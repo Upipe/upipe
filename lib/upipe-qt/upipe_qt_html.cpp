@@ -445,6 +445,10 @@ static struct upipe_mgr upipe_qt_html_mgr = {
     /* .refcount = */ NULL,
     /* .signature = */ UPIPE_QT_HTML_SIGNATURE,
 
+    /* .upipe_err_str = */ NULL,
+    /* .upipe_command_str = */ NULL,
+    /* .upipe_event_str = */ NULL,
+
     /* .upipe_alloc = */ upipe_qt_html_alloc,
     /* .upipe_input = */ NULL,
     /* .upipe_control = */ upipe_qt_html_control,

@@ -108,6 +108,39 @@ enum uprobe_event {
     UPROBE_LOCAL = 0x8000
 };
 
+/** @This return the corresponding event string.
+ *
+ * @param event the event value
+ * @return the event string
+ */
+static inline const char *uprobe_event_str(int event)
+{
+    switch (event) {
+    case UPROBE_LOG: return "UPROBE_LOG";
+    case UPROBE_FATAL: return "UPROBE_FATAL";
+    case UPROBE_ERROR: return "UPROBE_ERROR";
+    case UPROBE_READY: return "UPROBE_READY";
+    case UPROBE_DEAD: return "UPROBE_DEAD";
+    case UPROBE_SOURCE_END: return "UPROBE_SOURCE_END";
+    case UPROBE_SINK_END: return "UPROBE_SINK_END";
+    case UPROBE_NEED_OUTPUT: return "UPROBE_NEED_OUTPUT";
+    case UPROBE_PROVIDE_REQUEST: return "UPROBE_PROVIDE_REQUEST";
+    case UPROBE_NEED_UPUMP_MGR: return "UPROBE_NEED_UPUMP_MGR";
+    case UPROBE_FREEZE_UPUMP_MGR: return "UPROBE_FREEZE_UPUMP_MGR";
+    case UPROBE_THAW_UPUMP_MGR: return "UPROBE_THAW_UPUMP_MGR";
+    case UPROBE_NEW_FLOW_DEF: return "UPROBE_NEW_FLOW_DEF";
+    case UPROBE_NEW_RAP: return "UPROBE_NEW_RAP";
+    case UPROBE_SPLIT_UPDATE: return "UPROBE_SPLIT_UPDATE";
+    case UPROBE_SYNC_ACQUIRED: return "UPROBE_SYNC_ACQUIRED";
+    case UPROBE_SYNC_LOST: return "UPROBE_SYNC_LOST";
+    case UPROBE_CLOCK_REF: return "UPROBE_CLOCK_REF";
+    case UPROBE_CLOCK_TS: return "UPROBE_CLOCK_TS";
+    case UPROBE_CLOCK_UTC: return "UPROBE_CLOCK_UTC";
+    case UPROBE_LOCAL: break;
+    }
+    return NULL;
+}
+
 /** @This defines the levels of log messages. */
 enum uprobe_log_level {
     /** verbose messages, on a uref basis */
