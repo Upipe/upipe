@@ -150,7 +150,8 @@ static struct upipe *upipe_blit_sub_alloc(struct upipe_mgr *mgr,
 * @param uref uref structure
 * @param urefsub second uref structure containing the picture to copy
 */
-void copy(int hoset, int voset, struct uref *uref, struct uref *urefsub){
+static void copy(int hoset, int voset, struct uref *uref, struct uref *urefsub)
+{
     int x, y;
     size_t h, v, h2, v2;
     uint8_t macropixel, macropixel2;
