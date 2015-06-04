@@ -10,6 +10,7 @@ myinclude_HEADERS = \
 	upipe_ts_nit_decoder.h \
 	upipe_ts_pat_decoder.h \
 	upipe_ts_pes_decaps.h \
+	upipe_ts_pes_encaps.h \
 	upipe_ts_pmt_decoder.h \
 	upipe_ts_psi_generator.h \
 	upipe_ts_psi_join.h \
