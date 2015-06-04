@@ -425,6 +425,19 @@ static int _upipe_fsink_set_path(struct upipe *upipe, const char *path,
     return UBASE_ERR_NONE;
 }
 
+/** @internal @This returns the file descriptor of the currently opened file.
+ *
+ * @param upipe description structure of the pipe
+ * @param fd_p filled in with the file descriptor of the file
+ * @return an error code
+ */
+static int _upipe_fsink_get_fd(struct upipe *upipe, int *fd_p)
+{
+    struct upipe_fsink *upipe_fsink = upipe_fsink_from_upipe(upipe);
+    *fd_p = upipe_fsink->fd;
+    return UBASE_ERR_NONE;
+}
+
 /** @internal @This flushes all currently held buffers, and unblocks the
  * sources.
  *
@@ -489,6 +502,12 @@ static int  _upipe_fsink_control(struct upipe *upipe, int command, va_list args)
             const char *path = va_arg(args, const char *);
             enum upipe_fsink_mode mode = va_arg(args, enum upipe_fsink_mode);
             return _upipe_fsink_set_path(upipe, path, mode);
+        }
+
+        case UPIPE_FSINK_GET_FD: {
+            UBASE_SIGNATURE_CHECK(args, UPIPE_FSINK_SIGNATURE)
+            int *fd_p = va_arg(args, int *);
+            return _upipe_fsink_get_fd(upipe, fd_p);
         }
         case UPIPE_FLUSH:
             return upipe_fsink_flush(upipe);

@@ -58,7 +58,9 @@ enum upipe_fsink_command {
     /** returns the path of the currently opened file (const char **) */
     UPIPE_FSINK_GET_PATH,
     /** asks to open the given path (const char *, enum upipe_fsink_mode) */
-    UPIPE_FSINK_SET_PATH
+    UPIPE_FSINK_SET_PATH,
+    /** returns the file descriptor of the currently opened file (int *) */
+    UPIPE_FSINK_GET_FD
 };
 
 /** @This returns the management structure for all file sinks.
@@ -93,6 +95,19 @@ static inline int upipe_fsink_set_path(struct upipe *upipe,
 {
     return upipe_control(upipe, UPIPE_FSINK_SET_PATH, UPIPE_FSINK_SIGNATURE,
                          path, mode);
+}
+
+/** @This returns the file descriptor of the currently opened file.
+ *
+ * @param upipe description structure of the pipe
+ * @param fd_p filled in with the file descriptor of the file
+ * @return an error code
+ */
+static inline int upipe_fsink_get_fd(struct upipe *upipe,
+                                     int *fd_p)
+{
+    return upipe_control(upipe, UPIPE_FSINK_GET_FD, UPIPE_FSINK_SIGNATURE,
+                         fd_p);
 }
 
 #ifdef __cplusplus
