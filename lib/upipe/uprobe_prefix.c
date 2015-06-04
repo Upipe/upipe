@@ -28,6 +28,7 @@
  */
 
 #include <upipe/ubase.h>
+#include <upipe/ulist.h>
 #include <upipe/uprobe.h>
 #include <upipe/uprobe_prefix.h>
 #include <upipe/uprobe_helper_alloc.h>
@@ -52,16 +53,17 @@ static int uprobe_pfx_throw(struct uprobe *uprobe, struct upipe *upipe,
     if (event != UPROBE_LOG)
         return uprobe_throw_next(uprobe, upipe, event, args);
 
-    enum uprobe_log_level level = va_arg(args, enum uprobe_log_level);
+    struct ulog *ulog = va_arg(args, struct ulog *);
+    enum uprobe_log_level level = ulog->level;
     if (uprobe->next == NULL || uprobe_pfx->min_level > level)
         return UBASE_ERR_NONE;
 
-    const char *msg = va_arg(args, const char *);
-    const char *name = likely(uprobe_pfx->name != NULL) ?
-                       uprobe_pfx->name : "unknown";
-    char new_msg[strlen(msg) + +strlen(name) + strlen("[] ") + 1];
-    sprintf(new_msg, "[%s] %s", name, msg);
-    return uprobe_throw(uprobe->next, upipe, event, level, new_msg);
+    struct ulog_pfx ulog_pfx;
+    ulog_pfx.tag = likely(uprobe_pfx->name != NULL) ?
+        uprobe_pfx->name : "unknown";
+    ulist_add(&ulog->prefixes, ulog_pfx_to_uchain(&ulog_pfx));
+
+    return uprobe_throw(uprobe->next, upipe, event, ulog);
 }
 
 /** @This initializes an already allocated uprobe_pfx structure.
@@ -82,8 +84,7 @@ struct uprobe *uprobe_pfx_init(struct uprobe_pfx *uprobe_pfx,
     if (likely(name != NULL)) {
         uprobe_pfx->name = strdup(name);
         if (unlikely(uprobe_pfx->name == NULL)) {
-            uprobe_throw(next, NULL, UPROBE_LOG, UPROBE_LOG_ERROR,
-                         "allocation error in uprobe_pfx_init");
+            uprobe_err(next, NULL, "allocation error in uprobe_pfx_init");
             uprobe_throw(next, NULL, UPROBE_FATAL, UBASE_ERR_ALLOC);
         }
     } else

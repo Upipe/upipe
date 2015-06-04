@@ -35,6 +35,7 @@ extern "C" {
 #endif
 
 #include <upipe/ubase.h>
+#include <upipe/ulist.h>
 #include <upipe/uref_flow.h>
 
 #include <stdbool.h>
@@ -120,6 +121,26 @@ enum uprobe_log_level {
     UPROBE_LOG_WARNING,
     /** error messages, the processing cannot continue */
     UPROBE_LOG_ERROR
+};
+
+/** @This describe a prefix tag for a log message. */
+struct ulog_pfx {
+    /** uchain to attach in prefixes list */
+    struct uchain uchain;
+    /** the prefix string */
+    const char *tag;
+};
+
+UBASE_FROM_TO(ulog_pfx, uchain, uchain, uchain)
+
+/** @This describe a log message. */
+struct ulog {
+    /** log level of the message */
+    enum uprobe_log_level level;
+    /** the message to be logged */
+    const char *msg;
+    /** list of prefix tags */
+    struct uchain prefixes;
 };
 
 /** @This is the call-back type for uprobe events. */
@@ -274,7 +295,8 @@ static inline int uprobe_throw_next(struct uprobe *uprobe, struct upipe *upipe,
 static inline void uprobe_log(struct uprobe *uprobe, struct upipe *upipe,
                               enum uprobe_log_level level, const char *msg)
 {
-    uprobe_throw(uprobe, upipe, UPROBE_LOG, level, msg);
+    struct ulog ulog = { level, msg, ULIST_INIT(ulog.prefixes) };
+    uprobe_throw(uprobe, upipe, UPROBE_LOG, &ulog);
 }
 
 /** @internal @This throws a log event, with printf-style message generation.
