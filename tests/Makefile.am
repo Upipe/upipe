@@ -17,8 +17,7 @@ dist_check_DATA = \
 	udict_inline_test.txt \
 	uprobe_stdio_test.txt \
 	uprobe_prefix_test.txt \
-	upipe_ts_test.ts \
-	uref_uri_flow_test.txt
+	upipe_ts_test.ts
 
 check_PROGRAMS = \
 	ulist_test \
