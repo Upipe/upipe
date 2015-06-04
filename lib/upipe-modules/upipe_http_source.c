@@ -365,7 +365,7 @@ static int upipe_http_src_message_complete(http_parser *parser)
 
     switch (parser->status_code) {
     case 302:
-        upipe_notice_va(upipe, "redirect to %s", upipe_http_src->location);
+        upipe_http_src_throw_redirect(upipe, upipe_http_src->location);
         upipe_set_uri(upipe, upipe_http_src->location);
         return 0;
     }
@@ -392,7 +392,7 @@ static int upipe_http_src_body_cb(http_parser *parser, const char *at, size_t le
         systime = uclock_now(upipe_http_src->uclock);
     }
 
-    upipe_dbg_va(upipe, "received %zu bytes of body", len);
+    upipe_verbose_va(upipe, "received %zu bytes of body", len);
 
     /* alloc, map, copy, unmap */
     uref = uref_block_alloc(upipe_http_src->uref_mgr,
@@ -681,11 +681,13 @@ static int upipe_http_src_open_url(struct upipe *upipe)
     http_parser_settings *settings = &upipe_http_src->parser_settings;
     struct http_parser_url parsed_url;
     const char *url = upipe_http_src->url;
-
     struct addrinfo *info = NULL, *res;
     struct addrinfo hints;
     char *service;
     int ret, fd = -1;
+
+    if (!url)
+        return -1;
 
     /* check url size */
     if (unlikely(strnlen(url, MAX_URL_SIZE + 1) > MAX_URL_SIZE)) {
@@ -721,7 +723,13 @@ static int upipe_http_src_open_url(struct upipe *upipe)
     } else {
         service = strdup("http");
     }
-    upipe_http_src->path = url + parsed_url.field_data[UF_PATH].off;
+
+    if (parsed_url.field_set & (1 << UF_PATH)) {
+        upipe_http_src->path = url + parsed_url.field_data[UF_PATH].off;
+    }
+    else {
+        upipe_http_src->path = "/";
+    }
 
     /* get socket information */
     memset(&hints, 0, sizeof(struct addrinfo));
