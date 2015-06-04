@@ -15,4 +15,4 @@ struct upipe_mgr *upipe_stream_switcher_mgr_alloc(void);
 #ifdef __cplusplus
 }
 #endif
-#endif /* !_UPIPE_MODULS_UPIPE_STREAM_SWITCHER_H_ */
+#endif
