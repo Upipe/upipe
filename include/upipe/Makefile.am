@@ -93,3 +93,4 @@ pkginclude_HEADERS = \
 	urequest.h \
 	uring.h \
 	ustring.h
+	uuri.h
