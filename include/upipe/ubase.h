@@ -171,6 +171,8 @@ enum ubase_err {
     UBASE_ERR_UNKNOWN,
     /** allocation error */
     UBASE_ERR_ALLOC,
+    /** not enough space */
+    UBASE_ERR_NOSPC,
     /** unable to allocate a upump */
     UBASE_ERR_UPUMP,
     /** unhandled command or event */
@@ -200,6 +202,7 @@ static inline const char *ubase_err_str(int err)
     UBASE_CASE_TO_STR(UBASE_ERR_NONE);
     UBASE_CASE_TO_STR(UBASE_ERR_UNKNOWN);
     UBASE_CASE_TO_STR(UBASE_ERR_ALLOC);
+    UBASE_CASE_TO_STR(UBASE_ERR_NOSPC);
     UBASE_CASE_TO_STR(UBASE_ERR_UPUMP);
     UBASE_CASE_TO_STR(UBASE_ERR_UNHANDLED);
     UBASE_CASE_TO_STR(UBASE_ERR_INVALID);

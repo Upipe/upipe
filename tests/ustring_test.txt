@@ -1,0 +1,144 @@
+strings[0]: "(null)"
+compare with (null)
+compare with 
+compare with a string
+compare with this is a string
+compare with This is a STRING
+compare with this is a string this is a string
+compare with [this] [is] [a] [string]
+compare with -this-is-a-string-
+strings[1]: ""
+compare with (null)
+compare with 
+compare with a string
+compare with this is a string
+compare with This is a STRING
+compare with this is a string this is a string
+compare with [this] [is] [a] [string]
+compare with -this-is-a-string-
+strings[2]: "a string"
+word: "a"
+not word: " "
+word: "string"
+split "a" and "string"
+compare with (null)
+compare with 
+compare with a string
+compare with this is a string
+compare with This is a STRING
+compare with this is a string this is a string
+compare with [this] [is] [a] [string]
+compare with -this-is-a-string-
+strings[3]: "this is a string"
+word: "this"
+not word: " "
+word: "is"
+not word: " "
+word: "a"
+not word: " "
+word: "string"
+split "this" and "is a string"
+split "is" and "a string"
+split "a" and "string"
+compare with (null)
+compare with 
+compare with a string
+compare with this is a string
+compare with This is a STRING
+compare with this is a string this is a string
+compare with [this] [is] [a] [string]
+compare with -this-is-a-string-
+strings[4]: "This is a STRING"
+word: "This"
+not word: " "
+word: "is"
+not word: " "
+word: "a"
+not word: " "
+word: "STRING"
+split "This" and "is a STRING"
+split "is" and "a STRING"
+split "a" and "STRING"
+compare with (null)
+compare with 
+compare with a string
+compare with this is a string
+compare with This is a STRING
+compare with this is a string this is a string
+compare with [this] [is] [a] [string]
+compare with -this-is-a-string-
+strings[5]: "this is a string this is a string"
+word: "this"
+not word: " "
+word: "is"
+not word: " "
+word: "a"
+not word: " "
+word: "string"
+not word: " "
+word: "this"
+not word: " "
+word: "is"
+not word: " "
+word: "a"
+not word: " "
+word: "string"
+split "this" and "is a string this is a string"
+split "is" and "a string this is a string"
+split "a" and "string this is a string"
+split "string" and "this is a string"
+split "this" and "is a string"
+split "is" and "a string"
+split "a" and "string"
+compare with (null)
+compare with 
+compare with a string
+compare with this is a string
+compare with This is a STRING
+compare with this is a string this is a string
+compare with [this] [is] [a] [string]
+compare with -this-is-a-string-
+strings[6]: "[this] [is] [a] [string]"
+not word: "["
+word: "this"
+not word: "] ["
+word: "is"
+not word: "] ["
+word: "a"
+not word: "] ["
+word: "string"
+not word: "]"
+split "[this]" and "[is] [a] [string]"
+split "[is]" and "[a] [string]"
+split "[a]" and "[string]"
+compare with (null)
+compare with 
+compare with a string
+compare with this is a string
+compare with This is a STRING
+compare with this is a string this is a string
+compare with [this] [is] [a] [string]
+compare with -this-is-a-string-
+strings[7]: "-this-is-a-string-"
+not word: "-"
+word: "this"
+not word: "-"
+word: "is"
+not word: "-"
+word: "a"
+not word: "-"
+word: "string"
+not word: "-"
+split "" and "this-is-a-string-"
+split "this" and "is-a-string-"
+split "is" and "a-string-"
+split "a" and "string-"
+split "string" and ""
+compare with (null)
+compare with 
+compare with a string
+compare with this is a string
+compare with This is a STRING
+compare with this is a string this is a string
+compare with [this] [is] [a] [string]
+compare with -this-is-a-string-

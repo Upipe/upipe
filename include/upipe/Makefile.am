@@ -91,4 +91,5 @@ pkginclude_HEADERS = \
 	uref_sound_flow.h \
 	uref_std.h \
 	urequest.h \
-	uring.h
+	uring.h \
+	ustring.h

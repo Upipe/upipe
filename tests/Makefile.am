@@ -10,7 +10,8 @@ dist_check_SCRIPTS = \
 	upipe_file_test.sh \
 	upipe_multicat_test.sh \
 	upipe_ts_test.sh \
-	valgrind_wrapper.sh
+	valgrind_wrapper.sh \
+	ustring_test.sh
 
 dist_check_DATA = \
 	valgrind.supp \
@@ -19,10 +20,12 @@ dist_check_DATA = \
 	uprobe_stdio_test.txt \
 	uprobe_stdio_color_test.txt \
 	uprobe_prefix_test.txt \
-	upipe_ts_test.ts
+	upipe_ts_test.ts \
+	ustring_test.txt
 
 check_PROGRAMS = \
 	ulist_test \
+	ustring_test \
 	uprobe_stdio_test \
 	uprobe_stdio_color_test \
 	uprobe_syslog_test \
@@ -67,6 +70,7 @@ check_PROGRAMS = \
 
 TESTS = \
 	ulist_test \
+	ustring_test.sh \
 	umem_alloc_test \
 	umem_pool_test \
 	udict_inline_test.sh \
