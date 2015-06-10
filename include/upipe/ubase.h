@@ -81,10 +81,8 @@ extern "C" {
         (type *)( (char *)_mptr - offsetof(type,member) );})
 #endif
 
-#ifndef UBASE_ARRAY_SIZE
 /** @This is used to retrieve the number of items of an array. */
-#   define UBASE_ARRAY_SIZE(a)        (sizeof (a) / sizeof ((a)[0]))
-#endif
+#define UBASE_ARRAY_SIZE(a)        (sizeof (a) / sizeof ((a)[0]))
 
 /** @This declares two functions dealing with substructures included into a
  * larger structure.
