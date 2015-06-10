@@ -243,21 +243,21 @@ static void upipe_fsrc_worker(struct upump *upump)
         upipe_throw_source_end(upipe);
         return;
     }
-    if (unlikely(ret == 0)) {
-        uref_free(uref);
-        upipe_notice_va(upipe, "end of file %s", upipe_fsrc->path);
-        upipe_fsrc_set_upump(upipe, NULL);
-        upipe_throw_source_end(upipe);
-        return;
-    }
     if (upipe_fsrc->length != (uint64_t)-1)
         upipe_fsrc->length -= ret;
     if (upipe_fsrc->uclock != NULL)
         uref_clock_set_cr_sys(uref, systime);
     if (unlikely(ret != upipe_fsrc->output_size))
         uref_block_resize(uref, 0, ret);
+    if (unlikely(ret == 0))
+        uref_block_set_end(uref);
     upipe_use(upipe);
     upipe_fsrc_output(upipe, uref, &upipe_fsrc->upump);
+    if (unlikely(ret == 0)) {
+        upipe_notice_va(upipe, "end of file %s", upipe_fsrc->path);
+        upipe_fsrc_set_upump(upipe, NULL);
+        upipe_throw_source_end(upipe);
+    }
     upipe_release(upipe);
 }
 
