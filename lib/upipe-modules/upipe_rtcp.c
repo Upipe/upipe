@@ -185,52 +185,61 @@ static int upipe_rtcp_control_handle(struct upipe *upipe, int command,
                                      va_list args)
 {
     switch (command) {
-        case UPIPE_GET_FLOW_DEF: {
-            struct uref **p = va_arg(args, struct uref **);
-            return upipe_rtcp_get_flow_def(upipe, p);
-        }
-        case UPIPE_SET_FLOW_DEF: {
-            struct uref *p = va_arg(args, struct uref *);
-            return upipe_rtcp_set_flow_def(upipe, p);
-        }
+    case UPIPE_REGISTER_REQUEST: {
+        struct urequest *request = va_arg(args, struct urequest *);
+        return upipe_rtcp_alloc_output_proxy(upipe, request);
+    }
+    case UPIPE_UNREGISTER_REQUEST: {
+        struct urequest *request = va_arg(args, struct urequest *);
+        return upipe_rtcp_free_output_proxy(upipe, request);
+    }
 
-        case UPIPE_GET_OUTPUT: {
-            struct upipe **p = va_arg(args, struct upipe **);
-            return upipe_rtcp_get_output(upipe, p);
-        }
-        case UPIPE_SET_OUTPUT: {
-            struct upipe *output = va_arg(args, struct upipe *);
-            return upipe_rtcp_set_output(upipe, output);
-        }
+    case UPIPE_GET_FLOW_DEF: {
+        struct uref **p = va_arg(args, struct uref **);
+        return upipe_rtcp_get_flow_def(upipe, p);
+    }
+    case UPIPE_SET_FLOW_DEF: {
+        struct uref *p = va_arg(args, struct uref *);
+        return upipe_rtcp_set_flow_def(upipe, p);
+    }
 
-        case UPIPE_RTCP_GET_CLOCKRATE: {
-            unsigned int signature = va_arg(args, unsigned int);
-            assert(signature == UPIPE_RTCP_SIGNATURE);
-            uint32_t *rate_p = va_arg(args, uint32_t *);
-            return _upipe_rtcp_get_clockrate(upipe, rate_p);
-        }
-        case UPIPE_RTCP_SET_CLOCKRATE: {
-            unsigned int signature = va_arg(args, unsigned int);
-            assert(signature == UPIPE_RTCP_SIGNATURE);
-            uint32_t rate = va_arg(args, uint32_t);
-            return _upipe_rtcp_set_clockrate(upipe, rate);
-        }
+    case UPIPE_GET_OUTPUT: {
+        struct upipe **p = va_arg(args, struct upipe **);
+        return upipe_rtcp_get_output(upipe, p);
+    }
+    case UPIPE_SET_OUTPUT: {
+        struct upipe *output = va_arg(args, struct upipe *);
+        return upipe_rtcp_set_output(upipe, output);
+    }
 
-        case UPIPE_RTCP_GET_RATE: {
-            unsigned int signature = va_arg(args, unsigned int);
-            assert(signature == UPIPE_RTCP_SIGNATURE);
-            uint64_t *rate_p = va_arg(args, uint64_t *);
-            return _upipe_rtcp_get_rate(upipe, rate_p);
-        }
-        case UPIPE_RTCP_SET_RATE: {
-            unsigned int signature = va_arg(args, unsigned int);
-            assert(signature == UPIPE_RTCP_SIGNATURE);
-            uint64_t rate = va_arg(args, uint64_t);
-            return _upipe_rtcp_set_rate(upipe, rate);
-        }
+    case UPIPE_RTCP_GET_CLOCKRATE: {
+        unsigned int signature = va_arg(args, unsigned int);
+        assert(signature == UPIPE_RTCP_SIGNATURE);
+        uint32_t *rate_p = va_arg(args, uint32_t *);
+        return _upipe_rtcp_get_clockrate(upipe, rate_p);
+    }
+    case UPIPE_RTCP_SET_CLOCKRATE: {
+        unsigned int signature = va_arg(args, unsigned int);
+        assert(signature == UPIPE_RTCP_SIGNATURE);
+        uint32_t rate = va_arg(args, uint32_t);
+        return _upipe_rtcp_set_clockrate(upipe, rate);
+    }
 
-        default:
-            return UBASE_ERR_UNHANDLED;
+    case UPIPE_RTCP_GET_RATE: {
+        unsigned int signature = va_arg(args, unsigned int);
+        assert(signature == UPIPE_RTCP_SIGNATURE);
+        uint64_t *rate_p = va_arg(args, uint64_t *);
+        return _upipe_rtcp_get_rate(upipe, rate_p);
+    }
+    case UPIPE_RTCP_SET_RATE: {
+        unsigned int signature = va_arg(args, unsigned int);
+        assert(signature == UPIPE_RTCP_SIGNATURE);
+        uint64_t rate = va_arg(args, uint64_t);
+        return _upipe_rtcp_set_rate(upipe, rate);
+    }
+
+    default:
+        return UBASE_ERR_UNHANDLED;
     }
 }
 
