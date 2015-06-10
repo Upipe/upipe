@@ -11,6 +11,7 @@ dist_check_SCRIPTS = \
 	upipe_multicat_test.sh \
 	upipe_ts_test.sh \
 	valgrind_wrapper.sh \
+	uref_uri_test.sh \
 	ustring_test.sh
 
 dist_check_DATA = \
@@ -21,6 +22,7 @@ dist_check_DATA = \
 	uprobe_stdio_color_test.txt \
 	uprobe_prefix_test.txt \
 	upipe_ts_test.ts \
+	uref_uri_test.txt \
 	ustring_test.txt
 
 check_PROGRAMS = \
@@ -45,6 +47,7 @@ check_PROGRAMS = \
 	ubuf_pic_mem_test \
 	ubuf_sound_mem_test \
 	uref_std_test \
+	uref_uri_test \
 	uclock_std_test \
 	upipe_play_test \
 	upipe_trickplay_test \
@@ -92,6 +95,7 @@ TESTS = \
 	uprobe_uclock_test \
 	uprobe_uref_mgr_test \
 	uref_std_test \
+	uref_uri_test.sh \
 	uclock_std_test \
 	upipe_null_test \
 	upipe_play_test \
