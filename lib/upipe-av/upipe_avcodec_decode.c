@@ -1000,6 +1000,26 @@ static bool upipe_avcdec_decode_avpkt(struct upipe *upipe, AVPacket *avpkt,
     return !!gotframe;
 }
 
+/** @internal @This stores a uref in the temporary structure (required for
+ * buffer allocation in @ref upipe_avcdec_get_buffer).
+ *
+ * @param upipe description structure of the pipe
+ * @param uref uref structure
+ */
+static void upipe_avcdec_store_uref(struct upipe *upipe, struct uref *uref)
+{
+    struct upipe_avcdec *upipe_avcdec = upipe_avcdec_from_upipe(upipe);
+    if (upipe_avcdec->uref != NULL &&
+        upipe_avcdec->context->codec->type == AVMEDIA_TYPE_AUDIO &&
+        upipe_avcdec->uref->ubuf != NULL &&
+        upipe_avcdec->context->codec->capabilities & CODEC_CAP_DR1)
+        uref_sound_unmap(upipe_avcdec->uref, 0, -1, AV_NUM_DATA_POINTERS);
+    if (upipe_avcdec->uref != NULL && upipe_avcdec->uref->uchain.next != NULL)
+        uref_free(uref_from_uchain(upipe_avcdec->uref->uchain.next));
+    uref_free(upipe_avcdec->uref);
+    upipe_avcdec->uref = uref;
+}
+
 /** @internal @This decodes packets.
  *
  * @param upipe description structure of the pipe
@@ -1046,11 +1066,7 @@ static bool upipe_avcdec_decode(struct upipe *upipe, struct uref *uref,
 
     uref_pic_set_number(uref, upipe_avcdec->counter++);
 
-    /* Track current uref in pipe structure - required for buffer allocation
-     * in upipe_avcdec_get_buffer */
-    uref_free(upipe_avcdec->uref);
-    upipe_avcdec->uref = uref;
-
+    upipe_avcdec_store_uref(upipe, uref);
     upipe_avcdec_decode_avpkt(upipe, &avpkt, upump_p);
 
     free(avpkt.data);
