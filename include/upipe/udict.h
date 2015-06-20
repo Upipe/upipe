@@ -131,7 +131,9 @@ enum udict_type {
     /** p.bf */
     UDICT_TYPE_PIC_BF,
     /** p.tff */
-    UDICT_TYPE_PIC_TFF
+    UDICT_TYPE_PIC_TFF,
+    /** p.afd */
+    UDICT_TYPE_PIC_AFD
 };
 
 /** @This defines standard commands which udict modules may implement. */

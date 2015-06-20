@@ -779,6 +779,7 @@ static void upipe_avcdec_output_pic(struct upipe *upipe, struct upump **upump_p)
     struct upipe_avcdec *upipe_avcdec = upipe_avcdec_from_upipe(upipe);
     AVCodecContext *context = upipe_avcdec->context;
     AVFrame *frame = upipe_avcdec->frame;
+    AVFrameSideData *side_data;
     struct uref *uref = frame->opaque;
     struct uref *flow_def_attr = uref_from_uchain(uref->uchain.next);
 
@@ -853,6 +854,10 @@ static void upipe_avcdec_output_pic(struct upipe *upipe, struct upump **upump_p)
 
     if (frame->key_frame)
         uref_pic_set_key(uref);
+
+    side_data = av_frame_get_side_data(frame, AV_FRAME_DATA_AFD);
+    if (side_data && side_data->size == 1)
+        uref_pic_set_afd(uref, side_data->data[0]);
 
     /* various time-related attributes */
     upipe_avcdec_set_time_attributes(upipe, uref);

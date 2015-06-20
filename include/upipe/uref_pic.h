@@ -51,6 +51,7 @@ UREF_ATTR_VOID_SH(pic, progressive, UDICT_TYPE_PIC_PROGRESSIVE, progressive)
 UREF_ATTR_VOID_SH(pic, tf, UDICT_TYPE_PIC_TF, top field present)
 UREF_ATTR_VOID_SH(pic, bf, UDICT_TYPE_PIC_BF, bottom field present)
 UREF_ATTR_VOID_SH(pic, tff, UDICT_TYPE_PIC_TFF, top field first)
+UREF_ATTR_SMALL_UNSIGNED_SH(pic, afd, UDICT_TYPE_PIC_AFD, active format description)
 
 /** @This returns a new uref pointing to a new ubuf pointing to a picture.
  * This is equivalent to the two operations sequentially, and is a shortcut.
