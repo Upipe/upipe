@@ -298,6 +298,8 @@ static int upipe_ffmt_check_flow_format(struct upipe *upipe,
             if (ubase_check(uref_pic_flow_get_overscan(
                             upipe_ffmt->flow_def_wanted)))
                 uref_pic_flow_set_overscan(flow_def);
+            else
+                uref_pic_flow_delete_overscan(flow_def);
             uref_pic_flow_infer_sar(flow_def, dar);
         }
 

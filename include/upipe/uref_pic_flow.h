@@ -286,8 +286,8 @@ static inline int uref_pic_flow_infer_sar(struct uref *uref,
     bool overscan = ubase_check(uref_pic_flow_get_overscan(uref));
 
     struct urational sar;
-    sar.num = width * dar.num;
-    sar.den = height * dar.den;
+    sar.num = height * dar.num;
+    sar.den = width * dar.den;
     if (overscan) {
         if (width == 720 && height == 576 &&
             dar.num == 4 && dar.den == 3) {
