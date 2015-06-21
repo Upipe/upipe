@@ -293,7 +293,7 @@ static int upipe_ffmt_check_flow_format(struct upipe *upipe,
         if (ubase_check(uref_pic_flow_get_sar(upipe_ffmt->flow_def_wanted,
                                               &sar))) {
             uref_pic_flow_set_sar(flow_def, sar);
-        } else if (ubase_check(uref_ffmt_flow_get_dar(
+        } else if (ubase_check(uref_pic_flow_get_dar(
                         upipe_ffmt->flow_def_wanted, &dar))) {
             if (ubase_check(uref_pic_flow_get_overscan(
                             upipe_ffmt->flow_def_wanted)))
@@ -303,9 +303,10 @@ static int upipe_ffmt_check_flow_format(struct upipe *upipe,
             uref_pic_flow_infer_sar(flow_def, dar);
         }
 
-        /* delete sar and dar to let sws set it */
+        /* delete sar and visible sizes to let sws set it */
         uref_pic_flow_delete_sar(flow_def_dup);
-        uref_ffmt_flow_delete_dar(flow_def_dup);
+        uref_pic_flow_delete_hsize_visible(flow_def_dup);
+        uref_pic_flow_delete_vsize_visible(flow_def_dup);
 
         bool need_deint = !!(uref_pic_cmp_progressive(flow_def, flow_def_dup));
         bool need_sws = !uref_pic_flow_compare_format(flow_def, flow_def_dup) ||

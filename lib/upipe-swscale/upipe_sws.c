@@ -178,6 +178,9 @@ static bool upipe_sws_handle(struct upipe *upipe, struct uref *uref,
     if (unlikely(ubase_check(uref_flow_get_def(uref, &def)))) {
         upipe_sws_store_flow_def(upipe, NULL);
         uref = upipe_sws_store_flow_def_input(upipe, uref);
+        struct urational dar;
+        if (ubase_check(uref_pic_flow_get_dar(uref, &dar)))
+            uref_pic_flow_infer_sar(uref, dar);
         upipe_sws_require_ubuf_mgr(upipe, uref);
         return true;
     }
@@ -356,16 +359,6 @@ static bool upipe_sws_handle(struct upipe *upipe, struct uref *uref,
         return true;
     }
     uref_attach_ubuf(uref, ubuf);
-
-    struct urational sar;
-    if (ubase_check(uref_pic_flow_get_sar(upipe_sws->flow_def_attr, &sar)))
-        uref_pic_flow_delete_sar(uref);
-    else if (ubase_check(uref_pic_flow_get_sar(uref, &sar))) {
-        sar.num *= input_hsize * output_vsize;
-        sar.den *= input_vsize * output_hsize;
-        urational_simplify(&sar);
-        UBASE_FATAL(upipe, uref_pic_flow_set_sar(uref, sar))
-    }
     upipe_sws_output(upipe, uref, upump_p);
     return true;
 }
@@ -480,18 +473,45 @@ static int upipe_sws_set_flow_def(struct upipe *upipe, struct uref *flow_def)
         return UBASE_ERR_ALLOC;
     }
 
-    struct urational sar;
     uint64_t input_hsize, input_vsize, output_hsize, output_vsize;
-    if (!ubase_check(uref_pic_flow_get_sar(upipe_sws->flow_def_attr, &sar)) &&
-        ubase_check(uref_pic_flow_get_sar(flow_def, &sar)) &&
-        ubase_check(uref_pic_flow_get_hsize(flow_def, &input_hsize)) &&
+    if (ubase_check(uref_pic_flow_get_hsize(flow_def, &input_hsize)) &&
         ubase_check(uref_pic_flow_get_vsize(flow_def, &input_vsize)) &&
-        ubase_check(uref_pic_flow_get_hsize(upipe_sws->flow_def_attr, &output_hsize)) &&
-        ubase_check(uref_pic_flow_get_vsize(upipe_sws->flow_def_attr, &output_vsize))) {
-        sar.num *= input_hsize * output_vsize;
-        sar.den *= input_vsize * output_hsize;
-        urational_simplify(&sar);
-        UBASE_FATAL(upipe, uref_pic_flow_set_sar(flow_def, sar))
+        ubase_check(uref_pic_flow_get_hsize(upipe_sws->flow_def_attr,
+                                            &output_hsize)) &&
+        ubase_check(uref_pic_flow_get_vsize(upipe_sws->flow_def_attr,
+                                            &output_vsize)) &&
+        (input_hsize != output_hsize || input_vsize != output_vsize)) {
+
+        uint64_t hsize_visible;
+        if (input_hsize != output_hsize &&
+            ubase_check(uref_pic_flow_get_hsize_visible(flow_def,
+                                                        &hsize_visible))) {
+            hsize_visible *= output_hsize;
+            hsize_visible /= input_hsize;
+            UBASE_FATAL(upipe, uref_pic_flow_set_hsize_visible(flow_def,
+                        hsize_visible))
+                upipe_err_va(upipe, "meuh %"PRIu64, hsize_visible);
+        }
+
+        uint64_t vsize_visible;
+        if (input_vsize != output_vsize &&
+            ubase_check(uref_pic_flow_get_vsize_visible(flow_def,
+                                                        &vsize_visible))) {
+            vsize_visible *= output_vsize;
+            vsize_visible /= input_vsize;
+            UBASE_FATAL(upipe, uref_pic_flow_set_vsize_visible(flow_def,
+                        vsize_visible))
+        }
+
+        struct urational sar;
+        if (!ubase_check(uref_pic_flow_get_sar(upipe_sws->flow_def_attr,
+                                               &sar)) &&
+            ubase_check(uref_pic_flow_get_sar(flow_def, &sar))) {
+            sar.num *= input_hsize * output_vsize;
+            sar.den *= input_vsize * output_hsize;
+            urational_simplify(&sar);
+            UBASE_FATAL(upipe, uref_pic_flow_set_sar(flow_def, sar))
+        }
     }
 
     if (upipe_sws->input_pix_fmt == AV_PIX_FMT_YUV420P) {
