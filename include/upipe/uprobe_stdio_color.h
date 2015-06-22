@@ -24,7 +24,7 @@ UPROBE_HELPER_UPROBE(uprobe_stdio_color, uprobe)
 
 /** @This initializes an already allocated uprobe_stdio_color structure.
  *
- * @param uprobe_stdio color  pointer to the already allocated structure
+ * @param uprobe_stdio_color pointer to the already allocated structure
  * @param next next probe to test if this one doesn't catch the event
  * @param stream stdio stream to which to log the messages
  * @param level level at which to log the messages
