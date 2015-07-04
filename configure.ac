@@ -49,6 +49,7 @@ PKG_CHECK_UPIPE(SWRESAMPLE, libswresample libavutil, [libswresample/swresample.h
 PKG_CHECK_UPIPE(GLX, gl glu x11, [GL/glx.h GL/glu.h GL/gl.h])
 PKG_CHECK_UPIPE(X264, x264, [x264.h])
 PKG_CHECK_UPIPE(ECORE, ecore, [Ecore.h])
+PKG_CHECK_UPIPE(ZVBI, zvbi-0.2, [libzvbi.h])
 AC_LANG_PUSH([C++])
 PKG_CHECK_UPIPE(QTWEBKIT, QtWebKit, [QtWebKit])
 AC_LANG_POP([C++])
@@ -129,7 +130,7 @@ AC_EGREP_HEADER(timespec,sys/time.h,[
         AC_MSG_RESULT(no)
 ])
 
-AC_MSG_CHECKING([for eventfd]) 
+AC_MSG_CHECKING([for eventfd])
 AC_COMPILE_IFELSE([AC_LANG_PROGRAM(
         [[#include <sys/eventfd.h>]],
         [[eventfd (0, 0);]])
@@ -138,7 +139,7 @@ AC_COMPILE_IFELSE([AC_LANG_PROGRAM(
         AC_DEFINE(HAVE_EVENTFD, 1, Define if the OS supports eventfd(2).)
 ],[
         AC_MSG_RESULT([no])
-]) 
+])
 
 AC_CONFIG_FILES([Makefile
                  include/Makefile
@@ -162,6 +163,7 @@ AC_CONFIG_FILES([Makefile
                  include/upipe-nacl/Makefile
                  include/upipe-amt/Makefile
                  include/upipe-v210/Makefile
+                 include/upipe-zvbi/Makefile
                  lib/Makefile
                  lib/upipe/Makefile
                  lib/upipe/libupipe.pc
@@ -203,6 +205,8 @@ AC_CONFIG_FILES([Makefile
                  lib/upipe-amt/libupipe_amt.pc
                  lib/upipe-v210/Makefile
                  lib/upipe-v210/libupipe_v210.pc
+                 lib/upipe-zvbi/Makefile
+                 lib/upipe-zvbi/libupipe_zvbi.pc
                  tests/Makefile
                  examples/Makefile])
 AC_OUTPUT

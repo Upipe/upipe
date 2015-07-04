@@ -48,10 +48,12 @@
  * the line
  * @param vsize number of lines wanted in the picture area, or -1 for until the
  * last line
+ * @param fullrange whether the input is full-range
  * @return an error code
  */
 int ubuf_pic_plane_clear(struct ubuf *ubuf, const char *chroma,
-                         int hoffset, int voffset, int hsize, int vsize)
+                         int hoffset, int voffset, int hsize, int vsize,
+                         int fullrange)
 {
     size_t stride, width, height;
     uint8_t hsub, vsub, macropixel_size, macropixel;
@@ -86,7 +88,7 @@ int ubuf_pic_plane_clear(struct ubuf *ubuf, const char *chroma,
      || MATCH("r8g8b8") || MATCH("r8g8b8a8") || MATCH("a8r8g8b8")
      || MATCH("b8g8r8") || MATCH("b8g8r8a8") || MATCH("a8b8g8r8")) {
         LINELOOP(j) {
-            memset(buf, 0, width*macropixel_size/hsub/macropixel);
+            memset(buf, fullrange ? 0 : 16, width*macropixel_size/hsub/macropixel);
             buf += stride;
         }
     } else if (MATCH("u8") || MATCH("v8")) {
@@ -97,7 +99,7 @@ int ubuf_pic_plane_clear(struct ubuf *ubuf, const char *chroma,
     } else {
         known = false;
     }
-    
+
 #undef LINELOOP
 #undef MATCH
     UBASE_RETURN(ubuf_pic_plane_unmap(ubuf, chroma, hoffset, voffset,
@@ -119,10 +121,11 @@ int ubuf_pic_plane_clear(struct ubuf *ubuf, const char *chroma,
  * the line
  * @param vsize number of lines wanted in the picture area, or -1 for until the
  * last line
+ * @param fullrange whether the input is full-range
  * @return an error code
  */
 int ubuf_pic_clear(struct ubuf *ubuf, int hoffset, int voffset,
-                   int hsize, int vsize)
+                   int hsize, int vsize, int fullrange)
 {
     if (!ubuf)
         return UBASE_ERR_INVALID;
@@ -132,7 +135,7 @@ int ubuf_pic_clear(struct ubuf *ubuf, int hoffset, int voffset,
     while (ubase_check(ubuf_pic_plane_iterate(ubuf, &chroma)) &&
            chroma != NULL) {
         ret = ubase_check(ubuf_pic_plane_clear(ubuf, chroma,
-            hoffset, voffset, hsize, vsize)) || ret;
+            hoffset, voffset, hsize, vsize, fullrange)) || ret;
     }
 
     return ret ? UBASE_ERR_INVALID : UBASE_ERR_NONE;
