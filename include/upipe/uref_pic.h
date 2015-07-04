@@ -144,12 +144,13 @@ static inline int uref_pic_plane_unmap(struct uref *uref,
 
 /** @see ubuf_pic_plane_clear */
 static inline int uref_pic_plane_clear(struct uref *uref,
-        const char *chroma, int hoffset, int voffset, int hsize, int vsize)
+        const char *chroma, int hoffset, int voffset, int hsize, int vsize,
+        int fullrange)
 {
     if (uref->ubuf == NULL)
         return UBASE_ERR_INVALID;
     return ubuf_pic_plane_clear(uref->ubuf, chroma, hoffset, voffset,
-                                hsize, vsize);
+                                hsize, vsize, fullrange);
 }
 
 /** @see ubuf_pic_resize */
@@ -163,11 +164,12 @@ static inline int uref_pic_resize(struct uref *uref,
 
 /** @see ubuf_pic_clear */
 static inline int uref_pic_clear(struct uref *uref,
-        int hoffset, int voffset, int hsize, int vsize)
+        int hoffset, int voffset, int hsize, int vsize,
+        int fullrange)
 {
     if (uref->ubuf == NULL)
         return UBASE_ERR_INVALID;
-    return ubuf_pic_clear(uref->ubuf, hoffset, voffset, hsize, vsize);
+    return ubuf_pic_clear(uref->ubuf, hoffset, voffset, hsize, vsize, fullrange);
 }
 
 /** @This allocates a new ubuf of size new_hsize/new_vsize, and copies part of
