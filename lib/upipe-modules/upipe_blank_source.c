@@ -159,13 +159,13 @@ static struct uref *upipe_blksrc_alloc_uref(struct upipe *upipe)
                 upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
                 return NULL;
             }
-            uref_pic_clear(uref, 0, 0, -1, -1);
+            uref_pic_clear(uref, 0, 0, -1, -1, 1);
             uref_clock_set_duration(uref, upipe_blksrc->interval);
 
             if (ubase_check(uref_pic_get_progressive(upipe_blksrc->flow_def))) {
                 uref_pic_set_progressive(uref);
             }
-                
+
             return uref;
         }
         case UPIPE_BLKSRC_TYPE_SOUND: {
@@ -183,7 +183,7 @@ static struct uref *upipe_blksrc_alloc_uref(struct upipe *upipe)
             }
             const char *channel = NULL;
             uint8_t *buf = NULL;
-            while (ubase_check(uref_sound_plane_iterate(uref, &channel)) 
+            while (ubase_check(uref_sound_plane_iterate(uref, &channel))
                                                               && channel) {
                 uref_sound_plane_write_uint8_t(uref, channel, 0, -1, &buf);
                 memset(buf, 0, sample_size * samples);
@@ -505,7 +505,7 @@ static struct upipe *upipe_blksrc_alloc(struct upipe_mgr *mgr,
         upipe_blksrc_free_flow(upipe);
         return NULL;
     }
-        
+
     upipe_blksrc_init_urefcount(upipe);
     upipe_blksrc_init_uref_mgr(upipe);
     upipe_blksrc_init_ubuf_mgr(upipe);
