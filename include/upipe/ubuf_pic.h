@@ -495,7 +495,8 @@ static inline int ubuf_pic_replace(struct ubuf_mgr *mgr, struct ubuf **ubuf_p,
  * @return an error code
  */
 int ubuf_pic_plane_clear(struct ubuf *ubuf, const char *chroma,
-                         int hoffset, int voffset, int hsize, int vsize);
+                         int hoffset, int voffset, int hsize, int vsize,
+                         int fullrange);
 
 /** @This clears (part of) the specified picture, depending on plane type
  * and size (set U/V chroma to 0x80 instead of 0 for instance)
@@ -511,10 +512,11 @@ int ubuf_pic_plane_clear(struct ubuf *ubuf, const char *chroma,
  * the line
  * @param vsize number of lines wanted in the picture area, or -1 for until the
  * last line
+ * @param fullrange whether the input is full-range
  * @return an error code
  */
 int ubuf_pic_clear(struct ubuf *ubuf, int hoffset, int voffset,
-                   int hsize, int vsize);
+                   int hsize, int vsize, int fullrange);
 
 #ifdef __cplusplus
 }
