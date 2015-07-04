@@ -96,6 +96,18 @@ static int upipe_zvbienc_set_flow_def(struct upipe *upipe, struct uref *flow_def
 {
     if (flow_def == NULL)
         return UBASE_ERR_INVALID;
+
+    UBASE_RETURN(uref_flow_match_def(flow_def, "pic."))
+
+    uint8_t macropixel;
+    if (!ubase_check(uref_pic_flow_get_macropixel(flow_def, &macropixel)))
+        return UBASE_ERR_INVALID;
+
+    if (!(macropixel == 1 && ubase_check(uref_pic_flow_check_chroma(flow_def, 1, 1, 1, "y8")))) {
+        upipe_err(upipe, "incompatible input flow def");
+        uref_dump(flow_def, upipe->uprobe);
+        return UBASE_ERR_EXTERNAL;
+    }
     struct uref *flow_def_dup;
     if (unlikely((flow_def_dup = uref_dup(flow_def)) == NULL))
         return UBASE_ERR_ALLOC;
