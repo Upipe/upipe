@@ -292,7 +292,7 @@ static bool upipe_sws_thumbs_handle(struct upipe *upipe, struct uref *uref,
             upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
             return true;
         }
-        ubuf_pic_clear(ubuf, 0, 0, -1, -1);
+        ubuf_pic_clear(ubuf, 0, 0, -1, -1, 0);
         uref_attach_ubuf(gallery, ubuf);
     }
 

@@ -132,7 +132,7 @@ int main(int argc, char **argv)
     ubase_assert(ubuf_pic_plane_read(ubuf1, "y8", 0, 0, -1, -1, &r));
     ubase_assert(ubuf_pic_plane_unmap(ubuf1, "y8", 0, 0, -1, -1));
 
-    ubase_assert(ubuf_pic_clear(ubuf1, 0, 0, -1, -1));
+    ubase_assert(ubuf_pic_clear(ubuf1, 0, 0, -1, -1, 0));
     fill_in(ubuf1);
 
     ubase_assert(ubuf_pic_plane_read(ubuf1, "y8", 2, 2, 1, 1, &r));
