@@ -64,6 +64,7 @@ libupipe_modules_la_SOURCES = \
 	upipe_subpic_schedule.c \
 	upipe_id3v2.c \
 	id3v2.h \
+	upipe_ntsc_prepend.c \
 	$(NULL)
 
 if HAVE_WRITEV
