@@ -859,6 +859,10 @@ static void upipe_avcdec_output_pic(struct upipe *upipe, struct upump **upump_p)
     if (side_data && side_data->size == 1)
         uref_pic_set_afd(uref, side_data->data[0]);
 
+    side_data = av_frame_get_side_data(frame, AV_FRAME_DATA_A53_CC);
+    if (side_data)
+        uref_pic_set_cea_708(uref, side_data->data, side_data->size);
+
     /* various time-related attributes */
     upipe_avcdec_set_time_attributes(upipe, uref);
 

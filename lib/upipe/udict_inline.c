@@ -95,6 +95,8 @@ static const struct inline_shorthand inline_shorthands[] = {
     { "p.tf", UDICT_TYPE_VOID },
     { "p.bf", UDICT_TYPE_VOID },
     { "p.tff", UDICT_TYPE_VOID },
+    { "p.afd", UDICT_TYPE_SMALL_UNSIGNED },
+    { "p.cea_708", UDICT_TYPE_OPAQUE }
 };
 
 /** @This stores the size of the value of basic attribute types. */
