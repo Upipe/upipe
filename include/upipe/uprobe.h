@@ -328,7 +328,10 @@ static inline int uprobe_throw_next(struct uprobe *uprobe, struct upipe *upipe,
 static inline void uprobe_log(struct uprobe *uprobe, struct upipe *upipe,
                               enum uprobe_log_level level, const char *msg)
 {
-    struct ulog ulog = { level, msg, ULIST_INIT(ulog.prefixes) };
+    struct ulog ulog;
+    ulog.level = level;
+    ulog.msg = msg;
+    ulist_init(&ulog.prefixes);
     uprobe_throw(uprobe, upipe, UPROBE_LOG, &ulog);
 }
 

@@ -51,8 +51,6 @@ static inline void ulist_init(struct uchain *ulist)
     ulist->next = ulist->prev = ulist;
 }
 
-#define ULIST_INIT(List) (struct uchain){ .next = &(List), .prev = &(List) }
-
 /** @This checks if the element is the first of the list.
  *
  * @param ulist pointer to a ulist
