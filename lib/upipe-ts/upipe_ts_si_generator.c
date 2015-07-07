@@ -1272,7 +1272,7 @@ static void upipe_ts_sig_build_sdt(struct upipe *upipe)
                 continue;
             uint8_t service_type = 1;
             bool eit, eitschedule, ca;
-            uint8_t running = 5; /* running */
+            uint8_t running = 4; /* running */
             const char *service_name_str = DEFAULT_NAME;
             const char *provider_name_str = DEFAULT_NAME;
             uref_ts_flow_get_service_type(upipe_ts_sig_service->flow_def,
