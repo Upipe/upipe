@@ -12,12 +12,16 @@ before_install:
   - sudo apt-get install libx264-dev
   - sudo apt-get install yasm
   - sudo apt-get install libc6-i386
+
+  # bitstream
   - git clone --depth 1 git://git.videolan.org/bitstream.git
   - sudo make -C bitstream install
+
+  # ffmpeg
   - curl http://ffmpeg.org/releases/ffmpeg-2.7.1.tar.bz2 | tar -xj
   - cd ffmpeg-2.7.1
   - ./configure
-    --enable-pic
+    --enable-shared
     --disable-all
     --disable-doc
     --disable-libxcb
@@ -31,12 +35,17 @@ before_install:
     --enable-swresample
   - sudo make install
   - cd ..
+
+  # nacl sdk
   - wget http://storage.googleapis.com/nativeclient-mirror/nacl/nacl_sdk/nacl_sdk.zip
   - unzip nacl_sdk.zip
   - nacl_sdk/naclsdk update pepper_43
+
+  # libamt
   - git clone --depth 1 https://github.com/cisco/SSMAMTtools.git
   - sudo install -D SSMAMTtools/include/amt.h /usr/local/include/amt.h
   - sudo install -D SSMAMTtools/lib/linux/libamt64.a /usr/local/lib/libamt.a
+  - sudo ldconfig
 
 before_script: autoreconf -i
 
@@ -54,3 +63,5 @@ notifications:
       - "chat.freenode.net#upipe"
     on_success: never
     on_failure: always
+    use_notice: true
+    skip_join: true
