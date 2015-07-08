@@ -11,6 +11,7 @@ before_install:
   - sudo apt-get install libasound2-dev
   - sudo apt-get install libx264-dev
   - sudo apt-get install yasm
+  - sudo apt-get install libc6-i386
   - git clone --depth 1 git://git.videolan.org/bitstream.git
   - sudo make -C bitstream install
   - curl http://ffmpeg.org/releases/ffmpeg-2.7.1.tar.bz2 | tar -xj
