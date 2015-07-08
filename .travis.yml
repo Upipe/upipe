@@ -28,6 +28,7 @@ before_install:
     --enable-swscale
     --enable-swresample
   - sudo make install
+  - cd ..
 
 before_script: autoreconf -i
 
