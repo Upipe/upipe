@@ -34,6 +34,8 @@ before_install:
     --enable-avcodec
     --enable-swscale
     --enable-swresample
+    --enable-encoder=mpeg2video
+    --enable-encoder=mp2
   - sudo make install
   - cd ..
 
