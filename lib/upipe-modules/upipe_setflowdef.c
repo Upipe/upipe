@@ -159,6 +159,8 @@ static int upipe_setflowdef_build_flow_def(struct upipe *upipe)
     }
 
     upipe_setflowdef_store_flow_def(upipe, flow_def_dup);
+    /* force outputting the flow def */
+    upipe_setflowdef_output(upipe, NULL, NULL);
     return UBASE_ERR_NONE;
 }
 
