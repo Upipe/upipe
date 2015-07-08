@@ -12,6 +12,21 @@ before_install:
   - sudo apt-get install libx264-dev
   - git clone --depth 1 git://git.videolan.org/bitstream.git
   - sudo make -C bitstream install
+  - curl http://ffmpeg.org/releases/ffmpeg-2.7.1.tar.bz2 | tar -xj
+  - cd ffmpeg-2.7.1
+  - ./configure
+    --disable-all
+    --disable-doc
+    --disable-libxcb
+    --disable-sdl
+    --disable-xlib
+    --disable-iconv
+    --enable-avutil
+    --enable-avformat
+    --enable-avcodec
+    --enable-swscale
+    --enable-swresample
+  - sudo make install
 
 before_script: autoreconf -i
 
