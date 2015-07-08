@@ -490,7 +490,6 @@ static int upipe_sws_set_flow_def(struct upipe *upipe, struct uref *flow_def)
             hsize_visible /= input_hsize;
             UBASE_FATAL(upipe, uref_pic_flow_set_hsize_visible(flow_def,
                         hsize_visible))
-                upipe_err_va(upipe, "meuh %"PRIu64, hsize_visible);
         }
 
         uint64_t vsize_visible;
