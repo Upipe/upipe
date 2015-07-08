@@ -16,8 +16,7 @@ before_install:
   - curl http://ffmpeg.org/releases/ffmpeg-2.7.1.tar.bz2 | tar -xj
   - cd ffmpeg-2.7.1
   - ./configure
-    --disable-static
-    --enable-shared
+    --enable-pic
     --disable-all
     --disable-doc
     --disable-libxcb
@@ -31,10 +30,17 @@ before_install:
     --enable-swresample
   - sudo make install
   - cd ..
+  - wget http://storage.googleapis.com/nativeclient-mirror/nacl/nacl_sdk/nacl_sdk.zip
+  - unzip nacl_sdk.zip
+  - nacl_sdk/naclsdk update pepper_43
 
 before_script: autoreconf -i
 
-script: ./configure && make && make check
+script: ./configure
+          CPPFLAGS="-I$PWD/nacl_sdk/pepper_43/include"
+          LDFLAGS="-L$PWD/nacl_sdk/pepper_43/lib/glibc_x86_64" &&
+        make &&
+        make check
 
 after_failure: test -r tests/test-suite.log && cat tests/test-suite.log
 
