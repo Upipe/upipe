@@ -15,7 +15,9 @@ before_install:
 
 before_script: autoreconf -i
 
-script: "./configure && make && make check"
+script: ./configure && make && make check
+
+after_failure: test -r tests/test-suite.log && cat tests/test-suite.log
 
 notifications:
   irc:
