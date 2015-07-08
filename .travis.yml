@@ -5,9 +5,13 @@ compiler:
   - gcc
 
 before_install:
-  - sudo apt-get update -qq
-  - sudo apt-get install -y valgrind
-  - sudo apt-get install -y libev-dev
+  - sudo apt-get update
+  - sudo apt-get install valgrind
+  - sudo apt-get install libev-dev
+  - sudo apt-get install libasound2-dev
+  - sudo apt-get install libx264-dev
+  - git clone --depth 1 git://git.videolan.org/bitstream.git
+  - sudo make -C bitstream install
 
 before_script: autoreconf -i
 
