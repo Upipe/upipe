@@ -12,6 +12,7 @@ before_install:
   - sudo apt-get install libx264-dev
   - sudo apt-get install yasm
   - sudo apt-get install libc6-i386
+  - sudo apt-get remove libqtwebkit-dev
 
   # bitstream
   - git clone --depth 1 git://git.videolan.org/bitstream.git
