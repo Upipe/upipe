@@ -34,6 +34,9 @@ before_install:
   - wget http://storage.googleapis.com/nativeclient-mirror/nacl/nacl_sdk/nacl_sdk.zip
   - unzip nacl_sdk.zip
   - nacl_sdk/naclsdk update pepper_43
+  - git clone --depth 1 https://github.com/cisco/SSMAMTtools.git
+  - sudo install -D SSMAMTtools/include/amt.h /usr/local/include/amt.h
+  - sudo install -D SSMAMTtools/lib/linux/libamt64.a /usr/local/lib/libamt.a
 
 before_script: autoreconf -i
 
