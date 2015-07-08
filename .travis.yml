@@ -4,6 +4,17 @@ compiler:
   - clang
   - gcc
 
+before_install:
+  - sudo apt-get install valgrind
+  - sudo apt-get install libev-dev
+
 before_script: autoreconf -i
 
 script: "./configure && make && make check"
+
+notifications:
+  irc:
+    channels:
+      - "chat.freenode.net#upipe"
+    on_success: never
+    on_failure: always
