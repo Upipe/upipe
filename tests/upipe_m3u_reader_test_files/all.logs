@@ -1,0 +1,167 @@
+[;32m  debug[m: [;1;30m[[;36mfile source[;1;30m][m  throw ready event
+[;32m  debug[m: [;1;30m[[;36mfile source[;1;30m][m  require uref_mgr
+[;32m  debug[m: [;1;30m[[;36mfile source[;1;30m][m  throw provide request type 0
+[;32m  debug[m: [;1;30m[[;36mfile source[;1;30m][m  throw need upump mgr
+[;32m  debug[m: [;1;30m[[;36mfile source[;1;30m][m  require ubuf_mgr
+[;32m  debug[m: [;1;30m[[;36mfile source[;1;30m][m  throw provide request type 2
+[;32m  debug[m: [;1;30m[[;36mfile source[;1;30m][m  throw new flow def
+[;32m  debug[m: [;1;30m[[;36mfile source[;1;30m][m   - "f.def" [string]: "block."
+[;32m  debug[m: [;1;30m[[;36mfile source[;1;30m][m   - "b.size" [unsigned]: 32768
+[;34m notice[m: [;1;30m[[;36mfile source[;1;30m][m  opening file ./upipe_m3u_reader_test_files/1.m3u
+[;32m  debug[m: [;1;30m[[;36mm3u reader[;1;30m][m  throw ready event
+[;32m  debug[m: [;1;30m[[;36mm3u reader[;1;30m][m  throw provide request type 0
+[;32m  debug[m: [;1;30m[[;36mm3u reader[;1;30m][m  throw provide request type 2
+[;32m  debug[m: [;1;30m[[;36mfile source[;1;30m][m  throw new flow def
+[;32m  debug[m: [;1;30m[[;36mfile source[;1;30m][m   - "f.def" [string]: "block."
+[;32m  debug[m: [;1;30m[[;36mfile source[;1;30m][m   - "b.size" [unsigned]: 32768
+[;32m  debug[m: [;1;30m[[;36mnull[;1;30m][m  throw ready event
+[;32m  debug[m: [;1;30m[[;36mnull[;1;30m][m  throw provide request type 0
+[;32m  debug[m: [;1;30m[[;36mnull[;1;30m][m  throw provide request type 2
+[;32m  debug[m: [;1;30m[[;36mfile source[;1;30m][m  throw new flow def
+[;32m  debug[m: [;1;30m[[;36mfile source[;1;30m][m   - "f.def" [string]: "block."
+[;32m  debug[m: [;1;30m[[;36mfile source[;1;30m][m   - "b.size" [unsigned]: 32768
+[;32m  debug[m: [;1;30m[[;36mm3u reader[;1;30m][m  accepted flow def
+[;31m  error[m: [;1;30m[[;36mm3u reader[;1;30m][m  invalid m3u
+[;34m notice[m: [;1;30m[[;36mfile source[;1;30m][m  end of file ./upipe_m3u_reader_test_files/1.m3u
+[;32m  debug[m: [;1;30m[[;36mfile source[;1;30m][m  throw source end
+[;34m notice[m: [;1;30m[[;36mfile source[;1;30m][m  closing file ./upipe_m3u_reader_test_files/1.m3u
+[;34m notice[m: [;1;30m[[;36mfile source[;1;30m][m  opening file ./upipe_m3u_reader_test_files/2.m3u
+[;37mverbose[m: [;1;30m[[;36mm3u reader[;1;30m][m  found EXTM3U tag
+[;32m  debug[m: [;1;30m[[;36mm3u reader[;1;30m][m  throw new flow def
+[;32m  debug[m: [;1;30m[[;36mm3u reader[;1;30m][m   - "b.size" [unsigned]: 32768
+[;32m  debug[m: [;1;30m[[;36mm3u reader[;1;30m][m   - "f.def" [string]: "block.m3u."
+[;32m  debug[m: [;1;30m[[;36mm3u reader[;1;30m][m   - "uri.scheme" [string]: "file"
+[;32m  debug[m: [;1;30m[[;36mm3u reader[;1;30m][m   - "uri.path" [string]: "./upipe_m3u_reader_test_files/1.m3u"
+[;34m notice[m: [;1;30m[[;36mfile source[;1;30m][m  end of file ./upipe_m3u_reader_test_files/2.m3u
+[;32m  debug[m: [;1;30m[[;36mfile source[;1;30m][m  throw source end
+[;34m notice[m: [;1;30m[[;36mfile source[;1;30m][m  closing file ./upipe_m3u_reader_test_files/2.m3u
+[;34m notice[m: [;1;30m[[;36mfile source[;1;30m][m  opening file ./upipe_m3u_reader_test_files/3.m3u
+[;37mverbose[m: [;1;30m[[;36mm3u reader[;1;30m][m  found EXTM3U tag
+[;32m  debug[m: [;1;30m[[;36mm3u reader[;1;30m][m  version: 3
+[;32m  debug[m: [;1;30m[[;36mm3u reader[;1;30m][m  target duration: 140940000000
+[;37mverbose[m: [;1;30m[[;36mm3u reader[;1;30m][m  segment duration: 140918400000
+[;37mverbose[m: [;1;30m[[;36mm3u reader[;1;30m][m  uri http://media.example.com/entire.ts
+[;37mverbose[m: [;1;30m[[;36mm3u reader[;1;30m][m  endlist tag
+[;32m  debug[m: [;1;30m[[;36mm3u reader[;1;30m][m  throw new flow def
+[;32m  debug[m: [;1;30m[[;36mm3u reader[;1;30m][m   - "b.size" [unsigned]: 32768
+[;32m  debug[m: [;1;30m[[;36mm3u reader[;1;30m][m   - "m3u.version" [small_unsigned]: 3
+[;32m  debug[m: [;1;30m[[;36mm3u reader[;1;30m][m   - "f.def" [string]: "block.m3u.playlist."
+[;32m  debug[m: [;1;30m[[;36mm3u reader[;1;30m][m   - "m3u.playlist.target_duration" [unsigned]: 140940000000
+[;32m  debug[m: [;1;30m[[;36mm3u reader[;1;30m][m   - "m3u.playlist.endlist" [void]
+[;32m  debug[m: [;1;30m[[;36mm3u reader[;1;30m][m   - "uri.scheme" [string]: "file"
+[;32m  debug[m: [;1;30m[[;36mm3u reader[;1;30m][m   - "uri.path" [string]: "./upipe_m3u_reader_test_files/1.m3u"
+[;32m  debug[m: [;1;30m[[;36mnull[;1;30m][m  accepted flow def
+[;34m notice[m: [;1;30m[[;36mfile source[;1;30m][m  end of file ./upipe_m3u_reader_test_files/3.m3u
+[;32m  debug[m: [;1;30m[[;36mfile source[;1;30m][m  throw source end
+[;34m notice[m: [;1;30m[[;36mfile source[;1;30m][m  closing file ./upipe_m3u_reader_test_files/3.m3u
+[;34m notice[m: [;1;30m[[;36mfile source[;1;30m][m  opening file ./upipe_m3u_reader_test_files/4.m3u
+[;37mverbose[m: [;1;30m[[;36mm3u reader[;1;30m][m  found EXTM3U tag
+[;32m  debug[m: [;1;30m[[;36mm3u reader[;1;30m][m  version: 3
+[;32m  debug[m: [;1;30m[[;36mm3u reader[;1;30m][m  target duration: 216000000
+[;32m  debug[m: [;1;30m[[;36mm3u reader[;1;30m][m  media sequence 2680
+[;37mverbose[m: [;1;30m[[;36mm3u reader[;1;30m][m  segment duration: 215325000
+[;37mverbose[m: [;1;30m[[;36mm3u reader[;1;30m][m  uri https://priv.example.com/fileSequence2680.ts
+[;37mverbose[m: [;1;30m[[;36mm3u reader[;1;30m][m  segment duration: 214407000
+[;37mverbose[m: [;1;30m[[;36mm3u reader[;1;30m][m  uri https://priv.example.com/fileSequence2681.ts
+[;37mverbose[m: [;1;30m[[;36mm3u reader[;1;30m][m  segment duration: 215325000
+[;37mverbose[m: [;1;30m[[;36mm3u reader[;1;30m][m  uri https://priv.example.com/fileSequence2682.ts
+[;32m  debug[m: [;1;30m[[;36mm3u reader[;1;30m][m  throw new flow def
+[;32m  debug[m: [;1;30m[[;36mm3u reader[;1;30m][m   - "b.size" [unsigned]: 32768
+[;32m  debug[m: [;1;30m[[;36mm3u reader[;1;30m][m   - "m3u.version" [small_unsigned]: 3
+[;32m  debug[m: [;1;30m[[;36mm3u reader[;1;30m][m   - "f.def" [string]: "block.m3u.playlist."
+[;32m  debug[m: [;1;30m[[;36mm3u reader[;1;30m][m   - "m3u.playlist.target_duration" [unsigned]: 216000000
+[;32m  debug[m: [;1;30m[[;36mm3u reader[;1;30m][m   - "m3u.playlist.media_sequence" [unsigned]: 2680
+[;32m  debug[m: [;1;30m[[;36mm3u reader[;1;30m][m   - "uri.scheme" [string]: "file"
+[;32m  debug[m: [;1;30m[[;36mm3u reader[;1;30m][m   - "uri.path" [string]: "./upipe_m3u_reader_test_files/1.m3u"
+[;32m  debug[m: [;1;30m[[;36mnull[;1;30m][m  accepted flow def
+[;34m notice[m: [;1;30m[[;36mfile source[;1;30m][m  end of file ./upipe_m3u_reader_test_files/4.m3u
+[;32m  debug[m: [;1;30m[[;36mfile source[;1;30m][m  throw source end
+[;34m notice[m: [;1;30m[[;36mfile source[;1;30m][m  closing file ./upipe_m3u_reader_test_files/4.m3u
+[;34m notice[m: [;1;30m[[;36mfile source[;1;30m][m  opening file ./upipe_m3u_reader_test_files/5.m3u
+[;37mverbose[m: [;1;30m[[;36mm3u reader[;1;30m][m  found EXTM3U tag
+[;32m  debug[m: [;1;30m[[;36mm3u reader[;1;30m][m  version: 3
+[;32m  debug[m: [;1;30m[[;36mm3u reader[;1;30m][m  media sequence 7794
+[;32m  debug[m: [;1;30m[[;36mm3u reader[;1;30m][m  target duration: 405000000
+[;32m  debug[m: [;1;30m[[;36mm3u reader[;1;30m][m  ignore `#EXT-X-KEY:METHOD=AES-128,URI="https://priv.example.com/key.php?r=52"'
+[;37mverbose[m: [;1;30m[[;36mm3u reader[;1;30m][m  segment duration: 76491000
+[;37mverbose[m: [;1;30m[[;36mm3u reader[;1;30m][m  uri http://media.example.com/fileSequence52-A.ts
+[;37mverbose[m: [;1;30m[[;36mm3u reader[;1;30m][m  segment duration: 405000000
+[;37mverbose[m: [;1;30m[[;36mm3u reader[;1;30m][m  uri http://media.example.com/fileSequence52-B.ts
+[;37mverbose[m: [;1;30m[[;36mm3u reader[;1;30m][m  segment duration: 359991000
+[;37mverbose[m: [;1;30m[[;36mm3u reader[;1;30m][m  uri http://media.example.com/fileSequence52-C.ts
+[;32m  debug[m: [;1;30m[[;36mm3u reader[;1;30m][m  ignore `#EXT-X-KEY:METHOD=AES-128,URI="https://priv.example.com/key.php?r=53"'
+[;37mverbose[m: [;1;30m[[;36mm3u reader[;1;30m][m  segment duration: 405000000
+[;37mverbose[m: [;1;30m[[;36mm3u reader[;1;30m][m  uri http://media.example.com/fileSequence53-A.ts
+[;32m  debug[m: [;1;30m[[;36mm3u reader[;1;30m][m  throw new flow def
+[;32m  debug[m: [;1;30m[[;36mm3u reader[;1;30m][m   - "b.size" [unsigned]: 32768
+[;32m  debug[m: [;1;30m[[;36mm3u reader[;1;30m][m   - "m3u.version" [small_unsigned]: 3
+[;32m  debug[m: [;1;30m[[;36mm3u reader[;1;30m][m   - "f.def" [string]: "block.m3u.playlist."
+[;32m  debug[m: [;1;30m[[;36mm3u reader[;1;30m][m   - "m3u.playlist.media_sequence" [unsigned]: 7794
+[;32m  debug[m: [;1;30m[[;36mm3u reader[;1;30m][m   - "m3u.playlist.target_duration" [unsigned]: 405000000
+[;32m  debug[m: [;1;30m[[;36mm3u reader[;1;30m][m   - "uri.scheme" [string]: "file"
+[;32m  debug[m: [;1;30m[[;36mm3u reader[;1;30m][m   - "uri.path" [string]: "./upipe_m3u_reader_test_files/1.m3u"
+[;32m  debug[m: [;1;30m[[;36mnull[;1;30m][m  accepted flow def
+[;34m notice[m: [;1;30m[[;36mfile source[;1;30m][m  end of file ./upipe_m3u_reader_test_files/5.m3u
+[;32m  debug[m: [;1;30m[[;36mfile source[;1;30m][m  throw source end
+[;34m notice[m: [;1;30m[[;36mfile source[;1;30m][m  closing file ./upipe_m3u_reader_test_files/5.m3u
+[;34m notice[m: [;1;30m[[;36mfile source[;1;30m][m  opening file ./upipe_m3u_reader_test_files/6.m3u
+[;37mverbose[m: [;1;30m[[;36mm3u reader[;1;30m][m  found EXTM3U tag
+[;37mverbose[m: [;1;30m[[;36mm3u reader[;1;30m][m  uri http://example.com/low.m3u8
+[;37mverbose[m: [;1;30m[[;36mm3u reader[;1;30m][m  uri http://example.com/mid.m3u8
+[;37mverbose[m: [;1;30m[[;36mm3u reader[;1;30m][m  uri http://example.com/hi.m3u8
+[;37mverbose[m: [;1;30m[[;36mm3u reader[;1;30m][m  uri http://example.com/audio-only.m3u8
+[;32m  debug[m: [;1;30m[[;36mm3u reader[;1;30m][m  throw new flow def
+[;32m  debug[m: [;1;30m[[;36mm3u reader[;1;30m][m   - "b.size" [unsigned]: 32768
+[;32m  debug[m: [;1;30m[[;36mm3u reader[;1;30m][m   - "f.def" [string]: "block.m3u.master."
+[;32m  debug[m: [;1;30m[[;36mm3u reader[;1;30m][m   - "uri.scheme" [string]: "file"
+[;32m  debug[m: [;1;30m[[;36mm3u reader[;1;30m][m   - "uri.path" [string]: "./upipe_m3u_reader_test_files/1.m3u"
+[;32m  debug[m: [;1;30m[[;36mnull[;1;30m][m  accepted flow def
+[;34m notice[m: [;1;30m[[;36mfile source[;1;30m][m  end of file ./upipe_m3u_reader_test_files/6.m3u
+[;32m  debug[m: [;1;30m[[;36mfile source[;1;30m][m  throw source end
+[;34m notice[m: [;1;30m[[;36mfile source[;1;30m][m  closing file ./upipe_m3u_reader_test_files/6.m3u
+[;34m notice[m: [;1;30m[[;36mfile source[;1;30m][m  opening file ./upipe_m3u_reader_test_files/7.m3u
+[;37mverbose[m: [;1;30m[[;36mm3u reader[;1;30m][m  found EXTM3U tag
+[;37mverbose[m: [;1;30m[[;36mm3u reader[;1;30m][m  uri low/audio-video.m3u8
+[;32m  debug[m: [;1;30m[[;36mm3u reader[;1;30m][m  ignore `#EXT-X-I-FRAME-STREAM-INF:BANDWIDTH=86000,URI="low/iframe.m3u8"'
+[;37mverbose[m: [;1;30m[[;36mm3u reader[;1;30m][m  uri mid/audio-video.m3u8
+[;32m  debug[m: [;1;30m[[;36mm3u reader[;1;30m][m  ignore `#EXT-X-I-FRAME-STREAM-INF:BANDWIDTH=150000,URI="mid/iframe.m3u8"'
+[;37mverbose[m: [;1;30m[[;36mm3u reader[;1;30m][m  uri hi/audio-video.m3u8
+[;32m  debug[m: [;1;30m[[;36mm3u reader[;1;30m][m  ignore `#EXT-X-I-FRAME-STREAM-INF:BANDWIDTH=550000,URI="hi/iframe.m3u8"'
+[;37mverbose[m: [;1;30m[[;36mm3u reader[;1;30m][m  uri audio-only.m3u8
+[;34m notice[m: [;1;30m[[;36mfile source[;1;30m][m  end of file ./upipe_m3u_reader_test_files/7.m3u
+[;32m  debug[m: [;1;30m[[;36mfile source[;1;30m][m  throw source end
+[;34m notice[m: [;1;30m[[;36mfile source[;1;30m][m  closing file ./upipe_m3u_reader_test_files/7.m3u
+[;34m notice[m: [;1;30m[[;36mfile source[;1;30m][m  opening file ./upipe_m3u_reader_test_files/8.m3u
+[;37mverbose[m: [;1;30m[[;36mm3u reader[;1;30m][m  found EXTM3U tag
+[;32m  debug[m: [;1;30m[[;36mm3u reader[;1;30m][m  ignore `#EXT-X-MEDIA:TYPE=AUDIO,GROUP-ID="aac",NAME="English",DEFAULT=YES,AUTOSELECT=YES,LANGUAGE="en",URI="main/english-audio.m3u8"'
+[;32m  debug[m: [;1;30m[[;36mm3u reader[;1;30m][m  ignore `#EXT-X-MEDIA:TYPE=AUDIO,GROUP-ID="aac",NAME="Deutsch",DEFAULT=NO,AUTOSELECT=YES,LANGUAGE="de",URI="main/german-audio.m3u8"'
+[;32m  debug[m: [;1;30m[[;36mm3u reader[;1;30m][m  ignore `#EXT-X-MEDIA:TYPE=AUDIO,GROUP-ID="aac",NAME="Commentary",DEFAULT=NO,AUTOSELECT=NO,URI="commentary/audio-only.m3u8"'
+[;37mverbose[m: [;1;30m[[;36mm3u reader[;1;30m][m  uri low/video-only.m3u8
+[;37mverbose[m: [;1;30m[[;36mm3u reader[;1;30m][m  uri mid/video-only.m3u8
+[;37mverbose[m: [;1;30m[[;36mm3u reader[;1;30m][m  uri hi/video-only.m3u8
+[;37mverbose[m: [;1;30m[[;36mm3u reader[;1;30m][m  uri main/english-audio.m3u8
+[;34m notice[m: [;1;30m[[;36mfile source[;1;30m][m  end of file ./upipe_m3u_reader_test_files/8.m3u
+[;32m  debug[m: [;1;30m[[;36mfile source[;1;30m][m  throw source end
+[;34m notice[m: [;1;30m[[;36mfile source[;1;30m][m  closing file ./upipe_m3u_reader_test_files/8.m3u
+[;34m notice[m: [;1;30m[[;36mfile source[;1;30m][m  opening file ./upipe_m3u_reader_test_files/9.m3u
+[;37mverbose[m: [;1;30m[[;36mm3u reader[;1;30m][m  found EXTM3U tag
+[;32m  debug[m: [;1;30m[[;36mm3u reader[;1;30m][m  ignore `#EXT-X-MEDIA:TYPE=VIDEO,GROUP-ID="low",NAME="Main",DEFAULT=YES,URI="low/main/audio-video.m3u8"'
+[;32m  debug[m: [;1;30m[[;36mm3u reader[;1;30m][m  ignore `#EXT-X-MEDIA:TYPE=VIDEO,GROUP-ID="low",NAME="Centerfield",DEFAULT=NO,URI="low/centerfield/audio-video.m3u8"'
+[;32m  debug[m: [;1;30m[[;36mm3u reader[;1;30m][m  ignore `#EXT-X-MEDIA:TYPE=VIDEO,GROUP-ID="low",NAME="Dugout",DEFAULT=NO,URI="low/dugout/audio-video.m3u8"'
+[;37mverbose[m: [;1;30m[[;36mm3u reader[;1;30m][m  uri low/main/audio-video.m3u8
+[;32m  debug[m: [;1;30m[[;36mm3u reader[;1;30m][m  ignore `#EXT-X-MEDIA:TYPE=VIDEO,GROUP-ID="mid",NAME="Main",DEFAULT=YES,URI="mid/main/audio-video.m3u8"'
+[;32m  debug[m: [;1;30m[[;36mm3u reader[;1;30m][m  ignore `#EXT-X-MEDIA:TYPE=VIDEO,GROUP-ID="mid",NAME="Centerfield",DEFAULT=NO,URI="mid/centerfield/audio-video.m3u8"'
+[;32m  debug[m: [;1;30m[[;36mm3u reader[;1;30m][m  ignore `#EXT-X-MEDIA:TYPE=VIDEO,GROUP-ID="mid",NAME="Dugout",DEFAULT=NO,URI="mid/dugout/audio-video.m3u8"'
+[;37mverbose[m: [;1;30m[[;36mm3u reader[;1;30m][m  uri mid/main/audio-video.m3u8
+[;32m  debug[m: [;1;30m[[;36mm3u reader[;1;30m][m  ignore `#EXT-X-MEDIA:TYPE=VIDEO,GROUP-ID="hi",NAME="Main",DEFAULT=YES,URI="hi/main/audio-video.m3u8"'
+[;32m  debug[m: [;1;30m[[;36mm3u reader[;1;30m][m  ignore `#EXT-X-MEDIA:TYPE=VIDEO,GROUP-ID="hi",NAME="Centerfield",DEFAULT=NO,URI="hi/centerfield/audio-video.m3u8"'
+[;32m  debug[m: [;1;30m[[;36mm3u reader[;1;30m][m  ignore `#EXT-X-MEDIA:TYPE=VIDEO,GROUP-ID="hi",NAME="Dugout",DEFAULT=NO,URI="hi/dugout/audio-video.m3u8"'
+[;37mverbose[m: [;1;30m[[;36mm3u reader[;1;30m][m  uri hi/main/audio-video.m3u8
+[;37mverbose[m: [;1;30m[[;36mm3u reader[;1;30m][m  uri main/audio-only.m3u8
+[;34m notice[m: [;1;30m[[;36mfile source[;1;30m][m  end of file ./upipe_m3u_reader_test_files/9.m3u
+[;32m  debug[m: [;1;30m[[;36mfile source[;1;30m][m  throw source end
+[;34m notice[m: [;1;30m[[;36mfile source[;1;30m][m  closing file ./upipe_m3u_reader_test_files/9.m3u
+[;32m  debug[m: [;1;30m[[;36mfile source[;1;30m][m  throw dead event
+[;32m  debug[m: [;1;30m[[;36mm3u reader[;1;30m][m  throw dead event
+[;33mwarning[m: [;1;30m[[;36mnull[;1;30m][m  freed 24 packets
+[;32m  debug[m: [;1;30m[[;36mnull[;1;30m][m  throw dead event

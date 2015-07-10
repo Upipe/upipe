@@ -91,6 +91,11 @@ pkginclude_HEADERS = \
 	uref_sound.h \
 	uref_sound_flow.h \
 	uref_std.h \
+	uref_m3u.h \
+	uref_m3u_playlist.h \
+	uref_m3u_master.h \
+	uref_m3u_flow.h \
+	uref_m3u_playlist_flow.h \
 	uref_uri.h \
 	urequest.h \
 	uring.h \

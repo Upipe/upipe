@@ -47,4 +47,5 @@ myinclude_HEADERS = \
 	upipe_sine_wave_source.h \
 	upipe_stream_switcher.h \
 	upipe_dump.h \
-	uprobe_http_redirect.h
+	uprobe_http_redirect.h \
+	upipe_m3u_reader.h
