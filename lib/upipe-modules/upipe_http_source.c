@@ -270,6 +270,8 @@ static int upipe_http_src_status_cb(http_parser *parser)
     switch (parser->status_code) {
     /* success */
     case 200:
+    /* partial content */
+    case 206:
     /* found */
     case 302:
         break;
