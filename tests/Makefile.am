@@ -26,6 +26,7 @@ dist_check_DATA = \
 check_PROGRAMS = \
 	ulist_test \
 	ustring_test \
+	ucookie_test \
 	uprobe_stdio_test \
 	uprobe_stdio_color_test \
 	uprobe_syslog_test \
@@ -71,6 +72,7 @@ check_PROGRAMS = \
 TESTS = \
 	ulist_test \
 	ustring_test.sh \
+	ucookie_test \
 	umem_alloc_test \
 	umem_pool_test \
 	udict_inline_test.sh \

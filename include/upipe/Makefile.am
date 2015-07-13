@@ -19,6 +19,7 @@ pkginclude_HEADERS = \
 	ubuf_sound_mem.h \
 	uclock.h \
 	uclock_std.h \
+	ucookie.h \
 	udeal.h \
 	udict.h \
 	udict_dump.h \
