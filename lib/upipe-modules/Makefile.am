@@ -50,7 +50,8 @@ libupipe_modules_la_SOURCES = \
 	upipe_rtcp.c \
 	upipe_dump.c \
 	uprobe_http_redirect.c \
-	upipe_m3u_reader.c
+	upipe_m3u_reader.c \
+	upipe_m3u_playlist.c
 
 if HAVE_WRITEV
 libupipe_modules_la_SOURCES += \
