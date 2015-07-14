@@ -1,7 +1,9 @@
 /*
  * Copyright (C) 2015 Open Broadcast Systems Ltd
+ * Copyright (C) 2015 OpenHeadend S.A.R.L.
  *
  * Authors: Kieran Kunhya
+ *          Christophe Massiot
  *
  * Permission is hereby granted, free of charge, to any person obtaining
  * a copy of this software and associated documentation files (the
@@ -68,6 +70,12 @@ static int uprobe_syslog_throw(struct uprobe *uprobe, struct upipe *upipe,
     }
 
     size_t len = 0;
+    if (!uprobe_syslog->inited) {
+        priority |= uprobe_syslog->facility;
+        if (uprobe_syslog->ident != NULL)
+            len += strlen(uprobe_syslog->ident) + 2;
+    }
+
     struct uchain *uchain;
     ulist_foreach_reverse(&ulog->prefixes, uchain) {
         struct ulog_pfx *ulog_pfx = ulog_pfx_from_uchain(uchain);
@@ -77,6 +85,9 @@ static int uprobe_syslog_throw(struct uprobe *uprobe, struct upipe *upipe,
     char buffer[len + 1];
     memset(buffer, 0, sizeof (buffer));
     char *tmp = buffer;
+    if (!uprobe_syslog->inited && uprobe_syslog->ident != NULL)
+        tmp += sprintf(tmp, "%s: ", uprobe_syslog->ident);
+
     ulist_foreach_reverse(&ulog->prefixes, uchain) {
         struct ulog_pfx *ulog_pfx = ulog_pfx_from_uchain(uchain);
         tmp += sprintf(tmp, "[%s] ", ulog_pfx->tag);
@@ -90,25 +101,33 @@ static int uprobe_syslog_throw(struct uprobe *uprobe, struct upipe *upipe,
  *
  * @param uprobe_syslog pointer to the already allocated structure
  * @param next next probe to test if this one doesn't catch the event
- * @param ident syslog ident string
- * @param option syslog option (see syslog(3))
+ * @param ident syslog ident string (may be NULL)
+ * @param option syslog option (see syslog(3)), or -1 to not call openlog
  * @param facility syslog facility (see syslog(3))
  * @param level level at which to log the messages
  * @return pointer to uprobe, or NULL in case of error
  */
 struct uprobe *uprobe_syslog_init(struct uprobe_syslog *uprobe_syslog,
-                                  struct uprobe *next, char *ident,
+                                  struct uprobe *next, const char *ident,
                                   int option, int facility,
                                   enum uprobe_log_level min_level)
 {
     assert(uprobe_syslog != NULL);
     struct uprobe *uprobe = uprobe_syslog_to_uprobe(uprobe_syslog);
-    uprobe_syslog->ident = strdup(ident);
-    if (!uprobe_syslog->ident)
-        return NULL;
-    uprobe_syslog->min_level = min_level;
 
-    openlog(uprobe_syslog->ident, option, facility);
+    if (ident != NULL) {
+        uprobe_syslog->ident = strdup(ident);
+        if (!uprobe_syslog->ident)
+            return NULL;
+    } else
+        uprobe_syslog->ident = NULL;
+
+    uprobe_syslog->min_level = min_level;
+    uprobe_syslog->facility = facility;
+    uprobe_syslog->inited = option != -1;
+
+    if (uprobe_syslog->inited)
+        openlog(uprobe_syslog->ident, option, facility);
 
     uprobe_init(uprobe, uprobe_syslog_throw, next);
     return uprobe;
@@ -122,13 +141,14 @@ void uprobe_syslog_clean(struct uprobe_syslog *uprobe_syslog)
 {
     assert(uprobe_syslog != NULL);
     struct uprobe *uprobe = uprobe_syslog_to_uprobe(uprobe_syslog);
-    closelog();
+    if (uprobe_syslog->inited)
+        closelog();
     free(uprobe_syslog->ident);
     uprobe_syslog->ident = NULL;
     uprobe_clean(uprobe);
 }
 
-#define ARGS_DECL struct uprobe *next, char *ident, int option, int facility, enum uprobe_log_level min_level
+#define ARGS_DECL struct uprobe *next, const char *ident, int option, int facility, enum uprobe_log_level min_level
 #define ARGS next, ident, option, facility, min_level
 UPROBE_HELPER_ALLOC(uprobe_syslog)
 #undef ARGS
