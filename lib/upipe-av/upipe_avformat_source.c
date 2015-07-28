@@ -638,7 +638,8 @@ static struct uref *alloc_raw_video_def(struct uref_mgr *uref_mgr,
  * @return pointer to uref control packet, or NULL in case of error
  */
 static struct uref *alloc_video_def(struct uref_mgr *uref_mgr,
-                                    AVCodecContext *codec)
+                                    AVCodecContext *codec,
+                                    AVStream *stream)
 {
     const char *def = upipe_av_to_flow_def(codec->codec_id);
     if (unlikely(def == NULL))
@@ -660,9 +661,10 @@ static struct uref *alloc_video_def(struct uref_mgr *uref_mgr,
         urational_simplify(&fps);
         CHK(uref_pic_flow_set_fps(flow_def, fps))
     }
-    if (codec->sample_aspect_ratio.den) {
-        struct urational sar = { .num = codec->sample_aspect_ratio.num,
-                                 .den = codec->sample_aspect_ratio.den };
+    AVRational sample_ar = av_guess_sample_aspect_ratio(codec, stream, NULL);
+    if (sample_ar.num) {
+        struct urational sar = { .num = sample_ar.num,
+                                 .den = sample_ar.den };
         urational_simplify(&sar);
         CHK(uref_pic_flow_set_sar(flow_def, sar));
     }
@@ -756,7 +758,7 @@ static void upipe_avfsrc_probe(struct upump *upump)
                 if (codec->codec_id == AV_CODEC_ID_RAWVIDEO)
                     flow_def = alloc_raw_video_def(upipe_avfsrc->uref_mgr, codec);
                 else
-                    flow_def = alloc_video_def(upipe_avfsrc->uref_mgr, codec);
+                    flow_def = alloc_video_def(upipe_avfsrc->uref_mgr, codec, stream);
                 break;
             case AVMEDIA_TYPE_SUBTITLE:
                 flow_def = alloc_subtitles_def(upipe_avfsrc->uref_mgr, codec);
