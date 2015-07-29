@@ -2893,7 +2893,7 @@ static void upipe_ts_mux_update_psig(struct upipe *upipe)
         if (program->pmt_interval > max_psi_interval)
             program->pmt_interval = max_psi_interval;
         if (program->pcr_interval > max_pcr_interval)
-            program->pcr_interval = max_psi_interval;
+            program->pcr_interval = max_pcr_interval;
     }
 }
 
