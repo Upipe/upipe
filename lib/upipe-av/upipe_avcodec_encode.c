@@ -642,6 +642,10 @@ static void upipe_avcenc_encode_video(struct upipe *upipe,
         frame->linesize[i] = stride;
     }
 
+    /* set frame dimensions */
+    frame->width = hsize;
+    frame->height = vsize;
+
     /* set pts (needed for uref/avpkt mapping) */
     upipe_verbose_va(upipe, "input pts %"PRId64, upipe_avcenc->avcpts);
     frame->pts = upipe_avcenc->avcpts++;
