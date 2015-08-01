@@ -233,8 +233,6 @@ struct upipe_bmd_src {
 
     /** URI */
     char *uri;
-    /** card index */
-    int card_idx;
     /** queue between blackmagic thread and pipe thread */
     struct uqueue uqueue;
     /** handle to decklink card */
@@ -729,7 +727,6 @@ static int upipe_bmd_src_set_uri(struct upipe *upipe, const char *uri)
         idx += strlen(URI_SEP);
     }
     upipe_bmd_src->uri = strdup(uri);
-    upipe_bmd_src->card_idx = atoi(idx);
     upipe_notice_va(upipe, "opening device %s", upipe_bmd_src->uri);
 
     IDeckLinkIterator *deckLinkIterator;
@@ -741,21 +738,50 @@ static int upipe_bmd_src_set_uri(struct upipe *upipe, const char *uri)
         upipe_err(upipe, "decklink drivers not found");
         return UBASE_ERR_EXTERNAL;
     }
-
-    /* get decklink interface handler */
     HRESULT result = E_NOINTERFACE;
-    for (int i = 0; i <= upipe_bmd_src->card_idx; i++) {
-        if (deckLink)
-            deckLink->Release();
-        result = deckLinkIterator->Next(&deckLink);
-        if (result != S_OK)
-            break;
+
+    if (*idx == '@') {
+        uint64_t card_topology;
+        if (sscanf(idx + 1, "%"SCNu64, &card_topology) != 1) {
+            upipe_err_va(upipe, "invalid URI '%s'", uri);
+            return UBASE_ERR_INVALID;
+        }
+
+        /* get decklink interface handler */
+        for ( ; ; ) {
+            if (deckLink)
+                deckLink->Release();
+            result = deckLinkIterator->Next(&deckLink);
+            if (result != S_OK)
+                break;
+
+            IDeckLinkAttributes *deckLinkAttributes = NULL;
+            int64_t deckLinkTopologicalId = 0;
+            if (deckLink->QueryInterface(IID_IDeckLinkAttributes,
+                                         (void**)&deckLinkAttributes) == S_OK &&
+                deckLinkAttributes->GetInt(BMDDeckLinkTopologicalID,
+                                           &deckLinkTopologicalId) == S_OK &&
+                (uint64_t)deckLinkTopologicalId == card_topology)
+                break;
+            if (deckLinkAttributes != NULL)
+                deckLinkAttributes->Release();
+		}
+    } else {
+        int card_idx = atoi(idx);
+
+        /* get decklink interface handler */
+        for (int i = 0; i <= card_idx; i++) {
+            if (deckLink)
+                deckLink->Release();
+            result = deckLinkIterator->Next(&deckLink);
+            if (result != S_OK)
+                break;
+        }
     }
     deckLinkIterator->Release();
 
     if (result != S_OK) {
-        upipe_err_va(upipe, "decklink card %d not found",
-                     upipe_bmd_src->card_idx);
+        upipe_err_va(upipe, "decklink card not found (%s)", uri);
         if (deckLink)
             deckLink->Release();
         return UBASE_ERR_EXTERNAL;

@@ -1,5 +1,5 @@
 /* -LICENSE-START-
-** Copyright (c) 2013 Blackmagic Design
+** Copyright (c) 2014 Blackmagic Design
 **
 ** Permission is hereby granted, free of charge, to any person or organization
 ** obtaining a copy of the software and accompanying documentation covered by
@@ -57,7 +57,7 @@ public:
     virtual HRESULT GetDisplayName (/* out */ const char **displayName) = 0;
 
 protected:
-    virtual ~IDeckLink () {}; // call Release method to drop reference count
+    virtual ~IDeckLink () {} // call Release method to drop reference count
 };
 
 /* Functions */
@@ -65,7 +65,7 @@ protected:
 extern "C" {
 
 
-};
+}
 
 
 #endif /* defined(BMD_DECKLINKAPIDISCOVERY_H) */
