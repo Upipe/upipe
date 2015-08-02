@@ -266,7 +266,9 @@ check_PROGRAMS += \
 	upipe_ts_pes_encaps_test \
 	upipe_ts_psi_generator_test \
 	upipe_ts_si_generator_test \
-	upipe_ts_tstd_test
+	upipe_ts_tstd_test \
+	upipe_s337_encaps_test \
+	$(NULL)
 TESTS += \
 	upipe_rtp_decaps_test \
 	upipe_rtp_prepend_test \
@@ -296,7 +298,9 @@ TESTS += \
 	upipe_ts_pes_encaps_test \
 	upipe_ts_psi_generator_test \
 	upipe_ts_si_generator_test \
-	upipe_ts_tstd_test
+	upipe_ts_tstd_test \
+	upipe_s337_encaps_test \
+	$(NULL)
 
 if HAVE_EV
 check_PROGRAMS += \
@@ -377,6 +381,7 @@ upipe_mpga_framer_test_LDADD = $(LDADD) $(top_builddir)/lib/upipe-framers/libupi
 upipe_a52_framer_test_LDADD = $(LDADD) $(top_builddir)/lib/upipe-framers/libupipe_framers.la
 upipe_video_trim_test_LDADD = $(LDADD) $(top_builddir)/lib/upipe-framers/libupipe_framers.la
 upipe_h264_framer_test_LDADD = $(LDADD) $(top_builddir)/lib/upipe-framers/libupipe_framers.la -lev $(top_builddir)/lib/upump-ev/libupump_ev.la $(top_builddir)/lib/upipe-modules/libupipe_modules.la
+upipe_s337_encaps_test_LDADD = $(LDADD) $(top_builddir)/lib/upipe-modules/libupipe_modules.la
 
 upipe_avformat_test_CFLAGS = @AVFORMAT_CFLAGS@
 upipe_avformat_test_LDADD = $(LDADD) -lev $(top_builddir)/lib/upump-ev/libupump_ev.la $(top_builddir)/lib/upipe-av/libupipe_av.la @AVFORMAT_LIBS@

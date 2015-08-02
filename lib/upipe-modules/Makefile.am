@@ -78,7 +78,9 @@ libupipe_modules_la_SOURCES += \
 	upipe_rtp_prepend.c \
 	upipe_rtp_source.c \
 	upipe_rtcp.c \
-	upipe_rtp_reorder.c
+	upipe_rtp_reorder.c \
+	upipe_s337_encaps.c \
+	$(NULL)
 endif
 
 libupipe_modules_la_CPPFLAGS = -I$(top_builddir)/include -I$(top_srcdir)/include
