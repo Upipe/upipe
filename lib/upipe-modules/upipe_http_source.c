@@ -343,10 +343,8 @@ static int upipe_http_src_output_data(struct upipe *upipe,
     uref_clock_set_cr_sys(uref, systime);
     if (len == 0)
         uref_block_set_end(uref);
-    upipe_use(upipe);
     upipe_http_src_output(upipe, uref, &upipe_http_src->upump);
     upipe_http_src->position += len;
-    upipe_release(upipe);
 
     /* everything's fine, return 0 to http_parser */
     return 0;
@@ -359,7 +357,7 @@ static int upipe_http_src_message_complete(http_parser *parser)
 
     upipe_dbg_va(upipe, "message complete %i", parser->status_code);
     upipe_http_src_output_data(upipe, NULL, 0);
-    upipe_notice_va(upipe, "end of %s", upipe_http_src->url);
+    upipe_dbg_va(upipe, "end of %s", upipe_http_src->url);
     upipe_http_src_set_upump(upipe, NULL);
     upipe_throw_source_end(upipe);
 
@@ -434,6 +432,7 @@ static void upipe_http_src_worker(struct upump *upump)
     }
 
     /* parse response */
+    upipe_use(upipe);
     size_t parsed_len =
         http_parser_execute(&upipe_http_src->parser,
                             &upipe_http_src->parser_settings,
@@ -441,6 +440,7 @@ static void upipe_http_src_worker(struct upump *upump)
     if (parsed_len != len)
         upipe_warn(upipe, "http request execution failed");
     free(buffer);
+    upipe_release(upipe);
 }
 
 static int request_add(char **req_p, size_t *len, const char *fmt, ...)
