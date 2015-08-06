@@ -13,6 +13,8 @@
 #include <upipe/upipe_helper_input.h>
 #include <upipe-modules/upipe_stream_switcher.h>
 
+#define DELTA_WARN       (UCLOCK_FREQ / 1000)
+
 /** @internal @This is the private context of a stream switcher pipe. */
 struct upipe_stream_switcher {
     /** for urefcount helper */
@@ -31,7 +33,10 @@ struct upipe_stream_switcher {
     /** private */
     struct upipe *selected;
     struct upipe *waiting;
+    /** time to switch */
     uint64_t pts_orig;
+    /** last pts of the output stream */
+    uint64_t last_pts_orig;
     uint64_t rebase_timestamp;
     bool rebase_timestamp_set;
 
@@ -172,8 +177,9 @@ static int upipe_stream_switcher_input_control(struct upipe *upipe,
 /*
  * drop uref
  */
-static bool upipe_stream_switcher_drop(struct uref *uref)
+static bool upipe_stream_switcher_drop(struct upipe *upipe, struct uref *uref)
 {
+    upipe_verbose(upipe, "drop...");
     uref_free(uref);
     return true;
 }
@@ -192,14 +198,22 @@ static bool upipe_stream_switcher_fwd(struct upipe *upipe,
     struct upipe *super = upipe_stream_switcher_to_upipe(upipe_stream_switcher);
     uint64_t dts_prog = 0, dts_orig = 0;
 
-    assert(ubase_check(uref_clock_get_dts_orig(uref, &dts_orig)));
+    if (!ubase_check(uref_clock_get_dts_orig(uref, &dts_orig))) {
+        upipe_err(upipe, "no dts orig");
+        return upipe_stream_switcher_drop(upipe, uref);
+    }
+
     if (!ubase_check(uref_clock_get_dts_prog(uref, &dts_prog)))
         dts_prog = 0;
+
     if (!upipe_stream_switcher->rebase_timestamp_set) {
         upipe_stream_switcher->rebase_timestamp_set = true;
         upipe_stream_switcher->rebase_timestamp = dts_orig;
     }
-    assert(upipe_stream_switcher->rebase_timestamp <= dts_orig);
+    if (upipe_stream_switcher->rebase_timestamp > dts_orig) {
+        upipe_warn(upipe, "dts is in the past");
+        upipe_stream_switcher->rebase_timestamp = dts_orig;
+    }
     dts_orig -= upipe_stream_switcher->rebase_timestamp;
     upipe_verbose_va(upipe, "DTS rebase %"PRIu64"(%"PRIu64"ms) "
                      "-> %"PRIu64" (%"PRIu64"ms)",
@@ -225,8 +239,18 @@ static bool upipe_stream_switcher_wait(struct upipe_stream_switcher *super,
     uint64_t pts_orig = 0;
     if (!ubase_check(uref_clock_get_pts_orig(uref, &pts_orig))) {
         /* fail to get pts, dropping... */
-        upipe_warn(upipe, "fail to get pts");
-        return upipe_stream_switcher_drop(uref);
+        upipe_warn(upipe, "fail to get pts from new stream");
+        if (!ubase_check(uref_clock_get_dts_orig(uref, &pts_orig))) {
+            upipe_err(upipe, "fail to fallback on dts");
+            return upipe_stream_switcher_drop(upipe, uref);
+        }
+    }
+
+    if (pts_orig <= super->last_pts_orig) {
+        /* late frame, drop... */
+        upipe_dbg_va(upipe, "late frame %"PRIu64 " <= %"PRIu64,
+                     pts_orig, super->last_pts_orig);
+        return upipe_stream_switcher_drop(upipe, uref);
     }
     upipe_dbg_va(upipe, "found a key frame at %"PRIu64, pts_orig);
     super->waiting = upipe;
@@ -253,7 +277,7 @@ static void upipe_stream_switcher_switch(struct upipe_stream_switcher *super,
     super->waiting = NULL;
 
     /* wake up the new one */
-    upipe_stream_switcher_input_output_input(super->selected);
+    assert(upipe_stream_switcher_input_output_input(super->selected));
     upipe_stream_switcher_input_unblock_input(super->selected);
 
     /* destroy the old one */
@@ -284,25 +308,34 @@ static bool upipe_stream_switcher_input_output(struct upipe *upipe,
 
     if (upipe_stream_switcher_input->destroyed)
         /* previous stream, drop */
-        return upipe_stream_switcher_drop(uref);
+        return upipe_stream_switcher_drop(upipe, uref);
 
     if (upipe_stream_switcher->selected == upipe) {
         /* current selected stream */
-
-        if (!upipe_stream_switcher->waiting)
-            /* no waiting stream, forward */
-            return upipe_stream_switcher_fwd(upipe, uref, upump_p);
 
         uint64_t pts_orig = 0;
         if (!ubase_check(uref_clock_get_pts_orig(uref, &pts_orig))) {
             /* fail to get pts, dropping... */
             upipe_warn(upipe, "fail to get pts");
-            return upipe_stream_switcher_drop(uref);
+
+            if (!ubase_check(uref_clock_get_dts_orig(uref, &pts_orig))) {
+                upipe_err(upipe, "fail to fallback on dts");
+                return upipe_stream_switcher_drop(upipe, uref);
+            }
         }
+
+        upipe_stream_switcher->last_pts_orig = pts_orig;
+        if (!upipe_stream_switcher->waiting)
+            /* no waiting stream, forward */
+            return upipe_stream_switcher_fwd(upipe, uref, upump_p);
 
         if (pts_orig < upipe_stream_switcher->pts_orig)
             /* previous frame, forward */
             return upipe_stream_switcher_fwd(upipe, uref, upump_p);
+
+        if (pts_orig - upipe_stream_switcher->pts_orig > DELTA_WARN)
+            upipe_warn_va(upipe, "switch too late %"PRIu64,
+                          pts_orig - upipe_stream_switcher->pts_orig);
 
         /* the selected stream meet the waiting stream, switch */
         upipe_stream_switcher_switch(upipe_stream_switcher, upipe, uref);
@@ -336,7 +369,7 @@ static bool upipe_stream_switcher_input_output(struct upipe *upipe,
 
         /* not a key frame, drop */
     }
-    return upipe_stream_switcher_drop(uref);
+    return upipe_stream_switcher_drop(upipe, uref);
 }
 
 /** @internal @This hold and block stream uref if necessary.
@@ -402,6 +435,7 @@ static struct upipe *upipe_stream_switcher_alloc(struct upipe_mgr *mgr,
     upipe_stream_switcher->selected = NULL;
     upipe_stream_switcher->waiting = NULL;
     upipe_stream_switcher->pts_orig = 0;
+    upipe_stream_switcher->last_pts_orig = 0;
     upipe_stream_switcher->rebase_timestamp_set = false;
     upipe_stream_switcher->rebase_timestamp = 0;
 
