@@ -346,16 +346,16 @@ static bool upipe_h264f_find(struct upipe *upipe,
                     upipe_h264f->au_size, &size, &buffer))) {
         const uint8_t *p = upipe_framers_mpeg_scan(buffer, buffer + size,
                                                    &upipe_h264f->scan_context);
-        if (p > buffer + 4)
-            *prev_p = p[-4];
+        if (p > buffer + 5)
+            *prev_p = p[-5];
         uref_block_unmap(upipe_h264f->next_uref, upipe_h264f->au_size);
 
         if ((upipe_h264f->scan_context & 0xffffff00) == 0x100) {
             *start_p = upipe_h264f->scan_context & 0xff;
             upipe_h264f->au_size += p - buffer;
-            if (p <= buffer + 4 &&
+            if (p <= buffer + 5 &&
                 !ubase_check(uref_block_extract(upipe_h264f->next_uref,
-                                    upipe_h264f->au_size - 4, 1, prev_p)))
+                                    upipe_h264f->au_size - 5, 1, prev_p)))
                 *prev_p = 0xff;
             return true;
         }
