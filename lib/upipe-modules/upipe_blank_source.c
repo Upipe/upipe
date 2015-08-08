@@ -392,6 +392,14 @@ static int _upipe_blksrc_control(struct upipe *upipe, int command, va_list args)
         case UPIPE_ATTACH_UPUMP_MGR:
             upipe_blksrc_set_upump(upipe, NULL);
             return upipe_blksrc_attach_upump_mgr(upipe);
+        case UPIPE_REGISTER_REQUEST: {
+            struct urequest *request = va_arg(args, struct urequest *);
+            return upipe_blksrc_alloc_output_proxy(upipe, request);
+        }
+        case UPIPE_UNREGISTER_REQUEST: {
+            struct urequest *request = va_arg(args, struct urequest *);
+            return upipe_blksrc_free_output_proxy(upipe, request);
+        }
         case UPIPE_SET_FLOW_DEF: {
             struct uref *flow_def = va_arg(args, struct uref *);
             return upipe_blksrc_set_flow_def(upipe, flow_def);
