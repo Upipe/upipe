@@ -48,6 +48,7 @@
 #include <upipe-modules/upipe_worker_sink.h>
 #include <upipe-modules/upipe_transfer.h>
 #include <upipe-modules/upipe_null.h>
+#include <upipe-modules/upipe_idem.h>
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -237,6 +238,62 @@ int main(int argc, char **argv)
     upipe_mgr_release(upipe_wsink_mgr);
 
     struct uref *uref = uref_alloc(uref_mgr);
+    ubase_assert(uref_flow_set_def(uref, "void."));
+    ubase_assert(upipe_set_flow_def(upipe_handle, uref));
+    uref_flow_delete_def(uref);
+    nb_packets++;
+    upipe_input(upipe_handle, uref, NULL);
+    upipe_release(upipe_handle);
+
+    ev_loop(loop, 0);
+
+    uprobe_err(logger, NULL, "joining");
+    assert(!pthread_join(wsink_thread_id, NULL));
+    uprobe_err(logger, NULL, "joined");
+    assert(transferred);
+    assert(!nb_packets);
+
+    uprobe_release(uprobe_remote);
+    /* we won't get the transferred event as upipe_test is the sink */
+    nb_packets = 0;
+    uprobe_remote = uprobe_pthread_assert_alloc(uprobe_use(logger));
+    assert(uprobe_remote != NULL);
+
+    upipe_test = upipe_void_alloc(&test_mgr,
+            uprobe_pfx_alloc(uprobe_use(uprobe_remote), UPROBE_LOG_VERBOSE,
+                             "test"));
+    assert(upipe_test != NULL);
+
+    struct upipe_mgr *idem_mgr = upipe_idem_mgr_alloc();
+    upipe_test = upipe_void_chain_input(upipe_test, idem_mgr,
+            uprobe_pfx_alloc(uprobe_use(uprobe_remote), UPROBE_LOG_VERBOSE,
+                             "idem"));
+    assert(upipe_test != NULL);
+    upipe_mgr_release(idem_mgr);
+
+    upipe_xfer_mgr = upipe_xfer_mgr_alloc(XFER_QUEUE, XFER_POOL);
+    assert(upipe_xfer_mgr != NULL);
+
+    upipe_mgr_use(upipe_xfer_mgr);
+    assert(pthread_create(&wsink_thread_id, NULL, thread, upipe_xfer_mgr) == 0);
+    uprobe_pthread_assert_set(uprobe_remote, wsink_thread_id);
+
+    upipe_wsink_mgr = upipe_wsink_mgr_alloc(upipe_xfer_mgr);
+    assert(upipe_wsink_mgr != NULL);
+    upipe_mgr_release(upipe_xfer_mgr);
+
+    upipe_handle = upipe_wsink_alloc(upipe_wsink_mgr,
+            uprobe_pfx_alloc(uprobe_use(uprobe_main), UPROBE_LOG_VERBOSE,
+                             "wsink"),
+            upipe_test,
+            uprobe_pfx_alloc(uprobe_use(uprobe_remote), UPROBE_LOG_VERBOSE,
+                             "wsink_x"),
+            WSINK_QUEUE);
+    /* from now on upipe_test shouldn't be accessed from this thread */
+    assert(upipe_handle != NULL);
+    upipe_mgr_release(upipe_wsink_mgr);
+
+    uref = uref_alloc(uref_mgr);
     ubase_assert(uref_flow_set_def(uref, "void."));
     ubase_assert(upipe_set_flow_def(upipe_handle, uref));
     uref_flow_delete_def(uref);
