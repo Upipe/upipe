@@ -228,6 +228,7 @@ static struct upipe *_upipe_wsrc_alloc(struct upipe_mgr *mgr,
             return NULL;
         }
         upipe_attach_upump_mgr(upipe_wsrc->source);
+        upipe_release(last_remote_xfer);
     } else {
         upipe_wsrc->source = last_remote_xfer;
         upipe_release(remote);
