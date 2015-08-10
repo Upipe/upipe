@@ -351,9 +351,47 @@ static inline struct urational urational_add(const struct urational *urational1,
     struct urational sum;
     sum.num = urational1->num * (int64_t)urational2->den +
               urational2->num * (int64_t)urational1->den;
-    sum.den = urational1->den * (int64_t)urational2->den;
+    sum.den = urational1->den * urational2->den;
     urational_simplify(&sum);
     return sum;
+}
+
+/** @This multiplies two rationals.
+ *
+ * @param urational1 pointer to rational 1
+ * @param urational2 pointer to rational 2
+ * @return a rational
+ */
+static inline struct urational urational_multiply(
+        const struct urational *urational1, const struct urational *urational2)
+{
+    struct urational mul;
+    mul.num = urational1->num * urational1->num;
+    mul.den = urational1->den * urational2->den;
+    urational_simplify(&mul);
+    return mul;
+}
+
+/** @This divides two rationals.
+ *
+ * @param urational1 pointer to rational 1
+ * @param urational2 pointer to rational 2
+ * @return a rational
+ */
+static inline struct urational urational_divide(
+        const struct urational *dividend, const struct urational *diviser)
+{
+    struct urational div;
+    uint64_t diviser_num_abs = diviser->num;
+    int64_t sign = 1;
+    if (diviser->num < 0) {
+        diviser_num_abs = -diviser->num;
+        sign = -1;
+    }
+    div.num = dividend->num * (int64_t)diviser->den * sign;
+    div.den = dividend->den * diviser_num_abs;
+    urational_simplify(&div);
+    return div;
 }
 
 /** @This checks if a prefix matches a string.
