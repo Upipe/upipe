@@ -404,6 +404,7 @@ static void upipe_stream_switcher_init_sub_mgr(struct upipe *upipe)
     sub_mgr->upipe_alloc = upipe_stream_switcher_input_alloc;
     sub_mgr->upipe_control = upipe_stream_switcher_input_control;
     sub_mgr->upipe_input = upipe_stream_switcher_input_input;
+    sub_mgr->refcount = &upipe_stream_switcher->urefcount;
 }
 
 /*
