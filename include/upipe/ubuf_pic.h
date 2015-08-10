@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2012-2014 OpenHeadend S.A.R.L.
+ * Copyright (C) 2012-2015 OpenHeadend S.A.R.L.
  *
  * Authors: Christophe Massiot
  *
@@ -324,6 +324,86 @@ static inline int ubuf_pic_resize(struct ubuf *ubuf, int hskip, int vskip,
                         new_hsize, new_vsize);
 }
 
+/** @This blits a picture ubuf to another ubuf.
+ *
+ * @param dest destination ubuf
+ * @param src source ubuf
+ * @param dest_hoffset number of pixels to seek at the beginning of each line of
+ * dest
+ * @param dest_voffset number of lines to seek at the beginning of dest
+ * @param src_hoffset number of pixels to skip at the beginning of each line of
+ * src
+ * @param src_voffset number of lines to skip at the beginning of src
+ * @param extract_hsize horizontal size to copy
+ * @param extract_vsize vertical size to copy
+ * @return an error code
+ */
+static inline int ubuf_pic_blit(struct ubuf *dest, struct ubuf *src,
+                                int dest_hoffset, int dest_voffset,
+                                int src_hoffset, int src_voffset,
+                                int extract_hsize, int extract_vsize)
+{
+    uint8_t src_macropixel;
+    UBASE_RETURN(ubuf_pic_size(src, NULL, NULL, &src_macropixel))
+    uint8_t dest_macropixel;
+    UBASE_RETURN(ubuf_pic_size(dest, NULL, NULL, &dest_macropixel))
+    if (unlikely(dest_macropixel != src_macropixel))
+        return UBASE_ERR_INVALID;
+
+    const char *chroma = NULL;
+    while (ubase_check(ubuf_pic_plane_iterate(dest, &chroma)) &&
+           chroma != NULL) {
+        size_t src_stride;
+        uint8_t src_hsub, src_vsub, src_macropixel_size;
+        UBASE_RETURN(ubuf_pic_plane_size(src, chroma, &src_stride,
+                    &src_hsub, &src_vsub, &src_macropixel_size))
+
+        size_t dest_stride;
+        uint8_t dest_hsub, dest_vsub, dest_macropixel_size;
+        UBASE_RETURN(ubuf_pic_plane_size(dest, chroma,
+                    &dest_stride, &dest_hsub, &dest_vsub,
+                    &dest_macropixel_size))
+
+        if (unlikely(src_hsub != dest_hsub || src_vsub != dest_vsub ||
+                     src_macropixel_size != dest_macropixel_size))
+            return UBASE_ERR_INVALID;
+
+        uint8_t *dest_buffer;
+        const uint8_t *src_buffer;
+        UBASE_RETURN(ubuf_pic_plane_write(dest, chroma,
+                    dest_hoffset, dest_voffset,
+                    extract_hsize, extract_vsize, &dest_buffer))
+        int err = ubuf_pic_plane_read(src, chroma, src_hoffset, src_voffset,
+                                      extract_hsize, extract_vsize,
+                                      &src_buffer);
+        if (unlikely(!ubase_check(err))) {
+            ubuf_pic_plane_unmap(dest, chroma,
+                                 dest_hoffset, dest_voffset,
+                                 extract_hsize, extract_vsize);
+            return err;
+        }
+
+        int plane_hsize = extract_hsize / src_hsub / src_macropixel *
+                          src_macropixel_size;
+        int plane_vsize = extract_vsize / src_vsub;
+
+        for (int i = 0; i < plane_vsize; i++) {
+            memcpy(dest_buffer, src_buffer, plane_hsize);
+            dest_buffer += dest_stride;
+            src_buffer += src_stride;
+        }
+
+        err = ubuf_pic_plane_unmap(dest, chroma,
+                                   dest_hoffset, dest_voffset,
+                                   extract_hsize, extract_vsize);
+        UBASE_RETURN(ubuf_pic_plane_unmap(src, chroma,
+                                          src_hoffset, src_voffset,
+                                          extract_hsize, extract_vsize))
+        UBASE_RETURN(err)
+    }
+    return UBASE_ERR_NONE;
+}
+
 /** @This copies a picture ubuf to a newly allocated ubuf, and doesn't deal
  * with the old ubuf or a dictionary.
  *
@@ -345,106 +425,49 @@ static inline struct ubuf *ubuf_pic_copy(struct ubuf_mgr *mgr,
                                          int new_hsize, int new_vsize)
 {
     size_t ubuf_hsize, ubuf_vsize;
-    uint8_t macropixel;
     if (unlikely(!ubase_check(ubuf_pic_check_resize(ubuf, &hskip, &vskip,
-            &new_hsize, &new_vsize, &ubuf_hsize, &ubuf_vsize, &macropixel))))
+            &new_hsize, &new_vsize, &ubuf_hsize, &ubuf_vsize, NULL))))
         return NULL;
 
     struct ubuf *new_ubuf = ubuf_pic_alloc(mgr, new_hsize, new_vsize);
     if (unlikely(new_ubuf == NULL))
         return NULL;
 
-    uint8_t new_macropixel;
-    int extract_hoffset, extract_hskip;
-    int extract_voffset, extract_vskip;
+    int dest_hoffset, src_hoffset;
+    int dest_voffset, src_voffset;
     int extract_hsize, extract_vsize;
-    const char *chroma = NULL;
-    if (unlikely(!ubase_check(ubuf_pic_size(new_ubuf, NULL, NULL,
-                                            &new_macropixel)) ||
-                 new_macropixel != macropixel))
-        goto ubuf_pic_copy_err;
 
     if (hskip < 0) {
-        extract_hoffset = -hskip;
-        extract_hskip = 0;
+        dest_hoffset = -hskip;
+        src_hoffset = 0;
     } else {
-        extract_hoffset = 0;
-        extract_hskip = hskip;
+        dest_hoffset = 0;
+        src_hoffset = hskip;
     }
     extract_hsize =
-        new_hsize - extract_hoffset <= (int)ubuf_hsize - extract_hskip ?
-        new_hsize - extract_hoffset : (int)ubuf_hsize - extract_hskip;
+        new_hsize - dest_hoffset <= (int)ubuf_hsize - src_hoffset ?
+        new_hsize - dest_hoffset : (int)ubuf_hsize - src_hoffset;
 
     if (vskip < 0) {
-        extract_voffset = -vskip;
-        extract_vskip = 0;
+        dest_voffset = -vskip;
+        src_voffset = 0;
     } else {
-        extract_voffset = 0;
-        extract_vskip = vskip;
+        dest_voffset = 0;
+        src_voffset = vskip;
     }
     extract_vsize =
-        new_vsize - extract_voffset <= (int)ubuf_vsize - extract_vskip ?
-        new_vsize - extract_voffset : (int)ubuf_vsize - extract_vskip;
+        new_vsize - dest_voffset <= (int)ubuf_vsize - src_voffset ?
+        new_vsize - dest_voffset : (int)ubuf_vsize - src_voffset;
 
-    while (ubase_check(ubuf_pic_plane_iterate(ubuf, &chroma)) &&
-           chroma != NULL) {
-        size_t stride;
-        uint8_t hsub, vsub, macropixel_size;
-        if (unlikely(!ubase_check(ubuf_pic_plane_size(ubuf, chroma, &stride,
-                                          &hsub, &vsub, &macropixel_size))))
-            goto ubuf_pic_copy_err;
-
-        size_t new_stride;
-        uint8_t new_hsub, new_vsub, new_macropixel_size;
-        if (unlikely(!ubase_check(ubuf_pic_plane_size(new_ubuf, chroma,
-                                          &new_stride, &new_hsub, &new_vsub,
-                                          &new_macropixel_size))))
-            goto ubuf_pic_copy_err;
-
-        if (unlikely(hsub != new_hsub || vsub != new_vsub ||
-                     macropixel_size != new_macropixel_size))
-            goto ubuf_pic_copy_err;
-
-        uint8_t *new_buffer;
-        const uint8_t *buffer;
-        if (unlikely(!ubase_check(ubuf_pic_plane_write(new_ubuf, chroma,
-                                           extract_hoffset, extract_voffset,
-                                           extract_hsize, extract_vsize,
-                                           &new_buffer))))
-            goto ubuf_pic_copy_err;
-        if (unlikely(!ubase_check(ubuf_pic_plane_read(ubuf, chroma,
-                                          extract_hskip, extract_vskip,
-                                          extract_hsize, extract_vsize,
-                                          &buffer)))) {
-            ubuf_pic_plane_unmap(new_ubuf, chroma,
-                                 extract_hoffset, extract_voffset,
-                                 extract_hsize, extract_vsize);
-            goto ubuf_pic_copy_err;
-        }
-
-        int plane_hsize = extract_hsize / hsub / macropixel * macropixel_size;
-        int plane_vsize = extract_vsize / vsub;
-
-        for (int i = 0; i < plane_vsize; i++) {
-            memcpy(new_buffer, buffer, plane_hsize);
-            new_buffer += new_stride;
-            buffer += stride;
-        }
-
-        bool ret = ubase_check(ubuf_pic_plane_unmap(new_ubuf, chroma,
-                                        extract_hoffset, extract_voffset,
-                                        extract_hsize, extract_vsize));
-        if (unlikely(!ubase_check(ubuf_pic_plane_unmap(ubuf, chroma,
-                                           extract_hskip, extract_vskip,
-                                           extract_hsize, extract_vsize)) ||
-                     !ret))
-            goto ubuf_pic_copy_err;
+    if (unlikely(!ubase_check(ubuf_pic_blit(new_ubuf, ubuf,
+                        dest_hoffset, dest_voffset,
+                        src_hoffset, src_voffset,
+                        extract_hsize, extract_vsize)))) {
+        ubuf_free(new_ubuf);
+        return NULL;
     }
-    return new_ubuf;
 
-ubuf_pic_copy_err:
-    ubuf_free(new_ubuf);
-    return NULL;
+    return new_ubuf;
 }
 
 /** @This copies part of a ubuf to a newly allocated ubuf, and replaces the
