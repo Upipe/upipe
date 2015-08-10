@@ -1219,7 +1219,9 @@ static inline int upipe_get_sub_mgr(struct upipe *upipe, struct upipe_mgr **p)
     return upipe_control(upipe, UPIPE_GET_SUB_MGR, p);
 }
 
-/** @This iterates over the subpipes of a super-pipe.
+/** @This iterates over the subpipes of a super-pipe. Note that it is
+ * forbidden to release the returned subpipe (but you may release any other
+ * subpipe).
  *
  * @param upipe description structure of the super-pipe
  * @param p filled in with a pointer to the next subpipe, initialize at NULL
