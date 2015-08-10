@@ -1,7 +1,8 @@
 /*
- * Copyright (C) 2012-2013 OpenHeadend S.A.R.L.
+ * Copyright (C) 2012-2015 OpenHeadend S.A.R.L.
  *
  * Authors: Sebastien Gougelet
+ *          Christophe Massiot
  *
  * Permission is hereby granted, free of charge, to any person obtaining
  * a copy of this software and associated documentation files (the
@@ -23,6 +24,10 @@
  * SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
  */
 
+/** @file
+ * @short Upipe module blitting subpictures into a main picture
+ */
+
 #ifndef _UPIPE_MODULES_UPIPE_BLIT_H_
 /** @hidden */
 #define _UPIPE_MODULES_UPIPE_BLIT_H_
@@ -31,8 +36,9 @@ extern "C" {
 #endif
 
 #include <upipe/upipe.h>
+
 #define UPIPE_BLIT_SIGNATURE UBASE_FOURCC('b','l','i','t')
-#define UPIPE_BLIT_INPUT_SIGNATURE UBASE_FOURCC('b','l','i','s')
+#define UPIPE_BLIT_SUB_SIGNATURE UBASE_FOURCC('b','l','i','s')
 
 /** @This returns the management structure for blit pipes.
  *
@@ -43,100 +49,53 @@ struct upipe_mgr *upipe_blit_mgr_alloc(void);
 /** @This extends upipe_command with specific commands for upipe_blit_sub pipes.
  */
 enum upipe_blit_sub_command {
-    UPIPE_SUB_SENTINEL = UPIPE_CONTROL_LOCAL,
+    UPIPE_BLIT_SUB_SENTINEL = UPIPE_CONTROL_LOCAL,
 
-    UPIPE_SUB_SET_POSITIONH,
-
-    UPIPE_SUB_GET_POSITIONH,
-
-    UPIPE_SUB_SET_POSITIONV,
-
-    UPIPE_SUB_GET_POSITIONV,
-
-    UPIPE_SUB_SET_POSITION,
-
-    UPIPE_SUB_GET_POSITION,
+    /** gets the offsets of the rect onto which the input of this subpipe
+     * will be blitted (uint64_t, uint64_t, uint64_t, uint64_t) */
+    UPIPE_BLIT_SUB_GET_RECT,
+    /** sets the offsets of the rect onto which the input of this subpipe
+     * will be blitted (uint64_t, uint64_t, uint64_t, uint64_t) */
+    UPIPE_BLIT_SUB_SET_RECT
 };
 
-/** @This returns the current H position of the sub.
+/** @This gets the offsets (from the respective borders of the frame) of the
+ * rectangle onto which the input of the subpipe will be blitted.
  *
  * @param upipe description structure of the pipe
- * @param h filled with current horizontal position
+ * @param loffset_p filled in with the offset from the left border
+ * @param roffset_p filled in with the offset from the right border
+ * @param toffset_p filled in with the offset from the top border
+ * @param boffset_p filled in with the offset from the bottom border
  * @return an error code
  */
-static inline enum ubase_err upipe_blit_sub_get_hposition(struct upipe *upipe,
-                                                           int *h)
+static inline int upipe_blit_sub_get_rect(struct upipe *upipe,
+        uint64_t *loffset_p, uint64_t *roffset_p,
+        uint64_t *toffset_p, uint64_t *boffset_p)
 {
-    return upipe_control(upipe,UPIPE_SUB_GET_POSITIONH,
-                         UPIPE_BLIT_INPUT_SIGNATURE, h);
+    return upipe_control(upipe, UPIPE_BLIT_SUB_GET_RECT,
+                         UPIPE_BLIT_SUB_SIGNATURE,
+                         loffset_p, roffset_p, toffset_p, boffset_p);
 }
 
-/** @This sets the H position of the sub.
+/** @This sets the offsets (from the respective borders of the frame) of the
+ * rectangle onto which the input of the subpipe will be blitted.
  *
  * @param upipe description structure of the pipe
- * @param h horizontal position
+ * @param loffset offset from the left border
+ * @param roffset offset from the right border
+ * @param toffset offset from the top border
+ * @param boffset offset from the bottom border
  * @return an error code
  */
-static inline enum ubase_err upipe_blit_sub_set_hposition(struct upipe *upipe,
-                                                       int h)
+static inline int upipe_blit_sub_set_rect(struct upipe *upipe,
+        uint64_t loffset, uint64_t roffset, uint64_t toffset, uint64_t boffset)
 {
-    return upipe_control(upipe, UPIPE_SUB_SET_POSITIONH,
-                         UPIPE_BLIT_INPUT_SIGNATURE, h);
+    return upipe_control(upipe, UPIPE_BLIT_SUB_SET_RECT,
+                         UPIPE_BLIT_SUB_SIGNATURE,
+                         loffset, roffset, toffset, boffset);
 }
 
-/** @This returns the current V position of the sub.
- *
- * @param upipe description structure of the pipe
- * @param v filled with current vertical position
- * @return an error code
- */
-static inline enum ubase_err upipe_blit_sub_get_vposition(struct upipe *upipe,
-                                                           int *v)
-{
-    return upipe_control(upipe,UPIPE_SUB_GET_POSITIONV,
-                         UPIPE_BLIT_INPUT_SIGNATURE, v);
-}
-
-/** @This sets the V position of the sub.
- *
- * @param upipe description structure of the pipe
- * @param v vertical position
- * @return an error code
- */
-static inline enum ubase_err upipe_blit_sub_set_vposition(struct upipe *upipe,
-                                                       int v)
-{
-    return upipe_control(upipe, UPIPE_SUB_SET_POSITIONV,
-                         UPIPE_BLIT_INPUT_SIGNATURE, v);
-}
-
-/** @This sets the position of the sub.
- *
- * @param upipe description structure of the pipe
- * @param h horizontal position
- * @param v vertical position
- * @return an error code
- */
-static inline enum ubase_err upipe_blit_sub_set_position(struct upipe *upipe,
-                                                          int h, int v)
-{
-    return upipe_control(upipe, UPIPE_SUB_SET_POSITION,
-                          UPIPE_BLIT_INPUT_SIGNATURE, h, v);
-}
-
-/** @This return the position of the sub.
- *
- * @param upipe description structure of the pipe
- * @param h horizontal position
- * @param v vertical position
- * @return an error code
- */
-static inline enum ubase_err upipe_blit_sub_get_position(struct upipe *upipe,
-                                                          int *h, int *v)
-{
-    return upipe_control(upipe, UPIPE_SUB_GET_POSITION,
-                          UPIPE_BLIT_INPUT_SIGNATURE, h, v);
-}
 #ifdef __cplusplus
 }
 #endif
