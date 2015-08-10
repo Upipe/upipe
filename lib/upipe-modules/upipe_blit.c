@@ -303,7 +303,7 @@ static int upipe_blit_sub_provide_flow_format(struct upipe *upipe)
         struct urational div = urational_divide(&dest_dar, &src_dar);
         if (div.num > div.den) {
             /* Destination rectangle larger than source picture */
-            sub->hsize = dest_vsize * src_dar.num / src_dar.den;
+            sub->hsize = dest_hsize * div.den / div.num;
             sub->hsize -= sub->hsize % hround;
             assert(sub->hsize <= dest_hsize);
             sub->vsize = dest_vsize;
@@ -312,7 +312,7 @@ static int upipe_blit_sub_provide_flow_format(struct upipe *upipe)
         } else if (div.num < div.den) {
             /* Destination rectangle smaller than source picture */
             sub->hsize = dest_hsize;
-            sub->vsize = dest_hsize * src_dar.den / src_dar.num;
+            sub->vsize = dest_vsize * div.num / div.den;
             sub->vsize -= sub->vsize % vround;
             assert(sub->vsize <= dest_vsize);
             toffset += (dest_vsize - sub->vsize) / 2;
@@ -603,8 +603,8 @@ static void upipe_blit_input(struct upipe *upipe, struct uref *uref,
     const char *chroma = NULL;
     while (ubase_check(uref_pic_plane_iterate(uref, &chroma)) &&
            chroma != NULL) {
-        if (!ubase_check(uref_pic_plane_read(uref, chroma, 0, 0, -1, -1,
-                                             NULL)) ||
+        if (!ubase_check(uref_pic_plane_write(uref, chroma, 0, 0, -1, -1,
+                                              NULL)) ||
             !ubase_check(uref_pic_plane_unmap(uref, chroma, 0, 0, -1, -1))) {
             writable = false;
             break;
