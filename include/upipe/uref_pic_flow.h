@@ -224,6 +224,33 @@ static inline int uref_pic_flow_copy_format(struct uref *uref_dst,
     return UBASE_ERR_NONE;
 }
 
+/** @This iterates on chroma plane, and returns the highest horizontal and
+ * vertical subsampling.
+ *
+ * @param uref uref control packet
+ * @param hsub_p filled with the highest horizontal subsampling
+ * @param vsub_p filled with the highest vertical subsampling
+ * @return an error code
+ */
+static inline int uref_pic_flow_max_subsampling(struct uref *uref,
+        uint8_t *hsub_p, uint8_t *vsub_p)
+{
+    uint8_t planes;
+    UBASE_RETURN(uref_pic_flow_get_planes(uref, &planes))
+    *hsub_p = *vsub_p = 1;
+
+    for (uint8_t plane = 0; plane < planes; plane++) {
+        uint8_t var;
+        UBASE_RETURN(uref_pic_flow_get_hsubsampling(uref, &var, plane))
+        if (var > *hsub_p)
+            *hsub_p = var;
+        UBASE_RETURN(uref_pic_flow_get_vsubsampling(uref, &var, plane))
+        if (var > *vsub_p)
+            *vsub_p = var;
+    }
+    return UBASE_ERR_NONE;
+}
+
 /** @This clears the attributes defining the ubuf_pic manager format.
  *
  * @param uref uref control packet
