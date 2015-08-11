@@ -1775,7 +1775,7 @@ static bool upipe_h264f_nal_begin(struct upipe *upipe, struct upump **upump_p)
                     upipe_h264f->au_size - upipe_h264f->au_last_nal_start_size;
                 return false;
             }
-            if (slice_nal == UINT8_MAX)
+            if (!upipe_h264f->au_slice)
                 return false;
             if ((h264nalst_get_type(slice_nal) == H264NAL_TYPE_IDR) ==
                     (nal_type == H264NAL_TYPE_IDR) &&
