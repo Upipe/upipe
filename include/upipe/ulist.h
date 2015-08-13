@@ -185,6 +185,21 @@ static inline struct uchain *ulist_pop(struct uchain *ulist)
     return element;
 }
 
+/** @This return a pointer to the element at the given index.
+ *
+ * @param ulist pointer to a ulist
+ * @param index the index in the list
+ * @return pointer to the element at index
+ */
+static inline struct uchain *ulist_at(struct uchain *ulist, unsigned index)
+{
+    struct uchain *uchain;
+    for (uchain = ulist->next; uchain != ulist; uchain = uchain->next)
+        if (!index--)
+            return uchain;
+    return NULL;
+}
+
 /** @This sorts through a list using a comparison function.
  *
  * @param ulist pointer to a ulist
