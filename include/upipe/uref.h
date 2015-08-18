@@ -58,6 +58,22 @@ enum uref_date_type {
     UREF_DATE_PTS = 3
 };
 
+/** @This return the date type string
+ *
+ * @param dt the uref date type
+ * @return a string
+ */
+static inline const char *uref_date_type_str(int dt)
+{
+    switch ((enum uref_date_type)dt) {
+    UBASE_CASE_TO_STR(UREF_DATE_NONE);
+    UBASE_CASE_TO_STR(UREF_DATE_CR);
+    UBASE_CASE_TO_STR(UREF_DATE_DTS);
+    UBASE_CASE_TO_STR(UREF_DATE_PTS);
+    }
+    return NULL;
+}
+
 /** the upstream pipe has disconnected */
 #define UREF_FLAG_FLOW_END 0x1
 /** there is a discontinuity in the flow */
