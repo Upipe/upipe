@@ -122,6 +122,8 @@ struct upipe_alsource {
     uint8_t planes;
     /** number of samples in a period */
     unsigned int period_samples;
+    /** samples count */
+    uint64_t samples_count;
 
     /** device name */
     char *uri;
@@ -201,17 +203,16 @@ static void upipe_alsource_worker(struct upump *upump)
     struct upipe_alsource *upipe_alsource = upipe_alsource_from_upipe(upipe);
     struct uref *uref;
     struct ubuf *ubuf;
-    float *pcm[2];
+    float *pcm;
+    uint64_t systime = 0; /* to keep gcc quiet */
+    if (unlikely(upipe_alsource->uclock != NULL))
+        systime = uclock_now(upipe_alsource->uclock);
 
     ubuf = ubuf_sound_alloc(upipe_alsource->ubuf_mgr, upipe_alsource->period_samples);
 
-    ubuf_sound_plane_write_float(ubuf, "l", 0, -1, &pcm[0]);
-    ubuf_sound_plane_write_float(ubuf, "r", 0, -1, &pcm[1]);
-
-    int err = snd_pcm_readn(upipe_alsource->handle, (void**)&pcm, upipe_alsource->period_samples);
-
-    ubuf_sound_plane_unmap(ubuf, "l", 0, -1);
-    ubuf_sound_plane_unmap(ubuf, "r", 0, -1);
+    ubuf_sound_plane_write_float(ubuf, "lr", 0, -1, &pcm);
+    int err = snd_pcm_readi(upipe_alsource->handle, pcm, upipe_alsource->period_samples);
+    ubuf_sound_plane_unmap(ubuf, "lr", 0, -1);
 
     if (err < 0){
         ubuf_free(ubuf);
@@ -220,9 +221,27 @@ static void upipe_alsource_worker(struct upump *upump)
     else {
         uref = uref_alloc_control(upipe_alsource->uref_mgr);
         uref_attach_ubuf(uref, ubuf);
+        uref_clock_set_dts_pts_delay(uref, 0);
+        uref_clock_set_cr_orig(uref, upipe_alsource->samples_count * UCLOCK_FREQ /
+                                     upipe_alsource->rate);
+        uref_clock_set_cr_prog(uref, upipe_alsource->samples_count * UCLOCK_FREQ /
+                                     upipe_alsource->rate);
+        uref_clock_set_pts_orig(uref, upipe_alsource->samples_count * UCLOCK_FREQ /
+                                      upipe_alsource->rate);
+        uref_clock_set_pts_prog(uref, upipe_alsource->samples_count * UCLOCK_FREQ /
+                                      upipe_alsource->rate);
+
+        if (unlikely(upipe_alsource->uclock != NULL))
+            uref_clock_set_cr_sys(uref, systime);
+
+        upipe_throw_clock_ref(upipe, uref, upipe_alsource->period_samples * UCLOCK_FREQ /
+                                           upipe_alsource->rate, 0);
+        upipe_throw_clock_ts(upipe, uref);
+
         upipe_use(upipe);
         upipe_alsource_output(upipe, uref, &upipe_alsource->upump);
         upipe_release(upipe);
+        upipe_alsource->samples_count += upipe_alsource->period_samples;
     }
 
     return;
@@ -264,7 +283,7 @@ static bool upipe_alsource_open(struct upipe *upipe)
     }
 
     if (snd_pcm_hw_params_set_access(upipe_alsource->handle, hwparams,
-                                     SND_PCM_ACCESS_RW_NONINTERLEAVED) < 0) {
+                                     SND_PCM_ACCESS_RW_INTERLEAVED) < 0) {
         upipe_err_va(upipe, "can't set interleaved mode (%s)", uri);
         goto open_error;
     }
@@ -468,8 +487,7 @@ static int upipe_alsource_check(struct upipe *upipe, struct uref *flow_format)
     if (upipe_alsource->ubuf_mgr == NULL) {
         struct uref *flow_format = uref_sound_flow_alloc_def(upipe_alsource->uref_mgr, "f32.",
                                              2, 4*2);
-        uref_sound_flow_add_plane(flow_format, "l");
-        uref_sound_flow_add_plane(flow_format, "r");
+        uref_sound_flow_add_plane(flow_format, "lr");
         uref_sound_flow_set_rate(flow_format, 48000);
         uref_sound_flow_set_align(flow_format, 32);
         if (unlikely(flow_format == NULL)) {
