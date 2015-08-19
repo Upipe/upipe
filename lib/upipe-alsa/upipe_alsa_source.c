@@ -43,6 +43,7 @@
 #include <upipe/upipe.h>
 #include <upipe/upipe_helper_upipe.h>
 #include <upipe/upipe_helper_uref_mgr.h>
+#include <upipe/upipe_helper_ubuf_mgr.h>
 #include <upipe/upipe_helper_urefcount.h>
 #include <upipe/upipe_helper_void.h>
 #include <upipe/upipe_helper_upump_mgr.h>
@@ -84,7 +85,7 @@ static int upipe_alsource_check(struct upipe *upipe, struct uref *flow_format);
 /** @hidden */
 static bool upipe_alsource_recover(struct upipe *upipe, int err);
 
-/** @internal @This is the private context of a file source pipe. */
+/** @internal @This is the private context of an ALSA source pipe. */
 struct upipe_alsource {
     /** refcount management structure */
     struct urefcount urefcount;
@@ -94,10 +95,12 @@ struct upipe_alsource {
     /** uref manager request */
     struct urequest uref_mgr_request;
 
-    /** umem manager */
-    struct umem_mgr *umem_mgr;
     /** ubuf manager */
     struct ubuf_mgr *ubuf_mgr;
+    /** flow format packet */
+    struct uref *flow_format;
+    /** ubuf manager request */
+    struct urequest ubuf_mgr_request;
 
     /** upump manager */
     struct upump_mgr *upump_mgr;
@@ -117,10 +120,8 @@ struct upipe_alsource {
     snd_pcm_format_t format;
     /** number of planes (1 for planar formats) */
     uint8_t planes;
-    /** duration of a period */
-    uint64_t period_duration;
-    /** remainder of the number of frames to output per period */
-    long long frames_remainder;
+    /** number of samples in a period */
+    unsigned int period_samples;
 
     /** device name */
     char *uri;
@@ -138,11 +139,6 @@ struct upipe_alsource {
     /** list of output requests */
     struct uchain request_list;
 
-    /** flow format packet */
-    struct uref *flow_format;
-    /** ubuf manager request */
-    struct urequest ubuf_mgr_request;
-
     /** public upipe structure */
     struct upipe upipe;
 };
@@ -159,8 +155,12 @@ UPIPE_HELPER_UREF_MGR(upipe_alsource, uref_mgr, uref_mgr_request,
                       upipe_alsource_check,
                       upipe_alsource_register_output_request,
                       upipe_alsource_unregister_output_request)
+UPIPE_HELPER_UBUF_MGR(upipe_alsource, ubuf_mgr, flow_format, ubuf_mgr_request,
+                      upipe_alsource_check,
+                      upipe_alsource_register_output_request,
+                      upipe_alsource_unregister_output_request)
 
-/** @internal @This allocates a file source pipe.
+/** @internal @This allocates an ALSA source pipe.
  *
  * @param mgr common management structure
  * @param uprobe structure used to raise events
@@ -179,27 +179,17 @@ static struct upipe *upipe_alsource_alloc(struct upipe_mgr *mgr,
     struct upipe_alsource *upipe_alsource = upipe_alsource_from_upipe(upipe);
     upipe_alsource_init_urefcount(upipe);
     upipe_alsource_init_uref_mgr(upipe);
+    upipe_alsource_init_ubuf_mgr(upipe);
     upipe_alsource_init_upump_mgr(upipe);
     upipe_alsource_init_upump(upipe);
     upipe_alsource_init_output(upipe);
     upipe_alsource_init_uclock(upipe);
-
-    upipe_alsource->umem_mgr = umem_alloc_mgr_alloc();
-    upipe_alsource->ubuf_mgr = ubuf_sound_mem_mgr_alloc(UBUF_POOL_DEPTH,
-                                  UBUF_POOL_DEPTH, upipe_alsource->umem_mgr,
-                                  sizeof(int32_t)*2, 32);
-    ubuf_sound_mem_mgr_add_plane(upipe_alsource->ubuf_mgr, "l");
-    ubuf_sound_mem_mgr_add_plane(upipe_alsource->ubuf_mgr, "r");
 
     upipe_alsource->rate = 48000;
     upipe_alsource->channels = 2;
     upipe_alsource->format = SND_PCM_FORMAT_FLOAT;
     upipe_alsource->uri = strdup(DEFAULT_DEVICE);
     upipe_alsource->handle = NULL;
-
-    if (upipe_alsource->uref_mgr == NULL) {
-        upipe_alsource_require_uref_mgr(upipe);
-    }
 
     upipe_throw_ready(upipe);
     return upipe;
@@ -213,26 +203,25 @@ static void upipe_alsource_worker(struct upump *upump)
     struct ubuf *ubuf;
     float *pcm[2];
 
-    uref = uref_alloc_control(upipe_alsource->uref_mgr);
-    ubuf = ubuf_sound_alloc(upipe_alsource->ubuf_mgr, 1920);
+    ubuf = ubuf_sound_alloc(upipe_alsource->ubuf_mgr, upipe_alsource->period_samples);
 
     ubuf_sound_plane_write_float(ubuf, "l", 0, -1, &pcm[0]);
     ubuf_sound_plane_write_float(ubuf, "r", 0, -1, &pcm[1]);
 
-    int err = snd_pcm_readn(upipe_alsource->handle, &pcm, 1920);
+    int err = snd_pcm_readn(upipe_alsource->handle, (void**)&pcm, upipe_alsource->period_samples);
 
     ubuf_sound_plane_unmap(ubuf, "l", 0, -1);
     ubuf_sound_plane_unmap(ubuf, "r", 0, -1);
 
     if (err < 0){
         ubuf_free(ubuf);
-        uref_free(uref);
         upipe_alsource_recover(upipe, err);
     }
     else {
+        uref = uref_alloc_control(upipe_alsource->uref_mgr);
         uref_attach_ubuf(uref, ubuf);
         upipe_use(upipe);
-        upipe_alsource_output(upipe, uref, NULL);
+        upipe_alsource_output(upipe, uref, &upipe_alsource->upump);
         upipe_release(upipe);
     }
 
@@ -254,9 +243,6 @@ static bool upipe_alsource_open(struct upipe *upipe)
     const char *uri = upipe_alsource->uri;
     if (!strcmp(uri, "default"))
         uri = DEFAULT_DEVICE;
-
-    if (unlikely(!ubase_check(upipe_alsource_check_upump_mgr(upipe))))
-        return false;
 
     if (snd_pcm_open(&upipe_alsource->handle, uri, SND_PCM_STREAM_CAPTURE,
                      SND_PCM_NONBLOCK) < 0) {
@@ -301,7 +287,6 @@ static bool upipe_alsource_open(struct upipe *upipe)
         goto open_error;
     }
 
-    upipe_alsource->frames_remainder = 0;
     snd_pcm_uframes_t frames_in_period = (uint64_t)DEFAULT_PERIOD_DURATION *
                                          upipe_alsource->rate / UCLOCK_FREQ;
     if (snd_pcm_hw_params_set_period_size_near(upipe_alsource->handle, hwparams,
@@ -309,8 +294,7 @@ static bool upipe_alsource_open(struct upipe *upipe)
         upipe_err_va(upipe, "error setting period size on device %s", uri);
         goto open_error;
     }
-    upipe_alsource->period_duration = (uint64_t)frames_in_period *
-                                    UCLOCK_FREQ / upipe_alsource->rate;
+    upipe_alsource->period_samples = frames_in_period;
 
     snd_pcm_uframes_t buffer_size = frames_in_period * 4;
     if (snd_pcm_hw_params_set_buffer_size_min(upipe_alsource->handle, hwparams,
@@ -444,6 +428,7 @@ static int upipe_alsource_set_uri(struct upipe *upipe, const char *uri)
     upipe_alsource_close(upipe);
     free(upipe_alsource->uri);
     upipe_alsource->uri = NULL;
+    upipe_alsource_set_upump(upipe, NULL);
 
     if (unlikely(uri == NULL))
         return UBASE_ERR_NONE;
@@ -453,14 +438,6 @@ static int upipe_alsource_set_uri(struct upipe *upipe, const char *uri)
         upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
         return UBASE_ERR_ALLOC;
     }
-
-    /* flow definitions */
-    struct uref *flow_def = uref_sound_flow_alloc_def(upipe_alsource->uref_mgr, "f32.",
-                                         2, 4*2);
-    uref_sound_flow_add_plane(flow_def, "l");
-    uref_sound_flow_add_plane(flow_def, "r");
-    uref_sound_flow_set_rate(flow_def, 48000);
-    upipe_alsource->flow_def = flow_def;
 
     upipe_alsource_open(upipe);
 
@@ -479,13 +456,39 @@ static int upipe_alsource_check(struct upipe *upipe, struct uref *flow_format)
     if (flow_format != NULL)
         upipe_alsource_store_flow_def(upipe, flow_format);
 
-    if (upipe_alsource->flow_def == NULL)
+    upipe_alsource_check_upump_mgr(upipe);
+    if (upipe_alsource->upump_mgr == NULL)
+        return UBASE_ERR_NONE;
+
+    if (upipe_alsource->uref_mgr == NULL) {
+        upipe_alsource_require_uref_mgr(upipe);
+        return UBASE_ERR_NONE;
+    }
+
+    if (upipe_alsource->ubuf_mgr == NULL) {
+        struct uref *flow_format = uref_sound_flow_alloc_def(upipe_alsource->uref_mgr, "f32.",
+                                             2, 4*2);
+        uref_sound_flow_add_plane(flow_format, "l");
+        uref_sound_flow_add_plane(flow_format, "r");
+        uref_sound_flow_set_rate(flow_format, 48000);
+        uref_sound_flow_set_align(flow_format, 32);
+        if (unlikely(flow_format == NULL)) {
+            upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
+            return UBASE_ERR_ALLOC;
+        }
+        upipe_alsource_require_ubuf_mgr(upipe, flow_format);
+        return UBASE_ERR_NONE;
+    }
+
+    if (upipe_alsource->uclock == NULL &&
+        urequest_get_opaque(&upipe_alsource->uclock_request, struct upipe *)
+            != NULL)
         return UBASE_ERR_NONE;
 
     return UBASE_ERR_NONE;
 }
 
-/** @internal @This processes control commands on a file source pipe.
+/** @internal @This processes control commands on an ALSA source pipe.
  *
  * @param upipe description structure of the pipe
  * @param command type of command to process
@@ -501,12 +504,6 @@ static int _upipe_alsource_control(struct upipe *upipe, int command, va_list arg
         case UPIPE_ATTACH_UCLOCK:
             upipe_alsource_set_upump(upipe, NULL);
             upipe_alsource_require_uclock(upipe);
-            return UBASE_ERR_NONE;
-        case UPIPE_REGISTER_REQUEST: {
-            struct urequest *request = va_arg(args, struct urequest *);
-            return upipe_throw_provide_request(upipe, request);
-        }
-        case UPIPE_UNREGISTER_REQUEST:
             return UBASE_ERR_NONE;
         case UPIPE_GET_FLOW_DEF: {
             struct uref **p = va_arg(args, struct uref **);
@@ -563,9 +560,10 @@ static void upipe_alsource_free(struct upipe *upipe)
     upipe_alsource_clean_uclock(upipe);
     upipe_alsource_clean_upump(upipe);
     upipe_alsource_clean_upump_mgr(upipe);
+    upipe_alsource_clean_output(upipe);
+    upipe_alsource_clean_ubuf_mgr(upipe);
     upipe_alsource_clean_uref_mgr(upipe);
     upipe_alsource_clean_urefcount(upipe);
-    upipe_alsource_clean_output(upipe);
     upipe_alsource_free_void(upipe);
 }
 
@@ -581,7 +579,7 @@ static struct upipe_mgr upipe_alsource_mgr = {
     .upipe_mgr_control = NULL
 };
 
-/** @This returns the management structure for all file source pipes.
+/** @This returns the management structure for all ALSA source pipes.
  *
  * @return pointer to manager
  */
