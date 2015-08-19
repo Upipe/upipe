@@ -143,6 +143,9 @@ static void upipe_rtp_opus_input(struct upipe *upipe, struct uref *uref,
     upipe_rtp_opus->last_rtp_timestamp += delta;
     uref_clock_set_pts_prog(uref, upipe_rtp_opus->last_rtp_timestamp * TS_MULTIPLIER);
 
+    upipe_throw_clock_ref(upipe, uref, upipe_rtp_opus->last_rtp_timestamp * TS_MULTIPLIER, 0);
+    upipe_throw_clock_ts(upipe, uref);
+
     upipe_rtp_opus_output(upipe, uref, upump_p);
 }
 
