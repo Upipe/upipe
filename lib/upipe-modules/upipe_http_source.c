@@ -956,6 +956,8 @@ static struct upipe_mgr upipe_http_src_mgr = {
     .refcount = NULL,
     .signature = UPIPE_HTTP_SRC_SIGNATURE,
 
+    .upipe_event_str = upipe_http_src_event_str,
+
     .upipe_alloc = upipe_http_src_alloc,
     .upipe_input = NULL,
     .upipe_control = upipe_http_src_control,
