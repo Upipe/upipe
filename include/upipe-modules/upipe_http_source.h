@@ -38,61 +38,6 @@ extern "C" {
 
 #define UPIPE_HTTP_SRC_SIGNATURE UBASE_FOURCC('h','t','t','p')
 
-/** @This extends upipe_command with specific commands for http source. */
-enum upipe_http_src_command {
-    UPIPE_HTTP_SRC_SENTINEL = UPIPE_CONTROL_LOCAL,
-
-    /** returns the reading position of the current http request, in octets
-     * (uint64_t *) */
-    UPIPE_HTTP_SRC_GET_POSITION,
-    /** asks to get at the given position (uint64_t), using Range header */
-    UPIPE_HTTP_SRC_SET_POSITION,
-    /** asks to get at the given position (uint64_t), the given size
-     * (uint64_t), using Range header */
-    UPIPE_HTTP_SRC_SET_RANGE,
-};
-
-/** @This returns the reading position of the current http request.
- *
- * @param upipe description structure of the pipe
- * @param position_p filled in with the reading position, in octets
- * @return an error code
- */
-static inline int upipe_http_src_get_position(struct upipe *upipe,
-                                              uint64_t *position_p)
-{
-    return upipe_control(upipe, UPIPE_HTTP_SRC_GET_POSITION,
-                         UPIPE_HTTP_SRC_SIGNATURE, position_p);
-}
-
-/** @This request the given position using Range header
- *
- * @param upipe description structure of the pipe
- * @param position new reading position, in octets (between 0 and the size)
- * @return an error code
- */
-static inline int upipe_http_src_set_position(struct upipe *upipe,
-                                              uint64_t position)
-{
-    return upipe_control(upipe, UPIPE_HTTP_SRC_SET_POSITION,
-                         UPIPE_HTTP_SRC_SIGNATURE, position);
-}
-
-/** @This request the given range
- *
- * @param upipe description structure of the pipe
- * @param offset range starts at offset, in octets
- * @param length octets to read from offset, in octets
- * @return an error code
- */
-static inline int upipe_http_src_set_range(struct upipe *upipe,
-                                           uint64_t offset,
-                                           uint64_t length)
-{
-    return upipe_control(upipe, UPIPE_HTTP_SRC_SET_RANGE,
-                         UPIPE_HTTP_SRC_SIGNATURE, offset, length);
-}
-
 /** @This extends uprobe_event with specific events for http source. */
 enum upipe_http_src_event {
     UPROBE_HTTP_SRC_SENTINEL = UPROBE_LOCAL,

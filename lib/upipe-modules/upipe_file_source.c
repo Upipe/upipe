@@ -535,30 +535,24 @@ static int _upipe_fsrc_control(struct upipe *upipe, int command, va_list args)
             return upipe_fsrc_set_uri(upipe, uri);
         }
 
-        case UPIPE_FSRC_GET_SIZE: {
-            unsigned int signature = va_arg(args, unsigned int);
-            assert(signature == UPIPE_FSRC_SIGNATURE);
+        case UPIPE_SOURCE_GET_SIZE: {
             uint64_t *size_p = va_arg(args, uint64_t *);
             return _upipe_fsrc_get_size(upipe, size_p);
         }
-        case UPIPE_FSRC_GET_POSITION: {
-            UBASE_SIGNATURE_CHECK(args, UPIPE_FSRC_SIGNATURE)
+        case UPIPE_SOURCE_GET_POSITION: {
             uint64_t *position_p = va_arg(args, uint64_t *);
             return _upipe_fsrc_get_position(upipe, position_p);
         }
-        case UPIPE_FSRC_SET_POSITION: {
-            UBASE_SIGNATURE_CHECK(args, UPIPE_FSRC_SIGNATURE)
+        case UPIPE_SOURCE_SET_POSITION: {
             uint64_t position = va_arg(args, uint64_t);
             return _upipe_fsrc_set_position(upipe, position);
         }
-        case UPIPE_FSRC_SET_RANGE: {
-            UBASE_SIGNATURE_CHECK(args, UPIPE_FSRC_SIGNATURE)
+        case UPIPE_SOURCE_SET_RANGE: {
             uint64_t offset = va_arg(args, uint64_t);
             uint64_t length = va_arg(args, int64_t);
             return _upipe_fsrc_set_range(upipe, offset, length);
         }
-        case UPIPE_FSRC_GET_RANGE: {
-            UBASE_SIGNATURE_CHECK(args, UPIPE_FSRC_SIGNATURE)
+        case UPIPE_SOURCE_GET_RANGE: {
             uint64_t *offset_p = va_arg(args, uint64_t *);
             uint64_t *length_p = va_arg(args, uint64_t *);
             return _upipe_fsrc_get_range(upipe, offset_p, length_p);

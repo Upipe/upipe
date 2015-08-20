@@ -131,6 +131,22 @@ enum upipe_command {
     /** returns the super-pipe associated with a subpipe (struct upipe **) */
     UPIPE_SUB_GET_SUPER,
 
+    /*
+     * Source-related commands
+     */
+    /** returns the size of the source, in octets (uint64_t *) */
+    UPIPE_SOURCE_GET_SIZE,
+    /** returns the reading position of the source, in octets (uint64_t *) */
+    UPIPE_SOURCE_GET_POSITION,
+    /** asks to read at the given position (uint64_t) */
+    UPIPE_SOURCE_SET_POSITION,
+    /** asks to read at the given position (uint64_t),
+     * the given size (uint64_t) or to the end ((uint64_t)-1) */
+    UPIPE_SOURCE_SET_RANGE,
+    /** return the reading range of the currently opened file,
+     * position (uint64_t) and length (uint64_t) */
+    UPIPE_SOURCE_GET_RANGE,
+
     /** non-standard commands implemented by a module type can start from
      * there (first arg = signature) */
     UPIPE_CONTROL_LOCAL = 0x8000
@@ -318,6 +334,11 @@ static inline const char *upipe_command_str(struct upipe *upipe, int cmd)
     case UPIPE_GET_SUB_MGR: return "UPIPE_GET_SUB_MGR";
     case UPIPE_ITERATE_SUB: return "UPIPE_ITERATE_SUB";
     case UPIPE_SUB_GET_SUPER: return "UPIPE_SUB_GET_SUPER";
+    case UPIPE_SOURCE_GET_SIZE: return "UPIPE_SOURCE_GET_SIZE";
+    case UPIPE_SOURCE_GET_POSITION: return "UPIPE_SOURCE_GET_POSITION";
+    case UPIPE_SOURCE_SET_POSITION: return "UPIPE_SOURCE_SET_POSITION";
+    case UPIPE_SOURCE_GET_RANGE: return "UPIPE_SOURCE_GET_RANGE";
+    case UPIPE_SOURCE_SET_RANGE: return "UPIPE_SOURCE_SET_RANGE";
     case UPIPE_CONTROL_LOCAL: break;
     }
     return NULL;
@@ -1241,6 +1262,69 @@ static inline int upipe_iterate_sub(struct upipe *upipe, struct upipe **p)
 static inline int upipe_sub_get_super(struct upipe *upipe, struct upipe **p)
 {
     return upipe_control(upipe, UPIPE_SUB_GET_SUPER, p);
+}
+
+/** @This returns the size of the currently opened source.
+ *
+ * @param upipe description structure of the pipe
+ * @param size_p filled in with the size of the source, in octets
+ * @return an error code
+ */
+static inline int upipe_source_get_size(struct upipe *upipe, uint64_t *size_p)
+{
+    return upipe_control(upipe, UPIPE_SOURCE_GET_SIZE, size_p);
+}
+
+/** @This returns the reading position of the current source.
+ *
+ * @param upipe description structure of the pipe
+ * @param position_p filled in with the reading position, in octets
+ * @return an error code
+ */
+static inline int upipe_source_get_position(struct upipe *upipe,
+                                            uint64_t position_p)
+{
+    return upipe_control(upipe, UPIPE_SOURCE_GET_POSITION, position_p);
+}
+
+/** @This request the given reading position for the current source.
+ *
+ * @param upipe description structure of the pipe
+ * @param position new reading position, in octets (between 0 and the size)
+ * @return an error code
+ */
+static inline int upipe_source_set_position(struct upipe *upipe,
+                                            uint64_t position)
+{
+    return upipe_control(upipe, UPIPE_SOURCE_SET_POSITION, position);
+}
+
+/** @This returns the reading range of the current source.
+ *
+ * @param upipe description structure of the pipe
+ * @param offset_p filled in with range start, in octets
+ * @param length_p filled in with the reading length, in octets.
+ * @return an error code
+ */
+static inline int upipe_source_get_range(struct upipe *upipe,
+                                         uint64_t *offset_p,
+                                         uint64_t *length_p)
+{
+    return upipe_control(upipe, UPIPE_SOURCE_GET_RANGE, offset_p, length_p);
+}
+
+/** @This request the given range for the current source.
+ *
+ * @param upipe description structure of the pipe
+ * @param offset range starts at offset, in octets
+ * @param length octets to read from offset, in octets
+ * @return an error code
+ */
+static inline int upipe_source_set_range(struct upipe *upipe,
+                                         uint64_t offset,
+                                         uint64_t length)
+{
+    return upipe_control(upipe, UPIPE_SOURCE_SET_RANGE, offset, length);
 }
 
 /** @This declares twelve functions to allocate pipes with a certain pipe
