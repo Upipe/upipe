@@ -61,10 +61,6 @@
 #include <bitstream/ietf/rtp3551.h>
 #include <bitstream/ietf/rtp6184.h>
 
-#ifndef ARRAY_SIZE
-# define ARRAY_SIZE(a)  (sizeof (a) / sizeof ((a)[0]))
-#endif
-
 #define EXPECTED_FLOW_DEF "block."
 #define OUT_FLOW "block.rtp."
 
@@ -208,7 +204,7 @@ static int upipe_rtp_prepend_infer_type(struct upipe *upipe, const char *def)
     if (upipe_rtp_prepend->type_overwrite)
         return UBASE_ERR_NONE;
 
-    for (unsigned i = 0; i < ARRAY_SIZE(values); i++) {
+    for (unsigned i = 0; i < UBASE_ARRAY_SIZE(values); i++) {
         char match[strlen(values[i].match) + 2];
         snprintf(match, sizeof (match), ".%s.", values[i].match);
 
@@ -251,7 +247,7 @@ static int upipe_rtp_prepend_infer_ts_sync(struct upipe *upipe, const char *def)
     if (upipe_rtp_prepend->ts_sync_overwrite)
         return UBASE_ERR_NONE;
 
-    for (unsigned i = 0; i < ARRAY_SIZE(values); i++) {
+    for (unsigned i = 0; i < UBASE_ARRAY_SIZE(values); i++) {
         char match[strlen(values[i].match) + 2];
         snprintf(match, sizeof (match), ".%s.", values[i].match);
 
@@ -318,7 +314,7 @@ static int upipe_rtp_prepend_infer_clockrate(struct upipe *upipe,
     /* clock rate is defined here? */
     const char *def;
     UBASE_RETURN(uref_flow_get_def(flow_def, &def))
-    for (unsigned i = 0; i < ARRAY_SIZE(values); i++) {
+    for (unsigned i = 0; i < UBASE_ARRAY_SIZE(values); i++) {
         char match[strlen(values[i].match) + 2];
         snprintf(match, sizeof (match), ".%s.", values[i].match);
 
