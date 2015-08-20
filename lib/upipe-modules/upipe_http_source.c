@@ -391,6 +391,33 @@ static int upipe_http_src_body_cb(http_parser *parser, const char *at, size_t le
     return 0;
 }
 
+static void upipe_http_src_process(struct upipe *upipe,
+                                   struct uref *uref,
+                                   struct upump **upump_p)
+{
+    struct upipe_http_src *upipe_http_src = upipe_http_src_from_upipe(upipe);
+
+    /* parse response */
+    const uint8_t *buffer;
+    int size = -1;
+    if (unlikely(!ubase_check(uref_block_read(uref, 0, &size, &buffer))) ||
+        size < 0) {
+        uref_free(uref);
+        upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
+        return;
+    }
+    upipe_use(upipe);
+    size_t parsed_len =
+        http_parser_execute(&upipe_http_src->parser,
+                            &upipe_http_src->parser_settings,
+                            (const char *)buffer, size);
+    if (parsed_len != size)
+        upipe_warn(upipe, "http request execution failed");
+    upipe_release(upipe);
+    uref_block_unmap(uref, 0);
+    uref_free(uref);
+}
+
 /** @internal @This reads data from the source and outputs it.
  * It is called either when the idler triggers (permanent storage mode) or
  * when data is available on the http descriptor (live stream mode).
@@ -401,14 +428,31 @@ static void upipe_http_src_worker(struct upump *upump)
 {
     struct upipe *upipe = upump_get_opaque(upump, struct upipe *);
     struct upipe_http_src *upipe_http_src = upipe_http_src_from_upipe(upipe);
-    char *buffer = malloc(upipe_http_src->output_size); /* FIXME use ubuf/umem */
-    assert(buffer);
-    memset(buffer, 0, upipe_http_src->output_size);
 
-    ssize_t len = recv(upipe_http_src->fd, buffer, upipe_http_src->output_size, 0);
+    struct uref *uref = uref_block_alloc(upipe_http_src->uref_mgr,
+                                         upipe_http_src->ubuf_mgr,
+                                         upipe_http_src->output_size);
+    if (unlikely(uref == NULL)) {
+        upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
+        return;
+    }
+
+    uint8_t *buffer;
+    int output_size = -1;
+    if (unlikely(!ubase_check(uref_block_write(
+                    uref, 0, &output_size, &buffer)))) {
+        uref_free(uref);
+        upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
+        return;
+    }
+    assert(output_size == upipe_http_src->output_size);
+
+    ssize_t len = recv(upipe_http_src->fd, buffer,
+                       upipe_http_src->output_size, 0);
+    uref_block_unmap(uref, 0);
 
     if (unlikely(len == -1)) {
-        free(buffer);
+        uref_free(uref);
 
         switch (errno) {
             case EINTR:
@@ -425,22 +469,16 @@ static void upipe_http_src_worker(struct upump *upump)
                 break;
         }
         upipe_err_va(upipe, "read error from %s (%s)", upipe_http_src->url,
-                                                              strerror(errno));
+                     strerror(errno));
         upipe_http_src_set_upump(upipe, NULL);
         upipe_throw_source_end(upipe);
         return;
     }
 
-    /* parse response */
-    upipe_use(upipe);
-    size_t parsed_len =
-        http_parser_execute(&upipe_http_src->parser,
-                            &upipe_http_src->parser_settings,
-                            buffer, len);
-    if (parsed_len != len)
-        upipe_warn(upipe, "http request execution failed");
-    free(buffer);
-    upipe_release(upipe);
+    if (unlikely(len != upipe_http_src->output_size))
+        uref_block_resize(uref, 0, len);
+
+    return upipe_http_src_process(upipe, uref, &upump);
 }
 
 static int request_add(char **req_p, size_t *len, const char *fmt, ...)
