@@ -193,6 +193,18 @@ UPIPE_HELPER_UPUMP(upipe_http_src, upump, upump_mgr)
 UPIPE_HELPER_OUTPUT_SIZE(upipe_http_src, output_size)
 UPIPE_HELPER_UPUMP(upipe_http_src, upump_write, upump_mgr)
 
+static int upipe_http_src_header_field(http_parser *parser,
+                                       const char *at,
+                                       size_t len);
+static int upipe_http_src_header_value(http_parser *parser,
+                                       const char *at,
+                                       size_t len);
+static int upipe_http_src_body_cb(http_parser *parser,
+                                  const char *at,
+                                  size_t len);
+static int upipe_http_src_message_complete(http_parser *parser);
+static int upipe_http_src_status_cb(http_parser *parser);
+
 /** @internal @This allocates a http source pipe.
  *
  * @param mgr common management structure
@@ -226,6 +238,17 @@ static struct upipe *upipe_http_src_alloc(struct upipe_mgr *mgr,
     upipe_http_src->location = NULL;
     upipe_http_src->header_field = HEADER(NULL, 0);
     upipe_http_src->proxy = NULL;
+
+    /* init parser settings */
+    http_parser_settings *settings = &upipe_http_src->parser_settings;
+    settings->on_message_begin = NULL;
+    settings->on_url = NULL;
+    settings->on_header_field = upipe_http_src_header_field;
+    settings->on_header_value = upipe_http_src_header_value;
+    settings->on_headers_complete = NULL;
+    settings->on_body = upipe_http_src_body_cb;
+    settings->on_message_complete = upipe_http_src_message_complete;
+    settings->on_status_complete = upipe_http_src_status_cb;
 
     upipe_throw_ready(upipe);
 
@@ -763,8 +786,6 @@ static int upipe_http_src_open_url(struct upipe *upipe)
 {
     struct upipe_http_src *upipe_http_src = upipe_http_src_from_upipe(upipe);
     struct uref *flow_def = upipe_http_src->flow_def;
-    http_parser *parser = &upipe_http_src->parser;
-    http_parser_settings *settings = &upipe_http_src->parser_settings;
     struct addrinfo *info = NULL, *res;
     struct addrinfo hints;
     int ret, fd = -1;
@@ -772,16 +793,8 @@ static int upipe_http_src_open_url(struct upipe *upipe)
     if (!flow_def)
         return -1;
 
-    /* init parser and settings */
-    http_parser_init(parser, HTTP_RESPONSE);
-    settings->on_message_begin = NULL;
-    settings->on_url = NULL;
-    settings->on_header_field = upipe_http_src_header_field;
-    settings->on_header_value = upipe_http_src_header_value;
-    settings->on_headers_complete = NULL;
-    settings->on_body = upipe_http_src_body_cb;
-    settings->on_message_complete = upipe_http_src_message_complete;
-    settings->on_status_complete = upipe_http_src_status_cb;
+    /* init parser */
+    http_parser_init(&upipe_http_src->parser, HTTP_RESPONSE);
 
     /* get socket information */
     memset(&hints, 0, sizeof(struct addrinfo));
