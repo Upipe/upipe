@@ -392,7 +392,6 @@ static int upipe_http_src_message_complete(http_parser *parser)
     switch (parser->status_code) {
     case 302:
         upipe_http_src_throw_redirect(upipe, upipe_http_src->location);
-        upipe_set_uri(upipe, upipe_http_src->location);
         break;
     }
 

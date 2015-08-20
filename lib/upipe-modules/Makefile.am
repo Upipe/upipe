@@ -48,7 +48,8 @@ libupipe_modules_la_SOURCES = \
 	upipe_rtp_mpeg4.c \
 	upipe_rtp_opus.c \
 	upipe_rtcp.c \
-	upipe_dump.c
+	upipe_dump.c \
+	uprobe_http_redirect.c
 
 if HAVE_WRITEV
 libupipe_modules_la_SOURCES += \
