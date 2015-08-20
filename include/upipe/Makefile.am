@@ -27,6 +27,7 @@ pkginclude_HEADERS = \
 	ufifo.h \
 	ulifo.h \
 	ulist.h \
+	ulog.h \
 	umem.h \
 	umem_alloc.h \
 	umem_pool.h \
