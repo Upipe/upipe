@@ -350,6 +350,11 @@ static int upipe_http_src_output_data(struct upipe *upipe,
     return 0;
 }
 
+/** @internal @This is called by http_parser when message is completed.
+ *
+ * @param parser http parser structure
+ * @return 0
+ */
 static int upipe_http_src_message_complete(http_parser *parser)
 {
     struct upipe_http_src *upipe_http_src = upipe_http_src_from_parser(parser);
@@ -391,6 +396,12 @@ static int upipe_http_src_body_cb(http_parser *parser, const char *at, size_t le
     return 0;
 }
 
+/** @internal @This parses and outputs data.
+ *
+ * @param upipe description structure of the pipe
+ * @param uref uref structure
+ * @param upump_p reference to pump that generated the buffer
+ */
 static void upipe_http_src_process(struct upipe *upipe,
                                    struct uref *uref,
                                    struct upump **upump_p)

@@ -47,6 +47,11 @@ enum upipe_http_src_event {
     UPROBE_HTTP_SRC_REDIRECT,
 };
 
+/** @This converts an enum upipe_http_src_event to a string.
+ *
+ * @param event the enum to convert
+ * @return a string
+ */
 static inline const char *upipe_http_src_event_str(int event)
 {
     switch ((enum upipe_http_src_event)event) {
@@ -56,6 +61,12 @@ static inline const char *upipe_http_src_event_str(int event)
     return NULL;
 }
 
+/** @This throw a redirect event.
+ *
+ * @param upipe description structure of the pipe
+ * @param uri the temporary uri
+ * @return an error code
+ */
 static inline int upipe_http_src_throw_redirect(struct upipe *upipe,
                                                 const char *uri)
 {
