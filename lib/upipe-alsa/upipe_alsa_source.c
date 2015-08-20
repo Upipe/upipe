@@ -191,6 +191,7 @@ static struct upipe *upipe_alsource_alloc(struct upipe_mgr *mgr,
     upipe_alsource->channels = 2;
     upipe_alsource->format = SND_PCM_FORMAT_FLOAT;
     upipe_alsource->uri = strdup(DEFAULT_DEVICE);
+    upipe_alsource->pfd.fd = -1;
     upipe_alsource->handle = NULL;
 
     upipe_throw_ready(upipe);
@@ -238,10 +239,11 @@ static void upipe_alsource_worker(struct upump *upump)
                                            upipe_alsource->rate, 0);
         upipe_throw_clock_ts(upipe, uref);
 
+        upipe_alsource->samples_count += upipe_alsource->period_samples;
+
         upipe_use(upipe);
         upipe_alsource_output(upipe, uref, &upipe_alsource->upump);
         upipe_release(upipe);
-        upipe_alsource->samples_count += upipe_alsource->period_samples;
     }
 
     return;
@@ -355,21 +357,10 @@ static bool upipe_alsource_open(struct upipe *upipe)
     if (cnt > 1) {
         /* FIXME */
         upipe_err_va(upipe, "error: too many file descriptors");
-        goto open_error;
+        return UBASE_ERR_EXTERNAL;
     }
 
     snd_pcm_poll_descriptors(upipe_alsource->handle, &upipe_alsource->pfd, cnt);
-
-    struct upump *upump;
-    upump = upump_alloc_fd_read (upipe_alsource->upump_mgr,
-                                 upipe_alsource_worker, upipe,
-                                 upipe_alsource->pfd.fd);
-    if (unlikely(upump == NULL)) {
-        upipe_throw_fatal(upipe, UBASE_ERR_UPUMP);
-        return UBASE_ERR_UPUMP;
-    }
-    upipe_alsource_set_upump(upipe, upump);
-    upump_start(upump);
 
     snd_pcm_start(upipe_alsource->handle);
 
@@ -502,6 +493,19 @@ static int upipe_alsource_check(struct upipe *upipe, struct uref *flow_format)
         urequest_get_opaque(&upipe_alsource->uclock_request, struct upipe *)
             != NULL)
         return UBASE_ERR_NONE;
+
+    if (upipe_alsource->pfd.fd != -1 && upipe_alsource->upump == NULL) {
+        struct upump *upump;
+        upump = upump_alloc_fd_read (upipe_alsource->upump_mgr,
+                                     upipe_alsource_worker, upipe,
+                                     upipe_alsource->pfd.fd);
+        if (unlikely(upump == NULL)) {
+            upipe_throw_fatal(upipe, UBASE_ERR_UPUMP);
+            return UBASE_ERR_UPUMP;
+        }
+        upipe_alsource_set_upump(upipe, upump);
+        upump_start(upump);
+    }
 
     return UBASE_ERR_NONE;
 }
