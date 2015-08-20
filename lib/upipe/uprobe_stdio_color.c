@@ -9,10 +9,6 @@
 #include <string.h>
 #include <stdarg.h>
 
-#ifndef ARRAY_SIZE
-# define ARRAY_SIZE(a)  (sizeof (a) / sizeof ((a)[0]))
-#endif
-
 #define LEVEL_NAME_LEN  7
 
 #define ANSI_ESC(Value)         "\e[" Value "m"
@@ -130,7 +126,7 @@ static int uprobe_stdio_color_throw(struct uprobe *uprobe,
     }
 
     struct level level = level_unknown;
-    for (size_t i = 0; i < ARRAY_SIZE(levels); i++)
+    for (size_t i = 0; i < UBASE_ARRAY_SIZE(levels); i++)
         if (levels[i].log_level == ulog->level) {
             level = levels[i];
             break;
