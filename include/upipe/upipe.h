@@ -791,8 +791,18 @@ static inline int upipe_throw_need_upump_mgr(struct upipe *upipe,
 {
     upipe_dbg(upipe, "throw need upump mgr");
     int err = upipe_throw(upipe, UPROBE_NEED_UPUMP_MGR, upump_mgr_p);
-    upipe_dbg_va(upipe, "got upump_mgr %p with error code 0x%x",
-                 *upump_mgr_p, err);
+    if (ubase_check(err))
+        upipe_dbg_va(upipe, "got upump_mgr %p", *upump_mgr_p);
+    else {
+        const char *err_str = upipe_err_str(upipe, err);
+
+        if (err_str)
+            upipe_warn_va(upipe, "got upump_mgr %p with error %s",
+                          *upump_mgr_p, err_str);
+        else
+            upipe_warn_va(upipe, "got upump_mgr %p with error code 0x%x",
+                          *upump_mgr_p, err);
+    }
     return err;
 }
 
