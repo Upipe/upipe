@@ -887,16 +887,16 @@ static int _upipe_http_src_control(struct upipe *upipe,
             return upipe_http_src_set_uri(upipe, uri);
         }
 
-        case UPIPE_SOURCE_GET_POSITION: {
+        case UPIPE_SRC_GET_POSITION: {
             uint64_t *position_p = va_arg(args, uint64_t *);
             return _upipe_http_src_get_position(upipe, position_p);
         }
-        case UPIPE_SOURCE_SET_POSITION: {
+        case UPIPE_SRC_SET_POSITION: {
             uint64_t offset = va_arg(args, uint64_t);
             return _upipe_http_src_set_position(upipe, offset);
         }
 
-        case UPIPE_SOURCE_SET_RANGE: {
+        case UPIPE_SRC_SET_RANGE: {
             uint64_t offset = va_arg(args, uint64_t);
             uint64_t length = va_arg(args, uint64_t);
             return _upipe_http_src_set_range(upipe, offset, length);

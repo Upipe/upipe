@@ -135,17 +135,17 @@ enum upipe_command {
      * Source-related commands
      */
     /** returns the size of the source, in octets (uint64_t *) */
-    UPIPE_SOURCE_GET_SIZE,
+    UPIPE_SRC_GET_SIZE,
     /** returns the reading position of the source, in octets (uint64_t *) */
-    UPIPE_SOURCE_GET_POSITION,
+    UPIPE_SRC_GET_POSITION,
     /** asks to read at the given position (uint64_t) */
-    UPIPE_SOURCE_SET_POSITION,
+    UPIPE_SRC_SET_POSITION,
     /** asks to read at the given position (uint64_t),
      * the given size (uint64_t) or to the end ((uint64_t)-1) */
-    UPIPE_SOURCE_SET_RANGE,
+    UPIPE_SRC_SET_RANGE,
     /** return the reading range of the currently opened file,
      * position (uint64_t) and length (uint64_t) */
-    UPIPE_SOURCE_GET_RANGE,
+    UPIPE_SRC_GET_RANGE,
 
     /** non-standard commands implemented by a module type can start from
      * there (first arg = signature) */
@@ -311,34 +311,34 @@ static inline const char *upipe_command_str(struct upipe *upipe, int cmd)
     }
 
     switch (cmd) {
-    case UPIPE_ATTACH_UREF_MGR: return "UPIPE_ATTACH_UREF_MGR";
-    case UPIPE_ATTACH_UPUMP_MGR: return "UPIPE_ATTACH_UPUMP_MGR";
-    case UPIPE_ATTACH_UCLOCK: return "UPIPE_ATTACH_UCLOCK";
-    case UPIPE_GET_URI: return "UPIPE_GET_URI";
-    case UPIPE_SET_URI: return "UPIPE_SET_URI";
-    case UPIPE_GET_OPTION: return "UPIPE_GET_OPTION";
-    case UPIPE_SET_OPTION: return "UPIPE_SET_OPTION";
-    case UPIPE_REGISTER_REQUEST: return "UPIPE_REGISTER_REQUEST";
-    case UPIPE_UNREGISTER_REQUEST: return "UPIPE_UNREGISTER_REQUEST";
-    case UPIPE_SET_FLOW_DEF: return "UPIPE_SET_FLOW_DEF";
-    case UPIPE_GET_MAX_LENGTH: return "UPIPE_GET_MAX_LENGTH";
-    case UPIPE_SET_MAX_LENGTH: return "UPIPE_SET_MAX_LENGTH";
-    case UPIPE_FLUSH: return "UPIPE_FLUSH";
-    case UPIPE_GET_OUTPUT: return "UPIPE_GET_OUTPUT";
-    case UPIPE_SET_OUTPUT: return "UPIPE_SET_OUTPUT";
-    case UPIPE_ATTACH_UBUF_MGR: return "UPIPE_ATTACH_UBUF_MGR";
-    case UPIPE_GET_FLOW_DEF: return "UPIPE_GET_FLOW_DEF";
-    case UPIPE_GET_OUTPUT_SIZE: return "UPIPE_GET_OUTPUT_SIZE";
-    case UPIPE_SET_OUTPUT_SIZE: return "UPIPE_SET_OUTPUT_SIZE";
-    case UPIPE_SPLIT_ITERATE: return "UPIPE_SPLIT_ITERATE";
-    case UPIPE_GET_SUB_MGR: return "UPIPE_GET_SUB_MGR";
-    case UPIPE_ITERATE_SUB: return "UPIPE_ITERATE_SUB";
-    case UPIPE_SUB_GET_SUPER: return "UPIPE_SUB_GET_SUPER";
-    case UPIPE_SOURCE_GET_SIZE: return "UPIPE_SOURCE_GET_SIZE";
-    case UPIPE_SOURCE_GET_POSITION: return "UPIPE_SOURCE_GET_POSITION";
-    case UPIPE_SOURCE_SET_POSITION: return "UPIPE_SOURCE_SET_POSITION";
-    case UPIPE_SOURCE_GET_RANGE: return "UPIPE_SOURCE_GET_RANGE";
-    case UPIPE_SOURCE_SET_RANGE: return "UPIPE_SOURCE_SET_RANGE";
+    UBASE_CASE_TO_STR(UPIPE_ATTACH_UREF_MGR);
+    UBASE_CASE_TO_STR(UPIPE_ATTACH_UPUMP_MGR);
+    UBASE_CASE_TO_STR(UPIPE_ATTACH_UCLOCK);
+    UBASE_CASE_TO_STR(UPIPE_GET_URI);
+    UBASE_CASE_TO_STR(UPIPE_SET_URI);
+    UBASE_CASE_TO_STR(UPIPE_GET_OPTION);
+    UBASE_CASE_TO_STR(UPIPE_SET_OPTION);
+    UBASE_CASE_TO_STR(UPIPE_REGISTER_REQUEST);
+    UBASE_CASE_TO_STR(UPIPE_UNREGISTER_REQUEST);
+    UBASE_CASE_TO_STR(UPIPE_SET_FLOW_DEF);
+    UBASE_CASE_TO_STR(UPIPE_GET_MAX_LENGTH);
+    UBASE_CASE_TO_STR(UPIPE_SET_MAX_LENGTH);
+    UBASE_CASE_TO_STR(UPIPE_FLUSH);
+    UBASE_CASE_TO_STR(UPIPE_GET_OUTPUT);
+    UBASE_CASE_TO_STR(UPIPE_SET_OUTPUT);
+    UBASE_CASE_TO_STR(UPIPE_ATTACH_UBUF_MGR);
+    UBASE_CASE_TO_STR(UPIPE_GET_FLOW_DEF);
+    UBASE_CASE_TO_STR(UPIPE_GET_OUTPUT_SIZE);
+    UBASE_CASE_TO_STR(UPIPE_SET_OUTPUT_SIZE);
+    UBASE_CASE_TO_STR(UPIPE_SPLIT_ITERATE);
+    UBASE_CASE_TO_STR(UPIPE_GET_SUB_MGR);
+    UBASE_CASE_TO_STR(UPIPE_ITERATE_SUB);
+    UBASE_CASE_TO_STR(UPIPE_SUB_GET_SUPER);
+    UBASE_CASE_TO_STR(UPIPE_SRC_GET_SIZE);
+    UBASE_CASE_TO_STR(UPIPE_SRC_GET_POSITION);
+    UBASE_CASE_TO_STR(UPIPE_SRC_SET_POSITION);
+    UBASE_CASE_TO_STR(UPIPE_SRC_GET_RANGE);
+    UBASE_CASE_TO_STR(UPIPE_SRC_SET_RANGE);
     case UPIPE_CONTROL_LOCAL: break;
     }
     return NULL;
@@ -1280,9 +1280,9 @@ static inline int upipe_sub_get_super(struct upipe *upipe, struct upipe **p)
  * @param size_p filled in with the size of the source, in octets
  * @return an error code
  */
-static inline int upipe_source_get_size(struct upipe *upipe, uint64_t *size_p)
+static inline int upipe_src_get_size(struct upipe *upipe, uint64_t *size_p)
 {
-    return upipe_control(upipe, UPIPE_SOURCE_GET_SIZE, size_p);
+    return upipe_control(upipe, UPIPE_SRC_GET_SIZE, size_p);
 }
 
 /** @This returns the reading position of the current source.
@@ -1291,10 +1291,10 @@ static inline int upipe_source_get_size(struct upipe *upipe, uint64_t *size_p)
  * @param position_p filled in with the reading position, in octets
  * @return an error code
  */
-static inline int upipe_source_get_position(struct upipe *upipe,
-                                            uint64_t position_p)
+static inline int upipe_src_get_position(struct upipe *upipe,
+                                         uint64_t position_p)
 {
-    return upipe_control(upipe, UPIPE_SOURCE_GET_POSITION, position_p);
+    return upipe_control(upipe, UPIPE_SRC_GET_POSITION, position_p);
 }
 
 /** @This request the given reading position for the current source.
@@ -1303,10 +1303,10 @@ static inline int upipe_source_get_position(struct upipe *upipe,
  * @param position new reading position, in octets (between 0 and the size)
  * @return an error code
  */
-static inline int upipe_source_set_position(struct upipe *upipe,
-                                            uint64_t position)
+static inline int upipe_src_set_position(struct upipe *upipe,
+                                         uint64_t position)
 {
-    return upipe_control(upipe, UPIPE_SOURCE_SET_POSITION, position);
+    return upipe_control(upipe, UPIPE_SRC_SET_POSITION, position);
 }
 
 /** @This returns the reading range of the current source.
@@ -1316,11 +1316,11 @@ static inline int upipe_source_set_position(struct upipe *upipe,
  * @param length_p filled in with the reading length, in octets.
  * @return an error code
  */
-static inline int upipe_source_get_range(struct upipe *upipe,
-                                         uint64_t *offset_p,
-                                         uint64_t *length_p)
+static inline int upipe_src_get_range(struct upipe *upipe,
+                                      uint64_t *offset_p,
+                                      uint64_t *length_p)
 {
-    return upipe_control(upipe, UPIPE_SOURCE_GET_RANGE, offset_p, length_p);
+    return upipe_control(upipe, UPIPE_SRC_GET_RANGE, offset_p, length_p);
 }
 
 /** @This request the given range for the current source.
@@ -1330,11 +1330,11 @@ static inline int upipe_source_get_range(struct upipe *upipe,
  * @param length octets to read from offset, in octets
  * @return an error code
  */
-static inline int upipe_source_set_range(struct upipe *upipe,
-                                         uint64_t offset,
-                                         uint64_t length)
+static inline int upipe_src_set_range(struct upipe *upipe,
+                                      uint64_t offset,
+                                      uint64_t length)
 {
-    return upipe_control(upipe, UPIPE_SOURCE_SET_RANGE, offset, length);
+    return upipe_control(upipe, UPIPE_SRC_SET_RANGE, offset, length);
 }
 
 /** @This declares twelve functions to allocate pipes with a certain pipe
