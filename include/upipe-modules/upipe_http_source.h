@@ -47,6 +47,15 @@ enum upipe_http_src_event {
     UPROBE_HTTP_SRC_REDIRECT,
 };
 
+static inline const char *upipe_http_src_event_str(int event)
+{
+    switch ((enum upipe_http_src_event)event) {
+    UBASE_CASE_TO_STR(UPROBE_HTTP_SRC_REDIRECT);
+    case UPROBE_HTTP_SRC_SENTINEL: break;
+    }
+    return NULL;
+}
+
 static inline int upipe_http_src_throw_redirect(struct upipe *upipe,
                                                 const char *uri)
 {
