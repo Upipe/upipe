@@ -224,85 +224,6 @@ static struct upipe *upipe_http_src_alloc(struct upipe_mgr *mgr,
     return upipe;
 }
 
-/** @This frees a upipe.
- *
- * @param upipe description structure of the pipe
- */
-struct part {
-    const char *at;
-    size_t len;
-};
-
-#define PART(At, Len) (struct part){ .at = At, .len = Len }
-#define PART_NULL PART(NULL, 0)
-#define PART_IS_NULL(Part)      ((Part).at == NULL)
-
-static struct part part_make(const char *value, size_t len)
-{
-    return (struct part){ .at = value, .len = len};
-}
-
-static struct part part_while(const struct part *value,
-                              const char *contains)
-{
-    struct part part = PART_NULL;
-
-    for (size_t i = 0; i < value->len && value->at[i] != '\0'; i++) {
-        size_t j;
-        for (j = 0; contains[j]; j++)
-            if (contains[j] == value->at[i])
-                break;
-
-        if (!contains[j])
-            return part;
-
-        part.at = value->at;
-        part.len++;
-    }
-
-    return part;
-}
-
-static struct part part_remove_while(const struct part *value,
-                                     const char *contains)
-{
-    struct part remove = part_while(value, contains);
-    return PART(value->at + remove.len, value->len + remove.len);
-}
-
-static struct part part_until(const struct part *value,
-                              const char *except)
-{
-    struct part part = PART_NULL;
-
-    for (size_t i = 0; i < value->len && value->at[i] != '\0'; i++) {
-        for (size_t j = 0; except[j]; j++)
-            if (except[j] == value->at[i])
-                return part;
-
-        part.at = value->at;
-        part.len++;
-    }
-
-    return part;
-}
-
-static struct part part_name(const struct part *value)
-{
-    struct part cleaned = part_remove_while(value, " ");
-    struct part pair = part_until(&cleaned, ";");
-    if (PART_IS_NULL(pair))
-        return pair;
-    return part_until(&pair, "=");
-}
-
-static int part_cmp(const struct part *a, const struct part *b)
-{
-    if (a->len != b->len)
-        return a->len > b->len ? 1 : -1;
-    return strncmp(a->at, b->at, a->len);
-}
-
 /** @internal @This retrieves the upipe_http_src structure from parser
  * @param parser http parser structure
  * @return pointer to upipe_http_src private structure
@@ -349,6 +270,8 @@ static int upipe_http_src_status_cb(http_parser *parser)
     switch (parser->status_code) {
     /* success */
     case 200:
+    /* partial content */
+    case 206:
     /* found */
     case 302:
         break;
@@ -955,6 +878,8 @@ static void upipe_http_src_free(struct upipe *upipe)
 static struct upipe_mgr upipe_http_src_mgr = {
     .refcount = NULL,
     .signature = UPIPE_HTTP_SRC_SIGNATURE,
+
+    .upipe_event_str = upipe_http_src_event_str,
 
     .upipe_alloc = upipe_http_src_alloc,
     .upipe_input = NULL,
