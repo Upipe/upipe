@@ -535,24 +535,24 @@ static int _upipe_fsrc_control(struct upipe *upipe, int command, va_list args)
             return upipe_fsrc_set_uri(upipe, uri);
         }
 
-        case UPIPE_SOURCE_GET_SIZE: {
+        case UPIPE_SRC_GET_SIZE: {
             uint64_t *size_p = va_arg(args, uint64_t *);
             return _upipe_fsrc_get_size(upipe, size_p);
         }
-        case UPIPE_SOURCE_GET_POSITION: {
+        case UPIPE_SRC_GET_POSITION: {
             uint64_t *position_p = va_arg(args, uint64_t *);
             return _upipe_fsrc_get_position(upipe, position_p);
         }
-        case UPIPE_SOURCE_SET_POSITION: {
+        case UPIPE_SRC_SET_POSITION: {
             uint64_t position = va_arg(args, uint64_t);
             return _upipe_fsrc_set_position(upipe, position);
         }
-        case UPIPE_SOURCE_SET_RANGE: {
+        case UPIPE_SRC_SET_RANGE: {
             uint64_t offset = va_arg(args, uint64_t);
             uint64_t length = va_arg(args, int64_t);
             return _upipe_fsrc_set_range(upipe, offset, length);
         }
-        case UPIPE_SOURCE_GET_RANGE: {
+        case UPIPE_SRC_GET_RANGE: {
             uint64_t *offset_p = va_arg(args, uint64_t *);
             uint64_t *length_p = va_arg(args, uint64_t *);
             return _upipe_fsrc_get_range(upipe, offset_p, length_p);
