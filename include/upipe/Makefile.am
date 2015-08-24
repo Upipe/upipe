@@ -19,6 +19,7 @@ pkginclude_HEADERS = \
 	ubuf_sound_mem.h \
 	uclock.h \
 	uclock_std.h \
+	ucookie.h \
 	udeal.h \
 	udict.h \
 	udict_dump.h \
@@ -91,4 +92,6 @@ pkginclude_HEADERS = \
 	uref_sound_flow.h \
 	uref_std.h \
 	urequest.h \
-	uring.h
+	uring.h \
+	ustring.h
+	uuri.h

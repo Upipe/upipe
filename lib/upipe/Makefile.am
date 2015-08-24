@@ -28,7 +28,9 @@ libupipe_la_SOURCES = \
 	uprobe_uclock.c \
 	uprobe_upump_mgr.c \
 	uprobe_uref_mgr.c \
-	upump_common.c
+	upump_common.c \
+	uuri.c \
+	ucookie.c
 
 libupipe_la_CPPFLAGS = -I$(top_builddir)/include -I$(top_srcdir)/include
 libupipe_la_CFLAGS = -Wall
