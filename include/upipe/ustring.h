@@ -76,6 +76,16 @@ static inline bool ustring_is_null(const struct ustring sub)
     return sub.at == NULL;
 }
 
+/** @This returns true is the ustring is null or empty.
+ *
+ * @param sub an ustring
+ * @return true if the ustring is null or empty
+ */
+static inline bool ustring_is_empty(const struct ustring sub)
+{
+    return ustring_is_null(sub) || sub.len == 0;
+}
+
 /** @This allocated a string from an ustring.
  *
  * @param sub an ustring
