@@ -106,6 +106,8 @@ static void push(struct upump *upump)
         /* make it stop */
         upump_stop(upump);
         uatomic_fetch_sub(&refcount, 1);
+        /* trigger a spurious write event so that we unblock the reader */
+        ueventfd_write(&uqueue.event_pop);
     }
 }
 
@@ -148,7 +150,8 @@ static void pop(struct upump *upump)
         if (likely(elem->timeout.tv_nsec))
             assert(!nanosleep(&elem->timeout, NULL));
         ulifo_push(&ulifo, uchain);
-    } else if (likely(uatomic_load(&refcount) == 1))
+    }
+    if (unlikely(uatomic_load(&refcount) == 1))
         upump_stop(upump);
 }
 
