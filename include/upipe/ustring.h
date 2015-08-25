@@ -76,6 +76,16 @@ static inline bool ustring_is_null(const struct ustring sub)
     return sub.at == NULL;
 }
 
+/** @This returns true is the ustring is null or empty.
+ *
+ * @param sub an ustring
+ * @return true if the ustring is null or empty
+ */
+static inline bool ustring_is_empty(const struct ustring sub)
+{
+    return ustring_is_null(sub) || sub.len == 0;
+}
+
 /** @This allocated a string from an ustring.
  *
  * @param sub an ustring
@@ -294,6 +304,19 @@ static inline bool ustring_match(const struct ustring sub,
                                  const struct ustring prefix)
 {
     return !ustring_ncmp(sub, prefix, prefix.len);
+}
+
+/** @This returns true if the ustring sub start with ustring prefix.
+ *
+ * @param sub the ustring to test
+ * @param prefix the prefix to match
+ * @return a boolean
+ */
+static inline bool ustring_match_str(const struct ustring sub,
+                                     const char *prefix)
+{
+    struct ustring ustring_prefix = ustring_from_str(prefix);
+    return !ustring_ncmp(sub, ustring_prefix, ustring_prefix.len);
 }
 
 /** @This returns true if the ustring sub start with ustring prefix

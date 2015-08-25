@@ -28,6 +28,7 @@
 
 #include <ctype.h>
 #include <stdlib.h>
+#include <ctype.h>
 
 #define UURI_GEN_DELIMS ':', '/', '?', '#', '[', ']', '@'
 #define UURI_SUB_DELIMS '!', '$', '&', '\'', '(', ')', '*', '+', ',', ';', '='
@@ -44,40 +45,309 @@
                                   'A', 'B', 'C', 'D', 'E', 'F'
 #define UURI_UNRESERVED UURI_ALPHA, UURI_DIGIT, '-', '.', '_', '~'
 
+static const char uuri_escape_set[] = { UURI_RESERVED, 0 };
+
+static const char uuri_path_set[] = {
+    UURI_UNRESERVED, UURI_SUB_DELIMS, ':', '@', '/', 0
+};
+
+static const char uuri_query_set[] = {
+    UURI_UNRESERVED, UURI_SUB_DELIMS, ':', '@', '/', '?', 0
+};
+
+static const char uuri_fragment_set[] = {
+    UURI_UNRESERVED, UURI_SUB_DELIMS, ':', '@', '/', '?', 0
+};
+
+static inline struct ustring ustring_split_pct_encoded(struct ustring *ustring)
+{
+    if (ustring->len >= 3 &&
+        ustring->at[0] == '%' &&
+        isxdigit(ustring->at[1]) &&
+        isxdigit(ustring->at[2])) {
+        struct ustring tmp = ustring_truncate(*ustring, 3);
+        *ustring = ustring_shift(*ustring, 3);
+        return tmp;
+    }
+    return ustring_null();
+}
+
+ssize_t uuri_escape(const char *path, char *buffer, size_t size)
+{
+    struct ustring str = ustring_from_str(path);
+    size_t s = 0;
+
+    while (!ustring_is_empty(str)) {
+        struct ustring tmp = ustring_split_while(&str, uuri_escape_set);
+        memcpy(buffer, tmp.at, tmp.len > size ? size : tmp.len);
+        s += tmp.len;
+        buffer += tmp.len;
+        size -= size > tmp.len ? tmp.len : size;
+
+        tmp = ustring_split_until(&str, uuri_escape_set);
+        for (size_t i = 0; i < tmp.len; i++) {
+            int ret = snprintf(buffer, size, "%%%02X", tmp.at[i]);
+            if (ret != 3)
+                return -1;
+            s += 3;
+            buffer += 3;
+            size -= size > 3 ? 3 : size;
+        }
+    }
+    if (size)
+        *buffer = '\0';
+
+    return s;
+}
+
+static char uuri_xdigit_value(char c)
+{
+    if (isdigit(c))
+        return c - '0';
+    else if (isxdigit(c))
+        return (islower(c) ? c - 'a' : c - 'A') + 10;
+    else
+        return -1;
+}
+
+static char uuri_pct_decode(struct ustring pct)
+{
+    if (pct.len >= 3 && isxdigit(pct.at[1]) && isxdigit(pct.at[2]))
+        return uuri_xdigit_value(pct.at[1]) * 16 +
+            uuri_xdigit_value(pct.at[2]);
+    return -1;
+}
+
+ssize_t uuri_unescape(const char *path, char *buffer, size_t size)
+{
+    struct ustring str = ustring_from_str(path);
+    size_t s = 0;
+
+    while (!ustring_is_empty(str)) {
+        struct ustring tmp = ustring_split_until(&str, "%");
+        memcpy(buffer, tmp.at, tmp.len > size ? size : tmp.len);
+        s += tmp.len;
+        buffer += tmp.len;
+        size -= size > tmp.len ? tmp.len : size;
+
+        if (ustring_is_empty(str))
+            break;
+
+        struct ustring pct = ustring_split_pct_encoded(&str);
+        if (ustring_is_empty(pct))
+            return -1;
+        if (size) {
+            buffer[0] = uuri_pct_decode(pct);
+            size--;
+        }
+        buffer++;
+        s++;
+    }
+    if (size)
+        *buffer = '\0';
+
+    return s;
+}
+
+struct ustring uuri_parse_ipv4(struct ustring *str)
+{
+    struct ustring ipv4 = *str;
+    struct ustring tmp = *str;
+
+    for (unsigned i = 0; i < 4; i++) {
+        uint16_t value = 0;
+        bool digit = false;
+
+        while (tmp.len && isdigit(*tmp.at) && value <= 255) {
+            if (digit && !value)
+                return ustring_null();
+
+            value *= 10;
+            value += *tmp.at - '0';
+            tmp = ustring_shift(tmp, 1);
+            digit = true;
+        }
+
+        if (!digit || value > 255)
+            return ustring_null();
+
+        if (i < 3 && ustring_is_null(ustring_split_match_str(&tmp, ".")))
+            return ustring_null();
+    }
+    ipv4 = ustring_truncate(ipv4, ipv4.len - tmp.len);
+    *str = tmp;
+    return ipv4;
+}
+
+static struct ustring uuri_parse_ipv6_hex(struct ustring *str)
+{
+    if (!str->len || !isxdigit(str->at[0]))
+        return ustring_null();
+
+    struct ustring hex = *str;
+    struct ustring tmp = hex;
+    for (unsigned i = 0; tmp.len && isxdigit(*tmp.at) && i < 4; i++)
+        tmp = ustring_shift(tmp, 1);
+    hex = ustring_truncate(hex, hex.len - tmp.len);
+    *str = tmp;
+    return hex;
+}
+
+struct ustring uuri_parse_ipv6(struct ustring *str)
+{
+    struct ustring ipv6 = *str;
+    struct ustring tmp = *str;
+    int left = -1, right = 0;
+
+    for (struct ustring hex = tmp;
+         !ustring_is_null(uuri_parse_ipv6_hex(&hex)) &&
+         !ustring_match_str(hex, ".");
+         hex = tmp) {
+        right++;
+        tmp = hex;
+        if (ustring_match_str(tmp, "::") ||
+            ustring_is_null(ustring_split_match_str(&tmp, ":")))
+            break;
+    }
+
+    if (!ustring_is_null(ustring_split_match_str(&tmp, "::"))) {
+        left = right;
+        right = 0;
+
+        for (struct ustring hex = tmp;
+             !ustring_is_null(uuri_parse_ipv6_hex(&hex)) &&
+             !ustring_match_str(hex, ".");
+             hex = tmp) {
+            right++;
+            tmp = hex;
+            if (ustring_is_null(ustring_split_match_str(&tmp, ":")))
+                break;
+        }
+    }
+
+    struct ustring ipv4 = uuri_parse_ipv4(&tmp);
+    if (!ustring_is_null(ipv4))
+        right += 2;
+
+    if (left < 0) {
+        if (right != 8)
+            return ustring_null();
+    }
+    else if (left + right > 7)
+        return ustring_null();
+
+    ipv6 = ustring_truncate(ipv6, tmp.len - ipv6.len);
+    *str = tmp;
+    return ipv6;
+}
+
+struct ustring uuri_parse_ipv6_scoped(struct ustring *str)
+{
+    struct ustring tmp = *str;
+    struct ustring ipv6 = uuri_parse_ipv6(&tmp);
+    if (ustring_is_null(ipv6))
+        return ustring_null();
+
+    if (ustring_is_null(ustring_split_match_str(&tmp, "%25"))) {
+        *str = tmp;
+        return ipv6;
+    }
+
+    static const char set[] = { UURI_UNRESERVED, 0 };
+    while (!ustring_is_empty(ustring_split_while(&tmp, set)) ||
+           !ustring_is_empty(ustring_split_pct_encoded(&tmp)));
+
+    struct ustring ipv6_scoped = ustring_truncate(*str, str->len - tmp.len);
+    *str = tmp;
+    return ipv6_scoped;
+}
+
+struct ustring uuri_parse_ipvfuture(struct ustring *str)
+{
+    struct ustring tmp = *str;
+    if (ustring_is_empty(ustring_split_match_str(&tmp, "v")))
+        return ustring_null();
+
+    static const char hexdigit_set[] = { UURI_HEXDIGIT, 0 };
+    if (ustring_is_empty(ustring_split_while(&tmp, hexdigit_set)))
+        return ustring_null();
+
+    if (ustring_is_empty(ustring_split_match_str(&tmp, ".")))
+        return ustring_null();
+
+    static const char set[] = { UURI_UNRESERVED, UURI_SUB_DELIMS, ':', 0 };
+    if (ustring_is_empty(ustring_split_while(&tmp, set)))
+        return ustring_null();
+
+    struct ustring ipvfuture = ustring_truncate(*str, str->len - tmp.len);
+    *str = tmp;
+    return ipvfuture;
+}
+
+static struct ustring uuri_parse_ip_literal(struct ustring *str)
+{
+    struct ustring tmp = *str;
+
+    if (ustring_is_empty(ustring_split_match_str(&tmp, "[")))
+        return ustring_null();
+
+    if (ustring_is_empty(uuri_parse_ipv6_scoped(&tmp)) &&
+        ustring_is_empty(uuri_parse_ipvfuture(&tmp)))
+        return ustring_null();
+
+    if (ustring_is_empty(ustring_split_match_str(&tmp, "]")))
+        return ustring_null();
+
+    struct ustring ip_literal = ustring_truncate(*str, str->len - tmp.len);
+    *str = tmp;
+    return ip_literal;
+}
+
+static struct ustring uuri_parse_hostname(struct ustring *str)
+{
+    static const char set[] = { UURI_UNRESERVED, UURI_SUB_DELIMS, 0 };
+    struct ustring tmp = *str;
+    while (!ustring_is_empty(ustring_split_while(&tmp, set)) ||
+           !ustring_is_empty(ustring_split_pct_encoded(&tmp)));
+    struct ustring hostname = ustring_truncate(*str, str->len - tmp.len);
+    *str = tmp;
+    return hostname;
+}
+
 struct ustring uuri_parse_scheme(struct ustring *str)
 {
     static const char set[] = { UURI_ALPHA, UURI_DIGIT, '+', '-', '.', 0 };
-    if (str->len >= 1 || isalpha(str->at[0]))
+    if (str->len >= 1 && isalpha(str->at[0]))
         return ustring_split_while(str, set);
     return ustring_null();
 }
 
 struct ustring uuri_parse_userinfo(struct ustring *str)
 {
-    static const char set[] = { UURI_UNRESERVED, UURI_SUB_DELIMS, ':', '%', 0 };
-    return ustring_split_while(str, set);
+    static const char set[] = { UURI_UNRESERVED, UURI_SUB_DELIMS, ':', 0 };
+    struct ustring tmp = *str;
+    while (!ustring_is_empty(ustring_split_while(&tmp, set)) ||
+           !ustring_is_empty(ustring_split_pct_encoded(&tmp)));
+
+    struct ustring userinfo = ustring_truncate(*str, str->len - tmp.len);
+    *str = tmp;
+    return userinfo;
 }
 
 struct ustring uuri_parse_host(struct ustring *str)
 {
-    static const char reg_set[] = { UURI_UNRESERVED, UURI_SUB_DELIMS, '%', 0 };
-    static const char ipv6_set[] = { UURI_HEXDIGIT, ':', 0 };
-    const char *host_set = reg_set;
+    struct ustring ip_literal = uuri_parse_ip_literal(str);
+    if (!ustring_is_empty(ip_literal))
+        return ip_literal;
 
     struct ustring tmp = *str;
-    if (!ustring_is_null(ustring_split_match_str(&tmp, "[")))
-        host_set = ipv6_set;
-
-    struct ustring host = ustring_split_while(&tmp, host_set);
-
-    if (host_set == ipv6_set) {
-        if (ustring_is_null(ustring_split_match_str(&tmp, "]")))
-            return ustring_null();
-        host.at--;
-        host.len += 2;
-    }
-    *str = ustring_shift(*str, host.len);
-    return host;
+    struct ustring ipv4 = uuri_parse_ipv4(&tmp);
+    tmp = *str;
+    struct ustring hostname = uuri_parse_hostname(&tmp);
+    *str = tmp;
+    if (ustring_is_empty(ipv4) || hostname.len > ipv4.len)
+        return hostname;
+    return ipv4;
 }
 
 struct ustring uuri_parse_port(struct ustring *str)
@@ -105,19 +375,16 @@ struct uuri_authority uuri_parse_authority(struct ustring *str)
     if (ustring_is_null(host))
         return authority;
 
-    if (!tmp.len || *tmp.at == '/') {
+    if (ustring_is_null(ustring_split_match_str(&tmp, ":"))) {
         *str = tmp;
         authority.userinfo = userinfo;
         authority.host = host;
         return authority;
     }
 
-    if (ustring_is_null(ustring_split_match_str(&tmp, ":")))
-        return uuri_authority_null();
-
     struct ustring port = uuri_parse_port(&tmp);
     if (ustring_is_null(port))
-        return authority;
+        return uuri_authority_null();
     *str = tmp;
     authority.userinfo = userinfo;
     authority.host = host;
@@ -127,19 +394,22 @@ struct uuri_authority uuri_parse_authority(struct ustring *str)
 
 struct ustring uuri_parse_path(struct ustring *str)
 {
-    static const char set[] = { '?', '#', '\0' };
-    return ustring_split_until(str, set);
+    struct ustring tmp = *str;
+    while (!ustring_is_empty(ustring_split_while(&tmp, uuri_path_set)) ||
+           !ustring_is_empty(ustring_split_pct_encoded(&tmp)));
+    struct ustring path = ustring_truncate(*str, str->len - tmp.len);
+    *str = tmp;
+    return path;
 }
 
 struct ustring uuri_parse_query(struct ustring *str)
 {
-    static const char set[] = { '#', '\0' };
-    return ustring_split_until(str, set);
+    return ustring_split_while(str, uuri_query_set);
 }
 
 struct ustring uuri_parse_fragment(struct ustring *str)
 {
-    return ustring_split_until(str, "");
+    return ustring_split_while(str, uuri_fragment_set);
 }
 
 struct uuri uuri_parse(struct ustring *str)
@@ -160,7 +430,9 @@ struct uuri uuri_parse(struct ustring *str)
             return uuri_null();
     }
 
-    uuri.path = uuri_parse_path(&tmp);
+    if (uuri_authority_is_null(uuri.authority) || ustring_match_str(tmp, "/"))
+        uuri.path = uuri_parse_path(&tmp);
+
     if (!ustring_is_null(ustring_split_match_str(&tmp, "?")))
         uuri.query = uuri_parse_query(&tmp);
 

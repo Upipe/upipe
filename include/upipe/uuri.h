@@ -38,6 +38,124 @@ extern "C" {
 #include <stddef.h>
 #include <string.h>
 
+/** @This parses an IPv4 and shifts ustring str.
+ * (ex: 192.168.0.1)
+ *
+ * @param str the ustring to parse
+ * @return the parsed IPv4 or a null ustring
+ */
+struct ustring uuri_parse_ipv4(struct ustring *str);
+
+/** @This parses an IPv6 and shifts ustring str.
+ * (ex: FE80:0000:0000:0000:0202:B3FF:FE1E:8329)
+ *
+ * @param str the ustring to parse
+ * @return the parsed IPv6 or a null ustring
+ */
+struct ustring uuri_parse_ipv6(struct ustring *str);
+
+/** @This parses a scoped IPv6 and shifts ustring str.
+ * (ex: FE80:0000:0000:0000:0202:B3FF:FE1E:8329%25eth0)
+ *
+ * @param str the ustring to parse
+ * @return the parsed IPv6 or a null ustring
+ */
+struct ustring uuri_parse_ipv6_scoped(struct ustring *str);
+
+/** @This parses a future ip and shifts ustring str.
+ *
+ * @param str the ustring to parse
+ * @return the parsed IPv6 or a null ustring
+ */
+struct ustring uuri_parse_ipvfuture(struct ustring *str);
+
+/** @This parses and shifts an authority user info.
+ *
+ * @param str pointer to an ustring to parse and shift
+ * @return an ustring with the user info portion of str
+ */
+struct ustring uuri_parse_userinfo(struct ustring *str);
+
+/** @This parses and shifts an authority host.
+ *
+ * @param str pointer to an ustring to parse and shift
+ * @return an ustring with the host portion of str
+ */
+struct ustring uuri_parse_host(struct ustring *str);
+
+/** @This parses and shifts an authority port.
+ *
+ * @param str pointer to an ustring to parse and shift
+ * @return an ustring with the port portion of str
+ */
+struct ustring uuri_parse_port(struct ustring *str);
+
+/** @This parses and shifts a scheme.
+ *
+ * @param str pointer to an ustring to parse and shift
+ * @return an ustring with the scheme portion of str
+ */
+struct ustring uuri_parse_scheme(struct ustring *str);
+
+/** @This parses and shifts a path.
+ *
+ * @param str pointer to an ustring to parse and shift
+ * @return an ustring with the path portion of str
+ */
+struct ustring uuri_parse_path(struct ustring *str);
+
+/** @This parses and shifts a query.
+ *
+ * @param str pointer to an ustring to parse and shift
+ * @return an ustring with the query portion of str
+ */
+struct ustring uuri_parse_query(struct ustring *str);
+
+/** @This parses and shifts a fragment.
+ *
+ * @param str pointer to an ustring to parse and shift
+ * @return an ustring with the fragment portion of str
+ */
+struct ustring uuri_parse_fragment(struct ustring *str);
+
+/** @This escapes a string into a buffer.
+ *
+ * @param str the string to escape
+ * @param buffer the destination buffer
+ * @param size the size of the destination buffer
+ * @return the size needed to escape or a negative value on error
+ */
+ssize_t uuri_escape(const char *str, char *buffer, size_t size);
+
+/** @This returns the size needed to escape.
+ *
+ * @param str the string to escape
+ * @return the size needed to escape or a negative value on error
+ */
+static inline ssize_t uuri_escape_len(const char *str)
+{
+    return uuri_escape(str, NULL, 0);
+}
+
+/** @This unescapes a string into buffer.
+ *
+ * @param str the string to unescape
+ * @param buffer the destination buffer
+ * @param size the size of the destination buffer
+ * @return the size needed to unescape or a negative value on error
+ */
+ssize_t uuri_unescape(const char *str, char *buffer, size_t size);
+
+/** @This returns the size needed to unescape string.
+ *
+ * @param str the string to unescape
+ * @return the size needed to unescape or a negative value on error
+ */
+static inline ssize_t uuri_unescape_len(const char *str)
+{
+    return uuri_unescape(str, NULL, 0);
+}
+
 /** @This stores the authority part of an URI.
  *
  * [ userinfo '@' ] host [ ':' port ]
@@ -93,27 +211,6 @@ int uuri_authority_len(const struct uuri_authority *authority, size_t *len_p);
 int uuri_authority_to_buffer(const struct uuri_authority *authority,
                              char *buffer, size_t len);
 
-/** @This parses and shifts an authority user info.
- *
- * @param str pointer to an ustring to parse and shift
- * @return an ustring with the user info portion of str
- */
-struct ustring uuri_parse_userinfo(struct ustring *str);
-
-/** @This parses and shifts an authority host.
- *
- * @param str pointer to an ustring to parse and shift
- * @return an ustring with the host portion of str
- */
-struct ustring uuri_parse_host(struct ustring *str);
-
-/** @This parses and shifts an authority port.
- *
- * @param str pointer to an ustring to parse and shift
- * @return an ustring with the port portion of str
- */
-struct ustring uuri_parse_port(struct ustring *str);
-
 /** @This parses and shifts an authority.
  *
  * @param str pointer to an ustring to parse and shift
@@ -160,7 +257,7 @@ static inline struct uuri uuri_null(void)
  */
 static inline bool uuri_is_null(struct uuri uuri)
 {
-    return ustring_is_null(uuri.scheme) || ustring_is_null(uuri.path);
+    return ustring_is_null(uuri.scheme);
 }
 
 /** @This gets the length required to print uri.
@@ -187,34 +284,6 @@ int uuri_to_buffer(struct uuri *uuri, char *buffer, size_t len);
  * @return an error code
  */
 int uuri_to_str(struct uuri *uuri, char **str_p);
-
-/** @This parses and shifts a scheme.
- *
- * @param str pointer to an ustring to parse and shift
- * @return an ustring with the scheme portion of str
- */
-struct ustring uuri_parse_scheme(struct ustring *str);
-
-/** @This parses and shifts a path.
- *
- * @param str pointer to an ustring to parse and shift
- * @return an ustring with the path portion of str
- */
-struct ustring uuri_parse_path(struct ustring *str);
-
-/** @This parses and shifts a query.
- *
- * @param str pointer to an ustring to parse and shift
- * @return an ustring with the query portion of str
- */
-struct ustring uuri_parse_query(struct ustring *str);
-
-/** @This parses and shifts a fragment.
- *
- * @param str pointer to an ustring to parse and shift
- * @return an ustring with the fragment portion of str
- */
-struct ustring uuri_parse_fragment(struct ustring *str);
 
 /** @This parses and shifts an uri.
  *
