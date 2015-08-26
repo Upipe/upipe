@@ -217,6 +217,7 @@ static bool upipe_udp_parse_node_service(struct upipe *upipe,
             *intf++ = '\0';
             if (if_index != NULL) {
                 if (!upipe_udp_get_ifindex(upipe, intf, if_index)) {
+                    free(string);
                     return false;
                 };
             }
