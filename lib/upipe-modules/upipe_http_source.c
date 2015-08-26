@@ -671,7 +671,7 @@ static int upipe_http_src_open_url(struct upipe *upipe)
     for (res = info; res; res = res->ai_next) {
         fd = socket(res->ai_family, res->ai_socktype,
                                           res->ai_protocol);
-        if (likely(fd > 0)) {
+        if (likely(fd >= 0)) {
             if (connect(fd, res->ai_addr, res->ai_addrlen) == 0) {
                 break;
             }
