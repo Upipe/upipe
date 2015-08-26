@@ -217,6 +217,7 @@ static bool upipe_udp_parse_node_service(struct upipe *upipe,
             *intf++ = '\0';
             if (if_index != NULL) {
                 if (!upipe_udp_get_ifindex(upipe, intf, if_index)) {
+                    free(string);
                     return false;
                 };
             }
@@ -255,6 +256,10 @@ static bool upipe_udp_parse_node_service(struct upipe *upipe,
         struct in_addr addr;
         if (inet_aton(node, &addr) != 0) {
             struct sockaddr_in *sin = malloc(sizeof(struct sockaddr_in));
+            if (unlikely(sin == NULL)) {
+                free(string);
+                return false;
+            }
             sin->sin_family = AF_INET;
             if (port != NULL) {
                 sin->sin_port = ntohs(atoi(port));
