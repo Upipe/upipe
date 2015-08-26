@@ -53,7 +53,7 @@ before_install:
 
 before_script: autoreconf -i
 
-script: ./configure
+script: ./configure --disable-silent-rules
           CPPFLAGS="-I$PWD/nacl_sdk/pepper_43/include"
           LDFLAGS="-L$PWD/nacl_sdk/pepper_43/lib/glibc_x86_64" &&
         make &&
