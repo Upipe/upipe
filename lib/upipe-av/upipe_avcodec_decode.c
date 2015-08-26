@@ -1223,7 +1223,7 @@ static bool upipe_avcdec_check_option(struct upipe *upipe, const char *option,
     if (!strcmp(option, "lowres")) {
         if (!content) return true;
         uint8_t lowres = strtoul(content, NULL, 10);
-        if (lowres > upipe_avcdec->context->codec->max_lowres) {
+        if (lowres > av_codec_get_max_lowres(upipe_avcdec->context->codec)) {
             return false;
         }
     }
