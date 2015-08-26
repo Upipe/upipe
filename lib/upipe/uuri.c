@@ -598,8 +598,10 @@ int uuri_to_str(struct uuri *uuri, char **str_p)
         return UBASE_ERR_ALLOC;
 
     ret = uuri_to_buffer(uuri, str, (size + 1) * sizeof (char));
-    if (ret)
+    if (ret) {
+        free(str);
         return ret;
+    }
 
     *str_p = str;
     return UBASE_ERR_NONE;
