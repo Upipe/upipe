@@ -356,26 +356,28 @@ static int upipe_fsrc_set_uri(struct upipe *upipe, const char *path)
     if (unlikely(path == NULL))
         return UBASE_ERR_NONE;
 
-    struct stat st;
-    if (unlikely(stat(path, &st) == -1)) {
-        upipe_err_va(upipe, "can't stat file %s (%m)", path);
-        return UBASE_ERR_EXTERNAL;
-    }
-
-    upipe_fsrc->regular_file = !!S_ISREG(st.st_mode);
-    upipe_fsrc->fd = open(path, O_RDONLY | O_NONBLOCK | O_CLOEXEC);
-    if (unlikely(upipe_fsrc->fd == -1)) {
+    int fd = open(path, O_RDONLY | O_NONBLOCK | O_CLOEXEC);
+    if (unlikely(fd < 0)) {
         upipe_err_va(upipe, "can't open file %s (%m)", path);
         return UBASE_ERR_EXTERNAL;
     }
-
-    upipe_fsrc->path = strdup(path);
-    if (unlikely(upipe_fsrc->path == NULL)) {
-        close(upipe_fsrc->fd);
-        upipe_fsrc->fd = -1;
+    struct stat st;
+    if (unlikely(fstat(fd, &st) == -1)) {
+        upipe_err_va(upipe, "can't stat file %s (%m)", path);
+        close(fd);
+        return UBASE_ERR_EXTERNAL;
+    }
+    char *path_dup = strdup(path);
+    if (unlikely(path_dup == NULL)) {
+        close(fd);
         upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
         return UBASE_ERR_ALLOC;
     }
+
+    upipe_fsrc->fd = fd;
+    upipe_fsrc->regular_file = !!S_ISREG(st.st_mode);
+    upipe_fsrc->fd = open(path, O_RDONLY | O_NONBLOCK | O_CLOEXEC);
+    upipe_fsrc->path = path_dup;
     upipe_notice_va(upipe, "opening file %s", upipe_fsrc->path);
     return UBASE_ERR_NONE;
 }
