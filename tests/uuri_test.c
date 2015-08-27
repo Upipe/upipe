@@ -249,6 +249,8 @@ static void test_uri(void)
             "tel:+1-816-555-1212",
             "telnet://192.0.2.16:80/",
             "urn:oasis:names:specification:docbook:dtd:xml:4.1.2",
+            /* ipvfuture */
+            "test://[v1.0:name:0]",
         };
 
         for (size_t i = 0; i < UBASE_ARRAY_SIZE(valid); i++) {
@@ -265,6 +267,9 @@ static void test_uri(void)
             "scheme//:",
             "scheme///",
             "scheme://[ffff::7%eth0]/",
+            "scheme://[v.0:name:0]",
+            "scheme://[1.0:name:0]",
+            "scheme://[v1.0:name?:0]",
         };
 
         for (size_t i = 0; i < UBASE_ARRAY_SIZE(invalid); i++) {
