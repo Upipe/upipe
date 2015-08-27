@@ -40,8 +40,43 @@
 
 #define DELTA_WARN       (UCLOCK_FREQ / 1000)
 
+static inline int
+upipe_stream_switcher_input_throw_sync(struct upipe *upipe)
+{
+    upipe_dbg(upipe, "throw sync");
+    return upipe_throw(upipe, UPROBE_STREAM_SWITCHER_SUB_SYNC,
+                       UPIPE_STREAM_SWITCHER_SUB_SIGNATURE);
+}
+
+static inline int
+upipe_stream_switcher_input_throw_entering(struct upipe *upipe)
+{
+    upipe_dbg(upipe, "throw entering");
+    return upipe_throw(upipe, UPROBE_STREAM_SWITCHER_SUB_ENTERING,
+                       UPIPE_STREAM_SWITCHER_SUB_SIGNATURE);
+}
+
+static inline int
+upipe_stream_switcher_input_throw_leaving(struct upipe *upipe)
+{
+    upipe_dbg(upipe, "throw leaving");
+    return upipe_throw(upipe, UPROBE_STREAM_SWITCHER_SUB_LEAVING,
+                       UPIPE_STREAM_SWITCHER_SUB_SIGNATURE);
+}
+
+static inline int
+upipe_stream_switcher_input_throw_destroy(struct upipe *upipe)
+{
+    upipe_dbg(upipe, "throw destroy");
+    return upipe_throw(upipe, UPROBE_STREAM_SWITCHER_SUB_DESTROY,
+                       UPIPE_STREAM_SWITCHER_SUB_SIGNATURE);
+}
+
 /** @internal @This is the private context of a stream switcher pipe. */
 struct upipe_stream_switcher {
+    /** real refcount */
+    struct urefcount urefcount_real;
+
     /** for urefcount helper */
     struct urefcount urefcount;
 
@@ -72,10 +107,12 @@ struct upipe_stream_switcher {
 UPIPE_HELPER_UPIPE(upipe_stream_switcher, upipe,
                    UPIPE_STREAM_SWITCHER_SIGNATURE)
 UPIPE_HELPER_UREFCOUNT(upipe_stream_switcher, urefcount,
-                       upipe_stream_switcher_free)
+                       upipe_stream_switcher_no_ref)
 UPIPE_HELPER_VOID(upipe_stream_switcher)
 UPIPE_HELPER_OUTPUT(upipe_stream_switcher, output, flow_def, output_state,
                     request_list)
+
+UBASE_FROM_TO(upipe_stream_switcher, urefcount, urefcount_real, urefcount_real);
 
 /** @internal @This is the private context for stream switcher sub pipes. */
 struct upipe_stream_switcher_input {
@@ -92,10 +129,8 @@ struct upipe_stream_switcher_input {
     struct uchain blockers;
 
     /** private */
-    bool destroyed;
+    bool sync;
 
-    /** super pipe ref */
-    struct upipe *super;
     /** for upipe helper */
     struct upipe upipe;
 };
@@ -118,14 +153,22 @@ UPIPE_HELPER_SUBPIPE(upipe_stream_switcher, upipe_stream_switcher_input,
  * sub pipes
  */
 
+/* forward declarations */
+static void upipe_stream_switcher_input_destroy(struct upipe *upipe);
+
+/** @internal @This allocates an input stream.
+ *
+ * @param mgr common management structure
+ * @param uprobe structure used to raise events
+ * @param signature signature of the pipe allocator
+ * @param args optional arguments
+ * @return pointer to upipe or NULL in case of allocation error
+ */
 static struct upipe *upipe_stream_switcher_input_alloc(struct upipe_mgr *mgr,
                                                        struct uprobe *uprobe,
                                                        uint32_t signature,
                                                        va_list args)
 {
-    struct upipe_stream_switcher *upipe_stream_switcher =
-        upipe_stream_switcher_from_sub_mgr(mgr);
-
     struct upipe *upipe =
         upipe_stream_switcher_input_alloc_void(mgr, uprobe, signature, args);
     upipe_stream_switcher_input_init_urefcount(upipe);
@@ -134,25 +177,26 @@ static struct upipe *upipe_stream_switcher_input_alloc(struct upipe_mgr *mgr,
 
     struct upipe_stream_switcher_input *upipe_stream_switcher_input =
         upipe_stream_switcher_input_from_upipe(upipe);
-    upipe_stream_switcher_input->destroyed = false;
-    upipe_stream_switcher_input->super =
-        upipe_use(upipe_stream_switcher_to_upipe(upipe_stream_switcher));
+    upipe_stream_switcher_input->sync = false;
 
     upipe_throw_ready(upipe);
 
-    if (!upipe_stream_switcher->selected)
-        upipe_stream_switcher->selected = upipe;
+    struct upipe_stream_switcher *super =
+        upipe_stream_switcher_from_sub_mgr(mgr);
+    if (super->waiting)
+        upipe_stream_switcher_input_destroy(super->waiting);
+    assert(super->waiting == NULL);
+    super->waiting = upipe_use(upipe);
 
     return upipe;
 }
 
+/** @internal @This frees an input stream.
+ *
+ * @param upipe description structure of the pipe
+ */
 static void upipe_stream_switcher_input_free(struct upipe *upipe)
 {
-    struct upipe_stream_switcher_input *upipe_stream_switcher_input =
-        upipe_stream_switcher_input_from_upipe(upipe);
-
-    upipe_release(upipe_stream_switcher_input->super);
-
     upipe_throw_dead(upipe);
 
     upipe_stream_switcher_input_clean_input(upipe);
@@ -161,6 +205,13 @@ static void upipe_stream_switcher_input_free(struct upipe *upipe)
     upipe_stream_switcher_input_free_void(upipe);
 }
 
+/** @internal @This implements input stream control commands.
+ *
+ * @param upipe description structure of the pipe
+ * @param command command to execute
+ * @param args command arguments
+ * @return an error code
+ */
 static int upipe_stream_switcher_input_control(struct upipe *upipe,
                                                int command,
                                                va_list args)
@@ -199,8 +250,11 @@ static int upipe_stream_switcher_input_control(struct upipe *upipe,
     }
 }
 
-/*
- * drop uref
+/** @internal @This drops an uref.
+ *
+ * @param upipe description structure of the pipe
+ * @param uref uref to drop
+ * @returns true
  */
 static bool upipe_stream_switcher_drop(struct upipe *upipe, struct uref *uref)
 {
@@ -209,8 +263,55 @@ static bool upipe_stream_switcher_drop(struct upipe *upipe, struct uref *uref)
     return true;
 }
 
-/*
- * forward uref to the super pipe
+/** @internal @This destroy an input stream.
+ *
+ * @param upipe description structure of the pipe
+ */
+static void upipe_stream_switcher_input_destroy(struct upipe *upipe)
+{
+    assert(upipe->mgr != NULL);
+    struct upipe_stream_switcher *super =
+        upipe_stream_switcher_from_sub_mgr(upipe->mgr);
+
+    assert(upipe == super->selected || upipe == super->waiting);
+    if (super->selected == upipe) {
+        super->selected = NULL;
+        upipe_stream_switcher_input_throw_leaving(upipe);
+    }
+    if (super->waiting == upipe)
+        super->waiting = NULL;
+    upipe_stream_switcher_input_throw_destroy(upipe);
+    upipe_release(upipe);
+}
+
+/** @internal @This switch to a different sub pipe.
+ *
+ * @param super stream switcher super pipe.
+ * @param upipe new sub pipe to switch on.
+ */
+static void upipe_stream_switcher_switch(struct upipe_stream_switcher *super)
+{
+    /* destroy the old one */
+    if (super->selected)
+        upipe_stream_switcher_input_destroy(super->selected);
+    super->selected = NULL;
+
+    /* wake up the new one */
+    super->selected = super->waiting;
+    super->waiting = NULL;
+    if (super->selected) {
+        upipe_stream_switcher_input_throw_entering(super->selected);
+        if (upipe_stream_switcher_input_output_input(super->selected))
+            upipe_stream_switcher_input_unblock_input(super->selected);
+    }
+}
+
+/** @internal @This forwards uref to the super pipe
+ *
+ * @param upipe description structure of the pipe
+ * @param uref pointer to uref to output
+ * @param upump_p reference to the pump that generated the buffer
+ * @returns true if uref was outputted
  */
 static bool upipe_stream_switcher_fwd(struct upipe *upipe,
                                       struct uref *uref,
@@ -221,16 +322,12 @@ static bool upipe_stream_switcher_fwd(struct upipe *upipe,
     struct upipe_stream_switcher *upipe_stream_switcher =
         upipe_stream_switcher_from_sub_mgr(upipe_mgr);
     struct upipe *super = upipe_stream_switcher_to_upipe(upipe_stream_switcher);
-    uint64_t dts_prog = 0, dts_orig = 0;
 
+    uint64_t dts_orig = 0;
     if (!ubase_check(uref_clock_get_dts_orig(uref, &dts_orig))) {
         upipe_err(upipe, "no dts orig");
         return upipe_stream_switcher_drop(upipe, uref);
     }
-
-    if (!ubase_check(uref_clock_get_dts_prog(uref, &dts_prog)))
-        dts_prog = 0;
-
     if (!upipe_stream_switcher->rebase_timestamp_set) {
         upipe_stream_switcher->rebase_timestamp_set = true;
         upipe_stream_switcher->rebase_timestamp = dts_orig;
@@ -240,26 +337,47 @@ static bool upipe_stream_switcher_fwd(struct upipe *upipe,
         upipe_stream_switcher->rebase_timestamp = dts_orig;
     }
     dts_orig -= upipe_stream_switcher->rebase_timestamp;
+
+    uint64_t dts_prog;
+    if (!ubase_check(uref_clock_get_dts_prog(uref, &dts_prog)))
+        dts_prog = 0;
     upipe_verbose_va(upipe, "DTS rebase %"PRIu64"(%"PRIu64"ms) "
                      "-> %"PRIu64" (%"PRIu64"ms)",
-                     dts_prog, dts_prog / 27000, dts_orig, dts_orig / 27000);
+                     dts_prog, dts_prog / (UCLOCK_FREQ / 1000),
+                     dts_orig, dts_orig / (UCLOCK_FREQ / 1000));
     uref_clock_set_dts_prog(uref, dts_orig);
-
     upipe_stream_switcher_output(super, uref, upump_p);
+
     return true;
 }
 
-/*
- * set the upipe as waiting, return false to save the uref
+/** @internal @This sets the upipe as waiting, return false to save the uref
+ *
+ * @param super pointer to the private description of the super pipe
+ * @param upipe description structure of the pipe
+ * @param uref pointer to uref to output
+ * @return an error code
  */
 static bool upipe_stream_switcher_wait(struct upipe_stream_switcher *super,
                                        struct upipe *upipe, struct uref *uref)
 {
-    /* waiting pipe is already set ? */
-    if (super->waiting) {
-        assert(super->waiting == upipe);
+    struct upipe_stream_switcher_input *upipe_stream_switcher_input =
+        upipe_stream_switcher_input_from_upipe(upipe);
+
+    assert(super->waiting == upipe);
+
+    if (upipe_stream_switcher_input->sync)
         return false;
+
+    const char *flow_def;
+    if (!ubase_check(uref_flow_get_def(super->flow_def, &flow_def))) {
+        upipe_err(upipe, "fail to get flow format");
+        return upipe_stream_switcher_drop(upipe, uref);
     }
+
+    if (strstr(flow_def, ".pic.") && !ubase_check(uref_pic_get_key(uref)))
+        /* drop if not a key frames */
+        return upipe_stream_switcher_drop(upipe, uref);
 
     uint64_t pts_orig = 0;
     if (!ubase_check(uref_clock_get_pts_orig(uref, &pts_orig))) {
@@ -277,37 +395,10 @@ static bool upipe_stream_switcher_wait(struct upipe_stream_switcher *super,
                      pts_orig, super->last_pts_orig);
         return upipe_stream_switcher_drop(upipe, uref);
     }
-    upipe_dbg_va(upipe, "found a key frame at %"PRIu64, pts_orig);
-    super->waiting = upipe;
     super->pts_orig = pts_orig;
+    upipe_stream_switcher_input->sync = true;
+    upipe_stream_switcher_input_throw_sync(upipe);
     return false;
-}
-
-/** @internal @This switch to a different sub pipe.
- *
- * @param super stream switcher super pipe.
- * @param upipe new sub pipe to switch on.
- */
-static void upipe_stream_switcher_switch(struct upipe_stream_switcher *super,
-                                         struct upipe *upipe,
-                                         struct uref *uref)
-{
-    struct upipe_stream_switcher_input *upipe_stream_switcher_input =
-        upipe_stream_switcher_input_from_upipe(upipe);
-
-    upipe_notice_va(upipe, "switching streams at %"PRIu64, super->pts_orig);
-
-    /* switch the old stream with the new one */
-    super->selected = super->waiting;
-    super->waiting = NULL;
-
-    /* wake up the new one */
-    assert(upipe_stream_switcher_input_output_input(super->selected));
-    upipe_stream_switcher_input_unblock_input(super->selected);
-
-    /* destroy the old one */
-    upipe_stream_switcher_input->destroyed = true;
-    upipe_throw_sink_end(upipe);
 }
 
 /** @internal @This forward, drop or switch the uref.
@@ -324,18 +415,16 @@ static bool upipe_stream_switcher_input_output(struct upipe *upipe,
                                                struct uref *uref,
                                                struct upump **upump_p)
 {
-    struct upipe_stream_switcher_input *upipe_stream_switcher_input =
-        upipe_stream_switcher_input_from_upipe(upipe);
-    struct upipe_mgr *upipe_mgr = upipe->mgr;
-    assert(upipe_mgr);
-    struct upipe_stream_switcher *upipe_stream_switcher =
-        upipe_stream_switcher_from_sub_mgr(upipe_mgr);
+    assert(upipe->mgr);
+    struct upipe_stream_switcher *super =
+        upipe_stream_switcher_from_sub_mgr(upipe->mgr);
 
-    if (upipe_stream_switcher_input->destroyed)
-        /* previous stream, drop */
-        return upipe_stream_switcher_drop(upipe, uref);
+    if (super->selected == NULL) {
+        if (super->waiting)
+            upipe_stream_switcher_switch(super);
+    }
 
-    if (upipe_stream_switcher->selected == upipe) {
+    if (super->selected == upipe) {
         /* current selected stream */
 
         uint64_t pts_orig = 0;
@@ -349,51 +438,34 @@ static bool upipe_stream_switcher_input_output(struct upipe *upipe,
             }
         }
 
-        upipe_stream_switcher->last_pts_orig = pts_orig;
-        if (!upipe_stream_switcher->waiting)
+        super->last_pts_orig = pts_orig;
+        if (!super->waiting)
             /* no waiting stream, forward */
             return upipe_stream_switcher_fwd(upipe, uref, upump_p);
 
-        if (pts_orig < upipe_stream_switcher->pts_orig)
+        struct upipe_stream_switcher_input *waiting =
+            upipe_stream_switcher_input_from_upipe(super->waiting);
+        if (!waiting->sync)
+            /* no key frame found, forward */
+            return upipe_stream_switcher_fwd(upipe, uref, upump_p);
+
+        if (pts_orig < super->pts_orig)
             /* previous frame, forward */
             return upipe_stream_switcher_fwd(upipe, uref, upump_p);
 
-        if (pts_orig - upipe_stream_switcher->pts_orig > DELTA_WARN)
+        if (pts_orig - super->pts_orig > DELTA_WARN)
             upipe_warn_va(upipe, "switch too late %"PRIu64,
-                          pts_orig - upipe_stream_switcher->pts_orig);
+                          pts_orig - super->pts_orig);
 
         /* the selected stream meet the waiting stream, switch */
-        upipe_stream_switcher_switch(upipe_stream_switcher, upipe, uref);
+        upipe_stream_switcher_switch(super);
         /* drop */
     }
-    else if (upipe_stream_switcher->waiting) {
-        /* a stream is waiting for switch */
-
-        if (upipe_stream_switcher->waiting == upipe)
-            /* this is me, wait */
-            return upipe_stream_switcher_wait(upipe_stream_switcher,
-                                              upipe, uref);
-
-        /* not me, drop */
+    else if (super->waiting == upipe) {
+        /* waiting for switch */
+        return upipe_stream_switcher_wait(super, upipe, uref);
     }
-    else {
-        /* nobody is waiting */
-        const char *flow_def = "(none)";
-        uref_flow_get_def(upipe_stream_switcher->flow_def, &flow_def);
 
-        if (strstr(flow_def, ".pic.")) {
-            if (ubase_check(uref_pic_get_key(uref)))
-                /* key frame found, wait */
-                return upipe_stream_switcher_wait(upipe_stream_switcher,
-                                                  upipe, uref);
-        }
-        else if (strstr(flow_def, ".sound.")) {
-            return upipe_stream_switcher_wait(upipe_stream_switcher,
-                                              upipe, uref);
-        }
-
-        /* not a key frame, drop */
-    }
     return upipe_stream_switcher_drop(upipe, uref);
 }
 
@@ -426,15 +498,19 @@ static void upipe_stream_switcher_init_sub_mgr(struct upipe *upipe)
 
     memset(sub_mgr, 0, sizeof (*sub_mgr));
     sub_mgr->signature = UPIPE_STREAM_SWITCHER_SUB_SIGNATURE;
+    sub_mgr->upipe_event_str = upipe_stream_switcher_sub_event_str;
     sub_mgr->upipe_alloc = upipe_stream_switcher_input_alloc;
     sub_mgr->upipe_control = upipe_stream_switcher_input_control;
     sub_mgr->upipe_input = upipe_stream_switcher_input_input;
-    sub_mgr->refcount = &upipe_stream_switcher->urefcount;
+    sub_mgr->refcount = &upipe_stream_switcher->urefcount_real;
 }
 
 /*
  * super pipe
  */
+
+/* forward declarations */
+static void upipe_stream_switcher_free(struct urefcount *urefcount);
 
 /** @internal @This allocates a stream switcher pipe.
  *
@@ -464,18 +540,25 @@ static struct upipe *upipe_stream_switcher_alloc(struct upipe_mgr *mgr,
     upipe_stream_switcher->last_pts_orig = 0;
     upipe_stream_switcher->rebase_timestamp_set = false;
     upipe_stream_switcher->rebase_timestamp = 0;
+    urefcount_init(
+        upipe_stream_switcher_to_urefcount_real(upipe_stream_switcher),
+        upipe_stream_switcher_free);
 
     upipe_throw_ready(upipe);
 
     return upipe;
 }
 
-/** @This frees a stream switcher pipe.
+/** @internal @This frees a stream switcher pipe.
  *
- * @param upipe description structure of the pipe
+ * @param urefcount pointer to the embedded urefcount
  */
-static void upipe_stream_switcher_free(struct upipe *upipe)
+static void upipe_stream_switcher_free(struct urefcount *urefcount)
 {
+    struct upipe_stream_switcher *upipe_stream_switcher =
+        upipe_stream_switcher_from_urefcount_real(urefcount);
+    struct upipe *upipe = upipe_stream_switcher_to_upipe(upipe_stream_switcher);
+
     upipe_throw_dead(upipe);
 
     upipe_stream_switcher_clean_sub_inputs(upipe);
@@ -484,6 +567,34 @@ static void upipe_stream_switcher_free(struct upipe *upipe)
     upipe_stream_switcher_free_void(upipe);
 }
 
+/** @internal @This is called when there is no external reference to the
+ * pipe anymore.
+ *
+ * @param upipe description structure of the pipe
+ */
+static void upipe_stream_switcher_no_ref(struct upipe *upipe)
+{
+    struct upipe_stream_switcher *upipe_stream_switcher =
+        upipe_stream_switcher_from_upipe(upipe);
+
+    if (upipe_stream_switcher->waiting)
+        upipe_stream_switcher_input_destroy(upipe_stream_switcher->waiting);
+    assert(upipe_stream_switcher->waiting == NULL);
+
+    if (upipe_stream_switcher->selected)
+        upipe_stream_switcher_input_destroy(upipe_stream_switcher->selected);
+    assert(upipe_stream_switcher->selected == NULL);
+
+    urefcount_release(
+        upipe_stream_switcher_to_urefcount_real(upipe_stream_switcher));
+}
+
+/** @internal @This sets the flow format of the stream switcher pipe.
+ *
+ * @param upipe description structure of the pipe
+ * @param flow_def pointer to the flow definition
+ * @return an error code
+ */
 static int upipe_stream_switcher_set_flow_def(struct upipe *upipe,
                                               struct uref *flow_def)
 {
