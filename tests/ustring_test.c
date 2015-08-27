@@ -19,6 +19,28 @@ int main(int argc, char *argv[])
     assert(ustring_is_null(ustring_null()));
     assert(ustring_is_null(ustring_from_str(NULL)));
     assert(!ustring_is_null(ustring_from_str("")));
+    assert(
+        ustring_is_empty(
+            ustring_shift_until(
+                ustring_from_str("this is a string !"), "?")));
+    assert(
+        ustring_match_str(
+            ustring_shift_until(
+                ustring_from_str("this is a string !"), "?!"),
+            "!"));
+    assert(
+        ustring_match_str(
+            ustring_shift_until(
+                ustring_from_str("this is a string !"), "?!a"),
+            "a string !"));
+    assert(
+        ustring_match_sfx(
+            ustring_from_str("this is a string !"),
+            ustring_from_str("a string !")));
+    assert(
+        !ustring_match_sfx(
+            ustring_from_str("this is a string !"),
+            ustring_from_str("a string")));
 
     const char *strings[] = {
         NULL,

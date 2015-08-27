@@ -341,10 +341,8 @@ static inline bool ustring_casematch(const struct ustring sub,
 static inline bool ustring_match_sfx(const struct ustring sub,
                                      const struct ustring suffix)
 {
-    if (suffix.len > sub.len)
-        return false;
-    struct ustring tmp = ustring_shift(sub, sub.len - suffix.len);
-    return ustring_cmp(tmp, suffix) == 0;
+    return suffix.len > sub.len ? false :
+        ustring_cmp(ustring_shift(sub, sub.len - suffix.len), suffix) == 0;
 }
 
 /** @This returns true if the ustring sub end with ustring suffix
@@ -357,10 +355,8 @@ static inline bool ustring_match_sfx(const struct ustring sub,
 static inline bool ustring_casematch_sfx(const struct ustring sub,
                                          const struct ustring suffix)
 {
-    if (suffix.len > sub.len)
-        return false;
-    struct ustring tmp = ustring_shift(sub, sub.len - suffix.len);
-    return ustring_casecmp(tmp, suffix) == 0;
+    return suffix.len > sub.len ? false :
+        ustring_casecmp(ustring_shift(sub, sub.len - suffix.len), suffix) == 0;
 }
 
 /** @This returns the beginning of ustring sub containing only characters
