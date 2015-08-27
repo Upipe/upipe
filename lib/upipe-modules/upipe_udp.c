@@ -132,6 +132,7 @@ static bool upipe_udp_get_ifindex(struct upipe *upipe, const char *name, int *if
 
     if (ioctl(fd, SIOCGIFINDEX, &ifr) < 0) {
         upipe_err_va(upipe, "unable to get interface index (%m)");
+        close(fd);
         return false;
     }
 
