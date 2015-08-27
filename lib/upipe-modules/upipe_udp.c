@@ -132,6 +132,7 @@ static bool upipe_udp_get_ifindex(struct upipe *upipe, const char *name, int *if
 
     if (ioctl(fd, SIOCGIFINDEX, &ifr) < 0) {
         upipe_err_va(upipe, "unable to get interface index (%m)");
+        close(fd);
         return false;
     }
 
@@ -351,9 +352,12 @@ int upipe_udp_open_socket(struct upipe *upipe, const char *_uri, int ttl,
     socklen_t sockaddr_len;
     char *ifname = NULL;
 
+    if (!uri)
+        return -1;
+
     memset(&bind_addr, 0, sizeof(union sockaddru));
     memset(&connect_addr, 0, sizeof(union sockaddru));
-    
+
     bind_addr.ss.ss_family = AF_UNSPEC;
     connect_addr.ss.ss_family = AF_UNSPEC;
 
@@ -382,6 +386,7 @@ int upipe_udp_open_socket(struct upipe *upipe, const char *_uri, int ttl,
     }
 
     if (*token == '\0') {
+        free(uri);
         return -1;
     }
 
@@ -389,6 +394,7 @@ int upipe_udp_open_socket(struct upipe *upipe, const char *_uri, int ttl,
     if (token[0] != '@') {
         if (!upipe_udp_parse_node_service(upipe, token, &token, connect_port,
                                         &connect_if_index, &connect_addr.ss)) {
+            free(uri);
             return -1;
         }
         /* required on some architectures */
@@ -399,6 +405,7 @@ int upipe_udp_open_socket(struct upipe *upipe, const char *_uri, int ttl,
         token++;
         if (!upipe_udp_parse_node_service(upipe, token, &token, bind_port,
                                         &bind_if_index, &bind_addr.ss)) {
+            free(uri);
             return -1;
         }
         /* required on some architectures */
@@ -407,6 +414,7 @@ int upipe_udp_open_socket(struct upipe *upipe, const char *_uri, int ttl,
 
     if (bind_addr.ss.ss_family == AF_UNSPEC &&
          connect_addr.ss.ss_family == AF_UNSPEC) {
+        free(uri);
         return -1;
     }
 
@@ -455,6 +463,7 @@ int upipe_udp_open_socket(struct upipe *upipe, const char *_uri, int ttl,
 
     if (unlikely(*use_tcp && *use_raw)) {
         upipe_warn(upipe, "RAW sockets not implemented for tcp");
+        free(uri);
         return -1;
     }
 
