@@ -581,7 +581,7 @@ static int upipe_http_src_send_request(struct upipe *upipe)
     request_add(&req, &req_len, "User-Agent: %s\r\n", USER_AGENT);
 
     /* Host */
-    const char *host;
+    const char *host = NULL;
     if (ubase_check(uref_uri_get_host(flow_def, &host))) {
         upipe_verbose_va(upipe, "Host: %s", host);
         request_add(&req, &req_len, "Host: %s\r\n", host);
