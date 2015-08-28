@@ -1,4 +1,9 @@
+/** @file
+ * @short Upipe logging structure
+ */
+
 #ifndef _UPIPE_ULOG_H_
+/** @hidden */
 # define _UPIPE_ULOG_H_
 #ifdef __cplusplus
 extern "C" {
@@ -25,13 +30,13 @@ enum uprobe_log_level {
 
 /** @This describe a prefix tag for a log message. */
 struct ulog_pfx {
-    /** uchain to attach in prefixes list */
+    /** uchain to attach in @ref ulog prefixes field */
     struct uchain uchain;
     /** the prefix string */
     const char *tag;
 };
 
-UBASE_FROM_TO(ulog_pfx, uchain, uchain, uchain)
+UBASE_FROM_TO(ulog_pfx, uchain, uchain, uchain);
 
 /** @This describe a log message. */
 struct ulog {
@@ -43,6 +48,12 @@ struct ulog {
     struct uchain prefixes;
 };
 
+/** @This initializes an ulog structure.
+ *
+ * @param ulog pointer to the ulog structure to initialize
+ * @param level the level of the log
+ * @param msg the message to log
+ */
 static inline void ulog_init(struct ulog *ulog,
                              enum uprobe_log_level level,
                              const char *msg)

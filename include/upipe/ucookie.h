@@ -23,7 +23,12 @@
  * SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
  */
 
+/** @file
+ * @short Upipe functions to parse HTTP cookies
+ */
+
 #ifndef _UPIPE_UCOOKIE_H_
+/** @hidden */
 # define _UPIPE_UCOOKIE_H_
 #ifdef __cplusplus
 extern "C" {

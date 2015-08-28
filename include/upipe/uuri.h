@@ -24,10 +24,11 @@
  */
 
 /** @file
- * @short URI helper functions to parse or generate URIs according to RFC3986
+ * @short Upipe functions to parse or generate URIs according to RFC3986
  */
 
 #ifndef _UPIPE_UURI_H_
+/** @hidden */
 # define _UPIPE_UURI_H_
 #ifdef __cplusplus
 extern "C" {
@@ -158,7 +159,7 @@ static inline ssize_t uuri_unescape_len(const char *str)
 
 /** @This stores the authority part of an URI.
  *
- * [ userinfo '@' ] host [ ':' port ]
+ * [ userinfo '@@' ] host [ ':' port ]
  */
 struct uuri_authority {
     /** userinfo part */
