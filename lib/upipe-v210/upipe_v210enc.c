@@ -283,7 +283,7 @@ static bool upipe_v210enc_handle(struct upipe *upipe, struct uref *uref,
         const uint16_t *u = (const uint16_t *)input_planes[1];
         const uint16_t *v = (const uint16_t *)input_planes[2];
         for (h = 0; h < input_vsize; h++) {
-            uint32_t val;
+            uint32_t val = 0;
             w = (input_hsize / 6) * 6;
             upipe_v210enc->pack_line_10(y, u, v, dst, w);
 
@@ -322,7 +322,7 @@ static bool upipe_v210enc_handle(struct upipe *upipe, struct uref *uref,
         const uint8_t *u = input_planes[1];
         const uint8_t *v = input_planes[2];
         for (h = 0; h < input_vsize; h++) {
-            uint32_t val;
+            uint32_t val = 0;
             w = (input_hsize / 12) * 12;
             upipe_v210enc->pack_line_8(y, u, v, dst, w);
 

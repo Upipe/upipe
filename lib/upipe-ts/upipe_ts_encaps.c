@@ -422,7 +422,7 @@ static void upipe_ts_encaps_promote_uref(struct upipe *upipe)
 
         bool has_cr = ubase_check(uref_block_get_end(uref));
         const char *def;
-        uint64_t cr_prog, cr_sys;
+        uint64_t cr_prog = 0, cr_sys;
         size_t uref_size;
         if (unlikely(ubase_check(uref_flow_get_def(uref, &def)))) {
             encaps->psi = !ubase_ncmp(def, "block.mpegts.mpegtspsi.");

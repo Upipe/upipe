@@ -212,7 +212,7 @@ static bool upipe_ts_sdtd_table_validate(struct upipe *upipe)
 {
     struct upipe_ts_sdtd *upipe_ts_sdtd = upipe_ts_sdtd_from_upipe(upipe);
     bool first = true;
-    uint16_t onid;
+    uint16_t onid = 0;
     upipe_ts_psid_table_foreach (upipe_ts_sdtd->next_sdt, section_uref) {
         const uint8_t *section;
         int size = -1;
