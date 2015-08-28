@@ -389,7 +389,7 @@ static inline int uref_##group##_match_##attr(struct uref *uref,            \
 static inline int uref_##group##_cmp_##attr(struct uref *uref1,             \
                                             struct uref *uref2)             \
 {                                                                           \
-    const char *v1, *v2;                                                    \
+    const char *v1 = NULL, *v2 = NULL;                                      \
     int err1 = uref_##group##_get_##attr(uref1, &v1);                       \
     int err2 = uref_##group##_get_##attr(uref2, &v2);                       \
     if (!ubase_check(err1) && !ubase_check(err2))                           \
@@ -460,7 +460,7 @@ static inline int uref_##group##_match_##attr(struct uref *uref,            \
 static inline int uref_##group##_cmp_##attr(struct uref *uref1,             \
                                             struct uref *uref2)             \
 {                                                                           \
-    const char *v1, *v2;                                                    \
+    const char *v1 = NULL, *v2 = NULL;                                      \
     int err1 = uref_##group##_get_##attr(uref1, &v1);                       \
     int err2 = uref_##group##_get_##attr(uref2, &v2);                       \
     if (!ubase_check(err1) && !ubase_check(err2))                           \
@@ -535,7 +535,7 @@ static inline int uref_##group##_match_##attr(struct uref *uref,            \
 static inline int uref_##group##_cmp_##attr(struct uref *uref1,             \
                                             struct uref *uref2, args_decl)  \
 {                                                                           \
-    const char *v1, *v2;                                                    \
+    const char *v1 = NULL, *v2 = NULL;                                      \
     int err1 = uref_##group##_get_##attr(uref1, &v1, args);                 \
     int err2 = uref_##group##_get_##attr(uref2, &v2, args);                 \
     if (!ubase_check(err1) && !ubase_check(err2))                           \
@@ -814,7 +814,7 @@ static inline int uref_##group##_match_##attr(struct uref *uref,            \
 static inline int uref_##group##_cmp_##attr(struct uref *uref1,             \
                                             struct uref *uref2)             \
 {                                                                           \
-    uint8_t v1, v2;                                                         \
+    uint8_t v1 = 0, v2 = 0;                                                 \
     int err1 = uref_##group##_get_##attr(uref1, &v1);                       \
     int err2 = uref_##group##_get_##attr(uref2, &v2);                       \
     if (!ubase_check(err1) && !ubase_check(err2))                           \
@@ -884,7 +884,7 @@ static inline int uref_##group##_match_##attr(struct uref *uref,            \
 static inline int uref_##group##_cmp_##attr(struct uref *uref1,             \
                                             struct uref *uref2)             \
 {                                                                           \
-    uint8_t v1, v2;                                                         \
+    uint8_t v1 = 0, v2 = 0;                                                 \
     int err1 = uref_##group##_get_##attr(uref1, &v1);                       \
     int err2 = uref_##group##_get_##attr(uref2, &v2);                       \
     if (!ubase_check(err1) && !ubase_check(err2))                           \
@@ -965,7 +965,7 @@ static inline int uref_##group##_match_##attr(struct uref *uref,            \
 static inline int uref_##group##_cmp_##attr(struct uref *uref1,             \
                                             struct uref *uref2, args_decl)  \
 {                                                                           \
-    uint8_t v1, v2;                                                         \
+    uint8_t v1 = 0, v2 = 0;                                                 \
     int err1 = uref_##group##_get_##attr(uref1, &v1, args);                 \
     int err2 = uref_##group##_get_##attr(uref2, &v2, args);                 \
     if (!ubase_check(err1) && !ubase_check(err2))                           \
@@ -1039,7 +1039,7 @@ static inline int uref_##group##_match_##attr(struct uref *uref,            \
 static inline int uref_##group##_cmp_##attr(struct uref *uref1,             \
                                             struct uref *uref2)             \
 {                                                                           \
-    uint64_t v1, v2;                                                        \
+    uint64_t v1 = 0, v2 = 0;                                                \
     int err1 = uref_##group##_get_##attr(uref1, &v1);                       \
     int err2 = uref_##group##_get_##attr(uref2, &v2);                       \
     if (!ubase_check(err1) && !ubase_check(err2))                           \
@@ -1110,7 +1110,7 @@ static inline int uref_##group##_match_##attr(struct uref *uref,            \
 static inline int uref_##group##_cmp_##attr(struct uref *uref1,             \
                                             struct uref *uref2)             \
 {                                                                           \
-    uint64_t v1, v2;                                                        \
+    uint64_t v1 = 0, v2 = 0;                                                \
     int err1 = uref_##group##_get_##attr(uref1, &v1);                       \
     int err2 = uref_##group##_get_##attr(uref2, &v2);                       \
     if (!ubase_check(err1) && !ubase_check(err2))                           \
@@ -1187,7 +1187,7 @@ static inline int uref_##group##_match_##attr(struct uref *uref,            \
 static inline int uref_##group##_cmp_##attr(struct uref *uref1,             \
                                             struct uref *uref2, args_decl)  \
 {                                                                           \
-    uint64_t v1, v2;                                                        \
+    uint64_t v1 = 0, v2 = 0;                                                \
     int err1 = uref_##group##_get_##attr(uref1, &v1, args);                 \
     int err2 = uref_##group##_get_##attr(uref2, &v2, args);                 \
     if (!ubase_check(err1) && !ubase_check(err2))                           \
@@ -1261,7 +1261,7 @@ static inline int uref_##group##_match_##attr(struct uref *uref,            \
 static inline int uref_##group##_cmp_##attr(struct uref *uref1,             \
                                             struct uref *uref2)             \
 {                                                                           \
-    uint64_t v1, v2;                                                        \
+    uint64_t v1 = 0, v2 = 0;                                                \
     int err1 = uref_##group##_get_##attr(uref1, &v1);                       \
     int err2 = uref_##group##_get_##attr(uref2, &v2);                       \
     if (!ubase_check(err1) && !ubase_check(err2))                           \
@@ -1323,7 +1323,7 @@ static inline int uref_##group##_delete_##attr(struct uref *uref)           \
 static inline int uref_##group##_cmp_##attr(struct uref *uref1,             \
                                             struct uref *uref2)             \
 {                                                                           \
-    int64_t v1, v2;                                                         \
+    int64_t v1 = 0, v2 = 0;                                                 \
     int err1 = uref_##group##_get_##attr(uref1, &v1);                       \
     int err2 = uref_##group##_get_##attr(uref2, &v2);                       \
     if (!ubase_check(err1) && !ubase_check(err2))                           \
@@ -1462,7 +1462,7 @@ static inline int uref_##group##_delete_##attr(struct uref *uref)           \
 static inline int uref_##group##_cmp_##attr(struct uref *uref1,             \
                                             struct uref *uref2)             \
 {                                                                           \
-    double v1, v2;                                                          \
+    double v1 = 0, v2 = 0;                                                  \
     int err1 = uref_##group##_get_##attr(uref1, &v1);                       \
     int err2 = uref_##group##_get_##attr(uref2, &v2);                       \
     if (!ubase_check(err1) && !ubase_check(err2))                           \
