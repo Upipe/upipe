@@ -23,7 +23,12 @@
  * SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
  */
 
+/** @file
+ * @short Upipe sub string manipulation
+ */
+
 #ifndef _UPIPE_USTRING_H_
+/** @hidden */
 # define _UPIPE_USTRING_H_
 #ifdef __cplusplus
 extern "C" {
@@ -37,7 +42,9 @@ extern "C" {
 
 /** @This stores a portion of a string. */
 struct ustring {
+    /** pointer to the first character */
     char *at;
+    /** length from the first character */
     size_t len;
 };
 
@@ -181,7 +188,7 @@ static inline struct ustring ustring_while(const struct ustring sub,
 }
 
 /** @This returns the beginning of an ustring containing only characters
- * no present in set.
+ * absent from set.
  *
  * @param sub an ustring
  * @param set set of rejected characters
@@ -210,7 +217,7 @@ static inline struct ustring ustring_shift_while(const struct ustring sub,
     return ustring_shift(sub, tmp.len);
 }
 
-/** @This returns a shifted ustring while characters are not present in set.
+/** @This returns a shifted ustring while characters are absent from set.
  *
  * @param sub an ustring
  * @param set set of rejected characters
