@@ -183,7 +183,7 @@ int main(int argc, char *argv[])
 	snprintf(filepath, MAXPATHLEN, "%s%u%s", dirpath, 0, suffix);
 	fd = open(filepath, O_TRUNC|O_CREAT|O_WRONLY, 0644);
 	memset(filepath, 42, MAXPATHLEN);
-	write(fd, filepath, MAXPATHLEN);
+	assert(write(fd, filepath, MAXPATHLEN) == MAXPATHLEN);
 	close(fd);
 
 	// send flow definition
