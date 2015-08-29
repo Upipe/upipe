@@ -60,13 +60,14 @@
 #include <bitstream/ietf/rtp.h>
 #include <bitstream/ietf/rtp3551.h>
 #include <bitstream/ietf/rtp6184.h>
+#include <bitstream/ietf/rtp7587.h>
 
 #define EXPECTED_FLOW_DEF "block."
 #define OUT_FLOW "block.rtp."
 
 #define DEFAULT_TYPE            96 /* first dynamic rtp type */
 #define DEFAULT_TS_SYNC         UPIPE_RTP_PREPEND_TS_SYNC_CR
-#define DEFAULT_CLOCKRATE	90000
+#define DEFAULT_CLOCKRATE   90000
 #define RTP_TYPE_INVALID        UINT8_MAX
 
 /** upipe_rtp_prepend structure */
@@ -196,6 +197,7 @@ static int upipe_rtp_prepend_infer_type(struct upipe *upipe, const char *def)
         uint8_t type;
     } values[] = {
         { "mpegts", RTP_TYPE_MP2T },
+        { "opus", DEFAULT_TYPE },
     };
 
     struct upipe_rtp_prepend *upipe_rtp_prepend =
@@ -239,6 +241,7 @@ static int upipe_rtp_prepend_infer_ts_sync(struct upipe *upipe, const char *def)
         { "h264.pic", UPIPE_RTP_PREPEND_TS_SYNC_PTS },
         { "aac.sound", UPIPE_RTP_PREPEND_TS_SYNC_PTS },
         { "mpegts", UPIPE_RTP_PREPEND_TS_SYNC_CR },
+        { "opus.sound", UPIPE_RTP_PREPEND_TS_SYNC_PTS },
     };
 
     struct upipe_rtp_prepend *upipe_rtp_prepend =
@@ -283,6 +286,7 @@ static int upipe_rtp_prepend_infer_clockrate(struct upipe *upipe,
         uint32_t clockrate;
     } values[] = {
         { "h264.pic", RTP_6184_CLOCKRATE },
+        { "opus.sound", RTP_7587_CLOCKRATE },
     };
 
     struct upipe_rtp_prepend *upipe_rtp_prepend =
