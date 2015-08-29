@@ -203,25 +203,23 @@ static void upipe_alsource_worker(struct upump *upump)
     struct upipe *upipe = upump_get_opaque(upump, struct upipe *);
     struct upipe_alsource *upipe_alsource = upipe_alsource_from_upipe(upipe);
     struct uref *uref;
-    struct ubuf *ubuf;
     float *pcm;
     uint64_t systime = 0; /* to keep gcc quiet */
     if (unlikely(upipe_alsource->uclock != NULL))
         systime = uclock_now(upipe_alsource->uclock);
 
-    ubuf = ubuf_sound_alloc(upipe_alsource->ubuf_mgr, upipe_alsource->period_samples);
+    uref = uref_sound_alloc(upipe_alsource->uref_mgr, upipe_alsource->ubuf_mgr,
+                            upipe_alsource->period_samples);
 
-    ubuf_sound_plane_write_float(ubuf, "lr", 0, -1, &pcm);
+    ubuf_sound_plane_write_float(uref, "lr", 0, -1, &pcm);
     int err = snd_pcm_readi(upipe_alsource->handle, pcm, upipe_alsource->period_samples);
-    ubuf_sound_plane_unmap(ubuf, "lr", 0, -1);
+    ubuf_sound_plane_unmap(uref, "lr", 0, -1);
 
     if (err < 0){
-        ubuf_free(ubuf);
+        uref_free(uref);
         upipe_alsource_recover(upipe, err);
     }
     else {
-        uref = uref_alloc_control(upipe_alsource->uref_mgr);
-        uref_attach_ubuf(uref, ubuf);
         uref_clock_set_dts_pts_delay(uref, 0);
         uref_clock_set_cr_orig(uref, upipe_alsource->samples_count * UCLOCK_FREQ /
                                      upipe_alsource->rate);
