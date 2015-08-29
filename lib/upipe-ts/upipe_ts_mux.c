@@ -902,8 +902,6 @@ static struct upipe *upipe_ts_mux_input_alloc(struct upipe_mgr *mgr,
     upipe_ts_mux_input_store_first_inner(upipe, tstd);
     upipe_ts_encaps_set_tb_size(upipe_ts_mux_input->encaps,
                                 upipe_ts_mux->tb_size);
-    upipe_set_output(psig_flow,
-                     upipe_ts_mux_to_inner_sink(upipe_ts_mux));
     upipe_release(psig_flow);
     return upipe;
 }
