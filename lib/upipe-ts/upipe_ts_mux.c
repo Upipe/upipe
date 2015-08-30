@@ -3360,7 +3360,8 @@ static int _upipe_ts_mux_set_tdt_interval(struct upipe *upipe,
     struct upipe_ts_mux *upipe_ts_mux = upipe_ts_mux_from_upipe(upipe);
     upipe_ts_mux->tdt_interval = interval;
     upipe_ts_mux_update(upipe); /* will trigger set_tdt_interval */
-    upipe_ts_mux_require_uclock(upipe);
+    if (urequest_get_opaque(&upipe_ts_mux->uclock_request, void *) == NULL)
+        upipe_ts_mux_require_uclock(upipe);
     return UBASE_ERR_NONE;
 }
 
