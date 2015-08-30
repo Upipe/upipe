@@ -1115,7 +1115,7 @@ UPIPE_CONTROL_TEMPLATE(upipe, UPIPE, uri, URI,
 UPIPE_CONTROL_TEMPLATE(upipe, UPIPE, flow_def, FLOW_DEF, struct uref *,
                        flow definition of the output)
 UPIPE_CONTROL_TEMPLATE(upipe, UPIPE, output, OUTPUT, struct upipe *,
-                       pipe acting as output (unsafe, use only internally))
+                       pipe acting as output)
 UPIPE_CONTROL_TEMPLATE(upipe, UPIPE, max_length, MAX_LENGTH, unsigned int,
                        max length of the internal queue)
 UPIPE_CONTROL_TEMPLATE(upipe, UPIPE, output_size, OUTPUT_SIZE,
