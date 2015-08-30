@@ -1396,6 +1396,12 @@ static inline int upipe_src_set_range(struct upipe *upipe,
  * given super-pipe.
  *
  * @item @code
+ *  struct upipe *upipe_foo_chain_sub(struct upipe *super_pipe,
+ *                                    struct uprobe *uprobe, ...)
+ * @end code
+ * A wrapper to upipe_foo_alloc_sub() which also releases the super-pipe.
+ *
+ * @item @code
  *  struct upipe *upipe_foo_alloc_output_sub(struct upipe *upipe,
  *                                           struct upipe *super_pipe,
  *                                           struct uprobe *uprobe, ...)
@@ -1612,6 +1618,26 @@ static inline struct upipe *                                                \
         return NULL;                                                        \
     }                                                                       \
     return upipe_##GROUP##_alloc(sub_mgr, uprobe  ARGS);                    \
+}                                                                           \
+/** @This allocates and initializes a subpipe from the given super-pipe,    \
+ * and releases the super-pipe.                                             \
+ *                                                                          \
+ * Please note that this function does not _use() the probe, so if you want \
+ * to reuse an existing probe, you have to use it first.                    \
+ *                                                                          \
+ * @param super_upipe description structure of the super-pipe               \
+ * @param uprobe structure used to raise events (belongs to the callee)     \
+ * followed by arguments for the allocator (@see upipe_##GROUP##_alloc)     \
+ * @return pointer to allocated subpipe, or NULL in case of failure         \
+ */                                                                         \
+static inline struct upipe *                                                \
+    upipe_##GROUP##_chain_sub(struct upipe *super_pipe,                     \
+                              struct uprobe *uprobe  ARGS_DECL)             \
+{                                                                           \
+    struct upipe *upipe = upipe_##GROUP##_alloc_sub(super_pipe,             \
+                                                    uprobe  ARGS);          \
+    upipe_release(super_pipe);                                              \
+    return upipe;                                                           \
 }                                                                           \
 /** @This allocates a subpipe from the given super-pipe, and sets it as the \
  * output of the given pipe.                                                \
