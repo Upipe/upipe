@@ -44,6 +44,7 @@
 #include <upipe/upipe_helper_output.h>
 #include <upipe/upipe_helper_flow_def.h>
 #include <upipe-framers/upipe_mpga_framer.h>
+#include <upipe-framers/uref_mpga_flow.h>
 
 #include <stdlib.h>
 #include <stdbool.h>
@@ -364,6 +365,7 @@ static bool upipe_mpgaf_parse_mpeg(struct upipe *upipe)
 
     upipe_mpgaf->channels = mode == MPGA_MODE_MONO ? 1 : 2;
 
+    UBASE_FATAL(upipe, uref_mpga_flow_set_mode(flow_def, mode))
     UBASE_FATAL(upipe, uref_sound_flow_set_channels(flow_def, upipe_mpgaf->channels))
     UBASE_FATAL(upipe, uref_sound_flow_set_rate(flow_def, upipe_mpgaf->samplerate))
     UBASE_FATAL(upipe, uref_sound_flow_set_samples(flow_def, upipe_mpgaf->samples))
