@@ -211,9 +211,9 @@ static void upipe_alsource_worker(struct upump *upump)
     uref = uref_sound_alloc(upipe_alsource->uref_mgr, upipe_alsource->ubuf_mgr,
                             upipe_alsource->period_samples);
 
-    ubuf_sound_plane_write_float(uref, "lr", 0, -1, &pcm);
+    uref_sound_plane_write_float(uref, "lr", 0, -1, &pcm);
     int err = snd_pcm_readi(upipe_alsource->handle, pcm, upipe_alsource->period_samples);
-    ubuf_sound_plane_unmap(uref, "lr", 0, -1);
+    uref_sound_plane_unmap(uref, "lr", 0, -1);
 
     if (err < 0){
         uref_free(uref);
