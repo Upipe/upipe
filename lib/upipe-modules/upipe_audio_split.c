@@ -346,7 +346,17 @@ static void upipe_audio_split_input(struct upipe *upipe, struct uref *uref,
         uref_free(uref);
         return;
     }
-    uref_sound_flow_get_channels(upipe_audio_split->flow_def, &channels);
+    if (unlikely(!ubase_check(uref_sound_flow_get_channels(
+                    upipe_audio_split->flow_def, &channels)))) {
+        upipe_warn(upipe, "invalid flow def");
+        uref_free(uref);
+        return;
+    }
+    if (unlikely(channels == 0)) {
+        upipe_warn(upipe, "no channels");
+        uref_free(uref);
+        return;
+    }
     uint8_t out_sample_size = sample_size / channels;
 
     const uint8_t *in_buf;
