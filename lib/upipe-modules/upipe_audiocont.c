@@ -250,8 +250,7 @@ static inline enum ubase_err _upipe_audiocont_sub_set_input(struct upipe *upipe)
     struct upipe_audiocont *upipe_audiocont =
                             upipe_audiocont_from_sub_mgr(upipe->mgr);
     struct upipe *grandpipe = upipe_audiocont_to_upipe(upipe_audiocont);
-    free(upipe_audiocont->input_name);
-    upipe_audiocont->input_name = NULL;
+    ubase_clean_str(&upipe_audiocont->input_name);
     return upipe_audiocont_switch_input(grandpipe, upipe);
 }
 

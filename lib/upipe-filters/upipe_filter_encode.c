@@ -331,10 +331,8 @@ static int upipe_fenc_set_default_preset(struct upipe *upipe,
 {
     struct upipe_fenc *upipe_fenc = upipe_fenc_from_upipe(upipe);
 
-    free(upipe_fenc->preset);
-    free(upipe_fenc->tune);
-    upipe_fenc->preset = NULL;
-    upipe_fenc->tune = NULL;
+    ubase_clean_str(&upipe_fenc->preset);
+    ubase_clean_str(&upipe_fenc->tune);
     if (preset != NULL)
         upipe_fenc->preset = strdup(preset);
     if (tune != NULL)
@@ -357,8 +355,7 @@ static int upipe_fenc_set_profile(struct upipe *upipe, const char *profile)
 {
     struct upipe_fenc *upipe_fenc = upipe_fenc_from_upipe(upipe);
 
-    free(upipe_fenc->profile);
-    upipe_fenc->profile = NULL;
+    ubase_clean_str(&upipe_fenc->profile);
     if (profile != NULL)
         upipe_fenc->profile = strdup(profile);
 

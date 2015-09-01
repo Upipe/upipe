@@ -395,9 +395,7 @@ static int upipe_http_src_message_complete(http_parser *parser)
         break;
     }
 
-    free(upipe_http_src->location);
-    upipe_http_src->location = NULL;
-
+    ubase_clean_str(&upipe_http_src->location);
     return 0;
 }
 
@@ -675,10 +673,8 @@ static void upipe_http_src_worker_write(struct upump *upump)
     struct upipe *upipe = upump_get_opaque(upump, struct upipe *);
     struct upipe_http_src *upipe_http_src = upipe_http_src_from_upipe(upipe);
 
-    if (unlikely(upipe_http_src_send_request(upipe)) != UBASE_ERR_NONE) {
-        close(upipe_http_src->fd);
-        upipe_http_src->fd = -1;
-    }
+    if (unlikely(upipe_http_src_send_request(upipe)) != UBASE_ERR_NONE)
+        ubase_clean_fd(&upipe_http_src->fd);
 
     upipe_http_src->request_pending = false;
     upipe_http_src_set_upump_write(upipe, NULL);
@@ -850,8 +846,7 @@ static int upipe_http_src_open_url(struct upipe *upipe)
             if (connect(fd, res->ai_addr, res->ai_addrlen) == 0) {
                 break;
             }
-            close(fd);
-            fd = -1;
+            ubase_clean_fd(&fd);
         }
     }
     freeaddrinfo(info);
@@ -875,11 +870,9 @@ static int upipe_http_src_set_uri(struct upipe *upipe, const char *url)
     if (unlikely(upipe_http_src->fd != -1)) {
         if (likely(upipe_http_src->url != NULL))
             upipe_notice_va(upipe, "closing %s", upipe_http_src->url);
-        close(upipe_http_src->fd);
-        upipe_http_src->fd = -1;
+        ubase_clean_fd(&upipe_http_src->fd);
     }
-    free(upipe_http_src->url);
-    upipe_http_src->url = NULL;
+    ubase_clean_str(&upipe_http_src->url);
     upipe_http_src_set_upump(upipe, NULL);
     upipe_http_src->request_pending = false;
     upipe_http_src_set_upump_write(upipe, NULL);
@@ -959,8 +952,7 @@ static int _upipe_http_src_set_proxy(struct upipe *upipe, const char *proxy)
 {
     struct upipe_http_src *upipe_http_src = upipe_http_src_from_upipe(upipe);
 
-    free(upipe_http_src->proxy);
-    upipe_http_src->proxy = NULL;
+    ubase_clean_str(&upipe_http_src->proxy);
     if (proxy == NULL)
         return UBASE_ERR_NONE;
 
@@ -1195,8 +1187,7 @@ static int _upipe_http_src_mgr_set_proxy(struct upipe_mgr *mgr,
 {
     struct upipe_http_src_mgr *upipe_http_src_mgr =
         upipe_http_src_mgr_from_upipe_mgr(mgr);
-    free(upipe_http_src_mgr->proxy);
-    upipe_http_src_mgr->proxy = NULL;
+    ubase_clean_str(&upipe_http_src_mgr->proxy);
     if (proxy == NULL)
         return UBASE_ERR_NONE;
     upipe_http_src_mgr->proxy = strdup(proxy);

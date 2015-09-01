@@ -394,8 +394,7 @@ static void upipe_fsrc_close(struct upipe *upipe)
         if (!ubase_check(upipe_fsrc_get_uri(upipe, &path)))
             path = "(none)";
         upipe_notice_va(upipe, "closing file %s", path);
-        close(upipe_fsrc->fd);
-        upipe_fsrc->fd = -1;
+        ubase_clean_fd(&upipe_fsrc->fd);
     }
     upipe_fsrc->length = (uint64_t)-1;
     upipe_fsrc_set_upump(upipe, NULL);

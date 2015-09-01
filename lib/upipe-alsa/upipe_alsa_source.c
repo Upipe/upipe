@@ -434,8 +434,7 @@ static int upipe_alsource_set_uri(struct upipe *upipe, const char *uri)
     struct upipe_alsource *upipe_alsource = upipe_alsource_from_upipe(upipe);
 
     upipe_alsource_close(upipe);
-    free(upipe_alsource->uri);
-    upipe_alsource->uri = NULL;
+    ubase_clean_str(&upipe_alsource->uri);
     upipe_alsource_set_upump(upipe, NULL);
 
     if (unlikely(uri == NULL))

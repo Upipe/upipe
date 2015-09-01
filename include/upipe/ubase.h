@@ -45,6 +45,8 @@ extern "C" {
 #include <stdarg.h>
 #include <stddef.h>
 #include <string.h>
+#include <stdlib.h>
+#include <unistd.h>
 
 #ifdef __GNUC__
 
@@ -406,6 +408,49 @@ static inline struct urational urational_divide(
 static inline int ubase_ncmp(const char *string, const char *prefix)
 {
     return strncmp(string, prefix, strlen(prefix));
+}
+
+/** @This frees a pointer and sets it to NULL.
+ *
+ * @param ptr a pointer to malloced data or NULL
+ */
+static inline void ubase_clean_ptr(void **ptr_p)
+{
+    if (likely(ptr_p != NULL)) {
+        free(*ptr_p);
+        *ptr_p = NULL;
+    }
+}
+
+/** @This frees a string and sets it to NULL.
+ *
+ * @param ptr a pointer to a string
+ */
+static inline void ubase_clean_str(char **str_p)
+{
+    return ubase_clean_ptr((void **)str_p);
+}
+
+/** @This frees data pointer and sets it to NULL.
+ *
+ * @param ptr a pointer to data pointer
+ */
+static inline void ubase_clean_data(uint8_t **data_p)
+{
+    return ubase_clean_ptr((void **)data_p);
+}
+
+/** @This closes a fd and sets it to -1.
+ *
+ * @param fd_p a pointer to a fd
+ */
+static inline void ubase_clean_fd(int *fd_p)
+{
+    if (likely(fd_p != NULL)) {
+        if (likely(*fd_p >= 0))
+            close(*fd_p);
+        *fd_p = -1;
+    }
 }
 
 #ifdef __cplusplus

@@ -143,8 +143,7 @@ void uprobe_syslog_clean(struct uprobe_syslog *uprobe_syslog)
     struct uprobe *uprobe = uprobe_syslog_to_uprobe(uprobe_syslog);
     if (uprobe_syslog->inited)
         closelog();
-    free(uprobe_syslog->ident);
-    uprobe_syslog->ident = NULL;
+    ubase_clean_str(&uprobe_syslog->ident);
     uprobe_clean(uprobe);
 }
 

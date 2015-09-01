@@ -654,8 +654,7 @@ normal_bind:
                     close(fd);
                     return -1;
                 }
-                free(ifname);
-                ifname = NULL;
+                ubase_clean_str(&ifname);
             }
 #endif
         }

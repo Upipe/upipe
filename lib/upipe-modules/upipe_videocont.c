@@ -276,8 +276,7 @@ static inline int _upipe_videocont_sub_set_input(struct upipe *upipe)
     struct upipe_videocont *upipe_videocont =
                             upipe_videocont_from_sub_mgr(upipe->mgr);
     struct upipe *superpipe = upipe_videocont_to_upipe(upipe_videocont);
-    free(upipe_videocont->input_name);
-    upipe_videocont->input_name = NULL;
+    ubase_clean_str(&upipe_videocont->input_name);
     return upipe_videocont_switch_input(superpipe, upipe);
 }
 

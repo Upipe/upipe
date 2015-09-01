@@ -354,10 +354,9 @@ static int _upipe_fsink_set_path(struct upipe *upipe, const char *path,
     if (unlikely(upipe_fsink->fd != -1)) {
         if (likely(upipe_fsink->path != NULL))
             upipe_notice_va(upipe, "closing file %s", upipe_fsink->path);
-        close(upipe_fsink->fd);
+        ubase_clean_fd(&upipe_fsink->fd);
     }
-    free(upipe_fsink->path);
-    upipe_fsink->path = NULL;
+    ubase_clean_str(&upipe_fsink->path);
     upipe_fsink_set_upump(upipe, NULL);
     if (!upipe_fsink_check_input(upipe))
         /* Release the pipe used in @ref upipe_fsink_input. */
@@ -401,8 +400,7 @@ static int _upipe_fsink_set_path(struct upipe *upipe, const char *path,
         case UPIPE_FSINK_APPEND:
             if (unlikely(lseek(upipe_fsink->fd, 0, SEEK_END) == -1)) {
                 upipe_err_va(upipe, "can't append to file %s (%s)", path, mode_desc);
-                close(upipe_fsink->fd);
-                upipe_fsink->fd = -1;
+                ubase_clean_fd(&upipe_fsink->fd);
                 return UBASE_ERR_EXTERNAL;
             }
             break;
@@ -412,8 +410,7 @@ static int _upipe_fsink_set_path(struct upipe *upipe, const char *path,
 
     upipe_fsink->path = strdup(path);
     if (unlikely(upipe_fsink->path == NULL)) {
-        close(upipe_fsink->fd);
-        upipe_fsink->fd = -1;
+        ubase_clean_fd(&upipe_fsink->fd);
         upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
         return UBASE_ERR_ALLOC;
     }

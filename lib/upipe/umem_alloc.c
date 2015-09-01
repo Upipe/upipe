@@ -92,8 +92,7 @@ static bool umem_alloc_realloc(struct umem *umem, size_t new_size)
  */
 static void umem_alloc_free(struct umem *umem)
 {
-    free(umem->buffer);
-    umem->buffer = NULL;
+    ubase_clean_data(&umem->buffer);
     umem->mgr = NULL;
 }
 

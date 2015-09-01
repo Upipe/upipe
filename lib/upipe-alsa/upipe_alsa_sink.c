@@ -816,8 +816,7 @@ static int upipe_alsink_set_uri(struct upipe *upipe, const char *uri)
     struct upipe_alsink *upipe_alsink = upipe_alsink_from_upipe(upipe);
 
     upipe_alsink_close(upipe);
-    free(upipe_alsink->uri);
-    upipe_alsink->uri = NULL;
+    ubase_clean_str(&upipe_alsink->uri);
 
     if (unlikely(uri == NULL))
         return UBASE_ERR_NONE;
