@@ -821,8 +821,7 @@ static int upipe_avfsink_set_uri(struct upipe *upipe, const char *uri)
         }
         avformat_free_context(upipe_avfsink->context);
     }
-    free(upipe_avfsink->uri);
-    upipe_avfsink->uri = NULL;
+    ubase_clean_str(&upipe_avfsink->uri);
 
     if (unlikely(uri == NULL))
         return UBASE_ERR_NONE;

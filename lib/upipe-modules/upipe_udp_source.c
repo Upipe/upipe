@@ -326,11 +326,9 @@ static int upipe_udpsrc_set_uri(struct upipe *upipe, const char *uri)
         if (likely(upipe_udpsrc->uri != NULL)) {
             upipe_notice_va(upipe, "closing udp socket %s", upipe_udpsrc->uri);
         }
-        close(upipe_udpsrc->fd);
-        upipe_udpsrc->fd = -1;
+        ubase_clean_fd(&upipe_udpsrc->fd);
     }
-    free(upipe_udpsrc->uri);
-    upipe_udpsrc->uri = NULL;
+    ubase_clean_str(&upipe_udpsrc->uri);
     upipe_udpsrc_set_upump(upipe, NULL);
 
     if (unlikely(uri == NULL))
@@ -345,8 +343,7 @@ static int upipe_udpsrc_set_uri(struct upipe *upipe, const char *uri)
 
     upipe_udpsrc->uri = strdup(uri);
     if (unlikely(upipe_udpsrc->uri == NULL)) {
-        close(upipe_udpsrc->fd);
-        upipe_udpsrc->fd = -1;
+        ubase_clean_fd(&upipe_udpsrc->fd);
         upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
         return UBASE_ERR_ALLOC;
     }

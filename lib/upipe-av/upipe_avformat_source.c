@@ -733,8 +733,7 @@ static void upipe_avfsrc_probe(struct upump *upump)
             upipe_notice_va(upipe, "closing URL %s", upipe_avfsrc->url);
         avformat_close_input(&upipe_avfsrc->context);
         upipe_avfsrc->context = NULL;
-        free(upipe_avfsrc->url);
-        upipe_avfsrc->url = NULL;
+        ubase_clean_str(&upipe_avfsrc->url);
         return;
     }
 
@@ -909,8 +908,7 @@ static int upipe_avfsrc_set_uri(struct upipe *upipe, const char *url)
         upipe_avfsrc_abort_av_deal(upipe);
         upipe_avfsrc_throw_sub_subs(upipe, UPROBE_SOURCE_END);
     }
-    free(upipe_avfsrc->url);
-    upipe_avfsrc->url = NULL;
+    ubase_clean_str(&upipe_avfsrc->url);
 
     if (unlikely(url == NULL))
         return UBASE_ERR_NONE;

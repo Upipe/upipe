@@ -346,8 +346,7 @@ static int upipe_amtsrc_set_uri(struct upipe *upipe, const char *uri)
         amt_closeChannel(upipe_amtsrc->handle);
         upipe_amtsrc->handle = NULL;
     }
-    free(upipe_amtsrc->uri);
-    upipe_amtsrc->uri = NULL;
+    ubase_clean_str(&upipe_amtsrc->uri);
     upipe_amtsrc_set_upump(upipe, NULL);
 
     if (unlikely(uri == NULL))
