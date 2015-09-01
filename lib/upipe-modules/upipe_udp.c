@@ -256,22 +256,12 @@ static bool upipe_udp_parse_node_service(struct upipe *upipe,
          * fails in certain cases, like when network is down. */
         struct in_addr addr;
         if (inet_aton(node, &addr) != 0) {
-            struct sockaddr_in *sin = malloc(sizeof(struct sockaddr_in));
-            if (unlikely(sin == NULL)) {
-                free(string);
-                return false;
-            }
-            sin->sin_family = AF_INET;
-            if (port != NULL) {
-                sin->sin_port = ntohs(atoi(port));
-            } else {
-                sin->sin_port = 0;
-            }
-            sin->sin_addr = addr;
-
-            memcpy(ss, sin, sizeof(struct sockaddr_in));
-            free(sin);
-
+            struct sockaddr_in sin;
+            memset(&sin, 0, sizeof (struct sockaddr_in));
+            sin.sin_family = AF_INET;
+            sin.sin_port = port != NULL ? ntohs(atoi(port)) : 0;
+            sin.sin_addr = addr;
+            memcpy(ss, &sin, sizeof(struct sockaddr_in));
             free(string);
             return true;
         }
@@ -587,7 +577,8 @@ normal_bind:
         /* Increase the receive buffer size to 1/2MB (8Mb/s during 1/2s) to
          * avoid packet loss caused by scheduling problems */
         i = 0x80000;
-        setsockopt(fd, SOL_SOCKET, SO_RCVBUF, (void *) &i, sizeof(i));
+        if (setsockopt(fd, SOL_SOCKET, SO_RCVBUF, (void *) &i, sizeof(i)))
+            upipe_warn(upipe, "fail to increase receive buffer");
 
         /* Join the multicast group if the socket is a multicast address */
         if (bind_addr.ss.ss_family == AF_INET
