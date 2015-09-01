@@ -25,7 +25,6 @@ dist_check_DATA = \
 	upipe_ts_test.ts \
 	uref_uri_test.txt \
 	ustring_test.txt \
-	upipe_m3u_reader_test_files/all.logs \
 	upipe_m3u_reader_test_files/1.m3u \
 	upipe_m3u_reader_test_files/1.m3u.logs \
 	upipe_m3u_reader_test_files/2.m3u \
