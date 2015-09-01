@@ -354,7 +354,7 @@ static int _upipe_fsink_set_path(struct upipe *upipe, const char *path,
     if (unlikely(upipe_fsink->fd != -1)) {
         if (likely(upipe_fsink->path != NULL))
             upipe_notice_va(upipe, "closing file %s", upipe_fsink->path);
-        close(upipe_fsink->fd);
+        ubase_clean_fd(&upipe_fsink->fd);
     }
     ubase_clean_str(&upipe_fsink->path);
     upipe_fsink_set_upump(upipe, NULL);
