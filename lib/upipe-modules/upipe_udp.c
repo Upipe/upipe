@@ -577,7 +577,8 @@ normal_bind:
         /* Increase the receive buffer size to 1/2MB (8Mb/s during 1/2s) to
          * avoid packet loss caused by scheduling problems */
         i = 0x80000;
-        setsockopt(fd, SOL_SOCKET, SO_RCVBUF, (void *) &i, sizeof(i));
+        if (setsockopt(fd, SOL_SOCKET, SO_RCVBUF, (void *) &i, sizeof(i)))
+            upipe_warn(upipe, "fail to increase receive buffer");
 
         /* Join the multicast group if the socket is a multicast address */
         if (bind_addr.ss.ss_family == AF_INET
