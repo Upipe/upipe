@@ -2146,7 +2146,7 @@ static void upipe_ts_demux_build_flow_def(struct upipe *upipe)
     if (upipe_ts_demux->sdtd != NULL)
         upipe_get_flow_def(upipe_ts_demux->sdtd, &flow_def_sdt);
     if (flow_def_sdt != NULL) {
-        uint64_t sdt_tsid;
+        uint64_t sdt_tsid = 0;
         if (unlikely(tsid != UINT64_MAX &&
                      uref_flow_get_id(flow_def_sdt, &sdt_tsid) &&
                      tsid != sdt_tsid))

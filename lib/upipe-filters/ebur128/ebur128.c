@@ -323,8 +323,10 @@ ebur128_state* ebur128_init(unsigned int channels,
 
   return st;
 
+#ifdef USE_SPEEX_RESAMPLER
 free_short_term_block_energy_histogram:
   free(st->d->short_term_block_energy_histogram);
+#endif
 free_block_energy_histogram:
   free(st->d->block_energy_histogram);
 free_audio_data:

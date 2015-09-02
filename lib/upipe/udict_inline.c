@@ -429,7 +429,7 @@ static int udict_inline_set(struct udict *udict, const char *name,
 
     /* calculate header size */
     size_t header_size = 1;
-    size_t namelen;
+    size_t namelen = 0;
     if (likely(shorthand != NULL)) {
         if (base_type == UDICT_TYPE_OPAQUE || base_type == UDICT_TYPE_STRING)
             header_size += 2;

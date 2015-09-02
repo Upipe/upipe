@@ -186,12 +186,6 @@ static int avcdec_catch(struct uprobe *uprobe, struct upipe *upipe,
                                     loglevel, "sws"), flow_def2);
         assert(sws != NULL);
         upipe_release(upipe);
-        if (sws == NULL) {
-            upipe_err_va(upipe, "incompatible flow def");
-            uref_free(flow_def2);
-            upipe_release(upipe_source);
-            return true;
-        }
         upipe = sws;
     }
 
