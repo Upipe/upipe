@@ -509,9 +509,9 @@ static void upipe_h264f_stream_parse_hrd(struct upipe *upipe,
     uint8_t cpb_size_scale = ubuf_block_stream_show_bits(s, 4);
     ubuf_block_stream_skip_bits(s, 4);
     *octetrate_p =
-        ((upipe_h264f_stream_ue(s) + 1) << (6 + bitrate_scale)) / 8;
+        (((uint64_t)upipe_h264f_stream_ue(s) + 1) << (6 + bitrate_scale)) / 8;
     *cpb_size_p =
-        ((upipe_h264f_stream_ue(s) + 1) << (4 + cpb_size_scale)) / 8;
+        (((uint64_t)upipe_h264f_stream_ue(s) + 1) << (4 + cpb_size_scale)) / 8;
     upipe_h264f_stream_fill_bits(s, 2);
     ubuf_block_stream_skip_bits(s, 1); /* cbr_flag */
     ubuf_block_stream_skip_bits(s, 1);
