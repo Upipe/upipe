@@ -450,8 +450,6 @@ static int upipe_glxplayer_catch_avcdec(struct uprobe *uprobe,
             assert(yuvrgb != NULL);
             uref_free(output_flow);
             upipe_release(deint);
-            if (unlikely(yuvrgb == NULL))
-                return UBASE_ERR_ALLOC;
 
             glxplayer->upipe_glx_qsink =
                 upipe_qsink_alloc(glxplayer->upipe_qsink_mgr,
