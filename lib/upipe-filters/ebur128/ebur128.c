@@ -793,8 +793,7 @@ static int ebur128_energy_in_interval(ebur128_state* st,
   if (interval_frames > st->d->audio_data_frames) {
     return EBUR128_ERROR_INVALID_MODE;
   }
-  ebur128_calc_gating_block(st, interval_frames, out);
-  return EBUR128_SUCCESS;
+  return ebur128_calc_gating_block(st, interval_frames, out);
 }
 
 static int ebur128_energy_shortterm(ebur128_state* st, double* out) {
