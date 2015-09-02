@@ -387,7 +387,7 @@ static void upipe_ts_sig_service_build_eit(struct upipe *upipe)
             }
             bool ca =
                 ubase_check(uref_ts_event_get_scrambled(service->flow_def, i));
-            const char *language, *name_str, *description_str;
+            const char *language, *name_str = NULL, *description_str;
             uint8_t *name = NULL, *description = NULL;
             size_t name_size = 0, description_size = 0;
             bool desc4d = 
