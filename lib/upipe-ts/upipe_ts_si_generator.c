@@ -1304,11 +1304,11 @@ static void upipe_ts_sig_build_sdt(struct upipe *upipe)
             if (!sdt_validate_service(buffer, service,
                         descriptors_size + DESC48_HEADER_SIZE +
                         service_name_size + 1 + provider_name_size + 1)) {
+                free(service_name);
+                free(provider_name);
                 if (j)
                     break;
                 upipe_err_va(upipe, "SDT service too large");
-                free(service_name);
-                free(provider_name);
                 ubuf_free(ubuf);
                 upipe_throw_error(upipe, UBASE_ERR_INVALID);
                 return;
