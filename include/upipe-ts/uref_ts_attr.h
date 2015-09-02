@@ -72,7 +72,8 @@ static inline int uref_##group##_add_##name(struct uref *uref,              \
 static inline size_t uref_##group##_size_##name##s(struct uref *uref)       \
 {                                                                           \
     uint64_t descriptors = 0;                                               \
-    uref_##group##_get_##name##s(uref, &descriptors);                       \
+    if (!ubase_check(uref_##group##_get_##name##s(uref, &descriptors)))     \
+        descriptors = 0;                                                    \
     size_t descs_len = 0;                                                   \
     for (uint64_t j = 0; j < descriptors; j++) {                            \
         const uint8_t *desc;                                                \
