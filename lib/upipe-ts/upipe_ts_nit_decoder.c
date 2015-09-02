@@ -287,7 +287,6 @@ static void upipe_ts_nitd_parse_ts_descs(struct upipe *upipe,
     /* cast needed because biTStream expects an uint8_t * (but doesn't write
      * to it */
     while ((desc = descl_get_desc((uint8_t *)descl, desclength, j++)) != NULL) {
-        bool valid = true;
         bool copy = false;
         switch (desc_get_tag(desc)) {
             default:
@@ -295,8 +294,6 @@ static void upipe_ts_nitd_parse_ts_descs(struct upipe *upipe,
                 break;
         }
 
-        if (!valid)
-            upipe_warn_va(upipe, "invalid descriptor 0x%x", desc_get_tag(desc));
         if (copy) {
             UBASE_FATAL(upipe, uref_ts_flow_add_nit_ts_descriptor(flow_def,
                         desc, desc_get_length(desc) + DESC_HEADER_SIZE,
