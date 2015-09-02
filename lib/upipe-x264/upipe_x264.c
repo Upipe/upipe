@@ -437,12 +437,12 @@ static bool upipe_x264_open(struct upipe *upipe, int width, int height,
     }
 
     /* set octetrate for CBR streams */
-    if (params->rc.i_bitrate) {
+    if (params->rc.i_bitrate > 0) {
         uref_block_flow_set_octetrate(flow_def_attr,
-                                      params->rc.i_bitrate * 125);
-        if (params->rc.i_vbv_buffer_size)
+                                      (uint64_t)params->rc.i_bitrate * 125);
+        if (params->rc.i_vbv_buffer_size > 0)
             uref_block_flow_set_buffer_size(flow_def_attr,
-                                            params->rc.i_vbv_buffer_size * 125);
+                (uint64_t)params->rc.i_vbv_buffer_size * 125);
 
         uint64_t max_octetrate, max_bs;
         switch (params->i_level_idc) {
