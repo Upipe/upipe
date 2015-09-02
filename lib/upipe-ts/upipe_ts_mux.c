@@ -3037,9 +3037,9 @@ static void upipe_ts_mux_conformance_guess(struct upipe *upipe)
     if (upipe_ts_mux->flow_def_input == NULL)
         upipe_ts_mux_conformance_change(upipe,
                 UPIPE_TS_CONFORMANCE_DVB_NO_TABLES);
-
-    upipe_ts_mux_conformance_change(upipe,
-        upipe_ts_conformance_from_flow_def(upipe_ts_mux->flow_def_input));
+    else
+        upipe_ts_mux_conformance_change(upipe,
+            upipe_ts_conformance_from_flow_def(upipe_ts_mux->flow_def_input));
 }
 
 /** @internal @This sets the input flow definition.
