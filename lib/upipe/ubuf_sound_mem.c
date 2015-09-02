@@ -109,7 +109,10 @@ static struct ubuf *ubuf_sound_mem_alloc(struct ubuf_mgr *mgr,
     if (unlikely(signature != UBUF_ALLOC_SOUND))
         return NULL;
 
-    int size = va_arg(args, int);
+    int ssize = va_arg(args, int);
+    if (ssize < 0)
+        return NULL;
+    size_t size = ssize;
 
     struct ubuf_sound_mem_mgr *sound_mgr =
         ubuf_sound_mem_mgr_from_ubuf_mgr(mgr);
