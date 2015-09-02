@@ -215,13 +215,27 @@ static inline bool ueventfd_write(struct ueventfd *fd)
  */
 static inline bool ueventfd_init(struct ueventfd *fd, bool readable)
 {
+    int ret;
+
 #ifdef UPIPE_HAVE_EVENTFD
     fd->mode = UEVENTFD_MODE_EVENTFD;
     fd->event_fd = eventfd(readable ? 1 : 0, EFD_NONBLOCK | EFD_CLOEXEC);
     if (unlikely(fd->event_fd == -1)) { // try to eventfd() with no flags (ie. linux < 2.6.27)
         fd->event_fd = eventfd(readable ? 1 : 0, 0);
-        fcntl((fd->event_fd), F_SETFD, fcntl((fd->event_fd), F_GETFD) | FD_CLOEXEC);
-        fcntl((fd->event_fd), F_SETFL, fcntl((fd->event_fd), F_GETFL) | O_NONBLOCK);
+
+        ret = fcntl(fd->event_fd, F_GETFD);
+        if (unlikely(ret < 0))
+            return false;
+        ret = fcntl(fd->event_fd, F_SETFD, ret | FD_CLOEXEC);
+        if (unlikely(ret < 0))
+            return false;
+
+        ret = fcntl(fd->event_fd, F_GETFL);
+        if (unlikely(ret < 0))
+            return false;
+        ret = fcntl(fd->event_fd, F_SETFL | O_NONBLOCK);
+        if (unlikely(ret < 0))
+            return false;
 
         if (unlikely(fd->event_fd == -1)) { // eventfd() fails, fallback to pipe()
 #endif
@@ -231,11 +245,21 @@ static inline bool ueventfd_init(struct ueventfd *fd, bool readable)
 #endif
                 return false;
 
-            fcntl((fd->pipe_fds)[0], F_SETFD, fcntl((fd->pipe_fds)[0], F_GETFD) | FD_CLOEXEC);
-            fcntl((fd->pipe_fds)[1], F_SETFD, fcntl((fd->pipe_fds)[1], F_GETFD) | FD_CLOEXEC);
+            for (uint8_t i = 0; i < 2; i++) {
+                int ret = fcntl(fd->pipe_fds[i], F_GETFD);
+                if (unlikely(ret < 0))
+                    return false;
+                ret = fcntl(fd->pipe_fds[i], F_SETFD, ret | FD_CLOEXEC);
+                if (unlikely(ret < 0))
+                    return false;
 
-            fcntl((fd->pipe_fds)[0], F_SETFL, fcntl((fd->pipe_fds)[0], F_GETFL) | O_NONBLOCK);
-            fcntl((fd->pipe_fds)[1], F_SETFL, fcntl((fd->pipe_fds)[1], F_GETFL) | O_NONBLOCK);
+                ret = fcntl(fd->pipe_fds[i], F_GETFL);
+                if (unlikely(ret < 0))
+                    return false;
+                ret = fcntl(fd->pipe_fds[i], F_SETFL, ret | O_NONBLOCK);
+                if (unlikely(ret < 0))
+                    return false;
+            }
 
             if (likely(readable))
                 ueventfd_write(fd);
