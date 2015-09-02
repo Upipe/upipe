@@ -2576,7 +2576,7 @@ static int upipe_ts_mux_check(struct upipe *upipe, struct uref *flow_format)
             upipe_ts_mux_mgr_from_upipe_mgr(upipe->mgr);
 
         mux->psi_pid_pat = upipe_ts_mux_psi_pid_use(upipe, PAT_PID);
-        struct upipe *psig, *psi_join;
+        struct upipe *psig = NULL, *psi_join;
         if (unlikely(mux->psi_pid_pat == NULL ||
                      (psig = upipe_void_alloc(ts_mux_mgr->ts_psig_mgr,
                              uprobe_pfx_alloc(

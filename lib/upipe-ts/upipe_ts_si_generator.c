@@ -387,7 +387,7 @@ static void upipe_ts_sig_service_build_eit(struct upipe *upipe)
             }
             bool ca =
                 ubase_check(uref_ts_event_get_scrambled(service->flow_def, i));
-            const char *language, *name_str, *description_str;
+            const char *language, *name_str = NULL, *description_str;
             uint8_t *name = NULL, *description = NULL;
             size_t name_size = 0, description_size = 0;
             bool desc4d = 
@@ -1302,11 +1302,11 @@ static void upipe_ts_sig_build_sdt(struct upipe *upipe)
             if (!sdt_validate_service(buffer, service,
                         descriptors_size + DESC48_HEADER_SIZE +
                         service_name_size + 1 + provider_name_size + 1)) {
+                free(service_name);
+                free(provider_name);
                 if (j)
                     break;
                 upipe_err_va(upipe, "SDT service too large");
-                free(service_name);
-                free(provider_name);
                 ubuf_free(ubuf);
                 upipe_throw_error(upipe, UBASE_ERR_INVALID);
                 return;

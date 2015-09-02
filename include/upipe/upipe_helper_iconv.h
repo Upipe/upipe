@@ -104,6 +104,8 @@ static char *STRUCTURE##_iconv_append_null(const char *string,              \
                                            size_t length)                   \
 {                                                                           \
     char *output = malloc(length + 1);                                      \
+    if (unlikely(output == NULL))                                           \
+        return NULL;                                                        \
     memcpy(output, string, length);                                         \
     output[length] = '\0';                                                  \
     return output;                                                          \
@@ -145,6 +147,10 @@ static char *STRUCTURE##_iconv_wrapper(void *_upipe, const char *encoding,  \
     /* converted strings can be up to six times larger */                   \
     out_length = length * 6;                                                \
     p = output = malloc(out_length);                                        \
+    if (unlikely(p == NULL)) {                                              \
+        upipe_err(upipe, "couldn't allocate");                              \
+        return STRUCTURE##_iconv_append_null(string, length);               \
+    }                                                                       \
     if (iconv(s->ICONV_HANDLE, &string, &length, &p, &out_length) == -1) {  \
         upipe_warn_va(upipe, "couldn't convert from %s to %s (%m)",         \
                       encoding, NATIVE_ENCODING);                           \
