@@ -838,6 +838,8 @@ static int upipe_bmd_src_set_uri(struct upipe *upipe, const char *uri)
 #define IS_OPTION(option) (!strncasecmp(token, option, strlen(option)))
 #define ARG_OPTION(option) (token + strlen(option))
             if (IS_OPTION("mode=")) {
+                if (unlikely(mode != NULL))
+                    free(mode);
                 mode = config_stropt(ARG_OPTION("mode="));
             }
 #undef IS_OPTION
