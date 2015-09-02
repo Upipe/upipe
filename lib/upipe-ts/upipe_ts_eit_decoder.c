@@ -222,7 +222,7 @@ static bool upipe_ts_eitd_table_validate(struct upipe *upipe)
 {
     struct upipe_ts_eitd *upipe_ts_eitd = upipe_ts_eitd_from_upipe(upipe);
     bool first = true;
-    uint16_t onid, tsid;
+    uint16_t onid = 0, tsid = 0;
     upipe_ts_psid_table_foreach (upipe_ts_eitd->next_eit, section_uref) {
         if (section_uref == NULL)
             continue;
