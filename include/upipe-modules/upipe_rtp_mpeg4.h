@@ -22,7 +22,8 @@
  */
 
 #ifndef _UPIPE_MODULES_RTP_MPEG4_H_
-# define UPIPE_MODULES_RTP_MPEG4_H_
+/** @hidden */
+# define _UPIPE_MODULES_RTP_MPEG4_H_
 
 #ifdef __cplusplus
 extern "C" {
