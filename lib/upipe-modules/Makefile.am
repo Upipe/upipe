@@ -52,7 +52,8 @@ libupipe_modules_la_SOURCES = \
 	uprobe_http_redirect.c \
 	upipe_m3u_reader.c \
 	upipe_m3u_playlist.c \
-	upipe_auto_source.c
+	upipe_auto_source.c \
+	upipe_buffer.c
 
 if HAVE_WRITEV
 libupipe_modules_la_SOURCES += \
