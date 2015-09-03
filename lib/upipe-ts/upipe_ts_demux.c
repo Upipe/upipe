@@ -63,6 +63,7 @@
 #include <upipe/upipe_helper_subpipe.h>
 #include <upipe-modules/upipe_null.h>
 #include <upipe-modules/upipe_setrap.h>
+#include <upipe-modules/upipe_idem.h>
 #include <upipe-ts/uref_ts_flow.h>
 #include <upipe-ts/upipe_ts_demux.h>
 #include <upipe-ts/upipe_ts_split.h>
@@ -120,6 +121,8 @@ struct upipe_ts_demux_mgr {
     struct upipe_mgr *null_mgr;
     /** pointer to setrap manager */
     struct upipe_mgr *setrap_mgr;
+    /** pointer to idem manager */
+    struct upipe_mgr *idem_mgr;
 
     /** pointer to ts_split manager */
     struct upipe_mgr *ts_split_mgr;
@@ -825,8 +828,17 @@ static int upipe_ts_demux_output_plumber(struct upipe *upipe,
         return UBASE_ERR_NONE;
     }
 
-    upipe_warn_va(upipe, "unknown output flow definition: %s", def);
-    return UBASE_ERR_UNHANDLED;
+    upipe_warn_va(upipe, "unframed output flow definition: %s", def);
+    /* allocate opusf inner */
+    struct upipe *output =
+        upipe_void_alloc_output(inner, ts_demux_mgr->idem_mgr,
+            uprobe_pfx_alloc(
+                uprobe_use(&upipe_ts_demux_output->last_inner_probe),
+                UPROBE_LOG_VERBOSE, "idem"));
+    if (unlikely(output == NULL))
+        return UBASE_ERR_ALLOC;
+    upipe_ts_demux_output_store_last_inner(upipe, output);
+    return UBASE_ERR_NONE;
 }
 
 /** @internal @This catches events coming from output inner pipes.
@@ -2908,6 +2920,7 @@ static void upipe_ts_demux_mgr_free(struct urefcount *urefcount)
         upipe_ts_demux_mgr_from_urefcount(urefcount);
     upipe_mgr_release(ts_demux_mgr->null_mgr);
     upipe_mgr_release(ts_demux_mgr->setrap_mgr);
+    upipe_mgr_release(ts_demux_mgr->idem_mgr);
     upipe_mgr_release(ts_demux_mgr->ts_split_mgr);
     upipe_mgr_release(ts_demux_mgr->ts_sync_mgr);
     upipe_mgr_release(ts_demux_mgr->ts_check_mgr);
@@ -2964,6 +2977,10 @@ static int upipe_ts_demux_mgr_control(struct upipe_mgr *mgr,
             return UBASE_ERR_NONE;                                          \
         }
 
+        GET_SET_MGR(null, NULL)
+        GET_SET_MGR(setrap, SETRAP)
+        GET_SET_MGR(idem, IDEM)
+
         GET_SET_MGR(ts_split, TS_SPLIT)
         GET_SET_MGR(ts_sync, TS_SYNC)
         GET_SET_MGR(ts_check, TS_CHECK)
@@ -3005,6 +3022,7 @@ struct upipe_mgr *upipe_ts_demux_mgr_alloc(void)
 
     ts_demux_mgr->null_mgr = upipe_null_mgr_alloc();
     ts_demux_mgr->setrap_mgr = upipe_setrap_mgr_alloc();
+    ts_demux_mgr->idem_mgr = upipe_idem_mgr_alloc();
 
     ts_demux_mgr->ts_split_mgr = upipe_ts_split_mgr_alloc();
     ts_demux_mgr->ts_sync_mgr = upipe_ts_sync_mgr_alloc();

@@ -102,6 +102,9 @@ enum upipe_ts_demux_mgr_command {
     UPIPE_TS_DEMUX_MGR_SET_##NAME##_MGR,
 
     UPIPE_TS_DEMUX_MGR_GET_SET_MGR(null, NULL)
+    UPIPE_TS_DEMUX_MGR_GET_SET_MGR(setrap, SETRAP)
+    UPIPE_TS_DEMUX_MGR_GET_SET_MGR(idem, IDEM)
+
     UPIPE_TS_DEMUX_MGR_GET_SET_MGR(ts_split, TS_SPLIT)
     UPIPE_TS_DEMUX_MGR_GET_SET_MGR(ts_sync, TS_SYNC)
     UPIPE_TS_DEMUX_MGR_GET_SET_MGR(ts_check, TS_CHECK)
@@ -157,6 +160,9 @@ static inline int                                                           \
 }
 
 UPIPE_TS_DEMUX_MGR_GET_SET_MGR2(null, NULL)
+UPIPE_TS_DEMUX_MGR_GET_SET_MGR2(setrap, SETRAP)
+UPIPE_TS_DEMUX_MGR_GET_SET_MGR2(idem, IDEM)
+
 UPIPE_TS_DEMUX_MGR_GET_SET_MGR2(ts_split, TS_SPLIT)
 UPIPE_TS_DEMUX_MGR_GET_SET_MGR2(ts_sync, TS_SYNC)
 UPIPE_TS_DEMUX_MGR_GET_SET_MGR2(ts_check, TS_CHECK)
