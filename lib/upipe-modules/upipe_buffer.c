@@ -478,11 +478,11 @@ static int upipe_buffer_control(struct upipe *upipe,
         return upipe_buffer_attach_upump_mgr(upipe);
 
     case UPIPE_REGISTER_REQUEST: {
-        struct urequest *urequest = va_arg(args, struct uref *);
+        struct urequest *urequest = va_arg(args, struct urequest *);
         return upipe_buffer_alloc_output_proxy(upipe, urequest);
     }
     case UPIPE_UNREGISTER_REQUEST: {
-        struct urequest *urequest = va_arg(args, struct uref *);
+        struct urequest *urequest = va_arg(args, struct urequest *);
         return upipe_buffer_free_output_proxy(upipe, urequest);
     }
     case UPIPE_GET_FLOW_DEF: {
