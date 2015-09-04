@@ -742,7 +742,9 @@ static void upipe_avcenc_encode_audio(struct upipe *upipe,
             free(buf);
             return;
         }
-        int err = av_samples_copy(frame->data, buffers, offset, 0, extracted,
+        /* cast buffers because av_samples_copy is badly prototyped */
+        int err = av_samples_copy(frame->data, (uint8_t **)buffers,
+                                  offset, 0, extracted,
                                   context->channels, context->sample_fmt);
         UBASE_ERROR(upipe, uref_sound_unmap(uref, 0, extracted,
                                             AV_NUM_DATA_POINTERS))
