@@ -204,7 +204,7 @@ static void upipe_blit_sub_input(struct upipe *upipe, struct uref *uref,
         return;
     }
 
-    uint64_t hsize, vsize;
+    size_t hsize, vsize;
     uint8_t macropixel;
     if (unlikely(!ubase_check(uref_pic_size(uref, &hsize, &vsize,
                                             &macropixel)) ||
