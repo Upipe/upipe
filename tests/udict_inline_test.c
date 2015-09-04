@@ -74,7 +74,7 @@ int main(int argc, char **argv)
     ubase_assert(udict_set_float(udict1, 1.0, UDICT_TYPE_FLOAT, "x.version"));
     ubase_assert(udict_set_string(udict1, SALUTATION, UDICT_TYPE_STRING,
                             "x.salutation"));
-    struct urational rational = { num: 64, den: 45 };
+    struct urational rational = { .num = 64, .den = 45 };
     ubase_assert(udict_set_rational(udict1, rational, UDICT_TYPE_RATIONAL, "x.ar"));
 
     ubase_assert(udict_get_opaque(udict1, &o, UDICT_TYPE_OPAQUE, "x.opaque"));
