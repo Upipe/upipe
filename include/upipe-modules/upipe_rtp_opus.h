@@ -1,5 +1,5 @@
 #ifndef _UPIPE_MODULES_RTP_OPUS_H_
-# define UPIPE_MODULES_RTP_OPUS_H_
+# define _UPIPE_MODULES_RTP_OPUS_H_
 
 #ifdef __cplusplus
 extern "C" {
