@@ -99,5 +99,5 @@ pkginclude_HEADERS = \
 	uref_uri.h \
 	urequest.h \
 	uring.h \
-	ustring.h
+	ustring.h \
 	uuri.h

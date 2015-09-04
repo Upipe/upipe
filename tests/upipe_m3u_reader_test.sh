@@ -12,7 +12,7 @@ TMP="`mktemp -d tmp.XXXXXXXXXX`"
 
 for file in "$srcdir"/"$TESTNAME"_files/*.m3u; do
     echo "$file"
-    if ! "$srcdir"/"$TESTNAME" $file > "$TMP"/logs 2> /dev/null; then
+    if ! ./"$TESTNAME" $file > "$TMP"/logs 2> /dev/null; then
         rm -rf "$TMP"
         exit 1
     fi
@@ -38,7 +38,7 @@ if [ "$UNAME" = "Darwin" ]; then
 fi
 
 # Run in valgrind, with leak checking enabled
-libtool --mode=execute valgrind -q --leak-check=full --log-file="$TMP"/logs $VALGRIND_SUPPRESSIONS "$srcdir"/"$TESTNAME" "$srcdir"/"$TESTNAME"_files/*.m3u > /dev/null 2> /dev/null
+libtool --mode=execute valgrind -q --leak-check=full --log-file="$TMP"/logs $VALGRIND_SUPPRESSIONS ./"$TESTNAME" "$srcdir"/"$TESTNAME"_files/*.m3u > /dev/null 2> /dev/null
 RET=$?
 if test -s "$TMP"/logs; then
     cat "$TMP"/logs >&2
