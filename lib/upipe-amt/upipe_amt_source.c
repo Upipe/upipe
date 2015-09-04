@@ -538,8 +538,8 @@ static int upipe_amtsrc_mgr_control(struct upipe_mgr *mgr,
     switch (command) {
         case UPIPE_AMTSRC_MGR_SET_TIMEOUT: {
             UBASE_SIGNATURE_CHECK(args, UPIPE_AMTSRC_SIGNATURE)
-            unsigned int timeout = va_arg(args, unsigned int);
             /* no longer present in libamt */
+            /* unsigned int timeout = va_arg(args, unsigned int); */
             /* amt_timeOut(timeout); */
             return UBASE_ERR_NONE;
         }
