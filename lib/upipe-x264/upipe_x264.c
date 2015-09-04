@@ -162,8 +162,8 @@ static void upipe_x264_log(void *_upipe, int loglevel,
         return;
     }
 
-    vasprintf(&string, format, args);
-    if (unlikely(!string)) {
+    int ret = vasprintf(&string, format, args);
+    if (unlikely(ret < 0) || unlikely(!string)) {
         return;
     }
     end = string + strlen(string) - 1;
