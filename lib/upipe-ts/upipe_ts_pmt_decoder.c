@@ -190,6 +190,12 @@ static void upipe_ts_pmtd_parse_streamtype(struct upipe *upipe,
                             "block.mpegts.mpegtspes.h264.pic."))
             break;
 
+        case PMT_STREAMTYPE_SCTE_35:
+            UBASE_FATAL(upipe, uref_flow_set_def(flow_def, "void.scte35."))
+            UBASE_FATAL(upipe, uref_flow_set_raw_def(flow_def,
+                            "block.mpegts.mpegtspsi.mpegtsscte35.void."))
+            break;
+
         default:
             break;
     }
