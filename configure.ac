@@ -32,6 +32,7 @@ AX_PTHREAD(AM_CONDITIONAL(HAVE_PTHREAD, true),
            AM_CONDITIONAL(HAVE_PTHREAD, false))
 AC_SUBST(PTHREAD_CFLAGS)
 AC_SUBST(PTHREAD_LIBS)
+AM_ICONV
 
 # Check for header, then libev3 (ev_loop), then libev4 (ev_run)
 AC_CHECK_HEADERS([ev.h], [
