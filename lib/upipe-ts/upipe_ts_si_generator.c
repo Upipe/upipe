@@ -1698,8 +1698,8 @@ static int upipe_ts_sig_set_flow_def(struct upipe *upipe, struct uref *flow_def)
  * @param latency latency before the packet is output
  * @return an error code
  */
-static int _upipe_ts_sig_prepare(struct upipe *upipe, uint64_t cr_sys,
-                                 uint64_t latency)
+static int upipe_ts_sig_prepare(struct upipe *upipe, uint64_t cr_sys,
+                                uint64_t latency)
 {
     upipe_ts_sig_send_nit(upipe, cr_sys);
     upipe_ts_sig_send_sdt(upipe, cr_sys);
@@ -1796,13 +1796,13 @@ static int upipe_ts_sig_control(struct upipe *upipe, int command, va_list args)
             sig->frozen = true;
             return UBASE_ERR_NONE;
         }
-
-        case UPIPE_TS_SIG_PREPARE: {
-            UBASE_SIGNATURE_CHECK(args, UPIPE_TS_SIG_SIGNATURE)
+        case UPIPE_TS_MUX_PREPARE: {
+            UBASE_SIGNATURE_CHECK(args, UPIPE_TS_MUX_SIGNATURE)
             uint64_t cr_sys = va_arg(args, uint64_t);
             uint64_t latency = va_arg(args, uint64_t);
-            return _upipe_ts_sig_prepare(upipe, cr_sys, latency);
+            return upipe_ts_sig_prepare(upipe, cr_sys, latency);
         }
+
         case UPIPE_TS_SIG_GET_NIT_SUB: {
             UBASE_SIGNATURE_CHECK(args, UPIPE_TS_SIG_SIGNATURE)
             struct upipe **upipe_p = va_arg(args, struct upipe **);

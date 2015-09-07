@@ -2151,9 +2151,9 @@ static void upipe_ts_mux_increment(struct upipe *upipe)
     /* Tell PSI tables to prepare packets. */
     uint64_t original_cr_sys = mux->cr_sys - mux->latency;
     if (mux->psig != NULL)
-        upipe_ts_psig_prepare(mux->psig, original_cr_sys);
+        upipe_ts_mux_prepare(mux->psig, original_cr_sys, mux->latency);
     if (mux->sig != NULL)
-        upipe_ts_sig_prepare(mux->sig, original_cr_sys, mux->latency);
+        upipe_ts_mux_prepare(mux->sig, original_cr_sys, mux->latency);
 }
 
 /** @internal @This shows the next increment of cr_sys.
@@ -2451,9 +2451,9 @@ static void upipe_ts_mux_work_file(struct upipe *upipe, struct upump **upump_p)
                 upipe_ts_mux_init_cr_prog(upipe, mux->initial_cr_prog);
                 mux->initial_cr_prog = UINT64_MAX;
             }
-            upipe_ts_psig_prepare(mux->psig, min_cr_sys);
+            upipe_ts_mux_prepare(mux->psig, min_cr_sys, 0);
             if (mux->sig != NULL)
-                upipe_ts_sig_prepare(mux->sig, min_cr_sys, 0);
+                upipe_ts_mux_prepare(mux->sig, min_cr_sys, 0);
         }
 
         struct ubuf *ubuf;

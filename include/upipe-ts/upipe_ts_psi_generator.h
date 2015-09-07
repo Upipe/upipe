@@ -72,26 +72,6 @@ static inline bool upipe_ts_psig_program_set_pcr_pid(struct upipe *upipe,
                          UPIPE_TS_PSIG_PROGRAM_SIGNATURE, pcr_pid);
 }
 
-/** @This extends upipe_command with specific commands for ts_psig. */
-enum upipe_ts_psig_command {
-    UPIPE_TS_PSIG_SENTINEL = UPIPE_TS_MUX_PSIG,
-
-    /** prepares the next PSI sections for the given date (uint64_t) */
-    UPIPE_TS_PSIG_PREPARE
-};
-
-/** @This prepares the next PSI sections for the given date.
- *
- * @param upipe description structure of the pipe
- * @param cr_sys current muxing date
- * @return an error code
- */
-static inline int upipe_ts_psig_prepare(struct upipe *upipe, uint64_t cr_sys)
-{
-    return upipe_control_nodbg(upipe, UPIPE_TS_PSIG_PREPARE,
-                               UPIPE_TS_PSIG_SIGNATURE, cr_sys);
-}
-
 /** @This returns the management structure for all ts_psig pipes.
  *
  * @return pointer to manager
