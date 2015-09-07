@@ -549,6 +549,7 @@ static struct upipe *_upipe_bmd_src_alloc(struct upipe_mgr *mgr,
 
     uqueue_init(&upipe_bmd_src->uqueue, MAX_QUEUE_LENGTH,
                 upipe_bmd_src->uqueue_extra);
+    upipe_bmd_src->uri = NULL;
     upipe_bmd_src->deckLink = NULL;
     upipe_bmd_src->deckLinkInput = NULL;
     upipe_bmd_src->deckLinkConfiguration = NULL;
@@ -1077,12 +1078,14 @@ static void upipe_bmd_src_free(struct upipe *upipe)
     upipe_bmd_src_work(upipe, NULL);
     if (upipe_bmd_src->deckLinkConfiguration)
         upipe_bmd_src->deckLinkConfiguration->Release();
-    if (upipe_bmd_src->deckLinkInput)
+    if (upipe_bmd_src->deckLinkInput) {
+        upipe_bmd_src->deckLinkInput->StopStreams();
         upipe_bmd_src->deckLinkInput->Release();
-    if (upipe_bmd_src->deckLink)
-        upipe_bmd_src->deckLink->Release();
+    }
     if (upipe_bmd_src->deckLinkCaptureDelegate)
         upipe_bmd_src->deckLinkCaptureDelegate->Release();
+    if (upipe_bmd_src->deckLink)
+        upipe_bmd_src->deckLink->Release();
     uqueue_clean(&upipe_bmd_src->uqueue);
 
     upipe_bmd_src_output_clean(upipe_bmd_src_output_to_upipe(
