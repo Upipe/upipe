@@ -79,8 +79,6 @@ before_install:
       brew update;
       brew upgrade automake;
       brew upgrade libtool;
-      brew install gettext;
-      brew link --force gettext;
       brew install valgrind;
       brew install libev;
       brew install yasm;
@@ -106,9 +104,7 @@ before_install:
       sudo ldconfig;
     fi
 
-before_script:
-  - if [ "$TRAVIS_OS_NAME" = "osx" ]; then rm m4/iconv.m4; fi
-  - autoreconf -i
+before_script: autoreconf -i
 
 script: ./configure --disable-silent-rules
           CC="$HOST_CC"
