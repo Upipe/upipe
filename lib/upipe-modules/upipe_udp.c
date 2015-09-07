@@ -340,7 +340,9 @@ int upipe_udp_open_socket(struct upipe *upipe, const char *_uri, int ttl,
     bool b_raw;
     int family;
     socklen_t sockaddr_len;
+#if !defined(__APPLE__) && !defined(__native_client__)
     char *ifname = NULL;
+#endif
 
     if (!uri)
         return -1;

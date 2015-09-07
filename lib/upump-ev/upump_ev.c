@@ -138,7 +138,6 @@ static struct upump *upump_ev_alloc(struct upump_mgr *mgr,
     struct upump *upump = upump_ev_to_upump(upump_ev);
 
     switch (event) {
-#warning expect dereferencing warnings (libev doc says they are bogus)
         case UPUMP_TYPE_IDLER:
             ev_idle_init(&upump_ev->ev_idle, upump_ev_dispatch_idle);
             break;

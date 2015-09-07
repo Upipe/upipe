@@ -185,8 +185,9 @@ static int upipe_agg_set_flow_def(struct upipe *upipe, struct uref *flow_def)
     UBASE_RETURN(uref_flow_match_def(flow_def, EXPECTED_FLOW_DEF))
 
     struct upipe_agg *upipe_agg = upipe_agg_from_upipe(upipe);
-    upipe_agg->input_size = 0;
-    uref_block_flow_get_size(flow_def, &upipe_agg->input_size);
+    uint64_t size = 0;
+    uref_block_flow_get_size(flow_def, &size);
+    upipe_agg->input_size = size;
 
     uint64_t octetrate = 0;
     uref_block_flow_get_octetrate(flow_def, &octetrate);

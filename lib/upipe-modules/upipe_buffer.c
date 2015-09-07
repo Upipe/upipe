@@ -383,7 +383,7 @@ static int upipe_buffer_set_flow_def(struct upipe *upipe,
  * @return an error code
  */
 static int _upipe_buffer_get_max_size(struct upipe *upipe,
-                                      size_t *max_size_p)
+                                      uint64_t *max_size_p)
 {
     struct upipe_buffer *upipe_buffer = upipe_buffer_from_upipe(upipe);
     if (max_size_p)

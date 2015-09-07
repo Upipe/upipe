@@ -246,7 +246,7 @@ static inline bool ueventfd_init(struct ueventfd *fd, bool readable)
                 return false;
 
             for (uint8_t i = 0; i < 2; i++) {
-                int ret = fcntl(fd->pipe_fds[i], F_GETFD);
+                ret = fcntl(fd->pipe_fds[i], F_GETFD);
                 if (unlikely(ret < 0))
                     return false;
                 ret = fcntl(fd->pipe_fds[i], F_SETFD, ret | FD_CLOEXEC);
