@@ -756,15 +756,17 @@ static int upipe_bmd_src_set_uri(struct upipe *upipe, const char *uri)
                 break;
 
             IDeckLinkAttributes *deckLinkAttributes = NULL;
-            int64_t deckLinkTopologicalId = 0;
             if (deckLink->QueryInterface(IID_IDeckLinkAttributes,
-                                         (void**)&deckLinkAttributes) == S_OK &&
-                deckLinkAttributes->GetInt(BMDDeckLinkTopologicalID,
-                                           &deckLinkTopologicalId) == S_OK &&
-                (uint64_t)deckLinkTopologicalId == card_topology)
-                break;
-            if (deckLinkAttributes != NULL)
+                                         (void**)&deckLinkAttributes) == S_OK) {
+                int64_t deckLinkTopologicalId = 0;
+                HRESULT result =
+                    deckLinkAttributes->GetInt(BMDDeckLinkTopologicalID,
+                            &deckLinkTopologicalId);
                 deckLinkAttributes->Release();
+                if (result == S_OK &&
+                    (uint64_t)deckLinkTopologicalId == card_topology)
+                    break;
+            }
 		}
     } else {
         int card_idx = atoi(idx);
