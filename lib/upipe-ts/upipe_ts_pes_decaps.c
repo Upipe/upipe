@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2012-2014 OpenHeadend S.A.R.L.
+ * Copyright (C) 2012-2015 OpenHeadend S.A.R.L.
  *
  * Authors: Christophe Massiot
  *
@@ -52,6 +52,8 @@
 #define EXPECTED_FLOW_DEF "block.mpegtspes."
 /** 2^33 (max resolution of PCR, PTS and DTS) */
 #define POW2_33 UINT64_C(8589934592)
+/** max DTS/PTS delay */
+#define MAX_DELAY (UCLOCK_FREQ * 60)
 
 /** @internal @This is the private context of a ts_pesd pipe. */
 struct upipe_ts_pesd {
@@ -268,12 +270,12 @@ static void upipe_ts_pesd_decaps(struct upipe *upipe, struct upump **upump_p)
         }
 
         uint64_t dts_pts_delay = (POW2_33 + pts - dts) % POW2_33;
-        if (dts_pts_delay > POW2_33 / 2) {
+        dts_pts_delay *= UCLOCK_FREQ / 90000;
+        if (dts_pts_delay > MAX_DELAY) {
             upipe_warn_va(upipe, "invalid PTS field (%"PRIu64" < %"PRIu64")",
                           pts, dts);
             dts_pts_delay = 0;
         }
-        dts_pts_delay *= UCLOCK_FREQ / 90000;
         dts *= UCLOCK_FREQ / 90000;
         uref_clock_set_dts_orig(upipe_ts_pesd->next_uref, dts);
         uref_clock_set_dts_pts_delay(upipe_ts_pesd->next_uref, dts_pts_delay);
