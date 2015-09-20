@@ -874,10 +874,17 @@ static int upipe_ts_encaps_overlap_au(struct upipe *upipe,
     uref_clock_get_dts_sys(uref_au1, &dts_sys);
     uint64_t cr_sys;
     UBASE_RETURN(uref_clock_get_cr_sys(uref_au1, &cr_sys));
+    uint64_t cr_prog = UINT64_MAX;
+    uref_clock_get_cr_prog(uref_au1, &cr_prog);
 
     /* Adjust AU1's dts_sys and cr_sys */
     cr_sys -= (uint64_t)last_ts_size * UCLOCK_FREQ / encaps->octetrate;
     uref_clock_set_cr_sys(uref_au1, cr_sys);
+    if (cr_prog != UINT64_MAX) {
+        cr_prog -= (uint64_t)last_ts_size * UCLOCK_FREQ / encaps->octetrate;
+        uref_clock_set_cr_prog(uref_au1, cr_prog);
+    }
+
     if (dts_sys != UINT64_MAX) {
         dts_sys -= (uint64_t)last_ts_size * UCLOCK_FREQ / encaps->tb_rate;
         uref_clock_set_cr_dts_delay(uref_au1, dts_sys - cr_sys);
