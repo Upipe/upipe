@@ -441,7 +441,8 @@ static void upipe_ts_mux_program_change(struct upipe *upipe);
 /** @hidden */
 static void upipe_ts_mux_program_free(struct urefcount *urefcount_real);
 
-/** @internal @This defines the role of an input wrt. PCR management. */
+/** @internal @This defines the role of an input wrt. PCR management and
+ * scheduling. */
 enum upipe_ts_mux_input_type {
     /** video */
     UPIPE_TS_MUX_INPUT_VIDEO,
@@ -2397,7 +2398,7 @@ static uint64_t upipe_ts_mux_check_available(struct upipe *upipe)
                 if (input->deleted) {
                     upipe_release(input->encaps);
                     continue;
-                } else {
+                } else if (input->input_type != UPIPE_TS_MUX_INPUT_OTHER) {
                     upipe_release(upipe_ts_mux_program_to_upipe(program));
                     return UINT64_MAX;
                 }
