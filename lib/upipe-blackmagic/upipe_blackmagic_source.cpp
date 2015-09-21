@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2013-2014 OpenHeadend S.A.R.L.
+ * Copyright (C) 2013-2015 OpenHeadend S.A.R.L.
  *
  * Authors: Benjamin Cohen
  *          Christophe Massiot
@@ -46,6 +46,7 @@
 #include <upipe/upipe_helper_urefcount.h>
 #include <upipe/upipe_helper_void.h>
 #include <upipe/upipe_helper_flow.h>
+#include <upipe/upipe_helper_sync.h>
 #include <upipe/upipe_helper_uref_mgr.h>
 #include <upipe/upipe_helper_output.h>
 #include <upipe/upipe_helper_upump_mgr.h>
@@ -172,6 +173,8 @@ private:
 enum upipe_bmd_src_type {
     /** packet for pic subpipe */
     UPIPE_BMD_SRC_PIC,
+    /** packet for pic subpipe, without sync on input */
+    UPIPE_BMD_SRC_PIC_NO_INPUT,
     /** packet for sound subpipe */
     UPIPE_BMD_SRC_SOUND,
     /** packet for subpic subpipe */
@@ -247,6 +250,8 @@ struct upipe_bmd_src {
     bool progressive;
     /** true for top field first - for use by the private thread */
     bool tff;
+    /** true if we have thrown the sync_acquired event */
+    bool acquired;
 
     /** public upipe structure */
     struct upipe upipe;
@@ -257,7 +262,7 @@ struct upipe_bmd_src {
 
 UPIPE_HELPER_UPIPE(upipe_bmd_src, upipe, UPIPE_BMD_SRC_SIGNATURE)
 UPIPE_HELPER_UREFCOUNT(upipe_bmd_src, urefcount, upipe_bmd_src_free)
-
+UPIPE_HELPER_SYNC(upipe_bmd_src, acquired)
 UPIPE_HELPER_UREF_MGR(upipe_bmd_src, uref_mgr, uref_mgr_request, NULL,
                       upipe_throw_provide_request, NULL)
 UPIPE_HELPER_UCLOCK(upipe_bmd_src, uclock, uclock_request, NULL,
@@ -360,14 +365,16 @@ HRESULT DeckLinkCaptureDelegate::VideoInputFrameArrived(
     if (upipe_bmd_src->uclock)
         cr_sys = uclock_now(upipe_bmd_src->uclock);
 
-    if (VideoFrame && !(VideoFrame->GetFlags() & bmdFrameHasNoInputSource)) {
+    if (VideoFrame) {
         struct ubuf *ubuf =
             ubuf_pic_bmd_alloc(upipe_bmd_src->pic_subpipe.ubuf_mgr, VideoFrame);
         if (likely(ubuf != NULL)) {
             /* TODO subpic */
             struct uref *uref = uref_alloc(upipe_bmd_src->uref_mgr);
             uref_attach_ubuf(uref, ubuf);
-            uref_attr_set_priv(uref, UPIPE_BMD_SRC_PIC);
+            uref_attr_set_priv(uref,
+                    (VideoFrame->GetFlags() & bmdFrameHasNoInputSource) ?
+                    UPIPE_BMD_SRC_PIC_NO_INPUT : UPIPE_BMD_SRC_PIC);
 
             if (cr_sys != UINT64_MAX)
                 uref_clock_set_cr_sys(uref, cr_sys);
@@ -530,6 +537,7 @@ static struct upipe *_upipe_bmd_src_alloc(struct upipe_mgr *mgr,
     upipe_init(upipe, mgr, uprobe);
 
     upipe_bmd_src_init_urefcount(upipe);
+    upipe_bmd_src_init_sync(upipe);
     upipe_bmd_src_init_uref_mgr(upipe);
     upipe_bmd_src_init_uclock(upipe);
     upipe_bmd_src_init_upump_mgr(upipe);
@@ -583,9 +591,15 @@ void upipe_bmd_src_work(struct upipe *upipe, struct upump *upump)
         uref_attr_delete_priv(uref);
 
         switch (type) {
+            case UPIPE_BMD_SRC_PIC_NO_INPUT:
+                subpipe = upipe_bmd_src_output_to_upipe(
+                        upipe_bmd_src_to_pic_subpipe(upipe_bmd_src));
+                upipe_bmd_src_sync_lost(upipe);
+                break;
             case UPIPE_BMD_SRC_PIC:
                 subpipe = upipe_bmd_src_output_to_upipe(
                         upipe_bmd_src_to_pic_subpipe(upipe_bmd_src));
+                upipe_bmd_src_sync_acquired(upipe);
                 break;
             case UPIPE_BMD_SRC_SOUND:
                 subpipe = upipe_bmd_src_output_to_upipe(
@@ -607,7 +621,7 @@ void upipe_bmd_src_work(struct upipe *upipe, struct upump *upump)
             continue;
         }
 
-        if (type == UPIPE_BMD_SRC_PIC) {
+        if (type == UPIPE_BMD_SRC_PIC || type == UPIPE_BMD_SRC_PIC_NO_INPUT) {
             uint64_t pts_prog;
             if (likely(ubase_check(uref_clock_get_pts_prog(uref, &pts_prog))))
                 upipe_throw_clock_ref(subpipe, uref, pts_prog, 0);
@@ -1104,6 +1118,7 @@ static void upipe_bmd_src_free(struct upipe *upipe)
     upipe_bmd_src_clean_upump_mgr(upipe);
     upipe_bmd_src_clean_uclock(upipe);
     upipe_bmd_src_clean_urefcount(upipe);
+    upipe_bmd_src_clean_sync(upipe);
 
     upipe_clean(upipe);
     free(upipe_bmd_src);
