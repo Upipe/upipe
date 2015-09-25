@@ -27,9 +27,9 @@ matrix:
         - HOST_CXX="g++-$GCC_VERSION -m32"
 
     - os: linux
-      compiler: clang-3.6
+      compiler: clang-3.7
       env:
-        - CLANG_VERSION=3.6
+        - CLANG_VERSION=3.7
         - APT_REPOS="ppa:ubuntu-toolchain-r/test ppa:frodo-vdr/main ppa:danmbox/ppa ppa:dlundquist/sniproxy"
         - APT_PACKAGES="clang-$CLANG_VERSION"
         - HOST_CC=clang-$CLANG_VERSION
