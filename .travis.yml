@@ -1,10 +1,13 @@
+sudo: required
+dist: trusty
 osx_image: xcode7.2
 language: c
 
 env:
   global:
     - MAKEFLAGS=-j2
-    - FFMPEG="libavcodec-ffmpeg-opti-dev libavformat-ffmpeg-opti-dev libswresample-ffmpeg-opti-dev libswscale-ffmpeg-opti-dev"
+    - FFMPEG="libavcodec-ffmpeg-dev libavformat-ffmpeg-dev libswresample-ffmpeg-dev libswscale-ffmpeg-dev"
+    - APT_PACKAGES_COMMON="libev-dev libasound2-dev libx264-dev $FFMPEG"
 
 matrix:
   include:
@@ -13,28 +16,29 @@ matrix:
       compiler: gcc-5
       env:
         - GCC_VERSION=5
-        - APT_REPOS="ppa:ubuntu-toolchain-r/test ppa:frodo-vdr/main ppa:danmbox/ppa ppa:dlundquist/sniproxy"
-        - APT_PACKAGES="gcc-$GCC_VERSION g++-$GCC_VERSION libx264-dev $FFMPEG"
+        - APT_REPOS="ppa:ubuntu-toolchain-r/test ppa:mc3man/testing6"
+        - APT_PACKAGES="gcc-$GCC_VERSION g++-$GCC_VERSION $APT_PACKAGES_COMMON"
         - HOST_CC=gcc-$GCC_VERSION
         - HOST_CXX=g++-$GCC_VERSION
 
     - os: linux
-      compiler: gcc32
+      compiler: gcc-m32
       env:
         - GCC_VERSION=5
-        - APT_REPOS="ppa:ubuntu-toolchain-r/test ppa:frodo-vdr/main ppa:danmbox/ppa ppa:dlundquist/sniproxy"
-        - APT_PACKAGES="gcc-$GCC_VERSION-multilib g++-$GCC_VERSION-multilib"
-        - APT_PACKAGES_RM="mesa-common-dev libgl1-mesa-dev libglu1-mesa-dev libasound2-dev"
+        - APT_REPOS="ppa:ubuntu-toolchain-r/test ppa:mc3man/testing6"
+        - APT_PACKAGES="gcc-$GCC_VERSION-multilib g++-$GCC_VERSION-multilib $(echo $APT_PACKAGES_COMMON | sed 's/\(\S*\)/\1:i386/g') libgl1-mesa-dev:i386 libglu1-mesa-dev:i386 libc6-dbg:i386"
         - HOST_CC="gcc-$GCC_VERSION -m32"
         - HOST_CXX="g++-$GCC_VERSION -m32"
         - CFLAGS="-msse2 -mfpmath=sse"
+        - LIBAMT_PLATFORM="PLATFORM32=1"
+        - PKG_CONFIG_LIBDIR="/usr/lib/i386-linux-gnu/pkgconfig"
 
     - os: linux
       compiler: clang-3.7
       env:
         - CLANG_VERSION=3.7
-        - APT_REPOS="ppa:ubuntu-toolchain-r/test ppa:frodo-vdr/main ppa:danmbox/ppa ppa:dlundquist/sniproxy"
-        - APT_PACKAGES="clang-$CLANG_VERSION libx264-dev $FFMPEG"
+        - APT_REPOS="ppa:ubuntu-toolchain-r/test ppa:mc3man/testing6"
+        - APT_PACKAGES="clang-$CLANG_VERSION $APT_PACKAGES_COMMON"
         - HOST_CC=clang-$CLANG_VERSION
         - HOST_CXX=clang++-$CLANG_VERSION
         - CFLAGS="-Wno-error=unused-function"
@@ -48,10 +52,10 @@ matrix:
 
   allow_failures:
     - os: osx
-    - compiler: gcc32
 
 before_install:
   - if type apt-get 2>/dev/null; then
+      sudo dpkg --add-architecture i386;
       for APT_REPO in $APT_REPOS; do
         sudo add-apt-repository -y $APT_REPO;
       done;
@@ -59,25 +63,20 @@ before_install:
         curl -sSL "http://llvm.org/apt/llvm-snapshot.gpg.key" |
           sudo -E apt-key add -;
         sudo add-apt-repository -y "deb
-          http://llvm.org/apt/precise/
-          llvm-toolchain-precise-$CLANG_VERSION
+          http://llvm.org/apt/trusty/
+          llvm-toolchain-trusty-$CLANG_VERSION
           main";
       fi;
       sudo apt-get update;
-      sudo apt-get install
+      sudo apt-get install -y
         valgrind
-        libev-dev
-        libasound2-dev
-        libc6-i386
+        libc6:i386
         $APT_PACKAGES;
-      sudo apt-get remove
-        libqtwebkit-dev
-        $APT_PACKAGES_RM;
+      sudo apt-get remove -y
+        libqtwebkit-dev;
     fi
   - if type brew 2>/dev/null; then
       brew update;
-      brew upgrade automake;
-      brew upgrade libtool;
       brew install valgrind;
       brew install libev;
       brew install yasm;
@@ -100,10 +99,11 @@ before_install:
   - if [ "$TRAVIS_OS_NAME" = "linux" ]; then
       git clone --depth 1 https://github.com/cisco/SSMAMTtools.git;
       make -C SSMAMTtools/build/linux
-        CC="$HOST_CC"
-        CFLAGS='$(ADD_INCLUDE_DIR) -c -fPIC';
+        CC="$HOST_CC -fPIC"
+        TARGET=libamt.a
+        $LIBAMT_PLATFORM;
       sudo install -D SSMAMTtools/include/amt.h /usr/local/include/amt.h;
-      sudo install -D SSMAMTtools/lib/linux/libamt64.a /usr/local/lib/libamt.a;
+      sudo install -D SSMAMTtools/lib/linux/libamt.a /usr/local/lib/libamt.a;
       sudo ldconfig;
     fi
 
@@ -114,8 +114,7 @@ script: CONFIGURE_FLAGS="--disable-silent-rules
           CXX=\"$HOST_CXX\"
           CPPFLAGS=\"-I$PWD/nacl_sdk/pepper_43/include\"
           CFLAGS=\"-Werror -Wno-error=deprecated-declarations -O2 -g $CFLAGS\"
-          CXXFLAGS=\"-Werror -O2 -g\"
-          LDFLAGS=\"-L$PWD/nacl_sdk/pepper_43/lib/glibc_x86_64\"" &&
+          CXXFLAGS=\"-Werror -O2 -g\"" &&
         eval ./configure $CONFIGURE_FLAGS &&
         make distcheck
           DISTCHECK_CONFIGURE_FLAGS="$CONFIGURE_FLAGS"
