@@ -211,7 +211,7 @@ static void upipe_buffer_update(struct upipe *upipe)
 {
     struct upipe_buffer *upipe_buffer = upipe_buffer_from_upipe(upipe);
     enum upipe_buffer_state old_state = upipe_buffer->state;
-    enum upipe_buffer_state new_state = old_state;
+    enum upipe_buffer_state new_state;
 
     if (upipe_buffer->low_limit &&
         upipe_buffer->size < upipe_buffer->low_limit)

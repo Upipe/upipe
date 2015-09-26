@@ -293,7 +293,6 @@ static void upipe_nacl_audio_worker(void *sample_buffer, uint32_t buffer_size,
         if (unlikely(upipe_nacl_audio->uref == NULL)) {
             upipe_dbg_va(upipe, "playing %u frames of silence (empty)", frames);
             memset(sample_buffer, 0, frames * 4);
-            sample_buffer += frames * 4;
             break;
         }
 

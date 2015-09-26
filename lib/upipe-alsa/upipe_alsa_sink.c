@@ -590,7 +590,6 @@ static void upipe_alsink_consume(struct upipe *upipe, snd_pcm_uframes_t frames)
         uref_size <= frames) {
         upipe_alsink_pop_input(upipe);
         uref_free(uref);
-        frames = uref_size;
     } else {
         uref_sound_resize(uref, frames, -1);
         uint64_t pts;
