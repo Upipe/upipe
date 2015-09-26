@@ -1446,7 +1446,7 @@ static void upipe_ts_sig_build_eit_flow_def(struct upipe *upipe)
         octetrate += (uint64_t)service->eit_size * UCLOCK_FREQ / duration;
     }
 
-    if (unlikely(!size)) {
+    if (unlikely(!size || !section_freq.num)) {
         output->octetrate = 0;
         upipe_ts_sig_output_store_flow_def(upipe_ts_sig_output_to_upipe(output),
                                            NULL);
