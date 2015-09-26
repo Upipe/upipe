@@ -1181,10 +1181,11 @@ static int upipe_ts_mux_input_set_flow_def(struct upipe *upipe,
     if (latency + upipe_ts_mux_input->buffer_duration > upipe_ts_mux->latency) {
         upipe_ts_mux->latency = latency + upipe_ts_mux_input->buffer_duration;
         upipe_ts_mux_build_flow_def(upipe_ts_mux_to_upipe(upipe_ts_mux));
-    } else
+    } else if (au_per_sec.den) {
         upipe_set_max_length(upipe_ts_mux_input->encaps,
                 (MIN_BUFFERING + upipe_ts_mux->latency) * au_per_sec.num /
                 au_per_sec.den / UCLOCK_FREQ);
+    }
 
     upipe_notice_va(upipe,
             "adding %s on PID %"PRIu64" (%"PRIu64" bits/s), latency %"PRIu64" ms, buffer %"PRIu64" ms",
