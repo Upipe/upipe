@@ -354,14 +354,16 @@ static inline int ubuf_sound_interleave(struct ubuf *ubuf, uint8_t *buf,
     int i, j, k;
     const uint8_t *buffers_p[planes];
     UBASE_RETURN(ubuf_sound_read_uint8_t(ubuf, offset, samples, buffers_p, planes));
-    UBASE_RETURN(ubuf_sound_unmap(ubuf, offset, samples, planes));
-    for (i=0; i < samples; i++) {
-        for (j=0; j < planes; j++) {
-            for (k=0; k < sample_size; k++) {
+    for (i = 0; i < samples; i++) {
+        for (j = 0; j < planes; j++) {
+            if (unlikely(buffers_p[j] == NULL))
+                return UBASE_ERR_INVALID;
+            for (k = 0; k < sample_size; k++) {
                 *buf++ = buffers_p[j][i * sample_size + k];
             }
         }
     }
+    UBASE_RETURN(ubuf_sound_unmap(ubuf, offset, samples, planes));
 
     return UBASE_ERR_NONE;
 }
