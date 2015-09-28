@@ -159,6 +159,9 @@ static struct upipe_ts_scte35p_event *
 
     struct upipe_ts_scte35p_event *event =
         malloc(sizeof(struct upipe_ts_scte35p_event));
+    if (unlikely(event == NULL))
+        return NULL;
+
     uchain_init(&event->uchain);
     event->event_id = event_id;
     event->uref = uref;
@@ -285,6 +288,11 @@ static void upipe_ts_scte35p_input(struct upipe *upipe, struct uref *uref,
 
     struct upipe_ts_scte35p_event *event =
         upipe_ts_scte35p_event_find(upipe, event_id, uref);
+    if (unlikely(event == NULL)) {
+        uref_free(uref);
+        upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
+        return;
+    }
 
     if (ubase_check(uref_ts_scte35_get_cancel(uref))) {
         upipe_dbg_va(upipe, "splice %"PRIu64" cancelled", event_id);
