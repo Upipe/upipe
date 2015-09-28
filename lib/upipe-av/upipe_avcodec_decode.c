@@ -279,10 +279,11 @@ static int upipe_avcdec_get_buffer_pic(struct AVCodecContext *context,
     UBASE_FATAL(upipe, uref_pic_flow_set_vsize(flow_def_attr, context->height))
     UBASE_FATAL(upipe, uref_pic_flow_set_hsize_visible(flow_def_attr, context->width))
     UBASE_FATAL(upipe, uref_pic_flow_set_vsize_visible(flow_def_attr, context->height))
-    if (context->time_base.den && context->time_base.num) {
+    if (context->framerate.num && context->framerate.den) {
+
         struct urational fps = {
-            .num = context->time_base.den,
-            .den = context->time_base.num * context->ticks_per_frame
+            .num = context->framerate.num,
+            .den = context->framerate.den
         };
         urational_simplify(&fps);
         UBASE_FATAL(upipe, uref_pic_flow_set_fps(flow_def_attr, fps))
