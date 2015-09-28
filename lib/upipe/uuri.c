@@ -513,8 +513,6 @@ int uuri_authority_to_buffer(const struct uuri_authority *authority,
                        authority->port.at);
         if (ret < 0 || ret >= len)
             return UBASE_ERR_INVALID;
-        buffer += ret;
-        len -= ret;
     }
 
     return UBASE_ERR_NONE;
@@ -579,8 +577,6 @@ int uuri_to_buffer(struct uuri *uuri, char *buffer, size_t len)
                        uuri->fragment.at);
         if (ret < 0 || ret >= len)
             return UBASE_ERR_INVALID;
-        buffer += ret;
-        len -= ret;
     }
 
     return UBASE_ERR_NONE;
