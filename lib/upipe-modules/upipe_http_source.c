@@ -345,6 +345,9 @@ static int upipe_http_src_output_data(struct upipe *upipe,
     uint8_t *buf = NULL;
     int size;
 
+    if (unlikely(at == NULL))
+        len = 0;
+
     /* fetch systime */
     if (likely(upipe_http_src->uclock)) {
         systime = uclock_now(upipe_http_src->uclock);
@@ -360,7 +363,8 @@ static int upipe_http_src_output_data(struct upipe *upipe,
     size = -1;
     uref_block_write(uref, 0, &size, &buf);
     assert(len == size);
-    memcpy(buf, at, len);
+    if (likely(at != NULL))
+        memcpy(buf, at, len);
     uref_block_unmap(uref, 0);
 
     uref_clock_set_cr_sys(uref, systime);
