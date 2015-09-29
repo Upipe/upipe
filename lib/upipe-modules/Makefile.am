@@ -54,7 +54,8 @@ libupipe_modules_la_SOURCES = \
 	upipe_auto_source.c \
 	upipe_buffer.c \
 	upipe_aes_decrypt.c \
-	upipe_rate_limit.c
+	upipe_rate_limit.c \
+	upipe_burst.c
 
 if HAVE_WRITEV
 libupipe_modules_la_SOURCES += \

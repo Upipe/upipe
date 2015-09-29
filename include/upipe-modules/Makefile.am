@@ -54,4 +54,5 @@ myinclude_HEADERS = \
 	upipe_buffer.h \
 	upipe_aes_decrypt.h \
 	uref_aes_flow.h \
-	upipe_rate_limit.h
+	upipe_rate_limit.h \
+	upipe_burst.h
