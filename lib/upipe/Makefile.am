@@ -35,7 +35,7 @@ libupipe_la_SOURCES = \
 
 libupipe_la_CPPFLAGS = -I$(top_builddir)/include -I$(top_srcdir)/include
 libupipe_la_CFLAGS = -Wall
-libupipe_la_LIBADD = @libadd_rt_lib@
+libupipe_la_LIBADD = @libadd_rt_lib@ -lm
 libupipe_la_LDFLAGS = -no-undefined
 
 pkgconfigdir = $(libdir)/pkgconfig

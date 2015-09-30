@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2013 OpenHeadend S.A.R.L.
+ * Copyright (C) 2013-2015 OpenHeadend S.A.R.L.
  *
  * Authors: Christophe Massiot
  *
@@ -48,16 +48,19 @@ struct uprobe_dejitter {
     /** number of references received for offset calculaton */
     unsigned int offset_count;
     /** offset between stream clock and system clock */
-    int64_t offset;
-    /** residue */
-    int64_t offset_residue;
+    double offset;
 
     /** number of references received for deviation calculaton */
     unsigned int deviation_count;
     /** average absolute deviation */
-    uint64_t deviation;
-    /** residue */
-    uint64_t deviation_residue;
+    double deviation;
+
+    /** cr_prog of last clock ref */
+    uint64_t last_cr_prog;
+    /** cr_sys of last clock ref */
+    uint64_t last_cr_sys;
+    /** PLL drift rate */
+    struct urational drift_rate;
 
     /** structure exported to modules */
     struct uprobe uprobe;
@@ -69,11 +72,13 @@ UPROBE_HELPER_UPROBE(uprobe_dejitter, uprobe)
  *
  * @param uprobe_pfx pointer to the already allocated structure
  * @param next next probe to test if this one doesn't catch the event
- * @param divider number of reference clocks to keep for dejittering
+ * @param enabled true if dejitter is enabled
+ * @param deviation initial deviation, if not 0
  * @return pointer to uprobe, or NULL in case of error
  */
 struct uprobe *uprobe_dejitter_init(struct uprobe_dejitter *uprobe_dejitter,
-                                    struct uprobe *next, unsigned int divider);
+                                    struct uprobe *next, bool enabled,
+                                    uint64_t deviation);
 
 /** @This cleans a uprobe_dejitter structure.
  *
@@ -84,17 +89,21 @@ void uprobe_dejitter_clean(struct uprobe_dejitter *uprobe_dejitter);
 /** @This allocates a new uprobe_dejitter structure.
  *
  * @param next next probe to test if this one doesn't catch the event
- * @param divider number of reference clocks to keep for dejittering
+ * @param enabled true if dejitter is enabled
+ * @param deviation initial deviation, if not 0
  * @return pointer to uprobe, or NULL in case of error
  */
-struct uprobe *uprobe_dejitter_alloc(struct uprobe *next, unsigned int divider);
+struct uprobe *uprobe_dejitter_alloc(struct uprobe *next, bool enabled,
+                                     uint64_t deviation);
 
 /** @This sets a different divider. If set to 0, dejittering is disabled.
  *
  * @param uprobe pointer to probe
- * @param divider number of reference clocks to keep for dejittering
+ * @param enabled true if dejitter is enabled
+ * @param deviation initial deviation, if not 0
  */
-void uprobe_dejitter_set(struct uprobe *uprobe, unsigned int divider);
+void uprobe_dejitter_set(struct uprobe *uprobe, bool enabled,
+                         uint64_t deviation);
 
 #ifdef __cplusplus
 }

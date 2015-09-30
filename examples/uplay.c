@@ -96,7 +96,6 @@
 #define UBUF_SHARED_POOL_DEPTH  50
 #define UPUMP_POOL              10
 #define UPUMP_BLOCKER_POOL      10
-#define DEJITTER_DIVIDER        100
 #define XFER_QUEUE              255
 #define XFER_POOL               20
 #define FSRC_OUT_QUEUE_LENGTH   5
@@ -375,7 +374,7 @@ static void uplay_start(struct upump *upump)
         need_trickp = true;
     } else {
         upipe_release(upipe_src);
-        uprobe_dejitter_set(uprobe_dejitter, DEJITTER_DIVIDER);
+        uprobe_dejitter_set(uprobe_dejitter, true, 0);
         src_out_queue_length = SRC_OUT_QUEUE_LENGTH;
 
         /* try rtp source */
@@ -595,7 +594,7 @@ int main(int argc, char **argv)
     umem_mgr_release(umem_mgr);
     uprobe_pthread_upump_mgr_set(uprobe_main, main_upump_mgr);
 
-    uprobe_dejitter = uprobe_dejitter_alloc(uprobe_use(uprobe_main), 0);
+    uprobe_dejitter = uprobe_dejitter_alloc(uprobe_use(uprobe_main), false, 0);
     assert(uprobe_dejitter != NULL);
     uprobe_init(&uprobe_src_s, catch_src, uprobe_use(uprobe_main));
     uprobe_init(&uprobe_video_s, catch_video, uprobe_use(uprobe_dejitter));
