@@ -881,8 +881,7 @@ static void upipe_ts_psig_program_build(struct upipe *upipe)
 /** @internal @This sends a PMT PSI section.
  *
  * @param upipe description structure of the pipe
- * @param uref uref structure
- * @param upump_p reference to pump that generated the buffer
+ * @param cr_sys cr_sys of the next muxed packet
  */
 static void upipe_ts_psig_program_send(struct upipe *upipe, uint64_t cr_sys)
 {
@@ -1430,8 +1429,7 @@ static void upipe_ts_psig_build(struct upipe *upipe)
 /** @internal @This sends a PAT PSI section.
  *
  * @param upipe description structure of the pipe
- * @param uref uref structure
- * @param upump_p reference to pump that generated the buffer
+ * @param cr_sys cr_sys of the next muxed packet
  */
 static void upipe_ts_psig_send(struct upipe *upipe, uint64_t cr_sys)
 {
