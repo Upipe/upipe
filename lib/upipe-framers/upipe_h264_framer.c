@@ -209,6 +209,8 @@ struct upipe_h264f {
     uint8_t au_slice_nal;
     /** pseudo-packet containing date information for the next picture */
     struct uref au_uref_s;
+    /** drift rate of the next picture */
+    struct urational drift_rate;
     /** true if we have thrown the sync_acquired event (that means we found a
      * NAL start) */
     bool acquired;
@@ -244,6 +246,7 @@ static void upipe_h264f_flush_dates(struct upipe *upipe)
     uref_clock_set_date_orig(&upipe_h264f->au_uref_s, UINT64_MAX,
                              UREF_DATE_NONE);
     uref_clock_delete_dts_pts_delay(&upipe_h264f->au_uref_s);
+    upipe_h264f->drift_rate.num = upipe_h264f->drift_rate.den = 0;
 }
 
 /** @internal @This is called back by @ref upipe_h264f_append_uref_stream
@@ -266,6 +269,7 @@ static void upipe_h264f_promote_uref(struct upipe *upipe)
     if (ubase_check(uref_clock_get_dts_pts_delay(upipe_h264f->next_uref,
                                                  &date)))
         uref_clock_set_dts_pts_delay(&upipe_h264f->au_uref_s, date);
+    uref_clock_get_rate(upipe_h264f->next_uref, &upipe_h264f->drift_rate);
     if (ubase_check(uref_clock_get_dts_prog(upipe_h264f->next_uref, &date)))
         uref_clock_get_rap_sys(upipe_h264f->next_uref, &upipe_h264f->dts_rap);
 }
@@ -1417,6 +1421,7 @@ static void upipe_h264f_output_au(struct upipe *upipe, struct upump **upump_p)
     }
 
     struct uref au_uref_s = upipe_h264f->au_uref_s;
+    struct urational drift_rate = upipe_h264f->drift_rate;
     /* From now on, PTS declaration only impacts the next frame. */
     upipe_h264f_flush_dates(upipe);
 
@@ -1524,6 +1529,10 @@ static void upipe_h264f_output_au(struct upipe *upipe, struct upump **upump_p)
         uref_clock_set_dts_pts_delay(uref, date);
     else
         uref_clock_delete_dts_pts_delay(uref);
+    if (drift_rate.den)
+        uref_clock_set_rate(uref, drift_rate);
+    else
+        uref_clock_delete_rate(uref);
 
     switch (upipe_h264f->slice_type % 5) {
         case H264SLI_TYPE_I:

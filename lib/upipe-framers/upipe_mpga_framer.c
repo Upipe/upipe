@@ -153,6 +153,8 @@ struct upipe_mpgaf {
     ssize_t next_frame_size;
     /** pseudo-packet containing date information for the next picture */
     struct uref au_uref_s;
+    /** drift rate of the next picture */
+    struct urational drift_rate;
     /** true if we have thrown the sync_acquired event (that means we found a
      * sequence header) */
     bool acquired;
@@ -219,6 +221,7 @@ static struct upipe *upipe_mpgaf_alloc(struct upipe_mgr *mgr,
     upipe_mpgaf->next_frame_size = -1;
     uref_init(&upipe_mpgaf->au_uref_s);
     upipe_mpgaf_flush_dates(upipe);
+    upipe_mpgaf->drift_rate.num = upipe_mpgaf->drift_rate.den = 0;
     upipe_mpgaf->sync_header[0] = 0x0;
     upipe_throw_ready(upipe);
     return upipe;
@@ -528,6 +531,7 @@ static void upipe_mpgaf_output_frame(struct upipe *upipe,
     struct upipe_mpgaf *upipe_mpgaf = upipe_mpgaf_from_upipe(upipe);
 
     struct uref au_uref_s = upipe_mpgaf->au_uref_s;
+    struct urational drift_rate = upipe_mpgaf->drift_rate;
     /* From now on, PTS declaration only impacts the next frame. */
     upipe_mpgaf_flush_dates(upipe);
 
@@ -562,6 +566,10 @@ static void upipe_mpgaf_output_frame(struct upipe *upipe,
 
     /* PTS = DTS for MPEG audio */
     uref_clock_set_dts_pts_delay(uref, 0);
+    if (drift_rate.den)
+        uref_clock_set_rate(uref, drift_rate);
+    else
+        uref_clock_delete_rate(uref);
 
     UBASE_FATAL(upipe, uref_clock_set_duration(uref, duration))
 
@@ -588,6 +596,7 @@ static void upipe_mpgaf_promote_uref(struct upipe *upipe)
     SET_DATE(orig)
 #undef SET_DATE
 
+    uref_clock_get_rate(upipe_mpgaf->next_uref, &upipe_mpgaf->drift_rate);
     upipe_mpgaf->duration_residue = 0;
 }
 

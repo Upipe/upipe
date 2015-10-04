@@ -163,6 +163,8 @@ struct upipe_mpgvf {
     bool next_frame_slice;
     /** pseudo-packet containing date information for the next picture */
     struct uref au_uref_s;
+    /** drift rate of the next picture */
+    struct urational drift_rate;
     /** true if we have thrown the sync_acquired event (that means we found a
      * sequence header) */
     bool acquired;
@@ -243,6 +245,7 @@ static struct upipe *upipe_mpgvf_alloc(struct upipe_mgr *mgr,
     upipe_mpgvf->next_frame_slice = false;
     uref_init(&upipe_mpgvf->au_uref_s);
     upipe_mpgvf_flush_dates(upipe);
+    upipe_mpgvf->drift_rate.num = upipe_mpgvf->drift_rate.den = 0;
     upipe_mpgvf->sequence_header = upipe_mpgvf->sequence_ext =
         upipe_mpgvf->sequence_display = NULL;
     upipe_throw_ready(upipe);
@@ -949,6 +952,7 @@ static bool upipe_mpgvf_output_frame(struct upipe *upipe,
     }
 
     struct uref au_uref_s = upipe_mpgvf->au_uref_s;
+    struct urational drift_rate = upipe_mpgvf->drift_rate;
     /* From now on, PTS declaration only impacts the next frame. */
     upipe_mpgvf_flush_dates(upipe);
 
@@ -997,6 +1001,10 @@ static bool upipe_mpgvf_output_frame(struct upipe *upipe,
         uref_clock_set_dts_pts_delay(uref, date);
     else
         uref_clock_delete_dts_pts_delay(uref);
+    if (drift_rate.den)
+        uref_clock_set_rate(uref, drift_rate);
+    else
+        uref_clock_delete_rate(uref);
 
     upipe_mpgvf_output(upipe, uref, upump_p);
     return true;
@@ -1022,6 +1030,7 @@ static void upipe_mpgvf_promote_uref(struct upipe *upipe)
     if (ubase_check(uref_clock_get_dts_pts_delay(upipe_mpgvf->next_uref,
                                                  &date)))
         uref_clock_set_dts_pts_delay(&upipe_mpgvf->au_uref_s, date);
+    uref_clock_get_rate(upipe_mpgvf->next_uref, &upipe_mpgvf->drift_rate);
     if (ubase_check(uref_clock_get_dts_prog(upipe_mpgvf->next_uref, &date)))
         uref_clock_get_rap_sys(upipe_mpgvf->next_uref, &upipe_mpgvf->dts_rap);
 }
