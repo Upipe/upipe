@@ -1288,9 +1288,10 @@ static int _upipe_ts_encaps_splice(struct upipe *upipe, uint64_t cr_sys,
     if (encaps->pcr_interval && encaps->sys_prog_last_cr_prog != UINT64_MAX &&
         encaps->last_pcr + encaps->pcr_interval <= encaps->last_splice) {
         pcr_prog = (int64_t)encaps->sys_prog_last_cr_prog +
-            (int64_t)(encaps->last_splice - encaps->sys_prog_last_cr_sys) *
+            ((int64_t)encaps->last_splice -
+             (int64_t)encaps->sys_prog_last_cr_sys) *
             (int64_t)encaps->sys_prog_drift_rate.den /
-            encaps->sys_prog_drift_rate.num;
+            (int64_t)encaps->sys_prog_drift_rate.num;
         encaps->last_pcr = encaps->last_splice;
     }
 

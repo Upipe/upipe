@@ -146,6 +146,16 @@ struct upipe_avcenc {
     struct uchain urefs_in_use;
     /** last incoming pts (in avcodec timebase) */
     int64_t avcpts;
+    /** last DTS */
+    uint64_t last_dts;
+    /** last DTS (system time) */
+    uint64_t last_dts_sys;
+    /** drift rate */
+    struct urational drift_rate;
+    /** last input PTS */
+    uint64_t input_pts;
+    /** last input PTS (system time) */
+    uint64_t input_pts_sys;
 
     /** frame counter */
     uint64_t counter;
@@ -575,9 +585,42 @@ static bool upipe_avcenc_encode_frame(struct upipe *upipe,
     uref_clock_delete_cr_dts_delay(uref);
 
     /* rebase to dts as we're in encoded domain now */
-    uref_clock_rebase_dts_sys(uref);
-    uref_clock_rebase_dts_prog(uref);
+    uint64_t dts = UINT64_MAX;
+    if (!ubase_check(uref_clock_get_dts_prog(uref, &dts)) ||
+        (upipe_avcenc->last_dts != UINT64_MAX &&
+               dts < upipe_avcenc->last_dts)) {
+        upipe_warn_va(upipe, "DTS prog in the past, resetting (%"PRIu64" ms)",
+                      (upipe_avcenc->last_dts - dts) * 1000 / UCLOCK_FREQ);
+        dts = upipe_avcenc->last_dts + 1;
+        uref_clock_set_dts_prog(uref, dts);
+    } else
+        uref_clock_rebase_dts_prog(uref);
+
+    uint64_t dts_sys = UINT64_MAX;
+    if (upipe_avcenc->input_pts != UINT64_MAX &&
+        upipe_avcenc->input_pts_sys != UINT64_MAX) {
+        dts_sys = (int64_t)upipe_avcenc->input_pts_sys +
+            ((int64_t)dts - (int64_t)upipe_avcenc->input_pts) *
+            (int64_t)upipe_avcenc->drift_rate.num /
+            (int64_t)upipe_avcenc->drift_rate.den;
+        uref_clock_set_dts_sys(uref, dts_sys);
+    } else if (!ubase_check(uref_clock_get_dts_sys(uref, &dts_sys)) ||
+        (upipe_avcenc->last_dts_sys != UINT64_MAX &&
+               dts_sys < upipe_avcenc->last_dts_sys)) {
+        upipe_warn_va(upipe,
+                      "DTS sys in the past, resetting (%"PRIu64" ms)",
+                      (upipe_avcenc->last_dts_sys - dts_sys) * 1000 /
+                      UCLOCK_FREQ);
+        dts_sys = upipe_avcenc->last_dts_sys + 1;
+        uref_clock_set_dts_sys(uref, dts_sys);
+    } else
+        uref_clock_rebase_dts_sys(uref);
+
     uref_clock_rebase_dts_orig(uref);
+    uref_clock_set_rate(uref, upipe_avcenc->drift_rate);
+
+    upipe_avcenc->last_dts = dts;
+    upipe_avcenc->last_dts_sys = dts_sys;
 
     if (avpkt.flags & AV_PKT_FLAG_KEY)
         uref_flow_set_random(uref);
@@ -797,6 +840,9 @@ static bool upipe_avcenc_encode(struct upipe *upipe,
 {
     struct upipe_avcenc *upipe_avcenc = upipe_avcenc_from_upipe(upipe);
     AVCodecContext *context = upipe_avcenc->context;
+    uref_clock_get_rate(uref, &upipe_avcenc->drift_rate);
+    uref_clock_get_pts_prog(uref, &upipe_avcenc->input_pts);
+    uref_clock_get_pts_sys(uref, &upipe_avcenc->input_pts_sys);
 
     /* map input */
     switch (context->codec->type) {
@@ -1395,6 +1441,11 @@ static struct upipe *upipe_avcenc_alloc(struct upipe_mgr *mgr,
 
     ulist_init(&upipe_avcenc->urefs_in_use);
     upipe_avcenc->avcpts = AVCPTS_INIT;
+    upipe_avcenc->last_dts = UINT64_MAX;
+    upipe_avcenc->last_dts_sys = UINT64_MAX;
+    upipe_avcenc->drift_rate.num = upipe_avcenc->drift_rate.den = 1;
+    upipe_avcenc->input_pts = UINT64_MAX;
+    upipe_avcenc->input_pts_sys = UINT64_MAX;
 
     upipe_throw_ready(upipe);
     return upipe;

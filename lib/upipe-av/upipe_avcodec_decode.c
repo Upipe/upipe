@@ -152,6 +152,12 @@ struct upipe_avcdec {
     uint64_t next_pts_sys;
     /** latency in the input flow */
     uint64_t input_latency;
+    /** drift rate */
+    struct urational drift_rate;
+    /** last input DTS */
+    uint64_t input_dts;
+    /** last input DTS (system time) */
+    uint64_t input_dts_sys;
 
     /** avcodec context */
     AVCodecContext *context;
@@ -739,7 +745,14 @@ static void upipe_avcdec_set_time_attributes(struct upipe *upipe,
     } else
         uref_clock_rebase_pts_prog(uref);
 
-    if (!ubase_check(uref_clock_get_pts_sys(uref, &pts_sys))) {
+    if (upipe_avcdec->input_dts != UINT64_MAX &&
+        upipe_avcdec->input_dts_sys != UINT64_MAX) {
+        pts_sys = (int64_t)upipe_avcdec->input_dts_sys +
+            ((int64_t)pts - (int64_t)upipe_avcdec->input_dts) *
+            (int64_t)upipe_avcdec->drift_rate.num /
+            (int64_t)upipe_avcdec->drift_rate.den;
+        uref_clock_set_pts_sys(uref, pts_sys);
+    } else if (!ubase_check(uref_clock_get_pts_sys(uref, &pts_sys))) {
         pts_sys = upipe_avcdec->next_pts_sys;
         if (pts_sys != UINT64_MAX) {
             uref_clock_set_pts_sys(uref, pts_sys);
@@ -755,6 +768,7 @@ static void upipe_avcdec_set_time_attributes(struct upipe *upipe,
         uref_clock_rebase_pts_sys(uref);
 
     uref_clock_rebase_pts_orig(uref);
+    uref_clock_set_rate(uref, upipe_avcdec->drift_rate);
 
     /* compute next pts based on current frame duration */
     if (pts != UINT64_MAX && ubase_check(uref_clock_get_duration(uref, &duration))) {
@@ -1075,6 +1089,9 @@ static bool upipe_avcdec_decode(struct upipe *upipe, struct uref *uref,
     memset(avpkt.data + avpkt.size, 0, FF_INPUT_BUFFER_PADDING_SIZE);
 
     uref_pic_set_number(uref, upipe_avcdec->counter++);
+    uref_clock_get_rate(uref, &upipe_avcdec->drift_rate);
+    uref_clock_get_dts_prog(uref, &upipe_avcdec->input_dts);
+    uref_clock_get_dts_sys(uref, &upipe_avcdec->input_dts_sys);
 
     upipe_avcdec_store_uref(upipe, uref);
     upipe_avcdec_decode_avpkt(upipe, &avpkt, upump_p);
@@ -1396,6 +1413,9 @@ static struct upipe *upipe_avcdec_alloc(struct upipe_mgr *mgr,
     upipe_avcdec->next_pts = UINT64_MAX;
     upipe_avcdec->next_pts_sys = UINT64_MAX;
     upipe_avcdec->input_latency = 0;
+    upipe_avcdec->drift_rate.num = upipe_avcdec->drift_rate.den = 1;
+    upipe_avcdec->input_dts = UINT64_MAX;
+    upipe_avcdec->input_dts_sys = UINT64_MAX;
 
     upipe_throw_ready(upipe);
     return upipe;

@@ -118,8 +118,14 @@ struct upipe_x264 {
 
     /** last DTS */
     uint64_t last_dts;
-    /** last DTS (systime time) */
+    /** last DTS (system time) */
     uint64_t last_dts_sys;
+    /** drift rate */
+    struct urational drift_rate;
+    /** last input PTS */
+    uint64_t input_pts;
+    /** last input PTS (system time) */
+    uint64_t input_pts_sys;
 
     /** public structure */
     struct upipe upipe;
@@ -335,6 +341,9 @@ static struct upipe *upipe_x264_alloc(struct upipe_mgr *mgr,
 
     upipe_x264->last_dts = UINT64_MAX;
     upipe_x264->last_dts_sys = UINT64_MAX;
+    upipe_x264->drift_rate.num = upipe_x264->drift_rate.den = 1;
+    upipe_x264->input_pts = UINT64_MAX;
+    upipe_x264->input_pts_sys = UINT64_MAX;
 
     upipe_throw_ready(upipe);
     return upipe;
@@ -666,6 +675,9 @@ static void upipe_x264_input(struct upipe *upipe, struct uref *uref,
         /* set pts in x264 timebase */
         pic.i_pts = upipe_x264->x264_ts;
         upipe_x264->x264_ts++;
+        uref_clock_get_rate(uref, &upipe_x264->drift_rate);
+        uref_clock_get_pts_prog(uref, &upipe_x264->input_pts);
+        uref_clock_get_pts_sys(uref, &upipe_x264->input_pts_sys);
 
         /* map */
         for (i = 0; i < 3; i++) {
@@ -756,17 +768,27 @@ static void upipe_x264_input(struct upipe *upipe, struct uref *uref,
         uref_clock_rebase_dts_prog(uref);
 
     uint64_t dts_sys = UINT64_MAX;
-    if (!ubase_check(uref_clock_get_dts_sys(uref, &dts_sys)) ||
+    if (upipe_x264->input_pts != UINT64_MAX &&
+        upipe_x264->input_pts_sys != UINT64_MAX) {
+        dts_sys = (int64_t)upipe_x264->input_pts_sys +
+            ((int64_t)dts - (int64_t)upipe_x264->input_pts) *
+            (int64_t)upipe_x264->drift_rate.num /
+            (int64_t)upipe_x264->drift_rate.den;
+        uref_clock_set_dts_sys(uref, dts_sys);
+    } else if (!ubase_check(uref_clock_get_dts_sys(uref, &dts_sys)) ||
         (upipe_x264->last_dts_sys != UINT64_MAX &&
                dts_sys < upipe_x264->last_dts_sys)) {
-        upipe_warn_va(upipe, "DTS sys in the past, resetting (%"PRIu64" ms)",
-                      (upipe_x264->last_dts_sys - dts_sys) * 1000 / UCLOCK_FREQ);
+        upipe_warn_va(upipe,
+                      "DTS sys in the past, resetting (%"PRIu64" ms)",
+                      (upipe_x264->last_dts_sys - dts_sys) * 1000 /
+                      UCLOCK_FREQ);
         dts_sys = upipe_x264->last_dts_sys + 1;
         uref_clock_set_dts_sys(uref, dts_sys);
     } else
         uref_clock_rebase_dts_sys(uref);
 
     uref_clock_rebase_dts_orig(uref);
+    uref_clock_set_rate(uref, upipe_x264->drift_rate);
 
     upipe_x264->last_dts = dts;
     upipe_x264->last_dts_sys = dts_sys;
