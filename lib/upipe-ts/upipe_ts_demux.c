@@ -850,7 +850,7 @@ static int upipe_ts_demux_output_plumber(struct upipe *upipe,
     }
 
     upipe_warn_va(upipe, "unframed output flow definition: %s", def);
-    /* allocate opusf inner */
+    /* allocate idem inner */
     struct upipe *output =
         upipe_void_alloc_output(inner, ts_demux_mgr->idem_mgr,
             uprobe_pfx_alloc(
