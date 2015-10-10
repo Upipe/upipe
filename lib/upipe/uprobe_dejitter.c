@@ -50,10 +50,10 @@
 #define MAX_JITTER (UCLOCK_FREQ / 10)
 /** max allowed positive offset without drifting with the PLL (5 ms) */
 #define MAX_OFFSET (UCLOCK_FREQ / 200)
-/** max PLL drift (20 ppm) */
-#define MAX_DRIFT_RATE (UCLOCK_FREQ * 2 / 100000)
-/** PLL drift increment */
-#define DRIFT_INCREMENT 1
+/** wanted positive offset before stopping the drift (2 ms) */
+#define WANTED_OFFSET (UCLOCK_FREQ / 500)
+/** max PLL drift (25 ppm) */
+#define PLL_MAX_DRIFT (UCLOCK_FREQ * 5 / 200000)
 
 /** @internal @This catches clock_ref events thrown by pipes.
  *
@@ -113,7 +113,12 @@ static int uprobe_dejitter_clock_ref(struct uprobe *uprobe, struct upipe *upipe,
     if (uprobe_dejitter->offset_count == 1) {
         uprobe_dejitter->last_cr_prog = cr_prog;
         uprobe_dejitter->last_cr_sys = cr_prog + wanted_offset;
-        uprobe_dejitter->drift_rate.num = uprobe_dejitter->drift_rate.den = 1;
+        uprobe_dejitter->drift_rate.den = UCLOCK_FREQ;
+        if (uprobe_dejitter->deviation > 1)
+            uprobe_dejitter->drift_rate.num = UCLOCK_FREQ - PLL_MAX_DRIFT;
+        else
+            uprobe_dejitter->drift_rate.num = UCLOCK_FREQ;
+        urational_simplify(&uprobe_dejitter->drift_rate);
     }
 
     /* phase-locked loop */
@@ -125,30 +130,32 @@ static int uprobe_dejitter_clock_ref(struct uprobe *uprobe, struct upipe *upipe,
     if (uprobe_dejitter->offset_count > 1) {
         uprobe_dejitter->last_cr_prog = cr_prog;
         uprobe_dejitter->last_cr_sys = real_cr_sys;
-
-        uint64_t target_drift = UCLOCK_FREQ;
-        uint64_t current_drift = uprobe_dejitter->drift_rate.num * UCLOCK_FREQ /
-                                 uprobe_dejitter->drift_rate.den;
+        struct urational drift_rate;
+        drift_rate.num = uprobe_dejitter->drift_rate.num * UCLOCK_FREQ /
+                         uprobe_dejitter->drift_rate.den;
+        drift_rate.den = UCLOCK_FREQ;
         if (wanted_offset > real_offset)
-            target_drift = UCLOCK_FREQ + MAX_DRIFT_RATE;
+            drift_rate.num = UCLOCK_FREQ + PLL_MAX_DRIFT;
         else if (real_offset - wanted_offset > MAX_OFFSET)
-            target_drift = UCLOCK_FREQ - MAX_DRIFT_RATE;
+            drift_rate.num = UCLOCK_FREQ - PLL_MAX_DRIFT;
+        else if (real_offset - wanted_offset <= WANTED_OFFSET ||
+                 drift_rate.num > UCLOCK_FREQ)
+            drift_rate.num = UCLOCK_FREQ;
+        urational_simplify(&drift_rate);
 
-        if (target_drift > current_drift)
-            uprobe_dejitter->drift_rate.num = current_drift + DRIFT_INCREMENT;
-        else if (target_drift < current_drift)
-            uprobe_dejitter->drift_rate.num = current_drift - DRIFT_INCREMENT;
-        else
-            uprobe_dejitter->drift_rate.num = current_drift;
-        uprobe_dejitter->drift_rate.den = UCLOCK_FREQ;
-        urational_simplify(&uprobe_dejitter->drift_rate);
+        if (drift_rate.num != uprobe_dejitter->drift_rate.num ||
+            drift_rate.den != uprobe_dejitter->drift_rate.den)
+            upipe_dbg_va(upipe, "changing drift rate from %f to %f",
+                         (double)uprobe_dejitter->drift_rate.num /
+                         uprobe_dejitter->drift_rate.den,
+                         (double)drift_rate.num / drift_rate.den);
+        uprobe_dejitter->drift_rate = drift_rate;
     }
 
     upipe_verbose_va(upipe,
-            "new ref drift %f offset %"PRId64" target %"PRId64" deviation %f",
-            (double)uprobe_dejitter->drift_rate.num /
-            uprobe_dejitter->drift_rate.den, real_offset,
-            wanted_offset - real_offset, uprobe_dejitter->deviation);
+            "new ref offset %"PRId64" target %"PRId64" deviation %f",
+            real_offset, wanted_offset - real_offset,
+            uprobe_dejitter->deviation);
     return UBASE_ERR_NONE;
 }
 
