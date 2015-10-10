@@ -123,6 +123,17 @@ static void upipe_ts_tstd_input(struct upipe *upipe, struct uref *uref,
     uint64_t delay = (upipe_ts_tstd->fullness * UCLOCK_FREQ) /
                      upipe_ts_tstd->octetrate;
     uref_clock_set_cr_dts_delay(uref, delay);
+    uref_clock_rebase_cr_prog(uref);
+    uref_clock_rebase_cr_orig(uref);
+
+    uint64_t dts_sys;
+    struct urational drift_rate;
+    if (ubase_check(uref_clock_get_dts_sys(uref, &dts_sys)) &&
+        ubase_check(uref_clock_get_rate(uref, &drift_rate)))
+        uref_clock_set_cr_sys(uref,
+                dts_sys - delay * drift_rate.num / drift_rate.den);
+    else
+        uref_clock_rebase_cr_sys(uref);
 
     upipe_ts_tstd_output(upipe, uref, upump_p);
 }
