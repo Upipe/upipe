@@ -745,7 +745,8 @@ static void upipe_avcdec_set_time_attributes(struct upipe *upipe,
     } else
         uref_clock_rebase_pts_prog(uref);
 
-    if (upipe_avcdec->input_dts != UINT64_MAX &&
+    if (pts != UINT64_MAX &&
+        upipe_avcdec->input_dts != UINT64_MAX &&
         upipe_avcdec->input_dts_sys != UINT64_MAX) {
         pts_sys = (int64_t)upipe_avcdec->input_dts_sys +
             ((int64_t)pts - (int64_t)upipe_avcdec->input_dts) *

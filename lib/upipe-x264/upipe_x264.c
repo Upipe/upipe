@@ -768,7 +768,8 @@ static void upipe_x264_input(struct upipe *upipe, struct uref *uref,
         uref_clock_rebase_dts_prog(uref);
 
     uint64_t dts_sys = UINT64_MAX;
-    if (upipe_x264->input_pts != UINT64_MAX &&
+    if (dts != UINT64_MAX &&
+        upipe_x264->input_pts != UINT64_MAX &&
         upipe_x264->input_pts_sys != UINT64_MAX) {
         dts_sys = (int64_t)upipe_x264->input_pts_sys +
             ((int64_t)dts - (int64_t)upipe_x264->input_pts) *
