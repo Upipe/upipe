@@ -757,9 +757,9 @@ static void upipe_x264_input(struct upipe *upipe, struct uref *uref,
 
     /* rebase to dts as we're in encoded domain now */
     uint64_t dts = UINT64_MAX;
-    if (!ubase_check(uref_clock_get_dts_prog(uref, &dts)) ||
-        (upipe_x264->last_dts != UINT64_MAX &&
-               dts < upipe_x264->last_dts)) {
+    if ((!ubase_check(uref_clock_get_dts_prog(uref, &dts)) ||
+         dts < upipe_x264->last_dts) &&
+        upipe_x264->last_dts != UINT64_MAX) {
         upipe_warn_va(upipe, "DTS prog in the past, resetting (%"PRIu64" ms)",
                       (upipe_x264->last_dts - dts) * 1000 / UCLOCK_FREQ);
         dts = upipe_x264->last_dts + 1;
