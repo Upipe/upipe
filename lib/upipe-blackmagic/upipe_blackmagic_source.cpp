@@ -592,20 +592,27 @@ void upipe_bmd_src_work(struct upipe *upipe, struct upump *upump)
 
         switch (type) {
             case UPIPE_BMD_SRC_PIC_NO_INPUT:
-                subpipe = upipe_bmd_src_output_to_upipe(
-                        upipe_bmd_src_to_pic_subpipe(upipe_bmd_src));
                 upipe_bmd_src_sync_lost(upipe);
-                break;
+                uref_free(uref);
+                continue;
             case UPIPE_BMD_SRC_PIC:
                 subpipe = upipe_bmd_src_output_to_upipe(
                         upipe_bmd_src_to_pic_subpipe(upipe_bmd_src));
                 upipe_bmd_src_sync_acquired(upipe);
                 break;
             case UPIPE_BMD_SRC_SOUND:
+                if (!upipe_bmd_src->acquired) {
+                    uref_free(uref);
+                    continue;
+                }
                 subpipe = upipe_bmd_src_output_to_upipe(
                         upipe_bmd_src_to_sound_subpipe(upipe_bmd_src));
                 break;
             case UPIPE_BMD_SRC_SUBPIC:
+                if (!upipe_bmd_src->acquired) {
+                    uref_free(uref);
+                    continue;
+                }
                 subpipe = upipe_bmd_src_output_to_upipe(
                         upipe_bmd_src_to_subpic_subpipe(upipe_bmd_src));
                 break;
