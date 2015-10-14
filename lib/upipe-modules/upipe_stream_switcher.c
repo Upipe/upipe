@@ -494,6 +494,7 @@ static bool upipe_stream_switcher_input_output(struct upipe *upipe,
                           pts_orig - super->pts_orig);
 
         /* the selected stream meet the waiting stream, switch */
+        upipe_dbg_va(upipe, "switch at %"PRIu64, pts_orig);
         upipe_stream_switcher_switch(super);
         /* drop */
     }
