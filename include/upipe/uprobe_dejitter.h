@@ -62,6 +62,9 @@ struct uprobe_dejitter {
     /** PLL drift rate */
     struct urational drift_rate;
 
+    /** cr_sys of the last debug print */
+    uint64_t last_print;
+
     /** structure exported to modules */
     struct uprobe uprobe;
 };

@@ -25,6 +25,14 @@
 
 /** @file
  * @short probe catching clock_ref and clock_ts events for dejittering
+ *
+ * This implementation uses a low-pass filter to filter out the sampling noise,
+ * and a phase-locked loop to catch up with the clock of the transmitter. We
+ * try to avoid changing the drift of the PLL too often, because in TS mux
+ * this will trigger PCR inaccuracies, so only five thresholds are allowed:
+ * -desperate, -standard, 0, +standard, and +desperate.
+ * The desperate modes are not compliant with ISO MPEG, but we have to use them
+ * in desperate situations.
  */
 
 #include <upipe/ubase.h>
@@ -48,12 +56,22 @@
 #define DEFAULT_INITIAL_DEVIATION (UCLOCK_FREQ / 150)
 /** max allowed jitter */
 #define MAX_JITTER (UCLOCK_FREQ / 10)
-/** max allowed positive offset without drifting with the PLL (5 ms) */
-#define MAX_OFFSET (UCLOCK_FREQ / 200)
-/** wanted positive offset before stopping the drift (2 ms) */
-#define WANTED_OFFSET (UCLOCK_FREQ / 500)
-/** max PLL drift (25 ppm) */
-#define PLL_MAX_DRIFT (UCLOCK_FREQ * 5 / 200000)
+/** additional drift to avoid bouncing from one rate to another (5 ms) */
+#define DRIFT_SLIDE (UCLOCK_FREQ / 200)
+/** threshold below which the PLL is set to desperate low (20 ms) */
+#define DRIFT_DESPERATE_LOW (-(int64_t)UCLOCK_FREQ / 50)
+/** threshold below which the PLL is set to standard low (0 ms) */
+#define DRIFT_STANDARD_LOW 0
+/** threshold above which the PLL is set to standard high (20 ms) */
+#define DRIFT_STANDARD_HIGH (UCLOCK_FREQ / 50)
+/** threshold above which the PLL is set to desperate high (100 ms) */
+#define DRIFT_DESPERATE_HIGH (UCLOCK_FREQ / 10)
+/** standard PLL drift (25 ppm - ISO compliant) */
+#define PLL_STANDARD (UCLOCK_FREQ * 5 / 200000)
+/** desperate PLL drift (1000 ppm - not compliant) */
+#define PLL_DESPERATE (UCLOCK_FREQ / 1000)
+/** debug print periodicity */
+#define PRINT_PERIODICITY (60 * UCLOCK_FREQ)
 
 /** @internal @This catches clock_ref events thrown by pipes.
  *
@@ -113,12 +131,8 @@ static int uprobe_dejitter_clock_ref(struct uprobe *uprobe, struct upipe *upipe,
     if (uprobe_dejitter->offset_count == 1) {
         uprobe_dejitter->last_cr_prog = cr_prog;
         uprobe_dejitter->last_cr_sys = cr_prog + wanted_offset;
-        uprobe_dejitter->drift_rate.den = UCLOCK_FREQ;
-        if (uprobe_dejitter->deviation > 1)
-            uprobe_dejitter->drift_rate.num = UCLOCK_FREQ - PLL_MAX_DRIFT;
-        else
-            uprobe_dejitter->drift_rate.num = UCLOCK_FREQ;
-        urational_simplify(&uprobe_dejitter->drift_rate);
+        uprobe_dejitter->drift_rate.num =
+            uprobe_dejitter->drift_rate.den = 1;
     }
 
     /* phase-locked loop */
@@ -127,6 +141,8 @@ static int uprobe_dejitter_clock_ref(struct uprobe *uprobe, struct upipe *upipe,
                            uprobe_dejitter->drift_rate.num /
                            uprobe_dejitter->drift_rate.den;
     int64_t real_offset = (int64_t)real_cr_sys - (int64_t)cr_prog;
+    int64_t error_offset = real_offset - wanted_offset;
+
     if (uprobe_dejitter->offset_count > 1) {
         uprobe_dejitter->last_cr_prog = cr_prog;
         uprobe_dejitter->last_cr_sys = real_cr_sys;
@@ -134,12 +150,31 @@ static int uprobe_dejitter_clock_ref(struct uprobe *uprobe, struct upipe *upipe,
         drift_rate.num = uprobe_dejitter->drift_rate.num * UCLOCK_FREQ /
                          uprobe_dejitter->drift_rate.den;
         drift_rate.den = UCLOCK_FREQ;
-        if (wanted_offset > real_offset)
-            drift_rate.num = UCLOCK_FREQ + PLL_MAX_DRIFT;
-        else if (real_offset - wanted_offset > MAX_OFFSET)
-            drift_rate.num = UCLOCK_FREQ - PLL_MAX_DRIFT;
-        else if (real_offset - wanted_offset <= WANTED_OFFSET ||
-                 drift_rate.num > UCLOCK_FREQ)
+
+        /* calculate thresholds for drift changes, with optional slide */
+        int64_t desperate_low = DRIFT_DESPERATE_LOW;
+        if (drift_rate.num > UCLOCK_FREQ + PLL_STANDARD)
+            desperate_low += DRIFT_SLIDE;
+        int64_t standard_low = DRIFT_STANDARD_LOW;
+        if (drift_rate.num > UCLOCK_FREQ)
+            standard_low += DRIFT_SLIDE;
+        int64_t standard_high = DRIFT_STANDARD_HIGH;
+        if (drift_rate.num < UCLOCK_FREQ)
+            standard_high -= DRIFT_SLIDE;
+        int64_t desperate_high = DRIFT_DESPERATE_HIGH;
+        if (drift_rate.num < UCLOCK_FREQ - PLL_STANDARD)
+            desperate_high -= DRIFT_SLIDE;
+
+        /* calculate wanted drift rate */
+        if (error_offset < desperate_low)
+            drift_rate.num = UCLOCK_FREQ + PLL_DESPERATE;
+        else if (error_offset < standard_low)
+            drift_rate.num = UCLOCK_FREQ + PLL_STANDARD;
+        else if (error_offset > desperate_high)
+            drift_rate.num = UCLOCK_FREQ - PLL_DESPERATE;
+        else if (error_offset > standard_high)
+            drift_rate.num = UCLOCK_FREQ - PLL_STANDARD;
+        else
             drift_rate.num = UCLOCK_FREQ;
         urational_simplify(&drift_rate);
 
@@ -152,10 +187,18 @@ static int uprobe_dejitter_clock_ref(struct uprobe *uprobe, struct upipe *upipe,
         uprobe_dejitter->drift_rate = drift_rate;
     }
 
+    if (cr_sys > uprobe_dejitter->last_print + PRINT_PERIODICITY) {
+        upipe_dbg_va(upipe,
+                "dejitter drift %f error %"PRId64" deviation %g",
+                (double)uprobe_dejitter->drift_rate.num /
+                uprobe_dejitter->drift_rate.den,
+                error_offset, uprobe_dejitter->deviation);
+        uprobe_dejitter->last_print = cr_sys;
+    }
+
     upipe_verbose_va(upipe,
-            "new ref offset %"PRId64" target %"PRId64" deviation %f",
-            real_offset, wanted_offset - real_offset,
-            uprobe_dejitter->deviation);
+            "new ref offset %"PRId64" error %"PRId64" deviation %g",
+            real_offset, error_offset, uprobe_dejitter->deviation);
     return UBASE_ERR_NONE;
 }
 
@@ -256,6 +299,7 @@ struct uprobe *uprobe_dejitter_init(struct uprobe_dejitter *uprobe_dejitter,
     assert(uprobe_dejitter != NULL);
     struct uprobe *uprobe = uprobe_dejitter_to_uprobe(uprobe_dejitter);
     uprobe_dejitter->drift_rate.num = uprobe_dejitter->drift_rate.den = 1;
+    uprobe_dejitter->last_print = 0;
     uprobe_dejitter_set(uprobe, enabled, deviation);
     uprobe_init(uprobe, uprobe_dejitter_throw, next);
     return uprobe;
