@@ -531,6 +531,11 @@ static void upipe_ts_encaps_input(struct upipe *upipe, struct uref *uref,
                  encaps->nb_urefs >= encaps->max_urefs * 2)) {
         upipe_warn(upipe, "too many queued packets, dropping");
         uref_free(uref);
+        /* Also drop the first packet because it may have an invalid date. */
+        upipe_ts_encaps_consume_uref(upipe);
+        encaps->au_size = 0;
+        encaps->need_ready = encaps->need_status = true;
+        upipe_ts_encaps_check_status(upipe);
         return;
     }
 
