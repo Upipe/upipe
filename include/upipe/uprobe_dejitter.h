@@ -42,8 +42,10 @@ extern "C" {
 /** @This is a super-set of the uprobe structure with additional local
  * members. */
 struct uprobe_dejitter {
-    /** number of references to average */
-    unsigned int divider;
+    /** number of offsets to average */
+    unsigned int offset_divider;
+    /** number of deviations to average */
+    unsigned int deviation_divider;
 
     /** number of references received for offset calculaton */
     unsigned int offset_count;
@@ -99,7 +101,7 @@ void uprobe_dejitter_clean(struct uprobe_dejitter *uprobe_dejitter);
 struct uprobe *uprobe_dejitter_alloc(struct uprobe *next, bool enabled,
                                      uint64_t deviation);
 
-/** @This sets a different divider. If set to 0, dejittering is disabled.
+/** @This sets the parameters of the dejittering.
  *
  * @param uprobe pointer to probe
  * @param enabled true if dejitter is enabled
