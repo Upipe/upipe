@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2014 OpenHeadend S.A.R.L.
+ * Copyright (C) 2014-2015 OpenHeadend S.A.R.L.
  *
  * Authors: Benjamin Cohen
  *
@@ -56,6 +56,8 @@
 #define EXPECTED_FLOW_DEF "pic."
 /** default pts tolerance (late packets) */
 #define DEFAULT_TOLERANCE (UCLOCK_FREQ / 25)
+/** maximum retention when there is no packet afterwards */
+#define MAX_RETENTION UCLOCK_FREQ
 
 /** @internal @This is the private context of a ts join pipe. */
 struct upipe_videocont {
@@ -507,7 +509,6 @@ static void upipe_videocont_input(struct upipe *upipe, struct uref *uref,
         struct upipe_videocont_sub *sub =
                upipe_videocont_sub_from_uchain(uchain_sub);
         ulist_delete_foreach(&sub->urefs, uchain, uchain_tmp) {
-            uint64_t pts = 0;
             struct uref *uref_uchain = uref_from_uchain(uchain);
             const char *def;
             if (ubase_check(uref_flow_get_def(uref_uchain, &def))) {
@@ -515,9 +516,11 @@ static void upipe_videocont_input(struct upipe *upipe, struct uref *uref,
                 upipe_videocont_sub_handle_flow_def(
                         upipe_videocont_sub_to_upipe(sub), uref_uchain);
             } else {
+                uint64_t pts = 0;
                 uref_clock_get_pts_sys(uref_uchain, &pts);
-                if (pts + upipe_videocont->latency <
-                        next_pts - upipe_videocont->tolerance) {
+                if ((!ulist_is_last(&sub->urefs, uchain) &&
+                     pts + upipe_videocont->latency < next_pts) ||
+                    pts + upipe_videocont->latency < next_pts - MAX_RETENTION) {
                     upipe_verbose_va(upipe, "(%d) deleted uref %p (%"PRIu64")",
                                      subs, uref_uchain, pts);
                     ulist_delete(uchain);
@@ -545,40 +548,37 @@ static void upipe_videocont_input(struct upipe *upipe, struct uref *uref,
     uref_clock_get_pts_sys(next_uref, &pts);
     upipe_videocont->last_pts = next_pts - upipe_videocont->tolerance;
 
-    if (pts + upipe_videocont->latency <
-            next_pts + upipe_videocont->tolerance) {
-        upipe_verbose_va(upipe, "attached ubuf %p (%"PRIu64") next %"PRIu64,
-                         next_uref->ubuf, pts, next_pts);
-        uref_attach_ubuf(uref, ubuf_dup(next_uref->ubuf));
-        if (likely(ubase_check(uref_pic_get_progressive(next_uref)))) {
-            uref_pic_set_progressive(uref);
-        } else {
-            uref_pic_delete_progressive(uref);
-        }
-        if (likely(ubase_check(uref_pic_get_tf(next_uref)))) {
-            uref_pic_set_tf(uref);
-        } else {
-            uref_pic_delete_tf(uref);
-        }
-        if (likely(ubase_check(uref_pic_get_bf(next_uref)))) {
-            uref_pic_set_bf(uref);
-        } else {
-            uref_pic_delete_bf(uref);
-        }
-        if (likely(ubase_check(uref_pic_get_tff(next_uref)))) {
-            uref_pic_set_tff(uref);
-        } else {
-            uref_pic_delete_tff(uref);
-        }
-        if (upipe_videocont->last_uref == next_uref) {
-            upipe_warn_va(upipe, "reusing the same picture %"PRIu64" %"PRIu64,
-                      pts + upipe_videocont->latency, next_pts + upipe_videocont->tolerance);
-        }
-        upipe_videocont->last_uref = next_uref;
-        sub_attached = true;
-        next_uref = NULL;
-        /* do NOT pop/free from list so that we can dup frame if needed */
+    upipe_verbose_va(upipe, "attached ubuf %p (%"PRIu64") next %"PRIu64,
+                     next_uref->ubuf, pts, next_pts);
+    uref_attach_ubuf(uref, ubuf_dup(next_uref->ubuf));
+    if (likely(ubase_check(uref_pic_get_progressive(next_uref)))) {
+        uref_pic_set_progressive(uref);
+    } else {
+        uref_pic_delete_progressive(uref);
     }
+    if (likely(ubase_check(uref_pic_get_tf(next_uref)))) {
+        uref_pic_set_tf(uref);
+    } else {
+        uref_pic_delete_tf(uref);
+    }
+    if (likely(ubase_check(uref_pic_get_bf(next_uref)))) {
+        uref_pic_set_bf(uref);
+    } else {
+        uref_pic_delete_bf(uref);
+    }
+    if (likely(ubase_check(uref_pic_get_tff(next_uref)))) {
+        uref_pic_set_tff(uref);
+    } else {
+        uref_pic_delete_tff(uref);
+    }
+    if (upipe_videocont->last_uref == next_uref) {
+        upipe_warn_va(upipe, "reusing the same picture %"PRIu64" %"PRIu64,
+                  pts + upipe_videocont->latency, next_pts + upipe_videocont->tolerance);
+    }
+    upipe_videocont->last_uref = next_uref;
+    sub_attached = true;
+    next_uref = NULL;
+    /* do NOT pop/free from list so that we can dup frame if needed */
 
 output:
     if (unlikely(!upipe_videocont->flow_def_uptodate
