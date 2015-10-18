@@ -796,15 +796,14 @@ static void upipe_x264_input(struct upipe *upipe, struct uref *uref,
 
 #ifdef HAVE_X264_OBE
     /* speedcontrol */
-    if (ubase_check(uref_clock_get_dts_sys(uref, &dts))) {
-        if (upipe_x264->uclock != NULL && upipe_x264->sc_latency) {
-            uint64_t systime = uclock_now(upipe_x264->uclock);
-            int64_t buffer_state = dts_sys + upipe_x264->initial_latency +
-                                   upipe_x264->sc_latency - systime;
-            float buffer_fill = (float)buffer_state /
-                                (float)upipe_x264->sc_latency;
-            x264_speedcontrol_sync(upipe_x264->encoder, buffer_fill, 0, 1 );
-        }
+    if (dts_sys != UINT64_MAX && upipe_x264->uclock != NULL &&
+        upipe_x264->sc_latency) {
+        uint64_t systime = uclock_now(upipe_x264->uclock);
+        int64_t buffer_state = dts_sys + upipe_x264->initial_latency +
+                               upipe_x264->sc_latency - systime;
+        float buffer_fill = (float)buffer_state /
+                            (float)upipe_x264->sc_latency;
+        x264_speedcontrol_sync(upipe_x264->encoder, buffer_fill, 0, 1);
     }
 #endif
 
