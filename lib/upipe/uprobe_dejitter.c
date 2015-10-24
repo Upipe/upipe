@@ -228,11 +228,11 @@ static int uprobe_dejitter_clock_ts(struct uprobe *uprobe, struct upipe *upipe,
     if (type == UREF_DATE_NONE)
         return UBASE_ERR_INVALID;
 
-    uref_clock_set_date_sys(uref,
-            uprobe_dejitter->last_cr_sys +
-            (date - uprobe_dejitter->last_cr_prog) *
-            uprobe_dejitter->drift_rate.num / uprobe_dejitter->drift_rate.den,
-            type);
+    uint64_t date_sys = (int64_t)uprobe_dejitter->last_cr_sys +
+        ((int64_t)date - (int64_t)uprobe_dejitter->last_cr_prog) *
+        uprobe_dejitter->drift_rate.num /
+        (int64_t)uprobe_dejitter->drift_rate.den;
+    uref_clock_set_date_sys(uref, date_sys, type);
     uref_clock_set_rate(uref, uprobe_dejitter->drift_rate);
     return UBASE_ERR_NONE;
 }
