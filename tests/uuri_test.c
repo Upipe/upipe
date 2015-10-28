@@ -236,6 +236,8 @@ static void test_uri(void)
             "http://upipe.org:8080/index.html",
             "http://Meuuh@upipe.org:8080/index.html",
             "http://Meuuh@upipe.org:8080/index.html?query=toto#fragment",
+            "http://Meuuh@upipe.org:8080/index.html?query=toto%25tutu#fragment",
+            "http://Meuuh@upipe.org:8080/index.html?query=toto%25tutu#frag%25ment",
             "http://127.0.0.1/index.html",
             "file:///home/user/file.ext",
             "file:/home/",
