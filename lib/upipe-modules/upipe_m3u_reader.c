@@ -668,6 +668,8 @@ static void upipe_m3u_reader_output_all(struct upipe *upipe,
         return;
     }
 
+    /* force new flow def */
+    upipe_m3u_reader_store_flow_def(upipe, NULL);
     /* set output flow def */
     upipe_m3u_reader_store_flow_def(upipe, flow_def);
 
