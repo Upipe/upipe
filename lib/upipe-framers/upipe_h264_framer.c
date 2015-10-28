@@ -673,9 +673,11 @@ static void upipe_h264f_handle_pps(struct upipe *upipe)
         return;
     }
 
-    if (upipe_h264f->active_pps == pps_id &&
-        !ubase_check(ubuf_block_equal(upipe_h264f->pps[pps_id], ubuf)))
+    if (upipe_h264f->active_sps == -1 ||
+        (upipe_h264f->active_pps == pps_id &&
+         !ubase_check(ubuf_block_equal(upipe_h264f->pps[pps_id], ubuf)))) {
         upipe_h264f->active_pps = -1;
+    }
 
     if (upipe_h264f->pps[pps_id] != NULL)
         ubuf_free(upipe_h264f->pps[pps_id]);
