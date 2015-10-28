@@ -254,6 +254,8 @@ struct upipe_auto_src {
     struct upipe *output;
     /** inner source pipe */
     struct upipe *src;
+    /** output size */
+    unsigned int output_size;
 };
 
 UBASE_FROM_TO(upipe_auto_src, uprobe, proxy_probe, proxy_probe);
@@ -308,6 +310,7 @@ static struct upipe *upipe_auto_src_alloc(struct upipe_mgr *mgr,
                 upipe_auto_src_proxy_probe, NULL);
     upipe_auto_src->proxy_probe.refcount =
         upipe_auto_src_to_urefcount_real(upipe_auto_src);
+    upipe_auto_src->output_size = 0;
 
     upipe_throw_ready(upipe);
 
@@ -390,6 +393,13 @@ static int upipe_auto_src_set_uri_scheme(struct upipe *upipe,
             return UBASE_ERR_ALLOC;
         }
 
+        if (upipe_auto_src->output_size) {
+            int ret = upipe_set_output_size(upipe_auto_src->src,
+                                            upipe_auto_src->output_size);
+            if (!ubase_check(ret))
+                upipe_warn(upipe, "fail to set source output size");
+        }
+
         if (upipe_auto_src->output) {
             int ret = upipe_set_output(upipe_auto_src->src,
                                        upipe_auto_src->output);
@@ -453,6 +463,31 @@ static int upipe_auto_src_get_output(struct upipe *upipe,
     return UBASE_ERR_NONE;
 }
 
+static int upipe_auto_src_set_output_size(struct upipe *upipe,
+                                          unsigned int output_size)
+{
+    struct upipe_auto_src *upipe_auto_src = upipe_auto_src_from_upipe(upipe);
+    upipe_auto_src->output_size = output_size;
+    if (upipe_auto_src->src)
+        return upipe_set_output_size(upipe_auto_src->src, output_size);
+    return UBASE_ERR_NONE;
+}
+
+static int upipe_auto_src_get_output_size(struct upipe *upipe,
+                                          unsigned int *output_size_p)
+{
+    struct upipe_auto_src *upipe_auto_src = upipe_auto_src_from_upipe(upipe);
+    if (likely(output_size_p)) {
+        if (upipe_auto_src->output_size)
+            *output_size_p = upipe_auto_src->output_size;
+        else if (upipe_auto_src->src)
+            return upipe_get_output_size(upipe_auto_src->src, output_size_p);
+        else
+            return UBASE_ERR_INVALID;
+    }
+    return UBASE_ERR_NONE;
+}
+
 /** @internal @This dispatches auto source pipe commands.
  *
  * @param upipe description structure of the pipe
@@ -479,6 +514,15 @@ static int upipe_auto_src_control(struct upipe *upipe,
     case UPIPE_GET_OUTPUT: {
         struct upipe **output_p = va_arg(args, struct upipe **);
         return upipe_auto_src_get_output(upipe, output_p);
+    }
+
+    case UPIPE_SET_OUTPUT_SIZE: {
+        unsigned int output_size = va_arg(args, unsigned int);
+        return upipe_auto_src_set_output_size(upipe, output_size);
+    }
+    case UPIPE_GET_OUTPUT_SIZE: {
+        unsigned int *output_size_p = va_arg(args, unsigned int *);
+        return upipe_auto_src_get_output_size(upipe, output_size_p);
     }
     }
 
