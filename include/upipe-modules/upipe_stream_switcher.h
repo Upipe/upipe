@@ -37,7 +37,7 @@ extern "C" {
 
 /** @This extends uprobe_event with specific events for stream switcher
  * input. */
-enum upipe_stream_switcher_sub_event {
+enum uprobe_stream_switcher_sub_event {
     UPROBE_STREAM_SWITCHER_SUB_SENTINEL = UPROBE_LOCAL,
 
     /** stream is sync */
@@ -50,9 +50,9 @@ enum upipe_stream_switcher_sub_event {
     UPROBE_STREAM_SWITCHER_SUB_DESTROY,
 };
 
-static inline const char *upipe_stream_switcher_sub_event_str(int event)
+static inline const char *uprobe_stream_switcher_sub_event_str(int event)
 {
-    switch ((enum upipe_stream_switcher_sub_event)event) {
+    switch ((enum uprobe_stream_switcher_sub_event)event) {
     UBASE_CASE_TO_STR(UPROBE_STREAM_SWITCHER_SUB_SYNC);
     UBASE_CASE_TO_STR(UPROBE_STREAM_SWITCHER_SUB_ENTERING);
     UBASE_CASE_TO_STR(UPROBE_STREAM_SWITCHER_SUB_LEAVING);

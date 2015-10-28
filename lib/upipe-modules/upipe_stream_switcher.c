@@ -535,7 +535,7 @@ static void upipe_stream_switcher_init_sub_mgr(struct upipe *upipe)
 
     memset(sub_mgr, 0, sizeof (*sub_mgr));
     sub_mgr->signature = UPIPE_STREAM_SWITCHER_SUB_SIGNATURE;
-    sub_mgr->upipe_event_str = upipe_stream_switcher_sub_event_str;
+    sub_mgr->upipe_event_str = uprobe_stream_switcher_sub_event_str;
     sub_mgr->upipe_alloc = upipe_stream_switcher_input_alloc;
     sub_mgr->upipe_control = upipe_stream_switcher_input_control;
     sub_mgr->upipe_input = upipe_stream_switcher_input_input;
