@@ -39,7 +39,7 @@ extern "C" {
 #define UPIPE_HTTP_SRC_SIGNATURE UBASE_FOURCC('h','t','t','p')
 
 /** @This extends uprobe_event with specific events for http source. */
-enum upipe_http_src_event {
+enum uprobe_http_src_event {
     UPROBE_HTTP_SRC_SENTINEL = UPROBE_LOCAL,
 
     /** request receive a redirect (302) response
@@ -47,14 +47,14 @@ enum upipe_http_src_event {
     UPROBE_HTTP_SRC_REDIRECT,
 };
 
-/** @This converts an enum upipe_http_src_event to a string.
+/** @This converts an enum uprobe_http_src_event to a string.
  *
  * @param event the enum to convert
  * @return a string
  */
-static inline const char *upipe_http_src_event_str(int event)
+static inline const char *uprobe_http_src_event_str(int event)
 {
-    switch ((enum upipe_http_src_event)event) {
+    switch ((enum uprobe_http_src_event)event) {
     UBASE_CASE_TO_STR(UPROBE_HTTP_SRC_REDIRECT);
     case UPROBE_HTTP_SRC_SENTINEL: break;
     }
