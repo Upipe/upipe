@@ -92,6 +92,8 @@ struct upipe_m3u_reader {
 
     /** pipe acting as output */
     struct upipe *output;
+    /** temporary flow format */
+    struct uref *current_flow_def;
     /** output flow definition */
     struct uref *output_flow_def;
     /** output state */
@@ -151,6 +153,7 @@ static struct upipe *upipe_m3u_reader_alloc(struct upipe_mgr *mgr,
     struct upipe_m3u_reader *upipe_m3u_reader =
         upipe_m3u_reader_from_upipe(upipe);
     ulist_init(&upipe_m3u_reader->items);
+    upipe_m3u_reader->current_flow_def = NULL;
     upipe_m3u_reader->flow_def = NULL;
     upipe_m3u_reader->item = NULL;
     upipe_m3u_reader->restart = false;
@@ -168,6 +171,7 @@ static void upipe_m3u_reader_flush(struct upipe *upipe)
     struct upipe_m3u_reader *upipe_m3u_reader =
         upipe_m3u_reader_from_upipe(upipe);
 
+    uref_free(upipe_m3u_reader->current_flow_def);
     uref_free(upipe_m3u_reader->item);
     upipe_m3u_reader->item = NULL;
 
@@ -231,13 +235,11 @@ static int upipe_m3u_reader_get_item(struct upipe *upipe,
  * @param upipe description structure of the pipe
  * @param flow_def the current flow definition
  * @param line the trailing characters of the line
- * @param upump_p reference to pump that generated the buffer
  * @return an error code
  */
 static int upipe_m3u_reader_process_m3u(struct upipe *upipe,
                                         struct uref *flow_def,
-                                        const char *line,
-                                        struct upump **upump_p)
+                                        const char *line)
 {
     while (isspace(*line))
         line++;
@@ -260,13 +262,11 @@ static int upipe_m3u_reader_process_m3u(struct upipe *upipe,
  * @param upipe description structure of the pipe
  * @param flow_def the current flow definition
  * @param line the trailing characters of the line
- * @param upump_p reference to pump that generated the buffer
  * @return an error code
  */
 static int upipe_m3u_reader_process_version(struct upipe *upipe,
                                             struct uref *flow_def,
-                                            const char *line,
-                                            struct upump **upump_p)
+                                            const char *line)
 {
     UBASE_RETURN(uref_flow_match_def(flow_def, M3U_FLOW_DEF));
 
@@ -285,13 +285,11 @@ static int upipe_m3u_reader_process_version(struct upipe *upipe,
  * @param upipe description structure of the pipe
  * @param flow_def the current flow definition
  * @param line the trailing characters of the line
- * @param upump_p reference to pump that generated the buffer
  * @return an error code
  */
 static int upipe_m3u_reader_process_target_duration(struct upipe *upipe,
                                                     struct uref *flow_def,
-                                                    const char *line,
-                                                    struct upump **upump_p)
+                                                    const char *line)
 {
     const char *def;
     UBASE_RETURN(uref_flow_get_def(flow_def, &def));
@@ -315,13 +313,11 @@ static int upipe_m3u_reader_process_target_duration(struct upipe *upipe,
  * @param upipe description structure of the pipe
  * @param flow_def the current flow definition
  * @param line the trailing characters of the line
- * @param upump_p reference to pump that generated the buffer
  * @return an error code
  */
 static int upipe_m3u_reader_process_playlist_type(struct upipe *upipe,
                                                   struct uref *flow_def,
-                                                  const char *line,
-                                                  struct upump **upump_p)
+                                                  const char *line)
 {
     const char *def;
     UBASE_RETURN(uref_flow_get_def(flow_def, &def));
@@ -347,13 +343,11 @@ static int upipe_m3u_reader_process_playlist_type(struct upipe *upipe,
  * @param upipe description structure of the pipe
  * @param flow_def the current flow definition
  * @param line the trailing characters of the line
- * @param upump_p reference to pump that generated the buffer
  * @return an error code
  */
 static int upipe_m3u_reader_ext_x_media_sequence(struct upipe *upipe,
                                                  struct uref *flow_def,
-                                                 const char *line,
-                                                 struct upump **upump_p)
+                                                 const char *line)
 {
     const char *def;
     UBASE_RETURN(uref_flow_get_def(flow_def, &def));
@@ -376,13 +370,11 @@ static int upipe_m3u_reader_ext_x_media_sequence(struct upipe *upipe,
  * @param upipe description structure of the pipe
  * @param flow_def the current flow definition
  * @param line the trailing characters of the line
- * @param upump_p reference to pump that generated the buffer
  * @return an error code
  */
 static int upipe_m3u_reader_ext_x_endlist(struct upipe *upipe,
                                           struct uref *flow_def,
-                                          const char *line,
-                                          struct upump **upump_p)
+                                          const char *line)
 {
     const char *def;
     UBASE_RETURN(uref_flow_get_def(flow_def, &def));
@@ -399,13 +391,11 @@ static int upipe_m3u_reader_ext_x_endlist(struct upipe *upipe,
  * @param upipe description structure of the pipe
  * @param flow_def the current flow definition
  * @param line the trailing characters of the line
- * @param upump_p reference to pump that generated the buffer
  * @return an error code
  */
 static int upipe_m3u_reader_process_extinf(struct upipe *upipe,
                                            struct uref *flow_def,
-                                           const char *line,
-                                           struct upump **upump_p)
+                                           const char *line)
 {
     const char *def;
     struct uref *item;
@@ -477,13 +467,11 @@ static int stream_inf_set_codecs(struct uref *item,
  * @param upipe description structure of the pipe
  * @param flow_def the current flow definition
  * @param line the trailing characters of the line
- * @param upump_p reference to pump that generated the buffer
  * @return an error code
  */
 static int upipe_m3u_reader_ext_x_stream_inf(struct upipe *upipe,
                                              struct uref *flow_def,
-                                             const char *line,
-                                             struct upump **upump_p)
+                                             const char *line)
 {
     const char *def;
     struct uref *item;
@@ -502,13 +490,11 @@ static int upipe_m3u_reader_ext_x_stream_inf(struct upipe *upipe,
  * @param upipe description structure of the pipe
  * @param flow_def the current flow definition
  * @param line the trailing characters of the line
- * @param upump_p reference to pump that generated the buffer
  * @return an error code
  */
 static int upipe_m3u_reader_process_byte_range(struct upipe *upipe,
                                                struct uref *flow_def,
-                                               const char *line,
-                                               struct upump **upump_p)
+                                               const char *line)
 {
     const char *def;
     struct uref *item;
@@ -525,6 +511,7 @@ static int upipe_m3u_reader_process_byte_range(struct upipe *upipe,
         return UBASE_ERR_INVALID;
     }
 
+    upipe_verbose_va(upipe, "byte range length: %"PRIu64, byte_range_len);
     if (*endptr == '@') {
         line = endptr + 1;
         unsigned long long byte_range_off = strtoull(line, &endptr, 10);
@@ -533,6 +520,7 @@ static int upipe_m3u_reader_process_byte_range(struct upipe *upipe,
             return UBASE_ERR_INVALID;
         }
 
+        upipe_verbose_va(upipe, "byte range offset: %"PRIu64, byte_range_off);
         UBASE_RETURN(uref_m3u_playlist_set_byte_range_off(
                 item, byte_range_off));
     }
@@ -545,13 +533,11 @@ static int upipe_m3u_reader_process_byte_range(struct upipe *upipe,
  * @param upipe description structure of the pipe
  * @param flow_def the current flow definition
  * @param uri the uri
- * @param upump_p reference to pump that generated the buffer
  * @return an error code
  */
 static int upipe_m3u_reader_process_uri(struct upipe *upipe,
                                         struct uref *flow_def,
-                                        const char *uri,
-                                        struct upump **upump_p)
+                                        const char *uri)
 {
     struct upipe_m3u_reader *upipe_m3u_reader =
         upipe_m3u_reader_from_upipe(upipe);
@@ -571,17 +557,15 @@ static int upipe_m3u_reader_process_uri(struct upipe *upipe,
  * @param upipe description structure of the pipe
  * @param flow_def the current flow definition
  * @param uref pointer to uref carrying the line to parse
- * @param upump_p reference to pump that generated the buffer
  * @return an error code
  */
 static int upipe_m3u_reader_process_line(struct upipe *upipe,
                                          struct uref *flow_def,
-                                         struct uref *uref,
-                                         struct upump **upump_p)
+                                         struct uref *uref)
 {
     static const struct {
         const char *pfx;
-        int (*cb)(struct upipe *, struct uref *, const char *, struct upump **);
+        int (*cb)(struct upipe *, struct uref *, const char *);
     } ext_cb[] = {
         { "#EXTM3U", upipe_m3u_reader_process_m3u },
         { "#EXT-X-VERSION:", upipe_m3u_reader_process_version },
@@ -618,34 +602,32 @@ static int upipe_m3u_reader_process_line(struct upipe *upipe,
                 continue;
 
             return ext_cb[i].cb(upipe, flow_def,
-                                line + strlen(ext_cb[i].pfx),
-                                upump_p);
+                                line + strlen(ext_cb[i].pfx));
         }
         upipe_dbg_va(upipe, "ignore `%s'", line);
         return UBASE_ERR_NONE;
     }
 
-    return upipe_m3u_reader_process_uri(upipe, flow_def, line, upump_p);
+    return upipe_m3u_reader_process_uri(upipe, flow_def, line);
 }
 
 /** @internal @This parses and outputs a m3u file.
  *
  * @param upipe description structure of the pipe
- * @param upump_p reference to pump that generated the buffer
  * @return an error code
  */
-static void upipe_m3u_reader_process(struct upipe *upipe,
-                                     struct upump **upump_p)
+static void upipe_m3u_reader_process(struct upipe *upipe)
 {
     struct upipe_m3u_reader *upipe_m3u_reader =
         upipe_m3u_reader_from_upipe(upipe);
-    struct uref *flow_def = NULL;
 
-    if (upipe_m3u_reader->flow_def)
-        flow_def = uref_dup(upipe_m3u_reader->flow_def);
-    if (unlikely(flow_def == NULL)) {
-        upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
-        return;
+    if (unlikely(upipe_m3u_reader->current_flow_def == NULL)) {
+        upipe_m3u_reader->current_flow_def =
+            uref_dup(upipe_m3u_reader->flow_def);
+        if (unlikely(upipe_m3u_reader->current_flow_def == NULL)) {
+            upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
+            return;
+        }
     }
 
     /* parse m3u */
@@ -658,20 +640,37 @@ static void upipe_m3u_reader_process(struct upipe *upipe,
          offset = 0, uref = upipe_m3u_reader->next_uref) {
         struct uref *line =
             upipe_m3u_reader_extract_uref_stream(upipe, offset + 1);
-        ret = upipe_m3u_reader_process_line(upipe, flow_def,
-                                            line, upump_p);
+        ret = upipe_m3u_reader_process_line(
+            upipe, upipe_m3u_reader->current_flow_def, line);
         uref_free(line);
     }
 
-    if (!ubase_check(ret) ||
-        !ubase_check((ret = uref_flow_match_def(flow_def, M3U_FLOW_DEF)))) {
+    if (!ubase_check(ret))
+        upipe_err(upipe, "invalid m3u");
+}
+
+/** @internal @This outputs the m3u.
+ *
+ * @param upipe description structure of the pipe
+ * @param upump_p reference to source pump to block
+ */
+static void upipe_m3u_reader_output_all(struct upipe *upipe,
+                                        struct upump **upump_p)
+{
+    struct upipe_m3u_reader *upipe_m3u_reader =
+        upipe_m3u_reader_from_upipe(upipe);
+
+    struct uref *flow_def = upipe_m3u_reader->current_flow_def;
+    upipe_m3u_reader->current_flow_def = NULL;
+    if (unlikely(!ubase_check(uref_flow_match_def(flow_def, M3U_FLOW_DEF)))) {
         upipe_err(upipe, "invalid m3u");
         uref_free(flow_def);
         return;
     }
 
+    /* force new flow def */
+    upipe_m3u_reader_store_flow_def(upipe, NULL);
     /* set output flow def */
-    uref_uri_import(flow_def, upipe_m3u_reader->flow_def);
     upipe_m3u_reader_store_flow_def(upipe, flow_def);
 
     /* output */
@@ -711,9 +710,16 @@ static void upipe_m3u_reader_input(struct upipe *upipe, struct uref *uref,
         upipe_m3u_reader_flush(upipe);
         upipe_m3u_reader->restart = false;
     }
+
+    bool end = false;
+    if (unlikely(ubase_check(uref_block_get_end(uref))))
+        end = true;
+
     upipe_m3u_reader_append_uref_stream(upipe, uref);
-    if (ubase_check(uref_block_get_end(uref))) {
-        upipe_m3u_reader_process(upipe, upump_p);
+    upipe_m3u_reader_process(upipe);
+
+    if (unlikely(end)) {
+        upipe_m3u_reader_output_all(upipe, upump_p);
         upipe_m3u_reader->restart = true;
     }
 }
