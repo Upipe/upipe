@@ -1270,7 +1270,7 @@ struct upipe_mgr *upipe_http_src_mgr_alloc(void)
     memset(upipe_mgr, 0, sizeof (struct upipe_mgr));
     *upipe_mgr = (struct upipe_mgr) {
         .signature = UPIPE_HTTP_SRC_SIGNATURE,
-        .upipe_event_str = upipe_http_src_event_str,
+        .upipe_event_str = uprobe_http_src_event_str,
         .upipe_alloc = upipe_http_src_alloc,
         .upipe_control = upipe_http_src_control,
         .upipe_mgr_control = upipe_http_src_mgr_control,
