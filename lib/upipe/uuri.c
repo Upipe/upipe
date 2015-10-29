@@ -404,12 +404,22 @@ struct ustring uuri_parse_path(struct ustring *str)
 
 struct ustring uuri_parse_query(struct ustring *str)
 {
-    return ustring_split_while(str, uuri_query_set);
+    struct ustring tmp = *str;
+    while (!ustring_is_empty(ustring_split_while(&tmp, uuri_query_set)) ||
+           !ustring_is_empty(ustring_split_pct_encoded(&tmp)));
+    struct ustring query = ustring_truncate(*str, str->len - tmp.len);
+    *str = tmp;
+    return query;
 }
 
 struct ustring uuri_parse_fragment(struct ustring *str)
 {
-    return ustring_split_while(str, uuri_fragment_set);
+    struct ustring tmp = *str;
+    while (!ustring_is_empty(ustring_split_while(&tmp, uuri_fragment_set)) ||
+           !ustring_is_empty(ustring_split_pct_encoded(&tmp)));
+    struct ustring fragment = ustring_truncate(*str, str->len - tmp.len);
+    *str = tmp;
+    return fragment;
 }
 
 struct uuri uuri_parse(struct ustring *str)
