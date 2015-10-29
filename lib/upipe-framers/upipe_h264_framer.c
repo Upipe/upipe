@@ -1413,6 +1413,7 @@ static void upipe_h264f_output_au(struct upipe *upipe, struct upump **upump_p)
         return;
     if (upipe_h264f->au_slice_nal == UINT8_MAX ||
         upipe_h264f->active_sps == -1 || upipe_h264f->active_pps == -1) {
+        upipe_warn(upipe, "discarding data without SPS/PPS");
         upipe_h264f_consume_uref_stream(upipe, upipe_h264f->au_size);
         upipe_h264f->au_size = 0;
         upipe_h264f->au_vcl_offset = -1;
@@ -1710,6 +1711,7 @@ static void upipe_h264f_nal_end(struct upipe *upipe, struct upump **upump_p)
     struct upipe_h264f *upipe_h264f = upipe_h264f_from_upipe(upipe);
     if (unlikely(!upipe_h264f->acquired)) {
         /* we need to discard previous data */
+        upipe_warn(upipe, "discarding non-sync data");
         upipe_h264f_consume_uref_stream(upipe, upipe_h264f->au_size);
         upipe_h264f->au_size = 0;
         upipe_h264f_sync_acquired(upipe);
@@ -1724,10 +1726,11 @@ static void upipe_h264f_nal_end(struct upipe *upipe, struct upump **upump_p)
         last_nal_type == H264NAL_TYPE_PARTB ||
         last_nal_type == H264NAL_TYPE_PARTC ||
         last_nal_type == H264NAL_TYPE_IDR) {
-        if (unlikely(upipe_h264f->got_discontinuity))
+        if (unlikely(upipe_h264f->got_discontinuity)) {
+            upipe_warn(upipe, "outputting corrupt data");
             uref_flow_set_error(upipe_h264f->next_uref);
-        else
-            upipe_h264f_parse_slice(upipe, upump_p);
+        }
+        upipe_h264f_parse_slice(upipe, upump_p);
         if (last_nal_type == H264NAL_TYPE_IDR) {
             UBASE_FATAL(upipe, uref_flow_set_random(upipe_h264f->next_uref))
         }
@@ -1736,6 +1739,7 @@ static void upipe_h264f_nal_end(struct upipe *upipe, struct upump **upump_p)
 
     if (upipe_h264f->got_discontinuity) {
         /* discard the entire NAL */
+        upipe_warn(upipe, "discarding non-slice data due to discontinuity");
         upipe_h264f_consume_uref_stream(upipe, upipe_h264f->au_size);
         upipe_h264f->au_size = 0;
         return;

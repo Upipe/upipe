@@ -216,8 +216,10 @@ static void upipe_ts_sync_input(struct upipe *upipe, struct uref *uref,
                                 struct upump **upump_p)
 {
     struct upipe_ts_sync *upipe_ts_sync = upipe_ts_sync_from_upipe(upipe);
-    if (unlikely(ubase_check(uref_flow_get_discontinuity(uref))))
+    if (unlikely(ubase_check(uref_flow_get_discontinuity(uref)))) {
+        upipe_warn(upipe, "received discontinuity, flushing buffer");
         upipe_ts_sync_flush(upipe, upump_p);
+    }
 
     upipe_ts_sync_append_uref_stream(upipe, uref);
 
