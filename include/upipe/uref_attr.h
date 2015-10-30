@@ -55,6 +55,75 @@ static inline int uref_attr_import(struct uref *uref, struct uref *uref_attr)
     return udict_import(uref->udict, uref_attr->udict);
 }
 
+/** @This copies multiple attributes from an uref to another.
+ *
+ * @param uref pointer to the uref
+ * @param uref_src pointer to the source uref
+ * @param list array of copy function to apply
+ * @param list_size size of the array
+ * @return an error code
+ */
+static inline int uref_attr_copy_list(struct uref *uref, struct uref *uref_src,
+                                      int (*list[])(struct uref *uref,
+                                                    struct uref *uref_src),
+                                      size_t list_size)
+{
+    int err = UBASE_ERR_NONE;
+    for (size_t i = 0; ubase_check(err) && i < list_size; i++)
+        err = list[i](uref, uref_src);
+    return err;
+}
+
+/** @This deletes an attribute.
+ *
+ * @param uref pointer to the uref
+ * @param type type of the attribute (potentially a shorthand)
+ * @param name name of the attribute
+ * @return an error code
+ */
+static inline int uref_attr_delete(struct uref *uref, enum udict_type type,
+                                   const char *name)
+{
+    if (uref->udict == NULL)
+        return UBASE_ERR_INVALID;
+    return udict_delete(uref->udict, type, name);
+}
+
+/** @This deletes an attribute, with printf-style name generation.
+ *
+ * @param uref pointer to the uref
+ * @param type type of the attribute (potentially a shorthand)
+ * @param format printf-style format of the attribute, followed by a
+ * variable list of arguments
+ * @return an error code
+ */
+static inline int uref_attr_delete_va(struct uref *uref, enum udict_type type,
+                                      const char *format, ...)
+                   __attribute__ ((format(printf, 3, 4)));
+/** @hidden */
+static inline int uref_attr_delete_va(struct uref *uref, enum udict_type type,
+                                      const char *format, ...)
+{
+    UBASE_VARARG(uref_attr_delete(uref, type, string))
+}
+
+/** @This deletes multiple attributes.
+ *
+ * @param uref pointer to the uref
+ * @param list array of delete function to apply
+ * @param list_size size of the array
+ * @return an error code
+ */
+static inline int uref_attr_delete_list(struct uref *uref,
+                                        int (*list[])(struct uref *uref),
+                                        size_t list_size)
+{
+    int err = UBASE_ERR_NONE;
+    for (size_t i = 0; ubase_check(err) && i < list_size; i++)
+        err = list[i](uref);
+    return err;
+}
+
 #define UREF_ATTR_TEMPLATE(utype, ctype)                                    \
 /** @This returns the value of a utype attribute.                           \
  *                                                                          \
@@ -118,6 +187,43 @@ static inline int uref_attr_set_##utype##_va(struct uref *uref,             \
         ctype v, enum udict_type type, const char *format, ...)             \
 {                                                                           \
     UBASE_VARARG(uref_attr_set_##utype(uref, v, type, string))              \
+}                                                                           \
+/** @This copies the desc attribute from an uref to another.                \
+ *                                                                          \
+ * @param uref pointer to the uref                                          \
+ * @param uref_src pointer to the source uref                               \
+ * @param type type of the attribute (potentially a shorthand)              \
+ * @param name name of the attribute                                        \
+ * @return an error code                                                    \
+ */                                                                         \
+static inline int uref_attr_copy_##utype(struct uref *uref,                 \
+                                           struct uref *uref_src,           \
+                                           enum udict_type type,            \
+                                           const char *name)                \
+{                                                                           \
+    uref_attr_delete(uref, type, name);                                     \
+    ctype v;                                                                \
+    int err = uref_attr_get_##utype(uref_src, &v, type, name);              \
+    if (ubase_check(err))                                                   \
+        return uref_attr_set_##utype(uref, v, type, name);                  \
+    return UBASE_ERR_NONE;                                                  \
+}                                                                           \
+/** @This copies the desc attribute of an uref to another, with             \
+ * printf-style name generation.                                            \
+ *                                                                          \
+ * @param uref pointer to the uref                                          \
+ * @param uref_src pointer to the source uref                               \
+ * @param type type of the attribute (potentially a shorthand)              \
+ * @param format printf-style format of the attribute, followed by a        \
+ * variable list of arguments                                               \
+ * @return an error code                                                    \
+ */                                                                         \
+static inline int uref_attr_copy_##utype##_va(struct uref *uref,            \
+                                                struct uref *uref_src,      \
+                                                enum udict_type type,       \
+                                                const char *format, ...)    \
+{                                                                           \
+    UBASE_VARARG(uref_attr_copy_##utype(uref, uref_src, type, string))      \
 }
 
 UREF_ATTR_TEMPLATE(opaque, struct udict_opaque)
@@ -131,39 +237,6 @@ UREF_ATTR_TEMPLATE(int, int64_t)
 UREF_ATTR_TEMPLATE(float, double)
 UREF_ATTR_TEMPLATE(rational, struct urational)
 #undef UREF_ATTR_TEMPLATE
-
-/** @This deletes an attribute.
- *
- * @param uref pointer to the uref
- * @param type type of the attribute (potentially a shorthand)
- * @param name name of the attribute
- * @return an error code
- */
-static inline int uref_attr_delete(struct uref *uref, enum udict_type type,
-                                   const char *name)
-{
-    if (uref->udict == NULL)
-        return UBASE_ERR_INVALID;
-    return udict_delete(uref->udict, type, name);
-}
-
-/** @This deletes an attribute, with printf-style name generation.
- *
- * @param uref pointer to the uref
- * @param type type of the attribute (potentially a shorthand)
- * @param format printf-style format of the attribute, followed by a
- * variable list of arguments
- * @return an error code
- */
-static inline int uref_attr_delete_va(struct uref *uref, enum udict_type type,
-                                      const char *format, ...)
-                   __attribute__ ((format(printf, 3, 4)));
-/** @hidden */
-static inline int uref_attr_delete_va(struct uref *uref, enum udict_type type,
-                                      const char *format, ...)
-{
-    UBASE_VARARG(uref_attr_delete(uref, type, string))
-}
 
 /*
  * Opaque attributes
@@ -217,6 +290,18 @@ static inline int uref_##group##_set_##attr(struct uref *uref,              \
 static inline int uref_##group##_delete_##attr(struct uref *uref)           \
 {                                                                           \
     return uref_attr_delete(uref, UDICT_TYPE_OPAQUE, name);                 \
+}                                                                           \
+/** @This copies the desc attribute from an uref to another.                \
+ *                                                                          \
+ * @param uref pointer to the uref                                          \
+ * @param uref_src pointer to the source uref                               \
+ * @return an error code                                                    \
+ */                                                                         \
+static inline int uref_##group##_copy_##attr(struct uref *uref,             \
+                                             struct uref *uref_src)         \
+{                                                                           \
+    return uref_attr_copy_opaque(uref, uref_src,                            \
+                                 UDICT_TYPE_OPAQUE, name);                  \
 }
 
 /* @This allows to define accessors for a shorthand opaque attribute.
@@ -267,6 +352,17 @@ static inline int uref_##group##_set_##attr(struct uref *uref,              \
 static inline int uref_##group##_delete_##attr(struct uref *uref)           \
 {                                                                           \
     return uref_attr_delete(uref, type, NULL);                              \
+}                                                                           \
+/** @This copies the desc attribute from an uref to another.                \
+ *                                                                          \
+ * @param uref pointer to the uref                                          \
+ * @param uref_src pointer to the source uref                               \
+ * @return an error code                                                    \
+ */                                                                         \
+static inline int uref_##group##_copy_##attr(struct uref *uref,             \
+                                             struct uref *uref_src)         \
+{                                                                           \
+    return uref_attr_copy_opaque(uref, uref_src, type, NULL);               \
 }
 
 /* @This allows to define accessors for a opaque attribute, with a name
@@ -321,6 +417,19 @@ static inline int uref_##group##_set_##attr(struct uref *uref,              \
 static inline int uref_##group##_delete_##attr(struct uref *uref, args_decl)\
 {                                                                           \
     return uref_attr_delete_va(uref, UDICT_TYPE_OPAQUE, format, args);      \
+}                                                                           \
+/** @This copies the desc attribute from an uref to another.                \
+ *                                                                          \
+ * @param uref pointer to the uref                                          \
+ * @param uref_src pointer to the source uref                               \
+ * @return an error code                                                    \
+ */                                                                         \
+static inline int uref_##group##_copy_##attr(struct uref *uref,             \
+                                             struct uref *uref_src,         \
+                                             args_decl)                     \
+{                                                                           \
+    return uref_attr_copy_opaque_va(uref, uref_src, UDICT_TYPE_OPAQUE,      \
+                                    format, args);                          \
 }
 
 
@@ -366,6 +475,17 @@ static inline int uref_##group##_set_##attr(struct uref *uref,              \
 static inline int uref_##group##_delete_##attr(struct uref *uref)           \
 {                                                                           \
     return uref_attr_delete(uref, UDICT_TYPE_STRING, name);                 \
+}                                                                           \
+/** @This copies the desc attribute from an uref to another.                \
+ *                                                                          \
+ * @param uref pointer to the uref                                          \
+ * @param uref_src pointer to the source uref                               \
+ * @return an error code                                                    \
+ */                                                                         \
+static inline int uref_##group##_copy_##attr(struct uref *uref,             \
+                                             struct uref *uref_src)         \
+{                                                                           \
+    return uref_attr_copy_string(uref, uref_src, UDICT_TYPE_STRING, name);  \
 }                                                                           \
 /** @This compares the desc attribute to a given prefix.                    \
  *                                                                          \
@@ -437,6 +557,17 @@ static inline int uref_##group##_set_##attr(struct uref *uref,              \
 static inline int uref_##group##_delete_##attr(struct uref *uref)           \
 {                                                                           \
     return uref_attr_delete(uref, type, NULL);                              \
+}                                                                           \
+/** @This copies the desc attribute from an uref to another.                \
+ *                                                                          \
+ * @param uref pointer to the uref                                          \
+ * @param uref_src pointer to the source uref                               \
+ * @return an error code                                                    \
+ */                                                                         \
+static inline int uref_##group##_copy_##attr(struct uref *uref,             \
+                                             struct uref *uref_src)         \
+{                                                                           \
+    return uref_attr_copy_string(uref, uref_src, type, NULL);               \
 }                                                                           \
 /** @This compares the desc attribute to a given prefix.                    \
  *                                                                          \
@@ -513,6 +644,19 @@ static inline int uref_##group##_delete_##attr(struct uref *uref,           \
 {                                                                           \
     return uref_attr_delete_va(uref, UDICT_TYPE_STRING, format, args);      \
 }                                                                           \
+/** @This copies the desc attribute from an uref to another.                \
+ *                                                                          \
+ * @param uref pointer to the uref                                          \
+ * @param uref_src pointer to the source uref                               \
+ * @return an error code                                                    \
+ */                                                                         \
+static inline int uref_##group##_copy_##attr(struct uref *uref,             \
+                                             struct uref *uref_src,         \
+                                             args_decl)                     \
+{                                                                           \
+    return uref_attr_copy_string_va(uref, uref_src, UDICT_TYPE_STRING,      \
+                                    format, args);                          \
+}                                                                           \
 /** @This compares the desc attribute to a given prefix.                    \
  *                                                                          \
  * @param uref pointer to the uref                                          \
@@ -585,6 +729,17 @@ static inline int uref_##group##_delete_##attr(struct uref *uref)           \
 {                                                                           \
     return uref_attr_delete(uref, UDICT_TYPE_VOID, name);                   \
 }                                                                           \
+/** @This copies the desc attribute from an uref to another.                \
+ *                                                                          \
+ * @param uref pointer to the uref                                          \
+ * @param uref_src pointer to the source uref                               \
+ * @return an error code                                                    \
+ */                                                                         \
+static inline int uref_##group##_copy_##attr(struct uref *uref,             \
+                                             struct uref *uref_src)         \
+{                                                                           \
+    return uref_attr_copy_void(uref, uref_src, UDICT_TYPE_VOID, name);      \
+}                                                                           \
 /** @This compares the desc attribute in two urefs.                         \
  *                                                                          \
  * @param uref1 pointer to the first uref                                   \
@@ -637,6 +792,17 @@ static inline int uref_##group##_set_##attr(struct uref *uref)              \
 static inline int uref_##group##_delete_##attr(struct uref *uref)           \
 {                                                                           \
     return uref_attr_delete(uref, type, NULL);                              \
+}                                                                           \
+/** @This copies the desc attribute from an uref to another.                \
+ *                                                                          \
+ * @param uref pointer to the uref                                          \
+ * @param uref_src pointer to the source uref                               \
+ * @return an error code                                                    \
+ */                                                                         \
+static inline int uref_##group##_copy_##attr(struct uref *uref,             \
+                                             struct uref *uref_src)         \
+{                                                                           \
+    return uref_attr_copy_void(uref, uref_src, type, NULL);                 \
 }                                                                           \
 /** @This compares the desc attribute in two urefs.                         \
  *                                                                          \
@@ -694,6 +860,19 @@ static inline int uref_##group##_delete_##attr(struct uref *uref, args_decl)\
 {                                                                           \
     return uref_attr_delete_va(uref, UDICT_TYPE_VOID, format, args);        \
 }                                                                           \
+/** @This copies the desc attribute from an uref to another.                \
+ *                                                                          \
+ * @param uref pointer to the uref                                          \
+ * @param uref_src pointer to the source uref                               \
+ * @return an error code                                                    \
+ */                                                                         \
+static inline int uref_##group##_copy_##attr(struct uref *uref,             \
+                                             struct uref *uref_src,         \
+                                             args_decl)                     \
+{                                                                           \
+    return uref_attr_copy_void_va(uref, uref_src, UDICT_TYPE_VOID,          \
+                                  format, args);                            \
+}                                                                           \
 /** @This compares the desc attribute in two urefs.                         \
  *                                                                          \
  * @param uref1 pointer to the first uref                                   \
@@ -745,6 +924,19 @@ static inline void uref_##group##_set_##attr(struct uref *uref)             \
 static inline void uref_##group##_delete_##attr(struct uref *uref)          \
 {                                                                           \
     uref->flags &= ~(uint64_t)flag;                                         \
+}                                                                           \
+/** @This copies the desc attribute from an uref to another.                \
+ *                                                                          \
+ * @param uref pointer to the uref                                          \
+ * @param uref_src pointer to the source uref                               \
+ * @return an error code                                                    \
+ */                                                                         \
+static inline void uref_##group##_copy_##attr(struct uref *uref,            \
+                                              struct uref *uref_src)        \
+{                                                                           \
+    uref_##group##_delete_##attr(uref);                                     \
+    if (ubase_check(uref_##group##_get_##attr(uref_src)))                   \
+        uref_##group##_set_##attr(uref);                                    \
 }
 
 
@@ -790,6 +982,18 @@ static inline int uref_##group##_set_##attr(struct uref *uref, uint8_t v)   \
 static inline int uref_##group##_delete_##attr(struct uref *uref)           \
 {                                                                           \
     return uref_attr_delete(uref, UDICT_TYPE_SMALL_UNSIGNED, name);         \
+}                                                                           \
+/** @This copies the desc attribute from an uref to another.                \
+ *                                                                          \
+ * @param uref pointer to the uref                                          \
+ * @param uref_src pointer to the source uref                               \
+ * @return an error code                                                    \
+ */                                                                         \
+static inline int uref_##group##_copy_##attr(struct uref *uref,             \
+                                             struct uref *uref_src)         \
+{                                                                           \
+    return uref_attr_copy_small_unsigned(uref, uref_src,                    \
+                                         UDICT_TYPE_SMALL_UNSIGNED, name);  \
 }                                                                           \
 /** @This compares the desc attribute to given values.                      \
  *                                                                          \
@@ -860,6 +1064,17 @@ static inline int uref_##group##_set_##attr(struct uref *uref, uint8_t v)   \
 static inline int uref_##group##_delete_##attr(struct uref *uref)           \
 {                                                                           \
     return uref_attr_delete(uref, type, NULL);                              \
+}                                                                           \
+/** @This copies the desc attribute from an uref to another.                \
+ *                                                                          \
+ * @param uref pointer to the uref                                          \
+ * @param uref_src pointer to the source uref                               \
+ * @return an error code                                                    \
+ */                                                                         \
+static inline int uref_##group##_copy_##attr(struct uref *uref,             \
+                                             struct uref *uref_src)         \
+{                                                                           \
+    return uref_attr_copy_small_unsigned(uref, uref_src, type, NULL);       \
 }                                                                           \
 /** @This compares the desc attribute to given values.                      \
  *                                                                          \
@@ -941,6 +1156,20 @@ static inline int uref_##group##_delete_##attr(struct uref *uref, args_decl)\
     return uref_attr_delete_va(uref, UDICT_TYPE_SMALL_UNSIGNED,             \
                                format, args);                               \
 }                                                                           \
+/** @This copies the desc attribute from an uref to another.                \
+ *                                                                          \
+ * @param uref pointer to the uref                                          \
+ * @param uref_src pointer to the source uref                               \
+ * @return an error code                                                    \
+ */                                                                         \
+static inline int uref_##group##_copy_##attr(struct uref *uref,             \
+                                             struct uref *uref_src,         \
+                                             args_decl)                     \
+{                                                                           \
+    return uref_attr_copy_small_unsigned_va(uref, uref_src,                 \
+                                            UDICT_TYPE_SMALL_UNSIGNED,      \
+                                            format, args);                  \
+}                                                                           \
 /** @This compares the desc attribute to given values.                      \
  *                                                                          \
  * @param uref pointer to the uref                                          \
@@ -1016,6 +1245,18 @@ static inline int uref_##group##_delete_##attr(struct uref *uref)           \
 {                                                                           \
     return uref_attr_delete(uref, UDICT_TYPE_UNSIGNED, name);               \
 }                                                                           \
+/** @This copies the desc attribute from an uref to another.                \
+ *                                                                          \
+ * @param uref pointer to the uref                                          \
+ * @param uref_src pointer to the source uref                               \
+ * @return an error code                                                    \
+ */                                                                         \
+static inline int uref_##group##_copy_##attr(struct uref *uref,             \
+                                             struct uref *uref_src)         \
+{                                                                           \
+    return uref_attr_copy_unsigned(uref, uref_src, UDICT_TYPE_UNSIGNED,     \
+                                   name);                                   \
+}                                                                           \
 /** @This compares the desc attribute to given values.                      \
  *                                                                          \
  * @param uref pointer to the uref                                          \
@@ -1086,6 +1327,17 @@ static inline int uref_##group##_set_##attr(struct uref *uref, uint64_t v)  \
 static inline int uref_##group##_delete_##attr(struct uref *uref)           \
 {                                                                           \
     return uref_attr_delete(uref, type, NULL);                              \
+}                                                                           \
+/** @This copies the desc attribute from an uref to another.                \
+ *                                                                          \
+ * @param uref pointer to the uref                                          \
+ * @param uref_src pointer to the source uref                               \
+ * @return an error code                                                    \
+ */                                                                         \
+static inline int uref_##group##_copy_##attr(struct uref *uref,             \
+                                             struct uref *uref_src)         \
+{                                                                           \
+    return uref_attr_copy_unsigned(uref, uref_src, type, NULL);             \
 }                                                                           \
 /** @This compares the desc attribute to given values.                      \
  *                                                                          \
@@ -1163,6 +1415,19 @@ static inline int uref_##group##_delete_##attr(struct uref *uref, args_decl)\
 {                                                                           \
     return uref_attr_delete_va(uref, UDICT_TYPE_UNSIGNED, format, args);    \
 }                                                                           \
+/** @This copies the desc attribute from an uref to another.                \
+ *                                                                          \
+ * @param uref pointer to the uref                                          \
+ * @param uref_src pointer to the source uref                               \
+ * @return an error code                                                    \
+ */                                                                         \
+static inline int uref_##group##_copy_##attr(struct uref *uref,             \
+                                             struct uref *uref_src,         \
+                                             args_decl)                     \
+{                                                                           \
+    return uref_attr_copy_unsigned_va(uref, uref_src, UDICT_TYPE_UNSIGNED,  \
+                                      format, args);                        \
+}                                                                           \
 /** @This compares the desc attribute to given values.                      \
  *                                                                          \
  * @param uref pointer to the uref                                          \
@@ -1237,6 +1502,20 @@ static inline void uref_##group##_set_##attr(struct uref *uref,             \
 static inline void uref_##group##_delete_##attr(struct uref *uref)          \
 {                                                                           \
     uref->member = UINT64_MAX;                                              \
+}                                                                           \
+/** @This copies the desc attribute from an uref to another.                \
+ *                                                                          \
+ * @param uref pointer to the uref                                          \
+ * @param uref_src pointer to the source uref                               \
+ * @return an error code                                                    \
+ */                                                                         \
+static inline void uref_##group##_copy_##attr(struct uref *uref,            \
+                                              struct uref *uref_src)        \
+{                                                                           \
+    uint64_t v;                                                             \
+    uref_##group##_delete_##attr(uref);                                     \
+    if (ubase_check(uref_##group##_get_##attr(uref_src, &v)))               \
+        uref_##group##_set_##attr(uref, v);                                 \
 }                                                                           \
 /** @This compares the desc attribute to given values.                      \
  *                                                                          \
@@ -1314,6 +1593,17 @@ static inline int uref_##group##_delete_##attr(struct uref *uref)           \
 {                                                                           \
     return uref_attr_delete(uref, UDICT_TYPE_INT, name);                    \
 }                                                                           \
+/** @This copies the desc attribute from an uref to another.                \
+ *                                                                          \
+ * @param uref pointer to the uref                                          \
+ * @param uref_src pointer to the source uref                               \
+ * @return an error code                                                    \
+ */                                                                         \
+static inline int uref_##group##_copy_##attr(struct uref *uref,             \
+                                             struct uref *uref_src)         \
+{                                                                           \
+    return uref_attr_copy_int(uref, uref_src, UDICT_TYPE_INT, name);        \
+}                                                                           \
 /** @This compares the desc attribute in two urefs.                         \
  *                                                                          \
  * @param uref1 pointer to the first uref                                   \
@@ -1369,6 +1659,17 @@ static inline int uref_##group##_set_##attr(struct uref *uref, int64_t v)   \
 static inline int uref_##group##_delete_##attr(struct uref *uref)           \
 {                                                                           \
     return uref_attr_delete(uref, type, NULL);                              \
+}                                                                           \
+/** @This copies the desc attribute from an uref to another.                \
+ *                                                                          \
+ * @param uref pointer to the uref                                          \
+ * @param uref_src pointer to the source uref                               \
+ * @return an error code                                                    \
+ */                                                                         \
+static inline int uref_##group##_copy_##attr(struct uref *uref,             \
+                                             struct uref *uref_src)         \
+{                                                                           \
+    return uref_attr_copy_int(uref, uref_src, type, NULL);                  \
 }
 
 /* @This allows to define accessors for a int attribute, with a name
@@ -1410,6 +1711,19 @@ static inline int uref_##group##_set_##attr(struct uref *uref, int64_t v,   \
 static inline int uref_##group##_delete_##attr(struct uref *uref, args_decl)\
 {                                                                           \
     return uref_attr_delete_va(uref, UDICT_TYPE_INT, format, args);         \
+}                                                                           \
+/** @This copies the desc attribute from an uref to another.                \
+ *                                                                          \
+ * @param uref pointer to the uref                                          \
+ * @param uref_src pointer to the source uref                               \
+ * @return an error code                                                    \
+ */                                                                         \
+static inline int uref_##group##_copy_##attr(struct uref *uref,             \
+                                             struct uref *uref_src,         \
+                                             args_decl)                     \
+{                                                                           \
+    return uref_attr_copy_int_va(uref, uref_src, UDICT_TYPE_INT, format,    \
+                                 args);                                     \
 }
 
 /*
@@ -1452,6 +1766,17 @@ static inline int uref_##group##_set_##attr(struct uref *uref, double v)    \
 static inline int uref_##group##_delete_##attr(struct uref *uref)           \
 {                                                                           \
     return uref_attr_delete(uref, UDICT_TYPE_FLOAT, name);                  \
+}                                                                           \
+/** @This copies the desc attribute from an uref to another.                \
+ *                                                                          \
+ * @param uref pointer to the uref                                          \
+ * @param uref_src pointer to the source uref                               \
+ * @return an error code                                                    \
+ */                                                                         \
+static inline int uref_##group##_copy_##attr(struct uref *uref,             \
+                                             struct uref *uref_src)         \
+{                                                                           \
+    return uref_attr_copy_float(uref, uref_src, UDICT_TYPE_FLOAT, name);    \
 }                                                                           \
 /** @This compares the desc attribute in two urefs.                         \
  *                                                                          \
@@ -1508,6 +1833,17 @@ static inline int uref_##group##_set_##attr(struct uref *uref, double v)    \
 static inline int uref_##group##_delete_##attr(struct uref *uref)           \
 {                                                                           \
     return uref_attr_delete(uref, type, NULL);                              \
+}                                                                           \
+/** @This copies the desc attribute from an uref to another.                \
+ *                                                                          \
+ * @param uref pointer to the uref                                          \
+ * @param uref_src pointer to the source uref                               \
+ * @return an error code                                                    \
+ */                                                                         \
+static inline int uref_##group##_copy_##attr(struct uref *uref,             \
+                                             struct uref *uref_src)         \
+{                                                                           \
+    return uref_attr_copy_float(uref, uref_src, type, NULL);                \
 }
 
 /* @This allows to define accessors for a int attribute, with a name
@@ -1549,6 +1885,19 @@ static inline int uref_##group##_set_##attr(struct uref *uref, double v,    \
 static inline int uref_##group##_delete_##attr(struct uref *uref, args_decl)\
 {                                                                           \
     return uref_attr_delete_va(uref, UDICT_TYPE_FLOAT, format, args);       \
+}                                                                           \
+/** @This copies the desc attribute from an uref to another.                \
+ *                                                                          \
+ * @param uref pointer to the uref                                          \
+ * @param uref_src pointer to the source uref                               \
+ * @return an error code                                                    \
+ */                                                                         \
+static inline int uref_##group##_copy_##attr(struct uref *uref,             \
+                                             struct uref *uref_src,         \
+                                             args_decl)                     \
+{                                                                           \
+    return uref_attr_copy_float_va(uref, uref_src, UDICT_TYPE_FLOAT,        \
+                                   format, args);                           \
 }
 
 
@@ -1594,6 +1943,18 @@ static inline int uref_##group##_set_##attr(struct uref *uref,              \
 static inline int uref_##group##_delete_##attr(struct uref *uref)           \
 {                                                                           \
     return uref_attr_delete(uref, UDICT_TYPE_RATIONAL, name);               \
+}                                                                           \
+/** @This copies the desc attribute from an uref to another.                \
+ *                                                                          \
+ * @param uref pointer to the uref                                          \
+ * @param uref_src pointer to the source uref                               \
+ * @return an error code                                                    \
+ */                                                                         \
+static inline int uref_##group##_copy_##attr(struct uref *uref,             \
+                                             struct uref *uref_src)         \
+{                                                                           \
+    return uref_attr_copy_rational(uref, uref_src, UDICT_TYPE_RATIONAL,     \
+                                   name);                                   \
 }
 
 /* @This allows to define accessors for a shorthand rational attribute.
@@ -1634,6 +1995,17 @@ static inline int uref_##group##_set_##attr(struct uref *uref,              \
 static inline int uref_##group##_delete_##attr(struct uref *uref)           \
 {                                                                           \
     return uref_attr_delete(uref, type, NULL);                              \
+}                                                                           \
+/** @This copies the desc attribute from an uref to another.                \
+ *                                                                          \
+ * @param uref pointer to the uref                                          \
+ * @param uref_src pointer to the source uref                               \
+ * @return an error code                                                    \
+ */                                                                         \
+static inline int uref_##group##_copy_##attr(struct uref *uref,             \
+                                             struct uref *uref_src)         \
+{                                                                           \
+    return uref_attr_copy_rational(uref, uref_src, type, NULL);             \
 }
 
 /* @This allows to define accessors for a rational attribute, with a name
@@ -1677,6 +2049,19 @@ static inline int uref_##group##_set_##attr(struct uref *uref,              \
 static inline int uref_##group##_delete_##attr(struct uref *uref, args_decl)\
 {                                                                           \
     return uref_attr_delete_va(uref, UDICT_TYPE_RATIONAL, format, args);    \
+}                                                                           \
+/** @This copies the desc attribute from an uref to another.                \
+ *                                                                          \
+ * @param uref pointer to the uref                                          \
+ * @param uref_src pointer to the source uref                               \
+ * @return an error code                                                    \
+ */                                                                         \
+static inline int uref_##group##_copy_##attr(struct uref *uref,             \
+                                             struct uref *uref_src,         \
+                                             args_decl)                     \
+{                                                                           \
+    return uref_attr_copy_rational_va(uref, uref_src, UDICT_TYPE_RATIONAL,  \
+                                      format, args);                        \
 }
 
 UREF_ATTR_UNSIGNED_UREF(attr, priv, priv, private (internal pipe use))
