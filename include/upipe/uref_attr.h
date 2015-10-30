@@ -55,6 +55,25 @@ static inline int uref_attr_import(struct uref *uref, struct uref *uref_attr)
     return udict_import(uref->udict, uref_attr->udict);
 }
 
+/** @This copies multiple attributes from an uref to another.
+ *
+ * @param uref pointer to the uref
+ * @param uref_src pointer to the source uref
+ * @param list array of copy function to apply
+ * @param list_size size of the array
+ * @return an error code
+ */
+static inline int uref_attr_copy_list(struct uref *uref, struct uref *uref_src,
+                                      int (*list[])(struct uref *uref,
+                                                    struct uref *uref_src),
+                                      size_t list_size)
+{
+    int err = UBASE_ERR_NONE;
+    for (size_t i = 0; ubase_check(err) && i < list_size; i++)
+        err = list[i](uref, uref_src);
+    return err;
+}
+
 /** @This deletes an attribute.
  *
  * @param uref pointer to the uref
