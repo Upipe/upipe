@@ -107,6 +107,23 @@ static inline int uref_attr_delete_va(struct uref *uref, enum udict_type type,
     UBASE_VARARG(uref_attr_delete(uref, type, string))
 }
 
+/** @This deletes multiple attributes.
+ *
+ * @param uref pointer to the uref
+ * @param list array of delete function to apply
+ * @param list_size size of the array
+ * @return an error code
+ */
+static inline int uref_attr_delete_list(struct uref *uref,
+                                        int (*list[])(struct uref *uref),
+                                        size_t list_size)
+{
+    int err = UBASE_ERR_NONE;
+    for (size_t i = 0; ubase_check(err) && i < list_size; i++)
+        err = list[i](uref);
+    return err;
+}
+
 #define UREF_ATTR_TEMPLATE(utype, ctype)                                    \
 /** @This returns the value of a utype attribute.                           \
  *                                                                          \
