@@ -236,7 +236,7 @@ static bool upipe_opusf_parse_header(struct upipe *upipe)
     do {
         if (!ubase_check(uref_block_extract(upipe_opusf->next_uref,
                                             idx + 2, 1, &size))) {
-            return false;
+            return true;
         }
         frame_size += size;
         idx++;
