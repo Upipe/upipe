@@ -1,10 +1,10 @@
 prefix=@prefix@
 exec_prefix=@exec_prefix@
 libdir=@libdir@
-includedir=@includedir@     
-Name: libupipe_sws
+includedir=@includedir@
+Name: libupipe_swscale
 Description: Upipe multimedia framework, swscale interface module
 Version: @VERSION@
 Requires: libswscale libupipe
-Libs: -L${libdir} -lupipe_sws
+Libs: -L${libdir} -lupipe_swscale
 Cflags: -I${includedir}

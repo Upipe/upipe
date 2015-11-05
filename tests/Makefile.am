@@ -356,10 +356,10 @@ upipe_avcodec_decode_test_CFLAGS = @AVFORMAT_CFLAGS@
 upipe_avcodec_decode_test_LDADD = $(LDADD) -lev $(top_builddir)/lib/upump-ev/libupump_ev.la $(top_builddir)/lib/upipe-modules/libupipe_modules.la $(top_builddir)/lib/upipe-av/libupipe_av.la @AVFORMAT_LIBS@ -lpthread
 
 upipe_sws_test_CFLAGS = $(SWSCALE_CFLAGS)
-upipe_sws_test_LDADD = $(LDADD) $(SWSCALE_LIBS) $(top_builddir)/lib/upipe-swscale/libupipe_sws.la
+upipe_sws_test_LDADD = $(LDADD) $(SWSCALE_LIBS) $(top_builddir)/lib/upipe-swscale/libupipe_swscale.la
 
 upipe_swr_test_CFLAGS = $(SWRESAMPLE_CFLAGS)
-upipe_swr_test_LDADD = $(LDADD) $(SWRESAMPLE_LIBS) $(top_builddir)/lib/upipe-swresample/libupipe_swr.la $(top_builddir)/lib/upipe-modules/libupipe_modules.la
+upipe_swr_test_LDADD = $(LDADD) $(SWRESAMPLE_LIBS) $(top_builddir)/lib/upipe-swresample/libupipe_swresample.la $(top_builddir)/lib/upipe-modules/libupipe_modules.la
 
 upipe_ts_sync_test_LDADD = $(LDADD) $(top_builddir)/lib/upipe-ts/libupipe_ts.la
 upipe_ts_check_test_LDADD = $(LDADD) $(top_builddir)/lib/upipe-ts/libupipe_ts.la
