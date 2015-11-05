@@ -1,10 +1,10 @@
 prefix=@prefix@
 exec_prefix=@exec_prefix@
 libdir=@libdir@
-includedir=@includedir@     
-Name: libupipe_swr
+includedir=@includedir@
+Name: libupipe_swresample
 Description: Upipe multimedia framework, swresample interface module
 Version: @VERSION@
 Requires: libswresample libupipe
-Libs: -L${libdir} -lupipe_swr
+Libs: -L${libdir} -lupipe_swresample
 Cflags: -I${includedir}

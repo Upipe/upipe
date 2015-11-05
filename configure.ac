@@ -179,7 +179,7 @@ AC_CONFIG_FILES([Makefile
                  lib/upipe-av/Makefile
                  lib/upipe-av/libupipe_av.pc
                  lib/upipe-swscale/Makefile
-                 lib/upipe-swscale/libupipe_sws.pc
+                 lib/upipe-swscale/libupipe_swscale.pc
                  lib/upipe-ts/Makefile
                  lib/upipe-ts/libupipe_ts.pc
                  lib/upipe-gl/Makefile
@@ -193,7 +193,7 @@ AC_CONFIG_FILES([Makefile
                  lib/upipe-alsa/Makefile
                  lib/upipe-alsa/libupipe_alsa.pc
                  lib/upipe-swresample/Makefile
-                 lib/upipe-swresample/libupipe_swr.pc
+                 lib/upipe-swresample/libupipe_swresample.pc
                  lib/upipe-blackmagic/Makefile
                  lib/upipe-blackmagic/libupipe_blackmagic.pc
                  lib/upipe-qt/Makefile
