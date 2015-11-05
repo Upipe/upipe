@@ -1,6 +1,4 @@
-if HAVE_BITSTREAM
 lib_LTLIBRARIES = libupipe_framers.la
-endif
 
 noinst_HEADERS = upipe_framers_common.h
 libupipe_framers_la_SOURCES = \

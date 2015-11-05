@@ -1,6 +1,4 @@
-if HAVE_X264
 lib_LTLIBRARIES = libupipe_x264.la
-endif
 
 libupipe_x264_la_SOURCES = upipe_x264.c
 libupipe_x264_la_CPPFLAGS = -I$(top_builddir)/include -I$(top_srcdir)/include

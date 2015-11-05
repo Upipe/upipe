@@ -1,6 +1,4 @@
-if HAVE_OSX_DARWIN
 lib_LTLIBRARIES = libupipe_osx.la
-endif
 
 libupipe_osx_la_SOURCES = 
 
