@@ -1589,18 +1589,21 @@ static void upipe_h264f_output_prev_au(struct upipe *upipe,
  *
  * @param upipe description structure of the pipe
  * @param upump_p reference to pump that generated the buffer
+ * @return false if the slice is obviously invalid
  */
-static void upipe_h264f_parse_slice(struct upipe *upipe, struct upump **upump_p)
+static bool upipe_h264f_parse_slice(struct upipe *upipe, struct upump **upump_p)
 {
     struct upipe_h264f *upipe_h264f = upipe_h264f_from_upipe(upipe);
     struct upipe_h264f_stream f;
 upipe_h264f_parse_slice_retry:
     upipe_h264f_stream_init(&f);
     struct ubuf_block_stream *s = &f.s;
-    UBASE_FATAL_RETURN(upipe, ubuf_block_stream_init(s,
-                upipe_h264f->next_uref->ubuf,
+    if (!ubase_check(ubuf_block_stream_init(s, upipe_h264f->next_uref->ubuf,
                 upipe_h264f->au_last_nal_offset +
-                upipe_h264f->au_last_nal_start_size));
+                upipe_h264f->au_last_nal_start_size))) {
+        upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
+        return false;
+    }
 
     upipe_h264f_stream_ue(s); /* first_mb_in_slice */
     uint32_t slice_type = upipe_h264f_stream_ue(s);
@@ -1608,7 +1611,7 @@ upipe_h264f_parse_slice_retry:
     if (unlikely(pps_id >= H264PPS_ID_MAX)) {
         upipe_warn_va(upipe, "invalid PPS %"PRIu32" in slice", pps_id);
         ubuf_block_stream_clean(s);
-        return;
+        return false;
     }
 
     if (upipe_h264f->au_slice && pps_id != upipe_h264f->active_pps) {
@@ -1619,7 +1622,7 @@ upipe_h264f_parse_slice_retry:
 
     if (unlikely(!upipe_h264f_activate_pps(upipe, pps_id))) {
         ubuf_block_stream_clean(s);
-        return;
+        return false;
     }
 
     if (upipe_h264f->separate_colour_plane) {
@@ -1699,6 +1702,7 @@ upipe_h264f_parse_slice_retry:
     }
 
     upipe_h264f->au_slice = true;
+    return true;
 }
 
 /** @internal @This is called when a new NAL starts, to check the previous NAL.
@@ -1730,7 +1734,12 @@ static void upipe_h264f_nal_end(struct upipe *upipe, struct upump **upump_p)
             upipe_warn(upipe, "outputting corrupt data");
             uref_flow_set_error(upipe_h264f->next_uref);
         }
-        upipe_h264f_parse_slice(upipe, upump_p);
+        if (!upipe_h264f_parse_slice(upipe, upump_p)) {
+            upipe_warn(upipe, "discarding invalid slice data");
+            upipe_h264f_consume_uref_stream(upipe, upipe_h264f->au_size);
+            upipe_h264f->au_size = 0;
+            return;
+        }
         if (last_nal_type == H264NAL_TYPE_IDR) {
             UBASE_FATAL(upipe, uref_flow_set_random(upipe_h264f->next_uref))
         }
