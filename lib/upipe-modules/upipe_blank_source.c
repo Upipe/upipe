@@ -238,6 +238,12 @@ static void upipe_blksrc_worker(struct upump *upump)
 
     /* missed ticks */
     while (wait < 0) {
+        /* check if we have been released in the meantime */
+        if (upipe_single(upipe)) {
+            upipe_release(upipe);
+            return;
+        }
+
         upipe_warn_va(upipe, "late packet wait %"PRId64, wait);
 
         struct uref *uref = uref_dup(upipe_blksrc->blank_uref);
