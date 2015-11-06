@@ -526,10 +526,8 @@ static void upipe_avfsrc_worker(struct upump *upump)
     if (ts)
         upipe_throw_clock_ts(upipe, uref);
 
-    upipe_use(upipe);
     upipe_avfsrc_sub_output(upipe_avfsrc_sub_to_upipe(output), uref,
                             &upipe_avfsrc->upump);
-    upipe_release(upipe);
 }
 
 /** @internal @This starts the worker.
@@ -540,7 +538,8 @@ static bool upipe_avfsrc_start(struct upipe *upipe)
 {
     struct upipe_avfsrc *upipe_avfsrc = upipe_avfsrc_from_upipe(upipe);
     struct upump *upump = upump_alloc_idler(upipe_avfsrc->upump_mgr,
-                                            upipe_avfsrc_worker, upipe);
+                                            upipe_avfsrc_worker, upipe,
+                                            upipe->refcount);
     if (unlikely(upump == NULL)) {
         upipe_throw_fatal(upipe, UBASE_ERR_UPUMP);
         return false;
@@ -1073,7 +1072,7 @@ static int upipe_avfsrc_control(struct upipe *upipe, int command, va_list args)
 
         struct upump *upump_av_deal =
             upipe_av_deal_upump_alloc(upipe_avfsrc->upump_mgr,
-                                      upipe_avfsrc_probe, upipe);
+                    upipe_avfsrc_probe, upipe, upipe->refcount);
         if (unlikely(upump_av_deal == NULL)) {
             upipe_err(upipe, "can't create dealer");
             upipe_throw_fatal(upipe, UBASE_ERR_UPUMP);

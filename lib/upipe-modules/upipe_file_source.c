@@ -276,14 +276,12 @@ static void upipe_fsrc_worker(struct upump *upump)
         uref_block_resize(uref, 0, ret);
     if (unlikely(ret == 0))
         uref_block_set_end(uref);
-    upipe_use(upipe);
     upipe_fsrc_output(upipe, uref, &upipe_fsrc->upump);
     if (unlikely(ret == 0)) {
         upipe_notice_va(upipe, "end of file %s", path);
         upipe_fsrc_set_upump(upipe, NULL);
         upipe_throw_source_end(upipe);
     }
-    upipe_release(upipe);
 }
 
 /** @internal @This checks if the pump may be allocated.
@@ -333,11 +331,12 @@ static int upipe_fsrc_check(struct upipe *upipe, struct uref *flow_format)
         struct upump *upump;
         if (upipe_fsrc->regular_file)
             upump = upump_alloc_idler(upipe_fsrc->upump_mgr,
-                                      upipe_fsrc_worker, upipe);
+                                      upipe_fsrc_worker, upipe,
+                                      upipe->refcount);
         else
             upump = upump_alloc_fd_read(upipe_fsrc->upump_mgr,
                                         upipe_fsrc_worker, upipe,
-                                        upipe_fsrc->fd);
+                                        upipe->refcount, upipe_fsrc->fd);
         if (unlikely(upump == NULL)) {
             upipe_throw_fatal(upipe, UBASE_ERR_UPUMP);
             return UBASE_ERR_UPUMP;

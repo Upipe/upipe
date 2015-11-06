@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2012-2014 OpenHeadend S.A.R.L.
+ * Copyright (C) 2012-2015 OpenHeadend S.A.R.L.
  *
  * Authors: Christophe Massiot
  *
@@ -95,13 +95,17 @@ static inline bool uqueue_init(struct uqueue *uqueue, uint8_t length,
  * @param upump_mgr management structure for this event loop
  * @param cb function to call when the watcher triggers
  * @param opaque pointer to the module's internal structure
+ * @param refcount pointer to urefcount structure to increment during callback,
+ * or NULL
  * @return pointer to allocated watcher, or NULL in case of failure
  */
 static inline struct upump *uqueue_upump_alloc_push(struct uqueue *uqueue,
                                                     struct upump_mgr *upump_mgr,
-                                                    upump_cb cb, void *opaque)
+                                                    upump_cb cb, void *opaque,
+                                                    struct urefcount *refcount)
 {
-    return ueventfd_upump_alloc(&uqueue->event_push, upump_mgr, cb, opaque);
+    return ueventfd_upump_alloc(&uqueue->event_push, upump_mgr, cb, opaque,
+                                refcount);
 }
 
 /** @This allocates a watcher triggering when data is ready to be popped.
@@ -110,13 +114,17 @@ static inline struct upump *uqueue_upump_alloc_push(struct uqueue *uqueue,
  * @param upump_mgr management structure for this event loop
  * @param cb function to call when the watcher triggers
  * @param opaque pointer to the module's internal structure
+ * @param refcount pointer to urefcount structure to increment during callback,
+ * or NULL
  * @return pointer to allocated watcher, or NULL in case of failure
  */
 static inline struct upump *uqueue_upump_alloc_pop(struct uqueue *uqueue,
                                                    struct upump_mgr *upump_mgr,
-                                                   upump_cb cb, void *opaque)
+                                                   upump_cb cb, void *opaque,
+                                                   struct urefcount *refcount)
 {
-    return ueventfd_upump_alloc(&uqueue->event_pop, upump_mgr, cb, opaque);
+    return ueventfd_upump_alloc(&uqueue->event_pop, upump_mgr, cb, opaque,
+                                refcount);
 }
 
 /** @This pushes an element into the queue.

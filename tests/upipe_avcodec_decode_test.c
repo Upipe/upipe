@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2012-2014 OpenHeadend S.A.R.L.
+ * Copyright (C) 2012-2015 OpenHeadend S.A.R.L.
  *
  * Authors: Benjamin Cohen
  *
@@ -285,7 +285,7 @@ static void *test_thread(void *_thread)
 
     thread->count = 0;
     thread->limit = THREAD_FRAMES_LIMIT;
-    thread->fetchav_pump = upump_alloc_idler(upump_mgr, fetch_av_packets, thread);
+    thread->fetchav_pump = upump_alloc_idler(upump_mgr, fetch_av_packets, thread, NULL);
     assert(thread->fetchav_pump);
     upump_start(thread->fetchav_pump);
 
@@ -372,7 +372,7 @@ int main (int argc, char **argv)
                                                      UPUMP_BLOCKER_POOL);
     assert(upump_mgr != NULL);
     struct thread mainthread;
-    struct upump *write_pump = upump_alloc_idler(upump_mgr, fetch_av_packets, &mainthread);
+    struct upump *write_pump = upump_alloc_idler(upump_mgr, fetch_av_packets, &mainthread, NULL);
     assert(write_pump);
     upump_start(write_pump);
 

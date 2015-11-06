@@ -440,7 +440,7 @@ static int upipe_qsrc_control(struct upipe *upipe, int command, va_list args)
         struct upump *upump =
             uqueue_upump_alloc_pop(&upipe_queue(upipe)->uqueue,
                                    upipe_qsrc->upump_mgr,
-                                   upipe_qsrc_worker, upipe);
+                                   upipe_qsrc_worker, upipe, upipe->refcount);
         if (unlikely(upump == NULL)) {
             upipe_throw_fatal(upipe, UBASE_ERR_UPUMP);
             return UBASE_ERR_UPUMP;
@@ -449,7 +449,7 @@ static int upipe_qsrc_control(struct upipe *upipe, int command, va_list args)
         upump_start(upump);
         upump = uqueue_upump_alloc_pop(&upipe_queue(upipe)->downstream_oob,
                                        upipe_qsrc->upump_mgr,
-                                       upipe_qsrc_oob, upipe);
+                                       upipe_qsrc_oob, upipe, upipe->refcount);
         if (unlikely(upump == NULL)) {
             upipe_throw_fatal(upipe, UBASE_ERR_UPUMP);
             upipe_qsrc_set_upump(upipe, NULL);

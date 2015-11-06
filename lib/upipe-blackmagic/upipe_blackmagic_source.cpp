@@ -1075,8 +1075,8 @@ static int upipe_bmd_src_control(struct upipe *upipe, int command, va_list args)
         upipe_bmd_src->upump == NULL) {
         struct upump *upump =
             uqueue_upump_alloc_pop(&upipe_bmd_src->uqueue,
-                                   upipe_bmd_src->upump_mgr,
-                                   upipe_bmd_src_worker, upipe);
+                    upipe_bmd_src->upump_mgr, upipe_bmd_src_worker, upipe,
+                    upipe->refcount);
         if (unlikely(upump == NULL)) {
             upipe_throw_fatal(upipe, UBASE_ERR_UPUMP);
             return UBASE_ERR_UPUMP;

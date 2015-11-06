@@ -58,12 +58,15 @@ extern struct udeal upipe_av_deal;
  * @param upump_mgr management structure for this event loop
  * @param cb function to call when the watcher triggers
  * @param opaque pointer to the module's internal structure
+ * @param refcount pointer to urefcount structure to increment during callback,
+ * or NULL
  * @return pointer to allocated watcher, or NULL in case of failure
  */
 static inline struct upump *upipe_av_deal_upump_alloc(
-        struct upump_mgr *upump_mgr, upump_cb cb, void *opaque)
+        struct upump_mgr *upump_mgr, upump_cb cb, void *opaque,
+        struct urefcount *refcount)
 {
-    return udeal_upump_alloc(&upipe_av_deal, upump_mgr, cb, opaque);
+    return udeal_upump_alloc(&upipe_av_deal, upump_mgr, cb, opaque, refcount);
 }
 
 /** @This starts the watcher on exclusive access to avcodec_open().

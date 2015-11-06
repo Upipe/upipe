@@ -162,7 +162,8 @@ struct upipe_mgr *upipe_pthread_xfer_mgr_alloc(uint8_t queue_length,
         goto upipe_pthread_xfer_mgr_alloc_err3;
 
     struct upump *upump = ueventfd_upump_alloc(&pthread_ctx->event, upump_mgr,
-                                               upipe_pthread_stop, pthread_ctx);
+                                               upipe_pthread_stop, pthread_ctx,
+                                               NULL);
     upump_mgr_release(upump_mgr);
     if (unlikely(upump == NULL))
         goto upipe_pthread_xfer_mgr_alloc_err3;

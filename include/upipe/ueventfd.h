@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2012-2013 OpenHeadend S.A.R.L.
+ * Copyright (C) 2012-2015 OpenHeadend S.A.R.L.
  *
  * Authors: Christophe Massiot
  *
@@ -85,19 +85,24 @@ struct ueventfd {
  * @param upump_mgr management structure for this event loop
  * @param cb function to call when the watcher triggers
  * @param opaque pointer to the module's internal structure
+ * @param refcount pointer to urefcount structure to increment during callback,
+ * or NULL
  * @return pointer to allocated watcher, or NULL in case of failure
  */
 static inline struct upump *ueventfd_upump_alloc(struct ueventfd *fd,
                                                  struct upump_mgr *upump_mgr,
-                                                 upump_cb cb, void *opaque)
+                                                 upump_cb cb, void *opaque,
+                                                 struct urefcount *refcount)
 {
 #ifdef UPIPE_HAVE_EVENTFD
     if (likely(fd->mode == UEVENTFD_MODE_EVENTFD)) {
-        return upump_alloc_fd_read(upump_mgr, cb, opaque, fd->event_fd);
+        return upump_alloc_fd_read(upump_mgr, cb, opaque, refcount,
+                                   fd->event_fd);
     } else
 #endif
     if (likely(fd->mode == UEVENTFD_MODE_PIPE)) {
-        return upump_alloc_fd_read(upump_mgr, cb, opaque, (fd->pipe_fds)[0]);
+        return upump_alloc_fd_read(upump_mgr, cb, opaque, refcount,
+                                   (fd->pipe_fds)[0]);
     } else {
         return NULL; // shouldn't happen
     }

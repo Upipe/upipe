@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2013 OpenHeadend S.A.R.L.
+ * Copyright (C) 2013-2015 OpenHeadend S.A.R.L.
  *
  * Authors: Christophe Massiot
  *
@@ -53,6 +53,8 @@ struct upump_blocker {
     upump_blocker_cb cb;
     /** opaque pointer for the callback */
     void *opaque;
+    /** pointer to urefcount structure to increment during callback */
+    struct urefcount *refcount;
 };
 
 /** @This returns the high-level upump_blocker structure.
@@ -82,11 +84,12 @@ static inline struct uchain *
  * @param upump blocked pump
  * @param cb function to call when the pump is released
  * @param opaque pointer to the module's internal structure
+ * @param refcount pointer to urefcount structure to increment during callback,
+ * or NULL
  * @return pointer to allocated blocker, or NULL in case of failure
  */
 static inline struct upump_blocker *upump_blocker_alloc(struct upump *upump,
-                                                        upump_blocker_cb cb,
-                                                        void *opaque)
+        upump_blocker_cb cb, void *opaque, struct urefcount *refcount)
 {
     struct upump_blocker *upump_blocker =
         upump->mgr->upump_blocker_alloc(upump);
@@ -97,6 +100,7 @@ static inline struct upump_blocker *upump_blocker_alloc(struct upump *upump,
     upump_blocker->upump = upump;
     upump_blocker->cb = cb;
     upump_blocker->opaque = opaque;
+    upump_blocker->refcount = refcount;
     return upump_blocker;
 }
 

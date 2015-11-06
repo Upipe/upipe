@@ -659,7 +659,7 @@ static void upipe_avcdec_start_av_deal(struct upipe *upipe)
     upipe_dbg(upipe, "upump_mgr present, using udeal");
     struct upump *upump_av_deal =
         upipe_av_deal_upump_alloc(upipe_avcdec->upump_mgr,
-                                  upipe_avcdec_cb_av_deal, upipe);
+                upipe_avcdec_cb_av_deal, upipe, upipe->refcount);
     if (unlikely(!upump_av_deal)) {
         upipe_err(upipe, "can't create dealer");
         upipe_throw_fatal(upipe, UBASE_ERR_UPUMP);

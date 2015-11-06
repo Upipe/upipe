@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2013-2014 OpenHeadend S.A.R.L.
+ * Copyright (C) 2013-2015 OpenHeadend S.A.R.L.
  *
  * Authors: Christophe Massiot
  *
@@ -181,7 +181,8 @@ static UBASE_UNUSED void                                                    \
         upump_blocker_find(&s->BLOCKERS, *upump_p) != NULL)                 \
         return;                                                             \
     struct upump_blocker *blocker =                                         \
-        upump_blocker_alloc(*upump_p, STRUCTURE##_block_input_cb, upipe);   \
+        upump_blocker_alloc(*upump_p, STRUCTURE##_block_input_cb, upipe,    \
+                            upipe->refcount);                               \
     ulist_add(&s->BLOCKERS, upump_blocker_to_uchain(blocker));              \
 }                                                                           \
 /** @internal @This unblocks all source pumps.                              \

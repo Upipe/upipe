@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2012-2014 OpenHeadend S.A.R.L.
+ * Copyright (C) 2012-2015 OpenHeadend S.A.R.L.
  *
  * Authors: Benjamin Cohen
  *
@@ -198,7 +198,8 @@ int main(int argc, char **argv)
     uref_free(flow_def);
 
     /* idler */
-    struct upump *idlerpump = upump_alloc_idler(upump_mgr, idler_cb, NULL);
+    struct upump *idlerpump = upump_alloc_idler(upump_mgr, idler_cb, NULL,
+                                                NULL);
     upump_start(idlerpump);
 
     /* sigint handler */

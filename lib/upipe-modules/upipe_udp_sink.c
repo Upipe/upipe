@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2012-2014 OpenHeadend S.A.R.L.
+ * Copyright (C) 2012-2015 OpenHeadend S.A.R.L.
  *
  * Authors: Christophe Massiot
  *          Benjamin Cohen
@@ -168,8 +168,7 @@ static void upipe_udpsink_poll(struct upipe *upipe)
         return;
     }
     struct upump *watcher = upump_alloc_fd_write(upipe_udpsink->upump_mgr,
-                                                 upipe_udpsink_watcher, upipe,
-                                                 upipe_udpsink->fd);
+            upipe_udpsink_watcher, upipe, upipe->refcount, upipe_udpsink->fd);
     if (unlikely(watcher == NULL)) {
         upipe_err_va(upipe, "can't create watcher");
         upipe_throw_fatal(upipe, UBASE_ERR_UPUMP);

@@ -219,7 +219,7 @@ static void upipe_ts_scte35p_event_wait(struct upipe *upipe,
                  event->event_id, timeout * 1000000 / UCLOCK_FREQ);
 
     struct upump *watcher = upump_alloc_timer(upipe_ts_scte35p->upump_mgr,
-            upipe_ts_scte35p_event_watcher, event, timeout, 0);
+            upipe_ts_scte35p_event_watcher, event, upipe->refcount, timeout, 0);
     if (unlikely(watcher == NULL)) {
         upipe_ts_scte35p_event_free(upipe, event);
         upipe_err(upipe, "can't create watcher");

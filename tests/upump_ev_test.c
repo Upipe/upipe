@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2012-2013 OpenHeadend S.A.R.L.
+ * Copyright (C) 2012-2015 OpenHeadend S.A.R.L.
  *
  * Authors: Christophe Massiot
  *
@@ -71,7 +71,7 @@ static void write_idler_cb(struct upump *upump)
     ssize_t ret = write(pipefd[1], padding, strlen(padding) + 1);
     if (ret == -1 && (errno == EWOULDBLOCK || errno == EAGAIN)) {
         printf("write idler blocked\n");
-        blocker = upump_blocker_alloc(write_idler, blocker_cb, NULL);
+        blocker = upump_blocker_alloc(write_idler, blocker_cb, NULL, NULL);
         assert(blocker != NULL);
         upump_start(write_watcher);
         upump_start(read_timer);
@@ -123,14 +123,15 @@ int main(int argc, char **argv)
     assert(fcntl(pipefd[1], F_SETFL, flags) != -1);
 
     /* Create watchers */
-    write_idler = upump_alloc_idler(mgr, write_idler_cb, NULL);
+    write_idler = upump_alloc_idler(mgr, write_idler_cb, NULL, NULL);
     assert(write_idler != NULL);
-    write_watcher = upump_alloc_fd_write(mgr, write_watcher_cb, NULL,
+    write_watcher = upump_alloc_fd_write(mgr, write_watcher_cb, NULL, NULL,
                                          pipefd[1]);
     assert(write_watcher != NULL);
-    read_timer = upump_alloc_timer(mgr, read_timer_cb, NULL, timeout, 0);
+    read_timer = upump_alloc_timer(mgr, read_timer_cb, NULL, NULL, timeout, 0);
     assert(read_timer != NULL);
-    read_watcher = upump_alloc_fd_read(mgr, read_watcher_cb, NULL, pipefd[0]);
+    read_watcher = upump_alloc_fd_read(mgr, read_watcher_cb, NULL, NULL,
+                                       pipefd[0]);
     assert(read_watcher != NULL);
 
     /* Start tests */

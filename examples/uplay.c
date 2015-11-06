@@ -161,8 +161,7 @@ static int catch_glx(struct uprobe *uprobe, struct upipe *upipe,
                 upipe_notice_va(upipe, "exit key pressed (%d), exiting",
                                 key);
                 struct upump *idler_stop = upump_alloc_idler(main_upump_mgr,
-                                                             uplay_stop,
-                                                             (void *)1);
+                        uplay_stop, (void *)1, NULL);
                 upump_start(idler_stop);
             }
             break;
@@ -342,7 +341,7 @@ static int catch_src(struct uprobe *uprobe, struct upipe *upipe,
     if (event == UPROBE_SOURCE_END && main_upump_mgr != NULL) {
         upipe_dbg(upipe, "caught source end, dying");
         struct upump *idler_stop = upump_alloc_idler(main_upump_mgr,
-                                                     uplay_stop, (void *)0);
+                uplay_stop, (void *)0, NULL);
         upump_start(idler_stop);
         return UBASE_ERR_NONE;
     }
@@ -636,7 +635,7 @@ int main(int argc, char **argv)
 
     /* start */
     struct upump *idler_start = upump_alloc_idler(main_upump_mgr, uplay_start,
-                                                  (void *)uri);
+                                                  (void *)uri, NULL);
     upump_start(idler_start);
 
     /* main loop */

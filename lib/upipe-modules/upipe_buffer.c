@@ -279,7 +279,8 @@ static int upipe_buffer_upump_check(struct upipe *upipe)
         return UBASE_ERR_NONE;
 
     struct upump *upump =
-        upump_alloc_idler(upipe_buffer->upump_mgr, upipe_buffer_worker, upipe);
+        upump_alloc_idler(upipe_buffer->upump_mgr, upipe_buffer_worker, upipe,
+                          upipe->refcount);
     if (unlikely(upump == NULL))
         return UBASE_ERR_ALLOC;
 

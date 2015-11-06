@@ -2305,7 +2305,6 @@ static void upipe_ts_mux_complete(struct upipe *upipe, struct upump **upump_p)
  */
 static void _upipe_ts_mux_watcher(struct upipe *upipe)
 {
-    upipe_use(upipe);
     struct upipe_ts_mux *mux = upipe_ts_mux_from_upipe(upipe);
     if (unlikely(mux->cr_sys == UINT64_MAX))
         mux->cr_sys = uclock_now(mux->uclock);
@@ -2359,7 +2358,6 @@ static void _upipe_ts_mux_watcher(struct upipe *upipe)
 
     upipe_ts_mux_set_upump(upipe, NULL);
     upipe_ts_mux_work(upipe, NULL);
-    upipe_release(upipe);
 }
 
 /** @internal @This runs when the pump expires (live mode only).
@@ -2514,8 +2512,8 @@ static void upipe_ts_mux_work_live(struct upipe *upipe, struct upump **upump_p)
         uint64_t now = uclock_now(mux->uclock);
         if (next_cr_sys > now + mux->mux_delay) {
             upump = upump_alloc_timer(mux->upump_mgr, upipe_ts_mux_watcher,
-                                      upipe, next_cr_sys - now - mux->mux_delay,
-                                      0);
+                                      upipe, upipe->refcount,
+                                      next_cr_sys - now - mux->mux_delay, 0);
             if (unlikely(upump == NULL)) {
                 upipe_throw_fatal(upipe, UBASE_ERR_UPUMP);
                 return;
@@ -2530,7 +2528,8 @@ static void upipe_ts_mux_work_live(struct upipe *upipe, struct upump **upump_p)
     if (unlikely(upump == NULL)) {
         mux->cr_sys = UINT64_MAX;
         mux->cr_sys_remainder = 0;
-        upump = upump_alloc_idler(mux->upump_mgr, upipe_ts_mux_watcher, upipe);
+        upump = upump_alloc_idler(mux->upump_mgr, upipe_ts_mux_watcher, upipe,
+                                  upipe->refcount);
         if (unlikely(upump == NULL)) {
             upipe_throw_fatal(upipe, UBASE_ERR_UPUMP);
             return;

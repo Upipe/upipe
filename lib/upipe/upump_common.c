@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2012-2013 OpenHeadend S.A.R.L.
+ * Copyright (C) 2012-2015 OpenHeadend S.A.R.L.
  *
  * Authors: Christophe Massiot
  *
@@ -138,7 +138,12 @@ void upump_common_init(struct upump *upump)
  */
 void upump_common_dispatch(struct upump *upump)
 {
+    struct urefcount *refcount =
+        upump->refcount != NULL && !urefcount_dead(upump->refcount) ?
+        upump->refcount : NULL;
+    urefcount_use(refcount);
     upump->cb(upump);
+    urefcount_release(refcount);
 }
 
 /** @This starts a pump if allowed.
@@ -184,7 +189,12 @@ void upump_common_clean(struct upump *upump)
             upump_blocker_common_from_uchain(uchain);
         struct upump_blocker *blocker =
             upump_blocker_common_to_upump_blocker(blocker_common);
+        struct urefcount *refcount =
+            upump->refcount != NULL && !urefcount_dead(upump->refcount) ?
+            upump->refcount : NULL;
+        urefcount_use(refcount);
         blocker->cb(blocker);
+        urefcount_release(refcount);
     }
 }
 

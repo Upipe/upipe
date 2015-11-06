@@ -441,14 +441,12 @@ static void upipe_http_src_process(struct upipe *upipe,
         upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
         return;
     }
-    upipe_use(upipe);
     size_t parsed_len =
         http_parser_execute(&upipe_http_src->parser,
                             &upipe_http_src->parser_settings,
                             (const char *)buffer, size);
     if (parsed_len != size)
         upipe_warn(upipe, "http request execution failed");
-    upipe_release(upipe);
     uref_block_unmap(uref, 0);
     uref_free(uref);
 }
@@ -735,7 +733,7 @@ static int upipe_http_src_check(struct upipe *upipe, struct uref *flow_format)
             struct upump *upump;
             upump = upump_alloc_fd_read(upipe_http_src->upump_mgr,
                                         upipe_http_src_worker, upipe,
-                                        upipe_http_src->fd);
+                                        upipe->refcount, upipe_http_src->fd);
             if (unlikely(upump == NULL)) {
                 upipe_throw_fatal(upipe, UBASE_ERR_UPUMP);
                 return UBASE_ERR_UPUMP;
@@ -748,8 +746,8 @@ static int upipe_http_src_check(struct upipe *upipe, struct uref *flow_format)
             upipe_http_src->request_pending) {
             struct upump *upump =
                 upump_alloc_fd_write(upipe_http_src->upump_mgr,
-                                     upipe_http_src_worker_write,
-                                     upipe, upipe_http_src->fd);
+                                     upipe_http_src_worker_write, upipe,
+                                     upipe->refcount, upipe_http_src->fd);
             if (unlikely(upump == NULL)) {
                 upipe_throw_fatal(upipe, UBASE_ERR_UPUMP);
                 return UBASE_ERR_UPUMP;

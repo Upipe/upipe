@@ -422,8 +422,8 @@ static bool upipe_alsink_open(struct upipe *upipe)
     }
 
     struct upump *timer = upump_alloc_timer(upipe_alsink->upump_mgr,
-                                            upipe_alsink_timer, upipe, 0,
-                                            upipe_alsink->period_duration);
+            upipe_alsink_timer, upipe, upipe->refcount, 0,
+            upipe_alsink->period_duration);
     if (unlikely(timer == NULL)) {
         upipe_err(upipe, "can't create timer");
         goto open_error;

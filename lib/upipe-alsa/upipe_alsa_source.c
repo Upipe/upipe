@@ -239,9 +239,7 @@ static void upipe_alsource_worker(struct upump *upump)
 
         upipe_alsource->samples_count += upipe_alsource->period_samples;
 
-        upipe_use(upipe);
         upipe_alsource_output(upipe, uref, &upipe_alsource->upump);
-        upipe_release(upipe);
     }
 
     return;
@@ -494,8 +492,8 @@ static int upipe_alsource_check(struct upipe *upipe, struct uref *flow_format)
     if (upipe_alsource->pfd.fd != -1 && upipe_alsource->upump == NULL) {
         struct upump *upump;
         upump = upump_alloc_fd_read (upipe_alsource->upump_mgr,
-                                     upipe_alsource_worker, upipe,
-                                     upipe_alsource->pfd.fd);
+                upipe_alsource_worker, upipe, upipe->refcount,
+                upipe_alsource->pfd.fd);
         if (unlikely(upump == NULL)) {
             upipe_throw_fatal(upipe, UBASE_ERR_UPUMP);
             return UBASE_ERR_UPUMP;

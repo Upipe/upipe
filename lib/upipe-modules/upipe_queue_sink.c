@@ -200,7 +200,7 @@ static bool upipe_qsink_check_watcher(struct upipe *upipe)
     struct upump *upump =
         uqueue_upump_alloc_push(&upipe_queue(upipe_qsink->qsrc)->uqueue,
                                 upipe_qsink->upump_mgr,
-                                upipe_qsink_watcher, upipe);
+                                upipe_qsink_watcher, upipe, upipe->refcount);
     if (unlikely(upump == NULL)) {
         upipe_err_va(upipe, "can't create watcher");
         upipe_throw_fatal(upipe, UBASE_ERR_UPUMP);
@@ -351,7 +351,8 @@ static int upipe_qsink_push_downstream(struct upipe *upipe,
         if (upipe_qsink->upump_mgr != NULL) {
             struct upump *upump = uqueue_upump_alloc_pop(
                     &upipe_queue(upipe_qsink->qsrc)->upstream_oob,
-                    upipe_qsink->upump_mgr, upipe_qsink_oob, upipe);
+                    upipe_qsink->upump_mgr, upipe_qsink_oob, upipe,
+                    upipe->refcount);
             if (unlikely(upump == NULL)) {
                 upipe_err_va(upipe, "can't create watcher");
                 return UBASE_ERR_UPUMP;

@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2013 OpenHeadend S.A.R.L.
+ * Copyright (C) 2013-2015 OpenHeadend S.A.R.L.
  *
  * Authors: Christophe Massiot
  *
@@ -112,7 +112,7 @@ static void UBASE_UNUSED STRUCTURE##_wait_##UPUMP(struct upipe *upipe,      \
 {                                                                           \
     struct STRUCTURE *s = STRUCTURE##_from_upipe(upipe);                    \
     struct upump *watcher = upump_alloc_timer(s->UPUMP_MGR, cb, upipe,      \
-                                              timeout, 0);                  \
+                                              upipe->refcount, timeout, 0); \
     if (unlikely(watcher == NULL)) {                                        \
         upipe_err(upipe, "can't create watcher");                           \
         upipe_throw_fatal(upipe, UBASE_ERR_UPUMP);                          \
