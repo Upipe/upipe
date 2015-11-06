@@ -245,8 +245,11 @@ static int STRUCTURE##_register_output_request(struct upipe *upipe,         \
 {                                                                           \
     struct STRUCTURE *s = STRUCTURE##_from_upipe(upipe);                    \
     ulist_add(&s->REQUEST_LIST, urequest_to_uchain(urequest));              \
-    if (likely(s->OUTPUT != NULL))                                          \
-        return upipe_register_request(s->OUTPUT, urequest);                 \
+    int err;                                                                \
+    if (likely(s->OUTPUT != NULL &&                                         \
+               (err = upipe_register_request(s->OUTPUT, urequest))          \
+                 != UBASE_ERR_UNHANDLED))                                   \
+        return err;                                                         \
     return upipe_throw_provide_request(upipe, urequest);                    \
 }                                                                           \
 /** @internal @This unregisters a request to be forwarded downstream.       \
@@ -260,8 +263,11 @@ static int STRUCTURE##_unregister_output_request(struct upipe *upipe,       \
 {                                                                           \
     struct STRUCTURE *s = STRUCTURE##_from_upipe(upipe);                    \
     ulist_delete(urequest_to_uchain(urequest));                             \
-    if (likely(s->OUTPUT != NULL))                                          \
-        return upipe_unregister_request(s->OUTPUT, urequest);               \
+    int err;                                                                \
+    if (likely(s->OUTPUT != NULL &&                                         \
+               (err = upipe_unregister_request(s->OUTPUT, urequest))        \
+                 != UBASE_ERR_UNHANDLED))                                   \
+        return err;                                                         \
     return UBASE_ERR_NONE;                                                  \
 }                                                                           \
 /** @internal @This handles the result of a proxy request.                  \
