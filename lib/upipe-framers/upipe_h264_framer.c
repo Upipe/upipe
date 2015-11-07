@@ -1409,8 +1409,13 @@ static void upipe_h264f_handle_sei(struct upipe *upipe)
 static void upipe_h264f_output_au(struct upipe *upipe, struct upump **upump_p)
 {
     struct upipe_h264f *upipe_h264f = upipe_h264f_from_upipe(upipe);
-    if (!upipe_h264f->au_size)
+    if (!upipe_h264f->au_size) {
+        upipe_h264f->au_vcl_offset = -1;
+        upipe_h264f->au_slice = false;
+        upipe_h264f->au_slice_nal = UINT8_MAX;
+        upipe_h264f->pic_struct = -1;
         return;
+    }
     if (upipe_h264f->au_slice_nal == UINT8_MAX ||
         upipe_h264f->active_sps == -1 || upipe_h264f->active_pps == -1) {
         upipe_warn(upipe, "discarding data without SPS/PPS");
