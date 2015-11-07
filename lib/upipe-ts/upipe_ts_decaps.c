@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2012-2014 OpenHeadend S.A.R.L.
+ * Copyright (C) 2012-2015 OpenHeadend S.A.R.L.
  *
  * Authors: Christophe Massiot
  *
@@ -194,7 +194,7 @@ static void upipe_ts_decaps_input(struct upipe *upipe, struct uref *uref,
             uref_free(uref);
             return;
         }
-        upipe_warn_va(upipe, "potentially lost 7 packets");
+        upipe_warn_va(upipe, "potentially lost 16 packets");
         discontinuity = true;
     }
 
