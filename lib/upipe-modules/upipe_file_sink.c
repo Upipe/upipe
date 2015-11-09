@@ -304,7 +304,11 @@ static void upipe_fsink_sync(struct upump *upump)
     struct upipe *upipe = upump_get_opaque(upump, struct upipe *);
     struct upipe_fsink *upipe_fsink = upipe_fsink_from_upipe(upipe);
     if (likely(upipe_fsink->fd != -1))
+#if defined(_POSIX_SYNCHRONIZED_IO) && _POSIX_SYNCHRONIZED_IO > 0
         fdatasync(upipe_fsink->fd);
+#else
+        fsync(upipe_fsink->fd);
+#endif
 }
 
 /** @internal @This receives data.
