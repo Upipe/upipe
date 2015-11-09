@@ -90,7 +90,7 @@ struct upipe_genaux {
     unsigned int nb_urefs;
     /** max urefs in storage */
     unsigned int max_urefs;
-    /** list of blockers (used during udeal) */
+    /** list of blockers (used during urequest) */
     struct uchain blockers;
 
     /** get attr */

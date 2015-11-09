@@ -116,7 +116,7 @@ struct upipe_ffmt {
     unsigned int nb_urefs;
     /** max urefs in storage */
     unsigned int max_urefs;
-    /** list of blockers (used during udeal) */
+    /** list of blockers (used during urequest) */
     struct uchain blockers;
 
     /** swscale flags */
@@ -203,7 +203,7 @@ static struct upipe *upipe_ffmt_alloc(struct upipe_mgr *mgr,
  * @param upipe description structure of the pipe
  * @param uref uref structure
  * @param upump_p reference to pump that generated the buffer
- * @return always true
+ * @return true if the packet was handled
  */
 static bool upipe_ffmt_handle(struct upipe *upipe, struct uref *uref,
                               struct upump **upump_p)
