@@ -106,14 +106,17 @@ before_install:
 
 before_script: autoreconf -i
 
-script: ./configure --disable-silent-rules
-          CC="$HOST_CC"
-          CXX="$HOST_CXX"
-          CPPFLAGS="-I$PWD/nacl_sdk/pepper_43/include"
-          CFLAGS="-Werror -Wno-error=deprecated-declarations $CFLAGS"
-          CXXFLAGS="-Werror"
-          LDFLAGS="-L$PWD/nacl_sdk/pepper_43/lib/glibc_x86_64" &&
-        make distcheck TEST_SUITE_LOG="$PWD/tests.log"
+script: CONFIGURE_FLAGS="--disable-silent-rules
+          CC=\"$HOST_CC\"
+          CXX=\"$HOST_CXX\"
+          CPPFLAGS=\"-I$PWD/nacl_sdk/pepper_43/include\"
+          CFLAGS=\"-Werror -Wno-error=deprecated-declarations $CFLAGS\"
+          CXXFLAGS=\"-Werror\"
+          LDFLAGS=\"-L$PWD/nacl_sdk/pepper_43/lib/glibc_x86_64\"" &&
+        eval ./configure $CONFIGURE_FLAGS &&
+        make distcheck
+          DISTCHECK_CONFIGURE_FLAGS="$CONFIGURE_FLAGS"
+          TEST_SUITE_LOG="$PWD/tests.log"
 
 after_failure:
   - test -r config.log && cat config.log
