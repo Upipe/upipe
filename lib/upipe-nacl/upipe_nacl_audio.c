@@ -225,7 +225,8 @@ static bool upipe_nacl_audio_check_watcher(struct upipe *upipe)
     struct upump *upump =
         uqueue_upump_alloc_push(&upipe_nacl_audio->uqueue,
                                 upipe_nacl_audio->upump_mgr,
-                                upipe_nacl_audio_watcher, upipe);
+                                upipe_nacl_audio_watcher, upipe,
+                                upipe->refcount);
     if (unlikely(upump == NULL)) {
         upipe_err_va(upipe, "can't create watcher");
         upipe_throw_fatal(upipe, UBASE_ERR_UPUMP);
