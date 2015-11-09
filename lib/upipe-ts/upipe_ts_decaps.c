@@ -187,6 +187,11 @@ static void upipe_ts_decaps_input(struct upipe *upipe, struct uref *uref,
     }
 
     if (unlikely(ts_check_duplicate(cc, upipe_ts_decaps->last_cc))) {
+        if (!has_payload) {
+            /* padding or just PCR */
+            uref_free(uref);
+            return;
+        }
         if (upipe_ts_decaps->last_uref != NULL &&
             ubase_check(uref_block_compare(uref, 0,
                                            upipe_ts_decaps->last_uref))) {
