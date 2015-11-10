@@ -15,6 +15,7 @@ pkgconfigdir = $(libdir)/pkgconfig
 pkgconfig_DATA = libupipe_av.pc
 
 upipe_av_codecs.h: upipe_av_codecs.pl avcodec_include.h
-	CPP="$(CPP)" CFLAGS="$(CFLAGS) $(CPPFLAGS) @AVFORMAT_CFLAGS@" $(PERL) $(srcdir)/upipe_av_codecs.pl $(srcdir)/avcodec_include.h > $@
-
-FORCE:
+	$(AM_V_GEN) \
+	  CPP="$(CPP)" \
+	  CFLAGS="$(CFLAGS) $(CPPFLAGS) @AVFORMAT_CFLAGS@" \
+	  $(PERL) $(srcdir)/upipe_av_codecs.pl $(srcdir)/avcodec_include.h > $@
