@@ -52,7 +52,8 @@ libupipe_modules_la_SOURCES = \
 	upipe_m3u_reader.c \
 	upipe_m3u_playlist.c \
 	upipe_auto_source.c \
-	upipe_buffer.c
+	upipe_buffer.c \
+	upipe_aes_decrypt.c
 
 if HAVE_WRITEV
 libupipe_modules_la_SOURCES += \
