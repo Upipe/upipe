@@ -25,6 +25,7 @@ matrix:
         - APT_PACKAGES="gcc-$GCC_VERSION-multilib g++-$GCC_VERSION-multilib"
         - HOST_CC="gcc-$GCC_VERSION -m32"
         - HOST_CXX="g++-$GCC_VERSION -m32"
+        - CFLAGS="-msse2 -mfpmath=sse"
 
     - os: linux
       compiler: clang-3.7
