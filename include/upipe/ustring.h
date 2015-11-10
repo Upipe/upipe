@@ -40,6 +40,18 @@ extern "C" {
 #include <stddef.h>
 #include <string.h>
 
+#define USTRING_ALPHA_LOWER \
+    'a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j', \
+    'k', 'l', 'm', 'n', 'o', 'p', 'q', 'r', 's', 't', \
+    'u', 'v', 'w', 'x', 'y', 'z'
+#define USTRING_ALPHA_UPPER \
+    'A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', \
+    'K', 'L', 'M', 'N', 'O', 'P', 'Q', 'R', 'S', 'T', \
+    'U', 'V', 'W', 'X', 'Y', 'Z'
+#define USTRING_ALPHA USTRING_ALPHA_LOWER, USTRING_ALPHA_UPPER
+#define USTRING_DIGIT '0', '1', '2', '3', '4', '5', '6', '7', '8', '9'
+#define USTRING_HEXDIGIT USTRING_DIGIT, 'a', 'b', 'c', 'd', 'e', 'f', \
+                                  'A', 'B', 'C', 'D', 'E', 'F'
 /** @This stores a portion of a string. */
 struct ustring {
     /** pointer to the first character */
@@ -286,6 +298,19 @@ static inline int ustring_cmp(const struct ustring sub1,
                         sub1.len : sub2.len);
 }
 
+/** @This compares an ustring an a string.
+ *
+ * @param sub the ustring to compare
+ * @param str the string to compare
+ * @return an interger less than, equal to, or greater than zero if sub,
+ * respectively, to be less than, to match, or to be grearter than str
+ */
+static inline int ustring_cmp_str(const struct ustring sub,
+                                  const char *str)
+{
+    return ustring_cmp(sub, ustring_from_str(str));
+}
+
 /** @This compares two ustrings ignoring the case.
  *
  * @param sub1 the first ustring to compare
@@ -299,6 +324,19 @@ static inline int ustring_casecmp(const struct ustring sub1,
     return ustring_ncasecmp(sub1, sub2,
                             sub1.len >= sub2.len ?
                             sub1.len : sub2.len);
+}
+
+/** @This compares an ustring an a string ignoring the case.
+ *
+ * @param sub the ustring to compare
+ * @param str the string to compare
+ * @return an interger less than, equal to, or greater than zero if sub,
+ * respectively, to be less than, to match, or to be grearter than str
+ */
+static inline int ustring_casecmp_str(const struct ustring sub,
+                                      const char *str)
+{
+    return ustring_casecmp(sub, ustring_from_str(str));
 }
 
 /** @This returns true if the ustring sub start with ustring prefix.
@@ -481,6 +519,17 @@ ustring_split_casematch_str(struct ustring *sub, const char *prefix)
         return tmp;
     }
     return ustring_null();
+}
+
+static inline struct ustring
+ustring_unframe(const struct ustring ustring, char c)
+{
+    if (ustring.len >= 2 &&
+        ustring.at[0] == ustring.at[ustring.len - 1] &&
+        ustring.at[0] == c) {
+        return ustring_sub(ustring, 1, ustring.len - 2);
+    }
+    return ustring;
 }
 
 #ifdef __cplusplus
