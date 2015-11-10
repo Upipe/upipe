@@ -33,17 +33,7 @@
 #define UURI_GEN_DELIMS ':', '/', '?', '#', '[', ']', '@'
 #define UURI_SUB_DELIMS '!', '$', '&', '\'', '(', ')', '*', '+', ',', ';', '='
 #define UURI_RESERVED UURI_GEN_DELIMS, UURI_SUB_DELIMS
-#define UURI_ALPHA_LOWER 'a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j', \
-                         'k', 'l', 'm', 'n', 'o', 'p', 'q', 'r', 's', 't', \
-                         'u', 'v', 'w', 'x', 'y', 'z'
-#define UURI_ALPHA_UPPER 'A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', \
-                         'K', 'L', 'M', 'N', 'O', 'P', 'Q', 'R', 'S', 'T', \
-                         'U', 'V', 'W', 'X', 'Y', 'Z'
-#define UURI_ALPHA UURI_ALPHA_LOWER, UURI_ALPHA_UPPER
-#define UURI_DIGIT '0', '1', '2', '3', '4', '5', '6', '7', '8', '9'
-#define UURI_HEXDIGIT UURI_DIGIT, 'a', 'b', 'c', 'd', 'e', 'f', \
-                                  'A', 'B', 'C', 'D', 'E', 'F'
-#define UURI_UNRESERVED UURI_ALPHA, UURI_DIGIT, '-', '.', '_', '~'
+#define UURI_UNRESERVED USTRING_ALPHA, USTRING_DIGIT, '-', '.', '_', '~'
 
 static const char uuri_escape_set[] = { UURI_RESERVED, 0 };
 
@@ -268,7 +258,7 @@ struct ustring uuri_parse_ipvfuture(struct ustring *str)
     if (ustring_is_empty(ustring_split_match_str(&tmp, "v")))
         return ustring_null();
 
-    static const char hexdigit_set[] = { UURI_HEXDIGIT, 0 };
+    static const char hexdigit_set[] = { USTRING_HEXDIGIT, 0 };
     if (ustring_is_empty(ustring_split_while(&tmp, hexdigit_set)))
         return ustring_null();
 
@@ -316,7 +306,8 @@ static struct ustring uuri_parse_hostname(struct ustring *str)
 
 struct ustring uuri_parse_scheme(struct ustring *str)
 {
-    static const char set[] = { UURI_ALPHA, UURI_DIGIT, '+', '-', '.', 0 };
+    static const char set[] =
+        { USTRING_ALPHA, USTRING_DIGIT, '+', '-', '.', 0 };
     if (str->len >= 1 && isalpha(str->at[0]))
         return ustring_split_while(str, set);
     return ustring_null();
@@ -352,7 +343,7 @@ struct ustring uuri_parse_host(struct ustring *str)
 
 struct ustring uuri_parse_port(struct ustring *str)
 {
-    static const char set[] = { UURI_DIGIT, 0 };
+    static const char set[] = { USTRING_DIGIT, 0 };
     struct ustring port = ustring_while(*str, set);
     if (!port.len)
         return ustring_null();
