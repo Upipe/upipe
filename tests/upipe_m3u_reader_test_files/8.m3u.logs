@@ -1,17 +1,32 @@
 flow definition: block.m3u.master.
+uri: main/english-audio.m3u8
+master media_type: AUDIO
+master media_name: English
+master media_group: aac
+master media_default
+master media_autoselect
+uri: main/german-audio.m3u8
+master media_type: AUDIO
+master media_name: Deutsch
+master media_group: aac
+master media_autoselect
+uri: commentary/audio-only.m3u8
+master media_type: AUDIO
+master media_name: Commentary
+master media_group: aac
 uri: low/video-only.m3u8
-master stream info: BANDWIDTH=1280000,CODECS="...",AUDIO="aac"
 master bandwidth: 1280000
 master codecs: ...
+master audio: aac
 uri: mid/video-only.m3u8
-master stream info: BANDWIDTH=2560000,CODECS="...",AUDIO="aac"
 master bandwidth: 2560000
 master codecs: ...
+master audio: aac
 uri: hi/video-only.m3u8
-master stream info: BANDWIDTH=7680000,CODECS="...",AUDIO="aac"
 master bandwidth: 7680000
 master codecs: ...
+master audio: aac
 uri: main/english-audio.m3u8
-master stream info: BANDWIDTH=65000,CODECS="mp4a.40.5",AUDIO="aac"
 master bandwidth: 65000
 master codecs: mp4a.40.5
+master audio: aac

@@ -1,14 +1,10 @@
 flow definition: block.m3u.master.
 uri: http://example.com/low.m3u8
-master stream info: BANDWIDTH=1280000
 master bandwidth: 1280000
 uri: http://example.com/mid.m3u8
-master stream info: BANDWIDTH=2560000
 master bandwidth: 2560000
 uri: http://example.com/hi.m3u8
-master stream info: BANDWIDTH=7680000
 master bandwidth: 7680000
 uri: http://example.com/audio-only.m3u8
-master stream info: BANDWIDTH=65000,CODECS="mp4a.40.5"
 master bandwidth: 65000
 master codecs: mp4a.40.5

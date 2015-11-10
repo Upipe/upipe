@@ -1,17 +1,52 @@
 flow definition: block.m3u.master.
 uri: low/main/audio-video.m3u8
-master stream info: BANDWIDTH=1280000,CODECS="...",VIDEO="low"
+master media_type: VIDEO
+master media_name: Main
+master media_group: low
+master media_default
+uri: low/centerfield/audio-video.m3u8
+master media_type: VIDEO
+master media_name: Centerfield
+master media_group: low
+uri: low/dugout/audio-video.m3u8
+master media_type: VIDEO
+master media_name: Dugout
+master media_group: low
+uri: low/main/audio-video.m3u8
 master bandwidth: 1280000
 master codecs: ...
 uri: mid/main/audio-video.m3u8
-master stream info: BANDWIDTH=2560000,CODECS="...",VIDEO="mid"
+master media_type: VIDEO
+master media_name: Main
+master media_group: mid
+master media_default
+uri: mid/centerfield/audio-video.m3u8
+master media_type: VIDEO
+master media_name: Centerfield
+master media_group: mid
+uri: mid/dugout/audio-video.m3u8
+master media_type: VIDEO
+master media_name: Dugout
+master media_group: mid
+uri: mid/main/audio-video.m3u8
 master bandwidth: 2560000
 master codecs: ...
 uri: hi/main/audio-video.m3u8
-master stream info: BANDWIDTH=7680000,CODECS="...",VIDEO="hi"
+master media_type: VIDEO
+master media_name: Main
+master media_group: hi
+master media_default
+uri: hi/centerfield/audio-video.m3u8
+master media_type: VIDEO
+master media_name: Centerfield
+master media_group: hi
+uri: hi/dugout/audio-video.m3u8
+master media_type: VIDEO
+master media_name: Dugout
+master media_group: hi
+uri: hi/main/audio-video.m3u8
 master bandwidth: 7680000
 master codecs: ...
 uri: main/audio-only.m3u8
-master stream info: BANDWIDTH=65000,CODECS="mp4a.40.5"
 master bandwidth: 65000
 master codecs: mp4a.40.5
