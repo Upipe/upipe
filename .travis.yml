@@ -4,6 +4,7 @@ language: c
 env:
   global:
     - MAKEFLAGS=-j2
+    - FFMPEG="libavcodec-ffmpeg-opti-dev libavformat-ffmpeg-opti-dev libswresample-ffmpeg-opti-dev libswscale-ffmpeg-opti-dev"
 
 matrix:
   include:
@@ -13,7 +14,7 @@ matrix:
       env:
         - GCC_VERSION=5
         - APT_REPOS="ppa:ubuntu-toolchain-r/test ppa:frodo-vdr/main ppa:danmbox/ppa ppa:dlundquist/sniproxy"
-        - APT_PACKAGES="gcc-$GCC_VERSION g++-$GCC_VERSION"
+        - APT_PACKAGES="gcc-$GCC_VERSION g++-$GCC_VERSION libx264-dev $FFMPEG"
         - HOST_CC=gcc-$GCC_VERSION
         - HOST_CXX=g++-$GCC_VERSION
 
@@ -23,6 +24,7 @@ matrix:
         - GCC_VERSION=5
         - APT_REPOS="ppa:ubuntu-toolchain-r/test ppa:frodo-vdr/main ppa:danmbox/ppa ppa:dlundquist/sniproxy"
         - APT_PACKAGES="gcc-$GCC_VERSION-multilib g++-$GCC_VERSION-multilib"
+        - APT_PACKAGES_RM="mesa-common-dev libgl1-mesa-dev libglu1-mesa-dev"
         - HOST_CC="gcc-$GCC_VERSION -m32"
         - HOST_CXX="g++-$GCC_VERSION -m32"
         - CFLAGS="-msse2 -mfpmath=sse"
@@ -32,7 +34,7 @@ matrix:
       env:
         - CLANG_VERSION=3.7
         - APT_REPOS="ppa:ubuntu-toolchain-r/test ppa:frodo-vdr/main ppa:danmbox/ppa ppa:dlundquist/sniproxy"
-        - APT_PACKAGES="clang-$CLANG_VERSION"
+        - APT_PACKAGES="clang-$CLANG_VERSION libx264-dev $FFMPEG"
         - HOST_CC=clang-$CLANG_VERSION
         - HOST_CXX=clang++-$CLANG_VERSION
         - CFLAGS="-Wno-error=unused-function"
@@ -66,16 +68,11 @@ before_install:
         valgrind
         libev-dev
         libasound2-dev
-        libx264-dev
-        yasm
-        libavcodec-ffmpeg-opti-dev
-        libavformat-ffmpeg-opti-dev
-        libswresample-ffmpeg-opti-dev
-        libswscale-ffmpeg-opti-dev
         libc6-i386
         $APT_PACKAGES;
       sudo apt-get remove
-        libqtwebkit-dev;
+        libqtwebkit-dev
+        $APT_PACKAGES_RM;
     fi
   - if type brew 2>/dev/null; then
       brew update;
