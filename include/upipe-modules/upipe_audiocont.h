@@ -1,7 +1,8 @@
 /*
- * Copyright (C) 2014 OpenHeadend S.A.R.L.
+ * Copyright (C) 2014-2015 OpenHeadend S.A.R.L.
  *
  * Authors: Benjamin Cohen
+ *          Christophe Massiot
  *
  * Permission is hereby granted, free of charge, to any person obtaining
  * a copy of this software and associated documentation files (the
@@ -25,7 +26,7 @@
  */
 
 /** @file
- * @short Upipe module video continuity
+ * @short Upipe module audio continuity
  */
 
 #ifndef _UPIPE_MODULES_UPIPE_AUDIOCONT_H_
@@ -55,6 +56,10 @@ enum upipe_audiocont_command {
     UPIPE_AUDIOCONT_GET_LATENCY,
     /** sets the pts latency (uint64_t) */
     UPIPE_AUDIOCONT_SET_LATENCY,
+    /** returns the current crossblend period (uint64_t *) */
+    UPIPE_AUDIOCONT_GET_CROSSBLEND,
+    /** sets the crossblend period (uint64_t) */
+    UPIPE_AUDIOCONT_SET_CROSSBLEND
 };
 
 /** @This extends upipe_command with specific commands for upipe_audiocont
@@ -62,8 +67,8 @@ enum upipe_audiocont_command {
 enum upipe_audiocont_sub_command {
     UPIPE_AUDIOCONT_SUB_SENTINEL = UPIPE_CONTROL_LOCAL,
 
-    /** This sets a audiocont subpipe as its grandpipe input () */
-    UPIPE_AUDIOCONT_SUB_SET_INPUT,
+    /** This sets a audiocont subpipe as its grandpipe input (void) */
+    UPIPE_AUDIOCONT_SUB_SET_INPUT
 };
 
 /** @This returns the current input name if any.
@@ -129,6 +134,32 @@ static inline int upipe_audiocont_set_latency(struct upipe *upipe,
 {
     return upipe_control(upipe, UPIPE_AUDIOCONT_SET_LATENCY,
                          UPIPE_AUDIOCONT_SIGNATURE, latency);
+}
+
+/** @This returns the current crossblend period.
+ *
+ * @param upipe description structure of the pipe
+ * @param crossblend_p filled with current crossblend period
+ * @return an error code
+ */
+static inline int upipe_audiocont_get_crossblend(struct upipe *upipe,
+                                                 uint64_t *crossblend_p)
+{
+    return upipe_control(upipe, UPIPE_AUDIOCONT_GET_CROSSBLEND,
+                         UPIPE_AUDIOCONT_SIGNATURE, crossblend_p);
+}
+
+/** @This sets the crossblend period.
+ *
+ * @param upipe description structure of the pipe
+ * @param crossblend crossblend period
+ * @return an error code
+ */
+static inline int upipe_audiocont_set_crossblend(struct upipe *upipe,
+                                                 uint64_t crossblend)
+{
+    return upipe_control(upipe, UPIPE_AUDIOCONT_SET_CROSSBLEND,
+                         UPIPE_AUDIOCONT_SIGNATURE, crossblend);
 }
 
 /** @This sets a audiocont subpipe as its grandpipe input.
