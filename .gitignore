@@ -7,6 +7,7 @@
 # http://www.gnu.org/software/automake
 
 Makefile.in
+.dirstamp
 
 # http://www.gnu.org/software/autoconf
 
