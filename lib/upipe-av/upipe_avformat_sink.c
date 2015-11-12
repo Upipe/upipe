@@ -237,8 +237,8 @@ static int upipe_avfsink_sub_set_flow_def(struct upipe *upipe,
 
     struct urational fps, sar;
     uint64_t width, height;
-    uint8_t channels;
-    uint64_t rate, samples;
+    uint8_t channels = 0;
+    uint64_t rate = 0, samples = 0;
     if (codec_id < AV_CODEC_ID_FIRST_AUDIO) {
         if (unlikely(!ubase_check(uref_pic_flow_get_fps(flow_def, &fps)) ||
                      !ubase_check(uref_pic_flow_get_sar(flow_def, &sar)) ||
