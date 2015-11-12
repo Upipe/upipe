@@ -47,7 +47,6 @@ libupipe_modules_la_SOURCES = \
 	upipe_rtp_h264.c \
 	upipe_rtp_mpeg4.c \
 	upipe_rtp_opus.c \
-	upipe_rtcp.c \
 	upipe_dump.c \
 	uprobe_http_redirect.c \
 	upipe_m3u_reader.c \
@@ -65,7 +64,8 @@ if HAVE_BITSTREAM
 libupipe_modules_la_SOURCES += \
 	upipe_rtp_decaps.c \
 	upipe_rtp_prepend.c \
-	upipe_rtp_source.c
+	upipe_rtp_source.c \
+	upipe_rtcp.c
 endif
 
 libupipe_modules_la_CPPFLAGS = -I$(top_builddir)/include -I$(top_srcdir)/include
