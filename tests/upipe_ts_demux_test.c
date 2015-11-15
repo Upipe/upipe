@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2013-2014 OpenHeadend S.A.R.L.
+ * Copyright (C) 2013-2015 OpenHeadend S.A.R.L.
  *
  * Authors: Christophe Massiot
  *
@@ -76,7 +76,7 @@ static struct upipe *upipe_ts_demux_output_pmt = NULL;
 static struct upipe *upipe_ts_demux_output_video = NULL;
 static struct uprobe *logger;
 static uint64_t wanted_flow_id;
-static bool expect_new_flow_def = false;
+static int expect_new_flow_def = 0;
 
 /** definition of our uprobe */
 static int catch(struct uprobe *uprobe, struct upipe *upipe,
@@ -137,7 +137,7 @@ static int catch(struct uprobe *uprobe, struct upipe *upipe,
         }
         case UPROBE_NEED_OUTPUT:
             assert(expect_new_flow_def);
-            expect_new_flow_def = false;
+            expect_new_flow_def--;
             break;
     }
     return UBASE_ERR_NONE;
@@ -216,7 +216,7 @@ int main(int argc, char *argv[])
     *payload = 0xff;
     uref_block_unmap(uref, 0);
     wanted_flow_id = 12;
-    expect_new_flow_def = true;
+    expect_new_flow_def = 1;
     upipe_input(upipe_ts_demux, uref, NULL);
 
     uref = uref_block_alloc(uref_mgr, ubuf_mgr, TS_SIZE);
@@ -250,7 +250,7 @@ int main(int argc, char *argv[])
     *payload = 0xff;
     uref_block_unmap(uref, 0);
     wanted_flow_id = 43;
-    expect_new_flow_def = true;
+    expect_new_flow_def = 1;
     upipe_input(upipe_ts_demux, uref, NULL);
     assert(!expect_new_flow_def);
 
@@ -315,7 +315,7 @@ int main(int argc, char *argv[])
     *payload = 0xff;
     uref_block_unmap(uref, 0);
     wanted_flow_id = 43;
-    expect_new_flow_def = true;
+    expect_new_flow_def = 1;
     upipe_input(upipe_ts_demux, uref, NULL);
     assert(!expect_new_flow_def);
 
@@ -388,7 +388,7 @@ int main(int argc, char *argv[])
 
     mp2vend_init(payload);
     uref_block_unmap(uref, 0);
-    expect_new_flow_def = true;
+    expect_new_flow_def = 2;
     upipe_input(upipe_ts_demux, uref, NULL);
     assert(!expect_new_flow_def);
 

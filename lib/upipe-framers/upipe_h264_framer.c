@@ -42,6 +42,8 @@
 #include <upipe/upipe_helper_sync.h>
 #include <upipe/upipe_helper_uref_stream.h>
 #include <upipe/upipe_helper_output.h>
+#include <upipe/upipe_helper_input.h>
+#include <upipe/upipe_helper_flow_format.h>
 #include <upipe/upipe_helper_flow_def.h>
 #include <upipe-framers/upipe_h264_framer.h>
 #include <upipe-framers/uref_h264_flow.h>
@@ -95,8 +97,24 @@ struct upipe_h264f {
     struct uchain request_list;
     /** input flow definition packet */
     struct uref *flow_def_input;
-    /** attributes in the SPS */
+    /** attributes added by the pipe */
     struct uref *flow_def_attr;
+    /** requested flow definition */
+    struct uref *flow_def_requested;
+    /** requested annex B format */
+    bool annexb_requested;
+
+    /** flow format request */
+    struct urequest request;
+    /** temporary uref storage (used during urequest) */
+    struct uchain request_urefs;
+    /** nb urefs in storage */
+    unsigned int nb_urefs;
+    /** max urefs in storage */
+    unsigned int max_urefs;
+    /** list of blockers (used during urequest) */
+    struct uchain blockers;
+
     /** rap of the last dts */
     uint64_t dts_rap;
     /** rap of the last sps */
@@ -221,6 +239,12 @@ struct upipe_h264f {
 
 /** @hidden */
 static void upipe_h264f_promote_uref(struct upipe *upipe);
+/** @hidden */
+static bool upipe_h264f_handle(struct upipe *upipe, struct uref *uref,
+                               struct upump **upump_p);
+/** @hidden */
+static int upipe_h264f_check_flow_format(struct upipe *upipe,
+                                         struct uref *flow_format);
 
 UPIPE_HELPER_UPIPE(upipe_h264f, upipe, UPIPE_H264F_SIGNATURE)
 UPIPE_HELPER_UREFCOUNT(upipe_h264f, urefcount, upipe_h264f_free)
@@ -230,6 +254,10 @@ UPIPE_HELPER_UREF_STREAM(upipe_h264f, next_uref, next_uref_size, urefs,
                          upipe_h264f_promote_uref)
 
 UPIPE_HELPER_OUTPUT(upipe_h264f, output, flow_def, output_state, request_list)
+UPIPE_HELPER_INPUT(upipe_h264f, request_urefs, nb_urefs, max_urefs, blockers, upipe_h264f_handle)
+UPIPE_HELPER_FLOW_FORMAT(upipe_h264f, request, upipe_h264f_check_flow_format,
+                         upipe_h264f_register_output_request,
+                         upipe_h264f_unregister_output_request)
 UPIPE_HELPER_FLOW_DEF(upipe_h264f, flow_def_input, flow_def_attr)
 
 /** @internal @This flushes all dates.
@@ -295,7 +323,11 @@ static struct upipe *upipe_h264f_alloc(struct upipe_mgr *mgr,
     upipe_h264f_init_sync(upipe);
     upipe_h264f_init_uref_stream(upipe);
     upipe_h264f_init_output(upipe);
+    upipe_h264f_init_input(upipe);
+    upipe_h264f_init_flow_format(upipe);
     upipe_h264f_init_flow_def(upipe);
+    upipe_h264f->flow_def_requested = NULL;
+    upipe_h264f->annexb_requested = true;
     upipe_h264f->dts_rap = UINT64_MAX;
     upipe_h264f->sps_rap = UINT64_MAX;
     upipe_h264f->pps_rap = UINT64_MAX;
@@ -1245,12 +1277,13 @@ static bool upipe_h264f_activate_sps(struct upipe *upipe, uint32_t sps_id)
 
     upipe_h264f->active_sps = sps_id;
     ubuf_block_stream_clean(s);
+
+    upipe_h264f_store_flow_def(upipe, NULL);
+    uref_free(upipe_h264f->flow_def_requested);
+    upipe_h264f->flow_def_requested = NULL;
     flow_def = upipe_h264f_store_flow_def_attr(upipe, flow_def);
-    if (unlikely(flow_def == NULL)) {
-        upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
-        return false;
-    }
-    upipe_h264f_store_flow_def(upipe, flow_def);
+    if (flow_def != NULL)
+        upipe_h264f_require_flow_format(upipe, flow_def);
     return true;
 }
 
@@ -1399,6 +1432,95 @@ static void upipe_h264f_handle_sei(struct upipe *upipe)
     }
 
     ubuf_block_stream_clean(s);
+}
+
+/** @internal @This builds the flow definition packet.
+ *
+ * @param upipe description structure of the pipe
+ */
+static void upipe_h264f_build_flow_def(struct upipe *upipe)
+{
+    struct upipe_h264f *upipe_h264f = upipe_h264f_from_upipe(upipe);
+    assert(upipe_h264f->flow_def_requested != NULL);
+
+    struct uref *flow_def = uref_dup(upipe_h264f->flow_def_requested);
+    if (unlikely(flow_def == NULL)) {
+        upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
+        return;
+    }
+
+    if (upipe_h264f->duration) {
+        UBASE_FATAL(upipe, uref_clock_set_latency(flow_def,
+                         upipe_h264f->input_latency + upipe_h264f->duration))
+    }
+
+    upipe_h264f->annexb_requested =
+        ubase_check(uref_h264_flow_get_annexb(upipe_h264f->flow_def_requested));
+
+    if (ubase_check(uref_flow_get_global(upipe_h264f->flow_def_requested))) {
+        if (upipe_h264f->annexb_requested) {
+            size_t headers_size = 0;
+            int i;
+            for (i = 0; i < H264SPS_ID_MAX; i++) {
+                if (upipe_h264f->sps[i] != NULL) {
+                    size_t ubuf_size = 0;
+                    ubuf_block_size(upipe_h264f->sps[i], &ubuf_size);
+                    headers_size += ubuf_size;
+                }
+                if (upipe_h264f->sps_ext[i] != NULL) {
+                    size_t ubuf_size = 0;
+                    ubuf_block_size(upipe_h264f->sps_ext[i], &ubuf_size);
+                    headers_size += ubuf_size;
+                }
+            }
+            for (i = 0; i < H264PPS_ID_MAX; i++) {
+                if (upipe_h264f->pps[i] != NULL) {
+                    size_t ubuf_size = 0;
+                    ubuf_block_size(upipe_h264f->pps[i], &ubuf_size);
+                    headers_size += ubuf_size;
+                }
+            }
+
+            uint8_t headers[headers_size];
+            int j = 0;
+            for (i = 0; i < H264SPS_ID_MAX; i++) {
+                if (upipe_h264f->sps[i] != NULL) {
+                    size_t ubuf_size = 0;
+                    ubuf_block_size(upipe_h264f->sps[i], &ubuf_size);
+                    UBASE_FATAL(upipe,
+                            ubuf_block_extract(upipe_h264f->sps[i], 0, -1,
+                                               headers + j))
+                    j += ubuf_size;
+                }
+                if (upipe_h264f->sps_ext[i] != NULL) {
+                    size_t ubuf_size = 0;
+                    ubuf_block_size(upipe_h264f->sps_ext[i], &ubuf_size);
+                    UBASE_FATAL(upipe,
+                            ubuf_block_extract(upipe_h264f->sps_ext[i], 0, -1,
+                                               headers + j))
+                    j += ubuf_size;
+                }
+            }
+            for (i = 0; i < H264PPS_ID_MAX; i++) {
+                if (upipe_h264f->pps[i] != NULL) {
+                    size_t ubuf_size = 0;
+                    ubuf_block_size(upipe_h264f->pps[i], &ubuf_size);
+                    UBASE_FATAL(upipe,
+                            ubuf_block_extract(upipe_h264f->pps[i], 0, -1,
+                                               headers + j))
+                    j += ubuf_size;
+                }
+            }
+
+            UBASE_FATAL(upipe,
+                    uref_flow_set_headers(flow_def, headers, headers_size))
+
+        } else { /* !annexb */
+            /* TODO */
+        }
+    }
+
+    upipe_h264f_store_flow_def(upipe, flow_def);
 }
 
 /** @internal @This handles and outputs an access unit.
@@ -1564,9 +1686,21 @@ static void upipe_h264f_output_au(struct upipe *upipe, struct upump **upump_p)
     upipe_h264f->au_slice_nal = UINT8_MAX;
     upipe_h264f->pic_struct = -1;
 
+    if (unlikely(upipe_h264f->flow_def == NULL))
+        upipe_h264f_build_flow_def(upipe);
+
     if (unlikely(upipe_h264f->flow_def == NULL)) {
         uref_free(uref);
+        upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
         return;
+    }
+
+    /* Force sending and possibly negotiating flow def before converting
+     * bitstream. */
+    upipe_h264f_output(upipe, NULL, upump_p);
+
+    if (!upipe_h264f->annexb_requested) {
+        /* TODO */
     }
 
     upipe_h264f_output(upipe, uref, upump_p);
@@ -1860,6 +1994,10 @@ static void upipe_h264f_work(struct upipe *upipe, struct upump **upump_p)
 {
     struct upipe_h264f *upipe_h264f = upipe_h264f_from_upipe(upipe);
     while (upipe_h264f->next_uref != NULL) {
+        if (upipe_h264f->flow_def_requested == NULL &&
+            upipe_h264f->flow_def_attr != NULL)
+            return;
+
         uint8_t start, prev;
         if (!upipe_h264f_find(upipe, &start, &prev))
             return;
@@ -1878,7 +2016,43 @@ static void upipe_h264f_work(struct upipe *upipe, struct upump **upump_p)
     }
 }
 
-/** @internal @This receives data.
+/** @internal @This handles data.
+ *
+ * @param upipe description structure of the pipe
+ * @param uref uref structure
+ * @param upump_p reference to pump that generated the buffer
+ * @return true if the packet was handled
+ */
+static bool upipe_h264f_handle(struct upipe *upipe, struct uref *uref,
+                               struct upump **upump_p)
+{
+    struct upipe_h264f *upipe_h264f = upipe_h264f_from_upipe(upipe);
+    const char *def;
+    if (unlikely(ubase_check(uref_flow_get_def(uref, &def)))) {
+        upipe_h264f->input_latency = 0;
+        uref_clock_get_latency(uref, &upipe_h264f->input_latency);
+        upipe_h264f_store_flow_def(upipe, NULL);
+        uref_free(upipe_h264f->flow_def_requested);
+        upipe_h264f->flow_def_requested = NULL;
+        uref = upipe_h264f_store_flow_def_input(upipe, uref);
+        if (uref != NULL)
+            upipe_h264f_require_flow_format(upipe, uref);
+        return true;
+    }
+
+    if (upipe_h264f->flow_def_requested == NULL &&
+        upipe_h264f->flow_def_attr != NULL)
+        return false;
+
+    if (unlikely(ubase_check(uref_flow_get_discontinuity(uref))))
+        upipe_h264f->got_discontinuity = true;
+
+    upipe_h264f_append_uref_stream(upipe, uref);
+    upipe_h264f_work(upipe, upump_p);
+    return true;
+}
+
+/** @internal @This inputs data.
  *
  * @param upipe description structure of the pipe
  * @param uref uref structure
@@ -1887,13 +2061,44 @@ static void upipe_h264f_work(struct upipe *upipe, struct upump **upump_p)
 static void upipe_h264f_input(struct upipe *upipe, struct uref *uref,
                               struct upump **upump_p)
 {
+    if (!upipe_h264f_check_input(upipe)) {
+        upipe_h264f_hold_input(upipe, uref);
+        upipe_h264f_block_input(upipe, upump_p);
+    } else if (!upipe_h264f_handle(upipe, uref, upump_p)) {
+        upipe_h264f_hold_input(upipe, uref);
+        upipe_h264f_block_input(upipe, upump_p);
+        /* Increment upipe refcount to avoid disappearing before all packets
+         * have been sent. */
+        upipe_use(upipe);
+    }
+}
+
+/** @internal @This receives the result of a flow format request.
+ *
+ * @param upipe description structure of the pipe
+ * @param flow_format amended flow format
+ * @return an error code
+ */
+static int upipe_h264f_check_flow_format(struct upipe *upipe,
+                                         struct uref *flow_format)
+{
     struct upipe_h264f *upipe_h264f = upipe_h264f_from_upipe(upipe);
+    if (flow_format == NULL)
+        return UBASE_ERR_INVALID;
 
-    if (unlikely(ubase_check(uref_flow_get_discontinuity(uref))))
-        upipe_h264f->got_discontinuity = true;
+    uref_free(upipe_h264f->flow_def_requested);
+    upipe_h264f->flow_def_requested = flow_format;
+    upipe_h264f_build_flow_def(upipe);
 
-    upipe_h264f_append_uref_stream(upipe, uref);
-    upipe_h264f_work(upipe, upump_p);
+    bool was_buffered = !upipe_h264f_check_input(upipe);
+    upipe_h264f_output_input(upipe);
+    upipe_h264f_unblock_input(upipe);
+    if (was_buffered && upipe_h264f_check_input(upipe)) {
+        /* All packets have been output, release again the pipe that has been
+         * used in @ref upipe_h264f_input. */
+        upipe_release(upipe);
+    }
+    return UBASE_ERR_NONE;
 }
 
 /** @internal @This sets the input flow definition.
@@ -1915,19 +2120,7 @@ static int upipe_h264f_set_flow_def(struct upipe *upipe, struct uref *flow_def)
         upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
         return UBASE_ERR_ALLOC;
     }
-
-    struct upipe_h264f *upipe_h264f = upipe_h264f_from_upipe(upipe);
-    upipe_h264f->input_latency = 0;
-    uref_clock_get_latency(flow_def, &upipe_h264f->input_latency);
-
-    if (unlikely(upipe_h264f->duration &&
-                 !ubase_check(uref_clock_set_latency(flow_def_dup,
-                                    upipe_h264f->input_latency +
-                                    upipe_h264f->duration))))
-        upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
-    flow_def = upipe_h264f_store_flow_def_input(upipe, flow_def_dup);
-    if (flow_def != NULL)
-        upipe_h264f_store_flow_def(upipe, flow_def);
+    upipe_input(upipe, flow_def_dup, NULL);
     return UBASE_ERR_NONE;
 }
 
@@ -1983,7 +2176,10 @@ static void upipe_h264f_free(struct upipe *upipe)
     upipe_throw_dead(upipe);
 
     upipe_h264f_clean_uref_stream(upipe);
+    upipe_h264f_clean_input(upipe);
     upipe_h264f_clean_output(upipe);
+    uref_free(upipe_h264f->flow_def_requested);
+    upipe_h264f_clean_flow_format(upipe);
     upipe_h264f_clean_flow_def(upipe);
     upipe_h264f_clean_sync(upipe);
 
