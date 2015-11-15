@@ -4,6 +4,7 @@ DISTCLEANFILES = config.h
 pkginclude_HEADERS = \
 	uatomic.h \
 	ubase.h \
+	ubits.h \
 	ubuf.h \
 	ubuf_block.h \
 	ubuf_block_common.h \

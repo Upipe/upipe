@@ -47,6 +47,7 @@ dist_check_DATA = \
 
 check_PROGRAMS = \
 	ulist_test \
+	ubits_test \
 	ustring_test \
 	uuri_test \
 	ucookie_test \
@@ -95,6 +96,7 @@ check_PROGRAMS = \
 
 TESTS = \
 	ulist_test \
+	ubits_test \
 	uuri_test \
 	ustring_test.sh \
 	ucookie_test \
