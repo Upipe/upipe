@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2012-2014 OpenHeadend S.A.R.L.
+ * Copyright (C) 2012-2015 OpenHeadend S.A.R.L.
  *
  * Authors: Christophe Massiot
  *
@@ -65,6 +65,7 @@ UREF_ATTR_VOID_VA(flow, audio_clean, "f.clean[%"PRIu8"]",
 UREF_ATTR_VOID(flow, lowdelay, "f.lowdelay", low delay mode)
 UREF_ATTR_VOID(flow, copyright, "f.copyright", copyrighted content)
 UREF_ATTR_VOID(flow, original, "f.original", original or copy)
+UREF_ATTR_VOID(flow, global, "f.global", global headers present or required)
 UREF_ATTR_OPAQUE(flow, headers, "f.headers", global headers)
 UREF_ATTR_STRING(flow, name, "f.name", flow name)
 

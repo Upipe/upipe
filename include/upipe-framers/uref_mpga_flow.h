@@ -37,8 +37,8 @@ extern "C" {
 #include <upipe/uref.h>
 #include <upipe/uref_attr.h>
 
-UREF_ATTR_SMALL_UNSIGNED(mpga_flow, mode, "mpga.mode",
-        MPEG audio mode)
+UREF_ATTR_SMALL_UNSIGNED(mpga_flow, mode, "mpga.mode", MPEG audio mode)
+UREF_ATTR_VOID(mpga_flow, adts, "mpga.adts", MPEG-2 AAC ADTS)
 
 #ifdef __cplusplus
 }

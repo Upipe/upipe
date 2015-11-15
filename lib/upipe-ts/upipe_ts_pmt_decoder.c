@@ -39,6 +39,8 @@
 #include <upipe/upipe_helper_output.h>
 #include <upipe/upipe_helper_ubuf_mgr.h>
 #include <upipe/upipe_helper_flow_def.h>
+#include <upipe-framers/uref_h264_flow.h>
+#include <upipe-framers/uref_mpga_flow.h>
 #include <upipe-ts/upipe_ts_pmt_decoder.h>
 #include <upipe-ts/uref_ts_flow.h>
 #include "upipe_ts_psi_decoder.h"
@@ -182,12 +184,14 @@ static void upipe_ts_pmtd_parse_streamtype(struct upipe *upipe,
             UBASE_FATAL(upipe, uref_flow_set_def(flow_def, "block.aac.sound."))
             UBASE_FATAL(upipe, uref_flow_set_raw_def(flow_def,
                             "block.mpegts.mpegtspes.aac.sound."))
+            UBASE_FATAL(upipe, uref_mpga_flow_set_adts(flow_def))
             break;
 
         case PMT_STREAMTYPE_VIDEO_AVC:
             UBASE_FATAL(upipe, uref_flow_set_def(flow_def, "block.h264.pic."))
             UBASE_FATAL(upipe, uref_flow_set_raw_def(flow_def,
                             "block.mpegts.mpegtspes.h264.pic."))
+            UBASE_FATAL(upipe, uref_h264_flow_set_annexb(flow_def))
             break;
 
         case PMT_STREAMTYPE_SCTE_35:
