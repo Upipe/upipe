@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2012-2014 OpenHeadend S.A.R.L.
+ * Copyright (C) 2012-2015 OpenHeadend S.A.R.L.
  *
  * Authors: Christophe Massiot
  *
@@ -192,7 +192,11 @@ static UBASE_UNUSED void STRUCTURE##_output(struct upipe *upipe,            \
                                             struct upump **upump_p)         \
 {                                                                           \
     struct STRUCTURE *s = STRUCTURE##_from_upipe(upipe);                    \
-    assert(s->FLOW_DEF != NULL);                                            \
+    if (unlikely(s->FLOW_DEF == NULL)) {                                    \
+        upipe_warn(upipe, "no flow def, dropping uref");                    \
+        uref_free(uref);                                                    \
+        return;                                                             \
+    }                                                                       \
     if (unlikely(s->OUTPUT == NULL))                                        \
         upipe_throw_need_output(upipe, s->FLOW_DEF);                        \
     if (unlikely(s->OUTPUT == NULL)) {                                      \
@@ -202,6 +206,11 @@ static UBASE_UNUSED void STRUCTURE##_output(struct upipe *upipe,            \
                                                                             \
     bool already_retried = false;                                           \
     for ( ; ; ) {                                                           \
+        if (unlikely(s->FLOW_DEF == NULL)) {                                \
+            upipe_warn(upipe, "no flow def, dropping uref");                \
+            uref_free(uref);                                                \
+            return;                                                         \
+        }                                                                   \
         switch (s->OUTPUT_STATE) {                                          \
             case UPIPE_HELPER_OUTPUT_NONE: {                                \
                 if (likely(ubase_check(upipe_set_flow_def(s->OUTPUT,        \
@@ -211,12 +220,13 @@ static UBASE_UNUSED void STRUCTURE##_output(struct upipe *upipe,            \
                     continue;                                               \
                 }                                                           \
                 upipe_dbg(s->OUTPUT, "rejected flow def");                  \
-                struct upipe *output = s->OUTPUT;                           \
+                struct upipe *output = upipe_use(s->OUTPUT);                \
                 upipe_throw_need_output(upipe, s->FLOW_DEF);                \
                 if (output == s->OUTPUT || already_retried)                 \
                     s->OUTPUT_STATE = UPIPE_HELPER_OUTPUT_INVALID;          \
                 else                                                        \
                     already_retried = true;                                 \
+                upipe_release(output);                                      \
                 continue;                                                   \
             }                                                               \
                                                                             \
