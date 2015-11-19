@@ -161,6 +161,8 @@ struct es_conf *es_conf_alloc(struct udict_mgr *mgr,
                               uint64_t id, struct uchain *list)
 {
     struct es_conf *conf = malloc(sizeof(struct es_conf));
+    if (unlikely(conf == NULL))
+        return NULL;
     memset(conf, 0, sizeof(struct es_conf));
     uchain_init(&conf->uchain);
     if (list) {

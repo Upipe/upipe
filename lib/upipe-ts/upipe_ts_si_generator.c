@@ -387,7 +387,7 @@ static void upipe_ts_sig_service_build_eit(struct upipe *upipe)
             }
             bool ca =
                 ubase_check(uref_ts_event_get_scrambled(service->flow_def, i));
-            const char *language, *name_str, *description_str;
+            const char *language, *name_str = NULL, *description_str;
             uint8_t *name = NULL, *description = NULL;
             size_t name_size = 0, description_size = 0;
             bool desc4d = 
@@ -1134,10 +1134,10 @@ static void upipe_ts_sig_send_nit(struct upipe *upipe, uint64_t cr_sys)
         return;
     output->cr_sys = cr_sys;
     sig->nit_cr_sys = cr_sys;
-    if (sig->nit_sent) {
+    if (!sig->nit_sent) {
         sig->nit_version++;
         sig->nit_version &= 0x1f;
-        sig->nit_sent = false;
+        sig->nit_sent = true;
     }
 
     upipe_verbose_va(upipe, "sending NIT (%"PRIu64")", cr_sys);
@@ -1302,11 +1302,11 @@ static void upipe_ts_sig_build_sdt(struct upipe *upipe)
             if (!sdt_validate_service(buffer, service,
                         descriptors_size + DESC48_HEADER_SIZE +
                         service_name_size + 1 + provider_name_size + 1)) {
+                free(service_name);
+                free(provider_name);
                 if (j)
                     break;
                 upipe_err_va(upipe, "SDT service too large");
-                free(service_name);
-                free(provider_name);
                 ubuf_free(ubuf);
                 upipe_throw_error(upipe, UBASE_ERR_INVALID);
                 return;
@@ -1393,10 +1393,10 @@ static void upipe_ts_sig_send_sdt(struct upipe *upipe, uint64_t cr_sys)
         return;
     output->cr_sys = cr_sys;
     sig->sdt_cr_sys = cr_sys;
-    if (sig->sdt_sent) {
+    if (!sig->sdt_sent) {
         sig->sdt_version++;
         sig->sdt_version &= 0x1f;
-        sig->sdt_sent = false;
+        sig->sdt_sent = true;
     }
 
     upipe_verbose_va(upipe, "sending SDT (%"PRIu64")", cr_sys);
@@ -1446,7 +1446,7 @@ static void upipe_ts_sig_build_eit_flow_def(struct upipe *upipe)
         octetrate += (uint64_t)service->eit_size * UCLOCK_FREQ / duration;
     }
 
-    if (unlikely(!size)) {
+    if (unlikely(!size || !section_freq.num)) {
         output->octetrate = 0;
         upipe_ts_sig_output_store_flow_def(upipe_ts_sig_output_to_upipe(output),
                                            NULL);
@@ -1503,10 +1503,10 @@ static void upipe_ts_sig_send_eit(struct upipe *upipe, uint64_t cr_sys)
 
         output->cr_sys = cr_sys;
         service->eit_cr_sys = cr_sys;
-        if (service->eit_sent) {
+        if (!service->eit_sent) {
             service->eit_version++;
             service->eit_version &= 0x1f;
-            service->eit_sent = false;
+            service->eit_sent = true;
         }
 
         upipe_verbose_va(upipe_ts_sig_service_to_upipe(service),
@@ -1698,8 +1698,8 @@ static int upipe_ts_sig_set_flow_def(struct upipe *upipe, struct uref *flow_def)
  * @param latency latency before the packet is output
  * @return an error code
  */
-static int _upipe_ts_sig_prepare(struct upipe *upipe, uint64_t cr_sys,
-                                 uint64_t latency)
+static int upipe_ts_sig_prepare(struct upipe *upipe, uint64_t cr_sys,
+                                uint64_t latency)
 {
     upipe_ts_sig_send_nit(upipe, cr_sys);
     upipe_ts_sig_send_sdt(upipe, cr_sys);
@@ -1796,13 +1796,13 @@ static int upipe_ts_sig_control(struct upipe *upipe, int command, va_list args)
             sig->frozen = true;
             return UBASE_ERR_NONE;
         }
-
-        case UPIPE_TS_SIG_PREPARE: {
-            UBASE_SIGNATURE_CHECK(args, UPIPE_TS_SIG_SIGNATURE)
+        case UPIPE_TS_MUX_PREPARE: {
+            UBASE_SIGNATURE_CHECK(args, UPIPE_TS_MUX_SIGNATURE)
             uint64_t cr_sys = va_arg(args, uint64_t);
             uint64_t latency = va_arg(args, uint64_t);
-            return _upipe_ts_sig_prepare(upipe, cr_sys, latency);
+            return upipe_ts_sig_prepare(upipe, cr_sys, latency);
         }
+
         case UPIPE_TS_SIG_GET_NIT_SUB: {
             UBASE_SIGNATURE_CHECK(args, UPIPE_TS_SIG_SIGNATURE)
             struct upipe **upipe_p = va_arg(args, struct upipe **);

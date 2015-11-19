@@ -366,22 +366,22 @@ int main(int argc, char *argv[])
     uref_free(uref);
 
     upipe_dbg(upipe_ts_psig, "preparing PAT and 2 PMTs");
-    ubase_assert(upipe_ts_psig_prepare(upipe_ts_psig, UINT32_MAX));
+    ubase_assert(upipe_ts_mux_prepare(upipe_ts_psig, UINT32_MAX, 0));
     assert(pat == false);
     assert(program == 0);
 
     pat = true;
     program = 1;
     upipe_dbg(upipe_ts_psig, "preparing nothing");
-    ubase_assert(upipe_ts_psig_prepare(upipe_ts_psig,
-                                       UINT32_MAX + UCLOCK_FREQ));
+    ubase_assert(upipe_ts_mux_prepare(upipe_ts_psig,
+                                      UINT32_MAX + UCLOCK_FREQ, 0));
     assert(pat == true);
     assert(program == 1);
 
     psi_cr = UINT32_MAX + 10 * UCLOCK_FREQ;
     upipe_dbg(upipe_ts_psig, "preparing PAT and 2 PMTs");
-    ubase_assert(upipe_ts_psig_prepare(upipe_ts_psig,
-                                       UINT32_MAX + 10 * UCLOCK_FREQ));
+    ubase_assert(upipe_ts_mux_prepare(upipe_ts_psig,
+                                      UINT32_MAX + 10 * UCLOCK_FREQ, 0));
     assert(pat == false);
     assert(program == 0);
 
@@ -389,8 +389,8 @@ int main(int argc, char *argv[])
     program = 1;
     psi_cr = UINT32_MAX + 11 * UCLOCK_FREQ;
     upipe_dbg(upipe_ts_psig, "preparing 1 PMT");
-    ubase_assert(upipe_ts_psig_prepare(upipe_ts_psig,
-                                       UINT32_MAX + 11 * UCLOCK_FREQ));
+    ubase_assert(upipe_ts_mux_prepare(upipe_ts_psig,
+                                      UINT32_MAX + 11 * UCLOCK_FREQ, 0));
     assert(pat == false);
     assert(program == 2);
 
@@ -401,8 +401,8 @@ int main(int argc, char *argv[])
     program = 0;
     psi_cr = UINT32_MAX + 12 * UCLOCK_FREQ;
     upipe_dbg(upipe_ts_psig, "preparing PAT");
-    ubase_assert(upipe_ts_psig_prepare(upipe_ts_psig,
-                                       UINT32_MAX + 12 * UCLOCK_FREQ));
+    ubase_assert(upipe_ts_mux_prepare(upipe_ts_psig,
+                                      UINT32_MAX + 12 * UCLOCK_FREQ, 0));
     assert(pat == false);
     assert(program == 0);
 

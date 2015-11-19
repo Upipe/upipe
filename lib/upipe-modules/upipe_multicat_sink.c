@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2012-2014 OpenHeadend S.A.R.L.
+ * Copyright (C) 2012-2015 OpenHeadend S.A.R.L.
  *
  * Authors: Benjamin Cohen
  *
@@ -84,6 +84,8 @@ struct upipe_multicat_sink {
 
     /** file opening mode */
     enum upipe_fsink_mode mode;
+    /** sync period */
+    uint64_t sync_period;
 
     /** public upipe structure */
     struct upipe upipe;
@@ -110,7 +112,12 @@ static bool _upipe_multicat_sink_change_file(struct upipe *upipe, int64_t idx)
         return false;
     }
     snprintf(filepath, MAXPATHLEN, "%s%"PRId64"%s", upipe_multicat_sink->dirpath, idx, upipe_multicat_sink->suffix);
-    return ubase_check(upipe_fsink_set_path(upipe_multicat_sink->fsink, filepath, upipe_multicat_sink->mode));
+    if (!ubase_check(upipe_fsink_set_path(upipe_multicat_sink->fsink, filepath, upipe_multicat_sink->mode)))
+        return false;
+    if (upipe_multicat_sink->sync_period)
+        upipe_fsink_set_sync_period(upipe_multicat_sink->fsink,
+                                    upipe_multicat_sink->sync_period);
+    return true;
 }
 
 /** @internal @This handles data.
@@ -363,7 +370,25 @@ static int upipe_multicat_sink_control(struct upipe *upipe,
             UBASE_SIGNATURE_CHECK(args, UPIPE_MULTICAT_SINK_SIGNATURE)
             return _upipe_multicat_sink_get_path(upipe, va_arg(args, char **), va_arg(args, char **));
         }
+        case UPIPE_FSINK_SET_SYNC_PERIOD: {
+            UBASE_SIGNATURE_CHECK(args, UPIPE_FSINK_SIGNATURE)
+            uint64_t sync_period = va_arg(args, uint64_t);
+            upipe_multicat_sink->sync_period = sync_period;
+            if (upipe_multicat_sink->fsink != NULL)
+                return upipe_control_va(upipe_multicat_sink->fsink,
+                                        command, args);
+            return UBASE_ERR_NONE;
+        }
+        case UPIPE_FSINK_GET_SYNC_PERIOD: {
+            UBASE_SIGNATURE_CHECK(args, UPIPE_FSINK_SIGNATURE)
+            uint64_t *p = va_arg(args, uint64_t *);
+            *p = upipe_multicat_sink->sync_period;
+            return UBASE_ERR_NONE;
+        }
         default:
+            if (upipe_multicat_sink->fsink != NULL)
+                return upipe_control_va(upipe_multicat_sink->fsink,
+                                        command, args);
             return UBASE_ERR_UNHANDLED;
     }
 }
@@ -397,6 +422,7 @@ static struct upipe *upipe_multicat_sink_alloc(struct upipe_mgr *mgr,
     upipe_multicat_sink->fileidx = -1;
     upipe_multicat_sink->rotate = UPIPE_MULTICAT_SINK_DEF_ROTATE;
     upipe_multicat_sink->mode = UPIPE_FSINK_APPEND;
+    upipe_multicat_sink->sync_period = 0;
     upipe_multicat_sink->flow_def = NULL;
     upipe_throw_ready(upipe);
     return upipe;

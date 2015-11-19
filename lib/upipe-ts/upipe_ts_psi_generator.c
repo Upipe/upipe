@@ -881,8 +881,7 @@ static void upipe_ts_psig_program_build(struct upipe *upipe)
 /** @internal @This sends a PMT PSI section.
  *
  * @param upipe description structure of the pipe
- * @param uref uref structure
- * @param upump_p reference to pump that generated the buffer
+ * @param cr_sys cr_sys of the next muxed packet
  */
 static void upipe_ts_psig_program_send(struct upipe *upipe, uint64_t cr_sys)
 {
@@ -1430,8 +1429,7 @@ static void upipe_ts_psig_build(struct upipe *upipe)
 /** @internal @This sends a PAT PSI section.
  *
  * @param upipe description structure of the pipe
- * @param uref uref structure
- * @param upump_p reference to pump that generated the buffer
+ * @param cr_sys cr_sys of the next muxed packet
  */
 static void upipe_ts_psig_send(struct upipe *upipe, uint64_t cr_sys)
 {
@@ -1573,9 +1571,11 @@ static int upipe_ts_psig_set_version(struct upipe *upipe,
  *
  * @param upipe description structure of the pipe
  * @param cr_sys current muxing date
+ * @param latency unused
  * @return an error code
  */
-static int _upipe_ts_psig_prepare(struct upipe *upipe, uint64_t cr_sys)
+static int upipe_ts_psig_prepare(struct upipe *upipe, uint64_t cr_sys,
+                                 uint64_t latency)
 {
     struct upipe_ts_psig *upipe_ts_psig = upipe_ts_psig_from_upipe(upipe);
     upipe_ts_psig_send(upipe, cr_sys);
@@ -1659,11 +1659,11 @@ static int upipe_ts_psig_control(struct upipe *upipe, int command, va_list args)
             psig->frozen = true;
             return UBASE_ERR_NONE;
         }
-
-        case UPIPE_TS_PSIG_PREPARE: {
-            UBASE_SIGNATURE_CHECK(args, UPIPE_TS_PSIG_SIGNATURE)
+        case UPIPE_TS_MUX_PREPARE: {
+            UBASE_SIGNATURE_CHECK(args, UPIPE_TS_MUX_SIGNATURE)
             uint64_t cr_sys = va_arg(args, uint64_t);
-            return _upipe_ts_psig_prepare(upipe, cr_sys);
+            uint64_t latency = va_arg(args, uint64_t);
+            return upipe_ts_psig_prepare(upipe, cr_sys, latency);
         }
 
         default:

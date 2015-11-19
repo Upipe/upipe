@@ -23,7 +23,7 @@ fi
 
 mkdir -p "$TMP"/test2
 # Run in valgrind, with leak checking enabled
-libtool --mode=execute valgrind -q --leak-check=full $VALGRIND_SUPPRESSIONS ./upipe_multicat_test "$TMP"/test2/ .bar > /dev/null 2> "$TMP"/logs
+../libtool --mode=execute valgrind -q --leak-check=full $VALGRIND_SUPPRESSIONS ./upipe_multicat_test "$TMP"/test2/ .bar > /dev/null 2> "$TMP"/logs
 RET=$?
 if test -s "$TMP"/logs; then
         cat "$TMP"/logs >&2

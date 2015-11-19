@@ -35,52 +35,11 @@ extern "C" {
 /** We only accept the ISO 13818-2 elementary stream. */
 #define UPIPE_MPGVF_EXPECTED_FLOW_DEF "block.mpeg2video."
 
-/** @This extends upipe_command with specific commands for mpgv framer. */
-enum upipe_mpgvf_command {
-    UPIPE_MPGVF_SENTINEL = UPIPE_CONTROL_LOCAL,
-
-    /** returns the current setting for sequence header insertion (int *) */
-    UPIPE_MPGVF_GET_SEQUENCE_INSERTION,
-    /** sets or unsets the sequence header insertion (int) */
-    UPIPE_MPGVF_SET_SEQUENCE_INSERTION
-};
-
 /** @This returns the management structure for all mpgvf pipes.
  *
  * @return pointer to manager
  */
 struct upipe_mgr *upipe_mpgvf_mgr_alloc(void);
-
-/** @This returns the current setting for sequence header insertion.
- *
- * @param upipe description structure of the pipe
- * @param val_p filled with the current setting
- * @return false in case of error
- */
-static inline bool upipe_mpgvf_get_sequence_insertion(struct upipe *upipe,
-                                                      bool *val_p)
-{
-    int val;
-    bool ret = upipe_control(upipe, UPIPE_MPGVF_GET_SEQUENCE_INSERTION,
-                             UPIPE_MPGVF_SIGNATURE, &val);
-    *val_p = !!val;
-    return ret;
-}
-
-/** @This sets or unsets the sequence header insertion. When true, a sequence
- * headers is inserted in front of every I frame if it is missing, as per
- * ISO-13818-2 specification.
- *
- * @param upipe description structure of the pipe
- * @param val true for sequence header insertion
- * @return false in case of error
- */
-static inline bool upipe_mpgvf_set_sequence_insertion(struct upipe *upipe,
-                                                      bool val)
-{
-    return upipe_control(upipe, UPIPE_MPGVF_SET_SEQUENCE_INSERTION,
-                         UPIPE_MPGVF_SIGNATURE, val ? 1 : 0);
-}
 
 #ifdef __cplusplus
 }

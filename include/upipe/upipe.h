@@ -131,6 +131,22 @@ enum upipe_command {
     /** returns the super-pipe associated with a subpipe (struct upipe **) */
     UPIPE_SUB_GET_SUPER,
 
+    /*
+     * Source-related commands
+     */
+    /** returns the size of the source, in octets (uint64_t *) */
+    UPIPE_SRC_GET_SIZE,
+    /** returns the reading position of the source, in octets (uint64_t *) */
+    UPIPE_SRC_GET_POSITION,
+    /** asks to read at the given position (uint64_t) */
+    UPIPE_SRC_SET_POSITION,
+    /** asks to read at the given position (uint64_t),
+     * the given size (uint64_t) or to the end ((uint64_t)-1) */
+    UPIPE_SRC_SET_RANGE,
+    /** return the reading range of the currently opened file,
+     * position (uint64_t) and length (uint64_t) */
+    UPIPE_SRC_GET_RANGE,
+
     /** non-standard commands implemented by a module type can start from
      * there (first arg = signature) */
     UPIPE_CONTROL_LOCAL = 0x8000
@@ -295,29 +311,34 @@ static inline const char *upipe_command_str(struct upipe *upipe, int cmd)
     }
 
     switch (cmd) {
-    case UPIPE_ATTACH_UREF_MGR: return "UPIPE_ATTACH_UREF_MGR";
-    case UPIPE_ATTACH_UPUMP_MGR: return "UPIPE_ATTACH_UPUMP_MGR";
-    case UPIPE_ATTACH_UCLOCK: return "UPIPE_ATTACH_UCLOCK";
-    case UPIPE_GET_URI: return "UPIPE_GET_URI";
-    case UPIPE_SET_URI: return "UPIPE_SET_URI";
-    case UPIPE_GET_OPTION: return "UPIPE_GET_OPTION";
-    case UPIPE_SET_OPTION: return "UPIPE_SET_OPTION";
-    case UPIPE_REGISTER_REQUEST: return "UPIPE_REGISTER_REQUEST";
-    case UPIPE_UNREGISTER_REQUEST: return "UPIPE_UNREGISTER_REQUEST";
-    case UPIPE_SET_FLOW_DEF: return "UPIPE_SET_FLOW_DEF";
-    case UPIPE_GET_MAX_LENGTH: return "UPIPE_GET_MAX_LENGTH";
-    case UPIPE_SET_MAX_LENGTH: return "UPIPE_SET_MAX_LENGTH";
-    case UPIPE_FLUSH: return "UPIPE_FLUSH";
-    case UPIPE_GET_OUTPUT: return "UPIPE_GET_OUTPUT";
-    case UPIPE_SET_OUTPUT: return "UPIPE_SET_OUTPUT";
-    case UPIPE_ATTACH_UBUF_MGR: return "UPIPE_ATTACH_UBUF_MGR";
-    case UPIPE_GET_FLOW_DEF: return "UPIPE_GET_FLOW_DEF";
-    case UPIPE_GET_OUTPUT_SIZE: return "UPIPE_GET_OUTPUT_SIZE";
-    case UPIPE_SET_OUTPUT_SIZE: return "UPIPE_SET_OUTPUT_SIZE";
-    case UPIPE_SPLIT_ITERATE: return "UPIPE_SPLIT_ITERATE";
-    case UPIPE_GET_SUB_MGR: return "UPIPE_GET_SUB_MGR";
-    case UPIPE_ITERATE_SUB: return "UPIPE_ITERATE_SUB";
-    case UPIPE_SUB_GET_SUPER: return "UPIPE_SUB_GET_SUPER";
+    UBASE_CASE_TO_STR(UPIPE_ATTACH_UREF_MGR);
+    UBASE_CASE_TO_STR(UPIPE_ATTACH_UPUMP_MGR);
+    UBASE_CASE_TO_STR(UPIPE_ATTACH_UCLOCK);
+    UBASE_CASE_TO_STR(UPIPE_GET_URI);
+    UBASE_CASE_TO_STR(UPIPE_SET_URI);
+    UBASE_CASE_TO_STR(UPIPE_GET_OPTION);
+    UBASE_CASE_TO_STR(UPIPE_SET_OPTION);
+    UBASE_CASE_TO_STR(UPIPE_REGISTER_REQUEST);
+    UBASE_CASE_TO_STR(UPIPE_UNREGISTER_REQUEST);
+    UBASE_CASE_TO_STR(UPIPE_SET_FLOW_DEF);
+    UBASE_CASE_TO_STR(UPIPE_GET_MAX_LENGTH);
+    UBASE_CASE_TO_STR(UPIPE_SET_MAX_LENGTH);
+    UBASE_CASE_TO_STR(UPIPE_FLUSH);
+    UBASE_CASE_TO_STR(UPIPE_GET_OUTPUT);
+    UBASE_CASE_TO_STR(UPIPE_SET_OUTPUT);
+    UBASE_CASE_TO_STR(UPIPE_ATTACH_UBUF_MGR);
+    UBASE_CASE_TO_STR(UPIPE_GET_FLOW_DEF);
+    UBASE_CASE_TO_STR(UPIPE_GET_OUTPUT_SIZE);
+    UBASE_CASE_TO_STR(UPIPE_SET_OUTPUT_SIZE);
+    UBASE_CASE_TO_STR(UPIPE_SPLIT_ITERATE);
+    UBASE_CASE_TO_STR(UPIPE_GET_SUB_MGR);
+    UBASE_CASE_TO_STR(UPIPE_ITERATE_SUB);
+    UBASE_CASE_TO_STR(UPIPE_SUB_GET_SUPER);
+    UBASE_CASE_TO_STR(UPIPE_SRC_GET_SIZE);
+    UBASE_CASE_TO_STR(UPIPE_SRC_GET_POSITION);
+    UBASE_CASE_TO_STR(UPIPE_SRC_SET_POSITION);
+    UBASE_CASE_TO_STR(UPIPE_SRC_GET_RANGE);
+    UBASE_CASE_TO_STR(UPIPE_SRC_SET_RANGE);
     case UPIPE_CONTROL_LOCAL: break;
     }
     return NULL;
@@ -770,8 +791,18 @@ static inline int upipe_throw_need_upump_mgr(struct upipe *upipe,
 {
     upipe_dbg(upipe, "throw need upump mgr");
     int err = upipe_throw(upipe, UPROBE_NEED_UPUMP_MGR, upump_mgr_p);
-    upipe_dbg_va(upipe, "got upump_mgr %p with error code 0x%x",
-                 *upump_mgr_p, err);
+    if (ubase_check(err))
+        upipe_dbg_va(upipe, "got upump_mgr %p", *upump_mgr_p);
+    else {
+        const char *err_str = upipe_err_str(upipe, err);
+
+        if (err_str)
+            upipe_warn_va(upipe, "got upump_mgr %p with error %s",
+                          *upump_mgr_p, err_str);
+        else
+            upipe_warn_va(upipe, "got upump_mgr %p with error code 0x%x",
+                          *upump_mgr_p, err);
+    }
     return err;
 }
 
@@ -1084,7 +1115,7 @@ UPIPE_CONTROL_TEMPLATE(upipe, UPIPE, uri, URI,
 UPIPE_CONTROL_TEMPLATE(upipe, UPIPE, flow_def, FLOW_DEF, struct uref *,
                        flow definition of the output)
 UPIPE_CONTROL_TEMPLATE(upipe, UPIPE, output, OUTPUT, struct upipe *,
-                       pipe acting as output (unsafe, use only internally))
+                       pipe acting as output)
 UPIPE_CONTROL_TEMPLATE(upipe, UPIPE, max_length, MAX_LENGTH, unsigned int,
                        max length of the internal queue)
 UPIPE_CONTROL_TEMPLATE(upipe, UPIPE, output_size, OUTPUT_SIZE,
@@ -1243,6 +1274,69 @@ static inline int upipe_sub_get_super(struct upipe *upipe, struct upipe **p)
     return upipe_control(upipe, UPIPE_SUB_GET_SUPER, p);
 }
 
+/** @This returns the size of the currently opened source.
+ *
+ * @param upipe description structure of the pipe
+ * @param size_p filled in with the size of the source, in octets
+ * @return an error code
+ */
+static inline int upipe_src_get_size(struct upipe *upipe, uint64_t *size_p)
+{
+    return upipe_control(upipe, UPIPE_SRC_GET_SIZE, size_p);
+}
+
+/** @This returns the reading position of the current source.
+ *
+ * @param upipe description structure of the pipe
+ * @param position_p filled in with the reading position, in octets
+ * @return an error code
+ */
+static inline int upipe_src_get_position(struct upipe *upipe,
+                                         uint64_t position_p)
+{
+    return upipe_control(upipe, UPIPE_SRC_GET_POSITION, position_p);
+}
+
+/** @This request the given reading position for the current source.
+ *
+ * @param upipe description structure of the pipe
+ * @param position new reading position, in octets (between 0 and the size)
+ * @return an error code
+ */
+static inline int upipe_src_set_position(struct upipe *upipe,
+                                         uint64_t position)
+{
+    return upipe_control(upipe, UPIPE_SRC_SET_POSITION, position);
+}
+
+/** @This returns the reading range of the current source.
+ *
+ * @param upipe description structure of the pipe
+ * @param offset_p filled in with range start, in octets
+ * @param length_p filled in with the reading length, in octets.
+ * @return an error code
+ */
+static inline int upipe_src_get_range(struct upipe *upipe,
+                                      uint64_t *offset_p,
+                                      uint64_t *length_p)
+{
+    return upipe_control(upipe, UPIPE_SRC_GET_RANGE, offset_p, length_p);
+}
+
+/** @This request the given range for the current source.
+ *
+ * @param upipe description structure of the pipe
+ * @param offset range starts at offset, in octets
+ * @param length octets to read from offset, in octets
+ * @return an error code
+ */
+static inline int upipe_src_set_range(struct upipe *upipe,
+                                      uint64_t offset,
+                                      uint64_t length)
+{
+    return upipe_control(upipe, UPIPE_SRC_SET_RANGE, offset, length);
+}
+
 /** @This declares twelve functions to allocate pipes with a certain pipe
  * allocator.
  *
@@ -1300,6 +1394,12 @@ static inline int upipe_sub_get_super(struct upipe *upipe, struct upipe **p)
  * @end code
  * A wrapper to upipe_foo_alloc() which retrieves the subpipe manager from the
  * given super-pipe.
+ *
+ * @item @code
+ *  struct upipe *upipe_foo_chain_sub(struct upipe *super_pipe,
+ *                                    struct uprobe *uprobe, ...)
+ * @end code
+ * A wrapper to upipe_foo_alloc_sub() which also releases the super-pipe.
  *
  * @item @code
  *  struct upipe *upipe_foo_alloc_output_sub(struct upipe *upipe,
@@ -1518,6 +1618,26 @@ static inline struct upipe *                                                \
         return NULL;                                                        \
     }                                                                       \
     return upipe_##GROUP##_alloc(sub_mgr, uprobe  ARGS);                    \
+}                                                                           \
+/** @This allocates and initializes a subpipe from the given super-pipe,    \
+ * and releases the super-pipe.                                             \
+ *                                                                          \
+ * Please note that this function does not _use() the probe, so if you want \
+ * to reuse an existing probe, you have to use it first.                    \
+ *                                                                          \
+ * @param super_upipe description structure of the super-pipe               \
+ * @param uprobe structure used to raise events (belongs to the callee)     \
+ * followed by arguments for the allocator (@see upipe_##GROUP##_alloc)     \
+ * @return pointer to allocated subpipe, or NULL in case of failure         \
+ */                                                                         \
+static inline struct upipe *                                                \
+    upipe_##GROUP##_chain_sub(struct upipe *super_pipe,                     \
+                              struct uprobe *uprobe  ARGS_DECL)             \
+{                                                                           \
+    struct upipe *upipe = upipe_##GROUP##_alloc_sub(super_pipe,             \
+                                                    uprobe  ARGS);          \
+    upipe_release(super_pipe);                                              \
+    return upipe;                                                           \
 }                                                                           \
 /** @This allocates a subpipe from the given super-pipe, and sets it as the \
  * output of the given pipe.                                                \

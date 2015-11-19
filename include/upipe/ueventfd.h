@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2012-2013 OpenHeadend S.A.R.L.
+ * Copyright (C) 2012-2015 OpenHeadend S.A.R.L.
  *
  * Authors: Christophe Massiot
  *
@@ -85,19 +85,24 @@ struct ueventfd {
  * @param upump_mgr management structure for this event loop
  * @param cb function to call when the watcher triggers
  * @param opaque pointer to the module's internal structure
+ * @param refcount pointer to urefcount structure to increment during callback,
+ * or NULL
  * @return pointer to allocated watcher, or NULL in case of failure
  */
 static inline struct upump *ueventfd_upump_alloc(struct ueventfd *fd,
                                                  struct upump_mgr *upump_mgr,
-                                                 upump_cb cb, void *opaque)
+                                                 upump_cb cb, void *opaque,
+                                                 struct urefcount *refcount)
 {
 #ifdef UPIPE_HAVE_EVENTFD
     if (likely(fd->mode == UEVENTFD_MODE_EVENTFD)) {
-        return upump_alloc_fd_read(upump_mgr, cb, opaque, fd->event_fd);
+        return upump_alloc_fd_read(upump_mgr, cb, opaque, refcount,
+                                   fd->event_fd);
     } else
 #endif
     if (likely(fd->mode == UEVENTFD_MODE_PIPE)) {
-        return upump_alloc_fd_read(upump_mgr, cb, opaque, (fd->pipe_fds)[0]);
+        return upump_alloc_fd_read(upump_mgr, cb, opaque, refcount,
+                                   (fd->pipe_fds)[0]);
     } else {
         return NULL; // shouldn't happen
     }
@@ -215,13 +220,27 @@ static inline bool ueventfd_write(struct ueventfd *fd)
  */
 static inline bool ueventfd_init(struct ueventfd *fd, bool readable)
 {
+    int ret;
+
 #ifdef UPIPE_HAVE_EVENTFD
     fd->mode = UEVENTFD_MODE_EVENTFD;
     fd->event_fd = eventfd(readable ? 1 : 0, EFD_NONBLOCK | EFD_CLOEXEC);
     if (unlikely(fd->event_fd == -1)) { // try to eventfd() with no flags (ie. linux < 2.6.27)
         fd->event_fd = eventfd(readable ? 1 : 0, 0);
-        fcntl((fd->event_fd), F_SETFD, fcntl((fd->event_fd), F_GETFD) | FD_CLOEXEC);
-        fcntl((fd->event_fd), F_SETFL, fcntl((fd->event_fd), F_GETFL) | O_NONBLOCK);
+
+        ret = fcntl(fd->event_fd, F_GETFD);
+        if (unlikely(ret < 0))
+            return false;
+        ret = fcntl(fd->event_fd, F_SETFD, ret | FD_CLOEXEC);
+        if (unlikely(ret < 0))
+            return false;
+
+        ret = fcntl(fd->event_fd, F_GETFL);
+        if (unlikely(ret < 0))
+            return false;
+        ret = fcntl(fd->event_fd, F_SETFL | O_NONBLOCK);
+        if (unlikely(ret < 0))
+            return false;
 
         if (unlikely(fd->event_fd == -1)) { // eventfd() fails, fallback to pipe()
 #endif
@@ -231,11 +250,21 @@ static inline bool ueventfd_init(struct ueventfd *fd, bool readable)
 #endif
                 return false;
 
-            fcntl((fd->pipe_fds)[0], F_SETFD, fcntl((fd->pipe_fds)[0], F_GETFD) | FD_CLOEXEC);
-            fcntl((fd->pipe_fds)[1], F_SETFD, fcntl((fd->pipe_fds)[1], F_GETFD) | FD_CLOEXEC);
+            for (uint8_t i = 0; i < 2; i++) {
+                ret = fcntl(fd->pipe_fds[i], F_GETFD);
+                if (unlikely(ret < 0))
+                    return false;
+                ret = fcntl(fd->pipe_fds[i], F_SETFD, ret | FD_CLOEXEC);
+                if (unlikely(ret < 0))
+                    return false;
 
-            fcntl((fd->pipe_fds)[0], F_SETFL, fcntl((fd->pipe_fds)[0], F_GETFL) | O_NONBLOCK);
-            fcntl((fd->pipe_fds)[1], F_SETFL, fcntl((fd->pipe_fds)[1], F_GETFL) | O_NONBLOCK);
+                ret = fcntl(fd->pipe_fds[i], F_GETFL);
+                if (unlikely(ret < 0))
+                    return false;
+                ret = fcntl(fd->pipe_fds[i], F_SETFL, ret | O_NONBLOCK);
+                if (unlikely(ret < 0))
+                    return false;
+            }
 
             if (likely(readable))
                 ueventfd_write(fd);

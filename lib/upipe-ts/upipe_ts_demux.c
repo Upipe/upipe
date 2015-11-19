@@ -63,6 +63,7 @@
 #include <upipe/upipe_helper_subpipe.h>
 #include <upipe-modules/upipe_null.h>
 #include <upipe-modules/upipe_setrap.h>
+#include <upipe-modules/upipe_idem.h>
 #include <upipe-ts/uref_ts_flow.h>
 #include <upipe-ts/upipe_ts_demux.h>
 #include <upipe-ts/upipe_ts_split.h>
@@ -76,6 +77,7 @@
 #include <upipe-ts/upipe_ts_pat_decoder.h>
 #include <upipe-ts/upipe_ts_pmt_decoder.h>
 #include <upipe-ts/upipe_ts_pes_decaps.h>
+#include <upipe-ts/upipe_ts_scte35_decoder.h>
 #include <upipe-ts/upipe_ts_sdt_decoder.h>
 #include <upipe-ts/upipe_ts_tdt_decoder.h>
 
@@ -120,6 +122,8 @@ struct upipe_ts_demux_mgr {
     struct upipe_mgr *null_mgr;
     /** pointer to setrap manager */
     struct upipe_mgr *setrap_mgr;
+    /** pointer to idem manager */
+    struct upipe_mgr *idem_mgr;
 
     /** pointer to ts_split manager */
     struct upipe_mgr *ts_split_mgr;
@@ -150,6 +154,8 @@ struct upipe_ts_demux_mgr {
     struct upipe_mgr *ts_pmtd_mgr;
     /** pointer to ts_eitd manager */
     struct upipe_mgr *ts_eitd_mgr;
+    /** pointer to ts_scte35d manager */
+    struct upipe_mgr *ts_scte35d_mgr;
 
     /* ES */
     /** pointer to ts_pesd manager */
@@ -724,6 +730,24 @@ static int upipe_ts_demux_output_plumber(struct upipe *upipe,
         return UBASE_ERR_NONE;
     }
 
+    if (!ubase_ncmp(def, "block.mpegtspsi.mpegtsscte35.")) {
+        /* allocate ts_pesd inner */
+        struct upipe *output =
+            upipe_void_alloc_output(inner, ts_demux_mgr->ts_psim_mgr,
+                uprobe_pfx_alloc(
+                    uprobe_use(&upipe_ts_demux_output->probe),
+                    UPROBE_LOG_VERBOSE, "psim"));
+        if (unlikely(output == NULL))
+            return UBASE_ERR_ALLOC;
+        int err =
+            upipe_void_spawn_output(output, ts_demux_mgr->ts_scte35d_mgr,
+                   uprobe_pfx_alloc(uprobe_use(&upipe_ts_demux_output->probe),
+                                    UPROBE_LOG_VERBOSE, "scte35d"));
+        if (unlikely(!ubase_check(err)))
+            return UBASE_ERR_ALLOC;
+        return UBASE_ERR_NONE;
+    }
+
     if ((!ubase_ncmp(def, "block.mp2.") ||
          !ubase_ncmp(def, "block.aac.")) &&
         ts_demux_mgr->mpgaf_mgr != NULL) {
@@ -825,8 +849,17 @@ static int upipe_ts_demux_output_plumber(struct upipe *upipe,
         return UBASE_ERR_NONE;
     }
 
-    upipe_warn_va(upipe, "unknown output flow definition: %s", def);
-    return UBASE_ERR_UNHANDLED;
+    upipe_warn_va(upipe, "unframed output flow definition: %s", def);
+    /* allocate idem inner */
+    struct upipe *output =
+        upipe_void_alloc_output(inner, ts_demux_mgr->idem_mgr,
+            uprobe_pfx_alloc(
+                uprobe_use(&upipe_ts_demux_output->last_inner_probe),
+                UPROBE_LOG_VERBOSE, "idem"));
+    if (unlikely(output == NULL))
+        return UBASE_ERR_ALLOC;
+    upipe_ts_demux_output_store_last_inner(upipe, output);
+    return UBASE_ERR_NONE;
 }
 
 /** @internal @This catches events coming from output inner pipes.
@@ -2146,7 +2179,7 @@ static void upipe_ts_demux_build_flow_def(struct upipe *upipe)
     if (upipe_ts_demux->sdtd != NULL)
         upipe_get_flow_def(upipe_ts_demux->sdtd, &flow_def_sdt);
     if (flow_def_sdt != NULL) {
-        uint64_t sdt_tsid;
+        uint64_t sdt_tsid = 0;
         if (unlikely(tsid != UINT64_MAX &&
                      uref_flow_get_id(flow_def_sdt, &sdt_tsid) &&
                      tsid != sdt_tsid))
@@ -2908,6 +2941,7 @@ static void upipe_ts_demux_mgr_free(struct urefcount *urefcount)
         upipe_ts_demux_mgr_from_urefcount(urefcount);
     upipe_mgr_release(ts_demux_mgr->null_mgr);
     upipe_mgr_release(ts_demux_mgr->setrap_mgr);
+    upipe_mgr_release(ts_demux_mgr->idem_mgr);
     upipe_mgr_release(ts_demux_mgr->ts_split_mgr);
     upipe_mgr_release(ts_demux_mgr->ts_sync_mgr);
     upipe_mgr_release(ts_demux_mgr->ts_check_mgr);
@@ -2921,6 +2955,7 @@ static void upipe_ts_demux_mgr_free(struct urefcount *urefcount)
     upipe_mgr_release(ts_demux_mgr->ts_pmtd_mgr);
     upipe_mgr_release(ts_demux_mgr->ts_eitd_mgr);
     upipe_mgr_release(ts_demux_mgr->ts_pesd_mgr);
+    upipe_mgr_release(ts_demux_mgr->ts_scte35d_mgr);
     upipe_mgr_release(ts_demux_mgr->mpgaf_mgr);
     upipe_mgr_release(ts_demux_mgr->a52f_mgr);
     upipe_mgr_release(ts_demux_mgr->mpgvf_mgr);
@@ -2964,6 +2999,10 @@ static int upipe_ts_demux_mgr_control(struct upipe_mgr *mgr,
             return UBASE_ERR_NONE;                                          \
         }
 
+        GET_SET_MGR(null, NULL)
+        GET_SET_MGR(setrap, SETRAP)
+        GET_SET_MGR(idem, IDEM)
+
         GET_SET_MGR(ts_split, TS_SPLIT)
         GET_SET_MGR(ts_sync, TS_SYNC)
         GET_SET_MGR(ts_check, TS_CHECK)
@@ -2977,6 +3016,7 @@ static int upipe_ts_demux_mgr_control(struct upipe_mgr *mgr,
         GET_SET_MGR(ts_pmtd, TS_PMTD)
         GET_SET_MGR(ts_eitd, TS_EITD)
         GET_SET_MGR(ts_pesd, TS_PESD)
+        GET_SET_MGR(ts_scte35d, TS_SCTE35D)
 
         GET_SET_MGR(mpgaf, MPGAF)
         GET_SET_MGR(a52f, A52F)
@@ -3005,6 +3045,7 @@ struct upipe_mgr *upipe_ts_demux_mgr_alloc(void)
 
     ts_demux_mgr->null_mgr = upipe_null_mgr_alloc();
     ts_demux_mgr->setrap_mgr = upipe_setrap_mgr_alloc();
+    ts_demux_mgr->idem_mgr = upipe_idem_mgr_alloc();
 
     ts_demux_mgr->ts_split_mgr = upipe_ts_split_mgr_alloc();
     ts_demux_mgr->ts_sync_mgr = upipe_ts_sync_mgr_alloc();
@@ -3019,6 +3060,7 @@ struct upipe_mgr *upipe_ts_demux_mgr_alloc(void)
     ts_demux_mgr->ts_pmtd_mgr = upipe_ts_pmtd_mgr_alloc();
     ts_demux_mgr->ts_eitd_mgr = upipe_ts_eitd_mgr_alloc();
     ts_demux_mgr->ts_pesd_mgr = upipe_ts_pesd_mgr_alloc();
+    ts_demux_mgr->ts_scte35d_mgr = upipe_ts_scte35d_mgr_alloc();
 
     ts_demux_mgr->mpgaf_mgr = NULL;
     ts_demux_mgr->a52f_mgr = NULL;

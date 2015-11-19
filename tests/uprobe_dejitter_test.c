@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2013 OpenHeadend S.A.R.L.
+ * Copyright (C) 2013-2015 OpenHeadend S.A.R.L.
  *
  * Authors: Christophe Massiot
  *
@@ -80,11 +80,11 @@ int main(int argc, char **argv)
     struct uprobe uprobe;
     uprobe_init(&uprobe, catch, NULL);
     struct uprobe *logger = uprobe_stdio_alloc(&uprobe, stdout,
-                                               UPROBE_LOG_DEBUG);
+                                               UPROBE_LOG_VERBOSE);
     assert(logger != NULL);
 
     struct uprobe *uprobe_dejitter = uprobe_dejitter_alloc(uprobe_use(logger),
-                                                           10);
+                                                           true, 1);
     assert(uprobe_dejitter != NULL);
 
     struct upipe test_pipe;
@@ -103,7 +103,7 @@ int main(int argc, char **argv)
     uref_clock_set_pts_prog(uref, clock);
     upipe_throw_clock_ts(upipe, uref);
     ubase_assert(uref_clock_get_pts_sys(uref, &pts));
-    assert(pts == systime);
+    assert(pts == systime + 2);
 
     systime += 8000;
     clock += 10000;
@@ -113,7 +113,7 @@ int main(int argc, char **argv)
     uref_clock_set_pts_prog(uref, clock);
     upipe_throw_clock_ts(upipe, uref);
     ubase_assert(uref_clock_get_pts_sys(uref, &pts));
-    assert(pts == systime + 2500);
+    assert(pts == systime + 2002);
 
     uref_free(uref);
     uprobe_release(uprobe_dejitter);

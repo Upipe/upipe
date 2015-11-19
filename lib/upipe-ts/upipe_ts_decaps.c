@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2012-2014 OpenHeadend S.A.R.L.
+ * Copyright (C) 2012-2015 OpenHeadend S.A.R.L.
  *
  * Authors: Christophe Massiot
  *
@@ -65,6 +65,8 @@ struct upipe_ts_decaps {
 
     /** last continuity counter for this PID, or -1 */
     int8_t last_cc;
+    /** last TS packet */
+    struct uref *last_uref;
 
     /** public upipe structure */
     struct upipe upipe;
@@ -96,6 +98,7 @@ static struct upipe *upipe_ts_decaps_alloc(struct upipe_mgr *mgr,
     upipe_ts_decaps_init_urefcount(upipe);
     upipe_ts_decaps_init_output(upipe);
     upipe_ts_decaps->last_cc = -1;
+    upipe_ts_decaps->last_uref = NULL;
     upipe_throw_ready(upipe);
     return upipe;
 }
@@ -184,8 +187,20 @@ static void upipe_ts_decaps_input(struct upipe *upipe, struct uref *uref,
     }
 
     if (unlikely(ts_check_duplicate(cc, upipe_ts_decaps->last_cc))) {
-        uref_free(uref);
-        return;
+        if (!has_payload) {
+            /* padding or just PCR */
+            uref_free(uref);
+            return;
+        }
+        if (upipe_ts_decaps->last_uref != NULL &&
+            ubase_check(uref_block_compare(uref, 0,
+                                           upipe_ts_decaps->last_uref))) {
+            upipe_dbg(upipe, "removing duplicate packet");
+            uref_free(uref);
+            return;
+        }
+        upipe_warn_va(upipe, "potentially lost 16 packets");
+        discontinuity = true;
     }
 
     if (unlikely(!discontinuity &&
@@ -208,6 +223,8 @@ static void upipe_ts_decaps_input(struct upipe *upipe, struct uref *uref,
     if (unlikely(transporterror))
         uref_flow_set_error(uref);
 
+    uref_free(upipe_ts_decaps->last_uref);
+    upipe_ts_decaps->last_uref = uref_dup(uref);
     upipe_ts_decaps_output(upipe, uref, upump_p);
 }
 
@@ -287,6 +304,8 @@ static void upipe_ts_decaps_free(struct upipe *upipe)
 {
     upipe_throw_dead(upipe);
 
+    struct upipe_ts_decaps *upipe_ts_decaps = upipe_ts_decaps_from_upipe(upipe);
+    uref_free(upipe_ts_decaps->last_uref);
     upipe_ts_decaps_clean_output(upipe);
     upipe_ts_decaps_clean_urefcount(upipe);
     upipe_ts_decaps_free_void(upipe);

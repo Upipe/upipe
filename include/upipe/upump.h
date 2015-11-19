@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2012-2014 OpenHeadend S.A.R.L.
+ * Copyright (C) 2012-2015 OpenHeadend S.A.R.L.
  *
  * Authors: Christophe Massiot
  *
@@ -89,6 +89,8 @@ struct upump {
     upump_cb cb;
     /** opaque pointer for the callback */
     void *opaque;
+    /** pointer to urefcount structure to increment during callback */
+    struct urefcount *refcount;
 };
 
 UBASE_FROM_TO(upump, uchain, uchain, uchain)
@@ -139,11 +141,14 @@ UBASE_FROM_TO(upump_mgr, uchain, uchain, uchain)
  * @param mgr management structure for this event loop
  * @param cb function to call when the pump triggers
  * @param opaque pointer to the module's internal structure
+ * @param refcount pointer to urefcount structure to increment during callback,
+ * or NULL
  * @param event type of event to watch for, followed by optional parameters
  * @return pointer to allocated pump, or NULL in case of failure
  */
 static inline struct upump *upump_alloc(struct upump_mgr *mgr,
                                         upump_cb cb, void *opaque,
+                                        struct urefcount *refcount,
                                         enum upump_type event, ...)
 {
     struct upump *upump;
@@ -157,6 +162,7 @@ static inline struct upump *upump_alloc(struct upump_mgr *mgr,
     uchain_init(&upump->uchain);
     upump->cb = cb;
     upump->opaque = opaque;
+    upump->refcount = refcount;
     return upump;
 }
 
@@ -165,12 +171,15 @@ static inline struct upump *upump_alloc(struct upump_mgr *mgr,
  * @param mgr management structure for this event loop
  * @param cb function to call when the pump triggers
  * @param opaque pointer to the module's internal structure
+ * @param refcount pointer to urefcount structure to increment during callback,
+ * or NULL
  * @return pointer to allocated pump, or NULL in case of failure
  */
 static inline struct upump *upump_alloc_idler(struct upump_mgr *mgr,
-                                              upump_cb cb, void *opaque)
+                                              upump_cb cb, void *opaque,
+                                              struct urefcount *refcount)
 {
-    return upump_alloc(mgr, cb, opaque, UPUMP_TYPE_IDLER);
+    return upump_alloc(mgr, cb, opaque, refcount, UPUMP_TYPE_IDLER);
 }
 
 /** @This allocates and initializes a pump for a timer.
@@ -178,6 +187,8 @@ static inline struct upump *upump_alloc_idler(struct upump_mgr *mgr,
  * @param mgr management structure for this event loop
  * @param cb function to call when the pump triggers
  * @param opaque pointer to the module's internal structure
+ * @param refcount pointer to urefcount structure to increment during callback,
+ * or NULL
  * @param after time after which it triggers, in ticks of a 27 MHz monotonic
  * clock
  * @param repeat pump will trigger again each repeat occurrence, in ticks
@@ -186,9 +197,11 @@ static inline struct upump *upump_alloc_idler(struct upump_mgr *mgr,
  */
 static inline struct upump *upump_alloc_timer(struct upump_mgr *mgr,
                                               upump_cb cb, void *opaque,
+                                              struct urefcount *refcount,
                                               uint64_t after, uint64_t repeat)
 {
-    return upump_alloc(mgr, cb, opaque, UPUMP_TYPE_TIMER, after, repeat);
+    return upump_alloc(mgr, cb, opaque, refcount, UPUMP_TYPE_TIMER,
+                       after, repeat);
 }
 
 /** @This allocates and initializes a pump for a readable file descriptor.
@@ -196,14 +209,17 @@ static inline struct upump *upump_alloc_timer(struct upump_mgr *mgr,
  * @param mgr management structure for this event loop
  * @param cb function to call when the pump triggers
  * @param opaque pointer to the module's internal structure
+ * @param refcount pointer to urefcount structure to increment during callback,
+ * or NULL
  * @param fd file descriptor to watch
  * @return pointer to allocated pump, or NULL in case of failure
  */
 static inline struct upump *upump_alloc_fd_read(struct upump_mgr *mgr,
                                                 upump_cb cb, void *opaque,
+                                                struct urefcount *refcount,
                                                 int fd)
 {
-    return upump_alloc(mgr, cb, opaque, UPUMP_TYPE_FD_READ, fd);
+    return upump_alloc(mgr, cb, opaque, refcount, UPUMP_TYPE_FD_READ, fd);
 }
 
 /** @This allocates and initializes a pump for a writable file descriptor.
@@ -211,14 +227,17 @@ static inline struct upump *upump_alloc_fd_read(struct upump_mgr *mgr,
  * @param mgr management structure for this event loop
  * @param cb function to call when the pump triggers
  * @param opaque pointer to the module's internal structure
+ * @param refcount pointer to urefcount structure to increment during callback,
+ * or NULL
  * @param fd file descriptor to watch
  * @return pointer to allocated pump, or NULL in case of failure
  */
 static inline struct upump *upump_alloc_fd_write(struct upump_mgr *mgr,
                                                  upump_cb cb, void *opaque,
+                                                 struct urefcount *refcount,
                                                  int fd)
 {
-    return upump_alloc(mgr, cb, opaque, UPUMP_TYPE_FD_WRITE, fd);
+    return upump_alloc(mgr, cb, opaque, refcount, UPUMP_TYPE_FD_WRITE, fd);
 }
 
 /** @This asks the event loop to start monitoring a pump.

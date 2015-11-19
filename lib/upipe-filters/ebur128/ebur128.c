@@ -233,7 +233,7 @@ void ebur128_get_version(int* major, int* minor, int* patch) {
 ebur128_state* ebur128_init(unsigned int channels,
                             unsigned long samplerate,
                             int mode) {
-  int errcode, result;
+  int errcode;
   ebur128_state* st;
   unsigned int i;
 
@@ -299,7 +299,7 @@ ebur128_state* ebur128_init(unsigned int channels,
   st->d->short_term_frame_counter = 0;
 
 #ifdef USE_SPEEX_RESAMPLER
-  result = ebur128_init_resampler(st);
+  int result = ebur128_init_resampler(st);
   CHECK_ERROR(result, 0, free_short_term_block_energy_histogram)
 #endif
 
@@ -323,8 +323,10 @@ ebur128_state* ebur128_init(unsigned int channels,
 
   return st;
 
+#ifdef USE_SPEEX_RESAMPLER
 free_short_term_block_energy_histogram:
   free(st->d->short_term_block_energy_histogram);
+#endif
 free_block_energy_histogram:
   free(st->d->block_energy_histogram);
 free_audio_data:
@@ -791,8 +793,7 @@ static int ebur128_energy_in_interval(ebur128_state* st,
   if (interval_frames > st->d->audio_data_frames) {
     return EBUR128_ERROR_INVALID_MODE;
   }
-  ebur128_calc_gating_block(st, interval_frames, out);
-  return EBUR128_SUCCESS;
+  return ebur128_calc_gating_block(st, interval_frames, out);
 }
 
 static int ebur128_energy_shortterm(ebur128_state* st, double* out) {

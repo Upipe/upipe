@@ -422,8 +422,8 @@ static bool upipe_alsink_open(struct upipe *upipe)
     }
 
     struct upump *timer = upump_alloc_timer(upipe_alsink->upump_mgr,
-                                            upipe_alsink_timer, upipe, 0,
-                                            upipe_alsink->period_duration);
+            upipe_alsink_timer, upipe, upipe->refcount, 0,
+            upipe_alsink->period_duration);
     if (unlikely(timer == NULL)) {
         upipe_err(upipe, "can't create timer");
         goto open_error;
@@ -590,7 +590,6 @@ static void upipe_alsink_consume(struct upipe *upipe, snd_pcm_uframes_t frames)
         uref_size <= frames) {
         upipe_alsink_pop_input(upipe);
         uref_free(uref);
-        frames = uref_size;
     } else {
         uref_sound_resize(uref, frames, -1);
         uint64_t pts;
@@ -816,8 +815,7 @@ static int upipe_alsink_set_uri(struct upipe *upipe, const char *uri)
     struct upipe_alsink *upipe_alsink = upipe_alsink_from_upipe(upipe);
 
     upipe_alsink_close(upipe);
-    free(upipe_alsink->uri);
-    upipe_alsink->uri = NULL;
+    ubase_clean_str(&upipe_alsink->uri);
 
     if (unlikely(uri == NULL))
         return UBASE_ERR_NONE;

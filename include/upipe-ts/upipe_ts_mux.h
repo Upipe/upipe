@@ -139,6 +139,9 @@ enum upipe_ts_mux_command {
     UPIPE_TS_MUX_SET_VERSION,
     /** stops updating a PSI table upon sub removal */
     UPIPE_TS_MUX_FREEZE_PSI,
+    /** prepares the next access unit/section for the given date
+     * (uint64_t, uint64_t) */
+    UPIPE_TS_MUX_PREPARE,
 
     /** ts_encaps commands begin here */
     UPIPE_TS_MUX_ENCAPS = UPIPE_CONTROL_LOCAL + 0x1000,
@@ -573,6 +576,20 @@ static inline int upipe_ts_mux_freeze_psi(struct upipe *upipe)
 {
     return upipe_control(upipe, UPIPE_TS_MUX_FREEZE_PSI,
                          UPIPE_TS_MUX_SIGNATURE);
+}
+
+/** @This prepares the access unit/section for the given date.
+ *
+ * @param upipe description structure of the pipe
+ * @param cr_sys current muxing date
+ * @param latency latency before the packet is output
+ * @return an error code
+ */
+static inline int upipe_ts_mux_prepare(struct upipe *upipe, uint64_t cr_sys,
+                                       uint64_t latency)
+{
+    return upipe_control_nodbg(upipe, UPIPE_TS_MUX_PREPARE,
+                               UPIPE_TS_MUX_SIGNATURE, cr_sys, latency);
 }
 
 /** @This returns the management structure for all ts_mux pipes.

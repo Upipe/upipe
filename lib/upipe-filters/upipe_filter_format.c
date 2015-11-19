@@ -116,7 +116,7 @@ struct upipe_ffmt {
     unsigned int nb_urefs;
     /** max urefs in storage */
     unsigned int max_urefs;
-    /** list of blockers (used during udeal) */
+    /** list of blockers (used during urequest) */
     struct uchain blockers;
 
     /** swscale flags */
@@ -203,7 +203,7 @@ static struct upipe *upipe_ffmt_alloc(struct upipe_mgr *mgr,
  * @param upipe description structure of the pipe
  * @param uref uref structure
  * @param upump_p reference to pump that generated the buffer
- * @return always true
+ * @return true if the packet was handled
  */
 static bool upipe_ffmt_handle(struct upipe *upipe, struct uref *uref,
                               struct upump **upump_p)
@@ -225,14 +225,17 @@ static bool upipe_ffmt_handle(struct upipe *upipe, struct uref *uref,
             return true;
         }
 
+        /** It is legal to have just "sound." in flow_def_wanted to avoid
+         * changing unnecessarily the sample format. */
         char *old_def = NULL;
         if (!ubase_ncmp(def, "sound."))
             old_def = strdup(def);
         uref_attr_import(uref, upipe_ffmt->flow_def_wanted);
-        if (old_def != NULL) {
+        if (old_def != NULL &&
+            (!ubase_check(uref_flow_get_def(uref, &def)) ||
+             !strcmp(def, "sound.")))
             uref_flow_set_def(uref, old_def);
-            free(old_def);
-        }
+        free(old_def);
 
         upipe_ffmt_store_first_inner(upipe, NULL);
         upipe_ffmt_store_last_inner(upipe, NULL);

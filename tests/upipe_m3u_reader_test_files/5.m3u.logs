@@ -1,0 +1,12 @@
+flow definition: block.m3u.playlist.
+version: 3
+playlist target duration: 405000000
+playlist target duration: 7794
+uri: http://media.example.com/fileSequence52-A.ts
+playlist sequence duration: 76491000
+uri: http://media.example.com/fileSequence52-B.ts
+playlist sequence duration: 405000000
+uri: http://media.example.com/fileSequence52-C.ts
+playlist sequence duration: 359991000
+uri: http://media.example.com/fileSequence53-A.ts
+playlist sequence duration: 405000000

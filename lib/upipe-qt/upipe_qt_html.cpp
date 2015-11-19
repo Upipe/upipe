@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2014 OpenHeadend S.A.R.L.
+ * Copyright (C) 2014-2015 OpenHeadend S.A.R.L.
  *
  * Authors: Sebastien Gougelet
  *
@@ -209,7 +209,6 @@ static void upipe_qt_html_worker(struct upump *upump){
     struct upipe *upipe = upump_get_opaque(upump, struct upipe *);
     struct upipe_qt_html *upipe_qt_html = upipe_qt_html_from_upipe(upipe);
     struct uref *uref;
-    upipe_use(upipe);
     while ((uref = uqueue_pop(&upipe_qt_html->uqueue, struct uref *)) != NULL) {
         if (uref->ubuf !=  NULL){      
             upipe_qt_html_output(upipe, uref, &upipe_qt_html->upump);
@@ -220,7 +219,6 @@ static void upipe_qt_html_worker(struct upump *upump){
             return;
         }
     }
-    upipe_release(upipe);
 }
 
 /** @internal @This is the callback of upumpstart, start the QT Thread
@@ -241,8 +239,8 @@ void start(struct upump *upumpstart){
 
     struct upump *upump =
             uqueue_upump_alloc_pop(&upipe_qt_html->uqueue,
-                                   upipe_qt_html->upump_mgr,
-                                   upipe_qt_html_worker, upipe);
+                    upipe_qt_html->upump_mgr, upipe_qt_html_worker, upipe,
+                    upipe->refcount);
     upipe_qt_html_set_upump(upipe, upump);
     upump_start(upump);
 

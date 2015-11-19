@@ -212,9 +212,7 @@ static void upipe_sinesrc_idler(struct upump *upump)
         uref_clock_set_pts_sys(uref, upipe_sinesrc->next_pts);
         upipe_sinesrc->next_pts += UPIPE_SINESRC_DURATION;
     }
-    upipe_use(upipe);
     upipe_sinesrc_output(upipe, uref, &upipe_sinesrc->upump);
-    upipe_release(upipe);
 }
 
 /** @internal @This checks if the pump may be allocated.
@@ -261,7 +259,8 @@ static int upipe_sinesrc_check(struct upipe *upipe, struct uref *flow_format)
 
     if (upipe_sinesrc->upump == NULL) {
         struct upump *upump = upump_alloc_idler(upipe_sinesrc->upump_mgr,
-                                                upipe_sinesrc_idler, upipe);
+                                                upipe_sinesrc_idler, upipe,
+                                                upipe->refcount);
         if (unlikely(upump == NULL)) {
             upipe_throw_fatal(upipe, UBASE_ERR_UPUMP);
             return UBASE_ERR_UPUMP;

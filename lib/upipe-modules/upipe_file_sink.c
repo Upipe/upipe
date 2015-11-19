@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2012-2014 OpenHeadend S.A.R.L.
+ * Copyright (C) 2012-2015 OpenHeadend S.A.R.L.
  *
  * Authors: Christophe Massiot
  *
@@ -79,6 +79,8 @@ struct upipe_fsink {
     struct upump_mgr *upump_mgr;
     /** write watcher */
     struct upump *upump;
+    /** sync watcher */
+    struct upump *upump_sync;
 
     /** uclock structure, if not NULL we are in live mode */
     struct uclock *uclock;
@@ -91,6 +93,9 @@ struct upipe_fsink {
     int fd;
     /** file path */
     char *path;
+    /** sync period */
+    uint64_t sync_period;
+
     /** temporary uref storage */
     struct uchain urefs;
     /** nb urefs in storage */
@@ -109,6 +114,7 @@ UPIPE_HELPER_UREFCOUNT(upipe_fsink, urefcount, upipe_fsink_free)
 UPIPE_HELPER_VOID(upipe_fsink)
 UPIPE_HELPER_UPUMP_MGR(upipe_fsink, upump_mgr)
 UPIPE_HELPER_UPUMP(upipe_fsink, upump, upump_mgr)
+UPIPE_HELPER_UPUMP(upipe_fsink, upump_sync, upump_mgr)
 UPIPE_HELPER_INPUT(upipe_fsink, urefs, nb_urefs, max_urefs, blockers, upipe_fsink_output)
 UPIPE_HELPER_UCLOCK(upipe_fsink, uclock, uclock_request, NULL, upipe_throw_provide_request, NULL)
 
@@ -132,11 +138,13 @@ static struct upipe *upipe_fsink_alloc(struct upipe_mgr *mgr,
     upipe_fsink_init_urefcount(upipe);
     upipe_fsink_init_upump_mgr(upipe);
     upipe_fsink_init_upump(upipe);
+    upipe_fsink_init_upump_sync(upipe);
     upipe_fsink_init_input(upipe);
     upipe_fsink_init_uclock(upipe);
     upipe_fsink->latency = 0;
     upipe_fsink->fd = -1;
     upipe_fsink->path = NULL;
+    upipe_fsink->sync_period = 0;
     upipe_throw_ready(upipe);
     return upipe;
 }
@@ -154,8 +162,7 @@ static void upipe_fsink_poll(struct upipe *upipe)
         return;
     }
     struct upump *watcher = upump_alloc_fd_write(upipe_fsink->upump_mgr,
-                                                 upipe_fsink_watcher, upipe,
-                                                 upipe_fsink->fd);
+            upipe_fsink_watcher, upipe, upipe->refcount, upipe_fsink->fd);
     if (unlikely(watcher == NULL)) {
         upipe_err(upipe, "can't create watcher");
         upipe_throw_fatal(upipe, UBASE_ERR_UPUMP);
@@ -254,6 +261,7 @@ write_buffer:
             uref_free(uref);
             upipe_warn_va(upipe, "write error to %s (%m)", upipe_fsink->path);
             upipe_fsink_set_upump(upipe, NULL);
+            upipe_fsink_set_upump_sync(upipe, NULL);
             upipe_throw_sink_end(upipe);
             return true;
         }
@@ -285,6 +293,22 @@ static void upipe_fsink_watcher(struct upump *upump)
          * used in @ref upipe_fsink_input. */
         upipe_release(upipe);
     }
+}
+
+/** @internal @This is called when the file descriptor needs to be sync'ed.
+ *
+ * @param upump description structure of the timer
+ */
+static void upipe_fsink_sync(struct upump *upump)
+{
+    struct upipe *upipe = upump_get_opaque(upump, struct upipe *);
+    struct upipe_fsink *upipe_fsink = upipe_fsink_from_upipe(upipe);
+    if (likely(upipe_fsink->fd != -1))
+#if defined(_POSIX_SYNCHRONIZED_IO) && _POSIX_SYNCHRONIZED_IO > 0
+        fdatasync(upipe_fsink->fd);
+#else
+        fsync(upipe_fsink->fd);
+#endif
 }
 
 /** @internal @This receives data.
@@ -325,6 +349,23 @@ static int upipe_fsink_set_flow_def(struct upipe *upipe, struct uref *flow_def)
     return UBASE_ERR_NONE;
 }
 
+/** @internal @This flushes all currently held buffers, and unblocks the
+ * sources.
+ *
+ * @param upipe description structure of the pipe
+ * @return an error code
+ */
+static int upipe_fsink_flush(struct upipe *upipe)
+{
+    if (upipe_fsink_flush_input(upipe)) {
+        upipe_fsink_set_upump(upipe, NULL);
+        /* All packets have been output, release again the pipe that has been
+         * used in @ref upipe_fsink_input. */
+        upipe_release(upipe);
+    }
+    return UBASE_ERR_NONE;
+}
+
 /** @internal @This returns the path of the currently opened file.
  *
  * @param upipe description structure of the pipe
@@ -354,11 +395,11 @@ static int _upipe_fsink_set_path(struct upipe *upipe, const char *path,
     if (unlikely(upipe_fsink->fd != -1)) {
         if (likely(upipe_fsink->path != NULL))
             upipe_notice_va(upipe, "closing file %s", upipe_fsink->path);
-        close(upipe_fsink->fd);
+        ubase_clean_fd(&upipe_fsink->fd);
     }
-    free(upipe_fsink->path);
-    upipe_fsink->path = NULL;
+    ubase_clean_str(&upipe_fsink->path);
     upipe_fsink_set_upump(upipe, NULL);
+    upipe_fsink_set_upump_sync(upipe, NULL);
     if (!upipe_fsink_check_input(upipe))
         /* Release the pipe used in @ref upipe_fsink_input. */
         upipe_release(upipe);
@@ -401,8 +442,7 @@ static int _upipe_fsink_set_path(struct upipe *upipe, const char *path,
         case UPIPE_FSINK_APPEND:
             if (unlikely(lseek(upipe_fsink->fd, 0, SEEK_END) == -1)) {
                 upipe_err_va(upipe, "can't append to file %s (%s)", path, mode_desc);
-                close(upipe_fsink->fd);
-                upipe_fsink->fd = -1;
+                ubase_clean_fd(&upipe_fsink->fd);
                 return UBASE_ERR_EXTERNAL;
             }
             break;
@@ -412,8 +452,7 @@ static int _upipe_fsink_set_path(struct upipe *upipe, const char *path,
 
     upipe_fsink->path = strdup(path);
     if (unlikely(upipe_fsink->path == NULL)) {
-        close(upipe_fsink->fd);
-        upipe_fsink->fd = -1;
+        ubase_clean_fd(&upipe_fsink->fd);
         upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
         return UBASE_ERR_ALLOC;
     }
@@ -438,20 +477,31 @@ static int _upipe_fsink_get_fd(struct upipe *upipe, int *fd_p)
     return UBASE_ERR_NONE;
 }
 
-/** @internal @This flushes all currently held buffers, and unblocks the
- * sources.
+/** @internal @This sets the sync period.
  *
  * @param upipe description structure of the pipe
+ * @param sync_period sync period
  * @return an error code
  */
-static int upipe_fsink_flush(struct upipe *upipe)
+static int _upipe_fsink_set_sync_period(struct upipe *upipe,
+                                        uint64_t sync_period)
 {
-    if (upipe_fsink_flush_input(upipe)) {
-        upipe_fsink_set_upump(upipe, NULL);
-        /* All packets have been output, release again the pipe that has been
-         * used in @ref upipe_fsink_input. */
-        upipe_release(upipe);
-    }
+    struct upipe_fsink *upipe_fsink = upipe_fsink_from_upipe(upipe);
+    upipe_fsink->sync_period = sync_period;
+    upipe_fsink_set_upump_sync(upipe, NULL);
+    return UBASE_ERR_NONE;
+}
+
+/** @internal @This returns the sync period.
+ *
+ * @param upipe description structure of the pipe
+ * @param p filled in with the sync period
+ * @return an error code
+ */
+static int _upipe_fsink_get_sync_period(struct upipe *upipe, uint64_t *p)
+{
+    struct upipe_fsink *upipe_fsink = upipe_fsink_from_upipe(upipe);
+    *p = upipe_fsink->sync_period;
     return UBASE_ERR_NONE;
 }
 
@@ -467,9 +517,11 @@ static int  _upipe_fsink_control(struct upipe *upipe, int command, va_list args)
     switch (command) {
         case UPIPE_ATTACH_UPUMP_MGR:
             upipe_fsink_set_upump(upipe, NULL);
+            upipe_fsink_set_upump_sync(upipe, NULL);
             return upipe_fsink_attach_upump_mgr(upipe);
         case UPIPE_ATTACH_UCLOCK:
             upipe_fsink_set_upump(upipe, NULL);
+            upipe_fsink_set_upump_sync(upipe, NULL);
             upipe_fsink_require_uclock(upipe);
             return UBASE_ERR_NONE;
         case UPIPE_REGISTER_REQUEST: {
@@ -482,6 +534,8 @@ static int  _upipe_fsink_control(struct upipe *upipe, int command, va_list args)
             struct uref *flow_def = va_arg(args, struct uref *);
             return upipe_fsink_set_flow_def(upipe, flow_def);
         }
+        case UPIPE_FLUSH:
+            return upipe_fsink_flush(upipe);
 
         case UPIPE_GET_MAX_LENGTH: {
             unsigned int *p = va_arg(args, unsigned int *);
@@ -503,14 +557,21 @@ static int  _upipe_fsink_control(struct upipe *upipe, int command, va_list args)
             enum upipe_fsink_mode mode = va_arg(args, enum upipe_fsink_mode);
             return _upipe_fsink_set_path(upipe, path, mode);
         }
-
         case UPIPE_FSINK_GET_FD: {
             UBASE_SIGNATURE_CHECK(args, UPIPE_FSINK_SIGNATURE)
             int *fd_p = va_arg(args, int *);
             return _upipe_fsink_get_fd(upipe, fd_p);
         }
-        case UPIPE_FLUSH:
-            return upipe_fsink_flush(upipe);
+        case UPIPE_FSINK_SET_SYNC_PERIOD: {
+            UBASE_SIGNATURE_CHECK(args, UPIPE_FSINK_SIGNATURE)
+            uint64_t sync_period = va_arg(args, uint64_t);
+            return _upipe_fsink_set_sync_period(upipe, sync_period);
+        }
+        case UPIPE_FSINK_GET_SYNC_PERIOD: {
+            UBASE_SIGNATURE_CHECK(args, UPIPE_FSINK_SIGNATURE)
+            uint64_t *p = va_arg(args, uint64_t *);
+            return _upipe_fsink_get_sync_period(upipe, p);
+        }
         default:
             return UBASE_ERR_UNHANDLED;
     }
@@ -530,6 +591,25 @@ static int upipe_fsink_control(struct upipe *upipe, int command, va_list args)
 
     if (unlikely(!upipe_fsink_check_input(upipe)))
         upipe_fsink_poll(upipe);
+
+    struct upipe_fsink *upipe_fsink = upipe_fsink_from_upipe(upipe);
+    if (upipe_fsink->sync_period && upipe_fsink->fd != -1) {
+        if (unlikely(!ubase_check(upipe_fsink_check_upump_mgr(upipe)))) {
+            upipe_err_va(upipe, "can't get upump_mgr");
+            return UBASE_ERR_UPUMP;
+        }
+
+        struct upump *upump = upump_alloc_timer(upipe_fsink->upump_mgr,
+                upipe_fsink_sync, upipe, upipe->refcount,
+                upipe_fsink->sync_period, upipe_fsink->sync_period);
+        if (unlikely(upump == NULL)) {
+            upipe_err(upipe, "can't create timer");
+            upipe_throw_fatal(upipe, UBASE_ERR_UPUMP);
+        } else {
+            upipe_fsink_set_upump_sync(upipe, upump);
+            upump_start(upump);
+        }
+    }
 
     return UBASE_ERR_NONE;
 }
@@ -551,6 +631,7 @@ static void upipe_fsink_free(struct upipe *upipe)
     free(upipe_fsink->path);
     upipe_fsink_clean_uclock(upipe);
     upipe_fsink_clean_upump(upipe);
+    upipe_fsink_clean_upump_sync(upipe);
     upipe_fsink_clean_upump_mgr(upipe);
     upipe_fsink_clean_input(upipe);
     upipe_fsink_clean_urefcount(upipe);

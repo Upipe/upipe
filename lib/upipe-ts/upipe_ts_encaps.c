@@ -152,8 +152,12 @@ struct upipe_ts_encaps {
     size_t tb_buffer;
     /** muxing date of the last PCR */
     uint64_t last_pcr;
-    /** offset between cr_sys and cr_prog */
-    int64_t sys_prog_offset;
+    /** cr_prog of the last cr_sys/cr_prog reference */
+    uint64_t sys_prog_last_cr_prog;
+    /** cr_sys of the last cr_sys/cr_prog reference */
+    uint64_t sys_prog_last_cr_sys;
+    /** drift between cr_sys and cr_prog */
+    struct urational sys_prog_drift_rate;
     /** offset between cr_prog and coded value */
     int64_t cr_prog_offset;
     /** true if end of stream was received */
@@ -230,7 +234,10 @@ static struct upipe *upipe_ts_encaps_alloc(struct upipe_mgr *mgr,
     upipe_ts_encaps->last_splice = 0;
     upipe_ts_encaps->last_pcr = 0;
     upipe_ts_encaps->tb_buffer = TB_SIZE;
-    upipe_ts_encaps->sys_prog_offset = INT64_MAX;
+    upipe_ts_encaps->sys_prog_last_cr_prog = UINT64_MAX;
+    upipe_ts_encaps->sys_prog_last_cr_sys = UINT64_MAX;
+    upipe_ts_encaps->sys_prog_drift_rate.num =
+        upipe_ts_encaps->sys_prog_drift_rate.den = 1;
     upipe_ts_encaps->cr_prog_offset = 0;
     upipe_ts_encaps->eos = false;
     upipe_ts_encaps->need_ready = false;
@@ -294,7 +301,7 @@ static void upipe_ts_encaps_update_status(struct upipe *upipe)
     }
 
 upipe_ts_encaps_update_status_pcr:
-    if (encaps->pcr_interval && encaps->sys_prog_offset != INT64_MAX) {
+    if (encaps->pcr_interval && encaps->sys_prog_last_cr_prog != UINT64_MAX) {
         if (encaps->last_pcr)
             pcr_sys = encaps->last_pcr + encaps->pcr_interval;
         else
@@ -422,7 +429,7 @@ static void upipe_ts_encaps_promote_uref(struct upipe *upipe)
 
         bool has_cr = ubase_check(uref_block_get_end(uref));
         const char *def;
-        uint64_t cr_prog, cr_sys;
+        uint64_t cr_prog = 0, cr_sys;
         size_t uref_size;
         if (unlikely(ubase_check(uref_flow_get_def(uref, &def)))) {
             encaps->psi = !ubase_ncmp(def, "block.mpegts.mpegtspsi.");
@@ -470,9 +477,15 @@ static void upipe_ts_encaps_promote_uref(struct upipe *upipe)
         uref_clock_get_dts_sys(uref, &encaps->uref_dts_sys);
         encaps->uref_size = uref_size;
         if (!encaps->pcr_interval)
-            encaps->sys_prog_offset = INT64_MAX;
-        else if (has_cr)
-            encaps->sys_prog_offset = cr_prog - cr_sys;
+            encaps->sys_prog_last_cr_prog = UINT64_MAX;
+        else if (has_cr) {
+            encaps->sys_prog_last_cr_prog = cr_prog;
+            encaps->sys_prog_last_cr_sys = cr_sys;
+            encaps->sys_prog_drift_rate.num =
+                encaps->sys_prog_drift_rate.den = 1;
+            uref_clock_get_rate(uref, &encaps->sys_prog_drift_rate);
+            assert(encaps->sys_prog_drift_rate.num);
+        }
         if (ubase_check(uref_block_get_start(uref)))
             encaps->need_ready = true;
         break;
@@ -518,6 +531,11 @@ static void upipe_ts_encaps_input(struct upipe *upipe, struct uref *uref,
                  encaps->nb_urefs >= encaps->max_urefs * 2)) {
         upipe_warn(upipe, "too many queued packets, dropping");
         uref_free(uref);
+        /* Also drop the first packet because it may have an invalid date. */
+        upipe_ts_encaps_consume_uref(upipe);
+        encaps->au_size = 0;
+        encaps->need_ready = encaps->need_status = true;
+        upipe_ts_encaps_check_status(upipe);
         return;
     }
 
@@ -874,10 +892,17 @@ static int upipe_ts_encaps_overlap_au(struct upipe *upipe,
     uref_clock_get_dts_sys(uref_au1, &dts_sys);
     uint64_t cr_sys;
     UBASE_RETURN(uref_clock_get_cr_sys(uref_au1, &cr_sys));
+    uint64_t cr_prog = UINT64_MAX;
+    uref_clock_get_cr_prog(uref_au1, &cr_prog);
 
     /* Adjust AU1's dts_sys and cr_sys */
     cr_sys -= (uint64_t)last_ts_size * UCLOCK_FREQ / encaps->octetrate;
     uref_clock_set_cr_sys(uref_au1, cr_sys);
+    if (cr_prog != UINT64_MAX) {
+        cr_prog -= (uint64_t)last_ts_size * UCLOCK_FREQ / encaps->octetrate;
+        uref_clock_set_cr_prog(uref_au1, cr_prog);
+    }
+
     if (dts_sys != UINT64_MAX) {
         dts_sys -= (uint64_t)last_ts_size * UCLOCK_FREQ / encaps->tb_rate;
         uref_clock_set_cr_dts_delay(uref_au1, dts_sys - cr_sys);
@@ -1265,9 +1290,13 @@ static int _upipe_ts_encaps_splice(struct upipe *upipe, uint64_t cr_sys,
     }
 
     uint64_t pcr_prog = UINT64_MAX;
-    if (encaps->pcr_interval && encaps->sys_prog_offset != INT64_MAX &&
+    if (encaps->pcr_interval && encaps->sys_prog_last_cr_prog != UINT64_MAX &&
         encaps->last_pcr + encaps->pcr_interval <= encaps->last_splice) {
-        pcr_prog = encaps->last_splice + encaps->sys_prog_offset;
+        pcr_prog = (int64_t)encaps->sys_prog_last_cr_prog +
+            ((int64_t)encaps->last_splice -
+             (int64_t)encaps->sys_prog_last_cr_sys) *
+            (int64_t)encaps->sys_prog_drift_rate.den /
+            (int64_t)encaps->sys_prog_drift_rate.num;
         encaps->last_pcr = encaps->last_splice;
     }
 

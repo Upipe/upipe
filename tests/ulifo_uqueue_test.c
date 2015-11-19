@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2012-2013 OpenHeadend S.A.R.L.
+ * Copyright (C) 2012-2015 OpenHeadend S.A.R.L.
  *
  * Authors: Christophe Massiot
  *
@@ -100,12 +100,14 @@ static void push(struct upump *upump)
     if (unlikely(!uqueue_push(&uqueue, uchain))) {
         ulifo_push(&ulifo, uchain);
         thread->loop--;
-        thread->blocker = upump_blocker_alloc(upump, NULL, NULL);
+        thread->blocker = upump_blocker_alloc(upump, NULL, NULL, NULL);
         upump_start(thread->upump);
     } else if (unlikely(thread->loop >= nb_loops)) {
         /* make it stop */
         upump_stop(upump);
         uatomic_fetch_sub(&refcount, 1);
+        /* trigger a spurious write event so that we unblock the reader */
+        ueventfd_write(&uqueue.event_pop);
     }
 }
 
@@ -120,11 +122,12 @@ static void *push_thread(void *_thread)
     assert(thread->upump_mgr != NULL);
 
     thread->upump = uqueue_upump_alloc_push(&uqueue, thread->upump_mgr,
-                                            push_ready, thread);
+                                            push_ready, thread, NULL);
     assert(thread->upump != NULL);
     thread->blocker = NULL;
 
-    struct upump *upump = upump_alloc_idler(thread->upump_mgr, push, thread);
+    struct upump *upump = upump_alloc_idler(thread->upump_mgr, push, thread,
+                                            NULL);
     assert(upump != NULL);
     upump_start(upump);
 
@@ -148,7 +151,8 @@ static void pop(struct upump *upump)
         if (likely(elem->timeout.tv_nsec))
             assert(!nanosleep(&elem->timeout, NULL));
         ulifo_push(&ulifo, uchain);
-    } else if (likely(uatomic_load(&refcount) == 1))
+    }
+    if (unlikely(uatomic_load(&refcount) == 1))
         upump_stop(upump);
 }
 
@@ -178,7 +182,8 @@ int main(int argc, char **argv)
     }
 
     assert(uqueue_init(&uqueue, UQUEUE_MAX_DEPTH, uqueue_buffer));
-    struct upump *upump = uqueue_upump_alloc_pop(&uqueue, upump_mgr, pop, NULL);
+    struct upump *upump = uqueue_upump_alloc_pop(&uqueue, upump_mgr, pop, NULL,
+                                                 NULL);
     assert(upump != NULL);
 
     struct thread threads[2];

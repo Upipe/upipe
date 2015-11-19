@@ -169,7 +169,7 @@ static bool upipe_ts_psim_merge(struct upipe *upipe, struct uref *uref,
                 buffer, psi_header));
 
     if (unlikely(!psi_validate(psi_header) ||
-                 length + PSI_HEADER_SIZE > PSI_PRIVATE_MAX_SIZE)) {
+                 length > PSI_PRIVATE_MAX_SIZE)) {
         upipe_warn(upipe, "wrong PSI header");
         upipe_ts_psim_flush(upipe);
         return false;

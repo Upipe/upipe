@@ -408,9 +408,9 @@ static bool _upipe_sws_thumbs_set_size(struct upipe *upipe,
         return UBASE_ERR_ALLOC;
     }
     uref_pic_flow_set_hsize(flow, hsize * cols);
-    uref_pic_flow_set_hsize_visible(flow, hsize * cols);
-    uref_pic_flow_set_vsize(flow, vsize * rows);
-    uref_pic_flow_set_vsize_visible(flow, vsize * rows);
+    uref_pic_flow_set_hsize_visible(flow, (uint64_t)hsize * cols);
+    uref_pic_flow_set_vsize(flow, (uint64_t)vsize * rows);
+    uref_pic_flow_set_vsize_visible(flow, (uint64_t)vsize * rows);
     UBASE_FATAL(upipe, uref_pic_flow_set_align(flow, 16))
 
     flow = upipe_sws_thumbs_store_flow_def_attr(upipe, flow);

@@ -225,7 +225,8 @@ static bool upipe_nacl_audio_check_watcher(struct upipe *upipe)
     struct upump *upump =
         uqueue_upump_alloc_push(&upipe_nacl_audio->uqueue,
                                 upipe_nacl_audio->upump_mgr,
-                                upipe_nacl_audio_watcher, upipe);
+                                upipe_nacl_audio_watcher, upipe,
+                                upipe->refcount);
     if (unlikely(upump == NULL)) {
         upipe_err_va(upipe, "can't create watcher");
         upipe_throw_fatal(upipe, UBASE_ERR_UPUMP);
@@ -293,7 +294,6 @@ static void upipe_nacl_audio_worker(void *sample_buffer, uint32_t buffer_size,
         if (unlikely(upipe_nacl_audio->uref == NULL)) {
             upipe_dbg_va(upipe, "playing %u frames of silence (empty)", frames);
             memset(sample_buffer, 0, frames * 4);
-            sample_buffer += frames * 4;
             break;
         }
 

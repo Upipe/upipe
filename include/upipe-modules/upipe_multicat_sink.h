@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2012 OpenHeadend S.A.R.L.
+ * Copyright (C) 2012-2015 OpenHeadend S.A.R.L.
  *
  * Authors: Benjamin Cohen
  *
@@ -48,7 +48,7 @@ extern "C" {
 
 /** @This extends upipe_command with specific commands for multicat sink. */
 enum upipe_multicat_sink_command {
-    UPIPE_MULTICAT_SINK_SENTINEL = UPIPE_CONTROL_LOCAL,
+    UPIPE_MULTICAT_SINK_SENTINEL = UPIPE_FSINK_CONTROL_LOCAL,
 
     /** returns the path of the currently opened node
       * (const char **, const char **) */

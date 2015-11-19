@@ -62,6 +62,9 @@
 #include <upipe/upipe_helper_upump.h>
 #include <upipe/upipe_helper_bin_input.h>
 #include <upipe/upipe_helper_subpipe.h>
+#include <upipe-framers/uref_h264_flow.h>
+#include <upipe-framers/uref_mpga_flow.h>
+#include <upipe-framers/uref_mpgv_flow.h>
 #include <upipe-ts/uref_ts_flow.h>
 #include <upipe-ts/upipe_ts_mux.h>
 #include <upipe-ts/upipe_ts_encaps.h>
@@ -441,7 +444,8 @@ static void upipe_ts_mux_program_change(struct upipe *upipe);
 /** @hidden */
 static void upipe_ts_mux_program_free(struct urefcount *urefcount_real);
 
-/** @internal @This defines the role of an input wrt. PCR management. */
+/** @internal @This defines the role of an input wrt. PCR management and
+ * scheduling. */
 enum upipe_ts_mux_input_type {
     /** video */
     UPIPE_TS_MUX_INPUT_VIDEO,
@@ -902,8 +906,6 @@ static struct upipe *upipe_ts_mux_input_alloc(struct upipe_mgr *mgr,
     upipe_ts_mux_input_store_first_inner(upipe, tstd);
     upipe_ts_encaps_set_tb_size(upipe_ts_mux_input->encaps,
                                 upipe_ts_mux->tb_size);
-    upipe_set_output(psig_flow,
-                     upipe_ts_mux_to_inner_sink(upipe_ts_mux));
     upipe_release(psig_flow);
     return upipe;
 }
@@ -1182,10 +1184,11 @@ static int upipe_ts_mux_input_set_flow_def(struct upipe *upipe,
     if (latency + upipe_ts_mux_input->buffer_duration > upipe_ts_mux->latency) {
         upipe_ts_mux->latency = latency + upipe_ts_mux_input->buffer_duration;
         upipe_ts_mux_build_flow_def(upipe_ts_mux_to_upipe(upipe_ts_mux));
-    } else
+    } else if (au_per_sec.den) {
         upipe_set_max_length(upipe_ts_mux_input->encaps,
                 (MIN_BUFFERING + upipe_ts_mux->latency) * au_per_sec.num /
                 au_per_sec.den / UCLOCK_FREQ);
+    }
 
     upipe_notice_va(upipe,
             "adding %s on PID %"PRIu64" (%"PRIu64" bits/s), latency %"PRIu64" ms, buffer %"PRIu64" ms",
@@ -1194,6 +1197,32 @@ static int upipe_ts_mux_input_set_flow_def(struct upipe *upipe,
     upipe_ts_mux_program_change(upipe_ts_mux_program_to_upipe(program));
     upipe_ts_mux_program_update(upipe_ts_mux_program_to_upipe(program));
     return UBASE_ERR_NONE;
+}
+
+/** @internal @This provides a flow format suggestion.
+ *
+ * @param upipe description structure of the pipe
+ * @param request description structure of the request
+ * @return an error code
+ */
+static int upipe_ts_mux_provide_flow_format(struct upipe *upipe,
+                                            struct urequest *request)
+{
+    struct uref *flow_format = uref_dup(request->uref);
+    UBASE_ALLOC_RETURN(flow_format);
+    /* we never want global headers */
+    uref_flow_delete_global(flow_format);
+    const char *def;
+    if (likely(ubase_check(uref_flow_get_def(flow_format, &def)))) {
+        if (!ubase_ncmp(def, "block.h264."))
+            uref_h264_flow_set_annexb(flow_format);
+        else if (!ubase_ncmp(def, "block.aac."))
+            uref_mpga_flow_set_adts(flow_format);
+        else if (!ubase_ncmp(def, "block.mpeg1video.") ||
+                 !ubase_ncmp(def, "block.mpeg2video."))
+            uref_mpgv_flow_set_repeated_sequence(flow_format);
+    }
+    return urequest_provide_flow_format(request, flow_format);
 }
 
 /** @internal @This processes control commands on a ts_mux_input
@@ -1208,6 +1237,15 @@ static int upipe_ts_mux_input_control(struct upipe *upipe,
                                       int command, va_list args)
 {
     switch (command) {
+        case UPIPE_REGISTER_REQUEST: {
+            struct urequest *request = va_arg(args, struct urequest *);
+            if (request->type == UREQUEST_FLOW_FORMAT)
+                return upipe_ts_mux_provide_flow_format(upipe, request);
+            return upipe_throw_provide_request(upipe, request);
+        }
+        case UPIPE_UNREGISTER_REQUEST:
+            return UBASE_ERR_NONE;
+
         case UPIPE_SET_FLOW_DEF: {
             struct uref *flow_def = va_arg(args, struct uref *);
             return upipe_ts_mux_input_set_flow_def(upipe, flow_def);
@@ -2153,9 +2191,9 @@ static void upipe_ts_mux_increment(struct upipe *upipe)
     /* Tell PSI tables to prepare packets. */
     uint64_t original_cr_sys = mux->cr_sys - mux->latency;
     if (mux->psig != NULL)
-        upipe_ts_psig_prepare(mux->psig, original_cr_sys);
+        upipe_ts_mux_prepare(mux->psig, original_cr_sys, mux->latency);
     if (mux->sig != NULL)
-        upipe_ts_sig_prepare(mux->sig, original_cr_sys, mux->latency);
+        upipe_ts_mux_prepare(mux->sig, original_cr_sys, mux->latency);
 }
 
 /** @internal @This shows the next increment of cr_sys.
@@ -2305,7 +2343,6 @@ static void upipe_ts_mux_complete(struct upipe *upipe, struct upump **upump_p)
  */
 static void _upipe_ts_mux_watcher(struct upipe *upipe)
 {
-    upipe_use(upipe);
     struct upipe_ts_mux *mux = upipe_ts_mux_from_upipe(upipe);
     if (unlikely(mux->cr_sys == UINT64_MAX))
         mux->cr_sys = uclock_now(mux->uclock);
@@ -2359,7 +2396,6 @@ static void _upipe_ts_mux_watcher(struct upipe *upipe)
 
     upipe_ts_mux_set_upump(upipe, NULL);
     upipe_ts_mux_work(upipe, NULL);
-    upipe_release(upipe);
 }
 
 /** @internal @This runs when the pump expires (live mode only).
@@ -2399,7 +2435,7 @@ static uint64_t upipe_ts_mux_check_available(struct upipe *upipe)
                 if (input->deleted) {
                     upipe_release(input->encaps);
                     continue;
-                } else {
+                } else if (input->input_type != UPIPE_TS_MUX_INPUT_OTHER) {
                     upipe_release(upipe_ts_mux_program_to_upipe(program));
                     return UINT64_MAX;
                 }
@@ -2453,9 +2489,9 @@ static void upipe_ts_mux_work_file(struct upipe *upipe, struct upump **upump_p)
                 upipe_ts_mux_init_cr_prog(upipe, mux->initial_cr_prog);
                 mux->initial_cr_prog = UINT64_MAX;
             }
-            upipe_ts_psig_prepare(mux->psig, min_cr_sys);
+            upipe_ts_mux_prepare(mux->psig, min_cr_sys, 0);
             if (mux->sig != NULL)
-                upipe_ts_sig_prepare(mux->sig, min_cr_sys, 0);
+                upipe_ts_mux_prepare(mux->sig, min_cr_sys, 0);
         }
 
         struct ubuf *ubuf;
@@ -2514,8 +2550,8 @@ static void upipe_ts_mux_work_live(struct upipe *upipe, struct upump **upump_p)
         uint64_t now = uclock_now(mux->uclock);
         if (next_cr_sys > now + mux->mux_delay) {
             upump = upump_alloc_timer(mux->upump_mgr, upipe_ts_mux_watcher,
-                                      upipe, next_cr_sys - now - mux->mux_delay,
-                                      0);
+                                      upipe, upipe->refcount,
+                                      next_cr_sys - now - mux->mux_delay, 0);
             if (unlikely(upump == NULL)) {
                 upipe_throw_fatal(upipe, UBASE_ERR_UPUMP);
                 return;
@@ -2530,7 +2566,8 @@ static void upipe_ts_mux_work_live(struct upipe *upipe, struct upump **upump_p)
     if (unlikely(upump == NULL)) {
         mux->cr_sys = UINT64_MAX;
         mux->cr_sys_remainder = 0;
-        upump = upump_alloc_idler(mux->upump_mgr, upipe_ts_mux_watcher, upipe);
+        upump = upump_alloc_idler(mux->upump_mgr, upipe_ts_mux_watcher, upipe,
+                                  upipe->refcount);
         if (unlikely(upump == NULL)) {
             upipe_throw_fatal(upipe, UBASE_ERR_UPUMP);
             return;
@@ -2578,7 +2615,7 @@ static int upipe_ts_mux_check(struct upipe *upipe, struct uref *flow_format)
             upipe_ts_mux_mgr_from_upipe_mgr(upipe->mgr);
 
         mux->psi_pid_pat = upipe_ts_mux_psi_pid_use(upipe, PAT_PID);
-        struct upipe *psig, *psi_join;
+        struct upipe *psig = NULL, *psi_join;
         if (unlikely(mux->psi_pid_pat == NULL ||
                      (psig = upipe_void_alloc(ts_mux_mgr->ts_psig_mgr,
                              uprobe_pfx_alloc(
@@ -3039,9 +3076,9 @@ static void upipe_ts_mux_conformance_guess(struct upipe *upipe)
     if (upipe_ts_mux->flow_def_input == NULL)
         upipe_ts_mux_conformance_change(upipe,
                 UPIPE_TS_CONFORMANCE_DVB_NO_TABLES);
-
-    upipe_ts_mux_conformance_change(upipe,
-        upipe_ts_conformance_from_flow_def(upipe_ts_mux->flow_def_input));
+    else
+        upipe_ts_mux_conformance_change(upipe,
+            upipe_ts_conformance_from_flow_def(upipe_ts_mux->flow_def_input));
 }
 
 /** @internal @This sets the input flow definition.
@@ -3362,7 +3399,8 @@ static int _upipe_ts_mux_set_tdt_interval(struct upipe *upipe,
     struct upipe_ts_mux *upipe_ts_mux = upipe_ts_mux_from_upipe(upipe);
     upipe_ts_mux->tdt_interval = interval;
     upipe_ts_mux_update(upipe); /* will trigger set_tdt_interval */
-    upipe_ts_mux_require_uclock(upipe);
+    if (urequest_get_opaque(&upipe_ts_mux->uclock_request, void *) == NULL)
+        upipe_ts_mux_require_uclock(upipe);
     return UBASE_ERR_NONE;
 }
 

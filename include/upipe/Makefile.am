@@ -4,6 +4,7 @@ DISTCLEANFILES = config.h
 pkginclude_HEADERS = \
 	uatomic.h \
 	ubase.h \
+	ubits.h \
 	ubuf.h \
 	ubuf_block.h \
 	ubuf_block_common.h \
@@ -19,6 +20,7 @@ pkginclude_HEADERS = \
 	ubuf_sound_mem.h \
 	uclock.h \
 	uclock_std.h \
+	ucookie.h \
 	udeal.h \
 	udict.h \
 	udict_dump.h \
@@ -27,6 +29,7 @@ pkginclude_HEADERS = \
 	ufifo.h \
 	ulifo.h \
 	ulist.h \
+	ulog.h \
 	umem.h \
 	umem_alloc.h \
 	umem_pool.h \
@@ -57,6 +60,7 @@ pkginclude_HEADERS = \
 	uprobe_dejitter.h \
 	uprobe_helper_alloc.h \
 	uprobe_helper_uprobe.h \
+	uprobe_loglevel.h \
 	uprobe_output.h \
 	uprobe_prefix.h \
 	uprobe_select_flows.h \
@@ -88,5 +92,13 @@ pkginclude_HEADERS = \
 	uref_sound.h \
 	uref_sound_flow.h \
 	uref_std.h \
+	uref_m3u.h \
+	uref_m3u_playlist.h \
+	uref_m3u_master.h \
+	uref_m3u_flow.h \
+	uref_m3u_playlist_flow.h \
+	uref_uri.h \
 	urequest.h \
-	uring.h
+	uring.h \
+	ustring.h \
+	uuri.h

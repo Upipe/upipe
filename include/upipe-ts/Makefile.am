@@ -16,6 +16,8 @@ myinclude_HEADERS = \
 	upipe_ts_psi_join.h \
 	upipe_ts_psi_merge.h \
 	upipe_ts_psi_split.h \
+	upipe_ts_scte35_decoder.h \
+	upipe_ts_scte35_probe.h \
 	upipe_ts_sdt_decoder.h \
 	upipe_ts_si_generator.h \
 	upipe_ts_tdt_decoder.h \
@@ -24,4 +26,5 @@ myinclude_HEADERS = \
 	upipe_ts_tstd.h \
 	uref_ts_attr.h \
 	uref_ts_event.h \
-	uref_ts_flow.h
+	uref_ts_flow.h \
+	uref_ts_scte35.h

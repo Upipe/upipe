@@ -92,6 +92,8 @@ static void *uref_std_alloc_inner(struct upool *upool)
 {
     struct uref_std_mgr *std_mgr = uref_std_mgr_from_uref_pool(upool);
     struct uref *uref = malloc(sizeof(struct uref));
+    if (unlikely(uref == NULL))
+        return NULL;
     uref->mgr = uref_std_mgr_to_uref_mgr(std_mgr);
     return uref;
 }

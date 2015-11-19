@@ -179,6 +179,9 @@ static void upipe_telxf_work(struct upipe *upipe, struct upump **upump_p)
 
     /* We work on encoded data so in the DTS domain. Rebase on DTS. */
     uint64_t date;
+    struct urational drift_rate;
+    drift_rate.den = 0;
+    uref_clock_get_rate(upipe_telxf->next_uref, &drift_rate);
 #define SET_DATE(dv)                                                        \
     if (ubase_check(uref_clock_get_dts_##dv(upipe_telxf->next_uref, &date)))\
         uref_clock_set_dts_##dv(&upipe_telxf->au_uref_s, date);             \
@@ -200,6 +203,8 @@ static void upipe_telxf_work(struct upipe *upipe, struct upump **upump_p)
 #undef SET_DATE
 
     uref_clock_set_dts_pts_delay(upipe_telxf->next_uref, 0);
+    if (drift_rate.den)
+        uref_clock_set_rate(upipe_telxf->next_uref, drift_rate);
 
     upipe_telxf_output(upipe, upipe_telxf->next_uref, upump_p);
 upipe_telxf_work_err:

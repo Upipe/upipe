@@ -40,8 +40,6 @@ extern "C" {
 enum upipe_ts_sig_command {
     UPIPE_TS_SIG_SENTINEL = UPIPE_TS_MUX_SIG,
 
-    /** prepares the next SI sections for the given date (uint64_t, uint64_t) */
-    UPIPE_TS_SIG_PREPARE,
     /** returns the NIT subpipe (struct upipe **) */
     UPIPE_TS_SIG_GET_NIT_SUB,
     /** returns the SDT subpipe (struct upipe **) */
@@ -51,20 +49,6 @@ enum upipe_ts_sig_command {
     /** returns the TDT subpipe (struct upipe **) */
     UPIPE_TS_SIG_GET_TDT_SUB
 };
-
-/** @This prepares the next SI sections for the given date.
- *
- * @param upipe description structure of the pipe
- * @param cr_sys current muxing date
- * @param latency latency before the packet is output
- * @return an error code
- */
-static inline int upipe_ts_sig_prepare(struct upipe *upipe, uint64_t cr_sys,
-                                      uint64_t latency)
-{
-    return upipe_control_nodbg(upipe, UPIPE_TS_SIG_PREPARE,
-                               UPIPE_TS_SIG_SIGNATURE, cr_sys, latency);
-}
 
 /** @This returns the NIT subpipe. The refcount is not incremented so you
  * have to use it if you want to keep the pointer.

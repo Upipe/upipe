@@ -1,43 +1,94 @@
 language: c
 
-compiler:
-  - clang
-  - gcc
+env:
+  global:
+    - MAKEFLAGS=-j2
+
+matrix:
+  include:
+
+    - os: linux
+      compiler: gcc-5
+      env:
+        - GCC_VERSION=5
+        - APT_REPOS="ppa:ubuntu-toolchain-r/test ppa:frodo-vdr/main ppa:danmbox/ppa ppa:dlundquist/sniproxy"
+        - APT_PACKAGES="gcc-$GCC_VERSION g++-$GCC_VERSION"
+        - HOST_CC=gcc-$GCC_VERSION
+        - HOST_CXX=g++-$GCC_VERSION
+
+    - os: linux
+      compiler: gcc32
+      env:
+        - GCC_VERSION=5
+        - APT_REPOS="ppa:ubuntu-toolchain-r/test ppa:frodo-vdr/main ppa:danmbox/ppa ppa:dlundquist/sniproxy"
+        - APT_PACKAGES="gcc-$GCC_VERSION-multilib g++-$GCC_VERSION-multilib"
+        - HOST_CC="gcc-$GCC_VERSION -m32"
+        - HOST_CXX="g++-$GCC_VERSION -m32"
+
+    - os: linux
+      compiler: clang-3.6
+      env:
+        - CLANG_VERSION=3.6
+        - APT_REPOS="ppa:ubuntu-toolchain-r/test ppa:frodo-vdr/main ppa:danmbox/ppa ppa:dlundquist/sniproxy"
+        - APT_PACKAGES="clang-$CLANG_VERSION"
+        - HOST_CC=clang-$CLANG_VERSION
+        - HOST_CXX=clang++-$CLANG_VERSION
+        - CFLAGS="-Wno-error=unused-function"
+
+    - os: osx
+      compiler: clang
+      env:
+        - HOST_CC=clang
+        - HOST_CXX=clang++
+        - CFLAGS="-Wno-error=unused-function"
+
+  allow_failures:
+    - os: osx
+    - compiler: gcc32
 
 before_install:
-  - sudo apt-get update
-  - sudo apt-get install valgrind
-  - sudo apt-get install libev-dev
-  - sudo apt-get install libasound2-dev
-  - sudo apt-get install libx264-dev
-  - sudo apt-get install yasm
-  - sudo apt-get install libc6-i386
-  - sudo apt-get remove libqtwebkit-dev
+  - if type apt-get 2>/dev/null; then
+      for APT_REPO in $APT_REPOS; do
+        sudo add-apt-repository -y $APT_REPO;
+      done;
+      if [ "$CLANG_VERSION" ]; then
+        curl -sSL "http://llvm.org/apt/llvm-snapshot.gpg.key" |
+          sudo -E apt-key add -;
+        sudo add-apt-repository -y "deb
+          http://llvm.org/apt/precise/
+          llvm-toolchain-precise-$CLANG_VERSION
+          main";
+      fi;
+      sudo apt-get update;
+      sudo apt-get install
+        valgrind
+        libev-dev
+        libasound2-dev
+        libx264-dev
+        yasm
+        libavcodec-ffmpeg-opti-dev
+        libavformat-ffmpeg-opti-dev
+        libswresample-ffmpeg-opti-dev
+        libswscale-ffmpeg-opti-dev
+        libc6-i386
+        $APT_PACKAGES;
+      sudo apt-get remove
+        libqtwebkit-dev;
+    fi
+  - if type brew 2>/dev/null; then
+      brew update;
+      brew upgrade automake;
+      brew upgrade libtool;
+      brew install valgrind;
+      brew install libev;
+      brew install yasm;
+      brew install x264;
+      brew install ffmpeg;
+    fi
 
   # bitstream
   - git clone --depth 1 git://git.videolan.org/bitstream.git
   - sudo make -C bitstream install
-
-  # ffmpeg
-  - curl http://ffmpeg.org/releases/ffmpeg-2.7.1.tar.bz2 | tar -xj
-  - cd ffmpeg-2.7.1
-  - ./configure
-    --enable-shared
-    --disable-all
-    --disable-doc
-    --disable-libxcb
-    --disable-sdl
-    --disable-xlib
-    --disable-iconv
-    --enable-avutil
-    --enable-avformat
-    --enable-avcodec
-    --enable-swscale
-    --enable-swresample
-    --enable-encoder=mpeg2video
-    --enable-encoder=mp2
-  - sudo make install
-  - cd ..
 
   # nacl sdk
   - wget http://storage.googleapis.com/nativeclient-mirror/nacl/nacl_sdk/nacl_sdk.zip
@@ -45,21 +96,31 @@ before_install:
   - nacl_sdk/naclsdk update pepper_43
 
   # libamt
-  - git clone --depth 1 https://github.com/cisco/SSMAMTtools.git
-  - make CFLAGS='$(ADD_INCLUDE_DIR) -c -fPIC' -C SSMAMTtools/build/linux
-  - sudo install -D SSMAMTtools/include/amt.h /usr/local/include/amt.h
-  - sudo install -D SSMAMTtools/lib/linux/libamt64.a /usr/local/lib/libamt.a
-  - sudo ldconfig
+  - if [ "$TRAVIS_OS_NAME" = "linux" ]; then
+      git clone --depth 1 https://github.com/cisco/SSMAMTtools.git;
+      make CFLAGS='$(ADD_INCLUDE_DIR) -c -fPIC' -C SSMAMTtools/build/linux;
+      sudo install -D SSMAMTtools/include/amt.h /usr/local/include/amt.h;
+      sudo install -D SSMAMTtools/lib/linux/libamt64.a /usr/local/lib/libamt.a;
+      sudo ldconfig;
+    fi
 
 before_script: autoreconf -i
 
-script: ./configure
-          CPPFLAGS="-I$PWD/nacl_sdk/pepper_43/include"
-          LDFLAGS="-L$PWD/nacl_sdk/pepper_43/lib/glibc_x86_64" &&
-        make &&
-        make check
+script: CONFIGURE_FLAGS="--disable-silent-rules
+          CC=\"$HOST_CC\"
+          CXX=\"$HOST_CXX\"
+          CPPFLAGS=\"-I$PWD/nacl_sdk/pepper_43/include\"
+          CFLAGS=\"-Werror -Wno-error=deprecated-declarations $CFLAGS\"
+          CXXFLAGS=\"-Werror\"
+          LDFLAGS=\"-L$PWD/nacl_sdk/pepper_43/lib/glibc_x86_64\"" &&
+        eval ./configure $CONFIGURE_FLAGS &&
+        make distcheck
+          DISTCHECK_CONFIGURE_FLAGS="$CONFIGURE_FLAGS"
+          TEST_SUITE_LOG="$PWD/tests.log"
 
-after_failure: test -r tests/test-suite.log && cat tests/test-suite.log
+after_failure:
+  - test -r config.log && cat config.log
+  - test -r tests.log && cat tests.log
 
 notifications:
   irc:

@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2012 OpenHeadend S.A.R.L.
+ * Copyright (C) 2012-2015 OpenHeadend S.A.R.L.
  *
  * Authors: Christophe Massiot
  *
@@ -60,7 +60,14 @@ enum upipe_fsink_command {
     /** asks to open the given path (const char *, enum upipe_fsink_mode) */
     UPIPE_FSINK_SET_PATH,
     /** returns the file descriptor of the currently opened file (int *) */
-    UPIPE_FSINK_GET_FD
+    UPIPE_FSINK_GET_FD,
+    /** sets fdatasync period (uint64_t) */
+    UPIPE_FSINK_SET_SYNC_PERIOD,
+    /** gets fdatasync period (uint64_t *) */
+    UPIPE_FSINK_GET_SYNC_PERIOD,
+
+    /** outer pipes commands begin here */
+    UPIPE_FSINK_CONTROL_LOCAL = UPIPE_CONTROL_LOCAL + 0x1000
 };
 
 /** @This returns the management structure for all file sinks.
@@ -108,6 +115,32 @@ static inline int upipe_fsink_get_fd(struct upipe *upipe,
 {
     return upipe_control(upipe, UPIPE_FSINK_GET_FD, UPIPE_FSINK_SIGNATURE,
                          fd_p);
+}
+
+/** @This returns the sync period.
+ *
+ * @param upipe description structure of the pipe
+ * @param sync_period_p filled in with the sync period
+ * @return an error code
+ */
+static inline int upipe_fsink_get_sync_period(struct upipe *upipe,
+                                              uint64_t *sync_period_p)
+{
+    return upipe_control(upipe, UPIPE_FSINK_GET_SYNC_PERIOD,
+                         UPIPE_FSINK_SIGNATURE, sync_period_p);
+}
+
+/** @This sets the sync period.
+ *
+ * @param upipe description structure of the pipe
+ * @param sync_period sync period
+ * @return an error code
+ */
+static inline int upipe_fsink_set_sync_period(struct upipe *upipe,
+                                              uint64_t sync_period)
+{
+    return upipe_control(upipe, UPIPE_FSINK_SET_SYNC_PERIOD,
+                         UPIPE_FSINK_SIGNATURE, sync_period);
 }
 
 #ifdef __cplusplus

@@ -8,7 +8,7 @@ AC_CONFIG_HEADERS([config.h])
 AC_CONFIG_AUX_DIR([autotools])
 AC_CONFIG_MACRO_DIR([m4])
 AM_INIT_AUTOMAKE([foreign nostdinc parallel-tests color-tests subdir-objects])
-m4_ifdef([AM_SILENT_RULES], [AM_SILENT_RULES([no])])
+m4_ifdef([AM_SILENT_RULES], [AM_SILENT_RULES([yes])])
 PKG_PROG_PKG_CONFIG
 
 # Checks for programs.
@@ -32,6 +32,7 @@ AX_PTHREAD(AM_CONDITIONAL(HAVE_PTHREAD, true),
            AM_CONDITIONAL(HAVE_PTHREAD, false))
 AC_SUBST(PTHREAD_CFLAGS)
 AC_SUBST(PTHREAD_LIBS)
+AM_ICONV
 
 # Check for header, then libev3 (ev_loop), then libev4 (ev_run)
 AC_CHECK_HEADERS([ev.h], [
@@ -178,7 +179,7 @@ AC_CONFIG_FILES([Makefile
                  lib/upipe-av/Makefile
                  lib/upipe-av/libupipe_av.pc
                  lib/upipe-swscale/Makefile
-                 lib/upipe-swscale/libupipe_sws.pc
+                 lib/upipe-swscale/libupipe_swscale.pc
                  lib/upipe-ts/Makefile
                  lib/upipe-ts/libupipe_ts.pc
                  lib/upipe-gl/Makefile
@@ -192,7 +193,7 @@ AC_CONFIG_FILES([Makefile
                  lib/upipe-alsa/Makefile
                  lib/upipe-alsa/libupipe_alsa.pc
                  lib/upipe-swresample/Makefile
-                 lib/upipe-swresample/libupipe_swr.pc
+                 lib/upipe-swresample/libupipe_swresample.pc
                  lib/upipe-blackmagic/Makefile
                  lib/upipe-blackmagic/libupipe_blackmagic.pc
                  lib/upipe-qt/Makefile

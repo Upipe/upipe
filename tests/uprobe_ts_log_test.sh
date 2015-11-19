@@ -23,7 +23,7 @@ fi
 
 unset DIR
 FILE="`mktemp tmp.XXXXXXXXXX`"
-libtool --mode=execute valgrind -q --leak-check=full --suppressions="$srcdir"/valgrind.supp ./uprobe_ts_log_test > /dev/null 2> "$FILE"
+../libtool --mode=execute valgrind -q --leak-check=full --suppressions="$srcdir"/valgrind.supp ./uprobe_ts_log_test > /dev/null 2> "$FILE"
 RET=$?
 if test -s "$FILE"; then
         cat "$FILE" >&2

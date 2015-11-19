@@ -138,7 +138,6 @@ graph {flow: east}
 #define UBUF_SHARED_POOL_DEPTH 50
 #define UPUMP_POOL 10
 #define UPUMP_BLOCKER_POOL 10
-#define DEJITTER_DIVIDER    100
 #define XFER_QUEUE          255
 #define XFER_POOL           20
 #define READ_SIZE 4096
@@ -450,8 +449,6 @@ static int upipe_glxplayer_catch_avcdec(struct uprobe *uprobe,
             assert(yuvrgb != NULL);
             uref_free(output_flow);
             upipe_release(deint);
-            if (unlikely(yuvrgb == NULL))
-                return UBASE_ERR_ALLOC;
 
             glxplayer->upipe_glx_qsink =
                 upipe_qsink_alloc(glxplayer->upipe_qsink_mgr,
@@ -669,7 +666,7 @@ struct upipe_glxplayer *upipe_glxplayer_alloc(enum uprobe_log_level loglevel)
 
     /* probes specific to the demux pipe */
     glxplayer->uprobe_dejitter =
-        uprobe_dejitter_alloc(uprobe_use(glxplayer->uprobe_logger), 0);
+        uprobe_dejitter_alloc(uprobe_use(glxplayer->uprobe_logger), false, 0);
     if (unlikely(glxplayer->uprobe_dejitter == NULL))
         goto fail_dejitter;
 
@@ -872,7 +869,7 @@ bool upipe_glxplayer_play(struct upipe_glxplayer *glxplayer,
     }
 
     if (!glxplayer->trickp)
-        uprobe_dejitter_set(glxplayer->uprobe_dejitter, DEJITTER_DIVIDER);
+        uprobe_dejitter_set(glxplayer->uprobe_dejitter, true, 0);
 
     /* prepare a queue source for the decoded video frames */
     uprobe_throw(glxplayer->uprobe_logger, NULL, UPROBE_THAW_UPUMP_MGR);

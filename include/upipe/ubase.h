@@ -45,6 +45,8 @@ extern "C" {
 #include <stdarg.h>
 #include <stddef.h>
 #include <string.h>
+#include <stdlib.h>
+#include <unistd.h>
 
 #ifdef __GNUC__
 
@@ -81,10 +83,8 @@ extern "C" {
         (type *)( (char *)_mptr - offsetof(type,member) );})
 #endif
 
-#ifndef UBASE_ARRAY_SIZE
 /** @This is used to retrieve the number of items of an array. */
-#   define UBASE_ARRAY_SIZE(a)        (sizeof (a) / sizeof ((a)[0]))
-#endif
+#define UBASE_ARRAY_SIZE(a)        (sizeof (a) / sizeof ((a)[0]))
 
 /** @This declares two functions dealing with substructures included into a
  * larger structure.
@@ -173,6 +173,8 @@ enum ubase_err {
     UBASE_ERR_UNKNOWN,
     /** allocation error */
     UBASE_ERR_ALLOC,
+    /** not enough space */
+    UBASE_ERR_NOSPC,
     /** unable to allocate a upump */
     UBASE_ERR_UPUMP,
     /** unhandled command or event */
@@ -189,6 +191,8 @@ enum ubase_err {
     UBASE_ERR_LOCAL = 0x8000
 };
 
+#define UBASE_CASE_TO_STR(Value)        case Value: return #Value
+
 /** @This return the corresponding error string.
  *
  * @param err the error value
@@ -196,15 +200,16 @@ enum ubase_err {
  */
 static inline const char *ubase_err_str(int err)
 {
-    switch (err) {
-    case UBASE_ERR_NONE: return "UBASE_ERR_NONE";
-    case UBASE_ERR_UNKNOWN: return "UBASE_ERR_UNKNOWN";
-    case UBASE_ERR_ALLOC: return "UBASE_ERR_ALLOC";
-    case UBASE_ERR_UPUMP: return "UBASE_ERR_UPUMP";
-    case UBASE_ERR_UNHANDLED: return "UBASE_ERR_UNHANDLED";
-    case UBASE_ERR_INVALID: return "UBASE_ERR_INVALID";
-    case UBASE_ERR_EXTERNAL: return "UBASE_ERR_EXTERNAL";
-    case UBASE_ERR_BUSY: return "UBASE_ERR_BUSY";
+    switch ((enum ubase_err)err) {
+    UBASE_CASE_TO_STR(UBASE_ERR_NONE);
+    UBASE_CASE_TO_STR(UBASE_ERR_UNKNOWN);
+    UBASE_CASE_TO_STR(UBASE_ERR_ALLOC);
+    UBASE_CASE_TO_STR(UBASE_ERR_NOSPC);
+    UBASE_CASE_TO_STR(UBASE_ERR_UPUMP);
+    UBASE_CASE_TO_STR(UBASE_ERR_UNHANDLED);
+    UBASE_CASE_TO_STR(UBASE_ERR_INVALID);
+    UBASE_CASE_TO_STR(UBASE_ERR_EXTERNAL);
+    UBASE_CASE_TO_STR(UBASE_ERR_BUSY);
     case UBASE_ERR_LOCAL: break;
     }
     return NULL;
@@ -403,6 +408,49 @@ static inline struct urational urational_divide(
 static inline int ubase_ncmp(const char *string, const char *prefix)
 {
     return strncmp(string, prefix, strlen(prefix));
+}
+
+/** @This frees a pointer and sets it to NULL.
+ *
+ * @param ptr a pointer to malloced data or NULL
+ */
+static inline void ubase_clean_ptr(void **ptr_p)
+{
+    if (likely(ptr_p != NULL)) {
+        free(*ptr_p);
+        *ptr_p = NULL;
+    }
+}
+
+/** @This frees a string and sets it to NULL.
+ *
+ * @param ptr a pointer to a string
+ */
+static inline void ubase_clean_str(char **str_p)
+{
+    return ubase_clean_ptr((void **)str_p);
+}
+
+/** @This frees data pointer and sets it to NULL.
+ *
+ * @param ptr a pointer to data pointer
+ */
+static inline void ubase_clean_data(uint8_t **data_p)
+{
+    return ubase_clean_ptr((void **)data_p);
+}
+
+/** @This closes a fd and sets it to -1.
+ *
+ * @param fd_p a pointer to a fd
+ */
+static inline void ubase_clean_fd(int *fd_p)
+{
+    if (likely(fd_p != NULL)) {
+        if (likely(*fd_p >= 0))
+            close(*fd_p);
+        *fd_p = -1;
+    }
 }
 
 #ifdef __cplusplus

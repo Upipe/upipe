@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2013-2014 OpenHeadend S.A.R.L.
+ * Copyright (C) 2013-2015 OpenHeadend S.A.R.L.
  *
  * Authors: Benjamin Cohen
  *          Christophe Massiot
@@ -46,6 +46,7 @@
 #include <upipe/upipe_helper_urefcount.h>
 #include <upipe/upipe_helper_void.h>
 #include <upipe/upipe_helper_flow.h>
+#include <upipe/upipe_helper_sync.h>
 #include <upipe/upipe_helper_uref_mgr.h>
 #include <upipe/upipe_helper_output.h>
 #include <upipe/upipe_helper_upump_mgr.h>
@@ -172,6 +173,8 @@ private:
 enum upipe_bmd_src_type {
     /** packet for pic subpipe */
     UPIPE_BMD_SRC_PIC,
+    /** packet for pic subpipe, without sync on input */
+    UPIPE_BMD_SRC_PIC_NO_INPUT,
     /** packet for sound subpipe */
     UPIPE_BMD_SRC_SOUND,
     /** packet for subpic subpipe */
@@ -247,6 +250,8 @@ struct upipe_bmd_src {
     bool progressive;
     /** true for top field first - for use by the private thread */
     bool tff;
+    /** true if we have thrown the sync_acquired event */
+    bool acquired;
 
     /** public upipe structure */
     struct upipe upipe;
@@ -257,7 +262,7 @@ struct upipe_bmd_src {
 
 UPIPE_HELPER_UPIPE(upipe_bmd_src, upipe, UPIPE_BMD_SRC_SIGNATURE)
 UPIPE_HELPER_UREFCOUNT(upipe_bmd_src, urefcount, upipe_bmd_src_free)
-
+UPIPE_HELPER_SYNC(upipe_bmd_src, acquired)
 UPIPE_HELPER_UREF_MGR(upipe_bmd_src, uref_mgr, uref_mgr_request, NULL,
                       upipe_throw_provide_request, NULL)
 UPIPE_HELPER_UCLOCK(upipe_bmd_src, uclock, uclock_request, NULL,
@@ -360,14 +365,16 @@ HRESULT DeckLinkCaptureDelegate::VideoInputFrameArrived(
     if (upipe_bmd_src->uclock)
         cr_sys = uclock_now(upipe_bmd_src->uclock);
 
-    if (VideoFrame && !(VideoFrame->GetFlags() & bmdFrameHasNoInputSource)) {
+    if (VideoFrame) {
         struct ubuf *ubuf =
             ubuf_pic_bmd_alloc(upipe_bmd_src->pic_subpipe.ubuf_mgr, VideoFrame);
         if (likely(ubuf != NULL)) {
             /* TODO subpic */
             struct uref *uref = uref_alloc(upipe_bmd_src->uref_mgr);
             uref_attach_ubuf(uref, ubuf);
-            uref_attr_set_priv(uref, UPIPE_BMD_SRC_PIC);
+            uref_attr_set_priv(uref,
+                    (VideoFrame->GetFlags() & bmdFrameHasNoInputSource) ?
+                    UPIPE_BMD_SRC_PIC_NO_INPUT : UPIPE_BMD_SRC_PIC);
 
             if (cr_sys != UINT64_MAX)
                 uref_clock_set_cr_sys(uref, cr_sys);
@@ -530,6 +537,7 @@ static struct upipe *_upipe_bmd_src_alloc(struct upipe_mgr *mgr,
     upipe_init(upipe, mgr, uprobe);
 
     upipe_bmd_src_init_urefcount(upipe);
+    upipe_bmd_src_init_sync(upipe);
     upipe_bmd_src_init_uref_mgr(upipe);
     upipe_bmd_src_init_uclock(upipe);
     upipe_bmd_src_init_upump_mgr(upipe);
@@ -549,6 +557,7 @@ static struct upipe *_upipe_bmd_src_alloc(struct upipe_mgr *mgr,
 
     uqueue_init(&upipe_bmd_src->uqueue, MAX_QUEUE_LENGTH,
                 upipe_bmd_src->uqueue_extra);
+    upipe_bmd_src->uri = NULL;
     upipe_bmd_src->deckLink = NULL;
     upipe_bmd_src->deckLinkInput = NULL;
     upipe_bmd_src->deckLinkConfiguration = NULL;
@@ -582,15 +591,28 @@ void upipe_bmd_src_work(struct upipe *upipe, struct upump *upump)
         uref_attr_delete_priv(uref);
 
         switch (type) {
+            case UPIPE_BMD_SRC_PIC_NO_INPUT:
+                upipe_bmd_src_sync_lost(upipe);
+                uref_free(uref);
+                continue;
             case UPIPE_BMD_SRC_PIC:
                 subpipe = upipe_bmd_src_output_to_upipe(
                         upipe_bmd_src_to_pic_subpipe(upipe_bmd_src));
+                upipe_bmd_src_sync_acquired(upipe);
                 break;
             case UPIPE_BMD_SRC_SOUND:
+                if (!upipe_bmd_src->acquired) {
+                    uref_free(uref);
+                    continue;
+                }
                 subpipe = upipe_bmd_src_output_to_upipe(
                         upipe_bmd_src_to_sound_subpipe(upipe_bmd_src));
                 break;
             case UPIPE_BMD_SRC_SUBPIC:
+                if (!upipe_bmd_src->acquired) {
+                    uref_free(uref);
+                    continue;
+                }
                 subpipe = upipe_bmd_src_output_to_upipe(
                         upipe_bmd_src_to_subpic_subpipe(upipe_bmd_src));
                 break;
@@ -606,7 +628,7 @@ void upipe_bmd_src_work(struct upipe *upipe, struct upump *upump)
             continue;
         }
 
-        if (type == UPIPE_BMD_SRC_PIC) {
+        if (type == UPIPE_BMD_SRC_PIC || type == UPIPE_BMD_SRC_PIC_NO_INPUT) {
             uint64_t pts_prog;
             if (likely(ubase_check(uref_clock_get_pts_prog(uref, &pts_prog))))
                 upipe_throw_clock_ref(subpipe, uref, pts_prog, 0);
@@ -756,15 +778,17 @@ static int upipe_bmd_src_set_uri(struct upipe *upipe, const char *uri)
                 break;
 
             IDeckLinkAttributes *deckLinkAttributes = NULL;
-            int64_t deckLinkTopologicalId = 0;
             if (deckLink->QueryInterface(IID_IDeckLinkAttributes,
-                                         (void**)&deckLinkAttributes) == S_OK &&
-                deckLinkAttributes->GetInt(BMDDeckLinkTopologicalID,
-                                           &deckLinkTopologicalId) == S_OK &&
-                (uint64_t)deckLinkTopologicalId == card_topology)
-                break;
-            if (deckLinkAttributes != NULL)
+                                         (void**)&deckLinkAttributes) == S_OK) {
+                int64_t deckLinkTopologicalId = 0;
+                HRESULT result =
+                    deckLinkAttributes->GetInt(BMDDeckLinkTopologicalID,
+                            &deckLinkTopologicalId);
                 deckLinkAttributes->Release();
+                if (result == S_OK &&
+                    (uint64_t)deckLinkTopologicalId == card_topology)
+                    break;
+            }
 		}
     } else {
         int card_idx = atoi(idx);
@@ -838,6 +862,8 @@ static int upipe_bmd_src_set_uri(struct upipe *upipe, const char *uri)
 #define IS_OPTION(option) (!strncasecmp(token, option, strlen(option)))
 #define ARG_OPTION(option) (token + strlen(option))
             if (IS_OPTION("mode=")) {
+                if (unlikely(mode != NULL))
+                    free(mode);
                 mode = config_stropt(ARG_OPTION("mode="));
             }
 #undef IS_OPTION
@@ -1049,8 +1075,8 @@ static int upipe_bmd_src_control(struct upipe *upipe, int command, va_list args)
         upipe_bmd_src->upump == NULL) {
         struct upump *upump =
             uqueue_upump_alloc_pop(&upipe_bmd_src->uqueue,
-                                   upipe_bmd_src->upump_mgr,
-                                   upipe_bmd_src_worker, upipe);
+                    upipe_bmd_src->upump_mgr, upipe_bmd_src_worker, upipe,
+                    upipe->refcount);
         if (unlikely(upump == NULL)) {
             upipe_throw_fatal(upipe, UBASE_ERR_UPUMP);
             return UBASE_ERR_UPUMP;
@@ -1073,12 +1099,14 @@ static void upipe_bmd_src_free(struct upipe *upipe)
     upipe_bmd_src_work(upipe, NULL);
     if (upipe_bmd_src->deckLinkConfiguration)
         upipe_bmd_src->deckLinkConfiguration->Release();
-    if (upipe_bmd_src->deckLinkInput)
+    if (upipe_bmd_src->deckLinkInput) {
+        upipe_bmd_src->deckLinkInput->StopStreams();
         upipe_bmd_src->deckLinkInput->Release();
-    if (upipe_bmd_src->deckLink)
-        upipe_bmd_src->deckLink->Release();
+    }
     if (upipe_bmd_src->deckLinkCaptureDelegate)
         upipe_bmd_src->deckLinkCaptureDelegate->Release();
+    if (upipe_bmd_src->deckLink)
+        upipe_bmd_src->deckLink->Release();
     uqueue_clean(&upipe_bmd_src->uqueue);
 
     upipe_bmd_src_output_clean(upipe_bmd_src_output_to_upipe(
@@ -1097,6 +1125,7 @@ static void upipe_bmd_src_free(struct upipe *upipe)
     upipe_bmd_src_clean_upump_mgr(upipe);
     upipe_bmd_src_clean_uclock(upipe);
     upipe_bmd_src_clean_urefcount(upipe);
+    upipe_bmd_src_clean_sync(upipe);
 
     upipe_clean(upipe);
     free(upipe_bmd_src);

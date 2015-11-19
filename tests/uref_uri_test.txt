@@ -1,0 +1,94 @@
+debug: uri: http://upipe.org
+debug:  - "uri.scheme" [string]: "http"
+debug:  - "uri.host" [string]: "upipe.org"
+debug: uri: http://upipe.org
+debug: uri: http://upipe.org/
+debug:  - "uri.scheme" [string]: "http"
+debug:  - "uri.host" [string]: "upipe.org"
+debug:  - "uri.path" [string]: "/"
+debug: uri: http://upipe.org/
+debug: uri: http://upipe.org/index.html
+debug:  - "uri.scheme" [string]: "http"
+debug:  - "uri.host" [string]: "upipe.org"
+debug:  - "uri.path" [string]: "/index.html"
+debug: uri: http://upipe.org/index.html
+debug: uri: http://upipe.org:8080/index.html
+debug:  - "uri.scheme" [string]: "http"
+debug:  - "uri.host" [string]: "upipe.org"
+debug:  - "uri.port" [string]: "8080"
+debug:  - "uri.path" [string]: "/index.html"
+debug: uri: http://upipe.org:8080/index.html
+debug: uri: http://Meuuh@upipe.org:8080/index.html
+debug:  - "uri.scheme" [string]: "http"
+debug:  - "uri.userinfo" [string]: "Meuuh"
+debug:  - "uri.host" [string]: "upipe.org"
+debug:  - "uri.port" [string]: "8080"
+debug:  - "uri.path" [string]: "/index.html"
+debug: uri: http://Meuuh@upipe.org:8080/index.html
+debug: uri: http://Meuuh@upipe.org:8080/index.html?query=toto#fragment
+debug:  - "uri.scheme" [string]: "http"
+debug:  - "uri.userinfo" [string]: "Meuuh"
+debug:  - "uri.host" [string]: "upipe.org"
+debug:  - "uri.port" [string]: "8080"
+debug:  - "uri.path" [string]: "/index.html"
+debug:  - "uri.query" [string]: "query=toto"
+debug:  - "uri.fragment" [string]: "fragment"
+debug: uri: http://Meuuh@upipe.org:8080/index.html?query=toto#fragment
+debug: uri: http://127.0.0.1/index.html
+debug:  - "uri.scheme" [string]: "http"
+debug:  - "uri.host" [string]: "127.0.0.1"
+debug:  - "uri.path" [string]: "/index.html"
+debug: uri: http://127.0.0.1/index.html
+debug: uri: file:///home/user/file.ext
+debug:  - "uri.scheme" [string]: "file"
+debug:  - "uri.host" [string]: ""
+debug:  - "uri.path" [string]: "/home/user/file.ext"
+debug: uri: file:///home/user/file.ext
+debug: uri: file:/home/
+debug:  - "uri.scheme" [string]: "file"
+debug:  - "uri.path" [string]: "/home/"
+debug: uri: file:/home/
+debug: uri: test:?query=test#fragment
+debug:  - "uri.scheme" [string]: "test"
+debug:  - "uri.path" [string]: ""
+debug:  - "uri.query" [string]: "query=test"
+debug:  - "uri.fragment" [string]: "fragment"
+debug: uri: test:?query=test#fragment
+debug: uri: ftp://ftp.is.co.za/rfc/rfc1808.txt
+debug:  - "uri.scheme" [string]: "ftp"
+debug:  - "uri.host" [string]: "ftp.is.co.za"
+debug:  - "uri.path" [string]: "/rfc/rfc1808.txt"
+debug: uri: ftp://ftp.is.co.za/rfc/rfc1808.txt
+debug: uri: http://www.ietf.org/rfc/rfc2396.txt
+debug:  - "uri.scheme" [string]: "http"
+debug:  - "uri.host" [string]: "www.ietf.org"
+debug:  - "uri.path" [string]: "/rfc/rfc2396.txt"
+debug: uri: http://www.ietf.org/rfc/rfc2396.txt
+debug: uri: ldap://[2001:db8::7]/c=GB?objectClass?one
+debug:  - "uri.scheme" [string]: "ldap"
+debug:  - "uri.host" [string]: "[2001:db8::7]"
+debug:  - "uri.path" [string]: "/c=GB"
+debug:  - "uri.query" [string]: "objectClass?one"
+debug: uri: ldap://[2001:db8::7]/c=GB?objectClass?one
+debug: uri: mailto:John.Doe@example.com
+debug:  - "uri.scheme" [string]: "mailto"
+debug:  - "uri.path" [string]: "John.Doe@example.com"
+debug: uri: mailto:John.Doe@example.com
+debug: uri: news:comp.infosystems.www.servers.unix
+debug:  - "uri.scheme" [string]: "news"
+debug:  - "uri.path" [string]: "comp.infosystems.www.servers.unix"
+debug: uri: news:comp.infosystems.www.servers.unix
+debug: uri: tel:+1-816-555-1212
+debug:  - "uri.scheme" [string]: "tel"
+debug:  - "uri.path" [string]: "+1-816-555-1212"
+debug: uri: tel:+1-816-555-1212
+debug: uri: telnet://192.0.2.16:80/
+debug:  - "uri.scheme" [string]: "telnet"
+debug:  - "uri.host" [string]: "192.0.2.16"
+debug:  - "uri.port" [string]: "80"
+debug:  - "uri.path" [string]: "/"
+debug: uri: telnet://192.0.2.16:80/
+debug: uri: urn:oasis:names:specification:docbook:dtd:xml:4.1.2
+debug:  - "uri.scheme" [string]: "urn"
+debug:  - "uri.path" [string]: "oasis:names:specification:docbook:dtd:xml:4.1.2"
+debug: uri: urn:oasis:names:specification:docbook:dtd:xml:4.1.2

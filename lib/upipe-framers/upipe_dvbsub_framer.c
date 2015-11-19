@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2014 OpenHeadend S.A.R.L.
+ * Copyright (C) 2014-2015 OpenHeadend S.A.R.L.
  *
  * Authors: Christophe Massiot
  *

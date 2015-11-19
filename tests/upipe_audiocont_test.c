@@ -1,7 +1,8 @@
 /*
- * Copyright (C) 2014 OpenHeadend S.A.R.L.
+ * Copyright (C) 2014-2015 OpenHeadend S.A.R.L.
  *
  * Authors: Benjamin Cohen
+ *          Christophe Massiot
  *
  * Permission is hereby granted, free of charge, to any person obtaining
  * a copy of this software and associated documentation files (the
@@ -102,12 +103,19 @@ int main(int argc, char **argv)
                                                      UBUF_POOL_DEPTH);
     assert(logger != NULL);
 
+    /* reference flow definition */
+    struct uref *ref_flow = uref_sound_flow_alloc_def(uref_mgr, "f32.", 2, 8);
+    ubase_assert(uref_sound_flow_add_plane(ref_flow, "lr"));
+    ubase_assert(uref_sound_flow_set_rate(ref_flow, INPUT_RATE));
+
     /* build audiocont pipe */
     struct upipe_mgr *upipe_audiocont_mgr = upipe_audiocont_mgr_alloc();
     assert(upipe_audiocont_mgr);
-    struct upipe *audiocont = upipe_void_alloc(upipe_audiocont_mgr,
-        uprobe_pfx_alloc(uprobe_use(logger), UPROBE_LOG_LEVEL, "audiocont"));
+    struct upipe *audiocont = upipe_flow_alloc(upipe_audiocont_mgr,
+        uprobe_pfx_alloc(uprobe_use(logger), UPROBE_LOG_LEVEL, "audiocont"),
+        ref_flow);
     assert(audiocont);
+    ubase_assert(upipe_set_flow_def(audiocont, ref_flow));
 
     const char *input_name;
     ubase_assert(upipe_audiocont_get_input(audiocont, &input_name));
@@ -121,16 +129,15 @@ int main(int argc, char **argv)
     ubase_assert(upipe_audiocont_get_current_input(audiocont, &input_name));
     assert(input_name == NULL);
 
-    /* reference flow definition */
-    struct uref *ref_flow = uref_sound_flow_alloc_def(uref_mgr, "s16.", 2, 4);
-    ubase_assert(uref_sound_flow_add_plane(ref_flow, "lr"));
-    ubase_assert(uref_sound_flow_set_rate(ref_flow, INPUT_RATE));
-    ubase_assert(upipe_set_flow_def(audiocont, ref_flow));
-
-    /* common input (sub) flow definition */
-    struct uref *in_flow = uref_sound_flow_alloc_def(uref_mgr, "f32.", 1, 4);
-    ubase_assert(uref_sound_flow_add_plane(in_flow, "c"));
-    ubase_assert(uref_sound_flow_set_rate(in_flow, INPUT_RATE));
+    /* wrong input (sub) flow definition */
+    struct uref *wrong_flow = uref_sound_flow_alloc_def(uref_mgr, "f32.", 1, 4);
+    ubase_assert(uref_sound_flow_add_plane(wrong_flow, "c"));
+    ubase_assert(uref_sound_flow_set_rate(wrong_flow, INPUT_RATE));
+    struct upipe *sub = upipe_void_alloc_sub(audiocont,
+            uprobe_pfx_alloc(uprobe_use(logger), UPROBE_LOG_LEVEL, "sub"));
+    ubase_nassert(upipe_set_flow_def(sub, wrong_flow));
+    uref_free(wrong_flow);
+    upipe_release(sub);
 
     struct upipe *null = upipe_void_alloc_output(audiocont,
         upipe_null_mgr_alloc(),
@@ -145,7 +152,7 @@ int main(int argc, char **argv)
             uprobe_pfx_alloc_va(uprobe_use(logger),
                                 UPROBE_LOG_LEVEL, "sub%d", i));
         assert(subpipe[i]);
-        struct uref *subflow = uref_dup(in_flow);
+        struct uref *subflow = uref_dup(ref_flow);
         char name[20];
         snprintf(name, sizeof(name), "bar%d", i);
         uref_flow_set_name(subflow, name);
@@ -158,13 +165,7 @@ int main(int argc, char **argv)
                 UBUF_POOL_DEPTH, UBUF_POOL_DEPTH, umem_mgr, ref_flow);
     assert(ref_sound_mgr);
 
-    /* input (sub) sound ubuf manager */
-    struct ubuf_mgr *in_sound_mgr = ubuf_mem_mgr_alloc_from_flow_def(
-                UBUF_POOL_DEPTH, UBUF_POOL_DEPTH, umem_mgr, in_flow);
-    assert(in_sound_mgr);
-
     uref_free(ref_flow);
-    uref_free(in_flow);
 
     /* test input commutation controles */
     input_name = NULL;
@@ -185,7 +186,7 @@ int main(int argc, char **argv)
     /* input urefs */
     for (j=0; j < INPUT_NUM; j++) {
         for (i=0; i < ITERATIONS + j; i++) {
-            struct uref *uref = uref_sound_alloc(uref_mgr, in_sound_mgr, SAMPLES);
+            struct uref *uref = uref_sound_alloc(uref_mgr, ref_sound_mgr, SAMPLES);
             uref_clock_set_pts_sys(uref, UCLOCK_FREQ + i * DURATION - (DURATION / 10));
             uref_clock_set_duration(uref, DURATION);
             upipe_input(subpipe[j], uref, NULL);
@@ -206,7 +207,6 @@ int main(int argc, char **argv)
     }
 
     ubuf_mgr_release(ref_sound_mgr);
-    ubuf_mgr_release(in_sound_mgr);
 
     for (i=0; i < INPUT_NUM; i++) {
         upipe_release(subpipe[i]);

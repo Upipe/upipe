@@ -451,7 +451,7 @@ int main(int argc, char *argv[])
     assert(output);
     ubase_assert(upipe_set_output(output, upipe_sink));
 
-    ubase_assert(upipe_ts_sig_prepare(upipe_ts_sig, UINT32_MAX, 0));
+    ubase_assert(upipe_ts_mux_prepare(upipe_ts_sig, UINT32_MAX, 0));
     assert(tdt);
 
     upipe_release(upipe_ts_sig_service1);

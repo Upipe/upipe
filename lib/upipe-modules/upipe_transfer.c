@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2013-2014 OpenHeadend S.A.R.L.
+ * Copyright (C) 2013-2015 OpenHeadend S.A.R.L.
  *
  * Authors: Christophe Massiot
  *
@@ -300,6 +300,7 @@ static void upipe_xfer_probe_free(struct urefcount *urefcount_probe)
         upipe_xfer_msg_free(upipe->mgr, msg);
     }
 }
+
 /** @This allocates and initializes an xfer pipe. An xfer pipe allows to
  * transfer an existing pipe to a remote upump_mgr. The xfer pipe is then
  * used to remotely release the transferred pipe.
@@ -369,7 +370,6 @@ static void upipe_xfer_worker(struct upump *upump)
     struct upipe *upipe = upump_get_opaque(upump, struct upipe *);
     struct upipe_xfer *upipe_xfer = upipe_xfer_from_upipe(upipe);
     struct upipe_xfer_msg *msg;
-    urefcount_use(upipe_xfer_to_urefcount_real(upipe_xfer));
     while ((msg = uqueue_pop(&upipe_xfer->uqueue,
                              struct upipe_xfer_msg *)) != NULL) {
         switch (msg->type) {
@@ -397,7 +397,6 @@ static void upipe_xfer_worker(struct upump *upump)
         upipe_xfer_msg_free(upipe->mgr, msg);
         urefcount_release(upipe_xfer_to_urefcount_real(upipe_xfer));
     }
-    urefcount_release(upipe_xfer_to_urefcount_real(upipe_xfer));
 }
 
 /** @This processes control commands.
@@ -417,7 +416,8 @@ static int upipe_xfer_control(struct upipe *upipe, int command, va_list args)
             if (upipe_xfer->upump_mgr != NULL) {
                 /* prepare a queue to receive probe events */
                 upipe_xfer->upump = uqueue_upump_alloc_pop(&upipe_xfer->uqueue,
-                        upipe_xfer->upump_mgr, upipe_xfer_worker, upipe);
+                        upipe_xfer->upump_mgr, upipe_xfer_worker, upipe,
+                        upipe_xfer_to_urefcount_real(upipe_xfer));
                 if (unlikely(upipe_xfer->upump == NULL))
                     return UBASE_ERR_UPUMP;
                 upump_start(upipe_xfer->upump);
@@ -623,7 +623,7 @@ static int _upipe_xfer_mgr_attach(struct upipe_mgr *mgr,
 
     xfer_mgr->upump = uqueue_upump_alloc_pop(&xfer_mgr->uqueue,
                                              upump_mgr, upipe_xfer_mgr_worker,
-                                             mgr);
+                                             mgr, NULL);
     if (unlikely(xfer_mgr->upump == NULL))
         return UBASE_ERR_UPUMP;
 

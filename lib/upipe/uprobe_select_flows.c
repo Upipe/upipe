@@ -523,8 +523,8 @@ void uprobe_selflow_get(struct uprobe *uprobe, const char **flows_p)
  */
 int uprobe_selflow_set(struct uprobe *uprobe, const char *flows)
 {
-    struct uprobe_selflow *uprobe_selflow =
-        uprobe_selflow_from_uprobe(uprobe);
+    assert(flows != NULL);
+    struct uprobe_selflow *uprobe_selflow = uprobe_selflow_from_uprobe(uprobe);
     uprobe_selflow->auto_cfg = !strcmp(flows, "auto");
     if (!uprobe_selflow->auto_cfg || !uprobe_selflow->has_selection)
         return uprobe_selflow_set_internal(uprobe, flows);

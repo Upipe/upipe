@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2012-2014 OpenHeadend S.A.R.L.
+ * Copyright (C) 2012-2015 OpenHeadend S.A.R.L.
  *
  * Authors: Christophe Massiot
  *
@@ -192,7 +192,11 @@ static UBASE_UNUSED void STRUCTURE##_output(struct upipe *upipe,            \
                                             struct upump **upump_p)         \
 {                                                                           \
     struct STRUCTURE *s = STRUCTURE##_from_upipe(upipe);                    \
-    assert(s->FLOW_DEF != NULL);                                            \
+    if (unlikely(s->FLOW_DEF == NULL)) {                                    \
+        upipe_warn(upipe, "no flow def, dropping uref");                    \
+        uref_free(uref);                                                    \
+        return;                                                             \
+    }                                                                       \
     if (unlikely(s->OUTPUT == NULL))                                        \
         upipe_throw_need_output(upipe, s->FLOW_DEF);                        \
     if (unlikely(s->OUTPUT == NULL)) {                                      \
@@ -202,6 +206,11 @@ static UBASE_UNUSED void STRUCTURE##_output(struct upipe *upipe,            \
                                                                             \
     bool already_retried = false;                                           \
     for ( ; ; ) {                                                           \
+        if (unlikely(s->FLOW_DEF == NULL)) {                                \
+            upipe_warn(upipe, "no flow def, dropping uref");                \
+            uref_free(uref);                                                \
+            return;                                                         \
+        }                                                                   \
         switch (s->OUTPUT_STATE) {                                          \
             case UPIPE_HELPER_OUTPUT_NONE: {                                \
                 if (likely(ubase_check(upipe_set_flow_def(s->OUTPUT,        \
@@ -211,12 +220,13 @@ static UBASE_UNUSED void STRUCTURE##_output(struct upipe *upipe,            \
                     continue;                                               \
                 }                                                           \
                 upipe_dbg(s->OUTPUT, "rejected flow def");                  \
-                struct upipe *output = s->OUTPUT;                           \
+                struct upipe *output = upipe_use(s->OUTPUT);                \
                 upipe_throw_need_output(upipe, s->FLOW_DEF);                \
                 if (output == s->OUTPUT || already_retried)                 \
                     s->OUTPUT_STATE = UPIPE_HELPER_OUTPUT_INVALID;          \
                 else                                                        \
                     already_retried = true;                                 \
+                upipe_release(output);                                      \
                 continue;                                                   \
             }                                                               \
                                                                             \
@@ -245,8 +255,11 @@ static int STRUCTURE##_register_output_request(struct upipe *upipe,         \
 {                                                                           \
     struct STRUCTURE *s = STRUCTURE##_from_upipe(upipe);                    \
     ulist_add(&s->REQUEST_LIST, urequest_to_uchain(urequest));              \
-    if (likely(s->OUTPUT != NULL))                                          \
-        return upipe_register_request(s->OUTPUT, urequest);                 \
+    int err;                                                                \
+    if (likely(s->OUTPUT != NULL &&                                         \
+               (err = upipe_register_request(s->OUTPUT, urequest))          \
+                 != UBASE_ERR_UNHANDLED))                                   \
+        return err;                                                         \
     return upipe_throw_provide_request(upipe, urequest);                    \
 }                                                                           \
 /** @internal @This unregisters a request to be forwarded downstream.       \
@@ -260,8 +273,11 @@ static int STRUCTURE##_unregister_output_request(struct upipe *upipe,       \
 {                                                                           \
     struct STRUCTURE *s = STRUCTURE##_from_upipe(upipe);                    \
     ulist_delete(urequest_to_uchain(urequest));                             \
-    if (likely(s->OUTPUT != NULL))                                          \
-        return upipe_unregister_request(s->OUTPUT, urequest);               \
+    int err;                                                                \
+    if (likely(s->OUTPUT != NULL &&                                         \
+               (err = upipe_unregister_request(s->OUTPUT, urequest))        \
+                 != UBASE_ERR_UNHANDLED))                                   \
+        return err;                                                         \
     return UBASE_ERR_NONE;                                                  \
 }                                                                           \
 /** @internal @This handles the result of a proxy request.                  \

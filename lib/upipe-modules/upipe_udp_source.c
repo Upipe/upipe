@@ -239,9 +239,7 @@ static void upipe_udpsrc_worker(struct upump *upump)
         uref_clock_set_cr_sys(uref, systime);
     if (unlikely(ret != upipe_udpsrc->output_size))
         uref_block_resize(uref, 0, ret);
-    upipe_use(upipe);
     upipe_udpsrc_output(upipe, uref, &upipe_udpsrc->upump);
-    upipe_release(upipe);
 }
 
 /** @internal @This checks if the pump may be allocated.
@@ -285,7 +283,7 @@ static int upipe_udpsrc_check(struct upipe *upipe, struct uref *flow_format)
     if (upipe_udpsrc->fd != -1 && upipe_udpsrc->upump == NULL) {
         struct upump *upump;
         upump = upump_alloc_fd_read(upipe_udpsrc->upump_mgr,
-                                    upipe_udpsrc_worker, upipe,
+                                    upipe_udpsrc_worker, upipe, upipe->refcount,
                                     upipe_udpsrc->fd);
         if (unlikely(upump == NULL)) {
             upipe_throw_fatal(upipe, UBASE_ERR_UPUMP);
@@ -326,11 +324,9 @@ static int upipe_udpsrc_set_uri(struct upipe *upipe, const char *uri)
         if (likely(upipe_udpsrc->uri != NULL)) {
             upipe_notice_va(upipe, "closing udp socket %s", upipe_udpsrc->uri);
         }
-        close(upipe_udpsrc->fd);
-        upipe_udpsrc->fd = -1;
+        ubase_clean_fd(&upipe_udpsrc->fd);
     }
-    free(upipe_udpsrc->uri);
-    upipe_udpsrc->uri = NULL;
+    ubase_clean_str(&upipe_udpsrc->uri);
     upipe_udpsrc_set_upump(upipe, NULL);
 
     if (unlikely(uri == NULL))
@@ -345,8 +341,7 @@ static int upipe_udpsrc_set_uri(struct upipe *upipe, const char *uri)
 
     upipe_udpsrc->uri = strdup(uri);
     if (unlikely(upipe_udpsrc->uri == NULL)) {
-        close(upipe_udpsrc->fd);
-        upipe_udpsrc->fd = -1;
+        ubase_clean_fd(&upipe_udpsrc->fd);
         upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
         return UBASE_ERR_ALLOC;
     }

@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2012-2014 OpenHeadend S.A.R.L.
+ * Copyright (C) 2012-2015 OpenHeadend S.A.R.L.
  *
  * Authors: Christophe Massiot
  *
@@ -50,7 +50,7 @@ UREF_ATTR_UNSIGNED_UREF(clock, rap_cr_delay, rap_cr_delay,
 UREF_ATTR_UNSIGNED_SH(clock, duration, UDICT_TYPE_CLOCK_DURATION, duration)
 UREF_ATTR_SMALL_UNSIGNED(clock, index_rap, "k.index_rap",
                     frame offset from last random access point)
-UREF_ATTR_RATIONAL(clock, rate, "k.rate", playing rate)
+UREF_ATTR_RATIONAL_SH(clock, rate, UDICT_TYPE_CLOCK_RATE, playing rate)
 UREF_ATTR_UNSIGNED_SH(clock, latency, UDICT_TYPE_CLOCK_LATENCY,
         latency in uclock units)
 

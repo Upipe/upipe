@@ -47,6 +47,14 @@ int main(int argc, char **argv)
     for (unsigned i = 0; i < UBASE_ARRAY_SIZE(items); i++)
         assert(ulist_is_in(&items[i].uchain));
 
+    for (unsigned i = 0; i < UBASE_ARRAY_SIZE(items); i++) {
+        struct uchain *uchain = ulist_at(&list, i);
+        assert(uchain != NULL);
+        struct item *item = item_from_uchain(uchain);
+        assert(item->id == i);
+    }
+    assert(ulist_at(&list, UBASE_ARRAY_SIZE(items)) == NULL);
+
     struct uchain *uchain_tmp;
     ulist_delete_foreach(&list, uchain, uchain_tmp) {
         ulist_delete(uchain);

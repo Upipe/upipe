@@ -45,6 +45,7 @@
 #include <upipe/upipe_helper_void.h>
 #include <upipe/upipe_helper_flow_def_check.h>
 #include <upipe/upipe_helper_subpipe.h>
+#include <upipe-framers/uref_mpga_flow.h>
 #include <upipe-av/upipe_avformat_sink.h>
 
 #include "upipe_av_internal.h"
@@ -230,6 +231,7 @@ static int upipe_avfsink_sub_set_flow_def(struct upipe *upipe,
     if (ubase_ncmp(def, "block.") ||
         !(codec_id = upipe_av_from_flow_def(def + strlen("block."))) ||
         codec_id >= AV_CODEC_ID_FIRST_SUBTITLE) {
+        upipe_err(upipe, "bad codec");
         return UBASE_ERR_INVALID;
     }
     uint64_t octetrate = 0;
@@ -237,19 +239,23 @@ static int upipe_avfsink_sub_set_flow_def(struct upipe *upipe,
 
     struct urational fps, sar;
     uint64_t width, height;
-    uint8_t channels;
-    uint64_t rate, samples;
+    uint8_t channels = 0;
+    uint64_t rate = 0, samples = 0;
     if (codec_id < AV_CODEC_ID_FIRST_AUDIO) {
         if (unlikely(!ubase_check(uref_pic_flow_get_fps(flow_def, &fps)) ||
                      !ubase_check(uref_pic_flow_get_sar(flow_def, &sar)) ||
                      !ubase_check(uref_pic_flow_get_hsize(flow_def, &width)) ||
-                     !ubase_check(uref_pic_flow_get_vsize(flow_def, &height))))
+                     !ubase_check(uref_pic_flow_get_vsize(flow_def, &height)))) {
+            upipe_err(upipe, "bad video parameters");
             return UBASE_ERR_INVALID;
+        }
     } else {
         if (unlikely(!ubase_check(uref_sound_flow_get_channels(flow_def, &channels)) ||
                      !ubase_check(uref_sound_flow_get_rate(flow_def, &rate)) ||
-                     !ubase_check(uref_sound_flow_get_samples(flow_def, &samples))))
+                     !ubase_check(uref_sound_flow_get_samples(flow_def, &samples)))) {
+            upipe_err(upipe, "bad audio parameters");
             return UBASE_ERR_INVALID;
+        }
     }
 
     uint8_t *extradata_alloc = NULL;
@@ -264,6 +270,16 @@ static int upipe_avfsink_sub_set_flow_def(struct upipe *upipe,
         memcpy(extradata_alloc, extradata, extradata_size);
         memset(extradata_alloc + extradata_size, 0,
                FF_INPUT_BUFFER_PADDING_SIZE);
+    } else if (!ubase_ncmp(def, "block.h264.") ||
+               !ubase_ncmp(def, "block.aac.")) {
+        upipe_err(upipe, "global headers required");
+        return UBASE_ERR_INVALID;
+    }
+
+    if (!ubase_ncmp(def, "block.aac.") &&
+        ubase_check(uref_mpga_flow_get_adts(flow_def))) {
+        upipe_err(upipe, "asc required");
+        return UBASE_ERR_INVALID;
     }
 
     /* Extract relevant attributes to flow def check. */
@@ -325,7 +341,7 @@ static int upipe_avfsink_sub_set_flow_def(struct upipe *upipe,
     AVStream *stream = avformat_new_stream(upipe_avfsink->context, NULL);
     if (unlikely(stream == NULL)) {
         free(extradata_alloc);
-        upipe_err_va(upipe, "couldn't allocate stream");
+        upipe_err(upipe, "couldn't allocate stream");
         upipe_throw_fatal(upipe, UBASE_ERR_EXTERNAL);
         return UBASE_ERR_EXTERNAL;
     }
@@ -356,9 +372,13 @@ static int upipe_avfsink_sub_set_flow_def(struct upipe *upipe,
             codec->sample_aspect_ratio.num = sar.num;
         stream->sample_aspect_ratio.den =
             codec->sample_aspect_ratio.den = sar.den;
+        stream->avg_frame_rate.num = 25;
+        stream->avg_frame_rate.den = 1;
         codec->time_base.num = fps.den;
         codec->time_base.den = fps.num * 2;
         codec->ticks_per_frame = 2;
+        codec->framerate.num = fps.num;
+        codec->framerate.den = fps.den;
     } else {
         codec->codec_type = AVMEDIA_TYPE_AUDIO;
         codec->channels = channels;
@@ -376,6 +396,34 @@ static int upipe_avfsink_sub_set_flow_def(struct upipe *upipe,
     return UBASE_ERR_NONE;
 }
 
+/** @internal @This provides a flow format suggestion.
+ *
+ * @param upipe description structure of the pipe
+ * @param request description structure of the request
+ * @return an error code
+ */
+static int upipe_avfsink_sub_provide_flow_format(struct upipe *upipe,
+                                                 struct urequest *request)
+{
+    struct uref *flow_format = uref_dup(request->uref);
+    UBASE_ALLOC_RETURN(flow_format);
+    /* we always require global headers */
+    uref_flow_set_global(flow_format);
+    const char *def;
+    if (!ubase_check(uref_flow_get_def(flow_format, &def)))
+        return urequest_provide_flow_format(request, flow_format);
+
+    struct upipe_avfsink *upipe_avfsink =
+        upipe_avfsink_from_sub_mgr(upipe->mgr);
+    if (!ubase_ncmp(def, "block.aac.") && upipe_avfsink->format != NULL &&
+        (!strcmp(upipe_avfsink->format, "mp4") ||
+         !strcmp(upipe_avfsink->format, "mov") ||
+         !strcmp(upipe_avfsink->format, "m4a") ||
+         !strcmp(upipe_avfsink->format, "flv")))
+        uref_mpga_flow_delete_adts(flow_format);
+    return urequest_provide_flow_format(request, flow_format);
+}
+
 /** @internal @This processes control commands on an output subpipe of an
  * avfsink pipe.
  *
@@ -390,6 +438,8 @@ static int upipe_avfsink_sub_control(struct upipe *upipe,
     switch (command) {
         case UPIPE_REGISTER_REQUEST: {
             struct urequest *request = va_arg(args, struct urequest *);
+            if (request->type == UREQUEST_FLOW_FORMAT)
+                return upipe_avfsink_sub_provide_flow_format(upipe, request);
             return upipe_throw_provide_request(upipe, request);
         }
         case UPIPE_UNREGISTER_REQUEST:
@@ -821,8 +871,7 @@ static int upipe_avfsink_set_uri(struct upipe *upipe, const char *uri)
         }
         avformat_free_context(upipe_avfsink->context);
     }
-    free(upipe_avfsink->uri);
-    upipe_avfsink->uri = NULL;
+    ubase_clean_str(&upipe_avfsink->uri);
 
     if (unlikely(uri == NULL))
         return UBASE_ERR_NONE;

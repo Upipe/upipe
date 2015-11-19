@@ -10,4 +10,5 @@ myinclude_HEADERS = \
 	upipe_video_trim.h \
 	uref_mpgv.h \
 	uref_h264_flow.h \
+	uref_mpga_flow.h \
 	uref_mpgv_flow.h

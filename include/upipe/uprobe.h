@@ -37,6 +37,7 @@ extern "C" {
 #include <upipe/ubase.h>
 #include <upipe/ulist.h>
 #include <upipe/uref_flow.h>
+#include <upipe/ulog.h>
 
 #include <stdbool.h>
 #include <stdarg.h>
@@ -140,41 +141,6 @@ static inline const char *uprobe_event_str(int event)
     }
     return NULL;
 }
-
-/** @This defines the levels of log messages. */
-enum uprobe_log_level {
-    /** verbose messages, on a uref basis */
-    UPROBE_LOG_VERBOSE,
-    /** debug messages, not necessarily meaningful */
-    UPROBE_LOG_DEBUG,
-    /** notice messages, only informative */
-    UPROBE_LOG_NOTICE,
-    /** warning messages, the processing continues but may have unexpected
-     * results */
-    UPROBE_LOG_WARNING,
-    /** error messages, the processing cannot continue */
-    UPROBE_LOG_ERROR
-};
-
-/** @This describe a prefix tag for a log message. */
-struct ulog_pfx {
-    /** uchain to attach in prefixes list */
-    struct uchain uchain;
-    /** the prefix string */
-    const char *tag;
-};
-
-UBASE_FROM_TO(ulog_pfx, uchain, uchain, uchain)
-
-/** @This describe a log message. */
-struct ulog {
-    /** log level of the message */
-    enum uprobe_log_level level;
-    /** the message to be logged */
-    const char *msg;
-    /** list of prefix tags */
-    struct uchain prefixes;
-};
 
 /** @This is the call-back type for uprobe events. */
 typedef int (*uprobe_throw_func)(struct uprobe *, struct upipe *, int, va_list);
@@ -329,9 +295,7 @@ static inline void uprobe_log(struct uprobe *uprobe, struct upipe *upipe,
                               enum uprobe_log_level level, const char *msg)
 {
     struct ulog ulog;
-    ulog.level = level;
-    ulog.msg = msg;
-    ulist_init(&ulog.prefixes);
+    ulog_init(&ulog, level, msg);
     uprobe_throw(uprobe, upipe, UPROBE_LOG, &ulog);
 }
 

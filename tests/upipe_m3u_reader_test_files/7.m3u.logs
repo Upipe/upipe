@@ -1,0 +1,14 @@
+flow definition: block.m3u.master.
+uri: low/audio-video.m3u8
+master stream info: BANDWIDTH=1280000
+master bandwidth: 1280000
+uri: mid/audio-video.m3u8
+master stream info: BANDWIDTH=2560000
+master bandwidth: 2560000
+uri: hi/audio-video.m3u8
+master stream info: BANDWIDTH=7680000
+master bandwidth: 7680000
+uri: audio-only.m3u8
+master stream info: BANDWIDTH=65000,CODECS="mp4a.40.5"
+master bandwidth: 65000
+master codecs: mp4a.40.5

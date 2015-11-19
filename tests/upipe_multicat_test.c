@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2012-2014 OpenHeadend S.A.R.L.
+ * Copyright (C) 2012-2015 OpenHeadend S.A.R.L.
  *
  * Authors: Benjamin Cohen
  *
@@ -183,7 +183,7 @@ int main(int argc, char *argv[])
 	snprintf(filepath, MAXPATHLEN, "%s%u%s", dirpath, 0, suffix);
 	fd = open(filepath, O_TRUNC|O_CREAT|O_WRONLY, 0644);
 	memset(filepath, 42, MAXPATHLEN);
-	write(fd, filepath, MAXPATHLEN);
+	assert(write(fd, filepath, MAXPATHLEN) == MAXPATHLEN);
 	close(fd);
 
 	// send flow definition
@@ -210,7 +210,7 @@ int main(int argc, char *argv[])
     ubase_assert(upipe_multicat_sink_set_path(multicat_sink, dirpath, suffix));
 
 	// idler - packet generator
-	idler = upump_alloc_idler(upump_mgr, genpacket_idler, NULL);	
+	idler = upump_alloc_idler(upump_mgr, genpacket_idler, NULL, NULL);
 	assert(idler);
 
 	// fire !

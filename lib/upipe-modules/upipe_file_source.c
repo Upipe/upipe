@@ -28,10 +28,12 @@
  */
 
 #include <upipe/ubase.h>
+#include <upipe/uuri.h>
 #include <upipe/uprobe.h>
 #include <upipe/urequest.h>
 #include <upipe/uclock.h>
 #include <upipe/uref.h>
+#include <upipe/uref_uri.h>
 #include <upipe/uref_block.h>
 #include <upipe/uref_block_flow.h>
 #include <upipe/uref_clock.h>
@@ -111,12 +113,13 @@ struct upipe_fsrc {
     /** read size */
     unsigned int output_size;
 
+    /** file uri */
+    struct uref *uri;
+
     /** true if the file is regular and doesn't support poll() */
     bool regular_file;
     /** file descriptor */
     int fd;
-    /** file path */
-    char *path;
     /** length to read */
     uint64_t length;
 
@@ -166,11 +169,26 @@ static struct upipe *upipe_fsrc_alloc(struct upipe_mgr *mgr,
     upipe_fsrc_init_upump(upipe);
     upipe_fsrc_init_uclock(upipe);
     upipe_fsrc_init_output_size(upipe, UBUF_DEFAULT_SIZE);
+    upipe_fsrc->uri = NULL;
     upipe_fsrc->fd = -1;
-    upipe_fsrc->path = NULL;
     upipe_fsrc->length = (uint64_t)-1;
     upipe_throw_ready(upipe);
     return upipe;
+}
+
+/** @internal @This returns the path of the currently opened file.
+ *
+ * @param upipe description structure of the pipe
+ * @param path_p filled in with the path of the file
+ * @return an error code
+ */
+static int upipe_fsrc_get_uri(struct upipe *upipe, const char **path_p)
+{
+    struct upipe_fsrc *upipe_fsrc = upipe_fsrc_from_upipe(upipe);
+    assert(path_p != NULL);
+    if (!upipe_fsrc->uri)
+        return UBASE_ERR_INVALID;
+    return uref_uri_get_path(upipe_fsrc->uri, path_p);
 }
 
 /** @internal @This reads data from the source and outputs it.
@@ -188,10 +206,13 @@ static void upipe_fsrc_worker(struct upump *upump)
         systime = uclock_now(upipe_fsrc->uclock);
 
     if (!upipe_fsrc->length) {
-            upipe_notice_va(upipe, "end of range %s", upipe_fsrc->path);
-            upipe_fsrc_set_upump(upipe, NULL);
-            upipe_throw_source_end(upipe);
-            return;
+        const char *path;
+        if (ubase_check(upipe_fsrc_get_uri(upipe, &path)))
+            path = "(none)";
+        upipe_notice_va(upipe, "end of range %s", path);
+        upipe_fsrc_set_upump(upipe, NULL);
+        upipe_throw_source_end(upipe);
+        return;
     }
 
     if (upipe_fsrc->length != (uint64_t)-1 &&
@@ -222,6 +243,10 @@ static void upipe_fsrc_worker(struct upump *upump)
     ssize_t ret = read(upipe_fsrc->fd, buffer, upipe_fsrc->output_size);
     uref_block_unmap(uref, 0);
 
+    const char *path;
+    if (!ubase_check(upipe_fsrc_get_uri(upipe, &path)))
+        path = "(none)";
+
     if (unlikely(ret == -1)) {
         uref_free(uref);
         switch (errno) {
@@ -238,14 +263,7 @@ static void upipe_fsrc_worker(struct upump *upump)
             default:
                 break;
         }
-        upipe_err_va(upipe, "read error from %s (%m)", upipe_fsrc->path);
-        upipe_fsrc_set_upump(upipe, NULL);
-        upipe_throw_source_end(upipe);
-        return;
-    }
-    if (unlikely(ret == 0)) {
-        uref_free(uref);
-        upipe_notice_va(upipe, "end of file %s", upipe_fsrc->path);
+        upipe_err_va(upipe, "read error from %s (%m)", path);
         upipe_fsrc_set_upump(upipe, NULL);
         upipe_throw_source_end(upipe);
         return;
@@ -256,9 +274,14 @@ static void upipe_fsrc_worker(struct upump *upump)
         uref_clock_set_cr_sys(uref, systime);
     if (unlikely(ret != upipe_fsrc->output_size))
         uref_block_resize(uref, 0, ret);
-    upipe_use(upipe);
+    if (unlikely(ret == 0))
+        uref_block_set_end(uref);
     upipe_fsrc_output(upipe, uref, &upipe_fsrc->upump);
-    upipe_release(upipe);
+    if (unlikely(ret == 0)) {
+        upipe_notice_va(upipe, "end of file %s", path);
+        upipe_fsrc_set_upump(upipe, NULL);
+        upipe_throw_source_end(upipe);
+    }
 }
 
 /** @internal @This checks if the pump may be allocated.
@@ -272,6 +295,11 @@ static int upipe_fsrc_check(struct upipe *upipe, struct uref *flow_format)
     struct upipe_fsrc *upipe_fsrc = upipe_fsrc_from_upipe(upipe);
     if (flow_format != NULL)
         upipe_fsrc_store_flow_def(upipe, flow_format);
+
+    if (upipe_fsrc->flow_def &&
+        !ubase_check(uref_uri_import(upipe_fsrc->flow_def,
+                                     upipe_fsrc->uri)))
+        upipe_warn(upipe, "fail to import uri to flow format");
 
     upipe_fsrc_check_upump_mgr(upipe);
     if (upipe_fsrc->upump_mgr == NULL)
@@ -303,11 +331,12 @@ static int upipe_fsrc_check(struct upipe *upipe, struct uref *flow_format)
         struct upump *upump;
         if (upipe_fsrc->regular_file)
             upump = upump_alloc_idler(upipe_fsrc->upump_mgr,
-                                      upipe_fsrc_worker, upipe);
+                                      upipe_fsrc_worker, upipe,
+                                      upipe->refcount);
         else
             upump = upump_alloc_fd_read(upipe_fsrc->upump_mgr,
                                         upipe_fsrc_worker, upipe,
-                                        upipe_fsrc->fd);
+                                        upipe->refcount, upipe_fsrc->fd);
         if (unlikely(upump == NULL)) {
             upipe_throw_fatal(upipe, UBASE_ERR_UPUMP);
             return UBASE_ERR_UPUMP;
@@ -318,66 +347,105 @@ static int upipe_fsrc_check(struct upipe *upipe, struct uref *flow_format)
     return UBASE_ERR_NONE;
 }
 
-/** @internal @This returns the path of the currently opened file.
- *
- * @param upipe description structure of the pipe
- * @param path_p filled in with the path of the file
- * @return an error code
- */
-static int upipe_fsrc_get_uri(struct upipe *upipe, const char **path_p)
-{
-    struct upipe_fsrc *upipe_fsrc = upipe_fsrc_from_upipe(upipe);
-    assert(path_p != NULL);
-    *path_p = upipe_fsrc->path;
-    return UBASE_ERR_NONE;
-}
-
 /** @internal @This asks to open the given file.
  *
  * @param upipe description structure of the pipe
  * @param path relative or absolute path of the file
  * @return an error code
  */
-static int upipe_fsrc_set_uri(struct upipe *upipe, const char *path)
+static int upipe_fsrc_open(struct upipe *upipe)
 {
     struct upipe_fsrc *upipe_fsrc = upipe_fsrc_from_upipe(upipe);
+    const char *path;
+    int ret;
 
-    if (unlikely(upipe_fsrc->fd != -1)) {
-        if (likely(upipe_fsrc->path != NULL))
-            upipe_notice_va(upipe, "closing file %s", upipe_fsrc->path);
-        close(upipe_fsrc->fd);
-        upipe_fsrc->fd = -1;
-    }
-    free(upipe_fsrc->path);
-    upipe_fsrc->path = NULL;
-    upipe_fsrc->length = (uint64_t)-1;
-    upipe_fsrc_set_upump(upipe, NULL);
+    ret = upipe_fsrc_get_uri(upipe, &path);
+    if (!ubase_check(ret))
+        return ret;
 
     if (unlikely(path == NULL))
         return UBASE_ERR_NONE;
 
-    struct stat st;
-    if (unlikely(stat(path, &st) == -1)) {
-        upipe_err_va(upipe, "can't stat file %s (%m)", path);
-        return UBASE_ERR_EXTERNAL;
-    }
-
-    upipe_fsrc->regular_file = !!S_ISREG(st.st_mode);
-    upipe_fsrc->fd = open(path, O_RDONLY | O_NONBLOCK | O_CLOEXEC);
-    if (unlikely(upipe_fsrc->fd == -1)) {
+    int fd = open(path, O_RDONLY | O_NONBLOCK | O_CLOEXEC);
+    if (unlikely(fd < 0)) {
         upipe_err_va(upipe, "can't open file %s (%m)", path);
         return UBASE_ERR_EXTERNAL;
     }
-
-    upipe_fsrc->path = strdup(path);
-    if (unlikely(upipe_fsrc->path == NULL)) {
-        close(upipe_fsrc->fd);
-        upipe_fsrc->fd = -1;
-        upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
-        return UBASE_ERR_ALLOC;
+    struct stat st;
+    if (unlikely(fstat(fd, &st) == -1)) {
+        upipe_err_va(upipe, "can't stat file %s (%m)", path);
+        close(fd);
+        return UBASE_ERR_EXTERNAL;
     }
-    upipe_notice_va(upipe, "opening file %s", upipe_fsrc->path);
+
+    upipe_fsrc->fd = fd;
+    upipe_fsrc->regular_file = !!S_ISREG(st.st_mode);
+    upipe_notice_va(upipe, "opening file %s", path);
     return UBASE_ERR_NONE;
+}
+
+static void upipe_fsrc_close(struct upipe *upipe)
+{
+    struct upipe_fsrc *upipe_fsrc = upipe_fsrc_from_upipe(upipe);
+
+    if (unlikely(upipe_fsrc->fd != -1)) {
+        const char *path;
+        if (!ubase_check(upipe_fsrc_get_uri(upipe, &path)))
+            path = "(none)";
+        upipe_notice_va(upipe, "closing file %s", path);
+        ubase_clean_fd(&upipe_fsrc->fd);
+    }
+    upipe_fsrc->length = (uint64_t)-1;
+    upipe_fsrc_set_upump(upipe, NULL);
+    uref_free(upipe_fsrc->uri);
+    upipe_fsrc->uri = NULL;
+}
+
+static int upipe_fsrc_set_uri(struct upipe *upipe, const char *uri)
+{
+    struct upipe_fsrc *upipe_fsrc = upipe_fsrc_from_upipe(upipe);
+    int ret;
+
+    upipe_fsrc_close(upipe);
+
+    if (!uri)
+        return UBASE_ERR_NONE;
+
+    if (!upipe_fsrc->uref_mgr &&
+        !upipe_fsrc_demand_uref_mgr(upipe)) {
+        upipe_err(upipe, "no uref manager");
+        return UBASE_ERR_INVALID;
+    }
+
+    upipe_fsrc->uri = uref_alloc_control(upipe_fsrc->uref_mgr);
+    if (!upipe_fsrc->uri)
+        return UBASE_ERR_ALLOC;
+
+    struct uuri uuri;
+    if (!ubase_check(uuri_from_str(&uuri, uri))) {
+        /* not an uri (ie. does not start with "scheme:"),
+         * so add uri scheme and path to the flow def
+         */
+        ret = uref_uri_set_scheme(upipe_fsrc->uri, "file");
+        if (!ubase_check(ret)) {
+            upipe_err(upipe, "fail to set uri scheme to file");
+            return ret;
+        }
+
+        ret = uref_uri_set_path(upipe_fsrc->uri, uri);
+        if (!ubase_check(ret)) {
+            upipe_err_va(upipe, "fail to set uri path to %s", uri);
+            return ret;
+        }
+    }
+    else {
+        ret = uref_uri_set_from_str(upipe_fsrc->uri, uri);
+        if (!ubase_check(ret)) {
+            upipe_err_va(upipe, "fail to set flow uri %s", uri);
+            return ret;
+        }
+    }
+    return upipe_fsrc_open(upipe);
 }
 
 /** @internal @This returns the size of the currently opened file.
@@ -535,30 +603,24 @@ static int _upipe_fsrc_control(struct upipe *upipe, int command, va_list args)
             return upipe_fsrc_set_uri(upipe, uri);
         }
 
-        case UPIPE_FSRC_GET_SIZE: {
-            unsigned int signature = va_arg(args, unsigned int);
-            assert(signature == UPIPE_FSRC_SIGNATURE);
+        case UPIPE_SRC_GET_SIZE: {
             uint64_t *size_p = va_arg(args, uint64_t *);
             return _upipe_fsrc_get_size(upipe, size_p);
         }
-        case UPIPE_FSRC_GET_POSITION: {
-            UBASE_SIGNATURE_CHECK(args, UPIPE_FSRC_SIGNATURE)
+        case UPIPE_SRC_GET_POSITION: {
             uint64_t *position_p = va_arg(args, uint64_t *);
             return _upipe_fsrc_get_position(upipe, position_p);
         }
-        case UPIPE_FSRC_SET_POSITION: {
-            UBASE_SIGNATURE_CHECK(args, UPIPE_FSRC_SIGNATURE)
+        case UPIPE_SRC_SET_POSITION: {
             uint64_t position = va_arg(args, uint64_t);
             return _upipe_fsrc_set_position(upipe, position);
         }
-        case UPIPE_FSRC_SET_RANGE: {
-            UBASE_SIGNATURE_CHECK(args, UPIPE_FSRC_SIGNATURE)
+        case UPIPE_SRC_SET_RANGE: {
             uint64_t offset = va_arg(args, uint64_t);
             uint64_t length = va_arg(args, int64_t);
             return _upipe_fsrc_set_range(upipe, offset, length);
         }
-        case UPIPE_FSRC_GET_RANGE: {
-            UBASE_SIGNATURE_CHECK(args, UPIPE_FSRC_SIGNATURE)
+        case UPIPE_SRC_GET_RANGE: {
             uint64_t *offset_p = va_arg(args, uint64_t *);
             uint64_t *length_p = va_arg(args, uint64_t *);
             return _upipe_fsrc_get_range(upipe, offset_p, length_p);
@@ -590,15 +652,10 @@ static int upipe_fsrc_control(struct upipe *upipe, int command, va_list args)
  */
 static void upipe_fsrc_free(struct upipe *upipe)
 {
-    struct upipe_fsrc *upipe_fsrc = upipe_fsrc_from_upipe(upipe);
-    if (likely(upipe_fsrc->fd != -1)) {
-        if (likely(upipe_fsrc->path != NULL))
-            upipe_notice_va(upipe, "closing file %s", upipe_fsrc->path);
-        close(upipe_fsrc->fd);
-    }
+    upipe_fsrc_close(upipe);
+
     upipe_throw_dead(upipe);
 
-    free(upipe_fsrc->path);
     upipe_fsrc_clean_output_size(upipe);
     upipe_fsrc_clean_uclock(upipe);
     upipe_fsrc_clean_upump(upipe);

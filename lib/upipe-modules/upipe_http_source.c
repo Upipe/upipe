@@ -29,12 +29,14 @@
 
 #include <stdio.h>
 #include <upipe/ubase.h>
+#include <upipe/ucookie.h>
 #include <upipe/uprobe.h>
 #include <upipe/uclock.h>
 #include <upipe/uref.h>
 #include <upipe/uref_block.h>
 #include <upipe/uref_block_flow.h>
 #include <upipe/uref_clock.h>
+#include <upipe/uref_uri.h>
 #include <upipe/upump.h>
 #include <upipe/ubuf.h>
 #include <upipe/upipe.h>
@@ -71,7 +73,7 @@
 #define UBUF_DEFAULT_SIZE       4096
 
 #define MAX_URL_SIZE            2048
-#define HTTP_VERSION            "HTTP/1.0"
+#define HTTP_VERSION            "HTTP/1.1"
 #define USER_AGENT              "upipe_http_src"
 
 struct http_range {
@@ -81,6 +83,14 @@ struct http_range {
 
 #define HTTP_RANGE(Offset, Length)      \
     (struct http_range){ .offset = Offset, .length = Length }
+
+struct upipe_http_src_cookie {
+    struct uchain uchain;
+    char *value;
+    struct ucookie ucookie;
+};
+
+UBASE_FROM_TO(upipe_http_src_cookie, uchain, uchain, uchain)
 
 /** @hidden */
 static int upipe_http_src_check(struct upipe *upipe, struct uref *flow_format);
@@ -139,15 +149,13 @@ struct upipe_http_src {
     bool request_pending;
     /** http url */
     char *url;
-    /** host */
-    char *host;
-    /** path part of the url */
-    const char *path;
 
     struct header header_field;
 
     /** header location for 302 location */
     char *location;
+    /** http proxy */
+    char *proxy;
 
     /** range */
     struct http_range range;
@@ -185,6 +193,18 @@ UPIPE_HELPER_UPUMP(upipe_http_src, upump, upump_mgr)
 UPIPE_HELPER_OUTPUT_SIZE(upipe_http_src, output_size)
 UPIPE_HELPER_UPUMP(upipe_http_src, upump_write, upump_mgr)
 
+static int upipe_http_src_header_field(http_parser *parser,
+                                       const char *at,
+                                       size_t len);
+static int upipe_http_src_header_value(http_parser *parser,
+                                       const char *at,
+                                       size_t len);
+static int upipe_http_src_body_cb(http_parser *parser,
+                                  const char *at,
+                                  size_t len);
+static int upipe_http_src_message_complete(http_parser *parser);
+static int upipe_http_src_status_cb(http_parser *parser);
+
 /** @internal @This allocates a http source pipe.
  *
  * @param mgr common management structure
@@ -215,92 +235,44 @@ static struct upipe *upipe_http_src_alloc(struct upipe_mgr *mgr,
     upipe_http_src->url = NULL;
     upipe_http_src->range = HTTP_RANGE(0, -1);
     upipe_http_src->position = 0;
-    upipe_http_src->path = NULL;
-    upipe_http_src->host = NULL;
     upipe_http_src->location = NULL;
     upipe_http_src->header_field = HEADER(NULL, 0);
+    upipe_http_src->proxy = NULL;
+
+    /* init parser settings */
+    http_parser_settings *settings = &upipe_http_src->parser_settings;
+    settings->on_message_begin = NULL;
+    settings->on_url = NULL;
+    settings->on_header_field = upipe_http_src_header_field;
+    settings->on_header_value = upipe_http_src_header_value;
+    settings->on_headers_complete = NULL;
+    settings->on_body = upipe_http_src_body_cb;
+    settings->on_message_complete = upipe_http_src_message_complete;
+    settings->on_status_complete = upipe_http_src_status_cb;
 
     upipe_throw_ready(upipe);
+
+    const char *proxy;
+    if (!ubase_check(upipe_http_src_mgr_get_proxy(mgr, &proxy))) {
+        upipe_warn(upipe, "fail to get http proxy from manager");
+        proxy = NULL;
+    }
+
+    if (proxy && !ubase_check(upipe_http_src_set_proxy(upipe, proxy)))
+        upipe_warn(upipe, "fail to set http proxy");
+
     return upipe;
 }
 
-/** @This frees a upipe.
- *
- * @param upipe description structure of the pipe
- */
-struct part {
-    const char *at;
-    size_t len;
-};
-
-#define PART(At, Len) (struct part){ .at = At, .len = Len }
-#define PART_NULL PART(NULL, 0)
-#define PART_IS_NULL(Part)      ((Part).at == NULL)
-
-static struct part part_make(const char *value, size_t len)
+static int upipe_http_src_add_cookie(struct upipe *upipe,
+                                      const char *buf,
+                                      size_t len)
 {
-    return (struct part){ .at = value, .len = len};
-}
-
-static struct part part_while(const struct part *value,
-                              const char *contains)
-{
-    struct part part = PART_NULL;
-
-    for (size_t i = 0; i < value->len && value->at[i] != '\0'; i++) {
-        size_t j;
-        for (j = 0; contains[j]; j++)
-            if (contains[j] == value->at[i])
-                break;
-
-        if (!contains[j])
-            return part;
-
-        part.at = value->at;
-        part.len++;
-    }
-
-    return part;
-}
-
-static struct part part_remove_while(const struct part *value,
-                                     const char *contains)
-{
-    struct part remove = part_while(value, contains);
-    return PART(value->at + remove.len, value->len + remove.len);
-}
-
-static struct part part_until(const struct part *value,
-                              const char *except)
-{
-    struct part part = PART_NULL;
-
-    for (size_t i = 0; i < value->len && value->at[i] != '\0'; i++) {
-        for (size_t j = 0; except[j]; j++)
-            if (except[j] == value->at[i])
-                return part;
-
-        part.at = value->at;
-        part.len++;
-    }
-
-    return part;
-}
-
-static struct part part_name(const struct part *value)
-{
-    struct part cleaned = part_remove_while(value, " ");
-    struct part pair = part_until(&cleaned, ";");
-    if (PART_IS_NULL(pair))
-        return pair;
-    return part_until(&pair, "=");
-}
-
-static int part_cmp(const struct part *a, const struct part *b)
-{
-    if (a->len != b->len)
-        return a->len > b->len ? 1 : -1;
-    return strncmp(a->at, b->at, a->len);
+    char cookie[len + 1];
+    memcpy(cookie, buf, len);
+    cookie[len] = '\0';
+    upipe_dbg_va(upipe, "add cookie %s", cookie);
+    return upipe_http_src_mgr_set_cookie(upipe->mgr, cookie);
 }
 
 /** @internal @This retrieves the upipe_http_src structure from parser
@@ -336,6 +308,10 @@ static int upipe_http_src_header_value(http_parser *parser,
     if (!strncasecmp("Location", field.value, field.len)) {
         upipe_http_src->location = strndup(at, len);
     }
+    else if (!strncasecmp("Set-Cookie", field.value, field.len)) {
+        if (!ubase_check(upipe_http_src_add_cookie(upipe, at, len)))
+            upipe_warn_va(upipe, "fail to set cookie %.*s", (int)len, at);
+    }
     return 0;
 }
 
@@ -349,6 +325,8 @@ static int upipe_http_src_status_cb(http_parser *parser)
     switch (parser->status_code) {
     /* success */
     case 200:
+    /* partial content */
+    case 206:
     /* found */
     case 302:
         break;
@@ -358,17 +336,70 @@ static int upipe_http_src_status_cb(http_parser *parser)
     return 0;
 }
 
+static int upipe_http_src_output_data(struct upipe *upipe,
+                                      const char *at, size_t len)
+{
+    struct upipe_http_src *upipe_http_src = upipe_http_src_from_upipe(upipe);
+    struct uref *uref;
+    uint64_t systime = 0;
+    uint8_t *buf = NULL;
+    int size;
+
+    if (unlikely(at == NULL))
+        len = 0;
+
+    /* fetch systime */
+    if (likely(upipe_http_src->uclock)) {
+        systime = uclock_now(upipe_http_src->uclock);
+    }
+
+    /* alloc, map, copy, unmap */
+    uref = uref_block_alloc(upipe_http_src->uref_mgr,
+                            upipe_http_src->ubuf_mgr, len);
+    if (unlikely(!uref)) {
+        upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
+        return 0;
+    }
+    size = -1;
+    uref_block_write(uref, 0, &size, &buf);
+    assert(len == size);
+    if (likely(at != NULL))
+        memcpy(buf, at, len);
+    uref_block_unmap(uref, 0);
+
+    uref_clock_set_cr_sys(uref, systime);
+    if (len == 0)
+        uref_block_set_end(uref);
+    upipe_http_src_output(upipe, uref, &upipe_http_src->upump);
+    upipe_http_src->position += len;
+
+    /* everything's fine, return 0 to http_parser */
+    return 0;
+}
+
+/** @internal @This is called by http_parser when message is completed.
+ *
+ * @param parser http parser structure
+ * @return 0
+ */
 static int upipe_http_src_message_complete(http_parser *parser)
 {
     struct upipe_http_src *upipe_http_src = upipe_http_src_from_parser(parser);
     struct upipe *upipe = upipe_http_src_to_upipe(upipe_http_src);
 
+    upipe_dbg_va(upipe, "message complete %i", parser->status_code);
+    upipe_http_src_output_data(upipe, NULL, 0);
+    upipe_dbg_va(upipe, "end of %s", upipe_http_src->url);
+    upipe_http_src_set_upump(upipe, NULL);
+    upipe_throw_source_end(upipe);
+
     switch (parser->status_code) {
     case 302:
         upipe_http_src_throw_redirect(upipe, upipe_http_src->location);
-        upipe_set_uri(upipe, upipe_http_src->location);
-        return 0;
+        break;
     }
+
+    ubase_clean_str(&upipe_http_src->location);
     return 0;
 }
 
@@ -382,39 +413,42 @@ static int upipe_http_src_body_cb(http_parser *parser, const char *at, size_t le
 {
     struct upipe_http_src *upipe_http_src = upipe_http_src_from_parser(parser);
     struct upipe *upipe = upipe_http_src_to_upipe(upipe_http_src);
-    struct uref *uref;
-    uint64_t systime = 0;
-    uint8_t *buf = NULL;
-    int size;
-
-    /* fetch systime */
-    if (likely(upipe_http_src->uclock)) {
-        systime = uclock_now(upipe_http_src->uclock);
-    }
 
     upipe_verbose_va(upipe, "received %zu bytes of body", len);
-
-    /* alloc, map, copy, unmap */
-    uref = uref_block_alloc(upipe_http_src->uref_mgr,
-                            upipe_http_src->ubuf_mgr, len);
-    if (unlikely(!uref)) {
-        upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
-        return 0;
-    }
-    size = -1;
-    uref_block_write(uref, 0, &size, &buf);
-    assert(len == size);
-    memcpy(buf, at, len);
-    uref_block_unmap(uref, 0);
-
-    uref_clock_set_cr_sys(uref, systime);
-    upipe_use(upipe);
-    upipe_http_src_output(upipe, uref, &upipe_http_src->upump);
-    upipe_http_src->position += len;
-    upipe_release(upipe);
-
+    upipe_http_src_output_data(upipe, at, len);
     /* everything's fine, return 0 to http_parser */
     return 0;
+}
+
+/** @internal @This parses and outputs data.
+ *
+ * @param upipe description structure of the pipe
+ * @param uref uref structure
+ * @param upump_p reference to pump that generated the buffer
+ */
+static void upipe_http_src_process(struct upipe *upipe,
+                                   struct uref *uref,
+                                   struct upump **upump_p)
+{
+    struct upipe_http_src *upipe_http_src = upipe_http_src_from_upipe(upipe);
+
+    /* parse response */
+    const uint8_t *buffer;
+    int size = -1;
+    if (unlikely(!ubase_check(uref_block_read(uref, 0, &size, &buffer))) ||
+        size < 0) {
+        uref_free(uref);
+        upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
+        return;
+    }
+    size_t parsed_len =
+        http_parser_execute(&upipe_http_src->parser,
+                            &upipe_http_src->parser_settings,
+                            (const char *)buffer, size);
+    if (parsed_len != size)
+        upipe_warn(upipe, "http request execution failed");
+    uref_block_unmap(uref, 0);
+    uref_free(uref);
 }
 
 /** @internal @This reads data from the source and outputs it.
@@ -427,14 +461,31 @@ static void upipe_http_src_worker(struct upump *upump)
 {
     struct upipe *upipe = upump_get_opaque(upump, struct upipe *);
     struct upipe_http_src *upipe_http_src = upipe_http_src_from_upipe(upipe);
-    char *buffer = malloc(upipe_http_src->output_size); /* FIXME use ubuf/umem */
-    assert(buffer);
-    memset(buffer, 0, upipe_http_src->output_size);
 
-    ssize_t len = recv(upipe_http_src->fd, buffer, upipe_http_src->output_size, 0);
+    struct uref *uref = uref_block_alloc(upipe_http_src->uref_mgr,
+                                         upipe_http_src->ubuf_mgr,
+                                         upipe_http_src->output_size);
+    if (unlikely(uref == NULL)) {
+        upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
+        return;
+    }
+
+    uint8_t *buffer;
+    int output_size = -1;
+    if (unlikely(!ubase_check(uref_block_write(
+                    uref, 0, &output_size, &buffer)))) {
+        uref_free(uref);
+        upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
+        return;
+    }
+    assert(output_size == upipe_http_src->output_size);
+
+    ssize_t len = recv(upipe_http_src->fd, buffer,
+                       upipe_http_src->output_size, 0);
+    uref_block_unmap(uref, 0);
 
     if (unlikely(len == -1)) {
-        free(buffer);
+        uref_free(uref);
 
         switch (errno) {
             case EINTR:
@@ -451,27 +502,16 @@ static void upipe_http_src_worker(struct upump *upump)
                 break;
         }
         upipe_err_va(upipe, "read error from %s (%s)", upipe_http_src->url,
-                                                              strerror(errno));
-        upipe_http_src_set_upump(upipe, NULL);
-        upipe_throw_source_end(upipe);
-        return;
-    }
-    if (unlikely(len == 0)) {
-        free(buffer);
-        upipe_notice_va(upipe, "end of %s", upipe_http_src->url);
+                     strerror(errno));
         upipe_http_src_set_upump(upipe, NULL);
         upipe_throw_source_end(upipe);
         return;
     }
 
-    /* parse response */
-    size_t parsed_len =
-        http_parser_execute(&upipe_http_src->parser,
-                            &upipe_http_src->parser_settings,
-                            buffer, len);
-    if (parsed_len != len)
-        upipe_warn(upipe, "http request execution failed");
-    free(buffer);
+    if (unlikely(len != upipe_http_src->output_size))
+        uref_block_resize(uref, 0, len);
+
+    return upipe_http_src_process(upipe, uref, &upump);
 }
 
 static int request_add(char **req_p, size_t *len, const char *fmt, ...)
@@ -503,21 +543,51 @@ static int request_add(char **req_p, size_t *len, const char *fmt, ...)
 static int upipe_http_src_send_request(struct upipe *upipe)
 {
     struct upipe_http_src *upipe_http_src = upipe_http_src_from_upipe(upipe);
-    const char *url = upipe_http_src->path;
-    char req_buffer[4096 + strlen(url)];
+    struct uref *flow_def = upipe_http_src->flow_def;
+    char req_buffer[16384];
+    size_t req_len = sizeof (req_buffer);
     char *req = req_buffer;
-    size_t req_buffer_len = sizeof (req_buffer);
-    size_t req_len = req_buffer_len;
+    int ret;
 
-    /* build get request */
-    upipe_dbg_va(upipe, "GET %s", url);
-    request_add(&req, &req_len, "GET %s %s\r\n", url, HTTP_VERSION);
+    const char *path;
+    ret = uref_uri_get_path(flow_def, &path);
+    if (!ubase_check(ret)) {
+        upipe_err(upipe, "fail to get path");
+        return ret;
+    }
+    if (!strlen(path))
+        path = "/";
+
+    const char *query;
+    if (!ubase_check(uref_uri_get_query(flow_def, &query)))
+        query = NULL;
+
+    /* GET url */
+    if (upipe_http_src->proxy) {
+        upipe_dbg_va(upipe, "GET %s", upipe_http_src->url);
+        request_add(&req, &req_len, "GET %s %s\r\n",
+                    upipe_http_src->url, HTTP_VERSION);
+    }
+    else {
+        char url[strlen(path) + 1 + (query ? strlen(query) : 0) + 1];
+        sprintf(url, "%s%s%s", path, query ? "?" : "", query ? query : "");
+
+        upipe_dbg_va(upipe, "GET %s", url);
+        request_add(&req, &req_len, "GET %s %s\r\n", url, HTTP_VERSION);
+    }
+
+    /* User-Agent */
     upipe_verbose_va(upipe, "User-Agent: %s", USER_AGENT);
     request_add(&req, &req_len, "User-Agent: %s\r\n", USER_AGENT);
-    if (upipe_http_src->host) {
-        upipe_verbose_va(upipe, "Host: %s", upipe_http_src->host);
-        request_add(&req, &req_len, "Host: %s\r\n", upipe_http_src->host);
+
+    /* Host */
+    const char *host = NULL;
+    if (ubase_check(uref_uri_get_host(flow_def, &host))) {
+        upipe_verbose_va(upipe, "Host: %s", host);
+        request_add(&req, &req_len, "Host: %s\r\n", host);
     }
+
+    /* Range */
     upipe_http_src->position = 0;
     if (upipe_http_src->range.offset ||
         upipe_http_src->range.length != (uint64_t)-1) {
@@ -542,6 +612,33 @@ static int upipe_http_src_send_request(struct upipe *upipe)
 
         request_add(&req, &req_len, "\r\n");
     }
+
+    /* Cookie */
+    struct uchain *uchain = NULL;
+    bool first = true;
+    while (ubase_check(upipe_http_src_mgr_iterate_cookie(upipe->mgr,
+                                                         host, path,
+                                                         &uchain)) &&
+           uchain != NULL) {
+        struct upipe_http_src_cookie *cookie =
+            upipe_http_src_cookie_from_uchain(uchain);
+        upipe_verbose_va(upipe, "Cookie: %.*s=%.*s",
+                    (int)cookie->ucookie.name.len, cookie->ucookie.name.at,
+                    (int)cookie->ucookie.value.len, cookie->ucookie.value.at);
+        if (first)
+            request_add(&req, &req_len, "Cookie: %.*s=%.*s",
+                        (int)cookie->ucookie.name.len, cookie->ucookie.name.at,
+                        (int)cookie->ucookie.value.len, cookie->ucookie.value.at);
+        else
+            request_add(&req, &req_len, "; %.*s=%.*s",
+                        (int)cookie->ucookie.name.len, cookie->ucookie.name.at,
+                        (int)cookie->ucookie.value.len, cookie->ucookie.value.at);
+        first = false;
+    }
+    if (!first)
+        request_add(&req, &req_len, "\r\n");
+
+    /* End of request */
     request_add(&req, &req_len, "\r\n");
 
     if (unlikely(req == NULL)) {
@@ -549,7 +646,8 @@ static int upipe_http_src_send_request(struct upipe *upipe)
         return UBASE_ERR_ALLOC;
     }
 
-    int ret = send(upipe_http_src->fd, req_buffer, req_buffer_len - req_len, 0);
+    ret = send(upipe_http_src->fd, req_buffer,
+               sizeof (req_buffer) - req_len, 0);
     if (ret < 0) {
         switch(errno) {
             case EINTR:
@@ -563,7 +661,8 @@ static int upipe_http_src_send_request(struct upipe *upipe)
             case EBADF:
             case EINVAL:
             default:
-                upipe_err_va(upipe, "error sending request (%s)", strerror(errno));
+                upipe_err_va(upipe, "error sending request (%s)",
+                             strerror(errno));
                 return UBASE_ERR_EXTERNAL;
         }
     }
@@ -576,10 +675,8 @@ static void upipe_http_src_worker_write(struct upump *upump)
     struct upipe *upipe = upump_get_opaque(upump, struct upipe *);
     struct upipe_http_src *upipe_http_src = upipe_http_src_from_upipe(upipe);
 
-    if (unlikely(upipe_http_src_send_request(upipe)) != UBASE_ERR_NONE) {
-        close(upipe_http_src->fd);
-        upipe_http_src->fd = -1;
-    }
+    if (unlikely(upipe_http_src_send_request(upipe)) != UBASE_ERR_NONE)
+        ubase_clean_fd(&upipe_http_src->fd);
 
     upipe_http_src->request_pending = false;
     upipe_http_src_set_upump_write(upipe, NULL);
@@ -594,8 +691,16 @@ static void upipe_http_src_worker_write(struct upump *upump)
 static int upipe_http_src_check(struct upipe *upipe, struct uref *flow_format)
 {
     struct upipe_http_src *upipe_http_src = upipe_http_src_from_upipe(upipe);
-    if (flow_format != NULL)
-        upipe_http_src_store_flow_def(upipe, flow_format);
+    if (flow_format != NULL) {
+        if (!upipe_http_src->flow_def)
+            upipe_http_src_store_flow_def(upipe, flow_format);
+        else {
+            int ret = uref_flow_cmp_def(upipe_http_src->flow_def, flow_format);
+            uref_free(flow_format);
+            if (!ubase_check(ret))
+                return ret;
+        }
+    }
 
     upipe_http_src_check_upump_mgr(upipe);
     if (upipe_http_src->upump_mgr == NULL)
@@ -628,7 +733,7 @@ static int upipe_http_src_check(struct upipe *upipe, struct uref *flow_format)
             struct upump *upump;
             upump = upump_alloc_fd_read(upipe_http_src->upump_mgr,
                                         upipe_http_src_worker, upipe,
-                                        upipe_http_src->fd);
+                                        upipe->refcount, upipe_http_src->fd);
             if (unlikely(upump == NULL)) {
                 upipe_throw_fatal(upipe, UBASE_ERR_UPUMP);
                 return UBASE_ERR_UPUMP;
@@ -641,8 +746,8 @@ static int upipe_http_src_check(struct upipe *upipe, struct uref *flow_format)
             upipe_http_src->request_pending) {
             struct upump *upump =
                 upump_alloc_fd_write(upipe_http_src->upump_mgr,
-                                     upipe_http_src_worker_write,
-                                     upipe, upipe_http_src->fd);
+                                     upipe_http_src_worker_write, upipe,
+                                     upipe->refcount, upipe_http_src->fd);
             if (unlikely(upump == NULL)) {
                 upipe_throw_fatal(upipe, UBASE_ERR_UPUMP);
                 return UBASE_ERR_UPUMP;
@@ -677,92 +782,79 @@ static int upipe_http_src_get_uri(struct upipe *upipe, const char **url_p)
 static int upipe_http_src_open_url(struct upipe *upipe)
 {
     struct upipe_http_src *upipe_http_src = upipe_http_src_from_upipe(upipe);
-    http_parser *parser = &upipe_http_src->parser;
-    http_parser_settings *settings = &upipe_http_src->parser_settings;
-    struct http_parser_url parsed_url;
-    const char *url = upipe_http_src->url;
+    struct uref *flow_def = upipe_http_src->flow_def;
     struct addrinfo *info = NULL, *res;
     struct addrinfo hints;
-    char *service;
     int ret, fd = -1;
 
-    if (!url)
+    if (!flow_def)
         return -1;
 
-    /* check url size */
-    if (unlikely(strnlen(url, MAX_URL_SIZE + 1) > MAX_URL_SIZE)) {
-        upipe_err(upipe, "url too large, something's fishy");
-        return -1;
-    }
-
-    /* init parser and settings */
-    http_parser_init(parser, HTTP_RESPONSE);
-    settings->on_message_begin = NULL;
-    settings->on_url = NULL;
-    settings->on_header_field = upipe_http_src_header_field;
-    settings->on_header_value = upipe_http_src_header_value;
-    settings->on_headers_complete = NULL;
-    settings->on_body = upipe_http_src_body_cb;
-    settings->on_message_complete = upipe_http_src_message_complete;
-    settings->on_status_complete = upipe_http_src_status_cb;
-
-    /* parse url */
-    ret = http_parser_parse_url(url, strlen(url), 0, &parsed_url);
-    if (unlikely(ret != 0)) {
-        return -1;
-    }
-    if (unlikely(!(parsed_url.field_set & (1 << UF_HOST)))) {
-        return -1;
-    }
-    upipe_http_src->host = strndup(url + parsed_url.field_data[UF_HOST].off,
-                                   parsed_url.field_data[UF_HOST].len);
-
-    if (parsed_url.field_set & (1 <<UF_PORT)) {
-        service = strndup(url + parsed_url.field_data[UF_PORT].off,
-                                    parsed_url.field_data[UF_HOST].len);
-    } else {
-        service = strdup("http");
-    }
-
-    if (parsed_url.field_set & (1 << UF_PATH)) {
-        upipe_http_src->path = url + parsed_url.field_data[UF_PATH].off;
-    }
-    else {
-        upipe_http_src->path = "/";
-    }
+    /* init parser */
+    http_parser_init(&upipe_http_src->parser, HTTP_RESPONSE);
 
     /* get socket information */
     memset(&hints, 0, sizeof(struct addrinfo));
     hints.ai_family = PF_UNSPEC;
     hints.ai_socktype = SOCK_STREAM;
     hints.ai_protocol = 0;
-    ret = getaddrinfo(upipe_http_src->host, service, &hints, &info);
+
+    if (upipe_http_src->proxy) {
+        struct uuri uuri;
+        ret = uuri_from_str(&uuri, upipe_http_src->proxy);
+        if (!ubase_check(ret)) {
+            upipe_err_va(upipe, "invalid http_proxy %s",
+                         upipe_http_src->proxy);
+            return -1;
+        }
+        char host[uuri.authority.host.len + 1];
+        ustring_cpy(uuri.authority.host, host, sizeof (host));
+        char service[uuri.authority.port.len + 1];
+        ustring_cpy(uuri.authority.port, service, sizeof (service));
+
+        upipe_verbose_va(upipe, "getaddrinfo to %s%s%s",
+                         host, strlen(service) ? ":" : "",
+                         service);
+        ret = getaddrinfo(host, service, &hints, &info);
+    }
+    else {
+        const char *host;
+        if (!ubase_check(uref_uri_get_host(flow_def, &host))) {
+            upipe_err(upipe, "fail to get host");
+            return -1;
+        }
+
+        const char *service;
+        if (!ubase_check(uref_uri_get_port(flow_def, &service)) &&
+            !ubase_check(uref_uri_get_scheme(flow_def, &service))) {
+            upipe_err(upipe, "fail to get service");
+            return -1;
+        }
+
+        upipe_verbose_va(upipe, "getaddrinfo to %s", host);
+        ret = getaddrinfo(host, service, &hints, &info);
+    }
+
     if (unlikely(ret)) {
-        upipe_err_va(upipe, "%s", gai_strerror(ret));
-        free(service);
+        upipe_err_va(upipe, "getaddrinfo: %s", gai_strerror(ret));
         return -1;
     }
-    free(service);
 
     /* connect to first working ressource */
     for (res = info; res; res = res->ai_next) {
         fd = socket(res->ai_family, res->ai_socktype,
                                           res->ai_protocol);
-        if (likely(fd > 0)) {
+        if (likely(fd >= 0)) {
             if (connect(fd, res->ai_addr, res->ai_addrlen) == 0) {
                 break;
             }
-            close(fd);
-            fd = -1;
+            ubase_clean_fd(&fd);
         }
-    }
-    if (fd < 0) {
-        upipe_err(upipe, "could not connect to any ressource");
-        freeaddrinfo(info);
-        return -1;
     }
     freeaddrinfo(info);
 
+    if (fd < 0)
+        upipe_err(upipe, "could not connect to any ressource");
     return fd;
 }
 
@@ -775,24 +867,45 @@ static int upipe_http_src_open_url(struct upipe *upipe)
 static int upipe_http_src_set_uri(struct upipe *upipe, const char *url)
 {
     struct upipe_http_src *upipe_http_src = upipe_http_src_from_upipe(upipe);
+    int ret;
 
     if (unlikely(upipe_http_src->fd != -1)) {
         if (likely(upipe_http_src->url != NULL))
             upipe_notice_va(upipe, "closing %s", upipe_http_src->url);
-        close(upipe_http_src->fd);
-        upipe_http_src->fd = -1;
+        ubase_clean_fd(&upipe_http_src->fd);
     }
-    upipe_http_src->path = NULL;
-    free(upipe_http_src->host);
-    upipe_http_src->host = NULL;
-    free(upipe_http_src->url);
-    upipe_http_src->url = NULL;
+    ubase_clean_str(&upipe_http_src->url);
     upipe_http_src_set_upump(upipe, NULL);
     upipe_http_src->request_pending = false;
     upipe_http_src_set_upump_write(upipe, NULL);
 
     if (unlikely(url == NULL))
         return UBASE_ERR_NONE;
+
+    ret = upipe_http_src_check(upipe, NULL);
+    if (!ubase_check(ret))
+        return ret;
+
+    if (unlikely(upipe_http_src->uref_mgr == NULL)) {
+        upipe_err(upipe, "no uref mgr");
+        return UBASE_ERR_ALLOC;
+    }
+
+    struct uref *flow_def =
+        uref_block_flow_alloc_def(upipe_http_src->uref_mgr, NULL);
+    if (unlikely(flow_def == NULL)) {
+        upipe_err(upipe, "fail to create flow def");
+        return UBASE_ERR_NONE;
+    }
+
+    ret = uref_uri_set_from_str(flow_def, url);
+    if (!ubase_check(ret)) {
+        uref_free(flow_def);
+        upipe_err_va(upipe, "fail to set flow uri %s", url);
+        return ret;
+    }
+
+    upipe_http_src_store_flow_def(upipe, flow_def);
 
     upipe_http_src->url = strdup(url);
     if (unlikely(upipe_http_src->url == NULL))
@@ -834,6 +947,23 @@ static int _upipe_http_src_set_range(struct upipe *upipe,
 {
     struct upipe_http_src *upipe_http_src = upipe_http_src_from_upipe(upipe);
     upipe_http_src->range = HTTP_RANGE(offset, length);
+    return UBASE_ERR_NONE;
+}
+
+static int _upipe_http_src_set_proxy(struct upipe *upipe, const char *proxy)
+{
+    struct upipe_http_src *upipe_http_src = upipe_http_src_from_upipe(upipe);
+
+    ubase_clean_str(&upipe_http_src->proxy);
+    if (proxy == NULL)
+        return UBASE_ERR_NONE;
+
+    upipe_http_src->proxy = strdup(proxy);
+    if (unlikely(upipe_http_src->proxy == NULL)) {
+        upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
+        return UBASE_ERR_ALLOC;
+    }
+
     return UBASE_ERR_NONE;
 }
 
@@ -887,22 +1017,25 @@ static int _upipe_http_src_control(struct upipe *upipe,
             return upipe_http_src_set_uri(upipe, uri);
         }
 
-        case UPIPE_HTTP_SRC_GET_POSITION: {
-            UBASE_SIGNATURE_CHECK(args, UPIPE_HTTP_SRC_SIGNATURE)
+        case UPIPE_SRC_GET_POSITION: {
             uint64_t *position_p = va_arg(args, uint64_t *);
             return _upipe_http_src_get_position(upipe, position_p);
         }
-        case UPIPE_HTTP_SRC_SET_POSITION: {
-            UBASE_SIGNATURE_CHECK(args, UPIPE_HTTP_SRC_SIGNATURE)
+        case UPIPE_SRC_SET_POSITION: {
             uint64_t offset = va_arg(args, uint64_t);
             return _upipe_http_src_set_position(upipe, offset);
         }
 
-        case UPIPE_HTTP_SRC_SET_RANGE: {
-            UBASE_SIGNATURE_CHECK(args, UPIPE_HTTP_SRC_SIGNATURE)
+        case UPIPE_SRC_SET_RANGE: {
             uint64_t offset = va_arg(args, uint64_t);
             uint64_t length = va_arg(args, uint64_t);
             return _upipe_http_src_set_range(upipe, offset, length);
+        }
+
+        case UPIPE_HTTP_SRC_SET_PROXY: {
+            UBASE_SIGNATURE_CHECK(args, UPIPE_HTTP_SRC_SIGNATURE)
+            const char *proxy = va_arg(args, const char *);
+            return _upipe_http_src_set_proxy(upipe, proxy);
         }
 
         default:
@@ -940,7 +1073,7 @@ static void upipe_http_src_free(struct upipe *upipe)
     }
     upipe_throw_dead(upipe);
 
-    free(upipe_http_src->host);
+    free(upipe_http_src->proxy);
     free(upipe_http_src->url);
     upipe_http_src_clean_output_size(upipe);
     upipe_http_src_clean_uclock(upipe);
@@ -954,17 +1087,166 @@ static void upipe_http_src_free(struct upipe *upipe)
     upipe_http_src_free_void(upipe);
 }
 
-/** module manager static descriptor */
-static struct upipe_mgr upipe_http_src_mgr = {
-    .refcount = NULL,
-    .signature = UPIPE_HTTP_SRC_SIGNATURE,
 
-    .upipe_alloc = upipe_http_src_alloc,
-    .upipe_input = NULL,
-    .upipe_control = upipe_http_src_control,
-
-    .upipe_mgr_control = NULL
+struct upipe_http_src_mgr {
+    /** upipe manager */
+    struct upipe_mgr upipe_mgr;
+    /** urefcount structure */
+    struct urefcount urefcount;
+    /** cookie list */
+    struct uchain cookies;
+    /** proxy url */
+    char *proxy;
 };
+
+UBASE_FROM_TO(upipe_http_src_mgr, upipe_mgr, upipe_mgr, upipe_mgr)
+UBASE_FROM_TO(upipe_http_src_mgr, urefcount, urefcount, urefcount);
+
+static int _upipe_http_src_mgr_set_cookie(struct upipe_mgr *upipe_mgr,
+                                          const char *cookie_string)
+{
+    struct upipe_http_src_mgr *upipe_http_src_mgr =
+        upipe_http_src_mgr_from_upipe_mgr(upipe_mgr);
+
+    if (!cookie_string)
+        return UBASE_ERR_INVALID;
+
+    //FIXME: use uref ?
+    struct upipe_http_src_cookie *cookie = malloc(sizeof (*cookie));
+    if (unlikely(cookie == NULL))
+        return UBASE_ERR_ALLOC;
+
+    cookie->value = strdup(cookie_string);
+    if (unlikely(cookie->value == NULL)) {
+        free(cookie);
+        return UBASE_ERR_ALLOC;
+    }
+    if (!ubase_check(ucookie_from_str(&cookie->ucookie, cookie->value))) {
+        free(cookie->value);
+        free(cookie);
+        return UBASE_ERR_INVALID;
+    }
+    ulist_add(&upipe_http_src_mgr->cookies,
+              upipe_http_src_cookie_to_uchain(cookie));
+    return UBASE_ERR_NONE;
+}
+
+static bool upipe_http_src_domain_match(struct ustring domain,
+                                        const char *string)
+{
+    return ustring_casematch_sfx(ustring_from_str(string), domain);
+}
+
+static bool upipe_http_src_path_match(struct ustring path,
+                                      const char *string)
+{
+    return ustring_match(ustring_from_str(string), path);
+}
+
+static int _upipe_http_src_mgr_iterate_cookie(struct upipe_mgr *mgr,
+                                              const char *domain,
+                                              const char *path,
+                                              struct uchain **uchain_p)
+{
+    struct upipe_http_src_mgr *upipe_http_src_mgr =
+        upipe_http_src_mgr_from_upipe_mgr(mgr);
+
+    struct uchain *first;
+    if (!*uchain_p)
+        first = &upipe_http_src_mgr->cookies;
+    else
+        first = *uchain_p;
+
+    for (struct uchain *uchain = first->next;
+         uchain != &upipe_http_src_mgr->cookies;
+         uchain = uchain->next) {
+        struct upipe_http_src_cookie *cookie =
+            upipe_http_src_cookie_from_uchain(uchain);
+        if (!upipe_http_src_domain_match(cookie->ucookie.domain, domain) ||
+            !upipe_http_src_path_match(cookie->ucookie.path, path))
+            continue;
+
+        *uchain_p = uchain;
+        return UBASE_ERR_NONE;
+    }
+
+    *uchain_p = NULL;
+    return UBASE_ERR_NONE;
+}
+
+static int _upipe_http_src_mgr_get_proxy(struct upipe_mgr *mgr,
+                                         const char **proxy_p)
+{
+    struct upipe_http_src_mgr *upipe_http_src_mgr =
+        upipe_http_src_mgr_from_upipe_mgr(mgr);
+    if (proxy_p)
+        *proxy_p = upipe_http_src_mgr->proxy;
+    return UBASE_ERR_NONE;
+}
+
+static int _upipe_http_src_mgr_set_proxy(struct upipe_mgr *mgr,
+                                         const char *proxy)
+{
+    struct upipe_http_src_mgr *upipe_http_src_mgr =
+        upipe_http_src_mgr_from_upipe_mgr(mgr);
+    ubase_clean_str(&upipe_http_src_mgr->proxy);
+    if (proxy == NULL)
+        return UBASE_ERR_NONE;
+    upipe_http_src_mgr->proxy = strdup(proxy);
+    if (unlikely(upipe_http_src_mgr->proxy == NULL))
+        return UBASE_ERR_ALLOC;
+    return UBASE_ERR_NONE;
+}
+
+static int upipe_http_src_mgr_control(struct upipe_mgr *upipe_mgr,
+                                      int command, va_list args)
+{
+    switch (command) {
+    case UPIPE_HTTP_SRC_MGR_SET_COOKIE: {
+        UBASE_SIGNATURE_CHECK(args, UPIPE_HTTP_SRC_SIGNATURE)
+        const char *cookie_string = va_arg(args, const char *);
+        return _upipe_http_src_mgr_set_cookie(upipe_mgr, cookie_string);
+    }
+    case UPIPE_HTTP_SRC_MGR_ITERATE_COOKIE: {
+        UBASE_SIGNATURE_CHECK(args, UPIPE_HTTP_SRC_SIGNATURE)
+        const char *domain = va_arg(args, const char *);
+        const char *path = va_arg(args, const char *);
+        struct uchain **uchain_p = va_arg(args, struct uchain **);
+        return _upipe_http_src_mgr_iterate_cookie(upipe_mgr, domain, path,
+                                                  uchain_p);
+    }
+
+    case UPIPE_HTTP_SRC_MGR_GET_PROXY: {
+        UBASE_SIGNATURE_CHECK(args, UPIPE_HTTP_SRC_SIGNATURE)
+        const char **proxy_p = va_arg(args, const char **);
+        return _upipe_http_src_mgr_get_proxy(upipe_mgr, proxy_p);
+    }
+    case UPIPE_HTTP_SRC_MGR_SET_PROXY: {
+        UBASE_SIGNATURE_CHECK(args, UPIPE_HTTP_SRC_SIGNATURE)
+        const char *proxy = va_arg(args, const char *);
+        return _upipe_http_src_mgr_set_proxy(upipe_mgr, proxy);
+    }
+    }
+    return UBASE_ERR_UNHANDLED;
+}
+
+static void upipe_http_src_mgr_free(struct urefcount *urefcount)
+{
+    struct upipe_http_src_mgr *upipe_http_src_mgr =
+        upipe_http_src_mgr_from_urefcount(urefcount);
+
+    struct uchain *uchain, *uchain_tmp;
+    ulist_delete_foreach(&upipe_http_src_mgr->cookies, uchain, uchain_tmp) {
+        struct upipe_http_src_cookie *cookie =
+            upipe_http_src_cookie_from_uchain(uchain);
+        ulist_delete(uchain);
+        free(cookie->value);
+        free(cookie);
+    }
+    free(upipe_http_src_mgr->proxy);
+    urefcount_clean(urefcount);
+    free(upipe_http_src_mgr);
+}
 
 /** @This returns the management structure for all http source pipes.
  *
@@ -972,5 +1254,28 @@ static struct upipe_mgr upipe_http_src_mgr = {
  */
 struct upipe_mgr *upipe_http_src_mgr_alloc(void)
 {
-    return &upipe_http_src_mgr;
+    struct upipe_http_src_mgr *upipe_http_src_mgr =
+        malloc(sizeof (*upipe_http_src_mgr));
+    if (unlikely(upipe_http_src_mgr == NULL))
+        return NULL;
+    struct upipe_mgr *upipe_mgr =
+        upipe_http_src_mgr_to_upipe_mgr(upipe_http_src_mgr);
+
+    struct urefcount *urefcount =
+        upipe_http_src_mgr_to_urefcount(upipe_http_src_mgr);
+    urefcount_init(urefcount, upipe_http_src_mgr_free);
+
+    memset(upipe_mgr, 0, sizeof (struct upipe_mgr));
+    *upipe_mgr = (struct upipe_mgr) {
+        .signature = UPIPE_HTTP_SRC_SIGNATURE,
+        .upipe_event_str = uprobe_http_src_event_str,
+        .upipe_alloc = upipe_http_src_alloc,
+        .upipe_control = upipe_http_src_control,
+        .upipe_mgr_control = upipe_http_src_mgr_control,
+    };
+    upipe_mgr->refcount = urefcount;
+    ulist_init(&upipe_http_src_mgr->cookies);
+    upipe_http_src_mgr->proxy = NULL;
+
+    return upipe_http_src_mgr_to_upipe_mgr(upipe_http_src_mgr);
 }

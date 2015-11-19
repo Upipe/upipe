@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2012 OpenHeadend S.A.R.L.
+ * Copyright (C) 2012-2015 OpenHeadend S.A.R.L.
  *
  * Authors: Christophe Massiot <massiot@via.ecp.fr>
  *
@@ -77,13 +77,17 @@ static inline bool udeal_init(struct udeal *udeal)
  * @param upump_mgr management structure for this event loop
  * @param cb function to call when the watcher triggers
  * @param opaque pointer to the module's internal structure
+ * @param refcount pointer to urefcount structure to increment during callback,
+ * or NULL
  * @return pointer to allocated watcher, or NULL in case of failure
  */
 static inline struct upump *udeal_upump_alloc(struct udeal *udeal,
                                               struct upump_mgr *upump_mgr,
-                                              upump_cb cb, void *opaque)
+                                              upump_cb cb, void *opaque,
+                                              struct urefcount *refcount)
 {
-    return ueventfd_upump_alloc(&udeal->event, upump_mgr, cb, opaque);
+    return ueventfd_upump_alloc(&udeal->event, upump_mgr, cb, opaque,
+                                refcount);
 }
 
 /** @This starts the watcher and tries to immediately run the call-back.

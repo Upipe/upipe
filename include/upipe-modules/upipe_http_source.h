@@ -38,63 +38,8 @@ extern "C" {
 
 #define UPIPE_HTTP_SRC_SIGNATURE UBASE_FOURCC('h','t','t','p')
 
-/** @This extends upipe_command with specific commands for http source. */
-enum upipe_http_src_command {
-    UPIPE_HTTP_SRC_SENTINEL = UPIPE_CONTROL_LOCAL,
-
-    /** returns the reading position of the current http request, in octets
-     * (uint64_t *) */
-    UPIPE_HTTP_SRC_GET_POSITION,
-    /** asks to get at the given position (uint64_t), using Range header */
-    UPIPE_HTTP_SRC_SET_POSITION,
-    /** asks to get at the given position (uint64_t), the given size
-     * (uint64_t), using Range header */
-    UPIPE_HTTP_SRC_SET_RANGE,
-};
-
-/** @This returns the reading position of the current http request.
- *
- * @param upipe description structure of the pipe
- * @param position_p filled in with the reading position, in octets
- * @return an error code
- */
-static inline int upipe_http_src_get_position(struct upipe *upipe,
-                                              uint64_t *position_p)
-{
-    return upipe_control(upipe, UPIPE_HTTP_SRC_GET_POSITION,
-                         UPIPE_HTTP_SRC_SIGNATURE, position_p);
-}
-
-/** @This request the given position using Range header
- *
- * @param upipe description structure of the pipe
- * @param position new reading position, in octets (between 0 and the size)
- * @return an error code
- */
-static inline int upipe_http_src_set_position(struct upipe *upipe,
-                                              uint64_t position)
-{
-    return upipe_control(upipe, UPIPE_HTTP_SRC_SET_POSITION,
-                         UPIPE_HTTP_SRC_SIGNATURE, position);
-}
-
-/** @This request the given range
- *
- * @param upipe description structure of the pipe
- * @param offset range starts at offset, in octets
- * @param length octets to read from offset, in octets
- * @return an error code
- */
-static inline int upipe_http_src_set_range(struct upipe *upipe,
-                                           uint64_t offset,
-                                           uint64_t length)
-{
-    return upipe_control(upipe, UPIPE_HTTP_SRC_SET_RANGE,
-                         UPIPE_HTTP_SRC_SIGNATURE, offset, length);
-}
-
 /** @This extends uprobe_event with specific events for http source. */
-enum upipe_http_src_event {
+enum uprobe_http_src_event {
     UPROBE_HTTP_SRC_SENTINEL = UPROBE_LOCAL,
 
     /** request receive a redirect (302) response
@@ -102,12 +47,138 @@ enum upipe_http_src_event {
     UPROBE_HTTP_SRC_REDIRECT,
 };
 
+/** @This converts an enum uprobe_http_src_event to a string.
+ *
+ * @param event the enum to convert
+ * @return a string
+ */
+static inline const char *uprobe_http_src_event_str(int event)
+{
+    switch ((enum uprobe_http_src_event)event) {
+    UBASE_CASE_TO_STR(UPROBE_HTTP_SRC_REDIRECT);
+    case UPROBE_HTTP_SRC_SENTINEL: break;
+    }
+    return NULL;
+}
+
+/** @This throw a redirect event.
+ *
+ * @param upipe description structure of the pipe
+ * @param uri the temporary uri
+ * @return an error code
+ */
 static inline int upipe_http_src_throw_redirect(struct upipe *upipe,
                                                 const char *uri)
 {
     upipe_notice_va(upipe, "throw redirect to %s", uri);
     return upipe_throw(upipe, UPROBE_HTTP_SRC_REDIRECT,
                        UPIPE_HTTP_SRC_SIGNATURE, uri);
+}
+
+/** @This extends upipe_command with specific commands for http source. */
+enum upipe_http_src_command {
+    UPIPE_HTTP_SRC_SENTINEL = UPIPE_CONTROL_LOCAL,
+
+    /** set the http proxy to use (const char *) */
+    UPIPE_HTTP_SRC_SET_PROXY,
+};
+
+/** @This converts an enum upipe_http_src_command to a string.
+ *
+ * @param cmd the enum to convert
+ * @return a string
+ */
+static inline const char *upipe_http_src_command_str(int cmd)
+{
+    switch ((enum upipe_http_src_command)cmd) {
+    UBASE_CASE_TO_STR(UPIPE_HTTP_SRC_SET_PROXY);
+    case UPIPE_HTTP_SRC_SENTINEL: break;
+    }
+    return NULL;
+}
+
+/** @This sets the http proxy to use.
+ *
+ * @param upipe description structure of the pipe
+ * @param proxy the proxy url
+ * @return an error code
+ */
+static inline int upipe_http_src_set_proxy(struct upipe *upipe,
+                                           const char *proxy)
+{
+    return upipe_control(upipe, UPIPE_HTTP_SRC_SET_PROXY,
+                         UPIPE_HTTP_SRC_SIGNATURE, proxy);
+}
+
+/** @This extends upipe_mgr_command with specific commands for http source. */
+enum upipe_http_src_mgr_command {
+    UPIPE_HTTP_SRC_MGR_SENTINEL = UPIPE_MGR_CONTROL_LOCAL,
+
+    /** get the proxy url (const char **) */
+    UPIPE_HTTP_SRC_MGR_GET_PROXY,
+    /** set the proxy url (const char *) */
+    UPIPE_HTTP_SRC_MGR_SET_PROXY,
+
+    /** add a cookie (const char *) */
+    UPIPE_HTTP_SRC_MGR_SET_COOKIE,
+    /** iterate over cookies */
+    UPIPE_HTTP_SRC_MGR_ITERATE_COOKIE,
+};
+
+/** @This sets the proxy url to use by default for the new allocated pipes.
+ *
+ * @param mgr pointer to upipe manager
+ * @param proxy the proxy url
+ * @return an error code
+ */
+static inline int upipe_http_src_mgr_set_proxy(struct upipe_mgr *mgr,
+                                               const char *proxy)
+{
+    return upipe_mgr_control(mgr, UPIPE_HTTP_SRC_MGR_SET_PROXY,
+                             UPIPE_HTTP_SRC_SIGNATURE, proxy);
+}
+
+/** @This gets the proxy url to use by default for the new allocated pipes.
+ *
+ * @param mgr pointer to upipe manager
+ * @param proxy_p a pointer the proxy url
+ * @return an error code
+ */
+static inline int upipe_http_src_mgr_get_proxy(struct upipe_mgr *mgr,
+                                               const char **proxy_p)
+{
+    return upipe_mgr_control(mgr, UPIPE_HTTP_SRC_MGR_GET_PROXY,
+                             UPIPE_HTTP_SRC_SIGNATURE, proxy_p);
+}
+
+/** @This adds a cookie in the manager cookie list.
+ *
+ * @param mgr pointer to upipe manager
+ * @param string the cookie string to add
+ * @return an error code
+ */
+static inline int upipe_http_src_mgr_set_cookie(struct upipe_mgr *mgr,
+                                                const char *string)
+{
+    return upipe_mgr_control(mgr, UPIPE_HTTP_SRC_MGR_SET_COOKIE,
+                             UPIPE_HTTP_SRC_SIGNATURE, string);
+}
+
+/** @This iterates over the manager cookie list.
+ *
+ * @param mgr pointer to upipe manager
+ * @param domain the domain to match
+ * @param path the path to match
+ * @param uchain_p iterator
+ * @return an error code
+ */
+static inline int upipe_http_src_mgr_iterate_cookie(struct upipe_mgr *mgr,
+                                                    const char *domain,
+                                                    const char *path,
+                                                    struct uchain **uchain_p)
+{
+    return upipe_mgr_control(mgr, UPIPE_HTTP_SRC_MGR_ITERATE_COOKIE,
+                             UPIPE_HTTP_SRC_SIGNATURE, domain, path, uchain_p);
 }
 
 /** @This returns the management structure for all http sources.

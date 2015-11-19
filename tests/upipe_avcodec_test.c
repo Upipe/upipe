@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2013-2014 OpenHeadend S.A.R.L.
+ * Copyright (C) 2013-2015 OpenHeadend S.A.R.L.
  *
  * Authors: Benjamin Cohen <bencoh@notk.org>
  *
@@ -255,7 +255,8 @@ void *thread_start(void *_thread)
     uref_free(flow);
     thread->limit = FRAMES_LIMIT;
 
-    struct upump *source = upump_alloc_idler(upump_mgr, source_idler, thread);
+    struct upump *source = upump_alloc_idler(upump_mgr, source_idler, thread,
+                                             NULL);
     upump_start(source);
 
     ev_loop(loop, 0);

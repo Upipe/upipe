@@ -124,7 +124,7 @@ static int catch(struct uprobe *uprobe, struct upipe *upipe,
 
 /** helper phony pipe */
 struct udpsrc_test {
-	int counter;
+    int counter;
     struct uref *flow;
     struct upipe upipe;
 };
@@ -140,7 +140,7 @@ static struct upipe *test_alloc(struct upipe_mgr *mgr, struct uprobe *uprobe,
     assert(udpsrc_test != NULL);
     udpsrc_test->flow = NULL;
     udpsrc_test->counter = 0;
-	upipe_init(&udpsrc_test->upipe, mgr, uprobe);
+    upipe_init(&udpsrc_test->upipe, mgr, uprobe);
     upipe_throw_ready(&udpsrc_test->upipe);
     return &udpsrc_test->upipe;
 }
@@ -149,9 +149,9 @@ static struct upipe *test_alloc(struct upipe_mgr *mgr, struct uprobe *uprobe,
 static void test_input(struct upipe *upipe, struct uref *uref,
                        struct upump **upump_p)
 {
-	uint8_t buf[BUF_SIZE], str[BUF_SIZE];
-	const uint8_t *rbuf;
-	struct udpsrc_test *udpsrc_test = udpsrc_test_from_upipe(upipe);
+    uint8_t buf[BUF_SIZE], str[BUF_SIZE];
+    const uint8_t *rbuf;
+    struct udpsrc_test *udpsrc_test = udpsrc_test_from_upipe(upipe);
     assert(uref != NULL);
 
     if ((rbuf = uref_block_peek(uref, 0, -1, buf))) {
@@ -191,7 +191,7 @@ static void test_free(struct upipe *upipe)
     struct udpsrc_test *udpsrc_test = udpsrc_test_from_upipe(upipe);
     if (udpsrc_test->flow)
         uref_free(udpsrc_test->flow);
-	upipe_clean(upipe);
+    upipe_clean(upipe);
     free(udpsrc_test);
 }
 
@@ -207,20 +207,20 @@ static struct upipe_mgr udpsrc_test_mgr = {
 /* packet generator */
 static void genpackets(struct upump *unused)
 {
-	int i;
-	uint8_t buf[BUF_SIZE];
-	memset(buf, 0, sizeof(buf));
-	printf("Counter: %d\n", counter);
-	if (counter > 100) {
-		upump_stop(write_pump);
-		upipe_set_uri(upipe_udpsrc, NULL);
-		return;
-	}
-	for (i=0; i < 10; i++) {
-		snprintf((char *)buf, BUF_SIZE, FORMAT, counter);
-		counter++;
-		sendto(sockfd, buf, BUF_SIZE, 0, p->ai_addr, p->ai_addrlen);
-	}
+    int i;
+    uint8_t buf[BUF_SIZE];
+    memset(buf, 0, sizeof(buf));
+    printf("Counter: %d\n", counter);
+    if (counter > 100) {
+        upump_stop(write_pump);
+        upipe_set_uri(upipe_udpsrc, NULL);
+        return;
+    }
+    for (i=0; i < 10; i++) {
+        snprintf((char *)buf, BUF_SIZE, FORMAT, counter);
+        counter++;
+        sendto(sockfd, buf, BUF_SIZE, 0, p->ai_addr, p->ai_addrlen);
+    }
 }
 
 /* packet generator */
@@ -228,34 +228,34 @@ static void genpackets2(struct upump *upump)
 {
     struct uref *uref;
     uint8_t *buf;
-	int i, size = -1;
+    int i, size = -1;
 
-	printf("Counter: %d\n", counter);
-	if (counter > 200) {
-		upump_stop(write_pump);
-		upipe_set_uri(upipe_udpsrc, NULL);
-		return;
-	}
+    printf("Counter: %d\n", counter);
+    if (counter > 200) {
+        upump_stop(write_pump);
+        upipe_set_uri(upipe_udpsrc, NULL);
+        return;
+    }
 
-	for (i=0; i < 10; i++) {
+    for (i=0; i < 10; i++) {
         uref = uref_block_alloc(uref_mgr, ubuf_mgr, BUF_SIZE);
         uref_block_write(uref, 0, &size, &buf);
         assert(size == BUF_SIZE);
         memset(buf, 0, size);
-		snprintf((char *)buf, BUF_SIZE, FORMAT, counter);
+        snprintf((char *)buf, BUF_SIZE, FORMAT, counter);
         uref_block_unmap(uref, 0);
-		counter++;
+        counter++;
         upipe_input(upipe_udpsink, uref, NULL);
-	}
+    }
 }
 
 int main(int argc, char *argv[])
 {
-	char udp_uri[512], port_str[8];
-	int i, port;
-	bool ret;
+    char udp_uri[512], port_str[8];
+    int i, port;
+    bool ret;
 
-	/* env */
+    /* env */
     struct ev_loop *loop = ev_default_loop(0);
     struct umem_mgr *umem_mgr = umem_alloc_mgr_alloc();
     assert(umem_mgr != NULL);
@@ -292,7 +292,7 @@ int main(int argc, char *argv[])
                              "udpsrc_test"));
 
 
-	/* udpsrc */
+    /* udpsrc */
     struct upipe_mgr *upipe_udpsrc_mgr = upipe_udpsrc_mgr_alloc();
     assert(upipe_udpsrc_mgr != NULL);
     upipe_udpsrc = upipe_void_alloc(upipe_udpsrc_mgr,
@@ -302,45 +302,45 @@ int main(int argc, char *argv[])
     ubase_assert(upipe_set_output(upipe_udpsrc, udpsrc_test));
     ubase_assert(upipe_set_output_size(upipe_udpsrc, READ_SIZE));
     ubase_assert(upipe_attach_uclock(upipe_udpsrc));
-	srand(42);
+    srand(42);
 
     upipe_set_uri(upipe_udpsrc, "@127.0.0.1:42125");
     upipe_set_uri(upipe_udpsrc, NULL);
 
-	for (i=0; i < 10; i++) {
-		port = ((rand() % 40000) + 1024);
-		snprintf(udp_uri, sizeof(udp_uri), "@127.0.0.1:%d", port);
-		printf("Trying uri: %s ...\n", udp_uri);
-		if (( ret = ubase_check(upipe_set_uri(upipe_udpsrc, udp_uri)) )) {
-			break;
-		}
-	}
-	assert(ret);
+    for (i=0; i < 10; i++) {
+        port = ((rand() % 40000) + 1024);
+        snprintf(udp_uri, sizeof(udp_uri), "@127.0.0.1:%d", port);
+        printf("Trying uri: %s ...\n", udp_uri);
+        if (( ret = ubase_check(upipe_set_uri(upipe_udpsrc, udp_uri)) )) {
+            break;
+        }
+    }
+    assert(ret);
 
-	/* open client socket */
-	memset(&hints, 0, sizeof(hints));
-	hints.ai_family = AF_UNSPEC;
-	hints.ai_socktype = SOCK_DGRAM;
-	snprintf(port_str, sizeof(port_str), "%d", port);
-	assert(getaddrinfo("127.0.0.1", port_str, &hints, &servinfo) == 0);
-	for (p = servinfo; p != NULL; p = p->ai_next) {
-		if (( sockfd = socket(p->ai_family, p->ai_socktype, p->ai_protocol)) == -1) {
-	        continue;
-		}
-		break;
-	}
-	assert(p);
+    /* open client socket */
+    memset(&hints, 0, sizeof(hints));
+    hints.ai_family = AF_UNSPEC;
+    hints.ai_socktype = SOCK_DGRAM;
+    snprintf(port_str, sizeof(port_str), "%d", port);
+    assert(getaddrinfo("127.0.0.1", port_str, &hints, &servinfo) == 0);
+    for (p = servinfo; p != NULL; p = p->ai_next) {
+        if (( sockfd = socket(p->ai_family, p->ai_socktype, p->ai_protocol)) == -1) {
+            continue;
+        }
+        break;
+    }
+    assert(p);
 
-    write_pump = upump_alloc_idler(upump_mgr, genpackets, NULL);
-	assert(write_pump);
-	upump_start(write_pump);
+    write_pump = upump_alloc_idler(upump_mgr, genpackets, NULL, NULL);
+    assert(write_pump);
+    upump_start(write_pump);
 
-	/* fire */
+    /* fire */
     ev_loop(loop, 0);
 
-	assert(udpsrc_test_from_upipe(udpsrc_test)->counter == 110);
+    assert(udpsrc_test_from_upipe(udpsrc_test)->counter == 110);
     close(sockfd);
-	upump_free(write_pump);
+    upump_free(write_pump);
 
     /* now test upipe_udp_sink */
     struct uref *flow_def = uref_block_flow_alloc_def(uref_mgr, "bar");
@@ -354,26 +354,26 @@ int main(int argc, char *argv[])
     uref_free(flow_def);
 
     /* reset source uri */
-	for (i=0; i < 10; i++) {
-		port = ((rand() % 40000) + 1024);
-		snprintf(udp_uri, sizeof(udp_uri), "@127.0.0.1:%d", port);
-		printf("Trying uri: %s ...\n", udp_uri);
-		if (( ret = ubase_check(upipe_set_uri(upipe_udpsrc, udp_uri)) )) {
-			break;
-		}
-	}
-	assert(ret);
+    for (i=0; i < 10; i++) {
+        port = ((rand() % 40000) + 1024);
+        snprintf(udp_uri, sizeof(udp_uri), "@127.0.0.1:%d", port);
+        printf("Trying uri: %s ...\n", udp_uri);
+        if (( ret = ubase_check(upipe_set_uri(upipe_udpsrc, udp_uri)) )) {
+            break;
+        }
+    }
+    assert(ret);
     ubase_assert(upipe_udpsink_set_uri(upipe_udpsink, udp_uri+1, 0));
 
     /* redefine write pump */
-    write_pump = upump_alloc_idler(upump_mgr, genpackets2, NULL);
+    write_pump = upump_alloc_idler(upump_mgr, genpackets2, NULL, NULL);
     assert(write_pump);
     upump_start(write_pump);
 
     /* fire again */
     ev_loop(loop, 0);
 
-	/* release */
+    /* release */
     upump_free(write_pump);
     upipe_release(upipe_udpsrc);
     upipe_release(upipe_udpsink);
@@ -388,7 +388,7 @@ int main(int argc, char *argv[])
     uprobe_release(logger);
     uprobe_clean(&uprobe);
 
-	freeaddrinfo(servinfo);
+    freeaddrinfo(servinfo);
 
     ev_default_destroy();
     return 0;

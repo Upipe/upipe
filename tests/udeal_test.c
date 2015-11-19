@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2012-2013 OpenHeadend S.A.R.L.
+ * Copyright (C) 2012-2015 OpenHeadend S.A.R.L.
  *
  * Authors: Christophe Massiot
  *
@@ -111,7 +111,7 @@ static void *test_thread(void *_thread)
     assert(upump_mgr != NULL);
 
     struct upump *upump = udeal_upump_alloc(&udeal, upump_mgr, test_grab,
-                                              thread);
+                                            thread, NULL);
     assert(upump != NULL);
 
     udeal_start(&udeal, upump);

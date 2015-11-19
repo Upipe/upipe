@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2014 OpenHeadend S.A.R.L.
+ * Copyright (C) 2014-2015 OpenHeadend S.A.R.L.
  *
  * Authors: Christophe Massiot
  *
@@ -34,8 +34,10 @@
 extern "C" {
 #endif
 
+#include <upipe/uclock.h>
 #include <upipe/uref.h>
 #include <upipe/uref_attr.h>
+#include <upipe/uref_clock.h>
 #include <upipe/ubuf.h>
 #include <upipe/ubuf_sound.h>
 
@@ -186,6 +188,41 @@ static inline int uref_sound_replace(struct uref *uref,
     if (uref->ubuf == NULL)
         return UBASE_ERR_INVALID;
     return ubuf_sound_replace(ubuf_mgr, &uref->ubuf, skip, new_size);
+}
+
+/** @internal @This consumes samples off a sound uref, and adjusts dates
+ * and duration accordingly.
+ *
+ * @param uref uref structure
+ * @param consume number of samples to consume from uref
+ * @param samplerate sample rate
+ * @return an error code
+ */
+static inline int uref_sound_consume(struct uref *uref, size_t consume,
+                                     uint64_t samplerate)
+{
+    UBASE_RETURN(uref_sound_resize(uref, consume, -1))
+
+    size_t size;
+    uref_sound_size(uref, &size, NULL);
+
+    uint64_t duration = (uint64_t)size * UCLOCK_FREQ / samplerate;
+    uref_clock_set_duration(uref, duration);
+
+    uint64_t ts_offset = (uint64_t)consume * UCLOCK_FREQ / samplerate;
+    uint64_t date;
+    int type;
+    uref_clock_get_date_prog(uref, &date, &type);
+    if (type != UREF_DATE_NONE)
+        uref_clock_set_date_prog(uref, date + ts_offset, type);
+    uref_clock_get_date_sys(uref, &date, &type);
+    if (type != UREF_DATE_NONE)
+        uref_clock_set_date_sys(uref, date + ts_offset, type);
+    uref_clock_get_date_orig(uref, &date, &type);
+    if (type != UREF_DATE_NONE)
+        uref_clock_set_date_orig(uref, date + ts_offset, type);
+
+    return UBASE_ERR_NONE;
 }
 
 #ifdef __cplusplus

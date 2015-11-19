@@ -132,6 +132,7 @@ static bool upipe_udp_get_ifindex(struct upipe *upipe, const char *name, int *if
 
     if (ioctl(fd, SIOCGIFINDEX, &ifr) < 0) {
         upipe_err_va(upipe, "unable to get interface index (%m)");
+        close(fd);
         return false;
     }
 
@@ -217,6 +218,7 @@ static bool upipe_udp_parse_node_service(struct upipe *upipe,
             *intf++ = '\0';
             if (if_index != NULL) {
                 if (!upipe_udp_get_ifindex(upipe, intf, if_index)) {
+                    free(string);
                     return false;
                 };
             }
@@ -254,18 +256,12 @@ static bool upipe_udp_parse_node_service(struct upipe *upipe,
          * fails in certain cases, like when network is down. */
         struct in_addr addr;
         if (inet_aton(node, &addr) != 0) {
-            struct sockaddr_in *sin = malloc(sizeof(struct sockaddr_in));
-            sin->sin_family = AF_INET;
-            if (port != NULL) {
-                sin->sin_port = ntohs(atoi(port));
-            } else {
-                sin->sin_port = 0;
-            }
-            sin->sin_addr = addr;
-
-            memcpy(ss, sin, sizeof(struct sockaddr_in));
-            free(sin);
-
+            struct sockaddr_in sin;
+            memset(&sin, 0, sizeof (struct sockaddr_in));
+            sin.sin_family = AF_INET;
+            sin.sin_port = port != NULL ? ntohs(atoi(port)) : 0;
+            sin.sin_addr = addr;
+            memcpy(ss, &sin, sizeof(struct sockaddr_in));
             free(string);
             return true;
         }
@@ -344,11 +340,16 @@ int upipe_udp_open_socket(struct upipe *upipe, const char *_uri, int ttl,
     bool b_raw;
     int family;
     socklen_t sockaddr_len;
+#if !defined(__APPLE__) && !defined(__native_client__)
     char *ifname = NULL;
+#endif
+
+    if (!uri)
+        return -1;
 
     memset(&bind_addr, 0, sizeof(union sockaddru));
     memset(&connect_addr, 0, sizeof(union sockaddru));
-    
+
     bind_addr.ss.ss_family = AF_UNSPEC;
     connect_addr.ss.ss_family = AF_UNSPEC;
 
@@ -377,6 +378,7 @@ int upipe_udp_open_socket(struct upipe *upipe, const char *_uri, int ttl,
     }
 
     if (*token == '\0') {
+        free(uri);
         return -1;
     }
 
@@ -384,6 +386,7 @@ int upipe_udp_open_socket(struct upipe *upipe, const char *_uri, int ttl,
     if (token[0] != '@') {
         if (!upipe_udp_parse_node_service(upipe, token, &token, connect_port,
                                         &connect_if_index, &connect_addr.ss)) {
+            free(uri);
             return -1;
         }
         /* required on some architectures */
@@ -394,6 +397,7 @@ int upipe_udp_open_socket(struct upipe *upipe, const char *_uri, int ttl,
         token++;
         if (!upipe_udp_parse_node_service(upipe, token, &token, bind_port,
                                         &bind_if_index, &bind_addr.ss)) {
+            free(uri);
             return -1;
         }
         /* required on some architectures */
@@ -402,6 +406,7 @@ int upipe_udp_open_socket(struct upipe *upipe, const char *_uri, int ttl,
 
     if (bind_addr.ss.ss_family == AF_UNSPEC &&
          connect_addr.ss.ss_family == AF_UNSPEC) {
+        free(uri);
         return -1;
     }
 
@@ -450,6 +455,7 @@ int upipe_udp_open_socket(struct upipe *upipe, const char *_uri, int ttl,
 
     if (unlikely(*use_tcp && *use_raw)) {
         upipe_warn(upipe, "RAW sockets not implemented for tcp");
+        free(uri);
         return -1;
     }
 
@@ -573,7 +579,8 @@ normal_bind:
         /* Increase the receive buffer size to 1/2MB (8Mb/s during 1/2s) to
          * avoid packet loss caused by scheduling problems */
         i = 0x80000;
-        setsockopt(fd, SOL_SOCKET, SO_RCVBUF, (void *) &i, sizeof(i));
+        if (setsockopt(fd, SOL_SOCKET, SO_RCVBUF, (void *) &i, sizeof(i)))
+            upipe_warn(upipe, "fail to increase receive buffer");
 
         /* Join the multicast group if the socket is a multicast address */
         if (bind_addr.ss.ss_family == AF_INET
@@ -640,8 +647,7 @@ normal_bind:
                     close(fd);
                     return -1;
                 }
-                free(ifname);
-                ifname = NULL;
+                ubase_clean_str(&ifname);
             }
 #endif
         }

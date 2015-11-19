@@ -655,11 +655,8 @@ static struct upipe *upipe_sws_alloc(struct upipe_mgr *mgr,
     memset(upipe_sws->convert_ctx, 0, sizeof(upipe_sws->convert_ctx));
     for (int i = 0; i < 3; i++) {
         upipe_sws->convert_ctx[i] = sws_alloc_context();
-        if (!upipe_sws->convert_ctx[i]) {
-            uref_free(flow_def);
-            upipe_sws_free_flow(upipe);
+        if (!upipe_sws->convert_ctx[i])
             goto fail;
-        }
     }
 
     upipe_sws->flags = SWS_FULL_CHR_H_INP | SWS_ACCURATE_RND | SWS_LANCZOS;
@@ -679,7 +676,8 @@ fail:
             sws_freeContext(upipe_sws->convert_ctx[i]);
         upipe_sws->convert_ctx[i] = NULL;
     }
-
+    uref_free(flow_def);
+    upipe_sws_free_flow(upipe);
     return NULL;
 }
 

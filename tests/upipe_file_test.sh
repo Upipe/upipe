@@ -25,7 +25,7 @@ if [ "$UNAME" = "Darwin" ]; then
 fi
 
 # Run in valgrind, with leak checking enabled
-libtool --mode=execute valgrind -q --leak-check=full $VALGRIND_SUPPRESSIONS ./upipe_file_test Makefile "$TMP"/test2 > /dev/null 2> "$TMP"/logs
+../libtool --mode=execute valgrind -q --leak-check=full $VALGRIND_SUPPRESSIONS ./upipe_file_test Makefile "$TMP"/test2 > /dev/null 2> "$TMP"/logs
 RET=$?
 if test -s "$TMP"/logs; then
         cat "$TMP"/logs >&2

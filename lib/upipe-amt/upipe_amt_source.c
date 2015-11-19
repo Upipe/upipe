@@ -257,9 +257,7 @@ static void upipe_amtsrc_worker(struct upump *upump)
         uref_clock_set_cr_sys(uref, systime);
     if (unlikely(ret != upipe_amtsrc->output_size))
         uref_block_resize(uref, 0, ret);
-    upipe_use(upipe);
     upipe_amtsrc_output(upipe, uref, &upipe_amtsrc->upump);
-    upipe_release(upipe);
 }
 
 /** @internal @This checks if the pump may be allocated.
@@ -302,7 +300,7 @@ static int upipe_amtsrc_check(struct upipe *upipe, struct uref *flow_format)
 
     if (upipe_amtsrc->handle != NULL && upipe_amtsrc->upump == NULL) {
         struct upump *upump = upump_alloc_idler(upipe_amtsrc->upump_mgr,
-                                                upipe_amtsrc_worker, upipe);
+                upipe_amtsrc_worker, upipe, upipe->refcount);
         if (unlikely(upump == NULL)) {
             upipe_throw_fatal(upipe, UBASE_ERR_UPUMP);
             return UBASE_ERR_UPUMP;
@@ -346,8 +344,7 @@ static int upipe_amtsrc_set_uri(struct upipe *upipe, const char *uri)
         amt_closeChannel(upipe_amtsrc->handle);
         upipe_amtsrc->handle = NULL;
     }
-    free(upipe_amtsrc->uri);
-    upipe_amtsrc->uri = NULL;
+    ubase_clean_str(&upipe_amtsrc->uri);
     upipe_amtsrc_set_upump(upipe, NULL);
 
     if (unlikely(uri == NULL))
@@ -539,8 +536,8 @@ static int upipe_amtsrc_mgr_control(struct upipe_mgr *mgr,
     switch (command) {
         case UPIPE_AMTSRC_MGR_SET_TIMEOUT: {
             UBASE_SIGNATURE_CHECK(args, UPIPE_AMTSRC_SIGNATURE)
-            unsigned int timeout = va_arg(args, unsigned int);
             /* no longer present in libamt */
+            /* unsigned int timeout = va_arg(args, unsigned int); */
             /* amt_timeOut(timeout); */
             return UBASE_ERR_NONE;
         }

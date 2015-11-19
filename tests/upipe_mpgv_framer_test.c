@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2013-2014 OpenHeadend S.A.R.L.
+ * Copyright (C) 2013-2015 OpenHeadend S.A.R.L.
  *
  * Authors: Christophe Massiot
  *
@@ -32,6 +32,7 @@
 #include <upipe/uprobe.h>
 #include <upipe/uprobe_stdio.h>
 #include <upipe/uprobe_prefix.h>
+#include <upipe/uprobe_ubuf_mem.h>
 #include <upipe/umem.h>
 #include <upipe/umem_alloc.h>
 #include <upipe/udict.h>
@@ -138,6 +139,12 @@ static int test_control(struct upipe *upipe, int command, va_list args)
             uref_dump(flow_def, upipe->uprobe);
             return UBASE_ERR_NONE;
         }
+        case UPIPE_REGISTER_REQUEST: {
+            struct urequest *urequest = va_arg(args, struct urequest *);
+            return upipe_throw_provide_request(upipe, urequest);
+        }
+        case UPIPE_UNREGISTER_REQUEST:
+            return UBASE_ERR_NONE;
         default:
             assert(0);
             return UBASE_ERR_UNHANDLED;
@@ -177,6 +184,9 @@ int main(int argc, char *argv[])
     uprobe_init(&uprobe, catch, NULL);
     struct uprobe *uprobe_stdio = uprobe_stdio_alloc(&uprobe, stdout,
                                                      UPROBE_LOG_LEVEL);
+    assert(uprobe_stdio != NULL);
+    uprobe_stdio = uprobe_ubuf_mem_alloc(uprobe_stdio, umem_mgr,
+                                         UBUF_POOL_DEPTH, UBUF_POOL_DEPTH);
     assert(uprobe_stdio != NULL);
 
     struct uref *uref;

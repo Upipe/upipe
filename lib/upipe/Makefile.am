@@ -14,7 +14,9 @@ libupipe_la_SOURCES = \
 	ubuf_sound_mem.c \
 	udict_inline.c \
 	uref_std.c \
+	uref_uri.c \
 	uprobe_dejitter.c \
+	uprobe_loglevel.c \
 	uprobe_prefix.c \
 	uprobe_output.c \
 	uprobe_select_flows.c \
@@ -27,11 +29,13 @@ libupipe_la_SOURCES = \
 	uprobe_uclock.c \
 	uprobe_upump_mgr.c \
 	uprobe_uref_mgr.c \
-	upump_common.c
+	upump_common.c \
+	uuri.c \
+	ucookie.c
 
 libupipe_la_CPPFLAGS = -I$(top_builddir)/include -I$(top_srcdir)/include
 libupipe_la_CFLAGS = -Wall
-libupipe_la_LIBADD = @libadd_rt_lib@
+libupipe_la_LIBADD = @libadd_rt_lib@ -lm
 libupipe_la_LDFLAGS = -no-undefined
 
 pkgconfigdir = $(libdir)/pkgconfig
