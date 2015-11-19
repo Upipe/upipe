@@ -1311,6 +1311,12 @@ static bool upipe_h264f_activate_pps(struct upipe *upipe, uint32_t pps_id)
 
     upipe_h264f_stream_ue(s); /* pps_id */
     uint32_t sps_id = upipe_h264f_stream_ue(s);
+    if (unlikely(sps_id >= H264SPS_ID_MAX)) {
+        upipe_warn_va(upipe, "invalid SPS %"PRIu32, sps_id);
+        ubuf_block_stream_clean(s);
+        return false;
+    }
+
     if (!upipe_h264f_activate_sps(upipe, sps_id)) {
         ubuf_block_stream_clean(s);
         return false;
