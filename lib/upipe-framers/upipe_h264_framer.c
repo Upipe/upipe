@@ -556,13 +556,12 @@ static int upipe_h264f_stream_parse_hrd(struct upipe *upipe,
     upipe_h264f_stream_fill_bits(s, 2);
     ubuf_block_stream_skip_bits(s, 1); /* cbr_flag */
     ubuf_block_stream_skip_bits(s, 1);
-    cpb_cnt--;
-    while (cpb_cnt) {
+    int i;
+    for (i = 0; i < cpb_cnt; i++) {
         upipe_h264f_stream_ue(s);
         upipe_h264f_stream_ue(s);
         upipe_h264f_stream_fill_bits(s, 1);
         ubuf_block_stream_skip_bits(s, 1);
-        cpb_cnt--;
     }
 
     upipe_h264f_stream_fill_bits(s, 20);
