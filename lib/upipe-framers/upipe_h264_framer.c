@@ -2011,6 +2011,11 @@ static void upipe_h264f_work(struct upipe *upipe, struct upump **upump_p)
 
         upipe_h264f->au_size -= start_size;
         upipe_h264f_nal_end(upipe, upump_p);
+
+        if (upipe_h264f->flow_def_requested == NULL &&
+            upipe_h264f->flow_def_attr != NULL)
+            return;
+
         upipe_h264f->au_size += start_size;
         upipe_h264f->got_discontinuity = false;
         upipe_h264f->au_last_nal = start;
