@@ -340,8 +340,10 @@ static inline void urational_simplify(struct urational *urational)
         gcd = ubase_gcd(urational->num, urational->den);
     else
         gcd = ubase_gcd(-urational->num, urational->den);
-    urational->num /= gcd;
-    urational->den /= gcd;
+    if (gcd != 0) {
+        urational->num /= gcd;
+        urational->den /= gcd;
+    }
 }
 
 /** @This adds two rationals.
