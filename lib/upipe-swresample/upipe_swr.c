@@ -31,6 +31,7 @@
 #include <upipe/uprobe.h>
 #include <upipe/uref.h>
 #include <upipe/ubuf.h>
+#include <upipe/uref_clock.h>
 #include <upipe/uref_sound.h>
 #include <upipe/uref_sound_flow.h>
 #include <upipe/uref_dump.h>
@@ -59,6 +60,9 @@
 #include <libavutil/channel_layout.h>
 #include <libavutil/mathematics.h>
 #include <libswresample/swresample.h>
+
+/** typical frame size for latency calculation */
+#define FRAME_SIZE 1152
 
 /** @hidden */
 static bool upipe_swr_handle(struct upipe *upipe, struct uref *uref,
@@ -151,6 +155,14 @@ static bool upipe_swr_handle(struct upipe *upipe, struct uref *uref,
             upipe_av_samplefmt_from_flow_def(uref, &in_chan);
         uref_sound_flow_get_rate(uref, &in_rate);
 
+        if (upipe_swr->out_rate != 0 && in_rate != 0 &&
+            upipe_swr->out_rate != in_rate) {
+            uint64_t latency = 0;
+            uref_clock_get_latency(uref, &latency);
+            uref_clock_set_latency(uref,
+                    latency + FRAME_SIZE * UCLOCK_FREQ / in_rate);
+        }
+
         av_opt_set_int(upipe_swr->swr, "in_sample_fmt", in_fmt, 0);
         av_opt_set_int(upipe_swr->swr, "used_channel_count", 0, 0);
         av_opt_set_int(upipe_swr->swr, "in_channel_count", in_chan, 0);
@@ -208,11 +220,8 @@ static bool upipe_swr_handle(struct upipe *upipe, struct uref *uref,
                     out_rate, in_rate, AV_ROUND_UP);
     //upipe_verbose_va(upipe, "in: %zu out: %"PRIu64, in_samples, out_samples);
 
-    /* compute pts for next samples (see swresample.h for timebase) */
-    uint64_t pts = 0;
-    if (likely(ubase_check(uref_clock_get_pts_sys(uref, &pts)))) {
-        pts -= swr_get_delay(upipe_swr->swr, UCLOCK_FREQ);
-    }
+    /* compute delay (see swresample.h for timebase) */
+    uint64_t delay = swr_get_delay(upipe_swr->swr, UCLOCK_FREQ);
 
     const uint8_t *in_buf[upipe_swr->in_planes];
     if (unlikely(!ubase_check(uref_sound_read_uint8_t(uref, 0, -1, in_buf,
@@ -266,10 +275,13 @@ static bool upipe_swr_handle(struct upipe *upipe, struct uref *uref,
     uref_sound_resize(uref, 0, out_samples);
 
     /* set new pts and rebase */
-    if (likely(pts)) {
-        uref_clock_set_pts_sys(uref, pts);
-        uref_clock_rebase_pts_sys(uref);
-    }
+    uint64_t pts;
+    if (likely(ubase_check(uref_clock_get_pts_sys(uref, &pts))))
+        uref_clock_set_pts_sys(uref, pts - delay);
+    if (likely(ubase_check(uref_clock_get_pts_prog(uref, &pts))))
+        uref_clock_set_pts_prog(uref, pts - delay);
+    if (likely(ubase_check(uref_clock_get_pts_orig(uref, &pts))))
+        uref_clock_set_pts_orig(uref, pts - delay);
 
     upipe_swr_output(upipe, uref, upump_p);
     return true;
