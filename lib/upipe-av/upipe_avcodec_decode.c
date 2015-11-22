@@ -261,7 +261,7 @@ static int upipe_avcdec_get_buffer_pic(struct AVCodecContext *context,
     }
 
     /* Use avcodec width/height alignement, then resize pic. */
-    int width_aligned = context->width, height_aligned = context->height;
+    int width_aligned = frame->width, height_aligned = frame->height;
     avcodec_align_dimensions(context, &width_aligned, &height_aligned);
 
     /* Prepare flow definition attributes. */
