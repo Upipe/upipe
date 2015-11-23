@@ -594,7 +594,7 @@ static bool upipe_avcenc_encode_frame(struct upipe *upipe,
     upipe_avcenc->last_dts = dts;
     upipe_avcenc->last_dts_sys = dts_sys;
 
-    if (avpkt.flags & AV_PKT_FLAG_KEY)
+    if (codec->type == AVMEDIA_TYPE_VIDEO && (avpkt.flags & AV_PKT_FLAG_KEY))
         uref_flow_set_random(uref);
 
     if (upipe_avcenc->flow_def == NULL)
