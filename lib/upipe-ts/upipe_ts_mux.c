@@ -975,6 +975,7 @@ static int upipe_ts_mux_input_set_flow_def(struct upipe *upipe,
     original_au_per_sec.num = original_au_per_sec.den = 0;
     bool au_irregular = true;
     bool pes_alignment = false;
+    uint64_t coalesce_latency = 0;
 
     if (strstr(def, ".pic.sub.") != NULL) {
         input_type = UPIPE_TS_MUX_INPUT_OTHER;
@@ -1108,6 +1109,7 @@ static int upipe_ts_mux_input_set_flow_def(struct upipe *upipe,
         while (samples * nb_frames * UCLOCK_FREQ / rate < pes_min_duration)
             nb_frames++;
         samples *= nb_frames;
+        coalesce_latency = samples * nb_frames * UCLOCK_FREQ / rate;
 
         au_per_sec.num = rate;
         au_per_sec.den = samples;
@@ -1135,7 +1137,8 @@ static int upipe_ts_mux_input_set_flow_def(struct upipe *upipe,
     UBASE_FATAL(upipe, uref_block_flow_set_octetrate(flow_def_dup, octetrate));
     UBASE_FATAL(upipe, uref_block_flow_set_buffer_size(flow_def_dup,
                                                        buffer_size));
-    upipe_ts_mux_input->buffer_duration = UCLOCK_FREQ * buffer_size / octetrate;
+    upipe_ts_mux_input->buffer_duration =
+        UCLOCK_FREQ * buffer_size / octetrate + coalesce_latency;
 
     if (pes_alignment) {
         UBASE_FATAL(upipe, uref_ts_flow_set_pes_alignment(flow_def_dup))
