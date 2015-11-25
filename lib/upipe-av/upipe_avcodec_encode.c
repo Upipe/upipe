@@ -430,6 +430,16 @@ static void upipe_avcenc_build_flow_def(struct upipe *upipe)
         return;
     }
 
+    if (context->bit_rate) {
+        uref_block_flow_set_octetrate(flow_def, context->bit_rate / 8);
+        if (context->rc_buffer_size)
+            uref_block_flow_set_buffer_size(flow_def,
+                                            context->rc_buffer_size / 8);
+    }
+
+    if (context->codec->type == AVMEDIA_TYPE_AUDIO && context->frame_size > 0)
+        uref_sound_flow_set_samples(flow_def, context->frame_size);
+
     /* global headers (extradata) */
     if (context->extradata_size) {
         UBASE_FATAL(upipe,
@@ -909,16 +919,6 @@ static void upipe_avcenc_build_flow_def_attr(struct upipe *upipe)
     const char *codec_def = upipe_av_to_flow_def(codec->id);
     UBASE_FATAL(upipe, uref_flow_set_def_va(flow_def_attr, PREFIX_FLOW "%s",
                                       codec_def));
-
-    if (context->bit_rate) {
-        uref_block_flow_set_octetrate(flow_def_attr, context->bit_rate / 8);
-        if (context->rc_buffer_size)
-            uref_block_flow_set_buffer_size(flow_def_attr,
-                                            context->rc_buffer_size / 8);
-    }
-
-    if (codec->type == AVMEDIA_TYPE_AUDIO && context->frame_size > 0)
-        uref_sound_flow_set_samples(flow_def_attr, context->frame_size);
 
     /* Find out if flow def attributes have changed. */
     if (!upipe_avcenc_check_flow_def_attr(upipe, flow_def_attr)) {
