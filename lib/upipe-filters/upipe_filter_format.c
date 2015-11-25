@@ -295,6 +295,16 @@ static int upipe_ffmt_check_flow_format(struct upipe *upipe,
         struct urational sar, dar;
         if (ubase_check(uref_pic_flow_get_sar(upipe_ffmt->flow_def_wanted,
                                               &sar))) {
+            struct urational input_sar;
+            uint64_t hsize;
+            if (ubase_check(uref_pic_flow_get_hsize(flow_def, &hsize)) &&
+                ubase_check(uref_pic_flow_get_sar(flow_def, &input_sar))) {
+                struct urational sar_factor =
+                    urational_divide(&input_sar, &sar);
+                hsize = (hsize * sar_factor.num / sar_factor.den / 2) * 2;
+                uref_pic_flow_set_hsize(flow_def_dup, hsize);
+                uref_pic_flow_set_hsize_visible(flow_def_dup, hsize);
+            }
             uref_pic_flow_set_sar(flow_def, sar);
         } else if (ubase_check(uref_pic_flow_get_dar(
                         upipe_ffmt->flow_def_wanted, &dar))) {

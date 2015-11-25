@@ -116,6 +116,8 @@ struct upipe_avfsink_sub {
     int id;
     /** relevant flow definition attributes */
     struct uref *flow_def_check;
+    /** sample aspect ratio */
+    struct urational sar;
 
     /** buffered urefs */
     struct uchain urefs;
@@ -243,6 +245,7 @@ static int upipe_avfsink_sub_set_flow_def(struct upipe *upipe,
     uint64_t rate = 0, samples = 0;
     if (codec_id < AV_CODEC_ID_FIRST_AUDIO) {
         if (unlikely(!ubase_check(uref_pic_flow_get_fps(flow_def, &fps)) ||
+                     !fps.den ||
                      !ubase_check(uref_pic_flow_get_sar(flow_def, &sar)) ||
                      !ubase_check(uref_pic_flow_get_hsize(flow_def, &width)) ||
                      !ubase_check(uref_pic_flow_get_vsize(flow_def, &height)))) {
@@ -304,7 +307,6 @@ static int upipe_avfsink_sub_set_flow_def(struct upipe *upipe,
     }
     if (codec_id < AV_CODEC_ID_FIRST_AUDIO) {
         if (unlikely(!ubase_check(uref_pic_flow_set_fps(flow_def_check, fps)) ||
-                     !ubase_check(uref_pic_flow_set_sar(flow_def_check, sar)) ||
                      !ubase_check(uref_pic_flow_set_hsize(flow_def_check, width)) ||
                      !ubase_check(uref_pic_flow_set_vsize(flow_def_check, height)))) {
             free(extradata_alloc);
@@ -331,12 +333,19 @@ static int upipe_avfsink_sub_set_flow_def(struct upipe *upipe,
                                                           flow_def_check);
         free(extradata_alloc);
         uref_free(flow_def_check);
+
+        if (ret && codec_id < AV_CODEC_ID_FIRST_AUDIO &&
+            urational_cmp(&sar, &upipe_avfsink_sub->sar)) {
+            upipe_warn(upipe, "SAR is different");
+            upipe_throw_error(upipe, UBASE_ERR_BUSY);
+        }
         return ret ? UBASE_ERR_NONE : UBASE_ERR_BUSY;
     }
 
     /* Open a new avformat stream. */
     upipe_avfsink_sub->id = upipe_avfsink->context->nb_streams;
     upipe_avfsink_sub_store_flow_def_check(upipe, flow_def_check);
+    upipe_avfsink_sub->sar = sar;
 
     AVStream *stream = avformat_new_stream(upipe_avfsink->context, NULL);
     if (unlikely(stream == NULL)) {
