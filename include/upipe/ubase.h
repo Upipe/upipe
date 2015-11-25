@@ -346,6 +346,23 @@ static inline void urational_simplify(struct urational *urational)
     }
 }
 
+/** @This compares two rationals.
+ *
+ * @param urational1 pointer to rational 1
+ * @param urational2 pointer to rational 2
+ * @return 0 if both rationals are equal
+ */
+static inline int64_t urational_cmp(struct urational *urational1,
+                                    struct urational *urational2)
+{
+    if (!urational1->den && !urational2->den)
+        return 0;
+    if (!urational1->den || !urational2->den)
+        return INT64_MIN;
+    return urational1->num * (int64_t)urational2->den -
+           urational2->num * (int64_t)urational1->den;
+}
+
 /** @This adds two rationals.
  *
  * @param urational1 pointer to rational 1
