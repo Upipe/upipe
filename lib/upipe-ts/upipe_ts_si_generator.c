@@ -1631,10 +1631,10 @@ static int upipe_ts_sig_set_flow_def(struct upipe *upipe, struct uref *flow_def)
     if (flow_def == NULL)
         return UBASE_ERR_INVALID;
     UBASE_RETURN(uref_flow_match_def(flow_def, "void."))
-    uint64_t tsid, nid, onid;
-    UBASE_RETURN(uref_flow_get_id(flow_def, &tsid))
-    UBASE_RETURN(uref_ts_flow_get_nid(flow_def, &nid))
-    UBASE_RETURN(uref_ts_flow_get_onid(flow_def, &onid))
+    uint64_t tsid = 1, nid = 65535, onid = 65535;
+    uref_flow_get_id(flow_def, &tsid);
+    uref_ts_flow_get_nid(flow_def, &nid);
+    uref_ts_flow_get_onid(flow_def, &onid);
 
     struct uref *flow_def_dup;
     if (unlikely((flow_def_dup = uref_dup(flow_def)) == NULL)) {
