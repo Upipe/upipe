@@ -119,6 +119,8 @@ struct upipe_x264 {
     struct uref *flow_def_check;
     /** requested flow */
     struct uref *flow_def_requested;
+    /** requested headers */
+    bool headers_requested;
     /** output flow */
     struct uref *flow_def;
     /** output pipe */
@@ -366,6 +368,7 @@ static struct upipe *upipe_x264_alloc(struct upipe_mgr *mgr,
     upipe_x264_init_flow_def(upipe);
     upipe_x264_init_flow_def_check(upipe);
     upipe_x264->flow_def_requested = NULL;
+    upipe_x264->headers_requested = false;
 
     upipe_x264->last_dts = UINT64_MAX;
     upipe_x264->last_dts_sys = UINT64_MAX;
@@ -611,7 +614,7 @@ static void upipe_x264_build_flow_def(struct upipe *upipe)
     uref_clock_set_latency(flow_def, latency);
 
     /* global headers (extradata) */
-    if (!upipe_x264->params.b_repeat_headers) {
+    if (upipe_x264->headers_requested) {
         int i, ret, nal_num, size = 0;
         x264_nal_t *nals;
         ret = x264_encoder_headers(upipe_x264->encoder, &nals, &nal_num);
@@ -903,8 +906,8 @@ static int upipe_x264_check_flow_format(struct upipe *upipe,
     if (flow_format == NULL)
         return UBASE_ERR_INVALID;
 
-    upipe_x264->params.b_repeat_headers =
-        !ubase_check(uref_flow_get_global(flow_format));
+    upipe_x264->headers_requested =
+        ubase_check(uref_flow_get_global(flow_format));
 
     uref_free(upipe_x264->flow_def_requested);
     upipe_x264->flow_def_requested = NULL;
