@@ -34,6 +34,8 @@
 #include <upipe/upipe.h>
 #include <upipe/upipe_helper_upipe.h>
 #include <upipe/upipe_helper_urefcount.h>
+#include <upipe/upipe_helper_inner.h>
+#include <upipe/upipe_helper_uprobe.h>
 #include <upipe/upipe_helper_bin_output.h>
 #include <upipe-modules/upipe_worker_source.h>
 #include <upipe-modules/upipe_queue_sink.h>
@@ -94,8 +96,9 @@ struct upipe_wsrc {
 
 UPIPE_HELPER_UPIPE(upipe_wsrc, upipe, UPIPE_WSRC_SIGNATURE)
 UPIPE_HELPER_UREFCOUNT(upipe_wsrc, urefcount, upipe_wsrc_no_ref)
-UPIPE_HELPER_BIN_OUTPUT(upipe_wsrc, last_inner_probe, out_qsrc, output,
-                        output_request_list)
+UPIPE_HELPER_INNER(upipe_wsrc, out_qsrc)
+UPIPE_HELPER_UPROBE(upipe_wsrc, urefcount_real, last_inner_probe, NULL)
+UPIPE_HELPER_BIN_OUTPUT(upipe_wsrc, out_qsrc, output, output_request_list)
 
 UBASE_FROM_TO(upipe_wsrc, urefcount, urefcount_real, urefcount_real)
 
@@ -166,7 +169,8 @@ static struct upipe *_upipe_wsrc_alloc(struct upipe_mgr *mgr,
     upipe_init(upipe, mgr, uprobe);
     upipe_wsrc_init_urefcount(upipe);
     urefcount_init(upipe_wsrc_to_urefcount_real(upipe_wsrc), upipe_wsrc_free);
-    upipe_wsrc_init_bin_output(upipe, upipe_wsrc_to_urefcount_real(upipe_wsrc));
+    upipe_wsrc_init_last_inner_probe(upipe);
+    upipe_wsrc_init_bin_output(upipe);
     upipe_wsrc->source = NULL;
 
     uprobe_init(&upipe_wsrc->proxy_probe, upipe_wsrc_proxy_probe, NULL);
@@ -196,7 +200,7 @@ static struct upipe *_upipe_wsrc_alloc(struct upipe_mgr *mgr,
         upipe_set_max_length(out_qsink, queue_length - UINT8_MAX);
 
     upipe_attach_upump_mgr(out_qsrc);
-    upipe_wsrc_store_last_inner(upipe, out_qsrc);
+    upipe_wsrc_store_bin_output(upipe, out_qsrc);
 
     /* last remote */
     struct upipe *last_remote = upipe_use(remote);
@@ -259,7 +263,7 @@ static void upipe_wsrc_free(struct urefcount *urefcount_real)
     struct upipe *upipe = upipe_wsrc_to_upipe(upipe_wsrc);
     upipe_throw_dead(upipe);
     uprobe_clean(&upipe_wsrc->proxy_probe);
-    uprobe_clean(&upipe_wsrc->last_inner_probe);
+    upipe_wsrc_clean_last_inner_probe(upipe);
     urefcount_clean(urefcount_real);
     upipe_wsrc_clean_urefcount(upipe);
     upipe_clean(upipe);
