@@ -56,6 +56,8 @@
 #include <upipe/upipe_helper_void.h>
 #include <upipe/upipe_helper_uref_mgr.h>
 #include <upipe/upipe_helper_flow.h>
+#include <upipe/upipe_helper_inner.h>
+#include <upipe/upipe_helper_uprobe.h>
 #include <upipe/upipe_helper_bin_input.h>
 #include <upipe/upipe_helper_bin_output.h>
 #include <upipe/upipe_helper_sync.h>
@@ -294,6 +296,7 @@ UPIPE_HELPER_VOID(upipe_ts_demux)
 UPIPE_HELPER_OUTPUT(upipe_ts_demux, output, flow_def, output_state,
                     output_request_list)
 UPIPE_HELPER_SYNC(upipe_ts_demux, acquired)
+UPIPE_HELPER_INNER(upipe_ts_demux, input)
 UPIPE_HELPER_BIN_INPUT(upipe_ts_demux, input, input_request_list)
 UPIPE_HELPER_UREF_MGR(upipe_ts_demux, uref_mgr, uref_mgr_request, NULL,
                       upipe_ts_demux_register_output_request,
@@ -436,7 +439,10 @@ UPIPE_HELPER_UPIPE(upipe_ts_demux_output, upipe,
 UPIPE_HELPER_UREFCOUNT(upipe_ts_demux_output, urefcount,
                        upipe_ts_demux_output_no_input)
 UPIPE_HELPER_FLOW(upipe_ts_demux_output, NULL)
-UPIPE_HELPER_BIN_OUTPUT(upipe_ts_demux_output, last_inner_probe, last_inner,
+UPIPE_HELPER_INNER(upipe_ts_demux_output, last_inner)
+UPIPE_HELPER_UPROBE(upipe_ts_demux_output, urefcount_real, last_inner_probe,
+                    NULL)
+UPIPE_HELPER_BIN_OUTPUT(upipe_ts_demux_output, last_inner,
                         output, output_request_list)
 
 UPIPE_HELPER_SUBPIPE(upipe_ts_demux_program, upipe_ts_demux_output, output,
@@ -759,7 +765,7 @@ static int upipe_ts_demux_output_plumber(struct upipe *upipe,
                     UPROBE_LOG_VERBOSE, "mpgaf"));
         if (unlikely(output == NULL))
             return UBASE_ERR_ALLOC;
-        upipe_ts_demux_output_store_last_inner(upipe, output);
+        upipe_ts_demux_output_store_bin_output(upipe, output);
         return UBASE_ERR_NONE;
     }
 
@@ -774,7 +780,7 @@ static int upipe_ts_demux_output_plumber(struct upipe *upipe,
                     UPROBE_LOG_VERBOSE, "a52f"));
         if (unlikely(output == NULL))
             return UBASE_ERR_ALLOC;
-        upipe_ts_demux_output_store_last_inner(upipe, output);
+        upipe_ts_demux_output_store_bin_output(upipe, output);
         return UBASE_ERR_NONE;
     }
 
@@ -789,7 +795,7 @@ static int upipe_ts_demux_output_plumber(struct upipe *upipe,
                     UPROBE_LOG_VERBOSE, "mpgvf"));
         if (unlikely(output == NULL))
             return UBASE_ERR_ALLOC;
-        upipe_ts_demux_output_store_last_inner(upipe, output);
+        upipe_ts_demux_output_store_bin_output(upipe, output);
         return UBASE_ERR_NONE;
     }
 
@@ -803,7 +809,7 @@ static int upipe_ts_demux_output_plumber(struct upipe *upipe,
                     UPROBE_LOG_VERBOSE, "h264f"));
         if (unlikely(output == NULL))
             return UBASE_ERR_ALLOC;
-        upipe_ts_demux_output_store_last_inner(upipe, output);
+        upipe_ts_demux_output_store_bin_output(upipe, output);
         return UBASE_ERR_NONE;
     }
 
@@ -817,7 +823,7 @@ static int upipe_ts_demux_output_plumber(struct upipe *upipe,
                     UPROBE_LOG_VERBOSE, "telxf"));
         if (unlikely(output == NULL))
             return UBASE_ERR_ALLOC;
-        upipe_ts_demux_output_store_last_inner(upipe, output);
+        upipe_ts_demux_output_store_bin_output(upipe, output);
         return UBASE_ERR_NONE;
     }
 
@@ -831,7 +837,7 @@ static int upipe_ts_demux_output_plumber(struct upipe *upipe,
                     UPROBE_LOG_VERBOSE, "dvbsubf"));
         if (unlikely(output == NULL))
             return UBASE_ERR_ALLOC;
-        upipe_ts_demux_output_store_last_inner(upipe, output);
+        upipe_ts_demux_output_store_bin_output(upipe, output);
         return UBASE_ERR_NONE;
     }
 
@@ -845,7 +851,7 @@ static int upipe_ts_demux_output_plumber(struct upipe *upipe,
                     UPROBE_LOG_VERBOSE, "opusf"));
         if (unlikely(output == NULL))
             return UBASE_ERR_ALLOC;
-        upipe_ts_demux_output_store_last_inner(upipe, output);
+        upipe_ts_demux_output_store_bin_output(upipe, output);
         return UBASE_ERR_NONE;
     }
 
@@ -872,7 +878,7 @@ static int upipe_ts_demux_output_plumber(struct upipe *upipe,
                 UPROBE_LOG_VERBOSE, "idem"));
     if (unlikely(output == NULL))
         return UBASE_ERR_ALLOC;
-    upipe_ts_demux_output_store_last_inner(upipe, output);
+    upipe_ts_demux_output_store_bin_output(upipe, output);
     return UBASE_ERR_NONE;
 }
 
@@ -927,8 +933,8 @@ static struct upipe *upipe_ts_demux_output_alloc(struct upipe_mgr *mgr,
         upipe_ts_demux_output_from_upipe(upipe);
     upipe_ts_demux_output_init_urefcount(upipe);
     urefcount_init(upipe_ts_demux_output_to_urefcount_real(upipe_ts_demux_output), upipe_ts_demux_output_free);
-    upipe_ts_demux_output_init_bin_output(upipe,
-            upipe_ts_demux_output_to_urefcount_real(upipe_ts_demux_output));
+    upipe_ts_demux_output_init_last_inner_probe(upipe);
+    upipe_ts_demux_output_init_bin_output(upipe);
     upipe_ts_demux_output->flow_def_input = flow_def;
     upipe_ts_demux_output->pcr = false;
     upipe_ts_demux_output->split_output = NULL;
@@ -1064,6 +1070,7 @@ static void upipe_ts_demux_output_free(struct urefcount *urefcount_real)
 
     upipe_throw_dead(upipe);
     uref_free(upipe_ts_demux_output->flow_def_input);
+    upipe_ts_demux_output_clean_last_inner_probe(upipe);
     uprobe_clean(&upipe_ts_demux_output->probe);
     urefcount_clean(urefcount_real);
     upipe_ts_demux_output_clean_urefcount(upipe);
@@ -2719,11 +2726,11 @@ static int upipe_ts_demux_set_flow_def(struct upipe *upipe,
             upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
             return UBASE_ERR_ALLOC;
         }
-        upipe_ts_demux_store_first_inner(upipe, input);
+        upipe_ts_demux_store_bin_input(upipe, input);
         upipe_set_output(input, upipe_ts_demux->setrap);
 
     } else {
-        upipe_ts_demux_store_first_inner(upipe,
+        upipe_ts_demux_store_bin_input(upipe,
                                          upipe_use(upipe_ts_demux->setrap));
         upipe_ts_demux_sync_acquired(upipe);
     }
@@ -2900,7 +2907,7 @@ static void upipe_ts_demux_no_input(struct upipe *upipe)
 {
     struct upipe_ts_demux *upipe_ts_demux = upipe_ts_demux_from_upipe(upipe);
     /* release the packet blocked in ts_sync */
-    upipe_ts_demux_store_first_inner(upipe, NULL);
+    upipe_ts_demux_store_bin_input(upipe, NULL);
 
     upipe_ts_demux_throw_sub_programs(upipe, UPROBE_SOURCE_END);
 

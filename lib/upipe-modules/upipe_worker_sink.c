@@ -34,6 +34,7 @@
 #include <upipe/upipe.h>
 #include <upipe/upipe_helper_upipe.h>
 #include <upipe/upipe_helper_urefcount.h>
+#include <upipe/upipe_helper_inner.h>
 #include <upipe/upipe_helper_bin_input.h>
 #include <upipe-modules/upipe_worker_sink.h>
 #include <upipe-modules/upipe_queue_sink.h>
@@ -89,6 +90,7 @@ struct upipe_wsink {
 
 UPIPE_HELPER_UPIPE(upipe_wsink, upipe, UPIPE_WSINK_SIGNATURE)
 UPIPE_HELPER_UREFCOUNT(upipe_wsink, urefcount, upipe_wsink_no_ref)
+UPIPE_HELPER_INNER(upipe_wsink, in_qsink)
 UPIPE_HELPER_BIN_INPUT(upipe_wsink, in_qsink, request_list)
 
 UBASE_FROM_TO(upipe_wsink, urefcount, urefcount_real, urefcount_real)
@@ -200,7 +202,7 @@ static struct upipe *_upipe_wsink_alloc(struct upipe_mgr *mgr,
             in_qsrc);
     if (unlikely(in_qsink == NULL))
         goto upipe_wsink_alloc_err3;
-    upipe_wsink_store_first_inner(upipe, in_qsink);
+    upipe_wsink_store_bin_input(upipe, in_qsink);
     if (queue_length > UINT8_MAX)
         upipe_set_max_length(upipe_wsink->in_qsink, queue_length - UINT8_MAX);
 

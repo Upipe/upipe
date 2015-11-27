@@ -46,36 +46,29 @@ extern "C" {
  * which internally implement an inner pipeline to handle a given task. It also
  * acts as a proxy to the last element of the inner pipeline.
  *
- * You must add four members to your private upipe structure, for instance:
+ * @strong{You must} add four members to your private upipe structure,
+ * for instance:
  * @code
- *  struct uprobe last_inner_probe;
- *  struct upipe *last_inner;
  *  struct upipe *output;
  *  struct uchain output_request_list;
  * @end code
  *
- * You must also declare @ref #UPIPE_HELPER_UPIPE prior to using this macro.
+ * @strong{You must} also declare @ref #UPIPE_HELPER_UPIPE and
+ * @ref #UPIPE_HELPER_INNER prior to using
+ * this macro.
  *
  * Supposing the name of your structure is upipe_foo, it declares:
  * @list
  * @item @code
- *  int upipe_foo_probe_bin_output(struct uprobe *uprobe, struct upipe *inner,
- *                                 int event, va_list args)
- * @end @code
- * Probe to set on the last inner pipe. It attaches all events (proxy) to the
- * bin pipe. The @tt {struct uprobe} member is set to point to this probe during
- * init.
+ *  int upipe_foo_store_bin_output(struct upipe *upipe, struct upipe *inner)
+ * @end code
+ * Called whenever you change the last inner pipe of this bin.
  *
  * @item @code
  *  void upipe_foo_init_bin_output(struct upipe *upipe,
  *                                 struct urefcount *refcount)
  * @end code
  * Typically called in your upipe_foo_alloc() function.
- *
- * @item @code
- *  void upipe_foo_store_last_inner(struct upipe *upipe, struct upipe *inner)
- * @end code
- * Called whenever you change the last inner pipe of this bin.
  *
  * @item @code
  *  int upipe_foo_control_bin_output(struct upipe *upipe,
@@ -91,65 +84,38 @@ extern "C" {
  * @end list
  *
  * @param STRUCTURE name of your private upipe structure
- * @param LAST_INNER_PROBE name of the @tt {struct uprobe} field of
  * your private upipe structure
- * @param LAST_INNER name of the @tt{struct upipe *} field of
- * your private upipe structure, pointing to the last inner pipe of the bin
  * @param OUTPUT name of the @tt{struct upipe *} field of
  * your private upipe structure, pointing to the output of the bin
  * @param REQUEST_LIST name of the @tt{struct uchain} field of
  * your private upipe structure
  */
-#define UPIPE_HELPER_BIN_OUTPUT(STRUCTURE, LAST_INNER_PROBE, LAST_INNER,    \
-                                OUTPUT, REQUEST_LIST)                       \
-/** @internal @This catches events coming from the last inner pipe, and     \
- * attaches them to the bin pipe.                                           \
+#define UPIPE_HELPER_BIN_OUTPUT(STRUCTURE, LAST_INNER, OUTPUT, REQUEST_LIST)\
+/** @internal @This sets the output of the new last inner pipe.             \
  *                                                                          \
- * @param uprobe pointer to the probe in STRUCTURE                          \
- * @param inner pointer to the inner pipe                                   \
- * @param event event triggered by the inner pipe                           \
- * @param args arguments of the event                                       \
- * @return an error code                                                    \
+ * @param upipe description structure of the pipe                           \
+ * @param last_inner last inner pipe                                        \
  */                                                                         \
-static int STRUCTURE##_probe_bin_output(struct uprobe *uprobe,              \
-                                        struct upipe *inner,                \
-                                        int event, va_list args)            \
+static void STRUCTURE##_store_bin_output(struct upipe *upipe,               \
+                                         struct upipe *last_inner)          \
 {                                                                           \
-    struct STRUCTURE *s = container_of(uprobe, struct STRUCTURE,            \
-                                       LAST_INNER_PROBE);                   \
-    struct upipe *upipe = STRUCTURE##_to_upipe(s);                          \
-    return upipe_throw_proxy(upipe, inner, event, args);                    \
+    struct STRUCTURE *s = STRUCTURE##_from_upipe(upipe);                    \
+    STRUCTURE##_store_##LAST_INNER(upipe, last_inner);                      \
+    if (last_inner != NULL && s->OUTPUT != NULL)                            \
+        upipe_set_output(last_inner, s->OUTPUT);                            \
 }                                                                           \
 /** @internal @This initializes the private members for this helper.        \
  *                                                                          \
  * @param upipe description structure of the pipe                           \
  * @param refcount refcount to pass to the inner probe                      \
  */                                                                         \
-static void STRUCTURE##_init_bin_output(struct upipe *upipe,                \
-                                        struct urefcount *refcount)         \
+static void STRUCTURE##_init_bin_output(struct upipe *upipe)                \
 {                                                                           \
     struct STRUCTURE *s = STRUCTURE##_from_upipe(upipe);                    \
     /* NULL is the reason why we don't need to uprobe_clean() it */         \
-    uprobe_init(&s->LAST_INNER_PROBE, STRUCTURE##_probe_bin_output, NULL);  \
-    s->LAST_INNER_PROBE.refcount = refcount;                                \
-    s->LAST_INNER = NULL;                                                   \
+    STRUCTURE##_init_##LAST_INNER(upipe);                                   \
     s->OUTPUT = NULL;                                                       \
     ulist_init(&s->REQUEST_LIST);                                           \
-}                                                                           \
-/** @internal @This stores the last inner pipe, while releasing the         \
- * previous one, and setting the output.                                    \
- *                                                                          \
- * @param upipe description structure of the pipe                           \
- * @param last_inner last inner pipe (belongs to the callee)                \
- */                                                                         \
-static void STRUCTURE##_store_last_inner(struct upipe *upipe,               \
-                                         struct upipe *last_inner)          \
-{                                                                           \
-    struct STRUCTURE *s = STRUCTURE##_from_upipe(upipe);                    \
-    upipe_release(s->LAST_INNER);                                           \
-    s->LAST_INNER = last_inner;                                             \
-    if (last_inner != NULL && s->OUTPUT != NULL)                            \
-        upipe_set_output(last_inner, s->OUTPUT);                            \
 }                                                                           \
 /** @internal @This registers a request to be forwarded downstream. The     \
  * request will be replayed if the output changes. If there is no output,   \
@@ -242,9 +208,7 @@ static int STRUCTURE##_control_bin_output(struct upipe *upipe,              \
             return STRUCTURE##_set_bin_output(upipe, output);               \
         }                                                                   \
         default:                                                            \
-            if (s->LAST_INNER == NULL)                                      \
-                return UBASE_ERR_UNHANDLED;                                 \
-            return upipe_control_va(s->LAST_INNER, command, args);          \
+            return STRUCTURE##_control_##LAST_INNER(upipe, command, args);  \
     }                                                                       \
 }                                                                           \
 /** @internal @This cleans up the private members for this helper.          \
@@ -262,7 +226,7 @@ static void STRUCTURE##_clean_bin_output(struct upipe *upipe)               \
         urequest_clean(urequest);                                           \
         urequest_free(urequest);                                            \
     }                                                                       \
-    upipe_release(s->LAST_INNER);                                           \
+    STRUCTURE##_clean_##LAST_INNER(upipe);                                  \
     upipe_release(s->OUTPUT);                                               \
 }
 
