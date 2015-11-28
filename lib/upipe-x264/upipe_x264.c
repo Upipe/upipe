@@ -247,7 +247,7 @@ static int _upipe_x264_set_default(struct upipe *upipe)
     return UBASE_ERR_NONE;
 }
 
-/** @internal @This reset parameters to mpeg2 default
+/** @internal @This resets parameters to mpeg2 default
  * @param upipe description structure of the pipe
  * @return an error code
  */
@@ -284,8 +284,7 @@ static int _upipe_x264_set_default_preset(struct upipe *upipe,
  * @param profile x264 profile
  * @return an error code
  */
-static int _upipe_x264_set_profile(struct upipe *upipe,
-                                              const char *profile)
+static int _upipe_x264_set_profile(struct upipe *upipe, const char *profile)
 {
     struct upipe_x264 *upipe_x264 = upipe_x264_from_upipe(upipe);
     int ret;
