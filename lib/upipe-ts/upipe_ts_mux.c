@@ -2745,6 +2745,9 @@ static void upipe_ts_mux_update(struct upipe *upipe)
      * 2/ the drift of the output clock. */
     required_octetrate +=
         (required_octetrate * PCR_TOLERANCE_PPM * 2 + 999999) / 1000000;
+    /* Add a margin to avoid toggling between two values. */
+    required_octetrate += TS_SIZE;
+    required_octetrate -= required_octetrate % TS_SIZE;
     mux->required_octetrate = required_octetrate;
 
     uint64_t total_octetrate = mux->fixed_octetrate;
