@@ -355,6 +355,54 @@ static inline int uref_pic_flow_infer_sar(struct uref *uref,
     return uref_pic_flow_set_sar(uref, sar);
 }
 
+/** @This infers the DAR from the SAR and overscan in the uref.
+ *
+ * @param uref uref control packet
+ * @param dar_p filled in with the calculated display aspect ratio
+ * @return an error code
+ */
+static inline int uref_pic_flow_infer_dar(struct uref *uref,
+                                          struct urational *dar_p)
+{
+    uint64_t width, height;
+    UBASE_RETURN(uref_pic_flow_get_hsize(uref, &width))
+    UBASE_RETURN(uref_pic_flow_get_vsize(uref, &height))
+    struct urational sar;
+    UBASE_RETURN(uref_pic_flow_get_sar(uref, &sar))
+
+    if (ubase_check(uref_pic_flow_get_overscan(uref))) {
+        if ((width == 720 && height == 576 &&
+             sar.num == 12 && sar.den == 11) ||
+            (width == 720 && height == 480 &&
+             sar.num == 10 && sar.den == 11) ||
+            (width == 480 && height == 576 &&
+             sar.num == 18 && sar.den == 11) ||
+            (width == 480 && height == 480 &&
+             sar.num == 15 && sar.den == 11)) {
+            dar_p->num = 4;
+            dar_p->den = 3;
+            return UBASE_ERR_NONE;
+        }
+        if ((width == 720 && height == 576 &&
+             sar.num == 16 && sar.den == 11) ||
+            (width == 720 && height == 480 &&
+             sar.num == 40 && sar.den == 33) ||
+            (width == 480 && height == 576 &&
+             sar.num == 24 && sar.den == 11) ||
+            (width == 480 && height == 480 &&
+             sar.num == 20 && sar.den == 11)) {
+            dar_p->num = 16;
+            dar_p->den = 9;
+            return UBASE_ERR_NONE;
+        }
+    }
+
+    dar_p->num = sar.num * width;
+    dar_p->den = sar.den * height;
+    urational_simplify(dar_p);
+    return UBASE_ERR_NONE;
+}
+
 #ifdef __cplusplus
 }
 #endif
