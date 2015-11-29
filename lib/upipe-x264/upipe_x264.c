@@ -413,12 +413,15 @@ static bool upipe_x264_open(struct upipe *upipe, int width, int height)
         params->i_timebase_den = fps.num;
     }
 
-    if (!upipe_x264_mpeg2_enabled(upipe)) {
+#ifdef HAVE_X264_MPEG2
+    if (upipe_x264_mpeg2_enabled(upipe)) {
+        params->vui.i_aspect_ratio_information = upipe_x264->mpeg2_ar;
+    } else
+#endif
+    {
         params->vui.i_sar_width = upipe_x264->sar.num;
         params->vui.i_sar_height = upipe_x264->sar.den;
         params->vui.i_overscan = upipe_x264->overscan ? 2 : 1;
-    } else {
-        params->vui.i_aspect_ratio_information = upipe_x264->mpeg2_ar;
     }
     params->i_width = width;
     params->i_height = height;
@@ -495,7 +498,33 @@ static bool upipe_x264_open(struct upipe *upipe, int width, int height)
                 (uint64_t)params->rc.i_vbv_buffer_size * 125);
 
         uint64_t max_octetrate, max_bs;
-        if (!upipe_x264_mpeg2_enabled(upipe)) {
+#ifdef HAVE_X264_MPEG2
+        if (upipe_x264_mpeg2_enabled(upipe)) {
+            switch (params->i_level_idc) {
+                case X264_MPEG2_LEVEL_LOW:
+                    max_octetrate = 4000000 / 8;
+                    max_bs = 475136 / 8;
+                    break;
+                default:
+                    upipe_warn_va(upipe, "unknown level %"PRIu8,
+                                  params->i_level_idc);
+                    /* intended fall-through */
+                case X264_MPEG2_LEVEL_MAIN:
+                    max_octetrate = 15000000 / 8;
+                    max_bs = 1835008 / 8;
+                    break;
+                case X264_MPEG2_LEVEL_HIGH_1440:
+                    max_octetrate = 60000000 / 8;
+                    max_bs = 7340032 / 8;
+                    break;
+                case X264_MPEG2_LEVEL_HIGH:
+                    max_octetrate = 80000000 / 8;
+                    max_bs = 9781248 / 8;
+                    break;
+            }
+        } else
+#endif
+        {
             switch (params->i_level_idc) {
                 case 10:
                     max_octetrate = 64000 / 8;
@@ -553,35 +582,6 @@ static bool upipe_x264_open(struct upipe *upipe, int width, int height)
                     max_octetrate = 240000000 / 8;
                     max_bs = 240000000 / 8;
                     break;
-            }
-        } else { /* x262 */
-            switch (params->i_level_idc) {
-#ifdef HAVE_X264_MPEG2
-                case X264_MPEG2_LEVEL_LOW:
-                    max_octetrate = 4000000 / 8;
-                    max_bs = 475136 / 8;
-                    break;
-#endif
-                default:
-                    upipe_warn_va(upipe, "unknown level %"PRIu8,
-                                  params->i_level_idc);
-                    /* intended fall-through */
-#ifdef HAVE_X264_MPEG2
-                case X264_MPEG2_LEVEL_MAIN:
-#endif
-                    max_octetrate = 15000000 / 8;
-                    max_bs = 1835008 / 8;
-                    break;
-#ifdef HAVE_X264_MPEG2
-                case X264_MPEG2_LEVEL_HIGH_1440:
-                    max_octetrate = 60000000 / 8;
-                    max_bs = 7340032 / 8;
-                    break;
-                case X264_MPEG2_LEVEL_HIGH:
-                    max_octetrate = 80000000 / 8;
-                    max_bs = 9781248 / 8;
-                    break;
-#endif
             }
         }
         UBASE_FATAL(upipe, uref_block_flow_set_max_octetrate(flow_def_attr,
@@ -685,10 +685,12 @@ static inline bool upipe_x264_need_update(struct upipe *upipe,
 {
     struct upipe_x264 *upipe_x264 = upipe_x264_from_upipe(upipe);
     x264_param_t *params = &upipe_x264_from_upipe(upipe)->params;
+#ifdef HAVE_X264_MPEG2
     if (upipe_x264_mpeg2_enabled(upipe))
         return (params->i_width != width ||
                 params->i_height != height ||
                 params->vui.i_aspect_ratio_information != upipe_x264->mpeg2_ar);
+#endif
     return (params->i_width != width ||
             params->i_height != height ||
             params->vui.i_sar_width != upipe_x264->sar.num ||
