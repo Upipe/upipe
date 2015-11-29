@@ -521,6 +521,11 @@ static bool upipe_x264_open(struct upipe *upipe, int width, int height)
                     max_octetrate = 80000000 / 8;
                     max_bs = 9781248 / 8;
                     break;
+                case X264_MPEG2_LEVEL_HIGHP:
+                    /* ISO/IEC JTC1/SC29/WG11 MPEG2007/m14868 */
+                    max_octetrate = 120000000 / 8;
+                    max_bs = 14671872 / 8;
+                    break;
             }
         } else
 #endif
