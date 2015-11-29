@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2014 OpenHeadend S.A.R.L.
+ * Copyright (C) 2014-2015 OpenHeadend S.A.R.L.
  *
  * Authors: Christophe Massiot
  *
@@ -44,6 +44,7 @@
 #include <upipe-modules/upipe_idem.h>
 #include <upipe-filters/upipe_filter_encode.h>
 #include <upipe-x264/upipe_x264.h>
+#include <upipe-av/upipe_avcodec_encode.h>
 
 #include <stdlib.h>
 #include <stdbool.h>
@@ -94,6 +95,8 @@ struct upipe_fenc {
     char *profile;
     /** x264 speed control */
     uint64_t sc_latency;
+    /** x262 */
+    bool x262;
 
     /** probe for the last inner pipe */
     struct uprobe last_inner_probe;
@@ -136,15 +139,19 @@ static int upipe_fenc_alloc_inner(struct upipe *upipe)
 {
     struct upipe_fenc *upipe_fenc = upipe_fenc_from_upipe(upipe);
     struct upipe_fenc_mgr *fenc_mgr = upipe_fenc_mgr_from_upipe_mgr(upipe->mgr);
-    const char *def;
+    const char *def, *codec;
     if (ubase_check(uref_flow_get_def(upipe_fenc->flow_def_input, &def)) &&
-        !ubase_ncmp(def, "block.h264.") && fenc_mgr->x264_mgr != NULL) {
+        !ubase_check(uref_avcenc_get_codec_name(upipe_fenc->flow_def_input,
+                                                &codec)) &&
+        fenc_mgr->x264_mgr != NULL) {
         struct upipe *enc = upipe_void_alloc(fenc_mgr->x264_mgr,
                 uprobe_pfx_alloc(
                     uprobe_use(&upipe_fenc->last_inner_probe),
                     UPROBE_LOG_VERBOSE, "x264"));
         if (unlikely(enc == NULL))
             return UBASE_ERR_INVALID;
+        if (!ubase_ncmp(def, "block.mpeg2video."))
+            upipe_fenc->x262 = true;
 
         upipe_fenc_store_first_inner(upipe, upipe_use(enc));
         upipe_fenc_store_last_inner(upipe, enc);
@@ -193,6 +200,7 @@ static struct upipe *upipe_fenc_alloc(struct upipe_mgr *mgr,
     upipe_fenc->tune = NULL;
     upipe_fenc->profile = NULL;
     upipe_fenc->sc_latency = UINT64_MAX;
+    upipe_fenc->x262 = false;
     upipe_throw_ready(upipe);
     upipe_fenc_demand_uref_mgr(upipe);
 
@@ -240,6 +248,9 @@ static int upipe_fenc_set_flow_def(struct upipe *upipe, struct uref *flow_def)
     if (unlikely(!ubase_check(upipe_fenc_alloc_inner(upipe))))
         return UBASE_ERR_UNHANDLED;
 
+    if (upipe_fenc->x262) {
+        UBASE_RETURN(upipe_x264_set_default_mpeg2(upipe_fenc->last_inner))
+    }
     if (upipe_fenc->preset != NULL || upipe_fenc->tune != NULL)
         upipe_x264_set_default_preset(upipe_fenc->last_inner,
                                       upipe_fenc->preset, upipe_fenc->tune);
@@ -316,6 +327,23 @@ static int upipe_fenc_set_option(struct upipe *upipe,
                                 UDICT_TYPE_STRING, key);
     else
         udict_delete(upipe_fenc->options->udict, UDICT_TYPE_STRING, key);
+    return UBASE_ERR_NONE;
+}
+
+/** @internal @This resets parameters to mpeg2 default.
+ *
+ * @param upipe description structure of the pipe
+ * @return an error code
+ */
+static int upipe_fenc_set_default_mpeg2(struct upipe *upipe)
+{
+    struct upipe_fenc *upipe_fenc = upipe_fenc_from_upipe(upipe);
+
+    upipe_fenc->x262 = true;
+
+    if (upipe_fenc->last_inner != NULL) {
+        UBASE_RETURN(upipe_x264_set_default_mpeg2(upipe_fenc->last_inner))
+    }
     return UBASE_ERR_NONE;
 }
 
@@ -409,6 +437,10 @@ static int upipe_fenc_control(struct upipe *upipe, int command, va_list args)
             return upipe_fenc_set_flow_def(upipe, flow_def);
         }
 
+        case UPIPE_X264_SET_DEFAULT_MPEG2: {
+            UBASE_SIGNATURE_CHECK(args, UPIPE_X264_SIGNATURE)
+            return upipe_fenc_set_default_mpeg2(upipe);
+        }
         case UPIPE_X264_SET_DEFAULT_PRESET: {
             UBASE_SIGNATURE_CHECK(args, UPIPE_X264_SIGNATURE)
             const char *preset = va_arg(args, const char *);

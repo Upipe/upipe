@@ -130,6 +130,13 @@ struct upipe_x264 {
     /** list of output requests */
     struct uchain request_list;
 
+    /** input SAR */
+    struct urational sar;
+    /** input overscan */
+    bool overscan;
+    /** MPEG-2 aspect ratio information */
+    uint8_t mpeg2_ar;
+
     /** last DTS */
     uint64_t last_dts;
     /** last DTS (system time) */
@@ -368,6 +375,9 @@ static struct upipe *upipe_x264_alloc(struct upipe_mgr *mgr,
     upipe_x264_init_flow_def_check(upipe);
     upipe_x264->flow_def_requested = NULL;
     upipe_x264->headers_requested = false;
+    upipe_x264->sar.num = upipe_x264->sar.den = 1;
+    upipe_x264->overscan = false;
+    upipe_x264->mpeg2_ar = 1;
 
     upipe_x264->last_dts = UINT64_MAX;
     upipe_x264->last_dts_sys = UINT64_MAX;
@@ -384,11 +394,8 @@ static struct upipe *upipe_x264_alloc(struct upipe_mgr *mgr,
  * @param upipe description structure of the pipe
  * @param width image width
  * @param height image height
- * @param sar SAR
- * @param overscan overscan
  */
-static bool upipe_x264_open(struct upipe *upipe, int width, int height,
-                            struct urational *sar, bool overscan)
+static bool upipe_x264_open(struct upipe *upipe, int width, int height)
 {
     struct upipe_x264 *upipe_x264 = upipe_x264_from_upipe(upipe);
     struct urational fps = {0, 0};
@@ -406,9 +413,13 @@ static bool upipe_x264_open(struct upipe *upipe, int width, int height,
         params->i_timebase_den = fps.num;
     }
 
-    params->vui.i_sar_width = sar->num;
-    params->vui.i_sar_height = sar->den;
-    params->vui.i_overscan = overscan ? 2 : 1;
+    if (!upipe_x264_mpeg2_enabled(upipe)) {
+        params->vui.i_sar_width = upipe_x264->sar.num;
+        params->vui.i_sar_height = upipe_x264->sar.den;
+        params->vui.i_overscan = upipe_x264->overscan ? 2 : 1;
+    } else {
+        params->vui.i_aspect_ratio_information = upipe_x264->mpeg2_ar;
+    }
     params->i_width = width;
     params->i_height = height;
     if (!ubase_check(uref_pic_get_progressive(upipe_x264->flow_def_input)))
@@ -484,63 +495,94 @@ static bool upipe_x264_open(struct upipe *upipe, int width, int height,
                 (uint64_t)params->rc.i_vbv_buffer_size * 125);
 
         uint64_t max_octetrate, max_bs;
-        switch (params->i_level_idc) {
-            case 10:
-                max_octetrate = 64000 / 8;
-                max_bs = 175000 / 8;
-                break;
-            case 11:
-                max_octetrate = 192000 / 8;
-                max_bs = 500000 / 8;
-                break;
-            case 12:
-                max_octetrate = 384000 / 8;
-                max_bs = 1000000 / 8;
-                break;
-            case 13:
-                max_octetrate = 768000 / 8;
-                max_bs = 2000000 / 8;
-                break;
-            case 20:
-                max_octetrate = 2000000 / 8;
-                max_bs = 2000000 / 8;
-                break;
-            case 21:
-            case 22:
-                max_octetrate = 4000000 / 8;
-                max_bs = 4000000 / 8;
-                break;
-            case 30:
-                max_octetrate = 10000000 / 8;
-                max_bs = 10000000 / 8;
-                break;
-            case 31:
-                max_octetrate = 14000000 / 8;
-                max_bs = 14000000 / 8;
-                break;
-            case 32:
-            case 40:
-                max_octetrate = 20000000 / 8;
-                max_bs = 20000000 / 8;
-                break;
-            case 41:
-            case 42:
-                max_octetrate = 50000000 / 8;
-                max_bs = 62500000 / 8;
-                break;
-            case 50:
-                max_octetrate = 135000000 / 8;
-                max_bs = 135000000 / 8;
-                break;
-            default:
-                upipe_warn_va(upipe, "unknown level %"PRIu8,
-                              params->i_level_idc);
-                /* intended fall-through */
-            case 51:
-            case 52:
-                max_octetrate = 240000000 / 8;
-                max_bs = 240000000 / 8;
-                break;
+        if (!upipe_x264_mpeg2_enabled(upipe)) {
+            switch (params->i_level_idc) {
+                case 10:
+                    max_octetrate = 64000 / 8;
+                    max_bs = 175000 / 8;
+                    break;
+                case 11:
+                    max_octetrate = 192000 / 8;
+                    max_bs = 500000 / 8;
+                    break;
+                case 12:
+                    max_octetrate = 384000 / 8;
+                    max_bs = 1000000 / 8;
+                    break;
+                case 13:
+                    max_octetrate = 768000 / 8;
+                    max_bs = 2000000 / 8;
+                    break;
+                case 20:
+                    max_octetrate = 2000000 / 8;
+                    max_bs = 2000000 / 8;
+                    break;
+                case 21:
+                case 22:
+                    max_octetrate = 4000000 / 8;
+                    max_bs = 4000000 / 8;
+                    break;
+                case 30:
+                    max_octetrate = 10000000 / 8;
+                    max_bs = 10000000 / 8;
+                    break;
+                case 31:
+                    max_octetrate = 14000000 / 8;
+                    max_bs = 14000000 / 8;
+                    break;
+                case 32:
+                case 40:
+                    max_octetrate = 20000000 / 8;
+                    max_bs = 20000000 / 8;
+                    break;
+                case 41:
+                case 42:
+                    max_octetrate = 50000000 / 8;
+                    max_bs = 62500000 / 8;
+                    break;
+                case 50:
+                    max_octetrate = 135000000 / 8;
+                    max_bs = 135000000 / 8;
+                    break;
+                default:
+                    upipe_warn_va(upipe, "unknown level %"PRIu8,
+                                  params->i_level_idc);
+                    /* intended fall-through */
+                case 51:
+                case 52:
+                    max_octetrate = 240000000 / 8;
+                    max_bs = 240000000 / 8;
+                    break;
+            }
+        } else { /* x262 */
+            switch (params->i_level_idc) {
+#ifdef HAVE_X264_MPEG2
+                case X264_MPEG2_LEVEL_LOW:
+                    max_octetrate = 4000000 / 8;
+                    max_bs = 475136 / 8;
+                    break;
+#endif
+                default:
+                    upipe_warn_va(upipe, "unknown level %"PRIu8,
+                                  params->i_level_idc);
+                    /* intended fall-through */
+#ifdef HAVE_X264_MPEG2
+                case X264_MPEG2_LEVEL_MAIN:
+#endif
+                    max_octetrate = 15000000 / 8;
+                    max_bs = 1835008 / 8;
+                    break;
+#ifdef HAVE_X264_MPEG2
+                case X264_MPEG2_LEVEL_HIGH_1440:
+                    max_octetrate = 60000000 / 8;
+                    max_bs = 7340032 / 8;
+                    break;
+                case X264_MPEG2_LEVEL_HIGH:
+                    max_octetrate = 80000000 / 8;
+                    max_bs = 9781248 / 8;
+                    break;
+#endif
+            }
         }
         UBASE_FATAL(upipe, uref_block_flow_set_max_octetrate(flow_def_attr,
                     max_octetrate))
@@ -631,25 +673,27 @@ static void upipe_x264_build_flow_def(struct upipe *upipe)
     upipe_x264_store_flow_def(upipe, flow_def);
 }
 
-/** @internal @This checks incoming pic against cached parameters
+/** @internal @This checks incoming pic against cached parameters.
  *
  * @param upipe description structure of the pipe
  * @param width image width
  * @param height image height
- * @param sar SAR
- * @param overscan overscan
  * @return true if parameters update needed
  */
 static inline bool upipe_x264_need_update(struct upipe *upipe,
-                                          int width, int height,
-                                          struct urational *sar, bool overscan)
+                                          int width, int height)
 {
+    struct upipe_x264 *upipe_x264 = upipe_x264_from_upipe(upipe);
     x264_param_t *params = &upipe_x264_from_upipe(upipe)->params;
+    if (upipe_x264_mpeg2_enabled(upipe))
+        return (params->i_width != width ||
+                params->i_height != height ||
+                params->vui.i_aspect_ratio_information != upipe_x264->mpeg2_ar);
     return (params->i_width != width ||
             params->i_height != height ||
-            params->vui.i_sar_width != sar->num ||
-            params->vui.i_sar_height != sar->den ||
-            params->vui.i_overscan != (overscan ? 2 : 1));
+            params->vui.i_sar_width != upipe_x264->sar.num ||
+            params->vui.i_sar_height != upipe_x264->sar.den ||
+            params->vui.i_overscan != (upipe_x264->overscan ? 2 : 1));
 }
 
 /** @internal @This processes pictures.
@@ -670,6 +714,31 @@ static bool upipe_x264_handle(struct upipe *upipe, struct uref *uref,
         upipe_x264_store_flow_def(upipe, NULL);
         uref_free(upipe_x264->flow_def_requested);
         upipe_x264->flow_def_requested = NULL;
+
+        if (upipe_x264_mpeg2_enabled(upipe)) {
+            struct urational dar;
+            dar.num = 4;
+            dar.den = 3;
+            uref_pic_flow_infer_dar(uref, &dar);
+            if (dar.num == 4 && dar.den == 3)
+                upipe_x264->mpeg2_ar = 2;
+            else if (dar.num == 16 && dar.den == 9)
+                upipe_x264->mpeg2_ar = 3;
+            else if (dar.num == 221 && dar.den == 100)
+                upipe_x264->mpeg2_ar = 4;
+            else {
+                upipe_warn_va(upipe,
+                        "unrecognized aspect ratio %"PRId64"/%"PRIu64", using square",
+                        dar.num, dar.den);
+                upipe_x264->mpeg2_ar = 1;
+            }
+        } else {
+            upipe_x264->sar.num = upipe_x264->sar.den = 1;
+            uref_pic_flow_get_sar(uref, &upipe_x264->sar);
+            upipe_x264->overscan =
+                ubase_check(uref_pic_flow_get_overscan(uref));
+        }
+
         uref = upipe_x264_store_flow_def_input(upipe, uref);
         if (uref != NULL) {
             uref_pic_flow_clear_format(uref);
@@ -696,25 +765,17 @@ static bool upipe_x264_handle(struct upipe *upipe, struct uref *uref,
         pic.opaque = uref;
         pic.img.i_csp = X264_CSP_I420;
 
-        struct urational sar;
-        sar.den = sar.num = 1;
-        uref_pic_flow_get_sar(upipe_x264->flow_def_input, &sar);
-        urational_simplify(&sar);
         uref_pic_size(uref, &width, &height, NULL);
-        bool overscan =
-            ubase_check(uref_pic_flow_get_overscan(upipe_x264->flow_def_input));
 
         /* open encoder if not already opened or if update needed */
         if (unlikely(!upipe_x264->encoder)) {
             needopen = true;
-        } else if (unlikely(upipe_x264_need_update(upipe, width, height,
-                                                   &sar, overscan))) {
+        } else if (unlikely(upipe_x264_need_update(upipe, width, height))) {
             needopen = true;
             upipe_notice(upipe, "Flow parameters changed, reconfiguring encoder");
         }
         if (unlikely(needopen)) {
-            if (unlikely(!upipe_x264_open(upipe, width, height,
-                                          &sar, overscan))) {
+            if (unlikely(!upipe_x264_open(upipe, width, height))) {
                 upipe_err(upipe, "Could not open encoder");
                 uref_free(uref);
                 return true;
