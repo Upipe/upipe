@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2012-2014 OpenHeadend S.A.R.L.
+ * Copyright (C) 2012-2015 OpenHeadend S.A.R.L.
  *
  * Authors: Christophe Massiot
  *
@@ -267,6 +267,19 @@ int main(int argc, char *argv[])
     pes_init(buffer);
     pes_set_streamid(buffer, PES_STREAM_ID_PADDING);
     pes_set_length(buffer, 42);
+    uref_block_unmap(uref, 0);
+    payload_size = 0;
+    uref_block_set_start(uref);
+    /* do not increment nb_packets */
+    upipe_input(upipe_ts_pesd, uref, NULL);
+    assert(!nb_packets);
+
+    uref = uref_block_alloc(uref_mgr, ubuf_mgr, PES_HEADER_SIZE);
+    assert(uref != NULL);
+    size = -1;
+    ubase_assert(uref_block_write(uref, 0, &size, &buffer));
+    assert(size == PES_HEADER_SIZE);
+    memset(buffer, 0, PES_HEADER_SIZE);
     uref_block_unmap(uref, 0);
     payload_size = 0;
     expect_lost = true;

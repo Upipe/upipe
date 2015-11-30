@@ -77,6 +77,8 @@ struct upipe_ts_pesd {
     size_t next_pes_size;
     /** true if we have thrown the sync_acquired event */
     bool acquired;
+    /** true if subsequent (non-start) packets have to be dropped */
+    bool drop;
 
     /** public upipe structure */
     struct upipe upipe;
@@ -109,6 +111,7 @@ static struct upipe *upipe_ts_pesd_alloc(struct upipe_mgr *mgr,
     upipe_ts_pesd_init_urefcount(upipe);
     upipe_ts_pesd_init_sync(upipe);
     upipe_ts_pesd_init_output(upipe);
+    upipe_ts_pesd->drop = true;
     upipe_ts_pesd->next_uref = NULL;
     upipe_ts_pesd->next_uref_size = 0;
     upipe_throw_ready(upipe);
@@ -118,8 +121,9 @@ static struct upipe *upipe_ts_pesd_alloc(struct upipe_mgr *mgr,
 /** @internal @This flushes all input buffers.
  *
  * @param upipe description structure of the pipe
+ * @param lost true if the sync was lost
  */
-static void upipe_ts_pesd_flush(struct upipe *upipe)
+static void upipe_ts_pesd_flush(struct upipe *upipe, bool lost)
 {
     struct upipe_ts_pesd *upipe_ts_pesd = upipe_ts_pesd_from_upipe(upipe);
     if (upipe_ts_pesd->next_uref != NULL) {
@@ -127,7 +131,9 @@ static void upipe_ts_pesd_flush(struct upipe *upipe)
         upipe_ts_pesd->next_uref = NULL;
         upipe_ts_pesd->next_uref_size = 0;
     }
-    upipe_ts_pesd_sync_lost(upipe);
+    if (lost)
+        upipe_ts_pesd_sync_lost(upipe);
+    upipe_ts_pesd->drop = true;
 }
 
 /** @internal @This outputs a PES chunk, and checks if it is the end of the PES.
@@ -140,6 +146,7 @@ static void upipe_ts_pesd_check_output(struct upipe *upipe,
 {
     struct upipe_ts_pesd *upipe_ts_pesd = upipe_ts_pesd_from_upipe(upipe);
     upipe_ts_pesd_sync_acquired(upipe);
+    upipe_ts_pesd->drop = false;
     if (upipe_ts_pesd->next_uref_size == upipe_ts_pesd->next_pes_size) {
         uref_block_set_end(upipe_ts_pesd->next_uref);
         upipe_ts_pesd->next_uref_size = upipe_ts_pesd->next_pes_size = 0;
@@ -170,12 +177,12 @@ static void upipe_ts_pesd_decaps(struct upipe *upipe, struct upump **upump_p)
 
     if (unlikely(!validate)) {
         upipe_warn(upipe, "wrong PES header");
-        upipe_ts_pesd_flush(upipe);
+        upipe_ts_pesd_flush(upipe, true);
         return;
     }
 
     if (unlikely(streamid == PES_STREAM_ID_PADDING)) {
-        upipe_ts_pesd_flush(upipe);
+        upipe_ts_pesd_flush(upipe, false);
         return;
     }
 
@@ -199,7 +206,7 @@ static void upipe_ts_pesd_decaps(struct upipe *upipe, struct upump **upump_p)
 
     if (unlikely(length != 0 && length < PES_HEADER_OPTIONAL_SIZE)) {
         upipe_warn(upipe, "wrong PES length");
-        upipe_ts_pesd_flush(upipe);
+        upipe_ts_pesd_flush(upipe, true);
         return;
     }
 
@@ -219,7 +226,7 @@ static void upipe_ts_pesd_decaps(struct upipe *upipe, struct upump **upump_p)
 
     if (unlikely(!validate)) {
         upipe_warn(upipe, "wrong PES optional header");
-        upipe_ts_pesd_flush(upipe);
+        upipe_ts_pesd_flush(upipe, true);
         return;
     }
 
@@ -230,7 +237,7 @@ static void upipe_ts_pesd_decaps(struct upipe *upipe, struct upump **upump_p)
                  (has_dts && headerlength < PES_HEADER_SIZE_PTSDTS -
                                             PES_HEADER_SIZE_NOPTS))) {
         upipe_warn(upipe, "wrong PES header length");
-        upipe_ts_pesd_flush(upipe);
+        upipe_ts_pesd_flush(upipe, true);
         return;
     }
 
@@ -244,7 +251,7 @@ static void upipe_ts_pesd_decaps(struct upipe *upipe, struct upump **upump_p)
                 PES_HEADER_SIZE_NOPTS, PES_HEADER_TS_SIZE * (has_dts ? 2 : 1),
                 buffer3);
         if (unlikely(ts_fields == NULL)) {
-            upipe_ts_pesd_flush(upipe);
+            upipe_ts_pesd_flush(upipe, false);
             upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
             return;
         }
@@ -264,7 +271,7 @@ static void upipe_ts_pesd_decaps(struct upipe *upipe, struct upump **upump_p)
             upipe_warn(upipe, "wrong PES timestamp syntax");
 #if 0
             /* disable this because it is a common syntax error */
-            upipe_ts_pesd_flush(upipe);
+            upipe_ts_pesd_flush(upipe, true);
             return;
 #endif
         }
@@ -323,13 +330,13 @@ static void upipe_ts_pesd_input(struct upipe *upipe, struct uref *uref,
         if (unlikely(!ubase_check(uref_block_append(upipe_ts_pesd->next_uref,
                                                     ubuf)))) {
             ubuf_free(ubuf);
-            upipe_ts_pesd_flush(upipe);
+            upipe_ts_pesd_flush(upipe, false);
             upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
             return;
         }
         upipe_ts_pesd->next_uref_size += uref_size;
         upipe_ts_pesd_decaps(upipe, upump_p);
-    } else if (likely(upipe_ts_pesd->acquired)) {
+    } else if (likely(!upipe_ts_pesd->drop)) {
         upipe_ts_pesd->next_uref = uref;
         upipe_ts_pesd->next_uref_size += uref_size;
         upipe_ts_pesd_check_output(upipe, upump_p);
