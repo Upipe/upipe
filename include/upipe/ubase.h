@@ -472,6 +472,20 @@ static inline void ubase_clean_fd(int *fd_p)
     }
 }
 
+/** @This copies the signature from a va list.
+ *
+ * @param args the va list to copy from
+ * @return a signature
+ */
+static inline uint32_t ubase_get_signature(va_list args)
+{
+    va_list args_copy;
+    va_copy(args_copy, args);
+    uint32_t signature = va_arg(args_copy, uint32_t);
+    va_end(args_copy);
+    return signature;
+}
+
 #ifdef __cplusplus
 }
 #endif
