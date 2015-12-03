@@ -62,6 +62,8 @@ struct upipe_even {
     uint64_t first_date;
     /** last date */
     uint64_t last_date;
+    /** true if an input is dead */
+    bool dead;
 
     /** list of subs */
     struct uchain subs;
@@ -150,7 +152,6 @@ static struct upipe *upipe_even_sub_alloc(struct upipe_mgr *mgr,
     upipe_even_sub_init_input(upipe);
     upipe_even_sub_init_sub(upipe);
     struct upipe_even_sub *upipe_even_sub = upipe_even_sub_from_upipe(upipe);
-    ulist_init(&upipe_even_sub->urefs);
     upipe_even_sub->type = UPIPE_EVEN_UNKNOWN;
     upipe_even_sub->first_date = UINT64_MAX;
     upipe_even_sub->last_date = 0;
@@ -186,8 +187,51 @@ static void upipe_even_sub_input(struct upipe *upipe, struct uref *uref,
     if (unlikely(upipe_even_sub->first_date == UINT64_MAX))
         upipe_even_sub->first_date = date;
     upipe_even_sub->last_date = date + duration;
+    if (upipe_even_sub_check_input(upipe))
+        /* Increment upipe refcount to avoid disappearing before all packets
+         * have been sent. */
+        upipe_use(upipe);
     upipe_even_sub_hold_input(upipe, uref);
     upipe_even_process(upipe_even_to_upipe(upipe_even), upump_p);
+}
+
+/** @internal @This handles an uref.
+ *
+ * @param upipe description structure of the pipe
+ * @param uref uref structure
+ * @param upump_p reference to pump that generated the buffer
+ * @return true if the uref was handled
+ */
+static bool upipe_even_sub_handle(struct upipe *upipe, struct uref *uref,
+                                  struct upump **upump_p)
+{
+    struct upipe_even *upipe_even = upipe_even_from_sub_mgr(upipe->mgr);
+    uint64_t date;
+    if (unlikely(!ubase_check(uref_clock_get_pts_sys(uref, &date)))) {
+        int type;
+        uref_clock_get_date_sys(uref, &date, &type);
+        assert(type != UREF_DATE_NONE);
+    }
+    uint64_t duration = 0;
+    uref_clock_get_duration(uref, &duration);
+
+    if (unlikely(date + duration < upipe_even->first_date)) {
+        upipe_dbg(upipe, "removing orphan uref");
+        uref_free(uref);
+        return true;
+    }
+
+    if (date > upipe_even->last_date) {
+        if (upipe_even->dead) {
+            upipe_dbg(upipe, "removing orphan uref");
+            uref_free(uref);
+            return true;
+        }
+        return false;
+    }
+
+    upipe_even_sub_output(upipe, uref, upump_p);
+    return true;
 }
 
 /** @internal @This processes data.
@@ -198,34 +242,23 @@ static void upipe_even_sub_input(struct upipe *upipe, struct uref *uref,
 static void upipe_even_sub_process(struct upipe *upipe, struct upump **upump_p)
 {
     struct upipe_even_sub *upipe_even_sub = upipe_even_sub_from_upipe(upipe);
-    struct upipe_even *upipe_even = upipe_even_from_sub_mgr(upipe->mgr);
 
+    upipe_use(upipe);
     for ( ; ; ) {
-        struct uchain *uchain;
-        uchain = ulist_peek(&upipe_even_sub->urefs);
-        if (uchain == NULL)
-            break; /* not ready */
-        struct uref *uref = uref_from_uchain(uchain);
-        uint64_t date;
-        if (unlikely(!ubase_check(uref_clock_get_pts_sys(uref, &date)))) {
-            int type;
-            uref_clock_get_date_sys(uref, &date, &type);
-            assert(type != UREF_DATE_NONE);
-        }
-        uint64_t duration = 0;
-        uref_clock_get_duration(uref, &duration);
-        if (unlikely(date + duration < upipe_even->first_date)) {
-            upipe_dbg(upipe, "removing orphan uref");
+        struct uref *uref =
             upipe_even_sub_pop_input(upipe_even_sub_to_upipe(upipe_even_sub));
-            uref_free(uref);
-            continue;
-        }
-        if (date > upipe_even->last_date)
+        if (uref == NULL) /* not ready */
             break;
 
-        upipe_even_sub_pop_input(upipe_even_sub_to_upipe(upipe_even_sub));
-        upipe_even_sub_output(upipe, uref, upump_p);
+        if (!upipe_even_sub_handle(upipe, uref, upump_p)) {
+            upipe_even_sub_unshift_input(upipe, uref);
+            break;
+        } else if (upipe_even_sub_check_input(upipe))
+            /* All packets have been output, release again the pipe that has
+             * been used in @ref upipe_even_sub_input. */
+            upipe_release(upipe);
     }
+    upipe_release(upipe);
 }
 
 /** @internal @This sets the input flow definition.
@@ -322,8 +355,11 @@ static int upipe_even_sub_control(struct upipe *upipe,
  */
 static void upipe_even_sub_free(struct upipe *upipe)
 {
-    upipe_throw_dead(upipe);
+    struct upipe_even *upipe_even = upipe_even_from_sub_mgr(upipe->mgr);
+    upipe_even->dead = true;
+    upipe_even_process(upipe_even_to_upipe(upipe_even), NULL);
 
+    upipe_throw_dead(upipe);
     upipe_even_sub_clean_output(upipe);
     upipe_even_sub_clean_input(upipe);
     upipe_even_sub_clean_sub(upipe);
@@ -368,6 +404,7 @@ static struct upipe *upipe_even_alloc(struct upipe_mgr *mgr,
     upipe_even_init_sub_subs(upipe);
     struct upipe_even *upipe_even = upipe_even_from_upipe(upipe);
     upipe_even->first_date = UINT64_MAX;
+    upipe_even->dead = false;
     upipe_throw_ready(upipe);
     return upipe;
 }
@@ -383,44 +420,49 @@ static void upipe_even_process(struct upipe *upipe, struct upump **upump_p)
     struct upipe_even *upipe_even = upipe_even_from_upipe(upipe);
     struct uchain *uchain;
 
-    if (unlikely(upipe_even->first_date == UINT64_MAX)) {
-        uint64_t first_date = 0;
+    if (!upipe_even->dead) {
+        if (unlikely(upipe_even->first_date == UINT64_MAX)) {
+            uint64_t first_date = 0;
+            ulist_foreach (&upipe_even->subs, uchain) {
+                struct upipe_even_sub *upipe_even_sub =
+                    upipe_even_sub_from_uchain(uchain);
+                if (upipe_even_sub->type == UPIPE_EVEN_SUBPIC)
+                    continue;
+
+                if (upipe_even_sub->first_date == UINT64_MAX)
+                    return;
+                if (upipe_even_sub->first_date > first_date)
+                    first_date = upipe_even_sub->first_date;
+            }
+
+            upipe_even->first_date = first_date;
+        }
+
+        uint64_t last_date = UINT64_MAX;
         ulist_foreach (&upipe_even->subs, uchain) {
             struct upipe_even_sub *upipe_even_sub =
                 upipe_even_sub_from_uchain(uchain);
             if (upipe_even_sub->type == UPIPE_EVEN_SUBPIC)
                 continue;
 
-            if (upipe_even_sub->first_date == UINT64_MAX)
+            if (upipe_even_sub->last_date == UINT64_MAX)
                 return;
-            if (upipe_even_sub->first_date > first_date)
-                first_date = upipe_even_sub->first_date;
+            if (upipe_even_sub->last_date < last_date)
+                last_date = upipe_even_sub->last_date;
         }
 
-        upipe_even->first_date = first_date;
+        upipe_even->last_date = last_date;
     }
 
-    uint64_t last_date = UINT64_MAX;
-    ulist_foreach (&upipe_even->subs, uchain) {
-        struct upipe_even_sub *upipe_even_sub =
-            upipe_even_sub_from_uchain(uchain);
-        if (upipe_even_sub->type == UPIPE_EVEN_SUBPIC)
-            continue;
-
-        if (upipe_even_sub->last_date == UINT64_MAX)
-            return;
-        if (upipe_even_sub->last_date < last_date)
-            last_date = upipe_even_sub->last_date;
-    }
-
-    upipe_even->last_date = last_date;
-
-    ulist_foreach (&upipe_even->subs, uchain) {
+    upipe_use(upipe);
+    struct uchain *uchain_tmp;
+    ulist_delete_foreach (&upipe_even->subs, uchain, uchain_tmp) {
         struct upipe_even_sub *upipe_even_sub =
             upipe_even_sub_from_uchain(uchain);
         upipe_even_sub_process(upipe_even_sub_to_upipe(upipe_even_sub),
                                upump_p);
     }
+    upipe_release(upipe);
 }
 
 /** @internal @This processes control commands on a even pipe.
