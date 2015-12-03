@@ -44,7 +44,7 @@ extern "C" {
 
 #include <stdbool.h>
 
-/** @This declares eight functions helping a pipe to block source pumps,
+/** @This declares nine functions helping a pipe to block source pumps,
  * and to hold urefs that can't be immediately output.
  *
  * You must add four members to your private upipe structure, for instance:
@@ -96,6 +96,10 @@ extern "C" {
  * Returns the first buffered uref.
  *
  * @item @code
+ *  void upipe_foo_unshift_input(struct upipe *upipe, struct uref *uref)
+ * @end code
+ * Pushes an uref back into the buffered urefs.
+ *
  * @item @code
  *  bool upipe_foo_output_input(struct upipe *upipe)
  * @end code
@@ -237,6 +241,18 @@ static UBASE_UNUSED struct uref *STRUCTURE##_pop_input(struct upipe *upipe) \
     s->NB_UREFS--;                                                          \
     return uref_from_uchain(uchain);                                        \
 }                                                                           \
+/** @internal @This pushes an uref back into the buffered urefs.            \
+ *                                                                          \
+ * @param upipe description structure of the pipe                           \
+ * @param uref uref to hold                                                 \
+ */                                                                         \
+static UBASE_UNUSED void STRUCTURE##_unshift_input(struct upipe *upipe,     \
+                                                   struct uref *uref)       \
+{                                                                           \
+    struct STRUCTURE *s = STRUCTURE##_from_upipe(upipe);                    \
+    ulist_unshift(&s->UREFS, uref_to_uchain(uref));                         \
+    s->NB_UREFS++;                                                          \
+}                                                                           \
 /** @internal @This outputs all urefs that have been held.                  \
  *                                                                          \
  * @param upipe description structure of the pipe                           \
@@ -248,12 +264,11 @@ static UBASE_UNUSED bool STRUCTURE##_output_input(struct upipe *upipe)      \
     struct uchain *uchain;                                                  \
     while ((uchain = ulist_pop(&s->UREFS)) != NULL) {                       \
         s->NB_UREFS--;                                                      \
+        struct uref *uref = uref_from_uchain(uchain);                       \
         bool (*output)(struct upipe *, struct uref *, struct upump **) =    \
             OUTPUT;                                                         \
-        if (output != NULL &&                                               \
-            !output(upipe, uref_from_uchain(uchain), NULL)) {               \
-            ulist_unshift(&s->UREFS, uchain);                               \
-            s->NB_UREFS++;                                                  \
+        if (output != NULL && !output(upipe, uref, NULL)) {                 \
+            STRUCTURE##_unshift_input(upipe, uref);                         \
             return false;                                                   \
         }                                                                   \
     }                                                                       \
@@ -298,6 +313,8 @@ static void STRUCTURE##_clean_input(struct upipe *upipe)                    \
     STRUCTURE##_unblock_input(upipe);                                       \
     struct uchain *uchain, *uchain_tmp;                                     \
     ulist_delete_foreach (&s->UREFS, uchain, uchain_tmp) {                  \
+        upipe_dbg_va(upipe, "deleting still-born uref %p",                  \
+                     uref_from_uchain(uchain));                             \
         ulist_delete(uchain);                                               \
         uref_free(uref_from_uchain(uchain));                                \
     }                                                                       \
