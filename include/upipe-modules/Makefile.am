@@ -56,4 +56,5 @@ myinclude_HEADERS = \
 	uref_aes_flow.h \
 	upipe_rate_limit.h \
 	upipe_burst.h \
+	upipe_sequential_source.h \
 	upipe_segment_source.h

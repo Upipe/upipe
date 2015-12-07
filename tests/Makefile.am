@@ -8,6 +8,7 @@ dist_check_SCRIPTS = \
 	uprobe_prefix_test.sh \
 	udict_inline_test.sh \
 	upipe_file_test.sh \
+	upipe_seq_src_test.sh \
 	upipe_multicat_test.sh \
 	upipe_ts_test.sh \
 	valgrind_wrapper.sh \
@@ -150,6 +151,7 @@ check_PROGRAMS += \
 	uprobe_upump_mgr_test \
 	upipe_transfer_test \
 	upipe_file_test \
+	upipe_seq_src_test \
 	upipe_queue_test \
 	upipe_udp_test \
 	upipe_http_src_test \
@@ -167,6 +169,7 @@ TESTS += \
 	uprobe_upump_mgr_test \
 	upipe_transfer_test \
 	upipe_file_test.sh \
+	upipe_seq_src_test.sh \
 	upipe_queue_test \
 	upipe_udp_test \
 	upipe_multicat_test.sh \
@@ -406,3 +409,4 @@ upump_ecore_test_LDADD = $(LDADD) $(ECORE_LIBS) $(top_builddir)/lib/upump-ecore/
 upump_ecore_test_CFLAGS = $(ECORE_CFLAGS)
 upipe_m3u_reader_test_LDADD = $(LDADD) -lev $(top_builddir)/lib/upump-ev/libupump_ev.la $(top_builddir)/lib/upipe-modules/libupipe_modules.la
 ustring_test_CFLAGS = -fno-inline
+upipe_seq_src_test_LDADD = $(LDADD) -lev $(top_builddir)/lib/upump-ev/libupump_ev.la $(top_builddir)/lib/upipe-modules/libupipe_modules.la
