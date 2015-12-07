@@ -58,4 +58,5 @@ myinclude_HEADERS = \
 	upipe_rate_limit.h \
 	upipe_burst.h \
 	upipe_sequential_source.h \
-	upipe_segment_source.h
+	upipe_segment_source.h \
+	upipe_id3v2.h
