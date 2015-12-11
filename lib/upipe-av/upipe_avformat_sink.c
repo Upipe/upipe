@@ -359,6 +359,7 @@ static int upipe_avfsink_sub_set_flow_def(struct upipe *upipe,
     if (likely(ubase_check(uref_flow_get_id(flow_def, &id)))) {
         stream->id = id;
     }
+    stream->disposition = AV_DISPOSITION_DEFAULT;
 
     uint8_t languages;
     const char *lang;
