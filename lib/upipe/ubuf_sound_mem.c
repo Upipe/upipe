@@ -135,7 +135,7 @@ static struct ubuf *ubuf_sound_mem_alloc(struct ubuf_mgr *mgr,
         size_t plane_size;
         if (sound_mgr->align && (size * sound_mgr->common_mgr.sample_size) % sound_mgr->align)
             align = sound_mgr->align;
-        plane_size = (size * sound_mgr->common_mgr.sample_size) + align;
+        plane_size = (size * sound_mgr->common_mgr.sample_size * strlen(sound_mgr->common_mgr.planes[plane]->channel)) + align;
         if (align)
             plane_size -= plane_size % align;
         plane_sizes[plane] = plane_size + sound_mgr->align;
