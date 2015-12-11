@@ -2,8 +2,6 @@ Plans for core:
  - thread pool support in upump-ev
 
 Plans for modules:
- - trickplay support for multiple programs (needed for TS file transcoding)
- - partial rewrite of TS mux for better scheduling
 
 Bugs documentation:
  - doubly declared functions (due to __attribute__((format)))
