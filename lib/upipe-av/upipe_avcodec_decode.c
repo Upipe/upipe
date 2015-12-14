@@ -491,8 +491,6 @@ static int upipe_avcdec_get_buffer_sound(struct AVCodecContext *context,
     if (context->frame_size)
         UBASE_FATAL(upipe, uref_sound_flow_set_samples(flow_def_attr,
                                                  context->frame_size))
-    UBASE_FATAL(upipe, uref_sound_flow_set_sample_size(flow_def_attr,
-                     av_get_bytes_per_sample(context->sample_fmt)))
     UBASE_FATAL(upipe, uref_sound_flow_set_align(flow_def_attr, 32))
 
     if (unlikely(upipe_avcdec->ubuf_mgr == NULL)) {
@@ -533,6 +531,9 @@ static int upipe_avcdec_get_buffer_sound(struct AVCodecContext *context,
 
     frame->linesize[0] = av_get_bytes_per_sample(context->sample_fmt) *
                          frame->nb_samples;
+
+    if (!av_sample_fmt_is_planar(context->sample_fmt))
+        frame->linesize[0] *= context->channels;
 
     frame->extended_data = frame->data;
     frame->type = FF_BUFFER_TYPE_USER;
