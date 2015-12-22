@@ -327,8 +327,6 @@ static int upipe_avfsink_sub_set_flow_def(struct upipe *upipe,
 
     if (upipe_avfsink->opened) {
         /* Die if the attributes changed. */
-        /* NB: this supposes that all attributes are in the udict, and that
-         * the udict is never empty. */
         bool ret = upipe_avfsink_sub_check_flow_def_check(upipe,
                                                           flow_def_check);
         free(extradata_alloc);
@@ -337,7 +335,6 @@ static int upipe_avfsink_sub_set_flow_def(struct upipe *upipe,
         if (ret && codec_id < AV_CODEC_ID_FIRST_AUDIO &&
             urational_cmp(&sar, &upipe_avfsink_sub->sar)) {
             upipe_warn(upipe, "SAR is different");
-            upipe_throw_error(upipe, UBASE_ERR_BUSY);
         }
         return ret ? UBASE_ERR_NONE : UBASE_ERR_BUSY;
     }

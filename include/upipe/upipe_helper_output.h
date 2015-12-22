@@ -213,13 +213,14 @@ static UBASE_UNUSED void STRUCTURE##_output(struct upipe *upipe,            \
         }                                                                   \
         switch (s->OUTPUT_STATE) {                                          \
             case UPIPE_HELPER_OUTPUT_NONE: {                                \
-                if (likely(ubase_check(upipe_set_flow_def(s->OUTPUT,        \
-                                                          s->FLOW_DEF)))) { \
+                int err = upipe_set_flow_def(s->OUTPUT, s->FLOW_DEF);       \
+                if (likely(ubase_check(err))) {                             \
                     upipe_dbg(s->OUTPUT, "accepted flow def");              \
                     s->OUTPUT_STATE = UPIPE_HELPER_OUTPUT_VALID;            \
                     continue;                                               \
                 }                                                           \
                 upipe_dbg(s->OUTPUT, "rejected flow def");                  \
+                upipe_throw_error(s->OUTPUT, err);                          \
                 struct upipe *output = upipe_use(s->OUTPUT);                \
                 upipe_throw_need_output(upipe, s->FLOW_DEF);                \
                 if (output == s->OUTPUT || already_retried)                 \
