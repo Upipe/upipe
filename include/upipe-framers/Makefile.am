@@ -11,4 +11,5 @@ myinclude_HEADERS = \
 	uref_mpgv.h \
 	uref_h264_flow.h \
 	uref_mpga_flow.h \
-	uref_mpgv_flow.h
+	uref_mpgv_flow.h \
+	upipe_s302_framer.h
