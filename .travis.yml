@@ -24,7 +24,7 @@ matrix:
         - GCC_VERSION=5
         - APT_REPOS="ppa:ubuntu-toolchain-r/test ppa:frodo-vdr/main ppa:danmbox/ppa ppa:dlundquist/sniproxy"
         - APT_PACKAGES="gcc-$GCC_VERSION-multilib g++-$GCC_VERSION-multilib"
-        - APT_PACKAGES_RM="mesa-common-dev libgl1-mesa-dev libglu1-mesa-dev"
+        - APT_PACKAGES_RM="mesa-common-dev libgl1-mesa-dev libglu1-mesa-dev libasound2-dev"
         - HOST_CC="gcc-$GCC_VERSION -m32"
         - HOST_CXX="g++-$GCC_VERSION -m32"
         - CFLAGS="-msse2 -mfpmath=sse"
