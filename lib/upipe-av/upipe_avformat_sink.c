@@ -239,8 +239,8 @@ static int upipe_avfsink_sub_set_flow_def(struct upipe *upipe,
     uint64_t octetrate = 0;
     uref_block_flow_get_octetrate(flow_def, &octetrate);
 
-    struct urational fps, sar;
-    uint64_t width, height;
+    struct urational fps = {}, sar;
+    uint64_t width = 0, height = 0;
     uint8_t channels = 0;
     uint64_t rate = 0, samples = 0;
     if (codec_id < AV_CODEC_ID_FIRST_AUDIO) {
