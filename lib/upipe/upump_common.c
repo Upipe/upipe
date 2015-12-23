@@ -116,7 +116,8 @@ static void *upump_common_blocker_alloc_inner(struct upool *upool)
  * @param upool pointer to upool
  * @param blocker_common pointer to block_common to free
  */
-void upump_common_blocker_free_inner(struct upool *upool, void *blocker_common)
+static void upump_common_blocker_free_inner(struct upool *upool,
+                                            void *blocker_common)
 {
     free(blocker_common);
 }

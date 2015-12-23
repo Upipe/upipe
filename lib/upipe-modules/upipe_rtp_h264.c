@@ -38,8 +38,8 @@
 #include <upipe/upipe_helper_flow_def.h>
 #include <upipe-modules/upipe_rtp_h264.h>
 
-const uint8_t *upipe_mpeg_scan(const uint8_t *p, const uint8_t *end,
-                               uint8_t *len)
+static const uint8_t *upipe_mpeg_scan(const uint8_t *p, const uint8_t *end,
+                                      uint8_t *len)
 {
     while (p < end) {
         if ((p + 2 < end) && p[0] == 0 && p[1] == 0) {

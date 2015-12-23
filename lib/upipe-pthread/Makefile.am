@@ -6,7 +6,7 @@ libupipe_pthread_la_SOURCES = \
 	uprobe_pthread_assert.c
 
 libupipe_pthread_la_CPPFLAGS = -I$(top_builddir)/include -I$(top_srcdir)/include
-libupipe_pthread_la_CFLAGS = -Wall @PTHREAD_CFLAGS@
+libupipe_pthread_la_CFLAGS = @PTHREAD_CFLAGS@
 libupipe_pthread_la_LIBADD = $(top_builddir)/lib/upipe/libupipe.la $(top_builddir)/lib/upipe-modules/libupipe_modules.la @PTHREAD_LIBS@
 libupipe_pthread_la_LDFLAGS = -no-undefined
 

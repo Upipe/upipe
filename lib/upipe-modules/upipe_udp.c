@@ -197,7 +197,8 @@ static bool upipe_udp_parse_node_service(struct upipe *upipe,
     int family = AF_INET;
     char port_buffer[6];
     char *string = strdup(_string);
-    char *node, *port = NULL, *end;
+    const char *node;
+    char *port = NULL, *end;
     struct addrinfo *res = NULL;
     struct addrinfo hint;
     int ret;

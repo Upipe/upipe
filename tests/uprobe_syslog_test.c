@@ -39,7 +39,7 @@
 
 int main(int argc, char **argv)
 {
-    char *ident = "upipe-test";
+    const char *ident = "upipe-test";
 
     struct uprobe *uprobe1 = uprobe_syslog_alloc(NULL, ident, LOG_NDELAY | LOG_PID, LOG_LOCAL0, UPROBE_LOG_DEBUG);
     assert(uprobe1 != NULL);

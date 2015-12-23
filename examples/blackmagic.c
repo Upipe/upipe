@@ -99,7 +99,7 @@ static int catch(struct uprobe *uprobe, struct upipe *upipe,
     }
 }
 
-void usage(const char *argv0)
+static void usage(const char *argv0)
 {
     printf("Usage: %s [-d] [-f format] [-m mime] [-c video_codec] [-a audio_codec] bmd_uri sink_uri\n", argv0);
     exit(-1);

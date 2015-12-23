@@ -133,7 +133,7 @@ static inline struct es_conf *es_conf_from_uchain(struct uchain *uchain)
 }
 
 /* return es configuration from id */
-struct es_conf *es_conf_from_id(struct uchain *list, uint64_t id)
+static struct es_conf *es_conf_from_id(struct uchain *list, uint64_t id)
 {
     struct uchain *uchain;
     ulist_foreach (list, uchain) {
@@ -146,8 +146,8 @@ struct es_conf *es_conf_from_id(struct uchain *list, uint64_t id)
 }
 
 /* iterate in es configuration options */
-bool es_conf_iterate(struct es_conf *conf, const char **key,
-                     const char **value, enum udict_type *type)
+static bool es_conf_iterate(struct es_conf *conf, const char **key,
+                            const char **value, enum udict_type *type)
 {
     if (!ubase_check(udict_iterate(conf->options, key, type)) ||
         *type == UDICT_TYPE_END) {
@@ -157,8 +157,8 @@ bool es_conf_iterate(struct es_conf *conf, const char **key,
 }
 
 /* allocate es configuration */
-struct es_conf *es_conf_alloc(struct udict_mgr *mgr,
-                              uint64_t id, struct uchain *list)
+static struct es_conf *es_conf_alloc(struct udict_mgr *mgr,
+                                     uint64_t id, struct uchain *list)
 {
     struct es_conf *conf = malloc(sizeof(struct es_conf));
     if (unlikely(conf == NULL))
@@ -175,8 +175,8 @@ struct es_conf *es_conf_alloc(struct udict_mgr *mgr,
 }
 
 /* add option to es configuration */
-bool es_conf_add_option(struct es_conf *conf, const char *key,
-                                              const char *value)
+static bool es_conf_add_option(struct es_conf *conf, const char *key,
+                               const char *value)
 {
     assert(conf);
     return ubase_check(udict_set_string(conf->options,
@@ -270,7 +270,7 @@ static int catch_demux(struct uprobe *uprobe, struct upipe *upipe,
             incoming = decoder;
             
             /* stream type */
-            char *ffmt_def = NULL;
+            const char *ffmt_def = NULL;
             if (strstr(def, ".sound.")) {
                 ffmt_def = "sound.";
             } else if (strstr(def, "pic.")) {

@@ -619,8 +619,7 @@ static int upipe_audiocont_switch_input(struct upipe *upipe,
                                         struct upipe *input)
 {
     struct upipe_audiocont *upipe_audiocont = upipe_audiocont_from_upipe(upipe);
-    const char *name = upipe_audiocont->input_name ?
-                       upipe_audiocont->input_name : "(noname)";
+    const char *name = upipe_audiocont->input_name ? : "(noname)";
     upipe_audiocont->input_prev = upipe_audiocont->input_cur;
     upipe_audiocont->input_cur = input;
     upipe_audiocont->crossblend = 0.;

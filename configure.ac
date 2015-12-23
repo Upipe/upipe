@@ -25,6 +25,10 @@ AC_PROG_MAKE_SET
 AM_PROG_CC_C_O
 LT_INIT([win32-dll])
 
+WARN_FLAGS="-Wall -Wextra -Wno-unused -Wno-unused-parameter -Wno-sign-compare -Wmissing-declarations -Wwrite-strings -Wredundant-decls -Wundef -Wmissing-include-dirs"
+AC_SUBST([AM_CFLAGS], ["$WARN_FLAGS -Wstrict-prototypes -Wmissing-prototypes -Wold-style-definition"])
+AC_SUBST([AM_CXXFLAGS], ["$WARN_FLAGS"])
+
 # Checks for libraries.
 AC_CHECK_LIB(rt, clock_gettime, libadd_rt_lib="-lrt", libadd_rt_lib="")
 AC_SUBST(libadd_rt_lib)

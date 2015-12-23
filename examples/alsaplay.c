@@ -162,7 +162,7 @@ static int catch_avcdec(struct uprobe *uprobe, struct upipe *upipe,
     return true;
 }
 
-void usage(const char *argv0)
+static void usage(const char *argv0)
 {
     printf("Usage: %s [-d] <file> [<alsa device>]\n", argv0);
     exit(-1);

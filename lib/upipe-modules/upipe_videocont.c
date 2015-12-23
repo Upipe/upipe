@@ -467,8 +467,7 @@ static int upipe_videocont_switch_input(struct upipe *upipe,
                                         struct upipe *input)
 {
     struct upipe_videocont *upipe_videocont = upipe_videocont_from_upipe(upipe);
-    char *name = upipe_videocont->input_name ?
-                 upipe_videocont->input_name : "(noname)";
+    const char *name = upipe_videocont->input_name ? : "(noname)";
     upipe_videocont->input_cur = input;
     upipe_notice_va(upipe, "switched to input \"%s\" (%p)", name, input);
 

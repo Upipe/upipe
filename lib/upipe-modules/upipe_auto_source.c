@@ -196,7 +196,7 @@ static int upipe_auto_src_mgr_control(struct upipe_mgr *mgr,
  *
  * @param urefcount the embedded @tt {struct urefcount} of the manager
  */
-void upipe_auto_src_mgr_free(struct urefcount *urefcount)
+static void upipe_auto_src_mgr_free(struct urefcount *urefcount)
 {
     struct upipe_auto_src_mgr *upipe_auto_src_mgr =
         upipe_auto_src_mgr_from_urefcount(urefcount);

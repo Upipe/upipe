@@ -80,7 +80,7 @@ struct upipe *multicat_sink;
 struct upump *idler;
 uint64_t rotate = 0;
 
-void sig_handler(int sig)
+static void sig_handler(int sig)
 {
 //    fprintf("Exit on signal %d\n", sig);
     exit(1);

@@ -574,7 +574,7 @@ static struct upipe *_upipe_bmd_src_alloc(struct upipe_mgr *mgr,
  * @param upipe description structure of the pipe
  * @param upump description structure of the pump
  */
-void upipe_bmd_src_work(struct upipe *upipe, struct upump *upump)
+static void upipe_bmd_src_work(struct upipe *upipe, struct upump *upump)
 {
     struct upipe_bmd_src *upipe_bmd_src = upipe_bmd_src_from_upipe(upipe);
     struct uref *uref;

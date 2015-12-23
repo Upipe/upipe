@@ -30,6 +30,7 @@
 #include <upipe/ubase.h>
 #include <upipe/umem.h>
 #include <upipe/ubuf.h>
+#include <upipe/ubuf_mem.h>
 #include <upipe/ubuf_block_mem.h>
 #include <upipe/ubuf_pic_mem.h>
 #include <upipe/ubuf_sound_mem.h>

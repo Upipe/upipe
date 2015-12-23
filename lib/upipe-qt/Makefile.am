@@ -7,8 +7,6 @@ moc_thumbnail.cpp: thumbnail.h
 libupipe_qt_la_SOURCES = upipe_qt_html.cpp thumbnail.cpp thumbnail.h
 nodist_libupipe_qt_la_SOURCES = moc_thumbnail.cpp
 libupipe_qt_la_CPPFLAGS = -I$(top_builddir)/include -I$(top_srcdir)/include $(QTWEBKIT_CFLAGS) -I.
-libupipe_qt_la_CFLAGS = -Wall 
-libupipe_qt_la_CXXFLAGS = -Wall
 libupipe_qt_la_LIBADD = $(top_builddir)/lib/upipe/libupipe.la $(QTWEBKIT_LIBS)
 
 
