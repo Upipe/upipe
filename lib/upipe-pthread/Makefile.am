@@ -1,6 +1,4 @@
-if HAVE_PTHREAD
 lib_LTLIBRARIES = libupipe_pthread.la
-endif
 
 libupipe_pthread_la_SOURCES = \
 	upipe_pthread_transfer.c \

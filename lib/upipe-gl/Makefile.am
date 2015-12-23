@@ -1,6 +1,4 @@
-if HAVE_GLX
 lib_LTLIBRARIES = libupipe_gl.la
-endif
 
 libupipe_gl_la_SOURCES = \
     upipe_gl_sink_common.c \

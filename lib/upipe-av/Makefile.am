@@ -1,7 +1,5 @@
-if HAVE_AVFORMAT
 lib_LTLIBRARIES = libupipe_av.la
 BUILT_SOURCES = upipe_av_codecs.h
-endif
 
 nodist_libupipe_av_la_SOURCES = upipe_av_codecs.h
 CLEANFILES = upipe_av_codecs.h

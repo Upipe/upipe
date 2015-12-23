@@ -1,6 +1,4 @@
-if HAVE_BITSTREAM
 lib_LTLIBRARIES = libupipe_ts.la
-endif
 
 noinst_HEADERS = upipe_ts_psi_decoder.h
 libupipe_ts_la_SOURCES = \

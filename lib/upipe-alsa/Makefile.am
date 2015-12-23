@@ -1,6 +1,4 @@
-if HAVE_ALSA
 lib_LTLIBRARIES = libupipe_alsa.la
-endif
 
 libupipe_alsa_la_SOURCES = upipe_alsa_sink.c upipe_alsa_source.c
 libupipe_alsa_la_CPPFLAGS = -I$(top_builddir)/include -I$(top_srcdir)/include

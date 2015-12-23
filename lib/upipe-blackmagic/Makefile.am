@@ -1,6 +1,4 @@
-if HAVE_DLFCN_H
 lib_LTLIBRARIES = libupipe_blackmagic.la
-endif
 
 libupipe_blackmagic_la_SOURCES = ubuf_pic_blackmagic.cpp ubuf_sound_blackmagic.cpp upipe_blackmagic_source.cpp
 EXTRA_libupipe_blackmagic_la_SOURCES = include/DeckLinkAPIConfiguration.h include/DeckLinkAPIDeckControl.h include/DeckLinkAPIDiscovery.h include/DeckLinkAPIDispatch.cpp include/DeckLinkAPI.h include/DeckLinkAPIModes.h include/DeckLinkAPITypes.h include/DeckLinkAPIVersion.h include/LinuxCOM.h

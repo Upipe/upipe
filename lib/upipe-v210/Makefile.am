@@ -1,6 +1,4 @@
-if HAVE_AVUTIL
 lib_LTLIBRARIES = libupipe_v210.la
-endif
 
 libupipe_v210_la_SOURCES = upipe_v210enc.c
 libupipe_v210_la_CPPFLAGS = -I$(top_builddir)/include -I$(top_srcdir)/include
