@@ -493,7 +493,7 @@ static void upipe_xfer_no_ref(struct upipe *upipe)
  *
  * @param mgr pointer to a upipe manager
  */
-void upipe_xfer_mgr_vacuum(struct upipe_mgr *mgr)
+static void upipe_xfer_mgr_vacuum(struct upipe_mgr *mgr)
 {
     struct upipe_xfer_mgr *xfer_mgr = upipe_xfer_mgr_from_upipe_mgr(mgr);
     struct upipe_xfer_msg *msg;

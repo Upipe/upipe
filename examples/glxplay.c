@@ -596,7 +596,7 @@ static int upipe_glxplayer_catch_glx(struct uprobe *uprobe,
  * @param loglevel minimum log level to print
  * @return pointer to glxplayer context, or NULL in case of error
  */
-struct upipe_glxplayer *upipe_glxplayer_alloc(enum uprobe_log_level loglevel)
+static struct upipe_glxplayer *upipe_glxplayer_alloc(enum uprobe_log_level loglevel)
 {
     struct upipe_glxplayer *glxplayer = malloc(sizeof(struct upipe_glxplayer));
     if (unlikely(glxplayer == NULL))
@@ -758,9 +758,9 @@ fail_umem_mgr:
  * @param upipe_ts set to true to use Upipe's TS demux, false for libavformat
  * @return false in case of error
  */
-bool upipe_glxplayer_play(struct upipe_glxplayer *glxplayer,
-                          struct upump_mgr *upump_mgr, const char *uri,
-                          bool upipe_ts)
+static bool upipe_glxplayer_play(struct upipe_glxplayer *glxplayer,
+                                 struct upump_mgr *upump_mgr, const char *uri,
+                                 bool upipe_ts)
 {
     struct upipe *upipe_src;
     uprobe_pthread_upump_mgr_set(glxplayer->uprobe_logger, upump_mgr);
@@ -921,7 +921,7 @@ bool upipe_glxplayer_play(struct upipe_glxplayer *glxplayer,
  *
  * @param glxplayer glxplayer context
  */
-void upipe_glxplayer_free(struct upipe_glxplayer *glxplayer)
+static void upipe_glxplayer_free(struct upipe_glxplayer *glxplayer)
 {
     uprobe_clean(&glxplayer->uprobe_dec_qsrc_s);
     uprobe_clean(&glxplayer->uprobe_avcdec_s);

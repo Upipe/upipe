@@ -13,7 +13,6 @@ libupipe_framers_la_SOURCES = \
 	upipe_video_trim.c \
 	upipe_s302_framer.c
 libupipe_framers_la_CPPFLAGS = -I$(top_builddir)/include -I$(top_srcdir)/include
-libupipe_framers_la_CFLAGS = -Wall
 libupipe_framers_la_LDFLAGS = -no-undefined
 
 pkgconfigdir = $(libdir)/pkgconfig

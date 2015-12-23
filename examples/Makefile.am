@@ -1,5 +1,4 @@
 AM_CPPFLAGS = -I$(top_builddir)/include -I$(top_srcdir)/include
-AM_CFLAGS = -Wall
 LDADD = $(top_builddir)/lib/upipe/libupipe.la
 UPIPEMODULES_LIBS = $(top_builddir)/lib/upipe-modules/libupipe_modules.la
 UPIPEPTHREAD_LIBS = $(top_builddir)/lib/upipe-pthread/libupipe_pthread.la

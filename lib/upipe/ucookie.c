@@ -143,7 +143,7 @@ static int ucookie_parse_cookie_string(struct ucookie *ucookie,
     return UBASE_ERR_NONE;
 }
 
-int ucookie_parse(struct ucookie *ucookie, struct ustring *ustring)
+static int ucookie_parse(struct ucookie *ucookie, struct ustring *ustring)
 {
     struct ustring sub = *ustring;
     sub = ustring_shift_while(sub, " \t");
