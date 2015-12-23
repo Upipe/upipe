@@ -99,7 +99,9 @@ before_install:
   # libamt
   - if [ "$TRAVIS_OS_NAME" = "linux" ]; then
       git clone --depth 1 https://github.com/cisco/SSMAMTtools.git;
-      make CFLAGS='$(ADD_INCLUDE_DIR) -c -fPIC' -C SSMAMTtools/build/linux;
+      make -C SSMAMTtools/build/linux
+        CC="$HOST_CC"
+        CFLAGS='$(ADD_INCLUDE_DIR) -c -fPIC';
       sudo install -D SSMAMTtools/include/amt.h /usr/local/include/amt.h;
       sudo install -D SSMAMTtools/lib/linux/libamt64.a /usr/local/lib/libamt.a;
       sudo ldconfig;
