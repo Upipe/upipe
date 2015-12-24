@@ -225,7 +225,6 @@ check_PROGRAMS += \
 	upipe_mpgv_framer_test \
 	upipe_mpga_framer_test \
 	upipe_a52_framer_test \
-	upipe_h264_framer_test \
 	upipe_video_trim_test \
 	upipe_ts_check_test \
 	upipe_ts_decaps_test \
@@ -238,7 +237,6 @@ check_PROGRAMS += \
 	upipe_ts_psi_merge_test \
 	upipe_ts_psi_split_test \
 	upipe_ts_scte35_decoder_test \
-	upipe_ts_scte35_probe_test \
 	upipe_ts_sdt_decoder_test \
 	upipe_ts_tdt_decoder_test \
 	upipe_ts_split_test \
@@ -248,8 +246,7 @@ check_PROGRAMS += \
 	upipe_ts_pes_encaps_test \
 	upipe_ts_psi_generator_test \
 	upipe_ts_si_generator_test \
-	upipe_ts_tstd_test \
-	upipe_ts_test
+	upipe_ts_tstd_test
 TESTS += \
 	upipe_rtp_decaps_test \
 	upipe_rtp_prepend_test \
@@ -268,7 +265,6 @@ TESTS += \
 	upipe_ts_psi_merge_test \
 	upipe_ts_psi_split_test \
 	upipe_ts_scte35_decoder_test \
-	upipe_ts_scte35_probe_test \
 	upipe_ts_sdt_decoder_test \
 	upipe_ts_tdt_decoder_test \
 	upipe_ts_split_test \
@@ -278,8 +274,17 @@ TESTS += \
 	upipe_ts_pes_encaps_test \
 	upipe_ts_psi_generator_test \
 	upipe_ts_si_generator_test \
-	upipe_ts_tstd_test \
+	upipe_ts_tstd_test
+
+if HAVE_EV
+check_PROGRAMS += \
+	upipe_h264_framer_test \
+	upipe_ts_scte35_probe_test \
+	upipe_ts_test
+TESTS += \
+	upipe_ts_scte35_probe_test \
 	upipe_ts_test.sh
+endif
 endif
 
 if HAVE_X264
