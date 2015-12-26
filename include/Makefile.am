@@ -19,7 +19,7 @@ if HAVE_AMT
 SUBDIRS += upipe-amt
 endif
 
-if HAVE_AMT
+if HAVE_NACL
 SUBDIRS += upipe-nacl
 endif
 
