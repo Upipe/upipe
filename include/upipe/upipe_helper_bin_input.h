@@ -48,13 +48,14 @@ extern "C" {
  * which internally implement an inner pipeline to handle a given task. This
  * helper deals with the input of the inner pipeline and incoming requests.
  *
- * You must add two members to your private upipe structure, for instance:
+ * @strong{You must} add a member to your private upipe structure,
+ * for instance:
  * @code
- *  struct upipe *first_inner;
  *  struct uchain input_request_list;
  * @end code
  *
- * You must also declare @ref #UPIPE_HELPER_UPIPE prior to using this macro.
+ * @strong{You must} also declare @ref #UPIPE_HELPER_UPIPE and
+ * @ref #UPIPE_HELPER_INNER prior to using this macro.
  *
  * Supposing the name of your structure is upipe_foo, it declares:
  * @list
@@ -64,7 +65,7 @@ extern "C" {
  * Typically called in your upipe_foo_alloc() function.
  *
  * @item @code
- *  void upipe_foo_store_first_inner(struct upipe *upipe, struct upipe *inner)
+ *  void upipe_foo_store_bin_input(struct upipe *upipe, struct upipe *inner)
  * @end code
  * Called whenever you change the first inner pipe of this bin.
  *
@@ -126,7 +127,7 @@ extern "C" {
 static void STRUCTURE##_init_bin_input(struct upipe *upipe)                 \
 {                                                                           \
     struct STRUCTURE *s = STRUCTURE##_from_upipe(upipe);                    \
-    s->FIRST_INNER = NULL;                                                  \
+    STRUCTURE##_init_##FIRST_INNER(upipe);                                  \
     ulist_init(&s->REQUEST_LIST);                                           \
 }                                                                           \
 /** @internal @This sends a uref to the input. Note that uref is then       \
@@ -154,8 +155,8 @@ static UBASE_UNUSED void STRUCTURE##_bin_input(struct upipe *upipe,         \
  * @param upipe description structure of the pipe                           \
  * @param first_inner first inner pipe (belongs to the callee)              \
  */                                                                         \
-static void STRUCTURE##_store_first_inner(struct upipe *upipe,              \
-                                          struct upipe *first_inner)        \
+static void STRUCTURE##_store_bin_input(struct upipe *upipe,                \
+                                        struct upipe *first_inner)          \
 {                                                                           \
     struct STRUCTURE *s = STRUCTURE##_from_upipe(upipe);                    \
     if (likely(s->FIRST_INNER != NULL)) {                                   \
@@ -164,9 +165,8 @@ static void STRUCTURE##_store_first_inner(struct upipe *upipe,              \
             struct urequest *urequest = urequest_from_uchain(uchain);       \
             upipe_unregister_request(s->FIRST_INNER, urequest);             \
         }                                                                   \
-        upipe_release(s->FIRST_INNER);                                      \
     }                                                                       \
-    s->FIRST_INNER = first_inner;                                           \
+    STRUCTURE##_store_##FIRST_INNER(upipe, first_inner);                    \
     if (first_inner != NULL) {                                              \
         struct uchain *uchain;                                              \
         ulist_foreach (&s->REQUEST_LIST, uchain) {                          \
@@ -300,8 +300,7 @@ static int STRUCTURE##_control_bin_input(struct upipe *upipe,               \
  */                                                                         \
 static void STRUCTURE##_clean_bin_input(struct upipe *upipe)                \
 {                                                                           \
-    struct STRUCTURE *s = STRUCTURE##_from_upipe(upipe);                    \
-    upipe_release(s->FIRST_INNER);                                          \
+    STRUCTURE##_clean_##FIRST_INNER(upipe);                                 \
 }
 
 #ifdef __cplusplus

@@ -35,6 +35,8 @@
 #include <upipe/upipe_helper_upipe.h>
 #include <upipe/upipe_helper_void.h>
 #include <upipe/upipe_helper_urefcount.h>
+#include <upipe/upipe_helper_inner.h>
+#include <upipe/upipe_helper_uprobe.h>
 #include <upipe/upipe_helper_bin_output.h>
 #include <upipe-modules/upipe_rtp_source.h>
 #include <upipe-modules/upipe_udp_source.h>
@@ -91,8 +93,9 @@ struct upipe_rtpsrc {
 UPIPE_HELPER_UPIPE(upipe_rtpsrc, upipe, UPIPE_RTPSRC_SIGNATURE)
 UPIPE_HELPER_VOID(upipe_rtpsrc)
 UPIPE_HELPER_UREFCOUNT(upipe_rtpsrc, urefcount, upipe_rtpsrc_no_ref)
-UPIPE_HELPER_BIN_OUTPUT(upipe_rtpsrc, last_inner_probe, last_inner, output,
-                        output_request_list)
+UPIPE_HELPER_INNER(upipe_rtpsrc, last_inner)
+UPIPE_HELPER_UPROBE(upipe_rtpsrc, urefcount_real, last_inner_probe, NULL)
+UPIPE_HELPER_BIN_OUTPUT(upipe_rtpsrc, last_inner, output, output_request_list)
 
 UBASE_FROM_TO(upipe_rtpsrc, urefcount, urefcount_real, urefcount_real)
 
@@ -136,8 +139,8 @@ static struct upipe *upipe_rtpsrc_alloc(struct upipe_mgr *mgr,
     upipe_rtpsrc_init_urefcount(upipe);
     urefcount_init(upipe_rtpsrc_to_urefcount_real(upipe_rtpsrc),
                    upipe_rtpsrc_free);
-    upipe_rtpsrc_init_bin_output(upipe,
-            upipe_rtpsrc_to_urefcount_real(upipe_rtpsrc));
+    upipe_rtpsrc_init_last_inner_probe(upipe);
+    upipe_rtpsrc_init_bin_output(upipe);
     upipe_rtpsrc->source = NULL;
 
     uprobe_init(&upipe_rtpsrc->proxy_probe, upipe_rtpsrc_proxy_probe, NULL);
@@ -160,7 +163,7 @@ static struct upipe *upipe_rtpsrc_alloc(struct upipe_mgr *mgr,
                              UPROBE_LOG_VERBOSE, "rtpd"));
     if (unlikely(rtpd == NULL))
         goto upipe_rtpsrc_alloc_err;
-    upipe_rtpsrc_store_last_inner(upipe, rtpd);
+    upipe_rtpsrc_store_bin_output(upipe, rtpd);
     return upipe;
 
 upipe_rtpsrc_alloc_err:
@@ -208,7 +211,7 @@ static void upipe_rtpsrc_free(struct urefcount *urefcount_real)
     struct upipe *upipe = upipe_rtpsrc_to_upipe(upipe_rtpsrc);
     upipe_throw_dead(upipe);
     uprobe_clean(&upipe_rtpsrc->proxy_probe);
-    uprobe_clean(&upipe_rtpsrc->last_inner_probe);
+    upipe_rtpsrc_clean_last_inner_probe(upipe);
     urefcount_clean(urefcount_real);
     upipe_rtpsrc_clean_urefcount(upipe);
     upipe_rtpsrc_free_void(upipe);

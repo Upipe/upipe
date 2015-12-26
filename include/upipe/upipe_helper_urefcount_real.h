@@ -1,7 +1,5 @@
 /*
- * Copyright (C) 2013 OpenHeadend S.A.R.L.
- *
- * Authors: Christophe Massiot
+ * Copyright (c) 2015 Arnaud de Turckheim <quarium@gmail.com>
  *
  * Permission is hereby granted, free of charge, to any person obtaining
  * a copy of this software and associated documentation files (the
@@ -24,28 +22,21 @@
  */
 
 /** @file
- * @short Upipe helper functions for refcount structures
+ * @short Upipe helper functions for real refcount structures
  */
 
-#ifndef _UPIPE_UPIPE_HELPER_UREFCOUNT_H_
-/** @hidden */
-#define _UPIPE_UPIPE_HELPER_UREFCOUNT_H_
+#ifndef _UPIPE_UPIPE_HELPER_UREFCOUNT_REAL_H_
+# define _UPIPE_UPIPE_HELPER_UREFCOUNT_REAL_H_
 #ifdef __cplusplus
 extern "C" {
 #endif
 
-#include <upipe/ubase.h>
-#include <upipe/urefcount.h>
-#include <upipe/upipe.h>
-
-#include <assert.h>
-
-/** @This declares three functions dealing with public and private parts
+/** @This declares functions dealing with public and private parts
  * of the allocated pipe structure.
  *
  * You must add the urefcount structure to your private pipe structure:
  * @code
- *  struct urefcount urefcount;
+ *  struct urefcount urefcount_real;
  * @end code
  *
  * You must also declare @ref #UPIPE_HELPER_UPIPE prior to using this macro,
@@ -54,20 +45,27 @@ extern "C" {
  *  void upipe_foo_free(struct upipe *upipe)
  * @end code
  *
- * Supposing the name of your structure is upipe_foo, it declares:
+ * Supposing the name of your structure is upipe_foo and the name of the
+ * urefcount is urefcount_real, it declares:
  * @list
  * @item @code
- *  void upipe_foo_dead_urefcount(struct urefcount *urefcount)
+ *  void upipe_foo_dead_urefcount_real(struct urefcount *urefcount)
  * @end code
- * Internal wrapper for upipe_foo_free.
+ * Internal wrapper.
+ *
+ * @list
+ * @item @code
+ *  void upipe_foo_release_urefcount_real(struct urefcount *urefcount)
+ * @end code
+ * Typically called in the main urefcount callback.
  *
  * @item @code
- *  void upipe_foo_init_urefcount(struct upipe *upipe)
+ *  void upipe_foo_init_urefcount_real(struct upipe *upipe)
  * @end code
  * Typically called in your upipe_foo_alloc() function.
  *
  * @item @code
- *  void upipe_foo_clean_urefcount(struct upipe *upipe)
+ *  void upipe_foo_clean_urefcount_real(struct upipe *upipe)
  * @end code
  * Typically called from your upipe_foo_free() function.
  * @end list
@@ -77,7 +75,7 @@ extern "C" {
  * your private upipe structure
  * @param DEAD name of the function to free the structure
  */
-#define UPIPE_HELPER_UREFCOUNT(STRUCTURE, UREFCOUNT, DEAD)                  \
+#define UPIPE_HELPER_UREFCOUNT_REAL(STRUCTURE, UREFCOUNT, DEAD)             \
 UBASE_FROM_TO(STRUCTURE, urefcount, UREFCOUNT, UREFCOUNT)                   \
 /** @hidden */                                                              \
 static void DEAD(struct upipe *upipe);                                      \
@@ -85,32 +83,41 @@ static void DEAD(struct upipe *upipe);                                      \
  *                                                                          \
  * @param urefcount pointer to the urefcount structure                      \
  */                                                                         \
-static void STRUCTURE##_dead_urefcount(struct urefcount *urefcount)         \
+static void STRUCTURE##_dead_##UREFCOUNT(struct urefcount *urefcount)       \
 {                                                                           \
     struct STRUCTURE *s = STRUCTURE##_from_##UREFCOUNT(urefcount);          \
     DEAD(STRUCTURE##_to_upipe(s));                                          \
+}                                                                           \
+/** @internal @This releases the refcount.                                  \
+ *                                                                          \
+ * @param upipe description structure of the pipe                           \
+ */                                                                         \
+static void STRUCTURE##_release_##UREFCOUNT(struct upipe *upipe)            \
+{                                                                           \
+    struct STRUCTURE *s = STRUCTURE##_from_upipe(upipe);                    \
+    urefcount_release(&s->UREFCOUNT);                                       \
 }                                                                           \
 /** @internal @This initializes the private members for this helper.        \
  *                                                                          \
  * @param upipe description structure of the pipe                           \
  */                                                                         \
-static void STRUCTURE##_init_urefcount(struct upipe *upipe)                 \
+static void STRUCTURE##_init_##UREFCOUNT(struct upipe *upipe)               \
 {                                                                           \
     struct STRUCTURE *s = STRUCTURE##_from_upipe(upipe);                    \
-    urefcount_init(&s->UREFCOUNT, STRUCTURE##_dead_urefcount);              \
-    upipe->refcount = STRUCTURE##_to_##UREFCOUNT(s);                        \
+    urefcount_init(&s->UREFCOUNT, STRUCTURE##_dead_##UREFCOUNT);            \
 }                                                                           \
 /** @internal @This cleans up the private members for this helper.          \
  *                                                                          \
  * @param upipe description structure of the pipe                           \
  */                                                                         \
-static void STRUCTURE##_clean_urefcount(struct upipe *upipe)                \
+static void STRUCTURE##_clean_##UREFCOUNT(struct upipe *upipe)              \
 {                                                                           \
     struct STRUCTURE *s = STRUCTURE##_from_upipe(upipe);                    \
     urefcount_clean(&s->UREFCOUNT);                                         \
 }
 
+
 #ifdef __cplusplus
 }
 #endif
-#endif
+#endif /* !_UPIPE_UPIPE_HELPER_UREFCOUNT_REAL_H_ */
