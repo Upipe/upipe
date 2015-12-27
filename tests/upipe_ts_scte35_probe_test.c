@@ -145,7 +145,7 @@ int main(int argc, char *argv[])
     struct uclock uclock;
     uclock.refcount = NULL;
     uclock.uclock_now = test_now;
-    uclock.uclock_mktime = NULL;
+    uclock.uclock_to_real = uclock.uclock_from_real = NULL;
     uprobe_stdio = uprobe_uclock_alloc(uprobe_stdio, &uclock);
     assert(uprobe_stdio != NULL);
 

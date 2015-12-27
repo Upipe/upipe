@@ -51,8 +51,10 @@ int main(int argc, char **argv)
     assert(now_cal);
     printf("Now: %"PRIu64"\n", now);
     printf("Cal: %"PRIu64"\n", now_cal);
-    assert(uclock_mktime(uclock_cal, (uint64_t)TIME_SAMPLE * UCLOCK_FREQ) ==
-           TIME_SAMPLE);
+    assert(uclock_to_real(uclock_cal, (uint64_t)TIME_SAMPLE * UCLOCK_FREQ) ==
+           TIME_SAMPLE * UCLOCK_FREQ);
+    assert(uclock_from_real(uclock_cal, (uint64_t)TIME_SAMPLE * UCLOCK_FREQ) ==
+           TIME_SAMPLE * UCLOCK_FREQ);
     uclock_release(uclock);
     uclock_release(uclock_cal);
 }

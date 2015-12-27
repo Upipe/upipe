@@ -61,6 +61,34 @@ struct uclock_std {
 UBASE_FROM_TO(uclock_std, uclock, uclock, uclock)
 UBASE_FROM_TO(uclock_std, urefcount, urefcount, urefcount)
 
+/** @This returns the current time in the given clock.
+ *
+ * @param uclock utility structure passed to the module
+ * @param flags type of clock
+ * @return current system time in 27 MHz ticks
+ */
+static uint64_t uclock_std_now_inner(struct uclock *uclock,
+                                     enum uclock_std_flags flags)
+{
+#ifdef __MACH__ // OS X does not have clock_gettime, use clock_get_time
+    struct uclock_std *std = uclock_std_from_uclock(uclock);
+    mach_timespec_t ts;
+    clock_get_time((std->cclock), &ts);
+
+#else
+    struct timespec ts;
+    if (unlikely(clock_gettime((flags & UCLOCK_FLAG_REALTIME) ?
+                               CLOCK_REALTIME : CLOCK_MONOTONIC, &ts) == -1))
+        /* this should not happen as we have checked the clock existed
+         * in alloc */
+        return UINT64_MAX;
+#endif
+
+    uint64_t now = ts.tv_sec * UCLOCK_FREQ +
+                   ts.tv_nsec * UCLOCK_FREQ / UINT64_C(1000000000);
+    return now;
+}
+
 /** @This returns the current system time.
  *
  * @param uclock utility structure passed to the module
@@ -69,44 +97,46 @@ UBASE_FROM_TO(uclock_std, urefcount, urefcount, urefcount)
 static uint64_t uclock_std_now(struct uclock *uclock)
 {
     struct uclock_std *std = uclock_std_from_uclock(uclock);
-
-#ifdef __MACH__ // OS X does not have clock_gettime, use clock_get_time
-    mach_timespec_t ts;
-    clock_get_time((std->cclock), &ts);
-#else
-    struct timespec ts;
-
-    if (unlikely(clock_gettime(unlikely(std->flags & UCLOCK_FLAG_REALTIME) ?
-                               CLOCK_REALTIME : CLOCK_MONOTONIC, &ts) == -1))
-        /* this should not happen as we have checked the clock existed
-         * in alloc */
-        return 0;
-#endif
-
-    uint64_t now = ts.tv_sec * UCLOCK_FREQ +
-                   ts.tv_nsec * UCLOCK_FREQ / UINT64_C(1000000000);
-    return now;
+    return uclock_std_now_inner(uclock, std->flags);
 }
 
-/** @This converts a system time to Epoch time_t (seconds from
- * 1970-01-01 00:00:00 +0000)
+/** @This converts a system time to Epoch-based real time (from
+ * 1970-01-01 00:00:00 +0000). The scale is in units of @ref #UCLOCK_FREQ,
+ * divide by it to get standard time_t.
  *
  * @param uclock pointer to uclock
  * @param systime system time in 27 MHz ticks
- * @param number of seconds since the Epoch, or (time_t)-1 if unsupported
+ * @return number of ticks since the Epoch, or UINT64_MAX if unsupported
  */
-static time_t uclock_std_mktime(struct uclock *uclock, uint64_t systime)
+static uint64_t uclock_std_to_real(struct uclock *uclock, uint64_t systime)
 {
     struct uclock_std *std = uclock_std_from_uclock(uclock);
 
     if (std->flags & UCLOCK_FLAG_REALTIME)
-        return systime / UCLOCK_FREQ;
+        return systime;
 
     uint64_t now = uclock_std_now(uclock);
-    struct timeval tv;
-    if (gettimeofday(&tv, NULL) < 0)
-        return (time_t)-1;
-    return tv.tv_sec + ((int64_t)systime - now) / UCLOCK_FREQ;
+    uint64_t ref = uclock_std_now_inner(uclock, UCLOCK_FLAG_REALTIME);
+    return ref + systime - now;
+}
+
+/** @This converts Epoch-based real time (from * 1970-01-01 00:00:00 +0000)
+ * to real time. The scale has to be passed in units of @ref #UCLOCK_FREQ.
+ *
+ * @param uclock pointer to uclock
+ * @param real number of ticks since the Epoch
+ * @return system time in 27 MHz ticks, or UINT64_MAX if unsupported
+ */
+static uint64_t uclock_std_from_real(struct uclock *uclock, uint64_t real)
+{
+    struct uclock_std *std = uclock_std_from_uclock(uclock);
+
+    if (std->flags & UCLOCK_FLAG_REALTIME)
+        return real;
+
+    uint64_t now = uclock_std_now(uclock);
+    uint64_t ref = uclock_std_now_inner(uclock, UCLOCK_FLAG_REALTIME);
+    return now + real - ref;
 }
 
 /** @This frees a uclock.
@@ -154,7 +184,8 @@ struct uclock *uclock_std_alloc(enum uclock_std_flags flags)
     urefcount_init(uclock_std_to_urefcount(uclock_std), uclock_std_free);
     uclock_std->uclock.refcount = uclock_std_to_urefcount(uclock_std);
     uclock_std->uclock.uclock_now = uclock_std_now;
-    uclock_std->uclock.uclock_mktime = uclock_std_mktime;
+    uclock_std->uclock.uclock_to_real = uclock_std_to_real;
+    uclock_std->uclock.uclock_from_real = uclock_std_from_real;
 #ifdef __MACH__
     memcpy(&uclock_std->cclock, &cclock, sizeof(cclock));
 #endif

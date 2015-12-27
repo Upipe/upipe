@@ -51,32 +51,49 @@ struct uclock {
     /** function returning the current system time */
     uint64_t (*uclock_now)(struct uclock *);
 
-    /** function converting a system time to Epoch time_t */
-    time_t (*uclock_mktime)(struct uclock *, uint64_t);
+    /** function converting a system time to Epoch-based real time */
+    uint64_t (*uclock_to_real)(struct uclock *, uint64_t);
+    /** function converting Epoch-based real time to system time */
+    uint64_t (*uclock_from_real)(struct uclock *, uint64_t);
 };
 
 /** @This returns the current system time.
  *
  * @param uclock pointer to uclock
- * @return current system time in 27 MHz ticks
+ * @return current system time in 27 MHz ticks, or UINT64_MAX in case of error
  */
 static inline uint64_t uclock_now(struct uclock *uclock)
 {
     return uclock->uclock_now(uclock);
 }
 
-/** @This converts a system time to Epoch time_t (seconds from
- * 1970-01-01 00:00:00 +0000)
+/** @This converts a system time to Epoch-based real time (from
+ * 1970-01-01 00:00:00 +0000). The scale is in units of @ref #UCLOCK_FREQ,
+ * divide by it to get standard time_t.
  *
  * @param uclock pointer to uclock
  * @param systime system time in 27 MHz ticks
- * @param number of seconds since the Epoch, or (time_t)-1 if unsupported
+ * @return number of ticks since the Epoch, or UINT64_MAX if unsupported
  */
-static inline time_t uclock_mktime(struct uclock *uclock, uint64_t systime)
+static inline uint64_t uclock_to_real(struct uclock *uclock, uint64_t systime)
 {
-    if (uclock->uclock_mktime == NULL)
-        return (time_t)-1;
-    return uclock->uclock_mktime(uclock, systime);
+    if (uclock->uclock_to_real == NULL)
+        return UINT64_MAX;
+    return uclock->uclock_to_real(uclock, systime);
+}
+
+/** @This converts Epoch-based real time (from * 1970-01-01 00:00:00 +0000)
+ * to real time. The scale has to be passed in units of @ref #UCLOCK_FREQ.
+ *
+ * @param uclock pointer to uclock
+ * @param real number of ticks since the Epoch
+ * @return system time in 27 MHz ticks, or UINT64_MAX if unsupported
+ */
+static inline uint64_t uclock_from_real(struct uclock *uclock, uint64_t real)
+{
+    if (uclock->uclock_from_real == NULL)
+        return UINT64_MAX;
+    return uclock->uclock_from_real(uclock, real);
 }
 
 /** @This increments the reference count of a uclock.

@@ -1575,12 +1575,12 @@ static void upipe_ts_sig_send_tdt(struct upipe *upipe, uint64_t cr_sys,
                                   uint64_t latency)
 {
     struct upipe_ts_sig *sig = upipe_ts_sig_from_upipe(upipe);
-    time_t now;
+    uint64_t now;
     if (unlikely(sig->flow_def == NULL || sig->uclock == NULL ||
                  !sig->tdt_interval ||
                  sig->tdt_cr_sys + sig->tdt_interval > cr_sys ||
-                 (now = uclock_mktime(sig->uclock, cr_sys + latency)) ==
-                 (time_t)-1))
+                 (now = uclock_to_real(sig->uclock, cr_sys + latency)) ==
+                 UINT64_MAX))
         return;
 
     struct upipe_ts_sig_output *output = upipe_ts_sig_to_tdt_output(sig);
@@ -1607,7 +1607,7 @@ static void upipe_ts_sig_send_tdt(struct upipe *upipe, uint64_t cr_sys,
     }
 
     tdt_init(buffer);
-    tdt_set_utc(buffer, dvb_time_encode_UTC(now));
+    tdt_set_utc(buffer, dvb_time_encode_UTC(now / UCLOCK_FREQ));
     uref_block_unmap(uref, 0);
 
     uref_block_set_start(uref);

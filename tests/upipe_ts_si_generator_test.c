@@ -312,7 +312,7 @@ static struct upipe_mgr ts_test_mgr = {
 };
 
 /** helper uclock to test upipe_ts_sig */
-static time_t test_mktime(struct uclock *uclock, uint64_t cr_sys)
+static uint64_t test_to_real(struct uclock *uclock, uint64_t cr_sys)
 {
     assert(cr_sys == UINT32_MAX);
     struct tm tm;
@@ -323,7 +323,7 @@ static time_t test_mktime(struct uclock *uclock, uint64_t cr_sys)
     tm.tm_min = 45;
     tm.tm_sec = 0;
     tm.tm_isdst = 0;
-    return mktime(&tm);
+    return mktime(&tm) * UCLOCK_FREQ;
 }
 
 int main(int argc, char *argv[])
@@ -357,7 +357,7 @@ int main(int argc, char *argv[])
     struct uclock uclock;
     uclock.refcount = NULL;
     uclock.uclock_now = NULL;
-    uclock.uclock_mktime = test_mktime;
+    uclock.uclock_to_real = test_to_real;
     logger = uprobe_uclock_alloc(logger, &uclock);
     assert(logger != NULL);
 
