@@ -113,6 +113,10 @@ enum upipe_ts_mux_command {
     UPIPE_TS_MUX_GET_PCR_INTERVAL,
     /** sets the PCR interval (uint64_t) */
     UPIPE_TS_MUX_SET_PCR_INTERVAL,
+    /** returns the current SCTE35 interval (uint64_t *) */
+    UPIPE_TS_MUX_GET_SCTE35_INTERVAL,
+    /** sets the SCTE35 interval (uint64_t) */
+    UPIPE_TS_MUX_SET_SCTE35_INTERVAL,
     /** returns the current maximum retention delay (uint64_t *) */
     UPIPE_TS_MUX_GET_MAX_DELAY,
     /** sets the maximum retention delay (uint64_t) */
@@ -404,6 +408,32 @@ static inline int upipe_ts_mux_set_pcr_interval(struct upipe *upipe,
                                                 uint64_t interval)
 {
     return upipe_control(upipe, UPIPE_TS_MUX_SET_PCR_INTERVAL,
+                         UPIPE_TS_MUX_SIGNATURE, interval);
+}
+
+/** @This returns the current SCTE35 interval.
+ *
+ * @param upipe description structure of the pipe
+ * @param interval_p filled in with the interval
+ * @return an error code
+ */
+static inline int upipe_ts_mux_get_scte35_interval(struct upipe *upipe,
+                                                   uint64_t *interval_p)
+{
+    return upipe_control(upipe, UPIPE_TS_MUX_GET_SCTE35_INTERVAL,
+                         UPIPE_TS_MUX_SIGNATURE, interval_p);
+}
+
+/** @This sets the SCTE35 interval.
+ *
+ * @param upipe description structure of the pipe
+ * @param interval new interval
+ * @return an error code
+ */
+static inline int upipe_ts_mux_set_scte35_interval(struct upipe *upipe,
+                                                   uint64_t interval)
+{
+    return upipe_control(upipe, UPIPE_TS_MUX_SET_SCTE35_INTERVAL,
                          UPIPE_TS_MUX_SIGNATURE, interval);
 }
 

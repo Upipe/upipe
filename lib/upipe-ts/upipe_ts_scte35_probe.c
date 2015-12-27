@@ -216,7 +216,7 @@ static void upipe_ts_scte35p_event_wait(struct upipe *upipe,
     struct upipe_ts_scte35p *upipe_ts_scte35p =
         upipe_ts_scte35p_from_upipe(upipe);
     upipe_dbg_va(upipe, "splice %"PRIu64" waiting %"PRIu64" ms",
-                 event->event_id, timeout * 1000000 / UCLOCK_FREQ);
+                 event->event_id, timeout * 1000 / UCLOCK_FREQ);
 
     struct upump *watcher = upump_alloc_timer(upipe_ts_scte35p->upump_mgr,
             upipe_ts_scte35p_event_watcher, event, upipe->refcount, timeout, 0);
@@ -314,11 +314,13 @@ static void upipe_ts_scte35p_input(struct upipe *upipe, struct uref *uref,
         return;
     }
 
-    upipe_ts_scte35p_require_uclock(upipe);
     if (unlikely(upipe_ts_scte35p->uclock == NULL)) {
-        upipe_ts_scte35p_event_free(upipe, event);
-        upipe_warn(upipe, "no uclock");
-        return;
+        upipe_ts_scte35p_require_uclock(upipe);
+        if (unlikely(upipe_ts_scte35p->uclock == NULL)) {
+            upipe_ts_scte35p_event_free(upipe, event);
+            upipe_warn(upipe, "no uclock");
+            return;
+        }
     }
 
     uint64_t now = uclock_now(upipe_ts_scte35p->uclock);

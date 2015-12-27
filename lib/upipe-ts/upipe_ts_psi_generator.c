@@ -272,7 +272,9 @@ static int upipe_ts_psig_flow_check(struct upipe *upipe,
     uref_flow_get_languages(flow->flow_def, &languages);
 
     *descriptors_size_p = uref_ts_flow_size_descriptors(flow->flow_def);
-    if (!ubase_ncmp(raw_def, "block.dvb_teletext."))
+    if (!ubase_ncmp(raw_def, "void.scte35."))
+        *descriptors_size_p += DESC05_HEADER_SIZE;
+    else if (!ubase_ncmp(raw_def, "block.dvb_teletext."))
         *descriptors_size_p += DESC56_HEADER_SIZE +
                                languages * DESC56_LANGUAGE_SIZE;
     else if (!ubase_ncmp(raw_def, "block.dvb_subtitle."))
@@ -299,9 +301,9 @@ static int upipe_ts_psig_flow_check(struct upipe *upipe,
             return UBASE_ERR_UNHANDLED;
         }
     } else if (ubase_ncmp(raw_def, "block.mpeg1video.") &&
-             ubase_ncmp(raw_def, "block.mpeg2video.") &&
-             ubase_ncmp(raw_def, "block.mpeg4.") &&
-             ubase_ncmp(raw_def, "block.h264.")) {
+               ubase_ncmp(raw_def, "block.mpeg2video.") &&
+               ubase_ncmp(raw_def, "block.mpeg4.") &&
+               ubase_ncmp(raw_def, "block.h264.")) {
         upipe_warn_va(upipe, "unknown flow definition \"%s\"", raw_def);
         return UBASE_ERR_UNHANDLED;
     }
@@ -331,7 +333,9 @@ static int upipe_ts_psig_flow_build(struct upipe *upipe, uint8_t *es,
     uref_flow_get_languages(flow->flow_def, &languages);
 
     uint8_t stream_type = PMT_STREAMTYPE_PRIVATE_PES;
-    if (!ubase_ncmp(raw_def, "block.mpeg1video."))
+    if (!ubase_ncmp(raw_def, "void.scte35."))
+        stream_type = PMT_STREAMTYPE_SCTE_35;
+    else if (!ubase_ncmp(raw_def, "block.mpeg1video."))
         stream_type = PMT_STREAMTYPE_VIDEO_MPEG1;
     else if (!ubase_ncmp(raw_def, "block.mpeg2video."))
         stream_type = PMT_STREAMTYPE_VIDEO_MPEG2;
@@ -363,7 +367,14 @@ static int upipe_ts_psig_flow_build(struct upipe *upipe, uint8_t *es,
 
     uint64_t k = 0;
     uint8_t *desc;
-    if (!ubase_ncmp(raw_def, "block.dvb_teletext.")) {
+    if (!ubase_ncmp(raw_def, "void.scte35.")) {
+        desc = descs_get_desc(descs, k++);
+        assert(desc != NULL);
+        desc05_init(desc);
+        const uint8_t id[4] = { 'C', 'U', 'E', 'I' };
+        desc05_set_identifier(desc, id);
+
+    } else if (!ubase_ncmp(raw_def, "block.dvb_teletext.")) {
         desc = descs_get_desc(descs, k++);
         assert(desc != NULL);
         desc56_init(desc);

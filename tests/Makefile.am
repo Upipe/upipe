@@ -237,6 +237,7 @@ check_PROGRAMS += \
 	upipe_ts_psi_merge_test \
 	upipe_ts_psi_split_test \
 	upipe_ts_scte35_decoder_test \
+	upipe_ts_scte35_generator_test \
 	upipe_ts_sdt_decoder_test \
 	upipe_ts_tdt_decoder_test \
 	upipe_ts_split_test \
@@ -265,6 +266,7 @@ TESTS += \
 	upipe_ts_psi_merge_test \
 	upipe_ts_psi_split_test \
 	upipe_ts_scte35_decoder_test \
+	upipe_ts_scte35_generator_test \
 	upipe_ts_sdt_decoder_test \
 	upipe_ts_tdt_decoder_test \
 	upipe_ts_split_test \
@@ -383,6 +385,7 @@ upipe_ts_psi_split_test_LDADD = $(LDADD) $(top_builddir)/lib/upipe-ts/libupipe_t
 upipe_ts_pat_decoder_test_LDADD = $(LDADD) $(top_builddir)/lib/upipe-ts/libupipe_ts.la
 upipe_ts_pmt_decoder_test_LDADD = $(LDADD) $(top_builddir)/lib/upipe-ts/libupipe_ts.la
 upipe_ts_scte35_decoder_test_LDADD = $(LDADD) $(top_builddir)/lib/upipe-ts/libupipe_ts.la
+upipe_ts_scte35_generator_test_LDADD = $(LDADD) $(top_builddir)/lib/upipe-ts/libupipe_ts.la
 upipe_ts_scte35_probe_test_LDADD = $(LDADD) $(top_builddir)/lib/upipe-ts/libupipe_ts.la -lev $(top_builddir)/lib/upump-ev/libupump_ev.la
 upipe_ts_sdt_decoder_test_LDADD = $(LDADD) $(top_builddir)/lib/upipe-ts/libupipe_ts.la
 upipe_ts_si_generator_test_LDADD = $(LDADD) $(top_builddir)/lib/upipe-ts/libupipe_ts.la
