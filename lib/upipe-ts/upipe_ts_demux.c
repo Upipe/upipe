@@ -108,10 +108,6 @@
 #define MAX_PCR_INTERVAL (UCLOCK_FREQ / 2)
 /** max retention time for most streams (ISO/IEC 13818-1 2.4.2.6) */
 #define MAX_DELAY UCLOCK_FREQ
-/** max retention time for ISO/IEC 14496 streams (ISO/IEC 13818-1 2.4.2.6) */
-#define MAX_DELAY_14496 (UCLOCK_FREQ * 10)
-/** max retention time for still pictures streams (ISO/IEC 13818-1 2.4.2.6) */
-#define MAX_DELAY_STILL (UCLOCK_FREQ * 60)
 
 /** @internal @This is the private context of a ts_demux manager. */
 struct upipe_ts_demux_mgr {
@@ -937,7 +933,7 @@ static struct upipe *upipe_ts_demux_output_alloc(struct upipe_mgr *mgr,
     upipe_ts_demux_output->pcr = false;
     upipe_ts_demux_output->split_output = NULL;
     upipe_ts_demux_output->setrap = NULL;
-    upipe_ts_demux_output->max_delay = MAX_DELAY_STILL;
+    upipe_ts_demux_output->max_delay = MAX_DELAY;
     uref_ts_flow_get_max_delay(flow_def, &upipe_ts_demux_output->max_delay);
     uprobe_init(&upipe_ts_demux_output->probe,
                 upipe_ts_demux_output_probe, NULL);

@@ -56,6 +56,16 @@
 
 /** we only accept TS packets */
 #define EXPECTED_FLOW_DEF "block.mpegtspsi.mpegtspmt."
+/** max retention time for most streams (ISO/IEC 13818-1 2.4.2.6) */
+#define MAX_DELAY UCLOCK_FREQ
+/** max retention time for ISO/IEC 14496 streams (ISO/IEC 13818-1 2.4.2.6) */
+#define MAX_DELAY_14496 (UCLOCK_FREQ * 10)
+/** max retention time for still pictures streams (ISO/IEC 13818-1 2.4.2.6) */
+#define MAX_DELAY_STILL (UCLOCK_FREQ * 60)
+/** max retention time for teletext (ETSI EN 300 472 5.) */
+#define MAX_DELAY_TELX (UCLOCK_FREQ / 25)
+/** max retention time for SCTE-35 tables */
+#define MAX_DELAY_SCTE35 UINT64_MAX
 
 /** @hidden */
 static int upipe_ts_pmtd_check(struct upipe *upipe, struct uref *flow_format);
@@ -164,6 +174,7 @@ static void upipe_ts_pmtd_parse_streamtype(struct upipe *upipe,
                             "block.mpeg1video.pic."))
             UBASE_FATAL(upipe, uref_flow_set_raw_def(flow_def,
                             "block.mpegts.mpegtspes.mpeg1video.pic."))
+            UBASE_FATAL(upipe, uref_ts_flow_set_max_delay(flow_def, MAX_DELAY))
             break;
 
         case PMT_STREAMTYPE_VIDEO_MPEG2:
@@ -171,6 +182,7 @@ static void upipe_ts_pmtd_parse_streamtype(struct upipe *upipe,
                             "block.mpeg2video.pic."))
             UBASE_FATAL(upipe, uref_flow_set_raw_def(flow_def,
                             "block.mpegts.mpegtspes.mpeg2video.pic."))
+            UBASE_FATAL(upipe, uref_ts_flow_set_max_delay(flow_def, MAX_DELAY))
             break;
 
         case PMT_STREAMTYPE_AUDIO_MPEG1:
@@ -178,12 +190,14 @@ static void upipe_ts_pmtd_parse_streamtype(struct upipe *upipe,
             UBASE_FATAL(upipe, uref_flow_set_def(flow_def, "block.mp2.sound."))
             UBASE_FATAL(upipe, uref_flow_set_raw_def(flow_def,
                             "block.mpegts.mpegtspes.mp2.sound."))
+            UBASE_FATAL(upipe, uref_ts_flow_set_max_delay(flow_def, MAX_DELAY))
             break;
 
         case PMT_STREAMTYPE_AUDIO_ADTS:
             UBASE_FATAL(upipe, uref_flow_set_def(flow_def, "block.aac.sound."))
             UBASE_FATAL(upipe, uref_flow_set_raw_def(flow_def,
                             "block.mpegts.mpegtspes.aac.sound."))
+            UBASE_FATAL(upipe, uref_ts_flow_set_max_delay(flow_def, MAX_DELAY))
             UBASE_FATAL(upipe, uref_mpga_flow_set_adts(flow_def))
             break;
 
@@ -191,6 +205,8 @@ static void upipe_ts_pmtd_parse_streamtype(struct upipe *upipe,
             UBASE_FATAL(upipe, uref_flow_set_def(flow_def, "block.h264.pic."))
             UBASE_FATAL(upipe, uref_flow_set_raw_def(flow_def,
                             "block.mpegts.mpegtspes.h264.pic."))
+            UBASE_FATAL(upipe, uref_ts_flow_set_max_delay(flow_def,
+                            MAX_DELAY_14496))
             UBASE_FATAL(upipe, uref_h264_flow_set_annexb(flow_def))
             break;
 
@@ -198,6 +214,8 @@ static void upipe_ts_pmtd_parse_streamtype(struct upipe *upipe,
             UBASE_FATAL(upipe, uref_flow_set_def(flow_def, "void.scte35."))
             UBASE_FATAL(upipe, uref_flow_set_raw_def(flow_def,
                             "block.mpegts.mpegtspsi.mpegtsscte35.void."))
+            UBASE_FATAL(upipe, uref_ts_flow_set_max_delay(flow_def,
+                            MAX_DELAY_SCTE35))
             break;
 
         default:
@@ -241,6 +259,9 @@ static void upipe_ts_pmtd_parse_descs(struct upipe *upipe,
                                         "block.opus.sound."))
                             UBASE_FATAL(upipe, uref_flow_set_raw_def(flow_def,
                                         "block.mpegts.mpegtspes.opus.sound."))
+                            UBASE_FATAL(upipe,
+                                    uref_ts_flow_set_max_delay(flow_def,
+                                                               MAX_DELAY))
                         }
                     }
                     if ((identifier = desc05_get_identifier(desc))) {
@@ -249,6 +270,9 @@ static void upipe_ts_pmtd_parse_descs(struct upipe *upipe,
                                         "block.s302m.sound."))
                             UBASE_FATAL(upipe, uref_flow_set_raw_def(flow_def,
                                         "block.mpegts.mpegtspes.s302m.sound."))
+                            UBASE_FATAL(upipe,
+                                    uref_ts_flow_set_max_delay(flow_def,
+                                                               MAX_DELAY))
                         }
                     }
                 }
@@ -334,6 +358,8 @@ static void upipe_ts_pmtd_parse_descs(struct upipe *upipe,
                                 "block.dvb_teletext.pic.sub."))
                     UBASE_FATAL(upipe, uref_flow_set_raw_def(flow_def,
                                 "block.mpegts.mpegtspes.dvb_teletext.pic.sub."))
+                    UBASE_FATAL(upipe, uref_ts_flow_set_max_delay(flow_def,
+                                    MAX_DELAY_TELX))
 
                     uint8_t j = 0;
                     uint8_t *language;
@@ -362,6 +388,8 @@ static void upipe_ts_pmtd_parse_descs(struct upipe *upipe,
                                 "block.dvb_subtitle.pic.sub."))
                     UBASE_FATAL(upipe, uref_flow_set_raw_def(flow_def,
                                 "block.mpegts.mpegtspes.dvb_subtitle.pic.sub."))
+                    UBASE_FATAL(upipe, uref_ts_flow_set_max_delay(flow_def,
+                                    MAX_DELAY))
 
                     uint8_t j = 0;
                     uint8_t *language;
@@ -390,6 +418,8 @@ static void upipe_ts_pmtd_parse_descs(struct upipe *upipe,
                                 "block.ac3.sound."))
                     UBASE_FATAL(upipe, uref_flow_set_raw_def(flow_def,
                                 "block.mpegts.mpegtspes.ac3.sound."))
+                    UBASE_FATAL(upipe, uref_ts_flow_set_max_delay(flow_def,
+                                    MAX_DELAY))
                 }
                 break;
 
@@ -403,6 +433,8 @@ static void upipe_ts_pmtd_parse_descs(struct upipe *upipe,
                                 "block.eac3.sound."))
                     UBASE_FATAL(upipe, uref_flow_set_raw_def(flow_def,
                                 "block.mpegts.mpegtspes.eac3.sound."))
+                    UBASE_FATAL(upipe, uref_ts_flow_set_max_delay(flow_def,
+                                    MAX_DELAY))
                 }
                 break;
 
@@ -412,6 +444,8 @@ static void upipe_ts_pmtd_parse_descs(struct upipe *upipe,
                                 "block.dts.sound."))
                     UBASE_FATAL(upipe, uref_flow_set_raw_def(flow_def,
                                 "block.mpegts.mpegtspes.dts.sound."))
+                    UBASE_FATAL(upipe, uref_ts_flow_set_max_delay(flow_def,
+                                    MAX_DELAY))
                 }
                 break;
 
@@ -421,6 +455,8 @@ static void upipe_ts_pmtd_parse_descs(struct upipe *upipe,
                                 "block.aac.sound."))
                     UBASE_FATAL(upipe, uref_flow_set_raw_def(flow_def,
                                 "block.mpegts.mpegtspes.aac.sound."))
+                    UBASE_FATAL(upipe, uref_ts_flow_set_max_delay(flow_def,
+                                    MAX_DELAY))
                 }
                 break;
 
