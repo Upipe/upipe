@@ -274,6 +274,8 @@ static void upipe_ts_scte35g_input(struct upipe *upipe, struct uref *uref,
         pts_prog = UINT64_MAX;
     }
 
+    /* Force sending the table immediately */
+    scte35g->scte35_cr_sys = 0;
     upipe_notice_va(upipe,
                     "now using splice_insert command for event %"PRIu32,
                     event_id);
