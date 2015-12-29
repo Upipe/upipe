@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/bin/sh
 
 UNAME=$(uname)
 
@@ -7,34 +7,22 @@ shift
 
 # Check for shell scripts or leaking Qt
 if test "${1%.sh}" != "$1" -o `basename "$1"` = "upipe_qt_html_test"; then
-	exec "$1" "$srcdir"
-fi
-
-# Run normally
-"$@"
-RET=$?
-if test $RET -ne 0; then
-	exit $RET
+    exec "$1" "$srcdir"
 fi
 
 if ! which valgrind >/dev/null 2>&1; then
-	echo "#### Please install valgrind for unit tests"
-	exit 1
+    echo "#### Please install valgrind for unit tests"
+    exit 1
 fi
 
 # valgrind suppressions
-VALGRIND_SUPPRESSIONS=" --suppressions=$srcdir/valgrind.supp "
+SUPPRESSIONS="--suppressions=$srcdir/valgrind.supp"
 if [ "$UNAME" = "Darwin" ]; then
-    VALGRIND_SUPPRESSIONS+=" --suppressions=$srcdir/valgrind_osx.supp "
+    SUPPRESSIONS="$SUPPRESSIONS --suppressions=$srcdir/valgrind_osx.supp"
 fi
 
+VALGRIND_FLAGS="-q --leak-check=full --track-origins=yes --error-exitcode=1 $SUPPRESSIONS"
+
 # Run in valgrind, with leak checking enabled
-FILE="`mktemp tmp.XXXXXXXXXX`"
-../libtool --mode=execute valgrind -q --leak-check=full $VALGRIND_SUPPRESSIONS "$@" > /dev/null 2> "$FILE"
-RET=$?
-if test -s "$FILE"; then
-        cat "$FILE" >&2
-        RET=1
-fi
-rm -f "$FILE"
-exit $RET
+../libtool --mode=execute valgrind $VALGRIND_FLAGS "$@"
+exit $?
