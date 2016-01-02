@@ -25,7 +25,6 @@ dist_check_DATA = \
 	upipe_ts_test.ts \
 	uref_uri_test.txt \
 	ustring_test.txt \
-	ustring_test.valgrind \
 	upipe_m3u_reader_test_files/1.m3u \
 	upipe_m3u_reader_test_files/1.m3u.logs \
 	upipe_m3u_reader_test_files/2.m3u \
@@ -406,3 +405,4 @@ upipe_alsa_sink_test_LDADD = $(LDADD) -lasound $(top_builddir)/lib/upipe-alsa/li
 upump_ecore_test_LDADD = $(LDADD) $(ECORE_LIBS) $(top_builddir)/lib/upump-ecore/libupump_ecore.la
 upump_ecore_test_CFLAGS = $(ECORE_CFLAGS)
 upipe_m3u_reader_test_LDADD = $(LDADD) -lev $(top_builddir)/lib/upump-ev/libupump_ev.la $(top_builddir)/lib/upipe-modules/libupipe_modules.la
+ustring_test_CFLAGS = -fno-inline

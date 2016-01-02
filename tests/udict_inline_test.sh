@@ -1,38 +1,21 @@
 #!/bin/sh
 
+set -e
+
 srcdir="$1"
-DIR="`mktemp -d tmp.XXXXXXXXXX`"
-./udict_inline_test > "$DIR"/logs
-RET=$?
-if test $RET -ne 0; then
-	rm -rf "$DIR"
-	exit $RET
-fi
 
-cat "$srcdir"/udict_inline_test.txt > "$DIR"/ref
-cat "$srcdir"/udict_inline_test.txt >> "$DIR"/ref
-cat "$srcdir"/udict_inline_test.txt >> "$DIR"/ref
+TMP="`mktemp -d tmp.XXXXXXXXXX`"
+cleanup() { rm -rf "$TMP"; }
+trap cleanup EXIT
 
-sed -e "s/^\(debug: dumping udict\) .*$/\1/" < "$DIR"/logs | sed -e  "s/^\(debug: end of attributes for udict\) .*$/\1/" > "$DIR"/logs2
-diff -q "$DIR"/logs2 "$DIR"/ref
-RET=$?
-rm -rf "$DIR"
-if test $RET -ne 0; then
-	exit $RET
-fi
+"$srcdir"/valgrind_wrapper.sh "$srcdir" ./udict_inline_test > "$TMP"/logs
 
-if ! which valgrind >/dev/null 2>&1; then
-	echo "#### Please install valgrind for unit tests"
-	exit 1
-fi
+cat "$srcdir"/udict_inline_test.txt > "$TMP"/ref
+cat "$srcdir"/udict_inline_test.txt >> "$TMP"/ref
+cat "$srcdir"/udict_inline_test.txt >> "$TMP"/ref
 
-unset DIR
-FILE="`mktemp tmp.XXXXXXXXXX`"
-../libtool --mode=execute valgrind -q --leak-check=full ./udict_inline_test > /dev/null 2> "$FILE"
-RET=$?
-if test -s "$FILE"; then
-        cat "$FILE" >&2
-        RET=1
-fi
-rm -f "$FILE"
-exit $RET
+sed -e "s/^\(debug: dumping udict\) .*$/\1/" \
+    -e "s/^\(debug: end of attributes for udict\) .*$/\1/" \
+    -i "$TMP"/logs
+
+diff -u "$TMP"/ref "$TMP"/logs
