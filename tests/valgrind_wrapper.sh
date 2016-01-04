@@ -23,6 +23,10 @@ fi
 
 VALGRIND_FLAGS="-q --leak-check=full --track-origins=yes --error-exitcode=1 $SUPPRESSIONS"
 
+if test -z "$DISABLE_VALGRIND"; then
+    VALGRIND="valgrind $VALGRIND_FLAGS"
+fi
+
 # Run in valgrind, with leak checking enabled
-../libtool --mode=execute valgrind $VALGRIND_FLAGS "$@"
+../libtool --mode=execute $VALGRIND "$@"
 exit $?
