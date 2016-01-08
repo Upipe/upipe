@@ -55,6 +55,7 @@
 #include <string.h>
 #include <unistd.h>
 #include <sys/types.h>
+#include <sys/socket.h>
 #include <sys/stat.h>
 #include <fcntl.h>
 #include <sys/ioctl.h>
@@ -241,6 +242,8 @@ static bool upipe_udpsink_output(struct upipe *upipe, struct uref *uref,
 write_buffer:
     for ( ; ; ) {
         size_t payload_len = 0;
+        struct msghdr msghdr;
+        memset(&msghdr, 0, sizeof(msghdr));
         if (unlikely(!ubase_check(uref_block_size(uref, &payload_len)))) {
             upipe_warn(upipe, "cannot read ubuf size");
             return false;
@@ -277,7 +280,10 @@ write_buffer:
             break;
         }
 
-        ssize_t ret = writev(upipe_udpsink->fd, iovecs_s, iovec_count);
+        msghdr.msg_iov = iovecs;
+        msghdr.msg_iovlen = iovec_count;
+
+        ssize_t ret = sendmsg(upipe_udpsink->fd, &msghdr, 0);
         uref_block_iovec_unmap(uref, 0, -1, iovecs);
 
         if (unlikely(ret == -1)) {
