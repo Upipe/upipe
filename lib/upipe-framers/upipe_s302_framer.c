@@ -168,7 +168,7 @@ static void upipe_s302f_work(struct upipe *upipe, struct upump **upump_p)
         goto upipe_s302f_work_err;
     
     num_samples = audio_packet_size / (pair_length * (num_channels / 2));
-    octetrate = S302_FREQUENCY * audio_packet_size / num_samples;
+    octetrate = (uint64_t)S302_FREQUENCY * audio_packet_size / num_samples;
 
     /* Avoid jitter on NTSC patterns */
     if ((octetrate > upipe_s302f->octetrate + 500) ||
