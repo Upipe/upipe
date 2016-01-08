@@ -281,6 +281,7 @@ static int upipe_avfsink_sub_set_flow_def(struct upipe *upipe,
 
     if (!ubase_ncmp(def, "block.aac.") &&
         ubase_check(uref_mpga_flow_get_adts(flow_def))) {
+        free(extradata_alloc);
         upipe_err(upipe, "asc required");
         return UBASE_ERR_INVALID;
     }
