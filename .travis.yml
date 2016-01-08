@@ -50,9 +50,6 @@ matrix:
         - HOST_CXX=clang++
         - CFLAGS="-Wno-error=unused-function -Wno-error=unused-command-line-argument"
 
-  allow_failures:
-    - os: osx
-
 before_install:
   - if type apt-get 2>/dev/null; then
       sudo dpkg --add-architecture i386;
@@ -105,6 +102,11 @@ before_install:
       sudo install -D SSMAMTtools/include/amt.h /usr/local/include/amt.h;
       sudo install -D SSMAMTtools/lib/linux/libamt.a /usr/local/lib/libamt.a;
       sudo ldconfig;
+    fi
+
+  # disable valgrind on os x
+  - if [ "$TRAVIS_OS_NAME" = "osx" ]; then
+      export DISABLE_VALGRIND=1;
     fi
 
 before_script: autoreconf -i

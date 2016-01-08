@@ -14,8 +14,9 @@ cat "$srcdir"/udict_inline_test.txt > "$TMP"/ref
 cat "$srcdir"/udict_inline_test.txt >> "$TMP"/ref
 cat "$srcdir"/udict_inline_test.txt >> "$TMP"/ref
 
-sed -e "s/^\(debug: dumping udict\) .*$/\1/" \
+sed < "$TMP"/logs \
+    -e "s/^\(debug: dumping udict\) .*$/\1/" \
     -e "s/^\(debug: end of attributes for udict\) .*$/\1/" \
-    -i "$TMP"/logs
+    > "$TMP"/logs2
 
-diff -u "$TMP"/ref "$TMP"/logs
+diff -u "$TMP"/ref "$TMP"/logs2
