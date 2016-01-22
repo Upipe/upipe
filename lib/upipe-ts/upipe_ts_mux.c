@@ -2191,10 +2191,10 @@ static void upipe_ts_mux_init_inner_sink(struct upipe *upipe)
     inner_sink_mgr->upipe_mgr_control = NULL;
 
     struct upipe *sink = &upipe_ts_mux->inner_sink;
-    sink->refcount = upipe_ts_mux_to_urefcount(upipe_ts_mux);
     upipe_init(sink, inner_sink_mgr,
                uprobe_pfx_alloc(uprobe_use(upipe->uprobe), UPROBE_LOG_VERBOSE,
                                 "inner sink"));
+    sink->refcount = upipe_ts_mux_to_urefcount_real(upipe_ts_mux);
 }
 
 /** @internal @This cleans up the inner pseudo sink pipe.
