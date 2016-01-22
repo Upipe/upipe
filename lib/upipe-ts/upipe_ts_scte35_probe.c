@@ -57,8 +57,6 @@ struct upipe_ts_scte35p {
 
     /** upump manager */
     struct upump_mgr *upump_mgr;
-    /** write watcher */
-    struct upump *upump;
 
     /** uclock structure */
     struct uclock *uclock;
@@ -208,7 +206,7 @@ static void upipe_ts_scte35p_event_watcher(struct upump *upump)
  *
  * @param upipe description structure of the pipe
  * @param event description structure of the event
- * @param skew skew of the trigger
+ * @param timeout time after which the event triggers
  */
 static void upipe_ts_scte35p_event_wait(struct upipe *upipe,
         struct upipe_ts_scte35p_event *event, uint64_t timeout)
