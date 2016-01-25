@@ -51,6 +51,7 @@
 #include <upipe/upipe_helper_uclock.h>
 #include <upipe/upipe_helper_output_size.h>
 #include <upipe-modules/upipe_http_source.h>
+#include <upipe-modules/uref_http_flow.h>
 
 #include <stdlib.h>
 #include <stdbool.h>
@@ -271,6 +272,7 @@ static struct upipe *upipe_http_src_alloc(struct upipe_mgr *mgr,
 static void upipe_http_src_close(struct upipe *upipe)
 {
     struct upipe_http_src *upipe_http_src = upipe_http_src_from_upipe(upipe);
+    struct uref *flow_def = upipe_http_src->flow_def;
 
     if (likely(upipe_http_src->url != NULL))
         upipe_notice_va(upipe, "closing %s", upipe_http_src->url);
@@ -279,6 +281,8 @@ static void upipe_http_src_close(struct upipe *upipe)
     upipe_http_src_set_upump(upipe, NULL);
     upipe_http_src->request_pending = false;
     upipe_http_src_set_upump_write(upipe, NULL);
+    if (flow_def)
+        uref_http_delete_content_type(flow_def);
 }
 
 /** @This frees a upipe.
@@ -343,6 +347,7 @@ static int upipe_http_src_header_value(http_parser *parser,
 {
     struct upipe_http_src *upipe_http_src = upipe_http_src_from_parser(parser);
     struct upipe *upipe = upipe_http_src_to_upipe(upipe_http_src);
+    struct uref *flow_def = upipe_http_src->flow_def;
 
     struct header field = upipe_http_src->header_field;
     upipe_http_src->header_field = HEADER(NULL, 0);
@@ -355,6 +360,11 @@ static int upipe_http_src_header_value(http_parser *parser,
     else if (!strncasecmp("Set-Cookie", field.value, field.len)) {
         if (!ubase_check(upipe_http_src_add_cookie(upipe, at, len)))
             upipe_warn_va(upipe, "fail to set cookie %.*s", (int)len, at);
+    }
+    else if (!strncasecmp("Content-Type", field.value, field.len)) {
+        char content_type[len + 1];
+        snprintf(content_type, len + 1, "%s", at);
+        uref_http_set_content_type(flow_def, content_type);
     }
     return 0;
 }
