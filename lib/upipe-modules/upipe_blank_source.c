@@ -492,7 +492,7 @@ static struct upipe *upipe_blksrc_alloc(struct upipe_mgr *mgr,
             upipe_blksrc_free_flow(upipe);
             return NULL;
         }
-        upipe_blksrc->interval = UCLOCK_FREQ * fps.den / fps.num;
+        upipe_blksrc->interval = (uint64_t)UCLOCK_FREQ * fps.den / fps.num;
         upipe_blksrc->type = UPIPE_BLKSRC_TYPE_PIC;
     } else if (!ubase_ncmp(def, "sound.")) {
         uint8_t planes, ssize, channels;
