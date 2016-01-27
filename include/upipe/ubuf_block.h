@@ -387,7 +387,7 @@ static inline int ubuf_block_delete(struct ubuf *ubuf, int offset, int size)
         } else {
             /* Delete from the end */
             if (offset + size < block->size) {
-                if (unlikely(!ubuf_block_split(ubuf, offset + size)))
+                if (unlikely(!ubase_check(ubuf_block_split(ubuf, offset + size))))
                     return UBASE_ERR_INVALID;
 
                 block->size = offset;
