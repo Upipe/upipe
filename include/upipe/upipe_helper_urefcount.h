@@ -87,7 +87,7 @@ static void DEAD(struct upipe *upipe);                                      \
  */                                                                         \
 static void STRUCTURE##_dead_urefcount(struct urefcount *urefcount)         \
 {                                                                           \
-    struct STRUCTURE *s = STRUCTURE##_from_urefcount(urefcount);            \
+    struct STRUCTURE *s = STRUCTURE##_from_##UREFCOUNT(urefcount);          \
     DEAD(STRUCTURE##_to_upipe(s));                                          \
 }                                                                           \
 /** @internal @This initializes the private members for this helper.        \
@@ -98,7 +98,7 @@ static void STRUCTURE##_init_urefcount(struct upipe *upipe)                 \
 {                                                                           \
     struct STRUCTURE *s = STRUCTURE##_from_upipe(upipe);                    \
     urefcount_init(&s->UREFCOUNT, STRUCTURE##_dead_urefcount);              \
-    upipe->refcount = STRUCTURE##_to_urefcount(s);                          \
+    upipe->refcount = STRUCTURE##_to_##UREFCOUNT(s);                        \
 }                                                                           \
 /** @internal @This cleans up the private members for this helper.          \
  *                                                                          \
