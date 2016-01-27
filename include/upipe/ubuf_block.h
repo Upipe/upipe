@@ -276,9 +276,7 @@ static inline int ubuf_block_append(struct ubuf *ubuf, struct ubuf *append)
         return UBASE_ERR_INVALID;
 
     struct ubuf_block *block = ubuf_block_from_ubuf(ubuf);
-    struct ubuf_block *head_block = block;
     struct ubuf_block *append_block = ubuf_block_from_ubuf(append);
-    size_t old_total_size = block->total_size;
     block->total_size += append_block->total_size;
 
     if (block->cached_ubuf != NULL) {
@@ -290,8 +288,6 @@ static inline int ubuf_block_append(struct ubuf *ubuf, struct ubuf *append)
         block = ubuf_block_from_ubuf(ubuf);
     }
     block->next_ubuf = append;
-    head_block->cached_ubuf = append;
-    head_block->cached_offset = old_total_size;
     return UBASE_ERR_NONE;
 }
 
