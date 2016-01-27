@@ -345,6 +345,7 @@ static int upipe_avcdec_get_buffer_pic(struct AVCodecContext *context,
         upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
         return -1;
     }
+    ubuf_pic_clear(ubuf, 0, 0, -1, -1, 0);
     uref_attach_ubuf(uref, ubuf);
 
     /* Chain the new flow def attributes to the uref so we can apply them
