@@ -34,19 +34,17 @@
 }
 
 {
-   32bits_libev
+   32bits_libev_ev_run
    Memcheck:Addr1
    fun:ev_run
    ...
-   fun:main
 }
 
 {
-   32bits_libev_pthread
+   32bits_libev_ev_invoke_pending
    Memcheck:Addr1
+   obj:/usr/lib/i386-linux-gnu/libev.so.4.0.0
+   fun:ev_invoke_pending
    fun:ev_run
    ...
-   fun:start_thread
-   fun:clone
 }
-
