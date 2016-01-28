@@ -275,8 +275,10 @@ static bool upipe_sws_handle(struct upipe *upipe, struct uref *uref,
         upipe_verbose_va(upipe, "input_stride[%d] %d",
                          i, input_strides[i]);
     }
-    input_planes[i] = NULL;
-    input_strides[i] = 0;
+    for ( ; i < UPIPE_AV_MAX_PLANES; i++) {
+        input_planes[i] = NULL;
+        input_strides[i] = 0;
+    }
 
     /* allocate dest ubuf */
     struct ubuf *ubuf = ubuf_pic_alloc(upipe_sws->ubuf_mgr,
@@ -314,8 +316,10 @@ static bool upipe_sws_handle(struct upipe *upipe, struct uref *uref,
         upipe_verbose_va(upipe, "output_stride[%d] %d",
                          i, output_strides[i]);
     }
-    output_planes[i] = NULL;
-    output_strides[i] = 0;
+    for ( ; i < UPIPE_AV_MAX_PLANES; i++) {
+        output_planes[i] = NULL;
+        output_strides[i] = 0;
+    }
 
     /* fire ! */
     int ret = 0, ret2 = 1;

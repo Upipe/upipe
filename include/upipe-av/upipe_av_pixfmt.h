@@ -159,6 +159,10 @@ static inline int upipe_av_pixfmt_to_flow_def(enum PixelFormat pix_fmt,
             UBASE_RETURN(uref_pic_flow_add_plane(flow_def, 1, 1, 2, "u16b"))
             UBASE_RETURN(uref_pic_flow_add_plane(flow_def, 1, 1, 2, "v16b"))
             break;
+        case AV_PIX_FMT_GRAY8:
+            UBASE_RETURN(uref_pic_flow_set_macropixel(flow_def, 1))
+            UBASE_RETURN(uref_pic_flow_add_plane(flow_def, 1, 1, 1, "y8"))
+            break;
         case AV_PIX_FMT_RGB24:
             UBASE_RETURN(uref_pic_flow_set_macropixel(flow_def, 1))
             UBASE_RETURN(uref_pic_flow_add_plane(flow_def, 1, 1, 3, "r8g8b8"))
@@ -226,6 +230,7 @@ static inline enum PixelFormat
         AV_PIX_FMT_YUV444P10BE,
         AV_PIX_FMT_YUV444P16LE,
         AV_PIX_FMT_YUV444P16BE,
+        AV_PIX_FMT_GRAY8,
         AV_PIX_FMT_RGB24,
         AV_PIX_FMT_BGR24,
         AV_PIX_FMT_ARGB,
@@ -238,7 +243,9 @@ static inline enum PixelFormat
         pix_fmts = supported_fmts;
 
     uint8_t macropixel;
-    if (!ubase_check(uref_pic_flow_get_macropixel(flow_def, &macropixel)))
+    uint8_t nb_planes;
+    if (!ubase_check(uref_pic_flow_get_macropixel(flow_def, &macropixel)) ||
+        !ubase_check(uref_pic_flow_get_planes(flow_def, &nb_planes)))
         return -1;
 
 #define u ubase_check
@@ -443,6 +450,13 @@ static inline enum PixelFormat
                     return *pix_fmts;
                 }
                 break;
+            case AV_PIX_FMT_GRAY8:
+                if (macropixel == 1 && nb_planes == 1 &&
+                    u(uref_pic_flow_check_chroma(flow_def, 1, 1, 1, "y8"))) {
+                    chroma_p[0] = "y8";
+                    chroma_p[1] = NULL;
+                    return *pix_fmts;
+                }
             case AV_PIX_FMT_RGB24:
                 if (macropixel == 1 &&
                     u(uref_pic_flow_check_chroma(flow_def, 1, 1, 3, "r8g8b8"))) {
