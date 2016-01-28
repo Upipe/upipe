@@ -35,6 +35,8 @@
 #include <upipe/upipe_helper_upipe.h>
 #include <upipe/upipe_helper_urefcount.h>
 #include <upipe/upipe_helper_bin_input.h>
+#include <upipe/upipe_helper_inner.h>
+#include <upipe/upipe_helper_uprobe.h>
 #include <upipe/upipe_helper_bin_output.h>
 #include <upipe-modules/upipe_worker_linear.h>
 #include <upipe-modules/upipe_queue_sink.h>
@@ -99,9 +101,11 @@ struct upipe_wlin {
 
 UPIPE_HELPER_UPIPE(upipe_wlin, upipe, UPIPE_WLIN_SIGNATURE)
 UPIPE_HELPER_UREFCOUNT(upipe_wlin, urefcount, upipe_wlin_no_ref)
+UPIPE_HELPER_INNER(upipe_wlin, in_qsink)
 UPIPE_HELPER_BIN_INPUT(upipe_wlin, in_qsink, input_request_list)
-UPIPE_HELPER_BIN_OUTPUT(upipe_wlin, last_inner_probe, out_qsrc, output,
-                        output_request_list)
+UPIPE_HELPER_INNER(upipe_wlin, out_qsrc)
+UPIPE_HELPER_UPROBE(upipe_wlin, urefcount_real, last_inner_probe, NULL)
+UPIPE_HELPER_BIN_OUTPUT(upipe_wlin, out_qsrc, output, output_request_list)
 
 UBASE_FROM_TO(upipe_wlin, urefcount, urefcount_real, urefcount_real)
 
@@ -190,8 +194,9 @@ static struct upipe *_upipe_wlin_alloc(struct upipe_mgr *mgr,
     upipe_init(upipe, mgr, uprobe);
     upipe_wlin_init_urefcount(upipe);
     urefcount_init(upipe_wlin_to_urefcount_real(upipe_wlin), upipe_wlin_free);
+    upipe_wlin_init_last_inner_probe(upipe);
     upipe_wlin_init_bin_input(upipe);
-    upipe_wlin_init_bin_output(upipe, upipe_wlin_to_urefcount_real(upipe_wlin));
+    upipe_wlin_init_bin_output(upipe);
 
     uprobe_init(&upipe_wlin->proxy_probe, upipe_wlin_proxy_probe, NULL);
     upipe_wlin->proxy_probe.refcount = upipe_wlin_to_urefcount_real(upipe_wlin);
@@ -225,7 +230,7 @@ static struct upipe *_upipe_wlin_alloc(struct upipe_mgr *mgr,
         upipe_set_max_length(out_qsink, out_queue_length - UINT8_MAX);
 
     upipe_attach_upump_mgr(out_qsrc);
-    upipe_wlin_store_last_inner(upipe, out_qsrc);
+    upipe_wlin_store_bin_output(upipe, out_qsrc);
 
     /* last remote */
     struct upipe *last_remote = upipe_use(remote);
@@ -281,7 +286,7 @@ static struct upipe *_upipe_wlin_alloc(struct upipe_mgr *mgr,
         upipe_release(in_qsrc);
         goto upipe_wlin_alloc_err4;
     }
-    upipe_wlin_store_first_inner(upipe, in_qsink);
+    upipe_wlin_store_bin_input(upipe, in_qsink);
     if (in_queue_length > UINT8_MAX)
         upipe_set_max_length(upipe_wlin->in_qsink,
                                   in_queue_length - UINT8_MAX);
@@ -343,7 +348,7 @@ static void upipe_wlin_free(struct urefcount *urefcount_real)
     struct upipe *upipe = upipe_wlin_to_upipe(upipe_wlin);
     upipe_throw_dead(upipe);
     uprobe_clean(&upipe_wlin->proxy_probe);
-    uprobe_clean(&upipe_wlin->last_inner_probe);
+    upipe_wlin_clean_last_inner_probe(upipe);
     uprobe_clean(&upipe_wlin->in_qsrc_probe);
     uprobe_clean(&upipe_wlin->out_qsrc_probe);
     urefcount_clean(urefcount_real);
