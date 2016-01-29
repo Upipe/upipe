@@ -311,10 +311,15 @@ static int upipe_fsrc_check(struct upipe *upipe, struct uref *flow_format)
     if (flow_format != NULL)
         upipe_fsrc_store_flow_def(upipe, flow_format);
 
-    if (upipe_fsrc->flow_def &&
-        !ubase_check(uref_uri_import(upipe_fsrc->flow_def,
-                                     upipe_fsrc->uri)))
-        upipe_warn(upipe, "fail to import uri to flow format");
+    if (upipe_fsrc->flow_def) {
+        if (upipe_fsrc->uri) {
+            if (!ubase_check(uref_uri_copy(upipe_fsrc->flow_def,
+                                           upipe_fsrc->uri)))
+                upipe_warn(upipe, "fail to import uri to flow format");
+        }
+        else
+            uref_uri_delete(upipe_fsrc->flow_def);
+    }
 
     upipe_fsrc_check_upump_mgr(upipe);
     if (upipe_fsrc->upump_mgr == NULL)
