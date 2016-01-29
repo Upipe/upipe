@@ -45,30 +45,32 @@ int uref_uri_get(struct uref *uref, struct uuri *uuri);
 int uref_uri_set_from_str(struct uref *uref, const char *str);
 int uref_uri_get_to_str(struct uref *uref, char **str_p);
 
-static inline void uref_uri_delete(struct uref *uref)
+static inline int uref_uri_delete(struct uref *uref)
 {
-    uref_uri_delete_scheme(uref);
-    uref_uri_delete_userinfo(uref);
-    uref_uri_delete_host(uref);
-    uref_uri_delete_port(uref);
-    uref_uri_delete_path(uref);
-    uref_uri_delete_query(uref);
-    uref_uri_delete_fragment(uref);
+    int (*list[])(struct uref *) = {
+        uref_uri_delete_scheme,
+        uref_uri_delete_userinfo,
+        uref_uri_delete_host,
+        uref_uri_delete_port,
+        uref_uri_delete_path,
+        uref_uri_delete_query,
+        uref_uri_delete_fragment,
+    };
+    return uref_attr_delete_list(uref, list, UBASE_ARRAY_SIZE(list));
 }
 
-static inline int uref_uri_import(struct uref *uref,
-                                  struct uref *from)
+static inline int uref_uri_copy(struct uref *uref, struct uref *from)
 {
-    struct uuri uuri;
-    int ret;
-
-    uref_uri_delete(uref);
-    if (!from)
-        return UBASE_ERR_NONE;
-    ret = uref_uri_get(from, &uuri);
-    if (!ubase_check(ret))
-        return ret;
-    return uref_uri_set(uref, &uuri);
+    int (*list[])(struct uref *, struct uref *) = {
+        uref_uri_copy_scheme,
+        uref_uri_copy_userinfo,
+        uref_uri_copy_host,
+        uref_uri_copy_port,
+        uref_uri_copy_path,
+        uref_uri_copy_query,
+        uref_uri_copy_fragment,
+    };
+    return uref_attr_copy_list(uref, from, list, UBASE_ARRAY_SIZE(list));
 }
 
 #ifdef __cplusplus
