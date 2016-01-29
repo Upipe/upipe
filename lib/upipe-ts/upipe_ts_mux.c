@@ -60,6 +60,7 @@
 #include <upipe/upipe_helper_uclock.h>
 #include <upipe/upipe_helper_upump_mgr.h>
 #include <upipe/upipe_helper_upump.h>
+#include <upipe/upipe_helper_inner.h>
 #include <upipe/upipe_helper_bin_input.h>
 #include <upipe/upipe_helper_subpipe.h>
 #include <upipe-framers/uref_h264_flow.h>
@@ -348,6 +349,7 @@ struct upipe_ts_mux {
 UPIPE_HELPER_UPIPE(upipe_ts_mux, upipe, UPIPE_TS_MUX_SIGNATURE)
 UPIPE_HELPER_UREFCOUNT(upipe_ts_mux, urefcount, upipe_ts_mux_no_input)
 UPIPE_HELPER_VOID(upipe_ts_mux)
+UPIPE_HELPER_INNER(upipe_ts_mux, psig)
 UPIPE_HELPER_BIN_INPUT(upipe_ts_mux, psig, input_request_list)
 UPIPE_HELPER_OUTPUT(upipe_ts_mux, output, flow_def, output_state,
                     output_request_list)
@@ -439,6 +441,7 @@ UPIPE_HELPER_UPIPE(upipe_ts_mux_program, upipe, UPIPE_TS_MUX_PROGRAM_SIGNATURE)
 UPIPE_HELPER_UREFCOUNT(upipe_ts_mux_program, urefcount,
                        upipe_ts_mux_program_no_input)
 UPIPE_HELPER_VOID(upipe_ts_mux_program)
+UPIPE_HELPER_INNER(upipe_ts_mux_program, psig_program)
 UPIPE_HELPER_BIN_INPUT(upipe_ts_mux_program, psig_program, input_request_list)
 
 UBASE_FROM_TO(upipe_ts_mux_program, urefcount, urefcount_real, urefcount_real)
@@ -534,6 +537,7 @@ UPIPE_HELPER_UPIPE(upipe_ts_mux_input, upipe, UPIPE_TS_MUX_INPUT_SIGNATURE)
 UPIPE_HELPER_UREFCOUNT(upipe_ts_mux_input, urefcount,
                        upipe_ts_mux_input_no_input)
 UPIPE_HELPER_VOID(upipe_ts_mux_input)
+UPIPE_HELPER_INNER(upipe_ts_mux_input, input);
 UPIPE_HELPER_BIN_INPUT(upipe_ts_mux_input, input, input_request_list)
 
 UBASE_FROM_TO(upipe_ts_mux_input, urefcount, urefcount_real, urefcount_real)
@@ -925,7 +929,7 @@ static struct upipe *upipe_ts_mux_input_alloc(struct upipe_mgr *mgr,
         return upipe;
     }
 
-    upipe_ts_mux_input_store_first_inner(upipe,
+    upipe_ts_mux_input_store_bin_input(upipe,
             upipe_use(upipe_ts_mux_input->tstd));
     upipe_ts_encaps_set_tb_size(upipe_ts_mux_input->encaps,
                                 upipe_ts_mux->tb_size);
@@ -1195,7 +1199,7 @@ static int upipe_ts_mux_input_set_flow_def(struct upipe *upipe,
             return UBASE_ERR_ALLOC;
         }
         upipe_ts_mux_set_scte35_interval(scte35g, input->scte35_interval);
-        upipe_ts_mux_input_store_first_inner(upipe, scte35g);
+        upipe_ts_mux_input_store_bin_input(upipe, scte35g);
 
         if (input->psi_pid != NULL && input->psi_pid->pid != pid) {
             upipe_ts_mux_psi_pid_release(input->psi_pid);
@@ -1221,7 +1225,7 @@ static int upipe_ts_mux_input_set_flow_def(struct upipe *upipe,
         }
 
     } else { /* standard PES */
-        upipe_ts_mux_input_store_first_inner(upipe, upipe_use(input->tstd));
+        upipe_ts_mux_input_store_bin_input(upipe, upipe_use(input->tstd));
         upipe_ts_mux_set_max_delay(input->tstd, input->max_delay);
 
         if (input->psi_pid != NULL) {
@@ -1610,7 +1614,7 @@ static struct upipe *upipe_ts_mux_program_alloc(struct upipe_mgr *mgr,
         upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
         return upipe;
     }
-    upipe_ts_mux_program_store_first_inner(upipe, psig_program);
+    upipe_ts_mux_program_store_bin_input(upipe, psig_program);
 
     upipe_ts_mux_program_update_sig(upipe);
     upipe_ts_mux_program_update(upipe);
@@ -2861,11 +2865,11 @@ static int upipe_ts_mux_check(struct upipe *upipe, struct uref *flow_format)
                                  uprobe_use(&mux->probe),
                                  UPROBE_LOG_VERBOSE,
                                  "pat psi_join"))) == NULL)) {
-            upipe_ts_mux_store_first_inner(upipe, psig);
+            upipe_ts_mux_store_bin_input(upipe, psig);
             upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
             return UBASE_ERR_ALLOC;
         }
-        upipe_ts_mux_store_first_inner(upipe, psig);
+        upipe_ts_mux_store_bin_input(upipe, psig);
         upipe_release(psi_join);
         upipe_ts_mux_update(upipe);
     }
