@@ -80,6 +80,42 @@ static int duration_to_uclock(const char *str,
     return UBASE_ERR_NONE;
 }
 
+static int attribute_iterate(const char **item,
+                             struct ustring *name,
+                             struct ustring *value)
+{
+    static const char name_set[] = { USTRING_ALPHA_UPPER, '-', '\0' };
+    if (unlikely(!item) || unlikely(!*item))
+        return UBASE_ERR_INVALID;
+
+    struct ustring tmp = ustring_from_str(*item);
+    if (unlikely(ustring_is_empty(tmp))) {
+        *item = NULL;
+        return UBASE_ERR_NONE;
+    }
+
+    *name = ustring_split_while(&tmp, name_set);
+    if (unlikely(!ustring_match_str(tmp, "=")))
+        return UBASE_ERR_INVALID;
+    tmp = ustring_shift(tmp, 1);
+    if (ustring_match_str(tmp, "\"")) {
+        tmp = ustring_shift(tmp, 1);
+        *value = ustring_split_until(&tmp, "\"");
+        if (unlikely(!ustring_match_str(tmp, "\"")))
+            return UBASE_ERR_INVALID;
+        tmp = ustring_shift(tmp, 1);
+    }
+    else {
+        *value = ustring_split_until(&tmp, ",");
+    }
+    if (ustring_match_str(tmp, ","))
+        tmp = ustring_shift(tmp, 1);
+    else if (!ustring_is_empty(tmp))
+        return UBASE_ERR_INVALID;
+    *item = tmp.at;
+    return UBASE_ERR_NONE;
+}
+
 #define EXPECTED_FLOW_DEF       "block."
 #define M3U_FLOW_DEF            EXPECTED_FLOW_DEF "m3u."
 #define PLAYLIST_FLOW_DEF       M3U_FLOW_DEF "playlist."
@@ -110,6 +146,8 @@ struct upipe_m3u_reader {
     struct uref *flow_def;
     /** current item */
     struct uref *item;
+    /** current key */
+    struct uref *key;
     /** list of items */
     struct uchain items;
 
@@ -156,6 +194,7 @@ static struct upipe *upipe_m3u_reader_alloc(struct upipe_mgr *mgr,
     upipe_m3u_reader->current_flow_def = NULL;
     upipe_m3u_reader->flow_def = NULL;
     upipe_m3u_reader->item = NULL;
+    upipe_m3u_reader->key = NULL;
     upipe_m3u_reader->restart = false;
     upipe_throw_ready(upipe);
 
@@ -193,6 +232,7 @@ static void upipe_m3u_reader_free(struct upipe *upipe)
 
     upipe_throw_dead(upipe);
 
+    uref_free(upipe_m3u_reader->key);
     upipe_m3u_reader_flush(upipe);
     uref_free(upipe_m3u_reader->flow_def);
     upipe_m3u_reader_clean_uref_stream(upipe);
@@ -219,7 +259,7 @@ static int upipe_m3u_reader_get_item(struct upipe *upipe,
         return UBASE_ERR_INVALID;
 
     if (unlikely(upipe_m3u_reader->item == NULL)) {
-        upipe_m3u_reader->item = uref_alloc_control(flow_def->mgr);
+        upipe_m3u_reader->item = uref_sibling_alloc_control(flow_def);
         if (unlikely(upipe_m3u_reader->item == NULL)) {
             upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
             return UBASE_ERR_ALLOC;
@@ -416,52 +456,6 @@ static int upipe_m3u_reader_process_extinf(struct upipe *upipe,
     return uref_m3u_playlist_set_seq_duration(item, duration);
 }
 
-/** @internal @This sets the bandwidth attribute of an item if present.
- *
- * @param uref pointer to the uref carrying the attributes
- * @param stream_inf the "#EXT-X-STREAM-INF" value
- * @return an error code
- */
-static int stream_inf_set_bandwidth(struct uref *item,
-                                    const char *stream_inf)
-{
-    static const char *tag = "BANDWIDTH=";
-
-    const char *tmp;
-    if (unlikely((tmp = strstr(stream_inf, tag)) == NULL))
-        return UBASE_ERR_INVALID;
-    tmp += strlen(tag);
-    char *endptr;
-    uint64_t bandwidth = strtoull(tmp, &endptr, 10);
-    if (tmp == endptr)
-        return UBASE_ERR_INVALID;
-    return uref_m3u_master_set_bandwidth(item, bandwidth);
-}
-
-/** @internal @This sets the codecs attribute of an item if present.
- *
- * @param uref pointer to the uref carrying the attributes
- * @param stream_inf the "#EXT-X-STREAM-INF" value
- * @return an error code
- */
-static int stream_inf_set_codecs(struct uref *item,
-                                 const char *stream_inf)
-{
-    static const char *tag = "CODECS=";
-
-    const char *tmp;
-    if (unlikely((tmp = strstr(stream_inf, tag)) == NULL))
-        return UBASE_ERR_INVALID;
-    tmp += strlen(tag);
-    struct ustring ustring = ustring_from_str(tmp);
-    if (ustring_is_empty(ustring_split_match_str(&ustring, "\"")))
-        return UBASE_ERR_INVALID;
-    struct ustring value = ustring_split_until(&ustring, "\"");
-    char buffer[value.len + 1];
-    UBASE_RETURN(ustring_cpy(value, buffer, sizeof (buffer)));
-    return uref_m3u_master_set_codecs(item, buffer);
-}
-
 /** @internal @This checks and parses a "#EXT-X-STREAM-INF" tag.
  *
  * @param upipe description structure of the pipe
@@ -473,16 +467,58 @@ static int upipe_m3u_reader_ext_x_stream_inf(struct upipe *upipe,
                                              struct uref *flow_def,
                                              const char *line)
 {
-    const char *def;
-    struct uref *item;
-    UBASE_RETURN(uref_flow_get_def(flow_def, &def));
-    if (strcmp(def, M3U_FLOW_DEF) && strcmp(def, MASTER_FLOW_DEF))
+    if (!ubase_check(uref_flow_match_def(flow_def, M3U_FLOW_DEF)) &&
+        !ubase_check(uref_flow_match_def(flow_def, MASTER_FLOW_DEF)))
         return UBASE_ERR_INVALID;
     UBASE_RETURN(uref_flow_set_def(flow_def, MASTER_FLOW_DEF));
+
+    struct uref *item;
     UBASE_RETURN(upipe_m3u_reader_get_item(upipe, flow_def, &item));
-    UBASE_RETURN(stream_inf_set_bandwidth(item, line));
-    stream_inf_set_codecs(item, line);
-    return uref_m3u_master_set_stream_inf(item, line);
+
+    const char *iterator = line;
+    struct ustring name, value;
+    while (ubase_check(attribute_iterate(&iterator, &name, &value)) &&
+           iterator != NULL) {
+        char value_str[value.len + 1];
+        int err = ustring_cpy(value, value_str, sizeof (value_str));
+        if (unlikely(!ubase_check(err))) {
+            upipe_err_va(upipe, "fail to copy ustring %.*s",
+                         (int)value.len, value.at);
+            continue;
+        }
+
+        if (!ustring_cmp_str(name, "BANDWIDTH")) {
+            char *endptr;
+            uint64_t bandwidth = strtoull(value_str, &endptr, 10);
+            if (endptr == value_str)
+                return UBASE_ERR_INVALID;
+            err = uref_m3u_master_set_bandwidth(item, bandwidth);
+            if (unlikely(!ubase_check(err)))
+                upipe_err_va(upipe, "fail to set bandwidth to %s", value_str);
+        }
+        else if (!ustring_cmp_str(name, "CODECS")) {
+            err = uref_m3u_master_set_codecs(item, value_str);
+            if (unlikely(!ubase_check(err)))
+                upipe_err_va(upipe, "fail to set codecs to %s", value_str);
+        }
+        else if (!ustring_cmp_str(name, "AUDIO")) {
+            err = uref_m3u_master_set_audio(item, value_str);
+            if (unlikely(!ubase_check(err)))
+                upipe_err_va(upipe, "fail to set audio to %s", value_str);
+        }
+        else if (!ustring_cmp_str(name, "RESOLUTION")) {
+            err = uref_m3u_master_set_resolution(item, value_str);
+            if (unlikely(!ubase_check(err)))
+                upipe_err_va(upipe, "fail to set resolution to %s", value_str);
+        }
+        else {
+            upipe_warn_va(upipe, "ignoring attribute %.*s (%.*s)",
+                          (int)name.len, name.at,
+                          (int)value.len, value.at);
+        }
+    }
+
+    return UBASE_ERR_NONE;
 }
 
 /** @internal @This checks and parses a "#EXT-X-BYTERANGE" tag.
@@ -528,6 +564,193 @@ static int upipe_m3u_reader_process_byte_range(struct upipe *upipe,
     return uref_m3u_playlist_set_byte_range_len(item, byte_range_len);
 }
 
+static int upipe_m3u_reader_process_media(struct upipe *upipe,
+                                          struct uref *flow_def,
+                                          const char *line)
+{
+    struct upipe_m3u_reader *upipe_m3u_reader =
+        upipe_m3u_reader_from_upipe(upipe);
+
+    if (!ubase_check(uref_flow_match_def(flow_def, M3U_FLOW_DEF)) &&
+        !ubase_check(uref_flow_match_def(flow_def, MASTER_FLOW_DEF)))
+        return UBASE_ERR_INVALID;
+    UBASE_RETURN(uref_flow_set_def(flow_def, MASTER_FLOW_DEF));
+
+    struct uref *item = uref_sibling_alloc_control(flow_def);
+    if (unlikely(item == NULL)) {
+        upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
+        return UBASE_ERR_ALLOC;
+    }
+
+    struct ustring name, value;
+    while (ubase_check(attribute_iterate(&line, &name, &value)) && line) {
+        if (!ustring_cmp_str(name, "URI")) {
+            value = ustring_unframe(value, '"');
+            char val[value.len + 1];
+            int err = ustring_cpy(value, val, sizeof (val));
+            if (unlikely(!ubase_check(err))) {
+                upipe_warn_va(upipe, "fail to copy %.*s",
+                              (int)value.len, value.at);
+                continue;
+            }
+            err = uref_m3u_set_uri(item, val);
+            if (unlikely(!ubase_check(err))) {
+                upipe_warn_va(upipe, "fail to set uri %s", val);
+                continue;
+            }
+        }
+        else if (!ustring_cmp_str(name, "TYPE")) {
+            char val[value.len + 1];
+            int err = ustring_cpy(value, val, sizeof (val));
+            if (unlikely(!ubase_check(err))) {
+                upipe_warn_va(upipe, "fail to copy %.*s",
+                              (int)value.len, value.at);
+                continue;
+            }
+            err = uref_m3u_master_set_media_type(item, val);
+            if (unlikely(!ubase_check(err))) {
+                upipe_warn_va(upipe, "fail to set media type %s", val);
+                continue;
+            }
+        }
+        else if (!ustring_cmp_str(name, "DEFAULT")) {
+            if (!ustring_cmp_str(value, "YES")) {
+                int err = uref_m3u_master_set_media_default(item);
+                if (unlikely(!ubase_check(err)))
+                    continue;
+            }
+            else if (ustring_cmp_str(value, "NO")) {
+                upipe_warn_va(upipe, "invalid DEFAULT value %.*s",
+                              (int)value.len, value.at);
+                continue;
+            }
+        }
+        else if (!ustring_cmp_str(name, "AUTOSELECT")) {
+            if (!ustring_cmp_str(value, "YES")) {
+                int err = uref_m3u_master_set_media_autoselect(item);
+                if (unlikely(!ubase_check(err)))
+                    continue;
+            }
+            else if (ustring_cmp_str(value, "NO")) {
+                upipe_warn_va(upipe, "invalid AUTOSELECT value %.*s",
+                              (int)value.len, value.at);
+                continue;
+            }
+        }
+        else if (!ustring_cmp_str(name, "NAME")) {
+            value = ustring_unframe(value, '"');
+            char val[value.len + 1];
+            int err = ustring_cpy(value, val, sizeof (val));
+            if (unlikely(!ubase_check(err))) {
+                upipe_warn_va(upipe, "fail to copy %.*s",
+                              (int)value.len, value.at);
+                continue;
+            }
+            err = uref_m3u_master_set_media_name(item, val);
+            if (unlikely(!ubase_check(err))) {
+                upipe_warn_va(upipe, "fail to set media name %s", val);
+                continue;
+            }
+        }
+        else if (!ustring_cmp_str(name, "GROUP-ID")) {
+            value = ustring_unframe(value, '"');
+            char val[value.len + 1];
+            int err = ustring_cpy(value, val, sizeof (val));
+            if (unlikely(!ubase_check(err))) {
+                upipe_warn_va(upipe, "fail to copy %.*s",
+                              (int)value.len, value.at);
+                continue;
+            }
+            err = uref_m3u_master_set_media_group(item, val);
+            if (unlikely(!ubase_check(err))) {
+                upipe_warn_va(upipe, "fail to set group id %s", val);
+                continue;
+            }
+        }
+        else {
+            upipe_warn_va(upipe, "ignoring attribute %.*s (%.*s)",
+                          (int)name.len, name.at,
+                          (int)value.len, value.at);
+        }
+    }
+    ulist_add(&upipe_m3u_reader->items, uref_to_uchain(item));
+    return UBASE_ERR_NONE;
+}
+
+static int upipe_m3u_reader_key(struct upipe *upipe,
+                                struct uref *flow_def,
+                                const char *line)
+{
+    struct upipe_m3u_reader *upipe_m3u_reader =
+        upipe_m3u_reader_from_upipe(upipe);
+
+    if (unlikely(!ubase_check(uref_flow_match_def(flow_def,
+                                                  M3U_FLOW_DEF))) &&
+        unlikely(!ubase_check(uref_flow_match_def(flow_def,
+                                                  PLAYLIST_FLOW_DEF))))
+        return UBASE_ERR_INVALID;
+    UBASE_RETURN(uref_flow_set_def(flow_def, PLAYLIST_FLOW_DEF));
+
+    struct uref *key = uref_sibling_alloc_control(flow_def);
+    if (unlikely(key == NULL)) {
+        upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
+        return UBASE_ERR_ALLOC;
+    }
+
+    if (upipe_m3u_reader->key)
+        uref_free(upipe_m3u_reader->key);
+    upipe_m3u_reader->key = key;
+
+    const char *iterator = line;
+    struct ustring name, value;
+    while (ubase_check(attribute_iterate(&iterator, &name, &value)) &&
+           iterator != NULL) {
+        char value_str[value.len + 1];
+        int err = ustring_cpy(value, value_str, sizeof (value_str));
+        if (unlikely(!ubase_check(err))) {
+            upipe_err_va(upipe, "fail to copy ustring %.*s",
+                         (int)value.len, value.at);
+            continue;
+        }
+
+        if (!ustring_cmp_str(name, "METHOD")) {
+            err = uref_m3u_playlist_key_set_method(key, value_str);
+            if (unlikely(!ubase_check(err)))
+                upipe_err_va(upipe, "fail to set key method to %s", value_str);
+        }
+        else if (!ustring_cmp_str(name, "URI")) {
+            err = uref_m3u_playlist_key_set_uri(key, value_str);
+            if (unlikely(!ubase_check(err)))
+                upipe_err_va(upipe, "fail to set uri to %s", value_str);
+        }
+        else if (!ustring_cmp_str(name, "IV")) {
+            size_t len = strlen(value_str);
+            if (unlikely(len > 32)) {
+                upipe_warn_va(upipe, "invalid initialization vector %s",
+                              value_str);
+                continue;
+            }
+            for (unsigned i = 0; i < len; i += 2) {
+                if (unlikely(!isxdigit(value_str[i])) ||
+                    unlikely(!isxdigit(value_str[i + 1]))) {
+                    upipe_warn_va(upipe, "invalid initialization vector %s",
+                                  value_str);
+                    continue;
+                }
+                //FIXME
+                //iv[] = value_str[i]
+            }
+
+        }
+        else {
+            upipe_warn_va(upipe, "ignoring attribute %.*s (%.*s)",
+                          (int)name.len, name.at, (int)value.len, value.at);
+        }
+    }
+
+    return UBASE_ERR_NONE;
+}
+
 /** @internal @This checks an URI.
  *
  * @param upipe description structure of the pipe
@@ -547,6 +770,8 @@ static int upipe_m3u_reader_process_uri(struct upipe *upipe,
     struct uref *item;
     UBASE_RETURN(upipe_m3u_reader_get_item(upipe, flow_def, &item));
     UBASE_RETURN(uref_m3u_set_uri(item, uri));
+    if (upipe_m3u_reader->key)
+        UBASE_RETURN(uref_m3u_playlist_key_copy(item, upipe_m3u_reader->key));
     upipe_m3u_reader->item = NULL;
     ulist_add(&upipe_m3u_reader->items, uref_to_uchain(item));
     return UBASE_ERR_NONE;
@@ -573,9 +798,11 @@ static int upipe_m3u_reader_process_line(struct upipe *upipe,
         { "#EXT-X-PLAYLIST-TYPE:", upipe_m3u_reader_process_playlist_type },
         { "#EXTINF:", upipe_m3u_reader_process_extinf },
         { "#EXT-X-BYTERANGE:", upipe_m3u_reader_process_byte_range },
+        { "#EXT-X-MEDIA:", upipe_m3u_reader_process_media },
         { "#EXT-X-STREAM-INF:", upipe_m3u_reader_ext_x_stream_inf },
         { "#EXT-X-MEDIA-SEQUENCE:", upipe_m3u_reader_ext_x_media_sequence },
         { "#EXT-X-ENDLIST", upipe_m3u_reader_ext_x_endlist },
+        { "#EXT-X-KEY:", upipe_m3u_reader_key },
     };
 
     size_t block_size;

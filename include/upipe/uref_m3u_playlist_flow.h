@@ -41,6 +41,31 @@ UREF_ATTR_UNSIGNED(m3u_playlist_flow, media_sequence,
 UREF_ATTR_VOID(m3u_playlist_flow, endlist, "m3u.playlist.endlist",
                endlist)
 
+static inline int uref_m3u_playlist_flow_delete(struct uref *uref)
+{
+    int (*list[])(struct uref *) = {
+        uref_m3u_playlist_flow_delete_type,
+        uref_m3u_playlist_flow_delete_target_duration,
+        uref_m3u_playlist_flow_delete_media_sequence,
+        uref_m3u_playlist_flow_delete_endlist,
+    };
+
+    return uref_attr_delete_list(uref, list, UBASE_ARRAY_SIZE(list));
+}
+
+static inline int uref_m3u_playlist_flow_copy(struct uref *uref,
+                                              struct uref *uref_src)
+{
+    int (*list[])(struct uref *, struct uref *) = {
+        uref_m3u_playlist_flow_copy_type,
+        uref_m3u_playlist_flow_copy_target_duration,
+        uref_m3u_playlist_flow_copy_media_sequence,
+        uref_m3u_playlist_flow_copy_endlist,
+    };
+
+    return uref_attr_copy_list(uref, uref_src, list, UBASE_ARRAY_SIZE(list));
+}
+
 #ifdef __cplusplus
 }
 #endif

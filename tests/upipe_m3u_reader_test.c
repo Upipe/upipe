@@ -118,11 +118,6 @@ static int catch_uref(struct uprobe *uprobe,
             printf("playlist byte range offset: %"PRIu64"\n",
                    playlist_byte_range_off);
 
-        const char *master_stream_inf;
-        if (ubase_check(uref_m3u_master_get_stream_inf(
-                    uref, &master_stream_inf)))
-            printf("master stream info: %s\n", master_stream_inf);
-
         uint64_t master_bandwidth;
         if (ubase_check(uref_m3u_master_get_bandwidth(
                     uref, &master_bandwidth)))
@@ -132,6 +127,37 @@ static int catch_uref(struct uprobe *uprobe,
         if (ubase_check(uref_m3u_master_get_codecs(
                     uref, &master_codecs)))
             printf("master codecs: %s\n", master_codecs);
+
+        const char *resolution;
+        if (ubase_check(uref_m3u_master_get_resolution(
+                    uref, &resolution)))
+            printf("master resolution: %s\n", resolution);
+
+        const char *audio;
+        if (ubase_check(uref_m3u_master_get_audio(
+                    uref, &audio)))
+            printf("master audio: %s\n", audio);
+
+        const char *media_type;
+        if (ubase_check(uref_m3u_master_get_media_type(
+                    uref, &media_type)))
+            printf("master media_type: %s\n", media_type);
+
+        const char *media_name;
+        if (ubase_check(uref_m3u_master_get_media_name(
+                    uref, &media_name)))
+            printf("master media_name: %s\n", media_name);
+
+        const char *media_group;
+        if (ubase_check(uref_m3u_master_get_media_group(
+                    uref, &media_group)))
+            printf("master media_group: %s\n", media_group);
+
+        if (ubase_check(uref_m3u_master_get_media_default(uref)))
+            printf("master media_default\n");
+
+        if (ubase_check(uref_m3u_master_get_media_autoselect(uref)))
+            printf("master media_autoselect\n");
 
         return UBASE_ERR_NONE;
     }
