@@ -51,4 +51,6 @@ myinclude_HEADERS = \
 	upipe_m3u_reader.h \
 	upipe_m3u_playlist.h \
 	upipe_auto_source.h \
-	upipe_buffer.h
+	upipe_buffer.h \
+	upipe_aes_decrypt.h \
+	uref_aes_flow.h
