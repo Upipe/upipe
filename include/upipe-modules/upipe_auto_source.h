@@ -48,7 +48,7 @@ enum upipe_auto_src_mgr_command {
  * @param mgr pointer to upipe auto source manager
  * @param scheme an URI scheme (ex: "http", "file", "https", ...)
  * @param mgr_src the @tt {struct upipe_mgr *} to use for the URI beginning
- * with scheme @ref scheme
+ * with scheme
  * @return an error code
  */
 static inline int upipe_auto_src_mgr_set_mgr(struct upipe_mgr *mgr,
@@ -64,7 +64,7 @@ static inline int upipe_auto_src_mgr_set_mgr(struct upipe_mgr *mgr,
  * @param mgr pointer to upipe auto source manager
  * @param scheme an URI scheme (ex: "http", "file", "https", ...)
  * @param mgr_src_p a pointer filled with the @tt {struct upipe_mgr *}
- * used for the scheme @ref scheme
+ * used for the scheme
  * @return an error code
  */
 static inline int upipe_auto_src_mgr_get_mgr(struct upipe_mgr *mgr,

@@ -41,6 +41,7 @@ extern "C" {
 #include <sys/time.h>
 #include <assert.h>
 
+/* @This represents the Upipe clock frequency. */
 #define UCLOCK_FREQ UINT64_C(27000000)
 
 /** @This is a structure allowing to retrieve system time. */

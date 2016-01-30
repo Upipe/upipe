@@ -49,7 +49,6 @@ extern "C" {
  * @end code
  * Internal wrapper.
  *
- * @list
  * @item @code
  *  void upipe_foo_release_urefcount_real(struct urefcount *urefcount)
  * @end code
