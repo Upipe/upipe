@@ -1550,8 +1550,8 @@ static struct upipe *upipe_avcenc_alloc(struct upipe_mgr *mgr,
  * @param name codec name
  * @return an erorr code
  */
-int _upipe_avcenc_mgr_set_flow_def_from_name(struct uref *flow_def,
-                                             const char *name)
+static int _upipe_avcenc_mgr_set_flow_def_from_name(struct uref *flow_def,
+                                                    const char *name)
 {
     if (name == NULL)
         return UBASE_ERR_INVALID;
