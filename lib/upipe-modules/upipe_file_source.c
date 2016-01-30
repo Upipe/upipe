@@ -125,6 +125,8 @@ struct upipe_fsrc {
 
     /** public upipe structure */
     struct upipe upipe;
+    /** guard for upump */
+    bool safe;
 };
 
 UPIPE_HELPER_UPIPE(upipe_fsrc, upipe, UPIPE_FSRC_SIGNATURE)
@@ -172,8 +174,17 @@ static struct upipe *upipe_fsrc_alloc(struct upipe_mgr *mgr,
     upipe_fsrc->uri = NULL;
     upipe_fsrc->fd = -1;
     upipe_fsrc->length = (uint64_t)-1;
+    upipe_fsrc->safe = false;
     upipe_throw_ready(upipe);
     return upipe;
+}
+
+static void upipe_fsrc_set_upump_safe(struct upipe *upipe,
+                                      struct upump *upump)
+{
+    struct upipe_fsrc *upipe_fsrc = upipe_fsrc_from_upipe(upipe);
+    upipe_fsrc->safe = false;
+    upipe_fsrc_set_upump(upipe, upump);
 }
 
 /** @internal @This returns the path of the currently opened file.
@@ -210,7 +221,8 @@ static void upipe_fsrc_worker(struct upump *upump)
         if (ubase_check(upipe_fsrc_get_uri(upipe, &path)))
             path = "(none)";
         upipe_notice_va(upipe, "end of range %s", path);
-        upipe_fsrc_set_upump(upipe, NULL);
+        upipe_fsrc_set_upump_safe(upipe, NULL);
+        ubase_clean_fd(&upipe_fsrc->fd);
         upipe_throw_source_end(upipe);
         return;
     }
@@ -264,7 +276,8 @@ static void upipe_fsrc_worker(struct upump *upump)
                 break;
         }
         upipe_err_va(upipe, "read error from %s (%m)", path);
-        upipe_fsrc_set_upump(upipe, NULL);
+        upipe_fsrc_set_upump_safe(upipe, NULL);
+        ubase_clean_fd(&upipe_fsrc->fd);
         upipe_throw_source_end(upipe);
         return;
     }
@@ -276,10 +289,12 @@ static void upipe_fsrc_worker(struct upump *upump)
         uref_block_resize(uref, 0, ret);
     if (unlikely(ret == 0))
         uref_block_set_end(uref);
+    upipe_fsrc->safe = true;
     upipe_fsrc_output(upipe, uref, &upipe_fsrc->upump);
-    if (unlikely(ret == 0)) {
+    if (likely(upipe_fsrc->safe) && unlikely(ret == 0)) {
         upipe_notice_va(upipe, "end of file %s", path);
-        upipe_fsrc_set_upump(upipe, NULL);
+        upipe_fsrc_set_upump_safe(upipe, NULL);
+        ubase_clean_fd(&upipe_fsrc->fd);
         upipe_throw_source_end(upipe);
     }
 }
@@ -296,10 +311,15 @@ static int upipe_fsrc_check(struct upipe *upipe, struct uref *flow_format)
     if (flow_format != NULL)
         upipe_fsrc_store_flow_def(upipe, flow_format);
 
-    if (upipe_fsrc->flow_def &&
-        !ubase_check(uref_uri_import(upipe_fsrc->flow_def,
-                                     upipe_fsrc->uri)))
-        upipe_warn(upipe, "fail to import uri to flow format");
+    if (upipe_fsrc->flow_def) {
+        if (upipe_fsrc->uri) {
+            if (!ubase_check(uref_uri_copy(upipe_fsrc->flow_def,
+                                           upipe_fsrc->uri)))
+                upipe_warn(upipe, "fail to import uri to flow format");
+        }
+        else
+            uref_uri_delete(upipe_fsrc->flow_def);
+    }
 
     upipe_fsrc_check_upump_mgr(upipe);
     if (upipe_fsrc->upump_mgr == NULL)
@@ -341,7 +361,7 @@ static int upipe_fsrc_check(struct upipe *upipe, struct uref *flow_format)
             upipe_throw_fatal(upipe, UBASE_ERR_UPUMP);
             return UBASE_ERR_UPUMP;
         }
-        upipe_fsrc_set_upump(upipe, upump);
+        upipe_fsrc_set_upump_safe(upipe, upump);
         upump_start(upump);
     }
     return UBASE_ERR_NONE;
@@ -396,7 +416,7 @@ static void upipe_fsrc_close(struct upipe *upipe)
         ubase_clean_fd(&upipe_fsrc->fd);
     }
     upipe_fsrc->length = (uint64_t)-1;
-    upipe_fsrc_set_upump(upipe, NULL);
+    upipe_fsrc_set_upump_safe(upipe, NULL);
     uref_free(upipe_fsrc->uri);
     upipe_fsrc->uri = NULL;
 }
@@ -566,10 +586,10 @@ static int _upipe_fsrc_control(struct upipe *upipe, int command, va_list args)
 {
     switch (command) {
         case UPIPE_ATTACH_UPUMP_MGR:
-            upipe_fsrc_set_upump(upipe, NULL);
+            upipe_fsrc_set_upump_safe(upipe, NULL);
             return upipe_fsrc_attach_upump_mgr(upipe);
         case UPIPE_ATTACH_UCLOCK:
-            upipe_fsrc_set_upump(upipe, NULL);
+            upipe_fsrc_set_upump_safe(upipe, NULL);
             upipe_fsrc_require_uclock(upipe);
             return UBASE_ERR_NONE;
 

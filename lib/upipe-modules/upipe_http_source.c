@@ -51,6 +51,7 @@
 #include <upipe/upipe_helper_uclock.h>
 #include <upipe/upipe_helper_output_size.h>
 #include <upipe-modules/upipe_http_source.h>
+#include <upipe-modules/uref_http_flow.h>
 
 #include <stdlib.h>
 #include <stdbool.h>
@@ -264,6 +265,53 @@ static struct upipe *upipe_http_src_alloc(struct upipe_mgr *mgr,
     return upipe;
 }
 
+/** @This closes a connection.
+ *
+ * @param upipe description structure of the pipe
+ */
+static void upipe_http_src_close(struct upipe *upipe)
+{
+    struct upipe_http_src *upipe_http_src = upipe_http_src_from_upipe(upipe);
+    struct uref *flow_def = upipe_http_src->flow_def;
+
+    if (likely(upipe_http_src->url != NULL))
+        upipe_notice_va(upipe, "closing %s", upipe_http_src->url);
+    ubase_clean_fd(&upipe_http_src->fd);
+    ubase_clean_str(&upipe_http_src->url);
+    upipe_http_src_set_upump(upipe, NULL);
+    upipe_http_src->request_pending = false;
+    upipe_http_src_set_upump_write(upipe, NULL);
+    if (flow_def)
+        uref_http_delete_content_type(flow_def);
+}
+
+/** @This frees a upipe.
+ *
+ * @param upipe description structure of the pipe
+ */
+static void upipe_http_src_free(struct upipe *upipe)
+{
+    struct upipe_http_src *upipe_http_src = upipe_http_src_from_upipe(upipe);
+
+    upipe_http_src_close(upipe);
+
+    upipe_throw_dead(upipe);
+
+    free(upipe_http_src->proxy);
+    free(upipe_http_src->url);
+    free(upipe_http_src->location);
+    upipe_http_src_clean_output_size(upipe);
+    upipe_http_src_clean_uclock(upipe);
+    upipe_http_src_clean_upump_write(upipe);
+    upipe_http_src_clean_upump(upipe);
+    upipe_http_src_clean_upump_mgr(upipe);
+    upipe_http_src_clean_output(upipe);
+    upipe_http_src_clean_ubuf_mgr(upipe);
+    upipe_http_src_clean_uref_mgr(upipe);
+    upipe_http_src_clean_urefcount(upipe);
+    upipe_http_src_free_void(upipe);
+}
+
 static int upipe_http_src_add_cookie(struct upipe *upipe,
                                       const char *buf,
                                       size_t len)
@@ -299,6 +347,7 @@ static int upipe_http_src_header_value(http_parser *parser,
 {
     struct upipe_http_src *upipe_http_src = upipe_http_src_from_parser(parser);
     struct upipe *upipe = upipe_http_src_to_upipe(upipe_http_src);
+    struct uref *flow_def = upipe_http_src->flow_def;
 
     struct header field = upipe_http_src->header_field;
     upipe_http_src->header_field = HEADER(NULL, 0);
@@ -311,6 +360,11 @@ static int upipe_http_src_header_value(http_parser *parser,
     else if (!strncasecmp("Set-Cookie", field.value, field.len)) {
         if (!ubase_check(upipe_http_src_add_cookie(upipe, at, len)))
             upipe_warn_va(upipe, "fail to set cookie %.*s", (int)len, at);
+    }
+    else if (!strncasecmp("Content-Type", field.value, field.len)) {
+        char content_type[len + 1];
+        snprintf(content_type, len + 1, "%s", at);
+        uref_http_set_content_type(flow_def, content_type);
     }
     return 0;
 }
@@ -370,8 +424,8 @@ static int upipe_http_src_output_data(struct upipe *upipe,
     uref_clock_set_cr_sys(uref, systime);
     if (len == 0)
         uref_block_set_end(uref);
-    upipe_http_src_output(upipe, uref, &upipe_http_src->upump);
     upipe_http_src->position += len;
+    upipe_http_src_output(upipe, uref, &upipe_http_src->upump);
 
     /* everything's fine, return 0 to http_parser */
     return 0;
@@ -386,20 +440,33 @@ static int upipe_http_src_message_complete(http_parser *parser)
 {
     struct upipe_http_src *upipe_http_src = upipe_http_src_from_parser(parser);
     struct upipe *upipe = upipe_http_src_to_upipe(upipe_http_src);
+    char *location = upipe_http_src->location;
+    int status_code = parser->status_code;
 
-    upipe_dbg_va(upipe, "message complete %i", parser->status_code);
-    upipe_http_src_output_data(upipe, NULL, 0);
-    upipe_dbg_va(upipe, "end of %s", upipe_http_src->url);
-    upipe_http_src_set_upump(upipe, NULL);
+    upipe_http_src->location = NULL;
+
+    upipe_dbg_va(upipe, "message complete %i", status_code);
+
+    switch (status_code) {
+    /* success */
+    case 200:
+    /* partial content */
+    case 206:
+        upipe_http_src_output_data(upipe, NULL, 0);
+        break;
+    }
+    upipe_http_src_close(upipe);
     upipe_throw_source_end(upipe);
 
-    switch (parser->status_code) {
+    switch (status_code) {
+    /* redirect */
     case 302:
-        upipe_http_src_throw_redirect(upipe, upipe_http_src->location);
+        upipe_http_src_throw_redirect(upipe, location);
         break;
     }
 
-    ubase_clean_str(&upipe_http_src->location);
+    free(location);
+
     return 0;
 }
 
@@ -415,7 +482,18 @@ static int upipe_http_src_body_cb(http_parser *parser, const char *at, size_t le
     struct upipe *upipe = upipe_http_src_to_upipe(upipe_http_src);
 
     upipe_verbose_va(upipe, "received %zu bytes of body", len);
-    upipe_http_src_output_data(upipe, at, len);
+
+    switch (parser->status_code) {
+    /* success */
+    case 200:
+    /* partial content */
+    case 206:
+        upipe_http_src_output_data(upipe, at, len);
+        break;
+    /* redirect */
+    case 302:
+        break;
+    }
     /* everything's fine, return 0 to http_parser */
     return 0;
 }
@@ -445,8 +523,10 @@ static void upipe_http_src_process(struct upipe *upipe,
         http_parser_execute(&upipe_http_src->parser,
                             &upipe_http_src->parser_settings,
                             (const char *)buffer, size);
-    if (parsed_len != size)
+    if (parsed_len != size) {
         upipe_warn(upipe, "http request execution failed");
+        upipe_throw_source_end(upipe);
+    }
     uref_block_unmap(uref, 0);
     uref_free(uref);
 }
@@ -495,9 +575,7 @@ static void upipe_http_src_worker(struct upump *upump)
 #endif
                 /* not an issue, try again later */
                 return;
-            case EBADF:
-            case EINVAL:
-            case EIO:
+
             default:
                 break;
         }
@@ -505,13 +583,17 @@ static void upipe_http_src_worker(struct upump *upump)
                      strerror(errno));
         upipe_http_src_set_upump(upipe, NULL);
         upipe_throw_source_end(upipe);
-        return;
     }
-
-    if (unlikely(len != upipe_http_src->output_size))
-        uref_block_resize(uref, 0, len);
-
-    return upipe_http_src_process(upipe, uref, &upump);
+    else if (unlikely(len == 0)) {
+        upipe_verbose(upipe, "connection closed");
+        uref_free(uref);
+        upipe_throw_source_end(upipe);
+    }
+    else {
+        if (unlikely(len != upipe_http_src->output_size))
+            uref_block_resize(uref, 0, len);
+        upipe_http_src_process(upipe, uref, &upump);
+    }
 }
 
 static int request_add(char **req_p, size_t *len, const char *fmt, ...)
@@ -675,11 +757,13 @@ static void upipe_http_src_worker_write(struct upump *upump)
     struct upipe *upipe = upump_get_opaque(upump, struct upipe *);
     struct upipe_http_src *upipe_http_src = upipe_http_src_from_upipe(upipe);
 
-    if (unlikely(upipe_http_src_send_request(upipe)) != UBASE_ERR_NONE)
-        ubase_clean_fd(&upipe_http_src->fd);
-
-    upipe_http_src->request_pending = false;
-    upipe_http_src_set_upump_write(upipe, NULL);
+    if (unlikely(!ubase_check(upipe_http_src_send_request(upipe)))) {
+        upipe_err(upipe, "fail to send request");
+    }
+    else {
+        upipe_http_src->request_pending = false;
+        upipe_http_src_set_upump_write(upipe, NULL);
+    }
 }
 
 /** @internal @This checks if the pump may be allocated.
@@ -777,7 +861,7 @@ static int upipe_http_src_get_uri(struct upipe *upipe, const char **url_p)
  *
  * @param upipe description structure of the pipe
  * @param url relative or absolute url of the http
- * @return socket fd or -1 in case of error
+ * @return an error code
  */
 static int upipe_http_src_open_url(struct upipe *upipe)
 {
@@ -787,8 +871,8 @@ static int upipe_http_src_open_url(struct upipe *upipe)
     struct addrinfo hints;
     int ret, fd = -1;
 
-    if (!flow_def)
-        return -1;
+    if (unlikely(flow_def == NULL))
+        return UBASE_ERR_INVALID;
 
     /* init parser */
     http_parser_init(&upipe_http_src->parser, HTTP_RESPONSE);
@@ -805,7 +889,7 @@ static int upipe_http_src_open_url(struct upipe *upipe)
         if (!ubase_check(ret)) {
             upipe_err_va(upipe, "invalid http_proxy %s",
                          upipe_http_src->proxy);
-            return -1;
+            return UBASE_ERR_INVALID;
         }
         char host[uuri.authority.host.len + 1];
         ustring_cpy(uuri.authority.host, host, sizeof (host));
@@ -819,17 +903,11 @@ static int upipe_http_src_open_url(struct upipe *upipe)
     }
     else {
         const char *host;
-        if (!ubase_check(uref_uri_get_host(flow_def, &host))) {
-            upipe_err(upipe, "fail to get host");
-            return -1;
-        }
+        UBASE_RETURN(uref_uri_get_host(flow_def, &host));
 
         const char *service;
-        if (!ubase_check(uref_uri_get_port(flow_def, &service)) &&
-            !ubase_check(uref_uri_get_scheme(flow_def, &service))) {
-            upipe_err(upipe, "fail to get service");
-            return -1;
-        }
+        if (!ubase_check(uref_uri_get_port(flow_def, &service)))
+            UBASE_RETURN(uref_uri_get_scheme(flow_def, &service));
 
         upipe_verbose_va(upipe, "getaddrinfo to %s", host);
         ret = getaddrinfo(host, service, &hints, &info);
@@ -837,7 +915,7 @@ static int upipe_http_src_open_url(struct upipe *upipe)
 
     if (unlikely(ret)) {
         upipe_err_va(upipe, "getaddrinfo: %s", gai_strerror(ret));
-        return -1;
+        return UBASE_ERR_EXTERNAL;
     }
 
     /* connect to first working ressource */
@@ -845,17 +923,20 @@ static int upipe_http_src_open_url(struct upipe *upipe)
         fd = socket(res->ai_family, res->ai_socktype,
                                           res->ai_protocol);
         if (likely(fd >= 0)) {
-            if (connect(fd, res->ai_addr, res->ai_addrlen) == 0) {
+            if (connect(fd, res->ai_addr, res->ai_addrlen) == 0)
                 break;
-            }
             ubase_clean_fd(&fd);
         }
     }
     freeaddrinfo(info);
 
-    if (fd < 0)
+    if (fd < 0) {
         upipe_err(upipe, "could not connect to any ressource");
-    return fd;
+        return UBASE_ERR_EXTERNAL;
+    }
+
+    upipe_http_src->fd = fd;
+    return UBASE_ERR_NONE;
 }
 
 /** @internal @This asks to open the given http.
@@ -869,22 +950,14 @@ static int upipe_http_src_set_uri(struct upipe *upipe, const char *url)
     struct upipe_http_src *upipe_http_src = upipe_http_src_from_upipe(upipe);
     int ret;
 
-    if (unlikely(upipe_http_src->fd != -1)) {
-        if (likely(upipe_http_src->url != NULL))
-            upipe_notice_va(upipe, "closing %s", upipe_http_src->url);
-        ubase_clean_fd(&upipe_http_src->fd);
-    }
-    ubase_clean_str(&upipe_http_src->url);
-    upipe_http_src_set_upump(upipe, NULL);
-    upipe_http_src->request_pending = false;
-    upipe_http_src_set_upump_write(upipe, NULL);
+    upipe_http_src_close(upipe);
 
     if (unlikely(url == NULL))
         return UBASE_ERR_NONE;
 
-    ret = upipe_http_src_check(upipe, NULL);
-    if (!ubase_check(ret))
-        return ret;
+    upipe_notice_va(upipe, "opening %s", url);
+
+    UBASE_RETURN(upipe_http_src_check(upipe, NULL));
 
     if (unlikely(upipe_http_src->uref_mgr == NULL)) {
         upipe_err(upipe, "no uref mgr");
@@ -899,26 +972,21 @@ static int upipe_http_src_set_uri(struct upipe *upipe, const char *url)
     }
 
     ret = uref_uri_set_from_str(flow_def, url);
-    if (!ubase_check(ret)) {
+    if (unlikely(!ubase_check(ret))) {
         uref_free(flow_def);
-        upipe_err_va(upipe, "fail to set flow uri %s", url);
         return ret;
     }
 
     upipe_http_src_store_flow_def(upipe, flow_def);
 
     upipe_http_src->url = strdup(url);
-    if (unlikely(upipe_http_src->url == NULL))
+    if (unlikely(upipe_http_src->url == NULL)) {
+        upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
         return UBASE_ERR_ALLOC;
-
-    /* now call real code */
-    upipe_http_src->fd = upipe_http_src_open_url(upipe);
-    if (unlikely(upipe_http_src->fd < 0)) {
-        upipe_err_va(upipe, "can't open url %s", url);
-        return UBASE_ERR_EXTERNAL;
     }
 
-    upipe_notice_va(upipe, "opening url %s", upipe_http_src->url);
+    /* now call real code */
+    UBASE_RETURN(upipe_http_src_open_url(upipe));
     upipe_http_src->request_pending = true;
     return UBASE_ERR_NONE;
 }
@@ -1059,35 +1127,6 @@ static int upipe_http_src_control(struct upipe *upipe,
     return upipe_http_src_check(upipe, NULL);
 }
 
-/** @This frees a upipe.
- *
- * @param upipe description structure of the pipe
- */
-static void upipe_http_src_free(struct upipe *upipe)
-{
-    struct upipe_http_src *upipe_http_src = upipe_http_src_from_upipe(upipe);
-    if (likely(upipe_http_src->fd != -1)) {
-        if (likely(upipe_http_src->url != NULL))
-            upipe_notice_va(upipe, "closing %s", upipe_http_src->url);
-        close(upipe_http_src->fd);
-    }
-    upipe_throw_dead(upipe);
-
-    free(upipe_http_src->proxy);
-    free(upipe_http_src->url);
-    upipe_http_src_clean_output_size(upipe);
-    upipe_http_src_clean_uclock(upipe);
-    upipe_http_src_clean_upump_write(upipe);
-    upipe_http_src_clean_upump(upipe);
-    upipe_http_src_clean_upump_mgr(upipe);
-    upipe_http_src_clean_output(upipe);
-    upipe_http_src_clean_ubuf_mgr(upipe);
-    upipe_http_src_clean_uref_mgr(upipe);
-    upipe_http_src_clean_urefcount(upipe);
-    upipe_http_src_free_void(upipe);
-}
-
-
 struct upipe_http_src_mgr {
     /** upipe manager */
     struct upipe_mgr upipe_mgr;
@@ -1125,6 +1164,17 @@ static int _upipe_http_src_mgr_set_cookie(struct upipe_mgr *upipe_mgr,
         free(cookie->value);
         free(cookie);
         return UBASE_ERR_INVALID;
+    }
+
+    struct uchain *uchain, *uchain_tmp;
+    ulist_delete_foreach(&upipe_http_src_mgr->cookies, uchain, uchain_tmp) {
+        struct upipe_http_src_cookie *item =
+            upipe_http_src_cookie_from_uchain(uchain);
+
+        if (!ustring_cmp(item->ucookie.name, cookie->ucookie.name)) {
+            ulist_delete(uchain);
+            free(item);
+        }
     }
     ulist_add(&upipe_http_src_mgr->cookies,
               upipe_http_src_cookie_to_uchain(cookie));

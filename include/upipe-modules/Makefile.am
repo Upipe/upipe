@@ -32,6 +32,7 @@ myinclude_HEADERS = \
 	upipe_udp_source.h \
 	upipe_udp_sink.h \
 	upipe_http_source.h \
+	uref_http_flow.h \
 	upipe_rtp_decaps.h \
 	upipe_rtp_prepend.h \
 	upipe_rtp_source.h \
@@ -55,4 +56,6 @@ myinclude_HEADERS = \
 	upipe_aes_decrypt.h \
 	uref_aes_flow.h \
 	upipe_rate_limit.h \
-	upipe_burst.h
+	upipe_burst.h \
+	upipe_sequential_source.h \
+	upipe_segment_source.h
