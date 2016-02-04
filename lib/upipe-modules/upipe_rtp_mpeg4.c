@@ -86,6 +86,8 @@ static int upipe_rtp_mpeg4_control(struct upipe *upipe, int command,
 
 static void upipe_rtp_mpeg4_free(struct upipe *upipe)
 {
+    upipe_throw_dead(upipe);
+
     upipe_rtp_mpeg4_clean_output(upipe);
     upipe_rtp_mpeg4_clean_urefcount(upipe);
     upipe_rtp_mpeg4_free_void(upipe);
@@ -103,6 +105,8 @@ static struct upipe *upipe_rtp_mpeg4_alloc(struct upipe_mgr *mgr,
 
     upipe_rtp_mpeg4_init_urefcount(upipe);
     upipe_rtp_mpeg4_init_output(upipe);
+
+    upipe_throw_ready(upipe);
 
     return upipe;
 }
