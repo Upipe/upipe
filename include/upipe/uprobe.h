@@ -84,6 +84,8 @@ enum uprobe_event {
     UPROBE_FREEZE_UPUMP_MGR,
     /** upump manager probe is allowed to answer (void) */
     UPROBE_THAW_UPUMP_MGR,
+    /** a source pipe manager is necessary to operate (struct upipe_mgr **) */
+    UPROBE_NEED_SOURCE_MGR,
     /** a new flow definition is available on the output (struct uref *) */
     UPROBE_NEW_FLOW_DEF,
     /** a new random access point is available in the input (struct uref *) */

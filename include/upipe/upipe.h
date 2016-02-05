@@ -762,6 +762,20 @@ static inline int upipe_throw_need_output(struct upipe *upipe,
     return upipe_throw(upipe, UPROBE_NEED_OUTPUT, flow_def);
 }
 
+/** @This throws an event asking for a source pipe manager because a source
+ * pipe must be allocated.
+ *
+ * @param upipe description structure of the pipe
+ * @param source_mgr_p pointer filled with the provided source pipe manager
+ * @return an error code
+ */
+static inline int upipe_throw_need_source_mgr(struct upipe *upipe,
+                                              struct upipe_mgr **source_mgr_p)
+{
+    upipe_dbg(upipe, "throw need source manager");
+    return upipe_throw(upipe, UPROBE_NEED_SOURCE_MGR, source_mgr_p);
+}
+
 /** @This throws an event asking to provide a urequest. It is thrown by a
  * pipe when it has no output, or when it would make no sense to forward the
  * request to the output (for instance a request for a ubuf manager when the
