@@ -86,6 +86,8 @@ static int upipe_rtp_mpeg4_control(struct upipe *upipe, int command,
 
 static void upipe_rtp_mpeg4_free(struct upipe *upipe)
 {
+    upipe_throw_dead(upipe);
+
     upipe_rtp_mpeg4_clean_output(upipe);
     upipe_rtp_mpeg4_clean_urefcount(upipe);
     upipe_rtp_mpeg4_free_void(upipe);
@@ -104,6 +106,8 @@ static struct upipe *upipe_rtp_mpeg4_alloc(struct upipe_mgr *mgr,
     upipe_rtp_mpeg4_init_urefcount(upipe);
     upipe_rtp_mpeg4_init_output(upipe);
 
+    upipe_throw_ready(upipe);
+
     return upipe;
 }
 
@@ -113,17 +117,21 @@ static void upipe_rtp_mpeg4_input(struct upipe *upipe, struct uref *uref,
     size_t block_size = 0;
     if (!ubase_check(uref_block_size(uref, &block_size))) {
         upipe_warn(upipe, "fail to get uref block size");
+        uref_free(uref);
         return;
     }
     if (block_size <= 7) {
         upipe_warn(upipe, "invalid packet");
+        uref_free(uref);
         return;
     }
     block_size = (block_size - 7) << 3;
 
     struct ubuf *au = ubuf_block_alloc(uref->ubuf->mgr, 4);
-    if (unlikely(au == NULL))
+    if (unlikely(au == NULL)) {
+        uref_free(uref);
         return;
+    }
 
     int size = -1;
     uint8_t *buf;
@@ -134,15 +142,23 @@ static void upipe_rtp_mpeg4_input(struct upipe *upipe, struct uref *uref,
     buf[3] = block_size;
     ubuf_block_unmap(au, 0);
 
-    struct uref *payload = uref_block_splice(uref, 7, -1);
-    struct ubuf *tmp = uref_detach_ubuf(payload);
-    if (unlikely(!ubase_check(ubuf_block_append(au, tmp)))) {
-        upipe_warn(upipe, "could not append payload to header");
+    if (!ubase_check(uref_block_truncate(uref, 7))) {
+        upipe_err(upipe, "could not truncate uref");
+        uref_free(uref);
         return;
     }
-    uref_attach_ubuf(payload, au);
-    uref_clock_set_cr_dts_delay(payload, 0);
-    upipe_rtp_mpeg4_output(upipe, payload, upump_p);
+
+    struct ubuf *tmp = uref_detach_ubuf(uref);
+    if (unlikely(!ubase_check(ubuf_block_append(au, tmp)))) {
+        upipe_warn(upipe, "could not append payload to header");
+        ubuf_free(au);
+        ubuf_free(tmp);
+        uref_free(uref);
+        return;
+    }
+    uref_attach_ubuf(uref, au);
+    uref_clock_set_cr_dts_delay(uref, 0);
+    upipe_rtp_mpeg4_output(upipe, uref, upump_p);
 }
 
 static struct upipe_mgr upipe_rtp_mpeg4_mgr = {
