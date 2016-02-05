@@ -302,7 +302,8 @@ static int upipe_ffmt_check_flow_format(struct upipe *upipe,
                                               &sar))) {
             struct urational input_sar;
             uint64_t hsize;
-            if (ubase_check(uref_pic_flow_get_hsize(flow_def, &hsize)) &&
+            if (!ubase_check(uref_pic_flow_get_hsize(upipe_ffmt->flow_def_wanted, &hsize)) &&
+                ubase_check(uref_pic_flow_get_hsize(flow_def, &hsize)) &&
                 ubase_check(uref_pic_flow_get_sar(flow_def, &input_sar))) {
                 struct urational sar_factor =
                     urational_divide(&input_sar, &sar);
