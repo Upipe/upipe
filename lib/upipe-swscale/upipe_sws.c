@@ -104,9 +104,9 @@ struct upipe_sws {
     /** swscale image conversion context [0] for progressive, [1,2] interlaced */
     struct SwsContext *convert_ctx[3];
     /** input pixel format */
-    enum PixelFormat input_pix_fmt;
+    enum AVPixelFormat input_pix_fmt;
     /** requested output pixel format */
-    enum PixelFormat output_pix_fmt;
+    enum AVPixelFormat output_pix_fmt;
     /** input chroma map */
     const char *input_chroma_map[UPIPE_AV_MAX_PLANES];
     /** output chroma map */

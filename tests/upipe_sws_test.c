@@ -272,7 +272,7 @@ static struct upipe_mgr sws_test_mgr = {
 };
 
 // DEBUG - from swscale/swscale_unscaled.c
-static int check_image_pointers(const uint8_t * const data[4], enum PixelFormat pix_fmt, const int linesizes[4])
+static int check_image_pointers(const uint8_t * const data[4], enum AVPixelFormat pix_fmt, const int linesizes[4])
 {
     const AVPixFmtDescriptor *desc = &av_pix_fmt_descriptors[pix_fmt];
     int i;
@@ -344,8 +344,8 @@ int main(int argc, char **argv)
     ubase_assert(uref_pic_set_progressive(uref2));
 
     img_convert_ctx = sws_getCachedContext(NULL,
-                SRCSIZE, SRCSIZE, PIX_FMT_YUV420P,
-                DSTSIZE, DSTSIZE, PIX_FMT_YUV420P,
+                SRCSIZE, SRCSIZE, AV_PIX_FMT_YUV420P,
+                DSTSIZE, DSTSIZE, AV_PIX_FMT_YUV420P,
                 SWS_FULL_CHR_H_INP | SWS_ACCURATE_RND | SWS_LANCZOS,
                 NULL, NULL, NULL);
     assert(img_convert_ctx);
@@ -360,8 +360,8 @@ int main(int argc, char **argv)
     assert(strides[1]);
     assert(strides[2]);
 
-    assert(check_image_pointers((const uint8_t * const*) slices, PIX_FMT_YUV420P, strides));
-    assert(check_image_pointers((const uint8_t * const*) dslices, PIX_FMT_YUV420P, dstrides));
+    assert(check_image_pointers((const uint8_t * const*) slices, AV_PIX_FMT_YUV420P, strides));
+    assert(check_image_pointers((const uint8_t * const*) dslices, AV_PIX_FMT_YUV420P, dstrides));
 
     // fire raw swscale test
     sws_scale(img_convert_ctx, (const uint8_t * const*) slices, strides,

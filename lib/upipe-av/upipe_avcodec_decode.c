@@ -117,7 +117,7 @@ struct upipe_avcdec {
     /** upump mgr */
     struct upump_mgr *upump_mgr;
     /** pixel format used for the ubuf manager */
-    enum PixelFormat pix_fmt;
+    enum AVPixelFormat pix_fmt;
     /** sample format used for the ubuf manager */
     enum AVSampleFormat sample_fmt;
     /** number of channels used for the ubuf manager */
@@ -1417,7 +1417,7 @@ static struct upipe *upipe_avcdec_alloc(struct upipe_mgr *mgr,
     upipe_avcdec->frame = frame;
     upipe_avcdec->counter = 0;
     upipe_avcdec->close = false;
-    upipe_avcdec->pix_fmt = PIX_FMT_NONE;
+    upipe_avcdec->pix_fmt = AV_PIX_FMT_NONE;
     upipe_avcdec->sample_fmt = AV_SAMPLE_FMT_NONE;
     upipe_avcdec->channels = 0;
     upipe_avcdec->uref = NULL;

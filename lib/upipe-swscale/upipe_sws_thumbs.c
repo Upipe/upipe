@@ -114,9 +114,9 @@ struct upipe_sws_thumbs {
     struct picsize *thumbnum;
 
     /** input pixel format */
-    enum PixelFormat input_pix_fmt;
+    enum AVPixelFormat input_pix_fmt;
     /** requested output pixel format */
-    enum PixelFormat output_pix_fmt;
+    enum AVPixelFormat output_pix_fmt;
     /** input chroma map */
     const char *input_chroma_map[UPIPE_AV_MAX_PLANES];
     /** output chroma map */
