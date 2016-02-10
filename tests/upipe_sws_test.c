@@ -93,7 +93,7 @@ enum plane_action {
 };
 
 /** fetches a single chroma into slices and set corresponding stride */
-static void inline fetch_chroma(struct uref *uref, const char *str, int *strides, uint8_t **slices, size_t idx, enum plane_action action)
+static inline void fetch_chroma(struct uref *uref, const char *str, int *strides, uint8_t **slices, size_t idx, enum plane_action action)
 {
     size_t stride = 0;
     switch(action) {
@@ -303,7 +303,6 @@ int main(int argc, char **argv)
     struct uref *pic_flow, *uref1, *uref2;
     int strides[4], dstrides[4];
     uint8_t *slices[4], *dslices[4];
-    int ret;
 
     struct SwsContext *img_convert_ctx;
 
@@ -365,9 +364,9 @@ int main(int argc, char **argv)
     assert(check_image_pointers((const uint8_t * const*) dslices, PIX_FMT_YUV420P, dstrides));
 
     // fire raw swscale test
-    ret = sws_scale(img_convert_ctx, (const uint8_t * const*) slices, strides,
-                                     0, SRCSIZE,
-                                     dslices, dstrides);
+    sws_scale(img_convert_ctx, (const uint8_t * const*) slices, strides,
+                               0, SRCSIZE,
+                               dslices, dstrides);
     sws_freeContext(img_convert_ctx);
 
     filldata(uref1, strides, slices, UNMAP);

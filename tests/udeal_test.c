@@ -64,7 +64,6 @@ struct thread {
 static unsigned int counter; /* intentionally unprotected */
 static struct udeal udeal;
 static unsigned int nb_loops = NB_LOOPS;
-static unsigned int loop[2] = {0, 0};
 
 static void test_grab(struct upump *upump)
 {

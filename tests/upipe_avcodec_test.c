@@ -166,7 +166,7 @@ static int catch_avcenc(struct uprobe *uprobe, struct upipe *upipe,
 }
 
 /* fill picture with some stuff */
-void fill_pic(struct ubuf *ubuf)
+static void fill_pic(struct ubuf *ubuf)
 {
     const char *chroma = NULL;
     uint8_t *buf, hsub, vsub;
@@ -188,9 +188,9 @@ void fill_pic(struct ubuf *ubuf)
 }
 
 /* build video or audio pipeline */
-struct upipe *build_pipeline(const char *codec_def,
-                             struct upump_mgr *upump_mgr, int num,
-                             struct uref *flow_def)
+static struct upipe *build_pipeline(const char *codec_def,
+                                    struct upump_mgr *upump_mgr, int num,
+                                    struct uref *flow_def)
 {
     struct uref *output_flow = uref_dup(flow_def);
     ubase_assert(uref_flow_set_def_va(output_flow, "block.%s", codec_def));
@@ -212,7 +212,7 @@ struct upipe *build_pipeline(const char *codec_def,
 }
 
 /* picture generator */
-void source_idler(struct upump *upump)
+static void source_idler(struct upump *upump)
 {
     struct thread *thread = upump_get_opaque(upump, struct thread*);
     struct upipe *avcenc = thread->avcenc;
@@ -231,7 +231,7 @@ void source_idler(struct upump *upump)
 }
 
 /* thread entry point */
-void *thread_start(void *_thread)
+static void *thread_start(void *_thread)
 {
     struct thread *thread = _thread;
 

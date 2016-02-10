@@ -328,7 +328,6 @@ int main (int argc, char **argv)
     }
 
     int i, j;
-    AVDictionary *options = NULL;
 
     /* uref and mem management */
     struct umem_mgr *umem_mgr = umem_alloc_mgr_alloc();
