@@ -50,7 +50,6 @@ myinclude_HEADERS = \
 	upipe_dump.h \
 	uprobe_http_redirect.h \
 	upipe_m3u_reader.h \
-	upipe_m3u_playlist.h \
 	upipe_auto_source.h \
 	upipe_buffer.h \
 	upipe_aes_decrypt.h \
@@ -58,4 +57,5 @@ myinclude_HEADERS = \
 	upipe_rate_limit.h \
 	upipe_burst.h \
 	upipe_sequential_source.h \
-	upipe_segment_source.h
+	upipe_segment_source.h \
+	upipe_id3v2.h
