@@ -457,6 +457,7 @@ static inline enum AVPixelFormat
                     chroma_p[1] = NULL;
                     return *pix_fmts;
                 }
+                break;
             case AV_PIX_FMT_RGB24:
                 if (macropixel == 1 &&
                     u(uref_pic_flow_check_chroma(flow_def, 1, 1, 3, "r8g8b8"))) {
