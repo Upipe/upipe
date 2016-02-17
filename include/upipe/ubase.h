@@ -390,7 +390,7 @@ static inline struct urational urational_multiply(
         const struct urational *urational1, const struct urational *urational2)
 {
     struct urational mul;
-    mul.num = urational1->num * urational1->num;
+    mul.num = urational1->num * urational2->num;
     mul.den = urational1->den * urational2->den;
     urational_simplify(&mul);
     return mul;
