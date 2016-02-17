@@ -250,21 +250,12 @@ static void upipe_seg_src_no_ref(struct upipe *upipe)
     upipe_seg_src_release_urefcount_real(upipe);
 }
 
-static int upipe_seg_src_throw_need_source_mgr(struct upipe *upipe,
-                                               struct upipe_mgr **mgr_p)
-{
-    upipe_dbg(upipe, "throw need source manager");
-    return upipe_throw(upipe, UPROBE_SEG_SRC_NEED_SOURCE_MGR,
-                       UPIPE_SEG_SRC_SIGNATURE, mgr_p);
-}
-
 static int upipe_seg_src_check_source_mgr(struct upipe *upipe)
 {
     struct upipe_seg_src *upipe_seg_src = upipe_seg_src_from_upipe(upipe);
     if (likely(upipe_seg_src->source_mgr != NULL))
         return UBASE_ERR_NONE;
-    return upipe_seg_src_throw_need_source_mgr(
-        upipe, &upipe_seg_src->source_mgr);
+    return upipe_throw_need_source_mgr(upipe, &upipe_seg_src->source_mgr);
 }
 
 static int upipe_seg_src_check_src(struct upipe *upipe)

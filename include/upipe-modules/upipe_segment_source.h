@@ -56,14 +56,12 @@ enum uprobe_seg_src_event {
     UPROBE_SEG_SRC_SENTINEL = UPROBE_LOCAL,
 
     UPROBE_SEG_SRC_UPDATE,
-    UPROBE_SEG_SRC_NEED_SOURCE_MGR,
 };
 
 static inline const char *upipe_seg_src_event_str(int event)
 {
     switch ((enum uprobe_seg_src_event)event) {
     UBASE_CASE_TO_STR(UPROBE_SEG_SRC_UPDATE);
-    UBASE_CASE_TO_STR(UPROBE_SEG_SRC_NEED_SOURCE_MGR);
     case UPROBE_SEG_SRC_SENTINEL: break;
     }
     return NULL;
