@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2013-2015 OpenHeadend S.A.R.L.
+ * Copyright (C) 2013-2016 OpenHeadend S.A.R.L.
  *
  * Authors: Christophe Massiot
  *
@@ -464,11 +464,25 @@ static int upipe_ts_psig_flow_build(struct upipe *upipe, uint8_t *es,
             desc_set_length(desc, DESC6A_HEADER_SIZE - DESC_HEADER_SIZE);
             desc6a_clear_flags(desc);
 
+            uint8_t component_type;
+            if (ubase_check(uref_ts_flow_get_component_type(flow->flow_def,
+                                                            &component_type))) {
+                desc6a_set_component_type_flag(desc, true);
+                desc6a_set_component_type(desc, component_type);
+            }
+
         } else if (!ubase_ncmp(raw_def, "block.eac3.")) {
             desc = descs_get_desc(descs, k++);
             desc7a_init(desc);
             desc_set_length(desc, DESC7A_HEADER_SIZE - DESC_HEADER_SIZE);
             desc7a_clear_flags(desc);
+
+            uint8_t component_type;
+            if (ubase_check(uref_ts_flow_get_component_type(flow->flow_def,
+                                                            &component_type))) {
+                desc7a_set_component_type_flag(desc, true);
+                desc7a_set_component_type(desc, component_type);
+            }
 
         } else if (!ubase_ncmp(raw_def, "block.dts.")) {
             desc = descs_get_desc(descs, k++);
