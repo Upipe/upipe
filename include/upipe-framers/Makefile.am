@@ -9,6 +9,7 @@ myinclude_HEADERS = \
 	upipe_dvbsub_framer.h \
 	upipe_video_trim.h \
 	uref_mpgv.h \
+	uref_h264.h \
 	uref_h264_flow.h \
 	uref_mpga_flow.h \
 	uref_mpgv_flow.h \

@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2013-2015 OpenHeadend S.A.R.L.
+ * Copyright (C) 2013-2016 OpenHeadend S.A.R.L.
  *
  * Authors: Christophe Massiot
  *
@@ -46,6 +46,7 @@
 #include <upipe/upipe_helper_flow_format.h>
 #include <upipe/upipe_helper_flow_def.h>
 #include <upipe-framers/upipe_h264_framer.h>
+#include <upipe-framers/uref_h264.h>
 #include <upipe-framers/uref_h264_flow.h>
 
 #include "upipe_framers_common.h"
@@ -1690,6 +1691,7 @@ static void upipe_h264f_output_au(struct upipe *upipe, struct upump **upump_p)
     else
         uref_clock_delete_rate(uref);
 
+    UBASE_FATAL(upipe, uref_h264_set_type(uref, upipe_h264f->slice_type % 5))
     switch (upipe_h264f->slice_type % 5) {
         case H264SLI_TYPE_I:
             upipe_h264f->iframe_rap = upipe_h264f->pps_rap;
