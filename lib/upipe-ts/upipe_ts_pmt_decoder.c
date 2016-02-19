@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2012-2015 OpenHeadend S.A.R.L.
+ * Copyright (C) 2012-2016 OpenHeadend S.A.R.L.
  *
  * Authors: Christophe Massiot
  *
@@ -348,6 +348,15 @@ static void upipe_ts_pmtd_parse_descs(struct upipe *upipe,
             /* DVB */
             case 0x45: /* VBI data descriptor */
             case 0x46: /* VBI teletext descriptor */
+
+            case 0x50: /* Component descriptor */
+                if ((valid = desc50_validate(desc))) {
+                    UBASE_FATAL(upipe,
+                            uref_ts_flow_set_component_type(flow_def,
+                                desc50_get_component_type(desc)))
+                }
+                break;
+
             case 0x51: /* Mosaic descriptor */
             case 0x52: /* Stream identifier descriptor */
                 break;
@@ -420,6 +429,11 @@ static void upipe_ts_pmtd_parse_descs(struct upipe *upipe,
                                 "block.mpegts.mpegtspes.ac3.sound."))
                     UBASE_FATAL(upipe, uref_ts_flow_set_max_delay(flow_def,
                                     MAX_DELAY))
+                    if (desc6a_get_component_type_flag(desc)) {
+                        UBASE_FATAL(upipe,
+                                uref_ts_flow_set_component_type(flow_def,
+                                    desc6a_get_component_type(desc)))
+                    }
                 }
                 break;
 
@@ -435,6 +449,11 @@ static void upipe_ts_pmtd_parse_descs(struct upipe *upipe,
                                 "block.mpegts.mpegtspes.eac3.sound."))
                     UBASE_FATAL(upipe, uref_ts_flow_set_max_delay(flow_def,
                                     MAX_DELAY))
+                    if (desc7a_get_component_type_flag(desc)) {
+                        UBASE_FATAL(upipe,
+                                uref_ts_flow_set_component_type(flow_def,
+                                    desc7a_get_component_type(desc)))
+                    }
                 }
                 break;
 
