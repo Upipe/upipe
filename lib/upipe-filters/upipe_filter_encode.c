@@ -97,6 +97,8 @@ struct upipe_fenc {
     char *profile;
     /** x264 speed control */
     uint64_t sc_latency;
+    /** x264 slice type enforce */
+    bool slice_type_enforce;
     /** x262 */
     bool x262;
 
@@ -205,6 +207,7 @@ static struct upipe *upipe_fenc_alloc(struct upipe_mgr *mgr,
     upipe_fenc->tune = NULL;
     upipe_fenc->profile = NULL;
     upipe_fenc->sc_latency = UINT64_MAX;
+    upipe_fenc->slice_type_enforce = false;
     upipe_fenc->x262 = false;
     upipe_throw_ready(upipe);
     upipe_fenc_demand_uref_mgr(upipe);
@@ -264,6 +267,9 @@ static int upipe_fenc_set_flow_def(struct upipe *upipe, struct uref *flow_def)
     if (upipe_fenc->sc_latency != UINT64_MAX)
         upipe_x264_set_sc_latency(upipe_fenc->last_inner,
                                   upipe_fenc->sc_latency);
+    if (upipe_fenc->slice_type_enforce)
+        upipe_x264_set_slice_type_enforce(upipe_fenc->last_inner,
+                                          upipe_fenc->slice_type_enforce);
 
     if (upipe_fenc->options != NULL && upipe_fenc->options->udict != NULL) {
         const char *key = NULL;
@@ -417,6 +423,24 @@ static int upipe_fenc_set_sc_latency(struct upipe *upipe, uint64_t sc_latency)
     return UBASE_ERR_NONE;
 }
 
+/** @This sets the slice type enforcement mode (true or false).
+ *
+ * @param upipe description structure of the pipe
+ * @param enforce true if the incoming slice types must be enforced
+ * @return an error code
+ */
+static int upipe_fenc_set_slice_type_enforce(struct upipe *upipe, bool enforce)
+{
+    struct upipe_fenc *upipe_fenc = upipe_fenc_from_upipe(upipe);
+    upipe_fenc->slice_type_enforce = enforce;
+
+    if (upipe_fenc->last_inner != NULL) {
+        UBASE_RETURN(upipe_x264_set_slice_type_enforce(upipe_fenc->last_inner,
+                                                       enforce))
+    }
+    return UBASE_ERR_NONE;
+}
+
 /** @internal @This processes control commands on a fenc pipe.
  *
  * @param upipe description structure of the pipe
@@ -461,6 +485,11 @@ static int upipe_fenc_control(struct upipe *upipe, int command, va_list args)
             UBASE_SIGNATURE_CHECK(args, UPIPE_X264_SIGNATURE)
             uint64_t sc_latency = va_arg(args, uint64_t);
             return upipe_fenc_set_sc_latency(upipe, sc_latency);
+        }
+        case UPIPE_X264_SET_SLICE_TYPE_ENFORCE: {
+            UBASE_SIGNATURE_CHECK(args, UPIPE_X264_SIGNATURE)
+            bool enforce = !(va_arg(args, int) == 0);
+            return upipe_fenc_set_slice_type_enforce(upipe, enforce);
         }
 
         default:
