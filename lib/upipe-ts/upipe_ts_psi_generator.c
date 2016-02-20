@@ -294,6 +294,7 @@ static int upipe_ts_psig_flow_check(struct upipe *upipe,
                 *descriptors_size_p += 1;
         } else if (!ubase_ncmp(raw_def, "block.eac3.")) {
             *descriptors_size_p += DESC7A_HEADER_SIZE;
+            uint8_t component_type;
             if (ubase_check(uref_ts_flow_get_component_type(flow->flow_def,
                                                             &component_type)))
                 *descriptors_size_p += 1;
