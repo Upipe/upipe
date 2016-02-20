@@ -634,7 +634,8 @@ static int upipe_ts_psig_flow_set_flow_def(struct upipe *upipe,
     bool pmt_change = flow->flow_def == NULL ||
         uref_flow_cmp_raw_def(flow_def, flow->flow_def) ||
         uref_ts_flow_cmp_pid(flow_def, flow->flow_def) ||
-        uref_ts_flow_compare_descriptors(flow_def, flow->flow_def);
+        uref_ts_flow_compare_descriptors(flow_def, flow->flow_def) ||
+        uref_ts_flow_cmp_component_type(flow_def, flow->flow_def);
 
     uref_free(flow->flow_def);
     flow->flow_def = flow_def_dup;
