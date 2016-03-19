@@ -1,0 +1,10 @@
+prefix=@prefix@
+exec_prefix=@exec_prefix@
+libdir=@libdir@
+includedir=@includedir@
+Name: libupipe_dveo
+Description: Upipe multimedia framework, dveo module
+Version: @VERSION@
+Requires: libupipe
+Libs: -L${libdir} -lupipe_dveo
+Cflags: -I${includedir}
