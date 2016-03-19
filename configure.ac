@@ -168,6 +168,7 @@ AC_CONFIG_FILES([Makefile
                  include/upipe-amt/Makefile
                  include/upipe-v210/Makefile
                  include/upipe-hls/Makefile
+                 include/upipe-dveo/Makefile
                  lib/Makefile
                  lib/upipe/Makefile
                  lib/upipe/libupipe.pc
@@ -211,6 +212,8 @@ AC_CONFIG_FILES([Makefile
                  lib/upipe-v210/libupipe_v210.pc
                  lib/upipe-hls/Makefile
                  lib/upipe-hls/libupipe_hls.pc
+                 lib/upipe-dveo/Makefile
+                 lib/upipe-dveo/libupipe_dveo.pc
                  tests/Makefile
                  examples/Makefile])
 AC_OUTPUT
