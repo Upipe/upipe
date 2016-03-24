@@ -108,7 +108,7 @@ static const struct level levels[] = {
     },
 };
 
-const struct level level_unknown = {
+static const struct level level_unknown = {
     .log_level = UPROBE_LOG_ERROR,
     .name = "unknown",
     .color = ANSI_FG_RED,

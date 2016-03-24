@@ -504,7 +504,7 @@ static int upipe_rate_limit_control(struct upipe *upipe,
 }
 
 /** @internal @This is the static rate limit pipe manager. */
-struct upipe_mgr upipe_rate_limit_mgr = {
+static struct upipe_mgr upipe_rate_limit_mgr = {
     .refcount = NULL,
     .signature = UPIPE_RATE_LIMIT_SIGNATURE,
     .upipe_command_str = upipe_rate_limit_command_str,

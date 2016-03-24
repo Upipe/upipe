@@ -80,9 +80,9 @@ static int catch(struct uprobe *uprobe, struct upipe *upipe,
     return UBASE_ERR_NONE;
 }
 
-struct uref_mgr *uref_mgr;
-struct ubuf_mgr *sound_mgr;
-struct uprobe *logger;
+static struct uref_mgr *uref_mgr;
+static struct ubuf_mgr *sound_mgr;
+static struct uprobe *logger;
 
 int main(int argc, char **argv)
 {
