@@ -184,8 +184,8 @@ static void upipe_chunk_stream_flush(struct upipe *upipe)
  * @param align packet chunk alignement, in octets
  * @return an error code
  */
-static bool _upipe_chunk_stream_set_mtu(struct upipe *upipe,
-                                        unsigned int mtu, unsigned int align)
+static int _upipe_chunk_stream_set_mtu(struct upipe *upipe,
+                                       unsigned int mtu, unsigned int align)
 {
     struct upipe_chunk_stream *upipe_chunk_stream =
                        upipe_chunk_stream_from_upipe(upipe);
