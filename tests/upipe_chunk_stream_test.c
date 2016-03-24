@@ -66,7 +66,7 @@
 #define ALIGN 3
 #define REAL_MTU ((MTU / ALIGN) * ALIGN)
 
-unsigned int nb_packets = 0;
+static unsigned int nb_packets = 0;
 
 /** definition of our uprobe */
 static int catch(struct uprobe *uprobe, struct upipe *upipe,

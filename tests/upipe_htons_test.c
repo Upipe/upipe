@@ -63,7 +63,7 @@
 #define PACKETS_NUM 45
 #define PACKET_SIZE 524
 
-unsigned int nb_packets = 0;
+static unsigned int nb_packets = 0;
 
 /** definition of our uprobe */
 static int catch(struct uprobe *uprobe, struct upipe *upipe,
