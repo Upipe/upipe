@@ -74,6 +74,9 @@ before_install:
     fi
   - if type brew 2>/dev/null; then
       brew update;
+      cd /usr/local/Library/Formula;
+      git checkout b42854a ffmpeg.rb;
+      cd -;
       brew install valgrind;
       brew install libev;
       brew install yasm;
