@@ -48,6 +48,7 @@
 #include <upipe-modules/upipe_dump.h>
 #include <upipe-modules/upipe_rtp_h264.h>
 #include <upipe-modules/upipe_rtp_mpeg4.h>
+#include <upipe-modules/upipe_probe_uref.h>
 #include <upipe-hls/upipe_hls.h>
 #include <upipe-hls/upipe_hls_master.h>
 #include <upipe-hls/upipe_hls_variant.h>
@@ -80,6 +81,7 @@ static uint32_t video_rtp_type = 96;
 static uint32_t audio_rtp_type = 97;
 static bool audio_enabled = true;
 static bool video_enabled = true;
+static bool rewrite_date = false;
 
 static struct upipe *src = NULL;
 static struct upipe *trickp = NULL;
@@ -89,6 +91,126 @@ struct uprobe_audio {
 };
 
 UPROBE_HELPER_UPROBE(uprobe_audio, probe);
+
+struct uprobe_video {
+    struct uprobe probe;
+};
+
+UPROBE_HELPER_UPROBE(uprobe_video, probe);
+
+struct uprobe_rewrite_date {
+    struct uprobe probe;
+};
+
+UPROBE_HELPER_UPROBE(uprobe_rewrite_date, probe);
+
+static int catch_audio(struct uprobe *uprobe,
+                          struct upipe *upipe,
+                          int event, va_list args);
+static int catch_video(struct uprobe *uprobe,
+                          struct upipe *upipe,
+                          int event, va_list args);
+
+/*
+ * audio probe
+ */
+static struct uprobe *
+uprobe_audio_init(struct uprobe_audio *probe_audio,
+                     struct uprobe *next)
+{
+    struct uprobe *probe = uprobe_audio_to_uprobe(probe_audio);
+    uprobe_init(probe, catch_audio, next);
+    return probe;
+}
+
+static void uprobe_audio_clean(struct uprobe_audio *probe_audio)
+{
+    struct uprobe *probe = uprobe_audio_to_uprobe(probe_audio);
+    uprobe_clean(probe);
+}
+
+struct uprobe *uprobe_audio_alloc(struct uprobe *next);
+
+#define ARGS next
+#define ARGS_DECL struct uprobe *next
+UPROBE_HELPER_ALLOC(uprobe_audio);
+#undef ARGS_DECL
+#undef ARGS
+
+/*
+ * video probe
+ */
+static struct uprobe *
+uprobe_video_init(struct uprobe_video *probe_video,
+                     struct uprobe *next)
+{
+    struct uprobe *probe = uprobe_video_to_uprobe(probe_video);
+    uprobe_init(probe, catch_video, next);
+    return probe;
+}
+
+static void uprobe_video_clean(struct uprobe_video *probe_video)
+{
+    struct uprobe *probe = uprobe_video_to_uprobe(probe_video);
+    uprobe_clean(probe);
+}
+
+struct uprobe *uprobe_video_alloc(struct uprobe *next);
+
+#define ARGS next
+#define ARGS_DECL struct uprobe *next
+UPROBE_HELPER_ALLOC(uprobe_video);
+#undef ARGS_DECL
+#undef ARGS
+
+/*
+ * rewrite date probe
+ */
+static int catch_rewrite_date(struct uprobe *uprobe, struct upipe *upipe,
+                              int event, va_list args)
+{
+    if (event >= UPROBE_LOCAL) {
+        switch (ubase_get_signature(args)) {
+        case UPIPE_PROBE_UREF_SIGNATURE:
+            UBASE_SIGNATURE_CHECK(args, UPIPE_PROBE_UREF_SIGNATURE);
+            struct uref *uref = va_arg(args, struct uref *);
+            bool *drop = va_arg(args, bool *);
+
+            *drop = false;
+            int type;
+            uint64_t date;
+            uref_clock_get_date_orig(uref, &date, &type);
+            if (type != UREF_DATE_NONE) {
+                uprobe_dbg_va(uprobe, NULL, "rewrite %p orig -> prog", uref);
+                uref_clock_set_date_prog(uref, date, type);
+            }
+            return UBASE_ERR_NONE;
+        }
+    }
+
+    return uprobe_throw_next(uprobe, upipe, event, args);
+}
+
+static struct uprobe *
+uprobe_rewrite_date_init(struct uprobe_rewrite_date *probe,
+                         struct uprobe *next)
+{
+    uprobe_init(&probe->probe, catch_rewrite_date, next);
+    return uprobe_rewrite_date_to_uprobe(probe);
+}
+
+static void uprobe_rewrite_date_clean(struct uprobe_rewrite_date *probe)
+{
+    uprobe_clean(uprobe_rewrite_date_to_uprobe(probe));
+}
+
+static struct uprobe *uprobe_rewrite_date_alloc(struct uprobe *next);
+
+#define ARGS next
+#define ARGS_DECL struct uprobe *next
+UPROBE_HELPER_ALLOC(uprobe_rewrite_date);
+#undef ARGS_DECL
+#undef ARGS
 
 static int catch_audio(struct uprobe *uprobe,
                           struct upipe *upipe,
@@ -134,6 +256,19 @@ static int catch_audio(struct uprobe *uprobe,
             return ret;
         }
 
+        if (rewrite_date) {
+            struct upipe_mgr *upipe_probe_uref_mgr =
+                upipe_probe_uref_mgr_alloc();
+            assert(upipe_probe_uref_mgr);
+            output = upipe_void_chain_output(
+                output, upipe_probe_uref_mgr,
+                uprobe_pfx_alloc(
+                    uprobe_rewrite_date_alloc(uprobe_use(uprobe->next)),
+                    UPROBE_LOG_VERBOSE, "uref"));
+            upipe_mgr_release(upipe_probe_uref_mgr);
+            UBASE_ALLOC_RETURN(output);
+        }
+
         output = upipe_void_chain_output_sub(
             output, trickp,
             uprobe_pfx_alloc(uprobe_use(uprobe->next),
@@ -162,35 +297,6 @@ static int catch_audio(struct uprobe *uprobe,
     }
     return uprobe_throw_next(uprobe, upipe, event, args);
 }
-
-static struct uprobe *
-uprobe_audio_init(struct uprobe_audio *probe_audio,
-                     struct uprobe *next)
-{
-    struct uprobe *probe = uprobe_audio_to_uprobe(probe_audio);
-    uprobe_init(probe, catch_audio, next);
-    return probe;
-}
-
-static void uprobe_audio_clean(struct uprobe_audio *probe_audio)
-{
-    struct uprobe *probe = uprobe_audio_to_uprobe(probe_audio);
-    uprobe_clean(probe);
-}
-
-struct uprobe *uprobe_audio_alloc(struct uprobe *next);
-
-#define ARGS next
-#define ARGS_DECL struct uprobe *next
-UPROBE_HELPER_ALLOC(uprobe_audio);
-#undef ARGS_DECL
-#undef ARGS
-
-struct uprobe_video {
-    struct uprobe probe;
-};
-
-UPROBE_HELPER_UPROBE(uprobe_video, probe);
 
 static int catch_video(struct uprobe *uprobe,
                           struct upipe *upipe,
@@ -236,6 +342,19 @@ static int catch_video(struct uprobe *uprobe,
             return ret;
         }
 
+        if (rewrite_date) {
+            struct upipe_mgr *upipe_probe_uref_mgr =
+                upipe_probe_uref_mgr_alloc();
+            assert(upipe_probe_uref_mgr);
+            output = upipe_void_chain_output(
+                output, upipe_probe_uref_mgr,
+                uprobe_pfx_alloc(
+                    uprobe_rewrite_date_alloc(uprobe_use(uprobe->next)),
+                    UPROBE_LOG_VERBOSE, "uref"));
+            upipe_mgr_release(upipe_probe_uref_mgr);
+            UBASE_ALLOC_RETURN(output);
+        }
+
         output = upipe_void_chain_output_sub(
             output, trickp,
             uprobe_pfx_alloc(uprobe_use(uprobe->next),
@@ -264,29 +383,6 @@ static int catch_video(struct uprobe *uprobe,
     }
     return uprobe_throw_next(uprobe, upipe, event, args);
 }
-
-static struct uprobe *
-uprobe_video_init(struct uprobe_video *probe_video,
-                     struct uprobe *next)
-{
-    struct uprobe *probe = uprobe_video_to_uprobe(probe_video);
-    uprobe_init(probe, catch_video, next);
-    return probe;
-}
-
-static void uprobe_video_clean(struct uprobe_video *probe_video)
-{
-    struct uprobe *probe = uprobe_video_to_uprobe(probe_video);
-    uprobe_clean(probe);
-}
-
-struct uprobe *uprobe_video_alloc(struct uprobe *next);
-
-#define ARGS next
-#define ARGS_DECL struct uprobe *next
-UPROBE_HELPER_ALLOC(uprobe_video);
-#undef ARGS_DECL
-#undef ARGS
 
 struct uprobe_playlist {
     struct uprobe probe;
@@ -547,6 +643,7 @@ enum opt {
     OPT_AUDIO_PORT,
     OPT_NO_AUDIO,
     OPT_NO_VIDEO,
+    OPT_REWRITE_DATE,
 };
 
 static struct option options[] = {
@@ -556,6 +653,7 @@ static struct option options[] = {
     { "audio-port", required_argument, NULL, OPT_AUDIO_PORT },
     { "no-video", no_argument, NULL, OPT_NO_VIDEO },
     { "no-audio", no_argument, NULL, OPT_NO_AUDIO },
+    { "rewrite-date", no_argument, NULL, OPT_REWRITE_DATE },
     { "verbose", no_argument, NULL, OPT_VERBOSE },
     { 0, 0, 0, 0 },
 };
@@ -616,6 +714,9 @@ int main(int argc, char **argv)
             break;
         case OPT_NO_AUDIO:
             audio_enabled = false;
+            break;
+        case OPT_REWRITE_DATE:
+            rewrite_date = true;
             break;
 
         case OPT_INVALID:
