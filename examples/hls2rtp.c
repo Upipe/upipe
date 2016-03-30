@@ -538,6 +538,8 @@ static int catch_hls(struct uprobe *uprobe,
 }
 
 enum opt {
+    OPT_INVALID = '?',
+
     OPT_ID      = 0x100,
     OPT_ADDR,
     OPT_VIDEO_PORT,
@@ -594,6 +596,10 @@ int main(int argc, char **argv)
         case OPT_NO_AUDIO:
             audio_enabled = false;
             break;
+
+        case OPT_INVALID:
+            usage(argv[0]);
+            exit(-1);
         }
     }
 
