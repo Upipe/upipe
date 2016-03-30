@@ -539,6 +539,7 @@ static int catch_hls(struct uprobe *uprobe,
 
 enum opt {
     OPT_INVALID = '?',
+    OPT_VERBOSE = 'v',
 
     OPT_ID      = 0x100,
     OPT_ADDR,
@@ -555,6 +556,7 @@ static struct option options[] = {
     { "audio-port", required_argument, NULL, OPT_AUDIO_PORT },
     { "no-video", no_argument, NULL, OPT_NO_VIDEO },
     { "no-audio", no_argument, NULL, OPT_NO_AUDIO },
+    { "verbose", no_argument, NULL, OPT_VERBOSE },
     { 0, 0, 0, 0 },
 };
 
@@ -581,12 +583,22 @@ int main(int argc, char **argv)
 {
     int opt;
     int index = 0;
+    int log_level = UPROBE_LOG_LEVEL;
 
     /*
      * parse options
      */
-    while ((opt = getopt_long(argc, argv, "", options, &index)) != -1) {
+    while ((opt = getopt_long(argc, argv, "v", options, &index)) != -1) {
         switch ((enum opt)opt) {
+        case OPT_VERBOSE:
+            switch (log_level) {
+            case UPROBE_LOG_DEBUG:
+                log_level = UPROBE_LOG_VERBOSE;
+            case UPROBE_LOG_NOTICE:
+                log_level = UPROBE_LOG_DEBUG;
+            }
+            break;
+
         case OPT_ID:
             selected_variant_id = atoi(optarg);
             break;
@@ -634,7 +646,7 @@ int main(int argc, char **argv)
      * create root probe
      */
     struct uprobe *probe =
-        uprobe_stdio_color_alloc(NULL, stderr, UPROBE_LOG_LEVEL);
+        uprobe_stdio_color_alloc(NULL, stderr, log_level);
     assert(probe);
 
     /*
