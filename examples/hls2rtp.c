@@ -553,6 +553,7 @@ static struct option options[] = {
     { "audio-port", required_argument, NULL, OPT_AUDIO_PORT },
     { "no-video", no_argument, NULL, OPT_NO_VIDEO },
     { "no-audio", no_argument, NULL, OPT_NO_AUDIO },
+    { 0, 0, 0, 0 },
 };
 
 static void usage(const char *name)
