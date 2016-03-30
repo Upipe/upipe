@@ -561,6 +561,15 @@ static struct option options[] = {
 static void usage(const char *name)
 {
     fprintf(stderr, "%s <url>\n", name);
+    fprintf(stderr, "options:\n");
+    for (size_t i = 0; options[i].name; i++)
+        fprintf(stderr, "\t--%s%s%s%s\n",
+                options[i].name,
+                options[i].has_arg == optional_argument ? " [" :
+                options[i].has_arg == required_argument ? " <" : "",
+                options[i].has_arg != no_argument ? "arg" : "",
+                options[i].has_arg == optional_argument ? "]" :
+                options[i].has_arg == required_argument ? ">" : "");
 }
 
 static void sigint_cb(struct ev_loop *loop, struct ev_signal *w, int revents)
