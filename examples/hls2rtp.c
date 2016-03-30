@@ -148,6 +148,7 @@ static int catch_audio(struct uprobe *uprobe,
                              UPROBE_LOG_VERBOSE, "udp"));
         upipe_mgr_release(upipe_udpsink_mgr);
         UBASE_ALLOC_RETURN(output);
+        ubase_assert(upipe_attach_uclock(output));
         ret = upipe_set_uri(output, uri);
         if (unlikely(!ubase_check(ret))) {
             upipe_release(output);
@@ -249,6 +250,7 @@ static int catch_video(struct uprobe *uprobe,
                              UPROBE_LOG_VERBOSE, "udp"));
         upipe_mgr_release(upipe_udpsink_mgr);
         UBASE_ALLOC_RETURN(output);
+        ubase_assert(upipe_attach_uclock(output));
         ret = upipe_set_uri(output, uri);
         if (unlikely(!ubase_check(ret))) {
             upipe_release(output);
