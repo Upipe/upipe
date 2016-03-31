@@ -69,7 +69,7 @@ extern "C" {
  * @return pointer to the public uprobe structure                           \
  */                                                                         \
 static UBASE_UNUSED inline struct uprobe *                                  \
-    STRUCTURE##_to_uprobe(struct STRUCTURE *s)                             \
+    STRUCTURE##_to_uprobe(struct STRUCTURE *s)                              \
 {                                                                           \
     return &s->UPROBE;                                                      \
 }                                                                           \
