@@ -34,7 +34,6 @@
 #include <upipe/upipe_helper_inner.h>
 #include <upipe/upipe_helper_uprobe.h>
 #include <upipe/upipe_helper_bin_output.h>
-#include <upipe/upipe_helper_input.h>
 #include <upipe/upipe_helper_void.h>
 #include <upipe/upipe_helper_urefcount_real.h>
 #include <upipe/upipe_helper_urefcount.h>

@@ -42,8 +42,6 @@
 
 #include <upipe/uprobe_prefix.h>
 
-#include <upipe/uref_m3u_playlist_flow.h>
-#include <upipe/uref_m3u_master.h>
 #include <upipe/uref_m3u.h>
 #include <upipe/uref_uri.h>
 #include <upipe/uref_dump.h>
