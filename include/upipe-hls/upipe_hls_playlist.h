@@ -48,6 +48,8 @@ enum upipe_hls_playlist_command {
     UPIPE_HLS_PLAYLIST_PLAY,
     /** go to the next index */
     UPIPE_HLS_PLAYLIST_NEXT,
+    /** seek to this offset (uint64_t) */
+    UPIPE_HLS_PLAYLIST_SEEK,
 };
 
 /** @This converts m3u playlist specific command to a string.
@@ -63,6 +65,7 @@ static inline const char *upipe_hls_playlist_command_str(int cmd)
     UBASE_CASE_TO_STR(UPIPE_HLS_PLAYLIST_SET_INDEX);
     UBASE_CASE_TO_STR(UPIPE_HLS_PLAYLIST_PLAY);
     UBASE_CASE_TO_STR(UPIPE_HLS_PLAYLIST_NEXT);
+    UBASE_CASE_TO_STR(UPIPE_HLS_PLAYLIST_SEEK);
     case UPIPE_HLS_PLAYLIST_SENTINEL: break;
     }
     return NULL;
@@ -104,6 +107,22 @@ static inline int upipe_hls_playlist_next(struct upipe *upipe)
 {
     return upipe_control(upipe, UPIPE_HLS_PLAYLIST_NEXT,
                          UPIPE_HLS_PLAYLIST_SIGNATURE);
+}
+
+/** @This seeks into the playlist the corresponding media sequence for a
+ * given offset.
+ *
+ * @param upipe description structure of the pipe
+ * @param at offset to seek
+ * @param offset_p filled with remaining offset to seek in the current item,
+ * may be NULL.
+ * @return an error code
+ */
+static inline int upipe_hls_playlist_seek(struct upipe *upipe, uint64_t at,
+                                          uint64_t *offset_p)
+{
+    return upipe_control(upipe, UPIPE_HLS_PLAYLIST_SEEK,
+                         UPIPE_HLS_PLAYLIST_SIGNATURE, at, offset_p);
 }
 
 enum uprobe_hls_playlist_event {
