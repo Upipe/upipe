@@ -33,8 +33,6 @@ extern "C" {
 
 UREF_ATTR_UNSIGNED(m3u_playlist, seq_duration, "m3u.playlist.seq_duration",
                    sequence duration)
-UREF_ATTR_UNSIGNED(m3u_playlist, seq_time, "m3u.playlist.seq_time",
-                   sequence time)
 UREF_ATTR_UNSIGNED(m3u_playlist, byte_range_len, "m3u.playlist.byte_range_len",
                       length of the sub range)
 UREF_ATTR_UNSIGNED(m3u_playlist, byte_range_off, "m3u.playlist.byte_range_off",
@@ -58,7 +56,6 @@ static inline int uref_m3u_playlist_delete(struct uref *uref)
 {
     int (*list[])(struct uref *) = {
         uref_m3u_playlist_delete_seq_duration,
-        uref_m3u_playlist_delete_seq_time,
         uref_m3u_playlist_delete_byte_range_len,
         uref_m3u_playlist_delete_byte_range_off,
         uref_m3u_playlist_key_delete,
@@ -81,7 +78,6 @@ static inline int uref_m3u_playlist_copy(struct uref *uref,
 {
     int (*list[])(struct uref *, struct uref *) = {
         uref_m3u_playlist_copy_seq_duration,
-        uref_m3u_playlist_copy_seq_time,
         uref_m3u_playlist_copy_byte_range_len,
         uref_m3u_playlist_copy_byte_range_off,
         uref_m3u_playlist_key_copy,

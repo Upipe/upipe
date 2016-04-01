@@ -100,12 +100,6 @@ static int catch_uref(struct uprobe *uprobe,
             printf("playlist sequence duration: %"PRIu64"\n",
                    playlist_seq_duration);
 
-        uint64_t playlist_seq_time;
-        if (ubase_check(uref_m3u_playlist_get_seq_time(
-                    uref, &playlist_seq_time)))
-            printf("playlist sequence time: %"PRIu64"\n",
-                   playlist_seq_time);
-
         uint64_t playlist_byte_range_len;
         if (ubase_check(uref_m3u_playlist_get_byte_range_len(
                     uref, &playlist_byte_range_len)))
