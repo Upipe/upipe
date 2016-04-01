@@ -914,6 +914,12 @@ static int _upipe_hls_playlist_seek(struct upipe *upipe,
     return UBASE_ERR_INVALID;
 }
 
+/** @internal @This sets the inner pipe output size.
+ *
+ * @param upipe description structure of the pipe
+ * @param output_size new output size
+ * @return an error code
+ */
 static int upipe_hls_playlist_set_output_size(struct upipe *upipe,
                                               unsigned int output_size)
 {
@@ -925,6 +931,11 @@ static int upipe_hls_playlist_set_output_size(struct upipe *upipe,
     return UBASE_ERR_NONE;
 }
 
+/** @internal @This attaches an uclock to the inner pipe.
+ *
+ * @param upipe description structure of the pipe
+ * @return an error code
+ */
 static int upipe_hls_playlist_attach_uclock(struct upipe *upipe)
 {
     struct upipe_hls_playlist *upipe_hls_playlist =
