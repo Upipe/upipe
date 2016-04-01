@@ -32,7 +32,8 @@ libupipe_la_SOURCES = \
 	uprobe_uref_mgr.c \
 	upump_common.c \
 	uuri.c \
-	ucookie.c
+	ucookie.c \
+	ustring.c
 
 libupipe_la_CPPFLAGS = -I$(top_builddir)/include -I$(top_srcdir)/include
 libupipe_la_LIBADD = @libadd_rt_lib@ -lm
