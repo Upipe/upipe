@@ -69,9 +69,9 @@ extern "C" {
  * @return pointer to the public uprobe structure                           \
  */                                                                         \
 static UBASE_UNUSED inline struct uprobe *                                  \
-    STRUCTURE##_to_uprobe(struct STRUCTURE *s)                             \
+    STRUCTURE##_to_uprobe(struct STRUCTURE *s)                              \
 {                                                                           \
-    return &s->UPROBE;                                                      \
+    return s ? &s->UPROBE : NULL;                                           \
 }                                                                           \
 /** @internal @This returns the private STRUCTURE structure.                \
  *                                                                          \
@@ -81,7 +81,7 @@ static UBASE_UNUSED inline struct uprobe *                                  \
 static UBASE_UNUSED inline struct STRUCTURE *                               \
     STRUCTURE##_from_uprobe(struct uprobe *uprobe)                          \
 {                                                                           \
-    return container_of(uprobe, struct STRUCTURE, UPROBE);                  \
+    return uprobe ? container_of(uprobe, struct STRUCTURE, UPROBE) : NULL;  \
 }
 
 #ifdef __cplusplus
