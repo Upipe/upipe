@@ -74,13 +74,12 @@ before_install:
     fi
   - if type brew 2>/dev/null; then
       brew update;
-      cd /usr/local/Library/Formula;
-      git checkout b42854a ffmpeg.rb;
-      cd -;
       brew install valgrind;
       brew install libev;
       brew install yasm;
       brew install x264;
+      wget -O /usr/local/Library/Formula/ffmpeg.rb
+        "https://raw.githubusercontent.com/Homebrew/homebrew-core/7c988bdb8ffb9d2ffcce7606a43e360d98e4982c/Formula/ffmpeg.rb";
       brew install ffmpeg;
     fi
 
