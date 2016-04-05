@@ -40,14 +40,16 @@ extern "C" {
 enum upipe_hls_playlist_command {
     UPIPE_HLS_PLAYLIST_SENTINEL = UPIPE_CONTROL_LOCAL,
 
-    /** get the current index */
+    /** get the current index (uint64_t *) */
     UPIPE_HLS_PLAYLIST_GET_INDEX,
-    /** set the current index */
+    /** set the current index (uint64_t) */
     UPIPE_HLS_PLAYLIST_SET_INDEX,
     /** play */
     UPIPE_HLS_PLAYLIST_PLAY,
     /** go to the next index */
     UPIPE_HLS_PLAYLIST_NEXT,
+    /** seek to this offset (uint64_t) */
+    UPIPE_HLS_PLAYLIST_SEEK,
 };
 
 /** @This converts m3u playlist specific command to a string.
@@ -63,6 +65,7 @@ static inline const char *upipe_hls_playlist_command_str(int cmd)
     UBASE_CASE_TO_STR(UPIPE_HLS_PLAYLIST_SET_INDEX);
     UBASE_CASE_TO_STR(UPIPE_HLS_PLAYLIST_PLAY);
     UBASE_CASE_TO_STR(UPIPE_HLS_PLAYLIST_NEXT);
+    UBASE_CASE_TO_STR(UPIPE_HLS_PLAYLIST_SEEK);
     case UPIPE_HLS_PLAYLIST_SENTINEL: break;
     }
     return NULL;
@@ -94,18 +97,45 @@ static inline int upipe_hls_playlist_set_index(struct upipe *upipe,
                          UPIPE_HLS_PLAYLIST_SIGNATURE, index);
 }
 
+/** @This plays the next item in the playlist.
+ *
+ * @param upipe description structure of the pipe
+ * @return an error code
+ */
 static inline int upipe_hls_playlist_play(struct upipe *upipe)
 {
     return upipe_control(upipe, UPIPE_HLS_PLAYLIST_PLAY,
                          UPIPE_HLS_PLAYLIST_SIGNATURE);
 }
 
+/** @This goes to the next element in the playlist.
+ *
+ * @param upipe description structure of the pipe
+ * @return an error code
+ */
 static inline int upipe_hls_playlist_next(struct upipe *upipe)
 {
     return upipe_control(upipe, UPIPE_HLS_PLAYLIST_NEXT,
                          UPIPE_HLS_PLAYLIST_SIGNATURE);
 }
 
+/** @This seeks into the playlist the corresponding media sequence for a
+ * given offset.
+ *
+ * @param upipe description structure of the pipe
+ * @param at offset to seek
+ * @param offset_p filled with remaining offset to seek in the current item,
+ * may be NULL.
+ * @return an error code
+ */
+static inline int upipe_hls_playlist_seek(struct upipe *upipe, uint64_t at,
+                                          uint64_t *offset_p)
+{
+    return upipe_control(upipe, UPIPE_HLS_PLAYLIST_SEEK,
+                         UPIPE_HLS_PLAYLIST_SIGNATURE, at, offset_p);
+}
+
+/** @This extends @ref uprobe_event with specific m3u playlist events. */
 enum uprobe_hls_playlist_event {
     UPROBE_HLS_PLAYLIST_SENTINEL = UPROBE_LOCAL,
 
@@ -115,6 +145,11 @@ enum uprobe_hls_playlist_event {
     UPROBE_HLS_PLAYLIST_ITEM_END,
 };
 
+/** @This converts hls playlist specific event to a string.
+ *
+ * @param event @ref uprobe_event to convert
+ * @return a string or NULL if not a valid @ref uprobe_hls_playlist_event
+ */
 static inline const char *uprobe_hls_playlist_event_str(int event)
 {
     switch ((enum uprobe_hls_playlist_event)event) {
