@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2013-2015 OpenHeadend S.A.R.L.
+ * Copyright (C) 2013-2016 OpenHeadend S.A.R.L.
  *
  * Authors: Christophe Massiot
  *
@@ -2988,11 +2988,16 @@ static void upipe_ts_mux_update(struct upipe *upipe)
     if (!total_octetrate)
         total_octetrate = required_octetrate;
 
-    if (total_octetrate != mux->total_octetrate) {
+    /* Only go down if required octetrate is inferior by at least 5% to avoid
+     * bouncing. */
+    if (total_octetrate > mux->total_octetrate ||
+        total_octetrate < mux->total_octetrate - mux->total_octetrate / 20) {
         mux->total_octetrate = total_octetrate;
         upipe_ts_mux_build_flow_def(upipe);
         upipe_ts_mux_set_upump(upipe, NULL);
     }
+
+    upipe_ts_mux_notice(upipe);
 
     if (mux->total_octetrate) {
         mux->interval = (mux->mtu * UCLOCK_FREQ + mux->total_octetrate - 1) /
@@ -3049,8 +3054,6 @@ static void upipe_ts_mux_update(struct upipe *upipe)
             }
         }
     }
-
-    upipe_ts_mux_notice(upipe);
 }
 
 /** @internal @This builds the output flow definition.
