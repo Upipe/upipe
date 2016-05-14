@@ -800,8 +800,13 @@ static bool upipe_x264_handle(struct upipe *upipe, struct uref *uref,
         if (unlikely(!upipe_x264->encoder)) {
             needopen = true;
         } else if (unlikely(upipe_x264_need_update(upipe, width, height))) {
+            x264_param_t *params = &upipe_x264_from_upipe(upipe)->params;
+            upipe_notice_va(upipe, "Flow parameters changed, reconfiguring encoder (%d:%zu, %d:%zu, %d:%"PRId64", %d:%"PRIu64", %d:%d)",
+                params->i_width, width, params->i_height, height,
+                params->vui.i_sar_width, upipe_x264->sar.num,
+                params->vui.i_sar_height, upipe_x264->sar.den,
+                params->vui.i_overscan, (upipe_x264->overscan ? 2 : 1));
             needopen = true;
-            upipe_notice(upipe, "Flow parameters changed, reconfiguring encoder");
         }
         if (unlikely(needopen)) {
             if (unlikely(!upipe_x264_open(upipe, width, height))) {
