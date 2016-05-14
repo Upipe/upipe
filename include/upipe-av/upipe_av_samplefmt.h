@@ -138,6 +138,36 @@ static inline enum AVSampleFormat
     return fmt;
 }
 
+/** @This allows to match an av sample format with a flow definition.
+ *
+ * @param flow_def flow definition
+ * @param fmt av sample format
+ * @return an error code
+ */
+static inline int
+    upipe_av_samplefmt_match_flow_def(struct uref *flow_def,
+                                      enum AVSampleFormat fmt)
+{
+    const char *def;
+    uint8_t planes;
+    if (unlikely(!ubase_check(uref_flow_get_def(flow_def, &def)) ||
+                 !ubase_check(uref_sound_flow_get_planes(flow_def, &planes))))
+        return UBASE_ERR_INVALID;
+    enum AVSampleFormat tmp = AV_SAMPLE_FMT_NONE;
+    for (unsigned int i = 0; upipe_av_sample_fmts[i].fmt != AV_SAMPLE_FMT_NONE;
+         i++) {
+        if (!ubase_ncmp(def, upipe_av_sample_fmts[i].flow_def)) {
+            tmp = upipe_av_sample_fmts[i].fmt;
+            break;
+        }
+    }
+    if (tmp == fmt)
+        return UBASE_ERR_NONE;
+    if (planes == 1 && av_get_planar_sample_fmt(tmp) == fmt)
+        return UBASE_ERR_NONE;
+    return UBASE_ERR_INVALID;
+}
+
 #ifdef __cplusplus
 }
 #endif
