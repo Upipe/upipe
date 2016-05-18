@@ -61,7 +61,14 @@
 
 #include <ev.h>
 
-#define UPROBE_LOG_LEVEL                UPROBE_LOG_NOTICE
+struct output {
+    uint16_t port;
+    uint32_t rtp_type;
+    bool enabled;
+    struct upipe *pipe;
+    struct upipe *sink;
+};
+
 #define UMEM_POOL                       512
 #define UREF_POOL_DEPTH                 500
 #define UBUF_POOL_DEPTH                 3000
@@ -73,27 +80,31 @@
 #define XFER_QUEUE                      255
 #define XFER_POOL                       20
 
+static int log_level = UPROBE_LOG_NOTICE;
 static int variant_id = 0;
 static const char *url = NULL;
 static const char *addr = "127.0.0.1";
-static uint16_t video_port = 5004;
-static uint16_t audio_port = 5006;
-static uint32_t video_rtp_type = 96;
-static uint32_t audio_rtp_type = 97;
-static bool audio_enabled = true;
-static bool video_enabled = true;
+static struct output video_output = {
+    .port = 5004,
+    .rtp_type = 96,
+    .enabled = true,
+    .pipe = NULL,
+    .sink = NULL,
+};
+static struct output audio_output = {
+    .port = 5006,
+    .rtp_type = 97,
+    .enabled = true,
+    .pipe = NULL,
+    .sink = NULL,
+};
 static bool rewrite_date = false;
 static uint64_t seek = 0;
 static uint64_t sequence = 0;
-
 static struct upipe *src = NULL;
 static struct upipe *hls = NULL;
 static struct upipe *variant = NULL;
-static struct upipe *audio = NULL;
-static struct upipe *video = NULL;
-static struct upipe *video_sink = NULL;
-static struct upipe *audio_sink = NULL;
-
+static struct uprobe *main_probe = NULL;
 struct ev_signal signal_watcher;
 struct ev_io stdin_watcher;
 
@@ -106,7 +117,6 @@ static struct uprobe *uprobe_seek_alloc(struct uprobe *next, uint64_t at);
 static struct uprobe *uprobe_playlist_alloc(struct uprobe *next,
                                             uint64_t variant_id,
                                             uint64_t at);
-static struct uprobe *main_probe = NULL;
 
 /** @This releases a pipe and sets the pointer to NULL.
  *
@@ -158,8 +168,8 @@ static int select_variant(struct uprobe *uprobe, uint64_t variant_id)
 
 static void cmd_start(void)
 {
-    upipe_cleanup(&audio);
-    upipe_cleanup(&video);
+    upipe_cleanup(&audio_output.pipe);
+    upipe_cleanup(&video_output.pipe);
     upipe_cleanup(&variant);
     select_variant(main_probe, variant_id);
 }
@@ -167,8 +177,8 @@ static void cmd_start(void)
 /** @This stops the current variant.  */
 static void cmd_stop(void)
 {
-    upipe_cleanup(&audio);
-    upipe_cleanup(&video);
+    upipe_cleanup(&audio_output.pipe);
+    upipe_cleanup(&video_output.pipe);
     upipe_cleanup(&variant);
 }
 
@@ -430,7 +440,7 @@ static int catch_audio(struct uprobe *uprobe,
             assert(output);
         }
 
-        int ret = upipe_set_output(output, audio_sink);
+        int ret = upipe_set_output(output, audio_output.sink);
         upipe_release(output);
         return ret;
     }
@@ -496,7 +506,7 @@ static int catch_video(struct uprobe *uprobe,
                 UPROBE_LOG_VERBOSE, "seek"));
         upipe_mgr_release(upipe_probe_uref_mgr);
         UBASE_ALLOC_RETURN(output);
-        int ret = upipe_set_output(output, video_sink);
+        int ret = upipe_set_output(output, video_output.sink);
         upipe_release(output);
         return ret;
     }
@@ -564,8 +574,8 @@ static int catch_playlist(struct uprobe *uprobe,
         UBASE_RETURN(upipe_hls_playlist_next(upipe));
         UBASE_RETURN(upipe_hls_playlist_get_index(upipe, &sequence));
         if (variant_id != probe_playlist->variant_id) {
-            upipe_cleanup(&video);
-            upipe_cleanup(&audio);
+            upipe_cleanup(&video_output.pipe);
+            upipe_cleanup(&audio_output.pipe);
             upipe_cleanup(&variant);
             return select_variant(uprobe, variant_id);
         }
@@ -676,10 +686,10 @@ static int catch_variant(struct uprobe *uprobe,
             }
         }
 
-        if (!audio_enabled)
+        if (!audio_output.enabled)
             uref_audio = NULL;
 
-        if (!video_enabled)
+        if (!video_output.enabled)
             uref_video = NULL;
 
         uint64_t audio_id, video_id;
@@ -720,11 +730,11 @@ static int catch_variant(struct uprobe *uprobe,
             uprobe_variant_set_audio(
                 probe_variant, uprobe_playlist_from_uprobe(probe_playlist));
 
-            video = upipe_flow_alloc_sub(
+            video_output.pipe = upipe_flow_alloc_sub(
                 upipe,
                 uprobe_pfx_alloc(probe_playlist, UPROBE_LOG_VERBOSE, "mixed"),
                 uref_audio);
-            audio = upipe_use(video);
+            audio_output.pipe = upipe_use(video_output.pipe);
         }
         else {
             if (uref_audio) {
@@ -747,7 +757,7 @@ static int catch_variant(struct uprobe *uprobe,
                 uprobe_variant_set_audio(
                     probe_variant, uprobe_playlist_from_uprobe(probe_playlist));
 
-                audio = upipe_flow_alloc_sub(
+                audio_output.pipe = upipe_flow_alloc_sub(
                     upipe,
                     uprobe_pfx_alloc_va(
                         probe_playlist,
@@ -778,7 +788,7 @@ static int catch_variant(struct uprobe *uprobe,
                 uprobe_variant_set_video(
                     probe_variant, uprobe_playlist_from_uprobe(probe_playlist));
 
-                video = upipe_flow_alloc_sub(
+                video_output.pipe = upipe_flow_alloc_sub(
                     upipe,
                     uprobe_pfx_alloc_va(
                         probe_playlist,
@@ -851,10 +861,11 @@ static int catch_hls(struct uprobe *uprobe,
 static struct upipe *hls2rtp_video_sink(struct uprobe *probe,
                                         struct upipe *trickp)
 {
-    int ret = snprintf(NULL, 0, "%s:%u", addr, video_port);
+    uint16_t port = video_output.port;
+    int ret = snprintf(NULL, 0, "%s:%u", addr, port);
     assert(ret > 0);
     char uri[ret + 1];
-    assert(snprintf(uri, sizeof (uri), "%s:%u", addr, video_port) > 0);
+    assert(snprintf(uri, sizeof (uri), "%s:%u", addr, port) > 0);
 
     struct upipe_mgr *upipe_rtp_h264_mgr = upipe_rtp_h264_mgr_alloc();
     assert(upipe_rtp_h264_mgr);
@@ -874,7 +885,7 @@ static struct upipe *hls2rtp_video_sink(struct uprobe *probe,
                          UPROBE_LOG_VERBOSE, "rtp"));
     upipe_mgr_release(upipe_rtp_prepend_mgr);
     assert(output);
-    ubase_assert(upipe_rtp_prepend_set_type(output, video_rtp_type));
+    ubase_assert(upipe_rtp_prepend_set_type(output, video_output.rtp_type));
 
     output = upipe_void_chain_output_sub(
         output, trickp,
@@ -900,10 +911,11 @@ static struct upipe *hls2rtp_video_sink(struct uprobe *probe,
 static struct upipe *hls2rtp_audio_sink(struct uprobe *probe,
                                         struct upipe *trickp)
 {
-    int ret = snprintf(NULL, 0, "%s:%u", addr, audio_port);
+    uint16_t port = audio_output.port;
+    int ret = snprintf(NULL, 0, "%s:%u", addr, port);
     assert(ret > 0);
     char uri[ret + 1];
-    assert(snprintf(uri, sizeof (uri), "%s:%u", addr, audio_port) > 0);
+    assert(snprintf(uri, sizeof (uri), "%s:%u", addr, port) > 0);
 
     struct upipe_mgr *upipe_rtp_mpeg4_mgr = upipe_rtp_mpeg4_mgr_alloc();
     assert(upipe_rtp_mpeg4_mgr);
@@ -923,7 +935,7 @@ static struct upipe *hls2rtp_audio_sink(struct uprobe *probe,
                          UPROBE_LOG_VERBOSE, "rtp"));
     upipe_mgr_release(upipe_rtp_prepend_mgr);
     assert(output);
-    ubase_assert(upipe_rtp_prepend_set_type(output, audio_rtp_type));
+    ubase_assert(upipe_rtp_prepend_set_type(output, audio_output.rtp_type));
 
     output = upipe_void_chain_output_sub(
         output, trickp,
@@ -1006,7 +1018,6 @@ int main(int argc, char **argv)
 {
     int opt;
     int index = 0;
-    int log_level = UPROBE_LOG_LEVEL;
 
     /*
      * parse options
@@ -1029,16 +1040,16 @@ int main(int argc, char **argv)
             addr = optarg;
             break;
         case OPT_VIDEO_PORT:
-            video_port = atoi(optarg);
+            video_output.port = atoi(optarg);
             break;
         case OPT_AUDIO_PORT:
-            audio_port = atoi(optarg);
+            audio_output.port = atoi(optarg);
             break;
         case OPT_NO_VIDEO:
-            video_enabled = false;
+            video_output.enabled = false;
             break;
         case OPT_NO_AUDIO:
-            audio_enabled = false;
+            audio_output.enabled = false;
             break;
         case OPT_REWRITE_DATE:
             rewrite_date = true;
@@ -1167,15 +1178,15 @@ int main(int argc, char **argv)
         assert(trickp);
 
         /* create video sink */
-        if (video_enabled) {
-            video_sink = hls2rtp_video_sink(main_probe, trickp);
-            assert(video_sink);
+        if (video_output.enabled) {
+            video_output.sink = hls2rtp_video_sink(main_probe, trickp);
+            assert(video_output.sink);
         }
 
         /* create audio sink */
-        if (audio_enabled) {
-            audio_sink = hls2rtp_audio_sink(main_probe, trickp);
-            assert(audio_sink);
+        if (audio_output.enabled) {
+            audio_output.sink = hls2rtp_audio_sink(main_probe, trickp);
+            assert(audio_output.sink);
         }
 
         upipe_release(trickp);
@@ -1239,8 +1250,8 @@ int main(int argc, char **argv)
      */
     upipe_release(variant);
     upipe_release(src);
-    upipe_release(video_sink);
-    upipe_release(audio_sink);
+    upipe_release(video_output.sink);
+    upipe_release(audio_output.sink);
     uprobe_clean(&probe_hls);
 
     ev_loop_destroy(loop);
