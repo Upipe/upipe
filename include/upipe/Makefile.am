@@ -63,6 +63,7 @@ pkginclude_HEADERS = \
 	uprobe_dejitter.h \
 	uprobe_helper_alloc.h \
 	uprobe_helper_uprobe.h \
+	uprobe_helper_urefcount.h \
 	uprobe_loglevel.h \
 	uprobe_output.h \
 	uprobe_prefix.h \

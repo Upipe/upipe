@@ -532,6 +532,38 @@ ustring_unframe(const struct ustring ustring, char c)
     return ustring;
 }
 
+struct ustring_uint64 {
+    struct ustring str;
+    uint64_t value;
+};
+
+struct ustring_uint64 ustring_to_uint64(const struct ustring str, int base);
+
+static inline struct ustring_uint64 ustring_to_uint64_str(const char *str,
+                                                          int base)
+{
+    return ustring_to_uint64(ustring_from_str(str), base);
+}
+
+struct ustring_time {
+    struct ustring str;
+    uint64_t value;
+};
+
+struct ustring_time ustring_to_time(const struct ustring str);
+
+static inline struct ustring_time ustring_to_time_str(const char *str)
+{
+    return ustring_to_time(ustring_from_str(str));
+}
+
+struct ustring_size {
+    struct ustring str;
+    uint64_t value;
+};
+
+struct ustring_size ustring_to_size(const struct ustring str);
+
 #ifdef __cplusplus
 }
 #endif
