@@ -705,7 +705,7 @@ static int upipe_stream_switcher_control(struct upipe *upipe,
 }
 
 /** module manager static descriptor */
-struct upipe_mgr upipe_stream_switcher_mgr = {
+static struct upipe_mgr upipe_stream_switcher_mgr = {
     .signature = UPIPE_STREAM_SWITCHER_SIGNATURE,
     .upipe_alloc = upipe_stream_switcher_alloc,
     .upipe_control = upipe_stream_switcher_control,

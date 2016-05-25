@@ -62,8 +62,8 @@
 #define WIDTH               720
 #define HEIGHT              576
 
-struct ubuf_mgr *ubuf_mgr;
-struct uref_mgr *uref_mgr;
+static struct ubuf_mgr *ubuf_mgr;
+static struct uref_mgr *uref_mgr;
 
 /** definition of our uprobe */
 static int catch(struct uprobe *uprobe, struct upipe *upipe,

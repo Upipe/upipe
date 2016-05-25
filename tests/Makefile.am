@@ -245,6 +245,7 @@ check_PROGRAMS += \
 	upipe_ts_split_test \
 	upipe_ts_sync_test \
 	upipe_ts_demux_test \
+	upipe_ts_pid_filter_test \
 	upipe_ts_encaps_test \
 	upipe_ts_pes_encaps_test \
 	upipe_ts_psi_generator_test \
@@ -274,6 +275,7 @@ TESTS += \
 	upipe_ts_split_test \
 	upipe_ts_sync_test \
 	upipe_ts_demux_test \
+	upipe_ts_pid_filter_test \
 	upipe_ts_encaps_test \
 	upipe_ts_pes_encaps_test \
 	upipe_ts_psi_generator_test \
@@ -393,6 +395,7 @@ upipe_ts_sdt_decoder_test_LDADD = $(LDADD) $(top_builddir)/lib/upipe-ts/libupipe
 upipe_ts_si_generator_test_LDADD = $(LDADD) $(top_builddir)/lib/upipe-ts/libupipe_ts.la
 upipe_ts_tdt_decoder_test_LDADD = $(LDADD) $(top_builddir)/lib/upipe-ts/libupipe_ts.la
 upipe_ts_demux_test_LDADD = $(LDADD) $(top_builddir)/lib/upipe-ts/libupipe_ts.la $(top_builddir)/lib/upipe-framers/libupipe_framers.la
+upipe_ts_pid_filter_test_LDADD = $(LDADD) $(top_builddir)/lib/upipe-ts/libupipe_ts.la
 upipe_ts_test_LDADD = $(LDADD) $(top_builddir)/lib/upipe-ts/libupipe_ts.la $(top_builddir)/lib/upipe-framers/libupipe_framers.la -lev $(top_builddir)/lib/upump-ev/libupump_ev.la $(top_builddir)/lib/upipe-modules/libupipe_modules.la
 upipe_ts_tstd_test_LDADD = $(LDADD) $(top_builddir)/lib/upipe-ts/libupipe_ts.la
 

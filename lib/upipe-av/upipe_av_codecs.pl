@@ -11,7 +11,7 @@ open(FILE, '-|', "$ENV{'CPP'} $ENV{'CFLAGS'} \"$file\"") or die "couldn't open $
 
 print <<EOF;
 /* Auto-generated file from libavcodec/avcodec.h */
-const struct {
+static const struct {
     enum AVCodecID id;
     const char *flow_def;
 } upipe_av_codecs[] = {

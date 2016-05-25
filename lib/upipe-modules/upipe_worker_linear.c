@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2014-2015 OpenHeadend S.A.R.L.
+ * Copyright (C) 2014-2016 OpenHeadend S.A.R.L.
  *
  * Authors: Christophe Massiot
  *
@@ -235,11 +235,17 @@ static struct upipe *_upipe_wlin_alloc(struct upipe_mgr *mgr,
     /* last remote */
     struct upipe *last_remote = upipe_use(remote);
     struct upipe *tmp;
+
+    /* upipe_get_output is a control command and may trigger a need_upump_mgr
+     * event */
+    uprobe_throw(upipe->uprobe, NULL, UPROBE_FREEZE_UPUMP_MGR);
     while (ubase_check(upipe_get_output(last_remote, &tmp)) && tmp != NULL) {
         upipe_use(tmp);
         upipe_release(last_remote);
         last_remote = tmp;
     }
+    uprobe_throw(upipe->uprobe, NULL, UPROBE_THAW_UPUMP_MGR);
+
     struct upipe *last_remote_xfer = upipe_xfer_alloc(wlin_mgr->xfer_mgr,
             uprobe_pfx_alloc(uprobe_use(&upipe_wlin->proxy_probe),
                              UPROBE_LOG_VERBOSE, "lin_last_xfer"), last_remote);

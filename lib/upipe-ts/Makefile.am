@@ -9,6 +9,7 @@ libupipe_ts_la_SOURCES = \
 	upipe_ts_pes_decaps.c \
 	upipe_ts_pat_decoder.c \
 	upipe_ts_pmt_decoder.c \
+	upipe_ts_pid_filter.c \
 	upipe_ts_psi_join.c \
 	upipe_ts_psi_merge.c \
 	upipe_ts_psi_split.c \
@@ -19,6 +20,7 @@ libupipe_ts_la_SOURCES = \
 	upipe_ts_tdt_decoder.c \
 	upipe_ts_split.c \
 	upipe_ts_sync.c \
+	upipe_ts_align.c \
 	upipe_ts_demux.c \
 	upipe_ts_tstd.c \
 	upipe_ts_encaps.c \

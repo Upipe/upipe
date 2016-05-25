@@ -1,7 +1,7 @@
 /*
- * Copyright (C) 2013-2014 OpenHeadend S.A.R.L.
+ * Copyright (C) 2016 OpenHeadend S.A.R.L.
  *
- * Authors: Benjamin Cohen
+ * Authors: Christophe Massiot
  *
  * Permission is hereby granted, free of charge, to any person obtaining
  * a copy of this software and associated documentation files (the
@@ -24,7 +24,7 @@
  */
 
 /** @file
- * @short unit tests for htons module
+ * @short unit tests for TS PID filter module
  */
 
 #undef NDEBUG
@@ -45,25 +45,23 @@
 #include <upipe/uref_block.h>
 #include <upipe/uref_std.h>
 #include <upipe/upipe.h>
-#include <upipe-modules/upipe_htons.h>
+#include <upipe-ts/upipe_ts_pid_filter.h>
 
 #include <stdbool.h>
 #include <stdlib.h>
 #include <stdio.h>
 #include <unistd.h>
 #include <inttypes.h>
-#include <arpa/inet.h>
 #include <assert.h>
 
-#define UDICT_POOL_DEPTH 10
-#define UREF_POOL_DEPTH 10
-#define UBUF_POOL_DEPTH 10
+#include <bitstream/mpeg/ts.h>
+
+#define UDICT_POOL_DEPTH 0
+#define UREF_POOL_DEPTH 0
+#define UBUF_POOL_DEPTH 0
 #define UPROBE_LOG_LEVEL UPROBE_LOG_DEBUG
 
-#define PACKETS_NUM 45
-#define PACKET_SIZE 524
-
-static unsigned int nb_packets = 0;
+static uint16_t received_pid = UINT16_MAX;
 
 /** definition of our uprobe */
 static int catch(struct uprobe *uprobe, struct upipe *upipe,
@@ -82,9 +80,8 @@ static int catch(struct uprobe *uprobe, struct upipe *upipe,
 }
 
 /** helper phony pipe */
-static struct upipe *test_alloc(struct upipe_mgr *mgr,
-                                          struct uprobe *uprobe,
-                                          uint32_t signature, va_list args)
+static struct upipe *test_alloc(struct upipe_mgr *mgr, struct uprobe *uprobe,
+                                uint32_t signature, va_list args)
 {
     struct upipe *upipe = malloc(sizeof(struct upipe));
     assert(upipe != NULL);
@@ -98,23 +95,12 @@ static void test_input(struct upipe *upipe, struct uref *uref,
 {
     assert(uref != NULL);
     const uint8_t *buffer;
-    size_t size = 0;
-    int pos = 0, len = -1;
-    ubase_assert(uref_block_size(uref, &size));
-    upipe_dbg_va(upipe, "received packet of size %zu", size);
-
-    while (size > 0) {
-        ubase_assert(uref_block_read(uref, pos, &len, &buffer));
-        pos += len;
-        while (len > 1) {
-            assert(htons(*(uint16_t*)buffer) == nb_packets*PACKET_SIZE+size);
-            len -= 2;
-            size -= 2;
-            buffer += 2;
-        }
-        uref_block_unmap(uref, 0);
-    }
-    nb_packets--;
+    int size = -1;
+    ubase_assert(uref_block_read(uref, 0, &size, &buffer));
+    assert(size == TS_SIZE); //because of the way we allocated it
+    assert(ts_validate(buffer));
+    received_pid = ts_get_pid(buffer);
+    uref_block_unmap(uref, 0);
     uref_free(uref);
 }
 
@@ -138,7 +124,7 @@ static void test_free(struct upipe *upipe)
 }
 
 /** helper phony pipe */
-static struct upipe_mgr htons_test_mgr = {
+static struct upipe_mgr test_mgr = {
     .refcount = NULL,
     .upipe_alloc = test_alloc,
     .upipe_input = test_input,
@@ -165,61 +151,75 @@ int main(int argc, char *argv[])
                                                      UPROBE_LOG_LEVEL);
     assert(uprobe_stdio != NULL);
 
-    /* flow def */
     struct uref *uref;
-    uref = uref_block_flow_alloc_def(uref_mgr, "foo.");
+    uref = uref_block_flow_alloc_def(uref_mgr, "mpegts.");
     assert(uref != NULL);
 
-    struct upipe *upipe_sink = upipe_void_alloc(&htons_test_mgr,
-                                                uprobe_use(uprobe_stdio));
-    assert(upipe_sink != NULL);
-
-    struct upipe_mgr *upipe_htons_mgr = upipe_htons_mgr_alloc();
-    assert(upipe_htons_mgr != NULL);
-    struct upipe *upipe_htons = upipe_void_alloc(upipe_htons_mgr,
+    struct upipe_mgr *upipe_ts_pidf_mgr = upipe_ts_pidf_mgr_alloc();
+    assert(upipe_ts_pidf_mgr != NULL);
+    struct upipe *upipe_ts_pidf = upipe_void_alloc(upipe_ts_pidf_mgr,
             uprobe_pfx_alloc(uprobe_use(uprobe_stdio), UPROBE_LOG_LEVEL,
-                             "htons"));
-    assert(upipe_htons != NULL);
-    ubase_assert(upipe_set_flow_def(upipe_htons, uref));
-    ubase_assert(upipe_set_output(upipe_htons, upipe_sink));
+                             "ts pidf"));
+    assert(upipe_ts_pidf != NULL);
+    ubase_assert(upipe_set_flow_def(upipe_ts_pidf, uref));
     uref_free(uref);
 
+    struct upipe *sink = upipe_void_alloc(&test_mgr, uprobe_use(uprobe_stdio));
+    assert(sink != NULL);
+    ubase_assert(upipe_set_output(upipe_ts_pidf, sink));
+
+    ubase_assert(upipe_ts_pidf_add_pid(upipe_ts_pidf, 68));
+    ubase_assert(upipe_ts_pidf_add_pid(upipe_ts_pidf, 69));
+    ubase_assert(upipe_ts_pidf_add_pid(upipe_ts_pidf, 70));
+
     uint8_t *buffer;
-    int size, i;
+    int size;
+    uref = uref_block_alloc(uref_mgr, ubuf_mgr, TS_SIZE);
+    assert(uref != NULL);
+    size = -1;
+    ubase_assert(uref_block_write(uref, 0, &size, &buffer));
+    assert(size == TS_SIZE);
+    ts_pad(buffer);
+    ts_set_pid(buffer, 68);
+    uref_block_unmap(uref, 0);
+    upipe_input(upipe_ts_pidf, uref, NULL);
+    assert(received_pid == 68);
+    received_pid = UINT16_MAX;
 
-    nb_packets = PACKETS_NUM;
-    for (i=0; i < PACKETS_NUM; i++) {
-        uref = uref_block_alloc(uref_mgr, ubuf_mgr, PACKET_SIZE);
-        size = -1;
-        uref_block_write(uref, 0, &size, &buffer);
-        assert(size == PACKET_SIZE);
-        while (size > 1) {
-            *(uint16_t*)buffer = nb_packets*PACKET_SIZE+size;
-            buffer += 2;
-            size -= 2;
-        }
-        uref_block_unmap(uref, 0);
-        upipe_input(upipe_htons, uref, NULL);
-    }
-    /* TODO test segmented, shared, unaligned ubufs */
+    ubase_assert(upipe_ts_pidf_del_pid(upipe_ts_pidf, 69));
 
-    /* flush */
-    upipe_release(upipe_htons);
+    uref = uref_block_alloc(uref_mgr, ubuf_mgr, TS_SIZE);
+    assert(uref != NULL);
+    size = -1;
+    ubase_assert(uref_block_write(uref, 0, &size, &buffer));
+    assert(size == TS_SIZE);
+    ts_pad(buffer);
+    ts_set_pid(buffer, 69);
+    uref_block_unmap(uref, 0);
+    upipe_input(upipe_ts_pidf, uref, NULL);
+    assert(received_pid == UINT16_MAX);
 
-    printf("nb_packets: %u\n", nb_packets);
-    assert(nb_packets == 0);
+    uref = uref_block_alloc(uref_mgr, ubuf_mgr, TS_SIZE);
+    assert(uref != NULL);
+    size = -1;
+    ubase_assert(uref_block_write(uref, 0, &size, &buffer));
+    assert(size == TS_SIZE);
+    ts_pad(buffer);
+    ts_set_pid(buffer, 70);
+    uref_block_unmap(uref, 0);
+    upipe_input(upipe_ts_pidf, uref, NULL);
+    assert(received_pid == 70);
 
-    /* release everything */
-    upipe_mgr_release(upipe_htons_mgr); // nop
+    upipe_release(upipe_ts_pidf);
+    upipe_mgr_release(upipe_ts_pidf_mgr); // nop
 
-    test_free(upipe_sink);
+    test_free(sink);
 
     uref_mgr_release(uref_mgr);
     ubuf_mgr_release(ubuf_mgr);
     udict_mgr_release(udict_mgr);
     umem_mgr_release(umem_mgr);
     uprobe_release(uprobe_stdio);
-    uprobe_clean(&uprobe);
 
     return 0;
 }

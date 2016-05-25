@@ -1491,7 +1491,8 @@ static void upipe_ts_demux_program_check_pcr(struct upipe *upipe)
     struct upipe_ts_demux *demux = upipe_ts_demux_from_program_mgr(upipe->mgr);
     struct upipe_ts_demux_mgr *ts_demux_mgr =
         upipe_ts_demux_mgr_from_upipe_mgr(upipe_ts_demux_to_upipe(demux)->mgr);
-    bool found = upipe_ts_demux_program->pcr_pid == 8191;
+    bool found = upipe_ts_demux_program->pcr_pid == 8191 ||
+                 ulist_empty(&upipe_ts_demux_program->outputs);
 
     struct uchain *uchain;
     ulist_foreach (&upipe_ts_demux_program->outputs, uchain) {

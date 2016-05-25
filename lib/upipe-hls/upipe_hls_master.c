@@ -365,11 +365,7 @@ static void upipe_hls_master_input(struct upipe *upipe,
 
     const char *type;
     if (ubase_check(uref_m3u_master_get_media_type(uref, &type))) {
-        struct uref *rendition = uref_dup(uref);
-        if (unlikely(rendition == NULL))
-            upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
-        else
-            ulist_add(&upipe_hls_master->renditions, uref_to_uchain(rendition));
+        ulist_add(&upipe_hls_master->renditions, uref_to_uchain(uref));
     }
     else {
         const char *audio_id;

@@ -210,12 +210,29 @@ static void upipe_ts_pmtd_parse_streamtype(struct upipe *upipe,
             UBASE_FATAL(upipe, uref_h264_flow_set_annexb(flow_def))
             break;
 
+
+        case PMT_STREAMTYPE_ATSC_A52:
+            UBASE_FATAL(upipe, uref_flow_set_def(flow_def, "block.ac3.sound."))
+            UBASE_FATAL(upipe, uref_flow_set_raw_def(flow_def,
+                            "block.mpegts.mpegtspes.ac3.sound."))
+            UBASE_FATAL(upipe, uref_ts_flow_set_max_delay(flow_def,
+                            MAX_DELAY))
+            break;
+
         case PMT_STREAMTYPE_SCTE_35:
             UBASE_FATAL(upipe, uref_flow_set_def(flow_def, "void.scte35."))
             UBASE_FATAL(upipe, uref_flow_set_raw_def(flow_def,
                             "block.mpegts.mpegtspsi.mpegtsscte35.void."))
             UBASE_FATAL(upipe, uref_ts_flow_set_max_delay(flow_def,
                             MAX_DELAY_SCTE35))
+            break;
+
+        case PMT_STREAMTYPE_ATSC_A52E:
+            UBASE_FATAL(upipe, uref_flow_set_def(flow_def, "block.eac3.sound."))
+            UBASE_FATAL(upipe, uref_flow_set_raw_def(flow_def,
+                            "block.mpegts.mpegtspes.eac3.sound."))
+            UBASE_FATAL(upipe, uref_ts_flow_set_max_delay(flow_def,
+                            MAX_DELAY))
             break;
 
         default:

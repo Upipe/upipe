@@ -582,9 +582,12 @@ static void upipe_avfsink_mux(struct upipe *upipe, struct upump **upump_p)
             }
             upipe_avfsink->first_dts = input->next_dts;
             if (!(upipe_avfsink->context->oformat->flags & AVFMT_NOFILE)) {
-                int error = avio_open(&upipe_avfsink->context->pb,
-                                      upipe_avfsink->context->filename,
-                                      AVIO_FLAG_WRITE);
+                AVDictionary *options = NULL;
+                av_dict_copy(&options, upipe_avfsink->options, 0);
+                int error = avio_open2(&upipe_avfsink->context->pb,
+                                       upipe_avfsink->context->filename,
+                                       AVIO_FLAG_WRITE, NULL, &options);
+                av_dict_free(&options);
                 if (error < 0) {
                     upipe_av_strerror(error, buf);
                     upipe_err_va(upipe, "couldn't open file %s (%s)",

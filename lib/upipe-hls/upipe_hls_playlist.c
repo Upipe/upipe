@@ -34,7 +34,6 @@
 #include <upipe/upipe_helper_inner.h>
 #include <upipe/upipe_helper_uprobe.h>
 #include <upipe/upipe_helper_bin_output.h>
-#include <upipe/upipe_helper_input.h>
 #include <upipe/upipe_helper_void.h>
 #include <upipe/upipe_helper_urefcount_real.h>
 #include <upipe/upipe_helper_urefcount.h>
@@ -867,6 +866,60 @@ static int _upipe_hls_playlist_set_index(struct upipe *upipe,
     return UBASE_ERR_NONE;
 }
 
+/** @internal @This seeks into the playlist the corresponding media sequence
+ * for a given offset.
+ *
+ * @param upipe description structure of the pipe
+ * @param at offset to seek
+ * @param offset_p filled with remaining offset to seek in the current item,
+ * may be NULL.
+ * @return an error code
+ */
+static int _upipe_hls_playlist_seek(struct upipe *upipe,
+                                    uint64_t at, uint64_t *offset_p)
+{
+    struct upipe_hls_playlist *upipe_hls_playlist =
+        upipe_hls_playlist_from_upipe(upipe);
+    struct uref *flow = upipe_hls_playlist->input_flow_def;
+
+    /* if playlist type is set, it must be "VOD" or "EVENT". */
+    const char *type;
+    if (ubase_check(uref_m3u_playlist_flow_get_type(flow, &type)) &&
+        strcmp(type, "VOD") && strcmp(type, "EVENT"))
+        return UBASE_ERR_UNHANDLED;
+
+    /* we can't seek if items has been removed from the playlist,
+     * ie. media sequence is not 0. */
+    uint64_t seq;
+    if (!ubase_check(uref_m3u_playlist_flow_get_media_sequence(flow, &seq)))
+        seq = 0;
+    if (seq != 0)
+        return UBASE_ERR_UNHANDLED;
+
+    uint64_t index = 0;
+    struct uchain *uchain;
+    ulist_foreach(&upipe_hls_playlist->items, uchain) {
+        struct uref *item = uref_from_uchain(uchain);
+        uint64_t seq_duration;
+        UBASE_RETURN(uref_m3u_playlist_get_seq_duration(item, &seq_duration));
+        if (at < seq_duration) {
+            if (offset_p)
+                *offset_p = at;
+            return _upipe_hls_playlist_set_index(upipe, index);
+        }
+        at -= seq_duration;
+        index++;
+    }
+
+    return UBASE_ERR_INVALID;
+}
+
+/** @internal @This sets the inner pipe output size.
+ *
+ * @param upipe description structure of the pipe
+ * @param output_size new output size
+ * @return an error code
+ */
 static int upipe_hls_playlist_set_output_size(struct upipe *upipe,
                                               unsigned int output_size)
 {
@@ -878,6 +931,11 @@ static int upipe_hls_playlist_set_output_size(struct upipe *upipe,
     return UBASE_ERR_NONE;
 }
 
+/** @internal @This attaches an uclock to the inner pipe.
+ *
+ * @param upipe description structure of the pipe
+ * @return an error code
+ */
 static int upipe_hls_playlist_attach_uclock(struct upipe *upipe)
 {
     struct upipe_hls_playlist *upipe_hls_playlist =
@@ -938,6 +996,13 @@ static int upipe_hls_playlist_control(struct upipe *upipe,
     case UPIPE_HLS_PLAYLIST_NEXT: {
         UBASE_SIGNATURE_CHECK(args, UPIPE_HLS_PLAYLIST_SIGNATURE)
         return _upipe_hls_playlist_next(upipe);
+    }
+
+    case UPIPE_HLS_PLAYLIST_SEEK: {
+        UBASE_SIGNATURE_CHECK(args, UPIPE_HLS_PLAYLIST_SIGNATURE);
+        uint64_t at = va_arg(args, uint64_t);
+        uint64_t *offset_p = va_arg(args, uint64_t *);
+        return _upipe_hls_playlist_seek(upipe, at, offset_p);
     }
 
     default:

@@ -376,8 +376,8 @@ static void upipe_sws_thumbs_input(struct upipe *upipe, struct uref *uref,
  * @param vsize vertical size
  * @return an error code
  */
-static bool _upipe_sws_thumbs_set_size(struct upipe *upipe,
-                                       int hsize, int vsize, int cols, int rows)
+static int _upipe_sws_thumbs_set_size(struct upipe *upipe,
+                                      int hsize, int vsize, int cols, int rows)
 {
     struct upipe_sws_thumbs *upipe_sws_thumbs = upipe_sws_thumbs_from_upipe(upipe);
     if (unlikely(hsize <= 0 || vsize <= 0 || cols <= 0 || rows <= 0)) {

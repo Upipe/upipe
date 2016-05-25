@@ -78,6 +78,8 @@ before_install:
       brew install libev;
       brew install yasm;
       brew install x264;
+      wget -O /usr/local/Library/Formula/ffmpeg.rb
+        "https://raw.githubusercontent.com/Homebrew/homebrew-core/7c988bdb8ffb9d2ffcce7606a43e360d98e4982c/Formula/ffmpeg.rb";
       brew install ffmpeg;
     fi
 
@@ -89,7 +91,7 @@ before_install:
   - if [ "$TRAVIS_OS_NAME" = "linux" ]; then
       wget http://storage.googleapis.com/nativeclient-mirror/nacl/nacl_sdk/nacl_sdk.zip;
       unzip nacl_sdk.zip;
-      nacl_sdk/naclsdk update pepper_43;
+      nacl_sdk/naclsdk update pepper_49;
     fi
 
   # libamt
@@ -114,7 +116,7 @@ before_script: autoreconf -i
 script: CONFIGURE_FLAGS="--disable-silent-rules
           CC=\"$HOST_CC\"
           CXX=\"$HOST_CXX\"
-          CPPFLAGS=\"-I$PWD/nacl_sdk/pepper_43/include\"
+          CPPFLAGS=\"-I$PWD/nacl_sdk/pepper_49/include\"
           CFLAGS=\"-Werror -Wno-error=deprecated-declarations -O2 -g $CFLAGS\"
           CXXFLAGS=\"-Werror -O2 -g\"" &&
         eval ./configure $CONFIGURE_FLAGS &&
