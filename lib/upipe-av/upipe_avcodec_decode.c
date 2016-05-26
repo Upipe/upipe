@@ -354,7 +354,7 @@ static int upipe_avcdec_get_buffer_pic(struct AVCodecContext *context,
 
     if (!(context->codec->capabilities & CODEC_CAP_DR1)) {
         upipe_verbose(upipe, "no direct rendering, using default");
-        return avcodec_default_get_buffer(context, frame);
+        return avcodec_default_get_buffer2(context, frame, 0);
     }
 
     /* Direct rendering */
@@ -518,7 +518,7 @@ static int upipe_avcdec_get_buffer_sound(struct AVCodecContext *context,
     uref->uchain.next = uref_to_uchain(flow_def_attr);
 
     if (!(context->codec->capabilities & CODEC_CAP_DR1))
-        return avcodec_default_get_buffer(context, frame);
+        return avcodec_default_get_buffer2(context, frame, 0);
 
     /* Direct rendering */
     if (unlikely(!ubase_check(ubuf_sound_write_uint8_t(ubuf, 0, -1, frame->data,
