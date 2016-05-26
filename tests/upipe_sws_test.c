@@ -274,7 +274,7 @@ static struct upipe_mgr sws_test_mgr = {
 // DEBUG - from swscale/swscale_unscaled.c
 static int check_image_pointers(const uint8_t * const data[4], enum AVPixelFormat pix_fmt, const int linesizes[4])
 {
-    const AVPixFmtDescriptor *desc = &av_pix_fmt_descriptors[pix_fmt];
+    const AVPixFmtDescriptor *desc = av_pix_fmt_desc_get(pix_fmt);
     int i;
 
     for (i = 0; i < 4; i++) {
