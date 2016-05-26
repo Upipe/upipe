@@ -79,6 +79,7 @@ const char dvbm_sys_fmt[] = "/sys/class/dvbm/%u/%s";
 #define OPERATING_MODE        (1)
 #define TIMESTAMP_MODE        (2)
 #define TS_PACKETS            (7)
+#define MAX_DELAY             (UCLOCK_FREQ/10)
 
 /** @hidden */
 static int upipe_dveo_asi_src_check(struct upipe *upipe, struct uref *flow_format);
@@ -281,7 +282,10 @@ static void upipe_dveo_asi_src_worker(struct upump *upump)
         discontinuity = ts < upipe_dveo_asi_src->last_ts;
         upipe_dveo_asi_src->last_ts = ts;
         uref_block_peek_unmap(uref, 0, tmp, ptr);
-        if (first_ts == UINT64_MAX)
+
+        /* Latter condition can happen if buffer contains data from before
+         * cable unplug and after replug. Causes cr_sys with long delays */
+        if (first_ts == UINT64_MAX || ts - first_ts > MAX_DELAY)
             first_ts = ts;
 
         /* Delete rest of timestamps */
