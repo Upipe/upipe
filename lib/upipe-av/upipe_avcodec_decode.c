@@ -384,7 +384,6 @@ static int upipe_avcdec_get_buffer_pic(struct AVCodecContext *context,
         frame->linesize[plane] = stride;
     }
     frame->extended_data = frame->data;
-    frame->type = FF_BUFFER_TYPE_USER;
 
     return 0; /* success */
 }
@@ -537,7 +536,6 @@ static int upipe_avcdec_get_buffer_sound(struct AVCodecContext *context,
         frame->linesize[0] *= context->channels;
 
     frame->extended_data = frame->data;
-    frame->type = FF_BUFFER_TYPE_USER;
 
     return 0; /* success */
 }
