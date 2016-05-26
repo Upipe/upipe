@@ -1443,7 +1443,7 @@ static void upipe_avcenc_free(struct upipe *upipe)
 
     if (upipe_avcenc->context != NULL)
         av_free(upipe_avcenc->context);
-    av_free(upipe_avcenc->frame);
+    av_frame_free(&upipe_avcenc->frame);
 
     /* free remaining urefs (should not be any) */
     struct uchain *uchain;
@@ -1482,7 +1482,7 @@ static struct upipe *upipe_avcenc_alloc(struct upipe_mgr *mgr,
                                         struct uprobe *uprobe,
                                         uint32_t signature, va_list args)
 {
-    AVFrame *frame = avcodec_alloc_frame();
+    AVFrame *frame = av_frame_alloc();
     if (unlikely(frame == NULL))
         return NULL;
 
@@ -1490,7 +1490,7 @@ static struct upipe *upipe_avcenc_alloc(struct upipe_mgr *mgr,
     struct upipe *upipe = upipe_avcenc_alloc_flow(mgr, uprobe, signature, args,
                                                   &flow_def);
     if (unlikely(upipe == NULL)) {
-        av_free(frame);
+        av_frame_free(&frame);
         return NULL;
     }
 
@@ -1510,7 +1510,7 @@ static struct upipe *upipe_avcenc_alloc(struct upipe_mgr *mgr,
     if ((codec == NULL) ||
             (upipe_avcenc->context = avcodec_alloc_context3(codec)) == NULL) {
         uref_free(flow_def);
-        av_free(frame);
+        av_frame_free(&frame);
         upipe_avcenc_free_flow(upipe);
         return NULL;
     }

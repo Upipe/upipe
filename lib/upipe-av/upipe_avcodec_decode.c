@@ -1364,7 +1364,7 @@ static void upipe_avcdec_free(struct upipe *upipe)
         free(upipe_avcdec->context->extradata);
         av_free(upipe_avcdec->context);
     }
-    av_free(upipe_avcdec->frame);
+    av_frame_free(&upipe_avcdec->frame);
 
     upipe_throw_dead(upipe);
     uref_free(upipe_avcdec->uref);
@@ -1394,13 +1394,13 @@ static struct upipe *upipe_avcdec_alloc(struct upipe_mgr *mgr,
                                         struct uprobe *uprobe,
                                         uint32_t signature, va_list args)
 {
-    AVFrame *frame = avcodec_alloc_frame();
+    AVFrame *frame = av_frame_alloc();
     if (unlikely(frame == NULL))
         return NULL;
 
     struct upipe *upipe = upipe_avcdec_alloc_void(mgr, uprobe, signature, args);
     if (unlikely(upipe == NULL)) {
-        av_free(frame);
+        av_frame_free(&frame);
         return NULL;
     }
     upipe_avcdec_init_urefcount(upipe);
