@@ -354,7 +354,7 @@ static int upipe_avcdec_get_buffer_pic(struct AVCodecContext *context,
 
     if (!(context->codec->capabilities & CODEC_CAP_DR1)) {
         upipe_verbose(upipe, "no direct rendering, using default");
-        return avcodec_default_get_buffer(context, frame);
+        return avcodec_default_get_buffer2(context, frame, 0);
     }
 
     /* Direct rendering */
@@ -384,7 +384,6 @@ static int upipe_avcdec_get_buffer_pic(struct AVCodecContext *context,
         frame->linesize[plane] = stride;
     }
     frame->extended_data = frame->data;
-    frame->type = FF_BUFFER_TYPE_USER;
 
     return 0; /* success */
 }
@@ -519,7 +518,7 @@ static int upipe_avcdec_get_buffer_sound(struct AVCodecContext *context,
     uref->uchain.next = uref_to_uchain(flow_def_attr);
 
     if (!(context->codec->capabilities & CODEC_CAP_DR1))
-        return avcodec_default_get_buffer(context, frame);
+        return avcodec_default_get_buffer2(context, frame, 0);
 
     /* Direct rendering */
     if (unlikely(!ubase_check(ubuf_sound_write_uint8_t(ubuf, 0, -1, frame->data,
@@ -537,7 +536,6 @@ static int upipe_avcdec_get_buffer_sound(struct AVCodecContext *context,
         frame->linesize[0] *= context->channels;
 
     frame->extended_data = frame->data;
-    frame->type = FF_BUFFER_TYPE_USER;
 
     return 0; /* success */
 }
@@ -1364,7 +1362,7 @@ static void upipe_avcdec_free(struct upipe *upipe)
         free(upipe_avcdec->context->extradata);
         av_free(upipe_avcdec->context);
     }
-    av_free(upipe_avcdec->frame);
+    av_frame_free(&upipe_avcdec->frame);
 
     upipe_throw_dead(upipe);
     uref_free(upipe_avcdec->uref);
@@ -1394,13 +1392,13 @@ static struct upipe *upipe_avcdec_alloc(struct upipe_mgr *mgr,
                                         struct uprobe *uprobe,
                                         uint32_t signature, va_list args)
 {
-    AVFrame *frame = avcodec_alloc_frame();
+    AVFrame *frame = av_frame_alloc();
     if (unlikely(frame == NULL))
         return NULL;
 
     struct upipe *upipe = upipe_avcdec_alloc_void(mgr, uprobe, signature, args);
     if (unlikely(upipe == NULL)) {
-        av_free(frame);
+        av_frame_free(&frame);
         return NULL;
     }
     upipe_avcdec_init_urefcount(upipe);
