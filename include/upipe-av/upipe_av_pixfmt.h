@@ -58,6 +58,13 @@ static inline int upipe_av_pixfmt_to_flow_def(enum AVPixelFormat pix_fmt,
 {
     UBASE_RETURN(uref_pic_flow_set_planes(flow_def, 0))
     switch (pix_fmt) {
+        case AV_PIX_FMT_YUVA420P:
+            UBASE_RETURN(uref_pic_flow_set_macropixel(flow_def, 1))
+            UBASE_RETURN(uref_pic_flow_add_plane(flow_def, 1, 1, 1, "y8"))
+            UBASE_RETURN(uref_pic_flow_add_plane(flow_def, 2, 2, 1, "u8"))
+            UBASE_RETURN(uref_pic_flow_add_plane(flow_def, 2, 2, 1, "v8"))
+            UBASE_RETURN(uref_pic_flow_add_plane(flow_def, 1, 1, 1, "a8"))
+            break;
         case AV_PIX_FMT_YUV420P:
         case AV_PIX_FMT_YUVJ420P:
             UBASE_RETURN(uref_pic_flow_set_macropixel(flow_def, 1))
@@ -210,6 +217,7 @@ static inline enum AVPixelFormat
                                   const char *chroma_p[UPIPE_AV_MAX_PLANES])
 {
     static const enum AVPixelFormat supported_fmts[] = {
+        AV_PIX_FMT_YUVA420P,
         AV_PIX_FMT_YUV420P,
         AV_PIX_FMT_YUVJ420P,
         AV_PIX_FMT_YUV422P,
@@ -251,6 +259,20 @@ static inline enum AVPixelFormat
 #define u ubase_check
     while (*pix_fmts != -1) {
         switch (*pix_fmts) {
+            case AV_PIX_FMT_YUVA420P:
+                if (macropixel == 1 &&
+                    u(uref_pic_flow_check_chroma(flow_def, 1, 1, 1, "y8")) &&
+                    u(uref_pic_flow_check_chroma(flow_def, 2, 2, 1, "u8")) &&
+                    u(uref_pic_flow_check_chroma(flow_def, 2, 2, 1, "v8")) &&
+                    u(uref_pic_flow_check_chroma(flow_def, 1, 1, 1, "a8"))) {
+                    chroma_p[0] = "y8";
+                    chroma_p[1] = "u8";
+                    chroma_p[2] = "v8";
+                    chroma_p[3] = "a8";
+                    chroma_p[4] = NULL;
+                    return *pix_fmts;
+                }
+                break;
             case AV_PIX_FMT_YUV420P:
             case AV_PIX_FMT_YUVJ420P:
                 if (macropixel == 1 &&
