@@ -1987,9 +1987,7 @@ static bool upipe_h264f_nal_begin(struct upipe *upipe, struct upump **upump_p)
 
         case H264NAL_TYPE_ENDSEQ:
         case H264NAL_TYPE_ENDSTR:
-            /* immediately output everything and jump out */
-            upipe_h264f_output_au(upipe, upump_p);
-            return true;
+            return false;
 
         case H264NAL_TYPE_AUD:
         case H264NAL_TYPE_SPS:
