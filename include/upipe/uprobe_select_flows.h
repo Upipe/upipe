@@ -70,6 +70,20 @@ struct uprobe *uprobe_selflow_alloc(struct uprobe *next,
                                     enum uprobe_selflow_type type,
                                     const char *flows);
 
+/** @This allocates a new uprobe_selflow structure, with printf-style syntax.
+ *
+ * @param next next probe to test if this one doesn't catch the event
+ * @param subprobe probe to set on flow subpipes
+ * @param type type of flows to filter
+ * @param format printf-style format for the flows, followed by optional
+ * arguments
+ * @return pointer to uprobe, or NULL in case of error
+ */
+struct uprobe *uprobe_selflow_alloc_va(struct uprobe *next,
+                                       struct uprobe *subprobe,
+                                       enum uprobe_selflow_type type,
+                                       const char *format, ...);
+
 /** @This returns the flows selected by this probe.
  *
  * @param uprobe pointer to probe
