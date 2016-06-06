@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2013 OpenHeadend S.A.R.L.
+ * Copyright (C) 2013-2016 OpenHeadend S.A.R.L.
  *
  * Authors: Christophe Massiot
  *
@@ -61,8 +61,8 @@ enum uprobe_selflow_type {
  * @param subprobe probe to set on flow subpipes
  * @param type type of flows to filter
  * @param flows comma-separated list of flows or attribute/value pairs
- * (lang=eng or name=ABC) to select, terminated by a comma, or "auto" to
- * automatically select the first flow, or "all"
+ * (lang=eng or name=ABC) to select, or "auto" to automatically select the
+ * first flow, or "all"
  * @return pointer to uprobe, or NULL in case of error
  */
 struct uprobe *uprobe_selflow_alloc(struct uprobe *next,
@@ -96,8 +96,8 @@ void uprobe_selflow_get(struct uprobe *uprobe, const char **flows_p);
  *
  * @param uprobe pointer to probe
  * @param flows comma-separated list of flows or attribute/value pairs
- * (lang=eng or name=ABC) to select, terminated by a comma, or "auto" to
- * automatically select the first flow, or "all"
+ * (lang=eng or name=ABC) to select, or "auto" to automatically select the
+ * first flow, or "all"
  * @return an error code
  */
 int uprobe_selflow_set(struct uprobe *uprobe, const char *flows);
