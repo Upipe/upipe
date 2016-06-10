@@ -167,7 +167,7 @@ static inline int
     if (tmp == AV_SAMPLE_FMT_NONE)
         return UBASE_ERR_INVALID;
 
-    :f (planes == 1 && tmp == fmt)
+    if (planes == 1 && tmp == fmt)
         return UBASE_ERR_NONE;
     tmp = av_get_planar_sample_fmt(tmp);
     if ((channels == 1 || planes > 1) && tmp == fmt)
