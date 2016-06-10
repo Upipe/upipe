@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2013-2014 OpenHeadend S.A.R.L.
+ * Copyright (C) 2013-2016 OpenHeadend S.A.R.L.
  *
  * Authors: Christophe Massiot
  *
@@ -149,8 +149,11 @@ static inline int
                                       enum AVSampleFormat fmt)
 {
     const char *def;
+    uint8_t channels;
     uint8_t planes;
     if (unlikely(!ubase_check(uref_flow_get_def(flow_def, &def)) ||
+                 !ubase_check(uref_sound_flow_get_channels(flow_def,
+                                                           &channels)) ||
                  !ubase_check(uref_sound_flow_get_planes(flow_def, &planes))))
         return UBASE_ERR_INVALID;
     enum AVSampleFormat tmp = AV_SAMPLE_FMT_NONE;
@@ -161,9 +164,13 @@ static inline int
             break;
         }
     }
-    if (tmp == fmt)
+    if (tmp == AV_SAMPLE_FMT_NONE)
+        return UBASE_ERR_INVALID;
+
+    :f (planes == 1 && tmp == fmt)
         return UBASE_ERR_NONE;
-    if (planes == 1 && av_get_planar_sample_fmt(tmp) == fmt)
+    tmp = av_get_planar_sample_fmt(tmp);
+    if ((channels == 1 || planes > 1) && tmp == fmt)
         return UBASE_ERR_NONE;
     return UBASE_ERR_INVALID;
 }
