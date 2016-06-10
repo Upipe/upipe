@@ -308,6 +308,8 @@ struct upipe_ts_mux {
     uint64_t total_octetrate;
     /** calculated required octetrate including overheads, PMTs and PAT */
     uint64_t required_octetrate;
+    /** true if @ref upipe_ts_mux_update is running */
+    bool octetrate_in_progress;
     /** interval between packets (rounded up, not to be used anywhere
      * critical */
     uint64_t interval;
@@ -2297,6 +2299,7 @@ static struct upipe *upipe_ts_mux_alloc(struct upipe_mgr *mgr,
     upipe_ts_mux->padding_octetrate = 0;
     upipe_ts_mux->total_octetrate = 0;
     upipe_ts_mux->required_octetrate = 0;
+    upipe_ts_mux->octetrate_in_progress = false;
     upipe_ts_mux->interval = 0;
 
     ulist_init(&upipe_ts_mux->psi_pids);
@@ -2961,6 +2964,10 @@ static void upipe_ts_mux_notice(struct upipe *upipe)
 static void upipe_ts_mux_update(struct upipe *upipe)
 {
     struct upipe_ts_mux *mux = upipe_ts_mux_from_upipe(upipe);
+    if (mux->octetrate_in_progress)
+        return;
+    mux->octetrate_in_progress = true;
+
     uint64_t required_octetrate = mux->padding_octetrate;
     struct uchain *uchain;
     ulist_foreach (&mux->psi_pids, uchain) {
@@ -2988,10 +2995,7 @@ static void upipe_ts_mux_update(struct upipe *upipe)
     if (!total_octetrate)
         total_octetrate = required_octetrate;
 
-    /* Only go down if required octetrate is inferior by at least 5% to avoid
-     * bouncing. */
-    if (total_octetrate > mux->total_octetrate ||
-        total_octetrate < mux->total_octetrate - mux->total_octetrate / 20) {
+    if (total_octetrate != mux->total_octetrate) {
         mux->total_octetrate = total_octetrate;
         upipe_ts_mux_build_flow_def(upipe);
         upipe_ts_mux_set_upump(upipe, NULL);
@@ -3054,6 +3058,7 @@ static void upipe_ts_mux_update(struct upipe *upipe)
             }
         }
     }
+    mux->octetrate_in_progress = false;
 }
 
 /** @internal @This builds the output flow definition.
