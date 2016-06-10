@@ -50,6 +50,9 @@ matrix:
         - HOST_CXX=clang++
         - CFLAGS="-Wno-error=unused-function -Wno-error=unused-command-line-argument"
 
+  allow_failures:
+    - compiler: clang-3.7
+
 before_install:
   - if type apt-get 2>/dev/null; then
       sudo dpkg --add-architecture i386;
