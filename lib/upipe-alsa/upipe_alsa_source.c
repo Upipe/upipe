@@ -313,7 +313,7 @@ static bool upipe_alsource_open(struct upipe *upipe)
     }
     upipe_alsource->period_samples = frames_in_period;
 
-    snd_pcm_uframes_t buffer_size = frames_in_period * 4;
+    snd_pcm_uframes_t buffer_size = frames_in_period * 2;
     if (snd_pcm_hw_params_set_buffer_size_min(upipe_alsource->handle, hwparams,
                                               &buffer_size) < 0) {
         upipe_err_va(upipe, "error setting buffer size on device %s", uri);
