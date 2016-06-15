@@ -568,6 +568,13 @@ static bool upipe_avcdec_do_av_deal(struct upipe *upipe)
     if (upipe_avcdec->close) {
         upipe_notice_va(upipe, "codec %s (%s) %d closed", context->codec->name, 
                         context->codec->long_name, context->codec->id);
+
+        if (upipe_avcdec->uref != NULL &&
+                upipe_avcdec->context->codec->type == AVMEDIA_TYPE_AUDIO &&
+                upipe_avcdec->uref->ubuf != NULL &&
+                upipe_avcdec->context->codec->capabilities & CODEC_CAP_DR1)
+            uref_sound_unmap(upipe_avcdec->uref, 0, -1, AV_NUM_DATA_POINTERS);
+
         avcodec_close(context);
         return false;
     }
