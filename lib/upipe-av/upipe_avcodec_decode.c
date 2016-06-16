@@ -204,6 +204,8 @@ static int upipe_avcdec_check(struct upipe *upipe, struct uref *flow_format)
     return UBASE_ERR_NONE;
 }
 
+static void upipe_av_uref_pic_free(void *opaque, uint8_t *data);
+
 /* Documentation from libavcodec.h (get_buffer) :
  * The function will set AVFrame.data[], AVFrame.linesize[].
  * AVFrame.extended_data[] must also be set, but it should be the same as
@@ -234,7 +236,8 @@ static int upipe_avcdec_check(struct upipe *upipe, struct uref *flow_format)
  * @param frame avframe handler entering avcodec black magic box
  */
 static int upipe_avcdec_get_buffer_pic(struct AVCodecContext *context,
-                                       AVFrame *frame)
+                                       AVFrame *frame,
+                                       int flags)
 {
     struct upipe *upipe = context->opaque;
     struct upipe_avcdec *upipe_avcdec = upipe_avcdec_from_upipe(upipe);
@@ -339,12 +342,9 @@ static int upipe_avcdec_get_buffer_pic(struct AVCodecContext *context,
     /* Allocate a ubuf */
     struct ubuf *ubuf = ubuf_pic_alloc(upipe_avcdec->ubuf_mgr,
                                        width_aligned, height_aligned);
-    if (unlikely(ubuf == NULL)) {
-        uref_free(uref);
-        uref_free(flow_def_attr);
-        upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
-        return -1;
-    }
+    if (unlikely(ubuf == NULL))
+        goto error;
+
     ubuf_pic_clear(ubuf, 0, 0, -1, -1, 0);
     uref_attach_ubuf(uref, ubuf);
 
@@ -361,73 +361,71 @@ static int upipe_avcdec_get_buffer_pic(struct AVCodecContext *context,
     /* Iterate over the flow def attr because it's designed to be in the correct
      * chroma order, while the ubuf manager is not necessarily. */
     uint8_t planes;
-    if (unlikely(!ubase_check(uref_pic_flow_get_planes(flow_def_attr, &planes)))) {
-        uref_free(uref);
-        uref_free(flow_def_attr);
-        upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
-        return -1;
-    }
+    if (unlikely(!ubase_check(uref_pic_flow_get_planes(flow_def_attr, &planes))))
+        goto error;
+
+    /* Use this as an avcodec refcount */
+    uref_attr_set_priv(uref, planes);
 
     for (uint8_t plane = 0; plane < planes; plane++) {
         const char *chroma;
         size_t stride = 0;
+        uint8_t vsub = 1;
         if (unlikely(!ubase_check(uref_pic_flow_get_chroma(flow_def_attr, &chroma, plane)) ||
                      !ubase_check(ubuf_pic_plane_write(ubuf, chroma, 0, 0, -1, -1,
                                            &frame->data[plane])) ||
-                     !ubase_check(ubuf_pic_plane_size(ubuf, chroma, &stride, NULL, NULL,
+                     !ubase_check(ubuf_pic_plane_size(ubuf, chroma, &stride, NULL, &vsub,
                                           NULL)))) {
-            uref_free(uref);
-            uref_free(flow_def_attr);
-            upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
-            return -1;
+            // XXX: missing unmap and release av_buffer for previous planes
+            goto error;
         }
+
         frame->linesize[plane] = stride;
+        frame->buf[plane] = av_buffer_create(frame->data[plane], stride * height_aligned / vsub,
+                upipe_av_uref_pic_free, uref, 0);
     }
+
     frame->extended_data = frame->data;
 
     return 0; /* success */
+
+error:
+    uref_free(uref);
+    uref_free(flow_def_attr);
+    upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
+    return -1;
 }
 
-/** @internal @This is called by avcodec when releasing a picture.
- *
- * @param context current avcodec context
- * @param frame avframe handler released by avcodec black magic box
- */
-static void upipe_avcdec_release_buffer_pic(struct AVCodecContext *context,
-                                            AVFrame *frame)
+static void upipe_av_uref_pic_free(void *opaque, uint8_t *data)
 {
-    struct upipe *upipe = context->opaque;
-    struct uref *uref = frame->opaque;
+	struct uref *uref = opaque;
+
+    uint64_t buffers;
+    if (unlikely(!ubase_check(uref_attr_get_priv(uref, &buffers))))
+        return;
+    if (--buffers) {
+        uref_attr_set_priv(uref, buffers);
+        return;
+    }
+
     struct uref *flow_def_attr = uref_from_uchain(uref->uchain.next);
-    uref->uchain.next = NULL;
 
-    uint64_t framenum = 0;
-    uref_pic_get_number(uref, &framenum);
+    assert(flow_def_attr);
 
-    upipe_verbose_va(upipe, "Releasing frame %"PRIu64" (%p)", (uint64_t) framenum, uref);
-
-    if (!(context->codec->capabilities & CODEC_CAP_DR1)) {
-        avcodec_default_release_buffer(context, frame);
-        uref_free(flow_def_attr);
-        uref_free(uref);
-        return;
-    }
-
-    /* Direct rendering */
     uint8_t planes;
-    if (unlikely(!ubase_check(uref_pic_flow_get_planes(flow_def_attr, &planes)))) {
-        uref_free(flow_def_attr);
-        uref_free(uref);
-        upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
-        return;
-    }
+    if (unlikely(!ubase_check(uref_pic_flow_get_planes(flow_def_attr, &planes))))
+        goto end;
 
     for (uint8_t plane = 0; plane < planes; plane++) {
         const char *chroma;
-        if (ubase_check(uref_pic_flow_get_chroma(flow_def_attr, &chroma, plane)))
-            ubuf_pic_plane_unmap(uref->ubuf, chroma, 0, 0, -1, -1);
-        frame->data[plane] = NULL;
+        if (!ubase_check(uref_pic_flow_get_chroma(flow_def_attr, &chroma, plane)))
+            goto end;
+
+        /* unmap call in avcodec get_buffer2 */
+        ubuf_pic_plane_unmap(uref->ubuf, chroma, 0, 0, -1, -1);
     }
+
+end:
     uref_free(flow_def_attr);
     uref_free(uref);
 }
@@ -439,7 +437,7 @@ static void upipe_avcdec_release_buffer_pic(struct AVCodecContext *context,
  * @param frame avframe handler entering avcodec black magic box
  */
 static int upipe_avcdec_get_buffer_sound(struct AVCodecContext *context,
-                                         AVFrame *frame)
+                                         AVFrame *frame, int flags)
 {
     struct upipe *upipe = context->opaque;
     struct upipe_avcdec *upipe_avcdec = upipe_avcdec_from_upipe(upipe);
@@ -570,21 +568,27 @@ static bool upipe_avcdec_do_av_deal(struct upipe *upipe)
     if (upipe_avcdec->close) {
         upipe_notice_va(upipe, "codec %s (%s) %d closed", context->codec->name, 
                         context->codec->long_name, context->codec->id);
+
+        if (upipe_avcdec->uref != NULL &&
+                upipe_avcdec->context->codec->type == AVMEDIA_TYPE_AUDIO &&
+                upipe_avcdec->uref->ubuf != NULL &&
+                upipe_avcdec->context->codec->capabilities & CODEC_CAP_DR1)
+            uref_sound_unmap(upipe_avcdec->uref, 0, -1, AV_NUM_DATA_POINTERS);
+
         avcodec_close(context);
         return false;
     }
 
     switch (context->codec->type) {
         case AVMEDIA_TYPE_VIDEO:
-            context->get_buffer = upipe_avcdec_get_buffer_pic;
-            context->release_buffer = upipe_avcdec_release_buffer_pic;
+            context->get_buffer2 = upipe_avcdec_get_buffer_pic;
             /* otherwise we need specific prepend/append/align */
             context->flags |= CODEC_FLAG_EMU_EDGE;
+            context->refcounted_frames = 1;
             break;
         case AVMEDIA_TYPE_AUDIO:
-            context->get_buffer = upipe_avcdec_get_buffer_sound;
-            context->release_buffer = NULL;
-            /* release_buffer is not called for audio */
+            context->get_buffer2 = upipe_avcdec_get_buffer_sound;
+            /* audio frames are not refcounted */
             break;
         default:
             /* This should not happen */
