@@ -129,6 +129,7 @@ static struct upipe *upipe_s302f_alloc(struct upipe_mgr *mgr,
     upipe_s302f->octetrate = 0;
     upipe_s302f->next_uref = NULL;
     upipe_s302f->next_uref_size = 0;
+    uref_init(&upipe_s302f->au_uref_s);
     upipe_throw_ready(upipe);
     return upipe;
 }
