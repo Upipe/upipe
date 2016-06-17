@@ -500,7 +500,7 @@ static bool upipe_avcenc_encode_frame(struct upipe *upipe,
 
     struct ubuf *ubuf = ubuf_block_alloc(upipe_avcenc->ubuf_mgr, avpkt.size);
     if (unlikely(ubuf == NULL)) {
-        av_free_packet(&avpkt);
+        av_packet_unref(&avpkt);
         upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
         return false;
     }
@@ -509,23 +509,27 @@ static bool upipe_avcenc_encode_frame(struct upipe *upipe,
     uint8_t *buf;
     if (unlikely(!ubase_check(ubuf_block_write(ubuf, 0, &size, &buf)))) {
         ubuf_free(ubuf);
-        av_free_packet(&avpkt);
+        av_packet_unref(&avpkt);
         upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
         return false;
     }
     memcpy(buf, avpkt.data, size);
     ubuf_block_unmap(ubuf, 0);
-    av_free_packet(&avpkt);
+
+    int64_t pkt_pts = avpkt.pts, pkt_dts = avpkt.dts;
+    bool keyframe = avpkt.flags & AV_PKT_FLAG_KEY;
+
+    av_packet_unref(&avpkt);
 
     /* find uref corresponding to avpkt */
-    upipe_verbose_va(upipe, "output pts %"PRId64, avpkt.pts);
+    upipe_verbose_va(upipe, "output pts %"PRId64, pkt_pts);
     struct uchain *uchain;
     struct uchain *uchain_tmp;
     struct uref *uref = NULL;
     ulist_delete_foreach (&upipe_avcenc->urefs_in_use, uchain, uchain_tmp) {
         struct uref *uref_chain = uref_from_uchain(uchain);
         int64_t priv = 0;
-        if (ubase_check(uref_avcenc_get_priv(uref_chain, &priv)) && priv == avpkt.pts) {
+        if (ubase_check(uref_avcenc_get_priv(uref_chain, &priv)) && priv == pkt_pts) {
             uref = uref_chain;
             ulist_delete(uchain);
             break;
@@ -533,7 +537,7 @@ static bool upipe_avcenc_encode_frame(struct upipe *upipe,
     }
     if (unlikely(uref == NULL)) {
         upipe_warn_va(upipe, "could not find pts %"PRId64" in urefs in use",
-                      avpkt.pts);
+                      pkt_pts);
         ubuf_free(ubuf);
         return false;
     }
@@ -559,7 +563,7 @@ static bool upipe_avcenc_encode_frame(struct upipe *upipe,
     uref_avcenc_delete_priv(uref);
 
     /* set dts */
-    uint64_t dts_pts_delay = (uint64_t)(avpkt.pts - avpkt.dts) * UCLOCK_FREQ
+    uint64_t dts_pts_delay = (uint64_t)(pkt_pts - pkt_dts) * UCLOCK_FREQ
                               * context->time_base.num
                               / context->time_base.den;
     uref_clock_set_dts_pts_delay(uref, dts_pts_delay);
@@ -604,7 +608,7 @@ static bool upipe_avcenc_encode_frame(struct upipe *upipe,
     upipe_avcenc->last_dts = dts;
     upipe_avcenc->last_dts_sys = dts_sys;
 
-    if (codec->type == AVMEDIA_TYPE_VIDEO && (avpkt.flags & AV_PKT_FLAG_KEY))
+    if (codec->type == AVMEDIA_TYPE_VIDEO && keyframe)
         uref_flow_set_random(uref);
 
     if (upipe_avcenc->flow_def == NULL)
