@@ -998,8 +998,8 @@ static bool upipe_avcdec_decode_avpkt(struct upipe *upipe, AVPacket *avpkt,
 {
     struct upipe_avcdec *upipe_avcdec = upipe_avcdec_from_upipe(upipe);
     int gotframe = 0, len;
-    switch (upipe_avcdec->context->codec->type)
-        case AVMEDIA_TYPE_VIDEO: {
+    switch (upipe_avcdec->context->codec->type) {
+        case AVMEDIA_TYPE_VIDEO:
             len = avcodec_decode_video2(upipe_avcdec->context,
                                         upipe_avcdec->frame,
                                         &gotframe, avpkt);
@@ -1027,12 +1027,11 @@ static bool upipe_avcdec_decode_avpkt(struct upipe *upipe, AVPacket *avpkt,
             }
             break;
 
-        default: {
+        default:
             /* should never be here */
             upipe_err_va(upipe, "Unsupported media type (%d)",
                          upipe_avcdec->context->codec->type);
             break;
-        }
     }
     return !!gotframe;
 }
