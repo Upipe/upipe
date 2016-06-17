@@ -800,7 +800,6 @@ static void upipe_avcdec_set_time_attributes(struct upipe *upipe,
 /** @internal @This outputs video frames.
  *
  * @param upipe description structure of the pipe
- * @param frame AVFrame structure
  * @param upump_p reference to upump structure
  */
 static void upipe_avcdec_output_pic(struct upipe *upipe, struct upump **upump_p)
