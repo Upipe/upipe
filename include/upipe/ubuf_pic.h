@@ -336,12 +336,21 @@ static inline int ubuf_pic_resize(struct ubuf *ubuf, int hskip, int vskip,
  * @param src_voffset number of lines to skip at the beginning of src
  * @param extract_hsize horizontal size to copy
  * @param extract_vsize vertical size to copy
+ * @param alpha_plane pointer to alpha plane buffer, if any
+ * @param alpha_stride horizontal stride of the alpha plane buffer
+ * @param threshold alpha blending method
+ *    0 means ignore alpha
+ *    255 means blends src and dest together using alpha levels (slow)
+ *    Any value in between means using the src pixels if and only if
+ *      their alpha value is more than this value
  * @return an error code
  */
-static inline int ubuf_pic_blit(struct ubuf *dest, struct ubuf *src,
+static inline int ubuf_pic_blit_alpha(struct ubuf *dest, struct ubuf *src,
                                 int dest_hoffset, int dest_voffset,
                                 int src_hoffset, int src_voffset,
-                                int extract_hsize, int extract_vsize)
+                                int extract_hsize, int extract_vsize,
+                                const uint8_t *alpha_plane, int alpha_stride,
+                                const uint8_t threshold)
 {
     uint8_t src_macropixel;
     UBASE_RETURN(ubuf_pic_size(src, NULL, NULL, &src_macropixel))
@@ -388,7 +397,23 @@ static inline int ubuf_pic_blit(struct ubuf *dest, struct ubuf *src,
         int plane_vsize = extract_vsize / src_vsub;
 
         for (int i = 0; i < plane_vsize; i++) {
-            memcpy(dest_buffer, src_buffer, plane_hsize);
+            if (!alpha_plane || threshold == 0) {
+                memcpy(dest_buffer, src_buffer, plane_hsize);
+            } else if (threshold != 0xff) {
+                /* This is an on/off blending
+                 * if alpha is over the threshold, we use the subpicture pixel.
+                 */
+                for (int j = 0; j < plane_hsize; j++) {
+                    const uint8_t a = alpha_plane[alpha_stride * (i * src_vsub) + j * src_hsub];
+                    if (a > threshold) dest_buffer[j] = src_buffer[j];
+                }
+            } else {
+                /* smooth and slow blending */
+                for (int j = 0; j < plane_hsize; j++) {
+                    const uint8_t a = alpha_plane[alpha_stride * (i * src_vsub) + j * src_hsub];
+                    dest_buffer[j] = (dest_buffer[j] * (0xff - a) + src_buffer[j] * a) / 0xff;
+                }
+            }
             dest_buffer += dest_stride;
             src_buffer += src_stride;
         }
@@ -402,6 +427,51 @@ static inline int ubuf_pic_blit(struct ubuf *dest, struct ubuf *src,
         UBASE_RETURN(err)
     }
     return UBASE_ERR_NONE;
+}
+
+/** @This blits a picture ubuf to another ubuf.
+ *
+ * @param dest destination ubuf
+ * @param src source ubuf
+ * @param dest_hoffset number of pixels to seek at the beginning of each line of
+ * dest
+ * @param dest_voffset number of lines to seek at the beginning of dest
+ * @param src_hoffset number of pixels to skip at the beginning of each line of
+ * src
+ * @param src_voffset number of lines to skip at the beginning of src
+ * @param extract_hsize horizontal size to copy
+ * @param extract_vsize vertical size to copy
+ * @param threshold alpha parameter
+ * @return an error code
+ */
+static inline int ubuf_pic_blit(struct ubuf *dest, struct ubuf *src,
+                                int dest_hoffset, int dest_voffset,
+                                int src_hoffset, int src_voffset,
+                                int extract_hsize, int extract_vsize,
+                                const uint8_t threshold)
+{
+    const uint8_t *alpha;
+    size_t alpha_stride = 0;
+    int ret;
+
+    if (!ubase_check(ubuf_pic_plane_read(src, "a8", 0, 0, -1, -1, &alpha))) {
+        alpha = NULL;
+    } else if (unlikely(!ubase_check(ubuf_pic_plane_size(src, "a8", &alpha_stride,
+                            NULL, NULL, NULL)))) {
+        ret = UBASE_ERR_INVALID;
+        goto end;
+    }
+
+    ret = ubuf_pic_blit_alpha(dest, src, dest_hoffset, dest_voffset,
+                                src_hoffset, src_voffset,
+                                extract_hsize, extract_vsize,
+                                alpha, alpha_stride, threshold);
+
+end:
+    if (alpha)
+        ubuf_pic_plane_unmap(src, "a8", 0, 0, -1, -1);
+
+    return ret;
 }
 
 /** @This copies a picture ubuf to a newly allocated ubuf, and doesn't deal
@@ -462,7 +532,7 @@ static inline struct ubuf *ubuf_pic_copy(struct ubuf_mgr *mgr,
     if (unlikely(!ubase_check(ubuf_pic_blit(new_ubuf, ubuf,
                         dest_hoffset, dest_voffset,
                         src_hoffset, src_voffset,
-                        extract_hsize, extract_vsize)))) {
+                        extract_hsize, extract_vsize, 0)))) {
         ubuf_free(new_ubuf);
         return NULL;
     }

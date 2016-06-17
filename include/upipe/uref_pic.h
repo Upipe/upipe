@@ -173,30 +173,18 @@ static inline int uref_pic_clear(struct uref *uref,
     return ubuf_pic_clear(uref->ubuf, hoffset, voffset, hsize, vsize, fullrange);
 }
 
-/** @This blits a picture ubuf to an uref.
- *
- * @param uref pointer to uref structure
- * @param ubuf pointer to ubuf structure
- * @param dest_hoffset number of pixels to seek at the beginning of each line of
- * dest
- * @param dest_voffset number of lines to seek at the beginning of dest
- * @param src_hoffset number of pixels to skip at the beginning of each line of
- * src
- * @param src_voffset number of lines to skip at the beginning of src
- * @param extract_hsize horizontal size to copy
- * @param extract_vsize vertical size to copy
- * @return an error code
- */
+/** @see ubuf_pic_blit */
 static inline int uref_pic_blit(struct uref *uref, struct ubuf *ubuf,
                                 int dest_hoffset, int dest_voffset,
                                 int src_hoffset, int src_voffset,
-                                int extract_hsize, int extract_vsize)
+                                int extract_hsize, int extract_vsize,
+                                const uint8_t threshold)
 {
     if (uref->ubuf == NULL)
         return UBASE_ERR_INVALID;
     return ubuf_pic_blit(uref->ubuf, ubuf, dest_hoffset, dest_voffset,
                          src_hoffset, src_voffset,
-                         extract_hsize, extract_vsize);
+                         extract_hsize, extract_vsize, threshold);
 }
 
 /** @This allocates a new ubuf of size new_hsize/new_vsize, and copies part of
