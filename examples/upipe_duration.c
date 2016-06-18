@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2013-2014 OpenHeadend S.A.R.L.
+ * Copyright (C) 2013-2016 OpenHeadend S.A.R.L.
  *
  * Authors: Christophe Massiot
  *
@@ -99,6 +99,12 @@ static int count_control(struct upipe *upipe, int command, va_list args)
 {
     switch (command) {
         case UPIPE_SET_FLOW_DEF:
+            return UBASE_ERR_NONE;
+        case UPIPE_REGISTER_REQUEST: {
+            struct urequest *urequest = va_arg(args, struct urequest *);
+            return upipe_throw_provide_request(upipe, urequest);
+        }
+        case UPIPE_UNREGISTER_REQUEST:
             return UBASE_ERR_NONE;
         default:
             assert(0);
