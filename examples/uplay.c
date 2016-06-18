@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2014-2015 OpenHeadend S.A.R.L.
+ * Copyright (C) 2014-2016 OpenHeadend S.A.R.L.
  *
  * Authors: Christophe Massiot
  *
@@ -112,6 +112,8 @@ static const char *select_video = "auto";
 static const char *select_audio = "auto";
 /** selflow string for program */
 static const char *select_program = "auto";
+/** trickplay rate */
+static struct urational trickp_rate = { 1, 1 };
 /* upump manager for the main thread */
 static struct upump_mgr *main_upump_mgr = NULL;
 /* main (thread-safe) probe, whose first element is uprobe_pthread_upump_mgr */
@@ -419,6 +421,7 @@ static void uplay_start(struct upump *upump)
         assert(trickp != NULL);
         upipe_mgr_release(upipe_trickp_mgr);
         upipe_attach_uclock(trickp);
+        upipe_trickp_set_rate(trickp, trickp_rate);
     }
 
     struct upipe_mgr *upipe_play_mgr = upipe_play_mgr_alloc();
@@ -526,7 +529,7 @@ static void upump_mgr_free(struct upump_mgr *upump_mgr)
 }
 
 static void usage(const char *argv0) {
-    fprintf(stderr, "Usage: %s [-d] [-q] [-u] [-A <audio>] [-V <video>] [-P <program>] <source>\n", argv0);
+    fprintf(stderr, "Usage: %s [-d] [-q] [-u] [-A <audio>] [-V <video>] [-P <program>] [-R 1:1] <source>\n", argv0);
     exit(EXIT_FAILURE);
 }
 
@@ -534,7 +537,7 @@ int main(int argc, char **argv)
 {
     enum uprobe_log_level loglevel = UPROBE_LOG_LEVEL;
     int opt;
-    while ((opt = getopt(argc, argv, "udqA:V:P:")) != -1) {
+    while ((opt = getopt(argc, argv, "udqA:V:P:R:")) != -1) {
         switch (opt) {
             case 'u':
                 udp = true;
@@ -554,6 +557,14 @@ int main(int argc, char **argv)
             case 'P':
                 select_program = optarg;
                 break;
+            case 'R': {
+                char *end;
+                trickp_rate.num = strtoul(optarg, &end, 10);
+                if (*end == ':')
+                    end++;
+                trickp_rate.den = strtoul(end, NULL, 10);
+                break;
+            }
             default:
                 usage(argv[0]);
                 break;
