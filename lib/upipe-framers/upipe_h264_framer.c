@@ -437,7 +437,7 @@ static inline int upipe_h264f_stream_get(struct ubuf_block_stream *s,
     if (unlikely(!*octet_p))
         f->zeros |= 1;
     else if (unlikely(*octet_p == 3 && (f->zeros & 6) == 6)) /* escape word */
-        return ubuf_block_stream_get(s, octet_p);
+        return upipe_h264f_stream_get(s, octet_p);
     return UBASE_ERR_NONE;
 }
 
