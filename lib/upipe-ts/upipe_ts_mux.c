@@ -64,6 +64,7 @@
 #include <upipe/upipe_helper_bin_input.h>
 #include <upipe/upipe_helper_subpipe.h>
 #include <upipe-framers/uref_h264_flow.h>
+#include <upipe-framers/uref_h265_flow.h>
 #include <upipe-framers/uref_mpga_flow.h>
 #include <upipe-framers/uref_mpgv_flow.h>
 #include <upipe-ts/uref_ts_flow.h>
@@ -124,6 +125,8 @@
 #define MAX_DELAY UCLOCK_FREQ
 /** max retention time for ISO/IEC 14496 streams (ISO/IEC 13818-1 2.4.2.6) */
 #define MAX_DELAY_14496 (UCLOCK_FREQ * 10)
+/** max retention time for HEVC streams (FIXME) */
+#define MAX_DELAY_HEVC (UCLOCK_FREQ * 10)
 /** max retention time for still pictures streams (ISO/IEC 13818-1 2.4.2.6) */
 #define MAX_DELAY_STILL (UCLOCK_FREQ * 60)
 /** max retention time for teletext (ETSI EN 300 472 5.) */
@@ -1064,6 +1067,8 @@ static int upipe_ts_mux_input_set_flow_def(struct upipe *upipe,
             max_delay = MAX_DELAY_14496;
         } else if (!ubase_ncmp(def, "block.h264.")) {
             max_delay = MAX_DELAY_14496;
+        } else if (!ubase_ncmp(def, "block.hevc.")) {
+            max_delay = MAX_DELAY_HEVC;
         }
         UBASE_FATAL(upipe, uref_ts_flow_set_pes_id(flow_def_dup,
                                                 PES_STREAM_ID_VIDEO_MPEG));
@@ -1308,6 +1313,8 @@ static int upipe_ts_mux_provide_flow_format(struct upipe *upipe,
     if (likely(ubase_check(uref_flow_get_def(flow_format, &def)))) {
         if (!ubase_ncmp(def, "block.h264."))
             uref_h264_flow_set_annexb(flow_format);
+        else if (!ubase_ncmp(def, "block.hevc."))
+            uref_h265_flow_set_annexb(flow_format);
         else if (!ubase_ncmp(def, "block.aac."))
             uref_mpga_flow_set_adts(flow_format);
         else if (!ubase_ncmp(def, "block.mpeg1video.") ||

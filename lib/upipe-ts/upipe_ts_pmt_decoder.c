@@ -40,6 +40,7 @@
 #include <upipe/upipe_helper_ubuf_mgr.h>
 #include <upipe/upipe_helper_flow_def.h>
 #include <upipe-framers/uref_h264_flow.h>
+#include <upipe-framers/uref_h265_flow.h>
 #include <upipe-framers/uref_mpga_flow.h>
 #include <upipe-ts/upipe_ts_pmt_decoder.h>
 #include <upipe-ts/uref_ts_flow.h>
@@ -60,6 +61,8 @@
 #define MAX_DELAY UCLOCK_FREQ
 /** max retention time for ISO/IEC 14496 streams (ISO/IEC 13818-1 2.4.2.6) */
 #define MAX_DELAY_14496 (UCLOCK_FREQ * 10)
+/** max retention time for HEVC streams (FIXME) */
+#define MAX_DELAY_HEVC (UCLOCK_FREQ * 10)
 /** max retention time for still pictures streams (ISO/IEC 13818-1 2.4.2.6) */
 #define MAX_DELAY_STILL (UCLOCK_FREQ * 60)
 /** max retention time for teletext (ETSI EN 300 472 5.) */
@@ -210,6 +213,14 @@ static void upipe_ts_pmtd_parse_streamtype(struct upipe *upipe,
             UBASE_FATAL(upipe, uref_h264_flow_set_annexb(flow_def))
             break;
 
+        case PMT_STREAMTYPE_VIDEO_HEVC:
+            UBASE_FATAL(upipe, uref_flow_set_def(flow_def, "block.hevc.pic."))
+            UBASE_FATAL(upipe, uref_flow_set_raw_def(flow_def,
+                            "block.mpegts.mpegtspes.hevc.pic."))
+            UBASE_FATAL(upipe, uref_ts_flow_set_max_delay(flow_def,
+                            MAX_DELAY_HEVC))
+            UBASE_FATAL(upipe, uref_h265_flow_set_annexb(flow_def))
+            break;
 
         case PMT_STREAMTYPE_ATSC_A52:
             UBASE_FATAL(upipe, uref_flow_set_def(flow_def, "block.ac3.sound."))

@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2013-2015 OpenHeadend S.A.R.L.
+ * Copyright (C) 2013-2016 OpenHeadend S.A.R.L.
  *
  * Authors: Christophe Massiot
  *
@@ -166,6 +166,8 @@ struct upipe_ts_demux_mgr {
     struct upipe_mgr *mpgvf_mgr;
     /** pointer to h264f manager */
     struct upipe_mgr *h264f_mgr;
+    /** pointer to h265f manager */
+    struct upipe_mgr *h265f_mgr;
     /** pointer to telxf manager */
     struct upipe_mgr *telxf_mgr;
     /** pointer to dvbsubf manager */
@@ -807,6 +809,20 @@ static int upipe_ts_demux_output_plumber(struct upipe *upipe,
                 uprobe_pfx_alloc(
                     uprobe_use(&upipe_ts_demux_output->last_inner_probe),
                     UPROBE_LOG_VERBOSE, "h264f"));
+        if (unlikely(output == NULL))
+            return UBASE_ERR_ALLOC;
+        upipe_ts_demux_output_store_bin_output(upipe, output);
+        return UBASE_ERR_NONE;
+    }
+
+    if (!ubase_ncmp(def, "block.hevc.") &&
+        ts_demux_mgr->h265f_mgr != NULL) {
+        /* allocate h265f inner */
+        struct upipe *output =
+            upipe_void_alloc_output(inner, ts_demux_mgr->h265f_mgr,
+                uprobe_pfx_alloc(
+                    uprobe_use(&upipe_ts_demux_output->last_inner_probe),
+                    UPROBE_LOG_VERBOSE, "h265f"));
         if (unlikely(output == NULL))
             return UBASE_ERR_ALLOC;
         upipe_ts_demux_output_store_bin_output(upipe, output);
@@ -3003,6 +3019,7 @@ static void upipe_ts_demux_mgr_free(struct urefcount *urefcount)
     upipe_mgr_release(ts_demux_mgr->a52f_mgr);
     upipe_mgr_release(ts_demux_mgr->mpgvf_mgr);
     upipe_mgr_release(ts_demux_mgr->h264f_mgr);
+    upipe_mgr_release(ts_demux_mgr->h265f_mgr);
     upipe_mgr_release(ts_demux_mgr->telxf_mgr);
     upipe_mgr_release(ts_demux_mgr->dvbsubf_mgr);
     upipe_mgr_release(ts_demux_mgr->opusf_mgr);
@@ -3066,6 +3083,7 @@ static int upipe_ts_demux_mgr_control(struct upipe_mgr *mgr,
         GET_SET_MGR(a52f, A52F)
         GET_SET_MGR(mpgvf, MPGVF)
         GET_SET_MGR(h264f, H264F)
+        GET_SET_MGR(h265f, H265F)
         GET_SET_MGR(telxf, TELXF)
         GET_SET_MGR(dvbsubf, DVBSUBF)
         GET_SET_MGR(opusf, OPUSF)
@@ -3111,6 +3129,7 @@ struct upipe_mgr *upipe_ts_demux_mgr_alloc(void)
     ts_demux_mgr->a52f_mgr = NULL;
     ts_demux_mgr->mpgvf_mgr = NULL;
     ts_demux_mgr->h264f_mgr = NULL;
+    ts_demux_mgr->h265f_mgr = NULL;
     ts_demux_mgr->telxf_mgr = NULL;
     ts_demux_mgr->dvbsubf_mgr = NULL;
     ts_demux_mgr->opusf_mgr = NULL;

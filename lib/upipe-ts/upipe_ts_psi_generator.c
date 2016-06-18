@@ -311,7 +311,8 @@ static int upipe_ts_psig_flow_check(struct upipe *upipe,
     } else if (ubase_ncmp(raw_def, "block.mpeg1video.") &&
                ubase_ncmp(raw_def, "block.mpeg2video.") &&
                ubase_ncmp(raw_def, "block.mpeg4.") &&
-               ubase_ncmp(raw_def, "block.h264.")) {
+               ubase_ncmp(raw_def, "block.h264.") &&
+               ubase_ncmp(raw_def, "block.hevc.")) {
         upipe_warn_va(upipe, "unknown flow definition \"%s\"", raw_def);
         return UBASE_ERR_UNHANDLED;
     }
@@ -351,6 +352,8 @@ static int upipe_ts_psig_flow_build(struct upipe *upipe, uint8_t *es,
         stream_type = PMT_STREAMTYPE_VIDEO_MPEG4;
     else if (!ubase_ncmp(raw_def, "block.h264."))
         stream_type = PMT_STREAMTYPE_VIDEO_AVC;
+    else if (!ubase_ncmp(raw_def, "block.hevc."))
+        stream_type = PMT_STREAMTYPE_VIDEO_HEVC;
     else if (!ubase_ncmp(raw_def, "block.aac."))
         stream_type = PMT_STREAMTYPE_AUDIO_ADTS;
     else if (!ubase_ncmp(raw_def, "block.mp2.") ||
