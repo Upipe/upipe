@@ -551,6 +551,7 @@ static void upipe_videocont_input(struct upipe *upipe, struct uref *uref,
                      next_uref->ubuf, pts, next_pts);
     uref_attach_ubuf(uref, ubuf_dup(next_uref->ubuf));
     uref_attr_import(uref, next_uref);
+    uref_clock_delete_rate(uref);
     if (upipe_videocont->last_uref == next_uref) {
         upipe_warn_va(upipe, "reusing the same picture %"PRIu64" %"PRIu64,
                   pts + upipe_videocont->latency, next_pts + upipe_videocont->tolerance);
