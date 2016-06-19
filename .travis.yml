@@ -87,7 +87,7 @@ before_install:
     fi
 
   # bitstream
-  - git clone --depth 1 git://git.videolan.org/bitstream.git
+  - git clone --depth 1 https://code.videolan.org/videolan/bitstream.git
   - sudo make -C bitstream install
 
   # nacl sdk
