@@ -56,8 +56,24 @@ enum upipe_blit_sub_command {
     UPIPE_BLIT_SUB_GET_RECT,
     /** sets the offsets of the rect onto which the input of this subpipe
      * will be blitted (uint64_t, uint64_t, uint64_t, uint64_t) */
-    UPIPE_BLIT_SUB_SET_RECT
+    UPIPE_BLIT_SUB_SET_RECT,
+    /** sets the method for alpha blending (uint8_t)
+     * @see ubuf_pic_blit */
+    UPIPE_BLIT_SUB_SET_ALPHA_THRESHOLD,
 };
+
+/** @This sets the method for alpha blending for this subpipe.
+ *
+ * @param upipe description structure of the pipe
+ * @param threshold method for alpha blending (@see ubuf_pic_blit)
+ * @return an error code
+ */
+static inline int upipe_blit_sub_set_alpha_threshold(struct upipe *upipe,
+        uint8_t threshold)
+{
+    return upipe_control(upipe, UPIPE_BLIT_SUB_SET_ALPHA_THRESHOLD,
+                         UPIPE_BLIT_SUB_SIGNATURE, threshold);
+}
 
 /** @This gets the offsets (from the respective borders of the frame) of the
  * rectangle onto which the input of the subpipe will be blitted.

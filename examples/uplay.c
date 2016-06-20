@@ -266,6 +266,7 @@ static int catch_sub(struct uprobe *uprobe, struct upipe *upipe,
     struct upipe *subblit = upipe_void_alloc_output_sub(ffmt, upipe_blit,
             uprobe_pfx_alloc(uprobe_use(uprobe), UPROBE_LOG_VERBOSE, "subblit"));
     assert(subblit);
+    upipe_blit_sub_set_alpha_threshold(subblit, 20);
     upipe_release(subblit);
 
     return UBASE_ERR_NONE;

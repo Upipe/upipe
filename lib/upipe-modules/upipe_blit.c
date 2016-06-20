@@ -99,6 +99,8 @@ struct upipe_blit_sub {
     /** structure for double-linked lists */
     struct uchain uchain;
 
+    /** alpha blending method */
+    uint8_t alpha_threshold;
     /** offset from the left border */
     uint64_t loffset;
     /** offset from the right border */
@@ -154,6 +156,7 @@ static struct upipe *upipe_blit_sub_alloc(struct upipe_mgr *mgr,
     upipe_blit_sub_init_urefcount(upipe);
     upipe_blit_sub_init_sub(upipe);
     sub->loffset = sub->roffset = sub->toffset = sub->boffset = 0;
+    sub->alpha_threshold = 0; /* ignore alpha */
     sub->ubuf = NULL;
     sub->hsize = sub->vsize = sub->hposition = sub->vposition = UINT64_MAX;
     ulist_init(&sub->flow_format_requests);
@@ -174,7 +177,7 @@ static void upipe_blit_sub_work(struct upipe *upipe, struct uref *uref)
         return;
 
     int err = uref_pic_blit(uref, sub->ubuf, sub->hposition, sub->vposition,
-                            0, 0, sub->hsize, sub->vsize, 0 /* memcpy */);
+                            0, 0, sub->hsize, sub->vsize, sub->alpha_threshold);
     if (unlikely(!ubase_check(err))) {
         upipe_warn(upipe, "unable to blit picture");
         upipe_throw_error(upipe, err);
@@ -424,6 +427,20 @@ static int upipe_blit_sub_set_flow_def(struct upipe *upipe,
     return UBASE_ERR_NONE;
 }
 
+/** @internal @This sets the method for alpha blending for this subpipe.
+ *
+ * @param upipe description structure of the pipe
+ * @param threshold method for alpha blending (@see ubuf_pic_blit)
+ * @return an error code
+ */
+static int _upipe_blit_sub_set_alpha_threshold(struct upipe *upipe,
+        uint8_t threshold)
+{
+    struct upipe_blit_sub *sub = upipe_blit_sub_from_upipe(upipe);
+    sub->alpha_threshold = threshold;
+    return UBASE_ERR_NONE;
+}
+
 /** @internal @This gets the offsets (from the respective borders of the frame)
  * of the rectangle onto which the input of the subpipe will be blitted.
  *
@@ -509,6 +526,11 @@ static int upipe_blit_sub_control(struct upipe *upipe,
             return upipe_blit_sub_get_super(upipe, p);
         }
 
+        case UPIPE_BLIT_SUB_SET_ALPHA_THRESHOLD: {
+            UBASE_SIGNATURE_CHECK(args, UPIPE_BLIT_SUB_SIGNATURE);
+            uint8_t threshold = va_arg(args, unsigned);
+            return _upipe_blit_sub_set_alpha_threshold(upipe, threshold);
+        }
         case UPIPE_BLIT_SUB_GET_RECT: {
             UBASE_SIGNATURE_CHECK(args, UPIPE_BLIT_SUB_SIGNATURE);
             uint64_t *loffset_p = va_arg(args, uint64_t *);
