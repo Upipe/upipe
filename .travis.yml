@@ -81,8 +81,6 @@ before_install:
       brew install libev;
       brew install yasm;
       brew install x264;
-      wget -O /usr/local/Library/Formula/ffmpeg.rb
-        "https://raw.githubusercontent.com/Homebrew/homebrew-core/7c988bdb8ffb9d2ffcce7606a43e360d98e4982c/Formula/ffmpeg.rb";
       brew install ffmpeg;
     fi
 
