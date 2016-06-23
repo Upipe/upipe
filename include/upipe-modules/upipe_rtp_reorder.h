@@ -41,7 +41,7 @@ extern "C" {
 
 
 /** @This extends upipe_command with specific commands for delay pipes. */
-enum upipe_delay_command {
+enum upipe_rtpr_command {
     UPIPE_RTPR_SENTINEL = UPIPE_CONTROL_LOCAL,
 
     /** returns the current reorder delay being set into urefs (uint64_t **) */
