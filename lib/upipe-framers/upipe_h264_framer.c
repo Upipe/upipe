@@ -919,8 +919,8 @@ static bool upipe_h264f_activate_sps(struct upipe *upipe, uint32_t sps_id)
         bool overscan_present = !!ubuf_block_stream_show_bits(s, 1);
         ubuf_block_stream_skip_bits(s, 1);
         if (overscan_present) {
-            if (ubuf_block_stream_show_bits(s, 1))
-                UBASE_FATAL(upipe, uref_pic_flow_set_overscan(flow_def))
+            UBASE_FATAL(upipe, uref_pic_flow_set_overscan(flow_def,
+                        !!ubuf_block_stream_show_bits(s, 1)))
             ubuf_block_stream_skip_bits(s, 1);
         }
 

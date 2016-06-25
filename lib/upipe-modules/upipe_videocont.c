@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2014-2015 OpenHeadend S.A.R.L.
+ * Copyright (C) 2014-2016 OpenHeadend S.A.R.L.
  *
  * Authors: Benjamin Cohen
  *
@@ -444,8 +444,9 @@ static int upipe_videocont_switch_format(struct upipe *upipe,
     } else {
         uref_pic_flow_delete_sar(out_flow);
     }
-    if (likely(ubase_check(uref_pic_flow_get_overscan(in_flow)))) {
-        uref_pic_flow_set_overscan(out_flow);
+    bool overscan;
+    if (likely(ubase_check(uref_pic_flow_get_overscan(in_flow, &overscan)))) {
+        uref_pic_flow_set_overscan(out_flow, overscan);
     } else {
         uref_pic_flow_delete_overscan(out_flow);
     }

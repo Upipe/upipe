@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2012-2015 OpenHeadend S.A.R.L.
+ * Copyright (C) 2012-2016 OpenHeadend S.A.R.L.
  *
  * Authors: Benjamin Cohen
  *          Christophe Massiot
@@ -82,8 +82,6 @@ struct upipe_sws {
     enum upipe_helper_output_state output_state;
     /** list of output requests */
     struct uchain request_list;
-    /** true if the output flow def requests overscan deletiong */
-    bool delete_overscan;
 
     /** ubuf manager */
     struct ubuf_mgr *ubuf_mgr;
@@ -183,8 +181,6 @@ static bool upipe_sws_handle(struct upipe *upipe, struct uref *uref,
         struct urational dar;
         if (ubase_check(uref_pic_flow_get_dar(uref, &dar)))
             uref_pic_flow_infer_sar(uref, dar);
-        if (upipe_sws->delete_overscan)
-            uref_pic_flow_delete_overscan(uref);
         upipe_sws_require_ubuf_mgr(upipe, uref);
         return true;
     }
@@ -676,11 +672,6 @@ static struct upipe *upipe_sws_alloc(struct upipe_mgr *mgr,
         ubase_check(uref_pic_flow_get_full_range(flow_def)) ? 1 : 0;
     UBASE_FATAL(upipe, uref_pic_flow_set_align(flow_def, 16))
 
-    struct urational rational;
-    upipe_sws->delete_overscan =
-        (ubase_check(uref_pic_flow_get_sar(flow_def, &rational)) ||
-         ubase_check(uref_pic_flow_get_dar(flow_def, &rational))) &&
-        !ubase_check(uref_pic_flow_get_overscan(flow_def));
     upipe_sws_store_flow_def_attr(upipe, flow_def);
     return upipe;
 

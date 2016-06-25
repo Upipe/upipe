@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2012-2014 OpenHeadend S.A.R.L.
+ * Copyright (C) 2012-2016 OpenHeadend S.A.R.L.
  *
  * Authors: Christophe Massiot
  *
@@ -91,7 +91,7 @@ static const struct inline_shorthand inline_shorthands[] = {
     { "p.hposition", UDICT_TYPE_UNSIGNED },
     { "p.vposition", UDICT_TYPE_UNSIGNED },
     { "p.sar", UDICT_TYPE_RATIONAL },
-    { "p.overscan", UDICT_TYPE_VOID },
+    { "p.overscan", UDICT_TYPE_BOOL },
     { "p.progressive", UDICT_TYPE_VOID },
     { "p.tf", UDICT_TYPE_VOID },
     { "p.bf", UDICT_TYPE_VOID },

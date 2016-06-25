@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2012-2015 OpenHeadend S.A.R.L.
+ * Copyright (C) 2012-2016 OpenHeadend S.A.R.L.
  *
  * Authors: Christophe Massiot
  *
@@ -73,7 +73,7 @@ UREF_ATTR_INT(pic_flow, align_hmoffset, "p.align_hmoffset",
         horizontal offset of the aligned macropixel)
 
 UREF_ATTR_RATIONAL_SH(pic_flow, sar, UDICT_TYPE_PIC_SAR, sample aspect ratio)
-UREF_ATTR_VOID_SH(pic_flow, overscan, UDICT_TYPE_PIC_OVERSCAN, overscan)
+UREF_ATTR_BOOL_SH(pic_flow, overscan, UDICT_TYPE_PIC_OVERSCAN, overscan)
 UREF_ATTR_RATIONAL(pic_flow, dar, "p.dar", display aspect ratio)
 UREF_ATTR_UNSIGNED_SH(pic_flow, hsize, UDICT_TYPE_PIC_HSIZE, horizontal size)
 UREF_ATTR_UNSIGNED_SH(pic_flow, vsize, UDICT_TYPE_PIC_VSIZE, vertical size)
@@ -311,7 +311,8 @@ static inline int uref_pic_flow_infer_sar(struct uref *uref,
     uint64_t width, height;
     UBASE_RETURN(uref_pic_flow_get_hsize(uref, &width))
     UBASE_RETURN(uref_pic_flow_get_vsize(uref, &height))
-    bool overscan = ubase_check(uref_pic_flow_get_overscan(uref));
+    bool overscan = false;
+    uref_pic_flow_get_overscan(uref, &overscan);
 
     struct urational sar;
     sar.num = height * dar.num;
@@ -369,8 +370,10 @@ static inline int uref_pic_flow_infer_dar(struct uref *uref,
     UBASE_RETURN(uref_pic_flow_get_vsize(uref, &height))
     struct urational sar;
     UBASE_RETURN(uref_pic_flow_get_sar(uref, &sar))
+    bool overscan = false;
+    uref_pic_flow_get_overscan(uref, &overscan);
 
-    if (ubase_check(uref_pic_flow_get_overscan(uref))) {
+    if (overscan) {
         if ((width == 720 && height == 576 &&
              sar.num == 12 && sar.den == 11) ||
             (width == 720 && height == 480 &&

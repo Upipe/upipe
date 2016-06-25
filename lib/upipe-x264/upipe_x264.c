@@ -139,7 +139,7 @@ struct upipe_x264 {
     /** input SAR */
     struct urational sar;
     /** input overscan */
-    bool overscan;
+    int overscan;
     /** MPEG-2 aspect ratio information */
     uint8_t mpeg2_ar;
 
@@ -398,7 +398,7 @@ static struct upipe *upipe_x264_alloc(struct upipe_mgr *mgr,
     upipe_x264->flow_def_requested = NULL;
     upipe_x264->headers_requested = false;
     upipe_x264->sar.num = upipe_x264->sar.den = 1;
-    upipe_x264->overscan = false;
+    upipe_x264->overscan = 0; /* undef */
     upipe_x264->mpeg2_ar = 1;
 
     upipe_x264->last_dts = UINT64_MAX;
@@ -443,7 +443,7 @@ static bool upipe_x264_open(struct upipe *upipe, int width, int height)
     {
         params->vui.i_sar_width = upipe_x264->sar.num;
         params->vui.i_sar_height = upipe_x264->sar.den;
-        params->vui.i_overscan = upipe_x264->overscan ? 2 : 1;
+        params->vui.i_overscan = upipe_x264->overscan;
     }
     params->i_width = width;
     params->i_height = height;
@@ -722,7 +722,7 @@ static inline bool upipe_x264_need_update(struct upipe *upipe,
             params->i_height != height ||
             params->vui.i_sar_width != upipe_x264->sar.num ||
             params->vui.i_sar_height != upipe_x264->sar.den ||
-            params->vui.i_overscan != (upipe_x264->overscan ? 2 : 1));
+            params->vui.i_overscan != upipe_x264->overscan);
 }
 
 /** @internal @This processes pictures.
@@ -764,8 +764,11 @@ static bool upipe_x264_handle(struct upipe *upipe, struct uref *uref,
         } else {
             upipe_x264->sar.num = upipe_x264->sar.den = 1;
             uref_pic_flow_get_sar(uref, &upipe_x264->sar);
-            upipe_x264->overscan =
-                ubase_check(uref_pic_flow_get_overscan(uref));
+            bool overscan;
+            if (!ubase_check(uref_pic_flow_get_overscan(uref, &overscan)))
+                upipe_x264->overscan = 0; /* undef */
+            else
+                upipe_x264->overscan = overscan ? 2 : 1;
         }
 
         uref = upipe_x264_store_flow_def_input(upipe, uref);
@@ -805,7 +808,7 @@ static bool upipe_x264_handle(struct upipe *upipe, struct uref *uref,
                 params->i_width, width, params->i_height, height,
                 params->vui.i_sar_width, upipe_x264->sar.num,
                 params->vui.i_sar_height, upipe_x264->sar.den,
-                params->vui.i_overscan, (upipe_x264->overscan ? 2 : 1));
+                params->vui.i_overscan, upipe_x264->overscan);
             needopen = true;
         }
         if (unlikely(needopen)) {

@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2014-2015 OpenHeadend S.A.R.L.
+ * Copyright (C) 2014-2016 OpenHeadend S.A.R.L.
  *
  * Authors: Christophe Massiot
  *
@@ -314,11 +314,10 @@ static int upipe_ffmt_check_flow_format(struct upipe *upipe,
             uref_pic_flow_set_sar(flow_def, sar);
         } else if (ubase_check(uref_pic_flow_get_dar(
                         upipe_ffmt->flow_def_wanted, &dar))) {
+            bool overscan;
             if (ubase_check(uref_pic_flow_get_overscan(
-                            upipe_ffmt->flow_def_wanted)))
-                uref_pic_flow_set_overscan(flow_def);
-            else
-                uref_pic_flow_delete_overscan(flow_def);
+                            upipe_ffmt->flow_def_wanted, &overscan)))
+                uref_pic_flow_set_overscan(flow_def, overscan);
             uref_pic_flow_infer_sar(flow_def, dar);
         }
 
@@ -327,7 +326,8 @@ static int upipe_ffmt_check_flow_format(struct upipe *upipe,
         uref_pic_flow_delete_hsize_visible(flow_def_dup);
         uref_pic_flow_delete_vsize_visible(flow_def_dup);
 
-        bool need_deint = !!(uref_pic_cmp_progressive(flow_def, flow_def_dup));
+        bool need_deint = !ubase_check(uref_pic_get_progressive(flow_def)) &&
+                          ubase_check(uref_pic_get_progressive(flow_def_dup));
         bool need_sws = !uref_pic_flow_compare_format(flow_def, flow_def_dup) ||
                         uref_pic_flow_cmp_hsize(flow_def, flow_def_dup) ||
                         uref_pic_flow_cmp_vsize(flow_def, flow_def_dup);
