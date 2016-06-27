@@ -38,7 +38,7 @@ extern "C" {
 #include <upipe/upipe.h>
 
 /** @This declares four functions throwing the @ref UPROBE_SYNC_ACQUIRED and
- * @ref UPROBE_SYNC_LOST events in a consistant manner.
+ * @ref UPROBE_SYNC_LOST events in a consistent manner.
  *
  * You must add a boolean to your private pipe structure, for instance:
  * @code

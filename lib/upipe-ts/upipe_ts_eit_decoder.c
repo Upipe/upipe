@@ -259,7 +259,7 @@ static bool upipe_ts_eitd_table_validate(struct upipe *upipe)
  * @param flow_def flow definition packet to fill in
  * @param event event number
  * @param descl pointer to descriptor list
- * @param desclength length of the decriptor list
+ * @param desclength length of the descriptor list
  * @return an error code
  */
 static void upipe_ts_eitd_parse_descs(struct upipe *upipe,

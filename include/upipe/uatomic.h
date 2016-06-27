@@ -133,7 +133,7 @@ static inline uint32_t uatomic_fetch_add(uatomic_uint32_t *obj,
 /** @This decrements a uatomic variable.
  *
  * @param obj pointer to a uatomic variable
- * @param operand value to substract
+ * @param operand value to subtract
  * @return value before the operation
  */
 static inline uint32_t uatomic_fetch_sub(uatomic_uint32_t *obj,

@@ -190,7 +190,7 @@ void ubuf_mem_shared_free_inner(struct upool *upool, void *_shared);
  * pool.                                                                    \
  *                                                                          \
  * @param mgr pointer to a ubuf manager                                     \
- * @return pointer to STUCTURE or NULL in case of allocation error          \
+ * @return pointer to STRUCTURE or NULL in case of allocation error         \
  */                                                                         \
 static struct STRUCTURE *STRUCTURE##_alloc_pool(struct ubuf_mgr *mgr)       \
 {                                                                           \

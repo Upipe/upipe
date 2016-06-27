@@ -246,7 +246,7 @@ static inline struct ustring ustring_shift_until(const struct ustring sub,
  *
  * @param sub1 the first ustring to compare
  * @param sub2 the second ustring to compare
- * @return an interger less than, equal to, or greater than zero if the first
+ * @return an integer less than, equal to, or greater than zero if the first
  * len bytes of sub1, respectively, to be less than, to match,
  * or to be grearter than the first len bytes of sub2
  */
@@ -267,7 +267,7 @@ static inline int ustring_ncmp(const struct ustring sub1,
  *
  * @param sub1 the first ustring to compare
  * @param sub2 the second ustring to compare
- * @return an interger less than, equal to, or greater than zero if the first
+ * @return an integer less than, equal to, or greater than zero if the first
  * len bytes of sub1, respectively, to be less than, to match,
  * or to be grearter than the first len bytes of sub2
  */
@@ -287,7 +287,7 @@ static inline int ustring_ncasecmp(const struct ustring sub1,
  *
  * @param sub1 the first ustring to compare
  * @param sub2 the second ustring to compare
- * @return an interger less than, equal to, or greater than zero if sub1,
+ * @return an integer less than, equal to, or greater than zero if sub1,
  * respectively, to be less than, to match, or to be grearter than sub2
  */
 static inline int ustring_cmp(const struct ustring sub1,
@@ -302,7 +302,7 @@ static inline int ustring_cmp(const struct ustring sub1,
  *
  * @param sub the ustring to compare
  * @param str the string to compare
- * @return an interger less than, equal to, or greater than zero if sub,
+ * @return an integer less than, equal to, or greater than zero if sub,
  * respectively, to be less than, to match, or to be grearter than str
  */
 static inline int ustring_cmp_str(const struct ustring sub,
@@ -315,7 +315,7 @@ static inline int ustring_cmp_str(const struct ustring sub,
  *
  * @param sub1 the first ustring to compare
  * @param sub2 the second ustring to compare
- * @return an interger less than, equal to, or greater than zero if sub1,
+ * @return an integer less than, equal to, or greater than zero if sub1,
  * respectively, to be less than, to match, or to be grearter than sub2
  */
 static inline int ustring_casecmp(const struct ustring sub1,
@@ -330,7 +330,7 @@ static inline int ustring_casecmp(const struct ustring sub1,
  *
  * @param sub the ustring to compare
  * @param str the string to compare
- * @return an interger less than, equal to, or greater than zero if sub,
+ * @return an integer less than, equal to, or greater than zero if sub,
  * respectively, to be less than, to match, or to be grearter than str
  */
 static inline int ustring_casecmp_str(const struct ustring sub,

@@ -263,11 +263,11 @@
 
     @end section
 
-    @section {Structure dependancies}
+    @section {Structure dependencies}
 
-    The following graph depicts dependancy relationships between structures (dashed lines are optional):
+    The following graph depicts dependency relationships between structures (dashed lines are optional):
 
-    @image dependancies.png
+    @image dependencies.png
 
     @end section
 
@@ -281,7 +281,7 @@
 
     The @ref upump_mgr implementations are supplied by dedicated, API-specific libraries such as libupump-ev. Finally, @ref upipe_mgr managers allow to create the pipes themselves and are either provided by the libupipe-modules library for standard pipes, or by third-party libraries.
 
-    To instanciate managers it is necessary to link with some libraries; however there is no dependancy associated with the use of the children structures @ref ubuf, @ref uref and @ref upump, as all code is either provided by inline functions or function pointers. Libraries providing implementations of @ref upipe_mgr and @ref upipe usually do not depend on libupipe.
+    To instanciate managers it is necessary to link with some libraries; however there is no dependency associated with the use of the children structures @ref ubuf, @ref uref and @ref upump, as all code is either provided by inline functions or function pointers. Libraries providing implementations of @ref upipe_mgr and @ref upipe usually do not depend on libupipe.
 
     Upon initialization, a new pipe may be passed the managers for its @ref uref, @ref ubuf and @ref upump structures, if it requires to create them. If it has no need for a manager (for instance it just changes an attribute to all uref structures passing by), then it need not be passed.
 
@@ -317,7 +317,7 @@
 
       @item date variation @item scope @item description
 
-      @item sys @item whole stream @item Uses the same scale as @ref uclock_now. The date is represented in system time. On live streams, incoming packets should be stamped with this clock, and outgoing packets (for presentation or streaming) should be scheduled according to it. A fictious system time may be necessary even for some file to file conversion, as it is the only clock that is stream-wide.
+      @item sys @item whole stream @item Uses the same scale as @ref uclock_now. The date is represented in system time. On live streams, incoming packets should be stamped with this clock, and outgoing packets (for presentation or streaming) should be scheduled according to it. A fictitious system time may be necessary even for some file to file conversion, as it is the only clock that is stream-wide.
 
       @item orig @item program @item Carries the dates coded in the incoming stream, with the same origin, scaled to 27 MHz (if necessary). Its only use is for remultiplexing a stream with the exact same timestamps. A demux should typically retrieve this value.
 
