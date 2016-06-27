@@ -34,9 +34,9 @@ matrix:
         - PKG_CONFIG_LIBDIR="/usr/lib/i386-linux-gnu/pkgconfig"
 
     - os: linux
-      compiler: clang-3.7
+      compiler: clang-3.8
       env:
-        - CLANG_VERSION=3.7
+        - CLANG_VERSION=3.8
         - APT_REPOS="ppa:ubuntu-toolchain-r/test ppa:mc3man/testing6"
         - APT_PACKAGES="clang-$CLANG_VERSION $APT_PACKAGES_COMMON"
         - HOST_CC=clang-$CLANG_VERSION
@@ -49,9 +49,6 @@ matrix:
         - HOST_CC=clang
         - HOST_CXX=clang++
         - CFLAGS="-Wno-error=unused-function -Wno-error=unused-command-line-argument"
-
-  allow_failures:
-    - compiler: clang-3.7
 
 before_install:
   - if type apt-get 2>/dev/null; then
