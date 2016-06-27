@@ -925,7 +925,7 @@ static int upipe_ts_encaps_overlap_au(struct upipe *upipe,
     uref_flow_delete_discontinuity(uref_overlap);
     uref_flow_delete_random(uref_overlap);
 
-    /* AU2 is no longer the start of an acess unit */
+    /* AU2 is no longer the start of an access unit */
     uref_block_delete_start(uref_au2);
     return UBASE_ERR_NONE;
 }

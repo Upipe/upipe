@@ -103,7 +103,7 @@ static int catch(struct uprobe *uprobe, struct upipe *upipe,
         case UPROBE_READY:
         case UPROBE_DEAD:
         case UPROBE_NEED_UPUMP_MGR:
-        case UPROBE_GLX_SINK_KEYRELEASE: // dont care about release
+        case UPROBE_GLX_SINK_KEYRELEASE: // don't care about release
             break;
         case UPROBE_GLX_SINK_KEYPRESS: {
             unsigned int signature = va_arg(args, unsigned int);

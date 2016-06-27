@@ -125,7 +125,7 @@ static struct upipe *upipe_ts_scte35d_alloc(struct upipe_mgr *mgr,
  * @param upipe description structure of the pipe
  * @param uref uref to fill in
  * @param descl pointer to descriptor list
- * @param desclength length of the decriptor list
+ * @param desclength length of the descriptor list
  * @return an error code
  */
 static void upipe_ts_scte35d_parse_descs(struct upipe *upipe, struct uref *uref,

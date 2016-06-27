@@ -26,7 +26,7 @@ Makefile
 # mkdoc
 
 /doc/html
-/doc/dependancies.png
+/doc/dependencies.png
 
 # Qt
 /lib/upipe-qt/moc_thumbnail.cpp

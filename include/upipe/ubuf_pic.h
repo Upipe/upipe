@@ -294,7 +294,7 @@ static inline int ubuf_pic_check_resize(struct ubuf *ubuf,
 
 /** @This resizes a picture ubuf, if possible. This will only work if:
  * @list
- * @item the ubuf is only shrinked in one or both directions, or
+ * @item the ubuf is only shrunk in one or both directions, or
  * @item the relevant low-level buffer is not shared with another ubuf and the
  * picture manager allows to grow the buffer (ie. prepend/append have been
  * correctly specified at allocation, or reallocation is allowed)

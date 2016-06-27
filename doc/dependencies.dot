@@ -1,4 +1,4 @@
-digraph "Upipe objects dependancies" {
+digraph "Upipe objects dependencies" {
 	graph [bgcolor="#00000000"];
 	edge [penwidth=2, color="#203080"];
 	node [shape="oval", style="filled", fontname="Verdana Black", fontsize=11, fontcolor="white", color="#203080", fillcolor="#203080"];
