@@ -11,6 +11,7 @@ myinclude_HEADERS = \
 	upipe_probe_uref.h \
 	upipe_noclock.h \
 	upipe_nodemux.h \
+	upipe_dejitter.h \
 	upipe_delay.h \
 	upipe_null.h \
 	upipe_skip.h \
