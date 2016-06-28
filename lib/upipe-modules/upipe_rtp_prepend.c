@@ -67,7 +67,7 @@
 
 #define DEFAULT_TYPE            96 /* first dynamic rtp type */
 #define DEFAULT_TS_SYNC         UPIPE_RTP_PREPEND_TS_SYNC_CR
-#define DEFAULT_CLOCKRATE   90000
+#define DEFAULT_CLOCKRATE       90000
 #define RTP_TYPE_INVALID        UINT8_MAX
 
 /** upipe_rtp_prepend structure */
@@ -240,6 +240,8 @@ static int upipe_rtp_prepend_infer_ts_sync(struct upipe *upipe, const char *def)
     } values[] = {
         { "h264.pic", UPIPE_RTP_PREPEND_TS_SYNC_PTS },
         { "aac.sound", UPIPE_RTP_PREPEND_TS_SYNC_PTS },
+        { "mp3.sound", UPIPE_RTP_PREPEND_TS_SYNC_PTS },
+        { "mp2.sound", UPIPE_RTP_PREPEND_TS_SYNC_PTS },
         { "mpegts", UPIPE_RTP_PREPEND_TS_SYNC_CR },
         { "opus.sound", UPIPE_RTP_PREPEND_TS_SYNC_PTS },
     };
@@ -334,6 +336,18 @@ static int upipe_rtp_prepend_infer_clockrate(struct upipe *upipe,
     return UBASE_ERR_NONE;
 }
 
+/** @internal @This prints a notice on the parameters.
+ *
+ * @param upipe description structure of the pipe
+ */
+static void upipe_rtp_prepend_notice(struct upipe *upipe)
+{
+    struct upipe_rtp_prepend *upipe_rtp_prepend =
+        upipe_rtp_prepend_from_upipe(upipe);
+    upipe_notice_va(upipe, "using type %"PRIu8" with rate %"PRIu32" Hz",
+                    upipe_rtp_prepend->type, upipe_rtp_prepend->clockrate);
+}
+
 /** @internal @This sets the input flow definition.
  *
  * @param upipe description structure of the pipe
@@ -353,6 +367,7 @@ static int upipe_rtp_prepend_set_flow_def(struct upipe *upipe,
     UBASE_RETURN(upipe_rtp_prepend_infer_type(upipe, def))
     UBASE_RETURN(upipe_rtp_prepend_infer_ts_sync(upipe, def))
     UBASE_RETURN(upipe_rtp_prepend_infer_clockrate(upipe, flow_def))
+    upipe_rtp_prepend_notice(upipe);
 
     struct uref *flow_def_dup;
     if ((flow_def_dup = uref_dup(flow_def)) == NULL)
@@ -379,6 +394,7 @@ static int _upipe_rtp_prepend_set_type(struct upipe *upipe, uint8_t type)
         upipe_rtp_prepend_from_upipe(upipe);
     upipe_rtp_prepend->type_overwrite = true;
     upipe_rtp_prepend->type = type & 0x7f;
+    upipe_rtp_prepend_notice(upipe);
     return UBASE_ERR_NONE;
 }
 
@@ -411,6 +427,7 @@ static int _upipe_rtp_prepend_set_clockrate(struct upipe *upipe,
 
     upipe_rtp_prepend->clockrate_overwrite = true;
     upipe_rtp_prepend->clockrate = clockrate;
+    upipe_rtp_prepend_notice(upipe);
     return UBASE_ERR_NONE;
 }
 
