@@ -328,7 +328,7 @@ int upipe_udp_open_socket(struct upipe *upipe, const char *_uri, int ttl,
                           bool *use_raw, uint8_t *raw_header)
 {
     union sockaddru bind_addr, connect_addr;
-    int fd, i;
+    int fd = -1, i;
     char *uri = strdup(_uri);
     char *token = uri;
     char *token2 = NULL;
@@ -446,6 +446,8 @@ int upipe_udp_open_socket(struct upipe *upipe, const char *_uri, int ttl,
                 tos = strtol(ARG_OPTION("tos="), NULL, 0);
             } else if (IS_OPTION("tcp")) {
                 *use_tcp = true;
+            } else if (IS_OPTION("fd=")) {
+                fd = strtol(ARG_OPTION("fd="), NULL, 0);
             } else {
                 upipe_warn_va(upipe, "unrecognized option %s", token2);
             }
@@ -496,161 +498,163 @@ int upipe_udp_open_socket(struct upipe *upipe, const char *_uri, int ttl,
     }
 
 
-    /* Socket configuration */
-    int sock_type = SOCK_DGRAM;
-    if (*use_tcp) sock_type = SOCK_STREAM;
-    if (*use_raw) sock_type = SOCK_RAW;
-    int sock_proto = (*use_raw ? IPPROTO_RAW : 0);
+    if (fd == -1) {
+        /* Socket configuration */
+        int sock_type = SOCK_DGRAM;
+        if (*use_tcp) sock_type = SOCK_STREAM;
+        if (*use_raw) sock_type = SOCK_RAW;
+        int sock_proto = (*use_raw ? IPPROTO_RAW : 0);
 
-    if ((fd = socket(family, sock_type, sock_proto)) < 0) {
-        upipe_err_va(upipe, "unable to open socket (%m)");
-        return -1;
-    }
-    #if !defined(__APPLE__) && !defined(__native_client__)
-    if (*use_raw) {
-        int hincl = 1;
-        if (setsockopt(fd, IPPROTO_IP, IP_HDRINCL, &hincl, sizeof(hincl)) < 0) {
-            upipe_err_va(upipe, "unable to set IP_HDRINCL");
-            close(fd);
+        if ((fd = socket(family, sock_type, sock_proto)) < 0) {
+            upipe_err_va(upipe, "unable to open socket (%m)");
             return -1;
         }
-    }
-    #endif
+        #if !defined(__APPLE__) && !defined(__native_client__)
+        if (*use_raw) {
+            int hincl = 1;
+            if (setsockopt(fd, IPPROTO_IP, IP_HDRINCL, &hincl, sizeof(hincl)) < 0) {
+                upipe_err_va(upipe, "unable to set IP_HDRINCL");
+                close(fd);
+                return -1;
+            }
+        }
+        #endif
 
-    i = 1;
-    if (setsockopt(fd, SOL_SOCKET, SO_REUSEADDR, (void *)&i,
-                     sizeof(i)) == -1) {
-        upipe_err_va(upipe, "unable to set socket (%m)");
-        close(fd);
-        return -1;
-    }
-
-    if (family == AF_INET6) {
-        if (bind_if_index
-              && setsockopt(fd, IPPROTO_IPV6, IPV6_MULTICAST_IF,
-                     (void *)&bind_if_index, sizeof(bind_if_index)) < 0) {
-            upipe_err(upipe, "couldn't set interface index");
-            upipe_udp_print_socket(upipe, "socket definition:", &bind_addr, &connect_addr);
+        i = 1;
+        if (setsockopt(fd, SOL_SOCKET, SO_REUSEADDR, (void *)&i,
+                         sizeof(i)) == -1) {
+            upipe_err_va(upipe, "unable to set socket (%m)");
             close(fd);
             return -1;
         }
 
-        if (bind_addr.ss.ss_family != AF_UNSPEC) {
-            #if !defined(__APPLE__) && !defined(__native_client__)
-            if (IN6_IS_ADDR_MULTICAST(&bind_addr.sin6.sin6_addr)) {
-                struct ipv6_mreq imr;
-                union sockaddru bind_addr_any = bind_addr;
-                bind_addr_any.sin6.sin6_addr = in6addr_any;
+        if (family == AF_INET6) {
+            if (bind_if_index
+                  && setsockopt(fd, IPPROTO_IPV6, IPV6_MULTICAST_IF,
+                         (void *)&bind_if_index, sizeof(bind_if_index)) < 0) {
+                upipe_err(upipe, "couldn't set interface index");
+                upipe_udp_print_socket(upipe, "socket definition:", &bind_addr, &connect_addr);
+                close(fd);
+                return -1;
+            }
 
-                if (bind(fd, &bind_addr_any.so,
-                           sizeof(bind_addr_any)) < 0) {
-                    upipe_err(upipe, "couldn't bind");
-                    upipe_udp_print_socket(upipe, "socket definition:", &bind_addr, &connect_addr);
-                    close(fd);
-                    return -1;
-                }
+            if (bind_addr.ss.ss_family != AF_UNSPEC) {
+                #if !defined(__APPLE__) && !defined(__native_client__)
+                if (IN6_IS_ADDR_MULTICAST(&bind_addr.sin6.sin6_addr)) {
+                    struct ipv6_mreq imr;
+                    union sockaddru bind_addr_any = bind_addr;
+                    bind_addr_any.sin6.sin6_addr = in6addr_any;
 
-                imr.ipv6mr_multiaddr = bind_addr.sin6.sin6_addr;
-                imr.ipv6mr_interface = bind_if_index;
+                    if (bind(fd, &bind_addr_any.so,
+                               sizeof(bind_addr_any)) < 0) {
+                        upipe_err(upipe, "couldn't bind");
+                        upipe_udp_print_socket(upipe, "socket definition:", &bind_addr, &connect_addr);
+                        close(fd);
+                        return -1;
+                    }
 
-                /* Join Multicast group without source filter */
-                if (setsockopt(fd, IPPROTO_IPV6, IPV6_ADD_MEMBERSHIP,
-                                 (char *)&imr, sizeof(struct ipv6_mreq)) < 0) {
-                    upipe_err(upipe, "couldn't join multicast group");
-                    upipe_udp_print_socket(upipe, "socket definition:", &bind_addr, &connect_addr);
-                    close(fd);
-                    return -1;
-                }
-            } else
-            #endif
-                goto normal_bind;
+                    imr.ipv6mr_multiaddr = bind_addr.sin6.sin6_addr;
+                    imr.ipv6mr_interface = bind_if_index;
+
+                    /* Join Multicast group without source filter */
+                    if (setsockopt(fd, IPPROTO_IPV6, IPV6_ADD_MEMBERSHIP,
+                                     (char *)&imr, sizeof(struct ipv6_mreq)) < 0) {
+                        upipe_err(upipe, "couldn't join multicast group");
+                        upipe_udp_print_socket(upipe, "socket definition:", &bind_addr, &connect_addr);
+                        close(fd);
+                        return -1;
+                    }
+                } else
+                #endif
+                    goto normal_bind;
+            }
         }
-    }
-    else if (bind_addr.ss.ss_family != AF_UNSPEC) {
-normal_bind:
-        if (bind(fd, &bind_addr.so, sockaddr_len) < 0) {
-            upipe_err(upipe, "couldn't bind");
-            upipe_udp_print_socket(upipe, "socket definition:", &bind_addr, &connect_addr);
-            close(fd);
-            return -1;
+        else if (bind_addr.ss.ss_family != AF_UNSPEC) {
+    normal_bind:
+            if (bind(fd, &bind_addr.so, sockaddr_len) < 0) {
+                upipe_err(upipe, "couldn't bind");
+                upipe_udp_print_socket(upipe, "socket definition:", &bind_addr, &connect_addr);
+                close(fd);
+                return -1;
+            }
         }
-    }
 
-    if (!*use_tcp) {
-        /* Increase the receive buffer size to 1/2MB (8Mb/s during 1/2s) to
-         * avoid packet loss caused by scheduling problems */
-        i = 0x80000;
-        if (setsockopt(fd, SOL_SOCKET, SO_RCVBUF, (void *) &i, sizeof(i)))
-            upipe_warn(upipe, "fail to increase receive buffer");
+        if (!*use_tcp) {
+            /* Increase the receive buffer size to 1/2MB (8Mb/s during 1/2s) to
+             * avoid packet loss caused by scheduling problems */
+            i = 0x80000;
+            if (setsockopt(fd, SOL_SOCKET, SO_RCVBUF, (void *) &i, sizeof(i)))
+                upipe_warn(upipe, "fail to increase receive buffer");
 
-        /* Join the multicast group if the socket is a multicast address */
-        if (bind_addr.ss.ss_family == AF_INET
-              && IN_MULTICAST(ntohl(bind_addr.sin.sin_addr.s_addr))) {
+            /* Join the multicast group if the socket is a multicast address */
+            if (bind_addr.ss.ss_family == AF_INET
+                  && IN_MULTICAST(ntohl(bind_addr.sin.sin_addr.s_addr))) {
 #ifndef __native_client__
-            if (connect_addr.ss.ss_family != AF_UNSPEC) {
-                /* Source-specific multicast */
-                struct ip_mreq_source imr;
-                imr.imr_multiaddr = bind_addr.sin.sin_addr;
-                imr.imr_interface.s_addr = if_addr;
-                imr.imr_sourceaddr = connect_addr.sin.sin_addr;
-                if (bind_if_index) {
-                    upipe_warn(upipe, "ignoring ifindex option in SSM");
-                }
+                if (connect_addr.ss.ss_family != AF_UNSPEC) {
+                    /* Source-specific multicast */
+                    struct ip_mreq_source imr;
+                    imr.imr_multiaddr = bind_addr.sin.sin_addr;
+                    imr.imr_interface.s_addr = if_addr;
+                    imr.imr_sourceaddr = connect_addr.sin.sin_addr;
+                    if (bind_if_index) {
+                        upipe_warn(upipe, "ignoring ifindex option in SSM");
+                    }
 
-                if (setsockopt(fd, IPPROTO_IP, IP_ADD_SOURCE_MEMBERSHIP,
-                            (char *)&imr, sizeof(struct ip_mreq_source)) < 0) {
-                    upipe_err_va(upipe, "couldn't join multicast group (%m)");
-                    upipe_udp_print_socket(upipe, "socket definition:", &bind_addr,
-                                 &connect_addr);
-                    close(fd);
-                    return -1;
-                }
-            } else if (bind_if_index) {
-                /* Linux-specific interface-bound multicast */
-                struct ip_mreqn imr;
-                imr.imr_multiaddr = bind_addr.sin.sin_addr;
-                imr.imr_address.s_addr = if_addr;
-                imr.imr_ifindex = bind_if_index;
+                    if (setsockopt(fd, IPPROTO_IP, IP_ADD_SOURCE_MEMBERSHIP,
+                                (char *)&imr, sizeof(struct ip_mreq_source)) < 0) {
+                        upipe_err_va(upipe, "couldn't join multicast group (%m)");
+                        upipe_udp_print_socket(upipe, "socket definition:", &bind_addr,
+                                     &connect_addr);
+                        close(fd);
+                        return -1;
+                    }
+                } else if (bind_if_index) {
+                    /* Linux-specific interface-bound multicast */
+                    struct ip_mreqn imr;
+                    imr.imr_multiaddr = bind_addr.sin.sin_addr;
+                    imr.imr_address.s_addr = if_addr;
+                    imr.imr_ifindex = bind_if_index;
 
-                if (setsockopt(fd, IPPROTO_IP, IP_ADD_MEMBERSHIP,
-                                 (char *)&imr, sizeof(struct ip_mreqn)) < 0) {
-                    upipe_err_va(upipe, "couldn't join multicast group (%m)");
-                    upipe_udp_print_socket(upipe, "socket definition:", &bind_addr,
-                                 &connect_addr);
-                    close(fd);
-                    return -1;
-                }
-            } else
+                    if (setsockopt(fd, IPPROTO_IP, IP_ADD_MEMBERSHIP,
+                                     (char *)&imr, sizeof(struct ip_mreqn)) < 0) {
+                        upipe_err_va(upipe, "couldn't join multicast group (%m)");
+                        upipe_udp_print_socket(upipe, "socket definition:", &bind_addr,
+                                     &connect_addr);
+                        close(fd);
+                        return -1;
+                    }
+                } else
 #endif
-            {
-                /* Regular multicast */
-                struct ip_mreq imr;
-                imr.imr_multiaddr = bind_addr.sin.sin_addr;
-                imr.imr_interface.s_addr = if_addr;
+                {
+                    /* Regular multicast */
+                    struct ip_mreq imr;
+                    imr.imr_multiaddr = bind_addr.sin.sin_addr;
+                    imr.imr_interface.s_addr = if_addr;
 
-                if (setsockopt(fd, IPPROTO_IP, IP_ADD_MEMBERSHIP,
-                                 (char *)&imr, sizeof(struct ip_mreq)) < 0) {
-                    upipe_err_va(upipe, "couldn't join multicast group (%m)");
-                    upipe_udp_print_socket(upipe, "socket definition:", &bind_addr,
-                                 &connect_addr);
-                    close(fd);
-                    return -1;
+                    if (setsockopt(fd, IPPROTO_IP, IP_ADD_MEMBERSHIP,
+                                     (char *)&imr, sizeof(struct ip_mreq)) < 0) {
+                        upipe_err_va(upipe, "couldn't join multicast group (%m)");
+                        upipe_udp_print_socket(upipe, "socket definition:", &bind_addr,
+                                     &connect_addr);
+                        close(fd);
+                        return -1;
+                    }
                 }
-            }
 #ifdef SO_BINDTODEVICE
-            if (ifname) {
-                /* linux specific, needs root or CAP_NET_RAW */
-                if (setsockopt(fd, SOL_SOCKET, SO_BINDTODEVICE,
-                               ifname, strlen(ifname) + 1) < 0) {
-                    upipe_err_va(upipe, "couldn't bind to device %s (%m)",
-                                 ifname);
-                    free(ifname);
-                    close(fd);
-                    return -1;
+                if (ifname) {
+                    /* linux specific, needs root or CAP_NET_RAW */
+                    if (setsockopt(fd, SOL_SOCKET, SO_BINDTODEVICE,
+                                   ifname, strlen(ifname) + 1) < 0) {
+                        upipe_err_va(upipe, "couldn't bind to device %s (%m)",
+                                     ifname);
+                        free(ifname);
+                        close(fd);
+                        return -1;
+                    }
+                    ubase_clean_str(&ifname);
                 }
-                ubase_clean_str(&ifname);
-            }
 #endif
+            }
         }
     }
 
