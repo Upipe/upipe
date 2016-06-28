@@ -13,23 +13,25 @@ matrix:
   include:
 
     - os: linux
-      compiler: gcc-5
+      compiler: gcc-6
       env:
-        - GCC_VERSION=5
+        - GCC_VERSION=6
         - APT_REPOS="ppa:ubuntu-toolchain-r/test ppa:mc3man/testing6"
         - APT_PACKAGES="gcc-$GCC_VERSION g++-$GCC_VERSION $APT_PACKAGES_COMMON"
         - HOST_CC=gcc-$GCC_VERSION
         - HOST_CXX=g++-$GCC_VERSION
+        - CXXFLAGS="-Wno-error=literal-suffix"
 
     - os: linux
       compiler: gcc-m32
       env:
-        - GCC_VERSION=5
+        - GCC_VERSION=6
         - APT_REPOS="ppa:ubuntu-toolchain-r/test ppa:mc3man/testing6"
         - APT_PACKAGES="gcc-$GCC_VERSION-multilib g++-$GCC_VERSION-multilib $(echo $APT_PACKAGES_COMMON | sed 's/\(\S*\)/\1:i386/g') libgl1-mesa-dev:i386 libglu1-mesa-dev:i386 libc6-dbg:i386"
         - HOST_CC="gcc-$GCC_VERSION -m32"
         - HOST_CXX="g++-$GCC_VERSION -m32"
         - CFLAGS="-msse2 -mfpmath=sse"
+        - CXXFLAGS="-Wno-error=literal-suffix"
         - LIBAMT_PLATFORM="PLATFORM32=1"
         - PKG_CONFIG_LIBDIR="/usr/lib/i386-linux-gnu/pkgconfig"
 
@@ -116,7 +118,7 @@ script: CONFIGURE_FLAGS="--disable-silent-rules
           CXX=\"$HOST_CXX\"
           CPPFLAGS=\"-I$PWD/nacl_sdk/pepper_49/include\"
           CFLAGS=\"-Werror -Wno-error=deprecated-declarations -O2 -g $CFLAGS\"
-          CXXFLAGS=\"-Werror -O2 -g\"" &&
+          CXXFLAGS=\"-Werror -O2 -g $CXXFLAGS\"" &&
         eval ./configure $CONFIGURE_FLAGS &&
         make distcheck
           DISTCHECK_CONFIGURE_FLAGS="$CONFIGURE_FLAGS"
