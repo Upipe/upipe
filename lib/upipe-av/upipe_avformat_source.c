@@ -443,12 +443,12 @@ static void upipe_avfsrc_worker(struct upump *upump)
     struct upipe_avfsrc_sub *output =
         upipe_avfsrc_find_output(upipe, pkt.stream_index);
     if (output == NULL) {
-        av_free_packet(&pkt);
+        av_packet_unref(&pkt);
         return;
     }
     if (unlikely(output->ubuf_mgr == NULL)) {
         if (unlikely(!upipe_avfsrc_sub_demand_ubuf_mgr(upipe_avfsrc_sub_to_upipe(output), uref_dup(output->flow_def)))) {
-            av_free_packet(&pkt);
+            av_packet_unref(&pkt);
             return;
         }
     }
@@ -456,7 +456,7 @@ static void upipe_avfsrc_worker(struct upump *upump)
     struct uref *uref = uref_block_alloc(upipe_avfsrc->uref_mgr,
                                          output->ubuf_mgr, pkt.size);
     if (unlikely(uref == NULL)) {
-        av_free_packet(&pkt);
+        av_packet_unref(&pkt);
         upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
         return;
     }
@@ -468,14 +468,14 @@ static void upipe_avfsrc_worker(struct upump *upump)
     int read_size = -1;
     if (unlikely(!ubase_check(uref_block_write(uref, 0, &read_size, &buffer)))) {
         uref_free(uref);
-        av_free_packet(&pkt);
+        av_packet_unref(&pkt);
         upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
         return;
     }
     assert(read_size == pkt.size);
     memcpy(buffer, pkt.data, pkt.size);
     uref_block_unmap(uref, 0);
-    av_free_packet(&pkt);
+    av_packet_unref(&pkt);
 
     bool ts = false;
     if (upipe_avfsrc->uclock != NULL)
