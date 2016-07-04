@@ -1177,7 +1177,9 @@ static void upipe_ts_demux_program_build_flow_def(struct upipe *upipe)
 
     upipe_ts_demux_program_store_flow_def(upipe, flow_def);
     /* Force sending flow def */
-    upipe_ts_demux_program_output(upipe, NULL, NULL);
+    struct upipe_ts_demux *demux = upipe_ts_demux_from_program_mgr(upipe->mgr);
+    struct uref *uref = uref_alloc(demux->uref_mgr);
+    upipe_ts_demux_program_output(upipe, uref, NULL);
 }
 
 /** @internal @This catches new_flow_def events coming from pmtd inner pipe.
@@ -2282,7 +2284,8 @@ static void upipe_ts_demux_build_flow_def(struct upipe *upipe)
 
     upipe_ts_demux_store_flow_def(upipe, flow_def);
     /* Force sending flow def */
-    upipe_ts_demux_output(upipe, NULL, NULL);
+    struct uref *uref = uref_alloc(upipe_ts_demux->uref_mgr);
+    upipe_ts_demux_output(upipe, uref, NULL);
 }
 
 /** @internal @This changes the current conformance, and start necessary

@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2012-2015 OpenHeadend S.A.R.L.
+ * Copyright (C) 2012-2016 OpenHeadend S.A.R.L.
  *
  * Authors: Christophe Massiot
  *
@@ -920,7 +920,8 @@ static int upipe_avfsrc_set_uri(struct upipe *upipe, const char *url)
     uref_flow_set_def(flow_def, "void.");
     upipe_avfsrc_store_flow_def(upipe, flow_def);
     /* Force sending flow def */
-    upipe_avfsrc_output(upipe, NULL, NULL);
+    struct uref *uref = uref_alloc(upipe_avfsrc->uref_mgr);
+    upipe_avfsrc_output(upipe, uref, NULL);
 
     AVDictionary *options = NULL;
     av_dict_copy(&options, upipe_avfsrc->options, 0);
