@@ -5,7 +5,6 @@ libupipe_filters_la_SOURCES = \
 	upipe_filter_decode.c \
 	upipe_filter_encode.c \
 	upipe_filter_format.c \
-	uprobe_filter_suggest.c \
 	upipe_filter_ebur128.c \
 	ebur128/ebur128.c \
 	ebur128/ebur128.h

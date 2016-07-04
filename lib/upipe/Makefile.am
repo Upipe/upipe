@@ -18,7 +18,6 @@ libupipe_la_SOURCES = \
 	uprobe_dejitter.c \
 	uprobe_loglevel.c \
 	uprobe_prefix.c \
-	uprobe_output.c \
 	uprobe_select_flows.c \
 	uprobe_source_mgr.c \
 	uprobe_stdio.c \

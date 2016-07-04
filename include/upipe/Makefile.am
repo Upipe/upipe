@@ -65,7 +65,6 @@ pkginclude_HEADERS = \
 	uprobe_helper_uprobe.h \
 	uprobe_helper_urefcount.h \
 	uprobe_loglevel.h \
-	uprobe_output.h \
 	uprobe_prefix.h \
 	uprobe_select_flows.h \
 	uprobe_source_mgr.h \
