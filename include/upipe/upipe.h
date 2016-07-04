@@ -984,7 +984,11 @@ static inline void upipe_input(struct upipe *upipe, struct uref *uref,
                                struct upump **upump_p)
 {
     assert(upipe != NULL);
-    assert(upipe->mgr->upipe_input != NULL);
+    if (upipe->mgr->upipe_input == NULL) {
+        assert(uref->ubuf == NULL);
+        uref_free(uref);
+        return;
+    }
     upipe_use(upipe);
     upipe->mgr->upipe_input(upipe, uref, upump_p);
     upipe_release(upipe);
