@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2014-2015 OpenHeadend S.A.R.L.
+ * Copyright (C) 2014-2016 OpenHeadend S.A.R.L.
  *
  * Authors: Christophe Massiot
  *
@@ -64,6 +64,8 @@ struct upipe_pthread_ctx {
     upipe_pthread_upump_mgr_work upump_mgr_work;
     /** callback freeing the event loop in the new thread */
     upipe_pthread_upump_mgr_free upump_mgr_free;
+    /** opaque for upipe_pthread_upump_mgr_alloc */
+    void *upump_mgr_opaque;
     /** thread ID */
     pthread_t pthread_id;
     /** eventfd used for thread termination */
@@ -78,7 +80,8 @@ static void *upipe_pthread_start(void *_pthread_ctx)
 {
     struct upipe_pthread_ctx *pthread_ctx =
         (struct upipe_pthread_ctx *)_pthread_ctx;
-    struct upump_mgr *upump_mgr = pthread_ctx->upump_mgr_alloc();
+    struct upump_mgr *upump_mgr =
+        pthread_ctx->upump_mgr_alloc(pthread_ctx->upump_mgr_opaque);
     if (unlikely(upump_mgr == NULL)) {
         uprobe_err(pthread_ctx->uprobe_pthread_upump_mgr, NULL,
                    "unable to create upump_mgr");
@@ -137,6 +140,7 @@ static void upipe_pthread_stop(struct upump *upump)
  * @param upump_mgr_alloc callback creating the event loop in the new thread
  * @param upump_mgr_work callback running the event loop in the new thread
  * @param upump_mgr_free callback freeing the event loop in the new thread
+ * @param upump_mgr_opaque opaque for upump_mgr_alloc
  * @param pthread_id_p reference to created thread ID (may be NULL)
  * @param attr pthread attributes
  * @return pointer to xfer manager
@@ -145,7 +149,7 @@ struct upipe_mgr *upipe_pthread_xfer_mgr_alloc(uint8_t queue_length,
         uint16_t msg_pool_depth, struct uprobe *uprobe_pthread_upump_mgr,
         upipe_pthread_upump_mgr_alloc upump_mgr_alloc,
         upipe_pthread_upump_mgr_work upump_mgr_work,
-        upipe_pthread_upump_mgr_free upump_mgr_free,
+        upipe_pthread_upump_mgr_free upump_mgr_free, void *upump_mgr_opaque,
         pthread_t *pthread_id_p, const pthread_attr_t *restrict attr)
 {
     struct upipe_pthread_ctx *pthread_ctx =
@@ -177,6 +181,7 @@ struct upipe_mgr *upipe_pthread_xfer_mgr_alloc(uint8_t queue_length,
     pthread_ctx->upump_mgr_alloc = upump_mgr_alloc;
     pthread_ctx->upump_mgr_work = upump_mgr_work;
     pthread_ctx->upump_mgr_free = upump_mgr_free;
+    pthread_ctx->upump_mgr_opaque = upump_mgr_opaque;
 
     if (unlikely(pthread_create(&pthread_ctx->pthread_id, attr,
                                 upipe_pthread_start, pthread_ctx) != 0))
