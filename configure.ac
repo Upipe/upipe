@@ -12,7 +12,10 @@ m4_ifdef([AM_SILENT_RULES], [AM_SILENT_RULES([yes])])
 PKG_PROG_PKG_CONFIG
 
 # Checks for programs.
-AC_CHECK_PROG(PERL, perl, perl)
+AC_CHECK_PROGS(PERL, perl)
+AC_CHECK_PROGS(LUAJIT, luajit)
+AC_CHECK_PROGS(EU_READELF, eu-readelf)
+AC_CHECK_PROGS(LLVM_DWARFDUMP, [llvm-dwarfdump "xcrun llvm-dwarfdump"])
 AC_PATH_PROG(MOC, [moc-qt4 moc], moc)
 AC_PROG_CXX
 AC_PROG_AWK
@@ -24,6 +27,7 @@ AC_PROG_LN_S
 AC_PROG_MAKE_SET
 AM_PROG_CC_C_O
 LT_INIT([win32-dll])
+AM_CONDITIONAL(HAVE_OBJDUMP, test "$OBJDUMP" != false)
 
 WARN_FLAGS="-Wall -Wextra -Wno-unused -Wno-unused-parameter -Wno-sign-compare -Wmissing-declarations -Wwrite-strings -Wredundant-decls -Wundef -Wmissing-include-dirs"
 AC_SUBST([AM_CFLAGS], ["$WARN_FLAGS -Wstrict-prototypes -Wmissing-prototypes -Wold-style-definition"])
@@ -215,7 +219,8 @@ AC_CONFIG_FILES([Makefile
                  lib/upipe-dveo/Makefile
                  lib/upipe-dveo/libupipe_dveo.pc
                  tests/Makefile
-                 examples/Makefile])
+                 examples/Makefile
+                 luajit/Makefile])
 AC_OUTPUT
 
 grep "^#define HAVE_" config.h | sed -e 's/HAVE_/UPIPE_HAVE_/' > include/upipe/config.h

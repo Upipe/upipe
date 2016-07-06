@@ -1,0 +1,12 @@
+#!/bin/sh
+
+dir="`cd "$(dirname "$0")"; pwd`"
+
+export LUA_PATH="$dir/?.lua"
+export LD_LIBRARY_PATH="$dir"
+
+for libs in $dir/../lib/*/.libs; do
+    export LD_LIBRARY_PATH="$LD_LIBRARY_PATH:$libs"
+done
+
+exec luajit "$@"

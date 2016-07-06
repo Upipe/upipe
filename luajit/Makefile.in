@@ -1,0 +1,267 @@
+prefix         = @prefix@
+exec_prefix    = @exec_prefix@
+libdir         = @libdir@
+top_builddir   = @top_builddir@
+top_srcdir     = @top_srcdir@
+srcdir         = @srcdir@
+
+PERL           = @PERL@
+OBJDUMP        = @OBJDUMP@
+EU_READELF     = @EU_READELF@
+LLVM_DWARFDUMP = @LLVM_DWARFDUMP@
+DSYMUTIL       = @DSYMUTIL@
+LUAJIT         = @LUAJIT@
+SED            = @SED@
+MKDIR_P        = @MKDIR_P@
+INSTALL        = @INSTALL@
+INSTALL_DATA   = @INSTALL_DATA@
+CC             = @CC@
+CFLAGS         = @CFLAGS@
+CPPFLAGS       = @CPPFLAGS@
+LDFLAGS        = @LDFLAGS@
+
+LIST_C = upipe-modules upipe-filters upipe-dveo
+@HAVE_QTWEBKIT_TRUE@LIST_C += upipe-qt
+@HAVE_OSX_DARWIN_TRUE@LIST_C += upipe-osx
+@HAVE_ALSA_TRUE@LIST_C += upipe-alsa
+@HAVE_AMT_TRUE@LIST_C += upipe-amt
+@HAVE_NACL_TRUE@LIST_C += upipe-nacl
+@HAVE_GLX_TRUE@LIST_C += upipe-gl
+@HAVE_SWSCALE_TRUE@LIST_C += upipe-swscale
+@HAVE_SWRESAMPLE_TRUE@LIST_C += upipe-swresample
+@HAVE_DLFCN_H_TRUE@LIST_C += upipe-blackmagic
+@HAVE_AVUTIL_TRUE@LIST_C += upipe-v210
+@HAVE_BITSTREAM_TRUE@LIST_C += upipe-ts upipe-framers upipe-hls
+@HAVE_BITSTREAM_TRUE@@HAVE_X264_TRUE@LIST_C += upipe-x264
+@HAVE_AVFORMAT_TRUE@LIST_C += upipe-av
+@HAVE_PTHREAD_TRUE@LIST_C += upipe-pthread
+@HAVE_EV_TRUE@LIST_C += upump-ev
+@HAVE_ECORE_TRUE@LIST_C += upump-ecore
+
+INCLUDEDIR   = $(top_srcdir)/include
+LIST         = upipe $(LIST_C)
+STATIC_SO    = $(LIST:%=lib%.static.so)
+LIST_CDEF    = $(LIST_C:%=%.lua) libupipe.lua upipe-helper.lua
+SIG_LUA      = $(LIST:%=%-sigs.lua)
+CDEF_LUA     = $(LIST_CDEF) $(srcdir)/libev.lua
+GETTERS_LUA  = upipe-getters.lua uref-getters.lua
+ARGS_LUA     = $(srcdir)/uprobe-args.lua $(srcdir)/upipe-control-args.lua
+SO           = libffi-stdarg.so libupipe-helper.so
+SRC_LUA      = $(srcdir)/upipe.lua $(srcdir)/ffi-stdarg.lua \
+	       $(CDEF_LUA) $(SIG_LUA) $(GETTERS_LUA) $(ARGS_LUA)
+
+EXAMPLES     = extract_pic.lua upipe_duration.lua upipe_xor.lua
+DISTFILES    = ffi-stdarg.c ffi-stdarg.lua gen-ffi-cdef.pl libc.defs \
+	       libev.lua luajit upipe-control-args.lua \
+	       upipe-helper.c upipe.lua uprobe-args.lua
+
+CPPFLAGS += -I$(top_builddir)/include
+CPPFLAGS += -I$(INCLUDEDIR)
+
+LUAJIT_INSTALL_LMOD = $(prefix)/share/lua/5.1
+
+#-------------------------------------------------------------------------------
+# verbosity
+#-------------------------------------------------------------------------------
+
+V_at = $(V_at_@AM_V@)
+V_at_ = $(V_at_@AM_DEFAULT_VERBOSITY@)
+V_at_0 = @
+
+V_CCLD = $(V_CCLD_@AM_V@)
+V_CCLD_ = $(V_CCLD_@AM_DEFAULT_VERBOSITY@)
+V_CCLD_0 = @echo "  CCLD    " $@;
+
+V_GEN = $(V_GEN_@AM_V@)
+V_GEN_ = $(V_GEN_@AM_DEFAULT_VERBOSITY@)
+V_GEN_0 = @echo "  GEN     " $@;
+
+#-------------------------------------------------------------------------------
+# main rules
+#-------------------------------------------------------------------------------
+
+all: $(SO) $(STATIC_SO) $(SRC_LUA)
+
+install: all
+	$(MKDIR_P) $(DESTDIR)$(libdir)
+	$(INSTALL_DATA) $(SO) $(STATIC_SO) $(DESTDIR)$(libdir)
+	$(MKDIR_P) $(DESTDIR)$(LUAJIT_INSTALL_LMOD)
+	$(INSTALL_DATA) $(SRC_LUA) $(DESTDIR)$(LUAJIT_INSTALL_LMOD)
+
+uninstall:
+	$(RM) $(addprefix $(DESTDIR)$(libdir)/,$(SO) $(STATIC_SO))
+	$(RM) $(addprefix $(DESTDIR)$(LUAJIT_INSTALL_LMOD)/,$(notdir $(SRC_LUA)))
+
+clean: $(LIST:%=clean-static-so-%) clean-upipe-helper
+	$(RM) $(SIG_LUA)
+	$(RM) $(GETTERS_LUA)
+	$(RM) $(LIST_CDEF)
+	$(RM) $(SO)
+	$(RM) upipe.defs
+
+distclean: clean
+	$(RM) Makefile
+
+space := $(null) $(null)
+
+check: all
+ifneq ($(LUAJIT),)
+	LUA_PATH="?.lua;$(srcdir)/?.lua" \
+	LD_LIBRARY_PATH=.:$(subst $(space),:,$(LIST:%=$(top_builddir)/lib/%/.libs)) \
+	$(LUAJIT) $(srcdir)/examples/upipe_duration.lua \
+	  $(top_srcdir)/tests/upipe_ts_test.ts
+endif
+
+installcheck:
+
+DISTFILES := $(addprefix $(srcdir)/,$(DISTFILES))
+
+distdir: $(DISTFILES)
+	cp $(DISTFILES) $(distdir)
+	$(MKDIR_P) $(distdir)/examples
+	for i in $(EXAMPLES); do \
+	  cp $(srcdir)/examples/$$i $(distdir)/examples; \
+	done
+
+dvi:
+
+.PHONY: all install uninstall clean distclean check installcheck distdir dvi
+
+#-------------------------------------------------------------------------------
+# static so
+#-------------------------------------------------------------------------------
+
+%.static.c:
+	$(V_GEN){ \
+	  echo "#define static"; \
+	  echo "#define inline"; \
+	  echo "#define av_always_inline"; \
+	  cd $(INCLUDEDIR) && ls $*/*.h | \
+	    $(SED) 's/\(.*\)/#include <\1>/'; \
+	} > $@
+
+libupipe-av.static.so: CFLAGS += @AVFORMAT_CFLAGS@
+
+lib%.static.so: %.static.c
+	$(V_CCLD)$(CC) $(CFLAGS) $(CPPFLAGS) $(LDFLAGS) -shared -fPIC -o $@ $<
+
+%-sigs.lua: %.static.c
+	$(V_GEN)$(SED) -n \
+	  's/^#define UPIPE_\(.*\)_SIGNATURE UBASE_FOURCC(\(.*\))/upipe_sig("\L\1\E", \2)/p' \
+	  $(INCLUDEDIR)/$*/*.h > $@
+
+clean-static-so-%:
+	$(RM) $*.static.c lib$*.static.so
+	$(RM) $*.debug_info $*.static.debug_info
+
+#-------------------------------------------------------------------------------
+# cdef
+#-------------------------------------------------------------------------------
+
+prefix_base    = upipe_ uprobe_ ubuf_ uref_ uchain_ upump_ ustring_ udict_ \
+		 uclock_ umem_ uuri_ uqueue_ urequest_ ufifo_ ucookie_ \
+		 urefcount_ ueventfd_ uring_ ubase_ urational_ uatomic_ \
+		 ulifo_ upool_ ulist_ udeal_ ulog_
+
+prefix_modules = upipe_ uprobe_ uref_ upump_
+
+libupipe.lua: $(srcdir)/gen-ffi-cdef.pl $(srcdir)/libc.defs upipe.debug_info upipe.static.debug_info
+	$(V_GEN)$(PERL) $< \
+	  --format $(FMT_DEBUG_INFO) \
+	  --output $@ \
+	  --read-defs $(srcdir)/libc.defs \
+	  --write-defs upipe.defs \
+	  --enum ubase_err \
+	  --enum upipe_command \
+	  --enum uref_date_type \
+	  --enum uprobe_event \
+	  $(addprefix --prefix ,$(prefix_base)) \
+	  --load $(upipe_dlname) \
+	  --load libupipe.static.so \
+	  upipe.debug_info \
+	  upipe.static.debug_info
+
+upipe.defs: libupipe.lua
+
+$(srcdir)/upipe.lua $(srcdir)/ffi-stdarg.lua:
+	:
+
+%.lua: $(srcdir)/gen-ffi-cdef.pl $(srcdir)/libc.defs upipe.defs %.debug_info %.static.debug_info
+	$(V_GEN)$(PERL) $< \
+	  --format $(FMT_DEBUG_INFO) \
+	  --output $@ \
+	  --read-defs $(srcdir)/libc.defs \
+	  --read-defs upipe.defs \
+	  --enum 'uprobe_*' \
+	  $(addprefix --prefix ,$(prefix_modules)) \
+	  --load $($*_dlname) \
+	  --load lib$*.static.so \
+	  --require $*-sigs \
+	  $*.debug_info \
+	  $*.static.debug_info
+
+#-------------------------------------------------------------------------------
+# debug info
+#-------------------------------------------------------------------------------
+
+ifneq ($(OBJDUMP),false)
+  FMT_DEBUG_INFO = objdump
+  GEN_DEBUG_INFO = $(OBJDUMP) --dwarf=info $< > $@
+else ifneq ($(EU_READELF),)
+  FMT_DEBUG_INFO = eu-readelf
+  GEN_DEBUG_INFO = $(EU_READELF) -winfo -N $< > $@
+else ifneq ($(LLVM_DWARFDUMP),)
+  FMT_DEBUG_INFO = llvm-dwarfdump
+  GEN_DEBUG_INFO = $(DSYMUTIL) $<; $(LLVM_DWARFDUMP) -debug-dump=info $<.dSYM > $@
+endif
+
+define gen-debug-info
+  ifneq ($(wildcard $(top_builddir)/lib/$1/lib$(subst -,_,$1).la),)
+$1_dlname := $$(shell . $(top_builddir)/lib/$1/lib$(subst -,_,$1).la && echo $$$$dlname)
+$1.debug_info: $(top_builddir)/lib/$1/.libs/$$($1_dlname)
+	$$(V_GEN)$$(GEN_DEBUG_INFO)
+  endif
+endef
+
+$(foreach c,$(LIST),$(eval $(call gen-debug-info,$c)))
+
+%.debug_info: lib%.so
+	$(V_GEN)$(GEN_DEBUG_INFO)
+
+#-------------------------------------------------------------------------------
+# upipe-helper
+#-------------------------------------------------------------------------------
+
+upipe-helper.lua: $(srcdir)/gen-ffi-cdef.pl $(srcdir)/libc.defs upipe.defs upipe-helper.debug_info
+	$(V_GEN)$(PERL) $< \
+	  --format $(FMT_DEBUG_INFO) \
+	  --output $@ \
+	  --read-defs $(srcdir)/libc.defs \
+	  --read-defs upipe.defs \
+	  --prefix upipe_helper_ \
+	  --struct upipe_helper_mgr \
+	  --load libupipe-helper.so \
+	  upipe-helper.debug_info
+
+clean-upipe-helper:
+	$(RM) upipe-helper.debug_info
+
+#-------------------------------------------------------------------------------
+# getters
+#-------------------------------------------------------------------------------
+
+%-getters.lua: $(LIST_CDEF)
+	$(V_GEN){ \
+	  echo "return {"; \
+	  $(SED) -n -e 's/^int $*_\(\(.*_\)\?get_.*\)(struct $* \*, \([^,]*[^ ]\) *\*);$$/    \1 = "\3",/p' $^; \
+	  echo "}"; \
+	} > $@
+
+#-------------------------------------------------------------------------------
+# generic rules
+#-------------------------------------------------------------------------------
+
+lib%.so: $(srcdir)/%.c
+	$(V_CCLD)$(CC) $(CFLAGS) $(CPPFLAGS) $(LDFLAGS) -shared -fPIC -o $@ $<
+
+.DELETE_ON_ERROR:

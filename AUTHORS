@@ -13,3 +13,7 @@ D: a few modules
 N: Christophe Massiot
 E: cmassiot AT upipe DOT org
 D: design and implementation of the core
+
+N: Clément Vasseur
+E: clement.vasseur AT gmail DOT com
+D: luajit bindings
