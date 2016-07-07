@@ -291,11 +291,11 @@ TESTS += \
 	upipe_ts_scte35_probe_test \
 	upipe_ts_test.sh
 endif
-endif
 
 if HAVE_X264
 check_PROGRAMS += upipe_x264_test
 TESTS += upipe_x264_test
+endif
 endif
 
 if HAVE_ECORE
