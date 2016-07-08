@@ -56,7 +56,7 @@
 #define S302_HEADER_SIZE 4
 
 /* Length in bytes of two audio samples */
-static uint8_t pair_lengths[] = {5, 6, 7, 0};
+static const uint8_t pair_lengths[] = {5, 6, 7, 0};
 
 /** @internal @This is the private context of an s302f pipe. */
 struct upipe_s302f {
