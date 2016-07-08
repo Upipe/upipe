@@ -39,7 +39,9 @@ if HAVE_EV
 if HAVE_WRITEV
 noinst_PROGRAMS += udpmulticat
 noinst_PROGRAMS += decrypt
+if HAVE_BITSTREAM
 noinst_PROGRAMS += hls2rtp
+endif
 endif
 
 if HAVE_BITSTREAM
