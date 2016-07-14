@@ -28,6 +28,7 @@
  */
 
 #include <upipe/ubase.h>
+#include <upipe/ulist.h>
 #include <upipe/uprobe.h>
 #include <upipe/uprobe_prefix.h>
 #include <upipe/uref.h>
@@ -89,6 +90,9 @@ struct upipe_wsrc {
     struct uchain output_request_list;
     /** output */
     struct upipe *output;
+
+    /** list of inner pipes that may require @ref upipe_attach_upump_mgr */
+    struct uchain upump_mgr_pipes;
 
     /** public upipe structure */
     struct upipe upipe;
@@ -172,6 +176,7 @@ static struct upipe *_upipe_wsrc_alloc(struct upipe_mgr *mgr,
     upipe_wsrc_init_last_inner_probe(upipe);
     upipe_wsrc_init_bin_output(upipe);
     upipe_wsrc->source = NULL;
+    ulist_init(&upipe_wsrc->upump_mgr_pipes);
 
     uprobe_init(&upipe_wsrc->proxy_probe, upipe_wsrc_proxy_probe, NULL);
     upipe_wsrc->proxy_probe.refcount = upipe_wsrc_to_urefcount_real(upipe_wsrc);
@@ -200,7 +205,8 @@ static struct upipe *_upipe_wsrc_alloc(struct upipe_mgr *mgr,
         upipe_set_max_length(out_qsink, queue_length - UINT8_MAX);
 
     upipe_attach_upump_mgr(out_qsrc);
-    upipe_wsrc_store_bin_output(upipe, out_qsrc);
+    ulist_add(&upipe_wsrc->upump_mgr_pipes, upipe_to_uchain(out_qsrc));
+    upipe_wsrc_store_bin_output(upipe, upipe_use(out_qsrc));
 
     /* last remote */
     struct upipe *last_remote = upipe_use(remote);
@@ -224,6 +230,7 @@ static struct upipe *_upipe_wsrc_alloc(struct upipe_mgr *mgr,
         goto upipe_wsrc_alloc_err3;
     }
     upipe_attach_upump_mgr(last_remote_xfer);
+    ulist_add(&upipe_wsrc->upump_mgr_pipes, upipe_to_uchain(last_remote_xfer));
     upipe_set_output(last_remote_xfer, out_qsink);
     upipe_release(out_qsink);
 
@@ -238,9 +245,10 @@ static struct upipe *_upipe_wsrc_alloc(struct upipe_mgr *mgr,
             return NULL;
         }
         upipe_attach_upump_mgr(upipe_wsrc->source);
-        upipe_release(last_remote_xfer);
+        ulist_add(&upipe_wsrc->upump_mgr_pipes,
+                upipe_to_uchain(upipe_use(upipe_wsrc->source)));
     } else {
-        upipe_wsrc->source = last_remote_xfer;
+        upipe_wsrc->source = upipe_use(last_remote_xfer);
         upipe_release(remote);
     }
     return upipe;
@@ -256,6 +264,27 @@ upipe_wsrc_alloc_err2:
 upipe_wsrc_alloc_err:
     uprobe_release(uprobe);
     return NULL;
+}
+
+/** @internal @This processes control commands on a wsrc pipe.
+ *
+ * @param upipe description structure of the pipe
+ * @param command type of command to process
+ * @param args arguments of the command
+ * @return an error code
+ */
+static int upipe_wsrc_control(struct upipe *upipe, int command, va_list args)
+{
+    if (command == UPIPE_ATTACH_UPUMP_MGR) {
+        struct upipe_wsrc *upipe_wsrc = upipe_wsrc_from_upipe(upipe);
+        struct uchain *uchain;
+        ulist_foreach (&upipe_wsrc->upump_mgr_pipes, uchain) {
+            struct upipe *upump_mgr_pipe = upipe_from_uchain(uchain);
+            upipe_attach_upump_mgr(upump_mgr_pipe);
+        }
+    }
+
+    return upipe_wsrc_control_bin_output(upipe, command, args);
 }
 
 /** @This frees a upipe.
@@ -286,6 +315,14 @@ static void upipe_wsrc_no_ref(struct upipe *upipe)
     upipe_release(upipe_wsrc->source);
     upipe_wsrc->source = NULL;
     upipe_wsrc_clean_bin_output(upipe);
+
+    struct uchain *uchain, *uchain_tmp;
+    ulist_delete_foreach (&upipe_wsrc->upump_mgr_pipes, uchain, uchain_tmp) {
+        struct upipe *upump_mgr_pipe = upipe_from_uchain(uchain);
+        ulist_delete(uchain);
+        upipe_release(upump_mgr_pipe);
+    }
+
     urefcount_release(upipe_wsrc_to_urefcount_real(upipe_wsrc));
 }
 

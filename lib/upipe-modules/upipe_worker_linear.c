@@ -28,6 +28,7 @@
  */
 
 #include <upipe/ubase.h>
+#include <upipe/ulist.h>
 #include <upipe/uprobe.h>
 #include <upipe/uprobe_prefix.h>
 #include <upipe/uref.h>
@@ -94,6 +95,9 @@ struct upipe_wlin {
     struct upipe *out_qsrc;
     /** output */
     struct upipe *output;
+
+    /** list of inner pipes that may require @ref upipe_attach_upump_mgr */
+    struct uchain upump_mgr_pipes;
 
     /** public upipe structure */
     struct upipe upipe;
@@ -197,6 +201,7 @@ static struct upipe *_upipe_wlin_alloc(struct upipe_mgr *mgr,
     upipe_wlin_init_last_inner_probe(upipe);
     upipe_wlin_init_bin_input(upipe);
     upipe_wlin_init_bin_output(upipe);
+    ulist_init(&upipe_wlin->upump_mgr_pipes);
 
     uprobe_init(&upipe_wlin->proxy_probe, upipe_wlin_proxy_probe, NULL);
     upipe_wlin->proxy_probe.refcount = upipe_wlin_to_urefcount_real(upipe_wlin);
@@ -230,7 +235,8 @@ static struct upipe *_upipe_wlin_alloc(struct upipe_mgr *mgr,
         upipe_set_max_length(out_qsink, out_queue_length - UINT8_MAX);
 
     upipe_attach_upump_mgr(out_qsrc);
-    upipe_wlin_store_bin_output(upipe, out_qsrc);
+    ulist_add(&upipe_wlin->upump_mgr_pipes, upipe_to_uchain(out_qsrc));
+    upipe_wlin_store_bin_output(upipe, upipe_use(out_qsrc));
 
     /* last remote */
     struct upipe *last_remote = upipe_use(remote);
@@ -254,6 +260,7 @@ static struct upipe *_upipe_wlin_alloc(struct upipe_mgr *mgr,
         goto upipe_wlin_alloc_err3;
     }
     upipe_attach_upump_mgr(last_remote_xfer);
+    ulist_add(&upipe_wlin->upump_mgr_pipes, upipe_to_uchain(last_remote_xfer));
     upipe_set_output(last_remote_xfer, out_qsink);
     upipe_release(out_qsink);
 
@@ -269,7 +276,7 @@ static struct upipe *_upipe_wlin_alloc(struct upipe_mgr *mgr,
             goto upipe_wlin_alloc_err3;
         }
         upipe_attach_upump_mgr(remote_xfer);
-        upipe_release(last_remote_xfer);
+        ulist_add(&upipe_wlin->upump_mgr_pipes, upipe_to_uchain(remote_xfer));
     } else {
         remote_xfer = last_remote_xfer;
     }
@@ -305,14 +312,12 @@ static struct upipe *_upipe_wlin_alloc(struct upipe_mgr *mgr,
         goto upipe_wlin_alloc_err4;
     upipe_set_output(in_qsrc_xfer, remote);
     upipe_attach_upump_mgr(in_qsrc_xfer);
+    ulist_add(&upipe_wlin->upump_mgr_pipes, upipe_to_uchain(in_qsrc_xfer));
     upipe_release(remote);
-    upipe_release(remote_xfer);
-    upipe_release(in_qsrc_xfer);
     return upipe;
 
 upipe_wlin_alloc_err4:
     upipe_release(remote);
-    upipe_release(remote_xfer);
     upipe_release(upipe);
     return NULL;
 
@@ -337,6 +342,15 @@ upipe_wlin_alloc_err:
  */
 static int upipe_wlin_control(struct upipe *upipe, int command, va_list args)
 {
+    if (command == UPIPE_ATTACH_UPUMP_MGR) {
+        struct upipe_wlin *upipe_wlin = upipe_wlin_from_upipe(upipe);
+        struct uchain *uchain;
+        ulist_foreach (&upipe_wlin->upump_mgr_pipes, uchain) {
+            struct upipe *upump_mgr_pipe = upipe_from_uchain(uchain);
+            upipe_attach_upump_mgr(upump_mgr_pipe);
+        }
+    }
+
     int err = upipe_wlin_control_bin_input(upipe, command, args);
     if (err == UBASE_ERR_UNHANDLED)
         return upipe_wlin_control_bin_output(upipe, command, args);
@@ -372,6 +386,14 @@ static void upipe_wlin_no_ref(struct upipe *upipe)
     struct upipe_wlin *upipe_wlin = upipe_wlin_from_upipe(upipe);
     upipe_wlin_clean_bin_input(upipe);
     upipe_wlin_clean_bin_output(upipe);
+
+    struct uchain *uchain, *uchain_tmp;
+    ulist_delete_foreach (&upipe_wlin->upump_mgr_pipes, uchain, uchain_tmp) {
+        struct upipe *upump_mgr_pipe = upipe_from_uchain(uchain);
+        ulist_delete(uchain);
+        upipe_release(upump_mgr_pipe);
+    }
+
     urefcount_release(upipe_wlin_to_urefcount_real(upipe_wlin));
 }
 
