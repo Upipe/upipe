@@ -24,6 +24,7 @@ libupipe_ts_la_SOURCES = \
 	upipe_ts_demux.c \
 	upipe_ts_tstd.c \
 	upipe_ts_encaps.c \
+	upipe_ts_pcr_interpolator.c \
 	upipe_ts_pes_encaps.c \
 	upipe_ts_psi_generator.c \
 	upipe_ts_si_generator.c \
