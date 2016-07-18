@@ -76,6 +76,8 @@ before_install:
     fi
   - if type brew 2>/dev/null; then
       brew update;
+      brew upgrade libtool;
+      brew upgrade pkg-config;
       brew install valgrind;
       brew install libev;
       brew install yasm;
