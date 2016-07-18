@@ -616,7 +616,7 @@ static void upump_mgr_free(struct upump_mgr *upump_mgr)
 }
 
 static void usage(const char *argv0) {
-    fprintf(stderr, "Usage: %s [-d] [-q] [-u] [-A <audio>] [-V <video>] [-P <program>] [-R 1:1] <source>\n", argv0);
+    fprintf(stderr, "Usage: %s [-d] [-q] [-u] [-A <audio>] [-S <subtitle>] [-V <video>] [-P <program>] [-R 1:1] <source>\n", argv0);
     exit(EXIT_FAILURE);
 }
 
