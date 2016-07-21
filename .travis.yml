@@ -7,7 +7,7 @@ env:
   global:
     - MAKEFLAGS=-j2
     - FFMPEG="libavcodec-ffmpeg-dev libavformat-ffmpeg-dev libswresample-ffmpeg-dev libswscale-ffmpeg-dev"
-    - APT_PACKAGES_COMMON="libev-dev libasound2-dev libx264-dev luajit $FFMPEG"
+    - APT_PACKAGES_COMMON="libev-dev libasound2-dev libx264-dev luajit libspeexdsp-dev $FFMPEG"
 
 matrix:
   include:
@@ -83,6 +83,7 @@ before_install:
       brew install yasm;
       brew install x264;
       brew install ffmpeg;
+      brew install speex;
       brew install luajit;
     fi
 
