@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2013-2015 OpenHeadend S.A.R.L.
+ * Copyright (C) 2013-2016 OpenHeadend S.A.R.L.
  *
  * Authors: Benjamin Cohen
  *          Christophe Massiot
@@ -99,11 +99,14 @@ const struct {
     const char *name;
     BMDDisplayMode mode;
 } upipe_bmd_src_display_modes[] = {
+    /* SD modes */
     {"ntsc",        bmdModeNTSC},
     {"ntsc2398",    bmdModeNTSC2398},
     {"pal",         bmdModePAL},
     {"ntscp",       bmdModeNTSCp},
     {"palp",        bmdModePALp},
+
+    /* HD 1080 modes */
     {"1080p2398",   bmdModeHD1080p2398},
     {"1080p24",     bmdModeHD1080p24},
     {"1080p25",     bmdModeHD1080p25},
@@ -115,17 +118,27 @@ const struct {
     {"1080p50",     bmdModeHD1080p50},
     {"1080p5994",   bmdModeHD1080p5994},
     {"1080p6000",   bmdModeHD1080p6000},
+
+    /* HD 720 modes */
     {"720p50",      bmdModeHD720p50},
     {"720p5994",    bmdModeHD720p5994},
     {"720p60",      bmdModeHD720p60},
+
+    /* 2k modes */
     {"2k2398",      bmdMode2k2398},
     {"2k24",        bmdMode2k24},
     {"2k25",        bmdMode2k25},
+
+    /* 4k modes */
     {"2160p2398",   bmdMode4K2160p2398},
     {"2160p24",     bmdMode4K2160p24},
     {"2160p25",     bmdMode4K2160p25},
     {"2160p2997",   bmdMode4K2160p2997},
     {"2160p30",     bmdMode4K2160p30},
+    {"2160p50",     bmdMode4K2160p50},
+    {"2160p5994",   bmdMode4K2160p5994},
+    {"2160p60",     bmdMode4K2160p60},
+
     {NULL, 0},
 };
 
@@ -789,7 +802,7 @@ static int upipe_bmd_src_set_uri(struct upipe *upipe, const char *uri)
                     (uint64_t)deckLinkTopologicalId == card_topology)
                     break;
             }
-		}
+        }
     } else {
         int card_idx = atoi(idx);
 
@@ -877,7 +890,7 @@ static int upipe_bmd_src_set_uri(struct upipe *upipe, const char *uri)
     BMDDisplayMode displayModeId = bmdModeHD1080i50;
     if (mode) {
         int i = 0;
-        for (i=0; upipe_bmd_src_display_modes[i].name; i++) {
+        for (i = 0; upipe_bmd_src_display_modes[i].name; i++) {
             if (!strcmp(mode, upipe_bmd_src_display_modes[i].name)) {
                 displayModeId = upipe_bmd_src_display_modes[i].mode;
                 break;
@@ -887,25 +900,38 @@ static int upipe_bmd_src_set_uri(struct upipe *upipe, const char *uri)
     }
 
     /* find display mode */
-	IDeckLinkDisplayModeIterator *displayModeIterator = NULL;
+    IDeckLinkDisplayModeIterator *displayModeIterator = NULL;
     if (deckLinkInput->GetDisplayModeIterator(&displayModeIterator) != S_OK) {
         deckLinkInput->Release();
         deckLink->Release();
         return UBASE_ERR_EXTERNAL;
     }
     /* iterate through available display modes and compare */
-	IDeckLinkDisplayMode *displayModeIter = NULL, *displayMode = NULL;
-	while (displayModeIterator->Next(&displayModeIter) == S_OK) {
-        if (displayModeIter->GetDisplayMode() == displayModeId) {
-            displayMode = displayModeIter;
+    IDeckLinkDisplayMode *displayMode = NULL;
+    while (displayModeIterator->Next(&displayMode) == S_OK) {
+        if (displayMode->GetDisplayMode() == displayModeId)
             break;
-        }
-		displayModeIter->Release();
+        displayMode->Release();
     }
     displayModeIterator->Release();
 
     if (unlikely(!displayMode)) {
-        upipe_warn(upipe, "display mode not available");
+        upipe_err(upipe, "display mode not available");
+        deckLinkInput->Release();
+        deckLink->Release();
+        return UBASE_ERR_EXTERNAL;
+    }
+
+    const char *display_name;
+    if (displayMode->GetName(&display_name) == S_OK)
+        upipe_notice_va(upipe, "configuring mode %s", display_name);
+
+    BMDDisplayModeSupport displayModeSupported;
+    if (deckLinkInput->DoesSupportVideoMode(displayMode->GetDisplayMode(),
+                bmdFormat8BitYUV, bmdVideoInputFlagDefault,
+                &displayModeSupported, NULL) != S_OK ||
+        displayModeSupported == bmdDisplayModeNotSupported) {
+        upipe_err(upipe, "display mode not supported");
         deckLinkInput->Release();
         deckLink->Release();
         return UBASE_ERR_EXTERNAL;
@@ -928,10 +954,12 @@ static int upipe_bmd_src_set_uri(struct upipe *upipe, const char *uri)
     }
 
     /* configure input */
-    deckLinkInput->EnableVideoInput(displayModeId, bmdFormat8BitYUV,
-                    (detectFormat ? bmdVideoInputEnableFormatDetection : 0));
+    deckLinkInput->EnableVideoInput(displayMode->GetDisplayMode(),
+            bmdFormat8BitYUV,
+            (detectFormat ? bmdVideoInputEnableFormatDetection :
+                            bmdVideoInputFlagDefault));
     deckLinkInput->EnableAudioInput(bmdAudioSampleRate48kHz,
-                                    bmdAudioSampleType16bitInteger, CHANS);
+            bmdAudioSampleType16bitInteger, CHANS);
 
     /* managers */
     upipe_bmd_src->pic_subpipe.ubuf_mgr =
