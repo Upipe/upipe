@@ -82,8 +82,6 @@ struct upipe_wsrc {
     /** probe for queue source */
     struct uprobe qsrc_probe;
 
-    /** source pipe (xfer pipe) */
-    struct upipe *source;
     /** queue source (last inner pipe of the bin) */
     struct upipe *out_qsrc;
     /** list of output bin requests */
@@ -175,7 +173,6 @@ static struct upipe *_upipe_wsrc_alloc(struct upipe_mgr *mgr,
     urefcount_init(upipe_wsrc_to_urefcount_real(upipe_wsrc), upipe_wsrc_free);
     upipe_wsrc_init_last_inner_probe(upipe);
     upipe_wsrc_init_bin_output(upipe);
-    upipe_wsrc->source = NULL;
     ulist_init(&upipe_wsrc->upump_mgr_pipes);
 
     uprobe_init(&upipe_wsrc->proxy_probe, upipe_wsrc_proxy_probe, NULL);
@@ -236,21 +233,17 @@ static struct upipe *_upipe_wsrc_alloc(struct upipe_mgr *mgr,
 
     /* remote */
     if (last_remote != remote) {
-        upipe_wsrc->source = upipe_xfer_alloc(wsrc_mgr->xfer_mgr,
+        upipe_use(remote);
+        struct upipe *remote_xfer = upipe_xfer_alloc(wsrc_mgr->xfer_mgr,
                 uprobe_pfx_alloc(uprobe_use(&upipe_wsrc->proxy_probe),
                                  UPROBE_LOG_VERBOSE, "src_xfer"), remote);
-        if (unlikely(upipe_wsrc->source == NULL)) {
-            upipe_release(out_qsink);
-            upipe_release(upipe);
-            return NULL;
-        }
-        upipe_attach_upump_mgr(upipe_wsrc->source);
-        ulist_add(&upipe_wsrc->upump_mgr_pipes,
-                upipe_to_uchain(upipe_use(upipe_wsrc->source)));
-    } else {
-        upipe_wsrc->source = upipe_use(last_remote_xfer);
-        upipe_release(remote);
+        if (unlikely(remote_xfer == NULL))
+            goto upipe_wsrc_alloc_err3;
+        upipe_attach_upump_mgr(remote_xfer);
+        ulist_add(&upipe_wsrc->upump_mgr_pipes, upipe_to_uchain(remote_xfer));
     }
+
+    upipe_release(remote);
     return upipe;
 
 upipe_wsrc_alloc_err3:
@@ -312,8 +305,6 @@ static void upipe_wsrc_free(struct urefcount *urefcount_real)
 static void upipe_wsrc_no_ref(struct upipe *upipe)
 {
     struct upipe_wsrc *upipe_wsrc = upipe_wsrc_from_upipe(upipe);
-    upipe_release(upipe_wsrc->source);
-    upipe_wsrc->source = NULL;
     upipe_wsrc_clean_bin_output(upipe);
 
     struct uchain *uchain, *uchain_tmp;
@@ -404,7 +395,7 @@ struct upipe_mgr *upipe_wsrc_mgr_alloc(struct upipe_mgr *xfer_mgr)
     wsrc_mgr->mgr.signature = UPIPE_WSRC_SIGNATURE;
     wsrc_mgr->mgr.upipe_alloc = _upipe_wsrc_alloc;
     wsrc_mgr->mgr.upipe_input = NULL;
-    wsrc_mgr->mgr.upipe_control = upipe_wsrc_control_bin_output;
+    wsrc_mgr->mgr.upipe_control = upipe_wsrc_control;
     wsrc_mgr->mgr.upipe_mgr_control = upipe_wsrc_mgr_control;
     return upipe_wsrc_mgr_to_upipe_mgr(wsrc_mgr);
 }
