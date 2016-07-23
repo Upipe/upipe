@@ -412,7 +412,7 @@ static int upipe_xfer_control(struct upipe *upipe, int command, va_list args)
         case UPIPE_ATTACH_UPUMP_MGR: {
             struct upipe_xfer *upipe_xfer = upipe_xfer_from_upipe(upipe);
             upipe_xfer_set_upump(upipe, NULL);
-            UBASE_RETURN(upipe_xfer_attach_upump_mgr(upipe))
+            upipe_xfer_attach_upump_mgr(upipe);
             if (upipe_xfer->upump_mgr != NULL) {
                 /* prepare a queue to receive probe events */
                 upipe_xfer->upump = uqueue_upump_alloc_pop(&upipe_xfer->uqueue,
