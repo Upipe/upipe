@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2013-2014 OpenHeadend S.A.R.L.
+ * Copyright (C) 2013-2016 OpenHeadend S.A.R.L.
  *
  * Authors: Christophe Massiot
  *
@@ -44,6 +44,30 @@ extern "C" {
 #include <upipe/upipe.h>
 
 #define UPIPE_XFER_SIGNATURE UBASE_FOURCC('x','f','e','r')
+
+/** @This extends upipe_command with specific commands for xfer. */
+enum upipe_xfer_command {
+    UPIPE_XFER_SENTINEL = UPIPE_CONTROL_LOCAL,
+
+    /** returns the remote pipe (struct upipe **) */
+    UPIPE_XFER_GET_REMOTE,
+};
+
+/** @This returns the remote pipe. Please note that this should only be
+ * called in the thread running upipe_xfer, and that nothing should be done
+ * on the remote pipe, unless you have stopped the remote thread and
+ * performed a memory barrier (in a way not provided by Upipe API).
+ *
+ * @param upipe description structure of the pipe
+ * @param remote_p filled in with the remote pipe
+ * @return an error code
+ */
+static inline int upipe_xfer_get_remote(struct upipe *upipe,
+                                        struct upipe **remote_p)
+{
+    return upipe_control(upipe, UPIPE_XFER_GET_REMOTE,
+                         UPIPE_XFER_SIGNATURE, remote_p);
+}
 
 /** @This extends upipe_mgr_command with specific commands for xfer. */
 enum upipe_xfer_mgr_command {
