@@ -265,20 +265,15 @@ static struct upipe *_upipe_wlin_alloc(struct upipe_mgr *mgr,
     upipe_release(out_qsink);
 
     /* remote */
-    struct upipe *remote_xfer;
     if (last_remote != remote) {
         upipe_use(remote);
-        remote_xfer = upipe_xfer_alloc(wlin_mgr->xfer_mgr,
+        struct upipe *remote_xfer = upipe_xfer_alloc(wlin_mgr->xfer_mgr,
                 uprobe_pfx_alloc(uprobe_use(&upipe_wlin->proxy_probe),
                                  UPROBE_LOG_VERBOSE, "lin_xfer"), remote);
-        if (unlikely(remote_xfer == NULL)) {
-            upipe_release(out_qsink);
+        if (unlikely(remote_xfer == NULL))
             goto upipe_wlin_alloc_err3;
-        }
         upipe_attach_upump_mgr(remote_xfer);
         ulist_add(&upipe_wlin->upump_mgr_pipes, upipe_to_uchain(remote_xfer));
-    } else {
-        remote_xfer = last_remote_xfer;
     }
 
     /* input queue */
