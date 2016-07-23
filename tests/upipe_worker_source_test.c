@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2014-2015 OpenHeadend S.A.R.L.
+ * Copyright (C) 2014-2016 OpenHeadend S.A.R.L.
  *
  * Authors: Christophe Massiot
  *
@@ -182,6 +182,7 @@ static int catch(struct uprobe *uprobe, struct upipe *upipe, int event, va_list 
         case UPROBE_READY:
         case UPROBE_DEAD:
         case UPROBE_NEW_FLOW_DEF:
+        case UPROBE_NEED_UPUMP_MGR:
             break;
         default:
             assert(0);
@@ -236,6 +237,8 @@ int main(int argc, char **argv)
     assert(upipe_wsrc_mgr != NULL);
     upipe_mgr_release(upipe_xfer_mgr);
 
+    /* Test with upump_mgr frozen, this is supposed to work. */
+    uprobe_throw(uprobe_main, NULL, UPROBE_FREEZE_UPUMP_MGR);
     struct upipe *upipe_handle = upipe_wsrc_alloc(upipe_wsrc_mgr,
             uprobe_pfx_alloc(uprobe_use(uprobe_main), UPROBE_LOG_VERBOSE,
                              "wsrc"),
@@ -246,6 +249,8 @@ int main(int argc, char **argv)
     /* from now on upipe_test shouldn't be accessed from this thread */
     assert(upipe_handle != NULL);
     upipe_mgr_release(upipe_wsrc_mgr);
+    uprobe_throw(uprobe_main, NULL, UPROBE_THAW_UPUMP_MGR);
+    upipe_attach_upump_mgr(upipe_handle);
 
     struct upipe_mgr *upipe_null_mgr = upipe_null_mgr_alloc();
     assert(upipe_null_mgr != NULL);
