@@ -325,6 +325,8 @@ struct upipe_ts_mux {
 
     /** list of PIDs carrying PSI */
     struct uchain psi_pids;
+    /** list of inputs that are actually PSI */
+    struct uchain psi_inputs;
     /** max latency of the subpipes */
     uint64_t latency;
     /** date of the current uref (system time, latency taken into account) */
@@ -483,6 +485,8 @@ struct upipe_ts_mux_input {
     struct urefcount urefcount;
     /** structure for double-linked lists */
     struct uchain uchain;
+    /** structure for double-linked lists for PSI inputs */
+    struct uchain uchain_psi;
 
     /** true if the input is in the process of being deleted */
     bool deleted;
@@ -546,6 +550,7 @@ UPIPE_HELPER_INNER(upipe_ts_mux_input, input);
 UPIPE_HELPER_BIN_INPUT(upipe_ts_mux_input, input, input_request_list)
 
 UBASE_FROM_TO(upipe_ts_mux_input, urefcount, urefcount_real, urefcount_real)
+UBASE_FROM_TO(upipe_ts_mux_input, uchain, uchain_psi, uchain_psi)
 
 UPIPE_HELPER_SUBPIPE(upipe_ts_mux_program, upipe_ts_mux_input, input,
                      input_mgr, inputs, uchain)
@@ -881,6 +886,7 @@ static struct upipe *upipe_ts_mux_input_alloc(struct upipe_mgr *mgr,
     urefcount_init(upipe_ts_mux_input_to_urefcount_real(upipe_ts_mux_input),
                    upipe_ts_mux_input_free);
     upipe_ts_mux_input_init_bin_input(upipe);
+    uchain_init(upipe_ts_mux_input_to_uchain_psi(upipe_ts_mux_input));
     upipe_ts_mux_input->pcr = false;
     upipe_ts_mux_input->deleted = false;
     upipe_ts_mux_input->input_type = UPIPE_TS_MUX_INPUT_OTHER;
@@ -1192,6 +1198,8 @@ static int upipe_ts_mux_input_set_flow_def(struct upipe *upipe,
         input->dts_sys = UINT64_MAX;
         input->pcr_sys = UINT64_MAX;
         input->ready = false;
+        ulist_add(&upipe_ts_mux->psi_inputs,
+                  upipe_ts_mux_input_to_uchain_psi(input));
 
         struct upipe_ts_mux_mgr *ts_mux_mgr =
             upipe_ts_mux_mgr_from_upipe_mgr(upipe_ts_mux_to_upipe(upipe_ts_mux)->mgr);
@@ -1473,6 +1481,7 @@ static void upipe_ts_mux_input_no_input(struct upipe *upipe)
 
     upipe_ts_mux_input->deleted = true;
     if (upipe_ts_mux_input->input_type == UPIPE_TS_MUX_INPUT_SCTE35) {
+        ulist_delete(upipe_ts_mux_input_to_uchain_psi(upipe_ts_mux_input));
         upipe_release(upipe_ts_mux_input->encaps);
         upipe_ts_mux_input->encaps = NULL;
     } else
@@ -2310,6 +2319,7 @@ static struct upipe *upipe_ts_mux_alloc(struct upipe_mgr *mgr,
     upipe_ts_mux->interval = 0;
 
     ulist_init(&upipe_ts_mux->psi_pids);
+    ulist_init(&upipe_ts_mux->psi_inputs);
     upipe_ts_mux->mode = UPIPE_TS_MUX_MODE_CBR;
     upipe_ts_mux->tb_size = T_STD_TS_BUFFER;
     upipe_ts_mux->mtu = TS_SIZE;
@@ -2381,6 +2391,30 @@ static bool upipe_ts_mux_find_pid(struct upipe *upipe, uint16_t pid)
     return false;
 }
 
+/** @internal @This prepares PSI tables.
+ *
+ * @param upipe description structure of the pipe
+ * @param cr_sys current muxing date
+ * @param latency mux latency
+ */
+static void upipe_ts_mux_prepare_psi(struct upipe *upipe,
+                                     uint64_t cr_sys, uint64_t latency)
+{
+    struct upipe_ts_mux *mux = upipe_ts_mux_from_upipe(upipe);
+    if (mux->psig != NULL)
+        upipe_ts_mux_prepare(mux->psig, cr_sys, latency);
+    if (mux->sig != NULL)
+        upipe_ts_mux_prepare(mux->sig, cr_sys, latency);
+
+    struct uchain *uchain;
+    ulist_foreach (&mux->psi_inputs, uchain) {
+        struct upipe_ts_mux_input *input =
+            upipe_ts_mux_input_from_uchain_psi(uchain);
+        if (input->input != NULL)
+            upipe_ts_mux_prepare(input->input, cr_sys, latency);
+    }
+}
+
 /** @internal @This increments the cr_sys by a tick, and prepares PSI tables.
  *
  * @param upipe description structure of the pipe
@@ -2395,32 +2429,7 @@ static void upipe_ts_mux_increment(struct upipe *upipe)
     mux->cr_sys_remainder = q.rem;
 
     /* Tell PSI tables to prepare packets. */
-    uint64_t original_cr_sys = mux->cr_sys - mux->latency;
-    if (mux->psig != NULL)
-        upipe_ts_mux_prepare(mux->psig, original_cr_sys, mux->latency);
-    if (mux->sig != NULL)
-        upipe_ts_mux_prepare(mux->sig, original_cr_sys, mux->latency);
-
-    struct uchain *uchain;
-    ulist_foreach (&mux->programs, uchain) {
-        struct upipe_ts_mux_program *program =
-            upipe_ts_mux_program_from_uchain(uchain);
-
-        struct uchain *uchain_input;
-        ulist_foreach (&program->inputs, uchain_input) {
-            struct upipe_ts_mux_input *input =
-                upipe_ts_mux_input_from_uchain(uchain_input);
-            switch (input->input_type) {
-                case UPIPE_TS_MUX_INPUT_SCTE35:
-                    if (input->input != NULL)
-                        upipe_ts_mux_prepare(input->input, original_cr_sys,
-                                             mux->latency);
-                    break;
-                default:
-                    break;
-            }
-        }
-    }
+    upipe_ts_mux_prepare_psi(upipe, mux->cr_sys - mux->latency, mux->latency);
 }
 
 /** @internal @This shows the next increment of cr_sys.
@@ -2717,28 +2726,7 @@ static void upipe_ts_mux_work_file(struct upipe *upipe, struct upump **upump_p)
                 upipe_ts_mux_init_cr_prog(upipe, mux->initial_cr_prog);
                 mux->initial_cr_prog = UINT64_MAX;
             }
-            upipe_ts_mux_prepare(mux->psig, min_cr_sys, 0);
-            if (mux->sig != NULL)
-                upipe_ts_mux_prepare(mux->sig, min_cr_sys, 0);
-
-            struct uchain *uchain;
-            ulist_foreach (&mux->programs, uchain) {
-                struct upipe_ts_mux_program *program =
-                    upipe_ts_mux_program_from_uchain(uchain);
-
-                struct uchain *uchain_input;
-                ulist_foreach (&program->inputs, uchain_input) {
-                    struct upipe_ts_mux_input *input =
-                        upipe_ts_mux_input_from_uchain(uchain_input);
-                    switch (input->input_type) {
-                        case UPIPE_TS_MUX_INPUT_SCTE35:
-                            upipe_ts_mux_prepare(input->input, min_cr_sys, 0);
-                            break;
-                        default:
-                            break;
-                    }
-                }
-            }
+            upipe_ts_mux_prepare_psi(upipe, min_cr_sys, 0);
         }
 
         struct ubuf *ubuf;
