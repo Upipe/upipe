@@ -99,6 +99,8 @@
 #define DEFAULT_MUX_DELAY (UCLOCK_FREQ / 100)
 /** minimum allowed buffering (== max decoder VBV) */
 #define MIN_BUFFERING (UCLOCK_FREQ * 10)
+/** number of packets to output in one iteration of the live mode */
+#define NB_PACKETS 7
 /** T-STD TB octet rate for PSI tables */
 #define TB_RATE_PSI 125000
 /** T-STD TB octet rate for misc audio */
@@ -1523,8 +1525,13 @@ static void upipe_ts_mux_input_no_input(struct upipe *upipe)
         ulist_delete(upipe_ts_mux_input_to_uchain_psi(upipe_ts_mux_input));
         upipe_release(upipe_ts_mux_input->encaps);
         upipe_ts_mux_input->encaps = NULL;
-    } else
+    } else {
         upipe_ts_encaps_eos(upipe_ts_mux_input->encaps);
+        if (!upipe_ts_mux_input->ready) {
+            upipe_release(upipe_ts_mux_input->encaps);
+            upipe_ts_mux_input->encaps = NULL;
+        }
+    }
     upipe_release(upipe_ts_mux_input->tstd);
     upipe_ts_mux_input->tstd = NULL;
     upipe_release(upipe_ts_mux_input->psig_flow);
@@ -2630,51 +2637,38 @@ static void _upipe_ts_mux_watcher(struct upipe *upipe)
     if (unlikely(mux->cr_sys == UINT64_MAX))
         mux->cr_sys = uclock_now(mux->uclock);
 
-    upipe_ts_mux_increment(upipe);
-    if (mux->uref != NULL) /* capped VBR */
-        uref_clock_set_cr_sys(mux->uref, mux->cr_sys - mux->latency);
+    unsigned int nb_packets = 0;
+    while (nb_packets < NB_PACKETS) {
+        upipe_ts_mux_increment(upipe);
+        if (mux->uref != NULL) /* capped VBR */
+            uref_clock_set_cr_sys(mux->uref, mux->cr_sys - mux->latency);
 
-    while (mux->uref_size < mux->mtu) {
-        struct ubuf *ubuf;
-        uint64_t dts_sys;
-        upipe_ts_mux_splice(upipe, &ubuf, &dts_sys);
-        if (ubuf == NULL)
-            break;
-        upipe_ts_mux_append(upipe, ubuf, dts_sys);
-    }
-
-    uint64_t dts_sys;
-    if (mux->mode != UPIPE_TS_MUX_MODE_CAPPED ||
-        (mux->uref != NULL &&
-         ubase_check(uref_clock_get_dts_sys(mux->uref, &dts_sys)) &&
-         dts_sys + mux->latency < upipe_ts_mux_show_increment(upipe))) {
         while (mux->uref_size < mux->mtu) {
-            struct ubuf *ubuf = ubuf_dup(mux->padding);
+            nb_packets++;
+            struct ubuf *ubuf;
+            uint64_t dts_sys;
+            upipe_ts_mux_splice(upipe, &ubuf, &dts_sys);
             if (ubuf == NULL)
                 break;
-            upipe_ts_mux_append(upipe, ubuf, UINT64_MAX);
+            upipe_ts_mux_append(upipe, ubuf, dts_sys);
         }
-    }
 
-    if (mux->uref_size >= mux->mtu)
-        upipe_ts_mux_complete(upipe, &mux->upump);
-
-    /* Check for deleted inputs */
-    struct uchain *uchain_program, *uchain_program_tmp;
-    ulist_delete_foreach (&mux->programs, uchain_program, uchain_program_tmp) {
-        struct upipe_ts_mux_program *program =
-            upipe_ts_mux_program_from_uchain(uchain_program);
-        upipe_use(upipe_ts_mux_program_to_upipe(program));
-
-        struct uchain *uchain_input, *uchain_input_tmp;
-        ulist_delete_foreach (&program->inputs, uchain_input,
-                              uchain_input_tmp) {
-            struct upipe_ts_mux_input *input =
-                upipe_ts_mux_input_from_uchain(uchain_input);
-            if (input->deleted && !input->ready)
-                upipe_release(input->encaps);
+        uint64_t dts_sys;
+        if (mux->mode != UPIPE_TS_MUX_MODE_CAPPED ||
+            (mux->uref != NULL &&
+             ubase_check(uref_clock_get_dts_sys(mux->uref, &dts_sys)) &&
+             dts_sys + mux->latency < upipe_ts_mux_show_increment(upipe))) {
+            while (mux->uref_size < mux->mtu) {
+                nb_packets++;
+                struct ubuf *ubuf = ubuf_dup(mux->padding);
+                if (ubuf == NULL)
+                    break;
+                upipe_ts_mux_append(upipe, ubuf, UINT64_MAX);
+            }
         }
-        upipe_release(upipe_ts_mux_program_to_upipe(program));
+
+        if (mux->uref_size >= mux->mtu)
+            upipe_ts_mux_complete(upipe, &mux->upump);
     }
 
     upipe_ts_mux_set_upump(upipe, NULL);
