@@ -302,7 +302,7 @@ int main(int argc, char *argv[])
     uref_clock_set_dts_pts_delay(uref, UCLOCK_FREQ);
     uref_block_set_start(uref);
     uref_flow_set_discontinuity(uref);
-    ubase_assert(uref_flow_set_random(uref));
+    uref_flow_set_random(uref);
     upipe_input(upipe_ts_encaps, uref, NULL);
     assert(next_cr_sys <= UINT32_MAX);
     assert(next_ready);

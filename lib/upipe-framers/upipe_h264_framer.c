@@ -1797,7 +1797,7 @@ static void upipe_h264f_nal_end(struct upipe *upipe, struct upump **upump_p)
             return;
         }
         if (last_nal_type == H264NAL_TYPE_IDR) {
-            UBASE_FATAL(upipe, uref_flow_set_random(upipe_h264f->next_uref))
+            uref_flow_set_random(upipe_h264f->next_uref);
         }
         return;
     }

@@ -44,7 +44,7 @@ UREF_ATTR_VOID_UREF(flow, end, UREF_FLAG_FLOW_END,
         end flag meaning that the writer was disconnected)
 UREF_ATTR_VOID_UREF(flow, discontinuity, UREF_FLAG_FLOW_DISC,
         discontinuity flag that may be present in any uref carrying data)
-UREF_ATTR_VOID_SH(flow, random, UDICT_TYPE_FLOW_RANDOM,
+UREF_ATTR_VOID_UREF(flow, random, UREF_FLAG_FLOW_RANDOM,
         random access flag that may be present in any uref carrying data)
 UREF_ATTR_VOID_SH(flow, error, UDICT_TYPE_FLOW_ERROR,
         error flag that may be present in any uref carrying data)

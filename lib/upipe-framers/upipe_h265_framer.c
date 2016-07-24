@@ -1872,7 +1872,7 @@ static void upipe_h265f_nal_end(struct upipe *upipe, struct upump **upump_p)
             last_nal_type == H265NAL_TYPE_IDR_W_RADL ||
             last_nal_type == H265NAL_TYPE_IDR_N_LP ||
             last_nal_type == H265NAL_TYPE_CRA) {
-            UBASE_FATAL(upipe, uref_flow_set_random(upipe_h265f->next_uref))
+            uref_flow_set_random(upipe_h265f->next_uref);
         }
         return;
     }
