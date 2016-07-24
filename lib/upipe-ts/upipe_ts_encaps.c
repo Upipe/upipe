@@ -968,8 +968,9 @@ static int upipe_ts_encaps_promote_au(struct upipe *upipe)
 
     size_t au_size = encaps->uref_size;
     uint64_t duration = 0;
-    uref_clock_get_duration(encaps->uref, &duration);
     struct uchain *uchain = &encaps->urefs;
+    if (encaps->pes_min_duration)
+        uref_clock_get_duration(encaps->uref, &duration);
     while (!ulist_is_last(&encaps->urefs, uchain)) {
         if (ubase_check(uref_block_get_start(uref_from_uchain(uchain->next))))
             break;
@@ -978,10 +979,13 @@ static int upipe_ts_encaps_promote_au(struct upipe *upipe)
         size_t uref_size;
         UBASE_RETURN(uref_block_size(uref, &uref_size));
         au_size += uref_size;
-        uint64_t uref_duration = 0;
-        uref_clock_get_duration(uref, &uref_duration);
-        duration += uref_duration;
+        if (encaps->pes_min_duration) {
+            uint64_t uref_duration = 0;
+            uref_clock_get_duration(uref, &uref_duration);
+            duration += uref_duration;
+        }
     }
+
 #ifdef VERBOSE_HEADERS
     upipe_verbose_va(upipe, "promoting a%s access unit of size %zu",
             ubase_check(uref_flow_get_random(encaps->uref)) ? " random" : "n",
