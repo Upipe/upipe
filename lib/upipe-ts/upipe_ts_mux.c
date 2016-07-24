@@ -325,6 +325,8 @@ struct upipe_ts_mux {
 
     /** list of PIDs carrying PSI */
     struct uchain psi_pids;
+    /** list of PIDs carrying PSI, ordered for splice */
+    struct uchain psi_pids_splice;
     /** list of inputs that are actually PSI */
     struct uchain psi_inputs;
     /** max latency of the subpipes */
@@ -569,6 +571,8 @@ struct upipe_ts_mux_psi_pid {
     unsigned int refcount;
     /** structure for double-linked lists */
     struct uchain uchain;
+    /** structure for double-linked lists for splice */
+    struct uchain uchain_splice;
 
     /** PID */
     uint16_t pid;
@@ -593,6 +597,25 @@ struct upipe_ts_mux_psi_pid {
 };
 
 UBASE_FROM_TO(upipe_ts_mux_psi_pid, uchain, uchain, uchain)
+UBASE_FROM_TO(upipe_ts_mux_psi_pid, uchain, uchain_splice, uchain_splice)
+
+/** @internal @This sorts the psi_pids by increasing PID. We do not take into
+ * account cr_sys as, in the case of PSIs, packets are prepared for the
+ * current muxing date when calling @ref upipe_ts_mux_prepare.
+ *
+ * @param uchain1 pointer to first psi_pid
+ * @param uchain2 pointer to second psi_pid
+ * @return -1, 0 or +1
+ */
+static int upipe_ts_mux_psi_pid_compare(struct uchain *uchain1,
+                                        struct uchain *uchain2)
+{
+    struct upipe_ts_mux_psi_pid *psi_pid1 =
+        upipe_ts_mux_psi_pid_from_uchain_splice(uchain1);
+    struct upipe_ts_mux_psi_pid *psi_pid2 =
+        upipe_ts_mux_psi_pid_from_uchain_splice(uchain2);
+    return psi_pid1->pid - psi_pid2->pid;
+}
 
 /** @internal @This catches the events from psi_join inner pipes.
  *
@@ -659,6 +682,17 @@ static int upipe_ts_mux_psi_pid_encaps_probe(struct uprobe *uprobe,
 
     psi_pid->cr_sys = va_arg(args, uint64_t);
     psi_pid->dts_sys = va_arg(args, uint64_t);
+    struct uchain *uchain_splice =
+        upipe_ts_mux_psi_pid_to_uchain_splice(psi_pid);
+    if (ulist_is_in(uchain_splice))
+        ulist_delete(uchain_splice);
+
+    if (psi_pid->cr_sys != UINT64_MAX) {
+        struct upipe_ts_mux *upipe_ts_mux =
+            upipe_ts_mux_from_upipe(psi_pid->upipe);
+        ulist_bubble_reverse(&upipe_ts_mux->psi_pids_splice, uchain_splice,
+                             upipe_ts_mux_psi_pid_compare);
+    }
     return UBASE_ERR_NONE;
 }
 
@@ -697,6 +731,7 @@ static struct upipe_ts_mux_psi_pid *
 
     psi_pid->refcount = 1;
     uchain_init(upipe_ts_mux_psi_pid_to_uchain(psi_pid));
+    uchain_init(upipe_ts_mux_psi_pid_to_uchain_splice(psi_pid));
 
     psi_pid->pid = pid;
     /* we do not increase refcount as we will necessarily die before ts_mux */
@@ -795,6 +830,10 @@ static void upipe_ts_mux_psi_pid_release(struct upipe_ts_mux_psi_pid *psi_pid)
     psi_pid->refcount--;
     if (!psi_pid->refcount) {
         ulist_delete(upipe_ts_mux_psi_pid_to_uchain(psi_pid));
+        struct uchain *uchain_splice =
+            upipe_ts_mux_psi_pid_to_uchain_splice(psi_pid);
+        if (ulist_is_in(uchain_splice))
+            ulist_delete(uchain_splice);
         upipe_release(psi_pid->psi_join);
         upipe_release(psi_pid->encaps);
         uprobe_clean(&psi_pid->encaps_probe);
@@ -2319,6 +2358,7 @@ static struct upipe *upipe_ts_mux_alloc(struct upipe_mgr *mgr,
     upipe_ts_mux->interval = 0;
 
     ulist_init(&upipe_ts_mux->psi_pids);
+    ulist_init(&upipe_ts_mux->psi_pids_splice);
     ulist_init(&upipe_ts_mux->psi_inputs);
     upipe_ts_mux->mode = UPIPE_TS_MUX_MODE_CBR;
     upipe_ts_mux->tb_size = T_STD_TS_BUFFER;
@@ -2462,23 +2502,30 @@ static void upipe_ts_mux_splice(struct upipe *upipe, struct ubuf **ubuf_p,
     *ubuf_p = NULL;
 
     /* Order of priority: 1. PSI */
-    ulist_foreach (&mux->psi_pids, uchain) {
+    while (!ulist_empty(&mux->psi_pids_splice)) {
+        uchain = ulist_peek(&mux->psi_pids_splice);
         struct upipe_ts_mux_psi_pid *psi_pid =
-            upipe_ts_mux_psi_pid_from_uchain(uchain);
+            upipe_ts_mux_psi_pid_from_uchain_splice(uchain);
 
-        if (psi_pid->dts_sys < original_cr_sys) /* flush */
+        if (psi_pid->dts_sys < original_cr_sys) {
+            /* Too late: flush */
             upipe_ts_encaps_splice(psi_pid->encaps, original_cr_sys,
                                    NULL, NULL);
-
-        if (psi_pid->cr_sys <= original_cr_sys) {
-            err = upipe_ts_encaps_splice(psi_pid->encaps, original_cr_sys,
-                                         ubuf_p, dts_sys_p);
-            if (!ubase_check(err)) {
-                upipe_warn(upipe, "internal error in splice");
-                upipe_throw_fatal(upipe, err);
-            }
-            return;
+            /* No need to pop uchain as the probe does it for us. */
+            continue;
         }
+
+        if (psi_pid->cr_sys > original_cr_sys)
+            break; /* Too soon */
+
+        err = upipe_ts_encaps_splice(psi_pid->encaps, original_cr_sys,
+                                     ubuf_p, dts_sys_p);
+        if (!ubase_check(err)) {
+            upipe_warn(upipe, "internal error in splice");
+            upipe_throw_fatal(upipe, err);
+        }
+        /* No need to pop uchain as the probe does it for us. */
+        return;
     }
 
     /* 2. Inputs */
