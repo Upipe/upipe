@@ -479,6 +479,34 @@ static inline int ubuf_block_resize(struct ubuf *ubuf, int offset, int new_size)
     return UBASE_ERR_NONE;
 }
 
+/** @This prepends a block ubuf, if possible. This will only work if
+ * prepend has been correctly specified at allocation.
+ *
+ * Should this fail, @ref ubuf_block_merge may be used to achieve the same
+ * goal with an extra buffer copy.
+ *
+ * @param ubuf pointer to ubuf
+ * @param prepend number of octets to prepend
+ * @return an error code
+ */
+static inline int ubuf_block_prepend(struct ubuf *ubuf, int prepend)
+{
+    assert(prepend >= 0);
+    if (ubuf->mgr->signature != UBUF_ALLOC_BLOCK)
+        return UBASE_ERR_INVALID;
+
+    struct ubuf_block *block = ubuf_block_from_ubuf(ubuf);
+
+    if (prepend > block->offset)
+        return UBASE_ERR_INVALID;
+
+    block->offset -= prepend;
+    block->size += prepend;
+    block->total_size += prepend;
+    block->cached_offset += prepend;
+    return UBASE_ERR_NONE;
+}
+
 /** @This duplicates part of a ubuf.
  *
  * @param ubuf pointer to ubuf

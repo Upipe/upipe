@@ -52,6 +52,7 @@ int main(int argc, char **argv)
     assert(umem_mgr != NULL);
     struct ubuf_mgr *mgr = ubuf_block_mem_mgr_alloc(UBUF_POOL_DEPTH,
                                                     UBUF_POOL_DEPTH, umem_mgr,
+                                                    UBUF_PREPEND,
                                                     UBUF_ALIGN,
                                                     UBUF_ALIGN_OFFSET);
     assert(mgr != NULL);
@@ -107,6 +108,15 @@ int main(int argc, char **argv)
     assert(wanted == UBUF_SIZE);
     assert(r[0] == 1);
     assert(r[UBUF_SIZE - 1] == UBUF_SIZE);
+    ubase_assert(ubuf_block_unmap(ubuf1, 0));
+
+    /* test ubuf_block_prepend */
+    ubase_assert(ubuf_block_prepend(ubuf1, UBUF_PREPEND));
+    wanted = -1;
+    ubase_assert(ubuf_block_read(ubuf1, 0, &wanted, &r));
+    assert(wanted == UBUF_SIZE + UBUF_PREPEND);
+    assert(r[UBUF_PREPEND] == 1);
+    assert(r[UBUF_SIZE + UBUF_PREPEND - 1] == UBUF_SIZE);
     ubase_assert(ubuf_block_unmap(ubuf1, 0));
 
     ubuf_free(ubuf1);

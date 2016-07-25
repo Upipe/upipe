@@ -53,6 +53,8 @@ UREF_ATTR_UNSIGNED(block_flow, buffer_size, "b.bs",
 UREF_ATTR_UNSIGNED(block_flow, max_buffer_size, "b.max_bs",
         maximum size of coded buffer in octets)
 UREF_ATTR_UNSIGNED(block_flow, align, "b.align", alignment in octets)
+UREF_ATTR_UNSIGNED(block_flow, prepend, "b.prepend",
+        extra bytes allocated before buffer)
 UREF_ATTR_INT(block_flow, align_offset, "b.align_offset",
         offset of the aligned octet)
 UREF_ATTR_UNSIGNED(block_flow, size, "b.size", block size)

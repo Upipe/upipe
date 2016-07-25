@@ -216,6 +216,7 @@ int main(int argc, char **argv)
     /* block */
     ubuf_mgr = ubuf_block_mem_mgr_alloc(UBUF_POOL_DEPTH,
                                                     UBUF_POOL_DEPTH, umem_mgr,
+                                                    0,
                                                     UBUF_ALIGN,
                                                     UBUF_ALIGN_OFFSET);
     assert(ubuf_mgr);
