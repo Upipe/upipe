@@ -60,6 +60,7 @@ libupipe_modules_la_SOURCES = \
 	upipe_burst.c \
 	upipe_sequential_source.c \
 	upipe_segment_source.c \
+	upipe_subpic_schedule.c \
 	upipe_id3v2.c \
 	id3v2.h \
 	$(NULL)

@@ -63,4 +63,5 @@ myinclude_HEADERS = \
 	upipe_segment_source.h \
 	upipe_id3v2.h \
 	upipe_rtp_reorder.h \
+	upipe_subpic_schedule.h \
 	$(NULL)
