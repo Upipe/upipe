@@ -26,7 +26,7 @@
 /** @file
  * @short Upipe module - multicat file sink
  * This sink module owns an embedded file sink and changes its path
- * depending on the uref k.systime attribute.
+ * depending on the uref cr_sys attribute.
  */
 
 #ifndef _UPIPE_MODULES_UPIPE_MULTICAT_SINK_H_
@@ -77,6 +77,7 @@ struct upipe_mgr *upipe_multicat_sink_mgr_alloc(void);
  *
  * @param upipe description structure of the pipe
  * @param path_p filled in with the path of the file
+ * @param suffix_p filled in with the suffix used
  * @return an error code
  */
 static inline int
@@ -91,6 +92,7 @@ static inline int
  *
  * @param upipe description structure of the pipe
  * @param path relative or absolute path of the node
+ * @param suffix suffix to add to file names
  * @return an error code
  */
 static inline int
