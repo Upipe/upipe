@@ -255,10 +255,6 @@ static void upipe_fsrc_worker(struct upump *upump)
     ssize_t ret = read(upipe_fsrc->fd, buffer, upipe_fsrc->output_size);
     uref_block_unmap(uref, 0);
 
-    const char *path;
-    if (!ubase_check(upipe_fsrc_get_uri(upipe, &path)))
-        path = "(none)";
-
     if (unlikely(ret == -1)) {
         uref_free(uref);
         switch (errno) {
@@ -275,6 +271,8 @@ static void upipe_fsrc_worker(struct upump *upump)
             default:
                 break;
         }
+        const char *path = "(none)";
+        upipe_fsrc_get_uri(upipe, &path);
         upipe_err_va(upipe, "read error from %s (%m)", path);
         upipe_fsrc_set_upump_safe(upipe, NULL);
         ubase_clean_fd(&upipe_fsrc->fd);
@@ -292,6 +290,8 @@ static void upipe_fsrc_worker(struct upump *upump)
     upipe_fsrc->safe = true;
     upipe_fsrc_output(upipe, uref, &upipe_fsrc->upump);
     if (likely(upipe_fsrc->safe) && unlikely(ret == 0)) {
+        const char *path = "(none)";
+        upipe_fsrc_get_uri(upipe, &path);
         upipe_notice_va(upipe, "end of file %s", path);
         upipe_fsrc_set_upump_safe(upipe, NULL);
         ubase_clean_fd(&upipe_fsrc->fd);
