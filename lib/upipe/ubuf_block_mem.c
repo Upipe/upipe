@@ -49,6 +49,8 @@
 
 /** default alignement of buffer when unspecified */
 #define UBUF_DEFAULT_ALIGN          0
+/** default minimum extra space before buffer when unspecified */
+#define UBUF_DEFAULT_PREPEND        32
 
 /** @This is a super-set of the @ref ubuf (and @ref ubuf_block)
  * structure with private fields pointing to shared data. */
@@ -68,6 +70,8 @@ struct ubuf_block_mem_mgr {
     /** refcount management structure */
     struct urefcount urefcount;
 
+    /** extra space added before */
+    size_t prepend;
     /** alignment */
     size_t align;
     /** alignment offset */
@@ -124,7 +128,7 @@ static struct ubuf *ubuf_block_mem_alloc(struct ubuf_mgr *mgr,
         return NULL;
     }
 
-    size_t buffer_size = size + block_mem_mgr->align;
+    size_t buffer_size = size + block_mem_mgr->prepend + block_mem_mgr->align;
     if (unlikely(!umem_alloc(block_mem_mgr->umem_mgr, &block_mem->shared->umem,
                              buffer_size))) {
         ubuf_block_mem_shared_free_pool(mgr, block_mem->shared);
@@ -132,7 +136,7 @@ static struct ubuf *ubuf_block_mem_alloc(struct ubuf_mgr *mgr,
         return NULL;
     }
 
-    size_t offset = block_mem_mgr->align;
+    size_t offset = block_mem_mgr->prepend + block_mem_mgr->align;
     if (block_mem_mgr->align)
         offset -= ((uintptr_t)ubuf_mem_shared_buffer(block_mem->shared) +
                   offset + block_mem_mgr->align_offset) % block_mem_mgr->align;
@@ -365,6 +369,8 @@ static void ubuf_block_mem_mgr_free(struct urefcount *urefcount)
  * @param ubuf_pool_depth maximum number of ubuf structures in the pool
  * @param shared_pool_depth maximum number of shared structures in the pool
  * @param umem_mgr memory allocator to use for buffers
+ * @param prepend default minimum extra space before buffer (if set to -1, a
+ * default sensible value is used)
  * @param align default alignment in octets (if set to -1, a default sensible
  * value is used)
  * @param align_offset offset of the aligned octet, in octets (may be negative)
@@ -373,6 +379,7 @@ static void ubuf_block_mem_mgr_free(struct urefcount *urefcount)
 struct ubuf_mgr *ubuf_block_mem_mgr_alloc(uint16_t ubuf_pool_depth,
                                           uint16_t shared_pool_depth,
                                           struct umem_mgr *umem_mgr,
+                                          int prepend,
                                           int align, int align_offset)
 {
     assert(umem_mgr != NULL);
@@ -391,6 +398,7 @@ struct ubuf_mgr *ubuf_block_mem_mgr_alloc(uint16_t ubuf_pool_depth,
     block_mem_mgr->umem_mgr = umem_mgr;
     umem_mgr_use(umem_mgr);
 
+    block_mem_mgr->prepend = prepend >= 0 ? prepend : UBUF_DEFAULT_PREPEND;
     block_mem_mgr->align = align > 0 ? align : UBUF_DEFAULT_ALIGN;
     block_mem_mgr->align_offset = align_offset;
 
