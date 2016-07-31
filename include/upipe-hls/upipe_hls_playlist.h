@@ -55,7 +55,7 @@ enum upipe_hls_playlist_command {
 /** @This converts m3u playlist specific command to a string.
  *
  * @param cmd @ref upipe_hls_playlist_command to convert
- * @return the corresponding string or @ref NULL if not a valid
+ * @return the corresponding string or NULL if not a valid
  * @ref upipe_hls_playlist_command
  */
 static inline const char *upipe_hls_playlist_command_str(int cmd)

@@ -26,7 +26,7 @@
 /** @file
  * @short Upipe module calling dejtter on timestamps
  *
- * This module is used in conjunction with @ref upipe_nodemux. It is supposed
+ * This module is used in conjunction with upipe_nodemux. It is supposed
  * to be inserted in the pipeline after the DTS/PTS prog have been calculated,
  * for instance after the framer (upipe_nodemux on the contrary should be
  * before the framer). It considers each frame as a clock reference, and

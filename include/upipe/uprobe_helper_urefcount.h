@@ -47,7 +47,7 @@ extern "C" {
  * A wrapper to @ref uprobe_release which decrements the reference count or
  * frees the probe.
  * @end list
- * You @b must define @ref UPROBE_HELPER_UPROBE for @em uprobe_foo prior
+ * You @b must define @ref #UPROBE_HELPER_UPROBE for @em uprobe_foo prior
  * to this.
  */
 #define UPROBE_HELPER_UREFCOUNT(STRUCTURE)                                  \
