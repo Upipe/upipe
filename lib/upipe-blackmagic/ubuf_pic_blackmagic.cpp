@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2012-2014 OpenHeadend S.A.R.L.
+ * Copyright (C) 2012-2016 OpenHeadend S.A.R.L.
  *
  * Authors: Christophe Massiot
  *
@@ -122,7 +122,6 @@ static struct ubuf *ubuf_pic_bmd_alloc(struct ubuf_mgr *mgr,
     ubuf_pic_common_plane_init(ubuf, 0, (uint8_t *)buffer,
                                VideoFrame->GetRowBytes());
 
-    ubuf_mgr_use(mgr);
     return ubuf;
 }
 
@@ -159,7 +158,20 @@ static int ubuf_pic_bmd_dup(struct ubuf *ubuf, struct ubuf **new_ubuf_p)
     struct ubuf_pic_bmd *pic_bmd = ubuf_pic_bmd_from_ubuf(ubuf);
     new_pic->shared = pic_bmd->shared;
     pic_bmd->shared->AddRef();
-    ubuf_mgr_use(new_ubuf->mgr);
+    return UBASE_ERR_NONE;
+}
+
+/** @This returns the blackmagic video frame. The reference counter is not
+ * incremented.
+ *
+ * @param ubuf pointer to ubuf
+ * @param VideoFrame_p filled in with a pointer to IDeckLinkVideoFrame
+ * @return an error code
+ */
+static int _ubuf_pic_bmd_get_video_frame(struct ubuf *ubuf, void **VideoFrame_p)
+{
+    struct ubuf_pic_bmd *pic_bmd = ubuf_pic_bmd_from_ubuf(ubuf);
+    *VideoFrame_p = pic_bmd->shared;
     return UBASE_ERR_NONE;
 }
 
@@ -208,19 +220,8 @@ static int ubuf_pic_bmd_control(struct ubuf *ubuf, int command, va_list args)
                                              hsize, vsize, buffer_p);
         }
         case UBUF_WRITE_PICTURE_PLANE: {
-            const char *chroma = va_arg(args, const char *);
-            int hoffset = va_arg(args, int);
-            int voffset = va_arg(args, int);
-            int hsize = va_arg(args, int);
-            int vsize = va_arg(args, int);
-            uint8_t **buffer_p = va_arg(args, uint8_t **);
-#if 0
-            /* FIXME no way to know reference count */
-            if (!ubuf_mem_shared_single(pic->shared))
-                return UBASE_ERR_BUSY;
-#endif
-            return ubuf_pic_common_plane_map(ubuf, chroma, hoffset, voffset,
-                                             hsize, vsize, buffer_p);
+            /* There is no way to know reference count */
+            return UBASE_ERR_BUSY;
         }
         case UBUF_UNMAP_PICTURE_PLANE: {
             /* we don't actually care about the parameters */
@@ -237,6 +238,12 @@ static int ubuf_pic_bmd_control(struct ubuf *ubuf, int command, va_list args)
             int new_vsize = va_arg(args, int);
             return ubuf_pic_common_resize(ubuf, hskip, vskip,
                                           new_hsize, new_vsize);
+        }
+
+        case UBUF_PIC_BMD_GET_VIDEO_FRAME: {
+            UBASE_SIGNATURE_CHECK(args, UBUF_BMD_ALLOC_PICTURE)
+            void **VideoFrame_p = va_arg(args, void **);
+            return _ubuf_pic_bmd_get_video_frame(ubuf, VideoFrame_p);
         }
         default:
             return UBASE_ERR_UNHANDLED;
@@ -260,7 +267,6 @@ static void ubuf_pic_bmd_free(struct ubuf *ubuf)
 
     pic_bmd->shared->Release();
     upool_free(&pic_mgr->ubuf_pool, pic_bmd);
-    ubuf_mgr_release(mgr);
 }
 
 /** @internal @This allocates the data structure.
@@ -362,10 +368,6 @@ struct ubuf_mgr *ubuf_pic_bmd_mgr_alloc(uint16_t ubuf_pool_depth,
     if (unlikely(pic_mgr == NULL))
         return NULL;
 
-    pic_mgr->PixelFormat = PixelFormat;
-    upool_init(&pic_mgr->ubuf_pool, ubuf_pool_depth, pic_mgr->upool_extra,
-               ubuf_pic_bmd_alloc_inner, ubuf_pic_bmd_free_inner);
-
     struct ubuf_mgr *mgr = ubuf_pic_bmd_mgr_to_ubuf_mgr(pic_mgr);
     ubuf_pic_common_mgr_init(mgr, PixelFormat != bmdFormat10BitYUV ? 1 : 6);
 
@@ -378,6 +380,11 @@ struct ubuf_mgr *ubuf_pic_bmd_mgr_alloc(uint16_t ubuf_pool_depth,
     mgr->ubuf_control = ubuf_pic_bmd_control;
     mgr->ubuf_free = ubuf_pic_bmd_free;
     mgr->ubuf_mgr_control = ubuf_pic_bmd_mgr_control;
+
+    pic_mgr->PixelFormat = PixelFormat;
+    upool_init(&pic_mgr->ubuf_pool, mgr->refcount, ubuf_pool_depth,
+               pic_mgr->upool_extra,
+               ubuf_pic_bmd_alloc_inner, ubuf_pic_bmd_free_inner);
 
     int err;
     switch (PixelFormat) {

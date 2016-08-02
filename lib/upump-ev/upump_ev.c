@@ -165,7 +165,6 @@ static struct upump *upump_ev_alloc(struct upump_mgr *mgr,
     }
     upump_ev->event = event;
 
-    upump_mgr_use(mgr);
     upump_common_init(upump);
 
     return upump;
@@ -233,7 +232,6 @@ static void upump_ev_free(struct upump *upump)
     upump_common_clean(upump);
     struct upump_ev *upump_ev = upump_ev_from_upump(upump);
     upool_free(&ev_mgr->common_mgr.upump_pool, upump_ev);
-    upump_mgr_release(&ev_mgr->common_mgr.mgr);
 }
 
 /** @internal @This allocates the data structure.
@@ -313,16 +311,17 @@ struct upump_mgr *upump_ev_mgr_alloc(struct ev_loop *ev_loop,
         return NULL;
 
     struct upump_mgr *mgr = upump_ev_mgr_to_upump_mgr(ev_mgr);
+    urefcount_init(upump_ev_mgr_to_urefcount(ev_mgr), upump_ev_mgr_free);
+    ev_mgr->common_mgr.mgr.refcount = upump_ev_mgr_to_urefcount(ev_mgr);
+    ev_mgr->common_mgr.mgr.upump_alloc = upump_ev_alloc;
+    ev_mgr->common_mgr.mgr.upump_free = upump_ev_free;
+    ev_mgr->common_mgr.mgr.upump_mgr_control = upump_ev_mgr_control;
+
     upump_common_mgr_init(mgr, upump_pool_depth, upump_blocker_pool_depth,
                           ev_mgr->upool_extra,
                           upump_ev_real_start, upump_ev_real_stop,
                           upump_ev_alloc_inner, upump_ev_free_inner);
 
     ev_mgr->ev_loop = ev_loop;
-    urefcount_init(upump_ev_mgr_to_urefcount(ev_mgr), upump_ev_mgr_free);
-    ev_mgr->common_mgr.mgr.refcount = upump_ev_mgr_to_urefcount(ev_mgr);
-    ev_mgr->common_mgr.mgr.upump_alloc = upump_ev_alloc;
-    ev_mgr->common_mgr.mgr.upump_free = upump_ev_free;
-    ev_mgr->common_mgr.mgr.upump_mgr_control = upump_ev_mgr_control;
     return mgr;
 }

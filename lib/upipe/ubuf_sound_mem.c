@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2014-2015 OpenHeadend S.A.R.L.
+ * Copyright (C) 2014-2016 OpenHeadend S.A.R.L.
  *
  * Authors: Christophe Massiot
  *
@@ -144,7 +144,7 @@ static struct ubuf *ubuf_sound_mem_alloc(struct ubuf_mgr *mgr,
 
     if (unlikely(!umem_alloc(sound_mgr->umem_mgr, &sound_mem->shared->umem,
                              buffer_size))) {
-        ubuf_sound_mem_shared_free_pool(mgr, sound_mem->shared);
+        ubuf_sound_mem_shared_free_pool(sound_mem->shared);
         ubuf_sound_mem_free_pool(mgr, sound_mem);
         return NULL;
     }
@@ -159,7 +159,6 @@ static struct ubuf *ubuf_sound_mem_alloc(struct ubuf_mgr *mgr,
         buffer += plane_sizes[plane];
     }
 
-    ubuf_mgr_use(mgr);
     return ubuf;
 }
 
@@ -194,7 +193,33 @@ static int ubuf_sound_mem_dup(struct ubuf *ubuf, struct ubuf **new_ubuf_p)
 
     struct ubuf_sound_mem *sound_mem = ubuf_sound_mem_from_ubuf(ubuf);
     new_sound->shared = ubuf_mem_shared_use(sound_mem->shared);
-    ubuf_mgr_use(new_ubuf->mgr);
+    return UBASE_ERR_NONE;
+}
+
+/** @This returns the underlying shared buffer. The reference counter is not
+ * incremented.
+ *
+ * @param ubuf pointer to ubuf
+ * @param channel channel type (see channel reference)
+ * @param shared_p filled in with a pointer to the underlying shared buffer
+ * @param offset_p filled in with the offset in the shared buffer for the plane
+ * @param size_p filled in with the size of the plane
+ * @return an error code
+ */
+static int _ubuf_sound_mem_get_shared(struct ubuf *ubuf,
+        const char *channel, struct ubuf_mem_shared **shared_p,
+        size_t *offset_p, size_t *size_p)
+{
+    struct ubuf_sound_mem *sound_mem = ubuf_sound_mem_from_ubuf(ubuf);
+    *shared_p = sound_mem->shared;
+    size_t size;
+    uint8_t sample_size;
+    UBASE_RETURN(ubuf_sound_common_size(ubuf, &size, &sample_size))
+    uint8_t *buffer;
+    UBASE_RETURN(ubuf_sound_common_plane_map(ubuf, channel, 0, -1, &buffer))
+
+    *offset_p = buffer - ubuf_mem_shared_buffer(sound_mem->shared);
+    *size_p = sample_size * size;
     return UBASE_ERR_NONE;
 }
 
@@ -218,16 +243,16 @@ static int ubuf_sound_mem_control(struct ubuf *ubuf, int command, va_list args)
             return ubuf_sound_common_size(ubuf, size_p, sample_size_p);
         }
         case UBUF_ITERATE_SOUND_PLANE: {
-            const char **chroma_p = va_arg(args, const char **);
-            return ubuf_sound_common_plane_iterate(ubuf, chroma_p);
+            const char **channel_p = va_arg(args, const char **);
+            return ubuf_sound_common_plane_iterate(ubuf, channel_p);
         }
         case UBUF_READ_SOUND_PLANE: {
-            const char *chroma = va_arg(args, const char *);
+            const char *channel = va_arg(args, const char *);
             int offset = va_arg(args, int);
             int size = va_arg(args, int);
             uint8_t **buffer_p = va_arg(args, uint8_t **);
             int err =
-                ubuf_sound_common_plane_map(ubuf, chroma, offset,
+                ubuf_sound_common_plane_map(ubuf, channel, offset,
                                             size, buffer_p);
 #ifndef NDEBUG
             if (ubase_check(err)) {
@@ -238,7 +263,7 @@ static int ubuf_sound_mem_control(struct ubuf *ubuf, int command, va_list args)
             return err;
         }
         case UBUF_WRITE_SOUND_PLANE: {
-            const char *chroma = va_arg(args, const char *);
+            const char *channel = va_arg(args, const char *);
             int offset = va_arg(args, int);
             int size = va_arg(args, int);
             uint8_t **buffer_p = va_arg(args, uint8_t **);
@@ -246,7 +271,7 @@ static int ubuf_sound_mem_control(struct ubuf *ubuf, int command, va_list args)
             if (!ubuf_mem_shared_single(sound->shared))
                 return UBASE_ERR_BUSY;
             int err =
-                ubuf_sound_common_plane_map(ubuf, chroma, offset,
+                ubuf_sound_common_plane_map(ubuf, channel, offset,
                                             size, buffer_p);
 #ifndef NDEBUG
             if (ubase_check(err))
@@ -266,6 +291,17 @@ static int ubuf_sound_mem_control(struct ubuf *ubuf, int command, va_list args)
             int offset = va_arg(args, int);
             int new_size = va_arg(args, int);
             return ubuf_sound_common_resize(ubuf, offset, new_size);
+        }
+
+        case UBUF_SOUND_MEM_GET_SHARED: {
+            UBASE_SIGNATURE_CHECK(args, UBUF_SOUND_MEM_SIGNATURE)
+            const char *channel = va_arg(args, const char *);
+            struct ubuf_mem_shared **shared_p =
+                va_arg(args, struct ubuf_mem_shared **);
+            size_t *offset_p = va_arg(args, size_t *);
+            size_t *size_p = va_arg(args, size_t *);
+            return _ubuf_sound_mem_get_shared(ubuf, channel, shared_p,
+                                              offset_p, size_p);
         }
         default:
             return UBASE_ERR_UNHANDLED;
@@ -293,10 +329,9 @@ static void ubuf_sound_mem_free(struct ubuf *ubuf)
 
     if (unlikely(ubuf_mem_shared_release(sound_mem->shared))) {
         umem_free(&sound_mem->shared->umem);
-        ubuf_sound_mem_shared_free_pool(mgr, sound_mem->shared);
+        ubuf_sound_mem_shared_free_pool(sound_mem->shared);
     }
     ubuf_sound_mem_free_pool(mgr, sound_mem);
-    ubuf_mgr_release(mgr);
 }
 
 /** @internal @This allocates the data structure.
@@ -444,14 +479,6 @@ struct ubuf_mgr *ubuf_sound_mem_mgr_alloc(uint16_t ubuf_pool_depth,
     if (unlikely(sound_mgr == NULL))
         return NULL;
 
-    ubuf_sound_mem_mgr_init_pool(ubuf_sound_mem_mgr_to_ubuf_mgr(sound_mgr),
-            ubuf_pool_depth, shared_pool_depth, sound_mgr->upool_extra,
-            ubuf_sound_mem_alloc_inner, ubuf_sound_mem_free_inner);
-
-    sound_mgr->umem_mgr = umem_mgr;
-    sound_mgr->align = align;
-    umem_mgr_use(umem_mgr);
-
     struct ubuf_mgr *mgr = ubuf_sound_mem_mgr_to_ubuf_mgr(sound_mgr);
     ubuf_sound_common_mgr_init(mgr, sample_size);
 
@@ -464,6 +491,14 @@ struct ubuf_mgr *ubuf_sound_mem_mgr_alloc(uint16_t ubuf_pool_depth,
     mgr->ubuf_control = ubuf_sound_mem_control;
     mgr->ubuf_free = ubuf_sound_mem_free;
     mgr->ubuf_mgr_control = ubuf_sound_mem_mgr_control;
+
+    ubuf_sound_mem_mgr_init_pool(ubuf_sound_mem_mgr_to_ubuf_mgr(sound_mgr),
+            ubuf_pool_depth, shared_pool_depth, sound_mgr->upool_extra,
+            ubuf_sound_mem_alloc_inner, ubuf_sound_mem_free_inner);
+
+    sound_mgr->umem_mgr = umem_mgr;
+    sound_mgr->align = align;
+    umem_mgr_use(umem_mgr);
 
     return mgr;
 }

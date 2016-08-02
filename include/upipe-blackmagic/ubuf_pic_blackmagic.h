@@ -45,6 +45,15 @@ extern "C" {
  * is used properly. */
 #define UBUF_BMD_ALLOC_PICTURE UBASE_FOURCC('b','m','d','p')
 
+/** @This extends ubuf_command with specific commands for blackmagic picture
+ * allocator. */
+enum ubuf_pic_bmd_command {
+    UBUF_PIC_BMD_SENTINEL = UBUF_CONTROL_LOCAL,
+
+    /** returns the blackmagic video frame (void **) */
+    UBUF_PIC_BMD_GET_VIDEO_FRAME
+};
+
 /** @This returns a new ubuf from a blackmagic picture allocator.
  *
  * @param mgr management structure for this ubuf type
@@ -55,6 +64,20 @@ static inline struct ubuf *ubuf_pic_bmd_alloc(struct ubuf_mgr *mgr,
                                               void *VideoFrame)
 {
     return ubuf_alloc(mgr, UBUF_BMD_ALLOC_PICTURE, VideoFrame);
+}
+
+/** @This returns the blackmagic video frame. The reference counter is not
+ * incremented.
+ *
+ * @param ubuf pointer to ubuf
+ * @param VideoFrame_p filled in with a pointer to IDeckLinkVideoFrame
+ * @return an error code
+ */
+static inline int ubuf_pic_bmd_get_video_frame(struct ubuf *ubuf,
+                                               void **VideoFrame_p)
+{
+    return ubuf_control(ubuf, UBUF_PIC_BMD_GET_VIDEO_FRAME,
+                        UBUF_BMD_ALLOC_PICTURE, VideoFrame_p);
 }
 
 /** @This allocates a new instance of the ubuf manager for picture formats

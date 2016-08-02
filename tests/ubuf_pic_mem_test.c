@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2012 OpenHeadend S.A.R.L.
+ * Copyright (C) 2012-2016 OpenHeadend S.A.R.L.
  *
  * Authors: Christophe Massiot
  *
@@ -33,7 +33,9 @@
 #include <upipe/umem_alloc.h>
 #include <upipe/ubuf.h>
 #include <upipe/ubuf_pic.h>
+#include <upipe/ubuf_block.h>
 #include <upipe/ubuf_pic_mem.h>
+#include <upipe/ubuf_block_mem.h>
 
 #include <stdio.h>
 #include <string.h>
@@ -264,6 +266,35 @@ int main(int argc, char **argv)
     assert(r[0] == 1);
     ubase_assert(ubuf_pic_plane_unmap(ubuf1, "y8u8y8v8", 2, 0, -1, -1));
 
+    ubuf_free(ubuf1);
+    ubuf_mgr_release(mgr);
+
+    /* pic -> block transformation */
+    mgr = ubuf_pic_mem_mgr_alloc(UBUF_POOL_DEPTH, UBUF_POOL_DEPTH, umem_mgr, 1,
+                                 0, 0, 0, 0, 0, 0);
+    assert(mgr != NULL);
+    ubase_assert(ubuf_pic_mem_mgr_add_plane(mgr, "y8", 1, 1, 1));
+
+    ubuf1 = ubuf_pic_alloc(mgr, 32, 32);
+    assert(ubuf1 != NULL);
+    ubase_assert(ubuf_pic_clear(ubuf1, 0, 0, -1, -1, 0));
+    fill_in(ubuf1);
+
+    struct ubuf_mgr *block_mgr = ubuf_block_mem_mgr_alloc(UBUF_POOL_DEPTH,
+            UBUF_POOL_DEPTH, umem_mgr, 0, 0, 0);
+    struct ubuf *ubuf_block = ubuf_block_mem_alloc_from_pic(block_mgr,
+                                                            ubuf1, "y8");
+    assert(ubuf_block != NULL);
+    size_t size;
+    ubase_assert(ubuf_block_size(ubuf_block, &size));
+    assert(size == 32 * 32);
+    int size2 = -1;
+    ubase_assert(ubuf_block_read(ubuf_block, 0, &size2, &r));
+    assert(size2 == 32 * 32);
+    assert(r[0] == 1);
+
+    ubuf_free(ubuf_block);
+    ubuf_mgr_release(block_mgr);
     ubuf_free(ubuf1);
 
     ubuf_mgr_release(mgr);

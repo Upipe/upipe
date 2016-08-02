@@ -332,15 +332,15 @@ struct upump_mgr *upump_ecore_mgr_alloc(uint16_t upump_pool_depth,
         return NULL;
 
     struct upump_mgr *mgr = upump_ecore_mgr_to_upump_mgr(ecore_mgr);
-    upump_common_mgr_init(mgr, upump_pool_depth, upump_blocker_pool_depth,
-                          ecore_mgr->upool_extra,
-                          upump_ecore_real_start, upump_ecore_real_stop,
-                          upump_ecore_alloc_inner, upump_ecore_free_inner);
-
     urefcount_init(upump_ecore_mgr_to_urefcount(ecore_mgr), upump_ecore_mgr_free);
     ecore_mgr->common_mgr.mgr.refcount = upump_ecore_mgr_to_urefcount(ecore_mgr);
     ecore_mgr->common_mgr.mgr.upump_alloc = upump_ecore_alloc;
     ecore_mgr->common_mgr.mgr.upump_free = upump_ecore_free;
     ecore_mgr->common_mgr.mgr.upump_mgr_control = upump_ecore_mgr_control;
+
+    upump_common_mgr_init(mgr, upump_pool_depth, upump_blocker_pool_depth,
+                          ecore_mgr->upool_extra,
+                          upump_ecore_real_start, upump_ecore_real_stop,
+                          upump_ecore_alloc_inner, upump_ecore_free_inner);
     return mgr;
 }

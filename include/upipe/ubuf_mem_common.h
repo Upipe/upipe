@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2012-2014 OpenHeadend S.A.R.L.
+ * Copyright (C) 2012-2016 OpenHeadend S.A.R.L.
  *
  * Authors: Christophe Massiot
  *
@@ -46,6 +46,8 @@ extern "C" {
 struct ubuf_mem_shared {
     /** number of blocks pointing to the memory area */
     uatomic_uint32_t refcount;
+    /** pointer to origin pool */
+    struct upool *pool;
     /** umem structure pointing to buffer */
     struct umem umem;
 };
@@ -234,14 +236,11 @@ static void STRUCTURE##_free_pool(struct ubuf_mgr *mgr,                     \
 /** @internal @This deallocates a shared data structure or places it back   \
  * into the pool.                                                           \
  *                                                                          \
- * @param mgr pointer to a ubuf manager                                     \
  * @param shared pointer to ubuf_mem_shared                                 \
  */                                                                         \
-static void STRUCTURE##_shared_free_pool(struct ubuf_mgr *mgr,              \
-                                         struct ubuf_mem_shared *shared)    \
+static void STRUCTURE##_shared_free_pool(struct ubuf_mem_shared *shared)    \
 {                                                                           \
-    struct STRUCTURE##_mgr *mem_mgr = STRUCTURE##_mgr_from_ubuf_mgr(mgr);   \
-    upool_free(&mem_mgr->SHARED_POOL, shared);                              \
+    upool_free(shared->pool, shared);                                       \
 }                                                                           \
 /** @internal @This instructs an existing manager to release all structures \
  * currently kept in pools. It is intended as a debug tool only.            \
@@ -288,9 +287,9 @@ static void STRUCTURE##_mgr_init_pool(struct ubuf_mgr *mgr,                 \
         upool_alloc_cb ubuf_alloc_cb, upool_free_cb ubuf_free_cb)           \
 {                                                                           \
     struct STRUCTURE##_mgr *mem_mgr = STRUCTURE##_mgr_from_ubuf_mgr(mgr);   \
-    upool_init(&mem_mgr->UBUF_POOL, ubuf_pool_depth, extra,                 \
+    upool_init(&mem_mgr->UBUF_POOL, mgr->refcount, ubuf_pool_depth, extra,  \
                ubuf_alloc_cb, ubuf_free_cb);                                \
-    upool_init(&mem_mgr->SHARED_POOL, shared_pool_depth,                    \
+    upool_init(&mem_mgr->SHARED_POOL, mgr->refcount, shared_pool_depth,     \
                extra + upool_sizeof(ubuf_pool_depth),                       \
                ubuf_mem_shared_alloc_inner, ubuf_mem_shared_free_inner);    \
 }

@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2012-2015 OpenHeadend S.A.R.L.
+ * Copyright (C) 2012-2016 OpenHeadend S.A.R.L.
  *
  * Authors: Christophe Massiot
  *
@@ -270,9 +270,9 @@ void upump_common_mgr_init(struct upump_mgr *mgr,
     common_mgr->upump_real_start = upump_real_start;
     common_mgr->upump_real_stop = upump_real_stop;
 
-    upool_init(&common_mgr->upump_pool, upump_pool_depth, pool_extra,
-               upump_alloc_inner, upump_free_inner);
-    upool_init(&common_mgr->upump_blocker_pool, upump_blocker_pool_depth,
+    upool_init(&common_mgr->upump_pool, mgr->refcount, upump_pool_depth,
+               pool_extra, upump_alloc_inner, upump_free_inner);
+    upool_init(&common_mgr->upump_blocker_pool, NULL, upump_blocker_pool_depth,
                pool_extra + upool_sizeof(upump_pool_depth),
                upump_common_blocker_alloc_inner,
                upump_common_blocker_free_inner);

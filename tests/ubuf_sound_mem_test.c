@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2014 OpenHeadend S.A.R.L.
+ * Copyright (C) 2014-2016 OpenHeadend S.A.R.L.
  *
  * Authors: Christophe Massiot
  *
@@ -33,7 +33,9 @@
 #include <upipe/umem_alloc.h>
 #include <upipe/ubuf.h>
 #include <upipe/ubuf_sound.h>
+#include <upipe/ubuf_block.h>
 #include <upipe/ubuf_sound_mem.h>
+#include <upipe/ubuf_block_mem.h>
 
 #include <stdio.h>
 #include <string.h>
@@ -201,6 +203,33 @@ int main(int argc, char **argv)
 
     ubase_assert(ubuf_sound_resize(ubuf1, 0, 29));
 
+    ubuf_free(ubuf1);
+    ubuf_mgr_release(mgr);
+
+    /* sound -> block transformation */
+    mgr = ubuf_sound_mem_mgr_alloc(UBUF_POOL_DEPTH, UBUF_POOL_DEPTH, umem_mgr,
+                                   4, 32);
+    assert(mgr != NULL);
+    ubase_assert(ubuf_sound_mem_mgr_add_plane(mgr, "lr"));
+
+    ubuf1 = ubuf_sound_alloc(mgr, 32);
+    assert(ubuf1 != NULL);
+    fill_in(ubuf1);
+
+    struct ubuf_mgr *block_mgr = ubuf_block_mem_mgr_alloc(UBUF_POOL_DEPTH,
+            UBUF_POOL_DEPTH, umem_mgr, 0, 0, 0);
+    struct ubuf *ubuf_block = ubuf_block_mem_alloc_from_sound(block_mgr,
+                                                              ubuf1, "lr");
+    assert(ubuf_block != NULL);
+    ubase_assert(ubuf_block_size(ubuf_block, &size));
+    assert(size == 32 * 4);
+    int size2 = -1;
+    ubase_assert(ubuf_block_read(ubuf_block, 0, &size2, &r));
+    assert(size2 == 32 * 4);
+    assert(r[0] == 'l');
+
+    ubuf_free(ubuf_block);
+    ubuf_mgr_release(block_mgr);
     ubuf_free(ubuf1);
 
     ubuf_mgr_release(mgr);

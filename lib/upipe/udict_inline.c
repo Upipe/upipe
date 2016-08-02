@@ -167,7 +167,6 @@ static struct udict *udict_inline_alloc(struct udict_mgr *mgr, size_t size)
     buffer[0] = UDICT_TYPE_END;
     inl->size = 1;
 
-    udict_mgr_use(mgr);
     return udict;
 }
 
@@ -564,7 +563,6 @@ static void udict_inline_free(struct udict *udict)
 
     umem_free(&inl->umem);
     upool_free(&inline_mgr->udict_pool, inl);
-    udict_mgr_release(&inline_mgr->mgr);
 }
 
 /** @internal @This allocates the data structure.
@@ -670,15 +668,6 @@ struct udict_mgr *udict_inline_mgr_alloc(unsigned int udict_pool_depth,
     if (unlikely(inline_mgr == NULL))
         return NULL;
 
-    upool_init(&inline_mgr->udict_pool, udict_pool_depth,
-               (void *)inline_mgr + sizeof(struct udict_inline_mgr),
-               udict_inline_alloc_inner, udict_inline_free_inner);
-    inline_mgr->umem_mgr = umem_mgr;
-    umem_mgr_use(umem_mgr);
-
-    inline_mgr->min_size = min_size > 0 ? min_size : UDICT_MIN_SIZE;
-    inline_mgr->extra_size = extra_size > 0 ? extra_size : UDICT_EXTRA_SIZE;
-
     urefcount_init(udict_inline_mgr_to_urefcount(inline_mgr),
                    udict_inline_mgr_free);
     inline_mgr->mgr.refcount = udict_inline_mgr_to_urefcount(inline_mgr);
@@ -686,6 +675,16 @@ struct udict_mgr *udict_inline_mgr_alloc(unsigned int udict_pool_depth,
     inline_mgr->mgr.udict_control = udict_inline_control;
     inline_mgr->mgr.udict_free = udict_inline_free;
     inline_mgr->mgr.udict_mgr_control = udict_inline_mgr_control;
+
+    upool_init(&inline_mgr->udict_pool, inline_mgr->mgr.refcount,
+               udict_pool_depth,
+               (void *)inline_mgr + sizeof(struct udict_inline_mgr),
+               udict_inline_alloc_inner, udict_inline_free_inner);
+    inline_mgr->umem_mgr = umem_mgr;
+    umem_mgr_use(umem_mgr);
+
+    inline_mgr->min_size = min_size > 0 ? min_size : UDICT_MIN_SIZE;
+    inline_mgr->extra_size = extra_size > 0 ? extra_size : UDICT_EXTRA_SIZE;
 
 #ifdef STATS
     int i;

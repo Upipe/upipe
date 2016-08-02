@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2014 OpenHeadend S.A.R.L.
+ * Copyright (C) 2014-2016 OpenHeadend S.A.R.L.
  *
  * Authors: Christophe Massiot
  *
@@ -39,6 +39,41 @@ extern "C" {
 
 #include <stdint.h>
 #include <stdbool.h>
+
+/** @This is a simple signature to make sure the ubuf_control internal API
+ * is used properly. */
+#define UBUF_SOUND_MEM_SIGNATURE UBASE_FOURCC('m','e','m','s')
+
+/** @hidden */
+struct ubuf_mem_shared;
+
+/** @This extends ubuf_command with specific commands for sound mem manager. */
+enum ubuf_sound_mem_command {
+    UBUF_SOUND_MEM_SENTINEL = UBUF_CONTROL_LOCAL,
+
+    /** returns the shared substructure (const char *,
+     * struct ubuf_mem_shared **, size_t *, size_t *) */
+    UBUF_SOUND_MEM_GET_SHARED
+};
+
+/** @This returns the underlying shared buffer. The reference counter is not
+ * incremented.
+ *
+ * @param ubuf pointer to ubuf
+ * @param channel channel type (see channel reference)
+ * @param shared_p filled in with a pointer to the underlying shared buffer
+ * @param offset_p filled in with the offset in the shared buffer for the plane
+ * @param size_p filled in with the size of the plane
+ * @return an error code
+ */
+static inline int ubuf_sound_mem_get_shared(struct ubuf *ubuf,
+        const char *channel, struct ubuf_mem_shared **shared_p,
+        size_t *offset_p, size_t *size_p)
+{
+    return ubuf_control(ubuf, UBUF_SOUND_MEM_GET_SHARED,
+                        UBUF_SOUND_MEM_SIGNATURE, channel, shared_p,
+                        offset_p, size_p);
+}
 
 /** @This allocates a new instance of the ubuf manager for sound formats
  * using umem.
