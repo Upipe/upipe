@@ -2,7 +2,7 @@
 # Process this file with autoconf to produce a configure script.
 
 AC_PREREQ([2.61])
-AC_INIT([upipe], [0.4], [cmassiot@upipe.org])
+AC_INIT([upipe], [0.5], [cmassiot@upipe.org])
 AC_CONFIG_SRCDIR([lib/upipe/uprobe_stdio.c])
 AC_CONFIG_HEADERS([config.h])
 AC_CONFIG_AUX_DIR([autotools])
