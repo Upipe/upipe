@@ -16,6 +16,7 @@ myinclude_HEADERS = \
 	upipe_null.h \
 	upipe_skip.h \
 	upipe_aggregate.h \
+	upipe_convert_to_block.h \
 	upipe_worker_linear.h \
 	upipe_worker_sink.h \
 	upipe_worker_source.h \

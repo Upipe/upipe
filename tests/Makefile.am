@@ -81,6 +81,7 @@ check_PROGRAMS = \
 	upipe_delay_test \
 	upipe_skip_test \
 	upipe_aggregate_test \
+	upipe_convert_to_block_test \
 	upipe_htons_test \
 	upipe_chunk_stream_test \
 	upipe_setflowdef_test \
@@ -130,6 +131,7 @@ TESTS = \
 	upipe_delay_test \
 	upipe_skip_test \
 	upipe_aggregate_test \
+	upipe_convert_to_block_test \
 	upipe_htons_test \
 	upipe_chunk_stream_test \
 	upipe_setflowdef_test \
@@ -337,6 +339,7 @@ upipe_delay_test_LDADD = $(LDADD) $(top_builddir)/lib/upipe-modules/libupipe_mod
 upipe_null_test_LDADD = $(LDADD) $(top_builddir)/lib/upipe-modules/libupipe_modules.la
 upipe_skip_test_LDADD = $(LDADD) $(top_builddir)/lib/upipe-modules/libupipe_modules.la
 upipe_aggregate_test_LDADD = $(LDADD) $(top_builddir)/lib/upipe-modules/libupipe_modules.la
+upipe_convert_to_block_test_LDADD = $(LDADD) $(top_builddir)/lib/upipe-modules/libupipe_modules.la
 upipe_setflowdef_test_LDADD = $(LDADD) $(top_builddir)/lib/upipe-modules/libupipe_modules.la
 upipe_setattr_test_LDADD = $(LDADD) $(top_builddir)/lib/upipe-modules/libupipe_modules.la
 upipe_match_attr_test_LDADD = $(LDADD) $(top_builddir)/lib/upipe-modules/libupipe_modules.la

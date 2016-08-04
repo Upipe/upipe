@@ -29,6 +29,7 @@ libupipe_modules_la_SOURCES = \
 	upipe_delay.c \
 	upipe_skip.c \
 	upipe_aggregate.c \
+	upipe_convert_to_block.c \
 	upipe_htons.c \
 	upipe_chunk_stream.c \
 	upipe_setflowdef.c \
