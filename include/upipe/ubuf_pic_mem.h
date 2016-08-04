@@ -46,6 +46,8 @@ extern "C" {
 #define UBUF_PIC_MEM_SIGNATURE UBASE_FOURCC('m','e','m','p')
 
 /** @hidden */
+struct umem_mgr;
+/** @hidden */
 struct ubuf_mem_shared;
 
 /** @This extends ubuf_command with specific commands for pic mem manager. */

@@ -45,6 +45,8 @@ extern "C" {
 #define UBUF_SOUND_MEM_SIGNATURE UBASE_FOURCC('m','e','m','s')
 
 /** @hidden */
+struct umem_mgr;
+/** @hidden */
 struct ubuf_mem_shared;
 
 /** @This extends ubuf_command with specific commands for sound mem manager. */
