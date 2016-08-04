@@ -1,7 +1,8 @@
 /*
- * Copyright (C) 2014 OpenHeadend S.A.R.L.
+ * Copyright (C) 2014-2016 OpenHeadend S.A.R.L.
  *
  * Authors: Benjamin Cohen
+ *          Christophe Massiot
  *
  * Permission is hereby granted, free of charge, to any person obtaining
  * a copy of this software and associated documentation files (the
@@ -24,7 +25,7 @@
  */
 
 /** @file
- * @short Upipe module splitting packed audio to several planar outputs
+ * @short Upipe module splitting packed audio to several planar or packed outputs
  */
 
 #ifndef _UPIPE_MODULES_UPIPE_AUDIO_SPLIT_H_
@@ -40,8 +41,7 @@ extern "C" {
 #define UPIPE_AUDIO_SPLIT_SIGNATURE UBASE_FOURCC('a','s','p','l')
 #define UPIPE_AUDIO_SPLIT_OUTPUT_SIGNATURE UBASE_FOURCC('a','s','p','o')
 
-UREF_ATTR_SMALL_UNSIGNED_VA(audio_split, orig_index, "audio_split.orig_index[%s]",
-        audio split original index, const char *plane, plane)
+UREF_ATTR_UNSIGNED(audio_split, bitfield, "aspo.b", audio split bit field)
 
 /** @This returns the management structure for all audio_split pipes.
  *
