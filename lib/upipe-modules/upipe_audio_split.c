@@ -128,7 +128,7 @@ struct upipe_audio_split_sub {
 static int upipe_audio_split_sub_check(struct upipe *upipe,
                                        struct uref *flow_format);
 /** @hidden */
-static int upipe_audio_split_sub_build_flow_def(struct upipe *upipe);
+static void upipe_audio_split_sub_build_flow_def(struct upipe *upipe);
 
 UPIPE_HELPER_UPIPE(upipe_audio_split_sub, upipe,
                    UPIPE_AUDIO_SPLIT_OUTPUT_SIGNATURE)
@@ -288,12 +288,14 @@ static int upipe_audio_split_sub_check(struct upipe *upipe,
 /** @internal @This builds the subpipe flow definition.
  *
  * @param upipe description structure of the subpipe
- * @return an error code
  */
-static int upipe_audio_split_sub_build_flow_def(struct upipe *upipe)
+static void upipe_audio_split_sub_build_flow_def(struct upipe *upipe)
 {
     struct upipe_audio_split_sub *sub = upipe_audio_split_sub_from_upipe(upipe);
     struct upipe_audio_split *split = upipe_audio_split_from_sub_mgr(upipe->mgr);
+    if (split->flow_def == NULL)
+        return;
+
     if (sub->ubuf_mgr) {
         ubuf_mgr_release(sub->ubuf_mgr);
         sub->ubuf_mgr = NULL;
@@ -302,28 +304,29 @@ static int upipe_audio_split_sub_build_flow_def(struct upipe *upipe)
     struct uref *flow_def = uref_dup(split->flow_def);
     if (unlikely(!flow_def)) {
         upipe_throw_error(upipe, UBASE_ERR_ALLOC);
-        return UBASE_ERR_ALLOC;
+        return;
     }
 
     /* We need to copy planes, channels number, keep input flow definition,
      * and compute new sample size from previous sample size. */
     uref_sound_flow_clear_format(flow_def);
-    UBASE_RETURN(uref_sound_flow_set_planes(flow_def, sub->planes))
-    UBASE_RETURN(uref_sound_flow_set_channels(flow_def, sub->channels))
+    UBASE_ERROR(upipe, uref_sound_flow_set_planes(flow_def, sub->planes))
+    UBASE_ERROR(upipe, uref_sound_flow_set_channels(flow_def, sub->channels))
     for (uint8_t plane = 0; plane < sub->planes; plane++) {
         const char *channel;
-        UBASE_RETURN(uref_sound_flow_get_channel(sub->flow_def_params, &channel,
-                                                 plane))
-        UBASE_RETURN(uref_sound_flow_set_channel(flow_def, channel, plane))
+        UBASE_ERROR(upipe, uref_sound_flow_get_channel(sub->flow_def_params,
+                                                       &channel, plane))
+        UBASE_ERROR(upipe, uref_sound_flow_set_channel(flow_def,
+                                                       channel, plane))
     }
 
     sub->sample_size = split->sample_size / split->channels;
     if (sub->planes == 1)
         sub->sample_size *= sub->channels;
-    UBASE_RETURN(uref_sound_flow_set_sample_size(flow_def, sub->sample_size))
+    UBASE_ERROR(upipe, uref_sound_flow_set_sample_size(flow_def,
+                                                       sub->sample_size))
 
-    return upipe_audio_split_sub_demand_ubuf_mgr(upipe, flow_def) ?
-           UBASE_ERR_NONE : UBASE_ERR_ALLOC;
+    upipe_audio_split_sub_demand_ubuf_mgr(upipe, flow_def);
 }
 
 /** @internal @This processes control commands on an output subpipe of an
