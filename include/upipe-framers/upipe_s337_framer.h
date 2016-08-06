@@ -20,6 +20,12 @@
 
 /** @file
  * @short Upipe module building frames from chunks of a SMPTE 337 stream
+ * This pipe only supports the 16-bit mode.
+ *
+ * Normative references:
+ *  - SMPTE 337-2008 (non-PCM in AES3)
+ *  - SMPTE 338-2008 (non-PCM in AES3 - data types)
+ *  - SMPTE 340-2008 (non-PCM in AES3 - ATSC A/52B)
  */
 
 #ifndef _UPIPE_FRAMERS_UPIPE_S337_FRAMER_H_
