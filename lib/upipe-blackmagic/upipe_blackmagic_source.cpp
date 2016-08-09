@@ -75,27 +75,43 @@
 #define UBUF_POOL_DEPTH 25
 /** lowest possible prog PTS (just an arbitrarily high time) */
 #define BMD_CLOCK_MIN UINT32_MAX
-/** fixed sample rate FIXME */
+/** fixed sample rate */
 #define BMD_SAMPLERATE 48000
 /** fixed channels number */
-#define CHANS 8
+#define BMD_CHANNELS 16
 /** blackmagic uri separator */
 #define URI_SEP "://"
 
-const struct {
+const static struct {
     const char *name;
     BMDVideoConnection bmdConn;
 } upipe_bmd_src_video_conns[] = {
-    {"sdi", bmdVideoConnectionSDI},
-    {"hdmi", bmdVideoConnectionHDMI},
-    {"opticalsdi", bmdVideoConnectionOpticalSDI},
-    {"component", bmdVideoConnectionComponent},
-    {"composite", bmdVideoConnectionComposite},
-    {"svideo", bmdVideoConnectionSVideo},
-    {NULL, 0},
+    {"sdi",         bmdVideoConnectionSDI},
+    {"hdmi",        bmdVideoConnectionHDMI},
+    {"opticalsdi",  bmdVideoConnectionOpticalSDI},
+    {"component",   bmdVideoConnectionComponent},
+    {"composite",   bmdVideoConnectionComposite},
+    {"svideo",      bmdVideoConnectionSVideo},
+
+    {NULL, 0}
 };
 
-const struct {
+const static struct {
+    const char *name;
+    BMDAudioConnection bmdConn;
+} upipe_bmd_src_audio_conns[] = {
+    {"embedded",    bmdAudioConnectionEmbedded},
+    {"aesebu",      bmdAudioConnectionAESEBU},
+    {"analog",      bmdAudioConnectionAnalog},
+    {"analogxlr",   bmdAudioConnectionAnalogXLR},
+    {"analogrca",   bmdAudioConnectionAnalogRCA},
+    {"microphone",  bmdAudioConnectionMicrophone},
+    {"headphones",  bmdAudioConnectionHeadphones},
+
+    {NULL, 0}
+};
+
+const static struct {
     const char *name;
     BMDDisplayMode mode;
 } upipe_bmd_src_display_modes[] = {
@@ -139,7 +155,7 @@ const struct {
     {"2160p5994",   bmdMode4K2160p5994},
     {"2160p60",     bmdMode4K2160p60},
 
-    {NULL, 0},
+    {NULL, 0}
 };
 
 /** @internal @This is the class that retrieves frames in a private thread. */
@@ -189,9 +205,7 @@ enum upipe_bmd_src_type {
     /** packet for pic subpipe, without sync on input */
     UPIPE_BMD_SRC_PIC_NO_INPUT,
     /** packet for sound subpipe */
-    UPIPE_BMD_SRC_SOUND,
-    /** packet for subpic subpipe */
-    UPIPE_BMD_SRC_SUBPIC
+    UPIPE_BMD_SRC_SOUND
 };
 
 /** @internal @This is the private context of an output of a bmdsrc pipe */
@@ -216,7 +230,7 @@ UPIPE_HELPER_UPIPE(upipe_bmd_src_output, upipe, UPIPE_BMD_SRC_OUTPUT_SIGNATURE)
 UPIPE_HELPER_OUTPUT(upipe_bmd_src_output, output, flow_def, output_state,
                     request_list)
 
-/** @internal @This is the private context of a http source pipe. */
+/** @internal @This is the private context of a bmdsrc pipe. */
 struct upipe_bmd_src {
     /** refcount management structure */
     struct urefcount urefcount;
@@ -244,8 +258,6 @@ struct upipe_bmd_src {
     struct upipe_bmd_src_output pic_subpipe;
     /** sound subpipe */
     struct upipe_bmd_src_output sound_subpipe;
-    /** subpic subpipe */
-    struct upipe_bmd_src_output subpic_subpipe;
 
     /** URI */
     char *uri;
@@ -287,7 +299,6 @@ UPIPE_HELPER_UPUMP(upipe_bmd_src, upump, upump_mgr)
 UBASE_FROM_TO(upipe_bmd_src, upipe_mgr, sub_mgr, sub_mgr)
 UBASE_FROM_TO(upipe_bmd_src, upipe_bmd_src_output, pic_subpipe, pic_subpipe)
 UBASE_FROM_TO(upipe_bmd_src, upipe_bmd_src_output, sound_subpipe, sound_subpipe)
-UBASE_FROM_TO(upipe_bmd_src, upipe_bmd_src_output, subpic_subpipe, subpic_subpipe)
 
 static int upipe_bmd_src_flow_def_from_displaymode(struct uref *flow,
                                                    IDeckLinkDisplayMode *mode)
@@ -295,7 +306,7 @@ static int upipe_bmd_src_flow_def_from_displaymode(struct uref *flow,
     UBASE_RETURN(uref_pic_flow_set_hsize(flow, mode->GetWidth()));
     UBASE_RETURN(uref_pic_flow_set_vsize(flow, mode->GetHeight()));
 
-    /* TODO get aspect-ratio from WSS or user */
+    /* This is supposed to be fixed later by user or ancillary data */
     struct urational sar;
     sar.num = 16 * mode->GetHeight();
     sar.den =  9 * mode->GetWidth();
@@ -370,8 +381,8 @@ HRESULT DeckLinkCaptureDelegate::VideoInputFormatChanged(
  * @return S_OK
  */
 HRESULT DeckLinkCaptureDelegate::VideoInputFrameArrived(
-                        IDeckLinkVideoInputFrame* VideoFrame,
-                        IDeckLinkAudioInputPacket* AudioPacket)
+                        IDeckLinkVideoInputFrame *VideoFrame,
+                        IDeckLinkAudioInputPacket *AudioPacket)
 {
     struct upipe_bmd_src *upipe_bmd_src = upipe_bmd_src_from_upipe(upipe);
     uint64_t cr_sys = UINT64_MAX;
@@ -382,7 +393,6 @@ HRESULT DeckLinkCaptureDelegate::VideoInputFrameArrived(
         struct ubuf *ubuf =
             ubuf_pic_bmd_alloc(upipe_bmd_src->pic_subpipe.ubuf_mgr, VideoFrame);
         if (likely(ubuf != NULL)) {
-            /* TODO subpic */
             struct uref *uref = uref_alloc(upipe_bmd_src->uref_mgr);
             uref_attach_ubuf(uref, ubuf);
             uref_attr_set_priv(uref,
@@ -402,8 +412,6 @@ HRESULT DeckLinkCaptureDelegate::VideoInputFrameArrived(
                 uref_pic_set_progressive(uref);
             else if (upipe_bmd_src->tff)
                 uref_pic_set_tff(uref);
-
-            /* TODO read aspect-ratio from WSS */
 
             if (!uqueue_push(&upipe_bmd_src->uqueue, uref))
                 uref_free(uref);
@@ -534,7 +542,6 @@ static struct upipe *_upipe_bmd_src_alloc(struct upipe_mgr *mgr,
         return NULL;
     struct uprobe *uprobe_pic = va_arg(args, struct uprobe *);
     struct uprobe *uprobe_sound = va_arg(args, struct uprobe *);
-    struct uprobe *uprobe_subpic = va_arg(args, struct uprobe *);
 
     struct upipe_bmd_src *upipe_bmd_src =
         (struct upipe_bmd_src *)malloc(sizeof(struct upipe_bmd_src) +
@@ -542,7 +549,6 @@ static struct upipe *_upipe_bmd_src_alloc(struct upipe_mgr *mgr,
     if (unlikely(upipe_bmd_src == NULL)) {
         uprobe_release(uprobe_pic);
         uprobe_release(uprobe_sound);
-        uprobe_release(uprobe_subpic);
         return NULL;
     }
 
@@ -564,9 +570,6 @@ static struct upipe *_upipe_bmd_src_alloc(struct upipe_mgr *mgr,
     upipe_bmd_src_output_init(upipe_bmd_src_output_to_upipe(
                                 upipe_bmd_src_to_sound_subpipe(upipe_bmd_src)),
                               &upipe_bmd_src->sub_mgr, uprobe_sound);
-    upipe_bmd_src_output_init(upipe_bmd_src_output_to_upipe(
-                                upipe_bmd_src_to_subpic_subpipe(upipe_bmd_src)),
-                              &upipe_bmd_src->sub_mgr, uprobe_subpic);
 
     uqueue_init(&upipe_bmd_src->uqueue, MAX_QUEUE_LENGTH,
                 upipe_bmd_src->uqueue_extra);
@@ -620,14 +623,6 @@ static void upipe_bmd_src_work(struct upipe *upipe, struct upump *upump)
                 }
                 subpipe = upipe_bmd_src_output_to_upipe(
                         upipe_bmd_src_to_sound_subpipe(upipe_bmd_src));
-                break;
-            case UPIPE_BMD_SRC_SUBPIC:
-                if (!upipe_bmd_src->acquired) {
-                    uref_free(uref);
-                    continue;
-                }
-                subpipe = upipe_bmd_src_output_to_upipe(
-                        upipe_bmd_src_to_subpic_subpipe(upipe_bmd_src));
                 break;
             default:
                 upipe_throw_error(upipe, UBASE_ERR_UNKNOWN);
@@ -851,7 +846,7 @@ static int upipe_bmd_src_set_uri(struct upipe *upipe, const char *uri)
     if (idx != uri) {
         int i = 0;
         BMDVideoConnection conn = 0;
-        for (i=0; upipe_bmd_src_video_conns[i].name; i++) {
+        for (i = 0; upipe_bmd_src_video_conns[i].name; i++) {
             if (!ubase_ncmp(uri, upipe_bmd_src_video_conns[i].name)) {
                 conn = upipe_bmd_src_video_conns[i].bmdConn;
                 break;
@@ -861,11 +856,13 @@ static int upipe_bmd_src_set_uri(struct upipe *upipe, const char *uri)
         if (conn != 0) {
             deckLinkConfiguration->SetInt(
                 bmdDeckLinkConfigVideoInputConnection, conn);
-        }
+        } else
+            upipe_warn_va(upipe, "unknown video connection '%s'", uri);
     }
 
     /* parse uri parameters */
     char *mode = NULL;
+    char *audio = NULL;
     const char *params = strchr(idx, '/');
     if (params) {
         char *paramsdup = strdup(params);
@@ -878,12 +875,33 @@ static int upipe_bmd_src_set_uri(struct upipe *upipe, const char *uri)
                 if (unlikely(mode != NULL))
                     free(mode);
                 mode = config_stropt(ARG_OPTION("mode="));
+            } else if (IS_OPTION("audio=")) {
+                if (unlikely(audio != NULL))
+                    free(audio);
+                audio = config_stropt(ARG_OPTION("audio="));
             }
 #undef IS_OPTION
 #undef ARG_OPTION
         } while ((token = strchr(token, '/')) != NULL);
 
         free(paramsdup);
+    }
+
+    if (audio != NULL) {
+        int i = 0;
+        BMDAudioConnection conn = 0;
+        for (i = 0; upipe_bmd_src_audio_conns[i].name; i++) {
+            if (!ubase_ncmp(audio, upipe_bmd_src_audio_conns[i].name)) {
+                conn = upipe_bmd_src_audio_conns[i].bmdConn;
+                break;
+            }
+        }
+
+        if (conn != 0) {
+            deckLinkConfiguration->SetInt(
+                bmdDeckLinkConfigAudioInputConnection, conn);
+        } else
+            upipe_warn_va(upipe, "unknown audio connection '%s'", audio);
     }
 
     /* parse display mode */
@@ -959,15 +977,15 @@ static int upipe_bmd_src_set_uri(struct upipe *upipe, const char *uri)
             (detectFormat ? bmdVideoInputEnableFormatDetection :
                             bmdVideoInputFlagDefault));
     deckLinkInput->EnableAudioInput(bmdAudioSampleRate48kHz,
-            bmdAudioSampleType16bitInteger, CHANS);
+            bmdAudioSampleType16bitInteger, BMD_CHANNELS);
 
     /* managers */
     upipe_bmd_src->pic_subpipe.ubuf_mgr =
         ubuf_pic_bmd_mgr_alloc(UBUF_POOL_DEPTH, bmdFormat8BitYUV);
     upipe_bmd_src->sound_subpipe.ubuf_mgr =
         ubuf_sound_bmd_mgr_alloc(UBUF_POOL_DEPTH,
-                                 bmdAudioSampleType16bitInteger, CHANS, "ALL");
-    /* TODO subpic */
+                                 bmdAudioSampleType16bitInteger, BMD_CHANNELS,
+                                 "ALL");
     if (unlikely(upipe_bmd_src->pic_subpipe.ubuf_mgr == NULL ||
                  upipe_bmd_src->sound_subpipe.ubuf_mgr == NULL)) {
         if (upipe_bmd_src->pic_subpipe.ubuf_mgr)
@@ -995,14 +1013,13 @@ static int upipe_bmd_src_set_uri(struct upipe *upipe, const char *uri)
     displayMode->Release();
 
     flow_def = uref_sound_flow_alloc_def(upipe_bmd_src->uref_mgr, "s16.",
-                                         CHANS, 2*CHANS);
+                                         BMD_CHANNELS, 2 * BMD_CHANNELS);
     uref_sound_flow_add_plane(flow_def, "ALL");
     uref_sound_flow_set_rate(flow_def, BMD_SAMPLERATE);
     upipe_bmd_src_output_store_flow_def(
             upipe_bmd_src_output_to_upipe(
                 upipe_bmd_src_to_sound_subpipe(upipe_bmd_src)),
             flow_def);
-    /* TODO subpic */
 
     upipe_bmd_src->deckLink = deckLink;
     upipe_bmd_src->deckLinkInput = deckLinkInput;
@@ -1072,14 +1089,6 @@ static int _upipe_bmd_src_control(struct upipe *upipe,
                         upipe_bmd_src_from_upipe(upipe)));
             return UBASE_ERR_NONE;
         }
-        case UPIPE_BMD_SRC_GET_SUBPIC_SUB: {
-            UBASE_SIGNATURE_CHECK(args, UPIPE_BMD_SRC_SIGNATURE)
-            struct upipe **upipe_p = va_arg(args, struct upipe **);
-            *upipe_p = upipe_bmd_src_output_to_upipe(
-                    upipe_bmd_src_to_subpic_subpipe(
-                        upipe_bmd_src_from_upipe(upipe)));
-            return UBASE_ERR_NONE;
-        }
         default:
             return UBASE_ERR_UNHANDLED;
     }
@@ -1141,8 +1150,6 @@ static void upipe_bmd_src_free(struct upipe *upipe)
                 upipe_bmd_src_to_pic_subpipe(upipe_bmd_src)));
     upipe_bmd_src_output_clean(upipe_bmd_src_output_to_upipe(
                 upipe_bmd_src_to_sound_subpipe(upipe_bmd_src)));
-    upipe_bmd_src_output_clean(upipe_bmd_src_output_to_upipe(
-                upipe_bmd_src_to_subpic_subpipe(upipe_bmd_src)));
 
     upipe_throw_dead(upipe);
 

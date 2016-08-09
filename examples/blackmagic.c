@@ -204,9 +204,7 @@ int main(int argc, char **argv)
         uprobe_pfx_alloc(uprobe_use(logger),
                          loglevel, "bmdvideo"),
         uprobe_pfx_alloc(uprobe_use(logger),
-                         loglevel, "bmdaudio"),
-        uprobe_pfx_alloc(uprobe_use(logger),
-                         loglevel, "bmdsubpic"));
+                         loglevel, "bmdaudio"));
     assert(bmdsrc);
     upipe_attach_uclock(bmdsrc);
     upipe_set_uri(bmdsrc, bmd_uri);
