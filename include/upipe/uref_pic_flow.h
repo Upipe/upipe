@@ -92,6 +92,10 @@ UREF_ATTR_STRING_SH(pic_flow, transfer_characteristics,
 UREF_ATTR_STRING_SH(pic_flow, matrix_coefficients,
         UDICT_TYPE_PIC_MATRIX_COEFFICIENTS, matrix coefficients)
 
+/* SMPTE-2016 (AFD) */
+UREF_ATTR_SMALL_UNSIGNED(pic_flow, afd, "p.afd", Active Format Description)
+UREF_ATTR_OPAQUE(pic_flow, bar, "p.bar", bar data)
+
 /** @This allocates a control packet to define a new picture flow. For each
  * plane, uref_pic_flow_add_plane() has to be called afterwards.
  *
