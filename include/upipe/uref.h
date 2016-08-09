@@ -336,6 +336,21 @@ static inline struct ubuf *uref_detach_ubuf(struct uref *uref)
     return ubuf;
 }
 
+/** @This duplicates a uref and attaches a new ubuf to the copy.
+ *
+ * @param uref source structure to duplicate
+ * @return duplicated uref or NULL in case of allocation failure
+ */
+static inline struct uref *uref_fork(struct uref *uref, struct ubuf *ubuf)
+{
+    struct uref *new_uref = uref_dup_inner(uref);
+    if (unlikely(new_uref == NULL))
+        return NULL;
+
+    uref_attach_ubuf(new_uref, ubuf);
+    return new_uref;
+}
+
 /** @This increments the reference count of a uref manager.
  *
  * @param mgr pointer to uref manager
