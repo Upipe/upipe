@@ -218,6 +218,7 @@ static inline int ubuf_block_read(struct ubuf *ubuf, int offset,
  * octets, negative values start from the end
  * @param size_p pointer to the size of the buffer space wanted, in octets,
  * or -1 for the end of the block, changed during execution for the actual
+ * readable size
  * @param buffer_p reference written with a pointer to buffer space if not NULL
  * @return an error code
  */
