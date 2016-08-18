@@ -65,6 +65,8 @@ libupipe_modules_la_SOURCES = \
 	upipe_id3v2.c \
 	id3v2.h \
 	upipe_ntsc_prepend.c \
+	upipe_rtp_pcm_unpack.c \
+	upipe_rtp_pcm_pack.c \
 	$(NULL)
 
 if HAVE_WRITEV
