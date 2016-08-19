@@ -1,3 +1,4 @@
+NULL =
 myincludedir = $(includedir)/upipe-framers
 myinclude_HEADERS = \
 	upipe_h264_framer.h \
@@ -17,4 +18,5 @@ myinclude_HEADERS = \
 	uref_h265.h \
 	uref_h265_flow.h \
 	uref_mpga_flow.h \
-	uref_mpgv_flow.h
+	uref_mpgv_flow.h \
+	$(NULL)

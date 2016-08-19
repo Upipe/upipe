@@ -1,3 +1,4 @@
+NULL =
 myincludedir = $(includedir)/upipe-ts
 myinclude_HEADERS = \
 	upipe_ts.h \
@@ -31,4 +32,5 @@ myinclude_HEADERS = \
 	uref_ts_attr.h \
 	uref_ts_event.h \
 	uref_ts_flow.h \
-	uref_ts_scte35.h
+	uref_ts_scte35.h \
+	$(NULL)

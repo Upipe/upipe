@@ -1,3 +1,4 @@
+NULL =
 lib_LTLIBRARIES = libupipe_modules.la
 
 libupipe_modules_la_SOURCES = \
@@ -60,7 +61,8 @@ libupipe_modules_la_SOURCES = \
 	upipe_sequential_source.c \
 	upipe_segment_source.c \
 	upipe_id3v2.c \
-	id3v2.h
+	id3v2.h \
+	$(NULL)
 
 if HAVE_WRITEV
 libupipe_modules_la_SOURCES += \
