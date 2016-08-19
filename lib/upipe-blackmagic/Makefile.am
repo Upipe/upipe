@@ -1,9 +1,11 @@
+NULL =
 lib_LTLIBRARIES = libupipe_blackmagic.la
 
 libupipe_blackmagic_la_SOURCES = ubuf_pic_blackmagic.cpp \
                                  ubuf_sound_blackmagic.cpp \
                                  upipe_blackmagic_source.cpp \
-                                 upipe_blackmagic_extract_vanc.cpp
+                                 upipe_blackmagic_extract_vanc.cpp \
+                                 $(NULL)
 
 EXTRA_libupipe_blackmagic_la_SOURCES = include/DeckLinkAPIConfiguration.h \
                                        include/DeckLinkAPIDeckControl.h \

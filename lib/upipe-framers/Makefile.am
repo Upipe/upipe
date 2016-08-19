@@ -1,3 +1,4 @@
+NULL =
 lib_LTLIBRARIES = libupipe_framers.la
 
 noinst_HEADERS = upipe_framers_common.h \
@@ -16,7 +17,8 @@ libupipe_framers_la_SOURCES = \
 	upipe_dvbsub_framer.c \
 	upipe_s302_framer.c \
 	upipe_s337_framer.c \
-	upipe_video_trim.c
+	upipe_video_trim.c \
+	$(NULL)
 
 libupipe_framers_la_CPPFLAGS = -I$(top_builddir)/include -I$(top_srcdir)/include
 libupipe_framers_la_LDFLAGS = -no-undefined
