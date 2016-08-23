@@ -19,7 +19,7 @@ EXTRA_libupipe_blackmagic_la_SOURCES = include/DeckLinkAPIConfiguration.h \
 
 libupipe_blackmagic_la_CPPFLAGS = -I$(top_builddir)/include -I$(top_srcdir)/include
 libupipe_blackmagic_la_CXXFLAGS = -Wno-missing-declarations
-libupipe_blackmagic_la_LIBADD = $(top_builddir)/lib/upipe/libupipe.la -ldl
+libupipe_blackmagic_la_LIBADD = $(top_builddir)/lib/upipe/libupipe.la -ldl -lpthread
 
 pkgconfigdir = $(libdir)/pkgconfig
 pkgconfig_DATA = libupipe_blackmagic.pc
