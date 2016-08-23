@@ -27,7 +27,7 @@ AC_PROG_LN_S
 AC_PROG_MAKE_SET
 AM_PROG_CC_C_O
 LT_INIT([win32-dll])
-AM_CONDITIONAL(HAVE_OBJDUMP, test "$OBJDUMP" != false)
+AM_CONDITIONAL(BUILD_LUAJIT, test "$OBJDUMP" != false -a "$enable_shared" != no)
 
 WARN_FLAGS="-Wall -Wextra -Wno-unused -Wno-unused-parameter -Wno-sign-compare -Wmissing-declarations -Wwrite-strings -Wredundant-decls -Wundef -Wmissing-include-dirs"
 AC_SUBST([AM_CFLAGS], ["$WARN_FLAGS -Wstrict-prototypes -Wmissing-prototypes -Wold-style-definition"])
