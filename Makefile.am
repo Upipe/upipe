@@ -1,7 +1,7 @@
 ACLOCAL_AMFLAGS = -I m4
 SUBDIRS = lib include tests examples
 
-if HAVE_OBJDUMP
+if BUILD_LUAJIT
 SUBDIRS += luajit
 endif
 
