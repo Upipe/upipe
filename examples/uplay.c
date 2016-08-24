@@ -59,6 +59,7 @@
 #include <upipe-pthread/uprobe_pthread_upump_mgr.h>
 #include <upump-ev/upump_ev.h>
 #include <upipe-modules/upipe_blit.h>
+#include <upipe-modules/upipe_subpic_schedule.h>
 #include <upipe-modules/upipe_file_source.h>
 #include <upipe-modules/upipe_udp_source.h>
 #include <upipe-modules/upipe_rtp_source.h>
@@ -149,6 +150,8 @@ static struct upipe *trickp = NULL;
 static struct upipe *upipe_src = NULL;
 /* blit pipe */
 static struct upipe *upipe_blit = NULL;
+/* schedule pipe */
+static struct upipe *upipe_schedule = NULL;
 
 static void uplay_stop(struct upump *upump);
 
@@ -236,6 +239,11 @@ static int catch_sub(struct uprobe *uprobe, struct upipe *upipe,
 
     /* */
 
+    struct upipe *schedule = upipe_void_alloc_output_sub(upipe, upipe_schedule,
+            uprobe_pfx_alloc(uprobe_use(uprobe), UPROBE_LOG_VERBOSE, "subpic schedule sub"));
+    assert(schedule);
+    upipe_release(schedule);
+
     struct upipe_mgr *ffmt_mgr = upipe_ffmt_mgr_alloc();
     struct upipe_mgr *sws_mgr = upipe_sws_mgr_alloc();
     upipe_ffmt_mgr_set_sws_mgr(ffmt_mgr, sws_mgr);
@@ -246,7 +254,7 @@ static int catch_sub(struct uprobe *uprobe, struct upipe *upipe,
     uref_pic_flow_set_planes(uref, 0); /* request alpha */
     uref_pic_flow_add_plane(uref, 1, 1, 1, "a8");
 
-    struct upipe *ffmt = upipe_flow_alloc_output(upipe, ffmt_mgr,
+    struct upipe *ffmt = upipe_flow_alloc_output(schedule, ffmt_mgr,
             uprobe_pfx_alloc(uprobe_use(uprobe_main),
                              UPROBE_LOG_VERBOSE, "ffmt"),
             uref);
@@ -258,6 +266,7 @@ static int catch_sub(struct uprobe *uprobe, struct upipe *upipe,
     struct upipe *subblit = upipe_void_alloc_output_sub(ffmt, upipe_blit,
             uprobe_pfx_alloc(uprobe_use(uprobe), UPROBE_LOG_VERBOSE, "subblit"));
     assert(subblit);
+    upipe_blit_sub_set_alpha_threshold(subblit, 20);
     upipe_release(subblit);
 
     return UBASE_ERR_NONE;
@@ -287,8 +296,25 @@ static int catch_video(struct uprobe *uprobe, struct upipe *upipe,
     upipe_set_option(avcdec, "threads", "4");
     upipe_set_option(avcdec, "thread_type", "1");
 
+    /* deport to the decoder thread */
+    avcdec = upipe_wlin_alloc(upipe_wlin_mgr,
+            uprobe_pfx_alloc(uprobe_use(uprobe_main),
+                             UPROBE_LOG_VERBOSE, "wlin video"),
+            avcdec,
+            uprobe_pfx_alloc(uprobe_use(uprobe_main),
+                             UPROBE_LOG_VERBOSE, "wlin_x video"),
+            DEC_IN_QUEUE_LENGTH, DEC_OUT_QUEUE_LENGTH);
+    assert(avcdec != NULL);
+    upipe_set_output(upipe, avcdec);
+
+    struct upipe_mgr *subpic_schedule_mgr = upipe_subpic_schedule_mgr_alloc();
+    upipe_schedule = upipe_void_chain_output(avcdec, subpic_schedule_mgr,
+            uprobe_pfx_alloc(uprobe_use(uprobe), UPROBE_LOG_VERBOSE, "subpic schedule"));
+    upipe_mgr_release(subpic_schedule_mgr);
+    upipe_release(upipe_schedule);
+
     struct upipe_mgr *blit_mgr = upipe_blit_mgr_alloc();
-    upipe_blit = upipe_void_alloc_output(avcdec, blit_mgr,
+    upipe_blit = upipe_void_alloc_output(upipe_schedule, blit_mgr,
         uprobe_pfx_alloc(uprobe_use(uprobe_main),
                             UPROBE_LOG_VERBOSE, "blit video"));
     assert(upipe_blit);
@@ -310,39 +336,29 @@ static int catch_video(struct uprobe *uprobe, struct upipe *upipe,
     assert(ffmt != NULL);
     uref_free(uref);
     upipe_mgr_release(ffmt_mgr);
-    upipe_release(ffmt);
 
-    /* deport to the decoder thread */
-    avcdec = upipe_wlin_alloc(upipe_wlin_mgr,
-            uprobe_pfx_alloc(uprobe_use(uprobe_main),
-                             UPROBE_LOG_VERBOSE, "wlin video"),
-            avcdec,
-            uprobe_pfx_alloc(uprobe_use(uprobe_main),
-                             UPROBE_LOG_VERBOSE, "wlin_x video"),
-            DEC_IN_QUEUE_LENGTH, DEC_OUT_QUEUE_LENGTH);
-    assert(avcdec != NULL);
-    upipe_set_output(upipe, avcdec);
+    upipe = ffmt;
 
     if (trickp != NULL)
-        avcdec = upipe_void_chain_output_sub(avcdec, trickp,
+        upipe = upipe_void_chain_output_sub(upipe, trickp,
                 uprobe_pfx_alloc(uprobe_use(uprobe_main),
                                  UPROBE_LOG_VERBOSE, "trickp video"));
 
-    avcdec = upipe_void_chain_output_sub(avcdec, play,
+    upipe = upipe_void_chain_output_sub(upipe, play,
             uprobe_pfx_alloc(uprobe_use(uprobe_main),
                              UPROBE_LOG_VERBOSE, "play video"));
 
     struct upipe_mgr *upipe_glx_mgr = upipe_glx_sink_mgr_alloc();
-    avcdec = upipe_void_chain_output(avcdec, upipe_glx_mgr,
+    upipe = upipe_void_chain_output(upipe, upipe_glx_mgr,
             uprobe_gl_sink_cube_alloc(
                 uprobe_pfx_alloc(uprobe_use(&uprobe_glx_s),
                                  UPROBE_LOG_VERBOSE, "glx")));
-    assert(avcdec != NULL);
+    assert(upipe != NULL);
     upipe_mgr_release(upipe_glx_mgr);
-    upipe_glx_sink_init(avcdec, 0, 0, 800, 480);
-    upipe_attach_uclock(avcdec);
+    upipe_glx_sink_init(upipe, 0, 0, 800, 480);
+    upipe_attach_uclock(upipe);
 
-    upipe_release(avcdec);
+    upipe_release(upipe);
     return UBASE_ERR_NONE;
 }
 
@@ -616,7 +632,7 @@ static void upump_mgr_free(struct upump_mgr *upump_mgr)
 }
 
 static void usage(const char *argv0) {
-    fprintf(stderr, "Usage: %s [-d] [-q] [-u] [-A <audio>] [-V <video>] [-P <program>] [-R 1:1] <source>\n", argv0);
+    fprintf(stderr, "Usage: %s [-d] [-q] [-u] [-A <audio>] [-S <subtitle>] [-V <video>] [-P <program>] [-R 1:1] <source>\n", argv0);
     exit(EXIT_FAILURE);
 }
 
