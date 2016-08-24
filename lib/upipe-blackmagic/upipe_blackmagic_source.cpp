@@ -756,6 +756,7 @@ static int upipe_bmd_src_set_uri(struct upipe *upipe, const char *uri)
     } else {
         idx += strlen(URI_SEP);
     }
+    free(upipe_bmd_src->uri);
     upipe_bmd_src->uri = strdup(uri);
     upipe_notice_va(upipe, "opening device %s", upipe_bmd_src->uri);
 
@@ -1155,6 +1156,8 @@ static void upipe_bmd_src_free(struct upipe *upipe)
                 upipe_bmd_src_to_sound_subpipe(upipe_bmd_src)));
 
     upipe_throw_dead(upipe);
+
+    free(upipe_bmd_src->uri);
 
     if (upipe_bmd_src->output != NULL)
         upipe_release(upipe_bmd_src->output);
