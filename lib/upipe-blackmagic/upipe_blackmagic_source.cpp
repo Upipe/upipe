@@ -820,9 +820,11 @@ static int upipe_bmd_src_set_uri(struct upipe *upipe, const char *uri)
         return UBASE_ERR_EXTERNAL;
     }
 
-    const char *model_name;
-    if (deckLink->GetModelName(&model_name) == S_OK)
+    char *model_name;
+    if (deckLink->GetModelName((const char **)&model_name) == S_OK) {
         upipe_notice_va(upipe, "detected card type %s", model_name);
+        free(model_name);
+    }
 
     /* get decklink input handler */
     IDeckLinkInput *deckLinkInput;
@@ -941,9 +943,11 @@ static int upipe_bmd_src_set_uri(struct upipe *upipe, const char *uri)
         return UBASE_ERR_EXTERNAL;
     }
 
-    const char *display_name;
-    if (displayMode->GetName(&display_name) == S_OK)
+    char *display_name;
+    if (displayMode->GetName((const char **)&display_name) == S_OK) {
         upipe_notice_va(upipe, "configuring mode %s", display_name);
+        free(display_name);
+    }
 
     BMDDisplayModeSupport displayModeSupported;
     if (deckLinkInput->DoesSupportVideoMode(displayMode->GetDisplayMode(),
