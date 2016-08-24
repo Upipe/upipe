@@ -1133,7 +1133,6 @@ static void upipe_bmd_src_free(struct upipe *upipe)
 {
     struct upipe_bmd_src *upipe_bmd_src = upipe_bmd_src_from_upipe(upipe);
 
-    upipe_bmd_src_work(upipe, NULL);
     if (upipe_bmd_src->deckLinkConfiguration)
         upipe_bmd_src->deckLinkConfiguration->Release();
     if (upipe_bmd_src->deckLinkInput) {
@@ -1144,6 +1143,7 @@ static void upipe_bmd_src_free(struct upipe *upipe)
         upipe_bmd_src->deckLinkCaptureDelegate->Release();
     if (upipe_bmd_src->deckLink)
         upipe_bmd_src->deckLink->Release();
+    upipe_bmd_src_work(upipe, NULL);
     uqueue_clean(&upipe_bmd_src->uqueue);
 
     ubuf_mgr_release(upipe_bmd_src->pic_subpipe.ubuf_mgr);
