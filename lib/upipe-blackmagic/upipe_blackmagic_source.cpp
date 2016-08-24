@@ -1146,6 +1146,9 @@ static void upipe_bmd_src_free(struct upipe *upipe)
         upipe_bmd_src->deckLink->Release();
     uqueue_clean(&upipe_bmd_src->uqueue);
 
+    ubuf_mgr_release(upipe_bmd_src->pic_subpipe.ubuf_mgr);
+    ubuf_mgr_release(upipe_bmd_src->sound_subpipe.ubuf_mgr);
+
     upipe_bmd_src_output_clean(upipe_bmd_src_output_to_upipe(
                 upipe_bmd_src_to_pic_subpipe(upipe_bmd_src)));
     upipe_bmd_src_output_clean(upipe_bmd_src_output_to_upipe(
