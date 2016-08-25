@@ -167,6 +167,33 @@ static void upipe_rtp_prepend_input(struct upipe *upipe, struct uref *uref,
     ubuf_block_unmap(header, 0);
     upipe_rtp_prepend->seqnum++;
 
+    const char *def;
+    ubase_assert(uref_flow_get_def(upipe_rtp_prepend->flow_def, &def));
+    if (!ubase_ncmp(def, "block.rtp.mp2.sound.") ||
+            !ubase_ncmp(def, "block.rtp.mp3.sound.")) {
+        /* alloc mpa header */
+        struct ubuf *mpa_header = ubuf_block_alloc(uref->ubuf->mgr, 4);
+        if (unlikely(!mpa_header)) {
+            upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
+            uref_free(uref);
+            ubuf_free(header);
+            return;
+        }
+
+        /* write mpa mpa_header */
+        ubuf_block_write(mpa_header, 0, &size, &buf);
+        memset(buf, 0, 4); // frag_offset = 0
+        ubuf_block_unmap(mpa_header, 0);
+
+        if (unlikely(!ubase_check(ubuf_block_append(header, mpa_header)))) {
+            upipe_warn(upipe, "could not append mpa header to header");
+            ubuf_free(header);
+            ubuf_free(mpa_header);
+            uref_free(uref);
+            return;
+        }
+    }
+
     /* append payload (current ubuf) to header to form segmented ubuf */
     payload = uref_detach_ubuf(uref);
     if (unlikely(!ubase_check(ubuf_block_append(header, payload)))) {
