@@ -756,6 +756,7 @@ static int upipe_bmd_src_set_uri(struct upipe *upipe, const char *uri)
     } else {
         idx += strlen(URI_SEP);
     }
+    free(upipe_bmd_src->uri);
     upipe_bmd_src->uri = strdup(uri);
     upipe_notice_va(upipe, "opening device %s", upipe_bmd_src->uri);
 
@@ -819,9 +820,11 @@ static int upipe_bmd_src_set_uri(struct upipe *upipe, const char *uri)
         return UBASE_ERR_EXTERNAL;
     }
 
-    const char *model_name;
-    if (deckLink->GetModelName(&model_name) == S_OK)
+    char *model_name;
+    if (deckLink->GetModelName((const char **)&model_name) == S_OK) {
         upipe_notice_va(upipe, "detected card type %s", model_name);
+        free(model_name);
+    }
 
     /* get decklink input handler */
     IDeckLinkInput *deckLinkInput;
@@ -940,9 +943,11 @@ static int upipe_bmd_src_set_uri(struct upipe *upipe, const char *uri)
         return UBASE_ERR_EXTERNAL;
     }
 
-    const char *display_name;
-    if (displayMode->GetName(&display_name) == S_OK)
+    char *display_name;
+    if (displayMode->GetName((const char **)&display_name) == S_OK) {
         upipe_notice_va(upipe, "configuring mode %s", display_name);
+        free(display_name);
+    }
 
     BMDDisplayModeSupport displayModeSupported;
     if (deckLinkInput->DoesSupportVideoMode(displayMode->GetDisplayMode(),
@@ -1133,7 +1138,6 @@ static void upipe_bmd_src_free(struct upipe *upipe)
 {
     struct upipe_bmd_src *upipe_bmd_src = upipe_bmd_src_from_upipe(upipe);
 
-    upipe_bmd_src_work(upipe, NULL);
     if (upipe_bmd_src->deckLinkConfiguration)
         upipe_bmd_src->deckLinkConfiguration->Release();
     if (upipe_bmd_src->deckLinkInput) {
@@ -1144,7 +1148,11 @@ static void upipe_bmd_src_free(struct upipe *upipe)
         upipe_bmd_src->deckLinkCaptureDelegate->Release();
     if (upipe_bmd_src->deckLink)
         upipe_bmd_src->deckLink->Release();
+    upipe_bmd_src_work(upipe, NULL);
     uqueue_clean(&upipe_bmd_src->uqueue);
+
+    ubuf_mgr_release(upipe_bmd_src->pic_subpipe.ubuf_mgr);
+    ubuf_mgr_release(upipe_bmd_src->sound_subpipe.ubuf_mgr);
 
     upipe_bmd_src_output_clean(upipe_bmd_src_output_to_upipe(
                 upipe_bmd_src_to_pic_subpipe(upipe_bmd_src)));
@@ -1152,6 +1160,8 @@ static void upipe_bmd_src_free(struct upipe *upipe)
                 upipe_bmd_src_to_sound_subpipe(upipe_bmd_src)));
 
     upipe_throw_dead(upipe);
+
+    free(upipe_bmd_src->uri);
 
     if (upipe_bmd_src->output != NULL)
         upipe_release(upipe_bmd_src->output);
