@@ -78,7 +78,7 @@ struct upipe_ts_scte104d {
     struct urequest ubuf_mgr_request;
 
     /** array of received messages */
-    struct uref *messages[UINT8_MAX];
+    struct uref *messages[UINT8_MAX + 1];
 
     /** list of output subpipes */
     struct uchain subs;
@@ -265,7 +265,7 @@ static struct upipe *upipe_ts_scte104d_alloc(struct upipe_mgr *mgr,
     upipe_ts_scte104d_init_sub_mgr(upipe);
     upipe_ts_scte104d_init_sub_subs(upipe);
 
-    for (int i = 0; i < UINT8_MAX; i++)
+    for (int i = 0; i <= UINT8_MAX; i++)
         upipe_ts_scte104d->messages[i] = NULL;
 
     upipe_throw_ready(upipe);
@@ -596,7 +596,7 @@ static void upipe_ts_scte104d_free(struct urefcount *urefcount_real)
     struct upipe *upipe = upipe_ts_scte104d_to_upipe(upipe_ts_scte104d);
     upipe_throw_dead(upipe);
 
-    for (int i = 0; i < UINT8_MAX; i++)
+    for (int i = 0; i <= UINT8_MAX; i++)
         uref_free(upipe_ts_scte104d->messages[i]);
 
     upipe_ts_scte104d_clean_sub_subs(upipe);
