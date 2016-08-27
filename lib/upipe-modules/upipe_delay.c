@@ -107,17 +107,9 @@ static void upipe_delay_input(struct upipe *upipe, struct uref *uref,
 {
     struct upipe_delay *upipe_delay = upipe_delay_from_upipe(upipe);
     if (upipe_delay->delay) {
-        int type;
-        uint64_t date;
-        uref_clock_get_date_sys(uref, &date, &type);
-        if (type != UREF_DATE_NONE)
-            uref_clock_set_date_sys(uref, date + upipe_delay->delay, type);
-        uref_clock_get_date_prog(uref, &date, &type);
-        if (type != UREF_DATE_NONE)
-            uref_clock_set_date_prog(uref, date + upipe_delay->delay, type);
-        uref_clock_get_date_orig(uref, &date, &type);
-        if (type != UREF_DATE_NONE)
-            uref_clock_set_date_orig(uref, date + upipe_delay->delay, type);
+        uref_clock_add_date_sys(uref, upipe_delay->delay);
+        uref_clock_add_date_prog(uref, upipe_delay->delay);
+        uref_clock_add_date_orig(uref, upipe_delay->delay);
     }
     upipe_delay_output(upipe, uref, upump_p);
 }
