@@ -108,7 +108,7 @@ static struct upipe *upipe_ts_scte35d_alloc(struct upipe_mgr *mgr,
                                             uint32_t signature, va_list args)
 {
     struct upipe *upipe = upipe_ts_scte35d_alloc_void(mgr, uprobe, signature,
-                                                   args);
+                                                      args);
     if (unlikely(upipe == NULL))
         return NULL;
 
@@ -309,10 +309,16 @@ static int upipe_ts_scte35d_control(struct upipe *upipe, int command, va_list ar
     switch (command) {
         case UPIPE_REGISTER_REQUEST: {
             struct urequest *request = va_arg(args, struct urequest *);
+            if (request->type == UREQUEST_UBUF_MGR ||
+                request->type == UREQUEST_FLOW_FORMAT)
+                return upipe_throw_provide_request(upipe, request);
             return upipe_ts_scte35d_alloc_output_proxy(upipe, request);
         }
         case UPIPE_UNREGISTER_REQUEST: {
             struct urequest *request = va_arg(args, struct urequest *);
+            if (request->type == UREQUEST_UBUF_MGR ||
+                request->type == UREQUEST_FLOW_FORMAT)
+                return UBASE_ERR_NONE;
             return upipe_ts_scte35d_free_output_proxy(upipe, request);
         }
         case UPIPE_GET_FLOW_DEF: {
