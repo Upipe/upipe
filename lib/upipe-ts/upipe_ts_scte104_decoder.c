@@ -539,8 +539,11 @@ static int upipe_ts_scte104d_set_flow_def(struct upipe *upipe,
     ulist_foreach (&upipe_ts_scte104d->subs, uchain) {
         struct upipe_ts_scte104d_sub *sub =
             upipe_ts_scte104d_sub_from_uchain(uchain);
+        if (sub->output_state != UPIPE_HELPER_OUTPUT_NONE)
+            continue;
+        struct uref *uref = uref_sibling_alloc(flow_def);
         upipe_ts_scte104d_sub_output(upipe_ts_scte104d_sub_to_upipe(sub),
-                                     NULL, NULL);
+                                     uref, NULL);
     }
     return UBASE_ERR_NONE;
 }
