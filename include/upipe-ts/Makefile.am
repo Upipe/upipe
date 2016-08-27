@@ -20,6 +20,7 @@ myinclude_HEADERS = \
 	upipe_ts_psi_join.h \
 	upipe_ts_psi_merge.h \
 	upipe_ts_psi_split.h \
+	upipe_ts_scte104_decoder.h \
 	upipe_ts_scte35_decoder.h \
 	upipe_ts_scte35_generator.h \
 	upipe_ts_scte35_probe.h \
@@ -32,5 +33,6 @@ myinclude_HEADERS = \
 	uref_ts_attr.h \
 	uref_ts_event.h \
 	uref_ts_flow.h \
+	uref_ts_scte104_flow.h \
 	uref_ts_scte35.h \
 	$(NULL)
