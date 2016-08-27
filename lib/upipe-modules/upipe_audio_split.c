@@ -301,23 +301,21 @@ static void upipe_audio_split_sub_build_flow_def(struct upipe *upipe)
         sub->ubuf_mgr = NULL;
     }
 
-    struct uref *flow_def = uref_dup(split->flow_def);
+    struct uref *flow_def = uref_dup(sub->flow_def_params);
     if (unlikely(!flow_def)) {
         upipe_throw_error(upipe, UBASE_ERR_ALLOC);
         return;
     }
 
-    /* We need to copy planes, channels number, keep input flow definition,
-     * and compute new sample size from previous sample size. */
-    uref_sound_flow_clear_format(flow_def);
-    UBASE_ERROR(upipe, uref_sound_flow_set_planes(flow_def, sub->planes))
-    UBASE_ERROR(upipe, uref_sound_flow_set_channels(flow_def, sub->channels))
-    for (uint8_t plane = 0; plane < sub->planes; plane++) {
-        const char *channel;
-        UBASE_ERROR(upipe, uref_sound_flow_get_channel(sub->flow_def_params,
-                                                       &channel, plane))
-        UBASE_ERROR(upipe, uref_sound_flow_set_channel(flow_def,
-                                                       channel, plane))
+    /* We need to keep input flow definition and rate, and compute new sample
+     * size. */
+    const char *def;
+    if (likely(ubase_check(uref_flow_get_def(split->flow_def, &def)))) {
+        UBASE_ERROR(upipe, uref_flow_set_def(flow_def, def))
+    }
+    uint64_t rate;
+    if (likely(ubase_check(uref_sound_flow_get_rate(split->flow_def, &rate)))) {
+        UBASE_ERROR(upipe, uref_sound_flow_set_rate(flow_def, rate))
     }
 
     sub->sample_size = split->sample_size / split->channels;
