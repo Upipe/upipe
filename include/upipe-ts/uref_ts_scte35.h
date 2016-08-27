@@ -24,7 +24,7 @@
  */
 
 /** @file
- * @short Upipe flow definition attributes for TS SCTE 35
+ * @short Upipe uref attributes for TS SCTE 35
  */
 
 #ifndef _UPIPE_TS_UREF_TS_SCTE35_H_
