@@ -332,6 +332,10 @@ static int upipe_blit_sub_provide_flow_format(struct upipe *upipe)
 
         bool alpha = ubase_check(uref_pic_flow_check_chroma(
                 uref, 1, 1, 1, "a8"));
+        const char *chroma;
+        if (!alpha && ubase_check(uref_pic_flow_get_chroma(uref, &chroma, 0)) &&
+            strstr(chroma, "a8") != NULL)
+            alpha = true;
 
         uref_pic_flow_clear_format(uref);
         uref_pic_flow_copy_format(uref, upipe_blit->flow_def);
