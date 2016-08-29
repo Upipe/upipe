@@ -391,6 +391,7 @@ static struct upipe *_upipe_vanc_alloc(struct upipe_mgr *mgr,
     upipe_vanc->fps.num = 25;
     upipe_vanc->fps.den = 1;
     upipe_vanc->afd = UINT8_MAX;
+    upipe_vanc->scte104_uref = NULL;
     upipe_vanc->telx_uref = NULL;
     upipe_vanc->telx_octetrate = 0;
     upipe_vanc->cea708_uref = NULL;
