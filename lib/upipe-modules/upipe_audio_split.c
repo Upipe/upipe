@@ -307,11 +307,15 @@ static void upipe_audio_split_sub_build_flow_def(struct upipe *upipe)
         return;
     }
 
-    /* We need to keep input flow definition and rate, and compute new sample
-     * size. */
+    /* We need to keep input flow definition, latency and rate, and compute
+     * new sample size. */
     const char *def;
     if (likely(ubase_check(uref_flow_get_def(split->flow_def, &def)))) {
         UBASE_ERROR(upipe, uref_flow_set_def(flow_def, def))
+    }
+    uint64_t latency;
+    if (likely(ubase_check(uref_clock_get_latency(split->flow_def, &latency)))) {
+        UBASE_ERROR(upipe, uref_clock_set_latency(flow_def, latency))
     }
     uint64_t rate;
     if (likely(ubase_check(uref_sound_flow_get_rate(split->flow_def, &rate)))) {

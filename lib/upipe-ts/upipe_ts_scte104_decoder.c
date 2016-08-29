@@ -70,6 +70,8 @@ struct upipe_ts_scte104d {
     /** refcount management structure */
     struct urefcount urefcount;
 
+    /** input flow def */
+    struct uref *flow_def;
     /** ubuf manager */
     struct ubuf_mgr *ubuf_mgr;
     /** flow format packet */
@@ -116,6 +118,8 @@ struct upipe_ts_scte104d_sub {
     struct upipe *output;
     /** flow definition packet on this output */
     struct uref *flow_def;
+    /** attributes / parameters from application */
+    struct uref *flow_def_params;
     /** output state */
     enum upipe_helper_output_state output_state;
     /** list of output requests */
@@ -154,23 +158,51 @@ static struct upipe *upipe_ts_scte104d_sub_alloc(struct upipe_mgr *mgr,
                                                            args, &flow_def);
     if (unlikely(upipe == NULL))
         return NULL;
-    if (unlikely(!ubase_check(uref_flow_set_def(flow_def, OUTPUT_FLOW_DEF)))) {
-        upipe_release(upipe);
-        return NULL;
-    }
 
     struct upipe_ts_scte104d_sub *upipe_ts_scte104d_sub =
         upipe_ts_scte104d_sub_from_upipe(upipe);
     upipe_ts_scte104d_sub_init_urefcount(upipe);
     upipe_ts_scte104d_sub_init_output(upipe);
     upipe_ts_scte104d_sub_init_sub(upipe);
-    upipe_ts_scte104d_sub_store_flow_def(upipe, flow_def);
+    upipe_ts_scte104d_sub->flow_def_params = flow_def;
     upipe_ts_scte104d_sub->dpi_pid_index = 0;
     uref_ts_scte104_flow_get_dpi_pid_index(flow_def,
             &upipe_ts_scte104d_sub->dpi_pid_index);
 
     upipe_throw_ready(upipe);
     return upipe;
+}
+
+/** @internal @This builds the subpipe flow definition.
+ *
+ * @param upipe description structure of the subpipe
+ */
+static void upipe_ts_scte104d_sub_build_flow_def(struct upipe *upipe)
+{
+    struct upipe_ts_scte104d_sub *sub = upipe_ts_scte104d_sub_from_upipe(upipe);
+    struct upipe_ts_scte104d *scte104d =
+        upipe_ts_scte104d_from_sub_mgr(upipe->mgr);
+    if (scte104d->flow_def == NULL)
+        return;
+
+    struct uref *flow_def = uref_dup(sub->flow_def_params);
+    if (unlikely(!flow_def)) {
+        upipe_throw_error(upipe, UBASE_ERR_ALLOC);
+        return;
+    }
+
+    UBASE_ERROR(upipe, uref_flow_set_def(flow_def, OUTPUT_FLOW_DEF))
+    /* We need to keep input latency. */
+    uint64_t latency;
+    if (likely(ubase_check(uref_clock_get_latency(scte104d->flow_def, &latency)))) {
+        UBASE_ERROR(upipe, uref_clock_set_latency(flow_def, latency))
+    }
+
+    upipe_ts_scte104d_sub_store_flow_def(upipe, flow_def);
+
+    /* Force sending out flow definition */
+    struct uref *uref = uref_sibling_alloc(flow_def);
+    upipe_ts_scte104d_sub_output(upipe, uref, NULL);
 }
 
 /** @internal @This processes control commands on an output subpipe of a
@@ -213,8 +245,10 @@ static int upipe_ts_scte104d_sub_control(struct upipe *upipe,
  */
 static void upipe_ts_scte104d_sub_free(struct upipe *upipe)
 {
+    struct upipe_ts_scte104d_sub *sub = upipe_ts_scte104d_sub_from_upipe(upipe);
     upipe_throw_dead(upipe);
 
+    uref_free(sub->flow_def_params);
     upipe_ts_scte104d_sub_clean_output(upipe);
     upipe_ts_scte104d_sub_clean_sub(upipe);
     upipe_ts_scte104d_sub_clean_urefcount(upipe);
@@ -264,6 +298,7 @@ static struct upipe *upipe_ts_scte104d_alloc(struct upipe_mgr *mgr,
     upipe_ts_scte104d_init_ubuf_mgr(upipe);
     upipe_ts_scte104d_init_sub_mgr(upipe);
     upipe_ts_scte104d_init_sub_subs(upipe);
+    upipe_ts_scte104d->flow_def = NULL;
 
     for (int i = 0; i <= UINT8_MAX; i++)
         upipe_ts_scte104d->messages[i] = NULL;
@@ -509,7 +544,20 @@ static void upipe_ts_scte104d_input(struct upipe *upipe, struct uref *uref,
 static int upipe_ts_scte104d_check(struct upipe *upipe,
                                    struct uref *flow_format)
 {
-    uref_free(flow_format);
+    if (flow_format == NULL)
+        return UBASE_ERR_NONE;
+
+    struct upipe_ts_scte104d *upipe_ts_scte104d =
+        upipe_ts_scte104d_from_upipe(upipe);
+    uref_free(upipe_ts_scte104d->flow_def);
+    upipe_ts_scte104d->flow_def = flow_format;
+
+    struct uchain *uchain;
+    ulist_foreach (&upipe_ts_scte104d->subs, uchain) {
+        struct upipe_ts_scte104d_sub *sub =
+            upipe_ts_scte104d_sub_from_uchain(uchain);
+        upipe_ts_scte104d_sub_build_flow_def(upipe_ts_scte104d_sub_to_upipe(sub));
+    }
     return UBASE_ERR_NONE;
 }
 
@@ -531,20 +579,6 @@ static int upipe_ts_scte104d_set_flow_def(struct upipe *upipe,
         return UBASE_ERR_ALLOC;
     }
     upipe_ts_scte104d_demand_ubuf_mgr(upipe, flow_def_dup);
-
-    /* Force sending out flow definition */
-    struct upipe_ts_scte104d *upipe_ts_scte104d =
-        upipe_ts_scte104d_from_upipe(upipe);
-    struct uchain *uchain;
-    ulist_foreach (&upipe_ts_scte104d->subs, uchain) {
-        struct upipe_ts_scte104d_sub *sub =
-            upipe_ts_scte104d_sub_from_uchain(uchain);
-        if (sub->output_state != UPIPE_HELPER_OUTPUT_NONE)
-            continue;
-        struct uref *uref = uref_sibling_alloc(flow_def);
-        upipe_ts_scte104d_sub_output(upipe_ts_scte104d_sub_to_upipe(sub),
-                                     uref, NULL);
-    }
     return UBASE_ERR_NONE;
 }
 
@@ -599,6 +633,7 @@ static void upipe_ts_scte104d_free(struct urefcount *urefcount_real)
     for (int i = 0; i <= UINT8_MAX; i++)
         uref_free(upipe_ts_scte104d->messages[i]);
 
+    uref_free(upipe_ts_scte104d->flow_def);
     upipe_ts_scte104d_clean_sub_subs(upipe);
     urefcount_clean(urefcount_real);
     upipe_ts_scte104d_clean_ubuf_mgr(upipe);
