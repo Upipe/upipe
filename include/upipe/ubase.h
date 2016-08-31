@@ -305,6 +305,16 @@ do {                                                                        \
     if (unlikely(var == NULL))                                              \
         return UBASE_ERR_ALLOC;
 
+/** @This returns the sign of an integer.
+ *
+ * @param x integer
+ * @return sign of the integer
+ */
+static inline int64_t ubase_sign(int64_t x)
+{
+    return (x > 0) - (x < 0);
+}
+
 /** @This returns the greatest common denominator between two positive integers.
  *
  * @param a first integer (not null)
