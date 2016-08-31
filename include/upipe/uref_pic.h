@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2012-2013 OpenHeadend S.A.R.L.
+ * Copyright (C) 2012-2016 OpenHeadend S.A.R.L.
  *
  * Authors: Christophe Massiot
  *
@@ -47,6 +47,10 @@ UREF_ATTR_UNSIGNED_SH(pic, hposition, UDICT_TYPE_PIC_HPOSITION,
         horizontal position)
 UREF_ATTR_UNSIGNED_SH(pic, vposition, UDICT_TYPE_PIC_VPOSITION,
         vertical position)
+UREF_ATTR_UNSIGNED_SH(pic, lpadding, UDICT_TYPE_PIC_LPADDING, left padding)
+UREF_ATTR_UNSIGNED_SH(pic, rpadding, UDICT_TYPE_PIC_RPADDING, right padding)
+UREF_ATTR_UNSIGNED_SH(pic, tpadding, UDICT_TYPE_PIC_TPADDING, top padding)
+UREF_ATTR_UNSIGNED_SH(pic, bpadding, UDICT_TYPE_PIC_BPADDING, bottom padding)
 UREF_ATTR_VOID_SH(pic, progressive, UDICT_TYPE_PIC_PROGRESSIVE, progressive)
 UREF_ATTR_VOID_SH(pic, tf, UDICT_TYPE_PIC_TF, top field present)
 UREF_ATTR_VOID_SH(pic, bf, UDICT_TYPE_PIC_BF, bottom field present)
