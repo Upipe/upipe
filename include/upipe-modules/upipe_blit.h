@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2012-2015 OpenHeadend S.A.R.L.
+ * Copyright (C) 2012-2016 OpenHeadend S.A.R.L.
  *
  * Authors: Sebastien Gougelet
  *          Christophe Massiot
@@ -52,28 +52,22 @@ enum upipe_blit_sub_command {
     UPIPE_BLIT_SUB_SENTINEL = UPIPE_CONTROL_LOCAL,
 
     /** gets the offsets of the rect onto which the input of this subpipe
-     * will be blitted (uint64_t, uint64_t, uint64_t, uint64_t) */
+     * will be blitted (uint64_t *, uint64_t *, uint64_t *, uint64_t *) */
     UPIPE_BLIT_SUB_GET_RECT,
     /** sets the offsets of the rect onto which the input of this subpipe
      * will be blitted (uint64_t, uint64_t, uint64_t, uint64_t) */
     UPIPE_BLIT_SUB_SET_RECT,
+    /** gets the method for alpha blending (uint8_t *)
+     * @see ubuf_pic_blit */
+    UPIPE_BLIT_SUB_GET_ALPHA_THRESHOLD,
     /** sets the method for alpha blending (uint8_t)
      * @see ubuf_pic_blit */
     UPIPE_BLIT_SUB_SET_ALPHA_THRESHOLD,
+    /** gets the z-index (int *) */
+    UPIPE_BLIT_SUB_GET_Z_INDEX,
+    /** sets the z-index (int) */
+    UPIPE_BLIT_SUB_SET_Z_INDEX
 };
-
-/** @This sets the method for alpha blending for this subpipe.
- *
- * @param upipe description structure of the pipe
- * @param threshold method for alpha blending (@see ubuf_pic_blit)
- * @return an error code
- */
-static inline int upipe_blit_sub_set_alpha_threshold(struct upipe *upipe,
-        uint8_t threshold)
-{
-    return upipe_control(upipe, UPIPE_BLIT_SUB_SET_ALPHA_THRESHOLD,
-                         UPIPE_BLIT_SUB_SIGNATURE, threshold);
-}
 
 /** @This gets the offsets (from the respective borders of the frame) of the
  * rectangle onto which the input of the subpipe will be blitted.
@@ -110,6 +104,59 @@ static inline int upipe_blit_sub_set_rect(struct upipe *upipe,
     return upipe_control(upipe, UPIPE_BLIT_SUB_SET_RECT,
                          UPIPE_BLIT_SUB_SIGNATURE,
                          loffset, roffset, toffset, boffset);
+}
+
+/** @This gets the method for alpha blending for this subpipe.
+ *
+ * @param upipe description structure of the pipe
+ * @param threshold_p filled in with method for alpha blending
+ * (@see ubuf_pic_blit)
+ * @return an error code
+ */
+static inline int upipe_blit_sub_get_alpha_threshold(struct upipe *upipe,
+        uint8_t *threshold_p)
+{
+    return upipe_control(upipe, UPIPE_BLIT_SUB_GET_ALPHA_THRESHOLD,
+                         UPIPE_BLIT_SUB_SIGNATURE, threshold_p);
+}
+
+/** @This sets the method for alpha blending for this subpipe.
+ *
+ * @param upipe description structure of the pipe
+ * @param threshold method for alpha blending (@see ubuf_pic_blit)
+ * @return an error code
+ */
+static inline int upipe_blit_sub_set_alpha_threshold(struct upipe *upipe,
+        uint8_t threshold)
+{
+    return upipe_control(upipe, UPIPE_BLIT_SUB_SET_ALPHA_THRESHOLD,
+                         UPIPE_BLIT_SUB_SIGNATURE, (unsigned)threshold);
+}
+
+/** @This gets the z-index for this subpipe.
+ *
+ * @param upipe description structure of the pipe
+ * @param z_index_p filled in with z-index
+ * @return an error code
+ */
+static inline int upipe_blit_sub_get_z_index(struct upipe *upipe,
+        int *z_index_p)
+{
+    return upipe_control(upipe, UPIPE_BLIT_SUB_GET_Z_INDEX,
+                         UPIPE_BLIT_SUB_SIGNATURE, z_index_p);
+}
+
+/** @This sets the z-index for this subpipe.
+ *
+ * @param upipe description structure of the pipe
+ * @param z_index z-index
+ * @return an error code
+ */
+static inline int upipe_blit_sub_set_z_index(struct upipe *upipe,
+        int z_index)
+{
+    return upipe_control(upipe, UPIPE_BLIT_SUB_SET_Z_INDEX,
+                         UPIPE_BLIT_SUB_SIGNATURE, z_index);
 }
 
 #ifdef __cplusplus
