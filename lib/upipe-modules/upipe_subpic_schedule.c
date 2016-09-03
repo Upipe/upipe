@@ -286,9 +286,9 @@ static struct upipe *upipe_subpic_schedule_alloc(struct upipe_mgr *mgr,
     return &upipe_subpic_schedule->upipe;
 }
 
-/** @internal @This returns sub pictures to be output
+/** @internal @This selects sub pictures to be output
  */
-static struct uref *upipe_subpic_schedule_sub_handle_subpic(struct upipe *upipe,
+static void upipe_subpic_schedule_sub_handle_subpic(struct upipe *upipe,
         uint64_t date)
 {
     struct upipe_subpic_schedule_sub *upipe_subpic_schedule_sub =
@@ -299,35 +299,32 @@ static struct uref *upipe_subpic_schedule_sub_handle_subpic(struct upipe *upipe,
         upipe_verbose(upipe, "Subpicture elapsed");
         uref_free(uref);
         upipe_subpic_schedule_sub->uref = NULL;
-        uref = NULL;
     }
 
-    /* Is there a newer uref ? */
-    struct uchain *uchain = ulist_peek(&upipe_subpic_schedule_sub->urefs);
-    if (!uchain)
-        return uref;
+    struct uchain *uchain, *uchain_tmp;
+    ulist_delete_foreach(&upipe_subpic_schedule_sub->urefs, uchain, uchain_tmp) {
+        struct uref *next = uref_from_uchain(uchain);
 
-    struct uref *next = uref_from_uchain(uchain);
+        uint64_t date_next = 0;
+        uref_clock_get_pts_prog(next, &date_next);
 
-    uint64_t date_next = 0;
-    uref_clock_get_pts_prog(next, &date_next);
+        if (date_next > date) /* The next subpicture is in advance */
+            return;
 
-    if (date_next > date) /* The next subpicture is in advance */
-        return uref;
+        uint64_t duration;
+        if (unlikely(!ubase_check(uref_clock_get_duration(next, &duration))))
+            duration = 0;
+        upipe_subpic_schedule_sub->pts_end = date_next + duration;
 
-    uint64_t duration;
-    if (unlikely(!ubase_check(uref_clock_get_duration(next, &duration))))
-        duration = 0;
-    upipe_subpic_schedule_sub->pts_end = date_next + duration;
+        upipe_verbose_va(upipe, "subpicture updated to: %"PRIu64" until %"PRIu64,
+                date_next, upipe_subpic_schedule_sub->pts_end);
 
-    upipe_verbose_va(upipe, "subpicture updated to: %"PRIu64" until %"PRIu64,
-            date_next, upipe_subpic_schedule_sub->pts_end);
+        uref_free(upipe_subpic_schedule_sub->uref);     /* free previous */
+        ulist_delete(uchain);
+        upipe_subpic_schedule_sub->uref = next;
+    }
 
-    uref_free(upipe_subpic_schedule_sub->uref);     /* free previous */
-    ulist_pop(&upipe_subpic_schedule_sub->urefs);   /* pop next one */
-    upipe_subpic_schedule_sub->uref = next;
-
-    return next;
+    /* did not find a newer subpicture */
 }
 
 /** @internal @This schedules sub pictures
@@ -343,7 +340,8 @@ static void upipe_subpic_schedule_handle_subpics(struct upipe *upipe, uint64_t d
             upipe_subpic_schedule_sub_from_uchain(uchain);
         struct upipe *sub = &upipe_subpic_schedule_sub->upipe;
 
-        struct uref *uref = upipe_subpic_schedule_sub_handle_subpic(sub, date);
+        upipe_subpic_schedule_sub_handle_subpic(sub, date);
+        struct uref *uref = upipe_subpic_schedule_sub->uref;
         if (uref && uref->ubuf)
             upipe_subpic_schedule_sub_output(sub, uref_dup(uref), NULL);
     }
