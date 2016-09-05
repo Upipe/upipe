@@ -94,6 +94,8 @@ check_PROGRAMS = \
 	upipe_videocont_test \
 	upipe_audiocont_test \
 	upipe_filter_ebur128_test \
+	upipe_audio_max_test \
+	upipe_audio_bar_test \
 	upipe_filter_blend_test
 
 TESTS = \
@@ -145,6 +147,8 @@ TESTS = \
 	upipe_videocont_test \
 	upipe_audiocont_test \
 	upipe_filter_ebur128_test \
+	upipe_audio_max_test \
+	upipe_audio_bar_test \
 	upipe_filter_blend_test
 
 if HAVE_EV
@@ -409,6 +413,8 @@ upipe_glx_sink_test_LDADD = $(LDADD) $(GLX_LIBS) $(top_builddir)/lib/upipe-gl/li
 upipe_glx_sink_test_CFLAGS = $(GLX_CFLAGS)
 upipe_filter_blend_test_LDADD = $(LDADD) $(top_builddir)/lib/upipe-filters/libupipe_filters.la $(top_builddir)/lib/upipe-modules/libupipe_modules.la
 upipe_filter_ebur128_test_LDADD = $(LDADD) -lm $(top_builddir)/lib/upipe-filters/libupipe_filters.la $(top_builddir)/lib/upipe-modules/libupipe_modules.la
+upipe_audio_max_test_LDADD = $(LDADD) -lm $(top_builddir)/lib/upipe-filters/libupipe_filters.la $(top_builddir)/lib/upipe-modules/libupipe_modules.la
+upipe_audio_bar_test_LDADD = $(LDADD) -lm $(top_builddir)/lib/upipe-filters/libupipe_filters.la $(top_builddir)/lib/upipe-modules/libupipe_modules.la
 
 upipe_x264_test_LDADD = $(LDADD) $(X264_LIBS) $(top_builddir)/lib/upipe-x264/libupipe_x264.la
 upipe_x264_test_CFLAGS = $(X264_CFLAGS)
