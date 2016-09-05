@@ -309,7 +309,8 @@ static int upipe_blit_sub_provide_flow_format(struct upipe *upipe)
             continue;
         }
         uint64_t hsize = dest_hsize, vsize = dest_vsize;
-        uint64_t hposition = 0, vposition = 0;
+        uint64_t hposition = sub->loffset_r;
+        uint64_t vposition = sub->toffset_r;
 
         /* Get original sizes */
         uint64_t src_hsize, src_vsize;
@@ -354,9 +355,7 @@ static int upipe_blit_sub_provide_flow_format(struct upipe *upipe)
             rpad /= src_hsize;
             hsize -= lpad + rpad;
             hsize -= hsize % hround;
-            hposition = sub->loffset_r + lpad +
-                        (dest_hsize - hsize - lpad -rpad) / 2;
-            hposition -= hposition % hround;
+            hposition += (dest_hsize - hsize - lpad -rpad) / 2;
 
             tpad *= dest_vsize;
             tpad /= src_vsize;
@@ -364,10 +363,10 @@ static int upipe_blit_sub_provide_flow_format(struct upipe *upipe)
             bpad /= src_vsize;
             vsize -= tpad + bpad;
             vsize -= vsize % vround;
-            vposition = sub->toffset_r + tpad +
-                        (dest_vsize - vsize - tpad - bpad) / 2;
-            vposition -= vposition % hround;
+            vposition += (dest_vsize - vsize - tpad - bpad) / 2;
         }
+        hposition -= hposition % hround;
+        vposition -= vposition % hround;
 
         uref_pic_flow_set_hsize(uref, hsize);
         uref_pic_flow_set_vsize(uref, vsize);
