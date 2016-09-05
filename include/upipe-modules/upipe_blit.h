@@ -57,6 +57,10 @@ enum upipe_blit_sub_command {
     /** sets the offsets of the rect onto which the input of this subpipe
      * will be blitted (uint64_t, uint64_t, uint64_t, uint64_t) */
     UPIPE_BLIT_SUB_SET_RECT,
+    /** gets the alpha channel multiplier (uint8_t *) */
+    UPIPE_BLIT_SUB_GET_ALPHA,
+    /** sets the alpha channel multiplier (uint8_t) */
+    UPIPE_BLIT_SUB_SET_ALPHA,
     /** gets the method for alpha blending (uint8_t *)
      * @see ubuf_pic_blit */
     UPIPE_BLIT_SUB_GET_ALPHA_THRESHOLD,
@@ -104,6 +108,32 @@ static inline int upipe_blit_sub_set_rect(struct upipe *upipe,
     return upipe_control(upipe, UPIPE_BLIT_SUB_SET_RECT,
                          UPIPE_BLIT_SUB_SIGNATURE,
                          loffset, roffset, toffset, boffset);
+}
+
+/** @This gets the multiplier of the alpha channel.
+ *
+ * @param upipe description structure of the pipe
+ * @param alpha_p filled in with the mulitplier of the alpha channel
+ * @return an error code
+ */
+static inline int upipe_blit_sub_get_alpha(struct upipe *upipe,
+        uint8_t *alpha_p)
+{
+    return upipe_control(upipe, UPIPE_BLIT_SUB_GET_ALPHA,
+                         UPIPE_BLIT_SUB_SIGNATURE, alpha_p);
+}
+
+/** @This sets the multiplier of the alpha channel.
+ *
+ * @param upipe description structure of the pipe
+ * @param alpha multiplier of the alpha channel
+ * @return an error code
+ */
+static inline int upipe_blit_sub_set_alpha(struct upipe *upipe,
+        uint8_t alpha)
+{
+    return upipe_control(upipe, UPIPE_BLIT_SUB_SET_ALPHA,
+                         UPIPE_BLIT_SUB_SIGNATURE, (unsigned)alpha);
 }
 
 /** @This gets the method for alpha blending for this subpipe.

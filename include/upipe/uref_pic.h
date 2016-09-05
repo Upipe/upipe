@@ -182,13 +182,13 @@ static inline int uref_pic_blit(struct uref *uref, struct ubuf *ubuf,
                                 int dest_hoffset, int dest_voffset,
                                 int src_hoffset, int src_voffset,
                                 int extract_hsize, int extract_vsize,
-                                const uint8_t threshold)
+                                const uint8_t alpha, const uint8_t threshold)
 {
     if (uref->ubuf == NULL)
         return UBASE_ERR_INVALID;
     return ubuf_pic_blit(uref->ubuf, ubuf, dest_hoffset, dest_voffset,
                          src_hoffset, src_voffset,
-                         extract_hsize, extract_vsize, threshold);
+                         extract_hsize, extract_vsize, alpha, threshold);
 }
 
 /** @This allocates a new ubuf of size new_hsize/new_vsize, and copies part of

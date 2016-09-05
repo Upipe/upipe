@@ -101,6 +101,8 @@ struct upipe_blit_sub {
     /** structure for double-linked lists */
     struct uchain uchain;
 
+    /** alpha multiplier */
+    uint8_t alpha;
     /** alpha blending method */
     uint8_t alpha_threshold;
     /** z-index */
@@ -168,6 +170,7 @@ static struct upipe *upipe_blit_sub_alloc(struct upipe_mgr *mgr,
     struct upipe_blit_sub *sub = upipe_blit_sub_from_upipe(upipe);
     upipe_blit_sub_init_urefcount(upipe);
     upipe_blit_sub_init_sub(upipe);
+    sub->alpha = 0xff; /* opaque */
     sub->alpha_threshold = 0; /* ignore alpha */
     sub->z_index = 0;
     sub->loffset = sub->roffset = sub->toffset = sub->boffset = 0;
@@ -195,7 +198,7 @@ static void upipe_blit_sub_work(struct upipe *upipe, struct uref *uref)
         return;
 
     int err = uref_pic_blit(uref, sub->ubuf, sub->hposition, sub->vposition,
-                            0, 0, sub->hsize, sub->vsize,
+                            0, 0, sub->hsize, sub->vsize, sub->alpha,
                             sub->alpha_threshold);
     if (unlikely(!ubase_check(err))) {
         upipe_warn(upipe, "unable to blit picture");
@@ -300,75 +303,71 @@ static int upipe_blit_sub_provide_flow_format(struct upipe *upipe)
             continue;
         }
 
-        /* Get original sizes */
-        uint64_t src_hsize, src_vsize;
-        if (unlikely(!ubase_check(uref_pic_flow_get_hsize(urequest->uref,
-                                                          &src_hsize)) ||
-                     !ubase_check(uref_pic_flow_get_vsize(urequest->uref,
-                                                          &src_vsize)))) {
-            upipe_warn(upipe, "invalid flow format urequest size");
-            upipe_throw_error(upipe, UBASE_ERR_INVALID);
-            continue;
-        }
-        struct urational src_sar;
-        src_sar.num = src_sar.den = 1;
-        uref_pic_flow_get_sar(urequest->uref, &src_sar);
-
-        /* Get alignment directives */
-        uint64_t lpad = 0, rpad = 0, tpad = 0, bpad = 0;
-        uref_pic_get_lpadding(urequest->uref, &lpad);
-        uref_pic_get_rpadding(urequest->uref, &rpad);
-        uref_pic_get_tpadding(urequest->uref, &tpad);
-        uref_pic_get_bpadding(urequest->uref, &bpad);
-        src_hsize += lpad + rpad;
-        src_vsize += tpad + bpad;
-
-        /* FIXME take into account overscan */
-        struct urational src_dar;
-        src_dar.num = src_hsize * src_sar.num;
-        src_dar.den = src_vsize * src_sar.den;
-        urational_simplify(&src_dar);
-
         struct uref *uref = uref_dup(urequest->uref);
         if (unlikely(uref == NULL)) {
             upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
             continue;
         }
+        uint64_t hsize = dest_hsize, vsize = dest_vsize;
+        uint64_t hposition = 0, vposition = 0;
 
-        struct urational div = urational_divide(&dest_dar, &src_dar);
-        uint64_t hsize, vsize;
-        if (div.num > div.den) {
-            /* Destination rectangle larger than source picture */
-            hsize = dest_hsize * div.den / div.num;
-            vsize = dest_vsize;
-        } else if (div.num < div.den) {
-            /* Destination rectangle smaller than source picture */
-            hsize = dest_hsize;
-            vsize = dest_vsize * div.num / div.den;
-        } else {
-            hsize = dest_hsize;
-            vsize = dest_vsize;
+        /* Get original sizes */
+        uint64_t src_hsize, src_vsize;
+        if (ubase_check(uref_pic_flow_get_hsize(urequest->uref, &src_hsize)) &&
+            ubase_check(uref_pic_flow_get_vsize(urequest->uref, &src_vsize))) {
+            struct urational src_sar;
+            src_sar.num = src_sar.den = 1;
+            uref_pic_flow_get_sar(urequest->uref, &src_sar);
+
+            /* Get alignment directives */
+            uint64_t lpad = 0, rpad = 0, tpad = 0, bpad = 0;
+            uref_pic_get_lpadding(urequest->uref, &lpad);
+            uref_pic_get_rpadding(urequest->uref, &rpad);
+            uref_pic_get_tpadding(urequest->uref, &tpad);
+            uref_pic_get_bpadding(urequest->uref, &bpad);
+            src_hsize += lpad + rpad;
+            src_vsize += tpad + bpad;
+
+            /* FIXME take into account overscan */
+            struct urational src_dar;
+            src_dar.num = src_hsize * src_sar.num;
+            src_dar.den = src_vsize * src_sar.den;
+            urational_simplify(&src_dar);
+
+            struct urational div = urational_divide(&dest_dar, &src_dar);
+            if (div.num > div.den) {
+                /* Destination rectangle larger than source picture */
+                hsize = dest_hsize * div.den / div.num;
+                vsize = dest_vsize;
+            } else if (div.num < div.den) {
+                /* Destination rectangle smaller than source picture */
+                hsize = dest_hsize;
+                vsize = dest_vsize * div.num / div.den;
+            } else {
+                hsize = dest_hsize;
+                vsize = dest_vsize;
+            }
+
+            lpad *= dest_hsize;
+            lpad /= src_hsize;
+            rpad *= dest_hsize;
+            rpad /= src_hsize;
+            hsize -= lpad + rpad;
+            hsize -= hsize % hround;
+            hposition = sub->loffset_r + lpad +
+                        (dest_hsize - hsize - lpad -rpad) / 2;
+            hposition -= hposition % hround;
+
+            tpad *= dest_vsize;
+            tpad /= src_vsize;
+            bpad *= dest_vsize;
+            bpad /= src_vsize;
+            vsize -= tpad + bpad;
+            vsize -= vsize % vround;
+            vposition = sub->toffset_r + tpad +
+                        (dest_vsize - vsize - tpad - bpad) / 2;
+            vposition -= vposition % hround;
         }
-
-        lpad *= dest_hsize;
-        lpad /= src_hsize;
-        rpad *= dest_hsize;
-        rpad /= src_hsize;
-        hsize -= lpad + rpad;
-        hsize -= hsize % hround;
-        uint64_t hposition = sub->loffset_r + lpad +
-                             (dest_hsize - hsize - lpad -rpad) / 2;
-        hposition -= hposition % hround;
-
-        tpad *= dest_vsize;
-        tpad /= src_vsize;
-        bpad *= dest_vsize;
-        bpad /= src_vsize;
-        vsize -= tpad + bpad;
-        vsize -= vsize % vround;
-        uint64_t vposition = sub->toffset_r + tpad +
-                             (dest_vsize - vsize - tpad - bpad) / 2;
-        vposition -= vposition % hround;
 
         uref_pic_flow_set_hsize(uref, hsize);
         uref_pic_flow_set_vsize(uref, vsize);
@@ -526,6 +525,32 @@ static int _upipe_blit_sub_set_rect(struct upipe *upipe,
     return UBASE_ERR_NONE;
 }
 
+/** @internal @This gets the multiplier of the alpha channel.
+ *
+ * @param upipe description structure of the pipe
+ * @param alpha_p filled in with multiplier of the alpha channel
+ * @return an error code
+ */
+static int _upipe_blit_sub_get_alpha(struct upipe *upipe, uint8_t *alpha_p)
+{
+    struct upipe_blit_sub *sub = upipe_blit_sub_from_upipe(upipe);
+    *alpha_p = sub->alpha;
+    return UBASE_ERR_NONE;
+}
+
+/** @internal @This sets the multiplier of the alpha channel.
+ *
+ * @param upipe description structure of the pipe
+ * @param alpha multiplier of the alpha channel
+ * @return an error code
+ */
+static int _upipe_blit_sub_set_alpha(struct upipe *upipe, uint8_t alpha)
+{
+    struct upipe_blit_sub *sub = upipe_blit_sub_from_upipe(upipe);
+    sub->alpha = alpha;
+    return UBASE_ERR_NONE;
+}
+
 /** @internal @This gets the method for alpha blending for this subpipe.
  *
  * @param upipe description structure of the pipe
@@ -642,6 +667,16 @@ static int upipe_blit_sub_control(struct upipe *upipe,
             uint64_t boffset = va_arg(args, uint64_t);
             return _upipe_blit_sub_set_rect(upipe,
                     loffset, roffset, toffset, boffset);
+        }
+        case UPIPE_BLIT_SUB_GET_ALPHA: {
+            UBASE_SIGNATURE_CHECK(args, UPIPE_BLIT_SUB_SIGNATURE);
+            uint8_t *alpha_p = va_arg(args, uint8_t *);
+            return _upipe_blit_sub_get_alpha(upipe, alpha_p);
+        }
+        case UPIPE_BLIT_SUB_SET_ALPHA: {
+            UBASE_SIGNATURE_CHECK(args, UPIPE_BLIT_SUB_SIGNATURE);
+            unsigned alpha = va_arg(args, unsigned);
+            return _upipe_blit_sub_set_alpha(upipe, alpha);
         }
         case UPIPE_BLIT_SUB_GET_ALPHA_THRESHOLD: {
             UBASE_SIGNATURE_CHECK(args, UPIPE_BLIT_SUB_SIGNATURE);
