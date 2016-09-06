@@ -373,11 +373,12 @@ static int upipe_blit_sub_provide_flow_format(struct upipe *upipe)
         uref_pic_set_hposition(uref, hposition);
         uref_pic_set_vposition(uref, vposition);
 
-        bool alpha = ubase_check(uref_pic_flow_check_chroma(
-                uref, 1, 1, 1, "a8"));
+        bool alpha =
+            ubase_check(uref_pic_flow_check_chroma(uref, 1, 1, 1, "a8")) ||
+            ubase_check(uref_pic_flow_check_chroma(uref, 1, 1, 1, "a16"));
         const char *chroma;
         if (!alpha && ubase_check(uref_pic_flow_get_chroma(uref, &chroma, 0)) &&
-            strstr(chroma, "a8") != NULL)
+            (strstr(chroma, "a8") != NULL || strstr(chroma, "a16") != NULL))
             alpha = true;
 
         uref_pic_flow_clear_format(uref);

@@ -201,6 +201,10 @@ static inline int upipe_av_pixfmt_to_flow_def(enum AVPixelFormat pix_fmt,
             UBASE_RETURN(uref_pic_flow_set_macropixel(flow_def, 1))
             UBASE_RETURN(uref_pic_flow_add_plane(flow_def, 1, 1, 4, "b8g8r8a8"))
             break;
+        case AV_PIX_FMT_RGBA64BE:
+            UBASE_RETURN(uref_pic_flow_set_macropixel(flow_def, 1))
+            UBASE_RETURN(uref_pic_flow_add_plane(flow_def, 1, 1, 8, "r16g16b16a16"))
+            break;
         default:
             return UBASE_ERR_UNHANDLED;
     }
@@ -253,6 +257,7 @@ static inline enum AVPixelFormat
         AV_PIX_FMT_RGBA,
         AV_PIX_FMT_ABGR,
         AV_PIX_FMT_BGRA,
+        AV_PIX_FMT_RGBA64BE,
         -1
     };
     if (pix_fmts == NULL)
@@ -546,6 +551,14 @@ static inline enum AVPixelFormat
                 if (macropixel == 1 &&
                     u(uref_pic_flow_check_chroma(flow_def, 1, 1, 4, "b8g8r8a8"))) {
                     chroma_p[0] = "b8g8r8a8";
+                    chroma_p[1] = NULL;
+                    return *pix_fmts;
+                }
+                break;
+            case AV_PIX_FMT_RGBA64BE:
+                if (macropixel == 1 &&
+                    u(uref_pic_flow_check_chroma(flow_def, 1, 1, 8, "r16g16b16a16"))) {
+                    chroma_p[0] = "r16g16b16a16";
                     chroma_p[1] = NULL;
                     return *pix_fmts;
                 }
