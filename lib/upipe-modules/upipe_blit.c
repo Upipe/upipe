@@ -204,8 +204,6 @@ static void upipe_blit_sub_work(struct upipe *upipe, struct uref *uref)
         upipe_warn(upipe, "unable to blit picture");
         upipe_throw_error(upipe, err);
     }
-    ubuf_free(sub->ubuf);
-    sub->ubuf = NULL;
 }
 
 /** @internal @This receives data.
