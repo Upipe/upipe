@@ -248,8 +248,6 @@ static int upipe_amax_provide_flow_format(struct upipe *upipe,
         }
     }
 
-    UBASE_FATAL(upipe, uref_flow_set_def(flow, "sound.s16."));
-
     return urequest_provide_flow_format(request, flow);
 }
 
