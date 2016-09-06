@@ -45,7 +45,7 @@
 #include <upipe/upipe_helper_bin_input.h>
 #include <upipe/upipe_helper_bin_output.h>
 #include <upipe/upipe_helper_input.h>
-#include <upipe-modules/upipe_idem.h>
+#include <upipe-modules/upipe_setflowdef.h>
 #include <upipe-filters/upipe_filter_format.h>
 #include <upipe-filters/upipe_filter_blend.h>
 #include <upipe-swscale/upipe_sws.h>
@@ -360,6 +360,20 @@ static int upipe_ffmt_check_flow_format(struct upipe *upipe,
             upipe_ffmt_store_bin_output(upipe, sws);
             if (upipe_ffmt->sws_flags)
                 upipe_sws_set_flags(sws, upipe_ffmt->sws_flags);
+        } else {
+            struct upipe_mgr *setflowdef_mgr = upipe_setflowdef_mgr_alloc();
+            struct upipe *setflowdef = upipe_void_alloc(setflowdef_mgr,
+                    uprobe_pfx_alloc(uprobe_use(&upipe_ffmt->last_inner_probe),
+                                     UPROBE_LOG_VERBOSE, "setflowdef"));
+            upipe_mgr_release(setflowdef_mgr);
+            if (unlikely(setflowdef == NULL)) {
+                upipe_warn_va(upipe, "couldn't allocate setflowdef");
+            } else if (!need_deint)
+                upipe_ffmt_store_bin_input(upipe, upipe_use(setflowdef));
+            else
+                upipe_set_output(upipe_ffmt->first_inner, setflowdef);
+            upipe_ffmt_store_bin_output(upipe, setflowdef);
+            upipe_setflowdef_set_dict(setflowdef, flow_def_dup);
         }
 
     } else { /* sound. */
@@ -378,21 +392,22 @@ static int upipe_ffmt_check_flow_format(struct upipe *upipe,
             }
         }
     }
-    uref_free(flow_def_dup);
 
     if (upipe_ffmt->first_inner == NULL) {
-        struct upipe_mgr *idem_mgr = upipe_idem_mgr_alloc();
-        struct upipe *input = upipe_void_alloc(idem_mgr,
+        struct upipe_mgr *setflowdef_mgr = upipe_setflowdef_mgr_alloc();
+        struct upipe *input = upipe_void_alloc(setflowdef_mgr,
                 uprobe_pfx_alloc(uprobe_use(&upipe_ffmt->last_inner_probe),
-                                 UPROBE_LOG_VERBOSE, "idem"));
-        upipe_mgr_release(idem_mgr);
+                                 UPROBE_LOG_VERBOSE, "setflowdef"));
+        upipe_mgr_release(setflowdef_mgr);
         if (unlikely(input == NULL))
-            upipe_warn_va(upipe, "couldn't allocate idem");
+            upipe_warn_va(upipe, "couldn't allocate setflowdef");
         else {
+            upipe_setflowdef_set_dict(input, flow_def_dup);
             upipe_ffmt_store_bin_input(upipe, upipe_use(input));
             upipe_ffmt_store_bin_output(upipe, input);
         }
     }
+    uref_free(flow_def_dup);
 
     int err = upipe_set_flow_def(upipe_ffmt->first_inner, flow_def);
     uref_free(flow_def);
