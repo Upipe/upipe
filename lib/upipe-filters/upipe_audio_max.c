@@ -60,9 +60,6 @@ struct upipe_amax {
     /** list of output requests */
     struct uchain request_list;
 
-    /** input planes */
-    uint8_t planes;
-
     /** public structure */
     struct upipe upipe;
 };
@@ -198,7 +195,6 @@ static int upipe_amax_set_flow_def(struct upipe *upipe, struct uref *flow)
         return UBASE_ERR_INVALID;
 
     upipe_amax->process = process;
-    upipe_amax->planes = planes;
 
     struct uref *flow_dup;
     if (unlikely((flow_dup = uref_dup(flow)) == NULL)) {
