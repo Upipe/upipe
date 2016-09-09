@@ -262,6 +262,9 @@ static bool upipe_audiobar_handle(struct upipe *upipe, struct uref *uref,
         return true;
     }
 
+    if (!upipe_audiobar->ubuf_mgr)
+        return false;
+
     if (unlikely(upipe_audiobar->hsize == UINT64_MAX))
         return false;
 
