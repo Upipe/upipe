@@ -96,6 +96,11 @@ struct upipe_audiobar {
     /** list of output requests */
     struct uchain request_list;
 
+    /** peak value */
+    float peak[255];
+    /* peak date */
+    uint64_t peak_date[255];
+
     /** temporary uref storage (used during urequest) */
     struct uchain urefs;
     /** nb urefs in storage */
@@ -166,6 +171,11 @@ static struct upipe *upipe_audiobar_alloc(struct upipe_mgr *mgr,
     upipe_audiobar->hsize = upipe_audiobar->vsize =
         upipe_audiobar->sep_width = upipe_audiobar->pad_width = UINT64_MAX;
 
+    for (int i = 0; i < 255; i++) {
+        upipe_audiobar->peak[i] = 0.;
+        upipe_audiobar->peak_date[i] = 0;
+    }
+
     upipe_throw_ready(upipe);
     return upipe;
 }
@@ -177,21 +187,21 @@ static struct upipe *upipe_audiobar_alloc(struct upipe_mgr *mgr,
  */
 static double iec_scale(double dB)
 {
-    if (dB < -70.0f)
-        return 0.0f;
-    if (dB < -60.0f)
-        return (dB + 70.0f) * 0.0025f;
-    if (dB < -50.0f)
-        return (dB + 60.0f) * 0.005f + 0.025f;
-    if (dB < -40.0f)
-        return (dB + 50.0f) * 0.0075f + 0.075f;
-    if (dB < -30.0f)
-        return (dB + 40.0f) * 0.015f + 0.15f;
-    if (dB < -20.0f)
-        return (dB + 30.0f) * 0.02f + 0.3f;
-    if (dB < -0.001f || dB > 0.001f)  /* if (dB < 0.0f) */
-        return (dB + 20.0f) * 0.025f + 0.5f;
-    return 1.0f;
+    if (dB < -70.0)
+        return 0.0;
+    if (dB < -60.0)
+        return (dB + 70.0) * 0.0025;
+    if (dB < -50.0)
+        return (dB + 60.0) * 0.005f + 0.025;
+    if (dB < -40.0)
+        return (dB + 50.0) * 0.0075f + 0.075;
+    if (dB < -30.0)
+        return (dB + 40.0) * 0.015f + 0.15;
+    if (dB < -20.0)
+        return (dB + 30.0) * 0.02f + 0.3;
+    if (dB < -0.001f || dB > 0.001)  /* if (dB < 0.0) */
+        return (dB + 20.0) * 0.025f + 0.5;
+    return 1.0;
 }
 
 /** @internal @This copies pixels to the destination picture.
@@ -252,6 +262,9 @@ static bool upipe_audiobar_handle(struct upipe *upipe, struct uref *uref,
         return true;
     }
 
+    if (!upipe_audiobar->ubuf_mgr)
+        return false;
+
     if (unlikely(upipe_audiobar->hsize == UINT64_MAX))
         return false;
 
@@ -286,12 +299,31 @@ static bool upipe_audiobar_handle(struct upipe *upipe, struct uref *uref,
     uint8_t green[2][4] = { { 150, 44, 21, alpha }, { 74, 85, 74, alpha } };
     uint8_t yellow[2][4] = { { 226, 1, 148, alpha }, { 112, 64, 138, alpha } };
 
+    uint64_t pts = 0;
+    if (unlikely(!ubase_check(uref_clock_get_pts_prog(uref, &pts)))) {
+        upipe_warn(upipe, "unable to read pts");
+    }
+
     for (uint8_t chan = 0; chan < upipe_audiobar->channels; chan++) {
         double amplitude = 0.;
         if (unlikely(!ubase_check(uref_amax_get_amplitude(uref, &amplitude,
                                                           chan))))
             upipe_warn_va(upipe, "unable to get amplitude for channel %"PRIu8", assuming silence", chan);
-        double scale = iec_scale(log10(amplitude) * 20);
+
+        double scale = log10(amplitude) * 20;
+
+        // IEC-268-18 return time speed is 20dB per 1.7s (+/- .3)
+        if (upipe_audiobar->peak_date[chan])
+            upipe_audiobar->peak[chan] -= 20 * (pts - upipe_audiobar->peak_date[chan]) / (1.7 * UCLOCK_FREQ);
+
+        upipe_audiobar->peak_date[chan] = pts;
+
+        if (scale >= upipe_audiobar->peak[chan]) /* higher than lowered peak */
+            upipe_audiobar->peak[chan] = scale;
+        else /* Current amplitude can not go below the lowered peak value */
+            scale = upipe_audiobar->peak[chan];
+
+        scale = iec_scale(scale);
 
         const int hmax = h - scale * h;
         for (int row = 0; row < h; row++) {
