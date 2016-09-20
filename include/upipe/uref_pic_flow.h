@@ -101,7 +101,6 @@ UREF_ATTR_OPAQUE(pic_flow, bar, "p.bar", bar data)
  *
  * @param mgr uref management structure
  * @param macropixel number of pixels in a macropixel
- * @param planes number of planes
  * @return pointer to uref control packet, or NULL in case of error
  */
 static inline struct uref *uref_pic_flow_alloc_def(struct uref_mgr *mgr,
