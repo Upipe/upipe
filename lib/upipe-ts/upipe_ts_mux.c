@@ -1323,6 +1323,7 @@ static int upipe_ts_mux_input_set_flow_def(struct upipe *upipe,
     input->pid = pid;
     input->octetrate = octetrate;
     input->required_octetrate = octetrate + pes_overhead + ts_overhead;
+    input->pcr = false; /* reset PCR state to trigger a new PMT */
 
     uint64_t latency = 0;
     uref_clock_get_latency(flow_def, &latency);
