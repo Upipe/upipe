@@ -349,14 +349,20 @@ static void ubuf_pic_bmd_mgr_free(struct urefcount *urefcount)
 struct ubuf_mgr *ubuf_pic_bmd_mgr_alloc(uint16_t ubuf_pool_depth,
                                         uint32_t PixelFormat)
 {
+    uint8_t macropixel;
     switch (PixelFormat) {
         case bmdFormat8BitYUV:
+            macropixel = 2;
+            break;
+        case bmdFormat10BitYUV:
+            macropixel = 6;
+            break;
         case bmdFormat8BitARGB:
         case bmdFormat8BitBGRA:
         case bmdFormat10BitRGB:
         case bmdFormat10BitRGBXLE:
         case bmdFormat10BitRGBX:
-        case bmdFormat10BitYUV:
+            macropixel = 1;
             break;
         default:
             return NULL;
@@ -369,7 +375,7 @@ struct ubuf_mgr *ubuf_pic_bmd_mgr_alloc(uint16_t ubuf_pool_depth,
         return NULL;
 
     struct ubuf_mgr *mgr = ubuf_pic_bmd_mgr_to_ubuf_mgr(pic_mgr);
-    ubuf_pic_common_mgr_init(mgr, PixelFormat != bmdFormat10BitYUV ? 1 : 6);
+    ubuf_pic_common_mgr_init(mgr, macropixel);
 
     urefcount_init(ubuf_pic_bmd_mgr_to_urefcount(pic_mgr),
                    ubuf_pic_bmd_mgr_free);
