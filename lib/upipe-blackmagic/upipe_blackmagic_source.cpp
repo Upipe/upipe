@@ -895,6 +895,26 @@ static int upipe_bmd_src_set_uri(struct upipe *upipe, const char *uri)
         free(model_name);
     }
 
+    /* get decklink status handler */
+    IDeckLinkStatus *deckLinkStatus;
+    if (deckLink->QueryInterface(IID_IDeckLinkStatus,
+                                 (void**)&deckLinkStatus) != S_OK) {
+        upipe_err(upipe, "decklink card has no status");
+        deckLink->Release();
+        return UBASE_ERR_EXTERNAL;
+    }
+
+    int64_t duplex;
+    if (deckLinkStatus->GetInt(bmdDeckLinkStatusDuplexMode, &duplex) != S_OK) {
+        upipe_warn(upipe, "couldn't query duplex status");
+    } else if (duplex == bmdDuplexStatusInactive) {
+        upipe_err(upipe, "decklink card has no input connector");
+        deckLinkStatus->Release();
+        deckLink->Release();
+        return UBASE_ERR_INVALID;
+    }
+    deckLinkStatus->Release();
+
     /* get decklink input handler */
     IDeckLinkInput *deckLinkInput;
     if (deckLink->QueryInterface(IID_IDeckLinkInput,
