@@ -46,6 +46,15 @@ extern "C" {
  */
 struct upipe_mgr *upipe_blit_mgr_alloc(void);
 
+/** @This extends upipe_command with specific commands for upipe_blit pipes.
+ */
+enum upipe_blit_command {
+    UPIPE_BLIT_SENTINEL = UPIPE_CONTROL_LOCAL,
+
+    /** prepares the next picture to output (void) */
+    UPIPE_BLIT_PREPARE
+};
+
 /** @This extends upipe_command with specific commands for upipe_blit_sub pipes.
  */
 enum upipe_blit_sub_command {
@@ -72,6 +81,16 @@ enum upipe_blit_sub_command {
     /** sets the z-index (int) */
     UPIPE_BLIT_SUB_SET_Z_INDEX
 };
+
+/** @This prepares the next picture to output.
+ *
+ * @param upipe description structure of the pipe
+ * @return an error code
+ */
+static inline int upipe_blit_prepare(struct upipe *upipe)
+{
+    return upipe_control_nodbg(upipe, UPIPE_BLIT_PREPARE, UPIPE_BLIT_SIGNATURE);
+}
 
 /** @This gets the offsets (from the respective borders of the frame) of the
  * rectangle onto which the input of the subpipe will be blitted.

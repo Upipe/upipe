@@ -83,6 +83,9 @@ struct upipe_blit {
     /** sample aspect ratio of the output picture */
     struct urational sar;
 
+    /** last received uref */
+    struct uref *uref;
+
     /** public upipe structure */
     struct upipe upipe;
 };
@@ -353,7 +356,7 @@ static int upipe_blit_sub_provide_flow_format(struct upipe *upipe)
             rpad /= src_hsize;
             hsize -= lpad + rpad;
             hsize -= hsize % hround;
-            hposition += (dest_hsize - hsize - lpad -rpad) / 2;
+            hposition += (dest_hsize - hsize - lpad -rpad) / 2 + lpad;
 
             tpad *= dest_vsize;
             tpad /= src_vsize;
@@ -361,7 +364,7 @@ static int upipe_blit_sub_provide_flow_format(struct upipe *upipe)
             bpad /= src_vsize;
             vsize -= tpad + bpad;
             vsize -= vsize % vround;
-            vposition += (dest_vsize - vsize - tpad - bpad) / 2;
+            vposition += (dest_vsize - vsize - tpad - bpad) / 2 + tpad;
         }
         hposition -= hposition % hround;
         vposition -= vposition % hround;
@@ -771,6 +774,7 @@ static struct upipe *upipe_blit_alloc(struct upipe_mgr *mgr,
     upipe_blit_init_sub_mgr(upipe);
     upipe_blit_init_sub_subs(upipe);
     upipe_blit->hsize = upipe_blit->vsize = UINT64_MAX;
+    upipe_blit->uref = NULL;
 
     upipe_throw_ready(upipe);
     return upipe;
@@ -804,37 +808,8 @@ static void upipe_blit_input(struct upipe *upipe, struct uref *uref,
         return;
     }
 
-    /* Check if we can write on the planes */
-    bool writable = true;
-    const char *chroma = NULL;
-    while (ubase_check(uref_pic_plane_iterate(uref, &chroma)) &&
-           chroma != NULL) {
-        if (!ubase_check(uref_pic_plane_write(uref, chroma, 0, 0, -1, -1,
-                                              NULL)) ||
-            !ubase_check(uref_pic_plane_unmap(uref, chroma, 0, 0, -1, -1))) {
-            writable = false;
-            break;
-        }
-    }
-
-    if (!writable) {
-        struct ubuf *ubuf = ubuf_pic_copy(uref->ubuf->mgr, uref->ubuf,
-                                          0, 0, -1, -1);
-        if (unlikely(ubuf == NULL)) {
-            upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
-            uref_free(uref);
-            return;
-        }
-        uref_attach_ubuf(uref, ubuf);
-    }
-
-    struct uchain *uchain;
-    ulist_foreach (&upipe_blit->subs, uchain) {
-        struct upipe_blit_sub *sub = upipe_blit_sub_from_uchain(uchain);
-        upipe_blit_sub_work(upipe_blit_sub_to_upipe(sub), uref);
-    }
-
-    upipe_blit_output(upipe, uref, upump_p);
+    uref_free(upipe_blit->uref);
+    upipe_blit->uref = uref;
 }
 
 /** @internal @This sets the input flow definition.
@@ -892,6 +867,51 @@ static int upipe_blit_set_flow_def(struct upipe *upipe, struct uref *flow_def)
     return UBASE_ERR_NONE;
 }
 
+/** @internal @This prepares the next picture to output.
+ *
+ * @param upipe description structure of the pipe
+ * @return an error code
+ */
+static int _upipe_blit_prepare(struct upipe *upipe)
+{
+    struct upipe_blit *upipe_blit = upipe_blit_from_upipe(upipe);
+    if (unlikely(upipe_blit->uref == NULL))
+        return UBASE_ERR_INVALID;
+    struct uref *uref = uref_dup(upipe_blit->uref);
+
+    /* Check if we can write on the planes */
+    bool writable = true;
+    const char *chroma = NULL;
+    while (ubase_check(uref_pic_plane_iterate(uref, &chroma)) &&
+           chroma != NULL) {
+        if (!ubase_check(uref_pic_plane_write(uref, chroma, 0, 0, -1, -1,
+                                              NULL)) ||
+            !ubase_check(uref_pic_plane_unmap(uref, chroma, 0, 0, -1, -1))) {
+            writable = false;
+            break;
+        }
+    }
+
+    if (!writable) {
+        struct ubuf *ubuf = ubuf_pic_copy(uref->ubuf->mgr, uref->ubuf,
+                                          0, 0, -1, -1);
+        if (unlikely(ubuf == NULL)) {
+            uref_free(uref);
+            return UBASE_ERR_ALLOC;;
+        }
+        uref_attach_ubuf(uref, ubuf);
+    }
+
+    struct uchain *uchain;
+    ulist_foreach (&upipe_blit->subs, uchain) {
+        struct upipe_blit_sub *sub = upipe_blit_sub_from_uchain(uchain);
+        upipe_blit_sub_work(upipe_blit_sub_to_upipe(sub), uref);
+    }
+
+    upipe_blit_output(upipe, uref, NULL);
+    return UBASE_ERR_NONE;
+}
+
 /** @internal @This processes control commands on a file source pipe, and
  * checks the status of the pipe afterwards.
  *
@@ -936,6 +956,10 @@ static int upipe_blit_control(struct upipe *upipe, int command, va_list args)
             return upipe_blit_iterate_sub(upipe, p);
         }
 
+        case UPIPE_BLIT_PREPARE: {
+            UBASE_SIGNATURE_CHECK(args, UPIPE_BLIT_SIGNATURE);
+            return _upipe_blit_prepare(upipe);
+        }
         default:
             return UBASE_ERR_UNHANDLED;
     }
@@ -949,6 +973,8 @@ static void upipe_blit_free(struct upipe *upipe)
 {
     upipe_throw_dead(upipe);
 
+    struct upipe_blit *upipe_blit = upipe_blit_from_upipe(upipe);
+    uref_free(upipe_blit->uref);
     upipe_blit_clean_sub_subs(upipe);
     upipe_blit_clean_output(upipe);
     upipe_blit_clean_urefcount(upipe);

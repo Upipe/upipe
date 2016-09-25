@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2014-2015 OpenHeadend S.A.R.L.
+ * Copyright (C) 2014-2016 OpenHeadend S.A.R.L.
  *
  * Authors: Sebastien Gougelet
  *          Christophe Massiot
@@ -341,6 +341,7 @@ int main(int argc, char **argv)
     fill_in(uref, "v8", 0);
     uref_attr_set_priv(uref, 0);
     upipe_input(blit, uref, NULL);
+    ubase_assert(upipe_blit_prepare(blit));
 
     struct upipe *subpipe1 = upipe_void_alloc_sub(blit,
             uprobe_pfx_alloc_va(uprobe_use(logger),
@@ -371,6 +372,7 @@ int main(int argc, char **argv)
     fill_in(uref, "v8", 0);
     uref_attr_set_priv(uref, 1);
     upipe_input(blit, uref, NULL);
+    ubase_assert(upipe_blit_prepare(blit));
 
     /* release blit pipe and subpipes */
     upipe_release(subpipe1);
