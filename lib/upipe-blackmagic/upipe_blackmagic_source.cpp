@@ -427,19 +427,20 @@ HRESULT DeckLinkCaptureDelegate::VideoInputFormatChanged(
             pixel_format = bmdFormat8BitARGB;
     }
 
+    upipe_bmd_src->deckLinkInput->PauseStreams();
+
     if (pixel_format != upipe_bmd_src->pixel_format) {
         ubuf_mgr_release(upipe_bmd_src->pic_subpipe.ubuf_mgr);
         upipe_bmd_src->pic_subpipe.ubuf_mgr = NULL;
         upipe_bmd_src->pixel_format = pixel_format;
     }
+    upipe_bmd_src_build_video(upipe, mode);
 
-    upipe_bmd_src->deckLinkInput->PauseStreams();
     upipe_bmd_src->deckLinkInput->EnableVideoInput(mode->GetDisplayMode(),
             upipe_bmd_src->pixel_format, bmdVideoInputEnableFormatDetection);
     upipe_bmd_src->deckLinkInput->FlushStreams();
     upipe_bmd_src->deckLinkInput->StartStreams();
 
-    upipe_bmd_src_build_video(upipe, mode);
     return S_OK;
 }
 
@@ -526,7 +527,9 @@ static void upipe_bmd_src_output_init(struct upipe *upipe,
     upipe_init(upipe, sub_mgr, uprobe);
     upipe->refcount = &upipe_bmd_src->urefcount;
 
+    struct upipe_bmd_src_output *output = upipe_bmd_src_output_from_upipe(upipe);
     upipe_bmd_src_output_init_output(upipe);
+    output->ubuf_mgr = NULL;
 
     upipe_throw_ready(upipe);
 }
