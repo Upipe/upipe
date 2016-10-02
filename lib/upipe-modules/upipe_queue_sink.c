@@ -245,6 +245,7 @@ static void upipe_qsink_input(struct upipe *upipe, struct uref *uref,
         /* Increment upipe refcount to avoid disappearing before all packets
          * have been sent. */
         upipe_use(upipe);
+        upipe_throw_stalled(upipe);
     }
 }
 

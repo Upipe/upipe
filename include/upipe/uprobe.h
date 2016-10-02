@@ -68,6 +68,8 @@ enum uprobe_event {
     /** a pipe is about to be destroyed and will no longer accept input
      * and control commands (void) */
     UPROBE_DEAD,
+    /** a queue stalled due to a full FIFO (void) */
+    UPROBE_STALLED,
     /** unable to read from a source because the end of file was reached, or
      * the component disappeared, or because of an error (void) */
     UPROBE_SOURCE_END,

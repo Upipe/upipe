@@ -717,6 +717,18 @@ static inline int upipe_throw_dead(struct upipe *upipe)
     return upipe_throw(upipe, UPROBE_DEAD);
 }
 
+/** @This throws a stalled event. This event is thrown whenever a
+ * queue is stalled due to a full FIFO.
+ *
+ * @param upipe description structure of the pipe
+ * @return an error code
+ */
+static inline int upipe_throw_stalled(struct upipe *upipe)
+{
+    /* do not print anything as it can be a normal condition */
+    return upipe_throw(upipe, UPROBE_STALLED);
+}
+
 /** @This throws a source end event. This event is thrown when a pipe is unable
  * to read from an input because the end of file was reached, or because an
  * error occurred.
@@ -966,7 +978,8 @@ static inline int upipe_throw_clock_utc(struct upipe *upipe, struct uref *uref,
 static inline int upipe_throw_proxy(struct upipe *upipe, struct upipe *inner,
                                     int event, va_list args)
 {
-    if (event != UPROBE_READY && event != UPROBE_DEAD)
+    if (event != UPROBE_READY && event != UPROBE_DEAD &&
+        event != UPROBE_STALLED)
         return upipe_throw_va(upipe, event, args);
     return UBASE_ERR_NONE;
 }

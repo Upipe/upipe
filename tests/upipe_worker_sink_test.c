@@ -171,6 +171,7 @@ static int catch(struct uprobe *uprobe, struct upipe *upipe, int event, va_list 
         case UPROBE_DEAD:
         case UPROBE_NEW_FLOW_DEF:
         case UPROBE_NEED_UPUMP_MGR:
+        case UPROBE_STALLED:
             break;
         default:
             assert(0);
