@@ -978,8 +978,7 @@ static inline int upipe_throw_clock_utc(struct upipe *upipe, struct uref *uref,
 static inline int upipe_throw_proxy(struct upipe *upipe, struct upipe *inner,
                                     int event, va_list args)
 {
-    if (event != UPROBE_READY && event != UPROBE_DEAD &&
-        event != UPROBE_STALLED)
+    if (event != UPROBE_READY && event != UPROBE_DEAD)
         return upipe_throw_va(upipe, event, args);
     return UBASE_ERR_NONE;
 }
