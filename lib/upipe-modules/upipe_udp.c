@@ -540,6 +540,12 @@ int upipe_udp_open_socket(struct upipe *upipe, const char *_uri, int ttl,
                 return -1;
             }
 
+            /* bind to local link interfaces */
+            if (bind_if_index)
+                bind_addr.sin6.sin6_scope_id = bind_if_index;
+            if (connect_if_index)
+                connect_addr.sin6.sin6_scope_id = connect_if_index;
+
             if (bind_addr.ss.ss_family != AF_UNSPEC) {
                 #if !defined(__APPLE__) && !defined(__native_client__)
                 if (IN6_IS_ADDR_MULTICAST(&bind_addr.sin6.sin6_addr)) {
