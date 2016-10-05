@@ -391,7 +391,8 @@ int upipe_udp_open_socket(struct upipe *upipe, const char *_uri, int ttl,
             return -1;
         }
         /* required on some architectures */
-        memset(&connect_addr.sin.sin_zero, 0, sizeof(connect_addr.sin.sin_zero));
+        if (connect_addr.ss.ss_family == AF_INET)
+            memset(&connect_addr.sin.sin_zero, 0, sizeof(connect_addr.sin.sin_zero));
     }
 
     if (token[0] == '@') {
@@ -402,7 +403,8 @@ int upipe_udp_open_socket(struct upipe *upipe, const char *_uri, int ttl,
             return -1;
         }
         /* required on some architectures */
-        memset(&bind_addr.sin.sin_zero, 0, sizeof(bind_addr.sin.sin_zero));
+        if (connect_addr.ss.ss_family == AF_INET)
+            memset(&bind_addr.sin.sin_zero, 0, sizeof(bind_addr.sin.sin_zero));
     }
 
     if (bind_addr.ss.ss_family == AF_UNSPEC &&
@@ -538,6 +540,12 @@ int upipe_udp_open_socket(struct upipe *upipe, const char *_uri, int ttl,
                 return -1;
             }
 
+            /* bind to local link interfaces */
+            if (bind_if_index)
+                bind_addr.sin6.sin6_scope_id = bind_if_index;
+            if (connect_if_index)
+                connect_addr.sin6.sin6_scope_id = connect_if_index;
+
             if (bind_addr.ss.ss_family != AF_UNSPEC) {
                 #if !defined(__APPLE__) && !defined(__native_client__)
                 if (IN6_IS_ADDR_MULTICAST(&bind_addr.sin6.sin6_addr)) {
@@ -547,7 +555,7 @@ int upipe_udp_open_socket(struct upipe *upipe, const char *_uri, int ttl,
 
                     if (bind(fd, &bind_addr_any.so,
                                sizeof(bind_addr_any)) < 0) {
-                        upipe_err(upipe, "couldn't bind");
+                        upipe_err_va(upipe, "couldn't bind: %m");
                         upipe_udp_print_socket(upipe, "socket definition:", &bind_addr, &connect_addr);
                         close(fd);
                         return -1;
@@ -572,7 +580,7 @@ int upipe_udp_open_socket(struct upipe *upipe, const char *_uri, int ttl,
         else if (bind_addr.ss.ss_family != AF_UNSPEC) {
     normal_bind:
             if (bind(fd, &bind_addr.so, sockaddr_len) < 0) {
-                upipe_err(upipe, "couldn't bind");
+                upipe_err_va(upipe, "couldn't bind: %m");
                 upipe_udp_print_socket(upipe, "socket definition:", &bind_addr, &connect_addr);
                 close(fd);
                 return -1;
