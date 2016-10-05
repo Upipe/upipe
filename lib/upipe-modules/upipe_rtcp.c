@@ -273,26 +273,14 @@ static int upipe_rtcp_control(struct upipe *upipe, int command, va_list args)
 }
 
 static void upipe_rtcp_send_sr(struct upipe *upipe, struct upump **upump_p,
-                               struct uref *uref)
+                                uint64_t cr, uint64_t cr_prog)
 {
     struct upipe_rtcp *upipe_rtcp = upipe_rtcp_from_upipe(upipe);
-
-    uint64_t cr = 0;
-    if (unlikely(!ubase_check(uref_clock_get_cr_sys(uref, &cr)))) {
-        upipe_throw_fatal(upipe, UBASE_ERR_UNKNOWN);
-        return;
-    }
 
     lldiv_t div = lldiv(cr, UCLOCK_FREQ);
     uint64_t ntp_time =  ((uint64_t)div.quot << 32) +
         ((uint64_t)div.rem << 32) / UCLOCK_FREQ;
 
-    /* timestamp (synced to program clock ref, fallback to system clock ref) */
-
-    uint64_t cr_prog = 0;
-    if (unlikely(!ubase_check(uref_clock_get_pts_prog(uref, &cr_prog)))) {
-        uref_clock_get_pts_sys(uref, &cr_prog);
-    }
     div = lldiv(cr_prog, UCLOCK_FREQ);
     uint32_t ts = div.quot * upipe_rtcp->clockrate
          + ((uint64_t)div.rem * upipe_rtcp->clockrate)/UCLOCK_FREQ;
@@ -348,7 +336,14 @@ static void upipe_rtcp_input(struct upipe *upipe, struct uref *uref,
         return;
 
     upipe_rtcp->last_sent = cr;
-    upipe_rtcp_send_sr(upipe, upump_p, uref);
+
+    /* timestamp (synced to program clock ref, fallback to system clock ref) */
+    uint64_t cr_prog = 0;
+    if (unlikely(!ubase_check(uref_clock_get_pts_prog(uref, &cr_prog)))) {
+        uref_clock_get_pts_sys(uref, &cr_prog);
+    }
+
+    upipe_rtcp_send_sr(upipe, upump_p, cr, cr_prog);
 }
 
 static struct upipe_mgr upipe_rtcp_mgr = {
