@@ -42,9 +42,7 @@
 #include <upipe/upipe_helper_upump.h>
 #include <upipe-modules/upipe_rtcp.h>
 
-#include <bitstream/ietf/rtcp.h>
-
-#define RTCP_SR_SIZE    28
+#include <bitstream/ietf/rtcp_sr.h>
 
 struct upipe_rtcp {
     /** refcount management structure */
