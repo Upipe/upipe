@@ -82,6 +82,8 @@ endif
 if HAVE_BITSTREAM
 libupipe_modules_la_SOURCES += \
 	upipe_rtp_decaps.c \
+	upipe_rtp_feedback.c \
+	upipe_rtcp_fb_receiver.c \
 	upipe_rtp_prepend.c \
 	upipe_rtp_source.c \
 	upipe_rtp_demux.c \

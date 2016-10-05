@@ -39,6 +39,8 @@ myinclude_HEADERS = \
 	upipe_http_source.h \
 	uref_http_flow.h \
 	upipe_rtp_decaps.h \
+	upipe_rtp_feedback.h \
+	upipe_rtcp_fb_receiver.h \
 	upipe_rtp_prepend.h \
 	upipe_rtp_source.h \
 	upipe_rtp_demux.h \
