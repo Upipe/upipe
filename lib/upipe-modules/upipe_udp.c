@@ -391,7 +391,8 @@ int upipe_udp_open_socket(struct upipe *upipe, const char *_uri, int ttl,
             return -1;
         }
         /* required on some architectures */
-        memset(&connect_addr.sin.sin_zero, 0, sizeof(connect_addr.sin.sin_zero));
+        if (connect_addr.ss.ss_family == AF_INET)
+            memset(&connect_addr.sin.sin_zero, 0, sizeof(connect_addr.sin.sin_zero));
     }
 
     if (token[0] == '@') {
@@ -402,7 +403,8 @@ int upipe_udp_open_socket(struct upipe *upipe, const char *_uri, int ttl,
             return -1;
         }
         /* required on some architectures */
-        memset(&bind_addr.sin.sin_zero, 0, sizeof(bind_addr.sin.sin_zero));
+        if (connect_addr.ss.ss_family == AF_INET)
+            memset(&bind_addr.sin.sin_zero, 0, sizeof(bind_addr.sin.sin_zero));
     }
 
     if (bind_addr.ss.ss_family == AF_UNSPEC &&
