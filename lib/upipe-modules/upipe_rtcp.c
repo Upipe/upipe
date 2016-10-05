@@ -318,6 +318,7 @@ static void upipe_rtcp_input(struct upipe *upipe, struct uref *uref,
     size_t block_size = 0;
     if (unlikely(!ubase_check(uref_block_size(uref, &block_size)))) {
         upipe_err(upipe, "fail to get uref block size");
+        uref_free(uref);
         return;
     }
     upipe_rtcp->packet_count++;
@@ -326,14 +327,17 @@ static void upipe_rtcp_input(struct upipe *upipe, struct uref *uref,
     uint64_t cr = 0;
     if (unlikely(!ubase_check(uref_clock_get_cr_sys(uref, &cr)))) {
         upipe_warn_va(upipe, "non-dated buffer %p", uref);
+        uref_free(uref);
         return;
     }
 
     if (upipe_rtcp->last_sent == 0)
         upipe_rtcp->last_sent = cr;
 
-    if ((cr - upipe_rtcp->last_sent) < upipe_rtcp->rate)
+    if ((cr - upipe_rtcp->last_sent) < upipe_rtcp->rate) {
+        uref_free(uref);
         return;
+    }
 
     upipe_rtcp->last_sent = cr;
 
@@ -343,6 +347,7 @@ static void upipe_rtcp_input(struct upipe *upipe, struct uref *uref,
         uref_clock_get_pts_sys(uref, &cr_prog);
     }
 
+    uref_free(uref);
     upipe_rtcp_send_sr(upipe, upump_p, cr, cr_prog);
 }
 
