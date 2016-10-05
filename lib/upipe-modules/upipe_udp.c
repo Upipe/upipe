@@ -547,7 +547,7 @@ int upipe_udp_open_socket(struct upipe *upipe, const char *_uri, int ttl,
 
                     if (bind(fd, &bind_addr_any.so,
                                sizeof(bind_addr_any)) < 0) {
-                        upipe_err(upipe, "couldn't bind");
+                        upipe_err_va(upipe, "couldn't bind: %m");
                         upipe_udp_print_socket(upipe, "socket definition:", &bind_addr, &connect_addr);
                         close(fd);
                         return -1;
@@ -572,7 +572,7 @@ int upipe_udp_open_socket(struct upipe *upipe, const char *_uri, int ttl,
         else if (bind_addr.ss.ss_family != AF_UNSPEC) {
     normal_bind:
             if (bind(fd, &bind_addr.so, sockaddr_len) < 0) {
-                upipe_err(upipe, "couldn't bind");
+                upipe_err_va(upipe, "couldn't bind: %m");
                 upipe_udp_print_socket(upipe, "socket definition:", &bind_addr, &connect_addr);
                 close(fd);
                 return -1;
