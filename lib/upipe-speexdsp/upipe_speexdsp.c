@@ -312,6 +312,43 @@ static int upipe_speexdsp_set_flow_def(struct upipe *upipe, struct uref *flow_de
     return UBASE_ERR_NONE;
 }
 
+/** @internal @This provides a flow format suggestion.
+ *
+ * @param upipe description structure of the pipe
+ * @param request description structure of the request
+ * @return an error code
+ */
+static int upipe_speexdsp_provide_flow_format(struct upipe *upipe,
+                                          struct urequest *request)
+{
+    const char *def;
+    UBASE_RETURN(uref_flow_get_def(request->uref, &def))
+    uint8_t channels;
+    UBASE_RETURN(uref_sound_flow_get_channels(request->uref, &channels))
+    uint8_t planes;
+    UBASE_RETURN(uref_sound_flow_get_planes(request->uref, &planes))
+    uint8_t sample_size;
+    UBASE_RETURN(uref_sound_flow_get_sample_size(request->uref, &sample_size))
+
+    struct uref *flow = uref_dup(request->uref);
+    UBASE_ALLOC_RETURN(flow);
+
+    uref_sound_flow_clear_format(flow);
+    uref_sound_flow_set_planes(flow, 0);
+    uref_sound_flow_set_channels(flow, channels);
+    uref_sound_flow_add_plane(flow, "all");
+    if (ubase_ncmp(def, "sound.s16.")) {
+        uref_flow_set_def(flow, "sound.f32."); /* prefer f32 over s16 */
+        uref_sound_flow_set_sample_size(flow, 4 * channels);
+    } else {
+        uref_flow_set_def(flow, def);
+        uref_sound_flow_set_sample_size(flow, (planes > 1) ? sample_size :
+                sample_size / channels);
+    }
+
+    return urequest_provide_flow_format(request, flow);
+}
+
 /** @internal @This processes control commands on a speexdsp pipe.
  *
  * @param upipe description structure of the pipe
@@ -325,16 +362,12 @@ static int upipe_speexdsp_control(struct upipe *upipe, int command, va_list args
         /* generic commands */
         case UPIPE_REGISTER_REQUEST: {
             struct urequest *request = va_arg(args, struct urequest *);
-            if (request->type == UREQUEST_UBUF_MGR ||
-                request->type == UREQUEST_FLOW_FORMAT)
-                return upipe_throw_provide_request(upipe, request);
+            if (request->type == UREQUEST_FLOW_FORMAT)
+                return upipe_speexdsp_provide_flow_format(upipe, request);
             return upipe_speexdsp_alloc_output_proxy(upipe, request);
         }
         case UPIPE_UNREGISTER_REQUEST: {
             struct urequest *request = va_arg(args, struct urequest *);
-            if (request->type == UREQUEST_UBUF_MGR ||
-                request->type == UREQUEST_FLOW_FORMAT)
-                return UBASE_ERR_NONE;
             return upipe_speexdsp_free_output_proxy(upipe, request);
         }
 

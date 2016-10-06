@@ -59,6 +59,7 @@
 #define UPROBE_LOG_LEVEL    UPROBE_LOG_VERBOSE
 #define ALIGN               0
 
+static bool got_urequest = false;
 static bool got_input = false;
 
 /** definition of our uprobe */
@@ -131,6 +132,25 @@ static struct upipe_mgr test_mgr = {
     .upipe_control = test_control
 };
 
+static int provide_urequest(struct urequest *urequest, va_list args)
+{
+    struct uref *flow_format = va_arg(args, struct uref *);
+    assert(flow_format != NULL);
+    const char *def;
+    ubase_assert(uref_flow_get_def(flow_format, &def));
+    assert(!ubase_ncmp(def, "sound.f32."));
+    uint8_t channels;
+    ubase_assert(uref_sound_flow_get_channels(flow_format, &channels));
+    assert(channels == 2);
+    uint8_t planes;
+    ubase_assert(uref_sound_flow_get_planes(flow_format, &planes));
+    assert(planes == 1);
+    ubase_assert(uref_sound_flow_check_channel(flow_format, "all"));
+    got_urequest = true;
+    uref_free(flow_format);
+    return UBASE_ERR_NONE;
+}
+
 static void fill_in(struct ubuf *ubuf)
 {
     size_t size;
@@ -198,8 +218,19 @@ int main(int argc, char **argv)
     assert(test != NULL);
     ubase_assert(upipe_set_output(speexdsp, test));
 
+    /* test urequest flow format */
     struct uref *flow_def =
-        uref_sound_flow_alloc_def(uref_mgr, "s16.", 2, 2 * 2);
+        uref_sound_flow_alloc_def(uref_mgr, "s32.", 2, 4);
+    ubase_assert(uref_sound_flow_add_plane(flow_def, "l"));
+    ubase_assert(uref_sound_flow_add_plane(flow_def, "r"));
+    struct urequest request;
+    urequest_init_flow_format(&request, flow_def, provide_urequest, NULL);
+    upipe_register_request(speexdsp, &request);
+    assert(got_urequest);
+    upipe_unregister_request(speexdsp, &request);
+    urequest_clean(&request);
+
+    flow_def = uref_sound_flow_alloc_def(uref_mgr, "s16.", 2, 2 * 2);
     ubase_assert(uref_sound_flow_add_plane(flow_def, "lr"));
     ubase_assert(uref_sound_flow_set_rate(flow_def, 48000));
     ubase_assert(upipe_set_flow_def(speexdsp, flow_def));
