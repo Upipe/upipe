@@ -228,9 +228,6 @@ static int upipe_amax_provide_flow_format(struct upipe *upipe,
         ubase_check(uref_sound_flow_get_channel(request->uref,
                                                 &channels_names, 0)) &&
         strlen (channels_names) >= channels) {
-        /* compute sample size */
-        uint8_t sample_size = 0;
-
         /* set attributes */
         uref_sound_flow_clear_format(flow);
         UBASE_FATAL(upipe,
