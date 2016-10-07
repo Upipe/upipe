@@ -117,6 +117,11 @@ struct upipe_udpsrc {
     /** udp socket uri */
     char *uri;
 
+    /** source address */
+    struct sockaddr_storage addr;
+    /** source address (size) */
+    socklen_t addrlen;
+
     /** public upipe structure */
     struct upipe upipe;
 };
@@ -166,6 +171,7 @@ static struct upipe *upipe_udpsrc_alloc(struct upipe_mgr *mgr,
     upipe_udpsrc_init_output_size(upipe, UBUF_DEFAULT_SIZE);
     upipe_udpsrc->fd = -1;
     upipe_udpsrc->uri = NULL;
+    upipe_udpsrc->addrlen = 0;
     upipe_throw_ready(upipe);
     return upipe;
 }
@@ -202,7 +208,11 @@ static void upipe_udpsrc_worker(struct upump *upump)
     }
     assert(output_size == upipe_udpsrc->output_size);
 
-    ssize_t ret = read(upipe_udpsrc->fd, buffer, upipe_udpsrc->output_size);
+    struct sockaddr_storage addr;
+    socklen_t addrlen = sizeof(addr);
+
+    ssize_t ret = recvfrom(upipe_udpsrc->fd, buffer, upipe_udpsrc->output_size,
+                        0, (struct sockaddr*)&addr, &addrlen);
     uref_block_unmap(uref, 0);
 
     if (unlikely(ret == -1)) {
@@ -225,7 +235,14 @@ static void upipe_udpsrc_worker(struct upump *upump)
         upipe_udpsrc_set_upump(upipe, NULL);
         upipe_throw_source_end(upipe);
         return;
+    } else if (addrlen != upipe_udpsrc->addrlen ||
+        memcmp(&addr, &upipe_udpsrc->addr, addrlen)) {
+        upipe_throw(upipe, UPROBE_UDPSRC_NEW_PEER, UPIPE_UDPSRC_SIGNATURE,
+                &addr, &addrlen);
+        upipe_udpsrc->addrlen = addrlen;
+        memcpy(&upipe_udpsrc->addr, &addr, addrlen);
     }
+
     if (unlikely(ret == 0)) {
         uref_free(uref);
         if (likely(upipe_udpsrc->uclock == NULL)) {

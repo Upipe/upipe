@@ -117,6 +117,7 @@ static int catch(struct uprobe *uprobe, struct upipe *upipe,
         case UPROBE_DEAD:
         case UPROBE_NEW_FLOW_DEF:
         case UPROBE_SOURCE_END:
+        case UPROBE_UDPSRC_NEW_PEER:
             break;
     }
     return UBASE_ERR_NONE;

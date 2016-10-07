@@ -49,6 +49,14 @@ enum upipe_udpsrc_command {
     UPIPE_UDPSRC_SET_FD,
 };
 
+/** @This extends uprobe_throw with specific events . */
+enum uprobe_udpsrc_event {
+    UPROBE_UDPSRC_SENTINEL = UPROBE_LOCAL,
+
+    /** remote address changed (const struct sockaddr*, socklen_t) **/
+    UPROBE_UDPSRC_NEW_PEER,
+};
+
 /** @This returns currently opened udp fd.
  *
  * @param upipe description structure of the pipe
