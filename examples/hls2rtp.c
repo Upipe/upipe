@@ -34,8 +34,6 @@
 #include <upipe/uref_pic.h>
 #include <upipe/upump.h>
 #include <upump-ev/upump_ev.h>
-#include <upipe-pthread/upipe_pthread_transfer.h>
-#include <upipe-pthread/uprobe_pthread_upump_mgr.h>
 #include <upipe-modules/uprobe_http_redirect.h>
 #include <upipe-modules/upipe_null.h>
 #include <upipe-modules/upipe_auto_source.h>
