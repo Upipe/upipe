@@ -469,6 +469,8 @@ static int upipe_udpsink_flush(struct upipe *upipe)
 static int _upipe_udpsink_control(struct upipe *upipe,
                                   int command, va_list args)
 {
+    struct upipe_udpsink *upipe_udpsink = upipe_udpsink_from_upipe(upipe);
+
     switch (command) {
         case UPIPE_ATTACH_UPUMP_MGR:
             upipe_udpsink_set_upump(upipe, NULL);
@@ -516,6 +518,18 @@ static int _upipe_udpsink_control(struct upipe *upipe,
             const char *uri = va_arg(args, const char *);
             enum upipe_udpsink_mode mode = va_arg(args, enum upipe_udpsink_mode);
             return _upipe_udpsink_set_uri(upipe, uri, mode);
+        }
+        case UPIPE_UDPSINK_GET_FD: {
+            UBASE_SIGNATURE_CHECK(args, UPIPE_UDPSINK_SIGNATURE)
+            int *fd = va_arg(args, int *);
+            *fd = upipe_udpsink->fd;
+            return UBASE_ERR_NONE;
+        }
+        case UPIPE_UDPSINK_SET_FD: {
+            UBASE_SIGNATURE_CHECK(args, UPIPE_UDPSINK_SIGNATURE)
+            upipe_udpsink_set_upump(upipe, NULL);
+            upipe_udpsink->fd = va_arg(args, int );
+            return UBASE_ERR_NONE;
         }
         case UPIPE_FLUSH:
             return upipe_udpsink_flush(upipe);

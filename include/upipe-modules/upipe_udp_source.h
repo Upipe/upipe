@@ -39,6 +39,40 @@ extern "C" {
 
 #define UPIPE_UDPSRC_SIGNATURE UBASE_FOURCC('u','s','r','c')
 
+/** @This extends upipe_command with specific commands. */
+enum upipe_udpsrc_command {
+    UPIPE_UDPSRC_SENTINEL = UPIPE_CONTROL_LOCAL,
+
+    /** get socket fd (int*) **/
+    UPIPE_UDPSRC_GET_FD,
+    /** set socket fd (int) **/
+    UPIPE_UDPSRC_SET_FD,
+};
+
+/** @This returns currently opened udp fd.
+ *
+ * @param upipe description structure of the pipe
+ * @param fd_p filled in with the fd of the udp
+ * @return false in case of error
+ */
+static inline int upipe_udpsrc_get_fd(struct upipe *upipe, int *fd_p)
+{
+    return upipe_control(upipe, UPIPE_UDPSRC_GET_FD, UPIPE_UDPSRC_SIGNATURE,
+                         fd_p);
+}
+
+/** @This sets the udp fd.
+ *
+ * @param upipe description structure of the pipe
+ * @param fd file descriptor
+ * @return false in case of error
+ */
+static inline int upipe_udpsrc_set_fd(struct upipe *upipe, int fd)
+{
+    return upipe_control(upipe, UPIPE_UDPSRC_SET_FD, UPIPE_UDPSRC_SIGNATURE,
+                         fd);
+}
+
 /** @This returns the management structure for all udp socket sources.
  *
  * @return pointer to manager

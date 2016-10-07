@@ -359,6 +359,8 @@ static int upipe_udpsrc_set_uri(struct upipe *upipe, const char *uri)
 static int _upipe_udpsrc_control(struct upipe *upipe,
                                  int command, va_list args)
 {
+    struct upipe_udpsrc *upipe_udpsrc = upipe_udpsrc_from_upipe(upipe);
+
     switch (command) {
         case UPIPE_ATTACH_UPUMP_MGR:
             upipe_udpsrc_set_upump(upipe, NULL);
@@ -397,6 +399,18 @@ static int _upipe_udpsrc_control(struct upipe *upipe,
         case UPIPE_SET_URI: {
             const char *uri = va_arg(args, const char *);
             return upipe_udpsrc_set_uri(upipe, uri);
+        }
+        case UPIPE_UDPSRC_GET_FD: {
+            UBASE_SIGNATURE_CHECK(args, UPIPE_UDPSRC_SIGNATURE)
+            int *fd = va_arg(args, int *);
+            *fd = upipe_udpsrc->fd;
+            return UBASE_ERR_NONE;
+        }
+        case UPIPE_UDPSRC_SET_FD: {
+            UBASE_SIGNATURE_CHECK(args, UPIPE_UDPSRC_SIGNATURE)
+            upipe_udpsrc_set_upump(upipe, NULL);
+            upipe_udpsrc->fd = va_arg(args, int );
+            return UBASE_ERR_NONE;
         }
         default:
             return UBASE_ERR_UNHANDLED;

@@ -52,7 +52,11 @@ enum upipe_udpsink_command {
     /** returns the uri of the currently opened udp (const char **) */
     UPIPE_UDPSINK_GET_URI,
     /** asks to open the given uri (const char *, enum upipe_udpsink_mode) */
-    UPIPE_UDPSINK_SET_URI
+    UPIPE_UDPSINK_SET_URI,
+    /** get socket fd (int*) **/
+    UPIPE_UDPSINK_GET_FD,
+    /** set socket fd (int) **/
+    UPIPE_UDPSINK_SET_FD,
 };
 
 /** @This returns the management structure for all udp sinks.
@@ -60,6 +64,30 @@ enum upipe_udpsink_command {
  * @return pointer to manager
  */
 struct upipe_mgr *upipe_udpsink_mgr_alloc(void);
+
+/** @This returns currently opened udp fd.
+ *
+ * @param upipe description structure of the pipe
+ * @param fd_p filled in with the fd of the udp
+ * @return false in case of error
+ */
+static inline int upipe_udpsink_get_fd(struct upipe *upipe, int *fd_p)
+{
+    return upipe_control(upipe, UPIPE_UDPSINK_GET_FD, UPIPE_UDPSINK_SIGNATURE,
+                         fd_p);
+}
+
+/** @This sets the udp fd.
+ *
+ * @param upipe description structure of the pipe
+ * @param fd file descriptor
+ * @return false in case of error
+ */
+static inline int upipe_udpsink_set_fd(struct upipe *upipe, int fd)
+{
+    return upipe_control(upipe, UPIPE_UDPSINK_SET_FD, UPIPE_UDPSINK_SIGNATURE,
+                         fd);
+}
 
 /** @This returns the uri of the currently opened udp uri.
  *
