@@ -388,8 +388,7 @@ static int _upipe_udpsink_get_uri(struct upipe *upipe, const char **uri_p)
  * @param mode mode of opening the socket
  * @return an error code
  */
-static int _upipe_udpsink_set_uri(struct upipe *upipe, const char *uri,
-                                  enum upipe_udpsink_mode mode)
+static int _upipe_udpsink_set_uri(struct upipe *upipe, const char *uri)
 {
     struct upipe_udpsink *upipe_udpsink = upipe_udpsink_from_upipe(upipe);
     bool use_tcp = false;
@@ -410,21 +409,12 @@ static int _upipe_udpsink_set_uri(struct upipe *upipe, const char *uri,
 
     upipe_udpsink_check_upump_mgr(upipe);
 
-    const char *mode_desc = NULL; /* hush gcc */
-    switch (mode) {
-        case UPIPE_UDPSINK_NONE:
-            mode_desc = "none";
-            break;
-        default:
-            upipe_err_va(upipe, "invalid mode %d", mode);
-            return UBASE_ERR_INVALID;
-    }
     upipe_udpsink->fd = upipe_udp_open_socket(upipe, uri,
             UDP_DEFAULT_TTL, UDP_DEFAULT_PORT, 0, NULL, &use_tcp,
             &upipe_udpsink->raw, upipe_udpsink->raw_header);
 
     if (unlikely(upipe_udpsink->fd == -1)) {
-        upipe_err_va(upipe, "can't open uri %s (%s)", uri, mode_desc);
+        upipe_err_va(upipe, "can't open uri %s", uri);
         return UBASE_ERR_EXTERNAL;
     }
 
@@ -437,8 +427,7 @@ static int _upipe_udpsink_set_uri(struct upipe *upipe, const char *uri,
     if (!upipe_udpsink_check_input(upipe))
         /* Use again the pipe that we previously released. */
         upipe_use(upipe);
-    upipe_notice_va(upipe, "opening uri %s in %s mode",
-                    upipe_udpsink->uri, mode_desc);
+    upipe_notice_va(upipe, "opening uri %s", upipe_udpsink->uri);
     return UBASE_ERR_NONE;
 }
 
@@ -505,20 +494,9 @@ static int _upipe_udpsink_control(struct upipe *upipe,
         }
         case UPIPE_SET_URI: {
             const char *uri = va_arg(args, const char *);
-            return _upipe_udpsink_set_uri(upipe, uri, UPIPE_UDPSINK_NONE);
+            return _upipe_udpsink_set_uri(upipe, uri);
         }
 
-        case UPIPE_UDPSINK_GET_URI: {
-            UBASE_SIGNATURE_CHECK(args, UPIPE_UDPSINK_SIGNATURE)
-            const char **uri_p = va_arg(args, const char **);
-            return _upipe_udpsink_get_uri(upipe, uri_p);
-        }
-        case UPIPE_UDPSINK_SET_URI: {
-            UBASE_SIGNATURE_CHECK(args, UPIPE_UDPSINK_SIGNATURE)
-            const char *uri = va_arg(args, const char *);
-            enum upipe_udpsink_mode mode = va_arg(args, enum upipe_udpsink_mode);
-            return _upipe_udpsink_set_uri(upipe, uri, mode);
-        }
         case UPIPE_UDPSINK_GET_FD: {
             UBASE_SIGNATURE_CHECK(args, UPIPE_UDPSINK_SIGNATURE)
             int *fd = va_arg(args, int *);

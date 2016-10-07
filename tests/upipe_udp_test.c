@@ -363,7 +363,7 @@ int main(int argc, char *argv[])
         }
     }
     assert(ret);
-    ubase_assert(upipe_udpsink_set_uri(upipe_udpsink, udp_uri+1, 0));
+    ubase_assert(upipe_set_uri(upipe_udpsink, udp_uri+1));
 
     /* redefine write pump */
     write_pump = upump_alloc_idler(upump_mgr, genpackets2, NULL, NULL);

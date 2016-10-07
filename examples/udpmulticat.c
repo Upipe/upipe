@@ -196,7 +196,7 @@ int main(int argc, char *argv[])
                 upipe_udpsink_mgr,
                 uprobe_pfx_alloc(uprobe_use(logger),
                                  loglevel, "udpsink"));
-        if (!ubase_check(upipe_udpsink_set_uri(upipe_sink, dirpath, 0))) {
+        if (!ubase_check(upipe_set_uri(upipe_sink, dirpath))) {
             return EXIT_FAILURE;
         }
         upipe_release(upipe_sink);

@@ -39,20 +39,10 @@ extern "C" {
 
 #define UPIPE_UDPSINK_SIGNATURE UBASE_FOURCC('u','s','n','k')
 
-/** @This defines udp opening modes. */
-enum upipe_udpsink_mode {
-    /** do not do anything besides opening the fd */
-    UPIPE_UDPSINK_NONE = 0,
-};
-
 /** @This extends upipe_command with specific commands for udp sink. */
 enum upipe_udpsink_command {
     UPIPE_UDPSINK_SENTINEL = UPIPE_CONTROL_LOCAL,
 
-    /** returns the uri of the currently opened udp (const char **) */
-    UPIPE_UDPSINK_GET_URI,
-    /** asks to open the given uri (const char *, enum upipe_udpsink_mode) */
-    UPIPE_UDPSINK_SET_URI,
     /** get socket fd (int*) **/
     UPIPE_UDPSINK_GET_FD,
     /** set socket fd (int) **/
@@ -87,34 +77,6 @@ static inline int upipe_udpsink_set_fd(struct upipe *upipe, int fd)
 {
     return upipe_control(upipe, UPIPE_UDPSINK_SET_FD, UPIPE_UDPSINK_SIGNATURE,
                          fd);
-}
-
-/** @This returns the uri of the currently opened udp uri.
- *
- * @param upipe description structure of the pipe
- * @param uri_p filled in with the uri of the udp
- * @return false in case of error
- */
-static inline int upipe_udpsink_get_uri(struct upipe *upipe,
-                                        const char **uri_p)
-{
-    return upipe_control(upipe, UPIPE_UDPSINK_GET_URI, UPIPE_UDPSINK_SIGNATURE,
-                         uri_p);
-}
-
-/** @This asks to open the given udp uri.
- *
- * @param upipe description structure of the pipe
- * @param uri relative or absolute uri
- * @param mode mode of opening the uri
- * @return false in case of error
- */
-static inline int upipe_udpsink_set_uri(struct upipe *upipe,
-                                        const char *uri,
-                                        enum upipe_udpsink_mode mode)
-{
-    return upipe_control(upipe, UPIPE_UDPSINK_SET_URI, UPIPE_UDPSINK_SIGNATURE,
-                         uri, mode);
 }
 
 #ifdef __cplusplus
