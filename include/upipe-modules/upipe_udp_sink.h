@@ -36,6 +36,8 @@ extern "C" {
 #endif
 
 #include <upipe/upipe.h>
+#include <sys/types.h>
+#include <sys/socket.h>
 
 #define UPIPE_UDPSINK_SIGNATURE UBASE_FOURCC('u','s','n','k')
 
@@ -47,6 +49,8 @@ enum upipe_udpsink_command {
     UPIPE_UDPSINK_GET_FD,
     /** set socket fd (int) **/
     UPIPE_UDPSINK_SET_FD,
+    /** set remote address (const struct sockaddr *, socklen_t) **/
+    UPIPE_UDPSINK_SET_PEER,
 };
 
 /** @This returns the management structure for all udp sinks.
@@ -79,6 +83,19 @@ static inline int upipe_udpsink_set_fd(struct upipe *upipe, int fd)
                          fd);
 }
 
+/** @This sets the remote address (for unconnected sockets).
+ *
+ * @param upipe description structure of the pipe
+ * @param addr the remote address
+ * @param addrlen the size of addr
+ * @return false in case of error
+ */
+static inline int upipe_udpsink_set_peer(struct upipe *upipe,
+        const struct sockaddr *addr, socklen_t addrlen)
+{
+    return upipe_control(upipe, UPIPE_UDPSINK_SET_PEER, UPIPE_UDPSINK_SIGNATURE,
+            addr, addrlen);
+}
 #ifdef __cplusplus
 }
 #endif

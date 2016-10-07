@@ -113,6 +113,11 @@ struct upipe_udpsink {
     /** RAW header */
     uint8_t raw_header[RAW_HEADER_SIZE];
 
+    /** destination for not-connected socket */
+    struct sockaddr_storage addr;
+    /** destination for not-connected socket (size) */
+    socklen_t addrlen;
+
     /** public upipe structure */
     struct upipe upipe;
 };
@@ -152,6 +157,7 @@ static struct upipe *upipe_udpsink_alloc(struct upipe_mgr *mgr,
     upipe_udpsink->fd = -1;
     upipe_udpsink->uri = NULL;
     upipe_udpsink->raw = false;
+    upipe_udpsink->addrlen = 0;
     upipe_throw_ready(upipe);
     return upipe;
 }
@@ -242,8 +248,6 @@ static bool upipe_udpsink_output(struct upipe *upipe, struct uref *uref,
 write_buffer:
     for ( ; ; ) {
         size_t payload_len = 0;
-        struct msghdr msghdr;
-        memset(&msghdr, 0, sizeof(msghdr));
         if (unlikely(!ubase_check(uref_block_size(uref, &payload_len)))) {
             upipe_warn(upipe, "cannot read ubuf size");
             return false;
@@ -280,8 +284,17 @@ write_buffer:
             break;
         }
 
-        msghdr.msg_iov = iovecs;
-        msghdr.msg_iovlen = iovec_count;
+        struct msghdr msghdr = {
+            .msg_name = upipe_udpsink->addrlen ? &upipe_udpsink->addr : NULL,
+            .msg_namelen = upipe_udpsink->addrlen,
+
+            .msg_iov = iovecs,
+            .msg_iovlen = iovec_count,
+
+            .msg_control = NULL,
+            .msg_controllen = 0,
+            .msg_flags = 0,
+        };
 
         ssize_t ret = sendmsg(upipe_udpsink->fd, &msghdr, 0);
         uref_block_iovec_unmap(uref, 0, -1, iovecs);
@@ -513,6 +526,13 @@ static int _upipe_udpsink_control(struct upipe *upipe,
             UBASE_SIGNATURE_CHECK(args, UPIPE_UDPSINK_SIGNATURE)
             upipe_udpsink_set_upump(upipe, NULL);
             upipe_udpsink->fd = va_arg(args, int );
+            return UBASE_ERR_NONE;
+        }
+        case UPIPE_UDPSINK_SET_PEER: {
+            UBASE_SIGNATURE_CHECK(args, UPIPE_UDPSINK_SIGNATURE)
+            const struct sockaddr *s = va_arg(args, const struct sockaddr *);
+            upipe_udpsink->addrlen = va_arg(args, socklen_t);
+            memcpy(&upipe_udpsink->addr, s, upipe_udpsink->addrlen);
             return UBASE_ERR_NONE;
         }
         case UPIPE_FLUSH:
