@@ -101,6 +101,9 @@ struct upipe_speexdsp {
     /** current drift rate */
     struct urational drift_rate;
 
+    /** resampling quality */
+    int quality;
+
     /** public upipe structure */
     struct upipe upipe;
 };
@@ -302,7 +305,7 @@ static int upipe_speexdsp_set_flow_def(struct upipe *upipe, struct uref *flow_de
     int err;
     upipe_speexdsp->ctx = speex_resampler_init(channels,
                 upipe_speexdsp->rate, upipe_speexdsp->rate,
-                SPEEX_RESAMPLER_QUALITY_MAX, &err);
+                upipe_speexdsp->quality, &err);
     if (!upipe_speexdsp->ctx) {
         upipe_err_va(upipe, "Could not create resampler: %s",
                 speex_resampler_strerror(err));
@@ -358,6 +361,8 @@ static int upipe_speexdsp_provide_flow_format(struct upipe *upipe,
  */
 static int upipe_speexdsp_control(struct upipe *upipe, int command, va_list args)
 {
+    struct upipe_speexdsp *upipe_speexdsp = upipe_speexdsp_from_upipe(upipe);
+
     switch (command) {
         /* generic commands */
         case UPIPE_REGISTER_REQUEST: {
@@ -387,6 +392,26 @@ static int upipe_speexdsp_control(struct upipe *upipe, int command, va_list args
             struct uref *flow = va_arg(args, struct uref *);
             return upipe_speexdsp_set_flow_def(upipe, flow);
         }
+        case UPIPE_SET_OPTION: {
+            const char *option = va_arg(args, const char *);
+            const char *value  = va_arg(args, const char *);
+            if (strcmp(option, "quality"))
+                return UBASE_ERR_INVALID;
+            if (upipe_speexdsp->ctx)
+                return UBASE_ERR_BUSY;
+            int quality = atoi(value);
+            if (quality > SPEEX_RESAMPLER_QUALITY_MAX) {
+                quality = SPEEX_RESAMPLER_QUALITY_MAX;
+                upipe_err_va(upipe, "Clamping quality to %d",
+                        SPEEX_RESAMPLER_QUALITY_MAX);
+            } else if (quality < SPEEX_RESAMPLER_QUALITY_MIN) {
+                quality = SPEEX_RESAMPLER_QUALITY_MIN;
+                upipe_err_va(upipe, "Clamping quality to %d",
+                        SPEEX_RESAMPLER_QUALITY_MIN);
+            }
+            upipe_speexdsp->quality = quality;
+            return UBASE_ERR_NONE;
+        }
 
         default:
             return UBASE_ERR_UNHANDLED;
@@ -414,6 +439,7 @@ static struct upipe *upipe_speexdsp_alloc(struct upipe_mgr *mgr,
 
     upipe_speexdsp->ctx = NULL;
     upipe_speexdsp->drift_rate = (struct urational){ 0, 0 };
+    upipe_speexdsp->quality = SPEEX_RESAMPLER_QUALITY_MAX;
 
     upipe_speexdsp_init_urefcount(upipe);
     upipe_speexdsp_init_ubuf_mgr(upipe);
