@@ -159,7 +159,7 @@ static bool upipe_speexdsp_handle(struct upipe *upipe, struct uref *uref,
         return true;
     }
 
-    struct ubuf *ubuf = ubuf_sound_alloc(uref->ubuf->mgr, size + 10);
+    struct ubuf *ubuf = ubuf_sound_alloc(upipe_speexdsp->ubuf_mgr, size + 10);
     if (!ubuf)
         return false;
 
@@ -295,7 +295,7 @@ static int upipe_speexdsp_set_flow_def(struct upipe *upipe, struct uref *flow_de
         return UBASE_ERR_ALLOC;
     }
 
-    upipe_speexdsp_store_flow_def(upipe, flow_def);
+    upipe_speexdsp_require_ubuf_mgr(upipe, flow_def);
 
     if (upipe_speexdsp->ctx)
         speex_resampler_destroy(upipe_speexdsp->ctx);
@@ -369,10 +369,15 @@ static int upipe_speexdsp_control(struct upipe *upipe, int command, va_list args
             struct urequest *request = va_arg(args, struct urequest *);
             if (request->type == UREQUEST_FLOW_FORMAT)
                 return upipe_speexdsp_provide_flow_format(upipe, request);
+            if (request->type == UREQUEST_UBUF_MGR)
+                return upipe_throw_provide_request(upipe, request);
             return upipe_speexdsp_alloc_output_proxy(upipe, request);
         }
         case UPIPE_UNREGISTER_REQUEST: {
             struct urequest *request = va_arg(args, struct urequest *);
+            if (request->type == UREQUEST_FLOW_FORMAT ||
+                request->type == UREQUEST_UBUF_MGR)
+                return UBASE_ERR_NONE;
             return upipe_speexdsp_free_output_proxy(upipe, request);
         }
 

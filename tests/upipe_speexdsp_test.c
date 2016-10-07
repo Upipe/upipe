@@ -108,7 +108,15 @@ static int test_control(struct upipe *upipe, int command, va_list args)
     switch (command) {
         case UPIPE_SET_FLOW_DEF:
             return UBASE_ERR_NONE;
+        case UPIPE_REGISTER_REQUEST: {
+            struct urequest *urequest = va_arg(args, struct urequest *);
+            return upipe_throw_provide_request(upipe, urequest);
+        }
+        case UPIPE_UNREGISTER_REQUEST:
+            return UBASE_ERR_NONE;
         default:
+            upipe_err_va(upipe, "unhandled command %s",
+                    upipe_command_str(upipe, command));
             assert(0);
             return UBASE_ERR_UNHANDLED;
     }
