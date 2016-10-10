@@ -117,6 +117,7 @@ static int catch(struct uprobe *uprobe, struct upipe *upipe,
         case UPROBE_DEAD:
         case UPROBE_NEW_FLOW_DEF:
         case UPROBE_SOURCE_END:
+        case UPROBE_UDPSRC_NEW_PEER:
             break;
     }
     return UBASE_ERR_NONE;
@@ -363,7 +364,7 @@ int main(int argc, char *argv[])
         }
     }
     assert(ret);
-    ubase_assert(upipe_udpsink_set_uri(upipe_udpsink, udp_uri+1, 0));
+    ubase_assert(upipe_set_uri(upipe_udpsink, udp_uri+1));
 
     /* redefine write pump */
     write_pump = upump_alloc_idler(upump_mgr, genpackets2, NULL, NULL);

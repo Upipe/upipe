@@ -55,6 +55,7 @@
 #include <string.h>
 #include <unistd.h>
 #include <sys/types.h>
+#include <sys/socket.h>
 #include <sys/stat.h>
 #include <fcntl.h>
 #include <sys/ioctl.h>
@@ -112,6 +113,11 @@ struct upipe_udpsink {
     /** RAW header */
     uint8_t raw_header[RAW_HEADER_SIZE];
 
+    /** destination for not-connected socket */
+    struct sockaddr_storage addr;
+    /** destination for not-connected socket (size) */
+    socklen_t addrlen;
+
     /** public upipe structure */
     struct upipe upipe;
 };
@@ -151,6 +157,7 @@ static struct upipe *upipe_udpsink_alloc(struct upipe_mgr *mgr,
     upipe_udpsink->fd = -1;
     upipe_udpsink->uri = NULL;
     upipe_udpsink->raw = false;
+    upipe_udpsink->addrlen = 0;
     upipe_throw_ready(upipe);
     return upipe;
 }
@@ -277,7 +284,19 @@ write_buffer:
             break;
         }
 
-        ssize_t ret = writev(upipe_udpsink->fd, iovecs_s, iovec_count);
+        struct msghdr msghdr = {
+            .msg_name = upipe_udpsink->addrlen ? &upipe_udpsink->addr : NULL,
+            .msg_namelen = upipe_udpsink->addrlen,
+
+            .msg_iov = iovecs,
+            .msg_iovlen = iovec_count,
+
+            .msg_control = NULL,
+            .msg_controllen = 0,
+            .msg_flags = 0,
+        };
+
+        ssize_t ret = sendmsg(upipe_udpsink->fd, &msghdr, 0);
         uref_block_iovec_unmap(uref, 0, -1, iovecs);
 
         if (unlikely(ret == -1)) {
@@ -388,8 +407,7 @@ static int _upipe_udpsink_get_uri(struct upipe *upipe, const char **uri_p)
  * @param mode mode of opening the socket
  * @return an error code
  */
-static int _upipe_udpsink_set_uri(struct upipe *upipe, const char *uri,
-                                  enum upipe_udpsink_mode mode)
+static int _upipe_udpsink_set_uri(struct upipe *upipe, const char *uri)
 {
     struct upipe_udpsink *upipe_udpsink = upipe_udpsink_from_upipe(upipe);
     bool use_tcp = false;
@@ -410,21 +428,12 @@ static int _upipe_udpsink_set_uri(struct upipe *upipe, const char *uri,
 
     upipe_udpsink_check_upump_mgr(upipe);
 
-    const char *mode_desc = NULL; /* hush gcc */
-    switch (mode) {
-        case UPIPE_UDPSINK_NONE:
-            mode_desc = "none";
-            break;
-        default:
-            upipe_err_va(upipe, "invalid mode %d", mode);
-            return UBASE_ERR_INVALID;
-    }
     upipe_udpsink->fd = upipe_udp_open_socket(upipe, uri,
             UDP_DEFAULT_TTL, UDP_DEFAULT_PORT, 0, NULL, &use_tcp,
             &upipe_udpsink->raw, upipe_udpsink->raw_header);
 
     if (unlikely(upipe_udpsink->fd == -1)) {
-        upipe_err_va(upipe, "can't open uri %s (%s)", uri, mode_desc);
+        upipe_err_va(upipe, "can't open uri %s", uri);
         return UBASE_ERR_EXTERNAL;
     }
 
@@ -437,8 +446,7 @@ static int _upipe_udpsink_set_uri(struct upipe *upipe, const char *uri,
     if (!upipe_udpsink_check_input(upipe))
         /* Use again the pipe that we previously released. */
         upipe_use(upipe);
-    upipe_notice_va(upipe, "opening uri %s in %s mode",
-                    upipe_udpsink->uri, mode_desc);
+    upipe_notice_va(upipe, "opening uri %s", upipe_udpsink->uri);
     return UBASE_ERR_NONE;
 }
 
@@ -469,6 +477,8 @@ static int upipe_udpsink_flush(struct upipe *upipe)
 static int _upipe_udpsink_control(struct upipe *upipe,
                                   int command, va_list args)
 {
+    struct upipe_udpsink *upipe_udpsink = upipe_udpsink_from_upipe(upipe);
+
     switch (command) {
         case UPIPE_ATTACH_UPUMP_MGR:
             upipe_udpsink_set_upump(upipe, NULL);
@@ -503,19 +513,27 @@ static int _upipe_udpsink_control(struct upipe *upipe,
         }
         case UPIPE_SET_URI: {
             const char *uri = va_arg(args, const char *);
-            return _upipe_udpsink_set_uri(upipe, uri, UPIPE_UDPSINK_NONE);
+            return _upipe_udpsink_set_uri(upipe, uri);
         }
 
-        case UPIPE_UDPSINK_GET_URI: {
+        case UPIPE_UDPSINK_GET_FD: {
             UBASE_SIGNATURE_CHECK(args, UPIPE_UDPSINK_SIGNATURE)
-            const char **uri_p = va_arg(args, const char **);
-            return _upipe_udpsink_get_uri(upipe, uri_p);
+            int *fd = va_arg(args, int *);
+            *fd = upipe_udpsink->fd;
+            return UBASE_ERR_NONE;
         }
-        case UPIPE_UDPSINK_SET_URI: {
+        case UPIPE_UDPSINK_SET_FD: {
             UBASE_SIGNATURE_CHECK(args, UPIPE_UDPSINK_SIGNATURE)
-            const char *uri = va_arg(args, const char *);
-            enum upipe_udpsink_mode mode = va_arg(args, enum upipe_udpsink_mode);
-            return _upipe_udpsink_set_uri(upipe, uri, mode);
+            upipe_udpsink_set_upump(upipe, NULL);
+            upipe_udpsink->fd = va_arg(args, int );
+            return UBASE_ERR_NONE;
+        }
+        case UPIPE_UDPSINK_SET_PEER: {
+            UBASE_SIGNATURE_CHECK(args, UPIPE_UDPSINK_SIGNATURE)
+            const struct sockaddr *s = va_arg(args, const struct sockaddr *);
+            upipe_udpsink->addrlen = va_arg(args, socklen_t);
+            memcpy(&upipe_udpsink->addr, s, upipe_udpsink->addrlen);
+            return UBASE_ERR_NONE;
         }
         case UPIPE_FLUSH:
             return upipe_udpsink_flush(upipe);

@@ -255,7 +255,7 @@ int main(int argc, char **argv)
     upipe = upipe_void_chain_output(upipe, udp_mgr,
         uprobe_pfx_alloc(uprobe_use(mainprobe), UPROBE_LOG_VERBOSE, "udp"));
     upipe_attach_uclock(upipe);
-    ubase_assert(upipe_udpsink_set_uri(upipe, duri, 0));
+    ubase_assert(upipe_set_uri(upipe, duri));
     upipe_release(upipe);
 
     upipe_mgr_release(fsrc_mgr);
