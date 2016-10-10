@@ -36,6 +36,10 @@ if HAVE_SWRESAMPLE
 SUBDIRS += upipe-swresample
 endif
 
+if HAVE_SPEEXDSP
+SUBDIRS += upipe-speexdsp
+endif
+
 if HAVE_DLFCN_H
 SUBDIRS += upipe-blackmagic
 endif
