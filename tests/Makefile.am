@@ -96,7 +96,6 @@ check_PROGRAMS = \
 	upipe_filter_ebur128_test \
 	upipe_audio_max_test \
 	upipe_audio_bar_test \
-    upipe_speexdsp_test \
 	upipe_filter_blend_test
 
 TESTS = \
@@ -154,9 +153,9 @@ TESTS = \
 
 if HAVE_SPEEXDSP
 check_PROGRAMS += \
-    upipe_speexdsp_test
+	upipe_speexdsp_test
 TESTS += \
-    upipe_speexdsp_test
+	upipe_speexdsp_test
 endif
 
 if HAVE_EV
