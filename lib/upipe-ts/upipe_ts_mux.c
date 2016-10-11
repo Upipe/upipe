@@ -470,6 +470,8 @@ static void upipe_ts_mux_program_free(struct urefcount *urefcount_real);
 /** @internal @This defines the role of an input wrt. PCR management and
  * scheduling. */
 enum upipe_ts_mux_input_type {
+    /** flow def not received yet */
+    UPIPE_TS_MUX_INPUT_UNKNOWN,
     /** video */
     UPIPE_TS_MUX_INPUT_VIDEO,
     /** audio */
@@ -930,7 +932,7 @@ static struct upipe *upipe_ts_mux_input_alloc(struct upipe_mgr *mgr,
     uchain_init(upipe_ts_mux_input_to_uchain_psi(upipe_ts_mux_input));
     upipe_ts_mux_input->pcr = false;
     upipe_ts_mux_input->deleted = false;
-    upipe_ts_mux_input->input_type = UPIPE_TS_MUX_INPUT_OTHER;
+    upipe_ts_mux_input->input_type = UPIPE_TS_MUX_INPUT_UNKNOWN;
     upipe_ts_mux_input->pid = 0;
     upipe_ts_mux_input->octetrate = 0;
     upipe_ts_mux_input->buffer_duration = 0;
