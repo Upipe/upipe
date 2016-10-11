@@ -996,27 +996,24 @@ static int upipe_ts_encaps_promote_au(struct upipe *upipe)
     uref_clock_get_pts_prog(encaps->uref, &pts_prog);
     uref_clock_get_dts_prog(encaps->uref, &dts_prog);
 
-    if (encaps->pes_min_duration) {
-        while (duration < encaps->pes_min_duration) {
-            if (ulist_is_last(&encaps->urefs, uchain))
-                break;
+    while (duration < encaps->pes_min_duration) {
+        uint64_t uref_duration;
+        size_t uref_size;
+        const char *def;
+        if (ulist_is_last(&encaps->urefs, uchain) ||
+            ubase_check(uref_flow_get_def(uref_from_uchain(uchain->next), &def)) ||
+            ubase_check(uref_flow_get_random(uref_from_uchain(uchain->next))) ||
+            ubase_check(uref_flow_get_discontinuity(uref_from_uchain(uchain->next))) ||
+            !ubase_check(uref_clock_get_duration(uref_from_uchain(uchain->next), &uref_duration)) ||
+            !ubase_check(uref_block_size(uref_from_uchain(uchain->next), &uref_size)))
+            break;
 
-            uchain = uchain->next;
-            struct uref *uref = uref_from_uchain(uchain);
-            uint64_t uref_duration;
-            size_t uref_size;
-            const char *def;
-            if (ubase_check(uref_flow_get_def(uref, &def)) ||
-                ubase_check(uref_flow_get_random(uref)) ||
-                ubase_check(uref_flow_get_discontinuity(uref)) ||
-                !ubase_check(uref_clock_get_duration(uref, &uref_duration)) ||
-                !ubase_check(uref_block_size(uref, &uref_size)))
-                break;
-            duration += uref_duration;
-            au_size += uref_size;
-            uref_block_delete_start(uref);
-            upipe_verbose_va(upipe, "aggregating an access unit");
-        }
+        uchain = uchain->next;
+        struct uref *uref = uref_from_uchain(uchain);
+        duration += uref_duration;
+        au_size += uref_size;
+        uref_block_delete_start(uref);
+        upipe_verbose_va(upipe, "aggregating an access unit");
     }
 
     const char *def;
