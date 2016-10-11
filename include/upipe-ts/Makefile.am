@@ -30,6 +30,7 @@ myinclude_HEADERS = \
 	upipe_ts_split.h \
 	upipe_ts_sync.h \
 	upipe_ts_tstd.h \
+	upipe_rtp_fec.h \
 	uref_ts_attr.h \
 	uref_ts_event.h \
 	uref_ts_flow.h \
