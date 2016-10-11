@@ -193,6 +193,7 @@ static struct uref *STRUCTURE##_extract_uref_stream(struct upipe *upipe,    \
     bool error = ubase_check(uref_flow_get_error(STRUCTURE->NEXT_UREF));    \
     bool disc =                                                             \
         ubase_check(uref_flow_get_discontinuity(STRUCTURE->NEXT_UREF));     \
+    bool random = ubase_check(uref_flow_get_random(STRUCTURE->NEXT_UREF));  \
     while (extracted >= STRUCTURE->NEXT_UREF_SIZE) {                        \
         struct uchain *uchain = ulist_pop(&STRUCTURE->UREFS);               \
         if (uchain == NULL) {                                               \
@@ -224,6 +225,8 @@ static struct uref *STRUCTURE##_extract_uref_stream(struct upipe *upipe,    \
         uref_flow_set_error(uref);                                          \
     if (disc)                                                               \
         uref_flow_set_discontinuity(uref);                                  \
+    if (random)                                                             \
+        uref_flow_set_random(uref);                                         \
     return uref;                                                            \
 }                                                                           \
 /** @internal @This cleans up the private members for this helper.          \
