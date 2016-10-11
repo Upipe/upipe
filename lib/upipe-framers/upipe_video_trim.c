@@ -56,7 +56,9 @@ enum upipe_vtrim_type {
     /** ISO/IEC 11172-2 or ISO/IEC 13818-2 */
     UPIPE_VTRIM_MPGV,
     /** ISO/IEC 14496-10 */
-    UPIPE_VTRIM_H264
+    UPIPE_VTRIM_H264,
+    /** ITU-T H.265 */
+    UPIPE_VTRIM_H265
 };
 
 /** @internal @This is the private context of an vtrim pipe. */
@@ -228,6 +230,8 @@ static int upipe_vtrim_set_flow_def(struct upipe *upipe, struct uref *flow_def)
         upipe_vtrim->type = UPIPE_VTRIM_MPGV;
     else if (!ubase_ncmp(def, "block.h264."))
         upipe_vtrim->type = UPIPE_VTRIM_H264;
+    else if (!ubase_ncmp(def, "block.h265."))
+        upipe_vtrim->type = UPIPE_VTRIM_H265;
     else
         upipe_vtrim->type = UPIPE_VTRIM_UNKNOWN;
 
