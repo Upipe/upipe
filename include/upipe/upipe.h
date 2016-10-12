@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2012-2015 OpenHeadend S.A.R.L.
+ * Copyright (C) 2012-2016 OpenHeadend S.A.R.L.
  *
  * Authors: Christophe Massiot
  *
@@ -97,6 +97,8 @@ enum upipe_command {
     UPIPE_SET_MAX_LENGTH,
     /** flushes all currently held buffers and unblock the sources (void) */
     UPIPE_FLUSH,
+    /** end the preroll period (void) */
+    UPIPE_END_PREROLL,
 
     /*
      * Output-related commands
@@ -1250,6 +1252,16 @@ static inline int upipe_unregister_request(struct upipe *upipe,
 static inline int upipe_flush(struct upipe *upipe)
 {
     return upipe_control(upipe, UPIPE_FLUSH);
+}
+
+/** @This ends the preroll period in a pipe.
+ *
+ * @param upipe description structure of the pipe
+ * @return an error code
+ */
+static inline int upipe_end_preroll(struct upipe *upipe)
+{
+    return upipe_control(upipe, UPIPE_END_PREROLL);
 }
 
 /** @deprecated @see upipe_flush */

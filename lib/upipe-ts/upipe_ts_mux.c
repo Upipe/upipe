@@ -341,6 +341,8 @@ struct upipe_ts_mux {
     struct uref *uref;
     /** size of current aggregation */
     size_t uref_size;
+    /** true during the preroll period */
+    bool preroll;
 
     /** manager of the pseudo inner sink */
     struct upipe_mgr inner_sink_mgr;
@@ -1333,7 +1335,7 @@ static int upipe_ts_mux_input_set_flow_def(struct upipe *upipe,
     if (latency + input->buffer_duration > upipe_ts_mux->latency) {
         upipe_ts_mux->latency = latency + input->buffer_duration;
         upipe_ts_mux_build_flow_def(upipe_ts_mux_to_upipe(upipe_ts_mux));
-    } else if (au_per_sec.den) {
+    } else if (upipe_ts_mux->uclock != NULL && au_per_sec.den) { /* live mode */
         upipe_set_max_length(input->encaps,
                 (MIN_BUFFERING + upipe_ts_mux->latency) * au_per_sec.num /
                 au_per_sec.den / UCLOCK_FREQ);
@@ -1739,7 +1741,8 @@ static void upipe_ts_mux_program_change(struct upipe *upipe)
             old_pcr_input = input;
         }
         if (input->input_type == UPIPE_TS_MUX_INPUT_OTHER ||
-            input->input_type == UPIPE_TS_MUX_INPUT_SCTE35)
+            input->input_type == UPIPE_TS_MUX_INPUT_SCTE35 ||
+            input->input_type == UPIPE_TS_MUX_INPUT_UNKNOWN)
             continue;
         if (pcr_input == NULL ||
             (pcr_input->input_type == UPIPE_TS_MUX_INPUT_AUDIO &&
@@ -2378,6 +2381,7 @@ static struct upipe *upipe_ts_mux_alloc(struct upipe_mgr *mgr,
     upipe_ts_mux->cr_sys_remainder = 0;
     upipe_ts_mux->uref = NULL;
     upipe_ts_mux->uref_size = 0;
+    upipe_ts_mux->preroll = true;
 
     uprobe_init(&upipe_ts_mux->probe, upipe_ts_mux_probe, NULL);
     upipe_ts_mux->probe.refcount = upipe_ts_mux_to_urefcount_real(upipe_ts_mux);
@@ -2716,7 +2720,9 @@ static uint64_t upipe_ts_mux_check_available(struct upipe *upipe)
                     upipe_release(input->encaps);
                     continue;
                 } else if (input->input_type != UPIPE_TS_MUX_INPUT_OTHER &&
-                           input->input_type != UPIPE_TS_MUX_INPUT_SCTE35) {
+                           input->input_type != UPIPE_TS_MUX_INPUT_SCTE35 &&
+                           (input->input_type != UPIPE_TS_MUX_INPUT_UNKNOWN ||
+                            mux->preroll)) {
                     upipe_release(upipe_ts_mux_program_to_upipe(program));
                     return UINT64_MAX;
                 }
@@ -3126,6 +3132,8 @@ static void upipe_ts_mux_build_flow_def(struct upipe *upipe)
         upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
     upipe_ts_mux_store_flow_def(upipe, flow_def);
 
+    if (mux->uclock == NULL)
+        return; /* file mode */
 
     struct uchain *uchain_program;
     ulist_foreach (&mux->programs, uchain_program) {
@@ -3447,6 +3455,18 @@ static int upipe_ts_mux_set_output_size(struct upipe *upipe, unsigned int mtu)
         }
     }
     upipe_ts_mux_build_flow_def(upipe);
+    return UBASE_ERR_NONE;
+}
+
+/** @internal @This ends the preroll period.
+ *
+ * @param upipe description structure of the pipe
+ * @return an error code
+ */
+static int upipe_ts_mux_end_preroll(struct upipe *upipe)
+{
+    struct upipe_ts_mux *upipe_ts_mux = upipe_ts_mux_from_upipe(upipe);
+    upipe_ts_mux->preroll = false;
     return UBASE_ERR_NONE;
 }
 
@@ -3981,6 +4001,8 @@ static int _upipe_ts_mux_control(struct upipe *upipe, int command, va_list args)
             struct upipe **p = va_arg(args, struct upipe **);
             return upipe_ts_mux_iterate_sub(upipe, p);
         }
+        case UPIPE_END_PREROLL:
+            return upipe_ts_mux_end_preroll(upipe);
 
         case UPIPE_TS_MUX_GET_CONFORMANCE: {
             UBASE_SIGNATURE_CHECK(args, UPIPE_TS_MUX_SIGNATURE)
