@@ -56,7 +56,7 @@
 #define S302_HEADER_SIZE 4
 
 /* Length in bytes of two audio samples */
-static uint8_t pair_lengths[] = {5, 6, 7, 0};
+static const uint8_t pair_lengths[] = {5, 6, 7, 0};
 
 /** @internal @This is the private context of an s302f pipe. */
 struct upipe_s302f {
@@ -152,17 +152,22 @@ static void upipe_s302f_work(struct upipe *upipe, struct upump **upump_p)
 
     if (!ubase_check(uref_block_extract(upipe_s302f->next_uref,
                                         0, S302_HEADER_SIZE, header))) {
-        return;
+        uref_free(upipe_s302f->next_uref);
+        goto upipe_s302f_work_err;
     }
     audio_packet_size = (header[0] << 8) | header[1];
     num_channels = ((header[2] >> 6) + 1) * 2;
     bits_per_sample = (header[3] >> 4) & 0x3;
 
-    if (audio_packet_size + S302_HEADER_SIZE < upipe_s302f->next_uref_size)
-        return;
-
-    if (audio_packet_size + S302_HEADER_SIZE > upipe_s302f->next_uref_size)
+    if (audio_packet_size + S302_HEADER_SIZE < upipe_s302f->next_uref_size) {
+        uref_free(upipe_s302f->next_uref);
         goto upipe_s302f_work_err;
+    }
+
+    if (audio_packet_size + S302_HEADER_SIZE > upipe_s302f->next_uref_size) {
+        uref_free(upipe_s302f->next_uref);
+        goto upipe_s302f_work_err;
+    }
 
     pair_length = pair_lengths[bits_per_sample];
     if (!pair_length)
