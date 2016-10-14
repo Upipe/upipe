@@ -80,6 +80,7 @@
 #include <stdbool.h>
 #include <stdarg.h>
 #include <string.h>
+#include <limits.h>
 #include <assert.h>
 
 #include <bitstream/mpeg/ts.h>
@@ -1339,7 +1340,8 @@ static int upipe_ts_mux_input_set_flow_def(struct upipe *upipe,
         upipe_set_max_length(input->encaps,
                 (MIN_BUFFERING + upipe_ts_mux->latency) * au_per_sec.num /
                 au_per_sec.den / UCLOCK_FREQ);
-    }
+    } else /* file mode */
+        upipe_set_max_length(input->encaps, UINT_MAX);
 
     upipe_notice_va(upipe,
             "adding %s on PID %"PRIu64" (%"PRIu64" bits/s), latency %"PRIu64" ms, buffer %"PRIu64" ms",
@@ -3132,9 +3134,6 @@ static void upipe_ts_mux_build_flow_def(struct upipe *upipe)
         upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
     upipe_ts_mux_store_flow_def(upipe, flow_def);
 
-    if (mux->uclock == NULL)
-        return; /* file mode */
-
     struct uchain *uchain_program;
     ulist_foreach (&mux->programs, uchain_program) {
         struct upipe_ts_mux_program *program =
@@ -3143,11 +3142,16 @@ static void upipe_ts_mux_build_flow_def(struct upipe *upipe)
         ulist_foreach (&program->inputs, uchain_input) {
             struct upipe_ts_mux_input *input =
                 upipe_ts_mux_input_from_uchain(uchain_input);
-            if (input->encaps != NULL && input->original_au_per_sec.den)
-                upipe_set_max_length(input->encaps,
-                        (MIN_BUFFERING + mux->latency) *
-                        input->original_au_per_sec.num /
-                        input->original_au_per_sec.den / UCLOCK_FREQ);
+            if (input->encaps != NULL) {
+                if (mux->uclock != NULL && input->original_au_per_sec.den)
+                    /* live mode */
+                    upipe_set_max_length(input->encaps,
+                            (MIN_BUFFERING + mux->latency) *
+                            input->original_au_per_sec.num /
+                            input->original_au_per_sec.den / UCLOCK_FREQ);
+                else /* file mode */
+                    upipe_set_max_length(input->encaps, UINT_MAX);
+            }
         }
     }
 }
