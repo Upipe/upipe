@@ -138,15 +138,10 @@ static void upipe_ts_decaps_input(struct upipe *upipe, struct uref *uref,
             return;
         }
 
-        if (unlikely((!has_payload && af_length != 183) ||
-                     (has_payload && af_length >= 183))) {
+        if (unlikely((!has_payload && af_length != 183) || af_length > 183)) {
             upipe_warn(upipe, "invalid adaptation field received");
-            /* keep invalid packets with a 0-length payload because
-             * it is a common error in the field */
-            if (!(has_payload && af_length == 183)) {
-                uref_free(uref);
-                return;
-            }
+            uref_free(uref);
+            return;
         }
 
         if (af_length) {
