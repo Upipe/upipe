@@ -266,11 +266,8 @@ static int upipe_rtp_prepend_infer_ts_sync(struct upipe *upipe, const char *def)
         enum upipe_rtp_prepend_ts_sync sync;
     } values[] = {
         { "h264.pic", UPIPE_RTP_PREPEND_TS_SYNC_PTS },
-        { "aac.sound", UPIPE_RTP_PREPEND_TS_SYNC_PTS },
-        { "mp3.sound", UPIPE_RTP_PREPEND_TS_SYNC_PTS },
-        { "mp2.sound", UPIPE_RTP_PREPEND_TS_SYNC_PTS },
+        { "sound", UPIPE_RTP_PREPEND_TS_SYNC_PTS },
         { "mpegts", UPIPE_RTP_PREPEND_TS_SYNC_CR },
-        { "opus.sound", UPIPE_RTP_PREPEND_TS_SYNC_PTS },
     };
 
     struct upipe_rtp_prepend *upipe_rtp_prepend =

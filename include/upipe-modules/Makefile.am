@@ -67,4 +67,6 @@ myinclude_HEADERS = \
 	upipe_subpic_schedule.h \
 	upipe_s337_encaps.h \
 	upipe_ntsc_prepend.h \
+	upipe_rtp_pcm_unpack.h \
+	upipe_rtp_pcm_pack.h \
 	$(NULL)
