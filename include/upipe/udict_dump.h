@@ -105,7 +105,7 @@ static inline void udict_dump(struct udict *udict, struct uprobe *uprobe)
                 if (likely(ubase_check(udict_get_rational(udict, &val,
                                                           itype, iname))))
                     uprobe_dbg_va(uprobe, NULL,
-                                  " - \"%s\" [rational]: %"PRId64"/%"PRIu64,
+                                  " - \"%s\" [rational]: %" PRId64"/%" PRIu64,
                                   name, val.num, val.den);
                 else
                     uprobe_dbg_va(uprobe, NULL,
@@ -129,10 +129,10 @@ static inline void udict_dump(struct udict *udict, struct uprobe *uprobe)
             }
 
             UDICT_DUMP_TEMPLATE(SMALL_UNSIGNED, small_unsigned, uint8_t,
-                                "%"PRIu8)
-            UDICT_DUMP_TEMPLATE(SMALL_INT, small_int, int8_t, "%"PRId8)
-            UDICT_DUMP_TEMPLATE(UNSIGNED, unsigned, uint64_t, "%"PRIu64)
-            UDICT_DUMP_TEMPLATE(INT, int, int64_t, "%"PRId64)
+                                "%" PRIu8)
+            UDICT_DUMP_TEMPLATE(SMALL_INT, small_int, int8_t, "%" PRId8)
+            UDICT_DUMP_TEMPLATE(UNSIGNED, unsigned, uint64_t, "%" PRIu64)
+            UDICT_DUMP_TEMPLATE(INT, int, int64_t, "%" PRId64)
             UDICT_DUMP_TEMPLATE(FLOAT, float, double, "%f")
 #undef UDICT_DUMP_TEMPLATE
         }

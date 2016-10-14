@@ -9,7 +9,7 @@ extern "C" {
 UREF_ATTR_SMALL_UNSIGNED(http, cookies, "http.cookies",
                          number of http cookies)
 
-UREF_ATTR_STRING_VA(http, cookie, "http.cookie[%"PRIu8"]",
+UREF_ATTR_STRING_VA(http, cookie, "http.cookie[%" PRIu8"]",
                     http cookie, uint8_t nb, nb);
 
 UREF_ATTR_STRING_VA(http, cookie_value, "http.cookie.%s",
