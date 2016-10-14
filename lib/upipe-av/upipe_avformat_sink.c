@@ -427,7 +427,9 @@ static int upipe_avfsink_sub_provide_flow_format(struct upipe *upipe,
         (!strcmp(upipe_avfsink->format, "mp4") ||
          !strcmp(upipe_avfsink->format, "mov") ||
          !strcmp(upipe_avfsink->format, "m4a") ||
-         !strcmp(upipe_avfsink->format, "flv")))
+         !strcmp(upipe_avfsink->format, "flv") ||
+         !strcmp(upipe_avfsink->format, "adts") ||
+         !strcmp(upipe_avfsink->format, "aac")))
         uref_mpga_flow_delete_adts(flow_format);
     return urequest_provide_flow_format(request, flow_format);
 }
