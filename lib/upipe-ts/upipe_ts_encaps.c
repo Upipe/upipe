@@ -1460,10 +1460,49 @@ static void upipe_ts_encaps_free(struct upipe *upipe)
     upipe_ts_encaps_free_void(upipe);
 }
 
+/** @This returns a description string for local commands.
+ *
+ * @param cmd control command
+ * @return description string
+ */
+static const char *upipe_ts_encaps_command_str(int cmd)
+{
+    if (cmd < UPIPE_TS_MUX_ENCAPS)
+        return upipe_ts_mux_command_str(cmd);
+
+    switch (cmd) {
+        UBASE_CASE_TO_STR(UPIPE_TS_ENCAPS_SET_TB_SIZE);
+        UBASE_CASE_TO_STR(UPIPE_TS_ENCAPS_SPLICE);
+        UBASE_CASE_TO_STR(UPIPE_TS_ENCAPS_EOS);
+        default: break;
+    }
+    return NULL;
+}
+
+/** @This returns a description string for local events.
+ *
+ * @param event event
+ * @return description string
+ */
+static const char *upipe_ts_encaps_event_str(int event)
+{
+    if (event < UPROBE_TS_MUX_ENCAPS)
+        return upipe_ts_mux_event_str(event);
+
+    switch (event) {
+        UBASE_CASE_TO_STR(UPROBE_TS_ENCAPS_STATUS);
+        default: break;
+    }
+    return NULL;
+}
+
 /** module manager static descriptor */
 static struct upipe_mgr upipe_ts_encaps_mgr = {
     .refcount = NULL,
     .signature = UPIPE_TS_ENCAPS_SIGNATURE,
+
+    .upipe_command_str = upipe_ts_encaps_command_str,
+    .upipe_event_str = upipe_ts_encaps_event_str,
 
     .upipe_alloc = upipe_ts_encaps_alloc,
     .upipe_input = upipe_ts_encaps_input,

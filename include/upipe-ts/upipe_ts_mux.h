@@ -622,6 +622,20 @@ static inline int upipe_ts_mux_prepare(struct upipe *upipe, uint64_t cr_sys,
                                UPIPE_TS_MUX_SIGNATURE, cr_sys, latency);
 }
 
+/** @This returns a description string for local commands.
+ *
+ * @param cmd control command
+ * @return description string
+ */
+const char *upipe_ts_mux_command_str(int cmd);
+
+/** @This returns a description string for local events.
+ *
+ * @param event event
+ * @return description string
+ */
+const char *upipe_ts_mux_event_str(int event);
+
 /** @This returns the management structure for all ts_mux pipes.
  *
  * @return pointer to manager

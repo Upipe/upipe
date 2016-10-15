@@ -4322,6 +4322,68 @@ static int upipe_ts_mux_mgr_control(struct upipe_mgr *mgr,
     }
 }
 
+/** @This returns a description string for local commands.
+ *
+ * @param cmd control command
+ * @return description string
+ */
+const char *upipe_ts_mux_command_str(int cmd)
+{
+    switch (cmd) {
+        UBASE_CASE_TO_STR(UPIPE_TS_MUX_GET_CONFORMANCE);
+        UBASE_CASE_TO_STR(UPIPE_TS_MUX_SET_CONFORMANCE);
+        UBASE_CASE_TO_STR(UPIPE_TS_MUX_GET_CC);
+        UBASE_CASE_TO_STR(UPIPE_TS_MUX_SET_CC);
+        UBASE_CASE_TO_STR(UPIPE_TS_MUX_SET_CR_PROG);
+        UBASE_CASE_TO_STR(UPIPE_TS_MUX_GET_PAT_INTERVAL);
+        UBASE_CASE_TO_STR(UPIPE_TS_MUX_SET_PAT_INTERVAL);
+        UBASE_CASE_TO_STR(UPIPE_TS_MUX_GET_PMT_INTERVAL);
+        UBASE_CASE_TO_STR(UPIPE_TS_MUX_SET_PMT_INTERVAL);
+        UBASE_CASE_TO_STR(UPIPE_TS_MUX_GET_NIT_INTERVAL);
+        UBASE_CASE_TO_STR(UPIPE_TS_MUX_SET_NIT_INTERVAL);
+        UBASE_CASE_TO_STR(UPIPE_TS_MUX_GET_SDT_INTERVAL);
+        UBASE_CASE_TO_STR(UPIPE_TS_MUX_SET_SDT_INTERVAL);
+        UBASE_CASE_TO_STR(UPIPE_TS_MUX_GET_EIT_INTERVAL);
+        UBASE_CASE_TO_STR(UPIPE_TS_MUX_SET_EIT_INTERVAL);
+        UBASE_CASE_TO_STR(UPIPE_TS_MUX_GET_TDT_INTERVAL);
+        UBASE_CASE_TO_STR(UPIPE_TS_MUX_SET_TDT_INTERVAL);
+        UBASE_CASE_TO_STR(UPIPE_TS_MUX_GET_PCR_INTERVAL);
+        UBASE_CASE_TO_STR(UPIPE_TS_MUX_SET_PCR_INTERVAL);
+        UBASE_CASE_TO_STR(UPIPE_TS_MUX_GET_SCTE35_INTERVAL);
+        UBASE_CASE_TO_STR(UPIPE_TS_MUX_SET_SCTE35_INTERVAL);
+        UBASE_CASE_TO_STR(UPIPE_TS_MUX_GET_MAX_DELAY);
+        UBASE_CASE_TO_STR(UPIPE_TS_MUX_SET_MAX_DELAY);
+        UBASE_CASE_TO_STR(UPIPE_TS_MUX_GET_MUX_DELAY);
+        UBASE_CASE_TO_STR(UPIPE_TS_MUX_SET_MUX_DELAY);
+        UBASE_CASE_TO_STR(UPIPE_TS_MUX_GET_OCTETRATE);
+        UBASE_CASE_TO_STR(UPIPE_TS_MUX_SET_OCTETRATE);
+        UBASE_CASE_TO_STR(UPIPE_TS_MUX_GET_PADDING_OCTETRATE);
+        UBASE_CASE_TO_STR(UPIPE_TS_MUX_SET_PADDING_OCTETRATE);
+        UBASE_CASE_TO_STR(UPIPE_TS_MUX_GET_MODE);
+        UBASE_CASE_TO_STR(UPIPE_TS_MUX_SET_MODE);
+        UBASE_CASE_TO_STR(UPIPE_TS_MUX_GET_VERSION);
+        UBASE_CASE_TO_STR(UPIPE_TS_MUX_SET_VERSION);
+        UBASE_CASE_TO_STR(UPIPE_TS_MUX_FREEZE_PSI);
+        UBASE_CASE_TO_STR(UPIPE_TS_MUX_PREPARE);
+        default: break;
+    }
+    return NULL;
+}
+
+/** @This returns a description string for local events.
+ *
+ * @param event event
+ * @return description string
+ */
+const char *upipe_ts_mux_event_str(int event)
+{
+    switch (event) {
+        UBASE_CASE_TO_STR(UPROBE_TS_MUX_LAST_CC);
+        default: break;
+    }
+    return NULL;
+}
+
 /** @This returns the management structure for all ts_mux pipes.
  *
  * @return pointer to manager
@@ -4344,6 +4406,8 @@ struct upipe_mgr *upipe_ts_mux_mgr_alloc(void)
                    upipe_ts_mux_mgr_free);
     ts_mux_mgr->mgr.refcount = upipe_ts_mux_mgr_to_urefcount(ts_mux_mgr);
     ts_mux_mgr->mgr.signature = UPIPE_TS_MUX_SIGNATURE;
+    ts_mux_mgr->mgr.upipe_command_str = upipe_ts_mux_command_str;
+    ts_mux_mgr->mgr.upipe_event_str = upipe_ts_mux_event_str;
     ts_mux_mgr->mgr.upipe_alloc = upipe_ts_mux_alloc;
     ts_mux_mgr->mgr.upipe_input = NULL;
     ts_mux_mgr->mgr.upipe_control = upipe_ts_mux_control;

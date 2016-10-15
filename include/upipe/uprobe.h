@@ -126,6 +126,7 @@ static inline const char *uprobe_event_str(int event)
     case UPROBE_ERROR: return "UPROBE_ERROR";
     case UPROBE_READY: return "UPROBE_READY";
     case UPROBE_DEAD: return "UPROBE_DEAD";
+    case UPROBE_STALLED: return "UPROBE_STALLED";
     case UPROBE_SOURCE_END: return "UPROBE_SOURCE_END";
     case UPROBE_SINK_END: return "UPROBE_SINK_END";
     case UPROBE_NEED_OUTPUT: return "UPROBE_NEED_OUTPUT";
