@@ -183,6 +183,23 @@ static inline struct uref *uref_block_splice(struct uref *uref, int offset,
     return new_uref;
 }
 
+/** @see ubuf_block_split */
+static inline struct uref *uref_block_split(struct uref *uref, int offset)
+{
+    if (uref->ubuf == NULL)
+        return NULL;
+    struct uref *new_uref = uref_dup_inner(uref);
+    if (unlikely(new_uref == NULL))
+        return NULL;
+
+    new_uref->ubuf = ubuf_block_split(uref->ubuf, offset);
+    if (unlikely(new_uref->ubuf == NULL)) {
+        uref_free(new_uref);
+        return NULL;
+    }
+    return new_uref;
+}
+
 /** @see ubuf_block_peek */
 static inline const uint8_t *uref_block_peek(struct uref *uref,
                                              int offset, int size,

@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2013-2015 OpenHeadend S.A.R.L.
+ * Copyright (C) 2013-2016 OpenHeadend S.A.R.L.
  *
  * Authors: Christophe Massiot
  *
@@ -880,11 +880,9 @@ static int upipe_ts_encaps_overlap_au(struct upipe *upipe,
     struct upipe_ts_encaps *encaps = upipe_ts_encaps_from_upipe(upipe);
     size_t size;
     UBASE_RETURN(uref_block_size(uref_au1, &size));
-    struct uref *uref_overlap = uref_block_splice(uref_au1, size - last_ts_size,
-                                                  last_ts_size);
+    struct uref *uref_overlap = uref_block_split(uref_au1, size - last_ts_size);
     UBASE_ALLOC_RETURN(uref_overlap);
     struct uref *uref_au2 = uref_from_uchain(uchain->next);
-    uref_block_resize(uref_au1, 0, size - last_ts_size);
     ulist_insert(uchain, uchain->next, uref_to_uchain(uref_overlap));
     encaps->nb_urefs++;
 
@@ -1184,21 +1182,20 @@ static int upipe_ts_encaps_complete(struct upipe *upipe, struct ubuf **ubuf_p,
                 (uint64_t)(uref_size - header_size) * UCLOCK_FREQ /
                 encaps->tb_rate;
 
-        struct ubuf *payload;
+        struct ubuf *payload = uref_detach_ubuf(encaps->uref);
         if (uref_size >= TS_SIZE - ubuf_size) {
             size_t payload_size = TS_SIZE - ubuf_size;
             assert(payload_size);
-            payload = ubuf_block_splice(encaps->uref->ubuf, 0, payload_size);
+            uref_attach_ubuf(encaps->uref,
+                             ubuf_block_split(payload, payload_size));
             encaps->uref_size -= payload_size;
             encaps->au_size -= payload_size;
-            uref_block_resize(encaps->uref, payload_size, encaps->uref_size);
             if (payload_size >= header_size)
                 uref_attr_set_priv(encaps->uref, 0);
             else
                 uref_attr_set_priv(encaps->uref, header_size - payload_size);
             encaps->tb_buffer -= payload_size;
         } else {
-            payload = uref_detach_ubuf(encaps->uref);
             encaps->tb_buffer -= uref_size;
             encaps->au_size -= uref_size;
         }

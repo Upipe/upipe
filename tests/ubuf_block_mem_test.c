@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2012 OpenHeadend S.A.R.L.
+ * Copyright (C) 2012-2016 OpenHeadend S.A.R.L.
  *
  * Authors: Christophe Massiot
  *
@@ -281,9 +281,25 @@ int main(int argc, char **argv)
     ubase_assert(ubuf_block_extract(ubuf1, 0, -1, buf));
     for (int i = 0; i < 8; i++)
         assert(buf[i] == i);
-    for (int i = 9; i < 33; i++)
+    for (int i = 8; i < 33; i++)
         assert(buf[i] == i + 32);
+
+    /* test ubuf_block_split */
+    ubuf2 = ubuf_block_split(ubuf1, 9);
+    assert(ubuf2 != NULL);
+    ubase_assert(ubuf_block_size(ubuf1, &size));
+    assert(size == 9);
+    ubase_assert(ubuf_block_extract(ubuf1, 0, -1, buf));
+    for (int i = 0; i < 8; i++)
+        assert(buf[i] == i);
+    assert(buf[8] == 40);
+    ubase_assert(ubuf_block_size(ubuf2, &size));
+    assert(size == 24);
+    ubase_assert(ubuf_block_extract(ubuf2, 0, -1, buf));
+    for (int i = 0; i < 24; i++)
+        assert(buf[i] == i + 41);
     ubuf_free(ubuf1);
+    ubuf_free(ubuf2);
 
     ubuf_mgr_release(mgr);
     umem_mgr_release(umem_mgr);

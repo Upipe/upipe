@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2012-2014 OpenHeadend S.A.R.L.
+ * Copyright (C) 2012-2016 OpenHeadend S.A.R.L.
  *
  * Authors: Christophe Massiot
  *
@@ -75,8 +75,6 @@ struct ubuf_block {
 
     /** cached end ubuf */
     struct ubuf *cached_end_ubuf;
-    /** cached last offset */
-    size_t cached_end_offset;
 
     /** common structure */
     struct ubuf ubuf;
@@ -297,13 +295,14 @@ static inline int ubuf_block_append(struct ubuf *ubuf, struct ubuf *append)
     return UBASE_ERR_NONE;
 }
 
-/** @internal @This splits a block ubuf into two ubufs at the given offset.
+/** @internal @This slices a segmented block ubuf into two ubufs at the given
+ * offset.
  *
  * @param ubuf pointer to ubuf
- * @param offset offset at which to split
+ * @param offset offset at which to slice
  * @return an error code
  */
-static inline int ubuf_block_split(struct ubuf *ubuf, int offset)
+static inline int ubuf_block_slice(struct ubuf *ubuf, int offset)
 {
     struct ubuf_block *block = ubuf_block_from_ubuf(ubuf);
     struct ubuf *next = block->next_ubuf;
@@ -347,7 +346,7 @@ static inline int ubuf_block_insert(struct ubuf *ubuf, int offset,
 
     struct ubuf_block *block = ubuf_block_from_ubuf(ubuf);
     if (offset < block->size) {
-        UBASE_RETURN(ubuf_block_split(ubuf, offset))
+        UBASE_RETURN(ubuf_block_slice(ubuf, offset))
     }
 
     struct ubuf_block *insert_block = ubuf_block_from_ubuf(insert);
@@ -389,7 +388,7 @@ static inline int ubuf_block_delete(struct ubuf *ubuf, int offset, int size)
         } else {
             /* Delete from the end */
             if (offset + size < block->size) {
-                if (unlikely(!ubase_check(ubuf_block_split(ubuf, offset + size))))
+                if (unlikely(!ubase_check(ubuf_block_slice(ubuf, offset + size))))
                     return UBASE_ERR_INVALID;
 
                 block->size = offset;
@@ -430,8 +429,8 @@ static inline int ubuf_block_truncate(struct ubuf *ubuf, int offset)
         }
         head_block->size = 0;
         head_block->total_size = 0;
-        head_block->cached_ubuf = head_block->cached_end_ubuf = &head_block->ubuf;
-        head_block->cached_offset = head_block->cached_end_offset = 0;
+        head_block->cached_ubuf = head_block->cached_end_ubuf = ubuf;
+        head_block->cached_offset = 0;
         return UBASE_ERR_NONE;
     }
 
@@ -447,8 +446,9 @@ static inline int ubuf_block_truncate(struct ubuf *ubuf, int offset)
     }
     block->size = offset + 1;
     head_block->total_size = saved_size;
-    head_block->cached_ubuf = head_block->cached_end_ubuf = &head_block->ubuf;
-    head_block->cached_offset = head_block->cached_end_offset = 0;
+    head_block->cached_ubuf = &head_block->ubuf;
+    head_block->cached_offset = 0;
+    head_block->cached_end_ubuf = ubuf;
     return UBASE_ERR_NONE;
 }
 
@@ -520,7 +520,6 @@ static inline int ubuf_block_prepend(struct ubuf *ubuf, int prepend)
  * octets, negative values start from the end
  * @param size size of the buffer space wanted, in octets, or -1 for the end
  * of the block
- * @param buffer pointer to buffer space of at least size octets
  * @return newly allocated ubuf
  */
 static inline struct ubuf *ubuf_block_splice(struct ubuf *ubuf, int offset,
@@ -532,6 +531,47 @@ static inline struct ubuf *ubuf_block_splice(struct ubuf *ubuf, int offset,
                  !ubase_check(ubuf_control(ubuf, UBUF_SPLICE_BLOCK,
                                            &new_ubuf, offset, size))))
         return NULL;
+    return new_ubuf;
+}
+
+/** @This splits a ubuf in two, at the specified offset.
+ *
+ * @param ubuf pointer to ubuf, will be truncated at offset
+ * @param offset offset of the split in the original block, in octets,
+ * negative value start from the end
+ * @return newly allocated ubuf, starting at offset up to the end of the
+ * original ubuf
+ */
+static inline struct ubuf *ubuf_block_split(struct ubuf *ubuf, int offset)
+{
+    if (unlikely(ubuf->mgr->signature != UBUF_ALLOC_BLOCK))
+        return NULL;
+
+    int saved_offset = offset;
+    struct ubuf_block *head_block = ubuf_block_from_ubuf(ubuf);
+    if (unlikely((ubuf = ubuf_block_get(ubuf, &offset, NULL)) == NULL))
+        return NULL;
+
+    struct ubuf_block *block = ubuf_block_from_ubuf(ubuf);
+    if (offset < block->size)
+        if (unlikely(!ubase_check(ubuf_block_slice(ubuf, offset))))
+            return NULL;
+
+    if (saved_offset < 0)
+        saved_offset += head_block->total_size;
+
+    struct ubuf *new_ubuf = block->next_ubuf;
+    block->next_ubuf = NULL;
+
+    if (new_ubuf != NULL) {
+        struct ubuf_block *new_block = ubuf_block_from_ubuf(new_ubuf);
+        new_block->total_size = head_block->total_size - saved_offset;
+        new_block->cached_ubuf = new_block->cached_end_ubuf = new_ubuf;
+        new_block->cached_offset = 0;
+    }
+
+    head_block->total_size = saved_offset;
+    head_block->cached_end_ubuf = ubuf;
     return new_ubuf;
 }
 
