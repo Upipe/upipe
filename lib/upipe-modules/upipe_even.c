@@ -373,7 +373,10 @@ static void upipe_even_sub_free(struct upipe *upipe)
     upipe_even_sub_clean_sub(upipe);
     upipe_even_sub_clean_urefcount(upipe);
 
-    if (upipe_even_sub->type != UPIPE_EVEN_SUBPIC) {
+    if (upipe_even_sub->type != UPIPE_EVEN_SUBPIC &&
+        upipe_even_sub->type != UPIPE_EVEN_UNKNOWN) {
+        if (!upipe_even->dead)
+            upipe_dbg_va(upipe, "last date %"PRIu64, upipe_even->last_date);
         upipe_even->dead = true;
         if (!upipe_even->in_loop)
             upipe_even_process(upipe_even_to_upipe(upipe_even), NULL);
