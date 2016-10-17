@@ -158,21 +158,20 @@ static bool upipe_s337_encaps_handle(struct upipe *upipe, struct uref *uref,
     if (!upipe_s337_encaps->ubuf_mgr)
         return false;
 
-    struct ubuf *ubuf = ubuf_sound_alloc(upipe_s337_encaps->ubuf_mgr, A52_FRAME_SAMPLES);
-    if (!ubuf)
-        return false;
-
-    const uint8_t *buf;
-    int size = -1;
-    if (!ubase_check(uref_block_read(uref, 0, &size, &buf))) {
-        ubuf_free(ubuf);
+    size_t block_size;
+    if (!ubase_check(uref_block_size(uref, &block_size))) {
+        upipe_err(upipe, "Couldn't read block size");
         uref_free(uref);
         return true;
     }
 
-    if (size / 2 > A52_FRAME_SAMPLES - 4) {
-        upipe_err_va(upipe, "AC-3 block size %d too big", size);
-        size = (A52_FRAME_SAMPLES - 4) * 2;
+    struct ubuf *ubuf = ubuf_sound_alloc(upipe_s337_encaps->ubuf_mgr, A52_FRAME_SAMPLES);
+    if (!ubuf)
+        return false;
+
+    if (block_size / 2 > A52_FRAME_SAMPLES - 4) {
+        upipe_err_va(upipe, "AC-3 block size %d too big", block_size);
+        block_size = (A52_FRAME_SAMPLES - 4) * 2;
     }
 
     int32_t *out_data;
@@ -182,14 +181,31 @@ static bool upipe_s337_encaps_handle(struct upipe *upipe, struct uref *uref,
     out_data[0] = (S337_PREAMBLE_A1 << 24) | (S337_PREAMBLE_A2 << 16);
     out_data[1] = (S337_PREAMBLE_B1 << 24) | (S337_PREAMBLE_B2 << 16);
     out_data[2] = (S337_TYPE_A52 << 16) | (S337_MODE_16 << 21);
-    out_data[3] = ((size * 8) & 0xffff) << 16;
+    out_data[3] = ((block_size * 8) & 0xffff) << 16;
 
-    int i;
-    for (i = 0; i < size/2; i++)
-        out_data[4 + i] = (buf[2*i + 0] << 24) | (buf[2*i + 1] << 16);
-    memset(&out_data[4 + i], 0, 4 * (A52_FRAME_SAMPLES*2 - 4 - i));
+    int offset = 0;
+    while (block_size) {
+        const uint8_t *buf;
+        int size = block_size;
 
-    uref_block_unmap(uref, 0);
+        if (!ubase_check(uref_block_read(uref, offset, &size, &buf)) || size == 0) {
+            ubuf_sound_unmap(ubuf, 0, -1, 1);
+            ubuf_free(ubuf);
+            uref_free(uref);
+            return true;
+        }
+
+        for (int i = 0; i < size/2; i++)
+            out_data[4 + offset/2 + i] = (buf[2*i + 0] << 24) | (buf[2*i + 1] << 16);
+
+        uref_block_unmap(uref, offset);
+
+        block_size -= size;
+        offset += size;
+    }
+
+    memset(&out_data[4 + offset/2], 0, 4 * (A52_FRAME_SAMPLES*2 - 4 - offset/2));
+
     ubuf_sound_unmap(ubuf, 0, -1, 1);
 
     uref_attach_ubuf(uref, ubuf);
