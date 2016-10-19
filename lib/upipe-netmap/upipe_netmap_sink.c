@@ -490,17 +490,25 @@ static void upipe_netmap_sink_worker(struct upump *upump)
                 interleaved_line = get_interleaved_line(upipe_netmap_sink->line);
                 //printf("\n line %i \n", interleaved_line);
                 if(upipe_netmap_sink->input_is_v210) {
-                    src = upipe_netmap_sink->pixel_buffers[0] + upipe_netmap_sink->strides[0]*interleaved_line;
+                    src = upipe_netmap_sink->pixel_buffers[0] +
+                        upipe_netmap_sink->strides[0]*interleaved_line;
 
-                    int block_offset = upipe_netmap_sink->pixel_offset / upipe_netmap_sink->output_pixels_per_block;
+                    int block_offset = upipe_netmap_sink->pixel_offset /
+                        upipe_netmap_sink->output_pixels_per_block;
                     src += block_offset * upipe_netmap_sink->output_block_size;
 
                     upipe_netmap_sink->pack_v210((uint32_t*)src, dst, pixels2);
                 }
                 else if(upipe_netmap_sink->input_bit_depth == 8) {
-                    y8 = upipe_netmap_sink->pixel_buffers[0] + upipe_netmap_sink->strides[0] * interleaved_line + upipe_netmap_sink->pixel_offset / 1;
-                    u8 = upipe_netmap_sink->pixel_buffers[1] + upipe_netmap_sink->strides[1] * interleaved_line + upipe_netmap_sink->pixel_offset / 2;
-                    v8 = upipe_netmap_sink->pixel_buffers[2] + upipe_netmap_sink->strides[2] * interleaved_line + upipe_netmap_sink->pixel_offset / 2;
+                    y8 = upipe_netmap_sink->pixel_buffers[0] +
+                        upipe_netmap_sink->strides[0] * interleaved_line +
+                        upipe_netmap_sink->pixel_offset / 1;
+                    u8 = upipe_netmap_sink->pixel_buffers[1] +
+                        upipe_netmap_sink->strides[1] * interleaved_line +
+                        upipe_netmap_sink->pixel_offset / 2;
+                    v8 = upipe_netmap_sink->pixel_buffers[2] +
+                        upipe_netmap_sink->strides[2] * interleaved_line +
+                        upipe_netmap_sink->pixel_offset / 2;
                     upipe_netmap_sink->pack_8_planar(y8, u8, v8, dst, pixels2);
                 }
 
@@ -516,9 +524,10 @@ static void upipe_netmap_sink_worker(struct upump *upump)
                 upipe_netmap_sink->line = 0;
                 upipe_netmap_sink->pixel_offset = 0;
                 for (int i = 0; i < UPIPE_RFC4175_MAX_PLANES &&
-                                    upipe_netmap_sink->input_chroma_map[i] != NULL; i++) {
-                    uref_pic_plane_unmap(uref, upipe_netmap_sink->input_chroma_map[i],
-                                        0, 0, -1, -1);
+                        upipe_netmap_sink->input_chroma_map[i] != NULL; i++) {
+                    uref_pic_plane_unmap(uref,
+                            upipe_netmap_sink->input_chroma_map[i],
+                            0, 0, -1, -1);
                 }
                 uref_free(uref);
                 upipe_netmap_sink->frame_count++;
@@ -537,7 +546,8 @@ static void upipe_netmap_sink_worker(struct upump *upump)
             }
 
             bytes_left = input_size;
-            upipe_dbg_va(upipe, "uref start, txavail %d bytes left %d", txavail, bytes_left);
+            upipe_dbg_va(upipe, "uref start, txavail %d bytes left %d", txavail,
+                    bytes_left);
         }
 
         /* Enough data to fill entire ring buffer? */
@@ -546,10 +556,12 @@ static void upipe_netmap_sink_worker(struct upump *upump)
             data_to_put = bytes_left;
         bytes_left -= data_to_put;
 
-        uint16_t payload_size = HBRMT_LEN - ETHERNET_HEADER_LEN - UDP_HEADER_SIZE - IP_HEADER_MINSIZE;
+        uint16_t payload_size = HBRMT_LEN - ETHERNET_HEADER_LEN -
+            UDP_HEADER_SIZE - IP_HEADER_MINSIZE;
 
         /* Put headers and the marker if we've depleted the entire ubuf/frame */
-        dst += upipe_netmap_put_headers(upipe_netmap_sink, dst, payload_size, 98, !bytes_left);
+        dst += upipe_netmap_put_headers(upipe_netmap_sink, dst, payload_size,
+                98, !bytes_left);
         dst += upipe_put_hbrmt_headers(upipe_netmap_sink, dst);
 
         /* Put data */
@@ -593,12 +605,10 @@ static void upipe_netmap_sink_worker(struct upump *upump)
         if (!upipe_netmap_sink->use_tr03 && bytes_left > 0) {
             uref_block_unmap(uref, 0);
             uref_block_resize(uref, input_size - bytes_left, -1);
-        } else {
-            for (int i = 0; i < UPIPE_RFC4175_MAX_PLANES &&
-                    upipe_netmap_sink->input_chroma_map[i] != NULL; i++) {
-                uref_pic_plane_unmap(uref, upipe_netmap_sink->input_chroma_map[i],
-                        0, 0, -1, -1);
-            }
+        } else for (int i = 0; i < UPIPE_RFC4175_MAX_PLANES &&
+                upipe_netmap_sink->input_chroma_map[i] != NULL; i++) {
+            uref_pic_plane_unmap(uref, upipe_netmap_sink->input_chroma_map[i],
+                    0, 0, -1, -1);
         }
     }
     upipe_netmap_sink->uref = uref;
@@ -614,7 +624,8 @@ static void upipe_netmap_sink_worker(struct upump *upump)
 static bool upipe_netmap_sink_output(struct upipe *upipe, struct uref *uref,
                                  struct upump **upump_p)
 {
-    struct upipe_netmap_sink *upipe_netmap_sink = upipe_netmap_sink_from_upipe(upipe);
+    struct upipe_netmap_sink *upipe_netmap_sink =
+        upipe_netmap_sink_from_upipe(upipe);
     const char *def;
 
     if (unlikely(ubase_check(uref_flow_get_def(uref, &def)))) {
@@ -662,7 +673,8 @@ static int upipe_netmap_sink_set_flow_def(struct upipe *upipe,
     if (flow_def == NULL)
         return UBASE_ERR_INVALID;
 
-    struct upipe_netmap_sink *upipe_netmap_sink = upipe_netmap_sink_from_upipe(upipe);
+    struct upipe_netmap_sink *upipe_netmap_sink =
+        upipe_netmap_sink_from_upipe(upipe);
 
     /* Input is V210/Planar */
     if (ubase_check(uref_flow_match_def(flow_def, "pic."))) {
@@ -677,17 +689,23 @@ static int upipe_netmap_sink_set_flow_def(struct upipe *upipe,
                 (u(uref_pic_flow_check_chroma(flow_def, 1, 1, 2, "y10l")) &&
                  u(uref_pic_flow_check_chroma(flow_def, 2, 1, 2, "u10l")) &&
                  u(uref_pic_flow_check_chroma(flow_def, 2, 1, 2, "v10l"))) ||
-                (u(uref_pic_flow_check_chroma(flow_def, 1, 1, 128, "u10y10v10y10u10y10v10y10u10y10v10y10")))))) {
+                (u(uref_pic_flow_check_chroma(flow_def, 1, 1, 128,
+                                  "u10y10v10y10u10y10v10y10u10y10v10y10")))))) {
             upipe_err(upipe, "incompatible input flow def");
             return UBASE_ERR_EXTERNAL;
         }
 
-        upipe_netmap_sink->input_is_v210 = u(uref_pic_flow_check_chroma(flow_def, 1, 1, 128, "u10y10v10y10u10y10v10y10u10y10v10y10"));
-        upipe_netmap_sink->input_bit_depth = upipe_netmap_sink->input_is_v210 ? 0 : u(uref_pic_flow_check_chroma(flow_def, 1, 1, 1, "y8")) ? 8 : 10;
+        upipe_netmap_sink->input_is_v210 =
+            u(uref_pic_flow_check_chroma(flow_def, 1, 1, 128,
+                        "u10y10v10y10u10y10v10y10u10y10v10y10"));
+        upipe_netmap_sink->input_bit_depth = upipe_netmap_sink->input_is_v210
+            ? 0
+            : u(uref_pic_flow_check_chroma(flow_def, 1, 1, 1, "y8")) ? 8 : 10;
         #undef u
 
         if (upipe_netmap_sink->input_is_v210) {
-            upipe_netmap_sink->input_chroma_map[0] = "u10y10v10y10u10y10v10y10u10y10v10y10";
+            upipe_netmap_sink->input_chroma_map[0] =
+                "u10y10v10y10u10y10v10y10u10y10v10y10";
             upipe_netmap_sink->input_chroma_map[1] = NULL;
             upipe_netmap_sink->output_pixels_per_block = 6;
             upipe_netmap_sink->output_block_size = 16;
@@ -724,7 +742,8 @@ static int upipe_netmap_sink_set_flow_def(struct upipe *upipe,
  */
 static int _upipe_netmap_sink_get_uri(struct upipe *upipe, const char **uri_p)
 {
-    struct upipe_netmap_sink *upipe_netmap_sink = upipe_netmap_sink_from_upipe(upipe);
+    struct upipe_netmap_sink *upipe_netmap_sink =
+        upipe_netmap_sink_from_upipe(upipe);
     assert(uri_p != NULL);
     *uri_p = upipe_netmap_sink->uri;
     return UBASE_ERR_NONE;
@@ -763,7 +782,8 @@ static char *config_stropt(char *string)
  */
 static int _upipe_netmap_sink_set_uri(struct upipe *upipe, const char *uri)
 {
-    struct upipe_netmap_sink *upipe_netmap_sink = upipe_netmap_sink_from_upipe(upipe);
+    struct upipe_netmap_sink *upipe_netmap_sink =
+        upipe_netmap_sink_from_upipe(upipe);
     char check[2];
 
     nm_close(upipe_netmap_sink->d);
@@ -903,12 +923,13 @@ static int _upipe_netmap_sink_set_uri(struct upipe *upipe, const char *uri)
     }
 
 
-    if (upipe_netmap_sink->d && NETMAP_FD(upipe_netmap_sink->d) != -1 && upipe_netmap_sink->upump == NULL) {
+    if (upipe_netmap_sink->d && NETMAP_FD(upipe_netmap_sink->d) != -1 &&
+            upipe_netmap_sink->upump == NULL) {
         struct upump *upump;
 
         upump = upump_alloc_timer(upipe_netmap_sink->upump_mgr,
-                                  upipe_netmap_sink_worker, upipe, upipe->refcount, 0,
-                                  27000000/1000);
+                upipe_netmap_sink_worker, upipe, upipe->refcount, 0,
+                UCLOCK_FREQ/1000);
 
         upipe_netmap_sink_set_upump(upipe, upump);
         upump_start(upump);
@@ -999,7 +1020,8 @@ static int _upipe_netmap_sink_control(struct upipe *upipe,
  * @param args arguments of the command
  * @return an error code
  */
-static int upipe_netmap_sink_control(struct upipe *upipe, int command, va_list args)
+static int upipe_netmap_sink_control(struct upipe *upipe, int command,
+        va_list args)
 {
     UBASE_RETURN(_upipe_netmap_sink_control(upipe, command, args));
 
@@ -1018,7 +1040,8 @@ static int upipe_netmap_sink_control(struct upipe *upipe, int command, va_list a
  */
 static void upipe_netmap_sink_free(struct upipe *upipe)
 {
-    struct upipe_netmap_sink *upipe_netmap_sink = upipe_netmap_sink_from_upipe(upipe);
+    struct upipe_netmap_sink *upipe_netmap_sink =
+        upipe_netmap_sink_from_upipe(upipe);
     upipe_throw_dead(upipe);
 
     free(upipe_netmap_sink->uri);
