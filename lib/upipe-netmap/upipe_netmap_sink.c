@@ -247,7 +247,7 @@ static struct upipe *upipe_netmap_sink_alloc(struct upipe_mgr *mgr,
     upipe_netmap_sink->pack_10_planar = ff_planar_to_sdi_10_c;
     upipe_netmap_sink->pack_v210 = ff_v210_sdi_unpack_c;
 
-    if(upipe_netmap_sink->cpu_flags & AV_CPU_FLAG_AVX) {
+    if (upipe_netmap_sink->cpu_flags & AV_CPU_FLAG_AVX) {
         upipe_netmap_sink->pack_8_planar = ff_planar_to_sdi_8_avx;
         upipe_netmap_sink->pack_10_planar = ff_planar_to_sdi_10_avx;
         upipe_netmap_sink->pack_v210 = ff_v210_sdi_unpack_aligned_avx;
@@ -457,7 +457,7 @@ static void upipe_netmap_sink_worker(struct upump *upump)
             }
 
             int interleaved_line = get_interleaved_line(upipe_netmap_sink->line);
-            if(upipe_netmap_sink->input_is_v210) {
+            if (upipe_netmap_sink->input_is_v210) {
                 const uint8_t *src = upipe_netmap_sink->pixel_buffers[0] +
                     upipe_netmap_sink->strides[0]*interleaved_line;
 
@@ -466,7 +466,7 @@ static void upipe_netmap_sink_worker(struct upump *upump)
 
                 upipe_netmap_sink->pack_v210((uint32_t*)src, dst, pixels1);
             }
-            else if(upipe_netmap_sink->input_bit_depth == 8) {
+            else if (upipe_netmap_sink->input_bit_depth == 8) {
                 const uint8_t *y8, *u8, *v8;
                 y8 = upipe_netmap_sink->pixel_buffers[0] +
                     upipe_netmap_sink->strides[0] * interleaved_line +
@@ -490,10 +490,10 @@ static void upipe_netmap_sink_worker(struct upump *upump)
                 }
             }
 
-            if(data_len2) {
+            if (data_len2) {
                 interleaved_line = get_interleaved_line(upipe_netmap_sink->line);
                 //printf("\n line %i \n", interleaved_line);
-                if(upipe_netmap_sink->input_is_v210) {
+                if (upipe_netmap_sink->input_is_v210) {
                     const uint8_t *src = upipe_netmap_sink->pixel_buffers[0] +
                         upipe_netmap_sink->strides[0]*interleaved_line;
 
@@ -503,7 +503,7 @@ static void upipe_netmap_sink_worker(struct upump *upump)
 
                     upipe_netmap_sink->pack_v210((uint32_t*)src, dst, pixels2);
                 }
-                else if(upipe_netmap_sink->input_bit_depth == 8) {
+                else if (upipe_netmap_sink->input_bit_depth == 8) {
                     const uint8_t *y8, *u8, *v8;
                     y8 = upipe_netmap_sink->pixel_buffers[0] +
                         upipe_netmap_sink->strides[0] * interleaved_line +
@@ -525,7 +525,7 @@ static void upipe_netmap_sink_worker(struct upump *upump)
             txavail--;
 
             /* Release consumed frame */
-            if(marker && field) {
+            if (marker && field) {
                 upipe_netmap_sink->line = 0;
                 upipe_netmap_sink->pixel_offset = 0;
                 for (int i = 0; i < UPIPE_RFC4175_MAX_PLANES &&
