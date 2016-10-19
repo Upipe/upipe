@@ -5,6 +5,6 @@ includedir=@includedir@
 Name: libupipe_netmap
 Description: Upipe multimedia framework, netmap interface module
 Version: @VERSION@
-Requires: libupipe
+Requires: libupipe libavcodec
 Libs: -L${libdir} -lupipe_netmap
 Cflags: -I${includedir}
