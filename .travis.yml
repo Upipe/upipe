@@ -20,7 +20,6 @@ matrix:
         - APT_PACKAGES="gcc-$GCC_VERSION g++-$GCC_VERSION $APT_PACKAGES_COMMON"
         - HOST_CC=gcc-$GCC_VERSION
         - HOST_CXX=g++-$GCC_VERSION
-        - CXXFLAGS="-Wno-error=literal-suffix"
 
     - os: linux
       compiler: gcc-m32
@@ -31,7 +30,6 @@ matrix:
         - HOST_CC="gcc-$GCC_VERSION -m32"
         - HOST_CXX="g++-$GCC_VERSION -m32"
         - CFLAGS="-msse2 -mfpmath=sse"
-        - CXXFLAGS="-Wno-error=literal-suffix"
         - LIBAMT_PLATFORM="PLATFORM32=1"
         - PKG_CONFIG_LIBDIR="/usr/lib/i386-linux-gnu/pkgconfig"
 
