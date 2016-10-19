@@ -49,32 +49,14 @@
 #include <upipe/upipe_helper_uclock.h>
 #include <upipe-netmap/upipe_netmap_sink.h>
 
-#include <stdlib.h>
-#include <stdbool.h>
-#include <stdint.h>
-#include <stdarg.h>
-#include <string.h>
-#include <unistd.h>
-#include <sys/types.h>
-#include <sys/stat.h>
-#include <fcntl.h>
-#include <sys/ioctl.h>
-#include <errno.h>
-#include <assert.h>
-#include <time.h>
 #include <net/if.h>
+#include <arpa/inet.h>
 
 #define NETMAP_WITH_LIBS
 #include <net/netmap.h>
 #include <net/netmap_user.h>
 
-#include <sys/socket.h>
-#include <netinet/in.h>
-#include <arpa/inet.h>
-
-#include <libavutil/common.h>
-#include <libavutil/cpu.h>
-#include <libavutil/intreadwrite.h>
+#include <libavutil/cpu.h> // XXX
 
 #include <bitstream/ietf/ip.h>
 #include <bitstream/ietf/udp.h>
@@ -83,20 +65,14 @@
 #include <bitstream/ietf/rtp.h>
 #include <bitstream/ieee/ethernet.h>
 
-#define IP_HEADER_MINSIZE 20
-#define UDP_HEADER_SIZE 8
 #define HBRMT_HEADER_ONLY_SIZE 8
 #define HBRMT_DATA_SIZE 1376
-#define RAW_HEADER_SIZE (IP_HEADER_MINSIZE + UDP_HEADER_SIZE)
-#define HBRMT_DATA_OFFSET (RTP_HEADER_SIZE + HBRMT_HEADER_ONLY_SIZE)
 #define HBRMT_LEN (ETHERNET_HEADER_LEN + IP_HEADER_MINSIZE + UDP_HEADER_SIZE + RTP_HEADER_SIZE + HBRMT_HEADER_ONLY_SIZE + HBRMT_DATA_SIZE)
 
 #define UPIPE_RFC4175_MAX_PLANES 3
 
 #define UPIPE_RFC4175_PIXEL_PAIR_BYTES 5
 #define UPIPE_RFC4175_BLOCK_SIZE 15
-#define UPIPE_V210_BLOCK_LEN 16
-#define UPIPE_V210_PIXELS_PER_BLOCK 6
 
 void ff_planar_to_sdi_8_c(const uint8_t *y, const uint8_t *u, const uint8_t *v, uint8_t *l, const int64_t width);
 void ff_planar_to_sdi_10_c(const uint16_t *y, const uint16_t *u, const uint16_t *v, uint8_t *l, const int64_t width);
@@ -373,14 +349,6 @@ static inline int get_interleaved_line(int line_number)
     }
 }
 
-static uint64_t gettime(void)
-{
-    struct timespec r;
-    if (clock_gettime(CLOCK_MONOTONIC, &r) < 0)
-        abort();
-    return r.tv_sec * 1000000000 + r.tv_nsec;
-}
-
 static void upipe_netmap_sink_worker(struct upump *upump)
 {
     struct upipe *upipe = upump_get_opaque(upump, struct upipe *);
@@ -610,10 +578,6 @@ static void upipe_netmap_sink_worker(struct upump *upump)
             uref = NULL;
             upipe_netmap_sink->frame_count++;
             bytes_left = 0;
-            static uint64_t old;
-            uint64_t now = gettime();
-            upipe_dbg_va(upipe, "uref exhausted in %zu ms", (now - old) / 1000000);
-            old = now;
         }
     }
 
