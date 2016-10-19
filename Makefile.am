@@ -1,5 +1,5 @@
 ACLOCAL_AMFLAGS = -I m4
-SUBDIRS = lib include tests examples
+SUBDIRS = lib include tests examples x86
 
 if BUILD_LUAJIT
 SUBDIRS += luajit
