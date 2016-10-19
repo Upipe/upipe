@@ -354,10 +354,6 @@ static void upipe_netmap_sink_worker(struct upump *upump)
     struct upipe *upipe = upump_get_opaque(upump, struct upipe *);
     struct upipe_netmap_sink *upipe_netmap_sink = upipe_netmap_sink_from_upipe(upipe);
 
-    const uint8_t *y8, *u8, *v8;
-    uint16_t *y10, *u10, *v10;
-    const uint8_t *src;
-
     /* Source */
     struct uref *uref = upipe_netmap_sink->uref;
     const uint8_t *src_buf = NULL;
@@ -462,7 +458,8 @@ static void upipe_netmap_sink_worker(struct upump *upump)
 
             int interleaved_line = get_interleaved_line(upipe_netmap_sink->line);
             if(upipe_netmap_sink->input_is_v210) {
-                src = upipe_netmap_sink->pixel_buffers[0] + upipe_netmap_sink->strides[0]*interleaved_line;
+                const uint8_t *src = upipe_netmap_sink->pixel_buffers[0] +
+                    upipe_netmap_sink->strides[0]*interleaved_line;
 
                 int block_offset = upipe_netmap_sink->pixel_offset / upipe_netmap_sink->output_pixels_per_block;
                 src += block_offset * upipe_netmap_sink->output_block_size;
@@ -470,9 +467,16 @@ static void upipe_netmap_sink_worker(struct upump *upump)
                 upipe_netmap_sink->pack_v210((uint32_t*)src, dst, pixels1);
             }
             else if(upipe_netmap_sink->input_bit_depth == 8) {
-                y8 = upipe_netmap_sink->pixel_buffers[0] + upipe_netmap_sink->strides[0] * interleaved_line + upipe_netmap_sink->pixel_offset / 1;
-                u8 = upipe_netmap_sink->pixel_buffers[1] + upipe_netmap_sink->strides[1] * interleaved_line + upipe_netmap_sink->pixel_offset / 2;
-                v8 = upipe_netmap_sink->pixel_buffers[2] + upipe_netmap_sink->strides[2] * interleaved_line + upipe_netmap_sink->pixel_offset / 2;
+                const uint8_t *y8, *u8, *v8;
+                y8 = upipe_netmap_sink->pixel_buffers[0] +
+                    upipe_netmap_sink->strides[0] * interleaved_line +
+                    upipe_netmap_sink->pixel_offset / 1;
+                u8 = upipe_netmap_sink->pixel_buffers[1] +
+                    upipe_netmap_sink->strides[1] * interleaved_line +
+                    upipe_netmap_sink->pixel_offset / 2;
+                v8 = upipe_netmap_sink->pixel_buffers[2] +
+                    upipe_netmap_sink->strides[2] * interleaved_line +
+                    upipe_netmap_sink->pixel_offset / 2;
                 upipe_netmap_sink->pack_8_planar(y8, u8, v8, dst, pixels1);
             }
 
@@ -490,7 +494,7 @@ static void upipe_netmap_sink_worker(struct upump *upump)
                 interleaved_line = get_interleaved_line(upipe_netmap_sink->line);
                 //printf("\n line %i \n", interleaved_line);
                 if(upipe_netmap_sink->input_is_v210) {
-                    src = upipe_netmap_sink->pixel_buffers[0] +
+                    const uint8_t *src = upipe_netmap_sink->pixel_buffers[0] +
                         upipe_netmap_sink->strides[0]*interleaved_line;
 
                     int block_offset = upipe_netmap_sink->pixel_offset /
@@ -500,6 +504,7 @@ static void upipe_netmap_sink_worker(struct upump *upump)
                     upipe_netmap_sink->pack_v210((uint32_t*)src, dst, pixels2);
                 }
                 else if(upipe_netmap_sink->input_bit_depth == 8) {
+                    const uint8_t *y8, *u8, *v8;
                     y8 = upipe_netmap_sink->pixel_buffers[0] +
                         upipe_netmap_sink->strides[0] * interleaved_line +
                         upipe_netmap_sink->pixel_offset / 1;
