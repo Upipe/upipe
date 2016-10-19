@@ -127,7 +127,7 @@ struct upipe_netmap_sink {
     /** tr-03 functions */
     void (*pack_8_planar)(const uint8_t *y, const uint8_t *u, const uint8_t *v, uint8_t *l, const int64_t width);
     void (*pack_10_planar)(const uint16_t *y, const uint16_t *u, const uint16_t *v, uint8_t *l, const int64_t width);
-    void (*pack_v210)(const uint32_t *src, uint8_t *dst, int64_t width);
+    void (*unpack_v210)(const uint32_t *src, uint8_t *dst, int64_t width);
 
     /** upump manager */
     struct upump_mgr *upump_mgr;
@@ -240,12 +240,12 @@ static struct upipe *upipe_netmap_sink_alloc(struct upipe_mgr *mgr,
 
     upipe_netmap_sink->pack_8_planar = ff_planar_to_sdi_8_c;
     upipe_netmap_sink->pack_10_planar = ff_planar_to_sdi_10_c;
-    upipe_netmap_sink->pack_v210 = ff_v210_sdi_unpack_c;
+    upipe_netmap_sink->unpack_v210 = ff_v210_sdi_unpack_c;
 
     if (upipe_netmap_sink->cpu_flags & AV_CPU_FLAG_AVX) {
         upipe_netmap_sink->pack_8_planar = ff_planar_to_sdi_8_avx;
         upipe_netmap_sink->pack_10_planar = ff_planar_to_sdi_10_avx;
-        upipe_netmap_sink->pack_v210 = ff_v210_sdi_unpack_aligned_avx;
+        upipe_netmap_sink->unpack_v210 = ff_v210_sdi_unpack_aligned_avx;
     }
 
     upipe_throw_ready(upipe);
@@ -459,7 +459,7 @@ static void upipe_netmap_sink_worker(struct upump *upump)
                 int block_offset = upipe_netmap_sink->pixel_offset / upipe_netmap_sink->output_pixels_per_block;
                 src += block_offset * upipe_netmap_sink->output_block_size;
 
-                upipe_netmap_sink->pack_v210((uint32_t*)src, dst, pixels1);
+                upipe_netmap_sink->unpack_v210((uint32_t*)src, dst, pixels1);
             }
             else if (upipe_netmap_sink->input_bit_depth == 8) {
                 const uint8_t *y8, *u8, *v8;
@@ -496,7 +496,7 @@ static void upipe_netmap_sink_worker(struct upump *upump)
                         upipe_netmap_sink->output_pixels_per_block;
                     src += block_offset * upipe_netmap_sink->output_block_size;
 
-                    upipe_netmap_sink->pack_v210((uint32_t*)src, dst, pixels2);
+                    upipe_netmap_sink->unpack_v210((uint32_t*)src, dst, pixels2);
                 }
                 else if (upipe_netmap_sink->input_bit_depth == 8) {
                     const uint8_t *y8, *u8, *v8;
