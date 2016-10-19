@@ -45,7 +45,7 @@ extern "C" {
 #define UREF_SOUND_FLOW_DEF "sound."
 
 UREF_ATTR_SMALL_UNSIGNED(sound_flow, planes, "s.planes", number of planes)
-UREF_ATTR_STRING_VA(sound_flow, channel, "s.channel[%"PRIu8"]",
+UREF_ATTR_STRING_VA(sound_flow, channel, "s.channel[%" PRIu8"]",
         channel type, uint8_t plane, plane)
 UREF_ATTR_SMALL_UNSIGNED(sound_flow, channels, "s.channels", number of channels)
 UREF_ATTR_SMALL_UNSIGNED(sound_flow, sample_size, "s.sample_size",

@@ -845,7 +845,7 @@ static int upipe_bmd_src_set_uri(struct upipe *upipe, const char *uri)
 
     if (*idx == '@') {
         uint64_t card_topology;
-        if (sscanf(idx + 1, "%"SCNu64, &card_topology) != 1) {
+        if (sscanf(idx + 1, "%" SCNu64, &card_topology) != 1) {
             upipe_err_va(upipe, "invalid URI '%s'", uri);
             return UBASE_ERR_INVALID;
         }

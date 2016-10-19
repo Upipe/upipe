@@ -35,7 +35,7 @@ extern "C" {
 #include <upipe/uref_attr.h>
 #include <stdint.h>
 
-UREF_ATTR_FLOAT_VA(amax, amplitude, "amax.amp[%"PRIu8"]", max amplitude,
+UREF_ATTR_FLOAT_VA(amax, amplitude, "amax.amp[%" PRIu8"]", max amplitude,
         uint8_t plane, plane)
 
 #define UPIPE_AUDIO_MAX_SIGNATURE UBASE_FOURCC('a', 'm', 'a', 'x')

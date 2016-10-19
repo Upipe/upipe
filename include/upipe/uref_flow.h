@@ -54,13 +54,13 @@ UREF_ATTR_UNSIGNED_SH(flow, id, UDICT_TYPE_FLOW_ID,
 UREF_ATTR_STRING_SH(flow, raw_def, UDICT_TYPE_FLOW_RAWDEF, raw flow definition)
 UREF_ATTR_SMALL_UNSIGNED_SH(flow, languages, UDICT_TYPE_FLOW_LANGUAGES,
         number of flow languages)
-UREF_ATTR_STRING_VA(flow, language, "f.lang[%"PRIu8"]", flow language,
+UREF_ATTR_STRING_VA(flow, language, "f.lang[%" PRIu8"]", flow language,
         uint8_t nb, nb)
-UREF_ATTR_VOID_VA(flow, hearing_impaired, "f.himp[%"PRIu8"]",
+UREF_ATTR_VOID_VA(flow, hearing_impaired, "f.himp[%" PRIu8"]",
         flow for hearing impaired, uint8_t nb, nb)
-UREF_ATTR_VOID_VA(flow, visual_impaired, "f.vimp[%"PRIu8"]",
+UREF_ATTR_VOID_VA(flow, visual_impaired, "f.vimp[%" PRIu8"]",
         flow for visual impaired, uint8_t nb, nb)
-UREF_ATTR_VOID_VA(flow, audio_clean, "f.clean[%"PRIu8"]",
+UREF_ATTR_VOID_VA(flow, audio_clean, "f.clean[%" PRIu8"]",
         clean effects audio, uint8_t nb, nb)
 UREF_ATTR_VOID(flow, lowdelay, "f.lowdelay", low delay mode)
 UREF_ATTR_VOID(flow, copyright, "f.copyright", copyrighted content)
