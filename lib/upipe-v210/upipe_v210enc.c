@@ -53,6 +53,8 @@
 
 #include <upipe-v210/upipe_v210enc.h>
 
+#include "v210enc.h"
+
 #include <libavutil/common.h>
 #include <libavutil/intreadwrite.h>
 
@@ -550,6 +552,19 @@ static struct upipe *upipe_v210enc_alloc(struct upipe_mgr *mgr,
 
     upipe_v210enc->pack_line_8  = v210enc_planar_pack_8_c;
     upipe_v210enc->pack_line_10 = v210enc_planar_pack_10_c;
+
+    // FIXME: fallback for gcc < 4.8, clang, gcc on macOS?
+    if (__builtin_cpu_supports("avx2")) {
+        upipe_v210enc->pack_line_8  = upipe_v210_planar_pack_8_avx2;
+        upipe_v210enc->pack_line_10 = upipe_v210_planar_pack_10_avx2;
+    } else {
+        if (__builtin_cpu_supports("ssse3")) {
+            upipe_v210enc->pack_line_8  = upipe_v210_planar_pack_8_ssse3;
+            upipe_v210enc->pack_line_10 = upipe_v210_planar_pack_10_ssse3;
+        }
+        if (__builtin_cpu_supports("avx"))
+            upipe_v210enc->pack_line_8  = upipe_v210_planar_pack_8_avx;
+    }
 
     upipe_v210enc_init_urefcount(upipe);
     upipe_v210enc_init_ubuf_mgr(upipe);
