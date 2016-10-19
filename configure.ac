@@ -17,6 +17,7 @@ AC_CHECK_PROGS(LUAJIT, luajit)
 AC_CHECK_PROGS(EU_READELF, eu-readelf)
 AC_CHECK_PROGS(LLVM_DWARFDUMP, [llvm-dwarfdump "xcrun llvm-dwarfdump"])
 AC_PATH_PROG(MOC, [moc-qt4 moc], moc)
+AC_PATH_PROG(YASM, yasm)
 AC_PROG_CXX
 AC_PROG_AWK
 AC_PROG_CC_C99
@@ -29,9 +30,49 @@ AM_PROG_CC_C_O
 LT_INIT([win32-dll])
 AM_CONDITIONAL(BUILD_LUAJIT, test "$OBJDUMP" != false -a "$enable_shared" != no)
 
+YASMFLAGS=""
+case "${host_os}" in
+    darwin*)
+    case "${host}" in
+        i?86*)
+        YASMFLAGS="-f macho32 -DPREFIX"
+        ;;
+        x86_64*)
+        YASMFLAGS="-f macho64 -DPREFIX"
+        ARCH_X86_64=1
+        ;;
+    esac
+    ;;
+    *mingw32*)
+    case "${host}" in
+        i?86*)
+        YASMFLAGS="-f win32 -DPREFIX"
+        ;;
+        amd64*|x86_64*)
+        YASMFLAGS="-f win64 -DPREFIX"
+        ARCH_X86_64=1
+        ;;
+    esac
+    ;;
+    *)
+    case "${host}" in
+        i?86*)
+        YASMFLAGS="-f elf32"
+        ;;
+        x86_64*)
+        YASMFLAGS="-f elf64"
+        ;;
+    esac
+    ;;
+esac
+
+# add -prefer-non-pic so libtool doesn't add -fPIC, which yasm doesn't understand
+YASMFLAGS="${YASMFLAGS} -DPIC -prefer-non-pic"
+
 WARN_FLAGS="-Wall -Wextra -Wno-unused -Wno-unused-parameter -Wno-sign-compare -Wmissing-declarations -Wwrite-strings -Wredundant-decls -Wundef -Wmissing-include-dirs"
 AC_SUBST([AM_CFLAGS], ["$WARN_FLAGS -Wstrict-prototypes -Wmissing-prototypes -Wold-style-definition"])
 AC_SUBST([AM_CXXFLAGS], ["$WARN_FLAGS"])
+AC_SUBST(YASMFLAGS)
 
 # Checks for libraries.
 AC_CHECK_LIB(rt, clock_gettime, libadd_rt_lib="-lrt", libadd_rt_lib="")
