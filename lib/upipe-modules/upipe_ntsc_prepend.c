@@ -42,6 +42,7 @@
 #include <upipe/uref_pic_flow.h>
 
 #define UPIPE_NTSC_PREPEND_LINES 5
+#define UPIPE_NTSC_APPEND_LINES 1
 
 /** upipe_ntsc_prepend structure */
 struct upipe_ntsc_prepend {
@@ -105,6 +106,14 @@ static int upipe_ntsc_prepend_set_flow_def(struct upipe *upipe, struct uref *flo
         return UBASE_ERR_INVALID;
     }
 
+    uint8_t vappend;
+    UBASE_RETURN(uref_pic_flow_get_vappend(flow_def, &vappend));
+    if (vappend < UPIPE_NTSC_APPEND_LINES) {
+        upipe_err_va(upipe, "incompatible input flow def, vappend is %u",
+                vappend);
+        return UBASE_ERR_INVALID;
+    }
+
     uint64_t vsize, vsize_visible, hsize;
     UBASE_RETURN(uref_pic_flow_get_vsize(flow_def, &vsize));
     UBASE_RETURN(uref_pic_flow_get_vsize_visible(flow_def, &vsize_visible));
@@ -121,8 +130,8 @@ static int upipe_ntsc_prepend_set_flow_def(struct upipe *upipe, struct uref *flo
     if (unlikely(flow_def_dup == NULL))
         return UBASE_ERR_ALLOC;
 
-    vsize += UPIPE_NTSC_PREPEND_LINES;
-    vsize_visible += UPIPE_NTSC_PREPEND_LINES;
+    vsize += UPIPE_NTSC_PREPEND_LINES + UPIPE_NTSC_APPEND_LINES;
+    vsize_visible += UPIPE_NTSC_PREPEND_LINES + UPIPE_NTSC_APPEND_LINES;
 
     UBASE_FATAL(upipe, uref_pic_flow_set_vsize(flow_def_dup, vsize))
     UBASE_FATAL(upipe, uref_pic_flow_set_vsize_visible(flow_def_dup, vsize_visible))
