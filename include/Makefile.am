@@ -72,3 +72,6 @@ if HAVE_ECORE
 SUBDIRS += upump-ecore
 endif
 
+if HAVE_ZVBI
+SUBDIRS += upipe-zvbi
+endif

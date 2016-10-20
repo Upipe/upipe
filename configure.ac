@@ -59,6 +59,7 @@ PKG_CHECK_UPIPE(SPEEXDSP, speexdsp, [speex/speex_resampler.h])
 PKG_CHECK_UPIPE(GLX, gl glu x11, [GL/glx.h GL/glu.h GL/gl.h])
 PKG_CHECK_UPIPE(X264, x264, [x264.h])
 PKG_CHECK_UPIPE(ECORE, ecore, [Ecore.h])
+PKG_CHECK_UPIPE(ZVBI, zvbi-0.2, [libzvbi.h])
 AC_LANG_PUSH([C++])
 PKG_CHECK_UPIPE(QTWEBKIT, QtWebKit, [QtWebKit])
 AC_LANG_POP([C++])
@@ -174,6 +175,7 @@ AC_CONFIG_FILES([Makefile
                  include/upipe-amt/Makefile
                  include/upipe-v210/Makefile
                  include/upipe-hls/Makefile
+                 include/upipe-zvbi/Makefile
                  include/upipe-dveo/Makefile
                  lib/Makefile
                  lib/upipe/Makefile
@@ -220,6 +222,8 @@ AC_CONFIG_FILES([Makefile
                  lib/upipe-v210/libupipe_v210.pc
                  lib/upipe-hls/Makefile
                  lib/upipe-hls/libupipe_hls.pc
+                 lib/upipe-zvbi/Makefile
+                 lib/upipe-zvbi/libupipe_zvbi.pc
                  lib/upipe-dveo/Makefile
                  lib/upipe-dveo/libupipe_dveo.pc
                  tests/Makefile
