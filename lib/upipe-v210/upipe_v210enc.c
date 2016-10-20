@@ -54,7 +54,6 @@
 #include <upipe-v210/upipe_v210enc.h>
 
 #include <libavutil/common.h>
-#include <libavutil/cpu.h>
 #include <libavutil/intreadwrite.h>
 
 #define UPIPE_V210_MAX_PLANES 3
@@ -91,9 +90,6 @@ struct upipe_v210enc {
 
     /** input bit depth **/
     int input_bit_depth;
-
-    /** cpu flags **/
-    int cpu_flags;
 
     /** 8-bit line packing function **/
     upipe_v210enc_pack_line_8 pack_line_8;
@@ -633,7 +629,6 @@ static struct upipe *upipe_v210enc_alloc(struct upipe_mgr *mgr,
         return NULL;
 
     struct upipe_v210enc *upipe_v210enc = upipe_v210enc_from_upipe(upipe);
-    upipe_v210enc->cpu_flags = av_get_cpu_flags();
 
     upipe_v210enc->pack_line_8  = v210enc_planar_pack_8_c;
     upipe_v210enc->pack_line_10 = v210enc_planar_pack_10_c;
