@@ -31,6 +31,7 @@
 #include <upipe/uref_block.h>
 #include <upipe/uref_clock.h>
 #include <upipe/upump.h>
+#include <upipe/ubits.h>
 #include <upipe/ubuf.h>
 #include <upipe/upipe.h>
 #include <upipe/uref_pic.h>
@@ -51,14 +52,14 @@
 #include <net/netmap.h>
 #include <net/netmap_user.h>
 
-#include <libavutil/cpu.h> // XXX
-
 #include <bitstream/ietf/ip.h>
 #include <bitstream/ietf/udp.h>
 #include <bitstream/ietf/rfc4175.h>
 #include <bitstream/smpte/2022_6_hbrmt.h>
 #include <bitstream/ietf/rtp.h>
 #include <bitstream/ieee/ethernet.h>
+
+#include "sdi.h"
 
 #define HBRMT_HEADER_ONLY_SIZE 8
 #define HBRMT_DATA_SIZE 1376
@@ -69,13 +70,60 @@
 #define UPIPE_RFC4175_PIXEL_PAIR_BYTES 5
 #define UPIPE_RFC4175_BLOCK_SIZE 15
 
-void ff_planar_to_sdi_8_c(const uint8_t *y, const uint8_t *u, const uint8_t *v, uint8_t *l, const int64_t width);
-void ff_planar_to_sdi_10_c(const uint16_t *y, const uint16_t *u, const uint16_t *v, uint8_t *l, const int64_t width);
-void ff_v210_sdi_unpack_c(const uint32_t *src, uint8_t *sdi, int64_t width);
+static void upipe_planar_to_sdi_8_c(const uint8_t *y, const uint8_t *u, const uint8_t *v, uint8_t *l, const int64_t width)
+{
+    for (int j = 0; j < width/2; j++) {
+        uint8_t u1 = *u++;
+        uint8_t v1 = *v++;
+        uint8_t y1 = *y++;
+        uint8_t y2 = *y++;
 
-void ff_planar_to_sdi_8_avx(const uint8_t *y, const uint8_t *u, const uint8_t *v, uint8_t *l, const int64_t width);
-void ff_planar_to_sdi_10_avx(const uint16_t *y, const uint16_t *u, const uint16_t *v, uint8_t *l, const int64_t width);
-void ff_v210_sdi_unpack_aligned_avx(const uint32_t *src, uint8_t *sdi, int64_t width);
+        *l++ = u1;                                  // uuuuuuuu
+        *l++ = y1 >> 2;                             // 00yyyyyy
+        *l++ = (y1 & 0x3) << 6 | ((v1 >> 4) & 0xf); // yy00vvvv
+        *l++ = (v1 << 4) | (y2 >> 6);               // vvvv00yy
+        *l++ = y2 << 2;                             // yyyyyy00
+    }
+}
+
+static void upipe_planar_to_sdi_10_c(const uint16_t *y, const uint16_t *u, const uint16_t *v, uint8_t *l, const int64_t width)
+{
+    for (int j = 0; j < width/2; j++) {
+        uint16_t u1 = *u++;
+        uint16_t v1 = *v++;
+        uint16_t y1 = *y++;
+        uint16_t y2 = *y++;
+
+        *l++ = (u1 >> 2) & 0xff;                        // uuuuuuuu
+        *l++ = ((u1 & 0x3) << 6) | ((y1 >> 4) & 0x3f);  // uuyyyyyy
+        *l++ = ((y1 & 0xf) << 4) | ((v1 >> 6) & 0xf);   // yyyyvvvv
+        *l++ = ((v1 & 0xf) << 4) | ((y2 >> 8) & 0x3);   // vvvvvvyy
+        *l++ = y2 & 0xff;                               // yyyyyyyy
+    }
+}
+
+static void upipe_v210_sdi_unpack_c(const uint32_t *src, uint8_t *sdi, int64_t width)
+{
+#define WRITE_SDI \
+    do { \
+        uint32_t val = *src++; \
+        uint16_t a =  val & 0x3FF; \
+        uint16_t b = (val >> 10) & 0x3FF; \
+        uint16_t c = (val >> 20) & 0x3FF; \
+        ubits_put(&s, 30, (a << 20) | (b << 10) | c); \
+    } while (0)
+
+    struct ubits s;
+    ubits_init(&s, sdi, (width*10*2) >> 3);
+    for (int i = 0; i < width-5; i += 6) {
+        WRITE_SDI;
+        WRITE_SDI;
+        WRITE_SDI;
+        WRITE_SDI;
+    }
+    ubits_clean(&s, &sdi);
+#undef WRITE_SDI
+}
 
 /** @hidden */
 static bool upipe_netmap_sink_output(struct upipe *upipe, struct uref *uref,
@@ -107,9 +155,6 @@ struct upipe_netmap_sink {
 
     /** Ring */
     unsigned int ring_idx;
-
-    /** cpu flags **/
-    int cpu_flags;
 
     /** tr-03 stuff */
     int line; /* zero-indexed for consistency with below */
@@ -236,16 +281,14 @@ static struct upipe *upipe_netmap_sink_alloc(struct upipe_mgr *mgr,
     upipe_netmap_sink->n = 0;
     upipe_netmap_sink->uref = NULL;
 
-    upipe_netmap_sink->cpu_flags = av_get_cpu_flags();
+    upipe_netmap_sink->pack_8_planar = upipe_planar_to_sdi_8_c;
+    upipe_netmap_sink->pack_10_planar = upipe_planar_to_sdi_10_c;
+    upipe_netmap_sink->unpack_v210 = upipe_v210_sdi_unpack_c;
 
-    upipe_netmap_sink->pack_8_planar = ff_planar_to_sdi_8_c;
-    upipe_netmap_sink->pack_10_planar = ff_planar_to_sdi_10_c;
-    upipe_netmap_sink->unpack_v210 = ff_v210_sdi_unpack_c;
-
-    if (upipe_netmap_sink->cpu_flags & AV_CPU_FLAG_AVX) {
-        upipe_netmap_sink->pack_8_planar = ff_planar_to_sdi_8_avx;
-        upipe_netmap_sink->pack_10_planar = ff_planar_to_sdi_10_avx;
-        upipe_netmap_sink->unpack_v210 = ff_v210_sdi_unpack_aligned_avx;
+    if (__builtin_cpu_supports("avx")) {
+        upipe_netmap_sink->pack_8_planar = upipe_planar_to_sdi_8_avx;
+        upipe_netmap_sink->pack_10_planar = upipe_planar_to_sdi_10_avx;
+        upipe_netmap_sink->unpack_v210 = upipe_v210_sdi_unpack_aligned_avx;
     }
 
     upipe_throw_ready(upipe);
