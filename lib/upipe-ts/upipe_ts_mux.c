@@ -232,6 +232,8 @@ struct upipe_ts_mux {
     struct uclock *uclock;
     /** uclock request */
     struct urequest uclock_request;
+    /** true if a uclock has been requested */
+    bool live;
 
     /** upump manager */
     struct upump_mgr *upump_mgr;
@@ -1008,7 +1010,7 @@ static void upipe_ts_mux_input_input(struct upipe *upipe, struct uref *uref,
                 upipe_ts_mux_program_to_upipe(program)->mgr);
 
     upipe_ts_mux_input_bin_input(upipe, uref,
-            upipe_ts_mux->uclock == NULL ? upump_p : NULL);
+            upipe_ts_mux->live ? NULL : upump_p);
 
     upipe_ts_mux_work(upipe_ts_mux_to_upipe(upipe_ts_mux), upump_p);
 }
@@ -1336,7 +1338,7 @@ static int upipe_ts_mux_input_set_flow_def(struct upipe *upipe,
     if (latency + input->buffer_duration > upipe_ts_mux->latency) {
         upipe_ts_mux->latency = latency + input->buffer_duration;
         upipe_ts_mux_build_flow_def(upipe_ts_mux_to_upipe(upipe_ts_mux));
-    } else if (upipe_ts_mux->uclock != NULL && au_per_sec.den) { /* live mode */
+    } else if (!upipe_ts_mux->live && au_per_sec.den) { /* live mode */
         upipe_set_max_length(input->encaps,
                 (MIN_BUFFERING + upipe_ts_mux->latency) * au_per_sec.num /
                 au_per_sec.den / UCLOCK_FREQ);
@@ -2340,6 +2342,7 @@ static struct upipe *upipe_ts_mux_alloc(struct upipe_mgr *mgr,
     upipe_ts_mux_init_program_mgr(upipe);
     upipe_ts_mux_init_sub_programs(upipe);
 
+    upipe_ts_mux->live = false;
     upipe_ts_mux->psi_pid_pat = NULL;
     upipe_ts_mux->psig_nit = NULL;
     upipe_ts_mux->sig = NULL;
@@ -2876,7 +2879,7 @@ static void upipe_ts_mux_work(struct upipe *upipe, struct upump **upump_p)
                  !mux->interval))
         return;
 
-    if (urequest_get_opaque(&mux->uclock_request, struct upipe *) == NULL)
+    if (!mux->live)
         upipe_ts_mux_work_file(upipe, upump_p);
     else
         upipe_ts_mux_work_live(upipe, upump_p);
@@ -2958,7 +2961,7 @@ static int upipe_ts_mux_check(struct upipe *upipe, struct uref *flow_format)
         ubuf_block_unmap(mux->padding, 0);
     }
 
-    if (mux->uclock != NULL && mux->sig != NULL)
+    if (mux->live && mux->sig != NULL)
         upipe_ts_mux_set_tdt_interval(mux->sig, mux->tdt_interval);
 
     upipe_ts_mux_work(upipe, NULL);
@@ -2972,17 +2975,17 @@ static int upipe_ts_mux_check(struct upipe *upipe, struct uref *flow_format)
 static void upipe_ts_mux_notice(struct upipe *upipe)
 {
     struct upipe_ts_mux *mux = upipe_ts_mux_from_upipe(upipe);
-    if (mux->uclock != NULL) {
+    if (mux->live) {
         if (mux->total_octetrate == mux->required_octetrate)
             upipe_notice_va(upipe,
-                    "now operating in %s mode at %"PRIu64" bits/s (auto), conformance %s, latency %"PRIu64" ms",
+                    "now operating (live) in %s mode at %"PRIu64" bits/s (auto), conformance %s, latency %"PRIu64" ms",
                     upipe_ts_mux_mode_print(mux->mode),
                     mux->total_octetrate * 8,
                     upipe_ts_conformance_print(mux->conformance),
                     (mux->latency + mux->mux_delay) * 1000 / UCLOCK_FREQ);
         else
             upipe_notice_va(upipe,
-                    "now operating in %s mode at %"PRIu64" bits/s (requires %"PRIu64" bits/s), conformance %s, latency %"PRIu64" ms",
+                    "now operating (live) in %s mode at %"PRIu64" bits/s (requires %"PRIu64" bits/s), conformance %s, latency %"PRIu64" ms",
                     upipe_ts_mux_mode_print(mux->mode),
                     mux->total_octetrate * 8, mux->required_octetrate * 8,
                     upipe_ts_conformance_print(mux->conformance),
@@ -2990,13 +2993,13 @@ static void upipe_ts_mux_notice(struct upipe *upipe)
     } else {
         if (mux->total_octetrate == mux->required_octetrate)
             upipe_notice_va(upipe,
-                    "now operating in %s mode at %"PRIu64" bits/s (auto), conformance %s",
+                    "now operating (file) in %s mode at %"PRIu64" bits/s (auto), conformance %s",
                     upipe_ts_mux_mode_print(mux->mode),
                     mux->total_octetrate * 8,
                     upipe_ts_conformance_print(mux->conformance));
         else
             upipe_notice_va(upipe,
-                    "now operating in %s mode at %"PRIu64" bits/s (requires %"PRIu64" bits/s), conformance %s",
+                    "now operating (file) in %s mode at %"PRIu64" bits/s (requires %"PRIu64" bits/s), conformance %s",
                     upipe_ts_mux_mode_print(mux->mode),
                     mux->total_octetrate * 8, mux->required_octetrate * 8,
                     upipe_ts_conformance_print(mux->conformance));
@@ -3038,6 +3041,10 @@ static void upipe_ts_mux_update(struct upipe *upipe)
     required_octetrate -= required_octetrate % TS_SIZE;
     mux->required_octetrate = required_octetrate;
 
+    if (mux->live && mux->mux_delay &&
+        required_octetrate < mux->mtu * UCLOCK_FREQ / mux->mux_delay)
+        required_octetrate = mux->mtu * UCLOCK_FREQ / mux->mux_delay;
+
     uint64_t total_octetrate = mux->fixed_octetrate;
     if (!total_octetrate)
         total_octetrate = required_octetrate;
@@ -3067,7 +3074,7 @@ static void upipe_ts_mux_update(struct upipe *upipe)
                     mux->interval < mux->sdt_interval / 2 ?
                     mux->sdt_interval - (mux->sdt_interval % mux->interval) :
                     mux->sdt_interval);
-            if (mux->uclock != NULL)
+            if (mux->live)
                 upipe_ts_mux_set_tdt_interval(mux->sig,
                         mux->interval < mux->tdt_interval / 2 ?
                         mux->tdt_interval - (mux->tdt_interval % mux->interval) :
@@ -3143,7 +3150,7 @@ static void upipe_ts_mux_build_flow_def(struct upipe *upipe)
             struct upipe_ts_mux_input *input =
                 upipe_ts_mux_input_from_uchain(uchain_input);
             if (input->encaps != NULL) {
-                if (mux->uclock != NULL && input->original_au_per_sec.den)
+                if (mux->live && input->original_au_per_sec.den)
                     /* live mode */
                     upipe_set_max_length(input->encaps,
                             (MIN_BUFFERING + mux->latency) *
@@ -3707,11 +3714,13 @@ static int _upipe_ts_mux_get_tdt_interval(struct upipe *upipe,
 static int _upipe_ts_mux_set_tdt_interval(struct upipe *upipe,
                                           uint64_t interval)
 {
-    struct upipe_ts_mux *upipe_ts_mux = upipe_ts_mux_from_upipe(upipe);
-    upipe_ts_mux->tdt_interval = interval;
+    struct upipe_ts_mux *mux = upipe_ts_mux_from_upipe(upipe);
+    mux->tdt_interval = interval;
     upipe_ts_mux_update(upipe); /* will trigger set_tdt_interval */
-    if (urequest_get_opaque(&upipe_ts_mux->uclock_request, void *) == NULL)
+    if (!mux->live) {
+        mux->live = true;
         upipe_ts_mux_require_uclock(upipe);
+    }
     return UBASE_ERR_NONE;
 }
 
@@ -3969,10 +3978,14 @@ static int _upipe_ts_mux_control(struct upipe *upipe, int command, va_list args)
         case UPIPE_ATTACH_UPUMP_MGR:
             upipe_ts_mux_set_upump(upipe, NULL);
             return upipe_ts_mux_attach_upump_mgr(upipe);
-        case UPIPE_ATTACH_UCLOCK:
+        case UPIPE_ATTACH_UCLOCK: {
+            struct upipe_ts_mux *mux = upipe_ts_mux_from_upipe(upipe);
+            mux->live = true;
             upipe_ts_mux_set_upump(upipe, NULL);
             upipe_ts_mux_require_uclock(upipe);
+            upipe_ts_mux_update(upipe);
             return UBASE_ERR_NONE;
+        }
         case UPIPE_GET_FLOW_DEF: {
             struct uref **p = va_arg(args, struct uref **);
             return upipe_ts_mux_get_flow_def(upipe, p);
