@@ -20,7 +20,7 @@
 ;* Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
 ;******************************************************************************
 
-%include "libavutil/x86/x86util.asm"
+%include "x86util.asm"
 
 SECTION_RODATA
 
@@ -104,18 +104,14 @@ cglobal v210_planar_unpack_%1, 5, 5, 7
 INIT_XMM ssse3
 v210_planar_unpack unaligned
 
-%if HAVE_AVX_EXTERNAL
 INIT_XMM avx
 v210_planar_unpack unaligned
-%endif
 
 INIT_XMM ssse3
 v210_planar_unpack aligned
 
-%if HAVE_AVX_EXTERNAL
 INIT_XMM avx
 v210_planar_unpack aligned
-%endif
 
 %macro v210_uyvy_unpack 1
 
@@ -181,18 +177,14 @@ cglobal v210_uyvy_unpack_%1, 3, 3, 15
 INIT_XMM ssse3
 v210_uyvy_unpack unaligned
 
-%if HAVE_AVX_EXTERNAL
 INIT_XMM avx
 v210_uyvy_unpack unaligned
-%endif
 
 INIT_XMM ssse3
 v210_uyvy_unpack aligned
 
-%if HAVE_AVX_EXTERNAL
 INIT_XMM avx
 v210_uyvy_unpack aligned
-%endif
 
 %macro v210_sdi_unpack_aligned 0
 
@@ -244,7 +236,5 @@ cglobal v210_sdi_unpack_aligned, 3, 3, 14, src, dst, width
     RET
 %endmacro
 
-%if HAVE_AVX_EXTERNAL
 INIT_XMM avx
 v210_sdi_unpack_aligned
-%endif

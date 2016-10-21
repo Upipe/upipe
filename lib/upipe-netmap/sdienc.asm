@@ -19,18 +19,15 @@
 ;* Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
 ;******************************************************************************
 
-%include "libavutil/x86/x86util.asm"
+%include "x86util.asm"
 
 SECTION_RODATA 32
 
-cextern pw_4
-%define uyvy_enc_min_10 pw_4
+uyvy_enc_min_10: times 16 dw 0x0004
 uyvy_enc_max_10: times 16 dw 0x3fb
 
-cextern pb_1
-%define uyvy_enc_min_8 pb_1
-cextern pb_FE
-%define uyvy_enc_max_8 pb_FE
+uyvy_enc_min_8: times 16 dw 0x0101
+uyvy_enc_max_8: times 16 dw 0xFEFE
 
 sdi_blank: times 4 dw 0x200, 0x40, 0x200, 0x40, 0x200, 0x40, 0x200, 0x40
 
@@ -83,14 +80,10 @@ cglobal sdi_pack_10, 4, 4, 3, dst, y, size, total_size
     RET
 %endmacro
 
-%if HAVE_SSSE3_EXTERNAL
 INIT_XMM ssse3
 sdi_pack_10
-%endif
-%if HAVE_AVX_EXTERNAL
 INIT_XMM avx
 sdi_pack_10
-%endif
 
 %macro sdi_blank 0
 
@@ -111,10 +104,8 @@ cglobal sdi_blank, 2, 2, 1, dst, size
     RET
 %endmacro
 
-%if HAVE_AVX_EXTERNAL
 INIT_XMM avx
 sdi_blank
-%endif
 
 %macro planar_to_uyvy_8 0
 
@@ -182,10 +173,8 @@ cglobal planar_to_uyvy_8, 5, 5, 11, dst, y, u, v, width
     RET
 %endmacro
 
-%if HAVE_AVX_EXTERNAL
 INIT_XMM avx
 planar_to_uyvy_8
-%endif
 
 %macro planar_to_uyvy_10 0
 
@@ -229,14 +218,10 @@ cglobal planar_to_uyvy_10, 5, 5, 10, dst, y, u, v, width
     RET
 %endmacro
 
-%if HAVE_SSE2_EXTERNAL
 INIT_XMM sse2
 planar_to_uyvy_10
-%endif
-%if HAVE_AVX_EXTERNAL
 INIT_XMM avx
 planar_to_uyvy_10
-%endif
 
 %macro uyvy_to_planar_8 0
 
@@ -287,10 +272,8 @@ cglobal uyvy_to_planar_8, 5, 5, 8, y, u, v, l, width
     RET
 %endmacro
 
-%if HAVE_AVX_EXTERNAL
 INIT_XMM avx
 uyvy_to_planar_8
-%endif
 
 %macro uyvy_to_planar_10 0
 
@@ -335,10 +318,8 @@ cglobal uyvy_to_planar_10, 5, 5, 6, y, u, v, l, width
     RET
 %endmacro
 
-%if HAVE_AVX_EXTERNAL
 INIT_XMM avx
 uyvy_to_planar_10
-%endif
 
 %macro planar_to_sdi_8 0
 
@@ -379,10 +360,8 @@ cglobal planar_to_sdi_8, 5, 5, 3, y, u, v, l, width, size
     RET
 %endmacro
 
-%if HAVE_AVX_EXTERNAL
 INIT_XMM avx
 planar_to_sdi_8
-%endif
 
 %macro planar_to_sdi_10 0
 
@@ -416,10 +395,8 @@ cglobal planar_to_sdi_10, 5, 5, 3, y, u, v, l, width, size
     RET
 %endmacro
 
-%if HAVE_AVX_EXTERNAL
 INIT_XMM avx
 planar_to_sdi_10
-%endif
 
 %macro planar_10_to_planar_8 0
 
@@ -447,7 +424,5 @@ cglobal planar_10_to_planar_8, 3, 3, 3, y, y8, width
     RET
 %endmacro
 
-%if HAVE_AVX_EXTERNAL
 INIT_XMM avx
 planar_10_to_planar_8
-%endif
