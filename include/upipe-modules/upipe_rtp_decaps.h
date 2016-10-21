@@ -38,6 +38,20 @@ extern "C" {
 
 #define UPIPE_RTPD_SIGNATURE UBASE_FOURCC('r','t','p','d')
 
+enum upipe_rtpd_command {
+    UPIPE_RTPD_SENTINAL = UPIPE_CONTROL_LOCAL,
+
+    UPIPE_RTPD_GET_PACKETS_LOST, /* int sig, uint64_t * */
+};
+
+static inline int upipe_rtpd_get_packets_lost(struct upipe *upipe,
+        uint64_t *lost)
+{
+    return upipe_control(upipe, UPIPE_RTPD_GET_PACKETS_LOST,
+            UPIPE_RTPD_SIGNATURE, lost);
+}
+
+
 /** @This returns the management structure for rtpd pipes.
  *
  * @return pointer to manager
