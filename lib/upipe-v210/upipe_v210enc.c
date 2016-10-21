@@ -58,6 +58,16 @@
 
 #define UPIPE_V210_MAX_PLANES 3
 
+/** @This defines an 8-bit packing function. */
+typedef void (*upipe_v210enc_pack_line_8)(
+        const uint8_t *y, const uint8_t *u, const uint8_t *v,
+        uint8_t *dst, ptrdiff_t width);
+
+/** @This defines a 10-bit packing function. */
+typedef void (*upipe_v210enc_pack_line_10)(
+        const uint16_t *y, const uint16_t *u, const uint16_t *v,
+        uint8_t *dst, ptrdiff_t width);
+
 /** upipe_v210enc structure with v210enc parameters */
 struct upipe_v210enc {
     /** refcount management structure */
@@ -472,78 +482,6 @@ static int upipe_v210enc_set_flow_def(struct upipe *upipe, struct uref *flow_def
     return UBASE_ERR_NONE;
 }
 
-/** @This sets the 8-bit packing function.
- *
- * @param upipe description structure of the pipe
- * @param pack packing function
- * @return an error code
- */
-static inline int _upipe_v210enc_set_pack_line_8(struct upipe *upipe,
-        upipe_v210enc_pack_line_8 pack)
-{
-    struct upipe_v210enc *upipe_v210enc = upipe_v210enc_from_upipe(upipe);
-    if (unlikely(!pack)) {
-        return UBASE_ERR_INVALID;
-    }
-
-    upipe_v210enc->pack_line_8 = pack;
-    return UBASE_ERR_NONE;
-}
-
-/** @This gets the 8-bit packing function.
- *
- * @param upipe description structure of the pipe
- * @param pack_p written with the packing function
- * @return an error code
- */
-static inline int _upipe_v210enc_get_pack_line_8(struct upipe *upipe,
-        upipe_v210enc_pack_line_8 *pack_p)
-{
-    struct upipe_v210enc *upipe_v210enc = upipe_v210enc_from_upipe(upipe);
-    if (unlikely(!pack_p)) {
-        return UBASE_ERR_INVALID;
-    }
-
-    *pack_p = upipe_v210enc->pack_line_8;
-    return UBASE_ERR_NONE;
-}
-
-/** @This sets the 10-bit packing function.
- *
- * @param upipe description structure of the pipe
- * @param pack packing function
- * @return an error code
- */
-static inline int _upipe_v210enc_set_pack_line_10(struct upipe *upipe,
-        upipe_v210enc_pack_line_10 pack)
-{
-    struct upipe_v210enc *upipe_v210enc = upipe_v210enc_from_upipe(upipe);
-    if (unlikely(!pack)) {
-        return UBASE_ERR_INVALID;
-    }
-
-    upipe_v210enc->pack_line_10 = pack;
-    return UBASE_ERR_NONE;
-}
-
-/** @This gets the 10-bit packing function.
- *
- * @param upipe description structure of the pipe
- * @param pack_p written with the packing function
- * @return an error code
- */
-static inline int _upipe_v210enc_get_pack_line_10(struct upipe *upipe,
-        upipe_v210enc_pack_line_10 *pack_p)
-{
-    struct upipe_v210enc *upipe_v210enc = upipe_v210enc_from_upipe(upipe);
-    if (unlikely(!pack_p)) {
-        return UBASE_ERR_INVALID;
-    }
-
-    *pack_p = upipe_v210enc->pack_line_10;
-    return UBASE_ERR_NONE;
-}
-
 /** @internal @This processes control commands on a file source pipe, and
  * checks the status of the pipe afterwards.
  *
@@ -587,26 +525,6 @@ static int upipe_v210enc_control(struct upipe *upipe, int command, va_list args)
             return upipe_v210enc_set_flow_def(upipe, flow);
         }
 
-        case UPIPE_V210ENC_SET_PACK_LINE_8: {
-            UBASE_SIGNATURE_CHECK(args, UPIPE_V210ENC_SIGNATURE)
-            return _upipe_v210enc_set_pack_line_8(upipe,
-                   va_arg(args, upipe_v210enc_pack_line_8));
-        }
-        case UPIPE_V210ENC_GET_PACK_LINE_8: {
-            UBASE_SIGNATURE_CHECK(args, UPIPE_V210ENC_SIGNATURE)
-            return _upipe_v210enc_get_pack_line_8(upipe,
-                   va_arg(args, upipe_v210enc_pack_line_8 *));
-        }
-        case UPIPE_V210ENC_SET_PACK_LINE_10: {
-            UBASE_SIGNATURE_CHECK(args, UPIPE_V210ENC_SIGNATURE)
-            return _upipe_v210enc_set_pack_line_10(upipe,
-                   va_arg(args, upipe_v210enc_pack_line_10));
-        }
-        case UPIPE_V210ENC_GET_PACK_LINE_10: {
-            UBASE_SIGNATURE_CHECK(args, UPIPE_V210ENC_SIGNATURE)
-            return _upipe_v210enc_get_pack_line_10(upipe,
-                   va_arg(args, upipe_v210enc_pack_line_10 *));
-        }
         default:
             return UBASE_ERR_UNHANDLED;
     }
