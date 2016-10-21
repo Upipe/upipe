@@ -31,6 +31,7 @@ matrix:
         - HOST_CXX="g++-$GCC_VERSION -m32"
         - CFLAGS="-msse2 -mfpmath=sse"
         - LIBAMT_PLATFORM="PLATFORM32=1"
+        - HOST=--host=i386-linux-gnu
         - PKG_CONFIG_LIBDIR="/usr/lib/i386-linux-gnu/pkgconfig"
 
     - os: linux
@@ -115,7 +116,7 @@ before_install:
 
 before_script: autoreconf -i
 
-script: CONFIGURE_FLAGS="--disable-silent-rules
+script: CONFIGURE_FLAGS="--disable-silent-rules $HOST
           CC=\"$HOST_CC\"
           CXX=\"$HOST_CXX\"
           CPPFLAGS=\"-I$PWD/nacl_sdk/pepper_49/include\"
