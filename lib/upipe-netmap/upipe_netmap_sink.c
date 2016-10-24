@@ -385,6 +385,144 @@ static inline int get_interleaved_line(int line_number)
     return line_number*2;
 }
 
+/* returns 1 if uref exhausted */
+static int worker_tr03(struct upipe *upipe, uint8_t *dst, uint16_t *len)
+{
+    struct upipe_netmap_sink *upipe_netmap_sink = upipe_netmap_sink_from_upipe(upipe);
+
+    uint16_t eth_frame_len = ETHERNET_HEADER_LEN + UDP_HEADER_SIZE + IP_HEADER_MINSIZE + RTP_HEADER_SIZE + RFC_4175_HEADER_LEN + RFC_4175_EXT_SEQ_NUM_LEN;
+    uint16_t bytes_available = (1500 - eth_frame_len);
+    uint16_t pixels1 = (((bytes_available / UPIPE_RFC4175_BLOCK_SIZE) * UPIPE_RFC4175_BLOCK_SIZE) / UPIPE_RFC4175_PIXEL_PAIR_BYTES) * 2;
+    uint16_t pixels2 = 0;
+    uint8_t marker = 0, continuation = 0;
+
+    /* FIXME: hardcoded 1080 */
+#define WIDTH  1920
+#define HEIGHT 1080
+    uint8_t field = upipe_netmap_sink->line >= HEIGHT / 2;
+
+    /* Going to write a second partial line so limit data_len */
+    if (upipe_netmap_sink->pixel_offset + pixels1 > WIDTH) {
+        if (upipe_netmap_sink->line+1 == (HEIGHT/2) || upipe_netmap_sink->line+1 == HEIGHT)
+            marker = 1;
+        else
+            continuation = 1;
+
+        pixels1 = WIDTH - upipe_netmap_sink->pixel_offset;
+    }
+
+    uint16_t data_len1 = (pixels1 / 2) * UPIPE_RFC4175_PIXEL_PAIR_BYTES;
+    uint16_t data_len2 = 0;
+
+    eth_frame_len += data_len1;
+
+    if (continuation) {
+        bytes_available = 1500 - (eth_frame_len + RFC_4175_HEADER_LEN);
+        pixels2 = (((bytes_available / UPIPE_RFC4175_BLOCK_SIZE) * UPIPE_RFC4175_BLOCK_SIZE) / UPIPE_RFC4175_PIXEL_PAIR_BYTES) * 2;
+        data_len2 = (pixels2 / 2) * UPIPE_RFC4175_PIXEL_PAIR_BYTES;
+
+        eth_frame_len += RFC_4175_HEADER_LEN;
+        eth_frame_len += data_len2;
+
+        /** XXX check for zero case */
+    }
+#undef WIDTH
+#undef HEIGHT
+
+    uint16_t payload_size = eth_frame_len - ETHERNET_HEADER_LEN - UDP_HEADER_SIZE - IP_HEADER_MINSIZE;
+
+    dst += upipe_netmap_put_headers(upipe_netmap_sink, dst, payload_size, 103, marker);
+    rfc4175_set_extended_sequence_number(dst, (upipe_netmap_sink->seqnum >> 16) & UINT16_MAX);
+    upipe_netmap_sink->seqnum++;
+    upipe_netmap_sink->seqnum &= UINT32_MAX;
+    dst += RFC_4175_EXT_SEQ_NUM_LEN;
+    dst += upipe_put_rfc4175_headers(upipe_netmap_sink, dst, data_len1, field, upipe_netmap_sink->line+1, continuation,
+            upipe_netmap_sink->pixel_offset);
+
+    if (data_len2) {
+        /* Guaranteed to be from same field so continuation 0
+         * Guaranteed to also start from offset 0
+         */
+        dst += upipe_put_rfc4175_headers(upipe_netmap_sink, dst, data_len2, field, upipe_netmap_sink->line+1+1, 0, 0);
+    }
+
+    int interleaved_line = get_interleaved_line(upipe_netmap_sink->line);
+    if (upipe_netmap_sink->input_is_v210) {
+        const uint8_t *src = upipe_netmap_sink->pixel_buffers[0] +
+            upipe_netmap_sink->strides[0]*interleaved_line;
+
+        int block_offset = upipe_netmap_sink->pixel_offset / upipe_netmap_sink->output_pixels_per_block;
+        src += block_offset * upipe_netmap_sink->output_block_size;
+
+        upipe_netmap_sink->unpack_v210((uint32_t*)src, dst, pixels1);
+    }
+    else if (upipe_netmap_sink->input_bit_depth == 8) {
+        const uint8_t *y8, *u8, *v8;
+        y8 = upipe_netmap_sink->pixel_buffers[0] +
+            upipe_netmap_sink->strides[0] * interleaved_line +
+            upipe_netmap_sink->pixel_offset / 1;
+        u8 = upipe_netmap_sink->pixel_buffers[1] +
+            upipe_netmap_sink->strides[1] * interleaved_line +
+            upipe_netmap_sink->pixel_offset / 2;
+        v8 = upipe_netmap_sink->pixel_buffers[2] +
+            upipe_netmap_sink->strides[2] * interleaved_line +
+            upipe_netmap_sink->pixel_offset / 2;
+        upipe_netmap_sink->pack_8_planar(y8, u8, v8, dst, pixels1);
+    }
+
+    upipe_netmap_sink->pixel_offset += pixels1;
+    dst += data_len1;
+
+    if (continuation || marker) {
+        upipe_netmap_sink->pixel_offset = 0;
+        if (continuation || (marker && !field)) {
+            upipe_netmap_sink->line++;
+        }
+    }
+
+    if (data_len2) {
+        interleaved_line = get_interleaved_line(upipe_netmap_sink->line);
+        //printf("\n line %i \n", interleaved_line);
+        if (upipe_netmap_sink->input_is_v210) {
+            const uint8_t *src = upipe_netmap_sink->pixel_buffers[0] +
+                upipe_netmap_sink->strides[0]*interleaved_line;
+
+            int block_offset = upipe_netmap_sink->pixel_offset /
+                upipe_netmap_sink->output_pixels_per_block;
+            src += block_offset * upipe_netmap_sink->output_block_size;
+
+            upipe_netmap_sink->unpack_v210((uint32_t*)src, dst, pixels2);
+        }
+        else if (upipe_netmap_sink->input_bit_depth == 8) {
+            const uint8_t *y8, *u8, *v8;
+            y8 = upipe_netmap_sink->pixel_buffers[0] +
+                upipe_netmap_sink->strides[0] * interleaved_line +
+                upipe_netmap_sink->pixel_offset / 1;
+            u8 = upipe_netmap_sink->pixel_buffers[1] +
+                upipe_netmap_sink->strides[1] * interleaved_line +
+                upipe_netmap_sink->pixel_offset / 2;
+            v8 = upipe_netmap_sink->pixel_buffers[2] +
+                upipe_netmap_sink->strides[2] * interleaved_line +
+                upipe_netmap_sink->pixel_offset / 2;
+            upipe_netmap_sink->pack_8_planar(y8, u8, v8, dst, pixels2);
+        }
+
+        upipe_netmap_sink->pixel_offset += pixels2;
+    }
+
+    *len = eth_frame_len;
+
+    /* Release consumed frame */
+    if (marker && field) {
+        upipe_netmap_sink->line = 0;
+        upipe_netmap_sink->pixel_offset = 0;
+        upipe_netmap_sink->frame_count++;
+        return 1;
+    }
+
+    return 0;
+}
+
 static void upipe_netmap_sink_worker(struct upump *upump)
 {
     struct upipe *upipe = upump_get_opaque(upump, struct upipe *);
@@ -433,134 +571,7 @@ static void upipe_netmap_sink_worker(struct upump *upump)
         }
 
         if (upipe_netmap_sink->use_tr03) {
-            uint16_t eth_frame_len = ETHERNET_HEADER_LEN + UDP_HEADER_SIZE + IP_HEADER_MINSIZE + RTP_HEADER_SIZE + RFC_4175_HEADER_LEN + RFC_4175_EXT_SEQ_NUM_LEN;
-            uint16_t bytes_available = (1500 - eth_frame_len);
-            uint16_t pixels1 = (((bytes_available / UPIPE_RFC4175_BLOCK_SIZE) * UPIPE_RFC4175_BLOCK_SIZE) / UPIPE_RFC4175_PIXEL_PAIR_BYTES) * 2;
-            uint16_t pixels2 = 0;
-            uint8_t marker = 0, continuation = 0;
-
-            /* FIXME: hardcoded 1080 */
-#define WIDTH  1920
-#define HEIGHT 1080
-            uint8_t field = upipe_netmap_sink->line >= HEIGHT / 2;
-
-            /* Going to write a second partial line so limit data_len */
-            if (upipe_netmap_sink->pixel_offset + pixels1 > WIDTH) {
-                if (upipe_netmap_sink->line+1 == (HEIGHT/2) || upipe_netmap_sink->line+1 == HEIGHT)
-                    marker = 1;
-                else
-                    continuation = 1;
-
-                pixels1 = WIDTH - upipe_netmap_sink->pixel_offset;
-            }
-
-            uint16_t data_len1 = (pixels1 / 2) * UPIPE_RFC4175_PIXEL_PAIR_BYTES;
-            uint16_t data_len2 = 0;
-
-            eth_frame_len += data_len1;
-
-            if (continuation) {
-                bytes_available = 1500 - (eth_frame_len + RFC_4175_HEADER_LEN);
-                pixels2 = (((bytes_available / UPIPE_RFC4175_BLOCK_SIZE) * UPIPE_RFC4175_BLOCK_SIZE) / UPIPE_RFC4175_PIXEL_PAIR_BYTES) * 2;
-                data_len2 = (pixels2 / 2) * UPIPE_RFC4175_PIXEL_PAIR_BYTES;
-
-                eth_frame_len += RFC_4175_HEADER_LEN;
-                eth_frame_len += data_len2;
-
-                /** XXX check for zero case */
-            }
-#undef WIDTH
-#undef HEIGHT
-
-            uint16_t payload_size = eth_frame_len - ETHERNET_HEADER_LEN - UDP_HEADER_SIZE - IP_HEADER_MINSIZE;
-
-            dst += upipe_netmap_put_headers(upipe_netmap_sink, dst, payload_size, 103, marker);
-            rfc4175_set_extended_sequence_number(dst, (upipe_netmap_sink->seqnum >> 16) & UINT16_MAX);
-            upipe_netmap_sink->seqnum++;
-            upipe_netmap_sink->seqnum &= UINT32_MAX;
-            dst += RFC_4175_EXT_SEQ_NUM_LEN;
-            dst += upipe_put_rfc4175_headers(upipe_netmap_sink, dst, data_len1, field, upipe_netmap_sink->line+1, continuation,
-                                             upipe_netmap_sink->pixel_offset);
-
-            if (data_len2) {
-                /* Guaranteed to be from same field so continuation 0
-                 * Guaranteed to also start from offset 0
-                 */
-                dst += upipe_put_rfc4175_headers(upipe_netmap_sink, dst, data_len2, field, upipe_netmap_sink->line+1+1, 0, 0);
-            }
-
-            int interleaved_line = get_interleaved_line(upipe_netmap_sink->line);
-            if (upipe_netmap_sink->input_is_v210) {
-                const uint8_t *src = upipe_netmap_sink->pixel_buffers[0] +
-                    upipe_netmap_sink->strides[0]*interleaved_line;
-
-                int block_offset = upipe_netmap_sink->pixel_offset / upipe_netmap_sink->output_pixels_per_block;
-                src += block_offset * upipe_netmap_sink->output_block_size;
-
-                upipe_netmap_sink->unpack_v210((uint32_t*)src, dst, pixels1);
-            }
-            else if (upipe_netmap_sink->input_bit_depth == 8) {
-                const uint8_t *y8, *u8, *v8;
-                y8 = upipe_netmap_sink->pixel_buffers[0] +
-                    upipe_netmap_sink->strides[0] * interleaved_line +
-                    upipe_netmap_sink->pixel_offset / 1;
-                u8 = upipe_netmap_sink->pixel_buffers[1] +
-                    upipe_netmap_sink->strides[1] * interleaved_line +
-                    upipe_netmap_sink->pixel_offset / 2;
-                v8 = upipe_netmap_sink->pixel_buffers[2] +
-                    upipe_netmap_sink->strides[2] * interleaved_line +
-                    upipe_netmap_sink->pixel_offset / 2;
-                upipe_netmap_sink->pack_8_planar(y8, u8, v8, dst, pixels1);
-            }
-
-            upipe_netmap_sink->pixel_offset += pixels1;
-            dst += data_len1;
-
-            if (continuation || marker) {
-                upipe_netmap_sink->pixel_offset = 0;
-                if (continuation || (marker && !field)) {
-                    upipe_netmap_sink->line++;
-                }
-            }
-
-            if (data_len2) {
-                interleaved_line = get_interleaved_line(upipe_netmap_sink->line);
-                //printf("\n line %i \n", interleaved_line);
-                if (upipe_netmap_sink->input_is_v210) {
-                    const uint8_t *src = upipe_netmap_sink->pixel_buffers[0] +
-                        upipe_netmap_sink->strides[0]*interleaved_line;
-
-                    int block_offset = upipe_netmap_sink->pixel_offset /
-                        upipe_netmap_sink->output_pixels_per_block;
-                    src += block_offset * upipe_netmap_sink->output_block_size;
-
-                    upipe_netmap_sink->unpack_v210((uint32_t*)src, dst, pixels2);
-                }
-                else if (upipe_netmap_sink->input_bit_depth == 8) {
-                    const uint8_t *y8, *u8, *v8;
-                    y8 = upipe_netmap_sink->pixel_buffers[0] +
-                        upipe_netmap_sink->strides[0] * interleaved_line +
-                        upipe_netmap_sink->pixel_offset / 1;
-                    u8 = upipe_netmap_sink->pixel_buffers[1] +
-                        upipe_netmap_sink->strides[1] * interleaved_line +
-                        upipe_netmap_sink->pixel_offset / 2;
-                    v8 = upipe_netmap_sink->pixel_buffers[2] +
-                        upipe_netmap_sink->strides[2] * interleaved_line +
-                        upipe_netmap_sink->pixel_offset / 2;
-                    upipe_netmap_sink->pack_8_planar(y8, u8, v8, dst, pixels2);
-                }
-
-                upipe_netmap_sink->pixel_offset += pixels2;
-            }
-
-            txring->slot[cur].len = eth_frame_len;
-            cur = nm_ring_next(txring, cur);
-            txavail--;
-
-            /* Release consumed frame */
-            if (marker && field) {
-                upipe_netmap_sink->line = 0;
-                upipe_netmap_sink->pixel_offset = 0;
+            if (worker_tr03(upipe, dst, &txring->slot[cur].len)) {
                 for (int i = 0; i < UPIPE_RFC4175_MAX_PLANES &&
                         upipe_netmap_sink->input_chroma_map[i] != NULL; i++) {
                     uref_pic_plane_unmap(uref,
@@ -568,9 +579,12 @@ static void upipe_netmap_sink_worker(struct upump *upump)
                             0, 0, -1, -1);
                 }
                 uref_free(uref);
-                upipe_netmap_sink->frame_count++;
                 uref = NULL;
             }
+
+            cur = nm_ring_next(txring, cur);
+            txavail--;
+
             continue;
         }
 
