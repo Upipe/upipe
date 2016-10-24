@@ -135,7 +135,7 @@ struct upipe_netmap_sink {
     struct urefcount urefcount;
 
     /* Determined by the input flow_def */
-    bool use_tr03;
+    bool rfc4175;
     int input_bit_depth;
     bool input_is_v210;
 
@@ -540,7 +540,7 @@ static void upipe_netmap_sink_worker(struct upump *upump)
     uint32_t cur = txring->cur;
     uint32_t txavail = nm_ring_space(txring);
 
-    if (upipe_netmap_sink->use_tr03) {
+    if (upipe_netmap_sink->rfc4175) {
         for (int i = 0; i < UPIPE_RFC4175_MAX_PLANES &&
                 upipe_netmap_sink->input_chroma_map[i] != NULL; i++) {
             if (unlikely(!ubase_check(uref_pic_plane_read(uref,
@@ -570,7 +570,7 @@ static void upipe_netmap_sink_worker(struct upump *upump)
             input_size = -1;
         }
 
-        if (upipe_netmap_sink->use_tr03) {
+        if (upipe_netmap_sink->rfc4175) {
             if (worker_tr03(upipe, dst, &txring->slot[cur].len)) {
                 for (int i = 0; i < UPIPE_RFC4175_MAX_PLANES &&
                         upipe_netmap_sink->input_chroma_map[i] != NULL; i++) {
@@ -645,7 +645,7 @@ static void upipe_netmap_sink_worker(struct upump *upump)
         }
     }
 
-    if (!upipe_netmap_sink->use_tr03 && input_size != -1) {
+    if (!upipe_netmap_sink->rfc4175 && input_size != -1) {
         upipe_dbg_va(upipe, "loop done, input size %d bytes left %d -> %d",
                 input_size, bytes_left, input_size - bytes_left);
     }
@@ -654,7 +654,7 @@ static void upipe_netmap_sink_worker(struct upump *upump)
     ioctl(NETMAP_FD(upipe_netmap_sink->d), NIOCTXSYNC, NULL);
 
     if (uref) {
-        if (!upipe_netmap_sink->use_tr03) {
+        if (!upipe_netmap_sink->rfc4175) {
             if (bytes_left > 0) {
                 uref_block_unmap(uref, 0);
                 uref_block_resize(uref, input_size - bytes_left, -1);
@@ -733,7 +733,7 @@ static int upipe_netmap_sink_set_flow_def(struct upipe *upipe,
 
     /* Input is V210/Planar */
     if (ubase_check(uref_flow_match_def(flow_def, "pic."))) {
-        upipe_netmap_sink->use_tr03 = 1;
+        upipe_netmap_sink->rfc4175 = 1;
         uint8_t macropixel;
         if (!ubase_check(uref_pic_flow_get_macropixel(flow_def, &macropixel)))
             return UBASE_ERR_INVALID;
@@ -776,7 +776,7 @@ static int upipe_netmap_sink_set_flow_def(struct upipe *upipe,
             upipe_netmap_sink->input_chroma_map[2] = "v10l";
         }
     } else {
-        upipe_netmap_sink->use_tr03 = 0;
+        upipe_netmap_sink->rfc4175 = 0;
     }
 
     flow_def = uref_dup(flow_def);
