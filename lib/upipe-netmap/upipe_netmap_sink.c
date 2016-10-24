@@ -379,12 +379,10 @@ static int upipe_put_rfc4175_headers(struct upipe_netmap_sink *upipe_netmap_sink
 static inline int get_interleaved_line(int line_number)
 {
     assert(line_number < 1080);
-    if (line_number >= 540){
-        return (line_number - 540)*2 + 1;
-    }
-    else {
-        return line_number*2;
-    }
+    if (line_number >= 540)
+        return (line_number - 540) * 2 + 1;
+
+    return line_number*2;
 }
 
 static void upipe_netmap_sink_worker(struct upump *upump)
