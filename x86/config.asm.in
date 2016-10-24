@@ -1,0 +1,6 @@
+%define HAVE_ALIGNED_STACK 1
+%define HAVE_CPUNOP 1 ; we do not support nasm
+
+%define ARCH_X86_64 @ARCH_X86_64@
+
+%define private_prefix upipe

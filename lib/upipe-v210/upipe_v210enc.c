@@ -53,11 +53,22 @@
 
 #include <upipe-v210/upipe_v210enc.h>
 
+#include "v210enc.h"
+
 #include <libavutil/common.h>
-#include <libavutil/cpu.h>
 #include <libavutil/intreadwrite.h>
 
 #define UPIPE_V210_MAX_PLANES 3
+
+/** @This defines an 8-bit packing function. */
+typedef void (*upipe_v210enc_pack_line_8)(
+        const uint8_t *y, const uint8_t *u, const uint8_t *v,
+        uint8_t *dst, ptrdiff_t width);
+
+/** @This defines a 10-bit packing function. */
+typedef void (*upipe_v210enc_pack_line_10)(
+        const uint16_t *y, const uint16_t *u, const uint16_t *v,
+        uint8_t *dst, ptrdiff_t width);
 
 /** upipe_v210enc structure with v210enc parameters */
 struct upipe_v210enc {
@@ -91,9 +102,6 @@ struct upipe_v210enc {
 
     /** input bit depth **/
     int input_bit_depth;
-
-    /** cpu flags **/
-    int cpu_flags;
 
     /** 8-bit line packing function **/
     upipe_v210enc_pack_line_8 pack_line_8;
@@ -476,78 +484,6 @@ static int upipe_v210enc_set_flow_def(struct upipe *upipe, struct uref *flow_def
     return UBASE_ERR_NONE;
 }
 
-/** @This sets the 8-bit packing function.
- *
- * @param upipe description structure of the pipe
- * @param pack packing function
- * @return an error code
- */
-static inline int _upipe_v210enc_set_pack_line_8(struct upipe *upipe,
-        upipe_v210enc_pack_line_8 pack)
-{
-    struct upipe_v210enc *upipe_v210enc = upipe_v210enc_from_upipe(upipe);
-    if (unlikely(!pack)) {
-        return UBASE_ERR_INVALID;
-    }
-
-    upipe_v210enc->pack_line_8 = pack;
-    return UBASE_ERR_NONE;
-}
-
-/** @This gets the 8-bit packing function.
- *
- * @param upipe description structure of the pipe
- * @param pack_p written with the packing function
- * @return an error code
- */
-static inline int _upipe_v210enc_get_pack_line_8(struct upipe *upipe,
-        upipe_v210enc_pack_line_8 *pack_p)
-{
-    struct upipe_v210enc *upipe_v210enc = upipe_v210enc_from_upipe(upipe);
-    if (unlikely(!pack_p)) {
-        return UBASE_ERR_INVALID;
-    }
-
-    *pack_p = upipe_v210enc->pack_line_8;
-    return UBASE_ERR_NONE;
-}
-
-/** @This sets the 10-bit packing function.
- *
- * @param upipe description structure of the pipe
- * @param pack packing function
- * @return an error code
- */
-static inline int _upipe_v210enc_set_pack_line_10(struct upipe *upipe,
-        upipe_v210enc_pack_line_10 pack)
-{
-    struct upipe_v210enc *upipe_v210enc = upipe_v210enc_from_upipe(upipe);
-    if (unlikely(!pack)) {
-        return UBASE_ERR_INVALID;
-    }
-
-    upipe_v210enc->pack_line_10 = pack;
-    return UBASE_ERR_NONE;
-}
-
-/** @This gets the 10-bit packing function.
- *
- * @param upipe description structure of the pipe
- * @param pack_p written with the packing function
- * @return an error code
- */
-static inline int _upipe_v210enc_get_pack_line_10(struct upipe *upipe,
-        upipe_v210enc_pack_line_10 *pack_p)
-{
-    struct upipe_v210enc *upipe_v210enc = upipe_v210enc_from_upipe(upipe);
-    if (unlikely(!pack_p)) {
-        return UBASE_ERR_INVALID;
-    }
-
-    *pack_p = upipe_v210enc->pack_line_10;
-    return UBASE_ERR_NONE;
-}
-
 /** @internal @This processes control commands on a file source pipe, and
  * checks the status of the pipe afterwards.
  *
@@ -591,26 +527,6 @@ static int upipe_v210enc_control(struct upipe *upipe, int command, va_list args)
             return upipe_v210enc_set_flow_def(upipe, flow);
         }
 
-        case UPIPE_V210ENC_SET_PACK_LINE_8: {
-            UBASE_SIGNATURE_CHECK(args, UPIPE_V210ENC_SIGNATURE)
-            return _upipe_v210enc_set_pack_line_8(upipe,
-                   va_arg(args, upipe_v210enc_pack_line_8));
-        }
-        case UPIPE_V210ENC_GET_PACK_LINE_8: {
-            UBASE_SIGNATURE_CHECK(args, UPIPE_V210ENC_SIGNATURE)
-            return _upipe_v210enc_get_pack_line_8(upipe,
-                   va_arg(args, upipe_v210enc_pack_line_8 *));
-        }
-        case UPIPE_V210ENC_SET_PACK_LINE_10: {
-            UBASE_SIGNATURE_CHECK(args, UPIPE_V210ENC_SIGNATURE)
-            return _upipe_v210enc_set_pack_line_10(upipe,
-                   va_arg(args, upipe_v210enc_pack_line_10));
-        }
-        case UPIPE_V210ENC_GET_PACK_LINE_10: {
-            UBASE_SIGNATURE_CHECK(args, UPIPE_V210ENC_SIGNATURE)
-            return _upipe_v210enc_get_pack_line_10(upipe,
-                   va_arg(args, upipe_v210enc_pack_line_10 *));
-        }
         default:
             return UBASE_ERR_UNHANDLED;
     }
@@ -633,10 +549,33 @@ static struct upipe *upipe_v210enc_alloc(struct upipe_mgr *mgr,
         return NULL;
 
     struct upipe_v210enc *upipe_v210enc = upipe_v210enc_from_upipe(upipe);
-    upipe_v210enc->cpu_flags = av_get_cpu_flags();
 
     upipe_v210enc->pack_line_8  = v210enc_planar_pack_8_c;
     upipe_v210enc->pack_line_10 = v210enc_planar_pack_10_c;
+
+#if !defined(__APPLE__) /* macOS clang doesn't support that builtin yet */
+    if (__builtin_cpu_supports("avx2")) {
+        upipe_v210enc->pack_line_8  = upipe_v210_planar_pack_8_avx2;
+        upipe_v210enc->pack_line_10 = upipe_v210_planar_pack_10_avx2;
+    } else {
+#if defined(__clang__) && /* clang 3.8 doesn't know ssse3 */ \
+     (__clang_major__ < 3 || (__clang_major__ == 3 && __clang_minor__ <= 8))
+# ifdef __SSSE3__
+        if (1)
+# else
+        if (0)
+# endif
+#else
+        if (__builtin_cpu_supports("ssse3"))
+#endif
+        {
+            upipe_v210enc->pack_line_8  = upipe_v210_planar_pack_8_ssse3;
+            upipe_v210enc->pack_line_10 = upipe_v210_planar_pack_10_ssse3;
+        }
+        if (__builtin_cpu_supports("avx"))
+            upipe_v210enc->pack_line_8  = upipe_v210_planar_pack_8_avx;
+    }
+#endif
 
     upipe_v210enc_init_urefcount(upipe);
     upipe_v210enc_init_ubuf_mgr(upipe);
