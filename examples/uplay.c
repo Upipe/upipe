@@ -401,6 +401,8 @@ static int catch_audio(struct uprobe *uprobe, struct upipe *upipe,
             uprobe_pfx_alloc(uprobe_use(uprobe_main),
                              UPROBE_LOG_VERBOSE, "play audio"));
 
+    uprobe_throw(uprobe_main, NULL, UPROBE_FREEZE_UPUMP_MGR);
+
     struct upipe *sink;
 #ifdef UPIPE_HAVE_ALSA_ASOUNDLIB_H
     struct upipe_mgr *upipe_alsink_mgr = upipe_alsink_mgr_alloc();
@@ -417,6 +419,8 @@ static int catch_audio(struct uprobe *uprobe, struct upipe *upipe,
                              "null"));
     upipe_mgr_release(upipe_null_mgr);
 #endif
+
+    uprobe_throw(uprobe_main, NULL, UPROBE_THAW_UPUMP_MGR);
 
     /* deport to the sink thread */
     sink = upipe_wsink_alloc(upipe_wsink_mgr,
