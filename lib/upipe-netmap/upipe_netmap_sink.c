@@ -161,9 +161,9 @@ struct upipe_netmap_sink {
     int pixel_offset;
 
     /** input chroma map */
-    const char *input_chroma_map[UPIPE_RFC4175_MAX_PLANES+1];
-    const uint8_t *pixel_buffers[UPIPE_RFC4175_MAX_PLANES+1];
-    int            strides[UPIPE_RFC4175_MAX_PLANES+1];
+    const char *input_chroma_map[UPIPE_RFC4175_MAX_PLANES];
+    const uint8_t *pixel_buffers[UPIPE_RFC4175_MAX_PLANES];
+    int            strides[UPIPE_RFC4175_MAX_PLANES];
 
     /* Gets set during init only */
     int output_pixels_per_block;
@@ -416,8 +416,7 @@ static void upipe_netmap_sink_worker(struct upump *upump)
         if (upipe_netmap_sink->use_tr03) {
             if (input_size == -1) {
                 input_size = 0;
-                int i;
-                for (i = 0; i < UPIPE_RFC4175_MAX_PLANES &&
+                for (int i = 0; i < UPIPE_RFC4175_MAX_PLANES &&
                             upipe_netmap_sink->input_chroma_map[i] != NULL; i++) {
                     const uint8_t *plane_buf;
                     size_t stride;
@@ -433,7 +432,6 @@ static void upipe_netmap_sink_worker(struct upump *upump)
                     upipe_netmap_sink->pixel_buffers[i] = plane_buf;
                     upipe_netmap_sink->strides[i] = stride;
                 }
-                upipe_netmap_sink->pixel_buffers[i] = NULL;
             }
 
             uint16_t eth_frame_len = ETHERNET_HEADER_LEN + UDP_HEADER_SIZE + IP_HEADER_MINSIZE + RTP_HEADER_SIZE + RFC_4175_HEADER_LEN + RFC_4175_EXT_SEQ_NUM_LEN;
@@ -755,13 +753,11 @@ static int upipe_netmap_sink_set_flow_def(struct upipe *upipe,
             upipe_netmap_sink->input_chroma_map[0] = "y8";
             upipe_netmap_sink->input_chroma_map[1] = "u8";
             upipe_netmap_sink->input_chroma_map[2] = "v8";
-            upipe_netmap_sink->input_chroma_map[3] = NULL;
         }
         else if (upipe_netmap_sink->input_bit_depth == 10) {
             upipe_netmap_sink->input_chroma_map[0] = "y10l";
             upipe_netmap_sink->input_chroma_map[1] = "u10l";
             upipe_netmap_sink->input_chroma_map[2] = "v10l";
-            upipe_netmap_sink->input_chroma_map[3] = NULL;
         }
     } else {
         upipe_netmap_sink->use_tr03 = 0;
