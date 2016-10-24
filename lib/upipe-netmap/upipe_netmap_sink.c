@@ -632,6 +632,7 @@ static void upipe_netmap_sink_worker(struct upump *upump)
         cur = nm_ring_next(txring, cur);
 
         if (--txavail == 0) {
+            // FIXME : should we really refresh TX until we exhausted all urefs?
             txring->head = txring->cur = cur;
             ioctl(NETMAP_FD(upipe_netmap_sink->d), NIOCTXSYNC, NULL);
 
