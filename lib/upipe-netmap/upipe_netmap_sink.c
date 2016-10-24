@@ -141,7 +141,7 @@ struct upipe_netmap_sink {
 
     /** sequence number **/
     uint64_t seqnum;
-    int64_t frame_count;
+    uint64_t frame_count;
 
     /** Source */
     uint16_t src_port;
@@ -324,8 +324,9 @@ static int upipe_netmap_put_headers(struct upipe_netmap_sink *upipe_netmap_sink,
     rtp_set_hdr(buf);
     rtp_set_type(buf, pt);
     rtp_set_seqnum(buf, upipe_netmap_sink->seqnum & UINT16_MAX);
+
     //FIXME: NTSC only, correct this for PAL and in general
-    int64_t timestamp = upipe_netmap_sink->frame_count*(int64_t)900900;
+    uint64_t timestamp = upipe_netmap_sink->frame_count * 900900;
     rtp_set_timestamp(buf, timestamp & UINT32_MAX);
     if (put_marker)
         rtp_set_marker(buf);
