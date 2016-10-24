@@ -641,15 +641,18 @@ static void upipe_netmap_sink_worker(struct upump *upump)
     ioctl(NETMAP_FD(upipe_netmap_sink->d), NIOCTXSYNC, NULL);
 
     if (uref) {
-        if (!upipe_netmap_sink->use_tr03 && bytes_left > 0) {
-            uref_block_unmap(uref, 0);
-            uref_block_resize(uref, input_size - bytes_left, -1);
+        if (!upipe_netmap_sink->use_tr03) {
+            if (bytes_left > 0) {
+                uref_block_unmap(uref, 0);
+                uref_block_resize(uref, input_size - bytes_left, -1);
+            }
         } else for (int i = 0; i < UPIPE_RFC4175_MAX_PLANES &&
                 upipe_netmap_sink->input_chroma_map[i] != NULL; i++) {
             uref_pic_plane_unmap(uref, upipe_netmap_sink->input_chroma_map[i],
                     0, 0, -1, -1);
         }
     }
+
     upipe_netmap_sink->uref = uref;
 }
 
