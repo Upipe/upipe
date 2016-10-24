@@ -163,7 +163,7 @@ struct upipe_netmap_sink {
     /** input chroma map */
     const char *input_chroma_map[UPIPE_RFC4175_MAX_PLANES];
     const uint8_t *pixel_buffers[UPIPE_RFC4175_MAX_PLANES];
-    int            strides[UPIPE_RFC4175_MAX_PLANES];
+    size_t         strides[UPIPE_RFC4175_MAX_PLANES];
 
     /* Gets set during init only */
     int output_pixels_per_block;
