@@ -568,14 +568,14 @@ static void upipe_netmap_sink_worker(struct upump *upump)
     bool rfc4175 = upipe_netmap_sink->rfc4175;
 
     if (rfc4175) {
-        for (int i = 0; i < UPIPE_RFC4175_MAX_PLANES &&
-                upipe_netmap_sink->input_chroma_map[i] != NULL; i++) {
-            if (unlikely(!ubase_check(uref_pic_plane_read(uref,
-                                upipe_netmap_sink->input_chroma_map[i],
+        for (int i = 0; i < UPIPE_RFC4175_MAX_PLANES; i++) {
+            const char *chroma = upipe_netmap_sink->input_chroma_map[i];
+            if (!chroma)
+                break;
+            if (unlikely(!ubase_check(uref_pic_plane_read(uref, chroma,
                                 0, 0, -1, -1,
                                 &upipe_netmap_sink->pixel_buffers[i])) ||
-                        !ubase_check(uref_pic_plane_size(uref,
-                                upipe_netmap_sink->input_chroma_map[i],
+                        !ubase_check(uref_pic_plane_size(uref, chroma,
                                 &upipe_netmap_sink->strides[i], NULL, NULL,
                                 NULL)))) {
                 upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
@@ -613,11 +613,11 @@ static void upipe_netmap_sink_worker(struct upump *upump)
 
         if (rfc4175) {
             if (worker_rfc4175(upipe, &dst, &txring->slot[cur].len)) {
-                for (int i = 0; i < UPIPE_RFC4175_MAX_PLANES &&
-                        upipe_netmap_sink->input_chroma_map[i] != NULL; i++) {
-                    uref_pic_plane_unmap(uref,
-                            upipe_netmap_sink->input_chroma_map[i],
-                            0, 0, -1, -1);
+                for (int i = 0; i < UPIPE_RFC4175_MAX_PLANES; i++) {
+                    const char *chroma = upipe_netmap_sink->input_chroma_map[i];
+                    if (!chroma)
+                        break;
+                    uref_pic_plane_unmap(uref, chroma, 0, 0, -1, -1);
                 }
                 uref_free(uref);
                 uref = NULL;
@@ -660,10 +660,11 @@ static void upipe_netmap_sink_worker(struct upump *upump)
                 uref_block_unmap(uref, 0);
                 uref_block_resize(uref, input_size - bytes_left, -1);
             }
-        } else for (int i = 0; i < UPIPE_RFC4175_MAX_PLANES &&
-                upipe_netmap_sink->input_chroma_map[i] != NULL; i++) {
-            uref_pic_plane_unmap(uref, upipe_netmap_sink->input_chroma_map[i],
-                    0, 0, -1, -1);
+        } else for (int i = 0; i < UPIPE_RFC4175_MAX_PLANES; i++) {
+            const char *chroma = upipe_netmap_sink->input_chroma_map[i];
+            if (!chroma)
+                break;
+            uref_pic_plane_unmap(uref, chroma, 0, 0, -1, -1);
         }
     }
 
