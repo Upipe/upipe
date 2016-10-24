@@ -523,6 +523,32 @@ static int worker_rfc4175(struct upipe *upipe, uint8_t *dst, uint16_t *len)
     return 0;
 }
 
+static int worker_hbrmt(struct upipe *upipe, uint8_t **dst, const uint8_t *src,
+        int bytes_left, uint16_t *len)
+{
+    struct upipe_netmap_sink *upipe_netmap_sink = upipe_netmap_sink_from_upipe(upipe);
+
+    /* Enough data to fill entire ring buffer? */
+    int payload_len = *len = HBRMT_DATA_SIZE;
+    if (payload_len > bytes_left) {
+        payload_len = bytes_left;
+        /* padding */
+        memset(&dst[payload_len], 0, HBRMT_DATA_SIZE - payload_len);
+    }
+
+    uint16_t payload_size = HBRMT_LEN - ETHERNET_HEADER_LEN - UDP_HEADER_SIZE -
+        IP_HEADER_MINSIZE;
+
+    /* Put headers and the marker if we've depleted the entire ubuf/frame */
+    *dst += upipe_netmap_put_headers(upipe_netmap_sink, *dst, payload_size, 98, !bytes_left);
+    *dst += upipe_put_hbrmt_headers(upipe_netmap_sink, *dst);
+
+    /* Put data */
+    memcpy(*dst, src, payload_len);
+
+    return payload_len;
+}
+
 static void upipe_netmap_sink_worker(struct upump *upump)
 {
     struct upipe *upipe = upump_get_opaque(upump, struct upipe *);
@@ -602,31 +628,14 @@ static void upipe_netmap_sink_worker(struct upump *upump)
                     bytes_left);
         }
 
-        /* Enough data to fill entire ring buffer? */
-        int data_to_put = HBRMT_DATA_SIZE;
-        if (bytes_left < HBRMT_DATA_SIZE)
-            data_to_put = bytes_left;
-        bytes_left -= data_to_put;
+/////
+        int len = worker_hbrmt(upipe, &dst, src_buf, bytes_left, &txring->slot[cur].len);
+        dst += len;
+        src_buf += len;
+        bytes_left -= len;
 
-        uint16_t payload_size = HBRMT_LEN - ETHERNET_HEADER_LEN -
-            UDP_HEADER_SIZE - IP_HEADER_MINSIZE;
-
-        /* Put headers and the marker if we've depleted the entire ubuf/frame */
-        dst += upipe_netmap_put_headers(upipe_netmap_sink, dst, payload_size,
-                98, !bytes_left);
-        dst += upipe_put_hbrmt_headers(upipe_netmap_sink, dst);
-
-        /* Put data */
-        memcpy(dst, src_buf, data_to_put);
-        dst += data_to_put;
-        src_buf += data_to_put;
-
-        /* Put padding if there wasn't enough data */
-        if (data_to_put < HBRMT_DATA_SIZE)
-            memset(dst, 0, HBRMT_DATA_SIZE - data_to_put);
-
-        txring->slot[cur].len = HBRMT_LEN;
         cur = nm_ring_next(txring, cur);
+
         if (--txavail == 0) {
             txring->head = txring->cur = cur;
             ioctl(NETMAP_FD(upipe_netmap_sink->d), NIOCTXSYNC, NULL);
@@ -634,14 +643,11 @@ static void upipe_netmap_sink_worker(struct upump *upump)
             txavail = nm_ring_space(txring);
         }
 
-        /* Unmap, remove finished uref from queue and free uref */
-        assert(bytes_left >= 0);
         if (!bytes_left) {
             uref_block_unmap(uref, 0);
             uref_free(uref);
             uref = NULL;
             upipe_netmap_sink->frame_count++;
-            bytes_left = 0;
         }
     }
 
