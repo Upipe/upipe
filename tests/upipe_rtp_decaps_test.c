@@ -223,6 +223,10 @@ int main(int argc, char **argv)
     upipe_input(rtpd, uref, NULL);
     assert(!nb_packets);
 
+    uint64_t lost;
+    ubase_assert(upipe_rtpd_get_packets_lost(rtpd, &lost));
+    assert(lost == 42 - 1 - 1);
+
     /* release pipe */
     upipe_release(rtpd);
     test_free(rtpd_test);
