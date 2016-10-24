@@ -386,7 +386,7 @@ static inline int get_interleaved_line(int line_number)
 }
 
 /* returns 1 if uref exhausted */
-static int worker_tr03(struct upipe *upipe, uint8_t *dst, uint16_t *len)
+static int worker_rfc4175(struct upipe *upipe, uint8_t *dst, uint16_t *len)
 {
     struct upipe_netmap_sink *upipe_netmap_sink = upipe_netmap_sink_from_upipe(upipe);
 
@@ -571,7 +571,7 @@ static void upipe_netmap_sink_worker(struct upump *upump)
         }
 
         if (upipe_netmap_sink->rfc4175) {
-            if (worker_tr03(upipe, dst, &txring->slot[cur].len)) {
+            if (worker_rfc4175(upipe, dst, &txring->slot[cur].len)) {
                 for (int i = 0; i < UPIPE_RFC4175_MAX_PLANES &&
                         upipe_netmap_sink->input_chroma_map[i] != NULL; i++) {
                     uref_pic_plane_unmap(uref,
