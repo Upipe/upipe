@@ -355,7 +355,7 @@ static int upipe_put_hbrmt_headers(struct upipe_netmap_sink *upipe_netmap_sink,
     smpte_hbrmt_set_map(buf, 0);
     smpte_hbrmt_set_frame(buf, upipe_netmap_sink->frame);
     smpte_hbrmt_set_frate(buf, upipe_netmap_sink->frate);
-    smpte_hbrmt_set_sample(buf, 0x1);
+    smpte_hbrmt_set_sample(buf, 0x1); // 422 10 bits
     smpte_hbrmt_set_fmt_reserve(buf);
 
     buf += HBRMT_HEADER_ONLY_SIZE;
