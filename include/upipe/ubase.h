@@ -362,8 +362,8 @@ static inline void urational_simplify(struct urational *urational)
  * @param urational2 pointer to rational 2
  * @return 0 if both rationals are equal
  */
-static inline int64_t urational_cmp(struct urational *urational1,
-                                    struct urational *urational2)
+static inline int64_t urational_cmp(const struct urational *urational1,
+                                    const struct urational *urational2)
 {
     if (!urational1->den && !urational2->den)
         return 0;
