@@ -369,7 +369,7 @@
       @item A worker manager is created using the transfer manager. It allows to transfer whole subpipelines to the thread. You must choose the correct type of worker, whether the subpipeline is a source (@ref upipe_wsrc_mgr_alloc), a sink (@ref upipe_wsink_mgr_alloc) or a linear subpipeline (@ref upipe_wlin_mgr_alloc). This controls which queues will be set up for the input and/or output of the subpipeline.
       @item The pipes that are to be transferred to the subpipeline are created normally in the main thread. However, some pipes may request a upump manager and start working immediately, therefore pumps would be created with the wrong upump manager. To avoid that, it is necessary to freeze the upump manager of the main thread by calling @ref uprobe_throw on the probe that delivers upump managers (for instance @ref uprobe_pthread_upump_mgr_alloc) with the event @ref UPROBE_FREEZE_UPUMP_MGR.
       @item a worker pipe is created with a pointer to the subpipeline, and takes the place of the subpipeline, from the point of view of the main thread. It is possible to input urefs to the worker pipe (for linear and sink workers), set its output (for linear and source workers), or release it (@ref upipe_release). The worker pipe automatically calls @ref upipe_attach_upump_mgr on relevant pipes of the subpipeline.
-      @item After the subpipeline has been transferred, the upump manager of the main thread may be thawed with @ref UPROBE_THAW_UPUMP_MGR.
+      @item After the subpipeline has been created, the upump manager of the main thread may be thawed with @ref UPROBE_THAW_UPUMP_MGR.
 
     @end list
 
