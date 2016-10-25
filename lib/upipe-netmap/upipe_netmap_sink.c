@@ -143,6 +143,10 @@ struct upipe_netmap_sink {
     uint64_t seqnum;
     uint64_t frame_count;
 
+    //hbrmt header
+    uint8_t frate;
+    uint8_t frame;
+
     /** Source */
     uint16_t src_port;
     in_addr_t src_ip;
@@ -349,8 +353,8 @@ static int upipe_put_hbrmt_headers(struct upipe_netmap_sink *upipe_netmap_sink,
     smpte_hbrmt_set_fec(buf, 0);
     smpte_hbrmt_set_clock_frequency(buf, 0);
     smpte_hbrmt_set_map(buf, 0);
-    smpte_hbrmt_set_frame(buf, 0x20); // FIXME
-    smpte_hbrmt_set_frate(buf, 0x17); // FIXME
+    smpte_hbrmt_set_frame(buf, upipe_netmap_sink->frame);
+    smpte_hbrmt_set_frate(buf, upipe_netmap_sink->frate);
     smpte_hbrmt_set_sample(buf, 0x1);
     smpte_hbrmt_set_fmt_reserve(buf);
 
@@ -782,6 +786,16 @@ static int upipe_netmap_sink_set_flow_def(struct upipe *upipe,
     } else {
         upipe_netmap_sink->rfc4175 = 0;
     }
+
+    struct urational fps;
+    UBASE_RETURN(uref_pic_flow_get_fps(flow_def, &fps));
+
+    uint64_t hsize, vsize;
+    UBASE_RETURN(uref_pic_flow_get_hsize(flow_def, &hsize));
+    UBASE_RETURN(uref_pic_flow_get_vsize(flow_def, &vsize));
+
+    upipe_netmap_sink->frame = 0x20; // FIXME
+    upipe_netmap_sink->frate = 0x17; // FIXME
 
     flow_def = uref_dup(flow_def);
     UBASE_ALLOC_RETURN(flow_def)
