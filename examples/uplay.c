@@ -303,6 +303,8 @@ static int catch_video(struct uprobe *uprobe, struct upipe *upipe,
     if (upipe_wlin_mgr == NULL) /* we're dying */
         return UBASE_ERR_UNHANDLED;
 
+    uprobe_throw(uprobe_main, NULL, UPROBE_FREEZE_UPUMP_MGR);
+
     struct upipe_mgr *fdec_mgr = upipe_fdec_mgr_alloc();
     struct upipe_mgr *avcdec_mgr = upipe_avcdec_mgr_alloc();
     upipe_fdec_mgr_set_avcdec_mgr(fdec_mgr, avcdec_mgr);
@@ -314,6 +316,8 @@ static int catch_video(struct uprobe *uprobe, struct upipe *upipe,
     upipe_mgr_release(fdec_mgr);
     upipe_set_option(avcdec, "threads", "4");
     upipe_set_option(avcdec, "thread_type", "1");
+
+    uprobe_throw(uprobe_main, NULL, UPROBE_THAW_UPUMP_MGR);
 
     /* deport to the decoder thread */
     avcdec = upipe_wlin_alloc(upipe_wlin_mgr,
@@ -398,12 +402,15 @@ static int catch_audio(struct uprobe *uprobe, struct upipe *upipe,
     if (upipe_wlin_mgr == NULL) /* we're dying */
         return UBASE_ERR_UNHANDLED;
 
+    uprobe_throw(uprobe_main, NULL, UPROBE_FREEZE_UPUMP_MGR);
     struct upipe_mgr *upipe_avcdec_mgr = upipe_avcdec_mgr_alloc();
     struct upipe *avcdec = upipe_void_alloc(upipe_avcdec_mgr,
             uprobe_pfx_alloc(uprobe_use(uprobe_main),
                              UPROBE_LOG_VERBOSE, "avcdec audio"));
     assert(avcdec != NULL);
     upipe_mgr_release(upipe_avcdec_mgr);
+
+    uprobe_throw(uprobe_main, NULL, UPROBE_THAW_UPUMP_MGR);
 
     /* deport to the decoder thread */
     avcdec = upipe_wlin_alloc(upipe_wlin_mgr,
@@ -425,6 +432,8 @@ static int catch_audio(struct uprobe *uprobe, struct upipe *upipe,
             uprobe_pfx_alloc(uprobe_use(uprobe_main),
                              UPROBE_LOG_VERBOSE, "play audio"));
 
+    uprobe_throw(uprobe_main, NULL, UPROBE_FREEZE_UPUMP_MGR);
+
     struct upipe *sink;
 #ifdef UPIPE_HAVE_ALSA_ASOUNDLIB_H
     struct upipe_mgr *upipe_alsink_mgr = upipe_alsink_mgr_alloc();
@@ -441,6 +450,8 @@ static int catch_audio(struct uprobe *uprobe, struct upipe *upipe,
                              "null"));
     upipe_mgr_release(upipe_null_mgr);
 #endif
+
+    uprobe_throw(uprobe_main, NULL, UPROBE_THAW_UPUMP_MGR);
 
     /* deport to the sink thread */
     sink = upipe_wsink_alloc(upipe_wsink_mgr,
