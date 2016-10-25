@@ -289,11 +289,13 @@ static struct upipe *upipe_netmap_sink_alloc(struct upipe_mgr *mgr,
     upipe_netmap_sink->pack_10_planar = upipe_planar_to_sdi_10_c;
     upipe_netmap_sink->unpack_v210 = upipe_v210_sdi_unpack_c;
 
+#if !defined(__APPLE__) /* macOS clang doesn't support that builtin yet */
     if (__builtin_cpu_supports("avx")) {
         upipe_netmap_sink->pack_8_planar = upipe_planar_to_sdi_8_avx;
         upipe_netmap_sink->pack_10_planar = upipe_planar_to_sdi_10_avx;
         upipe_netmap_sink->unpack_v210 = upipe_v210_sdi_unpack_aligned_avx;
     }
+#endif
 
     upipe_throw_ready(upipe);
     return upipe;
