@@ -59,6 +59,7 @@
 #include <upipe-pthread/uprobe_pthread_upump_mgr.h>
 #include <upump-ev/upump_ev.h>
 #include <upipe-modules/upipe_blit.h>
+#include <upipe-modules/upipe_probe_uref.h>
 #include <upipe-modules/upipe_subpic_schedule.h>
 #include <upipe-modules/upipe_file_source.h>
 #include <upipe-modules/upipe_udp_source.h>
@@ -130,6 +131,8 @@ static struct uprobe *uprobe_dejitter = NULL;
 static struct uprobe uprobe_src_s;
 /* probe for demux video subpipe */
 static struct uprobe uprobe_video_s;
+/* probe for probe_uref subpipe */
+static struct uprobe uprobe_uref_s;
 /* probe for demux sub subpipe */
 static struct uprobe uprobe_sub_s;
 /* probe for demux audio subpipe */
@@ -272,6 +275,22 @@ static int catch_sub(struct uprobe *uprobe, struct upipe *upipe,
     return UBASE_ERR_NONE;
 }
 
+/* probe for pipe probe_uref */
+static int catch_uref(struct uprobe *uprobe, struct upipe *upipe,
+                       int event, va_list args)
+{
+    if (event == UPROBE_PROBE_UREF) {
+        UBASE_SIGNATURE_CHECK(args, UPIPE_PROBE_UREF_SIGNATURE);
+        /* ignore arguments */
+        va_arg(args, struct uref *);
+        va_arg(args, bool *);
+        upipe_blit_prepare(upipe_blit);
+        return UBASE_ERR_NONE;
+    }
+
+    return uprobe_throw_next(uprobe, upipe, event, args);
+}
+
 /* probe for video subpipe of demux */
 static int catch_video(struct uprobe *uprobe, struct upipe *upipe,
                        int event, va_list args)
@@ -311,10 +330,15 @@ static int catch_video(struct uprobe *uprobe, struct upipe *upipe,
     upipe_schedule = upipe_void_chain_output(avcdec, subpic_schedule_mgr,
             uprobe_pfx_alloc(uprobe_use(uprobe), UPROBE_LOG_VERBOSE, "subpic schedule"));
     upipe_mgr_release(subpic_schedule_mgr);
-    upipe_release(upipe_schedule);
+
+    struct upipe_mgr *probe_uref_mgr = upipe_probe_uref_mgr_alloc();
+    struct upipe *upipe_probe_uref = upipe_void_chain_output(upipe_schedule, probe_uref_mgr,
+            uprobe_pfx_alloc(&uprobe_uref_s, UPROBE_LOG_VERBOSE,
+                "video probe_uref"));
+    upipe_mgr_release(probe_uref_mgr);
 
     struct upipe_mgr *blit_mgr = upipe_blit_mgr_alloc();
-    upipe_blit = upipe_void_alloc_output(upipe_schedule, blit_mgr,
+    upipe_blit = upipe_void_chain_output(upipe_probe_uref, blit_mgr,
         uprobe_pfx_alloc(uprobe_use(uprobe_main),
                             UPROBE_LOG_VERBOSE, "blit video"));
     assert(upipe_blit);
@@ -716,6 +740,7 @@ int main(int argc, char **argv)
     uprobe_init(&uprobe_sub_s, catch_sub, uprobe_use(uprobe_dejitter));
     uprobe_init(&uprobe_video_s, catch_video, uprobe_use(uprobe_dejitter));
     uprobe_init(&uprobe_audio_s, catch_audio, uprobe_use(uprobe_dejitter));
+    uprobe_init(&uprobe_uref_s, catch_uref, uprobe_use(uprobe_main));
     uprobe_init(&uprobe_glx_s, catch_glx, uprobe_use(uprobe_main));
 
     /* upipe-av */
@@ -761,6 +786,7 @@ int main(int argc, char **argv)
 
     uprobe_clean(&uprobe_src_s);
     uprobe_clean(&uprobe_video_s);
+    uprobe_clean(&uprobe_uref_s);
     uprobe_clean(&uprobe_sub_s);
     uprobe_clean(&uprobe_audio_s);
     uprobe_clean(&uprobe_glx_s);
