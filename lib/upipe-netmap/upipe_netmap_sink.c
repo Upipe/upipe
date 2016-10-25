@@ -787,15 +787,54 @@ static int upipe_netmap_sink_set_flow_def(struct upipe *upipe,
         upipe_netmap_sink->rfc4175 = 0;
     }
 
-    struct urational fps;
-    UBASE_RETURN(uref_pic_flow_get_fps(flow_def, &fps));
-
     uint64_t hsize, vsize;
     UBASE_RETURN(uref_pic_flow_get_hsize(flow_def, &hsize));
     UBASE_RETURN(uref_pic_flow_get_vsize(flow_def, &vsize));
 
-    upipe_netmap_sink->frame = 0x20; // FIXME
-    upipe_netmap_sink->frate = 0x17; // FIXME
+    if (hsize == 720) {
+        if (vsize == 486) {
+            upipe_netmap_sink->frame = 0x10;
+        } else if (vsize == 576) {
+            upipe_netmap_sink->frame = 0x11;
+        } else
+            return UBASE_ERR_INVALID;
+    } else if (hsize == 1920 && vsize == 1080) {
+        upipe_netmap_sink->frame = 0x20; // interlaced
+        // FIXME: progressive/interlaced is per-picture
+        // XXX: should we do PSF at all?
+        // 0x21 progressive
+        // 0x22 psf
+    } else
+        return UBASE_ERR_INVALID;
+
+    static const struct  {
+        struct urational fps;
+        uint8_t frate;
+    } frate[] = {
+        { { 60,       1 }, 0x10 },
+        { { 60000, 1001 }, 0x11 },
+        { { 50,       1 }, 0x12 },
+        { { 48,       1 }, 0x14 },
+        { { 48000, 1001 }, 0x15 },
+        { { 30,       1 }, 0x16 },
+        { { 30000, 1001 }, 0x17 },
+        { { 25,       1 }, 0x18 },
+        { { 24,       1 }, 0x1a },
+        { { 24000, 1001 }, 0x1b },
+    };
+    struct urational fps;
+    UBASE_RETURN(uref_pic_flow_get_fps(flow_def, &fps));
+
+    upipe_netmap_sink->frate = 0;
+    for (int i = 0; i < sizeof(frate) / sizeof(frate[0]); i++) {
+        if (!urational_cmp(&frate[i].fps, &fps)) {
+            upipe_netmap_sink->frate = frate[i].frate;
+            break;
+        }
+    }
+
+    if (!upipe_netmap_sink->frate)
+        return UBASE_ERR_INVALID;
 
     flow_def = uref_dup(flow_def);
     UBASE_ALLOC_RETURN(flow_def)
