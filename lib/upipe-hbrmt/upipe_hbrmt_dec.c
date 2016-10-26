@@ -98,9 +98,6 @@ struct upipe_hbrmt_dec {
     /** last RTP timestamp */
     uint64_t last_rtp_timestamp;
 
-    /** next pts **/
-    int64_t next_pts;
-
     /* SDI offsets */
     const struct sdi_offsets_fmt *f;
 
@@ -157,8 +154,6 @@ static struct upipe *upipe_hbrmt_dec_alloc(struct upipe_mgr *mgr,
     upipe_throw_ready(upipe);
     return upipe;
 }
-
-#define MIN(X, Y) (((X) < (Y)) ? (X) : (Y))
 
 /** @internal @This handles data.
  *
