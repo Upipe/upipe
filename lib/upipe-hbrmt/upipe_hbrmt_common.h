@@ -224,7 +224,7 @@ struct sdi_picture_fmt {
     struct sdi_line_range vbi_f2_part2;
 };
 
-static struct sdi_picture_fmt pict_fmts[2] = {
+static const struct sdi_picture_fmt pict_fmts[2] = {
     /* 1125 Interlaced (1080 active) lines */
     {1920, 1080, 562, 7, 10, {1, 20}, {21, 560}, {561, 563}, {564, 583}, {584, 1123}, {1124, 1125}},
     /* 1125 Progressive (1080 active) lines */
@@ -239,7 +239,7 @@ struct sdi_offsets_fmt {
     /* Number of samples between SAV and start of active data */
     uint16_t active_offset;
 
-    struct sdi_picture_fmt *pict_fmt;
+    const struct sdi_picture_fmt *pict_fmt;
 
     /* 0x0 (Interlace), 0x1 (Segmented frame), 0x3 (Progressive) */
     uint8_t psf_ident;
@@ -262,7 +262,7 @@ struct sdi_offsets_fmt {
     struct urational fps;
 };
 
-static struct sdi_offsets_fmt fmts_data[7] = {
+static const struct sdi_offsets_fmt fmts_data[7] = {
     { 2640, 1125, 720, &pict_fmts[0], 0x0, 0x5, { 25, 1} },        /* 25 Hz I */
     { 2640, 1125, 720, &pict_fmts[1], 0x3, 0x9, { 50, 1} },        /* 50 Hz P */
 
