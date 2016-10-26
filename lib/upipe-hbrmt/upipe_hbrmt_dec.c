@@ -164,7 +164,7 @@ static struct upipe *upipe_hbrmt_dec_alloc(struct upipe_mgr *mgr,
     upipe_hbrmt_dec->next_packet_frame_start = 0;
     upipe_hbrmt_dec->expected_seqnum = -1;
     upipe_hbrmt_dec->discontinuity = 0;
-    upipe_hbrmt_dec->last_rtp_timestamp = UINT_MAX;
+    upipe_hbrmt_dec->last_rtp_timestamp = UINT32_MAX;
 
     upipe_throw_ready(upipe);
     return upipe;
@@ -306,8 +306,8 @@ static inline void upipe_hbrmt_dec_input(struct upipe *upipe, struct uref *uref,
         uref_clock_set_pts_orig(uref, timestamp);
 
         uint64_t delta =
-            (UINT_MAX + timestamp -
-             (upipe_hbrmt_dec->last_rtp_timestamp % UINT_MAX)) % UINT_MAX;
+            (UINT32_MAX + timestamp -
+             (upipe_hbrmt_dec->last_rtp_timestamp % UINT32_MAX)) % UINT32_MAX;
         upipe_hbrmt_dec->last_rtp_timestamp += delta;
         uref_clock_set_pts_prog(uref, upipe_hbrmt_dec->last_rtp_timestamp);
 
