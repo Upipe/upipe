@@ -41,9 +41,7 @@
 #include <upipe/upipe_helper_input.h>
 #include <upipe/upipe_helper_flow.h>
 
-#include <libavutil/common.h>
 #include <libavutil/cpu.h>
-#include <libavutil/intreadwrite.h>
 
 #include <upipe-hbrmt/upipe_unpack_rfc4175.h>
 #include "upipe_hbrmt_common.h"
@@ -353,8 +351,8 @@ static bool upipe_unpack_rfc4175_handle(struct upipe *upipe, struct uref *uref,
         uref_clock_set_pts_orig(uref, timestamp);
 
         uint64_t delta =
-            (UINT_MAX + timestamp -
-             (upipe_unpack_rfc4175->last_rtp_timestamp % UINT_MAX)) % UINT_MAX;
+            (UINT32_MAX + timestamp -
+             (upipe_unpack_rfc4175->last_rtp_timestamp % UINT32_MAX)) % UINT32_MAX;
         upipe_unpack_rfc4175->last_rtp_timestamp += delta;
         uref_clock_set_pts_prog(uref, upipe_unpack_rfc4175->last_rtp_timestamp);
 
@@ -585,7 +583,7 @@ static struct upipe *upipe_unpack_rfc4175_alloc(struct upipe_mgr *mgr,
     upipe_unpack_rfc4175_init_input(upipe);
 
     upipe_unpack_rfc4175->expected_seqnum = -1;
-    upipe_unpack_rfc4175->last_rtp_timestamp = UINT_MAX;
+    upipe_unpack_rfc4175->last_rtp_timestamp = UINT32_MAX;
     upipe_unpack_rfc4175->ubuf = NULL;
 
     upipe_throw_ready(upipe);
