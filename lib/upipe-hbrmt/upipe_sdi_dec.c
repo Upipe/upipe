@@ -619,109 +619,110 @@ static bool upipe_sdi_dec_handle(struct upipe *upipe, struct uref *uref,
 
             switch (packet[6] & 0xff) {
 #if 0
-                case S291_OP47SDP_DID:
-                    upipe_warn_va(upipe, "teletext! line %d", h+1);
-                        break;
+            case S291_OP47SDP_DID:
+                upipe_warn_va(upipe, "teletext! line %d", h+1);
+                    break;
 #endif
-                case S291_24BITAUDIO_GROUP1_DID:
-                case S291_24BITAUDIO_GROUP2_DID:
-                case S291_24BITAUDIO_GROUP3_DID:
-                case S291_24BITAUDIO_GROUP4_DID: {
-                    int audio_group = S291_24BITAUDIO_GROUP1_DID - (packet[6] & 0xff);
-                    if (data_count != 0x18) {
-                        upipe_warn_va(upipe, "Invalid data count 0x%x", data_count);
-                        continue;
-                    }
-
-                    // FIXME this is wrong
-                    if (h == 7 /*|| h == 569 - allowed for progressive */) // SMPTE RP 168
-                        upipe_warn_va(upipe, "Audio packet at invalid line %d", h + 1);
-
-                    uint16_t checksum = 0;
-                    int len = data_count + 3 /* DID / DBN / DC */;
-                    for (int i = 0; i < len; i++)
-                        checksum += packet[6 + 2*i] & 0x1ff;
-                    checksum &= 0x1ff;
-
-                    uint16_t stream_checksum = packet[6+len*2] & 0x1ff;
-                    if (checksum != stream_checksum) {
-                        upipe_err_va(upipe, "Invalid checksum: 0x%.3x != 0x%.3x",
-                            checksum, stream_checksum
-                        );
-                    }
-
-                    /* read ECC from bitstream */
-                    uint8_t stream_ecc[6];
-                    for (int i = 0; i < 6; i++)
-                        stream_ecc[i] = packet[48 + 2*i] & 0xff;
-
-                    /* calculate expected ECC */
-                    uint8_t ecc[6] = { 0 };
-                    for (int i = 0; i < 48; i += 2) {
-                        const uint8_t in = ecc[0] ^ (packet[i] & 0xff);
-                        ecc[0] = ecc[1] ^ in;
-                        ecc[1] = ecc[2];
-                        ecc[2] = ecc[3] ^ in;
-                        ecc[3] = ecc[4] ^ in;
-                        ecc[4] = ecc[5] ^ in;
-                        ecc[5] = in;
-                    }
-
-                    if (memcmp(ecc, stream_ecc, sizeof(ecc))) {
-                        upipe_err_va(upipe, "Wrong ECC, %.2x%.2x%.2x%.2x%.2x%.2x != %.2x%.2x%.2x%.2x%.2x%.2x",
-                            ecc[0], ecc[1], ecc[2], ecc[3], ecc[4], ecc[5],
-                            stream_ecc[0], stream_ecc[1], stream_ecc[2], stream_ecc[3], stream_ecc[4], stream_ecc[5]);
-                    }
-					uint16_t clock = packet[12] & 0xff;
-					clock |= (packet[14] & 0x0f) << 8;
-					clock |= (packet[14] & 0x20) << 7;
-					bool mpf = packet[14] & 0x10;
-
-					/* wtf */
-					if ((h >= 8 && h <= 8 + 5) || (h >= 570 && h <= 570 + 5)) {
-					} else
-						mpf = false;
-
-					uint64_t audio_clock = upipe_sdi_dec->audio_samples[audio_group] *
-						f->width * f->height * upipe_sdi_dec->fps.num /
-						upipe_sdi_dec->fps.den / 48000;
-
-					if (unlikely(upipe_sdi_dec->eav_clock == 0))
-						upipe_sdi_dec->eav_clock -= clock; // initial phase offset
-
-					int64_t offset = audio_clock -
-						(upipe_sdi_dec->eav_clock - (mpf ? f->width : 0));
-
-					if (offset + 1 < clock || offset - 1 > clock) {
-						upipe_sdi_dec->eav_clock -= clock - offset;
-						if (0) upipe_notice_va(upipe,
-								"audio group %d on line %d: wrong audio phase (mpf %d) CLK %d != %d => %"PRId64"",
-								audio_group, h, mpf, clock, offset, offset - clock);
-					}
-
-					for (int i = 0; i < 4; i++) {
-						int32_t s = extract_audio_sample(&packet[UPIPE_SDI_MAX_CHANNELS + i * 8]);
-						buf_audio[group_offset[audio_group] * UPIPE_SDI_MAX_CHANNELS + 4 * audio_group + i] = s;
-
-						if (i & 0x01) { // check 2nd syncword
-							size_t prev = group_offset[audio_group] * 16 + 4 * audio_group + i - 1;
-							if ((s == 0xa54e1f00   && buf_audio[prev] == 0x96f87200) ||
-								(s ==  0x54e1f000  && buf_audio[prev] ==  0x6f872000) ||
-								(s ==   0x4e1f0000 && buf_audio[prev] ==   0xf8720000)) {
-								uint8_t pair = audio_group * 2 + (i >> 1);
-								if (aes[pair] != -1) {
-									upipe_err_va(upipe, "AES at line %d AND %d", aes[pair], h);
-								}
-								aes[pair] = h;
-							}
-						}
-					}
-
-					upipe_sdi_dec->audio_samples[audio_group]++;
-					group_offset[audio_group]++;
-
+            case S291_24BITAUDIO_GROUP1_DID:
+            case S291_24BITAUDIO_GROUP2_DID:
+            case S291_24BITAUDIO_GROUP3_DID:
+            case S291_24BITAUDIO_GROUP4_DID: {
+                int audio_group = S291_24BITAUDIO_GROUP1_DID - (packet[6] & 0xff);
+                if (data_count != 0x18) {
+                    upipe_warn_va(upipe, "Invalid data count 0x%x", data_count);
+                    continue;
                 }
-                default: break;
+
+                // FIXME this is wrong
+                if (h == 7 /*|| h == 569 - allowed for progressive */) // SMPTE RP 168
+                    upipe_warn_va(upipe, "Audio packet at invalid line %d", h + 1);
+
+                uint16_t checksum = 0;
+                int len = data_count + 3 /* DID / DBN / DC */;
+                for (int i = 0; i < len; i++)
+                    checksum += packet[6 + 2*i] & 0x1ff;
+                checksum &= 0x1ff;
+
+                uint16_t stream_checksum = packet[6+len*2] & 0x1ff;
+                if (checksum != stream_checksum) {
+                    upipe_err_va(upipe, "Invalid checksum: 0x%.3x != 0x%.3x",
+                        checksum, stream_checksum
+                    );
+                }
+
+                /* read ECC from bitstream */
+                uint8_t stream_ecc[6];
+                for (int i = 0; i < 6; i++)
+                    stream_ecc[i] = packet[48 + 2*i] & 0xff;
+
+                /* calculate expected ECC */
+                uint8_t ecc[6] = { 0 };
+                for (int i = 0; i < 48; i += 2) {
+                    const uint8_t in = ecc[0] ^ (packet[i] & 0xff);
+                    ecc[0] = ecc[1] ^ in;
+                    ecc[1] = ecc[2];
+                    ecc[2] = ecc[3] ^ in;
+                    ecc[3] = ecc[4] ^ in;
+                    ecc[4] = ecc[5] ^ in;
+                    ecc[5] = in;
+                }
+
+                if (memcmp(ecc, stream_ecc, sizeof(ecc))) {
+                    upipe_err_va(upipe, "Wrong ECC, %.2x%.2x%.2x%.2x%.2x%.2x != %.2x%.2x%.2x%.2x%.2x%.2x",
+                        ecc[0], ecc[1], ecc[2], ecc[3], ecc[4], ecc[5],
+                        stream_ecc[0], stream_ecc[1], stream_ecc[2], stream_ecc[3], stream_ecc[4], stream_ecc[5]);
+                }
+                uint16_t clock = packet[12] & 0xff;
+                clock |= (packet[14] & 0x0f) << 8;
+                clock |= (packet[14] & 0x20) << 7;
+                bool mpf = packet[14] & 0x10;
+
+                /* wtf */
+                if ((h >= 8 && h <= 8 + 5) || (h >= 570 && h <= 570 + 5)) {
+                } else
+                    mpf = false;
+
+                uint64_t audio_clock = upipe_sdi_dec->audio_samples[audio_group] *
+                    f->width * f->height * upipe_sdi_dec->fps.num /
+                    upipe_sdi_dec->fps.den / 48000;
+
+                if (unlikely(upipe_sdi_dec->eav_clock == 0))
+                    upipe_sdi_dec->eav_clock -= clock; // initial phase offset
+
+                int64_t offset = audio_clock -
+                    (upipe_sdi_dec->eav_clock - (mpf ? f->width : 0));
+
+                if (offset + 1 < clock || offset - 1 > clock) {
+                    upipe_sdi_dec->eav_clock -= clock - offset;
+                    if (0) upipe_notice_va(upipe,
+                            "audio group %d on line %d: wrong audio phase (mpf %d) CLK %d != %d => %"PRId64"",
+                            audio_group, h, mpf, clock, offset, offset - clock);
+                }
+
+                for (int i = 0; i < 4; i++) {
+                    int32_t s = extract_audio_sample(&packet[UPIPE_SDI_MAX_CHANNELS + i * 8]);
+                    buf_audio[group_offset[audio_group] * UPIPE_SDI_MAX_CHANNELS + 4 * audio_group + i] = s;
+
+                    if (i & 0x01) { // check 2nd syncword
+                        size_t prev = group_offset[audio_group] * 16 + 4 * audio_group + i - 1;
+                        if ((s == 0xa54e1f00   && buf_audio[prev] == 0x96f87200) ||
+                            (s ==  0x54e1f000  && buf_audio[prev] ==  0x6f872000) ||
+                            (s ==   0x4e1f0000 && buf_audio[prev] ==   0xf8720000)) {
+                            uint8_t pair = audio_group * 2 + (i >> 1);
+                            if (aes[pair] != -1) {
+                                upipe_err_va(upipe, "AES at line %d AND %d", aes[pair], h);
+                            }
+                            aes[pair] = h;
+                        }
+                    }
+                }
+
+                upipe_sdi_dec->audio_samples[audio_group]++;
+                group_offset[audio_group]++;
+
+            }
+            default:
+                break;
             }
         }
 
