@@ -553,6 +553,7 @@ static struct upipe *upipe_v210enc_alloc(struct upipe_mgr *mgr,
     upipe_v210enc->pack_line_8  = v210enc_planar_pack_8_c;
     upipe_v210enc->pack_line_10 = v210enc_planar_pack_10_c;
 
+#if defined(__i686__) || defined(__x86_64__)
 #if !defined(__APPLE__) /* macOS clang doesn't support that builtin yet */
     if (__builtin_cpu_supports("avx2")) {
         upipe_v210enc->pack_line_8  = upipe_v210_planar_pack_8_avx2;
@@ -575,6 +576,7 @@ static struct upipe *upipe_v210enc_alloc(struct upipe_mgr *mgr,
         if (__builtin_cpu_supports("avx"))
             upipe_v210enc->pack_line_8  = upipe_v210_planar_pack_8_avx;
     }
+#endif
 #endif
 
     upipe_v210enc_init_urefcount(upipe);
