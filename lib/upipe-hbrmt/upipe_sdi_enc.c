@@ -48,12 +48,6 @@ void ff_planar_to_uyvy_10_avx (uint16_t *dst, const uint16_t *y, const uint16_t 
 void ff_v210_uyvy_unpack_c          (const uint32_t *src, uint16_t *uyvy, int64_t width);
 void ff_v210_uyvy_unpack_aligned_avx(const uint32_t *src, uint16_t *uyvy, int64_t width);
 
-void ff_sdi_blank_c  (uint16_t *dst, int64_t size);
-void ff_sdi_blank_avx(uint16_t *dst, int64_t size);
-
-void ff_planar_to_uyvy_8_c  (uint16_t *dst, const uint8_t *y, const uint8_t *u, const uint8_t *v, const int64_t width);
-void ff_planar_to_uyvy_8_avx(uint16_t *dst, const uint8_t *y, const uint8_t *u, const uint8_t *v, const int64_t width);
-
 /* [Field][VBI] */
 static const uint16_t sav_fvh_cword[2][2] = {{0x200, 0x2ac}, {0x31c, 0x3b0}};
 static const uint16_t eav_fvh_cword[2][2] = {{0x274, 0x2d8}, {0x368, 0x3c4}};
