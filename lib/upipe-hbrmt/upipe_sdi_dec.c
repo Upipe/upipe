@@ -885,7 +885,7 @@ static bool upipe_sdi_dec_handle(struct upipe *upipe, struct uref *uref,
     uref_block_unmap(uref, 0);
 
     /* unmap output */
-    for (i = 0; i < UPIPE_SDI_DEC_MAX_PLANES &&
+    for (int i = 0; i < UPIPE_SDI_DEC_MAX_PLANES &&
                 upipe_sdi_dec->output_chroma_map[i] != NULL; i++)
         ubuf_pic_plane_unmap(ubuf, upipe_sdi_dec->output_chroma_map[i],
                              0, 0, -1, -1);
