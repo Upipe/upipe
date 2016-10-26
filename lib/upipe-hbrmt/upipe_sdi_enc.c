@@ -287,14 +287,13 @@ static void put_audio_control_packet(uint16_t *dst, int ch_group)
 /* NOTE: Assumes samplerate is 48000 */
 static int audio_packets_per_line(const struct sdi_offsets_fmt *f)
 {
-    double fps = (double)f->fps.num/f->fps.den;
-    int line_rate = f->height*fps;
+    int line_rate = f->height * f->fps.num / f->fps.den;
 
-    int no = round((double)48000/line_rate);
+    int no = round((double)48000 / line_rate);
 
     /* Height - 2 because 2 is the total amount of switching lines per video
      * frame */
-    if ((no * (f->height - 2)) < 48000 / fps)
+    if ((no * (f->height - 2)) < 48000 * f->fps.den / f->fps.num)
         no++;
 
     return no;
