@@ -53,7 +53,7 @@ SUBDIRS += upipe-v210
 endif
 
 if HAVE_BITSTREAM
-SUBDIRS += upipe-ts upipe-framers upipe-hls
+SUBDIRS += upipe-ts upipe-framers upipe-hls upipe-hbrmt
 endif
 
 if HAVE_AVFORMAT
