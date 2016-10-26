@@ -71,9 +71,12 @@ cglobal sdi_pack_10, 3, 4, 3, dst, y, size
     pshufb  m0, [sdi_luma_shuf_10]
     por     m0, m1
 
-    movu    [dstq], m0
+    movu    [dstq], xm0
+%if cpuflag(avx2)
+    vextracti128 [dstq+10], m0, 1
+%endif
 
-    add     dstq, 10
+    add     dstq, (mmsize*5)/8
     add     sizeq, mmsize
     jl .loop
 
@@ -83,6 +86,8 @@ cglobal sdi_pack_10, 3, 4, 3, dst, y, size
 INIT_XMM ssse3
 sdi_pack_10
 INIT_XMM avx
+sdi_pack_10
+INIT_YMM avx2
 sdi_pack_10
 
 %macro sdi_blank 0

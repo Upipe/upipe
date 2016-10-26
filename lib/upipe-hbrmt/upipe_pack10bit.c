@@ -131,6 +131,8 @@ static bool upipe_pack10bit_handle(struct upipe *upipe, struct uref *uref,
         struct uref *flow_format = uref_dup(upipe_pack10bit->flow_def);
         if (!flow_format)
             return false;
+        /* avx2 worst case, writes a full xmm register at offset + 10 */
+        uref_block_flow_set_append(flow_format, 10 + 16);
         upipe_pack10bit_require_ubuf_mgr(upipe, flow_format);
         if (unlikely(!upipe_pack10bit->ubuf_mgr))
             return false;
@@ -349,6 +351,9 @@ static struct upipe *upipe_pack10bit_alloc(struct upipe_mgr *mgr,
 
 	if (__builtin_cpu_supports("avx"))
         upipe_pack10bit->pack = upipe_sdi_pack_10_avx;
+
+    if (__builtin_cpu_supports("avx2"))
+        upipe_pack10bit->pack = upipe_sdi_pack_10_avx2;
 #endif
 
     upipe_pack10bit_init_urefcount(upipe);
