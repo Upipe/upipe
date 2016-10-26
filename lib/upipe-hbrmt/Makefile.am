@@ -2,6 +2,10 @@ lib_LTLIBRARIES = libupipe_hbrmt.la
 
 libupipe_hbrmt_la_SOURCES = upipe_pack10bit.c \
     upipe_unpack10bit.c \
+    upipe_sdi_enc.c \
+    upipe_sdi_dec.c \
+    upipe_hbrmt_dec.c \
+    upipe_unpack_rfc4175.c \
     $(NULL)
 if HAVE_X86_ASM
 libupipe_hbrmt_la_SOURCES += sdidec.asm \
