@@ -284,17 +284,12 @@ static void put_audio_control_packet(uint16_t *dst, int ch_group)
     sdi_fill_anc_parity_checksum(&dst[6]);
 }
 
-/* NOTE: Assumes samplerate is 48000 */
-static int audio_packets_per_line(const struct sdi_offsets_fmt *f)
+static unsigned audio_packets_per_line(const struct sdi_offsets_fmt *f)
 {
-    int no = round((double)48000 * f->fps.den / (f->fps.num * f->height));
+    unsigned samples_per_frame = (48000 * f->fps.den  + f->fps.num - 1) / f->fps.num;
+    unsigned active_lines = f->height - 2;
 
-    /* Height - 2 because 2 is the total amount of switching lines per video
-     * frame */
-    if ((no * (f->height - 2)) < 48000 * f->fps.den / f->fps.num)
-        no++;
-
-    return no;
+    return (samples_per_frame + active_lines - 1) / active_lines;
 }
 
 /* NOTE: ch_group is zero indexed */
@@ -529,7 +524,7 @@ static void upipe_sdi_enc_encode_line(struct upipe *upipe, int h, uint16_t *dst,
     /* Returns the total amount of samples per channel that can be put on
      * a line, so convert that to packets (multiplying it by 4 since you have
      * 4 channel groups) */
-    int max_audio_packets_per_line = 4*audio_packets_per_line(f);
+    unsigned max_audio_packets_per_line = 4 * audio_packets_per_line(f);
 
     /* Progressive */
     if (f->psf_ident) {
