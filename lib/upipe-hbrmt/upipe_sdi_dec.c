@@ -154,7 +154,7 @@ struct upipe_sdi_dec {
     int output_bit_depth; /* Used if output_is_v210 is false */
 
     /** output chroma map */
-    const char *output_chroma_map[UPIPE_SDI_DEC_MAX_PLANES+1];
+    const char *output_chroma_map[UPIPE_SDI_DEC_MAX_PLANES];
 
     /** UYVY to V210 */
     void (*uyvy_to_v210)(const uint16_t *y, uint8_t *dst, ptrdiff_t width);
@@ -484,7 +484,6 @@ static bool upipe_sdi_dec_handle(struct upipe *upipe, struct uref *uref,
         upipe_sdi_dec->output_chroma_map[1] = "u8";
         upipe_sdi_dec->output_chroma_map[2] = "v8";
     }
-    upipe_sdi_dec->output_chroma_map[3] = NULL;
 
     /* map input */
     int input_size = -1;
@@ -547,18 +546,17 @@ static bool upipe_sdi_dec_handle(struct upipe *upipe, struct uref *uref,
     }
 
     /* map output */
-    uint8_t *output_plane[UPIPE_SDI_DEC_MAX_PLANES+1];
-    size_t output_stride[UPIPE_SDI_DEC_MAX_PLANES+1];
-    int i;
-    for (i = 0; i < UPIPE_SDI_DEC_MAX_PLANES &&
-                upipe_sdi_dec->output_chroma_map[i] != NULL; i++) {
+    uint8_t *output_plane[UPIPE_SDI_DEC_MAX_PLANES] = {0};
+    size_t output_stride[UPIPE_SDI_DEC_MAX_PLANES] = {0};
+    for (int i = 0; i < UPIPE_SDI_DEC_MAX_PLANES; i++) {
+        const char *c = upipe_sdi_dec->output_chroma_map[i];
+        if (c == NULL)
+            break;
         uint8_t *data;
         size_t stride;
-        if (unlikely(!ubase_check(ubuf_pic_plane_write(ubuf,
-                                           upipe_sdi_dec->output_chroma_map[i],
+        if (unlikely(!ubase_check(ubuf_pic_plane_write(ubuf, c,
                                            0, 0, -1, -1, &data)) ||
-                     !ubase_check(ubuf_pic_plane_size(ubuf,
-                                           upipe_sdi_dec->output_chroma_map[i],
+                     !ubase_check(ubuf_pic_plane_size(ubuf, c,
                                            &stride, NULL, NULL, NULL)))) {
             upipe_warn(upipe, "unable to map output");
             ubuf_free(ubuf);
@@ -568,8 +566,6 @@ static bool upipe_sdi_dec_handle(struct upipe *upipe, struct uref *uref,
         output_plane[i] = data;
         output_stride[i] = stride;
     }
-    output_plane[i] = NULL;
-    output_stride[i] = 0;
 
     uint8_t *fields[2][3] = {
         {output_plane[0],
@@ -885,10 +881,12 @@ static bool upipe_sdi_dec_handle(struct upipe *upipe, struct uref *uref,
     uref_block_unmap(uref, 0);
 
     /* unmap output */
-    for (int i = 0; i < UPIPE_SDI_DEC_MAX_PLANES &&
-                upipe_sdi_dec->output_chroma_map[i] != NULL; i++)
-        ubuf_pic_plane_unmap(ubuf, upipe_sdi_dec->output_chroma_map[i],
-                             0, 0, -1, -1);
+    for (int i = 0; i < UPIPE_SDI_DEC_MAX_PLANES; i++) {
+        const char *c = upipe_sdi_dec->output_chroma_map[i];
+        if (c == NULL)
+            break;
+        ubuf_pic_plane_unmap(ubuf, c, 0, 0, -1, -1);
+    }
 
     uref_attach_ubuf(uref, ubuf);
     uref_clock_set_pts_prog(uref, UINT32_MAX + upipe_sdi_dec->frame_num++ *
@@ -1017,7 +1015,6 @@ static int upipe_sdi_dec_set_flow_def(struct upipe *upipe, struct uref *flow_def
         UBASE_RETURN(uref_pic_flow_add_plane(flow_def_dup, 2, 1, 2, "u10l"))
         UBASE_RETURN(uref_pic_flow_add_plane(flow_def_dup, 2, 1, 2, "v10l"))
     }
-    upipe_sdi_dec->output_chroma_map[3] = NULL;
 
     uref_pic_flow_set_fps(flow_def_dup, upipe_sdi_dec->fps);
 
