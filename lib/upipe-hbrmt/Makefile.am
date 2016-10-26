@@ -14,7 +14,6 @@ libupipe_hbrmt_la_SOURCES += sdidec.asm \
     sdienc.h
 endif
 libupipe_hbrmt_la_CPPFLAGS = -I$(top_builddir)/include -I$(top_srcdir)/include
-libupipe_hbrmt_la_CFLAGS = $(AVUTIL_CFLAGS)
 libupipe_hbrmt_la_LIBADD = $(top_builddir)/lib/upipe/libupipe.la
 libupipe_hbrmt_la_LDFLAGS = -no-undefined
 

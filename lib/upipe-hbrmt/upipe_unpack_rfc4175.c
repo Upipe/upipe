@@ -41,8 +41,6 @@
 #include <upipe/upipe_helper_input.h>
 #include <upipe/upipe_helper_flow.h>
 
-#include <libavutil/cpu.h>
-
 #include <upipe-hbrmt/upipe_unpack_rfc4175.h>
 #include "upipe_hbrmt_common.h"
 
@@ -120,9 +118,6 @@ struct upipe_unpack_rfc4175 {
 
     /** Bitpacked to Planar 10 conversion */
     void (*bitpacked_to_uyvy)(uint8_t *src, uint16_t *y, int64_t size);
-
-    /** cpu flags **/
-    int cpu_flags;
 
     /** last RTP timestamp */
     uint64_t last_rtp_timestamp;
@@ -563,19 +558,28 @@ static struct upipe *upipe_unpack_rfc4175_alloc(struct upipe_mgr *mgr,
          upipe_unpack_rfc4175->output_block_size = 1;
     }
 
-    upipe_unpack_rfc4175->cpu_flags = av_get_cpu_flags();
-
     upipe_unpack_rfc4175->bitpacked_to_uyvy = ff_sdi_unpack_c;
     upipe_unpack_rfc4175->bitpacked_to_v210 = ff_sdi_v210_unpack_c;
     upipe_unpack_rfc4175->bitpacked_to_planar_8 = ff_sdi_to_planar_8_c;
 
-    if (upipe_unpack_rfc4175->cpu_flags & AV_CPU_FLAG_SSSE3)
+#if !defined(__APPLE__) /* macOS clang doesn't support that builtin yet */
+#if defined(__clang__) && /* clang 3.8 doesn't know ssse3 */ \
+     (__clang_major__ < 3 || (__clang_major__ == 3 && __clang_minor__ <= 8))
+# ifdef __SSSE3__
+    if (1)
+# else
+    if (0)
+# endif
+#else
+    if (__builtin_cpu_supports("ssse3"))
+#endif
         upipe_unpack_rfc4175->bitpacked_to_uyvy = ff_sdi_unpack_10_ssse3;
 
-    if (upipe_unpack_rfc4175->cpu_flags & AV_CPU_FLAG_AVX) {
+   if (__builtin_cpu_supports("avx")) {
         upipe_unpack_rfc4175->bitpacked_to_v210 = ff_sdi_v210_unpack_avx;
         upipe_unpack_rfc4175->bitpacked_to_planar_8 = ff_sdi_to_planar_8_avx;
     }
+#endif
 
     upipe_unpack_rfc4175_init_urefcount(upipe);
     upipe_unpack_rfc4175_init_ubuf_mgr(upipe);

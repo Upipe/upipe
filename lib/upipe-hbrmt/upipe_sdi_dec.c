@@ -61,8 +61,6 @@
 
 #include "upipe_hbrmt_common.h"
 
-#include <libavutil/cpu.h>
-
 #define UPIPE_SDI_DEC_MAX_PLANES 3
 #define UPIPE_SDI_MAX_CHANNELS 16
 
@@ -150,9 +148,6 @@ struct upipe_sdi_dec {
     unsigned int max_urefs;
     /** list of blockers (used during udeal) */
     struct uchain blockers;
-
-    /** cpu flags **/
-    int cpu_flags;
 
     /** output mode */
     bool output_is_v210;
@@ -1124,19 +1119,28 @@ static struct upipe *upipe_sdi_dec_alloc(struct upipe_mgr *mgr,
     if (!upipe_sdi_dec->output_is_v210)
          upipe_sdi_dec->output_bit_depth = ubase_check(uref_pic_flow_check_chroma(flow_def, 1, 1, 1, "y8")) ? 8 : 10;
 
-    upipe_sdi_dec->cpu_flags = av_get_cpu_flags();
-
     upipe_sdi_dec->uyvy_to_v210 = ff_v210_uyvy_pack_10_c;
     upipe_sdi_dec->uyvy_to_planar_8 = ff_uyvy_to_planar_8_c;
     upipe_sdi_dec->uyvy_to_planar_10 = ff_uyvy_to_planar_10_c;
 
-    if (upipe_sdi_dec->cpu_flags & AV_CPU_FLAG_SSSE3)
+#if !defined(__APPLE__) /* macOS clang doesn't support that builtin yet */
+#if defined(__clang__) && /* clang 3.8 doesn't know ssse3 */ \
+     (__clang_major__ < 3 || (__clang_major__ == 3 && __clang_minor__ <= 8))
+# ifdef __SSSE3__
+    if (1)
+# else
+    if (0)
+# endif
+#else
+    if (__builtin_cpu_supports("ssse3"))
+#endif
         upipe_sdi_dec->uyvy_to_v210 = ff_v210_uyvy_pack_10_ssse3;
 
-    if (upipe_sdi_dec->cpu_flags & AV_CPU_FLAG_AVX) {
+    if (__builtin_cpu_supports("avx")) {
         upipe_sdi_dec->uyvy_to_planar_8 = ff_uyvy_to_planar_8_avx;
         upipe_sdi_dec->uyvy_to_planar_10 = ff_uyvy_to_planar_10_avx;
     }
+#endif
 
     upipe_sdi_dec->crc_y = 0;
     upipe_sdi_dec->crc_c = 0;

@@ -26,9 +26,6 @@
 #include <upipe-hbrmt/upipe_sdi_enc.h>
 #include "upipe_hbrmt_common.h"
 
-#include <libavutil/common.h>
-#include <libavutil/cpu.h>
-
 #define UPIPE_SDI_MAX_PLANES 3
 #define UPIPE_SDI_MAX_CHANNELS 16
 
@@ -1157,7 +1154,6 @@ static struct upipe *upipe_sdi_enc_alloc(struct upipe_mgr *mgr,
         return NULL;
 
     struct upipe_sdi_enc *upipe_sdi_enc = upipe_sdi_enc_from_upipe(upipe);
-    int cpu_flags = av_get_cpu_flags();
 
     ulist_init(&upipe_sdi_enc->urefs);
     upipe_sdi_enc->n = 0;
@@ -1167,16 +1163,17 @@ static struct upipe *upipe_sdi_enc_alloc(struct upipe_mgr *mgr,
     upipe_sdi_enc->planar_to_uyvy_10 = ff_planar_to_uyvy_10_c;
     upipe_sdi_enc->v210_to_uyvy      = ff_v210_uyvy_unpack_c;
 
-    if (cpu_flags & AV_CPU_FLAG_SSE3) {
+#if !defined(__APPLE__) /* macOS clang doesn't support that builtin yet */
+    if (__builtin_cpu_supports("sse3"))
         upipe_sdi_enc->planar_to_uyvy_10 = ff_planar_to_uyvy_10_sse2;
-    }
 
-    if (cpu_flags & AV_CPU_FLAG_AVX) {
+    if (__builtin_cpu_supports("avx")) {
         upipe_sdi_enc->blank             = ff_sdi_blank_avx;
         upipe_sdi_enc->planar_to_uyvy_8  = ff_planar_to_uyvy_8_avx;
         upipe_sdi_enc->planar_to_uyvy_10 = ff_planar_to_uyvy_10_avx;
         upipe_sdi_enc->v210_to_uyvy      = ff_v210_uyvy_unpack_aligned_avx;
     }
+#endif
 
     upipe_sdi_enc_init_urefcount(upipe);
     upipe_sdi_enc_init_ubuf_mgr(upipe);
