@@ -41,22 +41,12 @@
 #include <upipe/upipe_helper_input.h>
 #include <upipe/upipe_helper_flow.h>
 
-#include <stdlib.h>
-#include <stdbool.h>
-#include <stdint.h>
-#include <stdarg.h>
-#include <string.h>
-#include <unistd.h>
-#include <errno.h>
-#include <assert.h>
-#include <limits.h>
-
 #include <libavutil/common.h>
 #include <libavutil/cpu.h>
 #include <libavutil/intreadwrite.h>
 
-#include <upipe-hbrmt/upipe_hbrmt_common.h>
 #include <upipe-hbrmt/upipe_unpack_rfc4175.h>
+#include "upipe_hbrmt_common.h"
 
 #include <bitstream/ietf/rfc4175.h>
 

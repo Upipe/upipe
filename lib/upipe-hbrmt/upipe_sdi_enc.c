@@ -24,7 +24,7 @@
 #include <bitstream/smpte/291.h>
 
 #include <upipe-hbrmt/upipe_sdi_enc.h>
-#include <upipe-hbrmt/upipe_hbrmt_common.h>
+#include "upipe_hbrmt_common.h"
 
 #include <libavutil/common.h>
 #include <libavutil/cpu.h>

@@ -45,20 +45,8 @@
 
 #include <bitstream/ietf/rtp.h>
 
-#include <upipe-hbrmt/upipe_hbrmt_common.h>
 #include <upipe-hbrmt/upipe_hbrmt_dec.h>
-
-#include <stdlib.h>
-#include <stdbool.h>
-#include <stdint.h>
-#include <inttypes.h>
-#include <stdarg.h>
-#include <string.h>
-#include <unistd.h>
-#include <errno.h>
-#include <math.h>
-#include <assert.h>
-#include <limits.h>
+#include "upipe_hbrmt_common.h"
 
 /** @hidden */
 static int upipe_hbrmt_dec_check(struct upipe *upipe, struct uref *flow_format);

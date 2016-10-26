@@ -57,8 +57,9 @@
 #include <bitstream/smpte/291.h>
 #include <bitstream/smpte/337.h>
 
-#include <upipe-hbrmt/upipe_hbrmt_common.h>
 #include <upipe-hbrmt/upipe_sdi_dec.h>
+
+#include "upipe_hbrmt_common.h"
 
 #include <libavutil/cpu.h>
 
