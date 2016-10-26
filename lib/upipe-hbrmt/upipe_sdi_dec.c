@@ -546,35 +546,26 @@ static bool upipe_sdi_dec_handle(struct upipe *upipe, struct uref *uref,
     }
 
     /* map output */
-    uint8_t *output_plane[UPIPE_SDI_DEC_MAX_PLANES] = {0};
+    uint8_t *fields[2][UPIPE_SDI_DEC_MAX_PLANES] = {0};
     size_t output_stride[UPIPE_SDI_DEC_MAX_PLANES] = {0};
     for (int i = 0; i < UPIPE_SDI_DEC_MAX_PLANES; i++) {
         const char *c = upipe_sdi_dec->output_chroma_map[i];
         if (c == NULL)
             break;
-        uint8_t *data;
-        size_t stride;
         if (unlikely(!ubase_check(ubuf_pic_plane_write(ubuf, c,
-                                           0, 0, -1, -1, &data)) ||
+                                           0, 0, -1, -1, &fields[0][i])) ||
                      !ubase_check(ubuf_pic_plane_size(ubuf, c,
-                                           &stride, NULL, NULL, NULL)))) {
+                                           &output_stride[i], NULL, NULL, NULL)))) {
             upipe_warn(upipe, "unable to map output");
             ubuf_free(ubuf);
             uref_free(uref);
             return true;
         }
-        output_plane[i] = data;
-        output_stride[i] = stride;
     }
 
-    uint8_t *fields[2][3] = {
-        {output_plane[0],
-         output_plane[1],
-         output_plane[2]},
-        {output_plane[0] + output_stride[0],
-         output_plane[1] + output_stride[1],
-         output_plane[2] + output_stride[2]},
-    };
+    for (int i = 0; i < UPIPE_SDI_DEC_MAX_PLANES; i++)
+        if (fields[0][i])
+            fields[1][i] = fields[0][i] + output_stride[i];
 
     for (int h = 0; h < f->height; h++) {
         /* Horizontal Blanking */
