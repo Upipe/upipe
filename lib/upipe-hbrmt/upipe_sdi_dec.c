@@ -413,7 +413,7 @@ static int aes_parse(struct upipe *upipe, int32_t *buf, size_t samples, int pair
 
         int32_t preamble[4] = { pa, pb, pc, pd };
         if (!memcmp(preamble, upipe_sdi_dec->aes_preamble[pair], sizeof(preamble))) {
-            return (pc >> 32 - bits) & 0x1f;
+            return (pc >> (32 - bits)) & 0x1f;
         }
 
         memcpy(upipe_sdi_dec->aes_preamble[pair], preamble, sizeof(preamble));
