@@ -42,6 +42,7 @@
 
 #define UBUF_POOL_DEPTH     1
 #define UBUF_PREPEND        32
+#define UBUF_APPEND         0
 #define UBUF_ALIGN          16
 #define UBUF_ALIGN_OFFSET   0
 #define UBUF_SIZE           188
@@ -53,6 +54,7 @@ int main(int argc, char **argv)
     struct ubuf_mgr *mgr = ubuf_block_mem_mgr_alloc(UBUF_POOL_DEPTH,
                                                     UBUF_POOL_DEPTH, umem_mgr,
                                                     UBUF_PREPEND,
+                                                    UBUF_APPEND,
                                                     UBUF_ALIGN,
                                                     UBUF_ALIGN_OFFSET);
     assert(mgr != NULL);
