@@ -51,10 +51,10 @@ extern "C" {
 
 /** @This defines an atomic 32-bits unsigned integer. ARM platforms do not
  * support larger atomic operations. */
-typedef volatile uint32_t uatomic_uint32_t;
+typedef uint32_t uatomic_uint32_t;
 
 /** @This defines an atomic pointer. */
-typedef void * volatile uatomic_ptr_t;
+typedef void * uatomic_ptr_t;
 
 /** @This defines a set of functions to manipulate atomic variables. */
 #define UATOMIC_TEMPLATE(type, ctype, atomictype)                           \
