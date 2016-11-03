@@ -1,7 +1,9 @@
 /*
  * Copyright (C) 2012-2015 OpenHeadend S.A.R.L.
+ * Copyright (C) 2016 DVMR
  *
  * Authors: Christophe Massiot
+ *          Franck Roger
  *
  * Permission is hereby granted, free of charge, to any person obtaining
  * a copy of this software and associated documentation files (the
@@ -59,6 +61,8 @@ enum upipe_fsink_command {
     UPIPE_FSINK_GET_PATH,
     /** asks to open the given path (const char *, enum upipe_fsink_mode) */
     UPIPE_FSINK_SET_PATH,
+    /** associates a stream with the upipe (int fildes, enum upip_fsink_mode) */
+    UPIPE_FSINK_SET_FD,
     /** returns the file descriptor of the currently opened file (int *) */
     UPIPE_FSINK_GET_FD,
     /** sets fdatasync period (uint64_t) */
@@ -102,6 +106,21 @@ static inline int upipe_fsink_set_path(struct upipe *upipe,
 {
     return upipe_control(upipe, UPIPE_FSINK_SET_PATH, UPIPE_FSINK_SIGNATURE,
                          path, mode);
+}
+
+/** @This associates a stream with the upipe
+ *
+ * @param upipe description structure of the pipe
+ * @param fildes file descriptor
+ * @param mode mode of opening the file
+ * @return an error code
+ */
+static inline int upipe_fsink_set_fd(struct upipe *upipe,
+                                     int fildes,
+                                     enum upipe_fsink_mode mode)
+{
+    return upipe_control(upipe, UPIPE_FSINK_SET_FD, UPIPE_FSINK_SIGNATURE,
+                         fildes, mode);
 }
 
 /** @This returns the file descriptor of the currently opened file.
