@@ -1,7 +1,9 @@
 /*
  * Copyright (C) 2016 OpenHeadend S.A.R.L.
+ * Copyright (C) 2016 DVMR
  *
  * Author: Christophe Massiot
+ *         Franck Roger
  *
  * Permission is hereby granted, free of charge, to any person obtaining
  * a copy of this software and associated documentation files (the
@@ -452,7 +454,7 @@ int main(int argc, char *argv[])
                                  UPROBE_LOG_VERBOSE, "sink"));
         assert(fsink != NULL);
         upipe_mgr_release(fsink_mgr);
-        upipe_fsink_set_path(fsink, "/dev/stdout", UPIPE_FSINK_NONE);
+        upipe_fsink_set_fd(fsink, STDOUT_FILENO, UPIPE_FSINK_NONE);
         upipe_attach_uclock(fsink);
         upipe_release(fsink);
     }
