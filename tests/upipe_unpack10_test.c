@@ -54,8 +54,8 @@
 #define UBUF_POOL_DEPTH 0
 #define UPROBE_LOG_LEVEL UPROBE_LOG_DEBUG
 
-/* assembly loads 16 bytes to process 10 bytes / 8 pixels */
-#define UBUF_APPEND 6
+/* assembly loads 32 bytes to process 20 bytes / 16 pixels */
+#define UBUF_APPEND 12
 
 #define WIDTH 1024
 

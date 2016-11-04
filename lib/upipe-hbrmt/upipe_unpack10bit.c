@@ -43,6 +43,8 @@
 
 #include "sdidec.h"
 
+#define UBUF_ALIGN 32 /* 256-bits simd (avx2) */
+
 /** upipe_unpack10bit structure with unpack10bit parameters */
 struct upipe_unpack10bit {
     /** refcount management structure */
@@ -110,6 +112,7 @@ static bool upipe_unpack10bit_handle(struct upipe *upipe, struct uref *uref,
     const char *def;
     if (unlikely(ubase_check(uref_flow_get_def(uref, &def)))) {
         upipe_unpack10bit_store_flow_def(upipe, NULL);
+        uref_block_flow_set_align(uref, UBUF_ALIGN);
         upipe_unpack10bit_require_ubuf_mgr(upipe, uref);
         return true;
     }
@@ -141,6 +144,13 @@ static bool upipe_unpack10bit_handle(struct upipe *upipe, struct uref *uref,
         uref_free(uref);
         ubuf_free(ubuf_out);
         upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
+        return true;
+    }
+
+    if ((uintptr_t)out & (UBUF_ALIGN-1)) {
+        upipe_err(upipe, "output block must be 32 byte aligned");
+        uref_free(uref);
+        ubuf_free(ubuf_out);
         return true;
     }
 
@@ -217,7 +227,7 @@ static int upipe_unpack10bit_set_flow_def(struct upipe *upipe, struct uref *flow
 
     uint64_t append;
     UBASE_RETURN(uref_block_flow_get_append(flow_def, &append));
-    if (append < 6)
+    if (append < 12)
         return UBASE_ERR_INVALID;
 
     struct uref *flow_def_dup = uref_dup(flow_def);
