@@ -68,7 +68,10 @@ cglobal sdi_unpack_10, 3, 3, 7, src, y, size
     mova     m6, [sdi_luma_mult_10]
 
 .loop:
-    movu     m0, [srcq+sizeq]
+    movu     xm0, [srcq+sizeq]
+%if cpuflag(avx2)
+    vinserti128 m0, m0, [srcq+sizeq+10], 1
+%endif
 
     pandn    m1, m2, m0
     pand     m0, m2
@@ -84,13 +87,15 @@ cglobal sdi_unpack_10, 3, 3, 7, src, y, size
     mova     [yq], m0
 
     add      yq,    mmsize
-    add      sizeq, 10
+    add      sizeq, (mmsize*5)/8
     jl .loop
 
     RET
 %endmacro
 
 INIT_XMM ssse3
+sdi_unpack_10
+INIT_YMM avx2
 sdi_unpack_10
 
 %macro sdi_v210_unpack 0

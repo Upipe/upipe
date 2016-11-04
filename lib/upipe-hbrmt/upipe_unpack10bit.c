@@ -327,6 +327,9 @@ static struct upipe *upipe_unpack10bit_alloc(struct upipe_mgr *mgr,
         if (__builtin_cpu_supports("ssse3"))
 #endif
 			upipe_unpack10bit->unpack = upipe_sdi_unpack_10_ssse3;
+
+    if (__builtin_cpu_supports("avx2"))
+        upipe_unpack10bit->unpack = upipe_sdi_unpack_10_avx2;
 #endif
 
     upipe_unpack10bit_init_urefcount(upipe);
