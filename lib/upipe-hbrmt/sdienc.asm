@@ -31,10 +31,6 @@ uyvy_enc_max_8: times 16 dw 0xFEFE
 
 sdi_blank: times 4 dw 0x200, 0x40, 0x200, 0x40, 0x200, 0x40, 0x200, 0x40
 
-uyvy_planar_shuf_10: times 2 db 0, 1, 8, 9, 4, 5,12,13, 2, 3, 6, 7,10,11,14,15
-
-uyvy_planar_shuf_8: times 2 db 2, 6, 10, 14, -1, -1, -1, -1, -1, -1, -1, -1, 0, 8, 4, 12
-
 sdi_enc_mult_10: times 4 dw 64, 16, 4, 1
 sdi_chroma_shuf_10: times 2 db 1, 0, 5, 4, -1, 9, 8, 13, 12, -1, -1, -1, -1, -1, -1, -1
 sdi_luma_shuf_10: times 2 db -1, 3, 2, 7, 6, -1, 11, 10, 15, 14, -1, -1, -1, -1, -1, -1
@@ -240,104 +236,6 @@ INIT_XMM sse2
 planar_to_uyvy_10
 INIT_XMM avx
 planar_to_uyvy_10
-
-%macro uyvy_to_planar_8 0
-
-; uyvy_to_planar_8(uint8_t *y, uint8_t *u, uint8_t *v, const uint16_t *l, const int64_t width)
-cglobal uyvy_to_planar_8, 5, 5, 8, y, u, v, l, width
-    lea        lq, [lq+4*widthq]
-    add        yq, widthq
-    shr        widthq, 1
-    add        uq, widthq
-    add        vq, widthq
-    neg        widthq
-
-    mova       m6, [uyvy_planar_shuf_8]
-
-.loop:
-    mova       m0, [lq+8*widthq+0*mmsize]
-    mova       m1, [lq+8*widthq+1*mmsize]
-    mova       m2, [lq+8*widthq+2*mmsize]
-    mova       m3, [lq+8*widthq+3*mmsize]
-
-    psrlw      m0, 2
-    psrlw      m1, 2
-    psrlw      m2, 2
-    psrlw      m3, 2
-
-    pshufb     m0, m6
-    pshufb     m1, m6
-    pshufb     m2, m6
-    pshufb     m3, m6
-
-    ; all registers have yyyy0000uuvv
-
-    punpckldq  m4, m0, m1 ; yyyy from m0 and yyyy from m1 -> yyyyyyyy
-    punpckldq  m5, m2, m3
-    punpcklqdq m4, m5
-
-    punpckhwd  m0, m1 ; uuvv from m0 and uuvv from m1 -> uuuuvvvv
-    punpckhwd  m2, m3
-    punpckhdq  m0, m2 ; eight u's and eight v's
-
-    mova      [yq + 2*widthq], m4
-    movq      [uq + 1*widthq], m0 ; put half of m0 (eight u's)
-    movhps    [vq + 1*widthq], m0 ; put the other half of m0 (eight v's)
-
-    add       widthq, 8
-    jl .loop
-
-    RET
-%endmacro
-
-INIT_XMM avx
-uyvy_to_planar_8
-
-%macro uyvy_to_planar_10 0
-
-; uyvy_to_planar_10(uint16_t *y, uint16_t *u, uint16_t *v, const uint16_t *l, const int64_t width)
-cglobal uyvy_to_planar_10, 5, 5, 6, y, u, v, l, width
-    lea       lq, [lq+4*widthq]
-    lea       yq, [yq+2*widthq]
-    add       uq, widthq
-    add       vq, widthq
-    neg       widthq
-
-    mova      m5, [uyvy_planar_shuf_10]
-
-.loop:
-    mova      m0, [lq+4*widthq+0*mmsize]
-    mova      m1, [lq+4*widthq+1*mmsize]
-    mova      m2, [lq+4*widthq+2*mmsize]
-    mova      m3, [lq+4*widthq+3*mmsize]
-
-    pshufb     m0, m5
-    pshufb     m1, m5
-    pshufb     m2, m5
-    pshufb     m3, m5
-    punpckldq  m4, m0, m1
-    punpckhqdq m0, m1
-    punpckldq  m1, m2, m3
-    punpckhqdq m2, m3
-
-    mova       [yq+2*widthq], m0
-    mova       [yq+2*widthq+mmsize], m2
-
-    punpckhqdq m0, m4, m1
-    punpcklqdq m4, m1
-    SWAP       m1, m0
-
-    mova       [uq+widthq], m4
-    mova       [vq+widthq], m1
-
-    add       widthq, mmsize
-    jl .loop
-
-    RET
-%endmacro
-
-INIT_XMM avx
-uyvy_to_planar_10
 
 %macro planar_to_sdi_8 0
 
