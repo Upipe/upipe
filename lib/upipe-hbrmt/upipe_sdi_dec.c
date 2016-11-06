@@ -59,6 +59,7 @@
 
 #include <upipe-hbrmt/upipe_sdi_dec.h>
 
+#include "sdidec.h"
 #include "upipe_hbrmt_common.h"
 
 #define UPIPE_SDI_DEC_MAX_PLANES 3
@@ -70,10 +71,8 @@ void ff_v210_uyvy_pack_10_c    (const uint16_t *y, uint8_t *dst, ptrdiff_t width
 void ff_v210_uyvy_pack_10_ssse3(const uint16_t *y, uint8_t *dst, ptrdiff_t width);
 
 void ff_uyvy_to_planar_10_c  (uint16_t *y, uint16_t *u, uint16_t *v, const uint16_t *l, const int64_t width);
-void ff_uyvy_to_planar_10_avx(uint16_t *y, uint16_t *u, uint16_t *v, const uint16_t *l, const int64_t width);
 
 void ff_uyvy_to_planar_8_c  (uint8_t *y, uint8_t *u, uint8_t *v, const uint16_t *l, const int64_t width);
-void ff_uyvy_to_planar_8_avx(uint8_t *y, uint8_t *u, uint8_t *v, const uint16_t *l, const int64_t width);
 
 /** audio input subpipe */
 struct upipe_sdi_dec_sub {
@@ -1082,8 +1081,8 @@ static struct upipe *upipe_sdi_dec_alloc(struct upipe_mgr *mgr,
         upipe_sdi_dec->uyvy_to_v210 = ff_v210_uyvy_pack_10_ssse3;
 
     if (__builtin_cpu_supports("avx")) {
-        upipe_sdi_dec->uyvy_to_planar_8 = ff_uyvy_to_planar_8_avx;
-        upipe_sdi_dec->uyvy_to_planar_10 = ff_uyvy_to_planar_10_avx;
+        upipe_sdi_dec->uyvy_to_planar_8 = upipe_uyvy_to_planar_8_avx;
+        upipe_sdi_dec->uyvy_to_planar_10 = upipe_uyvy_to_planar_10_avx;
     }
 #endif
 
