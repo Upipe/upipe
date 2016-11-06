@@ -70,10 +70,6 @@
 void ff_v210_uyvy_pack_10_c    (const uint16_t *y, uint8_t *dst, ptrdiff_t width);
 void ff_v210_uyvy_pack_10_ssse3(const uint16_t *y, uint8_t *dst, ptrdiff_t width);
 
-void ff_uyvy_to_planar_10_c  (uint16_t *y, uint16_t *u, uint16_t *v, const uint16_t *l, const int64_t width);
-
-void ff_uyvy_to_planar_8_c  (uint8_t *y, uint8_t *u, uint8_t *v, const uint16_t *l, const int64_t width);
-
 /** audio input subpipe */
 struct upipe_sdi_dec_sub {
     /** refcount management structure */
@@ -1036,6 +1032,36 @@ static int upipe_sdi_dec_control(struct upipe *upipe, int command, va_list args)
     }
 }
 
+static void uyvy_to_planar_8_c(uint8_t *y, uint8_t *u, uint8_t *v, const uint16_t *l, const int64_t width)
+{
+    int j;
+    for (j = 0; j < width; j++) {
+        u[0] = l[0] >> 2;
+        y[0] = l[1] >> 2;
+        v[0] = l[2] >> 2;
+        y[1] = l[3] >> 2;
+        l += 4;
+        y += 2;
+        u += 1;
+        v += 1;
+    }
+}
+
+static void uyvy_to_planar_10_c(uint16_t *y, uint16_t *u, uint16_t *v, const uint16_t *l, const int64_t width)
+{
+    int j;
+    for (j = 0; j < width/2; j++) {
+        u[0] = l[0];
+        y[0] = l[1];
+        v[0] = l[2];
+        y[1] = l[3];
+        l += 4;
+        y += 2;
+        u += 1;
+        v += 1;
+    }
+}
+
 /** @internal @This allocates a sdi_dec pipe.
  *
  * @param mgr common management structure
@@ -1064,8 +1090,8 @@ static struct upipe *upipe_sdi_dec_alloc(struct upipe_mgr *mgr,
     uref_free(flow_def);
 
     upipe_sdi_dec->uyvy_to_v210 = ff_v210_uyvy_pack_10_c;
-    upipe_sdi_dec->uyvy_to_planar_8 = ff_uyvy_to_planar_8_c;
-    upipe_sdi_dec->uyvy_to_planar_10 = ff_uyvy_to_planar_10_c;
+    upipe_sdi_dec->uyvy_to_planar_8 = uyvy_to_planar_8_c;
+    upipe_sdi_dec->uyvy_to_planar_10 = uyvy_to_planar_10_c;
 
 #if !defined(__APPLE__) /* macOS clang doesn't support that builtin yet */
 #if defined(__clang__) && /* clang 3.8 doesn't know ssse3 */ \
