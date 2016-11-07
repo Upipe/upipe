@@ -68,7 +68,6 @@
 #define ZERO_IDX(x) (x-1)
 
 void ff_v210_uyvy_pack_10_c    (const uint16_t *y, uint8_t *dst, ptrdiff_t width);
-void ff_v210_uyvy_pack_10_ssse3(const uint16_t *y, uint8_t *dst, ptrdiff_t width);
 
 /** audio input subpipe */
 struct upipe_sdi_dec_sub {
@@ -1104,7 +1103,7 @@ static struct upipe *upipe_sdi_dec_alloc(struct upipe_mgr *mgr,
 #else
     if (__builtin_cpu_supports("ssse3"))
 #endif
-        upipe_sdi_dec->uyvy_to_v210 = ff_v210_uyvy_pack_10_ssse3;
+        upipe_sdi_dec->uyvy_to_v210 = upipe_uyvy_to_v210_ssse3;
 
     if (__builtin_cpu_supports("avx")) {
         upipe_sdi_dec->uyvy_to_planar_8 = upipe_uyvy_to_planar_8_avx;
