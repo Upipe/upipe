@@ -65,6 +65,8 @@ v210_enc_uyvy_chroma_shuff_10: times 2 db 0, 1, 4, 5, -1, 8, 9, -1, -1, -1, -1, 
 v210_enc_uyvy_luma_shift_10: times 2 dw 0, 4, 0, 1, 0, 16, 0, 0
 v210_enc_uyvy_luma_shuft_10: times 2 db -1, 2, 3, -1, 6, 7, 10, 11, -1, -1, -1, -1, -1, -1, -1, -1
 
+uyvy_to_v210_store_mask: times 2 dq -1, 0
+
 SECTION .text
 
 %macro sdi_unpack_10 0
@@ -311,7 +313,7 @@ uyvy_to_planar_10
 %macro uyvy_to_v210 0
 
 ; uyvy_to_v210(const uint16_t *y, uint8_t *dst, ptrdiff_t width)
-cglobal uyvy_to_v210, 3, 6, 6, y, dst, width
+cglobal uyvy_to_v210, 3, 6, 6+cpuflag(avx2), y, dst, width
     shl     widthq, 2
     add     yq, widthq
     neg     widthq
@@ -319,9 +321,17 @@ cglobal uyvy_to_v210, 3, 6, 6, y, dst, width
     mova    m4, [v210_enc_min_10]
     mova    m5, [v210_enc_max_10]
 
+%if cpuflag(avx2)
+    mova m6, [uyvy_to_v210_store_mask]
+%endif
+
 .loop:
-    movu    m0, [yq+widthq+ 0]
-    movu    m1, [yq+widthq+12]
+    movu    xm0, [yq+widthq+ 0]
+    movu    xm1, [yq+widthq+12]
+%if cpuflag(avx2)
+    vinserti128 m0, m0, [yq + widthq + 24], 1
+    vinserti128 m1, m1, [yq + widthq + 36], 1
+%endif
 
     CLIPW   m0, m4, m5
     CLIPW   m1, m4, m5
@@ -341,15 +351,25 @@ cglobal uyvy_to_v210, 3, 6, 6, y, dst, width
     por     m0, m2
     por     m1, m3
 
+%if notcpuflag(avx2)
     movu    [dstq+0], m0
     movq    [dstq+8], m1
+%else
+    pslldq m1, 8
+    por m1, m0
+    mova [dstq], m1
+%endif
 
     add     dstq, mmsize
-    add     widthq, 24
+    add     widthq, (mmsize*3)/2
     jl .loop
 
     RET
 %endmacro
 
 INIT_XMM ssse3
+uyvy_to_v210
+INIT_XMM avx
+uyvy_to_v210
+INIT_YMM avx2
 uyvy_to_v210

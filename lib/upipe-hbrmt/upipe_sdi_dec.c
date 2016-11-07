@@ -1133,8 +1133,13 @@ static struct upipe *upipe_sdi_dec_alloc(struct upipe_mgr *mgr,
         upipe_sdi_dec->uyvy_to_v210 = upipe_uyvy_to_v210_ssse3;
 
     if (__builtin_cpu_supports("avx")) {
+        upipe_sdi_dec->uyvy_to_v210 = upipe_uyvy_to_v210_avx;
         upipe_sdi_dec->uyvy_to_planar_8 = upipe_uyvy_to_planar_8_avx;
         upipe_sdi_dec->uyvy_to_planar_10 = upipe_uyvy_to_planar_10_avx;
+    }
+
+    if (__builtin_cpu_supports("avx2")) {
+        upipe_sdi_dec->uyvy_to_v210 = upipe_uyvy_to_v210_avx2;
     }
 #endif
 
