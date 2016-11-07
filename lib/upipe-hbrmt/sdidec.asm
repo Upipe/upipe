@@ -226,10 +226,21 @@ cglobal uyvy_to_planar_8, 5, 5, 8, y, u, v, l, width
     mova       m6, [uyvy_planar_shuf_8]
 
 .loop:
+%if notcpuflag(avx2)
     mova       m0, [lq+8*widthq+0*mmsize]
     mova       m1, [lq+8*widthq+1*mmsize]
     mova       m2, [lq+8*widthq+2*mmsize]
     mova       m3, [lq+8*widthq+3*mmsize]
+%else
+    mova             xm0, [lq+8*widthq+  0]
+    mova             xm1, [lq+8*widthq+ 16]
+    mova             xm2, [lq+8*widthq+ 32]
+    mova             xm3, [lq+8*widthq+ 48]
+    vinserti128  m0,  m0, [lq+8*widthq+ 64], 1
+    vinserti128  m1,  m1, [lq+8*widthq+ 80], 1
+    vinserti128  m2,  m2, [lq+8*widthq+ 96], 1
+    vinserti128  m3,  m3, [lq+8*widthq+112], 1
+%endif
 
     psrlw      m0, 2
     psrlw      m1, 2
@@ -252,16 +263,26 @@ cglobal uyvy_to_planar_8, 5, 5, 8, y, u, v, l, width
     punpckhdq  m0, m2 ; eight u's and eight v's
 
     mova      [yq + 2*widthq], m4
+%if notcpuflag(avx2)
     movq      [uq + 1*widthq], m0 ; put half of m0 (eight u's)
     movhps    [vq + 1*widthq], m0 ; put the other half of m0 (eight v's)
+%else
+    vpermq m0, m0, q3120
+    movu [uq + widthq], xm0
+    vextracti128 [vq + widthq], m0, 1
+%endif
 
-    add       widthq, 8
+    add       widthq, mmsize/2
     jl .loop
 
     RET
 %endmacro
 
+INIT_XMM ssse3
+uyvy_to_planar_8
 INIT_XMM avx
+uyvy_to_planar_8
+INIT_YMM avx2
 uyvy_to_planar_8
 
 %macro uyvy_to_planar_10 0
