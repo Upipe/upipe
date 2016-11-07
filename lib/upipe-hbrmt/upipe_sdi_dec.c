@@ -62,12 +62,13 @@
 #include "sdidec.h"
 #include "upipe_hbrmt_common.h"
 
+#include <libavutil/common.h>
+#include <libavutil/intreadwrite.h>
+
 #define UPIPE_SDI_DEC_MAX_PLANES 3
 #define UPIPE_SDI_MAX_CHANNELS 16
 
 #define ZERO_IDX(x) (x-1)
-
-void ff_v210_uyvy_pack_10_c    (const uint16_t *y, uint8_t *dst, ptrdiff_t width);
 
 /** audio input subpipe */
 struct upipe_sdi_dec_sub {
@@ -1061,6 +1062,32 @@ static void uyvy_to_planar_10_c(uint16_t *y, uint16_t *u, uint16_t *v, const uin
     }
 }
 
+#define CLIP(v) av_clip(v, 4, 1019)
+
+#define WRITE_PIXELS_UYVY(a)            \
+    do {                                \
+        val  = CLIP(*a++);              \
+        tmp1 = CLIP(*a++);              \
+        tmp2 = CLIP(*a++);              \
+        val |= (tmp1 << 10) |           \
+               (tmp2 << 20);            \
+        AV_WL32(dst, val);              \
+        dst += 4;                       \
+    } while (0)
+
+static void uyvy_to_v210_c(const uint16_t *y, uint8_t *dst, ptrdiff_t width)
+{
+    uint32_t val, tmp1, tmp2;
+    int i;
+
+    for (i = 0; i < width - 5; i += 6) {
+        WRITE_PIXELS_UYVY(y);
+        WRITE_PIXELS_UYVY(y);
+        WRITE_PIXELS_UYVY(y);
+        WRITE_PIXELS_UYVY(y);
+    }
+}
+
 /** @internal @This allocates a sdi_dec pipe.
  *
  * @param mgr common management structure
@@ -1088,7 +1115,7 @@ static struct upipe *upipe_sdi_dec_alloc(struct upipe_mgr *mgr,
 
     uref_free(flow_def);
 
-    upipe_sdi_dec->uyvy_to_v210 = ff_v210_uyvy_pack_10_c;
+    upipe_sdi_dec->uyvy_to_v210 = uyvy_to_v210_c;
     upipe_sdi_dec->uyvy_to_planar_8 = uyvy_to_planar_8_c;
     upipe_sdi_dec->uyvy_to_planar_10 = uyvy_to_planar_10_c;
 
