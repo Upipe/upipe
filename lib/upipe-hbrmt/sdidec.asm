@@ -308,10 +308,10 @@ cglobal uyvy_to_planar_10, 5, 5, 6, y, u, v, l, width
 INIT_XMM avx
 uyvy_to_planar_10
 
-%macro v210_uyvy_pack_10 0
+%macro uyvy_to_v210 0
 
-; v210_uyvy_pack_10(const uint16_t *y, uint8_t *dst, ptrdiff_t width)
-cglobal v210_uyvy_pack_10, 3, 6, 6, y, dst, width
+; uyvy_to_v210(const uint16_t *y, uint8_t *dst, ptrdiff_t width)
+cglobal uyvy_to_v210, 3, 6, 6, y, dst, width
     shl     widthq, 2
     add     yq, widthq
     neg     widthq
@@ -352,4 +352,4 @@ cglobal v210_uyvy_pack_10, 3, 6, 6, y, dst, width
 %endmacro
 
 INIT_XMM ssse3
-v210_uyvy_pack_10
+uyvy_to_v210
