@@ -101,10 +101,11 @@ sdi_unpack_10
 %macro sdi_v210_unpack 0
 
 ; sdi_v210_unpack(const uint8_t *src, uint32_t *dst, int64_t width)
-cglobal sdi_v210_unpack, 3, 3, 14, src, dst, size
+cglobal sdi_v210_unpack, 3, 3, 3+11*ARCH_X86_64, src, dst, size
     add     srcq, sizeq
     neg     sizeq
 
+%if ARCH_X86_64
     mova    m3,  [sdi_v210_shuf_easy]
     mova    m4,  [sdi_v210_shuf_hard_1]
     mova    m5,  [sdi_v210_shuf_hard_2]
@@ -116,6 +117,19 @@ cglobal sdi_v210_unpack, 3, 3, 14, src, dst, size
     mova    m11, [sdi_v210_mask_hard_2]
     mova    m12, [sdi_v210_shuf_hard_1_end]
     mova    m13, [sdi_v210_shuf_hard_2_end]
+%else
+    %define m3  [sdi_v210_shuf_easy]
+    %define m4  [sdi_v210_shuf_hard_1]
+    %define m5  [sdi_v210_shuf_hard_2]
+    %define m6  [sdi_v210_rshift_easy]
+    %define m7  [sdi_v210_mult_hard_1]
+    %define m8  [sdi_v210_rshift_hard_2]
+    %define m9  [sdi_v210_mask_easy]
+    %define m10 [sdi_v210_mask_hard_1]
+    %define m11 [sdi_v210_mask_hard_2]
+    %define m12 [sdi_v210_shuf_hard_1_end]
+    %define m13 [sdi_v210_shuf_hard_2_end]
+%endif ; ARCH_X86_64
 
 .loop:
     movu     m0, [srcq+sizeq]

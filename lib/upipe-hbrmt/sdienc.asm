@@ -54,6 +54,8 @@ planar_10_uv_shift: dw 0x40, 0x40, 0x40, 0x40, 0x4, 0x4, 0x4, 0x4
 planar_10_y_shuf:  db -1, 1, 0, 3, 2, -1, 5, 4, 7, 6, -1, 9, 8, 11, 10, -1
 planar_10_uv_shuf: db 1, 0, 9, 8, -1, 3, 2, 11, 10, -1, 5, 4, 13, 12, -1, -1
 
+pb_0: times 32 db 0
+
 SECTION .text
 
 %macro sdi_pack_10 0
@@ -115,7 +117,7 @@ sdi_blank
 %macro planar_to_uyvy_8 0
 
 ; planar_to_uyvy_8(uint16_t *dst, const uint8_t *y, const uint8_t *u, const uint8_t *v, const int64_t width)
-cglobal planar_to_uyvy_8, 5, 5, 11, dst, y, u, v, width
+cglobal planar_to_uyvy_8, 5, 5, 8+3*ARCH_X86_64, dst, y, u, v, width
     shr       widthq, 1
     lea       yq, [yq+2*widthq]
     lea       dstq, [dstq+8*widthq]
@@ -123,10 +125,16 @@ cglobal planar_to_uyvy_8, 5, 5, 11, dst, y, u, v, width
     add       vq, widthq
     neg       widthq
 
+%if ARCH_X86_64
     pxor      m10, m10
 
     mova      m8, [uyvy_enc_min_8]
     mova      m9, [uyvy_enc_max_8]
+%else
+    %define m8  [uyvy_enc_min_8]
+    %define m9  [uyvy_enc_max_8]
+    %define m10 [pb_0]
+%endif ; ARCH_X86_64
 
 .loop:
     mova      m0, [yq+2*widthq]
@@ -184,15 +192,20 @@ planar_to_uyvy_8
 %macro planar_to_uyvy_10 0
 
 ; planar_to_uyvy_10(uint16_t *dst, const uint16_t *y, const uint16_t *u, const uint16_t *v, const int64_t width)
-cglobal planar_to_uyvy_10, 5, 5, 10, dst, y, u, v, width
+cglobal planar_to_uyvy_10, 5, 5, 8+2*ARCH_X86_64, dst, y, u, v, width
     lea       yq, [yq+2*widthq]
     lea       dstq, [dstq+4*widthq]
     add       uq, widthq
     add       vq, widthq
     neg       widthq
 
+%if ARCH_X86_64
     mova      m8, [uyvy_enc_min_10]
     mova      m9, [uyvy_enc_max_10]
+%else
+    %define m8  [uyvy_enc_min_8]
+    %define m9  [uyvy_enc_max_8]
+%endif ; ARCH_X86_64
 
 .loop:
     mova      m0, [yq+2*widthq]
