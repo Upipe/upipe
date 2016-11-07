@@ -277,10 +277,21 @@ cglobal uyvy_to_planar_10, 5, 5, 6, y, u, v, l, width
     mova      m5, [uyvy_planar_shuf_10]
 
 .loop:
+%if notcpuflag(avx2)
     mova      m0, [lq+4*widthq+0*mmsize]
     mova      m1, [lq+4*widthq+1*mmsize]
     mova      m2, [lq+4*widthq+2*mmsize]
     mova      m3, [lq+4*widthq+3*mmsize]
+%else
+    mova             xm0, [lq+4*widthq+  0]
+    mova             xm1, [lq+4*widthq+ 16]
+    vinserti128  m0,  m0, [lq+4*widthq+ 32], 1
+    vinserti128  m1,  m1, [lq+4*widthq+ 48], 1
+    mova             xm2, [lq+4*widthq+ 64]
+    mova             xm3, [lq+4*widthq+ 80]
+    vinserti128  m2,  m2, [lq+4*widthq+ 96], 1
+    vinserti128  m3,  m3, [lq+4*widthq+112], 1
+%endif
 
     pshufb     m0, m5
     pshufb     m1, m5
@@ -298,6 +309,11 @@ cglobal uyvy_to_planar_10, 5, 5, 6, y, u, v, l, width
     punpcklqdq m4, m1
     SWAP       m1, m0
 
+%if cpuflag(avx2)
+    vpermq m4, m4, q3120
+    vpermq m1, m1, q3120
+%endif
+
     mova       [uq+widthq], m4
     mova       [vq+widthq], m1
 
@@ -307,7 +323,11 @@ cglobal uyvy_to_planar_10, 5, 5, 6, y, u, v, l, width
     RET
 %endmacro
 
+INIT_XMM ssse3
+uyvy_to_planar_10
 INIT_XMM avx
+uyvy_to_planar_10
+INIT_YMM avx2
 uyvy_to_planar_10
 
 %macro uyvy_to_v210 0
