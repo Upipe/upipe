@@ -273,7 +273,9 @@ static inline const struct sdi_offsets_fmt *sdi_get_offsets(struct uref *flow_de
         /* 1125 Progressive (1080 active) lines */
         {1920, 1080, 0, 7, 10, {1, 41}, {42, 1121}, {1122, 1125}, {0, 0}, {0, 0}, {0, 0}},
         /* PAL */
-        {720, 576, 313, 6, 9, {1, 22}, {23, 260}, {561, 563}, {564, 583}, {336, 1123}, {1124, 1125}},
+        {720, 576, 313, 6, 9, {1, 22}, {23, 310}, {311, 312}, {313, 335}, {336, 623}, {624, 625}},
+        /* NTSC TODO */
+        /* 720p TODO */
     };
 
     static const struct sdi_offsets_fmt fmts_data[7] = {
