@@ -177,8 +177,6 @@ struct upipe_sdi_dec {
     /* Enable CPU-intensive debugging (CRC) */
     int debug;
 
-    struct urational fps;
-
     /* presence of an AES stream */
     int aes_detected[8];
 
@@ -683,8 +681,8 @@ static bool upipe_sdi_dec_handle(struct upipe *upipe, struct uref *uref,
                     mpf = false;
 
                 uint64_t audio_clock = upipe_sdi_dec->audio_samples[audio_group] *
-                    f->width * f->height * upipe_sdi_dec->fps.num /
-                    upipe_sdi_dec->fps.den / 48000;
+                    f->width * f->height * upipe_sdi_dec->f->fps.num /
+                    upipe_sdi_dec->f->fps.den / 48000;
 
                 if (unlikely(upipe_sdi_dec->eav_clock == 0))
                     upipe_sdi_dec->eav_clock -= clock; // initial phase offset
@@ -823,9 +821,9 @@ static bool upipe_sdi_dec_handle(struct upipe *upipe, struct uref *uref,
 
     uref_attach_ubuf(uref, ubuf);
     uref_clock_set_pts_prog(uref, UINT32_MAX + upipe_sdi_dec->frame_num++ *
-        UCLOCK_FREQ * upipe_sdi_dec->fps.den / upipe_sdi_dec->fps.num);
+        UCLOCK_FREQ * upipe_sdi_dec->f->fps.den / upipe_sdi_dec->f->fps.num);
     uref_clock_set_pts_orig(uref, UCLOCK_FREQ + upipe_sdi_dec->frame_num++ *
-        UCLOCK_FREQ * upipe_sdi_dec->fps.den / upipe_sdi_dec->fps.num);
+        UCLOCK_FREQ * upipe_sdi_dec->f->fps.den / upipe_sdi_dec->f->fps.num);
     uref_clock_set_dts_pts_delay(uref, 0);
     upipe_sdi_dec_output(upipe, uref, upump_p);
 
@@ -906,17 +904,15 @@ static int upipe_sdi_dec_set_flow_def(struct upipe *upipe, struct uref *flow_def
         return UBASE_ERR_INVALID;
 
     struct upipe_sdi_dec *upipe_sdi_dec = upipe_sdi_dec_from_upipe(upipe);
-    struct uref *flow_def_dup;
 
-    UBASE_RETURN(uref_pic_flow_get_fps(flow_def, &upipe_sdi_dec->fps));
-
-    upipe_sdi_dec->f = sdi_get_offsets(&upipe_sdi_dec->fps);
+    upipe_sdi_dec->f = sdi_get_offsets(flow_def);
     if (!upipe_sdi_dec->f) {
         upipe_err(upipe, "Could not figure out SDI offsets");
         return UBASE_ERR_INVALID;
     }
     upipe_sdi_dec->p = upipe_sdi_dec->f->pict_fmt;
 
+    struct uref *flow_def_dup;
     if ((flow_def_dup = uref_sibling_alloc(flow_def)) == NULL)
         return UBASE_ERR_ALLOC;
 
@@ -949,7 +945,7 @@ static int upipe_sdi_dec_set_flow_def(struct upipe *upipe, struct uref *flow_def
         UBASE_RETURN(uref_pic_flow_add_plane(flow_def_dup, 2, 1, 2, "v10l"))
     }
 
-    uref_pic_flow_set_fps(flow_def_dup, upipe_sdi_dec->fps);
+    uref_pic_flow_set_fps(flow_def_dup, upipe_sdi_dec->f->fps);
 
     uref_pic_flow_set_hsize(flow_def_dup, upipe_sdi_dec->p->active_width);
     uref_pic_flow_set_vsize(flow_def_dup, upipe_sdi_dec->p->active_height);

@@ -239,8 +239,8 @@ static inline void upipe_hbrmt_dec_input(struct upipe *upipe, struct uref *uref,
 
         struct uref *flow_format = uref_dup(upipe_hbrmt_dec->flow_def);
         uref_pic_flow_set_fps(flow_format, *fps);
+        upipe_hbrmt_dec->f = sdi_get_offsets(flow_format);
         upipe_hbrmt_dec_store_flow_def(upipe, flow_format);
-        upipe_hbrmt_dec->f = sdi_get_offsets((struct urational *) /* FIXME */ fps);
     }
 
     /* Allocate block memory */

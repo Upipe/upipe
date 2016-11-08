@@ -255,8 +255,12 @@ struct sdi_offsets_fmt {
     struct urational fps;
 };
 
-static inline const struct sdi_offsets_fmt *sdi_get_offsets(struct urational *fps)
+static inline const struct sdi_offsets_fmt *sdi_get_offsets(struct uref *flow_def)
 {
+    struct urational fps;
+
+    uref_pic_flow_get_fps(flow_def, &fps);
+
     static const struct sdi_picture_fmt pict_fmts[3] = {
         /* 1125 Interlaced (1080 active) lines */
         {1920, 1080, 562, 7, 10, {1, 20}, {21, 560}, {561, 563}, {564, 583}, {584, 1123}, {1124, 1125}},
@@ -280,7 +284,7 @@ static inline const struct sdi_offsets_fmt *sdi_get_offsets(struct urational *fp
     };
 
     for (size_t i = 0; i < sizeof(fmts_data) / sizeof(struct sdi_offsets_fmt); i++)
-        if (!urational_cmp(fps, &fmts_data[i].fps))
+        if (!urational_cmp(&fps, &fmts_data[i].fps))
             return &fmts_data[i];
 
     return NULL;

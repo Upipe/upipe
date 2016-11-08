@@ -1000,10 +1000,7 @@ static int upipe_sdi_enc_set_flow_def(struct upipe *upipe, struct uref *flow_def
 
     UBASE_RETURN(uref_flow_match_def(flow_def, "pic."))
 
-    struct urational fps;
-    UBASE_RETURN(uref_pic_flow_get_fps(flow_def, &fps));
-
-    upipe_sdi_enc->f = sdi_get_offsets(&fps);
+    upipe_sdi_enc->f = sdi_get_offsets(flow_def);
     if (!upipe_sdi_enc->f) {
         upipe_err(upipe, "Could not figure out SDI offsets");
         return UBASE_ERR_INVALID;
