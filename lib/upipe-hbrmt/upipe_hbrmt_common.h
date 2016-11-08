@@ -224,15 +224,6 @@ struct sdi_picture_fmt {
     struct sdi_line_range vbi_f2_part2;
 };
 
-static const struct sdi_picture_fmt pict_fmts[3] = {
-    /* 1125 Interlaced (1080 active) lines */
-    {1920, 1080, 562, 7, 10, {1, 20}, {21, 560}, {561, 563}, {564, 583}, {584, 1123}, {1124, 1125}},
-    /* 1125 Progressive (1080 active) lines */
-    {1920, 1080, 0, 7, 10, {1, 41}, {42, 1121}, {1122, 1125}, {0, 0}, {0, 0}, {0, 0}},
-    /* PAL */
-    {720, 576, 313, 6, 9, {1, 22}, {23, 260}, {561, 563}, {564, 583}, {336, 1123}, {1124, 1125}},
-};
-
 struct sdi_offsets_fmt {
     /* Full SDI width and height */
     uint16_t width;
@@ -264,21 +255,30 @@ struct sdi_offsets_fmt {
     struct urational fps;
 };
 
-static const struct sdi_offsets_fmt fmts_data[7] = {
-    { 2640, 1125, 720, &pict_fmts[0], 0x0, 0x5, { 25, 1} },        /* 25 Hz I */
-    { 2640, 1125, 720, &pict_fmts[1], 0x3, 0x9, { 50, 1} },        /* 50 Hz P */
-
-    { 2200, 1125, 280, &pict_fmts[0], 0x0, 0x6, { 30000, 1001 } }, /* 30/1.001 Hz I */
-    { 2200, 1125, 280, &pict_fmts[1], 0x3, 0xA, { 60000, 1001 } }, /* 60/1.001 Hz P */
-
-    { 2750, 1125, 830, &pict_fmts[0], 0x3, 0x2, { 24000, 1001 } }, /* 24/1.001 Hz */
-    { 2750, 1125, 830, &pict_fmts[0], 0x3, 0x3, { 24, 1 } },       /* 24 Hz */
-
-    {  864,  625, 144, &pict_fmts[2], 0x0, 0x5, { 25, 1} },        /* 625-line 25 Hz I */
-};
-
 static inline const struct sdi_offsets_fmt *sdi_get_offsets(struct urational *fps)
 {
+    static const struct sdi_picture_fmt pict_fmts[3] = {
+        /* 1125 Interlaced (1080 active) lines */
+        {1920, 1080, 562, 7, 10, {1, 20}, {21, 560}, {561, 563}, {564, 583}, {584, 1123}, {1124, 1125}},
+        /* 1125 Progressive (1080 active) lines */
+        {1920, 1080, 0, 7, 10, {1, 41}, {42, 1121}, {1122, 1125}, {0, 0}, {0, 0}, {0, 0}},
+        /* PAL */
+        {720, 576, 313, 6, 9, {1, 22}, {23, 260}, {561, 563}, {564, 583}, {336, 1123}, {1124, 1125}},
+    };
+
+    static const struct sdi_offsets_fmt fmts_data[7] = {
+        { 2640, 1125, 720, &pict_fmts[0], 0x0, 0x5, { 25, 1} },        /* 25 Hz I */
+        { 2640, 1125, 720, &pict_fmts[1], 0x3, 0x9, { 50, 1} },        /* 50 Hz P */
+
+        { 2200, 1125, 280, &pict_fmts[0], 0x0, 0x6, { 30000, 1001 } }, /* 30/1.001 Hz I */
+        { 2200, 1125, 280, &pict_fmts[1], 0x3, 0xA, { 60000, 1001 } }, /* 60/1.001 Hz P */
+
+        { 2750, 1125, 830, &pict_fmts[0], 0x3, 0x2, { 24000, 1001 } }, /* 24/1.001 Hz */
+        { 2750, 1125, 830, &pict_fmts[0], 0x3, 0x3, { 24, 1 } },       /* 24 Hz */
+
+        {  864,  625, 144, &pict_fmts[2], 0x0, 0x5, { 25, 1} },        /* 625-line 25 Hz I */
+    };
+
     for (size_t i = 0; i < sizeof(fmts_data) / sizeof(struct sdi_offsets_fmt); i++)
         if (!urational_cmp(fps, &fmts_data[i].fps))
             return &fmts_data[i];
