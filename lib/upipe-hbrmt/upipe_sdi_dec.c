@@ -699,23 +699,24 @@ static bool upipe_sdi_dec_handle(struct upipe *upipe, struct uref *uref,
                             audio_group, h, mpf, clock, offset, offset - clock);
                 }
 
-                for (int i = 0; i < 4; i++) {
-                    int32_t s = extract_audio_sample(&packet[UPIPE_SDI_MAX_CHANNELS + i * 8]);
-                    buf_audio[group_offset[audio_group] * UPIPE_SDI_MAX_CHANNELS + 4 * audio_group + i] = s;
+                if (buf_audio)
+                    for (int i = 0; i < 4; i++) {
+                        int32_t s = extract_audio_sample(&packet[UPIPE_SDI_MAX_CHANNELS + i * 8]);
+                        buf_audio[group_offset[audio_group] * UPIPE_SDI_MAX_CHANNELS + 4 * audio_group + i] = s;
 
-                    if (i & 0x01) { // check 2nd syncword
-                        size_t prev = group_offset[audio_group] * 16 + 4 * audio_group + i - 1;
-                        if ((s == 0xa54e1f00   && buf_audio[prev] == 0x96f87200) ||
-                            (s ==  0x54e1f000  && buf_audio[prev] ==  0x6f872000) ||
-                            (s ==   0x4e1f0000 && buf_audio[prev] ==   0xf8720000)) {
-                            uint8_t pair = audio_group * 2 + (i >> 1);
-                            if (aes[pair] != -1) {
-                                upipe_err_va(upipe, "AES at line %d AND %d", aes[pair], h);
+                        if (i & 0x01) { // check 2nd syncword
+                            size_t prev = group_offset[audio_group] * 16 + 4 * audio_group + i - 1;
+                            if ((s == 0xa54e1f00   && buf_audio[prev] == 0x96f87200) ||
+                                    (s ==  0x54e1f000  && buf_audio[prev] ==  0x6f872000) ||
+                                    (s ==   0x4e1f0000 && buf_audio[prev] ==   0xf8720000)) {
+                                uint8_t pair = audio_group * 2 + (i >> 1);
+                                if (aes[pair] != -1) {
+                                    upipe_err_va(upipe, "AES at line %d AND %d", aes[pair], h);
+                                }
+                                aes[pair] = h;
                             }
-                            aes[pair] = h;
                         }
                     }
-                }
 
                 upipe_sdi_dec->audio_samples[audio_group]++;
                 group_offset[audio_group]++;
