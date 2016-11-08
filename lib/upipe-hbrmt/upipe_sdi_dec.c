@@ -1048,6 +1048,8 @@ static struct upipe *upipe_sdi_dec_alloc(struct upipe_mgr *mgr,
     if (!upipe_sdi_dec->output_is_v210)
          upipe_sdi_dec->output_bit_depth = ubase_check(uref_pic_flow_check_chroma(flow_def, 1, 1, 1, "y8")) ? 8 : 10;
 
+    uref_free(flow_def);
+
     upipe_sdi_dec->uyvy_to_v210 = ff_v210_uyvy_pack_10_c;
     upipe_sdi_dec->uyvy_to_planar_8 = ff_uyvy_to_planar_8_c;
     upipe_sdi_dec->uyvy_to_planar_10 = ff_uyvy_to_planar_10_c;
