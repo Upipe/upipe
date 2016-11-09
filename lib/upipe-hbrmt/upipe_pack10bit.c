@@ -336,6 +336,7 @@ static struct upipe *upipe_pack10bit_alloc(struct upipe_mgr *mgr,
 
     upipe_pack10bit->pack = upipe_sdi_pack_c;
 
+#if defined(__i686__) || defined(__x86_64__)
 #if !defined(__APPLE__) /* macOS clang doesn't support that builtin yet */
 #if defined(__clang__) && /* clang 3.8 doesn't know ssse3 */ \
      (__clang_major__ < 3 || (__clang_major__ == 3 && __clang_minor__ <= 8))
@@ -354,6 +355,7 @@ static struct upipe *upipe_pack10bit_alloc(struct upipe_mgr *mgr,
 
     if (__builtin_cpu_supports("avx2"))
         upipe_pack10bit->pack = upipe_sdi_pack_10_avx2;
+#endif
 #endif
 
     upipe_pack10bit_init_urefcount(upipe);

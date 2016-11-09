@@ -2,11 +2,13 @@ lib_LTLIBRARIES = libupipe_hbrmt.la
 
 libupipe_hbrmt_la_SOURCES = upipe_pack10bit.c \
     upipe_unpack10bit.c \
-    sdidec.asm \
+    $(NULL)
+if HAVE_X86_ASM
+libupipe_hbrmt_la_SOURCES += sdidec.asm \
     sdidec.h \
     sdienc.asm \
-    sdienc.h \
-    $(NULL)
+    sdienc.h
+endif
 libupipe_hbrmt_la_CPPFLAGS = -I$(top_builddir)/include -I$(top_srcdir)/include
 libupipe_hbrmt_la_CFLAGS = $(AVUTIL_CFLAGS)
 libupipe_hbrmt_la_LIBADD = $(top_builddir)/lib/upipe/libupipe.la
