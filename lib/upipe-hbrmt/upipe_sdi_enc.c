@@ -700,10 +700,9 @@ static void upipe_sdi_enc_encode_line(struct upipe *upipe, int h, uint16_t *dst,
     }
 
     /* Update CRCs */
-    for (int i = 0; i < 2*input_hsize; i+=2) {
+    for (int i = 0; i < 2*input_hsize; i+=16) {
         const uint16_t *crc_src = &dst[2*f->active_offset + i];
-        sdi_crc_update(upipe_sdi_enc->crc_lut[0], &upipe_sdi_enc->crc_c, crc_src[0]);
-        sdi_crc_update(upipe_sdi_enc->crc_lut[0], &upipe_sdi_enc->crc_y, crc_src[1]);
+        sdi_crc_update_blk(upipe_sdi_enc->crc_lut, &upipe_sdi_enc->crc_c, &upipe_sdi_enc->crc_y, crc_src);
     }
 
     if (!vbi)

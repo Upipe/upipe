@@ -526,10 +526,9 @@ static bool upipe_sdi_dec_handle(struct upipe *upipe, struct uref *uref,
 
             }
 
-            for (int i = 0; i < 2*output_hsize; i+=2) {
+            for (int i = 0; i < 2*output_hsize; i+=16) {
                 const uint16_t *crc_src = &src[2*f->active_offset + i];
-                sdi_crc_update(upipe_sdi_dec->crc_lut[0], &upipe_sdi_dec->crc_c, crc_src[0]);
-                sdi_crc_update(upipe_sdi_dec->crc_lut[0], &upipe_sdi_dec->crc_y, crc_src[1]);
+                sdi_crc_update_blk(upipe_sdi_dec->crc_lut, &upipe_sdi_dec->crc_c, &upipe_sdi_dec->crc_y, crc_src);
             }
         }
     }
