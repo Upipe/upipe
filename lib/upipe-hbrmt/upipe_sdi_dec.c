@@ -169,6 +169,9 @@ struct upipe_sdi_dec {
     const struct sdi_offsets_fmt *f;
     const struct sdi_picture_fmt *p;
 
+    /* CRC LUT */
+    uint32_t crc_lut[8][1024];
+
     /* Chroma CRC context */
     uint32_t crc_c;
     /* Luma CRC context */
@@ -502,8 +505,8 @@ static bool upipe_sdi_dec_handle(struct upipe *upipe, struct uref *uref,
 
             if (!first_line ) {
                 for (int i = 0; i < 12; i += 2) {
-                    sdi_crc_update(&upipe_sdi_dec->crc_c, src[i + 0]);
-                    sdi_crc_update(&upipe_sdi_dec->crc_y, src[i + 1]);
+                    sdi_crc_update(upipe_sdi_dec->crc_lut[0], &upipe_sdi_dec->crc_c, src[i + 0]);
+                    sdi_crc_update(upipe_sdi_dec->crc_lut[0], &upipe_sdi_dec->crc_y, src[i + 1]);
                 }
 
                 sdi_crc_end(&upipe_sdi_dec->crc_c, &crc[0]);
@@ -525,8 +528,8 @@ static bool upipe_sdi_dec_handle(struct upipe *upipe, struct uref *uref,
 
             for (int i = 0; i < 2*output_hsize; i+=2) {
                 const uint16_t *crc_src = &src[2*f->active_offset + i];
-                sdi_crc_update(&upipe_sdi_dec->crc_c, crc_src[0]);
-                sdi_crc_update(&upipe_sdi_dec->crc_y, crc_src[1]);
+                sdi_crc_update(upipe_sdi_dec->crc_lut[0], &upipe_sdi_dec->crc_c, crc_src[0]);
+                sdi_crc_update(upipe_sdi_dec->crc_lut[0], &upipe_sdi_dec->crc_y, crc_src[1]);
             }
         }
     }
@@ -1072,6 +1075,9 @@ static struct upipe *upipe_sdi_dec_alloc(struct upipe_mgr *mgr,
 
     upipe_sdi_dec->crc_y = 0;
     upipe_sdi_dec->crc_c = 0;
+
+    sdi_crc_setup(upipe_sdi_dec->crc_lut);
+    
     upipe_sdi_dec->debug = 0;
     for (int i = 0; i < 4; i++)
         upipe_sdi_dec->audio_samples[i] = 0;

@@ -114,6 +114,9 @@ struct upipe_sdi_enc {
     /** output chroma map */
     const char *output_chroma_map;
 
+    /* CRC LUT */
+    uint32_t crc_lut[8][1024];
+
     /* Chroma CRC context */
     uint32_t crc_c;
     /* Luma CRC context */
@@ -582,8 +585,8 @@ static void upipe_sdi_enc_encode_line(struct upipe *upipe, int h, uint16_t *dst,
 
     /* update CRC */
     for (int i = 0; i < 12; i += 2) {
-        sdi_crc_update(&upipe_sdi_enc->crc_c, dst[i + 0]);
-        sdi_crc_update(&upipe_sdi_enc->crc_y, dst[i + 1]);
+        sdi_crc_update(upipe_sdi_enc->crc_lut[0], &upipe_sdi_enc->crc_c, dst[i + 0]);
+        sdi_crc_update(upipe_sdi_enc->crc_lut[0], &upipe_sdi_enc->crc_y, dst[i + 1]);
     }
 
     /* finalize, reset, and encode the CRCs */
@@ -699,8 +702,8 @@ static void upipe_sdi_enc_encode_line(struct upipe *upipe, int h, uint16_t *dst,
     /* Update CRCs */
     for (int i = 0; i < 2*input_hsize; i+=2) {
         const uint16_t *crc_src = &dst[2*f->active_offset + i];
-        sdi_crc_update(&upipe_sdi_enc->crc_c, crc_src[0]);
-        sdi_crc_update(&upipe_sdi_enc->crc_y, crc_src[1]);
+        sdi_crc_update(upipe_sdi_enc->crc_lut[0], &upipe_sdi_enc->crc_c, crc_src[0]);
+        sdi_crc_update(upipe_sdi_enc->crc_lut[0], &upipe_sdi_enc->crc_y, crc_src[1]);
     }
 
     if (!vbi)
