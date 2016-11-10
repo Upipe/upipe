@@ -516,7 +516,7 @@ static float get_pts(uint64_t pts)
 }
 
 static void upipe_sdi_enc_encode_line(struct upipe *upipe, int h, uint16_t *dst,
-    const uint8_t *planes[3][2], int *input_strides, const unsigned int samples,
+    const uint8_t *planes[2][3], int *input_strides, const unsigned int samples,
     int *sample_number, size_t input_hsize, size_t input_vsize)
 {
     struct upipe_sdi_enc *upipe_sdi_enc = upipe_sdi_enc_from_upipe(upipe);
@@ -940,10 +940,11 @@ static void upipe_sdi_enc_input(struct upipe *upipe, struct uref *uref,
 
     sdi_init_crc_channel_status(upipe_sdi_enc->aes_channel_status);
 
-    const uint8_t *planes[3][2] = {
-        {input_planes[0], input_planes[0] + input_strides[0]},
-        {input_planes[1], input_planes[1] + input_strides[1]},
-        {input_planes[2], input_planes[2] + input_strides[2]},
+    const uint8_t *planes[2][3] = {
+        {input_planes[0], input_planes[1], input_planes[2]},
+        {input_planes[0] + input_strides[0],
+         input_planes[1] + input_strides[1],
+         input_planes[2] + input_strides[2]},
     };
 
     uint16_t *dst = (uint16_t*)buf;
