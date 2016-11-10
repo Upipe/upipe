@@ -554,7 +554,7 @@ static void upipe_sdi_enc_encode_line(struct upipe *upipe, int h, uint16_t *dst,
             f2 = 0;
         }
         /* VBI F2 part 1 */
-        else if(h >= ZERO_IDX(p->vbi_f2_part1.start) && h <= ZERO_IDX(p->vbi_f1_part1.end)) {
+        else if(h >= ZERO_IDX(p->vbi_f2_part1.start) && h <= ZERO_IDX(p->vbi_f2_part1.end)) {
             vbi = 1;
             f2 = 1;
         }
