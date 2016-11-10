@@ -1007,6 +1007,7 @@ static int upipe_sdi_enc_set_flow_def(struct upipe *upipe, struct uref *flow_def
         upipe_err(upipe, "Could not figure out SDI offsets");
         return UBASE_ERR_INVALID;
     }
+    upipe_sdi_enc->p = upipe_sdi_enc->f->pict_fmt;
 
     struct uref *flow_def_dup;
 
