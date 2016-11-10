@@ -524,6 +524,8 @@ static void upipe_sdi_enc_encode_line(struct upipe *upipe, int h, uint16_t *dst,
     const struct sdi_picture_fmt *p = upipe_sdi_enc->p;
     bool vbi = 0, f2 = 0;
 
+    input_hsize = p->active_width;
+
     /* Returns the total amount of samples per channel that can be put on
      * a line, so convert that to packets (multiplying it by 4 since you have
      * 4 channel groups) */
