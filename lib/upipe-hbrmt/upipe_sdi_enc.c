@@ -23,6 +23,8 @@
 
 #include <bitstream/smpte/291.h>
 
+#include <libavutil/common.h>
+
 #include <upipe-hbrmt/upipe_sdi_enc.h>
 #include "upipe_hbrmt_common.h"
 
@@ -38,7 +40,6 @@
 void ff_sdi_blank_c  (uint16_t *dst, int64_t size);
 void ff_sdi_blank_avx(uint16_t *dst, int64_t size);
 
-void ff_planar_to_uyvy_8_c  (uint16_t *dst, const uint8_t *y, const uint8_t *u, const uint8_t *v, const int64_t width);
 void ff_planar_to_uyvy_8_avx(uint16_t *dst, const uint8_t *y, const uint8_t *u, const uint8_t *v, const int64_t width);
 
 void ff_planar_to_uyvy_10_c   (uint16_t *dst, const uint16_t *y, const uint16_t *u, const uint16_t *v, const int64_t width);
@@ -1122,6 +1123,20 @@ static int upipe_sdi_enc_control(struct upipe *upipe, int command, va_list args)
     }
 }
 
+#define CLIP8(c) (av_clip((*(c)), 1,  254))
+
+static void planar_to_uyvy_8_c(uint16_t *dst, const uint8_t *y, const uint8_t *u, const uint8_t *v, const int64_t width)
+{
+    int j;
+    for (j = 0; j < width/2; j++) {
+        dst[0] = CLIP8(u++) << 2;
+        dst[1] = CLIP8(y++) << 2;
+        dst[2] = CLIP8(v++) << 2;
+        dst[3] = CLIP8(y++) << 2;
+        dst += 4;
+    }
+}
+
 /** @internal @This allocates a sdi_enc pipe.
  *
  * @param mgr common management structure
@@ -1144,7 +1159,7 @@ static struct upipe *upipe_sdi_enc_alloc(struct upipe_mgr *mgr,
     upipe_sdi_enc->n = 0;
 
     upipe_sdi_enc->blank             = ff_sdi_blank_c;
-    upipe_sdi_enc->planar_to_uyvy_8  = ff_planar_to_uyvy_8_c;
+    upipe_sdi_enc->planar_to_uyvy_8  = planar_to_uyvy_8_c;
     upipe_sdi_enc->planar_to_uyvy_10 = ff_planar_to_uyvy_10_c;
     upipe_sdi_enc->v210_to_uyvy      = ff_v210_uyvy_unpack_c;
 
