@@ -1504,7 +1504,7 @@ static void upipe_ts_demux_program_handle_pcr(struct upipe *upipe,
  */
 static void upipe_ts_demux_program_check_pcr(struct upipe *upipe)
 {
-    if (upipe_dead(upipe))
+    if (urefcount_dead(upipe->refcount))
         return;
 
     struct upipe_ts_demux_program *upipe_ts_demux_program =
