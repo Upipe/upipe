@@ -195,17 +195,6 @@ static inline bool uprobe_single(struct uprobe *uprobe)
     return urefcount_single(uprobe->refcount);
 }
 
-/** @This checks if the probe has no more references.
- *
- * @param uprobe pointer to uprobe
- * @return true if there is no reference to the probe
- */
-static inline bool uprobe_dead(struct uprobe *uprobe)
-{
-    assert(uprobe != NULL);
-    return urefcount_dead(uprobe->refcount);
-}
-
 /** @This initializes a uprobe structure. It is typically called by the
  * application or a pipe creating inner pipes (on a structure already
  * allocated by the master object).
