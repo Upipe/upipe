@@ -28,6 +28,8 @@
 #include <upipe-hbrmt/upipe_sdi_enc.h>
 #include "upipe_hbrmt_common.h"
 
+#include "sdienc.h"
+
 #define UPIPE_SDI_MAX_PLANES 3
 #define UPIPE_SDI_MAX_CHANNELS 16
 
@@ -39,8 +41,6 @@
 
 void ff_sdi_blank_c  (uint16_t *dst, int64_t size);
 void ff_sdi_blank_avx(uint16_t *dst, int64_t size);
-
-void ff_planar_to_uyvy_8_avx(uint16_t *dst, const uint8_t *y, const uint8_t *u, const uint8_t *v, const int64_t width);
 
 void ff_planar_to_uyvy_10_sse2(uint16_t *dst, const uint16_t *y, const uint16_t *u, const uint16_t *v, const int64_t width);
 void ff_planar_to_uyvy_10_avx (uint16_t *dst, const uint16_t *y, const uint16_t *u, const uint16_t *v, const int64_t width);
@@ -1181,7 +1181,7 @@ static struct upipe *upipe_sdi_enc_alloc(struct upipe_mgr *mgr,
 
     if (__builtin_cpu_supports("avx")) {
         upipe_sdi_enc->blank             = ff_sdi_blank_avx;
-        upipe_sdi_enc->planar_to_uyvy_8  = ff_planar_to_uyvy_8_avx;
+        upipe_sdi_enc->planar_to_uyvy_8  = upipe_planar_to_uyvy_8_avx;
         upipe_sdi_enc->planar_to_uyvy_10 = ff_planar_to_uyvy_10_avx;
         upipe_sdi_enc->v210_to_uyvy      = ff_v210_uyvy_unpack_aligned_avx;
     }
