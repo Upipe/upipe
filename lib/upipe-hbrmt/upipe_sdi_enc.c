@@ -1219,6 +1219,7 @@ static struct upipe *upipe_sdi_enc_alloc(struct upipe_mgr *mgr,
     if (__builtin_cpu_supports("avx2")) {
         upipe_sdi_enc->planar_to_uyvy_8  = upipe_planar_to_uyvy_8_avx2;
         upipe_sdi_enc->planar_to_uyvy_10 = upipe_planar_to_uyvy_10_avx2;
+        upipe_sdi_enc->v210_to_uyvy      = upipe_v210_uyvy_unpack_aligned_avx2;
     }
 #endif
 

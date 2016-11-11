@@ -11,5 +11,7 @@ void upipe_planar_to_uyvy_10_avx2(uint16_t *dst, const uint16_t *y, const uint16
 
 void upipe_v210_uyvy_unpack_aligned_ssse3(const uint32_t *src, uint16_t *uyvy, int64_t width);
 void upipe_v210_uyvy_unpack_aligned_avx  (const uint32_t *src, uint16_t *uyvy, int64_t width);
+void upipe_v210_uyvy_unpack_aligned_avx2 (const uint32_t *src, uint16_t *uyvy, int64_t width);
 void upipe_v210_uyvy_unpack_unaligned_ssse3(const uint32_t *src, uint16_t *uyvy, int64_t width);
 void upipe_v210_uyvy_unpack_unaligned_avx  (const uint32_t *src, uint16_t *uyvy, int64_t width);
+void upipe_v210_uyvy_unpack_unaligned_avx2 (const uint32_t *src, uint16_t *uyvy, int64_t width);

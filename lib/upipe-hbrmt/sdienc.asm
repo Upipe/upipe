@@ -52,19 +52,19 @@ planar_10_uv_shuf: db 1, 0, 9, 8, -1, 3, 2, 11, 10, -1, 5, 4, 13, 12, -1, -1
 
 pb_0: times 32 db 0
 
-v210_uyvy_mask1: times 2 db 0xff, 0x03, 0xf0, 0x3f, 0x00, 0xfc, 0x0f, 0xc0
-v210_uyvy_mask2: times 2 db 0xf0, 0x3f, 0x00, 0xfc, 0x0f, 0xc0, 0xff, 0x03
+v210_uyvy_mask1: times 4 db 0xff, 0x03, 0xf0, 0x3f, 0x00, 0xfc, 0x0f, 0xc0
+v210_uyvy_mask2: times 4 db 0xf0, 0x3f, 0x00, 0xfc, 0x0f, 0xc0, 0xff, 0x03
 
-v210_uyvy_chroma_shuf1: db  0, 1,-1,-1, 2, 3,-1,-1, 5, 6,-1,-1, 8, 9,-1,-1
-v210_uyvy_luma_shuf1:   db -1,-1, 1, 2,-1,-1, 4, 5,-1,-1, 6, 7,-1,-1, 9,10
-v210_uyvy_chroma_shuf2: db  0, 1,-1,-1, 3, 4,-1,-1, 6, 7,-1,-1, 8, 9,-1,-1
-v210_uyvy_luma_shuf2:   db -1,-1, 2, 3,-1,-1, 4, 5,-1,-1, 7, 8,-1,-1,10,11
-v210_uyvy_chroma_shuf3: db  5, 6,-1,-1, 8, 9,-1,-1,10,11,-1,-1,13,14,-1,-1
-v210_uyvy_luma_shuf3:   db -1,-1, 6, 7,-1,-1, 9,10,-1,-1,12,13,-1,-1,14,15
+v210_uyvy_chroma_shuf1: times 2 db  0, 1,-1,-1, 2, 3,-1,-1, 5, 6,-1,-1, 8, 9,-1,-1
+v210_uyvy_luma_shuf1:   times 2 db -1,-1, 1, 2,-1,-1, 4, 5,-1,-1, 6, 7,-1,-1, 9,10
+v210_uyvy_chroma_shuf2: times 2 db  0, 1,-1,-1, 3, 4,-1,-1, 6, 7,-1,-1, 8, 9,-1,-1
+v210_uyvy_luma_shuf2:   times 2 db -1,-1, 2, 3,-1,-1, 4, 5,-1,-1, 7, 8,-1,-1,10,11
+v210_uyvy_chroma_shuf3: times 2 db  5, 6,-1,-1, 8, 9,-1,-1,10,11,-1,-1,13,14,-1,-1
+v210_uyvy_luma_shuf3:   times 2 db -1,-1, 6, 7,-1,-1, 9,10,-1,-1,12,13,-1,-1,14,15
 
-v210_uyvy_mult1: dw 0x7fff, 0x2000, 0x0800, 0x7fff, 0x2000, 0x0800, 0x7fff, 0x2000
-v210_uyvy_mult2: dw 0x0800, 0x7fff, 0x2000, 0x0800, 0x7fff, 0x2000, 0x0800, 0x7fff
-v210_uyvy_mult3: dw 0x2000, 0x0800, 0x7fff, 0x2000, 0x0800, 0x7fff, 0x2000, 0x0800
+v210_uyvy_mult1: times 2 dw 0x7fff, 0x2000, 0x0800, 0x7fff, 0x2000, 0x0800, 0x7fff, 0x2000
+v210_uyvy_mult2: times 2 dw 0x0800, 0x7fff, 0x2000, 0x0800, 0x7fff, 0x2000, 0x0800, 0x7fff
+v210_uyvy_mult3: times 2 dw 0x2000, 0x0800, 0x7fff, 0x2000, 0x0800, 0x7fff, 0x2000, 0x0800
 
 SECTION .text
 
@@ -329,11 +329,15 @@ cglobal v210_uyvy_unpack_%1, 3, 3, 15
 
 .loop:
 %ifidn %1, unaligned
-    movu   m0, [r0]
-    movu   m2, [r0+16]
+    movu   xm0, [r0]
+    movu   xm2, [r0+16]
 %else
-    mova   m0, [r0]
-    mova   m2, [r0+16]
+    mova   xm0, [r0]
+    mova   xm2, [r0+16]
+%endif
+%if cpuflag(avx2)
+    vinserti128 m0, m0, [r0+32], 1
+    vinserti128 m2, m2, [r0+48], 1
 %endif
     palignr  m1, m2, m0, 10
 
@@ -343,7 +347,11 @@ cglobal v210_uyvy_unpack_%1, 3, 3, 15
     pshufb   m0, m7
     por      m0, m3
     pmulhrsw m0, m12
-    mova [r1+r2], m0
+    mova [r1+r2], xm0
+
+%if cpuflag(avx2)
+    vextracti128 [r1 + r2 + 3*16], m0, 1
+%endif
 
     pandn    m3, m5, m1
     pand     m1, m5
@@ -351,7 +359,11 @@ cglobal v210_uyvy_unpack_%1, 3, 3, 15
     pshufb   m1, m9
     por      m1, m3
     pmulhrsw m1, m13
-    mova [r1+r2+mmsize], m1
+    mova [r1+r2+16], xm1
+
+%if cpuflag(avx2)
+    vextracti128 [r1 + r2 + 4*16], m1, 1
+%endif
 
     pandn    m3, m4, m2
     pand     m2, m4
@@ -359,7 +371,11 @@ cglobal v210_uyvy_unpack_%1, 3, 3, 15
     pshufb   m2, m11
     por      m2, m3
     pmulhrsw m2, m14
-    mova [r1+r2+2*mmsize], m2
+    mova [r1+r2+2*16], xm2
+
+%if cpuflag(avx2)
+    vextracti128 [r1 + r2 + 5*16], m2, 1
+%endif
 
     add r0, 2*mmsize
     add r2, 3*mmsize
@@ -372,10 +388,14 @@ INIT_XMM ssse3
 v210_uyvy_unpack unaligned
 INIT_XMM avx
 v210_uyvy_unpack unaligned
+INIT_YMM avx2
+v210_uyvy_unpack unaligned
 
 INIT_XMM ssse3
 v210_uyvy_unpack aligned
 INIT_XMM avx
+v210_uyvy_unpack aligned
+INIT_YMM avx2
 v210_uyvy_unpack aligned
 
 %macro planar_to_sdi_8 0
