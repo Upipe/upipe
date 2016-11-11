@@ -81,6 +81,8 @@ int ubuf_pic_plane_clear(struct ubuf *ubuf, const char *chroma,
         height = vsize;
     }
 
+    const size_t memset_width = width*macropixel_size/hsub/macropixel;
+
 #define MATCH(a) (strcmp(chroma, a) == 0)
 #define LINELOOP(a) for (a=0; a < height/vsub; a++)
 
@@ -88,12 +90,12 @@ int ubuf_pic_plane_clear(struct ubuf *ubuf, const char *chroma,
      || MATCH("r8g8b8") || MATCH("r8g8b8a8") || MATCH("a8r8g8b8")
      || MATCH("b8g8r8") || MATCH("b8g8r8a8") || MATCH("a8b8g8r8")) {
         LINELOOP(j) {
-            memset(buf, fullrange ? 0 : 16, width*macropixel_size/hsub/macropixel);
+            memset(buf, fullrange ? 0 : 16, memset_width);
             buf += stride;
         }
     } else if (MATCH("u8") || MATCH("v8")) {
         LINELOOP(j) {
-            memset(buf, 0x80, width*macropixel_size/hsub/macropixel);
+            memset(buf, 0x80, memset_width);
             buf += stride;
         }
     } else {
