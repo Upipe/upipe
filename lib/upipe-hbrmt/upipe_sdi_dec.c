@@ -623,9 +623,10 @@ static bool upipe_sdi_dec_handle(struct upipe *upipe, struct uref *uref,
 
     /* Parse the whole frame */
     for (int h = 0; h < f->height; h++) {
+        const uint8_t chroma_blanking = p->sd ? UPIPE_SDI_CHROMA_BLANKING_START : UPIPE_HDSDI_CHROMA_BLANKING_START;
         /* Horizontal Blanking */
-        uint16_t *line = (uint16_t *)input_buf + h * f->width * 2 + UPIPE_SDI_CHROMA_BLANKING_START;
-        for (int v = 0; v < 2 * f->active_offset - UPIPE_SDI_CHROMA_BLANKING_START; v++) {
+        uint16_t *line = (uint16_t *)input_buf + h * f->width * 2 + chroma_blanking;
+        for (int v = 0; v < 2 * f->active_offset - chroma_blanking; v++) {
             uint16_t *packet = line + v;
             if (!(packet[0] == S291_ADF1 && packet[2] == S291_ADF2 && packet[4] == S291_ADF3))
                 continue;
