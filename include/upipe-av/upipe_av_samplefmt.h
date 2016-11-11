@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2013-2014 OpenHeadend S.A.R.L.
+ * Copyright (C) 2013-2016 OpenHeadend S.A.R.L.
  *
  * Authors: Christophe Massiot
  *
@@ -136,6 +136,43 @@ static inline enum AVSampleFormat
     if (planes != 1)
         return av_get_planar_sample_fmt(fmt);
     return fmt;
+}
+
+/** @This allows to match an av sample format with a flow definition.
+ *
+ * @param flow_def flow definition
+ * @param fmt av sample format
+ * @return an error code
+ */
+static inline int
+    upipe_av_samplefmt_match_flow_def(struct uref *flow_def,
+                                      enum AVSampleFormat fmt)
+{
+    const char *def;
+    uint8_t channels;
+    uint8_t planes;
+    if (unlikely(!ubase_check(uref_flow_get_def(flow_def, &def)) ||
+                 !ubase_check(uref_sound_flow_get_channels(flow_def,
+                                                           &channels)) ||
+                 !ubase_check(uref_sound_flow_get_planes(flow_def, &planes))))
+        return UBASE_ERR_INVALID;
+    enum AVSampleFormat tmp = AV_SAMPLE_FMT_NONE;
+    for (unsigned int i = 0; upipe_av_sample_fmts[i].fmt != AV_SAMPLE_FMT_NONE;
+         i++) {
+        if (!ubase_ncmp(def, upipe_av_sample_fmts[i].flow_def)) {
+            tmp = upipe_av_sample_fmts[i].fmt;
+            break;
+        }
+    }
+    if (tmp == AV_SAMPLE_FMT_NONE)
+        return UBASE_ERR_INVALID;
+
+    if (planes == 1 && tmp == fmt)
+        return UBASE_ERR_NONE;
+    tmp = av_get_planar_sample_fmt(tmp);
+    if ((channels == 1 || planes > 1) && tmp == fmt)
+        return UBASE_ERR_NONE;
+    return UBASE_ERR_INVALID;
 }
 
 #ifdef __cplusplus

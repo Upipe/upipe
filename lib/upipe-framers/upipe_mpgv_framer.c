@@ -831,7 +831,11 @@ static bool upipe_mpgvf_parse_picture(struct upipe *upipe, struct uref *uref,
     UBASE_FATAL(upipe, uref_pic_set_number(uref, picture_number))
     UBASE_FATAL(upipe, uref_mpgv_set_type(uref, codingtype))
 
-    *duration_p = UCLOCK_FREQ * upipe_mpgvf->fps.den / upipe_mpgvf->fps.num;
+    if (upipe_mpgvf->fps.num)
+        *duration_p = UCLOCK_FREQ * upipe_mpgvf->fps.den / upipe_mpgvf->fps.num;
+    else
+        *duration_p = 0;
+
     if (upipe_mpgvf->next_frame_ext_offset != -1) {
         uint8_t ext_buffer[MP2VPICX_HEADER_SIZE];
         const uint8_t *ext;

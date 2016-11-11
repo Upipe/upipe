@@ -41,14 +41,14 @@ extern "C" {
 #include <string.h>
 #include <stdint.h>
 
-UREF_ATTR_SMALL_UNSIGNED_VA(ts_event, running_status, "te.run[%"PRIu64"]",
+UREF_ATTR_SMALL_UNSIGNED_VA(ts_event, running_status, "te.run[%" PRIu64"]",
         event running status, uint64_t event, event)
-UREF_ATTR_VOID_VA(ts_event, scrambled, "te.ca[%"PRIu64"]", scrambled event,
+UREF_ATTR_VOID_VA(ts_event, scrambled, "te.ca[%" PRIu64"]", scrambled event,
         uint64_t event, event)
-UREF_ATTR_UNSIGNED_VA(ts_event, descriptors, "te.descs[%"PRIu64"]",
+UREF_ATTR_UNSIGNED_VA(ts_event, descriptors, "te.descs[%" PRIu64"]",
         number of event descriptors, uint64_t event, event)
 UREF_TS_ATTR_SUBDESCRIPTOR(ts_event, descriptor,
-        "te.desc[%"PRIu64"][%"PRIu64"]")
+        "te.desc[%" PRIu64"][%" PRIu64"]")
 
 #ifdef __cplusplus
 }

@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2013-2015 OpenHeadend S.A.R.L.
+ * Copyright (C) 2013-2016 OpenHeadend S.A.R.L.
  *
  * Authors: Christophe Massiot
  *
@@ -60,9 +60,11 @@
 #include <upipe/upipe_helper_uclock.h>
 #include <upipe/upipe_helper_upump_mgr.h>
 #include <upipe/upipe_helper_upump.h>
+#include <upipe/upipe_helper_inner.h>
 #include <upipe/upipe_helper_bin_input.h>
 #include <upipe/upipe_helper_subpipe.h>
 #include <upipe-framers/uref_h264_flow.h>
+#include <upipe-framers/uref_h265_flow.h>
 #include <upipe-framers/uref_mpga_flow.h>
 #include <upipe-framers/uref_mpgv_flow.h>
 #include <upipe-ts/uref_ts_flow.h>
@@ -78,6 +80,7 @@
 #include <stdbool.h>
 #include <stdarg.h>
 #include <string.h>
+#include <limits.h>
 #include <assert.h>
 
 #include <bitstream/mpeg/ts.h>
@@ -97,6 +100,8 @@
 #define DEFAULT_MUX_DELAY (UCLOCK_FREQ / 100)
 /** minimum allowed buffering (== max decoder VBV) */
 #define MIN_BUFFERING (UCLOCK_FREQ * 10)
+/** number of packets to output in one iteration of the live mode */
+#define NB_PACKETS 7
 /** T-STD TB octet rate for PSI tables */
 #define TB_RATE_PSI 125000
 /** T-STD TB octet rate for misc audio */
@@ -123,6 +128,8 @@
 #define MAX_DELAY UCLOCK_FREQ
 /** max retention time for ISO/IEC 14496 streams (ISO/IEC 13818-1 2.4.2.6) */
 #define MAX_DELAY_14496 (UCLOCK_FREQ * 10)
+/** max retention time for HEVC streams (FIXME) */
+#define MAX_DELAY_HEVC (UCLOCK_FREQ * 10)
 /** max retention time for still pictures streams (ISO/IEC 13818-1 2.4.2.6) */
 #define MAX_DELAY_STILL (UCLOCK_FREQ * 60)
 /** max retention time for teletext (ETSI EN 300 472 5.) */
@@ -225,6 +232,8 @@ struct upipe_ts_mux {
     struct uclock *uclock;
     /** uclock request */
     struct urequest uclock_request;
+    /** true if a uclock has been requested */
+    bool live;
 
     /** upump manager */
     struct upump_mgr *upump_mgr;
@@ -307,6 +316,8 @@ struct upipe_ts_mux {
     uint64_t total_octetrate;
     /** calculated required octetrate including overheads, PMTs and PAT */
     uint64_t required_octetrate;
+    /** true if @ref upipe_ts_mux_update is running */
+    bool octetrate_in_progress;
     /** interval between packets (rounded up, not to be used anywhere
      * critical */
     uint64_t interval;
@@ -319,6 +330,10 @@ struct upipe_ts_mux {
 
     /** list of PIDs carrying PSI */
     struct uchain psi_pids;
+    /** list of PIDs carrying PSI, ordered for splice */
+    struct uchain psi_pids_splice;
+    /** list of inputs that are actually PSI */
+    struct uchain psi_inputs;
     /** max latency of the subpipes */
     uint64_t latency;
     /** date of the current uref (system time, latency taken into account) */
@@ -329,6 +344,8 @@ struct upipe_ts_mux {
     struct uref *uref;
     /** size of current aggregation */
     size_t uref_size;
+    /** true during the preroll period */
+    bool preroll;
 
     /** manager of the pseudo inner sink */
     struct upipe_mgr inner_sink_mgr;
@@ -348,6 +365,7 @@ struct upipe_ts_mux {
 UPIPE_HELPER_UPIPE(upipe_ts_mux, upipe, UPIPE_TS_MUX_SIGNATURE)
 UPIPE_HELPER_UREFCOUNT(upipe_ts_mux, urefcount, upipe_ts_mux_no_input)
 UPIPE_HELPER_VOID(upipe_ts_mux)
+UPIPE_HELPER_INNER(upipe_ts_mux, psig)
 UPIPE_HELPER_BIN_INPUT(upipe_ts_mux, psig, input_request_list)
 UPIPE_HELPER_OUTPUT(upipe_ts_mux, output, flow_def, output_state,
                     output_request_list)
@@ -439,6 +457,7 @@ UPIPE_HELPER_UPIPE(upipe_ts_mux_program, upipe, UPIPE_TS_MUX_PROGRAM_SIGNATURE)
 UPIPE_HELPER_UREFCOUNT(upipe_ts_mux_program, urefcount,
                        upipe_ts_mux_program_no_input)
 UPIPE_HELPER_VOID(upipe_ts_mux_program)
+UPIPE_HELPER_INNER(upipe_ts_mux_program, psig_program)
 UPIPE_HELPER_BIN_INPUT(upipe_ts_mux_program, psig_program, input_request_list)
 
 UBASE_FROM_TO(upipe_ts_mux_program, urefcount, urefcount_real, urefcount_real)
@@ -456,6 +475,8 @@ static void upipe_ts_mux_program_free(struct urefcount *urefcount_real);
 /** @internal @This defines the role of an input wrt. PCR management and
  * scheduling. */
 enum upipe_ts_mux_input_type {
+    /** flow def not received yet */
+    UPIPE_TS_MUX_INPUT_UNKNOWN,
     /** video */
     UPIPE_TS_MUX_INPUT_VIDEO,
     /** audio */
@@ -475,6 +496,8 @@ struct upipe_ts_mux_input {
     struct urefcount urefcount;
     /** structure for double-linked lists */
     struct uchain uchain;
+    /** structure for double-linked lists for PSI inputs */
+    struct uchain uchain_psi;
 
     /** true if the input is in the process of being deleted */
     bool deleted;
@@ -534,9 +557,11 @@ UPIPE_HELPER_UPIPE(upipe_ts_mux_input, upipe, UPIPE_TS_MUX_INPUT_SIGNATURE)
 UPIPE_HELPER_UREFCOUNT(upipe_ts_mux_input, urefcount,
                        upipe_ts_mux_input_no_input)
 UPIPE_HELPER_VOID(upipe_ts_mux_input)
+UPIPE_HELPER_INNER(upipe_ts_mux_input, input);
 UPIPE_HELPER_BIN_INPUT(upipe_ts_mux_input, input, input_request_list)
 
 UBASE_FROM_TO(upipe_ts_mux_input, urefcount, urefcount_real, urefcount_real)
+UBASE_FROM_TO(upipe_ts_mux_input, uchain, uchain_psi, uchain_psi)
 
 UPIPE_HELPER_SUBPIPE(upipe_ts_mux_program, upipe_ts_mux_input, input,
                      input_mgr, inputs, uchain)
@@ -555,6 +580,8 @@ struct upipe_ts_mux_psi_pid {
     unsigned int refcount;
     /** structure for double-linked lists */
     struct uchain uchain;
+    /** structure for double-linked lists for splice */
+    struct uchain uchain_splice;
 
     /** PID */
     uint16_t pid;
@@ -579,6 +606,25 @@ struct upipe_ts_mux_psi_pid {
 };
 
 UBASE_FROM_TO(upipe_ts_mux_psi_pid, uchain, uchain, uchain)
+UBASE_FROM_TO(upipe_ts_mux_psi_pid, uchain, uchain_splice, uchain_splice)
+
+/** @internal @This sorts the psi_pids by increasing PID. We do not take into
+ * account cr_sys as, in the case of PSIs, packets are prepared for the
+ * current muxing date when calling @ref upipe_ts_mux_prepare.
+ *
+ * @param uchain1 pointer to first psi_pid
+ * @param uchain2 pointer to second psi_pid
+ * @return -1, 0 or +1
+ */
+static int upipe_ts_mux_psi_pid_compare(struct uchain *uchain1,
+                                        struct uchain *uchain2)
+{
+    struct upipe_ts_mux_psi_pid *psi_pid1 =
+        upipe_ts_mux_psi_pid_from_uchain_splice(uchain1);
+    struct upipe_ts_mux_psi_pid *psi_pid2 =
+        upipe_ts_mux_psi_pid_from_uchain_splice(uchain2);
+    return psi_pid1->pid - psi_pid2->pid;
+}
 
 /** @internal @This catches the events from psi_join inner pipes.
  *
@@ -645,6 +691,17 @@ static int upipe_ts_mux_psi_pid_encaps_probe(struct uprobe *uprobe,
 
     psi_pid->cr_sys = va_arg(args, uint64_t);
     psi_pid->dts_sys = va_arg(args, uint64_t);
+    struct uchain *uchain_splice =
+        upipe_ts_mux_psi_pid_to_uchain_splice(psi_pid);
+    if (ulist_is_in(uchain_splice))
+        ulist_delete(uchain_splice);
+
+    if (psi_pid->cr_sys != UINT64_MAX) {
+        struct upipe_ts_mux *upipe_ts_mux =
+            upipe_ts_mux_from_upipe(psi_pid->upipe);
+        ulist_bubble_reverse(&upipe_ts_mux->psi_pids_splice, uchain_splice,
+                             upipe_ts_mux_psi_pid_compare);
+    }
     return UBASE_ERR_NONE;
 }
 
@@ -683,6 +740,7 @@ static struct upipe_ts_mux_psi_pid *
 
     psi_pid->refcount = 1;
     uchain_init(upipe_ts_mux_psi_pid_to_uchain(psi_pid));
+    uchain_init(upipe_ts_mux_psi_pid_to_uchain_splice(psi_pid));
 
     psi_pid->pid = pid;
     /* we do not increase refcount as we will necessarily die before ts_mux */
@@ -781,6 +839,10 @@ static void upipe_ts_mux_psi_pid_release(struct upipe_ts_mux_psi_pid *psi_pid)
     psi_pid->refcount--;
     if (!psi_pid->refcount) {
         ulist_delete(upipe_ts_mux_psi_pid_to_uchain(psi_pid));
+        struct uchain *uchain_splice =
+            upipe_ts_mux_psi_pid_to_uchain_splice(psi_pid);
+        if (ulist_is_in(uchain_splice))
+            ulist_delete(uchain_splice);
         upipe_release(psi_pid->psi_join);
         upipe_release(psi_pid->encaps);
         uprobe_clean(&psi_pid->encaps_probe);
@@ -872,9 +934,10 @@ static struct upipe *upipe_ts_mux_input_alloc(struct upipe_mgr *mgr,
     urefcount_init(upipe_ts_mux_input_to_urefcount_real(upipe_ts_mux_input),
                    upipe_ts_mux_input_free);
     upipe_ts_mux_input_init_bin_input(upipe);
+    uchain_init(upipe_ts_mux_input_to_uchain_psi(upipe_ts_mux_input));
     upipe_ts_mux_input->pcr = false;
     upipe_ts_mux_input->deleted = false;
-    upipe_ts_mux_input->input_type = UPIPE_TS_MUX_INPUT_OTHER;
+    upipe_ts_mux_input->input_type = UPIPE_TS_MUX_INPUT_UNKNOWN;
     upipe_ts_mux_input->pid = 0;
     upipe_ts_mux_input->octetrate = 0;
     upipe_ts_mux_input->buffer_duration = 0;
@@ -925,7 +988,7 @@ static struct upipe *upipe_ts_mux_input_alloc(struct upipe_mgr *mgr,
         return upipe;
     }
 
-    upipe_ts_mux_input_store_first_inner(upipe,
+    upipe_ts_mux_input_store_bin_input(upipe,
             upipe_use(upipe_ts_mux_input->tstd));
     upipe_ts_encaps_set_tb_size(upipe_ts_mux_input->encaps,
                                 upipe_ts_mux->tb_size);
@@ -947,7 +1010,7 @@ static void upipe_ts_mux_input_input(struct upipe *upipe, struct uref *uref,
                 upipe_ts_mux_program_to_upipe(program)->mgr);
 
     upipe_ts_mux_input_bin_input(upipe, uref,
-            upipe_ts_mux->uclock == NULL ? upump_p : NULL);
+            upipe_ts_mux->live ? NULL : upump_p);
 
     upipe_ts_mux_work(upipe_ts_mux_to_upipe(upipe_ts_mux), upump_p);
 }
@@ -1058,6 +1121,8 @@ static int upipe_ts_mux_input_set_flow_def(struct upipe *upipe,
             max_delay = MAX_DELAY_14496;
         } else if (!ubase_ncmp(def, "block.h264.")) {
             max_delay = MAX_DELAY_14496;
+        } else if (!ubase_ncmp(def, "block.hevc.")) {
+            max_delay = MAX_DELAY_HEVC;
         }
         UBASE_FATAL(upipe, uref_ts_flow_set_pes_id(flow_def_dup,
                                                 PES_STREAM_ID_VIDEO_MPEG));
@@ -1181,6 +1246,8 @@ static int upipe_ts_mux_input_set_flow_def(struct upipe *upipe,
         input->dts_sys = UINT64_MAX;
         input->pcr_sys = UINT64_MAX;
         input->ready = false;
+        ulist_add(&upipe_ts_mux->psi_inputs,
+                  upipe_ts_mux_input_to_uchain_psi(input));
 
         struct upipe_ts_mux_mgr *ts_mux_mgr =
             upipe_ts_mux_mgr_from_upipe_mgr(upipe_ts_mux_to_upipe(upipe_ts_mux)->mgr);
@@ -1195,7 +1262,7 @@ static int upipe_ts_mux_input_set_flow_def(struct upipe *upipe,
             return UBASE_ERR_ALLOC;
         }
         upipe_ts_mux_set_scte35_interval(scte35g, input->scte35_interval);
-        upipe_ts_mux_input_store_first_inner(upipe, scte35g);
+        upipe_ts_mux_input_store_bin_input(upipe, scte35g);
 
         if (input->psi_pid != NULL && input->psi_pid->pid != pid) {
             upipe_ts_mux_psi_pid_release(input->psi_pid);
@@ -1221,7 +1288,7 @@ static int upipe_ts_mux_input_set_flow_def(struct upipe *upipe,
         }
 
     } else { /* standard PES */
-        upipe_ts_mux_input_store_first_inner(upipe, upipe_use(input->tstd));
+        upipe_ts_mux_input_store_bin_input(upipe, upipe_use(input->tstd));
         upipe_ts_mux_set_max_delay(input->tstd, input->max_delay);
 
         if (input->psi_pid != NULL) {
@@ -1263,6 +1330,7 @@ static int upipe_ts_mux_input_set_flow_def(struct upipe *upipe,
     input->pid = pid;
     input->octetrate = octetrate;
     input->required_octetrate = octetrate + pes_overhead + ts_overhead;
+    input->pcr = false; /* reset PCR state to trigger a new PMT */
 
     uint64_t latency = 0;
     uref_clock_get_latency(flow_def, &latency);
@@ -1270,11 +1338,12 @@ static int upipe_ts_mux_input_set_flow_def(struct upipe *upipe,
     if (latency + input->buffer_duration > upipe_ts_mux->latency) {
         upipe_ts_mux->latency = latency + input->buffer_duration;
         upipe_ts_mux_build_flow_def(upipe_ts_mux_to_upipe(upipe_ts_mux));
-    } else if (au_per_sec.den) {
+    } else if (!upipe_ts_mux->live && au_per_sec.den) { /* live mode */
         upipe_set_max_length(input->encaps,
                 (MIN_BUFFERING + upipe_ts_mux->latency) * au_per_sec.num /
                 au_per_sec.den / UCLOCK_FREQ);
-    }
+    } else /* file mode */
+        upipe_set_max_length(input->encaps, UINT_MAX);
 
     upipe_notice_va(upipe,
             "adding %s on PID %"PRIu64" (%"PRIu64" bits/s), latency %"PRIu64" ms, buffer %"PRIu64" ms",
@@ -1302,6 +1371,8 @@ static int upipe_ts_mux_provide_flow_format(struct upipe *upipe,
     if (likely(ubase_check(uref_flow_get_def(flow_format, &def)))) {
         if (!ubase_ncmp(def, "block.h264."))
             uref_h264_flow_set_annexb(flow_format);
+        else if (!ubase_ncmp(def, "block.hevc."))
+            uref_h265_flow_set_annexb(flow_format);
         else if (!ubase_ncmp(def, "block.aac."))
             uref_mpga_flow_set_adts(flow_format);
         else if (!ubase_ncmp(def, "block.mpeg1video.") ||
@@ -1460,10 +1531,16 @@ static void upipe_ts_mux_input_no_input(struct upipe *upipe)
 
     upipe_ts_mux_input->deleted = true;
     if (upipe_ts_mux_input->input_type == UPIPE_TS_MUX_INPUT_SCTE35) {
+        ulist_delete(upipe_ts_mux_input_to_uchain_psi(upipe_ts_mux_input));
         upipe_release(upipe_ts_mux_input->encaps);
         upipe_ts_mux_input->encaps = NULL;
-    } else
+    } else {
         upipe_ts_encaps_eos(upipe_ts_mux_input->encaps);
+        if (!upipe_ts_mux_input->ready) {
+            upipe_release(upipe_ts_mux_input->encaps);
+            upipe_ts_mux_input->encaps = NULL;
+        }
+    }
     upipe_release(upipe_ts_mux_input->tstd);
     upipe_ts_mux_input->tstd = NULL;
     upipe_release(upipe_ts_mux_input->psig_flow);
@@ -1610,7 +1687,7 @@ static struct upipe *upipe_ts_mux_program_alloc(struct upipe_mgr *mgr,
         upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
         return upipe;
     }
-    upipe_ts_mux_program_store_first_inner(upipe, psig_program);
+    upipe_ts_mux_program_store_bin_input(upipe, psig_program);
 
     upipe_ts_mux_program_update_sig(upipe);
     upipe_ts_mux_program_update(upipe);
@@ -1668,7 +1745,8 @@ static void upipe_ts_mux_program_change(struct upipe *upipe)
             old_pcr_input = input;
         }
         if (input->input_type == UPIPE_TS_MUX_INPUT_OTHER ||
-            input->input_type == UPIPE_TS_MUX_INPUT_SCTE35)
+            input->input_type == UPIPE_TS_MUX_INPUT_SCTE35 ||
+            input->input_type == UPIPE_TS_MUX_INPUT_UNKNOWN)
             continue;
         if (pcr_input == NULL ||
             (pcr_input->input_type == UPIPE_TS_MUX_INPUT_AUDIO &&
@@ -2264,6 +2342,7 @@ static struct upipe *upipe_ts_mux_alloc(struct upipe_mgr *mgr,
     upipe_ts_mux_init_program_mgr(upipe);
     upipe_ts_mux_init_sub_programs(upipe);
 
+    upipe_ts_mux->live = false;
     upipe_ts_mux->psi_pid_pat = NULL;
     upipe_ts_mux->psig_nit = NULL;
     upipe_ts_mux->sig = NULL;
@@ -2293,9 +2372,12 @@ static struct upipe *upipe_ts_mux_alloc(struct upipe_mgr *mgr,
     upipe_ts_mux->padding_octetrate = 0;
     upipe_ts_mux->total_octetrate = 0;
     upipe_ts_mux->required_octetrate = 0;
+    upipe_ts_mux->octetrate_in_progress = false;
     upipe_ts_mux->interval = 0;
 
     ulist_init(&upipe_ts_mux->psi_pids);
+    ulist_init(&upipe_ts_mux->psi_pids_splice);
+    ulist_init(&upipe_ts_mux->psi_inputs);
     upipe_ts_mux->mode = UPIPE_TS_MUX_MODE_CBR;
     upipe_ts_mux->tb_size = T_STD_TS_BUFFER;
     upipe_ts_mux->mtu = TS_SIZE;
@@ -2304,6 +2386,7 @@ static struct upipe *upipe_ts_mux_alloc(struct upipe_mgr *mgr,
     upipe_ts_mux->cr_sys_remainder = 0;
     upipe_ts_mux->uref = NULL;
     upipe_ts_mux->uref_size = 0;
+    upipe_ts_mux->preroll = true;
 
     uprobe_init(&upipe_ts_mux->probe, upipe_ts_mux_probe, NULL);
     upipe_ts_mux->probe.refcount = upipe_ts_mux_to_urefcount_real(upipe_ts_mux);
@@ -2367,6 +2450,30 @@ static bool upipe_ts_mux_find_pid(struct upipe *upipe, uint16_t pid)
     return false;
 }
 
+/** @internal @This prepares PSI tables.
+ *
+ * @param upipe description structure of the pipe
+ * @param cr_sys current muxing date
+ * @param latency mux latency
+ */
+static void upipe_ts_mux_prepare_psi(struct upipe *upipe,
+                                     uint64_t cr_sys, uint64_t latency)
+{
+    struct upipe_ts_mux *mux = upipe_ts_mux_from_upipe(upipe);
+    if (mux->psig != NULL)
+        upipe_ts_mux_prepare(mux->psig, cr_sys, latency);
+    if (mux->sig != NULL)
+        upipe_ts_mux_prepare(mux->sig, cr_sys, latency);
+
+    struct uchain *uchain;
+    ulist_foreach (&mux->psi_inputs, uchain) {
+        struct upipe_ts_mux_input *input =
+            upipe_ts_mux_input_from_uchain_psi(uchain);
+        if (input->input != NULL)
+            upipe_ts_mux_prepare(input->input, cr_sys, latency);
+    }
+}
+
 /** @internal @This increments the cr_sys by a tick, and prepares PSI tables.
  *
  * @param upipe description structure of the pipe
@@ -2381,32 +2488,7 @@ static void upipe_ts_mux_increment(struct upipe *upipe)
     mux->cr_sys_remainder = q.rem;
 
     /* Tell PSI tables to prepare packets. */
-    uint64_t original_cr_sys = mux->cr_sys - mux->latency;
-    if (mux->psig != NULL)
-        upipe_ts_mux_prepare(mux->psig, original_cr_sys, mux->latency);
-    if (mux->sig != NULL)
-        upipe_ts_mux_prepare(mux->sig, original_cr_sys, mux->latency);
-
-    struct uchain *uchain;
-    ulist_foreach (&mux->programs, uchain) {
-        struct upipe_ts_mux_program *program =
-            upipe_ts_mux_program_from_uchain(uchain);
-
-        struct uchain *uchain_input;
-        ulist_foreach (&program->inputs, uchain_input) {
-            struct upipe_ts_mux_input *input =
-                upipe_ts_mux_input_from_uchain(uchain_input);
-            switch (input->input_type) {
-                case UPIPE_TS_MUX_INPUT_SCTE35:
-                    if (input->input != NULL)
-                        upipe_ts_mux_prepare(input->input, original_cr_sys,
-                                             mux->latency);
-                    break;
-                default:
-                    break;
-            }
-        }
-    }
+    upipe_ts_mux_prepare_psi(upipe, mux->cr_sys - mux->latency, mux->latency);
 }
 
 /** @internal @This shows the next increment of cr_sys.
@@ -2439,23 +2521,30 @@ static void upipe_ts_mux_splice(struct upipe *upipe, struct ubuf **ubuf_p,
     *ubuf_p = NULL;
 
     /* Order of priority: 1. PSI */
-    ulist_foreach (&mux->psi_pids, uchain) {
+    while (!ulist_empty(&mux->psi_pids_splice)) {
+        uchain = ulist_peek(&mux->psi_pids_splice);
         struct upipe_ts_mux_psi_pid *psi_pid =
-            upipe_ts_mux_psi_pid_from_uchain(uchain);
+            upipe_ts_mux_psi_pid_from_uchain_splice(uchain);
 
-        if (psi_pid->dts_sys < original_cr_sys) /* flush */
+        if (psi_pid->dts_sys < original_cr_sys) {
+            /* Too late: flush */
             upipe_ts_encaps_splice(psi_pid->encaps, original_cr_sys,
                                    NULL, NULL);
-
-        if (psi_pid->cr_sys <= original_cr_sys) {
-            err = upipe_ts_encaps_splice(psi_pid->encaps, original_cr_sys,
-                                         ubuf_p, dts_sys_p);
-            if (!ubase_check(err)) {
-                upipe_warn(upipe, "internal error in splice");
-                upipe_throw_fatal(upipe, err);
-            }
-            return;
+            /* No need to pop uchain as the probe does it for us. */
+            continue;
         }
+
+        if (psi_pid->cr_sys > original_cr_sys)
+            break; /* Too soon */
+
+        err = upipe_ts_encaps_splice(psi_pid->encaps, original_cr_sys,
+                                     ubuf_p, dts_sys_p);
+        if (!ubase_check(err)) {
+            upipe_warn(upipe, "internal error in splice");
+            upipe_throw_fatal(upipe, err);
+        }
+        /* No need to pop uchain as the probe does it for us. */
+        return;
     }
 
     /* 2. Inputs */
@@ -2560,51 +2649,38 @@ static void _upipe_ts_mux_watcher(struct upipe *upipe)
     if (unlikely(mux->cr_sys == UINT64_MAX))
         mux->cr_sys = uclock_now(mux->uclock);
 
-    upipe_ts_mux_increment(upipe);
-    if (mux->uref != NULL) /* capped VBR */
-        uref_clock_set_cr_sys(mux->uref, mux->cr_sys - mux->latency);
+    unsigned int nb_packets = 0;
+    while (nb_packets < NB_PACKETS) {
+        upipe_ts_mux_increment(upipe);
+        if (mux->uref != NULL) /* capped VBR */
+            uref_clock_set_cr_sys(mux->uref, mux->cr_sys - mux->latency);
 
-    while (mux->uref_size < mux->mtu) {
-        struct ubuf *ubuf;
-        uint64_t dts_sys;
-        upipe_ts_mux_splice(upipe, &ubuf, &dts_sys);
-        if (ubuf == NULL)
-            break;
-        upipe_ts_mux_append(upipe, ubuf, dts_sys);
-    }
-
-    uint64_t dts_sys;
-    if (mux->mode != UPIPE_TS_MUX_MODE_CAPPED ||
-        (mux->uref != NULL &&
-         ubase_check(uref_clock_get_dts_sys(mux->uref, &dts_sys)) &&
-         dts_sys + mux->latency < upipe_ts_mux_show_increment(upipe))) {
         while (mux->uref_size < mux->mtu) {
-            struct ubuf *ubuf = ubuf_dup(mux->padding);
+            nb_packets++;
+            struct ubuf *ubuf;
+            uint64_t dts_sys;
+            upipe_ts_mux_splice(upipe, &ubuf, &dts_sys);
             if (ubuf == NULL)
                 break;
-            upipe_ts_mux_append(upipe, ubuf, UINT64_MAX);
+            upipe_ts_mux_append(upipe, ubuf, dts_sys);
         }
-    }
 
-    if (mux->uref_size >= mux->mtu)
-        upipe_ts_mux_complete(upipe, &mux->upump);
-
-    /* Check for deleted inputs */
-    struct uchain *uchain_program, *uchain_program_tmp;
-    ulist_delete_foreach (&mux->programs, uchain_program, uchain_program_tmp) {
-        struct upipe_ts_mux_program *program =
-            upipe_ts_mux_program_from_uchain(uchain_program);
-        upipe_use(upipe_ts_mux_program_to_upipe(program));
-
-        struct uchain *uchain_input, *uchain_input_tmp;
-        ulist_delete_foreach (&program->inputs, uchain_input,
-                              uchain_input_tmp) {
-            struct upipe_ts_mux_input *input =
-                upipe_ts_mux_input_from_uchain(uchain_input);
-            if (input->deleted && !input->ready)
-                upipe_release(input->encaps);
+        uint64_t dts_sys;
+        if (mux->mode != UPIPE_TS_MUX_MODE_CAPPED ||
+            (mux->uref != NULL &&
+             ubase_check(uref_clock_get_dts_sys(mux->uref, &dts_sys)) &&
+             dts_sys + mux->latency < upipe_ts_mux_show_increment(upipe))) {
+            while (mux->uref_size < mux->mtu) {
+                nb_packets++;
+                struct ubuf *ubuf = ubuf_dup(mux->padding);
+                if (ubuf == NULL)
+                    break;
+                upipe_ts_mux_append(upipe, ubuf, UINT64_MAX);
+            }
         }
-        upipe_release(upipe_ts_mux_program_to_upipe(program));
+
+        if (mux->uref_size >= mux->mtu)
+            upipe_ts_mux_complete(upipe, &mux->upump);
     }
 
     upipe_ts_mux_set_upump(upipe, NULL);
@@ -2649,7 +2725,9 @@ static uint64_t upipe_ts_mux_check_available(struct upipe *upipe)
                     upipe_release(input->encaps);
                     continue;
                 } else if (input->input_type != UPIPE_TS_MUX_INPUT_OTHER &&
-                           input->input_type != UPIPE_TS_MUX_INPUT_SCTE35) {
+                           input->input_type != UPIPE_TS_MUX_INPUT_SCTE35 &&
+                           (input->input_type != UPIPE_TS_MUX_INPUT_UNKNOWN ||
+                            mux->preroll)) {
                     upipe_release(upipe_ts_mux_program_to_upipe(program));
                     return UINT64_MAX;
                 }
@@ -2703,28 +2781,7 @@ static void upipe_ts_mux_work_file(struct upipe *upipe, struct upump **upump_p)
                 upipe_ts_mux_init_cr_prog(upipe, mux->initial_cr_prog);
                 mux->initial_cr_prog = UINT64_MAX;
             }
-            upipe_ts_mux_prepare(mux->psig, min_cr_sys, 0);
-            if (mux->sig != NULL)
-                upipe_ts_mux_prepare(mux->sig, min_cr_sys, 0);
-
-            struct uchain *uchain;
-            ulist_foreach (&mux->programs, uchain) {
-                struct upipe_ts_mux_program *program =
-                    upipe_ts_mux_program_from_uchain(uchain);
-
-                struct uchain *uchain_input;
-                ulist_foreach (&program->inputs, uchain_input) {
-                    struct upipe_ts_mux_input *input =
-                        upipe_ts_mux_input_from_uchain(uchain_input);
-                    switch (input->input_type) {
-                        case UPIPE_TS_MUX_INPUT_SCTE35:
-                            upipe_ts_mux_prepare(input->input, min_cr_sys, 0);
-                            break;
-                        default:
-                            break;
-                    }
-                }
-            }
+            upipe_ts_mux_prepare_psi(upipe, min_cr_sys, 0);
         }
 
         struct ubuf *ubuf;
@@ -2822,7 +2879,7 @@ static void upipe_ts_mux_work(struct upipe *upipe, struct upump **upump_p)
                  !mux->interval))
         return;
 
-    if (urequest_get_opaque(&mux->uclock_request, struct upipe *) == NULL)
+    if (!mux->live)
         upipe_ts_mux_work_file(upipe, upump_p);
     else
         upipe_ts_mux_work_live(upipe, upump_p);
@@ -2861,11 +2918,11 @@ static int upipe_ts_mux_check(struct upipe *upipe, struct uref *flow_format)
                                  uprobe_use(&mux->probe),
                                  UPROBE_LOG_VERBOSE,
                                  "pat psi_join"))) == NULL)) {
-            upipe_ts_mux_store_first_inner(upipe, psig);
+            upipe_ts_mux_store_bin_input(upipe, psig);
             upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
             return UBASE_ERR_ALLOC;
         }
-        upipe_ts_mux_store_first_inner(upipe, psig);
+        upipe_ts_mux_store_bin_input(upipe, psig);
         upipe_release(psi_join);
         upipe_ts_mux_update(upipe);
     }
@@ -2904,7 +2961,7 @@ static int upipe_ts_mux_check(struct upipe *upipe, struct uref *flow_format)
         ubuf_block_unmap(mux->padding, 0);
     }
 
-    if (mux->uclock != NULL && mux->sig != NULL)
+    if (mux->live && mux->sig != NULL)
         upipe_ts_mux_set_tdt_interval(mux->sig, mux->tdt_interval);
 
     upipe_ts_mux_work(upipe, NULL);
@@ -2918,17 +2975,17 @@ static int upipe_ts_mux_check(struct upipe *upipe, struct uref *flow_format)
 static void upipe_ts_mux_notice(struct upipe *upipe)
 {
     struct upipe_ts_mux *mux = upipe_ts_mux_from_upipe(upipe);
-    if (mux->uclock != NULL) {
+    if (mux->live) {
         if (mux->total_octetrate == mux->required_octetrate)
             upipe_notice_va(upipe,
-                    "now operating in %s mode at %"PRIu64" bits/s (auto), conformance %s, latency %"PRIu64" ms",
+                    "now operating (live) in %s mode at %"PRIu64" bits/s (auto), conformance %s, latency %"PRIu64" ms",
                     upipe_ts_mux_mode_print(mux->mode),
                     mux->total_octetrate * 8,
                     upipe_ts_conformance_print(mux->conformance),
                     (mux->latency + mux->mux_delay) * 1000 / UCLOCK_FREQ);
         else
             upipe_notice_va(upipe,
-                    "now operating in %s mode at %"PRIu64" bits/s (requires %"PRIu64" bits/s), conformance %s, latency %"PRIu64" ms",
+                    "now operating (live) in %s mode at %"PRIu64" bits/s (requires %"PRIu64" bits/s), conformance %s, latency %"PRIu64" ms",
                     upipe_ts_mux_mode_print(mux->mode),
                     mux->total_octetrate * 8, mux->required_octetrate * 8,
                     upipe_ts_conformance_print(mux->conformance),
@@ -2936,13 +2993,13 @@ static void upipe_ts_mux_notice(struct upipe *upipe)
     } else {
         if (mux->total_octetrate == mux->required_octetrate)
             upipe_notice_va(upipe,
-                    "now operating in %s mode at %"PRIu64" bits/s (auto), conformance %s",
+                    "now operating (file) in %s mode at %"PRIu64" bits/s (auto), conformance %s",
                     upipe_ts_mux_mode_print(mux->mode),
                     mux->total_octetrate * 8,
                     upipe_ts_conformance_print(mux->conformance));
         else
             upipe_notice_va(upipe,
-                    "now operating in %s mode at %"PRIu64" bits/s (requires %"PRIu64" bits/s), conformance %s",
+                    "now operating (file) in %s mode at %"PRIu64" bits/s (requires %"PRIu64" bits/s), conformance %s",
                     upipe_ts_mux_mode_print(mux->mode),
                     mux->total_octetrate * 8, mux->required_octetrate * 8,
                     upipe_ts_conformance_print(mux->conformance));
@@ -2957,6 +3014,10 @@ static void upipe_ts_mux_notice(struct upipe *upipe)
 static void upipe_ts_mux_update(struct upipe *upipe)
 {
     struct upipe_ts_mux *mux = upipe_ts_mux_from_upipe(upipe);
+    if (mux->octetrate_in_progress)
+        return;
+    mux->octetrate_in_progress = true;
+
     uint64_t required_octetrate = mux->padding_octetrate;
     struct uchain *uchain;
     ulist_foreach (&mux->psi_pids, uchain) {
@@ -2980,6 +3041,10 @@ static void upipe_ts_mux_update(struct upipe *upipe)
     required_octetrate -= required_octetrate % TS_SIZE;
     mux->required_octetrate = required_octetrate;
 
+    if (mux->live && mux->mux_delay &&
+        required_octetrate < mux->mtu * UCLOCK_FREQ / mux->mux_delay)
+        required_octetrate = mux->mtu * UCLOCK_FREQ / mux->mux_delay;
+
     uint64_t total_octetrate = mux->fixed_octetrate;
     if (!total_octetrate)
         total_octetrate = required_octetrate;
@@ -2989,6 +3054,8 @@ static void upipe_ts_mux_update(struct upipe *upipe)
         upipe_ts_mux_build_flow_def(upipe);
         upipe_ts_mux_set_upump(upipe, NULL);
     }
+
+    upipe_ts_mux_notice(upipe);
 
     if (mux->total_octetrate) {
         mux->interval = (mux->mtu * UCLOCK_FREQ + mux->total_octetrate - 1) /
@@ -3007,7 +3074,7 @@ static void upipe_ts_mux_update(struct upipe *upipe)
                     mux->interval < mux->sdt_interval / 2 ?
                     mux->sdt_interval - (mux->sdt_interval % mux->interval) :
                     mux->sdt_interval);
-            if (mux->uclock != NULL)
+            if (mux->live)
                 upipe_ts_mux_set_tdt_interval(mux->sig,
                         mux->interval < mux->tdt_interval / 2 ?
                         mux->tdt_interval - (mux->tdt_interval % mux->interval) :
@@ -3045,8 +3112,7 @@ static void upipe_ts_mux_update(struct upipe *upipe)
             }
         }
     }
-
-    upipe_ts_mux_notice(upipe);
+    mux->octetrate_in_progress = false;
 }
 
 /** @internal @This builds the output flow definition.
@@ -3075,7 +3141,6 @@ static void upipe_ts_mux_build_flow_def(struct upipe *upipe)
         upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
     upipe_ts_mux_store_flow_def(upipe, flow_def);
 
-
     struct uchain *uchain_program;
     ulist_foreach (&mux->programs, uchain_program) {
         struct upipe_ts_mux_program *program =
@@ -3084,11 +3149,16 @@ static void upipe_ts_mux_build_flow_def(struct upipe *upipe)
         ulist_foreach (&program->inputs, uchain_input) {
             struct upipe_ts_mux_input *input =
                 upipe_ts_mux_input_from_uchain(uchain_input);
-            if (input->encaps != NULL && input->original_au_per_sec.den)
-                upipe_set_max_length(input->encaps,
-                        (MIN_BUFFERING + mux->latency) *
-                        input->original_au_per_sec.num /
-                        input->original_au_per_sec.den / UCLOCK_FREQ);
+            if (input->encaps != NULL) {
+                if (mux->live && input->original_au_per_sec.den)
+                    /* live mode */
+                    upipe_set_max_length(input->encaps,
+                            (MIN_BUFFERING + mux->latency) *
+                            input->original_au_per_sec.num /
+                            input->original_au_per_sec.den / UCLOCK_FREQ);
+                else /* file mode */
+                    upipe_set_max_length(input->encaps, UINT_MAX);
+            }
         }
     }
 }
@@ -3399,6 +3469,18 @@ static int upipe_ts_mux_set_output_size(struct upipe *upipe, unsigned int mtu)
     return UBASE_ERR_NONE;
 }
 
+/** @internal @This ends the preroll period.
+ *
+ * @param upipe description structure of the pipe
+ * @return an error code
+ */
+static int upipe_ts_mux_end_preroll(struct upipe *upipe)
+{
+    struct upipe_ts_mux *upipe_ts_mux = upipe_ts_mux_from_upipe(upipe);
+    upipe_ts_mux->preroll = false;
+    return UBASE_ERR_NONE;
+}
+
 /** @internal @This returns the current conformance mode. It cannot
  * return CONFORMANCE_AUTO.
  *
@@ -3632,11 +3714,13 @@ static int _upipe_ts_mux_get_tdt_interval(struct upipe *upipe,
 static int _upipe_ts_mux_set_tdt_interval(struct upipe *upipe,
                                           uint64_t interval)
 {
-    struct upipe_ts_mux *upipe_ts_mux = upipe_ts_mux_from_upipe(upipe);
-    upipe_ts_mux->tdt_interval = interval;
+    struct upipe_ts_mux *mux = upipe_ts_mux_from_upipe(upipe);
+    mux->tdt_interval = interval;
     upipe_ts_mux_update(upipe); /* will trigger set_tdt_interval */
-    if (urequest_get_opaque(&upipe_ts_mux->uclock_request, void *) == NULL)
+    if (!mux->live) {
+        mux->live = true;
         upipe_ts_mux_require_uclock(upipe);
+    }
     return UBASE_ERR_NONE;
 }
 
@@ -3894,10 +3978,14 @@ static int _upipe_ts_mux_control(struct upipe *upipe, int command, va_list args)
         case UPIPE_ATTACH_UPUMP_MGR:
             upipe_ts_mux_set_upump(upipe, NULL);
             return upipe_ts_mux_attach_upump_mgr(upipe);
-        case UPIPE_ATTACH_UCLOCK:
+        case UPIPE_ATTACH_UCLOCK: {
+            struct upipe_ts_mux *mux = upipe_ts_mux_from_upipe(upipe);
+            mux->live = true;
             upipe_ts_mux_set_upump(upipe, NULL);
             upipe_ts_mux_require_uclock(upipe);
+            upipe_ts_mux_update(upipe);
             return UBASE_ERR_NONE;
+        }
         case UPIPE_GET_FLOW_DEF: {
             struct uref **p = va_arg(args, struct uref **);
             return upipe_ts_mux_get_flow_def(upipe, p);
@@ -3930,6 +4018,8 @@ static int _upipe_ts_mux_control(struct upipe *upipe, int command, va_list args)
             struct upipe **p = va_arg(args, struct upipe **);
             return upipe_ts_mux_iterate_sub(upipe, p);
         }
+        case UPIPE_END_PREROLL:
+            return upipe_ts_mux_end_preroll(upipe);
 
         case UPIPE_TS_MUX_GET_CONFORMANCE: {
             UBASE_SIGNATURE_CHECK(args, UPIPE_TS_MUX_SIGNATURE)
@@ -4245,6 +4335,68 @@ static int upipe_ts_mux_mgr_control(struct upipe_mgr *mgr,
     }
 }
 
+/** @This returns a description string for local commands.
+ *
+ * @param cmd control command
+ * @return description string
+ */
+const char *upipe_ts_mux_command_str(int cmd)
+{
+    switch (cmd) {
+        UBASE_CASE_TO_STR(UPIPE_TS_MUX_GET_CONFORMANCE);
+        UBASE_CASE_TO_STR(UPIPE_TS_MUX_SET_CONFORMANCE);
+        UBASE_CASE_TO_STR(UPIPE_TS_MUX_GET_CC);
+        UBASE_CASE_TO_STR(UPIPE_TS_MUX_SET_CC);
+        UBASE_CASE_TO_STR(UPIPE_TS_MUX_SET_CR_PROG);
+        UBASE_CASE_TO_STR(UPIPE_TS_MUX_GET_PAT_INTERVAL);
+        UBASE_CASE_TO_STR(UPIPE_TS_MUX_SET_PAT_INTERVAL);
+        UBASE_CASE_TO_STR(UPIPE_TS_MUX_GET_PMT_INTERVAL);
+        UBASE_CASE_TO_STR(UPIPE_TS_MUX_SET_PMT_INTERVAL);
+        UBASE_CASE_TO_STR(UPIPE_TS_MUX_GET_NIT_INTERVAL);
+        UBASE_CASE_TO_STR(UPIPE_TS_MUX_SET_NIT_INTERVAL);
+        UBASE_CASE_TO_STR(UPIPE_TS_MUX_GET_SDT_INTERVAL);
+        UBASE_CASE_TO_STR(UPIPE_TS_MUX_SET_SDT_INTERVAL);
+        UBASE_CASE_TO_STR(UPIPE_TS_MUX_GET_EIT_INTERVAL);
+        UBASE_CASE_TO_STR(UPIPE_TS_MUX_SET_EIT_INTERVAL);
+        UBASE_CASE_TO_STR(UPIPE_TS_MUX_GET_TDT_INTERVAL);
+        UBASE_CASE_TO_STR(UPIPE_TS_MUX_SET_TDT_INTERVAL);
+        UBASE_CASE_TO_STR(UPIPE_TS_MUX_GET_PCR_INTERVAL);
+        UBASE_CASE_TO_STR(UPIPE_TS_MUX_SET_PCR_INTERVAL);
+        UBASE_CASE_TO_STR(UPIPE_TS_MUX_GET_SCTE35_INTERVAL);
+        UBASE_CASE_TO_STR(UPIPE_TS_MUX_SET_SCTE35_INTERVAL);
+        UBASE_CASE_TO_STR(UPIPE_TS_MUX_GET_MAX_DELAY);
+        UBASE_CASE_TO_STR(UPIPE_TS_MUX_SET_MAX_DELAY);
+        UBASE_CASE_TO_STR(UPIPE_TS_MUX_GET_MUX_DELAY);
+        UBASE_CASE_TO_STR(UPIPE_TS_MUX_SET_MUX_DELAY);
+        UBASE_CASE_TO_STR(UPIPE_TS_MUX_GET_OCTETRATE);
+        UBASE_CASE_TO_STR(UPIPE_TS_MUX_SET_OCTETRATE);
+        UBASE_CASE_TO_STR(UPIPE_TS_MUX_GET_PADDING_OCTETRATE);
+        UBASE_CASE_TO_STR(UPIPE_TS_MUX_SET_PADDING_OCTETRATE);
+        UBASE_CASE_TO_STR(UPIPE_TS_MUX_GET_MODE);
+        UBASE_CASE_TO_STR(UPIPE_TS_MUX_SET_MODE);
+        UBASE_CASE_TO_STR(UPIPE_TS_MUX_GET_VERSION);
+        UBASE_CASE_TO_STR(UPIPE_TS_MUX_SET_VERSION);
+        UBASE_CASE_TO_STR(UPIPE_TS_MUX_FREEZE_PSI);
+        UBASE_CASE_TO_STR(UPIPE_TS_MUX_PREPARE);
+        default: break;
+    }
+    return NULL;
+}
+
+/** @This returns a description string for local events.
+ *
+ * @param event event
+ * @return description string
+ */
+const char *upipe_ts_mux_event_str(int event)
+{
+    switch (event) {
+        UBASE_CASE_TO_STR(UPROBE_TS_MUX_LAST_CC);
+        default: break;
+    }
+    return NULL;
+}
+
 /** @This returns the management structure for all ts_mux pipes.
  *
  * @return pointer to manager
@@ -4267,6 +4419,8 @@ struct upipe_mgr *upipe_ts_mux_mgr_alloc(void)
                    upipe_ts_mux_mgr_free);
     ts_mux_mgr->mgr.refcount = upipe_ts_mux_mgr_to_urefcount(ts_mux_mgr);
     ts_mux_mgr->mgr.signature = UPIPE_TS_MUX_SIGNATURE;
+    ts_mux_mgr->mgr.upipe_command_str = upipe_ts_mux_command_str;
+    ts_mux_mgr->mgr.upipe_event_str = upipe_ts_mux_event_str;
     ts_mux_mgr->mgr.upipe_alloc = upipe_ts_mux_alloc;
     ts_mux_mgr->mgr.upipe_input = NULL;
     ts_mux_mgr->mgr.upipe_control = upipe_ts_mux_control;

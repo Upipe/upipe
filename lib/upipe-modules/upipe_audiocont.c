@@ -534,6 +534,29 @@ static int upipe_audiocont_sub_extract(struct upipe *upipe, struct ubuf *ubuf,
     return UBASE_ERR_NONE;
 }
 
+/** @internal @This imports our uref attributes into the newly allocated uref.
+ *
+ * @param upipe description structure of the pipe
+ * @param uref allocated uref
+ * @return an error code
+ */
+static int upipe_audiocont_sub_import_attr(struct upipe *upipe, struct uref *uref)
+{
+    struct upipe_audiocont_sub *sub = upipe_audiocont_sub_from_upipe(upipe);
+    struct upipe_audiocont *upipe_audiocont =
+                            upipe_audiocont_from_sub_mgr(upipe->mgr);
+
+    struct uchain *uchain = ulist_peek(&sub->urefs);
+    if (unlikely(!uchain)) {
+        upipe_verbose(upipe, "no input samples found");
+        return UBASE_ERR_INVALID;
+    }
+    struct uref *input_uref = uref_from_uchain(uchain);
+    uref_attr_import(uref, input_uref);
+    uref_clock_delete_rate(uref);
+    return UBASE_ERR_NONE;
+}
+
 /** @internal @This initializes the input manager for a audiocont pipe.
  *
  * @param upipe description structure of the pipe
@@ -727,6 +750,7 @@ static void upipe_audiocont_input(struct upipe *upipe, struct uref *uref,
             next_pts, next_duration, upipe_audiocont->crossblend, false);
     if (!ubase_check(err))
         upipe_throw_error(upipe, err);
+    upipe_audiocont_sub_import_attr(upipe_audiocont->input_cur, uref);
 
 output:
     if (upipe_audiocont->crossblend < 1.) {

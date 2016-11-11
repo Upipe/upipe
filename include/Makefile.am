@@ -1,7 +1,8 @@
 SUBDIRS = \
 	  upipe \
 	  upipe-modules \
-	  upipe-filters
+	  upipe-filters \
+	  upipe-dveo
 
 if HAVE_QTWEBKIT
 SUBDIRS += upipe-qt
@@ -39,6 +40,10 @@ if HAVE_SWRESAMPLE
 SUBDIRS += upipe-swresample
 endif
 
+if HAVE_SPEEXDSP
+SUBDIRS += upipe-speexdsp
+endif
+
 if HAVE_DLFCN_H
 SUBDIRS += upipe-blackmagic
 endif
@@ -48,7 +53,7 @@ SUBDIRS += upipe-v210
 endif
 
 if HAVE_BITSTREAM
-SUBDIRS += upipe-ts upipe-framers
+SUBDIRS += upipe-ts upipe-framers upipe-hls
 endif
 
 if HAVE_AVFORMAT
@@ -65,4 +70,8 @@ endif
 
 if HAVE_ECORE
 SUBDIRS += upump-ecore
+endif
+
+if HAVE_ZVBI
+SUBDIRS += upipe-zvbi
 endif

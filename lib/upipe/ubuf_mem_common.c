@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2012-2014 OpenHeadend S.A.R.L.
+ * Copyright (C) 2012-2016 OpenHeadend S.A.R.L.
  *
  * Authors: Christophe Massiot
  *
@@ -51,6 +51,7 @@ void *ubuf_mem_shared_alloc_inner(struct upool *upool)
     if (unlikely(shared == NULL))
         return NULL;
     uatomic_init(&shared->refcount, 1);
+    shared->pool = upool;
     return shared;
 }
 

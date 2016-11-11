@@ -36,23 +36,21 @@ extern "C" {
 #endif
 
 #include <upipe/upipe.h>
+#include <sys/types.h>
+#include <sys/socket.h>
 
 #define UPIPE_UDPSINK_SIGNATURE UBASE_FOURCC('u','s','n','k')
-
-/** @This defines udp opening modes. */
-enum upipe_udpsink_mode {
-    /** do not do anything besides opening the fd */
-    UPIPE_UDPSINK_NONE = 0,
-};
 
 /** @This extends upipe_command with specific commands for udp sink. */
 enum upipe_udpsink_command {
     UPIPE_UDPSINK_SENTINEL = UPIPE_CONTROL_LOCAL,
 
-    /** returns the uri of the currently opened udp (const char **) */
-    UPIPE_UDPSINK_GET_URI,
-    /** asks to open the given uri (const char *, enum upipe_udpsink_mode) */
-    UPIPE_UDPSINK_SET_URI
+    /** get socket fd (int*) **/
+    UPIPE_UDPSINK_GET_FD,
+    /** set socket fd (int) **/
+    UPIPE_UDPSINK_SET_FD,
+    /** set remote address (const struct sockaddr *, socklen_t) **/
+    UPIPE_UDPSINK_SET_PEER,
 };
 
 /** @This returns the management structure for all udp sinks.
@@ -61,34 +59,43 @@ enum upipe_udpsink_command {
  */
 struct upipe_mgr *upipe_udpsink_mgr_alloc(void);
 
-/** @This returns the uri of the currently opened udp uri.
+/** @This returns currently opened udp fd.
  *
  * @param upipe description structure of the pipe
- * @param uri_p filled in with the uri of the udp
+ * @param fd_p filled in with the fd of the udp
  * @return false in case of error
  */
-static inline int upipe_udpsink_get_uri(struct upipe *upipe,
-                                        const char **uri_p)
+static inline int upipe_udpsink_get_fd(struct upipe *upipe, int *fd_p)
 {
-    return upipe_control(upipe, UPIPE_UDPSINK_GET_URI, UPIPE_UDPSINK_SIGNATURE,
-                         uri_p);
+    return upipe_control(upipe, UPIPE_UDPSINK_GET_FD, UPIPE_UDPSINK_SIGNATURE,
+                         fd_p);
 }
 
-/** @This asks to open the given udp uri.
+/** @This sets the udp fd.
  *
  * @param upipe description structure of the pipe
- * @param uri relative or absolute uri
- * @param mode mode of opening the uri
+ * @param fd file descriptor
  * @return false in case of error
  */
-static inline int upipe_udpsink_set_uri(struct upipe *upipe,
-                                        const char *uri,
-                                        enum upipe_udpsink_mode mode)
+static inline int upipe_udpsink_set_fd(struct upipe *upipe, int fd)
 {
-    return upipe_control(upipe, UPIPE_UDPSINK_SET_URI, UPIPE_UDPSINK_SIGNATURE,
-                         uri, mode);
+    return upipe_control(upipe, UPIPE_UDPSINK_SET_FD, UPIPE_UDPSINK_SIGNATURE,
+                         fd);
 }
 
+/** @This sets the remote address (for unconnected sockets).
+ *
+ * @param upipe description structure of the pipe
+ * @param addr the remote address
+ * @param addrlen the size of addr
+ * @return false in case of error
+ */
+static inline int upipe_udpsink_set_peer(struct upipe *upipe,
+        const struct sockaddr *addr, socklen_t addrlen)
+{
+    return upipe_control(upipe, UPIPE_UDPSINK_SET_PEER, UPIPE_UDPSINK_SIGNATURE,
+            addr, addrlen);
+}
 #ifdef __cplusplus
 }
 #endif

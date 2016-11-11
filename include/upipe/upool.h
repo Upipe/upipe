@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2014 OpenHeadend S.A.R.L.
+ * Copyright (C) 2014-2016 OpenHeadend S.A.R.L.
  *
  * Authors: Christophe Massiot
  *
@@ -35,6 +35,7 @@ extern "C" {
 #endif
 
 #include <upipe/ubase.h>
+#include <upipe/urefcount.h>
 #include <upipe/ulifo.h>
 
 /** @hidden */
@@ -47,6 +48,8 @@ typedef void (*upool_free_cb)(struct upool *, void *);
 
 /** @This is the implementation of a pool of buffers. */
 struct upool {
+    /** pointer to refcount management structure */
+    struct urefcount *refcount;
     /** lifo */
     struct ulifo lifo;
     /** call-back to allocate new elements */
@@ -65,16 +68,42 @@ struct upool {
 /** @This initializes a upool.
  *
  * @param upool pointer to a upool structure
+ * @param refcount pointer to refcount management structure
  * @param length maximum number of elements in the pool
  * @param extra mandatory extra space allocated by the caller, with the size
  * returned by @ref #upool_sizeof
  */
-static inline void upool_init(struct upool *upool, uint16_t length, void *extra,
+static inline void upool_init(struct upool *upool, struct urefcount *refcount,
+                              uint16_t length, void *extra,
                               upool_alloc_cb alloc_cb, upool_free_cb free_cb)
 {
+    upool->refcount = refcount;
     ulifo_init(&upool->lifo, length, extra);
     upool->alloc_cb = alloc_cb;
     upool->free_cb = free_cb;
+}
+
+/** @This increments the reference count of a upool.
+ *
+ * @param upool pointer to upool
+ * @return same pointer to upool
+ */
+static inline struct upool *upool_use(struct upool *upool)
+{
+    if (upool == NULL)
+        return NULL;
+    urefcount_use(upool->refcount);
+    return upool;
+}
+
+/** @This decrements the reference count of a upool or frees it.
+ *
+ * @param upool pointer to upool
+ */
+static inline void upool_release(struct upool *upool)
+{
+    if (upool != NULL)
+        urefcount_release(upool->refcount);
 }
 
 /** @internal @This allocates an elements from the upool.
@@ -85,9 +114,11 @@ static inline void upool_init(struct upool *upool, uint16_t length, void *extra,
 static inline void *upool_alloc_internal(struct upool *upool)
 {
     void *obj = ulifo_pop(&upool->lifo, void *);
-    if (likely(obj != NULL))
-        return obj;
-    return upool->alloc_cb(upool);
+    if (unlikely(obj == NULL))
+        obj = upool->alloc_cb(upool);
+    if (obj != NULL)
+        upool_use(upool);
+    return obj;
 }
 
 /** @This allocates an elements from the upool.
@@ -105,9 +136,9 @@ static inline void *upool_alloc_internal(struct upool *upool)
  */
 static inline void upool_free(struct upool *upool, void *obj)
 {
-    if (likely(ulifo_push(&upool->lifo, obj)))
-        return;
-    upool->free_cb(upool, obj);
+    if (unlikely(!ulifo_push(&upool->lifo, obj)))
+        upool->free_cb(upool, obj);
+    upool_release(upool);
 }
 
 /** @This empties a upool.
@@ -117,8 +148,10 @@ static inline void upool_free(struct upool *upool, void *obj)
 static inline void upool_vacuum(struct upool *upool)
 {
     void *obj;
-    while ((obj = ulifo_pop(&upool->lifo, void *)) != NULL)
+    while ((obj = ulifo_pop(&upool->lifo, void *)) != NULL) {
         upool->free_cb(upool, obj);
+        upool_release(upool);
+    }
 }
 
 /** @This empties and cleans up a upool.

@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2014 OpenHeadend S.A.R.L.
+ * Copyright (C) 2014-2016 OpenHeadend S.A.R.L.
  *
  * Authors: Christophe Massiot
  *
@@ -116,7 +116,6 @@ static struct ubuf *ubuf_sound_bmd_alloc(struct ubuf_mgr *mgr,
     AudioFrame->GetBytes(&buffer);
     ubuf_sound_common_plane_init(ubuf, 0, (uint8_t *)buffer);
 
-    ubuf_mgr_use(mgr);
     return ubuf;
 }
 
@@ -153,7 +152,6 @@ static int ubuf_sound_bmd_dup(struct ubuf *ubuf, struct ubuf **new_ubuf_p)
     struct ubuf_sound_bmd *sound_bmd = ubuf_sound_bmd_from_ubuf(ubuf);
     new_sound->shared = sound_bmd->shared;
     sound_bmd->shared->AddRef();
-    ubuf_mgr_use(new_ubuf->mgr);
     return UBASE_ERR_NONE;
 }
 
@@ -189,17 +187,8 @@ static int ubuf_sound_bmd_control(struct ubuf *ubuf, int command, va_list args)
                                                size, buffer_p);
         }
         case UBUF_WRITE_SOUND_PLANE: {
-            const char *chroma = va_arg(args, const char *);
-            int offset = va_arg(args, int);
-            int size = va_arg(args, int);
-            uint8_t **buffer_p = va_arg(args, uint8_t **);
-#if 0
-            /* FIXME no way to know reference count */
-            if (!ubuf_mem_shared_single(sound->shared))
-                return UBASE_ERR_BUSY;
-#endif
-            return ubuf_sound_common_plane_map(ubuf, chroma, offset,
-                                               size, buffer_p);
+            /* There is no way to know reference count */
+            return UBASE_ERR_BUSY;
         }
         case UBUF_UNMAP_SOUND_PLANE: {
             /* we don't actually care about the parameters */
@@ -232,7 +221,6 @@ static void ubuf_sound_bmd_free(struct ubuf *ubuf)
 
     sound_bmd->shared->Release();
     upool_free(&sound_mgr->ubuf_pool, sound_bmd);
-    ubuf_mgr_release(mgr);
 }
 
 /** @internal @This allocates the data structure.
@@ -333,9 +321,6 @@ struct ubuf_mgr *ubuf_sound_bmd_mgr_alloc(uint16_t ubuf_pool_depth,
     if (unlikely(sound_mgr == NULL))
         return NULL;
 
-    upool_init(&sound_mgr->ubuf_pool, ubuf_pool_depth, sound_mgr->upool_extra,
-               ubuf_sound_bmd_alloc_inner, ubuf_sound_bmd_free_inner);
-
     struct ubuf_mgr *mgr = ubuf_sound_bmd_mgr_to_ubuf_mgr(sound_mgr);
     ubuf_sound_common_mgr_init(mgr, nb_channels *
             (SampleType == bmdAudioSampleType16bitInteger ? 2 : 4));
@@ -349,6 +334,10 @@ struct ubuf_mgr *ubuf_sound_bmd_mgr_alloc(uint16_t ubuf_pool_depth,
     mgr->ubuf_control = ubuf_sound_bmd_control;
     mgr->ubuf_free = ubuf_sound_bmd_free;
     mgr->ubuf_mgr_control = ubuf_sound_bmd_mgr_control;
+
+    upool_init(&sound_mgr->ubuf_pool, mgr->refcount, ubuf_pool_depth,
+               sound_mgr->upool_extra,
+               ubuf_sound_bmd_alloc_inner, ubuf_sound_bmd_free_inner);
 
     if (unlikely(!ubase_check(ubuf_sound_common_mgr_add_plane(mgr, channel)))) {
         ubuf_mgr_release(mgr);

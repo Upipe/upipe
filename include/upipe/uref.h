@@ -78,12 +78,14 @@ static inline const char *uref_date_type_str(int dt)
 #define UREF_FLAG_FLOW_END 0x1
 /** there is a discontinuity in the flow */
 #define UREF_FLAG_FLOW_DISC 0x2
+/** the current uref is a random access point */
+#define UREF_FLAG_FLOW_RANDOM 0x4
 /** the block is a starting point */
-#define UREF_FLAG_BLOCK_START 0x4
+#define UREF_FLAG_BLOCK_START 0x8
 /** the block is an ending point */
-#define UREF_FLAG_BLOCK_END 0x8
+#define UREF_FLAG_BLOCK_END 0x10
 /** the block contains a clock reference */
-#define UREF_FLAG_CLOCK_REF 0x10
+#define UREF_FLAG_CLOCK_REF 0x20
 
 /** position of the bitfield for the type of sys date */
 #define UREF_FLAG_DATE_SYS 0x0400000000000000
@@ -332,6 +334,21 @@ static inline struct ubuf *uref_detach_ubuf(struct uref *uref)
     struct ubuf *ubuf = uref->ubuf;
     uref->ubuf = NULL;
     return ubuf;
+}
+
+/** @This duplicates a uref and attaches a new ubuf to the copy.
+ *
+ * @param uref source structure to duplicate
+ * @return duplicated uref or NULL in case of allocation failure
+ */
+static inline struct uref *uref_fork(struct uref *uref, struct ubuf *ubuf)
+{
+    struct uref *new_uref = uref_dup_inner(uref);
+    if (unlikely(new_uref == NULL))
+        return NULL;
+
+    uref_attach_ubuf(new_uref, ubuf);
+    return new_uref;
 }
 
 /** @This increments the reference count of a uref manager.

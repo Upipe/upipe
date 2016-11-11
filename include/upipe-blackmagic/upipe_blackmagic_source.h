@@ -1,7 +1,8 @@
 /*
- * Copyright (C) 2013-2014 OpenHeadend S.A.R.L.
+ * Copyright (C) 2013-2016 OpenHeadend S.A.R.L.
  *
  * Authors: Benjamin Cohen
+ *          Christophe Massiot
  *
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
@@ -25,8 +26,11 @@
  * @table 2
  * @item uprobe_pic @item structure used to raise events for the pic subpipe
  * @item uprobe_sound @item structure used to raise events for the sound subpipe
- * @item uprobe_subpic @item structure used to raise events for the subpic subpipe
+ * @item uprobe_vanc @item structure used to raise events for the vanc subpipe
  * @end table
+ *
+ * The URI is made of several components:
+ * <video connection>://[<card#>|@<card topology>][/mode=<video mode>][/audio=<audio connection>]
  */
 
 #ifndef _UPIPE_BLACKMAGIC_UPIPE_BLACKMAGIC_SOURCE_H_
@@ -48,9 +52,7 @@ enum upipe_bmd_src_command {
     /** returns the pic subpipe (struct upipe **) */
     UPIPE_BMD_SRC_GET_PIC_SUB,
     /** returns the sound subpipe (struct upipe **) */
-    UPIPE_BMD_SRC_GET_SOUND_SUB,
-    /** returns the subpic subpipe (struct upipe **) */
-    UPIPE_BMD_SRC_GET_SUBPIC_SUB
+    UPIPE_BMD_SRC_GET_SOUND_SUB
 };
 
 /** @This returns the management structure for all bmd sources.
@@ -87,24 +89,10 @@ static inline int upipe_bmd_src_get_sound_sub(struct upipe *upipe,
                          UPIPE_BMD_SRC_SIGNATURE, upipe_p);
 }
 
-/** @This returns the subpic subpipe. The refcount is not incremented so you
- * have to use it if you want to keep the pointer.
- *
- * @param upipe description structure of the super pipe
- * @param upipe_p filled in with a pointer to the subpic subpipe
- * @return an error code
- */
-static inline int upipe_bmd_src_get_subpic_sub(struct upipe *upipe,
-                                               struct upipe **upipe_p)
-{
-    return upipe_control(upipe, UPIPE_BMD_SRC_GET_SUBPIC_SUB,
-                         UPIPE_BMD_SRC_SIGNATURE, upipe_p);
-}
-
 /** @hidden */
-#define ARGS_DECL , struct uprobe *uprobe_pic, struct uprobe *uprobe_sound, struct uprobe *uprobe_subpic
+#define ARGS_DECL , struct uprobe *uprobe_pic, struct uprobe *uprobe_sound
 /** @hidden */
-#define ARGS , uprobe_pic, uprobe_sound, uprobe_subpic
+#define ARGS , uprobe_pic, uprobe_sound
 UPIPE_HELPER_ALLOC(bmd_src, UPIPE_BMD_SRC_SIGNATURE)
 #undef ARGS
 #undef ARGS_DECL

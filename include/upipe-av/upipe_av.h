@@ -34,6 +34,9 @@ extern "C" {
 
 #include <stdbool.h>
 
+/** @hidden */
+struct uprobe;
+
 /** @This initializes non-reentrant parts of avcodec and avformat. Call it
  * before allocating managers from this library.
  *

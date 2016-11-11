@@ -164,6 +164,7 @@ int main(int argc, char **argv)
     /* block */
     struct ubuf_mgr *block_mgr = ubuf_block_mem_mgr_alloc(UBUF_POOL_DEPTH,
             UBUF_POOL_DEPTH, umem_mgr,
+            UBUF_PREPEND,
             UBUF_ALIGN,
             UBUF_ALIGN_OFFSET);
     assert(block_mgr);
@@ -221,6 +222,10 @@ int main(int argc, char **argv)
     nb_packets = 1;
     upipe_input(rtpd, uref, NULL);
     assert(!nb_packets);
+
+    uint64_t lost;
+    ubase_assert(upipe_rtpd_get_packets_lost(rtpd, &lost));
+    assert(lost == 42 - 1 - 1);
 
     /* release pipe */
     upipe_release(rtpd);

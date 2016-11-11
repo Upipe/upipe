@@ -66,7 +66,7 @@
 #define ALIGN 3
 #define REAL_MTU ((MTU / ALIGN) * ALIGN)
 
-unsigned int nb_packets = 0;
+static unsigned int nb_packets = 0;
 
 /** definition of our uprobe */
 static int catch(struct uprobe *uprobe, struct upipe *upipe,
@@ -158,7 +158,7 @@ int main(int argc, char *argv[])
     assert(uref_mgr != NULL);
     struct ubuf_mgr *ubuf_mgr = ubuf_block_mem_mgr_alloc(UBUF_POOL_DEPTH,
                                                          UBUF_POOL_DEPTH,
-                                                         umem_mgr, -1, 0);
+                                                         umem_mgr, 0, -1, 0);
     assert(ubuf_mgr != NULL);
     struct uprobe uprobe;
     uprobe_init(&uprobe, catch, NULL);

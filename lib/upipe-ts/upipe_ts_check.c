@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2013-2015 OpenHeadend S.A.R.L.
+ * Copyright (C) 2013-2016 OpenHeadend S.A.R.L.
  *
  * Authors: Christophe Massiot
  *
@@ -160,20 +160,19 @@ static void upipe_ts_check_input(struct upipe *upipe, struct uref *uref,
     }
 
     while (size > upipe_ts_check->output_size) {
-        struct uref *output = uref_block_splice(uref, 0,
-                                                upipe_ts_check->output_size);
-        if (unlikely(output == NULL)) {
+        struct uref *next = uref_block_split(uref, upipe_ts_check->output_size);
+        if (unlikely(next == NULL)) {
             uref_free(uref);
             upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
             return;
         }
-        if (!upipe_ts_check_check(upipe, output, upump_p)) {
-            uref_free(uref);
+        if (!upipe_ts_check_check(upipe, uref, upump_p)) {
+            uref_free(next);
             return;
         }
 
-        uref_block_resize(uref, upipe_ts_check->output_size, -1);
         size -= upipe_ts_check->output_size;
+        uref = next;
     }
     if (size == upipe_ts_check->output_size)
         upipe_ts_check_check(upipe, uref, upump_p);

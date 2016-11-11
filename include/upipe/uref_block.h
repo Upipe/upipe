@@ -157,6 +157,14 @@ static inline int uref_block_resize(struct uref *uref, int skip, int new_size)
     return ubuf_block_resize(uref->ubuf, skip, new_size);
 }
 
+/** @see ubuf_block_prepend */
+static inline int uref_block_prepend(struct uref *uref, int prepend)
+{
+    if (uref->ubuf == NULL)
+        return UBASE_ERR_INVALID;
+    return ubuf_block_prepend(uref->ubuf, prepend);
+}
+
 /** @see ubuf_block_splice */
 static inline struct uref *uref_block_splice(struct uref *uref, int offset,
                                              int size)
@@ -168,6 +176,23 @@ static inline struct uref *uref_block_splice(struct uref *uref, int offset,
         return NULL;
 
     new_uref->ubuf = ubuf_block_splice(uref->ubuf, offset, size);
+    if (unlikely(new_uref->ubuf == NULL)) {
+        uref_free(new_uref);
+        return NULL;
+    }
+    return new_uref;
+}
+
+/** @see ubuf_block_split */
+static inline struct uref *uref_block_split(struct uref *uref, int offset)
+{
+    if (uref->ubuf == NULL)
+        return NULL;
+    struct uref *new_uref = uref_dup_inner(uref);
+    if (unlikely(new_uref == NULL))
+        return NULL;
+
+    new_uref->ubuf = ubuf_block_split(uref->ubuf, offset);
     if (unlikely(new_uref->ubuf == NULL)) {
         uref_free(new_uref);
         return NULL;

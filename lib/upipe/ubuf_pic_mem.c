@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2012-2015 OpenHeadend S.A.R.L.
+ * Copyright (C) 2012-2016 OpenHeadend S.A.R.L.
  *
  * Authors: Christophe Massiot
  *
@@ -172,7 +172,7 @@ static struct ubuf *ubuf_pic_mem_alloc(struct ubuf_mgr *mgr,
 
     if (unlikely(!umem_alloc(pic_mgr->umem_mgr, &pic_mem->shared->umem,
                              buffer_size))) {
-        ubuf_pic_mem_shared_free_pool(mgr, pic_mem->shared);
+        ubuf_pic_mem_shared_free_pool(pic_mem->shared);
         ubuf_pic_mem_free_pool(mgr, pic_mem);
         return NULL;
     }
@@ -193,7 +193,6 @@ static struct ubuf *ubuf_pic_mem_alloc(struct ubuf_mgr *mgr,
         buffer += plane_sizes[plane];
     }
 
-    ubuf_mgr_use(mgr);
     return ubuf;
 }
 
@@ -228,7 +227,36 @@ static int ubuf_pic_mem_dup(struct ubuf *ubuf, struct ubuf **new_ubuf_p)
 
     struct ubuf_pic_mem *pic_mem = ubuf_pic_mem_from_ubuf(ubuf);
     new_pic->shared = ubuf_mem_shared_use(pic_mem->shared);
-    ubuf_mgr_use(new_ubuf->mgr);
+    return UBASE_ERR_NONE;
+}
+
+/** @This returns the underlying shared buffer. The reference counter is not
+ * incremented.
+ *
+ * @param ubuf pointer to ubuf
+ * @param chroma chroma type (see chroma reference)
+ * @param shared_p filled in with a pointer to the underlying shared buffer
+ * @param offset_p filled in with the offset in the shared buffer for the plane
+ * @param size_p filled in with the size of the plane
+ * @return an error code
+ */
+static int _ubuf_pic_mem_get_shared(struct ubuf *ubuf,
+        const char *chroma, struct ubuf_mem_shared **shared_p,
+        size_t *offset_p, size_t *size_p)
+{
+    struct ubuf_pic_mem *pic_mem = ubuf_pic_mem_from_ubuf(ubuf);
+    *shared_p = pic_mem->shared;
+    size_t hsize, vsize;
+    uint8_t macropixel;
+    UBASE_RETURN(ubuf_pic_common_size(ubuf, &hsize, &vsize, &macropixel))
+    size_t stride;
+    uint8_t hsub, vsub, macropixel_size;
+    UBASE_RETURN(ubuf_pic_common_plane_size(ubuf, chroma, &stride, &hsub, &vsub, &macropixel_size))
+    uint8_t *buffer;
+    UBASE_RETURN(ubuf_pic_common_plane_map(ubuf, chroma, 0, 0, -1, -1, &buffer))
+
+    *offset_p = buffer - ubuf_mem_shared_buffer(pic_mem->shared);
+    *size_p = stride * vsize / vsub;
     return UBASE_ERR_NONE;
 }
 
@@ -323,6 +351,17 @@ static int ubuf_pic_mem_control(struct ubuf *ubuf, int command, va_list args)
             return ubuf_pic_common_resize(ubuf, hskip, vskip,
                                           new_hsize, new_vsize);
         }
+
+        case UBUF_PIC_MEM_GET_SHARED: {
+            UBASE_SIGNATURE_CHECK(args, UBUF_PIC_MEM_SIGNATURE)
+            const char *chroma = va_arg(args, const char *);
+            struct ubuf_mem_shared **shared_p =
+                va_arg(args, struct ubuf_mem_shared **);
+            size_t *offset_p = va_arg(args, size_t *);
+            size_t *size_p = va_arg(args, size_t *);
+            return _ubuf_pic_mem_get_shared(ubuf, chroma, shared_p,
+                                            offset_p, size_p);
+        }
         default:
             return UBASE_ERR_UNHANDLED;
     }
@@ -349,10 +388,9 @@ static void ubuf_pic_mem_free(struct ubuf *ubuf)
 
     if (unlikely(ubuf_mem_shared_release(pic_mem->shared))) {
         umem_free(&pic_mem->shared->umem);
-        ubuf_pic_mem_shared_free_pool(mgr, pic_mem->shared);
+        ubuf_pic_mem_shared_free_pool(pic_mem->shared);
     }
     ubuf_pic_mem_free_pool(mgr, pic_mem);
-    ubuf_mgr_release(mgr);
 }
 
 /** @internal @This allocates the data structure.
@@ -532,13 +570,6 @@ struct ubuf_mgr *ubuf_pic_mem_mgr_alloc(uint16_t ubuf_pool_depth,
     if (unlikely(pic_mgr == NULL))
         return NULL;
 
-    ubuf_pic_mem_mgr_init_pool(ubuf_pic_mem_mgr_to_ubuf_mgr(pic_mgr),
-            ubuf_pool_depth, shared_pool_depth, pic_mgr->upool_extra,
-            ubuf_pic_mem_alloc_inner, ubuf_pic_mem_free_inner);
-
-    pic_mgr->umem_mgr = umem_mgr;
-    umem_mgr_use(umem_mgr);
-
     struct ubuf_mgr *mgr = ubuf_pic_mem_mgr_to_ubuf_mgr(pic_mgr);
     ubuf_pic_common_mgr_init(mgr, macropixel);
 
@@ -560,6 +591,13 @@ struct ubuf_mgr *ubuf_pic_mem_mgr_alloc(uint16_t ubuf_pool_depth,
     mgr->ubuf_control = ubuf_pic_mem_control;
     mgr->ubuf_free = ubuf_pic_mem_free;
     mgr->ubuf_mgr_control = ubuf_pic_mem_mgr_control;
+
+    ubuf_pic_mem_mgr_init_pool(ubuf_pic_mem_mgr_to_ubuf_mgr(pic_mgr),
+            ubuf_pool_depth, shared_pool_depth, pic_mgr->upool_extra,
+            ubuf_pic_mem_alloc_inner, ubuf_pic_mem_free_inner);
+
+    pic_mgr->umem_mgr = umem_mgr;
+    umem_mgr_use(umem_mgr);
 
     return mgr;
 }

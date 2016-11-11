@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2013-2014 OpenHeadend S.A.R.L.
+ * Copyright (C) 2013-2016 OpenHeadend S.A.R.L.
  *
  * Authors: Christophe Massiot
  *
@@ -59,6 +59,7 @@
 #include <upipe-ts/upipe_ts_demux.h>
 #include <upipe-framers/upipe_mpgv_framer.h>
 #include <upipe-framers/upipe_h264_framer.h>
+#include <upipe-framers/upipe_h265_framer.h>
 
 #include <ev.h>
 
@@ -99,6 +100,12 @@ static int count_control(struct upipe *upipe, int command, va_list args)
 {
     switch (command) {
         case UPIPE_SET_FLOW_DEF:
+            return UBASE_ERR_NONE;
+        case UPIPE_REGISTER_REQUEST: {
+            struct urequest *urequest = va_arg(args, struct urequest *);
+            return upipe_throw_provide_request(upipe, urequest);
+        }
+        case UPIPE_UNREGISTER_REQUEST:
             return UBASE_ERR_NONE;
         default:
             assert(0);
@@ -197,6 +204,9 @@ int main(int argc, char **argv)
     struct upipe_mgr *upipe_h264f_mgr = upipe_h264f_mgr_alloc();
     upipe_ts_demux_mgr_set_h264f_mgr(upipe_ts_demux_mgr, upipe_h264f_mgr);
     upipe_mgr_release(upipe_h264f_mgr);
+    struct upipe_mgr *upipe_h265f_mgr = upipe_h265f_mgr_alloc();
+    upipe_ts_demux_mgr_set_h265f_mgr(upipe_ts_demux_mgr, upipe_h265f_mgr);
+    upipe_mgr_release(upipe_h265f_mgr);
     struct upipe *ts_demux = upipe_void_alloc_output(upipe_src,
             upipe_ts_demux_mgr,
             uprobe_pfx_alloc(

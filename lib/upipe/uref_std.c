@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2012-2014 OpenHeadend S.A.R.L.
+ * Copyright (C) 2012-2016 OpenHeadend S.A.R.L.
  *
  * Authors: Christophe Massiot
  *
@@ -68,7 +68,6 @@ static struct uref *uref_std_alloc(struct uref_mgr *mgr)
     if (unlikely(uref == NULL))
         return NULL;
     uchain_init(&uref->uchain);
-    uref_mgr_use(mgr);
     return uref;
 }
 
@@ -80,7 +79,6 @@ static void uref_std_free(struct uref *uref)
 {
     struct uref_std_mgr *std_mgr = uref_std_mgr_from_uref_mgr(uref->mgr);
     upool_free(&std_mgr->uref_pool, uref);
-    uref_mgr_release(&std_mgr->mgr);
 }
 
 /** @internal @This allocates the data structure.
@@ -171,18 +169,18 @@ struct uref_mgr *uref_std_mgr_alloc(uint16_t uref_pool_depth,
     if (unlikely(std_mgr == NULL))
         return NULL;
 
-    upool_init(&std_mgr->uref_pool, uref_pool_depth, std_mgr->upool_extra,
-               uref_std_alloc_inner, uref_std_free_inner);
-
-    std_mgr->mgr.control_attr_size = control_attr_size;
-    std_mgr->mgr.udict_mgr = udict_mgr;
-    udict_mgr_use(udict_mgr);
-
     urefcount_init(uref_std_mgr_to_urefcount(std_mgr), uref_std_mgr_free);
     std_mgr->mgr.refcount = uref_std_mgr_to_urefcount(std_mgr);
     std_mgr->mgr.uref_alloc = uref_std_alloc;
     std_mgr->mgr.uref_free = uref_std_free;
     std_mgr->mgr.uref_mgr_control = uref_std_mgr_control;
     
+    upool_init(&std_mgr->uref_pool, std_mgr->mgr.refcount, uref_pool_depth,
+               std_mgr->upool_extra, uref_std_alloc_inner, uref_std_free_inner);
+
+    std_mgr->mgr.control_attr_size = control_attr_size;
+    std_mgr->mgr.udict_mgr = udict_mgr;
+    udict_mgr_use(udict_mgr);
+
     return uref_std_mgr_to_uref_mgr(std_mgr);
 }

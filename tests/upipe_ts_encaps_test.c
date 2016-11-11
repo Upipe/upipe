@@ -246,7 +246,7 @@ int main(int argc, char *argv[])
     assert(uref_mgr != NULL);
     struct ubuf_mgr *ubuf_mgr = ubuf_block_mem_mgr_alloc(UBUF_POOL_DEPTH,
                                                          UBUF_POOL_DEPTH,
-                                                         umem_mgr, -1, 0);
+                                                         umem_mgr, 0, -1, 0);
     assert(ubuf_mgr != NULL);
     struct uprobe uprobe;
     uprobe_init(&uprobe, catch, NULL);
@@ -302,7 +302,7 @@ int main(int argc, char *argv[])
     uref_clock_set_dts_pts_delay(uref, UCLOCK_FREQ);
     uref_block_set_start(uref);
     uref_flow_set_discontinuity(uref);
-    ubase_assert(uref_flow_set_random(uref));
+    uref_flow_set_random(uref);
     upipe_input(upipe_ts_encaps, uref, NULL);
     assert(next_cr_sys <= UINT32_MAX);
     assert(next_ready);

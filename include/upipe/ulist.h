@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2012-2014 OpenHeadend S.A.R.L.
+ * Copyright (C) 2012-2016 OpenHeadend S.A.R.L.
  *
  * Authors: Christophe Massiot
  *
@@ -206,7 +206,7 @@ static inline struct uchain *ulist_at(struct uchain *ulist, unsigned index)
  * @param compar comparison function accepting two uchains as arguments
  */
 static inline void ulist_sort(struct uchain *ulist,
-                              int (*compar)(struct uchain **, struct uchain **))
+        int (*compar)(struct uchain **, struct uchain **))
 {
     size_t depth = ulist_depth(ulist);
     size_t i;
@@ -263,10 +263,50 @@ static inline void ulist_sort(struct uchain *ulist,
  * @param uchain iterator
  * @param uchain_tmp uchain to use for temporary storage
  */
-#define ulist_delete_foreach_reverse(ulist, uchain, uchain_tmp)              \
+#define ulist_delete_foreach_reverse(ulist, uchain, uchain_tmp)             \
     for ((uchain) = (ulist)->prev, (uchain_tmp) = (uchain)->prev;           \
          (uchain) != (ulist);                                               \
          (uchain) = (uchain_tmp), (uchain_tmp) = (uchain)->prev)
+
+/** @This inserts a new element into a list using a comparison function.
+ *
+ * @param ulist pointer to a ulist
+ * @param element element to insert
+ * @param compar comparison function accepting two uchains as arguments
+ */
+static inline void ulist_bubble(struct uchain *ulist, struct uchain *element,
+        int (*compar)(struct uchain *, struct uchain *))
+{
+    struct uchain *uchain;
+    ulist_foreach (ulist, uchain) {
+        if (compar(element, uchain) < 0) {
+            ulist_insert(uchain->prev, uchain, element);
+            return;
+        }
+    }
+    ulist_insert(ulist->prev, ulist, element);
+}
+
+/** @This inserts a new element into a list using a comparison function, from
+ * the end.
+ *
+ * @param ulist pointer to a ulist
+ * @param element element to insert
+ * @param compar comparison function accepting two uchains as arguments
+ */
+static inline void ulist_bubble_reverse(struct uchain *ulist,
+        struct uchain *element,
+        int (*compar)(struct uchain *, struct uchain *))
+{
+    struct uchain *uchain;
+    ulist_foreach_reverse (ulist, uchain) {
+        if (compar(element, uchain) > 0) {
+            ulist_insert(uchain, uchain->next, element);
+            return;
+        }
+    }
+    ulist_insert(ulist, ulist->next, element);
+}
 
 #ifdef __cplusplus
 }

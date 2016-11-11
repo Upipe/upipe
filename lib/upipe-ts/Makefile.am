@@ -1,3 +1,4 @@
+NULL =
 lib_LTLIBRARIES = libupipe_ts.la
 
 noinst_HEADERS = upipe_ts_psi_decoder.h
@@ -9,9 +10,11 @@ libupipe_ts_la_SOURCES = \
 	upipe_ts_pes_decaps.c \
 	upipe_ts_pat_decoder.c \
 	upipe_ts_pmt_decoder.c \
+	upipe_ts_pid_filter.c \
 	upipe_ts_psi_join.c \
 	upipe_ts_psi_merge.c \
 	upipe_ts_psi_split.c \
+	upipe_ts_scte104_decoder.c \
 	upipe_ts_scte35_decoder.c \
 	upipe_ts_scte35_generator.c \
 	upipe_ts_scte35_probe.c \
@@ -19,13 +22,16 @@ libupipe_ts_la_SOURCES = \
 	upipe_ts_tdt_decoder.c \
 	upipe_ts_split.c \
 	upipe_ts_sync.c \
+	upipe_ts_align.c \
 	upipe_ts_demux.c \
 	upipe_ts_tstd.c \
 	upipe_ts_encaps.c \
+	upipe_ts_pcr_interpolator.c \
 	upipe_ts_pes_encaps.c \
 	upipe_ts_psi_generator.c \
 	upipe_ts_si_generator.c \
-	upipe_ts_mux.c
+	upipe_ts_mux.c \
+	$(NULL)
 
 libupipe_ts_la_CPPFLAGS = -I$(top_builddir)/include -I$(top_srcdir)/include
 libupipe_ts_la_LIBADD = $(top_builddir)/lib/upipe-modules/libupipe_modules.la \

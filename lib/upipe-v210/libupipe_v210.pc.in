@@ -5,6 +5,6 @@ includedir=@includedir@
 Name: libupipe_v210
 Description: Upipe multimedia framework, v210 interface module
 Version: @VERSION@
-Requires: libavutil libupipe
+Requires: libupipe
 Libs: -L${libdir} -lupipe_v210
 Cflags: -I${includedir}

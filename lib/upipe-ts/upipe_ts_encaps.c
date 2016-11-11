@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2013-2015 OpenHeadend S.A.R.L.
+ * Copyright (C) 2013-2016 OpenHeadend S.A.R.L.
  *
  * Authors: Christophe Massiot
  *
@@ -880,11 +880,9 @@ static int upipe_ts_encaps_overlap_au(struct upipe *upipe,
     struct upipe_ts_encaps *encaps = upipe_ts_encaps_from_upipe(upipe);
     size_t size;
     UBASE_RETURN(uref_block_size(uref_au1, &size));
-    struct uref *uref_overlap = uref_block_splice(uref_au1, size - last_ts_size,
-                                                  last_ts_size);
+    struct uref *uref_overlap = uref_block_split(uref_au1, size - last_ts_size);
     UBASE_ALLOC_RETURN(uref_overlap);
     struct uref *uref_au2 = uref_from_uchain(uchain->next);
-    uref_block_resize(uref_au1, 0, size - last_ts_size);
     ulist_insert(uchain, uchain->next, uref_to_uchain(uref_overlap));
     encaps->nb_urefs++;
 
@@ -925,7 +923,7 @@ static int upipe_ts_encaps_overlap_au(struct upipe *upipe,
     uref_flow_delete_discontinuity(uref_overlap);
     uref_flow_delete_random(uref_overlap);
 
-    /* AU2 is no longer the start of an acess unit */
+    /* AU2 is no longer the start of an access unit */
     uref_block_delete_start(uref_au2);
     return UBASE_ERR_NONE;
 }
@@ -968,8 +966,9 @@ static int upipe_ts_encaps_promote_au(struct upipe *upipe)
 
     size_t au_size = encaps->uref_size;
     uint64_t duration = 0;
-    uref_clock_get_duration(encaps->uref, &duration);
     struct uchain *uchain = &encaps->urefs;
+    if (encaps->pes_min_duration)
+        uref_clock_get_duration(encaps->uref, &duration);
     while (!ulist_is_last(&encaps->urefs, uchain)) {
         if (ubase_check(uref_block_get_start(uref_from_uchain(uchain->next))))
             break;
@@ -978,10 +977,13 @@ static int upipe_ts_encaps_promote_au(struct upipe *upipe)
         size_t uref_size;
         UBASE_RETURN(uref_block_size(uref, &uref_size));
         au_size += uref_size;
-        uint64_t uref_duration = 0;
-        uref_clock_get_duration(uref, &uref_duration);
-        duration += uref_duration;
+        if (encaps->pes_min_duration) {
+            uint64_t uref_duration = 0;
+            uref_clock_get_duration(uref, &uref_duration);
+            duration += uref_duration;
+        }
     }
+
 #ifdef VERBOSE_HEADERS
     upipe_verbose_va(upipe, "promoting a%s access unit of size %zu",
             ubase_check(uref_flow_get_random(encaps->uref)) ? " random" : "n",
@@ -992,27 +994,24 @@ static int upipe_ts_encaps_promote_au(struct upipe *upipe)
     uref_clock_get_pts_prog(encaps->uref, &pts_prog);
     uref_clock_get_dts_prog(encaps->uref, &dts_prog);
 
-    if (encaps->pes_min_duration) {
-        while (duration < encaps->pes_min_duration) {
-            if (ulist_is_last(&encaps->urefs, uchain))
-                break;
+    while (duration < encaps->pes_min_duration) {
+        uint64_t uref_duration;
+        size_t uref_size;
+        const char *def;
+        if (ulist_is_last(&encaps->urefs, uchain) ||
+            ubase_check(uref_flow_get_def(uref_from_uchain(uchain->next), &def)) ||
+            ubase_check(uref_flow_get_random(uref_from_uchain(uchain->next))) ||
+            ubase_check(uref_flow_get_discontinuity(uref_from_uchain(uchain->next))) ||
+            !ubase_check(uref_clock_get_duration(uref_from_uchain(uchain->next), &uref_duration)) ||
+            !ubase_check(uref_block_size(uref_from_uchain(uchain->next), &uref_size)))
+            break;
 
-            uchain = uchain->next;
-            struct uref *uref = uref_from_uchain(uchain);
-            uint64_t uref_duration;
-            size_t uref_size;
-            const char *def;
-            if (ubase_check(uref_flow_get_def(uref, &def)) ||
-                ubase_check(uref_flow_get_random(uref)) ||
-                ubase_check(uref_flow_get_discontinuity(uref)) ||
-                !ubase_check(uref_clock_get_duration(uref, &uref_duration)) ||
-                !ubase_check(uref_block_size(uref, &uref_size)))
-                break;
-            duration += uref_duration;
-            au_size += uref_size;
-            uref_block_delete_start(uref);
-            upipe_verbose_va(upipe, "aggregating an access unit");
-        }
+        uchain = uchain->next;
+        struct uref *uref = uref_from_uchain(uchain);
+        duration += uref_duration;
+        au_size += uref_size;
+        uref_block_delete_start(uref);
+        upipe_verbose_va(upipe, "aggregating an access unit");
     }
 
     const char *def;
@@ -1183,21 +1182,20 @@ static int upipe_ts_encaps_complete(struct upipe *upipe, struct ubuf **ubuf_p,
                 (uint64_t)(uref_size - header_size) * UCLOCK_FREQ /
                 encaps->tb_rate;
 
-        struct ubuf *payload;
+        struct ubuf *payload = uref_detach_ubuf(encaps->uref);
         if (uref_size >= TS_SIZE - ubuf_size) {
             size_t payload_size = TS_SIZE - ubuf_size;
             assert(payload_size);
-            payload = ubuf_block_splice(encaps->uref->ubuf, 0, payload_size);
+            uref_attach_ubuf(encaps->uref,
+                             ubuf_block_split(payload, payload_size));
             encaps->uref_size -= payload_size;
             encaps->au_size -= payload_size;
-            uref_block_resize(encaps->uref, payload_size, encaps->uref_size);
             if (payload_size >= header_size)
                 uref_attr_set_priv(encaps->uref, 0);
             else
                 uref_attr_set_priv(encaps->uref, header_size - payload_size);
             encaps->tb_buffer -= payload_size;
         } else {
-            payload = uref_detach_ubuf(encaps->uref);
             encaps->tb_buffer -= uref_size;
             encaps->au_size -= uref_size;
         }
@@ -1459,10 +1457,49 @@ static void upipe_ts_encaps_free(struct upipe *upipe)
     upipe_ts_encaps_free_void(upipe);
 }
 
+/** @This returns a description string for local commands.
+ *
+ * @param cmd control command
+ * @return description string
+ */
+static const char *upipe_ts_encaps_command_str(int cmd)
+{
+    if (cmd < UPIPE_TS_MUX_ENCAPS)
+        return upipe_ts_mux_command_str(cmd);
+
+    switch (cmd) {
+        UBASE_CASE_TO_STR(UPIPE_TS_ENCAPS_SET_TB_SIZE);
+        UBASE_CASE_TO_STR(UPIPE_TS_ENCAPS_SPLICE);
+        UBASE_CASE_TO_STR(UPIPE_TS_ENCAPS_EOS);
+        default: break;
+    }
+    return NULL;
+}
+
+/** @This returns a description string for local events.
+ *
+ * @param event event
+ * @return description string
+ */
+static const char *upipe_ts_encaps_event_str(int event)
+{
+    if (event < UPROBE_TS_MUX_ENCAPS)
+        return upipe_ts_mux_event_str(event);
+
+    switch (event) {
+        UBASE_CASE_TO_STR(UPROBE_TS_ENCAPS_STATUS);
+        default: break;
+    }
+    return NULL;
+}
+
 /** module manager static descriptor */
 static struct upipe_mgr upipe_ts_encaps_mgr = {
     .refcount = NULL,
     .signature = UPIPE_TS_ENCAPS_SIGNATURE,
+
+    .upipe_command_str = upipe_ts_encaps_command_str,
+    .upipe_event_str = upipe_ts_encaps_event_str,
 
     .upipe_alloc = upipe_ts_encaps_alloc,
     .upipe_input = upipe_ts_encaps_input,

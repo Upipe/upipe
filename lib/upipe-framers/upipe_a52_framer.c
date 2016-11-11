@@ -354,7 +354,7 @@ static bool upipe_a52f_parse_a52(struct upipe *upipe)
     /* frame size */
     upipe_a52f->next_frame_size = next_frame_size;
 
-    uint64_t octetrate = a52_bitrate_tab[a52_get_frmsizecod(header)] / 8;
+    uint64_t octetrate = a52_bitrate_tab[a52_get_frmsizecod(header)] * 1000 / 8;
     memcpy(upipe_a52f->sync_header, header, A52_SYNCINFO_SIZE);
     upipe_a52f->samplerate = samplerate;
 

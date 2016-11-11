@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2012-2015 OpenHeadend S.A.R.L.
+ * Copyright (C) 2012-2016 OpenHeadend S.A.R.L.
  *
  * Authors: Christophe Massiot
  *
@@ -40,6 +40,7 @@
 #include <upipe/upipe_helper_ubuf_mgr.h>
 #include <upipe/upipe_helper_flow_def.h>
 #include <upipe-framers/uref_h264_flow.h>
+#include <upipe-framers/uref_h265_flow.h>
 #include <upipe-framers/uref_mpga_flow.h>
 #include <upipe-ts/upipe_ts_pmt_decoder.h>
 #include <upipe-ts/uref_ts_flow.h>
@@ -60,6 +61,8 @@
 #define MAX_DELAY UCLOCK_FREQ
 /** max retention time for ISO/IEC 14496 streams (ISO/IEC 13818-1 2.4.2.6) */
 #define MAX_DELAY_14496 (UCLOCK_FREQ * 10)
+/** max retention time for HEVC streams (FIXME) */
+#define MAX_DELAY_HEVC (UCLOCK_FREQ * 10)
 /** max retention time for still pictures streams (ISO/IEC 13818-1 2.4.2.6) */
 #define MAX_DELAY_STILL (UCLOCK_FREQ * 60)
 /** max retention time for teletext (ETSI EN 300 472 5.) */
@@ -210,12 +213,37 @@ static void upipe_ts_pmtd_parse_streamtype(struct upipe *upipe,
             UBASE_FATAL(upipe, uref_h264_flow_set_annexb(flow_def))
             break;
 
+        case PMT_STREAMTYPE_VIDEO_HEVC:
+            UBASE_FATAL(upipe, uref_flow_set_def(flow_def, "block.hevc.pic."))
+            UBASE_FATAL(upipe, uref_flow_set_raw_def(flow_def,
+                            "block.mpegts.mpegtspes.hevc.pic."))
+            UBASE_FATAL(upipe, uref_ts_flow_set_max_delay(flow_def,
+                            MAX_DELAY_HEVC))
+            UBASE_FATAL(upipe, uref_h265_flow_set_annexb(flow_def))
+            break;
+
+        case PMT_STREAMTYPE_ATSC_A52:
+            UBASE_FATAL(upipe, uref_flow_set_def(flow_def, "block.ac3.sound."))
+            UBASE_FATAL(upipe, uref_flow_set_raw_def(flow_def,
+                            "block.mpegts.mpegtspes.ac3.sound."))
+            UBASE_FATAL(upipe, uref_ts_flow_set_max_delay(flow_def,
+                            MAX_DELAY))
+            break;
+
         case PMT_STREAMTYPE_SCTE_35:
             UBASE_FATAL(upipe, uref_flow_set_def(flow_def, "void.scte35."))
             UBASE_FATAL(upipe, uref_flow_set_raw_def(flow_def,
                             "block.mpegts.mpegtspsi.mpegtsscte35.void."))
             UBASE_FATAL(upipe, uref_ts_flow_set_max_delay(flow_def,
                             MAX_DELAY_SCTE35))
+            break;
+
+        case PMT_STREAMTYPE_ATSC_A52E:
+            UBASE_FATAL(upipe, uref_flow_set_def(flow_def, "block.eac3.sound."))
+            UBASE_FATAL(upipe, uref_flow_set_raw_def(flow_def,
+                            "block.mpegts.mpegtspes.eac3.sound."))
+            UBASE_FATAL(upipe, uref_ts_flow_set_max_delay(flow_def,
+                            MAX_DELAY))
             break;
 
         default:
@@ -229,7 +257,7 @@ static void upipe_ts_pmtd_parse_streamtype(struct upipe *upipe,
  * @param upipe description structure of the pipe
  * @param flow_def flow definition packet to fill in
  * @param descl pointer to descriptor list
- * @param desclength length of the decriptor list
+ * @param desclength length of the descriptor list
  * @return an error code
  */
 static void upipe_ts_pmtd_parse_descs(struct upipe *upipe,
@@ -348,6 +376,15 @@ static void upipe_ts_pmtd_parse_descs(struct upipe *upipe,
             /* DVB */
             case 0x45: /* VBI data descriptor */
             case 0x46: /* VBI teletext descriptor */
+
+            case 0x50: /* Component descriptor */
+                if ((valid = desc50_validate(desc))) {
+                    UBASE_FATAL(upipe,
+                            uref_ts_flow_set_component_type(flow_def,
+                                desc50_get_component_type(desc)))
+                }
+                break;
+
             case 0x51: /* Mosaic descriptor */
             case 0x52: /* Stream identifier descriptor */
                 break;
@@ -420,6 +457,11 @@ static void upipe_ts_pmtd_parse_descs(struct upipe *upipe,
                                 "block.mpegts.mpegtspes.ac3.sound."))
                     UBASE_FATAL(upipe, uref_ts_flow_set_max_delay(flow_def,
                                     MAX_DELAY))
+                    if (desc6a_get_component_type_flag(desc)) {
+                        UBASE_FATAL(upipe,
+                                uref_ts_flow_set_component_type(flow_def,
+                                    desc6a_get_component_type(desc)))
+                    }
                 }
                 break;
 
@@ -435,6 +477,11 @@ static void upipe_ts_pmtd_parse_descs(struct upipe *upipe,
                                 "block.mpegts.mpegtspes.eac3.sound."))
                     UBASE_FATAL(upipe, uref_ts_flow_set_max_delay(flow_def,
                                     MAX_DELAY))
+                    if (desc7a_get_component_type_flag(desc)) {
+                        UBASE_FATAL(upipe,
+                                uref_ts_flow_set_component_type(flow_def,
+                                    desc7a_get_component_type(desc)))
+                    }
                 }
                 break;
 

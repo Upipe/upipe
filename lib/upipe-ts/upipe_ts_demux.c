@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2013-2015 OpenHeadend S.A.R.L.
+ * Copyright (C) 2013-2016 OpenHeadend S.A.R.L.
  *
  * Authors: Christophe Massiot
  *
@@ -56,6 +56,8 @@
 #include <upipe/upipe_helper_void.h>
 #include <upipe/upipe_helper_uref_mgr.h>
 #include <upipe/upipe_helper_flow.h>
+#include <upipe/upipe_helper_inner.h>
+#include <upipe/upipe_helper_uprobe.h>
 #include <upipe/upipe_helper_bin_input.h>
 #include <upipe/upipe_helper_bin_output.h>
 #include <upipe/upipe_helper_sync.h>
@@ -164,6 +166,8 @@ struct upipe_ts_demux_mgr {
     struct upipe_mgr *mpgvf_mgr;
     /** pointer to h264f manager */
     struct upipe_mgr *h264f_mgr;
+    /** pointer to h265f manager */
+    struct upipe_mgr *h265f_mgr;
     /** pointer to telxf manager */
     struct upipe_mgr *telxf_mgr;
     /** pointer to dvbsubf manager */
@@ -294,6 +298,7 @@ UPIPE_HELPER_VOID(upipe_ts_demux)
 UPIPE_HELPER_OUTPUT(upipe_ts_demux, output, flow_def, output_state,
                     output_request_list)
 UPIPE_HELPER_SYNC(upipe_ts_demux, acquired)
+UPIPE_HELPER_INNER(upipe_ts_demux, input)
 UPIPE_HELPER_BIN_INPUT(upipe_ts_demux, input, input_request_list)
 UPIPE_HELPER_UREF_MGR(upipe_ts_demux, uref_mgr, uref_mgr_request, NULL,
                       upipe_ts_demux_register_output_request,
@@ -436,7 +441,10 @@ UPIPE_HELPER_UPIPE(upipe_ts_demux_output, upipe,
 UPIPE_HELPER_UREFCOUNT(upipe_ts_demux_output, urefcount,
                        upipe_ts_demux_output_no_input)
 UPIPE_HELPER_FLOW(upipe_ts_demux_output, NULL)
-UPIPE_HELPER_BIN_OUTPUT(upipe_ts_demux_output, last_inner_probe, last_inner,
+UPIPE_HELPER_INNER(upipe_ts_demux_output, last_inner)
+UPIPE_HELPER_UPROBE(upipe_ts_demux_output, urefcount_real, last_inner_probe,
+                    NULL)
+UPIPE_HELPER_BIN_OUTPUT(upipe_ts_demux_output, last_inner,
                         output, output_request_list)
 
 UPIPE_HELPER_SUBPIPE(upipe_ts_demux_program, upipe_ts_demux_output, output,
@@ -759,7 +767,7 @@ static int upipe_ts_demux_output_plumber(struct upipe *upipe,
                     UPROBE_LOG_VERBOSE, "mpgaf"));
         if (unlikely(output == NULL))
             return UBASE_ERR_ALLOC;
-        upipe_ts_demux_output_store_last_inner(upipe, output);
+        upipe_ts_demux_output_store_bin_output(upipe, output);
         return UBASE_ERR_NONE;
     }
 
@@ -774,7 +782,7 @@ static int upipe_ts_demux_output_plumber(struct upipe *upipe,
                     UPROBE_LOG_VERBOSE, "a52f"));
         if (unlikely(output == NULL))
             return UBASE_ERR_ALLOC;
-        upipe_ts_demux_output_store_last_inner(upipe, output);
+        upipe_ts_demux_output_store_bin_output(upipe, output);
         return UBASE_ERR_NONE;
     }
 
@@ -789,7 +797,7 @@ static int upipe_ts_demux_output_plumber(struct upipe *upipe,
                     UPROBE_LOG_VERBOSE, "mpgvf"));
         if (unlikely(output == NULL))
             return UBASE_ERR_ALLOC;
-        upipe_ts_demux_output_store_last_inner(upipe, output);
+        upipe_ts_demux_output_store_bin_output(upipe, output);
         return UBASE_ERR_NONE;
     }
 
@@ -803,7 +811,21 @@ static int upipe_ts_demux_output_plumber(struct upipe *upipe,
                     UPROBE_LOG_VERBOSE, "h264f"));
         if (unlikely(output == NULL))
             return UBASE_ERR_ALLOC;
-        upipe_ts_demux_output_store_last_inner(upipe, output);
+        upipe_ts_demux_output_store_bin_output(upipe, output);
+        return UBASE_ERR_NONE;
+    }
+
+    if (!ubase_ncmp(def, "block.hevc.") &&
+        ts_demux_mgr->h265f_mgr != NULL) {
+        /* allocate h265f inner */
+        struct upipe *output =
+            upipe_void_alloc_output(inner, ts_demux_mgr->h265f_mgr,
+                uprobe_pfx_alloc(
+                    uprobe_use(&upipe_ts_demux_output->last_inner_probe),
+                    UPROBE_LOG_VERBOSE, "h265f"));
+        if (unlikely(output == NULL))
+            return UBASE_ERR_ALLOC;
+        upipe_ts_demux_output_store_bin_output(upipe, output);
         return UBASE_ERR_NONE;
     }
 
@@ -817,7 +839,7 @@ static int upipe_ts_demux_output_plumber(struct upipe *upipe,
                     UPROBE_LOG_VERBOSE, "telxf"));
         if (unlikely(output == NULL))
             return UBASE_ERR_ALLOC;
-        upipe_ts_demux_output_store_last_inner(upipe, output);
+        upipe_ts_demux_output_store_bin_output(upipe, output);
         return UBASE_ERR_NONE;
     }
 
@@ -831,7 +853,7 @@ static int upipe_ts_demux_output_plumber(struct upipe *upipe,
                     UPROBE_LOG_VERBOSE, "dvbsubf"));
         if (unlikely(output == NULL))
             return UBASE_ERR_ALLOC;
-        upipe_ts_demux_output_store_last_inner(upipe, output);
+        upipe_ts_demux_output_store_bin_output(upipe, output);
         return UBASE_ERR_NONE;
     }
 
@@ -845,7 +867,7 @@ static int upipe_ts_demux_output_plumber(struct upipe *upipe,
                     UPROBE_LOG_VERBOSE, "opusf"));
         if (unlikely(output == NULL))
             return UBASE_ERR_ALLOC;
-        upipe_ts_demux_output_store_last_inner(upipe, output);
+        upipe_ts_demux_output_store_bin_output(upipe, output);
         return UBASE_ERR_NONE;
     }
 
@@ -872,7 +894,7 @@ static int upipe_ts_demux_output_plumber(struct upipe *upipe,
                 UPROBE_LOG_VERBOSE, "idem"));
     if (unlikely(output == NULL))
         return UBASE_ERR_ALLOC;
-    upipe_ts_demux_output_store_last_inner(upipe, output);
+    upipe_ts_demux_output_store_bin_output(upipe, output);
     return UBASE_ERR_NONE;
 }
 
@@ -927,8 +949,8 @@ static struct upipe *upipe_ts_demux_output_alloc(struct upipe_mgr *mgr,
         upipe_ts_demux_output_from_upipe(upipe);
     upipe_ts_demux_output_init_urefcount(upipe);
     urefcount_init(upipe_ts_demux_output_to_urefcount_real(upipe_ts_demux_output), upipe_ts_demux_output_free);
-    upipe_ts_demux_output_init_bin_output(upipe,
-            upipe_ts_demux_output_to_urefcount_real(upipe_ts_demux_output));
+    upipe_ts_demux_output_init_last_inner_probe(upipe);
+    upipe_ts_demux_output_init_bin_output(upipe);
     upipe_ts_demux_output->flow_def_input = flow_def;
     upipe_ts_demux_output->pcr = false;
     upipe_ts_demux_output->split_output = NULL;
@@ -1064,6 +1086,7 @@ static void upipe_ts_demux_output_free(struct urefcount *urefcount_real)
 
     upipe_throw_dead(upipe);
     uref_free(upipe_ts_demux_output->flow_def_input);
+    upipe_ts_demux_output_clean_last_inner_probe(upipe);
     uprobe_clean(&upipe_ts_demux_output->probe);
     urefcount_clean(urefcount_real);
     upipe_ts_demux_output_clean_urefcount(upipe);
@@ -1103,6 +1126,9 @@ static void upipe_ts_demux_program_init_output_mgr(struct upipe *upipe)
     struct upipe_mgr *output_mgr = &program->output_mgr;
     output_mgr->refcount = upipe_ts_demux_program_to_urefcount_real(program);
     output_mgr->signature = UPIPE_TS_DEMUX_OUTPUT_SIGNATURE;
+    output_mgr->upipe_err_str = NULL;
+    output_mgr->upipe_command_str = NULL;
+    output_mgr->upipe_event_str = NULL;
     output_mgr->upipe_alloc = upipe_ts_demux_output_alloc;
     output_mgr->upipe_input = NULL;
     output_mgr->upipe_control = upipe_ts_demux_output_control;
@@ -1154,7 +1180,9 @@ static void upipe_ts_demux_program_build_flow_def(struct upipe *upipe)
 
     upipe_ts_demux_program_store_flow_def(upipe, flow_def);
     /* Force sending flow def */
-    upipe_ts_demux_program_output(upipe, NULL, NULL);
+    struct upipe_ts_demux *demux = upipe_ts_demux_from_program_mgr(upipe->mgr);
+    struct uref *uref = uref_alloc(demux->uref_mgr);
+    upipe_ts_demux_program_output(upipe, uref, NULL);
 }
 
 /** @internal @This catches new_flow_def events coming from pmtd inner pipe.
@@ -1484,7 +1512,8 @@ static void upipe_ts_demux_program_check_pcr(struct upipe *upipe)
     struct upipe_ts_demux *demux = upipe_ts_demux_from_program_mgr(upipe->mgr);
     struct upipe_ts_demux_mgr *ts_demux_mgr =
         upipe_ts_demux_mgr_from_upipe_mgr(upipe_ts_demux_to_upipe(demux)->mgr);
-    bool found = upipe_ts_demux_program->pcr_pid == 8191;
+    bool found = upipe_ts_demux_program->pcr_pid == 8191 ||
+                 ulist_empty(&upipe_ts_demux_program->outputs);
 
     struct uchain *uchain;
     ulist_foreach (&upipe_ts_demux_program->outputs, uchain) {
@@ -1787,6 +1816,9 @@ static void upipe_ts_demux_init_program_mgr(struct upipe *upipe)
     struct upipe_mgr *program_mgr = &upipe_ts_demux->program_mgr;
     program_mgr->refcount = upipe_ts_demux_to_urefcount_real(upipe_ts_demux);
     program_mgr->signature = UPIPE_TS_DEMUX_PROGRAM_SIGNATURE;
+    program_mgr->upipe_err_str = NULL;
+    program_mgr->upipe_command_str = NULL;
+    program_mgr->upipe_event_str = NULL;
     program_mgr->upipe_alloc = upipe_ts_demux_program_alloc;
     program_mgr->upipe_input = NULL;
     program_mgr->upipe_control = upipe_ts_demux_program_control;
@@ -2258,7 +2290,8 @@ static void upipe_ts_demux_build_flow_def(struct upipe *upipe)
 
     upipe_ts_demux_store_flow_def(upipe, flow_def);
     /* Force sending flow def */
-    upipe_ts_demux_output(upipe, NULL, NULL);
+    struct uref *uref = uref_alloc(upipe_ts_demux->uref_mgr);
+    upipe_ts_demux_output(upipe, uref, NULL);
 }
 
 /** @internal @This changes the current conformance, and start necessary
@@ -2719,11 +2752,11 @@ static int upipe_ts_demux_set_flow_def(struct upipe *upipe,
             upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
             return UBASE_ERR_ALLOC;
         }
-        upipe_ts_demux_store_first_inner(upipe, input);
+        upipe_ts_demux_store_bin_input(upipe, input);
         upipe_set_output(input, upipe_ts_demux->setrap);
 
     } else {
-        upipe_ts_demux_store_first_inner(upipe,
+        upipe_ts_demux_store_bin_input(upipe,
                                          upipe_use(upipe_ts_demux->setrap));
         upipe_ts_demux_sync_acquired(upipe);
     }
@@ -2900,7 +2933,7 @@ static void upipe_ts_demux_no_input(struct upipe *upipe)
 {
     struct upipe_ts_demux *upipe_ts_demux = upipe_ts_demux_from_upipe(upipe);
     /* release the packet blocked in ts_sync */
-    upipe_ts_demux_store_first_inner(upipe, NULL);
+    upipe_ts_demux_store_bin_input(upipe, NULL);
 
     upipe_ts_demux_throw_sub_programs(upipe, UPROBE_SOURCE_END);
 
@@ -2995,6 +3028,7 @@ static void upipe_ts_demux_mgr_free(struct urefcount *urefcount)
     upipe_mgr_release(ts_demux_mgr->a52f_mgr);
     upipe_mgr_release(ts_demux_mgr->mpgvf_mgr);
     upipe_mgr_release(ts_demux_mgr->h264f_mgr);
+    upipe_mgr_release(ts_demux_mgr->h265f_mgr);
     upipe_mgr_release(ts_demux_mgr->telxf_mgr);
     upipe_mgr_release(ts_demux_mgr->dvbsubf_mgr);
     upipe_mgr_release(ts_demux_mgr->opusf_mgr);
@@ -3058,6 +3092,7 @@ static int upipe_ts_demux_mgr_control(struct upipe_mgr *mgr,
         GET_SET_MGR(a52f, A52F)
         GET_SET_MGR(mpgvf, MPGVF)
         GET_SET_MGR(h264f, H264F)
+        GET_SET_MGR(h265f, H265F)
         GET_SET_MGR(telxf, TELXF)
         GET_SET_MGR(dvbsubf, DVBSUBF)
         GET_SET_MGR(opusf, OPUSF)
@@ -3103,6 +3138,7 @@ struct upipe_mgr *upipe_ts_demux_mgr_alloc(void)
     ts_demux_mgr->a52f_mgr = NULL;
     ts_demux_mgr->mpgvf_mgr = NULL;
     ts_demux_mgr->h264f_mgr = NULL;
+    ts_demux_mgr->h265f_mgr = NULL;
     ts_demux_mgr->telxf_mgr = NULL;
     ts_demux_mgr->dvbsubf_mgr = NULL;
     ts_demux_mgr->opusf_mgr = NULL;

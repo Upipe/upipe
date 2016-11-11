@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2013-2014 OpenHeadend S.A.R.L.
+ * Copyright (C) 2013-2016 OpenHeadend S.A.R.L.
  *
  * Authors: Christophe Massiot
  *
@@ -151,36 +151,46 @@ static bool uprobe_selflow_check(struct uprobe *uprobe, uint64_t flow_id,
 
     /* comma-separated list of subs */
     const char *flows = uprobe_selflow->flows;
-    uint64_t found;
-    char attr[strlen(flows) + 1];
-    char value[strlen(flows) + 1];
-    int consumed;
-    int tmp;
-    while ((tmp = sscanf(flows, "%"PRIu64",%n", &found, &consumed)) >= 1 ||
-           sscanf(flows, "%[a-zA-Z]=%[^,],%n", attr, value,
-                  &consumed) >= 2) {
-        flows += consumed;
-        if (tmp > 0) {
+
+    while (*flows) {
+        int consumed;
+        uint64_t found;
+        if (sscanf(flows, "%"PRIu64",%n", &found, &consumed) >= 1 &&
+            consumed > 0) {
+            flows += consumed;
             if (found == flow_id)
                 return true;
-        } else if (!strcmp(attr, "lang")) {
-            uint8_t languages;
-            if (ubase_check(uref_flow_get_languages(flow_def, &languages)) &&
-                languages) {
-                for (uint8_t j = 0; j < languages; j++) {
-                    const char *lang;
-                    if (ubase_check(uref_flow_get_language(flow_def, &lang,
-                                                           j)) &&
-                        !strcmp(lang, value))
-                        return true;
-                }
-            }
-        } else if (!strcmp(attr, "name")) {
-            const char *name;
-            if (ubase_check(uref_program_flow_get_name(flow_def, &name)) &&
-                !strcmp(name, value))
-                 return true;
+            continue;
         }
+
+        char attr[strlen(flows) + 1];
+        char value[strlen(flows) + 1];
+        if (sscanf(flows, "%[a-zA-Z]=%[^,],%n", attr, value, &consumed) >= 2 &&
+            consumed > 0) {
+            flows += consumed;
+            if (!strcmp(attr, "lang")) {
+                uint8_t languages;
+                if (ubase_check(uref_flow_get_languages(flow_def, &languages))
+                        && languages) {
+                    for (uint8_t j = 0; j < languages; j++) {
+                        const char *lang;
+                        if (ubase_check(uref_flow_get_language(flow_def, &lang,
+                                                               j)) &&
+                            !strcmp(lang, value))
+                            return true;
+                    }
+                }
+            } else if (!strcmp(attr, "name")) {
+                const char *name;
+                if (ubase_check(uref_program_flow_get_name(flow_def, &name)) &&
+                    !strcmp(name, value))
+                     return true;
+            }
+            continue;
+        }
+
+        uprobe_warn_va(uprobe, NULL, "malformed flow (%s)", flows);
+        break;
     }
     return false;
 }
@@ -188,17 +198,35 @@ static bool uprobe_selflow_check(struct uprobe *uprobe, uint64_t flow_id,
 /** @internal @This sets the flows to select.
  *
  * @param uprobe pointer to probe
- * @param flows comma-separated list of flows to select, terminated by a
- * comma, or "auto" to automatically select the first flow, or "all"
+ * @param flows comma-separated list of flows to select, or "auto" to
+ * automatically select the first flow, or "all"
  * @return an error code
  */
 static int uprobe_selflow_set_internal(struct uprobe *uprobe, const char *flows)
 {
     struct uprobe_selflow *uprobe_selflow = uprobe_selflow_from_uprobe(uprobe);
     free(uprobe_selflow->flows);
-    uprobe_selflow->flows = strdup(flows);
-    if (unlikely(uprobe_selflow->flows == NULL))
-        return UBASE_ERR_ALLOC;
+    size_t flows_len = strlen(flows);
+    if (!flows_len) {
+        uprobe_warn(uprobe, NULL, "invalid flows");
+        uprobe_selflow->flows = strdup("auto");
+        if (unlikely(uprobe_selflow->flows == NULL))
+            return UBASE_ERR_ALLOC;
+    } else if (!strcmp(flows, "all") || !strcmp(flows, "auto")) {
+        uprobe_selflow->flows = strdup(flows);
+        if (unlikely(uprobe_selflow->flows == NULL))
+            return UBASE_ERR_ALLOC;
+    } else {
+        uprobe_selflow->flows = malloc(flows_len + sizeof(","));
+        if (unlikely(uprobe_selflow->flows == NULL))
+            return UBASE_ERR_ALLOC;
+        memcpy(uprobe_selflow->flows, flows, flows_len);
+        if (uprobe_selflow->flows[flows_len - 1] != ',') {
+            uprobe_selflow->flows[flows_len] = ',';
+            uprobe_selflow->flows[flows_len + 1] = '\0';
+        } else
+            uprobe_selflow->flows[flows_len] = '\0';
+    }
 
     int error = UBASE_ERR_NONE;
     struct uchain *uchain;
@@ -473,8 +501,8 @@ static void uprobe_selflow_free(struct urefcount *urefcount)
  * @param subprobe probe to set on flow subpipes
  * @param type type of flows to filter
  * @param flows comma-separated list of flows or attribute/value pairs
- * (lang=eng or name=ABC) to select, terminated by a comma, or "auto" to
- * automatically select the first flow, or "all"
+ * (lang=eng or name=ABC) to select, or "auto" to automatically select the
+ * first flow, or "all"
  * @return pointer to uprobe, or NULL in case of error
  */
 struct uprobe *uprobe_selflow_alloc(struct uprobe *next,
@@ -517,8 +545,8 @@ void uprobe_selflow_get(struct uprobe *uprobe, const char **flows_p)
  *
  * @param uprobe pointer to probe
  * @param flows comma-separated list of flows or attribute/value pairs
- * (lang=eng or name=ABC) to select, terminated by a comma, or "auto" to
- * automatically select the first flow, or "all"
+ * (lang=eng or name=ABC) to select, or "auto" to automatically select the
+ * first flow, or "all"
  * @return an error code
  */
 int uprobe_selflow_set(struct uprobe *uprobe, const char *flows)
@@ -530,6 +558,23 @@ int uprobe_selflow_set(struct uprobe *uprobe, const char *flows)
         return uprobe_selflow_set_internal(uprobe, flows);
     else
         return uprobe_selflow_check_auto(uprobe);
+}
+
+/** @This allocates a new uprobe_selflow structure, with printf-style syntax.
+ *
+ * @param next next probe to test if this one doesn't catch the event
+ * @param subprobe probe to set on flow subpipes
+ * @param type type of flows to filter
+ * @param format printf-style format for the flows, followed by optional
+ * arguments
+ * @return pointer to uprobe, or NULL in case of error
+ */
+struct uprobe *uprobe_selflow_alloc_va(struct uprobe *next,
+                                       struct uprobe *subprobe,
+                                       enum uprobe_selflow_type type,
+                                       const char *format, ...)
+{
+    UBASE_VARARG(uprobe_selflow_alloc(next, subprobe, type, string))
 }
 
 /** @This changes the flows selected by this probe, with printf-style

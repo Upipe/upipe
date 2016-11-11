@@ -111,6 +111,17 @@ static inline void uref_clock_delete_date_##dv(struct uref *uref)           \
 {                                                                           \
     uref->date_##dv = UINT64_MAX;                                           \
     uref->flags &= ~(UINT64_C(0x3) << UREF_FLAG_DATE_##DV##_SHIFT);         \
+}                                                                           \
+/** @This adds the given delay to the dv date.                              \
+ *                                                                          \
+ * @param uref uref structure                                               \
+ * @param delay delay to add in #UCLOCK_FREQ units                          \
+ */                                                                         \
+static inline void uref_clock_add_date_##dv(struct uref *uref,              \
+                                            int64_t delay)                  \
+{                                                                           \
+    if (uref->date_##dv != UINT64_MAX)                                      \
+        uref->date_##dv += delay;                                           \
 }
 
 UREF_CLOCK_TEMPLATE(sys, SYS)

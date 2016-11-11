@@ -1,7 +1,8 @@
 /*
- * Copyright (C) 2014 OpenHeadend S.A.R.L.
+ * Copyright (C) 2014-2016 OpenHeadend S.A.R.L.
  *
  * Authors: Benjamin Cohen
+ *          Christophe Massiot
  *
  * Permission is hereby granted, free of charge, to any person obtaining
  * a copy of this software and associated documentation files (the
@@ -58,6 +59,26 @@
 
 static int counter = 0;
 
+static void fill_in(struct ubuf *ubuf)
+{
+    size_t size;
+    uint8_t sample_size;
+    ubase_assert(ubuf_sound_size(ubuf, &size, &sample_size));
+    int octets = size * sample_size;
+
+    const char *channel = NULL;
+    while (ubase_check(ubuf_sound_plane_iterate(ubuf, &channel)) &&
+           channel != NULL) {
+        uint8_t *buffer;
+        ubase_assert(ubuf_sound_plane_write_uint8_t(ubuf, channel, 0, -1,
+                                                    &buffer));
+
+        for (int x = 0; x < octets; x++)
+            buffer[x] = (uint8_t)channel[0] + x;
+        ubase_assert(ubuf_sound_plane_unmap(ubuf, channel, 0, -1));
+    }
+}
+
 /** definition of our uprobe */
 static int catch(struct uprobe *uprobe, struct upipe *upipe,
                  int event, va_list args)
@@ -91,6 +112,41 @@ static void test_input(struct upipe *upipe, struct uref *uref,
                        struct upump **upump_p)
 {
     assert(uref != NULL);
+    const uint8_t *r;
+    switch (counter) {
+        case 0:
+        case 1: /* this assumes a certain ordering of subpipes */
+            ubase_assert(uref_sound_plane_read_uint8_t(uref, "r", 0, -1, &r));
+            assert(r[0] == 'l' + 2);
+            assert(r[1] == 'l' + 3);
+            assert(r[2] == 'l' + 10);
+            ubase_assert(uref_sound_plane_unmap(uref, "r", 0, -1));
+            break;
+        case 2:
+            ubase_assert(uref_sound_plane_read_uint8_t(uref, "l", 0, -1, &r));
+            assert(r[0] == 'l' + 0);
+            assert(r[1] == 'l' + 1);
+            assert(r[2] == 'l' + 8);
+            ubase_assert(uref_sound_plane_unmap(uref, "l", 0, -1));
+            ubase_assert(uref_sound_plane_read_uint8_t(uref, "r", 0, -1, &r));
+            assert(r[0] == 'l' + 2);
+            assert(r[1] == 'l' + 3);
+            assert(r[2] == 'l' + 10);
+            ubase_assert(uref_sound_plane_unmap(uref, "r", 0, -1));
+            break;
+        case 3:
+            ubase_assert(uref_sound_plane_read_uint8_t(uref, "lr", 0, -1, &r));
+            assert(r[0] == 'l' + 0);
+            assert(r[1] == 'l' + 1);
+            assert(r[2] == 'l' + 2);
+            assert(r[3] == 'l' + 3);
+            assert(r[4] == 'l' + 8);
+            assert(r[6] == 'l' + 10);
+            ubase_assert(uref_sound_plane_unmap(uref, "lr", 0, -1));
+            break;
+        default:
+            assert(0);
+    }
     counter++;
     uref_free(uref);
 }
@@ -143,7 +199,7 @@ int main(int argc, char *argv[])
     struct uref *flow;
     struct uprobe uprobe;
     uprobe_init(&uprobe, catch, NULL);
-    struct uprobe *logger = uprobe_stdio_alloc(&uprobe, stdout,
+    struct uprobe *logger = uprobe_stdio_alloc(&uprobe, stderr,
                                                UPROBE_LOG_LEVEL);
     assert(logger != NULL);
     logger = uprobe_ubuf_mem_alloc(logger, umem_mgr, UBUF_POOL_DEPTH,
@@ -159,8 +215,8 @@ int main(int argc, char *argv[])
     assert(upipe_sink1 != NULL);
 
     /* input flow definition */
-    flow = uref_sound_flow_alloc_def(uref_mgr, "s16.", 2, 4);
-    ubase_assert(uref_sound_flow_add_plane(flow, "lr"));
+    flow = uref_sound_flow_alloc_def(uref_mgr, "s16.", 4, 8);
+    ubase_assert(uref_sound_flow_add_plane(flow, "lrLR"));
     assert(flow != NULL);
 
     /* input sound ubuf manager */
@@ -180,11 +236,8 @@ int main(int argc, char *argv[])
 
     /* split subpipe */
     flow = uref_sound_flow_alloc_def(uref_mgr, "", 1, 0);
-    ubase_assert(uref_sound_flow_add_plane(flow, "l"));
-    ubase_assert(uref_audio_split_set_orig_index(flow, 0, "l"));
-    uint8_t idx;
-    ubase_assert(uref_audio_split_get_orig_index(flow, &idx, "l"));
-    assert(idx == 0);
+    ubase_assert(uref_sound_flow_add_plane(flow, "r"));
+    ubase_assert(uref_audio_split_set_bitfield(flow, 0x2));
     struct upipe *upipe_audio_split_output0 = upipe_flow_alloc_sub(upipe_audio_split,
             uprobe_pfx_alloc(uprobe_use(logger), UPROBE_LOG_LEVEL,
                              "split output 0"), flow);
@@ -195,32 +248,56 @@ int main(int argc, char *argv[])
     /* feed samples */
     uref = uref_sound_alloc(uref_mgr, sound_mgr, SAMPLES);
     assert(uref != NULL);
+    fill_in(uref->ubuf);
     upipe_input(upipe_audio_split, uref, NULL);
     assert(counter == 1);
-    counter = 0;
 
     /* split subpipe */
-    flow = uref_alloc(uref_mgr);
-    uref_flow_set_def(flow, "sound.");
+    flow = uref_sound_flow_alloc_def(uref_mgr, "", 2, 0);
+    ubase_assert(uref_sound_flow_add_plane(flow, "l"));
+    ubase_assert(uref_sound_flow_add_plane(flow, "r"));
+    ubase_assert(uref_audio_split_set_bitfield(flow, 0x3));
     struct upipe *upipe_audio_split_output1 = upipe_flow_alloc_sub(upipe_audio_split,
             uprobe_pfx_alloc(uprobe_use(logger), UPROBE_LOG_LEVEL,
                              "split output 1"), flow);
     uref_free(flow);
     assert(upipe_audio_split_output1 != NULL);
     ubase_assert(upipe_set_output(upipe_audio_split_output1, upipe_sink1));
-    assert(counter == 0);
+    assert(counter == 1);
 
     /* feed samples again */
     uref = uref_sound_alloc(uref_mgr, sound_mgr, SAMPLES);
     assert(uref != NULL);
+    fill_in(uref->ubuf);
     upipe_input(upipe_audio_split, uref, NULL);
-    assert(counter == 2);
+    assert(counter == 3);
+
+    upipe_release(upipe_audio_split_output0);
+    upipe_release(upipe_audio_split_output1);
+
+    /* split subpipe */
+    flow = uref_sound_flow_alloc_def(uref_mgr, "", 2, 0);
+    ubase_assert(uref_sound_flow_add_plane(flow, "lr"));
+    ubase_assert(uref_audio_split_set_bitfield(flow, 0x3));
+    upipe_audio_split_output0 = upipe_flow_alloc_sub(upipe_audio_split,
+            uprobe_pfx_alloc(uprobe_use(logger), UPROBE_LOG_LEVEL,
+                             "split output 0"), flow);
+    uref_free(flow);
+    assert(upipe_audio_split_output0 != NULL);
+    ubase_assert(upipe_set_output(upipe_audio_split_output0, upipe_sink0));
+
+    /* feed samples again */
+    uref = uref_sound_alloc(uref_mgr, sound_mgr, SAMPLES);
+    assert(uref != NULL);
+    fill_in(uref->ubuf);
+    upipe_input(upipe_audio_split, uref, NULL);
+    assert(counter == 4);
+
+    upipe_release(upipe_audio_split_output0);
 
     /* clean */
     ubuf_mgr_release(sound_mgr);
     upipe_release(upipe_audio_split);
-    upipe_release(upipe_audio_split_output0);
-    upipe_release(upipe_audio_split_output1);
     upipe_mgr_release(upipe_audio_split_mgr); // nop
 
     test_free(upipe_sink0);

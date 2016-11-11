@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2014-2015 OpenHeadend S.A.R.L.
+ * Copyright (C) 2014-2016 OpenHeadend S.A.R.L.
  *
  * Authors: Benjamin Cohen
  *
@@ -363,8 +363,9 @@ static int upipe_blksrc_set_flow_def(struct upipe *upipe, struct uref *flow_def)
     } else {
         uref_pic_flow_delete_sar(flow_def_dup);
     }
-    if (likely(ubase_check(uref_pic_flow_get_overscan(flow_def)))) {
-        uref_pic_flow_set_overscan(flow_def_dup);
+    bool overscan;
+    if (likely(ubase_check(uref_pic_flow_get_overscan(flow_def, &overscan)))) {
+        uref_pic_flow_set_overscan(flow_def_dup, overscan);
     } else {
         uref_pic_flow_delete_overscan(flow_def_dup);
     }
@@ -492,7 +493,7 @@ static struct upipe *upipe_blksrc_alloc(struct upipe_mgr *mgr,
             upipe_blksrc_free_flow(upipe);
             return NULL;
         }
-        upipe_blksrc->interval = UCLOCK_FREQ * fps.den / fps.num;
+        upipe_blksrc->interval = (uint64_t)UCLOCK_FREQ * fps.den / fps.num;
         upipe_blksrc->type = UPIPE_BLKSRC_TYPE_PIC;
     } else if (!ubase_ncmp(def, "sound.")) {
         uint8_t planes, ssize, channels;

@@ -114,9 +114,9 @@ struct upipe_sws_thumbs {
     struct picsize *thumbnum;
 
     /** input pixel format */
-    enum PixelFormat input_pix_fmt;
+    enum AVPixelFormat input_pix_fmt;
     /** requested output pixel format */
-    enum PixelFormat output_pix_fmt;
+    enum AVPixelFormat output_pix_fmt;
     /** input chroma map */
     const char *input_chroma_map[UPIPE_AV_MAX_PLANES];
     /** output chroma map */
@@ -376,8 +376,8 @@ static void upipe_sws_thumbs_input(struct upipe *upipe, struct uref *uref,
  * @param vsize vertical size
  * @return an error code
  */
-static bool _upipe_sws_thumbs_set_size(struct upipe *upipe,
-                                       int hsize, int vsize, int cols, int rows)
+static int _upipe_sws_thumbs_set_size(struct upipe *upipe,
+                                      int hsize, int vsize, int cols, int rows)
 {
     struct upipe_sws_thumbs *upipe_sws_thumbs = upipe_sws_thumbs_from_upipe(upipe);
     if (unlikely(hsize <= 0 || vsize <= 0 || cols <= 0 || rows <= 0)) {

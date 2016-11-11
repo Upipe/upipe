@@ -46,4 +46,35 @@
 
   @end section
 
+  @section T {Migration from Upipe 0.4 to 0.5}
+
+    Upipe 0.5 features only minor changes to the API.
+
+    @section {Application migration}
+
+      There are only a few modifications to migrate applications to Upipe 0.5:
+
+      @list
+
+        @item The deprecated uprobe_output and uprobe_filter_suggest have been removed.
+
+        @item The @ref upipe_pthread_xfer_mgr_alloc call now has yet another extra argument, allowing to pass an opaque to the thread start call-back.
+
+      @end list
+
+    @end section
+    @section {Pipe migration}
+
+      There are quite a few modifications to migrate pipes to Upipe 0.5:
+
+      @list
+
+        @item An additional @ref #UPIPE_HELPER_INNER helper allows to simplify the encapsulation of inner pipes, and @ref #UPIPE_HELPER_UPROBE simplifies the encapsulation of inner probes. As a result, The @ref #UPIPE_HELPER_BIN_INPUT and @ref #UPIPE_HELPER_BIN_OUTPUT helpers have been modified.
+
+      @end list
+
+    @end section
+
+  @end section
+
 @end section

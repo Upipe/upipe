@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2012-2015 OpenHeadend S.A.R.L.
+ * Copyright (C) 2012-2016 OpenHeadend S.A.R.L.
  *
  * Authors: Christophe Massiot
  *
@@ -50,13 +50,13 @@ UREF_ATTR_SMALL_UNSIGNED(pic_flow, macropixel, "p.macropixel",
         number of pixels in a macropixel)
 UREF_ATTR_SMALL_UNSIGNED(pic_flow, planes, "p.planes",
         number of planes)
-UREF_ATTR_SMALL_UNSIGNED_VA(pic_flow, hsubsampling, "p.hsub[%"PRIu8"]",
+UREF_ATTR_SMALL_UNSIGNED_VA(pic_flow, hsubsampling, "p.hsub[%" PRIu8"]",
         horizontal subsampling, uint8_t plane, plane)
-UREF_ATTR_SMALL_UNSIGNED_VA(pic_flow, vsubsampling, "p.vsub[%"PRIu8"]",
+UREF_ATTR_SMALL_UNSIGNED_VA(pic_flow, vsubsampling, "p.vsub[%" PRIu8"]",
         vertical subsampling, uint8_t plane, plane)
-UREF_ATTR_SMALL_UNSIGNED_VA(pic_flow, macropixel_size, "p.macropix[%"PRIu8"]",
+UREF_ATTR_SMALL_UNSIGNED_VA(pic_flow, macropixel_size, "p.macropix[%" PRIu8"]",
         size of a compound, uint8_t plane, plane)
-UREF_ATTR_STRING_VA(pic_flow, chroma, "p.chroma[%"PRIu8"]",
+UREF_ATTR_STRING_VA(pic_flow, chroma, "p.chroma[%" PRIu8"]",
         chroma type, uint8_t plane, plane)
 
 UREF_ATTR_RATIONAL(pic_flow, fps, "p.fps", frames per second)
@@ -73,7 +73,7 @@ UREF_ATTR_INT(pic_flow, align_hmoffset, "p.align_hmoffset",
         horizontal offset of the aligned macropixel)
 
 UREF_ATTR_RATIONAL_SH(pic_flow, sar, UDICT_TYPE_PIC_SAR, sample aspect ratio)
-UREF_ATTR_VOID_SH(pic_flow, overscan, UDICT_TYPE_PIC_OVERSCAN, overscan)
+UREF_ATTR_BOOL_SH(pic_flow, overscan, UDICT_TYPE_PIC_OVERSCAN, overscan)
 UREF_ATTR_RATIONAL(pic_flow, dar, "p.dar", display aspect ratio)
 UREF_ATTR_UNSIGNED_SH(pic_flow, hsize, UDICT_TYPE_PIC_HSIZE, horizontal size)
 UREF_ATTR_UNSIGNED_SH(pic_flow, vsize, UDICT_TYPE_PIC_VSIZE, vertical size)
@@ -92,12 +92,15 @@ UREF_ATTR_STRING_SH(pic_flow, transfer_characteristics,
 UREF_ATTR_STRING_SH(pic_flow, matrix_coefficients,
         UDICT_TYPE_PIC_MATRIX_COEFFICIENTS, matrix coefficients)
 
+/* SMPTE-2016 (AFD) */
+UREF_ATTR_SMALL_UNSIGNED(pic_flow, afd, "p.afd", Active Format Description)
+UREF_ATTR_OPAQUE(pic_flow, bar, "p.bar", bar data)
+
 /** @This allocates a control packet to define a new picture flow. For each
  * plane, uref_pic_flow_add_plane() has to be called afterwards.
  *
  * @param mgr uref management structure
  * @param macropixel number of pixels in a macropixel
- * @param planes number of planes
  * @return pointer to uref control packet, or NULL in case of error
  */
 static inline struct uref *uref_pic_flow_alloc_def(struct uref_mgr *mgr,
@@ -311,7 +314,8 @@ static inline int uref_pic_flow_infer_sar(struct uref *uref,
     uint64_t width, height;
     UBASE_RETURN(uref_pic_flow_get_hsize(uref, &width))
     UBASE_RETURN(uref_pic_flow_get_vsize(uref, &height))
-    bool overscan = ubase_check(uref_pic_flow_get_overscan(uref));
+    bool overscan = false;
+    uref_pic_flow_get_overscan(uref, &overscan);
 
     struct urational sar;
     sar.num = height * dar.num;
@@ -369,8 +373,10 @@ static inline int uref_pic_flow_infer_dar(struct uref *uref,
     UBASE_RETURN(uref_pic_flow_get_vsize(uref, &height))
     struct urational sar;
     UBASE_RETURN(uref_pic_flow_get_sar(uref, &sar))
+    bool overscan = false;
+    uref_pic_flow_get_overscan(uref, &overscan);
 
-    if (ubase_check(uref_pic_flow_get_overscan(uref))) {
+    if (overscan) {
         if ((width == 720 && height == 576 &&
              sar.num == 12 && sar.den == 11) ||
             (width == 720 && height == 480 &&

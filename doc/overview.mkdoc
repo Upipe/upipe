@@ -189,6 +189,8 @@
         @item @ref #UPIPE_HELPER_SUBPIPE @item helper for split pipes and join pipes to manage their subpipes
         @item @ref #UPIPE_HELPER_SYNC @item helper for pipes that wish to tell when the signal is acquired or lost
         @item @ref #UPIPE_HELPER_ICONV @item helper for pipes using the biTStream library and needing to convert strings
+        @item @ref #UPIPE_HELPER_INNER @item helper for pipes using inner pipes
+        @item @ref #UPIPE_HELPER_UPROBE @item helper for pipes using inner probes
         @item @ref #UPIPE_HELPER_BIN_INPUT @item helper for bin pipes (that incorporate a sub-pipeline of several pipes) dealing with the input of the bin
         @item @ref #UPIPE_HELPER_BIN_OUTPUT @item helper for bin pipes (that incorporate a sub-pipeline of several pipes) dealing with the output of the bin
         @item @ref #UPROBE_HELPER_UPROBE @item very basic helper providing the @tt {uprobe_foo_from_uprobe} and @tt {uprobe_foo_to_uprobe} functions on which most helpers rely
@@ -263,11 +265,11 @@
 
     @end section
 
-    @section {Structure dependancies}
+    @section {Structure dependencies}
 
-    The following graph depicts dependancy relationships between structures (dashed lines are optional):
+    The following graph depicts dependency relationships between structures (dashed lines are optional):
 
-    @image dependancies.png
+    @image dependencies.png
 
     @end section
 
@@ -281,7 +283,7 @@
 
     The @ref upump_mgr implementations are supplied by dedicated, API-specific libraries such as libupump-ev. Finally, @ref upipe_mgr managers allow to create the pipes themselves and are either provided by the libupipe-modules library for standard pipes, or by third-party libraries.
 
-    To instanciate managers it is necessary to link with some libraries; however there is no dependancy associated with the use of the children structures @ref ubuf, @ref uref and @ref upump, as all code is either provided by inline functions or function pointers. Libraries providing implementations of @ref upipe_mgr and @ref upipe usually do not depend on libupipe.
+    To instanciate managers it is necessary to link with some libraries; however there is no dependency associated with the use of the children structures @ref ubuf, @ref uref and @ref upump, as all code is either provided by inline functions or function pointers. Libraries providing implementations of @ref upipe_mgr and @ref upipe usually do not depend on libupipe.
 
     Upon initialization, a new pipe may be passed the managers for its @ref uref, @ref ubuf and @ref upump structures, if it requires to create them. If it has no need for a manager (for instance it just changes an attribute to all uref structures passing by), then it need not be passed.
 
@@ -317,7 +319,7 @@
 
       @item date variation @item scope @item description
 
-      @item sys @item whole stream @item Uses the same scale as @ref uclock_now. The date is represented in system time. On live streams, incoming packets should be stamped with this clock, and outgoing packets (for presentation or streaming) should be scheduled according to it. A fictious system time may be necessary even for some file to file conversion, as it is the only clock that is stream-wide.
+      @item sys @item whole stream @item Uses the same scale as @ref uclock_now. The date is represented in system time. On live streams, incoming packets should be stamped with this clock, and outgoing packets (for presentation or streaming) should be scheduled according to it. A fictitious system time may be necessary even for some file to file conversion, as it is the only clock that is stream-wide.
 
       @item orig @item program @item Carries the dates coded in the incoming stream, with the same origin, scaled to 27 MHz (if necessary). Its only use is for remultiplexing a stream with the exact same timestamps. A demux should typically retrieve this value.
 
@@ -367,7 +369,7 @@
       @item A worker manager is created using the transfer manager. It allows to transfer whole subpipelines to the thread. You must choose the correct type of worker, whether the subpipeline is a source (@ref upipe_wsrc_mgr_alloc), a sink (@ref upipe_wsink_mgr_alloc) or a linear subpipeline (@ref upipe_wlin_mgr_alloc). This controls which queues will be set up for the input and/or output of the subpipeline.
       @item The pipes that are to be transferred to the subpipeline are created normally in the main thread. However, some pipes may request a upump manager and start working immediately, therefore pumps would be created with the wrong upump manager. To avoid that, it is necessary to freeze the upump manager of the main thread by calling @ref uprobe_throw on the probe that delivers upump managers (for instance @ref uprobe_pthread_upump_mgr_alloc) with the event @ref UPROBE_FREEZE_UPUMP_MGR.
       @item a worker pipe is created with a pointer to the subpipeline, and takes the place of the subpipeline, from the point of view of the main thread. It is possible to input urefs to the worker pipe (for linear and sink workers), set its output (for linear and source workers), or release it (@ref upipe_release). The worker pipe automatically calls @ref upipe_attach_upump_mgr on relevant pipes of the subpipeline.
-      @item After the subpipeline has been transferred, the upump manager of the main thread may be thawed with @ref UPROBE_THAW_UPUMP_MGR.
+      @item After the subpipeline has been created, the upump manager of the main thread may be thawed with @ref UPROBE_THAW_UPUMP_MGR.
 
     @end list
 

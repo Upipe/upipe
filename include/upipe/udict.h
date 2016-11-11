@@ -122,6 +122,14 @@ enum udict_type {
     UDICT_TYPE_PIC_HPOSITION,
     /** p.vposition */
     UDICT_TYPE_PIC_VPOSITION,
+    /** p.lpadding */
+    UDICT_TYPE_PIC_LPADDING,
+    /** p.rpadding */
+    UDICT_TYPE_PIC_RPADDING,
+    /** p.tpadding */
+    UDICT_TYPE_PIC_TPADDING,
+    /** p.bpadding */
+    UDICT_TYPE_PIC_BPADDING,
     /** p.sar */
     UDICT_TYPE_PIC_SAR,
     /** p.overscan */

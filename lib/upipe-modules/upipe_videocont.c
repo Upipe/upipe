@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2014-2015 OpenHeadend S.A.R.L.
+ * Copyright (C) 2014-2016 OpenHeadend S.A.R.L.
  *
  * Authors: Benjamin Cohen
  *
@@ -444,8 +444,9 @@ static int upipe_videocont_switch_format(struct upipe *upipe,
     } else {
         uref_pic_flow_delete_sar(out_flow);
     }
-    if (likely(ubase_check(uref_pic_flow_get_overscan(in_flow)))) {
-        uref_pic_flow_set_overscan(out_flow);
+    bool overscan;
+    if (likely(ubase_check(uref_pic_flow_get_overscan(in_flow, &overscan)))) {
+        uref_pic_flow_set_overscan(out_flow, overscan);
     } else {
         uref_pic_flow_delete_overscan(out_flow);
     }
@@ -550,26 +551,8 @@ static void upipe_videocont_input(struct upipe *upipe, struct uref *uref,
     upipe_verbose_va(upipe, "attached ubuf %p (%"PRIu64") next %"PRIu64,
                      next_uref->ubuf, pts, next_pts);
     uref_attach_ubuf(uref, ubuf_dup(next_uref->ubuf));
-    if (likely(ubase_check(uref_pic_get_progressive(next_uref)))) {
-        uref_pic_set_progressive(uref);
-    } else {
-        uref_pic_delete_progressive(uref);
-    }
-    if (likely(ubase_check(uref_pic_get_tf(next_uref)))) {
-        uref_pic_set_tf(uref);
-    } else {
-        uref_pic_delete_tf(uref);
-    }
-    if (likely(ubase_check(uref_pic_get_bf(next_uref)))) {
-        uref_pic_set_bf(uref);
-    } else {
-        uref_pic_delete_bf(uref);
-    }
-    if (likely(ubase_check(uref_pic_get_tff(next_uref)))) {
-        uref_pic_set_tff(uref);
-    } else {
-        uref_pic_delete_tff(uref);
-    }
+    uref_attr_import(uref, next_uref);
+    uref_clock_delete_rate(uref);
     if (upipe_videocont->last_uref == next_uref) {
         upipe_warn_va(upipe, "reusing the same picture %"PRIu64" %"PRIu64,
                   pts + upipe_videocont->latency, next_pts + upipe_videocont->tolerance);

@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2015 OpenHeadend S.A.R.L.
+ * Copyright (C) 2015-2016 OpenHeadend S.A.R.L.
  *
  * Authors: Christophe Massiot
  *
@@ -62,8 +62,14 @@ struct upipe_even {
     uint64_t first_date;
     /** last date */
     uint64_t last_date;
+    /** true during the preroll period */
+    bool preroll;
     /** true if an input is dead */
     bool dead;
+    /** true if we are in the subpipe loop */
+    bool in_loop;
+    /** true if we need to restart the subpipe loop */
+    bool restart;
 
     /** list of subs */
     struct uchain subs;
@@ -216,14 +222,16 @@ static bool upipe_even_sub_handle(struct upipe *upipe, struct uref *uref,
     uref_clock_get_duration(uref, &duration);
 
     if (unlikely(date + duration < upipe_even->first_date)) {
-        upipe_dbg(upipe, "removing orphan uref");
+        upipe_dbg_va(upipe, "removing early uref (%"PRId64")",
+                     upipe_even->first_date - date - duration);
         uref_free(uref);
         return true;
     }
 
     if (date > upipe_even->last_date) {
         if (upipe_even->dead) {
-            upipe_dbg(upipe, "removing orphan uref");
+            upipe_dbg_va(upipe, "removing late uref (%"PRId64")",
+                         date - upipe_even->last_date);
             uref_free(uref);
             return true;
         }
@@ -253,10 +261,12 @@ static void upipe_even_sub_process(struct upipe *upipe, struct upump **upump_p)
         if (!upipe_even_sub_handle(upipe, uref, upump_p)) {
             upipe_even_sub_unshift_input(upipe, uref);
             break;
-        } else if (upipe_even_sub_check_input(upipe))
+        } else if (upipe_even_sub_check_input(upipe)) {
             /* All packets have been output, release again the pipe that has
              * been used in @ref upipe_even_sub_input. */
             upipe_release(upipe);
+            break;
+        }
     }
     upipe_release(upipe);
 }
@@ -272,8 +282,7 @@ static int upipe_even_sub_set_flow_def(struct upipe *upipe,
 {
     if (flow_def == NULL)
         return UBASE_ERR_INVALID;
-    struct upipe_even_sub *upipe_even_sub =
-        upipe_even_sub_from_upipe(upipe);
+    struct upipe_even_sub *upipe_even_sub = upipe_even_sub_from_upipe(upipe);
     const char *def;
     if (likely(ubase_check(uref_flow_get_def(flow_def, &def)))) {
         if (!ubase_ncmp(def, "pic.sub.") || strstr(def, ".pic.sub."))
@@ -355,15 +364,26 @@ static int upipe_even_sub_control(struct upipe *upipe,
  */
 static void upipe_even_sub_free(struct upipe *upipe)
 {
+    struct upipe_even_sub *upipe_even_sub = upipe_even_sub_from_upipe(upipe);
     struct upipe_even *upipe_even = upipe_even_from_sub_mgr(upipe->mgr);
-    upipe_even->dead = true;
-    upipe_even_process(upipe_even_to_upipe(upipe_even), NULL);
 
     upipe_throw_dead(upipe);
     upipe_even_sub_clean_output(upipe);
     upipe_even_sub_clean_input(upipe);
     upipe_even_sub_clean_sub(upipe);
     upipe_even_sub_clean_urefcount(upipe);
+
+    if (upipe_even_sub->type != UPIPE_EVEN_SUBPIC &&
+        upipe_even_sub->type != UPIPE_EVEN_UNKNOWN) {
+        if (!upipe_even->dead)
+            upipe_dbg_va(upipe, "last date %"PRIu64, upipe_even->last_date);
+        upipe_even->dead = true;
+        if (!upipe_even->in_loop)
+            upipe_even_process(upipe_even_to_upipe(upipe_even), NULL);
+        else
+            upipe_even->restart = true;
+    }
+
     upipe_even_sub_free_void(upipe);
 }
 
@@ -404,9 +424,65 @@ static struct upipe *upipe_even_alloc(struct upipe_mgr *mgr,
     upipe_even_init_sub_subs(upipe);
     struct upipe_even *upipe_even = upipe_even_from_upipe(upipe);
     upipe_even->first_date = UINT64_MAX;
+    upipe_even->preroll = true;
     upipe_even->dead = false;
+    upipe_even->in_loop = false;
+    upipe_even->restart = false;
     upipe_throw_ready(upipe);
     return upipe;
+}
+
+/** @internal @This checks if we have got packets on video and audio inputs.
+ *
+ * @param upipe description structure of the pipe
+ * @return true if we are ready
+ */
+static bool upipe_even_check(struct upipe *upipe)
+{
+    struct upipe_even *upipe_even = upipe_even_from_upipe(upipe);
+    struct uchain *uchain;
+
+    if (upipe_even->dead)
+        return true;
+
+    if (unlikely(upipe_even->first_date == UINT64_MAX)) {
+        uint64_t first_date = 0;
+        ulist_foreach (&upipe_even->subs, uchain) {
+            struct upipe_even_sub *upipe_even_sub =
+                upipe_even_sub_from_uchain(uchain);
+            if (upipe_even_sub->type == UPIPE_EVEN_SUBPIC ||
+                (upipe_even_sub->type == UPIPE_EVEN_UNKNOWN &&
+                 !upipe_even->preroll))
+                continue;
+
+            if (upipe_even_sub->first_date == UINT64_MAX)
+                return false;
+            if (upipe_even_sub->first_date > first_date)
+                first_date = upipe_even_sub->first_date;
+        }
+
+        upipe_even->first_date = first_date;
+        upipe_dbg_va(upipe, "first date %"PRIu64, first_date);
+    }
+
+    uint64_t last_date = UINT64_MAX;
+    ulist_foreach (&upipe_even->subs, uchain) {
+        struct upipe_even_sub *upipe_even_sub =
+            upipe_even_sub_from_uchain(uchain);
+        if (upipe_even_sub->type == UPIPE_EVEN_SUBPIC ||
+            (upipe_even_sub->type == UPIPE_EVEN_UNKNOWN &&
+             !upipe_even->preroll))
+            continue;
+
+        if (upipe_even_sub->last_date == UINT64_MAX)
+            return false;
+        if (upipe_even_sub->last_date < last_date)
+            last_date = upipe_even_sub->last_date;
+    }
+
+    upipe_even->last_date = last_date;
+    upipe_verbose_va(upipe, "last date %"PRIu64, last_date);
+    return true;
 }
 
 /** @internal @This checks if we have got packets on video and audio inputs, so
@@ -418,51 +494,39 @@ static struct upipe *upipe_even_alloc(struct upipe_mgr *mgr,
 static void upipe_even_process(struct upipe *upipe, struct upump **upump_p)
 {
     struct upipe_even *upipe_even = upipe_even_from_upipe(upipe);
-    struct uchain *uchain;
+    upipe_use(upipe);
 
-    if (!upipe_even->dead) {
-        if (unlikely(upipe_even->first_date == UINT64_MAX)) {
-            uint64_t first_date = 0;
-            ulist_foreach (&upipe_even->subs, uchain) {
-                struct upipe_even_sub *upipe_even_sub =
-                    upipe_even_sub_from_uchain(uchain);
-                if (upipe_even_sub->type == UPIPE_EVEN_SUBPIC)
-                    continue;
+    do {
+        upipe_even->restart = false;
 
-                if (upipe_even_sub->first_date == UINT64_MAX)
-                    return;
-                if (upipe_even_sub->first_date > first_date)
-                    first_date = upipe_even_sub->first_date;
-            }
+        if (!upipe_even_check(upipe))
+            break;
 
-            upipe_even->first_date = first_date;
-        }
-
-        uint64_t last_date = UINT64_MAX;
-        ulist_foreach (&upipe_even->subs, uchain) {
+        upipe_even->in_loop = true;
+        struct uchain *uchain, *uchain_tmp;
+        ulist_delete_foreach (&upipe_even->subs, uchain, uchain_tmp) {
             struct upipe_even_sub *upipe_even_sub =
                 upipe_even_sub_from_uchain(uchain);
-            if (upipe_even_sub->type == UPIPE_EVEN_SUBPIC)
-                continue;
-
-            if (upipe_even_sub->last_date == UINT64_MAX)
-                return;
-            if (upipe_even_sub->last_date < last_date)
-                last_date = upipe_even_sub->last_date;
+            upipe_even_sub_process(upipe_even_sub_to_upipe(upipe_even_sub),
+                                   upump_p);
         }
+        upipe_even->in_loop = false;
+    } while (upipe_even->restart);
 
-        upipe_even->last_date = last_date;
-    }
-
-    upipe_use(upipe);
-    struct uchain *uchain_tmp;
-    ulist_delete_foreach (&upipe_even->subs, uchain, uchain_tmp) {
-        struct upipe_even_sub *upipe_even_sub =
-            upipe_even_sub_from_uchain(uchain);
-        upipe_even_sub_process(upipe_even_sub_to_upipe(upipe_even_sub),
-                               upump_p);
-    }
     upipe_release(upipe);
+}
+
+/** @internal @This ends the preroll period.
+ *
+ * @param upipe description structure of the pipe
+ * @return an error code
+ */
+static int upipe_even_end_preroll(struct upipe *upipe)
+{
+    struct upipe_even *upipe_even = upipe_even_from_upipe(upipe);
+    upipe_even->preroll = false;
+    upipe_even_process(upipe, NULL);
+    return UBASE_ERR_NONE;
 }
 
 /** @internal @This processes control commands on a even pipe.
@@ -483,6 +547,8 @@ static int upipe_even_control(struct upipe *upipe, int command, va_list args)
             struct upipe **p = va_arg(args, struct upipe **);
             return upipe_even_iterate_sub(upipe, p);
         }
+        case UPIPE_END_PREROLL:
+            return upipe_even_end_preroll(upipe);
 
         default:
             return UBASE_ERR_UNHANDLED;

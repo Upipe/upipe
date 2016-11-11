@@ -61,10 +61,12 @@ struct ubuf_mgr *ubuf_mem_mgr_alloc_from_flow_def(uint16_t ubuf_pool_depth,
     if (!ubase_ncmp(def, "block.")) {
         uint64_t align = 0;
         int64_t align_offset = 0;
+        uint64_t prepend = 0;
         uref_block_flow_get_align(flow_def, &align);
         uref_block_flow_get_align_offset(flow_def, &align_offset);
+        uref_block_flow_get_prepend(flow_def, &prepend);
         return ubuf_block_mem_mgr_alloc(ubuf_pool_depth, shared_pool_depth,
-                                        umem_mgr, align, align_offset);
+                                        umem_mgr, prepend, align, align_offset);
     }
 
     if (!ubase_ncmp(def, "pic.")) {

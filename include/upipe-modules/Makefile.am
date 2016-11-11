@@ -1,3 +1,4 @@
+NULL =
 myincludedir = $(includedir)/upipe-modules
 myinclude_HEADERS = \
 	upipe_transfer.h \
@@ -11,10 +12,12 @@ myinclude_HEADERS = \
 	upipe_probe_uref.h \
 	upipe_noclock.h \
 	upipe_nodemux.h \
+	upipe_dejitter.h \
 	upipe_delay.h \
 	upipe_null.h \
 	upipe_skip.h \
 	upipe_aggregate.h \
+	upipe_convert_to_block.h \
 	upipe_worker_linear.h \
 	upipe_worker_sink.h \
 	upipe_worker_source.h \
@@ -32,6 +35,7 @@ myinclude_HEADERS = \
 	upipe_udp_source.h \
 	upipe_udp_sink.h \
 	upipe_http_source.h \
+	uref_http_flow.h \
 	upipe_rtp_decaps.h \
 	upipe_rtp_prepend.h \
 	upipe_rtp_source.h \
@@ -40,6 +44,7 @@ myinclude_HEADERS = \
 	upipe_rtp_opus.h \
 	upipe_rtcp.h \
 	upipe_blit.h \
+	upipe_crop.h \
 	upipe_audio_split.h \
 	upipe_videocont.h \
 	upipe_audiocont.h \
@@ -49,6 +54,19 @@ myinclude_HEADERS = \
 	upipe_dump.h \
 	uprobe_http_redirect.h \
 	upipe_m3u_reader.h \
-	upipe_m3u_playlist.h \
 	upipe_auto_source.h \
-	upipe_buffer.h
+	upipe_buffer.h \
+	upipe_aes_decrypt.h \
+	uref_aes_flow.h \
+	upipe_rate_limit.h \
+	upipe_burst.h \
+	upipe_sequential_source.h \
+	upipe_segment_source.h \
+	upipe_id3v2.h \
+	upipe_rtp_reorder.h \
+	upipe_subpic_schedule.h \
+	upipe_s337_encaps.h \
+	upipe_ntsc_prepend.h \
+	upipe_rtp_pcm_unpack.h \
+	upipe_rtp_pcm_pack.h \
+	$(NULL)

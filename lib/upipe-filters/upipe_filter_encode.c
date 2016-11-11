@@ -39,6 +39,8 @@
 #include <upipe/upipe_helper_flow.h>
 #include <upipe/upipe_helper_urefcount.h>
 #include <upipe/upipe_helper_uref_mgr.h>
+#include <upipe/upipe_helper_inner.h>
+#include <upipe/upipe_helper_uprobe.h>
 #include <upipe/upipe_helper_bin_input.h>
 #include <upipe/upipe_helper_bin_output.h>
 #include <upipe-modules/upipe_idem.h>
@@ -95,6 +97,8 @@ struct upipe_fenc {
     char *profile;
     /** x264 speed control */
     uint64_t sc_latency;
+    /** x264 slice type enforce */
+    bool slice_type_enforce;
     /** x262 */
     bool x262;
 
@@ -121,9 +125,11 @@ UPIPE_HELPER_FLOW(upipe_fenc, "block.")
 UPIPE_HELPER_UREFCOUNT(upipe_fenc, urefcount, upipe_fenc_no_ref)
 UPIPE_HELPER_UREF_MGR(upipe_fenc, uref_mgr, uref_mgr_request,
                       upipe_fenc_provide, upipe_throw_provide_request, NULL)
+UPIPE_HELPER_INNER(upipe_fenc, first_inner)
 UPIPE_HELPER_BIN_INPUT(upipe_fenc, first_inner, input_request_list)
-UPIPE_HELPER_BIN_OUTPUT(upipe_fenc, last_inner_probe, last_inner, output,
-                        output_request_list)
+UPIPE_HELPER_INNER(upipe_fenc, last_inner)
+UPIPE_HELPER_UPROBE(upipe_fenc, urefcount_real, last_inner_probe, NULL)
+UPIPE_HELPER_BIN_OUTPUT(upipe_fenc, last_inner, output, output_request_list)
 
 UBASE_FROM_TO(upipe_fenc, urefcount, urefcount_real, urefcount_real)
 
@@ -153,8 +159,8 @@ static int upipe_fenc_alloc_inner(struct upipe *upipe)
         if (!ubase_ncmp(def, "block.mpeg2video."))
             upipe_fenc->x262 = true;
 
-        upipe_fenc_store_first_inner(upipe, upipe_use(enc));
-        upipe_fenc_store_last_inner(upipe, enc);
+        upipe_fenc_store_bin_input(upipe, upipe_use(enc));
+        upipe_fenc_store_bin_output(upipe, enc);
         return UBASE_ERR_NONE;
     }
 
@@ -165,8 +171,8 @@ static int upipe_fenc_alloc_inner(struct upipe *upipe)
     if (unlikely(enc == NULL))
         return UBASE_ERR_INVALID;
 
-    upipe_fenc_store_first_inner(upipe, upipe_use(enc));
-    upipe_fenc_store_last_inner(upipe, enc);
+    upipe_fenc_store_bin_input(upipe, upipe_use(enc));
+    upipe_fenc_store_bin_output(upipe, enc);
     return UBASE_ERR_NONE;
 }
 
@@ -192,14 +198,16 @@ static struct upipe *upipe_fenc_alloc(struct upipe_mgr *mgr,
     urefcount_init(upipe_fenc_to_urefcount_real(upipe_fenc),
                    upipe_fenc_free);
     upipe_fenc_init_uref_mgr(upipe);
+    upipe_fenc_init_last_inner_probe(upipe);
     upipe_fenc_init_bin_input(upipe);
-    upipe_fenc_init_bin_output(upipe, upipe_fenc_to_urefcount_real(upipe_fenc));
+    upipe_fenc_init_bin_output(upipe);
     upipe_fenc->flow_def_input = flow_def_input;
     upipe_fenc->options = NULL;
     upipe_fenc->preset = NULL;
     upipe_fenc->tune = NULL;
     upipe_fenc->profile = NULL;
     upipe_fenc->sc_latency = UINT64_MAX;
+    upipe_fenc->slice_type_enforce = false;
     upipe_fenc->x262 = false;
     upipe_throw_ready(upipe);
     upipe_fenc_demand_uref_mgr(upipe);
@@ -242,8 +250,8 @@ static int upipe_fenc_set_flow_def(struct upipe *upipe, struct uref *flow_def)
         if (ubase_check(upipe_set_flow_def(upipe_fenc->last_inner, flow_def)))
             return UBASE_ERR_NONE;
     }
-    upipe_fenc_store_first_inner(upipe, NULL);
-    upipe_fenc_store_last_inner(upipe, NULL);
+    upipe_fenc_store_bin_input(upipe, NULL);
+    upipe_fenc_store_bin_output(upipe, NULL);
 
     if (unlikely(!ubase_check(upipe_fenc_alloc_inner(upipe))))
         return UBASE_ERR_UNHANDLED;
@@ -259,6 +267,9 @@ static int upipe_fenc_set_flow_def(struct upipe *upipe, struct uref *flow_def)
     if (upipe_fenc->sc_latency != UINT64_MAX)
         upipe_x264_set_sc_latency(upipe_fenc->last_inner,
                                   upipe_fenc->sc_latency);
+    if (upipe_fenc->slice_type_enforce)
+        upipe_x264_set_slice_type_enforce(upipe_fenc->last_inner,
+                                          upipe_fenc->slice_type_enforce);
 
     if (upipe_fenc->options != NULL && upipe_fenc->options->udict != NULL) {
         const char *key = NULL;
@@ -278,8 +289,8 @@ static int upipe_fenc_set_flow_def(struct upipe *upipe, struct uref *flow_def)
 
     if (ubase_check(upipe_set_flow_def(upipe_fenc->last_inner, flow_def)))
         return UBASE_ERR_NONE;
-    upipe_fenc_store_first_inner(upipe, NULL);
-    upipe_fenc_store_last_inner(upipe, NULL);
+    upipe_fenc_store_bin_input(upipe, NULL);
+    upipe_fenc_store_bin_output(upipe, NULL);
     return UBASE_ERR_INVALID;
 }
 
@@ -412,6 +423,24 @@ static int upipe_fenc_set_sc_latency(struct upipe *upipe, uint64_t sc_latency)
     return UBASE_ERR_NONE;
 }
 
+/** @This sets the slice type enforcement mode (true or false).
+ *
+ * @param upipe description structure of the pipe
+ * @param enforce true if the incoming slice types must be enforced
+ * @return an error code
+ */
+static int upipe_fenc_set_slice_type_enforce(struct upipe *upipe, bool enforce)
+{
+    struct upipe_fenc *upipe_fenc = upipe_fenc_from_upipe(upipe);
+    upipe_fenc->slice_type_enforce = enforce;
+
+    if (upipe_fenc->last_inner != NULL) {
+        UBASE_RETURN(upipe_x264_set_slice_type_enforce(upipe_fenc->last_inner,
+                                                       enforce))
+    }
+    return UBASE_ERR_NONE;
+}
+
 /** @internal @This processes control commands on a fenc pipe.
  *
  * @param upipe description structure of the pipe
@@ -457,6 +486,11 @@ static int upipe_fenc_control(struct upipe *upipe, int command, va_list args)
             uint64_t sc_latency = va_arg(args, uint64_t);
             return upipe_fenc_set_sc_latency(upipe, sc_latency);
         }
+        case UPIPE_X264_SET_SLICE_TYPE_ENFORCE: {
+            UBASE_SIGNATURE_CHECK(args, UPIPE_X264_SIGNATURE)
+            bool enforce = !(va_arg(args, int) == 0);
+            return upipe_fenc_set_slice_type_enforce(upipe, enforce);
+        }
 
         default:
             break;
@@ -483,7 +517,7 @@ static void upipe_fenc_free(struct urefcount *urefcount_real)
     free(upipe_fenc->preset);
     free(upipe_fenc->tune);
     free(upipe_fenc->profile);
-    uprobe_clean(&upipe_fenc->last_inner_probe);
+    upipe_fenc_clean_last_inner_probe(upipe);
     upipe_fenc_clean_uref_mgr(upipe);
     urefcount_clean(urefcount_real);
     upipe_fenc_clean_urefcount(upipe);

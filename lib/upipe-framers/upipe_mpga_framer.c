@@ -176,12 +176,12 @@ struct upipe_mpgaf {
     /* octet stream parser stuff */
     /** current size of next frame (in next_uref) */
     ssize_t next_frame_size;
-    /** pseudo-packet containing date information for the next picture */
+    /** pseudo-packet containing date information for the next frame */
     struct uref au_uref_s;
-    /** drift rate of the next picture */
+    /** drift rate of the next frame */
     struct urational drift_rate;
     /** true if we have thrown the sync_acquired event (that means we found a
-     * sequence header) */
+     * header) */
     bool acquired;
 
     /** public upipe structure */

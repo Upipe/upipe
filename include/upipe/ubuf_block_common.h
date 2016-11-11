@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2012-2014 OpenHeadend S.A.R.L.
+ * Copyright (C) 2012-2016 OpenHeadend S.A.R.L.
  *
  * Authors: Christophe Massiot
  *
@@ -58,7 +58,7 @@ static inline void ubuf_block_common_init(struct ubuf *ubuf, bool map)
     block->map = map;
     block->buffer = NULL;
 
-    block->cached_ubuf = ubuf;
+    block->cached_ubuf = block->cached_end_ubuf = ubuf;
     block->cached_offset = 0;
     uchain_init(&ubuf->uchain);
 }
@@ -106,7 +106,7 @@ static inline int ubuf_block_common_dup(struct ubuf *ubuf,
     new_block->size = block->size;
     new_block->total_size = block->total_size;
     new_block->buffer = block->buffer;
-    new_block->cached_ubuf = new_ubuf;
+    new_block->cached_ubuf = new_block->cached_end_ubuf = new_ubuf;
     new_block->cached_offset = 0;
 
     struct ubuf *next_ubuf = block->next_ubuf;
@@ -147,7 +147,7 @@ static inline int ubuf_block_common_splice(struct ubuf *ubuf,
     new_block->total_size = size;
     new_block->buffer = block->buffer;
     size -= new_block->size;
-    new_block->cached_ubuf = new_ubuf;
+    new_block->cached_ubuf = new_block->cached_end_ubuf = new_ubuf;
     new_block->cached_offset = 0;
 
     if (size > 0) {

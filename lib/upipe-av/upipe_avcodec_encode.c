@@ -500,7 +500,7 @@ static bool upipe_avcenc_encode_frame(struct upipe *upipe,
 
     struct ubuf *ubuf = ubuf_block_alloc(upipe_avcenc->ubuf_mgr, avpkt.size);
     if (unlikely(ubuf == NULL)) {
-        av_free_packet(&avpkt);
+        av_packet_unref(&avpkt);
         upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
         return false;
     }
@@ -509,23 +509,27 @@ static bool upipe_avcenc_encode_frame(struct upipe *upipe,
     uint8_t *buf;
     if (unlikely(!ubase_check(ubuf_block_write(ubuf, 0, &size, &buf)))) {
         ubuf_free(ubuf);
-        av_free_packet(&avpkt);
+        av_packet_unref(&avpkt);
         upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
         return false;
     }
     memcpy(buf, avpkt.data, size);
     ubuf_block_unmap(ubuf, 0);
-    av_free_packet(&avpkt);
+
+    int64_t pkt_pts = avpkt.pts, pkt_dts = avpkt.dts;
+    bool keyframe = avpkt.flags & AV_PKT_FLAG_KEY;
+
+    av_packet_unref(&avpkt);
 
     /* find uref corresponding to avpkt */
-    upipe_verbose_va(upipe, "output pts %"PRId64, avpkt.pts);
+    upipe_verbose_va(upipe, "output pts %"PRId64, pkt_pts);
     struct uchain *uchain;
     struct uchain *uchain_tmp;
     struct uref *uref = NULL;
     ulist_delete_foreach (&upipe_avcenc->urefs_in_use, uchain, uchain_tmp) {
         struct uref *uref_chain = uref_from_uchain(uchain);
         int64_t priv = 0;
-        if (ubase_check(uref_avcenc_get_priv(uref_chain, &priv)) && priv == avpkt.pts) {
+        if (ubase_check(uref_avcenc_get_priv(uref_chain, &priv)) && priv == pkt_pts) {
             uref = uref_chain;
             ulist_delete(uchain);
             break;
@@ -533,7 +537,7 @@ static bool upipe_avcenc_encode_frame(struct upipe *upipe,
     }
     if (unlikely(uref == NULL)) {
         upipe_warn_va(upipe, "could not find pts %"PRId64" in urefs in use",
-                      avpkt.pts);
+                      pkt_pts);
         ubuf_free(ubuf);
         return false;
     }
@@ -559,7 +563,7 @@ static bool upipe_avcenc_encode_frame(struct upipe *upipe,
     uref_avcenc_delete_priv(uref);
 
     /* set dts */
-    uint64_t dts_pts_delay = (uint64_t)(avpkt.pts - avpkt.dts) * UCLOCK_FREQ
+    uint64_t dts_pts_delay = (uint64_t)(pkt_pts - pkt_dts) * UCLOCK_FREQ
                               * context->time_base.num
                               / context->time_base.den;
     uref_clock_set_dts_pts_delay(uref, dts_pts_delay);
@@ -604,7 +608,7 @@ static bool upipe_avcenc_encode_frame(struct upipe *upipe,
     upipe_avcenc->last_dts = dts;
     upipe_avcenc->last_dts_sys = dts_sys;
 
-    if (codec->type == AVMEDIA_TYPE_VIDEO && (avpkt.flags & AV_PKT_FLAG_KEY))
+    if (codec->type == AVMEDIA_TYPE_VIDEO && keyframe)
         uref_flow_set_random(uref);
 
     if (upipe_avcenc->flow_def == NULL)
@@ -1124,17 +1128,15 @@ static int upipe_avcenc_set_flow_def(struct upipe *upipe, struct uref *flow_def)
         upipe_avcenc_store_flow_def_check(upipe, flow_def_check);
 
     } else {
-        uint8_t channels = 0;
-        enum AVSampleFormat sample_fmt =
-            upipe_av_samplefmt_from_flow_def(flow_def, &channels);
         const enum AVSampleFormat *sample_fmts = codec->sample_fmts;
-        if (sample_fmt == AV_SAMPLE_FMT_NONE || sample_fmts == NULL) {
+        if (sample_fmts == NULL) {
             upipe_err_va(upipe, "unknown sample format %s", def);
             uref_free(flow_def_check);
             return UBASE_ERR_INVALID;
         }
         while (*sample_fmts != -1) {
-            if (*sample_fmts == sample_fmt)
+            if (ubase_check(upipe_av_samplefmt_match_flow_def(flow_def,
+                                                              *sample_fmts)))
                 break;
             sample_fmts++;
         }
@@ -1168,8 +1170,14 @@ static int upipe_avcenc_set_flow_def(struct upipe *upipe, struct uref *flow_def)
         context->time_base.num = 1;
         context->time_base.den = 1;//rate; FIXME
 
+        uint8_t channels;
         const uint64_t *channel_layouts =
             upipe_avcenc->context->codec->channel_layouts;
+        if (!ubase_check(uref_sound_flow_get_channels(flow_def, &channels))) {
+            upipe_err_va(upipe, "unsupported channels");
+            uref_free(flow_def_check);
+            return UBASE_ERR_INVALID;
+        }
         while (*channel_layouts != 0) {
             if (av_get_channel_layout_nb_channels(*channel_layouts) == channels)
                 break;
@@ -1439,7 +1447,7 @@ static void upipe_avcenc_free(struct upipe *upipe)
 
     if (upipe_avcenc->context != NULL)
         av_free(upipe_avcenc->context);
-    av_free(upipe_avcenc->frame);
+    av_frame_free(&upipe_avcenc->frame);
 
     /* free remaining urefs (should not be any) */
     struct uchain *uchain;
@@ -1478,7 +1486,7 @@ static struct upipe *upipe_avcenc_alloc(struct upipe_mgr *mgr,
                                         struct uprobe *uprobe,
                                         uint32_t signature, va_list args)
 {
-    AVFrame *frame = avcodec_alloc_frame();
+    AVFrame *frame = av_frame_alloc();
     if (unlikely(frame == NULL))
         return NULL;
 
@@ -1486,7 +1494,7 @@ static struct upipe *upipe_avcenc_alloc(struct upipe_mgr *mgr,
     struct upipe *upipe = upipe_avcenc_alloc_flow(mgr, uprobe, signature, args,
                                                   &flow_def);
     if (unlikely(upipe == NULL)) {
-        av_free(frame);
+        av_frame_free(&frame);
         return NULL;
     }
 
@@ -1506,7 +1514,7 @@ static struct upipe *upipe_avcenc_alloc(struct upipe_mgr *mgr,
     if ((codec == NULL) ||
             (upipe_avcenc->context = avcodec_alloc_context3(codec)) == NULL) {
         uref_free(flow_def);
-        av_free(frame);
+        av_frame_free(&frame);
         upipe_avcenc_free_flow(upipe);
         return NULL;
     }
@@ -1550,8 +1558,8 @@ static struct upipe *upipe_avcenc_alloc(struct upipe_mgr *mgr,
  * @param name codec name
  * @return an erorr code
  */
-int _upipe_avcenc_mgr_set_flow_def_from_name(struct uref *flow_def,
-                                             const char *name)
+static int _upipe_avcenc_mgr_set_flow_def_from_name(struct uref *flow_def,
+                                                    const char *name)
 {
     if (name == NULL)
         return UBASE_ERR_INVALID;

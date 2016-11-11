@@ -12,7 +12,7 @@ that an application using Upipe is not restricted to a single high-level API,
 but can also implement and use any of the lower-level programming interfaces.
 It is also always possible to build higher-level interfaces. Its core
 data structures are expected to work efficiently without needlessly depending
-on each other, and are independantly unit-tested.
+on each other, and are independently unit-tested.
 
 The concept was completely designed and created in 2012, with today's
 computing architectures in mind. In particular, all platforms are nowadays

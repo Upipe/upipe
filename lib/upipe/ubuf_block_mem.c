@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2012-2015 OpenHeadend S.A.R.L.
+ * Copyright (C) 2012-2016 OpenHeadend S.A.R.L.
  *
  * Authors: Christophe Massiot
  *
@@ -37,6 +37,8 @@
 #include <upipe/ubuf_block_common.h>
 #include <upipe/ubuf_block_mem.h>
 #include <upipe/ubuf_mem_common.h>
+#include <upipe/ubuf_pic_mem.h>
+#include <upipe/ubuf_sound_mem.h>
 #include <upipe/uref.h>
 #include <upipe/uref_flow.h>
 #include <upipe/uref_block_flow.h>
@@ -49,6 +51,8 @@
 
 /** default alignement of buffer when unspecified */
 #define UBUF_DEFAULT_ALIGN          0
+/** default minimum extra space before buffer when unspecified */
+#define UBUF_DEFAULT_PREPEND        32
 
 /** @This is a super-set of the @ref ubuf (and @ref ubuf_block)
  * structure with private fields pointing to shared data. */
@@ -68,6 +72,8 @@ struct ubuf_block_mem_mgr {
     /** refcount management structure */
     struct urefcount urefcount;
 
+    /** extra space added before */
+    size_t prepend;
     /** alignment */
     size_t align;
     /** alignment offset */
@@ -96,18 +102,50 @@ UBUF_MEM_MGR_HELPER_POOL(ubuf_block_mem, ubuf_pool, shared_pool, shared)
 /** @This allocates a ubuf, a shared structure and a umem buffer.
  *
  * @param mgr common management structure
- * @param alloc_type must be UBUF_ALLOC_BLOCK (sentinel)
- * @param args optional arguments (1st = size)
+ * @param alloc_type allocation type
+ * @param args optional arguments
  * @return pointer to ubuf or NULL in case of allocation error
  */
 static struct ubuf *ubuf_block_mem_alloc(struct ubuf_mgr *mgr,
                                          uint32_t signature, va_list args)
 {
-    if (unlikely(signature != UBUF_ALLOC_BLOCK))
-        return NULL;
+    int size = 0; /* to keep compiler happy */
+    struct ubuf *ubuf_orig;
+    const char *plane_orig;
+    struct ubuf_mem_shared *shared_orig;
+    size_t offset_orig, size_orig;
+    switch (signature) {
+        case UBUF_ALLOC_BLOCK:
+            size = va_arg(args, int);
+            if (unlikely(size < 0))
+                return NULL;
+            break;
 
-    int size = va_arg(args, int);
-    assert(size >= 0);
+        case UBUF_BLOCK_MEM_ALLOC_FROM_PIC:
+            ubuf_orig = va_arg(args, struct ubuf *);
+            plane_orig = va_arg(args, const char *);
+            if (unlikely(ubuf_orig == NULL || ubuf_orig->mgr == NULL ||
+                         plane_orig == NULL || !*plane_orig ||
+                         !ubase_check(ubuf_pic_mem_get_shared(ubuf_orig,
+                                 plane_orig, &shared_orig,
+                                 &offset_orig, &size_orig))))
+                return NULL;
+            break;
+
+        case UBUF_BLOCK_MEM_ALLOC_FROM_SOUND:
+            ubuf_orig = va_arg(args, struct ubuf *);
+            plane_orig = va_arg(args, const char *);
+            if (unlikely(ubuf_orig == NULL || ubuf_orig->mgr == NULL ||
+                         plane_orig == NULL || !*plane_orig ||
+                         !ubase_check(ubuf_sound_mem_get_shared(ubuf_orig,
+                                 plane_orig, &shared_orig,
+                                 &offset_orig, &size_orig))))
+                return NULL;
+            break;
+
+        default:
+            return NULL;
+    }
 
     struct ubuf_block_mem_mgr *block_mem_mgr =
         ubuf_block_mem_mgr_from_ubuf_mgr(mgr);
@@ -118,29 +156,36 @@ static struct ubuf *ubuf_block_mem_alloc(struct ubuf_mgr *mgr,
     struct ubuf *ubuf = ubuf_block_mem_to_ubuf(block_mem);
     ubuf_block_common_init(ubuf, false);
 
+    if (signature != UBUF_ALLOC_BLOCK) {
+        /* We reuse a shared structure. */
+        block_mem->shared = ubuf_mem_shared_use(shared_orig);
+        ubuf_block_common_set(ubuf, offset_orig, size_orig);
+        ubuf_block_common_set_buffer(ubuf,
+                                     ubuf_mem_shared_buffer(block_mem->shared));
+        return ubuf;
+    }
+
     block_mem->shared = ubuf_block_mem_shared_alloc_pool(mgr);
     if (unlikely(block_mem->shared == NULL)) {
         ubuf_block_mem_free_pool(mgr, block_mem);
         return NULL;
     }
 
-    size_t buffer_size = size + block_mem_mgr->align;
+    size_t buffer_size = size + block_mem_mgr->prepend + block_mem_mgr->align;
     if (unlikely(!umem_alloc(block_mem_mgr->umem_mgr, &block_mem->shared->umem,
                              buffer_size))) {
-        ubuf_block_mem_shared_free_pool(mgr, block_mem->shared);
+        ubuf_block_mem_shared_free_pool(block_mem->shared);
         ubuf_block_mem_free_pool(mgr, block_mem);
         return NULL;
     }
 
-    size_t offset = block_mem_mgr->align;
+    size_t offset = block_mem_mgr->prepend + block_mem_mgr->align;
     if (block_mem_mgr->align)
         offset -= ((uintptr_t)ubuf_mem_shared_buffer(block_mem->shared) +
                   offset + block_mem_mgr->align_offset) % block_mem_mgr->align;
     ubuf_block_common_set(ubuf, offset, size);
     ubuf_block_common_set_buffer(ubuf,
                                  ubuf_mem_shared_buffer(block_mem->shared));
-
-    ubuf_mgr_use(mgr);
     return ubuf;
 }
 
@@ -168,7 +213,6 @@ static int ubuf_block_mem_dup(struct ubuf *ubuf, struct ubuf **new_ubuf_p)
 
     struct ubuf_block_mem *block_mem = ubuf_block_mem_from_ubuf(ubuf);
     new_block->shared = ubuf_mem_shared_use(block_mem->shared);
-    ubuf_mgr_use(new_ubuf->mgr);
     return UBASE_ERR_NONE;
 }
 
@@ -212,7 +256,6 @@ static int ubuf_block_mem_splice(struct ubuf *ubuf, struct ubuf **new_ubuf_p,
 
     struct ubuf_block_mem *block_mem = ubuf_block_mem_from_ubuf(ubuf);
     new_block->shared = ubuf_mem_shared_use(block_mem->shared);
-    ubuf_mgr_use(new_ubuf->mgr);
     return UBASE_ERR_NONE;
 }
 
@@ -257,10 +300,9 @@ static void ubuf_block_mem_free(struct ubuf *ubuf)
 
     if (unlikely(ubuf_mem_shared_release(block_mem->shared))) {
         umem_free(&block_mem->shared->umem);
-        ubuf_block_mem_shared_free_pool(mgr, block_mem->shared);
+        ubuf_block_mem_shared_free_pool(block_mem->shared);
     }
     ubuf_block_mem_free_pool(mgr, block_mem);
-    ubuf_mgr_release(mgr);
 }
 
 /** @internal @This allocates the data structure.
@@ -365,6 +407,8 @@ static void ubuf_block_mem_mgr_free(struct urefcount *urefcount)
  * @param ubuf_pool_depth maximum number of ubuf structures in the pool
  * @param shared_pool_depth maximum number of shared structures in the pool
  * @param umem_mgr memory allocator to use for buffers
+ * @param prepend default minimum extra space before buffer (if set to -1, a
+ * default sensible value is used)
  * @param align default alignment in octets (if set to -1, a default sensible
  * value is used)
  * @param align_offset offset of the aligned octet, in octets (may be negative)
@@ -373,6 +417,7 @@ static void ubuf_block_mem_mgr_free(struct urefcount *urefcount)
 struct ubuf_mgr *ubuf_block_mem_mgr_alloc(uint16_t ubuf_pool_depth,
                                           uint16_t shared_pool_depth,
                                           struct umem_mgr *umem_mgr,
+                                          int prepend,
                                           int align, int align_offset)
 {
     assert(umem_mgr != NULL);
@@ -384,13 +429,7 @@ struct ubuf_mgr *ubuf_block_mem_mgr_alloc(uint16_t ubuf_pool_depth,
     if (unlikely(block_mem_mgr == NULL))
         return NULL;
 
-    ubuf_block_mem_mgr_init_pool(ubuf_block_mem_mgr_to_ubuf_mgr(block_mem_mgr),
-            ubuf_pool_depth, shared_pool_depth, block_mem_mgr->upool_extra,
-            ubuf_block_mem_alloc_inner, ubuf_block_mem_free_inner);
-
-    block_mem_mgr->umem_mgr = umem_mgr;
-    umem_mgr_use(umem_mgr);
-
+    block_mem_mgr->prepend = prepend >= 0 ? prepend : UBUF_DEFAULT_PREPEND;
     block_mem_mgr->align = align > 0 ? align : UBUF_DEFAULT_ALIGN;
     block_mem_mgr->align_offset = align_offset;
 
@@ -403,6 +442,13 @@ struct ubuf_mgr *ubuf_block_mem_mgr_alloc(uint16_t ubuf_pool_depth,
     block_mem_mgr->mgr.ubuf_control = ubuf_block_mem_control;
     block_mem_mgr->mgr.ubuf_free = ubuf_block_mem_free;
     block_mem_mgr->mgr.ubuf_mgr_control = ubuf_block_mem_mgr_control;
+
+    ubuf_block_mem_mgr_init_pool(ubuf_block_mem_mgr_to_ubuf_mgr(block_mem_mgr),
+            ubuf_pool_depth, shared_pool_depth, block_mem_mgr->upool_extra,
+            ubuf_block_mem_alloc_inner, ubuf_block_mem_free_inner);
+
+    block_mem_mgr->umem_mgr = umem_mgr;
+    umem_mgr_use(umem_mgr);
 
     return ubuf_block_mem_mgr_to_ubuf_mgr(block_mem_mgr);
 }

@@ -31,10 +31,53 @@ extern "C" {
 
 #include <upipe/uref_attr.h>
 
-UREF_ATTR_STRING(m3u_master, stream_inf, "m3u.master.stream_inf", stream inf)
 UREF_ATTR_UNSIGNED(m3u_master, bandwidth, "m3u.master.bandwidth",
                    bits per second)
 UREF_ATTR_STRING(m3u_master, codecs, "m3u.master.codecs", codecs)
+UREF_ATTR_STRING(m3u_master, resolution, "m3u.master.resolution", resolution)
+UREF_ATTR_STRING(m3u_master, audio, "m3u.master.audio", audio group)
+UREF_ATTR_STRING(m3u_master, media_type, "m3u.master.media.type", media type)
+UREF_ATTR_VOID(m3u_master, media_default, "m3u.master.media.default",
+               media default)
+UREF_ATTR_VOID(m3u_master, media_autoselect, "m3u.master.media.autoselect",
+               auto select)
+UREF_ATTR_STRING(m3u_master, media_name, "m3u.master.media.name",
+                 media name)
+UREF_ATTR_STRING(m3u_master, media_group, "m3u.master.media.group",
+                 media group id)
+
+static inline int uref_m3u_master_delete(struct uref *uref)
+{
+    int (*list[])(struct uref *) = {
+        uref_m3u_master_delete_bandwidth,
+        uref_m3u_master_delete_codecs,
+        uref_m3u_master_delete_resolution,
+        uref_m3u_master_delete_audio,
+        uref_m3u_master_delete_media_type,
+        uref_m3u_master_delete_media_default,
+        uref_m3u_master_delete_media_autoselect,
+        uref_m3u_master_delete_media_name,
+        uref_m3u_master_delete_media_group,
+    };
+    return uref_attr_delete_list(uref, list, UBASE_ARRAY_SIZE(list));
+}
+
+static inline int uref_m3u_master_copy(struct uref *uref,
+                                       struct uref *uref_src)
+{
+    int (*list[])(struct uref *, struct uref *) = {
+        uref_m3u_master_copy_bandwidth,
+        uref_m3u_master_copy_codecs,
+        uref_m3u_master_copy_resolution,
+        uref_m3u_master_copy_audio,
+        uref_m3u_master_copy_media_type,
+        uref_m3u_master_copy_media_default,
+        uref_m3u_master_copy_media_autoselect,
+        uref_m3u_master_copy_media_name,
+        uref_m3u_master_copy_media_group,
+    };
+    return uref_attr_copy_list(uref, uref_src, list, UBASE_ARRAY_SIZE(list));
+}
 
 #ifdef __cplusplus
 }

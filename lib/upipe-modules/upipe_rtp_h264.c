@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2015 Arnaud de Turckheim <quarium@gmail.com>
+ * Copyright (c) 2015-2016 Arnaud de Turckheim <quarium@gmail.com>
  *
  * Authors: Arnaud de Turckheim
  *
@@ -172,7 +172,6 @@ static void upipe_rtp_h264_output_nalu(struct upipe *upipe,
                                        struct upump **upump_p)
 {
     size_t size = 0;
-    int offset = 0;
     if (unlikely(!ubase_check(uref_block_size(uref, &size)))) {
         upipe_err(upipe, "fail to get block size");
         return;
@@ -198,17 +197,19 @@ static void upipe_rtp_h264_output_nalu(struct upipe *upipe,
             hdr_size++;
         }
 
-        struct uref *part = uref_block_splice(uref, offset, split_size);
-        if (unlikely(part == NULL)) {
+        struct uref *next = uref_block_split(uref, split_size);
+        if (unlikely(next == NULL)) {
             upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
             return;
         }
 
+        /* FIXME should require a ubuf_mgr */
         struct ubuf *header =
                 ubuf_block_alloc(uref->ubuf->mgr, hdr_size * sizeof (hdr[0]));
         if (unlikely(header == NULL)) {
             upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
-            uref_free(part);
+            uref_free(uref);
+            uref_free(next);
             return;
         }
 
@@ -219,20 +220,23 @@ static void upipe_rtp_h264_output_nalu(struct upipe *upipe,
         ubuf_block_unmap(header, 0);
 
         /* append payload (current ubuf) to header to form segmented ubuf */
-        struct ubuf *payload = uref_detach_ubuf(part);
+        struct ubuf *payload = uref_detach_ubuf(uref);
         if (unlikely(!ubase_check(ubuf_block_append(header, payload)))) {
             upipe_warn(upipe, "could not append payload to header");
             ubuf_free(header);
-            uref_free(part);
+            ubuf_free(payload);
+            uref_free(uref);
+            uref_free(next);
             return;
         }
-        uref_attach_ubuf(part, header);
-        uref_clock_set_cr_dts_delay(part, 0);
-        upipe_rtp_h264_output(upipe, part, upump_p);
+        uref_attach_ubuf(uref, header);
+        uref_clock_set_cr_dts_delay(uref, 0);
+        upipe_rtp_h264_output(upipe, uref, upump_p);
         size -= split_size;
-        offset += split_size;
         fragment++;
+        uref = next;
     }
+    uref_free(uref);
 }
 
 static void upipe_rtp_h264_drop(struct upipe *upipe, struct uref *uref)
@@ -274,7 +278,6 @@ static void upipe_rtp_h264_input(struct upipe *upipe,
         struct uref *part = uref_block_splice(uref, s - buf + s_len + 1,
                                               e - (s + s_len + 1));
         upipe_rtp_h264_output_nalu(upipe, *(s + s_len), part, upump_p);
-        uref_free(part);
         s = e;
         s_len = e_len;
     }

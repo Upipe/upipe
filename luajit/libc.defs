@@ -1,0 +1,6 @@
+FILE
+pthread_attr_t
+pthread_t
+ssize_t
+struct iovec
+time_t

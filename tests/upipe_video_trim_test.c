@@ -178,7 +178,7 @@ int main(int argc, char *argv[])
     uref = uref_alloc(uref_mgr);
     assert(uref != NULL);
     ubase_assert(uref_mpgv_set_type(uref, MP2VPIC_TYPE_I));
-    ubase_assert(uref_flow_set_random(uref));
+    uref_flow_set_random(uref);
     upipe_input(upipe_vtrim, uref, NULL);
     assert(nb_packets == 1);
     assert(sync_acquired);
@@ -261,7 +261,7 @@ int main(int argc, char *argv[])
 
     uref = uref_alloc(uref_mgr);
     assert(uref != NULL);
-    ubase_assert(uref_flow_set_random(uref));
+    uref_flow_set_random(uref);
     upipe_input(upipe_vtrim, uref, NULL);
     assert(nb_packets == 1);
     assert(sync_acquired);

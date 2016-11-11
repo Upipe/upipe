@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2014-2015 OpenHeadend S.A.R.L.
+ * Copyright (C) 2014-2016 OpenHeadend S.A.R.L.
  *
  * Authors: Christophe Massiot
  *
@@ -40,10 +40,12 @@
 #include <upipe/upipe_helper_urefcount.h>
 #include <upipe/upipe_helper_flow_format.h>
 #include <upipe/upipe_helper_output.h>
+#include <upipe/upipe_helper_inner.h>
+#include <upipe/upipe_helper_uprobe.h>
 #include <upipe/upipe_helper_bin_input.h>
 #include <upipe/upipe_helper_bin_output.h>
 #include <upipe/upipe_helper_input.h>
-#include <upipe-modules/upipe_idem.h>
+#include <upipe-modules/upipe_setflowdef.h>
 #include <upipe-filters/upipe_filter_format.h>
 #include <upipe-filters/upipe_filter_blend.h>
 #include <upipe-swscale/upipe_sws.h>
@@ -131,9 +133,11 @@ UPIPE_HELPER_FLOW(upipe_ffmt, NULL)
 UPIPE_HELPER_UREFCOUNT(upipe_ffmt, urefcount, upipe_ffmt_no_ref)
 UPIPE_HELPER_INPUT(upipe_ffmt, urefs, nb_urefs, max_urefs, blockers,
                   upipe_ffmt_handle)
+UPIPE_HELPER_INNER(upipe_ffmt, first_inner)
 UPIPE_HELPER_BIN_INPUT(upipe_ffmt, first_inner, input_request_list)
-UPIPE_HELPER_BIN_OUTPUT(upipe_ffmt, last_inner_probe, last_inner, output,
-                        output_request_list)
+UPIPE_HELPER_INNER(upipe_ffmt, last_inner)
+UPIPE_HELPER_UPROBE(upipe_ffmt, urefcount_real, last_inner_probe, NULL)
+UPIPE_HELPER_BIN_OUTPUT(upipe_ffmt, last_inner, output, output_request_list)
 UPIPE_HELPER_FLOW_FORMAT(upipe_ffmt, request,
                          upipe_ffmt_check_flow_format,
                          upipe_ffmt_register_bin_output_request,
@@ -184,8 +188,9 @@ static struct upipe *upipe_ffmt_alloc(struct upipe_mgr *mgr,
     urefcount_init(upipe_ffmt_to_urefcount_real(upipe_ffmt), upipe_ffmt_free);
     upipe_ffmt_init_flow_format(upipe);
     upipe_ffmt_init_input(upipe);
+    upipe_ffmt_init_last_inner_probe(upipe);
     upipe_ffmt_init_bin_input(upipe);
-    upipe_ffmt_init_bin_output(upipe, upipe_ffmt_to_urefcount_real(upipe_ffmt));
+    upipe_ffmt_init_bin_output(upipe);
 
     uprobe_init(&upipe_ffmt->proxy_probe, upipe_ffmt_proxy_probe, NULL);
     upipe_ffmt->proxy_probe.refcount =
@@ -237,8 +242,8 @@ static bool upipe_ffmt_handle(struct upipe *upipe, struct uref *uref,
             uref_flow_set_def(uref, old_def);
         free(old_def);
 
-        upipe_ffmt_store_first_inner(upipe, NULL);
-        upipe_ffmt_store_last_inner(upipe, NULL);
+        upipe_ffmt_store_bin_input(upipe, NULL);
+        upipe_ffmt_store_bin_output(upipe, NULL);
         upipe_ffmt_require_flow_format(upipe, uref);
         return true;
     }
@@ -297,7 +302,8 @@ static int upipe_ffmt_check_flow_format(struct upipe *upipe,
                                               &sar))) {
             struct urational input_sar;
             uint64_t hsize;
-            if (ubase_check(uref_pic_flow_get_hsize(flow_def, &hsize)) &&
+            if (!ubase_check(uref_pic_flow_get_hsize(upipe_ffmt->flow_def_wanted, &hsize)) &&
+                ubase_check(uref_pic_flow_get_hsize(flow_def, &hsize)) &&
                 ubase_check(uref_pic_flow_get_sar(flow_def, &input_sar))) {
                 struct urational sar_factor =
                     urational_divide(&input_sar, &sar);
@@ -308,11 +314,10 @@ static int upipe_ffmt_check_flow_format(struct upipe *upipe,
             uref_pic_flow_set_sar(flow_def, sar);
         } else if (ubase_check(uref_pic_flow_get_dar(
                         upipe_ffmt->flow_def_wanted, &dar))) {
+            bool overscan;
             if (ubase_check(uref_pic_flow_get_overscan(
-                            upipe_ffmt->flow_def_wanted)))
-                uref_pic_flow_set_overscan(flow_def);
-            else
-                uref_pic_flow_delete_overscan(flow_def);
+                            upipe_ffmt->flow_def_wanted, &overscan)))
+                uref_pic_flow_set_overscan(flow_def, overscan);
             uref_pic_flow_infer_sar(flow_def, dar);
         }
 
@@ -321,7 +326,8 @@ static int upipe_ffmt_check_flow_format(struct upipe *upipe,
         uref_pic_flow_delete_hsize_visible(flow_def_dup);
         uref_pic_flow_delete_vsize_visible(flow_def_dup);
 
-        bool need_deint = !!(uref_pic_cmp_progressive(flow_def, flow_def_dup));
+        bool need_deint = !ubase_check(uref_pic_get_progressive(flow_def)) &&
+                          ubase_check(uref_pic_get_progressive(flow_def_dup));
         bool need_sws = !uref_pic_flow_compare_format(flow_def, flow_def_dup) ||
                         uref_pic_flow_cmp_hsize(flow_def, flow_def_dup) ||
                         uref_pic_flow_cmp_vsize(flow_def, flow_def_dup);
@@ -335,8 +341,8 @@ static int upipe_ffmt_check_flow_format(struct upipe *upipe,
             if (unlikely(input == NULL))
                 upipe_warn_va(upipe, "couldn't allocate deinterlace");
             else if (!need_sws)
-                upipe_ffmt_store_last_inner(upipe, upipe_use(input));
-            upipe_ffmt_store_first_inner(upipe, input);
+                upipe_ffmt_store_bin_output(upipe, upipe_use(input));
+            upipe_ffmt_store_bin_input(upipe, input);
         }
 
         if (need_sws) {
@@ -348,12 +354,26 @@ static int upipe_ffmt_check_flow_format(struct upipe *upipe,
                 upipe_warn_va(upipe, "couldn't allocate swscale");
                 udict_dump(flow_def_dup->udict, upipe->uprobe);
             } else if (!need_deint)
-                upipe_ffmt_store_first_inner(upipe, upipe_use(sws));
+                upipe_ffmt_store_bin_input(upipe, upipe_use(sws));
             else
                 upipe_set_output(upipe_ffmt->first_inner, sws);
-            upipe_ffmt_store_last_inner(upipe, sws);
+            upipe_ffmt_store_bin_output(upipe, sws);
             if (upipe_ffmt->sws_flags)
                 upipe_sws_set_flags(sws, upipe_ffmt->sws_flags);
+        } else {
+            struct upipe_mgr *setflowdef_mgr = upipe_setflowdef_mgr_alloc();
+            struct upipe *setflowdef = upipe_void_alloc(setflowdef_mgr,
+                    uprobe_pfx_alloc(uprobe_use(&upipe_ffmt->last_inner_probe),
+                                     UPROBE_LOG_VERBOSE, "setflowdef"));
+            upipe_mgr_release(setflowdef_mgr);
+            if (unlikely(setflowdef == NULL)) {
+                upipe_warn_va(upipe, "couldn't allocate setflowdef");
+            } else if (!need_deint)
+                upipe_ffmt_store_bin_input(upipe, upipe_use(setflowdef));
+            else
+                upipe_set_output(upipe_ffmt->first_inner, setflowdef);
+            upipe_ffmt_store_bin_output(upipe, setflowdef);
+            upipe_setflowdef_set_dict(setflowdef, flow_def_dup);
         }
 
     } else { /* sound. */
@@ -367,33 +387,34 @@ static int upipe_ffmt_check_flow_format(struct upipe *upipe,
                 upipe_warn_va(upipe, "couldn't allocate swresample");
                 udict_dump(flow_def_dup->udict, upipe->uprobe);
             } else {
-                upipe_ffmt_store_first_inner(upipe, upipe_use(input));
-                upipe_ffmt_store_last_inner(upipe, input);
+                upipe_ffmt_store_bin_input(upipe, upipe_use(input));
+                upipe_ffmt_store_bin_output(upipe, input);
             }
         }
     }
-    uref_free(flow_def_dup);
 
     if (upipe_ffmt->first_inner == NULL) {
-        struct upipe_mgr *idem_mgr = upipe_idem_mgr_alloc();
-        struct upipe *input = upipe_void_alloc(idem_mgr,
+        struct upipe_mgr *setflowdef_mgr = upipe_setflowdef_mgr_alloc();
+        struct upipe *input = upipe_void_alloc(setflowdef_mgr,
                 uprobe_pfx_alloc(uprobe_use(&upipe_ffmt->last_inner_probe),
-                                 UPROBE_LOG_VERBOSE, "idem"));
-        upipe_mgr_release(idem_mgr);
+                                 UPROBE_LOG_VERBOSE, "setflowdef"));
+        upipe_mgr_release(setflowdef_mgr);
         if (unlikely(input == NULL))
-            upipe_warn_va(upipe, "couldn't allocate idem");
+            upipe_warn_va(upipe, "couldn't allocate setflowdef");
         else {
-            upipe_ffmt_store_first_inner(upipe, upipe_use(input));
-            upipe_ffmt_store_last_inner(upipe, input);
+            upipe_setflowdef_set_dict(input, flow_def_dup);
+            upipe_ffmt_store_bin_input(upipe, upipe_use(input));
+            upipe_ffmt_store_bin_output(upipe, input);
         }
     }
+    uref_free(flow_def_dup);
 
     int err = upipe_set_flow_def(upipe_ffmt->first_inner, flow_def);
     uref_free(flow_def);
 
     if (!ubase_check(err)) {
-        upipe_ffmt_store_first_inner(upipe, NULL);
-        upipe_ffmt_store_last_inner(upipe, NULL);
+        upipe_ffmt_store_bin_input(upipe, NULL);
+        upipe_ffmt_store_bin_output(upipe, NULL);
         return err;
     }
 
@@ -491,7 +512,7 @@ static void upipe_ffmt_free(struct urefcount *urefcount_real)
     uref_free(upipe_ffmt->flow_def_input);
     uref_free(upipe_ffmt->flow_def_wanted);
     uprobe_clean(&upipe_ffmt->proxy_probe);
-    uprobe_clean(&upipe_ffmt->last_inner_probe);
+    upipe_ffmt_clean_last_inner_probe(upipe);
     urefcount_clean(urefcount_real);
     upipe_ffmt_clean_urefcount(upipe);
     upipe_ffmt_free_flow(upipe);

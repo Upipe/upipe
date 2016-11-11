@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2012-2013 OpenHeadend S.A.R.L.
+ * Copyright (C) 2012-2016 OpenHeadend S.A.R.L.
  *
  * Authors: Christophe Massiot
  *
@@ -47,6 +47,10 @@ UREF_ATTR_UNSIGNED_SH(pic, hposition, UDICT_TYPE_PIC_HPOSITION,
         horizontal position)
 UREF_ATTR_UNSIGNED_SH(pic, vposition, UDICT_TYPE_PIC_VPOSITION,
         vertical position)
+UREF_ATTR_UNSIGNED_SH(pic, lpadding, UDICT_TYPE_PIC_LPADDING, left padding)
+UREF_ATTR_UNSIGNED_SH(pic, rpadding, UDICT_TYPE_PIC_RPADDING, right padding)
+UREF_ATTR_UNSIGNED_SH(pic, tpadding, UDICT_TYPE_PIC_TPADDING, top padding)
+UREF_ATTR_UNSIGNED_SH(pic, bpadding, UDICT_TYPE_PIC_BPADDING, bottom padding)
 UREF_ATTR_VOID_SH(pic, progressive, UDICT_TYPE_PIC_PROGRESSIVE, progressive)
 UREF_ATTR_VOID_SH(pic, tf, UDICT_TYPE_PIC_TF, top field present)
 UREF_ATTR_VOID_SH(pic, bf, UDICT_TYPE_PIC_BF, bottom field present)
@@ -173,30 +177,18 @@ static inline int uref_pic_clear(struct uref *uref,
     return ubuf_pic_clear(uref->ubuf, hoffset, voffset, hsize, vsize, fullrange);
 }
 
-/** @This blits a picture ubuf to an uref.
- *
- * @param uref pointer to uref structure
- * @param ubuf pointer to ubuf structure
- * @param dest_hoffset number of pixels to seek at the beginning of each line of
- * dest
- * @param dest_voffset number of lines to seek at the beginning of dest
- * @param src_hoffset number of pixels to skip at the beginning of each line of
- * src
- * @param src_voffset number of lines to skip at the beginning of src
- * @param extract_hsize horizontal size to copy
- * @param extract_vsize vertical size to copy
- * @return an error code
- */
+/** @see ubuf_pic_blit */
 static inline int uref_pic_blit(struct uref *uref, struct ubuf *ubuf,
                                 int dest_hoffset, int dest_voffset,
                                 int src_hoffset, int src_voffset,
-                                int extract_hsize, int extract_vsize)
+                                int extract_hsize, int extract_vsize,
+                                const uint8_t alpha, const uint8_t threshold)
 {
     if (uref->ubuf == NULL)
         return UBASE_ERR_INVALID;
     return ubuf_pic_blit(uref->ubuf, ubuf, dest_hoffset, dest_voffset,
                          src_hoffset, src_voffset,
-                         extract_hsize, extract_vsize);
+                         extract_hsize, extract_vsize, alpha, threshold);
 }
 
 /** @This allocates a new ubuf of size new_hsize/new_vsize, and copies part of

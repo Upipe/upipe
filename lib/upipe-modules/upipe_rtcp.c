@@ -42,9 +42,7 @@
 #include <upipe/upipe_helper_upump.h>
 #include <upipe-modules/upipe_rtcp.h>
 
-#include <bitstream/ietf/rtcp.h>
-
-#define RTCP_SR_SIZE    28
+#include <bitstream/ietf/rtcp_sr.h>
 
 struct upipe_rtcp {
     /** refcount management structure */
@@ -275,26 +273,14 @@ static int upipe_rtcp_control(struct upipe *upipe, int command, va_list args)
 }
 
 static void upipe_rtcp_send_sr(struct upipe *upipe, struct upump **upump_p,
-                               struct uref *uref)
+                                uint64_t cr, uint64_t cr_prog)
 {
     struct upipe_rtcp *upipe_rtcp = upipe_rtcp_from_upipe(upipe);
-
-    uint64_t cr = 0;
-    if (unlikely(!ubase_check(uref_clock_get_cr_sys(uref, &cr)))) {
-        upipe_throw_fatal(upipe, UBASE_ERR_UNKNOWN);
-        return;
-    }
 
     lldiv_t div = lldiv(cr, UCLOCK_FREQ);
     uint64_t ntp_time =  ((uint64_t)div.quot << 32) +
         ((uint64_t)div.rem << 32) / UCLOCK_FREQ;
 
-    /* timestamp (synced to program clock ref, fallback to system clock ref) */
-
-    uint64_t cr_prog = 0;
-    if (unlikely(!ubase_check(uref_clock_get_pts_prog(uref, &cr_prog)))) {
-        uref_clock_get_pts_sys(uref, &cr_prog);
-    }
     div = lldiv(cr_prog, UCLOCK_FREQ);
     uint32_t ts = div.quot * upipe_rtcp->clockrate
          + ((uint64_t)div.rem * upipe_rtcp->clockrate)/UCLOCK_FREQ;
@@ -332,6 +318,7 @@ static void upipe_rtcp_input(struct upipe *upipe, struct uref *uref,
     size_t block_size = 0;
     if (unlikely(!ubase_check(uref_block_size(uref, &block_size)))) {
         upipe_err(upipe, "fail to get uref block size");
+        uref_free(uref);
         return;
     }
     upipe_rtcp->packet_count++;
@@ -340,17 +327,28 @@ static void upipe_rtcp_input(struct upipe *upipe, struct uref *uref,
     uint64_t cr = 0;
     if (unlikely(!ubase_check(uref_clock_get_cr_sys(uref, &cr)))) {
         upipe_warn_va(upipe, "non-dated buffer %p", uref);
+        uref_free(uref);
         return;
     }
 
     if (upipe_rtcp->last_sent == 0)
         upipe_rtcp->last_sent = cr;
 
-    if ((cr - upipe_rtcp->last_sent) < upipe_rtcp->rate)
+    if ((cr - upipe_rtcp->last_sent) < upipe_rtcp->rate) {
+        uref_free(uref);
         return;
+    }
 
     upipe_rtcp->last_sent = cr;
-    upipe_rtcp_send_sr(upipe, upump_p, uref);
+
+    /* timestamp (synced to program clock ref, fallback to system clock ref) */
+    uint64_t cr_prog = 0;
+    if (unlikely(!ubase_check(uref_clock_get_pts_prog(uref, &cr_prog)))) {
+        uref_clock_get_pts_sys(uref, &cr_prog);
+    }
+
+    uref_free(uref);
+    upipe_rtcp_send_sr(upipe, upump_p, cr, cr_prog);
 }
 
 static struct upipe_mgr upipe_rtcp_mgr = {

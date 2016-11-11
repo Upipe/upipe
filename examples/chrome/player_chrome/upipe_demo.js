@@ -111,7 +111,7 @@ function BarGraph(ctx) {
   var endArr;
   var looping = false;
     
-  // Loop method adjusts the height of bar and redraws if neccessary
+  // Loop method adjusts the height of bar and redraws if necessary
   var loop = function () {
 
     var delta;

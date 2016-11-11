@@ -67,7 +67,7 @@
 
 #define DEFAULT_TYPE            96 /* first dynamic rtp type */
 #define DEFAULT_TS_SYNC         UPIPE_RTP_PREPEND_TS_SYNC_CR
-#define DEFAULT_CLOCKRATE   90000
+#define DEFAULT_CLOCKRATE       90000
 #define RTP_TYPE_INVALID        UINT8_MAX
 
 /** upipe_rtp_prepend structure */
@@ -167,6 +167,33 @@ static void upipe_rtp_prepend_input(struct upipe *upipe, struct uref *uref,
     ubuf_block_unmap(header, 0);
     upipe_rtp_prepend->seqnum++;
 
+    const char *def;
+    ubase_assert(uref_flow_get_def(upipe_rtp_prepend->flow_def, &def));
+    if (!ubase_ncmp(def, "block.rtp.mp2.sound.") ||
+            !ubase_ncmp(def, "block.rtp.mp3.sound.")) {
+        /* alloc mpa header */
+        struct ubuf *mpa_header = ubuf_block_alloc(uref->ubuf->mgr, 4);
+        if (unlikely(!mpa_header)) {
+            upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
+            uref_free(uref);
+            ubuf_free(header);
+            return;
+        }
+
+        /* write mpa mpa_header */
+        ubuf_block_write(mpa_header, 0, &size, &buf);
+        memset(buf, 0, 4); // frag_offset = 0
+        ubuf_block_unmap(mpa_header, 0);
+
+        if (unlikely(!ubase_check(ubuf_block_append(header, mpa_header)))) {
+            upipe_warn(upipe, "could not append mpa header to header");
+            ubuf_free(header);
+            ubuf_free(mpa_header);
+            uref_free(uref);
+            return;
+        }
+    }
+
     /* append payload (current ubuf) to header to form segmented ubuf */
     payload = uref_detach_ubuf(uref);
     if (unlikely(!ubase_check(ubuf_block_append(header, payload)))) {
@@ -239,9 +266,8 @@ static int upipe_rtp_prepend_infer_ts_sync(struct upipe *upipe, const char *def)
         enum upipe_rtp_prepend_ts_sync sync;
     } values[] = {
         { "h264.pic", UPIPE_RTP_PREPEND_TS_SYNC_PTS },
-        { "aac.sound", UPIPE_RTP_PREPEND_TS_SYNC_PTS },
+        { "sound", UPIPE_RTP_PREPEND_TS_SYNC_PTS },
         { "mpegts", UPIPE_RTP_PREPEND_TS_SYNC_CR },
-        { "opus.sound", UPIPE_RTP_PREPEND_TS_SYNC_PTS },
     };
 
     struct upipe_rtp_prepend *upipe_rtp_prepend =
@@ -334,6 +360,18 @@ static int upipe_rtp_prepend_infer_clockrate(struct upipe *upipe,
     return UBASE_ERR_NONE;
 }
 
+/** @internal @This prints a notice on the parameters.
+ *
+ * @param upipe description structure of the pipe
+ */
+static void upipe_rtp_prepend_notice(struct upipe *upipe)
+{
+    struct upipe_rtp_prepend *upipe_rtp_prepend =
+        upipe_rtp_prepend_from_upipe(upipe);
+    upipe_notice_va(upipe, "using type %"PRIu8" with rate %"PRIu32" Hz",
+                    upipe_rtp_prepend->type, upipe_rtp_prepend->clockrate);
+}
+
 /** @internal @This sets the input flow definition.
  *
  * @param upipe description structure of the pipe
@@ -353,6 +391,7 @@ static int upipe_rtp_prepend_set_flow_def(struct upipe *upipe,
     UBASE_RETURN(upipe_rtp_prepend_infer_type(upipe, def))
     UBASE_RETURN(upipe_rtp_prepend_infer_ts_sync(upipe, def))
     UBASE_RETURN(upipe_rtp_prepend_infer_clockrate(upipe, flow_def))
+    upipe_rtp_prepend_notice(upipe);
 
     struct uref *flow_def_dup;
     if ((flow_def_dup = uref_dup(flow_def)) == NULL)
@@ -379,6 +418,7 @@ static int _upipe_rtp_prepend_set_type(struct upipe *upipe, uint8_t type)
         upipe_rtp_prepend_from_upipe(upipe);
     upipe_rtp_prepend->type_overwrite = true;
     upipe_rtp_prepend->type = type & 0x7f;
+    upipe_rtp_prepend_notice(upipe);
     return UBASE_ERR_NONE;
 }
 
@@ -411,6 +451,7 @@ static int _upipe_rtp_prepend_set_clockrate(struct upipe *upipe,
 
     upipe_rtp_prepend->clockrate_overwrite = true;
     upipe_rtp_prepend->clockrate = clockrate;
+    upipe_rtp_prepend_notice(upipe);
     return UBASE_ERR_NONE;
 }
 

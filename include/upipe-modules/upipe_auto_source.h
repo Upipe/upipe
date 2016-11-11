@@ -31,7 +31,7 @@ extern "C" {
 
 #include <upipe/upipe.h>
 
-#define UPIPE_AUTOSRC_SIGNATURE UBASE_FOURCC('a','s','r','c')
+#define UPIPE_AUTO_SRC_SIGNATURE UBASE_FOURCC('a','s','r','c')
 
 /** @This extends @ref upipe_command with specific auto source commands. */
 enum upipe_auto_src_mgr_command {
@@ -48,7 +48,7 @@ enum upipe_auto_src_mgr_command {
  * @param mgr pointer to upipe auto source manager
  * @param scheme an URI scheme (ex: "http", "file", "https", ...)
  * @param mgr_src the @tt {struct upipe_mgr *} to use for the URI beginning
- * with scheme @ref scheme
+ * with scheme
  * @return an error code
  */
 static inline int upipe_auto_src_mgr_set_mgr(struct upipe_mgr *mgr,
@@ -56,7 +56,7 @@ static inline int upipe_auto_src_mgr_set_mgr(struct upipe_mgr *mgr,
                                              struct upipe_mgr *mgr_src)
 {
     return upipe_mgr_control(mgr, UPIPE_AUTO_SRC_MGR_SET_MGR,
-                             UPIPE_AUTOSRC_SIGNATURE, scheme, mgr_src);
+                             UPIPE_AUTO_SRC_SIGNATURE, scheme, mgr_src);
 }
 
 /** @This gets the @tt {struct upipe_mgr *} used for a given scheme.
@@ -64,7 +64,7 @@ static inline int upipe_auto_src_mgr_set_mgr(struct upipe_mgr *mgr,
  * @param mgr pointer to upipe auto source manager
  * @param scheme an URI scheme (ex: "http", "file", "https", ...)
  * @param mgr_src_p a pointer filled with the @tt {struct upipe_mgr *}
- * used for the scheme @ref scheme
+ * used for the scheme
  * @return an error code
  */
 static inline int upipe_auto_src_mgr_get_mgr(struct upipe_mgr *mgr,
@@ -72,7 +72,7 @@ static inline int upipe_auto_src_mgr_get_mgr(struct upipe_mgr *mgr,
                                              struct upipe_mgr **mgr_src_p)
 {
     return upipe_mgr_control(mgr, UPIPE_AUTO_SRC_MGR_GET_MGR,
-                             UPIPE_AUTOSRC_SIGNATURE, scheme, mgr_src_p);
+                             UPIPE_AUTO_SRC_SIGNATURE, scheme, mgr_src_p);
 }
 
 /** @This returns the management structure for auto source.

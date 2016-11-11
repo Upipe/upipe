@@ -68,6 +68,8 @@ enum uprobe_event {
     /** a pipe is about to be destroyed and will no longer accept input
      * and control commands (void) */
     UPROBE_DEAD,
+    /** a queue stalled due to a full FIFO (void) */
+    UPROBE_STALLED,
     /** unable to read from a source because the end of file was reached, or
      * the component disappeared, or because of an error (void) */
     UPROBE_SOURCE_END,
@@ -84,6 +86,8 @@ enum uprobe_event {
     UPROBE_FREEZE_UPUMP_MGR,
     /** upump manager probe is allowed to answer (void) */
     UPROBE_THAW_UPUMP_MGR,
+    /** a source pipe manager is necessary to operate (struct upipe_mgr **) */
+    UPROBE_NEED_SOURCE_MGR,
     /** a new flow definition is available on the output (struct uref *) */
     UPROBE_NEW_FLOW_DEF,
     /** a new random access point is available in the input (struct uref *) */
@@ -122,6 +126,7 @@ static inline const char *uprobe_event_str(int event)
     case UPROBE_ERROR: return "UPROBE_ERROR";
     case UPROBE_READY: return "UPROBE_READY";
     case UPROBE_DEAD: return "UPROBE_DEAD";
+    case UPROBE_STALLED: return "UPROBE_STALLED";
     case UPROBE_SOURCE_END: return "UPROBE_SOURCE_END";
     case UPROBE_SINK_END: return "UPROBE_SINK_END";
     case UPROBE_NEED_OUTPUT: return "UPROBE_NEED_OUTPUT";

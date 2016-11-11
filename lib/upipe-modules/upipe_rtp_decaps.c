@@ -77,6 +77,9 @@ struct upipe_rtpd {
     /** list of output requests */
     struct uchain request_list;
 
+    /* number of packets lost */
+    uint64_t lost;
+
     /** public upipe structure */
     struct upipe upipe;
 };
@@ -107,6 +110,7 @@ static struct upipe *upipe_rtpd_alloc(struct upipe_mgr *mgr,
     upipe_rtpd_init_output(upipe);
     upipe_rtpd->expected_seqnum = -1;
     upipe_rtpd->type = 0;
+    upipe_rtpd->lost = 0;
     upipe_rtpd->flow_def_input = NULL;
 
     upipe_throw_ready(upipe);
@@ -164,9 +168,8 @@ static inline void upipe_rtpd_input(struct upipe *upipe, struct uref *uref,
 
     if (unlikely(upipe_rtpd->expected_seqnum != -1 &&
                  seqnum != upipe_rtpd->expected_seqnum)) {
-        upipe_warn_va(upipe, "potentially lost %d RTP packets",
-                      (seqnum + UINT16_MAX + 1 - upipe_rtpd->expected_seqnum) &
-                      UINT16_MAX);
+        upipe_rtpd->lost +=
+            (seqnum + UINT16_MAX + 1 - upipe_rtpd->expected_seqnum) & UINT16_MAX;
         uref_flow_set_discontinuity(uref);
     }
     upipe_rtpd->expected_seqnum = seqnum + 1;
@@ -226,6 +229,7 @@ static int upipe_rtpd_set_flow_def(struct upipe *upipe, struct uref *flow_def)
  */
 static int upipe_rtpd_control(struct upipe *upipe, int command, va_list args)
 {
+    struct upipe_rtpd *upipe_rtpd = upipe_rtpd_from_upipe(upipe);
     switch (command) {
         case UPIPE_REGISTER_REQUEST: {
             struct urequest *request = va_arg(args, struct urequest *);
@@ -250,6 +254,13 @@ static int upipe_rtpd_control(struct upipe *upipe, int command, va_list args)
         case UPIPE_SET_OUTPUT: {
             struct upipe *output = va_arg(args, struct upipe *);
             return upipe_rtpd_set_output(upipe, output);
+        }
+        case UPIPE_RTPD_GET_PACKETS_LOST: {
+            UBASE_SIGNATURE_CHECK(args, UPIPE_RTPD_SIGNATURE)
+            uint64_t *lost = va_arg(args, uint64_t *);
+            *lost = upipe_rtpd->lost;
+            upipe_rtpd->lost = 0; /* reset counter */
+            return UBASE_ERR_NONE;
         }
         default:
             return UBASE_ERR_UNHANDLED;

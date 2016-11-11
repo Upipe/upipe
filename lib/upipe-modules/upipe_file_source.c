@@ -125,6 +125,8 @@ struct upipe_fsrc {
 
     /** public upipe structure */
     struct upipe upipe;
+    /** guard for upump */
+    bool safe;
 };
 
 UPIPE_HELPER_UPIPE(upipe_fsrc, upipe, UPIPE_FSRC_SIGNATURE)
@@ -172,8 +174,17 @@ static struct upipe *upipe_fsrc_alloc(struct upipe_mgr *mgr,
     upipe_fsrc->uri = NULL;
     upipe_fsrc->fd = -1;
     upipe_fsrc->length = (uint64_t)-1;
+    upipe_fsrc->safe = false;
     upipe_throw_ready(upipe);
     return upipe;
+}
+
+static void upipe_fsrc_set_upump_safe(struct upipe *upipe,
+                                      struct upump *upump)
+{
+    struct upipe_fsrc *upipe_fsrc = upipe_fsrc_from_upipe(upipe);
+    upipe_fsrc->safe = false;
+    upipe_fsrc_set_upump(upipe, upump);
 }
 
 /** @internal @This returns the path of the currently opened file.
@@ -210,7 +221,8 @@ static void upipe_fsrc_worker(struct upump *upump)
         if (ubase_check(upipe_fsrc_get_uri(upipe, &path)))
             path = "(none)";
         upipe_notice_va(upipe, "end of range %s", path);
-        upipe_fsrc_set_upump(upipe, NULL);
+        upipe_fsrc_set_upump_safe(upipe, NULL);
+        ubase_clean_fd(&upipe_fsrc->fd);
         upipe_throw_source_end(upipe);
         return;
     }
@@ -243,10 +255,6 @@ static void upipe_fsrc_worker(struct upump *upump)
     ssize_t ret = read(upipe_fsrc->fd, buffer, upipe_fsrc->output_size);
     uref_block_unmap(uref, 0);
 
-    const char *path;
-    if (!ubase_check(upipe_fsrc_get_uri(upipe, &path)))
-        path = "(none)";
-
     if (unlikely(ret == -1)) {
         uref_free(uref);
         switch (errno) {
@@ -263,8 +271,11 @@ static void upipe_fsrc_worker(struct upump *upump)
             default:
                 break;
         }
+        const char *path = "(none)";
+        upipe_fsrc_get_uri(upipe, &path);
         upipe_err_va(upipe, "read error from %s (%m)", path);
-        upipe_fsrc_set_upump(upipe, NULL);
+        upipe_fsrc_set_upump_safe(upipe, NULL);
+        ubase_clean_fd(&upipe_fsrc->fd);
         upipe_throw_source_end(upipe);
         return;
     }
@@ -276,12 +287,41 @@ static void upipe_fsrc_worker(struct upump *upump)
         uref_block_resize(uref, 0, ret);
     if (unlikely(ret == 0))
         uref_block_set_end(uref);
+    upipe_fsrc->safe = true;
     upipe_fsrc_output(upipe, uref, &upipe_fsrc->upump);
-    if (unlikely(ret == 0)) {
+    if (likely(upipe_fsrc->safe) && unlikely(ret == 0)) {
+        const char *path = "(none)";
+        upipe_fsrc_get_uri(upipe, &path);
         upipe_notice_va(upipe, "end of file %s", path);
-        upipe_fsrc_set_upump(upipe, NULL);
+        upipe_fsrc_set_upump_safe(upipe, NULL);
+        ubase_clean_fd(&upipe_fsrc->fd);
         upipe_throw_source_end(upipe);
     }
+}
+
+/** @internal @This builds the flow definition.
+ *
+ * @param upipe description structure of the pipe
+ * @return an error code
+ */
+static void upipe_fsrc_build_flow_def(struct upipe *upipe)
+{
+    struct upipe_fsrc *upipe_fsrc = upipe_fsrc_from_upipe(upipe);
+    if (upipe_fsrc->uref_mgr == NULL)
+        return;
+    struct uref *flow_def =
+        uref_block_flow_alloc_def(upipe_fsrc->uref_mgr, NULL);
+    if (unlikely(flow_def == NULL)) {
+        upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
+        return;
+    }
+
+    uref_block_flow_set_size(flow_def, upipe_fsrc->output_size);
+    if (upipe_fsrc->uri != NULL &&
+        !ubase_check(uref_uri_copy(flow_def, upipe_fsrc->uri)))
+        upipe_warn(upipe, "fail to import uri to flow format");
+
+    upipe_fsrc_require_ubuf_mgr(upipe, flow_def);
 }
 
 /** @internal @This checks if the pump may be allocated.
@@ -296,11 +336,6 @@ static int upipe_fsrc_check(struct upipe *upipe, struct uref *flow_format)
     if (flow_format != NULL)
         upipe_fsrc_store_flow_def(upipe, flow_format);
 
-    if (upipe_fsrc->flow_def &&
-        !ubase_check(uref_uri_import(upipe_fsrc->flow_def,
-                                     upipe_fsrc->uri)))
-        upipe_warn(upipe, "fail to import uri to flow format");
-
     upipe_fsrc_check_upump_mgr(upipe);
     if (upipe_fsrc->upump_mgr == NULL)
         return UBASE_ERR_NONE;
@@ -310,15 +345,10 @@ static int upipe_fsrc_check(struct upipe *upipe, struct uref *flow_format)
         return UBASE_ERR_NONE;
     }
 
-    if (upipe_fsrc->ubuf_mgr == NULL) {
-        struct uref *flow_format =
-            uref_block_flow_alloc_def(upipe_fsrc->uref_mgr, NULL);
-        uref_block_flow_set_size(flow_format, upipe_fsrc->output_size);
-        if (unlikely(flow_format == NULL)) {
-            upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
-            return UBASE_ERR_ALLOC;
-        }
-        upipe_fsrc_require_ubuf_mgr(upipe, flow_format);
+    if (upipe_fsrc->ubuf_mgr == NULL &&
+        urequest_get_opaque(&upipe_fsrc->ubuf_mgr_request, struct upipe *)
+            != NULL) {
+        upipe_fsrc_build_flow_def(upipe);
         return UBASE_ERR_NONE;
     }
 
@@ -341,7 +371,7 @@ static int upipe_fsrc_check(struct upipe *upipe, struct uref *flow_format)
             upipe_throw_fatal(upipe, UBASE_ERR_UPUMP);
             return UBASE_ERR_UPUMP;
         }
-        upipe_fsrc_set_upump(upipe, upump);
+        upipe_fsrc_set_upump_safe(upipe, upump);
         upump_start(upump);
     }
     return UBASE_ERR_NONE;
@@ -381,6 +411,7 @@ static int upipe_fsrc_open(struct upipe *upipe)
     upipe_fsrc->fd = fd;
     upipe_fsrc->regular_file = !!S_ISREG(st.st_mode);
     upipe_notice_va(upipe, "opening file %s", path);
+    upipe_fsrc_build_flow_def(upipe);
     return UBASE_ERR_NONE;
 }
 
@@ -396,7 +427,7 @@ static void upipe_fsrc_close(struct upipe *upipe)
         ubase_clean_fd(&upipe_fsrc->fd);
     }
     upipe_fsrc->length = (uint64_t)-1;
-    upipe_fsrc_set_upump(upipe, NULL);
+    upipe_fsrc_set_upump_safe(upipe, NULL);
     uref_free(upipe_fsrc->uri);
     upipe_fsrc->uri = NULL;
 }
@@ -566,10 +597,10 @@ static int _upipe_fsrc_control(struct upipe *upipe, int command, va_list args)
 {
     switch (command) {
         case UPIPE_ATTACH_UPUMP_MGR:
-            upipe_fsrc_set_upump(upipe, NULL);
+            upipe_fsrc_set_upump_safe(upipe, NULL);
             return upipe_fsrc_attach_upump_mgr(upipe);
         case UPIPE_ATTACH_UCLOCK:
-            upipe_fsrc_set_upump(upipe, NULL);
+            upipe_fsrc_set_upump_safe(upipe, NULL);
             upipe_fsrc_require_uclock(upipe);
             return UBASE_ERR_NONE;
 
@@ -592,7 +623,9 @@ static int _upipe_fsrc_control(struct upipe *upipe, int command, va_list args)
         }
         case UPIPE_SET_OUTPUT_SIZE: {
             unsigned int output_size = va_arg(args, unsigned int);
-            return upipe_fsrc_set_output_size(upipe, output_size);
+            UBASE_RETURN(upipe_fsrc_set_output_size(upipe, output_size))
+            upipe_fsrc_build_flow_def(upipe);
+            return UBASE_ERR_NONE;
         }
         case UPIPE_GET_URI: {
             const char **uri_p = va_arg(args, const char **);

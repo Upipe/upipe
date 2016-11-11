@@ -1,3 +1,4 @@
+NULL =
 lib_LTLIBRARIES = libupipe_modules.la
 
 libupipe_modules_la_SOURCES = \
@@ -25,9 +26,11 @@ libupipe_modules_la_SOURCES = \
 	upipe_probe_uref.c \
 	upipe_noclock.c \
 	upipe_nodemux.c \
+	upipe_dejitter.c \
 	upipe_delay.c \
 	upipe_skip.c \
 	upipe_aggregate.c \
+	upipe_convert_to_block.c \
 	upipe_htons.c \
 	upipe_chunk_stream.c \
 	upipe_setflowdef.c \
@@ -35,6 +38,7 @@ libupipe_modules_la_SOURCES = \
 	upipe_setrap.c \
 	upipe_match_attr.c \
 	upipe_blit.c \
+	upipe_crop.c \
 	upipe_audio_split.c \
 	upipe_videocont.c \
 	upipe_audiocont.c \
@@ -50,9 +54,20 @@ libupipe_modules_la_SOURCES = \
 	upipe_dump.c \
 	uprobe_http_redirect.c \
 	upipe_m3u_reader.c \
-	upipe_m3u_playlist.c \
 	upipe_auto_source.c \
-	upipe_buffer.c
+	upipe_buffer.c \
+	upipe_aes_decrypt.c \
+	upipe_rate_limit.c \
+	upipe_burst.c \
+	upipe_sequential_source.c \
+	upipe_segment_source.c \
+	upipe_subpic_schedule.c \
+	upipe_id3v2.c \
+	id3v2.h \
+	upipe_ntsc_prepend.c \
+	upipe_rtp_pcm_unpack.c \
+	upipe_rtp_pcm_pack.c \
+	$(NULL)
 
 if HAVE_WRITEV
 libupipe_modules_la_SOURCES += \
@@ -65,7 +80,10 @@ libupipe_modules_la_SOURCES += \
 	upipe_rtp_decaps.c \
 	upipe_rtp_prepend.c \
 	upipe_rtp_source.c \
-	upipe_rtcp.c
+	upipe_rtcp.c \
+	upipe_rtp_reorder.c \
+	upipe_s337_encaps.c \
+	$(NULL)
 endif
 
 libupipe_modules_la_CPPFLAGS = -I$(top_builddir)/include -I$(top_srcdir)/include

@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2012-2015 OpenHeadend S.A.R.L.
+ * Copyright (C) 2012-2016 OpenHeadend S.A.R.L.
  *
  * Authors: Benjamin Cohen
  *          Christophe Massiot
@@ -104,9 +104,9 @@ struct upipe_sws {
     /** swscale image conversion context [0] for progressive, [1,2] interlaced */
     struct SwsContext *convert_ctx[3];
     /** input pixel format */
-    enum PixelFormat input_pix_fmt;
+    enum AVPixelFormat input_pix_fmt;
     /** requested output pixel format */
-    enum PixelFormat output_pix_fmt;
+    enum AVPixelFormat output_pix_fmt;
     /** input chroma map */
     const char *input_chroma_map[UPIPE_AV_MAX_PLANES];
     /** output chroma map */
@@ -275,8 +275,10 @@ static bool upipe_sws_handle(struct upipe *upipe, struct uref *uref,
         upipe_verbose_va(upipe, "input_stride[%d] %d",
                          i, input_strides[i]);
     }
-    input_planes[i] = NULL;
-    input_strides[i] = 0;
+    for ( ; i < UPIPE_AV_MAX_PLANES; i++) {
+        input_planes[i] = NULL;
+        input_strides[i] = 0;
+    }
 
     /* allocate dest ubuf */
     struct ubuf *ubuf = ubuf_pic_alloc(upipe_sws->ubuf_mgr,
@@ -314,8 +316,10 @@ static bool upipe_sws_handle(struct upipe *upipe, struct uref *uref,
         upipe_verbose_va(upipe, "output_stride[%d] %d",
                          i, output_strides[i]);
     }
-    output_planes[i] = NULL;
-    output_strides[i] = 0;
+    for ( ; i < UPIPE_AV_MAX_PLANES; i++) {
+        output_planes[i] = NULL;
+        output_strides[i] = 0;
+    }
 
     /* fire ! */
     int ret = 0, ret2 = 1;
@@ -667,6 +671,7 @@ static struct upipe *upipe_sws_alloc(struct upipe_mgr *mgr,
     upipe_sws->output_color_range =
         ubase_check(uref_pic_flow_get_full_range(flow_def)) ? 1 : 0;
     UBASE_FATAL(upipe, uref_pic_flow_set_align(flow_def, 16))
+
     upipe_sws_store_flow_def_attr(upipe, flow_def);
     return upipe;
 

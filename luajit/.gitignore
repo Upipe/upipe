@@ -1,0 +1,13 @@
+!/Makefile.in
+/build-*
+/*.static.c
+/*.debug_info
+/*.so
+/*-sigs.lua
+/upipe.defs
+/uref-getters.lua
+/upipe-getters.lua
+/libupipe.lua
+/upipe-*.lua
+/upump-*.lua
+!/upipe-control-args.lua

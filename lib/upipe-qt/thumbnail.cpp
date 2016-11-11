@@ -64,7 +64,7 @@
 
 /** @This is the main constructor of the Thumbnail
  *
- * @param url choosen url
+ * @param url chosen url
  */
 Thumbnail::Thumbnail(const char *url)
 {
@@ -81,7 +81,7 @@ Thumbnail::Thumbnail(const char *url)
 
 /** @This set the uref_mgr of the Thumbnail
  *
- * @param uref_mgr choosen uref_mgr
+ * @param uref_mgr chosen uref_mgr
  */
 void Thumbnail::seturefmgr(struct uref_mgr *uref_mgr)
 {
@@ -90,7 +90,7 @@ void Thumbnail::seturefmgr(struct uref_mgr *uref_mgr)
 
 /** @This set the ubuf_mgr of the Thumbnail
  *
- * @param ubuf_mgr choosen ubuf_mgr
+ * @param ubuf_mgr chosen ubuf_mgr
  */
 void Thumbnail::setubufmgr(struct ubuf_mgr *ubuf_mgr)
 {
@@ -99,7 +99,7 @@ void Thumbnail::setubufmgr(struct ubuf_mgr *ubuf_mgr)
 
 /** @This set the uqueue of the Thumbnail
  *
- * @param uqueue choosen uqueue
+ * @param uqueue chosen uqueue
  */
 void Thumbnail::setuqueue(struct uqueue *uqueue)
 {
@@ -108,7 +108,7 @@ void Thumbnail::setuqueue(struct uqueue *uqueue)
 
 /** @This set the second uqueue (uqueue2) of the Thumbnail
  *
- * @param uqueue2 choosen uqueue2
+ * @param uqueue2 chosen uqueue2
  */
 void Thumbnail::setuqueue2(struct uqueue *uqueue2)
 {
@@ -117,7 +117,7 @@ void Thumbnail::setuqueue2(struct uqueue *uqueue2)
 
 /** @This set the url of the Thumbnail
  *
- * @param url choosen url
+ * @param url chosen url
  */
 void Thumbnail::seturl(const char *url)
 {
@@ -126,7 +126,7 @@ void Thumbnail::seturl(const char *url)
 
 /** @This set the H size of the Thumbnail output
  *
- * @param H choosen H size
+ * @param H chosen H size
  */
 void Thumbnail::setH(int H)
 {
@@ -135,7 +135,7 @@ void Thumbnail::setH(int H)
 
 /** @This set the V size of the Thumbnail output
  *
- * @param V choosen V size
+ * @param V chosen V size
  */
 void Thumbnail::setV(int V)
 {

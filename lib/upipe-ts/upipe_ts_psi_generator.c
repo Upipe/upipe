@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2013-2015 OpenHeadend S.A.R.L.
+ * Copyright (C) 2013-2016 OpenHeadend S.A.R.L.
  *
  * Authors: Christophe Massiot
  *
@@ -63,6 +63,8 @@
 #define TB_RATE_PSI 125000
 /** default transport stream ID */
 #define DEFAULT_TSID 65535
+/** define to get timing verbosity */
+#undef VERBOSE_TIMING
 
 /** @internal @This is the private context of a ts psig pipe. */
 struct upipe_ts_psig {
@@ -72,6 +74,8 @@ struct upipe_ts_psig {
     struct uref *flow_def;
     /** true if the PAT update was frozen */
     bool frozen;
+    /** cr_sys of the next preparation */
+    uint64_t cr_sys_status;
 
     /** uref manager */
     struct uref_mgr *uref_mgr;
@@ -137,6 +141,8 @@ UPIPE_HELPER_UBUF_MGR(upipe_ts_psig, ubuf_mgr, flow_format, ubuf_mgr_request,
 static void upipe_ts_psig_build(struct upipe *upipe);
 /** @hidden */
 static void upipe_ts_psig_build_flow_def(struct upipe *upipe);
+/** @hidden */
+static void upipe_ts_psig_update_status(struct upipe *upipe);
 
 /** @internal @This is the private context of a program of a ts_psig pipe. */
 struct upipe_ts_psig_program {
@@ -286,11 +292,19 @@ static int upipe_ts_psig_flow_check(struct upipe *upipe,
             *descriptors_size_p += DESC0A_HEADER_SIZE +
                                    languages * DESC0A_LANGUAGE_SIZE;
 
-        if (!ubase_ncmp(raw_def, "block.ac3."))
+        if (!ubase_ncmp(raw_def, "block.ac3.")) {
             *descriptors_size_p += DESC6A_HEADER_SIZE;
-        else if (!ubase_ncmp(raw_def, "block.eac3."))
+            uint8_t component_type;
+            if (ubase_check(uref_ts_flow_get_component_type(flow->flow_def,
+                                                            &component_type)))
+                *descriptors_size_p += 1;
+        } else if (!ubase_ncmp(raw_def, "block.eac3.")) {
             *descriptors_size_p += DESC7A_HEADER_SIZE;
-        else if (!ubase_ncmp(raw_def, "block.dts."))
+            uint8_t component_type;
+            if (ubase_check(uref_ts_flow_get_component_type(flow->flow_def,
+                                                            &component_type)))
+                *descriptors_size_p += 1;
+        } else if (!ubase_ncmp(raw_def, "block.dts."))
             *descriptors_size_p += DESC7B_HEADER_SIZE;
         else if (!ubase_ncmp(raw_def, "block.opus."))
             *descriptors_size_p += DESC05_HEADER_SIZE;
@@ -303,7 +317,8 @@ static int upipe_ts_psig_flow_check(struct upipe *upipe,
     } else if (ubase_ncmp(raw_def, "block.mpeg1video.") &&
                ubase_ncmp(raw_def, "block.mpeg2video.") &&
                ubase_ncmp(raw_def, "block.mpeg4.") &&
-               ubase_ncmp(raw_def, "block.h264.")) {
+               ubase_ncmp(raw_def, "block.h264.") &&
+               ubase_ncmp(raw_def, "block.hevc.")) {
         upipe_warn_va(upipe, "unknown flow definition \"%s\"", raw_def);
         return UBASE_ERR_UNHANDLED;
     }
@@ -343,6 +358,8 @@ static int upipe_ts_psig_flow_build(struct upipe *upipe, uint8_t *es,
         stream_type = PMT_STREAMTYPE_VIDEO_MPEG4;
     else if (!ubase_ncmp(raw_def, "block.h264."))
         stream_type = PMT_STREAMTYPE_VIDEO_AVC;
+    else if (!ubase_ncmp(raw_def, "block.hevc."))
+        stream_type = PMT_STREAMTYPE_VIDEO_HEVC;
     else if (!ubase_ncmp(raw_def, "block.aac."))
         stream_type = PMT_STREAMTYPE_AUDIO_ADTS;
     else if (!ubase_ncmp(raw_def, "block.mp2.") ||
@@ -461,14 +478,28 @@ static int upipe_ts_psig_flow_build(struct upipe *upipe, uint8_t *es,
         if (!ubase_ncmp(raw_def, "block.ac3.")) {
             desc = descs_get_desc(descs, k++);
             desc6a_init(desc);
-            desc_set_length(desc, DESC6A_HEADER_SIZE - DESC_HEADER_SIZE);
             desc6a_clear_flags(desc);
+
+            uint8_t component_type;
+            if (ubase_check(uref_ts_flow_get_component_type(flow->flow_def,
+                                                            &component_type))) {
+                desc6a_set_component_type_flag(desc, true);
+                desc6a_set_component_type(desc, component_type);
+            }
+            desc6a_set_length(desc);
 
         } else if (!ubase_ncmp(raw_def, "block.eac3.")) {
             desc = descs_get_desc(descs, k++);
             desc7a_init(desc);
-            desc_set_length(desc, DESC7A_HEADER_SIZE - DESC_HEADER_SIZE);
             desc7a_clear_flags(desc);
+
+            uint8_t component_type;
+            if (ubase_check(uref_ts_flow_get_component_type(flow->flow_def,
+                                                            &component_type))) {
+                desc7a_set_component_type_flag(desc, true);
+                desc7a_set_component_type(desc, component_type);
+            }
+            desc7a_set_length(desc);
 
         } else if (!ubase_ncmp(raw_def, "block.dts.")) {
             desc = descs_get_desc(descs, k++);
@@ -612,7 +643,8 @@ static int upipe_ts_psig_flow_set_flow_def(struct upipe *upipe,
     bool pmt_change = flow->flow_def == NULL ||
         uref_flow_cmp_raw_def(flow_def, flow->flow_def) ||
         uref_ts_flow_cmp_pid(flow_def, flow->flow_def) ||
-        uref_ts_flow_compare_descriptors(flow_def, flow->flow_def);
+        uref_ts_flow_compare_descriptors(flow_def, flow->flow_def) ||
+        uref_ts_flow_cmp_component_type(flow_def, flow->flow_def);
 
     uref_free(flow->flow_def);
     flow->flow_def = flow_def_dup;
@@ -887,6 +919,7 @@ static void upipe_ts_psig_program_build(struct upipe *upipe)
     program->pmt_cr_sys = 0;
     program->pmt_sent = false;
     upipe_notice(upipe, "end PMT");
+    upipe_ts_psig_update_status(upipe_ts_psig_to_upipe(psig));
 }
 
 /** @internal @This sends a PMT PSI section.
@@ -900,8 +933,7 @@ static void upipe_ts_psig_program_send(struct upipe *upipe, uint64_t cr_sys)
         upipe_ts_psig_program_from_upipe(upipe);
     struct upipe_ts_psig *psig =
         upipe_ts_psig_from_program_mgr(upipe->mgr);
-    if (unlikely(psig->flow_def == NULL || psig->uref_mgr == NULL ||
-                 program->pmt_section == NULL || !program->pmt_interval ||
+    if (unlikely(program->pmt_section == NULL || !program->pmt_interval ||
                  program->pmt_cr_sys + program->pmt_interval > cr_sys))
         return;
 
@@ -1031,6 +1063,7 @@ static int _upipe_ts_psig_program_set_pcr_pid(struct upipe *upipe,
     struct upipe_ts_psig_program *upipe_ts_psig_program =
         upipe_ts_psig_program_from_upipe(upipe);
     upipe_ts_psig_program->pcr_pid = pcr_pid;
+    upipe_ts_psig_program_build(upipe);
     return UBASE_ERR_NONE;
 }
 
@@ -1061,8 +1094,11 @@ static int upipe_ts_psig_program_set_pmt_interval(struct upipe *upipe,
 {
     struct upipe_ts_psig_program *upipe_ts_psig_program =
         upipe_ts_psig_program_from_upipe(upipe);
+    struct upipe_ts_psig *upipe_ts_psig =
+        upipe_ts_psig_from_program_mgr(upipe->mgr);
     upipe_ts_psig_program->pmt_interval = interval;
     upipe_ts_psig_program_build_flow_def(upipe);
+    upipe_ts_psig_update_status(upipe_ts_psig_to_upipe(upipe_ts_psig));
     return UBASE_ERR_NONE;
 }
 
@@ -1265,6 +1301,7 @@ static struct upipe *upipe_ts_psig_alloc(struct upipe_mgr *mgr,
     upipe_ts_psig_init_sub_programs(upipe);
     upipe_ts_psig->flow_def = NULL;
     upipe_ts_psig->frozen = false;
+    upipe_ts_psig->cr_sys_status = UINT64_MAX;
 
     upipe_ts_psig->pat_version = 0;
     ulist_init(&upipe_ts_psig->pat_sections);
@@ -1435,6 +1472,7 @@ static void upipe_ts_psig_build(struct upipe *upipe)
 
     psig->pat_nb_sections = nb_sections;
     psig->pat_size = total_size;
+    upipe_ts_psig_update_status(upipe);
 }
 
 /** @internal @This sends a PAT PSI section.
@@ -1445,8 +1483,7 @@ static void upipe_ts_psig_build(struct upipe *upipe)
 static void upipe_ts_psig_send(struct upipe *upipe, uint64_t cr_sys)
 {
     struct upipe_ts_psig *psig = upipe_ts_psig_from_upipe(upipe);
-    if (unlikely(psig->flow_def == NULL || ulist_empty(&psig->pat_sections) ||
-                 !psig->pat_interval ||
+    if (unlikely(ulist_empty(&psig->pat_sections) || !psig->pat_interval ||
                  psig->pat_cr_sys + psig->pat_interval > cr_sys))
         return;
 
@@ -1480,6 +1517,35 @@ static void upipe_ts_psig_send(struct upipe *upipe, uint64_t cr_sys)
         upipe_ts_psig_output(upipe, uref, NULL);
         cr_sys += (uint64_t)ubuf_size * UCLOCK_FREQ / psig->pat_octetrate;
     }
+}
+
+/** @This updates the status to the mux.
+ *
+ * @param upipe description structure of the pipe
+ */
+static void upipe_ts_psig_update_status(struct upipe *upipe)
+{
+    struct upipe_ts_psig *psig = upipe_ts_psig_from_upipe(upipe);
+    uint64_t cr_sys = UINT64_MAX;
+
+    if (likely(psig->flow_def != NULL)) {
+        if (likely(!ulist_empty(&psig->pat_sections) && psig->pat_interval))
+            cr_sys = psig->pat_cr_sys + psig->pat_interval;
+
+        struct uchain *uchain;
+        ulist_foreach (&psig->programs, uchain) {
+            struct upipe_ts_psig_program *program =
+                upipe_ts_psig_program_from_uchain(uchain);
+            if (likely(program->pmt_section != NULL && program->pmt_interval &&
+                       cr_sys > program->pmt_cr_sys + program->pmt_interval))
+                cr_sys = program->pmt_cr_sys + program->pmt_interval;
+        }
+    }
+
+#ifdef VERBOSE_TIMING
+    upipe_verbose_va(upipe, "status cr_sys=%"PRIu64, cr_sys);
+#endif
+    psig->cr_sys_status = cr_sys;
 }
 
 /** @internal @This sets the input flow definition.
@@ -1542,6 +1608,7 @@ static int upipe_ts_psig_set_pat_interval(struct upipe *upipe,
     struct upipe_ts_psig *upipe_ts_psig = upipe_ts_psig_from_upipe(upipe);
     upipe_ts_psig->pat_interval = interval;
     upipe_ts_psig_build_flow_def(upipe);
+    upipe_ts_psig_update_status(upipe);
     return UBASE_ERR_NONE;
 }
 
@@ -1589,6 +1656,9 @@ static int upipe_ts_psig_prepare(struct upipe *upipe, uint64_t cr_sys,
                                  uint64_t latency)
 {
     struct upipe_ts_psig *upipe_ts_psig = upipe_ts_psig_from_upipe(upipe);
+    if (likely(upipe_ts_psig->cr_sys_status > cr_sys))
+        return UBASE_ERR_NONE;
+
     upipe_ts_psig_send(upipe, cr_sys);
 
     struct uchain *uchain;
@@ -1598,6 +1668,7 @@ static int upipe_ts_psig_prepare(struct upipe *upipe, uint64_t cr_sys,
         upipe_ts_psig_program_send(upipe_ts_psig_program_to_upipe(program),
                                    cr_sys);
     }
+    upipe_ts_psig_update_status(upipe);
     return UBASE_ERR_NONE;
 }
 

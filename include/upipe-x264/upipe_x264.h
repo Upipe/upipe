@@ -1,7 +1,7 @@
 /*****************************************************************************
  * upipe_x264.h: application interface for x264 module
  *****************************************************************************
- * Copyright (C) 2012 OpenHeadend S.A.R.L.
+ * Copyright (C) 2012-2016 OpenHeadend S.A.R.L.
  *
  * Authors: Benjamin Cohen <bencoh@notk.org>
  *
@@ -60,15 +60,18 @@ enum upipe_x264_command {
     UPIPE_X264_SET_PROFILE,
 
     /** switches to speedcontrol mode with the given latency (uint64_t) */
-    UPIPE_X264_SET_SC_LATENCY
+    UPIPE_X264_SET_SC_LATENCY,
+
+    /** set slice type enforcement mode (int) */
+    UPIPE_X264_SET_SLICE_TYPE_ENFORCE
 };
 
 /** @This reconfigures encoder with updated parameters.
  *
  * @param upipe description structure of the pipe
- * @return false in case of error
+ * @return an error code
  */
-static inline bool upipe_x264_reconfigure(struct upipe *upipe)
+static inline int upipe_x264_reconfigure(struct upipe *upipe)
 {
     return upipe_control(upipe, UPIPE_X264_RECONFIG, UPIPE_X264_SIGNATURE);
 }
@@ -76,9 +79,9 @@ static inline bool upipe_x264_reconfigure(struct upipe *upipe)
 /** @This sets default parameters (and runs CPU detection).
  *
  * @param upipe description structure of the pipe
- * @return false in case of error
+ * @return an error code
  */
-static inline bool upipe_x264_set_default(struct upipe *upipe)
+static inline int upipe_x264_set_default(struct upipe *upipe)
 {
     return upipe_control(upipe, UPIPE_X264_SET_DEFAULT, UPIPE_X264_SIGNATURE);
 }
@@ -86,9 +89,9 @@ static inline bool upipe_x264_set_default(struct upipe *upipe)
 /** @This sets default mpeg2 parameters (and runs CPU detection).
  *
  * @param upipe description structure of the pipe
- * @return false in case of error
+ * @return an error code
  */
-static inline bool upipe_x264_set_default_mpeg2(struct upipe *upipe)
+static inline int upipe_x264_set_default_mpeg2(struct upipe *upipe)
 {
     return upipe_control(upipe, UPIPE_X264_SET_DEFAULT_MPEG2,
                          UPIPE_X264_SIGNATURE);
@@ -99,22 +102,23 @@ static inline bool upipe_x264_set_default_mpeg2(struct upipe *upipe)
  * @param upipe description structure of the pipe
  * @param preset x264 preset
  * @param tuning x264 tuning
- * @return false in case of error
+ * @return an error code
  */
-static inline bool upipe_x264_set_default_preset(struct upipe *upipe, const char *preset,
-                                         const char *tuning)
+static inline int upipe_x264_set_default_preset(struct upipe *upipe,
+        const char *preset, const char *tuning)
 {
-    return upipe_control(upipe, UPIPE_X264_SET_DEFAULT_PRESET, UPIPE_X264_SIGNATURE,
-                         preset, tuning);
+    return upipe_control(upipe, UPIPE_X264_SET_DEFAULT_PRESET,
+                         UPIPE_X264_SIGNATURE, preset, tuning);
 }
 
 /** @This enforces profile.
  *
  * @param upipe description structure of the pipe
  * @param profile x264 profile
- * @return false in case of error
+ * @return an error code
  */
-static inline bool upipe_x264_set_profile(struct upipe *upipe, const char *profile)
+static inline int upipe_x264_set_profile(struct upipe *upipe,
+                                         const char *profile)
 {
     return upipe_control(upipe, UPIPE_X264_SET_PROFILE, UPIPE_X264_SIGNATURE,
                          profile);
@@ -125,13 +129,26 @@ static inline bool upipe_x264_set_profile(struct upipe *upipe, const char *profi
  *
  * @param upipe description structure of the pipe
  * @param latency size (in units of a 27 MHz) of the speedcontrol buffer
- * @return false in case of error
+ * @return an error code
  */
-static inline bool upipe_x264_set_sc_latency(struct upipe *upipe,
-                                             uint64_t sc_latency)
+static inline int upipe_x264_set_sc_latency(struct upipe *upipe,
+                                            uint64_t sc_latency)
 {
     return upipe_control(upipe, UPIPE_X264_SET_SC_LATENCY, UPIPE_X264_SIGNATURE,
                          sc_latency);
+}
+
+/** @This sets the slice type enforcement mode (true or false).
+ *
+ * @param upipe description structure of the pipe
+ * @param enforce true if the incoming slice types must be enforced
+ * @return an error code
+ */
+static inline int upipe_x264_set_slice_type_enforce(struct upipe *upipe,
+                                                    bool enforce)
+{
+    return upipe_control(upipe, UPIPE_X264_SET_SLICE_TYPE_ENFORCE,
+                         UPIPE_X264_SIGNATURE, enforce ? 1 : 0);
 }
 
 /** @This returns the management structure for x264 pipes.

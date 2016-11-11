@@ -57,21 +57,22 @@ UREF_ATTR_UNSIGNED(ts_flow, pes_min_duration, "t.pes_mindur",
         minimum PES duration)
 
 /* PMT */
+UREF_ATTR_SMALL_UNSIGNED(ts_flow, component_type, "t.ctype", component type)
 UREF_ATTR_UNSIGNED(ts_flow, descriptors, "t.descs", number of descriptors)
-UREF_ATTR_OPAQUE_VA(ts_flow, descriptor, "t.desc[%"PRIu64"]", descriptor,
+UREF_ATTR_OPAQUE_VA(ts_flow, descriptor, "t.desc[%" PRIu64"]", descriptor,
         uint64_t nb, nb)
 UREF_TS_ATTR_DESCRIPTOR(ts_flow, descriptor)
-UREF_ATTR_SMALL_UNSIGNED_VA(ts_flow, telx_type, "t.telxtype[%"PRIu8"]",
+UREF_ATTR_SMALL_UNSIGNED_VA(ts_flow, telx_type, "t.telxtype[%" PRIu8"]",
         teletext type according to EN 300 468, uint8_t nb, nb)
-UREF_ATTR_SMALL_UNSIGNED_VA(ts_flow, telx_magazine, "t.telxmag[%"PRIu8"]",
+UREF_ATTR_SMALL_UNSIGNED_VA(ts_flow, telx_magazine, "t.telxmag[%" PRIu8"]",
         teletext magazine according to EN 300 468, uint8_t nb, nb)
-UREF_ATTR_SMALL_UNSIGNED_VA(ts_flow, telx_page, "t.telxpage[%"PRIu8"]",
+UREF_ATTR_SMALL_UNSIGNED_VA(ts_flow, telx_page, "t.telxpage[%" PRIu8"]",
         teletext page according to EN 300 468, uint8_t nb, nb)
-UREF_ATTR_SMALL_UNSIGNED_VA(ts_flow, sub_type, "t.subtype[%"PRIu8"]",
+UREF_ATTR_SMALL_UNSIGNED_VA(ts_flow, sub_type, "t.subtype[%" PRIu8"]",
         subtitling type according to EN 300 468, uint8_t nb, nb)
-UREF_ATTR_SMALL_UNSIGNED_VA(ts_flow, sub_composition, "t.subcomp[%"PRIu8"]",
+UREF_ATTR_SMALL_UNSIGNED_VA(ts_flow, sub_composition, "t.subcomp[%" PRIu8"]",
         subtitling composition page according to EN 300 468, uint8_t nb, nb)
-UREF_ATTR_SMALL_UNSIGNED_VA(ts_flow, sub_ancillary, "t.subanc[%"PRIu8"]",
+UREF_ATTR_SMALL_UNSIGNED_VA(ts_flow, sub_ancillary, "t.subanc[%" PRIu8"]",
         subtitling ancillary page according to EN 300 468, uint8_t nb, nb)
 
 /* SDT */
@@ -85,7 +86,7 @@ UREF_ATTR_STRING(ts_flow, provider_name, "t.provname", provider name)
 UREF_ATTR_SMALL_UNSIGNED(ts_flow, service_type, "t.servtype", service type)
 UREF_ATTR_UNSIGNED(ts_flow, sdt_descriptors, "t.sdt.descs",
         number of SDT descriptors)
-UREF_ATTR_OPAQUE_VA(ts_flow, sdt_descriptor, "t.sdt.desc[%"PRIu64"]",
+UREF_ATTR_OPAQUE_VA(ts_flow, sdt_descriptor, "t.sdt.desc[%" PRIu64"]",
         SDT descriptor, uint64_t nb, nb)
 UREF_TS_ATTR_DESCRIPTOR(ts_flow, sdt_descriptor)
 
@@ -98,19 +99,19 @@ UREF_ATTR_UNSIGNED(ts_flow, nid, "t.nid", network ID)
 UREF_ATTR_STRING(ts_flow, network_name, "t.netwname", network name)
 UREF_ATTR_UNSIGNED(ts_flow, nit_descriptors, "t.nit.descs",
         number of NIT descriptors)
-UREF_ATTR_OPAQUE_VA(ts_flow, nit_descriptor, "t.nit.desc[%"PRIu64"]",
+UREF_ATTR_OPAQUE_VA(ts_flow, nit_descriptor, "t.nit.desc[%" PRIu64"]",
         NIT descriptor, uint64_t nb, nb)
 UREF_TS_ATTR_DESCRIPTOR(ts_flow, nit_descriptor)
 UREF_ATTR_UNSIGNED(ts_flow, nit_ts, "t.nit.ts", ts number)
-UREF_ATTR_UNSIGNED_VA(ts_flow, nit_ts_tsid, "t.nit.tstsid[%"PRIu64"]",
+UREF_ATTR_UNSIGNED_VA(ts_flow, nit_ts_tsid, "t.nit.tstsid[%" PRIu64"]",
         ts transport stream ID, uint64_t ts, ts)
-UREF_ATTR_UNSIGNED_VA(ts_flow, nit_ts_onid, "t.nit.tsonid[%"PRIu64"]",
+UREF_ATTR_UNSIGNED_VA(ts_flow, nit_ts_onid, "t.nit.tsonid[%" PRIu64"]",
         ts original network ID, uint64_t ts, ts)
 UREF_ATTR_UNSIGNED_VA(ts_flow, nit_ts_descriptors,
-        "t.nit.tsdescs[%"PRIu64"]", number of NIT TS descriptors,
+        "t.nit.tsdescs[%" PRIu64"]", number of NIT TS descriptors,
         uint64_t ts, ts)
 UREF_TS_ATTR_SUBDESCRIPTOR(ts_flow, nit_ts_descriptor,
-        "t.nit.tsdesc[%"PRIu64"][%"PRIu64"]")
+        "t.nit.tsdesc[%" PRIu64"][%" PRIu64"]")
 
 /** @This returns the value of a PSI section filter.
  *

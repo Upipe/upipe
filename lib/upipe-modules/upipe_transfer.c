@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2013-2015 OpenHeadend S.A.R.L.
+ * Copyright (C) 2013-2016 OpenHeadend S.A.R.L.
  *
  * Authors: Christophe Massiot
  *
@@ -78,9 +78,9 @@ struct upipe_xfer_mgr {
 UBASE_FROM_TO(upipe_xfer_mgr, upipe_mgr, upipe_mgr, mgr)
 UBASE_FROM_TO(upipe_xfer_mgr, urefcount, urefcount, urefcount)
 
-/** @This represents types of commands to send to the remote upump_mgr.
+/** @This represents types of messages to send to the remote upump_mgr.
  */
-enum upipe_xfer_command {
+enum upipe_xfer_msg_type {
     /** attach upump manager on a pipe */
     UPIPE_XFER_ATTACH_UPUMP_MGR,
     /** set URI on a pipe */
@@ -412,7 +412,7 @@ static int upipe_xfer_control(struct upipe *upipe, int command, va_list args)
         case UPIPE_ATTACH_UPUMP_MGR: {
             struct upipe_xfer *upipe_xfer = upipe_xfer_from_upipe(upipe);
             upipe_xfer_set_upump(upipe, NULL);
-            UBASE_RETURN(upipe_xfer_attach_upump_mgr(upipe))
+            upipe_xfer_attach_upump_mgr(upipe);
             if (upipe_xfer->upump_mgr != NULL) {
                 /* prepare a queue to receive probe events */
                 upipe_xfer->upump = uqueue_upump_alloc_pop(&upipe_xfer->uqueue,
@@ -446,6 +446,14 @@ static int upipe_xfer_control(struct upipe *upipe, int command, va_list args)
             union upipe_xfer_arg arg = { .pipe = upipe_use(output) };
             return upipe_xfer_mgr_send(upipe->mgr, UPIPE_XFER_SET_OUTPUT,
                                        upipe_xfer->upipe_remote, arg);
+        }
+
+        case UPIPE_XFER_GET_REMOTE: {
+            UBASE_SIGNATURE_CHECK(args, UPIPE_XFER_SIGNATURE)
+            struct upipe_xfer *upipe_xfer = upipe_xfer_from_upipe(upipe);
+            struct upipe **remote_p = va_arg(args, struct upipe **);
+            *remote_p = upipe_xfer->upipe_remote;
+            return UBASE_ERR_NONE;
         }
         default:
             return UBASE_ERR_UNHANDLED;

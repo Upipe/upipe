@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2015 OpenHeadend S.A.R.L.
+ * Copyright (C) 2015-2016 OpenHeadend S.A.R.L.
  *
  * Authors: Christophe Massiot
  *
@@ -74,6 +74,8 @@
 #define DEFAULT_NAME "Upipe"
 /** we only store UTF-8 at the moment */
 #define NATIVE_ENCODING "UTF-8"
+/** define to get timing verbosity */
+#undef VERBOSE_TIMING
 
 /** @internal @This is the private context of a ts sig subpipe outputting a
  * table. */
@@ -135,6 +137,8 @@ struct upipe_ts_sig {
     struct uref *flow_def;
     /** true if the update was frozen */
     bool frozen;
+    /** cr_sys of the next preparation */
+    uint64_t cr_sys_status;
 
     /** NIT version number */
     uint8_t nit_version;
@@ -213,8 +217,12 @@ UBASE_FROM_TO(upipe_ts_sig, upipe_ts_sig_output, tdt_output, tdt_output)
 
 /** @hidden */
 static void upipe_ts_sig_build_sdt_flow_def(struct upipe *upipe);
+/** @hidden */
 static void upipe_ts_sig_build_sdt(struct upipe *upipe);
+/** @hidden */
 static void upipe_ts_sig_build_eit_flow_def(struct upipe *upipe);
+/** @hidden */
+static void upipe_ts_sig_update_status(struct upipe *upipe);
 
 /** @internal @This is the private context of a service of a ts_sig pipe
  * (outputs EITp/f). */
@@ -486,6 +494,7 @@ static void upipe_ts_sig_service_build_eit(struct upipe *upipe)
     service->eit_nb_sections = nb_sections;
     service->eit_size = total_size;
     service->eit_sent = false;
+    upipe_ts_sig_update_status(upipe_ts_sig_to_upipe(sig));
 }
 
 /** @internal @This compares two services wrt. ascending service IDs.
@@ -826,6 +835,7 @@ static struct upipe *_upipe_ts_sig_alloc(struct upipe_mgr *mgr,
 
     upipe_ts_sig->flow_def = NULL;
     upipe_ts_sig->frozen = false;
+    upipe_ts_sig->cr_sys_status = UINT64_MAX;
 
     upipe_ts_sig->nit_version = 0;
     ulist_init(&upipe_ts_sig->nit_sections);
@@ -1114,6 +1124,7 @@ static void upipe_ts_sig_build_nit(struct upipe *upipe)
     sig->nit_nb_sections = nb_sections;
     sig->nit_size = total_size;
     sig->nit_sent = false;
+    upipe_ts_sig_update_status(upipe);
 }
 
 /** @internal @This sends a NIT PSI section.
@@ -1124,8 +1135,7 @@ static void upipe_ts_sig_build_nit(struct upipe *upipe)
 static void upipe_ts_sig_send_nit(struct upipe *upipe, uint64_t cr_sys)
 {
     struct upipe_ts_sig *sig = upipe_ts_sig_from_upipe(upipe);
-    if (unlikely(sig->flow_def == NULL || ulist_empty(&sig->nit_sections) ||
-                 !sig->nit_interval ||
+    if (unlikely(ulist_empty(&sig->nit_sections) || !sig->nit_interval ||
                  sig->nit_cr_sys + sig->nit_interval > cr_sys))
         return;
 
@@ -1373,6 +1383,7 @@ static void upipe_ts_sig_build_sdt(struct upipe *upipe)
     sig->sdt_nb_sections = nb_sections;
     sig->sdt_size = total_size;
     sig->sdt_sent = false;
+    upipe_ts_sig_update_status(upipe);
 }
 
 /** @internal @This sends a SDT PSI section.
@@ -1383,8 +1394,7 @@ static void upipe_ts_sig_build_sdt(struct upipe *upipe)
 static void upipe_ts_sig_send_sdt(struct upipe *upipe, uint64_t cr_sys)
 {
     struct upipe_ts_sig *sig = upipe_ts_sig_from_upipe(upipe);
-    if (unlikely(sig->flow_def == NULL || ulist_empty(&sig->sdt_sections) ||
-                 !sig->sdt_interval ||
+    if (unlikely(ulist_empty(&sig->sdt_sections) || !sig->sdt_interval ||
                  sig->sdt_cr_sys + sig->sdt_interval > cr_sys))
         return;
 
@@ -1620,6 +1630,70 @@ static void upipe_ts_sig_send_tdt(struct upipe *upipe, uint64_t cr_sys,
         MIN_SECTION_INTERVAL;
 }
 
+/** @This updates the status to the mux.
+ *
+ * @param upipe description structure of the pipe
+ */
+static void upipe_ts_sig_update_status(struct upipe *upipe)
+{
+    struct upipe_ts_sig *sig = upipe_ts_sig_from_upipe(upipe);
+    uint64_t cr_sys = UINT64_MAX;
+
+    if (likely(sig->flow_def != NULL)) {
+        if (likely(!ulist_empty(&sig->nit_sections) && sig->nit_interval)) {
+            uint64_t nit_cr_sys = sig->nit_cr_sys + sig->nit_interval;
+            struct upipe_ts_sig_output *output =
+                upipe_ts_sig_to_nit_output(sig);
+            if (unlikely(nit_cr_sys < output->cr_sys))
+                nit_cr_sys = output->cr_sys;
+            if (nit_cr_sys < cr_sys)
+                cr_sys = nit_cr_sys;
+        }
+
+        if (likely(!ulist_empty(&sig->sdt_sections) && sig->sdt_interval)) {
+            uint64_t sdt_cr_sys = sig->sdt_cr_sys + sig->sdt_interval;
+            struct upipe_ts_sig_output *output =
+                upipe_ts_sig_to_sdt_output(sig);
+            if (unlikely(sdt_cr_sys < output->cr_sys))
+                sdt_cr_sys = output->cr_sys;
+            if (sdt_cr_sys < cr_sys)
+                cr_sys = sdt_cr_sys;
+        }
+
+        uint64_t eit_cr_sys = cr_sys;
+        struct uchain *uchain;
+        ulist_foreach (&sig->services, uchain) {
+            struct upipe_ts_sig_service *service =
+                upipe_ts_sig_service_from_uchain(uchain);
+            if (likely(!ulist_empty(&service->eit_sections) &&
+                       service->eit_interval &&
+                       eit_cr_sys > service->eit_cr_sys + service->eit_interval))
+                eit_cr_sys = service->eit_cr_sys + service->eit_interval;
+        }
+        struct upipe_ts_sig_output *output =
+            upipe_ts_sig_to_eit_output(sig);
+        if (unlikely(eit_cr_sys < output->cr_sys))
+            eit_cr_sys = output->cr_sys;
+        if (eit_cr_sys < cr_sys)
+            cr_sys = eit_cr_sys;
+
+        if (likely(sig->uclock != NULL && sig->tdt_interval)) {
+            uint64_t tdt_cr_sys = sig->tdt_cr_sys + sig->tdt_interval;
+            struct upipe_ts_sig_output *output =
+                upipe_ts_sig_to_tdt_output(sig);
+            if (unlikely(tdt_cr_sys < output->cr_sys))
+                tdt_cr_sys = output->cr_sys;
+            if (tdt_cr_sys < cr_sys)
+                cr_sys = tdt_cr_sys;
+        }
+    }
+
+#ifdef VERBOSE_TIMING
+    upipe_verbose_va(upipe, "status cr_sys=%"PRIu64, cr_sys);
+#endif
+    sig->cr_sys_status = cr_sys;
+}
+
 /** @internal @This sets the input flow definition.
  *
  * @param upipe description structure of the pipe
@@ -1701,10 +1775,15 @@ static int upipe_ts_sig_set_flow_def(struct upipe *upipe, struct uref *flow_def)
 static int upipe_ts_sig_prepare(struct upipe *upipe, uint64_t cr_sys,
                                 uint64_t latency)
 {
+    struct upipe_ts_sig *sig = upipe_ts_sig_from_upipe(upipe);
+    if (likely(sig->cr_sys_status > cr_sys))
+        return UBASE_ERR_NONE;
+
     upipe_ts_sig_send_nit(upipe, cr_sys);
     upipe_ts_sig_send_sdt(upipe, cr_sys);
     upipe_ts_sig_send_eit(upipe, cr_sys);
     upipe_ts_sig_send_tdt(upipe, cr_sys, latency);
+    upipe_ts_sig_update_status(upipe);
     return UBASE_ERR_NONE;
 }
 
@@ -1763,6 +1842,7 @@ static int upipe_ts_sig_control(struct upipe *upipe, int command, va_list args)
             UBASE_SIGNATURE_CHECK(args, UPIPE_TS_MUX_SIGNATURE)
             sig->nit_interval = va_arg(args, uint64_t);
             upipe_ts_sig_build_nit_flow_def(upipe);
+            upipe_ts_sig_update_status(upipe);
             return UBASE_ERR_NONE;
         }
         case UPIPE_TS_MUX_GET_SDT_INTERVAL: {
@@ -1775,6 +1855,7 @@ static int upipe_ts_sig_control(struct upipe *upipe, int command, va_list args)
             UBASE_SIGNATURE_CHECK(args, UPIPE_TS_MUX_SIGNATURE)
             sig->sdt_interval = va_arg(args, uint64_t);
             upipe_ts_sig_build_sdt_flow_def(upipe);
+            upipe_ts_sig_update_status(upipe);
             return UBASE_ERR_NONE;
         }
         case UPIPE_TS_MUX_GET_TDT_INTERVAL: {
@@ -1789,6 +1870,7 @@ static int upipe_ts_sig_control(struct upipe *upipe, int command, va_list args)
             if (sig->tdt_interval)
                 upipe_ts_sig_require_uclock(upipe);
             upipe_ts_sig_build_tdt_flow_def(upipe);
+            upipe_ts_sig_update_status(upipe);
             return UBASE_ERR_NONE;
         }
         case UPIPE_TS_MUX_FREEZE_PSI: {

@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2014 OpenHeadend S.A.R.L.
+ * Copyright (C) 2014-2016 OpenHeadend S.A.R.L.
  *
  * Authors: Christophe Massiot
  *
@@ -44,7 +44,7 @@ struct uprobe_pthread_upump_mgr_local {
     /** pointer to upump manager */
     struct upump_mgr *upump_mgr;
     /** true if the probe is frozen on this thread */
-    bool frozen;
+    unsigned int frozen;
 };
 
 /** @internal @This returns thread local storage, or allocates it if needed.
@@ -64,7 +64,7 @@ static struct uprobe_pthread_upump_mgr_local *
         if (unlikely(tls == NULL))
             return NULL;
         tls->upump_mgr = NULL;
-        tls->frozen = false;
+        tls->frozen = 0;
         if (unlikely(pthread_setspecific(uprobe_pthread_upump_mgr->key,
                                          tls) != 0)) {
             free(tls);
@@ -107,7 +107,14 @@ static int uprobe_pthread_upump_mgr_throw(struct uprobe *uprobe,
                 uprobe_pthread_upump_mgr_tls(uprobe);
             if (unlikely(tls == NULL))
                 return UBASE_ERR_ALLOC;
-            tls->frozen = event == UPROBE_FREEZE_UPUMP_MGR;
+            /* From now on only one thread may access *tls */
+            if (event == UPROBE_FREEZE_UPUMP_MGR)
+                tls->frozen++;
+            else
+                tls->frozen--;
+            uprobe_dbg_va(uprobe, upipe, "%s upump manager (%u)",
+                          event == UPROBE_FREEZE_UPUMP_MGR ? "freezing" :
+                          "thawing", tls->frozen);
             return UBASE_ERR_NONE;
         }
 

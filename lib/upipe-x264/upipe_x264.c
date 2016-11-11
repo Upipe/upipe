@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2013-2015 OpenHeadend S.A.R.L.
+ * Copyright (C) 2013-2016 OpenHeadend S.A.R.L.
  *
  * Authors: Benjamin Cohen
  *
@@ -56,6 +56,8 @@
 #include <upipe/upipe_helper_flow_def.h>
 #include <upipe/upipe_helper_flow_def_check.h>
 #include <upipe-x264/upipe_x264.h>
+#include <upipe-framers/uref_h264.h>
+#include <upipe-framers/uref_mpgv.h>
 
 #include <stdlib.h>
 #include <strings.h>
@@ -64,6 +66,8 @@
 #include <ctype.h>
 
 #include <x264.h>
+#include <bitstream/mpeg/h264.h>
+#include <bitstream/mpeg/mp2v.h>
 
 #define EXPECTED_FLOW "pic."
 #define OUT_FLOW "block.h264.pic."
@@ -84,6 +88,8 @@ struct upipe_x264 {
     uint64_t initial_latency;
     /** latency introduced by speedcontrol */
     uint64_t sc_latency;
+    /** true if the existing slice types must be enforced */
+    bool slice_type_enforce;
 
     /** x264 "PTS" */
     uint64_t x264_ts;
@@ -133,7 +139,7 @@ struct upipe_x264 {
     /** input SAR */
     struct urational sar;
     /** input overscan */
-    bool overscan;
+    int overscan;
     /** MPEG-2 aspect ratio information */
     uint8_t mpeg2_ar;
 
@@ -340,6 +346,21 @@ static int _upipe_x264_set_sc_latency(struct upipe *upipe, uint64_t sc_latency)
 #endif
 }
 
+/** @This sets the slice type enforcement mode (true or false).
+ *
+ * @param upipe description structure of the pipe
+ * @param enforce true if the incoming slice types must be enforced
+ * @return an error code
+ */
+static int _upipe_x264_set_slice_type_enforce(struct upipe *upipe, bool enforce)
+{
+    struct upipe_x264 *upipe_x264 = upipe_x264_from_upipe(upipe);
+    upipe_x264->slice_type_enforce = enforce;
+    upipe_dbg_va(upipe, "%sactivating slice type enforcement",
+                 enforce ? "" : "de");
+    return UBASE_ERR_NONE;
+}
+
 /** @internal @This allocates a filter pipe.
  *
  * @param mgr common management structure
@@ -363,6 +384,7 @@ static struct upipe *upipe_x264_alloc(struct upipe_mgr *mgr,
     upipe_x264->input_latency = 0;
     upipe_x264->initial_latency = 0;
     upipe_x264->sc_latency = 0;
+    upipe_x264->slice_type_enforce = false;
     upipe_x264->x264_ts = 0;
 
     upipe_x264_init_urefcount(upipe);
@@ -376,7 +398,7 @@ static struct upipe *upipe_x264_alloc(struct upipe_mgr *mgr,
     upipe_x264->flow_def_requested = NULL;
     upipe_x264->headers_requested = false;
     upipe_x264->sar.num = upipe_x264->sar.den = 1;
-    upipe_x264->overscan = false;
+    upipe_x264->overscan = 0; /* undef */
     upipe_x264->mpeg2_ar = 1;
 
     upipe_x264->last_dts = UINT64_MAX;
@@ -421,7 +443,7 @@ static bool upipe_x264_open(struct upipe *upipe, int width, int height)
     {
         params->vui.i_sar_width = upipe_x264->sar.num;
         params->vui.i_sar_height = upipe_x264->sar.den;
-        params->vui.i_overscan = upipe_x264->overscan ? 2 : 1;
+        params->vui.i_overscan = upipe_x264->overscan;
     }
     params->i_width = width;
     params->i_height = height;
@@ -700,7 +722,7 @@ static inline bool upipe_x264_need_update(struct upipe *upipe,
             params->i_height != height ||
             params->vui.i_sar_width != upipe_x264->sar.num ||
             params->vui.i_sar_height != upipe_x264->sar.den ||
-            params->vui.i_overscan != (upipe_x264->overscan ? 2 : 1));
+            params->vui.i_overscan != upipe_x264->overscan);
 }
 
 /** @internal @This processes pictures.
@@ -742,8 +764,11 @@ static bool upipe_x264_handle(struct upipe *upipe, struct uref *uref,
         } else {
             upipe_x264->sar.num = upipe_x264->sar.den = 1;
             uref_pic_flow_get_sar(uref, &upipe_x264->sar);
-            upipe_x264->overscan =
-                ubase_check(uref_pic_flow_get_overscan(uref));
+            bool overscan;
+            if (!ubase_check(uref_pic_flow_get_overscan(uref, &overscan)))
+                upipe_x264->overscan = 0; /* undef */
+            else
+                upipe_x264->overscan = overscan ? 2 : 1;
         }
 
         uref = upipe_x264_store_flow_def_input(upipe, uref);
@@ -778,8 +803,13 @@ static bool upipe_x264_handle(struct upipe *upipe, struct uref *uref,
         if (unlikely(!upipe_x264->encoder)) {
             needopen = true;
         } else if (unlikely(upipe_x264_need_update(upipe, width, height))) {
+            x264_param_t *params = &upipe_x264_from_upipe(upipe)->params;
+            upipe_notice_va(upipe, "Flow parameters changed, reconfiguring encoder (%d:%zu, %d:%zu, %d:%"PRId64", %d:%"PRIu64", %d:%d)",
+                params->i_width, width, params->i_height, height,
+                params->vui.i_sar_width, upipe_x264->sar.num,
+                params->vui.i_sar_height, upipe_x264->sar.den,
+                params->vui.i_overscan, upipe_x264->overscan);
             needopen = true;
-            upipe_notice(upipe, "Flow parameters changed, reconfiguring encoder");
         }
         if (unlikely(needopen)) {
             if (unlikely(!upipe_x264_open(upipe, width, height))) {
@@ -799,6 +829,43 @@ static bool upipe_x264_handle(struct upipe *upipe, struct uref *uref,
         uref_clock_get_rate(uref, &upipe_x264->drift_rate);
         uref_clock_get_pts_prog(uref, &upipe_x264->input_pts);
         uref_clock_get_pts_sys(uref, &upipe_x264->input_pts_sys);
+
+        pic.i_type = X264_TYPE_AUTO;
+        if (upipe_x264->slice_type_enforce) {
+            uint8_t type;
+            if (ubase_check(uref_h264_get_type(uref, &type))) {
+                switch (type) {
+                    case H264SLI_TYPE_P:
+                        pic.i_type = X264_TYPE_P;
+                        break;
+                    case H264SLI_TYPE_B:
+                        pic.i_type = X264_TYPE_B;
+                        break;
+                    case H264SLI_TYPE_I:
+                        pic.i_type = X264_TYPE_KEYFRAME;
+                        break;
+                    case H264SLI_TYPE_SP:
+                    case H264SLI_TYPE_SI:
+                    default:
+                        break;
+                }
+            } else if (ubase_check(uref_mpgv_get_type(uref, &type))) {
+                switch (type) {
+                    case MP2VPIC_TYPE_P:
+                        pic.i_type = X264_TYPE_P;
+                        break;
+                    case MP2VPIC_TYPE_B:
+                        pic.i_type = X264_TYPE_B;
+                        break;
+                    case MP2VPIC_TYPE_I:
+                        pic.i_type = X264_TYPE_KEYFRAME;
+                        break;
+                    case MP2VPIC_TYPE_D:
+                    default:
+                        break;
+                }
+            }
+        }
 
         /* map */
         for (i = 0; i < 3; i++) {
@@ -1196,6 +1263,11 @@ static int upipe_x264_control(struct upipe *upipe, int command, va_list args)
             UBASE_SIGNATURE_CHECK(args, UPIPE_X264_SIGNATURE)
             uint64_t sc_latency = va_arg(args, uint64_t);
             return _upipe_x264_set_sc_latency(upipe, sc_latency);
+        }
+        case UPIPE_X264_SET_SLICE_TYPE_ENFORCE: {
+            UBASE_SIGNATURE_CHECK(args, UPIPE_X264_SIGNATURE)
+            bool enforce = !(va_arg(args, int) == 0);
+            return _upipe_x264_set_slice_type_enforce(upipe, enforce);
         }
         default:
             return UBASE_ERR_UNHANDLED;

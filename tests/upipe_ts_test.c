@@ -60,6 +60,7 @@
 #include <upipe-ts/upipe_ts_split.h>
 #include <upipe-framers/upipe_mpgv_framer.h>
 #include <upipe-framers/upipe_h264_framer.h>
+#include <upipe-framers/upipe_h265_framer.h>
 #include <upipe-framers/upipe_mpga_framer.h>
 #include <upipe-framers/upipe_a52_framer.h>
 #include <upipe-framers/upipe_video_trim.h>
@@ -372,6 +373,8 @@ int main(int argc, char *argv[])
     assert(upipe_mpgvf_mgr != NULL);
     struct upipe_mgr *upipe_h264f_mgr = upipe_h264f_mgr_alloc();
     assert(upipe_h264f_mgr != NULL);
+    struct upipe_mgr *upipe_h265f_mgr = upipe_h265f_mgr_alloc();
+    assert(upipe_h265f_mgr != NULL);
     struct upipe_mgr *upipe_mpgaf_mgr = upipe_mpgaf_mgr_alloc();
     assert(upipe_mpgaf_mgr != NULL);
     struct upipe_mgr *upipe_a52f_mgr = upipe_a52f_mgr_alloc();
@@ -383,6 +386,8 @@ int main(int argc, char *argv[])
                                                   upipe_mpgvf_mgr));
     ubase_assert(upipe_ts_demux_mgr_set_h264f_mgr(upipe_ts_demux_mgr,
                                                   upipe_h264f_mgr));
+    ubase_assert(upipe_ts_demux_mgr_set_h265f_mgr(upipe_ts_demux_mgr,
+                                                  upipe_h265f_mgr));
     ubase_assert(upipe_ts_demux_mgr_set_mpgaf_mgr(upipe_ts_demux_mgr,
                                                   upipe_mpgaf_mgr));
     ubase_assert(upipe_ts_demux_mgr_set_a52f_mgr(upipe_ts_demux_mgr,
@@ -396,6 +401,7 @@ int main(int argc, char *argv[])
     upipe_mgr_release(upipe_ts_demux_mgr);
     upipe_mgr_release(upipe_mpgvf_mgr);
     upipe_mgr_release(upipe_h264f_mgr);
+    upipe_mgr_release(upipe_h265f_mgr);
     upipe_mgr_release(upipe_mpgaf_mgr);
     upipe_mgr_release(upipe_a52f_mgr);
     upipe_mgr_release(upipe_fsrc_mgr);

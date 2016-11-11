@@ -1,7 +1,9 @@
 /*
  * Copyright (C) 2012-2015 OpenHeadend S.A.R.L.
+ * Copyright (C) 2016 DVMR
  *
  * Authors: Christophe Massiot
+ *          Franck Roger
  *
  * Permission is hereby granted, free of charge, to any person obtaining
  * a copy of this software and associated documentation files (the
@@ -464,6 +466,74 @@ static int _upipe_fsink_set_path(struct upipe *upipe, const char *path,
     return UBASE_ERR_NONE;
 }
 
+/** @internal @This associates file descriptor..
+ *
+ * @param upipe description structure of the pipe
+ * @param fd file descriptor
+ * @param mode mode of opening the file
+ * @return an error code
+ */
+static int _upipe_fsink_set_fd(struct upipe *upipe, int fd,
+                               enum upipe_fsink_mode mode)
+{
+    struct upipe_fsink *upipe_fsink = upipe_fsink_from_upipe(upipe);
+
+    if (unlikely(upipe_fsink->fd != -1)) {
+        if (likely(upipe_fsink->path != NULL))
+            upipe_notice_va(upipe, "closing file %s", upipe_fsink->path);
+        ubase_clean_fd(&upipe_fsink->fd);
+    }
+    ubase_clean_str(&upipe_fsink->path);
+    upipe_fsink_set_upump(upipe, NULL);
+    upipe_fsink_set_upump_sync(upipe, NULL);
+    if (!upipe_fsink_check_input(upipe))
+        /* Release the pipe used in @ref upipe_fsink_input. */
+        upipe_release(upipe);
+
+    if (unlikely(fd < 0))
+        return UBASE_ERR_NONE;
+
+    upipe_fsink_check_upump_mgr(upipe);
+
+    const char *mode_desc = NULL; /* hush gcc */
+    switch (mode) {
+        case UPIPE_FSINK_NONE:
+            break;
+        case UPIPE_FSINK_APPEND:
+            mode_desc = "append";
+            break;
+        case UPIPE_FSINK_OVERWRITE:
+            mode_desc = "overwrite";
+            break;
+        case UPIPE_FSINK_CREATE:
+            mode_desc = "create";
+            break;
+        default:
+            upipe_err_va(upipe, "invalid mode %d", mode);
+            return UBASE_ERR_INVALID;
+    }
+    upipe_fsink->fd = fd;
+    switch (mode) {
+        /* O_APPEND seeks on each write, so use this instead */
+        case UPIPE_FSINK_APPEND:
+            if (unlikely(lseek(upipe_fsink->fd, 0, SEEK_END) == -1)) {
+                upipe_err_va(upipe, "can't associates file descriptor %d (%s)", fd, mode_desc);
+                ubase_clean_fd(&upipe_fsink->fd);
+                return UBASE_ERR_EXTERNAL;
+            }
+            break;
+        default:
+            break;
+    }
+
+    if (!upipe_fsink_check_input(upipe))
+        /* Use again the pipe that we previously released. */
+        upipe_use(upipe);
+    upipe_notice_va(upipe, "opening file %s in %s mode",
+                    upipe_fsink->path, mode_desc);
+    return UBASE_ERR_NONE;
+}
+
 /** @internal @This returns the file descriptor of the currently opened file.
  *
  * @param upipe description structure of the pipe
@@ -556,6 +626,12 @@ static int  _upipe_fsink_control(struct upipe *upipe, int command, va_list args)
             const char *path = va_arg(args, const char *);
             enum upipe_fsink_mode mode = va_arg(args, enum upipe_fsink_mode);
             return _upipe_fsink_set_path(upipe, path, mode);
+        }
+        case UPIPE_FSINK_SET_FD: {
+            UBASE_SIGNATURE_CHECK(args, UPIPE_FSINK_SIGNATURE)
+            int fd = va_arg(args, int);
+            enum upipe_fsink_mode mode = va_arg(args, enum upipe_fsink_mode);
+            return _upipe_fsink_set_fd(upipe, fd, mode);
         }
         case UPIPE_FSINK_GET_FD: {
             UBASE_SIGNATURE_CHECK(args, UPIPE_FSINK_SIGNATURE)

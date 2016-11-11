@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2012-2014 OpenHeadend S.A.R.L.
+ * Copyright (C) 2012-2016 OpenHeadend S.A.R.L.
  *
  * Authors: Christophe Massiot
  *
@@ -937,6 +937,145 @@ static inline void uref_##group##_copy_##attr(struct uref *uref,            \
     uref_##group##_delete_##attr(uref);                                     \
     if (ubase_check(uref_##group##_get_##attr(uref_src)))                   \
         uref_##group##_set_##attr(uref);                                    \
+}
+
+
+/*
+ * Boolean attributes
+ */
+
+/* @This allows to define accessors for a bool attribute.
+ *
+ * @param group group of attributes
+ * @param attr readable name of the attribute, for the function names
+ * @param name string defining the attribute
+ * @param desc description of the attribute
+ */
+#define UREF_ATTR_BOOL(group, attr, name, desc)                             \
+/** @This returns the desc attribute of a uref.                             \
+ *                                                                          \
+ * @param uref pointer to the uref                                          \
+ * @param p pointer to the retrieved value (modified during execution)      \
+ * @return an error code                                                    \
+ */                                                                         \
+static inline int uref_##group##_get_##attr(struct uref *uref, bool *p)     \
+{                                                                           \
+    return uref_attr_get_bool(uref, p, UDICT_TYPE_BOOL, name);              \
+}                                                                           \
+/** @This sets the desc attribute of a uref.                                \
+ *                                                                          \
+ * @param uref pointer to the uref                                          \
+ * @param v value to set                                                    \
+ * @return an error code                                                    \
+ */                                                                         \
+static inline int uref_##group##_set_##attr(struct uref *uref, bool v)      \
+{                                                                           \
+    return uref_attr_set_bool(uref, v, UDICT_TYPE_BOOL, name);              \
+}                                                                           \
+/** @This deletes the desc attribute of a uref.                             \
+ *                                                                          \
+ * @param uref pointer to the uref                                          \
+ * @return an error code                                                    \
+ */                                                                         \
+static inline int uref_##group##_delete_##attr(struct uref *uref)           \
+{                                                                           \
+    return uref_attr_delete(uref, UDICT_TYPE_BOOL, name);                   \
+}                                                                           \
+/** @This copies the desc attribute from an uref to another.                \
+ *                                                                          \
+ * @param uref pointer to the uref                                          \
+ * @param uref_src pointer to the source uref                               \
+ * @return an error code                                                    \
+ */                                                                         \
+static inline int uref_##group##_copy_##attr(struct uref *uref,             \
+                                             struct uref *uref_src)         \
+{                                                                           \
+    return uref_attr_copy_bool(uref, uref_src, UDICT_TYPE_BOOL, name);      \
+}                                                                           \
+/** @This compares the desc attribute in two urefs.                         \
+ *                                                                          \
+ * @param uref1 pointer to the first uref                                   \
+ * @param uref2 pointer to the second uref                                  \
+ * @return 0 if both attributes are absent or identical                     \
+ */                                                                         \
+static inline int uref_##group##_cmp_##attr(struct uref *uref1,             \
+                                            struct uref *uref2)             \
+{                                                                           \
+    bool v1 = false, v2 = false;                                            \
+    int err1 = uref_##group##_get_##attr(uref1, &v1);                       \
+    int err2 = uref_##group##_get_##attr(uref2, &v2);                       \
+    if (!ubase_check(err1) && !ubase_check(err2))                           \
+        return 0;                                                           \
+    if (!ubase_check(err1) || !ubase_check(err2))                           \
+        return -1;                                                          \
+    return v1 == v2 ? 0 : 1;                                                \
+}
+
+/* @This allows to define accessors for a shorthand bool attribute.
+ *
+ * @param group group of attributes
+ * @param attr readable name of the attribute, for the function names
+ * @param type shorthand type
+ * @param desc description of the attribute
+ */
+#define UREF_ATTR_BOOL_SH(group, attr, type, desc)                          \
+/** @This returns the desc attribute of a uref.                             \
+ *                                                                          \
+ * @param uref pointer to the uref                                          \
+ * @param p pointer to the retrieved value (modified during execution)      \
+ * @return an error code                                                    \
+ */                                                                         \
+static inline int uref_##group##_get_##attr(struct uref *uref, bool *p)     \
+{                                                                           \
+    return uref_attr_get_bool(uref, p, type, NULL);                         \
+}                                                                           \
+/** @This sets the desc attribute of a uref.                                \
+ *                                                                          \
+ * @param uref pointer to the uref                                          \
+ * @param v value to set                                                    \
+ * @return an error code                                                    \
+ */                                                                         \
+static inline int uref_##group##_set_##attr(struct uref *uref, bool v)      \
+{                                                                           \
+    return uref_attr_set_bool(uref, v, type, NULL);                         \
+}                                                                           \
+/** @This deletes the desc attribute of a uref.                             \
+ *                                                                          \
+ * @param uref pointer to the uref                                          \
+ * @return an error code                                                    \
+ */                                                                         \
+static inline int uref_##group##_delete_##attr(struct uref *uref)           \
+{                                                                           \
+    return uref_attr_delete(uref, type, NULL);                              \
+}                                                                           \
+/** @This copies the desc attribute from an uref to another.                \
+ *                                                                          \
+ * @param uref pointer to the uref                                          \
+ * @param uref_src pointer to the source uref                               \
+ * @return an error code                                                    \
+ */                                                                         \
+static inline int uref_##group##_copy_##attr(struct uref *uref,             \
+                                             struct uref *uref_src)         \
+{                                                                           \
+    return uref_attr_copy_bool(uref, uref_src, type, NULL);                 \
+}                                                                           \
+/** @This compares the desc attribute in two urefs.                         \
+ *                                                                          \
+ * @param uref1 pointer to the first uref                                   \
+ * @param uref2 pointer to the second uref                                  \
+ * @return 0 if both attributes are absent or identical                     \
+ */                                                                         \
+static inline int uref_##group##_cmp_##attr(struct uref *uref1,             \
+                                            struct uref *uref2)             \
+{                                                                           \
+    bool v1 = false, v2 = false;                                            \
+    int err1 = uref_##group##_get_##attr(uref1, &v1);                       \
+    int err2 = uref_##group##_get_##attr(uref2, &v2);                       \
+    if (!ubase_check(err1) && !ubase_check(err2))                           \
+        return 0;                                                           \
+    if (!ubase_check(err1) || !ubase_check(err2))                           \
+        return -1;                                                          \
+    return v1 == v2 ? 0 : 1;                                                \
 }
 
 

@@ -328,7 +328,6 @@ int main (int argc, char **argv)
     }
 
     int i, j;
-    AVDictionary *options = NULL;
 
     /* uref and mem management */
     struct umem_mgr *umem_mgr = umem_alloc_mgr_alloc();
@@ -341,6 +340,7 @@ int main (int argc, char **argv)
     /* block */
     block_mgr = ubuf_block_mem_mgr_alloc(UBUF_POOL_DEPTH,
             UBUF_POOL_DEPTH, umem_mgr,
+            UBUF_PREPEND,
             UBUF_ALIGN,
             UBUF_ALIGN_OFFSET);
     assert(block_mgr);

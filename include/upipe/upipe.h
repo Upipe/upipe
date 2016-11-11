@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2012-2015 OpenHeadend S.A.R.L.
+ * Copyright (C) 2012-2016 OpenHeadend S.A.R.L.
  *
  * Authors: Christophe Massiot
  *
@@ -97,6 +97,8 @@ enum upipe_command {
     UPIPE_SET_MAX_LENGTH,
     /** flushes all currently held buffers and unblock the sources (void) */
     UPIPE_FLUSH,
+    /** end the preroll period (void) */
+    UPIPE_END_PREROLL,
 
     /*
      * Output-related commands
@@ -324,6 +326,7 @@ static inline const char *upipe_command_str(struct upipe *upipe, int cmd)
     UBASE_CASE_TO_STR(UPIPE_GET_MAX_LENGTH);
     UBASE_CASE_TO_STR(UPIPE_SET_MAX_LENGTH);
     UBASE_CASE_TO_STR(UPIPE_FLUSH);
+    UBASE_CASE_TO_STR(UPIPE_END_PREROLL);
     UBASE_CASE_TO_STR(UPIPE_GET_OUTPUT);
     UBASE_CASE_TO_STR(UPIPE_SET_OUTPUT);
     UBASE_CASE_TO_STR(UPIPE_ATTACH_UBUF_MGR);
@@ -717,6 +720,18 @@ static inline int upipe_throw_dead(struct upipe *upipe)
     return upipe_throw(upipe, UPROBE_DEAD);
 }
 
+/** @This throws a stalled event. This event is thrown whenever a
+ * queue is stalled due to a full FIFO.
+ *
+ * @param upipe description structure of the pipe
+ * @return an error code
+ */
+static inline int upipe_throw_stalled(struct upipe *upipe)
+{
+    /* do not print anything as it can be a normal condition */
+    return upipe_throw(upipe, UPROBE_STALLED);
+}
+
 /** @This throws a source end event. This event is thrown when a pipe is unable
  * to read from an input because the end of file was reached, or because an
  * error occurred.
@@ -760,6 +775,20 @@ static inline int upipe_throw_need_output(struct upipe *upipe,
         udict_dump(flow_def->udict, upipe->uprobe);
     }
     return upipe_throw(upipe, UPROBE_NEED_OUTPUT, flow_def);
+}
+
+/** @This throws an event asking for a source pipe manager because a source
+ * pipe must be allocated.
+ *
+ * @param upipe description structure of the pipe
+ * @param source_mgr_p pointer filled with the provided source pipe manager
+ * @return an error code
+ */
+static inline int upipe_throw_need_source_mgr(struct upipe *upipe,
+                                              struct upipe_mgr **source_mgr_p)
+{
+    upipe_dbg(upipe, "throw need source manager");
+    return upipe_throw(upipe, UPROBE_NEED_SOURCE_MGR, source_mgr_p);
 }
 
 /** @This throws an event asking to provide a urequest. It is thrown by a
@@ -970,7 +999,11 @@ static inline void upipe_input(struct upipe *upipe, struct uref *uref,
                                struct upump **upump_p)
 {
     assert(upipe != NULL);
-    assert(upipe->mgr->upipe_input != NULL);
+    if (upipe->mgr->upipe_input == NULL) {
+        assert(uref->ubuf == NULL);
+        uref_free(uref);
+        return;
+    }
     upipe_use(upipe);
     upipe->mgr->upipe_input(upipe, uref, upump_p);
     upipe_release(upipe);
@@ -1220,6 +1253,16 @@ static inline int upipe_unregister_request(struct upipe *upipe,
 static inline int upipe_flush(struct upipe *upipe)
 {
     return upipe_control(upipe, UPIPE_FLUSH);
+}
+
+/** @This ends the preroll period in a pipe.
+ *
+ * @param upipe description structure of the pipe
+ * @return an error code
+ */
+static inline int upipe_end_preroll(struct upipe *upipe)
+{
+    return upipe_control(upipe, UPIPE_END_PREROLL);
 }
 
 /** @deprecated @see upipe_flush */

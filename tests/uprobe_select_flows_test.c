@@ -248,7 +248,7 @@ int main(int argc, char **argv)
     assert(!strcmp(flows, "name=B 2,name=A 1,foo=bar,"));
 
     del_flows = 12 + 13;
-    uprobe_selflow_set(uprobe_selflow, "14,");
+    uprobe_selflow_set(uprobe_selflow, "14");
     assert(!add_flows);
     assert(!del_flows);
     uprobe_selflow_get(uprobe_selflow, &flows);
