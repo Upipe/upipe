@@ -236,10 +236,21 @@ cglobal planar_to_uyvy_10, 5, 5, 8+2*ARCH_X86_64, dst, y, u, v, width
 %endif ; ARCH_X86_64
 
 .loop:
+%if notcpuflag(avx2)
     mova      m0, [yq+2*widthq]
     mova      m1, [yq+2*widthq+mmsize]
     mova      m2, [uq+widthq]
     mova      m3, [vq+widthq]
+%else
+    mova        xm0, [yq+2*widthq]
+    mova        xm1, [yq+2*widthq+16]
+    mova        xm2, [uq+widthq]
+    mova        xm3, [vq+widthq]
+    vinserti128  m0, m0, [yq + 2*widthq + 32], 1
+    vinserti128  m1, m1, [yq + 2*widthq + 48], 1
+    vinserti128  m2, m2, [uq +   widthq + 16], 1
+    vinserti128  m3, m3, [vq +   widthq + 16], 1
+%endif
 
     CLIPW     m0, m8, m9
     CLIPW     m1, m8, m9
@@ -253,10 +264,21 @@ cglobal planar_to_uyvy_10, 5, 5, 8+2*ARCH_X86_64, dst, y, u, v, width
     punpckhwd m4, m0
     punpckhwd m5, m1
 
+%if notcpuflag(avx2)
     mova      [dstq+4*widthq+0*mmsize], m7
     mova      [dstq+4*widthq+1*mmsize], m4
     mova      [dstq+4*widthq+2*mmsize], m6
     mova      [dstq+4*widthq+3*mmsize], m5
+%else
+    mova         [dstq + 4*widthq +   0], xm7
+    mova         [dstq + 4*widthq +  16], xm4
+    mova         [dstq + 4*widthq +  32], xm6
+    mova         [dstq + 4*widthq +  48], xm5
+    vextracti128 [dstq + 4*widthq +  64], m7, 1
+    vextracti128 [dstq + 4*widthq +  80], m4, 1
+    vextracti128 [dstq + 4*widthq +  96], m6, 1
+    vextracti128 [dstq + 4*widthq + 112], m5, 1
+%endif
 
     add       widthq, mmsize
     jl .loop
@@ -267,6 +289,8 @@ cglobal planar_to_uyvy_10, 5, 5, 8+2*ARCH_X86_64, dst, y, u, v, width
 INIT_XMM sse2
 planar_to_uyvy_10
 INIT_XMM avx
+planar_to_uyvy_10
+INIT_YMM avx2
 planar_to_uyvy_10
 
 %macro planar_to_sdi_8 0

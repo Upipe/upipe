@@ -7,3 +7,4 @@ void upipe_planar_to_uyvy_8_avx2(uint16_t *dst, const uint8_t *y, const uint8_t 
 
 void upipe_planar_to_uyvy_10_sse2(uint16_t *dst, const uint16_t *y, const uint16_t *u, const uint16_t *v, const int64_t width);
 void upipe_planar_to_uyvy_10_avx (uint16_t *dst, const uint16_t *y, const uint16_t *u, const uint16_t *v, const int64_t width);
+void upipe_planar_to_uyvy_10_avx2(uint16_t *dst, const uint16_t *y, const uint16_t *u, const uint16_t *v, const int64_t width);
