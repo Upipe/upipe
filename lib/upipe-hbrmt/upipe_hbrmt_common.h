@@ -22,19 +22,6 @@ extern "C" {
 #define UPIPE_SDI_PSF_IDENT_PSF 1
 #define UPIPE_SDI_PSF_IDENT_P   3
 
-/*
-#define SDI_CRC_POLY 0x46001
-    for (int i = 0; i < 1024; i++) {
-        uint32_t current = i;
-        for (int j = 0; j < 10; j++) {
-            if (current & 1)
-                current ^= SDI_CRC_POLY;
-            current >>= 1;
-        }
-        lut[i] = current;
-    }
-*/
-
 static void sdi_crc_setup(uint32_t crc_lut[8][1024])
 {
     #define SDI_CRC_POLY 0x46001
