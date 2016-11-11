@@ -42,9 +42,6 @@
 void ff_sdi_blank_c  (uint16_t *dst, int64_t size);
 void ff_sdi_blank_avx(uint16_t *dst, int64_t size);
 
-void ff_planar_to_uyvy_10_sse2(uint16_t *dst, const uint16_t *y, const uint16_t *u, const uint16_t *v, const int64_t width);
-void ff_planar_to_uyvy_10_avx (uint16_t *dst, const uint16_t *y, const uint16_t *u, const uint16_t *v, const int64_t width);
-
 void ff_v210_uyvy_unpack_c          (const uint32_t *src, uint16_t *uyvy, int64_t width);
 void ff_v210_uyvy_unpack_aligned_avx(const uint32_t *src, uint16_t *uyvy, int64_t width);
 
@@ -1177,12 +1174,12 @@ static struct upipe *upipe_sdi_enc_alloc(struct upipe_mgr *mgr,
 
 #if !defined(__APPLE__) /* macOS clang doesn't support that builtin yet */
     if (__builtin_cpu_supports("sse3"))
-        upipe_sdi_enc->planar_to_uyvy_10 = ff_planar_to_uyvy_10_sse2;
+        upipe_sdi_enc->planar_to_uyvy_10 = upipe_planar_to_uyvy_10_sse2;
 
     if (__builtin_cpu_supports("avx")) {
         upipe_sdi_enc->blank             = ff_sdi_blank_avx;
         upipe_sdi_enc->planar_to_uyvy_8  = upipe_planar_to_uyvy_8_avx;
-        upipe_sdi_enc->planar_to_uyvy_10 = ff_planar_to_uyvy_10_avx;
+        upipe_sdi_enc->planar_to_uyvy_10 = upipe_planar_to_uyvy_10_avx;
         upipe_sdi_enc->v210_to_uyvy      = ff_v210_uyvy_unpack_aligned_avx;
     }
 #endif
