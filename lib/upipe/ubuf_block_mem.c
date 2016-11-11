@@ -53,6 +53,8 @@
 #define UBUF_DEFAULT_ALIGN          0
 /** default minimum extra space before buffer when unspecified */
 #define UBUF_DEFAULT_PREPEND        32
+/** default minimum extra space after buffer when unspecified */
+#define UBUF_DEFAULT_APPEND         0
 
 /** @This is a super-set of the @ref ubuf (and @ref ubuf_block)
  * structure with private fields pointing to shared data. */
@@ -74,6 +76,8 @@ struct ubuf_block_mem_mgr {
 
     /** extra space added before */
     size_t prepend;
+    /** extra space added after */
+    size_t append;
     /** alignment */
     size_t align;
     /** alignment offset */
@@ -171,7 +175,8 @@ static struct ubuf *ubuf_block_mem_alloc(struct ubuf_mgr *mgr,
         return NULL;
     }
 
-    size_t buffer_size = size + block_mem_mgr->prepend + block_mem_mgr->align;
+    size_t buffer_size = size + block_mem_mgr->prepend + block_mem_mgr->align +
+        block_mem_mgr->append;
     if (unlikely(!umem_alloc(block_mem_mgr->umem_mgr, &block_mem->shared->umem,
                              buffer_size))) {
         ubuf_block_mem_shared_free_pool(block_mem->shared);
@@ -409,6 +414,7 @@ static void ubuf_block_mem_mgr_free(struct urefcount *urefcount)
  * @param umem_mgr memory allocator to use for buffers
  * @param prepend default minimum extra space before buffer (if set to -1, a
  * default sensible value is used)
+ * @param append extra space after buffer
  * @param align default alignment in octets (if set to -1, a default sensible
  * value is used)
  * @param align_offset offset of the aligned octet, in octets (may be negative)
@@ -417,7 +423,7 @@ static void ubuf_block_mem_mgr_free(struct urefcount *urefcount)
 struct ubuf_mgr *ubuf_block_mem_mgr_alloc(uint16_t ubuf_pool_depth,
                                           uint16_t shared_pool_depth,
                                           struct umem_mgr *umem_mgr,
-                                          int prepend,
+                                          int prepend, int append,
                                           int align, int align_offset)
 {
     assert(umem_mgr != NULL);
@@ -430,6 +436,7 @@ struct ubuf_mgr *ubuf_block_mem_mgr_alloc(uint16_t ubuf_pool_depth,
         return NULL;
 
     block_mem_mgr->prepend = prepend >= 0 ? prepend : UBUF_DEFAULT_PREPEND;
+    block_mem_mgr->append = append >= 0 ? append : UBUF_DEFAULT_APPEND;
     block_mem_mgr->align = align > 0 ? align : UBUF_DEFAULT_ALIGN;
     block_mem_mgr->align_offset = align_offset;
 

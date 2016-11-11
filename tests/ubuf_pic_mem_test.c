@@ -281,7 +281,7 @@ int main(int argc, char **argv)
     fill_in(ubuf1);
 
     struct ubuf_mgr *block_mgr = ubuf_block_mem_mgr_alloc(UBUF_POOL_DEPTH,
-            UBUF_POOL_DEPTH, umem_mgr, 0, 0, 0);
+            UBUF_POOL_DEPTH, umem_mgr, 0, 0, 0, 0);
     struct ubuf *ubuf_block = ubuf_block_mem_alloc_from_pic(block_mgr,
                                                             ubuf1, "y8");
     assert(ubuf_block != NULL);
