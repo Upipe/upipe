@@ -216,9 +216,10 @@ static void sdi_fill_anc_parity_checksum(uint16_t *buf)
 
     for (int i = 0; i < 2*len; i += 2) {
         bool parity = parity_tab[buf[i] & 0xff];
-        buf[i] |= (!parity << 9) | (parity << 8);
+        buf[i] |= (parity << 8);
 
-        checksum += buf[i] & 0x1ff;
+        checksum += buf[i];
+        buf[i] |= (!parity << 9);
     }
 
     checksum &= 0x1ff;
