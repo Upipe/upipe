@@ -321,6 +321,20 @@ static void upipe_sdi_dec_init_sub_mgr(struct upipe *upipe)
     sub_mgr->upipe_mgr_control = NULL;
 }
 
+static inline int32_t extract_sd_audio_sample(uint16_t *data)
+{
+    union {
+        uint32_t u;
+        int32_t  i;
+    } sample = {0};
+
+    sample.u |= (data[0] & 0x1F8) << 9;
+    sample.u |= (data[1] & 0x1FF) << 18;
+    sample.u |= (data[2] & 0x01F) << 27;
+
+    return sample.i;
+}
+
 static inline int32_t extract_hd_audio_sample(uint16_t *data)
 {
     union {
