@@ -43,8 +43,6 @@
 void ff_sdi_blank_c  (uint16_t *dst, int64_t size);
 void ff_sdi_blank_avx(uint16_t *dst, int64_t size);
 
-void ff_v210_uyvy_unpack_aligned_avx(const uint32_t *src, uint16_t *uyvy, int64_t width);
-
 /* [Field][VBI] */
 static const uint16_t sav_fvh_cword[2][2] = {{0x200, 0x2ac}, {0x31c, 0x3b0}};
 static const uint16_t eav_fvh_cword[2][2] = {{0x274, 0x2d8}, {0x368, 0x3c4}};
@@ -1197,11 +1195,25 @@ static struct upipe *upipe_sdi_enc_alloc(struct upipe_mgr *mgr,
     if (__builtin_cpu_supports("sse2"))
         upipe_sdi_enc->planar_to_uyvy_10 = upipe_planar_to_uyvy_10_sse2;
 
+#if defined(__clang__) && /* clang 3.8 doesn't know ssse3 */ \
+     (__clang_major__ < 3 || (__clang_major__ == 3 && __clang_minor__ <= 8))
+# ifdef __SSSE3__
+    if (1)
+# else
+    if (0)
+# endif
+#else
+    if (__builtin_cpu_supports("ssse3"))
+#endif
+    {
+        upipe_sdi_enc->v210_to_uyvy      = upipe_v210_uyvy_unpack_aligned_ssse3;
+    }
+
     if (__builtin_cpu_supports("avx")) {
         upipe_sdi_enc->blank             = ff_sdi_blank_avx;
         upipe_sdi_enc->planar_to_uyvy_8  = upipe_planar_to_uyvy_8_avx;
         upipe_sdi_enc->planar_to_uyvy_10 = upipe_planar_to_uyvy_10_avx;
-        upipe_sdi_enc->v210_to_uyvy      = ff_v210_uyvy_unpack_aligned_avx;
+        upipe_sdi_enc->v210_to_uyvy      = upipe_v210_uyvy_unpack_aligned_avx;
     }
 
     if (__builtin_cpu_supports("avx2")) {
