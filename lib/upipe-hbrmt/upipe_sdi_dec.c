@@ -496,7 +496,7 @@ static bool upipe_sdi_dec_handle(struct upipe *upipe, struct uref *uref,
         return true;
     }
 
-    if (upipe_sdi_dec->debug) {
+    if (!p->sd && upipe_sdi_dec->debug) {
         for (int h = 0; h < f->height; h++) {
             const uint16_t *src = (uint16_t*)&input_buf[h * 2 * sizeof(uint16_t) * f->width];
             uint16_t crc[4];
