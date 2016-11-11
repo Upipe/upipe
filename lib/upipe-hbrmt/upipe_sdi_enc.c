@@ -24,6 +24,7 @@
 #include <bitstream/smpte/291.h>
 
 #include <libavutil/common.h>
+#include <libavutil/bswap.h>
 
 #include <upipe-hbrmt/upipe_sdi_enc.h>
 #include "upipe_hbrmt_common.h"
@@ -42,7 +43,6 @@
 void ff_sdi_blank_c  (uint16_t *dst, int64_t size);
 void ff_sdi_blank_avx(uint16_t *dst, int64_t size);
 
-void ff_v210_uyvy_unpack_c          (const uint32_t *src, uint16_t *uyvy, int64_t width);
 void ff_v210_uyvy_unpack_aligned_avx(const uint32_t *src, uint16_t *uyvy, int64_t width);
 
 /* [Field][VBI] */
@@ -1146,6 +1146,27 @@ static void planar_to_uyvy_10_c(uint16_t *dst, const uint16_t *y, const uint16_t
     }
 }
 
+#define READ_PIXELS(a, b, c)         \
+    do {                             \
+        val  = av_le2ne32(*src++);   \
+        *a++ =  val & 0x3FF;         \
+        *b++ = (val >> 10) & 0x3FF;  \
+        *c++ = (val >> 20) & 0x3FF;  \
+    } while (0)
+
+static void v210_uyvy_unpack_c(const uint32_t *src, uint16_t *uyvy, int64_t width)
+{
+    uint32_t val;
+    int i;
+
+    for( i = 0; i < width-5; i += 6 ){
+        READ_PIXELS(uyvy, uyvy, uyvy);
+        READ_PIXELS(uyvy, uyvy, uyvy);
+        READ_PIXELS(uyvy, uyvy, uyvy);
+        READ_PIXELS(uyvy, uyvy, uyvy);
+    }
+}
+
 /** @internal @This allocates a sdi_enc pipe.
  *
  * @param mgr common management structure
@@ -1170,7 +1191,7 @@ static struct upipe *upipe_sdi_enc_alloc(struct upipe_mgr *mgr,
     upipe_sdi_enc->blank             = ff_sdi_blank_c;
     upipe_sdi_enc->planar_to_uyvy_8  = planar_to_uyvy_8_c;
     upipe_sdi_enc->planar_to_uyvy_10 = planar_to_uyvy_10_c;
-    upipe_sdi_enc->v210_to_uyvy      = ff_v210_uyvy_unpack_c;
+    upipe_sdi_enc->v210_to_uyvy      = v210_uyvy_unpack_c;
 
 #if !defined(__APPLE__) /* macOS clang doesn't support that builtin yet */
     if (__builtin_cpu_supports("sse2"))
