@@ -321,7 +321,7 @@ static void upipe_sdi_dec_init_sub_mgr(struct upipe *upipe)
     sub_mgr->upipe_mgr_control = NULL;
 }
 
-static inline int32_t extract_audio_sample(uint16_t *data)
+static inline int32_t extract_hd_audio_sample(uint16_t *data)
 {
     union {
         uint32_t u;
@@ -701,7 +701,7 @@ static bool upipe_sdi_dec_handle(struct upipe *upipe, struct uref *uref,
 
                 if (buf_audio)
                     for (int i = 0; i < 4; i++) {
-                        int32_t s = extract_audio_sample(&packet[UPIPE_SDI_MAX_CHANNELS + i * 8]);
+                        int32_t s = extract_hd_audio_sample(&packet[UPIPE_SDI_MAX_CHANNELS + i * 8]);
                         buf_audio[group_offset[audio_group] * UPIPE_SDI_MAX_CHANNELS + 4 * audio_group + i] = s;
 
                         if (i & 0x01) { // check 2nd syncword
