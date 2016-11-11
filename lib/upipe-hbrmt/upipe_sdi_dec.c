@@ -638,11 +638,11 @@ static bool upipe_sdi_dec_handle(struct upipe *upipe, struct uref *uref,
                 upipe_warn_va(upipe, "teletext! line %d", h+1);
                     break;
 #endif
-            case S291_24BITAUDIO_GROUP1_DID:
-            case S291_24BITAUDIO_GROUP2_DID:
-            case S291_24BITAUDIO_GROUP3_DID:
-            case S291_24BITAUDIO_GROUP4_DID: {
-                int audio_group = S291_24BITAUDIO_GROUP1_DID - (packet[6] & 0xff);
+            case S291_HD_AUDIO_GROUP1_DID:
+            case S291_HD_AUDIO_GROUP2_DID:
+            case S291_HD_AUDIO_GROUP3_DID:
+            case S291_HD_AUDIO_GROUP4_DID: {
+                int audio_group = S291_HD_AUDIO_GROUP1_DID - (packet[6] & 0xff);
                 if (data_count != 0x18) {
                     upipe_warn_va(upipe, "Invalid data count 0x%x", data_count);
                     continue;
