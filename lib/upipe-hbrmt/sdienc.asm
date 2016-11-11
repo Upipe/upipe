@@ -133,10 +133,21 @@ cglobal planar_to_uyvy_8, 5, 5, 8+3*ARCH_X86_64, dst, y, u, v, width
 %endif ; ARCH_X86_64
 
 .loop:
+%if notcpuflag(avx2)
     mova      m0, [yq+2*widthq]
     mova      m1, [yq+2*widthq+mmsize]
     mova      m2, [uq+widthq]
     mova      m3, [vq+widthq]
+%else
+    mova        xm0, [yq+2*widthq]
+    mova        xm1, [yq+2*widthq+16]
+    mova        xm2, [uq+widthq]
+    mova        xm3, [vq+widthq]
+    vinserti128  m0, m0, [yq + 2*widthq + 32], 1
+    vinserti128  m1, m1, [yq + 2*widthq + 48], 1
+    vinserti128  m2, m2, [uq +   widthq + 16], 1
+    vinserti128  m3, m3, [vq +   widthq + 16], 1
+%endif
 
     CLIPUB    m0, m8, m9
     CLIPUB    m1, m8, m9
@@ -167,6 +178,7 @@ cglobal planar_to_uyvy_8, 5, 5, 8+3*ARCH_X86_64, dst, y, u, v, width
     punpcklbw m6, m10
     psllw     m6, 2
 
+%if notcpuflag(avx2)
     mova      [dstq+8*widthq+0*mmsize], m0
     mova      [dstq+8*widthq+1*mmsize], m1
     mova      [dstq+8*widthq+2*mmsize], m2
@@ -175,6 +187,24 @@ cglobal planar_to_uyvy_8, 5, 5, 8+3*ARCH_X86_64, dst, y, u, v, width
     mova      [dstq+8*widthq+5*mmsize], m5
     mova      [dstq+8*widthq+6*mmsize], m6
     mova      [dstq+8*widthq+7*mmsize], m7
+%else
+    mova         [dstq + 8*widthq +  0*16], xm0
+    mova         [dstq + 8*widthq +  1*16], xm1
+    mova         [dstq + 8*widthq +  2*16], xm2
+    mova         [dstq + 8*widthq +  3*16], xm3
+    mova         [dstq + 8*widthq +  4*16], xm4
+    mova         [dstq + 8*widthq +  5*16], xm5
+    mova         [dstq + 8*widthq +  6*16], xm6
+    mova         [dstq + 8*widthq +  7*16], xm7
+    vextracti128 [dstq + 8*widthq +  8*16],  m0, 1
+    vextracti128 [dstq + 8*widthq +  9*16],  m1, 1
+    vextracti128 [dstq + 8*widthq + 10*16],  m2, 1
+    vextracti128 [dstq + 8*widthq + 11*16],  m3, 1
+    vextracti128 [dstq + 8*widthq + 12*16],  m4, 1
+    vextracti128 [dstq + 8*widthq + 13*16],  m5, 1
+    vextracti128 [dstq + 8*widthq + 14*16],  m6, 1
+    vextracti128 [dstq + 8*widthq + 15*16],  m7, 1
+%endif
 
     add       widthq, mmsize
     jl .loop
@@ -183,6 +213,8 @@ cglobal planar_to_uyvy_8, 5, 5, 8+3*ARCH_X86_64, dst, y, u, v, width
 %endmacro
 
 INIT_XMM avx
+planar_to_uyvy_8
+INIT_YMM avx2
 planar_to_uyvy_8
 
 %macro planar_to_uyvy_10 0

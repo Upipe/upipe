@@ -3,6 +3,7 @@ void upipe_sdi_pack_10_avx  (uint8_t *dst, const uint8_t *y, int64_t size);
 void upipe_sdi_pack_10_avx2 (uint8_t *dst, const uint8_t *y, int64_t size);
 
 void upipe_planar_to_uyvy_8_avx(uint16_t *dst, const uint8_t *y, const uint8_t *u, const uint8_t *v, const int64_t width);
+void upipe_planar_to_uyvy_8_avx2(uint16_t *dst, const uint8_t *y, const uint8_t *u, const uint8_t *v, const int64_t width);
 
 void upipe_planar_to_uyvy_10_sse2(uint16_t *dst, const uint16_t *y, const uint16_t *u, const uint16_t *v, const int64_t width);
 void upipe_planar_to_uyvy_10_avx (uint16_t *dst, const uint16_t *y, const uint16_t *u, const uint16_t *v, const int64_t width);
