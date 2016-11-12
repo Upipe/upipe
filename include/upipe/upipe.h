@@ -461,17 +461,6 @@ static inline bool upipe_single(struct upipe *upipe)
     return urefcount_single(upipe->refcount);
 }
 
-/** @This checks if the pipe has no more references.
- *
- * @param upipe pointer to upipe
- * @return true if there is no reference to the pipe
- */
-static inline bool upipe_dead(struct upipe *upipe)
-{
-    assert(upipe != NULL);
-    return urefcount_dead(upipe->refcount);
-}
-
 /** @This gets the opaque member of a pipe.
  *
  * @param upipe pointer to upipe

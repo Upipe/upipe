@@ -139,10 +139,9 @@ void upump_common_init(struct upump *upump)
  */
 void upump_common_dispatch(struct upump *upump)
 {
-    struct urefcount *refcount =
-        upump->refcount != NULL && !urefcount_dead(upump->refcount) ?
-        upump->refcount : NULL;
-    urefcount_use(refcount);
+    struct urefcount *refcount = upump->refcount;
+    if (urefcount_use(refcount) == 0)
+        refcount = NULL;
     upump->cb(upump);
     urefcount_release(refcount);
 }
@@ -190,10 +189,9 @@ void upump_common_clean(struct upump *upump)
             upump_blocker_common_from_uchain(uchain);
         struct upump_blocker *blocker =
             upump_blocker_common_to_upump_blocker(blocker_common);
-        struct urefcount *refcount =
-            upump->refcount != NULL && !urefcount_dead(upump->refcount) ?
-            upump->refcount : NULL;
-        urefcount_use(refcount);
+        struct urefcount *refcount = upump->refcount;
+        if (urefcount_use(refcount) == 0)
+            refcount = NULL;
         blocker->cb(blocker);
         urefcount_release(refcount);
     }
