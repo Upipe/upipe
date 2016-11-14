@@ -133,7 +133,7 @@ struct sdi_offsets_fmt {
     uint16_t width;
     uint16_t height;
  
-    /* Number of samples between SAV and start of active data */
+    /* Number of samples (pairs) between SAV and start of active data */
     uint16_t active_offset;
 
     const struct sdi_picture_fmt *pict_fmt;
