@@ -1,0 +1,10 @@
+prefix=@prefix@
+exec_prefix=@exec_prefix@
+libdir=@libdir@
+includedir=@includedir@
+Name: libupipe_hbrmt
+Description: Upipe multimedia framework, hbrmt interface module
+Version: @VERSION@
+Requires: libupipe
+Libs: -L${libdir} -lupipe_hbrmt
+Cflags: -I${includedir}
