@@ -474,7 +474,7 @@ static int upipe_v210enc_set_flow_def(struct upipe *upipe, struct uref *flow_def
     if ((flow_def_dup = uref_dup(flow_def)) == NULL)
         return UBASE_ERR_ALLOC;
 
-    uref_pic_flow_set_align(flow_def_dup, 16);
+    uref_pic_flow_set_align(flow_def_dup, 32);
     uref_pic_flow_set_planes(flow_def_dup, 1);
     uref_pic_flow_set_macropixel(flow_def_dup, 48);
     uref_pic_flow_set_macropixel_size(flow_def_dup, 128, 0);
