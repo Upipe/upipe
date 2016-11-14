@@ -941,11 +941,11 @@ static int upipe_sdi_dec_set_flow_def(struct upipe *upipe, struct uref *flow_def
 
     uref_flow_set_def(flow_def_dup, "pic.");
 
+    uref_pic_flow_set_align(flow_def_dup, 32);
     if (upipe_sdi_dec->output_is_v210) {
         upipe_sdi_dec->output_chroma_map[0] = "u10y10v10y10u10y10v10y10u10y10v10y10";
         upipe_sdi_dec->output_chroma_map[1] = NULL;
         upipe_sdi_dec->output_chroma_map[2] = NULL;
-        uref_pic_flow_set_align(flow_def_dup, 16);
         uref_pic_flow_set_planes(flow_def_dup, 1);
         uref_pic_flow_set_macropixel(flow_def_dup, 48);
         uref_pic_flow_set_macropixel_size(flow_def_dup, 128, 0);
