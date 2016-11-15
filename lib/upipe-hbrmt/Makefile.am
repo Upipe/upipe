@@ -5,6 +5,7 @@ libupipe_hbrmt_la_SOURCES = upipe_pack10bit.c \
     upipe_sdi_enc.c \
     upipe_sdi_dec.c \
     upipe_hbrmt_dec.c \
+    sdidec.c \
     upipe_unpack_rfc4175.c \
     $(NULL)
 if HAVE_X86_ASM
