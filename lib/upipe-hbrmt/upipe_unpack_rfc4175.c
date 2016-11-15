@@ -141,8 +141,7 @@ static inline int get_interleaved_line(int line_number)
     assert(line_number <= 1080);
     if (line_number > 540){
         return (line_number - 540)*2 - 1;
-    }
-    else {
+    } else {
         return (line_number-1)*2;
     }
 }
@@ -314,8 +313,7 @@ static bool upipe_unpack_rfc4175_handle(struct upipe *upipe, struct uref *uref,
 
                 upipe_unpack_rfc4175->bitpacked_to_v210(rfc4175_data,
                         (uint32_t *)dst, length[1]);
-            }
-            else {
+            } else {
                 uint8_t *y8 = upipe_unpack_rfc4175->output_plane[0] +
                     upipe_unpack_rfc4175->output_stride[0] * interleaved_line +
                     line_offset[1] / 1;
@@ -552,8 +550,7 @@ static struct upipe *upipe_unpack_rfc4175_alloc(struct upipe_mgr *mgr,
     if (upipe_unpack_rfc4175->output_is_v210) {
         upipe_unpack_rfc4175->output_pixels_per_block = 6;
         upipe_unpack_rfc4175->output_block_size = 16;
-    }
-    else {
+    } else {
          upipe_unpack_rfc4175->output_bit_depth = ubase_check(uref_pic_flow_check_chroma(flow_def, 1, 1, 1, "y8")) ? 8 : 10;
          upipe_unpack_rfc4175->output_pixels_per_block = 1;
          upipe_unpack_rfc4175->output_block_size = 1;
