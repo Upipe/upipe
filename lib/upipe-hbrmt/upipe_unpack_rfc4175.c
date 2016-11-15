@@ -165,10 +165,6 @@ static bool upipe_unpack_rfc4175_handle(struct upipe *upipe, struct uref *uref,
         return true;
     }
 
-    uint8_t *dst;
-    uint8_t *y8, *u8, *v8;
-    uint16_t *y10, *u10, *v10;
-
     if (upipe_unpack_rfc4175->flow_def == NULL)
         return false;
 
@@ -257,13 +253,12 @@ static bool upipe_unpack_rfc4175_handle(struct upipe *upipe, struct uref *uref,
 
     uint8_t *rfc4175_data = ((uint8_t *)input_buf) + RTP_HEADER_SIZE + RFC_4175_EXT_SEQ_NUM_LEN;
 
-    uint16_t length[2] = {0}, field[2], line_number[2], line_offset[2];
-    uint8_t continuation;
+    uint16_t length[2], field[2], line_number[2], line_offset[2];
 
     length[0]      = rfc4175_get_line_length(rfc4175_data);
     field[0]       = rfc4175_get_line_field_id(rfc4175_data);
     line_number[0] = rfc4175_get_line_number(rfc4175_data);
-    continuation = rfc4175_get_line_continuation(rfc4175_data);
+    uint8_t continuation = rfc4175_get_line_continuation(rfc4175_data);
     line_offset[0] = rfc4175_get_line_offset(rfc4175_data);
     rfc4175_data += RFC_4175_HEADER_LEN;
     if (continuation) {
@@ -283,7 +278,7 @@ static bool upipe_unpack_rfc4175_handle(struct upipe *upipe, struct uref *uref,
 
         if (upipe_unpack_rfc4175->output_is_v210) {
             /* Start */
-            dst = upipe_unpack_rfc4175->output_plane[0] + upipe_unpack_rfc4175->output_stride[0]*interleaved_line;
+            uint8_t *dst = upipe_unpack_rfc4175->output_plane[0] + upipe_unpack_rfc4175->output_stride[0]*interleaved_line;
 
             /* Offset to a pixel/pblock within the line */
             int block_offset = line_offset[0] / upipe_unpack_rfc4175->output_pixels_per_block;
@@ -292,6 +287,7 @@ static bool upipe_unpack_rfc4175_handle(struct upipe *upipe, struct uref *uref,
             upipe_unpack_rfc4175->bitpacked_to_v210(rfc4175_data, (uint32_t *)dst, length[0]);
         }
         else {
+            uint8_t *y8, *u8, *v8;
             y8 = upipe_unpack_rfc4175->output_plane[0] + upipe_unpack_rfc4175->output_stride[0]*interleaved_line + line_offset[0] / 1;
             u8 = upipe_unpack_rfc4175->output_plane[1] + upipe_unpack_rfc4175->output_stride[1]*interleaved_line + line_offset[0] / 2;
             v8 = upipe_unpack_rfc4175->output_plane[2] + upipe_unpack_rfc4175->output_stride[2]*interleaved_line + line_offset[0] / 2;
@@ -305,7 +301,7 @@ static bool upipe_unpack_rfc4175_handle(struct upipe *upipe, struct uref *uref,
 
             if (upipe_unpack_rfc4175->output_is_v210) {
                 /* Start */
-                dst = upipe_unpack_rfc4175->output_plane[0] + upipe_unpack_rfc4175->output_stride[0]*interleaved_line;
+                uint8_t *dst = upipe_unpack_rfc4175->output_plane[0] + upipe_unpack_rfc4175->output_stride[0]*interleaved_line;
 
                 /* Offset to a pixel/pblock within the line */
                 int block_offset = line_offset[1] / upipe_unpack_rfc4175->output_pixels_per_block;
@@ -314,6 +310,7 @@ static bool upipe_unpack_rfc4175_handle(struct upipe *upipe, struct uref *uref,
                 upipe_unpack_rfc4175->bitpacked_to_v210(rfc4175_data, (uint32_t *)dst, length[1]);
             }
             else {
+                uint8_t *y8, *u8, *v8;
                 y8 = upipe_unpack_rfc4175->output_plane[0] + upipe_unpack_rfc4175->output_stride[0]*interleaved_line + line_offset[1] / 1;
                 u8 = upipe_unpack_rfc4175->output_plane[1] + upipe_unpack_rfc4175->output_stride[1]*interleaved_line + line_offset[1] / 2;
                 v8 = upipe_unpack_rfc4175->output_plane[2] + upipe_unpack_rfc4175->output_stride[2]*interleaved_line + line_offset[1] / 2;
