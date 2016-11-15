@@ -447,8 +447,11 @@ static int upipe_v210enc_amend_ubuf_mgr(struct upipe *upipe,
     UBASE_ALLOC_RETURN(flow_format);
 
     uint64_t align;
-    if (!ubase_check(uref_pic_flow_get_align(flow_format, &align)) || !align)
+    if (!ubase_check(uref_pic_flow_get_align(flow_format, &align)) || !align) {
         uref_pic_flow_set_align(flow_format, 32);
+        align = 32;
+    }
+    
 
     if (align % 32) {
         align = align * 32 / ubase_gcd(align, 32);
