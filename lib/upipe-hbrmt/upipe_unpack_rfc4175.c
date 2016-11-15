@@ -251,7 +251,7 @@ static bool upipe_unpack_rfc4175_handle(struct upipe *upipe, struct uref *uref,
         upipe_unpack_rfc4175->output_stride[i] = 0;
     }
 
-    uint8_t *rfc4175_data = ((uint8_t *)input_buf) + RTP_HEADER_SIZE + RFC_4175_EXT_SEQ_NUM_LEN;
+    const uint8_t *rfc4175_data = &input_buf[RTP_HEADER_SIZE + RFC_4175_EXT_SEQ_NUM_LEN];
 
     uint16_t length[2], field[2], line_number[2], line_offset[2];
 
