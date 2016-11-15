@@ -43,19 +43,11 @@
 
 #include <upipe-hbrmt/upipe_unpack_rfc4175.h>
 #include "upipe_hbrmt_common.h"
+#include "sdidec.h"
 
 #include <bitstream/ietf/rfc4175.h>
 
 #define UPIPE_UNPACK_RFC4175_MAX_PLANES 3
-
-void ff_sdi_unpack_c       (uint8_t *src, uint16_t *y, int64_t size);
-void ff_sdi_unpack_10_ssse3(uint8_t *src, uint16_t *y, int64_t size);
-
-void ff_sdi_v210_unpack_c  (uint8_t *src, uint32_t *dst, int64_t size);
-void ff_sdi_v210_unpack_avx(uint8_t *src, uint32_t *dst, int64_t size);
-
-void ff_sdi_to_planar_8_c  (uint8_t *src, uint8_t *y, uint8_t *u, uint8_t *v, int64_t size);
-void ff_sdi_to_planar_8_avx(uint8_t *src, uint8_t *y, uint8_t *u, uint8_t *v, int64_t size);
 
 /** upipe_unpack_rfc4175 structure */
 struct upipe_unpack_rfc4175 {
@@ -111,13 +103,13 @@ struct upipe_unpack_rfc4175 {
     bool next_packet_frame_start;
 
     /** Bitpacked to V210 conversion */
-    void (*bitpacked_to_v210)(uint8_t *src, uint32_t *dst, int64_t size);
+    void (*bitpacked_to_v210)(const uint8_t *src, uint32_t *dst, int64_t size);
 
     /** Bitpacked to Planar 8 conversion */
-    void (*bitpacked_to_planar_8)(uint8_t *src, uint8_t *y, uint8_t *u, uint8_t *v, int64_t size);
+    void (*bitpacked_to_planar_8)(const uint8_t *src, uint8_t *y, uint8_t *u, uint8_t *v, int64_t size);
 
     /** Bitpacked to Planar 10 conversion */
-    void (*bitpacked_to_uyvy)(uint8_t *src, uint16_t *y, int64_t size);
+    void (*bitpacked_to_uyvy)(const uint8_t *src, uint16_t *y, int64_t size);
 
     /** last RTP timestamp */
     uint64_t last_rtp_timestamp;
@@ -558,9 +550,9 @@ static struct upipe *upipe_unpack_rfc4175_alloc(struct upipe_mgr *mgr,
          upipe_unpack_rfc4175->output_block_size = 1;
     }
 
-    upipe_unpack_rfc4175->bitpacked_to_uyvy = ff_sdi_unpack_c;
-    upipe_unpack_rfc4175->bitpacked_to_v210 = ff_sdi_v210_unpack_c;
-    upipe_unpack_rfc4175->bitpacked_to_planar_8 = ff_sdi_to_planar_8_c;
+    upipe_unpack_rfc4175->bitpacked_to_uyvy = upipe_sdi_unpack_c;
+    upipe_unpack_rfc4175->bitpacked_to_v210 = upipe_sdi_v210_unpack_c;
+    upipe_unpack_rfc4175->bitpacked_to_planar_8 = upipe_sdi_to_planar_8_c;
 
 #if !defined(__APPLE__) /* macOS clang doesn't support that builtin yet */
 #if defined(__clang__) && /* clang 3.8 doesn't know ssse3 */ \
@@ -573,11 +565,11 @@ static struct upipe *upipe_unpack_rfc4175_alloc(struct upipe_mgr *mgr,
 #else
     if (__builtin_cpu_supports("ssse3"))
 #endif
-        upipe_unpack_rfc4175->bitpacked_to_uyvy = ff_sdi_unpack_10_ssse3;
+        upipe_unpack_rfc4175->bitpacked_to_uyvy = upipe_sdi_unpack_10_ssse3;
 
    if (__builtin_cpu_supports("avx")) {
-        upipe_unpack_rfc4175->bitpacked_to_v210 = ff_sdi_v210_unpack_avx;
-        upipe_unpack_rfc4175->bitpacked_to_planar_8 = ff_sdi_to_planar_8_avx;
+        upipe_unpack_rfc4175->bitpacked_to_v210 = upipe_sdi_v210_unpack_avx;
+        upipe_unpack_rfc4175->bitpacked_to_planar_8 = upipe_sdi_to_planar_8_avx;
     }
 #endif
 
