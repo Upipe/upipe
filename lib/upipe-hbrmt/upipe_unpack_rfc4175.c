@@ -255,17 +255,12 @@ static bool upipe_unpack_rfc4175_handle(struct upipe *upipe, struct uref *uref,
 
     uint16_t length[2], field[2], line_number[2], line_offset[2];
 
-    length[0]      = rfc4175_get_line_length(rfc4175_data);
-    field[0]       = rfc4175_get_line_field_id(rfc4175_data);
-    line_number[0] = rfc4175_get_line_number(rfc4175_data);
     uint8_t continuation = rfc4175_get_line_continuation(rfc4175_data);
-    line_offset[0] = rfc4175_get_line_offset(rfc4175_data);
-    rfc4175_data += RFC_4175_HEADER_LEN;
-    if (continuation) {
-        length[1] = rfc4175_get_line_length(rfc4175_data);
-        field[1] = rfc4175_get_line_field_id(rfc4175_data);
-        line_number[1] = rfc4175_get_line_number(rfc4175_data);
-        line_offset[1] = rfc4175_get_line_offset(rfc4175_data);
+    for (int i = 0; i < 1 + !!continuation; i++) {
+        length[i]      = rfc4175_get_line_length(rfc4175_data);
+        field[i]       = rfc4175_get_line_field_id(rfc4175_data);
+        line_number[i] = rfc4175_get_line_number(rfc4175_data);
+        line_offset[i] = rfc4175_get_line_offset(rfc4175_data);
         rfc4175_data += RFC_4175_HEADER_LEN;
     }
 
