@@ -1,5 +1,5 @@
 /*
- * 10 bit packing
+ * RFC 4175 unpacking
  *
  * Copyright (c) 2016 Open Broadcast Systems Ltd
  *
@@ -19,7 +19,7 @@
  */
 
 /** @file
- * @short Upipe pack10bit module
+ * @short Upipe unpack rfc 4175 module
  */
 
 #include <upipe/ubase.h>
@@ -57,7 +57,7 @@ void ff_sdi_v210_unpack_avx(uint8_t *src, uint32_t *dst, int64_t size);
 void ff_sdi_to_planar_8_c  (uint8_t *src, uint8_t *y, uint8_t *u, uint8_t *v, int64_t size);
 void ff_sdi_to_planar_8_avx(uint8_t *src, uint8_t *y, uint8_t *u, uint8_t *v, int64_t size);
 
-/** upipe_unpack_rfc4175 structure with pack10bit parameters */
+/** upipe_unpack_rfc4175 structure */
 struct upipe_unpack_rfc4175 {
     /** refcount management structure */
     struct urefcount urefcount;
