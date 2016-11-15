@@ -433,6 +433,40 @@ static int upipe_v210enc_check(struct upipe *upipe, struct uref *flow_format)
     return UBASE_ERR_NONE;
 }
 
+/** @internal @This requires a ubuf manager by proxy, and amends the flow
+ * format.
+ *
+ * @param upipe description structure of the pipe
+ * @param request description structure of the request
+ * @return an error code
+ */
+static int upipe_v210enc_amend_ubuf_mgr(struct upipe *upipe,
+                                        struct urequest *request)
+{
+    struct uref *flow_format = uref_dup(request->uref);
+    UBASE_ALLOC_RETURN(flow_format);
+
+    uint64_t align;
+    if (!ubase_check(uref_pic_flow_get_align(flow_format, &align)) || !align) {
+        uref_pic_flow_set_align(flow_format, 32);
+        align = 32;
+    }
+    
+
+    if (align % 32) {
+        align = align * 32 / ubase_gcd(align, 32);
+        uref_pic_flow_set_align(flow_format, align);
+    }
+
+    struct urequest ubuf_mgr_request;
+    urequest_set_opaque(&ubuf_mgr_request, request);
+    urequest_init_ubuf_mgr(&ubuf_mgr_request, flow_format,
+                           upipe_v210enc_provide_output_proxy, NULL);
+    upipe_throw_provide_request(upipe, &ubuf_mgr_request);
+    urequest_clean(&ubuf_mgr_request);
+    return UBASE_ERR_NONE;
+}
+
 /** @internal @This sets the input flow definition.
  *
  * @param upipe description structure of the pipe
@@ -474,7 +508,7 @@ static int upipe_v210enc_set_flow_def(struct upipe *upipe, struct uref *flow_def
     if ((flow_def_dup = uref_dup(flow_def)) == NULL)
         return UBASE_ERR_ALLOC;
 
-    uref_pic_flow_set_align(flow_def_dup, 16);
+    uref_pic_flow_set_align(flow_def_dup, 32);
     uref_pic_flow_set_planes(flow_def_dup, 1);
     uref_pic_flow_set_macropixel(flow_def_dup, 48);
     uref_pic_flow_set_macropixel_size(flow_def_dup, 128, 0);
@@ -497,8 +531,9 @@ static int upipe_v210enc_control(struct upipe *upipe, int command, va_list args)
     switch (command) {
         case UPIPE_REGISTER_REQUEST: {
             struct urequest *request = va_arg(args, struct urequest *);
-            if (request->type == UREQUEST_UBUF_MGR ||
-                request->type == UREQUEST_FLOW_FORMAT)
+            if (request->type == UREQUEST_UBUF_MGR)
+                return upipe_v210enc_amend_ubuf_mgr(upipe, request);
+            if (request->type == UREQUEST_FLOW_FORMAT)
                 return upipe_throw_provide_request(upipe, request);
             return upipe_v210enc_alloc_output_proxy(upipe, request);
         }
