@@ -278,21 +278,29 @@ static bool upipe_unpack_rfc4175_handle(struct upipe *upipe, struct uref *uref,
 
         if (upipe_unpack_rfc4175->output_is_v210) {
             /* Start */
-            uint8_t *dst = upipe_unpack_rfc4175->output_plane[0] + upipe_unpack_rfc4175->output_stride[0]*interleaved_line;
+            uint8_t *dst = upipe_unpack_rfc4175->output_plane[0] +
+                upipe_unpack_rfc4175->output_stride[0] * interleaved_line;
 
             /* Offset to a pixel/pblock within the line */
-            int block_offset = line_offset[0] / upipe_unpack_rfc4175->output_pixels_per_block;
+            int block_offset = line_offset[0] /
+                upipe_unpack_rfc4175->output_pixels_per_block;
             dst += block_offset * upipe_unpack_rfc4175->output_block_size;
 
-            upipe_unpack_rfc4175->bitpacked_to_v210(rfc4175_data, (uint32_t *)dst, length[0]);
-        }
-        else {
-            uint8_t *y8, *u8, *v8;
-            y8 = upipe_unpack_rfc4175->output_plane[0] + upipe_unpack_rfc4175->output_stride[0]*interleaved_line + line_offset[0] / 1;
-            u8 = upipe_unpack_rfc4175->output_plane[1] + upipe_unpack_rfc4175->output_stride[1]*interleaved_line + line_offset[0] / 2;
-            v8 = upipe_unpack_rfc4175->output_plane[2] + upipe_unpack_rfc4175->output_stride[2]*interleaved_line + line_offset[0] / 2;
-            
-            upipe_unpack_rfc4175->bitpacked_to_planar_8(rfc4175_data, y8, u8, v8, length[0]);
+            upipe_unpack_rfc4175->bitpacked_to_v210(rfc4175_data,
+                    (uint32_t *)dst, length[0]);
+        } else {
+            uint8_t *y8 = upipe_unpack_rfc4175->output_plane[0] +
+                upipe_unpack_rfc4175->output_stride[0] * interleaved_line +
+                line_offset[0] / 1;
+            uint8_t *u8 = upipe_unpack_rfc4175->output_plane[1] +
+                upipe_unpack_rfc4175->output_stride[1] * interleaved_line +
+                line_offset[0] / 2;
+            uint8_t *v8 = upipe_unpack_rfc4175->output_plane[2] +
+                upipe_unpack_rfc4175->output_stride[2] * interleaved_line +
+                line_offset[0] / 2;
+
+            upipe_unpack_rfc4175->bitpacked_to_planar_8(rfc4175_data,
+                    y8, u8, v8, length[0]);
         }
 
         if (continuation) {
@@ -301,21 +309,30 @@ static bool upipe_unpack_rfc4175_handle(struct upipe *upipe, struct uref *uref,
 
             if (upipe_unpack_rfc4175->output_is_v210) {
                 /* Start */
-                uint8_t *dst = upipe_unpack_rfc4175->output_plane[0] + upipe_unpack_rfc4175->output_stride[0]*interleaved_line;
+                uint8_t *dst = upipe_unpack_rfc4175->output_plane[0] +
+                    upipe_unpack_rfc4175->output_stride[0] * interleaved_line;
 
                 /* Offset to a pixel/pblock within the line */
-                int block_offset = line_offset[1] / upipe_unpack_rfc4175->output_pixels_per_block;
+                int block_offset = line_offset[1] /
+                    upipe_unpack_rfc4175->output_pixels_per_block;
                 dst += block_offset * upipe_unpack_rfc4175->output_block_size;
 
-                upipe_unpack_rfc4175->bitpacked_to_v210(rfc4175_data, (uint32_t *)dst, length[1]);
+                upipe_unpack_rfc4175->bitpacked_to_v210(rfc4175_data,
+                        (uint32_t *)dst, length[1]);
             }
             else {
-                uint8_t *y8, *u8, *v8;
-                y8 = upipe_unpack_rfc4175->output_plane[0] + upipe_unpack_rfc4175->output_stride[0]*interleaved_line + line_offset[1] / 1;
-                u8 = upipe_unpack_rfc4175->output_plane[1] + upipe_unpack_rfc4175->output_stride[1]*interleaved_line + line_offset[1] / 2;
-                v8 = upipe_unpack_rfc4175->output_plane[2] + upipe_unpack_rfc4175->output_stride[2]*interleaved_line + line_offset[1] / 2;
-                
-                upipe_unpack_rfc4175->bitpacked_to_planar_8(rfc4175_data, y8, u8, v8, length[1]);
+                uint8_t *y8 = upipe_unpack_rfc4175->output_plane[0] +
+                    upipe_unpack_rfc4175->output_stride[0] * interleaved_line +
+                    line_offset[1] / 1;
+                uint8_t *u8 = upipe_unpack_rfc4175->output_plane[1] +
+                    upipe_unpack_rfc4175->output_stride[1] * interleaved_line +
+                    line_offset[1] / 2;
+                uint8_t *v8 = upipe_unpack_rfc4175->output_plane[2] +
+                    upipe_unpack_rfc4175->output_stride[2] * interleaved_line +
+                    line_offset[1] / 2;
+
+                upipe_unpack_rfc4175->bitpacked_to_planar_8(rfc4175_data,
+                        y8, u8, v8, length[1]);
             }
         }
     }
@@ -351,7 +368,7 @@ static bool upipe_unpack_rfc4175_handle(struct upipe *upipe, struct uref *uref,
 
     /* unmap input */
     uref_block_unmap(uref, 0);
-    uref_free(uref); 
+    uref_free(uref);
 
     return true;
 }
