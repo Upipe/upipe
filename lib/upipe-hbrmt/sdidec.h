@@ -19,6 +19,6 @@ void upipe_uyvy_to_planar_10_avx(uint16_t *y, uint16_t *u, uint16_t *v, const ui
 void upipe_uyvy_to_planar_10_avx2(uint16_t *y, uint16_t *u, uint16_t *v, const uint16_t *l, const int64_t width);
 
 /* process (mmsize*3)/8 pixels per iteration */
-void upipe_uyvy_to_v210_ssse3(const uint16_t *y, uint8_t *dst, ptrdiff_t width);
-void upipe_uyvy_to_v210_avx  (const uint16_t *y, uint8_t *dst, ptrdiff_t width);
-void upipe_uyvy_to_v210_avx2 (const uint16_t *y, uint8_t *dst, ptrdiff_t width);
+void upipe_uyvy_to_v210_ssse3(const uint16_t *y, uint8_t *dst, int64_t width);
+void upipe_uyvy_to_v210_avx  (const uint16_t *y, uint8_t *dst, int64_t width);
+void upipe_uyvy_to_v210_avx2 (const uint16_t *y, uint8_t *dst, int64_t width);

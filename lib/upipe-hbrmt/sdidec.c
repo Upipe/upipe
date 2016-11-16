@@ -1,5 +1,4 @@
 #include <inttypes.h>
-#include <stddef.h>
 #include "sdidec.h"
 
 void upipe_sdi_unpack_c(const uint8_t *src, uint16_t *y, int64_t size)
