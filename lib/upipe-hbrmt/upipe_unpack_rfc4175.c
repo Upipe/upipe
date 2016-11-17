@@ -513,6 +513,7 @@ static struct upipe *upipe_unpack_rfc4175_alloc(struct upipe_mgr *mgr,
 #endif
     {
         upipe_unpack_rfc4175->bitpacked_to_v210 = upipe_sdi_v210_unpack_ssse3;
+        upipe_unpack_rfc4175->bitpacked_to_planar_8 = upipe_sdi_to_planar_8_ssse3;
     }
 
    if (__builtin_cpu_supports("avx")) {
@@ -522,6 +523,7 @@ static struct upipe *upipe_unpack_rfc4175_alloc(struct upipe_mgr *mgr,
 
    if (__builtin_cpu_supports("avx2")) {
         upipe_unpack_rfc4175->bitpacked_to_v210 = upipe_sdi_v210_unpack_avx2;
+        upipe_unpack_rfc4175->bitpacked_to_planar_8 = upipe_sdi_to_planar_8_avx2;
    }
 #endif
 

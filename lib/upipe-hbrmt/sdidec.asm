@@ -31,12 +31,15 @@ sdi_luma_shuf_10:    times 2 db -1, -1,  2,  1, -1, -1,  4,  3, -1, -1,  7,  6, 
 sdi_chroma_mult_10:  times 4 dw 0x400, 0x0, 0x4000, 0x0
 sdi_luma_mult_10:    times 4 dw 0x0, 0x800, 0x0, 0x7fff
 
-planar_8_c_shuf: db 0, 5, 10, -1, -1, -1, -1, -1, 3, 2, 8, 7, 13, 12, -1, -1
-planar_8_v_shuf_after: db 9, 11, 13, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1
+planar_8_c_shuf:       times 2 db 0, 5,10,-1,-1,-1,-1,-1, 3, 2, 8, 7,13,12,-1,-1
+planar_8_v_shuf_after: times 2 db 9,11,13,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1
 
-planar_8_y_shuf: db 2, 1, 4, 3, 7, 6, 9, 8, 12, 11, 14, 13, -1, -1, -1, -1
-planar_8_y_mult: dw 0x4, 0x40, 0x4, 0x40, 0x4, 0x40, 0x0, 0x0
-planar_8_y_shuf_after: db 1, 3, 5, 7, 9, 11, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1
+planar_8_y_shuf: times 2 db 2, 1, 4, 3, 7, 6, 9, 8,12,11,14,13,-1,-1,-1,-1
+planar_8_y_mult: times 2 dw 0x4, 0x40, 0x4, 0x40, 0x4, 0x40, 0x0, 0x0
+planar_8_y_shuf_after: times 2 db 1, 3, 5, 7, 9,11,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1
+
+planar_8_avx2_shuf1:   db 0, 1, 2, 8, 9,10,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1
+planar_8_avx2_shuf2:   db 1, 3, 5, 9,11,13,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1
 
 uyvy_planar_shuf_10: times 2 db 0, 1, 8, 9, 4, 5,12,13, 2, 3, 6, 7,10,11,14,15
 
@@ -108,28 +111,49 @@ cglobal sdi_to_planar_8, 5, 6, 3, src, y, u, v, size, offset
     neg      sizeq
 
 .loop:
-    movu     m0, [srcq+sizeq]
+    movu     xm0, [srcq+sizeq]
+%if cpuflag(avx2)
+    vinserti128 m0, m0, [srcq+sizeq+15], 1
+%endif
 
     pshufb   m1, m0, [planar_8_c_shuf]
 
     pshufb   m0, [planar_8_y_shuf]
     pmullw   m0, [planar_8_y_mult]
     pshufb   m0, [planar_8_y_shuf_after]
-    movq     [yq + 2*offsetq], m0
+    movq     [yq + 2*offsetq], xm0
+%if cpuflag(avx2)
+    vextracti128 [yq + 2*offsetq + 6], m0, 1
+%endif
 
+%if notcpuflag(avx2)
     movd     [uq + offsetq], m1
     psllw    m2, m1, 4
     pshufb   m2, [planar_8_v_shuf_after]
     movd     [vq + offsetq], m2
+%else
+    vpermq m1, m1, q3120
+    vextracti128 xm2, m1, 1
+    pshufb xm1, [planar_8_avx2_shuf1]
+    movq [uq + offsetq], xm1
 
-    add      offsetq, 3
-    add      sizeq, 15
+    psllw xm2, 4
+    pshufb xm2, [planar_8_avx2_shuf2]
+    movq [vq + offsetq], xm2
+%endif
+
+    add      offsetq, (3*mmsize)/16
+    add      sizeq, (15*mmsize)/16
     jl .loop
 
     RET
 %endmacro
 
+INIT_XMM ssse3
+sdi_to_planar_8
 INIT_XMM avx
+sdi_to_planar_8
+INIT_YMM avx2
 sdi_to_planar_8
 
 %macro uyvy_to_planar_8 0
