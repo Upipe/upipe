@@ -26,3 +26,8 @@ void upipe_sdi_blank_avx(uint16_t *dst, int64_t size);
 void upipe_planar_to_sdi_8_ssse3(const uint8_t *y, const uint8_t *u, const uint8_t *v, uint8_t *dest, int64_t width);
 void upipe_planar_to_sdi_8_avx  (const uint8_t *y, const uint8_t *u, const uint8_t *v, uint8_t *dest, int64_t width);
 void upipe_planar_to_sdi_8_avx2 (const uint8_t *y, const uint8_t *u, const uint8_t *v, uint8_t *dest, int64_t width);
+
+/* process (6*mmsize)/16 pixels per iteration */
+void upipe_planar_to_sdi_10_ssse3(const uint16_t *y, const uint16_t *u, const uint16_t *v, uint8_t *dest, int64_t width);
+void upipe_planar_to_sdi_10_avx  (const uint16_t *y, const uint16_t *u, const uint16_t *v, uint8_t *dest, int64_t width);
+void upipe_planar_to_sdi_10_avx2 (const uint16_t *y, const uint16_t *u, const uint16_t *v, uint8_t *dest, int64_t width);
