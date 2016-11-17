@@ -35,14 +35,14 @@ sdi_enc_mult_10: times 4 dw 64, 16, 4, 1
 sdi_chroma_shuf_10: times 2 db 1, 0, 5, 4, -1, 9, 8, 13, 12, -1, -1, -1, -1, -1, -1, -1
 sdi_luma_shuf_10: times 2 db -1, 3, 2, 7, 6, -1, 11, 10, 15, 14, -1, -1, -1, -1, -1, -1
 
-planar_8_y_shuf: db 0, -1, 1, -1, 2, -1, 3, -1, 4, -1, 5, -1, 6, -1, -1, -1
-planar_8_y_mult: dw 0x40, 0x4, 0x40, 0x4, 0x40, 0x4, 0x40, 0x0
-planar_8_y_shuf_after: db -1, 1, 0, 3, 2, -1, 5, 4, 7, 6, -1, 9, 8, 11, 10, -1
+planar_8_y_shuf: times 2 db 0, -1, 1, -1, 2, -1, 3, -1, 4, -1, 5, -1, 6, -1, -1, -1
+planar_8_y_mult: times 2 dw 0x40, 0x4, 0x40, 0x4, 0x40, 0x4, 0x40, 0x0
+planar_8_y_shuf_after: times 2 db -1, 1, 0, 3, 2, -1, 5, 4, 7, 6, -1, 9, 8, 11, 10, -1
 
-planar_8_u_shuf: db 0, -1, -1, -1, -1, 1, -1, -1, -1, -1, 2, -1, -1, -1, -1, -1
+planar_8_u_shuf: times 2 db 0, -1, -1, -1, -1, 1, -1, -1, -1, -1, 2, -1, -1, -1, -1, -1
 
-planar_8_v_shuf: db 0, -1, 2, -1, 3, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1
-planar_8_v_shuf_after: db -1, -1, 1, 0, -1, -1, -1, 3, 2, -1, -1, -1, 5, 4, -1, -1
+planar_8_v_shuf: times 2 db 0, -1, 2, -1, 3, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1
+planar_8_v_shuf_after: times 2 db -1, -1, 1, 0, -1, -1, -1, 3, 2, -1, -1, -1, 5, 4, -1, -1
 
 planar_10_y_shift:  dw 0x10, 0x1, 0x10, 0x1, 0x10, 0x1, 0x10, 0x1
 planar_10_uv_shift: dw 0x40, 0x40, 0x40, 0x40, 0x4, 0x4, 0x4, 0x4
@@ -420,9 +420,14 @@ cglobal planar_to_sdi_8, 5, 5, 3, y, u, v, l, width
     neg    widthq
 
 .loop:
-    movq   m0, [yq + widthq*2]
-    movd   m1, [uq + widthq*1]
-    movd   m2, [vq + widthq*1]
+    movq   xm0, [yq + widthq*2]
+    movd   xm1, [uq + widthq*1]
+    movd   xm2, [vq + widthq*1]
+%if cpuflag(avx2)
+    vinserti128 m0, m0, [yq + widthq*2 + 6], 1
+    vinserti128 m1, m1, [uq + widthq*1 + 3], 1
+    vinserti128 m2, m2, [vq + widthq*1 + 3], 1
+%endif
 
     pshufb m0, [planar_8_y_shuf]
     pmullw m0, [planar_8_y_mult]
@@ -438,16 +443,23 @@ cglobal planar_to_sdi_8, 5, 5, 3, y, u, v, l, width
 
     por    m0, m2
 
-    movu   [lq], m0
+    movu   [lq], xm0
+%if cpuflag(avx2)
+    vextracti128 [lq+15], m0, 1
+%endif
 
-    add    lq, 15
-    add    widthq, 3
+    add    lq, (15*mmsize)/16
+    add    widthq, (3*mmsize)/16
     jl .loop
 
     RET
 %endmacro
 
+INIT_XMM ssse3
+planar_to_sdi_8
 INIT_XMM avx
+planar_to_sdi_8
+INIT_YMM avx2
 planar_to_sdi_8
 
 %macro planar_to_sdi_10 0
