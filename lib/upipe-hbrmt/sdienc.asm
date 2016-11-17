@@ -411,7 +411,7 @@ v210_uyvy_unpack aligned
 %macro planar_to_sdi_8 0
 
 ; planar_to_sdi_8(const uint8_t *y, const uint8_t *u, const uint8_t *v, uint8_t *l, const int64_t width)
-cglobal planar_to_sdi_8, 5, 5, 3, y, u, v, l, width, size
+cglobal planar_to_sdi_8, 5, 5, 3, y, u, v, l, width
     shr    widthq, 1
     lea    yq, [yq + 2*widthq]
     add    uq, widthq
@@ -422,7 +422,7 @@ cglobal planar_to_sdi_8, 5, 5, 3, y, u, v, l, width, size
 .loop:
     movq   m0, [yq + widthq*2]
     movd   m1, [uq + widthq*1]
-    movu   m2, [vq + widthq*1]
+    movd   m2, [vq + widthq*1]
 
     pshufb m0, [planar_8_y_shuf]
     pmullw m0, [planar_8_y_mult]
