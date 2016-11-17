@@ -31,19 +31,19 @@ sdi_luma_shuf_10:    times 2 db -1, -1,  2,  1, -1, -1,  4,  3, -1, -1,  7,  6, 
 sdi_chroma_mult_10:  times 4 dw 0x400, 0x0, 0x4000, 0x0
 sdi_luma_mult_10:    times 4 dw 0x0, 0x800, 0x0, 0x7fff
 
-sdi_v210_shuf_easy:       db 1, 0, -1, -1, 4, 3, 7, 6, 8, 7, 11, 10, 12, 11, -1, -1
-sdi_v210_rshift_easy:     dw 0x200, 0x7fff, 0x7fff, 0x7fff, 0x2000, 0x2000, 0x800, 0x7fff
-sdi_v210_mask_easy:       db 0xff, 0x03, 0x00, 0x00, 0xff, 0x03, 0xf0, 0x3f, 0xff, 0x03, 0xf0, 0x3f, 0xff, 0x03, 0x00, 0x00
+sdi_v210_shuf_easy:       times 2 db 1, 0, -1, -1, 4, 3, 7, 6, 8, 7, 11, 10, 12, 11, -1, -1
+sdi_v210_rshift_easy:     times 2 dw 0x200, 0x7fff, 0x7fff, 0x7fff, 0x2000, 0x2000, 0x800, 0x7fff
+sdi_v210_mask_easy:       times 2 db 0xff, 0x03, 0x00, 0x00, 0xff, 0x03, 0xf0, 0x3f, 0xff, 0x03, 0xf0, 0x3f, 0xff, 0x03, 0x00, 0x00
 
-sdi_v210_shuf_hard_1:     db 3, 2, 9, 8, 14, 13, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1
-sdi_v210_mult_hard_1:     dw 4, 4, 16, 1, 1, 1, 1, 1
-sdi_v210_mask_hard_1:     db 0xf0, 0x3f, 0xfc, 0x0f, 0xf0, 0x3f, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00
-sdi_v210_shuf_hard_1_end: db -1, -1, 0, 1, -1, -1, -1, -1, -1, 2, 3, -1, -1, -1, 4, 5
+sdi_v210_shuf_hard_1:     times 2 db 3, 2, 9, 8, 14, 13, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1
+sdi_v210_mult_hard_1:     times 2 dw 4, 4, 16, 1, 1, 1, 1, 1
+sdi_v210_mask_hard_1:     times 2 db 0xf0, 0x3f, 0xfc, 0x0f, 0xf0, 0x3f, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00
+sdi_v210_shuf_hard_1_end: times 2 db -1, -1, 0, 1, -1, -1, -1, -1, -1, 2, 3, -1, -1, -1, 4, 5
 
-sdi_v210_shuf_hard_2:     db 2, 1, 6, 5, 13, 12, -1, -1,  -1, -1, -1, -1,  -1, -1, -1, -1
-sdi_v210_rshift_hard_2:   dw 0x2000, 0x800, 0x7fff, 0x7fff, 0x7fff, 0x7fff, 0x7fff, 0x7fff
-sdi_v210_mask_hard_2:     db 0xfc, 0x0f, 0xfc, 0x0f, 0xfc, 0x0f, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00
-sdi_v210_shuf_hard_2_end: db -1, 0, 1, -1, -1, 2, 3, -1, -1, -1, -1, -1, -1, 4, 5, -1
+sdi_v210_shuf_hard_2:     times 2 db 2, 1, 6, 5, 13, 12, -1, -1,  -1, -1, -1, -1,  -1, -1, -1, -1
+sdi_v210_rshift_hard_2:   times 2 dw 0x2000, 0x800, 0x7fff, 0x7fff, 0x7fff, 0x7fff, 0x7fff, 0x7fff
+sdi_v210_mask_hard_2:     times 2 db 0xfc, 0x0f, 0xfc, 0x0f, 0xfc, 0x0f, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00
+sdi_v210_shuf_hard_2_end: times 2 db -1, 0, 1, -1, -1, 2, 3, -1, -1, -1, -1, -1, -1, 4, 5, -1
 
 planar_8_c_shuf: db 0, 5, 10, -1, -1, -1, -1, -1, 3, 2, 8, 7, 13, 12, -1, -1
 planar_8_v_shuf_after: db 9, 11, 13, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1
@@ -147,7 +147,10 @@ cglobal sdi_v210_unpack, 3, 3, 3+11*ARCH_X86_64, src, dst, size
 %endif ; ARCH_X86_64
 
 .loop:
-    movu     m0, [srcq+sizeq]
+    movu     xm0, [srcq+sizeq]
+%if cpuflag(avx2)
+    vinserti128 m0, m0, [srcq + sizeq + 15], 1
+%endif
 
     pshufb   m1, m0, m3
     pshufb   m2, m0, m4
@@ -170,13 +173,17 @@ cglobal sdi_v210_unpack, 3, 3, 3+11*ARCH_X86_64, src, dst, size
     mova     [dstq], m1
 
     add      dstq, mmsize
-    add      sizeq, 15
+    add      sizeq, (15*mmsize)/16
     jl .loop
 
     RET
 %endmacro
 
+INIT_XMM ssse3
+sdi_v210_unpack
 INIT_XMM avx
+sdi_v210_unpack
+INIT_YMM avx2
 sdi_v210_unpack
 
 %macro sdi_to_planar_8 0

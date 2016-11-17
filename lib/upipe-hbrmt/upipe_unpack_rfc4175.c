@@ -500,10 +500,28 @@ static struct upipe *upipe_unpack_rfc4175_alloc(struct upipe_mgr *mgr,
     upipe_unpack_rfc4175->bitpacked_to_planar_8 = upipe_sdi_to_planar_8_c;
 
 #if !defined(__APPLE__) /* macOS clang doesn't support that builtin yet */
+#if defined(__clang__) && /* clang 3.8 doesn't know ssse3 */ \
+     (__clang_major__ < 3 || (__clang_major__ == 3 && __clang_minor__ <= 8))
+# ifdef __SSSE3__
+    if (1)
+# else
+    if (0)
+# endif
+#else
+    if (__builtin_cpu_supports("ssse3"))
+#endif
+    {
+        upipe_unpack_rfc4175->bitpacked_to_v210 = upipe_sdi_v210_unpack_ssse3;
+    }
+
    if (__builtin_cpu_supports("avx")) {
         upipe_unpack_rfc4175->bitpacked_to_v210 = upipe_sdi_v210_unpack_avx;
         upipe_unpack_rfc4175->bitpacked_to_planar_8 = upipe_sdi_to_planar_8_avx;
     }
+
+   if (__builtin_cpu_supports("avx2")) {
+        upipe_unpack_rfc4175->bitpacked_to_v210 = upipe_sdi_v210_unpack_avx2;
+   }
 #endif
 
     upipe_unpack_rfc4175_init_urefcount(upipe);
