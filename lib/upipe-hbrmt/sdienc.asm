@@ -310,7 +310,7 @@ planar_to_uyvy_10
 %macro v210_uyvy_unpack 1
 
 ; v210_uyvy_unpack(const uint32_t *src, uint16_t *uyvy, int64_t width)
-cglobal v210_uyvy_unpack_%1, 3, 3, 15
+cglobal v210_uyvy_unpack_%1, 3, 3, 8+7*ARCH_X86_64
     shl    r2, 2
     add    r1, r2
     neg    r2
@@ -319,6 +319,7 @@ cglobal v210_uyvy_unpack_%1, 3, 3, 15
     mova  m5, [v210_uyvy_mask2]
     mova  m6, [v210_uyvy_luma_shuf1]
     mova  m7, [v210_uyvy_chroma_shuf1]
+%if ARCH_X86_64
     mova  m8, [v210_uyvy_luma_shuf2]
     mova  m9, [v210_uyvy_chroma_shuf2]
     mova m10, [v210_uyvy_luma_shuf3]
@@ -326,6 +327,15 @@ cglobal v210_uyvy_unpack_%1, 3, 3, 15
     mova m12, [v210_uyvy_mult1]
     mova m13, [v210_uyvy_mult2]
     mova m14, [v210_uyvy_mult3]
+%else
+    %define  m8 [v210_uyvy_luma_shuf2]
+    %define  m9 [v210_uyvy_chroma_shuf2]
+    %define m10 [v210_uyvy_luma_shuf3]
+    %define m11 [v210_uyvy_chroma_shuf3]
+    %define m12 [v210_uyvy_mult1]
+    %define m13 [v210_uyvy_mult2]
+    %define m14 [v210_uyvy_mult3]
+%endif ; ARCH_X86_64
 
 .loop:
 %ifidn %1, unaligned
