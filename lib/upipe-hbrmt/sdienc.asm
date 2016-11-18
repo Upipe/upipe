@@ -522,6 +522,9 @@ cglobal planar_10_to_planar_8, 3, 3, 3, y, y8, width
 .loop:
     mova     m0, [yq + widthq*2 + 0*mmsize]
     mova     m1, [yq + widthq*2 + 1*mmsize]
+%if cpuflag(avx2)
+    SBUTTERFLY dqqq, 0, 1, 2
+%endif
 
     psrlw    m0, 2
     psrlw    m1, 2
@@ -536,5 +539,7 @@ cglobal planar_10_to_planar_8, 3, 3, 3, y, y8, width
     RET
 %endmacro
 
-INIT_XMM avx
+INIT_XMM sse2
+planar_10_to_planar_8
+INIT_YMM avx2
 planar_10_to_planar_8
