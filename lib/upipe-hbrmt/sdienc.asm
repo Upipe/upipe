@@ -171,7 +171,12 @@ cglobal planar_to_uyvy_8, 5, 5, 8+3*ARCH_X86_64, dst, y, u, v, width
     punpckhbw m5, m2, m3
     punpcklbw m4, m2, m3
     punpckhbw m2, m4, m0
+%if cpuflag(avx)
     punpcklbw m0, m4, m0
+%else
+    punpcklbw m4, m0
+    SWAP       0,  4
+%endif
     punpckhbw m6, m5, m1
     punpcklbw m4, m5, m1
 
@@ -226,6 +231,8 @@ cglobal planar_to_uyvy_8, 5, 5, 8+3*ARCH_X86_64, dst, y, u, v, width
     RET
 %endmacro
 
+INIT_XMM sse2
+planar_to_uyvy_8
 INIT_XMM avx
 planar_to_uyvy_8
 INIT_YMM avx2
