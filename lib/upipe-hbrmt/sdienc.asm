@@ -71,16 +71,18 @@ SECTION .text
 %macro sdi_pack_10 0
 
 ; sdi_pack_10(uint8_t *dst, const uint8_t *y, int64_t size)
-cglobal sdi_pack_10, 3, 4, 3, dst, y, size
+cglobal sdi_pack_10, 3, 4, 5, dst, y, size
     add     sizeq, sizeq
     add     yq, sizeq
     neg     sizeq
     mova    m2, [sdi_enc_mult_10]
+    mova    m3, [sdi_chroma_shuf_10]
+    mova    m4, [sdi_luma_shuf_10]
 
 .loop:
     pmullw  m0, m2, [yq+sizeq]
-    pshufb  m1, m0, [sdi_chroma_shuf_10]
-    pshufb  m0, [sdi_luma_shuf_10]
+    pshufb  m1, m0, m3
+    pshufb  m0, m4
     por     m0, m1
 
     movu    [dstq], xm0
