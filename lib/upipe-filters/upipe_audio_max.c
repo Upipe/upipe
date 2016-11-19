@@ -262,6 +262,8 @@ static int upipe_amax_control(struct upipe *upipe, int command, va_list args)
         }
         case UPIPE_UNREGISTER_REQUEST: {
             struct urequest *request = va_arg(args, struct urequest *);
+            if (request->type == UREQUEST_FLOW_FORMAT)
+                return UBASE_ERR_NONE;
             return upipe_amax_free_output_proxy(upipe, request);
         }
         case UPIPE_GET_FLOW_DEF: {

@@ -84,6 +84,7 @@ static inline struct ubuf *ubuf_block_mem_alloc_from_sound(struct ubuf_mgr *mgr,
  * @param umem_mgr memory allocator to use for buffers
  * @param prepend default minimum extra space before buffer (if set to -1, a
  * default sensible value is used)
+ * @param append extra space after buffer
  * @param align default alignment in octets (if set to -1, a default sensible
  * value is used)
  * @param align_offset offset of the aligned octet, in octets (may be negative)
@@ -92,7 +93,7 @@ static inline struct ubuf *ubuf_block_mem_alloc_from_sound(struct ubuf_mgr *mgr,
 struct ubuf_mgr *ubuf_block_mem_mgr_alloc(uint16_t ubuf_pool_depth,
                                           uint16_t shared_pool_depth,
                                           struct umem_mgr *umem_mgr,
-                                          int prepend,
+                                          int prepend, int append,
                                           int align, int align_offset);
 
 #ifdef __cplusplus

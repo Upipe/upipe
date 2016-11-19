@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2015 OpenHeadend S.A.R.L.
+ * Copyright (C) 2016 OpenHeadend S.A.R.L.
  *
  * Authors: Christophe Massiot
  *
@@ -24,16 +24,17 @@
  */
 
 /** @file
- * @short unit tests for TS PSI join module
+ * @short unit tests for SDI unpack10bit module
  */
 
 #undef NDEBUG
 
-#include <upipe/uclock.h>
 #include <upipe/uprobe.h>
 #include <upipe/uprobe_stdio.h>
 #include <upipe/uprobe_prefix.h>
+#include <upipe/uprobe_ubuf_mem.h>
 #include <upipe/umem.h>
+#include <upipe/ubits.h>
 #include <upipe/umem_alloc.h>
 #include <upipe/udict.h>
 #include <upipe/udict_inline.h>
@@ -44,31 +45,21 @@
 #include <upipe/uref_flow.h>
 #include <upipe/uref_block_flow.h>
 #include <upipe/uref_block.h>
-#include <upipe/uref_clock.h>
 #include <upipe/uref_std.h>
 #include <upipe/upipe.h>
-#include <upipe-ts/uref_ts_flow.h>
-#include <upipe-ts/upipe_ts_psi_join.h>
-#include <upipe-ts/uref_ts_flow.h>
-
-#include <stdbool.h>
-#include <stdlib.h>
-#include <stdio.h>
-#include <unistd.h>
-#include <inttypes.h>
-#include <assert.h>
-
-#include <bitstream/mpeg/psi.h>
+#include <upipe-hbrmt/upipe_unpack10bit.h>
 
 #define UDICT_POOL_DEPTH 0
 #define UREF_POOL_DEPTH 0
 #define UBUF_POOL_DEPTH 0
 #define UPROBE_LOG_LEVEL UPROBE_LOG_DEBUG
 
-static uint8_t received = 0;
-static uint64_t octetrate = 0;
-static uint64_t section_interval = 0;
-static uint64_t latency = 0;
+/* assembly loads 32 bytes to process 20 bytes / 16 pixels */
+#define UBUF_APPEND 12
+
+#define WIDTH 1024
+
+static bool received_block = false;
 
 /** definition of our uprobe */
 static int catch(struct uprobe *uprobe, struct upipe *upipe,
@@ -80,16 +71,8 @@ static int catch(struct uprobe *uprobe, struct upipe *upipe,
             break;
         case UPROBE_READY:
         case UPROBE_DEAD:
+        case UPROBE_NEW_FLOW_DEF:
             break;
-        case UPROBE_NEW_FLOW_DEF: {
-            struct uref *flow_def = va_arg(args, struct uref *);
-            ubase_assert(uref_flow_match_def(flow_def, "block.mpegtspsi."));
-            ubase_assert(uref_block_flow_get_octetrate(flow_def, &octetrate));
-            ubase_assert(uref_ts_flow_get_psi_section_interval(flow_def,
-                        &section_interval));
-            ubase_assert(uref_clock_get_latency(flow_def, &latency));
-            break;
-        }
     }
     return UBASE_ERR_NONE;
 }
@@ -109,11 +92,14 @@ static void test_input(struct upipe *upipe, struct uref *uref,
                        struct upump **upump_p)
 {
     assert(uref != NULL);
-    const uint8_t *buffer;
+    const uint8_t *buf;
     int size = -1;
-    ubase_assert(uref_block_read(uref, 0, &size, &buffer));
-    assert(size == PSI_HEADER_SIZE); //because of the way we allocated it
-    received = psi_get_tableid(buffer);
+    ubase_assert(uref_block_read(uref, 0, &size, &buf));
+    assert(size == WIDTH * 2);
+    const uint16_t *pixels = (const uint16_t*)buf;
+    for (int i = 0; i < WIDTH; i++)
+        assert(*pixels++ == i);
+    received_block = true;
     uref_block_unmap(uref, 0);
     uref_free(uref);
 }
@@ -130,6 +116,7 @@ static int test_control(struct upipe *upipe, int command, va_list args)
         }
         case UPIPE_UNREGISTER_REQUEST:
             return UBASE_ERR_NONE;
+
         default:
             assert(0);
             return UBASE_ERR_UNHANDLED;
@@ -144,7 +131,7 @@ static void test_free(struct upipe *upipe)
 }
 
 /** helper phony pipe */
-static struct upipe_mgr ts_test_mgr = {
+static struct upipe_mgr test_mgr = {
     .refcount = NULL,
     .upipe_alloc = test_alloc,
     .upipe_input = test_input,
@@ -163,100 +150,67 @@ int main(int argc, char *argv[])
     assert(uref_mgr != NULL);
     struct ubuf_mgr *ubuf_mgr = ubuf_block_mem_mgr_alloc(UBUF_POOL_DEPTH,
                                                          UBUF_POOL_DEPTH,
-                                                         umem_mgr, 0, 0, -1, 0);
+                                                         umem_mgr,
+                                                         0, UBUF_APPEND, -1, 0);
     assert(ubuf_mgr != NULL);
     struct uprobe uprobe;
     uprobe_init(&uprobe, catch, NULL);
-    struct uprobe *logger = uprobe_stdio_alloc(&uprobe, stdout,
-                                               UPROBE_LOG_LEVEL);
-    assert(logger != NULL);
+    struct uprobe *uprobe_stdio = uprobe_stdio_alloc(&uprobe, stdout,
+                                                     UPROBE_LOG_LEVEL);
+    assert(uprobe_stdio != NULL);
 
-    struct upipe_mgr *upipe_ts_psi_join_mgr = upipe_ts_psi_join_mgr_alloc();
-    assert(upipe_ts_psi_join_mgr != NULL);
+    uprobe_stdio = uprobe_ubuf_mem_alloc(uprobe_stdio, umem_mgr,
+            UBUF_POOL_DEPTH, UBUF_POOL_DEPTH);
+    assert(uprobe_stdio != NULL);
 
-    struct uref *uref = uref_block_flow_alloc_def(uref_mgr, "mpegtspsi.");
+    struct uref *uref;
+    uref = uref_block_flow_alloc_def(uref_mgr, "");
+    uref_block_flow_set_append(uref, UBUF_APPEND);
     assert(uref != NULL);
-    ubase_assert(uref_block_flow_set_octetrate(uref, 1));
-    ubase_assert(uref_ts_flow_set_psi_section_interval(uref, UCLOCK_FREQ));
-    ubase_assert(uref_clock_set_latency(uref, 1));
 
-    struct upipe *upipe_ts_psi_join = upipe_flow_alloc(upipe_ts_psi_join_mgr,
-            uprobe_pfx_alloc(uprobe_use(logger), UPROBE_LOG_LEVEL,
-                             "ts join"),
-            uref);
-    assert(upipe_ts_psi_join != NULL);
-
-    struct upipe *upipe_sink = upipe_void_alloc(&ts_test_mgr,
-                                                uprobe_use(logger));
-    assert(upipe_sink != NULL);
-    ubase_assert(upipe_set_output(upipe_ts_psi_join, upipe_sink));
-
-    struct upipe *upipe_ts_psi_join_input1 =
-        upipe_void_alloc_sub(upipe_ts_psi_join,
-            uprobe_pfx_alloc(uprobe_use(logger), UPROBE_LOG_LEVEL,
-                                   "ts join input 1"));
-    assert(upipe_ts_psi_join_input1 != NULL);
-    ubase_assert(upipe_set_flow_def(upipe_ts_psi_join_input1, uref));
-    assert(octetrate == 1);
-    assert(section_interval == UCLOCK_FREQ);
-    assert(latency == 1);
-
-    octetrate = 0;
-    section_interval = 0;
-    latency = 0;
-    struct upipe *upipe_ts_psi_join_input2 =
-        upipe_void_alloc_sub(upipe_ts_psi_join,
-            uprobe_pfx_alloc(uprobe_use(logger), UPROBE_LOG_LEVEL,
-                                   "ts join input 2"));
-    assert(upipe_ts_psi_join_input2 != NULL);
-    ubase_assert(upipe_set_flow_def(upipe_ts_psi_join_input2, uref));
-    assert(octetrate == 2);
-    assert(section_interval == UCLOCK_FREQ / 2);
-    assert(latency == 1);
+    struct upipe_mgr *upipe_unpack10bit_mgr = upipe_unpack10bit_mgr_alloc();
+    assert(upipe_unpack10bit_mgr != NULL);
+    struct upipe *upipe_unpack10 = upipe_void_alloc(upipe_unpack10bit_mgr,
+            uprobe_pfx_alloc(uprobe_use(uprobe_stdio), UPROBE_LOG_LEVEL,
+                             "unpack10"));
+    assert(upipe_unpack10 != NULL);
+    ubase_assert(upipe_set_flow_def(upipe_unpack10, uref));
     uref_free(uref);
+
+    struct upipe *sink = upipe_void_alloc(&test_mgr, uprobe_use(uprobe_stdio));
+    assert(sink != NULL);
+    ubase_assert(upipe_set_output(upipe_unpack10, sink));
 
     uint8_t *buffer;
     int size;
-    uref = uref_block_alloc(uref_mgr, ubuf_mgr, PSI_HEADER_SIZE);
+    uref = uref_block_alloc(uref_mgr, ubuf_mgr, WIDTH * 10 / 8);
     assert(uref != NULL);
     size = -1;
     ubase_assert(uref_block_write(uref, 0, &size, &buffer));
-    assert(size == PSI_HEADER_SIZE);
-    psi_init(buffer, false);
-    psi_set_tableid(buffer, 1);
-    psi_set_length(buffer, 0);
+    assert(size == WIDTH * 10 / 8);
+
+    struct ubits s;
+    ubits_init(&s, buffer, size);
+    for (int i = 0; i < WIDTH; i++)
+        ubits_put(&s, 10, i);
+    uint8_t *end;
+    ubase_assert(ubits_clean(&s, &end));
+    assert(end == &buffer[size]);
+
     uref_block_unmap(uref, 0);
-    received = 0;
-    upipe_input(upipe_ts_psi_join_input1, uref, NULL);
-    assert(received == 1);
+    upipe_input(upipe_unpack10, uref, NULL);
+    assert(received_block);
 
-    uref = uref_block_alloc(uref_mgr, ubuf_mgr, PSI_HEADER_SIZE);
-    assert(uref != NULL);
-    size = -1;
-    ubase_assert(uref_block_write(uref, 0, &size, &buffer));
-    assert(size == PSI_HEADER_SIZE);
-    psi_init(buffer, false);
-    psi_set_tableid(buffer, 2);
-    psi_set_length(buffer, 0);
-    uref_block_unmap(uref, 0);
-    received = 0;
-    upipe_input(upipe_ts_psi_join_input2, uref, NULL);
-    assert(received == 2);
+    upipe_release(upipe_unpack10);
+    upipe_mgr_release(upipe_unpack10bit_mgr); // nop
 
-    upipe_release(upipe_ts_psi_join_input2);
-    upipe_release(upipe_ts_psi_join_input1);
-
-    upipe_release(upipe_ts_psi_join);
-    upipe_mgr_release(upipe_ts_psi_join_mgr); // nop
-
-    test_free(upipe_sink);
+    test_free(sink);
 
     uref_mgr_release(uref_mgr);
     ubuf_mgr_release(ubuf_mgr);
     udict_mgr_release(udict_mgr);
     umem_mgr_release(umem_mgr);
-    uprobe_release(logger);
-    uprobe_clean(&uprobe);
+    uprobe_release(uprobe_stdio);
 
     return 0;
 }

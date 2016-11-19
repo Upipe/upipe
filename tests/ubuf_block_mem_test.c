@@ -42,6 +42,7 @@
 
 #define UBUF_POOL_DEPTH     1
 #define UBUF_PREPEND        32
+#define UBUF_APPEND         15
 #define UBUF_ALIGN          16
 #define UBUF_ALIGN_OFFSET   0
 #define UBUF_SIZE           188
@@ -53,6 +54,7 @@ int main(int argc, char **argv)
     struct ubuf_mgr *mgr = ubuf_block_mem_mgr_alloc(UBUF_POOL_DEPTH,
                                                     UBUF_POOL_DEPTH, umem_mgr,
                                                     UBUF_PREPEND,
+                                                    UBUF_APPEND,
                                                     UBUF_ALIGN,
                                                     UBUF_ALIGN_OFFSET);
     assert(mgr != NULL);
@@ -76,7 +78,7 @@ int main(int argc, char **argv)
     wanted = -1;
     ubase_assert(ubuf_block_write(ubuf1, 0, &wanted, &w));
     assert(wanted == UBUF_SIZE);
-    for (int i = 0; i < UBUF_SIZE; i++)
+    for (int i = 0; i < UBUF_SIZE + UBUF_APPEND; i++)
         w[i] = i + 1;
     ubase_assert(ubuf_block_unmap(ubuf1, 0));
 
@@ -102,10 +104,10 @@ int main(int argc, char **argv)
     ubase_assert(ubuf_block_unmap(ubuf1, 0));
 
     /* test ubuf_block_resize */
-    ubase_assert(ubuf_block_resize(ubuf1, 2 * UBUF_PREPEND, UBUF_SIZE));
+    ubase_assert(ubuf_block_resize(ubuf1, 2 * UBUF_PREPEND, UBUF_SIZE + UBUF_APPEND));
     wanted = -1;
     ubase_assert(ubuf_block_read(ubuf1, 0, &wanted, &r));
-    assert(wanted == UBUF_SIZE);
+    assert(wanted == UBUF_SIZE + UBUF_APPEND);
     assert(r[0] == 1);
     assert(r[UBUF_SIZE - 1] == UBUF_SIZE);
     ubase_assert(ubuf_block_unmap(ubuf1, 0));
@@ -114,7 +116,7 @@ int main(int argc, char **argv)
     ubase_assert(ubuf_block_prepend(ubuf1, UBUF_PREPEND));
     wanted = -1;
     ubase_assert(ubuf_block_read(ubuf1, 0, &wanted, &r));
-    assert(wanted == UBUF_SIZE + UBUF_PREPEND);
+    assert(wanted == UBUF_SIZE + UBUF_APPEND + UBUF_PREPEND);
     assert(r[UBUF_PREPEND] == 1);
     assert(r[UBUF_SIZE + UBUF_PREPEND - 1] == UBUF_SIZE);
     ubase_assert(ubuf_block_unmap(ubuf1, 0));

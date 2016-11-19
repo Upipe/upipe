@@ -139,10 +139,7 @@ void upump_common_init(struct upump *upump)
  */
 void upump_common_dispatch(struct upump *upump)
 {
-    struct urefcount *refcount =
-        upump->refcount != NULL && !urefcount_dead(upump->refcount) ?
-        upump->refcount : NULL;
-    urefcount_use(refcount);
+    struct urefcount *refcount = urefcount_use(upump->refcount);
     upump->cb(upump);
     urefcount_release(refcount);
 }
@@ -185,18 +182,15 @@ void upump_common_clean(struct upump *upump)
 {
     struct upump_common *common = upump_common_from_upump(upump);
     struct uchain *uchain, *uchain_tmp;
+    struct urefcount *refcount = urefcount_use(upump->refcount);
     ulist_delete_foreach (&common->blockers, uchain, uchain_tmp) {
         struct upump_blocker_common *blocker_common =
             upump_blocker_common_from_uchain(uchain);
         struct upump_blocker *blocker =
             upump_blocker_common_to_upump_blocker(blocker_common);
-        struct urefcount *refcount =
-            upump->refcount != NULL && !urefcount_dead(upump->refcount) ?
-            upump->refcount : NULL;
-        urefcount_use(refcount);
         blocker->cb(blocker);
-        urefcount_release(refcount);
     }
+    urefcount_release(refcount);
 }
 
 /** @This returns the extra buffer space needed for pools.
