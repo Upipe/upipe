@@ -112,7 +112,6 @@ static bool upipe_unpack10bit_handle(struct upipe *upipe, struct uref *uref,
     const char *def;
     if (unlikely(ubase_check(uref_flow_get_def(uref, &def)))) {
         upipe_unpack10bit_store_flow_def(upipe, NULL);
-        uref_block_flow_set_align(uref, UBUF_ALIGN);
         upipe_unpack10bit_require_ubuf_mgr(upipe, uref);
         return true;
     }
@@ -236,6 +235,7 @@ static int upipe_unpack10bit_set_flow_def(struct upipe *upipe, struct uref *flow
         return UBASE_ERR_ALLOC;
 
     uref_flow_set_def(flow_def_dup, "block.");
+    uref_block_flow_set_align(flow_def_dup, UBUF_ALIGN);
 
     upipe_input(upipe, flow_def_dup, NULL);
     return UBASE_ERR_NONE;
