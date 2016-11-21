@@ -292,29 +292,30 @@ static void upipe_hbrmt_dec_input(struct upipe *upipe, struct uref *uref,
     memcpy(upipe_hbrmt_dec->dst_buf, src + HBRMT_DATA_OFFSET, to_write);
     upipe_hbrmt_dec->dst_buf += HBRMT_DATA_SIZE;
 
+    if (!marker)
+        goto end;
+
     /* Output a block */
-    if (marker && upipe_hbrmt_dec->ubuf) {
-        uint32_t timestamp = rtp_get_timestamp(src);
-        uref_block_unmap(uref, 0);
+    uint32_t timestamp = rtp_get_timestamp(src);
+    uref_block_unmap(uref, 0);
 
-        // FIXME assumes 27MHz
-        uref_clock_set_pts_orig(uref, timestamp);
+    // FIXME assumes 27MHz
+    uref_clock_set_pts_orig(uref, timestamp);
 
-        uint64_t delta =
-            (UINT32_MAX + timestamp -
-             (upipe_hbrmt_dec->last_rtp_timestamp % UINT32_MAX)) % UINT32_MAX;
-        upipe_hbrmt_dec->last_rtp_timestamp += delta;
-        uref_clock_set_pts_prog(uref, upipe_hbrmt_dec->last_rtp_timestamp);
+    uint64_t delta =
+        (UINT32_MAX + timestamp -
+         (upipe_hbrmt_dec->last_rtp_timestamp % UINT32_MAX)) % UINT32_MAX;
+    upipe_hbrmt_dec->last_rtp_timestamp += delta;
+    uref_clock_set_pts_prog(uref, upipe_hbrmt_dec->last_rtp_timestamp);
 
-        upipe_throw_clock_ref(upipe, uref, upipe_hbrmt_dec->last_rtp_timestamp, 0);
-        upipe_throw_clock_ts(upipe, uref);
+    upipe_throw_clock_ref(upipe, uref, upipe_hbrmt_dec->last_rtp_timestamp, 0);
+    upipe_throw_clock_ts(upipe, uref);
 
-        uref_attach_ubuf(uref, upipe_hbrmt_dec->ubuf);
+    uref_attach_ubuf(uref, upipe_hbrmt_dec->ubuf);
 
-        upipe_hbrmt_dec_output(upipe, uref, upump_p);
-        upipe_hbrmt_dec->ubuf = NULL;
-        return;
-    }
+    upipe_hbrmt_dec_output(upipe, uref, upump_p);
+    upipe_hbrmt_dec->ubuf = NULL;
+    return;
 
 end:
     if (src)
