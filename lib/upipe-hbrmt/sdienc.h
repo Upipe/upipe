@@ -19,3 +19,5 @@ void upipe_v210_uyvy_unpack_aligned_avx2 (const uint32_t *src, uint16_t *uyvy, i
 void upipe_v210_uyvy_unpack_unaligned_ssse3(const uint32_t *src, uint16_t *uyvy, int64_t width);
 void upipe_v210_uyvy_unpack_unaligned_avx  (const uint32_t *src, uint16_t *uyvy, int64_t width);
 void upipe_v210_uyvy_unpack_unaligned_avx2 (const uint32_t *src, uint16_t *uyvy, int64_t width);
+
+void upipe_sdi_blank_avx(uint16_t *dst, int64_t size);

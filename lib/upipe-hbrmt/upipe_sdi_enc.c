@@ -48,8 +48,6 @@ static void upipe_sdi_blank_c(uint16_t *dst, int64_t size)
     }
 }
 
-void upipe_sdi_blank_avx(uint16_t *dst, int64_t size);
-
 /* [Field][VBI] */
 static const uint16_t sav_fvh_cword[2][2] = {{0x200, 0x2ac}, {0x31c, 0x3b0}};
 static const uint16_t eav_fvh_cword[2][2] = {{0x274, 0x2d8}, {0x368, 0x3c4}};
