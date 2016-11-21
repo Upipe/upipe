@@ -36,6 +36,7 @@
 #include <upipe/uref_pic_flow.h>
 #include <upipe/uref_flow.h>
 #include <upipe/uref_clock.h>
+#include <upipe/uclock.h>
 #include <upipe/upipe_helper_uref_mgr.h>
 #include <upipe/upipe_helper_ubuf_mgr.h>
 #include <upipe/upipe_helper_upipe.h>
@@ -236,6 +237,11 @@ static inline void upipe_hbrmt_dec_input(struct upipe *upipe, struct uref *uref,
         struct uref *flow_format = uref_dup(upipe_hbrmt_dec->flow_def);
         uref_pic_flow_set_fps(flow_format, *fps);
         upipe_hbrmt_dec->f = sdi_get_offsets(flow_format);
+        uint64_t latency;
+        if (!ubase_check(uref_clock_get_latency(flow_format, &latency)))
+            latency = 0;
+        latency += UCLOCK_FREQ * fps->den / fps->num;
+        uref_clock_set_latency(flow_format, latency);
         upipe_hbrmt_dec_store_flow_def(upipe, flow_format);
     }
 
