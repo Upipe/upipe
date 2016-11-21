@@ -587,6 +587,10 @@ static void extract_sd_audio(struct upipe *upipe, const uint16_t *packet, int h,
     const struct sdi_offsets_fmt *f = upipe_sdi_dec->f;
 
     int data_count = packet[5] & 0xff;
+    if (data_count % 12) {
+        upipe_err_va(upipe, "Invalid data count");
+        return;
+    }
 
     /* Slightly different to HD */
     int audio_group = (S291_SD_AUDIO_GROUP1_DID - (packet[3] & 0xff)) >> 1;
@@ -601,10 +605,10 @@ static void extract_sd_audio(struct upipe *upipe, const uint16_t *packet, int h,
     if (checksum != stream_checksum) {
         upipe_err_va(upipe, "Invalid checksum: 0x%.3x != 0x%.3x",
                      checksum, stream_checksum);
+        return;
     }
 
     const uint16_t *src = &packet[6];
-
     for (int i = 0; i < data_count/3; i += 4) {
         int32_t *dst = &ctx->buf_audio[ctx->group_offset[audio_group] * UPIPE_SDI_MAX_CHANNELS + 4 * audio_group + i];
         dst[0] = extract_sd_audio_sample(&src[0+3*i]);
