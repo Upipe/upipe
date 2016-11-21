@@ -462,7 +462,7 @@ static int aes_parse(struct upipe *upipe, int32_t *buf, size_t samples, int pair
 }
 
 static void extract_hd_audio(struct upipe *upipe, const uint16_t *packet, int h,
-        struct audio_ctx *ctx)
+                             struct audio_ctx *ctx)
 {
     struct upipe_sdi_dec *upipe_sdi_dec = upipe_sdi_dec_from_upipe(upipe);
     const struct sdi_offsets_fmt *f = upipe_sdi_dec->f;
@@ -580,10 +580,30 @@ static void parse_hd_hanc(struct upipe *upipe, const uint16_t *packet, int h,
     }
 }
 
-static void parse_hd_hanc(struct upipe *upipe, const uint16_t *packet, int h,
+static void extract_sd_audio(struct upipe *upipe, const uint16_t *packet, int h,
+                             struct audio_ctx *ctx)
+{
+    struct upipe_sdi_dec *upipe_sdi_dec = upipe_sdi_dec_from_upipe(upipe);
+    const struct sdi_offsets_fmt *f = upipe_sdi_dec->f;
+
+    int data_count = packet[5] & 0xff;
+
+    int audio_group = S291_SD_AUDIO_GROUP1_DID - (packet[3] & 0xff);
+
+static void parse_sd_hanc(struct upipe *upipe, const uint16_t *packet, int h,
                          struct audio_ctx *ctx)
 {
+    switch (packet[3] & 0xff) {
+    case S291_SD_AUDIO_GROUP1_DID:
+    case S291_SD_AUDIO_GROUP2_DID:
+    case S291_SD_AUDIO_GROUP3_DID:
+    case S291_SD_AUDIO_GROUP4_DID:
+        extract_sd_audio(upipe, packet, h, ctx);
+        break;
 
+    default:
+        break;
+    }
 }
 
 /** @internal @This handles data.
@@ -749,6 +769,8 @@ static bool upipe_sdi_dec_handle(struct upipe *upipe, struct uref *uref,
             const uint16_t *packet = line + v;
 
             if (p->sd) {
+                if (packet[0] == S291_ADF1 && packet[1] == S291_ADF2 && packet[2] == S291_ADF3)
+                    parse_sd_hanc(upipe, packet, h, &audio_ctx);
             } else {
                 if (packet[0] == S291_ADF1 && packet[2] == S291_ADF2 && packet[4] == S291_ADF3)
                     parse_hd_hanc(upipe, packet, h, &audio_ctx);
