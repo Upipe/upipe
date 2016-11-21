@@ -330,7 +330,7 @@ static inline int32_t extract_sd_audio_sample(uint16_t *data)
     return sample.i;
 }
 
-static inline int32_t extract_hd_audio_sample(uint16_t *data)
+static inline int32_t extract_hd_audio_sample(const uint16_t *data)
 {
     union {
         uint32_t u;
