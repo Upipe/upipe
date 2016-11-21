@@ -69,7 +69,7 @@ struct upipe_hbrmt_dec {
     struct urequest ubuf_mgr_request;
 
     /** got a discontinuity */
-    int discontinuity;
+    bool discontinuity;
 
     /** expected sequence number */
     int expected_seqnum;
@@ -145,7 +145,7 @@ static struct upipe *upipe_hbrmt_dec_alloc(struct upipe_mgr *mgr,
 
     upipe_hbrmt_dec->next_packet_frame_start = 0;
     upipe_hbrmt_dec->expected_seqnum = -1;
-    upipe_hbrmt_dec->discontinuity = 0;
+    upipe_hbrmt_dec->discontinuity = false;
     upipe_hbrmt_dec->last_rtp_timestamp = UINT32_MAX;
 
     upipe_throw_ready(upipe);
@@ -183,7 +183,7 @@ static inline void upipe_hbrmt_dec_input(struct upipe *upipe, struct uref *uref,
         upipe_warn_va(upipe, "potentially lost %d RTP packets, got %u expected %u",
                       (seqnum + UINT16_MAX + 1 - upipe_hbrmt_dec->expected_seqnum) &
                       UINT16_MAX, seqnum, upipe_hbrmt_dec->expected_seqnum);
-        upipe_hbrmt_dec->discontinuity = 1;
+        upipe_hbrmt_dec->discontinuity = true;
     }
 
     upipe_hbrmt_dec->expected_seqnum = seqnum + 1;
@@ -192,7 +192,7 @@ static inline void upipe_hbrmt_dec_input(struct upipe *upipe, struct uref *uref,
     /* Skip until next marker packet if there's been a discontinuity */
     if (upipe_hbrmt_dec->discontinuity) {
         if (marker) {
-            upipe_hbrmt_dec->discontinuity = 0;
+            upipe_hbrmt_dec->discontinuity = false;
             upipe_hbrmt_dec->next_packet_frame_start = 1;
         }
         if (upipe_hbrmt_dec->ubuf) {
