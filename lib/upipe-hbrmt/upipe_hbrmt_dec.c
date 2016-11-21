@@ -153,6 +153,51 @@ static struct upipe *upipe_hbrmt_dec_alloc(struct upipe_mgr *mgr,
     return upipe;
 }
 
+/** @internal */
+static int upipe_hbrmt_dec_set_fps(struct upipe *upipe, uint8_t frate)
+{
+    struct upipe_hbrmt_dec *upipe_hbrmt_dec = upipe_hbrmt_dec_from_upipe(upipe);
+
+    if (frate < 0x10 || frate > 0x1b) {
+        upipe_err_va(upipe, "Invalid hbrmt frate 0x%x", frate);
+        return UBASE_ERR_INVALID;
+    }
+
+    static const struct urational frate_fps[12] = {
+        { 60,    1    }, // 0x10
+        { 60000, 1001 }, // 0x11
+        { 50,    1    }, // 0x12
+        { 0,     0    }, // 0x13
+        { 48,    1    }, // 0x14
+        { 48000, 1001 }, // 0x15
+        { 30,    1    }, // 0x16
+        { 30000, 1001 }, // 0x17
+        { 25,    1    }, // 0x18
+        { 0,     0    }, // 0x19
+        { 24,    1    }, // 0x1A
+        { 24000, 1001 }, // 0x1B
+    };
+
+    const struct urational *fps = &frate_fps[frate - 0x10];
+    if (fps->num == 0) {
+        upipe_err_va(upipe, "Invalid hbrmt frate 0x%x", frate);
+        return UBASE_ERR_INVALID;
+    }
+
+    struct uref *flow_format = uref_dup(upipe_hbrmt_dec->flow_def);
+    uref_pic_flow_set_fps(flow_format, *fps);
+    upipe_hbrmt_dec->f = sdi_get_offsets(flow_format);
+
+    uint64_t latency;
+    if (!ubase_check(uref_clock_get_latency(flow_format, &latency)))
+        latency = 0;
+    latency += UCLOCK_FREQ * fps->den / fps->num;
+    uref_clock_set_latency(flow_format, latency);
+    upipe_hbrmt_dec_store_flow_def(upipe, flow_format);
+
+    return UBASE_ERR_NONE;
+}
+
 /** @internal @This handles data.
  *
  * @param upipe description structure of the pipe
@@ -210,39 +255,8 @@ static void upipe_hbrmt_dec_input(struct upipe *upipe, struct uref *uref,
 
     if (unlikely(!upipe_hbrmt_dec->f)) {
         const uint8_t frate = ((src[17] & 0x0f) << 4) | ((src[18] & 0xf0) >> 4);
-        if (frate < 0x10 || frate > 0x1b) {
-            upipe_err_va(upipe, "Invalid hbrmt frate 0x%x", frate);
+        if (!ubase_check(upipe_hbrmt_dec_set_fps(upipe, frate)))
             goto end;
-        }
-        static const struct urational frate_fps[12] = {
-            { 60,    1    }, // 0x10
-            { 60000, 1001 }, // 0x11
-            { 50,    1    }, // 0x12
-            { 0,     0    }, // 0x13
-            { 48,    1    }, // 0x14
-            { 48000, 1001 }, // 0x15
-            { 30,    1    }, // 0x16
-            { 30000, 1001 }, // 0x17
-            { 25,    1    }, // 0x18
-            { 0,     0    }, // 0x19
-            { 24,    1    }, // 0x1A
-            { 24000, 1001 }, // 0x1B
-        };
-        const struct urational *fps = &frate_fps[frate - 0x10];
-        if (fps->num == 0) {
-            upipe_err_va(upipe, "Invalid hbrmt frate 0x%x", frate);
-            goto end;
-        }
-
-        struct uref *flow_format = uref_dup(upipe_hbrmt_dec->flow_def);
-        uref_pic_flow_set_fps(flow_format, *fps);
-        upipe_hbrmt_dec->f = sdi_get_offsets(flow_format);
-        uint64_t latency;
-        if (!ubase_check(uref_clock_get_latency(flow_format, &latency)))
-            latency = 0;
-        latency += UCLOCK_FREQ * fps->den / fps->num;
-        uref_clock_set_latency(flow_format, latency);
-        upipe_hbrmt_dec_store_flow_def(upipe, flow_format);
     }
 
     /* Allocate block memory */
