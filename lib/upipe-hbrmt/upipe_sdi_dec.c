@@ -609,21 +609,6 @@ static bool upipe_sdi_dec_handle(struct upipe *upipe, struct uref *uref,
     const struct sdi_picture_fmt *p = upipe_sdi_dec->p;
     const size_t output_hsize = p->active_width, output_vsize = p->active_height;
 
-    if (upipe_sdi_dec->output_is_v210) {
-        upipe_sdi_dec->output_chroma_map[0] = "u10y10v10y10u10y10v10y10u10y10v10y10";
-        upipe_sdi_dec->output_chroma_map[1] = NULL;
-        upipe_sdi_dec->output_chroma_map[2] = NULL;
-    } else if (upipe_sdi_dec->output_bit_depth == 10) {
-        upipe_sdi_dec->output_chroma_map[0] = "y10l";
-        upipe_sdi_dec->output_chroma_map[1] = "u10l";
-        upipe_sdi_dec->output_chroma_map[2] = "v10l";
-    }
-    else {
-        upipe_sdi_dec->output_chroma_map[0] = "y8";
-        upipe_sdi_dec->output_chroma_map[1] = "u8";
-        upipe_sdi_dec->output_chroma_map[2] = "v8";
-    }
-
     /* map input */
     int input_size = -1;
     const uint8_t *input_buf = NULL;
