@@ -564,14 +564,10 @@ static void extract_hd_audio(struct upipe *upipe, const uint16_t *packet, int h,
     ctx->group_offset[audio_group]++;
 }
 
-static void parse_hd_anc(struct upipe *upipe, const uint16_t *packet, int h,
-        struct audio_ctx *ctx)
+static void parse_hd_hanc(struct upipe *upipe, const uint16_t *packet, int h,
+                         struct audio_ctx *ctx)
 {
     switch (packet[6] & 0xff) {
-    case S291_OP47SDP_DID:
-        upipe_verbose_va(upipe, "teletext! line %d", h+1);
-        break;
-
     case S291_HD_AUDIO_GROUP1_DID:
     case S291_HD_AUDIO_GROUP2_DID:
     case S291_HD_AUDIO_GROUP3_DID:
@@ -582,6 +578,12 @@ static void parse_hd_anc(struct upipe *upipe, const uint16_t *packet, int h,
     default:
         break;
     }
+}
+
+static void parse_hd_hanc(struct upipe *upipe, const uint16_t *packet, int h,
+                         struct audio_ctx *ctx)
+{
+
 }
 
 /** @internal @This handles data.
@@ -748,9 +750,8 @@ static bool upipe_sdi_dec_handle(struct upipe *upipe, struct uref *uref,
 
             if (p->sd) {
             } else {
-                if (packet[0] == S291_ADF1 && packet[2] == S291_ADF2 &&
-                            packet[4] == S291_ADF3)
-                        parse_hd_anc(upipe, packet, h, &audio_ctx);
+                if (packet[0] == S291_ADF1 && packet[2] == S291_ADF2 && packet[4] == S291_ADF3)
+                    parse_hd_hanc(upipe, packet, h, &audio_ctx);
             }
         }
 
