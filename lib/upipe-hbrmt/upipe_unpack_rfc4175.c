@@ -169,22 +169,6 @@ static bool upipe_unpack_rfc4175_handle(struct upipe *upipe, struct uref *uref,
 
     const size_t output_hsize = 1920, output_vsize = 1080;
 
-    if (upipe_unpack_rfc4175->output_is_v210) {
-        upipe_unpack_rfc4175->output_chroma_map[0] = "u10y10v10y10u10y10v10y10u10y10v10y10";
-        upipe_unpack_rfc4175->output_chroma_map[1] = NULL;
-        upipe_unpack_rfc4175->output_chroma_map[2] = NULL;
-    } else if (upipe_unpack_rfc4175->output_bit_depth == 8) {
-        upipe_unpack_rfc4175->output_chroma_map[0] = "y8";
-        upipe_unpack_rfc4175->output_chroma_map[1] = "u8";
-        upipe_unpack_rfc4175->output_chroma_map[2] = "v8";
-    } else {
-        upipe_unpack_rfc4175->output_chroma_map[0] = "y10l";
-        upipe_unpack_rfc4175->output_chroma_map[1] = "u10l";
-        upipe_unpack_rfc4175->output_chroma_map[2] = "v10l";
-    }
-    upipe_unpack_rfc4175->output_chroma_map[3] = NULL;
-
-
     /* map input */
     int input_size = -1;
     const uint8_t *input_buf = NULL;
