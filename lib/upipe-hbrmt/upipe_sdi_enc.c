@@ -144,7 +144,7 @@ struct upipe_sdi_enc {
     uint8_t frame_idx;
 
     /* worst case audio buffer (~128kB) */
-    int32_t audio_buf[16 /* channels */ * 48000 * 1001 / 24000];
+    int32_t audio_buf[UPIPE_SDI_MAX_CHANNELS /* channels */ * 48000 * 1001 / 24000];
 
     /* */
     bool started;
@@ -334,7 +334,7 @@ static int put_audio_data_packet(uint16_t *dst, struct upipe_sdi_enc *s,
     for (int i = 0; i < 4; i++) {
         /* Each channel group has 4 samples from 4 channels, and in total
          * there are 16 channels at all times in the buffer */
-        sample.i   = s->audio_buf[audio_sample*16 + (ch_group*4 + i)];
+        sample.i   = s->audio_buf[audio_sample*UPIPE_SDI_MAX_CHANNELS + (ch_group*4 + i)];
         sample.u >>= 8;
 
         /* Channel status */
@@ -419,7 +419,7 @@ static int upipe_sdi_enc_sub_control(struct upipe *upipe, int command, va_list a
                 return UBASE_ERR_INVALID;
             UBASE_RETURN(uref_flow_match_def(flow, "sound."))
             UBASE_RETURN(uref_sound_flow_get_channels(flow, &sdi_enc_sub->channels))
-            if (sdi_enc_sub->channels > 16)
+            if (sdi_enc_sub->channels > UPIPE_SDI_MAX_CHANNELS)
                 return UBASE_ERR_INVALID;
             return UBASE_ERR_NONE;
         }
