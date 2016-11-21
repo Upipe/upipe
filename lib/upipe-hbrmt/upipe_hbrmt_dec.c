@@ -186,8 +186,7 @@ static inline void upipe_hbrmt_dec_input(struct upipe *upipe, struct uref *uref,
         upipe_hbrmt_dec->discontinuity = true;
     }
 
-    upipe_hbrmt_dec->expected_seqnum = seqnum + 1;
-    upipe_hbrmt_dec->expected_seqnum &= UINT16_MAX;
+    upipe_hbrmt_dec->expected_seqnum = (seqnum + 1) & UINT16_MAX;
 
     /* Skip until next marker packet if there's been a discontinuity */
     if (upipe_hbrmt_dec->discontinuity) {
