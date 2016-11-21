@@ -159,7 +159,7 @@ static struct upipe *upipe_hbrmt_dec_alloc(struct upipe_mgr *mgr,
  * @param uref uref structure
  * @param upump_p reference to pump that generated the buffer
  */
-static inline void upipe_hbrmt_dec_input(struct upipe *upipe, struct uref *uref,
+static void upipe_hbrmt_dec_input(struct upipe *upipe, struct uref *uref,
                                     struct upump **upump_p)
 {
     struct upipe_hbrmt_dec *upipe_hbrmt_dec = upipe_hbrmt_dec_from_upipe(upipe);
