@@ -317,7 +317,8 @@ static void upipe_hbrmt_dec_input(struct upipe *upipe, struct uref *uref,
     }
 
 end:
-    uref_block_unmap(uref, 0);
+    if (src)
+        uref_block_unmap(uref, 0);
     uref_free(uref);
 }
 
