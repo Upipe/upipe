@@ -353,7 +353,7 @@ uyvy_to_planar_10
 
 %macro uyvy_to_v210 0
 
-; uyvy_to_v210(const uint16_t *y, uint8_t *dst, ptrdiff_t width)
+; uyvy_to_v210(const uint16_t *y, uint8_t *dst, int64_t width)
 cglobal uyvy_to_v210, 3, 6, 6+cpuflag(avx2), y, dst, width
     shl     widthq, 2
     add     yq, widthq
