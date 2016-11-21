@@ -216,11 +216,7 @@ static void upipe_hbrmt_dec_input(struct upipe *upipe, struct uref *uref,
         goto end;
     }
 
-    bool valid = rtp_check_hdr(src);
-    bool extension = rtp_check_extension(src);
-    uint8_t cc = rtp_get_cc(src);
     uint8_t marker = rtp_check_marker(src);
-    uint8_t type = rtp_get_type(src);
     uint16_t seqnum = rtp_get_seqnum(src);
     uint32_t timestamp = rtp_get_timestamp(src);
 
