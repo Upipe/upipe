@@ -198,6 +198,36 @@ static int upipe_hbrmt_dec_set_fps(struct upipe *upipe, uint8_t frate)
     return UBASE_ERR_NONE;
 }
 
+/** @internal */
+static int upipe_hbrmt_alloc_output_ubuf(struct upipe *upipe)
+{
+    struct upipe_hbrmt_dec *upipe_hbrmt_dec = upipe_hbrmt_dec_from_upipe(upipe);
+
+    const struct sdi_offsets_fmt *f = upipe_hbrmt_dec->f;
+
+    /* Only 422 accepted, so this assumption is fine */
+    uint64_t pixels = f->width * f->height * 2;
+    uint64_t packed_size = (pixels * 10) / 8;
+
+    upipe_hbrmt_dec->ubuf = ubuf_block_alloc(upipe_hbrmt_dec->ubuf_mgr, packed_size);
+    if (unlikely(upipe_hbrmt_dec->ubuf == NULL)) {
+        upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
+        return UBASE_ERR_ALLOC;
+    }
+
+    int dst_size = -1;
+    if (unlikely(!ubase_check(ubuf_block_write(upipe_hbrmt_dec->ubuf, 0,
+                        &dst_size, &upipe_hbrmt_dec->dst_buf)))) {
+        ubuf_free(upipe_hbrmt_dec->ubuf);
+        upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
+        return UBASE_ERR_ALLOC;
+    }
+
+    upipe_hbrmt_dec->dst_end = upipe_hbrmt_dec->dst_buf + dst_size;
+
+    return UBASE_ERR_NONE;
+}
+
 /** @internal @This handles data.
  *
  * @param upipe description structure of the pipe
@@ -255,29 +285,9 @@ static void upipe_hbrmt_dec_input(struct upipe *upipe, struct uref *uref,
     }
 
     /* Allocate block memory */
-    if (upipe_hbrmt_dec->next_packet_frame_start) {
-        const struct sdi_offsets_fmt *f = upipe_hbrmt_dec->f;
-
-        /* Only 422 accepted, so this assumption is fine */
-        int pixels = f->width*f->height*2;
-        int packed_size = (pixels*10) >> 3;
-
-        upipe_hbrmt_dec->ubuf = ubuf_block_alloc(upipe_hbrmt_dec->ubuf_mgr, packed_size);
-        if (unlikely(upipe_hbrmt_dec->ubuf == NULL)) {
-            upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
+    if (upipe_hbrmt_dec->next_packet_frame_start)
+        if (!ubase_check(upipe_hbrmt_alloc_output_ubuf(upipe)))
             goto end;
-        }
-
-        int dst_size = -1;
-        if (unlikely(!ubase_check(ubuf_block_write(upipe_hbrmt_dec->ubuf, 0,
-                                                   &dst_size, &upipe_hbrmt_dec->dst_buf)))) {
-            ubuf_free(upipe_hbrmt_dec->ubuf);
-            upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
-            goto end;
-        }
-
-        upipe_hbrmt_dec->dst_end = upipe_hbrmt_dec->dst_buf + dst_size;
-    }
 
     upipe_hbrmt_dec->next_packet_frame_start = marker;
 
