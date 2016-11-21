@@ -347,18 +347,16 @@ static int upipe_hbrmt_dec_check(struct upipe *upipe, struct uref *flow_format)
         return UBASE_ERR_NONE;
     }
 
-    if (upipe_hbrmt_dec->ubuf_mgr == NULL) {
-        struct uref *flow_format = uref_block_flow_alloc_def(upipe_hbrmt_dec->uref_mgr, NULL);
-
-        if (unlikely(flow_format == NULL)) {
-            upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
-            return UBASE_ERR_ALLOC;
-        }
-
-        upipe_hbrmt_dec_require_ubuf_mgr(upipe, flow_format);
+    if (upipe_hbrmt_dec->ubuf_mgr)
         return UBASE_ERR_NONE;
+
+    flow_format = uref_block_flow_alloc_def(upipe_hbrmt_dec->uref_mgr, NULL);
+    if (unlikely(flow_format == NULL)) {
+        upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
+        return UBASE_ERR_ALLOC;
     }
 
+    upipe_hbrmt_dec_require_ubuf_mgr(upipe, flow_format);
     return UBASE_ERR_NONE;
 }
 
