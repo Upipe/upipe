@@ -255,6 +255,7 @@ static void upipe_hbrmt_dec_input(struct upipe *upipe, struct uref *uref,
     bool marker = rtp_check_marker(src);
     uint16_t seqnum = rtp_get_seqnum(src);
 
+    src_size -= RTP_HEADER_SIZE;
     const uint8_t *hbrmt = &src[RTP_HEADER_SIZE];
 
     if (unlikely(!upipe_hbrmt_dec->f)) {
@@ -298,14 +299,31 @@ static void upipe_hbrmt_dec_input(struct upipe *upipe, struct uref *uref,
     if (unlikely(!upipe_hbrmt_dec->ubuf))
         goto end;
 
+    const uint8_t *payload = &hbrmt[HBRMT_HEADER_ONLY_SIZE];
+    if (smpte_hbrmt_get_clock_frequency(hbrmt)) {
+        payload += 4;
+        src_size -= 4;
+    }
+    uint8_t ext = smpte_hbrmt_get_ext(hbrmt);
+    if (ext) {
+        payload += 4 * ext;
+        src_size -= 4 * ext;
+    }
+
     int to_write = HBRMT_DATA_SIZE;
+
+    if (src_size < HBRMT_DATA_SIZE) {
+        upipe_err(upipe, "Too small packet, reading anyway");
+        to_write = src_size;
+    }
+
     if (&upipe_hbrmt_dec->dst_buf[HBRMT_DATA_SIZE] > upipe_hbrmt_dec->dst_end) {
         to_write = upipe_hbrmt_dec->dst_end - upipe_hbrmt_dec->dst_buf;
         if (!marker)
             upipe_err(upipe, "Not overflowing output packet");
     }
 
-    memcpy(upipe_hbrmt_dec->dst_buf, &src[HBRMT_DATA_OFFSET], to_write);
+    memcpy(upipe_hbrmt_dec->dst_buf, payload, to_write);
     upipe_hbrmt_dec->dst_buf += HBRMT_DATA_SIZE;
 
     if (!marker)
