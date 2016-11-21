@@ -322,7 +322,7 @@ static void upipe_sdi_dec_init_sub_mgr(struct upipe *upipe)
     sub_mgr->upipe_mgr_control = NULL;
 }
 
-static inline int32_t extract_sd_audio_sample(uint16_t *data)
+static inline int32_t extract_sd_audio_sample(const uint16_t *data)
 {
     union {
         uint32_t u;
@@ -588,7 +588,32 @@ static void extract_sd_audio(struct upipe *upipe, const uint16_t *packet, int h,
 
     int data_count = packet[5] & 0xff;
 
-    int audio_group = S291_SD_AUDIO_GROUP1_DID - (packet[3] & 0xff);
+    /* Slightly different to HD */
+    int audio_group = (S291_SD_AUDIO_GROUP1_DID - (packet[3] & 0xff)) >> 1;
+
+    uint16_t checksum = 0;
+    int len = data_count + 3 /* DID / DBN / DC */;
+    for (int i = 0; i < len; i++)
+        checksum += packet[3+i] & 0x1ff;
+    checksum &= 0x1ff;
+
+    uint16_t stream_checksum = packet[3+len] & 0x1ff;
+    if (checksum != stream_checksum) {
+        upipe_err_va(upipe, "Invalid checksum: 0x%.3x != 0x%.3x",
+                     checksum, stream_checksum);
+    }
+
+    for (int i = 0; i < data_count/3; i += 4) {
+        int32_t *base = &ctx->buf_audio[ctx->group_offset[audio_group] * UPIPE_SDI_MAX_CHANNELS + 4 * audio_group + i];
+        base[0] = extract_sd_audio_sample(&packet[6+i]);
+        base[1] = extract_sd_audio_sample(&packet[9+i]);
+        base[2] = extract_sd_audio_sample(&packet[12+i]);
+        base[3] = extract_sd_audio_sample(&packet[15+i]);
+
+        upipe_sdi_dec->audio_samples[audio_group]++;
+        ctx->group_offset[audio_group]++;
+    }
+    
 }
 
 static void parse_sd_hanc(struct upipe *upipe, const uint16_t *packet, int h,
