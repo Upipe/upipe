@@ -144,7 +144,7 @@ static struct upipe *upipe_hbrmt_dec_alloc(struct upipe_mgr *mgr,
     upipe_hbrmt_dec->dst_buf = NULL;
     upipe_hbrmt_dec->dst_end = NULL;
 
-    upipe_hbrmt_dec->next_packet_frame_start = 0;
+    upipe_hbrmt_dec->next_packet_frame_start = false;
     upipe_hbrmt_dec->expected_seqnum = -1;
     upipe_hbrmt_dec->discontinuity = false;
     upipe_hbrmt_dec->last_rtp_timestamp = UINT32_MAX;
@@ -216,7 +216,7 @@ static void upipe_hbrmt_dec_input(struct upipe *upipe, struct uref *uref,
         goto end;
     }
 
-    uint8_t marker = rtp_check_marker(src);
+    bool marker = rtp_check_marker(src);
     uint16_t seqnum = rtp_get_seqnum(src);
 
     if (unlikely(upipe_hbrmt_dec->expected_seqnum != -1 &&
@@ -233,7 +233,7 @@ static void upipe_hbrmt_dec_input(struct upipe *upipe, struct uref *uref,
     if (upipe_hbrmt_dec->discontinuity) {
         if (marker) {
             upipe_hbrmt_dec->discontinuity = false;
-            upipe_hbrmt_dec->next_packet_frame_start = 1;
+            upipe_hbrmt_dec->next_packet_frame_start = true;
         }
         if (upipe_hbrmt_dec->ubuf) {
             /* Output the incomplete packet - better than nothing and will make
