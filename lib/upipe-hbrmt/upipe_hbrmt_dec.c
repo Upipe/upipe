@@ -264,25 +264,20 @@ static void upipe_hbrmt_dec_input(struct upipe *upipe, struct uref *uref,
                       (seqnum + UINT16_MAX + 1 - upipe_hbrmt_dec->expected_seqnum) &
                       UINT16_MAX, seqnum, upipe_hbrmt_dec->expected_seqnum);
         upipe_hbrmt_dec->discontinuity = true;
+        /* drop current packet */
+        if (upipe_hbrmt_dec->ubuf) {
+            ubuf_block_unmap(upipe_hbrmt_dec->ubuf, 0);
+            upipe_hbrmt_dec->ubuf = NULL;
+        }
     }
 
     upipe_hbrmt_dec->expected_seqnum = (seqnum + 1) & UINT16_MAX;
 
-    /* Skip until next marker packet if there's been a discontinuity */
     if (upipe_hbrmt_dec->discontinuity) {
+        /* reset discontinuity */
         if (marker) {
             upipe_hbrmt_dec->discontinuity = false;
             upipe_hbrmt_dec->next_packet_frame_start = true;
-        }
-        if (upipe_hbrmt_dec->ubuf) {
-            /* Output the incomplete packet - better than nothing and will make
-             * the next pipe worry about freeing the allocated memory */
-            ubuf_block_unmap(upipe_hbrmt_dec->ubuf, 0);
-            uref_block_unmap(uref, 0);
-            uref_attach_ubuf(uref, upipe_hbrmt_dec->ubuf);
-            upipe_hbrmt_dec_output(upipe, uref, upump_p);
-            upipe_hbrmt_dec->ubuf = NULL;
-            return;
         }
         goto end;
     }
