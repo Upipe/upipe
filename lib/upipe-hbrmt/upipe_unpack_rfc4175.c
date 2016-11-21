@@ -89,11 +89,11 @@ struct upipe_unpack_rfc4175 {
     uint64_t expected_seqnum;
 
     /** output chroma map */
-    const char *output_chroma_map[UPIPE_UNPACK_RFC4175_MAX_PLANES+1];
+    const char *output_chroma_map[UPIPE_UNPACK_RFC4175_MAX_PLANES];
 
     struct ubuf *ubuf;
-    uint8_t *output_plane[UPIPE_UNPACK_RFC4175_MAX_PLANES+1];
-    size_t output_stride[UPIPE_UNPACK_RFC4175_MAX_PLANES+1];
+    uint8_t *output_plane[UPIPE_UNPACK_RFC4175_MAX_PLANES];
+    size_t output_stride[UPIPE_UNPACK_RFC4175_MAX_PLANES];
 
     /* Gets set during init only */
     int output_pixels_per_block;
@@ -211,17 +211,17 @@ static bool upipe_unpack_rfc4175_handle(struct upipe *upipe, struct uref *uref,
         }
 
         /* map output */
-        int i;
-        for (i = 0; i < UPIPE_UNPACK_RFC4175_MAX_PLANES &&
-                    upipe_unpack_rfc4175->output_chroma_map[i] != NULL; i++) {
+        for (int i = 0; i < UPIPE_UNPACK_RFC4175_MAX_PLANES ; i++) {
+            const char *chroma = upipe_unpack_rfc4175->output_chroma_map[i];
+            if (chroma == NULL)
+                break;
+
             uint8_t *data;
             size_t stride;
             if (unlikely(!ubase_check(ubuf_pic_plane_write(upipe_unpack_rfc4175->ubuf,
-                                               upipe_unpack_rfc4175->output_chroma_map[i],
-                                               0, 0, -1, -1, &data)) ||
+                                chroma, 0, 0, -1, -1, &data)) ||
                          !ubase_check(ubuf_pic_plane_size(upipe_unpack_rfc4175->ubuf,
-                                               upipe_unpack_rfc4175->output_chroma_map[i],
-                                               &stride, NULL, NULL, NULL)))) {
+                                 chroma, &stride, NULL, NULL, NULL)))) {
                 upipe_warn(upipe, "unable to map output");
                 ubuf_free(upipe_unpack_rfc4175->ubuf);
                 uref_free(uref);
@@ -230,8 +230,6 @@ static bool upipe_unpack_rfc4175_handle(struct upipe *upipe, struct uref *uref,
             upipe_unpack_rfc4175->output_plane[i] = data;
             upipe_unpack_rfc4175->output_stride[i] = stride;
         }
-        upipe_unpack_rfc4175->output_plane[i] = NULL;
-        upipe_unpack_rfc4175->output_stride[i] = 0;
     }
 
     const uint8_t *rfc4175_data = &input_buf[RTP_HEADER_SIZE + RFC_4175_EXT_SEQ_NUM_LEN];
@@ -288,11 +286,13 @@ static bool upipe_unpack_rfc4175_handle(struct upipe *upipe, struct uref *uref,
 
     if (upipe_unpack_rfc4175->next_packet_frame_start && upipe_unpack_rfc4175->ubuf) {
         /* unmap output */
-        for (int i = 0; i < UPIPE_UNPACK_RFC4175_MAX_PLANES &&
-                    upipe_unpack_rfc4175->output_chroma_map[i] != NULL; i++)
+        for (int i = 0; i < UPIPE_UNPACK_RFC4175_MAX_PLANES; i++) {
+            const char *chroma = upipe_unpack_rfc4175->output_chroma_map[i];
+            if (chroma == NULL)
+                break;
             ubuf_pic_plane_unmap(upipe_unpack_rfc4175->ubuf,
-                                 upipe_unpack_rfc4175->output_chroma_map[i],
-                                 0, 0, -1, -1);
+                    chroma, 0, 0, -1, -1);
+        }
 
         uref_block_unmap(uref, 0);
 
@@ -416,7 +416,6 @@ static int upipe_unpack_rfc4175_set_flow_def(struct upipe *upipe, struct uref *f
         UBASE_RETURN(uref_pic_flow_add_plane(flow_def_dup, 2, 1, 2, "u10l"))
         UBASE_RETURN(uref_pic_flow_add_plane(flow_def_dup, 2, 1, 2, "v10l"))
     }
-    upipe_unpack_rfc4175->output_chroma_map[3] = NULL;
 
     struct urational fps = { .num = 30000, .den = 1001 };
     uref_pic_flow_set_fps(flow_def_dup, fps);
