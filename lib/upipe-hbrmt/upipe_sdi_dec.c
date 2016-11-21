@@ -840,7 +840,10 @@ static bool upipe_sdi_dec_handle(struct upipe *upipe, struct uref *uref,
         uref_sound_plane_unmap(uref_audio, "ALL", 0, -1);
         uref_sound_resize(uref_audio, 0, samples_received);
 
-        upipe_sdi_dec_sub_output(&upipe_sdi_dec_sub->upipe, uref_audio, upump_p);
+        if (samples_received == 0)
+            uref_free(uref_audio);
+        else
+            upipe_sdi_dec_sub_output(&upipe_sdi_dec_sub->upipe, uref_audio, upump_p);
     }
 
     /* unmap input */
