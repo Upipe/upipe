@@ -605,10 +605,10 @@ static void extract_sd_audio(struct upipe *upipe, const uint16_t *packet, int h,
 
     for (int i = 0; i < data_count/3; i += 4) {
         int32_t *base = &ctx->buf_audio[ctx->group_offset[audio_group] * UPIPE_SDI_MAX_CHANNELS + 4 * audio_group + i];
-        base[0] = extract_sd_audio_sample(&packet[6+i]);
-        base[1] = extract_sd_audio_sample(&packet[9+i]);
-        base[2] = extract_sd_audio_sample(&packet[12+i]);
-        base[3] = extract_sd_audio_sample(&packet[15+i]);
+        base[0] = extract_sd_audio_sample(&packet[6+3*i]);
+        base[1] = extract_sd_audio_sample(&packet[9+3*i]);
+        base[2] = extract_sd_audio_sample(&packet[12+3*i]);
+        base[3] = extract_sd_audio_sample(&packet[15+3*i]);
 
         upipe_sdi_dec->audio_samples[audio_group]++;
         ctx->group_offset[audio_group]++;
