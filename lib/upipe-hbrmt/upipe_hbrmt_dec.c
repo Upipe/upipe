@@ -247,6 +247,11 @@ static void upipe_hbrmt_dec_input(struct upipe *upipe, struct uref *uref,
         goto end;
     }
 
+    if (unlikely(src_size < HBRMT_DATA_OFFSET + HBRMT_DATA_SIZE)) {
+        upipe_err(upipe, "too small buffer received");
+        goto end;
+    }
+
     bool marker = rtp_check_marker(src);
     uint16_t seqnum = rtp_get_seqnum(src);
 
