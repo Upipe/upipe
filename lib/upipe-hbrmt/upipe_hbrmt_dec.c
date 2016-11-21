@@ -267,6 +267,7 @@ static void upipe_hbrmt_dec_input(struct upipe *upipe, struct uref *uref,
         /* drop current packet */
         if (upipe_hbrmt_dec->ubuf) {
             ubuf_block_unmap(upipe_hbrmt_dec->ubuf, 0);
+            ubuf_free(upipe_hbrmt_dec->ubuf);
             upipe_hbrmt_dec->ubuf = NULL;
         }
     }
