@@ -249,6 +249,12 @@ static void upipe_hbrmt_dec_input(struct upipe *upipe, struct uref *uref,
     bool marker = rtp_check_marker(src);
     uint16_t seqnum = rtp_get_seqnum(src);
 
+    if (unlikely(!upipe_hbrmt_dec->f)) {
+        const uint8_t frate = ((src[17] & 0x0f) << 4) | ((src[18] & 0xf0) >> 4);
+        if (!ubase_check(upipe_hbrmt_dec_set_fps(upipe, frate)))
+            goto end;
+    }
+
     if (unlikely(upipe_hbrmt_dec->expected_seqnum != -1 &&
                  seqnum != upipe_hbrmt_dec->expected_seqnum)) {
         upipe_warn_va(upipe, "potentially lost %d RTP packets, got %u expected %u",
@@ -276,12 +282,6 @@ static void upipe_hbrmt_dec_input(struct upipe *upipe, struct uref *uref,
             return;
         }
         goto end;
-    }
-
-    if (unlikely(!upipe_hbrmt_dec->f)) {
-        const uint8_t frate = ((src[17] & 0x0f) << 4) | ((src[18] & 0xf0) >> 4);
-        if (!ubase_check(upipe_hbrmt_dec_set_fps(upipe, frate)))
-            goto end;
     }
 
     /* Allocate block memory */
