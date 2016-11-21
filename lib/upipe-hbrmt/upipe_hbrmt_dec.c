@@ -293,11 +293,13 @@ static void upipe_hbrmt_dec_input(struct upipe *upipe, struct uref *uref,
         goto end;
 
     int to_write = HBRMT_DATA_SIZE;
-    //FIXME: should only happen when the marker bit is flagged
-    if ((upipe_hbrmt_dec->dst_buf + HBRMT_DATA_SIZE) > upipe_hbrmt_dec->dst_end)
+    if (&upipe_hbrmt_dec->dst_buf[HBRMT_DATA_SIZE] > upipe_hbrmt_dec->dst_end) {
         to_write = upipe_hbrmt_dec->dst_end - upipe_hbrmt_dec->dst_buf;
+        if (!marker)
+            upipe_err(upipe, "Not overflowing output packet");
+    }
 
-    memcpy(upipe_hbrmt_dec->dst_buf, src + HBRMT_DATA_OFFSET, to_write);
+    memcpy(upipe_hbrmt_dec->dst_buf, &src[HBRMT_DATA_OFFSET], to_write);
     upipe_hbrmt_dec->dst_buf += HBRMT_DATA_SIZE;
 
     if (!marker)
