@@ -81,7 +81,7 @@ struct upipe_hbrmt_dec {
 
     /** Packed block destination */
     uint8_t *dst_buf;
-    uint8_t *dst_end;
+    int dst_size;
 
     /** current frame **/
     struct ubuf *ubuf;
@@ -141,9 +141,9 @@ static struct upipe *upipe_hbrmt_dec_alloc(struct upipe_mgr *mgr,
     upipe_hbrmt_dec_init_ubuf_mgr(upipe);
     upipe_hbrmt_dec_init_output(upipe);
 
-    upipe_hbrmt_dec->ubuf    = NULL;
-    upipe_hbrmt_dec->dst_buf = NULL;
-    upipe_hbrmt_dec->dst_end = NULL;
+    upipe_hbrmt_dec->ubuf     = NULL;
+    upipe_hbrmt_dec->dst_buf  = NULL;
+    upipe_hbrmt_dec->dst_size = 0;
 
     upipe_hbrmt_dec->next_packet_frame_start = false;
     upipe_hbrmt_dec->expected_seqnum = -1;
@@ -216,15 +216,14 @@ static int upipe_hbrmt_alloc_output_ubuf(struct upipe *upipe)
         return UBASE_ERR_ALLOC;
     }
 
-    int dst_size = -1;
+    upipe_hbrmt_dec->dst_size = -1;
     if (unlikely(!ubase_check(ubuf_block_write(upipe_hbrmt_dec->ubuf, 0,
-                        &dst_size, &upipe_hbrmt_dec->dst_buf)))) {
+                        &upipe_hbrmt_dec->dst_size,
+                        &upipe_hbrmt_dec->dst_buf)))) {
         ubuf_free(upipe_hbrmt_dec->ubuf);
         upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
         return UBASE_ERR_ALLOC;
     }
-
-    upipe_hbrmt_dec->dst_end = upipe_hbrmt_dec->dst_buf + dst_size;
 
     return UBASE_ERR_NONE;
 }
@@ -312,19 +311,20 @@ static void upipe_hbrmt_dec_input(struct upipe *upipe, struct uref *uref,
 
     int to_write = HBRMT_DATA_SIZE;
 
-    if (src_size < HBRMT_DATA_SIZE) {
-        upipe_err(upipe, "Too small packet, reading anyway");
+    if (to_write > src_size) {
         to_write = src_size;
+        upipe_err(upipe, "Too small packet, reading anyway");
     }
 
-    if (&upipe_hbrmt_dec->dst_buf[HBRMT_DATA_SIZE] > upipe_hbrmt_dec->dst_end) {
-        to_write = upipe_hbrmt_dec->dst_end - upipe_hbrmt_dec->dst_buf;
+    if (to_write > upipe_hbrmt_dec->dst_size) {
+        to_write = upipe_hbrmt_dec->dst_size;
         if (!marker)
             upipe_err(upipe, "Not overflowing output packet");
     }
 
     memcpy(upipe_hbrmt_dec->dst_buf, payload, to_write);
     upipe_hbrmt_dec->dst_buf += to_write;
+    upipe_hbrmt_dec->dst_size -= to_write;
 
     if (!marker)
         goto end;
