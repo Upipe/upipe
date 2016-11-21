@@ -41,7 +41,7 @@
 #define ZERO_IDX(x) (x-1)
 
 void ff_sdi_blank_c  (uint16_t *dst, int64_t size);
-void ff_sdi_blank_avx(uint16_t *dst, int64_t size);
+void upipe_sdi_blank_avx(uint16_t *dst, int64_t size);
 
 /* [Field][VBI] */
 static const uint16_t sav_fvh_cword[2][2] = {{0x200, 0x2ac}, {0x31c, 0x3b0}};
@@ -1210,7 +1210,7 @@ static struct upipe *upipe_sdi_enc_alloc(struct upipe_mgr *mgr,
     }
 
     if (__builtin_cpu_supports("avx")) {
-        upipe_sdi_enc->blank             = ff_sdi_blank_avx;
+        upipe_sdi_enc->blank             = upipe_sdi_blank_avx;
         upipe_sdi_enc->planar_to_uyvy_8  = upipe_planar_to_uyvy_8_avx;
         upipe_sdi_enc->planar_to_uyvy_10 = upipe_planar_to_uyvy_10_avx;
         upipe_sdi_enc->v210_to_uyvy      = upipe_v210_uyvy_unpack_aligned_avx;
