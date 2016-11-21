@@ -322,8 +322,8 @@ static int upipe_hbrmt_dec_set_flow_def(struct upipe *upipe, struct uref *flow_d
         return UBASE_ERR_INVALID;
     UBASE_RETURN(uref_flow_match_def(flow_def, "block."))
 
-    struct uref *flow_def_dup;
-    if (unlikely((flow_def_dup = uref_dup(flow_def)) == NULL))
+    struct uref *flow_def_dup = uref_dup(flow_def);
+    if (unlikely(flow_def_dup == NULL))
         return UBASE_ERR_ALLOC;
     uref_free(upipe_hbrmt_dec->flow_def_input);
     upipe_hbrmt_dec->flow_def_input = flow_def_dup;
