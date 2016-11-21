@@ -207,7 +207,7 @@ static inline void upipe_hbrmt_dec_input(struct upipe *upipe, struct uref *uref,
         goto end;
     }
 
-    if (!upipe_hbrmt_dec->f) {
+    if (unlikely(!upipe_hbrmt_dec->f)) {
         const uint8_t frate = ((src[17] & 0x0f) << 4) | ((src[18] & 0xf0) >> 4);
         if (frate < 0x10 || frate > 0x1b) {
             upipe_err_va(upipe, "Invalid hbrmt frate 0x%x", frate);
