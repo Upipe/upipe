@@ -86,8 +86,6 @@ struct upipe_hbrmt_dec {
 
     /** output pipe */
     struct upipe *output;
-    /** input flow definition packet */
-    struct uref *flow_def_input;
     /** flow definition packet */
     struct uref *flow_def;
     /** output state */
@@ -140,7 +138,6 @@ static struct upipe *upipe_hbrmt_dec_alloc(struct upipe_mgr *mgr,
     upipe_hbrmt_dec_init_uref_mgr(upipe);
     upipe_hbrmt_dec_init_ubuf_mgr(upipe);
     upipe_hbrmt_dec_init_output(upipe);
-    upipe_hbrmt_dec->flow_def_input = NULL;
 
     upipe_hbrmt_dec->ubuf    = NULL;
     upipe_hbrmt_dec->dst_buf = NULL;
@@ -322,11 +319,6 @@ static int upipe_hbrmt_dec_set_flow_def(struct upipe *upipe, struct uref *flow_d
         return UBASE_ERR_INVALID;
     UBASE_RETURN(uref_flow_match_def(flow_def, "block."))
 
-    struct uref *flow_def_dup = uref_dup(flow_def);
-    if (unlikely(flow_def_dup == NULL))
-        return UBASE_ERR_ALLOC;
-    uref_free(upipe_hbrmt_dec->flow_def_input);
-    upipe_hbrmt_dec->flow_def_input = flow_def_dup;
     return UBASE_ERR_NONE;
 }
 
@@ -416,7 +408,6 @@ static void upipe_hbrmt_dec_free(struct upipe *upipe)
     upipe_dbg_va(upipe, "releasing pipe %p", upipe);
     upipe_throw_dead(upipe);
 
-    uref_free(upipe_hbrmt_dec->flow_def_input);
     upipe_hbrmt_dec_clean_output(upipe);
     upipe_hbrmt_dec_clean_urefcount(upipe);
     upipe_hbrmt_dec_free_void(upipe);
