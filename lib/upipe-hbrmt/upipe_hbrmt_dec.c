@@ -324,7 +324,7 @@ static void upipe_hbrmt_dec_input(struct upipe *upipe, struct uref *uref,
     }
 
     memcpy(upipe_hbrmt_dec->dst_buf, payload, to_write);
-    upipe_hbrmt_dec->dst_buf += HBRMT_DATA_SIZE;
+    upipe_hbrmt_dec->dst_buf += to_write;
 
     if (!marker)
         goto end;
