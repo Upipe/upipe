@@ -1,7 +1,7 @@
 /*
- * Copyright (C) 2014 OpenHeadend S.A.R.L.
+ * Copyright (c) 2016 Open Broadcast Systems Ltd
  *
- * Authors: Christophe Massiot
+ * Authors: Kieran Kunhya
  *
  * Permission is hereby granted, free of charge, to any person obtaining
  * a copy of this software and associated documentation files (the
