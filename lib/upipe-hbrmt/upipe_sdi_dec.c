@@ -589,6 +589,7 @@ static void extract_sd_audio(struct upipe *upipe, const uint16_t *packet, int h,
     int data_count = packet[5] & 0xff;
 
     int audio_group = S291_SD_AUDIO_GROUP1_DID - (packet[3] & 0xff);
+}
 
 static void parse_sd_hanc(struct upipe *upipe, const uint16_t *packet, int h,
                          struct audio_ctx *ctx)
