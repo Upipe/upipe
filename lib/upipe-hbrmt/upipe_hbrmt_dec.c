@@ -269,11 +269,13 @@ static void upipe_hbrmt_dec_input(struct upipe *upipe, struct uref *uref,
                       (seqnum + UINT16_MAX + 1 - upipe_hbrmt_dec->expected_seqnum) &
                       UINT16_MAX, seqnum, upipe_hbrmt_dec->expected_seqnum);
         upipe_hbrmt_dec->discontinuity = true;
-        /* drop current packet */
+
         if (upipe_hbrmt_dec->ubuf) {
-            ubuf_block_unmap(upipe_hbrmt_dec->ubuf, 0);
-            ubuf_free(upipe_hbrmt_dec->ubuf);
-            upipe_hbrmt_dec->ubuf = NULL;
+            if (marker) {
+                upipe_hbrmt_dec->discontinuity = false;
+                upipe_hbrmt_dec->next_packet_frame_start = true;
+            }
+            goto output;
         }
     }
 
@@ -330,6 +332,7 @@ static void upipe_hbrmt_dec_input(struct upipe *upipe, struct uref *uref,
         goto end;
 
     /* Output a block */
+output:
     uref_block_unmap(uref, 0);
 
     const struct urational *fps = &upipe_hbrmt_dec->f->fps;
