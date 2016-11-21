@@ -45,6 +45,7 @@
 #include <upipe/upipe_helper_output.h>
 
 #include <bitstream/ietf/rtp.h>
+#include <bitstream/smpte/2022_6_hbrmt.h>
 
 #include <upipe-hbrmt/upipe_hbrmt_dec.h>
 #include "upipe_hbrmt_common.h"
@@ -249,8 +250,10 @@ static void upipe_hbrmt_dec_input(struct upipe *upipe, struct uref *uref,
     bool marker = rtp_check_marker(src);
     uint16_t seqnum = rtp_get_seqnum(src);
 
+    const uint8_t *hbrmt = &src[RTP_HEADER_SIZE];
+
     if (unlikely(!upipe_hbrmt_dec->f)) {
-        const uint8_t frate = ((src[17] & 0x0f) << 4) | ((src[18] & 0xf0) >> 4);
+        const uint8_t frate = smpte_hbrmt_get_frate(hbrmt);
         if (!ubase_check(upipe_hbrmt_dec_set_fps(upipe, frate)))
             goto end;
     }
