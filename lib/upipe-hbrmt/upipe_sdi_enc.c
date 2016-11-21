@@ -40,7 +40,14 @@
 
 #define ZERO_IDX(x) (x-1)
 
-void ff_sdi_blank_c  (uint16_t *dst, int64_t size);
+static void upipe_sdi_blank_c(uint16_t *dst, int64_t size)
+{
+    for (int w = 0; w < size; w++) {
+        dst[2*w+0] = 0x200;
+        dst[2*w+1] = 0x40;
+    }
+}
+
 void upipe_sdi_blank_avx(uint16_t *dst, int64_t size);
 
 /* [Field][VBI] */
@@ -1186,7 +1193,7 @@ static struct upipe *upipe_sdi_enc_alloc(struct upipe_mgr *mgr,
     ulist_init(&upipe_sdi_enc->urefs);
     upipe_sdi_enc->n = 0;
 
-    upipe_sdi_enc->blank             = ff_sdi_blank_c;
+    upipe_sdi_enc->blank             = upipe_sdi_blank_c;
     upipe_sdi_enc->planar_to_uyvy_8  = planar_to_uyvy_8_c;
     upipe_sdi_enc->planar_to_uyvy_10 = planar_to_uyvy_10_c;
     upipe_sdi_enc->v210_to_uyvy      = v210_uyvy_unpack_c;
