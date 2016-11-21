@@ -553,7 +553,7 @@ static void extract_hd_audio(struct upipe *upipe, const uint16_t *packet, int h,
                         (s ==   0x4e1f0000 && ctx->buf_audio[prev] ==   0xf8720000)) {
                     uint8_t pair = audio_group * 2 + (i >> 1);
                     if (ctx->aes[pair] != -1) {
-                        upipe_err_va(upipe, "AES at line %d AND %d", ctx->aes[pair], h);
+                        upipe_err_va(upipe, "SMPTE 337 sync at line %d AND %d", ctx->aes[pair], h);
                     }
                     ctx->aes[pair] = h;
                 }
