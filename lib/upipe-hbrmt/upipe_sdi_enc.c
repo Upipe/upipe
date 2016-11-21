@@ -111,8 +111,6 @@ struct upipe_sdi_enc {
 
     /** input chroma map */
     const char *input_chroma_map[UPIPE_SDI_MAX_PLANES+1];
-    /** output chroma map */
-    const char *output_chroma_map;
 
     /* CRC LUT */
     uint32_t crc_lut[8][1024];
