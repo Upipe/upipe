@@ -110,7 +110,7 @@ struct upipe_sdi_enc {
     bool input_is_v210;
 
     /** input chroma map */
-    const char *input_chroma_map[UPIPE_SDI_MAX_PLANES+1];
+    const char *input_chroma_map[UPIPE_SDI_MAX_PLANES];
 
     /* CRC LUT */
     uint32_t crc_lut[8][1024];
@@ -903,19 +903,19 @@ static void upipe_sdi_enc_input(struct upipe *upipe, struct uref *uref,
     }
 
     /* map input */
-    const uint8_t *input_planes[UPIPE_SDI_MAX_PLANES + 1];
-    int input_strides[UPIPE_SDI_MAX_PLANES + 1];
-    int i;
-    for (i = 0; i < UPIPE_SDI_MAX_PLANES &&
-                upipe_sdi_enc->input_chroma_map[i] != NULL; i++) {
+    const uint8_t *input_planes[UPIPE_SDI_MAX_PLANES];
+    int input_strides[UPIPE_SDI_MAX_PLANES];
+    for (int i = 0; i < UPIPE_SDI_MAX_PLANES; i++) {
+        const char *chroma = upipe_sdi_enc->input_chroma_map[i];
+        if (chroma == NULL)
+            break;
+
         const uint8_t *data;
         size_t stride;
         if (unlikely(!ubase_check(uref_pic_plane_read(uref,
-                                          upipe_sdi_enc->input_chroma_map[i],
-                                          0, 0, -1, -1, &data)) ||
+                            chroma, 0, 0, -1, -1, &data)) ||
                      !ubase_check(uref_pic_plane_size(uref,
-                                          upipe_sdi_enc->input_chroma_map[i],
-                                          &stride, NULL, NULL, NULL)))) {
+                             chroma, &stride, NULL, NULL, NULL)))) {
             upipe_warn(upipe, "invalid buffer received");
             uref_free(uref);
             return;
@@ -923,8 +923,6 @@ static void upipe_sdi_enc_input(struct upipe *upipe, struct uref *uref,
         input_planes[i] = data;
         input_strides[i] = stride;
     }
-    input_planes[i] = NULL;
-    input_strides[i] = 0;
 
     const struct sdi_offsets_fmt *f = upipe_sdi_enc->f;
 
@@ -963,10 +961,12 @@ static void upipe_sdi_enc_input(struct upipe *upipe, struct uref *uref,
     ubuf_block_unmap(ubuf, 0);
 
     /* unmap pictures */
-    for (int i = 0; i < UPIPE_SDI_MAX_PLANES &&
-                upipe_sdi_enc->input_chroma_map[i] != NULL; i++)
-        uref_pic_plane_unmap(uref, upipe_sdi_enc->input_chroma_map[i],
-                             0, 0, -1, -1);
+    for (int i = 0; i < UPIPE_SDI_MAX_PLANES; i++) {
+        const char *chroma = upipe_sdi_enc->input_chroma_map[i];
+        if (chroma == NULL)
+            break;
+        uref_pic_plane_unmap(uref, chroma, 0, 0, -1, -1);
+    }
 
     // XXX : apparently we can't re-use bmd urefs?!
     struct uref *uref2 = uref_dup(uref);
@@ -1039,19 +1039,16 @@ static int upipe_sdi_enc_set_flow_def(struct upipe *upipe, struct uref *flow_def
         upipe_sdi_enc->input_chroma_map[0] = "u10y10v10y10u10y10v10y10u10y10v10y10";
         upipe_sdi_enc->input_chroma_map[1] = NULL;
         upipe_sdi_enc->input_chroma_map[2] = NULL;
-        upipe_sdi_enc->input_chroma_map[3] = NULL;
     }
     else if (upipe_sdi_enc->input_bit_depth == 8) {
         upipe_sdi_enc->input_chroma_map[0] = "y8";
         upipe_sdi_enc->input_chroma_map[1] = "u8";
         upipe_sdi_enc->input_chroma_map[2] = "v8";
-        upipe_sdi_enc->input_chroma_map[3] = NULL;
     }
     else {
         upipe_sdi_enc->input_chroma_map[0] = "y10l";
         upipe_sdi_enc->input_chroma_map[1] = "u10l";
         upipe_sdi_enc->input_chroma_map[2] = "v10l";
-        upipe_sdi_enc->input_chroma_map[3] = NULL;
     }
 
     if ((flow_def_dup = uref_sibling_alloc(flow_def)) == NULL)
