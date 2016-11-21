@@ -218,7 +218,6 @@ static void upipe_hbrmt_dec_input(struct upipe *upipe, struct uref *uref,
 
     uint8_t marker = rtp_check_marker(src);
     uint16_t seqnum = rtp_get_seqnum(src);
-    uint32_t timestamp = rtp_get_timestamp(src);
 
     if (unlikely(upipe_hbrmt_dec->expected_seqnum != -1 &&
                  seqnum != upipe_hbrmt_dec->expected_seqnum)) {
@@ -295,6 +294,7 @@ static void upipe_hbrmt_dec_input(struct upipe *upipe, struct uref *uref,
 
     /* Output a block */
     if (marker && upipe_hbrmt_dec->ubuf) {
+        uint32_t timestamp = rtp_get_timestamp(src);
         uref_block_unmap(uref, 0);
 
         // FIXME assumes 27MHz
