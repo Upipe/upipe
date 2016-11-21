@@ -95,8 +95,8 @@ struct upipe_hbrmt_dec {
     /** list of output requests */
     struct uchain request_list;
 
-    /** last RTP timestamp */
-    uint64_t last_rtp_timestamp;
+    /** frame number */
+    uint64_t frame;
 
     /* SDI offsets */
     const struct sdi_offsets_fmt *f;
@@ -148,7 +148,7 @@ static struct upipe *upipe_hbrmt_dec_alloc(struct upipe_mgr *mgr,
     upipe_hbrmt_dec->next_packet_frame_start = false;
     upipe_hbrmt_dec->expected_seqnum = -1;
     upipe_hbrmt_dec->discontinuity = false;
-    upipe_hbrmt_dec->last_rtp_timestamp = UINT32_MAX;
+    upipe_hbrmt_dec->frame = 0;
 
     upipe_throw_ready(upipe);
     return upipe;
@@ -330,19 +330,16 @@ static void upipe_hbrmt_dec_input(struct upipe *upipe, struct uref *uref,
         goto end;
 
     /* Output a block */
-    uint32_t timestamp = rtp_get_timestamp(src);
     uref_block_unmap(uref, 0);
 
-    // FIXME assumes 27MHz
-    uref_clock_set_pts_orig(uref, timestamp);
+    const struct urational *fps = &upipe_hbrmt_dec->f->fps;
+    uint64_t pts = UINT32_MAX + upipe_hbrmt_dec->frame++ * fps->den / fps->num;
 
-    uint64_t delta =
-        (UINT32_MAX + timestamp -
-         (upipe_hbrmt_dec->last_rtp_timestamp % UINT32_MAX)) % UINT32_MAX;
-    upipe_hbrmt_dec->last_rtp_timestamp += delta;
-    uref_clock_set_pts_prog(uref, upipe_hbrmt_dec->last_rtp_timestamp);
+    uref_clock_set_pts_orig(uref, pts);
+    uref_clock_set_pts_prog(uref, pts);
 
-    upipe_throw_clock_ref(upipe, uref, upipe_hbrmt_dec->last_rtp_timestamp, 0);
+    // FIXME: we don't have a clock ref
+//    upipe_throw_clock_ref(upipe, uref, last_rtp_timestamp, 0);
     upipe_throw_clock_ts(upipe, uref);
 
     uref_attach_ubuf(uref, upipe_hbrmt_dec->ubuf);
