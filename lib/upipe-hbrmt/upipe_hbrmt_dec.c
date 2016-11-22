@@ -460,6 +460,8 @@ static void upipe_hbrmt_dec_free(struct upipe *upipe)
 
     ubuf_free(upipe_hbrmt_dec->ubuf);
 
+    upipe_hbrmt_dec_clean_uref_mgr(upipe);
+    upipe_hbrmt_dec_clean_ubuf_mgr(upipe);
     upipe_hbrmt_dec_clean_output(upipe);
     upipe_hbrmt_dec_clean_urefcount(upipe);
     upipe_hbrmt_dec_free_void(upipe);
