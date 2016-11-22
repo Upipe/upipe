@@ -179,11 +179,7 @@ static bool upipe_unpack_rfc4175_handle(struct upipe *upipe, struct uref *uref,
         return true;
     }
 
-    bool valid = rtp_check_hdr(input_buf);
-    bool extension = rtp_check_extension(input_buf);
-    uint8_t cc = rtp_get_cc(input_buf);
     uint8_t marker = rtp_check_marker(input_buf);
-    uint8_t type = rtp_get_type(input_buf);
     uint16_t seqnum = rtp_get_seqnum(input_buf);
     uint32_t timestamp = rtp_get_timestamp(input_buf);
 
