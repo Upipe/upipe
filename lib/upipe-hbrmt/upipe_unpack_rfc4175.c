@@ -238,67 +238,69 @@ static bool upipe_unpack_rfc4175_handle(struct upipe *upipe, struct uref *uref,
 
     upipe_unpack_rfc4175->next_packet_frame_start = marker && field[0];
 
-    if (upipe_unpack_rfc4175->ubuf) {
-        for (int i = 0; i < 1 + !!continuation; i++) {
-            int interleaved_line = get_interleaved_line(line_number[i]);
+    if (!upipe_unpack_rfc4175->ubuf)
+        goto end;
 
-            if (upipe_unpack_rfc4175->output_is_v210) {
-                /* Start */
-                uint8_t *dst = upipe_unpack_rfc4175->output_plane[0] +
-                    upipe_unpack_rfc4175->output_stride[0] * interleaved_line;
+    for (int i = 0; i < 1 + !!continuation; i++) {
+        int interleaved_line = get_interleaved_line(line_number[i]);
 
-                /* Offset to a pixel/pblock within the line */
-                dst += (line_offset[i] / 6) * 16;
+        if (upipe_unpack_rfc4175->output_is_v210) {
+            /* Start */
+            uint8_t *dst = upipe_unpack_rfc4175->output_plane[0] +
+                upipe_unpack_rfc4175->output_stride[0] * interleaved_line;
 
-                upipe_unpack_rfc4175->bitpacked_to_v210(rfc4175_data,
-                        (uint32_t *)dst, length[i]);
-            } else {
-                uint8_t *plane[UPIPE_UNPACK_RFC4175_MAX_PLANES];
-                for (int j = 0 ; j < UPIPE_UNPACK_RFC4175_MAX_PLANES; j++) {
-                    plane[j] = upipe_unpack_rfc4175->output_plane[j] +
+            /* Offset to a pixel/pblock within the line */
+            dst += (line_offset[i] / 6) * 16;
+
+            upipe_unpack_rfc4175->bitpacked_to_v210(rfc4175_data,
+                    (uint32_t *)dst, length[i]);
+        } else {
+            uint8_t *plane[UPIPE_UNPACK_RFC4175_MAX_PLANES];
+            for (int j = 0 ; j < UPIPE_UNPACK_RFC4175_MAX_PLANES; j++) {
+                plane[j] = upipe_unpack_rfc4175->output_plane[j] +
                     upipe_unpack_rfc4175->output_stride[j] * interleaved_line +
                     line_offset[i] / (j ? 2 : 1); // XXX: hsub
-                }
-
-                upipe_unpack_rfc4175->bitpacked_to_planar_8(rfc4175_data,
-                        plane[0], plane[1], plane[2], length[i]);
             }
-            rfc4175_data += length[0];
+
+            upipe_unpack_rfc4175->bitpacked_to_planar_8(rfc4175_data,
+                    plane[0], plane[1], plane[2], length[i]);
         }
+        rfc4175_data += length[0];
     }
 
+    if (!upipe_unpack_rfc4175->next_packet_frame_start)
+        goto end;
 
-    if (upipe_unpack_rfc4175->next_packet_frame_start && upipe_unpack_rfc4175->ubuf) {
-        /* unmap output */
-        for (int i = 0; i < UPIPE_UNPACK_RFC4175_MAX_PLANES; i++) {
-            const char *chroma = upipe_unpack_rfc4175->output_chroma_map[i];
-            if (chroma == NULL)
-                break;
-            ubuf_pic_plane_unmap(upipe_unpack_rfc4175->ubuf,
-                    chroma, 0, 0, -1, -1);
-        }
-
-        uint32_t timestamp = rtp_get_timestamp(input_buf);
-        uref_block_unmap(uref, 0);
-
-        // FIXME assumes 27MHz
-        uref_clock_set_pts_orig(uref, timestamp);
-
-        uint64_t delta =
-            (UINT32_MAX + timestamp -
-             (upipe_unpack_rfc4175->last_rtp_timestamp % UINT32_MAX)) % UINT32_MAX;
-        upipe_unpack_rfc4175->last_rtp_timestamp += delta;
-        uref_clock_set_pts_prog(uref, upipe_unpack_rfc4175->last_rtp_timestamp);
-
-        upipe_throw_clock_ref(upipe, uref, upipe_unpack_rfc4175->last_rtp_timestamp, 0);
-        upipe_throw_clock_ts(upipe, uref);
-
-        uref_attach_ubuf(uref, upipe_unpack_rfc4175->ubuf);
-        upipe_unpack_rfc4175_output(upipe, uref, upump_p);
-        upipe_unpack_rfc4175->ubuf = NULL;
-        return true;
+    /* unmap output */
+    for (int i = 0; i < UPIPE_UNPACK_RFC4175_MAX_PLANES; i++) {
+        const char *chroma = upipe_unpack_rfc4175->output_chroma_map[i];
+        if (chroma == NULL)
+            break;
+        ubuf_pic_plane_unmap(upipe_unpack_rfc4175->ubuf,
+                chroma, 0, 0, -1, -1);
     }
 
+    uint32_t timestamp = rtp_get_timestamp(input_buf);
+    uref_block_unmap(uref, 0);
+
+    // FIXME assumes 27MHz
+    uref_clock_set_pts_orig(uref, timestamp);
+
+    uint64_t delta =
+        (UINT32_MAX + timestamp -
+         (upipe_unpack_rfc4175->last_rtp_timestamp % UINT32_MAX)) % UINT32_MAX;
+    upipe_unpack_rfc4175->last_rtp_timestamp += delta;
+    uref_clock_set_pts_prog(uref, upipe_unpack_rfc4175->last_rtp_timestamp);
+
+    upipe_throw_clock_ref(upipe, uref, upipe_unpack_rfc4175->last_rtp_timestamp, 0);
+    upipe_throw_clock_ts(upipe, uref);
+
+    uref_attach_ubuf(uref, upipe_unpack_rfc4175->ubuf);
+    upipe_unpack_rfc4175_output(upipe, uref, upump_p);
+    upipe_unpack_rfc4175->ubuf = NULL;
+    return true;
+
+end:
     /* unmap input */
     uref_block_unmap(uref, 0);
     uref_free(uref);
