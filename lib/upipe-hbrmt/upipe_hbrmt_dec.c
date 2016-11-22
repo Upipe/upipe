@@ -282,21 +282,12 @@ static void upipe_hbrmt_dec_input(struct upipe *upipe, struct uref *uref,
                       (seqnum + UINT16_MAX + 1 - upipe_hbrmt_dec->expected_seqnum) &
                       UINT16_MAX, seqnum, upipe_hbrmt_dec->expected_seqnum);
         upipe_hbrmt_dec->discontinuity = true;
-
-        if (upipe_hbrmt_dec->ubuf) {
-            goto end;
-        }
     }
 
     upipe_hbrmt_dec->expected_seqnum = (seqnum + 1) & UINT16_MAX;
 
-    if (upipe_hbrmt_dec->discontinuity) {
-        /* reset discontinuity */
-        if (marker) {
-            upipe_hbrmt_dec->discontinuity = false;
-        }
+    if (upipe_hbrmt_dec->discontinuity)
         goto end;
-    }
 
     if (unlikely(!upipe_hbrmt_dec->ubuf))
         goto end;
@@ -334,6 +325,7 @@ end:
         uref_block_unmap(uref, 0);
 
     if (marker) {
+        upipe_hbrmt_dec->discontinuity = false;
         if (upipe_hbrmt_dec->ubuf) {
             upipe_hbrmt_dec_date(upipe, uref);
             ubuf_block_unmap(upipe_hbrmt_dec->ubuf, 0);
