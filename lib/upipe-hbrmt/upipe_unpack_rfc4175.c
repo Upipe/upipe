@@ -24,6 +24,7 @@
 
 #include <upipe/ubase.h>
 #include <upipe/uprobe.h>
+#include <upipe/uclock.h>
 #include <upipe/uref.h>
 #include <upipe/ubuf.h>
 #include <upipe/uref_pic_flow.h>
@@ -282,14 +283,15 @@ static bool upipe_unpack_rfc4175_handle(struct upipe *upipe, struct uref *uref,
     uint32_t timestamp = rtp_get_timestamp(input_buf);
     uref_block_unmap(uref, 0);
 
-    // FIXME assumes 27MHz
-    uref_clock_set_pts_orig(uref, timestamp);
+    uref_clock_set_pts_orig(uref, timestamp * UCLOCK_FREQ / 90000);
 
     uint64_t delta =
         (UINT32_MAX + timestamp -
          (upipe_unpack_rfc4175->last_rtp_timestamp % UINT32_MAX)) % UINT32_MAX;
     upipe_unpack_rfc4175->last_rtp_timestamp += delta;
+
     uint64_t pts = upipe_unpack_rfc4175->last_rtp_timestamp;
+    pts = pts * UCLOCK_FREQ / 90000;
 
     uref_clock_set_pts_prog(uref, pts);
     uref_clock_set_pts_orig(uref, pts);
