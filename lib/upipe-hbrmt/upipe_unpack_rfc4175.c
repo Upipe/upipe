@@ -205,19 +205,18 @@ static bool upipe_unpack_rfc4175_handle(struct upipe *upipe, struct uref *uref,
             if (chroma == NULL)
                 break;
 
-            uint8_t *data;
-            size_t stride;
             if (unlikely(!ubase_check(ubuf_pic_plane_write(upipe_unpack_rfc4175->ubuf,
-                                chroma, 0, 0, -1, -1, &data)) ||
+                                chroma, 0, 0, -1, -1,
+                                &upipe_unpack_rfc4175->output_plane[i])) ||
                          !ubase_check(ubuf_pic_plane_size(upipe_unpack_rfc4175->ubuf,
-                                 chroma, &stride, NULL, NULL, NULL)))) {
+                                 chroma,
+                                 &upipe_unpack_rfc4175->output_stride[i],
+                                 NULL, NULL, NULL)))) {
                 upipe_warn(upipe, "unable to map output");
                 ubuf_free(upipe_unpack_rfc4175->ubuf);
                 uref_free(uref);
                 return true;
             }
-            upipe_unpack_rfc4175->output_plane[i] = data;
-            upipe_unpack_rfc4175->output_stride[i] = stride;
         }
     }
 
