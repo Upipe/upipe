@@ -36,7 +36,6 @@
 #include <upipe/uref_block.h>
 #include <upipe/upipe_helper_upipe.h>
 #include <upipe/upipe_helper_urefcount.h>
-#include <upipe/upipe_helper_void.h>
 #include <upipe/upipe_helper_ubuf_mgr.h>
 #include <upipe/upipe_helper_output.h>
 #include <upipe/upipe_helper_input.h>
@@ -118,7 +117,6 @@ static int upipe_unpack_rfc4175_check(struct upipe *upipe, struct uref *flow_for
 
 UPIPE_HELPER_UPIPE(upipe_unpack_rfc4175, upipe, UPIPE_UNPACK_RFC4175_SIGNATURE);
 UPIPE_HELPER_UREFCOUNT(upipe_unpack_rfc4175, urefcount, upipe_unpack_rfc4175_free);
-UPIPE_HELPER_VOID(upipe_unpack_rfc4175);
 UPIPE_HELPER_FLOW(upipe_unpack_rfc4175, NULL);
 UPIPE_HELPER_OUTPUT(upipe_unpack_rfc4175, output, flow_def, output_state, request_list)
 UPIPE_HELPER_UBUF_MGR(upipe_unpack_rfc4175, ubuf_mgr, flow_format, ubuf_mgr_request,
