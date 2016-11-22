@@ -104,9 +104,6 @@ struct upipe_unpack_rfc4175 {
     /** Bitpacked to Planar 8 conversion */
     void (*bitpacked_to_planar_8)(const uint8_t *src, uint8_t *y, uint8_t *u, uint8_t *v, int64_t size);
 
-    /** Bitpacked to Planar 10 conversion */
-    void (*bitpacked_to_uyvy)(const uint8_t *src, uint16_t *y, int64_t size);
-
     /** last RTP timestamp */
     uint64_t last_rtp_timestamp;
 
@@ -491,23 +488,10 @@ static struct upipe *upipe_unpack_rfc4175_alloc(struct upipe_mgr *mgr,
     if (!upipe_unpack_rfc4175->output_is_v210)
          upipe_unpack_rfc4175->output_bit_depth = ubase_check(uref_pic_flow_check_chroma(flow_def, 1, 1, 1, "y8")) ? 8 : 10;
 
-    upipe_unpack_rfc4175->bitpacked_to_uyvy = upipe_sdi_unpack_c;
     upipe_unpack_rfc4175->bitpacked_to_v210 = upipe_sdi_v210_unpack_c;
     upipe_unpack_rfc4175->bitpacked_to_planar_8 = upipe_sdi_to_planar_8_c;
 
 #if !defined(__APPLE__) /* macOS clang doesn't support that builtin yet */
-#if defined(__clang__) && /* clang 3.8 doesn't know ssse3 */ \
-     (__clang_major__ < 3 || (__clang_major__ == 3 && __clang_minor__ <= 8))
-# ifdef __SSSE3__
-    if (1)
-# else
-    if (0)
-# endif
-#else
-    if (__builtin_cpu_supports("ssse3"))
-#endif
-        upipe_unpack_rfc4175->bitpacked_to_uyvy = upipe_sdi_unpack_10_ssse3;
-
    if (__builtin_cpu_supports("avx")) {
         upipe_unpack_rfc4175->bitpacked_to_v210 = upipe_sdi_v210_unpack_avx;
         upipe_unpack_rfc4175->bitpacked_to_planar_8 = upipe_sdi_to_planar_8_avx;
