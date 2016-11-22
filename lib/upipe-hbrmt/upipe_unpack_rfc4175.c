@@ -95,10 +95,6 @@ struct upipe_unpack_rfc4175 {
     uint8_t *output_plane[UPIPE_UNPACK_RFC4175_MAX_PLANES];
     size_t output_stride[UPIPE_UNPACK_RFC4175_MAX_PLANES];
 
-    /* Gets set during init only */
-    int output_pixels_per_block;
-    int output_block_size;
-
     /** indicates next packet is a start of a frame */
     bool next_packet_frame_start;
 
@@ -255,9 +251,7 @@ static bool upipe_unpack_rfc4175_handle(struct upipe *upipe, struct uref *uref,
                     upipe_unpack_rfc4175->output_stride[0] * interleaved_line;
 
                 /* Offset to a pixel/pblock within the line */
-                int block_offset = line_offset[i] /
-                    upipe_unpack_rfc4175->output_pixels_per_block;
-                dst += block_offset * upipe_unpack_rfc4175->output_block_size;
+                dst += (line_offset[i] / 6) * 16;
 
                 upipe_unpack_rfc4175->bitpacked_to_v210(rfc4175_data,
                         (uint32_t *)dst, length[i]);
@@ -497,14 +491,8 @@ static struct upipe *upipe_unpack_rfc4175_alloc(struct upipe_mgr *mgr,
     upipe_unpack_rfc4175->output_is_block = 0;
 
     upipe_unpack_rfc4175->output_is_v210 = ubase_check(uref_pic_flow_check_chroma(flow_def, 1, 1, 128, "u10y10v10y10u10y10v10y10u10y10v10y10"));
-    if (upipe_unpack_rfc4175->output_is_v210) {
-        upipe_unpack_rfc4175->output_pixels_per_block = 6;
-        upipe_unpack_rfc4175->output_block_size = 16;
-    } else {
+    if (!upipe_unpack_rfc4175->output_is_v210)
          upipe_unpack_rfc4175->output_bit_depth = ubase_check(uref_pic_flow_check_chroma(flow_def, 1, 1, 1, "y8")) ? 8 : 10;
-         upipe_unpack_rfc4175->output_pixels_per_block = 1;
-         upipe_unpack_rfc4175->output_block_size = 1;
-    }
 
     upipe_unpack_rfc4175->bitpacked_to_uyvy = upipe_sdi_unpack_c;
     upipe_unpack_rfc4175->bitpacked_to_v210 = upipe_sdi_v210_unpack_c;
