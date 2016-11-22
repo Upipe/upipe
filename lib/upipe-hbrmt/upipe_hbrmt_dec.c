@@ -350,7 +350,7 @@ end:
 
     if (marker) {
         upipe_hbrmt_dec_date(upipe, uref);
-
+        ubuf_block_unmap(upipe_hbrmt_dec->ubuf, 0);
         uref_attach_ubuf(uref, upipe_hbrmt_dec->ubuf);
         upipe_hbrmt_dec->ubuf = NULL;
 
