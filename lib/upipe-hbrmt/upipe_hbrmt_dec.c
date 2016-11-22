@@ -458,8 +458,9 @@ static int upipe_hbrmt_dec_control(struct upipe *upipe, int command, va_list arg
 static void upipe_hbrmt_dec_free(struct upipe *upipe)
 {
     struct upipe_hbrmt_dec *upipe_hbrmt_dec = upipe_hbrmt_dec_from_upipe(upipe);
-    upipe_dbg_va(upipe, "releasing pipe %p", upipe);
     upipe_throw_dead(upipe);
+
+    ubuf_free(upipe_hbrmt_dec->ubuf);
 
     upipe_hbrmt_dec_clean_output(upipe);
     upipe_hbrmt_dec_clean_urefcount(upipe);
