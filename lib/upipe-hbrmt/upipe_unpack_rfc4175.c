@@ -256,18 +256,15 @@ static bool upipe_unpack_rfc4175_handle(struct upipe *upipe, struct uref *uref,
                 upipe_unpack_rfc4175->bitpacked_to_v210(rfc4175_data,
                         (uint32_t *)dst, length[i]);
             } else {
-                uint8_t *y8 = upipe_unpack_rfc4175->output_plane[0] +
-                    upipe_unpack_rfc4175->output_stride[0] * interleaved_line +
-                    line_offset[i] / 1;
-                uint8_t *u8 = upipe_unpack_rfc4175->output_plane[1] +
-                    upipe_unpack_rfc4175->output_stride[1] * interleaved_line +
-                    line_offset[i] / 2;
-                uint8_t *v8 = upipe_unpack_rfc4175->output_plane[2] +
-                    upipe_unpack_rfc4175->output_stride[2] * interleaved_line +
-                    line_offset[i] / 2;
+                uint8_t *plane[UPIPE_UNPACK_RFC4175_MAX_PLANES];
+                for (int j = 0 ; j < UPIPE_UNPACK_RFC4175_MAX_PLANES; j++) {
+                    plane[j] = upipe_unpack_rfc4175->output_plane[j] +
+                    upipe_unpack_rfc4175->output_stride[j] * interleaved_line +
+                    line_offset[i] / (j ? 2 : 1); // XXX: hsub
+                }
 
                 upipe_unpack_rfc4175->bitpacked_to_planar_8(rfc4175_data,
-                        y8, u8, v8, length[i]);
+                        plane[0], plane[1], plane[2], length[i]);
             }
             rfc4175_data += length[0];
         }
