@@ -76,9 +76,6 @@ struct upipe_hbrmt_dec {
     /** expected sequence number */
     int expected_seqnum;
 
-    /** indicates next packet is a start of a frame */
-    bool next_packet_frame_start;
-
     /** Packed block destination */
     uint8_t *dst_buf;
     int dst_size;
@@ -145,7 +142,6 @@ static struct upipe *upipe_hbrmt_dec_alloc(struct upipe_mgr *mgr,
     upipe_hbrmt_dec->dst_buf  = NULL;
     upipe_hbrmt_dec->dst_size = 0;
 
-    upipe_hbrmt_dec->next_packet_frame_start = false;
     upipe_hbrmt_dec->expected_seqnum = -1;
     upipe_hbrmt_dec->discontinuity = false;
     upipe_hbrmt_dec->frame = 0;
@@ -287,8 +283,6 @@ static void upipe_hbrmt_dec_input(struct upipe *upipe, struct uref *uref,
         upipe_hbrmt_dec->discontinuity = true;
 
         if (upipe_hbrmt_dec->ubuf) {
-            if (marker)
-                upipe_hbrmt_dec->next_packet_frame_start = true;
             goto end;
         }
     }
@@ -299,17 +293,9 @@ static void upipe_hbrmt_dec_input(struct upipe *upipe, struct uref *uref,
         /* reset discontinuity */
         if (marker) {
             upipe_hbrmt_dec->discontinuity = false;
-            upipe_hbrmt_dec->next_packet_frame_start = true;
         }
         goto end;
     }
-
-    /* Allocate block memory */
-    if (upipe_hbrmt_dec->next_packet_frame_start)
-        if (!ubase_check(upipe_hbrmt_dec_alloc_output_ubuf(upipe)))
-            goto end;
-
-    upipe_hbrmt_dec->next_packet_frame_start = marker;
 
     if (unlikely(!upipe_hbrmt_dec->ubuf))
         goto end;
@@ -354,6 +340,7 @@ end:
             upipe_hbrmt_dec->ubuf = NULL;
             upipe_hbrmt_dec_output(upipe, uref, upump_p);
         }
+        upipe_hbrmt_dec_alloc_output_ubuf(upipe);
     } else
         uref_free(uref);
 }
