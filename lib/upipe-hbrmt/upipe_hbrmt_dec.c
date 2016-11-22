@@ -321,21 +321,24 @@ static void upipe_hbrmt_dec_input(struct upipe *upipe, struct uref *uref,
     upipe_hbrmt_dec->dst_size -= to_write;
 
 end:
-    if (src)
-        uref_block_unmap(uref, 0);
+    uref_block_unmap(uref, 0);
 
-    if (marker) {
-        upipe_hbrmt_dec->discontinuity = false;
-        if (upipe_hbrmt_dec->ubuf) {
-            upipe_hbrmt_dec_date(upipe, uref);
-            ubuf_block_unmap(upipe_hbrmt_dec->ubuf, 0);
-            uref_attach_ubuf(uref, upipe_hbrmt_dec->ubuf);
-            upipe_hbrmt_dec->ubuf = NULL;
-            upipe_hbrmt_dec_output(upipe, uref, upump_p);
-        }
-        upipe_hbrmt_dec_alloc_output_ubuf(upipe);
+    bool output = marker || upipe_hbrmt_dec->discontinuity;
+    if (output && upipe_hbrmt_dec->ubuf) {
+        /* output current block */
+        upipe_hbrmt_dec_date(upipe, uref);
+        ubuf_block_unmap(upipe_hbrmt_dec->ubuf, 0);
+        uref_attach_ubuf(uref, upipe_hbrmt_dec->ubuf);
+        upipe_hbrmt_dec->ubuf = NULL;
+        upipe_hbrmt_dec_output(upipe, uref, upump_p);
     } else
         uref_free(uref);
+
+    if (marker) {
+        /* reset discontinuity when we see the next marker */
+        upipe_hbrmt_dec->discontinuity = false;
+        upipe_hbrmt_dec_alloc_output_ubuf(upipe);
+    }
 }
 
 /** @internal @This sets the input flow definition.
