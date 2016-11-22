@@ -176,7 +176,6 @@ static bool upipe_unpack_rfc4175_handle(struct upipe *upipe, struct uref *uref,
 
     uint8_t marker = rtp_check_marker(input_buf);
     uint16_t seqnum = rtp_get_seqnum(input_buf);
-    uint32_t timestamp = rtp_get_timestamp(input_buf);
 
     if (unlikely(upipe_unpack_rfc4175->expected_seqnum != -1 &&
                  seqnum != upipe_unpack_rfc4175->expected_seqnum)) {
@@ -279,6 +278,7 @@ static bool upipe_unpack_rfc4175_handle(struct upipe *upipe, struct uref *uref,
                     chroma, 0, 0, -1, -1);
         }
 
+        uint32_t timestamp = rtp_get_timestamp(input_buf);
         uref_block_unmap(uref, 0);
 
         // FIXME assumes 27MHz
