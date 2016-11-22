@@ -162,8 +162,6 @@ static bool upipe_unpack_rfc4175_handle(struct upipe *upipe, struct uref *uref,
     if (upipe_unpack_rfc4175->flow_def == NULL)
         return false;
 
-    const size_t output_hsize = 1920, output_vsize = 1080;
-
     /* map input */
     int input_size = -1;
     const uint8_t *input_buf = NULL;
@@ -187,7 +185,9 @@ static bool upipe_unpack_rfc4175_handle(struct upipe *upipe, struct uref *uref,
     upipe_unpack_rfc4175->expected_seqnum = (seqnum + 1) & UINT16_MAX;
 
     if (upipe_unpack_rfc4175->next_packet_frame_start) {
-        /* allocate dest ubuf -- FIXME: this is for v210 only */
+        /* FIXME: w/h */
+        const size_t output_hsize = 1920, output_vsize = 1080;
+        /* FIXME: this is for v210 only */
         size_t aligned_output_hsize = ((output_hsize + 47) / 48) * 48;
         upipe_unpack_rfc4175->ubuf = ubuf_pic_alloc(upipe_unpack_rfc4175->ubuf_mgr,
                                                     aligned_output_hsize, output_vsize);
