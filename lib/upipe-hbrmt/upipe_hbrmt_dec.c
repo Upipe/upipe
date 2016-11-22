@@ -347,12 +347,13 @@ end:
         uref_block_unmap(uref, 0);
 
     if (marker) {
-        upipe_hbrmt_dec_date(upipe, uref);
-        ubuf_block_unmap(upipe_hbrmt_dec->ubuf, 0);
-        uref_attach_ubuf(uref, upipe_hbrmt_dec->ubuf);
-        upipe_hbrmt_dec->ubuf = NULL;
-
-        upipe_hbrmt_dec_output(upipe, uref, upump_p);
+        if (upipe_hbrmt_dec->ubuf) {
+            upipe_hbrmt_dec_date(upipe, uref);
+            ubuf_block_unmap(upipe_hbrmt_dec->ubuf, 0);
+            uref_attach_ubuf(uref, upipe_hbrmt_dec->ubuf);
+            upipe_hbrmt_dec->ubuf = NULL;
+            upipe_hbrmt_dec_output(upipe, uref, upump_p);
+        }
     } else
         uref_free(uref);
 }
