@@ -287,10 +287,8 @@ static void upipe_hbrmt_dec_input(struct upipe *upipe, struct uref *uref,
         upipe_hbrmt_dec->discontinuity = true;
 
         if (upipe_hbrmt_dec->ubuf) {
-            if (marker) {
-                upipe_hbrmt_dec->discontinuity = false;
+            if (marker)
                 upipe_hbrmt_dec->next_packet_frame_start = true;
-            }
             goto end;
         }
     }
