@@ -283,8 +283,6 @@ static bool upipe_unpack_rfc4175_handle(struct upipe *upipe, struct uref *uref,
     uint32_t timestamp = rtp_get_timestamp(input_buf);
     uref_block_unmap(uref, 0);
 
-    uref_clock_set_pts_orig(uref, timestamp * UCLOCK_FREQ / 90000);
-
     uint64_t delta =
         (UINT32_MAX + timestamp -
          (upipe_unpack_rfc4175->last_rtp_timestamp % UINT32_MAX)) % UINT32_MAX;
@@ -294,7 +292,7 @@ static bool upipe_unpack_rfc4175_handle(struct upipe *upipe, struct uref *uref,
     pts = pts * UCLOCK_FREQ / 90000;
 
     uref_clock_set_pts_prog(uref, pts);
-    uref_clock_set_pts_orig(uref, pts);
+    uref_clock_set_pts_orig(uref, timestamp * UCLOCK_FREQ / 90000);
     uref_clock_set_dts_pts_delay(uref, 0);
 
     upipe_throw_clock_ref(upipe, uref, pts, 0);
