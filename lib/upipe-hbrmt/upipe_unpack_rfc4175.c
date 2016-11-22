@@ -80,7 +80,6 @@ struct upipe_unpack_rfc4175 {
     struct uchain blockers;
 
     /** Set from reading the input flow def */
-    bool output_is_block; /* For UYVY which is still not done FIXME */
     bool output_is_v210;
     int output_bit_depth;
 
@@ -483,9 +482,6 @@ static struct upipe *upipe_unpack_rfc4175_alloc(struct upipe_mgr *mgr,
         return NULL;
 
     struct upipe_unpack_rfc4175 *upipe_unpack_rfc4175 = upipe_unpack_rfc4175_from_upipe(upipe);
-
-    //FIXME: detection for uyvy since it's a block!
-    upipe_unpack_rfc4175->output_is_block = 0;
 
     upipe_unpack_rfc4175->output_is_v210 = ubase_check(uref_pic_flow_check_chroma(flow_def, 1, 1, 128, "u10y10v10y10u10y10v10y10u10y10v10y10"));
     if (!upipe_unpack_rfc4175->output_is_v210)
