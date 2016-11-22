@@ -341,8 +341,7 @@ output:
     uref_clock_set_pts_orig(uref, pts);
     uref_clock_set_pts_prog(uref, pts);
 
-    // FIXME: we don't have a clock ref
-//    upipe_throw_clock_ref(upipe, uref, last_rtp_timestamp, 0);
+    upipe_throw_clock_ref(upipe, uref, pts, 0);
     upipe_throw_clock_ts(upipe, uref);
 
     uref_attach_ubuf(uref, upipe_hbrmt_dec->ubuf);
