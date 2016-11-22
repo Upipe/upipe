@@ -141,6 +141,42 @@ static inline int get_interleaved_line(int line_number)
     }
 }
 
+/** @internal */
+static void upipe_unpack_rfc4175_alloc_output(struct upipe *upipe)
+{
+    struct upipe_unpack_rfc4175 *upipe_unpack_rfc4175 = upipe_unpack_rfc4175_from_upipe(upipe);
+
+    struct ubuf *ubuf = ubuf_pic_alloc(upipe_unpack_rfc4175->ubuf_mgr,
+            upipe_unpack_rfc4175->hsize, upipe_unpack_rfc4175->vsize);
+
+    if (unlikely(ubuf == NULL)) {
+        upipe_warn(upipe, "unable to allocate output");
+        upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
+        upipe_unpack_rfc4175->ubuf = NULL;
+        return;
+    }
+
+    /* map output */
+    for (int i = 0; i < UPIPE_UNPACK_RFC4175_MAX_PLANES ; i++) {
+        const char *chroma = upipe_unpack_rfc4175->output_chroma_map[i];
+        if (chroma == NULL)
+            break;
+
+        if (unlikely(!ubase_check(ubuf_pic_plane_write(ubuf, chroma,
+                            0, 0, -1, -1,
+                            &upipe_unpack_rfc4175->output_plane[i])) ||
+                    !ubase_check(ubuf_pic_plane_size(ubuf, chroma,
+                            &upipe_unpack_rfc4175->output_stride[i],
+                            NULL, NULL, NULL)))) {
+            upipe_warn(upipe, "unable to map output");
+            ubuf_free(ubuf);
+            ubuf = NULL;
+            break;
+        }
+    }
+
+    upipe_unpack_rfc4175->ubuf = ubuf;
+}
 /** @internal @This handles data.
  *
  * @param upipe description structure of the pipe
@@ -185,32 +221,9 @@ static bool upipe_unpack_rfc4175_handle(struct upipe *upipe, struct uref *uref,
     upipe_unpack_rfc4175->expected_seqnum = (seqnum + 1) & UINT16_MAX;
 
     if (upipe_unpack_rfc4175->next_packet_frame_start) {
-        upipe_unpack_rfc4175->ubuf = ubuf_pic_alloc(upipe_unpack_rfc4175->ubuf_mgr,
-                upipe_unpack_rfc4175->hsize, upipe_unpack_rfc4175->vsize);
-        if (unlikely(upipe_unpack_rfc4175->ubuf == NULL)) {
-            upipe_warn(upipe, "unable to allocate output");
-            upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
+        upipe_unpack_rfc4175_alloc_output(upipe);
+        if (!upipe_unpack_rfc4175->ubuf)
             goto end;
-        }
-
-        /* map output */
-        for (int i = 0; i < UPIPE_UNPACK_RFC4175_MAX_PLANES ; i++) {
-            const char *chroma = upipe_unpack_rfc4175->output_chroma_map[i];
-            if (chroma == NULL)
-                break;
-
-            if (unlikely(!ubase_check(ubuf_pic_plane_write(upipe_unpack_rfc4175->ubuf,
-                                chroma, 0, 0, -1, -1,
-                                &upipe_unpack_rfc4175->output_plane[i])) ||
-                         !ubase_check(ubuf_pic_plane_size(upipe_unpack_rfc4175->ubuf,
-                                 chroma,
-                                 &upipe_unpack_rfc4175->output_stride[i],
-                                 NULL, NULL, NULL)))) {
-                upipe_warn(upipe, "unable to map output");
-                ubuf_free(upipe_unpack_rfc4175->ubuf);
-                goto end;
-            }
-        }
     }
 
     const uint8_t *rfc4175_data = &input_buf[RTP_HEADER_SIZE + RFC_4175_EXT_SEQ_NUM_LEN];
