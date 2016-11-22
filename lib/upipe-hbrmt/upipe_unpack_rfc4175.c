@@ -42,10 +42,10 @@
 #include <upipe/upipe_helper_flow.h>
 
 #include <upipe-hbrmt/upipe_unpack_rfc4175.h>
-#include "upipe_hbrmt_common.h"
 #include "sdidec.h"
 
 #include <bitstream/ietf/rfc4175.h>
+#include <bitstream/ietf/rtp.h>
 
 #define UPIPE_UNPACK_RFC4175_MAX_PLANES 3
 
