@@ -305,23 +305,19 @@ static bool upipe_unpack_rfc4175_handle(struct upipe *upipe, struct uref *uref,
         rfc4175_data += length[i];
     }
 
-    if (!upipe_unpack_rfc4175->next_packet_frame_start)
-        goto end;
-
-    uint32_t timestamp = rtp_get_timestamp(input_buf);
-    uref_block_unmap(uref, 0);
-
-    upipe_unpack_rfc4175_prepare_frame(upipe, uref, timestamp);
-    uref_attach_ubuf(uref, upipe_unpack_rfc4175->ubuf);
-    upipe_unpack_rfc4175->ubuf = NULL;
-    upipe_unpack_rfc4175_output(upipe, uref, upump_p);
-    return true;
-
 end:
-    /* unmap input */
-    uref_block_unmap(uref, 0);
-    uref_free(uref);
+    if (upipe_unpack_rfc4175->next_packet_frame_start) {
+        uint32_t timestamp = rtp_get_timestamp(input_buf);
+        uref_block_unmap(uref, 0);
 
+        upipe_unpack_rfc4175_prepare_frame(upipe, uref, timestamp);
+        uref_attach_ubuf(uref, upipe_unpack_rfc4175->ubuf);
+        upipe_unpack_rfc4175->ubuf = NULL;
+        upipe_unpack_rfc4175_output(upipe, uref, upump_p);
+    } else {
+        uref_block_unmap(uref, 0);
+        uref_free(uref);
+    }
     return true;
 }
 
