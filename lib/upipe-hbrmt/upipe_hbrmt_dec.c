@@ -228,6 +228,21 @@ static int upipe_hbrmt_alloc_output_ubuf(struct upipe *upipe)
     return UBASE_ERR_NONE;
 }
 
+/** @internal */
+static void upipe_hbrmt_dec_date(struct upipe *upipe, struct uref *uref)
+{
+    struct upipe_hbrmt_dec *upipe_hbrmt_dec = upipe_hbrmt_dec_from_upipe(upipe);
+
+    const struct urational *fps = &upipe_hbrmt_dec->f->fps;
+    uint64_t pts = UINT32_MAX + upipe_hbrmt_dec->frame++ * fps->den / fps->num;
+
+    uref_clock_set_pts_orig(uref, pts);
+    uref_clock_set_pts_prog(uref, pts);
+
+    upipe_throw_clock_ref(upipe, uref, pts, 0);
+    upipe_throw_clock_ts(upipe, uref);
+}
+
 /** @internal @This handles data.
  *
  * @param upipe description structure of the pipe
@@ -238,6 +253,7 @@ static void upipe_hbrmt_dec_input(struct upipe *upipe, struct uref *uref,
                                     struct upump **upump_p)
 {
     struct upipe_hbrmt_dec *upipe_hbrmt_dec = upipe_hbrmt_dec_from_upipe(upipe);
+    bool marker = false;
 
     int src_size = -1;
     const uint8_t *src = NULL;
@@ -251,7 +267,7 @@ static void upipe_hbrmt_dec_input(struct upipe *upipe, struct uref *uref,
         goto end;
     }
 
-    bool marker = rtp_check_marker(src);
+    marker = rtp_check_marker(src);
     uint16_t seqnum = rtp_get_seqnum(src);
 
     src_size -= RTP_HEADER_SIZE;
@@ -275,7 +291,7 @@ static void upipe_hbrmt_dec_input(struct upipe *upipe, struct uref *uref,
                 upipe_hbrmt_dec->discontinuity = false;
                 upipe_hbrmt_dec->next_packet_frame_start = true;
             }
-            goto output;
+            goto end;
         }
     }
 
@@ -328,32 +344,19 @@ static void upipe_hbrmt_dec_input(struct upipe *upipe, struct uref *uref,
     upipe_hbrmt_dec->dst_buf += to_write;
     upipe_hbrmt_dec->dst_size -= to_write;
 
-    if (!marker)
-        goto end;
-
-    /* Output a block */
-output:
-    uref_block_unmap(uref, 0);
-
-    const struct urational *fps = &upipe_hbrmt_dec->f->fps;
-    uint64_t pts = UINT32_MAX + upipe_hbrmt_dec->frame++ * fps->den / fps->num;
-
-    uref_clock_set_pts_orig(uref, pts);
-    uref_clock_set_pts_prog(uref, pts);
-
-    upipe_throw_clock_ref(upipe, uref, pts, 0);
-    upipe_throw_clock_ts(upipe, uref);
-
-    uref_attach_ubuf(uref, upipe_hbrmt_dec->ubuf);
-
-    upipe_hbrmt_dec_output(upipe, uref, upump_p);
-    upipe_hbrmt_dec->ubuf = NULL;
-    return;
-
 end:
     if (src)
         uref_block_unmap(uref, 0);
-    uref_free(uref);
+
+    if (marker) {
+        upipe_hbrmt_dec_date(upipe, uref);
+
+        uref_attach_ubuf(uref, upipe_hbrmt_dec->ubuf);
+        upipe_hbrmt_dec->ubuf = NULL;
+
+        upipe_hbrmt_dec_output(upipe, uref, upump_p);
+    } else
+        uref_free(uref);
 }
 
 /** @internal @This sets the input flow definition.
