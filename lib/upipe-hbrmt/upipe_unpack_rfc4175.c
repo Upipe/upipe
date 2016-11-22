@@ -98,9 +98,6 @@ struct upipe_unpack_rfc4175 {
     uint8_t *output_plane[UPIPE_UNPACK_RFC4175_MAX_PLANES];
     size_t output_stride[UPIPE_UNPACK_RFC4175_MAX_PLANES];
 
-    /** indicates next packet is a start of a frame */
-    bool next_packet_frame_start;
-
     /** Bitpacked to V210 conversion */
     void (*bitpacked_to_v210)(const uint8_t *src, uint32_t *dst, int64_t size);
 
@@ -241,6 +238,7 @@ static bool upipe_unpack_rfc4175_handle(struct upipe *upipe, struct uref *uref,
     }
 
     uint8_t marker = rtp_check_marker(input_buf);
+    uint32_t timestamp = rtp_get_timestamp(input_buf);
     uint16_t seqnum = rtp_get_seqnum(input_buf);
 
     if (unlikely(upipe_unpack_rfc4175->expected_seqnum != -1 &&
@@ -251,12 +249,6 @@ static bool upipe_unpack_rfc4175_handle(struct upipe *upipe, struct uref *uref,
         upipe_unpack_rfc4175->discontinuity = 1;
     }
     upipe_unpack_rfc4175->expected_seqnum = (seqnum + 1) & UINT16_MAX;
-
-    if (upipe_unpack_rfc4175->next_packet_frame_start) {
-        upipe_unpack_rfc4175_alloc_output(upipe);
-        if (!upipe_unpack_rfc4175->ubuf)
-            goto end;
-    }
 
     const uint8_t *rfc4175_data = &input_buf[RTP_HEADER_SIZE + RFC_4175_EXT_SEQ_NUM_LEN];
 
@@ -273,7 +265,7 @@ static bool upipe_unpack_rfc4175_handle(struct upipe *upipe, struct uref *uref,
 
     // FIXME sanity check all of these
 
-    upipe_unpack_rfc4175->next_packet_frame_start = marker && field[0];
+    marker &= field[0];
 
     if (!upipe_unpack_rfc4175->ubuf)
         goto end;
@@ -306,18 +298,20 @@ static bool upipe_unpack_rfc4175_handle(struct upipe *upipe, struct uref *uref,
     }
 
 end:
-    if (upipe_unpack_rfc4175->next_packet_frame_start) {
-        uint32_t timestamp = rtp_get_timestamp(input_buf);
-        uref_block_unmap(uref, 0);
 
-        upipe_unpack_rfc4175_prepare_frame(upipe, uref, timestamp);
-        uref_attach_ubuf(uref, upipe_unpack_rfc4175->ubuf);
-        upipe_unpack_rfc4175->ubuf = NULL;
-        upipe_unpack_rfc4175_output(upipe, uref, upump_p);
+    uref_block_unmap(uref, 0);
+    if (marker) {
+        if (upipe_unpack_rfc4175->ubuf) {
+            upipe_unpack_rfc4175_prepare_frame(upipe, uref, timestamp);
+            uref_attach_ubuf(uref, upipe_unpack_rfc4175->ubuf);
+            upipe_unpack_rfc4175_output(upipe, uref, upump_p);
+        }
+
+        upipe_unpack_rfc4175_alloc_output(upipe);
     } else {
-        uref_block_unmap(uref, 0);
         uref_free(uref);
     }
+
     return true;
 }
 
