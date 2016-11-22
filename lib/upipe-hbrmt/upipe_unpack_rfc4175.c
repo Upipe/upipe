@@ -185,8 +185,7 @@ static bool upipe_unpack_rfc4175_handle(struct upipe *upipe, struct uref *uref,
                       UINT16_MAX, seqnum, upipe_unpack_rfc4175->expected_seqnum);
         upipe_unpack_rfc4175->discontinuity = 1;
     }
-    upipe_unpack_rfc4175->expected_seqnum = seqnum + 1;
-    upipe_unpack_rfc4175->expected_seqnum &= UINT16_MAX;
+    upipe_unpack_rfc4175->expected_seqnum = (seqnum + 1) & UINT16_MAX;
 
     if (upipe_unpack_rfc4175->next_packet_frame_start) {
         /* allocate dest ubuf -- FIXME: this is for v210 only */
