@@ -189,10 +189,8 @@ static bool upipe_unpack_rfc4175_handle(struct upipe *upipe, struct uref *uref,
                 upipe_unpack_rfc4175->hsize, upipe_unpack_rfc4175->vsize);
         if (unlikely(upipe_unpack_rfc4175->ubuf == NULL)) {
             upipe_warn(upipe, "unable to allocate output");
-            uref_block_unmap(uref, 0);
-            uref_free(uref);
             upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
-            return true;
+            goto end;
         }
 
         /* map output */
@@ -210,8 +208,7 @@ static bool upipe_unpack_rfc4175_handle(struct upipe *upipe, struct uref *uref,
                                  NULL, NULL, NULL)))) {
                 upipe_warn(upipe, "unable to map output");
                 ubuf_free(upipe_unpack_rfc4175->ubuf);
-                uref_free(uref);
-                return true;
+                goto end;
             }
         }
     }
