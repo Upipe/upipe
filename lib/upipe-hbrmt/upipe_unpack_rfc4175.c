@@ -79,6 +79,11 @@ struct upipe_unpack_rfc4175 {
     /** list of blockers (used during udeal) */
     struct uchain blockers;
 
+    /** width */
+    uint64_t hsize;
+    /** height */
+    uint64_t vsize;
+
     /** Set from reading the input flow def */
     bool output_is_v210;
 
@@ -128,7 +133,7 @@ UPIPE_HELPER_INPUT(upipe_unpack_rfc4175, urefs, nb_urefs, max_urefs, blockers, u
 /* One indexed separated IN, Zero indexed interleaved OUT */
 static inline int get_interleaved_line(int line_number)
 {
-    assert(line_number <= 1080);
+    assert(line_number <= 1080); // FIXME
     if (line_number > 540){
         return (line_number - 540) * 2 - 1;
     } else {
@@ -180,12 +185,8 @@ static bool upipe_unpack_rfc4175_handle(struct upipe *upipe, struct uref *uref,
     upipe_unpack_rfc4175->expected_seqnum = (seqnum + 1) & UINT16_MAX;
 
     if (upipe_unpack_rfc4175->next_packet_frame_start) {
-        /* FIXME: w/h */
-        const size_t output_hsize = 1920, output_vsize = 1080;
-        /* FIXME: this is for v210 only */
-        size_t aligned_output_hsize = ((output_hsize + 47) / 48) * 48;
         upipe_unpack_rfc4175->ubuf = ubuf_pic_alloc(upipe_unpack_rfc4175->ubuf_mgr,
-                                                    aligned_output_hsize, output_vsize);
+                upipe_unpack_rfc4175->hsize, upipe_unpack_rfc4175->vsize);
         if (unlikely(upipe_unpack_rfc4175->ubuf == NULL)) {
             upipe_warn(upipe, "unable to allocate output");
             uref_block_unmap(uref, 0);
@@ -367,9 +368,8 @@ static int upipe_unpack_rfc4175_set_flow_def(struct upipe *upipe, struct uref *f
 
     UBASE_RETURN(uref_flow_match_def(flow_def, "block."))
 
-    struct uref *flow_def_dup;
-
-    if ((flow_def_dup = uref_sibling_alloc(flow_def)) == NULL)
+    struct uref *flow_def_dup = uref_sibling_alloc(flow_def);
+    if (flow_def_dup == NULL)
         return UBASE_ERR_ALLOC;
 
     uref_flow_set_def(flow_def_dup, "pic.");
@@ -396,8 +396,8 @@ static int upipe_unpack_rfc4175_set_flow_def(struct upipe *upipe, struct uref *f
     struct urational fps = { .num = 30000, .den = 1001 };
     uref_pic_flow_set_fps(flow_def_dup, fps);
 
-    uref_pic_flow_set_hsize(flow_def_dup, 1920);
-    uref_pic_flow_set_vsize(flow_def_dup, 1080);
+    uref_pic_flow_set_hsize(flow_def_dup, upipe_unpack_rfc4175->hsize);
+    uref_pic_flow_set_vsize(flow_def_dup, upipe_unpack_rfc4175->vsize);
 
     uref_pic_flow_set_hsubsampling(flow_def_dup, 1, 0);
     uref_pic_flow_set_vsubsampling(flow_def_dup, 1, 0);
@@ -473,7 +473,18 @@ static struct upipe *upipe_unpack_rfc4175_alloc(struct upipe_mgr *mgr,
 
     struct upipe_unpack_rfc4175 *upipe_unpack_rfc4175 = upipe_unpack_rfc4175_from_upipe(upipe);
 
+    if (!ubase_check(uref_pic_flow_get_hsize(flow_def, &upipe_unpack_rfc4175->hsize)) ||
+        !ubase_check(uref_pic_flow_get_vsize(flow_def, &upipe_unpack_rfc4175->vsize))) {
+        upipe_err(upipe, "missing picture dimension");
+        upipe_unpack_rfc4175_free_flow(upipe);
+        return NULL;
+    }
+
     upipe_unpack_rfc4175->output_is_v210 = ubase_check(uref_pic_flow_check_chroma(flow_def, 1, 1, 128, "u10y10v10y10u10y10v10y10u10y10v10y10"));
+
+    if (upipe_unpack_rfc4175->output_is_v210) {
+        upipe_unpack_rfc4175->hsize = (upipe_unpack_rfc4175->hsize + 47) / 48 * 48;
+    }
 
     upipe_unpack_rfc4175->bitpacked_to_v210 = upipe_sdi_v210_unpack_c;
     upipe_unpack_rfc4175->bitpacked_to_planar_8 = upipe_sdi_to_planar_8_c;
