@@ -200,7 +200,7 @@ static int upipe_hbrmt_dec_set_fps(struct upipe *upipe, uint8_t frate)
 }
 
 /** @internal */
-static int upipe_hbrmt_alloc_output_ubuf(struct upipe *upipe)
+static int upipe_hbrmt_dec_alloc_output_ubuf(struct upipe *upipe)
 {
     struct upipe_hbrmt_dec *upipe_hbrmt_dec = upipe_hbrmt_dec_from_upipe(upipe);
 
@@ -308,7 +308,7 @@ static void upipe_hbrmt_dec_input(struct upipe *upipe, struct uref *uref,
 
     /* Allocate block memory */
     if (upipe_hbrmt_dec->next_packet_frame_start)
-        if (!ubase_check(upipe_hbrmt_alloc_output_ubuf(upipe)))
+        if (!ubase_check(upipe_hbrmt_dec_alloc_output_ubuf(upipe)))
             goto end;
 
     upipe_hbrmt_dec->next_packet_frame_start = marker;
