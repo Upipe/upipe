@@ -177,6 +177,38 @@ static void upipe_unpack_rfc4175_alloc_output(struct upipe *upipe)
 
     upipe_unpack_rfc4175->ubuf = ubuf;
 }
+
+
+/** @internal */
+static void upipe_unpack_rfc4175_prepare_frame(struct upipe *upipe, struct uref *uref, uint32_t timestamp)
+{
+    struct upipe_unpack_rfc4175 *upipe_unpack_rfc4175 = upipe_unpack_rfc4175_from_upipe(upipe);
+
+    /* unmap output */
+    for (int i = 0; i < UPIPE_UNPACK_RFC4175_MAX_PLANES; i++) {
+        const char *chroma = upipe_unpack_rfc4175->output_chroma_map[i];
+        if (chroma == NULL)
+            break;
+        ubuf_pic_plane_unmap(upipe_unpack_rfc4175->ubuf,
+                chroma, 0, 0, -1, -1);
+    }
+
+    uint64_t delta =
+        (UINT32_MAX + timestamp -
+         (upipe_unpack_rfc4175->last_rtp_timestamp % UINT32_MAX)) % UINT32_MAX;
+    upipe_unpack_rfc4175->last_rtp_timestamp += delta;
+
+    uint64_t pts = upipe_unpack_rfc4175->last_rtp_timestamp;
+    pts = pts * UCLOCK_FREQ / 90000;
+
+    uref_clock_set_pts_prog(uref, pts);
+    uref_clock_set_pts_orig(uref, timestamp * UCLOCK_FREQ / 90000);
+    uref_clock_set_dts_pts_delay(uref, 0);
+
+    upipe_throw_clock_ref(upipe, uref, pts, 0);
+    upipe_throw_clock_ts(upipe, uref);
+}
+
 /** @internal @This handles data.
  *
  * @param upipe description structure of the pipe
@@ -276,36 +308,13 @@ static bool upipe_unpack_rfc4175_handle(struct upipe *upipe, struct uref *uref,
     if (!upipe_unpack_rfc4175->next_packet_frame_start)
         goto end;
 
-    /* unmap output */
-    for (int i = 0; i < UPIPE_UNPACK_RFC4175_MAX_PLANES; i++) {
-        const char *chroma = upipe_unpack_rfc4175->output_chroma_map[i];
-        if (chroma == NULL)
-            break;
-        ubuf_pic_plane_unmap(upipe_unpack_rfc4175->ubuf,
-                chroma, 0, 0, -1, -1);
-    }
-
     uint32_t timestamp = rtp_get_timestamp(input_buf);
     uref_block_unmap(uref, 0);
 
-    uint64_t delta =
-        (UINT32_MAX + timestamp -
-         (upipe_unpack_rfc4175->last_rtp_timestamp % UINT32_MAX)) % UINT32_MAX;
-    upipe_unpack_rfc4175->last_rtp_timestamp += delta;
-
-    uint64_t pts = upipe_unpack_rfc4175->last_rtp_timestamp;
-    pts = pts * UCLOCK_FREQ / 90000;
-
-    uref_clock_set_pts_prog(uref, pts);
-    uref_clock_set_pts_orig(uref, timestamp * UCLOCK_FREQ / 90000);
-    uref_clock_set_dts_pts_delay(uref, 0);
-
-    upipe_throw_clock_ref(upipe, uref, pts, 0);
-    upipe_throw_clock_ts(upipe, uref);
-
+    upipe_unpack_rfc4175_prepare_frame(upipe, uref, timestamp);
     uref_attach_ubuf(uref, upipe_unpack_rfc4175->ubuf);
-    upipe_unpack_rfc4175_output(upipe, uref, upump_p);
     upipe_unpack_rfc4175->ubuf = NULL;
+    upipe_unpack_rfc4175_output(upipe, uref, upump_p);
     return true;
 
 end:
