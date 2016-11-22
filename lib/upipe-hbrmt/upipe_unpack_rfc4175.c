@@ -257,7 +257,7 @@ static bool upipe_unpack_rfc4175_handle(struct upipe *upipe, struct uref *uref,
             upipe_unpack_rfc4175->bitpacked_to_planar_8(rfc4175_data,
                     plane[0], plane[1], plane[2], length[i]);
         }
-        rfc4175_data += length[0];
+        rfc4175_data += length[i];
     }
 
     if (!upipe_unpack_rfc4175->next_packet_frame_start)
