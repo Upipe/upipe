@@ -255,7 +255,8 @@ static void upipe_hbrmt_dec_input(struct upipe *upipe, struct uref *uref,
     const uint8_t *src = NULL;
     if (unlikely(!ubase_check(uref_block_read(uref, 0, &src_size, &src)))) {
         upipe_err(upipe, "invalid buffer received");
-        goto end;
+        uref_free(uref);
+        return;
     }
 
     if (unlikely(src_size < HBRMT_DATA_OFFSET + HBRMT_DATA_SIZE)) {
