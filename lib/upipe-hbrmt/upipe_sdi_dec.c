@@ -184,8 +184,8 @@ struct upipe_sdi_dec {
     /* Per audio group number of samples written */
     uint64_t audio_samples[4];
 
-    /** number of frames output */
-    uint64_t frame_num;
+    /** first pts */
+    uint64_t first_pts;
 
     /** public upipe structure */
     struct upipe upipe;
@@ -605,6 +605,15 @@ static bool upipe_sdi_dec_handle(struct upipe *upipe, struct uref *uref,
     if (!upipe_sdi_dec->ubuf_mgr)
         return false;
 
+    if (unlikely(upipe_sdi_dec->first_pts == 0)) {
+        if (!ubase_check(uref_clock_get_pts_prog(uref,
+                        &upipe_sdi_dec->first_pts))) {
+            upipe_err(upipe, "undated uref");
+            uref_free(uref);
+            return true;
+        }
+    }
+
     const struct sdi_offsets_fmt *f = upipe_sdi_dec->f;
     const struct sdi_picture_fmt *p = upipe_sdi_dec->p;
     const size_t output_hsize = p->active_width, output_vsize = p->active_height;
@@ -786,11 +795,12 @@ static bool upipe_sdi_dec_handle(struct upipe *upipe, struct uref *uref,
     }
 
     if (uref_audio) {
-        uint64_t pts = upipe_sdi_dec_sub->samples * UCLOCK_FREQ / 48000;
-        pts += UINT32_MAX; // do not start at 0
+        uint64_t pts = upipe_sdi_dec->first_pts +
+            upipe_sdi_dec_sub->samples * UCLOCK_FREQ / 48000;
         uref_clock_set_pts_prog(uref_audio, pts);
         uref_clock_set_pts_orig(uref_audio, pts);
         uref_clock_set_dts_pts_delay(uref_audio, 0);
+        upipe_throw_clock_ts(upipe, uref);
 
         int samples_received = audio_ctx.group_offset[0];
         for (int i = 1; i < 4; i++) {
@@ -843,11 +853,6 @@ static bool upipe_sdi_dec_handle(struct upipe *upipe, struct uref *uref,
     }
 
     uref_attach_ubuf(uref, ubuf);
-    uref_clock_set_pts_prog(uref, UINT32_MAX + upipe_sdi_dec->frame_num++ *
-        UCLOCK_FREQ * upipe_sdi_dec->f->fps.den / upipe_sdi_dec->f->fps.num);
-    uref_clock_set_pts_orig(uref, UCLOCK_FREQ + upipe_sdi_dec->frame_num++ *
-        UCLOCK_FREQ * upipe_sdi_dec->f->fps.den / upipe_sdi_dec->f->fps.num);
-    uref_clock_set_dts_pts_delay(uref, 0);
     upipe_sdi_dec_output(upipe, uref, upump_p);
 
     return true;
@@ -1171,7 +1176,7 @@ static struct upipe *upipe_sdi_dec_alloc(struct upipe_mgr *mgr,
     for (int i = 0; i < 8; i++)
         upipe_sdi_dec->aes_detected[i] = -1;
     upipe_sdi_dec->eav_clock = 0;
-    upipe_sdi_dec->frame_num = 0;
+    upipe_sdi_dec->first_pts = 0;
 
     for (int i = 0; i < 8; i++)
         for (int j = 0; j < 4; j++)
