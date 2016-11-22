@@ -53,6 +53,10 @@ SUBDIRS += upipe-ts upipe-framers upipe-hls upipe-hbrmt
 if HAVE_X264
 SUBDIRS += upipe-x264
 endif
+
+if HAVE_NETMAP
+SUBDIRS += upipe-netmap
+endif
 endif
 
 if HAVE_AVFORMAT
