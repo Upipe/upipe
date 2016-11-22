@@ -234,6 +234,7 @@ static void upipe_hbrmt_dec_date(struct upipe *upipe, struct uref *uref)
 
     uref_clock_set_pts_orig(uref, pts);
     uref_clock_set_pts_prog(uref, pts);
+    uref_clock_set_dts_pts_delay(uref, 0);
 
     upipe_throw_clock_ref(upipe, uref, pts, 0);
     upipe_throw_clock_ts(upipe, uref);
