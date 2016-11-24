@@ -47,6 +47,11 @@ planar_8_y_shuf_after: times 2 db 1, 3, 5, 7, 9,11,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1
 planar_8_avx2_shuf1:   db 0, 1, 2, 8, 9,10,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1
 planar_8_avx2_shuf2:   db 1, 3, 5, 9,11,13,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1
 
+sdi_to_planar10_mask_c: times 2 db 255, 192, 15, 252, 0, 255, 192, 15, 252, 0, 255, 192, 15, 252, 0, 0
+sdi_to_planar10_shuf_c: times 2 db 1, 0, 6, 5,11,10,-1,-1, 3, 2, 8, 7,13,12,-1,-1
+sdi_to_planar10_mult_y: times 2 dw 2048, 32767, 2048, 32767, 2048, 32767, 0, 0
+sdi_to_planar10_mult_c: times 2 dw 1024, 1024, 1024, 0, 16384, 16384, 16384, 0
+
 SECTION .text
 
 %macro sdi_v210_unpack 0
@@ -175,3 +180,51 @@ INIT_XMM avx
 sdi_to_planar_8
 INIT_YMM avx2
 sdi_to_planar_8
+
+%macro sdi_to_planar_10 0
+
+; sdi_to_planar_10(uint8_t *src, uint16_t *y, uint16_t *u, uint16_t *v, int64_t size)
+cglobal sdi_to_planar_10, 5, 6, 3+cpuflag(avx2), src, y, u, v, size, offset
+    xor      offsetq, offsetq
+    add      srcq, sizeq
+    neg      sizeq
+
+    mova     m2, [sdi_to_planar10_mask_c]
+
+    .loop:
+        movu     xm0, [srcq + sizeq]
+%if cpuflag(avx2)
+        vinserti128 m0, m0, [srcq + sizeq + 15], 1
+%endif
+
+        pandn    m1, m2, m0
+        pand     m0, m2
+
+        pshufb m0, [sdi_to_planar10_shuf_c]
+        pshufb m1, [planar_8_y_shuf]
+
+        pmulhuw  m0, [sdi_to_planar10_mult_c]
+        pmulhrsw m1, [sdi_to_planar10_mult_y]
+
+        movu [yq + 2*offsetq], xm1
+        movq   [uq + offsetq], xm0
+        movhps [vq + offsetq], xm0
+%if cpuflag(avx2)
+        vextracti128 [yq + 2*offsetq + 12], m1, 1
+        vextracti128 xm3, m0, 1
+        movq   [uq + offsetq + 6], xm3
+        movhps [vq + offsetq + 6], xm3
+%endif
+
+        add offsetq, (6*mmsize)/16
+        add sizeq, (15*mmsize)/16
+    jl .loop
+RET
+%endmacro
+
+INIT_XMM ssse3
+sdi_to_planar_10
+INIT_XMM avx
+sdi_to_planar_10
+INIT_YMM avx2
+sdi_to_planar_10
