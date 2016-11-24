@@ -12,6 +12,8 @@ if HAVE_X86_ASM
 libupipe_hbrmt_la_SOURCES += \
     rfc4175_dec.asm \
     rfc4175_dec.h \
+    rfc4175_enc.asm \
+    rfc4175_enc.h \
     sdidec.asm \
     sdidec.h \
     sdienc.asm \
