@@ -8,6 +8,7 @@ libupipe_filters_la_SOURCES = \
 	upipe_filter_ebur128.c \
 	upipe_audio_max.c \
 	upipe_audio_bar.c \
+	upipe_audio_graph.c \
 	upipe_filter_vanc.c \
 	ebur128/ebur128.c \
 	ebur128/ebur128.h

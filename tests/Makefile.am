@@ -96,6 +96,7 @@ check_PROGRAMS = \
 	upipe_filter_ebur128_test \
 	upipe_audio_max_test \
 	upipe_audio_bar_test \
+	upipe_audio_graph_test \
 	upipe_filter_blend_test
 
 TESTS = \
@@ -149,6 +150,7 @@ TESTS = \
 	upipe_filter_ebur128_test \
 	upipe_audio_max_test \
 	upipe_audio_bar_test \
+	upipe_audio_graph_test \
 	upipe_filter_blend_test
 
 if HAVE_SPEEXDSP
@@ -433,6 +435,7 @@ upipe_filter_blend_test_LDADD = $(LDADD) $(top_builddir)/lib/upipe-filters/libup
 upipe_filter_ebur128_test_LDADD = $(LDADD) -lm $(top_builddir)/lib/upipe-filters/libupipe_filters.la $(top_builddir)/lib/upipe-modules/libupipe_modules.la
 upipe_audio_max_test_LDADD = $(LDADD) -lm $(top_builddir)/lib/upipe-filters/libupipe_filters.la $(top_builddir)/lib/upipe-modules/libupipe_modules.la
 upipe_audio_bar_test_LDADD = $(LDADD) -lm $(top_builddir)/lib/upipe-filters/libupipe_filters.la $(top_builddir)/lib/upipe-modules/libupipe_modules.la
+upipe_audio_graph_test_LDADD = $(LDADD) -lm $(top_builddir)/lib/upipe-filters/libupipe_filters.la $(top_builddir)/lib/upipe-modules/libupipe_modules.la
 upipe_speexdsp_test_LDADD = $(LDADD) $(top_builddir)/lib/upipe-speexdsp/libupipe_speexdsp.la $(top_builddir)/lib/upipe-modules/libupipe_modules.la
 
 upipe_x264_test_LDADD = $(LDADD) $(X264_LIBS) $(top_builddir)/lib/upipe-x264/libupipe_x264.la

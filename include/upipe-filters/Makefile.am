@@ -7,4 +7,5 @@ myinclude_HEADERS = \
 	upipe_filter_ebur128.h \
 	upipe_audio_max.h \
 	upipe_audio_bar.h \
+	upipe_audio_graph.h \
 	upipe_filter_vanc.h
