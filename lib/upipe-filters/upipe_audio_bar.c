@@ -97,7 +97,7 @@ struct upipe_audiobar {
     struct uchain request_list;
 
     /** peak value */
-    float peak[255];
+    double peak[255];
     /* peak date */
     uint64_t peak_date[255];
 
