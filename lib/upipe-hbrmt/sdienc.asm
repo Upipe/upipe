@@ -552,3 +552,41 @@ INIT_XMM sse2
 planar_10_to_planar_8
 INIT_YMM avx2
 planar_10_to_planar_8
+
+%macro planar8_to_planar10 0
+
+; planar_10_to_planar_8(const uint16_t *y, const uint8_t *y8, const int64_t width)
+cglobal planar8_to_planar10, 3, 3, 2 + notcpuflag(sse4), y, y8, width
+    lea      yq, [yq + 2*widthq]
+    add      y8q, widthq
+
+    neg      widthq
+
+%if notcpuflag(sse4)
+    pxor m2, m2
+%endif
+
+.loop:
+%if cpuflag(sse4)
+        pmovzxbw m0, [y8q + widthq]
+%else
+        movh m0, [y8q + widthq]
+        punpcklbw m0, m2
+%endif
+
+        psllw m1, m0, 2
+        psrlw m0, 6
+        por m0, m1
+
+        mova [yq + 2*widthq], m0
+
+        add      widthq, mmsize/2
+    jl .loop
+RET
+
+%endmacro
+
+INIT_XMM sse2
+planar8_to_planar10
+INIT_YMM avx2
+planar8_to_planar10

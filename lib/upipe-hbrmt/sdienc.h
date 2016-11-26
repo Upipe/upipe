@@ -36,3 +36,7 @@ void upipe_planar_to_sdi_10_avx2 (const uint16_t *y, const uint16_t *u, const ui
 /* process mmsize samples per iteration */
 void upipe_planar_10_to_planar_8_sse2(uint16_t *data_10, const uint8_t *data_8, int64_t width);
 void upipe_planar_10_to_planar_8_avx2(uint16_t *data_10, const uint8_t *data_8, int64_t width);
+
+/* process mmsize/2 samples per iteration */
+void upipe_planar8_to_planar10_sse2(uint16_t *data_10, const uint8_t *data_8, int64_t width);
+void upipe_planar8_to_planar10_avx2(uint16_t *data_10, const uint8_t *data_8, int64_t width);
