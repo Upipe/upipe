@@ -54,7 +54,7 @@
 #define UBUF_POOL_DEPTH 0
 #define UPROBE_LOG_LEVEL UPROBE_LOG_DEBUG
 
-#define UBUF_ALIGN 16 /* 128-bits simd */
+#define UBUF_ALIGN 32 /* 256-bits simd */
 
 #define WIDTH 1024
 

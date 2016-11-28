@@ -112,7 +112,6 @@ static bool upipe_unpack10bit_handle(struct upipe *upipe, struct uref *uref,
     const char *def;
     if (unlikely(ubase_check(uref_flow_get_def(uref, &def)))) {
         upipe_unpack10bit_store_flow_def(upipe, NULL);
-        uref_block_flow_set_align(uref, UBUF_ALIGN);
         upipe_unpack10bit_require_ubuf_mgr(upipe, uref);
         return true;
     }
@@ -144,13 +143,6 @@ static bool upipe_unpack10bit_handle(struct upipe *upipe, struct uref *uref,
         uref_free(uref);
         ubuf_free(ubuf_out);
         upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
-        return true;
-    }
-
-    if ((uintptr_t)out & (UBUF_ALIGN-1)) {
-        upipe_err(upipe, "output block must be 32 byte aligned");
-        uref_free(uref);
-        ubuf_free(ubuf_out);
         return true;
     }
 
@@ -212,6 +204,39 @@ static int upipe_unpack10bit_check(struct upipe *upipe, struct uref *flow_format
     return UBASE_ERR_NONE;
 }
 
+/** @internal @This requires a ubuf manager by proxy, and amends the flow
+ * format.
+ *
+ * @param upipe description structure of the pipe
+ * @param request description structure of the request
+ * @return an error code
+ */
+static int upipe_unpack10bit_amend_ubuf_mgr(struct upipe *upipe,
+                                            struct urequest *request)
+{
+    struct uref *flow_format = uref_dup(request->uref);
+    UBASE_ALLOC_RETURN(flow_format);
+
+    uint64_t align;
+    if (!ubase_check(uref_block_flow_get_align(flow_format, &align)) || !align) {
+        uref_block_flow_set_align(flow_format, UBUF_ALIGN);
+        align = UBUF_ALIGN;
+    }
+    
+    if (align % UBUF_ALIGN) {
+        align = align * UBUF_ALIGN / ubase_gcd(align, UBUF_ALIGN);
+        uref_block_flow_set_align(flow_format, align);
+    }
+
+    struct urequest ubuf_mgr_request;
+    urequest_set_opaque(&ubuf_mgr_request, request);
+    urequest_init_ubuf_mgr(&ubuf_mgr_request, flow_format,
+                           upipe_unpack10bit_provide_output_proxy, NULL);
+    upipe_throw_provide_request(upipe, &ubuf_mgr_request);
+    urequest_clean(&ubuf_mgr_request);
+    return UBASE_ERR_NONE;
+}
+
 /** @internal @This sets the input flow definition.
  *
  * @param upipe description structure of the pipe
@@ -236,6 +261,7 @@ static int upipe_unpack10bit_set_flow_def(struct upipe *upipe, struct uref *flow
         return UBASE_ERR_ALLOC;
 
     uref_flow_set_def(flow_def_dup, "block.");
+    uref_block_flow_set_align(flow_def_dup, UBUF_ALIGN);
 
     upipe_input(upipe, flow_def_dup, NULL);
     return UBASE_ERR_NONE;
@@ -254,8 +280,9 @@ static int upipe_unpack10bit_control(struct upipe *upipe, int command, va_list a
     switch (command) {
         case UPIPE_REGISTER_REQUEST: {
             struct urequest *request = va_arg(args, struct urequest *);
-            if (request->type == UREQUEST_UBUF_MGR ||
-                request->type == UREQUEST_FLOW_FORMAT)
+            if (request->type == UREQUEST_UBUF_MGR)
+                return upipe_unpack10bit_amend_ubuf_mgr(upipe, request);
+            if (request->type == UREQUEST_FLOW_FORMAT)
                 return upipe_throw_provide_request(upipe, request);
             return upipe_unpack10bit_alloc_output_proxy(upipe, request);
         }
