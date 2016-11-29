@@ -42,6 +42,7 @@
 #include <upipe/upipe_helper_flow.h>
 
 #include <upipe-hbrmt/upipe_unpack_rfc4175.h>
+#include "rfc4175_dec.h"
 #include "sdidec.h"
 
 #include <bitstream/ietf/rfc4175.h>
