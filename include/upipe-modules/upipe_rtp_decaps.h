@@ -59,6 +59,7 @@ static inline int upipe_rtpd_get_packets_lost(struct upipe *upipe,
 struct upipe_mgr *upipe_rtpd_mgr_alloc(void);
 
 UREF_ATTR_UNSIGNED(rtp, timestamp, "timestamp", TIMESTAMP)
+UREF_ATTR_UNSIGNED(rtp, seqnum, "seqnum", SEQNUM)
 
 #ifdef __cplusplus
 }
