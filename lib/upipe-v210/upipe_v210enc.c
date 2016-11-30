@@ -518,6 +518,36 @@ static int upipe_v210enc_set_flow_def(struct upipe *upipe, struct uref *flow_def
     return UBASE_ERR_NONE;
 }
 
+/** @internal @This provides a flow format suggestion.
+ *
+ * @param upipe description structure of the pipe
+ * @param request description structure of the request
+ * @return an error code
+ */
+static int upipe_v210enc_provide_flow_format(struct upipe *upipe,
+                                              struct urequest *request)
+{
+    struct uref *flow_format = uref_dup(request->uref);
+    UBASE_ALLOC_RETURN(flow_format);
+
+    uref_pic_flow_clear_format(flow_format);
+
+    uint8_t plane;
+    if (ubase_check(uref_pic_flow_find_chroma(request->uref, "y10l", &plane))) {
+        uref_pic_flow_add_plane(flow_format, 1, 1, 2, "y10l");
+        uref_pic_flow_add_plane(flow_format, 2, 1, 2, "u10l");
+        uref_pic_flow_add_plane(flow_format, 2, 1, 2, "v10l");
+    } else {
+        uref_pic_flow_add_plane(flow_format, 1, 1, 1, "y8");
+        uref_pic_flow_add_plane(flow_format, 2, 1, 1, "u8");
+        uref_pic_flow_add_plane(flow_format, 2, 1, 1, "v8");
+    }
+
+    uref_pic_flow_set_macropixel(flow_format, 1);
+
+    return urequest_provide_flow_format(request, flow_format);
+}
+
 /** @internal @This processes control commands on a file source pipe, and
  * checks the status of the pipe afterwards.
  *
@@ -534,7 +564,7 @@ static int upipe_v210enc_control(struct upipe *upipe, int command, va_list args)
             if (request->type == UREQUEST_UBUF_MGR)
                 return upipe_v210enc_amend_ubuf_mgr(upipe, request);
             if (request->type == UREQUEST_FLOW_FORMAT)
-                return upipe_throw_provide_request(upipe, request);
+                return upipe_v210enc_provide_flow_format(upipe, request);
             return upipe_v210enc_alloc_output_proxy(upipe, request);
         }
         case UPIPE_UNREGISTER_REQUEST: {
