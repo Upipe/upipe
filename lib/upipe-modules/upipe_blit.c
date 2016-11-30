@@ -879,6 +879,22 @@ static int _upipe_blit_prepare(struct upipe *upipe)
         return UBASE_ERR_INVALID;
     struct uref *uref = uref_dup(upipe_blit->uref);
 
+    struct uchain *uchain;
+    bool subpic = false;
+    ulist_foreach (&upipe_blit->subs, uchain) {
+        struct upipe_blit_sub *sub = upipe_blit_sub_from_uchain(uchain);
+        if (likely(sub->ubuf != NULL)) {
+            subpic = true;
+            break;
+        }
+    }
+
+    /* Avoid copying the picture if there is nothing to blit */
+    if (!subpic) {
+        upipe_blit_output(upipe, uref, NULL);
+        return UBASE_ERR_NONE;
+    }
+
     /* Check if we can write on the planes */
     bool writable = true;
     const char *chroma = NULL;
@@ -902,7 +918,6 @@ static int _upipe_blit_prepare(struct upipe *upipe)
         uref_attach_ubuf(uref, ubuf);
     }
 
-    struct uchain *uchain;
     ulist_foreach (&upipe_blit->subs, uchain) {
         struct upipe_blit_sub *sub = upipe_blit_sub_from_uchain(uchain);
         upipe_blit_sub_work(upipe_blit_sub_to_upipe(sub), uref);
