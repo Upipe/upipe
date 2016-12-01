@@ -180,7 +180,8 @@ static bool upipe_s337_encaps_handle(struct upipe *upipe, struct uref *uref,
     /* Pa, Pb, Pc, Pd */
     out_data[0] = (S337_PREAMBLE_A1 << 24) | (S337_PREAMBLE_A2 << 16);
     out_data[1] = (S337_PREAMBLE_B1 << 24) | (S337_PREAMBLE_B2 << 16);
-    out_data[2] = (S337_TYPE_A52 << 16) | (S337_MODE_16 << 21);
+    out_data[2] = (S337_TYPE_A52 << 16) | (S337_MODE_16 << 21) |
+        (S337_TYPE_A52_REP_RATE_FLAG << 24);
     out_data[3] = ((block_size * 8) & 0xffff) << 16;
 
     int offset = 0;
@@ -235,7 +236,7 @@ static int upipe_s337_encaps_set_flow_def(struct upipe *upipe,
         return UBASE_ERR_INVALID;
 
     struct uref *flow_def_dup = uref_dup(flow_def);
-    uref_flow_set_def(flow_def_dup, "sound.s32.");
+    uref_flow_set_def(flow_def_dup, "sound.s32.s337.a52.");
     uref_sound_flow_set_channels(flow_def_dup, 2);
     uref_sound_flow_set_sample_size(flow_def_dup, 2*4);
 
