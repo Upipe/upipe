@@ -236,7 +236,7 @@ static int upipe_s337_encaps_set_flow_def(struct upipe *upipe,
         return UBASE_ERR_INVALID;
 
     struct uref *flow_def_dup = uref_dup(flow_def);
-    uref_flow_set_def(flow_def_dup, "sound.s32.");
+    uref_flow_set_def(flow_def_dup, "sound.s32.s337.a52.");
     uref_sound_flow_set_channels(flow_def_dup, 2);
     uref_sound_flow_set_sample_size(flow_def_dup, 2*4);
 
