@@ -256,7 +256,7 @@ static void upipe_hbrmt_dec_date(struct upipe *upipe, struct uref *uref)
     struct upipe_hbrmt_dec *upipe_hbrmt_dec = upipe_hbrmt_dec_from_upipe(upipe);
 
     const struct urational *fps = &upipe_hbrmt_dec->f->fps;
-    uint64_t pts = UINT32_MAX + upipe_hbrmt_dec->frame++ * fps->den / fps->num;
+    uint64_t pts = UINT32_MAX + UCLOCK_FREQ * upipe_hbrmt_dec->frame++ * fps->den / fps->num;
 
     uref_clock_set_pts_orig(uref, pts);
     uref_clock_set_pts_prog(uref, pts);
