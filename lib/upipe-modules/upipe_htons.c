@@ -27,6 +27,8 @@
  * @short Upipe module - htons
  */
 
+#define _XOPEN_SOURCE
+
 #include <upipe/ubase.h>
 #include <upipe/uprobe.h>
 #include <upipe/uref.h>
@@ -48,6 +50,7 @@
 #include <string.h>
 #include <errno.h>
 #include <assert.h>
+#include <unistd.h>
 #include <arpa/inet.h>
 
 #define EXPECTED_FLOW_DEF "block."
@@ -89,6 +92,11 @@ static void upipe_htons_input(struct upipe *upipe, struct uref *uref,
     int remain, bufsize = -1, offset = 0;
     uint8_t *buf = NULL;
 
+#ifdef UPIPE_WORDS_BIGENDIAN
+    upipe_htons_output(upipe, uref, upump_p);
+    return;
+#endif
+
     /* block size */
     if (unlikely(!ubase_check(uref_block_size(uref, &size)))) {
         upipe_warn(upipe, "could not read uref block size");
@@ -122,10 +130,8 @@ static void upipe_htons_input(struct upipe *upipe, struct uref *uref,
         if (unlikely((uintptr_t)buf & 1)) {
             upipe_warn_va(upipe, "unaligned buffer: %p", buf);
         }
-        for (remain = bufsize; remain > 1; remain -= 2) {
-            *(uint16_t *)buf = htons(*(uint16_t *)buf);
-            buf += 2;
-        }
+
+        swab(buf, buf, bufsize & ~1);
 
         uref_block_unmap(uref, offset);
         offset += bufsize;
