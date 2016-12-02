@@ -151,7 +151,7 @@ static struct upipe *upipe_hbrmt_dec_alloc(struct upipe_mgr *mgr,
 }
 
 /** @internal */
-static int upipe_hbrmt_dec_set_fps(struct upipe *upipe, uint8_t frate)
+static int upipe_hbrmt_dec_set_flow(struct upipe *upipe, uint8_t frate, uint8_t frame)
 {
     struct upipe_hbrmt_dec *upipe_hbrmt_dec = upipe_hbrmt_dec_from_upipe(upipe);
 
@@ -183,7 +183,33 @@ static int upipe_hbrmt_dec_set_fps(struct upipe *upipe, uint8_t frate)
 
     struct uref *flow_format = uref_dup(upipe_hbrmt_dec->flow_def);
     uref_pic_flow_set_fps(flow_format, *fps);
+    if (frame == 0x10) {
+        uref_pic_flow_set_hsize(flow_format, 720);
+        uref_pic_flow_set_vsize(flow_format, 486);
+    } else if (frame == 0x11) {
+        uref_pic_flow_set_hsize(flow_format, 720);
+        uref_pic_flow_set_vsize(flow_format, 576);
+    } else if (frame >= 0x20 && frame <= 0x22) {
+        uref_pic_flow_set_hsize(flow_format, 1920);
+        uref_pic_flow_set_vsize(flow_format, 1080);
+    } else if (frame >= 0x23 && frame <= 0x24) {
+        uref_pic_flow_set_hsize(flow_format, 2048);
+        uref_pic_flow_set_vsize(flow_format, 1080);
+    } else if (frame == 0x30) {
+        uref_pic_flow_set_hsize(flow_format, 1280);
+        uref_pic_flow_set_vsize(flow_format, 720);
+    } else {
+        upipe_err_va(upipe, "Invalid hbrmt frame 0x%x", frame);
+        uref_free(flow_format);
+        return UBASE_ERR_INVALID;
+    }
+
     upipe_hbrmt_dec->f = sdi_get_offsets(flow_format);
+    if (!upipe_hbrmt_dec->f) {
+        upipe_err(upipe, "Couldn't figure out sdi offsets");
+        uref_free(flow_format);
+        return UBASE_ERR_INVALID;
+    }
 
     uint64_t latency;
     if (!ubase_check(uref_clock_get_latency(flow_format, &latency)))
@@ -273,7 +299,8 @@ static void upipe_hbrmt_dec_input(struct upipe *upipe, struct uref *uref,
 
     if (unlikely(!upipe_hbrmt_dec->f)) {
         const uint8_t frate = smpte_hbrmt_get_frate(hbrmt);
-        if (!ubase_check(upipe_hbrmt_dec_set_fps(upipe, frate)))
+        const uint8_t frame = smpte_hbrmt_get_frame(hbrmt);
+        if (!ubase_check(upipe_hbrmt_dec_set_flow(upipe, frate, frame)))
             goto end;
     }
 
