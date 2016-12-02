@@ -217,12 +217,17 @@ static int upipe_unpack10bit_amend_ubuf_mgr(struct upipe *upipe,
     struct uref *flow_format = uref_dup(request->uref);
     UBASE_ALLOC_RETURN(flow_format);
 
+    uint64_t append;
+    if (!ubase_check(uref_block_flow_get_append(flow_format, &append)) || append < 12) {
+        uref_block_flow_set_append(flow_format, 12);
+    }
+
     uint64_t align;
     if (!ubase_check(uref_block_flow_get_align(flow_format, &align)) || !align) {
         uref_block_flow_set_align(flow_format, UBUF_ALIGN);
         align = UBUF_ALIGN;
     }
-    
+
     if (align % UBUF_ALIGN) {
         align = align * UBUF_ALIGN / ubase_gcd(align, UBUF_ALIGN);
         uref_block_flow_set_align(flow_format, align);
