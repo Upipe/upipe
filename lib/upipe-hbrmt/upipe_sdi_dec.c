@@ -650,8 +650,8 @@ static bool upipe_sdi_dec_handle(struct upipe *upipe, struct uref *uref,
                 }
 
                 if (memcmp(crc, stream_crc, sizeof(crc))) {
-                    upipe_err_va(upipe, "Frame CRC does not match: "
-                            "0x%.4x%.4x%.4x%.4x != 0x%.4x%.4x%.4x%.4x",
+                    upipe_err_va(upipe, "Line %d CRC does not match: "
+                            "0x%.4x%.4x%.4x%.4x != 0x%.4x%.4x%.4x%.4x", h,
                             crc[0], crc[1], crc[2], crc[3],
                             stream_crc[0], stream_crc[1], stream_crc[2], stream_crc[3]);
                 }
