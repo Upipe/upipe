@@ -113,7 +113,7 @@ cglobal sdi_blank, 2, 2, 1, dst, size
     mova    m0, [sdi_blank]
 
 .loop:
-    mova    [dstq+sizeq], m0
+    movu    [dstq+sizeq], m0
 
     add     sizeq, mmsize
     jl .loop
