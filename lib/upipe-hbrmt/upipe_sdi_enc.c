@@ -1237,6 +1237,8 @@ static struct upipe *upipe_sdi_enc_alloc(struct upipe_mgr *mgr,
     for (int i = 0; i < 4; i++)
         upipe_sdi_enc->mpf_packet_bits[i] = 0;
 
+    sdi_crc_setup(upipe_sdi_enc->crc_lut);
+
     upipe_sdi_enc->frame_idx = 0;
     upipe_sdi_enc->uref_audio = NULL;
     upipe_sdi_enc->started = 0;
