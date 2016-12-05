@@ -50,6 +50,8 @@
 #include <upipe-hbrmt/upipe_hbrmt_dec.h>
 #include "upipe_hbrmt_common.h"
 
+#include "sdidec.h"
+
 /** @hidden */
 static int upipe_hbrmt_dec_check(struct upipe *upipe, struct uref *flow_format);
 
@@ -100,6 +102,15 @@ struct upipe_hbrmt_dec {
 
     /** public upipe structure */
     struct upipe upipe;
+
+    /** unpack */
+    void (*sdi_to_uyvy)(const uint8_t *src, uint16_t *y, uintptr_t pixels);
+
+    /** unpack scratch buffer */
+    uint8_t unpack_scratch_buffer[5];
+
+    /** bytes in scratch buffer */
+    uint8_t unpack_scratch_buffer_count;
 };
 
 UPIPE_HELPER_UPIPE(upipe_hbrmt_dec, upipe, UPIPE_HBRMT_DEC_SIGNATURE);
@@ -146,6 +157,28 @@ static struct upipe *upipe_hbrmt_dec_alloc(struct upipe_mgr *mgr,
     upipe_hbrmt_dec->expected_seqnum = -1;
     upipe_hbrmt_dec->discontinuity = false;
     upipe_hbrmt_dec->frame = 0;
+    upipe_hbrmt_dec->unpack_scratch_buffer_count = 0;
+
+    upipe_hbrmt_dec->sdi_to_uyvy = upipe_sdi_unpack_c;
+
+#if defined(__i686__) || defined(__x86_64__)
+#if !defined(__APPLE__) /* macOS clang doesn't support that builtin yet */
+#if defined(__clang__) && /* clang 3.8 doesn't know ssse3 */ \
+     (__clang_major__ < 3 || (__clang_major__ == 3 && __clang_minor__ <= 8))
+# ifdef __SSSE3__
+        if (1)
+# else
+        if (0)
+# endif
+#else
+        if (__builtin_cpu_supports("ssse3"))
+#endif
+            upipe_hbrmt_dec->sdi_to_uyvy = upipe_sdi_to_uyvy_unaligned_ssse3;
+
+    if (__builtin_cpu_supports("avx2"))
+        upipe_hbrmt_dec->sdi_to_uyvy = upipe_sdi_to_uyvy_unaligned_avx2;
+#endif
+#endif
 
     upipe_throw_ready(upipe);
     return upipe;
@@ -231,9 +264,8 @@ static int upipe_hbrmt_dec_alloc_output_ubuf(struct upipe *upipe)
 
     /* Only 422 accepted, so this assumption is fine */
     uint64_t samples = f->width * f->height * 2;
-    uint64_t packed_size = (samples * 10) / 8;
 
-    upipe_hbrmt_dec->ubuf = ubuf_block_alloc(upipe_hbrmt_dec->ubuf_mgr, packed_size);
+    upipe_hbrmt_dec->ubuf = ubuf_block_alloc(upipe_hbrmt_dec->ubuf_mgr, 2 * samples);
     if (unlikely(upipe_hbrmt_dec->ubuf == NULL)) {
         upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
         return UBASE_ERR_ALLOC;
@@ -305,6 +337,7 @@ static void upipe_hbrmt_dec_input(struct upipe *upipe, struct uref *uref,
     if (unlikely(!upipe_hbrmt_dec->ubuf))
         goto end;
 
+    src_size -= HBRMT_HEADER_ONLY_SIZE;
     const uint8_t *payload = &hbrmt[HBRMT_HEADER_ONLY_SIZE];
     if (smpte_hbrmt_get_clock_frequency(hbrmt)) {
         payload += 4;
@@ -316,22 +349,55 @@ static void upipe_hbrmt_dec_input(struct upipe *upipe, struct uref *uref,
         src_size -= 4 * ext;
     }
 
-    int to_write = HBRMT_DATA_SIZE;
-
-    if (to_write > src_size) {
-        to_write = src_size;
+    if (src_size < HBRMT_DATA_SIZE) {
         upipe_err(upipe, "Too small packet, reading anyway");
     }
+    int foo = src_size;
 
-    if (to_write > upipe_hbrmt_dec->dst_size) {
-        to_write = upipe_hbrmt_dec->dst_size;
-        if (!marker)
-            upipe_err(upipe, "Not overflowing output packet");
+    /* If there is data in the scratch buffer... */
+
+    unsigned n = upipe_hbrmt_dec->unpack_scratch_buffer_count;
+    if (n && upipe_hbrmt_dec->dst_size > 4 * 2) {
+        /* Copy from the new "packet" into the end... */
+        memcpy(&upipe_hbrmt_dec->unpack_scratch_buffer[n], payload, 5 - n);
+
+        /* Advance input buffer. */
+        payload += 5-n;
+        src_size -= 5-n;
+
+        /* Unpack from the scratch buffer. */
+        upipe_sdi_unpack_c(upipe_hbrmt_dec->unpack_scratch_buffer,
+                (uint16_t*)upipe_hbrmt_dec->dst_buf, 2);
+
+        /* Advance output buffer by 2 pixels */
+        upipe_hbrmt_dec->dst_buf += 4 * 2;
+        upipe_hbrmt_dec->dst_size -= 4 * 2;
+        //printf("HI SCRATCH 2\n");
+
+        /* Set scratch count to 0. */
+        upipe_hbrmt_dec->unpack_scratch_buffer_count = 0;
     }
 
-    memcpy(upipe_hbrmt_dec->dst_buf, payload, to_write);
-    upipe_hbrmt_dec->dst_buf += to_write;
-    upipe_hbrmt_dec->dst_size -= to_write;
+    if (src_size > upipe_hbrmt_dec->dst_size * 5 / 8) {
+        src_size = upipe_hbrmt_dec->dst_size * 5 / 8;
+        if (!marker)
+            upipe_err_va(upipe, "Not overflowing output packet: %d, %d",
+                    src_size, upipe_hbrmt_dec->dst_size);
+    }
+
+    int unpack_bytes = (src_size / 5) * 5;
+    int unpack_pixels = (unpack_bytes * 2) / 5;
+    upipe_hbrmt_dec->sdi_to_uyvy(payload, (uint16_t*)upipe_hbrmt_dec->dst_buf, unpack_pixels);
+    upipe_hbrmt_dec->dst_buf += 4 * unpack_pixels;
+    upipe_hbrmt_dec->dst_size -= 4 * unpack_pixels;
+
+    /* If we have any bytes remaining... */
+    if (unpack_bytes < src_size) {
+        /* Copy them into the scratch buffer. */
+        memcpy(upipe_hbrmt_dec->unpack_scratch_buffer, &payload[unpack_bytes],
+                src_size - unpack_bytes);
+        upipe_hbrmt_dec->unpack_scratch_buffer_count = src_size - unpack_bytes;
+    }
 
 end:
     uref_block_unmap(uref, 0);
