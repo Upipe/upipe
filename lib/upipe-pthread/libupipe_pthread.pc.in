@@ -7,4 +7,5 @@ Description: Upipe multimedia framework, pthread modules
 Version: @VERSION@
 Requires: libupipe
 Libs: -L${libdir} -lupipe_pthread
+Libs.private: -lpthread
 Cflags: -I${includedir}
