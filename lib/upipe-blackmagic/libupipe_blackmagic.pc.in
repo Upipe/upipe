@@ -7,4 +7,5 @@ Description: upipe multimedia framework, blackmagic-specific module
 Version: @VERSION@
 Requires: libupipe
 Libs: -L${libdir} -lupipe_blackmagic
+Libs.private: -lpthread -ldl -lstdc++
 Cflags: -I${includedir}
