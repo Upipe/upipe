@@ -542,6 +542,7 @@ static int worker_hbrmt(struct upipe *upipe, uint8_t **dst, const uint8_t *src,
         /* padding */
         memset(*dst + payload_len, 0, HBRMT_DATA_SIZE - payload_len);
     }
+    bytes_left -= payload_len;
 
     uint16_t payload_size = HBRMT_LEN - ETHERNET_HEADER_LEN - UDP_HEADER_SIZE -
         IP_HEADER_MINSIZE;
