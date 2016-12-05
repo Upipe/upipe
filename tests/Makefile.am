@@ -174,6 +174,7 @@ check_PROGRAMS += \
 	upipe_http_src_test \
 	upipe_multicat_test \
 	upipe_blank_source_test \
+	upipe_time_limit_test \
 	upipe_worker_linear_test \
 	upipe_worker_sink_test \
 	upipe_worker_source_test \
@@ -191,6 +192,7 @@ TESTS += \
 	upipe_udp_test \
 	upipe_multicat_test.sh \
 	upipe_blank_source_test \
+	upipe_time_limit_test \
 	upipe_worker_linear_test \
 	upipe_worker_sink_test \
 	upipe_worker_source_test \
@@ -353,6 +355,7 @@ upipe_worker_source_test_LDADD = $(LDADD) -lev $(top_builddir)/lib/upump-ev/libu
 upipe_multicat_test_LDADD = $(LDADD) -lev $(top_builddir)/lib/upump-ev/libupump_ev.la $(top_builddir)/lib/upipe-modules/libupipe_modules.la
 upipe_http_src_test_LDADD = $(LDADD) -lev $(top_builddir)/lib/upump-ev/libupump_ev.la $(top_builddir)/lib/upipe-modules/libupipe_modules.la
 upipe_blank_source_test_LDADD = $(LDADD) -lev $(top_builddir)/lib/upump-ev/libupump_ev.la $(top_builddir)/lib/upipe-modules/libupipe_modules.la
+upipe_time_limit_test_LDADD = $(LDADD) -lev $(top_builddir)/lib/upump-ev/libupump_ev.la $(top_builddir)/lib/upipe-modules/libupipe_modules.la
 upipe_play_test_LDADD = $(LDADD) $(top_builddir)/lib/upipe-modules/libupipe_modules.la
 upipe_trickplay_test_LDADD = $(LDADD) $(top_builddir)/lib/upipe-modules/libupipe_modules.la
 upipe_even_test_LDADD = $(LDADD) $(top_builddir)/lib/upipe-modules/libupipe_modules.la

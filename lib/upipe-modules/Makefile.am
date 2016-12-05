@@ -59,6 +59,7 @@ libupipe_modules_la_SOURCES = \
 	upipe_buffer.c \
 	upipe_aes_decrypt.c \
 	upipe_rate_limit.c \
+	upipe_time_limit.c \
 	upipe_burst.c \
 	upipe_sequential_source.c \
 	upipe_segment_source.c \
