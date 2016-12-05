@@ -107,7 +107,7 @@
 #define TS_CLOCK_MAX (POW2_33 * UCLOCK_FREQ / 90000)
 /** max interval between PCRs (ISO/IEC 13818-1 2.7.2) - could be 100 ms but
  * allow higher tolerance */
-#define MAX_PCR_INTERVAL (UCLOCK_FREQ / 2)
+#define MAX_PCR_INTERVAL UCLOCK_FREQ
 /** max retention time for most streams (ISO/IEC 13818-1 2.4.2.6) */
 #define MAX_DELAY UCLOCK_FREQ
 
