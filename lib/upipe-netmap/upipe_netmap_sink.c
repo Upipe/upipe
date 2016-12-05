@@ -599,7 +599,7 @@ static void upipe_netmap_sink_worker(struct upump *upump)
             struct uchain *uchain = ulist_pop(&upipe_netmap_sink->sink_queue);
             if (!uchain)
                 break;
-            upipe_dbg_va(upipe, "pop, urefs: %zu", --upipe_netmap_sink->n);
+            upipe_verbose_va(upipe, "pop, urefs: %zu", --upipe_netmap_sink->n);
             uref = uref_from_uchain(uchain);
             input_size = -1;
         }
@@ -614,7 +614,7 @@ static void upipe_netmap_sink_worker(struct upump *upump)
             }
 
             bytes_left = input_size;
-            upipe_dbg_va(upipe, "uref start, txavail %d bytes left %d", txavail,
+            upipe_verbose_va(upipe, "uref start, txavail %d bytes left %d", txavail,
                     bytes_left);
         }
 
@@ -655,7 +655,7 @@ static void upipe_netmap_sink_worker(struct upump *upump)
     }
 
     if (!rfc4175 && input_size != -1) {
-        upipe_dbg_va(upipe, "loop done, input size %d bytes left %d -> %d",
+        upipe_verbose_va(upipe, "loop done, input size %d bytes left %d -> %d",
                 input_size, bytes_left, input_size - bytes_left);
     }
 
@@ -699,7 +699,7 @@ static bool upipe_netmap_sink_output(struct upipe *upipe, struct uref *uref,
     }
 
     ulist_add(&upipe_netmap_sink->sink_queue, uref_to_uchain(uref));
-    upipe_dbg_va(upipe, "push, urefs: %zu", ++upipe_netmap_sink->n);
+    upipe_verbose_va(upipe, "push, urefs: %zu", ++upipe_netmap_sink->n);
 
     return true;
 }
