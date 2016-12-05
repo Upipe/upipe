@@ -41,7 +41,6 @@ extern "C" {
 #include <upipe/upipe.h>
 #include <upipe/uref_block.h>
 #include <upipe-modules/upipe_file_sink.h>
-#include <upipe-modules/upipe_multicat_sink.h>
 
 #define UPIPE_MULTICAT_SINK_SIGNATURE UBASE_FOURCC('m','s','n','k')
 #define UPIPE_MULTICAT_SINK_DEF_ROTATE UINT64_C(97200000000)
