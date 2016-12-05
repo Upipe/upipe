@@ -353,7 +353,8 @@ static int upipe_multicat_sink_control(struct upipe *upipe,
         }
         case UPIPE_MULTICAT_SINK_SET_FSINK_MGR: {
             UBASE_SIGNATURE_CHECK(args, UPIPE_MULTICAT_SINK_SIGNATURE)
-            upipe_multicat_sink->fsink_mgr = va_arg(args, struct upipe_mgr*);
+            upipe_multicat_sink->fsink_mgr =
+                upipe_mgr_use(va_arg(args, struct upipe_mgr*));
             return UBASE_ERR_NONE;
         }
         case UPIPE_MULTICAT_SINK_GET_FSINK_MGR: {
@@ -443,6 +444,7 @@ static void upipe_multicat_sink_free(struct upipe *upipe)
     upipe_dbg_va(upipe, "releasing pipe %p", upipe);
     upipe_throw_dead(upipe);
 
+    upipe_mgr_release(upipe_multicat_sink->fsink_mgr);
     free(upipe_multicat_sink->dirpath);
     free(upipe_multicat_sink->suffix);
     upipe_multicat_sink_clean_urefcount(upipe);
