@@ -162,6 +162,9 @@ static struct upipe *upipe_fsrc_alloc(struct upipe_mgr *mgr,
                                       va_list args)
 {
     struct upipe *upipe = upipe_fsrc_alloc_void(mgr, uprobe, signature, args);
+    if (unlikely(upipe == NULL))
+        return NULL;
+
     struct upipe_fsrc *upipe_fsrc = upipe_fsrc_from_upipe(upipe);
     upipe_fsrc_init_urefcount(upipe);
     upipe_fsrc_init_uref_mgr(upipe);
@@ -380,7 +383,6 @@ static int upipe_fsrc_check(struct upipe *upipe, struct uref *flow_format)
 /** @internal @This asks to open the given file.
  *
  * @param upipe description structure of the pipe
- * @param path relative or absolute path of the file
  * @return an error code
  */
 static int upipe_fsrc_open(struct upipe *upipe)
