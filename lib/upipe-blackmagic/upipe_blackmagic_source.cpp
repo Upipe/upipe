@@ -974,12 +974,10 @@ static int upipe_bmd_src_set_uri(struct upipe *upipe, const char *uri)
 #define IS_OPTION(option) (!strncasecmp(token, option, strlen(option)))
 #define ARG_OPTION(option) (token + strlen(option))
             if (IS_OPTION("mode=")) {
-                if (unlikely(mode != NULL))
-                    free(mode);
+                free(mode);
                 mode = config_stropt(ARG_OPTION("mode="));
             } else if (IS_OPTION("audio=")) {
-                if (unlikely(audio != NULL))
-                    free(audio);
+                free(audio);
                 audio = config_stropt(ARG_OPTION("audio="));
             }
 #undef IS_OPTION
