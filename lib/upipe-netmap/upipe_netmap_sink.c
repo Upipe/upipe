@@ -536,7 +536,7 @@ static int worker_hbrmt(struct upipe *upipe, uint8_t **dst, const uint8_t *src,
     struct upipe_netmap_sink *upipe_netmap_sink = upipe_netmap_sink_from_upipe(upipe);
 
     /* Enough data to fill entire ring buffer? */
-    int payload_len = *len = HBRMT_DATA_SIZE;
+    int payload_len = HBRMT_DATA_SIZE;
     if (payload_len > bytes_left) {
         payload_len = bytes_left;
         /* padding */
@@ -552,6 +552,7 @@ static int worker_hbrmt(struct upipe *upipe, uint8_t **dst, const uint8_t *src,
 
     /* Put data */
     memcpy(*dst, src, payload_len);
+    *len = HBRMT_LEN;
 
     return payload_len;
 }
