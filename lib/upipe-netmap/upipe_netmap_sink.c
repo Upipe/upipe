@@ -957,14 +957,14 @@ static int _upipe_netmap_sink_set_uri(struct upipe *upipe, const char *uri)
     if (!srcmac) {
         free(ip);
         free(dstmac);
-        upipe_err(upipe, "src mac address unspecified, use ?srcmac=0xYY:0xZZ");
+        upipe_err(upipe, "src mac address unspecified, use ?srcmac=YY:ZZ");
         return UBASE_ERR_INVALID;
     }
 
     if (!dstmac) {
         free(ip);
         free(srcmac);
-        upipe_err(upipe, "dst mac address unspecified, use ?dstmac=0xYY:0xZZ");
+        upipe_err(upipe, "dst mac address unspecified, use ?dstmac=YY:ZZ");
         return UBASE_ERR_INVALID;
     }
 
