@@ -134,6 +134,8 @@
 #define MAX_DELAY_STILL (UCLOCK_FREQ * 60)
 /** max retention time for teletext (ETSI EN 300 472 5.) */
 #define MAX_DELAY_TELX (UCLOCK_FREQ / 25)
+/** max retention time for DVB subtitles - unbound */
+#define MAX_DELAY_DVBSUB MAX_DELAY_STILL
 /** fixed PES header size for teletext (ETSI EN 300 472 4.2) */
 #define PES_HEADER_SIZE_TELX 45
 
@@ -1097,6 +1099,7 @@ static int upipe_ts_mux_input_set_flow_def(struct upipe *upipe,
             au_irregular = false;
             pes_alignment = true;
             buffer_size = BS_DVBSUB;
+            max_delay = MAX_DELAY_DVBSUB;
             uref_block_flow_get_buffer_size(flow_def, &buffer_size);
             UBASE_FATAL(upipe, uref_ts_flow_set_pes_id(flow_def_dup,
                                                 PES_STREAM_ID_PRIVATE_1));
