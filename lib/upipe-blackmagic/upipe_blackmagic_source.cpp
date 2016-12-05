@@ -273,6 +273,8 @@ struct upipe_bmd_src {
     DeckLinkCaptureDelegate *deckLinkCaptureDelegate;
     /** pixel format */
     BMDPixelFormat pixel_format;
+    /** yuv pixel format (UYVY or v210) */
+    BMDPixelFormat yuv_pixel_format;
     /** true for progressive frames - for use by the private thread */
     bool progressive;
     /** true for top field first - for use by the private thread */
@@ -425,7 +427,8 @@ HRESULT DeckLinkCaptureDelegate::VideoInputFormatChanged(
                 BMDDetectedVideoInputFormatFlags flags)
 {
     struct upipe_bmd_src *upipe_bmd_src = upipe_bmd_src_from_upipe(upipe);
-    BMDPixelFormat pixel_format = bmdFormat8BitYUV;
+    /* Assumes default format is YUV, check bmdDetectedVideoInputYCbCr422? */
+    BMDPixelFormat pixel_format = upipe_bmd_src->yuv_pixel_format;
     if (events & bmdVideoInputColorspaceChanged) {
         if (flags & bmdDetectedVideoInputRGB444)
             pixel_format = bmdFormat8BitARGB;
@@ -1045,7 +1048,9 @@ static int upipe_bmd_src_set_uri(struct upipe *upipe, const char *uri)
         free(display_name);
     }
 
-    upipe_bmd_src->pixel_format = bmdFormat8BitYUV;
+    /* save YUV format, useful when switching between yuv and ARGB */
+    upipe_bmd_src->yuv_pixel_format = bmdFormat8BitYUV;
+    upipe_bmd_src->pixel_format = upipe_bmd_src->yuv_pixel_format;
     BMDDisplayModeSupport displayModeSupported;
     if (deckLinkInput->DoesSupportVideoMode(displayMode->GetDisplayMode(),
                 upipe_bmd_src->pixel_format, bmdVideoInputFlagDefault,
