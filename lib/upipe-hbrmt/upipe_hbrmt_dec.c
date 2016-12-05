@@ -230,8 +230,8 @@ static int upipe_hbrmt_dec_alloc_output_ubuf(struct upipe *upipe)
     const struct sdi_offsets_fmt *f = upipe_hbrmt_dec->f;
 
     /* Only 422 accepted, so this assumption is fine */
-    uint64_t pixels = f->width * f->height * 2;
-    uint64_t packed_size = (pixels * 10) / 8;
+    uint64_t samples = f->width * f->height * 2;
+    uint64_t packed_size = (samples * 10) / 8;
 
     upipe_hbrmt_dec->ubuf = ubuf_block_alloc(upipe_hbrmt_dec->ubuf_mgr, packed_size);
     if (unlikely(upipe_hbrmt_dec->ubuf == NULL)) {
