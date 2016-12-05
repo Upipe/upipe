@@ -1051,7 +1051,7 @@ static int upipe_sdi_enc_set_flow_def(struct upipe *upipe, struct uref *flow_def
         upipe_sdi_enc->input_chroma_map[2] = "v10l";
     }
 
-    if ((flow_def_dup = uref_sibling_alloc(flow_def)) == NULL)
+    if ((flow_def_dup = uref_dup(flow_def)) == NULL)
         return UBASE_ERR_ALLOC;
 
     uref_flow_set_def(flow_def_dup, "block.");
