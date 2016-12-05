@@ -595,18 +595,19 @@ static void upipe_sdi_enc_encode_line(struct upipe *upipe, int h, uint16_t *dst,
     sdi_crc_end(&upipe_sdi_enc->crc_y, &dst[13]);
 
     /* HBI */
-    upipe_sdi_enc->blank(&dst[UPIPE_SDI_CHROMA_BLANKING_START], f->active_offset - UPIPE_SDI_SAV_LENGTH);
+    const uint8_t chroma_blanking = p->sd ? UPIPE_SDI_CHROMA_BLANKING_START : UPIPE_HDSDI_CHROMA_BLANKING_START;
+    upipe_sdi_enc->blank(&dst[chroma_blanking], f->active_offset - UPIPE_SDI_SAV_LENGTH);
 
     /* These packets are written in the first Luma sample after SAV */
     /* Payload identifier */
     if ((h == ZERO_IDX(p->payload_id_line)) ||
         (f->psf_ident != UPIPE_SDI_PSF_IDENT_P && h == ZERO_IDX(p->payload_id_line + p->field_offset))) {
-        put_payload_identifier(&dst[UPIPE_SDI_CHROMA_BLANKING_START+1], f);
+        put_payload_identifier(&dst[chroma_blanking+1], f);
     }
     /* Audio control packet on Switching Line + 2 */
     else if ((h == ZERO_IDX(p->switching_line + 2)) ||
              (f->psf_ident != UPIPE_SDI_PSF_IDENT_P && h == ZERO_IDX(p->switching_line + p->field_offset + 2))) { 
-        put_audio_control_packet(&dst[UPIPE_SDI_CHROMA_BLANKING_START+1], 1);
+        put_audio_control_packet(&dst[chroma_blanking+1], 1);
     }
 
     /* All channel groups should have the same samples to put on a line */
@@ -623,7 +624,7 @@ static void upipe_sdi_enc_encode_line(struct upipe *upipe, int h, uint16_t *dst,
 
         /* Start counting the destination from the start of the
          * chroma horizontal blanking */
-        int dst_pos = UPIPE_SDI_CHROMA_BLANKING_START;
+        int dst_pos = chroma_blanking;
 
         /* If more than a single audio packed must be put on a line
          * then the following sequence will be sent: 1 1 2 2 3 3 4 4 */
