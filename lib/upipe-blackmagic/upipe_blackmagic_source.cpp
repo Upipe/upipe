@@ -965,6 +965,7 @@ static int upipe_bmd_src_set_uri(struct upipe *upipe, const char *uri)
     /* parse uri parameters */
     char *mode = NULL;
     char *audio = NULL;
+    char *video_bits = NULL;
     const char *params = strchr(idx, '/');
     if (params) {
         char *paramsdup = strdup(params);
@@ -979,6 +980,9 @@ static int upipe_bmd_src_set_uri(struct upipe *upipe, const char *uri)
             } else if (IS_OPTION("audio=")) {
                 free(audio);
                 audio = config_stropt(ARG_OPTION("audio="));
+            } else if (IS_OPTION("video_bits=")) {
+                free(video_bits);
+                video_bits = config_stropt(ARG_OPTION("video_bits="));
             }
 #undef IS_OPTION
 #undef ARG_OPTION
@@ -1003,6 +1007,17 @@ static int upipe_bmd_src_set_uri(struct upipe *upipe, const char *uri)
         } else
             upipe_warn_va(upipe, "unknown audio connection '%s'", audio);
         free(audio);
+    }
+
+    /* save YUV format, useful when switching between yuv and ARGB */
+    upipe_bmd_src->yuv_pixel_format = bmdFormat8BitYUV;
+    if (video_bits != NULL) {
+        if (!strcmp(video_bits, "10")) {
+            upipe_bmd_src->yuv_pixel_format = bmdFormat10BitYUV;
+        } else {
+            upipe_warn_va(upipe, "unknown video_bits setting '%s'", video_bits);
+        }
+        free(video_bits);
     }
 
     /* parse display mode */
@@ -1047,8 +1062,6 @@ static int upipe_bmd_src_set_uri(struct upipe *upipe, const char *uri)
         free(display_name);
     }
 
-    /* save YUV format, useful when switching between yuv and ARGB */
-    upipe_bmd_src->yuv_pixel_format = bmdFormat8BitYUV;
     upipe_bmd_src->pixel_format = upipe_bmd_src->yuv_pixel_format;
     BMDDisplayModeSupport displayModeSupported;
     if (deckLinkInput->DoesSupportVideoMode(displayMode->GetDisplayMode(),
