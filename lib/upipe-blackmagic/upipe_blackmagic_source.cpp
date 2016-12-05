@@ -389,22 +389,28 @@ static int upipe_bmd_src_build_video(struct upipe *upipe,
 /** @internal @This prepares the pipe for a new audio configuration.
  *
  * @param upipe super-pipe structure
- * @param mode decklink display mode
+ * @param sample_format 16 or 32 bits audio sample depth
  * @return an error code
  */
-static int upipe_bmd_src_build_audio(struct upipe *upipe)
+static int upipe_bmd_src_build_audio(struct upipe *upipe,
+        BMDAudioSampleType sample_format)
 {
     struct upipe_bmd_src *upipe_bmd_src = upipe_bmd_src_from_upipe(upipe);
     if (upipe_bmd_src->sound_subpipe.ubuf_mgr == NULL)
         upipe_bmd_src->sound_subpipe.ubuf_mgr =
         ubuf_sound_bmd_mgr_alloc(UBUF_POOL_DEPTH,
-                                 bmdAudioSampleType16bitInteger, BMD_CHANNELS,
-                                 "ALL");
+                sample_format, BMD_CHANNELS, "ALL");
     if (upipe_bmd_src->sound_subpipe.ubuf_mgr == NULL)
         return UBASE_ERR_ALLOC;
 
-    struct uref *flow_def = uref_sound_flow_alloc_def(upipe_bmd_src->uref_mgr,
-            "s16.", BMD_CHANNELS, sizeof(int16_t) * BMD_CHANNELS);
+    struct uref *flow_def;
+    if (sample_format == bmdAudioSampleType16bitInteger) {
+        flow_def = uref_sound_flow_alloc_def(upipe_bmd_src->uref_mgr,
+                "s16.", BMD_CHANNELS, sizeof(int16_t) * BMD_CHANNELS);
+    } else {
+        flow_def = uref_sound_flow_alloc_def(upipe_bmd_src->uref_mgr,
+                "s32.", BMD_CHANNELS, sizeof(int32_t) * BMD_CHANNELS);
+    }
     uref_sound_flow_add_plane(flow_def, "ALL");
     uref_sound_flow_set_rate(flow_def, BMD_SAMPLERATE);
 
@@ -966,6 +972,7 @@ static int upipe_bmd_src_set_uri(struct upipe *upipe, const char *uri)
     char *mode = NULL;
     char *audio = NULL;
     char *video_bits = NULL;
+    char *audio_bits = NULL;
     const char *params = strchr(idx, '/');
     if (params) {
         char *paramsdup = strdup(params);
@@ -980,6 +987,9 @@ static int upipe_bmd_src_set_uri(struct upipe *upipe, const char *uri)
             } else if (IS_OPTION("audio=")) {
                 free(audio);
                 audio = config_stropt(ARG_OPTION("audio="));
+            } else if (IS_OPTION("audio_bits=")) {
+                free(audio_bits);
+                audio_bits = config_stropt(ARG_OPTION("audio_bits="));
             } else if (IS_OPTION("video_bits=")) {
                 free(video_bits);
                 video_bits = config_stropt(ARG_OPTION("video_bits="));
@@ -1009,11 +1019,26 @@ static int upipe_bmd_src_set_uri(struct upipe *upipe, const char *uri)
         free(audio);
     }
 
+    /** audio sample depth */
+    BMDAudioSampleType sample_format = bmdAudioSampleType16bitInteger;
+    if (audio_bits != NULL) {
+        if (!strcmp(audio_bits, "32")) {
+            sample_format = bmdAudioSampleType32bitInteger;
+        } else if (!strcmp(audio_bits, "16")) {
+            sample_format = bmdAudioSampleType16bitInteger;
+        } else {
+            upipe_warn_va(upipe, "unknown audio_bits setting '%s'", audio_bits);
+        }
+        free(audio_bits);
+    }
+
     /* save YUV format, useful when switching between yuv and ARGB */
     upipe_bmd_src->yuv_pixel_format = bmdFormat8BitYUV;
     if (video_bits != NULL) {
         if (!strcmp(video_bits, "10")) {
             upipe_bmd_src->yuv_pixel_format = bmdFormat10BitYUV;
+        } else if (!strcmp(video_bits, "8")) {
+            upipe_bmd_src->yuv_pixel_format = bmdFormat8BitYUV;
         } else {
             upipe_warn_va(upipe, "unknown video_bits setting '%s'", video_bits);
         }
@@ -1102,7 +1127,7 @@ static int upipe_bmd_src_set_uri(struct upipe *upipe, const char *uri)
     }
 
     if (deckLinkInput->EnableAudioInput(bmdAudioSampleRate48kHz,
-            bmdAudioSampleType16bitInteger, BMD_CHANNELS) != S_OK) {
+            sample_format, BMD_CHANNELS) != S_OK) {
         upipe_err(upipe, "sample format not supported");
         deckLinkInput->Release();
         deckLink->Release();
@@ -1110,7 +1135,7 @@ static int upipe_bmd_src_set_uri(struct upipe *upipe, const char *uri)
     }
 
     if (unlikely(!ubase_check(upipe_bmd_src_build_video(upipe, displayMode)) ||
-                 !ubase_check(upipe_bmd_src_build_audio(upipe)))) {
+                 !ubase_check(upipe_bmd_src_build_audio(upipe, sample_format)))) {
         deckLinkInput->Release();
         deckLink->Release();
         return UBASE_ERR_ALLOC;
