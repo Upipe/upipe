@@ -65,6 +65,12 @@ extern "C" {
  * Called whenever you allocate or free the worker.
  *
  * @item @code
+ *  void upipe_foo_wait_upump(struct upipe *upipe, uint64_t delay, upump_cb cb)
+ * @end code
+ * Creates a time upump waiting for the given delay, and calling the
+ * callback cb.
+ *
+ * @item @code
  *  void upipe_foo_clean_upump(struct upipe *upipe)
  * @end code
  * Typically called from your upipe_foo_free() function.
