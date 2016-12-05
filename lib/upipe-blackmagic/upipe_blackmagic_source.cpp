@@ -323,6 +323,10 @@ static int upipe_bmd_src_build_video(struct upipe *upipe,
     if (upipe_bmd_src->pixel_format == bmdFormat8BitYUV) {
         flow_def = uref_pic_flow_alloc_def(upipe_bmd_src->uref_mgr, 2);
         uref_pic_flow_add_plane(flow_def, 1, 1, 4, "u8y8v8y8");
+    } else if (upipe_bmd_src->pixel_format == bmdFormat10BitYUV) {
+        flow_def = uref_pic_flow_alloc_def(upipe_bmd_src->uref_mgr, 6);
+        uref_pic_flow_add_plane(flow_def, 1, 1, 16,
+                "u10y10v10y10u10y10v10y10u10y10v10y10");
     } else {
         flow_def = uref_pic_flow_alloc_def(upipe_bmd_src->uref_mgr, 1);
         uref_pic_flow_add_plane(flow_def, 1, 1, 4, "a8r8g8b8");
