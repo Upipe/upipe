@@ -1002,6 +1002,7 @@ static int upipe_bmd_src_set_uri(struct upipe *upipe, const char *uri)
                 bmdDeckLinkConfigAudioInputConnection, conn);
         } else
             upipe_warn_va(upipe, "unknown audio connection '%s'", audio);
+        free(audio);
     }
 
     /* parse display mode */
