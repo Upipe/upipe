@@ -7,6 +7,7 @@ myinclude_HEADERS = \
 	upipe_file_sink.h \
 	upipe_file_source.h \
 	upipe_genaux.h \
+	upipe_multicat_source.h \
 	upipe_multicat_sink.h \
 	upipe_multicat_probe.h \
 	upipe_probe_uref.h \
