@@ -618,8 +618,8 @@ static void upipe_sdi_enc_encode_line(struct upipe *upipe, int h, uint16_t *dst,
 
     /* Chroma packets */
     /* Audio can go anywhere but the switching lines+1 */
-    if (!(h == ZERO_IDX(p->switching_line + 1)) ||
-        !(f->psf_ident != UPIPE_SDI_PSF_IDENT_P && h == ZERO_IDX(p->switching_line + p->field_offset + 1))) {
+    if (!(h == ZERO_IDX(p->switching_line + 1)) &&
+        !(p->field_offset && h == ZERO_IDX(p->switching_line + p->field_offset + 1))) {
         int packets_put = 0;
 
         /* Start counting the destination from the start of the
