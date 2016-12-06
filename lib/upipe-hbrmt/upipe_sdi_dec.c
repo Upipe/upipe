@@ -466,6 +466,7 @@ static void extract_hd_audio(struct upipe *upipe, const uint16_t *packet, int h,
 {
     struct upipe_sdi_dec *upipe_sdi_dec = upipe_sdi_dec_from_upipe(upipe);
     const struct sdi_offsets_fmt *f = upipe_sdi_dec->f;
+    const struct sdi_picture_fmt *p = upipe_sdi_dec->p;
 
     int data_count = packet[10] & 0xff;
 
@@ -475,9 +476,10 @@ static void extract_hd_audio(struct upipe *upipe, const uint16_t *packet, int h,
         return;
     }
 
-    // FIXME this is wrong
-    if (h == 7 /*|| h == 569 - allowed for progressive */) // SMPTE RP 168
-        upipe_warn_va(upipe, "Audio packet at invalid line %d", h + 1);
+    /* Audio packets are not allowed on the switching line + 1 */
+    if (h == ZERO_IDX(p->switching_line + 1) ||
+        (p->field_offset && h == ZERO_IDX(p->switching_line + p->field_offset + 1)))
+        upipe_warn_va(upipe, "Audio packet on invalid line %d", h + 1);
 
     uint16_t checksum = 0;
     int len = data_count + 3 /* DID / DBN / DC */;
