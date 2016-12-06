@@ -91,7 +91,7 @@
 #define XFER_QUEUE 255
 #define XFER_POOL 20
 #define SINK_QUEUE_LENGTH 2000
-#define UPROBE_LOG_LEVEL UPROBE_LOG_WARNING
+#define UPROBE_LOG_LEVEL UPROBE_LOG_NOTICE
 #define DEFAULT_ROTATE (UCLOCK_FREQ * 3600)
 #define DEFAULT_READAHEAD (UCLOCK_FREQ / 5)
 #define DEFAULT_MTU 1316
@@ -165,7 +165,7 @@ int main(int argc, char *argv[])
     enum uprobe_log_level loglevel = UPROBE_LOG_LEVEL;
 
     /* parse options */
-    while ((opt = getopt(argc, argv, "r:R:k:l:i:d")) != -1) {
+    while ((opt = getopt(argc, argv, "r:R:k:m:l:i:d")) != -1) {
         switch (opt) {
             case 'r':
                 rotate = strtoull(optarg, NULL, 0);
@@ -235,24 +235,34 @@ int main(int argc, char *argv[])
 
     /* sink */
     uprobe_throw(logger, NULL, UPROBE_FREEZE_UPUMP_MGR);
-    struct upipe_mgr *mgr;
-    struct stat st;
-    if (stat(dstpath, &st) == 0)
-        mgr = upipe_fsink_mgr_alloc();
-    else
-        mgr = upipe_udpsink_mgr_alloc();
-
     struct uprobe *uprobe_sink = uprobe_xfer_alloc(uprobe_use(logger));
     uprobe_xfer_add(uprobe_sink, UPROBE_XFER_VOID, UPROBE_SINK_END, 0);
+    struct upipe *sink;
 
-    struct upipe *sink = upipe_void_alloc(mgr,
-            uprobe_pfx_alloc(uprobe_sink, UPROBE_LOG_VERBOSE, "sink"));
-    upipe_mgr_release(mgr);
-    assert(sink != NULL);
+    struct stat st;
+    if (stat(dstpath, &st) == 0) {
+        struct upipe_mgr *fsink_mgr = upipe_fsink_mgr_alloc();
+        sink = upipe_void_alloc(fsink_mgr,
+                uprobe_pfx_alloc(uprobe_sink, UPROBE_LOG_VERBOSE, "fsink"));
+        upipe_mgr_release(fsink_mgr);
+        assert(sink != NULL);
 
-    if (!ubase_check(upipe_set_uri(sink, dstpath))) {
-        uprobe_err_va(logger, NULL, "unable to open '%s'", dstpath);
-        exit(EXIT_FAILURE);
+        if (!ubase_check(upipe_fsink_set_path(sink, dstpath,
+                                              UPIPE_FSINK_NONE))) {
+            uprobe_err_va(logger, NULL, "unable to open '%s'", dstpath);
+            exit(EXIT_FAILURE);
+        }
+    } else {
+        struct upipe_mgr *udpsink_mgr = upipe_udpsink_mgr_alloc();
+        sink = upipe_void_alloc(udpsink_mgr,
+                uprobe_pfx_alloc(uprobe_sink, UPROBE_LOG_VERBOSE, "fsink"));
+        upipe_mgr_release(udpsink_mgr);
+        assert(sink != NULL);
+
+        if (!ubase_check(upipe_set_uri(sink, dstpath))) {
+            uprobe_err_va(logger, NULL, "unable to open '%s'", dstpath);
+            exit(EXIT_FAILURE);
+        }
     }
     upipe_attach_uclock(sink);
     upipe_set_max_length(sink, SINK_QUEUE_LENGTH);
