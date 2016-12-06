@@ -226,8 +226,10 @@ static void upipe_audio_split_sub_process(struct upipe *upipe,
             while (in_idx < split->channels && !(sub->bitfield & (1 << in_idx)))
                 in_idx++;
 
-            if (unlikely(in_idx == split->channels))
+            if (unlikely(in_idx == split->channels)) {
+                upipe_warn(upipe, "couldn't find channels");
                 break;
+            }
 
             uint8_t *out_buf;
             if (unlikely(!ubase_check(ubuf_sound_plane_write_uint8_t(ubuf,
@@ -252,9 +254,6 @@ static void upipe_audio_split_sub_process(struct upipe *upipe,
             out_idx++;
         } while (sub->planes == 1 && out_idx < sub->channels);
     }
-
-    if (unlikely(in_idx == split->channels))
-        upipe_warn(upipe, "couldn't find channels");
 
     /* dup uref, allocate new ubuf */
     struct uref *output = uref_dup(uref);
