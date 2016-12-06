@@ -54,10 +54,10 @@ sdi_to_planar10_mult_c: times 2 dw 1024, 1024, 1024, 0, 16384, 16384, 16384, 0
 
 SECTION .text
 
-%macro sdi_v210_unpack 0
+%macro sdi_to_v210 0
 
 ; sdi_v210_unpack(const uint8_t *src, uint32_t *dst, int64_t width)
-cglobal sdi_v210_unpack, 3, 3, 3+11*ARCH_X86_64, src, dst, size
+cglobal sdi_to_v210, 3, 3, 3+11*ARCH_X86_64, src, dst, size
     add     srcq, sizeq
     neg     sizeq
 
@@ -121,11 +121,11 @@ cglobal sdi_v210_unpack, 3, 3, 3+11*ARCH_X86_64, src, dst, size
 %endmacro
 
 INIT_XMM ssse3
-sdi_v210_unpack
+sdi_to_v210
 INIT_XMM avx
-sdi_v210_unpack
+sdi_to_v210
 INIT_YMM avx2
-sdi_v210_unpack
+sdi_to_v210
 
 %macro sdi_to_planar_8 0
 

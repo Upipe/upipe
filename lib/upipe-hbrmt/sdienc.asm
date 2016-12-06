@@ -68,10 +68,10 @@ v210_uyvy_mult3: times 2 dw 0x2000, 0x0800, 0x7fff, 0x2000, 0x0800, 0x7fff, 0x20
 
 SECTION .text
 
-%macro sdi_pack_10 0
+%macro uyvy_to_sdi 0
 
 ; sdi_pack_10(uint8_t *dst, const uint8_t *y, int64_t size)
-cglobal sdi_pack_10, 3, 4, 5, dst, y, size
+cglobal uyvy_to_sdi, 3, 4, 5, dst, y, size
     add     sizeq, sizeq
     add     yq, sizeq
     neg     sizeq
@@ -98,11 +98,11 @@ cglobal sdi_pack_10, 3, 4, 5, dst, y, size
 %endmacro
 
 INIT_XMM ssse3
-sdi_pack_10
+uyvy_to_sdi
 INIT_XMM avx
-sdi_pack_10
+uyvy_to_sdi
 INIT_YMM avx2
-sdi_pack_10
+uyvy_to_sdi
 
 %macro sdi_blank 0
 
@@ -316,10 +316,10 @@ planar_to_uyvy_10
 INIT_YMM avx2
 planar_to_uyvy_10
 
-%macro v210_uyvy_unpack 1
+%macro v210_to_uyvy 1
 
 ; v210_uyvy_unpack(const uint32_t *src, uint16_t *uyvy, int64_t width)
-cglobal v210_uyvy_unpack_%1, 3, 3, 8+7*ARCH_X86_64
+cglobal v210_to_uyvy_%1, 3, 3, 8+7*ARCH_X86_64
     shl    r2, 2
     add    r1, r2
     neg    r2
@@ -404,18 +404,18 @@ cglobal v210_uyvy_unpack_%1, 3, 3, 8+7*ARCH_X86_64
 %endmacro
 
 INIT_XMM ssse3
-v210_uyvy_unpack unaligned
+v210_to_uyvy unaligned
 INIT_XMM avx
-v210_uyvy_unpack unaligned
+v210_to_uyvy unaligned
 INIT_YMM avx2
-v210_uyvy_unpack unaligned
+v210_to_uyvy unaligned
 
 INIT_XMM ssse3
-v210_uyvy_unpack aligned
+v210_to_uyvy aligned
 INIT_XMM avx
-v210_uyvy_unpack aligned
+v210_to_uyvy aligned
 INIT_YMM avx2
-v210_uyvy_unpack aligned
+v210_to_uyvy aligned
 
 %macro planar_to_sdi_8 0
 
