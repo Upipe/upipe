@@ -147,7 +147,7 @@ static bool upipe_pack10bit_handle(struct upipe *upipe, struct uref *uref,
         return true;
     }
 
-    int pixels = buf_size / 2;
+    int pixels = buf_size / 4;
 
     upipe_pack10bit->pack(buffer, src, pixels);
 

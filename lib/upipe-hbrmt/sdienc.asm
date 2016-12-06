@@ -71,16 +71,15 @@ SECTION .text
 %macro uyvy_to_sdi 0
 
 ; sdi_pack_10(uint8_t *dst, const uint8_t *y, int64_t size)
-cglobal uyvy_to_sdi, 3, 4, 5, dst, y, size
-    add     sizeq, sizeq
-    add     yq, sizeq
-    neg     sizeq
+cglobal uyvy_to_sdi, 3, 4, 5, dst, y, pixels
+    lea     yq, [yq + 4*pixelsq]
+    neg     pixelsq
     mova    m2, [sdi_enc_mult_10]
     mova    m3, [sdi_chroma_shuf_10]
     mova    m4, [sdi_luma_shuf_10]
 
 .loop:
-    pmullw  m0, m2, [yq+sizeq]
+    pmullw  m0, m2, [yq+4*pixelsq]
     pshufb  m1, m0, m3
     pshufb  m0, m4
     por     m0, m1
@@ -91,7 +90,7 @@ cglobal uyvy_to_sdi, 3, 4, 5, dst, y, size
 %endif
 
     add     dstq, (mmsize*5)/8
-    add     sizeq, mmsize
+    add     pixelsq, mmsize/4
     jl .loop
 
     RET
@@ -129,13 +128,13 @@ sdi_blank
 %macro planar_to_uyvy_8 0
 
 ; planar_to_uyvy_8(uint16_t *dst, const uint8_t *y, const uint8_t *u, const uint8_t *v, const int64_t width)
-cglobal planar_to_uyvy_8, 5, 5, 8+3*ARCH_X86_64, dst, y, u, v, width
-    shr       widthq, 1
-    lea       yq, [yq+2*widthq]
-    lea       dstq, [dstq+8*widthq]
-    add       uq, widthq
-    add       vq, widthq
-    neg       widthq
+cglobal planar_to_uyvy_8, 5, 5, 8+3*ARCH_X86_64, dst, y, u, v, pixels
+    shr       pixelsq, 1
+    lea       yq, [yq+2*pixelsq]
+    lea       dstq, [dstq+8*pixelsq]
+    add       uq, pixelsq
+    add       vq, pixelsq
+    neg       pixelsq
 
 %if ARCH_X86_64
     pxor      m10, m10
@@ -150,19 +149,19 @@ cglobal planar_to_uyvy_8, 5, 5, 8+3*ARCH_X86_64, dst, y, u, v, width
 
 .loop:
 %if notcpuflag(avx2)
-    mova      m0, [yq+2*widthq]
-    mova      m1, [yq+2*widthq+mmsize]
-    mova      m2, [uq+widthq]
-    mova      m3, [vq+widthq]
+    mova      m0, [yq+2*pixelsq]
+    mova      m1, [yq+2*pixelsq+mmsize]
+    mova      m2, [uq+pixelsq]
+    mova      m3, [vq+pixelsq]
 %else
-    mova        xm0, [yq+2*widthq]
-    mova        xm1, [yq+2*widthq+16]
-    mova        xm2, [uq+widthq]
-    mova        xm3, [vq+widthq]
-    vinserti128  m0, m0, [yq + 2*widthq + 32], 1
-    vinserti128  m1, m1, [yq + 2*widthq + 48], 1
-    vinserti128  m2, m2, [uq +   widthq + 16], 1
-    vinserti128  m3, m3, [vq +   widthq + 16], 1
+    mova        xm0, [yq+2*pixelsq]
+    mova        xm1, [yq+2*pixelsq+16]
+    mova        xm2, [uq+pixelsq]
+    mova        xm3, [vq+pixelsq]
+    vinserti128  m0, m0, [yq + 2*pixelsq + 32], 1
+    vinserti128  m1, m1, [yq + 2*pixelsq + 48], 1
+    vinserti128  m2, m2, [uq +   pixelsq + 16], 1
+    vinserti128  m3, m3, [vq +   pixelsq + 16], 1
 %endif
 
     CLIPUB    m0, m8, m9
@@ -200,34 +199,34 @@ cglobal planar_to_uyvy_8, 5, 5, 8+3*ARCH_X86_64, dst, y, u, v, width
     psllw     m6, 2
 
 %if notcpuflag(avx2)
-    mova      [dstq+8*widthq+0*mmsize], m0
-    mova      [dstq+8*widthq+1*mmsize], m1
-    mova      [dstq+8*widthq+2*mmsize], m2
-    mova      [dstq+8*widthq+3*mmsize], m3
-    mova      [dstq+8*widthq+4*mmsize], m4
-    mova      [dstq+8*widthq+5*mmsize], m5
-    mova      [dstq+8*widthq+6*mmsize], m6
-    mova      [dstq+8*widthq+7*mmsize], m7
+    mova      [dstq+8*pixelsq+0*mmsize], m0
+    mova      [dstq+8*pixelsq+1*mmsize], m1
+    mova      [dstq+8*pixelsq+2*mmsize], m2
+    mova      [dstq+8*pixelsq+3*mmsize], m3
+    mova      [dstq+8*pixelsq+4*mmsize], m4
+    mova      [dstq+8*pixelsq+5*mmsize], m5
+    mova      [dstq+8*pixelsq+6*mmsize], m6
+    mova      [dstq+8*pixelsq+7*mmsize], m7
 %else
-    mova         [dstq + 8*widthq +  0*16], xm0
-    mova         [dstq + 8*widthq +  1*16], xm1
-    mova         [dstq + 8*widthq +  2*16], xm2
-    mova         [dstq + 8*widthq +  3*16], xm3
-    mova         [dstq + 8*widthq +  4*16], xm4
-    mova         [dstq + 8*widthq +  5*16], xm5
-    mova         [dstq + 8*widthq +  6*16], xm6
-    mova         [dstq + 8*widthq +  7*16], xm7
-    vextracti128 [dstq + 8*widthq +  8*16],  m0, 1
-    vextracti128 [dstq + 8*widthq +  9*16],  m1, 1
-    vextracti128 [dstq + 8*widthq + 10*16],  m2, 1
-    vextracti128 [dstq + 8*widthq + 11*16],  m3, 1
-    vextracti128 [dstq + 8*widthq + 12*16],  m4, 1
-    vextracti128 [dstq + 8*widthq + 13*16],  m5, 1
-    vextracti128 [dstq + 8*widthq + 14*16],  m6, 1
-    vextracti128 [dstq + 8*widthq + 15*16],  m7, 1
+    mova         [dstq + 8*pixelsq +  0*16], xm0
+    mova         [dstq + 8*pixelsq +  1*16], xm1
+    mova         [dstq + 8*pixelsq +  2*16], xm2
+    mova         [dstq + 8*pixelsq +  3*16], xm3
+    mova         [dstq + 8*pixelsq +  4*16], xm4
+    mova         [dstq + 8*pixelsq +  5*16], xm5
+    mova         [dstq + 8*pixelsq +  6*16], xm6
+    mova         [dstq + 8*pixelsq +  7*16], xm7
+    vextracti128 [dstq + 8*pixelsq +  8*16],  m0, 1
+    vextracti128 [dstq + 8*pixelsq +  9*16],  m1, 1
+    vextracti128 [dstq + 8*pixelsq + 10*16],  m2, 1
+    vextracti128 [dstq + 8*pixelsq + 11*16],  m3, 1
+    vextracti128 [dstq + 8*pixelsq + 12*16],  m4, 1
+    vextracti128 [dstq + 8*pixelsq + 13*16],  m5, 1
+    vextracti128 [dstq + 8*pixelsq + 14*16],  m6, 1
+    vextracti128 [dstq + 8*pixelsq + 15*16],  m7, 1
 %endif
 
-    add       widthq, mmsize
+    add       pixelsq, mmsize
     jl .loop
 
     RET
@@ -243,12 +242,12 @@ planar_to_uyvy_8
 %macro planar_to_uyvy_10 0
 
 ; planar_to_uyvy_10(uint16_t *dst, const uint16_t *y, const uint16_t *u, const uint16_t *v, const int64_t width)
-cglobal planar_to_uyvy_10, 5, 5, 8+2*ARCH_X86_64, dst, y, u, v, width
-    lea       yq, [yq+2*widthq]
-    lea       dstq, [dstq+4*widthq]
-    add       uq, widthq
-    add       vq, widthq
-    neg       widthq
+cglobal planar_to_uyvy_10, 5, 5, 8+2*ARCH_X86_64, dst, y, u, v, pixels
+    lea       yq, [yq+2*pixelsq]
+    lea       dstq, [dstq+4*pixelsq]
+    add       uq, pixelsq
+    add       vq, pixelsq
+    neg       pixelsq
 
 %if ARCH_X86_64
     mova      m8, [uyvy_enc_min_10]
@@ -260,19 +259,19 @@ cglobal planar_to_uyvy_10, 5, 5, 8+2*ARCH_X86_64, dst, y, u, v, width
 
 .loop:
 %if notcpuflag(avx2)
-    mova      m0, [yq+2*widthq]
-    mova      m1, [yq+2*widthq+mmsize]
-    mova      m2, [uq+widthq]
-    mova      m3, [vq+widthq]
+    mova      m0, [yq+2*pixelsq]
+    mova      m1, [yq+2*pixelsq+mmsize]
+    mova      m2, [uq+pixelsq]
+    mova      m3, [vq+pixelsq]
 %else
-    mova        xm0, [yq+2*widthq]
-    mova        xm1, [yq+2*widthq+16]
-    mova        xm2, [uq+widthq]
-    mova        xm3, [vq+widthq]
-    vinserti128  m0, m0, [yq + 2*widthq + 32], 1
-    vinserti128  m1, m1, [yq + 2*widthq + 48], 1
-    vinserti128  m2, m2, [uq +   widthq + 16], 1
-    vinserti128  m3, m3, [vq +   widthq + 16], 1
+    mova        xm0, [yq+2*pixelsq]
+    mova        xm1, [yq+2*pixelsq+16]
+    mova        xm2, [uq+pixelsq]
+    mova        xm3, [vq+pixelsq]
+    vinserti128  m0, m0, [yq + 2*pixelsq + 32], 1
+    vinserti128  m1, m1, [yq + 2*pixelsq + 48], 1
+    vinserti128  m2, m2, [uq +   pixelsq + 16], 1
+    vinserti128  m3, m3, [vq +   pixelsq + 16], 1
 %endif
 
     CLIPW     m0, m8, m9
@@ -288,22 +287,22 @@ cglobal planar_to_uyvy_10, 5, 5, 8+2*ARCH_X86_64, dst, y, u, v, width
     punpckhwd m5, m1
 
 %if notcpuflag(avx2)
-    mova      [dstq+4*widthq+0*mmsize], m7
-    mova      [dstq+4*widthq+1*mmsize], m4
-    mova      [dstq+4*widthq+2*mmsize], m6
-    mova      [dstq+4*widthq+3*mmsize], m5
+    mova      [dstq+4*pixelsq+0*mmsize], m7
+    mova      [dstq+4*pixelsq+1*mmsize], m4
+    mova      [dstq+4*pixelsq+2*mmsize], m6
+    mova      [dstq+4*pixelsq+3*mmsize], m5
 %else
-    mova         [dstq + 4*widthq +   0], xm7
-    mova         [dstq + 4*widthq +  16], xm4
-    mova         [dstq + 4*widthq +  32], xm6
-    mova         [dstq + 4*widthq +  48], xm5
-    vextracti128 [dstq + 4*widthq +  64], m7, 1
-    vextracti128 [dstq + 4*widthq +  80], m4, 1
-    vextracti128 [dstq + 4*widthq +  96], m6, 1
-    vextracti128 [dstq + 4*widthq + 112], m5, 1
+    mova         [dstq + 4*pixelsq +   0], xm7
+    mova         [dstq + 4*pixelsq +  16], xm4
+    mova         [dstq + 4*pixelsq +  32], xm6
+    mova         [dstq + 4*pixelsq +  48], xm5
+    vextracti128 [dstq + 4*pixelsq +  64], m7, 1
+    vextracti128 [dstq + 4*pixelsq +  80], m4, 1
+    vextracti128 [dstq + 4*pixelsq +  96], m6, 1
+    vextracti128 [dstq + 4*pixelsq + 112], m5, 1
 %endif
 
-    add       widthq, mmsize
+    add       pixelsq, mmsize
     jl .loop
 
     RET
@@ -420,22 +419,22 @@ v210_to_uyvy aligned
 %macro planar_to_sdi_8 0
 
 ; planar_to_sdi_8(const uint8_t *y, const uint8_t *u, const uint8_t *v, uint8_t *l, const int64_t width)
-cglobal planar_to_sdi_8, 5, 5, 3, y, u, v, l, width
-    shr    widthq, 1
-    lea    yq, [yq + 2*widthq]
-    add    uq, widthq
-    add    vq, widthq
+cglobal planar_to_sdi_8, 5, 5, 3, y, u, v, l, pixels
+    shr    pixelsq, 1
+    lea    yq, [yq + 2*pixelsq]
+    add    uq, pixelsq
+    add    vq, pixelsq
 
-    neg    widthq
+    neg    pixelsq
 
 .loop:
-    movq   xm0, [yq + widthq*2]
-    movd   xm1, [uq + widthq*1]
-    movd   xm2, [vq + widthq*1]
+    movq   xm0, [yq + pixelsq*2]
+    movd   xm1, [uq + pixelsq*1]
+    movd   xm2, [vq + pixelsq*1]
 %if cpuflag(avx2)
-    vinserti128 m0, m0, [yq + widthq*2 + 6], 1
-    vinserti128 m1, m1, [uq + widthq*1 + 3], 1
-    vinserti128 m2, m2, [vq + widthq*1 + 3], 1
+    vinserti128 m0, m0, [yq + pixelsq*2 + 6], 1
+    vinserti128 m1, m1, [uq + pixelsq*1 + 3], 1
+    vinserti128 m2, m2, [vq + pixelsq*1 + 3], 1
 %endif
 
     pshufb m0, [planar_8_y_shuf]
@@ -458,7 +457,7 @@ cglobal planar_to_sdi_8, 5, 5, 3, y, u, v, l, width
 %endif
 
     add    lq, (15*mmsize)/16
-    add    widthq, (3*mmsize)/16
+    add    pixelsq, (3*mmsize)/16
     jl .loop
 
     RET
@@ -474,21 +473,21 @@ planar_to_sdi_8
 %macro planar_to_sdi_10 0
 
 ; planar_to_sdi_10(const uint16_t *y, const uint16_t *u, const uint16_t *v, uint8_t *l, const int64_t width)
-cglobal planar_to_sdi_10, 5, 5, 3, y, u, v, l, width, size
-    lea    yq, [yq + 2*widthq]
-    add    uq, widthq
-    add    vq, widthq
+cglobal planar_to_sdi_10, 5, 5, 3, y, u, v, l, pixels, size
+    lea    yq, [yq + 2*pixelsq]
+    add    uq, pixelsq
+    add    vq, pixelsq
 
-    neg    widthq
+    neg    pixelsq
 
 .loop:
-    movu   xm0, [yq + widthq*2]
-    movq   xm1, [uq + widthq*1]
-    movhps xm1, [vq + widthq*1]
+    movu   xm0, [yq + pixelsq*2]
+    movq   xm1, [uq + pixelsq*1]
+    movhps xm1, [vq + pixelsq*1]
 %if cpuflag(avx2)
-    vinserti128 m0, m0, [yq + widthq*2 + 12], 1
-    movq   xm2, [uq + widthq*1 +  6]
-    movhps xm2, [vq + widthq*1 +  6]
+    vinserti128 m0, m0, [yq + pixelsq*2 + 12], 1
+    movq   xm2, [uq + pixelsq*1 +  6]
+    movhps xm2, [vq + pixelsq*1 +  6]
     vinserti128 m1, m1, xm2, 1
 %endif
 
@@ -506,7 +505,7 @@ cglobal planar_to_sdi_10, 5, 5, 3, y, u, v, l, width, size
 %endif
 
     add    lq, (15*mmsize)/16
-    add    widthq, (6*mmsize)/16
+    add    pixelsq, (6*mmsize)/16
     jl .loop
 
     RET
@@ -522,15 +521,15 @@ planar_to_sdi_10
 %macro planar_10_to_planar_8 0
 
 ; planar_10_to_planar_8(const uint16_t *y, const uint8_t *y8, const int64_t width)
-cglobal planar_10_to_planar_8, 3, 3, 3, y, y8, width
-    lea      yq, [yq + 2*widthq]
-    add      y8q, widthq
+cglobal planar_10_to_planar_8, 3, 3, 3, y, y8, samples
+    lea      yq, [yq + 2*samplesq]
+    add      y8q, samplesq
 
-    neg      widthq
+    neg      samplesq
 
 .loop:
-    mova     m0, [yq + widthq*2 + 0*mmsize]
-    mova     m1, [yq + widthq*2 + 1*mmsize]
+    mova     m0, [yq + samplesq*2 + 0*mmsize]
+    mova     m1, [yq + samplesq*2 + 1*mmsize]
 %if cpuflag(avx2)
     SBUTTERFLY dqqq, 0, 1, 2
 %endif
@@ -540,9 +539,9 @@ cglobal planar_10_to_planar_8, 3, 3, 3, y, y8, width
 
     packuswb m0, m1
 
-    mova     [y8q + widthq], m0
+    mova     [y8q + samplesq], m0
 
-    add      widthq, mmsize
+    add      samplesq, mmsize
     jl .loop
 
     RET
@@ -556,11 +555,11 @@ planar_10_to_planar_8
 %macro planar8_to_planar10 0
 
 ; planar_10_to_planar_8(const uint16_t *y, const uint8_t *y8, const int64_t width)
-cglobal planar8_to_planar10, 3, 3, 2 + notcpuflag(sse4), y, y8, width
-    lea      yq, [yq + 2*widthq]
-    add      y8q, widthq
+cglobal planar8_to_planar10, 3, 3, 2 + notcpuflag(sse4), y, y8, samples
+    lea      yq, [yq + 2*samplesq]
+    add      y8q, samplesq
 
-    neg      widthq
+    neg      samplesq
 
 %if notcpuflag(sse4)
     pxor m2, m2
@@ -568,9 +567,9 @@ cglobal planar8_to_planar10, 3, 3, 2 + notcpuflag(sse4), y, y8, width
 
 .loop:
 %if cpuflag(sse4)
-        pmovzxbw m0, [y8q + widthq]
+        pmovzxbw m0, [y8q + samplesq]
 %else
-        movh m0, [y8q + widthq]
+        movh m0, [y8q + samplesq]
         punpcklbw m0, m2
 %endif
 
@@ -578,9 +577,9 @@ cglobal planar8_to_planar10, 3, 3, 2 + notcpuflag(sse4), y, y8, width
         psrlw m0, 6
         por m0, m1
 
-        mova [yq + 2*widthq], m0
+        mova [yq + 2*samplesq], m0
 
-        add      widthq, mmsize/2
+        add      samplesq, mmsize/2
     jl .loop
 RET
 
