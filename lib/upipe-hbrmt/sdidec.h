@@ -9,13 +9,13 @@ void upipe_sdi_to_planar_8_c(const uint8_t *src, uint8_t *y, uint8_t *u, uint8_t
 
 /* process mmsize pixels per iteration */
 void upipe_uyvy_to_planar_8_ssse3(uint8_t *y, uint8_t *u, uint8_t *v, const uint16_t *l, const int64_t width);
-void upipe_uyvy_to_planar_8_avx(uint8_t *y, uint8_t *u, uint8_t *v, const uint16_t *l, const int64_t width);
-void upipe_uyvy_to_planar_8_avx2(uint8_t *y, uint8_t *u, uint8_t *v, const uint16_t *l, const int64_t width);
+void upipe_uyvy_to_planar_8_avx  (uint8_t *y, uint8_t *u, uint8_t *v, const uint16_t *l, const int64_t width);
+void upipe_uyvy_to_planar_8_avx2 (uint8_t *y, uint8_t *u, uint8_t *v, const uint16_t *l, const int64_t width);
 
 /* process mmsize pixels per iteration */
 void upipe_uyvy_to_planar_10_ssse3(uint16_t *y, uint16_t *u, uint16_t *v, const uint16_t *l, const int64_t width);
-void upipe_uyvy_to_planar_10_avx(uint16_t *y, uint16_t *u, uint16_t *v, const uint16_t *l, const int64_t width);
-void upipe_uyvy_to_planar_10_avx2(uint16_t *y, uint16_t *u, uint16_t *v, const uint16_t *l, const int64_t width);
+void upipe_uyvy_to_planar_10_avx  (uint16_t *y, uint16_t *u, uint16_t *v, const uint16_t *l, const int64_t width);
+void upipe_uyvy_to_planar_10_avx2 (uint16_t *y, uint16_t *u, uint16_t *v, const uint16_t *l, const int64_t width);
 
 /* process (mmsize*3)/8 pixels per iteration */
 void upipe_uyvy_to_v210_ssse3(const uint16_t *y, uint8_t *dst, int64_t width);
