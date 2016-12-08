@@ -136,6 +136,7 @@ struct upipe_netmap_sink {
 
     /** input flow def */
     struct uref *flow_def;
+    struct urational fps;
 
     /* Determined by the input flow_def */
     bool rfc4175;
@@ -185,6 +186,8 @@ struct upipe_netmap_sink {
     struct upump_mgr *upump_mgr;
     /** write watcher */
     struct upump *upump;
+
+    int pkt;
 
     /** uclock structure, if not NULL we are in live mode */
     struct uclock *uclock;
@@ -287,6 +290,7 @@ static struct upipe *upipe_netmap_sink_alloc(struct upipe_mgr *mgr,
     upipe_netmap_sink->d = NULL;
     ulist_init(&upipe_netmap_sink->sink_queue);
     upipe_netmap_sink->n = 0;
+    upipe_netmap_sink->pkt = 0;
     upipe_netmap_sink->uref = NULL;
 
     upipe_netmap_sink->pack_8_planar = upipe_planar_to_sdi_8_c;
@@ -335,8 +339,13 @@ static int upipe_netmap_put_headers(struct upipe_netmap_sink *upipe_netmap_sink,
     rtp_set_type(buf, pt);
     rtp_set_seqnum(buf, upipe_netmap_sink->seqnum & UINT16_MAX);
 
-    //FIXME: NTSC only, correct this for PAL and in general
-    uint64_t timestamp = upipe_netmap_sink->frame_count * 900900;
+    int pkt = upipe_netmap_sink->pkt++;
+    uint64_t pkts_per_frame = 4497; // FIXME : hardcoded for HD NTSC
+    assert(pkt < pkts_per_frame);
+    struct urational *fps = &upipe_netmap_sink->fps;
+    uint64_t frame_duration = UCLOCK_FREQ * fps->den / fps->num;
+    uint64_t timestamp = upipe_netmap_sink->frame_count * frame_duration +
+        frame_duration * pkt / pkts_per_frame;
     rtp_set_timestamp(buf, timestamp & UINT32_MAX);
     if (put_marker)
         rtp_set_marker(buf);
@@ -528,6 +537,7 @@ static int worker_rfc4175(struct upipe *upipe, uint8_t **dst, uint16_t *len)
         upipe_netmap_sink->line = 0;
         upipe_netmap_sink->pixel_offset = 0;
         upipe_netmap_sink->frame_count++;
+        upipe_netmap_sink->pkt = 0;
         return 1;
     }
 
@@ -657,6 +667,7 @@ static void upipe_netmap_sink_worker(struct upump *upump)
             uref_free(uref);
             uref = NULL;
             upipe_netmap_sink->frame_count++;
+            upipe_netmap_sink->pkt = 0;
         }
     }
 
@@ -831,12 +842,11 @@ static int upipe_netmap_sink_set_flow_def(struct upipe *upipe,
         { { 24,       1 }, 0x1a },
         { { 24000, 1001 }, 0x1b },
     };
-    struct urational fps;
-    UBASE_RETURN(uref_pic_flow_get_fps(flow_def, &fps));
+    UBASE_RETURN(uref_pic_flow_get_fps(flow_def, &upipe_netmap_sink->fps));
 
     upipe_netmap_sink->frate = 0;
     for (int i = 0; i < sizeof(frate) / sizeof(frate[0]); i++) {
-        if (!urational_cmp(&frate[i].fps, &fps)) {
+        if (!urational_cmp(&frate[i].fps, &upipe_netmap_sink->fps)) {
             upipe_netmap_sink->frate = frate[i].frate;
             break;
         }
