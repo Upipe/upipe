@@ -842,7 +842,6 @@ static int upipe_netmap_sink_set_flow_def(struct upipe *upipe,
 
     flow_def = uref_dup(flow_def);
     UBASE_ALLOC_RETURN(flow_def)
-    uref_flow_set_def(flow_def, "block.");
     upipe_input(upipe, flow_def, NULL);
 
     return UBASE_ERR_NONE;
