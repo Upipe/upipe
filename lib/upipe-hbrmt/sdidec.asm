@@ -51,9 +51,9 @@ SECTION .text
 %macro sdi_to_uyvy 0
 
 ; sdi_unpack_10(const uint8_t *src, uint16_t *y, int64_t size)
-cglobal sdi_to_uyvy, 3, 3, 7, src, y, size
-    add      srcq, sizeq
-    neg      sizeq
+cglobal sdi_to_uyvy, 3, 3, 7, src, y, bytes
+    add      srcq, bytesq
+    neg      bytesq
 
     mova     m2, [sdi_comp_mask_10]
     mova     m3, [sdi_chroma_shuf_10]
@@ -62,9 +62,9 @@ cglobal sdi_to_uyvy, 3, 3, 7, src, y, size
     mova     m6, [sdi_luma_mult_10]
 
 .loop:
-    movu     xm0, [srcq+sizeq]
+    movu     xm0, [srcq + bytesq]
 %if cpuflag(avx2)
-    vinserti128 m0, m0, [srcq+sizeq+10], 1
+    vinserti128 m0, m0, [srcq + bytesq + 10], 1
 %endif
 
     pandn    m1, m2, m0
@@ -81,7 +81,7 @@ cglobal sdi_to_uyvy, 3, 3, 7, src, y, size
     mova     [yq], m0
 
     add      yq,    mmsize
-    add      sizeq, (mmsize*5)/8
+    add      bytesq, (mmsize*5)/8
     jl .loop
 
     RET

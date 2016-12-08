@@ -1,6 +1,6 @@
 /* process (mmsize*5)/8 bytes per iteration */
-void upipe_sdi_to_uyvy_ssse3(const uint8_t *src, uint16_t *y, int64_t size);
-void upipe_sdi_to_uyvy_avx2 (const uint8_t *src, uint16_t *y, int64_t size);
+void upipe_sdi_to_uyvy_ssse3(const uint8_t *src, uint16_t *y, int64_t bytes);
+void upipe_sdi_to_uyvy_avx2 (const uint8_t *src, uint16_t *y, int64_t bytes);
 void upipe_sdi_unpack_c(const uint8_t *src, uint16_t *y, int64_t size);
 
 void upipe_sdi_v210_unpack_c(const uint8_t *src, uint32_t *dst, int64_t size);
