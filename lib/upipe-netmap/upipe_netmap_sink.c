@@ -61,12 +61,7 @@
 
 #include "sdi.h"
 
-#define HBRMT_HEADER_ONLY_SIZE 8
-#define HBRMT_DATA_SIZE 1376
-#define HBRMT_LEN (ETHERNET_HEADER_LEN + IP_HEADER_MINSIZE + UDP_HEADER_SIZE + RTP_HEADER_SIZE + HBRMT_HEADER_ONLY_SIZE + HBRMT_DATA_SIZE)
-
 #define UPIPE_RFC4175_MAX_PLANES 3
-
 #define UPIPE_RFC4175_PIXEL_PAIR_BYTES 5
 #define UPIPE_RFC4175_BLOCK_SIZE 15
 
@@ -358,7 +353,7 @@ static int upipe_netmap_put_headers(struct upipe_netmap_sink *upipe_netmap_sink,
 static int upipe_put_hbrmt_headers(struct upipe_netmap_sink *upipe_netmap_sink,
                                    uint8_t *buf)
 {
-    memset(buf, 0, HBRMT_HEADER_ONLY_SIZE);
+    memset(buf, 0, HBRMT_HEADER_SIZE);
     smpte_hbrmt_set_ext(buf, 0);
     smpte_hbrmt_set_video_source_format(buf);
     smpte_hbrmt_set_video_source_id(buf, 0);
@@ -373,12 +368,12 @@ static int upipe_put_hbrmt_headers(struct upipe_netmap_sink *upipe_netmap_sink,
     smpte_hbrmt_set_sample(buf, 0x1); // 422 10 bits
     smpte_hbrmt_set_fmt_reserve(buf);
 
-    buf += HBRMT_HEADER_ONLY_SIZE;
+    buf += HBRMT_HEADER_SIZE;
 
     upipe_netmap_sink->seqnum++;
     upipe_netmap_sink->seqnum &= UINT16_MAX;
 
-    return HBRMT_HEADER_ONLY_SIZE;
+    return HBRMT_HEADER_SIZE;
 }
 
 static int upipe_put_rfc4175_headers(struct upipe_netmap_sink *upipe_netmap_sink, uint8_t *buf,
@@ -558,16 +553,16 @@ static int worker_hbrmt(struct upipe *upipe, uint8_t **dst, const uint8_t *src,
     }
     bytes_left -= payload_len;
 
-    uint16_t payload_size = HBRMT_LEN - ETHERNET_HEADER_LEN - UDP_HEADER_SIZE -
-        IP_HEADER_MINSIZE;
+    uint16_t udp_payload_size = RTP_HEADER_SIZE + HBRMT_HEADER_SIZE + HBRMT_DATA_SIZE;
 
     /* Put headers and the marker if we've depleted the entire ubuf/frame */
-    *dst += upipe_netmap_put_headers(upipe_netmap_sink, *dst, payload_size, 98, !bytes_left);
+    *dst += upipe_netmap_put_headers(upipe_netmap_sink, *dst, udp_payload_size,
+            98, !bytes_left);
     *dst += upipe_put_hbrmt_headers(upipe_netmap_sink, *dst);
 
     /* Put data */
     memcpy(*dst, src, payload_len);
-    *len = HBRMT_LEN;
+    *len = ETHERNET_HEADER_LEN + IP_HEADER_MINSIZE + UDP_HEADER_SIZE + udp_payload_size;
 
     return payload_len;
 }
