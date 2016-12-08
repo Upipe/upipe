@@ -134,6 +134,9 @@ struct upipe_netmap_sink {
     /** refcount management structure */
     struct urefcount urefcount;
 
+    /** input flow def */
+    struct uref *flow_def;
+
     /* Determined by the input flow_def */
     bool rfc4175;
     int input_bit_depth;
@@ -269,6 +272,7 @@ static struct upipe *upipe_netmap_sink_alloc(struct upipe_mgr *mgr,
 
     struct upipe_netmap_sink *upipe_netmap_sink = upipe_netmap_sink_from_upipe(upipe);
 
+    upipe_netmap_sink->flow_def = NULL;
     upipe_netmap_sink->seqnum = 0;
     upipe_netmap_sink->frame_count = 0;
     upipe_netmap_sink->line = 0;
@@ -696,7 +700,8 @@ static bool upipe_netmap_sink_output(struct upipe *upipe, struct uref *uref,
     const char *def;
 
     if (unlikely(ubase_check(uref_flow_get_def(uref, &def)))) {
-        uref_free(uref);
+        uref_free(upipe_netmap_sink->flow_def);
+        upipe_netmap_sink->flow_def = uref;
         return true;
     }
 
@@ -1157,7 +1162,9 @@ static void upipe_netmap_sink_free(struct upipe *upipe)
         upipe_netmap_sink_from_upipe(upipe);
     upipe_throw_dead(upipe);
 
+    uref_free(upipe_netmap_sink->flow_def);
     free(upipe_netmap_sink->uri);
+
     upipe_netmap_sink_clean_uclock(upipe);
     upipe_netmap_sink_clean_upump(upipe);
     upipe_netmap_sink_clean_upump_mgr(upipe);
