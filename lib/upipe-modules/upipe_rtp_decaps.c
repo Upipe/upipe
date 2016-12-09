@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2014 OpenHeadend S.A.R.L.
+ * Copyright (C) 2014-2016 OpenHeadend S.A.R.L.
  *
  * Authors: Christophe Massiot
  *
@@ -53,6 +53,8 @@
 #include <assert.h>
 
 #include <bitstream/ietf/rtp.h>
+#include <bitstream/ietf/rtp3551.h>
+#include <bitstream/ietf/rtp2250.h>
 
 #define EXPECTED_FLOW_DEF "block."
 
@@ -188,6 +190,25 @@ static inline void upipe_rtpd_input(struct upipe *upipe, struct uref *uref,
             case RTP_TYPE_TS:
                 uref_flow_set_def(flow_def, "block.mpegtsaligned.");
                 break;
+            case RTP_TYPE_MPA:
+                uref_flow_set_def(flow_def, "block.mp3.sound.");
+                offset += RTP2250A_HEADER_SIZE;
+                break;
+            case RTP_TYPE_MPV:
+                rtp_header = uref_block_peek(uref, offset,
+                                             RTP2250V_HEADER_SIZE,
+                                             rtp_buffer);
+                if (unlikely(rtp_header == NULL)) {
+                    upipe_warn(upipe, "invalid buffer received");
+                    uref_free(uref);
+                    return;
+                }
+                offset += RTP2250V_HEADER_SIZE +
+                    rtp2250v_check_mpeg2(rtp_header) * RTP2250VX_HEADER_SIZE;
+                uref_block_peek_unmap(uref, offset, rtp_buffer, rtp_header);
+
+                uref_flow_set_def(flow_def, "block.mpeg2video.pic.");
+                break;
             default:
                 break;
         }
@@ -195,6 +216,27 @@ static inline void upipe_rtpd_input(struct upipe *upipe, struct uref *uref,
         upipe_rtpd_store_flow_def(upipe, flow_def);
     }
     uref_rtp_set_timestamp(uref, timestamp);
+
+    switch (type) {
+        case RTP_TYPE_MPA:
+            offset += RTP2250A_HEADER_SIZE;
+            break;
+        case RTP_TYPE_MPV:
+            rtp_header = uref_block_peek(uref, offset,
+                                         RTP2250V_HEADER_SIZE,
+                                         rtp_buffer);
+            if (unlikely(rtp_header == NULL)) {
+                upipe_warn(upipe, "invalid buffer received");
+                uref_free(uref);
+                return;
+            }
+            offset += RTP2250V_HEADER_SIZE +
+                rtp2250v_check_mpeg2(rtp_header) * RTP2250VX_HEADER_SIZE;
+            uref_block_peek_unmap(uref, offset, rtp_buffer, rtp_header);
+            break;
+        default:
+            break;
+    }
 
     uref_block_resize(uref, offset, -1);
     upipe_rtpd_output(upipe, uref, upump_p);
