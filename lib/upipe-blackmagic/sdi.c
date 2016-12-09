@@ -227,10 +227,12 @@ void sdi_encode_ttx(uint16_t *buf, int f2, int packets, const uint8_t **packet, 
         uint16_t line = line_offset + PAL_FIELD_OFFSET * f2;
 
         /* Write structure A */
-        buf[ANC_START_LEN + OP47_INITIAL_WORDS + packets]  = ((!f2) << 7) | line_offset;
+        buf[ANC_START_LEN + OP47_INITIAL_WORDS + j]  = ((!f2) << 7) |
+            (0x3 << 5) |
+            line_offset;
 
         /* Structure B */
-        int idx = OP47_STRUCT_B_OFFSET + 45 * packets;
+        int idx = OP47_STRUCT_B_OFFSET + 45 * j;
 
         /* 2x Run in codes */
         memset(&buf[idx], 0x55, 2 * sizeof(uint16_t));
