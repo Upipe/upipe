@@ -744,6 +744,39 @@ static bool upipe_sdi_dec_handle(struct upipe *upipe, struct uref *uref,
     for (int i = 0; i < 8; i++)
         audio_ctx.aes[i] = -1;
 
+    struct upipe_sdi_dec_sub *vanc_sub = &upipe_sdi_dec->vanc;
+    if (!vanc_sub->ubuf_mgr) {
+        struct uref *vanc_flow_def = uref_sibling_alloc(uref);
+        uref_flow_set_def(vanc_flow_def, "pic.");
+        UBASE_RETURN(uref_pic_flow_set_macropixel(vanc_flow_def, 1))
+        UBASE_RETURN(uref_pic_flow_add_plane(vanc_flow_def, 1, 1, 2, "x10"))
+        upipe_sdi_dec_sub_require_ubuf_mgr(&vanc_sub->upipe, vanc_flow_def);
+        uref_free(vanc_flow_def);
+    }
+
+    struct uref *uref_vanc = uref_dup(uref);
+    struct ubuf *ubuf_vanc = ubuf_pic_alloc(vanc_sub->ubuf_mgr,
+            f->pict_fmt->active_width * 2,
+            f->height - f->pict_fmt->active_height);
+
+    size_t vanc_stride;
+    uint8_t *vanc_buf = NULL;
+    if (unlikely(ubuf_vanc == NULL)) {
+        upipe_throw_error(upipe, UBASE_ERR_ALLOC);
+        uref_free(uref_vanc);
+        uref_vanc = NULL;
+    } else {
+        uref_attach_ubuf(uref_vanc, ubuf_vanc);
+        if (unlikely(!ubase_check(uref_pic_plane_size(uref_vanc, "x10",
+                            &vanc_stride, NULL, NULL, NULL)) ||
+                    !ubase_check(uref_pic_plane_write(uref_vanc, "x10",
+                            0, 0, -1, -1, &vanc_buf)))) {
+            uref_free(uref_vanc);
+            uref_vanc = NULL;
+            upipe_throw_fatal(upipe, "Could not map vanc buffer");
+        }
+    }
+
     struct upipe_sdi_dec_sub *audio_sub = &upipe_sdi_dec->audio;
     uref_audio = uref_dup(uref);
     if (!audio_sub->ubuf_mgr) {
@@ -808,10 +841,22 @@ static bool upipe_sdi_dec_handle(struct upipe *upipe, struct uref *uref,
             }
         }
 
+        uint16_t *src_line = (uint16_t*)input_buf + (h * f->width + f->active_offset) * 2;
         if (!active) {
-            // Parse VBI
+            if (uref_vanc) {
+                uint16_t *vanc_dst = (uint16_t*)vanc_buf;
+                // deinterleave for vanc_filter
+                if (p->sd) {
+                    // TODO
+                } else {
+                    for (unsigned i = 0; i < vanc_stride / 4; i++) {
+                        vanc_dst[                i] = src_line[2*i  ]; // Y
+                        vanc_dst[vanc_stride/4 + i] = src_line[2*i+1];  // C
+                    }
+                }
+                vanc_buf += vanc_stride;
+            }
         } else {
-            uint16_t *src_line = (uint16_t*)input_buf + (h * f->width + f->active_offset) * 2;
             uint8_t *y = fields[f2][0];
             uint8_t *u = fields[f2][1];
             uint8_t *v = fields[f2][2];
@@ -875,6 +920,11 @@ static bool upipe_sdi_dec_handle(struct upipe *upipe, struct uref *uref,
             uref_free(uref_audio);
         else
             upipe_sdi_dec_sub_output(&audio_sub->upipe, uref_audio, upump_p);
+    }
+
+    if (uref_vanc) {
+        uref_pic_plane_unmap(uref_vanc, "x10", 0, 0, -1, -1);
+        upipe_sdi_dec_sub_output(&vanc_sub->upipe, uref_vanc, upump_p);
     }
 
     /* unmap input */
