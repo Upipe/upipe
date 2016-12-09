@@ -734,7 +734,7 @@ static bool upipe_sdi_dec_handle(struct upipe *upipe, struct uref *uref,
     }
 
     /* map output */
-    uint8_t *fields[2][UPIPE_SDI_DEC_MAX_PLANES] = {0};
+    uint8_t *fields[2][UPIPE_SDI_DEC_MAX_PLANES] = { {0}, {0} };
     size_t output_stride[UPIPE_SDI_DEC_MAX_PLANES] = {0};
     for (int i = 0; i < UPIPE_SDI_DEC_MAX_PLANES; i++) {
         const char *c = upipe_sdi_dec->output_chroma_map[i];
