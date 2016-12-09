@@ -318,10 +318,10 @@ planar_to_uyvy_10
 %macro v210_to_uyvy 1
 
 ; v210_uyvy_unpack(const uint32_t *src, uint16_t *uyvy, int64_t width)
-cglobal v210_to_uyvy_%1, 3, 3, 8+7*ARCH_X86_64
-    shl    r2, 2
-    add    r1, r2
-    neg    r2
+cglobal v210_to_uyvy_%1, 3, 3, 8+7*ARCH_X86_64, src, dst, pixels
+    shl    pixelsq, 2
+    add    dstq,    pixelsq
+    neg    pixelsq
 
     mova  m4, [v210_uyvy_mask1]
     mova  m5, [v210_uyvy_mask2]
@@ -347,15 +347,15 @@ cglobal v210_to_uyvy_%1, 3, 3, 8+7*ARCH_X86_64
 
 .loop:
 %ifidn %1, unaligned
-    movu   xm0, [r0]
-    movu   xm2, [r0+16]
+    movu   xm0, [srcq]
+    movu   xm2, [srcq + 16]
 %else
-    mova   xm0, [r0]
-    mova   xm2, [r0+16]
+    mova   xm0, [srcq]
+    mova   xm2, [srcq + 16]
 %endif
 %if cpuflag(avx2)
-    vinserti128 m0, m0, [r0+32], 1
-    vinserti128 m2, m2, [r0+48], 1
+    vinserti128 m0, m0, [srcq + 32], 1
+    vinserti128 m2, m2, [srcq + 48], 1
 %endif
     palignr  m1, m2, m0, 10
 
@@ -365,10 +365,10 @@ cglobal v210_to_uyvy_%1, 3, 3, 8+7*ARCH_X86_64
     pshufb   m0, m7
     por      m0, m3
     pmulhrsw m0, m12
-    mova [r1+r2], xm0
+    mova [dstq + pixelsq], xm0
 
 %if cpuflag(avx2)
-    vextracti128 [r1 + r2 + 3*16], m0, 1
+    vextracti128 [dstq + pixelsq + 3*16], m0, 1
 %endif
 
     pandn    m3, m5, m1
@@ -377,10 +377,10 @@ cglobal v210_to_uyvy_%1, 3, 3, 8+7*ARCH_X86_64
     pshufb   m1, m9
     por      m1, m3
     pmulhrsw m1, m13
-    mova [r1+r2+16], xm1
+    mova [dstq + pixelsq + 16], xm1
 
 %if cpuflag(avx2)
-    vextracti128 [r1 + r2 + 4*16], m1, 1
+    vextracti128 [dstq + pixelsq + 4*16], m1, 1
 %endif
 
     pandn    m3, m4, m2
@@ -389,14 +389,14 @@ cglobal v210_to_uyvy_%1, 3, 3, 8+7*ARCH_X86_64
     pshufb   m2, m11
     por      m2, m3
     pmulhrsw m2, m14
-    mova [r1+r2+2*16], xm2
+    mova [dstq + pixelsq + 2*16], xm2
 
 %if cpuflag(avx2)
-    vextracti128 [r1 + r2 + 5*16], m2, 1
+    vextracti128 [dstq + pixelsq + 5*16], m2, 1
 %endif
 
-    add r0, 2*mmsize
-    add r2, 3*mmsize
+    add srcq, 2*mmsize
+    add pixelsq, 3*mmsize
     jl  .loop
 
     REP_RET
