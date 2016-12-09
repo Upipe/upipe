@@ -187,6 +187,12 @@ struct upipe_sdi_dec {
     /** first pts */
     uint64_t first_pts;
 
+    /** vanc output */
+    struct upipe_sdi_dec_sub vanc;
+
+    /** audio output */
+    struct upipe_sdi_dec_sub audio;
+
     /** public upipe structure */
     struct upipe upipe;
 };
@@ -208,7 +214,6 @@ static int upipe_sdi_dec_sub_check(struct upipe *upipe, struct uref *flow_format
 UPIPE_HELPER_UPIPE(upipe_sdi_dec, upipe, UPIPE_SDI_DEC_SIGNATURE);
 UPIPE_HELPER_UREFCOUNT(upipe_sdi_dec, urefcount, upipe_sdi_dec_free);
 UPIPE_HELPER_VOID(upipe_sdi_dec);
-UPIPE_HELPER_FLOW(upipe_sdi_dec, NULL);
 UPIPE_HELPER_OUTPUT(upipe_sdi_dec, output, flow_def, output_state, request_list)
 UPIPE_HELPER_UBUF_MGR(upipe_sdi_dec, ubuf_mgr, flow_format, ubuf_mgr_request,
                       upipe_sdi_dec_check,
@@ -217,15 +222,13 @@ UPIPE_HELPER_UBUF_MGR(upipe_sdi_dec, ubuf_mgr, flow_format, ubuf_mgr_request,
 UPIPE_HELPER_INPUT(upipe_sdi_dec, urefs, nb_urefs, max_urefs, blockers, upipe_sdi_dec_handle)
 
 UPIPE_HELPER_UPIPE(upipe_sdi_dec_sub, upipe, UPIPE_SDI_DEC_SUB_SIGNATURE)
-UPIPE_HELPER_UREFCOUNT(upipe_sdi_dec_sub, urefcount, upipe_sdi_dec_sub_free)
-UPIPE_HELPER_VOID(upipe_sdi_dec_sub)
 UPIPE_HELPER_OUTPUT(upipe_sdi_dec_sub, output, flow_def, output_state, request_list)
 UPIPE_HELPER_UBUF_MGR(upipe_sdi_dec_sub, ubuf_mgr, flow_format, ubuf_mgr_request,
                       upipe_sdi_dec_sub_check,
                       upipe_sdi_dec_sub_register_output_request,
                       upipe_sdi_dec_sub_unregister_output_request)
 
-UPIPE_HELPER_SUBPIPE(upipe_sdi_dec, upipe_sdi_dec_sub, sub, sub_mgr, subs, uchain)
+UBASE_FROM_TO(upipe_sdi_dec, upipe_mgr, sub_mgr, sub_mgr)
 
 static int upipe_sdi_dec_set_option(struct upipe *upipe, const char *option,
         const char *value)
@@ -249,21 +252,6 @@ static int upipe_sdi_dec_sub_control(struct upipe *upipe, int command, va_list a
     struct upipe_sdi_dec_sub *sdi_dec_sub = upipe_sdi_dec_sub_from_upipe(upipe);
 
     switch (command) {
-        case UPIPE_REGISTER_REQUEST: {
-            struct urequest *request = va_arg(args, struct urequest *);
-            if (request->type == UREQUEST_UBUF_MGR ||
-                request->type == UREQUEST_FLOW_FORMAT)
-                return upipe_throw_provide_request(upipe, request);
-            return upipe_sdi_dec_sub_alloc_output_proxy(upipe, request);
-        }
-        case UPIPE_UNREGISTER_REQUEST: {
-            struct urequest *request = va_arg(args, struct urequest *);
-            if (request->type == UREQUEST_UBUF_MGR ||
-                request->type == UREQUEST_FLOW_FORMAT)
-                return UBASE_ERR_NONE;
-            return upipe_sdi_dec_sub_free_output_proxy(upipe, request);
-        }
-
         case UPIPE_GET_OUTPUT: {
             struct upipe **p = va_arg(args, struct upipe **);
             return upipe_sdi_dec_sub_get_output(upipe, p);
@@ -278,21 +266,18 @@ static int upipe_sdi_dec_sub_control(struct upipe *upipe, int command, va_list a
     }
 }
 
-static struct upipe *upipe_sdi_dec_sub_alloc(struct upipe_mgr *mgr,
-                                     struct uprobe *uprobe,
-                                     uint32_t signature, va_list args)
+static struct upipe *upipe_sdi_dec_sub_init(struct upipe *upipe,
+        struct upipe_mgr *mgr, struct uprobe *uprobe)
 {
-    struct upipe *upipe = upipe_sdi_dec_sub_alloc_void(mgr, uprobe, signature, args);
-    if (unlikely(upipe == NULL))
-        return NULL;
+    upipe_init(upipe, mgr, uprobe);
 
     struct upipe_sdi_dec_sub *upipe_sdi_dec_sub =
         upipe_sdi_dec_sub_from_upipe(upipe);
+    struct upipe_sdi_dec *upipe_sdi_dec = upipe_sdi_dec_from_sub_mgr(mgr);
 
-    upipe_sdi_dec_sub_init_sub(upipe);
     upipe_sdi_dec_sub_init_output(upipe);
     upipe_sdi_dec_sub_init_ubuf_mgr(upipe);
-    upipe_sdi_dec_sub_init_urefcount(upipe);
+    upipe->refcount = &upipe_sdi_dec->urefcount;
 
     upipe_sdi_dec_sub->samples = 0;
 
@@ -300,14 +285,12 @@ static struct upipe *upipe_sdi_dec_sub_alloc(struct upipe_mgr *mgr,
     return upipe;
 }
 
-static void upipe_sdi_dec_sub_free(struct upipe *upipe)
+static void upipe_sdi_dec_sub_clean(struct upipe *upipe)
 {
     upipe_throw_dead(upipe);
     upipe_sdi_dec_sub_clean_ubuf_mgr(upipe);
-    upipe_sdi_dec_sub_clean_sub(upipe);
     upipe_sdi_dec_sub_clean_output(upipe);
-    upipe_sdi_dec_sub_clean_urefcount(upipe);
-    upipe_sdi_dec_sub_free_void(upipe);
+    upipe_clean(upipe);
 }
 
 static void upipe_sdi_dec_init_sub_mgr(struct upipe *upipe)
@@ -316,7 +299,7 @@ static void upipe_sdi_dec_init_sub_mgr(struct upipe *upipe)
     struct upipe_mgr *sub_mgr = &upipe_sdi_dec->sub_mgr;
     sub_mgr->refcount = upipe_sdi_dec_to_urefcount(upipe_sdi_dec);
     sub_mgr->signature = UPIPE_SDI_DEC_SUB_SIGNATURE;
-    sub_mgr->upipe_alloc = upipe_sdi_dec_sub_alloc;
+    sub_mgr->upipe_alloc = NULL;
     sub_mgr->upipe_input = NULL;
     sub_mgr->upipe_control = upipe_sdi_dec_sub_control;
     sub_mgr->upipe_mgr_control = NULL;
@@ -756,41 +739,37 @@ static bool upipe_sdi_dec_handle(struct upipe *upipe, struct uref *uref,
             fields[1][i] = fields[0][i] + output_stride[i];
 
     struct uref *uref_audio = NULL;
-    struct upipe_sdi_dec_sub *upipe_sdi_dec_sub = NULL;
 
     struct audio_ctx audio_ctx = {0};
     for (int i = 0; i < 8; i++)
         audio_ctx.aes[i] = -1;
 
-    if (!ulist_empty(&upipe_sdi_dec->subs)) {
-        upipe_sdi_dec_sub =
-            upipe_sdi_dec_sub_from_uchain(ulist_peek(&upipe_sdi_dec->subs));
-        uref_audio = uref_dup(uref);
-        if (!upipe_sdi_dec_sub->ubuf_mgr) {
-            uref_flow_set_def(uref_audio, "sound.s32.");
-            uref_sound_flow_add_plane(uref_audio, "ALL");
-            uref_sound_flow_set_channels(uref_audio, 16);
-            uref_sound_flow_set_rate(uref_audio, 48000);
-            uref_sound_flow_set_sample_size(uref_audio, 4 * 16);
-            upipe_sdi_dec_sub_require_ubuf_mgr(&upipe_sdi_dec_sub->upipe,
-                    uref_audio);
-            uref_flow_delete_def(uref_audio);
-            assert(upipe_sdi_dec_sub->ubuf_mgr); // FIXME
-        }
+    struct upipe_sdi_dec_sub *audio_sub = &upipe_sdi_dec->audio;
+    uref_audio = uref_dup(uref);
+    if (!audio_sub->ubuf_mgr) {
+        uref_flow_set_def(uref_audio, "sound.s32.");
+        uref_sound_flow_add_plane(uref_audio, "ALL");
+        uref_sound_flow_set_channels(uref_audio, 16);
+        uref_sound_flow_set_rate(uref_audio, 48000);
+        uref_sound_flow_set_sample_size(uref_audio, 4 * 16);
+        upipe_sdi_dec_sub_require_ubuf_mgr(&audio_sub->upipe,
+                uref_audio);
+        uref_flow_delete_def(uref_audio);
+        assert(audio_sub->ubuf_mgr); // FIXME
+    }
 
-        struct ubuf *ubuf = ubuf_sound_alloc(upipe_sdi_dec_sub->ubuf_mgr, 1125*2);
-        if (unlikely(!ubuf)) {
-            upipe_throw_fatal(upipe, "Unable to allocate a sound buffer");
+    struct ubuf *ubuf_sound = ubuf_sound_alloc(audio_sub->ubuf_mgr, 1125*2);
+    if (unlikely(!ubuf_sound)) {
+        upipe_throw_fatal(upipe, "Unable to allocate a sound buffer");
+        uref_free(uref_audio);
+        uref_audio = NULL;
+    } else {
+        uref_attach_ubuf(uref_audio, ubuf_sound);
+        if (unlikely(!ubase_check(uref_sound_plane_write_int32_t(uref_audio,
+                            "ALL", 0, -1, &audio_ctx.buf_audio)))) {
             uref_free(uref_audio);
             uref_audio = NULL;
-        } else {
-            uref_attach_ubuf(uref_audio, ubuf);
-            if (unlikely(!ubase_check(uref_sound_plane_write_int32_t(uref_audio,
-                                "ALL", 0, -1, &audio_ctx.buf_audio)))) {
-                uref_free(uref_audio);
-                uref_audio = NULL;
-                upipe_throw_fatal(upipe, "Could not map audio buffer");
-            }
+            upipe_throw_fatal(upipe, "Could not map audio buffer");
         }
     }
 
@@ -853,7 +832,7 @@ static bool upipe_sdi_dec_handle(struct upipe *upipe, struct uref *uref,
 
     if (uref_audio) {
         uint64_t pts = upipe_sdi_dec->first_pts +
-            upipe_sdi_dec_sub->samples * UCLOCK_FREQ / 48000;
+            audio_sub->samples * UCLOCK_FREQ / 48000;
         uref_clock_set_pts_prog(uref_audio, pts);
         uref_clock_set_pts_orig(uref_audio, pts);
         uref_clock_set_dts_pts_delay(uref_audio, 0);
@@ -888,14 +867,14 @@ static bool upipe_sdi_dec_handle(struct upipe *upipe, struct uref *uref,
             }
         }
 
-        upipe_sdi_dec_sub->samples += samples_received;;
+        audio_sub->samples += samples_received;;
         uref_sound_plane_unmap(uref_audio, "ALL", 0, -1);
         uref_sound_resize(uref_audio, 0, samples_received);
 
         if (samples_received == 0)
             uref_free(uref_audio);
         else
-            upipe_sdi_dec_sub_output(&upipe_sdi_dec_sub->upipe, uref_audio, upump_p);
+            upipe_sdi_dec_sub_output(&audio_sub->upipe, uref_audio, upump_p);
     }
 
     /* unmap input */
@@ -1054,15 +1033,9 @@ static int upipe_sdi_dec_set_flow_def(struct upipe *upipe, struct uref *flow_def
  */
 static int upipe_sdi_dec_control(struct upipe *upipe, int command, va_list args)
 {
+    struct upipe_sdi_dec *upipe_sdi_dec = upipe_sdi_dec_from_upipe(upipe);
+
     switch (command) {
-        case UPIPE_GET_SUB_MGR: {
-            struct upipe_mgr **p = va_arg(args, struct upipe_mgr **);
-            return upipe_sdi_dec_get_sub_mgr(upipe, p);
-        }
-        case UPIPE_ITERATE_SUB: {
-            struct upipe **p = va_arg(args, struct upipe **);
-            return upipe_sdi_dec_iterate_sub(upipe, p);
-        }
         case UPIPE_REGISTER_REQUEST: {
             struct urequest *request = va_arg(args, struct urequest *);
             if (request->type == UREQUEST_UBUF_MGR ||
@@ -1098,6 +1071,18 @@ static int upipe_sdi_dec_control(struct upipe *upipe, int command, va_list args)
             const char *option = va_arg(args, const char *);
             const char *value  = va_arg(args, const char *);
             return upipe_sdi_dec_set_option(upipe, option, value);
+        }
+        case UPIPE_SDI_DEC_GET_VANC_SUB: {
+            UBASE_SIGNATURE_CHECK(args, UPIPE_SDI_DEC_SIGNATURE)
+            struct upipe **upipe_p = va_arg(args, struct upipe **);
+            *upipe_p = upipe_sdi_dec_sub_to_upipe(&upipe_sdi_dec->vanc);
+            return UBASE_ERR_NONE;
+        }
+        case UPIPE_SDI_DEC_GET_AUDIO_SUB: {
+            UBASE_SIGNATURE_CHECK(args, UPIPE_SDI_DEC_SIGNATURE)
+            struct upipe **upipe_p = va_arg(args, struct upipe **);
+            *upipe_p = upipe_sdi_dec_sub_to_upipe(&upipe_sdi_dec->audio);
+            return UBASE_ERR_NONE;
         }
 
         default:
@@ -1169,17 +1154,26 @@ static void uyvy_to_v210_c(const uint16_t *y, uint8_t *dst, int64_t width)
  * @param args optional arguments
  * @return pointer to upipe or NULL in case of allocation error
  */
-static struct upipe *upipe_sdi_dec_alloc(struct upipe_mgr *mgr,
+static struct upipe *_upipe_sdi_dec_alloc(struct upipe_mgr *mgr,
                                      struct uprobe *uprobe,
                                      uint32_t signature, va_list args)
 {
-    struct uref *flow_def;
-    struct upipe *upipe = upipe_sdi_dec_alloc_flow(mgr, uprobe, signature,
-                                                   args, &flow_def);
-    if (unlikely(upipe == NULL))
+    if (signature != UPIPE_SDI_DEC_SIGNATURE)
         return NULL;
 
-    struct upipe_sdi_dec *upipe_sdi_dec = upipe_sdi_dec_from_upipe(upipe);
+    struct uprobe *uprobe_vanc = va_arg(args, struct uprobe *);
+    struct uprobe *uprobe_audio = va_arg(args, struct uprobe *);
+    struct uref *flow_def = uref_dup(va_arg(args, struct uref *));
+    struct upipe_sdi_dec *upipe_sdi_dec = malloc(sizeof(struct upipe_sdi_dec));
+    if (unlikely(upipe_sdi_dec == NULL)) {
+        uprobe_release(uprobe_vanc);
+        uprobe_release(uprobe_audio);
+        uref_free(flow_def);
+        return NULL;
+    }
+
+    struct upipe *upipe = upipe_sdi_dec_to_upipe(upipe_sdi_dec);
+    upipe_init(upipe, mgr, uprobe);
 
     /* Get the given flow format and enable v210 as appropriate */
     upipe_sdi_dec->output_is_v210 = ubase_check(uref_pic_flow_check_chroma(flow_def, 1, 1, 16, "u10y10v10y10u10y10v10y10u10y10v10y10"));
@@ -1243,8 +1237,12 @@ static struct upipe *upipe_sdi_dec_alloc(struct upipe_mgr *mgr,
     upipe_sdi_dec_init_ubuf_mgr(upipe);
     upipe_sdi_dec_init_output(upipe);
     upipe_sdi_dec_init_sub_mgr(upipe);
-    upipe_sdi_dec_init_sub_subs(upipe);
     upipe_sdi_dec_init_input(upipe);
+
+    upipe_sdi_dec_sub_init(upipe_sdi_dec_sub_to_upipe(&upipe_sdi_dec->vanc),
+                              &upipe_sdi_dec->sub_mgr, uprobe_vanc);
+    upipe_sdi_dec_sub_init(upipe_sdi_dec_sub_to_upipe(&upipe_sdi_dec->audio),
+                              &upipe_sdi_dec->sub_mgr, uprobe_audio);
 
     upipe_throw_ready(upipe);
     return upipe;
@@ -1261,8 +1259,8 @@ static void upipe_sdi_dec_free(struct upipe *upipe)
     upipe_sdi_dec_clean_output(upipe);
     upipe_sdi_dec_clean_ubuf_mgr(upipe);
     upipe_sdi_dec_clean_urefcount(upipe);
-    upipe_sdi_dec_clean_sub_subs(upipe);
-    upipe_sdi_dec_free_flow(upipe);
+    upipe_clean(upipe);
+    free(upipe);
 }
 
 /** module manager static descriptor */
@@ -1270,7 +1268,7 @@ static struct upipe_mgr upipe_sdi_dec_mgr = {
     .refcount = NULL,
     .signature = UPIPE_SDI_DEC_SIGNATURE,
 
-    .upipe_alloc = upipe_sdi_dec_alloc,
+    .upipe_alloc = _upipe_sdi_dec_alloc,
     .upipe_input = upipe_sdi_dec_input,
     .upipe_control = upipe_sdi_dec_control,
 
