@@ -2,6 +2,7 @@
 #include <string.h>
 
 #include <bitstream/smpte/291.h>
+#include <bitstream/dvb/vbi.h>
 
 #include "sdi.h"
 
@@ -177,10 +178,10 @@ void sdi_encode_v210(uint32_t *dst, uint16_t *src, int width)
 
 int sdi_encode_ttx_sd(uint8_t *buf, const uint8_t *pic_data, vbi_sampling_par *sp)
 {
-    uint8_t line_offset = pic_data[2] & 0x1f;
+    uint8_t line_offset = dvbvbittx_get_line(&pic_data[DVBVBI_HEADER_SIZE]);
     // XXX: verify. 1 means first field
     // according to EN 300 472
-    uint8_t f2 = (pic_data[2] >> 5) & 1;
+    uint8_t f2 = !!dvbvbittx_get_field(&pic_data[DVBVBI_HEADER_SIZE]);
     uint16_t line = line_offset + PAL_FIELD_OFFSET * f2;
 
     sp->start[f2] = line;
@@ -220,14 +221,11 @@ void sdi_encode_ttx(uint16_t *buf, int f2, int packets, const uint8_t **packet, 
     for (int j = 0; j < packets; j++) {
         const uint8_t *pic_data = packet[j];
 
-        uint8_t line_offset = pic_data[2] & 0x1f;
-        // XXX: verify. 1 means first field
-        // according to EN 300 472
-        uint8_t f2 = (pic_data[2] >> 5) & 1;
-        uint16_t line = line_offset + PAL_FIELD_OFFSET * f2;
+        uint8_t line_offset = dvbvbittx_get_line(&pic_data[DVBVBI_HEADER_SIZE]);
+        uint8_t f2 = !!dvbvbittx_get_field(&pic_data[DVBVBI_HEADER_SIZE]);
 
         /* Write structure A */
-        buf[ANC_START_LEN + OP47_INITIAL_WORDS + j]  = ((!f2) << 7) |
+        buf[ANC_START_LEN + OP47_INITIAL_WORDS + j]  = ((f2) << 7) |
             (0x3 << 5) |
             line_offset;
 
@@ -235,11 +233,12 @@ void sdi_encode_ttx(uint16_t *buf, int f2, int packets, const uint8_t **packet, 
         int idx = OP47_STRUCT_B_OFFSET + 45 * j;
 
         /* 2x Run in codes */
-        memset(&buf[idx], 0x55, 2 * sizeof(uint16_t));
+        buf[idx] = 0x55;
+        buf[idx+1] = 0x55;
 
         /* Framing code, MRAG and the data */
         for (int i = 0; i < 43; i++)
-            buf[idx + 2 + i] = REVERSE(pic_data[3 + i]);
+            buf[idx + 2 + i] = REVERSE(pic_data[DVBVBI_UNIT_HEADER_SIZE + 1 /* framing */ + i]);
     }
 
     int idx = OP47_STRUCT_B_OFFSET + 45 * packets;

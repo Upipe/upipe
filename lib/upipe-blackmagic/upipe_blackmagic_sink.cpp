@@ -62,6 +62,7 @@
 #include <pthread.h>
 
 #include <bitstream/smpte/337.h>
+#include <bitstream/dvb/vbi.h>
 
 #include "include/DeckLinkAPI.h"
 
@@ -402,18 +403,26 @@ static void upipe_bmd_sink_extract_ttx(IDeckLinkVideoFrameAncillary *ancillary,
     const uint8_t *packet[2][5] = {0};
     int packets[2] = {0};
 
-    for (; pic_data_size >= 46; pic_data += 46, pic_data_size -= 46) {
+    if (pic_data[0] != DVBVBI_DATA_IDENTIFIER)
+        return;
+
+    pic_data++;
+    pic_data_size--;
+
+    static const unsigned dvb_unit_size = DVBVBI_UNIT_HEADER_SIZE + DVBVBI_LENGTH;
+    for (; pic_data_size >= dvb_unit_size; pic_data += dvb_unit_size, pic_data_size -= dvb_unit_size) {
         uint8_t data_unit_id  = pic_data[0];
         uint8_t data_unit_len = pic_data[1];
 
-        if (data_unit_id != 0x2 && data_unit_id != 0x3)
+        if (data_unit_id != DVBVBI_ID_TTX_SUB && data_unit_id != DVBVBI_ID_TTX_NONSUB)
             continue;
 
-        if (data_unit_len != 44)
+        if (data_unit_len != DVBVBI_LENGTH)
             continue;
 
-        uint8_t line_offset = pic_data[2] & 0x1f;
-        uint8_t f2 = !((pic_data[2] >> 5) & 1);
+        uint8_t line_offset = dvbvbittx_get_line(&pic_data[DVBVBI_UNIT_HEADER_SIZE]);
+
+        uint8_t f2 = !!dvbvbittx_get_field(&pic_data[DVBVBI_UNIT_HEADER_SIZE]);
         if (f2 == 0 && line_offset == 0) // line == 0
             continue;
 
@@ -916,7 +925,7 @@ static upipe_bmd_sink_frame *get_video_frame(struct upipe *upipe,
         const uint8_t *buf;
         int size = -1;
         if (ubase_check(uref_block_read(subpic, 0, &size, &buf))) {
-            upipe_bmd_sink_extract_ttx(ancillary, buf + 1, size - 1, w, sd,
+            upipe_bmd_sink_extract_ttx(ancillary, buf, size, w, sd,
                     &upipe_bmd_sink->sp,
                     &upipe_bmd_sink->op47_sequence_counter[0]);
             uref_block_unmap(subpic, 0);
