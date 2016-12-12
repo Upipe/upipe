@@ -238,7 +238,7 @@ void sdi_encode_ttx(uint16_t *buf, int f2, int packets, const uint8_t **packet, 
 
         /* Framing code, MRAG and the data */
         for (int i = 0; i < 43; i++)
-            buf[idx + 2 + i] = REVERSE(pic_data[DVBVBI_UNIT_HEADER_SIZE + 1 /* framing */ + i]);
+            buf[idx + 2 + i] = REVERSE(pic_data[DVBVBI_UNIT_HEADER_SIZE + 1 /* line/field */ + i]);
     }
 
     int idx = OP47_STRUCT_B_OFFSET + 45 * packets;
