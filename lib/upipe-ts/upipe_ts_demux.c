@@ -3115,6 +3115,7 @@ struct upipe_mgr *upipe_ts_demux_mgr_alloc(void)
     if (unlikely(ts_demux_mgr == NULL))
         return NULL;
 
+    memset(ts_demux_mgr, 0, sizeof(*ts_demux_mgr));
     ts_demux_mgr->null_mgr = upipe_null_mgr_alloc();
     ts_demux_mgr->setrap_mgr = upipe_setrap_mgr_alloc();
     ts_demux_mgr->idem_mgr = upipe_idem_mgr_alloc();

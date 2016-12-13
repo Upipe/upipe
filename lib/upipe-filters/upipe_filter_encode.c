@@ -599,6 +599,7 @@ struct upipe_mgr *upipe_fenc_mgr_alloc(void)
     if (unlikely(fenc_mgr == NULL))
         return NULL;
 
+    memset(fenc_mgr, 0, sizeof(*fenc_mgr));
     fenc_mgr->avcenc_mgr = NULL;
     fenc_mgr->x264_mgr = NULL;
 

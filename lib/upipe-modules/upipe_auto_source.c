@@ -227,6 +227,7 @@ struct upipe_mgr *upipe_auto_src_mgr_alloc(void)
     if (unlikely(upipe_auto_src_mgr == NULL))
         return NULL;
 
+    memset(upipe_auto_src_mgr, 0, sizeof (*upipe_auto_src_mgr));
     urefcount_init(upipe_auto_src_mgr_to_urefcount(upipe_auto_src_mgr),
                    upipe_auto_src_mgr_free);
     ulist_init(&upipe_auto_src_mgr->mgrs);

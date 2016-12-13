@@ -4411,6 +4411,7 @@ struct upipe_mgr *upipe_ts_mux_mgr_alloc(void)
     if (unlikely(ts_mux_mgr == NULL))
         return NULL;
 
+    memset(ts_mux_mgr, 0, sizeof(*ts_mux_mgr));
     ts_mux_mgr->ts_encaps_mgr = upipe_ts_encaps_mgr_alloc();
     ts_mux_mgr->ts_tstd_mgr = upipe_ts_tstd_mgr_alloc();
     ts_mux_mgr->ts_psi_join_mgr = upipe_ts_psi_join_mgr_alloc();

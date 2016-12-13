@@ -595,6 +595,7 @@ struct upipe_mgr *upipe_ffmt_mgr_alloc(void)
     if (unlikely(ffmt_mgr == NULL))
         return NULL;
 
+    memset(ffmt_mgr, 0, sizeof(*ffmt_mgr));
     ffmt_mgr->sws_mgr = NULL;
     ffmt_mgr->swr_mgr = NULL;
     ffmt_mgr->deint_mgr = upipe_filter_blend_mgr_alloc();

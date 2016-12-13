@@ -362,6 +362,7 @@ struct upipe_mgr *upipe_wsink_mgr_alloc(struct upipe_mgr *xfer_mgr)
     if (unlikely(wsink_mgr == NULL))
         return NULL;
 
+    memset(wsink_mgr, 0, sizeof(*wsink_mgr));
     wsink_mgr->qsrc_mgr = upipe_qsrc_mgr_alloc();
     wsink_mgr->qsink_mgr = upipe_qsink_mgr_alloc();
     wsink_mgr->xfer_mgr = upipe_mgr_use(xfer_mgr);
