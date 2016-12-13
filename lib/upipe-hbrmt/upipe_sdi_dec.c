@@ -860,13 +860,14 @@ static bool upipe_sdi_dec_handle(struct upipe *upipe, struct uref *uref,
             }
         }
 
-        bool active = 0, f2 = 0;     
+        bool active = 0, f2 = 0;
         /* Progressive */
         if (f->psf_ident) {
             // FIXME
             f2 = 0;
         }
         else {
+            f2 = h >= ZERO_IDX(p->vbi_f2_part1.start);
             /* ACTIVE F1 */
             if (h >= ZERO_IDX(p->active_f1.start) && h <= ZERO_IDX(p->active_f1.end)) {
                 active = 1;
@@ -874,7 +875,6 @@ static bool upipe_sdi_dec_handle(struct upipe *upipe, struct uref *uref,
             /* ACTIVE F2 */
             else if (h >= ZERO_IDX(p->active_f2.start) && h <= ZERO_IDX(p->active_f2.end)) {
                 active = 1;
-                f2 = 1;
             }
         }
 
