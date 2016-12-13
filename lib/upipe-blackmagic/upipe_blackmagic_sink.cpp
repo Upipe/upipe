@@ -422,7 +422,7 @@ static void upipe_bmd_sink_extract_ttx(IDeckLinkVideoFrameAncillary *ancillary,
 
         uint8_t line_offset = dvbvbittx_get_line(&pic_data[DVBVBI_UNIT_HEADER_SIZE]);
 
-        uint8_t f2 = !!dvbvbittx_get_field(&pic_data[DVBVBI_UNIT_HEADER_SIZE]);
+        uint8_t f2 = !dvbvbittx_get_field(&pic_data[DVBVBI_UNIT_HEADER_SIZE]);
         if (f2 == 0 && line_offset == 0) // line == 0
             continue;
 
