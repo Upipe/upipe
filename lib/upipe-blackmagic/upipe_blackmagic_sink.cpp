@@ -438,7 +438,7 @@ static void upipe_bmd_sink_extract_ttx(IDeckLinkVideoFrameAncillary *ancillary,
             continue;
 
         if (sd) {
-            uint8_t buf[VANC_WIDTH*2*2];
+            uint8_t buf[720*2];
             sdi_clear_vbi(buf, 720);
 
             int line = sdi_encode_ttx_sd(&buf[0], packet[i][0], sp);
