@@ -294,6 +294,7 @@ struct upipe_mgr *upipe_rtpsrc_mgr_alloc(void)
     if (unlikely(rtpsrc_mgr == NULL))
         return NULL;
 
+    memset(rtpsrc_mgr, 0, sizeof(*rtpsrc_mgr));
     rtpsrc_mgr->udpsrc_mgr = upipe_udpsrc_mgr_alloc();
     rtpsrc_mgr->rtpd_mgr = upipe_rtpd_mgr_alloc();
 

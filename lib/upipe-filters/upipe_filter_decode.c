@@ -388,6 +388,7 @@ struct upipe_mgr *upipe_fdec_mgr_alloc(void)
     if (unlikely(fdec_mgr == NULL))
         return NULL;
 
+    memset(fdec_mgr, 0, sizeof(*fdec_mgr));
     fdec_mgr->avcdec_mgr = NULL;
 
     urefcount_init(upipe_fdec_mgr_to_urefcount(fdec_mgr),

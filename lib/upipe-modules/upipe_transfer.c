@@ -681,6 +681,7 @@ struct upipe_mgr *upipe_xfer_mgr_alloc(uint8_t queue_length,
     if (unlikely(xfer_mgr == NULL))
         return NULL;
 
+    memset(xfer_mgr, 0, sizeof(*xfer_mgr));
     if (unlikely(!uqueue_init(&xfer_mgr->uqueue, queue_length,
                               xfer_mgr->extra))) {
         free(xfer_mgr);

@@ -262,6 +262,7 @@ struct upipe_mgr *upipe_seq_src_mgr_alloc(void)
     if (unlikely(upipe_seq_src_mgr == NULL))
         return NULL;
 
+    memset(upipe_seq_src_mgr, 0, sizeof(*upipe_seq_src_mgr));
     urefcount_init(&upipe_seq_src_mgr->urefcount, upipe_seq_src_mgr_free);
     upipe_seq_src_mgr->mgr.refcount = &upipe_seq_src_mgr->urefcount;
     upipe_seq_src_mgr->mgr.signature = UPIPE_SEQ_SRC_SIGNATURE;

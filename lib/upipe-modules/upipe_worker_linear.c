@@ -460,6 +460,7 @@ struct upipe_mgr *upipe_wlin_mgr_alloc(struct upipe_mgr *xfer_mgr)
     if (unlikely(wlin_mgr == NULL))
         return NULL;
 
+    memset(wlin_mgr, 0, sizeof(*wlin_mgr));
     wlin_mgr->qsrc_mgr = upipe_qsrc_mgr_alloc();
     wlin_mgr->qsink_mgr = upipe_qsink_mgr_alloc();
     wlin_mgr->xfer_mgr = upipe_mgr_use(xfer_mgr);
