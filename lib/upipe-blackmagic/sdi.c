@@ -223,7 +223,7 @@ void sdi_encode_ttx(uint16_t *buf, int packets, const uint8_t **packet, uint16_t
         uint8_t f2 = !dvbvbittx_get_field(&pic_data[DVBVBI_UNIT_HEADER_SIZE]);
 
         /* Write structure A */
-        buf[ANC_START_LEN + OP47_INITIAL_WORDS + j]  = ((f2) << 7) |
+        buf[ANC_START_LEN + OP47_INITIAL_WORDS + j]  = ((!f2) << 7) |
             (0x3 << 5) |
             line_offset;
 
