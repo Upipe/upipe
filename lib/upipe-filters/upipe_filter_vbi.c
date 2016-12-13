@@ -509,7 +509,7 @@ static void upipe_vbi_process_ttx(struct upipe *upipe, struct uref *uref,
 
     upipe_vbi->telx_w[0] = DVBVBI_ID_TTX_SUB;
     upipe_vbi->telx_w[1] = DVBVBI_LENGTH;
-    dvbvbittx_set_field(&upipe_vbi->telx_w[2], line > 313);
+    dvbvbittx_set_field(&upipe_vbi->telx_w[2], line < 313);
     dvbvbittx_set_line(&upipe_vbi->telx_w[2], (line % 313) );
     upipe_vbi->telx_w[3] = TELX_FRAMING_CODE;
 
