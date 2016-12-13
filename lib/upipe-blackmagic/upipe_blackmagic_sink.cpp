@@ -450,7 +450,7 @@ static void upipe_bmd_sink_extract_ttx(IDeckLinkVideoFrameAncillary *ancillary,
             uint16_t buf[VANC_WIDTH*2];
 
             sdi_clear_vanc(buf);
-            sdi_encode_ttx(&buf[0], i, packets[i], &packet[i][0], &ctr_array[i]);
+            sdi_encode_ttx(&buf[0], packets[i], &packet[i][0], &ctr_array[i]);
 
             void *vanc;
             int line = OP47_LINE1 + 563*i;

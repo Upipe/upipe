@@ -199,7 +199,7 @@ int sdi_encode_ttx_sd(uint8_t *buf, const uint8_t *pic_data, vbi_sampling_par *s
     return line;
 }
 
-void sdi_encode_ttx(uint16_t *buf, int f2, int packets, const uint8_t **packet, uint16_t *ctr)
+void sdi_encode_ttx(uint16_t *buf, int packets, const uint8_t **packet, uint16_t *ctr)
 {
     sdi_start_anc(buf, S291_OP47SDP_DID, S291_OP47SDP_SDID);
 
