@@ -604,7 +604,6 @@ static void extract_sd_audio(struct upipe *upipe, const uint16_t *packet, int h,
         upipe_sdi_dec->audio_samples[audio_group]++;
         ctx->group_offset[audio_group]++;
     }
-    
 }
 
 static void parse_sd_hanc(struct upipe *upipe, const uint16_t *packet, int h,
@@ -1270,7 +1269,7 @@ static struct upipe *_upipe_sdi_dec_alloc(struct upipe_mgr *mgr,
     upipe_sdi_dec->crc_c = 0;
 
     sdi_crc_setup(upipe_sdi_dec->crc_lut);
-    
+
     upipe_sdi_dec->debug = 0;
     for (int i = 0; i < 4; i++)
         upipe_sdi_dec->audio_samples[i] = 0;
