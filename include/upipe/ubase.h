@@ -79,7 +79,7 @@ extern "C" {
 #ifndef container_of
 /** @This is used to retrieve the private portion of a structure. */
 #   define container_of(ptr, type, member) ({                               \
-        const typeof( ((type *)0)->member ) *_mptr = (ptr);                 \
+        const __typeof__( ((type *)0)->member ) *_mptr = (ptr);             \
         (type *)( (char *)_mptr - offsetof(type,member) );})
 #endif
 
