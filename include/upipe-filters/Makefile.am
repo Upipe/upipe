@@ -9,3 +9,7 @@ myinclude_HEADERS = \
 	upipe_audio_bar.h \
 	upipe_audio_graph.h \
 	upipe_filter_vanc.h
+
+if HAVE_ZVBI
+myinclude_HEADERS += upipe_filter_vbi.h
+endif

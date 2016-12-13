@@ -12,10 +12,16 @@ libupipe_filters_la_SOURCES = \
 	upipe_filter_vanc.c \
 	ebur128/ebur128.c \
 	ebur128/ebur128.h
-    
+
 libupipe_filters_la_CPPFLAGS = -I$(top_builddir)/include -I$(top_srcdir)/include
 libupipe_filters_la_LIBADD = $(top_builddir)/lib/upipe-modules/libupipe_modules.la $(top_builddir)/lib/upipe-modules/libupipe_modules.la
 libupipe_filters_la_LDFLAGS = -no-undefined
+
+if HAVE_ZVBI
+libupipe_filters_la_SOURCES += upipe_filter_vbi.c
+libupipe_filters_la_CPPFLAGS += $(ZVBI_CFLAGS)
+libupipe_filters_la_LIBADD += $(ZVBI_LIBS)
+endif
 
 pkgconfigdir = $(libdir)/pkgconfig
 pkgconfig_DATA = libupipe_filters.pc
