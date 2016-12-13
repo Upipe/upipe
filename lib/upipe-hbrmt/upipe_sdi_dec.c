@@ -190,6 +190,9 @@ struct upipe_sdi_dec {
     /** vanc output */
     struct upipe_sdi_dec_sub vanc;
 
+    /** vbi output */
+    struct upipe_sdi_dec_sub vbi;
+
     /** audio output */
     struct upipe_sdi_dec_sub audio;
 
@@ -743,6 +746,39 @@ static bool upipe_sdi_dec_handle(struct upipe *upipe, struct uref *uref,
     for (int i = 0; i < 8; i++)
         audio_ctx.aes[i] = -1;
 
+    struct uref *uref_vbi = NULL;
+    int vbi_line = 0;
+    uint8_t *vbi_buf = NULL;
+    struct upipe_sdi_dec_sub *vbi_sub = &upipe_sdi_dec->vbi;
+    if (p->sd) {
+        if (!vbi_sub->ubuf_mgr) {
+            struct uref *vbi_flow_def = uref_sibling_alloc(uref);
+            uref_flow_set_def(vbi_flow_def, "pic.");
+            UBASE_RETURN(uref_pic_flow_set_macropixel(vbi_flow_def, 1))
+                UBASE_RETURN(uref_pic_flow_add_plane(vbi_flow_def, 1, 1, 1, "y8"))
+                upipe_sdi_dec_sub_require_ubuf_mgr(&vbi_sub->upipe, vbi_flow_def);
+            uref_free(vbi_flow_def);
+        }
+
+        uref_vbi = uref_dup(uref);
+        struct ubuf *ubuf_vbi = ubuf_pic_alloc(vbi_sub->ubuf_mgr, 720,
+                f->height - f->pict_fmt->active_height);
+
+        if (unlikely(ubuf_vbi == NULL)) {
+            upipe_throw_error(upipe, UBASE_ERR_ALLOC);
+            uref_free(uref_vbi);
+            uref_vbi = NULL;
+        } else {
+            uref_attach_ubuf(uref_vbi, ubuf_vbi);
+            if (unlikely(!ubase_check(uref_pic_plane_write(uref_vbi, "y8",
+                                0, 0, -1, -1, &vbi_buf)))) {
+                uref_free(uref_vbi);
+                uref_vbi = NULL;
+                upipe_throw_fatal(upipe, "Could not map vbi buffer");
+            }
+        }
+    }
+
     struct upipe_sdi_dec_sub *vanc_sub = &upipe_sdi_dec->vanc;
     if (!vanc_sub->ubuf_mgr) {
         struct uref *vanc_flow_def = uref_sibling_alloc(uref);
@@ -805,6 +841,8 @@ static bool upipe_sdi_dec_handle(struct upipe *upipe, struct uref *uref,
         }
     }
 
+    uint8_t vbi[720 * 32];
+
     /* Parse the whole frame */
     for (int h = 0; h < f->height; h++) {
         const uint8_t chroma_blanking = p->sd ? UPIPE_SDI_CHROMA_BLANKING_START : UPIPE_HDSDI_CHROMA_BLANKING_START;
@@ -842,18 +880,26 @@ static bool upipe_sdi_dec_handle(struct upipe *upipe, struct uref *uref,
 
         uint16_t *src_line = (uint16_t*)input_buf + (h * f->width + f->active_offset) * 2;
         if (!active) {
-            if (uref_vanc) {
+            // deinterleave for vanc_filter
+            if (p->sd) {
+                /* Only part 1 of vbi */
+                if ((!f2 && h <= ZERO_IDX(p->vbi_f1_part1.end)) ||
+                        (f2 && h <= ZERO_IDX(p->vbi_f2_part1.end))) {
+                    for (int i = 0; i < 720; i++) {
+                        vbi_buf[720 * vbi_line + i] =
+                            (src_line[2*i + 1] >> 2) & 0xff;
+                    }
+                    vbi_line++;
+                }
+            } else {
                 uint16_t *vanc_dst = (uint16_t*)vanc_buf;
-                // deinterleave for vanc_filter
-                if (p->sd) {
-                    // TODO
-                } else {
+                if (uref_vanc) {
                     for (unsigned i = 0; i < vanc_stride / 4; i++) {
                         vanc_dst[                i] = src_line[2*i  ]; // Y
                         vanc_dst[vanc_stride/4 + i] = src_line[2*i+1];  // C
                     }
+                    vanc_buf += vanc_stride;
                 }
-                vanc_buf += vanc_stride;
             }
         } else {
             uint8_t *y = fields[f2][0];
@@ -919,6 +965,11 @@ static bool upipe_sdi_dec_handle(struct upipe *upipe, struct uref *uref,
             uref_free(uref_audio);
         else
             upipe_sdi_dec_sub_output(&audio_sub->upipe, uref_audio, upump_p);
+    }
+
+    if (uref_vbi) {
+        uref_pic_plane_unmap(uref_vbi, "y8", 0, 0, -1, -1);
+        upipe_sdi_dec_sub_output(&vbi_sub->upipe, uref_vbi, upump_p);
     }
 
     if (uref_vanc) {
@@ -1127,6 +1178,12 @@ static int upipe_sdi_dec_control(struct upipe *upipe, int command, va_list args)
             *upipe_p = upipe_sdi_dec_sub_to_upipe(&upipe_sdi_dec->vanc);
             return UBASE_ERR_NONE;
         }
+        case UPIPE_SDI_DEC_GET_VBI_SUB: {
+            UBASE_SIGNATURE_CHECK(args, UPIPE_SDI_DEC_SIGNATURE)
+            struct upipe **upipe_p = va_arg(args, struct upipe **);
+            *upipe_p = upipe_sdi_dec_sub_to_upipe(&upipe_sdi_dec->vbi);
+            return UBASE_ERR_NONE;
+        }
         case UPIPE_SDI_DEC_GET_AUDIO_SUB: {
             UBASE_SIGNATURE_CHECK(args, UPIPE_SDI_DEC_SIGNATURE)
             struct upipe **upipe_p = va_arg(args, struct upipe **);
@@ -1211,11 +1268,13 @@ static struct upipe *_upipe_sdi_dec_alloc(struct upipe_mgr *mgr,
         return NULL;
 
     struct uprobe *uprobe_vanc = va_arg(args, struct uprobe *);
+    struct uprobe *uprobe_vbi = va_arg(args, struct uprobe *);
     struct uprobe *uprobe_audio = va_arg(args, struct uprobe *);
     struct uref *flow_def = uref_dup(va_arg(args, struct uref *));
     struct upipe_sdi_dec *upipe_sdi_dec = malloc(sizeof(struct upipe_sdi_dec));
     if (unlikely(upipe_sdi_dec == NULL)) {
         uprobe_release(uprobe_vanc);
+        uprobe_release(uprobe_vbi);
         uprobe_release(uprobe_audio);
         uref_free(flow_def);
         return NULL;
@@ -1290,6 +1349,8 @@ static struct upipe *_upipe_sdi_dec_alloc(struct upipe_mgr *mgr,
 
     upipe_sdi_dec_sub_init(upipe_sdi_dec_sub_to_upipe(&upipe_sdi_dec->vanc),
                               &upipe_sdi_dec->sub_mgr, uprobe_vanc);
+    upipe_sdi_dec_sub_init(upipe_sdi_dec_sub_to_upipe(&upipe_sdi_dec->vbi),
+                              &upipe_sdi_dec->sub_mgr, uprobe_vbi);
     upipe_sdi_dec_sub_init(upipe_sdi_dec_sub_to_upipe(&upipe_sdi_dec->audio),
                               &upipe_sdi_dec->sub_mgr, uprobe_audio);
 
@@ -1303,7 +1364,10 @@ static struct upipe *_upipe_sdi_dec_alloc(struct upipe_mgr *mgr,
  */
 static void upipe_sdi_dec_free(struct upipe *upipe)
 {
+    struct upipe_sdi_dec *upipe_sdi_dec = upipe_sdi_dec_from_upipe(upipe);
+
     upipe_throw_dead(upipe);
+
     upipe_sdi_dec_clean_input(upipe);
     upipe_sdi_dec_clean_output(upipe);
     upipe_sdi_dec_clean_ubuf_mgr(upipe);
