@@ -175,8 +175,8 @@ v210_to_planar_8 aligned
 %macro v210_to_sdi 0
 
 ; v210_to_sdi(const uint32_t *src, uint8_t *dst, int64_t width)
-cglobal v210_to_sdi, 3, 3, 8 + 7*ARCH_X86_64, src, dst, width
-    neg      widthq
+cglobal v210_to_sdi, 3, 3, 8 + 7*ARCH_X86_64, src, dst, pixels
+    neg      pixelsq
 
     mova     m3,  [v210_sdi_mask_1]
     mova     m4,  [v210_sdi_mask_2]
@@ -230,7 +230,7 @@ cglobal v210_to_sdi, 3, 3, 8 + 7*ARCH_X86_64, src, dst, width
 
         add      dstq, (15*mmsize)/16
         add srcq, mmsize
-        add      widthq, (6*mmsize)/16
+        add      pixelsq, (6*mmsize)/16
     jl .loop
 RET
 
