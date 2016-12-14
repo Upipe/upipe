@@ -605,7 +605,7 @@ static void upipe_vanc_output_telx(struct upipe *upipe,
     while (nb_units < nb_units_rounded) {
         upipe_vanc->telx_w[0] = DVBVBI_ID_STUFFING;
         upipe_vanc->telx_w[1] = DVBVBI_LENGTH;
-        memset(&upipe_vanc->telx_w[2], 0xff, RDD08SDP_B_SIZE - 2);
+        memset(&upipe_vanc->telx_w[2], 0xff, DVBVBI_LENGTH);
 
         upipe_vanc->telx_w += DVBVBI_LENGTH + DVBVBI_UNIT_HEADER_SIZE;
         nb_units++;
@@ -667,8 +667,12 @@ static void upipe_vanc_process_op47sdp(struct upipe *upipe, struct uref *uref,
         upipe_warn(upipe, "invalid OP47 SDP checksum");
         return;
     }
-    if (unlikely(!rdd08sdp_validate(r) || !rdd08sdp_get_a(r, 0))) {
+    if (unlikely(!rdd08sdp_validate(r))) {
         upipe_warn(upipe, "invalid OP47 SDP syntax");
+        return;
+    }
+    if (unlikely(!rdd08sdp_get_a(r, 0))) {
+        upipe_warn(upipe, "invalid OP47 A struct");
         return;
     }
 
