@@ -459,7 +459,7 @@ static void upipe_vbi_output_telx(struct upipe *upipe,
     while (nb_units < nb_units_rounded) {
         upipe_vbi->telx_w[0] = DVBVBI_ID_STUFFING;
         upipe_vbi->telx_w[1] = DVBVBI_LENGTH;
-        memset(&upipe_vbi->telx_w[2], 0xff, 43);
+        memset(&upipe_vbi->telx_w[2], 0xff, 44);
 
         upipe_vbi->telx_w += DVBVBI_LENGTH + DVBVBI_UNIT_HEADER_SIZE;
         nb_units++;
@@ -496,7 +496,6 @@ static void upipe_vbi_process_ttx(struct upipe *upipe, struct uref *uref,
 {
     struct upipe_vbi *upipe_vbi = upipe_vbi_from_upipe(upipe);
     assert(size == 56);
-    printf(".\n");
     if (unlikely(upipe_vbi->telx_uref == NULL))
         upipe_vbi_alloc_telx(upipe, uref);
     if (unlikely(upipe_vbi->telx_uref == NULL))
@@ -651,21 +650,11 @@ static bool upipe_vbi_handle(struct upipe *upipe, struct uref *uref,
     vbi_sliced out[49];
     memset(out, 0, sizeof(out));
     int n = vbi_raw_decode(&upipe_vbi->vbi_dec, (uint8_t*)r, out);
-    if (n) {
-        for (int i = 0; i < n; i++) {
-            printf("decoded line %d: %s : %x\n",
-                    out[i].line,
-                    vbi_sliced_name(out[i].id),
-                    out[i].id
-                    );
-
-            if (out[i].id & VBI_SLICED_TELETEXT_B) {
-                upipe_vbi_process_ttx(upipe, uref, out[i].data,
-                        sizeof(out[i].data), out[i].line);
-            }
+    for (int i = 0; i < n; i++) {
+        if (out[i].id & VBI_SLICED_TELETEXT_B) {
+            upipe_vbi_process_ttx(upipe, uref, out[i].data,
+                    sizeof(out[i].data), out[i].line);
         }
-    } else {
-        printf("not decoded\n");
     }
 
     uref_pic_plane_unmap(uref, "y8", 0, 0, -1, -1);
