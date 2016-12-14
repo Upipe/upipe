@@ -930,6 +930,7 @@ static bool upipe_sdi_dec_handle(struct upipe *upipe, struct uref *uref,
         uref_clock_set_pts_prog(uref_audio, pts);
         uref_clock_set_pts_orig(uref_audio, pts);
         uref_clock_set_dts_pts_delay(uref_audio, 0);
+        upipe_throw_clock_ref(upipe, uref, pts, 0);
         upipe_throw_clock_ts(upipe, uref);
 
         int samples_received = audio_ctx.group_offset[0];
