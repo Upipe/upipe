@@ -184,8 +184,8 @@ struct upipe_sdi_dec {
     /* Per audio group number of samples written */
     uint64_t audio_samples[4];
 
-    /** first pts */
-    uint64_t first_pts;
+    /** used to generate PTS */
+    uint64_t frame_num;
 
     /** vanc output */
     struct upipe_sdi_dec_sub vanc;
@@ -646,15 +646,6 @@ static bool upipe_sdi_dec_handle(struct upipe *upipe, struct uref *uref,
     if (!upipe_sdi_dec->ubuf_mgr)
         return false;
 
-    if (unlikely(upipe_sdi_dec->first_pts == 0)) {
-        if (!ubase_check(uref_clock_get_pts_prog(uref,
-                        &upipe_sdi_dec->first_pts))) {
-            upipe_err(upipe, "undated uref");
-            uref_free(uref);
-            return true;
-        }
-    }
-
     const struct sdi_offsets_fmt *f = upipe_sdi_dec->f;
     const struct sdi_picture_fmt *p = upipe_sdi_dec->p;
     const size_t output_hsize = p->active_width, output_vsize = p->active_height;
@@ -668,6 +659,16 @@ static bool upipe_sdi_dec_handle(struct upipe *upipe, struct uref *uref,
         upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
         return true;
     }
+
+    const struct urational *fps = &upipe_sdi_dec->f->fps;
+    uint64_t pts = UINT32_MAX + upipe_sdi_dec->frame_num++ *
+        UCLOCK_FREQ * fps->den / fps->num;
+
+    uref_clock_set_pts_prog(uref, pts);
+    uref_clock_set_pts_orig(uref, pts);
+    uref_clock_set_dts_pts_delay(uref, 0);
+    upipe_throw_clock_ref(upipe, uref, pts, 0);
+    upipe_throw_clock_ts(upipe, uref);
 
     if (!p->sd && upipe_sdi_dec->debug) {
         for (int h = 0; h < f->height; h++) {
@@ -925,13 +926,13 @@ static bool upipe_sdi_dec_handle(struct upipe *upipe, struct uref *uref,
     }
 
     if (uref_audio) {
-        uint64_t pts = upipe_sdi_dec->first_pts +
+        uint64_t pts = UINT32_MAX +
             audio_sub->samples * UCLOCK_FREQ / 48000;
         uref_clock_set_pts_prog(uref_audio, pts);
         uref_clock_set_pts_orig(uref_audio, pts);
         uref_clock_set_dts_pts_delay(uref_audio, 0);
-        upipe_throw_clock_ref(upipe, uref, pts, 0);
-        upipe_throw_clock_ts(upipe, uref);
+
+        upipe_throw_clock_ts(upipe, uref_audio);
 
         int samples_received = audio_ctx.group_offset[0];
         for (int i = 1; i < 4; i++) {
@@ -1340,7 +1341,7 @@ static struct upipe *_upipe_sdi_dec_alloc(struct upipe_mgr *mgr,
     for (int i = 0; i < 8; i++)
         upipe_sdi_dec->aes_detected[i] = -1;
     upipe_sdi_dec->eav_clock = 0;
-    upipe_sdi_dec->first_pts = 0;
+    upipe_sdi_dec->frame_num = 0;
 
     for (int i = 0; i < 8; i++)
         for (int j = 0; j < 4; j++)
