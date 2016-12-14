@@ -790,14 +790,18 @@ static bool upipe_sdi_dec_handle(struct upipe *upipe, struct uref *uref,
     }
 
     struct uref *uref_vanc = uref_dup(uref);
-    struct ubuf *ubuf_vanc = ubuf_pic_alloc(vanc_sub->ubuf_mgr,
+    struct ubuf *ubuf_vanc = NULL;
+    if (!p->sd) {
+        ubuf_vanc = ubuf_pic_alloc(vanc_sub->ubuf_mgr,
             f->pict_fmt->active_width * 2,
             f->height - f->pict_fmt->active_height);
+        if (unlikely(ubuf_vanc == NULL))
+            upipe_throw_error(upipe, UBASE_ERR_ALLOC);
+    }
 
     size_t vanc_stride;
     uint8_t *vanc_buf = NULL;
     if (unlikely(ubuf_vanc == NULL)) {
-        upipe_throw_error(upipe, UBASE_ERR_ALLOC);
         uref_free(uref_vanc);
         uref_vanc = NULL;
     } else {
