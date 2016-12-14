@@ -29,7 +29,7 @@ uyvy_enc_max_10: times 16 dw 0x3fb
 uyvy_enc_min_8: times 16 dw 0x0101
 uyvy_enc_max_8: times 16 dw 0xFEFE
 
-sdi_blank: times 4 dw 0x200, 0x40, 0x200, 0x40, 0x200, 0x40, 0x200, 0x40
+sdi_blank: times 8 dw 0x200, 0x40
 
 sdi_enc_mult_10: times 4 dw 64, 16, 4, 1
 sdi_chroma_shuf_10: times 2 db 1, 0, 5, 4, -1, 9, 8, 13, 12, -1, -1, -1, -1, -1, -1, -1
