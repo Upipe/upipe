@@ -106,17 +106,17 @@ uyvy_to_sdi
 %macro sdi_blank 0
 
 ; sdi_blank(uint16_t *dst, int64_t size)
-cglobal sdi_blank, 2, 2, 1, dst, size
-    shl     sizeq, 2
-    add     dstq, sizeq
-    neg     sizeq
+cglobal sdi_blank, 2, 2, 1, dst, pixels
+    shl     pixelsq, 2
+    add     dstq, pixelsq
+    neg     pixelsq
 
     mova    m0, [sdi_blank]
 
 .loop:
-    movu    [dstq+sizeq], m0
+    movu    [dstq+pixelsq], m0
 
-    add     sizeq, mmsize
+    add     pixelsq, mmsize
     jl .loop
 
     RET

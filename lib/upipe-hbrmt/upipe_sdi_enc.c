@@ -36,9 +36,9 @@
 #define UPIPE_SDI_SAV_LENGTH 4
 #define UPIPE_HD_SDI_SAV_LENGTH 8
 
-static void upipe_sdi_blank_c(uint16_t *dst, int64_t size)
+static void upipe_sdi_blank_c(uint16_t *dst, int64_t pixels)
 {
-    for (int w = 0; w < size; w++) {
+    for (int w = 0; w < pixels; w++) {
         dst[2*w+0] = 0x200;
         dst[2*w+1] = 0x40;
     }

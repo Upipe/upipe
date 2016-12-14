@@ -21,7 +21,7 @@ void upipe_v210_to_uyvy_unaligned_ssse3(const uint32_t *src, uint16_t *uyvy, int
 void upipe_v210_to_uyvy_unaligned_avx  (const uint32_t *src, uint16_t *uyvy, int64_t pixels);
 void upipe_v210_to_uyvy_unaligned_avx2 (const uint32_t *src, uint16_t *uyvy, int64_t pixels);
 
-void upipe_sdi_blank_avx(uint16_t *dst, int64_t size);
+void upipe_sdi_blank_avx(uint16_t *dst, int64_t pixels);
 
 /* process (6*mmsize)/16 pixels per iteration */
 void upipe_planar_to_sdi_8_ssse3(const uint8_t *y, const uint8_t *u, const uint8_t *v, uint8_t *dest, int64_t pixels);
