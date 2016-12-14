@@ -35,20 +35,20 @@ sdi_enc_mult_10: times 4 dw 64, 16, 4, 1
 sdi_chroma_shuf_10: times 2 db 1, 0, 5, 4, -1, 9, 8, 13, 12, -1, -1, -1, -1, -1, -1, -1
 sdi_luma_shuf_10: times 2 db -1, 3, 2, 7, 6, -1, 11, 10, 15, 14, -1, -1, -1, -1, -1, -1
 
-planar_8_y_shuf: db 0, -1, 1, -1, 2, -1, 3, -1, 4, -1, 5, -1, 6, -1, -1, -1
-planar_8_y_mult: dw 0x40, 0x4, 0x40, 0x4, 0x40, 0x4, 0x40, 0x0
-planar_8_y_shuf_after: db -1, 1, 0, 3, 2, -1, 5, 4, 7, 6, -1, 9, 8, 11, 10, -1
+planar_8_y_shuf: times 2 db 0, -1, 1, -1, 2, -1, 3, -1, 4, -1, 5, -1, 6, -1, -1, -1
+planar_8_y_mult: times 2 dw 0x40, 0x4, 0x40, 0x4, 0x40, 0x4, 0x40, 0x0
+planar_8_y_shuf_after: times 2 db -1, 1, 0, 3, 2, -1, 5, 4, 7, 6, -1, 9, 8, 11, 10, -1
 
-planar_8_u_shuf: db 0, -1, -1, -1, -1, 1, -1, -1, -1, -1, 2, -1, -1, -1, -1, -1
+planar_8_u_shuf: times 2 db 0, -1, -1, -1, -1, 1, -1, -1, -1, -1, 2, -1, -1, -1, -1, -1
 
-planar_8_v_shuf: db 0, -1, 2, -1, 3, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1
-planar_8_v_shuf_after: db -1, -1, 1, 0, -1, -1, -1, 3, 2, -1, -1, -1, 5, 4, -1, -1
+planar_8_v_shuf: times 2 db 0, -1, 2, -1, 3, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1
+planar_8_v_shuf_after: times 2 db -1, -1, 1, 0, -1, -1, -1, 3, 2, -1, -1, -1, 5, 4, -1, -1
 
-planar_10_y_shift:  dw 0x10, 0x1, 0x10, 0x1, 0x10, 0x1, 0x10, 0x1
-planar_10_uv_shift: dw 0x40, 0x40, 0x40, 0x40, 0x4, 0x4, 0x4, 0x4
+planar_10_y_shift:  times 2 dw 0x10, 0x1, 0x10, 0x1, 0x10, 0x1, 0x10, 0x1
+planar_10_uv_shift: times 2 dw 0x40, 0x40, 0x40, 0x40, 0x4, 0x4, 0x4, 0x4
 
-planar_10_y_shuf:  db -1, 1, 0, 3, 2, -1, 5, 4, 7, 6, -1, 9, 8, 11, 10, -1
-planar_10_uv_shuf: db 1, 0, 9, 8, -1, 3, 2, 11, 10, -1, 5, 4, 13, 12, -1, -1
+planar_10_y_shuf:  times 2 db -1, 1, 0, 3, 2, -1, 5, 4, 7, 6, -1, 9, 8, 11, 10, -1
+planar_10_uv_shuf: times 2 db 1, 0, 9, 8, -1, 3, 2, 11, 10, -1, 5, 4, 13, 12, -1, -1
 
 pb_0: times 32 db 0
 
@@ -71,16 +71,18 @@ SECTION .text
 %macro sdi_pack_10 0
 
 ; sdi_pack_10(uint8_t *dst, const uint8_t *y, int64_t size)
-cglobal sdi_pack_10, 3, 4, 3, dst, y, size
+cglobal sdi_pack_10, 3, 4, 5, dst, y, size
     add     sizeq, sizeq
     add     yq, sizeq
     neg     sizeq
     mova    m2, [sdi_enc_mult_10]
+    mova    m3, [sdi_chroma_shuf_10]
+    mova    m4, [sdi_luma_shuf_10]
 
 .loop:
     pmullw  m0, m2, [yq+sizeq]
-    pshufb  m1, m0, [sdi_chroma_shuf_10]
-    pshufb  m0, [sdi_luma_shuf_10]
+    pshufb  m1, m0, m3
+    pshufb  m0, m4
     por     m0, m1
 
     movu    [dstq], xm0
@@ -171,7 +173,12 @@ cglobal planar_to_uyvy_8, 5, 5, 8+3*ARCH_X86_64, dst, y, u, v, width
     punpckhbw m5, m2, m3
     punpcklbw m4, m2, m3
     punpckhbw m2, m4, m0
+%if cpuflag(avx)
     punpcklbw m0, m4, m0
+%else
+    punpcklbw m4, m0
+    SWAP       0,  4
+%endif
     punpckhbw m6, m5, m1
     punpcklbw m4, m5, m1
 
@@ -226,6 +233,8 @@ cglobal planar_to_uyvy_8, 5, 5, 8+3*ARCH_X86_64, dst, y, u, v, width
     RET
 %endmacro
 
+INIT_XMM sse2
+planar_to_uyvy_8
 INIT_XMM avx
 planar_to_uyvy_8
 INIT_YMM avx2
@@ -411,7 +420,7 @@ v210_uyvy_unpack aligned
 %macro planar_to_sdi_8 0
 
 ; planar_to_sdi_8(const uint8_t *y, const uint8_t *u, const uint8_t *v, uint8_t *l, const int64_t width)
-cglobal planar_to_sdi_8, 5, 5, 3, y, u, v, l, width, size
+cglobal planar_to_sdi_8, 5, 5, 3, y, u, v, l, width
     shr    widthq, 1
     lea    yq, [yq + 2*widthq]
     add    uq, widthq
@@ -420,9 +429,14 @@ cglobal planar_to_sdi_8, 5, 5, 3, y, u, v, l, width, size
     neg    widthq
 
 .loop:
-    movq   m0, [yq + widthq*2]
-    movd   m1, [uq + widthq*1]
-    movu   m2, [vq + widthq*1]
+    movq   xm0, [yq + widthq*2]
+    movd   xm1, [uq + widthq*1]
+    movd   xm2, [vq + widthq*1]
+%if cpuflag(avx2)
+    vinserti128 m0, m0, [yq + widthq*2 + 6], 1
+    vinserti128 m1, m1, [uq + widthq*1 + 3], 1
+    vinserti128 m2, m2, [vq + widthq*1 + 3], 1
+%endif
 
     pshufb m0, [planar_8_y_shuf]
     pmullw m0, [planar_8_y_mult]
@@ -438,16 +452,23 @@ cglobal planar_to_sdi_8, 5, 5, 3, y, u, v, l, width, size
 
     por    m0, m2
 
-    movu   [lq], m0
+    movu   [lq], xm0
+%if cpuflag(avx2)
+    vextracti128 [lq+15], m0, 1
+%endif
 
-    add    lq, 15
-    add    widthq, 3
+    add    lq, (15*mmsize)/16
+    add    widthq, (3*mmsize)/16
     jl .loop
 
     RET
 %endmacro
 
+INIT_XMM ssse3
+planar_to_sdi_8
 INIT_XMM avx
+planar_to_sdi_8
+INIT_YMM avx2
 planar_to_sdi_8
 
 %macro planar_to_sdi_10 0
@@ -461,9 +482,15 @@ cglobal planar_to_sdi_10, 5, 5, 3, y, u, v, l, width, size
     neg    widthq
 
 .loop:
-    movu   m0, [yq + widthq*2]
-    movq   m1, [uq + widthq*1]
-    movhps m1, [vq + widthq*1]
+    movu   xm0, [yq + widthq*2]
+    movq   xm1, [uq + widthq*1]
+    movhps xm1, [vq + widthq*1]
+%if cpuflag(avx2)
+    vinserti128 m0, m0, [yq + widthq*2 + 12], 1
+    movq   xm2, [uq + widthq*1 +  6]
+    movhps xm2, [vq + widthq*1 +  6]
+    vinserti128 m1, m1, xm2, 1
+%endif
 
     pmullw m0, [planar_10_y_shift]
     pmullw m1, [planar_10_uv_shift]
@@ -473,16 +500,23 @@ cglobal planar_to_sdi_10, 5, 5, 3, y, u, v, l, width, size
 
     por    m0, m1
 
-    movu   [lq], m0
+    movu   [lq], xm0
+%if cpuflag(avx2)
+    vextracti128 [lq+15], m0, 1
+%endif
 
-    add    lq, 15
-    add    widthq, 6
+    add    lq, (15*mmsize)/16
+    add    widthq, (6*mmsize)/16
     jl .loop
 
     RET
 %endmacro
 
+INIT_XMM ssse3
+planar_to_sdi_10
 INIT_XMM avx
+planar_to_sdi_10
+INIT_YMM avx2
 planar_to_sdi_10
 
 %macro planar_10_to_planar_8 0
@@ -497,6 +531,9 @@ cglobal planar_10_to_planar_8, 3, 3, 3, y, y8, width
 .loop:
     mova     m0, [yq + widthq*2 + 0*mmsize]
     mova     m1, [yq + widthq*2 + 1*mmsize]
+%if cpuflag(avx2)
+    SBUTTERFLY dqqq, 0, 1, 2
+%endif
 
     psrlw    m0, 2
     psrlw    m1, 2
@@ -511,5 +548,45 @@ cglobal planar_10_to_planar_8, 3, 3, 3, y, y8, width
     RET
 %endmacro
 
-INIT_XMM avx
+INIT_XMM sse2
 planar_10_to_planar_8
+INIT_YMM avx2
+planar_10_to_planar_8
+
+%macro planar8_to_planar10 0
+
+; planar_10_to_planar_8(const uint16_t *y, const uint8_t *y8, const int64_t width)
+cglobal planar8_to_planar10, 3, 3, 2 + notcpuflag(sse4), y, y8, width
+    lea      yq, [yq + 2*widthq]
+    add      y8q, widthq
+
+    neg      widthq
+
+%if notcpuflag(sse4)
+    pxor m2, m2
+%endif
+
+.loop:
+%if cpuflag(sse4)
+        pmovzxbw m0, [y8q + widthq]
+%else
+        movh m0, [y8q + widthq]
+        punpcklbw m0, m2
+%endif
+
+        psllw m1, m0, 2
+        psrlw m0, 6
+        por m0, m1
+
+        mova [yq + 2*widthq], m0
+
+        add      widthq, mmsize/2
+    jl .loop
+RET
+
+%endmacro
+
+INIT_XMM sse2
+planar8_to_planar10
+INIT_YMM avx2
+planar8_to_planar10
