@@ -884,6 +884,10 @@ static upipe_bmd_sink_frame *get_video_frame(struct upipe *upipe,
     /* Loop through subpic data */
     struct upipe_bmd_sink_sub *subpic_sub = &upipe_bmd_sink->subpic_subpipe;
 
+    uint64_t vid_pts = 0;
+    uref_clock_get_pts_sys(uref, &vid_pts);
+    vid_pts += upipe_bmd_sink->pic_subpipe.latency;
+
     for (;;) {
         /* buffered uref if any */
         struct uref *subpic = subpic_sub->uref;
@@ -906,13 +910,13 @@ static upipe_bmd_sink_frame *get_video_frame(struct upipe *upipe,
         //printf("\n SUBPIC PTS %" PRIu64" \n", subpic_pts );
 
         /* Delete old urefs */
-        if (subpic_pts + (UCLOCK_FREQ/25) < pts) {
+        if (subpic_pts + (UCLOCK_FREQ/25) < vid_pts) {
             uref_free(subpic);
             continue;
         }
 
         /* Buffer if needed */
-        if (subpic_pts - (UCLOCK_FREQ/25) > pts) {
+        if (subpic_pts - (UCLOCK_FREQ/25) > vid_pts) {
             subpic_sub->uref = subpic;
             break;
         }
