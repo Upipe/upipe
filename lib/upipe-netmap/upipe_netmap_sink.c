@@ -572,6 +572,9 @@ static void upipe_netmap_sink_worker(struct upump *upump)
     struct upipe *upipe = upump_get_opaque(upump, struct upipe *);
     struct upipe_netmap_sink *upipe_netmap_sink = upipe_netmap_sink_from_upipe(upipe);
 
+    if (!upipe_netmap_sink->flow_def)
+        return;
+
     /* Source */
     struct uref *uref = upipe_netmap_sink->uref;
     const uint8_t *src_buf = NULL;
