@@ -590,6 +590,7 @@ static void upipe_netmap_sink_worker(struct upump *upump)
     uint32_t txavail = nm_ring_space(txring);
     bool rfc4175 = upipe_netmap_sink->rfc4175;
 
+    /* map picture */
     if (rfc4175) {
         for (int i = 0; i < UPIPE_RFC4175_MAX_PLANES; i++) {
             const char *chroma = upipe_netmap_sink->input_chroma_map[i];
@@ -609,6 +610,7 @@ static void upipe_netmap_sink_worker(struct upump *upump)
         }
     }
 
+    /* fill ring buffer */
     while (txavail) {
         uint8_t *dst = (uint8_t*)NETMAP_BUF(txring, txring->slot[cur].buf_idx);
         if (!uref) {
@@ -671,6 +673,7 @@ static void upipe_netmap_sink_worker(struct upump *upump)
         }
     }
 
+    /* */
     if (!rfc4175 && input_size != -1) {
         upipe_verbose_va(upipe, "loop done, input size %d bytes left %d -> %d",
                 input_size, bytes_left, input_size - bytes_left);
@@ -679,6 +682,7 @@ static void upipe_netmap_sink_worker(struct upump *upump)
     txring->head = txring->cur = cur;
     ioctl(NETMAP_FD(upipe_netmap_sink->d), NIOCTXSYNC, NULL);
 
+    /* resize current buffer (if any) */
     if (uref) {
         if (!rfc4175) {
             if (bytes_left > 0) {
