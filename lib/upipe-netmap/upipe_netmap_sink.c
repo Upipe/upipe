@@ -133,6 +133,9 @@ struct upipe_netmap_sink {
     struct uref *flow_def;
     struct urational fps;
 
+    /** frame size */
+    uint64_t frame_size;
+
     /* Determined by the input flow_def */
     bool rfc4175;
     int input_bit_depth;
@@ -275,6 +278,7 @@ static struct upipe *upipe_netmap_sink_alloc(struct upipe_mgr *mgr,
     upipe_netmap_sink->frame_count = 0;
     upipe_netmap_sink->line = 0;
     upipe_netmap_sink->pixel_offset = 0;
+    upipe_netmap_sink->frame_size = 0;
 
     upipe_netmap_sink_init_urefcount(upipe);
     upipe_netmap_sink_init_upump_mgr(upipe);
@@ -334,13 +338,11 @@ static int upipe_netmap_put_headers(struct upipe_netmap_sink *upipe_netmap_sink,
     rtp_set_type(buf, pt);
     rtp_set_seqnum(buf, upipe_netmap_sink->seqnum & UINT16_MAX);
 
-    int pkt = upipe_netmap_sink->pkt++;
-    uint64_t pkts_per_frame = 4497; // FIXME : hardcoded for HD NTSC
-    assert(pkt < pkts_per_frame);
     struct urational *fps = &upipe_netmap_sink->fps;
     uint64_t frame_duration = UCLOCK_FREQ * fps->den / fps->num;
     uint64_t timestamp = upipe_netmap_sink->frame_count * frame_duration +
-        frame_duration * pkt / pkts_per_frame;
+        (frame_duration * upipe_netmap_sink->pkt++ * HBRMT_DATA_SIZE) /
+        upipe_netmap_sink->frame_size;
     rtp_set_timestamp(buf, timestamp & UINT32_MAX);
     if (put_marker)
         rtp_set_marker(buf);
@@ -712,6 +714,14 @@ static bool upipe_netmap_sink_output(struct upipe *upipe, struct uref *uref,
         uref_free(upipe_netmap_sink->flow_def);
         upipe_netmap_sink->flow_def = uref;
         return true;
+    }
+
+    if (upipe_netmap_sink->frame_size == 0) {
+        if (!upipe_netmap_sink->rfc4175) {
+            uref_block_size(uref, &upipe_netmap_sink->frame_size);
+        } else {
+            // TODO
+        }
     }
 
     ulist_add(&upipe_netmap_sink->sink_queue, uref_to_uchain(uref));
