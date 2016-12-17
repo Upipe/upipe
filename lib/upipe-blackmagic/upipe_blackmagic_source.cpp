@@ -736,7 +736,8 @@ static void upipe_bmd_src_work(struct upipe *upipe, struct upump *upump)
         uint64_t pts_prog = UINT64_MAX;
         if (likely(ubase_check(uref_clock_get_pts_orig(uref, &pts_orig)))) {
             pts_prog = pts_orig + upipe_bmd_src->timestamp_offset;
-            if (unlikely(pts_prog <= upipe_bmd_src->timestamp_highest)) {
+            if (unlikely(type == UPIPE_BMD_SRC_PIC &&
+                         pts_prog <= upipe_bmd_src->timestamp_highest)) {
                 upipe_warn(upipe, "timestamp is in the past, resetting");
                 pts_prog = upipe_bmd_src->timestamp_highest +
                     UCLOCK_FREQ * upipe_bmd_src->fps.den /
