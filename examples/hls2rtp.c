@@ -34,6 +34,7 @@
 #include <upipe/uprobe_helper_uprobe.h>
 #include <upipe/uprobe_helper_urefcount.h>
 #include <upipe/uprobe_helper_alloc.h>
+#include <upipe/uprobe_stdio.h>
 #include <upipe/uprobe_stdio_color.h>
 #include <upipe/uprobe_loglevel.h>
 #include <upipe/uprobe_prefix.h>
@@ -887,16 +888,22 @@ static struct upipe *hls2rtp_video_sink(struct uprobe *probe,
     char uri[ret + 1];
     assert(snprintf(uri, sizeof (uri), "%s:%u", addr, port) > 0);
 
-    struct upipe_mgr *upipe_rtp_h264_mgr = upipe_rtp_h264_mgr_alloc();
-    assert(upipe_rtp_h264_mgr);
-    struct upipe *sink = upipe_void_alloc(
-        upipe_rtp_h264_mgr,
+    struct upipe *sink = upipe_void_alloc_sub(
+        trickp,
         uprobe_pfx_alloc(uprobe_use(probe),
-                         UPROBE_LOG_VERBOSE, "rtp h264"));
-    upipe_mgr_release(upipe_rtp_h264_mgr);
+                         UPROBE_LOG_VERBOSE, "trickp pic"));
     assert(sink);
 
     struct upipe *output = upipe_use(sink);
+    struct upipe_mgr *upipe_rtp_h264_mgr = upipe_rtp_h264_mgr_alloc();
+    assert(upipe_rtp_h264_mgr);
+    output = upipe_void_chain_output(
+        output, upipe_rtp_h264_mgr,
+        uprobe_pfx_alloc(uprobe_use(probe),
+                         UPROBE_LOG_VERBOSE, "rtp h264"));
+    assert(output);
+    upipe_mgr_release(upipe_rtp_h264_mgr);
+
     struct upipe_mgr *upipe_rtp_prepend_mgr = upipe_rtp_prepend_mgr_alloc();
     assert(upipe_rtp_prepend_mgr);
     output = upipe_void_chain_output(
@@ -906,12 +913,6 @@ static struct upipe *hls2rtp_video_sink(struct uprobe *probe,
     upipe_mgr_release(upipe_rtp_prepend_mgr);
     assert(output);
     ubase_assert(upipe_rtp_prepend_set_type(output, video_output.rtp_type));
-
-    output = upipe_void_chain_output_sub(
-        output, trickp,
-        uprobe_pfx_alloc(uprobe_use(probe),
-                         UPROBE_LOG_VERBOSE, "trickp pic"));
-    assert(output);
 
     struct upipe_mgr *upipe_udpsink_mgr = upipe_udpsink_mgr_alloc();
     assert(upipe_udpsink_mgr);
@@ -937,16 +938,22 @@ static struct upipe *hls2rtp_audio_sink(struct uprobe *probe,
     char uri[ret + 1];
     assert(snprintf(uri, sizeof (uri), "%s:%u", addr, port) > 0);
 
-    struct upipe_mgr *upipe_rtp_mpeg4_mgr = upipe_rtp_mpeg4_mgr_alloc();
-    assert(upipe_rtp_mpeg4_mgr);
-    struct upipe *sink = upipe_void_alloc(
-        upipe_rtp_mpeg4_mgr,
+    struct upipe *sink = upipe_void_alloc_sub(
+        trickp,
         uprobe_pfx_alloc(uprobe_use(probe),
-                         UPROBE_LOG_VERBOSE, "rtp aac"));
-    upipe_mgr_release(upipe_rtp_mpeg4_mgr);
+                         UPROBE_LOG_VERBOSE, "trickp sound"));
     assert(sink);
 
     struct upipe *output = upipe_use(sink);
+    struct upipe_mgr *upipe_rtp_mpeg4_mgr = upipe_rtp_mpeg4_mgr_alloc();
+    assert(upipe_rtp_mpeg4_mgr);
+    output = upipe_void_chain_output(
+        output, upipe_rtp_mpeg4_mgr,
+        uprobe_pfx_alloc(uprobe_use(probe),
+                         UPROBE_LOG_VERBOSE, "rtp aac"));
+    upipe_mgr_release(upipe_rtp_mpeg4_mgr);
+    assert(output);
+
     struct upipe_mgr *upipe_rtp_prepend_mgr = upipe_rtp_prepend_mgr_alloc();
     assert(upipe_rtp_prepend_mgr);
     output = upipe_void_chain_output(
@@ -956,12 +963,6 @@ static struct upipe *hls2rtp_audio_sink(struct uprobe *probe,
     upipe_mgr_release(upipe_rtp_prepend_mgr);
     assert(output);
     ubase_assert(upipe_rtp_prepend_set_type(output, audio_output.rtp_type));
-
-    output = upipe_void_chain_output_sub(
-        output, trickp,
-        uprobe_pfx_alloc(uprobe_use(probe),
-                         UPROBE_LOG_VERBOSE, "trickp sound"));
-    assert(output);
 
     struct upipe_mgr *upipe_udpsink_mgr = upipe_udpsink_mgr_alloc();
     assert(upipe_udpsink_mgr);
@@ -990,6 +991,7 @@ enum opt {
     OPT_AUDIO_PORT,
     OPT_NO_AUDIO,
     OPT_NO_VIDEO,
+    OPT_NO_COLOR,
     OPT_REWRITE_DATE,
     OPT_SEEK,
     OPT_SEQUENCE,
@@ -1003,6 +1005,7 @@ static struct option options[] = {
     { "audio-port", required_argument, NULL, OPT_AUDIO_PORT },
     { "no-video", no_argument, NULL, OPT_NO_VIDEO },
     { "no-audio", no_argument, NULL, OPT_NO_AUDIO },
+    { "no-color", no_argument, NULL, OPT_NO_COLOR },
     { "rewrite-date", no_argument, NULL, OPT_REWRITE_DATE },
     { "verbose", no_argument, NULL, OPT_VERBOSE },
     { "seek", required_argument, NULL, OPT_SEEK },
@@ -1038,6 +1041,7 @@ int main(int argc, char **argv)
 {
     int opt;
     int index = 0;
+    bool color = true;
 
     /*
      * parse options
@@ -1048,8 +1052,10 @@ int main(int argc, char **argv)
             switch (log_level) {
             case UPROBE_LOG_DEBUG:
                 log_level = UPROBE_LOG_VERBOSE;
+                break;
             case UPROBE_LOG_NOTICE:
                 log_level = UPROBE_LOG_DEBUG;
+                break;
             }
             break;
 
@@ -1070,6 +1076,9 @@ int main(int argc, char **argv)
             break;
         case OPT_NO_AUDIO:
             audio_output.enabled = false;
+            break;
+        case OPT_NO_COLOR:
+            color = false;
             break;
         case OPT_REWRITE_DATE:
             rewrite_date = true;
@@ -1121,8 +1130,9 @@ int main(int argc, char **argv)
     /*
      * create root probe
      */
-    main_probe =
-        uprobe_stdio_color_alloc(NULL, stderr, log_level);
+    main_probe = color ?
+        uprobe_stdio_color_alloc(NULL, stderr, log_level) :
+        uprobe_stdio_alloc(NULL, stderr, log_level);
     assert(main_probe);
 
     /*
