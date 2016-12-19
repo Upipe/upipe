@@ -924,7 +924,6 @@ static int _upipe_netmap_sink_set_uri(struct upipe *upipe, const char *uri)
 {
     struct upipe_netmap_sink *upipe_netmap_sink =
         upipe_netmap_sink_from_upipe(upipe);
-    char check[2];
 
     nm_close(upipe_netmap_sink->d);
     ubase_clean_str(&upipe_netmap_sink->uri);
@@ -938,8 +937,7 @@ static int _upipe_netmap_sink_set_uri(struct upipe *upipe, const char *uri)
 
     upipe_netmap_sink_check_upump_mgr(upipe);
 
-    sscanf(uri, "%*[^-]-%u%2c", &upipe_netmap_sink->ring_idx, check);
-    if (strncmp(check, "/T", 2)) {
+    if (sscanf(uri, "%*[^-]-%u/T", &upipe_netmap_sink->ring_idx) != 1) {
         upipe_err_va(upipe, "invalid netmap receive uri %s", uri);
         return UBASE_ERR_EXTERNAL;
     }
