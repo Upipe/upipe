@@ -81,6 +81,7 @@
 #include <upipe-filters/upipe_filter_format.h>
 #include <upipe-av/upipe_av.h>
 #include <upipe-av/upipe_av_pixfmt.h>
+#include <upipe-av/upipe_av_samplefmt.h>
 #include <upipe-av/upipe_avformat_source.h>
 #include <upipe-av/upipe_avcodec_decode.h>
 #include <upipe-swscale/upipe_sws.h>
@@ -403,12 +404,18 @@ static int catch_audio(struct uprobe *uprobe, struct upipe *upipe,
         return UBASE_ERR_UNHANDLED;
 
     uprobe_throw(uprobe_main, NULL, UPROBE_FREEZE_UPUMP_MGR);
-    struct upipe_mgr *upipe_avcdec_mgr = upipe_avcdec_mgr_alloc();
-    struct upipe *avcdec = upipe_void_alloc(upipe_avcdec_mgr,
+    struct upipe_mgr *fdec_mgr = upipe_fdec_mgr_alloc();
+    struct upipe_mgr *avcdec_mgr = upipe_avcdec_mgr_alloc();
+    upipe_fdec_mgr_set_avcdec_mgr(fdec_mgr, avcdec_mgr);
+    upipe_mgr_release(avcdec_mgr);
+    struct upipe *avcdec = upipe_void_alloc(fdec_mgr,
             uprobe_pfx_alloc(uprobe_use(uprobe_main),
                              UPROBE_LOG_VERBOSE, "avcdec audio"));
     assert(avcdec != NULL);
-    upipe_mgr_release(upipe_avcdec_mgr);
+    upipe_mgr_release(fdec_mgr);
+    char sample_fmt_str[5];
+    snprintf(sample_fmt_str, sizeof(sample_fmt_str), "%d", (int)AV_SAMPLE_FMT_S16);
+    upipe_set_option(avcdec, "request_sample_fmt", sample_fmt_str);
 
     uprobe_throw(uprobe_main, NULL, UPROBE_THAW_UPUMP_MGR);
 
