@@ -403,6 +403,25 @@ static bool upipe_mpgvf_parse_sequence(struct upipe *upipe)
             case MP2VSEQX_LEVEL_HIGHP:
                 max_octetrate = 120000000 / 8;
                 break;
+            case MPV2SEQX_LEVEL_LOW_MV:
+                max_octetrate = 8000000 / 8;
+                break;
+            case MPV2SEQX_LEVEL_MAIN_MV:
+                max_octetrate = 25000000 / 8;
+                break;
+            case MPV2SEQX_LEVEL_HIGH_MV:
+                max_octetrate = 130000000 / 8;
+                break;
+            case MPV2SEQX_LEVEL_HIGH1440_MV:
+                max_octetrate = 100000000 / 8;
+                break;
+                break;
+            case MPV2SEQX_LEVEL_MAIN_422:
+                max_octetrate = 50000000 / 8;
+                break;
+            case MPV2SEQX_LEVEL_HIGH_422:
+                max_octetrate = 300000000 / 8;
+                break;
             default:
                 upipe_err_va(upipe, "invalid level %d",
                              profilelevel & MP2VSEQX_LEVEL_MASK);
