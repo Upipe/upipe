@@ -156,6 +156,9 @@ static struct upipe *upipe_src = NULL;
 static struct upipe *upipe_blit = NULL;
 /* schedule pipe */
 static struct upipe *upipe_schedule = NULL;
+/* picture resizing */
+static unsigned w = 0;
+static unsigned h = 0;
 
 static void uplay_stop(struct upump *upump);
 
@@ -357,6 +360,10 @@ static int catch_video(struct uprobe *uprobe, struct upipe *upipe,
 
     struct uref *uref = uref_sibling_alloc(flow_def);
     uref_flow_set_def(uref, "pic.");
+    if (w && h) {
+        uref_pic_flow_set_hsize(uref, w);
+        uref_pic_flow_set_vsize(uref, h);
+    }
 
     struct upipe *ffmt = upipe_flow_alloc_output(upipe_blit, ffmt_mgr,
             uprobe_pfx_alloc(uprobe_use(uprobe_main),
@@ -674,7 +681,7 @@ static void upump_mgr_free(struct upump_mgr *upump_mgr)
 }
 
 static void usage(const char *argv0) {
-    fprintf(stderr, "Usage: %s [-d] [-q] [-u] [-A <audio>] [-S <subtitle>] [-V <video>] [-P <program>] [-R 1:1] <source>\n", argv0);
+    fprintf(stderr, "Usage: %s [-d] [-q] [-u] [-s 1920x1080] [-A <audio>] [-S <subtitle>] [-V <video>] [-P <program>] [-R 1:1] <source>\n", argv0);
     exit(EXIT_FAILURE);
 }
 
@@ -682,7 +689,7 @@ int main(int argc, char **argv)
 {
     enum uprobe_log_level loglevel = UPROBE_LOG_LEVEL;
     int opt;
-    while ((opt = getopt(argc, argv, "udqA:V:S:P:R:")) != -1) {
+    while ((opt = getopt(argc, argv, "udqA:V:S:P:R:s:")) != -1) {
         switch (opt) {
             case 'u':
                 udp = true;
@@ -713,6 +720,12 @@ int main(int argc, char **argv)
                 trickp_rate.den = strtoul(end, NULL, 10);
                 break;
             }
+            case 's':
+                if (sscanf(optarg, "%ux%u", &w, &h) != 2) {
+                    fprintf(stderr, "Incorrect size \"%s\"\n", optarg);
+                    w = h = 0;
+                }
+                break;
             default:
                 usage(argv[0]);
                 break;
