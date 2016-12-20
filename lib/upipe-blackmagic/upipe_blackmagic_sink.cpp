@@ -1348,7 +1348,6 @@ static int upipe_bmd_sink_sub_set_flow_def(struct upipe *upipe,
         BMDDisplayMode bmdMode = upipe_bmd_mode_from_flow_def(&upipe_bmd_sink->upipe, flow_def);
         if (bmdMode != upipe_bmd_sink->mode) {
             upipe_err(upipe, "Flow def doesn't correspond to configured mode");
-            return UBASE_ERR_UNHANDLED;
         }
 
         if (macropixel != 48 || ubase_check(
