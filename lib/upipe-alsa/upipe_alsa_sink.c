@@ -67,7 +67,7 @@
 #endif
 
 /** default device name */
-#define DEFAULT_DEVICE "plughw:0,0"
+#define DEFAULT_DEVICE "default"
 /** default period duration */
 #define DEFAULT_PERIOD_DURATION (UCLOCK_FREQ / 25)
 /** tolerance on PTSs (plus or minus) */
@@ -320,13 +320,10 @@ static bool upipe_alsink_open(struct upipe *upipe)
     if (unlikely(upipe_alsink->uri == NULL))
         return false;
 
-    const char *uri = upipe_alsink->uri;
-    if (!strcmp(uri, "default"))
-        uri = DEFAULT_DEVICE;
-
     if (unlikely(!ubase_check(upipe_alsink_check_upump_mgr(upipe))))
         return false;
 
+    const char *uri = upipe_alsink->uri;
     if (snd_pcm_open(&upipe_alsink->handle, uri, SND_PCM_STREAM_PLAYBACK,
                      SND_PCM_NONBLOCK) < 0) {
         upipe_err_va(upipe, "can't open device %s", uri);
