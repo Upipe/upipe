@@ -852,8 +852,10 @@ static bool upipe_h264f_activate_sps(struct upipe *upipe, uint32_t sps_id)
     if (!upipe_h264f->frame_mbs_only) {
         vsize = map_height * 16 * 2;
         ubuf_block_stream_skip_bits(s, 1); /* mb_adaptive_frame_field */
-    } else
+    } else {
+        UBASE_FATAL(upipe, uref_pic_set_progressive(flow_def))
         vsize = map_height * 16;
+    }
     ubuf_block_stream_skip_bits(s, 1); /* direct8x8_inference */
 
     bool frame_cropping = !!ubuf_block_stream_show_bits(s, 1);
