@@ -342,7 +342,7 @@ static bool upipe_alsink_open(struct upipe *upipe)
 
     if (snd_pcm_hw_params_set_rate_resample(upipe_alsink->handle, hwparams,
                                             1) < 0) {
-        upipe_err_va(upipe, "can't set interleaved mode (%s)", uri);
+        upipe_err_va(upipe, "can't set resampling (%s)", uri);
         goto open_error;
     }
 
