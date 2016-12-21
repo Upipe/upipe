@@ -332,7 +332,7 @@ int main(int argc, char *argv[])
     }
     assert(p);
 
-    write_pump = upump_alloc_idler(upump_mgr, genpackets, NULL, NULL);
+    write_pump = upump_alloc_timer(upump_mgr, genpackets, NULL, NULL, 0, UCLOCK_FREQ / 100);
     assert(write_pump);
     upump_start(write_pump);
 
@@ -367,7 +367,7 @@ int main(int argc, char *argv[])
     ubase_assert(upipe_set_uri(upipe_udpsink, udp_uri+1));
 
     /* redefine write pump */
-    write_pump = upump_alloc_idler(upump_mgr, genpackets2, NULL, NULL);
+    write_pump = upump_alloc_timer(upump_mgr, genpackets2, NULL, NULL, 0, UCLOCK_FREQ / 100);
     assert(write_pump);
     upump_start(write_pump);
 
