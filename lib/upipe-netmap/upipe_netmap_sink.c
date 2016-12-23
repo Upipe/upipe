@@ -784,14 +784,14 @@ static int upipe_netmap_sink_set_flow_def(struct upipe *upipe,
                 (u(uref_pic_flow_check_chroma(flow_def, 1, 1, 2, "y10l")) &&
                  u(uref_pic_flow_check_chroma(flow_def, 2, 1, 2, "u10l")) &&
                  u(uref_pic_flow_check_chroma(flow_def, 2, 1, 2, "v10l"))) ||
-                (u(uref_pic_flow_check_chroma(flow_def, 1, 1, 128,
+                (u(uref_pic_flow_check_chroma(flow_def, 1, 1, 16,
                                   "u10y10v10y10u10y10v10y10u10y10v10y10")))))) {
             upipe_err(upipe, "incompatible input flow def");
             return UBASE_ERR_EXTERNAL;
         }
 
         upipe_netmap_sink->input_is_v210 =
-            u(uref_pic_flow_check_chroma(flow_def, 1, 1, 128,
+            u(uref_pic_flow_check_chroma(flow_def, 1, 1, 16,
                         "u10y10v10y10u10y10v10y10u10y10v10y10"));
         upipe_netmap_sink->input_bit_depth = upipe_netmap_sink->input_is_v210
             ? 0
