@@ -1351,8 +1351,8 @@ static int upipe_bmd_sink_sub_set_flow_def(struct upipe *upipe,
             upipe_err(upipe, "Flow def doesn't correspond to configured mode");
         }
 
-        if (macropixel != 48 || ubase_check(
-                             uref_pic_flow_check_chroma(flow_def, 1, 1, 1,
+        if (macropixel != 6 || !ubase_check(
+                             uref_pic_flow_check_chroma(flow_def, 1, 1, 16,
                                                         "u10y10v10y10u10y10v10y10u10y10v10y10"))) {
             upipe_err(upipe, "incompatible input flow def");
             uref_dump(flow_def, upipe->uprobe);
