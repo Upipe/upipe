@@ -131,6 +131,9 @@ struct upipe_sdi_enc {
      * on each packet until it syncs back up */
     int mpf_packet_bits[4];
 
+    /* data block number for each audio control and data group */
+    uint8_t dbn[8];
+
     /* SDI offsets */
     const struct sdi_offsets_fmt *f;
     const struct sdi_picture_fmt *p;
@@ -252,7 +255,7 @@ static void put_payload_identifier(uint16_t *dst, const struct sdi_offsets_fmt *
     sdi_fill_anc_parity_checksum(&dst[6]);
 }
 
-static void put_audio_control_packet(uint16_t *dst, int ch_group)
+static void put_audio_control_packet(uint16_t *dst, int ch_group, uint8_t dbn)
 {
     /* ADF */
     dst[0] = S291_ADF1;
@@ -263,7 +266,7 @@ static void put_audio_control_packet(uint16_t *dst, int ch_group)
     dst[6] = 0xE4 - ch_group;
 
     /* DBN */
-    dst[8] = 0x0;
+    dst[8] = dbn;
 
     /* DC */
     dst[10] = 11;
@@ -297,7 +300,7 @@ static unsigned audio_packets_per_line(const struct sdi_offsets_fmt *f)
 /* NOTE: ch_group is zero indexed */
 static int put_audio_data_packet(uint16_t *dst, struct upipe_sdi_enc *s,
                                  int audio_sample, int ch_group,
-                                 uint8_t mpf_bit, uint16_t clk)
+                                 uint8_t mpf_bit, uint16_t clk, uint8_t dbn)
 {
     union {
         uint32_t u;
@@ -317,7 +320,7 @@ static int put_audio_data_packet(uint16_t *dst, struct upipe_sdi_enc *s,
     dst[6] = 0xE8 - (ch_group + 1);
 
     /* DBN */
-    dst[8] = 0x0;
+    dst[8] = dbn;
 
     /* DC */
     dst[10] = 24;
@@ -607,7 +610,9 @@ static void upipe_sdi_enc_encode_line(struct upipe *upipe, int h, uint16_t *dst,
     /* Audio control packet on Switching Line + 2 */
     else if ((h == ZERO_IDX(p->switching_line + 2)) ||
              (f->psf_ident != UPIPE_SDI_PSF_IDENT_P && h == ZERO_IDX(p->switching_line + p->field_offset + 2))) { 
-        put_audio_control_packet(&dst[chroma_blanking+1], 1);
+        put_audio_control_packet(&dst[chroma_blanking+1], 1, upipe_sdi_enc->dbn[4+1]++);
+        if (upipe_sdi_enc->dbn[4+1] == 0)
+            upipe_sdi_enc->dbn[4+1] = 1;
     }
 
     /* All channel groups should have the same samples to put on a line */
@@ -660,7 +665,10 @@ static void upipe_sdi_enc_encode_line(struct upipe *upipe, int h, uint16_t *dst,
                 uint16_t sample_clock = aud_clock - upipe_sdi_enc->eav_clock;
 
                 dst_pos += put_audio_data_packet(&dst[dst_pos], upipe_sdi_enc,
-                        sample_number[ch_group], ch_group, mpf_bit, sample_clock);
+                        sample_number[ch_group], ch_group, mpf_bit, sample_clock,
+                        upipe_sdi_enc->dbn[ch_group]++);
+                if (upipe_sdi_enc->dbn[ch_group] == 0)
+                    upipe_sdi_enc->dbn[ch_group] = 1;
                 sample_number[ch_group]++;
                 packets_put++;
             }
@@ -1237,6 +1245,8 @@ static struct upipe *upipe_sdi_enc_alloc(struct upipe_mgr *mgr,
     upipe_sdi_enc->total_audio_samples_put = 0;
     for (int i = 0; i < 4; i++)
         upipe_sdi_enc->mpf_packet_bits[i] = 0;
+    for (int i = 0; i < 8; i++)
+        upipe_sdi_enc->dbn[i] = 1;
 
     sdi_crc_setup(upipe_sdi_enc->crc_lut);
 
