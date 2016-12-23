@@ -614,10 +614,12 @@ static void upipe_sdi_enc_encode_line(struct upipe *upipe, int h, uint16_t *dst,
     /* Audio control packet on Switching Line + 2 */
     else if ((h == ZERO_IDX(p->switching_line + 2)) ||
              (f->psf_ident != UPIPE_SDI_PSF_IDENT_P && h == ZERO_IDX(p->switching_line + p->field_offset + 2))) { 
-        // TODO: control packets for all audio groups
-        put_audio_control_packet(&dst[chroma_blanking+1], 0, upipe_sdi_enc->dbn[4+0]++);
-        if (upipe_sdi_enc->dbn[4+0] == 0)
-            upipe_sdi_enc->dbn[4+0] = 1;
+        int dst_pos = chroma_blanking + 1;
+        for (int i = 0; i < 4; i++) {
+            dst_pos += put_audio_control_packet(&dst[dst_pos], i, upipe_sdi_enc->dbn[4+i]++);
+            if (upipe_sdi_enc->dbn[4+i] == 0)
+                upipe_sdi_enc->dbn[4+i] = 1;
+        }
     }
 
     /* All channel groups should have the same samples to put on a line */
