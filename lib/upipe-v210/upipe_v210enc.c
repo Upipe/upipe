@@ -510,8 +510,8 @@ static int upipe_v210enc_set_flow_def(struct upipe *upipe, struct uref *flow_def
 
     uref_pic_flow_clear_format(flow_def_dup);
     uref_pic_flow_set_align(flow_def_dup, 32);
-    uref_pic_flow_set_macropixel(flow_def_dup, 48);
-    uref_pic_flow_add_plane(flow_def_dup, 1, 1, 128, "u10y10v10y10u10y10v10y10u10y10v10y10");
+    uref_pic_flow_set_macropixel(flow_def_dup, 6);
+    uref_pic_flow_add_plane(flow_def_dup, 1, 1, 16, "u10y10v10y10u10y10v10y10u10y10v10y10");
 
     upipe_input(upipe, flow_def_dup, NULL);
     return UBASE_ERR_NONE;
