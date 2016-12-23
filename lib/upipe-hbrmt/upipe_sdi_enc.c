@@ -255,7 +255,7 @@ static void put_payload_identifier(uint16_t *dst, const struct sdi_offsets_fmt *
     sdi_fill_anc_parity_checksum(&dst[6]);
 }
 
-static void put_audio_control_packet(uint16_t *dst, int ch_group, uint8_t dbn)
+static int put_audio_control_packet(uint16_t *dst, int ch_group, uint8_t dbn)
 {
     /* ADF */
     dst[0] = S291_ADF1;
@@ -287,6 +287,10 @@ static void put_audio_control_packet(uint16_t *dst, int ch_group, uint8_t dbn)
     dst[32] = 0x0; /* Reserved */
 
     sdi_fill_anc_parity_checksum(&dst[6]);
+
+    /* Total amount to increment the destination including the luma words,
+     * so in total it's 18 chroma words */
+    return 36;
 }
 
 static unsigned audio_packets_per_line(const struct sdi_offsets_fmt *f)
