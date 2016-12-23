@@ -263,7 +263,7 @@ static void put_audio_control_packet(uint16_t *dst, int ch_group, uint8_t dbn)
     dst[4] = S291_ADF3;
 
     /* DID */
-    dst[6] = 0xE4 - ch_group;
+    dst[6] = 0xE4 - (ch_group + 1);
 
     /* DBN */
     dst[8] = dbn;
@@ -610,9 +610,10 @@ static void upipe_sdi_enc_encode_line(struct upipe *upipe, int h, uint16_t *dst,
     /* Audio control packet on Switching Line + 2 */
     else if ((h == ZERO_IDX(p->switching_line + 2)) ||
              (f->psf_ident != UPIPE_SDI_PSF_IDENT_P && h == ZERO_IDX(p->switching_line + p->field_offset + 2))) { 
-        put_audio_control_packet(&dst[chroma_blanking+1], 1, upipe_sdi_enc->dbn[4+1]++);
-        if (upipe_sdi_enc->dbn[4+1] == 0)
-            upipe_sdi_enc->dbn[4+1] = 1;
+        // TODO: control packets for all audio groups
+        put_audio_control_packet(&dst[chroma_blanking+1], 0, upipe_sdi_enc->dbn[4+0]++);
+        if (upipe_sdi_enc->dbn[4+0] == 0)
+            upipe_sdi_enc->dbn[4+0] = 1;
     }
 
     /* All channel groups should have the same samples to put on a line */
