@@ -77,8 +77,8 @@ extern "C" {
 class upipe_bmd_sink_frame : public IDeckLinkVideoFrame
 {
 public:
-    upipe_bmd_sink_frame(struct uref *_uref, void *_buffer, long _width, long _height, uint64_t _pts) :
-                         uref(_uref), data(_buffer), width(_width), height(_height), pts(_pts) {
+    upipe_bmd_sink_frame(struct uref *_uref, void *_buffer, long _width, long _height, size_t _stride, uint64_t _pts) :
+                         uref(_uref), data(_buffer), width(_width), height(_height), stride(_stride), pts(_pts) {
         uatomic_store(&refcount, 1);
     }
 
@@ -97,7 +97,7 @@ public:
     }
 
     virtual long STDMETHODCALLTYPE GetRowBytes(void) {
-        return ((width + 47) / 48) * 128;
+        return stride;
     }
 
     virtual BMDPixelFormat STDMETHODCALLTYPE GetPixelFormat(void) {
@@ -155,6 +155,7 @@ private:
     void *data;
     long width;
     long height;
+    size_t stride;
 
     uatomic_uint32_t refcount;
     IDeckLinkVideoFrameAncillary *frame_anc;
@@ -840,7 +841,7 @@ static upipe_bmd_sink_frame *get_video_frame(struct upipe *upipe,
         return NULL;
     }
     upipe_bmd_sink_frame *video_frame = new upipe_bmd_sink_frame(uref,
-            (void*)plane, w, h, pts);
+            (void*)plane, w, h, stride, pts);
     if (!video_frame) {
         uref_free(uref);
         return NULL;
