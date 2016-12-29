@@ -162,6 +162,9 @@ static void test_input(struct upipe *upipe, struct uref *uref,
         udpsrc_test->counter++;
         uref_block_peek_unmap(uref, 0, buf, rbuf);
     }
+    if (udpsrc_test->counter == 110 || udpsrc_test->counter == 210) {
+        upipe_set_uri(upipe_udpsrc, NULL);
+    }
 
     uref_free(uref);
 }
@@ -214,7 +217,6 @@ static void genpackets(struct upump *unused)
     printf("Counter: %d\n", counter);
     if (counter > 100) {
         upump_stop(write_pump);
-        upipe_set_uri(upipe_udpsrc, NULL);
         return;
     }
     for (i=0; i < 10; i++) {
@@ -234,7 +236,6 @@ static void genpackets2(struct upump *upump)
     printf("Counter: %d\n", counter);
     if (counter > 200) {
         upump_stop(write_pump);
-        upipe_set_uri(upipe_udpsrc, NULL);
         return;
     }
 
@@ -332,7 +333,7 @@ int main(int argc, char *argv[])
     }
     assert(p);
 
-    write_pump = upump_alloc_timer(upump_mgr, genpackets, NULL, NULL, 0, UCLOCK_FREQ / 100);
+    write_pump = upump_alloc_idler(upump_mgr, genpackets, NULL, NULL);
     assert(write_pump);
     upump_start(write_pump);
 
@@ -367,7 +368,7 @@ int main(int argc, char *argv[])
     ubase_assert(upipe_set_uri(upipe_udpsink, udp_uri+1));
 
     /* redefine write pump */
-    write_pump = upump_alloc_timer(upump_mgr, genpackets2, NULL, NULL, 0, UCLOCK_FREQ / 100);
+    write_pump = upump_alloc_idler(upump_mgr, genpackets2, NULL, NULL);
     assert(write_pump);
     upump_start(write_pump);
 
