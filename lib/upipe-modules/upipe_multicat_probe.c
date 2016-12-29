@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2012-2014 OpenHeadend S.A.R.L.
+ * Copyright (C) 2012-2016 OpenHeadend S.A.R.L.
  *
  * Authors: Benjamin Cohen
  *
@@ -68,6 +68,8 @@ struct upipe_multicat_probe {
 
     /** rotate interval */
     uint64_t rotate;
+    /** rotate offset */
+    uint64_t rotate_offset;
     /** current index */
     uint64_t idx;
 
@@ -97,7 +99,8 @@ static void upipe_multicat_probe_input(struct upipe *upipe, struct uref *uref,
     if (unlikely(!ubase_check(uref_clock_get_cr_sys(uref, &systime)))) {
         upipe_warn(upipe, "uref has no systime");
     } else {
-        newidx = (systime/upipe_multicat_probe->rotate);
+        newidx = (systime - upipe_multicat_probe->rotate_offset) /
+                 upipe_multicat_probe->rotate;
         if (upipe_multicat_probe->idx != newidx) {
             upipe_throw(upipe, UPROBE_MULTICAT_PROBE_ROTATE,
                         UPIPE_MULTICAT_PROBE_SIGNATURE, uref, newidx);
@@ -130,9 +133,10 @@ static int upipe_multicat_probe_set_flow_def(struct upipe *upipe,
  *
  * @param upipe description structure of the pipe
  * @param rotate new rotate interval
+ * @param rotate_offset new rotate offset
  * @return an error code
  */
-static int  _upipe_multicat_probe_set_rotate(struct upipe *upipe, uint64_t rotate)
+static int  _upipe_multicat_probe_set_rotate(struct upipe *upipe, uint64_t rotate, uint64_t rotate_offset)
 {
     struct upipe_multicat_probe *upipe_multicat_probe = upipe_multicat_probe_from_upipe(upipe);
     if (unlikely(rotate < 1)) {
@@ -140,7 +144,8 @@ static int  _upipe_multicat_probe_set_rotate(struct upipe *upipe, uint64_t rotat
         return UBASE_ERR_INVALID;
     }
     upipe_multicat_probe->rotate = rotate;
-    upipe_notice_va(upipe, "setting rotate: %"PRIu64, rotate);
+    upipe_multicat_probe->rotate_offset = rotate_offset;
+    upipe_notice_va(upipe, "setting rotate: %"PRIu64"+%"PRIu64, rotate, rotate_offset);
     return UBASE_ERR_NONE;
 }
 
@@ -148,13 +153,15 @@ static int  _upipe_multicat_probe_set_rotate(struct upipe *upipe, uint64_t rotat
  *
  * @param upipe description structure of the pipe
  * @param rotate_p filled in with the current rotate interval
+ * @param offset_p filled in with the current rotate offset
  * @return an error code
  */
-static int _upipe_multicat_probe_get_rotate(struct upipe *upipe, uint64_t *rotate_p)
+static int _upipe_multicat_probe_get_rotate(struct upipe *upipe, uint64_t *rotate_p, uint64_t *offset_p)
 {
     struct upipe_multicat_probe *upipe_multicat_probe = upipe_multicat_probe_from_upipe(upipe);
     assert(rotate_p != NULL);
     *rotate_p = upipe_multicat_probe->rotate;
+    *offset_p = upipe_multicat_probe->rotate_offset;
     return UBASE_ERR_NONE;
 }
 
@@ -197,11 +204,15 @@ static int upipe_multicat_probe_control(struct upipe *upipe,
 
         case UPIPE_MULTICAT_PROBE_SET_ROTATE: {
             UBASE_SIGNATURE_CHECK(args, UPIPE_MULTICAT_PROBE_SIGNATURE)
-            return _upipe_multicat_probe_set_rotate(upipe, va_arg(args, uint64_t));
+            uint64_t rotate = va_arg(args, uint64_t);
+            uint64_t rotate_offset = va_arg(args, uint64_t);
+            return _upipe_multicat_probe_set_rotate(upipe, rotate, rotate_offset);
         }
         case UPIPE_MULTICAT_PROBE_GET_ROTATE: {
             UBASE_SIGNATURE_CHECK(args, UPIPE_MULTICAT_PROBE_SIGNATURE)
-            return _upipe_multicat_probe_get_rotate(upipe, va_arg(args, uint64_t*));
+            uint64_t *rotate_p = va_arg(args, uint64_t *);
+            uint64_t *rotate_offset_p = va_arg(args, uint64_t *);
+            return _upipe_multicat_probe_get_rotate(upipe, rotate_p, rotate_offset_p);
         }
         default:
             return UBASE_ERR_UNHANDLED;
@@ -231,6 +242,7 @@ static struct upipe *upipe_multicat_probe_alloc(struct upipe_mgr *mgr,
     upipe_multicat_probe_init_urefcount(upipe);
     upipe_multicat_probe_init_output(upipe);
     upipe_multicat_probe->rotate = UPIPE_MULTICAT_PROBE_DEF_ROTATE;
+    upipe_multicat_probe->rotate_offset = UPIPE_MULTICAT_PROBE_DEF_ROTATE_OFFSET;
     upipe_multicat_probe->idx = 0;
     upipe_multicat_probe->flow_def = NULL;
     upipe_throw_ready(upipe);
