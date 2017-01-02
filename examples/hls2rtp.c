@@ -126,8 +126,9 @@ static struct upipe *src = NULL;
 static struct upipe *hls = NULL;
 static struct upipe *variant = NULL;
 static struct uprobe *main_probe = NULL;
-struct ev_signal signal_watcher;
-struct ev_io stdin_watcher;
+static struct ev_signal signal_watcher;
+static struct ev_io stdin_watcher;
+static struct ev_loop *loop;
 
 static struct uprobe *uprobe_rewrite_date_alloc(struct uprobe *next);
 static struct uprobe *uprobe_variant_alloc(struct uprobe *next,
@@ -207,7 +208,7 @@ static void cmd_stop(void)
  *
  * @param loop event loop
  */
-static void cmd_quit(struct ev_loop *loop)
+static void cmd_quit(void)
 {
     cmd_stop();
     upipe_cleanup(&hls);
@@ -219,7 +220,7 @@ static void cmd_quit(struct ev_loop *loop)
 /** @This handles SIGINT signal. */
 static void sigint_cb(struct ev_loop *loop, struct ev_signal *w, int revents)
 {
-    cmd_quit(loop);
+    cmd_quit();
 }
 
 /** @This handles seek.
@@ -255,7 +256,7 @@ static void stdin_cb(struct ev_loop *loop, struct ev_io *io, int revents)
         *last = '\0';
 
     if (!strcmp("quit", cmd))
-        cmd_quit(loop);
+        cmd_quit();
     else if (!strcmp("stop", cmd))
         cmd_stop();
     else if (!strcmp("start", cmd))
@@ -574,7 +575,7 @@ static int catch_playlist(struct uprobe *uprobe,
     switch (event) {
     case UPROBE_HLS_PLAYLIST_RELOADED: {
         UBASE_SIGNATURE_CHECK(args, UPIPE_HLS_PLAYLIST_SIGNATURE);
-        uprobe_notice(uprobe, NULL, "reloading playlist");
+        uprobe_notice(uprobe, NULL, "playlist reloaded");
         uint64_t at = probe_playlist->at;
         if (at) {
             uint64_t remain = 0;
@@ -600,7 +601,8 @@ static int catch_playlist(struct uprobe *uprobe,
             upipe_cleanup(&variant);
             return select_variant(uprobe, variant_id);
         }
-        return upipe_hls_playlist_play(upipe);
+        if (!ubase_check(upipe_hls_playlist_play(upipe)))
+                cmd_quit();
     }
     return uprobe_throw_next(uprobe, upipe, event, args);
 }
@@ -1117,7 +1119,7 @@ int main(int argc, char **argv)
     /*
      * create event loop
      */
-    struct ev_loop *loop = ev_default_loop(0);
+    loop = ev_default_loop(0);
     assert(loop);
 
     ev_signal_init(&signal_watcher, sigint_cb, SIGINT);
