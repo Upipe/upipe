@@ -156,7 +156,7 @@ static int probe_reader(struct uprobe *uprobe, struct upipe *inner,
             upipe_mgr_release(upipe_hls_master_mgr);
             UBASE_ALLOC_RETURN(output);
             upipe_hls_store_bin_output(upipe, output);
-            return upipe_set_output(inner, output);
+            return UBASE_ERR_NONE;
         }
         else
             upipe_warn_va(upipe, "unsupported flow format %s", def);
