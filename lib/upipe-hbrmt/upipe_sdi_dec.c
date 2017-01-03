@@ -175,6 +175,9 @@ struct upipe_sdi_dec {
     /* Enable CPU-intensive debugging (CRC) */
     int debug;
 
+    /* check DBN sequence for each Type 1 packet */
+    uint8_t dbn[0x80];
+
     /* presence of an AES stream */
     int aes_detected[8];
 
@@ -552,10 +555,38 @@ static void extract_hd_audio(struct upipe *upipe, const uint16_t *packet, int h,
     ctx->group_offset[audio_group]++;
 }
 
+static void validate_dbn(struct upipe *upipe, uint8_t did, uint8_t dbn)
+{
+    struct upipe_sdi_dec *upipe_sdi_dec = upipe_sdi_dec_from_upipe(upipe);
+
+    assert(did >= 0x80);
+    did -= 0x80; /* we only store dbn for type 1 packets */
+
+    if (likely(upipe_sdi_dec->dbn[did] != 0)) {
+        uint8_t expected_dbn = upipe_sdi_dec->dbn[did] + 1;
+        if (unlikely(expected_dbn == 0))
+            expected_dbn = 1; /* DBN cycles from 255 to 1 */
+
+        if (expected_dbn != dbn)
+            upipe_err_va(upipe, "[DID 0x%.2x] Wrong DBN: 0x%.2x -> 0x%.2x",
+                did + 0x80, upipe_sdi_dec->dbn[did], dbn);
+    } else if (dbn != 0) {
+        upipe_dbg_va(upipe, "[DID 0x%.2x] Checking DBN", did + 0x80);
+    }
+
+    upipe_sdi_dec->dbn[did] = dbn;
+}
+
 static void parse_hd_hanc(struct upipe *upipe, const uint16_t *packet, int h,
                          struct audio_ctx *ctx)
 {
-    switch (packet[6] & 0xff) {
+    uint8_t did = packet[6] & 0xff;
+
+    if (did >= 0x80) { /* type 1 packet */
+        validate_dbn(upipe, did, packet[8] & 0xff);
+    }
+
+    switch (did) {
     case S291_HD_AUDIO_GROUP1_DID:
     case S291_HD_AUDIO_GROUP2_DID:
     case S291_HD_AUDIO_GROUP3_DID:
@@ -1346,6 +1377,8 @@ static struct upipe *_upipe_sdi_dec_alloc(struct upipe_mgr *mgr,
     for (int i = 0; i < 8; i++)
         for (int j = 0; j < 4; j++)
             upipe_sdi_dec->aes_preamble[i][j] = 0;
+
+    memset(upipe_sdi_dec->dbn, 0, sizeof(upipe_sdi_dec->dbn));
 
     upipe_sdi_dec_init_urefcount(upipe);
     upipe_sdi_dec_init_ubuf_mgr(upipe);
