@@ -213,6 +213,9 @@ struct upipe_netmap_sink {
     /** currently used uref */
     struct uref *uref;
 
+    /** latency */
+    uint64_t latency;
+
     /** public upipe structure */
     struct upipe upipe;
 };
@@ -855,6 +858,13 @@ static int upipe_netmap_sink_set_flow_def(struct upipe *upipe,
         { { 24000, 1001 }, 0x1b },
     };
     UBASE_RETURN(uref_pic_flow_get_fps(flow_def, &upipe_netmap_sink->fps));
+
+    if (!ubase_check(uref_clock_get_latency(flow_def, &upipe_netmap_sink->latency))) {
+        upipe_err(upipe, "no latency");
+        upipe_netmap_sink->latency = 0;
+    } else {
+        upipe_notice_va(upipe, "latency %" PRIu64, upipe_netmap_sink->latency);
+    }
 
     upipe_netmap_sink->frate = 0;
     for (int i = 0; i < sizeof(frate) / sizeof(frate[0]); i++) {
