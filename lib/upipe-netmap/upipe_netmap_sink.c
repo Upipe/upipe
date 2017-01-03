@@ -747,6 +747,19 @@ static bool upipe_netmap_sink_output(struct upipe *upipe, struct uref *uref,
 static void upipe_netmap_sink_input(struct upipe *upipe, struct uref *uref,
                                 struct upump **upump_p)
 {
+    struct upipe_netmap_sink *upipe_netmap_sink = upipe_netmap_sink_from_upipe(upipe);
+
+    if (upipe_netmap_sink->upump == NULL) {
+        if (upipe_netmap_sink->d && NETMAP_FD(upipe_netmap_sink->d) != -1) {
+            struct upump *upump = upump_alloc_timer(upipe_netmap_sink->upump_mgr,
+                    upipe_netmap_sink_worker, upipe, upipe->refcount, 0,
+                    UCLOCK_FREQ/1000);
+
+            upipe_netmap_sink_set_upump(upipe, upump);
+            upump_start(upump);
+        }
+    }
+
     if (!upipe_netmap_sink_check_input(upipe)) {
         upipe_netmap_sink_hold_input(upipe, uref);
         upipe_netmap_sink_block_input(upipe, upump_p);
@@ -1070,20 +1083,8 @@ static int _upipe_netmap_sink_set_uri(struct upipe *upipe, const char *uri)
         return UBASE_ERR_ALLOC;
     }
 
-
-    if (upipe_netmap_sink->d && NETMAP_FD(upipe_netmap_sink->d) != -1 &&
-            upipe_netmap_sink->upump == NULL) {
-        struct upump *upump;
-
-        upump = upump_alloc_timer(upipe_netmap_sink->upump_mgr,
-                upipe_netmap_sink_worker, upipe, upipe->refcount, 0,
-                UCLOCK_FREQ/1000);
-
-        upipe_netmap_sink_set_upump(upipe, upump);
-        upump_start(upump);
-    }
-
     upipe_notice_va(upipe, "opening netmap socket %s", upipe_netmap_sink->uri);
+
     if (!upipe_netmap_sink_check_input(upipe))
         /* Use again the pipe that we previously released. */
         upipe_use(upipe);
