@@ -115,7 +115,13 @@ struct output {
 #define XFER_POOL                       20
 #define QUEUE_LENGTH                    255
 #define PADDING_OCTETRATE               128000
+#define MAX_GAP                         (UCLOCK_FREQ)
 #define DEFAULT_TIME_LIMIT              (UCLOCK_FREQ * 10)
+
+/** 2^33 (max resolution of PCR, PTS and DTS) */
+#define POW2_33 UINT64_C(8589934592)
+/** max resolution of PCR, PTS and DTS */
+#define TS_CLOCK_MAX (POW2_33 * UCLOCK_FREQ / 90000)
 
 static int log_level = UPROBE_LOG_NOTICE;
 static uint64_t variant_id = UINT64_MAX;
@@ -137,6 +143,9 @@ static struct output audio_output = {
     .sink = NULL,
 };
 static bool rewrite_date = false;
+static int64_t timestamp_offset = 0;
+static uint64_t last_cr = TS_CLOCK_MAX;
+static uint64_t timestamp_highest = TS_CLOCK_MAX;
 static uint64_t seek = 0;
 static uint64_t sequence = 0;
 static struct upipe *src = NULL;
@@ -154,7 +163,8 @@ static struct ev_signal signal_watcher;
 static struct ev_io stdin_watcher;
 static struct ev_loop *main_loop;
 
-static struct uprobe *uprobe_rewrite_date_alloc(struct uprobe *next);
+static struct uprobe *uprobe_rewrite_date_alloc(struct uprobe *next,
+                                                bool video);
 static struct uprobe *uprobe_variant_alloc(struct uprobe *next,
                                            uint64_t id, uint64_t at);
 static struct uprobe *uprobe_audio_alloc(struct uprobe *next);
@@ -268,11 +278,14 @@ static void cmd_stop(void)
  */
 static void cmd_quit(void)
 {
+#if 0
+    /* FIXME this requires being in the sink thread */
     if (ts_mux) {
         struct upipe *superpipe;
         if (ubase_check(upipe_sub_get_super(ts_mux, &superpipe)))
             upipe_ts_mux_freeze_psi(superpipe);
     }
+#endif
 
     cmd_stop();
     upipe_cleanup(&hls);
@@ -392,6 +405,7 @@ UPROBE_HELPER_UPROBE(uprobe_variant, probe);
 /** @This is the private context of a rewrite date probe */
 struct uprobe_rewrite_date {
     struct uprobe probe;
+    bool video;
 };
 
 UPROBE_HELPER_UPROBE(uprobe_rewrite_date, probe);
@@ -400,36 +414,62 @@ UPROBE_HELPER_UPROBE(uprobe_rewrite_date, probe);
 static int catch_rewrite_date(struct uprobe *uprobe, struct upipe *upipe,
                               int event, va_list args)
 {
-    if (event >= UPROBE_LOCAL) {
-        switch (ubase_get_signature(args)) {
-        case UPIPE_PROBE_UREF_SIGNATURE:
-            UBASE_SIGNATURE_CHECK(args, UPIPE_PROBE_UREF_SIGNATURE);
-            struct uref *uref = va_arg(args, struct uref *);
-            bool *drop = va_arg(args, bool *);
+    struct uprobe_rewrite_date *probe_rewrite_date =
+        uprobe_rewrite_date_from_uprobe(uprobe);
+    if (event != UPROBE_PROBE_UREF ||
+        ubase_get_signature(args) != UPIPE_PROBE_UREF_SIGNATURE)
+        return uprobe_throw_next(uprobe, upipe, event, args);
 
-            *drop = false;
-            int type;
-            uint64_t date;
-            uref_clock_get_date_orig(uref, &date, &type);
-            if (type != UREF_DATE_NONE) {
-                uprobe_verbose_va(uprobe, NULL, "rewrite %p orig -> prog",
-                                  uref);
-                uref_clock_set_date_prog(uref, date, type);
-            }
-            return UBASE_ERR_NONE;
+    UBASE_SIGNATURE_CHECK(args, UPIPE_PROBE_UREF_SIGNATURE);
+    struct uref *uref = va_arg(args, struct uref *);
+    bool *drop = va_arg(args, bool *);
+
+    *drop = false;
+    int type;
+    uint64_t date;
+    uref_clock_get_date_orig(uref, &date, &type);
+    if (type == UREF_DATE_NONE)
+        return UBASE_ERR_NONE;
+
+    if (probe_rewrite_date->video) {
+        uint64_t delta = (TS_CLOCK_MAX + date -
+                          (last_cr % TS_CLOCK_MAX)) % TS_CLOCK_MAX;
+        if (delta < MAX_GAP)
+            last_cr += delta;
+        else {
+            upipe_dbg_va(upipe, "clock ref discontinuity %"PRIu64, delta);
+            last_cr = date;
+            timestamp_offset = timestamp_highest - date;
         }
     }
 
-    return uprobe_throw_next(uprobe, upipe, event, args);
+    uint64_t delta = (TS_CLOCK_MAX + date -
+                      (last_cr % TS_CLOCK_MAX)) % TS_CLOCK_MAX;
+    if (delta > MAX_GAP) {
+        /* This should not happen */
+        upipe_warn_va(upipe, "timestamp discontinuity %"PRIu64, delta);
+        uref_clock_delete_date_prog(uref);
+        return UBASE_ERR_NONE;
+    }
+
+    upipe_verbose_va(upipe, "rewrite %"PRIu64" -> %"PRIu64, date,
+                     timestamp_offset + last_cr + delta);
+    date = timestamp_offset + last_cr + delta;
+    uref_clock_set_date_prog(uref, date, type);
+    if (date > timestamp_highest)
+        timestamp_highest = date;
+
+    return UBASE_ERR_NONE;
 }
 
 /** @This initializes a rewrite date probe. */
 static struct uprobe *
 uprobe_rewrite_date_init(struct uprobe_rewrite_date *probe_rewrite_date,
-                         struct uprobe *next)
+                         struct uprobe *next, bool video)
 {
     struct uprobe *probe = uprobe_rewrite_date_to_uprobe(probe_rewrite_date);
     uprobe_init(probe, catch_rewrite_date, next);
+    probe_rewrite_date->video = video;
     return probe;
 }
 
@@ -439,8 +479,8 @@ static void uprobe_rewrite_date_clean(struct uprobe_rewrite_date *probe)
     uprobe_clean(uprobe_rewrite_date_to_uprobe(probe));
 }
 
-#define ARGS_DECL struct uprobe *next
-#define ARGS next
+#define ARGS_DECL struct uprobe *next, bool video
+#define ARGS next, video
 UPROBE_HELPER_ALLOC(uprobe_rewrite_date);
 #undef ARGS
 #undef ARGS_DECL
@@ -522,8 +562,8 @@ static int catch_audio(struct uprobe *uprobe,
             output = upipe_void_chain_output(
                 output, probe_uref_mgr,
                 uprobe_pfx_alloc(
-                    uprobe_rewrite_date_alloc(uprobe_use(main_probe)),
-                    UPROBE_LOG_VERBOSE, "uref"));
+                    uprobe_rewrite_date_alloc(uprobe_use(main_probe), false),
+                    UPROBE_LOG_VERBOSE, "rewrite sound"));
             assert(output);
         }
 
@@ -575,8 +615,8 @@ static int catch_video(struct uprobe *uprobe,
             output = upipe_void_chain_output(
                 output, probe_uref_mgr,
                 uprobe_pfx_alloc(
-                    uprobe_rewrite_date_alloc(uprobe_use(main_probe)),
-                    UPROBE_LOG_VERBOSE, "uref"));
+                    uprobe_rewrite_date_alloc(uprobe_use(main_probe), true),
+                    UPROBE_LOG_VERBOSE, "rewrite pic"));
             assert(output);
         }
 
