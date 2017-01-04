@@ -74,6 +74,7 @@
 #include <upipe-modules/upipe_rtp_mpeg4.h>
 #include <upipe-modules/upipe_probe_uref.h>
 #include <upipe-modules/upipe_setflowdef.h>
+#include <upipe-modules/upipe_time_limit.h>
 #include <upipe-modules/upipe_worker_sink.h>
 #include <upipe-hls/upipe_hls.h>
 #include <upipe-hls/upipe_hls_master.h>
@@ -111,6 +112,7 @@ struct output {
 #define XFER_POOL                       20
 #define QUEUE_LENGTH                    255
 #define PADDING_OCTETRATE               128000
+#define DEFAULT_TIME_LIMIT              (UCLOCK_FREQ * 10)
 
 static int log_level = UPROBE_LOG_NOTICE;
 static int variant_id = 0;
@@ -138,6 +140,7 @@ static struct upipe *hls = NULL;
 static struct upipe *variant = NULL;
 static struct upipe *ts_mux = NULL;
 static struct upipe_mgr *probe_uref_mgr = NULL;
+static struct upipe_mgr *time_limit_mgr = NULL;
 static struct upipe_mgr *rtp_prepend_mgr = NULL;
 static struct upipe_mgr *udpsink_mgr = NULL;
 static struct upipe_mgr *setflowdef_mgr = NULL;
@@ -929,6 +932,7 @@ static int catch_hls(struct uprobe *uprobe,
 
 static struct upipe *hls2rtp_video_sink(struct uprobe *probe,
                                         struct upipe *trickp,
+                                        uint64_t time_limit,
                                         struct upipe_mgr *wsink_mgr)
 {
     struct upipe *sink = upipe_void_alloc_sub(
@@ -936,7 +940,13 @@ static struct upipe *hls2rtp_video_sink(struct uprobe *probe,
         uprobe_pfx_alloc(uprobe_use(probe),
                          UPROBE_LOG_VERBOSE, "trickp pic"));
     assert(sink);
+
     struct upipe *output = upipe_use(sink);
+    output = upipe_void_chain_output(output, time_limit_mgr,
+        uprobe_pfx_alloc(uprobe_use(probe),
+                         UPROBE_LOG_VERBOSE, "time_limit"));
+    assert(output);
+    upipe_time_limit_set_limit(output, time_limit);
 
     if (!ts_mux) {
         uint16_t port = video_output.port;
@@ -1014,6 +1024,7 @@ static struct upipe *hls2rtp_video_sink(struct uprobe *probe,
 
 static struct upipe *hls2rtp_audio_sink(struct uprobe *probe,
                                         struct upipe *trickp,
+                                        uint64_t time_limit,
                                         struct upipe_mgr *wsink_mgr)
 {
     struct upipe *sink = upipe_void_alloc_sub(
@@ -1021,7 +1032,13 @@ static struct upipe *hls2rtp_audio_sink(struct uprobe *probe,
         uprobe_pfx_alloc(uprobe_use(probe),
                          UPROBE_LOG_VERBOSE, "trickp sound"));
     assert(sink);
+
     struct upipe *output = upipe_use(sink);
+    output = upipe_void_chain_output(output, time_limit_mgr,
+        uprobe_pfx_alloc(uprobe_use(probe),
+                         UPROBE_LOG_VERBOSE, "time_limit"));
+    assert(output);
+    upipe_time_limit_set_limit(output, time_limit);
 
     if (!ts_mux) {
         uint16_t port = audio_output.port;
@@ -1113,6 +1130,7 @@ enum opt {
     OPT_REWRITE_DATE,
     OPT_SEEK,
     OPT_SEQUENCE,
+    OPT_TIME_LIMIT,
     OPT_HELP,
 };
 
@@ -1129,6 +1147,7 @@ static struct option options[] = {
     { "verbose", no_argument, NULL, OPT_VERBOSE },
     { "seek", required_argument, NULL, OPT_SEEK },
     { "sequence", required_argument, NULL, OPT_SEQUENCE },
+    { "time-limit", required_argument, NULL, OPT_TIME_LIMIT },
     { "help", no_argument, NULL, OPT_HELP },
     { 0, 0, 0, 0 },
 };
@@ -1162,6 +1181,7 @@ int main(int argc, char **argv)
     int index = 0;
     bool color = true;
     bool ts = false;
+    uint64_t time_limit = DEFAULT_TIME_LIMIT;
 
     /*
      * parse options
@@ -1215,6 +1235,9 @@ int main(int argc, char **argv)
         }
         case OPT_SEQUENCE:
             sequence = strtoull(optarg, NULL, 10);
+            break;
+        case OPT_TIME_LIMIT:
+            time_limit = strtoull(optarg, NULL, 10);
             break;
 
         case OPT_HELP:
@@ -1315,6 +1338,8 @@ int main(int argc, char **argv)
 
     probe_uref_mgr = upipe_probe_uref_mgr_alloc();
     assert(probe_uref_mgr);
+    time_limit_mgr = upipe_time_limit_mgr_alloc();
+    assert(time_limit_mgr);
     rtp_prepend_mgr = upipe_rtp_prepend_mgr_alloc();
     assert(rtp_prepend_mgr);
     udpsink_mgr = upipe_udpsink_mgr_alloc();
@@ -1412,14 +1437,14 @@ int main(int argc, char **argv)
         /* create video sink */
         if (video_output.enabled) {
             video_output.sink = hls2rtp_video_sink(main_probe, trickp,
-                                                   wsink_mgr);
+                                                   time_limit, wsink_mgr);
             assert(video_output.sink);
         }
 
         /* create audio sink */
         if (audio_output.enabled) {
             audio_output.sink = hls2rtp_audio_sink(main_probe, trickp,
-                                                   wsink_mgr);
+                                                   time_limit, wsink_mgr);
             assert(audio_output.sink);
         }
 
@@ -1501,6 +1526,7 @@ int main(int argc, char **argv)
      * release ressources
      */
     upipe_mgr_release(probe_uref_mgr);
+    upipe_mgr_release(time_limit_mgr);
     upipe_mgr_release(rtp_prepend_mgr);
     upipe_mgr_release(udpsink_mgr);
     upipe_mgr_release(setflowdef_mgr);
