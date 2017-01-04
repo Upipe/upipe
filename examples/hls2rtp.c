@@ -1131,6 +1131,7 @@ enum opt {
     OPT_SEEK,
     OPT_SEQUENCE,
     OPT_TIME_LIMIT,
+    OPT_RT_PRIORITY,
     OPT_HELP,
 };
 
@@ -1148,6 +1149,7 @@ static struct option options[] = {
     { "seek", required_argument, NULL, OPT_SEEK },
     { "sequence", required_argument, NULL, OPT_SEQUENCE },
     { "time-limit", required_argument, NULL, OPT_TIME_LIMIT },
+    { "rt-priority", required_argument, NULL, OPT_RT_PRIORITY },
     { "help", no_argument, NULL, OPT_HELP },
     { 0, 0, 0, 0 },
 };
@@ -1182,6 +1184,7 @@ int main(int argc, char **argv)
     bool color = true;
     bool ts = false;
     uint64_t time_limit = DEFAULT_TIME_LIMIT;
+    unsigned int rt_priority = 0;
 
     /*
      * parse options
@@ -1238,6 +1241,9 @@ int main(int argc, char **argv)
             break;
         case OPT_TIME_LIMIT:
             time_limit = strtoull(optarg, NULL, 10);
+            break;
+        case OPT_RT_PRIORITY:
+            rt_priority = strtoul(optarg, NULL, 10);
             break;
 
         case OPT_HELP:
@@ -1350,10 +1356,19 @@ int main(int argc, char **argv)
     struct upipe_mgr *wsink_mgr = NULL;
     {
         struct upipe_mgr *sink_xfer_mgr = NULL;
+        pthread_attr_t attr;
         /* sink thread */
+        pthread_attr_init(&attr);
+        if (rt_priority) {
+            pthread_attr_setinheritsched(&attr, PTHREAD_EXPLICIT_SCHED);
+            pthread_attr_setschedpolicy(&attr, SCHED_RR);
+            struct sched_param param;
+            param.sched_priority = rt_priority;
+            pthread_attr_setschedparam(&attr, &param);
+        }
         sink_xfer_mgr = upipe_pthread_xfer_mgr_alloc(XFER_QUEUE,
                 XFER_POOL, uprobe_use(main_probe), upump_mgr_alloc,
-                upump_mgr_work, upump_mgr_free, NULL, NULL, NULL);
+                upump_mgr_work, upump_mgr_free, NULL, NULL, &attr);
         assert(sink_xfer_mgr != NULL);
 
         /* deport to sink thread */
