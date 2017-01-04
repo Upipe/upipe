@@ -29,6 +29,7 @@
 #include <unistd.h>
 #include <libgen.h>
 #include <ctype.h>
+#include <syslog.h>
 
 #include <upipe/ulist.h>
 #include <upipe/uuri.h>
@@ -39,6 +40,7 @@
 #include <upipe/uprobe_helper_alloc.h>
 #include <upipe/uprobe_stdio.h>
 #include <upipe/uprobe_stdio_color.h>
+#include <upipe/uprobe_syslog.h>
 #include <upipe/uprobe_loglevel.h>
 #include <upipe/uprobe_prefix.h>
 #include <upipe/uprobe_select_flows.h>
@@ -1132,6 +1134,7 @@ enum opt {
     OPT_SEQUENCE,
     OPT_TIME_LIMIT,
     OPT_RT_PRIORITY,
+    OPT_SYSLOG_TAG,
     OPT_HELP,
 };
 
@@ -1150,6 +1153,7 @@ static struct option options[] = {
     { "sequence", required_argument, NULL, OPT_SEQUENCE },
     { "time-limit", required_argument, NULL, OPT_TIME_LIMIT },
     { "rt-priority", required_argument, NULL, OPT_RT_PRIORITY },
+    { "syslog-tag", required_argument, NULL, OPT_SYSLOG_TAG },
     { "help", no_argument, NULL, OPT_HELP },
     { 0, 0, 0, 0 },
 };
@@ -1185,6 +1189,7 @@ int main(int argc, char **argv)
     bool ts = false;
     uint64_t time_limit = DEFAULT_TIME_LIMIT;
     unsigned int rt_priority = 0;
+    const char *syslog_tag = NULL;
 
     /*
      * parse options
@@ -1245,6 +1250,9 @@ int main(int argc, char **argv)
         case OPT_RT_PRIORITY:
             rt_priority = strtoul(optarg, NULL, 10);
             break;
+        case OPT_SYSLOG_TAG:
+            syslog_tag = optarg;
+            break;
 
         case OPT_HELP:
             usage(argv[0], NULL);
@@ -1282,9 +1290,13 @@ int main(int argc, char **argv)
     /*
      * create root probe
      */
-    main_probe = color ?
-        uprobe_stdio_color_alloc(NULL, stderr, log_level) :
-        uprobe_stdio_alloc(NULL, stderr, log_level);
+    if (syslog_tag != NULL)
+        main_probe = uprobe_syslog_alloc(NULL, syslog_tag, LOG_NDELAY | LOG_PID,
+                                         LOG_USER, log_level);
+    else
+        main_probe = color ?
+            uprobe_stdio_color_alloc(NULL, stderr, log_level) :
+            uprobe_stdio_alloc(NULL, stderr, log_level);
     assert(main_probe);
 
     /*
