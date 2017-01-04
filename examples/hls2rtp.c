@@ -58,6 +58,7 @@
 #include <upipe/uref_std.h>
 #include <upipe/uref_uri.h>
 #include <upipe/uref_m3u.h>
+#include <upipe/uref_m3u_master.h>
 #include <upipe/uref_dump.h>
 #include <upipe/uref_pic.h>
 #include <upipe/upump.h>
@@ -117,7 +118,8 @@ struct output {
 #define DEFAULT_TIME_LIMIT              (UCLOCK_FREQ * 10)
 
 static int log_level = UPROBE_LOG_NOTICE;
-static int variant_id = 0;
+static uint64_t variant_id = UINT64_MAX;
+static uint64_t bandwidth_max = UINT64_MAX;
 static const char *url = NULL;
 static const char *addr = "127.0.0.1";
 static struct output video_output = {
@@ -203,21 +205,28 @@ static inline void upipe_cleanup(struct upipe **upipe_p)
     }
 }
 
-static int select_variant(struct uprobe *uprobe, uint64_t variant_id)
+static int select_variant(struct uprobe *uprobe)
 {
     struct uref *uref_variant = NULL;
+    uint64_t bandwidth_variant = 0;
     for (struct uref *uref = NULL;
          ubase_check(upipe_split_iterate(hls, &uref)) && uref;) {
         uint64_t id;
         ubase_assert(uref_flow_get_id(uref, &id));
         const char *uri = "(none)";
         uref_m3u_get_uri(uref, &uri);
+        uint64_t bandwidth = 0;
+        uref_m3u_master_get_bandwidth(uref, &bandwidth);
 
-        uprobe_notice_va(uprobe, NULL, "%"PRIu64" - %s", id, uri);
-        uref_dump(uref, uprobe);
-
-        if (variant_id == id)
+        if (variant_id == id) {
             uref_variant = uref;
+            break;
+        }
+
+        if (bandwidth <= bandwidth_max && bandwidth > bandwidth_variant) {
+            uref_variant = uref;
+            bandwidth_variant = bandwidth;
+        }
     }
 
     if (!uref_variant) {
@@ -244,7 +253,7 @@ static void cmd_start(void)
     upipe_cleanup(&audio_output.pipe);
     upipe_cleanup(&video_output.pipe);
     upipe_cleanup(&variant);
-    select_variant(main_probe, variant_id);
+    select_variant(main_probe);
 }
 
 /** @This stops the current variant.  */
@@ -648,7 +657,7 @@ static int catch_playlist(struct uprobe *uprobe,
             upipe_cleanup(&video_output.pipe);
             upipe_cleanup(&audio_output.pipe);
             upipe_cleanup(&variant);
-            return select_variant(uprobe, variant_id);
+            return select_variant(uprobe);
         }
         if (!ubase_check(upipe_hls_playlist_play(upipe))) {
             cmd_quit();
@@ -925,7 +934,7 @@ static int catch_hls(struct uprobe *uprobe,
             uref_dump(uref, uprobe);
         }
 
-        return select_variant(uprobe, variant_id);
+        return select_variant(uprobe);
     }
     }
 
@@ -1132,6 +1141,7 @@ enum opt {
     OPT_REWRITE_DATE,
     OPT_SEEK,
     OPT_SEQUENCE,
+    OPT_BANDWIDTH,
     OPT_TIME_LIMIT,
     OPT_RT_PRIORITY,
     OPT_SYSLOG_TAG,
@@ -1151,6 +1161,7 @@ static struct option options[] = {
     { "verbose", no_argument, NULL, OPT_VERBOSE },
     { "seek", required_argument, NULL, OPT_SEEK },
     { "sequence", required_argument, NULL, OPT_SEQUENCE },
+    { "bandwidth", required_argument, NULL, OPT_BANDWIDTH },
     { "time-limit", required_argument, NULL, OPT_TIME_LIMIT },
     { "rt-priority", required_argument, NULL, OPT_RT_PRIORITY },
     { "syslog-tag", required_argument, NULL, OPT_SYSLOG_TAG },
@@ -1208,7 +1219,7 @@ int main(int argc, char **argv)
             break;
 
         case OPT_ID:
-            variant_id = atoi(optarg);
+            variant_id = strtoull(optarg, NULL, 10);
             break;
         case OPT_ADDR:
             addr = optarg;
@@ -1243,6 +1254,9 @@ int main(int argc, char **argv)
         }
         case OPT_SEQUENCE:
             sequence = strtoull(optarg, NULL, 10);
+            break;
+        case OPT_BANDWIDTH:
+            bandwidth_max = strtoull(optarg, NULL, 10);
             break;
         case OPT_TIME_LIMIT:
             time_limit = strtoull(optarg, NULL, 10);
