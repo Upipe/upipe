@@ -115,6 +115,7 @@ struct output {
 #define XFER_POOL                       20
 #define QUEUE_LENGTH                    255
 #define PADDING_OCTETRATE               128000
+#define TS_PAYLOAD_SIZE                 1316
 #define MAX_GAP                         (UCLOCK_FREQ)
 #define DEFAULT_TIME_LIMIT              (UCLOCK_FREQ * 10)
 
@@ -1169,6 +1170,9 @@ enum opt {
     OPT_MISSING_ARG = ':',
 
     OPT_VERBOSE = 'v',
+    OPT_UDP = 'U',
+    OPT_MTU = 'M',
+    OPT_CONFORMANCE = 'K',
 
     OPT_ID      = 0x100,
     OPT_ADDR,
@@ -1205,6 +1209,9 @@ static struct option options[] = {
     { "time-limit", required_argument, NULL, OPT_TIME_LIMIT },
     { "rt-priority", required_argument, NULL, OPT_RT_PRIORITY },
     { "syslog-tag", required_argument, NULL, OPT_SYSLOG_TAG },
+    { "mtu", required_argument, NULL, OPT_MTU },
+    { "udp", no_argument, NULL, OPT_UDP },
+    { "conformance", required_argument, NULL, OPT_CONFORMANCE },
     { "help", no_argument, NULL, OPT_HELP },
     { 0, 0, 0, 0 },
 };
@@ -1241,11 +1248,14 @@ int main(int argc, char **argv)
     uint64_t time_limit = DEFAULT_TIME_LIMIT;
     unsigned int rt_priority = 0;
     const char *syslog_tag = NULL;
+    bool udp = false;
+    int mtu = TS_PAYLOAD_SIZE;
+    enum upipe_ts_conformance conformance = UPIPE_TS_CONFORMANCE_AUTO;
 
     /*
      * parse options
      */
-    while ((opt = getopt_long(argc, argv, "v", options, &index)) != -1) {
+    while ((opt = getopt_long(argc, argv, "vUMK", options, &index)) != -1) {
         switch ((enum opt)opt) {
         case OPT_VERBOSE:
             switch (log_level) {
@@ -1306,6 +1316,15 @@ int main(int argc, char **argv)
             break;
         case OPT_SYSLOG_TAG:
             syslog_tag = optarg;
+            break;
+        case OPT_UDP:
+            udp = true;
+            break;
+        case OPT_MTU:
+            mtu = strtol(optarg, NULL, 10);
+            break;
+        case OPT_CONFORMANCE:
+            conformance = upipe_ts_conformance_from_string(optarg);
             break;
 
         case OPT_HELP:
@@ -1462,7 +1481,7 @@ int main(int argc, char **argv)
             upipe_mgr_release(fsink_mgr);
             upipe_fsink_set_path(sink, addr, UPIPE_FSINK_OVERWRITE);
 
-        } else {
+        } else if (!udp) {
             /* add rtp header */
             sink = upipe_void_chain_input(sink, rtp_prepend_mgr,
                 uprobe_pfx_alloc(uprobe_use(main_probe),
@@ -1478,8 +1497,10 @@ int main(int argc, char **argv)
         assert(ts_mux);
         upipe_mgr_release(upipe_ts_mux_mgr);
         upipe_ts_mux_set_mode(ts_mux, UPIPE_TS_MUX_MODE_CAPPED);
-        upipe_set_output_size(ts_mux, 1316);
+        upipe_set_output_size(ts_mux, mtu);
         upipe_ts_mux_set_padding_octetrate(ts_mux, PADDING_OCTETRATE);
+        if (conformance != UPIPE_TS_CONFORMANCE_AUTO)
+            upipe_ts_mux_set_conformance(ts_mux, conformance);
 
         struct uref *flow_def = uref_alloc_control(uref_mgr);
         uref_flow_set_def(flow_def, "void.");
