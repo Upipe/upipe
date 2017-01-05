@@ -1255,7 +1255,7 @@ int main(int argc, char **argv)
     /*
      * parse options
      */
-    while ((opt = getopt_long(argc, argv, "vUMK", options, &index)) != -1) {
+    while ((opt = getopt_long(argc, argv, "vUM:K:", options, &index)) != -1) {
         switch ((enum opt)opt) {
         case OPT_VERBOSE:
             switch (log_level) {
