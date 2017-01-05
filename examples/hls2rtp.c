@@ -1189,6 +1189,7 @@ enum opt {
     OPT_TIME_LIMIT,
     OPT_RT_PRIORITY,
     OPT_SYSLOG_TAG,
+    OPT_NO_STDIN,
     OPT_HELP,
 };
 
@@ -1212,6 +1213,7 @@ static struct option options[] = {
     { "mtu", required_argument, NULL, OPT_MTU },
     { "udp", no_argument, NULL, OPT_UDP },
     { "conformance", required_argument, NULL, OPT_CONFORMANCE },
+    { "no-stdin", no_argument, NULL, OPT_NO_STDIN },
     { "help", no_argument, NULL, OPT_HELP },
     { 0, 0, 0, 0 },
 };
@@ -1251,6 +1253,7 @@ int main(int argc, char **argv)
     bool udp = false;
     int mtu = TS_PAYLOAD_SIZE;
     enum upipe_ts_conformance conformance = UPIPE_TS_CONFORMANCE_AUTO;
+    bool no_stdin = false;
 
     /*
      * parse options
@@ -1326,6 +1329,9 @@ int main(int argc, char **argv)
         case OPT_CONFORMANCE:
             conformance = upipe_ts_conformance_from_string(optarg);
             break;
+        case OPT_NO_STDIN:
+            no_stdin = true;
+            break;
 
         case OPT_HELP:
             usage(argv[0], NULL);
@@ -1358,7 +1364,8 @@ int main(int argc, char **argv)
 
     ev_init(&stdin_watcher, stdin_cb);
     ev_io_set(&stdin_watcher, STDIN_FILENO, EV_READ);
-    ev_io_start(main_loop, &stdin_watcher);
+    if (!no_stdin)
+        ev_io_start(main_loop, &stdin_watcher);
 
     /*
      * create root probe
