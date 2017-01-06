@@ -80,11 +80,13 @@
 #define UREF_PER_SLICE 10
 #define SLICES_NUM 10
 
-struct uref_mgr *uref_mgr;
-struct ubuf_mgr *ubuf_mgr;
-struct upipe *multicat_sink;
-struct upump *idler;
-uint64_t rotate = 0;
+static struct uref_mgr *uref_mgr;
+static struct ubuf_mgr *ubuf_mgr;
+static struct upipe *multicat_sink;
+static struct upump *idler;
+static uint64_t rotate = 0;
+static uint64_t rotate_offset = 0;
+static uint64_t gen_systime = 0;
 
 static void sig_handler(int sig)
 {
@@ -93,7 +95,7 @@ static void sig_handler(int sig)
 }
 
 static void usage(const char *argv0) {
-    fprintf(stdout, "Usage: %s [-r <rotate>] <dest dir> <suffix>\n", argv0);
+    fprintf(stdout, "Usage: %s [-r <rotate> [-O <rotate offset>]] <dest dir> <suffix>\n", argv0);
     exit(EXIT_FAILURE);
 }
 
@@ -118,8 +120,7 @@ static int catch(struct uprobe *uprobe, struct upipe *upipe,
 /** packet generator */
 static void genpacket_idler(struct upump *upump)
 {
-    static uint64_t systime = 0;
-    if (systime >= SLICES_NUM * rotate) {
+    if (gen_systime >= SLICES_NUM * rotate + rotate_offset) {
         upump_stop(idler);
         return;
     }
@@ -130,12 +131,12 @@ static void genpacket_idler(struct upump *upump)
     ubase_assert(uref_block_write(uref, 0, &size, &buf));
     assert(size == sizeof(uint64_t));
 
-    upipe_genaux_hton64(buf, systime);
-    uref_clock_set_cr_sys(uref, systime);
+    upipe_genaux_hton64(buf, gen_systime);
+    uref_clock_set_cr_sys(uref, gen_systime);
 
     uref_block_unmap(uref, 0);
     upipe_input(multicat_sink, uref, NULL);
-    systime += rotate/UREF_PER_SLICE;
+    gen_systime += rotate/UREF_PER_SLICE;
 }
 
 /** helper phony pipe */
@@ -211,16 +212,18 @@ int main(int argc, char *argv[])
 {
     const char *dirpath, *suffix;
     struct uref *flow;
-    uint64_t systime = 0, val;
     char filepath[MAXPATHLEN];
     int i, j, fd, ret, opt;
 
     signal (SIGINT, sig_handler);
 
-    while ((opt = getopt(argc, argv, "r:")) != -1) {
+    while ((opt = getopt(argc, argv, "r:O:")) != -1) {
         switch (opt) {
             case 'r':
                 rotate = strtoull(optarg, NULL, 0);
+                break;
+            case 'O':
+                gen_systime = rotate_offset = strtoull(optarg, NULL, 0);
                 break;
             default:
                 usage(argv[0]);
@@ -283,9 +286,9 @@ int main(int argc, char *argv[])
     uref_free(flow);
     ubase_assert(upipe_multicat_sink_set_fsink_mgr(multicat_sink, upipe_fsink_mgr));
     if (rotate) {
-        ubase_assert(upipe_multicat_sink_set_rotate(multicat_sink, rotate));
+        ubase_assert(upipe_multicat_sink_set_rotate(multicat_sink, rotate, rotate_offset));
     } else {
-        upipe_multicat_sink_get_rotate(multicat_sink, &rotate);
+        upipe_multicat_sink_get_rotate(multicat_sink, &rotate, &rotate_offset);
     }
     ubase_assert(upipe_multicat_sink_set_mode(multicat_sink, UPIPE_FSINK_OVERWRITE));
     ubase_assert(upipe_multicat_sink_set_path(multicat_sink, dirpath, suffix));
@@ -303,6 +306,7 @@ int main(int argc, char *argv[])
     upipe_mgr_release(upipe_multicat_sink_mgr); // nop
 
     // check resulting files
+    uint64_t systime = rotate_offset, val;
     for (i=0; i < SLICES_NUM; i++){
         snprintf(filepath, MAXPATHLEN, "%s%"PRId64"%s", dirpath, (systime/rotate), suffix);
         printf("Opening %s ... ", filepath);
@@ -335,6 +339,7 @@ int main(int argc, char *argv[])
     ubase_assert(uref_msrc_flow_set_data(flow, suffix));
     ubase_assert(uref_msrc_flow_set_aux(flow, suffix));
     ubase_assert(uref_msrc_flow_set_rotate(flow, rotate));
+    ubase_assert(uref_msrc_flow_set_offset(flow, rotate_offset));
     ubase_assert(upipe_set_flow_def(msrc, flow));
     uref_free(flow);
     ubase_assert(upipe_set_output_size(msrc, sizeof(uint64_t)));

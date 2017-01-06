@@ -93,13 +93,15 @@
 #define SINK_QUEUE_LENGTH 2000
 #define UPROBE_LOG_LEVEL UPROBE_LOG_NOTICE
 #define DEFAULT_ROTATE (UCLOCK_FREQ * 3600)
+#define DEFAULT_ROTATE_OFFSET 0
 #define DEFAULT_READAHEAD (UCLOCK_FREQ / 5)
 #define DEFAULT_MTU 1316
 
 static void usage(const char *argv0) {
-    fprintf(stdout, "Usage: %s [-d] [-r <rotate>] [-R <read-ahead>] [-k <start>] (-m <MTU>] [-l <syslog ident>] <source dir/prefix> <data suffix> <aux suffix> <destination>\n", argv0);
+    fprintf(stdout, "Usage: %s [-d] [-r <rotate>] [-O <rotate offset>] [-R <read-ahead>] [-k <start>] (-m <MTU>] [-l <syslog ident>] <source dir/prefix> <data suffix> <aux suffix> <destination>\n", argv0);
     fprintf(stdout, "   -d: force debug log level\n");
     fprintf(stdout, "   -r: rotate interval in 27MHz unit\n");
+    fprintf(stdout, "   -O: rotate offset in 27MHz unit\n");
     fprintf(stdout, "   -R: read-ahead in 27MHz unit\n");
     fprintf(stdout, "   -k: start time in 27MHz unit\n");
     fprintf(stdout, "   -m: data packet size\n");
@@ -157,6 +159,7 @@ int main(int argc, char *argv[])
     const char *syslog_ident = NULL;
     const char *dstpath, *dirpath, *data, *aux;
     uint64_t rotate = DEFAULT_ROTATE;
+    uint64_t rotate_offset = DEFAULT_ROTATE_OFFSET;
     uint64_t readahead = DEFAULT_READAHEAD;
     int64_t start = 0;
     unsigned long mtu = DEFAULT_MTU;
@@ -165,10 +168,13 @@ int main(int argc, char *argv[])
     enum uprobe_log_level loglevel = UPROBE_LOG_LEVEL;
 
     /* parse options */
-    while ((opt = getopt(argc, argv, "r:R:k:m:l:i:d")) != -1) {
+    while ((opt = getopt(argc, argv, "r:O:R:k:m:l:i:d")) != -1) {
         switch (opt) {
             case 'r':
                 rotate = strtoull(optarg, NULL, 0);
+                break;
+            case 'O':
+                rotate_offset = strtoull(optarg, NULL, 0);
                 break;
             case 'R':
                 readahead = strtoull(optarg, NULL, 0);
@@ -327,6 +333,7 @@ int main(int argc, char *argv[])
     uref_msrc_flow_set_data(flow, data);
     uref_msrc_flow_set_aux(flow, aux);
     uref_msrc_flow_set_rotate(flow, rotate);
+    uref_msrc_flow_set_offset(flow, rotate_offset);
     uint64_t now = uclock_now(uclock);
     if (start < 0)
         start += now;

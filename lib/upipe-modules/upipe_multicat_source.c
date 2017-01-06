@@ -264,12 +264,14 @@ static int upipe_msrc_start(struct upipe *upipe)
 {
     struct upipe_msrc *upipe_msrc = upipe_msrc_from_upipe(upipe);
     const char *path, *data, *aux;
-    uint64_t rotate;
+    uint64_t rotate = UPIPE_MSRC_DEF_ROTATE;
+    uint64_t offset = UPIPE_MSRC_DEF_OFFSET;
     UBASE_RETURN(uref_msrc_flow_get_path(upipe_msrc->flow_def_input, &path))
     UBASE_RETURN(uref_msrc_flow_get_data(upipe_msrc->flow_def_input, &data))
     UBASE_RETURN(uref_msrc_flow_get_aux(upipe_msrc->flow_def_input, &aux))
-    UBASE_RETURN(uref_msrc_flow_get_rotate(upipe_msrc->flow_def_input, &rotate))
-    upipe_msrc->fileidx = upipe_msrc->pos / rotate;
+    uref_msrc_flow_get_rotate(upipe_msrc->flow_def_input, &rotate);
+    uref_msrc_flow_get_offset(upipe_msrc->flow_def_input, &offset);
+    upipe_msrc->fileidx = (upipe_msrc->pos - offset) / rotate;
 
     char aux_file[strlen(path) + strlen(aux) +
                   sizeof(".18446744073709551615")];
@@ -531,11 +533,9 @@ static int upipe_msrc_set_flow_def(struct upipe *upipe, struct uref *flow_def)
 {
     struct upipe_msrc *upipe_msrc = upipe_msrc_from_upipe(upipe);
     const char *path, *data, *aux;
-    uint64_t rotate;
     if (!ubase_check(uref_msrc_flow_get_path(flow_def, &path)) ||
         !ubase_check(uref_msrc_flow_get_data(flow_def, &data)) ||
-        !ubase_check(uref_msrc_flow_get_aux(flow_def, &aux)) ||
-        !ubase_check(uref_msrc_flow_get_rotate(flow_def, &rotate)))
+        !ubase_check(uref_msrc_flow_get_aux(flow_def, &aux)))
         return UBASE_ERR_INVALID;
 
     upipe_msrc_close(upipe);

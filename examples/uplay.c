@@ -81,6 +81,7 @@
 #include <upipe-filters/upipe_filter_format.h>
 #include <upipe-av/upipe_av.h>
 #include <upipe-av/upipe_av_pixfmt.h>
+#include <upipe-av/upipe_av_samplefmt.h>
 #include <upipe-av/upipe_avformat_source.h>
 #include <upipe-av/upipe_avcodec_decode.h>
 #include <upipe-swscale/upipe_sws.h>
@@ -155,6 +156,9 @@ static struct upipe *upipe_src = NULL;
 static struct upipe *upipe_blit = NULL;
 /* schedule pipe */
 static struct upipe *upipe_schedule = NULL;
+/* picture resizing */
+static unsigned w = 0;
+static unsigned h = 0;
 
 static void uplay_stop(struct upump *upump);
 
@@ -356,6 +360,10 @@ static int catch_video(struct uprobe *uprobe, struct upipe *upipe,
 
     struct uref *uref = uref_sibling_alloc(flow_def);
     uref_flow_set_def(uref, "pic.");
+    if (w && h) {
+        uref_pic_flow_set_hsize(uref, w);
+        uref_pic_flow_set_vsize(uref, h);
+    }
 
     struct upipe *ffmt = upipe_flow_alloc_output(upipe_blit, ffmt_mgr,
             uprobe_pfx_alloc(uprobe_use(uprobe_main),
@@ -403,12 +411,18 @@ static int catch_audio(struct uprobe *uprobe, struct upipe *upipe,
         return UBASE_ERR_UNHANDLED;
 
     uprobe_throw(uprobe_main, NULL, UPROBE_FREEZE_UPUMP_MGR);
-    struct upipe_mgr *upipe_avcdec_mgr = upipe_avcdec_mgr_alloc();
-    struct upipe *avcdec = upipe_void_alloc(upipe_avcdec_mgr,
+    struct upipe_mgr *fdec_mgr = upipe_fdec_mgr_alloc();
+    struct upipe_mgr *avcdec_mgr = upipe_avcdec_mgr_alloc();
+    upipe_fdec_mgr_set_avcdec_mgr(fdec_mgr, avcdec_mgr);
+    upipe_mgr_release(avcdec_mgr);
+    struct upipe *avcdec = upipe_void_alloc(fdec_mgr,
             uprobe_pfx_alloc(uprobe_use(uprobe_main),
                              UPROBE_LOG_VERBOSE, "avcdec audio"));
     assert(avcdec != NULL);
-    upipe_mgr_release(upipe_avcdec_mgr);
+    upipe_mgr_release(fdec_mgr);
+    char sample_fmt_str[5];
+    snprintf(sample_fmt_str, sizeof(sample_fmt_str), "%d", (int)AV_SAMPLE_FMT_S16);
+    upipe_set_option(avcdec, "request_sample_fmt", sample_fmt_str);
 
     uprobe_throw(uprobe_main, NULL, UPROBE_THAW_UPUMP_MGR);
 
@@ -667,7 +681,7 @@ static void upump_mgr_free(struct upump_mgr *upump_mgr)
 }
 
 static void usage(const char *argv0) {
-    fprintf(stderr, "Usage: %s [-d] [-q] [-u] [-A <audio>] [-S <subtitle>] [-V <video>] [-P <program>] [-R 1:1] <source>\n", argv0);
+    fprintf(stderr, "Usage: %s [-d] [-q] [-u] [-s 1920x1080] [-A <audio>] [-S <subtitle>] [-V <video>] [-P <program>] [-R 1:1] <source>\n", argv0);
     exit(EXIT_FAILURE);
 }
 
@@ -675,7 +689,7 @@ int main(int argc, char **argv)
 {
     enum uprobe_log_level loglevel = UPROBE_LOG_LEVEL;
     int opt;
-    while ((opt = getopt(argc, argv, "udqA:V:S:P:R:")) != -1) {
+    while ((opt = getopt(argc, argv, "udqA:V:S:P:R:s:")) != -1) {
         switch (opt) {
             case 'u':
                 udp = true;
@@ -706,6 +720,12 @@ int main(int argc, char **argv)
                 trickp_rate.den = strtoul(end, NULL, 10);
                 break;
             }
+            case 's':
+                if (sscanf(optarg, "%ux%u", &w, &h) != 2) {
+                    fprintf(stderr, "Incorrect size \"%s\"\n", optarg);
+                    w = h = 0;
+                }
+                break;
             default:
                 usage(argv[0]);
                 break;

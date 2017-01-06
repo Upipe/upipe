@@ -8,4 +8,4 @@ TMP="`mktemp -d tmp.XXXXXXXXXX`"
 cleanup() { rm -rf "$TMP"; }
 trap cleanup EXIT
 
-"$srcdir"/valgrind_wrapper.sh "$srcdir" ./upipe_multicat_test -r 270000000 "$TMP"/ .bar
+"$srcdir"/valgrind_wrapper.sh "$srcdir" ./upipe_multicat_test -r 270000000 -O 135000000 "$TMP"/ .bar
