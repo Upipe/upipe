@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2013-2016 OpenHeadend S.A.R.L.
+ * Copyright (C) 2013-2017 OpenHeadend S.A.R.L.
  *
  * Authors: Christophe Massiot
  *
@@ -1242,37 +1242,38 @@ static int upipe_ts_encaps_complete(struct upipe *upipe, struct ubuf **ubuf_p,
 /** @This returns a ubuf containing a TS packet, and the dts_sys of the packet.
  *
  * @param upipe description structure of the pipe
- * @param cr_sys date at which the packet will be muxed
+ * @param cr_sys_min date at which the packet will be muxed
+ * @param cr_sys_max maximum date allowed for muxing
  * @param ubuf_p filled in with a pointer to the ubuf (may be NULL)
  * @param dts_sys_p filled in with the dts_sys, or UINT64_MAX
  * @return an error code
  */
-static int _upipe_ts_encaps_splice(struct upipe *upipe, uint64_t cr_sys,
-                                   struct ubuf **ubuf_p, uint64_t *dts_sys_p)
+static int _upipe_ts_encaps_splice(struct upipe *upipe, uint64_t cr_sys_min,
+        uint64_t cr_sys_max, struct ubuf **ubuf_p, uint64_t *dts_sys_p)
 {
     struct upipe_ts_encaps *encaps = upipe_ts_encaps_from_upipe(upipe);
     if (encaps->ubuf_mgr == NULL)
         return UBASE_ERR_INVALID;
 
-    if (encaps->last_splice < cr_sys) {
-        encaps->tb_buffer += (cr_sys - encaps->last_splice) * encaps->tb_rate /
-                             UCLOCK_FREQ;
+    if (encaps->last_splice < cr_sys_min) {
+        encaps->tb_buffer += (cr_sys_min - encaps->last_splice) *
+                             encaps->tb_rate / UCLOCK_FREQ;
         if (encaps->tb_buffer > encaps->tb_size)
             encaps->tb_buffer = encaps->tb_size;
     }
-    encaps->last_splice = cr_sys;
+    encaps->last_splice = cr_sys_min;
 
     if (ubuf_p == NULL) {
-        /* Flush until cr_sys */
+        /* Flush until cr_sys_min */
         while (encaps->uref != NULL) {
             if (encaps->uref_dts_sys != UINT64_MAX) {
                 uint64_t dts_sys = encaps->uref_dts_sys -
                     (uint64_t)encaps->uref_size * UCLOCK_FREQ / encaps->tb_rate;
-                if (dts_sys >= cr_sys)
+                if (dts_sys >= cr_sys_min)
                     break;
 
                 upipe_warn_va(upipe, "dropping late packet (%"PRIu64")",
-                              cr_sys - dts_sys);
+                              cr_sys_min - dts_sys);
                 upipe_ts_encaps_consume_uref(upipe);
                 encaps->au_size = 0;
                 encaps->need_ready = encaps->need_status = true;
@@ -1298,13 +1299,15 @@ static int _upipe_ts_encaps_splice(struct upipe *upipe, uint64_t cr_sys,
         encaps->last_pcr = encaps->last_splice;
     }
 
-    if (encaps->uref == NULL || encaps->last_cr_sys > cr_sys) {
+    if (encaps->uref == NULL ||
+        (encaps->last_cr_sys > cr_sys_min &&
+         encaps->last_dts_sys > cr_sys_max)) {
         if (unlikely(pcr_prog == UINT64_MAX))
             upipe_dbg(upipe, "adding unnecessary padding (internal error)");
 
         *ubuf_p = upipe_ts_encaps_build_ts(upipe, 0, false, pcr_prog, false,
                                            false);
-        *dts_sys_p = pcr_prog != UINT64_MAX ? cr_sys : UINT64_MAX;
+        *dts_sys_p = pcr_prog != UINT64_MAX ? cr_sys_min : UINT64_MAX;
         encaps->need_status = true;
         upipe_ts_encaps_check_status(upipe);
         return UBASE_ERR_NONE;
@@ -1419,10 +1422,12 @@ static int upipe_ts_encaps_control(struct upipe *upipe,
         }
         case UPIPE_TS_ENCAPS_SPLICE: {
             UBASE_SIGNATURE_CHECK(args, UPIPE_TS_ENCAPS_SIGNATURE)
-            uint64_t cr_sys = va_arg(args, uint64_t);
+            uint64_t cr_sys_min = va_arg(args, uint64_t);
+            uint64_t cr_sys_max = va_arg(args, uint64_t);
             struct ubuf **ubuf_p = va_arg(args, struct ubuf **);
             uint64_t *dts_sys_p = va_arg(args, uint64_t *);
-            return _upipe_ts_encaps_splice(upipe, cr_sys, ubuf_p, dts_sys_p);
+            return _upipe_ts_encaps_splice(upipe, cr_sys_min, cr_sys_max,
+                                           ubuf_p, dts_sys_p);
         }
         case UPIPE_TS_ENCAPS_EOS: {
             UBASE_SIGNATURE_CHECK(args, UPIPE_TS_ENCAPS_SIGNATURE)

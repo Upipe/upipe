@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2013-2016 OpenHeadend S.A.R.L.
+ * Copyright (C) 2013-2017 OpenHeadend S.A.R.L.
  *
  * Authors: Christophe Massiot
  *
@@ -2532,7 +2532,7 @@ static void upipe_ts_mux_splice(struct upipe *upipe, struct ubuf **ubuf_p,
         if (psi_pid->dts_sys < original_cr_sys) {
             /* Too late: flush */
             upipe_ts_encaps_splice(psi_pid->encaps, original_cr_sys,
-                                   NULL, NULL);
+                                   original_cr_sys + mux->interval, NULL, NULL);
             /* No need to pop uchain as the probe does it for us. */
             continue;
         }
@@ -2541,6 +2541,7 @@ static void upipe_ts_mux_splice(struct upipe *upipe, struct ubuf **ubuf_p,
             break; /* Too soon */
 
         err = upipe_ts_encaps_splice(psi_pid->encaps, original_cr_sys,
+                                     original_cr_sys + mux->interval,
                                      ubuf_p, dts_sys_p);
         if (!ubase_check(err)) {
             upipe_warn(upipe, "internal error in splice");
@@ -2562,6 +2563,7 @@ static void upipe_ts_mux_splice(struct upipe *upipe, struct ubuf **ubuf_p,
                 upipe_ts_mux_input_from_uchain(uchain_input);
             if (input->dts_sys < original_cr_sys) /* flush */
                 upipe_ts_encaps_splice(input->encaps, original_cr_sys,
+                                       original_cr_sys + mux->interval,
                                        NULL, NULL);
 
             if (input->dts_sys <= original_cr_sys + mux->interval ||
@@ -2576,11 +2578,13 @@ static void upipe_ts_mux_splice(struct upipe *upipe, struct ubuf **ubuf_p,
         }
     }
 
-    if (selected_input == NULL || selected_input->cr_sys > original_cr_sys)
+    if (selected_input == NULL ||
+        selected_input->cr_sys > original_cr_sys)
         return;
 
 upipe_ts_mux_splice_done:
     err = upipe_ts_encaps_splice(selected_input->encaps, original_cr_sys,
+                                 original_cr_sys + mux->interval,
                                  ubuf_p, dts_sys_p);
     if (!ubase_check(err)) {
         upipe_warn(upipe, "internal error in splice");
