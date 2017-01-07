@@ -585,8 +585,9 @@ static void upipe_http_src_worker(struct upump *upump)
         upipe_throw_source_end(upipe);
     }
     else if (unlikely(len == 0)) {
-        upipe_verbose(upipe, "connection closed");
+        upipe_dbg(upipe, "connection closed");
         uref_free(uref);
+        upipe_http_src_set_upump(upipe, NULL);
         upipe_throw_source_end(upipe);
     }
     else {
