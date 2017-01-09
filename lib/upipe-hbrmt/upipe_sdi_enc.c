@@ -622,8 +622,11 @@ static void upipe_sdi_enc_encode_line(struct upipe *upipe, int h, uint16_t *dst,
         }
     }
 
+    /* Ideal number of samples that should've been put */
+    unsigned samples_put_target = samples * (h+1) / f->height;
+
     /* All channel groups should have the same samples to put on a line */
-    int sample_diff = samples - sample_number[0];
+    int sample_diff = samples_put_target - sample_number[0];
 
     if (sample_diff > 2)
         sample_diff = 2;
@@ -966,8 +969,6 @@ static void upipe_sdi_enc_input(struct upipe *upipe, struct uref *uref,
     int sample_number[4] = {0, 0, 0, 0}; /* Counter for each channel group */
 
     for (int h = 0; h < f->height; h++) {
-        /* Ideal number of samples that should've been put */
-        unsigned samples_put_target = samples * (h+1) / f->height;
         upipe_sdi_enc_encode_line(upipe, h, &dst[h * f->width * 2],
                                   planes, &input_strides[0], samples,
                                   &sample_number[0], input_hsize, input_vsize);
