@@ -535,43 +535,36 @@ static void upipe_sdi_enc_encode_line(struct upipe *upipe, int line_num, uint16_
      * 4 channel groups) */
     unsigned max_audio_packets_per_line = 4 * audio_packets_per_line(f);
 
-    /* Progressive */
-    if (f->psf_ident) {
-        vbi = (line_num >= p->vbi_f1_part1.start && line_num <= p->vbi_f1_part1.end) ||
-              (line_num >= p->vbi_f1_part2.start && line_num <= p->vbi_f1_part2.end);
+    /** Line Number can never be between [0, 0] so this will work for progressive */
+    /* VBI F1 part 1 */
+    if(line_num >= p->vbi_f1_part1.start && line_num <= p->vbi_f1_part1.end) {
+        vbi = 1;
         f2 = 0;
     }
-    else {
-        /* VBI F1 part 1 */
-        if(line_num >= p->vbi_f1_part1.start && line_num <= p->vbi_f1_part1.end) {
-            vbi = 1;
-            f2 = 0;
-        }
-        /* ACTIVE F1 */
-        else if(line_num >= p->active_f1.start && line_num <= p->active_f1.end) {
-            vbi = 0;
-            f2 = 0;
-        }
-        /* VBI F1 part 2 */
-        else if(line_num >= p->vbi_f1_part2.start && line_num <= p->vbi_f1_part2.end) {
-            vbi = 1;
-            f2 = 0;
-        }
-        /* VBI F2 part 1 */
-        else if(line_num >= p->vbi_f2_part1.start && line_num <= p->vbi_f2_part1.end) {
-            vbi = 1;
-            f2 = 1;
-        }
-        /* ACTIVE F2 */
-        else if(line_num >= p->active_f2.start && line_num <= p->active_f2.end) {
-            vbi = 0;
-            f2 = 1;
-        }
-        /* VBI F2 part 2 */
-        else if(line_num >= p->vbi_f2_part2.start && line_num <= p->vbi_f2_part2.end) {
-            vbi = 1;
-            f2 = 1;
-        }
+    /* ACTIVE F1 */
+    else if(line_num >= p->active_f1.start && line_num <= p->active_f1.end) {
+        vbi = 0;
+        f2 = 0;
+    }
+    /* VBI F1 part 2 */
+    else if(line_num >= p->vbi_f1_part2.start && line_num <= p->vbi_f1_part2.end) {
+        vbi = 1;
+        f2 = 0;
+    }
+    /* VBI F2 part 1 */
+    else if(line_num >= p->vbi_f2_part1.start && line_num <= p->vbi_f2_part1.end) {
+        vbi = 1;
+        f2 = 1;
+    }
+    /* ACTIVE F2 */
+    else if(line_num >= p->active_f2.start && line_num <= p->active_f2.end) {
+        vbi = 0;
+        f2 = 1;
+    }
+    /* VBI F2 part 2 */
+    else if(line_num >= p->vbi_f2_part2.start && line_num <= p->vbi_f2_part2.end) {
+        vbi = 1;
+        f2 = 1;
     }
 
     /* EAV */
