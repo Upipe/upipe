@@ -607,7 +607,7 @@ static void extract_sd_audio(struct upipe *upipe, const uint16_t *packet, int h,
 
     int data_count = packet[5] & 0xff;
     if (data_count % 12) {
-        upipe_err_va(upipe, "Invalid data count");
+        upipe_err_va(upipe, "Invalid data count %d", data_count);
         return;
     }
 
