@@ -38,8 +38,6 @@
  * audio packets must go in */
 #define UPIPE_SDI_SAV_LENGTH 8
 
-#define ZERO_IDX(x) (x-1)
-
 static void upipe_sdi_blank_c(uint16_t *dst, int64_t size)
 {
     for (int w = 0; w < size; w++) {
@@ -521,7 +519,7 @@ static float get_pts(uint64_t pts)
     return (float)((int64_t)pts - (int64_t)first_pts) / UCLOCK_FREQ;
 }
 
-static void upipe_sdi_enc_encode_line(struct upipe *upipe, int h, uint16_t *dst,
+static void upipe_sdi_enc_encode_line(struct upipe *upipe, int line_num, uint16_t *dst,
     const uint8_t *planes[2][UPIPE_SDI_MAX_PLANES], int *input_strides, const unsigned int samples,
     int *sample_number, size_t input_hsize, size_t input_vsize)
 {
@@ -539,38 +537,38 @@ static void upipe_sdi_enc_encode_line(struct upipe *upipe, int h, uint16_t *dst,
 
     /* Progressive */
     if (f->psf_ident) {
-        vbi = (h >= ZERO_IDX(p->vbi_f1_part1.start) && h <= ZERO_IDX(p->vbi_f1_part1.end)) ||
-              (h >= ZERO_IDX(p->vbi_f1_part2.start) && h <= ZERO_IDX(p->vbi_f1_part2.end));
+        vbi = (line_num >= p->vbi_f1_part1.start && line_num <= p->vbi_f1_part1.end) ||
+              (line_num >= p->vbi_f1_part2.start && line_num <= p->vbi_f1_part2.end);
         f2 = 0;
     }
     else {
         /* VBI F1 part 1 */
-        if(h >= ZERO_IDX(p->vbi_f1_part1.start) && h <= ZERO_IDX(p->vbi_f1_part1.end)) {
+        if(line_num >= p->vbi_f1_part1.start && line_num <= p->vbi_f1_part1.end) {
             vbi = 1;
             f2 = 0;
         }
         /* ACTIVE F1 */
-        else if(h >= ZERO_IDX(p->active_f1.start) && h <= ZERO_IDX(p->active_f1.end)) {
+        else if(line_num >= p->active_f1.start && line_num <= p->active_f1.end) {
             vbi = 0;
             f2 = 0;
         }
         /* VBI F1 part 2 */
-        else if(h >= ZERO_IDX(p->vbi_f1_part2.start) && h <= ZERO_IDX(p->vbi_f1_part2.end)) {
+        else if(line_num >= p->vbi_f1_part2.start && line_num <= p->vbi_f1_part2.end) {
             vbi = 1;
             f2 = 0;
         }
         /* VBI F2 part 1 */
-        else if(h >= ZERO_IDX(p->vbi_f2_part1.start) && h <= ZERO_IDX(p->vbi_f2_part1.end)) {
+        else if(line_num >= p->vbi_f2_part1.start && line_num <= p->vbi_f2_part1.end) {
             vbi = 1;
             f2 = 1;
         }
         /* ACTIVE F2 */
-        else if(h >= ZERO_IDX(p->active_f2.start) && h <= ZERO_IDX(p->active_f2.end)) {
+        else if(line_num >= p->active_f2.start && line_num <= p->active_f2.end) {
             vbi = 0;
             f2 = 1;
         }
         /* VBI F2 part 2 */
-        else if(h >= ZERO_IDX(p->vbi_f2_part2.start) && h <= ZERO_IDX(p->vbi_f2_part2.end)) {
+        else if(line_num >= p->vbi_f2_part2.start && line_num <= p->vbi_f2_part2.end) {
             vbi = 1;
             f2 = 1;
         }
@@ -585,10 +583,10 @@ static void upipe_sdi_enc_encode_line(struct upipe *upipe, int h, uint16_t *dst,
     dst[5] = 0x000;
     dst[6] = eav_fvh_cword[f2][vbi];
     dst[7] = eav_fvh_cword[f2][vbi];
-    dst[8] = (h & 0x3f) << 2;
+    dst[8] = (line_num & 0x3f) << 2;
     dst[8] |= NOT_BIT8(dst[8]);
     dst[9] = dst[8];
-    dst[10] = (1 << 9) | (((h >> 7) & 0xf) << 2);
+    dst[10] = (1 << 9) | (((line_num >> 7) & 0xf) << 2);
     dst[11] = dst[10];
 
     /* update CRC */
@@ -607,13 +605,13 @@ static void upipe_sdi_enc_encode_line(struct upipe *upipe, int h, uint16_t *dst,
 
     /* These packets are written in the first Luma sample after SAV */
     /* Payload identifier */
-    if ((h == ZERO_IDX(p->payload_id_line)) ||
-        (f->psf_ident != UPIPE_SDI_PSF_IDENT_P && h == ZERO_IDX(p->payload_id_line + p->field_offset))) {
+    if ((line_num == p->payload_id_line) ||
+        (f->psf_ident != UPIPE_SDI_PSF_IDENT_P && line_num == p->payload_id_line + p->field_offset)) {
         put_payload_identifier(&dst[chroma_blanking+1], f);
     }
     /* Audio control packet on Switching Line + 2 */
-    else if ((h == ZERO_IDX(p->switching_line + 2)) ||
-             (f->psf_ident != UPIPE_SDI_PSF_IDENT_P && h == ZERO_IDX(p->switching_line + p->field_offset + 2))) { 
+    else if ((line_num == p->switching_line + 2) ||
+             (f->psf_ident != UPIPE_SDI_PSF_IDENT_P && line_num == p->switching_line + p->field_offset + 2)) { 
         int dst_pos = chroma_blanking + 1;
         for (int i = 0; i < 4; i++) {
             dst_pos += put_audio_control_packet(&dst[dst_pos], i, upipe_sdi_enc->dbn[4+i]++);
@@ -623,7 +621,7 @@ static void upipe_sdi_enc_encode_line(struct upipe *upipe, int h, uint16_t *dst,
     }
 
     /* Ideal number of samples that should've been put */
-    unsigned samples_put_target = samples * (h+1) / f->height;
+    unsigned samples_put_target = samples * (line_num) / f->height;
 
     /* All channel groups should have the same samples to put on a line */
     int sample_diff = samples_put_target - sample_number[0];
@@ -633,8 +631,8 @@ static void upipe_sdi_enc_encode_line(struct upipe *upipe, int h, uint16_t *dst,
 
     /* Chroma packets */
     /* Audio can go anywhere but the switching lines+1 */
-    if (!(h == ZERO_IDX(p->switching_line + 1)) &&
-        !(p->field_offset && h == ZERO_IDX(p->switching_line + p->field_offset + 1))) {
+    if (!(line_num == p->switching_line + 1) &&
+        !(p->field_offset && line_num == p->switching_line + p->field_offset + 1)) {
         int packets_put = 0;
 
         /* Start counting the destination from the start of the
@@ -969,7 +967,7 @@ static void upipe_sdi_enc_input(struct upipe *upipe, struct uref *uref,
     int sample_number[4] = {0, 0, 0, 0}; /* Counter for each channel group */
 
     for (int h = 0; h < f->height; h++) {
-        upipe_sdi_enc_encode_line(upipe, h, &dst[h * f->width * 2],
+        upipe_sdi_enc_encode_line(upipe, h+1, &dst[h * f->width * 2],
                                   planes, &input_strides[0], samples,
                                   &sample_number[0], input_hsize, input_vsize);
         upipe_sdi_enc->eav_clock += f->width;
