@@ -852,6 +852,8 @@ static int upipe_netmap_sink_set_flow_def(struct upipe *upipe,
         // XXX: should we do PSF at all?
         // 0x21 progressive
         // 0x22 psf
+    } else if (hsize == 1280 && vsize == 720) {
+        upipe_netmap_sink->frame = 0x30; // progressive
     } else
         return UBASE_ERR_INVALID;
 
