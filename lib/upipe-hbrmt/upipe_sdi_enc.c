@@ -716,6 +716,7 @@ static void upipe_sdi_enc_encode_line(struct upipe *upipe, int line_num, uint16_
         sdi_crc_update_blk(upipe_sdi_enc->crc_lut, &upipe_sdi_enc->crc_c, &upipe_sdi_enc->crc_y, crc_src);
     }
 
+    /* FIXME: support PSF */
     if (!vbi)
         for (int i = 0; i < UPIPE_SDI_MAX_PLANES; i++)
             planes[f2][i] += input_strides[i] * (1 + (f2 ? 1 : !f->psf_ident));
