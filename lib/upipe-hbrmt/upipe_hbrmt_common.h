@@ -133,7 +133,7 @@ struct sdi_offsets_fmt {
     uint16_t width;
     uint16_t height;
  
-    /* Number of samples (pairs) between SAV and start of active data */
+    /* Number of samples (pairs) between EAV and start of active data */
     uint16_t active_offset;
 
     const struct sdi_picture_fmt *pict_fmt;
@@ -176,13 +176,16 @@ static inline const struct sdi_offsets_fmt *sdi_get_offsets(struct uref *flow_de
         {0, 1920, 1080, 562, 7, 10, {1, 20}, {21, 560}, {561, 563}, {564, 583}, {584, 1123}, {1124, 1125}},
         /* 1125 Progressive (1080 active) lines */
         {0, 1920, 1080, 0, 7, 10, {1, 41}, {42, 1121}, {1122, 1125}, {0, 0}, {0, 0}, {0, 0}},
+        /* 750 Progressive (720 active) lines */
+        {0, 1280, 720, 0, 7, 10, {1, 25}, {26, 745}, {746, 750}, {0, 0}, {0, 0}, {0, 0}},
+
         /* PAL */
         {1, 720, 576, 313, 6, 9, {1, 22}, {23, 310}, {311, 312}, {313, 335}, {336, 623}, {624, 625}},
         /* NTSC TODO */
-        /* 720p TODO */
     };
 
     static const struct sdi_offsets_fmt fmts_data[7] = {
+        /* 1125 Lines */
         { 2640, 1125, 720, &pict_fmts[0], 0x0, 0x5, { 25, 1} },        /* 25 Hz I */
         { 2640, 1125, 720, &pict_fmts[1], 0x3, 0x9, { 50, 1} },        /* 50 Hz P */
 
@@ -192,7 +195,12 @@ static inline const struct sdi_offsets_fmt *sdi_get_offsets(struct uref *flow_de
         { 2750, 1125, 830, &pict_fmts[0], 0x3, 0x2, { 24000, 1001 } }, /* 24/1.001 Hz */
         { 2750, 1125, 830, &pict_fmts[0], 0x3, 0x3, { 24, 1 } },       /* 24 Hz */
 
-        {  864,  625, 144, &pict_fmts[2], 0x0, 0x5, { 25, 1} },        /* 625-line 25 Hz I */
+        /* 750 Lines */
+        { 1976, 750, 696, &pict_fmts[2], 0x3, 0x9, { 50, 1} },        /* 50 Hz P */
+        { 1646, 750, 366, &pict_fmts[2], 0x3, 0xA, { 60000, 1001 } }, /* 60/1.001 Hz P */
+
+        { 864,  625, 144, &pict_fmts[3], 0x0, 0x5, { 25, 1} },        /* 625-line 25 Hz I */
+        
     };
 
     for (size_t i = 0; i < sizeof(fmts_data) / sizeof(struct sdi_offsets_fmt); i++)
