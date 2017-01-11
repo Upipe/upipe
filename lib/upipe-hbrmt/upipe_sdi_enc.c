@@ -420,8 +420,12 @@ static int upipe_sdi_enc_sub_control(struct upipe *upipe, int command, va_list a
             struct uref *flow = va_arg(args, struct uref *);
             if (flow == NULL)
                 return UBASE_ERR_INVALID;
-            UBASE_RETURN(uref_flow_match_def(flow, "sound."))
+            uint8_t planes;
+            UBASE_RETURN(uref_flow_match_def(flow, "sound.s32."))
             UBASE_RETURN(uref_sound_flow_get_channels(flow, &sdi_enc_sub->channels))
+            UBASE_RETURN(uref_sound_flow_get_planes(flow, &planes))
+            if (planes != 1)
+                return UBASE_ERR_INVALID;
             if (sdi_enc_sub->channels > UPIPE_SDI_MAX_CHANNELS)
                 return UBASE_ERR_INVALID;
             return UBASE_ERR_NONE;
