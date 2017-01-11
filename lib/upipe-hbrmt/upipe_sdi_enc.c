@@ -850,7 +850,12 @@ static struct uref *upipe_sdi_enc_avsync(struct upipe *upipe, unsigned samples)
         if (overlap)
             size = samples - idx;
 
-        memcpy(&upipe_sdi_enc->audio_buf[idx * channels], buf, sizeof(int32_t) * size * channels);
+        int32_t *dst = &upipe_sdi_enc->audio_buf[idx * UPIPE_SDI_MAX_CHANNELS];
+        for (size_t i = 0; i < size; i++) {
+            memcpy(dst, buf, sizeof(int32_t) * channels);
+            dst += UPIPE_SDI_MAX_CHANNELS;
+            buf += channels;
+        }
 
         uref_sound_unmap(uref_audio, 0, -1, 1);
 
