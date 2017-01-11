@@ -319,7 +319,7 @@ static int put_audio_data_packet(uint16_t *dst, struct upipe_sdi_enc *s,
     dst[4] = S291_ADF3;
 
     /* DID */
-    dst[6] = S291_SD_AUDIO_GROUP1_DID - ch_group ;
+    dst[6] = S291_HD_AUDIO_GROUP1_DID - ch_group ;
 
     /* DBN */
     dst[8] = dbn;
