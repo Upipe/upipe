@@ -749,7 +749,8 @@ static void upipe_netmap_sink_input(struct upipe *upipe, struct uref *uref,
 {
     struct upipe_netmap_sink *upipe_netmap_sink = upipe_netmap_sink_from_upipe(upipe);
 
-    if (upipe_netmap_sink->upump == NULL) {
+    upipe_netmap_sink_check_upump_mgr(upipe);
+    if (upipe_netmap_sink->upump == NULL && upipe_netmap_sink->upump_mgr) {
         if (upipe_netmap_sink->d && NETMAP_FD(upipe_netmap_sink->d) != -1) {
             struct upump *upump = upump_alloc_timer(upipe_netmap_sink->upump_mgr,
                     upipe_netmap_sink_worker, upipe, upipe->refcount, 0,
