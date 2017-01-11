@@ -797,6 +797,12 @@ static struct uref *upipe_sdi_enc_avsync(struct upipe *upipe, unsigned samples)
             if (pts_audio < pts) {
                 uint64_t pts_diff = pts - pts_audio;
                 size_t samples = pts_diff * 48000 / UCLOCK_FREQ;
+                if (samples > size) {
+                    ulist_delete(uchain);
+                    uref_free(uref_audio);
+                    first = true;
+                    continue;
+                }
                 ubase_assert(uref_sound_resize(uref_audio, samples, -1));
                 uref_clock_set_pts_sys(uref_audio, pts);
                 upipe_verbose_va(sub, "Resized audio, removed %zu samples", samples);
