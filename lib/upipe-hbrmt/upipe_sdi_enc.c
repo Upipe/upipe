@@ -321,7 +321,7 @@ static unsigned audio_packets_per_line(const struct sdi_offsets_fmt *f)
 
 /* NOTE: ch_group is zero indexed */
 static int put_audio_data_packet(uint16_t *dst, struct upipe_sdi_enc *s,
-                                 int audio_sample, int ch_group,
+                                 int sample_number, int ch_group,
                                  uint8_t mpf_bit, uint16_t clk, uint8_t dbn)
 {
     union {
@@ -357,16 +357,16 @@ static int put_audio_data_packet(uint16_t *dst, struct upipe_sdi_enc *s,
     for (int i = 0; i < 4; i++) {
         /* Each channel group has 4 samples from 4 channels, and in total
          * there are 16 channels at all times in the buffer */
-        sample.i   = s->audio_buf[audio_sample*UPIPE_SDI_MAX_CHANNELS + (ch_group*4 + i)];
+        sample.i   = s->audio_buf[sample_number*UPIPE_SDI_MAX_CHANNELS + (ch_group*4 + i)];
         sample.u >>= 8;
 
         /* Channel status */
-        uint8_t byte_pos = (audio_sample % 192)/8;
-        uint8_t bit_pos = (audio_sample % 24) % 8;
+        uint8_t byte_pos = (sample_number % 192)/8;
+        uint8_t bit_pos = (sample_number % 24) % 8;
         uint8_t ch_stat = !!(s->aes_channel_status[byte_pos] & (1 << bit_pos));
 
         /* Block sync bit, channel status and validity */
-        uint8_t aes_block_sync = (!(audio_sample % 24)) && (!(i & 1));
+        uint8_t aes_block_sync = (!(sample_number % 24)) && (!(i & 1));
         uint8_t aes_status_validity = (ch_stat << 2) | (0 << 1) | 1;
 
         uint16_t word0 = ((sample.u & 0xf     ) <<  4) | (aes_block_sync      << 3);
