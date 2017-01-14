@@ -772,6 +772,7 @@ static void upipe_hd_sdi_enc_encode_line(struct upipe *upipe, int line_num, uint
     /* All channel groups should have the same samples to put on a line */
     int samples_to_put = samples_put_target - upipe_sdi_enc->sample_pos;
 
+    /* Clip this to something reasonable */
     if (samples_to_put > 2)
         samples_to_put = 2;
 
