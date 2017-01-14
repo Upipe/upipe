@@ -331,7 +331,7 @@ static unsigned audio_packets_per_line(const struct sdi_offsets_fmt *f)
 
 /* NOTE: ch_group is zero indexed */
 static int put_hd_audio_data_packet(struct upipe_sdi_enc *upipe_sdi_enc, uint16_t *dst,
-                                    int sample_number, int ch_group,
+                                    int sample_pos, int ch_group,
                                     uint8_t mpf_bit, uint16_t clk)
 {
     union {
@@ -372,12 +372,12 @@ static int put_hd_audio_data_packet(struct upipe_sdi_enc *upipe_sdi_enc, uint16_
         sample.u >>= 8;
 
         /* Channel status */
-        uint8_t byte_pos = (sample_number % 192)/8;
-        uint8_t bit_pos = (sample_number % 24) % 8;
+        uint8_t byte_pos = (sample_pos % 192)/8;
+        uint8_t bit_pos = (sample_pos % 24) % 8;
         uint8_t ch_stat = !!(upipe_sdi_enc->aes_channel_status[byte_pos] & (1 << bit_pos));
 
         /* Block sync bit, channel status and validity */
-        uint8_t aes_block_sync = (!(sample_number % 24)) && (!(i & 1));
+        uint8_t aes_block_sync = (!(sample_pos % 24)) && (!(i & 1));
         uint8_t aes_status_validity = (ch_stat << 2) | (0 << 1) | 1;
 
         uint16_t word0 = ((sample.u & 0xf     ) <<  4) | (aes_block_sync      << 3);
@@ -552,7 +552,7 @@ static float get_pts(uint64_t pts)
 
 static void upipe_sdi_enc_encode_line(struct upipe *upipe, int line_num, uint16_t *dst,
     const uint8_t *planes[2][UPIPE_SDI_MAX_PLANES], int *input_strides, const unsigned int samples,
-    int *sample_number, size_t input_hsize, size_t input_vsize)
+    int *sample_pos, size_t input_hsize, size_t input_vsize)
 {
     struct upipe_sdi_enc *upipe_sdi_enc = upipe_sdi_enc_from_upipe(upipe);
     const struct sdi_offsets_fmt *f = upipe_sdi_enc->f;
@@ -646,7 +646,7 @@ static void upipe_sdi_enc_encode_line(struct upipe *upipe, int line_num, uint16_
     unsigned samples_put_target = samples * (line_num) / f->height;
 
     /* All channel groups should have the same samples to put on a line */
-    int samples_to_put = samples_put_target - sample_number[0];
+    int samples_to_put = samples_put_target - sample_pos[0];
 
     if (samples_to_put > 2)
         samples_to_put = 2;
@@ -707,7 +707,7 @@ static void upipe_sdi_enc_encode_line(struct upipe *upipe, int line_num, uint16_
          * amount of packets for each audio group to be belonging to a line before */
         for (int ch_group = 0; ch_group < 4; ch_group++) {
             /* Difference between current samples actually put and the target */
-            upipe_sdi_enc->mpf_packet_bits[ch_group] = samples - sample_number[ch_group];
+            upipe_sdi_enc->mpf_packet_bits[ch_group] = samples - sample_pos[ch_group];
         }
     }
 
@@ -985,12 +985,12 @@ static void upipe_sdi_enc_input(struct upipe *upipe, struct uref *uref,
     uint16_t *dst = (uint16_t*)buf;
 
     /* map input audio */
-    int sample_number[4] = {0, 0, 0, 0}; /* Counter for each channel group */
+    int sample_pos[4] = {0, 0, 0, 0}; /* Counter for each channel group */
 
     for (int h = 0; h < f->height; h++) {
         upipe_sdi_enc_encode_line(upipe, h+1, &dst[h * f->width * 2],
                                   planes, &input_strides[0], samples,
-                                  &sample_number[0], input_hsize, input_vsize);
+                                  sample_pos, input_hsize, input_vsize);
         upipe_sdi_enc->eav_clock += f->width;
     }
 
