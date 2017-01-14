@@ -228,7 +228,7 @@ static inline void sdi_fill_anc_parity_checksum(uint16_t *buf, int gap)
     buf[gap*len] = checksum;
 }
 
-static void sdi_fill_anc_parity_checksum_hd(uint16_t *buf)
+static void sdi_fill_anc_parity_checksum_sd(uint16_t *buf)
 {
     return sdi_fill_anc_parity_checksum(buf, 1);
 }
