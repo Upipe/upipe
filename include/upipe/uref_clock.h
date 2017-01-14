@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2012-2015 OpenHeadend S.A.R.L.
+ * Copyright (C) 2012-2017 OpenHeadend S.A.R.L.
  *
  * Authors: Christophe Massiot
  *
@@ -53,6 +53,7 @@ UREF_ATTR_SMALL_UNSIGNED(clock, index_rap, "k.index_rap",
 UREF_ATTR_RATIONAL_SH(clock, rate, UDICT_TYPE_CLOCK_RATE, playing rate)
 UREF_ATTR_UNSIGNED_SH(clock, latency, UDICT_TYPE_CLOCK_LATENCY,
         latency in uclock units)
+UREF_ATTR_UNSIGNED_SH(clock, wrap, UDICT_TYPE_CLOCK_WRAP, wrap around value)
 
 /** @hidden */
 #define UREF_CLOCK_TEMPLATE(dv, DV)                                         \
