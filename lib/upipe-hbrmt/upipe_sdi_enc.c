@@ -228,41 +228,50 @@ static inline void sdi_fill_anc_parity_checksum(uint16_t *buf, int gap)
     buf[gap*len] = checksum;
 }
 
-static void sdi_fill_anc_parity_checksum_sd(uint16_t *buf)
-{
-    return sdi_fill_anc_parity_checksum(buf, 1);
+#define SDI_FILL_ANC_PARITY(type, gap)                         \
+static void sdi_fill_anc_parity_checksum_##type(uint16_t *buf) \
+{                                                              \
+    sdi_fill_anc_parity_checksum(buf, gap);                    \
 }
 
-static void sdi_fill_anc_parity_checksum_hd(uint16_t *buf)
-{
-    return sdi_fill_anc_parity_checksum(buf, 2);
-}
+SDI_FILL_ANC_PARITY(sd, 1)
+SDI_FILL_ANC_PARITY(hd, 2)
 
-static void put_payload_identifier(uint16_t *dst, const struct sdi_offsets_fmt *f)
+static inline void put_payload_identifier(uint16_t *dst, const struct sdi_offsets_fmt *f,
+                                          int gap)
 {
     /* ADF */
-    dst[0] = S291_ADF1;
-    dst[2] = S291_ADF2;
-    dst[4] = S291_ADF3;
+    dst[gap*0] = S291_ADF1;
+    dst[gap*1] = S291_ADF2;
+    dst[gap*2] = S291_ADF3;
 
     /* DID */
-    dst[6] = S291_PAYLOADID_DID;
+    dst[gap*3] = S291_PAYLOADID_DID;
 
     /* SDID */
-    dst[8] = S291_PAYLOADID_SDID;
+    dst[gap*4] = S291_PAYLOADID_SDID;
 
     /* DC */
-    dst[10] = 4;
+    dst[gap*5] = 4;
 
     /* UDW */
-    dst[12] = 0x04;
-    dst[14] = (f->psf_ident << 6) | f->frame_rate;
-    dst[16] = f->psf_ident == 0x0 ? 0x1 : 0x5;
-    dst[18] = 0x00;
+    dst[gap*6] = 0x04;
+    dst[gap*7] = (f->psf_ident << 6) | f->frame_rate;
+    dst[gap*8] = f->psf_ident == 0x0 ? 0x1 : 0x5;
+    dst[gap*9] = 0x00;
 
     /* Parity + CS */
-    sdi_fill_anc_parity_checksum_hd(&dst[6]);
+    sdi_fill_anc_parity_checksum_hd(&dst[gap*3]);
 }
+
+#define PUT_PAYLOAD_IDENTIFIER(type, gap)                      \
+static void put_payload_identifier_##type(uint16_t *dst, const struct sdi_offsets_fmt *f) \
+{                                                              \
+    put_payload_identifier(dst, f, gap);                       \
+}
+
+PUT_PAYLOAD_IDENTIFIER(sd, 1)
+PUT_PAYLOAD_IDENTIFIER(hd, 2)
 
 static int put_audio_control_packet(uint16_t *dst, int ch_group, uint8_t dbn)
 {
