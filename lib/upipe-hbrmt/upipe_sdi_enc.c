@@ -648,8 +648,9 @@ static void upipe_sdi_enc_encode_line(struct upipe *upipe, int line_num, uint16_
     for (int ch_group = 0; ch_group < 4; ch_group++) {
 
 
-        upipe_sdi_enc->sample_pos += samples_to_put;
+        
     }
+    upipe_sdi_enc->sample_pos += samples_to_put;
 
     if(vbi) {
         /* black */
@@ -821,12 +822,12 @@ static void upipe_hd_sdi_enc_encode_line(struct upipe *upipe, int line_num, uint
                 uint16_t sample_clock = aud_clock - upipe_sdi_enc->eav_clock;
 
                 dst_pos += put_hd_audio_data_packet(upipe_sdi_enc, &dst[dst_pos],
-                           ch_group, mpf_bit, sample_clock);
-                upipe_sdi_enc->sample_pos++;
+                                                    ch_group, mpf_bit, sample_clock);
                 packets_put++;
             }
             upipe_sdi_enc->total_audio_samples_put += samples_to_put;
         }
+        upipe_sdi_enc->sample_pos += samples_to_put;
     } else {
         /* The current line is a switching line, so mark the next sample_diff
          * amount of packets for each audio group to be belonging to a line before */
