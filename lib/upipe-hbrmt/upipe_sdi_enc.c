@@ -620,7 +620,7 @@ static void upipe_sdi_enc_encode_line(struct upipe *upipe, int line_num, uint16_
     /* Payload identifier */
     if ((line_num == p->payload_id_line) ||
         (f->psf_ident != UPIPE_SDI_PSF_IDENT_P && line_num == p->payload_id_line + p->field_offset)) {
-        put_payload_identifier(&dst[chroma_blanking+1], f);
+        put_payload_identifier_hd(&dst[chroma_blanking+1], f);
     }
     /* Audio control packet on Switching Line + 2 */
     else if ((line_num == p->switching_line + 2) ||
