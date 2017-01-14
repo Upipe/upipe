@@ -768,6 +768,7 @@ static bool upipe_sdi_dec_handle(struct upipe *upipe, struct uref *uref,
         }
     }
 
+    // FIXME NTSC this is broken
     for (int i = 0; i < UPIPE_SDI_DEC_MAX_PLANES; i++)
         if (fields[0][i])
             fields[1][i] = fields[0][i] + output_stride[i];
