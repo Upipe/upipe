@@ -118,6 +118,9 @@ struct upipe_sdi_enc {
     /* Luma CRC context */
     uint32_t crc_y;
 
+    /* Sample Position */
+    int sample_pos;
+
     /* AES channel status bitstream */
     uint8_t aes_channel_status[24];
 
@@ -327,17 +330,44 @@ static unsigned audio_packets_per_line(const struct sdi_offsets_fmt *f)
     unsigned active_lines = f->height - 2;
 
     return (samples_per_frame + active_lines - 1) / active_lines;
-}
+}                           
 
 /* NOTE: ch_group is zero indexed */
-static int put_hd_audio_data_packet(struct upipe_sdi_enc *upipe_sdi_enc, uint16_t *dst,
-                                    int sample_pos, int ch_group,
-                                    uint8_t mpf_bit, uint16_t clk)
+static int put_sd_audio_data_packet(struct upipe_sdi_enc *upipe_sdi_enc, uint16_t *dst,
+                                    int ch_group)
 {
     union {
         uint32_t u;
         int32_t  i;
     } sample;
+
+    /* ADF */
+    dst[0] = S291_ADF1;
+    dst[1] = S291_ADF2;
+    dst[2] = S291_ADF3;
+
+    /* DID */
+    dst[3] = 0xff - (ch_group << 1);
+
+    /* DBN */
+    dst[4] = upipe_sdi_enc->dbn[ch_group];
+    sdi_increment_dbn(&upipe_sdi_enc->dbn[ch_group]);
+
+    /* DC */
+    dst[5] = 24;
+
+    return 0;
+}
+
+/* NOTE: ch_group is zero indexed */
+static int put_hd_audio_data_packet(struct upipe_sdi_enc *upipe_sdi_enc, uint16_t *dst,
+                                    int ch_group, uint8_t mpf_bit, uint16_t clk)
+{
+    union {
+        uint32_t u;
+        int32_t  i;
+    } sample;
+    int sample_pos = upipe_sdi_enc->sample_pos;
 
     /* Clock */
     uint8_t clock_1 = clk & 0xff, clock_2 = (clk & 0x1F00) >> 8;
@@ -552,11 +582,106 @@ static float get_pts(uint64_t pts)
 
 static void upipe_sdi_enc_encode_line(struct upipe *upipe, int line_num, uint16_t *dst,
     const uint8_t *planes[2][UPIPE_SDI_MAX_PLANES], int *input_strides, const unsigned int samples,
-    int *sample_pos, size_t input_hsize, size_t input_vsize)
+    size_t input_hsize, size_t input_vsize)
 {
     struct upipe_sdi_enc *upipe_sdi_enc = upipe_sdi_enc_from_upipe(upipe);
     const struct sdi_offsets_fmt *f = upipe_sdi_enc->f;
     const struct sdi_picture_fmt *p = upipe_sdi_enc->p;
+    bool vbi = 0, f2 = 0;
+
+    input_hsize = p->active_width;
+
+    /* Returns the total amount of samples per channel that can be put on
+     * a line, so convert that to packets (multiplying it by 4 since you have
+     * 4 channel groups) */
+    unsigned max_audio_packets_per_line = 4 * audio_packets_per_line(f);
+
+    // FIXME factor out common code
+
+    /* VBI F1 part 1 */
+    if(line_num >= p->vbi_f1_part1.start && line_num <= p->vbi_f1_part1.end) {
+        vbi = 1;
+        f2 = 0;
+    }
+    /* ACTIVE F1 */
+    else if(line_num >= p->active_f1.start && line_num <= p->active_f1.end) {
+        vbi = 0;
+        f2 = 0;
+    }
+    /* VBI F1 part 2 */
+    else if(line_num >= p->vbi_f1_part2.start && line_num <= p->vbi_f1_part2.end) {
+        vbi = 1;
+        f2 = 0;
+    }
+    /* VBI F2 part 1 */
+    else if(line_num >= p->vbi_f2_part1.start && line_num <= p->vbi_f2_part1.end) {
+        vbi = 1;
+        f2 = 1;
+    }
+    /* ACTIVE F2 */
+    else if(line_num >= p->active_f2.start && line_num <= p->active_f2.end) {
+        vbi = 0;
+        f2 = 1;
+    }
+    /* VBI F2 part 2 */
+    else if(line_num >= p->vbi_f2_part2.start && line_num <= p->vbi_f2_part2.end) {
+        vbi = 1;
+        f2 = 1;
+    }
+
+    /* EAV */
+    dst[0] = 0x3ff;
+    dst[1] = 0x000;
+    dst[2] = 0x000;
+    dst[3] = eav_fvh_cword[f2][vbi];
+
+    /* HBI */
+    const uint8_t chroma_blanking = UPIPE_SDI_CHROMA_BLANKING_START;
+    upipe_sdi_enc->blank(&dst[chroma_blanking], f->active_offset - UPIPE_SDI_SAV_LENGTH);
+
+    /* Ideal number of samples that should've been put */
+    unsigned samples_put_target = samples * (line_num) / f->height;
+
+    /* All channel groups should have the same samples to put on a line */
+    int samples_to_put = samples_put_target - sample_pos[0];
+
+    for (int ch_group = 0; ch_group < 4; ch_group++) {
+
+
+        sample_pos[ch_group] += samples_to_put;
+    }
+
+    if(vbi) {
+        /* black */
+        upipe_sdi_enc->blank(&dst[2*f->active_offset], input_hsize);
+    } else {
+        const uint8_t *y = planes[f2][0];
+        const uint8_t *u = planes[f2][1];
+        const uint8_t *v = planes[f2][2];
+
+        if (upipe_sdi_enc->input_is_v210)
+            upipe_sdi_enc->v210_to_uyvy((uint32_t *)y, (uint16_t *)&dst[2*f->active_offset], input_hsize);
+        else if (upipe_sdi_enc->input_bit_depth == 10)
+            upipe_sdi_enc->planar_to_uyvy_10(&dst[2*f->active_offset], (uint16_t *)y, (uint16_t *)u, (uint16_t *)v, input_hsize);
+        else
+            upipe_sdi_enc->planar_to_uyvy_8 (&dst[2*f->active_offset], y, u, v, input_hsize);
+    }
+
+    /* Progressive SD not supported */
+    if (!vbi)
+        for (int i = 0; i < UPIPE_SDI_MAX_PLANES; i++)
+            planes[f2][i] += input_strides[i] * 2;
+}
+
+static void upipe_hd_sdi_enc_encode_line(struct upipe *upipe, int line_num, uint16_t *dst,
+    const uint8_t *planes[2][UPIPE_SDI_MAX_PLANES], int *input_strides, const unsigned int samples,
+    size_t input_hsize, size_t input_vsize)
+{
+    struct upipe_sdi_enc *upipe_sdi_enc = upipe_sdi_enc_from_upipe(upipe);
+    const struct sdi_offsets_fmt *f = upipe_sdi_enc->f;
+    const struct sdi_picture_fmt *p = upipe_sdi_enc->p;
+    const uint8_t chroma_blanking = UPIPE_HDSDI_CHROMA_BLANKING_START;
+
     bool vbi = 0, f2 = 0;
 
     input_hsize = p->active_width;
@@ -624,7 +749,6 @@ static void upipe_sdi_enc_encode_line(struct upipe *upipe, int line_num, uint16_
     sdi_crc_end(&upipe_sdi_enc->crc_y, &dst[13]);
 
     /* HBI */
-    const uint8_t chroma_blanking = p->sd ? UPIPE_SDI_CHROMA_BLANKING_START : UPIPE_HDSDI_CHROMA_BLANKING_START;
     upipe_sdi_enc->blank(&dst[chroma_blanking], f->active_offset - UPIPE_SDI_SAV_LENGTH);
 
     /* These packets are written in the first Luma sample after SAV */
@@ -972,26 +1096,34 @@ static void upipe_sdi_enc_input(struct upipe *upipe, struct uref *uref,
     int size = -1;
     uint8_t *buf;
     ubase_assert(ubuf_block_write(ubuf, 0, &size, &buf));
+    uint16_t *dst = (uint16_t*)buf;
 
     sdi_init_crc_channel_status(upipe_sdi_enc->aes_channel_status);
 
-    const uint8_t *planes[2][UPIPE_SDI_MAX_PLANES] = {
-        {input_planes[0], input_planes[1], input_planes[2]},
-        {input_planes[0] + input_strides[0],
-         input_planes[1] + input_strides[1],
-         input_planes[2] + input_strides[2]},
-    };
+    const uint8_t *planes[2][UPIPE_SDI_MAX_PLANES];
 
-    uint16_t *dst = (uint16_t*)buf;
+    /* NTSC is bff, invert fields */
+    bool bff = upipe_sdi_enc->p->sd && upipe_sdi_enc->p->active_height == 480;
+    for (int i = 0; i < UPIPE_SDI_MAX_PLANES; i++) {
+        planes[ bff][i] = input_planes[i];
+        planes[!bff][i] = input_planes[i] + input_strides[i];
+    }    
 
-    /* map input audio */
-    int sample_pos[4] = {0, 0, 0, 0}; /* Counter for each channel group */
+    upipe_sdi_enc->sample_pos = 0;
 
     for (int h = 0; h < f->height; h++) {
-        upipe_sdi_enc_encode_line(upipe, h+1, &dst[h * f->width * 2],
-                                  planes, &input_strides[0], samples,
-                                  sample_pos, input_hsize, input_vsize);
-        upipe_sdi_enc->eav_clock += f->width;
+        /* Note conversion to 1-indexed line-number */
+        if (upipe_sdi_enc->p->sd) {
+            upipe_sdi_enc_encode_line(upipe, h+1, &dst[h * f->width * 2],
+                                      planes, &input_strides[0], samples,
+                                      input_hsize, input_vsize);
+        }
+        else {
+            upipe_hd_sdi_enc_encode_line(upipe, h+1, &dst[h * f->width * 2],
+                                         planes, &input_strides[0], samples,
+                                         input_hsize, input_vsize);
+            upipe_sdi_enc->eav_clock += f->width;
+        }
     }
 
     ubuf_block_unmap(ubuf, 0);
@@ -1269,6 +1401,7 @@ static struct upipe *upipe_sdi_enc_alloc(struct upipe_mgr *mgr,
     upipe_sdi_enc->crc_y = 0;
 
     upipe_sdi_enc->eav_clock = 0;
+    upipe_sdi_enc->sample_pos = 0;
     upipe_sdi_enc->total_audio_samples_put = 0;
     for (int i = 0; i < 4; i++)
         upipe_sdi_enc->mpf_packet_bits[i] = 0;
