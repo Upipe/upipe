@@ -208,6 +208,14 @@ static void sdi_init_crc_channel_status(uint8_t *data)
     data[23] = crc;
 }
 
+/** DBN */
+static void sdi_increment_dbn(uint8_t *dbn)
+{
+    *dbn++;
+    if (*dbn == 0)
+        *dbn = 1;
+}
+
 /** Ancillary Parity and Checksum */
 static inline void sdi_fill_anc_parity_checksum(uint16_t *buf, int gap)
 {
@@ -273,7 +281,7 @@ static void put_payload_identifier_##type(uint16_t *dst, const struct sdi_offset
 PUT_PAYLOAD_IDENTIFIER(sd, 1)
 PUT_PAYLOAD_IDENTIFIER(hd, 2)
 
-static int put_audio_control_packet(uint16_t *dst, int ch_group, uint8_t dbn)
+static int put_audio_control_packet(uint16_t *dst, int ch_group)
 {
     /* ADF */
     dst[0] = S291_ADF1;
@@ -284,7 +292,8 @@ static int put_audio_control_packet(uint16_t *dst, int ch_group, uint8_t dbn)
     dst[6] = 0xE4 - (ch_group + 1);
 
     /* DBN */
-    dst[8] = dbn;
+    dst[8] = upipe_sdi_enc->dbn[4+ch_group];
+    increment_dbn(&upipe_sdi_enc->dbn[4+ch_group]);
 
     /* DC */
     dst[10] = 11;
@@ -321,8 +330,8 @@ static unsigned audio_packets_per_line(const struct sdi_offsets_fmt *f)
 
 /* NOTE: ch_group is zero indexed */
 static int put_hd_audio_data_packet(struct upipe_sdi_enc *s, uint16_t *dst,
-                                    int sample_number, int ch_group,
-                                    uint8_t mpf_bit, uint16_t clk, uint8_t dbn)
+                                    int sample_pos, int ch_group,
+                                    uint8_t mpf_bit, uint16_t clk)
 {
     union {
         uint32_t u;
@@ -342,7 +351,8 @@ static int put_hd_audio_data_packet(struct upipe_sdi_enc *s, uint16_t *dst,
     dst[6] = 0xE8 - (ch_group + 1);
 
     /* DBN */
-    dst[8] = dbn;
+    dst[8] = upipe_sdi_enc->dbn[ch_group];
+    increment_dbn(&upipe_sdi_enc->dbn[ch_group]);
 
     /* DC */
     dst[10] = 24;
@@ -627,9 +637,7 @@ static void upipe_sdi_enc_encode_line(struct upipe *upipe, int line_num, uint16_
              (f->psf_ident != UPIPE_SDI_PSF_IDENT_P && line_num == p->switching_line + p->field_offset + 2)) { 
         int dst_pos = chroma_blanking + 1;
         for (int i = 0; i < 4; i++) {
-            dst_pos += put_audio_control_packet(&dst[dst_pos], i, upipe_sdi_enc->dbn[4+i]++);
-            if (upipe_sdi_enc->dbn[4+i] == 0)
-                upipe_sdi_enc->dbn[4+i] = 1;
+            dst_pos += put_audio_control_packet(&dst[dst_pos], i);
         }
     }
 
@@ -687,11 +695,8 @@ static void upipe_sdi_enc_encode_line(struct upipe *upipe, int line_num, uint16_
                 uint16_t sample_clock = aud_clock - upipe_sdi_enc->eav_clock;
 
                 dst_pos += put_hd_audio_data_packet(upipe_sdi_enc, &dst[dst_pos],
-                        sample_number[ch_group], ch_group, mpf_bit, sample_clock,
-                        upipe_sdi_enc->dbn[ch_group]++);
-                if (upipe_sdi_enc->dbn[ch_group] == 0)
-                    upipe_sdi_enc->dbn[ch_group] = 1;
-                sample_number[ch_group]++;
+                           sample_pos[ch_group], ch_group, mpf_bit, sample_clock);
+                sample_pos[ch_group]++;
                 packets_put++;
             }
             upipe_sdi_enc->total_audio_samples_put += samples_to_put;
