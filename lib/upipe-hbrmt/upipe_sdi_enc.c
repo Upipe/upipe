@@ -331,7 +331,7 @@ static unsigned audio_packets_per_line(const struct sdi_offsets_fmt *f)
 
 /* NOTE: ch_group is zero indexed */
 static int put_hd_audio_data_packet(struct upipe_sdi_enc *upipe_sdi_enc, uint16_t *dst,
-                                    int sample_pos, int ch_group,
+                                    int sample_number, int ch_group,
                                     uint8_t mpf_bit, uint16_t clk)
 {
     union {
