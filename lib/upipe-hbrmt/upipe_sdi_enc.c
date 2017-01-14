@@ -208,12 +208,13 @@ static void sdi_init_crc_channel_status(uint8_t *data)
     data[23] = crc;
 }
 
-static void sdi_fill_anc_parity_checksum(uint16_t *buf)
+/** Ancillary Parity and Checksum */
+static inline void sdi_fill_anc_parity_checksum(uint16_t *buf, int gap)
 {
     uint16_t checksum = 0;
     int len = buf[4] + 3; /* Data count + 3 = did + sdid + dc + udw */
 
-    for (int i = 0; i < 2*len; i += 2) {
+    for (int i = 0; i < gap*len; i += gap) {
         bool parity = parity_tab[buf[i] & 0xff];
         buf[i] |= (parity << 8);
 
@@ -224,7 +225,17 @@ static void sdi_fill_anc_parity_checksum(uint16_t *buf)
     checksum &= 0x1ff;
     checksum |= NOT_BIT8(checksum);
 
-    buf[2*len] = checksum;
+    buf[gap*len] = checksum;
+}
+
+static void sdi_fill_anc_parity_checksum_hd(uint16_t *buf)
+{
+    return sdi_fill_anc_parity_checksum(buf, 1);
+}
+
+static void sdi_fill_anc_parity_checksum_hd(uint16_t *buf)
+{
+    return sdi_fill_anc_parity_checksum(buf, 2);
 }
 
 static void put_payload_identifier(uint16_t *dst, const struct sdi_offsets_fmt *f)
@@ -250,7 +261,7 @@ static void put_payload_identifier(uint16_t *dst, const struct sdi_offsets_fmt *
     dst[18] = 0x00;
 
     /* Parity + CS */
-    sdi_fill_anc_parity_checksum(&dst[6]);
+    sdi_fill_anc_parity_checksum_hd(&dst[6]);
 }
 
 static int put_audio_control_packet(uint16_t *dst, int ch_group, uint8_t dbn)
@@ -284,7 +295,7 @@ static int put_audio_control_packet(uint16_t *dst, int ch_group, uint8_t dbn)
     dst[30] = 0x0; /* Reserved */
     dst[32] = 0x0; /* Reserved */
 
-    sdi_fill_anc_parity_checksum(&dst[6]);
+    sdi_fill_anc_parity_checksum_hd(&dst[6]);
 
     /* Total amount to increment the destination including the luma words,
      * so in total it's 18 chroma words */
@@ -386,7 +397,7 @@ static int put_audio_data_packet(uint16_t *dst, struct upipe_sdi_enc *s,
     dst[56] = ecc[4];
     dst[58] = ecc[5];
 
-    sdi_fill_anc_parity_checksum(&dst[6]);
+    sdi_fill_anc_parity_checksum_hd(&dst[6]);
 
     /* Total amount to increment the destination including the luma words,
      * so in total it's 31 chroma words */
