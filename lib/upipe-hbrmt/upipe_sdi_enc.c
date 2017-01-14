@@ -637,10 +637,10 @@ static void upipe_sdi_enc_encode_line(struct upipe *upipe, int line_num, uint16_
     unsigned samples_put_target = samples * (line_num) / f->height;
 
     /* All channel groups should have the same samples to put on a line */
-    int sample_diff = samples_put_target - sample_number[0];
+    int samples_to_put = samples_put_target - sample_number[0];
 
-    if (sample_diff > 2)
-        sample_diff = 2;
+    if (samples_to_put > 2)
+        samples_to_put = 2;
 
     /* Chroma packets */
     /* Audio can go anywhere but the switching lines+1 */
@@ -661,7 +661,7 @@ static void upipe_sdi_enc_encode_line(struct upipe *upipe, int line_num, uint16_
                 break;
             }
 
-            for (int samples_to_put = 0; samples_to_put < sample_diff; samples_to_put++) {
+            for (int sample = 0; sample < samples_to_put; sample++) {
                 /* Packet belongs to another line */
                 uint8_t mpf_bit = 0;
 
