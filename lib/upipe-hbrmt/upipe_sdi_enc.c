@@ -59,7 +59,7 @@ static const bool parity_tab[256] = {
 
 /** upipe_sdi_enc structure with sdi_enc parameters */
 struct upipe_sdi_enc {
-    /** Fills a uyvy image with 0x200 (Y), 0x40 (U, V) */
+    /** Fills a uyvy image with 0x40 (Y), 0x200 (U, V) */
     void (*blank)(uint16_t *dst, int64_t size);
 
     /** Converts planar 8 bit to UYVY */
