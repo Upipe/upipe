@@ -694,7 +694,7 @@ static void upipe_sdi_enc_encode_line(struct upipe *upipe, int line_num, uint16_
                 sample_number[ch_group]++;
                 packets_put++;
             }
-            upipe_sdi_enc->total_audio_samples_put += sample_diff;
+            upipe_sdi_enc->total_audio_samples_put += samples_to_put;
         }
     } else {
         /* The current line is a switching line, so mark the next sample_diff
