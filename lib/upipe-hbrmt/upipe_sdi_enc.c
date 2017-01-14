@@ -294,7 +294,7 @@ static int put_audio_control_packet(struct upipe_sdi_enc *upipe_sdi_enc,
 
     /* DBN */
     dst[8] = upipe_sdi_enc->dbn[4+ch_group];
-    increment_dbn(&upipe_sdi_enc->dbn[4+ch_group]);
+    sdi_increment_dbn(&upipe_sdi_enc->dbn[4+ch_group]);
 
     /* DC */
     dst[10] = 11;
@@ -353,7 +353,7 @@ static int put_hd_audio_data_packet(struct upipe_sdi_enc *s, uint16_t *dst,
 
     /* DBN */
     dst[8] = upipe_sdi_enc->dbn[ch_group];
-    increment_dbn(&upipe_sdi_enc->dbn[ch_group]);
+    sdi_increment_dbn(&upipe_sdi_enc->dbn[ch_group]);
 
     /* DC */
     dst[10] = 24;
@@ -638,7 +638,7 @@ static void upipe_sdi_enc_encode_line(struct upipe *upipe, int line_num, uint16_
              (f->psf_ident != UPIPE_SDI_PSF_IDENT_P && line_num == p->switching_line + p->field_offset + 2)) { 
         int dst_pos = chroma_blanking + 1;
         for (int i = 0; i < 4; i++) {
-            dst_pos += put_audio_control_packet(&dst[dst_pos], i);
+            dst_pos += put_audio_control_packet(upipe_sdi_enc, &dst[dst_pos], i);
         }
     }
 
