@@ -1117,12 +1117,12 @@ static void upipe_sdi_enc_input(struct upipe *upipe, struct uref *uref,
         /* Note conversion to 1-indexed line-number */
         if (upipe_sdi_enc->p->sd) {
             upipe_sdi_enc_encode_line(upipe, h+1, &dst[h * f->width * 2],
-                                      planes, &input_strides[0], samples,
+                                      planes, input_strides, samples,
                                       input_hsize, input_vsize);
         }
         else {
             upipe_hd_sdi_enc_encode_line(upipe, h+1, &dst[h * f->width * 2],
-                                         planes, &input_strides[0], samples,
+                                         planes, input_strides, samples,
                                          input_hsize, input_vsize);
             upipe_sdi_enc->eav_clock += f->width;
         }
