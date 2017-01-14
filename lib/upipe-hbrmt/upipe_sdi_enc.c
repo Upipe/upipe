@@ -643,12 +643,12 @@ static void upipe_sdi_enc_encode_line(struct upipe *upipe, int line_num, uint16_
     unsigned samples_put_target = samples * (line_num) / f->height;
 
     /* All channel groups should have the same samples to put on a line */
-    int samples_to_put = samples_put_target - sample_pos[0];
+    int samples_to_put = samples_put_target - upipe_sdi_enc->sample_pos;
 
     for (int ch_group = 0; ch_group < 4; ch_group++) {
 
 
-        sample_pos[ch_group] += samples_to_put;
+        upipe_sdi_enc->sample_pos += samples_to_put;
     }
 
     if(vbi) {
@@ -770,7 +770,7 @@ static void upipe_hd_sdi_enc_encode_line(struct upipe *upipe, int line_num, uint
     unsigned samples_put_target = samples * (line_num) / f->height;
 
     /* All channel groups should have the same samples to put on a line */
-    int samples_to_put = samples_put_target - sample_pos[0];
+    int samples_to_put = samples_put_target - upipe_sdi_enc->sample_pos;
 
     if (samples_to_put > 2)
         samples_to_put = 2;
@@ -820,8 +820,8 @@ static void upipe_hd_sdi_enc_encode_line(struct upipe *upipe, int line_num, uint
                 uint16_t sample_clock = aud_clock - upipe_sdi_enc->eav_clock;
 
                 dst_pos += put_hd_audio_data_packet(upipe_sdi_enc, &dst[dst_pos],
-                           sample_pos[ch_group], ch_group, mpf_bit, sample_clock);
-                sample_pos[ch_group]++;
+                           ch_group, mpf_bit, sample_clock);
+                upipe_sdi_enc->sample_pos++;
                 packets_put++;
             }
             upipe_sdi_enc->total_audio_samples_put += samples_to_put;
@@ -831,7 +831,7 @@ static void upipe_hd_sdi_enc_encode_line(struct upipe *upipe, int line_num, uint
          * amount of packets for each audio group to be belonging to a line before */
         for (int ch_group = 0; ch_group < 4; ch_group++) {
             /* Difference between current samples actually put and the target */
-            upipe_sdi_enc->mpf_packet_bits[ch_group] = samples - sample_pos[ch_group];
+            upipe_sdi_enc->mpf_packet_bits[ch_group] = samples - upipe_sdi_enc->sample_pos;
         }
     }
 
