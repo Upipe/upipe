@@ -281,7 +281,8 @@ static void put_payload_identifier_##type(uint16_t *dst, const struct sdi_offset
 PUT_PAYLOAD_IDENTIFIER(sd, 1)
 PUT_PAYLOAD_IDENTIFIER(hd, 2)
 
-static int put_audio_control_packet(uint16_t *dst, int ch_group)
+static int put_audio_control_packet(struct upipe_sdi_enc *upipe_sdi_enc,
+                                    uint16_t *dst, int ch_group)
 {
     /* ADF */
     dst[0] = S291_ADF1;
