@@ -652,7 +652,8 @@ static void upipe_sdi_enc_encode_line(struct upipe *upipe, int line_num, uint16_
          * chroma horizontal blanking */
         int dst_pos = chroma_blanking;
 
-        /* If more than a single audio packed must be put on a line
+        // FIXME this does not match BMD
+        /* If more than a single audio packet must be put on a line
          * then the following sequence will be sent: 1 1 2 2 3 3 4 4 */
         for (int ch_group = 0; ch_group < 4; ch_group++) {
             /* Check if too many packets have been put on the line */
