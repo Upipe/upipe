@@ -320,9 +320,9 @@ static unsigned audio_packets_per_line(const struct sdi_offsets_fmt *f)
 }
 
 /* NOTE: ch_group is zero indexed */
-static int put_hd_audio_data_packet(uint16_t *dst, struct upipe_sdi_enc *s,
-                                 int sample_number, int ch_group,
-                                 uint8_t mpf_bit, uint16_t clk, uint8_t dbn)
+static int put_hd_audio_data_packet(struct upipe_sdi_enc *s, uint16_t *dst,
+                                    int sample_number, int ch_group,
+                                    uint8_t mpf_bit, uint16_t clk, uint8_t dbn)
 {
     union {
         uint32_t u;
@@ -686,7 +686,7 @@ static void upipe_sdi_enc_encode_line(struct upipe *upipe, int line_num, uint16_
                  * EAV pixel clock */
                 uint16_t sample_clock = aud_clock - upipe_sdi_enc->eav_clock;
 
-                dst_pos += put_hd_audio_data_packet(&dst[dst_pos], upipe_sdi_enc,
+                dst_pos += put_hd_audio_data_packet(upipe_sdi_enc, &dst[dst_pos],
                         sample_number[ch_group], ch_group, mpf_bit, sample_clock,
                         upipe_sdi_enc->dbn[ch_group]++);
                 if (upipe_sdi_enc->dbn[ch_group] == 0)
