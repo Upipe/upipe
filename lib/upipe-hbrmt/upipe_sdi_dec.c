@@ -309,18 +309,21 @@ static void upipe_sdi_dec_init_sub_mgr(struct upipe *upipe)
     sub_mgr->upipe_mgr_control = NULL;
 }
 
-static inline int32_t extract_sd_audio_sample(const uint16_t *data)
+static inline void extract_sd_audio_group(int32_t *dst, const uint16_t *data)
 {
     union {
         uint32_t u;
         int32_t  i;
-    } sample = {0};
+    } sample;
 
-    sample.u |= (data[0] & 0x1F8) << 9;
-    sample.u |= (data[1] & 0x1FF) << 18;
-    sample.u |= (data[2] & 0x01F) << 27;
+    for (int i = 0; i < 4; i++) {
+        uint8_t channel_idx = (data[0] & 0x6) >> 1;
+        sample.u  = (data[0+3*i] & 0x1F8) << 9;
+        sample.u |= (data[1+3*i] & 0x1FF) << 18;
+        sample.u |= (data[2+3*i] & 0x01F) << 27;
 
-    return sample.i;
+        dst[channel_idx] = sample.i;
+    }
 }
 
 static inline int32_t extract_hd_audio_sample(const uint16_t *data)
@@ -628,10 +631,7 @@ static void extract_sd_audio(struct upipe *upipe, const uint16_t *packet, int li
     const uint16_t *src = &packet[6];
     for (int i = 0; i < data_count/3; i += 4) {
         int32_t *dst = &ctx->buf_audio[ctx->group_offset[audio_group] * UPIPE_SDI_MAX_CHANNELS + 4 * audio_group + i];
-        dst[0] = extract_sd_audio_sample(&src[0+3*i]);
-        dst[1] = extract_sd_audio_sample(&src[3+3*i]);
-        dst[2] = extract_sd_audio_sample(&src[6+3*i]);
-        dst[3] = extract_sd_audio_sample(&src[9+3*i]);
+        extract_sd_audio_group(dst, &src[3*i]);
 
         upipe_sdi_dec->audio_samples[audio_group]++;
         ctx->group_offset[audio_group]++;
