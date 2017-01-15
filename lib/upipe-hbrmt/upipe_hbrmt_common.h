@@ -17,6 +17,8 @@ extern "C" {
 #define HBRMT_LEN (ETHERNET_HEADER_LEN + IP_HEADER_MINSIZE + UDP_HEADER_SIZE + RTP_HEADER_SIZE + HBRMT_HEADER_ONLY_SIZE + HBRMT_DATA_SIZE)
 
 #define UPIPE_SDI_CHROMA_BLANKING_START    4
+/* 16 is the start of chroma horizontal blanking, where
+ * audio packets must go in */
 #define UPIPE_HDSDI_CHROMA_BLANKING_START 16
 
 #define UPIPE_SDI_PSF_IDENT_I   0
