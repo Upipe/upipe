@@ -333,12 +333,15 @@ static unsigned audio_packets_per_line(const struct sdi_offsets_fmt *f)
 
 /* NOTE: ch_group is zero indexed */
 static int put_sd_audio_data_packet(struct upipe_sdi_enc *upipe_sdi_enc, uint16_t *dst,
-                                    int ch_group)
+                                    int ch_group, int num_samples)
 {
     union {
         uint32_t u;
         int32_t  i;
     } sample;
+    int sample_pos = upipe_sdi_enc->sample_pos;
+    uint64_t total_samples = upipe_sdi_enc->total_audio_samples_put;
+    uint16_t *audio_words;
 
     /* ADF */
     dst[0] = S291_ADF1;
@@ -353,7 +356,43 @@ static int put_sd_audio_data_packet(struct upipe_sdi_enc *upipe_sdi_enc, uint16_
     sdi_increment_dbn(&upipe_sdi_enc->dbn[ch_group]);
 
     /* DC */
-    dst[5] = 24;
+    dst[5] = 3 * 4 * num_samples;
+
+    audio_words = &dst[6];
+    for (int j = 0; j < num_samples; j++) {
+        for (int i = 0; i < 4; i++) {
+            sample.i   = upipe_sdi_enc->audio_buf[sample_pos*UPIPE_SDI_MAX_CHANNELS + (ch_group*4 + i)];
+            sample.u >>= 12;
+
+            /* Channel status */
+            uint8_t byte_pos = (total_samples % 192)/8;
+            uint8_t bit_pos = (total_samples % 24) % 8;
+            uint8_t ch_stat = !!(upipe_sdi_enc->aes_channel_status[byte_pos] & (1 << bit_pos));
+
+            /* Block sync bit, channel status and validity
+             * SMPTE 272 says both pairs must have Z=1 */
+            uint8_t aes_block_sync = !(total_samples % 192);
+            /* P (calculated later) | C | U | V */
+            uint8_t aes_status_validity = (ch_stat << 2) | (0 << 1) | 1;
+
+            audio_words[0] = ((sample.u & 0x3f   ) <<  3) | (i << 1) | aes_block_sync;
+            audio_words[1] = ((sample.u & 0x7fc0 ) >>  6) ;
+            audio_words[2] = ((sample.u & 0xf8000) >> 15) | (aes_status_validity << 5);
+
+            /* AES parity bit */
+            uint8_t par = 0;
+            par += parity_tab[audio_words[0] & 0x1ff];
+            par += parity_tab[audio_words[1] & 0x1ff];
+            par += parity_tab[audio_words[2] & 0x1ff];
+            audio_words[2] |= (par & 1) << 8;
+        }
+        audio_words += 3 * 4;
+        
+        sample_pos++;
+        total_samples++;
+    }
+
+    sdi_fill_anc_parity_checksum_sd(&dst[3]);
 
     return 0;
 }
