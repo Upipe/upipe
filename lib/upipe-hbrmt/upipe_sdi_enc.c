@@ -408,7 +408,7 @@ static int put_hd_audio_data_packet(struct upipe_sdi_enc *upipe_sdi_enc, uint16_
         /* Block sync bit, channel status and validity
          * Table 4 of SMPTE 299 makes it clear the second channel has Z=0 */
         uint8_t aes_block_sync = (!(total_samples % 192)) && (!(i & 1));
-        /* P | C | U | V */
+        /* P (calculated later) | C | U | V */
         uint8_t aes_status_validity = (ch_stat << 2) | (0 << 1) | 1;
 
         uint16_t word0 = ((sample.u & 0xf     ) <<  4) | (aes_block_sync      << 3);
