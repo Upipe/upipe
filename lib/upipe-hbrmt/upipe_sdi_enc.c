@@ -681,6 +681,7 @@ static void upipe_hd_sdi_enc_encode_line(struct upipe *upipe, int line_num, uint
     struct upipe_sdi_enc *upipe_sdi_enc = upipe_sdi_enc_from_upipe(upipe);
     const struct sdi_offsets_fmt *f = upipe_sdi_enc->f;
     const struct sdi_picture_fmt *p = upipe_sdi_enc->p;
+    uint16_t *active_start = &dst[2*f->active_offset];
     const uint8_t chroma_blanking = UPIPE_HDSDI_CHROMA_BLANKING_START;
 
     bool vbi = 0, f2 = 0;
@@ -838,34 +839,34 @@ static void upipe_hd_sdi_enc_encode_line(struct upipe *upipe, int line_num, uint
     }
 
     /* SAV */
-    dst[2*f->active_offset-8] = 0x3ff;
-    dst[2*f->active_offset-7] = 0x3ff;
-    dst[2*f->active_offset-6] = 0x000;
-    dst[2*f->active_offset-5] = 0x000;
-    dst[2*f->active_offset-4] = 0x000;
-    dst[2*f->active_offset-3] = 0x000;
-    dst[2*f->active_offset-2] = sav_fvh_cword[f2][vbi];
-    dst[2*f->active_offset-1] = sav_fvh_cword[f2][vbi];
+    active_start[-8] = 0x3ff;
+    active_start[-7] = 0x3ff;
+    active_start[-6] = 0x000;
+    active_start[-5] = 0x000;
+    active_start[-4] = 0x000;
+    active_start[-3] = 0x000;
+    active_start[-2] = sav_fvh_cword[f2][vbi];
+    active_start[-1] = sav_fvh_cword[f2][vbi];
 
     if(vbi) {
         /* black */
-        upipe_sdi_enc->blank(&dst[2*f->active_offset], input_hsize);
+        upipe_sdi_enc->blank(active_start, input_hsize);
     } else {
         const uint8_t *y = planes[f2][0];
         const uint8_t *u = planes[f2][1];
         const uint8_t *v = planes[f2][2];
 
         if (upipe_sdi_enc->input_is_v210)
-            upipe_sdi_enc->v210_to_uyvy((uint32_t *)y, (uint16_t *)&dst[2*f->active_offset], input_hsize);
+            upipe_sdi_enc->v210_to_uyvy((uint32_t *)y, active_start, input_hsize);
         else if (upipe_sdi_enc->input_bit_depth == 10)
-            upipe_sdi_enc->planar_to_uyvy_10(&dst[2*f->active_offset], (uint16_t *)y, (uint16_t *)u, (uint16_t *)v, input_hsize);
+            upipe_sdi_enc->planar_to_uyvy_10(active_start, (uint16_t *)y, (uint16_t *)u, (uint16_t *)v, input_hsize);
         else
-            upipe_sdi_enc->planar_to_uyvy_8 (&dst[2*f->active_offset], y, u, v, input_hsize);
+            upipe_sdi_enc->planar_to_uyvy_8 (active_start, y, u, v, input_hsize);
     }
 
     /* Update CRCs */
     for (int i = 0; i < 2*input_hsize; i+=16) {
-        const uint16_t *crc_src = &dst[2*f->active_offset + i];
+        const uint16_t *crc_src = &active_start[i];
         sdi_crc_update_blk(upipe_sdi_enc->crc_lut, &upipe_sdi_enc->crc_c, &upipe_sdi_enc->crc_y, crc_src);
     }
 
