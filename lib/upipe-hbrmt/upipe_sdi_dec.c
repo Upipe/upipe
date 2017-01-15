@@ -509,7 +509,7 @@ static void extract_hd_audio(struct upipe *upipe, const uint16_t *packet, int li
     bool mpf = packet[14] & 0x10;
 
     /* wtf */
-    if ((h >= 8 && h <= 8 + 5) || (h >= 570 && h <= 570 + 5)) {
+    if ((line_num >= 9 && line_num <= 9 + 5) || (line_num >= 571 && line_num <= 571 + 5)) {
     } else
         mpf = false;
 
