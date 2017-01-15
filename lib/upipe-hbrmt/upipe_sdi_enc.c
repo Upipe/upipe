@@ -52,8 +52,8 @@ static const bool parity_tab[512] = {
 #   define P2(n) n, n^1, n^1, n
 #   define P4(n) P2(n), P2(n^1), P2(n^1), P2(n)
 #   define P6(n) P4(n), P4(n^1), P4(n^1), P4(n)
-#   define P8(n) P6(n), P6(n^1), P6(n^1), P6(n)
-    P8(0), P8(1), P8(1), P8(0)
+    P6(0), P6(1), P6(1), P6(0),
+    P6(0), P6(1), P6(1), P6(0)
 };
 
 /** upipe_sdi_enc structure with sdi_enc parameters */
