@@ -366,6 +366,7 @@ static int put_hd_audio_data_packet(struct upipe_sdi_enc *upipe_sdi_enc, uint16_
         int32_t  i;
     } sample;
     int sample_pos = upipe_sdi_enc->sample_pos;
+    uint64_t total_samples = upipe_sdi_enc->total_audio_samples_put;
 
     /* Clock */
     uint8_t clock_1 = clk & 0xff, clock_2 = (clk & 0x1F00) >> 8;
@@ -400,12 +401,14 @@ static int put_hd_audio_data_packet(struct upipe_sdi_enc *upipe_sdi_enc, uint16_
         sample.u >>= 8;
 
         /* Channel status */
-        uint8_t byte_pos = (sample_pos % 192)/8;
-        uint8_t bit_pos = (sample_pos % 24) % 8;
+        uint8_t byte_pos = (total_samples % 192)/8;
+        uint8_t bit_pos = (total_samples % 24) % 8;
         uint8_t ch_stat = !!(upipe_sdi_enc->aes_channel_status[byte_pos] & (1 << bit_pos));
 
-        /* Block sync bit, channel status and validity */
-        uint8_t aes_block_sync = (!(sample_pos % 24)) && (!(i & 1));
+        /* Block sync bit, channel status and validity
+         * Table 4 of SMPTE 299 makes it clear the second channel has Z=0 */
+        uint8_t aes_block_sync = (!(total_samples % 192)) && (!(i & 1));
+        /* P | C | U | V */
         uint8_t aes_status_validity = (ch_stat << 2) | (0 << 1) | 1;
 
         uint16_t word0 = ((sample.u & 0xf     ) <<  4) | (aes_block_sync      << 3);
@@ -649,6 +652,7 @@ static void upipe_sdi_enc_encode_line(struct upipe *upipe, int line_num, uint16_
 
         
     }
+    upipe_sdi_enc->total_audio_samples_put += samples_to_put;
     upipe_sdi_enc->sample_pos += samples_to_put;
 
     /* SAV */
@@ -831,8 +835,8 @@ static void upipe_hd_sdi_enc_encode_line(struct upipe *upipe, int line_num, uint
                                                     ch_group, mpf_bit, sample_clock);
                 packets_put++;
             }
-            upipe_sdi_enc->total_audio_samples_put += samples_to_put;
         }
+        upipe_sdi_enc->total_audio_samples_put += samples_to_put;
         upipe_sdi_enc->sample_pos += samples_to_put;
     } else {
         /* The current line is a switching line, so mark the next sample_diff
