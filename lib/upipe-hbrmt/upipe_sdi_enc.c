@@ -1,4 +1,3 @@
-
 #include <upipe/ubase.h>
 #include <upipe/uprobe.h>
 #include <upipe/uref.h>
@@ -34,9 +33,8 @@
 #define UPIPE_SDI_MAX_PLANES 3
 #define UPIPE_SDI_MAX_CHANNELS 16
 
-/* 16 is the start of chroma horizontal blanking, where
- * audio packets must go in */
-#define UPIPE_SDI_SAV_LENGTH 8
+#define UPIPE_SDI_SAV_LENGTH 4
+#define UPIPE_HD_SDI_SAV_LENGTH 8
 
 static void upipe_sdi_blank_c(uint16_t *dst, int64_t size)
 {
@@ -758,7 +756,7 @@ static void upipe_hd_sdi_enc_encode_line(struct upipe *upipe, int line_num, uint
     sdi_crc_end(&upipe_sdi_enc->crc_y, &dst[13]);
 
     /* HBI */
-    upipe_sdi_enc->blank(&dst[chroma_blanking], f->active_offset - UPIPE_SDI_SAV_LENGTH);
+    upipe_sdi_enc->blank(&dst[chroma_blanking], f->active_offset - UPIPE_HD_SDI_SAV_LENGTH);
 
     /* These packets are written in the first Luma sample after SAV */
     /* Payload identifier */
