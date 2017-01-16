@@ -243,6 +243,7 @@ if HAVE_BITSTREAM
 check_PROGRAMS += \
 	upipe_rtp_decaps_test \
 	upipe_rtp_prepend_test \
+	upipe_rtp_test \
 	upipe_mpgv_framer_test \
 	upipe_mpga_framer_test \
 	upipe_a52_framer_test \
@@ -277,6 +278,7 @@ check_PROGRAMS += \
 TESTS += \
 	upipe_rtp_decaps_test \
 	upipe_rtp_prepend_test \
+	upipe_rtp_test \
 	upipe_mpgv_framer_test \
 	upipe_mpga_framer_test \
 	upipe_a52_framer_test \
@@ -374,6 +376,7 @@ upipe_multicat_probe_test_LDADD = $(LDADD) $(top_builddir)/lib/upipe-modules/lib
 upipe_setrap_test_LDADD = $(LDADD) $(top_builddir)/lib/upipe-modules/libupipe_modules.la
 upipe_rtp_decaps_test_LDADD = $(LDADD) $(top_builddir)/lib/upipe-modules/libupipe_modules.la
 upipe_rtp_prepend_test_LDADD = $(LDADD) $(top_builddir)/lib/upipe-modules/libupipe_modules.la
+upipe_rtp_test_LDADD = $(LDADD) -lev $(top_builddir)/lib/upump-ev/libupump_ev.la $(top_builddir)/lib/upipe-modules/libupipe_modules.la $(top_builddir)/lib/upipe-framers/libupipe_framers.la
 upipe_chunk_stream_test_LDADD = $(LDADD) $(top_builddir)/lib/upipe-modules/libupipe_modules.la
 upipe_htons_test_LDADD = $(LDADD) $(top_builddir)/lib/upipe-modules/libupipe_modules.la
 upipe_blit_test_LDADD = $(LDADD) $(top_builddir)/lib/upipe-modules/libupipe_modules.la

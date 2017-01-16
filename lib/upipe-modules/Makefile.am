@@ -81,6 +81,7 @@ libupipe_modules_la_SOURCES += \
 	upipe_rtp_decaps.c \
 	upipe_rtp_prepend.c \
 	upipe_rtp_source.c \
+	upipe_rtp_demux.c \
 	upipe_rtcp.c \
 	upipe_rtp_reorder.c \
 	upipe_s337_encaps.c \
