@@ -213,7 +213,7 @@ static void sdi_init_crc_channel_status(uint8_t *data)
 /** DBN */
 static void sdi_increment_dbn(uint8_t *dbn)
 {
-    *dbn++;
+    (*dbn)++;
     if (*dbn == 0)
         *dbn = 1;
 }
@@ -292,7 +292,7 @@ static int put_audio_control_packet(struct upipe_sdi_enc *upipe_sdi_enc,
     dst[4] = S291_ADF3;
 
     /* DID */
-    dst[6] = 0xE4 - (ch_group + 1);
+    dst[6] = S291_HD_AUDIOCONTROL_GROUP1_DID - ch_group;
 
     /* DBN */
     dst[8] = upipe_sdi_enc->dbn[4+ch_group];
@@ -418,7 +418,7 @@ static int put_hd_audio_data_packet(struct upipe_sdi_enc *upipe_sdi_enc, uint16_
     dst[4] = S291_ADF3;
 
     /* DID */
-    dst[6] = 0xE8 - (ch_group + 1);
+    dst[6] = S291_HD_AUDIO_GROUP1_DID - ch_group ;
 
     /* DBN */
     dst[8] = upipe_sdi_enc->dbn[ch_group];
@@ -459,7 +459,7 @@ static int put_hd_audio_data_packet(struct upipe_sdi_enc *upipe_sdi_enc, uint16_
 
         /* AES parity bit */
         uint8_t par = 0;
-        par += parity_tab[word0 & 0xff];
+        par += parity_tab[word0 & 0xf0];
         par += parity_tab[word1 & 0xff];
         par += parity_tab[word2 & 0xff];
         par += parity_tab[word3 & 0xff];
@@ -523,8 +523,12 @@ static int upipe_sdi_enc_sub_control(struct upipe *upipe, int command, va_list a
             struct uref *flow = va_arg(args, struct uref *);
             if (flow == NULL)
                 return UBASE_ERR_INVALID;
-            UBASE_RETURN(uref_flow_match_def(flow, "sound."))
+            uint8_t planes;
+            UBASE_RETURN(uref_flow_match_def(flow, "sound.s32."))
             UBASE_RETURN(uref_sound_flow_get_channels(flow, &sdi_enc_sub->channels))
+            UBASE_RETURN(uref_sound_flow_get_planes(flow, &planes))
+            if (planes != 1)
+                return UBASE_ERR_INVALID;
             if (sdi_enc_sub->channels > UPIPE_SDI_MAX_CHANNELS)
                 return UBASE_ERR_INVALID;
             return UBASE_ERR_NONE;
@@ -1000,6 +1004,12 @@ static struct uref *upipe_sdi_enc_avsync(struct upipe *upipe, unsigned samples)
             if (pts_audio < pts) {
                 uint64_t pts_diff = pts - pts_audio;
                 size_t samples = pts_diff * 48000 / UCLOCK_FREQ;
+                if (samples > size) {
+                    ulist_delete(uchain);
+                    uref_free(uref_audio);
+                    first = true;
+                    continue;
+                }
                 ubase_assert(uref_sound_resize(uref_audio, samples, -1));
                 uref_clock_set_pts_sys(uref_audio, pts);
                 upipe_verbose_va(sub, "Resized audio, removed %zu samples", samples);
@@ -1043,7 +1053,12 @@ static struct uref *upipe_sdi_enc_avsync(struct upipe *upipe, unsigned samples)
         if (overlap)
             size = samples - idx;
 
-        memcpy(&upipe_sdi_enc->audio_buf[idx * channels], buf, sizeof(int32_t) * size * channels);
+        int32_t *dst = &upipe_sdi_enc->audio_buf[idx * UPIPE_SDI_MAX_CHANNELS];
+        for (size_t i = 0; i < size; i++) {
+            memcpy(dst, buf, sizeof(int32_t) * channels);
+            dst += UPIPE_SDI_MAX_CHANNELS;
+            buf += channels;
+        }
 
         uref_sound_unmap(uref_audio, 0, -1, 1);
 
