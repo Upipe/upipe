@@ -360,7 +360,7 @@ static int put_sd_audio_data_packet(struct upipe_sdi_enc *upipe_sdi_enc, uint16_
     uint16_t *audio_words = &dst[6];
     for (int j = 0; j < num_samples; j++) {
         for (int i = 0; i < UPIPE_SDI_CHANNELS_PER_GROUP; i++) {
-            sample.i   = upipe_sdi_enc->audio_buf[sample_pos*UPIPE_SDI_MAX_CHANNELS + (ch_group*4 + i)];
+            sample.i   = upipe_sdi_enc->audio_buf[(sample_pos+j)*UPIPE_SDI_MAX_CHANNELS + (ch_group*4 + i)];
             sample.u >>= 12;
 
             /* Channel status */
@@ -387,7 +387,6 @@ static int put_sd_audio_data_packet(struct upipe_sdi_enc *upipe_sdi_enc, uint16_
             audio_words += 3;
         }
         
-        sample_pos++;
         total_samples++;
     }
 
