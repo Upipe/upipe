@@ -385,6 +385,7 @@ static int upipe_http_src_status_cb(http_parser *parser)
     case 302:
         break;
     default:
+        upipe_http_src_throw_error(upipe, parser->status_code);
         return -1;
     }
     return 0;

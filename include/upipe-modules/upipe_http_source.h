@@ -45,6 +45,9 @@ enum uprobe_http_src_event {
     /** request receive a redirect (302) response
      * with the url (const char *) */
     UPROBE_HTTP_SRC_REDIRECT,
+    /** request receive an error code response
+     * with the error code (unsigned int) */
+    UPROBE_HTTP_SRC_ERROR,
 };
 
 /** @This converts an enum uprobe_http_src_event to a string.
@@ -56,6 +59,7 @@ static inline const char *uprobe_http_src_event_str(int event)
 {
     switch ((enum uprobe_http_src_event)event) {
     UBASE_CASE_TO_STR(UPROBE_HTTP_SRC_REDIRECT);
+    UBASE_CASE_TO_STR(UPROBE_HTTP_SRC_ERROR);
     case UPROBE_HTTP_SRC_SENTINEL: break;
     }
     return NULL;
@@ -73,6 +77,19 @@ static inline int upipe_http_src_throw_redirect(struct upipe *upipe,
     upipe_notice_va(upipe, "throw redirect to %s", uri);
     return upipe_throw(upipe, UPROBE_HTTP_SRC_REDIRECT,
                        UPIPE_HTTP_SRC_SIGNATURE, uri);
+}
+
+/** @This throw an error code event.
+ *
+ * @param upipe description structure of the pipe
+ * @param code HTTP error code
+ * @return an error code
+ */
+static inline int upipe_http_src_throw_error(struct upipe *upipe, unsigned code)
+{
+    upipe_notice_va(upipe, "throw http error code %u", code);
+    return upipe_throw(upipe, UPROBE_HTTP_SRC_ERROR,
+                       UPIPE_HTTP_SRC_SIGNATURE, code);
 }
 
 /** @This extends upipe_command with specific commands for http source. */
