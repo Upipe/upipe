@@ -25,6 +25,8 @@ extern "C" {
 #define UPIPE_SDI_PSF_IDENT_PSF 1
 #define UPIPE_SDI_PSF_IDENT_P   3
 
+#define UPIPE_SDI_CHANNELS_PER_GROUP 4
+
 static void sdi_crc_setup(uint32_t crc_lut[8][1024])
 {
     #define SDI_CRC_POLY 0x46001

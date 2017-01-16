@@ -356,11 +356,11 @@ static int put_sd_audio_data_packet(struct upipe_sdi_enc *upipe_sdi_enc, uint16_
     sdi_increment_dbn(&upipe_sdi_enc->dbn[ch_group]);
 
     /* DC */
-    dst[5] = 3 * 4 * num_samples;
+    dst[5] = 3 * UPIPE_SDI_CHANNELS_PER_GROUP * num_samples;
 
     audio_words = &dst[6];
     for (int j = 0; j < num_samples; j++) {
-        for (int i = 0; i < 4; i++) {
+        for (int i = 0; i < UPIPE_SDI_CHANNELS_PER_GROUP; i++) {
             sample.i   = upipe_sdi_enc->audio_buf[sample_pos*UPIPE_SDI_MAX_CHANNELS + (ch_group*4 + i)];
             sample.u >>= 12;
 
@@ -386,7 +386,7 @@ static int put_sd_audio_data_packet(struct upipe_sdi_enc *upipe_sdi_enc, uint16_
             par += parity_tab[audio_words[2] & 0x1ff];
             audio_words[2] |= (par & 1) << 8;
         }
-        audio_words += 3 * 4;
+        audio_words += 3 * UPIPE_SDI_CHANNELS_PER_GROUP;
         
         sample_pos++;
         total_samples++;
@@ -434,10 +434,11 @@ static int put_hd_audio_data_packet(struct upipe_sdi_enc *upipe_sdi_enc, uint16_
     dst[14] = ((clock_2 & 0x10) << 1) | (mpf_bit << 4) | (clock_2 & 0xF);
 
     /* CHn */
-    for (int i = 0; i < 4; i++) {
+    for (int i = 0; i < UPIPE_SDI_CHANNELS_PER_GROUP; i++) {
         /* Each channel group has 4 samples from 4 channels, and in total
          * there are 16 channels at all times in the buffer */
-        sample.i   = upipe_sdi_enc->audio_buf[sample_pos*UPIPE_SDI_MAX_CHANNELS + (ch_group*4 + i)];
+        sample.i   = upipe_sdi_enc->audio_buf[sample_pos*UPIPE_SDI_MAX_CHANNELS +
+                                              (ch_group*UPIPE_SDI_CHANNELS_PER_GROUP + i)];
         sample.u >>= 8;
 
         /* Channel status */
@@ -687,7 +688,7 @@ static void upipe_sdi_enc_encode_line(struct upipe *upipe, int line_num, uint16_
     /* All channel groups should have the same samples to put on a line */
     int samples_to_put = samples_put_target - upipe_sdi_enc->sample_pos;
 
-    for (int ch_group = 0; ch_group < 4; ch_group++) {
+    for (int ch_group = 0; ch_group < UPIPE_SDI_CHANNELS_PER_GROUP; ch_group++) {
 
 
         
@@ -738,9 +739,8 @@ static void upipe_hd_sdi_enc_encode_line(struct upipe *upipe, int line_num, uint
     input_hsize = p->active_width;
 
     /* Returns the total amount of samples per channel that can be put on
-     * a line, so convert that to packets (multiplying it by 4 since you have
-     * 4 channel groups) */
-    unsigned max_audio_packets_per_line = 4 * audio_packets_per_line(f);
+     * a line, so convert that to packets */
+    unsigned max_audio_packets_per_line = UPIPE_SDI_CHANNELS_PER_GROUP * audio_packets_per_line(f);
 
     /** Line Number can never be between [0, 0] so this will work for progressive */
     /* VBI F1 part 1 */
@@ -812,7 +812,7 @@ static void upipe_hd_sdi_enc_encode_line(struct upipe *upipe, int line_num, uint
     else if ((line_num == p->switching_line + 2) ||
              (f->psf_ident != UPIPE_SDI_PSF_IDENT_P && line_num == p->switching_line + p->field_offset + 2)) { 
         int dst_pos = chroma_blanking + 1;
-        for (int i = 0; i < 4; i++) {
+        for (int i = 0; i < UPIPE_SDI_CHANNELS_PER_GROUP; i++) {
             dst_pos += put_audio_control_packet(upipe_sdi_enc, &dst[dst_pos], i);
         }
     }
@@ -840,7 +840,7 @@ static void upipe_hd_sdi_enc_encode_line(struct upipe *upipe, int line_num, uint
         // FIXME this does not match BMD
         /* If more than a single audio packet must be put on a line
          * then the following sequence will be sent: 1 1 2 2 3 3 4 4 */
-        for (int ch_group = 0; ch_group < 4; ch_group++) {
+        for (int ch_group = 0; ch_group < UPIPE_SDI_CHANNELS_PER_GROUP; ch_group++) {
             /* Check if too many packets have been put on the line */
             if ((packets_put + 1) > max_audio_packets_per_line) {
                 upipe_err(upipe, "too many audio packets per line");
@@ -881,7 +881,7 @@ static void upipe_hd_sdi_enc_encode_line(struct upipe *upipe, int line_num, uint
     } else {
         /* The current line is a switching line, so mark the next sample_diff
          * amount of packets for each audio group to be belonging to a line before */
-        for (int ch_group = 0; ch_group < 4; ch_group++) {
+        for (int ch_group = 0; ch_group < UPIPE_SDI_CHANNELS_PER_GROUP; ch_group++) {
             /* Difference between current samples actually put and the target */
             upipe_sdi_enc->mpf_packet_bits[ch_group] = samples - upipe_sdi_enc->sample_pos;
         }
@@ -1457,7 +1457,7 @@ static struct upipe *upipe_sdi_enc_alloc(struct upipe_mgr *mgr,
     upipe_sdi_enc->eav_clock = 0;
     upipe_sdi_enc->sample_pos = 0;
     upipe_sdi_enc->total_audio_samples_put = 0;
-    for (int i = 0; i < 4; i++)
+    for (int i = 0; i < UPIPE_SDI_CHANNELS_PER_GROUP; i++)
         upipe_sdi_enc->mpf_packet_bits[i] = 0;
     for (int i = 0; i < 8; i++)
         upipe_sdi_enc->dbn[i] = 1;

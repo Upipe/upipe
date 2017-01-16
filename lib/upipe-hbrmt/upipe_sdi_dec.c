@@ -183,7 +183,7 @@ struct upipe_sdi_dec {
 
     int64_t eav_clock;
     /* Per audio group number of samples written */
-    uint64_t audio_samples[4];
+    uint64_t audio_samples[UPIPE_SDI_CHANNELS_PER_GROUP];
 
     /** used to generate PTS */
     uint64_t frame_num;
@@ -203,7 +203,7 @@ struct upipe_sdi_dec {
 
 struct audio_ctx {
     int32_t *buf_audio;
-    size_t group_offset[4];
+    size_t group_offset[UPIPE_SDI_CHANNELS_PER_GROUP];
     int aes[8];
 };
 
@@ -316,7 +316,7 @@ static inline void extract_sd_audio_group(int32_t *dst, const uint16_t *data)
         int32_t  i;
     } sample;
 
-    for (int i = 0; i < 4; i++) {
+    for (int i = 0; i < UPIPE_SDI_CHANNELS_PER_GROUP; i++) {
         uint8_t channel_idx = (data[0] & 0x6) >> 1;
         sample.u  = (data[0+3*i] & 0x1F8) << 9;
         sample.u |= (data[1+3*i] & 0x1FF) << 18;
@@ -534,7 +534,7 @@ static void extract_hd_audio(struct upipe *upipe, const uint16_t *packet, int li
     }
 
     if (ctx->buf_audio)
-        for (int i = 0; i < 4; i++) {
+        for (int i = 0; i < UPIPE_SDI_CHANNELS_PER_GROUP; i++) {
             int32_t s = extract_hd_audio_sample(&packet[UPIPE_SDI_MAX_CHANNELS + i * 8]);
             ctx->buf_audio[ctx->group_offset[audio_group] * UPIPE_SDI_MAX_CHANNELS + 4 * audio_group + i] = s;
 
@@ -629,8 +629,9 @@ static void extract_sd_audio(struct upipe *upipe, const uint16_t *packet, int li
     }
 
     const uint16_t *src = &packet[6];
-    for (int i = 0; i < data_count/3; i += 4) {
-        int32_t *dst = &ctx->buf_audio[ctx->group_offset[audio_group] * UPIPE_SDI_MAX_CHANNELS + 4 * audio_group + i];
+    for (int i = 0; i < data_count/3; i += UPIPE_SDI_CHANNELS_PER_GROUP) {
+        int32_t *dst = &ctx->buf_audio[ctx->group_offset[audio_group] * UPIPE_SDI_MAX_CHANNELS +
+                                       UPIPE_SDI_CHANNELS_PER_GROUP * audio_group + i];
         extract_sd_audio_group(dst, &src[3*i]);
 
         upipe_sdi_dec->audio_samples[audio_group]++;
@@ -967,7 +968,7 @@ static bool upipe_sdi_dec_handle(struct upipe *upipe, struct uref *uref,
         upipe_throw_clock_ts(upipe, uref_audio);
 
         int samples_received = audio_ctx.group_offset[0];
-        for (int i = 1; i < 4; i++) {
+        for (int i = 1; i < UPIPE_SDI_CHANNELS_PER_GROUP; i++) {
             if (audio_ctx.group_offset[i] == samples_received)
                 continue;
 
@@ -1368,7 +1369,7 @@ static struct upipe *_upipe_sdi_dec_alloc(struct upipe_mgr *mgr,
     sdi_crc_setup(upipe_sdi_dec->crc_lut);
 
     upipe_sdi_dec->debug = 0;
-    for (int i = 0; i < 4; i++)
+    for (int i = 0; i < UPIPE_SDI_CHANNELS_PER_GROUP; i++)
         upipe_sdi_dec->audio_samples[i] = 0;
     for (int i = 0; i < 8; i++)
         upipe_sdi_dec->aes_detected[i] = -1;
@@ -1376,7 +1377,7 @@ static struct upipe *_upipe_sdi_dec_alloc(struct upipe_mgr *mgr,
     upipe_sdi_dec->frame_num = 0;
 
     for (int i = 0; i < 8; i++)
-        for (int j = 0; j < 4; j++)
+        for (int j = 0; j < UPIPE_SDI_CHANNELS_PER_GROUP; j++)
             upipe_sdi_dec->aes_preamble[i][j] = 0;
 
     memset(upipe_sdi_dec->dbn, 0, sizeof(upipe_sdi_dec->dbn));
