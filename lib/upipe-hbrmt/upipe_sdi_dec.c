@@ -317,7 +317,7 @@ static inline void extract_sd_audio_group(int32_t *dst, const uint16_t *data)
     } sample;
 
     for (int i = 0; i < UPIPE_SDI_CHANNELS_PER_GROUP; i++) {
-        uint8_t channel_idx = (data[0] & 0x6) >> 1;
+        uint8_t channel_idx = (data[0+3*i] & 0x6) >> 1;
         sample.u  = (data[0+3*i] & 0x1F8) << 9;
         sample.u |= (data[1+3*i] & 0x1FF) << 18;
         sample.u |= (data[2+3*i] & 0x01F) << 27;
