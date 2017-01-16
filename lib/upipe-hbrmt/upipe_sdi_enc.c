@@ -459,7 +459,7 @@ static int put_hd_audio_data_packet(struct upipe_sdi_enc *upipe_sdi_enc, uint16_
 
         /* AES parity bit */
         uint8_t par = 0;
-        par += parity_tab[word0 & 0xff];
+        par += parity_tab[word0 & 0xf0];
         par += parity_tab[word1 & 0xff];
         par += parity_tab[word2 & 0xff];
         par += parity_tab[word3 & 0xff];
