@@ -22,7 +22,7 @@
 /** @file
  * @short Upipe sink module for netmap
  */
-
+#define _GNU_SOURCE
 #include <upipe/ubase.h>
 #include <upipe/ulist.h>
 #include <upipe/uprobe.h>
@@ -194,6 +194,8 @@ struct upipe_netmap_sink {
 
     /** socket uri */
     char *uri;
+    /** tx_maxrate sysctl uri */
+    char *maxrate_uri;
     /** temporary uref storage */
     struct uchain urefs;
     /** nb urefs in storage */
@@ -289,6 +291,7 @@ static struct upipe *upipe_netmap_sink_alloc(struct upipe_mgr *mgr,
     upipe_netmap_sink_init_input(upipe);
     upipe_netmap_sink_init_uclock(upipe);
     upipe_netmap_sink->uri = NULL;
+    upipe_netmap_sink->maxrate_uri = NULL;
     upipe_netmap_sink->d = NULL;
     ulist_init(&upipe_netmap_sink->sink_queue);
     upipe_netmap_sink->n = 0;
@@ -724,10 +727,28 @@ static bool upipe_netmap_sink_output(struct upipe *upipe, struct uref *uref,
     }
 
     if (upipe_netmap_sink->frame_size == 0) {
+        uint64_t rate = 0;
         if (!upipe_netmap_sink->rfc4175) {
             uref_block_size(uref, &upipe_netmap_sink->frame_size);
+            uint64_t packets_per_frame = (upipe_netmap_sink->frame_size + HBRMT_DATA_SIZE - 1) / HBRMT_DATA_SIZE;
+            static const uint64_t eth_packet_size =
+            ETHERNET_HEADER_LEN + IP_HEADER_MINSIZE + UDP_HEADER_SIZE +
+                RTP_HEADER_SIZE + HBRMT_HEADER_SIZE + HBRMT_DATA_SIZE +
+                    4 /* ethernet CRC */;
+
+            rate = 8 * eth_packet_size * packets_per_frame * upipe_netmap_sink->fps.num /
+                upipe_netmap_sink->fps.den;
         } else {
             // TODO
+        }
+
+        FILE *f = fopen(upipe_netmap_sink->maxrate_uri, "w");
+        if (!f) {
+            upipe_err_va(upipe, "Could not open maxrate sysctl %s",
+                    upipe_netmap_sink->maxrate_uri);
+        } else {
+            fprintf(f, "%" PRIu64, rate);
+            fclose(f);
         }
     }
 
@@ -953,6 +974,7 @@ static int _upipe_netmap_sink_set_uri(struct upipe *upipe, const char *uri)
 
     nm_close(upipe_netmap_sink->d);
     ubase_clean_str(&upipe_netmap_sink->uri);
+    ubase_clean_str(&upipe_netmap_sink->maxrate_uri);
     upipe_netmap_sink_set_upump(upipe, NULL);
     if (!upipe_netmap_sink_check_input(upipe))
         /* Release the pipe used in @ref upipe_netmap_sink_input. */
@@ -963,7 +985,7 @@ static int _upipe_netmap_sink_set_uri(struct upipe *upipe, const char *uri)
 
     upipe_netmap_sink_check_upump_mgr(upipe);
 
-    if (sscanf(uri, "%*[^-]-%u/T", &upipe_netmap_sink->ring_idx) != 1) {
+    if (sscanf(uri, "netmap:%*[^-]-%u/T", &upipe_netmap_sink->ring_idx) != 1) {
         upipe_err_va(upipe, "invalid netmap receive uri %s", uri);
         return UBASE_ERR_EXTERNAL;
     }
@@ -1079,6 +1101,17 @@ static int _upipe_netmap_sink_set_uri(struct upipe *upipe, const char *uri)
         upipe_err_va(upipe, "can't open netmap socket %s", uri);
         return UBASE_ERR_EXTERNAL;
     }
+
+    char *intf = strdup(uri);
+    *strchr(intf, '-') = '\0'; /* we already matched the - in sscanf */
+    if (asprintf(&upipe_netmap_sink->maxrate_uri,
+                "/sys/class/net/%s/queues/tx-%d/tx_maxrate",
+                &intf[strlen("netmap:")], upipe_netmap_sink->ring_idx) < 0) {
+        free(intf);
+        upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
+        return UBASE_ERR_ALLOC;
+    }
+    free(intf);
 
     upipe_netmap_sink->uri = strdup(uri);
     if (unlikely(upipe_netmap_sink->uri == NULL)) {
@@ -1198,6 +1231,7 @@ static void upipe_netmap_sink_free(struct upipe *upipe)
 
     uref_free(upipe_netmap_sink->flow_def);
     free(upipe_netmap_sink->uri);
+    free(upipe_netmap_sink->maxrate_uri);
 
     upipe_netmap_sink_clean_uclock(upipe);
     upipe_netmap_sink_clean_upump(upipe);
