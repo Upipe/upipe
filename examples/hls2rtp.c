@@ -982,6 +982,21 @@ static int catch_hls(struct uprobe *uprobe,
     return uprobe_throw_next(uprobe, upipe, event, args);
 }
 
+static int catch_src(struct uprobe *uprobe, struct upipe *upipe,
+                     int event, va_list args)
+{
+        if (event != UPROBE_HTTP_SRC_ERROR ||
+            ubase_get_signature(args) != UPIPE_HTTP_SRC_SIGNATURE)
+                return uprobe_throw_next(uprobe, upipe, event, args);
+
+        UBASE_SIGNATURE_CHECK(args, UPIPE_HTTP_SRC_SIGNATURE);
+        unsigned int code = va_arg(args, unsigned int);
+
+        uprobe_err_va(uprobe, NULL, "http error %u", code);
+        cmd_quit();
+        return UBASE_ERR_NONE;
+}
+
 static struct upipe *hls2rtp_video_sink(struct uprobe *probe,
                                         struct upipe *trickp,
                                         uint64_t time_limit,
@@ -1581,6 +1596,7 @@ int main(int argc, char **argv)
     /*
      * create source pipe
      */
+    struct uprobe probe_src;
     {
         struct upipe_mgr *upipe_auto_src_mgr = upipe_auto_src_mgr_alloc();
         assert(upipe_auto_src_mgr);
@@ -1600,9 +1616,10 @@ int main(int argc, char **argv)
         main_probe = uprobe_source_mgr_alloc(main_probe, upipe_auto_src_mgr);
         assert(main_probe);
 
+        uprobe_init(&probe_src, catch_src, uprobe_use(main_probe));
         src = upipe_void_alloc(
             upipe_auto_src_mgr,
-            uprobe_pfx_alloc(uprobe_use(main_probe),
+            uprobe_pfx_alloc(uprobe_use(&probe_src),
                              UPROBE_LOG_VERBOSE, "src"));
         upipe_mgr_release(upipe_auto_src_mgr);
         assert(src);
@@ -1640,6 +1657,7 @@ int main(int argc, char **argv)
     upipe_mgr_release(udpsink_mgr);
     upipe_mgr_release(setflowdef_mgr);
     uprobe_clean(&probe_hls);
+    uprobe_clean(&probe_src);
     uref_mgr_release(uref_mgr);
 
     ev_loop_destroy(main_loop);
