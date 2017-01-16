@@ -394,7 +394,7 @@ static int put_sd_audio_data_packet(struct upipe_sdi_enc *upipe_sdi_enc, uint16_
 
     sdi_fill_anc_parity_checksum_sd(&dst[3]);
 
-    return 0;
+    return 6 + 3 * UPIPE_SDI_CHANNELS_PER_GROUP * num_samples + 1;
 }
 
 /* NOTE: ch_group is zero indexed */
