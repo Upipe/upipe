@@ -341,7 +341,6 @@ static int put_sd_audio_data_packet(struct upipe_sdi_enc *upipe_sdi_enc, uint16_
     } sample;
     int sample_pos = upipe_sdi_enc->sample_pos;
     uint64_t total_samples = upipe_sdi_enc->total_audio_samples_put;
-    uint16_t *audio_words;
 
     /* ADF */
     dst[0] = S291_ADF1;
@@ -358,7 +357,7 @@ static int put_sd_audio_data_packet(struct upipe_sdi_enc *upipe_sdi_enc, uint16_
     /* DC */
     dst[5] = 3 * UPIPE_SDI_CHANNELS_PER_GROUP * num_samples;
 
-    audio_words = &dst[6];
+    uint16_t *audio_words = &dst[6];
     for (int j = 0; j < num_samples; j++) {
         for (int i = 0; i < UPIPE_SDI_CHANNELS_PER_GROUP; i++) {
             sample.i   = upipe_sdi_enc->audio_buf[sample_pos*UPIPE_SDI_MAX_CHANNELS + (ch_group*4 + i)];
@@ -385,8 +384,8 @@ static int put_sd_audio_data_packet(struct upipe_sdi_enc *upipe_sdi_enc, uint16_
             par += parity_tab[audio_words[1] & 0x1ff];
             par += parity_tab[audio_words[2] & 0x1ff];
             audio_words[2] |= (par & 1) << 8;
+            audio_words += 3;
         }
-        audio_words += 3 * UPIPE_SDI_CHANNELS_PER_GROUP;
         
         sample_pos++;
         total_samples++;
