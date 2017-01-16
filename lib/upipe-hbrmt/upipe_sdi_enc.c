@@ -222,7 +222,7 @@ static void sdi_increment_dbn(uint8_t *dbn)
 static inline void sdi_fill_anc_parity_checksum(uint16_t *buf, int gap)
 {
     uint16_t checksum = 0;
-    int len = buf[4] + 3; /* Data count + 3 = did + sdid + dc + udw */
+    int len = buf[2*gap] + 3; /* Data count + 3 = did + sdid + dc + udw */
 
     for (int i = 0; i < gap*len; i += gap) {
         bool parity = parity_tab[buf[i] & 0xff];
