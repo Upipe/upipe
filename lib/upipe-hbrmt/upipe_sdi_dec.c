@@ -631,7 +631,7 @@ static void extract_sd_audio(struct upipe *upipe, const uint16_t *packet, int li
     const uint16_t *src = &packet[6];
     for (int i = 0; i < data_count/3; i += UPIPE_SDI_CHANNELS_PER_GROUP) {
         int32_t *dst = &ctx->buf_audio[ctx->group_offset[audio_group] * UPIPE_SDI_MAX_CHANNELS +
-                                       UPIPE_SDI_CHANNELS_PER_GROUP * audio_group + i];
+                                       audio_group * UPIPE_SDI_CHANNELS_PER_GROUP];
         extract_sd_audio_group(dst, &src[3*i]);
 
         upipe_sdi_dec->audio_samples[audio_group]++;
