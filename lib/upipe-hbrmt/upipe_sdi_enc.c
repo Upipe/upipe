@@ -379,7 +379,7 @@ static int put_sd_audio_data_packet(struct upipe_sdi_enc *upipe_sdi_enc, uint16_
             audio_words[1] = ((sample.u & 0x7fc0 ) >>  6) ;
             audio_words[2] = ((sample.u & 0xf8000) >> 15) | (aes_status_validity << 5);
 
-            /* AES parity bit */
+            /* Not the AES parity bit */
             uint8_t par = 0;
             par += parity_tab[audio_words[0] & 0x1ff];
             par += parity_tab[audio_words[1] & 0x1ff];
