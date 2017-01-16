@@ -213,7 +213,7 @@ static void sdi_init_crc_channel_status(uint8_t *data)
 /** DBN */
 static void sdi_increment_dbn(uint8_t *dbn)
 {
-    *dbn++;
+    (*dbn)++;
     if (*dbn == 0)
         *dbn = 1;
 }
