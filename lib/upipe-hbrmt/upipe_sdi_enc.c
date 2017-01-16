@@ -681,6 +681,7 @@ static void upipe_sdi_enc_encode_line(struct upipe *upipe, int line_num, uint16_
     dst[1] = 0x000;
     dst[2] = 0x000;
     dst[3] = eav_fvh_cword[f2][vbi];
+    dst += 4;
 
     /* HBI */
     const uint8_t chroma_blanking = UPIPE_SDI_CHROMA_BLANKING_START;
@@ -693,9 +694,7 @@ static void upipe_sdi_enc_encode_line(struct upipe *upipe, int line_num, uint16_
     int samples_to_put = samples_put_target - upipe_sdi_enc->sample_pos;
 
     for (int ch_group = 0; ch_group < UPIPE_SDI_CHANNELS_PER_GROUP; ch_group++) {
-
-
-        
+        dst += put_sd_audio_data_packet(upipe_sdi_enc, dst, ch_group, samples_to_put);
     }
     upipe_sdi_enc->total_audio_samples_put += samples_to_put;
     upipe_sdi_enc->sample_pos += samples_to_put;
