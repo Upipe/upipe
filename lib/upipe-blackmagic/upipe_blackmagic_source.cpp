@@ -1000,6 +1000,7 @@ static int upipe_bmd_src_set_uri(struct upipe *upipe, const char *uri)
     char *audio = NULL;
     char *video_bits = NULL;
     char *audio_bits = NULL;
+    bool mirror = true;
     const char *params = strchr(idx, '/');
     if (params) {
         char *paramsdup = strdup(params);
@@ -1020,6 +1021,8 @@ static int upipe_bmd_src_set_uri(struct upipe *upipe, const char *uri)
             } else if (IS_OPTION("video_bits=")) {
                 free(video_bits);
                 video_bits = config_stropt(ARG_OPTION("video_bits="));
+            } else if (IS_OPTION("nomirror")) {
+                mirror = false;
             }
 #undef IS_OPTION
 #undef ARG_OPTION
@@ -1027,6 +1030,11 @@ static int upipe_bmd_src_set_uri(struct upipe *upipe, const char *uri)
 
         free(paramsdup);
     }
+
+    deckLinkConfiguration->SetInt(bmdDeckLinkConfigCapturePassThroughMode,
+            mirror ? bmdDeckLinkCapturePassthroughModeDirect :
+            bmdDeckLinkCapturePassthroughModeDisabled);
+
 
     if (audio != NULL) {
         int i = 0;
