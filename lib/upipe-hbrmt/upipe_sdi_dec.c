@@ -309,8 +309,19 @@ static void upipe_sdi_dec_init_sub_mgr(struct upipe *upipe)
     sub_mgr->upipe_mgr_control = NULL;
 }
 
-static inline void extract_sd_audio_group(int32_t *dst, const uint16_t *data)
+static const bool parity_tab[512] = {
+#   define P2(n) n, n^1, n^1, n
+#   define P4(n) P2(n), P2(n^1), P2(n^1), P2(n)
+#   define P6(n) P4(n), P4(n^1), P4(n^1), P4(n)
+    P6(0), P6(1), P6(1), P6(0),
+    P6(1), P6(0), P6(0), P6(1)
+};
+
+static inline void extract_sd_audio_group(struct upipe *upipe, int32_t *dst,
+        const uint16_t *data)
 {
+    struct upipe_sdi_dec *upipe_sdi_dec = upipe_sdi_dec_from_upipe(upipe);
+
     union {
         uint32_t u;
         int32_t  i;
@@ -322,12 +333,27 @@ static inline void extract_sd_audio_group(int32_t *dst, const uint16_t *data)
         sample.u |= (data[1+3*i] & 0x1FF) << 18;
         sample.u |= (data[2+3*i] & 0x01F) << 27;
 
+        if (upipe_sdi_dec->debug) {
+            uint8_t parity = 0;
+            parity += parity_tab[data[0+3*i] & 0x1ff];
+            parity += parity_tab[data[1+3*i] & 0x1ff];
+            parity += parity_tab[data[2+3*i] & 0x0ff];
+
+            if ((parity & 1) != ((data[2+3*i] >> 8) & 1)) {
+                upipe_err_va(upipe, "wrong audio parity: 0x%.3x 0x%.3x 0x%.3x",
+                        data[0+3*i], data[1+3*i], data[2+3*i]);
+            }
+        }
+
         dst[channel_idx] = sample.i;
     }
 }
 
-static inline int32_t extract_hd_audio_sample(const uint16_t *data)
+static inline int32_t extract_hd_audio_sample(struct upipe *upipe,
+        const uint16_t *data)
 {
+    struct upipe_sdi_dec *upipe_sdi_dec = upipe_sdi_dec_from_upipe(upipe);
+
     union {
         uint32_t u;
         int32_t  i;
@@ -337,6 +363,19 @@ static inline int32_t extract_hd_audio_sample(const uint16_t *data)
     sample.u |= (data[2] & 0xFF) << 12;
     sample.u |= (data[4] & 0xFF) << 20;
     sample.u |= (data[6] & 0x0F) << 28;
+
+    if (upipe_sdi_dec->debug) {
+        uint8_t parity = 0;
+        parity += parity_tab[data[0] & 0xf0];
+        parity += parity_tab[data[2] & 0xff];
+        parity += parity_tab[data[4] & 0xff];
+        parity += parity_tab[data[6] & 0xff];
+
+        if ((parity & 1) != ((data[6] >> 7) & 1)) {
+            upipe_err_va(upipe, "wrong audio parity: 0x%.2x 0x%.2x 0x%.2x 0x%.2x",
+                    data[0] & 0xf0, data[2], data[4], data[6]);
+        }
+    }
 
     return sample.i;
 }
@@ -535,7 +574,7 @@ static void extract_hd_audio(struct upipe *upipe, const uint16_t *packet, int li
 
     if (ctx->buf_audio)
         for (int i = 0; i < UPIPE_SDI_CHANNELS_PER_GROUP; i++) {
-            int32_t s = extract_hd_audio_sample(&packet[UPIPE_SDI_MAX_CHANNELS + i * 8]);
+            int32_t s = extract_hd_audio_sample(upipe, &packet[UPIPE_SDI_MAX_CHANNELS + i * 8]);
             ctx->buf_audio[ctx->group_offset[audio_group] * UPIPE_SDI_MAX_CHANNELS + 4 * audio_group + i] = s;
 
             if (i & 0x01) { // check 2nd syncword
@@ -632,7 +671,7 @@ static void extract_sd_audio(struct upipe *upipe, const uint16_t *packet, int li
     for (int i = 0; i < data_count/3; i += UPIPE_SDI_CHANNELS_PER_GROUP) {
         int32_t *dst = &ctx->buf_audio[ctx->group_offset[audio_group] * UPIPE_SDI_MAX_CHANNELS +
                                        audio_group * UPIPE_SDI_CHANNELS_PER_GROUP];
-        extract_sd_audio_group(dst, &src[3*i]);
+        extract_sd_audio_group(upipe, dst, &src[3*i]);
 
         upipe_sdi_dec->audio_samples[audio_group]++;
         ctx->group_offset[audio_group]++;
