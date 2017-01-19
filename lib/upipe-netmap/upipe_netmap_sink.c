@@ -583,6 +583,7 @@ static void upipe_netmap_sink_worker(struct upump *upump)
                                                upipe_netmap_sink->ring_idx);
     uint32_t cur = txring->cur;
     uint32_t txavail = nm_ring_space(txring);
+    //if (!txavail) upipe_dbg_va(upipe, "txavail 0, woke up for nothing");
     bool rfc4175 = upipe_netmap_sink->rfc4175;
 
     /* map picture */
@@ -612,8 +613,10 @@ static void upipe_netmap_sink_worker(struct upump *upump)
             struct uchain *uchain = ulist_pop(&upipe_netmap_sink->sink_queue);
             if (!uchain)
                 break;
-            upipe_verbose_va(upipe, "pop, urefs: %zu", --upipe_netmap_sink->n);
+            upipe_netmap_sink->n--;
+//            upipe_notice_va(upipe, "pop, urefs: %zu", upipe_netmap_sink->n);
             uref = uref_from_uchain(uchain);
+
             input_size = -1;
         }
 
@@ -627,8 +630,10 @@ static void upipe_netmap_sink_worker(struct upump *upump)
             }
 
             bytes_left = input_size;
-            upipe_verbose_va(upipe, "uref start, txavail %d bytes left %d", txavail,
-                    bytes_left);
+            if (txavail > 1024)
+            upipe_notice_va(upipe, "uref start, txavail %d, pkts left %d, %zu urefs buffered",
+                    txavail, (bytes_left + HBRMT_DATA_SIZE - 1) / HBRMT_DATA_SIZE,
+                    upipe_netmap_sink->n);
         }
 
         if (rfc4175) {
@@ -663,8 +668,11 @@ static void upipe_netmap_sink_worker(struct upump *upump)
 
     /* */
     if (!rfc4175 && input_size != -1) {
-        upipe_verbose_va(upipe, "loop done, input size %d bytes left %d -> %d",
-                input_size, bytes_left, input_size - bytes_left);
+        if (0) upipe_notice_va(upipe, "loop done, input pkts %d pkts left %d -> %d\n",
+                (input_size + HBRMT_DATA_SIZE - 1) / HBRMT_DATA_SIZE,
+                (bytes_left + HBRMT_DATA_SIZE - 1) / HBRMT_DATA_SIZE,
+                (input_size - bytes_left + HBRMT_DATA_SIZE - 1) / HBRMT_DATA_SIZE
+                );
     }
 
     txring->head = txring->cur = cur;
@@ -735,7 +743,8 @@ static bool upipe_netmap_sink_output(struct upipe *upipe, struct uref *uref,
     }
 
     ulist_add(&upipe_netmap_sink->sink_queue, uref_to_uchain(uref));
-    upipe_verbose_va(upipe, "push, urefs: %zu", ++upipe_netmap_sink->n);
+    upipe_netmap_sink->n++;
+    //upipe_notice_va(upipe, "push, urefs: %zu", upipe_netmap_sink->n);
 
     return true;
 }
