@@ -41,7 +41,6 @@
 #include <upipe/upipe_helper_void.h>
 #include <upipe/upipe_helper_upump_mgr.h>
 #include <upipe/upipe_helper_upump.h>
-#include <upipe/upipe_helper_input.h>
 #include <upipe/upipe_helper_uclock.h>
 #include <upipe-netmap/upipe_netmap_sink.h>
 
@@ -196,14 +195,6 @@ struct upipe_netmap_sink {
     char *uri;
     /** tx_maxrate sysctl uri */
     char *maxrate_uri;
-    /** temporary uref storage */
-    struct uchain urefs;
-    /** nb urefs in storage */
-    unsigned int nb_urefs;
-    /** max urefs in storage */
-    unsigned int max_urefs;
-    /** list of blockers */
-    struct uchain blockers;
 
     /** netmap descriptor **/
     struct nm_desc *d;
@@ -227,7 +218,6 @@ UPIPE_HELPER_UREFCOUNT(upipe_netmap_sink, urefcount, upipe_netmap_sink_free)
 UPIPE_HELPER_VOID(upipe_netmap_sink)
 UPIPE_HELPER_UPUMP_MGR(upipe_netmap_sink, upump_mgr)
 UPIPE_HELPER_UPUMP(upipe_netmap_sink, upump, upump_mgr)
-UPIPE_HELPER_INPUT(upipe_netmap_sink, urefs, nb_urefs, max_urefs, blockers, upipe_netmap_sink_output)
 UPIPE_HELPER_UCLOCK(upipe_netmap_sink, uclock, uclock_request, NULL, upipe_throw_provide_request, NULL)
 
 
@@ -288,7 +278,6 @@ static struct upipe *upipe_netmap_sink_alloc(struct upipe_mgr *mgr,
     upipe_netmap_sink_init_urefcount(upipe);
     upipe_netmap_sink_init_upump_mgr(upipe);
     upipe_netmap_sink_init_upump(upipe);
-    upipe_netmap_sink_init_input(upipe);
     upipe_netmap_sink_init_uclock(upipe);
     upipe_netmap_sink->uri = NULL;
     upipe_netmap_sink->maxrate_uri = NULL;
@@ -782,16 +771,7 @@ static void upipe_netmap_sink_input(struct upipe *upipe, struct uref *uref,
         }
     }
 
-    if (!upipe_netmap_sink_check_input(upipe)) {
-        upipe_netmap_sink_hold_input(upipe, uref);
-        upipe_netmap_sink_block_input(upipe, upump_p);
-    } else if (!upipe_netmap_sink_output(upipe, uref, upump_p)) {
-        upipe_netmap_sink_hold_input(upipe, uref);
-        upipe_netmap_sink_block_input(upipe, upump_p);
-        /* Increment upipe refcount to avoid disappearing before all packets
-         * have been sent. */
-        upipe_use(upipe);
-    }
+    upipe_netmap_sink_output(upipe, uref, upump_p);
 }
 
 /** @internal @This sets the input flow definition.
@@ -976,9 +956,6 @@ static int _upipe_netmap_sink_set_uri(struct upipe *upipe, const char *uri)
     ubase_clean_str(&upipe_netmap_sink->uri);
     ubase_clean_str(&upipe_netmap_sink->maxrate_uri);
     upipe_netmap_sink_set_upump(upipe, NULL);
-    if (!upipe_netmap_sink_check_input(upipe))
-        /* Release the pipe used in @ref upipe_netmap_sink_input. */
-        upipe_release(upipe);
 
     if (unlikely(uri == NULL))
         return UBASE_ERR_NONE;
@@ -1121,10 +1098,6 @@ static int _upipe_netmap_sink_set_uri(struct upipe *upipe, const char *uri)
 
     upipe_notice_va(upipe, "opening netmap socket %s", upipe_netmap_sink->uri);
 
-    if (!upipe_netmap_sink_check_input(upipe))
-        /* Use again the pipe that we previously released. */
-        upipe_use(upipe);
-
     upipe_netmap_sink->src_ip = inet_addr(src_ip);
     upipe_netmap_sink->dst_ip = inet_addr(ip);
 
@@ -1133,23 +1106,6 @@ static int _upipe_netmap_sink_set_uri(struct upipe *upipe, const char *uri)
     free(dstmac);
     free(srcmac);
 
-    return UBASE_ERR_NONE;
-}
-
-/** @internal @This flushes all currently held buffers, and unblocks the
- * sources.
- *
- * @param upipe description structure of the pipe
- * @return an error code
- */
-static int upipe_netmap_sink_flush(struct upipe *upipe)
-{
-    if (upipe_netmap_sink_flush_input(upipe)) {
-        upipe_netmap_sink_set_upump(upipe, NULL);
-        /* All packets have been output, release again the pipe that has been
-         * used in @ref upipe_netmap_sink_input. */
-        upipe_release(upipe);
-    }
     return UBASE_ERR_NONE;
 }
 
@@ -1189,9 +1145,6 @@ static int _upipe_netmap_sink_control(struct upipe *upipe,
             const char *uri = va_arg(args, const char *);
             return _upipe_netmap_sink_set_uri(upipe, uri);
         }
-
-        case UPIPE_FLUSH:
-            return upipe_netmap_sink_flush(upipe);
         default:
             return UBASE_ERR_UNHANDLED;
     }
@@ -1209,12 +1162,6 @@ static int upipe_netmap_sink_control(struct upipe *upipe, int command,
         va_list args)
 {
     UBASE_RETURN(_upipe_netmap_sink_control(upipe, command, args));
-
-    // FIXME check status
-#if 0
-    if (unlikely(!upipe_netmap_sink_check_input(upipe)))
-        upipe_netmap_sink_poll(upipe);
-#endif
 
     return UBASE_ERR_NONE;
 }
@@ -1236,7 +1183,6 @@ static void upipe_netmap_sink_free(struct upipe *upipe)
     upipe_netmap_sink_clean_uclock(upipe);
     upipe_netmap_sink_clean_upump(upipe);
     upipe_netmap_sink_clean_upump_mgr(upipe);
-    upipe_netmap_sink_clean_input(upipe);
     upipe_netmap_sink_clean_urefcount(upipe);
     upipe_netmap_sink_free_void(upipe);
 }
