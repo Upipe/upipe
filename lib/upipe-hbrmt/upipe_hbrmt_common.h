@@ -185,7 +185,8 @@ static inline const struct sdi_offsets_fmt *sdi_get_offsets(struct uref *flow_de
 
         /* PAL */
         {1, 720, 576, 313, 6, 9, {1, 22}, {23, 310}, {311, 312}, {313, 335}, {336, 623}, {624, 625}},
-        /* NTSC TODO */
+        /* NTSC */
+        {1, 720, 480, 266, 10, 13, {4, 19}, {20, 263}, {264, 265}, {266, 282}, {283, 525}, {1, 3}},
     };
 
     static const struct sdi_offsets_fmt fmts_data[] = {
@@ -204,7 +205,7 @@ static inline const struct sdi_offsets_fmt *sdi_get_offsets(struct uref *flow_de
         { 1650, 750, 370, &pict_fmts[2], 0x3, 0xA, { 60000, 1001 } }, /* 60/1.001 Hz P */
 
         { 864,  625, 144, &pict_fmts[3], 0x0, 0x5, { 25, 1} },        /* 625-line 25 Hz I */
-        
+        { 858,  525, 138, &pict_fmts[4], 0x0, 0x6, { 30000, 1001 } }, /* 525-line 30/1.001 Hz I */
     };
 
     for (size_t i = 0; i < sizeof(fmts_data) / sizeof(struct sdi_offsets_fmt); i++)
