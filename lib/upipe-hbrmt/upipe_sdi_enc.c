@@ -1122,10 +1122,42 @@ static void upipe_sdi_enc_input(struct upipe *upipe, struct uref *uref,
 
     ulist_add(&upipe_sdi_enc->urefs, uref_to_uchain(uref)); // buffer uref
     upipe_verbose_va(upipe, "urefs: %zu", ++upipe_sdi_enc->n);
-
+#if 0
     uref = upipe_sdi_enc_avsync(upipe, samples);
-    if (!uref)
+#else
+{
+    uref = uref_from_uchain(ulist_pop(&upipe_sdi_enc->urefs));
+    struct upipe_sdi_enc_sub *sdi_enc_sub = upipe_sdi_enc_sub_from_uchain(upipe_sdi_enc->subs.next);
+    struct upipe *sub = &sdi_enc_sub->upipe;
+    struct uref *uref_audio = uref_from_uchain(ulist_pop(&sdi_enc_sub->urefs));
+    if (uref_audio) {
+        const uint8_t channels = sdi_enc_sub->channels;
+
+        size_t size = 0;
+        uref_sound_size(uref_audio, &size, NULL);
+        samples = size;
+
+        const int32_t *buf;
+        uref_sound_read_int32_t(uref_audio, 0, -1, &buf, 1);
+
+        int32_t *dst = &upipe_sdi_enc->audio_buf[0];
+        for (size_t i = 0; i < size; i++) {
+            memcpy(dst, buf, sizeof(int32_t) * channels);
+            dst += UPIPE_SDI_MAX_CHANNELS;
+            buf += channels;
+        }
+
+        uref_sound_unmap(uref_audio, 0, -1, 1);
+        uref_free(uref_audio);
+    } else {
+        samples = 0;
+    }
+}
+#endif
+    if (!uref) {
+        upipe_err_va(upipe, "no vid uref");
         return;
+    }
 
     size_t input_hsize, input_vsize;
     if (!ubase_check(uref_pic_size(uref, &input_hsize, &input_vsize, NULL))) {
