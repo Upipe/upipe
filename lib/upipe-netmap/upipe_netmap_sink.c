@@ -27,6 +27,7 @@
 #include <upipe/ulist.h>
 #include <upipe/uprobe.h>
 #include <upipe/uclock.h>
+#include <upipe/uclock_std.h>
 #include <upipe/uref.h>
 #include <upipe/uref_block.h>
 #include <upipe/uref_clock.h>
@@ -298,6 +299,7 @@ static struct upipe *upipe_netmap_sink_alloc(struct upipe_mgr *mgr,
         upipe_netmap_sink->unpack_v210 = upipe_v210_sdi_unpack_aligned_avx;
     }
 #endif
+    upipe_netmap_sink_require_uclock(upipe);
 
     upipe_throw_ready(upipe);
     return upipe;
@@ -569,6 +571,15 @@ static void upipe_netmap_sink_worker(struct upump *upump)
     struct upipe *upipe = upump_get_opaque(upump, struct upipe *);
     struct upipe_netmap_sink *upipe_netmap_sink = upipe_netmap_sink_from_upipe(upipe);
 
+    static struct uclock *u; // FIXME: use attach_uclock
+    if (!u)
+        u = uclock_std_alloc(0);
+    uint64_t now = uclock_now(u);
+    static uint64_t old;
+    if ((now - old) > UCLOCK_FREQ / 50)
+    printf("%s() after %" PRIu64 "us\n", __func__, (now - old) / 27);
+    old = now;
+
     if (!upipe_netmap_sink->flow_def)
         return;
 
@@ -578,6 +589,19 @@ static void upipe_netmap_sink_worker(struct upump *upump)
     int input_size = -1;
     int bytes_left = 0;
 
+    static bool preroll = 1;
+    if (uref) {
+        uint64_t pts = 0;
+        uref_clock_get_pts_sys(uref, &pts);
+        pts += upipe_netmap_sink->latency;
+        pts += UCLOCK_FREQ / 50;
+        if (pts > now) {
+            //printf("waiting : pts - now = %" PRIu64 "ms\n", (pts - now) / 27000);
+            if (preroll)
+                return;
+        }
+        preroll = 0;
+    }
     /* Open up transmission ring */
     struct netmap_ring *txring = NETMAP_TXRING(upipe_netmap_sink->d->nifp,
                                                upipe_netmap_sink->ring_idx);
@@ -617,6 +641,19 @@ static void upipe_netmap_sink_worker(struct upump *upump)
 //            upipe_notice_va(upipe, "pop, urefs: %zu", upipe_netmap_sink->n);
             uref = uref_from_uchain(uchain);
 
+            if (preroll) {
+                uint64_t pts = 0;
+                uref_clock_get_pts_sys(uref, &pts);
+                pts += upipe_netmap_sink->latency;
+                pts += UCLOCK_FREQ / 50; // TODO: use sink_latency
+                if (pts > now) {
+                    printf("waiting after pop\n");
+                    upipe_netmap_sink->uref = uref;
+                    return;
+                }
+            } else {
+                // TODO: drop late frames
+            }
             input_size = -1;
         }
 
