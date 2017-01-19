@@ -1011,7 +1011,8 @@ static void output_cb(struct upipe *upipe)
             uqueue_length(&upipe_bmd_sink_sub->uqueue));
 
     /* Find a picture */
-    struct uref *uref;
+    struct uref *uref = NULL;
+#if 0
     for (;;) {
         /* pop first available picture */
         uref = upipe_bmd_sink_sub->uref;
@@ -1082,6 +1083,9 @@ static void output_cb(struct upipe *upipe)
                 dur_to_time(vid_pts - pts));
         break;
     }
+#else
+    uref = uqueue_pop(&upipe_bmd_sink_sub->uqueue, struct uref *);
+#endif
 
     schedule_frame(upipe, uref, pts);
 
