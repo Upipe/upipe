@@ -1155,7 +1155,7 @@ static int upipe_sdi_dec_set_flow_def(struct upipe *upipe, struct uref *flow_def
     upipe_sdi_dec->p = upipe_sdi_dec->f->pict_fmt;
 
     struct uref *flow_def_dup;
-    if ((flow_def_dup = uref_sibling_alloc(flow_def)) == NULL)
+    if ((flow_def_dup = uref_dup(flow_def)) == NULL)
         return UBASE_ERR_ALLOC;
 
     uref_flow_set_def(flow_def_dup, "pic.");
