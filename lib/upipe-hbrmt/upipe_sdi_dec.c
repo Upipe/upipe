@@ -811,6 +811,12 @@ static bool upipe_sdi_dec_handle(struct upipe *upipe, struct uref *uref,
         if (fields[0][i])
             fields[1][i] = fields[0][i] + output_stride[i];
 
+    if (!f->psf_ident) {
+        output_stride[0] *= 2;
+        output_stride[1] *= 2;
+        output_stride[2] *= 2;
+    }
+
     struct uref *uref_audio = NULL;
 
     struct audio_ctx audio_ctx = {0};
@@ -938,21 +944,15 @@ static bool upipe_sdi_dec_handle(struct upipe *upipe, struct uref *uref,
         }
 
         bool active = 0, f2 = 0;
-        /* Progressive */
-        if (f->psf_ident) {
-            // FIXME
-            f2 = 0;
-        }
-        else {
+        /* ACTIVE F1 */
+        if (line_num >= p->active_f1.start && line_num <= p->active_f1.end)
+            active = 1;
+
+        if (!f->psf_ident) {
             f2 = line_num >= p->vbi_f2_part1.start;
-            /* ACTIVE F1 */
-            if (line_num >= p->active_f1.start && line_num <= p->active_f1.end) {
-                active = 1;
-            }
             /* ACTIVE F2 */
-            else if (line_num >= p->active_f2.start && line_num <= p->active_f2.end) {
+            if (line_num >= p->active_f2.start && line_num <= p->active_f2.end)
                 active = 1;
-            }
         }
 
         uint16_t *src_line = (uint16_t*)input_buf + (h * f->width + f->active_offset) * 2;
@@ -990,9 +990,9 @@ static bool upipe_sdi_dec_handle(struct upipe *upipe, struct uref *uref,
             else
                 upipe_sdi_dec->uyvy_to_planar_10((uint16_t *)y, (uint16_t *)u, (uint16_t *)v, src_line, output_hsize);
 
-            fields[f2][0] += output_stride[0] * 2;
-            fields[f2][1] += output_stride[1] * 2;
-            fields[f2][2] += output_stride[2] * 2;
+            fields[f2][0] += output_stride[0];
+            fields[f2][1] += output_stride[1];
+            fields[f2][2] += output_stride[2];
         }
         upipe_sdi_dec->eav_clock += f->width;
     }
@@ -1192,6 +1192,9 @@ static int upipe_sdi_dec_set_flow_def(struct upipe *upipe, struct uref *flow_def
 
     uref_pic_flow_set_hsize(flow_def_dup, upipe_sdi_dec->p->active_width);
     uref_pic_flow_set_vsize(flow_def_dup, upipe_sdi_dec->p->active_height);
+
+    if (upipe_sdi_dec->f->psf_ident)
+        uref_pic_set_progressive(flow_def_dup);
 
     // FIXME is this correct
     uref_pic_flow_set_hsubsampling(flow_def_dup, 1, 0);
