@@ -53,7 +53,7 @@ static const bool parity_tab[512] = {
 #   define P4(n) P2(n), P2(n^1), P2(n^1), P2(n)
 #   define P6(n) P4(n), P4(n^1), P4(n^1), P4(n)
     P6(0), P6(1), P6(1), P6(0),
-    P6(0), P6(1), P6(1), P6(0)
+    P6(1), P6(0), P6(0), P6(1)
 };
 
 /** upipe_sdi_enc structure with sdi_enc parameters */
@@ -219,14 +219,21 @@ static void sdi_increment_dbn(uint8_t *dbn)
 }
 
 /** Ancillary Parity and Checksum */
-static inline void sdi_fill_anc_parity_checksum(uint16_t *buf, int gap)
+static inline void sdi_fill_anc_parity_checksum(uint16_t *buf, bool do_parity,
+        int gap)
 {
     uint16_t checksum = 0;
-    int len = buf[4] + 3; /* Data count + 3 = did + sdid + dc + udw */
+    int len = buf[2*gap] + 3; /* Data count + 3 = did + sdid + dc + udw */
 
     for (int i = 0; i < gap*len; i += gap) {
-        bool parity = parity_tab[buf[i] & 0xff];
-        buf[i] |= (parity << 8);
+        bool parity;
+        if (do_parity) {
+            parity = parity_tab[buf[i] & 0xff];
+            buf[i] |= (parity << 8);
+        } else {
+            /* do not calculate parity bit, just set bit9 to !bit8 */
+            parity = (buf[i] & 0x100) >> 8;
+        }
 
         checksum += buf[i];
         buf[i] |= (!parity << 9);
@@ -238,10 +245,10 @@ static inline void sdi_fill_anc_parity_checksum(uint16_t *buf, int gap)
     buf[gap*len] = checksum;
 }
 
-#define SDI_FILL_ANC_PARITY(type, gap)                         \
-static void sdi_fill_anc_parity_checksum_##type(uint16_t *buf) \
-{                                                              \
-    sdi_fill_anc_parity_checksum(buf, gap);                    \
+#define SDI_FILL_ANC_PARITY(type, gap)                                      \
+static void sdi_fill_anc_parity_checksum_##type(uint16_t *buf, bool parity) \
+{                                                                           \
+    sdi_fill_anc_parity_checksum(buf, parity, gap);                         \
 }
 
 SDI_FILL_ANC_PARITY(sd, 1)
@@ -271,7 +278,7 @@ static inline void put_payload_identifier(uint16_t *dst, const struct sdi_offset
     dst[gap*9] = 0x00;
 
     /* Parity + CS */
-    sdi_fill_anc_parity_checksum_hd(&dst[gap*3]);
+    sdi_fill_anc_parity_checksum_hd(&dst[gap*3], true);
 }
 
 #define PUT_PAYLOAD_IDENTIFIER(type, gap)                      \
@@ -316,7 +323,7 @@ static int put_audio_control_packet(struct upipe_sdi_enc *upipe_sdi_enc,
     dst[30] = 0x0; /* Reserved */
     dst[32] = 0x0; /* Reserved */
 
-    sdi_fill_anc_parity_checksum_hd(&dst[6]);
+    sdi_fill_anc_parity_checksum_hd(&dst[6], true);
 
     /* Total amount to increment the destination including the luma words,
      * so in total it's 18 chroma words */
@@ -341,7 +348,6 @@ static int put_sd_audio_data_packet(struct upipe_sdi_enc *upipe_sdi_enc, uint16_
     } sample;
     int sample_pos = upipe_sdi_enc->sample_pos;
     uint64_t total_samples = upipe_sdi_enc->total_audio_samples_put;
-    uint16_t *audio_words;
 
     /* ADF */
     dst[0] = S291_ADF1;
@@ -358,10 +364,10 @@ static int put_sd_audio_data_packet(struct upipe_sdi_enc *upipe_sdi_enc, uint16_
     /* DC */
     dst[5] = 3 * UPIPE_SDI_CHANNELS_PER_GROUP * num_samples;
 
-    audio_words = &dst[6];
+    uint16_t *audio_words = &dst[6];
     for (int j = 0; j < num_samples; j++) {
         for (int i = 0; i < UPIPE_SDI_CHANNELS_PER_GROUP; i++) {
-            sample.i   = upipe_sdi_enc->audio_buf[sample_pos*UPIPE_SDI_MAX_CHANNELS + (ch_group*4 + i)];
+            sample.i   = upipe_sdi_enc->audio_buf[(sample_pos+j)*UPIPE_SDI_MAX_CHANNELS + (ch_group*4 + i)];
             sample.u >>= 12;
 
             /* Channel status */
@@ -385,16 +391,15 @@ static int put_sd_audio_data_packet(struct upipe_sdi_enc *upipe_sdi_enc, uint16_
             par += parity_tab[audio_words[1] & 0x1ff];
             par += parity_tab[audio_words[2] & 0x1ff];
             audio_words[2] |= (par & 1) << 8;
+            audio_words += 3;
         }
-        audio_words += 3 * UPIPE_SDI_CHANNELS_PER_GROUP;
         
-        sample_pos++;
         total_samples++;
     }
 
-    sdi_fill_anc_parity_checksum_sd(&dst[3]);
+    sdi_fill_anc_parity_checksum_sd(&dst[3], false);
 
-    return 0;
+    return 6 + 3 * UPIPE_SDI_CHANNELS_PER_GROUP * num_samples + 1;
 }
 
 /* NOTE: ch_group is zero indexed */
@@ -462,7 +467,7 @@ static int put_hd_audio_data_packet(struct upipe_sdi_enc *upipe_sdi_enc, uint16_
         par += parity_tab[word0 & 0xf0];
         par += parity_tab[word1 & 0xff];
         par += parity_tab[word2 & 0xff];
-        par += parity_tab[word3 & 0xff];
+        par += parity_tab[word3 & 0x0f];
         word3 |= (par & 1) << 7;
 
         dst[16 + i*8 + 0] = word0;
@@ -489,7 +494,7 @@ static int put_hd_audio_data_packet(struct upipe_sdi_enc *upipe_sdi_enc, uint16_
     dst[56] = ecc[4];
     dst[58] = ecc[5];
 
-    sdi_fill_anc_parity_checksum_hd(&dst[6]);
+    sdi_fill_anc_parity_checksum_hd(&dst[6], true);
 
     /* Total amount to increment the destination including the luma words,
      * so in total it's 31 chroma words */
@@ -681,6 +686,7 @@ static void upipe_sdi_enc_encode_line(struct upipe *upipe, int line_num, uint16_
     dst[1] = 0x000;
     dst[2] = 0x000;
     dst[3] = eav_fvh_cword[f2][vbi];
+    dst += 4;
 
     /* HBI */
     const uint8_t chroma_blanking = UPIPE_SDI_CHROMA_BLANKING_START;
@@ -693,9 +699,7 @@ static void upipe_sdi_enc_encode_line(struct upipe *upipe, int line_num, uint16_
     int samples_to_put = samples_put_target - upipe_sdi_enc->sample_pos;
 
     for (int ch_group = 0; ch_group < UPIPE_SDI_CHANNELS_PER_GROUP; ch_group++) {
-
-
-        
+        dst += put_sd_audio_data_packet(upipe_sdi_enc, dst, ch_group, samples_to_put);
     }
     upipe_sdi_enc->total_audio_samples_put += samples_to_put;
     upipe_sdi_enc->sample_pos += samples_to_put;
@@ -1118,10 +1122,42 @@ static void upipe_sdi_enc_input(struct upipe *upipe, struct uref *uref,
 
     ulist_add(&upipe_sdi_enc->urefs, uref_to_uchain(uref)); // buffer uref
     upipe_verbose_va(upipe, "urefs: %zu", ++upipe_sdi_enc->n);
-
+#if 0
     uref = upipe_sdi_enc_avsync(upipe, samples);
-    if (!uref)
+#else
+{
+    uref = uref_from_uchain(ulist_pop(&upipe_sdi_enc->urefs));
+    struct upipe_sdi_enc_sub *sdi_enc_sub = upipe_sdi_enc_sub_from_uchain(upipe_sdi_enc->subs.next);
+    struct upipe *sub = &sdi_enc_sub->upipe;
+    struct uref *uref_audio = uref_from_uchain(ulist_pop(&sdi_enc_sub->urefs));
+    if (uref_audio) {
+        const uint8_t channels = sdi_enc_sub->channels;
+
+        size_t size = 0;
+        uref_sound_size(uref_audio, &size, NULL);
+        samples = size;
+
+        const int32_t *buf;
+        uref_sound_read_int32_t(uref_audio, 0, -1, &buf, 1);
+
+        int32_t *dst = &upipe_sdi_enc->audio_buf[0];
+        for (size_t i = 0; i < size; i++) {
+            memcpy(dst, buf, sizeof(int32_t) * channels);
+            dst += UPIPE_SDI_MAX_CHANNELS;
+            buf += channels;
+        }
+
+        uref_sound_unmap(uref_audio, 0, -1, 1);
+        uref_free(uref_audio);
+    } else {
+        samples = 0;
+    }
+}
+#endif
+    if (!uref) {
+        upipe_err_va(upipe, "no vid uref");
         return;
+    }
 
     size_t input_hsize, input_vsize;
     if (!ubase_check(uref_pic_size(uref, &input_hsize, &input_vsize, NULL))) {

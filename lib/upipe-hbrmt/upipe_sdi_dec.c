@@ -309,8 +309,19 @@ static void upipe_sdi_dec_init_sub_mgr(struct upipe *upipe)
     sub_mgr->upipe_mgr_control = NULL;
 }
 
-static inline void extract_sd_audio_group(int32_t *dst, const uint16_t *data)
+static const bool parity_tab[512] = {
+#   define P2(n) n, n^1, n^1, n
+#   define P4(n) P2(n), P2(n^1), P2(n^1), P2(n)
+#   define P6(n) P4(n), P4(n^1), P4(n^1), P4(n)
+    P6(0), P6(1), P6(1), P6(0),
+    P6(1), P6(0), P6(0), P6(1)
+};
+
+static inline void extract_sd_audio_group(struct upipe *upipe, int32_t *dst,
+        const uint16_t *data)
 {
+    struct upipe_sdi_dec *upipe_sdi_dec = upipe_sdi_dec_from_upipe(upipe);
+
     union {
         uint32_t u;
         int32_t  i;
@@ -322,12 +333,27 @@ static inline void extract_sd_audio_group(int32_t *dst, const uint16_t *data)
         sample.u |= (data[1+3*i] & 0x1FF) << 18;
         sample.u |= (data[2+3*i] & 0x01F) << 27;
 
+        if (upipe_sdi_dec->debug) {
+            uint8_t parity = 0;
+            parity += parity_tab[data[0+3*i] & 0x1ff];
+            parity += parity_tab[data[1+3*i] & 0x1ff];
+            parity += parity_tab[data[2+3*i] & 0x0ff];
+
+            if ((parity & 1) != ((data[2+3*i] >> 8) & 1)) {
+                upipe_err_va(upipe, "wrong audio parity: 0x%.3x 0x%.3x 0x%.3x",
+                        data[0+3*i], data[1+3*i], data[2+3*i]);
+            }
+        }
+
         dst[channel_idx] = sample.i;
     }
 }
 
-static inline int32_t extract_hd_audio_sample(const uint16_t *data)
+static inline int32_t extract_hd_audio_sample(struct upipe *upipe,
+        const uint16_t *data)
 {
+    struct upipe_sdi_dec *upipe_sdi_dec = upipe_sdi_dec_from_upipe(upipe);
+
     union {
         uint32_t u;
         int32_t  i;
@@ -337,6 +363,19 @@ static inline int32_t extract_hd_audio_sample(const uint16_t *data)
     sample.u |= (data[2] & 0xFF) << 12;
     sample.u |= (data[4] & 0xFF) << 20;
     sample.u |= (data[6] & 0x0F) << 28;
+
+    if (upipe_sdi_dec->debug) {
+        uint8_t parity = 0;
+        parity += parity_tab[data[0] & 0xf0];
+        parity += parity_tab[data[2] & 0xff];
+        parity += parity_tab[data[4] & 0xff];
+        parity += parity_tab[data[6] & 0x0f];
+
+        if ((parity & 1) != ((data[6] >> 7) & 1)) {
+            upipe_err_va(upipe, "wrong audio parity: 0x%.2x 0x%.2x 0x%.2x 0x%.2x",
+                    data[0] & 0xff, data[2] & 0xff, data[4] & 0xff, data[6] & 0xff);
+        }
+    }
 
     return sample.i;
 }
@@ -535,7 +574,7 @@ static void extract_hd_audio(struct upipe *upipe, const uint16_t *packet, int li
 
     if (ctx->buf_audio)
         for (int i = 0; i < UPIPE_SDI_CHANNELS_PER_GROUP; i++) {
-            int32_t s = extract_hd_audio_sample(&packet[UPIPE_SDI_MAX_CHANNELS + i * 8]);
+            int32_t s = extract_hd_audio_sample(upipe, &packet[UPIPE_SDI_MAX_CHANNELS + i * 8]);
             ctx->buf_audio[ctx->group_offset[audio_group] * UPIPE_SDI_MAX_CHANNELS + 4 * audio_group + i] = s;
 
             if (i & 0x01) { // check 2nd syncword
@@ -631,8 +670,8 @@ static void extract_sd_audio(struct upipe *upipe, const uint16_t *packet, int li
     const uint16_t *src = &packet[6];
     for (int i = 0; i < data_count/3; i += UPIPE_SDI_CHANNELS_PER_GROUP) {
         int32_t *dst = &ctx->buf_audio[ctx->group_offset[audio_group] * UPIPE_SDI_MAX_CHANNELS +
-                                       UPIPE_SDI_CHANNELS_PER_GROUP * audio_group + i];
-        extract_sd_audio_group(dst, &src[3*i]);
+                                       audio_group * UPIPE_SDI_CHANNELS_PER_GROUP];
+        extract_sd_audio_group(upipe, dst, &src[3*i]);
 
         upipe_sdi_dec->audio_samples[audio_group]++;
         ctx->group_offset[audio_group]++;
@@ -772,6 +811,12 @@ static bool upipe_sdi_dec_handle(struct upipe *upipe, struct uref *uref,
         if (fields[0][i])
             fields[1][i] = fields[0][i] + output_stride[i];
 
+    if (!f->psf_ident) {
+        output_stride[0] *= 2;
+        output_stride[1] *= 2;
+        output_stride[2] *= 2;
+    }
+
     struct uref *uref_audio = NULL;
 
     struct audio_ctx audio_ctx = {0};
@@ -899,21 +944,15 @@ static bool upipe_sdi_dec_handle(struct upipe *upipe, struct uref *uref,
         }
 
         bool active = 0, f2 = 0;
-        /* Progressive */
-        if (f->psf_ident) {
-            // FIXME
-            f2 = 0;
-        }
-        else {
+        /* ACTIVE F1 */
+        if (line_num >= p->active_f1.start && line_num <= p->active_f1.end)
+            active = 1;
+
+        if (!f->psf_ident) {
             f2 = line_num >= p->vbi_f2_part1.start;
-            /* ACTIVE F1 */
-            if (line_num >= p->active_f1.start && line_num <= p->active_f1.end) {
-                active = 1;
-            }
             /* ACTIVE F2 */
-            else if (line_num >= p->active_f2.start && line_num <= p->active_f2.end) {
+            if (line_num >= p->active_f2.start && line_num <= p->active_f2.end)
                 active = 1;
-            }
         }
 
         uint16_t *src_line = (uint16_t*)input_buf + (h * f->width + f->active_offset) * 2;
@@ -951,16 +990,17 @@ static bool upipe_sdi_dec_handle(struct upipe *upipe, struct uref *uref,
             else
                 upipe_sdi_dec->uyvy_to_planar_10((uint16_t *)y, (uint16_t *)u, (uint16_t *)v, src_line, output_hsize);
 
-            fields[f2][0] += output_stride[0] * 2;
-            fields[f2][1] += output_stride[1] * 2;
-            fields[f2][2] += output_stride[2] * 2;
+            fields[f2][0] += output_stride[0];
+            fields[f2][1] += output_stride[1];
+            fields[f2][2] += output_stride[2];
         }
         upipe_sdi_dec->eav_clock += f->width;
     }
 
     if (uref_audio) {
-        uint64_t pts = UINT32_MAX +
-            audio_sub->samples * UCLOCK_FREQ / 48000;
+        // FIXME: ntsc - a/v pts need to be mostly equal, in case we receive
+        // frames without audio
+        //uint64_t pts = UINT32_MAX + audio_sub->samples * UCLOCK_FREQ / 48000;
         uref_clock_set_pts_prog(uref_audio, pts);
         uref_clock_set_pts_orig(uref_audio, pts);
         uref_clock_set_dts_pts_delay(uref_audio, 0);
@@ -1116,7 +1156,7 @@ static int upipe_sdi_dec_set_flow_def(struct upipe *upipe, struct uref *flow_def
     upipe_sdi_dec->p = upipe_sdi_dec->f->pict_fmt;
 
     struct uref *flow_def_dup;
-    if ((flow_def_dup = uref_sibling_alloc(flow_def)) == NULL)
+    if ((flow_def_dup = uref_dup(flow_def)) == NULL)
         return UBASE_ERR_ALLOC;
 
     uref_flow_set_def(flow_def_dup, "pic.");
@@ -1152,6 +1192,9 @@ static int upipe_sdi_dec_set_flow_def(struct upipe *upipe, struct uref *flow_def
 
     uref_pic_flow_set_hsize(flow_def_dup, upipe_sdi_dec->p->active_width);
     uref_pic_flow_set_vsize(flow_def_dup, upipe_sdi_dec->p->active_height);
+
+    if (upipe_sdi_dec->f->psf_ident)
+        uref_pic_set_progressive(flow_def_dup);
 
     // FIXME is this correct
     uref_pic_flow_set_hsubsampling(flow_def_dup, 1, 0);
