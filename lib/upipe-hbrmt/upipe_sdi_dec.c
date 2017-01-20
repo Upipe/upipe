@@ -806,10 +806,18 @@ static bool upipe_sdi_dec_handle(struct upipe *upipe, struct uref *uref,
         }
     }
 
-    // FIXME NTSC this is broken
+    bool ntsc = p->height == 486;
     for (int i = 0; i < UPIPE_SDI_DEC_MAX_PLANES; i++)
-        if (fields[0][i])
-            fields[1][i] = fields[0][i] + output_stride[i];
+        if (fields[0][i]) {
+            /* NTSC is bottom field first */
+            if (ntsc) {
+                fields[1][i] = fields[0][i];
+                fields[0][i] += output_stride[i];
+            }
+            else {
+                fields[1][i] = fields[0][i] + output_stride[i];
+            }
+        }
 
     if (!f->psf_ident) {
         output_stride[0] *= 2;
@@ -943,10 +951,14 @@ static bool upipe_sdi_dec_handle(struct upipe *upipe, struct uref *uref,
             }
         }
 
-        bool active = 0, f2 = 0;
+        bool active = 0, f2 = 0, special_case = 0;
         /* ACTIVE F1 */
         if (line_num >= p->active_f1.start && line_num <= p->active_f1.end)
             active = 1;
+
+        /* Treat NTSC Line 20 (Field 1) as a special case like BMD does */
+        if (ntsc && line_num == 20)
+            special_case = 1;
 
         if (!f->psf_ident) {
             f2 = line_num >= p->vbi_f2_part1.start;
@@ -956,7 +968,7 @@ static bool upipe_sdi_dec_handle(struct upipe *upipe, struct uref *uref,
         }
 
         uint16_t *src_line = (uint16_t*)input_buf + (h * f->width + f->active_offset) * 2;
-        if (!active) {
+        if (!active || special_case) {
             // deinterleave for vanc_filter
             if (p->sd) {
                 /* Only part 1 of vbi */
