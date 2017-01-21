@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2015 Arnaud de Turckheim <quarium@gmail.com>
- * Copyright (c) 2016 OpenHeadend S.A.R.L.
+ * Copyright (c) 2016-2017 OpenHeadend S.A.R.L.
  *
  * Permission is hereby granted, free of charge, to any person obtaining
  * a copy of this software and associated documentation files (the
@@ -1492,6 +1492,7 @@ int main(int argc, char **argv)
                                      UPROBE_LOG_VERBOSE, "udpsink"));
         assert(sink != NULL);
         upipe_attach_uclock(sink);
+        upipe_set_max_length(sink, UINT16_MAX);
 
         if (!ubase_check(upipe_set_uri(sink, addr))) {
             upipe_release(sink);
@@ -1521,6 +1522,7 @@ int main(int argc, char **argv)
         upipe_ts_mux_set_mode(ts_mux, UPIPE_TS_MUX_MODE_CAPPED);
         upipe_set_output_size(ts_mux, mtu);
         upipe_ts_mux_set_padding_octetrate(ts_mux, PADDING_OCTETRATE);
+        upipe_attach_uclock(ts_mux);
         if (conformance != UPIPE_TS_CONFORMANCE_AUTO)
             upipe_ts_mux_set_conformance(ts_mux, conformance);
 
@@ -1588,7 +1590,6 @@ int main(int argc, char **argv)
                                  UPROBE_LOG_VERBOSE, "wsink_x"),
                 QUEUE_LENGTH);
         assert(ts_mux != NULL);
-        upipe_attach_upump_mgr(ts_mux);
     }
 
     upipe_mgr_release(wsink_mgr);
