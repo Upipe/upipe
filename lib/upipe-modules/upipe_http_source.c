@@ -422,7 +422,8 @@ static int upipe_http_src_output_data(struct upipe *upipe,
         memcpy(buf, at, len);
     uref_block_unmap(uref, 0);
 
-    uref_clock_set_cr_sys(uref, systime);
+    if (systime)
+        uref_clock_set_cr_sys(uref, systime);
     if (len == 0)
         uref_block_set_end(uref);
     upipe_http_src->position += len;
