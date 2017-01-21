@@ -473,6 +473,7 @@ static void upipe_ts_encaps_promote_uref(struct upipe *upipe)
 
         encaps->uref = uref;
         encaps->uref_cr_sys = cr_sys;
+        assert(cr_sys);
         encaps->uref_dts_sys = UINT64_MAX;
         uref_clock_get_dts_sys(uref, &encaps->uref_dts_sys);
         encaps->uref_size = uref_size;
@@ -1272,8 +1273,8 @@ static int _upipe_ts_encaps_splice(struct upipe *upipe, uint64_t cr_sys_min,
                 if (dts_sys >= cr_sys_min)
                     break;
 
-                upipe_warn_va(upipe, "dropping late packet (%"PRIu64")",
-                              cr_sys_min - dts_sys);
+                upipe_warn_va(upipe, "dropping late packet (%"PRIu64" ms)",
+                              (cr_sys_min - dts_sys) * 1000 / UCLOCK_FREQ);
                 upipe_ts_encaps_consume_uref(upipe);
                 encaps->au_size = 0;
                 encaps->need_ready = encaps->need_status = true;
