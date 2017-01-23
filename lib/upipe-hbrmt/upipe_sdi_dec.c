@@ -1293,7 +1293,7 @@ static int upipe_sdi_dec_control(struct upipe *upipe, int command, va_list args)
 static void uyvy_to_planar_8_c(uint8_t *y, uint8_t *u, uint8_t *v, const uint16_t *l, const int64_t width)
 {
     int j;
-    for (j = 0; j < width; j++) {
+    for (j = 0; j < width / 2; j++) {
         u[0] = l[0] >> 2;
         y[0] = l[1] >> 2;
         v[0] = l[2] >> 2;
