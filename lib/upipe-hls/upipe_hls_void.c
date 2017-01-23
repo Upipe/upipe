@@ -451,9 +451,16 @@ static int probe_playlist(struct uprobe *uprobe, struct upipe *inner,
         upipe_release(output);
         return UBASE_ERR_NONE;
     }
+    }
 
-    case UPROBE_HLS_PLAYLIST_NEED_RELOAD:
-        return upipe_hls_void_reload(upipe);
+    if (event >= UPROBE_LOCAL) {
+        switch (ubase_get_signature(args)) {
+        case UPIPE_HLS_PLAYLIST_SIGNATURE:
+            switch (event) {
+            case UPROBE_HLS_PLAYLIST_NEED_RELOAD:
+                return upipe_hls_void_reload(upipe);
+            };
+        }
     }
 
     return upipe_throw_proxy(upipe, inner, event, args);
