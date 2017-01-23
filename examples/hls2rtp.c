@@ -1598,6 +1598,9 @@ int main(int argc, char **argv)
      * create source pipe
      */
     struct uprobe probe_src;
+    uprobe_init(&probe_src, catch_src, uprobe_use(main_probe));
+    uprobe_release(main_probe);
+    main_probe = &probe_src;
     {
         struct upipe_mgr *upipe_auto_src_mgr = upipe_auto_src_mgr_alloc();
         assert(upipe_auto_src_mgr);
@@ -1617,10 +1620,9 @@ int main(int argc, char **argv)
         main_probe = uprobe_source_mgr_alloc(main_probe, upipe_auto_src_mgr);
         assert(main_probe);
 
-        uprobe_init(&probe_src, catch_src, uprobe_use(main_probe));
         src = upipe_void_alloc(
             upipe_auto_src_mgr,
-            uprobe_pfx_alloc(uprobe_use(&probe_src),
+            uprobe_pfx_alloc(uprobe_use(main_probe),
                              UPROBE_LOG_VERBOSE, "src"));
         upipe_mgr_release(upipe_auto_src_mgr);
         assert(src);
