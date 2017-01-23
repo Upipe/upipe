@@ -777,7 +777,7 @@ static bool upipe_sdi_dec_handle(struct upipe *upipe, struct uref *uref,
     }
 
     /* allocate dest ubuf */
-    size_t aligned_output_hsize = ((output_hsize + 47) / 48) * 48;
+    size_t aligned_output_hsize = ((output_hsize + 5) / 6) * 6;
     struct ubuf *ubuf = ubuf_pic_alloc(upipe_sdi_dec->ubuf_mgr,
                                        aligned_output_hsize, output_vsize);
     if (unlikely(ubuf == NULL)) {
