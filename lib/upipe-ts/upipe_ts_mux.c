@@ -2554,21 +2554,32 @@ static void upipe_ts_mux_splice(struct upipe *upipe, struct ubuf **ubuf_p,
     /* 2. Inputs */
     uint64_t cr_sys = UINT64_MAX;
     struct upipe_ts_mux_input *selected_input = NULL;
-    ulist_foreach (&mux->programs, uchain) {
+    struct uchain *uchain_tmp;
+    ulist_delete_foreach (&mux->programs, uchain, uchain_tmp) {
         struct upipe_ts_mux_program *program =
             upipe_ts_mux_program_from_uchain(uchain);
-        struct uchain *uchain_input;
-        ulist_foreach (&program->inputs, uchain_input) {
+        upipe_use(upipe_ts_mux_program_to_upipe(program));
+
+        struct uchain *uchain_input, *uchain_tmp2;
+        ulist_delete_foreach (&program->inputs, uchain_input, uchain_tmp2) {
             struct upipe_ts_mux_input *input =
                 upipe_ts_mux_input_from_uchain(uchain_input);
-            if (input->dts_sys < original_cr_sys) /* flush */
+            if (input->dts_sys < original_cr_sys) { /* flush */
                 upipe_ts_encaps_splice(input->encaps, original_cr_sys,
                                        original_cr_sys + mux->interval,
                                        NULL, NULL);
 
+                if (input->deleted && !input->ready) {
+                    /* This triggers the immediate deletion of the input. */
+                    upipe_release(input->encaps);
+                    continue;
+                }
+            }
+
             if (input->dts_sys <= original_cr_sys + mux->interval ||
                 input->pcr_sys <= original_cr_sys) {
                 selected_input = input;
+                upipe_release(upipe_ts_mux_program_to_upipe(program));
                 goto upipe_ts_mux_splice_done;
             }
             if (input->cr_sys < cr_sys) {
@@ -2576,6 +2587,8 @@ static void upipe_ts_mux_splice(struct upipe *upipe, struct ubuf **ubuf_p,
                 cr_sys = input->cr_sys;
             }
         }
+
+        upipe_release(upipe_ts_mux_program_to_upipe(program));
     }
 
     if (selected_input == NULL ||
