@@ -806,7 +806,7 @@ static bool upipe_sdi_dec_handle(struct upipe *upipe, struct uref *uref,
         }
     }
 
-    bool ntsc = p->height == 486;
+    bool ntsc = p->active_height == 486;
     for (int i = 0; i < UPIPE_SDI_DEC_MAX_PLANES; i++)
         if (fields[0][i]) {
             /* NTSC is bottom field first */
