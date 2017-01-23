@@ -662,7 +662,7 @@ static int _upipe_fsrc_control(struct upipe *upipe, int command, va_list args)
         }
 
         default:
-            return UBASE_ERR_NONE;
+            return UBASE_ERR_UNHANDLED;
     }
 }
 
