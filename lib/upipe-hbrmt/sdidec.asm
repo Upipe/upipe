@@ -98,10 +98,16 @@ INIT_YMM avx2
 sdi_to_uyvy aligned
 sdi_to_uyvy unaligned
 
-%macro uyvy_to_planar_8 0
+%macro uyvy_to_planar_8 1
+
+%ifidn %1, aligned
+    %define move mova
+%else
+    %define move movu
+%endif
 
 ; uyvy_to_planar_8(uint8_t *y, uint8_t *u, uint8_t *v, const uint16_t *l, const int64_t width)
-cglobal uyvy_to_planar_8, 5, 5, 8, y, u, v, l, pixels
+cglobal uyvy_to_planar_8_%1, 5, 5, 8, y, u, v, l, pixels
     lea        lq, [lq+4*pixelsq]
     add        yq, pixelsq
     shr        pixelsq, 1
@@ -113,15 +119,15 @@ cglobal uyvy_to_planar_8, 5, 5, 8, y, u, v, l, pixels
 
 .loop:
 %if notcpuflag(avx2)
-    mova       m0, [lq+8*pixelsq+0*mmsize]
-    mova       m1, [lq+8*pixelsq+1*mmsize]
-    mova       m2, [lq+8*pixelsq+2*mmsize]
-    mova       m3, [lq+8*pixelsq+3*mmsize]
+    move       m0, [lq+8*pixelsq+0*mmsize]
+    move       m1, [lq+8*pixelsq+1*mmsize]
+    move       m2, [lq+8*pixelsq+2*mmsize]
+    move       m3, [lq+8*pixelsq+3*mmsize]
 %else
-    mova             xm0, [lq+8*pixelsq+  0]
-    mova             xm1, [lq+8*pixelsq+ 16]
-    mova             xm2, [lq+8*pixelsq+ 32]
-    mova             xm3, [lq+8*pixelsq+ 48]
+    move             xm0, [lq+8*pixelsq+  0]
+    move             xm1, [lq+8*pixelsq+ 16]
+    move             xm2, [lq+8*pixelsq+ 32]
+    move             xm3, [lq+8*pixelsq+ 48]
     vinserti128  m0,  m0, [lq+8*pixelsq+ 64], 1
     vinserti128  m1,  m1, [lq+8*pixelsq+ 80], 1
     vinserti128  m2,  m2, [lq+8*pixelsq+ 96], 1
@@ -148,7 +154,7 @@ cglobal uyvy_to_planar_8, 5, 5, 8, y, u, v, l, pixels
     punpckhwd  m2, m3
     punpckhdq  m0, m2 ; eight u's and eight v's
 
-    mova      [yq + 2*pixelsq], m4
+    move      [yq + 2*pixelsq], m4
 %if notcpuflag(avx2)
     movq      [uq + 1*pixelsq], m0 ; put half of m0 (eight u's)
     movhps    [vq + 1*pixelsq], m0 ; put the other half of m0 (eight v's)
@@ -165,11 +171,14 @@ cglobal uyvy_to_planar_8, 5, 5, 8, y, u, v, l, pixels
 %endmacro
 
 INIT_XMM ssse3
-uyvy_to_planar_8
+uyvy_to_planar_8 aligned
+uyvy_to_planar_8 unaligned
 INIT_XMM avx
-uyvy_to_planar_8
+uyvy_to_planar_8 aligned
+uyvy_to_planar_8 unaligned
 INIT_YMM avx2
-uyvy_to_planar_8
+uyvy_to_planar_8 aligned
+uyvy_to_planar_8 unaligned
 
 %macro uyvy_to_planar_10 0
 
