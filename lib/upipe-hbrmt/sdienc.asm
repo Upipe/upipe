@@ -131,10 +131,16 @@ cglobal sdi_blank, 2, 2, 1, dst, pixels
 INIT_XMM avx
 sdi_blank
 
-%macro planar_to_uyvy_8 0
+%macro planar_to_uyvy_8 1
+
+%ifidn %1, aligned
+    %define move mova
+%else
+    %define move movu
+%endif
 
 ; planar_to_uyvy_8(uint16_t *dst, const uint8_t *y, const uint8_t *u, const uint8_t *v, const int64_t width)
-cglobal planar_to_uyvy_8, 5, 5, 8+3*ARCH_X86_64, dst, y, u, v, pixels
+cglobal planar_to_uyvy_8_%1, 5, 5, 8+3*ARCH_X86_64, dst, y, u, v, pixels
     shr       pixelsq, 1
     lea       yq, [yq+2*pixelsq]
     lea       dstq, [dstq+8*pixelsq]
@@ -155,15 +161,15 @@ cglobal planar_to_uyvy_8, 5, 5, 8+3*ARCH_X86_64, dst, y, u, v, pixels
 
 .loop:
 %if notcpuflag(avx2)
-    mova      m0, [yq+2*pixelsq]
-    mova      m1, [yq+2*pixelsq+mmsize]
-    mova      m2, [uq+pixelsq]
-    mova      m3, [vq+pixelsq]
+    move      m0, [yq+2*pixelsq]
+    move      m1, [yq+2*pixelsq+mmsize]
+    move      m2, [uq+pixelsq]
+    move      m3, [vq+pixelsq]
 %else
-    mova        xm0, [yq+2*pixelsq]
-    mova        xm1, [yq+2*pixelsq+16]
-    mova        xm2, [uq+pixelsq]
-    mova        xm3, [vq+pixelsq]
+    move        xm0, [yq+2*pixelsq]
+    move        xm1, [yq+2*pixelsq+16]
+    move        xm2, [uq+pixelsq]
+    move        xm3, [vq+pixelsq]
     vinserti128  m0, m0, [yq + 2*pixelsq + 32], 1
     vinserti128  m1, m1, [yq + 2*pixelsq + 48], 1
     vinserti128  m2, m2, [uq +   pixelsq + 16], 1
@@ -205,23 +211,23 @@ cglobal planar_to_uyvy_8, 5, 5, 8+3*ARCH_X86_64, dst, y, u, v, pixels
     psllw     m6, 2
 
 %if notcpuflag(avx2)
-    mova      [dstq+8*pixelsq+0*mmsize], m0
-    mova      [dstq+8*pixelsq+1*mmsize], m1
-    mova      [dstq+8*pixelsq+2*mmsize], m2
-    mova      [dstq+8*pixelsq+3*mmsize], m3
-    mova      [dstq+8*pixelsq+4*mmsize], m4
-    mova      [dstq+8*pixelsq+5*mmsize], m5
-    mova      [dstq+8*pixelsq+6*mmsize], m6
-    mova      [dstq+8*pixelsq+7*mmsize], m7
+    move      [dstq+8*pixelsq+0*mmsize], m0
+    move      [dstq+8*pixelsq+1*mmsize], m1
+    move      [dstq+8*pixelsq+2*mmsize], m2
+    move      [dstq+8*pixelsq+3*mmsize], m3
+    move      [dstq+8*pixelsq+4*mmsize], m4
+    move      [dstq+8*pixelsq+5*mmsize], m5
+    move      [dstq+8*pixelsq+6*mmsize], m6
+    move      [dstq+8*pixelsq+7*mmsize], m7
 %else
-    mova         [dstq + 8*pixelsq +  0*16], xm0
-    mova         [dstq + 8*pixelsq +  1*16], xm1
-    mova         [dstq + 8*pixelsq +  2*16], xm2
-    mova         [dstq + 8*pixelsq +  3*16], xm3
-    mova         [dstq + 8*pixelsq +  4*16], xm4
-    mova         [dstq + 8*pixelsq +  5*16], xm5
-    mova         [dstq + 8*pixelsq +  6*16], xm6
-    mova         [dstq + 8*pixelsq +  7*16], xm7
+    move         [dstq + 8*pixelsq +  0*16], xm0
+    move         [dstq + 8*pixelsq +  1*16], xm1
+    move         [dstq + 8*pixelsq +  2*16], xm2
+    move         [dstq + 8*pixelsq +  3*16], xm3
+    move         [dstq + 8*pixelsq +  4*16], xm4
+    move         [dstq + 8*pixelsq +  5*16], xm5
+    move         [dstq + 8*pixelsq +  6*16], xm6
+    move         [dstq + 8*pixelsq +  7*16], xm7
     vextracti128 [dstq + 8*pixelsq +  8*16],  m0, 1
     vextracti128 [dstq + 8*pixelsq +  9*16],  m1, 1
     vextracti128 [dstq + 8*pixelsq + 10*16],  m2, 1
@@ -239,11 +245,14 @@ cglobal planar_to_uyvy_8, 5, 5, 8+3*ARCH_X86_64, dst, y, u, v, pixels
 %endmacro
 
 INIT_XMM sse2
-planar_to_uyvy_8
+planar_to_uyvy_8 aligned
+planar_to_uyvy_8 unaligned
 INIT_XMM avx
-planar_to_uyvy_8
+planar_to_uyvy_8 aligned
+planar_to_uyvy_8 unaligned
 INIT_YMM avx2
-planar_to_uyvy_8
+planar_to_uyvy_8 aligned
+planar_to_uyvy_8 unaligned
 
 %macro planar_to_uyvy_10 0
 
