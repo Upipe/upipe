@@ -68,10 +68,10 @@ v210_uyvy_mult3: times 2 dw 0x2000, 0x0800, 0x7fff, 0x2000, 0x0800, 0x7fff, 0x20
 
 SECTION .text
 
-%macro uyvy_to_sdi 0
+%macro uyvy_to_sdi 0-1
 
 ; sdi_pack_10(uint8_t *dst, const uint8_t *y, int64_t size)
-cglobal uyvy_to_sdi, 3, 4, 5, dst, y, pixels
+cglobal uyvy_to_sdi%1, 3, 4, 5, dst, y, pixels
     lea     yq, [yq + 4*pixelsq]
     neg     pixelsq
     mova    m2, [sdi_enc_mult_10]
@@ -79,7 +79,12 @@ cglobal uyvy_to_sdi, 3, 4, 5, dst, y, pixels
     mova    m4, [sdi_luma_shuf_10]
 
 .loop:
+%ifidn %1, _unaligned
+    movu    m0, [yq+4*pixelsq]
+    pmullw  m0, m2
+%else
     pmullw  m0, m2, [yq+4*pixelsq]
+%endif
     pshufb  m1, m0, m3
     pshufb  m0, m4
     por     m0, m1
@@ -97,7 +102,8 @@ cglobal uyvy_to_sdi, 3, 4, 5, dst, y, pixels
 %endmacro
 
 INIT_XMM ssse3
-uyvy_to_sdi
+uyvy_to_sdi _aligned
+uyvy_to_sdi _unaligned
 INIT_XMM avx
 uyvy_to_sdi
 INIT_YMM avx2
