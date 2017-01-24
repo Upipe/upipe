@@ -175,6 +175,8 @@ static struct uprobe *uprobe_playlist_alloc(struct uprobe *next,
                                             uint64_t variant_id,
                                             uint64_t at);
 
+static void cmd_quit(void);
+
 static struct upump_mgr *upump_mgr_alloc(void *unused)
 {
     /* disable signals */
@@ -264,7 +266,8 @@ static void cmd_start(void)
     upipe_cleanup(&audio_output.pipe);
     upipe_cleanup(&video_output.pipe);
     upipe_cleanup(&variant);
-    select_variant(main_probe);
+    if (!ubase_check(select_variant(main_probe)))
+        cmd_quit();
 }
 
 /** @This stops the current variant.  */
@@ -664,6 +667,7 @@ static int catch_playlist(struct uprobe *uprobe,
 {
     struct uprobe_playlist *probe_playlist =
         uprobe_playlist_from_uprobe(uprobe);
+    int ret;
 
     if (event < UPROBE_LOCAL)
         return uprobe_throw_next(uprobe, upipe, event, args);
@@ -679,15 +683,27 @@ static int catch_playlist(struct uprobe *uprobe,
         if (at) {
             uint64_t remain = 0;
             uprobe_notice_va(uprobe, NULL, "seek at %"PRIu64, at);
-            UBASE_RETURN(upipe_hls_playlist_seek(upipe, at, &remain));
+            ret = upipe_hls_playlist_seek(upipe, at, &remain);
+            if (!ubase_check(ret)) {
+                cmd_quit();
+                return ret;
+            }
+
             if (probe_playlist->video)
                 probe_playlist->video->at = remain;
             probe_playlist->at = 0;
         }
         else if (sequence) {
-            UBASE_RETURN(upipe_hls_playlist_set_index(upipe, sequence));
+            ret = upipe_hls_playlist_set_index(upipe, sequence);
+            if (!ubase_check(ret))
+                cmd_quit();
+            return ret;
         }
-        return upipe_hls_playlist_play(upipe);
+
+        ret = upipe_hls_playlist_play(upipe);
+        if (!ubase_check(ret))
+            cmd_quit();
+        return ret;
     }
 
     case UPROBE_HLS_PLAYLIST_ITEM_END:
@@ -698,12 +714,16 @@ static int catch_playlist(struct uprobe *uprobe,
             upipe_cleanup(&video_output.pipe);
             upipe_cleanup(&audio_output.pipe);
             upipe_cleanup(&variant);
-            return select_variant(uprobe);
+            ret = select_variant(uprobe);
+            if (!ubase_check(ret))
+                cmd_quit();
+            return ret;
         }
-        if (!ubase_check(upipe_hls_playlist_play(upipe))) {
+
+        ret = upipe_hls_playlist_play(upipe);
+        if (!ubase_check(ret))
             cmd_quit();
-            return UBASE_ERR_NONE;
-        }
+        return ret;
     }
     return uprobe_throw_next(uprobe, upipe, event, args);
 }
@@ -923,6 +943,10 @@ static int catch_variant(struct uprobe *uprobe,
             else
                 uprobe_warn(uprobe, NULL, "no video");
         }
+
+        if (!video_output.pipe && !audio_output.pipe)
+            cmd_quit();
+
         return UBASE_ERR_NONE;
     }
     }
@@ -960,6 +984,8 @@ static int catch_hls(struct uprobe *uprobe,
                      struct upipe *upipe,
                      int event, va_list args)
 {
+    int ret;
+
     switch (event) {
     case UPROBE_SPLIT_UPDATE: {
         uprobe_notice_va(uprobe, NULL, "list:");
@@ -975,7 +1001,10 @@ static int catch_hls(struct uprobe *uprobe,
             uref_dump(uref, uprobe);
         }
 
-        return select_variant(uprobe);
+        ret = select_variant(uprobe);
+        if (!ubase_check(ret))
+            cmd_quit();
+        return ret;
     }
     }
 
