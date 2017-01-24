@@ -255,10 +255,16 @@ INIT_YMM avx2
 uyvy_to_planar_10 aligned
 uyvy_to_planar_10 unaligned
 
-%macro uyvy_to_v210 0
+%macro uyvy_to_v210 1
+
+%ifidn %1, aligned
+    %define move mova
+%else
+    %define move movu
+%endif
 
 ; uyvy_to_v210(const uint16_t *y, uint8_t *dst, int64_t width)
-cglobal uyvy_to_v210, 3, 6, 6+cpuflag(avx2), y, dst, pixels
+cglobal uyvy_to_v210_%1, 3, 6, 6+cpuflag(avx2), y, dst, pixels
     shl     pixelsq, 2
     add     yq, pixelsq
     neg     pixelsq
@@ -302,7 +308,7 @@ cglobal uyvy_to_v210, 3, 6, 6+cpuflag(avx2), y, dst, pixels
 %else
     pslldq m1, 8
     por m1, m0
-    mova [dstq], m1
+    move [dstq], m1
 %endif
 
     add     dstq, mmsize
@@ -313,8 +319,11 @@ cglobal uyvy_to_v210, 3, 6, 6+cpuflag(avx2), y, dst, pixels
 %endmacro
 
 INIT_XMM ssse3
-uyvy_to_v210
+uyvy_to_v210 aligned
+uyvy_to_v210 unaligned
 INIT_XMM avx
-uyvy_to_v210
+uyvy_to_v210 aligned
+uyvy_to_v210 unaligned
 INIT_YMM avx2
-uyvy_to_v210
+uyvy_to_v210 aligned
+uyvy_to_v210 unaligned
