@@ -107,7 +107,7 @@ sdi_to_uyvy unaligned
 %endif
 
 ; uyvy_to_planar_8(uint8_t *y, uint8_t *u, uint8_t *v, const uint16_t *l, const int64_t width)
-cglobal uyvy_to_planar_8_%1, 5, 5, 8, y, u, v, l, pixels
+cglobal uyvy_to_planar_8_%1, 5, 5, 7, y, u, v, l, pixels
     lea        lq, [lq+4*pixelsq]
     add        yq, pixelsq
     shr        pixelsq, 1

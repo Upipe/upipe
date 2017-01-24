@@ -497,7 +497,7 @@ planar_to_sdi_8
 %macro planar_to_sdi_10 0
 
 ; planar_to_sdi_10(const uint16_t *y, const uint16_t *u, const uint16_t *v, uint8_t *l, const int64_t width)
-cglobal planar_to_sdi_10, 5, 5, 3, y, u, v, l, pixels, size
+cglobal planar_to_sdi_10, 5, 5, 2+cpuflag(avx2), y, u, v, l, pixels, size
     lea    yq, [yq + 2*pixelsq]
     add    uq, pixelsq
     add    vq, pixelsq
@@ -545,7 +545,7 @@ planar_to_sdi_10
 %macro planar_10_to_planar_8 0
 
 ; planar_10_to_planar_8(const uint16_t *y, const uint8_t *y8, const int64_t width)
-cglobal planar_10_to_planar_8, 3, 3, 3, y, y8, samples
+cglobal planar_10_to_planar_8, 3, 3, 2+cpuflag(avx2), y, y8, samples
     lea      yq, [yq + 2*samplesq]
     add      y8q, samplesq
 
