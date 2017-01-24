@@ -1470,8 +1470,10 @@ static struct upipe *upipe_sdi_enc_alloc(struct upipe_mgr *mgr,
     upipe_sdi_enc->v210_to_uyvy      = v210_uyvy_unpack_c;
 
 #if !defined(__APPLE__) /* macOS clang doesn't support that builtin yet */
-    if (__builtin_cpu_supports("sse2"))
+    if (__builtin_cpu_supports("sse2")) {
+        upipe_sdi_enc->planar_to_uyvy_8 = upipe_planar_to_uyvy_8_aligned_sse2;
         upipe_sdi_enc->planar_to_uyvy_10 = upipe_planar_to_uyvy_10_aligned_sse2;
+    }
 
 #if defined(__clang__) && /* clang 3.8 doesn't know ssse3 */ \
      (__clang_major__ < 3 || (__clang_major__ == 3 && __clang_minor__ <= 8))
