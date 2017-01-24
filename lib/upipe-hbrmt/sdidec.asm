@@ -48,10 +48,10 @@ uyvy_to_v210_store_mask: times 2 dq -1, 0
 
 SECTION .text
 
-%macro sdi_to_uyvy 0
+%macro sdi_to_uyvy 1
 
 ; sdi_unpack_10(const uint8_t *src, uint16_t *y, int64_t size)
-cglobal sdi_to_uyvy, 3, 3, 7, src, y, bytes
+cglobal sdi_to_uyvy_%1, 3, 3, 7, src, y, bytes
     add      srcq, bytesq
     neg      bytesq
 
@@ -78,7 +78,11 @@ cglobal sdi_to_uyvy, 3, 3, 7, src, y, bytes
 
     por      m0, m1
 
+%ifidn %1, aligned
     mova     [yq], m0
+%else
+    movu     [yq], m0
+%endif
 
     add      yq,    mmsize
     add      bytesq, (mmsize*5)/8
@@ -88,9 +92,11 @@ cglobal sdi_to_uyvy, 3, 3, 7, src, y, bytes
 %endmacro
 
 INIT_XMM ssse3
-sdi_to_uyvy
+sdi_to_uyvy aligned
+sdi_to_uyvy unaligned
 INIT_YMM avx2
-sdi_to_uyvy
+sdi_to_uyvy aligned
+sdi_to_uyvy unaligned
 
 %macro uyvy_to_planar_8 0
 
