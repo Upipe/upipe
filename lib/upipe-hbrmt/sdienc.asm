@@ -274,8 +274,8 @@ cglobal planar_to_uyvy_10_%1, 5, 5, 8+2*ARCH_X86_64, dst, y, u, v, pixels
     mova      m8, [uyvy_enc_min_10]
     mova      m9, [uyvy_enc_max_10]
 %else
-    %define m8  [uyvy_enc_min_8]
-    %define m9  [uyvy_enc_max_8]
+    %define m8  [uyvy_enc_min_10]
+    %define m9  [uyvy_enc_max_10]
 %endif ; ARCH_X86_64
 
 .loop:
