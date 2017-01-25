@@ -260,6 +260,17 @@ static int upipe_sync_sub_control(struct upipe *upipe, int command, va_list args
     }
 }
 
+static float pts_to_time(uint64_t pts)
+{
+    static uint64_t first;
+    if (!first)
+        first = pts;
+
+    pts -= first;
+
+    return (float)pts / 27000;
+}
+
 static bool can_start_sound(struct upipe *upipe, const struct urational *fps)
 {
     struct upipe_sync_sub *upipe_sync_sub = upipe_sync_sub_from_upipe(upipe);
@@ -535,7 +546,14 @@ static void cb(struct upump *upump)
     assert(upipe_sync->uref);
     struct uref *uref = uref_dup(upipe_sync->uref);
     uref_clock_set_pts_sys(uref, upipe_sync->pts - upipe_sync->latency);
+    now = uclock_now(upipe_sync->uclock);
 
+        upipe_notice_va(upipe_sync_sub_to_upipe(upipe_sync_sub_pic),
+                "output %.2f now %.2f latency %" PRIu64,
+                pts_to_time(upipe_sync->pts - upipe_sync->latency),
+                pts_to_time(now),
+                upipe_sync->latency / 27000
+            );
     upipe_sync_sub_output(upipe_sync_sub_to_upipe(upipe_sync_sub_pic),
             uref, NULL);
 
@@ -598,8 +616,10 @@ static void upipe_sync_sub_input(struct upipe *upipe, struct uref *uref,
 
     /* reject late pics */
     if (now > pts) {
-        upipe_err_va(upipe, "%s() TOO LATE by %" PRIu64 "ms, drop pic",
-            __func__, (now - pts) / 27000);
+        uint64_t cr = 0;
+        uref_clock_get_cr_sys(uref, &cr);
+        upipe_err_va(upipe, "%s() TOO LATE by %" PRIu64 "ms, drop pic, recept %" PRIu64 "",
+            __func__, (now - pts) / 27000, (now - cr) / 27000);
         uref_free(uref);
         return;
     }
