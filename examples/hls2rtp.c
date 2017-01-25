@@ -987,6 +987,10 @@ static int catch_hls(struct uprobe *uprobe,
     int ret;
 
     switch (event) {
+    case UPROBE_ERROR:
+        cmd_quit();
+        return UBASE_ERR_NONE;
+
     case UPROBE_SPLIT_UPDATE: {
         uprobe_notice_va(uprobe, NULL, "list:");
 
