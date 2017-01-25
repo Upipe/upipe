@@ -48,12 +48,12 @@ uyvy_to_v210_store_mask: times 2 dq -1, 0
 
 SECTION .text
 
-%macro sdi_unpack_10 0
+%macro sdi_to_uyvy 1
 
 ; sdi_unpack_10(const uint8_t *src, uint16_t *y, int64_t size)
-cglobal sdi_unpack_10, 3, 3, 7, src, y, size
-    add      srcq, sizeq
-    neg      sizeq
+cglobal sdi_to_uyvy_%1, 3, 3, 7, src, y, bytes
+    add      srcq, bytesq
+    neg      bytesq
 
     mova     m2, [sdi_comp_mask_10]
     mova     m3, [sdi_chroma_shuf_10]
@@ -62,9 +62,9 @@ cglobal sdi_unpack_10, 3, 3, 7, src, y, size
     mova     m6, [sdi_luma_mult_10]
 
 .loop:
-    movu     xm0, [srcq+sizeq]
+    movu     xm0, [srcq + bytesq]
 %if cpuflag(avx2)
-    vinserti128 m0, m0, [srcq+sizeq+10], 1
+    vinserti128 m0, m0, [srcq + bytesq + 10], 1
 %endif
 
     pandn    m1, m2, m0
@@ -78,48 +78,60 @@ cglobal sdi_unpack_10, 3, 3, 7, src, y, size
 
     por      m0, m1
 
+%ifidn %1, aligned
     mova     [yq], m0
+%else
+    movu     [yq], m0
+%endif
 
     add      yq,    mmsize
-    add      sizeq, (mmsize*5)/8
+    add      bytesq, (mmsize*5)/8
     jl .loop
 
     RET
 %endmacro
 
 INIT_XMM ssse3
-sdi_unpack_10
+sdi_to_uyvy aligned
+sdi_to_uyvy unaligned
 INIT_YMM avx2
-sdi_unpack_10
+sdi_to_uyvy aligned
+sdi_to_uyvy unaligned
 
-%macro uyvy_to_planar_8 0
+%macro uyvy_to_planar_8 1
+
+%ifidn %1, aligned
+    %define move mova
+%else
+    %define move movu
+%endif
 
 ; uyvy_to_planar_8(uint8_t *y, uint8_t *u, uint8_t *v, const uint16_t *l, const int64_t width)
-cglobal uyvy_to_planar_8, 5, 5, 8, y, u, v, l, width
-    lea        lq, [lq+4*widthq]
-    add        yq, widthq
-    shr        widthq, 1
-    add        uq, widthq
-    add        vq, widthq
-    neg        widthq
+cglobal uyvy_to_planar_8_%1, 5, 5, 7, y, u, v, l, pixels
+    lea        lq, [lq+4*pixelsq]
+    add        yq, pixelsq
+    shr        pixelsq, 1
+    add        uq, pixelsq
+    add        vq, pixelsq
+    neg        pixelsq
 
     mova       m6, [uyvy_planar_shuf_8]
 
 .loop:
 %if notcpuflag(avx2)
-    mova       m0, [lq+8*widthq+0*mmsize]
-    mova       m1, [lq+8*widthq+1*mmsize]
-    mova       m2, [lq+8*widthq+2*mmsize]
-    mova       m3, [lq+8*widthq+3*mmsize]
+    move       m0, [lq+8*pixelsq+0*mmsize]
+    move       m1, [lq+8*pixelsq+1*mmsize]
+    move       m2, [lq+8*pixelsq+2*mmsize]
+    move       m3, [lq+8*pixelsq+3*mmsize]
 %else
-    mova             xm0, [lq+8*widthq+  0]
-    mova             xm1, [lq+8*widthq+ 16]
-    mova             xm2, [lq+8*widthq+ 32]
-    mova             xm3, [lq+8*widthq+ 48]
-    vinserti128  m0,  m0, [lq+8*widthq+ 64], 1
-    vinserti128  m1,  m1, [lq+8*widthq+ 80], 1
-    vinserti128  m2,  m2, [lq+8*widthq+ 96], 1
-    vinserti128  m3,  m3, [lq+8*widthq+112], 1
+    move             xm0, [lq+8*pixelsq+  0]
+    move             xm1, [lq+8*pixelsq+ 16]
+    move             xm2, [lq+8*pixelsq+ 32]
+    move             xm3, [lq+8*pixelsq+ 48]
+    vinserti128  m0,  m0, [lq+8*pixelsq+ 64], 1
+    vinserti128  m1,  m1, [lq+8*pixelsq+ 80], 1
+    vinserti128  m2,  m2, [lq+8*pixelsq+ 96], 1
+    vinserti128  m3,  m3, [lq+8*pixelsq+112], 1
 %endif
 
     psrlw      m0, 2
@@ -142,56 +154,65 @@ cglobal uyvy_to_planar_8, 5, 5, 8, y, u, v, l, width
     punpckhwd  m2, m3
     punpckhdq  m0, m2 ; eight u's and eight v's
 
-    mova      [yq + 2*widthq], m4
+    move      [yq + 2*pixelsq], m4
 %if notcpuflag(avx2)
-    movq      [uq + 1*widthq], m0 ; put half of m0 (eight u's)
-    movhps    [vq + 1*widthq], m0 ; put the other half of m0 (eight v's)
+    movq      [uq + 1*pixelsq], m0 ; put half of m0 (eight u's)
+    movhps    [vq + 1*pixelsq], m0 ; put the other half of m0 (eight v's)
 %else
     vpermq m0, m0, q3120
-    movu [uq + widthq], xm0
-    vextracti128 [vq + widthq], m0, 1
+    movu [uq + pixelsq], xm0
+    vextracti128 [vq + pixelsq], m0, 1
 %endif
 
-    add       widthq, mmsize/2
+    add       pixelsq, mmsize/2
     jl .loop
 
     RET
 %endmacro
 
 INIT_XMM ssse3
-uyvy_to_planar_8
+uyvy_to_planar_8 aligned
+uyvy_to_planar_8 unaligned
 INIT_XMM avx
-uyvy_to_planar_8
+uyvy_to_planar_8 aligned
+uyvy_to_planar_8 unaligned
 INIT_YMM avx2
-uyvy_to_planar_8
+uyvy_to_planar_8 aligned
+uyvy_to_planar_8 unaligned
 
-%macro uyvy_to_planar_10 0
+%macro uyvy_to_planar_10 1
+
+%ifidn %1, aligned
+    %define move mova
+%else
+    %define move movu
+%endif
 
 ; uyvy_to_planar_10(uint16_t *y, uint16_t *u, uint16_t *v, const uint16_t *l, const int64_t width)
-cglobal uyvy_to_planar_10, 5, 5, 6, y, u, v, l, width
-    lea       lq, [lq+4*widthq]
-    lea       yq, [yq+2*widthq]
-    add       uq, widthq
-    add       vq, widthq
-    neg       widthq
+cglobal uyvy_to_planar_10_%1, 5, 5, 6, y, u, v, l, pixels
+    lea       lq, [lq+4*pixelsq]
+    lea       yq, [yq+2*pixelsq]
+    add       uq, pixelsq
+    add       vq, pixelsq
+    neg       pixelsq
 
     mova      m5, [uyvy_planar_shuf_10]
 
 .loop:
 %if notcpuflag(avx2)
-    mova      m0, [lq+4*widthq+0*mmsize]
-    mova      m1, [lq+4*widthq+1*mmsize]
-    mova      m2, [lq+4*widthq+2*mmsize]
-    mova      m3, [lq+4*widthq+3*mmsize]
+    move      m0, [lq+4*pixelsq+0*mmsize]
+    move      m1, [lq+4*pixelsq+1*mmsize]
+    move      m2, [lq+4*pixelsq+2*mmsize]
+    move      m3, [lq+4*pixelsq+3*mmsize]
 %else
-    mova             xm0, [lq+4*widthq+  0]
-    mova             xm1, [lq+4*widthq+ 16]
-    vinserti128  m0,  m0, [lq+4*widthq+ 32], 1
-    vinserti128  m1,  m1, [lq+4*widthq+ 48], 1
-    mova             xm2, [lq+4*widthq+ 64]
-    mova             xm3, [lq+4*widthq+ 80]
-    vinserti128  m2,  m2, [lq+4*widthq+ 96], 1
-    vinserti128  m3,  m3, [lq+4*widthq+112], 1
+    move             xm0, [lq+4*pixelsq+  0]
+    move             xm1, [lq+4*pixelsq+ 16]
+    vinserti128  m0,  m0, [lq+4*pixelsq+ 32], 1
+    vinserti128  m1,  m1, [lq+4*pixelsq+ 48], 1
+    move             xm2, [lq+4*pixelsq+ 64]
+    move             xm3, [lq+4*pixelsq+ 80]
+    vinserti128  m2,  m2, [lq+4*pixelsq+ 96], 1
+    vinserti128  m3,  m3, [lq+4*pixelsq+112], 1
 %endif
 
     pshufb     m0, m5
@@ -203,8 +224,8 @@ cglobal uyvy_to_planar_10, 5, 5, 6, y, u, v, l, width
     punpckldq  m1, m2, m3
     punpckhqdq m2, m3
 
-    mova       [yq+2*widthq], m0
-    mova       [yq+2*widthq+mmsize], m2
+    move       [yq+2*pixelsq], m0
+    move       [yq+2*pixelsq+mmsize], m2
 
     punpckhqdq m0, m4, m1
     punpcklqdq m4, m1
@@ -215,29 +236,38 @@ cglobal uyvy_to_planar_10, 5, 5, 6, y, u, v, l, width
     vpermq m1, m1, q3120
 %endif
 
-    mova       [uq+widthq], m4
-    mova       [vq+widthq], m1
+    move       [uq+pixelsq], m4
+    move       [vq+pixelsq], m1
 
-    add       widthq, mmsize
+    add       pixelsq, mmsize
     jl .loop
 
     RET
 %endmacro
 
 INIT_XMM ssse3
-uyvy_to_planar_10
+uyvy_to_planar_10 aligned
+uyvy_to_planar_10 unaligned
 INIT_XMM avx
-uyvy_to_planar_10
+uyvy_to_planar_10 aligned
+uyvy_to_planar_10 unaligned
 INIT_YMM avx2
-uyvy_to_planar_10
+uyvy_to_planar_10 aligned
+uyvy_to_planar_10 unaligned
 
-%macro uyvy_to_v210 0
+%macro uyvy_to_v210 1
+
+%ifidn %1, aligned
+    %define move mova
+%else
+    %define move movu
+%endif
 
 ; uyvy_to_v210(const uint16_t *y, uint8_t *dst, int64_t width)
-cglobal uyvy_to_v210, 3, 6, 6+cpuflag(avx2), y, dst, width
-    shl     widthq, 2
-    add     yq, widthq
-    neg     widthq
+cglobal uyvy_to_v210_%1, 3, 6, 6+cpuflag(avx2), y, dst, pixels
+    shl     pixelsq, 2
+    add     yq, pixelsq
+    neg     pixelsq
 
     mova    m4, [v210_enc_min_10]
     mova    m5, [v210_enc_max_10]
@@ -247,11 +277,11 @@ cglobal uyvy_to_v210, 3, 6, 6+cpuflag(avx2), y, dst, width
 %endif
 
 .loop:
-    movu    xm0, [yq+widthq+ 0]
-    movu    xm1, [yq+widthq+12]
+    movu    xm0, [yq+pixelsq+ 0]
+    movu    xm1, [yq+pixelsq+12]
 %if cpuflag(avx2)
-    vinserti128 m0, m0, [yq + widthq + 24], 1
-    vinserti128 m1, m1, [yq + widthq + 36], 1
+    vinserti128 m0, m0, [yq + pixelsq + 24], 1
+    vinserti128 m1, m1, [yq + pixelsq + 36], 1
 %endif
 
     CLIPW   m0, m4, m5
@@ -278,19 +308,22 @@ cglobal uyvy_to_v210, 3, 6, 6+cpuflag(avx2), y, dst, width
 %else
     pslldq m1, 8
     por m1, m0
-    mova [dstq], m1
+    move [dstq], m1
 %endif
 
     add     dstq, mmsize
-    add     widthq, (mmsize*3)/2
+    add     pixelsq, (mmsize*3)/2
     jl .loop
 
     RET
 %endmacro
 
 INIT_XMM ssse3
-uyvy_to_v210
+uyvy_to_v210 aligned
+uyvy_to_v210 unaligned
 INIT_XMM avx
-uyvy_to_v210
+uyvy_to_v210 aligned
+uyvy_to_v210 unaligned
 INIT_YMM avx2
-uyvy_to_v210
+uyvy_to_v210 aligned
+uyvy_to_v210 unaligned

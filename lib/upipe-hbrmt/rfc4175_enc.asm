@@ -62,11 +62,11 @@ SECTION .text
 %macro v210_to_planar_10 1
 
 ; v210_planar_unpack(const uint32_t *src, uint16_t *y, uint16_t *u, uint16_t *v, int64_t width)
-cglobal v210_to_planar_10_%1, 5, 5, 7, src, y, u, v, width
-    lea    yq, [yq+2*widthq]
-    add    uq, widthq
-    add    vq, widthq
-    neg    widthq
+cglobal v210_to_planar_10_%1, 5, 5, 7, src, y, u, v, pixels
+    lea    yq, [yq + 2*pixelsq]
+    add    uq, pixelsq
+    add    vq, pixelsq
+    neg    pixelsq
 
     mova   m3, [v210_mult]
     mova   m4, [v210_mask]
@@ -87,22 +87,22 @@ cglobal v210_to_planar_10_%1, 5, 5, 7, src, y, u, v, width
 
         shufps m2, m1, m0, 0x8d ; y1 y2 y4 y5 y0 __ y3 __
         pshufb m2, m5           ; y0 y1 y2 y3 y4 y5 __ __
-        movu   [yq + 2*widthq], m2
+        movu   [yq + 2*pixelsq], m2
 
         shufps m1, m1, m0, 0xd8     ; u0 v0 v1 u2 u1 __ v2 __
         pshufb m1, m6           ; u0 u1 u2 __ v0 v1 v2 __
-        movq   [uq + widthq], xm1
-        movhps [vq + widthq], xm1
+        movq   [uq + pixelsq], xm1
+        movhps [vq + pixelsq], xm1
 
     %if cpuflag(avx2)
-        vextracti128 [yq + 2*widthq + 12], m2, 1
+        vextracti128 [yq + 2*pixelsq + 12], m2, 1
         vextracti128 xm0, m1, 1
-        movq   [uq + widthq + 6], xm0
-        movhps [vq + widthq + 6], xm0
+        movq   [uq + pixelsq + 6], xm0
+        movhps [vq + pixelsq + 6], xm0
     %endif
 
         add srcq, mmsize
-        add widthq, (6*mmsize)/16
+        add pixelsq, (6*mmsize)/16
     jl  .loop
 RET
 
@@ -117,12 +117,12 @@ v210_to_planar_10 aligned
 
 %macro v210_to_planar_8 1
 
-cglobal v210_to_planar_8_%1, 5, 5, 7, src, y, u, v, width
-    shr widthq, 1
-    lea    yq, [yq+2*widthq]
-    add    uq, widthq
-    add    vq, widthq
-    neg    widthq
+cglobal v210_to_planar_8_%1, 5, 5, 7, src, y, u, v, pixels
+    shr pixelsq, 1
+    lea    yq, [yq + 2*pixelsq]
+    add    uq, pixelsq
+    add    vq, pixelsq
+    neg    pixelsq
 
     mova   m3, [v210_mult]
 
@@ -143,23 +143,23 @@ cglobal v210_to_planar_8_%1, 5, 5, 7, src, y, u, v, width
         pshufb m2, m0, [v210_to_planar8_shuf_y]
         pshufb m1, m0, [v210_to_planar8_shuf_u]
         pshufb m0, m0, [v210_to_planar8_shuf_v]
-        movq [yq + 2*widthq], xm2
+        movq [yq + 2*pixelsq], xm2
 
 %if notcpuflag(avx2)
-        movd [uq + widthq],   xm1
-        movd [vq + widthq],   xm0
+        movd [uq + pixelsq],   xm1
+        movd [vq + pixelsq],   xm0
 %else
-        vextracti128 [yq + 2*widthq + 6], m2, 1
+        vextracti128 [yq + 2*pixelsq + 6], m2, 1
         vpermq m1, m1, q3120
         vpermq m0, m0, q3120
         pshufb xm1, xm1, [planar_8_avx2_shuf1]
         pshufb xm0, xm0, [planar_8_avx2_shuf1]
-        movq [uq + widthq],   xm1
-        movq [vq + widthq],   xm0
+        movq [uq + pixelsq],   xm1
+        movq [vq + pixelsq],   xm0
 %endif
 
         add srcq, mmsize
-        add widthq, (3*mmsize)/16
+        add pixelsq, (3*mmsize)/16
     jl  .loop
 RET
 
@@ -175,8 +175,8 @@ v210_to_planar_8 aligned
 %macro v210_to_sdi 0
 
 ; v210_to_sdi(const uint32_t *src, uint8_t *dst, int64_t width)
-cglobal v210_to_sdi, 3, 3, 8 + 7*ARCH_X86_64, src, dst, width
-    neg      widthq
+cglobal v210_to_sdi, 3, 3, 8 + 7*ARCH_X86_64, src, dst, pixels
+    neg      pixelsq
 
     mova     m3,  [v210_sdi_mask_1]
     mova     m4,  [v210_sdi_mask_2]
@@ -230,7 +230,7 @@ cglobal v210_to_sdi, 3, 3, 8 + 7*ARCH_X86_64, src, dst, width
 
         add      dstq, (15*mmsize)/16
         add srcq, mmsize
-        add      widthq, (6*mmsize)/16
+        add      pixelsq, (6*mmsize)/16
     jl .loop
 RET
 

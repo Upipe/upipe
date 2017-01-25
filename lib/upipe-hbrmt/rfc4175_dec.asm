@@ -54,12 +54,12 @@ sdi_to_planar10_mult_c: times 2 dw 1024, 1024, 1024, 0, 16384, 16384, 16384, 0
 
 SECTION .text
 
-%macro sdi_v210_unpack 0
+%macro sdi_to_v210 0
 
 ; sdi_v210_unpack(const uint8_t *src, uint32_t *dst, int64_t width)
-cglobal sdi_v210_unpack, 3, 3, 3+11*ARCH_X86_64, src, dst, size
-    add     srcq, sizeq
-    neg     sizeq
+cglobal sdi_to_v210, 3, 3, 3+11*ARCH_X86_64, src, dst, bytes
+    add     srcq, bytesq
+    neg     bytesq
 
 %if ARCH_X86_64
     mova    m3,  [sdi_v210_shuf_easy]
@@ -88,9 +88,9 @@ cglobal sdi_v210_unpack, 3, 3, 3+11*ARCH_X86_64, src, dst, size
 %endif ; ARCH_X86_64
 
 .loop:
-    movu     xm0, [srcq+sizeq]
+    movu     xm0, [srcq + bytesq]
 %if cpuflag(avx2)
-    vinserti128 m0, m0, [srcq + sizeq + 15], 1
+    vinserti128 m0, m0, [srcq + bytesq + 15], 1
 %endif
 
     pshufb   m1, m0, m3
@@ -114,31 +114,31 @@ cglobal sdi_v210_unpack, 3, 3, 3+11*ARCH_X86_64, src, dst, size
     mova     [dstq], m1
 
     add      dstq, mmsize
-    add      sizeq, (15*mmsize)/16
+    add      bytesq, (15*mmsize)/16
     jl .loop
 
     RET
 %endmacro
 
 INIT_XMM ssse3
-sdi_v210_unpack
+sdi_to_v210
 INIT_XMM avx
-sdi_v210_unpack
+sdi_to_v210
 INIT_YMM avx2
-sdi_v210_unpack
+sdi_to_v210
 
 %macro sdi_to_planar_8 0
 
 ; sdi_to_planar_8(uint8_t *src, uint8_t *y, uint8_t *u, uint8_t *v, int64_t size)
-cglobal sdi_to_planar_8, 5, 6, 3, src, y, u, v, size, offset
+cglobal sdi_to_planar_8, 5, 6, 3, src, y, u, v, bytes, offset
     xor      offsetq, offsetq
-    add      srcq, sizeq
-    neg      sizeq
+    add      srcq,    bytesq
+    neg      bytesq
 
 .loop:
-    movu     xm0, [srcq+sizeq]
+    movu     xm0, [srcq + bytesq]
 %if cpuflag(avx2)
-    vinserti128 m0, m0, [srcq+sizeq+15], 1
+    vinserti128 m0, m0, [srcq + bytesq + 15], 1
 %endif
 
     pshufb   m1, m0, [planar_8_c_shuf]
@@ -168,7 +168,7 @@ cglobal sdi_to_planar_8, 5, 6, 3, src, y, u, v, size, offset
 %endif
 
     add      offsetq, (3*mmsize)/16
-    add      sizeq, (15*mmsize)/16
+    add      bytesq, (15*mmsize)/16
     jl .loop
 
     RET
@@ -184,17 +184,17 @@ sdi_to_planar_8
 %macro sdi_to_planar_10 0
 
 ; sdi_to_planar_10(uint8_t *src, uint16_t *y, uint16_t *u, uint16_t *v, int64_t size)
-cglobal sdi_to_planar_10, 5, 6, 3+cpuflag(avx2), src, y, u, v, size, offset
+cglobal sdi_to_planar_10, 5, 6, 3+cpuflag(avx2), src, y, u, v, bytes, offset
     xor      offsetq, offsetq
-    add      srcq, sizeq
-    neg      sizeq
+    add      srcq,    bytesq
+    neg      bytesq
 
     mova     m2, [sdi_to_planar10_mask_c]
 
     .loop:
-        movu     xm0, [srcq + sizeq]
+        movu     xm0, [srcq + bytesq]
 %if cpuflag(avx2)
-        vinserti128 m0, m0, [srcq + sizeq + 15], 1
+        vinserti128 m0, m0, [srcq + bytesq + 15], 1
 %endif
 
         pandn    m1, m2, m0
@@ -217,7 +217,7 @@ cglobal sdi_to_planar_10, 5, 6, 3+cpuflag(avx2), src, y, u, v, size, offset
 %endif
 
         add offsetq, (6*mmsize)/16
-        add sizeq, (15*mmsize)/16
+        add bytesq, (15*mmsize)/16
     jl .loop
 RET
 %endmacro
