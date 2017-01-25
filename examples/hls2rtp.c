@@ -1209,6 +1209,25 @@ static struct upipe *hls2rtp_audio_sink(struct uprobe *probe,
     return sink;
 }
 
+static int catch_error(struct uprobe *uprobe,
+                     struct upipe *upipe,
+                     int event, va_list args)
+{
+    switch (event) {
+    case UPROBE_FATAL: {
+        int code = va_arg(args, int);
+        exit(code);
+        break;
+    }
+
+    case UPROBE_ERROR:
+        cmd_quit();
+        return UBASE_ERR_NONE;
+    }
+
+    return uprobe_throw_next(uprobe, upipe, event, args);
+}
+
 enum opt {
     OPT_INVALID = '?',
     OPT_MISSING_ARG = ':',
@@ -1422,6 +1441,11 @@ int main(int argc, char **argv)
             uprobe_stdio_color_alloc(NULL, stderr, log_level) :
             uprobe_stdio_alloc(NULL, stderr, log_level);
     assert(main_probe);
+
+    struct uprobe probe_error;
+    uprobe_init(&probe_error, catch_error, uprobe_use(main_probe));
+    uprobe_release(main_probe);
+    main_probe = &probe_error;
 
     /*
      * add umem manager probe
@@ -1690,6 +1714,7 @@ int main(int argc, char **argv)
     upipe_mgr_release(setflowdef_mgr);
     uprobe_clean(&probe_hls);
     uprobe_clean(&probe_src);
+    uprobe_clean(&probe_error);
     uref_mgr_release(uref_mgr);
 
     ev_loop_destroy(main_loop);
