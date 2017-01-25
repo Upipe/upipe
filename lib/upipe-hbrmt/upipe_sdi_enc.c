@@ -639,7 +639,8 @@ static void upipe_sdi_enc_encode_line(struct upipe *upipe, int line_num, uint16_
     const struct sdi_offsets_fmt *f = upipe_sdi_enc->f;
     const struct sdi_picture_fmt *p = upipe_sdi_enc->p;
     uint16_t *active_start = &dst[2*f->active_offset];
-    bool vbi = 0, f2 = 0;
+    bool vbi = 0, f2 = 0, special_case = 0, ntsc;
+    ntsc = p->active_height == 486;
 
     input_hsize = p->active_width;
 
@@ -681,6 +682,10 @@ static void upipe_sdi_enc_encode_line(struct upipe *upipe, int line_num, uint16_
         f2 = 1;
     }
 
+    /* Treat NTSC Line 20 (Field 1) as a special case like BMD does */
+    if (ntsc && line_num == 20)
+        special_case = 1;
+
     /* EAV */
     dst[0] = 0x3ff;
     dst[1] = 0x000;
@@ -710,7 +715,7 @@ static void upipe_sdi_enc_encode_line(struct upipe *upipe, int line_num, uint16_
     active_start[-2] = 0x000;
     active_start[-1] = sav_fvh_cword[f2][vbi];
 
-    if(vbi) {
+    if(vbi || special_case) {
         /* black */
         upipe_sdi_enc->blank(active_start, input_hsize);
     } else {
@@ -727,7 +732,7 @@ static void upipe_sdi_enc_encode_line(struct upipe *upipe, int line_num, uint16_
     }
 
     /* Progressive SD not supported */
-    if (!vbi)
+    if (!vbi && !special_case)
         for (int i = 0; i < UPIPE_SDI_MAX_PLANES; i++)
             planes[f2][i] += input_strides[i] * 2;
 }
@@ -1206,7 +1211,7 @@ static void upipe_sdi_enc_input(struct upipe *upipe, struct uref *uref,
     const uint8_t *planes[2][UPIPE_SDI_MAX_PLANES];
 
     /* NTSC is bff, invert fields */
-    bool bff = upipe_sdi_enc->p->sd && upipe_sdi_enc->p->active_height == 480;
+    bool bff = upipe_sdi_enc->p->active_height == 486;
     for (int i = 0; i < UPIPE_SDI_MAX_PLANES; i++) {
         planes[ bff][i] = input_planes[i];
         planes[!bff][i] = input_planes[i] + input_strides[i];
