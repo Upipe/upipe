@@ -134,6 +134,14 @@ enum upipe_command {
     UPIPE_SUB_GET_SUPER,
 
     /*
+     * Bin pipes commands
+     */
+    /** returns the first inner pipe for debug purposes (struct upipe **) */
+    UPIPE_GET_FIRST_INNER,
+    /** returns the last inner pipe for debug purposes (struct upipe **) */
+    UPIPE_GET_LAST_INNER,
+
+    /*
      * Source-related commands
      */
     /** returns the size of the source, in octets (uint64_t *) */
@@ -337,6 +345,8 @@ static inline const char *upipe_command_str(struct upipe *upipe, int cmd)
     UBASE_CASE_TO_STR(UPIPE_GET_SUB_MGR);
     UBASE_CASE_TO_STR(UPIPE_ITERATE_SUB);
     UBASE_CASE_TO_STR(UPIPE_SUB_GET_SUPER);
+    UBASE_CASE_TO_STR(UPIPE_GET_FIRST_INNER);
+    UBASE_CASE_TO_STR(UPIPE_GET_LAST_INNER);
     UBASE_CASE_TO_STR(UPIPE_SRC_GET_SIZE);
     UBASE_CASE_TO_STR(UPIPE_SRC_GET_POSITION);
     UBASE_CASE_TO_STR(UPIPE_SRC_SET_POSITION);
@@ -1315,6 +1325,28 @@ static inline int upipe_iterate_sub(struct upipe *upipe, struct upipe **p)
 static inline int upipe_sub_get_super(struct upipe *upipe, struct upipe **p)
 {
     return upipe_control(upipe, UPIPE_SUB_GET_SUPER, p);
+}
+
+/** @This returns the first inner pipe of the bin for debug purposes.
+ *
+ * @param upipe description structure of the subpipe
+ * @param p filled in with a pointer to the first inner pipe
+ * @return an error code
+ */
+static inline int upipe_get_first_inner(struct upipe *upipe, struct upipe **p)
+{
+    return upipe_control(upipe, UPIPE_GET_FIRST_INNER, p);
+}
+
+/** @This returns the last inner pipe of the bin for debug purposes.
+ *
+ * @param upipe description structure of the subpipe
+ * @param p filled in with a pointer to the last inner pipe
+ * @return an error code
+ */
+static inline int upipe_get_last_inner(struct upipe *upipe, struct upipe **p)
+{
+    return upipe_control(upipe, UPIPE_GET_LAST_INNER, p);
 }
 
 /** @This returns the size of the currently opened source.

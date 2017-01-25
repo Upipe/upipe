@@ -1067,6 +1067,13 @@ static int upipe_ts_demux_output_control(struct upipe *upipe,
             *p = upipe_ts_demux_output->flow_def_input;
             return UBASE_ERR_NONE;
         }
+        case UPIPE_GET_FIRST_INNER: {
+            struct upipe_ts_demux_output *upipe_ts_demux_output =
+                upipe_ts_demux_output_from_upipe(upipe);
+            struct upipe **p = va_arg(args, struct upipe **);
+            *p = upipe_ts_demux_output->split_output;
+            return (*p != NULL) ? UBASE_ERR_NONE : UBASE_ERR_UNHANDLED;
+        }
 
         default:
             return upipe_ts_demux_output_control_bin_output(upipe, command,
@@ -1741,6 +1748,20 @@ static int upipe_ts_demux_program_control(struct upipe *upipe,
             if (upipe_ts_demux_program->pmtd == NULL)
                 return UBASE_ERR_UNHANDLED;
             return upipe_split_iterate(upipe_ts_demux_program->pmtd, p);
+        }
+        case UPIPE_GET_FIRST_INNER: {
+            struct upipe_ts_demux_program *upipe_ts_demux_program =
+                upipe_ts_demux_program_from_upipe(upipe);
+            struct upipe **p = va_arg(args, struct upipe **);
+            *p = upipe_ts_demux_program->psi_split_output_pmt;
+            return (*p != NULL) ? UBASE_ERR_NONE : UBASE_ERR_UNHANDLED;
+        }
+        case UPIPE_GET_LAST_INNER: {
+            struct upipe_ts_demux_program *upipe_ts_demux_program =
+                upipe_ts_demux_program_from_upipe(upipe);
+            struct upipe **p = va_arg(args, struct upipe **);
+            *p = upipe_ts_demux_program->pmtd;
+            return (*p != NULL) ? UBASE_ERR_NONE : UBASE_ERR_UNHANDLED;
         }
 
         default:
@@ -2877,6 +2898,13 @@ static int upipe_ts_demux_control(struct upipe *upipe,
         case UPIPE_SPLIT_ITERATE: {
             struct uref **p = va_arg(args, struct uref **);
             return upipe_ts_demux_iterate(upipe, p);
+        }
+        case UPIPE_GET_LAST_INNER: {
+            struct upipe_ts_demux *upipe_ts_demux =
+                upipe_ts_demux_from_upipe(upipe);
+            struct upipe **p = va_arg(args, struct upipe **);
+            *p = upipe_ts_demux->setrap;
+            return (*p != NULL) ? UBASE_ERR_NONE : UBASE_ERR_UNHANDLED;
         }
 
         case UPIPE_TS_DEMUX_GET_CONFORMANCE: {

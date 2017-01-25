@@ -268,13 +268,21 @@ upipe_wsrc_alloc_err:
  */
 static int upipe_wsrc_control(struct upipe *upipe, int command, va_list args)
 {
-    if (command == UPIPE_ATTACH_UPUMP_MGR) {
-        struct upipe_wsrc *upipe_wsrc = upipe_wsrc_from_upipe(upipe);
-        struct uchain *uchain;
-        ulist_foreach (&upipe_wsrc->upump_mgr_pipes, uchain) {
-            struct upipe *upump_mgr_pipe = upipe_from_uchain(uchain);
-            upipe_attach_upump_mgr(upump_mgr_pipe);
+    switch (command) {
+        case UPIPE_ATTACH_UPUMP_MGR: {
+            struct upipe_wsrc *upipe_wsrc = upipe_wsrc_from_upipe(upipe);
+            struct uchain *uchain;
+            ulist_foreach (&upipe_wsrc->upump_mgr_pipes, uchain) {
+                struct upipe *upump_mgr_pipe = upipe_from_uchain(uchain);
+                upipe_attach_upump_mgr(upump_mgr_pipe);
+            }
         }
+        case UPIPE_GET_FIRST_INNER:
+        case UPIPE_GET_LAST_INNER:
+            /* because we can't graph it currently */
+            return UBASE_ERR_UNHANDLED;
+        default:
+            break;
     }
 
     return upipe_wsrc_control_bin_output(upipe, command, args);

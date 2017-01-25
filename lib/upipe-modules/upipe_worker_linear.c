@@ -337,13 +337,21 @@ upipe_wlin_alloc_err:
  */
 static int upipe_wlin_control(struct upipe *upipe, int command, va_list args)
 {
-    if (command == UPIPE_ATTACH_UPUMP_MGR) {
-        struct upipe_wlin *upipe_wlin = upipe_wlin_from_upipe(upipe);
-        struct uchain *uchain;
-        ulist_foreach (&upipe_wlin->upump_mgr_pipes, uchain) {
-            struct upipe *upump_mgr_pipe = upipe_from_uchain(uchain);
-            upipe_attach_upump_mgr(upump_mgr_pipe);
+    switch (command) {
+        case UPIPE_ATTACH_UPUMP_MGR: {
+            struct upipe_wlin *upipe_wlin = upipe_wlin_from_upipe(upipe);
+            struct uchain *uchain;
+            ulist_foreach (&upipe_wlin->upump_mgr_pipes, uchain) {
+                struct upipe *upump_mgr_pipe = upipe_from_uchain(uchain);
+                upipe_attach_upump_mgr(upump_mgr_pipe);
+            }
         }
+        case UPIPE_GET_FIRST_INNER:
+        case UPIPE_GET_LAST_INNER:
+            /* because we can't graph it currently */
+            return UBASE_ERR_UNHANDLED;
+        default:
+            break;
     }
 
     int err = upipe_wlin_control_bin_input(upipe, command, args);
