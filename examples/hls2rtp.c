@@ -34,6 +34,7 @@
 #include <upipe/ulist.h>
 #include <upipe/uuri.h>
 #include <upipe/upipe.h>
+#include <upipe/upipe_dump.h>
 #include <upipe/uprobe.h>
 #include <upipe/uprobe_helper_uprobe.h>
 #include <upipe/uprobe_helper_urefcount.h>
@@ -129,6 +130,7 @@ static uint64_t variant_id = UINT64_MAX;
 static uint64_t bandwidth_max = UINT64_MAX;
 static const char *url = NULL;
 static const char *addr = "127.0.0.1";
+static const char *dump = NULL;
 static struct output video_output = {
     .port = 5004,
     .rtp_type = 96,
@@ -290,6 +292,9 @@ static void cmd_quit(void)
             upipe_ts_mux_freeze_psi(superpipe);
     }
 #endif
+
+    if (dump != NULL)
+        upipe_dump_open(NULL, NULL, dump, src, NULL);
 
     cmd_stop();
     upipe_cleanup(&hls);
@@ -1253,6 +1258,7 @@ enum opt {
     OPT_RT_PRIORITY,
     OPT_SYSLOG_TAG,
     OPT_NO_STDIN,
+    OPT_DUMP,
     OPT_HELP,
 };
 
@@ -1277,6 +1283,7 @@ static struct option options[] = {
     { "udp", no_argument, NULL, OPT_UDP },
     { "conformance", required_argument, NULL, OPT_CONFORMANCE },
     { "no-stdin", no_argument, NULL, OPT_NO_STDIN },
+    { "dump", required_argument, NULL, OPT_DUMP },
     { "help", no_argument, NULL, OPT_HELP },
     { 0, 0, 0, 0 },
 };
@@ -1394,6 +1401,9 @@ int main(int argc, char **argv)
             break;
         case OPT_NO_STDIN:
             no_stdin = true;
+            break;
+        case OPT_DUMP:
+            dump = optarg;
             break;
 
         case OPT_HELP:

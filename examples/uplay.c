@@ -54,6 +54,7 @@
 #include <upipe/uclock.h>
 #include <upipe/uclock_std.h>
 #include <upipe/upipe.h>
+#include <upipe/upipe_dump.h>
 #include <upipe/upump.h>
 #include <upipe-pthread/upipe_pthread_transfer.h>
 #include <upipe-pthread/uprobe_pthread_upump_mgr.h>
@@ -159,6 +160,8 @@ static struct upipe *upipe_schedule = NULL;
 /* picture resizing */
 static unsigned w = 0;
 static unsigned h = 0;
+/* upipe dump file */
+static const char *dump = NULL;
 
 static void uplay_stop(struct upump *upump);
 
@@ -629,6 +632,9 @@ static void uplay_stop(struct upump *upump)
     upump_free(upump);
 
     uprobe_notice(uprobe_main, NULL, "running stop idler");
+    if (dump != NULL && upipe_src != NULL)
+        upipe_dump_open(NULL, NULL, dump, upipe_src, NULL);
+
     if (force_quit && upipe_src != NULL) {
         struct upipe_mgr *upipe_null_mgr = upipe_null_mgr_alloc();
         struct upipe *null = upipe_void_alloc(upipe_null_mgr,
@@ -681,7 +687,7 @@ static void upump_mgr_free(struct upump_mgr *upump_mgr)
 }
 
 static void usage(const char *argv0) {
-    fprintf(stderr, "Usage: %s [-d] [-q] [-u] [-s 1920x1080] [-A <audio>] [-S <subtitle>] [-V <video>] [-P <program>] [-R 1:1] <source>\n", argv0);
+    fprintf(stderr, "Usage: %s [-D <dot file>] [-d] [-q] [-u] [-s 1920x1080] [-A <audio>] [-S <subtitle>] [-V <video>] [-P <program>] [-R 1:1] <source>\n", argv0);
     exit(EXIT_FAILURE);
 }
 
@@ -689,7 +695,7 @@ int main(int argc, char **argv)
 {
     enum uprobe_log_level loglevel = UPROBE_LOG_LEVEL;
     int opt;
-    while ((opt = getopt(argc, argv, "udqA:V:S:P:R:s:")) != -1) {
+    while ((opt = getopt(argc, argv, "udqA:V:S:P:R:s:D:")) != -1) {
         switch (opt) {
             case 'u':
                 udp = true;
@@ -725,6 +731,9 @@ int main(int argc, char **argv)
                     fprintf(stderr, "Incorrect size \"%s\"\n", optarg);
                     w = h = 0;
                 }
+                break;
+            case 'D':
+                dump = optarg;
                 break;
             default:
                 usage(argv[0]);

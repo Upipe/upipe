@@ -34,6 +34,7 @@ pkginclude_HEADERS = \
 	umem_alloc.h \
 	umem_pool.h \
 	upipe.h \
+	upipe_dump.h \
 	upipe_helper_bin_input.h \
 	upipe_helper_bin_output.h \
 	upipe_helper_flow_def_check.h \
