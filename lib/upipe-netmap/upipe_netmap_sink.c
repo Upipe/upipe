@@ -569,6 +569,17 @@ static int worker_hbrmt(struct upipe *upipe, uint8_t **dst, const uint8_t *src,
     return payload_len;
 }
 
+static float pts_to_time(uint64_t pts)
+{
+    static uint64_t first;
+    if (!first)
+        first = pts;
+
+    pts -= first;
+
+    return (float)pts / 27000;
+}
+
 static void upipe_netmap_sink_worker(struct upump *upump)
 {
     struct upipe *upipe = upump_get_opaque(upump, struct upipe *);
@@ -579,6 +590,7 @@ static void upipe_netmap_sink_worker(struct upump *upump)
         u = uclock_std_alloc(0);
     uint64_t now = uclock_now(u);
     static uint64_t old;
+    if (old == 0) old = now;
     if ((now - old) > UCLOCK_FREQ / 50)
     printf("%s() after %" PRIu64 "us\n", __func__, (now - old) / 27);
     old = now;
@@ -643,21 +655,40 @@ static void upipe_netmap_sink_worker(struct upump *upump)
             if (!uchain)
                 break;
             upipe_netmap_sink->n--;
-//            upipe_notice_va(upipe, "pop, urefs: %zu", upipe_netmap_sink->n);
             uref = uref_from_uchain(uchain);
 
-            if (preroll) {
-                uint64_t pts = 0;
-                uref_clock_get_pts_sys(uref, &pts);
-                pts += upipe_netmap_sink->latency;
-                pts += UCLOCK_FREQ / 50; // TODO: use sink_latency
-                if (pts > now) {
-                    printf("waiting after pop\n");
-                    upipe_netmap_sink->uref = uref;
-                    return;
-                }
-            } else {
-                // TODO: drop late frames
+            uint64_t pts = 0;
+            uref_clock_get_pts_sys(uref, &pts);
+            pts += upipe_netmap_sink->latency;
+            uint64_t cr = 0;
+            uref_clock_get_cr_sys(uref, &cr);
+
+            uint64_t now = uclock_now(u);
+
+            if (0) upipe_notice_va(upipe, "pop, urefs: %zu, now %.2f pts %.2f cr %.2f",
+                    upipe_netmap_sink->n,
+                    pts_to_time(now),
+                    pts_to_time(pts),
+                    pts_to_time(cr)
+            );
+
+            if (preroll && pts + NETMAP_SINK_LATENCY > now) {
+                printf("waiting preroll after pop\n");
+                upipe_netmap_sink->uref = uref;
+                return;
+            }
+
+            if (pts + NETMAP_SINK_LATENCY < now) {
+                uref_free(uref);
+                uref = NULL;
+                upipe_warn_va(upipe, "drop late frame, %" PRIu64 "ms, now %.2f pts %.2f cr %.2f latency %.2f",
+                        (now - pts) / 27000,
+                        pts_to_time(now),
+                        pts_to_time(pts - upipe_netmap_sink->latency),
+                        pts_to_time(cr),
+                        (float)upipe_netmap_sink->latency / 27000
+                );
+                continue;
             }
             input_size = -1;
         }
