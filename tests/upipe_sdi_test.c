@@ -147,7 +147,7 @@ int main(int argc, char *argv[])
 
     /* yuv 8 */
     pic_mgr[0] = ubuf_pic_mem_mgr_alloc(UBUF_POOL_DEPTH, UBUF_POOL_DEPTH, umem_mgr, 1,
-            0, 0, 0, 0, 0, 0);
+            0, 0, 0, 0, 32, 0);
     assert(pic_mgr[0] != NULL);
     ubase_assert(ubuf_pic_mem_mgr_add_plane(pic_mgr[0], "y8", 1, 1, 1));
     ubase_assert(ubuf_pic_mem_mgr_add_plane(pic_mgr[0], "u8", 2, 1, 1));
@@ -155,7 +155,7 @@ int main(int argc, char *argv[])
 
     /* yuv 10 */
     pic_mgr[1] = ubuf_pic_mem_mgr_alloc(UBUF_POOL_DEPTH, UBUF_POOL_DEPTH, umem_mgr, 1,
-            0, 0, 0, 0, 0, 0);
+            0, 0, 0, 0, 32, 0);
     assert(pic_mgr[1] != NULL);
     ubase_assert(ubuf_pic_mem_mgr_add_plane(pic_mgr[1], "y10l", 1, 1, 2));
     ubase_assert(ubuf_pic_mem_mgr_add_plane(pic_mgr[1], "u10l", 2, 1, 2));
@@ -164,7 +164,7 @@ int main(int argc, char *argv[])
 
     /* v210 */
     pic_mgr[2] = ubuf_pic_mem_mgr_alloc(UBUF_POOL_DEPTH, UBUF_POOL_DEPTH, umem_mgr, 6,
-            0, 0, 0, 0, 0, 0);
+            0, 0, 0, 0, 32, 0);
     assert(pic_mgr[2] != NULL);
     ubase_assert(ubuf_pic_mem_mgr_add_plane(pic_mgr[2],
                 "u10y10v10y10u10y10v10y10u10y10v10y10", 1, 1, 16));
