@@ -1612,6 +1612,7 @@ int main(int argc, char **argv)
                              UPROBE_LOG_VERBOSE, "trickp"));
         upipe_mgr_release(upipe_trickp_mgr);
         assert(trickp);
+        upipe_end_preroll(trickp);
 
         /* create video sink */
         if (video_output.enabled) {
