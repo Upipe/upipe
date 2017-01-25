@@ -1435,7 +1435,7 @@ static void v210_uyvy_unpack_c(const uint32_t *src, uint16_t *uyvy, int64_t widt
     uint32_t val;
     int i;
 
-    for( i = 0; i < width-5; i += 6 ){
+    for( i = 0; i < width; i += 6 ){
         READ_PIXELS(uyvy, uyvy, uyvy);
         READ_PIXELS(uyvy, uyvy, uyvy);
         READ_PIXELS(uyvy, uyvy, uyvy);
