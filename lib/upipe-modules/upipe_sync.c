@@ -174,8 +174,18 @@ static int upipe_sync_sub_set_flow_def(struct upipe *upipe, struct uref *flow_de
     const char *def;
     UBASE_RETURN(uref_flow_get_def(flow_def, &def))
 
-    UBASE_RETURN(uref_clock_get_latency(flow_def, &upipe_sync->latency));
-    upipe_notice_va(upipe, "Latency %" PRIu64, upipe_sync->latency);
+    uint64_t latency;
+    if (!ubase_check(uref_clock_get_latency(flow_def, &latency)))
+        latency = 0;
+
+    // FIXME : estimated latency added by processing
+    latency += UCLOCK_FREQ / 25;
+    uref_clock_set_latency(flow_def, latency);
+
+    if (latency > upipe_sync->latency) {
+        upipe_notice_va(upipe, "Latency %" PRIu64, latency);
+        upipe_sync->latency = latency;
+    }
 
     if (!ubase_ncmp(def, "pic.")) {
         UBASE_RETURN(uref_pic_flow_get_fps(flow_def, &upipe_sync_sub->rate));
