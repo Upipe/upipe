@@ -65,6 +65,9 @@
 #define UPIPE_RFC4175_PIXEL_PAIR_BYTES 5
 #define UPIPE_RFC4175_BLOCK_SIZE 15
 
+/* the maximum ever delay between 2 TX buffers refill */
+#define NETMAP_SINK_LATENCY (UCLOCK_FREQ / 50)
+
 static void upipe_planar_to_sdi_8_c(const uint8_t *y, const uint8_t *u, const uint8_t *v, uint8_t *l, const int64_t width)
 {
     for (int j = 0; j < width/2; j++) {
@@ -590,18 +593,20 @@ static void upipe_netmap_sink_worker(struct upump *upump)
     int bytes_left = 0;
 
     static bool preroll = 1;
-    if (uref) {
+    if (uref && preroll) {
         uint64_t pts = 0;
         uref_clock_get_pts_sys(uref, &pts);
         pts += upipe_netmap_sink->latency;
-        pts += UCLOCK_FREQ / 50;
+        pts += NETMAP_SINK_LATENCY;
         if (pts > now) {
-            //printf("waiting : pts - now = %" PRIu64 "ms\n", (pts - now) / 27000);
-            if (preroll)
-                return;
+            upipe_dbg_va(upipe, "preroll : pts - now = %" PRIu64 "ms",
+                    (pts - now) / 27000);
+            return;
         }
+        upipe_notice_va(upipe, "end of preroll");
         preroll = 0;
     }
+
     /* Open up transmission ring */
     struct netmap_ring *txring = NETMAP_TXRING(upipe_netmap_sink->d->nifp,
                                                upipe_netmap_sink->ring_idx);
@@ -1168,6 +1173,8 @@ static int _upipe_netmap_sink_control(struct upipe *upipe,
             return UBASE_ERR_NONE;
         case UPIPE_REGISTER_REQUEST: {
             struct urequest *request = va_arg(args, struct urequest *);
+            if (request->type == UREQUEST_SINK_LATENCY)
+                return urequest_provide_sink_latency(request, NETMAP_SINK_LATENCY);
             return upipe_throw_provide_request(upipe, request);
         }
         case UPIPE_UNREGISTER_REQUEST:
