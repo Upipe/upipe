@@ -573,7 +573,7 @@ static void upipe_sync_sub_input(struct upipe *upipe, struct uref *uref,
 
     /* prepare to insert in linked list */
     struct uchain *uchain = uref_to_uchain(uref);
-    uchain->prev = uchain->next = NULL;
+    ulist_init(uchain);
 
     /* buffer audio */
     if (upipe_sync_sub->sound) {
