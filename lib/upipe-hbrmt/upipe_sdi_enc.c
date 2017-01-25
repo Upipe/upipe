@@ -198,7 +198,7 @@ static void sdi_init_crc_channel_status(uint8_t *data)
         0xdd, 0xb9, 0x15, 0x71, 0x3c, 0x58, 0xf4, 0x90, 0x6e, 0x0a, 0xa6, 0xc2, 0x8f, 0xeb, 0x47, 0x23
     };
 
-    memset(data, 23, sizeof(uint8_t));
+    memset(data, 0, 23);
 
     data[0] = 0x03; /* Only indicates professional use and LPCM */
     data[2] = 0x29; /* Forces 24 bits, leaves Level regulation default */
