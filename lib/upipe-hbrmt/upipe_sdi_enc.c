@@ -1471,8 +1471,8 @@ static struct upipe *upipe_sdi_enc_alloc(struct upipe_mgr *mgr,
 
 #if !defined(__APPLE__) /* macOS clang doesn't support that builtin yet */
     if (__builtin_cpu_supports("sse2")) {
-        upipe_sdi_enc->planar_to_uyvy_8 = upipe_planar_to_uyvy_8_aligned_sse2;
-        upipe_sdi_enc->planar_to_uyvy_10 = upipe_planar_to_uyvy_10_aligned_sse2;
+        upipe_sdi_enc->planar_to_uyvy_8 = upipe_planar_to_uyvy_8_unaligned_sse2;
+        upipe_sdi_enc->planar_to_uyvy_10 = upipe_planar_to_uyvy_10_unaligned_sse2;
     }
 
 #if defined(__clang__) && /* clang 3.8 doesn't know ssse3 */ \
@@ -1486,20 +1486,20 @@ static struct upipe *upipe_sdi_enc_alloc(struct upipe_mgr *mgr,
     if (__builtin_cpu_supports("ssse3"))
 #endif
     {
-        upipe_sdi_enc->v210_to_uyvy      = upipe_v210_to_uyvy_aligned_ssse3;
+        upipe_sdi_enc->v210_to_uyvy      = upipe_v210_to_uyvy_unaligned_ssse3;
     }
 
     if (__builtin_cpu_supports("avx")) {
         upipe_sdi_enc->blank             = upipe_sdi_blank_avx;
-        upipe_sdi_enc->planar_to_uyvy_8  = upipe_planar_to_uyvy_8_aligned_avx;
-        upipe_sdi_enc->planar_to_uyvy_10 = upipe_planar_to_uyvy_10_aligned_avx;
-        upipe_sdi_enc->v210_to_uyvy      = upipe_v210_to_uyvy_aligned_avx;
+        upipe_sdi_enc->planar_to_uyvy_8  = upipe_planar_to_uyvy_8_unaligned_avx;
+        upipe_sdi_enc->planar_to_uyvy_10 = upipe_planar_to_uyvy_10_unaligned_avx;
+        upipe_sdi_enc->v210_to_uyvy      = upipe_v210_to_uyvy_unaligned_avx;
     }
 
     if (__builtin_cpu_supports("avx2")) {
-        upipe_sdi_enc->planar_to_uyvy_8  = upipe_planar_to_uyvy_8_aligned_avx2;
-        upipe_sdi_enc->planar_to_uyvy_10 = upipe_planar_to_uyvy_10_aligned_avx2;
-        upipe_sdi_enc->v210_to_uyvy      = upipe_v210_to_uyvy_aligned_avx2;
+        upipe_sdi_enc->planar_to_uyvy_8  = upipe_planar_to_uyvy_8_unaligned_avx2;
+        upipe_sdi_enc->planar_to_uyvy_10 = upipe_planar_to_uyvy_10_unaligned_avx2;
+        upipe_sdi_enc->v210_to_uyvy      = upipe_v210_to_uyvy_unaligned_avx2;
     }
 #endif
 
