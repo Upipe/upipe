@@ -873,7 +873,7 @@ static void upipe_m3u_reader_process(struct upipe *upipe)
     }
 
     if (!ubase_check(ret))
-        upipe_err(upipe, "invalid m3u");
+        upipe_throw_error(upipe, ret);
 }
 
 /** @internal @This outputs the m3u.
@@ -890,8 +890,8 @@ static void upipe_m3u_reader_output_all(struct upipe *upipe,
     struct uref *flow_def = upipe_m3u_reader->current_flow_def;
     upipe_m3u_reader->current_flow_def = NULL;
     if (unlikely(!ubase_check(uref_flow_match_def(flow_def, M3U_FLOW_DEF)))) {
-        upipe_err(upipe, "invalid m3u");
         uref_free(flow_def);
+        upipe_throw_error(upipe, UBASE_ERR_INVALID);
         return;
     }
 
