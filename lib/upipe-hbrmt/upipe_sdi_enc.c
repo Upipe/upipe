@@ -1297,6 +1297,7 @@ static int upipe_sdi_enc_set_flow_def(struct upipe *upipe, struct uref *flow_def
     if (!ubase_check(uref_pic_flow_get_macropixel(flow_def, &macropixel)))
         return UBASE_ERR_INVALID;
 
+    // TODO : check plane stride
 #define u ubase_check
     if (!(((u(uref_pic_flow_check_chroma(flow_def, 1, 1, 1, "y8")) &&
              u(uref_pic_flow_check_chroma(flow_def, 2, 1, 1, "u8")) &&
@@ -1333,6 +1334,7 @@ static int upipe_sdi_enc_set_flow_def(struct upipe *upipe, struct uref *flow_def
         return UBASE_ERR_ALLOC;
 
     uref_flow_set_def(flow_def_dup, "block.");
+    uref_block_flow_set_append(flow_def_dup, 256); /* worst case for asm */
     uref_pic_flow_set_fps(flow_def_dup, upipe_sdi_enc->fps);
 
     upipe_input(upipe, flow_def_dup, NULL);
