@@ -94,6 +94,8 @@ static int attribute_iterate(const char **item,
         return UBASE_ERR_NONE;
     }
 
+    /* remove whitespaces */
+    tmp = ustring_shift_while(tmp, " ");
     *name = ustring_split_while(&tmp, name_set);
     if (unlikely(!ustring_match_str(tmp, "=")))
         return UBASE_ERR_INVALID;
@@ -106,8 +108,10 @@ static int attribute_iterate(const char **item,
         tmp = ustring_shift(tmp, 1);
     }
     else {
-        *value = ustring_split_until(&tmp, ",");
+        *value = ustring_split_until(&tmp, " ,");
     }
+    /* remove whitespaces */
+    tmp = ustring_shift_while(tmp, " ");
     if (ustring_match_str(tmp, ","))
         tmp = ustring_shift(tmp, 1);
     else if (!ustring_is_empty(tmp))
@@ -476,9 +480,21 @@ static int upipe_m3u_reader_ext_x_stream_inf(struct upipe *upipe,
     UBASE_RETURN(upipe_m3u_reader_get_item(upipe, flow_def, &item));
 
     const char *iterator = line;
-    struct ustring name, value;
-    while (ubase_check(attribute_iterate(&iterator, &name, &value)) &&
-           iterator != NULL) {
+    bool bandwidth_present = false;
+    while (true) {
+        struct ustring name, value;
+        int ret;
+
+        ret = attribute_iterate(&iterator, &name, &value);
+        if (!ubase_check(ret)) {
+            upipe_err_va(upipe, "fail to parse attribute list at %s",
+                         iterator);
+            return ret;
+        }
+
+        if (iterator == NULL)
+            break;
+
         char value_str[value.len + 1];
         int err = ustring_cpy(value, value_str, sizeof (value_str));
         if (unlikely(!ubase_check(err))) {
@@ -495,6 +511,8 @@ static int upipe_m3u_reader_ext_x_stream_inf(struct upipe *upipe,
             err = uref_m3u_master_set_bandwidth(item, bandwidth);
             if (unlikely(!ubase_check(err)))
                 upipe_err_va(upipe, "fail to set bandwidth to %s", value_str);
+            else
+                bandwidth_present = true;
         }
         else if (!ustring_cmp_str(name, "CODECS")) {
             err = uref_m3u_master_set_codecs(item, value_str);
@@ -517,6 +535,9 @@ static int upipe_m3u_reader_ext_x_stream_inf(struct upipe *upipe,
                           (int)value.len, value.at);
         }
     }
+
+    if (!bandwidth_present)
+        upipe_warn(upipe, "no bandwidth attribute found");
 
     return UBASE_ERR_NONE;
 }
