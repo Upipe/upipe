@@ -94,6 +94,8 @@ static int attribute_iterate(const char **item,
         return UBASE_ERR_NONE;
     }
 
+    /* remove whitespaces */
+    tmp = ustring_shift_while(tmp, " ");
     *name = ustring_split_while(&tmp, name_set);
     if (unlikely(!ustring_match_str(tmp, "=")))
         return UBASE_ERR_INVALID;
@@ -106,8 +108,10 @@ static int attribute_iterate(const char **item,
         tmp = ustring_shift(tmp, 1);
     }
     else {
-        *value = ustring_split_until(&tmp, ",");
+        *value = ustring_split_until(&tmp, " ,");
     }
+    /* remove whitespaces */
+    tmp = ustring_shift_while(tmp, " ");
     if (ustring_match_str(tmp, ","))
         tmp = ustring_shift(tmp, 1);
     else if (!ustring_is_empty(tmp))
