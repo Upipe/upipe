@@ -480,9 +480,20 @@ static int upipe_m3u_reader_ext_x_stream_inf(struct upipe *upipe,
     UBASE_RETURN(upipe_m3u_reader_get_item(upipe, flow_def, &item));
 
     const char *iterator = line;
-    struct ustring name, value;
-    while (ubase_check(attribute_iterate(&iterator, &name, &value)) &&
-           iterator != NULL) {
+    while (true) {
+        struct ustring name, value;
+        int ret;
+
+        ret = attribute_iterate(&iterator, &name, &value);
+        if (!ubase_check(ret)) {
+            upipe_err_va(upipe, "fail to parse attribute list at %s",
+                         iterator);
+            return ret;
+        }
+
+        if (iterator == NULL)
+            break;
+
         char value_str[value.len + 1];
         int err = ustring_cpy(value, value_str, sizeof (value_str));
         if (unlikely(!ubase_check(err))) {
