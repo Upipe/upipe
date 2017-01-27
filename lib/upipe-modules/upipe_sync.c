@@ -591,15 +591,15 @@ static void upipe_sync_sub_input(struct upipe *upipe, struct uref *uref,
     upipe_dbg_va(upipe, "push PTS in %" PRIu64 " ms", (pts - now) / 27000);
 #endif
 
-    /* prepare to insert in linked list */
-    struct uchain *uchain = uref_to_uchain(uref);
-    ulist_init(uchain);
-
     /* buffer audio */
     size_t samples = 0;
     uref_sound_size(uref, &samples, NULL);
     upipe_sync_sub->samples += samples;
     //upipe_notice_va(upipe, "push, samples %" PRIu64, upipe_sync_sub->samples);
+
+    /* prepare to insert in linked list */
+    struct uchain *uchain = uref_to_uchain(uref);
+    ulist_init(uchain);
 
     ulist_add(&upipe_sync_sub->urefs, uchain);
 }
