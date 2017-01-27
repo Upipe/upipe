@@ -280,10 +280,12 @@ static float pts_to_time(uint64_t pts)
     return (float)pts / 27000;
 }
 
-static bool can_start_sound(struct upipe *upipe, const struct urational *fps)
+static bool can_start_sound(struct upipe *upipe)
 {
     struct upipe_sync_sub *upipe_sync_sub = upipe_sync_sub_from_upipe(upipe);
     struct upipe_sync *upipe_sync = upipe_sync_from_sub_mgr(upipe->mgr);
+
+    const struct urational *fps = &upipe_sync->fps;
 
     const uint64_t video_pts = upipe_sync->pts;
 
@@ -342,7 +344,7 @@ static bool can_start_sound(struct upipe *upipe, const struct urational *fps)
     return upipe_sync_sub->samples >= 48000 * fps->den / fps->num;
 }
 
-static bool can_start(struct upipe *upipe, const struct urational *fps)
+static bool can_start(struct upipe *upipe)
 {
     struct upipe_sync *upipe_sync = upipe_sync_from_upipe(upipe);
 
@@ -352,7 +354,7 @@ static bool can_start(struct upipe *upipe, const struct urational *fps)
     ulist_foreach(&upipe_sync->subs, uchain) {
         struct upipe_sync_sub *upipe_sync_sub = upipe_sync_sub_from_uchain(uchain);
         if (upipe_sync_sub->sound)
-            if (!can_start_sound(upipe_sync_sub_to_upipe(upipe_sync_sub), fps))
+            if (!can_start_sound(upipe_sync_sub_to_upipe(upipe_sync_sub)))
                 start = false;
     }
 
@@ -519,7 +521,7 @@ static void cb(struct upump *upump)
     }
 
     /* sync audio */
-    if (!can_start(upipe_sync_to_upipe(upipe_sync), &upipe_sync->fps)) {
+    if (!can_start(upipe_sync_to_upipe(upipe_sync))) {
         upipe_err_va(upipe, "not enough samples");
     }
 
