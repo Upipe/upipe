@@ -631,12 +631,6 @@ static void upipe_sync_input(struct upipe *upipe, struct uref *uref,
 {
     struct upipe_sync *upipe_sync = upipe_sync_from_upipe(upipe);
 
-    /* need upump mgr */
-    if (!ubase_check(upipe_sync_check_upump_mgr(upipe_sync_to_upipe(upipe_sync)))) {
-        uref_free(uref);
-        return;
-    }
-
     /* get uref date */
     uint64_t pts;
     if (!ubase_check(uref_clock_get_pts_sys(uref, &pts))) {
@@ -647,11 +641,6 @@ static void upipe_sync_input(struct upipe *upipe, struct uref *uref,
     pts += upipe_sync->latency;
 
     uint64_t now = uclock_now(upipe_sync->uclock);
-    //upipe_dbg_va(upipe, "push PTS in %" PRIu64 " ms", (pts - now) / 27000);
-
-    /* prepare to insert in linked list */
-    struct uchain *uchain = uref_to_uchain(uref);
-    ulist_init(uchain);
 
     /* reject late pics */
     if (now > pts) {
@@ -663,12 +652,21 @@ static void upipe_sync_input(struct upipe *upipe, struct uref *uref,
         return;
     }
 
+    /* prepare to insert in linked list */
+    struct uchain *uchain = uref_to_uchain(uref);
+    ulist_init(uchain);
+
+    //upipe_dbg_va(upipe, "push PTS in %" PRIu64 " ms", (pts - now) / 27000);
+
     /* buffer pic */
     ulist_add(&upipe_sync->urefs, uchain);
-    uref = NULL;
 
     /* timer already active */
     if (upipe_sync->upump)
+        return;
+
+    /* need upump mgr */
+    if (!ubase_check(upipe_sync_check_upump_mgr(upipe_sync_to_upipe(upipe_sync))))
         return;
 
     /* start timer */
