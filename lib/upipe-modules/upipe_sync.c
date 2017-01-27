@@ -191,6 +191,14 @@ static int upipe_sync_sub_set_flow_def(struct upipe *upipe, struct uref *flow_de
     const char *def;
     UBASE_RETURN(uref_flow_get_def(flow_def, &def))
 
+    if (ubase_ncmp(def, "sound.")) {
+        upipe_err_va(upipe, "Unknown def %s", def);
+        return UBASE_ERR_INVALID;
+    }
+
+    if (ubase_ncmp(def, "sound.s32."))
+        return UBASE_ERR_INVALID;
+
     uint64_t latency;
     if (!ubase_check(uref_clock_get_latency(flow_def, &latency)))
         latency = 0;
@@ -203,14 +211,6 @@ static int upipe_sync_sub_set_flow_def(struct upipe *upipe, struct uref *flow_de
         upipe_notice_va(upipe, "Latency %" PRIu64, latency);
         upipe_sync->latency = latency;
     }
-
-    if (ubase_ncmp(def, "sound.")) {
-        upipe_err_va(upipe, "Unknown def %s", def);
-        return UBASE_ERR_INVALID;
-    }
-
-    if (ubase_ncmp(def, "sound.s32."))
-        return UBASE_ERR_INVALID;
 
     uint8_t planes;
     UBASE_RETURN(uref_sound_flow_get_planes(flow_def, &planes));
