@@ -577,12 +577,6 @@ static void upipe_sync_sub_input(struct upipe *upipe, struct uref *uref,
         return;
     }
 
-    /* need upump mgr */
-    if (!ubase_check(upipe_sync_check_upump_mgr(upipe_sync_to_upipe(upipe_sync)))) {
-        uref_free(uref);
-        return;
-    }
-
     /* get uref date */
     uint64_t pts;
     if (!ubase_check(uref_clock_get_pts_sys(uref, &pts))) {
