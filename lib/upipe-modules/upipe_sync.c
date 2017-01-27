@@ -569,7 +569,6 @@ static void upipe_sync_sub_input(struct upipe *upipe, struct uref *uref,
         struct upump **upump_p)
 {
     struct upipe_sync_sub *upipe_sync_sub = upipe_sync_sub_from_upipe(upipe);
-    struct upipe_sync *upipe_sync = upipe_sync_from_sub_mgr(upipe->mgr);
 
     if (!upipe_sync_sub->sound) {
         // TODO subpics
@@ -577,6 +576,8 @@ static void upipe_sync_sub_input(struct upipe *upipe, struct uref *uref,
         return;
     }
 
+#if 0
+    struct upipe_sync *upipe_sync = upipe_sync_from_sub_mgr(upipe->mgr);
     /* get uref date */
     uint64_t pts;
     if (!ubase_check(uref_clock_get_pts_sys(uref, &pts))) {
@@ -587,7 +588,8 @@ static void upipe_sync_sub_input(struct upipe *upipe, struct uref *uref,
     pts += upipe_sync->latency;
 
     uint64_t now = uclock_now(upipe_sync->uclock);
-    //upipe_dbg_va(upipe, "push PTS in %" PRIu64 " ms", (pts - now) / 27000);
+    upipe_dbg_va(upipe, "push PTS in %" PRIu64 " ms", (pts - now) / 27000);
+#endif
 
     /* prepare to insert in linked list */
     struct uchain *uchain = uref_to_uchain(uref);
