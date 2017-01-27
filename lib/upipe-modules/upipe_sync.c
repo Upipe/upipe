@@ -131,10 +131,6 @@ struct upipe_sync_sub {
 
     /** ntsc */
     uint8_t frame_idx;
-
-    /* samplerate */
-    // TODO: subpics
-    struct urational rate;
 };
 
 UPIPE_HELPER_UPIPE(upipe_sync_sub, upipe, UPIPE_SYNC_SUB_SIGNATURE);
@@ -222,10 +218,11 @@ static int upipe_sync_sub_set_flow_def(struct upipe *upipe, struct uref *flow_de
     if (channels != 2)
         return UBASE_ERR_INVALID;
 
-    uint64_t num;
-    UBASE_RETURN(uref_sound_flow_get_rate(flow_def, &num));
-    upipe_sync_sub->rate.num = num;
-    upipe_sync_sub->rate.den = 1;
+    uint64_t rate;
+    UBASE_RETURN(uref_sound_flow_get_rate(flow_def, &rate));
+    if (rate != 48000)
+        return UBASE_ERR_INVALID;
+
     upipe_sync_sub->sound = true;
 
     upipe_sync_sub_store_flow_def(upipe, uref_dup(flow_def));
@@ -310,11 +307,9 @@ static bool can_start_sound(struct upipe *upipe, const struct urational *fps)
         if (pts_diff > 0) { /* audio too early, drop */
             size_t samples = 0;
             uref_sound_size(uref, &samples, NULL);
-            uint64_t duration = UCLOCK_FREQ * samples *
-                upipe_sync_sub->rate.den / upipe_sync_sub->rate.num;
+            uint64_t duration = UCLOCK_FREQ * samples / 48000;
             if (pts_diff < duration) {
-                uint64_t drop_samples = pts_diff * upipe_sync_sub->rate.num /
-                    upipe_sync_sub->rate.den / UCLOCK_FREQ;
+                uint64_t drop_samples = pts_diff * 48000 / UCLOCK_FREQ;
                 if (drop_samples >= samples) {
                     upipe_notice_va(upipe_sync_sub_to_upipe(upipe_sync_sub),
                             "LOLDROP, duration in CLOCK %" PRIu64 "", duration);
@@ -342,9 +337,9 @@ static bool can_start_sound(struct upipe *upipe, const struct urational *fps)
         }
     }
 
-    if (upipe_sync_sub->samples < upipe_sync_sub->rate.num * fps->den / fps->num)
+    if (upipe_sync_sub->samples < 48000 * fps->den / fps->num)
         upipe_notice_va(&upipe_sync_sub->upipe, "SAMPLES %" PRIu64, upipe_sync_sub->samples);
-    return upipe_sync_sub->samples >= upipe_sync_sub->rate.num * fps->den / fps->num;
+    return upipe_sync_sub->samples >= 48000 * fps->den / fps->num;
 }
 
 static bool can_start(struct upipe *upipe, const struct urational *fps)
