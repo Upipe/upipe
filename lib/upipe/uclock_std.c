@@ -25,7 +25,7 @@
  */
 
 /** @file
- * @short standard common toolbox provided by the application to modules
+ * @short Upipe standard implementation of uclock
  */
 
 #include <upipe/ubase.h>
