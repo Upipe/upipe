@@ -227,7 +227,7 @@ int main(int argc, char **argv)
     assert(upipe_test != NULL);
 
     struct upipe_mgr *upipe_xfer_mgr =
-        upipe_xfer_mgr_alloc(XFER_QUEUE, XFER_POOL);
+        upipe_xfer_mgr_alloc(XFER_QUEUE, XFER_POOL, NULL);
     assert(upipe_xfer_mgr != NULL);
 
     upipe_mgr_use(upipe_xfer_mgr);
@@ -291,7 +291,7 @@ int main(int argc, char **argv)
     assert(upipe_test != NULL);
     upipe_mgr_release(idem_mgr);
 
-    upipe_xfer_mgr = upipe_xfer_mgr_alloc(XFER_QUEUE, XFER_POOL);
+    upipe_xfer_mgr = upipe_xfer_mgr_alloc(XFER_QUEUE, XFER_POOL, NULL);
     assert(upipe_xfer_mgr != NULL);
 
     upipe_mgr_use(upipe_xfer_mgr);

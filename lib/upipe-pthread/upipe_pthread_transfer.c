@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2014-2016 OpenHeadend S.A.R.L.
+ * Copyright (C) 2014-2017 OpenHeadend S.A.R.L.
  *
  * Authors: Christophe Massiot
  *
@@ -172,7 +172,7 @@ struct upipe_mgr *upipe_pthread_xfer_mgr_alloc(uint8_t queue_length,
     if (unlikely(upump == NULL))
         goto upipe_pthread_xfer_mgr_alloc_err3;
 
-    struct upipe_mgr *xfer_mgr = upipe_xfer_mgr_alloc(queue_length, msg_pool_depth);
+    struct upipe_mgr *xfer_mgr = upipe_xfer_mgr_alloc(queue_length, msg_pool_depth, NULL);
     if (unlikely(xfer_mgr == NULL))
         goto upipe_pthread_xfer_mgr_alloc_err4;
 

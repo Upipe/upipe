@@ -316,7 +316,7 @@ static int upipe_glxplayer_catch_demux_output(struct uprobe *uprobe,
             upipe_set_output(upipe, glxplayer->upipe_dec_qsink);
 
             /* prepare to transfer the queue source */
-            glxplayer->dec_xfer = upipe_xfer_mgr_alloc(XFER_QUEUE, XFER_POOL);
+            glxplayer->dec_xfer = upipe_xfer_mgr_alloc(XFER_QUEUE, XFER_POOL, NULL);
             if (unlikely(glxplayer->dec_xfer == NULL)) {
                 upipe_release(upipe_dec_qsrc);
                 return UBASE_ERR_ALLOC;
@@ -884,7 +884,7 @@ static bool upipe_glxplayer_play(struct upipe_glxplayer *glxplayer,
     upipe_attach_upump_mgr(glxplayer->upipe_glx_qsrc);
 
     /* prepare to transfer the source to a new thread */
-    glxplayer->src_xfer = upipe_xfer_mgr_alloc(XFER_QUEUE, XFER_POOL);
+    glxplayer->src_xfer = upipe_xfer_mgr_alloc(XFER_QUEUE, XFER_POOL, NULL);
     if (unlikely(glxplayer->src_xfer == NULL)) {
         upipe_release(upipe_src);
         upipe_release(glxplayer->upipe_glx_qsrc);
