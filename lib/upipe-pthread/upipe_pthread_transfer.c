@@ -31,6 +31,7 @@
 #include <upipe/ubase.h>
 #include <upipe/urefcount.h>
 #include <upipe/ueventfd.h>
+#include <upipe/umutex.h>
 #include <upipe/uprobe.h>
 #include <upipe/uprobe_prefix.h>
 #include <upipe/upump.h>
@@ -48,6 +49,7 @@
 #include <stdarg.h>
 #include <string.h>
 #include <unistd.h>
+#include <signal.h>
 #include <errno.h>
 #include <math.h>
 #include <assert.h>
@@ -59,17 +61,17 @@ struct upipe_pthread_ctx {
     /** pointer to upump_mgr probe */
     struct uprobe *uprobe_pthread_upump_mgr;
     /** callback creating the event loop in the new thread */
-    upipe_pthread_upump_mgr_alloc upump_mgr_alloc;
-    /** callback running the event loop in the new thread */
-    upipe_pthread_upump_mgr_work upump_mgr_work;
-    /** callback freeing the event loop in the new thread */
-    upipe_pthread_upump_mgr_free upump_mgr_free;
-    /** opaque for upipe_pthread_upump_mgr_alloc */
-    void *upump_mgr_opaque;
+    upump_mgr_alloc upump_mgr_alloc;
+    /** maximum number of upump structures in the pool */
+    uint16_t upump_pool_depth;
+    /** maximum number of upump_blocker structures in the pool */
+    uint16_t upump_blocker_pool_depth;
     /** thread ID */
     pthread_t pthread_id;
     /** eventfd used for thread termination */
     struct ueventfd event;
+    /** mutual exclusion primitives for access to the event loop */
+    struct umutex *mutex;
 };
 
 /** @internal @This is the main function of the new thread.
@@ -80,15 +82,27 @@ static void *upipe_pthread_start(void *_pthread_ctx)
 {
     struct upipe_pthread_ctx *pthread_ctx =
         (struct upipe_pthread_ctx *)_pthread_ctx;
+
+    /* disable signals */
+    sigset_t sigs;
+    sigemptyset(&sigs);
+    sigaddset(&sigs, SIGTERM);
+    sigaddset(&sigs, SIGINT);
+    sigaddset(&sigs, SIGPIPE);
+    pthread_sigmask(SIG_BLOCK, &sigs, NULL);
+
+    pthread_setcanceltype(PTHREAD_CANCEL_ASYNCHRONOUS, NULL);
+
+    /* spawn the upump manager */
     struct upump_mgr *upump_mgr =
-        pthread_ctx->upump_mgr_alloc(pthread_ctx->upump_mgr_opaque);
+        pthread_ctx->upump_mgr_alloc(pthread_ctx->upump_pool_depth,
+                                     pthread_ctx->upump_blocker_pool_depth);
     if (unlikely(upump_mgr == NULL)) {
         uprobe_err(pthread_ctx->uprobe_pthread_upump_mgr, NULL,
                    "unable to create upump_mgr");
         uprobe_release(pthread_ctx->uprobe_pthread_upump_mgr);
         upipe_mgr_release(pthread_ctx->xfer_mgr);
-        free(pthread_ctx);
-        return NULL;
+        goto upipe_pthread_start_abort;
     }
 
     int err =
@@ -96,20 +110,28 @@ static void *upipe_pthread_start(void *_pthread_ctx)
                                      upump_mgr);
     if (unlikely(!ubase_check(err)))
         uprobe_err_va(pthread_ctx->uprobe_pthread_upump_mgr, NULL,
-                      "unable to attach upump_mgr (%d)", err);
+                      "unable to attach upump_mgr (%s)", ubase_err_str(err));
 
     err = upipe_xfer_mgr_attach(pthread_ctx->xfer_mgr, upump_mgr);
     if (unlikely(!ubase_check(err)))
         uprobe_err_va(pthread_ctx->uprobe_pthread_upump_mgr, NULL,
-                      "unable to attach xfer (%d)", err);
+                      "unable to attach xfer (%s)", ubase_err_str(err));
 
     uprobe_release(pthread_ctx->uprobe_pthread_upump_mgr);
     upipe_mgr_release(pthread_ctx->xfer_mgr);
 
-    pthread_ctx->upump_mgr_work(upump_mgr);
-    upump_mgr_release(upump_mgr);
-    pthread_ctx->upump_mgr_free(upump_mgr);
+    err = upump_mgr_run(upump_mgr, pthread_ctx->mutex);
 
+    if (err = UBASE_ERR_BUSY)
+        uprobe_warn(pthread_ctx->uprobe_pthread_upump_mgr, NULL,
+                    "upump manager returned with an active pump");
+    else if (!ubase_check(err))
+        uprobe_err_va(pthread_ctx->uprobe_pthread_upump_mgr, NULL,
+                      "upump manager couldn't run (%s)", ubase_err_str(err));
+
+    upump_mgr_release(upump_mgr);
+
+upipe_pthread_start_abort:
     ueventfd_write(&pthread_ctx->event);
     return NULL;
 }
@@ -127,6 +149,7 @@ static void upipe_pthread_stop(struct upump *upump)
 
     pthread_join(pthread_ctx->pthread_id, NULL);
     ueventfd_clean(&pthread_ctx->event);
+    umutex_release(pthread_ctx->mutex);
     free(pthread_ctx);
 }
 
@@ -137,19 +160,19 @@ static void upipe_pthread_stop(struct upump *upump)
  * @param msg_pool_depth maximum number of messages in the pool
  * @param uprobe_pthread_upump_mgr pointer to optional probe, that will be set
  * with the created upump_mgr
- * @param upump_mgr_alloc callback creating the event loop in the new thread
- * @param upump_mgr_work callback running the event loop in the new thread
- * @param upump_mgr_free callback freeing the event loop in the new thread
- * @param upump_mgr_opaque opaque for upump_mgr_alloc
+ * @param upump_mgr_alloc alloc function provided by the upump manager
+ * @param upump_pool_depth maximum number of upump structures in the pool
+ * @param upump_blocker_pool_depth maximum number of upump_blocker structures in
+ * the pool
+ * @param mutex mutual exclusion pimitives to access the event loop, or NULL
  * @param pthread_id_p reference to created thread ID (may be NULL)
  * @param attr pthread attributes
  * @return pointer to xfer manager
  */
 struct upipe_mgr *upipe_pthread_xfer_mgr_alloc(uint8_t queue_length,
         uint16_t msg_pool_depth, struct uprobe *uprobe_pthread_upump_mgr,
-        upipe_pthread_upump_mgr_alloc upump_mgr_alloc,
-        upipe_pthread_upump_mgr_work upump_mgr_work,
-        upipe_pthread_upump_mgr_free upump_mgr_free, void *upump_mgr_opaque,
+        upump_mgr_alloc upump_mgr_alloc, uint16_t upump_pool_depth,
+        uint16_t upump_blocker_pool_depth, struct umutex *mutex,
         pthread_t *pthread_id_p, const pthread_attr_t *restrict attr)
 {
     struct upipe_pthread_ctx *pthread_ctx =
@@ -161,7 +184,8 @@ struct upipe_mgr *upipe_pthread_xfer_mgr_alloc(uint8_t queue_length,
         goto upipe_pthread_xfer_mgr_alloc_err2;
 
     struct upump_mgr *upump_mgr = NULL;
-    uprobe_throw(uprobe_pthread_upump_mgr, NULL, UPROBE_NEED_UPUMP_MGR, &upump_mgr);
+    uprobe_throw(uprobe_pthread_upump_mgr, NULL, UPROBE_NEED_UPUMP_MGR,
+                 &upump_mgr);
     if (unlikely(upump_mgr == NULL))
         goto upipe_pthread_xfer_mgr_alloc_err3;
 
@@ -172,16 +196,17 @@ struct upipe_mgr *upipe_pthread_xfer_mgr_alloc(uint8_t queue_length,
     if (unlikely(upump == NULL))
         goto upipe_pthread_xfer_mgr_alloc_err3;
 
-    struct upipe_mgr *xfer_mgr = upipe_xfer_mgr_alloc(queue_length, msg_pool_depth, NULL);
+    struct upipe_mgr *xfer_mgr = upipe_xfer_mgr_alloc(queue_length,
+                                                      msg_pool_depth, mutex);
     if (unlikely(xfer_mgr == NULL))
         goto upipe_pthread_xfer_mgr_alloc_err4;
 
     pthread_ctx->xfer_mgr = upipe_mgr_use(xfer_mgr);
     pthread_ctx->uprobe_pthread_upump_mgr = uprobe_pthread_upump_mgr;
     pthread_ctx->upump_mgr_alloc = upump_mgr_alloc;
-    pthread_ctx->upump_mgr_work = upump_mgr_work;
-    pthread_ctx->upump_mgr_free = upump_mgr_free;
-    pthread_ctx->upump_mgr_opaque = upump_mgr_opaque;
+    pthread_ctx->upump_pool_depth = upump_pool_depth;
+    pthread_ctx->upump_blocker_pool_depth = upump_blocker_pool_depth;
+    pthread_ctx->mutex = umutex_use(mutex);
 
     if (unlikely(pthread_create(&pthread_ctx->pthread_id, attr,
                                 upipe_pthread_start, pthread_ctx) != 0))
@@ -193,6 +218,7 @@ struct upipe_mgr *upipe_pthread_xfer_mgr_alloc(uint8_t queue_length,
     return xfer_mgr;
 
 upipe_pthread_xfer_mgr_alloc_err5:
+    umutex_release(mutex);
     upipe_mgr_release(pthread_ctx->xfer_mgr);
     upipe_mgr_release(xfer_mgr);
 upipe_pthread_xfer_mgr_alloc_err4:

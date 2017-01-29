@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2014-2016 OpenHeadend S.A.R.L.
+ * Copyright (C) 2014-2017 OpenHeadend S.A.R.L.
  *
  * Authors: Christophe Massiot
  *
@@ -58,6 +58,7 @@
 #include <upipe/upump.h>
 #include <upipe-pthread/upipe_pthread_transfer.h>
 #include <upipe-pthread/uprobe_pthread_upump_mgr.h>
+#include <upipe-pthread/umutex_pthread.h>
 #include <upump-ev/upump_ev.h>
 #include <upipe-modules/upipe_blit.h>
 #include <upipe-modules/upipe_probe_uref.h>
@@ -664,28 +665,6 @@ static void uplay_stop(struct upump *upump)
     main_upump_mgr = NULL;
 }
 
-static struct upump_mgr *upump_mgr_alloc(void *unused)
-{
-    struct ev_loop *loop = ev_loop_new(0);
-    struct upump_mgr *upump_mgr = upump_ev_mgr_alloc(loop, UPUMP_POOL,
-                                                     UPUMP_BLOCKER_POOL);
-    assert(upump_mgr != NULL);
-    upump_mgr_set_opaque(upump_mgr, loop);
-    return upump_mgr;
-}
-
-static void upump_mgr_work(struct upump_mgr *upump_mgr)
-{
-    struct ev_loop *loop = upump_mgr_get_opaque(upump_mgr, struct ev_loop *);
-    ev_loop(loop, 0);
-}
-
-static void upump_mgr_free(struct upump_mgr *upump_mgr)
-{
-    struct ev_loop *loop = upump_mgr_get_opaque(upump_mgr, struct ev_loop *);
-    ev_loop_destroy(loop);
-}
-
 static void usage(const char *argv0) {
     fprintf(stderr, "Usage: %s [-D <dot file>] [-d] [-q] [-u] [-s 1920x1080] [-A <audio>] [-S <subtitle>] [-V <video>] [-P <program>] [-R 1:1] <source>\n", argv0);
     exit(EXIT_FAILURE);
@@ -792,26 +771,36 @@ int main(int argc, char **argv)
     }
 
     /* worker threads */
+    struct umutex *mutex = NULL;
+    if (dump)
+        mutex = umutex_pthread_alloc(0);
     struct upipe_mgr *src_xfer_mgr = upipe_pthread_xfer_mgr_alloc(XFER_QUEUE,
-            XFER_POOL, uprobe_use(uprobe_main), upump_mgr_alloc,
-            upump_mgr_work, upump_mgr_free, NULL, NULL, NULL);
+            XFER_POOL, uprobe_use(uprobe_main), upump_ev_mgr_alloc_loop,
+            UPUMP_POOL, UPUMP_BLOCKER_POOL, mutex, NULL, NULL);
     assert(src_xfer_mgr != NULL);
+    umutex_release(mutex);
     upipe_wsrc_mgr = upipe_wsrc_mgr_alloc(src_xfer_mgr);
     assert(upipe_wsrc_mgr != NULL);
     upipe_mgr_release(src_xfer_mgr);
 
+    if (dump)
+        mutex = umutex_pthread_alloc(0);
     struct upipe_mgr *dec_xfer_mgr = upipe_pthread_xfer_mgr_alloc(XFER_QUEUE,
-            XFER_POOL, uprobe_use(uprobe_main), upump_mgr_alloc,
-            upump_mgr_work, upump_mgr_free, NULL, NULL, NULL);
+            XFER_POOL, uprobe_use(uprobe_main), upump_ev_mgr_alloc_loop,
+            UPUMP_POOL, UPUMP_BLOCKER_POOL, mutex, NULL, NULL);
     assert(dec_xfer_mgr != NULL);
+    umutex_release(mutex);
     upipe_wlin_mgr = upipe_wlin_mgr_alloc(dec_xfer_mgr);
     assert(upipe_wlin_mgr != NULL);
     upipe_mgr_release(dec_xfer_mgr);
 
+    if (dump)
+        mutex = umutex_pthread_alloc(0);
     struct upipe_mgr *sink_xfer_mgr = upipe_pthread_xfer_mgr_alloc(XFER_QUEUE,
-            XFER_POOL, uprobe_use(uprobe_main), upump_mgr_alloc,
-            upump_mgr_work, upump_mgr_free, NULL, NULL, NULL);
+            XFER_POOL, uprobe_use(uprobe_main), upump_ev_mgr_alloc_loop,
+            UPUMP_POOL, UPUMP_BLOCKER_POOL, mutex, NULL, NULL);
     assert(sink_xfer_mgr != NULL);
+    umutex_release(mutex);
     upipe_wsink_mgr = upipe_wsink_mgr_alloc(sink_xfer_mgr);
     assert(upipe_wsink_mgr != NULL);
     upipe_mgr_release(sink_xfer_mgr);

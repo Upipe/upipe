@@ -140,6 +140,9 @@ struct upump_mgr {
 
 UBASE_FROM_TO(upump_mgr, uchain, uchain, uchain)
 
+/** @This allocates a new event loop and a upump manager. */
+typedef struct upump_mgr *(*upump_mgr_alloc)(uint16_t, uint16_t);
+
 /** @internal @This allocates and initializes a pump.
  *
  * @param mgr management structure for this event loop

@@ -92,6 +92,7 @@
 #include <upipe-ts/upipe_ts_mux.h>
 #include <upipe-pthread/uprobe_pthread_upump_mgr.h>
 #include <upipe-pthread/upipe_pthread_transfer.h>
+#include <upipe-pthread/umutex_pthread.h>
 
 #include <ev.h>
 #include <pthread.h>
@@ -178,35 +179,6 @@ static struct uprobe *uprobe_playlist_alloc(struct uprobe *next,
                                             uint64_t at);
 
 static void cmd_quit(void);
-
-static struct upump_mgr *upump_mgr_alloc(void *unused)
-{
-    /* disable signals */
-    sigset_t sigs;
-    sigemptyset(&sigs);
-    sigaddset(&sigs, SIGTERM);
-    sigaddset(&sigs, SIGINT);
-    pthread_sigmask(SIG_BLOCK, &sigs, NULL);
-
-    struct ev_loop *loop = ev_loop_new(0);
-    struct upump_mgr *upump_mgr = upump_ev_mgr_alloc(loop, UPUMP_POOL,
-                                                     UPUMP_BLOCKER_POOL);
-    assert(upump_mgr != NULL);
-    upump_mgr_set_opaque(upump_mgr, loop);
-    return upump_mgr;
-}
-
-static void upump_mgr_work(struct upump_mgr *upump_mgr)
-{
-    struct ev_loop *loop = upump_mgr_get_opaque(upump_mgr, struct ev_loop *);
-    ev_loop(loop, 0);
-}
-
-static void upump_mgr_free(struct upump_mgr *upump_mgr)
-{
-    struct ev_loop *loop = upump_mgr_get_opaque(upump_mgr, struct ev_loop *);
-    ev_loop_destroy(loop);
-}
 
 /** @This releases a pipe and sets the pointer to NULL.
  *
@@ -1536,10 +1508,14 @@ int main(int argc, char **argv)
             param.sched_priority = rt_priority;
             pthread_attr_setschedparam(&attr, &param);
         }
+        struct umutex *wsink_mutex = NULL;
+        if (dump)
+            wsink_mutex = umutex_pthread_alloc(0);
         sink_xfer_mgr = upipe_pthread_xfer_mgr_alloc(XFER_QUEUE,
-                XFER_POOL, uprobe_use(main_probe), upump_mgr_alloc,
-                upump_mgr_work, upump_mgr_free, NULL, NULL, &attr);
+                XFER_POOL, uprobe_use(main_probe), upump_ev_mgr_alloc_loop,
+                UPUMP_POOL, UPUMP_BLOCKER_POOL, wsink_mutex, NULL, &attr);
         assert(sink_xfer_mgr != NULL);
+        umutex_release(wsink_mutex);
 
         /* deport to sink thread */
         wsink_mgr = upipe_wsink_mgr_alloc(sink_xfer_mgr);
