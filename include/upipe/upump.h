@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2012-2015 OpenHeadend S.A.R.L.
+ * Copyright (C) 2012-2017 OpenHeadend S.A.R.L.
  *
  * Authors: Christophe Massiot
  *
@@ -49,6 +49,8 @@ struct upump_mgr;
 struct upump;
 /** @hidden */
 struct upump_blocker;
+/** @hidden */
+struct umutex;
 
 /** types of pumps */
 enum upump_type {
@@ -97,6 +99,8 @@ UBASE_FROM_TO(upump, uchain, uchain, uchain)
 
 /** @This defines standard commands which upump managers may implement. */
 enum upump_mgr_command {
+    /** run the event loop (struct umutex *) */
+    UPUMP_MGR_RUN,
     /** release all buffers kept in pools (void) */
     UPUMP_MGR_VACUUM,
 
@@ -367,6 +371,18 @@ static inline int upump_mgr_control(struct upump_mgr *mgr, int command, ...)
     err = upump_mgr_control_va(mgr, command, args);
     va_end(args);
     return err;
+}
+
+/** @This runs an event loop until no pump is active.
+ *
+ * @param mgr pointer to upump manager
+ * @param mutex mutual exclusion primitives to access the event loop
+ * @return an error code, including @ref UBASE_ERR_BUSY, if a pump is still
+ * active
+ */
+static inline int upump_mgr_run(struct upump_mgr *mgr, struct umutex *mutex)
+{
+    return upump_mgr_control(mgr, UPUMP_MGR_RUN, mutex);
 }
 
 /** @This instructs an existing upump manager to release all structures

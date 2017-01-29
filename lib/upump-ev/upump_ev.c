@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2012-2014 OpenHeadend S.A.R.L.
+ * Copyright (C) 2012-2017 OpenHeadend S.A.R.L.
  *
  * Authors: Christophe Massiot
  *
@@ -30,6 +30,7 @@
 #include <upipe/ubase.h>
 #include <upipe/urefcount.h>
 #include <upipe/uclock.h>
+#include <upipe/umutex.h>
 #include <upipe/upump.h>
 #include <upipe/upump_common.h>
 #include <upump-ev/upump_ev.h>
@@ -46,6 +47,8 @@ struct upump_ev_mgr {
 
     /** ev private structure */
     struct ev_loop *ev_loop;
+    /** true if the loop has to be destroyed at the end */
+    bool destroy;
 
     /** common structure */
     struct upump_common_mgr common_mgr;
@@ -261,6 +264,53 @@ static void upump_ev_free_inner(struct upool *upool, void *upump_ev)
     free(upump_ev);
 }
 
+/** @internal @This is called when the event loop starts invoking watchers.
+ *
+ * @param ev_loop ev loop
+ **/
+static void upump_ev_mgr_lock(struct ev_loop *loop)
+{
+    struct umutex *mutex = ev_userdata(loop);
+    umutex_lock(mutex);
+}
+
+/** @internal @This is called when the event loop goes to sleep.
+ *
+ * @param ev_loop ev loop
+ **/
+static void upump_ev_mgr_unlock(struct ev_loop *loop)
+{
+    struct umutex *mutex = ev_userdata(loop);
+    umutex_unlock(mutex);
+}
+
+/** @internal @This runs an event loop.
+ *
+ * @param mgr pointer to a upump_mgr structure
+ * @param mutex mutual exclusion primitives to access the event loop
+ * @return an error code, including @ref UBASE_ERR_BUSY if a pump is still
+ * active
+ */
+static int upump_ev_mgr_run(struct upump_mgr *mgr, struct umutex *mutex)
+{
+    struct upump_ev_mgr *ev_mgr = upump_ev_mgr_from_upump_mgr(mgr);
+
+    if (mutex != NULL) {
+        ev_set_userdata(ev_mgr->ev_loop, mutex);
+        ev_set_loop_release_cb(ev_mgr->ev_loop,
+                               upump_ev_mgr_unlock, upump_ev_mgr_lock);
+
+        upump_ev_mgr_lock(ev_mgr->ev_loop);
+    }
+
+    bool status = ev_run(ev_mgr->ev_loop, 0);
+
+    if (mutex != NULL)
+        upump_ev_mgr_unlock(ev_mgr->ev_loop);
+
+    return status ? UBASE_ERR_BUSY : UBASE_ERR_NONE;
+}
+
 /** @This processes control commands on a upump_ev_mgr.
  *
  * @param mgr pointer to a upump_mgr structure
@@ -272,6 +322,10 @@ static int upump_ev_mgr_control(struct upump_mgr *mgr,
                                 int command, va_list args)
 {
     switch (command) {
+        case UPUMP_MGR_RUN: {
+            struct umutex *mutex = va_arg(args, struct umutex *);
+            return upump_ev_mgr_run(mgr, mutex);
+        }
         case UPUMP_MGR_VACUUM:
             upump_common_mgr_vacuum(mgr);
             return UBASE_ERR_NONE;
@@ -288,6 +342,8 @@ static void upump_ev_mgr_free(struct urefcount *urefcount)
 {
     struct upump_ev_mgr *ev_mgr = upump_ev_mgr_from_urefcount(urefcount);
     upump_common_mgr_clean(upump_ev_mgr_to_upump_mgr(ev_mgr));
+    if (ev_mgr->destroy)
+        ev_loop_destroy(ev_mgr->ev_loop);
     free(ev_mgr);
 }
 
@@ -323,5 +379,58 @@ struct upump_mgr *upump_ev_mgr_alloc(struct ev_loop *ev_loop,
                           upump_ev_alloc_inner, upump_ev_free_inner);
 
     ev_mgr->ev_loop = ev_loop;
+    ev_mgr->destroy = false;
+    return mgr;
+}
+
+/** @This allocates and initializes a upump_mgr structure bound to the
+ * default ev loop.
+ *
+ * @param upump_pool_depth maximum number of upump structures in the pool
+ * @param upump_blocker_pool_depth maximum number of upump_blocker structures in
+ * the pool
+ * @return pointer to the wrapped upump_mgr structure
+ */
+struct upump_mgr *upump_ev_mgr_alloc_default(uint16_t upump_pool_depth,
+                                             uint16_t upump_blocker_pool_depth)
+{
+    struct ev_loop *loop = ev_default_loop(0);
+    if (loop == NULL)
+        return NULL;
+
+    struct upump_mgr *mgr = upump_ev_mgr_alloc(loop, upump_pool_depth,
+                                               upump_blocker_pool_depth);
+    if (mgr == NULL)
+        return NULL;
+
+    struct upump_ev_mgr *ev_mgr = upump_ev_mgr_from_upump_mgr(mgr);
+    ev_mgr->destroy = true;
+
+    return mgr;
+}
+
+/** @This allocates and initializes a upump_mgr structure bound to an
+ * allocated ev loop.
+ *
+ * @param upump_pool_depth maximum number of upump structures in the pool
+ * @param upump_blocker_pool_depth maximum number of upump_blocker structures in
+ * the pool
+ * @return pointer to the wrapped upump_mgr structure
+ */
+struct upump_mgr *upump_ev_mgr_alloc_loop(uint16_t upump_pool_depth,
+                                          uint16_t upump_blocker_pool_depth)
+{
+    struct ev_loop *loop = ev_loop_new(0);
+    if (loop == NULL)
+        return NULL;
+
+    struct upump_mgr *mgr = upump_ev_mgr_alloc(loop, upump_pool_depth,
+                                               upump_blocker_pool_depth);
+    if (mgr == NULL)
+        return NULL;
+
+    struct upump_ev_mgr *ev_mgr = upump_ev_mgr_from_upump_mgr(mgr);
+    ev_mgr->destroy = true;
+
     return mgr;
 }
