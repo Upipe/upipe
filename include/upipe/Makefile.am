@@ -33,6 +33,7 @@ pkginclude_HEADERS = \
 	umem.h \
 	umem_alloc.h \
 	umem_pool.h \
+	umutex.h \
 	upipe.h \
 	upipe_dump.h \
 	upipe_helper_bin_input.h \
