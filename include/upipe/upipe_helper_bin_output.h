@@ -207,7 +207,7 @@ static int STRUCTURE##_control_bin_output(struct upipe *upipe,              \
             struct upipe *output = va_arg(args, struct upipe *);            \
             return STRUCTURE##_set_bin_output(upipe, output);               \
         }                                                                   \
-        case UPIPE_GET_LAST_INNER: {                                        \
+        case UPIPE_BIN_GET_LAST_INNER: {                                    \
             struct upipe **p = va_arg(args, struct upipe **);               \
             *p = s->LAST_INNER;                                             \
             return (*p != NULL) ? UBASE_ERR_NONE : UBASE_ERR_UNHANDLED;     \

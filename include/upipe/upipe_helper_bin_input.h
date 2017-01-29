@@ -290,7 +290,7 @@ static int STRUCTURE##_control_bin_input(struct upipe *upipe,               \
             if (s->FIRST_INNER == NULL)                                     \
                 return UBASE_ERR_INVALID;                                   \
             return upipe_control_va(s->FIRST_INNER, command, args);         \
-        case UPIPE_GET_FIRST_INNER: {                                       \
+        case UPIPE_BIN_GET_FIRST_INNER: {                                   \
             struct upipe **p = va_arg(args, struct upipe **);               \
             *p = s->FIRST_INNER;                                            \
             return (*p != NULL) ? UBASE_ERR_NONE : UBASE_ERR_UNHANDLED;     \

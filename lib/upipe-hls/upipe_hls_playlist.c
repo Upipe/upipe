@@ -1067,7 +1067,7 @@ static int upipe_hls_playlist_control_internal(struct upipe *upipe,
 
     case UPIPE_ATTACH_UPUMP_MGR:
         return upipe_hls_playlist_attach_upump_mgr(upipe);
-    case UPIPE_GET_FIRST_INNER: {
+    case UPIPE_BIN_GET_FIRST_INNER: {
         struct upipe_hls_playlist *upipe_hls_playlist =
             upipe_hls_playlist_from_upipe(upipe);
         struct upipe **p = va_arg(args, struct upipe **);

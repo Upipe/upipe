@@ -450,7 +450,7 @@ static int upipe_auto_src_control(struct upipe *upipe,
         return upipe_auto_src_get_output_size(upipe, output_size_p);
     }
 
-    case UPIPE_GET_FIRST_INNER: {
+    case UPIPE_BIN_GET_FIRST_INNER: {
         struct upipe_auto_src *upipe_auto_src =
             upipe_auto_src_from_upipe(upipe);
         struct upipe **p = va_arg(args, struct upipe **);

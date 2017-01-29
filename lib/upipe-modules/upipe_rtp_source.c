@@ -212,7 +212,7 @@ static int upipe_rtpsrc_control(struct upipe *upipe, int command, va_list args)
         case UPIPE_GET_URI:
         case UPIPE_SET_URI:
             return upipe_control_va(upipe_rtpsrc->source, command, args);
-        case UPIPE_GET_FIRST_INNER: {
+        case UPIPE_BIN_GET_FIRST_INNER: {
             struct upipe **p = va_arg(args, struct upipe **);
             *p = upipe_rtpsrc->source;
             return (*p != NULL) ? UBASE_ERR_NONE : UBASE_ERR_UNHANDLED;

@@ -448,7 +448,7 @@ static int upipe_hls_audio_control(struct upipe *upipe,
         const char *uri = va_arg(args, const char *);
         return upipe_hls_audio_set_uri(upipe, uri);
     }
-    case UPIPE_GET_FIRST_INNER: {
+    case UPIPE_BIN_GET_FIRST_INNER: {
         struct upipe_hls_audio *upipe_hls_audio =
             upipe_hls_audio_from_upipe(upipe);
         struct upipe **p = va_arg(args, struct upipe **);

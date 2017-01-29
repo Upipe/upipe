@@ -244,7 +244,7 @@ static int upipe_seq_src_control(struct upipe *upipe,
         const char **uri_p = va_arg(args, const char **);
         return upipe_seq_src_get_uri(upipe, uri_p);
     }
-    case UPIPE_GET_FIRST_INNER: {
+    case UPIPE_BIN_GET_FIRST_INNER: {
         struct upipe_seq_src *upipe_seq_src = upipe_seq_src_from_upipe(upipe);
         struct upipe **p = va_arg(args, struct upipe **);
         *p = upipe_seq_src->src;

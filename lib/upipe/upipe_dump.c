@@ -61,12 +61,17 @@ static void upipe_dump_pipe(upipe_dump_pipe_label pipe_label,
  */
 char *upipe_dump_upipe_label_default(struct upipe *upipe)
 {
-    /* We assume that the first probe is a prefix probe and print the
-     * node. */
-    const char *prefix = uprobe_pfx_get_name(upipe->uprobe) ?: "";
+    struct uprobe *uprobe = upipe->uprobe;
+    const char *prefix = NULL;
+
+    while (uprobe != NULL && prefix == NULL) {
+        prefix = uprobe_pfx_get_name(uprobe);
+        uprobe = uprobe->next;
+    }
 
     char *string = malloc(strlen(prefix) + sizeof(" (aaaa)"));
-    sprintf(string, "%s (%4.4s)", prefix, (const char *)&upipe->mgr->signature);
+    sprintf(string, "%s (%4.4s)", prefix ?: "",
+            (const char *)&upipe->mgr->signature);
     return string;
 }
 
@@ -238,10 +243,11 @@ static void upipe_dump_pipe(upipe_dump_pipe_label pipe_label,
     ulist_add(list, upipe_to_uchain(upipe));
 
     /* Dig into inner pipes. */
+    upipe_bin_freeze(upipe);
     struct upipe *first_inner = NULL;
     struct upipe *last_inner = NULL;
-    upipe_get_first_inner(upipe, &first_inner);
-    upipe_get_last_inner(upipe, &last_inner);
+    upipe_bin_get_first_inner(upipe, &first_inner);
+    upipe_bin_get_last_inner(upipe, &last_inner);
     if (first_inner != NULL || last_inner != NULL) {
         first_inner = first_inner ?: last_inner;
         last_inner = last_inner ?: first_inner;
@@ -277,6 +283,7 @@ static void upipe_dump_pipe(upipe_dump_pipe_label pipe_label,
         ctx->output_uid = ctx->input_uid;
         fprintf(file, "pipe%"PRIu64" [label=\"%s\"];\n", ctx->input_uid, label);
     }
+    upipe_bin_thaw(upipe);
 
     /* Iterate over subpipes. */
     struct upipe *sub = NULL;

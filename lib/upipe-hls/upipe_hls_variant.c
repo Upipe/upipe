@@ -290,7 +290,7 @@ static int upipe_hls_variant_sub_control(struct upipe *upipe,
         struct upipe **super_p = va_arg(args, struct upipe **);
         return upipe_hls_variant_sub_get_super(upipe, super_p);
     }
-    case UPIPE_GET_FIRST_INNER: {
+    case UPIPE_BIN_GET_FIRST_INNER: {
         struct upipe_hls_variant_sub *upipe_hls_variant_sub =
             upipe_hls_variant_sub_from_upipe(upipe);
         struct upipe **p = va_arg(args, struct upipe **);
