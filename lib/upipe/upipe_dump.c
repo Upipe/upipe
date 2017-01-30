@@ -42,6 +42,8 @@ struct upipe_dump_ctx {
     uint64_t input_uid;
     /** unique ID for pipe output */
     uint64_t output_uid;
+    /** true if the output graph was already dumped */
+    bool output_dumped;
     /** original uchain */
     struct uchain original_uchain;
     /** original opaque */
@@ -52,7 +54,7 @@ struct upipe_dump_ctx {
 static void upipe_dump_pipe(upipe_dump_pipe_label pipe_label,
                             upipe_dump_flow_def_label flow_def_label,
                             FILE *file, struct upipe *upipe, uint64_t *uid_p,
-                            struct uchain *list, bool downwards);
+                            struct uchain *list, bool no_output);
 
 /** @This converts a pipe to a label (default function).
  *
@@ -133,11 +135,17 @@ static void upipe_dump_output(upipe_dump_pipe_label pipe_label,
 {
     struct upipe_dump_ctx *ctx =
         upipe_get_opaque(upipe, struct upipe_dump_ctx *);
+    ctx->output_dumped = true;
 
     /* Iterate over subpipes. */
     struct upipe *sub = NULL;
-    while (ubase_check(upipe_iterate_sub(upipe, &sub)) && sub != NULL)
-        upipe_dump_output(pipe_label, flow_def_label, file, sub, uid_p, list);
+    while (ubase_check(upipe_iterate_sub(upipe, &sub)) && sub != NULL) {
+        struct upipe_dump_ctx *sub_ctx =
+                upipe_get_opaque(sub, struct upipe_dump_ctx *);
+        if (!sub_ctx->output_dumped)
+            upipe_dump_output(pipe_label, flow_def_label, file, sub,
+                              uid_p, list);
+    }
 
     /* Edge with output. */
     struct upipe *output = NULL;
@@ -211,25 +219,15 @@ static void upipe_dump_inner(upipe_dump_pipe_label pipe_label,
  * @param upipe upipe to dump
  * @param uid_p pointer to unique ID
  * @param list list of already printed pipes
- * @param downwards true if we are called by the super-pipe
+ * @param no_output true if the output will be dumped from another context
  */
 static void upipe_dump_pipe(upipe_dump_pipe_label pipe_label,
                             upipe_dump_flow_def_label flow_def_label,
                             FILE *file, struct upipe *upipe, uint64_t *uid_p,
-                            struct uchain *list, bool downwards)
+                            struct uchain *list, bool no_output)
 {
     if (upipe_dump_find(upipe, list))
         return;
-
-    if (!downwards) {
-        /* Find out if we have a super-pipe. */
-        struct upipe *super;
-        if (ubase_check(upipe_sub_get_super(upipe, &super)) && super != NULL) {
-            upipe_dump_pipe(pipe_label, flow_def_label, file, super,
-                            uid_p, list, false);
-            return;
-        }
-    }
 
     char *label = pipe_label(upipe);
 
@@ -237,6 +235,7 @@ static void upipe_dump_pipe(upipe_dump_pipe_label pipe_label,
     struct upipe_dump_ctx *ctx = malloc(sizeof(struct upipe_dump_ctx));
     assert(ctx != NULL);
     ctx->input_uid = (*uid_p)++;
+    ctx->output_dumped = !no_output;
     ctx->original_uchain = upipe->uchain;
     ctx->original_opaque = upipe->opaque;
     upipe_set_opaque(upipe, ctx);
@@ -299,7 +298,7 @@ static void upipe_dump_pipe(upipe_dump_pipe_label pipe_label,
                 ctx->input_uid, sub_ctx->input_uid);
     }
 
-    if (!downwards)
+    if (!no_output)
         upipe_dump_output(pipe_label, flow_def_label, file, upipe, uid_p, list);
 
     free(label);
@@ -321,6 +320,7 @@ void upipe_dump_va(upipe_dump_pipe_label pipe_label,
 
     uint64_t uid = 0;
     struct uchain list;
+    struct uchain *uchain, *uchain_tmp;
     ulist_init(&list);
 
     fprintf(file, "digraph \"upipe dump\" {\n");
@@ -334,10 +334,18 @@ void upipe_dump_va(upipe_dump_pipe_label pipe_label,
         upipe_dump_pipe(pipe_label, flow_def_label, file, source,
                         &uid, &list, false);
 
+    /* Walk through the super-pipes that we may have forgotten. */
+    ulist_foreach (&list, uchain) {
+        struct upipe *upipe = upipe_from_uchain(uchain);
+        struct upipe *super;
+        if (ubase_check(upipe_sub_get_super(upipe, &super)) && super != NULL)
+            upipe_dump_pipe(pipe_label, flow_def_label, file, super,
+                            &uid, &list, false);
+    }
+
     fprintf(file, "}\n");
 
     /* Clean up. */
-    struct uchain *uchain, *uchain_tmp;
     ulist_delete_foreach (&list, uchain, uchain_tmp) {
         struct upipe *upipe = upipe_from_uchain(uchain);
         struct upipe_dump_ctx *ctx =
