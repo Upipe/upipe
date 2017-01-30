@@ -73,8 +73,6 @@
 #include <arpa/inet.h>
 #include <netdb.h>
 
-#include <ev.h>
-
 #include <bitstream/ietf/rtp.h>
 #include <bitstream/ietf/rtp2250.h>
 #include <bitstream/mpeg/mpga.h>
@@ -223,7 +221,6 @@ int main(int argc, char *argv[])
     bool ret;
 
     /* env */
-    struct ev_loop *loop = ev_default_loop(0);
     struct umem_mgr *umem_mgr = umem_alloc_mgr_alloc();
     assert(umem_mgr != NULL);
     struct udict_mgr *udict_mgr = udict_inline_mgr_alloc(UDICT_POOL_DEPTH,
@@ -234,8 +231,8 @@ int main(int argc, char *argv[])
     ubuf_mgr = ubuf_block_mem_mgr_alloc(UBUF_POOL_DEPTH, UBUF_POOL_DEPTH,
                                                          umem_mgr, 0, 0, -1, 0);
     assert(ubuf_mgr != NULL);
-    struct upump_mgr *upump_mgr = upump_ev_mgr_alloc(loop, UPUMP_POOL,
-                                                     UPUMP_BLOCKER_POOL);
+    struct upump_mgr *upump_mgr = upump_ev_mgr_alloc_default(UPUMP_POOL,
+            UPUMP_BLOCKER_POOL);
     assert(upump_mgr != NULL);
     struct uclock *uclock = uclock_std_alloc(0);
     assert(uclock != NULL);
@@ -337,7 +334,7 @@ int main(int argc, char *argv[])
     upump_start(write_pump);
 
     /* fire */
-    ev_loop(loop, 0);
+    upump_mgr_run(upump_mgr, NULL);
 
     assert(counter_in == 330);
     close(sockfd);
@@ -357,6 +354,5 @@ int main(int argc, char *argv[])
 
     freeaddrinfo(servinfo);
 
-    ev_default_destroy();
     return 0;
 }

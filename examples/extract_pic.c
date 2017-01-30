@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2013-2014 OpenHeadend S.A.R.L.
+ * Copyright (C) 2013-2017 OpenHeadend S.A.R.L.
  *
  * Authors: Christophe Massiot
  *
@@ -72,7 +72,6 @@
 #include <pthread.h>
 #include <errno.h>
 
-#include <ev.h>
 #include <pthread.h>
 
 #define UDICT_POOL_DEPTH    50
@@ -281,15 +280,14 @@ int main(int argc, char **argv)
     logstream = stderr;
 
     /* setup environnement */
-    struct ev_loop *loop = ev_default_loop(0);
     struct umem_mgr *umem_mgr = umem_alloc_mgr_alloc();
     struct udict_mgr *udict_mgr = udict_inline_mgr_alloc(UDICT_POOL_DEPTH,
                                                          umem_mgr, -1, -1);
     uref_mgr = uref_std_mgr_alloc(UREF_POOL_DEPTH, udict_mgr,
                                                    0);
 
-    struct upump_mgr *upump_mgr = upump_ev_mgr_alloc(loop,
-                            UPUMP_POOL, UPUMP_BLOCKER_POOL);
+    struct upump_mgr *upump_mgr = upump_ev_mgr_alloc_default(UPUMP_POOL,
+            UPUMP_BLOCKER_POOL);
 
     /* default probe */
     logger = uprobe_stdio_alloc(NULL, logstream, loglevel);
@@ -360,7 +358,7 @@ int main(int argc, char **argv)
     upipe_release(ts_demux);
 
     /* fire loop ! */
-    ev_loop(loop, 0);
+    upump_mgr_run(upump_mgr, NULL);
 
     /* release everyhing */
     upipe_release(upipe_source);
@@ -381,7 +379,6 @@ int main(int argc, char **argv)
     udict_mgr_release(udict_mgr);
     umem_mgr_release(umem_mgr);
 
-    ev_default_destroy();
     upipe_av_clean();
 
     return 0;

@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2014-2016 OpenHeadend S.A.R.L.
+ * Copyright (C) 2014-2017 OpenHeadend S.A.R.L.
  *
  * Authors: Christophe Massiot
  *
@@ -56,8 +56,6 @@
 #include <unistd.h>
 #include <pthread.h>
 #include <assert.h>
-
-#include <ev.h>
 
 #define UDICT_POOL_DEPTH 0
 #define UREF_POOL_DEPTH 0
@@ -149,18 +147,17 @@ static void *thread(void *_upipe_xfer_mgr)
 {
     struct upipe_mgr *upipe_xfer_mgr = (struct upipe_mgr *)_upipe_xfer_mgr;
 
-    struct ev_loop *loop = ev_loop_new(0);
-    struct upump_mgr *upump_mgr = upump_ev_mgr_alloc(loop, UPUMP_POOL, UPUMP_BLOCKER_POOL);
+    struct upump_mgr *upump_mgr = upump_ev_mgr_alloc_loop(UPUMP_POOL,
+                                                          UPUMP_BLOCKER_POOL);
     assert(upump_mgr != NULL);
     uprobe_pthread_upump_mgr_set(logger, upump_mgr);
 
     ubase_assert(upipe_xfer_mgr_attach(upipe_xfer_mgr, upump_mgr));
     upipe_mgr_release(upipe_xfer_mgr);
 
-    ev_loop(loop, 0);
+    upump_mgr_run(upump_mgr, NULL);
 
     upump_mgr_release(upump_mgr);
-    ev_loop_destroy(loop);
 
     return NULL;
 }
@@ -184,9 +181,8 @@ static int catch(struct uprobe *uprobe, struct upipe *upipe, int event, va_list 
 
 int main(int argc, char **argv)
 {
-    struct ev_loop *loop = ev_default_loop(0);
     struct upump_mgr *upump_mgr =
-        upump_ev_mgr_alloc(loop, UPUMP_POOL, UPUMP_BLOCKER_POOL);
+        upump_ev_mgr_alloc_default(UPUMP_POOL, UPUMP_BLOCKER_POOL);
 
     struct umem_mgr *umem_mgr = umem_alloc_mgr_alloc();
     assert(umem_mgr != NULL);
@@ -253,7 +249,7 @@ int main(int argc, char **argv)
     upipe_input(upipe_handle, uref, NULL);
     upipe_release(upipe_handle);
 
-    ev_loop(loop, 0);
+    upump_mgr_run(upump_mgr, NULL);
 
     uprobe_err(logger, NULL, "joining");
     assert(!pthread_join(wsink_thread_id, NULL));
@@ -309,7 +305,7 @@ int main(int argc, char **argv)
     upipe_input(upipe_handle, uref, NULL);
     upipe_release(upipe_handle);
 
-    ev_loop(loop, 0);
+    upump_mgr_run(upump_mgr, NULL);
 
     uprobe_err(logger, NULL, "joining");
     assert(!pthread_join(wsink_thread_id, NULL));
@@ -325,6 +321,5 @@ int main(int argc, char **argv)
     umem_mgr_release(umem_mgr);
     uprobe_release(logger);
 
-    ev_default_destroy();
     return 0;
 }

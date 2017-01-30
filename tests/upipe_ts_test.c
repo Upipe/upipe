@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2013-2015 OpenHeadend S.A.R.L.
+ * Copyright (C) 2013-2017 OpenHeadend S.A.R.L.
  *
  * Authors: Christophe Massiot
  *
@@ -79,8 +79,6 @@
 #include <unistd.h>
 #include <inttypes.h>
 #include <assert.h>
-
-#include <ev.h>
 
 #define UDICT_POOL_DEPTH 0
 #define UREF_POOL_DEPTH 0
@@ -314,7 +312,6 @@ int main(int argc, char *argv[])
     src_file = argv[1];
     sink_file = argv[2];
 
-    struct ev_loop *loop = ev_default_loop(0);
     struct umem_mgr *umem_mgr = umem_alloc_mgr_alloc();
     assert(umem_mgr != NULL);
     struct udict_mgr *udict_mgr = udict_inline_mgr_alloc(UDICT_POOL_DEPTH,
@@ -322,7 +319,7 @@ int main(int argc, char *argv[])
     assert(udict_mgr != NULL);
     uref_mgr = uref_std_mgr_alloc(UREF_POOL_DEPTH, udict_mgr, 0);
     assert(uref_mgr != NULL);
-    upump_mgr = upump_ev_mgr_alloc(loop, UPUMP_POOL, UPUMP_BLOCKER_POOL);
+    upump_mgr = upump_ev_mgr_alloc_default(UPUMP_POOL, UPUMP_BLOCKER_POOL);
     assert(upump_mgr != NULL);
 
     struct uprobe uprobe_s;
@@ -447,7 +444,7 @@ int main(int argc, char *argv[])
 
     upipe_release(upipe_ts);
 
-    ev_loop(loop, 0);
+    upump_mgr_run(upump_mgr, NULL);
 
     upipe_release(upipe_even);
     uprobe_release(logger);
@@ -457,6 +454,5 @@ int main(int argc, char *argv[])
     uprobe_clean(&uprobe_src_s);
     uprobe_clean(&uprobe_s);
 
-    ev_default_destroy();
     return 0;
 }

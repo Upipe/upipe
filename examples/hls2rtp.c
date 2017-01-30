@@ -94,7 +94,6 @@
 #include <upipe-pthread/upipe_pthread_transfer.h>
 #include <upipe-pthread/umutex_pthread.h>
 
-#include <ev.h>
 #include <pthread.h>
 
 struct output {
@@ -165,7 +164,6 @@ static struct uprobe *main_probe = NULL;
 static struct uref_mgr *uref_mgr;
 static struct ev_signal signal_watcher;
 static struct ev_io stdin_watcher;
-static struct ev_loop *main_loop;
 
 static struct uprobe *uprobe_rewrite_date_alloc(struct uprobe *next,
                                                 bool video);
@@ -276,12 +274,10 @@ static void cmd_quit(void)
     upipe_cleanup(&src);
     upipe_cleanup(&video_output.sink);
     upipe_cleanup(&audio_output.sink);
-    ev_signal_stop(main_loop, &signal_watcher);
-    ev_io_stop(main_loop, &stdin_watcher);
 }
 
 /** @This handles SIGINT signal. */
-static void sigint_cb(struct ev_loop *loop, struct ev_signal *w, int revents)
+static void sigint_cb(struct upump *upump)
 {
     cmd_quit();
 }
@@ -301,7 +297,7 @@ static void cmd_select(const char *id)
 }
 
 /** @This handles stdin events. */
-static void stdin_cb(struct ev_loop *loop, struct ev_io *io, int revents)
+static void stdin_cb(struct upump *upump)
 {
     char cmd_buffer[2048];
 
@@ -1401,16 +1397,21 @@ int main(int argc, char **argv)
     /*
      * create event loop
      */
-    main_loop = ev_default_loop(0);
-    assert(main_loop);
+    struct upump_mgr *upump_mgr =
+        upump_ev_mgr_alloc_default(UPUMP_POOL, UPUMP_BLOCKER_POOL);
+    assert(upump_mgr);
+    struct upump *sigint_pump = upump_alloc_signal(upump_mgr, sigint_cb,
+            (void *)SIGINT, NULL, SIGINT);
+    upump_set_status(sigint_pump, false);
+    upump_start(sigint_pump);
 
-    ev_signal_init(&signal_watcher, sigint_cb, SIGINT);
-    ev_signal_start(main_loop, &signal_watcher);
-
-    ev_init(&stdin_watcher, stdin_cb);
-    ev_io_set(&stdin_watcher, STDIN_FILENO, EV_READ);
-    if (!no_stdin)
-        ev_io_start(main_loop, &stdin_watcher);
+    struct upump *stdin_pump = NULL;
+    if (!no_stdin) {
+        stdin_pump = upump_alloc_fd_read(upump_mgr, stdin_cb, NULL, NULL,
+                                         STDIN_FILENO);
+        upump_set_status(stdin_pump, false);
+        upump_start(stdin_pump);
+    }
 
     /*
      * create root probe
@@ -1475,9 +1476,6 @@ int main(int argc, char **argv)
      * add upump manager probe
      */
     {
-        struct upump_mgr *upump_mgr =
-            upump_ev_mgr_alloc(main_loop, UPUMP_POOL, UPUMP_BLOCKER_POOL);
-        assert(upump_mgr);
         main_probe = uprobe_pthread_upump_mgr_alloc(main_probe);
         assert(main_probe != NULL);
         uprobe_pthread_upump_mgr_set(main_probe, upump_mgr);
@@ -1689,11 +1687,17 @@ int main(int argc, char **argv)
     /*
      * run main loop
      */
-    ev_loop(main_loop, 0);
+    upump_mgr_run(upump_mgr, NULL);
 
     /*
      * release ressources
      */
+    upump_stop(sigint_pump);
+    upump_free(sigint_pump);
+    if (stdin_pump != NULL) {
+        upump_stop(stdin_pump);
+        upump_free(stdin_pump);
+    }
     upipe_mgr_release(probe_uref_mgr);
     upipe_mgr_release(time_limit_mgr);
     upipe_mgr_release(rtp_prepend_mgr);
@@ -1703,8 +1707,6 @@ int main(int argc, char **argv)
     uprobe_clean(&probe_src);
     uprobe_clean(&probe_error);
     uref_mgr_release(uref_mgr);
-
-    ev_loop_destroy(main_loop);
 
     return 0;
 }

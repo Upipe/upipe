@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2012-2015 OpenHeadend S.A.R.L.
+ * Copyright (C) 2012-2017 OpenHeadend S.A.R.L.
  *
  * Authors: Christophe Massiot
             Benjamin Cohen
@@ -70,8 +70,6 @@
 #include <netinet/in.h>
 #include <arpa/inet.h>
 #include <netdb.h>
-
-#include <ev.h>
 
 #define UDICT_POOL_DEPTH 0
 #define UREF_POOL_DEPTH 0
@@ -258,7 +256,6 @@ int main(int argc, char *argv[])
     bool ret;
 
     /* env */
-    struct ev_loop *loop = ev_default_loop(0);
     struct umem_mgr *umem_mgr = umem_alloc_mgr_alloc();
     assert(umem_mgr != NULL);
     struct udict_mgr *udict_mgr = udict_inline_mgr_alloc(UDICT_POOL_DEPTH,
@@ -269,8 +266,8 @@ int main(int argc, char *argv[])
     ubuf_mgr = ubuf_block_mem_mgr_alloc(UBUF_POOL_DEPTH, UBUF_POOL_DEPTH,
                                                          umem_mgr, 0, 0, -1, 0);
     assert(ubuf_mgr != NULL);
-    struct upump_mgr *upump_mgr = upump_ev_mgr_alloc(loop, UPUMP_POOL,
-                                                     UPUMP_BLOCKER_POOL);
+    struct upump_mgr *upump_mgr = upump_ev_mgr_alloc_default(UPUMP_POOL,
+            UPUMP_BLOCKER_POOL);
     assert(upump_mgr != NULL);
     struct uclock *uclock = uclock_std_alloc(0);
     assert(uclock != NULL);
@@ -338,7 +335,7 @@ int main(int argc, char *argv[])
     upump_start(write_pump);
 
     /* fire */
-    ev_loop(loop, 0);
+    upump_mgr_run(upump_mgr, NULL);
 
     assert(udpsrc_test_from_upipe(udpsrc_test)->counter == 110);
     close(sockfd);
@@ -373,7 +370,7 @@ int main(int argc, char *argv[])
     upump_start(write_pump);
 
     /* fire again */
-    ev_loop(loop, 0);
+    upump_mgr_run(upump_mgr, NULL);
 
     /* release */
     upump_free(write_pump);
@@ -392,6 +389,5 @@ int main(int argc, char *argv[])
 
     freeaddrinfo(servinfo);
 
-    ev_default_destroy();
     return 0;
 }

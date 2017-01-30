@@ -21,8 +21,6 @@
 #include <upipe-modules/upipe_probe_uref.h>
 #include <upipe-modules/upipe_null.h>
 
-#include <ev.h>
-
 #include <stdlib.h>
 #include <assert.h>
 
@@ -165,10 +163,8 @@ int main(int argc, char *argv[])
     nb_files = argc - 1;
     files = argv + 1;
 
-    struct ev_loop *loop = ev_default_loop(0);
-    assert(loop != NULL);
-    struct upump_mgr *upump_mgr = upump_ev_mgr_alloc(loop, UPUMP_POOL,
-                                                     UPUMP_BLOCKER_POOL);
+    struct upump_mgr *upump_mgr = upump_ev_mgr_alloc_default(UPUMP_POOL,
+            UPUMP_BLOCKER_POOL);
     assert(upump_mgr != NULL);
 
     struct umem_mgr *umem_mgr = umem_alloc_mgr_alloc();
@@ -235,7 +231,7 @@ int main(int argc, char *argv[])
     upipe_release(upipe_null);
 
     /* run main loop */
-    ev_loop(loop, 0);
+    upump_mgr_run(upump_mgr, NULL);
 
     /* release */
     upipe_release(upipe_fsrc);
@@ -246,6 +242,5 @@ int main(int argc, char *argv[])
     uprobe_clean(&uprobe_fsrc);
     uprobe_clean(&uprobe_uref);
     uprobe_release(logger);
-    ev_default_destroy();
     return 0;
 }

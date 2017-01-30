@@ -93,7 +93,6 @@
 #include <upipe-alsa/upipe_alsa_sink.h>
 #endif
 
-#include <ev.h>
 #include <pthread.h>
 
 #define UPROBE_LOG_LEVEL UPROBE_LOG_DEBUG
@@ -725,8 +724,7 @@ int main(int argc, char **argv)
     const char *uri = argv[optind++];
 
     /* structures managers */
-    struct ev_loop *loop = ev_default_loop(0);
-    main_upump_mgr = upump_ev_mgr_alloc(loop, UPUMP_POOL, UPUMP_BLOCKER_POOL);
+    main_upump_mgr = upump_ev_mgr_alloc_default(UPUMP_POOL, UPUMP_BLOCKER_POOL);
     assert(main_upump_mgr != NULL);
     struct umem_mgr *umem_mgr = umem_pool_mgr_alloc_simple(UMEM_POOL);
     struct udict_mgr *udict_mgr = udict_inline_mgr_alloc(UDICT_POOL_DEPTH,
@@ -811,7 +809,7 @@ int main(int argc, char **argv)
     upump_start(idler_start);
 
     /* main loop */
-    ev_loop(loop, 0);
+    upump_mgr_run(main_upump_mgr, NULL);
 
     uprobe_clean(&uprobe_src_s);
     uprobe_clean(&uprobe_video_s);
@@ -822,7 +820,6 @@ int main(int argc, char **argv)
 
     upipe_av_clean();
 
-    ev_default_destroy();
     return 0;
 }
 

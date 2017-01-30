@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2012-2015 OpenHeadend S.A.R.L.
+ * Copyright (C) 2012-2017 OpenHeadend S.A.R.L.
  *
  * Authors: Christophe Massiot
  *
@@ -40,8 +40,6 @@
 #include <errno.h>
 #include <assert.h>
 
-#include <ev.h>
-
 #define UPUMP_POOL 1
 #define UPUMP_BLOCKER_POOL 1
 
@@ -51,7 +49,6 @@ static const char *padding = "This is an initialized bit of space used to pad su
  * the buffer space of a pipe. */
 #define MIN_READ (128*1024)
 
-static struct ev_loop *loop;
 static int pipefd[2];
 static struct upump_mgr *mgr;
 static struct upump *write_idler;
@@ -111,8 +108,7 @@ static void read_watcher_cb(struct upump *unused)
 int main(int argc, char **argv)
 {
     long flags;
-    loop = ev_default_loop(0);
-    mgr = upump_ev_mgr_alloc(loop, UPUMP_POOL, UPUMP_BLOCKER_POOL);
+    mgr = upump_ev_mgr_alloc_default(UPUMP_POOL, UPUMP_BLOCKER_POOL);
     assert(mgr != NULL);
 
     /* Create a pipe with non-blocking write */
@@ -136,7 +132,7 @@ int main(int argc, char **argv)
 
     /* Start tests */
     upump_start(write_idler);
-    ev_loop(loop, 0);
+    upump_mgr_run(mgr, NULL);
     assert(bytes_read);
     assert(bytes_read == bytes_written);
 
@@ -147,6 +143,5 @@ int main(int argc, char **argv)
     upump_free(read_watcher);
     upump_mgr_release(mgr);
 
-    ev_default_destroy();
     return 0;
 }

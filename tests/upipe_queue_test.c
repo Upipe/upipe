@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2012-2014 OpenHeadend S.A.R.L.
+ * Copyright (C) 2012-2017 OpenHeadend S.A.R.L.
  *
  * Authors: Christophe Massiot
  *
@@ -52,8 +52,6 @@
 #include <stdbool.h>
 #include <assert.h>
 
-#include <ev.h>
-
 #define UDICT_POOL_DEPTH 0
 #define UREF_POOL_DEPTH 0
 #define UPUMP_POOL 0
@@ -63,7 +61,6 @@
 
 UREF_ATTR_SMALL_UNSIGNED(test, test, "x.test", test)
 
-static struct ev_loop *loop;
 static struct upump_mgr *upump_mgr;
 static struct upipe *upipe_qsink;
 static uint8_t counter = 0;
@@ -172,8 +169,7 @@ static struct upipe_mgr queue_test_mgr = {
 
 int main(int argc, char *argv[])
 {
-    loop = ev_default_loop(0);
-    upump_mgr = upump_ev_mgr_alloc(loop, UPUMP_POOL, UPUMP_BLOCKER_POOL);
+    upump_mgr = upump_ev_mgr_alloc_default(UPUMP_POOL, UPUMP_BLOCKER_POOL);
 
     struct umem_mgr *umem_mgr = umem_alloc_mgr_alloc();
     assert(umem_mgr != NULL);
@@ -236,7 +232,7 @@ int main(int argc, char *argv[])
     urequest_init_uref_mgr(&request, provide_request, NULL);
     upipe_register_request(upipe_qsink, &request);
 
-    ev_loop(loop, 0);
+    upump_mgr_run(upump_mgr, NULL);
 
     assert(counter == 2);
     assert(request_was_unregistered);
@@ -267,6 +263,5 @@ int main(int argc, char *argv[])
     uprobe_release(logger);
     uprobe_clean(&uprobe);
 
-    ev_default_destroy();
     return 0;
 }

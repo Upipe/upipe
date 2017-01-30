@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2012-2015 OpenHeadend S.A.R.L.
+ * Copyright (C) 2012-2017 OpenHeadend S.A.R.L.
  *
  * Authors: Christophe Massiot
  *
@@ -43,8 +43,6 @@
 #include <time.h>
 #include <pthread.h>
 #include <assert.h>
-
-#include <ev.h>
 
 #define UPUMP_POOL 1
 #define UPUMP_BLOCKER_POOL 1
@@ -104,9 +102,8 @@ static void *test_thread(void *_thread)
     /* so that they both start at different places */
     thread->loop = thread->thread;
 
-    struct ev_loop *loop = ev_loop_new(0);
-    struct upump_mgr *upump_mgr = upump_ev_mgr_alloc(loop, UPUMP_POOL,
-                                                     UPUMP_BLOCKER_POOL);
+    struct upump_mgr *upump_mgr = upump_ev_mgr_alloc_loop(UPUMP_POOL,
+                                                          UPUMP_BLOCKER_POOL);
     assert(upump_mgr != NULL);
 
     struct upump *upump = udeal_upump_alloc(&udeal, upump_mgr, test_grab,
@@ -115,11 +112,10 @@ static void *test_thread(void *_thread)
 
     udeal_start(&udeal, upump);
 
-    ev_loop(loop, 0);
+    upump_mgr_run(upump_mgr, NULL);
 
     upump_free(upump);
     upump_mgr_release(upump_mgr);
-    ev_loop_destroy(loop);
 
     return NULL;
 }

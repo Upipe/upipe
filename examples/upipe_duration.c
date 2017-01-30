@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2013-2016 OpenHeadend S.A.R.L.
+ * Copyright (C) 2013-2017 OpenHeadend S.A.R.L.
  *
  * Authors: Christophe Massiot
  *
@@ -60,8 +60,6 @@
 #include <upipe-framers/upipe_mpgv_framer.h>
 #include <upipe-framers/upipe_h264_framer.h>
 #include <upipe-framers/upipe_h265_framer.h>
-
-#include <ev.h>
 
 #define UPROBE_LOG_LEVEL UPROBE_LOG_NOTICE
 #define UMEM_POOL 512
@@ -151,9 +149,8 @@ int main(int argc, char **argv)
     const char *file = argv[1];
 
     /* structures managers */
-    struct ev_loop *loop = ev_default_loop(0);
-    struct upump_mgr *upump_mgr = upump_ev_mgr_alloc(loop, UPUMP_POOL,
-                                                     UPUMP_BLOCKER_POOL);
+    struct upump_mgr *upump_mgr = upump_ev_mgr_alloc_default(UPUMP_POOL,
+            UPUMP_BLOCKER_POOL);
     assert(upump_mgr != NULL);
     struct umem_mgr *umem_mgr = umem_pool_mgr_alloc_simple(UMEM_POOL);
     struct udict_mgr *udict_mgr = udict_inline_mgr_alloc(UDICT_POOL_DEPTH,
@@ -220,7 +217,7 @@ int main(int argc, char **argv)
     upipe_mgr_release(upipe_ts_demux_mgr);
 
     /* main loop */
-    ev_loop(loop, 0);
+    upump_mgr_run(upump_mgr, NULL);
 
     upipe_release(upipe_src);
     count_free(sink);
@@ -228,7 +225,6 @@ int main(int argc, char **argv)
     uprobe_release(uprobe);
     uprobe_clean(&uprobe_split_s);
 
-    ev_default_destroy();
     printf("%.2f\n", (double)duration / UCLOCK_FREQ);
 
     return 0;

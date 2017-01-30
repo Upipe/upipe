@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2012-2014 OpenHeadend S.A.R.L.
+ * Copyright (C) 2012-2017 OpenHeadend S.A.R.L.
  *
  * Authors: Benjamin Cohen
  *          Christophe Massiot
@@ -124,7 +124,6 @@ graph {flow: east}
 #include <upipe-gl/uprobe_gl_sink_cube.h>
 #include <upipe-filters/upipe_filter_blend.h>
 
-#include <ev.h>
 #include <pthread.h>
 
 #define ALIVE() { printf("ALIVE %s %d\n", __func__, __LINE__); fflush(stdout);}
@@ -199,16 +198,14 @@ static void *upipe_glxplayer_source_thread(void *_glxplayer)
 {
     struct upipe_glxplayer *glxplayer = (struct upipe_glxplayer *)_glxplayer;
 
-    struct ev_loop *loop = ev_loop_new(0);
     struct upump_mgr *upump_mgr =
-        upump_ev_mgr_alloc(loop, UPUMP_POOL, UPUMP_BLOCKER_POOL);
+        upump_ev_mgr_alloc_loop(UPUMP_POOL, UPUMP_BLOCKER_POOL);
     upipe_xfer_mgr_attach(glxplayer->src_xfer, upump_mgr);
     uprobe_pthread_upump_mgr_set(glxplayer->uprobe_logger, upump_mgr);
+
+    upump_mgr_run(upump_mgr, NULL);
+
     upump_mgr_release(upump_mgr);
-
-    ev_loop(loop, 0);
-
-    ev_loop_destroy(loop);
     printf("end of source thread\n");
     upipe_mgr_release(glxplayer->dec_xfer);
     pthread_join(glxplayer->dec_thread_id, NULL);
@@ -225,16 +222,14 @@ static void *upipe_glxplayer_dec_thread(void *_glxplayer)
 {
     struct upipe_glxplayer *glxplayer = (struct upipe_glxplayer *)_glxplayer;
 
-    struct ev_loop *loop = ev_loop_new(0);
     struct upump_mgr *upump_mgr =
-        upump_ev_mgr_alloc(loop, UPUMP_POOL, UPUMP_BLOCKER_POOL);
+        upump_ev_mgr_alloc_loop(UPUMP_POOL, UPUMP_BLOCKER_POOL);
     upipe_xfer_mgr_attach(glxplayer->dec_xfer, upump_mgr);
     uprobe_pthread_upump_mgr_set(glxplayer->uprobe_logger, upump_mgr);
+
+    upump_mgr_run(upump_mgr, NULL);
+
     upump_mgr_release(upump_mgr);
-
-    ev_loop(loop, 0);
-
-    ev_loop_destroy(loop);
     printf("end of avc thread\n");
 
     return NULL;
@@ -971,20 +966,18 @@ int main(int argc, char** argv)
     const char *uri = argv[optind++];
 
     // upipe env
-    struct ev_loop *loop = ev_default_loop(0);
     struct upump_mgr *upump_mgr =
-        upump_ev_mgr_alloc(loop, UPUMP_POOL, UPUMP_BLOCKER_POOL);
+        upump_ev_mgr_alloc_default(UPUMP_POOL, UPUMP_BLOCKER_POOL);
     assert(upump_mgr != NULL);
     struct upipe_glxplayer *glxplayer = upipe_glxplayer_alloc(loglevel);
     assert(glxplayer != NULL);
 
     upipe_glxplayer_play(glxplayer, upump_mgr, uri, upipe_ts);
-    upump_mgr_release(upump_mgr);
 
-    ev_loop(loop, 0);
+    upump_mgr_run(upump_mgr, NULL);
 
     upipe_glxplayer_free(glxplayer);
-    ev_default_destroy();
+    upump_mgr_release(upump_mgr);
 
     return 0; 
 }
