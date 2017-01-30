@@ -35,6 +35,8 @@
 
 #include <ev.h>
 
+#define UPUMP_EV_SIGNATURE UBASE_FOURCC('e','v',' ',' ')
+
 /** @This allocates and initializes a upump_mgr structure bound to a given
  * ev loop.
  *

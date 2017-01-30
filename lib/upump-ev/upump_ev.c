@@ -64,13 +64,14 @@ UBASE_FROM_TO(upump_ev_mgr, urefcount, urefcount, urefcount)
  */
 struct upump_ev {
     /** type of event to watch */
-    enum upump_type event;
+    int event;
 
     /** ev private structure */
     union {
         struct ev_io ev_io;
         struct ev_timer ev_timer;
         struct ev_idle ev_idle;
+        struct ev_signal ev_signal;
     };
 
     /** common structure */
@@ -122,6 +123,21 @@ static void upump_ev_dispatch_idle(struct ev_loop *ev_loop,
     upump_common_dispatch(upump);
 }
 
+/** @This dispatches an event to a pump for type ev_signal.
+ *
+ * @param ev_loop current event loop (unused parameter)
+ * @param ev_signal ev pump
+ * @param revents events triggered (unused parameter)
+ */
+static void upump_ev_dispatch_signal(struct ev_loop *ev_loop,
+                                     struct ev_signal *ev_signal, int revents)
+{
+    struct upump_ev *upump_ev = container_of(ev_signal, struct upump_ev,
+                                             ev_signal);
+    struct upump *upump = upump_ev_to_upump(upump_ev);
+    upump_common_dispatch(upump);
+}
+
 /** @This allocates a new upump_ev.
  *
  * @param mgr pointer to a upump_mgr structure wrapped into a
@@ -131,7 +147,7 @@ static void upump_ev_dispatch_idle(struct ev_loop *ev_loop,
  * @return pointer to allocated pump, or NULL in case of failure
  */
 static struct upump *upump_ev_alloc(struct upump_mgr *mgr,
-                                    enum upump_type event, va_list args)
+                                    int event, va_list args)
 {
     struct upump_ev_mgr *ev_mgr = upump_ev_mgr_from_upump_mgr(mgr);
     struct upump_ev *upump_ev = upool_alloc(&ev_mgr->common_mgr.upump_pool,
@@ -162,6 +178,12 @@ static struct upump *upump_ev_alloc(struct upump_mgr *mgr,
             ev_io_init(&upump_ev->ev_io, upump_ev_dispatch_io, fd, EV_WRITE);
             break;
         }
+        case UPUMP_TYPE_SIGNAL: {
+            int signal = va_arg(args, int);
+            ev_signal_init(&upump_ev->ev_signal, upump_ev_dispatch_signal,
+                           signal);
+            break;
+        }
         default:
             free(upump_ev);
             return NULL;
@@ -176,8 +198,9 @@ static struct upump *upump_ev_alloc(struct upump_mgr *mgr,
 /** @This starts a pump.
  *
  * @param upump description structure of the pump
+ * @param status blocking status of the pump
  */
-static void upump_ev_real_start(struct upump *upump)
+static void upump_ev_real_start(struct upump *upump, bool status)
 {
     struct upump_ev *upump_ev = upump_ev_from_upump(upump);
     struct upump_ev_mgr *ev_mgr = upump_ev_mgr_from_upump_mgr(upump->mgr);
@@ -193,20 +216,28 @@ static void upump_ev_real_start(struct upump *upump)
         case UPUMP_TYPE_FD_WRITE:
             ev_io_start(ev_mgr->ev_loop, &upump_ev->ev_io);
             break;
+        case UPUMP_TYPE_SIGNAL:
+            ev_signal_start(ev_mgr->ev_loop, &upump_ev->ev_signal);
+            break;
         default:
             break;
     }
+    if (!status)
+        ev_unref(ev_mgr->ev_loop);
 }
 
-/** @This stop a pump.
+/** @This stops a pump.
  *
  * @param upump description structure of the pump
+ * @param status blocking status of the pump
  */
-static void upump_ev_real_stop(struct upump *upump)
+static void upump_ev_real_stop(struct upump *upump, bool status)
 {
     struct upump_ev *upump_ev = upump_ev_from_upump(upump);
     struct upump_ev_mgr *ev_mgr = upump_ev_mgr_from_upump_mgr(upump->mgr);
 
+    if (!status)
+        ev_ref(ev_mgr->ev_loop);
     switch (upump_ev->event) {
         case UPUMP_TYPE_IDLER:
             ev_idle_stop(ev_mgr->ev_loop, &upump_ev->ev_idle);
@@ -217,6 +248,9 @@ static void upump_ev_real_stop(struct upump *upump)
         case UPUMP_TYPE_FD_READ:
         case UPUMP_TYPE_FD_WRITE:
             ev_io_stop(ev_mgr->ev_loop, &upump_ev->ev_io);
+            break;
+        case UPUMP_TYPE_SIGNAL:
+            ev_signal_stop(ev_mgr->ev_loop, &upump_ev->ev_signal);
             break;
         default:
             break;
@@ -262,6 +296,51 @@ static void *upump_ev_alloc_inner(struct upool *upool)
 static void upump_ev_free_inner(struct upool *upool, void *upump_ev)
 {
     free(upump_ev);
+}
+
+/** @This processes control commands on a upump_ev.
+ *
+ * @param upump description structure of the pump
+ * @param command type of command to process
+ * @param args arguments of the command
+ * @return an error code
+ */
+static int upump_ev_control(struct upump *upump, int command, va_list args)
+{
+    switch (command) {
+        case UPUMP_START:
+            upump_common_start(upump);
+            return UBASE_ERR_NONE;
+        case UPUMP_STOP:
+            upump_common_stop(upump);
+            return UBASE_ERR_NONE;
+        case UPUMP_FREE:
+            upump_ev_free(upump);
+            return UBASE_ERR_NONE;
+        case UPUMP_GET_STATUS: {
+            int *status_p = va_arg(args, int *);
+            upump_common_get_status(upump, status_p);
+            return UBASE_ERR_NONE;
+        }
+        case UPUMP_SET_STATUS: {
+            int status = va_arg(args, int);
+            upump_common_set_status(upump, status);
+            return UBASE_ERR_NONE;
+        }
+        case UPUMP_ALLOC_BLOCKER: {
+            struct upump_blocker **p = va_arg(args, struct upump_blocker **);
+            *p = upump_common_blocker_alloc(upump);
+            return UBASE_ERR_NONE;
+        }
+        case UPUMP_FREE_BLOCKER: {
+            struct upump_blocker *blocker =
+                va_arg(args, struct upump_blocker *);
+            upump_common_blocker_free(blocker);
+            return UBASE_ERR_NONE;
+        }
+        default:
+            return UBASE_ERR_UNHANDLED;
+    }
 }
 
 /** @internal @This is called when the event loop starts invoking watchers.
@@ -367,10 +446,11 @@ struct upump_mgr *upump_ev_mgr_alloc(struct ev_loop *ev_loop,
         return NULL;
 
     struct upump_mgr *mgr = upump_ev_mgr_to_upump_mgr(ev_mgr);
+    mgr->signature = UPUMP_EV_SIGNATURE;
     urefcount_init(upump_ev_mgr_to_urefcount(ev_mgr), upump_ev_mgr_free);
     ev_mgr->common_mgr.mgr.refcount = upump_ev_mgr_to_urefcount(ev_mgr);
     ev_mgr->common_mgr.mgr.upump_alloc = upump_ev_alloc;
-    ev_mgr->common_mgr.mgr.upump_free = upump_ev_free;
+    ev_mgr->common_mgr.mgr.upump_control = upump_ev_control;
     ev_mgr->common_mgr.mgr.upump_mgr_control = upump_ev_mgr_control;
 
     upump_common_mgr_init(mgr, upump_pool_depth, upump_blocker_pool_depth,

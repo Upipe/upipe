@@ -52,7 +52,7 @@ struct upump_blocker;
 /** @hidden */
 struct umutex;
 
-/** types of pumps */
+/** @This defines the standard types of pumps. */
 enum upump_type {
     /** event continuously triggers (no argument) */
     UPUMP_TYPE_IDLER,
@@ -64,8 +64,36 @@ enum upump_type {
     UPUMP_TYPE_FD_READ,
     /** event triggers on available writing space to file descriptor
      * (argument = int) */
-    UPUMP_TYPE_FD_WRITE
+    UPUMP_TYPE_FD_WRITE,
+    /** event triggers on a UNIX signal (argument = int) */
+    UPUMP_TYPE_SIGNAL,
     /* TODO: Windows objects */
+
+    /** non-standard types implemented by a upump handler can start
+     * from there (first arg = signature) */
+    UPUMP_TYPE_LOCAL = 0x8000
+};
+
+/** @This defines standard commands which upump handlers may implement. */
+enum upump_command {
+    /** starts the pump (void) */
+    UPUMP_START,
+    /** stops the pump (void) */
+    UPUMP_STOP,
+    /** frees the pump (void) */
+    UPUMP_FREE,
+    /** gets the pump blocking status (int *) */
+    UPUMP_GET_STATUS,
+    /** sets the pump blocking status (int) */
+    UPUMP_SET_STATUS,
+    /** allocates a blocker (struct upump_blocker **) */
+    UPUMP_ALLOC_BLOCKER,
+    /** frees a blocker (struct upump_blocker *) */
+    UPUMP_FREE_BLOCKER,
+
+    /** non-standard commands implemented by a upump handler can start
+     * from there (first arg = signature) */
+    UPUMP_CONTROL_LOCAL = 0x8000
 };
 
 /** function called when a pump is triggered */
@@ -104,7 +132,7 @@ enum upump_mgr_command {
     /** release all buffers kept in pools (void) */
     UPUMP_MGR_VACUUM,
 
-    /** non-standard manager commands implemented by a module type can start
+    /** non-standard manager commands implemented by a upump handler can start
      * from there (first arg = signature) */
     UPUMP_MGR_CONTROL_LOCAL = 0x8000
 };
@@ -113,25 +141,18 @@ enum upump_mgr_command {
 struct upump_mgr {
     /** pointer to refcount management structure */
     struct urefcount *refcount;
+    /** signature of the upump handler */
+    unsigned int signature;
     /** structure for double-linked lists - for use by the application only */
     struct uchain uchain;
     /** opaque - for use by the application only */
     void *opaque;
 
     /** function to create a pump */
-    struct upump *(*upump_alloc)(struct upump_mgr *,
-                                 enum upump_type, va_list);
-    /** function to start a pump */
-    void (*upump_start)(struct upump *);
-    /** function to stop a pump */
-    void (*upump_stop)(struct upump *);
-    /** function to free the pump */
-    void (*upump_free)(struct upump *);
-
-    /** function to create a blocker */
-    struct upump_blocker *(*upump_blocker_alloc)(struct upump *);
-    /** function to free the blocker */
-    void (*upump_blocker_free)(struct upump_blocker *);
+    struct upump *(*upump_alloc)(struct upump_mgr *, int, va_list);
+    /** control function for standard or local commands - all parameters
+     * belong to the caller */
+    int (*upump_control)(struct upump *, int, va_list);
 
     /** control function for standard or local manager commands - all parameters
      * belong to the caller */
@@ -156,7 +177,7 @@ typedef struct upump_mgr *(*upump_mgr_alloc)(uint16_t, uint16_t);
 static inline struct upump *upump_alloc(struct upump_mgr *mgr,
                                         upump_cb cb, void *opaque,
                                         struct urefcount *refcount,
-                                        enum upump_type event, ...)
+                                        int event, ...)
 {
     struct upump *upump;
     va_list args;
@@ -247,13 +268,71 @@ static inline struct upump *upump_alloc_fd_write(struct upump_mgr *mgr,
     return upump_alloc(mgr, cb, opaque, refcount, UPUMP_TYPE_FD_WRITE, fd);
 }
 
+/** @This allocates and initializes a pump for a signal.
+ *
+ * @param mgr management structure for this event loop
+ * @param cb function to call when the pump triggers
+ * @param opaque pointer to the module's internal structure
+ * @param refcount pointer to urefcount structure to increment during callback,
+ * or NULL
+ * @param signal signal to watch
+ * @return pointer to allocated pump, or NULL in case of failure
+ */
+static inline struct upump *upump_alloc_signal(struct upump_mgr *mgr,
+                                               upump_cb cb, void *opaque,
+                                               struct urefcount *refcount,
+                                               int signal)
+{
+    return upump_alloc(mgr, cb, opaque, refcount, UPUMP_TYPE_SIGNAL, signal);
+}
+
+/** @internal @This sends a control command to the pump. Note that all control
+ * commands must be executed from the same thread - no reentrancy or locking
+ * is required from the pump. Also note that all arguments are owned by the
+ * caller.
+ *
+ * @param upump description structure of the pump
+ * @param command control command to send
+ * @param args optional read or write parameters
+ * @return an error code
+ */
+static inline int upump_control_va(struct upump *upump,
+                                   int command, va_list args)
+{
+    assert(upump != NULL);
+    if (upump->mgr->upump_control == NULL)
+        return UBASE_ERR_UNHANDLED;
+
+    return upump->mgr->upump_control(upump, command, args);
+}
+
+/** @internal @This sends a control command to the pump. Note that all control
+ * commands must be executed from the same thread - no reentrancy or locking
+ * is required from the pump. Also note that all arguments are owned by the
+ * caller.
+ *
+ * @param upump description structure of the pump
+ * @param command control command to send, followed by optional read or write
+ * parameters
+ * @return an error code
+ */
+static inline int upump_control(struct upump *upump, int command, ...)
+{
+    int err;
+    va_list args;
+    va_start(args, command);
+    err = upump_control_va(upump, command, args);
+    va_end(args);
+    return err;
+}
+
 /** @This asks the event loop to start monitoring a pump.
  *
  * @param pump description structure of the pump
  */
 static inline void upump_start(struct upump *upump)
 {
-    upump->mgr->upump_start(upump);
+    upump_control(upump, UPUMP_START);
 }
 
 /** @This asks the event loop to stop monitoring a pump.
@@ -262,10 +341,10 @@ static inline void upump_start(struct upump *upump)
  */
 static inline void upump_stop(struct upump *upump)
 {
-    upump->mgr->upump_stop(upump);
+    upump_control(upump, UPUMP_STOP);
 }
 
-/** @This frees a struct upump structure.
+/** @This frees a upump structure.
  * Please note that the pump must be stopped before.
  *
  * @param upump description structure of the pump
@@ -274,7 +353,33 @@ static inline void upump_free(struct upump *upump)
 {
     if (upump == NULL)
         return;
-    upump->mgr->upump_free(upump);
+    upump_control(upump, UPUMP_FREE);
+}
+
+/** @This gets the blocking status of a pump (whether the event loop will
+ * quit if the pump is the only active pump).
+ *
+ * @param upump description structure of the pump
+ * @param status_p reference to boolean representing the blocking status of a
+ * pump
+ */
+static inline void upump_get_status(struct upump *upump, bool *status_p)
+{
+    int status;
+    upump_control(upump, UPUMP_GET_STATUS, &status);
+    *status_p = status;
+}
+
+/** @This sets the blocking status of a pump (whether the event loop will
+ * quit if the pump is the only active pump).
+ *
+ * @param upump description structure of the pump
+ * @param status boolean setting the blocking status of a pump
+ */
+static inline void upump_set_status(struct upump *upump, bool status)
+{
+    int i = status ? 1 : 0;
+    upump_control(upump, UPUMP_SET_STATUS, i);
 }
 
 /** @This gets the opaque structure with a cast.
