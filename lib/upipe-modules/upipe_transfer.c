@@ -658,6 +658,7 @@ static int _upipe_xfer_mgr_attach(struct upipe_mgr *mgr,
 static inline int _upipe_xfer_mgr_freeze(struct upipe_mgr *mgr)
 {
     struct upipe_xfer_mgr *xfer_mgr = upipe_xfer_mgr_from_upipe_mgr(mgr);
+    upipe_mgr_use(mgr);
     return umutex_lock(xfer_mgr->mutex);
 }
 
@@ -670,7 +671,9 @@ static inline int _upipe_xfer_mgr_freeze(struct upipe_mgr *mgr)
 static inline int _upipe_xfer_mgr_thaw(struct upipe_mgr *mgr)
 {
     struct upipe_xfer_mgr *xfer_mgr = upipe_xfer_mgr_from_upipe_mgr(mgr);
-    return umutex_unlock(xfer_mgr->mutex);
+    int err = umutex_unlock(xfer_mgr->mutex);
+    upipe_mgr_release(mgr);
+    return err;
 }
 
 /** @This processes manager control commands.
