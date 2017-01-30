@@ -55,8 +55,8 @@ DISTFILES    = ffi-stdarg.c ffi-stdarg.lua gen-ffi-cdef.pl libc.defs \
 	       libev.lua luajit upipe-control-args.lua \
 	       upipe-helper.c upipe.lua uprobe-args.lua
 
-CPPFLAGS += -I$(top_builddir)/include
-CPPFLAGS += -I$(INCLUDEDIR)
+CPPFLAGS := -I$(top_builddir)/include $(CPPFLAGS)
+CPPFLAGS := -I$(INCLUDEDIR) $(CPPFLAGS)
 
 LUAJIT_INSTALL_LMOD = $(prefix)/share/lua/5.1
 
