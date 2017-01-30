@@ -418,6 +418,7 @@ static int upipe_wlin_control(struct upipe *upipe, int command, va_list args)
                 struct upipe *upump_mgr_pipe = upipe_from_uchain(uchain);
                 upipe_attach_upump_mgr(upump_mgr_pipe);
             }
+            return UBASE_ERR_NONE;
         }
         case UPIPE_BIN_FREEZE:
             return upipe_wlin_freeze(upipe);
