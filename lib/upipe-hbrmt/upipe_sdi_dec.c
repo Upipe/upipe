@@ -1179,8 +1179,8 @@ static int upipe_sdi_dec_set_flow_def(struct upipe *upipe, struct uref *flow_def
         upipe_sdi_dec->output_chroma_map[1] = NULL;
         upipe_sdi_dec->output_chroma_map[2] = NULL;
         uref_pic_flow_set_planes(flow_def_dup, 1);
-        uref_pic_flow_set_macropixel(flow_def_dup, 48);
-        uref_pic_flow_set_macropixel_size(flow_def_dup, 128, 0);
+        uref_pic_flow_set_macropixel(flow_def_dup, 6);
+        uref_pic_flow_set_macropixel_size(flow_def_dup, 16, 0);
         uref_pic_flow_set_chroma(flow_def_dup, upipe_sdi_dec->output_chroma_map[0], 0);
     } else if (upipe_sdi_dec->output_bit_depth == 8) {
         upipe_sdi_dec->output_chroma_map[0] = "y8";
