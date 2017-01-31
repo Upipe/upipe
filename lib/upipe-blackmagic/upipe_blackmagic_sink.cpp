@@ -1779,15 +1779,15 @@ static int upipe_bmd_sink_set_option(struct upipe *upipe,
 
     if (!strcmp(k, "card-index"))
         upipe_bmd_sink->card_idx = atoi(v);
-
-    if (!strcmp(k, "mode")) {
+    else if (!strcmp(k, "mode")) {
         union {
             BMDDisplayMode mode_id;
             char mode_s[4];
         } u;
         strncpy(u.mode_s, v, sizeof(u.mode_s));
         upipe_bmd_sink->mode = htonl(u.mode_id);
-    }
+    } else
+        return UBASE_ERR_INVALID;
 
     return UBASE_ERR_NONE;
 }
