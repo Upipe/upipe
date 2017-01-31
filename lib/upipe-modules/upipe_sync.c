@@ -507,7 +507,9 @@ static void cb(struct upump *upump)
             /* frame pts too much in the past */
             upipe_warn_va(upipe, "too late");
         } else if (pts > now + ticks / 2) {
-            upipe_err_va(upipe, "too early");
+            upipe_warn_va(upipe, "too early: %.2f > %.2f",
+                pts_to_time(pts), pts_to_time(now + ticks / 2)
+            );
             uchain = NULL; /* do not drop */
             break;
         } else {
@@ -534,6 +536,8 @@ static void cb(struct upump *upump)
         /* buffer picture */
         uref_free(upipe_sync->uref);
         upipe_sync->uref = uref_from_uchain(uchain);
+    } else {
+        upipe_dbg_va(upipe, "repeating picture");
     }
 
     assert(upipe_sync->uref);
