@@ -293,6 +293,12 @@ struct upipe_bmd_sink {
     /** offset between audio sample 0 and line 21 */
     uint8_t line21_offset;
 
+    /** pass through closed captions */
+    uatomic_uint32_t cc;
+
+    /** pass through teletext */
+    uatomic_uint32_t ttx;
+
     /** last frame output */
     upipe_bmd_sink_frame *video_frame;
 };
@@ -859,27 +865,29 @@ static upipe_bmd_sink_frame *get_video_frame(struct upipe *upipe,
         return NULL;
     }
 
-    const uint8_t *pic_data = NULL;
-    size_t pic_data_size = 0;
-    uref_pic_get_cea_708(uref, &pic_data, &pic_data_size);
-    int ntsc = upipe_bmd_sink->mode == bmdModeNTSC ||
-               upipe_bmd_sink->mode == bmdModeHD1080i5994;
+    if (uatomic_load(&upipe_bmd_sink->cc)) {
+        const uint8_t *pic_data = NULL;
+        size_t pic_data_size = 0;
+        uref_pic_get_cea_708(uref, &pic_data, &pic_data_size);
+        int ntsc = upipe_bmd_sink->mode == bmdModeNTSC ||
+            upipe_bmd_sink->mode == bmdModeHD1080i5994;
 
-    if (ntsc && pic_data_size > 0) {
-        /** XXX: Support crazy 25fps captions? **/
-        const uint8_t fps = upipe_bmd_sink->mode == bmdModeNTSC ||
-            upipe_bmd_sink->mode == bmdModeHD1080i5994 ? 0x4 : 0x7;
-        void *vanc;
-        ancillary->GetBufferForVerticalBlankingLine(CC_LINE, &vanc);
-        uint16_t buf[VANC_WIDTH*2];
-        sdi_write_cdp(pic_data, pic_data_size, buf,
-                &upipe_bmd_sink->cdp_hdr_sequence_cntr, fps);
-        sdi_calc_parity_checksum(buf);
+        if (ntsc && pic_data_size > 0) {
+            /** XXX: Support crazy 25fps captions? **/
+            const uint8_t fps = upipe_bmd_sink->mode == bmdModeNTSC ||
+                upipe_bmd_sink->mode == bmdModeHD1080i5994 ? 0x4 : 0x7;
+            void *vanc;
+            ancillary->GetBufferForVerticalBlankingLine(CC_LINE, &vanc);
+            uint16_t buf[VANC_WIDTH*2];
+            sdi_write_cdp(pic_data, pic_data_size, buf,
+                    &upipe_bmd_sink->cdp_hdr_sequence_cntr, fps);
+            sdi_calc_parity_checksum(buf);
 
-        if (sd)
-            sdi_encode_v210_sd((uint32_t*)vanc, (uint8_t*)buf, w);
-        else
-            sdi_encode_v210((uint32_t*)vanc, buf, w);
+            if (sd)
+                sdi_encode_v210_sd((uint32_t*)vanc, (uint8_t*)buf, w);
+            else
+                sdi_encode_v210((uint32_t*)vanc, buf, w);
+        }
     }
 
     /* Loop through subpic data */
@@ -919,6 +927,11 @@ static upipe_bmd_sink_frame *get_video_frame(struct upipe *upipe,
         /* Buffer if needed */
         if (subpic_pts - (UCLOCK_FREQ/25) > vid_pts) {
             subpic_sub->uref = subpic;
+            break;
+        }
+
+        if (!uatomic_load(&upipe_bmd_sink->ttx)) {
+            uref_free(subpic);
             break;
         }
 
@@ -1786,6 +1799,10 @@ static int upipe_bmd_sink_set_option(struct upipe *upipe,
         } u;
         strncpy(u.mode_s, v, sizeof(u.mode_s));
         upipe_bmd_sink->mode = htonl(u.mode_id);
+    } else if (!strcmp(k, "cc")) {
+        uatomic_store(&upipe_bmd_sink->cc, strcmp(v, "0"));
+    } else if (!strcmp(k, "teletext")) {
+        uatomic_store(&upipe_bmd_sink->ttx, strcmp(v, "0"));
     } else
         return UBASE_ERR_INVALID;
 
