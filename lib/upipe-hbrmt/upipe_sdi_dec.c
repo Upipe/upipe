@@ -595,7 +595,7 @@ static void extract_hd_audio(struct upipe *upipe, const uint16_t *packet, int li
     ctx->group_offset[audio_group]++;
 }
 
-static void validate_dbn(struct upipe *upipe, uint8_t did, uint8_t dbn)
+static void validate_dbn(struct upipe *upipe, uint8_t did, uint8_t dbn, int line_num)
 {
     struct upipe_sdi_dec *upipe_sdi_dec = upipe_sdi_dec_from_upipe(upipe);
 
@@ -608,8 +608,8 @@ static void validate_dbn(struct upipe *upipe, uint8_t did, uint8_t dbn)
             expected_dbn = 1; /* DBN cycles from 255 to 1 */
 
         if (expected_dbn != dbn)
-            upipe_err_va(upipe, "[DID 0x%.2x] Wrong DBN: 0x%.2x -> 0x%.2x",
-                did + 0x80, upipe_sdi_dec->dbn[did], dbn);
+            upipe_err_va(upipe, "[%u] [DID 0x%.2x] Wrong DBN: 0x%.2x -> 0x%.2x",
+                line_num, did + 0x80, upipe_sdi_dec->dbn[did], dbn);
     } else if (dbn != 0) {
         upipe_dbg_va(upipe, "[DID 0x%.2x] Checking DBN", did + 0x80);
     }
@@ -623,7 +623,7 @@ static void parse_hd_hanc(struct upipe *upipe, const uint16_t *packet, int line_
     uint8_t did = packet[6] & 0xff;
 
     if (did >= 0x80) { /* type 1 packet */
-        validate_dbn(upipe, did, packet[8] & 0xff);
+        validate_dbn(upipe, did, packet[8] & 0xff, line_num);
     }
 
     switch (did) {
