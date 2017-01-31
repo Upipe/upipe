@@ -170,6 +170,62 @@ static struct upipe *upipe_sync_sub_alloc(struct upipe_mgr *mgr,
     return upipe;
 }
 
+/** @internal @This builds the output flow definition.
+ *
+  * @param upipe description structure of the pipe
+ */
+static void upipe_sync_build_flow_def(struct upipe *upipe)
+{
+    struct upipe_sync *upipe_sync = upipe_sync_from_upipe(upipe);
+    struct uref *flow_def = upipe_sync->flow_def;
+    if (flow_def == NULL)
+        return;
+    upipe_sync->flow_def = NULL;
+
+    if (!ubase_check(uref_clock_set_latency(flow_def, upipe_sync->latency)))
+        upipe_throw_error(upipe, UBASE_ERR_ALLOC);
+
+    upipe_sync_store_flow_def(upipe, flow_def);
+}
+
+/** @internal @This builds the output flow definition.
+ *
+  * @param upipe description structure of the pipe
+ */
+static void upipe_sync_sub_build_flow_def(struct upipe *upipe)
+{
+    struct upipe_sync_sub *upipe_sync_sub = upipe_sync_sub_from_upipe(upipe);
+    struct uref *flow_def = upipe_sync_sub->flow_def;
+    if (flow_def == NULL)
+        return;
+    upipe_sync_sub->flow_def = NULL;
+
+    struct upipe_sync *upipe_sync = upipe_sync_from_sub_mgr(upipe->mgr);
+    if (!ubase_check(uref_clock_set_latency(flow_def, upipe_sync->latency)))
+        upipe_throw_error(upipe, UBASE_ERR_ALLOC);
+
+    upipe_sync_sub_store_flow_def(upipe, flow_def);
+}
+
+/** @internal @This sets the latency and rebuilds flow definitions.
+ *
+ * @param upipe description structure of the pipe
+ */
+static void upipe_sync_set_latency(struct upipe *upipe)
+{
+    struct upipe_sync *upipe_sync = upipe_sync_from_upipe(upipe);
+
+    struct uchain *uchain;
+    ulist_foreach (&upipe_sync->subs, uchain) {
+        struct upipe_sync_sub *upipe_sync_sub =
+            upipe_sync_sub_from_uchain(uchain);
+        upipe_sync_sub_build_flow_def(upipe_sync_sub_to_upipe(upipe_sync_sub));
+    }
+
+    upipe_sync_build_flow_def(upipe);
+}
+
+
 /** @internal @This sets the input flow definition.
  *
  * @param upipe description structure of the pipe
@@ -206,6 +262,9 @@ static int upipe_sync_sub_set_flow_def(struct upipe *upipe, struct uref *flow_de
     if (latency > upipe_sync->latency) {
         upipe_notice_va(upipe, "Latency %" PRIu64, latency);
         upipe_sync->latency = latency;
+        upipe_sync_set_latency(upipe_sync_to_upipe(upipe_sync));
+    } else {
+        upipe_sync_sub_build_flow_def(upipe);
     }
 
     uint8_t planes;
@@ -743,6 +802,9 @@ static int upipe_sync_set_flow_def(struct upipe *upipe, struct uref *flow_def)
     if (latency > upipe_sync->latency) {
         upipe_notice_va(upipe, "Latency %" PRIu64, latency);
         upipe_sync->latency = latency;
+        upipe_sync_set_latency(upipe_sync_to_upipe(upipe_sync));
+    } else {
+        upipe_sync_build_flow_def(upipe);
     }
 
     if (ubase_ncmp(def, "pic.")) {
