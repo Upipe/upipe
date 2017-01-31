@@ -99,6 +99,41 @@ cglobal uyvy_to_sdi%1, 3, 4, 5, dst, y, pixels
     jl .loop
 
     RET
+
+cglobal uyvy_to_sdi_2%1, 3, 5, 5, dst1, dst2, y, pixels
+    %define offset    r4q
+    xor     offset,   offset
+    lea     yq,      [yq + 4*pixelsq]
+    neg     pixelsq
+    mova    m2,      [sdi_enc_mult_10]
+    mova    m3,      [sdi_chroma_shuf_10]
+    mova    m4,      [sdi_luma_shuf_10]
+
+    .loop:
+        %ifidn %1, _unaligned
+            movu    m0, [yq+4*pixelsq]
+            pmullw  m0, m2
+        %else
+            pmullw  m0, m2, [yq+4*pixelsq]
+        %endif
+
+        pshufb  m1, m0, m3
+        pshufb  m0, m4
+        por     m0, m1
+
+        movu    [dst1q + offset], xm0
+        movu    [dst2q + offset], xm0
+        %if cpuflag(avx2)
+            vextracti128 [dst1q + offset + 10], m0, 1
+            vextracti128 [dst2q + offset + 10], m0, 1
+        %endif
+
+        add     offset, (mmsize*5)/8
+        add     pixelsq, mmsize/4
+    jl .loop
+
+RET
+
 %endmacro
 
 INIT_XMM ssse3
