@@ -1016,8 +1016,6 @@ static void output_cb(struct upipe *upipe)
     /* PTS for this output frame */
     __sync_synchronize();
     uint64_t pts = upipe_bmd_sink->pts;
-    if (pts == 0)
-        return;
 
     uint64_t now = uclock_now(&upipe_bmd_sink->uclock);
     if (0) upipe_notice_va(upipe, "PTS %.2f - %.2f - %u pics",
