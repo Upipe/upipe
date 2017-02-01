@@ -352,6 +352,7 @@ public:
             val = 0;
 
         uint64_t now = uclock_now(&upipe_bmd_sink->uclock);
+        __sync_synchronize();
         uint64_t pts = ((upipe_bmd_sink_frame*)frame)->pts;
         int64_t diff = now - pts - upipe_bmd_sink->ticks_per_frame;
 
@@ -1013,6 +1014,7 @@ static void output_cb(struct upipe *upipe)
         upipe_bmd_sink_from_sub_mgr(upipe->mgr);
 
     /* PTS for this output frame */
+    __sync_synchronize();
     uint64_t pts = upipe_bmd_sink->pts;
     if (pts == 0)
         return;
@@ -1057,6 +1059,7 @@ static void output_cb(struct upipe *upipe)
                 upipe_err(upipe, "Could not begin audio preroll");
 
             upipe_bmd_sink->pts = 0;
+            __sync_synchronize();
             uqueue_uref_flush(&upipe_bmd_sink_sub->uqueue);
             uatomic_store(&upipe_bmd_sink->preroll, PREROLL_FRAMES);
             return;
@@ -1123,6 +1126,7 @@ static void output_cb(struct upipe *upipe)
 
     /* bump PTS */
     upipe_bmd_sink->pts += upipe_bmd_sink->ticks_per_frame;
+    __sync_synchronize();
 }
 
 /** @internal @This handles input uref.
@@ -1162,6 +1166,7 @@ static bool upipe_bmd_sink_sub_output(struct upipe *upipe, struct uref *uref)
     if (!uatomic_load(&upipe_bmd_sink->preroll))
         return false;
 
+    __sync_synchronize();
     uint64_t pts = upipe_bmd_sink->pts;
     if (unlikely(!pts)) {
         /* First PTS is set to the first picture PTS */
@@ -1173,6 +1178,7 @@ static bool upipe_bmd_sink_sub_output(struct upipe *upipe, struct uref *uref)
         pts += upipe_bmd_sink_sub->latency;
         upipe_bmd_sink->start_pts = pts;
         upipe_bmd_sink->pts = pts;
+        __sync_synchronize();
 
         return false;
     }
@@ -1187,6 +1193,7 @@ static bool upipe_bmd_sink_sub_output(struct upipe *upipe, struct uref *uref)
 
     /* next PTS */
     upipe_bmd_sink->pts += upipe_bmd_sink->ticks_per_frame;
+    __sync_synchronize();
 
     /* We're done buffering and now prerolling,
      * push the uref we just got into the fifo and
@@ -1577,6 +1584,7 @@ static void upipe_bmd_stop(struct upipe *upipe)
     IDeckLinkOutput *deckLinkOutput = upipe_bmd_sink->deckLinkOutput;
 
     upipe_bmd_sink->pts = 0;
+    __sync_synchronize();
     uatomic_store(&upipe_bmd_sink->preroll, PREROLL_FRAMES);
     deckLinkOutput->StopScheduledPlayback(0, NULL, 0);
     deckLinkOutput->DisableAudioOutput();
