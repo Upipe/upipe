@@ -1577,6 +1577,7 @@ static void upipe_bmd_stop(struct upipe *upipe)
     IDeckLinkOutput *deckLinkOutput = upipe_bmd_sink->deckLinkOutput;
 
     upipe_bmd_sink->pts = 0;
+    uatomic_store(&upipe_bmd_sink->preroll, PREROLL_FRAMES);
     deckLinkOutput->StopScheduledPlayback(0, NULL, 0);
     deckLinkOutput->DisableAudioOutput();
     /* bump clock upwards before it's made unavailable by DisableVideoOutput */
@@ -1589,8 +1590,6 @@ static void upipe_bmd_stop(struct upipe *upipe)
             upipe_bmd_sink_sub_from_uchain(uchain);
         uqueue_uref_flush(&upipe_bmd_sink_sub->uqueue);
     }
-
-    uatomic_store(&upipe_bmd_sink->preroll, PREROLL_FRAMES);
 
     if (upipe_bmd_sink->displayMode) {
         upipe_bmd_sink->displayMode->Release();
