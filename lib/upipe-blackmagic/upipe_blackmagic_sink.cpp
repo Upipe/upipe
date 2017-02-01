@@ -245,7 +245,6 @@ struct upipe_bmd_sink {
 
     uint64_t start_pts;
     uatomic_uint32_t preroll;
-    uint64_t pts;
 
     /** vanc/vbi temporary buffer **/
 
@@ -1061,7 +1060,7 @@ static void output_cb(struct upipe *upipe, uint64_t pts)
             if (upipe_bmd_sink->deckLinkOutput->BeginAudioPreroll() != S_OK)
                 upipe_err(upipe, "Could not begin audio preroll");
 
-            upipe_bmd_sink->pts = 0;
+            upipe_bmd_sink->start_pts = 0;
             __sync_synchronize();
             uqueue_uref_flush(&upipe_bmd_sink_sub->uqueue);
             uatomic_store(&upipe_bmd_sink->preroll, PREROLL_FRAMES);
@@ -1165,7 +1164,7 @@ static bool upipe_bmd_sink_sub_output(struct upipe *upipe, struct uref *uref)
     if (!uatomic_load(&upipe_bmd_sink->preroll))
         return false;
 
-    uint64_t pts = upipe_bmd_sink->pts;
+    uint64_t pts = upipe_bmd_sink->start_pts;
     if (unlikely(!pts)) {
         /* First PTS is set to the first picture PTS */
         if (unlikely(!ubase_check(uref_clock_get_pts_sys(uref, &pts)))) {
@@ -1175,7 +1174,6 @@ static bool upipe_bmd_sink_sub_output(struct upipe *upipe, struct uref *uref)
         }
         pts += upipe_bmd_sink_sub->latency;
         upipe_bmd_sink->start_pts = pts;
-        upipe_bmd_sink->pts = pts;
 
         return false;
     }
@@ -1189,7 +1187,8 @@ static bool upipe_bmd_sink_sub_output(struct upipe *upipe, struct uref *uref)
     }
 
     /* next PTS */
-    upipe_bmd_sink->pts += upipe_bmd_sink->ticks_per_frame;
+    pts += (PREROLL_FRAMES - uatomic_load(&upipe_bmd_sink->preroll)) *
+        upipe_bmd_sink->ticks_per_frame;
 
     /* We're done buffering and now prerolling,
      * push the uref we just got into the fifo and
@@ -1579,7 +1578,7 @@ static void upipe_bmd_stop(struct upipe *upipe)
     struct upipe_bmd_sink *upipe_bmd_sink = upipe_bmd_sink_from_upipe(upipe);
     IDeckLinkOutput *deckLinkOutput = upipe_bmd_sink->deckLinkOutput;
 
-    upipe_bmd_sink->pts = 0;
+    upipe_bmd_sink->start_pts = 0;
 
     uatomic_store(&upipe_bmd_sink->preroll, PREROLL_FRAMES);
     upipe_bmd_sink->cb->pts = 0; /* callback is not running anymore */
