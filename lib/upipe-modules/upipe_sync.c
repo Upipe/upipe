@@ -873,6 +873,16 @@ static int upipe_sync_control(struct upipe *upipe, int command, va_list args)
     }
 }
 
+static void ulist_uref_flush(struct uchain *ulist)
+{
+    for (;;) {
+        struct uchain *uchain = ulist_pop(ulist);
+        if (!uchain)
+            break;
+        uref_free(uref_from_uchain(uchain));
+    }
+}
+
 /** @internal @This frees all resources allocated.
  *
  * @param upipe description structure of the pipe
@@ -883,6 +893,7 @@ static void upipe_sync_free(struct upipe *upipe)
 
     upipe_throw_dead(upipe);
 
+    ulist_uref_flush(&upipe_sync->urefs);
     uref_free(upipe_sync->uref);
 
     upipe_sync_clean_urefcount(upipe);
@@ -900,7 +911,11 @@ static void upipe_sync_free(struct upipe *upipe)
  */
 static void upipe_sync_sub_free(struct upipe *upipe)
 {
+    struct upipe_sync_sub *upipe_sync_sub = upipe_sync_sub_from_upipe(upipe);
     upipe_throw_dead(upipe);
+
+    ulist_uref_flush(&upipe_sync_sub->urefs);
+
     upipe_sync_sub_clean_urefcount(upipe);
     upipe_sync_sub_clean_output(upipe);
     upipe_sync_sub_clean_sub(upipe);
