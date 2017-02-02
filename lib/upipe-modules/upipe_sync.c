@@ -374,8 +374,8 @@ static bool sync_channel(struct upipe *upipe)
                 if (drop_samples >= samples) {
                     upipe_notice_va(upipe_sync_sub_to_upipe(upipe_sync_sub),
                             "LOLDROP, duration in CLOCK %" PRIu64 "", duration);
-                    uref_free(uref);
                     ulist_delete(uchain_uref);
+                    uref_free(uref);
                     continue;
                 }
                 // resize
@@ -390,8 +390,8 @@ static bool sync_channel(struct upipe *upipe)
                 float f = (float)((int64_t)pts - (int64_t)video_pts) * 1000 / UCLOCK_FREQ;
                 upipe_notice_va(upipe_sync_sub_to_upipe(upipe_sync_sub),
                         "DROP %.2f, duration in CLOCK %" PRIu64 "", f, duration);
-                uref_free(uref);
                 ulist_delete(uchain_uref);
+                uref_free(uref);
                 upipe_sync_sub->samples -= samples;
                 continue;
             }
