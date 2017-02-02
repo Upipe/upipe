@@ -662,11 +662,7 @@ static void upipe_sync_sub_input(struct upipe *upipe, struct uref *uref,
     upipe_sync_sub->samples += samples;
     //upipe_notice_va(upipe, "push, samples %" PRIu64, upipe_sync_sub->samples);
 
-    /* prepare to insert in linked list */
-    struct uchain *uchain = uref_to_uchain(uref);
-    ulist_init(uchain);
-
-    ulist_add(&upipe_sync_sub->urefs, uchain);
+    ulist_add(&upipe_sync_sub->urefs, uref_to_uchain(uref));
 }
 
 /** @internal @This initializes the output manager for a dup set pipe.
@@ -717,14 +713,11 @@ static void upipe_sync_input(struct upipe *upipe, struct uref *uref,
         return;
     }
 
-    /* prepare to insert in linked list */
-    struct uchain *uchain = uref_to_uchain(uref);
-    ulist_init(uchain);
-
     //upipe_dbg_va(upipe, "push PTS in %" PRIu64 " ms", (pts - now) / 27000);
 
     /* buffer pic */
-    ulist_add(&upipe_sync->urefs, uchain);
+    ulist_add(&upipe_sync->urefs, uref_to_uchain(uref));
+
 
     /* timer already active */
     if (upipe_sync->upump)
