@@ -170,7 +170,13 @@ sub p {
   };
 
   my $typedef = sub {
-    &once($a->{name}, sub { 'typedef ' . &p($a->{type}, $a->{name}) });
+    unless ($defs{$a->{name}}) {
+      my $td = &p($a->{type}, $a->{name});
+      unless ($defs{$a->{name}}) {
+        print 'typedef ', $td, ";\n";
+        $defs{$a->{name}} = 2;
+      }
+    }
     &$tname();
   };
 

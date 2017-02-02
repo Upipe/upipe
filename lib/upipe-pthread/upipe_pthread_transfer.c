@@ -122,7 +122,7 @@ static void *upipe_pthread_start(void *_pthread_ctx)
 
     err = upump_mgr_run(upump_mgr, pthread_ctx->mutex);
 
-    if (err = UBASE_ERR_BUSY)
+    if (err == UBASE_ERR_BUSY)
         uprobe_warn(pthread_ctx->uprobe_pthread_upump_mgr, NULL,
                     "upump manager returned with an active pump");
     else if (!ubase_check(err))

@@ -96,6 +96,9 @@ upipe_alloc = alloc "upipe"
 uclock_alloc = alloc "uclock"
 
 local mgr_alias = {
+    upump = {
+	ev_default = { "ev", "default" }
+    },
     umem = {
         pool_simple = { "pool", "simple" }
     }
@@ -232,6 +235,12 @@ ffi.metatype("struct upipe_mgr", {
     __newindex = function (mgr, key, val)
         local sym = fmt("upipe_%s_mgr_set_%s", sigs[mgr.signature], key)
         C[sym](mgr, val)
+    end
+})
+
+ffi.metatype("struct upump_mgr", {
+    __index = function (mgr, key)
+        return C[fmt("upump_mgr_%s", key)]
     end
 })
 
