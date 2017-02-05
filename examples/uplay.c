@@ -363,6 +363,9 @@ static int catch_video(struct uprobe *uprobe, struct upipe *upipe,
 
     struct uref *uref = uref_sibling_alloc(flow_def);
     uref_flow_set_def(uref, "pic.");
+    /* request rgb16 as swscale conversion is faster than rgb24 */
+    uref_pic_flow_add_plane(uref, 1, 1, 2, "r5g6b5");
+
     if (w && h) {
         uref_pic_flow_set_hsize(uref, w);
         uref_pic_flow_set_vsize(uref, h);

@@ -490,7 +490,8 @@ static int upipe_glx_sink_set_flow_def(struct upipe *upipe,
     uint8_t macropixel;
     if (!ubase_check(uref_pic_flow_get_macropixel(flow_def, &macropixel)) ||
         macropixel != 1 ||
-        !ubase_check(uref_pic_flow_check_chroma(flow_def, 1, 1, 3, "r8g8b8"))) {
+        (!ubase_check(uref_pic_flow_check_chroma(flow_def, 1, 1, 2, "r5g6b5")) &&
+         !ubase_check(uref_pic_flow_check_chroma(flow_def, 1, 1, 3, "r8g8b8")))) {
         upipe_err(upipe, "incompatible flow definition");
         uref_dump(flow_def, upipe->uprobe);
         return UBASE_ERR_INVALID;
@@ -513,10 +514,15 @@ static int upipe_glx_sink_provide_flow_format(struct upipe *upipe,
 {
     struct uref *flow_format = uref_dup(request->uref);
     UBASE_ALLOC_RETURN(flow_format);
+    bool rgb565 = ubase_check(uref_pic_flow_check_chroma(flow_format, 1, 1, 2, "r5g6b5"));
+
     uref_pic_flow_clear_format(flow_format);
     uref_pic_flow_set_macropixel(flow_format, 1);
     uref_pic_flow_set_planes(flow_format, 0);
-    uref_pic_flow_add_plane(flow_format, 1, 1, 3, "r8g8b8");
+    if (rgb565)
+        uref_pic_flow_add_plane(flow_format, 1, 1, 2, "r5g6b5");
+    else
+        uref_pic_flow_add_plane(flow_format, 1, 1, 3, "r8g8b8");
     uref_pic_set_progressive(flow_format);
     uref_pic_flow_delete_colour_primaries(flow_format);
     uref_pic_flow_delete_transfer_characteristics(flow_format);
