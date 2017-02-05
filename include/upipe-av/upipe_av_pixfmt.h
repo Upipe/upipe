@@ -177,6 +177,10 @@ static inline int upipe_av_pixfmt_to_flow_def(enum AVPixelFormat pix_fmt,
             UBASE_RETURN(uref_pic_flow_set_macropixel(flow_def, 1))
             UBASE_RETURN(uref_pic_flow_add_plane(flow_def, 1, 1, 1, "y8"))
             break;
+        case AV_PIX_FMT_RGB565:
+            UBASE_RETURN(uref_pic_flow_set_macropixel(flow_def, 1))
+            UBASE_RETURN(uref_pic_flow_add_plane(flow_def, 1, 1, 2, "r5g6b5"))
+            break;
         case AV_PIX_FMT_RGB24:
             UBASE_RETURN(uref_pic_flow_set_macropixel(flow_def, 1))
             UBASE_RETURN(uref_pic_flow_add_plane(flow_def, 1, 1, 3, "r8g8b8"))
@@ -251,6 +255,7 @@ static inline enum AVPixelFormat
         AV_PIX_FMT_YUV444P16LE,
         AV_PIX_FMT_YUV444P16BE,
         AV_PIX_FMT_GRAY8,
+        AV_PIX_FMT_RGB565,
         AV_PIX_FMT_RGB24,
         AV_PIX_FMT_BGR24,
         AV_PIX_FMT_ARGB,
@@ -503,6 +508,14 @@ static inline enum AVPixelFormat
                 if (macropixel == 1 && nb_planes == 1 &&
                     u(uref_pic_flow_check_chroma(flow_def, 1, 1, 1, "y8"))) {
                     chroma_p[0] = "y8";
+                    chroma_p[1] = NULL;
+                    return *pix_fmts;
+                }
+                break;
+            case AV_PIX_FMT_RGB565:
+                if (macropixel == 1 &&
+                    u(uref_pic_flow_check_chroma(flow_def, 1, 1, 2, "r5g6b5"))) {
+                    chroma_p[0] = "r5g6b5";
                     chroma_p[1] = NULL;
                     return *pix_fmts;
                 }
