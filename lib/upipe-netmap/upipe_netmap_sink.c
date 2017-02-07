@@ -190,10 +190,8 @@ struct upipe_netmap_sink {
 
     int pkt;
 
-    /** uclock structure, if not NULL we are in live mode */
+    /** PC clock */
     struct uclock *uclock;
-    /** uclock request */
-    struct urequest uclock_request;
 
     /** socket uri */
     char *uri;
@@ -225,7 +223,6 @@ UPIPE_HELPER_UREFCOUNT(upipe_netmap_sink, urefcount, upipe_netmap_sink_free)
 UPIPE_HELPER_VOID(upipe_netmap_sink)
 UPIPE_HELPER_UPUMP_MGR(upipe_netmap_sink, upump_mgr)
 UPIPE_HELPER_UPUMP(upipe_netmap_sink, upump, upump_mgr)
-UPIPE_HELPER_UCLOCK(upipe_netmap_sink, uclock, uclock_request, NULL, upipe_throw_provide_request, NULL)
 
 
 static void upipe_udp_raw_fill_headers(struct upipe *upipe,
@@ -275,6 +272,8 @@ static struct upipe *upipe_netmap_sink_alloc(struct upipe_mgr *mgr,
 
     struct upipe_netmap_sink *upipe_netmap_sink = upipe_netmap_sink_from_upipe(upipe);
 
+    upipe_netmap_sink->uclock = uclock_std_alloc(0);
+
     upipe_netmap_sink->flow_def = NULL;
     upipe_netmap_sink->seqnum = 0;
     upipe_netmap_sink->frame_count = 0;
@@ -285,7 +284,6 @@ static struct upipe *upipe_netmap_sink_alloc(struct upipe_mgr *mgr,
     upipe_netmap_sink_init_urefcount(upipe);
     upipe_netmap_sink_init_upump_mgr(upipe);
     upipe_netmap_sink_init_upump(upipe);
-    upipe_netmap_sink_init_uclock(upipe);
     upipe_netmap_sink->uri = NULL;
     upipe_netmap_sink->maxrate_uri = NULL;
     upipe_netmap_sink->d = NULL;
@@ -305,7 +303,6 @@ static struct upipe *upipe_netmap_sink_alloc(struct upipe_mgr *mgr,
         upipe_netmap_sink->unpack_v210 = upipe_v210_sdi_unpack_aligned_avx;
     }
 #endif
-    upipe_netmap_sink_require_uclock(upipe);
 
     upipe_throw_ready(upipe);
     return upipe;
@@ -582,15 +579,15 @@ static void upipe_netmap_sink_worker(struct upump *upump)
     struct upipe *upipe = upump_get_opaque(upump, struct upipe *);
     struct upipe_netmap_sink *upipe_netmap_sink = upipe_netmap_sink_from_upipe(upipe);
 
-    static struct uclock *u; // FIXME: use attach_uclock
-    if (!u)
-        u = uclock_std_alloc(0);
-    uint64_t now = uclock_now(u);
-    static uint64_t old;
-    if (old == 0) old = now;
-    if ((now - old) > UCLOCK_FREQ / 50)
-    printf("%s() after %" PRIu64 "us\n", __func__, (now - old) / 27);
-    old = now;
+    uint64_t now = uclock_now(upipe_netmap_sink->uclock);
+    {
+        static uint64_t old;
+        if (old == 0)
+            old = now;
+        if ((now - old) > UCLOCK_FREQ / 50)
+            printf("%s() after %" PRIu64 "us\n", __func__, (now - old) / 27);
+        old = now;
+    }
 
     if (!upipe_netmap_sink->flow_def)
         return;
@@ -659,7 +656,7 @@ static void upipe_netmap_sink_worker(struct upump *upump)
             uint64_t cr = 0;
             uref_clock_get_cr_sys(uref, &cr);
 
-            uint64_t now = uclock_now(u);
+            uint64_t now = uclock_now(upipe_netmap_sink->uclock);
 
             if (0) upipe_notice_va(upipe, "pop, urefs: %zu, now %.2f pts %.2f cr %.2f",
                     upipe_netmap_sink->n,
@@ -1195,10 +1192,6 @@ static int _upipe_netmap_sink_control(struct upipe *upipe,
         case UPIPE_ATTACH_UPUMP_MGR:
             upipe_netmap_sink_set_upump(upipe, NULL);
             return upipe_netmap_sink_attach_upump_mgr(upipe);
-        case UPIPE_ATTACH_UCLOCK:
-            upipe_netmap_sink_set_upump(upipe, NULL);
-            upipe_netmap_sink_require_uclock(upipe);
-            return UBASE_ERR_NONE;
         case UPIPE_REGISTER_REQUEST: {
             struct urequest *request = va_arg(args, struct urequest *);
             if (request->type == UREQUEST_SINK_LATENCY)
@@ -1250,11 +1243,11 @@ static void upipe_netmap_sink_free(struct upipe *upipe)
         upipe_netmap_sink_from_upipe(upipe);
     upipe_throw_dead(upipe);
 
+    uclock_release(upipe_netmap_sink->uclock);
     uref_free(upipe_netmap_sink->flow_def);
     free(upipe_netmap_sink->uri);
     free(upipe_netmap_sink->maxrate_uri);
 
-    upipe_netmap_sink_clean_uclock(upipe);
     upipe_netmap_sink_clean_upump(upipe);
     upipe_netmap_sink_clean_upump_mgr(upipe);
     upipe_netmap_sink_clean_urefcount(upipe);
