@@ -331,12 +331,6 @@ static int upipe_sync_sub_control(struct upipe *upipe, int command, va_list args
 
 static float pts_to_time(uint64_t pts)
 {
-    static uint64_t first;
-    if (!first)
-        first = pts;
-
-    pts -= first;
-
     return (float)pts / 27000;
 }
 
@@ -567,7 +561,7 @@ static void cb(struct upump *upump)
             /* frame pts too much in the past */
             upipe_warn_va(upipe, "too late");
         } else if (pts > now + ticks / 2) {
-            upipe_warn_va(upipe, "too early: %.2f > %.2f",
+            upipe_warn_va(upipe, "audio too early: %.2f > %.2f",
                 pts_to_time(pts), pts_to_time(now + ticks / 2)
             );
             uchain = NULL; /* do not drop */
@@ -597,7 +591,7 @@ static void cb(struct upump *upump)
         uref_free(upipe_sync->uref);
         upipe_sync->uref = uref_from_uchain(uchain);
     } else {
-        upipe_dbg_va(upipe, "repeating picture");
+        upipe_dbg_va(upipe, "no picture, repeating last one");
     }
 
     assert(upipe_sync->uref);
@@ -708,7 +702,7 @@ static void upipe_sync_input(struct upipe *upipe, struct uref *uref,
     if (now > pts) {
         uint64_t cr = 0;
         uref_clock_get_cr_sys(uref, &cr);
-        upipe_err_va(upipe, "%s() TOO LATE by %" PRIu64 "ms, drop pic, recept %" PRIu64 "",
+        upipe_err_va(upipe, "%s() picture too late by %" PRIu64 "ms, drop pic, recept %" PRIu64 "",
             __func__, (now - pts) / 27000, (now - cr) / 27000);
         uref_free(uref);
         return;
