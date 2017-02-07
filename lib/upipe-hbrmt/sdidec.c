@@ -1,10 +1,8 @@
 #include <inttypes.h>
 #include "sdidec.h"
 
-void upipe_sdi_unpack_c(const uint8_t *src, uint16_t *y, int64_t bytes)
+void upipe_sdi_unpack_c(const uint8_t *src, uint16_t *y, int64_t pixels)
 {
-    uint64_t pixels = bytes * 8 /10;
-
     for (int i = 0; i < pixels; i += 4) {
         uint8_t a = *src++;
         uint8_t b = *src++;
