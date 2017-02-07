@@ -571,12 +571,6 @@ static int worker_hbrmt(struct upipe *upipe, uint8_t **dst, const uint8_t *src,
 
 static float pts_to_time(uint64_t pts)
 {
-    static uint64_t first;
-    if (!first)
-        first = pts;
-
-    pts -= first;
-
     return (float)pts / 27000;
 }
 
