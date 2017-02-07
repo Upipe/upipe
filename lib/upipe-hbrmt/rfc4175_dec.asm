@@ -185,17 +185,18 @@ sdi_to_planar_8
 %macro sdi_to_planar_10 0
 
 ; sdi_to_planar_10(uint8_t *src, uint16_t *y, uint16_t *u, uint16_t *v, int64_t size)
-cglobal sdi_to_planar_10, 5, 6, 3+cpuflag(avx2), src, y, u, v, bytes, offset
-    xor      offsetq, offsetq
-    add      srcq,    bytesq
-    neg      bytesq
+cglobal sdi_to_planar_10, 5, 5, 3+cpuflag(avx2), src, y, u, v, pixels
+    lea yq,     [yq + 2*pixelsq]
+    add uq,      pixelsq
+    add vq,      pixelsq
+    neg pixelsq
 
     mova     m2, [sdi_to_planar10_mask_c]
 
     .loop:
-        movu     xm0, [srcq + bytesq]
+        movu     xm0, [srcq]
 %if cpuflag(avx2)
-        vinserti128 m0, m0, [srcq + bytesq + 15], 1
+        vinserti128 m0, m0, [srcq + 15], 1
 %endif
 
         pandn    m1, m2, m0
@@ -207,18 +208,18 @@ cglobal sdi_to_planar_10, 5, 6, 3+cpuflag(avx2), src, y, u, v, bytes, offset
         pmulhuw  m0, [sdi_to_planar10_mult_c]
         pmulhrsw m1, [sdi_to_planar10_mult_y]
 
-        movu [yq + 2*offsetq], xm1
-        movq   [uq + offsetq], xm0
-        movhps [vq + offsetq], xm0
+        movu [yq + 2*pixelsq], xm1
+        movq   [uq + pixelsq], xm0
+        movhps [vq + pixelsq], xm0
 %if cpuflag(avx2)
-        vextracti128 [yq + 2*offsetq + 12], m1, 1
+        vextracti128 [yq + 2*pixelsq + 12], m1, 1
         vextracti128 xm3, m0, 1
-        movq   [uq + offsetq + 6], xm3
-        movhps [vq + offsetq + 6], xm3
+        movq   [uq + pixelsq + 6], xm3
+        movhps [vq + pixelsq + 6], xm3
 %endif
 
-        add offsetq, (6*mmsize)/16
-        add bytesq, (15*mmsize)/16
+        add    srcq, (15*mmsize)/16
+        add pixelsq, (6*mmsize)/16
     jl .loop
 RET
 %endmacro
