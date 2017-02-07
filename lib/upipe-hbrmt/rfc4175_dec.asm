@@ -129,15 +129,17 @@ sdi_to_v210
 %macro sdi_to_planar_8 0
 
 ; sdi_to_planar_8(uint8_t *src, uint8_t *y, uint8_t *u, uint8_t *v, int64_t size)
-cglobal sdi_to_planar_8, 5, 6, 3, src, y, u, v, bytes, offset
-    xor      offsetq, offsetq
-    add      srcq,    bytesq
-    neg      bytesq
+cglobal sdi_to_planar_8, 5, 5, 3, src, y, u, v, pixels
+    add yq,      pixelsq
+    shr pixelsq, 1
+    add uq,      pixelsq
+    add vq,      pixelsq
+    neg pixelsq
 
 .loop:
-    movu     xm0, [srcq + bytesq]
+    movu     xm0, [srcq]
 %if cpuflag(avx2)
-    vinserti128 m0, m0, [srcq + bytesq + 15], 1
+    vinserti128 m0, m0, [srcq + 15], 1
 %endif
 
     pshufb   m1, m0, [planar_8_c_shuf]
@@ -145,29 +147,29 @@ cglobal sdi_to_planar_8, 5, 6, 3, src, y, u, v, bytes, offset
     pshufb   m0, [planar_8_y_shuf]
     pmullw   m0, [planar_8_y_mult]
     pshufb   m0, [planar_8_y_shuf_after]
-    movq     [yq + 2*offsetq], xm0
+    movq     [yq + 2*pixelsq], xm0
 %if cpuflag(avx2)
-    vextracti128 [yq + 2*offsetq + 6], m0, 1
+    vextracti128 [yq + 2*pixelsq + 6], m0, 1
 %endif
 
 %if notcpuflag(avx2)
-    movd     [uq + offsetq], m1
+    movd     [uq + pixelsq], m1
     psllw    m2, m1, 4
     pshufb   m2, [planar_8_v_shuf_after]
-    movd     [vq + offsetq], m2
+    movd     [vq + pixelsq], m2
 %else
     vpermq m1, m1, q3120
     vextracti128 xm2, m1, 1
     pshufb xm1, [planar_8_avx2_shuf1]
-    movq [uq + offsetq], xm1
+    movq [uq + pixelsq], xm1
 
     psllw xm2, 4
     pshufb xm2, [planar_8_avx2_shuf2]
-    movq [vq + offsetq], xm2
+    movq [vq + pixelsq], xm2
 %endif
 
-    add      offsetq, (3*mmsize)/16
-    add      bytesq, (15*mmsize)/16
+    add      srcq, (15*mmsize)/16
+    add   pixelsq, (3*mmsize)/16
     jl .loop
 
     RET
