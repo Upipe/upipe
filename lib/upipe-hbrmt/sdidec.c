@@ -18,10 +18,8 @@ void upipe_sdi_unpack_c(const uint8_t *src, uint16_t *y, int64_t bytes)
     }
 }
 
-void upipe_sdi_v210_unpack_c(const uint8_t *src, uint32_t *dst, int64_t bytes)
+void upipe_sdi_v210_unpack_c(const uint8_t *src, uint32_t *dst, int64_t pixels)
 {
-    int pixels = (bytes * 8) / 10;
-
     for (int i = 0; i < pixels; i += 3 * 4) {
         uint16_t a, b, c;
 

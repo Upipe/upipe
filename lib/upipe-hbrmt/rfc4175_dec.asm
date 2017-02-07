@@ -57,9 +57,7 @@ SECTION .text
 %macro sdi_to_v210 0
 
 ; sdi_v210_unpack(const uint8_t *src, uint32_t *dst, int64_t width)
-cglobal sdi_to_v210, 3, 3, 3+11*ARCH_X86_64, src, dst, bytes
-    add     srcq, bytesq
-    neg     bytesq
+cglobal sdi_to_v210, 3, 3, 3+11*ARCH_X86_64, src, dst, pixels
 
 %if ARCH_X86_64
     mova    m3,  [sdi_v210_shuf_easy]
@@ -88,9 +86,9 @@ cglobal sdi_to_v210, 3, 3, 3+11*ARCH_X86_64, src, dst, bytes
 %endif ; ARCH_X86_64
 
 .loop:
-    movu     xm0, [srcq + bytesq]
+    movu     xm0, [srcq]
 %if cpuflag(avx2)
-    vinserti128 m0, m0, [srcq + bytesq + 15], 1
+    vinserti128 m0, m0, [srcq + 15], 1
 %endif
 
     pshufb   m1, m0, m3
@@ -114,8 +112,9 @@ cglobal sdi_to_v210, 3, 3, 3+11*ARCH_X86_64, src, dst, bytes
     mova     [dstq], m1
 
     add      dstq, mmsize
-    add      bytesq, (15*mmsize)/16
-    jl .loop
+    add      srcq, (15*mmsize)/16
+    sub   pixelsq, (6*mmsize)/16
+    jg .loop
 
     RET
 %endmacro

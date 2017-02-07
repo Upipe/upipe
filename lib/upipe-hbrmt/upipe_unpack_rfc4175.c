@@ -100,7 +100,7 @@ struct upipe_unpack_rfc4175 {
     size_t output_stride[UPIPE_UNPACK_RFC4175_MAX_PLANES];
 
     /** Bitpacked to V210 conversion */
-    void (*bitpacked_to_v210)(const uint8_t *src, uint32_t *dst, int64_t size);
+    void (*bitpacked_to_v210)(const uint8_t *src, uint32_t *dst, int64_t pixels);
 
     /** Bitpacked to Planar 8 conversion */
     void (*bitpacked_to_planar_8)(const uint8_t *src, uint8_t *y, uint8_t *u, uint8_t *v, int64_t size);
@@ -283,7 +283,7 @@ static bool upipe_unpack_rfc4175_handle(struct upipe *upipe, struct uref *uref,
             dst += (line_offset[i] / 6) * 16;
 
             upipe_unpack_rfc4175->bitpacked_to_v210(rfc4175_data,
-                    (uint32_t *)dst, length[i]);
+                    (uint32_t *)dst, (2 * length[i]) / 5);
         } else {
             uint8_t *plane[UPIPE_UNPACK_RFC4175_MAX_PLANES];
             for (int j = 0 ; j < UPIPE_UNPACK_RFC4175_MAX_PLANES; j++) {
