@@ -121,7 +121,11 @@ struct upipe_sync_sub {
     /** linked list of subpipes */
     struct uchain uchain;
 
+    /** subpic or sound */
     bool sound;
+
+    /** channels */
+    uint8_t channels;
 
     /** linked list of buffered urefs */
     struct uchain urefs;
@@ -272,10 +276,7 @@ static int upipe_sync_sub_set_flow_def(struct upipe *upipe, struct uref *flow_de
     if (planes != 1)
         return UBASE_ERR_INVALID;
 
-    uint8_t channels;
-    UBASE_RETURN(uref_sound_flow_get_channels(flow_def, &channels));
-    if (channels != 2)
-        return UBASE_ERR_INVALID;
+    UBASE_RETURN(uref_sound_flow_get_channels(flow_def, &upipe_sync_sub->channels));
 
     uint64_t rate;
     UBASE_RETURN(uref_sound_flow_get_rate(flow_def, &rate));
@@ -462,7 +463,7 @@ static void output_sound(struct upipe *upipe, const struct urational *fps,
         if (!upipe_sync_sub->sound)
             continue;
         struct upipe *upipe_sub = upipe_sync_sub_to_upipe(upipe_sync_sub);
-
+        const uint8_t channels = upipe_sync_sub->channels;
         size_t samples = audio_samples_count(upipe_sub, fps);
 
         /* look at first uref without dequeuing */
@@ -499,8 +500,8 @@ static void output_sound(struct upipe *upipe, const struct urational *fps,
                 uref_samples = samples;
             }
 
-            memcpy(dst_buf, src_buf, 2 /* FIXME */ * sizeof(int32_t) * uref_samples);
-            dst_buf += 2 /* FIXME */ * uref_samples;
+            memcpy(dst_buf, src_buf, channels * sizeof(int32_t) * uref_samples);
+            dst_buf += channels * uref_samples;
 
             uref_sound_unmap(src, 0, -1, 1);
 
