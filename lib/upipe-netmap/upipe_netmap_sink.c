@@ -213,6 +213,9 @@ struct upipe_netmap_sink {
     /** latency */
     uint64_t latency;
 
+    /** prerolling */
+    bool preroll;
+
     /** public upipe structure */
     struct upipe upipe;
 };
@@ -598,8 +601,7 @@ static void upipe_netmap_sink_worker(struct upump *upump)
     int input_size = -1;
     int bytes_left = 0;
 
-    static bool preroll = 1;
-    if (uref && preroll) {
+    if (uref && upipe_netmap_sink->preroll) {
         uint64_t pts = 0;
         uref_clock_get_pts_sys(uref, &pts);
         pts += upipe_netmap_sink->latency;
@@ -610,7 +612,7 @@ static void upipe_netmap_sink_worker(struct upump *upump)
             return;
         }
         upipe_notice_va(upipe, "end of preroll");
-        preroll = 0;
+        upipe_netmap_sink->preroll = false;
     }
 
     /* Open up transmission ring */
@@ -666,7 +668,7 @@ static void upipe_netmap_sink_worker(struct upump *upump)
                     pts_to_time(cr)
             );
 
-            if (preroll && pts + NETMAP_SINK_LATENCY > now) {
+            if (upipe_netmap_sink->preroll && pts + NETMAP_SINK_LATENCY > now) {
                 printf("waiting preroll after pop\n");
                 upipe_netmap_sink->uref = uref;
                 return;
@@ -780,6 +782,7 @@ static bool upipe_netmap_sink_output(struct upipe *upipe, struct uref *uref,
     if (unlikely(ubase_check(uref_flow_get_def(uref, &def)))) {
         uref_free(upipe_netmap_sink->flow_def);
         upipe_netmap_sink->flow_def = uref;
+        upipe_netmap_sink->preroll = true;
         return true;
     }
 
