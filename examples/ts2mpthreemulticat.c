@@ -343,7 +343,7 @@ int main(int argc, char *argv[])
     upump_start(sigint_pump);
     struct upump *sigterm_pump = upump_alloc_signal(upump_mgr, sighandler,
             (void *)SIGTERM, NULL, SIGTERM);
-    upump_set_status(sigint_pump, false);
+    upump_set_status(sigterm_pump, false);
     upump_start(sigterm_pump);
 
     if (srcpath != NULL) {
