@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2013-2016 OpenHeadend S.A.R.L.
+ * Copyright (C) 2013-2017 OpenHeadend S.A.R.L.
  *
  * Authors: Christophe Massiot
  *
@@ -664,6 +664,13 @@ static int upipe_ts_demux_output_clock_ts(struct upipe *upipe,
     struct uref *uref = va_arg(args, struct uref *);
     uint64_t dts_orig;
     if (ubase_check(uref_clock_get_dts_orig(uref, &dts_orig))) {
+        if (program->pcr_pid == 8191) {
+            /* No PCR, treat DTS as PCR. */
+            upipe_ts_demux_program_handle_pcr(
+                    upipe_ts_demux_program_to_upipe(program),
+                    uref, dts_orig, false);
+        }
+
         /* handle 2^33 wrap-arounds */
         uint64_t delta = (TS_CLOCK_MAX + dts_orig -
                           (program->last_pcr % TS_CLOCK_MAX)) % TS_CLOCK_MAX;
