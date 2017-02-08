@@ -150,13 +150,13 @@ struct upipe_sdi_dec {
     const char *output_chroma_map[UPIPE_SDI_DEC_MAX_PLANES];
 
     /** UYVY to V210 */
-    void (*uyvy_to_v210)(const uint16_t *y, uint8_t *dst, int64_t width);
+    void (*uyvy_to_v210)(const uint16_t *y, uint8_t *dst, uintptr_t width);
 
     /** UYVY to 8-bit Planar */
-    void (*uyvy_to_planar_8)(uint8_t *y, uint8_t *u, uint8_t *v, const uint16_t *l, const int64_t width);
+    void (*uyvy_to_planar_8)(uint8_t *y, uint8_t *u, uint8_t *v, const uint16_t *l, uintptr_t width);
 
     /** UYVY to 10-bit Planar */
-    void (*uyvy_to_planar_10)(uint16_t *y, uint16_t *u, uint16_t *v, const uint16_t *l, const int64_t width);
+    void (*uyvy_to_planar_10)(uint16_t *y, uint16_t *u, uint16_t *v, const uint16_t *l, uintptr_t width);
 
     /* SDI offsets */
     const struct sdi_offsets_fmt *f;
@@ -1290,7 +1290,7 @@ static int upipe_sdi_dec_control(struct upipe *upipe, int command, va_list args)
     }
 }
 
-static void uyvy_to_planar_8_c(uint8_t *y, uint8_t *u, uint8_t *v, const uint16_t *l, const int64_t width)
+static void uyvy_to_planar_8_c(uint8_t *y, uint8_t *u, uint8_t *v, const uint16_t *l, uintptr_t width)
 {
     int j;
     for (j = 0; j < width / 2; j++) {
@@ -1305,7 +1305,7 @@ static void uyvy_to_planar_8_c(uint8_t *y, uint8_t *u, uint8_t *v, const uint16_
     }
 }
 
-static void uyvy_to_planar_10_c(uint16_t *y, uint16_t *u, uint16_t *v, const uint16_t *l, const int64_t width)
+static void uyvy_to_planar_10_c(uint16_t *y, uint16_t *u, uint16_t *v, const uint16_t *l, uintptr_t width)
 {
     int j;
     for (j = 0; j < width/2; j++) {
@@ -1333,7 +1333,7 @@ static void uyvy_to_planar_10_c(uint16_t *y, uint16_t *u, uint16_t *v, const uin
         dst += 4;                       \
     } while (0)
 
-static void uyvy_to_v210_c(const uint16_t *y, uint8_t *dst, int64_t width)
+static void uyvy_to_v210_c(const uint16_t *y, uint8_t *dst, uintptr_t width)
 {
     uint32_t val, tmp1, tmp2;
     int i;

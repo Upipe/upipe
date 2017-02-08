@@ -76,7 +76,7 @@ struct upipe_unpack10bit {
     struct uchain blockers;
 
     /** unpacking */
-    void (*unpack)(const uint8_t *src, uint16_t *y, int64_t pixels);
+    void (*unpack)(const uint8_t *src, uint16_t *y, uintptr_t pixels);
 
     /** public upipe structure */
     struct upipe upipe;

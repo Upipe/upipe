@@ -100,10 +100,10 @@ struct upipe_unpack_rfc4175 {
     size_t output_stride[UPIPE_UNPACK_RFC4175_MAX_PLANES];
 
     /** Bitpacked to V210 conversion */
-    void (*bitpacked_to_v210)(const uint8_t *src, uint32_t *dst, int64_t pixels);
+    void (*bitpacked_to_v210)(const uint8_t *src, uint32_t *dst, uintptr_t pixels);
 
     /** Bitpacked to Planar 8 conversion */
-    void (*bitpacked_to_planar_8)(const uint8_t *src, uint8_t *y, uint8_t *u, uint8_t *v, int64_t pixels);
+    void (*bitpacked_to_planar_8)(const uint8_t *src, uint8_t *y, uint8_t *u, uint8_t *v, uintptr_t pixels);
 
     /** last RTP timestamp */
     uint64_t last_rtp_timestamp;

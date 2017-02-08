@@ -79,7 +79,7 @@ struct upipe_pack10bit {
     struct uchain blockers;
 
     /** packing */
-    void (*pack)(uint8_t *dst, const uint8_t *y, int64_t size);
+    void (*pack)(uint8_t *dst, const uint8_t *y, uintptr_t size);
 
     /** public upipe structure */
     struct upipe upipe;
@@ -322,7 +322,7 @@ static int upipe_pack10bit_control(struct upipe *upipe, int command, va_list arg
     }
 }
 
-static void upipe_sdi_pack_c(uint8_t *dst, const uint8_t *y, int64_t size)
+static void upipe_sdi_pack_c(uint8_t *dst, const uint8_t *y, uintptr_t size)
 {
     struct ubits s;
     ubits_init(&s, dst, size * 10 / 8);

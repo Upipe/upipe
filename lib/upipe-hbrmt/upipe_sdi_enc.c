@@ -36,7 +36,7 @@
 #define UPIPE_SDI_SAV_LENGTH 4
 #define UPIPE_HD_SDI_SAV_LENGTH 8
 
-static void upipe_sdi_blank_c(uint16_t *dst, int64_t pixels)
+static void upipe_sdi_blank_c(uint16_t *dst, uintptr_t pixels)
 {
     for (int w = 0; w < pixels; w++) {
         dst[2*w+0] = 0x200;
@@ -59,18 +59,18 @@ static const bool parity_tab[512] = {
 /** upipe_sdi_enc structure with sdi_enc parameters */
 struct upipe_sdi_enc {
     /** Fills a uyvy image with 0x40 (Y), 0x200 (U, V) */
-    void (*blank)(uint16_t *dst, int64_t size);
+    void (*blank)(uint16_t *dst, uintptr_t size);
 
     /** Converts planar 8 bit to UYVY */
     void (*planar_to_uyvy_8)(uint16_t *dst, const uint8_t *y, const uint8_t *u,
-                             const uint8_t *v, const int64_t width);
+                             const uint8_t *v, uintptr_t width);
 
     /** Converts planar 10 bit to UYVY */
     void (*planar_to_uyvy_10)(uint16_t *dst, const uint16_t *y, const uint16_t *u,
-                              const uint16_t *v, const int64_t width);
+                              const uint16_t *v, uintptr_t width);
 
     /** Converts v210 to UYVY */
-    void (*v210_to_uyvy)(const uint32_t *src, uint16_t *uyvy, int64_t width);
+    void (*v210_to_uyvy)(const uint32_t *src, uint16_t *uyvy, uintptr_t width);
 
     /** refcount management structure */
     struct urefcount urefcount;
