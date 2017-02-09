@@ -1132,9 +1132,15 @@ static void upipe_sdi_enc_input(struct upipe *upipe, struct uref *uref,
 #else
 {
     uref = uref_from_uchain(ulist_pop(&upipe_sdi_enc->urefs));
-    struct upipe_sdi_enc_sub *sdi_enc_sub = upipe_sdi_enc_sub_from_uchain(upipe_sdi_enc->subs.next);
-    struct upipe *sub = &sdi_enc_sub->upipe;
-    struct uref *uref_audio = uref_from_uchain(ulist_pop(&sdi_enc_sub->urefs));
+    struct upipe_sdi_enc_sub *sdi_enc_sub = NULL;
+    struct uref *uref_audio = NULL;
+    struct uchain *uchain = ulist_peek(&upipe_sdi_enc->subs);
+    if (uchain) {
+        sdi_enc_sub = upipe_sdi_enc_sub_from_uchain(uchain);
+        uref_audio = uref_from_uchain(ulist_pop(&sdi_enc_sub->urefs));
+    } else {
+        upipe_err(upipe, "no audio subpipe");
+    }
     if (uref_audio) {
         const uint8_t channels = sdi_enc_sub->channels;
 
