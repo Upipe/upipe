@@ -214,6 +214,11 @@ struct upipe_netmap_sink {
     /** prerolling */
     bool preroll;
 
+    /** packet headers */
+    // TODO: rfc
+    uint8_t header[ETHERNET_HEADER_LEN + IP_HEADER_MINSIZE + UDP_HEADER_SIZE +
+        RTP_HEADER_SIZE + HBRMT_HEADER_SIZE];
+
     /** public upipe structure */
     struct upipe upipe;
 };
@@ -567,15 +572,26 @@ static int worker_hbrmt(struct upipe *upipe, uint8_t **dst, const uint8_t *src,
 
     uint16_t udp_payload_size = RTP_HEADER_SIZE + HBRMT_HEADER_SIZE + HBRMT_DATA_SIZE;
 
-    /* Put headers and the marker if we've depleted the entire ubuf/frame */
-    *dst += upipe_netmap_put_ip_headers(upipe, *dst, udp_payload_size);
-    int rtp_size = upipe_netmap_put_rtp_headers(upipe, *dst, 98, true);
-    if (!bytes_left)
-        rtp_set_marker(*dst);
-    *dst += rtp_size;
-    *dst += upipe_put_hbrmt_headers(upipe, *dst);
+    uint8_t *header = &upipe_netmap_sink->header[0];
 
-    upipe_netmap_sink->seqnum++;
+    /* update rtp header */
+    uint8_t *rtp = &header[ETHERNET_HEADER_LEN + IP_HEADER_MINSIZE + UDP_HEADER_SIZE];
+    rtp_set_seqnum(rtp, upipe_netmap_sink->seqnum++ & UINT16_MAX);
+    const struct urational *fps = &upipe_netmap_sink->fps;
+    uint64_t frame_duration = UCLOCK_FREQ * fps->den / fps->num;
+    uint64_t timestamp = upipe_netmap_sink->frame_count * frame_duration +
+        (frame_duration * upipe_netmap_sink->pkt++ * HBRMT_DATA_SIZE) /
+        upipe_netmap_sink->frame_size;
+    rtp_set_timestamp(rtp, timestamp & UINT32_MAX);
+    if (!bytes_left)
+        rtp_set_marker(rtp);
+
+    /* copy header */
+    memcpy(*dst, upipe_netmap_sink->header, sizeof(upipe_netmap_sink->header));
+    *dst += sizeof(upipe_netmap_sink->header);
+
+    if (!bytes_left)
+        rtp_clear_marker(rtp);
 
     /* Put data */
     memcpy(*dst, src, payload_len);
@@ -742,8 +758,13 @@ static void upipe_netmap_sink_worker(struct upump *upump)
             uref_block_unmap(uref, 0);
             uref_free(uref);
             uref = NULL;
-            upipe_netmap_sink->frame_count++;
             upipe_netmap_sink->pkt = 0;
+
+            /* update hbrmt header */
+            uint8_t *hbrmt = &upipe_netmap_sink->header[ETHERNET_HEADER_LEN +
+                IP_HEADER_MINSIZE + UDP_HEADER_SIZE + RTP_HEADER_SIZE];
+            smpte_hbrmt_set_frame_count(hbrmt, ++upipe_netmap_sink->frame_count & UINT8_MAX);
+
         }
     }
 
@@ -977,6 +998,18 @@ static int upipe_netmap_sink_set_flow_def(struct upipe *upipe,
 
     if (!upipe_netmap_sink->frate)
         return UBASE_ERR_INVALID;
+
+    if (!upipe_netmap_sink->rfc4175) {
+        uint8_t *header = &upipe_netmap_sink->header[0];
+        static const uint16_t udp_payload_size = RTP_HEADER_SIZE +
+            HBRMT_HEADER_SIZE + HBRMT_DATA_SIZE;
+        header += upipe_netmap_put_ip_headers(upipe, header, udp_payload_size);
+        header += upipe_netmap_put_rtp_headers(upipe, header, 98, false);
+        header += upipe_put_hbrmt_headers(upipe, header);
+        assert(header == &upipe_netmap_sink->header[sizeof(upipe_netmap_sink->header)]);
+    } else {
+        // TODO
+    }
 
     flow_def = uref_dup(flow_def);
     UBASE_ALLOC_RETURN(flow_def)
