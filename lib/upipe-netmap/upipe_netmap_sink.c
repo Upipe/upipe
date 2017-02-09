@@ -61,6 +61,8 @@
 
 #include "sdi.h"
 
+#include "../upipe-hbrmt/sdienc.h"
+
 #define UPIPE_RFC4175_MAX_PLANES 3
 #define UPIPE_RFC4175_PIXEL_PAIR_BYTES 5
 #define UPIPE_RFC4175_BLOCK_SIZE 15
@@ -219,6 +221,14 @@ struct upipe_netmap_sink {
     uint8_t header[ETHERNET_HEADER_LEN + IP_HEADER_MINSIZE + UDP_HEADER_SIZE +
         RTP_HEADER_SIZE + HBRMT_HEADER_SIZE];
 
+    /* TODO: 4 for ssse3 / avx, 8 for avx2 */
+#define PACK10_LOOP_SIZE 8 /* pixels per loop */
+
+    /** cached packed pixels */
+    uint8_t packed_pixels[PACK10_LOOP_SIZE * 5 / 2 - 1];
+    /** number of cached packed pixels */
+    uint8_t packed_bytes;
+
     /** public upipe structure */
     struct upipe upipe;
 };
@@ -295,6 +305,7 @@ static struct upipe *upipe_netmap_sink_alloc(struct upipe_mgr *mgr,
     upipe_netmap_sink->n = 0;
     upipe_netmap_sink->pkt = 0;
     upipe_netmap_sink->uref = NULL;
+    upipe_netmap_sink->packed_bytes = 0;
 
     upipe_netmap_sink->pack_8_planar = upipe_planar_to_sdi_8_c;
     upipe_netmap_sink->pack_10_planar = upipe_planar_to_sdi_10_c;
@@ -560,17 +571,26 @@ static int worker_hbrmt(struct upipe *upipe, uint8_t *dst, const uint8_t *src,
         int bytes_left, uint16_t *len)
 {
     struct upipe_netmap_sink *upipe_netmap_sink = upipe_netmap_sink_from_upipe(upipe);
+    const uint8_t packed_bytes = upipe_netmap_sink->packed_bytes;
 
-    /* Enough data to fill entire ring buffer? */
+    /* available payload size */
+    int pack_bytes_left = bytes_left * 5 / 8 + packed_bytes;
+
+    /* desired payload size */
     int payload_len = HBRMT_DATA_SIZE;
-    if (payload_len > bytes_left) {
-        payload_len = bytes_left;
-        /* padding */
-        memset(dst + payload_len, 0, HBRMT_DATA_SIZE - payload_len);
-    }
-    bytes_left -= payload_len;
+    if (payload_len > pack_bytes_left)
+        payload_len = pack_bytes_left;
 
-    uint16_t udp_payload_size = RTP_HEADER_SIZE + HBRMT_HEADER_SIZE + HBRMT_DATA_SIZE;
+    /* pixels we need to read, 4 bytes per pixel */
+    int pixels = ((payload_len - packed_bytes + 4)/5) * 8 / 4;
+    assert(pixels);
+
+    /* round to asm loop size */
+    pixels += PACK10_LOOP_SIZE - 1;
+    pixels &= ~(PACK10_LOOP_SIZE - 1);
+
+    // FIXME: what if we exhaust the uref while outputting the penultimate packet?
+    // Hi50 is fine, need to test others and eventually come up with a solution
 
     uint8_t *header = &upipe_netmap_sink->header[0];
 
@@ -583,21 +603,47 @@ static int worker_hbrmt(struct upipe *upipe, uint8_t *dst, const uint8_t *src,
         (frame_duration * upipe_netmap_sink->pkt++ * HBRMT_DATA_SIZE) /
         upipe_netmap_sink->frame_size;
     rtp_set_timestamp(rtp, timestamp & UINT32_MAX);
-    if (!bytes_left)
+    if (bytes_left == pixels * 4)
         rtp_set_marker(rtp);
 
     /* copy header */
     memcpy(dst, upipe_netmap_sink->header, sizeof(upipe_netmap_sink->header));
     dst += sizeof(upipe_netmap_sink->header);
 
-    if (!bytes_left)
+    /* unset rtp marker if needed */
+    if (bytes_left == pixels * 4)
         rtp_clear_marker(rtp);
 
-    /* Put data */
-    memcpy(dst, src, payload_len);
-    *len = ETHERNET_HEADER_LEN + IP_HEADER_MINSIZE + UDP_HEADER_SIZE + udp_payload_size;
+    /* use previous scratch buffer */
+    if (packed_bytes) {
+        memcpy(dst, upipe_netmap_sink->packed_pixels, packed_bytes);
+        dst += packed_bytes;
+    }
 
-    return payload_len;
+    /* convert pixels */
+    upipe_uyvy_to_sdi_unaligned_ssse3(dst, src, pixels);
+
+    /* bytes these pixels decoded to */
+    int bytes = pixels * 4 * 5 / 8;
+
+    /* overlap */
+    int pkt_rem = bytes - (payload_len - packed_bytes);
+    assert(pkt_rem <= sizeof(upipe_netmap_sink->packed_pixels));
+    if (pkt_rem > 0)
+        memcpy(upipe_netmap_sink->packed_pixels, dst + bytes - pkt_rem, pkt_rem);
+
+    /* update overlap count */
+    upipe_netmap_sink->packed_bytes = pkt_rem;
+
+    /* padding */
+    if (payload_len != HBRMT_DATA_SIZE)
+        memset(dst + payload_len, 0, HBRMT_DATA_SIZE - payload_len);
+
+    /* packet size */
+    *len = ETHERNET_HEADER_LEN + IP_HEADER_MINSIZE + UDP_HEADER_SIZE +
+        RTP_HEADER_SIZE + HBRMT_HEADER_SIZE + HBRMT_DATA_SIZE;
+
+    return pixels * 4;
 }
 
 static float pts_to_time(uint64_t pts)
@@ -822,6 +868,7 @@ static bool upipe_netmap_sink_output(struct upipe *upipe, struct uref *uref,
         uint64_t rate = 0;
         if (!upipe_netmap_sink->rfc4175) {
             uref_block_size(uref, &upipe_netmap_sink->frame_size);
+            upipe_netmap_sink->frame_size = upipe_netmap_sink->frame_size * 5 / 8;
             uint64_t packets_per_frame = (upipe_netmap_sink->frame_size + HBRMT_DATA_SIZE - 1) / HBRMT_DATA_SIZE;
             static const uint64_t eth_packet_size =
             ETHERNET_HEADER_LEN + IP_HEADER_MINSIZE + UDP_HEADER_SIZE +
