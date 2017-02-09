@@ -1,10 +1,8 @@
 #include <inttypes.h>
 #include "sdidec.h"
 
-void upipe_sdi_unpack_c(const uint8_t *src, uint16_t *y, int64_t bytes)
+void upipe_sdi_unpack_c(const uint8_t *src, uint16_t *y, uintptr_t pixels)
 {
-    uint64_t pixels = bytes * 8 /10;
-
     for (int i = 0; i < pixels; i += 4) {
         uint8_t a = *src++;
         uint8_t b = *src++;
@@ -18,10 +16,8 @@ void upipe_sdi_unpack_c(const uint8_t *src, uint16_t *y, int64_t bytes)
     }
 }
 
-void upipe_sdi_v210_unpack_c(const uint8_t *src, uint32_t *dst, int64_t bytes)
+void upipe_sdi_v210_unpack_c(const uint8_t *src, uint32_t *dst, uintptr_t pixels)
 {
-    int pixels = (bytes * 8) / 10;
-
     for (int i = 0; i < pixels; i += 3 * 4) {
         uint16_t a, b, c;
 
@@ -47,9 +43,8 @@ void upipe_sdi_v210_unpack_c(const uint8_t *src, uint32_t *dst, int64_t bytes)
     }
 }
 
-void upipe_sdi_to_planar_8_c(const uint8_t *src, uint8_t *y, uint8_t *u, uint8_t *v, int64_t bytes)
+void upipe_sdi_to_planar_8_c(const uint8_t *src, uint8_t *y, uint8_t *u, uint8_t *v, uintptr_t pixels)
 {
-    int pixels = (bytes * 8) / 10;
     for (int i = 0; i < pixels; i += 4) {
         uint8_t a = *src++; // UUUUUUUU
         uint8_t b = *src++; // ..YYYYYY

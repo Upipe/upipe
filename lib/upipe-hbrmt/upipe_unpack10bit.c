@@ -76,7 +76,7 @@ struct upipe_unpack10bit {
     struct uchain blockers;
 
     /** unpacking */
-    void (*unpack)(const uint8_t *src, uint16_t *y, int64_t size);
+    void (*unpack)(const uint8_t *src, uint16_t *y, uintptr_t pixels);
 
     /** public upipe structure */
     struct upipe upipe;
@@ -146,7 +146,7 @@ static bool upipe_unpack10bit_handle(struct upipe *upipe, struct uref *uref,
         return true;
     }
 
-    upipe_unpack10bit->unpack(input, (uint16_t *)out, input_size);
+    upipe_unpack10bit->unpack(input, (uint16_t *)out, (2*input_size) / 5);
 
     ubuf_block_unmap(ubuf_out, 0);
     uref_block_unmap(uref, 0);
