@@ -224,6 +224,9 @@ struct upipe_netmap_sink {
     /* TODO: 4 for ssse3 / avx, 8 for avx2 */
 #define PACK10_LOOP_SIZE 8 /* pixels per loop */
 
+    /** packing */
+    void (*pack)(uint8_t *dst, const uint8_t *y, uintptr_t size);
+
     /** cached packed pixels */
     uint8_t packed_pixels[PACK10_LOOP_SIZE * 5 / 2 - 1];
     /** number of cached packed pixels */
@@ -265,6 +268,22 @@ static void upipe_udp_raw_fill_headers(uint8_t *header,
     udp_set_dstport(header, portdst);
     udp_set_len(header, len + UDP_HEADER_SIZE);
     udp_set_cksum(header, 0);
+}
+
+static void upipe_sdi_pack_c(uint8_t *dst, const uint8_t *y, uintptr_t size)
+{
+    struct ubits s;
+    ubits_init(&s, dst, size * 10 / 8);
+
+    for (int i = 0; i < size; i ++)
+        ubits_put(&s, 10, htons((y[2*i+0] << 8) | y[2*i+1]));
+
+    uint8_t *end;
+    if (!ubase_check(ubits_clean(&s, &end))) {
+        // error
+    } else {
+        // check buffer end?
+    }
 }
 
 /** @internal @This allocates a netmap sink pipe.
@@ -311,12 +330,32 @@ static struct upipe *upipe_netmap_sink_alloc(struct upipe_mgr *mgr,
     upipe_netmap_sink->pack_10_planar = upipe_planar_to_sdi_10_c;
     upipe_netmap_sink->unpack_v210 = upipe_v210_sdi_unpack_c;
 
+    upipe_netmap_sink->pack = upipe_sdi_pack_c;
+
+#if defined(__i686__) || defined(__x86_64__)
 #if !defined(__APPLE__) /* macOS clang doesn't support that builtin yet */
+#if defined(__clang__) && /* clang 3.8 doesn't know ssse3 */ \
+     (__clang_major__ < 3 || (__clang_major__ == 3 && __clang_minor__ <= 8))
+# ifdef __SSSE3__
+    if (1)
+# else
+    if (0)
+# endif
+#else
+    if (__builtin_cpu_supports("ssse3"))
+#endif
+        upipe_netmap_sink->pack = upipe_uyvy_to_sdi_unaligned_ssse3;
+
     if (__builtin_cpu_supports("avx")) {
+        upipe_netmap_sink->pack = upipe_uyvy_to_sdi_avx;
         upipe_netmap_sink->pack_8_planar = upipe_planar_to_sdi_8_avx;
         upipe_netmap_sink->pack_10_planar = upipe_planar_to_sdi_10_avx;
         upipe_netmap_sink->unpack_v210 = upipe_v210_sdi_unpack_aligned_avx;
     }
+
+    if (__builtin_cpu_supports("avx2"))
+        upipe_netmap_sink->pack = upipe_uyvy_to_sdi_avx2;
+#endif
 #endif
 
     upipe_throw_ready(upipe);
@@ -621,7 +660,7 @@ static int worker_hbrmt(struct upipe *upipe, uint8_t *dst, const uint8_t *src,
     }
 
     /* convert pixels */
-    upipe_uyvy_to_sdi_unaligned_ssse3(dst, src, pixels);
+    upipe_netmap_sink->pack(dst, src, pixels);
 
     /* bytes these pixels decoded to */
     int bytes = pixels * 4 * 5 / 8;
