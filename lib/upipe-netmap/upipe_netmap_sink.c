@@ -556,7 +556,7 @@ static int worker_rfc4175(struct upipe *upipe, uint8_t **dst, uint16_t *len)
     return 0;
 }
 
-static int worker_hbrmt(struct upipe *upipe, uint8_t **dst, const uint8_t *src,
+static int worker_hbrmt(struct upipe *upipe, uint8_t *dst, const uint8_t *src,
         int bytes_left, uint16_t *len)
 {
     struct upipe_netmap_sink *upipe_netmap_sink = upipe_netmap_sink_from_upipe(upipe);
@@ -566,7 +566,7 @@ static int worker_hbrmt(struct upipe *upipe, uint8_t **dst, const uint8_t *src,
     if (payload_len > bytes_left) {
         payload_len = bytes_left;
         /* padding */
-        memset(*dst + payload_len, 0, HBRMT_DATA_SIZE - payload_len);
+        memset(dst + payload_len, 0, HBRMT_DATA_SIZE - payload_len);
     }
     bytes_left -= payload_len;
 
@@ -587,14 +587,14 @@ static int worker_hbrmt(struct upipe *upipe, uint8_t **dst, const uint8_t *src,
         rtp_set_marker(rtp);
 
     /* copy header */
-    memcpy(*dst, upipe_netmap_sink->header, sizeof(upipe_netmap_sink->header));
-    *dst += sizeof(upipe_netmap_sink->header);
+    memcpy(dst, upipe_netmap_sink->header, sizeof(upipe_netmap_sink->header));
+    dst += sizeof(upipe_netmap_sink->header);
 
     if (!bytes_left)
         rtp_clear_marker(rtp);
 
     /* Put data */
-    memcpy(*dst, src, payload_len);
+    memcpy(dst, src, payload_len);
     *len = ETHERNET_HEADER_LEN + IP_HEADER_MINSIZE + UDP_HEADER_SIZE + udp_payload_size;
 
     return payload_len;
@@ -745,8 +745,7 @@ static void upipe_netmap_sink_worker(struct upump *upump)
                 uref = NULL;
             }
         } else {
-            int len = worker_hbrmt(upipe, &dst, src_buf, bytes_left, &txring->slot[cur].len);
-            dst += len;
+            int len = worker_hbrmt(upipe, dst, src_buf, bytes_left, &txring->slot[cur].len);
             src_buf += len;
             bytes_left -= len;
         }
