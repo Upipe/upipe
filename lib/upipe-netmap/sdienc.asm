@@ -29,8 +29,6 @@ uyvy_enc_max_10: times 16 dw 0x3fb
 uyvy_enc_min_8: times 16 dw 0x0101
 uyvy_enc_max_8: times 16 dw 0xFEFE
 
-sdi_blank: times 4 dw 0x200, 0x40, 0x200, 0x40, 0x200, 0x40, 0x200, 0x40
-
 uyvy_planar_shuf_10: times 2 db 0, 1, 8, 9, 4, 5,12,13, 2, 3, 6, 7,10,11,14,15
 
 uyvy_planar_shuf_8: db 2, 6, 10, 14, -1, -1, -1, -1, -1, -1, -1, -1, 0, 8, 4, 12
@@ -84,28 +82,6 @@ INIT_XMM ssse3
 sdi_pack_10
 INIT_XMM avx
 sdi_pack_10
-
-%macro sdi_blank 0
-
-; sdi_blank(uint16_t *dst, int64_t size)
-cglobal sdi_blank, 2, 2, 1, dst, size
-    shl     sizeq, 2
-    add     dstq, sizeq
-    neg     sizeq
-
-    mova    m0, [sdi_blank]
-
-.loop:
-    mova    [dstq+sizeq], m0
-
-    add     sizeq, mmsize
-    jl .loop
-
-    RET
-%endmacro
-
-INIT_XMM avx
-sdi_blank
 
 %macro planar_to_uyvy_8 0
 
