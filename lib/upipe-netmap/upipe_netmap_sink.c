@@ -308,7 +308,7 @@ static struct upipe *upipe_netmap_sink_alloc(struct upipe_mgr *mgr,
 }
 
 static int upipe_netmap_put_rtp_headers(struct upipe *upipe, uint8_t *buf,
-        uint8_t pt)
+        uint8_t pt, bool update)
 {
     struct upipe_netmap_sink *upipe_netmap_sink = upipe_netmap_sink_from_upipe(upipe);
 
@@ -316,14 +316,16 @@ static int upipe_netmap_put_rtp_headers(struct upipe *upipe, uint8_t *buf,
     rtp_set_hdr(buf);
     rtp_set_type(buf, pt);
 
-    rtp_set_seqnum(buf, upipe_netmap_sink->seqnum & UINT16_MAX);
+    if (update) {
+        rtp_set_seqnum(buf, upipe_netmap_sink->seqnum & UINT16_MAX);
 
-    struct urational *fps = &upipe_netmap_sink->fps;
-    uint64_t frame_duration = UCLOCK_FREQ * fps->den / fps->num;
-    uint64_t timestamp = upipe_netmap_sink->frame_count * frame_duration +
-        (frame_duration * upipe_netmap_sink->pkt++ * HBRMT_DATA_SIZE) /
-        upipe_netmap_sink->frame_size;
-    rtp_set_timestamp(buf, timestamp & UINT32_MAX);
+        const struct urational *fps = &upipe_netmap_sink->fps;
+        uint64_t frame_duration = UCLOCK_FREQ * fps->den / fps->num;
+        uint64_t timestamp = upipe_netmap_sink->frame_count * frame_duration +
+            (frame_duration * upipe_netmap_sink->pkt++ * HBRMT_DATA_SIZE) /
+            upipe_netmap_sink->frame_size;
+        rtp_set_timestamp(buf, timestamp & UINT32_MAX);
+    }
 
     return RTP_HEADER_SIZE;
 }
@@ -452,7 +454,7 @@ static int worker_rfc4175(struct upipe *upipe, uint8_t **dst, uint16_t *len)
     *dst += upipe_netmap_put_ip_headers(upipe, *dst, payload_size);
 
     /* RTP HEADER */
-    int rtp_size = upipe_netmap_put_rtp_headers(upipe, *dst, 103);
+    int rtp_size = upipe_netmap_put_rtp_headers(upipe, *dst, 103, true);
     if (marker)
         rtp_set_marker(*dst);
     *dst += rtp_size;
@@ -567,7 +569,7 @@ static int worker_hbrmt(struct upipe *upipe, uint8_t **dst, const uint8_t *src,
 
     /* Put headers and the marker if we've depleted the entire ubuf/frame */
     *dst += upipe_netmap_put_ip_headers(upipe, *dst, udp_payload_size);
-    int rtp_size = upipe_netmap_put_rtp_headers(upipe, *dst, 98);
+    int rtp_size = upipe_netmap_put_rtp_headers(upipe, *dst, 98, true);
     if (!bytes_left)
         rtp_set_marker(*dst);
     *dst += rtp_size;
