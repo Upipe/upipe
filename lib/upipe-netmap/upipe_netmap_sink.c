@@ -372,11 +372,6 @@ static int upipe_put_hbrmt_headers(struct upipe *upipe, uint8_t *buf)
     smpte_hbrmt_set_sample(buf, 0x1); // 422 10 bits
     smpte_hbrmt_set_fmt_reserve(buf);
 
-    buf += HBRMT_HEADER_SIZE;
-
-    upipe_netmap_sink->seqnum++;
-    upipe_netmap_sink->seqnum &= UINT16_MAX;
-
     return HBRMT_HEADER_SIZE;
 }
 
@@ -563,6 +558,8 @@ static int worker_hbrmt(struct upipe *upipe, uint8_t **dst, const uint8_t *src,
     *dst += upipe_netmap_put_headers(upipe, *dst, udp_payload_size,
             98, !bytes_left);
     *dst += upipe_put_hbrmt_headers(upipe, *dst);
+
+    upipe_netmap_sink->seqnum++;
 
     /* Put data */
     memcpy(*dst, src, payload_len);
