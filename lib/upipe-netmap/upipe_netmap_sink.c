@@ -328,8 +328,8 @@ static int upipe_netmap_put_rtp_headers(struct upipe *upipe, uint8_t *buf,
     return RTP_HEADER_SIZE;
 }
 
-static int upipe_netmap_put_headers(struct upipe *upipe, uint8_t *buf,
-        uint16_t payload_size, uint8_t pt, bool put_marker)
+static int upipe_netmap_put_ip_headers(struct upipe *upipe, uint8_t *buf,
+        uint16_t payload_size)
 {
     struct upipe_netmap_sink *upipe_netmap_sink = upipe_netmap_sink_from_upipe(upipe);
 
@@ -354,12 +354,7 @@ static int upipe_netmap_put_headers(struct upipe *upipe, uint8_t *buf,
 
     buf += IP_HEADER_MINSIZE + UDP_HEADER_SIZE;
 
-    /* RTP HEADER */
-    upipe_netmap_put_rtp_headers(upipe, buf, pt);
-    if (put_marker)
-        rtp_set_marker(buf);
-
-    return ETHERNET_HEADER_LEN + IP_HEADER_MINSIZE + UDP_HEADER_SIZE + RTP_HEADER_SIZE;
+    return ETHERNET_HEADER_LEN + IP_HEADER_MINSIZE + UDP_HEADER_SIZE;
 }
 
 static int upipe_put_hbrmt_headers(struct upipe *upipe, uint8_t *buf)
@@ -454,7 +449,14 @@ static int worker_rfc4175(struct upipe *upipe, uint8_t **dst, uint16_t *len)
 
     uint16_t payload_size = eth_frame_len - ETHERNET_HEADER_LEN - UDP_HEADER_SIZE - IP_HEADER_MINSIZE;
 
-    *dst += upipe_netmap_put_headers(upipe, *dst, payload_size, 103, marker);
+    *dst += upipe_netmap_put_ip_headers(upipe, *dst, payload_size);
+
+    /* RTP HEADER */
+    int rtp_size = upipe_netmap_put_rtp_headers(upipe, *dst, 103);
+    if (marker)
+        rtp_set_marker(*dst);
+    *dst += rtp_size;
+
     rfc4175_set_extended_sequence_number(*dst, (upipe_netmap_sink->seqnum >> 16) & UINT16_MAX);
     upipe_netmap_sink->seqnum++;
     upipe_netmap_sink->seqnum &= UINT32_MAX;
@@ -564,8 +566,11 @@ static int worker_hbrmt(struct upipe *upipe, uint8_t **dst, const uint8_t *src,
     uint16_t udp_payload_size = RTP_HEADER_SIZE + HBRMT_HEADER_SIZE + HBRMT_DATA_SIZE;
 
     /* Put headers and the marker if we've depleted the entire ubuf/frame */
-    *dst += upipe_netmap_put_headers(upipe, *dst, udp_payload_size,
-            98, !bytes_left);
+    *dst += upipe_netmap_put_ip_headers(upipe, *dst, udp_payload_size);
+    int rtp_size = upipe_netmap_put_rtp_headers(upipe, *dst, 98);
+    if (!bytes_left)
+        rtp_set_marker(*dst);
+    *dst += rtp_size;
     *dst += upipe_put_hbrmt_headers(upipe, *dst);
 
     upipe_netmap_sink->seqnum++;
