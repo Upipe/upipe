@@ -143,7 +143,7 @@ static int uprobe_stdio_color_throw(struct uprobe *uprobe,
     }
 
     char buffer[len + 1];
-    memset(buffer, 0, sizeof (buffer));
+    buffer[0] = '\0';
     char *tmp = buffer;
     ulist_foreach_reverse(&ulog->prefixes, uchain) {
         struct ulog_pfx *ulog_pfx = ulog_pfx_from_uchain(uchain);
