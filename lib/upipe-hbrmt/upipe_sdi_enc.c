@@ -1440,7 +1440,7 @@ static int upipe_sdi_enc_control(struct upipe *upipe, int command, va_list args)
 #define CLIP8(c) (av_clip((*(c)), 1,  254))
 #define CLIP(c)  (av_clip((*(c)), 4, 1019))
 
-static void planar_to_uyvy_8_c(uint16_t *dst, const uint8_t *y, const uint8_t *u, const uint8_t *v, const int64_t width)
+static void planar_to_uyvy_8_c(uint16_t *dst, const uint8_t *y, const uint8_t *u, const uint8_t *v, const uintptr_t width)
 {
     int j;
     for (j = 0; j < width/2; j++) {
@@ -1452,7 +1452,7 @@ static void planar_to_uyvy_8_c(uint16_t *dst, const uint8_t *y, const uint8_t *u
     }
 }
 
-static void planar_to_uyvy_10_c(uint16_t *dst, const uint16_t *y, const uint16_t *u, const uint16_t *v, const int64_t width)
+static void planar_to_uyvy_10_c(uint16_t *dst, const uint16_t *y, const uint16_t *u, const uint16_t *v, const uintptr_t width)
 {
     int j;
     for (j = 0; j < width/2; j++) {
@@ -1472,7 +1472,7 @@ static void planar_to_uyvy_10_c(uint16_t *dst, const uint16_t *y, const uint16_t
         *c++ = (val >> 20) & 0x3FF;  \
     } while (0)
 
-static void v210_uyvy_unpack_c(const uint32_t *src, uint16_t *uyvy, int64_t width)
+static void v210_uyvy_unpack_c(const uint32_t *src, uint16_t *uyvy, uintptr_t width)
 {
     uint32_t val;
     int i;
