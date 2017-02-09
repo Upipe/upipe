@@ -307,6 +307,27 @@ static struct upipe *upipe_netmap_sink_alloc(struct upipe_mgr *mgr,
     return upipe;
 }
 
+static int upipe_netmap_put_rtp_headers(struct upipe *upipe, uint8_t *buf,
+        uint8_t pt)
+{
+    struct upipe_netmap_sink *upipe_netmap_sink = upipe_netmap_sink_from_upipe(upipe);
+
+    memset(buf, 0, RTP_HEADER_SIZE);
+    rtp_set_hdr(buf);
+    rtp_set_type(buf, pt);
+
+    rtp_set_seqnum(buf, upipe_netmap_sink->seqnum & UINT16_MAX);
+
+    struct urational *fps = &upipe_netmap_sink->fps;
+    uint64_t frame_duration = UCLOCK_FREQ * fps->den / fps->num;
+    uint64_t timestamp = upipe_netmap_sink->frame_count * frame_duration +
+        (frame_duration * upipe_netmap_sink->pkt++ * HBRMT_DATA_SIZE) /
+        upipe_netmap_sink->frame_size;
+    rtp_set_timestamp(buf, timestamp & UINT32_MAX);
+
+    return RTP_HEADER_SIZE;
+}
+
 static int upipe_netmap_put_headers(struct upipe *upipe, uint8_t *buf,
         uint16_t payload_size, uint8_t pt, bool put_marker)
 {
@@ -334,21 +355,9 @@ static int upipe_netmap_put_headers(struct upipe *upipe, uint8_t *buf,
     buf += IP_HEADER_MINSIZE + UDP_HEADER_SIZE;
 
     /* RTP HEADER */
-    memset(buf, 0, RTP_HEADER_SIZE);
-    rtp_set_hdr(buf);
-    rtp_set_type(buf, pt);
-    rtp_set_seqnum(buf, upipe_netmap_sink->seqnum & UINT16_MAX);
-
-    struct urational *fps = &upipe_netmap_sink->fps;
-    uint64_t frame_duration = UCLOCK_FREQ * fps->den / fps->num;
-    uint64_t timestamp = upipe_netmap_sink->frame_count * frame_duration +
-        (frame_duration * upipe_netmap_sink->pkt++ * HBRMT_DATA_SIZE) /
-        upipe_netmap_sink->frame_size;
-    rtp_set_timestamp(buf, timestamp & UINT32_MAX);
+    upipe_netmap_put_rtp_headers(upipe, buf, pt);
     if (put_marker)
         rtp_set_marker(buf);
-
-    buf += RTP_HEADER_SIZE;
 
     return ETHERNET_HEADER_LEN + IP_HEADER_MINSIZE + UDP_HEADER_SIZE + RTP_HEADER_SIZE;
 }
