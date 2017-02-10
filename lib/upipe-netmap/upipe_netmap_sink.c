@@ -1384,6 +1384,7 @@ static void upipe_netmap_sink_free(struct upipe *upipe)
     upipe_netmap_sink_clean_upump(upipe);
     upipe_netmap_sink_clean_upump_mgr(upipe);
     upipe_netmap_sink_clean_urefcount(upipe);
+    nm_close(upipe_netmap_sink->d);
     upipe_netmap_sink_free_void(upipe);
 }
 
