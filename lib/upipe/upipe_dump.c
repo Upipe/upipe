@@ -42,8 +42,6 @@ struct upipe_dump_ctx {
     uint64_t input_uid;
     /** unique ID for pipe output */
     uint64_t output_uid;
-    /** true if the output graph was already dumped */
-    bool output_dumped;
     /** original uchain */
     struct uchain original_uchain;
     /** original opaque */
@@ -54,7 +52,7 @@ struct upipe_dump_ctx {
 static void upipe_dump_pipe(upipe_dump_pipe_label pipe_label,
                             upipe_dump_flow_def_label flow_def_label,
                             FILE *file, struct upipe *upipe, uint64_t *uid_p,
-                            struct uchain *list, bool no_output);
+                            struct uchain *list, struct upipe *last_output);
 
 /** @This converts a pipe to a label (default function).
  *
@@ -119,98 +117,6 @@ static bool upipe_dump_find(struct upipe *upipe, struct uchain *list)
     return false;
 }
 
-/** @internal @This dumps the outputs of a pipe and its subpipes.
- *
- * @param pipe_label function to print pipe labels
- * @param flow_def_label function to print flow_def labels
- * @param file file pointer to write to
- * @param upipe first pipe of the pipeline
- * @param uid_p pointer to unique ID
- * @param list list of already printed pipes
- */
-static void upipe_dump_output(upipe_dump_pipe_label pipe_label,
-                              upipe_dump_flow_def_label flow_def_label,
-                              FILE *file, struct upipe *upipe,
-                              uint64_t *uid_p, struct uchain *list)
-{
-    struct upipe_dump_ctx *ctx =
-        upipe_get_opaque(upipe, struct upipe_dump_ctx *);
-    ctx->output_dumped = true;
-
-    /* Iterate over subpipes. */
-    struct upipe *sub = NULL;
-    while (ubase_check(upipe_iterate_sub(upipe, &sub)) && sub != NULL) {
-        struct upipe_dump_ctx *sub_ctx =
-                upipe_get_opaque(sub, struct upipe_dump_ctx *);
-        if (!sub_ctx->output_dumped)
-            upipe_dump_output(pipe_label, flow_def_label, file, sub,
-                              uid_p, list);
-    }
-
-    /* Edge with output. */
-    struct upipe *output = NULL;
-    upipe_get_output(upipe, &output);
-    if (output == NULL)
-        return;
-
-    upipe_dump_pipe(pipe_label, flow_def_label, file, output,
-                    uid_p, list, false);
-
-    struct uref *flow_def = NULL;
-    upipe_get_flow_def(upipe, &flow_def);
-    char *label = flow_def_label(flow_def);
-
-    struct upipe_dump_ctx *output_ctx =
-            upipe_get_opaque(output, struct upipe_dump_ctx *);
-    fprintf(file, "pipe%"PRIu64"->pipe%"PRIu64" [label=\"%s\"];\n",
-            ctx->output_uid, output_ctx->input_uid, label);
-    free(label);
-}
-
-/** @internal @This dumps the inner pipes of a pipe.
- *
- * @param pipe_label function to print pipe labels
- * @param flow_def_label function to print flow_def labels
- * @param file file pointer to write to
- * @param first_inner first inner pipe
- * @param last_inner last inner pipe
- * @param uid_p pointer to unique ID
- * @param list list of already printed pipes
- */
-static void upipe_dump_inner(upipe_dump_pipe_label pipe_label,
-                             upipe_dump_flow_def_label flow_def_label,
-                             FILE *file, struct upipe *first_inner,
-                             struct upipe *last_inner,
-                             uint64_t *uid_p, struct uchain *list)
-{
-    upipe_dump_pipe(pipe_label, flow_def_label, file, first_inner,
-                    uid_p, list, true);
-    if (first_inner == last_inner)
-        return;
-
-    struct upipe_dump_ctx *first_ctx =
-        upipe_get_opaque(first_inner, struct upipe_dump_ctx *);
-
-    /* Edge with output. */
-    struct upipe *output = NULL;
-    upipe_get_output(first_inner, &output);
-    if (output == NULL)
-        return;
-
-    upipe_dump_inner(pipe_label, flow_def_label, file, output, last_inner,
-                     uid_p, list);
-
-    struct uref *flow_def = NULL;
-    upipe_get_flow_def(first_inner, &flow_def);
-    char *label = flow_def_label(flow_def);
-
-    struct upipe_dump_ctx *output_ctx =
-            upipe_get_opaque(output, struct upipe_dump_ctx *);
-    fprintf(file, "pipe%"PRIu64"->pipe%"PRIu64" [label=\"%s\"];\n",
-            first_ctx->output_uid, output_ctx->input_uid, label);
-    free(label);
-}
-
 /** @internal @This dumps a pipe in dot format.
  *
  * @param pipe_label function to print pipe labels
@@ -219,12 +125,12 @@ static void upipe_dump_inner(upipe_dump_pipe_label pipe_label,
  * @param upipe upipe to dump
  * @param uid_p pointer to unique ID
  * @param list list of already printed pipes
- * @param no_output true if the output will be dumped from another context
+ * @param last_output last output pipe of the pipeline
  */
 static void upipe_dump_pipe(upipe_dump_pipe_label pipe_label,
                             upipe_dump_flow_def_label flow_def_label,
                             FILE *file, struct upipe *upipe, uint64_t *uid_p,
-                            struct uchain *list, bool no_output)
+                            struct uchain *list, struct upipe *last_output)
 {
     if (upipe_dump_find(upipe, list))
         return;
@@ -235,11 +141,25 @@ static void upipe_dump_pipe(upipe_dump_pipe_label pipe_label,
     struct upipe_dump_ctx *ctx = malloc(sizeof(struct upipe_dump_ctx));
     assert(ctx != NULL);
     ctx->input_uid = (*uid_p)++;
-    ctx->output_dumped = !no_output;
     ctx->original_uchain = upipe->uchain;
     ctx->original_opaque = upipe->opaque;
     upipe_set_opaque(upipe, ctx);
     ulist_add(list, upipe_to_uchain(upipe));
+    fprintf(file, "#begin pipe%"PRIu64"\n", ctx->input_uid);
+
+    /* Iterate over subpipes. */
+    struct upipe *sub = NULL;
+    while (ubase_check(upipe_iterate_sub(upipe, &sub)) && sub != NULL) {
+        upipe_dump_pipe(pipe_label, flow_def_label, file, sub,
+                        uid_p, list, last_output);
+
+        struct upipe_dump_ctx *sub_ctx =
+            upipe_get_opaque(sub, struct upipe_dump_ctx *);
+        fprintf(file, "pipe%"PRIu64"->pipe%"PRIu64" [style=\"dashed\"];\n",
+                ctx->input_uid, sub_ctx->input_uid);
+        fprintf(file, "{rank=same; pipe%"PRIu64" pipe%"PRIu64"};\n",
+                ctx->input_uid, sub_ctx->input_uid);
+    }
 
     /* Dig into inner pipes. */
     upipe_bin_freeze(upipe);
@@ -263,10 +183,10 @@ static void upipe_dump_pipe(upipe_dump_pipe_label pipe_label,
         fprintf(file, "pipe%"PRIu64" [label=\"output\", style=\"dashed,filled\"];\n",
                 ctx->output_uid);
 
-        upipe_dump_inner(pipe_label, flow_def_label, file,
-                         first_inner, last_inner, uid_p, list);
-        upipe_dump_inner(pipe_label, flow_def_label, file,
-                         last_inner, last_inner, uid_p, list);
+        upipe_dump_pipe(pipe_label, flow_def_label, file, first_inner,
+                        uid_p, list, last_inner);
+        upipe_dump_pipe(pipe_label, flow_def_label, file, last_inner,
+                        uid_p, list, last_inner);
 
         struct upipe_dump_ctx *first_ctx =
                 upipe_get_opaque(first_inner, struct upipe_dump_ctx *);
@@ -283,25 +203,32 @@ static void upipe_dump_pipe(upipe_dump_pipe_label pipe_label,
         fprintf(file, "pipe%"PRIu64" [label=\"%s\"];\n", ctx->input_uid, label);
     }
     upipe_bin_thaw(upipe);
-
-    /* Iterate over subpipes. */
-    struct upipe *sub = NULL;
-    while (ubase_check(upipe_iterate_sub(upipe, &sub)) && sub != NULL) {
-        upipe_dump_pipe(pipe_label, flow_def_label, file, sub,
-                        uid_p, list, true);
-
-        struct upipe_dump_ctx *sub_ctx =
-            upipe_get_opaque(sub, struct upipe_dump_ctx *);
-        fprintf(file, "pipe%"PRIu64"->pipe%"PRIu64" [style=\"dashed\"];\n",
-                ctx->input_uid, sub_ctx->input_uid);
-        fprintf(file, "{rank=same; pipe%"PRIu64" pipe%"PRIu64"};\n",
-                ctx->input_uid, sub_ctx->input_uid);
-    }
-
-    if (!no_output)
-        upipe_dump_output(pipe_label, flow_def_label, file, upipe, uid_p, list);
-
     free(label);
+
+    if (upipe == last_output)
+        goto upipe_dump_pipe_end;
+
+    /* Edge with output. */
+    struct upipe *output = NULL;
+    upipe_get_output(upipe, &output);
+    if (output == NULL)
+        goto upipe_dump_pipe_end;
+
+    upipe_dump_pipe(pipe_label, flow_def_label, file, output,
+                    uid_p, list, last_output);
+
+    struct uref *flow_def = NULL;
+    upipe_get_flow_def(upipe, &flow_def);
+    label = flow_def_label(flow_def);
+
+    struct upipe_dump_ctx *output_ctx =
+            upipe_get_opaque(output, struct upipe_dump_ctx *);
+    fprintf(file, "pipe%"PRIu64"->pipe%"PRIu64" [label=\"%s\"];\n",
+            ctx->output_uid, output_ctx->input_uid, label);
+    free(label);
+
+upipe_dump_pipe_end:
+    fprintf(file, "#end pipe%"PRIu64"\n", ctx->input_uid);
 }
 
 /** @This dumps a pipeline in dot format.
@@ -335,13 +262,21 @@ void upipe_dump_va(upipe_dump_pipe_label pipe_label,
                         &uid, &list, false);
 
     /* Walk through the super-pipes that we may have forgotten. */
-    ulist_foreach (&list, uchain) {
-        struct upipe *upipe = upipe_from_uchain(uchain);
-        struct upipe *super;
-        if (ubase_check(upipe_sub_get_super(upipe, &super)) && super != NULL)
-            upipe_dump_pipe(pipe_label, flow_def_label, file, super,
-                            &uid, &list, false);
-    }
+    fprintf(file, "#super-pipes\n");
+    uint64_t last_uid;
+    do {
+        last_uid = uid;
+        ulist_foreach (&list, uchain) {
+            struct upipe *upipe = upipe_from_uchain(uchain);
+            struct upipe *super = NULL;
+            while (ubase_check(upipe_sub_get_super(upipe, &upipe)) &&
+                   upipe != NULL)
+                super = upipe;
+            if (super != NULL)
+                upipe_dump_pipe(pipe_label, flow_def_label, file, super,
+                                &uid, &list, false);
+        }
+    } while (last_uid != uid);
 
     fprintf(file, "}\n");
 
