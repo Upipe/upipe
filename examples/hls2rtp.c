@@ -276,7 +276,7 @@ static void cmd_quit(void)
     upipe_cleanup(&audio_output.sink);
 }
 
-/** @This handles SIGINT signal. */
+/** @This handles SIGINT and SIGTERM signal. */
 static void sigint_cb(struct upump *upump)
 {
     cmd_quit();
@@ -1404,6 +1404,10 @@ int main(int argc, char **argv)
             (void *)SIGINT, NULL, SIGINT);
     upump_set_status(sigint_pump, false);
     upump_start(sigint_pump);
+    struct upump *sigterm_pump = upump_alloc_signal(upump_mgr, sigint_cb,
+            (void *)SIGTERM, NULL, SIGTERM);
+    upump_set_status(sigterm_pump, false);
+    upump_start(sigterm_pump);
 
     struct upump *stdin_pump = NULL;
     if (!no_stdin) {
@@ -1694,6 +1698,8 @@ int main(int argc, char **argv)
      */
     upump_stop(sigint_pump);
     upump_free(sigint_pump);
+    upump_stop(sigterm_pump);
+    upump_free(sigterm_pump);
     if (stdin_pump != NULL) {
         upump_stop(stdin_pump);
         upump_free(stdin_pump);
