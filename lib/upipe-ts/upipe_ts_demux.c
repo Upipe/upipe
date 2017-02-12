@@ -2910,7 +2910,7 @@ static int upipe_ts_demux_control(struct upipe *upipe,
             struct upipe_ts_demux *upipe_ts_demux =
                 upipe_ts_demux_from_upipe(upipe);
             struct upipe **p = va_arg(args, struct upipe **);
-            *p = upipe_ts_demux->setrap;
+            *p = upipe_ts_demux->patd;
             return (*p != NULL) ? UBASE_ERR_NONE : UBASE_ERR_UNHANDLED;
         }
 
