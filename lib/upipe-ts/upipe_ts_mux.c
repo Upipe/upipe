@@ -1479,6 +1479,13 @@ static int upipe_ts_mux_input_control(struct upipe *upipe,
             upipe_ts_mux_work(upipe_ts_mux_to_upipe(upipe_ts_mux), NULL);
             return UBASE_ERR_NONE;
         }
+        case UPIPE_BIN_GET_LAST_INNER: {
+            struct upipe_ts_mux_input *upipe_ts_mux_input =
+                upipe_ts_mux_input_from_upipe(upipe);
+            struct upipe **p = va_arg(args, struct upipe **);
+            *p = upipe_ts_mux_input->psig_flow;
+            return (*p != NULL) ? UBASE_ERR_NONE : UBASE_ERR_UNHANDLED;
+        }
 
         case UPIPE_TS_MUX_GET_MAX_DELAY:
         case UPIPE_TS_MUX_SET_MAX_DELAY: {
