@@ -256,9 +256,6 @@ static int probe_src(struct uprobe *uprobe, struct upipe *inner,
     struct upipe *upipe = upipe_hls_playlist_to_upipe(upipe_hls_playlist);
 
     switch (event) {
-    case UPROBE_NEED_OUTPUT:
-        return upipe_set_output(inner, upipe_hls_playlist->setflowdef);
-
     case UPROBE_SOURCE_END:
         upipe_notice(upipe, "stopped");
         upipe_hls_playlist->playing = false;
@@ -616,6 +613,8 @@ static int upipe_hls_playlist_play_uri(struct upipe *upipe,
             UPROBE_LOG_VERBOSE, "src"));
     UBASE_ALLOC_RETURN(inner);
     UBASE_RETURN(upipe_hls_playlist_set_src(upipe, inner));
+    UBASE_RETURN(upipe_set_output(inner, upipe_hls_playlist->setflowdef));
+
     UBASE_RETURN(upipe_set_uri(inner, uri));
 
     uint64_t range_off = 0;
