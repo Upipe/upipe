@@ -583,12 +583,14 @@ static void upipe_http_src_worker(struct upump *upump)
         }
         upipe_err_va(upipe, "read error from %s (%s)", upipe_http_src->url,
                      strerror(errno));
+        upipe_http_src_output_data(upipe, NULL, 0);
         upipe_http_src_set_upump(upipe, NULL);
         upipe_throw_source_end(upipe);
     }
     else if (unlikely(len == 0)) {
         upipe_dbg(upipe, "connection closed");
         uref_free(uref);
+        upipe_http_src_output_data(upipe, NULL, 0);
         upipe_http_src_set_upump(upipe, NULL);
         upipe_throw_source_end(upipe);
     }
