@@ -63,6 +63,9 @@
 #include <GL/glu.h>
 #include <GL/glx.h>
 
+/** max number of urefs to buffer */
+#define BUFFER_UREFS 5
+
 /** @hidden */
 static bool upipe_glx_sink_output(struct upipe *upipe, struct uref *uref,
                                   struct upump **upump_p);
@@ -373,6 +376,7 @@ static struct upipe *upipe_glx_sink_alloc(struct upipe_mgr *mgr,
     upipe_glx_sink_init_upump_watcher(upipe);
     upipe_glx_sink_init_input(upipe);
     upipe_glx_sink_init_uclock(upipe);
+    upipe_glx_sink->max_urefs = BUFFER_UREFS;
     upipe_glx_sink->latency = 0;
 
     upipe_glx_sink->display = NULL;
