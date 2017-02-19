@@ -149,6 +149,8 @@ struct upipe_mpgvf {
     bool closed_gop;
     /** sample aspect ratio */
     struct urational sar;
+    /** field number for this picture */
+    unsigned int field_number;
 
     /* octet stream stuff */
     /** next uref to be processed */
@@ -263,6 +265,7 @@ static struct upipe *upipe_mpgvf_alloc(struct upipe_mgr *mgr,
     upipe_mpgvf->last_temporal_reference = -1;
     upipe_mpgvf->got_discontinuity = false;
     upipe_mpgvf->fps.num = 0;
+    upipe_mpgvf->field_number = 0;
     upipe_mpgvf->scan_context = UINT32_MAX;
     upipe_mpgvf->next_frame_size = 0;
     upipe_mpgvf->next_frame_sequence = false;
@@ -884,15 +887,21 @@ static bool upipe_mpgvf_parse_picture(struct upipe *upipe, struct uref *uref,
                 *duration_p /= 2;
         }
 
+        upipe_mpgvf->field_number %= 2;
         if (structure & MP2VPICX_TOP_FIELD)
             UBASE_FATAL(upipe, uref_pic_set_tf(uref))
+        else
+            upipe_mpgvf->field_number++;
         if (structure & MP2VPICX_BOTTOM_FIELD)
             UBASE_FATAL(upipe, uref_pic_set_bf(uref))
+        else
+            upipe_mpgvf->field_number++;
         if (tff)
             UBASE_FATAL(upipe, uref_pic_set_tff(uref))
         if (progressive)
             UBASE_FATAL(upipe, uref_pic_set_progressive(uref))
     } else {
+        upipe_mpgvf->field_number = 0;
         UBASE_FATAL(upipe, uref_pic_set_tf(uref))
         UBASE_FATAL(upipe, uref_pic_set_bf(uref))
         UBASE_FATAL(upipe, uref_pic_set_progressive(uref))
@@ -925,7 +934,8 @@ static bool upipe_mpgvf_handle_picture(struct upipe *upipe, struct uref *uref,
         case MP2VPIC_TYPE_I: {
             if (upipe_mpgvf->next_frame_sequence)
                 uref_flow_set_random(uref);
-            UBASE_FATAL(upipe, uref_pic_set_key(uref))
+            if (upipe_mpgvf->field_number != 2)
+                UBASE_FATAL(upipe, uref_pic_set_key(uref))
 
             upipe_mpgvf->ref_rap = upipe_mpgvf->iframe_rap;
             upipe_mpgvf->iframe_rap = upipe_mpgvf->seq_rap;
