@@ -399,9 +399,7 @@ static int catch_rewrite_date(struct uprobe *uprobe, struct upipe *upipe,
 
     UBASE_SIGNATURE_CHECK(args, UPIPE_PROBE_UREF_SIGNATURE);
     struct uref *uref = va_arg(args, struct uref *);
-    bool *drop = va_arg(args, bool *);
 
-    *drop = false;
     int type;
     uint64_t date;
     uref_clock_get_date_orig(uref, &date, &type);
