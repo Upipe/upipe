@@ -288,10 +288,10 @@ static int catch_uref(struct uprobe *uprobe, struct upipe *upipe,
 {
     if (event == UPROBE_PROBE_UREF) {
         UBASE_SIGNATURE_CHECK(args, UPIPE_PROBE_UREF_SIGNATURE);
-        /* ignore arguments */
         va_arg(args, struct uref *);
+        struct upump **upump_p = va_arg(args, struct upump **);
         va_arg(args, bool *);
-        upipe_blit_prepare(upipe_blit);
+        upipe_blit_prepare(upipe_blit, upump_p);
         return UBASE_ERR_NONE;
     }
 
@@ -618,9 +618,9 @@ static void uplay_start(struct upump *upump)
                             uprobe_selflow_alloc(uprobe_use(uprobe_dejitter),
                                 uprobe_use(&uprobe_video_s),
                                 UPROBE_SELFLOW_PIC, select_video),
-                                uprobe_use(&uprobe_sub_s),
-                                UPROBE_SELFLOW_SUBPIC, select_sub),
-                            uprobe_use(&uprobe_audio_s),
+                            uprobe_use(&uprobe_sub_s),
+                            UPROBE_SELFLOW_SUBPIC, select_sub),
+                        uprobe_use(&uprobe_audio_s),
                         UPROBE_SELFLOW_SOUND, select_audio),
                     UPROBE_SELFLOW_VOID, select_program),
                 UPROBE_LOG_VERBOSE, "ts demux"));

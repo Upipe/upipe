@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2014-2016 OpenHeadend S.A.R.L.
+ * Copyright (C) 2014-2017 OpenHeadend S.A.R.L.
  *
  * Authors: Sebastien Gougelet
  *          Christophe Massiot
@@ -870,9 +870,10 @@ static int upipe_blit_set_flow_def(struct upipe *upipe, struct uref *flow_def)
 /** @internal @This prepares the next picture to output.
  *
  * @param upipe description structure of the pipe
+ * @param upump_p reference to pump that generated the buffer
  * @return an error code
  */
-static int _upipe_blit_prepare(struct upipe *upipe)
+static int _upipe_blit_prepare(struct upipe *upipe, struct upump **upump_p)
 {
     struct upipe_blit *upipe_blit = upipe_blit_from_upipe(upipe);
     if (unlikely(upipe_blit->uref == NULL))
@@ -891,7 +892,7 @@ static int _upipe_blit_prepare(struct upipe *upipe)
 
     /* Avoid copying the picture if there is nothing to blit */
     if (!subpic) {
-        upipe_blit_output(upipe, uref, NULL);
+        upipe_blit_output(upipe, uref, upump_p);
         return UBASE_ERR_NONE;
     }
 
@@ -923,7 +924,7 @@ static int _upipe_blit_prepare(struct upipe *upipe)
         upipe_blit_sub_work(upipe_blit_sub_to_upipe(sub), uref);
     }
 
-    upipe_blit_output(upipe, uref, NULL);
+    upipe_blit_output(upipe, uref, upump_p);
     return UBASE_ERR_NONE;
 }
 
@@ -973,7 +974,8 @@ static int upipe_blit_control(struct upipe *upipe, int command, va_list args)
 
         case UPIPE_BLIT_PREPARE: {
             UBASE_SIGNATURE_CHECK(args, UPIPE_BLIT_SIGNATURE);
-            return _upipe_blit_prepare(upipe);
+            struct upump **upump_p = va_arg(args, struct upump **);
+            return _upipe_blit_prepare(upipe, upump_p);
         }
         default:
             return UBASE_ERR_UNHANDLED;
