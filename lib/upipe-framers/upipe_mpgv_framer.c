@@ -984,7 +984,7 @@ static void upipe_mpgvf_build_flow_def(struct upipe *upipe)
     }
 
     upipe_mpgvf->sequence_requested =
-        !ubase_check(uref_mpgv_flow_get_repeated_sequence(
+        ubase_check(uref_mpgv_flow_get_repeated_sequence(
                     upipe_mpgvf->flow_def_requested));
 
     upipe_mpgvf_store_flow_def(upipe, flow_def);
