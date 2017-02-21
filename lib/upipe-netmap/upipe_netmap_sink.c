@@ -242,6 +242,31 @@ UPIPE_HELPER_VOID(upipe_netmap_sink)
 UPIPE_HELPER_UPUMP_MGR(upipe_netmap_sink, upump_mgr)
 UPIPE_HELPER_UPUMP(upipe_netmap_sink, upump, upump_mgr)
 
+/* Compute the checksum of the given ip header. */
+static uint16_t ip_checksum(const void *data, uint16_t len)
+{
+    const uint8_t *addr = data;
+    uint32_t i;
+    uint32_t sum = 0;
+
+    /* Checksum all the pairs of bytes first... */
+    for (i = 0; i < (len & ~1U); i += 2) {
+        sum += (u_int16_t)ntohs(*((u_int16_t *)(addr + i)));
+        if (sum > 0xFFFF)
+            sum -= 0xFFFF;
+    }
+    /*
+     * If there's a single byte left over, checksum it, too.
+     * Network byte order is big-endian, so the remaining byte is
+     * the high byte.
+     */
+    if (i < len) {
+        sum += addr[i] << 8;
+        if (sum > 0xFFFF)
+            sum -= 0xFFFF;
+    }
+    return ~sum & 0xffff;
+}
 
 static void upipe_udp_raw_fill_headers(uint8_t *header,
                                        in_addr_t ipsrc, in_addr_t ipdst,
@@ -262,6 +287,9 @@ static void upipe_udp_raw_fill_headers(uint8_t *header,
     ip_set_cksum(header, 0);
     ip_set_srcaddr(header, ntohl(ipsrc));
     ip_set_dstaddr(header, ntohl(ipdst));
+
+    /* update ip checksum */
+    ip_set_cksum(header, ip_checksum(header, IP_HEADER_MINSIZE));
 
     header += IP_HEADER_MINSIZE;
     udp_set_srcport(header, portsrc);
