@@ -391,14 +391,13 @@ static int upipe_netmap_put_ip_headers(struct upipe *upipe, uint8_t *buf,
     struct upipe_netmap_sink *upipe_netmap_sink = upipe_netmap_sink_from_upipe(upipe);
 
     /* Destination MAC */
-    memcpy(&buf[0], upipe_netmap_sink->dst_mac, 6);
+    ethernet_set_dstaddr(buf, upipe_netmap_sink->dst_mac);
 
     /* Source MAC */
-    memcpy(&buf[6], upipe_netmap_sink->src_mac, 6);
+    ethernet_set_srcaddr(buf, upipe_netmap_sink->src_mac);
 
     /* Ethertype */
-    buf[12] = 0x08;
-    buf[13] = 0x00;
+    ethernet_set_lentype(buf, ETHERNET_TYPE_IP);
 
     buf += ETHERNET_HEADER_LEN;
 
