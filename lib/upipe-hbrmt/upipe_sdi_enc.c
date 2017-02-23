@@ -796,7 +796,7 @@ static void upipe_hd_sdi_enc_encode_line(struct upipe *upipe, int line_num, uint
     dst[5] = 0x000;
     dst[6] = eav_fvh_cword[f2][vbi];
     dst[7] = eav_fvh_cword[f2][vbi];
-    dst[8] = (line_num & 0x3f) << 2;
+    dst[8] = (line_num & 0x7f) << 2;
     dst[8] |= NOT_BIT8(dst[8]);
     dst[9] = dst[8];
     dst[10] = (1 << 9) | (((line_num >> 7) & 0xf) << 2);
