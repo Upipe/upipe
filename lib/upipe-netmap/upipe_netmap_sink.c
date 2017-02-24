@@ -1276,11 +1276,6 @@ static int _upipe_netmap_sink_set_uri(struct upipe *upipe, const char *uri)
         goto error;
     }
 
-    if (!dstmac) {
-        upipe_err(upipe, "dst mac address unspecified, use ?dstmac=YY:ZZ");
-        goto error;
-    }
-
     upipe_netmap_sink->src_port = upipe_netmap_sink->ring_idx * 1000;
     upipe_netmap_sink->dst_port = upipe_netmap_sink->src_port;
 
@@ -1306,15 +1301,30 @@ static int _upipe_netmap_sink_set_uri(struct upipe *upipe, const char *uri)
 
     upipe_netmap_sink->dst_ip = inet_addr(ip);
 
-    if (sscanf(dstmac, "%2hhx:%2hhx:%2hhx:%2hhx:%2hhx:%2hhx",
-                &upipe_netmap_sink->dst_mac[0],
-                &upipe_netmap_sink->dst_mac[1],
-                &upipe_netmap_sink->dst_mac[2],
-                &upipe_netmap_sink->dst_mac[3],
-                &upipe_netmap_sink->dst_mac[4],
-                &upipe_netmap_sink->dst_mac[5]) != 6) {
-        upipe_err(upipe, "invalid dst macaddr");
-        goto error;
+    if (dstmac) {
+        if (sscanf(dstmac, "%2hhx:%2hhx:%2hhx:%2hhx:%2hhx:%2hhx",
+                    &upipe_netmap_sink->dst_mac[0],
+                    &upipe_netmap_sink->dst_mac[1],
+                    &upipe_netmap_sink->dst_mac[2],
+                    &upipe_netmap_sink->dst_mac[3],
+                    &upipe_netmap_sink->dst_mac[4],
+                    &upipe_netmap_sink->dst_mac[5]) != 6) {
+            upipe_err(upipe, "invalid dst macaddr");
+            goto error;
+        }
+    } else {
+        if (IN_MULTICAST(ntohl(upipe_netmap_sink->dst_ip))) {
+            uint32_t ip = upipe_netmap_sink->dst_ip;
+            upipe_netmap_sink->dst_mac[0] = 0x01;
+            upipe_netmap_sink->dst_mac[1] = 0x00;
+            upipe_netmap_sink->dst_mac[2] = 0x5e;
+            upipe_netmap_sink->dst_mac[3] = (ip >> 16) & 0x7f;
+            upipe_netmap_sink->dst_mac[4] = (ip >>  8) & 0xff;
+            upipe_netmap_sink->dst_mac[5] = (ip      ) & 0xff;
+        } else {
+            upipe_err(upipe, "unicast and dst mac address unspecified, use ?dstmac=YY:ZZ");
+            goto error;
+        }
     }
 
     if (srcmac) {
@@ -1336,7 +1346,6 @@ static int _upipe_netmap_sink_set_uri(struct upipe *upipe, const char *uri)
             upipe_err(upipe, "Could not read interface address");
             goto error;
         }
-
     }
 
     free(ip);
