@@ -371,7 +371,7 @@ static void upipe_rtp_fec_apply_col_fec(struct upipe *upipe)
 
         /* If no current matrix is being processed and we have enough packets
          * set existing matrix to the snbase value */
-        if (/*upipe_rtp_fec->cur_matrix_snbase == UINT32_MAX &&*/
+        if (upipe_rtp_fec->cur_matrix_snbase == UINT32_MAX &&
             seq_num_lt(upipe_rtp_fec->first_seqnum, snbase_low)) {
             upipe_rtp_fec->cur_matrix_snbase = snbase_low;
         }
