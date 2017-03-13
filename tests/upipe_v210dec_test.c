@@ -119,6 +119,8 @@ static struct upipe *test_alloc(struct upipe_mgr *mgr, struct uprobe *uprobe,
     return upipe;
 }
 
+bool test_sucessful = false;
+
 /** helper phony pipe */
 static void test_input(struct upipe *upipe, struct uref *uref,
                        struct upump **upump_p)
@@ -130,14 +132,15 @@ static void test_input(struct upipe *upipe, struct uref *uref,
     size_t w, h, stride;
     uint8_t wsub, hsub;
 
-    if (uref_pic_flow_check_chroma(uref, 1, 1, 1, "y8")) {
-        /* test y8 plane */
-        ubase_assert(uref_pic_plane_read(uref, "y8", 0, 0, -1, -1, &buffer));
-        ubase_assert(uref_pic_plane_size(uref, "y8", &stride, 0, 0, 0));
-        ubase_assert(uref_pic_size(uref, &w, &h, 0));
+    ubase_assert(uref_pic_size(uref, &w, &h, NULL));
+    assert(w > 0);
+    assert(h > 0);
 
+    if (ubase_check(uref_pic_plane_read(uref, "y8", 0, 0, -1, -1, &buffer)) &&
+        ubase_check(uref_pic_plane_size(uref, "y8", &stride, NULL, NULL, NULL))) {
+        /* test y8 plane */
         for (int y = 0; y < h; y++) {
-            uint8_t *src = buffer;
+            const uint8_t *src = buffer;
             for (int x = 0; x < w-2; x += 3) {
                 assert(src[0] == 128);
                 assert(src[1] == 64);
@@ -148,9 +151,26 @@ static void test_input(struct upipe *upipe, struct uref *uref,
 
         upipe_dbg(upipe, "y8 plane tested correctly");
         uref_pic_plane_unmap(uref, "y8", 0, 0, -1, -1);
+        test_sucessful = true;
     }
 
-    /* TODO: test y10 plane */
+    else if (ubase_check(uref_pic_plane_read(uref, "y10", 0, 0, -1, -1, &buffer)) &&
+             ubase_check(uref_pic_plane_size(uref, "y10", &stride, NULL, NULL, NULL))) {
+        /* test y10 plane */
+        for (int y = 0; y < h; y++) {
+            const uint16_t *src = (uint16_t*)buffer;
+            for (int x = 0; x < w-2; x += 3) {
+                assert(src[0] == 512);
+                assert(src[1] == 256);
+                assert(src[2] == 768);
+            }
+            buffer += stride;
+        }
+
+        upipe_dbg(upipe, "y10 plane tested correctly");
+        uref_pic_plane_unmap(uref, "y10", 0, 0, -1, -1);
+        test_sucessful = true;
+    }
 
     else {
         upipe_err(upipe, "unknown chroma format");
@@ -250,6 +270,14 @@ int main(int argc, char **argv)
     ubase_assert(uref_pic_flow_set_hsize(out_flow_8, TEST_WIDTH));
     ubase_assert(uref_pic_flow_set_vsize(out_flow_8, TEST_HEIGHT));
 
+    struct uref *out_flow_10 = uref_pic_flow_alloc_def(uref_mgr, 1);
+    assert(out_flow_10);
+    ubase_assert(uref_pic_flow_add_plane(out_flow_10, 1, 1, 2, "y10"));
+    ubase_assert(uref_pic_flow_add_plane(out_flow_10, 2, 1, 2, "u10"));
+    ubase_assert(uref_pic_flow_add_plane(out_flow_10, 2, 1, 2, "v10"));
+    ubase_assert(uref_pic_flow_set_hsize(out_flow_10, TEST_WIDTH));
+    ubase_assert(uref_pic_flow_set_vsize(out_flow_10, TEST_HEIGHT));
+
     /* create a probe */
     struct uprobe uprobe;
     uprobe_init(&uprobe, catch, NULL);
@@ -273,7 +301,7 @@ int main(int argc, char **argv)
     /* build v210dec pipe */
     struct upipe_mgr *upipe_v210dec_mgr = upipe_v210dec_mgr_alloc();
     assert(upipe_v210dec_mgr);
-    struct upipe *v210dec = upipe_flow_alloc(upipe_v210dec_mgr, uprobe_use(logger_v210), out_flow_8);
+    struct upipe *v210dec = upipe_flow_alloc(upipe_v210dec_mgr, uprobe_use(logger_v210), out_flow_10);
     assert(v210dec);
 
     /* build phony pipe */
@@ -291,6 +319,7 @@ int main(int argc, char **argv)
 
     uref_free(in_flow_def);
     uref_free(out_flow_8);
+    uref_free(out_flow_10);
     /* release v210dec pipe */
     uref_free(input_uref);
     upipe_release(v210dec);
@@ -307,5 +336,5 @@ int main(int argc, char **argv)
     uprobe_release(logger);
     uprobe_clean(&uprobe);
 
-    return 0;
+    return !test_sucessful;
 }
