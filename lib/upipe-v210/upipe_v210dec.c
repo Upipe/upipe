@@ -273,11 +273,48 @@ static bool upipe_v210dec_handle(struct upipe *upipe, struct uref *uref,
                     output_planes[i] += output_strides[i];
                 input_plane += input_stride;
             }
-
         } break;
 
-        //default:
-            // TODO check this if needed
+        case V2D_OUTPUT_PLANAR_10: {
+            for (int h = 0; h < input_vsize; h++) {
+                uint16_t *y = (uint16_t*)output_planes[0];
+                uint16_t *u = (uint16_t*)output_planes[1];
+                uint16_t *v = (uint16_t*)output_planes[2];
+                const uint32_t *src = (uint32_t*)input_plane;
+
+                int w = (input_hsize / 6) * 6;
+                v210dec->v210_to_planar_10(src, y, u, v, w);
+
+                y += w;
+                u += w >> 1;
+                v += w >> 1;
+                src += (w * 2) / 3;
+
+                if (w < input_hsize - 1) {
+                    READ_PIXELS_10(u, y, v);
+                    uint32_t val = AV_RL32(src);
+                    src++;
+                    *y++ = val & 1023;
+
+                    if (w < input_hsize - 3) {
+                        *u++ = (val >> 10) & 1023;
+                        *y++ = (val >> 20) & 1023;
+
+                        val = AV_RL32(src);
+                        src++;
+                        *v++ = val & 1023;
+                        *y++ = (val >> 10) & 1023;
+                    }
+                }
+
+                for (int i = 0; i < 3; i++)
+                    output_planes[i] += output_strides[i];
+                input_plane += input_stride;
+            }
+        } break;
+
+        default:
+            assert(0);
     }
 
     uref_pic_plane_unmap(uref, v210_chroma_str, 0, 0, -1, -1);
@@ -415,6 +452,19 @@ static int upipe_v210dec_set_flow_def(struct upipe *upipe, struct uref *flow_def
             UBASE_RETURN(uref_pic_flow_set_hmappend(output_flow, 12 + 16));
         } break;
 
+        case V2D_OUTPUT_PLANAR_10: {
+            v210dec->output_chroma_map[0] = "y10";
+            v210dec->output_chroma_map[1] = "u10";
+            v210dec->output_chroma_map[2] = "v10";
+            uref_pic_flow_clear_format(output_flow);
+            UBASE_RETURN(uref_pic_flow_set_align(output_flow, 32));
+            UBASE_RETURN(uref_pic_flow_set_macropixel(output_flow, 1))
+            UBASE_RETURN(uref_pic_flow_add_plane(output_flow, 1, 1, 2, "y10"))
+            UBASE_RETURN(uref_pic_flow_add_plane(output_flow, 2, 1, 2, "u10"))
+            UBASE_RETURN(uref_pic_flow_add_plane(output_flow, 2, 1, 2, "v10"))
+            UBASE_RETURN(uref_pic_flow_set_hmappend(output_flow, 6 + 8));
+        } break;
+
         default:
             upipe_err(upipe, "unknown output format");
             uref_dump(flow_def, upipe->uprobe);
@@ -524,10 +574,18 @@ static struct upipe *upipe_v210dec_alloc(struct upipe_mgr *manager,
 #define PRINT_OUTPUT_TYPE(a) \
     upipe_dbg(upipe, "output type is " #a)
 
-    if (ubase_check(uref_pic_flow_check_chroma(flow_def, 2, 1, 1, "u8")) &&
+    if (ubase_check(uref_pic_flow_check_chroma(flow_def, 1, 1, 1, "y8")) &&
+        ubase_check(uref_pic_flow_check_chroma(flow_def, 2, 1, 1, "u8")) &&
         ubase_check(uref_pic_flow_check_chroma(flow_def, 2, 1, 1, "v8"))) {
         v210dec->output_type = V2D_OUTPUT_PLANAR_8;
         PRINT_OUTPUT_TYPE(V2D_OUTPUT_PLANAR_8);
+    }
+
+    else if (ubase_check(uref_pic_flow_check_chroma(flow_def, 1, 1, 2, "y10")) &&
+             ubase_check(uref_pic_flow_check_chroma(flow_def, 2, 1, 2, "u10")) &&
+             ubase_check(uref_pic_flow_check_chroma(flow_def, 2, 1, 2, "v10"))) {
+        v210dec->output_type = V2D_OUTPUT_PLANAR_10;
+        PRINT_OUTPUT_TYPE(V2D_OUTPUT_PLANAR_10);
     }
 
     else {
