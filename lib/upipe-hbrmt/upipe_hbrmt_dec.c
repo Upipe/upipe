@@ -141,6 +141,7 @@ static struct upipe *upipe_hbrmt_dec_alloc(struct upipe_mgr *mgr,
     upipe_hbrmt_dec->ubuf     = NULL;
     upipe_hbrmt_dec->dst_buf  = NULL;
     upipe_hbrmt_dec->dst_size = 0;
+    upipe_hbrmt_dec->f = NULL;
 
     upipe_hbrmt_dec->expected_seqnum = -1;
     upipe_hbrmt_dec->discontinuity = false;
