@@ -27,9 +27,7 @@
 
 #include <upipe-ts/upipe_ts_demux.h>
 
-#include <upipe-framers/upipe_mpga_framer.h>
-#include <upipe-framers/upipe_mpgv_framer.h>
-#include <upipe-framers/upipe_h264_framer.h>
+#include <upipe-framers/upipe_auto_framer.h>
 
 #include <upipe-modules/upipe_aes_decrypt.h>
 #include <upipe-modules/upipe_m3u_reader.h>
@@ -399,43 +397,15 @@ static int probe_playlist(struct uprobe *uprobe, struct upipe *inner,
             return UBASE_ERR_ALLOC;
         }
 
-        struct upipe_mgr *upipe_mpgaf_mgr = upipe_mpgaf_mgr_alloc();
-        if (unlikely(upipe_mpgaf_mgr == NULL)) {
+        struct upipe_mgr *upipe_autof_mgr = upipe_autof_mgr_alloc();
+        if (unlikely(upipe_autof_mgr == NULL)) {
             upipe_mgr_release(upipe_ts_demux_mgr);
             upipe_release(output);
             return UBASE_ERR_ALLOC;
         }
-        ret = upipe_ts_demux_mgr_set_mpgaf_mgr(upipe_ts_demux_mgr,
-                                               upipe_mpgaf_mgr);
-        upipe_mgr_release(upipe_mpgaf_mgr);
-        if (unlikely(!ubase_check(ret))) {
-            upipe_mgr_release(upipe_ts_demux_mgr);
-            upipe_release(output);
-            return ret;
-        }
-        struct upipe_mgr *upipe_mpgvf_mgr = upipe_mpgvf_mgr_alloc();
-        if (unlikely(upipe_mpgvf_mgr == NULL)) {
-            upipe_mgr_release(upipe_ts_demux_mgr);
-            upipe_release(output);
-            return UBASE_ERR_ALLOC;
-        }
-        ret = upipe_ts_demux_mgr_set_mpgvf_mgr(upipe_ts_demux_mgr,
-                                               upipe_mpgvf_mgr);
-        upipe_mgr_release(upipe_mpgvf_mgr);
-        if (unlikely(!ubase_check(ret))) {
-            upipe_mgr_release(upipe_ts_demux_mgr);
-            upipe_release(output);
-            return ret;
-        }
-        struct upipe_mgr *upipe_h264f_mgr = upipe_h264f_mgr_alloc();
-        if (unlikely(upipe_h264f_mgr == NULL)) {
-            upipe_mgr_release(upipe_ts_demux_mgr);
-            upipe_release(output);
-            return UBASE_ERR_ALLOC;
-        }
-        ret = upipe_ts_demux_mgr_set_h264f_mgr(upipe_ts_demux_mgr,
-                                               upipe_h264f_mgr);
-        upipe_mgr_release(upipe_h264f_mgr);
+        ret = upipe_ts_demux_mgr_set_autof_mgr(upipe_ts_demux_mgr,
+                                               upipe_autof_mgr);
+        upipe_mgr_release(upipe_autof_mgr);
         if (unlikely(!ubase_check(ret))) {
             upipe_mgr_release(upipe_ts_demux_mgr);
             upipe_release(output);

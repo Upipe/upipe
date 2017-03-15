@@ -113,8 +113,7 @@ graph {flow: east}
 #include <upipe-modules/upipe_trickplay.h>
 #include <upipe-pthread/uprobe_pthread_upump_mgr.h>
 #include <upipe-ts/upipe_ts_demux.h>
-#include <upipe-framers/upipe_mpgv_framer.h>
-#include <upipe-framers/upipe_h264_framer.h>
+#include <upipe-framers/upipe_auto_framer.h>
 #include <upipe-av/upipe_av.h>
 #include <upipe-av/uref_av_flow.h>
 #include <upipe-av/upipe_avformat_source.h>
@@ -837,17 +836,11 @@ static bool upipe_glxplayer_play(struct upipe_glxplayer *glxplayer,
             upipe_release(upipe_src);
             return false;
         }
-        struct upipe_mgr *upipe_mpgvf_mgr = upipe_mpgvf_mgr_alloc();
-        if (upipe_mpgvf_mgr != NULL) {
-            upipe_ts_demux_mgr_set_mpgvf_mgr(upipe_ts_demux_mgr,
-                                             upipe_mpgvf_mgr);
-            upipe_mgr_release(upipe_mpgvf_mgr);
-        }
-        struct upipe_mgr *upipe_h264f_mgr = upipe_h264f_mgr_alloc();
-        if (upipe_h264f_mgr != NULL) {
-            upipe_ts_demux_mgr_set_h264f_mgr(upipe_ts_demux_mgr,
-                                             upipe_h264f_mgr);
-            upipe_mgr_release(upipe_h264f_mgr);
+        struct upipe_mgr *upipe_autof_mgr = upipe_autof_mgr_alloc();
+        if (upipe_autof_mgr != NULL) {
+            upipe_ts_demux_mgr_set_autof_mgr(upipe_ts_demux_mgr,
+                                             upipe_autof_mgr);
+            upipe_mgr_release(upipe_autof_mgr);
         }
 
         struct upipe *upipe_ts_demux =

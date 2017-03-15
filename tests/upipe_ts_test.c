@@ -58,13 +58,7 @@
 #include <upipe-ts/upipe_ts_pmt_decoder.h>
 #include <upipe-ts/uref_ts_flow.h>
 #include <upipe-ts/upipe_ts_split.h>
-#include <upipe-framers/upipe_mpgv_framer.h>
-#include <upipe-framers/upipe_h264_framer.h>
-#include <upipe-framers/upipe_h265_framer.h>
-#include <upipe-framers/upipe_mpga_framer.h>
-#include <upipe-framers/upipe_a52_framer.h>
-#include <upipe-framers/upipe_telx_framer.h>
-#include <upipe-framers/upipe_dvbsub_framer.h>
+#include <upipe-framers/upipe_auto_framer.h>
 #include <upipe-framers/upipe_video_trim.h>
 #include <upipe-modules/upipe_file_source.h>
 #include <upipe-modules/upipe_file_sink.h>
@@ -359,6 +353,7 @@ int main(int argc, char *argv[])
             uprobe_pfx_alloc(uprobe_use(&uprobe_src_s),
                              UPROBE_LOG_LEVEL, "file source"));
     assert(upipe_fsrc != NULL);
+    upipe_mgr_release(upipe_fsrc_mgr);
     ubase_assert(upipe_set_output_size(upipe_fsrc, READ_SIZE));
     ubase_assert(upipe_set_uri(upipe_fsrc, src_file));
 
@@ -368,37 +363,13 @@ int main(int argc, char *argv[])
     struct uprobe uprobe_ts_demux_s;
     uprobe_init(&uprobe_ts_demux_s, catch_ts_demux, uprobe_use(logger));
 
-    struct upipe_mgr *upipe_mpgvf_mgr = upipe_mpgvf_mgr_alloc();
-    assert(upipe_mpgvf_mgr != NULL);
-    struct upipe_mgr *upipe_h264f_mgr = upipe_h264f_mgr_alloc();
-    assert(upipe_h264f_mgr != NULL);
-    struct upipe_mgr *upipe_h265f_mgr = upipe_h265f_mgr_alloc();
-    assert(upipe_h265f_mgr != NULL);
-    struct upipe_mgr *upipe_mpgaf_mgr = upipe_mpgaf_mgr_alloc();
-    assert(upipe_mpgaf_mgr != NULL);
-    struct upipe_mgr *upipe_a52f_mgr = upipe_a52f_mgr_alloc();
-    assert(upipe_a52f_mgr != NULL);
-    struct upipe_mgr *upipe_telxf_mgr = upipe_telxf_mgr_alloc();
-    assert(upipe_telxf_mgr != NULL);
-    struct upipe_mgr *upipe_dvbsubf_mgr = upipe_dvbsubf_mgr_alloc();
-    assert(upipe_dvbsubf_mgr != NULL);
+    struct upipe_mgr *upipe_autof_mgr = upipe_autof_mgr_alloc();
+    assert(upipe_autof_mgr != NULL);
 
     struct upipe_mgr *upipe_ts_demux_mgr = upipe_ts_demux_mgr_alloc();
     assert(upipe_ts_demux_mgr != NULL);
-    ubase_assert(upipe_ts_demux_mgr_set_mpgvf_mgr(upipe_ts_demux_mgr,
-                                                  upipe_mpgvf_mgr));
-    ubase_assert(upipe_ts_demux_mgr_set_h264f_mgr(upipe_ts_demux_mgr,
-                                                  upipe_h264f_mgr));
-    ubase_assert(upipe_ts_demux_mgr_set_h265f_mgr(upipe_ts_demux_mgr,
-                                                  upipe_h265f_mgr));
-    ubase_assert(upipe_ts_demux_mgr_set_mpgaf_mgr(upipe_ts_demux_mgr,
-                                                  upipe_mpgaf_mgr));
-    ubase_assert(upipe_ts_demux_mgr_set_a52f_mgr(upipe_ts_demux_mgr,
-                                                 upipe_a52f_mgr));
-    ubase_assert(upipe_ts_demux_mgr_set_telxf_mgr(upipe_ts_demux_mgr,
-                                                  upipe_telxf_mgr));
-    ubase_assert(upipe_ts_demux_mgr_set_dvbsubf_mgr(upipe_ts_demux_mgr,
-                                                    upipe_dvbsubf_mgr));
+    ubase_assert(upipe_ts_demux_mgr_set_autof_mgr(upipe_ts_demux_mgr,
+                                                  upipe_autof_mgr));
 
     struct upipe *upipe_ts = upipe_void_alloc_output(upipe_fsrc,
             upipe_ts_demux_mgr,
@@ -406,14 +377,7 @@ int main(int argc, char *argv[])
                              UPROBE_LOG_LEVEL, "ts demux"));
     assert(upipe_ts != NULL);
     upipe_mgr_release(upipe_ts_demux_mgr);
-    upipe_mgr_release(upipe_mpgvf_mgr);
-    upipe_mgr_release(upipe_h264f_mgr);
-    upipe_mgr_release(upipe_h265f_mgr);
-    upipe_mgr_release(upipe_mpgaf_mgr);
-    upipe_mgr_release(upipe_a52f_mgr);
-    upipe_mgr_release(upipe_telxf_mgr);
-    upipe_mgr_release(upipe_dvbsubf_mgr);
-    upipe_mgr_release(upipe_fsrc_mgr);
+    upipe_mgr_release(upipe_autof_mgr);
     ubase_assert(upipe_ts_demux_set_conformance(upipe_ts,
                                                 UPIPE_TS_CONFORMANCE_ISO));
 
