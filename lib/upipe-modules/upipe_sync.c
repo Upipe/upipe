@@ -599,6 +599,7 @@ static void cb(struct upump *upump)
     uref_clock_set_pts_sys(uref, upipe_sync->pts - upipe_sync->latency);
     now = uclock_now(upipe_sync->uclock);
 
+    if (0)
         upipe_notice_va(upipe,
                 "output %.2f now %.2f latency %" PRIu64,
                 pts_to_time(upipe_sync->pts - upipe_sync->latency),
