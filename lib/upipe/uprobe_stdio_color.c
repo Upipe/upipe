@@ -28,11 +28,13 @@
 #include <upipe/uprobe_stdio_color.h>
 #include <upipe/uprobe_helper_alloc.h>
 #include <upipe/upipe.h>
+#include <upipe/uclock.h>
 
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
 #include <stdarg.h>
+#include <time.h>
 
 #define LEVEL_NAME_LEN  7
 
@@ -157,8 +159,30 @@ static int uprobe_stdio_color_throw(struct uprobe *uprobe,
             break;
         }
 
-    fprintf(uprobe_stdio_color->stream, LEVEL("%s", "%*s") ": %s %s\n",
-            level.color, LEVEL_NAME_LEN, level.name, buffer, ulog->msg);
+    struct timespec ts;
+    if (clock_gettime(CLOCK_MONOTONIC, &ts) < 0)
+        abort();
+
+    uint64_t now = ts.tv_sec * UCLOCK_FREQ +
+        ts.tv_nsec * UCLOCK_FREQ / UINT64_C(1000000000);
+
+    now /= 27000;
+
+    int ret = fprintf(uprobe_stdio_color->stream, "%" PRIu64 " " LEVEL("%s", "%*s") ": %s %s\n",
+            now, level.color, LEVEL_NAME_LEN, level.name, buffer, ulog->msg);
+
+    if (clock_gettime(CLOCK_MONOTONIC, &ts) < 0)
+        abort();
+
+    uint64_t now2 = ts.tv_sec * UCLOCK_FREQ +
+        ts.tv_nsec * UCLOCK_FREQ / UINT64_C(1000000000);
+
+    now2 /= 27000;
+
+    now2 -= now;
+    if (now2 > 4) {
+        fprintf(stderr, "fprintf (%d) took %" PRIu64 " ms\n", ret, now2);
+    }
 
     return UBASE_ERR_NONE;
 }
