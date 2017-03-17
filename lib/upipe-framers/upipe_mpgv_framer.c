@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2013-2015 OpenHeadend S.A.R.L.
+ * Copyright (C) 2013-2017 OpenHeadend S.A.R.L.
  *
  * Authors: Christophe Massiot
  *
@@ -984,8 +984,7 @@ static void upipe_mpgvf_build_flow_def(struct upipe *upipe)
     }
 
     upipe_mpgvf->sequence_requested =
-        ubase_check(uref_mpgv_flow_get_repeated_sequence(
-                    upipe_mpgvf->flow_def_requested));
+        !ubase_check(uref_flow_get_global(upipe_mpgvf->flow_def_requested));
 
     upipe_mpgvf_store_flow_def(upipe, flow_def);
 }

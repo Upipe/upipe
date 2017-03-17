@@ -1378,9 +1378,6 @@ static int upipe_ts_mux_provide_flow_format(struct upipe *upipe,
             uref_h265_flow_set_annexb(flow_format);
         else if (!ubase_ncmp(def, "block.aac."))
             uref_mpga_flow_set_adts(flow_format);
-        else if (!ubase_ncmp(def, "block.mpeg1video.") ||
-                 !ubase_ncmp(def, "block.mpeg2video."))
-            uref_mpgv_flow_set_repeated_sequence(flow_format);
     }
     return urequest_provide_flow_format(request, flow_format);
 }
