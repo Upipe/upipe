@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2012-2016 OpenHeadend S.A.R.L.
+ * Copyright (C) 2012-2017 OpenHeadend S.A.R.L.
  *
  * Authors: Christophe Massiot
  *
@@ -886,6 +886,34 @@ static inline int ubuf_block_merge(struct ubuf_mgr *mgr, struct ubuf **ubuf_p,
     ubuf_free(*ubuf_p);
     *ubuf_p = new_ubuf;
     return UBASE_ERR_NONE;
+}
+
+/** @This allocates a new ubuf and copies data from an opaque pointer to it.
+ *
+ * @param mgr management structure for this ubuf type
+ * @param p pointer to opaque data
+ * @param size size of opaque data, in octets
+ * @return pointer to newly allocated ubuf or NULL in case of error
+ */
+static inline struct ubuf *ubuf_block_alloc_from_opaque(struct ubuf_mgr *mgr,
+        const uint8_t *p, size_t size)
+{
+    struct ubuf *ubuf = ubuf_block_alloc(mgr, size);
+    if (unlikely(ubuf == NULL))
+        return NULL;
+
+    int copy_size = size;
+    uint8_t *buffer;
+    if (unlikely(!ubase_check(ubuf_block_write(ubuf, 0, &copy_size, &buffer))))
+        goto ubuf_block_alloc_from_opaque_err;
+    memcpy(buffer, p, size);
+    if (unlikely(!ubase_check(ubuf_block_unmap(ubuf, 0))))
+        goto ubuf_block_alloc_from_opaque_err;
+    return ubuf;
+
+ubuf_block_alloc_from_opaque_err:
+    ubuf_free(ubuf);
+    return NULL;
 }
 
 /** @This compares the content of a block ubuf in a larger ubuf.
