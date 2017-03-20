@@ -243,6 +243,7 @@ if HAVE_BITSTREAM
 check_PROGRAMS += \
 	upipe_rtp_decaps_test \
 	upipe_rtp_prepend_test \
+	upipe_rtp_test \
 	upipe_mpgv_framer_test \
 	upipe_mpga_framer_test \
 	upipe_a52_framer_test \
@@ -278,6 +279,7 @@ check_PROGRAMS += \
 TESTS += \
 	upipe_rtp_decaps_test \
 	upipe_rtp_prepend_test \
+	upipe_rtp_test \
 	upipe_mpgv_framer_test \
 	upipe_mpga_framer_test \
 	upipe_a52_framer_test \
@@ -343,9 +345,9 @@ AM_CPPFLAGS = -I$(top_builddir)/include -I$(top_srcdir)/include
 LDADD = $(top_builddir)/lib/upipe/libupipe.la
 
 upump_ev_test_LDADD = $(LDADD) -lev $(top_builddir)/lib/upump-ev/libupump_ev.la
-ulifo_uqueue_test_CFLAGS = -pthread
+ulifo_uqueue_test_CFLAGS = $(AM_CFLAGS) -pthread
 ulifo_uqueue_test_LDADD = $(LDADD) -lev $(top_builddir)/lib/upump-ev/libupump_ev.la
-udeal_test_CFLAGS = -pthread
+udeal_test_CFLAGS = $(AM_CFLAGS) -pthread
 udeal_test_LDADD = $(LDADD) -lev $(top_builddir)/lib/upump-ev/libupump_ev.la
 uprobe_upump_mgr_test_LDADD = $(LDADD) -lev $(top_builddir)/lib/upump-ev/libupump_ev.la
 upipe_file_test_LDADD = $(LDADD) -lev $(top_builddir)/lib/upump-ev/libupump_ev.la $(top_builddir)/lib/upipe-modules/libupipe_modules.la
@@ -376,6 +378,7 @@ upipe_multicat_probe_test_LDADD = $(LDADD) $(top_builddir)/lib/upipe-modules/lib
 upipe_setrap_test_LDADD = $(LDADD) $(top_builddir)/lib/upipe-modules/libupipe_modules.la
 upipe_rtp_decaps_test_LDADD = $(LDADD) $(top_builddir)/lib/upipe-modules/libupipe_modules.la
 upipe_rtp_prepend_test_LDADD = $(LDADD) $(top_builddir)/lib/upipe-modules/libupipe_modules.la
+upipe_rtp_test_LDADD = $(LDADD) -lev $(top_builddir)/lib/upump-ev/libupump_ev.la $(top_builddir)/lib/upipe-modules/libupipe_modules.la $(top_builddir)/lib/upipe-framers/libupipe_framers.la
 upipe_chunk_stream_test_LDADD = $(LDADD) $(top_builddir)/lib/upipe-modules/libupipe_modules.la
 upipe_htons_test_LDADD = $(LDADD) $(top_builddir)/lib/upipe-modules/libupipe_modules.la
 upipe_blit_test_LDADD = $(LDADD) $(top_builddir)/lib/upipe-modules/libupipe_modules.la
@@ -396,17 +399,17 @@ upipe_pack10_test_LDADD = $(LDADD) $(top_builddir)/lib/upipe-hbrmt/libupipe_hbrm
 upipe_unpack10_test_LDADD = $(LDADD) $(top_builddir)/lib/upipe-hbrmt/libupipe_hbrmt.la
 upipe_sdi_test_LDADD = $(LDADD) $(top_builddir)/lib/upipe-hbrmt/libupipe_hbrmt.la
 
-upipe_avformat_test_CFLAGS = @AVFORMAT_CFLAGS@
-upipe_avformat_test_LDADD = $(LDADD) -lev $(top_builddir)/lib/upump-ev/libupump_ev.la $(top_builddir)/lib/upipe-av/libupipe_av.la @AVFORMAT_LIBS@
-upipe_avcodec_test_CFLAGS = @AVFORMAT_CFLAGS@
-upipe_avcodec_test_LDADD = $(LDADD) -lev $(top_builddir)/lib/upump-ev/libupump_ev.la $(top_builddir)/lib/upipe-modules/libupipe_modules.la $(top_builddir)/lib/upipe-av/libupipe_av.la @AVFORMAT_LIBS@ -lpthread
-upipe_avcodec_decode_test_CFLAGS = @AVFORMAT_CFLAGS@
-upipe_avcodec_decode_test_LDADD = $(LDADD) -lev $(top_builddir)/lib/upump-ev/libupump_ev.la $(top_builddir)/lib/upipe-modules/libupipe_modules.la $(top_builddir)/lib/upipe-av/libupipe_av.la @AVFORMAT_LIBS@ -lpthread
+upipe_avformat_test_CFLAGS = $(AM_CFLAGS) $(AVFORMAT_CFLAGS)
+upipe_avformat_test_LDADD = $(LDADD) -lev $(top_builddir)/lib/upump-ev/libupump_ev.la $(top_builddir)/lib/upipe-av/libupipe_av.la $(AVFORMAT_LIBS)
+upipe_avcodec_test_CFLAGS = $(AM_CFLAGS) $(AVFORMAT_CFLAGS)
+upipe_avcodec_test_LDADD = $(LDADD) -lev $(top_builddir)/lib/upump-ev/libupump_ev.la $(top_builddir)/lib/upipe-modules/libupipe_modules.la $(top_builddir)/lib/upipe-av/libupipe_av.la $(AVFORMAT_LIBS) -lpthread
+upipe_avcodec_decode_test_CFLAGS = $(AM_CFLAGS) $(AVFORMAT_CFLAGS)
+upipe_avcodec_decode_test_LDADD = $(LDADD) -lev $(top_builddir)/lib/upump-ev/libupump_ev.la $(top_builddir)/lib/upipe-modules/libupipe_modules.la $(top_builddir)/lib/upipe-av/libupipe_av.la $(AVFORMAT_LIBS) -lpthread
 
-upipe_sws_test_CFLAGS = $(SWSCALE_CFLAGS)
+upipe_sws_test_CFLAGS = $(AM_CFLAGS) $(SWSCALE_CFLAGS)
 upipe_sws_test_LDADD = $(LDADD) $(SWSCALE_LIBS) $(top_builddir)/lib/upipe-swscale/libupipe_swscale.la
 
-upipe_swr_test_CFLAGS = $(SWRESAMPLE_CFLAGS)
+upipe_swr_test_CFLAGS = $(AM_CFLAGS) $(SWRESAMPLE_CFLAGS)
 upipe_swr_test_LDADD = $(LDADD) $(SWRESAMPLE_LIBS) $(top_builddir)/lib/upipe-swresample/libupipe_swresample.la $(top_builddir)/lib/upipe-modules/libupipe_modules.la
 
 upipe_ts_sync_test_LDADD = $(LDADD) $(top_builddir)/lib/upipe-ts/libupipe_ts.la
@@ -436,7 +439,7 @@ upipe_ts_test_LDADD = $(LDADD) $(top_builddir)/lib/upipe-ts/libupipe_ts.la $(top
 upipe_ts_tstd_test_LDADD = $(LDADD) $(top_builddir)/lib/upipe-ts/libupipe_ts.la
 
 upipe_glx_sink_test_LDADD = $(LDADD) $(GLX_LIBS) $(top_builddir)/lib/upipe-gl/libupipe_gl.la -lev $(top_builddir)/lib/upump-ev/libupump_ev.la
-upipe_glx_sink_test_CFLAGS = $(GLX_CFLAGS)
+upipe_glx_sink_test_CFLAGS = $(AM_CFLAGS) $(GLX_CFLAGS)
 upipe_filter_blend_test_LDADD = $(LDADD) $(top_builddir)/lib/upipe-filters/libupipe_filters.la $(top_builddir)/lib/upipe-modules/libupipe_modules.la
 upipe_filter_ebur128_test_LDADD = $(LDADD) -lm $(top_builddir)/lib/upipe-filters/libupipe_filters.la $(top_builddir)/lib/upipe-modules/libupipe_modules.la
 upipe_audio_max_test_LDADD = $(LDADD) -lm $(top_builddir)/lib/upipe-filters/libupipe_filters.la $(top_builddir)/lib/upipe-modules/libupipe_modules.la
@@ -445,11 +448,11 @@ upipe_audio_graph_test_LDADD = $(LDADD) -lm $(top_builddir)/lib/upipe-filters/li
 upipe_speexdsp_test_LDADD = $(LDADD) $(top_builddir)/lib/upipe-speexdsp/libupipe_speexdsp.la $(top_builddir)/lib/upipe-modules/libupipe_modules.la
 
 upipe_x264_test_LDADD = $(LDADD) $(X264_LIBS) $(top_builddir)/lib/upipe-x264/libupipe_x264.la
-upipe_x264_test_CFLAGS = $(X264_CFLAGS)
+upipe_x264_test_CFLAGS = $(AM_CFLAGS) $(X264_CFLAGS)
 
 upipe_alsa_sink_test_LDADD = $(LDADD) -lasound $(top_builddir)/lib/upipe-alsa/libupipe_alsa.la $(top_builddir)/lib/upipe-modules/libupipe_modules.la -lev $(top_builddir)/lib/upump-ev/libupump_ev.la
 upump_ecore_test_LDADD = $(LDADD) $(ECORE_LIBS) $(top_builddir)/lib/upump-ecore/libupump_ecore.la
-upump_ecore_test_CFLAGS = $(ECORE_CFLAGS)
+upump_ecore_test_CFLAGS = $(AM_CFLAGS) $(ECORE_CFLAGS)
 upipe_m3u_reader_test_LDADD = $(LDADD) -lev $(top_builddir)/lib/upump-ev/libupump_ev.la $(top_builddir)/lib/upipe-modules/libupipe_modules.la
-ustring_test_CFLAGS = -fno-inline
+ustring_test_CFLAGS = $(AM_CFLAGS) -fno-inline
 upipe_seq_src_test_LDADD = $(LDADD) -lev $(top_builddir)/lib/upump-ev/libupump_ev.la $(top_builddir)/lib/upipe-modules/libupipe_modules.la

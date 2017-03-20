@@ -49,7 +49,7 @@ enum upipe_ts_encaps_command {
     /** sets the size of the TB buffer (unsigned int) */
     UPIPE_TS_ENCAPS_SET_TB_SIZE,
     /** returns a ubuf containing a TS packet and its dts_sys (uint64_t,
-     * struct ubuf **, uint64_t *) */
+     * uint64_t, struct ubuf **, uint64_t *) */
     UPIPE_TS_ENCAPS_SPLICE,
     /** signals an end of stream (void) */
     UPIPE_TS_ENCAPS_EOS
@@ -71,18 +71,19 @@ static inline int upipe_ts_encaps_set_tb_size(struct upipe *upipe,
 /** @This returns a ubuf containing a TS packet, and the dts_sys of the packet.
  *
  * @param upipe description structure of the pipe
- * @param cr_sys date at which the packet will be muxed
+ * @param cr_sys_min date at which the packet will be muxed
+ * @param cr_sys_max maximum date allowed for muxing
  * @param ubuf_p filled in with a pointer to the ubuf (may be NULL)
  * @param dts_sys_p filled in with the dts_sys, or UINT64_MAX
  * @return an error code
  */
-static inline int upipe_ts_encaps_splice(struct upipe *upipe, uint64_t cr_sys,
-                                         struct ubuf **ubuf_p,
-                                         uint64_t *dts_sys_p)
+static inline int upipe_ts_encaps_splice(struct upipe *upipe,
+        uint64_t cr_sys_min, uint64_t cr_sys_max,
+        struct ubuf **ubuf_p, uint64_t *dts_sys_p)
 {
     return upipe_control_nodbg(upipe, UPIPE_TS_ENCAPS_SPLICE,
-                               UPIPE_TS_ENCAPS_SIGNATURE, cr_sys, ubuf_p,
-                               dts_sys_p);
+                               UPIPE_TS_ENCAPS_SIGNATURE,
+                               cr_sys_min, cr_sys_max, ubuf_p, dts_sys_p);
 }
 
 /** @This signals an end of stream, so that buffered packets can be released.

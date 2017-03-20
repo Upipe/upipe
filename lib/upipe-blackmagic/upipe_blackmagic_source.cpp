@@ -275,6 +275,12 @@ struct upipe_bmd_src {
     BMDPixelFormat pixel_format;
     /** yuv pixel format (UYVY or v210) */
     BMDPixelFormat yuv_pixel_format;
+    /** offset between bmd timestamps and Upipe timestamps */
+    int64_t timestamp_offset;
+    /** highest Upipe timestamp given to a frame */
+    uint64_t timestamp_highest;
+    /** current frame rate */
+    struct urational fps;
     /** true for progressive frames - for use by the private thread */
     bool progressive;
     /** true for top field first - for use by the private thread */
@@ -487,7 +493,6 @@ HRESULT DeckLinkCaptureDelegate::VideoInputFrameArrived(
             BMDTimeValue FrameTime, FrameDuration;
             VideoFrame->GetStreamTime(&FrameTime, &FrameDuration, UCLOCK_FREQ);
             uref_clock_set_pts_orig(uref, FrameTime);
-            uref_clock_set_pts_prog(uref, FrameTime + BMD_CLOCK_MIN);
             uref_clock_set_dts_pts_delay(uref, 0);
             uref_clock_set_duration(uref, FrameDuration);
 
@@ -515,7 +520,6 @@ HRESULT DeckLinkCaptureDelegate::VideoInputFrameArrived(
             BMDTimeValue PacketTime;
             AudioPacket->GetPacketTime(&PacketTime, UCLOCK_FREQ);
             uref_clock_set_pts_orig(uref, PacketTime);
-            uref_clock_set_pts_prog(uref, PacketTime + BMD_CLOCK_MIN);
             uref_clock_set_dts_pts_delay(uref, 0);
             uref_clock_set_duration(uref, AudioPacket->GetSampleFrameCount() *
                                           UCLOCK_FREQ / BMD_SAMPLERATE);
@@ -664,6 +668,10 @@ static struct upipe *_upipe_bmd_src_alloc(struct upipe_mgr *mgr,
     upipe_bmd_src->deckLinkConfiguration = NULL;
     upipe_bmd_src->deckLinkCaptureDelegate = NULL;
     upipe_bmd_src->progressive = false;
+    upipe_bmd_src->timestamp_offset = 0;
+    upipe_bmd_src->timestamp_highest = BMD_CLOCK_MIN;
+    upipe_bmd_src->fps.num = 25;
+    upipe_bmd_src->fps.den = 1;
     upipe_bmd_src->tff = true;
 
     upipe_throw_ready(upipe);
@@ -717,13 +725,32 @@ static void upipe_bmd_src_work(struct upipe *upipe, struct upump *upump)
 
         const char *def;
         if (unlikely(ubase_check(uref_flow_get_def(uref, &def)))) {
+            upipe_bmd_src->fps.num = 25;
+            upipe_bmd_src->fps.den = 1;
+            uref_pic_flow_get_fps(uref, &upipe_bmd_src->fps);
             upipe_bmd_src_output_store_flow_def(subpipe, uref);
             continue;
         }
 
+        uint64_t pts_orig;
+        uint64_t pts_prog = UINT64_MAX;
+        if (likely(ubase_check(uref_clock_get_pts_orig(uref, &pts_orig)))) {
+            pts_prog = pts_orig + upipe_bmd_src->timestamp_offset;
+            if (unlikely(type == UPIPE_BMD_SRC_PIC &&
+                         pts_prog <= upipe_bmd_src->timestamp_highest)) {
+                upipe_warn(upipe, "timestamp is in the past, resetting");
+                pts_prog = upipe_bmd_src->timestamp_highest +
+                    UCLOCK_FREQ * upipe_bmd_src->fps.den /
+                                  upipe_bmd_src->fps.num;
+                upipe_bmd_src->timestamp_offset = pts_prog - pts_orig;
+            }
+            if (pts_prog > upipe_bmd_src->timestamp_highest)
+                upipe_bmd_src->timestamp_highest = pts_prog;
+            uref_clock_set_pts_prog(uref, pts_prog);
+        }
+
         if (type == UPIPE_BMD_SRC_PIC || type == UPIPE_BMD_SRC_PIC_NO_INPUT) {
-            uint64_t pts_prog;
-            if (likely(ubase_check(uref_clock_get_pts_prog(uref, &pts_prog))))
+            if (likely(pts_prog != UINT64_MAX))
                 upipe_throw_clock_ref(subpipe, uref, pts_prog, 0);
         }
         upipe_throw_clock_ts(subpipe, uref);
@@ -973,6 +1000,7 @@ static int upipe_bmd_src_set_uri(struct upipe *upipe, const char *uri)
     char *audio = NULL;
     char *video_bits = NULL;
     char *audio_bits = NULL;
+    bool mirror = true;
     const char *params = strchr(idx, '/');
     if (params) {
         char *paramsdup = strdup(params);
@@ -993,6 +1021,8 @@ static int upipe_bmd_src_set_uri(struct upipe *upipe, const char *uri)
             } else if (IS_OPTION("video_bits=")) {
                 free(video_bits);
                 video_bits = config_stropt(ARG_OPTION("video_bits="));
+            } else if (IS_OPTION("nomirror")) {
+                mirror = false;
             }
 #undef IS_OPTION
 #undef ARG_OPTION
@@ -1000,6 +1030,11 @@ static int upipe_bmd_src_set_uri(struct upipe *upipe, const char *uri)
 
         free(paramsdup);
     }
+
+    deckLinkConfiguration->SetInt(bmdDeckLinkConfigCapturePassThroughMode,
+            mirror ? bmdDeckLinkCapturePassthroughModeDirect :
+            bmdDeckLinkCapturePassthroughModeDisabled);
+
 
     if (audio != NULL) {
         int i = 0;

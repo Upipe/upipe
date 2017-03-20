@@ -79,7 +79,7 @@ static void upipe_ntsc_prepend_input(struct upipe *upipe, struct uref *uref,
     struct upipe_ntsc_prepend *upipe_ntsc_prepend = upipe_ntsc_prepend_from_upipe(upipe);
 
     uref_pic_delete_tff(uref);
-    UBASE_FATAL(upipe, uref_pic_resize(uref, 0, -UPIPE_NTSC_PREPEND_LINES, -1, -1))
+    UBASE_FATAL(upipe, uref_pic_resize(uref, 0, -UPIPE_NTSC_PREPEND_LINES, -1, 486))
     UBASE_FATAL(upipe, uref_pic_clear(uref, 0, 0, -1, UPIPE_NTSC_PREPEND_LINES, 0))
 
     upipe_ntsc_prepend_output(upipe, uref, upump_p);
@@ -140,6 +140,40 @@ static int upipe_ntsc_prepend_set_flow_def(struct upipe *upipe, struct uref *flo
     return UBASE_ERR_NONE;
 }
 
+/** @internal @This requires a ubuf manager by proxy, and amends the flow
+ * format.
+ *
+ * @param upipe description structure of the pipe
+ * @param request description structure of the request
+ * @return an error code
+ */
+static int upipe_ntsc_prepend_amend_ubuf_mgr(struct upipe *upipe,
+                                        struct urequest *request)
+{
+    struct uref *flow_format = uref_dup(request->uref);
+    UBASE_ALLOC_RETURN(flow_format);
+
+    uint8_t vprepend, vappend;
+    if (!ubase_check(uref_pic_flow_get_vprepend(flow_format, &vprepend)))
+        vprepend = 0;
+    if (!ubase_check(uref_pic_flow_get_vappend(flow_format, &vappend)))
+        vappend = 0;
+
+    vprepend += UPIPE_NTSC_PREPEND_LINES;
+    vappend += UPIPE_NTSC_APPEND_LINES;
+
+    uref_pic_flow_set_vappend(flow_format, vappend);
+    uref_pic_flow_set_vprepend(flow_format, vprepend);
+
+    struct urequest ubuf_mgr_request;
+    urequest_set_opaque(&ubuf_mgr_request, request);
+    urequest_init_ubuf_mgr(&ubuf_mgr_request, flow_format,
+                           upipe_ntsc_prepend_provide_output_proxy, NULL);
+    upipe_throw_provide_request(upipe, &ubuf_mgr_request);
+    urequest_clean(&ubuf_mgr_request);
+    return UBASE_ERR_NONE;
+}
+
 /** @internal @This processes control commands on an ntsc_prepend pipe.
  *
  * @param upipe description structure of the pipe
@@ -152,10 +186,14 @@ static int upipe_ntsc_prepend_control(struct upipe *upipe, int command, va_list 
     switch (command) {
         case UPIPE_REGISTER_REQUEST: {
             struct urequest *request = va_arg(args, struct urequest *);
+            if (request->type == UREQUEST_UBUF_MGR)
+                return upipe_ntsc_prepend_amend_ubuf_mgr(upipe, request);
             return upipe_ntsc_prepend_alloc_output_proxy(upipe, request);
         }
         case UPIPE_UNREGISTER_REQUEST: {
             struct urequest *request = va_arg(args, struct urequest *);
+            if (request->type == UREQUEST_UBUF_MGR)
+                return UBASE_ERR_NONE;
             return upipe_ntsc_prepend_free_output_proxy(upipe, request);
         }
         case UPIPE_GET_FLOW_DEF: {

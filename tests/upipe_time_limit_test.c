@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2016 OpenHeadend S.A.R.L.
+ * Copyright (C) 2016-2017 OpenHeadend S.A.R.L.
  *
  * Authors: Christophe Massiot
  *
@@ -145,15 +145,14 @@ int main(int argc, char **argv)
     struct uref *uref;
 
     /* uref and mem management */
-    struct ev_loop *loop = ev_default_loop(0);
     struct umem_mgr *umem_mgr = umem_alloc_mgr_alloc();
     assert(umem_mgr != NULL);
     struct udict_mgr *udict_mgr = udict_inline_mgr_alloc(UDICT_POOL_DEPTH, umem_mgr, -1, -1);
     assert(udict_mgr != NULL);
     struct uref_mgr *uref_mgr = uref_std_mgr_alloc(UREF_POOL_DEPTH, udict_mgr, 0); 
     assert(uref_mgr != NULL);
-    struct upump_mgr *upump_mgr = upump_ev_mgr_alloc(loop, UPUMP_POOL,
-                                                     UPUMP_BLOCKER_POOL);
+    struct upump_mgr *upump_mgr = upump_ev_mgr_alloc_default(UPUMP_POOL,
+            UPUMP_BLOCKER_POOL);
     assert(upump_mgr != NULL);
     struct uclock *uclock = uclock_std_alloc(0);
     assert(uclock);
@@ -196,7 +195,7 @@ int main(int argc, char **argv)
     /* Now send uref */
     upipe_input(time_limit, uref, NULL);
 
-    ev_loop(loop, 0);
+    upump_mgr_run(upump_mgr, NULL);
     assert(!cr_sys);
 
     upipe_release(time_limit);
@@ -211,6 +210,5 @@ int main(int argc, char **argv)
     uprobe_release(logger);
     uprobe_clean(&uprobe);
 
-    ev_default_destroy();
     return 0;
 }

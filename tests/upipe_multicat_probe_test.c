@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2013-2014 OpenHeadend S.A.R.L.
+ * Copyright (C) 2013-2016 OpenHeadend S.A.R.L.
  *
  * Authors: Benjamin Cohen
  *
@@ -56,6 +56,7 @@
 
 #define SYSTIMEINC      100
 #define ROTATE          (SYSTIMEINC * 10)
+#define ROTATE_OFFSET   (ROTATE / 2)
 #define UREFNB          (ROTATE * 5 + 1)
 
 static unsigned int pipe_counter = 0, probe_counter = 0;
@@ -80,7 +81,7 @@ static int catch(struct uprobe *uprobe, struct upipe *upipe,
             uint64_t index = va_arg(args, uint64_t);
             uint64_t systime = 0;
             ubase_assert(uref_clock_get_cr_sys(uref, &systime));
-            assert(systime/ROTATE == index);
+            assert((systime - ROTATE_OFFSET) / ROTATE == index);
             assert(index == probe_counter);
 
             break;
@@ -166,7 +167,7 @@ int main(int argc, char *argv[])
                              "multicat_probe"));
     assert(upipe_multicat_probe != NULL);
     ubase_assert(upipe_set_flow_def(upipe_multicat_probe, uref));
-    ubase_assert(upipe_multicat_probe_set_rotate(upipe_multicat_probe, ROTATE));
+    ubase_assert(upipe_multicat_probe_set_rotate(upipe_multicat_probe, ROTATE, ROTATE_OFFSET));
     ubase_assert(upipe_set_output(upipe_multicat_probe, upipe_sink));
     uref_free(uref);
 
@@ -174,7 +175,7 @@ int main(int argc, char *argv[])
     for (i=0; i < UREFNB; i++) {
         uref = uref_alloc(uref_mgr);
         assert(uref != NULL);
-        uref_clock_set_cr_sys(uref, SYSTIMEINC * i);
+        uref_clock_set_cr_sys(uref, ROTATE_OFFSET + SYSTIMEINC * i);
         upipe_input(upipe_multicat_probe, uref, NULL);
     }
     assert(pipe_counter == UREFNB);

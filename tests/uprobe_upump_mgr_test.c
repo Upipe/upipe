@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2013-2014 OpenHeadend S.A.R.L.
+ * Copyright (C) 2013-2017 OpenHeadend S.A.R.L.
  *
  * Authors: Christophe Massiot
  *
@@ -77,8 +77,7 @@ static struct upipe_mgr uprobe_test_mgr = {
 
 int main(int argc, char **argv)
 {
-    struct ev_loop *loop = ev_default_loop(0);
-    upump_mgr = upump_ev_mgr_alloc(loop, UPUMP_POOL, UPUMP_BLOCKER_POOL);
+    upump_mgr = upump_ev_mgr_alloc_default(UPUMP_POOL, UPUMP_BLOCKER_POOL);
     assert(upump_mgr != NULL);
 
     struct uprobe *uprobe = uprobe_upump_mgr_alloc(NULL, upump_mgr);
@@ -88,6 +87,5 @@ int main(int argc, char **argv)
     struct upipe *upipe = upipe_void_alloc(&uprobe_test_mgr, uprobe);
     uprobe_test_free(upipe);
 
-    ev_default_destroy();
     return 0;
 }

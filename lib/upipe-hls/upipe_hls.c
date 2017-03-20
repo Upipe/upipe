@@ -156,7 +156,7 @@ static int probe_reader(struct uprobe *uprobe, struct upipe *inner,
             upipe_mgr_release(upipe_hls_master_mgr);
             UBASE_ALLOC_RETURN(output);
             upipe_hls_store_bin_output(upipe, output);
-            return upipe_set_output(inner, output);
+            return UBASE_ERR_NONE;
         }
         else
             upipe_warn_va(upipe, "unsupported flow format %s", def);
@@ -198,12 +198,21 @@ static struct upipe *upipe_hls_alloc(struct upipe_mgr *mgr,
     struct upipe_hls *upipe_hls = upipe_hls_from_upipe(upipe);
     struct upipe *inner = NULL;
     struct upipe_mgr *upipe_m3u_reader_mgr = upipe_m3u_reader_mgr_alloc();
-    if (likely(upipe_m3u_reader_mgr != NULL)) {
-        inner = upipe_void_alloc(
-            upipe_m3u_reader_mgr,
-            uprobe_pfx_alloc(uprobe_use(&upipe_hls->probe_reader),
-                             UPROBE_LOG_VERBOSE, "reader"));
-        upipe_mgr_release(upipe_m3u_reader_mgr);
+    if (unlikely(!upipe_m3u_reader_mgr)) {
+        upipe_err(upipe, "fail to allocate m3u reader manager");
+        upipe_release(upipe);
+        return NULL;
+    }
+
+    inner = upipe_void_alloc(
+        upipe_m3u_reader_mgr,
+        uprobe_pfx_alloc(uprobe_use(&upipe_hls->probe_reader),
+                         UPROBE_LOG_VERBOSE, "reader"));
+    upipe_mgr_release(upipe_m3u_reader_mgr);
+    if (unlikely(!inner)) {
+        upipe_err(upipe, "fail to allocate m3u reader");
+        upipe_release(upipe);
+        return NULL;
     }
     upipe_hls_store_bin_input(upipe, inner);
 

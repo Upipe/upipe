@@ -63,9 +63,6 @@ struct upipe_rtp_pcm_unpack {
     /** list of output requests */
     struct uchain request_list;
 
-    /** last RTP timestamp */
-    uint64_t last_rtp_timestamp;
-
     /** sample rate */
     uint64_t rate;
     /** channels */
@@ -220,8 +217,6 @@ static struct upipe *upipe_rtp_pcm_unpack_alloc(struct upipe_mgr *mgr,
     upipe_rtp_pcm_unpack_init_input(upipe);
     upipe_rtp_pcm_unpack_init_output(upipe);
 
-    upipe_rtp_pcm_unpack->last_rtp_timestamp = UINT_MAX;
-
     return upipe;
 }
 
@@ -246,24 +241,6 @@ static bool upipe_rtp_pcm_unpack_handle(struct upipe *upipe, struct uref *uref,
     struct upipe_rtp_pcm_unpack *upipe_rtp_pcm_unpack = upipe_rtp_pcm_unpack_from_upipe(upipe);
     if (!upipe_rtp_pcm_unpack->ubuf_mgr)
         return false;
-
-    uint64_t timestamp = 0;
-    uref_rtp_get_timestamp(uref, &timestamp);
-
-    uref_clock_set_pts_orig(uref, timestamp * UCLOCK_FREQ / upipe_rtp_pcm_unpack->rate);
-
-    uint64_t delta =
-        (UINT_MAX + timestamp -
-         (upipe_rtp_pcm_unpack->last_rtp_timestamp % UINT_MAX)) % UINT_MAX;
-    upipe_rtp_pcm_unpack->last_rtp_timestamp += delta;
-
-    timestamp = upipe_rtp_pcm_unpack->last_rtp_timestamp *
-        UCLOCK_FREQ / upipe_rtp_pcm_unpack->rate;
-
-    uref_clock_set_pts_prog(uref, timestamp);
-
-    upipe_throw_clock_ref(upipe, uref, timestamp, 0);
-    upipe_throw_clock_ts(upipe, uref);
 
     size_t s = 0;
     uref_block_size(uref, &s);

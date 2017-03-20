@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2012-2016 OpenHeadend S.A.R.L.
+ * Copyright (C) 2012-2017 OpenHeadend S.A.R.L.
  *
  * Authors: Christophe Massiot
  *
@@ -74,7 +74,7 @@ struct upump_blocker *upump_common_blocker_alloc(struct upump *upump)
     if (common->started && !was_blocked) {
         struct upump_common_mgr *common_mgr =
             upump_common_mgr_from_upump_mgr(upump->mgr);
-        common_mgr->upump_real_stop(upump);
+        common_mgr->upump_real_stop(upump, common->status);
     }
     return blocker;
 }
@@ -95,7 +95,7 @@ void upump_common_blocker_free(struct upump_blocker *blocker)
     if (common->started && ulist_empty(&common->blockers)) {
         struct upump_common_mgr *common_mgr =
             upump_common_mgr_from_upump_mgr(blocker->upump->mgr);
-        common_mgr->upump_real_start(blocker->upump);
+        common_mgr->upump_real_start(blocker->upump, common->status);
     }
 
     upool_free(&common_mgr->upump_blocker_pool, blocker_common);
@@ -130,6 +130,7 @@ void upump_common_init(struct upump *upump)
 {
     struct upump_common *common = upump_common_from_upump(upump);
     common->started = false;
+    common->status = true;
     ulist_init(&common->blockers);
 }
 
@@ -155,7 +156,7 @@ void upump_common_start(struct upump *upump)
     if (ulist_empty(&common->blockers)) {
         struct upump_common_mgr *common_mgr =
             upump_common_mgr_from_upump_mgr(upump->mgr);
-        common_mgr->upump_real_start(upump);
+        common_mgr->upump_real_start(upump, common->status);
     }
 }
 
@@ -170,8 +171,35 @@ void upump_common_stop(struct upump *upump)
     if (ulist_empty(&common->blockers)) {
         struct upump_common_mgr *common_mgr =
             upump_common_mgr_from_upump_mgr(upump->mgr);
-        common_mgr->upump_real_stop(upump);
+        common_mgr->upump_real_stop(upump, common->status);
     }
+}
+
+/** @This gets the blocking status of a pump.
+ *
+ * @param upump description structure of the pump
+ * @param status_p reference to blocking status
+ */
+void upump_common_get_status(struct upump *upump, int *status_p)
+{
+    struct upump_common *common = upump_common_from_upump(upump);
+    *status_p = common->status ? 1 : 0;
+}
+
+/** @This sets the blocking status of a pump.
+ *
+ * @param upump description structure of the pump
+ * @param status blocking status
+ */
+void upump_common_set_status(struct upump *upump, int status)
+{
+    struct upump_common *common = upump_common_from_upump(upump);
+    bool started = common->started;
+    if (started)
+        upump_common_stop(upump);
+    common->status = !!status;
+    if (started)
+        upump_common_start(upump);
 }
 
 /** @This cleans up the common part of a pump.
@@ -248,17 +276,13 @@ void upump_common_mgr_clean(struct upump_mgr *mgr)
 void upump_common_mgr_init(struct upump_mgr *mgr,
                            uint16_t upump_pool_depth,
                            uint16_t upump_blocker_pool_depth, void *pool_extra,
-                           void (*upump_real_start)(struct upump *),
-                           void (*upump_real_stop)(struct upump *),
+                           void (*upump_real_start)(struct upump *, bool),
+                           void (*upump_real_stop)(struct upump *, bool),
                            void *(*upump_alloc_inner)(struct upool *),
                            void (*upump_free_inner)(struct upool *, void *))
 {
     uchain_init(&mgr->uchain);
     mgr->opaque = NULL;
-    mgr->upump_start = upump_common_start;
-    mgr->upump_stop = upump_common_stop;
-    mgr->upump_blocker_alloc = upump_common_blocker_alloc;
-    mgr->upump_blocker_free = upump_common_blocker_free;
 
     struct upump_common_mgr *common_mgr = upump_common_mgr_from_upump_mgr(mgr);
     common_mgr->upump_real_start = upump_real_start;

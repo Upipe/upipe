@@ -113,6 +113,8 @@ struct upipe_hls_void {
     struct upipe *pmt;
     /** attach uclock is needed */
     bool attach_uclock;
+    /** uri */
+    char *uri;
 };
 
 /** @hidden */
@@ -237,6 +239,13 @@ static int upipe_hls_void_sub_control(struct upipe *upipe,
         struct upipe **super_p = va_arg(args, struct upipe **);
         return upipe_hls_void_sub_get_super(upipe, super_p);
     }
+    case UPIPE_BIN_GET_FIRST_INNER: {
+        struct upipe_hls_void_sub *upipe_hls_void_sub =
+            upipe_hls_void_sub_from_upipe(upipe);
+        struct upipe **p = va_arg(args, struct upipe **);
+        *p = upipe_hls_void_sub->src;
+        return (*p != NULL) ? UBASE_ERR_NONE : UBASE_ERR_UNHANDLED;
+    }
     }
     return upipe_hls_void_sub_control_bin_output(upipe, command, args);
 }
@@ -285,6 +294,62 @@ static int probe_demux_out(struct uprobe *uprobe, struct upipe *inner,
         return UBASE_ERR_NONE;
     }
     return upipe_throw_proxy(upipe, inner, event, args);
+}
+
+/** @internal @This checks if source manager is set and asks for it if not.
+ *
+ * @param upipe description structure of the pipe
+ * @return an error code
+ */
+static int upipe_hls_void_check_source_mgr(struct upipe *upipe)
+{
+    struct upipe_hls_void *upipe_hls_void = upipe_hls_void_from_upipe(upipe);
+    if (unlikely(upipe_hls_void->source_mgr == NULL))
+        return upipe_throw_need_source_mgr(upipe, &upipe_hls_void->source_mgr);
+    return UBASE_ERR_NONE;
+}
+
+static int upipe_hls_void_reload(struct upipe *upipe)
+{
+    struct upipe_hls_void *upipe_hls_void = upipe_hls_void_from_upipe(upipe);
+
+    UBASE_RETURN(upipe_hls_void_check_source_mgr(upipe));
+
+    struct upipe *src = upipe_hls_void->src;
+    if (unlikely(!src)) {
+        upipe_warn(upipe, "no source pipe to reload");
+        return UBASE_ERR_INVALID;
+    }
+
+    struct upipe *output;
+    int ret = upipe_get_output(src, &output);
+    if (unlikely(!ubase_check(ret))) {
+        upipe_warn(upipe, "source pipe has no output pipe");
+        return ret;
+    }
+
+    upipe_dbg_va(upipe, "reloading %s", upipe_hls_void->uri);
+
+    struct upipe *inner = upipe_void_alloc(
+        upipe_hls_void->source_mgr,
+        uprobe_pfx_alloc(uprobe_use(&upipe_hls_void->probe_src),
+                         UPROBE_LOG_VERBOSE, "src"));
+    UBASE_ALLOC_RETURN(inner);
+
+    ret = upipe_set_output(inner, output);
+    if (unlikely(!ubase_check(ret))) {
+        upipe_release(inner);
+        return UBASE_ERR_INVALID;
+    }
+
+    ret = upipe_set_uri(inner, upipe_hls_void->uri);
+    if (unlikely(!ubase_check(ret))) {
+        upipe_release(inner);
+        return ret;
+    }
+
+    upipe_hls_void_store_src(upipe, inner);
+    return UBASE_ERR_NONE;
 }
 
 /** @internal @This catches event from the playlist inner pipe.
@@ -394,6 +459,17 @@ static int probe_playlist(struct uprobe *uprobe, struct upipe *inner,
         return UBASE_ERR_NONE;
     }
     }
+
+    if (event >= UPROBE_LOCAL) {
+        switch (ubase_get_signature(args)) {
+        case UPIPE_HLS_PLAYLIST_SIGNATURE:
+            switch (event) {
+            case UPROBE_HLS_PLAYLIST_NEED_RELOAD:
+                return upipe_hls_void_reload(upipe);
+            };
+        }
+    }
+
     return upipe_throw_proxy(upipe, inner, event, args);
 }
 
@@ -500,6 +576,7 @@ static struct upipe *upipe_hls_void_alloc(struct upipe_mgr *mgr,
     struct upipe_hls_void *upipe_hls_void = upipe_hls_void_from_upipe(upipe);
     upipe_hls_void->source_mgr = NULL;
     upipe_hls_void->attach_uclock = false;
+    upipe_hls_void->uri = NULL;
 
     upipe_throw_ready(upipe);
 
@@ -512,8 +589,10 @@ static struct upipe *upipe_hls_void_alloc(struct upipe_mgr *mgr,
  */
 static void upipe_hls_void_free(struct upipe *upipe)
 {
+    struct upipe_hls_void *upipe_hls_void = upipe_hls_void_from_upipe(upipe);
     upipe_throw_dead(upipe);
 
+    free(upipe_hls_void->uri);
     upipe_hls_void_clean_sub_pipes(upipe);
     upipe_hls_void_clean_probe_src(upipe);
     upipe_hls_void_clean_probe_reader(upipe);
@@ -541,19 +620,6 @@ static void upipe_hls_void_no_ref(struct upipe *upipe)
     upipe_hls_void_release_urefcount_real(upipe);
 }
 
-/** @internal @This checks if source manager is set and asks for it if not.
- *
- * @param upipe description structure of the pipe
- * @return an error code
- */
-static int upipe_hls_void_check_source_mgr(struct upipe *upipe)
-{
-    struct upipe_hls_void *upipe_hls_void = upipe_hls_void_from_upipe(upipe);
-    if (unlikely(upipe_hls_void->source_mgr == NULL))
-        return upipe_throw_need_source_mgr(upipe, &upipe_hls_void->source_mgr);
-    return UBASE_ERR_NONE;
-}
-
 /** @internal @This sets the uri.
  *
  * @param upipe description structure of the pipe
@@ -579,6 +645,7 @@ static int upipe_hls_void_set_uri(struct upipe *upipe, const char *uri)
         return ret;
     }
 
+    upipe_hls_void->uri = uri ? strdup(uri) : NULL;
     upipe_hls_void_store_src(upipe, inner);
     return UBASE_ERR_NONE;
 }
@@ -627,6 +694,20 @@ static int upipe_hls_void_control(struct upipe *upipe,
     }
     case UPIPE_SPLIT_ITERATE:
         return upipe_hls_void_control_pmt(upipe, command, args);
+    case UPIPE_BIN_GET_FIRST_INNER: {
+        struct upipe_hls_void *upipe_hls_void =
+            upipe_hls_void_from_upipe(upipe);
+        struct upipe **p = va_arg(args, struct upipe **);
+        *p = upipe_hls_void->src;
+        return (*p != NULL) ? UBASE_ERR_NONE : UBASE_ERR_UNHANDLED;
+    }
+    case UPIPE_BIN_GET_LAST_INNER: {
+        struct upipe_hls_void *upipe_hls_void =
+            upipe_hls_void_from_upipe(upipe);
+        struct upipe **p = va_arg(args, struct upipe **);
+        *p = upipe_hls_void->playlist;
+        return (*p != NULL) ? UBASE_ERR_NONE : UBASE_ERR_UNHANDLED;
+    }
     }
 
     if (command >= UPROBE_LOCAL) {

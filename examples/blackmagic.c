@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2012-2014 OpenHeadend S.A.R.L.
+ * Copyright (C) 2012-2017 OpenHeadend S.A.R.L.
  *
  * Authors: Benjamin Cohen
  *
@@ -63,7 +63,6 @@
 #include <stdint.h>
 #include <stdio.h>
 #include <unistd.h>
-#include <ev.h>
 
 #define UPROBE_LOG_LEVEL UPROBE_LOG_NOTICE
 #define QUEUE_LENGTH 50
@@ -144,8 +143,7 @@ int main(int argc, char **argv)
     sink_uri = argv[optind++];
 
     /* upipe env */
-    struct ev_loop *loop = ev_default_loop(0);
-    upump_mgr = upump_ev_mgr_alloc(loop, UPUMP_POOL, UPUMP_BLOCKER_POOL);
+    upump_mgr = upump_ev_mgr_alloc_default(UPUMP_POOL, UPUMP_BLOCKER_POOL);
     struct umem_mgr *umem_mgr = umem_alloc_mgr_alloc();
     struct udict_mgr *udict_mgr = udict_inline_mgr_alloc(UDICT_POOL_DEPTH,
                                                          umem_mgr, -1, -1);
@@ -285,7 +283,7 @@ int main(int argc, char **argv)
         upipe_release(devnull);
     }
 
-    ev_loop(loop, 0);
+    upump_mgr_run(upump_mgr, NULL);
 
     /* should clean everything here, but meh :-) */
 }

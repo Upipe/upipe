@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2012-2015 OpenHeadend S.A.R.L.
+ * Copyright (C) 2012-2017 OpenHeadend S.A.R.L.
  *
  * Authors: Benjamin Cohen
  *
@@ -49,7 +49,6 @@
 #include <string.h>
 #include <stdlib.h>
 #include <stdbool.h>
-#include <ev.h>
 #include <assert.h>
 
 #define UPUMP_POOL 1
@@ -68,14 +67,15 @@
 #define HEIGHT              576
 #define LIMIT               120
 
-struct ubuf_mgr *ubuf_mgr;
-struct uref_mgr *uref_mgr;
-struct upipe *glx_sink[SINK_NUM];
+static struct ubuf_mgr *ubuf_mgr;
+static struct uref_mgr *uref_mgr;
+static struct upipe *glx_sink[SINK_NUM];
+static struct upump *idlerpump;
 
-static void sigint_cb (struct ev_loop *loop, struct ev_signal *w, int revents)
+static void sigint_cb(struct upump *upump)
 {
     printf("sigint received, exiting.\n");
-    ev_unloop (loop, EVUNLOOP_ALL);
+    upump_stop(idlerpump);
 }
 
 static void keyhandler(struct upipe *upipe, unsigned long key)
@@ -176,9 +176,8 @@ int main(int argc, char **argv)
     ubase_assert(ubuf_pic_mem_mgr_add_plane(ubuf_mgr, "r8g8b8", 1, 1, 3));
 
     /* ev loop */
-    struct ev_loop *loop = ev_default_loop(0);
-    struct upump_mgr *upump_mgr = upump_ev_mgr_alloc(loop, UPUMP_POOL,
-                                                     UPUMP_BLOCKER_POOL);
+    struct upump_mgr *upump_mgr = upump_ev_mgr_alloc_default(UPUMP_POOL,
+            UPUMP_BLOCKER_POOL);
     assert(upump_mgr != NULL);
 
     struct uref *flow_def = uref_pic_flow_alloc_def(uref_mgr, 1);
@@ -198,24 +197,25 @@ int main(int argc, char **argv)
     uref_free(flow_def);
 
     /* idler */
-    struct upump *idlerpump = upump_alloc_idler(upump_mgr, idler_cb, NULL,
-                                                NULL);
+    idlerpump = upump_alloc_idler(upump_mgr, idler_cb, NULL, NULL);
     upump_start(idlerpump);
 
     /* sigint handler */
-    struct ev_signal signal_watcher;
-    ev_signal_init (&signal_watcher, sigint_cb, SIGINT);
-    ev_signal_start (loop, &signal_watcher);
-    ev_unref(loop);
+    struct upump *sigint_pump = upump_alloc_signal(upump_mgr, sigint_cb, NULL,
+                                                   NULL, SIGINT);
+    upump_set_status(sigint_pump, false);
+    upump_start(sigint_pump);
 
     // Fire
-    ev_loop(loop, 0);
+    upump_mgr_run(upump_mgr, NULL);
 
     // Clean - release
     for (i=0; i < SINK_NUM; i++) {
         upipe_release(glx_sink[i]);
     }
     upump_free(idlerpump);
+    upump_stop(sigint_pump);
+    upump_free(sigint_pump);
     upump_mgr_release(upump_mgr);
     upipe_mgr_release(glx_mgr); // noop
     ubuf_mgr_release(ubuf_mgr);

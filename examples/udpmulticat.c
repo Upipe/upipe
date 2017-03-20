@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2012-2014 OpenHeadend S.A.R.L.
+ * Copyright (C) 2012-2017 OpenHeadend S.A.R.L.
  *
  * Authors: Benjamin Cohen
  *
@@ -86,8 +86,6 @@
 #include <inttypes.h>
 #include <signal.h>
 
-#include <ev.h>
-
 #define UDICT_POOL_DEPTH 10
 #define UREF_POOL_DEPTH 10
 #define UBUF_POOL_DEPTH 10
@@ -97,9 +95,10 @@
 #define UPROBE_LOG_LEVEL UPROBE_LOG_WARNING
 
 static void usage(const char *argv0) {
-    fprintf(stdout, "Usage: %s [-d] [-r <rotate>] <udp source> <dest dir/prefix> [<suffix>]\n", argv0);
+    fprintf(stdout, "Usage: %s [-d] [-r <rotate>] [-O <rotate offset>] <udp source> <dest dir/prefix> [<suffix>]\n", argv0);
     fprintf(stdout, "   -d: force debug log level\n");
     fprintf(stdout, "   -r: rotate interval in 27MHz unit\n");
+    fprintf(stdout, "   -O: rotate offset in 27MHz unit\n");
     fprintf(stdout, "If no <suffix> specified, udpmulticat sends data to a udp socket\n");
     exit(EXIT_FAILURE);
 }
@@ -123,14 +122,18 @@ int main(int argc, char *argv[])
     const char *srcpath, *dirpath, *suffix = NULL;
     bool udp = false;
     uint64_t rotate = 0;
+    uint64_t rotate_offset = 0;
     int opt;
     enum uprobe_log_level loglevel = UPROBE_LOG_LEVEL;
 
     /* parse options */
-    while ((opt = getopt(argc, argv, "r:d")) != -1) {
+    while ((opt = getopt(argc, argv, "r:O:d")) != -1) {
         switch (opt) {
             case 'r':
                 rotate = strtoull(optarg, NULL, 0);
+                break;
+            case 'O':
+                rotate_offset = strtoull(optarg, NULL, 0);
                 break;
             case 'd':
                 loglevel = UPROBE_LOG_DEBUG;
@@ -151,14 +154,13 @@ int main(int argc, char *argv[])
     }
 
     /* setup environnement */
-    struct ev_loop *loop = ev_default_loop(0);
     struct umem_mgr *umem_mgr = umem_alloc_mgr_alloc();
     struct udict_mgr *udict_mgr = udict_inline_mgr_alloc(UDICT_POOL_DEPTH,
                                                          umem_mgr, -1, -1);
     struct uref_mgr *uref_mgr = uref_std_mgr_alloc(UREF_POOL_DEPTH, udict_mgr,
                                                    0);
-    struct upump_mgr *upump_mgr = upump_ev_mgr_alloc(loop, UPUMP_POOL,
-                                                     UPUMP_BLOCKER_POOL);
+    struct upump_mgr *upump_mgr = upump_ev_mgr_alloc_default(UPUMP_POOL,
+            UPUMP_BLOCKER_POOL);
     struct uclock *uclock = uclock_std_alloc(UCLOCK_FLAG_REALTIME);
     struct uprobe uprobe;
     uprobe_init(&uprobe, catch, NULL);
@@ -223,7 +225,7 @@ int main(int argc, char *argv[])
                                  loglevel, "datasink"));
         upipe_multicat_sink_set_fsink_mgr(datasink, upipe_fsink_mgr);
         if (rotate) {
-            upipe_multicat_sink_set_rotate(datasink, rotate);
+            upipe_multicat_sink_set_rotate(datasink, rotate, rotate_offset);
         }
         upipe_multicat_sink_set_path(datasink, dirpath, suffix);
         upipe_release(datasink);
@@ -242,7 +244,7 @@ int main(int argc, char *argv[])
                                  loglevel, "auxsink"));
         upipe_multicat_sink_set_fsink_mgr(auxsink, upipe_fsink_mgr);
         if (rotate) {
-            upipe_multicat_sink_set_rotate(auxsink, rotate);
+            upipe_multicat_sink_set_rotate(auxsink, rotate, rotate_offset);
         }
         upipe_multicat_sink_set_path(auxsink, dirpath, ".aux");
         upipe_release(genaux);
@@ -251,7 +253,7 @@ int main(int argc, char *argv[])
     }
 
     /* fire loop ! */
-    ev_loop(loop, 0);
+    upump_mgr_run(upump_mgr, NULL);
 
     /* should never be here for the moment. todo: sighandler.
      * release everything */
@@ -264,6 +266,5 @@ int main(int argc, char *argv[])
     umem_mgr_release(umem_mgr);
     uclock_release(uclock);
 
-    ev_default_destroy();
     return 0;
 }

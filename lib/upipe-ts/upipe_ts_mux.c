@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2013-2016 OpenHeadend S.A.R.L.
+ * Copyright (C) 2013-2017 OpenHeadend S.A.R.L.
  *
  * Authors: Christophe Massiot
  *
@@ -1479,6 +1479,13 @@ static int upipe_ts_mux_input_control(struct upipe *upipe,
             upipe_ts_mux_work(upipe_ts_mux_to_upipe(upipe_ts_mux), NULL);
             return UBASE_ERR_NONE;
         }
+        case UPIPE_BIN_GET_LAST_INNER: {
+            struct upipe_ts_mux_input *upipe_ts_mux_input =
+                upipe_ts_mux_input_from_upipe(upipe);
+            struct upipe **p = va_arg(args, struct upipe **);
+            *p = upipe_ts_mux_input->psig_flow;
+            return (*p != NULL) ? UBASE_ERR_NONE : UBASE_ERR_UNHANDLED;
+        }
 
         case UPIPE_TS_MUX_GET_MAX_DELAY:
         case UPIPE_TS_MUX_SET_MAX_DELAY: {
@@ -2532,7 +2539,7 @@ static void upipe_ts_mux_splice(struct upipe *upipe, struct ubuf **ubuf_p,
         if (psi_pid->dts_sys < original_cr_sys) {
             /* Too late: flush */
             upipe_ts_encaps_splice(psi_pid->encaps, original_cr_sys,
-                                   NULL, NULL);
+                                   original_cr_sys + mux->interval, NULL, NULL);
             /* No need to pop uchain as the probe does it for us. */
             continue;
         }
@@ -2541,6 +2548,7 @@ static void upipe_ts_mux_splice(struct upipe *upipe, struct ubuf **ubuf_p,
             break; /* Too soon */
 
         err = upipe_ts_encaps_splice(psi_pid->encaps, original_cr_sys,
+                                     original_cr_sys + mux->interval,
                                      ubuf_p, dts_sys_p);
         if (!ubase_check(err)) {
             upipe_warn(upipe, "internal error in splice");
@@ -2553,20 +2561,32 @@ static void upipe_ts_mux_splice(struct upipe *upipe, struct ubuf **ubuf_p,
     /* 2. Inputs */
     uint64_t cr_sys = UINT64_MAX;
     struct upipe_ts_mux_input *selected_input = NULL;
-    ulist_foreach (&mux->programs, uchain) {
+    struct uchain *uchain_tmp;
+    ulist_delete_foreach (&mux->programs, uchain, uchain_tmp) {
         struct upipe_ts_mux_program *program =
             upipe_ts_mux_program_from_uchain(uchain);
-        struct uchain *uchain_input;
-        ulist_foreach (&program->inputs, uchain_input) {
+        upipe_use(upipe_ts_mux_program_to_upipe(program));
+
+        struct uchain *uchain_input, *uchain_tmp2;
+        ulist_delete_foreach (&program->inputs, uchain_input, uchain_tmp2) {
             struct upipe_ts_mux_input *input =
                 upipe_ts_mux_input_from_uchain(uchain_input);
-            if (input->dts_sys < original_cr_sys) /* flush */
+            if (input->dts_sys < original_cr_sys) { /* flush */
                 upipe_ts_encaps_splice(input->encaps, original_cr_sys,
+                                       original_cr_sys + mux->interval,
                                        NULL, NULL);
+
+                if (input->deleted && !input->ready) {
+                    /* This triggers the immediate deletion of the input. */
+                    upipe_release(input->encaps);
+                    continue;
+                }
+            }
 
             if (input->dts_sys <= original_cr_sys + mux->interval ||
                 input->pcr_sys <= original_cr_sys) {
                 selected_input = input;
+                upipe_release(upipe_ts_mux_program_to_upipe(program));
                 goto upipe_ts_mux_splice_done;
             }
             if (input->cr_sys < cr_sys) {
@@ -2574,13 +2594,17 @@ static void upipe_ts_mux_splice(struct upipe *upipe, struct ubuf **ubuf_p,
                 cr_sys = input->cr_sys;
             }
         }
+
+        upipe_release(upipe_ts_mux_program_to_upipe(program));
     }
 
-    if (selected_input == NULL || selected_input->cr_sys > original_cr_sys)
+    if (selected_input == NULL ||
+        selected_input->cr_sys > original_cr_sys)
         return;
 
 upipe_ts_mux_splice_done:
     err = upipe_ts_encaps_splice(selected_input->encaps, original_cr_sys,
+                                 original_cr_sys + mux->interval,
                                  ubuf_p, dts_sys_p);
     if (!ubase_check(err)) {
         upipe_warn(upipe, "internal error in splice");
@@ -4411,6 +4435,7 @@ struct upipe_mgr *upipe_ts_mux_mgr_alloc(void)
     if (unlikely(ts_mux_mgr == NULL))
         return NULL;
 
+    memset(ts_mux_mgr, 0, sizeof(*ts_mux_mgr));
     ts_mux_mgr->ts_encaps_mgr = upipe_ts_encaps_mgr_alloc();
     ts_mux_mgr->ts_tstd_mgr = upipe_ts_tstd_mgr_alloc();
     ts_mux_mgr->ts_psi_join_mgr = upipe_ts_psi_join_mgr_alloc();

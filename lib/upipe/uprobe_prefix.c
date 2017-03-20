@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2013-2014 OpenHeadend S.A.R.L.
+ * Copyright (C) 2013-2017 OpenHeadend S.A.R.L.
  *
  * Authors: Christophe Massiot
  *
@@ -104,6 +104,20 @@ void uprobe_pfx_clean(struct uprobe_pfx *uprobe_pfx)
     struct uprobe *uprobe = uprobe_pfx_to_uprobe(uprobe_pfx);
     free(uprobe_pfx->name);
     uprobe_clean(uprobe);
+}
+
+/** @This returns the name of the pipe.
+ *
+ * @param uprobe pointer to probe
+ * @return name of the pipe (informative)
+ */
+const char *uprobe_pfx_get_name(struct uprobe *uprobe)
+{
+    if (uprobe->uprobe_throw != uprobe_pfx_throw)
+        return NULL;
+
+    struct uprobe_pfx *uprobe_pfx = uprobe_pfx_from_uprobe(uprobe);
+    return uprobe_pfx->name;
 }
 
 #define ARGS_DECL struct uprobe *next, enum uprobe_log_level min_level, const char *name

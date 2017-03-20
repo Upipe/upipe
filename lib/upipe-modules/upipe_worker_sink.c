@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2014-2016 OpenHeadend S.A.R.L.
+ * Copyright (C) 2014-2017 OpenHeadend S.A.R.L.
  *
  * Authors: Christophe Massiot
  *
@@ -57,7 +57,7 @@ struct upipe_wsink_mgr {
     struct upipe_mgr *qsrc_mgr;
     /** pointer to queue sink manager */
     struct upipe_mgr *qsink_mgr;
-    /** pointer to source xfer manager */
+    /** pointer to xfer manager */
     struct upipe_mgr *xfer_mgr;
 
     /** public upipe_mgr structure */
@@ -84,9 +84,16 @@ struct upipe_wsink {
 
     /** input queue sink (first inner pipe of the bin) */
     struct upipe *in_qsink;
+    /** first remote pipe */
+    struct upipe *first_remote_xfer;
+    /** last remote pipe */
+    struct upipe *last_remote_xfer;
 
     /** list of inner pipes that may require @ref upipe_attach_upump_mgr */
     struct uchain upump_mgr_pipes;
+
+    /** true if @ref upipe_bin_freeze has been called */
+    bool frozen;
 
     /** public upipe structure */
     struct upipe upipe;
@@ -178,20 +185,51 @@ static struct upipe *_upipe_wsink_alloc(struct upipe_mgr *mgr,
                 uprobe_remote);
     upipe_wsink->in_qsrc_probe.refcount =
         upipe_wsink_to_urefcount_real(upipe_wsink);
+    upipe_wsink->frozen = false;
     upipe_throw_ready(upipe);
 
-    /* remote */
-    upipe_use(remote);
-    struct upipe *remote_xfer = upipe_xfer_alloc(wsink_mgr->xfer_mgr,
+    /* last remote */
+    struct upipe *last_remote = upipe_use(remote);
+    struct upipe *tmp;
+
+    /* upipe_get_output is a control command and may trigger a need_upump_mgr
+     * event */
+    uprobe_throw(upipe->uprobe, NULL, UPROBE_FREEZE_UPUMP_MGR);
+    while (ubase_check(upipe_get_output(last_remote, &tmp)) && tmp != NULL) {
+        upipe_use(tmp);
+        upipe_release(last_remote);
+        last_remote = tmp;
+    }
+    uprobe_throw(upipe->uprobe, NULL, UPROBE_THAW_UPUMP_MGR);
+
+    struct upipe *last_remote_xfer = upipe_xfer_alloc(wsink_mgr->xfer_mgr,
             uprobe_pfx_alloc(uprobe_use(&upipe_wsink->proxy_probe),
-                             UPROBE_LOG_VERBOSE, "sink_xfer"), remote);
-    if (unlikely(remote_xfer == NULL)) {
+                             UPROBE_LOG_VERBOSE, "sink_last_xfer"), last_remote);
+    if (unlikely(last_remote_xfer == NULL)) {
         upipe_release(remote);
         upipe_release(upipe);
         return NULL;
     }
-    upipe_attach_upump_mgr(remote_xfer);
-    ulist_add(&upipe_wsink->upump_mgr_pipes, upipe_to_uchain(remote_xfer));
+    upipe_attach_upump_mgr(last_remote_xfer);
+    upipe_wsink->last_remote_xfer = upipe_use(last_remote_xfer);
+    ulist_add(&upipe_wsink->upump_mgr_pipes, upipe_to_uchain(last_remote_xfer));
+
+    /* remote */
+    if (last_remote != remote) {
+        upipe_use(remote);
+        struct upipe *remote_xfer = upipe_xfer_alloc(wsink_mgr->xfer_mgr,
+                uprobe_pfx_alloc(uprobe_use(&upipe_wsink->proxy_probe),
+                                 UPROBE_LOG_VERBOSE, "sink_xfer"), remote);
+        if (unlikely(remote_xfer == NULL)) {
+            upipe_release(remote);
+            upipe_release(upipe);
+            return NULL;
+        }
+        upipe_attach_upump_mgr(remote_xfer);
+        upipe_wsink->first_remote_xfer = upipe_use(remote_xfer);
+        ulist_add(&upipe_wsink->upump_mgr_pipes, upipe_to_uchain(remote_xfer));
+    } else
+        upipe_wsink->first_remote_xfer = upipe_use(upipe_wsink->last_remote_xfer);
 
     /* input queue */
     struct upipe *in_qsrc = upipe_qsrc_alloc(wsink_mgr->qsrc_mgr,
@@ -236,6 +274,68 @@ upipe_wsink_alloc_err:
     return NULL;
 }
 
+/** @internal @This freezes the inner pipes.
+ *
+ * @param upipe description structure of the pipe
+ * @return an error code
+ */
+static int upipe_wsink_freeze(struct upipe *upipe)
+{
+    struct upipe_wsink *upipe_wsink = upipe_wsink_from_upipe(upipe);
+    if (upipe_wsink->frozen)
+        return UBASE_ERR_NONE;
+
+    struct upipe_wsink_mgr *wsink_mgr = upipe_wsink_mgr_from_upipe_mgr(upipe->mgr);
+    UBASE_RETURN(upipe_xfer_mgr_freeze(wsink_mgr->xfer_mgr));
+    upipe_wsink->frozen = true;
+    return UBASE_ERR_NONE;
+}
+
+/** @internal @This thaws the inner pipes.
+ *
+ * @param upipe description structure of the pipe
+ * @return an error code
+ */
+static int upipe_wsink_thaw(struct upipe *upipe)
+{
+    struct upipe_wsink *upipe_wsink = upipe_wsink_from_upipe(upipe);
+    if (!upipe_wsink->frozen)
+        return UBASE_ERR_NONE;
+
+    struct upipe_wsink_mgr *wsink_mgr = upipe_wsink_mgr_from_upipe_mgr(upipe->mgr);
+    UBASE_RETURN(upipe_xfer_mgr_thaw(wsink_mgr->xfer_mgr));
+    upipe_wsink->frozen = false;
+    return UBASE_ERR_NONE;
+}
+
+/** @internal @This gets the first inner pipe of the bin.
+ *
+ * @param upipe description structure of the pipe
+ * @return an error code
+ */
+static int upipe_wsink_get_first_inner(struct upipe *upipe, struct upipe **p)
+{
+    struct upipe_wsink *upipe_wsink = upipe_wsink_from_upipe(upipe);
+    if (!upipe_wsink->frozen)
+        return UBASE_ERR_BUSY;
+
+    return upipe_xfer_get_remote(upipe_wsink->first_remote_xfer, p);
+}
+
+/** @internal @This gets the last inner pipe of the bin.
+ *
+ * @param upipe description structure of the pipe
+ * @return an error code
+ */
+static int upipe_wsink_get_last_inner(struct upipe *upipe, struct upipe **p)
+{
+    struct upipe_wsink *upipe_wsink = upipe_wsink_from_upipe(upipe);
+    if (!upipe_wsink->frozen)
+        return UBASE_ERR_BUSY;
+
+    return upipe_xfer_get_remote(upipe_wsink->last_remote_xfer, p);
+}
+
 /** @This processes control commands.
  *
  * @param upipe description structure of the pipe
@@ -245,13 +345,30 @@ upipe_wsink_alloc_err:
  */
 static int upipe_wsink_control(struct upipe *upipe, int command, va_list args)
 {
-    if (command == UPIPE_ATTACH_UPUMP_MGR) {
-        struct upipe_wsink *upipe_wsink = upipe_wsink_from_upipe(upipe);
-        struct uchain *uchain;
-        ulist_foreach (&upipe_wsink->upump_mgr_pipes, uchain) {
-            struct upipe *upump_mgr_pipe = upipe_from_uchain(uchain);
-            upipe_attach_upump_mgr(upump_mgr_pipe);
+    switch (command) {
+        case UPIPE_ATTACH_UPUMP_MGR: {
+            struct upipe_wsink *upipe_wsink = upipe_wsink_from_upipe(upipe);
+            struct uchain *uchain;
+            ulist_foreach (&upipe_wsink->upump_mgr_pipes, uchain) {
+                struct upipe *upump_mgr_pipe = upipe_from_uchain(uchain);
+                upipe_attach_upump_mgr(upump_mgr_pipe);
+            }
+            return UBASE_ERR_NONE;
         }
+        case UPIPE_BIN_FREEZE:
+            return upipe_wsink_freeze(upipe);
+        case UPIPE_BIN_THAW:
+            return upipe_wsink_thaw(upipe);
+        case UPIPE_BIN_GET_FIRST_INNER: {
+            struct upipe **p = va_arg(args, struct upipe **);
+            return upipe_wsink_get_first_inner(upipe, p);
+        }
+        case UPIPE_BIN_GET_LAST_INNER: {
+            struct upipe **p = va_arg(args, struct upipe **);
+            return upipe_wsink_get_last_inner(upipe, p);
+        }
+        default:
+            break;
     }
 
     return upipe_wsink_control_bin_input(upipe, command, args);
@@ -283,6 +400,8 @@ static void upipe_wsink_no_ref(struct upipe *upipe)
 {
     struct upipe_wsink *upipe_wsink = upipe_wsink_from_upipe(upipe);
     upipe_wsink_clean_bin_input(upipe);
+    upipe_release(upipe_wsink->first_remote_xfer);
+    upipe_release(upipe_wsink->last_remote_xfer);
 
     struct uchain *uchain, *uchain_tmp;
     ulist_delete_foreach (&upipe_wsink->upump_mgr_pipes, uchain, uchain_tmp) {
@@ -362,6 +481,7 @@ struct upipe_mgr *upipe_wsink_mgr_alloc(struct upipe_mgr *xfer_mgr)
     if (unlikely(wsink_mgr == NULL))
         return NULL;
 
+    memset(wsink_mgr, 0, sizeof(*wsink_mgr));
     wsink_mgr->qsrc_mgr = upipe_qsrc_mgr_alloc();
     wsink_mgr->qsink_mgr = upipe_qsink_mgr_alloc();
     wsink_mgr->xfer_mgr = upipe_mgr_use(xfer_mgr);

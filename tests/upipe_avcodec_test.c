@@ -70,7 +70,6 @@ UREF_ATTR_INT(xflow, num, "x.f.num", flow num)
 #include <stdlib.h>
 #include <stdbool.h>
 #include <assert.h>
-#include <ev.h>
 #include <pthread.h>
 
 #define UPUMP_POOL 0
@@ -237,9 +236,8 @@ static void *thread_start(void *_thread)
 
     fprintf(STREAM, "Thread %d launched.\n", thread->num);
 
-    struct ev_loop *loop = ev_loop_new(0);
-    struct upump_mgr *upump_mgr = upump_ev_mgr_alloc(loop, UPUMP_POOL,
-                                                     UPUMP_BLOCKER_POOL);
+    struct upump_mgr *upump_mgr = upump_ev_mgr_alloc_loop(UPUMP_POOL,
+            UPUMP_BLOCKER_POOL);
 
     struct uref *flow = uref_pic_flow_alloc_def(uref_mgr, 1);
     assert(flow != NULL);
@@ -259,13 +257,12 @@ static void *thread_start(void *_thread)
                                              NULL);
     upump_start(source);
 
-    ev_loop(loop, 0);
+    upump_mgr_run(upump_mgr, NULL);
 
     printf("Thread %d ended.\n", thread->num);
     assert(thread->iteration > thread->limit);
     upump_free(source);
     upump_mgr_release(upump_mgr);
-    ev_loop_destroy(loop);
 
     return NULL;
 }

@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2013-2016 OpenHeadend S.A.R.L.
+ * Copyright (C) 2013-2017 OpenHeadend S.A.R.L.
  *
  * Authors: Christophe Massiot
  *
@@ -43,6 +43,9 @@ extern "C" {
 
 #include <upipe/upipe.h>
 
+/** @hidden */
+struct umutex;
+
 #define UPIPE_XFER_SIGNATURE UBASE_FOURCC('x','f','e','r')
 
 /** @This extends upipe_command with specific commands for xfer. */
@@ -50,7 +53,7 @@ enum upipe_xfer_command {
     UPIPE_XFER_SENTINEL = UPIPE_CONTROL_LOCAL,
 
     /** returns the remote pipe (struct upipe **) */
-    UPIPE_XFER_GET_REMOTE,
+    UPIPE_XFER_GET_REMOTE
 };
 
 /** @This returns the remote pipe. Please note that this should only be
@@ -74,7 +77,11 @@ enum upipe_xfer_mgr_command {
     UPIPE_XFER_MGR_SENTINEL = UPIPE_MGR_CONTROL_LOCAL,
 
     /** attach to given upump manager (struct upump_mgr *) */
-    UPIPE_XFER_MGR_ATTACH
+    UPIPE_XFER_MGR_ATTACH,
+    /** freeze the remote event loop (void) */
+    UPIPE_XFER_MGR_FREEZE,
+    /** thaw the remote event loop (void) */
+    UPIPE_XFER_MGR_THAW
 };
 
 /** @This returns a management structure for xfer pipes. You would need one
@@ -84,10 +91,12 @@ enum upipe_xfer_mgr_command {
  *
  * @param queue_length maximum length of the internal queues
  * @param msg_pool_depth maximum number of messages in the pool
+ * @param mutex mutual exclusion primitives to access the event loop, or NULL
  * @return pointer to manager
  */
 struct upipe_mgr *upipe_xfer_mgr_alloc(uint8_t queue_length,
-                                       uint16_t msg_pool_depth);
+                                       uint16_t msg_pool_depth,
+                                       struct umutex *mutex);
 
 /** @This attaches a upipe_xfer_mgr to a given event loop. The xfer manager
  * will call upump_alloc_XXX and upump_start, so it must be done in a context
@@ -108,6 +117,32 @@ static inline int upipe_xfer_mgr_attach(struct upipe_mgr *mgr,
 {
     return upipe_mgr_control(mgr, UPIPE_XFER_MGR_ATTACH, UPIPE_XFER_SIGNATURE,
                              upump_mgr);
+}
+
+/** @This freezes the remote event loop. Use this function if you need to
+ * walk through the remote pipes, send control commands or allocate subpipes
+ * of remote pipes.
+ *
+ * This is only possible if the manager was allocated with a mutex, otherwise
+ * an error message is returned.
+ *
+ * @param mgr xfer_mgr structure
+ * @return an error code
+ */
+static inline int upipe_xfer_mgr_freeze(struct upipe_mgr *mgr)
+{
+    return upipe_mgr_control(mgr, UPIPE_XFER_MGR_FREEZE, UPIPE_XFER_SIGNATURE);
+}
+
+/** @This thaws the remote event loop previously frozen by @ref
+ * upipe_xfer_mgr_freeze.
+ *
+ * @param mgr xfer_mgr structure
+ * @return an error code
+ */
+static inline int upipe_xfer_mgr_thaw(struct upipe_mgr *mgr)
+{
+    return upipe_mgr_control(mgr, UPIPE_XFER_MGR_THAW, UPIPE_XFER_SIGNATURE);
 }
 
 /** @hidden */

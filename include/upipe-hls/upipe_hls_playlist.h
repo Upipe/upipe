@@ -139,6 +139,8 @@ static inline int upipe_hls_playlist_seek(struct upipe *upipe, uint64_t at,
 enum uprobe_hls_playlist_event {
     UPROBE_HLS_PLAYLIST_SENTINEL = UPROBE_LOCAL,
 
+    /** playlist need to be reloaded */
+    UPROBE_HLS_PLAYLIST_NEED_RELOAD,
     /** playlist was reloaded */
     UPROBE_HLS_PLAYLIST_RELOADED,
     /** the item has finished */
@@ -153,6 +155,7 @@ enum uprobe_hls_playlist_event {
 static inline const char *uprobe_hls_playlist_event_str(int event)
 {
     switch ((enum uprobe_hls_playlist_event)event) {
+    UBASE_CASE_TO_STR(UPROBE_HLS_PLAYLIST_NEED_RELOAD);
     UBASE_CASE_TO_STR(UPROBE_HLS_PLAYLIST_RELOADED);
     UBASE_CASE_TO_STR(UPROBE_HLS_PLAYLIST_ITEM_END);
     case UPROBE_HLS_PLAYLIST_SENTINEL: break;

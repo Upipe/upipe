@@ -288,7 +288,7 @@ write_buffer:
             .msg_name = upipe_udpsink->addrlen ? &upipe_udpsink->addr : NULL,
             .msg_namelen = upipe_udpsink->addrlen,
 
-            .msg_iov = iovecs,
+            .msg_iov = iovecs_s,
             .msg_iovlen = iovec_count,
 
             .msg_control = NULL,

@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2014 OpenHeadend S.A.R.L.
+ * Copyright (C) 2014-2017 OpenHeadend S.A.R.L.
  *
  * Authors: Christophe Massiot
  *
@@ -81,9 +81,8 @@ static struct upipe_mgr uprobe_test_mgr = {
 
 static void *thread(void *unused)
 {
-    struct ev_loop *loop = ev_loop_new(0);
     struct upump_mgr *upump_mgr =
-        upump_ev_mgr_alloc(loop, UPUMP_POOL, UPUMP_BLOCKER_POOL);
+        upump_ev_mgr_alloc_loop(UPUMP_POOL, UPUMP_BLOCKER_POOL);
     assert(upump_mgr != NULL);
 
     struct upipe *upipe;
@@ -108,7 +107,6 @@ static void *thread(void *unused)
     uprobe_test_free(upipe);
 
     upump_mgr_release(upump_mgr);
-    ev_loop_destroy(loop);
     return NULL;
 }
 

@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2014 OpenHeadend S.A.R.L.
+ * Copyright (C) 2014-2017 OpenHeadend S.A.R.L.
  *
  * Authors: Sebastien Gougelet
  *
@@ -64,7 +64,6 @@
 #include <stdbool.h>
 #include <assert.h>
 #include <pthread.h>
-#include <ev.h>
 #include <stdio.h>
 #include <string.h>
 #include <stdlib.h>
@@ -181,8 +180,7 @@ int main(int argc, char **argv)
     assert(udict_mgr != NULL);                                     
     struct uref_mgr *uref_mgr = uref_std_mgr_alloc(UREF_POOL_DEPTH, udict_mgr, 0); 
     assert(uref_mgr != NULL);
-    struct ev_loop *loop = ev_default_loop(0);
-    main_upump_mgr = upump_ev_mgr_alloc(loop, UPUMP_POOL, UPUMP_BLOCKER_POOL);
+    main_upump_mgr = upump_ev_mgr_alloc_default(UPUMP_POOL, UPUMP_BLOCKER_POOL);
     assert(main_upump_mgr != NULL);
 
     struct ubuf_mgr *pic_mgr = ubuf_pic_mem_mgr_alloc(UBUF_POOL_DEPTH,
@@ -219,7 +217,7 @@ int main(int argc, char **argv)
     assert(html_test);
     ubase_assert(upipe_set_output(html, html_test));
 
-    ev_loop(loop, 0);
+    upump_mgr_run(main_upump_mgr, NULL);
 
     test_free(html_test);
     upump_mgr_release(main_upump_mgr);

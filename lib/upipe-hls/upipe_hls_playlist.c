@@ -38,6 +38,8 @@
 #include <upipe/upipe_helper_urefcount_real.h>
 #include <upipe/upipe_helper_urefcount.h>
 #include <upipe/upipe_helper_upipe.h>
+#include <upipe/upipe_helper_upump_mgr.h>
+#include <upipe/upipe_helper_upump.h>
 #include <upipe/upipe.h>
 
 #include <upipe/uprobe_prefix.h>
@@ -53,6 +55,8 @@
 #include <upipe/uref_block.h>
 #include <upipe/uref_uri.h>
 
+#include <upipe/uclock.h>
+
 #include <stdlib.h>
 #include <limits.h>
 #include <libgen.h>
@@ -60,14 +64,21 @@
 /** @showvalue */
 #define EXPECTED_FLOW_DEF "block.m3u.playlist."
 
-static inline int upipe_hls_playlist_throw_reloaded(struct upipe *upipe)
+static int upipe_hls_playlist_throw_need_reload(struct upipe *upipe)
+{
+    upipe_dbg(upipe, "throw need reload");
+    return upipe_throw(upipe, UPROBE_HLS_PLAYLIST_NEED_RELOAD,
+                       UPIPE_HLS_PLAYLIST_SIGNATURE);
+}
+
+static int upipe_hls_playlist_throw_reloaded(struct upipe *upipe)
 {
     upipe_dbg(upipe, "throw reloaded");
     return upipe_throw(upipe, UPROBE_HLS_PLAYLIST_RELOADED,
                        UPIPE_HLS_PLAYLIST_SIGNATURE);
 }
 
-static inline int upipe_hls_playlist_throw_item_end(struct upipe *upipe)
+static int upipe_hls_playlist_throw_item_end(struct upipe *upipe)
 {
     upipe_dbg(upipe, "throw item end");
     return upipe_throw(upipe, UPROBE_HLS_PLAYLIST_ITEM_END,
@@ -111,6 +122,11 @@ struct upipe_hls_playlist {
     /** key probe */
     struct uprobe probe_key;
 
+    /** upump manager */
+    struct upump_mgr *upump_mgr;
+    /** timer */
+    struct upump *upump;
+
     /** current index in the playlist */
     uint64_t index;
     /** reloading */
@@ -126,6 +142,8 @@ struct upipe_hls_playlist {
     } key;
     /** attach uclock was called */
     bool attach_uclock;
+    /** is currently playing */
+    bool playing;
 };
 
 static int probe_key_src(struct uprobe *uprobe, struct upipe *inner,
@@ -149,6 +167,8 @@ UPIPE_HELPER_UPROBE(upipe_hls_playlist, urefcount_real, probe_key, probe_key);
 UPIPE_HELPER_UPROBE(upipe_hls_playlist, urefcount_real, probe_src, probe_src);
 UPIPE_HELPER_UPROBE(upipe_hls_playlist, urefcount_real, probe_setflowdef, NULL);
 UPIPE_HELPER_BIN_OUTPUT(upipe_hls_playlist, setflowdef, output, requests);
+UPIPE_HELPER_UPUMP_MGR(upipe_hls_playlist, upump_mgr);
+UPIPE_HELPER_UPUMP(upipe_hls_playlist, upump, upump_mgr);
 
 /** @internal @This catches the inner key source pipe event.
  *
@@ -194,6 +214,7 @@ static int probe_key(struct uprobe *uprobe, struct upipe *inner,
     case UPROBE_PROBE_UREF: {
         UBASE_SIGNATURE_CHECK(args, UPIPE_PROBE_UREF_SIGNATURE);
         struct uref *uref = va_arg(args, struct uref *);
+        struct upump **upump_p = va_arg(args, struct upump **);
         bool *drop = va_arg(args, bool *);
         *drop = true;
 
@@ -236,10 +257,9 @@ static int probe_src(struct uprobe *uprobe, struct upipe *inner,
     struct upipe *upipe = upipe_hls_playlist_to_upipe(upipe_hls_playlist);
 
     switch (event) {
-    case UPROBE_NEED_OUTPUT:
-        return upipe_set_output(inner, upipe_hls_playlist->setflowdef);
-
     case UPROBE_SOURCE_END:
+        upipe_notice(upipe, "stopped");
+        upipe_hls_playlist->playing = false;
         return upipe_hls_playlist_throw_item_end(upipe);
     }
     return upipe_throw_proxy(upipe, inner, event, args);
@@ -272,6 +292,8 @@ static struct upipe *upipe_hls_playlist_alloc(struct upipe_mgr *mgr,
     upipe_hls_playlist_init_src(upipe);
     upipe_hls_playlist_init_upipe_key(upipe);
     upipe_hls_playlist_init_bin_output(upipe);
+    upipe_hls_playlist_init_upump_mgr(upipe);
+    upipe_hls_playlist_init_upump(upipe);
 
     struct upipe_hls_playlist *upipe_hls_playlist =
         upipe_hls_playlist_from_upipe(upipe);
@@ -286,6 +308,7 @@ static struct upipe *upipe_hls_playlist_alloc(struct upipe_mgr *mgr,
     upipe_hls_playlist->key.uri = NULL;
     upipe_hls_playlist->key.method = NULL;
     upipe_hls_playlist->attach_uclock = false;
+    upipe_hls_playlist->playing = false;
 
     upipe_throw_ready(upipe);
 
@@ -342,6 +365,8 @@ static void upipe_hls_playlist_free(struct upipe *upipe)
     free(upipe_hls_playlist->key.method);
     uref_free(upipe_hls_playlist->flow_def);
     uref_free(upipe_hls_playlist->input_flow_def);
+    upipe_hls_playlist_clean_upump(upipe);
+    upipe_hls_playlist_clean_upump_mgr(upipe);
     upipe_hls_playlist_clean_bin_output(upipe);
     upipe_hls_playlist_flush(upipe);
     upipe_hls_playlist_clean_probe_src(upipe);
@@ -589,6 +614,8 @@ static int upipe_hls_playlist_play_uri(struct upipe *upipe,
             UPROBE_LOG_VERBOSE, "src"));
     UBASE_ALLOC_RETURN(inner);
     UBASE_RETURN(upipe_hls_playlist_set_src(upipe, inner));
+    UBASE_RETURN(upipe_set_output(inner, upipe_hls_playlist->setflowdef));
+
     UBASE_RETURN(upipe_set_uri(inner, uri));
 
     uint64_t range_off = 0;
@@ -596,6 +623,8 @@ static int upipe_hls_playlist_play_uri(struct upipe *upipe,
     uint64_t range_len = (uint64_t)-1;
     uref_m3u_playlist_get_byte_range_len(item, &range_len);
     UBASE_RETURN(upipe_src_set_range(inner, range_off, range_len));
+    upipe_notice(upipe, "playing");
+    upipe_hls_playlist->playing = true;
     return UBASE_ERR_NONE;
 }
 
@@ -605,7 +634,8 @@ static int upipe_hls_playlist_play_uri(struct upipe *upipe,
  * @param item item to play
  * @return an error code
  */
-static int upipe_hls_playlist_play_item(struct upipe *upipe, struct uref *item)
+static int upipe_hls_playlist_play_item(struct upipe *upipe,
+                                        struct uref *item)
 {
     struct upipe_hls_playlist *upipe_hls_playlist =
         upipe_hls_playlist_from_upipe(upipe);
@@ -694,17 +724,27 @@ static int _upipe_hls_playlist_play(struct upipe *upipe)
         upipe_hls_playlist_from_upipe(upipe);
     struct uref *input_flow_def = upipe_hls_playlist->input_flow_def;
 
+    if (upipe_hls_playlist->playing) {
+        upipe_notice(upipe, "playlist is already playing");
+        return UBASE_ERR_NONE;
+    }
+
     if (unlikely(input_flow_def == NULL))
         return UBASE_ERR_INVALID;
 
     uint64_t media_sequence = 0;
-    uref_m3u_playlist_flow_get_media_sequence(input_flow_def, &media_sequence);
+    uref_m3u_playlist_flow_get_media_sequence(
+        input_flow_def, &media_sequence);
 
     if (upipe_hls_playlist->index == (uint64_t)-1)
         upipe_hls_playlist->index = media_sequence;
-
-    if (media_sequence > upipe_hls_playlist->index)
-        return UBASE_ERR_INVALID;
+    else if (media_sequence > upipe_hls_playlist->index) {
+        upipe_warn_va(upipe, "media sequence %"PRIu64" is gone, "
+                      "playing sequence %"PRIu64,
+                      upipe_hls_playlist->index,
+                      media_sequence);
+        upipe_hls_playlist->index = media_sequence;
+    }
 
     struct uref *item = NULL;
     UBASE_RETURN(upipe_hls_playlist_get_item_at(
@@ -739,8 +779,10 @@ static int _upipe_hls_playlist_next(struct upipe *upipe)
         upipe_hls_playlist_from_upipe(upipe);
     struct uref *input_flow_def = upipe_hls_playlist->input_flow_def;
 
-    if (unlikely(input_flow_def == NULL))
+    if (unlikely(input_flow_def == NULL)) {
+        upipe_warn(upipe, "no input flow def");
         return UBASE_ERR_INVALID;
+    }
 
     uint64_t media_sequence;
     if (!ubase_check(uref_m3u_playlist_flow_get_media_sequence(
@@ -749,11 +791,15 @@ static int _upipe_hls_playlist_next(struct upipe *upipe)
 
     if (upipe_hls_playlist->index == (uint64_t)-1)
         upipe_hls_playlist->index = media_sequence;
-
-    if (media_sequence > upipe_hls_playlist->index)
-        return UBASE_ERR_INVALID;
-
-    upipe_hls_playlist->index++;
+    else if (media_sequence > upipe_hls_playlist->index + 1) {
+        upipe_warn_va(upipe, "media sequence %"PRIu64" is gone, "
+                      "playing sequence %"PRIu64,
+                      upipe_hls_playlist->index + 1,
+                      media_sequence);
+        upipe_hls_playlist->index = media_sequence;
+    }
+    else
+        upipe_hls_playlist->index++;
     upipe_dbg_va(upipe, "next item %"PRIu64, upipe_hls_playlist->index);
     return UBASE_ERR_NONE;
 }
@@ -800,6 +846,12 @@ static void upipe_hls_playlist_store_input_flow_def(struct upipe *upipe,
     upipe_hls_playlist->input_flow_def = flow_def;
 }
 
+static void upipe_hls_playlist_need_reload_cb(struct upump *upump)
+{
+        struct upipe *upipe = upump_get_opaque(upump, struct upipe *);
+        upipe_hls_playlist_throw_need_reload(upipe);
+}
+
 /** @internal @This sets a new flow definition.
  *
  * @param upipe description structure of the pipe
@@ -830,6 +882,42 @@ static int upipe_hls_playlist_set_flow_def(struct upipe *upipe,
     if (unlikely(flow_def_dup == NULL)) {
         upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
         return UBASE_ERR_ALLOC;
+    }
+
+    const char *type;
+    if (!ubase_check(uref_m3u_playlist_flow_get_type(flow_def_dup, &type)) ||
+        (strcasecmp(type, "VOD") && strcasecmp(type, "EVENT")) ||
+        !ubase_check(uref_m3u_playlist_flow_get_endlist(flow_def_dup))) {
+        upipe_notice(upipe, "playlist need to be reloaded");
+
+        uint64_t old_media_sequence, media_sequence;
+        if (!upipe_hls_playlist->input_flow_def ||
+            !ubase_check(uref_m3u_playlist_flow_get_media_sequence(
+                    upipe_hls_playlist->input_flow_def, &old_media_sequence)))
+            old_media_sequence = 0;
+
+        if (!ubase_check(uref_m3u_playlist_flow_get_media_sequence(
+                    input_flow_def, &media_sequence)))
+            media_sequence = 0;
+
+        uint64_t target_duration;
+        if (ubase_check(uref_m3u_playlist_flow_get_target_duration(
+                    flow_def_dup, &target_duration))) {
+            if (old_media_sequence == media_sequence) {
+                upipe_dbg(upipe, "playlist media sequence has not changed");
+                target_duration /= 2;
+            }
+
+            upipe_dbg_va(upipe, "wait %"PRIu64"s before reloading",
+                         target_duration / UCLOCK_FREQ);
+            upipe_hls_playlist_wait_upump(
+                upipe, target_duration,
+                upipe_hls_playlist_need_reload_cb);
+        }
+        else {
+            upipe_warn(upipe, "no target duration in the playlist");
+            upipe_hls_playlist_set_upump(upipe, NULL);
+        }
     }
     upipe_hls_playlist_store_input_flow_def(upipe, flow_def_dup);
     return UBASE_ERR_NONE;
@@ -952,9 +1040,9 @@ static int upipe_hls_playlist_attach_uclock(struct upipe *upipe)
  * @param command type of command to process
  * @param args optional arguments
  */
-static int upipe_hls_playlist_control(struct upipe *upipe,
-                                      int command,
-                                      va_list args)
+static int upipe_hls_playlist_control_internal(struct upipe *upipe,
+					       int command,
+					       va_list args)
 {
     switch (command) {
     case UPIPE_REGISTER_REQUEST: {
@@ -975,6 +1063,16 @@ static int upipe_hls_playlist_control(struct upipe *upipe,
     case UPIPE_SET_OUTPUT_SIZE: {
         unsigned int output_size = va_arg(args, unsigned int);
         return upipe_hls_playlist_set_output_size(upipe, output_size);
+    }
+
+    case UPIPE_ATTACH_UPUMP_MGR:
+        return upipe_hls_playlist_attach_upump_mgr(upipe);
+    case UPIPE_BIN_GET_FIRST_INNER: {
+        struct upipe_hls_playlist *upipe_hls_playlist =
+            upipe_hls_playlist_from_upipe(upipe);
+        struct upipe **p = va_arg(args, struct upipe **);
+        *p = upipe_hls_playlist->src;
+        return (*p != NULL) ? UBASE_ERR_NONE : UBASE_ERR_UNHANDLED;
     }
 
     case UPIPE_HLS_PLAYLIST_GET_INDEX: {
@@ -1008,6 +1106,21 @@ static int upipe_hls_playlist_control(struct upipe *upipe,
     default:
         return upipe_hls_playlist_control_bin_output(upipe, command, args);
     }
+}
+
+static int upipe_hls_playlist_check(struct upipe *upipe,
+				    struct uref *flow_def)
+{
+	upipe_hls_playlist_check_upump_mgr(upipe);
+	return UBASE_ERR_NONE;
+}
+
+static int upipe_hls_playlist_control(struct upipe *upipe,
+                                      int command,
+                                      va_list args)
+{
+	UBASE_RETURN(upipe_hls_playlist_control_internal(upipe, command, args));
+	return upipe_hls_playlist_check(upipe, NULL);
 }
 
 /** @internal m3u playlist manager static descriptor */

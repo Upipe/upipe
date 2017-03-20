@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2012 OpenHeadend S.A.R.L.
+ * Copyright (C) 2012-2017 OpenHeadend S.A.R.L.
  *
  * Authors: Benjamin Cohen
  *
@@ -45,7 +45,7 @@ extern "C" {
 enum uprobe_probe_uref_event {
     UPROBE_PROBE_SENTINEL = UPROBE_LOCAL,
 
-    /** received uref event (struct uref *uref, bool *drop) */
+    /** received uref event (struct uref *, struct upump **, bool *drop) */
     UPROBE_PROBE_UREF
 };
 
