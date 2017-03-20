@@ -335,7 +335,7 @@ static bool upipe_mpgaf_parse_mpeg(struct upipe *upipe)
                     MPGA_HEADER_SIZE, header)))
         return true; /* not enough data */
 
-    if (likely(mpga_sync_compare(header, upipe_mpgaf->sync_header))) {
+    if (likely(mpga_sync_compare_formats(header, upipe_mpgaf->sync_header))) {
         /* identical sync */
         upipe_mpgaf->next_frame_size = mpga_get_padding(header) ?
                                        upipe_mpgaf->frame_size_padding :
@@ -889,6 +889,7 @@ static int upipe_mpgaf_set_flow_def(struct upipe *upipe, struct uref *flow_def)
     const char *def;
     if (unlikely(!ubase_check(uref_flow_get_def(flow_def, &def)) ||
                  (ubase_ncmp(def, "block.mp2.") &&
+                  ubase_ncmp(def, "block.mp3.") &&
                   ubase_ncmp(def, "block.aac.") &&
                   strcmp(def, "block."))))
         return UBASE_ERR_INVALID;

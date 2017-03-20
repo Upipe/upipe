@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2012-2015 OpenHeadend S.A.R.L.
+ * Copyright (C) 2012-2017 OpenHeadend S.A.R.L.
  *
  * Authors: Benjamin Cohen
  *
@@ -275,9 +275,8 @@ static void *test_thread(void *_thread)
     struct upipe *avcdec = thread->avcdec;
 
     printf("Thread %d launched.\n", thread->num);
-    struct ev_loop *loop = ev_loop_new(0);
-    struct upump_mgr *upump_mgr = upump_ev_mgr_alloc(loop, UPUMP_POOL,
-                                                     UPUMP_BLOCKER_POOL);
+    struct upump_mgr *upump_mgr = upump_ev_mgr_alloc_loop(UPUMP_POOL,
+                                                          UPUMP_BLOCKER_POOL);
     assert (upump_mgr != NULL);
 
     uprobe_upump_mgr_set(avcdec->uprobe, upump_mgr);
@@ -290,12 +289,11 @@ static void *test_thread(void *_thread)
     upump_start(thread->fetchav_pump);
 
     // Fire !
-    ev_loop(loop, 0);
+    upump_mgr_run(upump_mgr, NULL);
 
     printf("Thread %d ended.\n", thread->num);
     upump_free(thread->fetchav_pump);
     upump_mgr_release(upump_mgr);
-    ev_loop_destroy(loop);
     return NULL;
 }
 
@@ -368,9 +366,8 @@ int main (int argc, char **argv)
     assert(logger != NULL);
 
     /* ev / pumps */
-    struct ev_loop *loop = ev_default_loop(0);
-    struct upump_mgr *upump_mgr = upump_ev_mgr_alloc(loop, UPUMP_POOL,
-                                                     UPUMP_BLOCKER_POOL);
+    struct upump_mgr *upump_mgr = upump_ev_mgr_alloc_default(UPUMP_POOL,
+            UPUMP_BLOCKER_POOL);
     assert(upump_mgr != NULL);
     struct thread mainthread;
     struct upump *write_pump = upump_alloc_idler(upump_mgr, fetch_av_packets, &mainthread, NULL);
@@ -522,7 +519,7 @@ int main (int argc, char **argv)
     }
 
     // Now read with avformat
-    ev_loop(loop, 0);
+    upump_mgr_run(upump_mgr, NULL);
 
     // Close avformat
     avformat_close_input(&mainthread.avfctx);
@@ -543,6 +540,5 @@ int main (int argc, char **argv)
     uprobe_clean(&uprobe);
     upipe_av_clean();
 
-    ev_default_destroy();
     return 0;
 }

@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2014 OpenHeadend S.A.R.L.
+ * Copyright (C) 2014-2017 OpenHeadend S.A.R.L.
  *
  * Authors: Benjamin Cohen
  *
@@ -60,8 +60,6 @@
 #include <stdlib.h>
 #include <stdbool.h>
 #include <assert.h>
-
-#include <ev.h>
 
 #define UPUMP_POOL          1
 #define UPUMP_BLOCKER_POOL  1
@@ -196,9 +194,8 @@ int main(int argc, char **argv)
 {
     printf("Compiled %s %s (%s)\n", __DATE__, __TIME__, __FILE__);
 
-    struct ev_loop *loop = ev_default_loop(0);
-    struct upump_mgr *upump_mgr = upump_ev_mgr_alloc(loop,
-                                    UPUMP_POOL, UPUMP_BLOCKER_POOL);
+    struct upump_mgr *upump_mgr = upump_ev_mgr_alloc_default(UPUMP_POOL,
+            UPUMP_BLOCKER_POOL);
     assert(upump_mgr != NULL);
 
     /* upipe env */
@@ -261,7 +258,7 @@ int main(int argc, char **argv)
     ubase_assert(upipe_set_output(blksrc, blksrc_test));
 
     /* launch test */
-    ev_loop(loop, 0);
+    upump_mgr_run(upump_mgr, NULL);
 
     /* release pipes */
     test_free(blksrc_test);
@@ -289,7 +286,7 @@ int main(int argc, char **argv)
     ubase_assert(upipe_set_output(blksrc, blksrc_test));
 
     /* launch test */
-    ev_loop(loop, 0);
+    upump_mgr_run(upump_mgr, NULL);
 
     /* release pipes */
     test_free(blksrc_test);
@@ -304,6 +301,5 @@ int main(int argc, char **argv)
     upump_mgr_release(upump_mgr);
     uclock_release(uclock);
 
-    ev_default_destroy();
     return 0;
 }

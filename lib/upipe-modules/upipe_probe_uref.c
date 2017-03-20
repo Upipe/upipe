@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2012-2014 OpenHeadend S.A.R.L.
+ * Copyright (C) 2012-2017 OpenHeadend S.A.R.L.
  *
  * Authors: Benjamin Cohen
  *
@@ -84,7 +84,8 @@ static void upipe_probe_uref_input(struct upipe *upipe, struct uref *uref,
                                    struct upump **upump_p)
 {
     bool drop = false;
-    upipe_throw(upipe, UPROBE_PROBE_UREF, UPIPE_PROBE_UREF_SIGNATURE, uref, &drop);
+    upipe_throw(upipe, UPROBE_PROBE_UREF, UPIPE_PROBE_UREF_SIGNATURE, uref,
+                upump_p, &drop);
     if (drop) {
         uref_free(uref);
     } else {

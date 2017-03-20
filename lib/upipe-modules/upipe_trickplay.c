@@ -71,6 +71,8 @@ struct upipe_trickp {
     uint64_t ts_origin;
     /** offset of systimes */
     uint64_t systime_offset;
+    /** true if we are in preroll */
+    bool preroll;
 
     /** current rate */
     struct urational rate;
@@ -369,6 +371,7 @@ static struct upipe *upipe_trickp_alloc(struct upipe_mgr *mgr,
     struct upipe_trickp *upipe_trickp = upipe_trickp_from_upipe(upipe);
     upipe_trickp->systime_offset = 0;
     upipe_trickp->ts_origin = 0;
+    upipe_trickp->preroll = true;
     upipe_trickp->rate.num = upipe_trickp->rate.den = 1;
     upipe_throw_ready(upipe);
     upipe_trickp_require_uclock(upipe);
@@ -396,8 +399,13 @@ static int upipe_trickp_check_start(struct upipe *upipe, struct uref *uref)
         for ( ; ; ) {
             struct uchain *uchain2;
             uchain2 = ulist_peek(&upipe_trickp_sub->urefs);
-            if (uchain2 == NULL)
-                return UBASE_ERR_NONE; /* not ready */
+            if (uchain2 == NULL) {
+                if (!upipe_trickp->preroll)
+                    break;
+                else
+                    return UBASE_ERR_NONE; /* not ready */
+            }
+
             struct uref *uref = uref_from_uchain(uchain2);
             uint64_t ts;
             int type;
@@ -419,6 +427,7 @@ static int upipe_trickp_check_start(struct upipe *upipe, struct uref *uref)
         return UBASE_ERR_NONE;
     upipe_trickp->ts_origin = earliest_ts;
     upipe_trickp->systime_offset = uclock_now(upipe_trickp->uclock);
+    upipe_trickp->preroll = false;
     upipe_verbose_va(upipe, "setting origin=%"PRIu64" now=%"PRIu64,
                      upipe_trickp->ts_origin, upipe_trickp->systime_offset);
 
@@ -528,6 +537,12 @@ static int upipe_trickp_control(struct upipe *upipe, int command, va_list args)
         case UPIPE_ITERATE_SUB: {
             struct upipe **p = va_arg(args, struct upipe **);
             return upipe_trickp_iterate_sub(upipe, p);
+        }
+        case UPIPE_END_PREROLL: {
+            struct upipe_trickp *upipe_trickp = upipe_trickp_from_upipe(upipe);
+            upipe_trickp->preroll = false;
+            upipe_trickp_check_start(upipe, NULL);
+            return UBASE_ERR_NONE;
         }
 
         case UPIPE_TRICKP_GET_RATE: {

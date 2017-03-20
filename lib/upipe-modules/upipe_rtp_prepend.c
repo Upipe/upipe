@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2013-2014 OpenHeadend S.A.R.L.
+ * Copyright (C) 2013-2016 OpenHeadend S.A.R.L.
  *
  * Authors: Benjamin Cohen
  *
@@ -96,8 +96,10 @@ struct upipe_rtp_prepend {
     bool clockrate_overwrite;
     /** rtp type */
     uint8_t type;
-    /** rtp type is overwrite by user */
+    /** rtp type is overwritten by user */
     bool type_overwrite;
+    /** rtp type is MPA */
+    bool mpa;
 
     /** public upipe structure */
     struct upipe upipe;
@@ -167,10 +169,7 @@ static void upipe_rtp_prepend_input(struct upipe *upipe, struct uref *uref,
     ubuf_block_unmap(header, 0);
     upipe_rtp_prepend->seqnum++;
 
-    const char *def;
-    ubase_assert(uref_flow_get_def(upipe_rtp_prepend->flow_def, &def));
-    if (!ubase_ncmp(def, "block.rtp.mp2.sound.") ||
-            !ubase_ncmp(def, "block.rtp.mp3.sound.")) {
+    if (upipe_rtp_prepend->mpa) {
         /* alloc mpa header */
         struct ubuf *mpa_header = ubuf_block_alloc(uref->ubuf->mgr, 4);
         if (unlikely(!mpa_header)) {
@@ -393,6 +392,11 @@ static int upipe_rtp_prepend_set_flow_def(struct upipe *upipe,
     UBASE_RETURN(upipe_rtp_prepend_infer_clockrate(upipe, flow_def))
     upipe_rtp_prepend_notice(upipe);
 
+    struct upipe_rtp_prepend *upipe_rtp_prepend =
+        upipe_rtp_prepend_from_upipe(upipe);
+    upipe_rtp_prepend->mpa = !ubase_ncmp(def, "block.mp2.sound.") ||
+                             !ubase_ncmp(def, "block.mp3.sound.");
+
     struct uref *flow_def_dup;
     if ((flow_def_dup = uref_dup(flow_def)) == NULL)
         return UBASE_ERR_ALLOC;
@@ -600,6 +604,7 @@ static struct upipe *upipe_rtp_prepend_alloc(struct upipe_mgr *mgr,
     upipe_rtp_prepend->type_overwrite = false;
     upipe_rtp_prepend->type = RTP_TYPE_INVALID;
     upipe_rtp_prepend->seqnum = 0; /* FIXME random init ?*/
+    upipe_rtp_prepend->mpa = false;
 
     upipe_throw_ready(upipe);
     return upipe;

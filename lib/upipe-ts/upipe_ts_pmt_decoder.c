@@ -68,6 +68,8 @@
 /** max retention time for teletext (ETSI EN 300 472 5.) - be more lenient */
 //#define MAX_DELAY_TELX (UCLOCK_FREQ / 25)
 #define MAX_DELAY_TELX MAX_DELAY
+/** max retention time for DVB subtitles - unbound */
+#define MAX_DELAY_DVBSUB MAX_DELAY_STILL
 /** max retention time for SCTE-35 tables */
 #define MAX_DELAY_SCTE35 UINT64_MAX
 
@@ -427,7 +429,7 @@ static void upipe_ts_pmtd_parse_descs(struct upipe *upipe,
                     UBASE_FATAL(upipe, uref_flow_set_raw_def(flow_def,
                                 "block.mpegts.mpegtspes.dvb_subtitle.pic.sub."))
                     UBASE_FATAL(upipe, uref_ts_flow_set_max_delay(flow_def,
-                                    MAX_DELAY))
+                                    MAX_DELAY_DVBSUB))
 
                     uint8_t j = 0;
                     uint8_t *language;

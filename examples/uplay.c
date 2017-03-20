@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2014-2016 OpenHeadend S.A.R.L.
+ * Copyright (C) 2014-2017 OpenHeadend S.A.R.L.
  *
  * Authors: Christophe Massiot
  *
@@ -54,9 +54,11 @@
 #include <upipe/uclock.h>
 #include <upipe/uclock_std.h>
 #include <upipe/upipe.h>
+#include <upipe/upipe_dump.h>
 #include <upipe/upump.h>
 #include <upipe-pthread/upipe_pthread_transfer.h>
 #include <upipe-pthread/uprobe_pthread_upump_mgr.h>
+#include <upipe-pthread/umutex_pthread.h>
 #include <upump-ev/upump_ev.h>
 #include <upipe-modules/upipe_blit.h>
 #include <upipe-modules/upipe_probe_uref.h>
@@ -81,6 +83,7 @@
 #include <upipe-filters/upipe_filter_format.h>
 #include <upipe-av/upipe_av.h>
 #include <upipe-av/upipe_av_pixfmt.h>
+#include <upipe-av/upipe_av_samplefmt.h>
 #include <upipe-av/upipe_avformat_source.h>
 #include <upipe-av/upipe_avcodec_decode.h>
 #include <upipe-swscale/upipe_sws.h>
@@ -90,7 +93,6 @@
 #include <upipe-alsa/upipe_alsa_sink.h>
 #endif
 
-#include <ev.h>
 #include <pthread.h>
 
 #define UPROBE_LOG_LEVEL UPROBE_LOG_DEBUG
@@ -155,6 +157,11 @@ static struct upipe *upipe_src = NULL;
 static struct upipe *upipe_blit = NULL;
 /* schedule pipe */
 static struct upipe *upipe_schedule = NULL;
+/* picture resizing */
+static unsigned w = 0;
+static unsigned h = 0;
+/* upipe dump file */
+static const char *dump = NULL;
 
 static void uplay_stop(struct upump *upump);
 
@@ -281,10 +288,10 @@ static int catch_uref(struct uprobe *uprobe, struct upipe *upipe,
 {
     if (event == UPROBE_PROBE_UREF) {
         UBASE_SIGNATURE_CHECK(args, UPIPE_PROBE_UREF_SIGNATURE);
-        /* ignore arguments */
         va_arg(args, struct uref *);
+        struct upump **upump_p = va_arg(args, struct upump **);
         va_arg(args, bool *);
-        upipe_blit_prepare(upipe_blit);
+        upipe_blit_prepare(upipe_blit, upump_p);
         return UBASE_ERR_NONE;
     }
 
@@ -356,6 +363,13 @@ static int catch_video(struct uprobe *uprobe, struct upipe *upipe,
 
     struct uref *uref = uref_sibling_alloc(flow_def);
     uref_flow_set_def(uref, "pic.");
+    /* request rgb16 as swscale conversion is faster than rgb24 */
+    uref_pic_flow_add_plane(uref, 1, 1, 2, "r5g6b5");
+
+    if (w && h) {
+        uref_pic_flow_set_hsize(uref, w);
+        uref_pic_flow_set_vsize(uref, h);
+    }
 
     struct upipe *ffmt = upipe_flow_alloc_output(upipe_blit, ffmt_mgr,
             uprobe_pfx_alloc(uprobe_use(uprobe_main),
@@ -403,12 +417,18 @@ static int catch_audio(struct uprobe *uprobe, struct upipe *upipe,
         return UBASE_ERR_UNHANDLED;
 
     uprobe_throw(uprobe_main, NULL, UPROBE_FREEZE_UPUMP_MGR);
-    struct upipe_mgr *upipe_avcdec_mgr = upipe_avcdec_mgr_alloc();
-    struct upipe *avcdec = upipe_void_alloc(upipe_avcdec_mgr,
+    struct upipe_mgr *fdec_mgr = upipe_fdec_mgr_alloc();
+    struct upipe_mgr *avcdec_mgr = upipe_avcdec_mgr_alloc();
+    upipe_fdec_mgr_set_avcdec_mgr(fdec_mgr, avcdec_mgr);
+    upipe_mgr_release(avcdec_mgr);
+    struct upipe *avcdec = upipe_void_alloc(fdec_mgr,
             uprobe_pfx_alloc(uprobe_use(uprobe_main),
                              UPROBE_LOG_VERBOSE, "avcdec audio"));
     assert(avcdec != NULL);
-    upipe_mgr_release(upipe_avcdec_mgr);
+    upipe_mgr_release(fdec_mgr);
+    char sample_fmt_str[5];
+    snprintf(sample_fmt_str, sizeof(sample_fmt_str), "%d", (int)AV_SAMPLE_FMT_S16);
+    upipe_set_option(avcdec, "request_sample_fmt", sample_fmt_str);
 
     uprobe_throw(uprobe_main, NULL, UPROBE_THAW_UPUMP_MGR);
 
@@ -598,9 +618,9 @@ static void uplay_start(struct upump *upump)
                             uprobe_selflow_alloc(uprobe_use(uprobe_dejitter),
                                 uprobe_use(&uprobe_video_s),
                                 UPROBE_SELFLOW_PIC, select_video),
-                                uprobe_use(&uprobe_sub_s),
-                                UPROBE_SELFLOW_SUBPIC, select_sub),
-                            uprobe_use(&uprobe_audio_s),
+                            uprobe_use(&uprobe_sub_s),
+                            UPROBE_SELFLOW_SUBPIC, select_sub),
+                        uprobe_use(&uprobe_audio_s),
                         UPROBE_SELFLOW_SOUND, select_audio),
                     UPROBE_SELFLOW_VOID, select_program),
                 UPROBE_LOG_VERBOSE, "ts demux"));
@@ -615,6 +635,9 @@ static void uplay_stop(struct upump *upump)
     upump_free(upump);
 
     uprobe_notice(uprobe_main, NULL, "running stop idler");
+    if (dump != NULL && upipe_src != NULL)
+        upipe_dump_open(NULL, NULL, dump, upipe_src, NULL);
+
     if (force_quit && upipe_src != NULL) {
         struct upipe_mgr *upipe_null_mgr = upipe_null_mgr_alloc();
         struct upipe *null = upipe_void_alloc(upipe_null_mgr,
@@ -644,30 +667,8 @@ static void uplay_stop(struct upump *upump)
     main_upump_mgr = NULL;
 }
 
-static struct upump_mgr *upump_mgr_alloc(void *unused)
-{
-    struct ev_loop *loop = ev_loop_new(0);
-    struct upump_mgr *upump_mgr = upump_ev_mgr_alloc(loop, UPUMP_POOL,
-                                                     UPUMP_BLOCKER_POOL);
-    assert(upump_mgr != NULL);
-    upump_mgr_set_opaque(upump_mgr, loop);
-    return upump_mgr;
-}
-
-static void upump_mgr_work(struct upump_mgr *upump_mgr)
-{
-    struct ev_loop *loop = upump_mgr_get_opaque(upump_mgr, struct ev_loop *);
-    ev_loop(loop, 0);
-}
-
-static void upump_mgr_free(struct upump_mgr *upump_mgr)
-{
-    struct ev_loop *loop = upump_mgr_get_opaque(upump_mgr, struct ev_loop *);
-    ev_loop_destroy(loop);
-}
-
 static void usage(const char *argv0) {
-    fprintf(stderr, "Usage: %s [-d] [-q] [-u] [-A <audio>] [-S <subtitle>] [-V <video>] [-P <program>] [-R 1:1] <source>\n", argv0);
+    fprintf(stderr, "Usage: %s [-D <dot file>] [-d] [-q] [-u] [-s 1920x1080] [-A <audio>] [-S <subtitle>] [-V <video>] [-P <program>] [-R 1:1] <source>\n", argv0);
     exit(EXIT_FAILURE);
 }
 
@@ -675,7 +676,7 @@ int main(int argc, char **argv)
 {
     enum uprobe_log_level loglevel = UPROBE_LOG_LEVEL;
     int opt;
-    while ((opt = getopt(argc, argv, "udqA:V:S:P:R:")) != -1) {
+    while ((opt = getopt(argc, argv, "udqA:V:S:P:R:s:D:")) != -1) {
         switch (opt) {
             case 'u':
                 udp = true;
@@ -706,6 +707,15 @@ int main(int argc, char **argv)
                 trickp_rate.den = strtoul(end, NULL, 10);
                 break;
             }
+            case 's':
+                if (sscanf(optarg, "%ux%u", &w, &h) != 2) {
+                    fprintf(stderr, "Incorrect size \"%s\"\n", optarg);
+                    w = h = 0;
+                }
+                break;
+            case 'D':
+                dump = optarg;
+                break;
             default:
                 usage(argv[0]);
                 break;
@@ -717,8 +727,7 @@ int main(int argc, char **argv)
     const char *uri = argv[optind++];
 
     /* structures managers */
-    struct ev_loop *loop = ev_default_loop(0);
-    main_upump_mgr = upump_ev_mgr_alloc(loop, UPUMP_POOL, UPUMP_BLOCKER_POOL);
+    main_upump_mgr = upump_ev_mgr_alloc_default(UPUMP_POOL, UPUMP_BLOCKER_POOL);
     assert(main_upump_mgr != NULL);
     struct umem_mgr *umem_mgr = umem_pool_mgr_alloc_simple(UMEM_POOL);
     struct udict_mgr *udict_mgr = udict_inline_mgr_alloc(UDICT_POOL_DEPTH,
@@ -763,26 +772,36 @@ int main(int argc, char **argv)
     }
 
     /* worker threads */
+    struct umutex *mutex = NULL;
+    if (dump)
+        mutex = umutex_pthread_alloc(0);
     struct upipe_mgr *src_xfer_mgr = upipe_pthread_xfer_mgr_alloc(XFER_QUEUE,
-            XFER_POOL, uprobe_use(uprobe_main), upump_mgr_alloc,
-            upump_mgr_work, upump_mgr_free, NULL, NULL, NULL);
+            XFER_POOL, uprobe_use(uprobe_main), upump_ev_mgr_alloc_loop,
+            UPUMP_POOL, UPUMP_BLOCKER_POOL, mutex, NULL, NULL);
     assert(src_xfer_mgr != NULL);
+    umutex_release(mutex);
     upipe_wsrc_mgr = upipe_wsrc_mgr_alloc(src_xfer_mgr);
     assert(upipe_wsrc_mgr != NULL);
     upipe_mgr_release(src_xfer_mgr);
 
+    if (dump)
+        mutex = umutex_pthread_alloc(0);
     struct upipe_mgr *dec_xfer_mgr = upipe_pthread_xfer_mgr_alloc(XFER_QUEUE,
-            XFER_POOL, uprobe_use(uprobe_main), upump_mgr_alloc,
-            upump_mgr_work, upump_mgr_free, NULL, NULL, NULL);
+            XFER_POOL, uprobe_use(uprobe_main), upump_ev_mgr_alloc_loop,
+            UPUMP_POOL, UPUMP_BLOCKER_POOL, mutex, NULL, NULL);
     assert(dec_xfer_mgr != NULL);
+    umutex_release(mutex);
     upipe_wlin_mgr = upipe_wlin_mgr_alloc(dec_xfer_mgr);
     assert(upipe_wlin_mgr != NULL);
     upipe_mgr_release(dec_xfer_mgr);
 
+    if (dump)
+        mutex = umutex_pthread_alloc(0);
     struct upipe_mgr *sink_xfer_mgr = upipe_pthread_xfer_mgr_alloc(XFER_QUEUE,
-            XFER_POOL, uprobe_use(uprobe_main), upump_mgr_alloc,
-            upump_mgr_work, upump_mgr_free, NULL, NULL, NULL);
+            XFER_POOL, uprobe_use(uprobe_main), upump_ev_mgr_alloc_loop,
+            UPUMP_POOL, UPUMP_BLOCKER_POOL, mutex, NULL, NULL);
     assert(sink_xfer_mgr != NULL);
+    umutex_release(mutex);
     upipe_wsink_mgr = upipe_wsink_mgr_alloc(sink_xfer_mgr);
     assert(upipe_wsink_mgr != NULL);
     upipe_mgr_release(sink_xfer_mgr);
@@ -793,7 +812,7 @@ int main(int argc, char **argv)
     upump_start(idler_start);
 
     /* main loop */
-    ev_loop(loop, 0);
+    upump_mgr_run(main_upump_mgr, NULL);
 
     uprobe_clean(&uprobe_src_s);
     uprobe_clean(&uprobe_video_s);
@@ -804,7 +823,6 @@ int main(int argc, char **argv)
 
     upipe_av_clean();
 
-    ev_default_destroy();
     return 0;
 }
 

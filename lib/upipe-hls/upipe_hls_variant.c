@@ -199,26 +199,45 @@ static struct upipe *upipe_hls_variant_sub_alloc(struct upipe_mgr *mgr,
         upipe_warn_va(upipe, "unhandle flow def %s", def);
     }
 
-    if (likely(upipe_mgr != NULL)) {
-        last_inner = upipe_void_alloc(
-            upipe_mgr,
-            uprobe_pfx_alloc(
-                uprobe_use(&upipe_hls_variant_sub->probe_last_inner),
-                UPROBE_LOG_VERBOSE, name));
-        upipe_mgr_release(upipe_mgr);
+    if (upipe_mgr == NULL) {
+        upipe_release(upipe);
+        return NULL;
+    }
+
+    last_inner = upipe_void_alloc(
+        upipe_mgr,
+        uprobe_pfx_alloc(
+            uprobe_use(&upipe_hls_variant_sub->probe_last_inner),
+            UPROBE_LOG_VERBOSE, name));
+    upipe_mgr_release(upipe_mgr);
+    if (last_inner == NULL) {
+        upipe_err(upipe, "fail to allocate sub pipe");
+        upipe_release(upipe);
+        return NULL;
     }
 
     struct upipe_hls_variant *upipe_hls_variant =
         upipe_hls_variant_from_sub_mgr(mgr);
 
     const char *item_uri = NULL;
-    uref_hls_get_uri(flow_def, &item_uri);
     char *uri = NULL;
+    uref_hls_get_uri(flow_def, &item_uri);
+
     if (unlikely(!ubase_check(upipe_hls_variant_make_uri(
-                    upipe_hls_variant->flow_def, item_uri, &uri))))
+                    upipe_hls_variant->flow_def, item_uri, &uri))) || !uri) {
         upipe_warn_va(upipe, "fail to make uri with %s", item_uri);
-    if (uri == NULL || unlikely(!ubase_check(upipe_set_uri(last_inner, uri))))
+        upipe_release(last_inner);
+        upipe_release(upipe);
+        return NULL;
+    }
+
+    if (unlikely(!ubase_check(upipe_set_uri(last_inner, uri)))) {
         upipe_warn_va(upipe, "fail to set uri %s", uri);
+        free(uri);
+        upipe_release(last_inner);
+        upipe_release(upipe);
+        return NULL;
+    }
     free(uri);
 
     upipe_hls_variant_sub_store_bin_output(upipe, last_inner);
@@ -270,6 +289,13 @@ static int upipe_hls_variant_sub_control(struct upipe *upipe,
     case UPIPE_SUB_GET_SUPER: {
         struct upipe **super_p = va_arg(args, struct upipe **);
         return upipe_hls_variant_sub_get_super(upipe, super_p);
+    }
+    case UPIPE_BIN_GET_FIRST_INNER: {
+        struct upipe_hls_variant_sub *upipe_hls_variant_sub =
+            upipe_hls_variant_sub_from_upipe(upipe);
+        struct upipe **p = va_arg(args, struct upipe **);
+        *p = upipe_hls_variant_sub->last_inner;
+        return (*p != NULL) ? UBASE_ERR_NONE : UBASE_ERR_UNHANDLED;
     }
     }
     return upipe_hls_variant_sub_control_bin_output(upipe, command, args);

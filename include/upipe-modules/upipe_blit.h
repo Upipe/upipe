@@ -51,7 +51,7 @@ struct upipe_mgr *upipe_blit_mgr_alloc(void);
 enum upipe_blit_command {
     UPIPE_BLIT_SENTINEL = UPIPE_CONTROL_LOCAL,
 
-    /** prepares the next picture to output (void) */
+    /** prepares the next picture to output (struct upump **) */
     UPIPE_BLIT_PREPARE
 };
 
@@ -85,11 +85,14 @@ enum upipe_blit_sub_command {
 /** @This prepares the next picture to output.
  *
  * @param upipe description structure of the pipe
+ * @param upump_p reference to pump that generated the buffer
  * @return an error code
  */
-static inline int upipe_blit_prepare(struct upipe *upipe)
+static inline int upipe_blit_prepare(struct upipe *upipe,
+                                     struct upump **upump_p)
 {
-    return upipe_control_nodbg(upipe, UPIPE_BLIT_PREPARE, UPIPE_BLIT_SIGNATURE);
+    return upipe_control_nodbg(upipe, UPIPE_BLIT_PREPARE, UPIPE_BLIT_SIGNATURE,
+                               upump_p);
 }
 
 /** @This gets the offsets (from the respective borders of the frame) of the

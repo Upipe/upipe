@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2012-2015 OpenHeadend S.A.R.L.
+ * Copyright (C) 2012-2017 OpenHeadend S.A.R.L.
  *
  * Authors: Christophe Massiot
  *
@@ -92,6 +92,8 @@ enum udict_type {
     UDICT_TYPE_CLOCK_RATE,
     /** f.latency */
     UDICT_TYPE_CLOCK_LATENCY,
+    /** f.wrap */
+    UDICT_TYPE_CLOCK_WRAP,
 
     /** b.end */
     UDICT_TYPE_BLOCK_END,

@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2014-2016 OpenHeadend S.A.R.L.
+ * Copyright (C) 2014-2017 OpenHeadend S.A.R.L.
  *
  * Authors: Christophe Massiot
  *
@@ -36,21 +36,14 @@ extern "C" {
 #endif
 
 #include <upipe/upipe.h>
+#include <upipe/uprobe.h>
+#include <upipe/upump.h>
 
+#include <stdint.h>
 #include <pthread.h>
 
-/** @This represents the application call-back that is supposed to create the
- * event loop in the new thread. */
-typedef struct upump_mgr *
-    (*upipe_pthread_upump_mgr_alloc)(void *);
-
-/** @This represents the application call-back that is supposed to run the
- * event loop in the new thread. */
-typedef void (*upipe_pthread_upump_mgr_work)(struct upump_mgr *);
-
-/** @This represents the application call-back that is supposed to free the
- * event loop in the new thread. */
-typedef void (*upipe_pthread_upump_mgr_free)(struct upump_mgr *);
+/** @hidden */
+struct umutex;
 
 /** @This returns a management structure for transfer pipes, using a new
  * pthread. You would need one management structure per target thread.
@@ -59,19 +52,19 @@ typedef void (*upipe_pthread_upump_mgr_free)(struct upump_mgr *);
  * @param msg_pool_depth maximum number of messages in the pool
  * @param uprobe_pthread_upump_mgr pointer to optional probe, that will be set
  * with the created upump_mgr
- * @param upump_mgr_alloc callback creating the event loop in the new thread
- * @param upump_mgr_work callback running the event loop in the new thread
- * @param upump_mgr_free callback freeing the event loop in the new thread
- * @param upump_mgr_opaque opaque for upump_mgr_alloc
+ * @param upump_mgr_alloc alloc function provided by the upump manager
+ * @param upump_pool_depth maximum number of upump structures in the pool
+ * @param upump_blocker_pool_depth maximum number of upump_blocker structures in
+ * the pool
+ * @param mutex mutual exclusion pimitives to access the event loop, or NULL
  * @param pthread_id_p reference to created thread ID (may be NULL)
  * @param attr pthread attributes
  * @return pointer to xfer manager
  */
 struct upipe_mgr *upipe_pthread_xfer_mgr_alloc(uint8_t queue_length,
         uint16_t msg_pool_depth, struct uprobe *uprobe_pthread_upump_mgr,
-        upipe_pthread_upump_mgr_alloc upump_mgr_alloc,
-        upipe_pthread_upump_mgr_work upump_mgr_work,
-        upipe_pthread_upump_mgr_free upump_mgr_free, void *opaque,
+        upump_mgr_alloc upump_mgr_alloc, uint16_t upump_pool_depth,
+        uint16_t upump_blocker_pool_depth, struct umutex *mutex,
         pthread_t *pthread_id_p, const pthread_attr_t *restrict attr);
 
 #ifdef __cplusplus

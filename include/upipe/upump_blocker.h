@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2013-2015 OpenHeadend S.A.R.L.
+ * Copyright (C) 2013-2017 OpenHeadend S.A.R.L.
  *
  * Authors: Christophe Massiot
  *
@@ -57,27 +57,7 @@ struct upump_blocker {
     struct urefcount *refcount;
 };
 
-/** @This returns the high-level upump_blocker structure.
- *
- * @param uchain pointer to the uchain structure wrapped into the upump_blocker
- * @return pointer to the upump_blocker structure
- */
-static inline struct upump_blocker *
-    upump_blocker_from_uchain(struct uchain *uchain)
-{
-    return container_of(uchain, struct upump_blocker, uchain);
-}
-
-/** @This returns the uchain structure used for FIFO, LIFO and lists.
- *
- * @param upump_blocker upump_blocker structure
- * @return pointer to the uchain structure
- */
-static inline struct uchain *
-    upump_blocker_to_uchain(struct upump_blocker *upump_blocker)
-{
-    return &upump_blocker->uchain;
-}
+UBASE_FROM_TO(upump_blocker, uchain, uchain, uchain)
 
 /** @This allocates and initializes a blocker.
  *
@@ -91,9 +71,10 @@ static inline struct uchain *
 static inline struct upump_blocker *upump_blocker_alloc(struct upump *upump,
         upump_blocker_cb cb, void *opaque, struct urefcount *refcount)
 {
-    struct upump_blocker *upump_blocker =
-        upump->mgr->upump_blocker_alloc(upump);
-    if (unlikely(upump_blocker == NULL))
+    struct upump_blocker *upump_blocker = NULL;
+    if (unlikely(!ubase_check(upump_control(upump, UPUMP_ALLOC_BLOCKER,
+                                            &upump_blocker)) ||
+                 upump_blocker == NULL))
         return NULL;
 
     uchain_init(&upump_blocker->uchain);
@@ -110,7 +91,7 @@ static inline struct upump_blocker *upump_blocker_alloc(struct upump *upump,
  */
 static inline void upump_blocker_free(struct upump_blocker *blocker)
 {
-    blocker->upump->mgr->upump_blocker_free(blocker);
+    upump_control(blocker->upump, UPUMP_FREE_BLOCKER, blocker);
 }
 
 /** @This gets the opaque structure with a cast.

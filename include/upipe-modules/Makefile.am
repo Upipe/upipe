@@ -7,6 +7,7 @@ myinclude_HEADERS = \
 	upipe_file_sink.h \
 	upipe_file_source.h \
 	upipe_genaux.h \
+	upipe_multicat_source.h \
 	upipe_multicat_sink.h \
 	upipe_multicat_probe.h \
 	upipe_probe_uref.h \
@@ -39,6 +40,7 @@ myinclude_HEADERS = \
 	upipe_rtp_decaps.h \
 	upipe_rtp_prepend.h \
 	upipe_rtp_source.h \
+	upipe_rtp_demux.h \
 	upipe_rtp_h264.h \
 	upipe_rtp_mpeg4.h \
 	upipe_rtp_opus.h \
@@ -59,6 +61,7 @@ myinclude_HEADERS = \
 	upipe_aes_decrypt.h \
 	uref_aes_flow.h \
 	upipe_rate_limit.h \
+	upipe_time_limit.h \
 	upipe_burst.h \
 	upipe_sequential_source.h \
 	upipe_segment_source.h \

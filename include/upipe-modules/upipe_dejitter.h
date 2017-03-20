@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2016 OpenHeadend S.A.R.L.
+ * Copyright (C) 2016-2017 OpenHeadend S.A.R.L.
  *
  * Authors: Christophe Massiot
  *
@@ -26,12 +26,8 @@
 /** @file
  * @short Upipe module calling dejtter on timestamps
  *
- * This module is used in conjunction with upipe_nodemux. It is supposed
- * to be inserted in the pipeline after the DTS/PTS prog have been calculated,
- * for instance after the framer (upipe_nodemux on the contrary should be
- * before the framer). It considers each frame as a clock reference, and
- * throws events to fix the sys timestamps, normally caught by
- * @ref uprobe_dejitter.
+ * The input of the super-pipe is supposed to be the clock ref. Its output
+ * and the outputs of the subpipes are then dejittered with the clock ts probe.
  */
 
 #ifndef _UPIPE_MODULES_UPIPE_DEJITTER_H_
@@ -44,6 +40,7 @@ extern "C" {
 #include <upipe/upipe.h>
 
 #define UPIPE_DEJITTER_SIGNATURE UBASE_FOURCC('d','j','t','r')
+#define UPIPE_DEJITTER_SUB_SIGNATURE UBASE_FOURCC('d','j','t','s')
 
 /** @This returns the management structure for all dejitter pipes.
  *

@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2012-2015 OpenHeadend S.A.R.L.
+ * Copyright (C) 2012-2016 OpenHeadend S.A.R.L.
  *
  * Authors: Benjamin Cohen
  *
@@ -81,6 +81,8 @@ struct upipe_multicat_sink {
 
     /** rotate interval */
     uint64_t rotate;
+    /** rotate offset */
+    uint64_t rotate_offset;
 
     /** file opening mode */
     enum upipe_fsink_mode mode;
@@ -138,7 +140,8 @@ static void upipe_multicat_sink_input(struct upipe *upipe, struct uref *uref,
         uref_free(uref);
         return;
     }
-    newidx = (systime/upipe_multicat_sink->rotate);
+    newidx = (systime - upipe_multicat_sink->rotate_offset) /
+             upipe_multicat_sink->rotate;
     if (upipe_multicat_sink->fileidx != newidx) {
         if (unlikely(! _upipe_multicat_sink_change_file(upipe, newidx))) {
             upipe_warn(upipe, "couldnt change file path");
@@ -244,10 +247,11 @@ static int _upipe_multicat_sink_set_path(struct upipe *upipe, const char *path, 
  *
  * @param upipe description structure of the pipe
  * @param rotate new rotate interval
+ * @param rotate_offset new rotate offset
  * @return an error code
  */
 static int  _upipe_multicat_sink_set_rotate(struct upipe *upipe,
-        uint64_t rotate)
+        uint64_t rotate, uint64_t rotate_offset)
 {
     struct upipe_multicat_sink *upipe_multicat_sink = upipe_multicat_sink_from_upipe(upipe);
     if (unlikely(rotate < 2)) {
@@ -255,14 +259,16 @@ static int  _upipe_multicat_sink_set_rotate(struct upipe *upipe,
         return UBASE_ERR_INVALID;
     }
     upipe_multicat_sink->rotate = rotate;
-    upipe_notice_va(upipe, "setting rotate: %"PRIu64, rotate);
+    upipe_multicat_sink->rotate_offset = rotate_offset;
+    upipe_notice_va(upipe, "setting rotate: %"PRIu64"+%"PRIu64,
+                    rotate, rotate_offset);
     return UBASE_ERR_NONE;
 }
 
 /** @internal @This returns the current fsink manager
  *
  * @param upipe description structure of the pipe
- * @param rotate_p filled in with the current rotate interval
+ * @param fsink_mgr filled in with the current fsink manager
  * @return an error code
  */
 static int _upipe_multicat_sink_get_fsink_mgr(struct upipe *upipe,
@@ -278,22 +284,24 @@ static int _upipe_multicat_sink_get_fsink_mgr(struct upipe *upipe,
  *
  * @param upipe description structure of the pipe
  * @param rotate_p filled in with the current rotate interval
+ * @param rotate_offset_p filled in with the current rotate offset
  * @return an error code
  */
 static int _upipe_multicat_sink_get_rotate(struct upipe *upipe,
-        uint64_t *rotate_p)
+        uint64_t *rotate_p, uint64_t *rotate_offset_p)
 {
     struct upipe_multicat_sink *upipe_multicat_sink = upipe_multicat_sink_from_upipe(upipe);
     assert(rotate_p != NULL);
     *rotate_p = upipe_multicat_sink->rotate;
+    *rotate_offset_p = upipe_multicat_sink->rotate_offset;
     return UBASE_ERR_NONE;
 }
 
 /** @internal @This returns the current dirpath/suffix
  *
  * @param upipe description structure of the pipe
- * @param path_p filled in with the current rotate interval
- * @param suffix_p filled in with the current rotate interval
+ * @param path_p filled in with the current dirpath
+ * @param suffix_p filled in with the current suffix
  * @return an error code
  */
 static int _upipe_multicat_sink_get_path(struct upipe *upipe,
@@ -345,15 +353,20 @@ static int upipe_multicat_sink_control(struct upipe *upipe,
         }
         case UPIPE_MULTICAT_SINK_SET_ROTATE: {
             UBASE_SIGNATURE_CHECK(args, UPIPE_MULTICAT_SINK_SIGNATURE)
-            return _upipe_multicat_sink_set_rotate(upipe, va_arg(args, uint64_t));
+            uint64_t rotate = va_arg(args, uint64_t);
+            uint64_t rotate_offset = va_arg(args, uint64_t);
+            return _upipe_multicat_sink_set_rotate(upipe, rotate, rotate_offset);
         }
         case UPIPE_MULTICAT_SINK_GET_ROTATE: {
             UBASE_SIGNATURE_CHECK(args, UPIPE_MULTICAT_SINK_SIGNATURE)
-            return _upipe_multicat_sink_get_rotate(upipe, va_arg(args, uint64_t*));
+            uint64_t *rotate_p = va_arg(args, uint64_t *);
+            uint64_t *rotate_offset_p = va_arg(args, uint64_t *);
+            return _upipe_multicat_sink_get_rotate(upipe, rotate_p, rotate_offset_p);
         }
         case UPIPE_MULTICAT_SINK_SET_FSINK_MGR: {
             UBASE_SIGNATURE_CHECK(args, UPIPE_MULTICAT_SINK_SIGNATURE)
-            upipe_multicat_sink->fsink_mgr = va_arg(args, struct upipe_mgr*);
+            upipe_multicat_sink->fsink_mgr =
+                upipe_mgr_use(va_arg(args, struct upipe_mgr*));
             return UBASE_ERR_NONE;
         }
         case UPIPE_MULTICAT_SINK_GET_FSINK_MGR: {
@@ -421,6 +434,7 @@ static struct upipe *upipe_multicat_sink_alloc(struct upipe_mgr *mgr,
     upipe_multicat_sink->suffix = NULL;
     upipe_multicat_sink->fileidx = -1;
     upipe_multicat_sink->rotate = UPIPE_MULTICAT_SINK_DEF_ROTATE;
+    upipe_multicat_sink->rotate_offset = UPIPE_MULTICAT_SINK_DEF_ROTATE_OFFSET;
     upipe_multicat_sink->mode = UPIPE_FSINK_APPEND;
     upipe_multicat_sink->sync_period = 0;
     upipe_multicat_sink->flow_def = NULL;
@@ -443,6 +457,7 @@ static void upipe_multicat_sink_free(struct upipe *upipe)
     upipe_dbg_va(upipe, "releasing pipe %p", upipe);
     upipe_throw_dead(upipe);
 
+    upipe_mgr_release(upipe_multicat_sink->fsink_mgr);
     free(upipe_multicat_sink->dirpath);
     free(upipe_multicat_sink->suffix);
     upipe_multicat_sink_clean_urefcount(upipe);

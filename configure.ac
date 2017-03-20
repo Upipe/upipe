@@ -143,6 +143,8 @@ AC_CHECK_HEADERS([AudioToolbox/AudioToolbox.h], [AM_CONDITIONAL(HAVE_AUDIOTOOLBO
 AC_CHECK_HEADERS([alsa/asoundlib.h], AM_CONDITIONAL(HAVE_ALSA, true), AM_CONDITIONAL(HAVE_ALSA, false))
 AC_CHECK_HEADERS([dlfcn.h], AM_CONDITIONAL(HAVE_DLFCN_H, true), AM_CONDITIONAL(HAVE_DLFCN_H, false))
 AC_CHECK_HEADERS([amt.h], AM_CONDITIONAL(HAVE_AMT, true), AM_CONDITIONAL(HAVE_AMT, false))
+AC_CHECK_HEADERS([net/netmap.h], AM_CONDITIONAL(HAVE_NETMAP, true), AM_CONDITIONAL(HAVE_NETMAP, false),[#include <stdint.h>
+#include <net/if.h>])
 
 # Checks for header files.
 AC_HEADER_STDC
@@ -224,6 +226,7 @@ AC_CONFIG_FILES([Makefile
                  include/upipe-hls/Makefile
                  include/upipe-zvbi/Makefile
                  include/upipe-dveo/Makefile
+                 include/upipe-netmap/Makefile
                  lib/Makefile
                  lib/upipe/Makefile
                  lib/upipe/libupipe.pc
@@ -275,6 +278,8 @@ AC_CONFIG_FILES([Makefile
                  lib/upipe-zvbi/libupipe_zvbi.pc
                  lib/upipe-dveo/Makefile
                  lib/upipe-dveo/libupipe_dveo.pc
+                 lib/upipe-netmap/Makefile
+                 lib/upipe-netmap/libupipe_netmap.pc
                  x86/Makefile
                  x86/config.asm
                  tests/Makefile

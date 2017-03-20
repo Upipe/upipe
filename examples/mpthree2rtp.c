@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2016 OpenHeadend S.A.R.L
+ * Copyright (C) 2016-2017 OpenHeadend S.A.R.L
  *
  * Authors: Christophe Massiot
  *
@@ -40,13 +40,18 @@
 #include <upipe/udict_inline.h>
 #include <upipe/uref_std.h>
 #include <upipe/uref_clock.h>
+#include <upipe/uref_sound_flow.h>
 #include <upipe/upipe.h>
 #include <upipe/upump.h>
 #include <upump-ev/upump_ev.h>
 #include <upipe-modules/upipe_file_source.h>
+#include <upipe-av/upipe_av.h>
+#include <upipe-av/upipe_avcodec_decode.h>
+#include <upipe-swresample/upipe_swr.h>
 #include <upipe-modules/upipe_trickplay.h>
 #include <upipe-modules/upipe_probe_uref.h>
 #include <upipe-modules/upipe_rtp_prepend.h>
+#include <upipe-modules/upipe_rtp_pcm_pack.h>
 #include <upipe-modules/upipe_udp_sink.h>
 #include <upipe-modules/upipe_nodemux.h>
 #include <upipe-framers/upipe_mpga_framer.h>
@@ -80,21 +85,12 @@ const char *suri = NULL;
 struct uprobe *mainprobe;
 struct upipe *source = NULL;
 
-/* init signal watcher */
-static void signal_watcher_init(struct ev_signal *w,
-                    struct ev_loop *loop,
-                    void (*cb)(struct ev_loop*, struct ev_signal*, int),
-                    int signum)
-{
-    ev_signal_init(w, cb, signum);
-    ev_signal_start(loop, w);
-    ev_unref(loop);
-}
-
 /* generic signal handler */
-static void sighandler(struct ev_loop *loop, struct ev_signal *w, int revents)
+static void sighandler(struct upump *upump)
 {
-    printf("signal %s received, exiting.\n", strsignal(w->signum));
+    int signal = (int)upump_get_opaque(upump, ptrdiff_t);
+    uprobe_err_va(mainprobe, NULL, "signal %s received, exiting",
+                  strsignal(signal));
     upipe_release(source);
     source = NULL;
 }
@@ -134,7 +130,7 @@ static int catch_probe_uref(struct uprobe *uprobe, struct upipe *upipe,
 
 static void usage(const char *argv0)
 {
-    fprintf(stderr, "Usage: %s [-d] [-q] [-u] <source file> <destip:destport>\n", argv0);
+    fprintf(stderr, "Usage: %s [-p] [-d] [-q] [-u] <source file> <destip:destport>\n", argv0);
     fprintf(stderr, "   -u: UDP only\n");
     exit(EXIT_FAILURE);
 }
@@ -143,10 +139,11 @@ int main(int argc, char **argv)
 {
     const char *duri = NULL;
     bool rtp = true;
+    bool pcm = false;
     int opt;
 
     /* parse options */
-    while ((opt = getopt(argc, argv, "dqu")) != -1) {
+    while ((opt = getopt(argc, argv, "pdqu")) != -1) {
         switch(opt) {
             case 'd':
                 if (loglevel > 0) loglevel--;
@@ -156,6 +153,9 @@ int main(int argc, char **argv)
                 break;
             case 'u':
                 rtp = false;
+                break;
+            case 'p':
+                pcm = true;
                 break;
 
             default:
@@ -170,9 +170,8 @@ int main(int argc, char **argv)
     duri = argv[optind++];
 
     /* event-loop management */
-    struct ev_loop *loop = ev_default_loop(0);
-    struct upump_mgr *upump_mgr = upump_ev_mgr_alloc(loop, UPUMP_POOL,
-                                                     UPUMP_BLOCKER_POOL);
+    struct upump_mgr *upump_mgr = upump_ev_mgr_alloc_default(UPUMP_POOL,
+            UPUMP_BLOCKER_POOL);
     
     /* mem management */
     struct umem_mgr *umem_mgr = umem_pool_mgr_alloc_simple(UMEM_POOL);
@@ -243,12 +242,51 @@ int main(int argc, char **argv)
                          "probe_uref"));
     assert(upipe != NULL);
 
+    if (pcm) {
+        /* avcodec */
+        if (unlikely(!upipe_av_init(false,
+                        uprobe_pfx_alloc(uprobe_use(mainprobe),
+                            UPROBE_LOG_VERBOSE, "av")))) {
+            exit(EXIT_FAILURE);
+        }
+
+        /* decode */
+        struct upipe_mgr *avcdec_mgr = upipe_avcdec_mgr_alloc();
+        upipe = upipe_void_chain_output(upipe, avcdec_mgr,
+                uprobe_pfx_alloc(uprobe_use(mainprobe),
+                    UPROBE_LOG_VERBOSE, "avcdec audio"));
+        upipe_mgr_release(avcdec_mgr);
+
+        /* convert to interleaved s32, TODO: non-stereo */
+        struct uref *uref = uref_sound_flow_alloc_def(uref_mgr,
+            "s32.", 2, 8
+        );
+        uref_sound_flow_set_planes(uref, 1);
+
+        /* swr */
+        struct upipe_mgr *swr_mgr = upipe_swr_mgr_alloc();
+        upipe = upipe_flow_chain_output(upipe, swr_mgr,
+                uprobe_pfx_alloc(uprobe_use(mainprobe),
+                    UPROBE_LOG_VERBOSE, "swr"), uref);
+        upipe_mgr_release(swr_mgr);
+        uref_free(uref);
+
+        /* pcm pack */
+        struct upipe_mgr *pack_mgr = upipe_rtp_pcm_pack_mgr_alloc();
+        upipe = upipe_void_chain_output(upipe, pack_mgr,
+            uprobe_pfx_alloc(uprobe_use(mainprobe), UPROBE_LOG_VERBOSE, "pack"));
+        assert(upipe != NULL);
+        upipe_mgr_release(pack_mgr);
+
+    }
+
     if (rtp) {
         /* rtp header */
         upipe = upipe_void_chain_output(upipe, rtp_mgr,
             uprobe_pfx_alloc(uprobe_use(mainprobe), UPROBE_LOG_VERBOSE, "rtp"));
         assert(upipe != NULL);
-        upipe_rtp_prepend_set_type(upipe, 14); /* mpeg audio */
+        upipe_rtp_prepend_set_type(upipe,
+                pcm ? 96 /* dynamic */ : 14 /* mpeg audio */);
     }
 
     /* udp sink */
@@ -267,16 +305,20 @@ int main(int argc, char **argv)
     upipe_mgr_release(udp_mgr);
 
     /* sighandlers */
-    struct ev_signal sigint_watcher;
-    signal_watcher_init(&sigint_watcher, loop, sighandler, SIGINT);
+    struct upump *sigint_pump = upump_alloc_signal(upump_mgr, sighandler,
+            (void *)SIGINT, NULL, SIGINT);
+    upump_set_status(sigint_pump, false);
+    upump_start(sigint_pump);
 
     /* fire loop */
-    ev_loop(loop, 0);
+    upump_mgr_run(upump_mgr, NULL);
 
     /* clean */
     if (source != NULL)
         upipe_release(source);
 
+    upump_stop(sigint_pump);
+    upump_free(sigint_pump);
     uprobe_clean(&uprobe_probe_uref_s);
     uprobe_clean(&uprobe_source_s);
     uprobe_release(mainprobe);
@@ -286,6 +328,8 @@ int main(int argc, char **argv)
     umem_mgr_release(umem_mgr);
     upump_mgr_release(upump_mgr);
 
-    ev_default_destroy();
+    if (pcm)
+        upipe_av_clean();
+
     return 0;
 }

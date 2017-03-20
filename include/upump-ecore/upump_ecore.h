@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2014 OpenHeadend S.A.R.L.
+ * Copyright (C) 2014-2017 OpenHeadend S.A.R.L.
  *
  * Authors: Benjamin Cohen
  *          Cedric Bail <cedric.bail@free.fr>
@@ -33,6 +33,8 @@
 #define _UPIPE_ECORE_UPUMP_ECORE_H_
 
 #include <upipe/upump.h>
+
+#define UPUMP_ECORE_SIGNATURE UBASE_FOURCC('e','c','o','r')
 
 /** @This allocates and initializes a upump_ecore_mgr structure.
  *

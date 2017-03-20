@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2012-2016 OpenHeadend S.A.R.L.
+ * Copyright (C) 2012-2017 OpenHeadend S.A.R.L.
  *
  * Authors: Christophe Massiot
  *
@@ -74,6 +74,7 @@ static const struct inline_shorthand inline_shorthands[] = {
     { "k.duration", UDICT_TYPE_UNSIGNED },
     { "k.rate", UDICT_TYPE_RATIONAL },
     { "k.latency", UDICT_TYPE_UNSIGNED },
+    { "k.wrap", UDICT_TYPE_UNSIGNED },
 
     { "b.end", UDICT_TYPE_VOID },
 

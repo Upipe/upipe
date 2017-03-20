@@ -21,6 +21,7 @@ libupipe_modules_la_SOURCES = \
 	http-parser/http_parser.c \
 	http-parser/http_parser.h \
 	upipe_genaux.c \
+	upipe_multicat_source.c \
 	upipe_multicat_sink.c \
 	upipe_multicat_probe.c \
 	upipe_probe_uref.c \
@@ -50,7 +51,6 @@ libupipe_modules_la_SOURCES = \
 	upipe_stream_switcher.c \
 	upipe_rtp_h264.c \
 	upipe_rtp_mpeg4.c \
-	upipe_rtp_opus.c \
 	upipe_dump.c \
 	uprobe_http_redirect.c \
 	upipe_m3u_reader.c \
@@ -58,6 +58,7 @@ libupipe_modules_la_SOURCES = \
 	upipe_buffer.c \
 	upipe_aes_decrypt.c \
 	upipe_rate_limit.c \
+	upipe_time_limit.c \
 	upipe_burst.c \
 	upipe_sequential_source.c \
 	upipe_segment_source.c \
@@ -81,6 +82,7 @@ libupipe_modules_la_SOURCES += \
 	upipe_rtp_decaps.c \
 	upipe_rtp_prepend.c \
 	upipe_rtp_source.c \
+	upipe_rtp_demux.c \
 	upipe_rtcp.c \
 	upipe_rtp_reorder.c \
 	upipe_s337_encaps.c \

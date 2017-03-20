@@ -75,3 +75,7 @@ endif
 if HAVE_ZVBI
 SUBDIRS += upipe-zvbi
 endif
+
+if HAVE_NETMAP
+SUBDIRS += upipe-netmap
+endif

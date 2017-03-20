@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2012-2014 OpenHeadend S.A.R.L.
+ * Copyright (C) 2012-2017 OpenHeadend S.A.R.L.
  *
  * Authors: Christophe Massiot
  *
@@ -50,6 +50,8 @@ struct upump_blocker;
 struct upump_common {
     /** true if upump_start() was called on the pump */
     bool started;
+    /** true if the pump is blocking */
+    bool status;
     /** list of blockers registered on this pump */
     struct uchain blockers;
 
@@ -96,6 +98,20 @@ void upump_common_start(struct upump *upump);
  */
 void upump_common_stop(struct upump *upump);
 
+/** @This gets the blocking status of a pump.
+ *
+ * @param upump description structure of the pump
+ * @param status_p reference to blocking status
+ */
+void upump_common_get_status(struct upump *upump, int *status_p);
+
+/** @This sets the blocking status of a pump.
+ *
+ * @param upump description structure of the pump
+ * @param status blocking status
+ */
+void upump_common_set_status(struct upump *upump, int status);
+
 /** @This cleans up the common part of a pump.
  *
  * @param upump description structure of the pump
@@ -112,9 +128,9 @@ struct upump_common_mgr {
     struct upool upump_blocker_pool;
 
     /** function to really start a watcher */
-    void (*upump_real_start)(struct upump *);
+    void (*upump_real_start)(struct upump *, bool);
     /** function to really stop a watcher */
-    void (*upump_real_stop)(struct upump *);
+    void (*upump_real_stop)(struct upump *, bool);
 
     /** structure exported to modules */
     struct upump_mgr mgr;
@@ -165,8 +181,8 @@ void upump_common_mgr_clean(struct upump_mgr *mgr);
 void upump_common_mgr_init(struct upump_mgr *mgr,
                            uint16_t upump_pool_depth,
                            uint16_t upump_blocker_pool_depth, void *pool_extra,
-                           void (*upump_real_start)(struct upump *),
-                           void (*upump_real_stop)(struct upump *),
+                           void (*upump_real_start)(struct upump *, bool),
+                           void (*upump_real_stop)(struct upump *, bool),
                            void *(*upump_alloc_inner)(struct upool *),
                            void (*upump_free_inner)(struct upool *, void *));
 

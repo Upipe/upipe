@@ -57,8 +57,6 @@
 #include <upipe-framers/upipe_h264_framer.h>
 #include <upipe-framers/upipe_h265_framer.h>
 
-#include <ev.h>
-
 #define UPROBE_LOG_LEVEL UPROBE_LOG_NOTICE
 #define UMEM_POOL 512
 #define UDICT_POOL_DEPTH 500
@@ -91,9 +89,8 @@ int main(int argc, char **argv)
     const char *output = argv[2];
 
     /* structures managers */
-    struct ev_loop *loop = ev_default_loop(0);
     struct upump_mgr *upump_mgr =
-        upump_ev_mgr_alloc(loop, UPUMP_POOL, UPUMP_BLOCKER_POOL);
+        upump_ev_mgr_alloc_default(UPUMP_POOL, UPUMP_BLOCKER_POOL);
     assert(upump_mgr != NULL);
     struct umem_mgr *umem_mgr = umem_pool_mgr_alloc_simple(UMEM_POOL);
     struct udict_mgr *udict_mgr =
@@ -176,15 +173,13 @@ int main(int argc, char **argv)
     upipe_mgr_release(upipe_ts_demux_mgr);
 
     /* main loop */
-    ev_loop(loop, 0);
+    upump_mgr_run(upump_mgr, NULL);
 
     upipe_release(upipe_sink);
     upipe_release(upipe_src);
 
     uprobe_release(uprobe);
     uprobe_clean(&uprobe_video);
-
-    ev_default_destroy();
 
     return 0;
 }

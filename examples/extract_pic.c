@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2013-2014 OpenHeadend S.A.R.L.
+ * Copyright (C) 2013-2017 OpenHeadend S.A.R.L.
  *
  * Authors: Christophe Massiot
  *
@@ -45,6 +45,7 @@
 #include <upipe/uref_pic_flow.h>
 #include <upipe/uref_block_flow.h>
 #include <upipe/upipe.h>
+#include <upipe/upipe_dump.h>
 #include <upipe/upump.h>
 #include <upump-ev/upump_ev.h>
 #include <upipe-modules/upipe_file_sink.h>
@@ -69,8 +70,8 @@
 #include <sys/param.h>
 #include <signal.h>
 #include <pthread.h>
+#include <errno.h>
 
-#include <ev.h>
 #include <pthread.h>
 
 #define UDICT_POOL_DEPTH    50
@@ -87,30 +88,32 @@
 
 #define UPROBE_LOG_LEVEL UPROBE_LOG_NOTICE
 
-enum uprobe_log_level loglevel = UPROBE_LOG_LEVEL;
+static enum uprobe_log_level loglevel = UPROBE_LOG_LEVEL;
 
-FILE *logstream;
-struct uprobe *logger;
-struct uprobe uprobe_uref;
-struct uprobe uprobe_avcdec;
-struct upipe_mgr *upipe_avcdec_mgr;
-struct upipe_mgr *upipe_avcenc_mgr;
-struct upipe_mgr *upipe_filter_blend_mgr;
-struct upipe_mgr *upipe_sws_mgr;
-struct upipe_mgr *upipe_fsink_mgr;
-struct upipe_mgr *upipe_probe_uref_mgr;
-struct uref_mgr *uref_mgr;
+static FILE *logstream;
+static struct uprobe *logger;
+static struct uprobe uprobe_uref;
+static struct uprobe uprobe_avcdec;
+static struct upipe_mgr *upipe_avcdec_mgr;
+static struct upipe_mgr *upipe_avcenc_mgr;
+static struct upipe_mgr *upipe_filter_blend_mgr;
+static struct upipe_mgr *upipe_sws_mgr;
+static struct upipe_mgr *upipe_fsink_mgr;
+static struct upipe_mgr *upipe_probe_uref_mgr;
+static struct uref_mgr *uref_mgr;
 
-const char *srcpath, *dstpath;
+static const char *srcpath, *dstpath;
+static const char *dump = NULL;
 
-struct upipe *upipe_source;
-struct upipe *upipe_split_output = NULL;
-struct upipe *upipe_null;
+static struct upipe *upipe_source;
+static struct upipe *upipe_split_output = NULL;
+static struct upipe *upipe_null;
 
 static void usage(const char *argv0) {
-    fprintf(stderr, "Usage: %s [-d] [-q] <source> <destination>\n", argv0);
+    fprintf(stderr, "Usage: %s [-d] [-q] [-D <dot file>] <source> <destination>\n", argv0);
     fprintf(stderr, "   -d: force debug log level\n");
     fprintf(stderr, "   -q: quieter log\n");
+    fprintf(stderr, "   -D: dump pipeline in dot format\n");
     exit(EXIT_FAILURE);
 }
 
@@ -129,6 +132,10 @@ static int uref_catch(struct uprobe *uprobe, struct upipe *upipe,
         return uprobe_throw_next(uprobe, upipe, event, args);
 
     if (upipe_source != NULL) {
+        /* dump the pipeline before leaving */
+        if (dump != NULL)
+            upipe_dump_open(NULL, NULL, dump, upipe_source, NULL);
+
         /* release the source to exit */
         upipe_release(upipe_source);
         upipe_source = NULL;
@@ -248,13 +255,16 @@ int main(int argc, char **argv)
     int opt;
 
     /* parse options */
-    while ((opt = getopt(argc, argv, "dq")) != -1) {
+    while ((opt = getopt(argc, argv, "dqD:")) != -1) {
         switch (opt) {
             case 'd':
                 if (loglevel > 0) loglevel--;
                 break;
             case 'q':
                 if (loglevel < UPROBE_LOG_ERROR) loglevel++;
+                break;
+            case 'D':
+                dump = optarg;
                 break;
             default:
                 usage(argv[0]);
@@ -270,15 +280,14 @@ int main(int argc, char **argv)
     logstream = stderr;
 
     /* setup environnement */
-    struct ev_loop *loop = ev_default_loop(0);
     struct umem_mgr *umem_mgr = umem_alloc_mgr_alloc();
     struct udict_mgr *udict_mgr = udict_inline_mgr_alloc(UDICT_POOL_DEPTH,
                                                          umem_mgr, -1, -1);
     uref_mgr = uref_std_mgr_alloc(UREF_POOL_DEPTH, udict_mgr,
                                                    0);
 
-    struct upump_mgr *upump_mgr = upump_ev_mgr_alloc(loop,
-                            UPUMP_POOL, UPUMP_BLOCKER_POOL);
+    struct upump_mgr *upump_mgr = upump_ev_mgr_alloc_default(UPUMP_POOL,
+            UPUMP_BLOCKER_POOL);
 
     /* default probe */
     logger = uprobe_stdio_alloc(NULL, logstream, loglevel);
@@ -349,7 +358,7 @@ int main(int argc, char **argv)
     upipe_release(ts_demux);
 
     /* fire loop ! */
-    ev_loop(loop, 0);
+    upump_mgr_run(upump_mgr, NULL);
 
     /* release everyhing */
     upipe_release(upipe_source);
@@ -370,7 +379,6 @@ int main(int argc, char **argv)
     udict_mgr_release(udict_mgr);
     umem_mgr_release(umem_mgr);
 
-    ev_default_destroy();
     upipe_av_clean();
 
     return 0;

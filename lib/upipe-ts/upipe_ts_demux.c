@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2013-2016 OpenHeadend S.A.R.L.
+ * Copyright (C) 2013-2017 OpenHeadend S.A.R.L.
  *
  * Authors: Christophe Massiot
  *
@@ -107,7 +107,7 @@
 #define TS_CLOCK_MAX (POW2_33 * UCLOCK_FREQ / 90000)
 /** max interval between PCRs (ISO/IEC 13818-1 2.7.2) - could be 100 ms but
  * allow higher tolerance */
-#define MAX_PCR_INTERVAL (UCLOCK_FREQ / 2)
+#define MAX_PCR_INTERVAL UCLOCK_FREQ
 /** max retention time for most streams (ISO/IEC 13818-1 2.4.2.6) */
 #define MAX_DELAY UCLOCK_FREQ
 
@@ -664,6 +664,13 @@ static int upipe_ts_demux_output_clock_ts(struct upipe *upipe,
     struct uref *uref = va_arg(args, struct uref *);
     uint64_t dts_orig;
     if (ubase_check(uref_clock_get_dts_orig(uref, &dts_orig))) {
+        if (program->pcr_pid == 8191) {
+            /* No PCR, treat DTS as PCR. */
+            upipe_ts_demux_program_handle_pcr(
+                    upipe_ts_demux_program_to_upipe(program),
+                    uref, dts_orig, false);
+        }
+
         /* handle 2^33 wrap-arounds */
         uint64_t delta = (TS_CLOCK_MAX + dts_orig -
                           (program->last_pcr % TS_CLOCK_MAX)) % TS_CLOCK_MAX;
@@ -1066,6 +1073,13 @@ static int upipe_ts_demux_output_control(struct upipe *upipe,
             struct uref **p = va_arg(args, struct uref **);
             *p = upipe_ts_demux_output->flow_def_input;
             return UBASE_ERR_NONE;
+        }
+        case UPIPE_BIN_GET_FIRST_INNER: {
+            struct upipe_ts_demux_output *upipe_ts_demux_output =
+                upipe_ts_demux_output_from_upipe(upipe);
+            struct upipe **p = va_arg(args, struct upipe **);
+            *p = upipe_ts_demux_output->split_output;
+            return (*p != NULL) ? UBASE_ERR_NONE : UBASE_ERR_UNHANDLED;
         }
 
         default:
@@ -1741,6 +1755,20 @@ static int upipe_ts_demux_program_control(struct upipe *upipe,
             if (upipe_ts_demux_program->pmtd == NULL)
                 return UBASE_ERR_UNHANDLED;
             return upipe_split_iterate(upipe_ts_demux_program->pmtd, p);
+        }
+        case UPIPE_BIN_GET_FIRST_INNER: {
+            struct upipe_ts_demux_program *upipe_ts_demux_program =
+                upipe_ts_demux_program_from_upipe(upipe);
+            struct upipe **p = va_arg(args, struct upipe **);
+            *p = upipe_ts_demux_program->psi_split_output_pmt;
+            return (*p != NULL) ? UBASE_ERR_NONE : UBASE_ERR_UNHANDLED;
+        }
+        case UPIPE_BIN_GET_LAST_INNER: {
+            struct upipe_ts_demux_program *upipe_ts_demux_program =
+                upipe_ts_demux_program_from_upipe(upipe);
+            struct upipe **p = va_arg(args, struct upipe **);
+            *p = upipe_ts_demux_program->pmtd;
+            return (*p != NULL) ? UBASE_ERR_NONE : UBASE_ERR_UNHANDLED;
         }
 
         default:
@@ -2878,6 +2906,13 @@ static int upipe_ts_demux_control(struct upipe *upipe,
             struct uref **p = va_arg(args, struct uref **);
             return upipe_ts_demux_iterate(upipe, p);
         }
+        case UPIPE_BIN_GET_LAST_INNER: {
+            struct upipe_ts_demux *upipe_ts_demux =
+                upipe_ts_demux_from_upipe(upipe);
+            struct upipe **p = va_arg(args, struct upipe **);
+            *p = upipe_ts_demux->patd;
+            return (*p != NULL) ? UBASE_ERR_NONE : UBASE_ERR_UNHANDLED;
+        }
 
         case UPIPE_TS_DEMUX_GET_CONFORMANCE: {
             UBASE_SIGNATURE_CHECK(args, UPIPE_TS_DEMUX_SIGNATURE)
@@ -3115,6 +3150,7 @@ struct upipe_mgr *upipe_ts_demux_mgr_alloc(void)
     if (unlikely(ts_demux_mgr == NULL))
         return NULL;
 
+    memset(ts_demux_mgr, 0, sizeof(*ts_demux_mgr));
     ts_demux_mgr->null_mgr = upipe_null_mgr_alloc();
     ts_demux_mgr->setrap_mgr = upipe_setrap_mgr_alloc();
     ts_demux_mgr->idem_mgr = upipe_idem_mgr_alloc();

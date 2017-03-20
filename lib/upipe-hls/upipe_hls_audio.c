@@ -75,6 +75,8 @@ struct upipe_hls_audio {
     struct uprobe probe_aes_decrypt;
     /** attach uclock needed */
     bool attach_uclock;
+    /** current uri */
+    char *uri;
 };
 
 /** @hidden */
@@ -104,6 +106,63 @@ UPIPE_HELPER_UPROBE(upipe_hls_audio, urefcount_real, probe_id3v2, NULL);
 UPIPE_HELPER_UPROBE(upipe_hls_audio, urefcount_real, probe_last_inner, NULL);
 UPIPE_HELPER_UPROBE(upipe_hls_audio, urefcount_real, probe_aes_decrypt, NULL);
 UPIPE_HELPER_BIN_OUTPUT(upipe_hls_audio, last_inner, output, requests);
+
+/** @internal @This checks if source manager is set and asks for it if not.
+ *
+ * @param upipe description structure of the pipe
+ * @return an error code
+ */
+static int upipe_hls_audio_check_source_mgr(struct upipe *upipe)
+{
+    struct upipe_hls_audio *upipe_hls_audio = upipe_hls_audio_from_upipe(upipe);
+    if (unlikely(upipe_hls_audio->source_mgr == NULL))
+        return upipe_throw_need_source_mgr(upipe, &upipe_hls_audio->source_mgr);
+    return UBASE_ERR_NONE;
+}
+
+static int upipe_hls_audio_reload(struct upipe *upipe)
+{
+    struct upipe_hls_audio *upipe_hls_audio =
+        upipe_hls_audio_from_upipe(upipe);
+
+    UBASE_RETURN(upipe_hls_audio_check_source_mgr(upipe));
+
+    struct upipe *src = upipe_hls_audio->src;
+    if (unlikely(!src)) {
+        upipe_warn(upipe, "no source pipe to reload");
+        return UBASE_ERR_INVALID;
+    }
+
+    struct upipe *output;
+    int ret = upipe_get_output(src, &output);
+    if (unlikely(!ubase_check(ret))) {
+        upipe_warn(upipe, "source pipe has no output pipe");
+        return ret;
+    }
+
+    upipe_dbg_va(upipe, "reloading %s", upipe_hls_audio->uri);
+
+    struct upipe *inner = upipe_void_alloc(
+        upipe_hls_audio->source_mgr,
+        uprobe_pfx_alloc(uprobe_use(&upipe_hls_audio->probe_src),
+                         UPROBE_LOG_VERBOSE, "src"));
+    UBASE_ALLOC_RETURN(inner);
+
+    ret = upipe_set_output(inner, output);
+    if (unlikely(!ubase_check(ret))) {
+        upipe_release(inner);
+        return UBASE_ERR_INVALID;
+    }
+
+    ret = upipe_set_uri(inner, upipe_hls_audio->uri);
+    if (unlikely(!ubase_check(ret))) {
+        upipe_release(inner);
+        return ret;
+    }
+
+    upipe_hls_audio_store_src(upipe, inner);
+    return UBASE_ERR_NONE;
+}
 
 static int probe_playlist(struct uprobe *uprobe, struct upipe *inner,
                           int event, va_list args)
@@ -167,6 +226,16 @@ static int probe_playlist(struct uprobe *uprobe, struct upipe *inner,
         upipe_hls_audio_store_bin_output(upipe, output);
         return UBASE_ERR_NONE;
     }
+    }
+
+    if (event >= UPROBE_LOCAL) {
+        switch (ubase_get_signature(args)) {
+        case UPIPE_HLS_PLAYLIST_SIGNATURE:
+            switch (event) {
+            case UPROBE_HLS_PLAYLIST_NEED_RELOAD:
+                return upipe_hls_audio_reload(upipe);
+            }
+        }
     }
 
     return upipe_throw_proxy(upipe, inner, event, args);
@@ -250,9 +319,11 @@ static struct upipe *upipe_hls_audio_alloc(struct upipe_mgr *mgr,
     upipe_hls_audio_init_playlist(upipe);
     upipe_hls_audio_init_bin_output(upipe);
 
-    struct upipe_hls_audio *upipe_hls_audio = upipe_hls_audio_from_upipe(upipe);
+    struct upipe_hls_audio *upipe_hls_audio =
+        upipe_hls_audio_from_upipe(upipe);
     upipe_hls_audio->attach_uclock = false;
     upipe_hls_audio->source_mgr = NULL;
+    upipe_hls_audio->uri = NULL;
 
     upipe_throw_ready(upipe);
 
@@ -265,8 +336,12 @@ static struct upipe *upipe_hls_audio_alloc(struct upipe_mgr *mgr,
  */
 static void upipe_hls_audio_free(struct upipe *upipe)
 {
+    struct upipe_hls_audio *upipe_hls_audio =
+        upipe_hls_audio_from_upipe(upipe);
+
     upipe_throw_dead(upipe);
 
+    free(upipe_hls_audio->uri);
     upipe_hls_audio_clean_bin_output(upipe);
     upipe_hls_audio_clean_probe_last_inner(upipe);
     upipe_hls_audio_clean_probe_id3v2(upipe);
@@ -289,14 +364,6 @@ static void upipe_hls_audio_no_ref(struct upipe *upipe)
     upipe_hls_audio_clean_src(upipe);
     upipe_hls_audio_clean_last_inner(upipe);
     upipe_hls_audio_release_urefcount_real(upipe);
-}
-
-static int upipe_hls_audio_check_source_mgr(struct upipe *upipe)
-{
-    struct upipe_hls_audio *upipe_hls_audio = upipe_hls_audio_from_upipe(upipe);
-    if (unlikely(upipe_hls_audio->source_mgr == NULL))
-        return upipe_throw_need_source_mgr(upipe, &upipe_hls_audio->source_mgr);
-    return UBASE_ERR_NONE;
 }
 
 /** @internal @This sets the playlist inner pipe.
@@ -344,6 +411,7 @@ static int upipe_hls_audio_set_uri(struct upipe *upipe, const char *uri)
         uprobe_pfx_alloc(uprobe_use(&upipe_hls_audio->probe_src),
                          UPROBE_LOG_VERBOSE, "src"));
     UBASE_ALLOC_RETURN(src);
+    upipe_hls_audio->uri = uri ? strdup(uri) : NULL;
     upipe_hls_audio_store_src(upipe, src);
     return upipe_set_uri(src, uri);
 }
@@ -379,6 +447,13 @@ static int upipe_hls_audio_control(struct upipe *upipe,
     case UPIPE_SET_URI: {
         const char *uri = va_arg(args, const char *);
         return upipe_hls_audio_set_uri(upipe, uri);
+    }
+    case UPIPE_BIN_GET_FIRST_INNER: {
+        struct upipe_hls_audio *upipe_hls_audio =
+            upipe_hls_audio_from_upipe(upipe);
+        struct upipe **p = va_arg(args, struct upipe **);
+        *p = upipe_hls_audio->src;
+        return (*p != NULL) ? UBASE_ERR_NONE : UBASE_ERR_UNHANDLED;
     }
     }
 

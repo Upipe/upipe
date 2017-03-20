@@ -197,10 +197,13 @@ static void upipe_rtp_h264_output_nalu(struct upipe *upipe,
             hdr_size++;
         }
 
-        struct uref *next = uref_block_split(uref, split_size);
-        if (unlikely(next == NULL)) {
-            upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
-            return;
+        struct uref *next = NULL;
+        if (!last_fragment) {
+            next = uref_block_split(uref, split_size);
+            if (unlikely(next == NULL)) {
+                upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
+                return;
+            }
         }
 
         /* FIXME should require a ubuf_mgr */
@@ -236,7 +239,6 @@ static void upipe_rtp_h264_output_nalu(struct upipe *upipe,
         fragment++;
         uref = next;
     }
-    uref_free(uref);
 }
 
 static void upipe_rtp_h264_drop(struct upipe *upipe, struct uref *uref)

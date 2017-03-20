@@ -23,6 +23,7 @@
         @item lock-less buffer queues (@ref uqueue) without thread limitations
         @item lock-less buffer pools (@ref upool) without thread limitations
         @item lock-less exclusive access to non-reentrant resources (@ref udeal)
+        @item blocking exclusive access to non-reentrant resources (@ref umutex)
         @item objects to pass event information between threads (@ref ueventfd)
         @item dictionaries storing key/value pairs (@ref udict)
         @item memory allocation with or without pools (@ref umem)

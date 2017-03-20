@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2012-2015 OpenHeadend S.A.R.L.
+ * Copyright (C) 2012-2017 OpenHeadend S.A.R.L.
  *
  * Authors: Christophe Massiot
  *
@@ -46,8 +46,6 @@
 #include <time.h>
 #include <pthread.h>
 #include <assert.h>
-
-#include <ev.h>
 
 #define ULIFO_MAX_DEPTH 10
 #define UQUEUE_MAX_DEPTH 6
@@ -116,9 +114,7 @@ static void *push_thread(void *_thread)
     struct thread *thread = (struct thread *)_thread;
     thread->loop = 0;
 
-    struct ev_loop *loop = ev_loop_new(0);
-    thread->upump_mgr = upump_ev_mgr_alloc(loop, UPUMP_POOL,
-                                           UPUMP_BLOCKER_POOL);
+    thread->upump_mgr = upump_ev_mgr_alloc_loop(UPUMP_POOL, UPUMP_BLOCKER_POOL);
     assert(thread->upump_mgr != NULL);
 
     thread->upump = uqueue_upump_alloc_push(&uqueue, thread->upump_mgr,
@@ -131,12 +127,11 @@ static void *push_thread(void *_thread)
     assert(upump != NULL);
     upump_start(upump);
 
-    ev_loop(loop, 0);
+    upump_mgr_run(thread->upump_mgr, NULL);
 
     upump_free(upump);
     upump_free(thread->upump);
     upump_mgr_release(thread->upump_mgr);
-    ev_loop_destroy(loop);
 
     return NULL;
 }

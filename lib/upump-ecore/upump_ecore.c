@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2014 OpenHeadend S.A.R.L.
+ * Copyright (C) 2014-2017 OpenHeadend S.A.R.L.
  *
  * Authors: Benjamin Cohen
  *          Cedric Bail <cedric.bail@free.fr>
@@ -31,6 +31,7 @@
 #include <upipe/ubase.h>
 #include <upipe/urefcount.h>
 #include <upipe/uclock.h>
+#include <upipe/umutex.h>
 #include <upipe/upump.h>
 #include <upipe/upump_common.h>
 #include <upump-ecore/upump_ecore.h>
@@ -59,7 +60,7 @@ UBASE_FROM_TO(upump_ecore_mgr, urefcount, urefcount, urefcount)
  */
 struct upump_ecore {
     /** type of event to watch */
-    enum upump_type event;
+    int event;
 
     /** Ecore private structure */
     union {
@@ -136,7 +137,7 @@ static Eina_Bool upump_ecore_dispatch_idle(void *_upump_ecore)
  * @return pointer to allocated pump, or NULL in case of failure
  */
 static struct upump *upump_ecore_alloc(struct upump_mgr *mgr,
-                                    enum upump_type event, va_list args)
+                                       int event, va_list args)
 {
     struct upump_ecore_mgr *ecore_mgr = upump_ecore_mgr_from_upump_mgr(mgr);
     struct upump_ecore *upump_ecore = upool_alloc(&ecore_mgr->common_mgr.upump_pool,
@@ -191,10 +192,12 @@ static struct upump *upump_ecore_alloc(struct upump_mgr *mgr,
 /** @This starts a pump.
  *
  * @param upump description structure of the pump
+ * @param status blocking status of the pump
  */
-static void upump_ecore_real_start(struct upump *upump)
+static void upump_ecore_real_start(struct upump *upump, bool status)
 {
     struct upump_ecore *upump_ecore = upump_ecore_from_upump(upump);
+    abort(status); /* FIXME not implemented */
 
     switch (upump_ecore->event) {
         case UPUMP_TYPE_IDLER:
@@ -215,13 +218,15 @@ static void upump_ecore_real_start(struct upump *upump)
     }
 }
 
-/** @This stop a pump.
+/** @This stops a pump.
  *
  * @param upump description structure of the pump
+ * @param status blocking status of the pump
  */
-static void upump_ecore_real_stop(struct upump *upump)
+static void upump_ecore_real_stop(struct upump *upump, bool status)
 {
     struct upump_ecore *upump_ecore = upump_ecore_from_upump(upump);
+    abort(status); /* FIXME not implemented */
 
     switch (upump_ecore->event) {
         case UPUMP_TYPE_IDLER:
@@ -284,6 +289,68 @@ static void upump_ecore_free_inner(struct upool *upool, void *upump_ecore)
     free(upump_ecore);
 }
 
+/** @This processes control commands on a upump_ecore.
+ *
+ * @param upump description structure of the pump
+ * @param command type of command to process
+ * @param args arguments of the command
+ * @return an error code
+ */
+static int upump_ecore_control(struct upump *upump, int command, va_list args)
+{
+    switch (command) {
+        case UPUMP_START:
+            upump_common_start(upump);
+            return UBASE_ERR_NONE;
+        case UPUMP_STOP:
+            upump_common_stop(upump);
+            return UBASE_ERR_NONE;
+        case UPUMP_FREE:
+            upump_ecore_free(upump);
+            return UBASE_ERR_NONE;
+        case UPUMP_GET_STATUS: {
+            int *status_p = va_arg(args, int *);
+            upump_common_get_status(upump, status_p);
+            return UBASE_ERR_NONE;
+        }
+        case UPUMP_SET_STATUS: {
+            int status = va_arg(args, int);
+            upump_common_set_status(upump, status);
+            return UBASE_ERR_NONE;
+        }
+        case UPUMP_ALLOC_BLOCKER: {
+            struct upump_blocker **p = va_arg(args, struct upump_blocker **);
+            *p = upump_common_blocker_alloc(upump);
+            return UBASE_ERR_NONE;
+        }
+        case UPUMP_FREE_BLOCKER: {
+            struct upump_blocker *blocker =
+                va_arg(args, struct upump_blocker *);
+            upump_common_blocker_free(blocker);
+            return UBASE_ERR_NONE;
+        }
+        default:
+            return UBASE_ERR_UNHANDLED;
+    }
+}
+
+/** @internal @This runs an event loop.
+ *
+ * @param mgr pointer to a upump_mgr structure
+ * @param mutex mutual exclusion primitives to access the event loop
+ * @return an error code, including @ref UBASE_ERR_BUSY if a pump is still
+ * active
+ */
+static int upump_ecore_mgr_run(struct upump_mgr *mgr, struct umutex *mutex)
+{
+    if (mutex != NULL)
+        return UBASE_ERR_UNHANDLED;
+
+    ecore_main_loop_begin();
+
+    return UBASE_ERR_NONE;
+}
+
 /** @This processes control commands on a upump_ecore_mgr.
  *
  * @param mgr pointer to a upump_mgr structure
@@ -292,9 +359,13 @@ static void upump_ecore_free_inner(struct upool *upool, void *upump_ecore)
  * @return an error code
  */
 static int upump_ecore_mgr_control(struct upump_mgr *mgr,
-                                int command, va_list args)
+                                   int command, va_list args)
 {
     switch (command) {
+        case UPUMP_MGR_RUN: {
+            struct umutex *mutex = va_arg(args, struct umutex *);
+            return upump_ecore_mgr_run(mgr, mutex);
+        }
         case UPUMP_MGR_VACUUM:
             upump_common_mgr_vacuum(mgr);
             return UBASE_ERR_NONE;
@@ -312,6 +383,7 @@ static void upump_ecore_mgr_free(struct urefcount *urefcount)
     struct upump_ecore_mgr *ecore_mgr = upump_ecore_mgr_from_urefcount(urefcount);
     upump_common_mgr_clean(upump_ecore_mgr_to_upump_mgr(ecore_mgr));
     free(ecore_mgr);
+    ecore_shutdown();
 }
 
 /** @This allocates and initializes a upump_ecore_mgr structure.
@@ -324,6 +396,9 @@ static void upump_ecore_mgr_free(struct urefcount *urefcount)
 struct upump_mgr *upump_ecore_mgr_alloc(uint16_t upump_pool_depth,
                                         uint16_t upump_blocker_pool_depth)
 {
+    if (!ecore_init())
+        return NULL;
+
     struct upump_ecore_mgr *ecore_mgr =
         malloc(sizeof(struct upump_ecore_mgr) +
                upump_common_mgr_sizeof(upump_pool_depth,
@@ -332,10 +407,11 @@ struct upump_mgr *upump_ecore_mgr_alloc(uint16_t upump_pool_depth,
         return NULL;
 
     struct upump_mgr *mgr = upump_ecore_mgr_to_upump_mgr(ecore_mgr);
+    mgr->signature = UPUMP_ECORE_SIGNATURE;
     urefcount_init(upump_ecore_mgr_to_urefcount(ecore_mgr), upump_ecore_mgr_free);
     ecore_mgr->common_mgr.mgr.refcount = upump_ecore_mgr_to_urefcount(ecore_mgr);
     ecore_mgr->common_mgr.mgr.upump_alloc = upump_ecore_alloc;
-    ecore_mgr->common_mgr.mgr.upump_free = upump_ecore_free;
+    ecore_mgr->common_mgr.mgr.upump_control = upump_ecore_control;
     ecore_mgr->common_mgr.mgr.upump_mgr_control = upump_ecore_mgr_control;
 
     upump_common_mgr_init(mgr, upump_pool_depth, upump_blocker_pool_depth,

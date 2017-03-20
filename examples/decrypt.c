@@ -1,8 +1,6 @@
 #include <stdio.h>
 #include <stdlib.h>
 
-#include <ev.h>
-
 #include <upipe/uprobe.h>
 #include <upipe/uprobe_prefix.h>
 #include <upipe/uprobe_stdio_color.h>
@@ -103,9 +101,8 @@ int main(int argc, char *argv[])
     const char *in = argv[3];
     const char *out = argv[4];
 
-    struct ev_loop *loop = ev_default_loop(0);
-    struct upump_mgr *upump_mgr = upump_ev_mgr_alloc(loop, UPUMP_POOL,
-                                                     UPUMP_BLOCKER_POOL);
+    struct upump_mgr *upump_mgr = upump_ev_mgr_alloc_default(UPUMP_POOL,
+            UPUMP_BLOCKER_POOL);
     assert(upump_mgr != NULL);
     struct umem_mgr *umem_mgr = umem_pool_mgr_alloc_simple(UMEM_POOL);
     struct udict_mgr *udict_mgr = udict_inline_mgr_alloc(UDICT_POOL_DEPTH,
@@ -187,11 +184,9 @@ int main(int argc, char *argv[])
     ubase_assert(upipe_fsink_set_path(fsink, out, UPIPE_FSINK_OVERWRITE));
     upipe_release(fsink);
 
-    ev_loop(loop, 0);
+    upump_mgr_run(upump_mgr, NULL);
 
     uprobe_clean(&uprobe_src);
-
-    ev_default_destroy();
 
     return 0;
 }

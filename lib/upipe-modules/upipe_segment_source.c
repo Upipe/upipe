@@ -298,6 +298,12 @@ static int upipe_seg_src_control(struct upipe *upipe,
         UBASE_RETURN(upipe_seg_src_check_src(upipe));
         return upipe_seg_src_control_src(upipe, command, args);
     }
+    case UPIPE_BIN_GET_FIRST_INNER: {
+        struct upipe_seg_src *upipe_seg_src = upipe_seg_src_from_upipe(upipe);
+        struct upipe **p = va_arg(args, struct upipe **);
+        *p = upipe_seg_src->src;
+        return (*p != NULL) ? UBASE_ERR_NONE : UBASE_ERR_UNHANDLED;
+    }
     }
 
     return upipe_seg_src_control_bin_output(upipe, command, args);

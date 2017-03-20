@@ -1,6 +1,5 @@
 #!/usr/bin/env luajit
 
-local ev = require "libev"
 local ffi = require "ffi"
 local upipe = require "upipe"
 
@@ -26,10 +25,9 @@ if #arg ~= 1 then
 end
 
 local file = arg[1]
-local loop = ffi.gc(ev_default_loop(0), ev_loop_destroy)
 
 -- managers
-local upump_mgr = upump.ev(loop, UPUMP_POOL, UPUMP_BLOCKER_POOL)
+local upump_mgr = upump.ev_default(UPUMP_POOL, UPUMP_BLOCKER_POOL)
 local umem_mgr = umem.pool_simple(UMEM_POOL)
 local udict_mgr = udict.inline(UDICT_POOL_DEPTH, umem_mgr, -1, -1)
 local uref_mgr = uref.std(UREF_POOL_DEPTH, udict_mgr, 0)
@@ -92,6 +90,6 @@ src.output = ts_demux_mgr:new(
     probe)
 
 -- main loop
-ev_run(loop, 0)
+upump_mgr:run(nil)
 
 print(string.format("%.2f", tonumber(sink.props.duration) / UCLOCK_FREQ))

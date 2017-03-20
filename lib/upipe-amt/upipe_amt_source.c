@@ -559,6 +559,7 @@ struct upipe_mgr *upipe_amtsrc_mgr_alloc(const char *amt_relay)
     if (unlikely(amtsrc_mgr == NULL))
         return NULL;
 
+    memset(amtsrc_mgr, 0, sizeof(*amtsrc_mgr));
     if (!inet_aton(amt_relay, &amtsrc_mgr->amt_addr) ||
         amt_init(htonl(amtsrc_mgr->amt_addr.s_addr))) {
         free(amtsrc_mgr);

@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2014 OpenHeadend S.A.R.L.
+ * Copyright (C) 2014-2017 OpenHeadend S.A.R.L.
  *
  * Authors: Christophe Massiot
  *
@@ -33,7 +33,7 @@
 #include <upipe/uref.h>
 #include <upipe/upipe.h>
 #include <upipe/upipe_helper_upipe.h>
-#include <upipe/upipe_helper_void.h>
+#include <upipe/upipe_helper_flow.h>
 #include <upipe/upipe_helper_urefcount.h>
 #include <upipe/upipe_helper_inner.h>
 #include <upipe/upipe_helper_uprobe.h>
@@ -41,6 +41,7 @@
 #include <upipe-modules/upipe_rtp_source.h>
 #include <upipe-modules/upipe_udp_source.h>
 #include <upipe-modules/upipe_rtp_decaps.h>
+#include <upipe-modules/upipe_setflowdef.h>
 
 #include <stdlib.h>
 #include <stdbool.h>
@@ -57,6 +58,8 @@ struct upipe_rtpsrc_mgr {
     struct upipe_mgr *udpsrc_mgr;
     /** pointer to rtp decaps manager */
     struct upipe_mgr *rtpd_mgr;
+    /** pointer to setflowdef manager */
+    struct upipe_mgr *setflowdef_mgr;
 
     /** public upipe_mgr structure */
     struct upipe_mgr mgr;
@@ -91,7 +94,7 @@ struct upipe_rtpsrc {
 };
 
 UPIPE_HELPER_UPIPE(upipe_rtpsrc, upipe, UPIPE_RTPSRC_SIGNATURE)
-UPIPE_HELPER_VOID(upipe_rtpsrc)
+UPIPE_HELPER_FLOW(upipe_rtpsrc, NULL)
 UPIPE_HELPER_UREFCOUNT(upipe_rtpsrc, urefcount, upipe_rtpsrc_no_ref)
 UPIPE_HELPER_INNER(upipe_rtpsrc, last_inner)
 UPIPE_HELPER_UPROBE(upipe_rtpsrc, urefcount_real, last_inner_probe, NULL)
@@ -132,7 +135,9 @@ static struct upipe *upipe_rtpsrc_alloc(struct upipe_mgr *mgr,
                                         struct uprobe *uprobe,
                                         uint32_t signature, va_list args)
 {
-    struct upipe *upipe = upipe_rtpsrc_alloc_void(mgr, uprobe, signature, args);
+    struct uref *flow_def;
+    struct upipe *upipe = upipe_rtpsrc_alloc_flow(mgr, uprobe, signature, args,
+                                                  &flow_def);
     if (unlikely(upipe == NULL))
         return NULL;
     struct upipe_rtpsrc *upipe_rtpsrc = upipe_rtpsrc_from_upipe(upipe);
@@ -156,17 +161,30 @@ static struct upipe *upipe_rtpsrc_alloc(struct upipe_mgr *mgr,
                 UPROBE_LOG_VERBOSE, "udpsrc"));
     if (unlikely(upipe_rtpsrc->source == NULL))
         goto upipe_rtpsrc_alloc_err;
+    struct upipe *output = upipe_use(upipe_rtpsrc->source);
 
-    struct upipe *rtpd = upipe_void_alloc_output(upipe_rtpsrc->source,
+    if (flow_def != NULL) {
+        output = upipe_void_chain_output(output,
+                rtpsrc_mgr->setflowdef_mgr,
+                uprobe_pfx_alloc(uprobe_use(&upipe_rtpsrc->proxy_probe),
+                                 UPROBE_LOG_VERBOSE, "setflowdef"));
+        if (unlikely(output == NULL))
+            goto upipe_rtpsrc_alloc_err;
+        upipe_setflowdef_set_dict(output, flow_def);
+        uref_free(flow_def);
+    }
+
+    output = upipe_void_chain_output(output,
             rtpsrc_mgr->rtpd_mgr,
             uprobe_pfx_alloc(uprobe_use(&upipe_rtpsrc->last_inner_probe),
                              UPROBE_LOG_VERBOSE, "rtpd"));
-    if (unlikely(rtpd == NULL))
+    if (unlikely(output == NULL))
         goto upipe_rtpsrc_alloc_err;
-    upipe_rtpsrc_store_bin_output(upipe, rtpd);
+    upipe_rtpsrc_store_bin_output(upipe, output);
     return upipe;
 
 upipe_rtpsrc_alloc_err:
+    uref_free(flow_def);
     upipe_release(upipe);
     return NULL;
 }
@@ -194,6 +212,11 @@ static int upipe_rtpsrc_control(struct upipe *upipe, int command, va_list args)
         case UPIPE_GET_URI:
         case UPIPE_SET_URI:
             return upipe_control_va(upipe_rtpsrc->source, command, args);
+        case UPIPE_BIN_GET_FIRST_INNER: {
+            struct upipe **p = va_arg(args, struct upipe **);
+            *p = upipe_rtpsrc->source;
+            return (*p != NULL) ? UBASE_ERR_NONE : UBASE_ERR_UNHANDLED;
+        }
 
         default:
             return upipe_rtpsrc_control_bin_output(upipe, command, args);
@@ -214,7 +237,7 @@ static void upipe_rtpsrc_free(struct urefcount *urefcount_real)
     upipe_rtpsrc_clean_last_inner_probe(upipe);
     urefcount_clean(urefcount_real);
     upipe_rtpsrc_clean_urefcount(upipe);
-    upipe_rtpsrc_free_void(upipe);
+    upipe_rtpsrc_free_flow(upipe);
 }
 
 /** @This is called when there is no external reference to the pipe anymore.
@@ -277,6 +300,7 @@ static int upipe_rtpsrc_mgr_control(struct upipe_mgr *mgr,
 
         GET_SET_MGR(udpsrc, UDPSRC)
         GET_SET_MGR(rtpd, RTPD)
+        GET_SET_MGR(setflowdef, SETFLOWDEF)
 #undef GET_SET_MGR
 
         default:
@@ -294,8 +318,10 @@ struct upipe_mgr *upipe_rtpsrc_mgr_alloc(void)
     if (unlikely(rtpsrc_mgr == NULL))
         return NULL;
 
+    memset(rtpsrc_mgr, 0, sizeof(*rtpsrc_mgr));
     rtpsrc_mgr->udpsrc_mgr = upipe_udpsrc_mgr_alloc();
     rtpsrc_mgr->rtpd_mgr = upipe_rtpd_mgr_alloc();
+    rtpsrc_mgr->setflowdef_mgr = upipe_setflowdef_mgr_alloc();
 
     urefcount_init(upipe_rtpsrc_mgr_to_urefcount(rtpsrc_mgr),
                    upipe_rtpsrc_mgr_free);

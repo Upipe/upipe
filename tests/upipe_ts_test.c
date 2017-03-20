@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2013-2015 OpenHeadend S.A.R.L.
+ * Copyright (C) 2013-2017 OpenHeadend S.A.R.L.
  *
  * Authors: Christophe Massiot
  *
@@ -63,6 +63,8 @@
 #include <upipe-framers/upipe_h265_framer.h>
 #include <upipe-framers/upipe_mpga_framer.h>
 #include <upipe-framers/upipe_a52_framer.h>
+#include <upipe-framers/upipe_telx_framer.h>
+#include <upipe-framers/upipe_dvbsub_framer.h>
 #include <upipe-framers/upipe_video_trim.h>
 #include <upipe-modules/upipe_file_source.h>
 #include <upipe-modules/upipe_file_sink.h>
@@ -77,8 +79,6 @@
 #include <unistd.h>
 #include <inttypes.h>
 #include <assert.h>
-
-#include <ev.h>
 
 #define UDICT_POOL_DEPTH 0
 #define UREF_POOL_DEPTH 0
@@ -312,7 +312,6 @@ int main(int argc, char *argv[])
     src_file = argv[1];
     sink_file = argv[2];
 
-    struct ev_loop *loop = ev_default_loop(0);
     struct umem_mgr *umem_mgr = umem_alloc_mgr_alloc();
     assert(umem_mgr != NULL);
     struct udict_mgr *udict_mgr = udict_inline_mgr_alloc(UDICT_POOL_DEPTH,
@@ -320,7 +319,7 @@ int main(int argc, char *argv[])
     assert(udict_mgr != NULL);
     uref_mgr = uref_std_mgr_alloc(UREF_POOL_DEPTH, udict_mgr, 0);
     assert(uref_mgr != NULL);
-    upump_mgr = upump_ev_mgr_alloc(loop, UPUMP_POOL, UPUMP_BLOCKER_POOL);
+    upump_mgr = upump_ev_mgr_alloc_default(UPUMP_POOL, UPUMP_BLOCKER_POOL);
     assert(upump_mgr != NULL);
 
     struct uprobe uprobe_s;
@@ -379,6 +378,10 @@ int main(int argc, char *argv[])
     assert(upipe_mpgaf_mgr != NULL);
     struct upipe_mgr *upipe_a52f_mgr = upipe_a52f_mgr_alloc();
     assert(upipe_a52f_mgr != NULL);
+    struct upipe_mgr *upipe_telxf_mgr = upipe_telxf_mgr_alloc();
+    assert(upipe_telxf_mgr != NULL);
+    struct upipe_mgr *upipe_dvbsubf_mgr = upipe_dvbsubf_mgr_alloc();
+    assert(upipe_dvbsubf_mgr != NULL);
 
     struct upipe_mgr *upipe_ts_demux_mgr = upipe_ts_demux_mgr_alloc();
     assert(upipe_ts_demux_mgr != NULL);
@@ -392,6 +395,10 @@ int main(int argc, char *argv[])
                                                   upipe_mpgaf_mgr));
     ubase_assert(upipe_ts_demux_mgr_set_a52f_mgr(upipe_ts_demux_mgr,
                                                  upipe_a52f_mgr));
+    ubase_assert(upipe_ts_demux_mgr_set_telxf_mgr(upipe_ts_demux_mgr,
+                                                  upipe_telxf_mgr));
+    ubase_assert(upipe_ts_demux_mgr_set_dvbsubf_mgr(upipe_ts_demux_mgr,
+                                                    upipe_dvbsubf_mgr));
 
     struct upipe *upipe_ts = upipe_void_alloc_output(upipe_fsrc,
             upipe_ts_demux_mgr,
@@ -404,6 +411,8 @@ int main(int argc, char *argv[])
     upipe_mgr_release(upipe_h265f_mgr);
     upipe_mgr_release(upipe_mpgaf_mgr);
     upipe_mgr_release(upipe_a52f_mgr);
+    upipe_mgr_release(upipe_telxf_mgr);
+    upipe_mgr_release(upipe_dvbsubf_mgr);
     upipe_mgr_release(upipe_fsrc_mgr);
     ubase_assert(upipe_ts_demux_set_conformance(upipe_ts,
                                                 UPIPE_TS_CONFORMANCE_ISO));
@@ -435,7 +444,7 @@ int main(int argc, char *argv[])
 
     upipe_release(upipe_ts);
 
-    ev_loop(loop, 0);
+    upump_mgr_run(upump_mgr, NULL);
 
     upipe_release(upipe_even);
     uprobe_release(logger);
@@ -445,6 +454,5 @@ int main(int argc, char *argv[])
     uprobe_clean(&uprobe_src_s);
     uprobe_clean(&uprobe_s);
 
-    ev_default_destroy();
     return 0;
 }

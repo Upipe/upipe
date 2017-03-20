@@ -4,77 +4,39 @@
 
 #include <upipe/ubase.h>
 #include <upipe/uprobe.h>
-#include <upipe/uref.h>
 #include <upipe/uref_block.h>
 #include <upipe/uref_block_flow.h>
-#include <upipe/ubuf.h>
 #include <upipe/uref_pic_flow.h>
 #include <upipe/uref_pic.h>
 #include <upipe/upipe.h>
 #include <upipe/ulist.h>
 #include <upipe/uref_flow.h>
+#include <upipe/uref.h>
 #include <upipe/uref_dump.h>
+#include <upipe/uref_clock.h>
 #include <upipe/upump.h>
 #include <upipe/upipe_helper_uclock.h>
 #include <upipe/upipe_helper_upipe.h>
 #include <upipe/upipe_helper_upipe.h>
 #include <upipe/upipe_helper_urefcount.h>
-#include <upipe/upipe_helper_flow.h>
 #include <upipe/upipe_helper_flow_def.h>
 #include <upipe/upipe_helper_output.h>
-#include <upipe/upipe_helper_void.h>
-#include <upipe/upipe_helper_uref_mgr.h>
 #include <upipe/upipe_helper_upump_mgr.h>
 #include <upipe/upipe_helper_upump.h>
 
-#include <upipe-modules/upipe_rtp_decaps.h>
 #include <upipe-modules/upipe_rtp_fec.h>
+
 #include <bitstream/ietf/rtp.h>
+#include <bitstream/mpeg/ts.h>
 #include <bitstream/smpte/2022_1_fec.h>
 
-#include <stdlib.h>
-#include <stdbool.h>
-#include <stdint.h>
-#include <stdarg.h>
-#include <string.h>
-#include <unistd.h>
-#include <errno.h>
-#include <assert.h>
-
 #define UPIPE_FEC_JITTER UCLOCK_FREQ/25
-
-/** @hidden */
-static int upipe_rtp_fec_check(struct upipe *upipe, struct uref *flow_format);
-
-/** @internal @This is the private context of an output of an upipe_rtp_fec sub
- * pipe. */
-struct upipe_rtp_fec_sub {
-    /** refcount management structure */
-    struct urefcount urefcount;
-    /** structure for double-linked lists */
-    struct uchain uchain;
-
-    /** buffered urefs */
-    struct uchain urefs;
-
-    /** public upipe structure */
-    struct upipe upipe;
-};
-
-struct seqnum_history {
-    uint64_t seqnum;
-    uint64_t date_sys;
-};
+#define FEC_MAX 255
 
 /** upipe_rtp_fec structure with rtp-fec parameters */
 struct upipe_rtp_fec {
     /** refcount management structure */
     struct urefcount urefcount;
-
-    /** uref manager */
-    struct uref_mgr *uref_mgr;
-    /** uref manager request */
-    struct urequest uref_mgr_request;
 
     /** uclock structure, if not NULL we are in live mode */
     struct uclock *uclock;
@@ -89,36 +51,36 @@ struct upipe_rtp_fec {
     /** watcher */
     struct upump *upump;
 
-    int64_t pkts_since_last_fec;
+    uint64_t pkts_since_last_fec;
 
     int cols;
     int rows;
 
-    uint64_t first_seqnum;
-    uint64_t last_seqnum;
-    uint64_t last_send_seqnum;
+    uint32_t first_seqnum;
+    uint32_t last_seqnum;
+    uint32_t last_send_seqnum;
 
     /* Lowest (base) sequence number of current FEC matrix */
-    uint64_t cur_matrix_snbase;
+    uint32_t cur_matrix_snbase;
     /* Lowest (base) sequence number of current FEC row */
-    uint64_t cur_row_fec_snbase;
+    uint32_t cur_row_fec_snbase;
 
-    struct seqnum_history *recent;
-    int recent_len;
+    struct {
+        uint64_t seqnum;
+        uint64_t date_sys;
+    } recent[2 * FEC_MAX * FEC_MAX];
     uint64_t latency;
 
     /** main subpipe **/
-    struct upipe_rtp_fec_sub main_subpipe;
+    struct upipe main_subpipe;
     /** col subpipe */
-    struct upipe_rtp_fec_sub col_subpipe;
+    struct upipe col_subpipe;
     /** row subpipe */
-    struct upipe_rtp_fec_sub row_subpipe;
+    struct upipe row_subpipe;
 
     struct uchain main_queue;
     struct uchain col_queue;
     struct uchain row_queue;
-
-    int pump_start;
 
     /** output pipe */
     struct upipe *output;
@@ -138,24 +100,17 @@ UPIPE_HELPER_UREFCOUNT(upipe_rtp_fec, urefcount, upipe_rtp_fec_free);
 
 UPIPE_HELPER_OUTPUT(upipe_rtp_fec, output, flow_def, output_state, request_list)
 
-UPIPE_HELPER_UREF_MGR(upipe_rtp_fec, uref_mgr, uref_mgr_request,
-                      upipe_rtp_fec_check,
-                      upipe_rtp_fec_register_output_request,
-                      upipe_rtp_fec_unregister_output_request)
-
-UPIPE_HELPER_UCLOCK(upipe_rtp_fec, uclock, uclock_request, upipe_rtp_fec_check,
+UPIPE_HELPER_UCLOCK(upipe_rtp_fec, uclock, uclock_request, NULL,
                     upipe_rtp_fec_register_output_request,
                     upipe_rtp_fec_unregister_output_request)
 
 UPIPE_HELPER_UPUMP_MGR(upipe_rtp_fec, upump_mgr);
 UPIPE_HELPER_UPUMP(upipe_rtp_fec, upump, upump_mgr);
 
-UPIPE_HELPER_UPIPE(upipe_rtp_fec_sub, upipe, UPIPE_RTP_FEC_INPUT_SIGNATURE)
-
 UBASE_FROM_TO(upipe_rtp_fec, upipe_mgr, sub_mgr, sub_mgr)
-UBASE_FROM_TO(upipe_rtp_fec, upipe_rtp_fec_sub, main_subpipe, main_subpipe)
-UBASE_FROM_TO(upipe_rtp_fec, upipe_rtp_fec_sub, col_subpipe, col_subpipe)
-UBASE_FROM_TO(upipe_rtp_fec, upipe_rtp_fec_sub, row_subpipe, row_subpipe)
+UBASE_FROM_TO(upipe_rtp_fec, upipe, main_subpipe, main_subpipe)
+UBASE_FROM_TO(upipe_rtp_fec, upipe, col_subpipe, col_subpipe)
+UBASE_FROM_TO(upipe_rtp_fec, upipe, row_subpipe, row_subpipe)
 
 /** @internal @This initializes an subpipe of a rtp fec pipe.
  *
@@ -173,384 +128,347 @@ static void upipe_rtp_fec_sub_init(struct upipe *upipe,
     upipe_throw_ready(upipe);
 }
 
-static void upipe_rtp_fec_xor_c(uint8_t *dst, const uint8_t *src, size_t len)
+static inline bool seq_num_lt(uint16_t s1, uint16_t s2)
 {
-    for (int i = 0; i < len; i++)
-        dst[i] ^= src[i];
+    uint16_t diff = s2 - s1;
+    if (s1 == s2)
+        return false;
+
+    return diff < 0x8000;
 }
 
-/* based off Live555 code */
-static inline int seq_num_lt(uint16_t s1, uint16_t s2)
- {
-    /* a 'less-than' on 16-bit sequence numbers */
-    int diff = s2-s1;
-    if (diff > 0)
-        return (diff < 0x8000);
-    else if (diff < 0)
-        return (diff < -0x8000);
-    else
-        return 0;
+static void upipe_rtp_fec_extract_parameters(struct uref *fec_uref,
+                                             uint32_t *ts_rec,
+                                             uint16_t *length_rec)
+{
+    uint8_t fec_header[SMPTE_2022_FEC_HEADER_SIZE];
+
+    const uint8_t *peek = uref_block_peek(fec_uref, RTP_HEADER_SIZE,
+            sizeof(fec_header), fec_header);
+    if (ts_rec)
+        *ts_rec = smpte_fec_get_ts_recovery(peek);
+    if (length_rec)
+        *length_rec = smpte_fec_get_length_rec(peek);
+    uref_block_peek_unmap(fec_uref, RTP_HEADER_SIZE, fec_header, peek);
 }
 
-/* Clears the main queue of packets with seqnum < snbase */
-static void clear_main_list(struct uchain *main_list, uint64_t snbase)
+/* Delete main packets older than the reference point */
+static void clear_main_list(struct uchain *main_list, uint16_t snbase)
 {
     struct uchain *uchain, *uchain_tmp;
 
-    /* Delete main packets older than the reference point */
     ulist_delete_foreach (main_list, uchain, uchain_tmp) {
         struct uref *uref = uref_from_uchain(uchain);
-        uint64_t seqnum = 0;
-        uref_rtp_get_seqnum(uref, &seqnum);
+        if (!seq_num_lt(uref->priv, snbase))
+            break;
 
-        if (seq_num_lt(seqnum, snbase)){
-            ulist_delete(uchain);
-            uref_free(uref);
-        }
+        ulist_delete(uchain);
+        uref_free(uref);
     }
 }
 
-static void clear_fec_list(struct uchain *fec_list, uint64_t last_fec_snbase)
+// TODO : merge with above, cache seqnum
+/* Delete FEC packets older than the reference point */
+static void clear_fec_list(struct uchain *fec_list, uint16_t last_fec_snbase)
 {
     struct uchain *uchain, *uchain_tmp;
-    const uint8_t *peek;
-    uint8_t fec_header[SMPTE_2022_FEC_HEADER_SIZE];
-    int size = SMPTE_2022_FEC_HEADER_SIZE;
-
-    /* Delete FEC packets older than the reference point */
     ulist_delete_foreach (fec_list, uchain, uchain_tmp) {
         struct uref *fec_uref = uref_from_uchain(uchain);
-        peek = uref_block_peek(fec_uref, 0, size, fec_header);
-        uint64_t snbase_low = smpte_fec_get_snbase_low(peek);
-        uref_block_peek_unmap(fec_uref, 0, fec_header, peek);
+        uint16_t snbase_low = fec_uref->priv >> 32;
 
-        if (seq_num_lt(snbase_low, last_fec_snbase)) {
-            ulist_delete(uchain);
-            uref_free(fec_uref);
-        }
+        if (!seq_num_lt(snbase_low, last_fec_snbase))
+            break;
+
+        ulist_delete(uchain);
+        uref_free(fec_uref);
     }
 }
 
 static void insert_ordered_uref(struct uchain *queue, struct uref *uref)
 {
-    int dup = 0, ooo = 0;
+    uint16_t new_seqnum = uref->priv;
+
     struct uchain *uchain, *uchain_tmp;
-    uint64_t new_seqnum = 0;
-    uref_rtp_get_seqnum(uref, &new_seqnum);
-
-    //printf("\n INSERT \n");
-
     ulist_delete_foreach_reverse(queue, uchain, uchain_tmp) {
         struct uref *cur_uref = uref_from_uchain(uchain);
-        uint64_t seqnum = 0;
-        uref_rtp_get_seqnum(cur_uref, &seqnum);
+        uint16_t seqnum = cur_uref->priv;
 
-        //printf("\n checking seqnum %u new_seqnum %u \n", seqnum, new_seqnum);
-        if (seq_num_lt(new_seqnum, seqnum)) {
-            /* Inserting first needs a special case */
-            if (ulist_is_first(queue, uchain)){
-                //printf("\n FIRST insert %u before %u \n", new_seqnum, seqnum );
-                uref_clock_delete_date_sys(uref);
-                ulist_insert(uchain->prev, uchain, uref_to_uchain(uref));
-                ooo = 1;
-                break;
-            }
-            else {
-                struct uref *prev_uref = uref_from_uchain(uchain->prev);
-                uint64_t prev_seqnum = 0;
-                uref_rtp_get_seqnum(prev_uref, &prev_seqnum);
-                if (!seq_num_lt(new_seqnum, prev_seqnum) && !(new_seqnum == prev_seqnum)) {
-                    //printf("\n insert %u before %u \n", new_seqnum, seqnum );
-                    uref_clock_delete_date_sys(uref);
-                    ulist_insert(uchain->prev, uchain, uref_to_uchain(uref));
-                    ooo = 1;
-                    break;
-                }
-            }
-        }
         /* Duplicate packet */
-        else if (new_seqnum == seqnum) {
-            //printf("\n duplicate \n");
-            dup = 1;
+        if (new_seqnum == seqnum) {
             uref_free(uref);
-            break;
+            return;
         }
-        else
+
+        if (!seq_num_lt(new_seqnum, seqnum))
             break;
+
+        /* Check previous packet if any */
+        struct uref *prev_uref = uref_from_uchain(uchain->prev);
+        if (prev_uref) {
+            uint16_t prev_seqnum = prev_uref->priv;
+            if (prev_seqnum == new_seqnum)
+                continue;
+
+            if (seq_num_lt(new_seqnum, prev_uref->priv))
+                continue;
+        }
+
+        //uref_clock_delete_date_sys(uref);
+        ulist_insert(uchain->prev, uchain, uref_to_uchain(uref));
+        return;
     }
 
-    /* Add to end if normal packet */
-    if ((!dup && !ooo)) {
-        ulist_add(queue, uref_to_uchain(uref));
-        //printf("\n adding %u \n", new_seqnum);
-    }
+    /* Add to end of queue */
+    ulist_add(queue, uref_to_uchain(uref));
 }
 
-static void upipe_rtp_fec_extract_parameters(struct uref *fec_uref,
-                                             uint64_t *snbase_low,
-                                             uint64_t *ts_rec,
-                                             uint16_t *length_rec)
+/* apply the correction from that fec packet */
+static void upipe_rtp_fec_correct_packets(struct upipe *upipe,
+        struct uref *fec_uref, uint16_t *seqnum_list, int items)
 {
-    const uint8_t *peek;
-    uint8_t fec_header[SMPTE_2022_FEC_HEADER_SIZE];
-    size_t size = SMPTE_2022_FEC_HEADER_SIZE;
-    
-    peek = uref_block_peek(fec_uref, 0, size, fec_header);
-    *snbase_low = smpte_fec_get_snbase_low(peek);
-    *ts_rec = smpte_fec_get_ts_recovery(peek);
-    *length_rec = smpte_fec_get_length_rec(peek);
-    uref_block_peek_unmap(fec_uref, 0, fec_header, peek);
-}
+    struct upipe_rtp_fec *upipe_rtp_fec = upipe_rtp_fec_from_upipe(upipe);
 
-static void upipe_rtp_fec_correct_packets(struct upipe_rtp_fec *upipe_rtp_fec,
-                                          struct uref *fec_uref,
-                                          uint64_t ts_rec,
-                                          uint16_t length_rec,
-                                          uint16_t *seqnum_list,
-                                          int items)
-{
-    struct uchain *uchain, *uchain_tmp;
-    const uint8_t *peek;
-    uint64_t seqnum = 0;
-    bool found_seqnum[50] = {0};
-    uint8_t payload_buf[188*7];
+    bool found_seqnum[FEC_MAX] = {0};
 
-    /* Build a list of expected packets */
     int processed = 0;
+    struct uchain *uchain, *uchain_tmp;
     ulist_foreach (&upipe_rtp_fec->main_queue, uchain) {
         struct uref *uref = uref_from_uchain(uchain);
-        uref_rtp_get_seqnum(uref, &seqnum);
+        uint16_t seqnum = uref->priv;
 
+        // TODO: reduce complexity, both lists are ordered
         for (int i = 0; i < items; i++) {
-            if (seqnum_list[i] == seqnum) {
-                processed++;
-                found_seqnum[i] = 1;
-            }
+            if (seqnum_list[i] != seqnum)
+                continue;
 
-            if (processed == items)
-                break;
+            found_seqnum[i] = true;
+            if (++processed < items)
+                break; /* next uref */
+
+            upipe_verbose_va(upipe, "no packets lost");
+            uref_free(fec_uref);
+            return;
         }
     }
 
-    //printf("\n items %i processed %i snbase %u \n", items, processed, seqnum_list[0] );
-    /* Recoverable packet */
-    if (processed == items-1) {
-        uint64_t missing_seqnum = 0;
-        uint8_t *dst;
-
-        ulist_foreach (&upipe_rtp_fec->main_queue, uchain) {
-            struct uref *uref = uref_from_uchain(uchain);
-            size_t uref_len = 0;
-            uref_rtp_get_seqnum(uref, &seqnum);
-
-            /* Recover length and timestamp of missing packet */
-            for (int i = 0; i < items; i++) {
-                if(seqnum_list[i] == seqnum) {
-                    uint64_t timestamp = 0;
-                    uref_rtp_get_timestamp(uref, &timestamp);
-                    uref_block_size(uref, &uref_len);
-                    length_rec ^= uref_len;
-                    ts_rec ^= timestamp;
-                    //printf("\n applying items %u length rec %u seqnum %u \n", items, uref_len, seqnum );
-                }
-            }
-        }
-
-        if( length_rec != 1316 )
-        {
-            //printf("\n DUBIOUS REC LEN %i \n", length_rec );
-        }
-
-        for (int i = 0; i < items; i++) {
-            if (found_seqnum[i] == 0) {
-                missing_seqnum = seqnum_list[i];
-                break;
-            }
-        }
-
-        uref_block_resize(fec_uref, SMPTE_2022_FEC_HEADER_SIZE, -1);
-        uref_block_write(fec_uref, 0, (int *)&length_rec, &dst);
-
-        processed = 0;
-        ulist_foreach (&upipe_rtp_fec->main_queue, uchain) {
-            struct uref *uref = uref_from_uchain(uchain);
-            size_t size = 0;
-            uref_rtp_get_seqnum(uref, &seqnum);
-
-            for (int i = 0; i < items; i++) {
-                if (seqnum_list[i] == seqnum) {
-                    uref_block_size(uref, &size);
-                    peek = uref_block_peek(uref, 0, -1, payload_buf);
-                    upipe_rtp_fec_xor_c(dst, peek, size);
-                    uref_block_peek_unmap(uref, 0, payload_buf, peek);
-                    break;
-                }
-            }
-
-            if (processed == items-1)
-                break;
-        }
-
-        upipe_warn_va(&upipe_rtp_fec->upipe, "Corrected packet. Sequence number: %u", missing_seqnum);
-        //printf("\n items %i correctheader %x not-lost seqnum %u timestamp %u \n", items, dst[0], missing_seqnum, ts_rec );
-        uref_block_unmap(fec_uref, 0);
-        uref_rtp_set_seqnum(fec_uref, missing_seqnum);
-        uref_rtp_set_timestamp(fec_uref, ts_rec);
-
-        insert_ordered_uref(&upipe_rtp_fec->main_queue, fec_uref);
-    }
-    else {
+    if (processed != items - 1) {
+        upipe_err_va(upipe, "Too much packet loss: found only %d out of %d",
+                processed, items);
         uref_free(fec_uref);
+        return;
     }
+
+    /* Extract parameters from FEC packet */
+    uint16_t length_rec;
+    uint32_t ts_rec;
+    upipe_rtp_fec_extract_parameters(fec_uref, &ts_rec, &length_rec);
+
+    /* Recoverable packet */
+    ulist_foreach (&upipe_rtp_fec->main_queue, uchain) {
+        struct uref *uref = uref_from_uchain(uchain);
+
+        // TODO: only if in list?
+
+        uint8_t rtp_buffer[RTP_HEADER_SIZE];
+        const uint8_t *rtp_header = uref_block_peek(uref, 0, RTP_HEADER_SIZE,
+                rtp_buffer);
+        if (unlikely(rtp_header == NULL)) {
+            upipe_warn(upipe, "invalid buffer");
+            continue;
+        }
+
+        uint32_t timestamp = rtp_get_timestamp(rtp_header);
+        uref_block_peek_unmap(uref, 0, rtp_buffer, rtp_header);
+
+        /* Recover length and timestamp of missing packet */
+        for (int i = 0; i < items; i++) {
+            if (seqnum_list[i] == uref->priv) {
+                size_t uref_len = 0;
+                uref_block_size(uref, &uref_len);
+                uref_len -= RTP_HEADER_SIZE;
+
+                length_rec ^= uref_len;
+                ts_rec ^= timestamp;
+            }
+        }
+    }
+
+    if (length_rec != 7 * TS_SIZE)
+        upipe_warn_va(upipe_rtp_fec_to_upipe(upipe_rtp_fec),
+                "DUBIOUS REC LEN %i timestamp %u", length_rec, ts_rec);
+
+    uref_block_resize(fec_uref, SMPTE_2022_FEC_HEADER_SIZE, -1);
+    uint8_t *dst;
+    int size = length_rec + RTP_HEADER_SIZE;
+    uref_block_write(fec_uref, 0, &size, &dst);
+
+    bool copy_header = true;
+
+    ulist_foreach (&upipe_rtp_fec->main_queue, uchain) {
+        struct uref *uref = uref_from_uchain(uchain);
+        for (int i = 0; i < items; i++) {
+            if (seqnum_list[i] == uref->priv) {
+                size_t size = 0;
+                uref_block_size(uref, &size);
+                assert(size >= RTP_HEADER_SIZE);
+                uint8_t payload_buf[TS_SIZE * 7 + RTP_HEADER_SIZE];
+                assert(size <= sizeof(payload_buf)); // FIXME
+                // TODO: uref_block_read in a loop
+                const uint8_t *peek = uref_block_peek(uref, 0, size,
+                        payload_buf);
+                if (copy_header) {
+                    memcpy(dst, peek, RTP_HEADER_SIZE);
+                    copy_header = false;
+                }
+                for (int i = 0; i < size - RTP_HEADER_SIZE; i++)
+                    dst[RTP_HEADER_SIZE + i] ^= peek[RTP_HEADER_SIZE + i];
+                uref_block_peek_unmap(uref, RTP_HEADER_SIZE, payload_buf, peek);
+                break;
+            }
+        }
+
+        if (items == 1) // ???
+            break;
+    }
+
+    // XXX
+    uint16_t missing_seqnum = 0;
+    for (int i = 0; i < items; i++)
+        if (!found_seqnum[i]) {
+            missing_seqnum = seqnum_list[i];
+            break;
+        }
+
+    upipe_warn_va(&upipe_rtp_fec->upipe, "Corrected packet. Sequence number: %u", missing_seqnum);
+    fec_uref->priv = missing_seqnum;
+    rtp_set_seqnum(dst, missing_seqnum);
+    rtp_set_timestamp(dst, ts_rec);
+    uref_block_unmap(fec_uref, 0);
+    uref_block_resize(fec_uref, 0, size);
+
+    insert_ordered_uref(&upipe_rtp_fec->main_queue, fec_uref);
 }
 
-static int upipe_rtp_fec_apply_col_fec(struct upipe_rtp_fec *upipe_rtp_fec)
+static void upipe_rtp_fec_apply_col_fec(struct upipe *upipe)
 {
-    uint64_t snbase_low, ts_rec;
-    uint16_t length_rec;
-    uint16_t seqnum_list[50];
+    struct upipe_rtp_fec *upipe_rtp_fec = upipe_rtp_fec_from_upipe(upipe);
+    uint16_t seqnum_list[FEC_MAX];
 
-    while (1) {
+    for (;;) {
         struct uchain *fec_uchain = ulist_peek(&upipe_rtp_fec->col_queue);
         if (!fec_uchain)
             break;
-        struct uref *fec_uref = uref_from_uchain(fec_uchain);
 
-        /* Extract parameters from FEC packet */
-        upipe_rtp_fec_extract_parameters(fec_uref, &snbase_low, &ts_rec, &length_rec); 
-        uint64_t col_delta = (upipe_rtp_fec->last_seqnum + UINT16_MAX - snbase_low) & UINT16_MAX;
+        struct uref *fec_uref = uref_from_uchain(fec_uchain);
+        uint16_t snbase_low = fec_uref->priv >> 32;
+        uint16_t col_delta = upipe_rtp_fec->last_seqnum - snbase_low - 1;
 
         /* Account for late column FEC packets by making sure at least one extra row exists */
-        if (col_delta > (upipe_rtp_fec->cols+1)*upipe_rtp_fec->rows) {
-            ulist_pop(&upipe_rtp_fec->col_queue);
-            /* If no current matrix is being processed and we have enough packets
-             * set existing matrix to the snbase value */
-            if (upipe_rtp_fec->cur_matrix_snbase == UINT64_MAX &&
-                seq_num_lt(upipe_rtp_fec->first_seqnum, snbase_low))
-                upipe_rtp_fec->cur_matrix_snbase = snbase_low;
-
-            uint16_t expected_seqnum = snbase_low;
-
-            //printf("\n col queuelen %i snbaselow %u \n", ulist_depth(&upipe_rtp_fec->main_queue), expected_seqnum ); 
-
-            /* Build a list of the expected sequence numbers in matrix column */
-            for (int i = 0; i < upipe_rtp_fec->rows; i++) {
-                seqnum_list[i] = expected_seqnum;
-                expected_seqnum += upipe_rtp_fec->cols;
-            }
-
-            upipe_rtp_fec_correct_packets(upipe_rtp_fec, fec_uref, ts_rec,
-                                          length_rec, seqnum_list, upipe_rtp_fec->rows);
-        }
-        else {
+        if (col_delta <= (upipe_rtp_fec->cols + 1) * upipe_rtp_fec->rows)
             break;
-        }
-    }
 
-    return 0;
+        ulist_pop(&upipe_rtp_fec->col_queue);
+
+        /* If no current matrix is being processed and we have enough packets
+         * set existing matrix to the snbase value */
+        if (upipe_rtp_fec->cur_matrix_snbase == UINT32_MAX &&
+            seq_num_lt(upipe_rtp_fec->first_seqnum, snbase_low)) {
+            upipe_rtp_fec->cur_matrix_snbase = snbase_low;
+        }
+
+        /* Build a list of the expected sequence numbers in matrix column */
+        for (int i = 0; i < upipe_rtp_fec->rows; i++) {
+            seqnum_list[i] = snbase_low;
+            snbase_low += upipe_rtp_fec->cols;
+        }
+
+        upipe_rtp_fec_correct_packets(upipe, fec_uref, seqnum_list,
+                upipe_rtp_fec->rows);
+    }
 }
 
-static int upipe_rtp_fec_apply_row_fec(struct upipe_rtp_fec *upipe_rtp_fec,
-                                       uint64_t cur_row_fec_snbase)
+static void upipe_rtp_fec_apply_row_fec(struct upipe *upipe,
+                                       uint16_t cur_row_fec_snbase)
 {
-    uint64_t snbase_low, ts_rec;
-    uint16_t length_rec;
-    uint16_t seqnum_list[50];
+    struct upipe_rtp_fec *upipe_rtp_fec = upipe_rtp_fec_from_upipe(upipe);
+
+    uint16_t seqnum_list[FEC_MAX];
 
     /* get rid of old row FEC packets */
     clear_fec_list(&upipe_rtp_fec->row_queue, cur_row_fec_snbase);
 
-    //printf("\n try row depth %i \n", ulist_depth(&upipe_rtp_fec->row_queue));
-
     /* Row FEC packets are optional so may not actually exist */
     struct uchain *fec_uchain = ulist_pop(&upipe_rtp_fec->row_queue);
     if (!fec_uchain)
-        return 0;
+        return;
+
     struct uref *fec_uref = uref_from_uchain(fec_uchain);
-
-    /* Extract FEC parameters */
-    upipe_rtp_fec_extract_parameters(fec_uref, &snbase_low, &ts_rec, &length_rec);
-
-    uint16_t expected_seqnum = snbase_low;
+    uint16_t snbase_low = fec_uref->priv >> 32;
 
     upipe_rtp_fec->cur_row_fec_snbase = snbase_low;
 
-    //printf("\n row processing %"PRIu64" \n", snbase_low);
-    //printf("\n row queuelen %i snbaselow %u length-rec %u \n", ulist_depth(&upipe_rtp_fec->main_queue), expected_seqnum, length_rec );
-
     /* Build a list of the expected sequence numbers */
     for (int i = 0; i < upipe_rtp_fec->cols; i++)
-        seqnum_list[i] = expected_seqnum++;
+        seqnum_list[i] = snbase_low++;
 
-    upipe_rtp_fec_correct_packets(upipe_rtp_fec, fec_uref, ts_rec,
-                                  length_rec, seqnum_list, upipe_rtp_fec->cols);
-
-    return 0;
+    upipe_rtp_fec_correct_packets(upipe, fec_uref, seqnum_list,
+            upipe_rtp_fec->cols);
 }
 
-
+static void upipe_rtp_fec_clear_queue(struct uchain *queue)
+{
+    struct uchain *uchain, *uchain_tmp;
+    ulist_delete_foreach (queue, uchain, uchain_tmp) {
+        struct uref *uref = uref_from_uchain(uchain);
+        ulist_delete(uchain);
+        uref_free(uref);
+    }
+}
 
 static void upipe_rtp_fec_clear(struct upipe_rtp_fec *upipe_rtp_fec)
 {
-    struct uchain *uchain, *uchain_tmp;
-    ulist_delete_foreach (&upipe_rtp_fec->main_queue, uchain, uchain_tmp) {
-        struct uref *uref = uref_from_uchain(uchain);
-        ulist_delete(uchain);
-        uref_free(uref);
-    }
-
-    ulist_delete_foreach (&upipe_rtp_fec->col_queue, uchain, uchain_tmp) {
-        struct uref *uref = uref_from_uchain(uchain);
-        ulist_delete(uchain);
-        uref_free(uref);
-    }
-
-    ulist_delete_foreach (&upipe_rtp_fec->row_queue, uchain, uchain_tmp) {
-        struct uref *uref = uref_from_uchain(uchain);
-        ulist_delete(uchain);
-        uref_free(uref);
-    }
+    upipe_rtp_fec_clear_queue(&upipe_rtp_fec->main_queue);
+    upipe_rtp_fec_clear_queue(&upipe_rtp_fec->col_queue);
+    upipe_rtp_fec_clear_queue(&upipe_rtp_fec->row_queue);
 }
 
+// TODO: wait_upump?
 static void upipe_rtp_fec_timer(struct upump *upump)
 {
     struct upipe *upipe = upump_get_opaque(upump, struct upipe *);
     struct upipe_rtp_fec *upipe_rtp_fec = upipe_rtp_fec_from_upipe(upipe);
     uint64_t now = uclock_now(upipe_rtp_fec->uclock);
-    uint64_t date_sys, seqnum = 0;
-    int type;
+
     struct uchain *uchain, *uchain_tmp;
-    struct uref *uref;
-
-    //printf("\n iter \n");
-
     ulist_delete_foreach (&upipe_rtp_fec->main_queue, uchain, uchain_tmp) {
-        uref = uref_from_uchain(uchain);
+        struct uref *uref = uref_from_uchain(uchain);
+        uint64_t date_sys = UINT64_MAX;
+        int type;
         uref_clock_get_date_sys(uref, &date_sys, &type);
-        uref_rtp_get_seqnum(uref, &seqnum);
+        uint64_t seqnum = uref->priv & UINT32_MAX;
 
-        //printf("\n check now %"PRIu64" date_sys %"PRIu64" seqnum %"PRIu64" latency %"PRIu64"  \n", now, date_sys, seqnum, upipe_rtp_fec->latency );
-        if (now >= date_sys + upipe_rtp_fec->latency || date_sys == UINT64_MAX) {
-            //printf("\n send now %"PRIu64" date_sys %"PRIu64" seqnum %"PRIu64" \n", now, date_sys, seqnum );
+        if (date_sys != UINT64_MAX) {
+            // TODO: replace by output latency
+            date_sys += upipe_rtp_fec->latency;
 
-            /* Don't overflow date_sys on error corrected frames */
-            if (date_sys != UINT64_MAX) {
-                date_sys += upipe_rtp_fec->latency;
-                uref_clock_set_date_sys(uref, date_sys, type);
-            }
-            ulist_delete(uchain);
-            upipe_rtp_fec_output(upipe, uref, NULL);
+            if (now < date_sys)
+                break;
 
-            if (upipe_rtp_fec->last_send_seqnum != UINT64_MAX &&
-                ((upipe_rtp_fec->last_send_seqnum+1) & UINT16_MAX) != seqnum) {
-                //printf("\n FEC LOST expected seqnum %u got %u \n", ((upipe_rtp_fec->last_send_seqnum+1) & UINT16_MAX), seqnum);
-            }
-
-            upipe_rtp_fec->last_send_seqnum = seqnum;
+            uref_clock_set_date_sys(uref, date_sys, type);
         }
-        else {
-            break;
+
+        ulist_delete(uchain);
+        upipe_rtp_fec_output(upipe, uref, NULL);
+
+        if (upipe_rtp_fec->last_send_seqnum != UINT32_MAX) {
+            uint16_t expected = upipe_rtp_fec->last_send_seqnum + 1;
+            if (expected != seqnum) {
+                upipe_err_va(upipe, "FEC output LOST, expected seqnum %hu got %hu",
+                        expected, seqnum);
+            }
         }
+
+        upipe_rtp_fec->last_send_seqnum = seqnum;
     }
 }
 
@@ -558,48 +476,230 @@ static void upipe_rtp_fec_timer(struct upump *upump)
  *
  * @param upipe description structure of the pipe
  */
-static int upipe_rtp_fec_build_flow_def(struct upipe *upipe)
+static int upipe_rtp_fec_build_flow_def(struct upipe *upipe, struct uref *flow_def)
 {
     struct upipe_rtp_fec *upipe_rtp_fec = upipe_rtp_fec_from_upipe(upipe);
-    if (upipe_rtp_fec->uref_mgr == NULL)
-        return UBASE_ERR_ALLOC;
 
-    struct uref *flow_def =
-        uref_block_flow_alloc_def(upipe_rtp_fec->uref_mgr, "block.mpegtsaligned.");
+    flow_def = uref_dup(flow_def);
     if (unlikely(flow_def == NULL)) {
         upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
         return UBASE_ERR_ALLOC;
     }
 
+    uref_flow_set_def(flow_def, "block.mpegtsaligned.");
     upipe_rtp_fec_store_flow_def(upipe, flow_def);
-    //printf("\n store flow def \n");
 
     return UBASE_ERR_NONE;
 }
 
-/** @internal @This receives a provided ubuf manager.
- *
- * @param upipe description structure of the pipe
- * @param flow_format amended flow format
- * @return an error code
- */
-static int upipe_rtp_fec_check(struct upipe *upipe, struct uref *flow_format)
+/* Clear matrices if change of FEC */
+static void clear_fec(struct upipe *upipe)
 {
     struct upipe_rtp_fec *upipe_rtp_fec = upipe_rtp_fec_from_upipe(upipe);
-    if (flow_format != NULL)
-        upipe_rtp_fec_store_flow_def(upipe, flow_format);
 
-    upipe_rtp_fec_check_upump_mgr(upipe);
-    if (upipe_rtp_fec->uref_mgr == NULL) {
-        upipe_rtp_fec_require_uref_mgr(upipe);
-        return UBASE_ERR_NONE;
+    upipe_rtp_fec_clear(upipe_rtp_fec);
+
+    upipe_rtp_fec->first_seqnum = UINT32_MAX;
+    upipe_rtp_fec->last_seqnum = UINT32_MAX;
+    upipe_rtp_fec->latency = 0;
+
+    memset(upipe_rtp_fec->recent, 0xff, 2 * upipe_rtp_fec->rows *
+            upipe_rtp_fec->cols * sizeof(*upipe_rtp_fec->recent));
+}
+
+static void upipe_rtp_fec_start_timer(struct upipe *upipe, uint16_t seqnum)
+{
+    struct upipe_rtp_fec *upipe_rtp_fec = upipe_rtp_fec_from_sub_mgr(upipe->mgr);
+
+    /* Clear any old non-FEC packets */
+    clear_main_list(&upipe_rtp_fec->main_queue, upipe_rtp_fec->cur_matrix_snbase);
+
+    struct uchain *first_uchain = ulist_peek(&upipe_rtp_fec->main_queue);
+    if (!first_uchain)
+        return;
+
+    struct uref *first_uref = uref_from_uchain(first_uchain);
+    upipe_rtp_fec->first_seqnum = first_uref->priv;
+
+    /* Make sure we have at least two matrices of data as per the spec */
+    uint16_t seq_delta = seqnum - upipe_rtp_fec->first_seqnum - 1;
+    int two_matrix_size = 2 * upipe_rtp_fec->cols * upipe_rtp_fec->rows;
+    if (seq_delta < two_matrix_size || seq_delta == UINT16_MAX) {
+        return;
     }
 
-    upipe_rtp_fec_build_flow_def(upipe);
+    /* Calculate delay from first packet of matrix arriving to pump start time */
+    int type;
+    uint64_t date_sys = UINT64_MAX;
+    uref_clock_get_date_sys(first_uref, &date_sys, &type);
 
-    // FIXME this is broke
+    if (date_sys == UINT64_MAX) {
+        /* First packet having an unusable date_sys is not useful */
+        ulist_delete(first_uchain);
+        uref_free(first_uref);
+        first_uchain = ulist_peek(&upipe_rtp_fec->main_queue);
+        if (first_uchain) {
+            struct uref *uref = uref_from_uchain(first_uchain);
+            upipe_rtp_fec->first_seqnum = uref->priv;
+        }
+        return;
+    }
 
-    return UBASE_ERR_NONE;
+    /* First packet of matrix can be recovered packet and have no date_sys */
+    uint64_t now = uclock_now(upipe_rtp_fec->uclock);
+    upipe_rtp_fec->latency = now - date_sys + UPIPE_FEC_JITTER;
+
+    /* Start pump that clears the buffer */
+    struct upump *upump = upump_alloc_timer(upipe_rtp_fec->upump_mgr,
+            upipe_rtp_fec_timer, &upipe_rtp_fec->upipe,
+            upipe_rtp_fec->upipe.refcount,
+            0, UCLOCK_FREQ/90000); // 300Hz ??!
+    upipe_rtp_fec_set_upump(&upipe_rtp_fec->upipe, upump);
+    upump_start(upump);
+}
+
+/* main */
+static void upipe_rtp_fec_main_input(struct upipe *upipe, struct uref *uref)
+{
+    struct upipe_rtp_fec *upipe_rtp_fec = upipe_rtp_fec_from_sub_mgr(upipe->mgr);
+    struct upipe *super_pipe = upipe_rtp_fec_to_upipe(upipe_rtp_fec);
+
+    uint16_t seqnum = uref->priv;
+
+    if (upipe_rtp_fec->first_seqnum == UINT32_MAX)
+        upipe_rtp_fec->first_seqnum = seqnum;
+
+    /* Output packets immediately if no FEC packets found as per spec */
+    if (!upipe_rtp_fec->cols && !upipe_rtp_fec->rows) {
+        upipe_rtp_fec->last_seqnum = seqnum;
+        upipe_verbose_va(upipe, "no FEC detected");
+        upipe_rtp_fec_output(&upipe_rtp_fec->upipe, uref, NULL);
+        return;
+    }
+
+    uint16_t seq_delta = upipe_rtp_fec->last_seqnum - seqnum;
+    if (seq_delta > 0x8000)
+        seq_delta = -seq_delta; // XXX ?
+
+    /* Resync if packet is too old or too new */
+    unsigned int two_matrix_size = 2 * upipe_rtp_fec->cols * upipe_rtp_fec->rows;
+    bool fec_change = false;
+    if (upipe_rtp_fec->last_seqnum != UINT32_MAX && seq_delta > two_matrix_size) {
+        upipe_warn_va(upipe, "resync");
+        fec_change = true;
+        uref_free(uref);
+    } else {
+        upipe_rtp_fec->last_seqnum = seqnum;
+        insert_ordered_uref(&upipe_rtp_fec->main_queue, uref);
+
+        int type;
+        uint64_t date_sys = 0;
+        uref_clock_get_date_sys(uref, &date_sys, &type);
+
+        /* Owing to clock drift the latency of 2x the FEC matrix may increase
+         * Build a continually updating duration and correct the latency if necessary.
+         * Also helps with undershoot of latency calculation from initial packets */
+        uint8_t idx = seqnum % two_matrix_size;
+        uint64_t prev_date_sys = upipe_rtp_fec->recent[idx].date_sys;
+        uint64_t prev_seqnum = upipe_rtp_fec->recent[idx].seqnum;
+        uint16_t expected_seqnum = prev_seqnum + two_matrix_size;
+        uint16_t later_seqnum = seqnum + two_matrix_size;
+        uint8_t new_idx = later_seqnum % two_matrix_size;
+
+        /* Make sure the sequence number is exactly two matrices behind and not more,
+         * otherwise the latency calculation will be too large */
+        if (prev_date_sys != UINT64_MAX && prev_seqnum != UINT64_MAX && seqnum == expected_seqnum) {
+            uint64_t latency = date_sys - prev_date_sys;
+            if (upipe_rtp_fec->latency < latency) {
+                upipe_rtp_fec->latency = latency + UPIPE_FEC_JITTER;
+                upipe_warn_va(upipe, "Late packets increasing buffer-size/latency to %f seconds", (double)upipe_rtp_fec->latency / UCLOCK_FREQ);
+            }
+        }
+
+        upipe_rtp_fec->recent[new_idx].date_sys = date_sys;
+        upipe_rtp_fec->recent[new_idx].seqnum = seqnum;
+    }
+
+    if (!upipe_rtp_fec->cols)
+        goto out;
+
+    if (upipe_rtp_fec->rows) {
+        upipe_rtp_fec_apply_col_fec(super_pipe);
+
+        uint32_t cur_row_fec_snbase = upipe_rtp_fec->cur_row_fec_snbase;
+        if (cur_row_fec_snbase == UINT32_MAX)
+            cur_row_fec_snbase = upipe_rtp_fec->first_seqnum;
+
+        /* Wait for two rows to arrive to allow for late row FEC packets */
+        uint16_t row_delta = seqnum - cur_row_fec_snbase - 1;
+        if (row_delta > 2 * upipe_rtp_fec->cols)
+            upipe_rtp_fec_apply_row_fec(super_pipe, cur_row_fec_snbase);
+    }
+
+    if (upipe_rtp_fec->cur_matrix_snbase == UINT32_MAX)
+        goto out;
+
+    if (!upipe_rtp_fec->upump)
+        upipe_rtp_fec_start_timer(upipe, seqnum);
+
+out:
+    if (fec_change)
+        clear_fec(super_pipe);
+}
+
+static void upipe_rtp_fec_colrow_input(struct upipe *upipe, struct uref *uref)
+{
+    struct upipe_rtp_fec *upipe_rtp_fec =
+        upipe_rtp_fec_from_sub_mgr(upipe->mgr);
+
+    uint8_t fec_buffer[SMPTE_2022_FEC_HEADER_SIZE];
+
+    const uint8_t *fec_header = uref_block_peek(uref, RTP_HEADER_SIZE,
+            sizeof(fec_buffer), fec_buffer);
+    uint8_t d = smpte_fec_check_d(fec_header);
+    uint8_t offset = smpte_fec_get_offset(fec_header);
+    uint8_t na = smpte_fec_get_na(fec_header);
+    uint64_t snbase_low = smpte_fec_get_snbase_low(fec_header);
+    uref->priv |= (snbase_low << 32);
+    uref_block_peek_unmap(uref, RTP_HEADER_SIZE, fec_buffer, fec_header);
+
+    bool col = (upipe == upipe_rtp_fec_to_col_subpipe(upipe_rtp_fec));
+    struct uchain *queue = col ? &upipe_rtp_fec->col_queue :
+        &upipe_rtp_fec->row_queue;
+
+    if (col) {
+        if (d) {
+            upipe_warn(upipe, "Invalid column FEC packet found, ignoring");
+            goto invalid;
+        }
+
+        if (!offset || !na) {
+            upipe_warn(upipe, "Invalid row/column in FEC packet, ignoring");
+            goto invalid;
+        }
+
+        if (upipe_rtp_fec->cols != offset) {
+            upipe_rtp_fec->cols = offset;
+            upipe_rtp_fec->rows = na;
+
+            upipe_warn_va(upipe, "FEC detected %u rows and %u columns", upipe_rtp_fec->rows,
+                    upipe_rtp_fec->cols);
+            clear_fec(upipe_rtp_fec_to_upipe(upipe_rtp_fec));
+        }
+    } else {
+        assert(upipe == upipe_rtp_fec_to_row_subpipe(upipe_rtp_fec));
+        if (!d) {
+            upipe_warn(upipe, "Invalid row FEC packet found, ignoring");
+            goto invalid;
+        }
+    }
+
+    insert_ordered_uref(queue, uref);
+    upipe_rtp_fec->pkts_since_last_fec = 0;
+    return;
+
+invalid:
+    uref_free(uref);
 }
 
 /** @internal @This handles input uref.
@@ -613,245 +713,34 @@ static void upipe_rtp_fec_sub_input(struct upipe *upipe, struct uref *uref,
 {
     struct upipe_rtp_fec *upipe_rtp_fec =
         upipe_rtp_fec_from_sub_mgr(upipe->mgr);
-    struct upipe_rtp_fec_sub *upipe_rtp_fec_sub =
-        upipe_rtp_fec_sub_from_upipe(upipe);
-    uint8_t fec_buffer[SMPTE_2022_FEC_HEADER_SIZE];
-    int fec_change = 0;
 
-    if (upipe_rtp_fec_sub == &upipe_rtp_fec->main_subpipe) {
-        int type;
-        uint64_t seqnum = 0, date_sys = 0;
-        uref_rtp_get_seqnum(uref, &seqnum);
-        uref_clock_get_date_sys(uref, &date_sys, &type);
-
-        if (upipe_rtp_fec->first_seqnum == UINT64_MAX) {
-            upipe_rtp_fec->first_seqnum = seqnum;
-            //printf("\n FIRST seqnum %"PRIu64" \n", seqnum );
-        }
-
-        //printf("\n arrived %"PRIu64" ts %"PRIu64" \n", seqnum, date_sys);
-
-        /* Output packets immediately if no FEC packets found as per spec */
-        if (!upipe_rtp_fec->cols && !upipe_rtp_fec->rows) {
-            upipe_rtp_fec->last_seqnum = seqnum;
-            upipe_rtp_fec_output(&upipe_rtp_fec->upipe, uref, NULL);
-        }
-        else {
-            int two_matrix_size = 2*(upipe_rtp_fec->cols*upipe_rtp_fec->rows);
-
-            uint64_t seq_delta;
-            if (seq_num_lt(seqnum, upipe_rtp_fec->last_seqnum))
-                seq_delta = (upipe_rtp_fec->last_seqnum + UINT16_MAX + 1 - seqnum) & UINT16_MAX;
-            else
-                seq_delta = (seqnum + UINT16_MAX + 1 - upipe_rtp_fec->last_seqnum) & UINT16_MAX;
-                      
-            /* Resync if packet is too old or too new */
-            if (upipe_rtp_fec->last_seqnum != UINT64_MAX && seq_delta > two_matrix_size) {
-                fec_change = 1;
-                uref_free(uref);
-            }
-            else {
-                upipe_rtp_fec->last_seqnum = seqnum;
-                insert_ordered_uref(&upipe_rtp_fec->main_queue, uref);
-
-                /* Owing to clock drift the latency of 2x the FEC matrix may increase
-                 * Build a continually updating duration and correct the latency if necessary.
-                 * Also helps with undershoot of latency calculation from initial packets */
-                uint8_t idx = seqnum % two_matrix_size;
-                uint64_t prev_date_sys = upipe_rtp_fec->recent[idx].date_sys;
-                uint64_t prev_seqnum = upipe_rtp_fec->recent[idx].seqnum;
-                uint64_t expected_seqnum = (prev_seqnum + two_matrix_size) & UINT16_MAX;
-                uint16_t later_seqnum = (seqnum + two_matrix_size) & UINT16_MAX;
-                uint8_t new_idx = later_seqnum % two_matrix_size;
-
-                /* Make sure the sequence number is exactly two matrices behind and not more,
-                 * otherwise the latency calculation will be too large */
-                if (prev_date_sys != UINT64_MAX && prev_seqnum != UINT64_MAX && seqnum == expected_seqnum) {
-                    uint64_t latency = date_sys - prev_date_sys;
-                    if (upipe_rtp_fec->latency < latency) {
-                        upipe_rtp_fec->latency = latency + UPIPE_FEC_JITTER;
-                        upipe_warn_va(upipe, "Late packets increasing buffer-size/latency to %f seconds", (double)upipe_rtp_fec->latency / UCLOCK_FREQ);
-                    }
-                }
-                
-                upipe_rtp_fec->recent[new_idx].date_sys = date_sys;
-                upipe_rtp_fec->recent[new_idx].seqnum = seqnum;
-            }
-            
-        }
-
-        if (upipe_rtp_fec->cols && upipe_rtp_fec->rows) {
-            upipe_rtp_fec_apply_col_fec(upipe_rtp_fec);
-            
-            uint64_t cur_row_fec_snbase = upipe_rtp_fec->cur_row_fec_snbase == UINT64_MAX ?
-                                          upipe_rtp_fec->first_seqnum :
-                                          upipe_rtp_fec->cur_row_fec_snbase;
-
-            /* Wait for two rows to arrive to allow for late row FEC packets */
-            uint64_t row_delta = (seqnum + UINT16_MAX - cur_row_fec_snbase) & UINT16_MAX;
-            if (row_delta > 2*upipe_rtp_fec->cols) {
-                ////printf("APPLY ROW delta %u queuelen %u \n", delta, ulist_depth(&upipe_rtp_fec->main_queue) );
-                upipe_rtp_fec_apply_row_fec(upipe_rtp_fec, cur_row_fec_snbase);
-            }
-        }
-
-        if (upipe_rtp_fec->cols && !upipe_rtp_fec->pump_start &&
-            upipe_rtp_fec->cur_matrix_snbase != UINT64_MAX) {
-            struct uchain *first_uchain;
-            struct uref *first_uref;
-
-            int matrix_size = upipe_rtp_fec->cols*upipe_rtp_fec->rows;
-
-            /* Clear any old non-FEC packets */
-            clear_main_list(&upipe_rtp_fec->main_queue, upipe_rtp_fec->cur_matrix_snbase);
-
-            first_uchain = ulist_peek(&upipe_rtp_fec->main_queue);
-            if (first_uchain) {
-                //printf("\n depth %i \n", ulist_depth(&upipe_rtp_fec->main_queue));
-                first_uref = uref_from_uchain(first_uchain);
-                uref_rtp_get_seqnum(first_uref, &upipe_rtp_fec->first_seqnum);
-                
-                /* Make sure we have at least two matrices of data as per the spec */
-                uint64_t mat_delta = (seqnum + UINT16_MAX - upipe_rtp_fec->cur_matrix_snbase) & UINT16_MAX;
-                uint64_t seq_delta = (seqnum + UINT16_MAX - upipe_rtp_fec->first_seqnum) & UINT16_MAX;
-                //printf("\n mat_delta %u seq_delta %u cur_matrix_snbase %u first_seqnum %u \n", mat_delta, seq_delta,
-                       //upipe_rtp_fec->cur_matrix_snbase, upipe_rtp_fec->first_seqnum);
-                if (seq_delta >= 2*matrix_size && seq_delta != UINT16_MAX) {
-
-                    uint64_t date_sys, now;
-                    int type;
-                    
-                    /* Calculate delay from first packet of matrix arriving to pump start time */
-                    uref_clock_get_date_sys(first_uref, &date_sys, &type);
-
-                    //printf("\n date_sys %"PRIu64" seqnum %u \n", date_sys, seqnum);
-
-                    /* First packet of matrix can be recovered packet and have no date_sys */
-                    if (date_sys != UINT64_MAX) {
-                        now = uclock_now(upipe_rtp_fec->uclock);
-                        upipe_rtp_fec->latency = now - date_sys + UPIPE_FEC_JITTER;
-
-                        //printf("\n pump start depth %u delta %u seqdelta %u first_date_sys %"PRIu64" latency %"PRIu64" \n", ulist_depth(&upipe_rtp_fec->main_queue), mat_delta, seq_delta, date_sys, upipe_rtp_fec->latency );
-                        /* Start pump that clears the buffer */
-                        struct upump *upump = upump_alloc_timer(upipe_rtp_fec->upump_mgr,
-                                                                upipe_rtp_fec_timer, &upipe_rtp_fec->upipe,
-                                                                upipe_rtp_fec->upipe.refcount,
-                                                                0, UCLOCK_FREQ/90000);
-                        upipe_rtp_fec_set_upump(&upipe_rtp_fec->upipe, upump);
-                        upump_start(upump);
-                        upipe_rtp_fec->pump_start = 1;
-                    }
-                    else {
-                        /* First packet having an unusable date_sys is not useful */
-                        ulist_delete(first_uchain);
-                        uref_free(first_uref);
-                        first_uchain = ulist_peek(&upipe_rtp_fec->main_queue);
-                        if (first_uchain) {
-                            first_uref = uref_from_uchain(first_uchain);
-                            uref_rtp_get_seqnum(uref, &upipe_rtp_fec->first_seqnum);
-                        }
-                    }
-                }
-            }
-        }
-
-        upipe_rtp_fec->pkts_since_last_fec++;
+    uint8_t rtp_buffer[RTP_HEADER_SIZE];
+    const uint8_t *rtp_header = uref_block_peek(uref, 0, sizeof(rtp_buffer),
+            rtp_buffer);
+    if (unlikely(rtp_header == NULL)) {
+        upipe_warn(upipe, "invalid buffer received");
+        uref_free(uref);
+        return;
     }
-    else {
-        const uint8_t *fec_header = uref_block_peek(uref, 0, SMPTE_2022_FEC_HEADER_SIZE, fec_buffer);
-        uint8_t d = smpte_fec_check_d(fec_header);
-        uint8_t offset = smpte_fec_get_offset(fec_header);
-        uint8_t na = smpte_fec_get_na(fec_header);
-        uref_block_peek_unmap(uref, 0, fec_buffer, fec_header);
 
-        if (upipe_rtp_fec_sub == &upipe_rtp_fec->col_subpipe) {
-            if (d) {
-                upipe_warn(upipe, "Invalid column FEC packet found, ignoring");
-                uref_free(uref);
-                return;
-            }
+    uref->priv = rtp_get_seqnum(rtp_header);
+    uref_block_peek_unmap(uref, 0, rtp_buffer, rtp_header);
 
-            if(!offset || !na) {
-                upipe_warn(upipe, "Invalid row/column in FEC packet, ignoring");
-                uref_free(uref);
-                return;
-            }
-            
-            if (upipe_rtp_fec->cols != offset && upipe_rtp_fec->cols <= 50 &&
-                upipe_rtp_fec->rows <= 50) {
-                upipe_rtp_fec->cols = offset;
-                upipe_rtp_fec->rows = na;
-
-                fec_change = 1;
-                upipe_warn_va(upipe, "FEC detected %u rows and %u columns", upipe_rtp_fec->rows,
-                              upipe_rtp_fec->cols);
-            }
-            insert_ordered_uref(&upipe_rtp_fec->col_queue, uref);
-        }
-        else if (upipe_rtp_fec_sub == &upipe_rtp_fec->row_subpipe) {
-            if (!d) {
-                upipe_warn(upipe, "Invalid row FEC packet found, ignoring");
-                uref_free(uref);
-                return;
-            }
-            insert_ordered_uref(&upipe_rtp_fec->row_queue, uref);
-        }
-
-        upipe_rtp_fec->pkts_since_last_fec = 0;
+    if (upipe != upipe_rtp_fec_to_main_subpipe(upipe_rtp_fec)) {
+        upipe_rtp_fec_colrow_input(upipe, uref);
+        return;
     }
+
+    upipe_rtp_fec_main_input(upipe, uref);
 
     /* Disable FEC if no FEC packets arrive for a while */
-    if (upipe_rtp_fec->pkts_since_last_fec > 200 && 
-       (upipe_rtp_fec->rows || upipe_rtp_fec->cols)) {
-        upipe_rtp_fec->rows = upipe_rtp_fec->cols = 0;
-        fec_change = 1;
+    if (++upipe_rtp_fec->pkts_since_last_fec > 200 && // FIXME : hardcoded value
+            (upipe_rtp_fec->rows || upipe_rtp_fec->cols)) {
+        upipe_rtp_fec->rows = 0;
+        upipe_rtp_fec->cols = 0;
+        clear_fec(upipe_rtp_fec_to_upipe(upipe_rtp_fec));
         upipe_warn(upipe, "No FEC Packets received for a while, disabling FEC");
     }
-
-    /* Clear matrices if change of FEC */
-    if (fec_change) {
-        upipe_rtp_fec_clear(upipe_rtp_fec);
-        fec_change = 0;
-
-        upipe_rtp_fec->first_seqnum = UINT64_MAX;
-        upipe_rtp_fec->last_seqnum = UINT64_MAX;
-
-        free(upipe_rtp_fec->recent);
-        upipe_rtp_fec->recent = NULL;
-        if (upipe_rtp_fec->rows && upipe_rtp_fec->cols) {
-            upipe_rtp_fec->recent_len = 2 * upipe_rtp_fec->rows * upipe_rtp_fec->cols;
-            upipe_rtp_fec->recent = malloc(upipe_rtp_fec->recent_len * sizeof(*upipe_rtp_fec->recent));
-            if (!upipe_rtp_fec->recent) {
-                upipe_err(upipe, "Malloc failed");
-                return;
-            }
-
-            memset(upipe_rtp_fec->recent, 0xff, upipe_rtp_fec->recent_len * sizeof(*upipe_rtp_fec->recent));
-        }
-        upipe_rtp_fec->latency = 0;
-
-        //printf("\n FEC change \n");
-    }
-}
-
-/** @internal @This sets the input flow definition.
- *
- * @param upipe description structure of the pipe
- * @param flow_def flow definition packet
- * @return an error code
- */
-static int upipe_rtp_fec_sub_set_flow_def(struct upipe *upipe,
-                                          struct uref *flow_def)
-{
-    if (flow_def == NULL)
-        return UBASE_ERR_INVALID;
-
-    struct upipe_rtp_fec *upipe_rtp_fec =
-        upipe_rtp_fec_from_sub_mgr(upipe->mgr);
-    struct upipe_rtp_fec_sub *upipe_rtp_fec_sub =
-        upipe_rtp_fec_sub_from_upipe(upipe);
-
-    return UBASE_ERR_NONE;
 }
 
 /** @internal @This processes control commands on an output subpipe of an
@@ -865,24 +754,31 @@ static int upipe_rtp_fec_sub_set_flow_def(struct upipe *upipe,
 static int upipe_rtp_fec_sub_control(struct upipe *upipe,
                                      int command, va_list args)
 {
-    switch (command) {
-        case UPIPE_REGISTER_REQUEST: {
-            struct urequest *request = va_arg(args, struct urequest *);
-            return upipe_throw_provide_request(upipe, request);
-        }
-        case UPIPE_UNREGISTER_REQUEST:
-            return UBASE_ERR_NONE;
-        case UPIPE_SET_FLOW_DEF: {
-            struct uref *flow_def = va_arg(args, struct uref *);
-            return upipe_rtp_fec_sub_set_flow_def(upipe, flow_def);
-        }
-        case UPIPE_SUB_GET_SUPER: {
-            struct upipe **p = va_arg(args, struct upipe **);
-            *p = upipe_rtp_fec_to_upipe(upipe_rtp_fec_from_sub_mgr(upipe->mgr));
-        }
+    struct upipe_rtp_fec *upipe_rtp_fec =
+        upipe_rtp_fec_from_sub_mgr(upipe->mgr);
 
-        default:
-            return UBASE_ERR_UNHANDLED;
+    switch (command) {
+    case UPIPE_REGISTER_REQUEST: {
+        struct urequest *request = va_arg(args, struct urequest *);
+        return upipe_throw_provide_request(upipe, request);
+    }
+    case UPIPE_UNREGISTER_REQUEST:
+        return UBASE_ERR_NONE;
+    case UPIPE_SET_FLOW_DEF: {
+        if (upipe != upipe_rtp_fec_to_main_subpipe(upipe_rtp_fec))
+            return UBASE_ERR_NONE;
+
+        struct uref *flow_def = va_arg(args, struct uref *);
+        return upipe_rtp_fec_build_flow_def(upipe_rtp_fec_to_upipe(
+                    upipe_rtp_fec), flow_def);
+    }
+    case UPIPE_SUB_GET_SUPER: {
+        struct upipe **p = va_arg(args, struct upipe **);
+        *p = upipe_rtp_fec_to_upipe(upipe_rtp_fec);
+    }
+
+    default:
+        return UBASE_ERR_UNHANDLED;
     }
 }
 
@@ -892,10 +788,7 @@ static int upipe_rtp_fec_sub_control(struct upipe *upipe,
  */
 static void upipe_rtp_fec_sub_clean(struct upipe *upipe)
 {
-    struct upipe_rtp_fec *upipe_rtp_fec =
-        upipe_rtp_fec_from_sub_mgr(upipe->mgr);
     upipe_throw_dead(upipe);
-
     upipe_clean(upipe);
 }
 
@@ -907,6 +800,7 @@ static void upipe_rtp_fec_init_sub_mgr(struct upipe *upipe)
 {
     struct upipe_rtp_fec *upipe_rtp_fec = upipe_rtp_fec_from_upipe(upipe);
     struct upipe_mgr *sub_mgr = &upipe_rtp_fec->sub_mgr;
+
     sub_mgr->refcount = upipe_rtp_fec_to_urefcount(upipe_rtp_fec);
     sub_mgr->signature = UPIPE_RTP_FEC_INPUT_SIGNATURE;
     sub_mgr->upipe_alloc = NULL;
@@ -942,13 +836,11 @@ static struct upipe *_upipe_rtp_fec_alloc(struct upipe_mgr *mgr,
         return NULL;
     }
 
-    upipe_rtp_fec->first_seqnum = UINT64_MAX;
-    upipe_rtp_fec->last_seqnum = UINT64_MAX;
-    upipe_rtp_fec->last_send_seqnum = UINT64_MAX;
-    upipe_rtp_fec->cur_matrix_snbase = UINT64_MAX;
-    upipe_rtp_fec->cur_row_fec_snbase = UINT64_MAX;
-
-    upipe_rtp_fec->pump_start = 0;
+    upipe_rtp_fec->first_seqnum = UINT32_MAX;
+    upipe_rtp_fec->last_seqnum = UINT32_MAX;
+    upipe_rtp_fec->last_send_seqnum = UINT32_MAX;
+    upipe_rtp_fec->cur_matrix_snbase = UINT32_MAX;
+    upipe_rtp_fec->cur_row_fec_snbase = UINT32_MAX;
 
     struct upipe *upipe = upipe_rtp_fec_to_upipe(upipe_rtp_fec);
     upipe_init(upipe, mgr, uprobe);
@@ -957,25 +849,22 @@ static struct upipe *_upipe_rtp_fec_alloc(struct upipe_mgr *mgr,
     upipe_rtp_fec_init_upump(upipe);
     upipe_rtp_fec_init_uclock(upipe);
     upipe_rtp_fec_init_urefcount(upipe);
-    upipe_rtp_fec_init_uref_mgr(upipe);
     upipe_rtp_fec_init_sub_mgr(upipe);
     upipe_rtp_fec_init_output(upipe);
 
     /* Initalise subpipes */
-    upipe_rtp_fec_sub_init(upipe_rtp_fec_sub_to_upipe(upipe_rtp_fec_to_main_subpipe(upipe_rtp_fec)),
+    upipe_rtp_fec_sub_init(upipe_rtp_fec_to_main_subpipe(upipe_rtp_fec),
                             &upipe_rtp_fec->sub_mgr, uprobe_main);
-    upipe_rtp_fec_sub_init(upipe_rtp_fec_sub_to_upipe(upipe_rtp_fec_to_col_subpipe(upipe_rtp_fec)),
+    upipe_rtp_fec_sub_init(upipe_rtp_fec_to_col_subpipe(upipe_rtp_fec),
                             &upipe_rtp_fec->sub_mgr, uprobe_col);
-    upipe_rtp_fec_sub_init(upipe_rtp_fec_sub_to_upipe(upipe_rtp_fec_to_row_subpipe(upipe_rtp_fec)),
+    upipe_rtp_fec_sub_init(upipe_rtp_fec_to_row_subpipe(upipe_rtp_fec),
                             &upipe_rtp_fec->sub_mgr, uprobe_row);
 
     ulist_init(&upipe_rtp_fec->main_queue);
     ulist_init(&upipe_rtp_fec->col_queue);
     ulist_init(&upipe_rtp_fec->row_queue);
 
-    upipe_rtp_fec_require_uref_mgr(upipe);
     upipe_rtp_fec_check_upump_mgr(upipe);
-    upipe_rtp_fec_build_flow_def(upipe);
 
     upipe_throw_ready(upipe);
 
@@ -992,59 +881,56 @@ static struct upipe *_upipe_rtp_fec_alloc(struct upipe_mgr *mgr,
  */
 static int upipe_rtp_fec_control(struct upipe *upipe, int command, va_list args)
 {
+    struct upipe_rtp_fec *upipe_rtp_fec = upipe_rtp_fec_from_upipe(upipe);
+
     switch (command) {
-        case UPIPE_ATTACH_UPUMP_MGR:
-            upipe_rtp_fec_set_upump(upipe, NULL);
-            return upipe_rtp_fec_attach_upump_mgr(upipe);
-        case UPIPE_ATTACH_UCLOCK:
-            upipe_rtp_fec_set_upump(upipe, NULL);
-            upipe_rtp_fec_require_uclock(upipe);
-            return UBASE_ERR_NONE;
-        case UPIPE_REGISTER_REQUEST: {
-            struct urequest *request = va_arg(args, struct urequest *);
-            return upipe_throw_provide_request(upipe, request);
-        }
-        case UPIPE_UNREGISTER_REQUEST:
-            return UBASE_ERR_NONE;
-        case UPIPE_GET_FLOW_DEF: {
-            struct uref **p = va_arg(args, struct uref **);
-            return upipe_rtp_fec_get_flow_def(upipe, p);
-        }
-        case UPIPE_GET_OUTPUT: {
-            struct upipe **p = va_arg(args, struct upipe **);
-            return upipe_rtp_fec_get_output(upipe, p);
-        }
-        case UPIPE_SET_OUTPUT: {
-            struct upipe *output = va_arg(args, struct upipe *);
-            return upipe_rtp_fec_set_output(upipe, output);
-        }
-        /* specific commands */
-        case UPIPE_RTP_FEC_GET_MAIN_SUB: {
-            UBASE_SIGNATURE_CHECK(args, UPIPE_RTP_FEC_SIGNATURE)
-            struct upipe **upipe_p = va_arg(args, struct upipe **);
-            *upipe_p =  upipe_rtp_fec_sub_to_upipe(
-                            upipe_rtp_fec_to_main_subpipe(
-                                upipe_rtp_fec_from_upipe(upipe)));
-            return UBASE_ERR_NONE;
-        }
-        case UPIPE_RTP_FEC_GET_COL_SUB: {
-            UBASE_SIGNATURE_CHECK(args, UPIPE_RTP_FEC_SIGNATURE)
-            struct upipe **upipe_p = va_arg(args, struct upipe **);
-            *upipe_p =  upipe_rtp_fec_sub_to_upipe(
-                            upipe_rtp_fec_to_col_subpipe(
-                                upipe_rtp_fec_from_upipe(upipe)));
-            return UBASE_ERR_NONE;
-        }
-        case UPIPE_RTP_FEC_GET_ROW_SUB: {
-            UBASE_SIGNATURE_CHECK(args, UPIPE_RTP_FEC_SIGNATURE)
-            struct upipe **upipe_p = va_arg(args, struct upipe **);
-            *upipe_p =  upipe_rtp_fec_sub_to_upipe(
-                            upipe_rtp_fec_to_row_subpipe(
-                                upipe_rtp_fec_from_upipe(upipe)));
-            return UBASE_ERR_NONE;
-        }
-        default:
-            return UBASE_ERR_UNHANDLED;
+    case UPIPE_ATTACH_UPUMP_MGR:
+        upipe_rtp_fec_set_upump(upipe, NULL);
+        return upipe_rtp_fec_attach_upump_mgr(upipe);
+    case UPIPE_ATTACH_UCLOCK:
+        upipe_rtp_fec_set_upump(upipe, NULL);
+        upipe_rtp_fec_require_uclock(upipe);
+        return UBASE_ERR_NONE;
+    case UPIPE_REGISTER_REQUEST: {
+        struct urequest *request = va_arg(args, struct urequest *);
+        return upipe_throw_provide_request(upipe, request);
+    }
+    case UPIPE_UNREGISTER_REQUEST:
+        return UBASE_ERR_NONE;
+    case UPIPE_GET_FLOW_DEF: {
+        struct uref **p = va_arg(args, struct uref **);
+        return upipe_rtp_fec_get_flow_def(upipe, p);
+    }
+    case UPIPE_GET_OUTPUT: {
+        struct upipe **p = va_arg(args, struct upipe **);
+        return upipe_rtp_fec_get_output(upipe, p);
+    }
+    case UPIPE_SET_OUTPUT: {
+        struct upipe *output = va_arg(args, struct upipe *);
+        return upipe_rtp_fec_set_output(upipe, output);
+    }
+
+    /* specific commands */
+    case UPIPE_RTP_FEC_GET_MAIN_SUB: {
+        UBASE_SIGNATURE_CHECK(args, UPIPE_RTP_FEC_SIGNATURE)
+        struct upipe **upipe_p = va_arg(args, struct upipe **);
+        *upipe_p = upipe_rtp_fec_to_main_subpipe(upipe_rtp_fec);
+        return UBASE_ERR_NONE;
+    }
+    case UPIPE_RTP_FEC_GET_COL_SUB: {
+        UBASE_SIGNATURE_CHECK(args, UPIPE_RTP_FEC_SIGNATURE)
+        struct upipe **upipe_p = va_arg(args, struct upipe **);
+        *upipe_p = upipe_rtp_fec_to_col_subpipe(upipe_rtp_fec);
+        return UBASE_ERR_NONE;
+    }
+    case UPIPE_RTP_FEC_GET_ROW_SUB: {
+        UBASE_SIGNATURE_CHECK(args, UPIPE_RTP_FEC_SIGNATURE)
+        struct upipe **upipe_p = va_arg(args, struct upipe **);
+        *upipe_p = upipe_rtp_fec_to_row_subpipe(upipe_rtp_fec);
+        return UBASE_ERR_NONE;
+    }
+    default:
+        return UBASE_ERR_UNHANDLED;
     }
 }
 
@@ -1056,22 +942,18 @@ static void upipe_rtp_fec_free(struct upipe *upipe)
 {
     struct upipe_rtp_fec *upipe_rtp_fec = upipe_rtp_fec_from_upipe(upipe);
 
-    if (upipe_rtp_fec->pump_start)
-        upump_stop(upipe_rtp_fec->upump);
+    upipe_throw_dead(upipe);
 
     upipe_rtp_fec_clear(upipe_rtp_fec);
 
-    upipe_rtp_fec_sub_clean(upipe_rtp_fec_sub_to_upipe(upipe_rtp_fec_to_main_subpipe(upipe_rtp_fec)));
-    upipe_rtp_fec_sub_clean(upipe_rtp_fec_sub_to_upipe(upipe_rtp_fec_to_col_subpipe(upipe_rtp_fec)));
-    upipe_rtp_fec_sub_clean(upipe_rtp_fec_sub_to_upipe(upipe_rtp_fec_to_row_subpipe(upipe_rtp_fec)));
-
-    upipe_throw_dead(upipe);
+    upipe_rtp_fec_sub_clean(upipe_rtp_fec_to_main_subpipe(upipe_rtp_fec));
+    upipe_rtp_fec_sub_clean(upipe_rtp_fec_to_col_subpipe(upipe_rtp_fec));
+    upipe_rtp_fec_sub_clean(upipe_rtp_fec_to_row_subpipe(upipe_rtp_fec));
 
     upipe_rtp_fec_clean_uclock(upipe);
     upipe_rtp_fec_clean_upump(upipe);
     upipe_rtp_fec_clean_upump_mgr(upipe);
     upipe_rtp_fec_clean_urefcount(upipe);
-    upipe_rtp_fec_clean_uref_mgr(upipe);
 
     upipe_rtp_fec_clean_output(upipe);
 
@@ -1099,4 +981,3 @@ struct upipe_mgr *upipe_rtp_fec_mgr_alloc(void)
 {
     return &upipe_rtp_fec_mgr;
 }
-
