@@ -40,6 +40,7 @@ myinclude_HEADERS = \
 	upipe_rtp_decaps.h \
 	upipe_rtp_prepend.h \
 	upipe_rtp_source.h \
+	upipe_rtp_demux.h \
 	upipe_rtp_h264.h \
 	upipe_rtp_mpeg4.h \
 	upipe_rtp_opus.h \

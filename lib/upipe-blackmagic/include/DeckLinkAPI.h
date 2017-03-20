@@ -150,6 +150,7 @@ enum _BMDDetectedVideoInputFormatFlags {
 
 typedef uint32_t BMDDeckLinkCapturePassthroughMode;
 enum _BMDDeckLinkCapturePassthroughMode {
+    bmdDeckLinkCapturePassthroughModeDisabled                    = /* 'pdis' */ 0x70646973,
     bmdDeckLinkCapturePassthroughModeDirect                      = /* 'pdir' */ 0x70646972,
     bmdDeckLinkCapturePassthroughModeCleanSwitch                 = /* 'pcln' */ 0x70636C6E
 };

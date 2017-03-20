@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2013 OpenHeadend S.A.R.L.
+ * Copyright (C) 2013-2017 OpenHeadend S.A.R.L.
  *
  * Authors: Christophe Massiot
  *
@@ -71,6 +71,13 @@ struct uprobe *uprobe_pfx_init(struct uprobe_pfx *uprobe_pfx,
  * @param uprobe_pfx structure to clean
  */
 void uprobe_pfx_clean(struct uprobe_pfx *uprobe_pfx);
+
+/** @This returns the name of the pipe.
+ *
+ * @param uprobe pointer to probe
+ * @return name of the pipe (informative)
+ */
+const char *uprobe_pfx_get_name(struct uprobe *uprobe);
 
 /** @This allocates a new uprobe pfx structure.
  *

@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2013-2015 OpenHeadend S.A.R.L.
+ * Copyright (C) 2013-2017 OpenHeadend S.A.R.L.
  *
  * Authors: Christophe Massiot
  *
@@ -60,8 +60,6 @@
 #include <upipe-modules/upipe_dump.h>
 #include <upipe-framers/upipe_h264_framer.h>
 
-#include <ev.h>
-
 #include <stdlib.h>
 #include <stdint.h>
 #include <stdio.h>
@@ -84,9 +82,8 @@ int main(int argc, char **argv)
     const char *file = argv[1];
 
     /* structures managers */
-    struct ev_loop *loop = ev_default_loop(0);
-    struct upump_mgr *upump_mgr = upump_ev_mgr_alloc(loop, UPUMP_POOL,
-                                                     UPUMP_BLOCKER_POOL);
+    struct upump_mgr *upump_mgr = upump_ev_mgr_alloc_default(UPUMP_POOL,
+            UPUMP_BLOCKER_POOL);
     assert(upump_mgr != NULL);
     struct umem_mgr *umem_mgr = umem_alloc_mgr_alloc();
     struct udict_mgr *udict_mgr = udict_inline_mgr_alloc(UDICT_POOL_DEPTH,
@@ -135,13 +132,12 @@ int main(int argc, char **argv)
     upipe_release(upipe);
 
     /* main loop */
-    ev_loop(loop, 0);
+    upump_mgr_run(upump_mgr, NULL);
 
     upipe_release(upipe_src);
 
     uprobe_release(uprobe);
 
-    ev_default_destroy();
     return 0;
 }
 

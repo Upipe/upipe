@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2013-2015 OpenHeadend S.A.R.L.
+ * Copyright (C) 2013-2017 OpenHeadend S.A.R.L.
  *
  * Authors: Christophe Massiot
  *
@@ -84,9 +84,8 @@ int main(int argc, char **argv)
     assert(uclock != NULL);
 
     /* upump management */
-    struct ev_loop *loop = ev_default_loop(0);
-    struct upump_mgr *upump_mgr = upump_ev_mgr_alloc(loop, UPUMP_POOL,
-                                                     UPUMP_BLOCKER_POOL);
+    struct upump_mgr *upump_mgr = upump_ev_mgr_alloc_default(UPUMP_POOL,
+            UPUMP_BLOCKER_POOL);
     assert(upump_mgr != NULL);
 
     /* uref and mem management */
@@ -132,7 +131,7 @@ int main(int argc, char **argv)
     ubase_assert(upipe_attach_uclock(alsink));
     ubase_assert(upipe_set_uri(alsink, "default"));
 
-    ev_loop(loop, 0);
+    upump_mgr_run(upump_mgr, NULL);
 
     /* release pipe */
     upipe_release(alsink);
@@ -147,6 +146,5 @@ int main(int argc, char **argv)
     uprobe_release(logger);
     uprobe_clean(&uprobe);
 
-    ev_default_destroy();
     return 0;
 }

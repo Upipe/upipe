@@ -82,11 +82,15 @@ static struct upipe *STRUCTURE##_alloc_flow(struct upipe_mgr *mgr,          \
                                             va_list args,                   \
                                             struct uref **flow_def_p)       \
 {                                                                           \
-    if (signature != UPIPE_FLOW_SIGNATURE) {                                \
+    if (signature != UPIPE_FLOW_SIGNATURE &&                                \
+        (signature != UPIPE_VOID_SIGNATURE || EXPECTED_FLOW_DEF != NULL)) { \
         uprobe_release(uprobe);                                             \
         return NULL;                                                        \
     }                                                                       \
-    if (EXPECTED_FLOW_DEF != NULL || flow_def_p != NULL) {                  \
+    if (signature == UPIPE_VOID_SIGNATURE) {                                \
+        if (flow_def_p != NULL)                                             \
+            *flow_def_p = NULL;                                             \
+    } else if (EXPECTED_FLOW_DEF != NULL || flow_def_p != NULL) {           \
         struct uref *flow_def = va_arg(args, struct uref *);                \
         if (unlikely(flow_def == NULL)) {                                   \
             uprobe_release(uprobe);                                         \

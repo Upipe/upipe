@@ -239,6 +239,13 @@ static int upipe_hls_void_sub_control(struct upipe *upipe,
         struct upipe **super_p = va_arg(args, struct upipe **);
         return upipe_hls_void_sub_get_super(upipe, super_p);
     }
+    case UPIPE_BIN_GET_FIRST_INNER: {
+        struct upipe_hls_void_sub *upipe_hls_void_sub =
+            upipe_hls_void_sub_from_upipe(upipe);
+        struct upipe **p = va_arg(args, struct upipe **);
+        *p = upipe_hls_void_sub->src;
+        return (*p != NULL) ? UBASE_ERR_NONE : UBASE_ERR_UNHANDLED;
+    }
     }
     return upipe_hls_void_sub_control_bin_output(upipe, command, args);
 }
@@ -451,9 +458,16 @@ static int probe_playlist(struct uprobe *uprobe, struct upipe *inner,
         upipe_release(output);
         return UBASE_ERR_NONE;
     }
+    }
 
-    case UPROBE_HLS_PLAYLIST_NEED_RELOAD:
-        return upipe_hls_void_reload(upipe);
+    if (event >= UPROBE_LOCAL) {
+        switch (ubase_get_signature(args)) {
+        case UPIPE_HLS_PLAYLIST_SIGNATURE:
+            switch (event) {
+            case UPROBE_HLS_PLAYLIST_NEED_RELOAD:
+                return upipe_hls_void_reload(upipe);
+            };
+        }
     }
 
     return upipe_throw_proxy(upipe, inner, event, args);
@@ -680,6 +694,20 @@ static int upipe_hls_void_control(struct upipe *upipe,
     }
     case UPIPE_SPLIT_ITERATE:
         return upipe_hls_void_control_pmt(upipe, command, args);
+    case UPIPE_BIN_GET_FIRST_INNER: {
+        struct upipe_hls_void *upipe_hls_void =
+            upipe_hls_void_from_upipe(upipe);
+        struct upipe **p = va_arg(args, struct upipe **);
+        *p = upipe_hls_void->src;
+        return (*p != NULL) ? UBASE_ERR_NONE : UBASE_ERR_UNHANDLED;
+    }
+    case UPIPE_BIN_GET_LAST_INNER: {
+        struct upipe_hls_void *upipe_hls_void =
+            upipe_hls_void_from_upipe(upipe);
+        struct upipe **p = va_arg(args, struct upipe **);
+        *p = upipe_hls_void->playlist;
+        return (*p != NULL) ? UBASE_ERR_NONE : UBASE_ERR_UNHANDLED;
+    }
     }
 
     if (command >= UPROBE_LOCAL) {

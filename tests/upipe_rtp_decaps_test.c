@@ -138,6 +138,7 @@ static int catch(struct uprobe *uprobe, struct upipe *upipe, int event, va_list 
         case UPROBE_READY:
         case UPROBE_DEAD:
         case UPROBE_NEW_FLOW_DEF:
+        case UPROBE_CLOCK_REF:
             break;
         default:
             assert(0);
@@ -177,7 +178,7 @@ int main(int argc, char **argv)
                                                      UPROBE_LOG_DEBUG);
     assert(uprobe_stdio != NULL);
 
-    uref = uref_block_flow_alloc_def(uref_mgr, NULL);
+    uref = uref_block_flow_alloc_def(uref_mgr, "rtp.");
     assert(uref);
 
     /* build rtpd pipe */

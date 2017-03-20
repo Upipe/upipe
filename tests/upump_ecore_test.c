@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2012-2015 OpenHeadend S.A.R.L.
+ * Copyright (C) 2012-2017 OpenHeadend S.A.R.L.
  *
  * Authors: Christophe Massiot
  *
@@ -115,7 +115,6 @@ static void read_watcher_cb(struct upump *unused)
 int main(int argc, char **argv)
 {
     long flags;
-    assert(ecore_init());
     mgr = upump_ecore_mgr_alloc(UPUMP_POOL, UPUMP_BLOCKER_POOL);
     assert(mgr != NULL);
 
@@ -141,7 +140,7 @@ int main(int argc, char **argv)
     /* Start tests */
     upump_start(write_idler);
 
-    ecore_main_loop_begin();
+    upump_mgr_run(mgr, NULL);
     printf("\nread: \t%zd\nwrite: \t%zd\n", bytes_read, bytes_written);
     assert(bytes_read);
     assert(bytes_read == bytes_written);
@@ -152,8 +151,6 @@ int main(int argc, char **argv)
     upump_free(read_timer);
     upump_free(read_watcher);
     upump_mgr_release(mgr);
-
-    ecore_shutdown();
 
     return 0;
 }

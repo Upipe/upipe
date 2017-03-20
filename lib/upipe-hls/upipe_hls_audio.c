@@ -226,10 +226,16 @@ static int probe_playlist(struct uprobe *uprobe, struct upipe *inner,
         upipe_hls_audio_store_bin_output(upipe, output);
         return UBASE_ERR_NONE;
     }
-
-    case UPROBE_HLS_PLAYLIST_NEED_RELOAD: {
-        return upipe_hls_audio_reload(upipe);
     }
+
+    if (event >= UPROBE_LOCAL) {
+        switch (ubase_get_signature(args)) {
+        case UPIPE_HLS_PLAYLIST_SIGNATURE:
+            switch (event) {
+            case UPROBE_HLS_PLAYLIST_NEED_RELOAD:
+                return upipe_hls_audio_reload(upipe);
+            }
+        }
     }
 
     return upipe_throw_proxy(upipe, inner, event, args);
@@ -441,6 +447,13 @@ static int upipe_hls_audio_control(struct upipe *upipe,
     case UPIPE_SET_URI: {
         const char *uri = va_arg(args, const char *);
         return upipe_hls_audio_set_uri(upipe, uri);
+    }
+    case UPIPE_BIN_GET_FIRST_INNER: {
+        struct upipe_hls_audio *upipe_hls_audio =
+            upipe_hls_audio_from_upipe(upipe);
+        struct upipe **p = va_arg(args, struct upipe **);
+        *p = upipe_hls_audio->src;
+        return (*p != NULL) ? UBASE_ERR_NONE : UBASE_ERR_UNHANDLED;
     }
     }
 

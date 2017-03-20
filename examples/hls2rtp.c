@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2015 Arnaud de Turckheim <quarium@gmail.com>
- * Copyright (c) 2016 OpenHeadend S.A.R.L.
+ * Copyright (c) 2016-2017 OpenHeadend S.A.R.L.
  *
  * Permission is hereby granted, free of charge, to any person obtaining
  * a copy of this software and associated documentation files (the
@@ -34,6 +34,7 @@
 #include <upipe/ulist.h>
 #include <upipe/uuri.h>
 #include <upipe/upipe.h>
+#include <upipe/upipe_dump.h>
 #include <upipe/uprobe.h>
 #include <upipe/uprobe_helper_uprobe.h>
 #include <upipe/uprobe_helper_urefcount.h>
@@ -91,8 +92,8 @@
 #include <upipe-ts/upipe_ts_mux.h>
 #include <upipe-pthread/uprobe_pthread_upump_mgr.h>
 #include <upipe-pthread/upipe_pthread_transfer.h>
+#include <upipe-pthread/umutex_pthread.h>
 
-#include <ev.h>
 #include <pthread.h>
 
 struct output {
@@ -129,6 +130,7 @@ static uint64_t variant_id = UINT64_MAX;
 static uint64_t bandwidth_max = UINT64_MAX;
 static const char *url = NULL;
 static const char *addr = "127.0.0.1";
+static const char *dump = NULL;
 static struct output video_output = {
     .port = 5004,
     .rtp_type = 96,
@@ -162,7 +164,6 @@ static struct uprobe *main_probe = NULL;
 static struct uref_mgr *uref_mgr;
 static struct ev_signal signal_watcher;
 static struct ev_io stdin_watcher;
-static struct ev_loop *main_loop;
 
 static struct uprobe *uprobe_rewrite_date_alloc(struct uprobe *next,
                                                 bool video);
@@ -175,34 +176,7 @@ static struct uprobe *uprobe_playlist_alloc(struct uprobe *next,
                                             uint64_t variant_id,
                                             uint64_t at);
 
-static struct upump_mgr *upump_mgr_alloc(void *unused)
-{
-    /* disable signals */
-    sigset_t sigs;
-    sigemptyset(&sigs);
-    sigaddset(&sigs, SIGTERM);
-    sigaddset(&sigs, SIGINT);
-    pthread_sigmask(SIG_BLOCK, &sigs, NULL);
-
-    struct ev_loop *loop = ev_loop_new(0);
-    struct upump_mgr *upump_mgr = upump_ev_mgr_alloc(loop, UPUMP_POOL,
-                                                     UPUMP_BLOCKER_POOL);
-    assert(upump_mgr != NULL);
-    upump_mgr_set_opaque(upump_mgr, loop);
-    return upump_mgr;
-}
-
-static void upump_mgr_work(struct upump_mgr *upump_mgr)
-{
-    struct ev_loop *loop = upump_mgr_get_opaque(upump_mgr, struct ev_loop *);
-    ev_loop(loop, 0);
-}
-
-static void upump_mgr_free(struct upump_mgr *upump_mgr)
-{
-    struct ev_loop *loop = upump_mgr_get_opaque(upump_mgr, struct ev_loop *);
-    ev_loop_destroy(loop);
-}
+static void cmd_quit(void);
 
 /** @This releases a pipe and sets the pointer to NULL.
  *
@@ -264,7 +238,8 @@ static void cmd_start(void)
     upipe_cleanup(&audio_output.pipe);
     upipe_cleanup(&video_output.pipe);
     upipe_cleanup(&variant);
-    select_variant(main_probe);
+    if (!ubase_check(select_variant(main_probe)))
+        cmd_quit();
 }
 
 /** @This stops the current variant.  */
@@ -288,6 +263,9 @@ static void cmd_quit(void)
     }
 #endif
 
+    if (dump != NULL)
+        upipe_dump_open(NULL, NULL, dump, src, NULL);
+
     cmd_stop();
     upipe_cleanup(&hls);
     upipe_cleanup(&src);
@@ -296,12 +274,10 @@ static void cmd_quit(void)
     upipe_cleanup(&src);
     upipe_cleanup(&video_output.sink);
     upipe_cleanup(&audio_output.sink);
-    ev_signal_stop(main_loop, &signal_watcher);
-    ev_io_stop(main_loop, &stdin_watcher);
 }
 
-/** @This handles SIGINT signal. */
-static void sigint_cb(struct ev_loop *loop, struct ev_signal *w, int revents)
+/** @This handles SIGINT and SIGTERM signal. */
+static void sigint_cb(struct upump *upump)
 {
     cmd_quit();
 }
@@ -321,7 +297,7 @@ static void cmd_select(const char *id)
 }
 
 /** @This handles stdin events. */
-static void stdin_cb(struct ev_loop *loop, struct ev_io *io, int revents)
+static void stdin_cb(struct upump *upump)
 {
     char cmd_buffer[2048];
 
@@ -423,9 +399,7 @@ static int catch_rewrite_date(struct uprobe *uprobe, struct upipe *upipe,
 
     UBASE_SIGNATURE_CHECK(args, UPIPE_PROBE_UREF_SIGNATURE);
     struct uref *uref = va_arg(args, struct uref *);
-    bool *drop = va_arg(args, bool *);
 
-    *drop = false;
     int type;
     uint64_t date;
     uref_clock_get_date_orig(uref, &date, &type);
@@ -664,6 +638,7 @@ static int catch_playlist(struct uprobe *uprobe,
 {
     struct uprobe_playlist *probe_playlist =
         uprobe_playlist_from_uprobe(uprobe);
+    int ret;
 
     if (event < UPROBE_LOCAL)
         return uprobe_throw_next(uprobe, upipe, event, args);
@@ -679,15 +654,27 @@ static int catch_playlist(struct uprobe *uprobe,
         if (at) {
             uint64_t remain = 0;
             uprobe_notice_va(uprobe, NULL, "seek at %"PRIu64, at);
-            UBASE_RETURN(upipe_hls_playlist_seek(upipe, at, &remain));
+            ret = upipe_hls_playlist_seek(upipe, at, &remain);
+            if (!ubase_check(ret)) {
+                cmd_quit();
+                return ret;
+            }
+
             if (probe_playlist->video)
                 probe_playlist->video->at = remain;
             probe_playlist->at = 0;
         }
         else if (sequence) {
-            UBASE_RETURN(upipe_hls_playlist_set_index(upipe, sequence));
+            ret = upipe_hls_playlist_set_index(upipe, sequence);
+            if (!ubase_check(ret))
+                cmd_quit();
+            return ret;
         }
-        return upipe_hls_playlist_play(upipe);
+
+        ret = upipe_hls_playlist_play(upipe);
+        if (!ubase_check(ret))
+            cmd_quit();
+        return ret;
     }
 
     case UPROBE_HLS_PLAYLIST_ITEM_END:
@@ -698,12 +685,16 @@ static int catch_playlist(struct uprobe *uprobe,
             upipe_cleanup(&video_output.pipe);
             upipe_cleanup(&audio_output.pipe);
             upipe_cleanup(&variant);
-            return select_variant(uprobe);
+            ret = select_variant(uprobe);
+            if (!ubase_check(ret))
+                cmd_quit();
+            return ret;
         }
-        if (!ubase_check(upipe_hls_playlist_play(upipe))) {
+
+        ret = upipe_hls_playlist_play(upipe);
+        if (!ubase_check(ret))
             cmd_quit();
-            return UBASE_ERR_NONE;
-        }
+        return ret;
     }
     return uprobe_throw_next(uprobe, upipe, event, args);
 }
@@ -923,6 +914,10 @@ static int catch_variant(struct uprobe *uprobe,
             else
                 uprobe_warn(uprobe, NULL, "no video");
         }
+
+        if (!video_output.pipe && !audio_output.pipe)
+            cmd_quit();
+
         return UBASE_ERR_NONE;
     }
     }
@@ -960,6 +955,8 @@ static int catch_hls(struct uprobe *uprobe,
                      struct upipe *upipe,
                      int event, va_list args)
 {
+    int ret;
+
     switch (event) {
     case UPROBE_SPLIT_UPDATE: {
         uprobe_notice_va(uprobe, NULL, "list:");
@@ -975,11 +972,29 @@ static int catch_hls(struct uprobe *uprobe,
             uref_dump(uref, uprobe);
         }
 
-        return select_variant(uprobe);
+        ret = select_variant(uprobe);
+        if (!ubase_check(ret))
+            cmd_quit();
+        return ret;
     }
     }
 
     return uprobe_throw_next(uprobe, upipe, event, args);
+}
+
+static int catch_src(struct uprobe *uprobe, struct upipe *upipe,
+                     int event, va_list args)
+{
+        if (event != UPROBE_HTTP_SRC_ERROR ||
+            ubase_get_signature(args) != UPIPE_HTTP_SRC_SIGNATURE)
+                return uprobe_throw_next(uprobe, upipe, event, args);
+
+        UBASE_SIGNATURE_CHECK(args, UPIPE_HTTP_SRC_SIGNATURE);
+        unsigned int code = va_arg(args, unsigned int);
+
+        uprobe_err_va(uprobe, NULL, "http error %u", code);
+        cmd_quit();
+        return UBASE_ERR_NONE;
 }
 
 static struct upipe *hls2rtp_video_sink(struct uprobe *probe,
@@ -1165,6 +1180,25 @@ static struct upipe *hls2rtp_audio_sink(struct uprobe *probe,
     return sink;
 }
 
+static int catch_error(struct uprobe *uprobe,
+                     struct upipe *upipe,
+                     int event, va_list args)
+{
+    switch (event) {
+    case UPROBE_FATAL: {
+        int code = va_arg(args, int);
+        exit(code);
+        break;
+    }
+
+    case UPROBE_ERROR:
+        cmd_quit();
+        return UBASE_ERR_NONE;
+    }
+
+    return uprobe_throw_next(uprobe, upipe, event, args);
+}
+
 enum opt {
     OPT_INVALID = '?',
     OPT_MISSING_ARG = ':',
@@ -1190,6 +1224,7 @@ enum opt {
     OPT_RT_PRIORITY,
     OPT_SYSLOG_TAG,
     OPT_NO_STDIN,
+    OPT_DUMP,
     OPT_HELP,
 };
 
@@ -1214,6 +1249,7 @@ static struct option options[] = {
     { "udp", no_argument, NULL, OPT_UDP },
     { "conformance", required_argument, NULL, OPT_CONFORMANCE },
     { "no-stdin", no_argument, NULL, OPT_NO_STDIN },
+    { "dump", required_argument, NULL, OPT_DUMP },
     { "help", no_argument, NULL, OPT_HELP },
     { 0, 0, 0, 0 },
 };
@@ -1332,6 +1368,9 @@ int main(int argc, char **argv)
         case OPT_NO_STDIN:
             no_stdin = true;
             break;
+        case OPT_DUMP:
+            dump = optarg;
+            break;
 
         case OPT_HELP:
             usage(argv[0], NULL);
@@ -1356,16 +1395,25 @@ int main(int argc, char **argv)
     /*
      * create event loop
      */
-    main_loop = ev_default_loop(0);
-    assert(main_loop);
+    struct upump_mgr *upump_mgr =
+        upump_ev_mgr_alloc_default(UPUMP_POOL, UPUMP_BLOCKER_POOL);
+    assert(upump_mgr);
+    struct upump *sigint_pump = upump_alloc_signal(upump_mgr, sigint_cb,
+            (void *)SIGINT, NULL, SIGINT);
+    upump_set_status(sigint_pump, false);
+    upump_start(sigint_pump);
+    struct upump *sigterm_pump = upump_alloc_signal(upump_mgr, sigint_cb,
+            (void *)SIGTERM, NULL, SIGTERM);
+    upump_set_status(sigterm_pump, false);
+    upump_start(sigterm_pump);
 
-    ev_signal_init(&signal_watcher, sigint_cb, SIGINT);
-    ev_signal_start(main_loop, &signal_watcher);
-
-    ev_init(&stdin_watcher, stdin_cb);
-    ev_io_set(&stdin_watcher, STDIN_FILENO, EV_READ);
-    if (!no_stdin)
-        ev_io_start(main_loop, &stdin_watcher);
+    struct upump *stdin_pump = NULL;
+    if (!no_stdin) {
+        stdin_pump = upump_alloc_fd_read(upump_mgr, stdin_cb, NULL, NULL,
+                                         STDIN_FILENO);
+        upump_set_status(stdin_pump, false);
+        upump_start(stdin_pump);
+    }
 
     /*
      * create root probe
@@ -1378,6 +1426,11 @@ int main(int argc, char **argv)
             uprobe_stdio_color_alloc(NULL, stderr, log_level) :
             uprobe_stdio_alloc(NULL, stderr, log_level);
     assert(main_probe);
+
+    struct uprobe probe_error;
+    uprobe_init(&probe_error, catch_error, uprobe_use(main_probe));
+    uprobe_release(main_probe);
+    main_probe = &probe_error;
 
     /*
      * add umem manager probe
@@ -1425,9 +1478,6 @@ int main(int argc, char **argv)
      * add upump manager probe
      */
     {
-        struct upump_mgr *upump_mgr =
-            upump_ev_mgr_alloc(main_loop, UPUMP_POOL, UPUMP_BLOCKER_POOL);
-        assert(upump_mgr);
         main_probe = uprobe_pthread_upump_mgr_alloc(main_probe);
         assert(main_probe != NULL);
         uprobe_pthread_upump_mgr_set(main_probe, upump_mgr);
@@ -1458,10 +1508,14 @@ int main(int argc, char **argv)
             param.sched_priority = rt_priority;
             pthread_attr_setschedparam(&attr, &param);
         }
+        struct umutex *wsink_mutex = NULL;
+        if (dump)
+            wsink_mutex = umutex_pthread_alloc(0);
         sink_xfer_mgr = upipe_pthread_xfer_mgr_alloc(XFER_QUEUE,
-                XFER_POOL, uprobe_use(main_probe), upump_mgr_alloc,
-                upump_mgr_work, upump_mgr_free, NULL, NULL, &attr);
+                XFER_POOL, uprobe_use(main_probe), upump_ev_mgr_alloc_loop,
+                UPUMP_POOL, UPUMP_BLOCKER_POOL, wsink_mutex, NULL, &attr);
         assert(sink_xfer_mgr != NULL);
+        umutex_release(wsink_mutex);
 
         /* deport to sink thread */
         wsink_mgr = upipe_wsink_mgr_alloc(sink_xfer_mgr);
@@ -1477,6 +1531,7 @@ int main(int argc, char **argv)
                                      UPROBE_LOG_VERBOSE, "udpsink"));
         assert(sink != NULL);
         upipe_attach_uclock(sink);
+        upipe_set_max_length(sink, UINT16_MAX);
 
         if (!ubase_check(upipe_set_uri(sink, addr))) {
             upipe_release(sink);
@@ -1506,6 +1561,7 @@ int main(int argc, char **argv)
         upipe_ts_mux_set_mode(ts_mux, UPIPE_TS_MUX_MODE_CAPPED);
         upipe_set_output_size(ts_mux, mtu);
         upipe_ts_mux_set_padding_octetrate(ts_mux, PADDING_OCTETRATE);
+        upipe_attach_uclock(ts_mux);
         if (conformance != UPIPE_TS_CONFORMANCE_AUTO)
             upipe_ts_mux_set_conformance(ts_mux, conformance);
 
@@ -1542,6 +1598,7 @@ int main(int argc, char **argv)
                              UPROBE_LOG_VERBOSE, "trickp"));
         upipe_mgr_release(upipe_trickp_mgr);
         assert(trickp);
+        upipe_end_preroll(trickp);
 
         /* create video sink */
         if (video_output.enabled) {
@@ -1573,7 +1630,6 @@ int main(int argc, char **argv)
                                  UPROBE_LOG_VERBOSE, "wsink_x"),
                 QUEUE_LENGTH);
         assert(ts_mux != NULL);
-        upipe_attach_upump_mgr(ts_mux);
     }
 
     upipe_mgr_release(wsink_mgr);
@@ -1581,6 +1637,10 @@ int main(int argc, char **argv)
     /*
      * create source pipe
      */
+    struct uprobe probe_src;
+    uprobe_init(&probe_src, catch_src, uprobe_use(main_probe));
+    uprobe_release(main_probe);
+    main_probe = &probe_src;
     {
         struct upipe_mgr *upipe_auto_src_mgr = upipe_auto_src_mgr_alloc();
         assert(upipe_auto_src_mgr);
@@ -1629,20 +1689,28 @@ int main(int argc, char **argv)
     /*
      * run main loop
      */
-    ev_loop(main_loop, 0);
+    upump_mgr_run(upump_mgr, NULL);
 
     /*
      * release ressources
      */
+    upump_stop(sigint_pump);
+    upump_free(sigint_pump);
+    upump_stop(sigterm_pump);
+    upump_free(sigterm_pump);
+    if (stdin_pump != NULL) {
+        upump_stop(stdin_pump);
+        upump_free(stdin_pump);
+    }
     upipe_mgr_release(probe_uref_mgr);
     upipe_mgr_release(time_limit_mgr);
     upipe_mgr_release(rtp_prepend_mgr);
     upipe_mgr_release(udpsink_mgr);
     upipe_mgr_release(setflowdef_mgr);
     uprobe_clean(&probe_hls);
+    uprobe_clean(&probe_src);
+    uprobe_clean(&probe_error);
     uref_mgr_release(uref_mgr);
-
-    ev_loop_destroy(main_loop);
 
     return 0;
 }

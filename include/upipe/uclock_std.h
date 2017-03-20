@@ -1,9 +1,7 @@
-/*****************************************************************************
- * uclock_std.h: standard implementation of uclock
- *****************************************************************************
+/*
  * Copyright (C) 2012 OpenHeadend S.A.R.L.
  *
- * Authors: Christophe Massiot <massiot@via.ecp.fr>
+ * Authors: Christophe Massiot
  *
  * Permission is hereby granted, free of charge, to any person obtaining
  * a copy of this software and associated documentation files (the
@@ -23,7 +21,11 @@
  * CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT,
  * TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE
  * SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
- *****************************************************************************/
+ */
+
+/** @file
+ * @short Upipe standard implementation of uclock
+ */
 
 #ifndef _UPIPE_UCLOCK_STD_H_
 /** @hidden */
@@ -34,13 +36,13 @@ extern "C" {
 
 #include <upipe/uclock.h>
 
-/** flags for the creation of a uclock_t structure */
+/** flags for the creation of a uclock structure */
 enum uclock_std_flags {
     /** force using a real-time clock even if a monotonic clock is available */
     UCLOCK_FLAG_REALTIME = 0x1
 };
 
-/** @This allocates a new uclock_t structure.
+/** @This allocates a new uclock structure.
  *
  * @param flags flags for the creation of a uclock structure
  * @return pointer to uclock, or NULL in case of error

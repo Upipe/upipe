@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2013-2016 OpenHeadend S.A.R.L.
+ * Copyright (C) 2013-2017 OpenHeadend S.A.R.L.
  *
  * Authors: Christophe Massiot
  *
@@ -30,6 +30,7 @@
 
 #include <upipe/ubase.h>
 #include <upipe/urefcount.h>
+#include <upipe/umutex.h>
 #include <upipe/ulifo.h>
 #include <upipe/uqueue.h>
 #include <upipe/uprobe.h>
@@ -61,6 +62,8 @@ struct upipe_xfer_mgr {
     /** public upipe manager structure */
     struct upipe_mgr mgr;
 
+    /** mutual exclusion primitives to access the remote event loop */
+    struct umutex *mutex;
     /** watcher */
     struct upump *upump;
     /** remote upump_mgr */
@@ -522,6 +525,7 @@ static void upipe_xfer_mgr_free(struct upipe_mgr *mgr)
     upump_free(xfer_mgr->upump);
     upump_mgr_release(xfer_mgr->upump_mgr);
     uqueue_clean(&xfer_mgr->uqueue);
+    umutex_release(xfer_mgr->mutex);
     upipe_xfer_mgr_vacuum(mgr);
     free(xfer_mgr);
 }
@@ -641,6 +645,37 @@ static int _upipe_xfer_mgr_attach(struct upipe_mgr *mgr,
     return UBASE_ERR_NONE;
 }
 
+/** @This freezes the remote event loop. Use this function if you need to
+ * walk through the remote pipes, send control commands or allocate subpipes
+ * of remote pipes.
+ *
+ * This is only possible if the manager was allocated with a mutex, otherwise
+ * an error message is returned.
+ *
+ * @param mgr xfer_mgr structure
+ * @return an error code
+ */
+static inline int _upipe_xfer_mgr_freeze(struct upipe_mgr *mgr)
+{
+    struct upipe_xfer_mgr *xfer_mgr = upipe_xfer_mgr_from_upipe_mgr(mgr);
+    upipe_mgr_use(mgr);
+    return umutex_lock(xfer_mgr->mutex);
+}
+
+/** @This thaws the remote event loop previously frozen by @ref
+ * upipe_xfer_mgr_freeze.
+ *
+ * @param mgr xfer_mgr structure
+ * @return an error code
+ */
+static inline int _upipe_xfer_mgr_thaw(struct upipe_mgr *mgr)
+{
+    struct upipe_xfer_mgr *xfer_mgr = upipe_xfer_mgr_from_upipe_mgr(mgr);
+    int err = umutex_unlock(xfer_mgr->mutex);
+    upipe_mgr_release(mgr);
+    return err;
+}
+
 /** @This processes manager control commands.
  *
  * @param mgr xfer_mgr structure
@@ -657,6 +692,14 @@ static int upipe_xfer_mgr_control(struct upipe_mgr *mgr,
             struct upump_mgr *upump_mgr = va_arg(args, struct upump_mgr *);
             return _upipe_xfer_mgr_attach(mgr, upump_mgr);
         }
+        case UPIPE_XFER_MGR_FREEZE: {
+            UBASE_SIGNATURE_CHECK(args, UPIPE_XFER_SIGNATURE)
+            return _upipe_xfer_mgr_freeze(mgr);
+        }
+        case UPIPE_XFER_MGR_THAW: {
+            UBASE_SIGNATURE_CHECK(args, UPIPE_XFER_SIGNATURE)
+            return _upipe_xfer_mgr_thaw(mgr);
+        }
         default:
             return UBASE_ERR_UNHANDLED;
     }
@@ -669,10 +712,12 @@ static int upipe_xfer_mgr_control(struct upipe_mgr *mgr,
  *
  * @param queue_length maximum length of the internal queues
  * @param msg_pool_depth maximum number of messages in the pool
+ * @param mutex mutual exclusion primitives to access the event loop, or NULL
  * @return pointer to manager
  */
 struct upipe_mgr *upipe_xfer_mgr_alloc(uint8_t queue_length,
-                                       uint16_t msg_pool_depth)
+                                       uint16_t msg_pool_depth,
+                                       struct umutex *mutex)
 {
     assert(queue_length);
     struct upipe_xfer_mgr *xfer_mgr = malloc(sizeof(struct upipe_xfer_mgr) +
@@ -687,6 +732,7 @@ struct upipe_mgr *upipe_xfer_mgr_alloc(uint8_t queue_length,
         free(xfer_mgr);
         return NULL;
     }
+    xfer_mgr->mutex = umutex_use(mutex);
     xfer_mgr->upump = NULL;
     xfer_mgr->upump_mgr = NULL;
     xfer_mgr->queue_length = queue_length;

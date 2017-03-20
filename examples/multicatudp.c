@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2016 OpenHeadend S.A.R.L.
+ * Copyright (C) 2016-2017 OpenHeadend S.A.R.L.
  *
  * Authors: Christophe Massiot
  *
@@ -81,8 +81,6 @@
 #include <syslog.h>
 #include <pthread.h>
 
-#include <ev.h>
-
 #define UDICT_POOL_DEPTH 10
 #define UREF_POOL_DEPTH 10
 #define UBUF_POOL_DEPTH 10
@@ -106,35 +104,6 @@ static void usage(const char *argv0) {
     fprintf(stdout, "   -k: start time in 27MHz unit\n");
     fprintf(stdout, "   -m: data packet size\n");
     exit(EXIT_FAILURE);
-}
-
-static struct upump_mgr *upump_mgr_alloc(void *unused)
-{
-    /* disable signals */
-    sigset_t sigs;
-    sigemptyset(&sigs);
-    sigaddset(&sigs, SIGTERM);
-    sigaddset(&sigs, SIGINT);
-    pthread_sigmask(SIG_BLOCK, &sigs, NULL);
-
-    struct ev_loop *loop = ev_loop_new(0);
-    struct upump_mgr *upump_mgr = upump_ev_mgr_alloc(loop, UPUMP_POOL,
-                                                     UPUMP_BLOCKER_POOL);
-    assert(upump_mgr != NULL);
-    upump_mgr_set_opaque(upump_mgr, loop);
-    return upump_mgr;
-}
-
-static void upump_mgr_work(struct upump_mgr *upump_mgr)
-{
-    struct ev_loop *loop = upump_mgr_get_opaque(upump_mgr, struct ev_loop *);
-    ev_loop(loop, 0);
-}
-
-static void upump_mgr_free(struct upump_mgr *upump_mgr)
-{
-    struct ev_loop *loop = upump_mgr_get_opaque(upump_mgr, struct ev_loop *);
-    ev_loop_destroy(loop);
 }
 
 /** definition of our uprobe */
@@ -207,14 +176,13 @@ int main(int argc, char *argv[])
     dstpath = argv[optind++];
 
     /* setup environnement */
-    struct ev_loop *loop = ev_default_loop(0);
     struct umem_mgr *umem_mgr = umem_alloc_mgr_alloc();
     struct udict_mgr *udict_mgr = udict_inline_mgr_alloc(UDICT_POOL_DEPTH,
                                                          umem_mgr, -1, -1);
     struct uref_mgr *uref_mgr = uref_std_mgr_alloc(UREF_POOL_DEPTH, udict_mgr,
                                                    0);
-    struct upump_mgr *upump_mgr = upump_ev_mgr_alloc(loop, UPUMP_POOL,
-                                                     UPUMP_BLOCKER_POOL);
+    struct upump_mgr *upump_mgr = upump_ev_mgr_alloc_default(UPUMP_POOL,
+            UPUMP_BLOCKER_POOL);
     struct uclock *uclock = uclock_std_alloc(UCLOCK_FLAG_REALTIME);
     struct uprobe uprobe;
     uprobe_init(&uprobe, catch, NULL);
@@ -284,8 +252,8 @@ int main(int argc, char *argv[])
         pthread_attr_setschedparam(&attr, &param);
     }
     struct upipe_mgr *xfer_mgr = upipe_pthread_xfer_mgr_alloc(XFER_QUEUE,
-            XFER_POOL, uprobe_use(logger), upump_mgr_alloc,
-            upump_mgr_work, upump_mgr_free, NULL, NULL, &attr);
+            XFER_POOL, uprobe_use(logger), upump_ev_mgr_alloc_loop,
+            UPUMP_POOL, UPUMP_BLOCKER_POOL, NULL, NULL, &attr);
     assert(xfer_mgr != NULL);
 
     /* deport to the RT thread */
@@ -351,7 +319,7 @@ int main(int argc, char *argv[])
     upipe_release(time_limit);
 
     /* fire loop ! */
-    ev_loop(loop, 0);
+    upump_mgr_run(upump_mgr, NULL);
 
     uprobe_release(logger);
     uprobe_clean(&uprobe);
@@ -361,6 +329,5 @@ int main(int argc, char *argv[])
     umem_mgr_release(umem_mgr);
     uclock_release(uclock);
 
-    ev_default_destroy();
     return 0;
 }

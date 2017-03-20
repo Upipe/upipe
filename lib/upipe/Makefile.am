@@ -15,6 +15,7 @@ libupipe_la_SOURCES = \
 	udict_inline.c \
 	uref_std.c \
 	uref_uri.c \
+	upipe_dump.c \
 	uprobe_dejitter.c \
 	uprobe_loglevel.c \
 	uprobe_prefix.c \

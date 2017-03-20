@@ -127,7 +127,7 @@ static void fill_in(struct uref *uref,
                     uint8_t macropixel_size)
 {
     size_t hsize, vsize, stride;
-    uint8_t *buffer;
+    uint8_t *buffer = NULL;
     uref_pic_plane_write(uref, chroma, 0, 0, -1, -1, &buffer);
     uref_pic_plane_size(uref, chroma, &stride, NULL, NULL, NULL);
     assert(buffer != NULL);

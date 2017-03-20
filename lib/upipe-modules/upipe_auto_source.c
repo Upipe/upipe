@@ -449,6 +449,14 @@ static int upipe_auto_src_control(struct upipe *upipe,
         unsigned int *output_size_p = va_arg(args, unsigned int *);
         return upipe_auto_src_get_output_size(upipe, output_size_p);
     }
+
+    case UPIPE_BIN_GET_FIRST_INNER: {
+        struct upipe_auto_src *upipe_auto_src =
+            upipe_auto_src_from_upipe(upipe);
+        struct upipe **p = va_arg(args, struct upipe **);
+        *p = upipe_auto_src->src;
+        return (*p != NULL) ? UBASE_ERR_NONE : UBASE_ERR_UNHANDLED;
+    }
     }
 
     return upipe_auto_src_control_bin_output(upipe, command, args);

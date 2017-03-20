@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2013-2015 OpenHeadend S.A.R.L.
+ * Copyright (C) 2013-2017 OpenHeadend S.A.R.L.
  *
  * Authors: Christophe Massiot
  *
@@ -328,8 +328,8 @@ int main(int argc, char *argv[])
             assert(next_pcr_sys == UINT32_MAX + UCLOCK_FREQ);
         }
 
-        ubase_assert(upipe_ts_encaps_splice(upipe_ts_encaps, mux_sys, &ubuf,
-                                            &dts_sys));
+        ubase_assert(upipe_ts_encaps_splice(upipe_ts_encaps, mux_sys, mux_sys,
+                                            &ubuf, &dts_sys));
 
         if (i == 0) {
             assert(dts_sys == mux_sys);
@@ -351,7 +351,8 @@ int main(int argc, char *argv[])
     assert(next_dts_sys == UINT64_MAX);
     assert(next_pcr_sys <= UINT32_MAX + UCLOCK_FREQ);
     ubase_assert(upipe_ts_encaps_splice(upipe_ts_encaps,
-                UINT32_MAX + UCLOCK_FREQ, &ubuf, &dts_sys));
+                UINT32_MAX + UCLOCK_FREQ, UINT32_MAX + UCLOCK_FREQ,
+                &ubuf, &dts_sys));
     assert(dts_sys == UINT32_MAX + UCLOCK_FREQ);
     check_ubuf(ubuf, 0, false, false, false, false,
                UCLOCK_FREQ, UINT64_MAX, UINT64_MAX, &total_size, &payload_size);
@@ -406,8 +407,8 @@ int main(int argc, char *argv[])
                                   (uint64_t)total_size * UCLOCK_FREQ / 2194);
         }
 
-        ubase_assert(upipe_ts_encaps_splice(upipe_ts_encaps, mux_sys, &ubuf,
-                                            &dts_sys));
+        ubase_assert(upipe_ts_encaps_splice(upipe_ts_encaps, mux_sys, mux_sys,
+                                            &ubuf, &dts_sys));
 
         if (i == 0) {
             check_ubuf(ubuf, PES_STREAM_ID_PRIVATE_2, true, false, false, true,
@@ -474,7 +475,8 @@ int main(int argc, char *argv[])
     assert(next_dts_sys == UINT32_MAX + 3 * UCLOCK_FREQ / 2);
 
     ubase_assert(upipe_ts_encaps_splice(upipe_ts_encaps,
-                UINT32_MAX + UCLOCK_FREQ / 2, &ubuf, &dts_sys));
+                UINT32_MAX + UCLOCK_FREQ / 2, UINT32_MAX + UCLOCK_FREQ / 2,
+                &ubuf, &dts_sys));
     assert(dts_sys == UINT32_MAX + 3 * UCLOCK_FREQ / 2);
     total_size = 2 + 14;
     check_ubuf(ubuf, PES_STREAM_ID_AUDIO_MPEG, true, false, false, true,
@@ -535,8 +537,9 @@ int main(int argc, char *argv[])
     assert(next_dts_sys == UINT32_MAX + 2 * UCLOCK_FREQ - 169 * UCLOCK_FREQ / 170);
 
     ubase_assert(upipe_ts_encaps_splice(upipe_ts_encaps,
-                UINT32_MAX + UCLOCK_FREQ - 169 * UCLOCK_FREQ / 170, &ubuf,
-                &dts_sys));
+                UINT32_MAX + UCLOCK_FREQ - 169 * UCLOCK_FREQ / 170,
+                UINT32_MAX + UCLOCK_FREQ - 169 * UCLOCK_FREQ / 170,
+                &ubuf, &dts_sys));
     /* rounding issue */
     assert(dts_sys == UINT32_MAX + 2 * UCLOCK_FREQ - 168 * UCLOCK_FREQ / 170 - UCLOCK_FREQ / 170);
     total_size += 14;
@@ -552,8 +555,9 @@ int main(int argc, char *argv[])
     assert(next_dts_sys == UINT32_MAX + 2 * UCLOCK_FREQ - UCLOCK_FREQ / 170);
 
     ubase_assert(upipe_ts_encaps_splice(upipe_ts_encaps,
-                UINT32_MAX + UCLOCK_FREQ - UCLOCK_FREQ / 170, &ubuf,
-                &dts_sys));
+                UINT32_MAX + UCLOCK_FREQ - UCLOCK_FREQ / 170,
+                UINT32_MAX + UCLOCK_FREQ - UCLOCK_FREQ / 170,
+                &ubuf, &dts_sys));
     assert(dts_sys == UINT32_MAX + 2 * UCLOCK_FREQ - UCLOCK_FREQ / 170);
     total_size = 14 + 2;
     check_ubuf(ubuf, PES_STREAM_ID_AUDIO_MPEG, true, false, false, false,
@@ -604,7 +608,7 @@ int main(int argc, char *argv[])
                              (uint64_t)total_size * UCLOCK_FREQ / 1024);
         }
 
-        ubase_assert(upipe_ts_encaps_splice(upipe_ts_encaps, mux_sys,
+        ubase_assert(upipe_ts_encaps_splice(upipe_ts_encaps, mux_sys, mux_sys,
                                             &ubuf, &dts_sys));
 
         if (i == 0) {

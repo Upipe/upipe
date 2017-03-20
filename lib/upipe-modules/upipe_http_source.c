@@ -385,6 +385,7 @@ static int upipe_http_src_status_cb(http_parser *parser)
     case 302:
         break;
     default:
+        upipe_http_src_throw_error(upipe, parser->status_code);
         return -1;
     }
     return 0;
@@ -421,7 +422,8 @@ static int upipe_http_src_output_data(struct upipe *upipe,
         memcpy(buf, at, len);
     uref_block_unmap(uref, 0);
 
-    uref_clock_set_cr_sys(uref, systime);
+    if (systime)
+        uref_clock_set_cr_sys(uref, systime);
     if (len == 0)
         uref_block_set_end(uref);
     upipe_http_src->position += len;
@@ -581,12 +583,15 @@ static void upipe_http_src_worker(struct upump *upump)
         }
         upipe_err_va(upipe, "read error from %s (%s)", upipe_http_src->url,
                      strerror(errno));
+        upipe_http_src_output_data(upipe, NULL, 0);
         upipe_http_src_set_upump(upipe, NULL);
         upipe_throw_source_end(upipe);
     }
     else if (unlikely(len == 0)) {
-        upipe_verbose(upipe, "connection closed");
+        upipe_dbg(upipe, "connection closed");
         uref_free(uref);
+        upipe_http_src_output_data(upipe, NULL, 0);
+        upipe_http_src_set_upump(upipe, NULL);
         upipe_throw_source_end(upipe);
     }
     else {

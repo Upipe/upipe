@@ -39,16 +39,19 @@
 bool upipe_gl_texture_load_uref(struct uref *uref, GLuint texture)
 {
     const uint8_t *data = NULL;
+    bool rgb565 = false;
     size_t width, height;
     uref_pic_size(uref, &width, &height, NULL);
     if(!ubase_check(uref_pic_plane_read(uref, "r8g8b8", 0, 0, -1, -1, &data))) {
-        return false;
+        if(!ubase_check(uref_pic_plane_read(uref, "r5g6b5", 0, 0, -1, -1, &data))) {
+            return false;
+        }
+        rgb565 = true;
     }
     glBindTexture(GL_TEXTURE_2D, texture);
-    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, width, 
-            height, 0, GL_RGB, GL_UNSIGNED_BYTE, 
-            data);
-    uref_pic_plane_unmap(uref, "r8g8b8", 0, 0, -1, -1);
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, width, height, 0, GL_RGB,
+            rgb565 ? GL_UNSIGNED_SHORT_5_6_5 : GL_UNSIGNED_BYTE, data);
+    uref_pic_plane_unmap(uref, rgb565 ? "r5g6b5" : "r8g8b8", 0, 0, -1, -1);
 
     return true;
 }

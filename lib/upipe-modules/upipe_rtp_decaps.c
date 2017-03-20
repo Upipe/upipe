@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2014-2016 OpenHeadend S.A.R.L.
+ * Copyright (C) 2014-2017 OpenHeadend S.A.R.L.
  *
  * Authors: Christophe Massiot
  *
@@ -29,11 +29,14 @@
 
 #include <upipe/ubase.h>
 #include <upipe/uprobe.h>
+#include <upipe/uclock.h>
 #include <upipe/uref.h>
 #include <upipe/upipe.h>
 #include <upipe/uref_block.h>
 #include <upipe/uref_block_flow.h>
+#include <upipe/uref_sound_flow.h>
 #include <upipe/uref_flow.h>
+#include <upipe/uref_clock.h>
 #include <upipe/upipe.h>
 #include <upipe/upipe_helper_upipe.h>
 #include <upipe/upipe_helper_urefcount.h>
@@ -56,7 +59,50 @@
 #include <bitstream/ietf/rtp3551.h>
 #include <bitstream/ietf/rtp2250.h>
 
+/** we only accept blocks */
 #define EXPECTED_FLOW_DEF "block."
+/** RTP timestamps wrap at 32 bits */
+#define POW2_32 UINT64_C(4294967296)
+
+/** @This is a list of supported outputs. */
+enum upipe_rtpd_mode {
+    /** PCM mu-law */
+    UPIPE_RTPD_PCMU = 0,
+    /** GSM */
+    UPIPE_RTPD_GSM,
+    /** PCM a-law */
+    UPIPE_RTPD_PCMA,
+    /** PCM */
+    UPIPE_RTPD_PCM,
+    /** QCELP */
+    UPIPE_RTPD_QCELP,
+    /** MPEG audio */
+    UPIPE_RTPD_MPA,
+    /** MPEG video */
+    UPIPE_RTPD_MPV,
+    /** MPEG transport stream */
+    UPIPE_RTPD_MPTS,
+    /** Opus */
+    UPIPE_RTPD_OPUS,
+    /** Unknown */
+    UPIPE_RTPD_UNKNOWN
+};
+
+/** @This is a list of input flow definitions matching the supported
+ * outputs. */
+static const char *upipe_rtpd_flow_defs[] = {
+    "block.rtp.pcm_mulaw.sound",
+    "block.rtp.gsm.sound",
+    "block.rtp.pcm_alaw.sound",
+    "block.rtp.sound.",
+    "block.rtp.qcelp.sound",
+    "block.rtp.mp3.sound",
+    "block.rtp.mpeg2video.pic",
+    "block.rtp.mpegtsaligned.",
+    "block.rtp.opus.sound.",
+    "block.rtp.",
+    NULL
+};
 
 /** upipe_rtpd structure */
 struct upipe_rtpd {
@@ -67,6 +113,12 @@ struct upipe_rtpd {
     int expected_seqnum;
     /** current RTP type */
     uint8_t type;
+    /** current output mode */
+    enum upipe_rtpd_mode mode;
+    /** configured output mode */
+    enum upipe_rtpd_mode mode_config;
+    /** configured sample rate */
+    uint64_t rate;
 
     /** output pipe */
     struct upipe *output;
@@ -111,12 +163,129 @@ static struct upipe *upipe_rtpd_alloc(struct upipe_mgr *mgr,
     upipe_rtpd_init_urefcount(upipe);
     upipe_rtpd_init_output(upipe);
     upipe_rtpd->expected_seqnum = -1;
-    upipe_rtpd->type = 0;
+    upipe_rtpd->type = UINT8_MAX;
+    upipe_rtpd->mode = upipe_rtpd->mode_config = UPIPE_RTPD_UNKNOWN;
     upipe_rtpd->lost = 0;
     upipe_rtpd->flow_def_input = NULL;
+    upipe_rtpd->rate = 0;
 
     upipe_throw_ready(upipe);
     return upipe;
+}
+
+/** @internal @This builds the output flow definition and sets the mode.
+ *
+ * @param upipe description structure of the pipe
+ */
+static inline void upipe_rtpd_build_flow_def(struct upipe *upipe)
+{
+    struct upipe_rtpd *upipe_rtpd = upipe_rtpd_from_upipe(upipe);
+    assert(upipe_rtpd->flow_def_input != NULL);
+    struct uref *flow_def = uref_dup(upipe_rtpd->flow_def_input);
+    if (unlikely(flow_def == NULL)) {
+        uref_free(flow_def);
+        upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
+        return;
+    }
+
+    /* infer mode from type */
+    upipe_rtpd->mode = UPIPE_RTPD_UNKNOWN;
+    const char *def = "block.";
+    uint64_t rate = 0;
+    uint8_t channels = 0;
+    switch (upipe_rtpd->type) {
+        case RTP_TYPE_PCMU:
+            upipe_rtpd->mode = UPIPE_RTPD_PCMU;
+            rate = 8000;
+            def = "block.pcm_mulaw.sound.";
+            break;
+        case RTP_TYPE_GSM:
+            upipe_rtpd->mode = UPIPE_RTPD_GSM;
+            rate = 8000;
+            def = "block.gsm.sound.";
+            break;
+        case RTP_TYPE_PCMA:
+            upipe_rtpd->mode = UPIPE_RTPD_PCMA;
+            rate = 8000;
+            def = "block.pcm_alaw.sound.";
+            break;
+        case RTP_TYPE_L16:
+            upipe_rtpd->mode = UPIPE_RTPD_PCM;
+            rate = 44100;
+            channels = 2;
+            def = "block.sound.s16be.";
+            break;
+        case RTP_TYPE_L16MONO:
+            upipe_rtpd->mode = UPIPE_RTPD_PCM;
+            rate = 44100;
+            channels = 1;
+            def = "block.sound.s16be.";
+            break;
+        case RTP_TYPE_QCELP:
+            upipe_rtpd->mode = UPIPE_RTPD_QCELP;
+            rate = 8000;
+            def = "block.qcelp.sound";
+            break;
+        case RTP_TYPE_MPA:
+            upipe_rtpd->mode = UPIPE_RTPD_MPA;
+            def = "block.mp3.sound.";
+            break;
+        case RTP_TYPE_MPV:
+            upipe_rtpd->mode = UPIPE_RTPD_MPV;
+            def = "block.mpeg2video.pic.";
+            break;
+        case RTP_TYPE_TS:
+            upipe_rtpd->mode = UPIPE_RTPD_MPTS;
+            def = "block.mpegtsaligned.";
+            break;
+        default:
+            break;
+    }
+
+    if (upipe_rtpd->mode == UPIPE_RTPD_UNKNOWN) {
+        uref_flow_get_def(upipe_rtpd->flow_def_input, &def);
+
+        upipe_rtpd->mode = upipe_rtpd->mode_config;
+        if (unlikely(!ubase_check(uref_flow_set_def_va(flow_def, "block.%s",
+                            def + strlen("block.rtp.")))))
+            upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
+    } else {
+        if (upipe_rtpd->mode_config != UPIPE_RTPD_UNKNOWN &&
+            upipe_rtpd->mode != upipe_rtpd->mode_config)
+            upipe_warn_va(upipe,
+                          "flow def %s is not compatible with RTP type %"PRIu8,
+                          def, upipe_rtpd->type);
+        uref_flow_set_def(flow_def, def);
+    }
+    uref_sound_flow_get_rate(upipe_rtpd->flow_def_input, &rate);
+    uref_sound_flow_get_channels(upipe_rtpd->flow_def_input, &channels);
+    upipe_rtpd->rate = rate;
+
+    switch (upipe_rtpd->mode) {
+        case UPIPE_RTPD_MPA:
+        case UPIPE_RTPD_MPV:
+        case UPIPE_RTPD_MPTS:
+            uref_clock_set_wrap(flow_def, POW2_32 * UCLOCK_FREQ / 90000);
+            break;
+        case UPIPE_RTPD_PCM:
+            if (channels)
+                uref_sound_flow_set_channels(flow_def, channels);
+            /* intended fall-through */
+        case UPIPE_RTPD_UNKNOWN:
+        case UPIPE_RTPD_PCMA:
+        case UPIPE_RTPD_PCMU:
+        case UPIPE_RTPD_GSM:
+        case UPIPE_RTPD_QCELP:
+            if (upipe_rtpd->rate)
+                uref_clock_set_wrap(flow_def,
+                                    POW2_32 * UCLOCK_FREQ / upipe_rtpd->rate);
+            break;
+        case UPIPE_RTPD_OPUS:
+            uref_clock_set_wrap(flow_def, POW2_32 * UCLOCK_FREQ / 48000);
+            break;
+    }
+
+    upipe_rtpd_store_flow_def(upipe, flow_def);
 }
 
 /** @internal @This handles data.
@@ -178,50 +347,21 @@ static inline void upipe_rtpd_input(struct upipe *upipe, struct uref *uref,
     upipe_rtpd->expected_seqnum &= UINT16_MAX;
 
     if (unlikely(type != upipe_rtpd->type)) {
-        assert(upipe_rtpd->flow_def_input != NULL);
-        struct uref *flow_def = uref_dup(upipe_rtpd->flow_def_input);
-        if (unlikely(flow_def == NULL)) {
-            uref_free(uref);
-            upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
-            return;
-        }
-
-        switch (type) {
-            case RTP_TYPE_TS:
-                uref_flow_set_def(flow_def, "block.mpegtsaligned.");
-                break;
-            case RTP_TYPE_MPA:
-                uref_flow_set_def(flow_def, "block.mp3.sound.");
-                offset += RTP2250A_HEADER_SIZE;
-                break;
-            case RTP_TYPE_MPV:
-                rtp_header = uref_block_peek(uref, offset,
-                                             RTP2250V_HEADER_SIZE,
-                                             rtp_buffer);
-                if (unlikely(rtp_header == NULL)) {
-                    upipe_warn(upipe, "invalid buffer received");
-                    uref_free(uref);
-                    return;
-                }
-                offset += RTP2250V_HEADER_SIZE +
-                    rtp2250v_check_mpeg2(rtp_header) * RTP2250VX_HEADER_SIZE;
-                uref_block_peek_unmap(uref, offset, rtp_buffer, rtp_header);
-
-                uref_flow_set_def(flow_def, "block.mpeg2video.pic.");
-                break;
-            default:
-                break;
-        }
         upipe_rtpd->type = type;
-        upipe_rtpd_store_flow_def(upipe, flow_def);
+        upipe_rtpd_build_flow_def(upipe);
     }
-    uref_rtp_set_timestamp(uref, timestamp);
 
-    switch (type) {
-        case RTP_TYPE_MPA:
+    switch (upipe_rtpd->mode) {
+        case UPIPE_RTPD_MPA:
             offset += RTP2250A_HEADER_SIZE;
+            /* We set DTS because we are in coded domain and we are sure
+             * DTS = PTS */
+            uref_clock_set_dts_orig(uref,
+                                    (uint64_t)timestamp * UCLOCK_FREQ / 90000);
+            uref_clock_set_dts_pts_delay(uref, 0);
+            upipe_throw_clock_ts(upipe, uref);
             break;
-        case RTP_TYPE_MPV:
+        case UPIPE_RTPD_MPV:
             rtp_header = uref_block_peek(uref, offset,
                                          RTP2250V_HEADER_SIZE,
                                          rtp_buffer);
@@ -233,6 +373,43 @@ static inline void upipe_rtpd_input(struct upipe *upipe, struct uref *uref,
             offset += RTP2250V_HEADER_SIZE +
                 rtp2250v_check_mpeg2(rtp_header) * RTP2250VX_HEADER_SIZE;
             uref_block_peek_unmap(uref, offset, rtp_buffer, rtp_header);
+            uref_clock_set_pts_orig(uref,
+                                    (uint64_t)timestamp * UCLOCK_FREQ / 90000);
+            upipe_throw_clock_ts(upipe, uref);
+            break;
+        case UPIPE_RTPD_MPTS:
+            upipe_throw_clock_ref(upipe, uref,
+                                  (uint64_t)timestamp * UCLOCK_FREQ / 90000,
+                                  false);
+            break;
+        case UPIPE_RTPD_UNKNOWN:
+        case UPIPE_RTPD_PCM:
+        case UPIPE_RTPD_PCMA:
+        case UPIPE_RTPD_PCMU:
+            if (upipe_rtpd->rate) {
+                uref_clock_set_pts_orig(uref,
+                        (uint64_t)timestamp * UCLOCK_FREQ / upipe_rtpd->rate);
+                upipe_throw_clock_ts(upipe, uref);
+            }
+            break;
+        case UPIPE_RTPD_GSM:
+        case UPIPE_RTPD_QCELP:
+            /* We set DTS because we are in coded domain and we are sure
+             * DTS = PTS */
+            if (upipe_rtpd->rate) {
+                uref_clock_set_dts_orig(uref,
+                        (uint64_t)timestamp * UCLOCK_FREQ / upipe_rtpd->rate);
+                uref_clock_set_dts_pts_delay(uref, 0);
+                upipe_throw_clock_ts(upipe, uref);
+            }
+            break;
+        case UPIPE_RTPD_OPUS:
+            /* We set DTS because we are in coded domain and we are sure
+             * DTS = PTS */
+            uref_clock_set_dts_orig(uref,
+                                    (uint64_t)timestamp * UCLOCK_FREQ / 48000);
+            uref_clock_set_dts_pts_delay(uref, 0);
+            upipe_throw_clock_ts(upipe, uref);
             break;
         default:
             break;
@@ -252,11 +429,33 @@ static int upipe_rtpd_set_flow_def(struct upipe *upipe, struct uref *flow_def)
 {
     if (flow_def == NULL)
         return UBASE_ERR_INVALID;
-    UBASE_RETURN(uref_flow_match_def(flow_def, EXPECTED_FLOW_DEF))
+    const char *def;
+    UBASE_RETURN(uref_flow_get_def(flow_def, &def))
+    if (ubase_ncmp(def, EXPECTED_FLOW_DEF))
+        return UBASE_ERR_INVALID;
+
+    struct upipe_rtpd *upipe_rtpd = upipe_rtpd_from_upipe(upipe);
     struct uref *flow_def_dup;
     if (unlikely((flow_def_dup = uref_dup(flow_def)) == NULL))
         return UBASE_ERR_ALLOC;
-    struct upipe_rtpd *upipe_rtpd = upipe_rtpd_from_upipe(upipe);
+
+    int i;
+    for (i = 0; upipe_rtpd_flow_defs[i] != NULL; i++)
+        if (!ubase_ncmp(def, upipe_rtpd_flow_defs[i]))
+            break;
+    if (i > UPIPE_RTPD_UNKNOWN) {
+        upipe_warn(upipe, "block. input is deprecated, please set it to block.rtp.");
+        i = UPIPE_RTPD_UNKNOWN;
+        uref_flow_set_def(flow_def_dup, "block.rtp.");
+    }
+    upipe_rtpd->mode_config = i;
+    upipe_rtpd->type = UINT8_MAX;
+
+    upipe_rtpd->rate = 0;
+    uref_sound_flow_get_rate(flow_def, &upipe_rtpd->rate);
+    if (upipe_rtpd->mode_config == UPIPE_RTPD_PCM && upipe_rtpd->rate == 0)
+        upipe_warn(upipe, "you have to specify sample rate for PCM modes");
+
     uref_free(upipe_rtpd->flow_def_input);
     upipe_rtpd->flow_def_input = flow_def_dup;
     return UBASE_ERR_NONE;

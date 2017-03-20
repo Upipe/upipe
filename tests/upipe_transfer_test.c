@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2012-2014 OpenHeadend S.A.R.L.
+ * Copyright (C) 2012-2017 OpenHeadend S.A.R.L.
  *
  * Authors: Christophe Massiot
  *
@@ -47,8 +47,6 @@
 #include <unistd.h>
 #include <pthread.h>
 #include <assert.h>
-
-#include <ev.h>
 
 #define UPUMP_POOL 1
 #define UPUMP_BLOCKER_POOL 1
@@ -125,17 +123,15 @@ static void *thread(void *_upipe_xfer_mgr)
 {
     struct upipe_mgr *upipe_xfer_mgr = (struct upipe_mgr *)_upipe_xfer_mgr;
 
-    struct ev_loop *loop = ev_loop_new(0);
-    upump_mgr = upump_ev_mgr_alloc(loop, UPUMP_POOL, UPUMP_BLOCKER_POOL);
+    upump_mgr = upump_ev_mgr_alloc_loop(UPUMP_POOL, UPUMP_BLOCKER_POOL);
     assert(upump_mgr != NULL);
 
     ubase_assert(upipe_xfer_mgr_attach(upipe_xfer_mgr, upump_mgr));
     upipe_mgr_release(upipe_xfer_mgr);
 
-    ev_loop(loop, 0);
+    upump_mgr_run(upump_mgr, NULL);
 
     upump_mgr_release(upump_mgr);
-    ev_loop_destroy(loop);
 
     return NULL;
 }
@@ -159,9 +155,8 @@ static int catch(struct uprobe *uprobe, struct upipe *upipe, int event, va_list 
 
 int main(int argc, char **argv)
 {
-    struct ev_loop *loop = ev_default_loop(0);
     struct upump_mgr *upump_mgr =
-        upump_ev_mgr_alloc(loop, UPUMP_POOL, UPUMP_BLOCKER_POOL);
+        upump_ev_mgr_alloc_default(UPUMP_POOL, UPUMP_BLOCKER_POOL);
 
     struct uprobe uprobe;
     uprobe_init(&uprobe, catch, NULL);
@@ -182,7 +177,7 @@ int main(int argc, char **argv)
     assert(upipe_test != NULL);
 
     struct upipe_mgr *upipe_xfer_mgr =
-        upipe_xfer_mgr_alloc(XFER_QUEUE, XFER_POOL);
+        upipe_xfer_mgr_alloc(XFER_QUEUE, XFER_POOL, NULL);
     assert(upipe_xfer_mgr != NULL);
 
     upipe_mgr_use(upipe_xfer_mgr);
@@ -200,7 +195,7 @@ int main(int argc, char **argv)
 
     upipe_mgr_release(upipe_xfer_mgr);
 
-    ev_loop(loop, 0);
+    upump_mgr_run(upump_mgr, NULL);
 
     assert(!pthread_join(xfer_thread_id, NULL));
     assert(transferred);
@@ -209,6 +204,5 @@ int main(int argc, char **argv)
     uprobe_release(uprobe_stdio);
     uprobe_release(uprobe_upump_mgr);
     upump_mgr_release(upump_mgr);
-    ev_default_destroy();
     return 0;
 }

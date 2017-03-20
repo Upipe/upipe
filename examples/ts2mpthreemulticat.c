@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2016 OpenHeadend S.A.R.L.
+ * Copyright (C) 2016-2017 OpenHeadend S.A.R.L.
  * Copyright (C) 2016 DVMR
  *
  * Author: Christophe Massiot
@@ -81,8 +81,6 @@
 #include <inttypes.h>
 #include <signal.h>
 
-#include <ev.h>
-
 #include <bitstream/mpeg/mpga.h>
 
 #define UMEM_POOL               512
@@ -130,20 +128,12 @@ static void stop(void)
     sink = NULL;
 }
 
-static void sighandler(struct ev_loop *loop, struct ev_signal *w, int revents)
+static void sighandler(struct upump *upump)
 {
+    int signal = (int)upump_get_opaque(upump, ptrdiff_t);
     uprobe_err_va(logger, NULL, "signal %s received, exiting",
-                  strsignal(w->signum));
+                  strsignal(signal));
     stop();
-}
-
-static void signal_watcher_init(struct ev_signal *w, struct ev_loop *loop,
-                    void (*cb)(struct ev_loop*, struct ev_signal*, int),
-                    int signum)
-{
-    ev_signal_init(w, cb, signum);
-    ev_signal_start(loop, w);
-    ev_unref(loop);
 }
 
 static int catch_src(struct uprobe *uprobe, struct upipe *upipe,
@@ -310,14 +300,13 @@ int main(int argc, char *argv[])
     dirpath = argv[optind++];
 
     /* setup environnement */
-    struct ev_loop *loop = ev_default_loop(0);
     struct umem_mgr *umem_mgr = umem_pool_mgr_alloc_simple(UMEM_POOL);
     struct udict_mgr *udict_mgr = udict_inline_mgr_alloc(UDICT_POOL_DEPTH,
                                                          umem_mgr, -1, -1);
     struct uref_mgr *uref_mgr = uref_std_mgr_alloc(UREF_POOL_DEPTH, udict_mgr,
                                                    0);
-    struct upump_mgr *upump_mgr = upump_ev_mgr_alloc(loop, UPUMP_POOL,
-                                                     UPUMP_BLOCKER_POOL);
+    struct upump_mgr *upump_mgr = upump_ev_mgr_alloc_default(UPUMP_POOL,
+            UPUMP_BLOCKER_POOL);
     uclock = uclock_std_alloc(UCLOCK_FLAG_REALTIME);
     logger = uprobe_stdio_alloc(NULL, stderr, loglevel);
     assert(logger != NULL);
@@ -348,9 +337,14 @@ int main(int argc, char *argv[])
     uprobe_init(&uprobe_uref_date_s, catch_uref_date, uprobe_use(logger));
 
     /* sighandler */
-    struct ev_signal sigint_watcher, sigterm_watcher;
-    signal_watcher_init(&sigint_watcher, loop, sighandler, SIGINT);
-    signal_watcher_init(&sigterm_watcher, loop, sighandler, SIGTERM);
+    struct upump *sigint_pump = upump_alloc_signal(upump_mgr, sighandler,
+            (void *)SIGINT, NULL, SIGINT);
+    upump_set_status(sigint_pump, false);
+    upump_start(sigint_pump);
+    struct upump *sigterm_pump = upump_alloc_signal(upump_mgr, sighandler,
+            (void *)SIGTERM, NULL, SIGTERM);
+    upump_set_status(sigterm_pump, false);
+    upump_start(sigterm_pump);
 
     if (srcpath != NULL) {
         /* source */
@@ -465,9 +459,13 @@ int main(int argc, char *argv[])
     }
 
     /* fire loop ! */
-    ev_loop(loop, 0);
+    upump_mgr_run(upump_mgr, NULL);
 
     /* release everything */
+    upump_stop(sigint_pump);
+    upump_free(sigint_pump);
+    upump_stop(sigterm_pump);
+    upump_free(sigterm_pump);
     uprobe_release(logger);
     uprobe_release(uprobe_dejitter);
     uprobe_clean(&uprobe_src_s);
@@ -479,6 +477,5 @@ int main(int argc, char *argv[])
     umem_mgr_release(umem_mgr);
     uclock_release(uclock);
 
-    ev_default_destroy();
     return 0;
 }

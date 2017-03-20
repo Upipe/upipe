@@ -214,6 +214,7 @@ static int probe_key(struct uprobe *uprobe, struct upipe *inner,
     case UPROBE_PROBE_UREF: {
         UBASE_SIGNATURE_CHECK(args, UPIPE_PROBE_UREF_SIGNATURE);
         struct uref *uref = va_arg(args, struct uref *);
+        struct upump **upump_p = va_arg(args, struct upump **);
         bool *drop = va_arg(args, bool *);
         *drop = true;
 
@@ -256,9 +257,6 @@ static int probe_src(struct uprobe *uprobe, struct upipe *inner,
     struct upipe *upipe = upipe_hls_playlist_to_upipe(upipe_hls_playlist);
 
     switch (event) {
-    case UPROBE_NEED_OUTPUT:
-        return upipe_set_output(inner, upipe_hls_playlist->setflowdef);
-
     case UPROBE_SOURCE_END:
         upipe_notice(upipe, "stopped");
         upipe_hls_playlist->playing = false;
@@ -616,6 +614,8 @@ static int upipe_hls_playlist_play_uri(struct upipe *upipe,
             UPROBE_LOG_VERBOSE, "src"));
     UBASE_ALLOC_RETURN(inner);
     UBASE_RETURN(upipe_hls_playlist_set_src(upipe, inner));
+    UBASE_RETURN(upipe_set_output(inner, upipe_hls_playlist->setflowdef));
+
     UBASE_RETURN(upipe_set_uri(inner, uri));
 
     uint64_t range_off = 0;
@@ -1066,7 +1066,14 @@ static int upipe_hls_playlist_control_internal(struct upipe *upipe,
     }
 
     case UPIPE_ATTACH_UPUMP_MGR:
-	return upipe_hls_playlist_attach_upump_mgr(upipe);
+        return upipe_hls_playlist_attach_upump_mgr(upipe);
+    case UPIPE_BIN_GET_FIRST_INNER: {
+        struct upipe_hls_playlist *upipe_hls_playlist =
+            upipe_hls_playlist_from_upipe(upipe);
+        struct upipe **p = va_arg(args, struct upipe **);
+        *p = upipe_hls_playlist->src;
+        return (*p != NULL) ? UBASE_ERR_NONE : UBASE_ERR_UNHANDLED;
+    }
 
     case UPIPE_HLS_PLAYLIST_GET_INDEX: {
         UBASE_SIGNATURE_CHECK(args, UPIPE_HLS_PLAYLIST_SIGNATURE)

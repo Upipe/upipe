@@ -95,7 +95,6 @@
 #include <stdint.h>
 #include <string.h>
 #include <math.h>
-#include <ev.h>
 #include <pthread.h>
 #include <sys/param.h>
 #include <sys/types.h>
@@ -131,8 +130,6 @@ PPB_MessageLoop *ppb_message_loop_interface = NULL;
 PPB_View *ppb_view_interface = NULL;
 PPB_VarDictionary *ppb_var_dictionary_interface = NULL;
 
-/* main event loop */
-static struct ev_loop *loop;
 /** NaCl event loop timer */
 static struct upump *event_upump;
 /* upump manager for the main thread */
@@ -448,28 +445,6 @@ static void demo_stop(void)
     play = NULL;
 }
 
-static struct upump_mgr *upump_mgr_alloc(void)
-{
-    struct ev_loop *loop = ev_loop_new(0);
-    struct upump_mgr *upump_mgr = upump_ev_mgr_alloc(loop, UPUMP_POOL,
-                                                     UPUMP_BLOCKER_POOL);
-    assert(upump_mgr != NULL);
-    upump_mgr_set_opaque(upump_mgr, loop);
-    return upump_mgr;
-}
-
-static void upump_mgr_work(struct upump_mgr *upump_mgr)
-{
-    struct ev_loop *loop = upump_mgr_get_opaque(upump_mgr, struct ev_loop *);
-    ev_loop(loop, 0);
-}
-
-static void upump_mgr_free(struct upump_mgr *upump_mgr)
-{
-    struct ev_loop *loop = upump_mgr_get_opaque(upump_mgr, struct ev_loop *);
-    ev_loop_destroy(loop);
-}
-
 /**
  * Create a new PP_Var from a C string.
  * @param[in] str The string to convert.
@@ -605,8 +580,7 @@ int upipe_demo(int argc, char *argv[])
         (PPB_VarDictionary *)PSGetInterface(PPB_VAR_DICTIONARY_INTERFACE);
 
     /* upipe env */
-    loop = ev_default_loop(0);
-    main_upump_mgr = upump_ev_mgr_alloc(loop, UPUMP_POOL, UPUMP_BLOCKER_POOL);
+    main_upump_mgr = upump_ev_mgr_alloc_default(UPUMP_POOL, UPUMP_BLOCKER_POOL);
     assert(main_upump_mgr != NULL);
     struct umem_mgr *umem_mgr = umem_pool_mgr_alloc_simple(UMEM_POOL);
     struct udict_mgr *udict_mgr = udict_inline_mgr_alloc(UDICT_POOL_DEPTH,
@@ -645,16 +619,16 @@ int upipe_demo(int argc, char *argv[])
 
     /* worker threads */
     struct upipe_mgr *src_xfer_mgr = upipe_pthread_xfer_mgr_alloc(XFER_QUEUE,
-            XFER_POOL, uprobe_use(uprobe_main), upump_mgr_alloc,
-            upump_mgr_work, upump_mgr_free, NULL);
+            XFER_POOL, uprobe_use(uprobe_main), upump_ev_mgr_alloc_loop,
+            UPUMP_POOL, UPUMP_BLOCKER_POOL, NULL, NULL, NULL);
     assert(src_xfer_mgr != NULL);
     upipe_wsrc_mgr = upipe_wsrc_mgr_alloc(src_xfer_mgr);
     assert(upipe_wsrc_mgr != NULL);
     upipe_mgr_release(src_xfer_mgr);
 
     struct upipe_mgr *dec_xfer_mgr = upipe_pthread_xfer_mgr_alloc(XFER_QUEUE,
-            XFER_POOL, uprobe_use(uprobe_main), upump_mgr_alloc,
-            upump_mgr_work, upump_mgr_free, NULL);
+            XFER_POOL, uprobe_use(uprobe_main), upump_ev_mgr_alloc_loop,
+            UPUMP_POOL, UPUMP_BLOCKER_POOL, NULL, NULL, NULL);
     assert(dec_xfer_mgr != NULL);
     upipe_wlin_mgr = upipe_wlin_mgr_alloc(dec_xfer_mgr);
     assert(upipe_wlin_mgr != NULL);
@@ -685,7 +659,7 @@ int upipe_demo(int argc, char *argv[])
 
     /* wait for an event asking to open a URI */
     printf("entering event loop\n");
-    ev_loop(loop, 0);
+    upump_mgr_run(main_upump_mgr, NULL);
     printf("exiting event loop\n");
 
     /* release & free */
@@ -700,7 +674,6 @@ int upipe_demo(int argc, char *argv[])
 
     upipe_av_clean();
 
-    ev_default_destroy();
     printf("upipe_demo exiting\n");
     return 0;
 }

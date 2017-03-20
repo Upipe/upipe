@@ -43,7 +43,7 @@ LIST         = upipe $(LIST_C)
 STATIC_SO    = $(LIST:%=lib%.static.so)
 LIST_CDEF    = $(LIST_C:%=%.lua) libupipe.lua upipe-helper.lua
 SIG_LUA      = $(LIST:%=%-sigs.lua)
-CDEF_LUA     = $(LIST_CDEF) $(srcdir)/libev.lua
+CDEF_LUA     = $(LIST_CDEF)
 GETTERS_LUA  = upipe-getters.lua uref-getters.lua
 ARGS_LUA     = $(srcdir)/uprobe-args.lua $(srcdir)/upipe-control-args.lua
 SO           = libffi-stdarg.so libupipe-helper.so
@@ -52,11 +52,11 @@ SRC_LUA      = $(srcdir)/upipe.lua $(srcdir)/ffi-stdarg.lua \
 
 EXAMPLES     = extract_pic.lua upipe_duration.lua upipe_xor.lua
 DISTFILES    = ffi-stdarg.c ffi-stdarg.lua gen-ffi-cdef.pl libc.defs \
-	       libev.lua luajit upipe-control-args.lua \
-	       upipe-helper.c upipe.lua uprobe-args.lua
+	       luajit upipe-control-args.lua upipe-helper.c upipe.lua \
+	       uprobe-args.lua
 
-CPPFLAGS += -I$(top_builddir)/include
-CPPFLAGS += -I$(INCLUDEDIR)
+CPPFLAGS := -I$(top_builddir)/include $(CPPFLAGS)
+CPPFLAGS := -I$(INCLUDEDIR) $(CPPFLAGS)
 
 LUAJIT_INSTALL_LMOD = $(prefix)/share/lua/5.1
 

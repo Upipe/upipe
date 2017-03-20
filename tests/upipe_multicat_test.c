@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2012-2016 OpenHeadend S.A.R.L.
+ * Copyright (C) 2012-2017 OpenHeadend S.A.R.L.
  *
  * Authors: Benjamin Cohen
  *          Christophe Massiot
@@ -67,8 +67,6 @@
 #include <fcntl.h>
 #include <signal.h>
 #include <assert.h>
-
-#include <ev.h>
 
 #define UDICT_POOL_DEPTH 0
 #define UREF_POOL_DEPTH  0
@@ -235,7 +233,6 @@ int main(int argc, char *argv[])
     suffix = argv[optind++];
 
     // setup env
-    struct ev_loop *loop = ev_default_loop(0);
     struct umem_mgr *umem_mgr = umem_alloc_mgr_alloc();
     assert(umem_mgr != NULL);
     struct udict_mgr *udict_mgr = udict_inline_mgr_alloc(UDICT_POOL_DEPTH,
@@ -248,8 +245,8 @@ int main(int argc, char *argv[])
                                                          UBUF_POOL_DEPTH,
                                                          umem_mgr, 0, 0, -1, 0);
     assert(ubuf_mgr != NULL);
-    struct upump_mgr *upump_mgr = upump_ev_mgr_alloc(loop, UPUMP_POOL,
-                                                     UPUMP_BLOCKER_POOL);
+    struct upump_mgr *upump_mgr = upump_ev_mgr_alloc_default(UPUMP_POOL,
+            UPUMP_BLOCKER_POOL);
     assert(upump_mgr != NULL);
     struct uprobe uprobe;
     uprobe_init(&uprobe, catch, NULL);
@@ -299,7 +296,7 @@ int main(int argc, char *argv[])
 
     // fire !
     upump_start(idler);
-    ev_loop(loop, 0);
+    upump_mgr_run(upump_mgr, NULL);
     upump_free(idler);
     upipe_release(multicat_sink);
     upipe_mgr_release(upipe_fsink_mgr); // nop
@@ -350,7 +347,7 @@ int main(int argc, char *argv[])
 
     // fire !
     ubase_assert(upipe_src_set_position(msrc, 0));
-    ev_loop(loop, 0);
+    upump_mgr_run(upump_mgr, NULL);
 
     // release everything
     upipe_release(msrc);
@@ -362,8 +359,6 @@ int main(int argc, char *argv[])
     umem_mgr_release(umem_mgr);
     uprobe_release(logger);
     uprobe_clean(&uprobe);
-
-    ev_default_destroy();
 
     return 0;
 }
