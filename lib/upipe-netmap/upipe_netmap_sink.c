@@ -947,7 +947,7 @@ const int64_t nominal = 1556497121 /*(10000000000 * 2^14 / 105262)*/; //  155649
             );
 
             if (upipe_netmap_sink->preroll && pts + NETMAP_SINK_LATENCY > now) {
-                printf("waiting preroll after pop\n");
+                upipe_dbg(upipe, "waiting preroll after pop");
                 upipe_netmap_sink->uref = uref;
                 return;
             }
