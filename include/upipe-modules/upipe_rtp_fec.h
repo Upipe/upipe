@@ -26,7 +26,16 @@ enum rtp_fec_command {
     UPIPE_RTP_FEC_GET_COL_SUB,
     /** returns the fec-row subpipe (struct upipe **) */
     UPIPE_RTP_FEC_GET_ROW_SUB,
+    /** returns the number of non recovered packets (uint64_t *) */
+    UPIPE_RTP_FEC_GET_PACKETS_LOST,
 };
+
+static inline int upipe_rtp_fec_get_packets_lost(struct upipe *upipe,
+        uint64_t *lost)
+{
+    return upipe_control(upipe, UPIPE_RTP_FEC_GET_PACKETS_LOST,
+            UPIPE_RTP_FEC_SIGNATURE, lost);
+}
 
 /** @This returns the pic subpipe. The refcount is not incremented so you
  * have to use it if you want to keep the pointer.

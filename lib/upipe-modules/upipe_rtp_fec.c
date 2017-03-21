@@ -82,6 +82,9 @@ struct upipe_rtp_fec {
     struct uchain col_queue;
     struct uchain row_queue;
 
+    /* number of packets not recovered */
+    uint64_t lost;
+
     /** output pipe */
     struct upipe *output;
     /** flow_definition packet */
@@ -463,8 +466,11 @@ static void upipe_rtp_fec_timer(struct upump *upump)
         if (upipe_rtp_fec->last_send_seqnum != UINT32_MAX) {
             uint16_t expected = upipe_rtp_fec->last_send_seqnum + 1;
             if (expected != seqnum) {
-                upipe_err_va(upipe, "FEC output LOST, expected seqnum %hu got %hu",
+                upipe_dbg_va(upipe, "FEC output LOST, expected seqnum %hu got %hu",
                         expected, seqnum);
+                upipe_rtp_fec->lost +=
+                    (seqnum + UINT16_MAX + 1 - expected) & UINT16_MAX;
+
             }
         }
 
@@ -842,6 +848,8 @@ static struct upipe *_upipe_rtp_fec_alloc(struct upipe_mgr *mgr,
     upipe_rtp_fec->cur_matrix_snbase = UINT32_MAX;
     upipe_rtp_fec->cur_row_fec_snbase = UINT32_MAX;
 
+    upipe_rtp_fec->lost = 0;
+
     struct upipe *upipe = upipe_rtp_fec_to_upipe(upipe_rtp_fec);
     upipe_init(upipe, mgr, uprobe);
 
@@ -927,6 +935,13 @@ static int upipe_rtp_fec_control(struct upipe *upipe, int command, va_list args)
         UBASE_SIGNATURE_CHECK(args, UPIPE_RTP_FEC_SIGNATURE)
         struct upipe **upipe_p = va_arg(args, struct upipe **);
         *upipe_p = upipe_rtp_fec_to_row_subpipe(upipe_rtp_fec);
+        return UBASE_ERR_NONE;
+    }
+    case UPIPE_RTP_FEC_GET_PACKETS_LOST: {
+        UBASE_SIGNATURE_CHECK(args, UPIPE_RTP_FEC_SIGNATURE)
+        uint64_t *lost = va_arg(args, uint64_t*);
+        *lost = upipe_rtp_fec->lost;
+        upipe_rtp_fec->lost = 0; /* reset counter */
         return UBASE_ERR_NONE;
     }
     default:
