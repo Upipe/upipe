@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2012-2016 OpenHeadend S.A.R.L.
+ * Copyright (C) 2012-2017 OpenHeadend S.A.R.L.
  *
  * Authors: Christophe Massiot
  *
@@ -475,7 +475,6 @@ static void upipe_avfsrc_worker(struct upump *upump)
     assert(read_size == pkt.size);
     memcpy(buffer, pkt.data, pkt.size);
     uref_block_unmap(uref, 0);
-    av_packet_unref(&pkt);
 
     bool ts = false;
     if (upipe_avfsrc->uclock != NULL)
@@ -525,6 +524,7 @@ static void upipe_avfsrc_worker(struct upump *upump)
 
     if (ts)
         upipe_throw_clock_ts(upipe, uref);
+    av_packet_unref(&pkt);
 
     upipe_avfsrc_sub_output(upipe_avfsrc_sub_to_upipe(output), uref,
                             &upipe_avfsrc->upump);
