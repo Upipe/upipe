@@ -208,6 +208,8 @@ struct upipe_netmap_sink {
     struct uchain sink_queue;
     size_t n;
 
+    size_t fakes;
+
     /** currently used uref */
     struct uref *uref;
 
@@ -426,6 +428,7 @@ static struct upipe *upipe_netmap_sink_alloc(struct upipe_mgr *mgr,
     upipe_netmap_sink->d = NULL;
     ulist_init(&upipe_netmap_sink->sink_queue);
     upipe_netmap_sink->n = 0;
+    upipe_netmap_sink->fakes = 0;
     upipe_netmap_sink->pkt = 0;
     upipe_netmap_sink->uref = NULL;
     upipe_netmap_sink->packed_bytes = 0;
@@ -866,8 +869,12 @@ static void upipe_netmap_sink_worker(struct upump *upump)
 const int64_t nominal = 1556497121 /*(10000000000 * 2^14 / 105262)*/; //  1556494800
         int64_t err = (int64_t)bps - nominal;
 
-        upipe_warn_va(upipe, "txavail %d at %" PRIu64 " bps -> err %" PRId64 " %zu urefs",
-                txavail, (uint64_t)bps, err, upipe_netmap_sink->n);
+        upipe_warn_va(upipe,
+                "txavail %d at %" PRIu64 " bps -> err %" PRId64 ", %zu urefs, "
+                "%zu fake packets",
+                txavail, (uint64_t)bps, err, upipe_netmap_sink->n,
+                upipe_netmap_sink->fakes
+                );
     }
     //if (!txavail) upipe_dbg_va(upipe, "txavail 0, woke up for nothing");
     //upipe_err_va(upipe, "TXAVAL %u", txavail);
@@ -919,6 +926,7 @@ const int64_t nominal = 1556497121 /*(10000000000 * 2^14 / 105262)*/; //  155649
 
                         cur = nm_ring_next(txring, cur);
                         dst = (uint8_t*)NETMAP_BUF(txring, txring->slot[cur].buf_idx);
+                        upipe_netmap_sink->fakes++;
                         if (--txavail == 0)
                             break;
                     } //else upipe_notice_va(upipe, "no fake packet");
