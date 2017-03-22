@@ -431,6 +431,7 @@ static struct upipe *upipe_netmap_sink_alloc(struct upipe_mgr *mgr,
     upipe_netmap_sink->fakes = 0;
     upipe_netmap_sink->pkt = 0;
     upipe_netmap_sink->uref = NULL;
+    upipe_netmap_sink->preroll = true;
     upipe_netmap_sink->packed_bytes = 0;
 
     upipe_netmap_sink->pack_8_planar = upipe_planar_to_sdi_8_c;
