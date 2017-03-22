@@ -181,7 +181,7 @@ static int uprobe_stdio_color_throw(struct uprobe *uprobe,
 
     now2 -= now;
     if (now2 > 4) {
-        fprintf(stderr, "fprintf (%d) took %" PRIu64 " ms\n", ret, now2);
+        fprintf(stderr, "%" PRIu64 " fprintf (%d) took %" PRIu64 " ms\n", now, ret, now2);
     }
 
     return UBASE_ERR_NONE;
