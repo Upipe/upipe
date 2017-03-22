@@ -72,7 +72,7 @@
 #define UPIPE_RFC4175_BLOCK_SIZE 15
 
 /* the maximum ever delay between 2 TX buffers refill */
-#define NETMAP_SINK_LATENCY (UCLOCK_FREQ / 50)
+#define NETMAP_SINK_LATENCY (UCLOCK_FREQ / 25)
 
 static void upipe_planar_to_sdi_8_c(const uint8_t *y, const uint8_t *u, const uint8_t *v, uint8_t *l, const int64_t width)
 {
@@ -209,6 +209,8 @@ struct upipe_netmap_sink {
     size_t n;
 
     size_t fakes;
+    uint64_t bits;
+    uint64_t start;
 
     /** currently used uref */
     struct uref *uref;
@@ -430,6 +432,8 @@ static struct upipe *upipe_netmap_sink_alloc(struct upipe_mgr *mgr,
     upipe_netmap_sink->n = 0;
     upipe_netmap_sink->fakes = 0;
     upipe_netmap_sink->pkt = 0;
+    upipe_netmap_sink->bits = 0;
+    upipe_netmap_sink->start = 0;
     upipe_netmap_sink->uref = NULL;
     upipe_netmap_sink->preroll = true;
     upipe_netmap_sink->packed_bytes = 0;
@@ -840,45 +844,60 @@ static void upipe_netmap_sink_worker(struct upump *upump)
         upipe_netmap_sink->preroll = false;
     }
 
-    // clock at start
-    static uint64_t start;
-    static uint64_t bytes = 0;
-
     /* Open up transmission ring */
     struct netmap_ring *txring = NETMAP_TXRING(upipe_netmap_sink->d->nifp,
                                                upipe_netmap_sink->ring_idx);
     uint32_t cur = txring->cur;
     uint32_t txavail = nm_ring_space(txring);
 
-    uint64_t noww = uclock_now(&upipe_netmap_sink->uclock) - start;
-    static uint64_t prev;
     bool ddd = false;
-    if (noww - prev > UCLOCK_FREQ) {
-        prev = noww;
-        ddd = true;
+    {
+        static uint64_t prev;
+        if (now - prev > UCLOCK_FREQ) {
+            prev = now;
+            ddd = true;
+        }
     }
 
-    if (txavail > (txring->num_slots / 2) || ddd) {
-        uint64_t now = uclock_now(&upipe_netmap_sink->uclock) - start;
+    if (txavail > (txring->num_slots / 2) && !upipe_netmap_sink->n)
+        ddd = true;
 
-        __uint128_t bps = 8 * bytes;
-        bps -= (4095 - txavail) * 1442 * 8;
+    __uint128_t bps = upipe_netmap_sink->bits;
+    bps -= (txring->num_slots - 1 - txavail) * 1442 * 8;
 
-        bps *= UCLOCK_FREQ;
-        bps /= now;
+    bps *= UCLOCK_FREQ;
+    bps /= now - upipe_netmap_sink->start;
 
-const int64_t nominal = 1556497121 /*(10000000000 * 2^14 / 105262)*/; //  1556494800
-        int64_t err = (int64_t)bps - nominal;
+    int64_t err = (int64_t)bps - 1556494800;
 
+    if (err > 0 && txavail) {
+        // here for 3k (22.5ms) / 20ms latency
+        //upipe_dbg_va(upipe, "bps %" PRIu64 " -> fake", (uint64_t) bps);
+        uint8_t *dst = (uint8_t*)NETMAP_BUF(txring, txring->slot[cur].buf_idx);
+        cur = nm_ring_next(txring, cur);
+        txavail--;
+
+        memset(dst, 0, 1438);
+        memcpy(dst, upipe_netmap_sink->header, ETHERNET_HEADER_LEN);
+        txring->slot[cur].len = 1438;
+
+        upipe_netmap_sink->fakes++;
+    }
+
+    if (ddd) {
         upipe_warn_va(upipe,
                 "txavail %d at %" PRIu64 " bps -> err %" PRId64 ", %zu urefs, "
-                "%zu fake packets",
+                "%zu fake",
                 txavail, (uint64_t)bps, err, upipe_netmap_sink->n,
                 upipe_netmap_sink->fakes
                 );
     }
-    //if (!txavail) upipe_dbg_va(upipe, "txavail 0, woke up for nothing");
-    //upipe_err_va(upipe, "TXAVAL %u", txavail);
+
+    if (upipe_netmap_sink->start) {
+        // for gnuplot
+        //printf("%" PRIu64 " %" PRIu64 "\n", now - upipe_netmap_sink->start, (int64_t)bps);
+    }
+
     bool rfc4175 = upipe_netmap_sink->rfc4175;
 
     /* map picture */
@@ -905,38 +924,7 @@ const int64_t nominal = 1556497121 /*(10000000000 * 2^14 / 105262)*/; //  155649
     while (txavail) {
         uint8_t *dst = (uint8_t*)NETMAP_BUF(txring, txring->slot[cur].buf_idx);
         if (!uref) {
-            {   /* level */
-                // ms still available in txbuf
-                uint64_t buf_ms = 1000LLU * txring->num_slots * 1442 * 8 / 1556494800;
-                uint64_t tx_ms = 1000LLU * txavail * 1442 * 8 / 1556494800;
-                uint64_t lat_ms = 1000 * NETMAP_SINK_LATENCY / UCLOCK_FREQ;
-
-                if (buf_ms <= lat_ms) {
-                    /* the tx buffer is smaller than sink latency */
-                    abort();
-                } else if (buf_ms > lat_ms) {
-                    /* the tx buffer is bigger than sink latency */
-                    if (buf_ms < lat_ms + tx_ms) {
-                        if (0) upipe_notice_va(upipe, "buf %llu ms, avail %llu ms, xlatency %llu ms",
-                                buf_ms, tx_ms, lat_ms);
-
-                        // here for 3k (22.5ms) / 20ms latency
-                        memset(dst, 0, 1438);
-                        memcpy(dst, upipe_netmap_sink->header, ETHERNET_HEADER_LEN);
-                        txring->slot[cur].len = 1438;
-
-                        cur = nm_ring_next(txring, cur);
-                        dst = (uint8_t*)NETMAP_BUF(txring, txring->slot[cur].buf_idx);
-                        upipe_netmap_sink->fakes++;
-                        if (--txavail == 0)
-                            break;
-                    } //else upipe_notice_va(upipe, "no fake packet");
-                }
-            }
-
             struct uchain *uchain = ulist_pop(&upipe_netmap_sink->sink_queue);
-                if (0 && !uchain)
-                    upipe_err_va(upipe, "NO UREF, TX %u", txavail);
             if (!uchain)
                 break;
 
@@ -947,13 +935,7 @@ const int64_t nominal = 1556497121 /*(10000000000 * 2^14 / 105262)*/; //  155649
             uref_clock_get_pts_sys(uref, &pts);
             pts += upipe_netmap_sink->latency;
 
-            uint64_t now = uclock_now(&upipe_netmap_sink->uclock);
-
-            if (0 && !upipe_netmap_sink->n)
-                upipe_notice_va(upipe, "pop last, now %.2f pts %.2f",
-                    pts_to_time(now),
-                    pts_to_time(pts)
-            );
+            //uint64_t now = uclock_now(&upipe_netmap_sink->uclock);
 
             if (upipe_netmap_sink->preroll && pts + NETMAP_SINK_LATENCY > now) {
                 upipe_dbg(upipe, "waiting preroll after pop");
@@ -985,15 +967,6 @@ const int64_t nominal = 1556497121 /*(10000000000 * 2^14 / 105262)*/; //  155649
             }
 
             bytes_left = input_size;
-            if (txavail > (txring->num_slots/2))
-            upipe_notice_va(upipe, "uref start, txavail %d, pkts left %d, %zu urefs buffered",
-                    txavail, (bytes_left + HBRMT_DATA_SIZE - 1) / HBRMT_DATA_SIZE,
-                    upipe_netmap_sink->n);
-        }
-
-        if (!start) {
-            assert(uref);
-            start = uclock_now(&upipe_netmap_sink->uclock);
         }
 
         if (rfc4175) {
@@ -1011,8 +984,10 @@ const int64_t nominal = 1556497121 /*(10000000000 * 2^14 / 105262)*/; //  155649
             int len = worker_hbrmt(upipe, dst, src_buf, bytes_left, &txring->slot[cur].len);
             src_buf += len;
             bytes_left -= len;
-            bytes += txring->slot[cur].len + 4 /* CRC */;
             assert(txring->slot[cur].len == 1438);
+
+            /* 64 bits overflows after 375 years at 1.5G */
+            upipe_netmap_sink->bits += (txring->slot[cur].len + 4 /* CRC */) * 8;
         }
 
         cur = nm_ring_next(txring, cur);
@@ -1057,6 +1032,9 @@ const int64_t nominal = 1556497121 /*(10000000000 * 2^14 / 105262)*/; //  155649
     }
 
     upipe_netmap_sink->uref = uref;
+
+    if (!upipe_netmap_sink->start)
+        upipe_netmap_sink->start = uclock_now(&upipe_netmap_sink->uclock);
 
     txring->head = txring->cur = cur;
     ioctl(NETMAP_FD(upipe_netmap_sink->d), NIOCTXSYNC, NULL);
