@@ -809,7 +809,7 @@ static void upipe_netmap_sink_worker(struct upump *upump)
         if (old == 0)
             old = now;
         if ((now - old) > UCLOCK_FREQ / 50)
-            printf("%s() after %" PRIu64 "us\n", __func__, (now - old) / 27);
+            printf("%" PRIu64 " %s() after %" PRIu64 "us\n", now, __func__, (now - old) / 27);
         old = now;
     }
 
@@ -866,8 +866,8 @@ static void upipe_netmap_sink_worker(struct upump *upump)
 const int64_t nominal = 1556497121 /*(10000000000 * 2^14 / 105262)*/; //  1556494800
         int64_t err = (int64_t)bps - nominal;
 
-        upipe_warn_va(upipe, "txavail %d at %" PRIu64 " bps -> err %" PRId64,
-                txavail, bps, err);
+        upipe_warn_va(upipe, "txavail %d at %" PRIu64 " bps -> err %" PRId64 " %zu urefs",
+                txavail, (uint64_t)bps, err, upipe_netmap_sink->n);
     }
     //if (!txavail) upipe_dbg_va(upipe, "txavail 0, woke up for nothing");
     //upipe_err_va(upipe, "TXAVAL %u", txavail);
