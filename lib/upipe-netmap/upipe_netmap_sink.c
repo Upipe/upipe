@@ -1041,9 +1041,6 @@ const int64_t nominal = 1556497121 /*(10000000000 * 2^14 / 105262)*/; //  155649
                 );
     }
 
-    txring->head = txring->cur = cur;
-    ioctl(NETMAP_FD(upipe_netmap_sink->d), NIOCTXSYNC, NULL);
-
     /* resize current buffer (if any) */
     if (uref) {
         if (!rfc4175) {
@@ -1060,6 +1057,9 @@ const int64_t nominal = 1556497121 /*(10000000000 * 2^14 / 105262)*/; //  155649
     }
 
     upipe_netmap_sink->uref = uref;
+
+    txring->head = txring->cur = cur;
+    ioctl(NETMAP_FD(upipe_netmap_sink->d), NIOCTXSYNC, NULL);
 }
 
 /** @internal @This outputs data to the netmap sink.
