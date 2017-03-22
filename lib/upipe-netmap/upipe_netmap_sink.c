@@ -857,7 +857,7 @@ static void upipe_netmap_sink_worker(struct upump *upump)
     if (txavail > (txring->num_slots / 2) || ddd) {
         uint64_t now = uclock_now(&upipe_netmap_sink->uclock) - start;
 
-        uint64_t bps = 8 * bytes;
+        __uint128_t bps = 8 * bytes;
         bps -= (4095 - txavail) * 1442 * 8;
 
         bps *= UCLOCK_FREQ;
