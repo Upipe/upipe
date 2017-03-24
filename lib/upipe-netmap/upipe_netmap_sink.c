@@ -498,7 +498,7 @@ static int upipe_netmap_put_rtp_headers(struct upipe *upipe, uint8_t *buf,
         const struct urational *fps = &upipe_netmap_sink->fps;
         uint64_t frame_duration = UCLOCK_FREQ * fps->den / fps->num;
         uint64_t timestamp = upipe_netmap_sink->frame_count * frame_duration +
-            (frame_duration * upipe_netmap_sink->pkt++ * HBRMT_DATA_SIZE) /
+            (frame_duration * upipe_netmap_sink->pkt * HBRMT_DATA_SIZE) /
             upipe_netmap_sink->frame_size;
         rtp_set_timestamp(buf, timestamp & UINT32_MAX);
     }
@@ -628,6 +628,7 @@ static int worker_rfc4175(struct upipe *upipe, uint8_t **dst, uint16_t *len)
 
     /* RTP HEADER */
     int rtp_size = upipe_netmap_put_rtp_headers(upipe, *dst, 103, true);
+    upipe_netmap_sink->pkt++;
     if (marker)
         rtp_set_marker(*dst);
     *dst += rtp_size;
