@@ -730,8 +730,8 @@ static int worker_rfc4175(struct upipe *upipe, uint8_t **dst, uint16_t *len)
     return 0;
 }
 
-static int worker_hbrmt(struct upipe *upipe, uint8_t *dst, const uint8_t *src,
-        int bytes_left, uint16_t *len)
+static int worker_hbrmt(struct upipe *upipe, uint8_t **dst, const uint8_t *src,
+        int bytes_left, uint16_t **len)
 {
     struct upipe_netmap_sink *upipe_netmap_sink = upipe_netmap_sink_from_upipe(upipe);
     const uint8_t packed_bytes = upipe_netmap_sink->packed_bytes;
@@ -755,36 +755,45 @@ static int worker_hbrmt(struct upipe *upipe, uint8_t *dst, const uint8_t *src,
     // FIXME: what if we exhaust the uref while outputting the penultimate packet?
     // Hi50 is fine, need to test others and eventually come up with a solution
 
-    uint8_t *header = &upipe_netmap_sink->intf[0].header[0];
-
-    /* update rtp header */
-    uint8_t *rtp = &header[ETHERNET_HEADER_LEN + IP_HEADER_MINSIZE + UDP_HEADER_SIZE];
-    rtp_set_seqnum(rtp, upipe_netmap_sink->seqnum++ & UINT16_MAX);
     const struct urational *fps = &upipe_netmap_sink->fps;
     uint64_t frame_duration = UCLOCK_FREQ * fps->den / fps->num;
     uint64_t timestamp = upipe_netmap_sink->frame_count * frame_duration +
         (frame_duration * upipe_netmap_sink->pkt++ * HBRMT_DATA_SIZE) /
         upipe_netmap_sink->frame_size;
-    rtp_set_timestamp(rtp, timestamp & UINT32_MAX);
-    if (bytes_left == pixels * 4)
-        rtp_set_marker(rtp);
 
-    /* copy header */
-    memcpy(dst, header, sizeof(upipe_netmap_sink->intf[0].header));
-    dst += sizeof(upipe_netmap_sink->intf[0].header);
+    for (size_t i = 0; i < 2; i++) {
+        struct upipe_netmap_intf *intf = &upipe_netmap_sink->intf[i];
+        if (!intf->d)
+            break;
 
-    /* unset rtp marker if needed */
-    if (bytes_left == pixels * 4)
-        rtp_clear_marker(rtp);
+        uint8_t *header = &intf->header[0];
 
-    /* use previous scratch buffer */
-    if (packed_bytes) {
-        memcpy(dst, upipe_netmap_sink->packed_pixels, packed_bytes);
-        dst += packed_bytes;
+        /* update rtp header */
+        uint8_t *rtp = &header[ETHERNET_HEADER_LEN + IP_HEADER_MINSIZE + UDP_HEADER_SIZE];
+        rtp_set_seqnum(rtp, upipe_netmap_sink->seqnum & UINT16_MAX);
+        rtp_set_timestamp(rtp, timestamp & UINT32_MAX);
+        if (bytes_left == pixels * 4)
+            rtp_set_marker(rtp);
+
+        /* copy header */
+        memcpy(dst[i], header, sizeof(upipe_netmap_sink->intf[i].header));
+        dst[i] += sizeof(upipe_netmap_sink->intf[i].header);
+
+        /* unset rtp marker if needed */
+        if (bytes_left == pixels * 4)
+            rtp_clear_marker(rtp);
+
+        /* use previous scratch buffer */
+        if (packed_bytes) {
+            memcpy(dst[i], upipe_netmap_sink->packed_pixels, packed_bytes);
+            dst[i] += packed_bytes;
+        }
     }
 
+    upipe_netmap_sink->seqnum++;
+
     /* convert pixels */
-    upipe_netmap_sink->pack(dst, src, pixels);
+    upipe_netmap_sink->pack(dst[0], src, pixels);
 
     /* bytes these pixels decoded to */
     int bytes = pixels * 4 * 5 / 8;
@@ -793,18 +802,24 @@ static int worker_hbrmt(struct upipe *upipe, uint8_t *dst, const uint8_t *src,
     int pkt_rem = bytes - (payload_len - packed_bytes);
     assert(pkt_rem <= sizeof(upipe_netmap_sink->packed_pixels));
     if (pkt_rem > 0)
-        memcpy(upipe_netmap_sink->packed_pixels, dst + bytes - pkt_rem, pkt_rem);
+        memcpy(upipe_netmap_sink->packed_pixels, dst[0] + bytes - pkt_rem, pkt_rem);
 
     /* update overlap count */
     upipe_netmap_sink->packed_bytes = pkt_rem;
 
     /* padding */
     if (payload_len != HBRMT_DATA_SIZE)
-        memset(dst + payload_len, 0, HBRMT_DATA_SIZE - payload_len);
+        memset(dst[0] + payload_len, 0, HBRMT_DATA_SIZE - payload_len);
+
+    if (dst[1]) {
+        memcpy(dst[1], dst[0], HBRMT_DATA_SIZE);
+    }
 
     /* packet size */
-    *len = ETHERNET_HEADER_LEN + IP_HEADER_MINSIZE + UDP_HEADER_SIZE +
+    *len[0] = ETHERNET_HEADER_LEN + IP_HEADER_MINSIZE + UDP_HEADER_SIZE +
         RTP_HEADER_SIZE + HBRMT_HEADER_SIZE + HBRMT_DATA_SIZE;
+    if (len[1])
+        *len[1] = *len[0];
 
     return pixels * 4;
 }
@@ -852,12 +867,25 @@ static void upipe_netmap_sink_worker(struct upump *upump)
         upipe_netmap_sink->preroll = false;
     }
 
-    struct upipe_netmap_intf *intf = &upipe_netmap_sink->intf[0];
-    /* Open up transmission ring */
-    struct netmap_ring *txring = NETMAP_TXRING(intf->d->nifp,
-                                               intf->ring_idx);
-    uint32_t cur = txring->cur;
-    uint32_t txavail = nm_ring_space(txring);
+    struct netmap_ring *txring[2] = { NULL, NULL };
+    uint32_t cur[2];
+    uint32_t txavail = UINT32_MAX;
+
+    for (size_t i = 0; i < 2; i++) {
+        struct upipe_netmap_intf *intf = &upipe_netmap_sink->intf[i];
+        txring[i] = NULL;
+        if (!intf->d)
+            break;
+
+        txring[i] = NETMAP_TXRING(intf->d->nifp, intf->ring_idx);
+        cur[i] = txring[i]->cur;
+        uint32_t t = nm_ring_space(txring[i]);
+        if (txavail > t)
+            txavail = t;
+    }
+
+    assert(txring[0]);
+    uint32_t num_slots = txring[0]->num_slots;
 
     bool ddd = false;
     {
@@ -868,11 +896,11 @@ static void upipe_netmap_sink_worker(struct upump *upump)
         }
     }
 
-    if (txavail > (txring->num_slots / 2) && !upipe_netmap_sink->n)
+    if (txavail > (num_slots / 2) && !upipe_netmap_sink->n)
         ddd = true;
 
     __uint128_t bps = upipe_netmap_sink->bits;
-    bps -= (txring->num_slots - 1 - txavail) * 1442 * 8;
+    bps -= (num_slots - 1 - txavail) * 1442 * 8;
 
     bps *= UCLOCK_FREQ;
     bps /= now - upipe_netmap_sink->start;
@@ -882,13 +910,17 @@ static void upipe_netmap_sink_worker(struct upump *upump)
     if (err > 0 && txavail) {
         // here for 3k (22.5ms) / 20ms latency
         //upipe_dbg_va(upipe, "bps %" PRIu64 " -> fake", (uint64_t) bps);
-        uint8_t *dst = (uint8_t*)NETMAP_BUF(txring, txring->slot[cur].buf_idx);
-        cur = nm_ring_next(txring, cur);
+        for (size_t i = 0; i < 2; i++) {
+            struct upipe_netmap_intf *intf = &upipe_netmap_sink->intf[i];
+            if (!intf->d)
+                break;
+            uint8_t *dst = (uint8_t*)NETMAP_BUF(txring[i], txring[i]->slot[cur[i]].buf_idx);
+            memset(dst, 0, 1438);
+            memcpy(dst, intf->header, ETHERNET_HEADER_LEN);
+            txring[i]->slot[cur[i]].len = 1438;
+            cur[i] = nm_ring_next(txring[i], cur[i]);
+        }
         txavail--;
-
-        memset(dst, 0, 1438);
-        memcpy(dst, intf->header, ETHERNET_HEADER_LEN);
-        txring->slot[cur].len = 1438;
 
         upipe_netmap_sink->fakes++;
     }
@@ -931,7 +963,6 @@ static void upipe_netmap_sink_worker(struct upump *upump)
 
     /* fill ring buffer */
     while (txavail) {
-        uint8_t *dst = (uint8_t*)NETMAP_BUF(txring, txring->slot[cur].buf_idx);
         if (!uref) {
             struct uchain *uchain = ulist_pop(&upipe_netmap_sink->sink_queue);
             if (!uchain)
@@ -978,8 +1009,24 @@ static void upipe_netmap_sink_worker(struct upump *upump)
             bytes_left = input_size;
         }
 
+        uint8_t *dst[2] = { NULL, NULL };
+        uint16_t *len[2] = { NULL, NULL };
+
+        for (size_t i = 0; i < 2; i++) {
+            struct upipe_netmap_intf *intf = &upipe_netmap_sink->intf[i];
+            if (!intf->d)
+                break;
+
+            struct netmap_slot *slot = &txring[i]->slot[cur[i]];
+
+            dst[i] = (uint8_t*)NETMAP_BUF(txring[i], slot->buf_idx);
+            len[i] = &slot->len;
+            cur[i] = nm_ring_next(txring[i], cur[i]);
+        }
+
         if (rfc4175) {
-            if (worker_rfc4175(upipe, &dst, &txring->slot[cur].len)) {
+            // TODO: -7
+            if (worker_rfc4175(upipe, &dst[0], len[0])) {
                 for (int i = 0; i < UPIPE_RFC4175_MAX_PLANES; i++) {
                     const char *chroma = upipe_netmap_sink->input_chroma_map[i];
                     if (!chroma)
@@ -990,16 +1037,15 @@ static void upipe_netmap_sink_worker(struct upump *upump)
                 uref = NULL;
             }
         } else {
-            int len = worker_hbrmt(upipe, dst, src_buf, bytes_left, &txring->slot[cur].len);
-            src_buf += len;
-            bytes_left -= len;
-            assert(txring->slot[cur].len == 1438);
+            int s = worker_hbrmt(upipe, dst, src_buf, bytes_left, len);
+            src_buf += s;
+            bytes_left -= s;
+            assert(*len[0] == 1438);
 
             /* 64 bits overflows after 375 years at 1.5G */
-            upipe_netmap_sink->bits += (txring->slot[cur].len + 4 /* CRC */) * 8;
+            upipe_netmap_sink->bits += (*len[0] + 4 /* CRC */) * 8;
         }
 
-        cur = nm_ring_next(txring, cur);
         txavail--;
 
         if (!rfc4175 && !bytes_left) {
@@ -1008,11 +1054,17 @@ static void upipe_netmap_sink_worker(struct upump *upump)
             uref = NULL;
             upipe_netmap_sink->pkt = 0;
 
-            /* update hbrmt header */
-            uint8_t *hbrmt = &intf->header[ETHERNET_HEADER_LEN +
-                IP_HEADER_MINSIZE + UDP_HEADER_SIZE + RTP_HEADER_SIZE];
-            smpte_hbrmt_set_frame_count(hbrmt, ++upipe_netmap_sink->frame_count & UINT8_MAX);
+            upipe_netmap_sink->frame_count++;
+            for (size_t i = 0; i < 2; i++) {
+                struct upipe_netmap_intf *intf = &upipe_netmap_sink->intf[i];
+                if (!intf->d)
+                    break;
 
+                /* update hbrmt header */
+                uint8_t *hbrmt = &intf->header[ETHERNET_HEADER_LEN +
+                    IP_HEADER_MINSIZE + UDP_HEADER_SIZE + RTP_HEADER_SIZE];
+                smpte_hbrmt_set_frame_count(hbrmt, upipe_netmap_sink->frame_count & UINT8_MAX);
+            }
         }
     }
 
@@ -1045,8 +1097,14 @@ static void upipe_netmap_sink_worker(struct upump *upump)
     if (!upipe_netmap_sink->start)
         upipe_netmap_sink->start = uclock_now(&upipe_netmap_sink->uclock);
 
-    txring->head = txring->cur = cur;
-    ioctl(NETMAP_FD(intf->d), NIOCTXSYNC, NULL);
+    for (size_t i = 0; i < 2; i++) {
+        struct upipe_netmap_intf *intf = &upipe_netmap_sink->intf[i];
+        if (!intf->d)
+            break;
+
+        txring[i]->head = txring[i]->cur = cur[i];
+        ioctl(NETMAP_FD(intf->d), NIOCTXSYNC, NULL);
+    }
 }
 
 /** @internal @This outputs data to the netmap sink.
