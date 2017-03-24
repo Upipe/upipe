@@ -1088,7 +1088,7 @@ static bool upipe_netmap_sink_output(struct upipe *upipe, struct uref *uref,
 
         for (size_t i = 0; i < 2; i++) {
             struct upipe_netmap_intf *intf = &upipe_netmap_sink->intf[i];
-            if (!intf)
+            if (!intf->d)
                 break;
             FILE *f = fopen(intf->maxrate_uri, "w");
             if (!f) {
@@ -1259,7 +1259,7 @@ static int upipe_netmap_sink_set_flow_def(struct upipe *upipe,
     if (!upipe_netmap_sink->rfc4175) {
         for (size_t i = 0; i < 2; i++) {
             struct upipe_netmap_intf *intf = &upipe_netmap_sink->intf[i];
-            if (!intf)
+            if (!intf->d)
                 break;
             uint8_t *header = &intf->header[0];
             static const uint16_t udp_payload_size = RTP_HEADER_SIZE +
@@ -1618,8 +1618,6 @@ static void upipe_netmap_sink_free(struct upipe *upipe)
 
     for (size_t i = 0; i < 2; i++) {
         struct upipe_netmap_intf *intf = &upipe_netmap_sink->intf[i];
-        if (!intf)
-            break;
         free(intf->uri);
         free(intf->maxrate_uri);
         nm_close(intf->d);
