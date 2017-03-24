@@ -171,6 +171,14 @@ struct upipe_netmap_sink {
     /** Ring */
     unsigned int ring_idx;
 
+    /** socket uri */
+    char *uri;
+    /** tx_maxrate sysctl uri */
+    char *maxrate_uri;
+
+    /** netmap descriptor **/
+    struct nm_desc *d;
+
     /** tr-03 stuff */
     int line; /* zero-indexed for consistency with below */
     int pixel_offset;
@@ -195,14 +203,6 @@ struct upipe_netmap_sink {
     struct upump *upump;
 
     int pkt;
-
-    /** socket uri */
-    char *uri;
-    /** tx_maxrate sysctl uri */
-    char *maxrate_uri;
-
-    /** netmap descriptor **/
-    struct nm_desc *d;
 
     /** uref sink queue **/
     struct uchain sink_queue;
