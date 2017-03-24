@@ -147,8 +147,6 @@ struct upipe_netmap_intf {
     /** Ring */
     unsigned int ring_idx;
 
-    /** socket uri */
-    char *uri;
     /** tx_maxrate sysctl uri */
     char *maxrate_uri;
 
@@ -224,6 +222,9 @@ struct upipe_netmap_sink {
 
     /** latency */
     uint64_t latency;
+
+    /** uri */
+    char *uri;
 
     /** prerolling */
     bool preroll;
@@ -429,9 +430,9 @@ static struct upipe *upipe_netmap_sink_alloc(struct upipe_mgr *mgr,
     upipe_netmap_sink_init_urefcount(upipe);
     upipe_netmap_sink_init_upump_mgr(upipe);
     upipe_netmap_sink_init_upump(upipe);
+    upipe_netmap_sink->uri = NULL;
     for (size_t i = 0; i < 2; i++) {
         struct upipe_netmap_intf *intf = &upipe_netmap_sink->intf[i];
-        intf->uri = NULL;
         intf->maxrate_uri = NULL;
         intf->d = NULL;
     }
@@ -1291,9 +1292,8 @@ static int _upipe_netmap_sink_get_uri(struct upipe *upipe, const char **uri_p)
     struct upipe_netmap_sink *upipe_netmap_sink =
         upipe_netmap_sink_from_upipe(upipe);
     struct upipe_netmap_intf *intf = &upipe_netmap_sink->intf[0];
-    // TODO: combine
     assert(uri_p != NULL);
-    *uri_p = intf->uri;
+    *uri_p = upipe_netmap_sink->uri;
     return UBASE_ERR_NONE;
 }
 
@@ -1360,29 +1360,9 @@ static bool source_addr(const char *intf, uint8_t *mac, in_addr_t *ip)
     return got_mac && got_ip;
 }
 
-/** @internal @This asks to open the given socket.
- *
- * @param upipe description structure of the pipe
- * @param uri relative or absolute uri of the socket
- * @param mode mode of opening the socket
- * @return an error code
- */
-static int upipe_netmap_sink_set_uri(struct upipe *upipe, const char *uri)
+static int upipe_netmap_sink_open_intf(struct upipe *upipe,
+        struct upipe_netmap_intf *intf, const char *uri, char *intf_name)
 {
-    struct upipe_netmap_sink *upipe_netmap_sink =
-        upipe_netmap_sink_from_upipe(upipe);
-    struct upipe_netmap_intf *intf = &upipe_netmap_sink->intf[0];
-
-    nm_close(intf->d);
-    ubase_clean_str(&intf->uri);
-    ubase_clean_str(&intf->maxrate_uri);
-    upipe_netmap_sink_set_upump(upipe, NULL);
-
-    if (unlikely(uri == NULL))
-        return UBASE_ERR_NONE;
-
-    upipe_netmap_sink_check_upump_mgr(upipe);
-
     if (sscanf(uri, "netmap:%*[^-]-%u/T", &intf->ring_idx) != 1) {
         upipe_err_va(upipe, "invalid netmap receive uri %s", uri);
         return UBASE_ERR_INVALID;
@@ -1390,7 +1370,8 @@ static int upipe_netmap_sink_set_uri(struct upipe *upipe, const char *uri)
 
     char *intf_addr = strdup(&uri[strlen("netmap:")]);
     *strchr(intf_addr, '-') = '\0'; /* we already matched the - in sscanf */
-    strncpy(upipe_netmap_sink->ifr.ifr_name, intf_addr, IFNAMSIZ);
+    if (intf_name)
+        strncpy(intf_name, intf_addr, IFNAMSIZ);
 
     /* parse uri parameters */
     char *ip = NULL;
@@ -1520,14 +1501,6 @@ static int upipe_netmap_sink_set_uri(struct upipe *upipe, const char *uri)
     }
     free(intf_addr);
 
-    intf->uri = strdup(uri);
-    if (unlikely(intf->uri == NULL)) {
-        upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
-        return UBASE_ERR_ALLOC;
-    }
-
-    upipe_notice_va(upipe, "opening netmap socket %s", intf->uri);
-
     return UBASE_ERR_NONE;
 
 error:
@@ -1537,6 +1510,56 @@ error:
     free(intf_addr);
 
     return UBASE_ERR_INVALID;
+}
+
+/** @internal @This asks to open the given socket.
+ *
+ * @param upipe description structure of the pipe
+ * @param uri relative or absolute uri of the socket
+ * @param mode mode of opening the socket
+ * @return an error code
+ */
+static int upipe_netmap_sink_set_uri(struct upipe *upipe, const char *uri)
+{
+    struct upipe_netmap_sink *upipe_netmap_sink =
+        upipe_netmap_sink_from_upipe(upipe);
+
+    ubase_clean_str(&upipe_netmap_sink->uri);
+    for (size_t i = 0; i < 2; i++) {
+        struct upipe_netmap_intf *intf = &upipe_netmap_sink->intf[i];
+        nm_close(intf->d);
+        ubase_clean_str(&intf->maxrate_uri);
+    }
+
+    upipe_netmap_sink_set_upump(upipe, NULL);
+    upipe_netmap_sink_check_upump_mgr(upipe);
+    if (unlikely(uri == NULL))
+        return UBASE_ERR_NONE;
+
+    upipe_netmap_sink->uri = strdup(uri);
+    if (unlikely(upipe_netmap_sink->uri == NULL)) {
+        upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
+        return UBASE_ERR_ALLOC;
+    }
+
+    upipe_notice_va(upipe, "opening netmap socket %s", uri);
+
+    char *p = strchr(upipe_netmap_sink->uri, '+');
+    if (p)
+        *p++ = '\0';
+
+    struct upipe_netmap_intf *intf = &upipe_netmap_sink->intf[0];
+    UBASE_RETURN(upipe_netmap_sink_open_intf(upipe, intf,
+                upipe_netmap_sink->uri, upipe_netmap_sink->ifr.ifr_name));
+
+    if (p) {
+        p[-1] = '+';
+        UBASE_RETURN(upipe_netmap_sink_open_intf(upipe, intf+1, p, NULL));
+    }
+
+    upipe_notice_va(upipe, "opened %d netmap socket(s)", p ? 2 : 1);
+
+    return UBASE_ERR_NONE;
 }
 
 /** @internal @This processes control commands on a netmap sink pipe.
@@ -1615,10 +1638,10 @@ static void upipe_netmap_sink_free(struct upipe *upipe)
 
     close(upipe_netmap_sink->fd);
     uref_free(upipe_netmap_sink->flow_def);
+    free(upipe_netmap_sink->uri);
 
     for (size_t i = 0; i < 2; i++) {
         struct upipe_netmap_intf *intf = &upipe_netmap_sink->intf[i];
-        free(intf->uri);
         free(intf->maxrate_uri);
         nm_close(intf->d);
     }
