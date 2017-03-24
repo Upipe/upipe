@@ -1276,7 +1276,7 @@ static int _upipe_netmap_sink_get_uri(struct upipe *upipe, const char **uri_p)
     return UBASE_ERR_NONE;
 }
 
-/** @internal @This is a helper for @ref _upipe_netmap_sink_set_uri.
+/** @internal @This is a helper for @ref upipe_netmap_sink_set_uri.
  *
  * @param string option string
  * @return duplicated string
@@ -1346,7 +1346,7 @@ static bool source_addr(const char *intf, uint8_t *mac, in_addr_t *ip)
  * @param mode mode of opening the socket
  * @return an error code
  */
-static int _upipe_netmap_sink_set_uri(struct upipe *upipe, const char *uri)
+static int upipe_netmap_sink_set_uri(struct upipe *upipe, const char *uri)
 {
     struct upipe_netmap_sink *upipe_netmap_sink =
         upipe_netmap_sink_from_upipe(upipe);
@@ -1558,7 +1558,7 @@ static int _upipe_netmap_sink_control(struct upipe *upipe,
         }
         case UPIPE_SET_URI: {
             const char *uri = va_arg(args, const char *);
-            return _upipe_netmap_sink_set_uri(upipe, uri);
+            return upipe_netmap_sink_set_uri(upipe, uri);
         }
         default:
             return UBASE_ERR_UNHANDLED;
