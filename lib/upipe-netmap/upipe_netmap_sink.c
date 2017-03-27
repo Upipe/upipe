@@ -233,7 +233,10 @@ struct upipe_netmap_sink {
 #define PACK10_LOOP_SIZE 8 /* pixels per loop */
 
     /** packing */
-    void (*pack)(uint8_t *dst, const uint8_t *y, uintptr_t size);
+    void (*pack)(uint8_t *dst, const uint8_t *y, uintptr_t pixels);
+
+    /** packing */
+    void (*pack2)(uint8_t *dst1, uint8_t *dst2, const uint8_t *y, uintptr_t pixels);
 
     /** cached packed pixels */
     uint8_t packed_pixels[PACK10_LOOP_SIZE * 5 / 2 - 1];
@@ -314,12 +317,12 @@ static void upipe_udp_raw_fill_headers(uint8_t *header,
     udp_set_cksum(header, 0);
 }
 
-static void upipe_sdi_pack_c(uint8_t *dst, const uint8_t *y, uintptr_t size)
+static void upipe_sdi_pack_c(uint8_t *dst, const uint8_t *y, uintptr_t pixels)
 {
     struct ubits s;
-    ubits_init(&s, dst, size * 10 / 8);
+    ubits_init(&s, dst, pixels * 10 / 8);
 
-    for (int i = 0; i < size; i ++)
+    for (int i = 0; i < pixels; i ++)
         ubits_put(&s, 10, htons((y[2*i+0] << 8) | y[2*i+1]));
 
     uint8_t *end;
@@ -328,6 +331,12 @@ static void upipe_sdi_pack_c(uint8_t *dst, const uint8_t *y, uintptr_t size)
     } else {
         // check buffer end?
     }
+}
+
+static void upipe_sdi_pack2_c(uint8_t *dst1, uint8_t *dst2, const uint8_t *y, uintptr_t pixels)
+{
+    upipe_sdi_pack_c(dst1, y, pixels);
+    memcpy(dst2, dst1, pixels * 10 / 8);
 }
 
 static uint64_t uclock_netmap_sink_now(struct uclock *uclock)
@@ -451,6 +460,7 @@ static struct upipe *upipe_netmap_sink_alloc(struct upipe_mgr *mgr,
     upipe_netmap_sink->unpack_v210 = upipe_v210_sdi_unpack_c;
 
     upipe_netmap_sink->pack = upipe_sdi_pack_c;
+    upipe_netmap_sink->pack2 = upipe_sdi_pack2_c;
 
 #if defined(__i686__) || defined(__x86_64__)
 #if !defined(__APPLE__) /* macOS clang doesn't support that builtin yet */
@@ -464,17 +474,23 @@ static struct upipe *upipe_netmap_sink_alloc(struct upipe_mgr *mgr,
 #else
     if (__builtin_cpu_supports("ssse3"))
 #endif
+    {
         upipe_netmap_sink->pack = upipe_uyvy_to_sdi_unaligned_ssse3;
+        upipe_netmap_sink->pack2 = upipe_uyvy_to_sdi_2_unaligned_ssse3;
+    }
 
     if (__builtin_cpu_supports("avx")) {
         upipe_netmap_sink->pack = upipe_uyvy_to_sdi_avx;
+        upipe_netmap_sink->pack2 = upipe_uyvy_to_sdi_2_avx;
         upipe_netmap_sink->pack_8_planar = upipe_planar_to_sdi_8_avx;
         upipe_netmap_sink->pack_10_planar = upipe_planar_to_sdi_10_avx;
         upipe_netmap_sink->unpack_v210 = upipe_v210_sdi_unpack_aligned_avx;
     }
 
-    if (__builtin_cpu_supports("avx2"))
+    if (__builtin_cpu_supports("avx2")) {
         upipe_netmap_sink->pack = upipe_uyvy_to_sdi_avx2;
+        upipe_netmap_sink->pack2 = upipe_uyvy_to_sdi_2_avx2;
+    }
 #endif
 #endif
 
