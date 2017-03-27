@@ -751,6 +751,7 @@ static int worker_hbrmt(struct upipe *upipe, uint8_t **dst, const uint8_t *src,
 {
     struct upipe_netmap_sink *upipe_netmap_sink = upipe_netmap_sink_from_upipe(upipe);
     const uint8_t packed_bytes = upipe_netmap_sink->packed_bytes;
+    bool copy = dst[1] != NULL;
 
     /* available payload size */
     int pack_bytes_left = bytes_left * 5 / 8 + packed_bytes;
@@ -809,7 +810,10 @@ static int worker_hbrmt(struct upipe *upipe, uint8_t **dst, const uint8_t *src,
     upipe_netmap_sink->seqnum++;
 
     /* convert pixels */
-    upipe_netmap_sink->pack(dst[0], src, pixels);
+    if (copy)
+        upipe_netmap_sink->pack2(dst[0], dst[1], src, pixels);
+    else
+        upipe_netmap_sink->pack(dst[0], src, pixels);
 
     /* bytes these pixels decoded to */
     int bytes = pixels * 4 * 5 / 8;
@@ -817,24 +821,26 @@ static int worker_hbrmt(struct upipe *upipe, uint8_t **dst, const uint8_t *src,
     /* overlap */
     int pkt_rem = bytes - (payload_len - packed_bytes);
     assert(pkt_rem <= sizeof(upipe_netmap_sink->packed_pixels));
-    if (pkt_rem > 0)
+    if (pkt_rem > 0) {
         memcpy(upipe_netmap_sink->packed_pixels, dst[0] + bytes - pkt_rem, pkt_rem);
+        if (copy)
+            memcpy(upipe_netmap_sink->packed_pixels, dst[1] + bytes - pkt_rem, pkt_rem);
+    }
 
     /* update overlap count */
     upipe_netmap_sink->packed_bytes = pkt_rem;
 
     /* padding */
-    if (payload_len != HBRMT_DATA_SIZE)
+    if (payload_len != HBRMT_DATA_SIZE) {
         memset(dst[0] + payload_len, 0, HBRMT_DATA_SIZE - payload_len);
-
-    if (dst[1]) {
-        memcpy(dst[1], dst[0], HBRMT_DATA_SIZE);
+        if (copy)
+            memset(dst[1] + payload_len, 0, HBRMT_DATA_SIZE - payload_len);
     }
 
     /* packet size */
     *len[0] = ETHERNET_HEADER_LEN + IP_HEADER_MINSIZE + UDP_HEADER_SIZE +
         RTP_HEADER_SIZE + HBRMT_HEADER_SIZE + HBRMT_DATA_SIZE;
-    if (len[1])
+    if (copy)
         *len[1] = *len[0];
 
     return pixels * 4;
