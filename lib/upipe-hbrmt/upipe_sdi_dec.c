@@ -912,12 +912,15 @@ static bool upipe_sdi_dec_handle(struct upipe *upipe, struct uref *uref,
         upipe_sdi_dec_sub_require_ubuf_mgr(&audio_sub->upipe,
                 uref_audio);
         uref_flow_delete_def(uref_audio);
-        assert(audio_sub->ubuf_mgr); // FIXME
     }
 
-    struct ubuf *ubuf_sound = ubuf_sound_alloc(audio_sub->ubuf_mgr, 1125*2);
+    struct ubuf *ubuf_sound = NULL;
+    if (audio_sub->ubuf_mgr) {
+        ubuf_sound = ubuf_sound_alloc(audio_sub->ubuf_mgr, 1125*2);
+        if (!ubuf_sound)
+            upipe_throw_fatal(upipe, "Unable to allocate a sound buffer");
+    }
     if (unlikely(!ubuf_sound)) {
-        upipe_throw_fatal(upipe, "Unable to allocate a sound buffer");
         uref_free(uref_audio);
         uref_audio = NULL;
     } else {
