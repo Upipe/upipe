@@ -905,7 +905,7 @@ static bool upipe_sdi_dec_handle(struct upipe *upipe, struct uref *uref,
     uref_audio = uref_dup(uref);
     if (!audio_sub->ubuf_mgr) {
         uref_flow_set_def(uref_audio, "sound.s32.");
-        uref_sound_flow_add_plane(uref_audio, "ALL");
+        uref_sound_flow_add_plane(uref_audio, "lrcLRS0123456789");
         uref_sound_flow_set_channels(uref_audio, 16);
         uref_sound_flow_set_rate(uref_audio, 48000);
         uref_sound_flow_set_sample_size(uref_audio, 4 * 16);
@@ -926,7 +926,7 @@ static bool upipe_sdi_dec_handle(struct upipe *upipe, struct uref *uref,
     } else {
         uref_attach_ubuf(uref_audio, ubuf_sound);
         if (unlikely(!ubase_check(uref_sound_plane_write_int32_t(uref_audio,
-                            "ALL", 0, -1, &audio_ctx.buf_audio)))) {
+                            "lrcLRS0123456789", 0, -1, &audio_ctx.buf_audio)))) {
             uref_free(uref_audio);
             uref_audio = NULL;
             upipe_throw_fatal(upipe, "Could not map audio buffer");
@@ -1052,7 +1052,7 @@ static bool upipe_sdi_dec_handle(struct upipe *upipe, struct uref *uref,
         }
 
         audio_sub->samples += samples_received;;
-        uref_sound_plane_unmap(uref_audio, "ALL", 0, -1);
+        uref_sound_plane_unmap(uref_audio, "lrcLRS0123456789", 0, -1);
         uref_sound_resize(uref_audio, 0, samples_received);
 
         if (samples_received == 0)
