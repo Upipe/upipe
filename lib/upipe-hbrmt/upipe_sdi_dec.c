@@ -488,8 +488,8 @@ static int aes_parse(struct upipe *upipe, int32_t *buf, size_t samples, int pair
     return data_type;
 }
 
-static void extract_hd_audio(struct upipe *upipe, const uint16_t *packet, int line_num,
-                             struct audio_ctx *ctx)
+static int extract_hd_audio(struct upipe *upipe, const uint16_t *packet, int line_num,
+                            struct audio_ctx *ctx)
 {
     struct upipe_sdi_dec *upipe_sdi_dec = upipe_sdi_dec_from_upipe(upipe);
     const struct sdi_offsets_fmt *f = upipe_sdi_dec->f;
@@ -500,7 +500,7 @@ static void extract_hd_audio(struct upipe *upipe, const uint16_t *packet, int li
     int audio_group = S291_HD_AUDIO_GROUP1_DID - (packet[6] & 0xff);
     if (data_count != 0x18) {
         upipe_warn_va(upipe, "Invalid data count 0x%x", data_count);
-        return;
+        return 0;
     }
 
     /* Audio packets are not allowed on the switching line + 1 */
@@ -591,6 +591,9 @@ static void extract_hd_audio(struct upipe *upipe, const uint16_t *packet, int li
 
     upipe_sdi_dec->audio_samples[audio_group]++;
     ctx->group_offset[audio_group]++;
+
+    /* Return the length in pixels */
+    return 2 * (S291_HEADER_SIZE + data_count + S291_FOOTER_SIZE);
 }
 
 static void validate_dbn(struct upipe *upipe, uint8_t did, uint8_t dbn, int line_num)
@@ -615,10 +618,11 @@ static void validate_dbn(struct upipe *upipe, uint8_t did, uint8_t dbn, int line
     upipe_sdi_dec->dbn[did] = dbn;
 }
 
-static void parse_hd_hanc(struct upipe *upipe, const uint16_t *packet, int line_num,
+static int parse_hd_hanc(struct upipe *upipe, const uint16_t *packet, int line_num,
                          struct audio_ctx *ctx)
 {
     uint8_t did = packet[6] & 0xff;
+    int len = 0;
 
     if (did >= 0x80) { /* type 1 packet */
         validate_dbn(upipe, did, packet[8] & 0xff, line_num);
@@ -629,16 +633,18 @@ static void parse_hd_hanc(struct upipe *upipe, const uint16_t *packet, int line_
     case S291_HD_AUDIO_GROUP2_DID:
     case S291_HD_AUDIO_GROUP3_DID:
     case S291_HD_AUDIO_GROUP4_DID:
-        extract_hd_audio(upipe, packet, line_num, ctx);
+        len = extract_hd_audio(upipe, packet, line_num, ctx);
         break;
 
     default:
         break;
     }
+
+    return len;
 }
 
-static void extract_sd_audio(struct upipe *upipe, const uint16_t *packet, int line_num,
-                             struct audio_ctx *ctx)
+static int extract_sd_audio(struct upipe *upipe, const uint16_t *packet, int line_num,
+                            struct audio_ctx *ctx)
 {
     struct upipe_sdi_dec *upipe_sdi_dec = upipe_sdi_dec_from_upipe(upipe);
     const struct sdi_offsets_fmt *f = upipe_sdi_dec->f;
@@ -646,7 +652,7 @@ static void extract_sd_audio(struct upipe *upipe, const uint16_t *packet, int li
     int data_count = packet[5] & 0xff;
     if (data_count % 12) {
         upipe_err_va(upipe, "Invalid data count %d", data_count);
-        return;
+        return 0;
     }
 
     /* Slightly different to HD */
@@ -662,7 +668,7 @@ static void extract_sd_audio(struct upipe *upipe, const uint16_t *packet, int li
     if (checksum != stream_checksum) {
         upipe_err_va(upipe, "Invalid checksum: 0x%.3x != 0x%.3x",
                      checksum, stream_checksum);
-        return;
+        return 0;
     }
 
     const uint16_t *src = &packet[6];
@@ -674,22 +680,28 @@ static void extract_sd_audio(struct upipe *upipe, const uint16_t *packet, int li
         upipe_sdi_dec->audio_samples[audio_group]++;
         ctx->group_offset[audio_group]++;
     }
+
+    return S291_HEADER_SIZE + data_count + S291_FOOTER_SIZE;
 }
 
-static void parse_sd_hanc(struct upipe *upipe, const uint16_t *packet, int line_num,
+static int parse_sd_hanc(struct upipe *upipe, const uint16_t *packet, int line_num,
                          struct audio_ctx *ctx)
 {
+    int len = 0;
+ 
     switch (packet[3] & 0xff) {
     case S291_SD_AUDIO_GROUP1_DID:
     case S291_SD_AUDIO_GROUP2_DID:
     case S291_SD_AUDIO_GROUP3_DID:
     case S291_SD_AUDIO_GROUP4_DID:
-        extract_sd_audio(upipe, packet, line_num, ctx);
+        len = extract_sd_audio(upipe, packet, line_num, ctx);
         break;
 
     default:
         break;
     }
+
+    return len;
 }
 
 /** @internal @This handles data.
@@ -946,10 +958,10 @@ static bool upipe_sdi_dec_handle(struct upipe *upipe, struct uref *uref,
 
             if (p->sd) {
                 if (packet[0] == S291_ADF1 && packet[1] == S291_ADF2 && packet[2] == S291_ADF3)
-                    parse_sd_hanc(upipe, packet, line_num, &audio_ctx);
+                    v += parse_sd_hanc(upipe, packet, line_num, &audio_ctx) - 1;
             } else {
                 if (packet[0] == S291_ADF1 && packet[2] == S291_ADF2 && packet[4] == S291_ADF3)
-                    parse_hd_hanc(upipe, packet, line_num, &audio_ctx);
+                    v += parse_hd_hanc(upipe, packet, line_num, &audio_ctx) - 1;
             }
         }
 
