@@ -3,8 +3,6 @@
  *
  * Copyright (c) 2016 Open Broadcast Systems Ltd
  *
- * This file is based on the implementation in FFmpeg.
- *
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
  * License as published by the Free Software Foundation; either
