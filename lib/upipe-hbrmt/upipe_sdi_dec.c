@@ -508,6 +508,7 @@ static int extract_hd_audio(struct upipe *upipe, const uint16_t *packet, int lin
         (p->field_offset && line_num == p->switching_line + p->field_offset + 1))
         upipe_warn_va(upipe, "Audio packet on invalid line %d", line_num);
 
+    /* FIXME: extract this to a generic HD validation function */
     uint16_t checksum = 0;
     int len = data_count + 3 /* DID / DBN / DC */;
     for (int i = 0; i < len; i++)
@@ -658,6 +659,7 @@ static int extract_sd_audio(struct upipe *upipe, const uint16_t *packet, int lin
     /* Slightly different to HD */
     int audio_group = (S291_SD_AUDIO_GROUP1_DID - (packet[3] & 0xff)) >> 1;
 
+    /* FIXME: extract this to a generic SD validation function */
     uint16_t checksum = 0;
     int len = data_count + 3 /* DID / DBN / DC */;
     for (int i = 0; i < len; i++)
@@ -964,6 +966,8 @@ static bool upipe_sdi_dec_handle(struct upipe *upipe, struct uref *uref,
         const int hanc_len = 2 * f->active_offset - hanc_start - sav_len;
         int line_num = h + 1;
 
+        // FIXME check EAV
+
         /* Horizontal Blanking */
         uint16_t *line = (uint16_t *)input_buf + h * f->width * 2 + hanc_start;
         for (int v = 0; v < hanc_len; v++) {
@@ -1000,6 +1004,8 @@ static bool upipe_sdi_dec_handle(struct upipe *upipe, struct uref *uref,
             if (line_num >= p->active_f2.start && line_num <= p->active_f2.end)
                 active = 1;
         }
+
+        // FIXME check SAV (and perhaps verify against known line number???)
 
         uint16_t *src_line = (uint16_t*)input_buf + (h * f->width + f->active_offset) * 2;
         if (!active || special_case) {
