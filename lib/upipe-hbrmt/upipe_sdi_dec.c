@@ -596,7 +596,7 @@ static int extract_hd_audio(struct upipe *upipe, const uint16_t *packet, int lin
     return 2 * (S291_HEADER_SIZE + data_count + S291_FOOTER_SIZE);
 }
 
-static void validate_dbn(struct upipe *upipe, uint8_t did, uint8_t dbn, int line_num)
+static inline void validate_dbn(struct upipe *upipe, uint8_t did, uint8_t dbn, int line_num)
 {
     struct upipe_sdi_dec *upipe_sdi_dec = upipe_sdi_dec_from_upipe(upipe);
 
@@ -702,6 +702,17 @@ static int parse_sd_hanc(struct upipe *upipe, const uint16_t *packet, int line_n
     }
 
     return len;
+}
+
+static bool validate_anc_len(const uint16_t *packet, int left, int sd)
+{
+    int data_count = (sd ? packet[5] : packet[10]) & 0xff;
+    int total_size =  S291_HEADER_SIZE + data_count + S291_FOOTER_SIZE;
+
+    if (!sd)
+        total_size *= 2;
+
+    return left >= total_size;
 }
 
 /** @internal @This handles data.
@@ -949,19 +960,28 @@ static bool upipe_sdi_dec_handle(struct upipe *upipe, struct uref *uref,
     for (int h = 0; h < f->height; h++) {
         /* HANC starts at end of EAV */
         const uint8_t hanc_start = p->sd ? UPIPE_SDI_EAV_LENGTH : UPIPE_HD_SDI_EAV_LENGTH;
+        const uint8_t sav_len = p->sd ? UPIPE_SDI_SAV_LENGTH : UPIPE_HD_SDI_SAV_LENGTH;
+        const int hanc_len = 2 * f->active_offset - hanc_start - sav_len;
         int line_num = h + 1;
-        
+
         /* Horizontal Blanking */
         uint16_t *line = (uint16_t *)input_buf + h * f->width * 2 + hanc_start;
-        for (int v = 0; v < 2 * f->active_offset - hanc_start; v++) {
+        for (int v = 0; v < hanc_len; v++) {
             const uint16_t *packet = line + v;
+            int left = hanc_len - v;
 
             if (p->sd) {
-                if (packet[0] == S291_ADF1 && packet[1] == S291_ADF2 && packet[2] == S291_ADF3)
+                if (packet[0] == S291_ADF1 && packet[1] == S291_ADF2 && packet[2] == S291_ADF3 &&
+                    validate_anc_len(packet, left, p->sd))
+                {
                     v += parse_sd_hanc(upipe, packet, line_num, &audio_ctx) - 1;
+                }
             } else {
-                if (packet[0] == S291_ADF1 && packet[2] == S291_ADF2 && packet[4] == S291_ADF3)
+                if (packet[0] == S291_ADF1 && packet[2] == S291_ADF2 && packet[4] == S291_ADF3 &&
+                    validate_anc_len(packet, left, p->sd))
+                {
                     v += parse_hd_hanc(upipe, packet, line_num, &audio_ctx) - 1;
+                }
             }
         }
 
