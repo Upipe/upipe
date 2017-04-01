@@ -33,9 +33,6 @@
 #define UPIPE_SDI_MAX_PLANES 3
 #define UPIPE_SDI_MAX_CHANNELS 16
 
-#define UPIPE_SDI_SAV_LENGTH 4
-#define UPIPE_HD_SDI_SAV_LENGTH 8
-
 static void upipe_sdi_blank_c(uint16_t *dst, uintptr_t pixels)
 {
     for (int w = 0; w < pixels; w++) {
@@ -694,8 +691,8 @@ static void upipe_sdi_enc_encode_line(struct upipe *upipe, int line_num, uint16_
     dst += 4;
 
     /* HBI */
-    const uint8_t chroma_blanking = UPIPE_SDI_CHROMA_BLANKING_START;
-    upipe_sdi_enc->blank(&dst[chroma_blanking], f->active_offset - UPIPE_SDI_SAV_LENGTH);
+    const uint8_t hanc_start = UPIPE_SDI_EAV_LENGTH;
+    upipe_sdi_enc->blank(&dst[hanc_start], f->active_offset - UPIPE_SDI_SAV_LENGTH);
 
     /* Ideal number of samples that should've been put */
     unsigned samples_put_target = samples * (line_num) / f->height;
@@ -745,7 +742,7 @@ static void upipe_hd_sdi_enc_encode_line(struct upipe *upipe, int line_num, uint
     const struct sdi_offsets_fmt *f = upipe_sdi_enc->f;
     const struct sdi_picture_fmt *p = upipe_sdi_enc->p;
     uint16_t *active_start = &dst[2*f->active_offset];
-    const uint8_t chroma_blanking = UPIPE_HDSDI_CHROMA_BLANKING_START;
+    const uint8_t hanc_start = UPIPE_HD_SDI_EAV_LENGTH;
 
     bool vbi = 0, f2 = 0;
 
@@ -813,18 +810,18 @@ static void upipe_hd_sdi_enc_encode_line(struct upipe *upipe, int line_num, uint
     sdi_crc_end(&upipe_sdi_enc->crc_y, &dst[13]);
 
     /* HBI */
-    upipe_sdi_enc->blank(&dst[chroma_blanking], f->active_offset - UPIPE_HD_SDI_SAV_LENGTH);
+    upipe_sdi_enc->blank(&dst[hanc_start], f->active_offset - UPIPE_HD_SDI_SAV_LENGTH);
 
     /* These packets are written in the first Luma sample after SAV */
     /* Payload identifier */
     if ((line_num == p->payload_id_line) ||
         (f->psf_ident != UPIPE_SDI_PSF_IDENT_P && line_num == p->payload_id_line + p->field_offset)) {
-        put_payload_identifier_hd(&dst[chroma_blanking+1], f);
+        put_payload_identifier_hd(&dst[hanc_start+1], f);
     }
     /* Audio control packet on Switching Line + 2 */
     else if ((line_num == p->switching_line + 2) ||
              (f->psf_ident != UPIPE_SDI_PSF_IDENT_P && line_num == p->switching_line + p->field_offset + 2)) { 
-        int dst_pos = chroma_blanking + 1;
+        int dst_pos = hanc_start + 1;
         for (int i = 0; i < UPIPE_SDI_CHANNELS_PER_GROUP; i++) {
             dst_pos += put_audio_control_packet(upipe_sdi_enc, &dst[dst_pos], i);
         }
@@ -848,7 +845,7 @@ static void upipe_hd_sdi_enc_encode_line(struct upipe *upipe, int line_num, uint
 
         /* Start counting the destination from the start of the
          * chroma horizontal blanking */
-        int dst_pos = chroma_blanking;
+        int dst_pos = hanc_start;
 
         // FIXME this does not match BMD
         /* If more than a single audio packet must be put on a line

@@ -16,10 +16,14 @@ extern "C" {
 #define HBRMT_DATA_OFFSET (RTP_HEADER_SIZE + HBRMT_HEADER_ONLY_SIZE)
 #define HBRMT_LEN (ETHERNET_HEADER_LEN + IP_HEADER_MINSIZE + UDP_HEADER_SIZE + RTP_HEADER_SIZE + HBRMT_HEADER_ONLY_SIZE + HBRMT_DATA_SIZE)
 
-#define UPIPE_SDI_CHROMA_BLANKING_START    4
-/* 16 is the start of chroma horizontal blanking, where
- * audio packets must go in */
-#define UPIPE_HDSDI_CHROMA_BLANKING_START 16
+/* EAV Length
+ * Start of HANC data, technically HBI since not all lines have HANC */
+#define UPIPE_SDI_EAV_LENGTH    4
+#define UPIPE_HD_SDI_EAV_LENGTH 16
+
+/* SAV Length */
+#define UPIPE_SDI_SAV_LENGTH    4
+#define UPIPE_HD_SDI_SAV_LENGTH 8
 
 #define UPIPE_SDI_PSF_IDENT_I   0
 #define UPIPE_SDI_PSF_IDENT_PSF 1

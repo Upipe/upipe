@@ -935,12 +935,13 @@ static bool upipe_sdi_dec_handle(struct upipe *upipe, struct uref *uref,
 
     /* Parse the whole frame */
     for (int h = 0; h < f->height; h++) {
-        const uint8_t chroma_blanking = p->sd ? UPIPE_SDI_CHROMA_BLANKING_START : UPIPE_HDSDI_CHROMA_BLANKING_START;
+        /* HANC starts at end of EAV */
+        const uint8_t hanc_start = p->sd ? UPIPE_SDI_EAV_LENGTH : UPIPE_HD_SDI_EAV_LENGTH;
         int line_num = h + 1;
         
         /* Horizontal Blanking */
-        uint16_t *line = (uint16_t *)input_buf + h * f->width * 2 + chroma_blanking;
-        for (int v = 0; v < 2 * f->active_offset - chroma_blanking; v++) {
+        uint16_t *line = (uint16_t *)input_buf + h * f->width * 2 + hanc_start;
+        for (int v = 0; v < 2 * f->active_offset - hanc_start; v++) {
             const uint16_t *packet = line + v;
 
             if (p->sd) {
