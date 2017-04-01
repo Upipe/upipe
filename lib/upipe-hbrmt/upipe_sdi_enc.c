@@ -333,7 +333,7 @@ static unsigned audio_packets_per_line(const struct sdi_offsets_fmt *f)
     unsigned active_lines = f->height - 2;
 
     return (samples_per_frame + active_lines - 1) / active_lines;
-}                           
+}
 
 /* NOTE: ch_group is zero indexed */
 static int put_sd_audio_data_packet(struct upipe_sdi_enc *upipe_sdi_enc, uint16_t *dst,
@@ -390,7 +390,7 @@ static int put_sd_audio_data_packet(struct upipe_sdi_enc *upipe_sdi_enc, uint16_
             audio_words[2] |= (par & 1) << 8;
             audio_words += 3;
         }
-        
+
         total_samples++;
     }
 
@@ -820,7 +820,7 @@ static void upipe_hd_sdi_enc_encode_line(struct upipe *upipe, int line_num, uint
     }
     /* Audio control packet on Switching Line + 2 */
     else if ((line_num == p->switching_line + 2) ||
-             (f->psf_ident != UPIPE_SDI_PSF_IDENT_P && line_num == p->switching_line + p->field_offset + 2)) { 
+             (f->psf_ident != UPIPE_SDI_PSF_IDENT_P && line_num == p->switching_line + p->field_offset + 2)) {
         int dst_pos = hanc_start + 1;
         for (int i = 0; i < UPIPE_SDI_CHANNELS_PER_GROUP; i++) {
             dst_pos += put_audio_control_packet(upipe_sdi_enc, &dst[dst_pos], i);
@@ -1218,14 +1218,14 @@ static void upipe_sdi_enc_input(struct upipe *upipe, struct uref *uref,
     for (int i = 0; i < UPIPE_SDI_MAX_PLANES; i++) {
         planes[ bff][i] = input_planes[i];
         planes[!bff][i] = input_planes[i] + input_strides[i];
-    }    
+    }
 
     upipe_sdi_enc->sample_pos = 0;
 
     for (int h = 0; h < f->height; h++) {
         /* Note conversion to 1-indexed line-number */
         uint16_t *dst_line = &dst[h * f->width * 2];
-    
+
         if (upipe_sdi_enc->p->sd) {
             upipe_sdi_enc_encode_line(upipe, h+1, dst_line,
                                       planes, input_strides, samples,
