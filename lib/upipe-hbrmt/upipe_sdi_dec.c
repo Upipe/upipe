@@ -369,7 +369,7 @@ static inline int32_t extract_hd_audio_sample(struct upipe *upipe,
         parity += parity_tab[data[0] & 0xf0];
         parity += parity_tab[data[2] & 0xff];
         parity += parity_tab[data[4] & 0xff];
-        parity += parity_tab[data[6] & 0x0f];
+        parity += parity_tab[data[6] & 0x7f];
 
         if ((parity & 1) != ((data[6] >> 7) & 1)) {
             upipe_err_va(upipe, "wrong audio parity: 0x%.2x 0x%.2x 0x%.2x 0x%.2x",
