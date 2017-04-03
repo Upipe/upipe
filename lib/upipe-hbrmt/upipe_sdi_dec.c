@@ -706,7 +706,7 @@ static int parse_sd_hanc(struct upipe *upipe, const uint16_t *packet, int line_n
     return len;
 }
 
-static bool validate_anc_len(const uint16_t *packet, int left, int sd)
+static inline bool validate_anc_len(const uint16_t *packet, int left, bool sd)
 {
     int data_count = (sd ? packet[5] : packet[10]) & 0xff;
     int total_size =  S291_HEADER_SIZE + data_count + S291_FOOTER_SIZE;
@@ -976,7 +976,7 @@ static bool upipe_sdi_dec_handle(struct upipe *upipe, struct uref *uref,
             int left = hanc_len - v;
 
                 if (packet[0] == S291_ADF1 && packet[1] == S291_ADF2 && packet[2] == S291_ADF3 &&
-                    validate_anc_len(packet, left, p->sd))
+                    validate_anc_len(packet, left, true))
                 {
                     v += parse_sd_hanc(upipe, packet, line_num, &audio_ctx) - 1;
                 }
@@ -989,7 +989,7 @@ static bool upipe_sdi_dec_handle(struct upipe *upipe, struct uref *uref,
                 int left = hanc_len - v;
 
                 if (packet[0] == S291_ADF1 && packet[2] == S291_ADF2 && packet[4] == S291_ADF3 &&
-                    validate_anc_len(packet, left, p->sd))
+                    validate_anc_len(packet, left, false))
                 {
                     v += parse_hd_hanc(upipe, packet, line_num, &audio_ctx) - 1;
                 }
