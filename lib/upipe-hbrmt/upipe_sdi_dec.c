@@ -970,17 +970,24 @@ static bool upipe_sdi_dec_handle(struct upipe *upipe, struct uref *uref,
 
         /* Horizontal Blanking */
         uint16_t *line = (uint16_t *)input_buf + h * f->width * 2 + hanc_start;
+        if (p->sd) {
         for (int v = 0; v < hanc_len; v++) {
             const uint16_t *packet = line + v;
             int left = hanc_len - v;
 
-            if (p->sd) {
                 if (packet[0] == S291_ADF1 && packet[1] == S291_ADF2 && packet[2] == S291_ADF3 &&
                     validate_anc_len(packet, left, p->sd))
                 {
                     v += parse_sd_hanc(upipe, packet, line_num, &audio_ctx) - 1;
                 }
-            } else {
+            }
+        }
+
+        else {
+            for (int v = 0; v < hanc_len; v++) {
+                const uint16_t *packet = line + v;
+                int left = hanc_len - v;
+
                 if (packet[0] == S291_ADF1 && packet[2] == S291_ADF2 && packet[4] == S291_ADF3 &&
                     validate_anc_len(packet, left, p->sd))
                 {
