@@ -142,7 +142,7 @@ static struct upipe *upipe_freetype_alloc(struct upipe_mgr *mgr,
 
     struct upipe_freetype *upipe_freetype = upipe_freetype_from_upipe(upipe);
 
-    upipe_freetype->flow_output = flow_def;
+    upipe_freetype->flow_output = uref_dup(flow_def);
 
     if (FT_Init_FreeType(&upipe_freetype->library)) {
         uref_free(upipe_freetype->flow_output);
@@ -188,7 +188,7 @@ static void upipe_freetype_input(struct upipe *upipe, struct uref *uref, struct 
         uref_pic_flow_set_macropixel(flow_def, 1);
         uref_pic_flow_set_align(flow_def, 16);
         uref_pic_set_progressive(flow_def);
-        upipe_freetype_demand_ubuf_mgr(upipe, flow_def);
+        upipe_freetype_demand_ubuf_mgr(upipe, uref_dup(flow_def));
         upipe_freetype_store_flow_def(upipe, flow_def);
     }
 
