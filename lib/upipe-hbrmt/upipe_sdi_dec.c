@@ -254,6 +254,11 @@ static int upipe_sdi_dec_sub_control(struct upipe *upipe, int command, va_list a
     struct upipe_sdi_dec_sub *sdi_dec_sub = upipe_sdi_dec_sub_from_upipe(upipe);
 
     switch (command) {
+        case UPIPE_GET_FLOW_DEF: {
+            struct uref **p = va_arg(args, struct uref **);
+            return upipe_sdi_dec_sub_get_flow_def(upipe, p);
+        }
+
         case UPIPE_GET_OUTPUT: {
             struct upipe **p = va_arg(args, struct upipe **);
             return upipe_sdi_dec_sub_get_output(upipe, p);
@@ -1339,6 +1344,19 @@ static int upipe_sdi_dec_control(struct upipe *upipe, int command, va_list args)
             UBASE_SIGNATURE_CHECK(args, UPIPE_SDI_DEC_SIGNATURE)
             struct upipe **upipe_p = va_arg(args, struct upipe **);
             *upipe_p = upipe_sdi_dec_sub_to_upipe(&upipe_sdi_dec->audio);
+            return UBASE_ERR_NONE;
+        }
+        case UPIPE_ITERATE_SUB: {
+            struct upipe **p = va_arg(args, struct upipe **);
+            if (*p == NULL) {
+                *p = &upipe_sdi_dec->vanc.upipe;
+            } else if (*p == &upipe_sdi_dec->vanc.upipe) {
+                *p = &upipe_sdi_dec->vbi.upipe;
+            } else if (*p == &upipe_sdi_dec->vbi.upipe) {
+                *p = &upipe_sdi_dec->audio.upipe;
+            } else {
+                *p = NULL;
+            }
             return UBASE_ERR_NONE;
         }
 
