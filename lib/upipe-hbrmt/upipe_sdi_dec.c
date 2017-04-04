@@ -980,6 +980,11 @@ static bool upipe_sdi_dec_handle(struct upipe *upipe, struct uref *uref,
                 {
                     v += parse_sd_hanc(upipe, packet, line_num, &audio_ctx) - 1;
                 }
+                else
+                {
+                    /* Ancillary data packets must be contiguous and left aligned */
+                    break;
+                }
             }
         }
 
@@ -992,6 +997,11 @@ static bool upipe_sdi_dec_handle(struct upipe *upipe, struct uref *uref,
                     validate_anc_len(packet, left, false))
                 {
                     v += parse_hd_hanc(upipe, packet, line_num, &audio_ctx) - 1;
+                }
+                else
+                {
+                    /* Ancillary data packets must be contiguous and left aligned */
+                    break;
                 }
             }
         }
