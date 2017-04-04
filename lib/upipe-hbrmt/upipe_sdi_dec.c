@@ -971,9 +971,9 @@ static bool upipe_sdi_dec_handle(struct upipe *upipe, struct uref *uref,
         /* Horizontal Blanking */
         uint16_t *line = (uint16_t *)input_buf + h * f->width * 2 + hanc_start;
         if (p->sd) {
-        for (int v = 0; v < hanc_len; v++) {
-            const uint16_t *packet = line + v;
-            int left = hanc_len - v;
+            for (int v = 0; v < hanc_len; v++) {
+                const uint16_t *packet = line + v;
+                int left = hanc_len - v;
 
                 if (packet[0] == S291_ADF1 && packet[1] == S291_ADF2 && packet[2] == S291_ADF3 &&
                     validate_anc_len(packet, left, true))
@@ -986,9 +986,7 @@ static bool upipe_sdi_dec_handle(struct upipe *upipe, struct uref *uref,
                     break;
                 }
             }
-        }
-
-        else {
+        } else {
             for (int v = 0; v < hanc_len; v++) {
                 const uint16_t *packet = line + v;
                 int left = hanc_len - v;
