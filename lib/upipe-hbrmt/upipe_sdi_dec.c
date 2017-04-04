@@ -978,6 +978,7 @@ static bool upipe_sdi_dec_handle(struct upipe *upipe, struct uref *uref,
                 if (packet[0] == S291_ADF1 && packet[1] == S291_ADF2 && packet[2] == S291_ADF3 &&
                     validate_anc_len(packet, left, true))
                 {
+                    /* - 1 to compensate for v++ above */
                     v += parse_sd_hanc(upipe, packet, line_num, &audio_ctx) - 1;
                 }
                 else
@@ -994,6 +995,7 @@ static bool upipe_sdi_dec_handle(struct upipe *upipe, struct uref *uref,
                 if (packet[0] == S291_ADF1 && packet[2] == S291_ADF2 && packet[4] == S291_ADF3 &&
                     validate_anc_len(packet, left, false))
                 {
+                    /* - 1 to compensate for v++ above */
                     v += parse_hd_hanc(upipe, packet, line_num, &audio_ctx) - 1;
                 }
                 else
