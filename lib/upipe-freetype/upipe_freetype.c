@@ -181,6 +181,7 @@ static void upipe_freetype_input(struct upipe *upipe, struct uref *uref, struct 
         uref_pic_flow_add_plane(flow_def, 1, 1, 1, "y8");
         uref_pic_flow_add_plane(flow_def, 2, 1, 1, "u8");
         uref_pic_flow_add_plane(flow_def, 2, 1, 1, "v8");
+        uref_pic_flow_add_plane(flow_def, 1, 1, 1, "a8");
         uref_pic_flow_set_hsize(flow_def, h);
         uref_pic_flow_set_hsize_visible(flow_def, h);
         uref_pic_flow_set_vsize(flow_def, v);
@@ -203,6 +204,8 @@ static void upipe_freetype_input(struct upipe *upipe, struct uref *uref, struct 
 
     uint8_t *dst;
     ubase_assert(ubuf_pic_plane_write(ubuf, "y8", 0, 0, -1, -1, &dst));
+    uint8_t *dsta;
+    ubase_assert(ubuf_pic_plane_write(ubuf, "a8", 0, 0, -1, -1, &dsta));
 
     /* the pen position in 26.6 cartesian space coordinates */
     FT_Vector pen; /* untransformed origin  */
@@ -239,8 +242,10 @@ static void upipe_freetype_input(struct upipe *upipe, struct uref *uref, struct 
         }
 
         for (FT_Int i = (x < 0 ? 0 : x); i < x_max; i++)
-            for (FT_Int j = (y < 0 ? 0 : y); j < y_max; j++)
+            for (FT_Int j = (y < 0 ? 0 : y); j < y_max; j++) {
                 dst[j*h + i] |= bitmap->buffer[(j - y) * bitmap->width + (i - x)];
+                dsta[j*h + i] |= bitmap->buffer[(j - y) * bitmap->width + (i - x)];
+            }
 
         /* increment pen position */
         pen.x += slot->advance.x;
@@ -253,9 +258,12 @@ static void upipe_freetype_input(struct upipe *upipe, struct uref *uref, struct 
         for (int i = 0; i < v; i++) {
             memmove(&dst[i*h + (h - text_w) / 2], &dst[i*h], text_w);
             memset(&dst[i*h], 0, (h - text_w) / 2);
+            memmove(&dsta[i*h + (h - text_w) / 2], &dsta[i*h], text_w);
+            memset(&dsta[i*h], 0, (h - text_w) / 2);
         }
 
     ubuf_pic_plane_unmap(ubuf, "y8", 0, 0, -1, -1);
+    ubuf_pic_plane_unmap(ubuf, "a8", 0, 0, -1, -1);
 
     uref_attach_ubuf(uref, ubuf);
 
