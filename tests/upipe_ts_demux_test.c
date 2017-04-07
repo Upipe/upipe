@@ -388,7 +388,7 @@ int main(int argc, char *argv[])
 
     mp2vend_init(payload);
     uref_block_unmap(uref, 0);
-    expect_new_flow_def = 2;
+    expect_new_flow_def = 1;
     upipe_input(upipe_ts_demux, uref, NULL);
     assert(!expect_new_flow_def);
 

@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2012-2015 OpenHeadend S.A.R.L.
+ * Copyright (C) 2012-2017 OpenHeadend S.A.R.L.
  *
  * Authors: Christophe Massiot
  *
@@ -49,6 +49,8 @@ UREF_ATTR_VOID_UREF(flow, random, UREF_FLAG_FLOW_RANDOM,
 UREF_ATTR_VOID_SH(flow, error, UDICT_TYPE_FLOW_ERROR,
         error flag that may be present in any uref carrying data)
 UREF_ATTR_STRING_SH(flow, def, UDICT_TYPE_FLOW_DEF, flow definition)
+UREF_ATTR_VOID(flow, complete, "f.comp",
+        flow def flag telling an uref represents an access unit)
 UREF_ATTR_UNSIGNED_SH(flow, id, UDICT_TYPE_FLOW_ID,
         flow ID from the last split pipe)
 UREF_ATTR_STRING_SH(flow, raw_def, UDICT_TYPE_FLOW_RAWDEF, raw flow definition)
