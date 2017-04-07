@@ -1341,7 +1341,8 @@ static int upipe_ts_mux_input_set_flow_def(struct upipe *upipe,
     if (latency + input->buffer_duration > upipe_ts_mux->latency) {
         upipe_ts_mux->latency = latency + input->buffer_duration;
         upipe_ts_mux_build_flow_def(upipe_ts_mux_to_upipe(upipe_ts_mux));
-    } else if (!upipe_ts_mux->live && au_per_sec.den) { /* live mode */
+    }
+    if (upipe_ts_mux->live && au_per_sec.den) { /* live mode */
         upipe_set_max_length(input->encaps,
                 (MIN_BUFFERING + upipe_ts_mux->latency) * au_per_sec.num /
                 au_per_sec.den / UCLOCK_FREQ);
