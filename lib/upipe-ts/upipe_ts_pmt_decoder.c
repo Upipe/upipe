@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2012-2016 OpenHeadend S.A.R.L.
+ * Copyright (C) 2012-2017 OpenHeadend S.A.R.L.
  *
  * Authors: Christophe Massiot
  *
@@ -204,7 +204,8 @@ static void upipe_ts_pmtd_parse_streamtype(struct upipe *upipe,
             UBASE_FATAL(upipe, uref_flow_set_raw_def(flow_def,
                             "block.mpegts.mpegtspes.aac.sound."))
             UBASE_FATAL(upipe, uref_ts_flow_set_max_delay(flow_def, MAX_DELAY))
-            UBASE_FATAL(upipe, uref_mpga_flow_set_adts(flow_def))
+            UBASE_FATAL(upipe, uref_mpga_flow_set_encaps(flow_def,
+                            UREF_MPGA_ENCAPS_ADTS))
             break;
 
         case PMT_STREAMTYPE_VIDEO_AVC:

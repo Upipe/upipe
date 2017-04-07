@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2013-2015 OpenHeadend S.A.R.L.
+ * Copyright (C) 2013-2017 OpenHeadend S.A.R.L.
  *
  * Authors: Christophe Massiot
  *
@@ -21,7 +21,7 @@
 /** @file
  * @short Upipe module building frames from an ISO 13818-3 or 7 stream
  * This framer supports levels 1, 2, 3 of ISO/IEC 11179-3 and ISO/IEC 13818-3,
- * and ISO/IEC 13818-7 (ADTS AAC) streams
+ * and ISO/IEC 13818-7 (ADTS AAC) and ISO/IEC 14496-3 (raw AAC) streams
  */
 
 #include <upipe/ubase.h>
@@ -41,6 +41,7 @@
 #include <upipe/upipe_helper_urefcount.h>
 #include <upipe/upipe_helper_void.h>
 #include <upipe/upipe_helper_sync.h>
+#include <upipe/upipe_helper_ubuf_mgr.h>
 #include <upipe/upipe_helper_uref_stream.h>
 #include <upipe/upipe_helper_output.h>
 #include <upipe/upipe_helper_input.h>
@@ -120,8 +121,12 @@ struct upipe_mpgaf {
     struct uref *flow_def_attr;
     /** requested flow definition */
     struct uref *flow_def_requested;
-    /** requested ADTS or ASC */
-    bool asc_requested;
+    /** input AAC encapsulation */
+    enum uref_mpga_encaps encaps_input;
+    /** output AAC encapsulation */
+    enum uref_mpga_encaps encaps_output;
+    /** complete input */
+    bool complete_input;
 
     /** flow format request */
     struct urequest request;
@@ -133,6 +138,15 @@ struct upipe_mpgaf {
     unsigned int max_urefs;
     /** list of blockers (used during urequest) */
     struct uchain blockers;
+    /** buffered output uref (used during urequest) */
+    struct uref *uref_output;
+
+    /** ubuf manager */
+    struct ubuf_mgr *ubuf_mgr;
+    /** flow format packet */
+    struct uref *flow_format;
+    /** ubuf manager request */
+    struct urequest ubuf_mgr_request;
 
     /** latency in the input flow */
     uint64_t input_latency;
@@ -196,6 +210,9 @@ static bool upipe_mpgaf_handle(struct upipe *upipe, struct uref *uref,
 /** @hidden */
 static int upipe_mpgaf_check_flow_format(struct upipe *upipe,
                                          struct uref *flow_format);
+/** @hidden */
+static int upipe_mpgaf_check_ubuf_mgr(struct upipe *upipe,
+                                      struct uref *flow_format);
 
 UPIPE_HELPER_UPIPE(upipe_mpgaf, upipe, UPIPE_MPGAF_SIGNATURE)
 UPIPE_HELPER_UREFCOUNT(upipe_mpgaf, urefcount, upipe_mpgaf_free)
@@ -210,6 +227,10 @@ UPIPE_HELPER_FLOW_FORMAT(upipe_mpgaf, request, upipe_mpgaf_check_flow_format,
                          upipe_mpgaf_register_output_request,
                          upipe_mpgaf_unregister_output_request)
 UPIPE_HELPER_FLOW_DEF(upipe_mpgaf, flow_def_input, flow_def_attr)
+UPIPE_HELPER_UBUF_MGR(upipe_mpgaf, ubuf_mgr, flow_format,
+                      ubuf_mgr_request, upipe_mpgaf_check_ubuf_mgr,
+                      upipe_mpgaf_register_output_request,
+                      upipe_mpgaf_unregister_output_request)
 
 /** @internal @This flushes all dates.
  *
@@ -251,14 +272,19 @@ static struct upipe *upipe_mpgaf_alloc(struct upipe_mgr *mgr,
     upipe_mpgaf_init_input(upipe);
     upipe_mpgaf_init_flow_format(upipe);
     upipe_mpgaf_init_flow_def(upipe);
+    upipe_mpgaf_init_ubuf_mgr(upipe);
     upipe_mpgaf->flow_def_requested = NULL;
-    upipe_mpgaf->asc_requested = false;
+    upipe_mpgaf->encaps_input = upipe_mpgaf->encaps_output =
+        UREF_MPGA_ENCAPS_ADTS;
+    upipe_mpgaf->complete_input = false;
+    upipe_mpgaf->uref_output = NULL;
     upipe_mpgaf->type = UPIPE_MPGAF_UNKNOWN;
     upipe_mpgaf->input_latency = 0;
     upipe_mpgaf->has_crc = 0;
     upipe_mpgaf->profile = 0;
     upipe_mpgaf->samplerate_idx = 0;
     upipe_mpgaf->samplerate = 0;
+    upipe_mpgaf->duration_residue = 0;
     upipe_mpgaf->got_discontinuity = false;
     upipe_mpgaf->next_frame_size = -1;
     uref_init(&upipe_mpgaf->au_uref_s);
@@ -267,59 +293,6 @@ static struct upipe *upipe_mpgaf_alloc(struct upipe_mgr *mgr,
     upipe_mpgaf->sync_header[0] = 0x0;
     upipe_throw_ready(upipe);
     return upipe;
-}
-
-/** @internal @This scans for a sync word.
- *
- * @param upipe description structure of the pipe
- * @param dropped_p filled with the number of octets to drop before the sync
- * @return true if a sync word was found
- */
-static bool upipe_mpgaf_scan(struct upipe *upipe, size_t *dropped_p)
-{
-    struct upipe_mpgaf *upipe_mpgaf = upipe_mpgaf_from_upipe(upipe);
-    while (ubase_check(uref_block_scan(upipe_mpgaf->next_uref, dropped_p, 0xff))) {
-        uint8_t word;
-        if (!ubase_check(uref_block_extract(upipe_mpgaf->next_uref,
-                        *dropped_p + 1, 1, &word)))
-            return false;
-
-        if ((word & 0xe0) == 0xe0)
-            return true;
-        (*dropped_p)++;
-    }
-    return false;
-}
-
-/** @internal @This checks if a sync word begins just after the end of the
- * next frame.
- *
- * @param upipe description structure of the pipe
- * @param ready_p filled with true if a sync word was found
- * @param false if no sync word was found and resync is needed
- */
-static bool upipe_mpgaf_check_frame(struct upipe *upipe, bool *ready_p)
-{
-    struct upipe_mpgaf *upipe_mpgaf = upipe_mpgaf_from_upipe(upipe);
-    size_t size;
-    *ready_p = false;
-    if (!ubase_check(uref_block_size(upipe_mpgaf->next_uref, &size)))
-        return false;
-    if (size < upipe_mpgaf->next_frame_size)
-        return true;
-
-    uint8_t words[2];
-    if (!ubase_check(uref_block_extract(upipe_mpgaf->next_uref,
-                            upipe_mpgaf->next_frame_size, 2, words))) {
-        /* not enough data */
-        if (upipe_mpgaf->acquired) /* avoid delaying packets unnecessarily */
-            *ready_p = true;
-        return true;
-    }
-    if (words[0] != 0xff || (words[1] & 0xe0) != 0xe0)
-        return false;
-    *ready_p = true;
-    return true;
 }
 
 /** @internal @This parses a new MPEG layers 1, 2 or 3 header.
@@ -353,6 +326,9 @@ static bool upipe_mpgaf_parse_mpeg(struct upipe *upipe)
         upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
         return false;
     }
+    UBASE_FATAL(upipe, uref_flow_set_complete(flow_def))
+    UBASE_FATAL(upipe, uref_mpga_flow_set_encaps(flow_def,
+                upipe_mpgaf->encaps_input))
 
     memcpy(upipe_mpgaf->sync_header, header, MPGA_HEADER_SIZE);
 
@@ -477,6 +453,7 @@ static bool upipe_mpgaf_parse_adts(struct upipe *upipe)
         upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
         return false;
     }
+    UBASE_FATAL(upipe, uref_flow_set_complete(flow_def))
 
     upipe_mpgaf->has_crc = !adts_get_protection_absent(header);
     upipe_mpgaf->profile = adts_get_profile(header);
@@ -497,7 +474,7 @@ static bool upipe_mpgaf_parse_adts(struct upipe *upipe)
     if (samplerate <= 24000)
         /* assume SBR on low frequency streams */
         samplerate *= 2;
-    UBASE_FATAL(upipe, uref_mpga_flow_set_adts(flow_def))
+    UBASE_FATAL(upipe, uref_mpga_flow_set_encaps(flow_def, UREF_MPGA_ENCAPS_ADTS))
     UBASE_FATAL(upipe, uref_sound_flow_set_rate(flow_def, samplerate))
     UBASE_FATAL(upipe, uref_sound_flow_set_samples(flow_def, upipe_mpgaf->samples))
     UBASE_FATAL(upipe, uref_clock_set_latency(flow_def,
@@ -567,6 +544,104 @@ static bool upipe_mpgaf_parse_header(struct upipe *upipe)
     return upipe_mpgaf_parse_adts(upipe);
 }
 
+/** @internal @This checks if there are global headers and uses them.
+ *
+ * @param upipe description structure of the pipe
+ */
+static void upipe_mpgaf_handle_global(struct upipe *upipe)
+{
+    struct upipe_mpgaf *upipe_mpgaf = upipe_mpgaf_from_upipe(upipe);
+    upipe_mpgaf_sync_lost(upipe);
+
+    /* set sensible defaults */
+    upipe_mpgaf->has_crc = false;
+    upipe_mpgaf->profile = ADTS_PROFILE_LC;
+    upipe_mpgaf->samplerate_idx = 3;
+    upipe_mpgaf->samplerate = 48000;
+    upipe_mpgaf->samples = ADTS_SAMPLES_PER_BLOCK;
+    upipe_mpgaf->channels = 2;
+
+    const uint8_t *p;
+    size_t size;
+    if (!ubase_check(uref_flow_get_headers(upipe_mpgaf->flow_def_input,
+                                           &p, &size)) || size < 2)
+        return;
+
+    uint8_t profile = p[0] >> 3;
+    switch (profile) {
+        case ASC_TYPE_MAIN:
+            upipe_mpgaf->profile = ADTS_PROFILE_MAIN;
+            upipe_mpgaf->samples = p[1] & 0x4 ? 960 : 1024;
+            break;
+        default:
+            upipe_warn(upipe, "unhandled profile %"PRIu8" in ASC");
+            /* intended pass-through */
+        case ASC_TYPE_LC:
+            upipe_mpgaf->profile = ADTS_PROFILE_LC;
+            upipe_mpgaf->samples = p[1] & 0x4 ? 960 : 1024;
+            break;
+        case ASC_TYPE_SSR:
+            upipe_mpgaf->profile = ADTS_PROFILE_SSR;
+            upipe_mpgaf->samples = 256;
+            break;
+        case 0x1f:
+            upipe_warn(upipe, "unhandled profile extension in ASC");
+            return;
+    }
+
+    upipe_mpgaf->samplerate_idx = ((p[0] & 0x7) << 1) | (p[1] >> 7);
+    upipe_mpgaf->samplerate =
+        adts_samplerate_table[upipe_mpgaf->samplerate_idx];
+    /* FIXME support free sample rate */
+    upipe_mpgaf->channels = (p[1] & 0x78) >> 3;
+}
+
+/** @internal @This builds the global headers of the flow definition packet.
+ *
+ * @param upipe description structure of the pipe
+ * @param flow_def flow definition packet
+ */
+static void upipe_mpgaf_build_global(struct upipe *upipe, struct uref *flow_def)
+{
+    struct upipe_mpgaf *upipe_mpgaf = upipe_mpgaf_from_upipe(upipe);
+    if (upipe_mpgaf->type != UPIPE_MPGAF_AAC) {
+        upipe_warn(upipe, "no global headers for mpga streams");
+        return;
+    }
+
+    size_t headers_size = 2;
+    uint8_t headers[headers_size];
+    struct ubits bw;
+    ubits_init(&bw, headers, headers_size);
+
+    /* AudioSpecificConfig */
+    switch (upipe_mpgaf->profile) {
+        case ADTS_PROFILE_MAIN:
+            ubits_put(&bw, 5, ASC_TYPE_MAIN);
+            break;
+        default:
+        case ADTS_PROFILE_LC:
+            ubits_put(&bw, 5, ASC_TYPE_LC);
+            break;
+        case ADTS_PROFILE_SSR:
+            ubits_put(&bw, 5, ASC_TYPE_SSR);
+            break;
+    }
+    ubits_put(&bw, 4, upipe_mpgaf->samplerate_idx);
+    ubits_put(&bw, 4, upipe_mpgaf->channels);
+
+    /* GASpecificConfig */
+    ubits_put(&bw, 1, 0); /* frame length - 1024 samples */
+    ubits_put(&bw, 1, 0); /* !core coder */
+    ubits_put(&bw, 1, 0); /* !extension */
+
+    uint8_t *headers_end;
+    int err = ubits_clean(&bw, &headers_end);
+    ubase_assert(err);
+    UBASE_FATAL(upipe,
+            uref_flow_set_headers(flow_def, headers, headers_end - headers))
+}
+
 /** @internal @This builds the flow definition packet.
  *
  * @param upipe description structure of the pipe
@@ -583,6 +658,13 @@ static void upipe_mpgaf_build_flow_def(struct upipe *upipe)
         return;
     }
 
+    const uint8_t *p;
+    size_t size;
+    if (!ubase_check(uref_flow_get_global(flow_def)))
+        uref_flow_delete_headers(flow_def);
+    else if (!ubase_check(uref_flow_get_headers(flow_def, &p, &size)))
+        upipe_mpgaf_build_global(upipe, flow_def);
+
     if (upipe_mpgaf->samplerate) {
         UBASE_FATAL(upipe, uref_clock_set_latency(flow_def,
                     upipe_mpgaf->input_latency +
@@ -590,54 +672,15 @@ static void upipe_mpgaf_build_flow_def(struct upipe *upipe)
                     upipe_mpgaf->samplerate))
     }
 
-    if (ubase_check(uref_flow_get_global(upipe_mpgaf->flow_def_requested)) &&
-        upipe_mpgaf->type == UPIPE_MPGAF_AAC) {
-        size_t headers_size = 2;
-        uint8_t headers[headers_size];
-        struct ubits bw;
-        ubits_init(&bw, headers, headers_size);
-
-        /* AudioSpecificConfig */
-        switch (upipe_mpgaf->profile) {
-            case ADTS_PROFILE_MAIN:
-                ubits_put(&bw, 5, ASC_TYPE_MAIN);
-                break;
-            default:
-            case ADTS_PROFILE_LC:
-                ubits_put(&bw, 5, ASC_TYPE_LC);
-                break;
-            case ADTS_PROFILE_SSR:
-                ubits_put(&bw, 5, ASC_TYPE_SSR);
-                break;
-        }
-        ubits_put(&bw, 4, upipe_mpgaf->samplerate_idx);
-        ubits_put(&bw, 4, upipe_mpgaf->channels);
-
-        /* GASpecificConfig */
-        ubits_put(&bw, 1, 0); /* frame length - 1024 samples */
-        ubits_put(&bw, 1, 0); /* !core coder */
-        ubits_put(&bw, 1, 0); /* !extension */
-
-        uint8_t *headers_end;
-        int err = ubits_clean(&bw, &headers_end);
-        ubase_assert(err);
-        UBASE_FATAL(upipe,
-                uref_flow_set_headers(flow_def, headers, headers_end - headers))
-    }
-
-    upipe_mpgaf->asc_requested =
-        !ubase_check(uref_mpga_flow_get_adts(upipe_mpgaf->flow_def_requested));
-
     upipe_mpgaf_store_flow_def(upipe, flow_def);
 }
 
-/** @internal @This handles and outputs a frame.
+/** @internal @This handles a frame to prepare for output.
  *
  * @param upipe description structure of the pipe
- * @param upump_p reference to pump that generated the buffer
+ * @return pointer to uref
  */
-static void upipe_mpgaf_output_frame(struct upipe *upipe,
-                                     struct upump **upump_p)
+static struct uref *upipe_mpgaf_handle_frame(struct upipe *upipe)
 {
     struct upipe_mpgaf *upipe_mpgaf = upipe_mpgaf_from_upipe(upipe);
 
@@ -650,7 +693,7 @@ static void upipe_mpgaf_output_frame(struct upipe *upipe,
             upipe_mpgaf->next_frame_size);
     if (unlikely(uref == NULL)) {
         upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
-        return;
+        return NULL;
     }
 
     lldiv_t div = lldiv((uint64_t)upipe_mpgaf->samples * UCLOCK_FREQ +
@@ -688,20 +731,21 @@ static void upipe_mpgaf_output_frame(struct upipe *upipe,
         uref_flow_set_discontinuity(uref);
     upipe_mpgaf->got_discontinuity = false;
 
-    if (unlikely(upipe_mpgaf->flow_def == NULL))
-        upipe_mpgaf_build_flow_def(upipe);
+    return uref;
+}
 
-    if (unlikely(upipe_mpgaf->flow_def == NULL)) {
-        uref_free(uref);
-        upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
-        return;
-    }
-
-    /* Force sending and possibly negotiating flow def before converting
-     * bitstream. */
-    upipe_mpgaf_output(upipe, NULL, upump_p);
-
-    if (upipe_mpgaf->type == UPIPE_MPGAF_AAC && upipe_mpgaf->asc_requested)
+/** @internal @This outputs a frame.
+ *
+ * @param upipe description structure of the pipe
+ * @param uref pointer to uref
+ * @param upump_p reference to pump that generated the buffer
+ */
+static void upipe_mpgaf_output_frame(struct upipe *upipe, struct uref *uref,
+                                     struct upump **upump_p)
+{
+    struct upipe_mpgaf *upipe_mpgaf = upipe_mpgaf_from_upipe(upipe);
+    if (upipe_mpgaf->type == UPIPE_MPGAF_AAC &&
+        upipe_mpgaf->encaps_output == UREF_MPGA_ENCAPS_RAW)
         uref_block_resize(uref, ADTS_HEADER_SIZE +
                 (upipe_mpgaf->has_crc ? ADTS_CRC_SIZE : 0), -1);
 
@@ -729,12 +773,66 @@ static void upipe_mpgaf_promote_uref(struct upipe *upipe)
     upipe_mpgaf->duration_residue = 0;
 }
 
+/** @internal @This scans for a sync word.
+ *
+ * @param upipe description structure of the pipe
+ * @param dropped_p filled with the number of octets to drop before the sync
+ * @return true if a sync word was found
+ */
+static bool upipe_mpgaf_scan(struct upipe *upipe, size_t *dropped_p)
+{
+    struct upipe_mpgaf *upipe_mpgaf = upipe_mpgaf_from_upipe(upipe);
+    while (ubase_check(uref_block_scan(upipe_mpgaf->next_uref, dropped_p, 0xff))) {
+        uint8_t word;
+        if (!ubase_check(uref_block_extract(upipe_mpgaf->next_uref,
+                        *dropped_p + 1, 1, &word)))
+            return false;
+
+        if ((word & 0xe0) == 0xe0)
+            return true;
+        (*dropped_p)++;
+    }
+    return false;
+}
+
+/** @internal @This checks if a sync word begins just after the end of the
+ * next frame.
+ *
+ * @param upipe description structure of the pipe
+ * @param ready_p filled with true if a sync word was found
+ * @param false if no sync word was found and resync is needed
+ */
+static bool upipe_mpgaf_check_frame(struct upipe *upipe, bool *ready_p)
+{
+    struct upipe_mpgaf *upipe_mpgaf = upipe_mpgaf_from_upipe(upipe);
+    size_t size;
+    *ready_p = false;
+    if (!ubase_check(uref_block_size(upipe_mpgaf->next_uref, &size)))
+        return false;
+    if (size < upipe_mpgaf->next_frame_size)
+        return true;
+
+    uint8_t words[2];
+    if (!ubase_check(uref_block_extract(upipe_mpgaf->next_uref,
+                            upipe_mpgaf->next_frame_size, 2, words))) {
+        /* not enough data */
+        if (upipe_mpgaf->acquired || upipe_mpgaf->complete_input)
+            /* avoid delaying packets unnecessarily */
+            *ready_p = true;
+        return true;
+    }
+    if (words[0] != 0xff || (words[1] & 0xe0) != 0xe0)
+        return false;
+    *ready_p = true;
+    return true;
+}
+
 /** @internal @This tries to output frames from the queue of input buffers.
  *
  * @param upipe description structure of the pipe
  * @param upump_p reference to pump that generated the buffer
  */
-static void upipe_mpgaf_work(struct upipe *upipe, struct upump **upump_p)
+static void upipe_mpgaf_work_adts(struct upipe *upipe, struct upump **upump_p)
 {
     struct upipe_mpgaf *upipe_mpgaf = upipe_mpgaf_from_upipe(upipe);
     while (upipe_mpgaf->next_uref != NULL) {
@@ -775,9 +873,132 @@ static void upipe_mpgaf_work(struct upipe *upipe, struct upump **upump_p)
         }
 
         upipe_mpgaf_sync_acquired(upipe);
-        upipe_mpgaf_output_frame(upipe, upump_p);
+        struct uref *uref = upipe_mpgaf_handle_frame(upipe);
         upipe_mpgaf->next_frame_size = -1;
+
+        if (unlikely(upipe_mpgaf->flow_def_requested == NULL)) {
+            upipe_mpgaf->uref_output = uref;
+            return;
+        }
+
+        upipe_mpgaf_output_frame(upipe, uref, upump_p);
     }
+}
+
+/** @internal @This works on incoming raw frames (supposedly one frame per uref
+ * guaranteed by demux).
+ *
+ * @param upipe description structure of the pipe
+ * @param uref uref structure containing one frame
+ * @param upump_p reference to pump that generated the buffer
+ * @return true if the packet was handled
+ */
+static bool upipe_mpgaf_work_raw(struct upipe *upipe, struct uref *uref,
+                                 struct upump **upump_p)
+{
+    struct upipe_mpgaf *upipe_mpgaf = upipe_mpgaf_from_upipe(upipe);
+    size_t size;
+    if (unlikely(!ubase_check(uref_block_size(uref, &size)) || !size)) {
+        upipe_throw_error(upipe, UBASE_ERR_INVALID);
+        uref_free(uref);
+        return true;
+    }
+
+    if (unlikely(!upipe_mpgaf->acquired)) {
+        upipe_mpgaf_sync_acquired(upipe);
+        struct uref *flow_def = upipe_mpgaf_alloc_flow_def_attr(upipe);
+        if (unlikely(flow_def == NULL)) {
+            upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
+            return true;
+        }
+
+        UBASE_FATAL(upipe, uref_flow_set_def(flow_def, "block.aac.sound."))
+        if (upipe_mpgaf->channels) {
+            UBASE_FATAL(upipe, uref_sound_flow_set_channels(flow_def, upipe_mpgaf->channels))
+        }
+        uint64_t samplerate = upipe_mpgaf->samplerate;
+        if (samplerate <= 24000)
+            /* assume SBR on low frequency streams */
+            samplerate *= 2;
+        UBASE_FATAL(upipe,
+                uref_mpga_flow_set_encaps(flow_def, UREF_MPGA_ENCAPS_RAW))
+        UBASE_FATAL(upipe,
+                uref_sound_flow_set_rate(flow_def, samplerate))
+        UBASE_FATAL(upipe,
+                uref_sound_flow_set_samples(flow_def, upipe_mpgaf->samples))
+        UBASE_FATAL(upipe, uref_clock_set_latency(flow_def,
+                    upipe_mpgaf->input_latency +
+                    UCLOCK_FREQ * upipe_mpgaf->samples / samplerate))
+
+        /* Calculate octetrate assuming the stream is CBR. Do not take SBR into
+         * account here, as it would * 2 both the samplerate and the number of
+         * samples. */
+        uint64_t octetrate = size * upipe_mpgaf->samplerate /
+                             upipe_mpgaf->samples;
+        /* Round up to a multiple of 8 kbits/s. */
+        octetrate += 999;
+        octetrate -= octetrate % 1000;
+        upipe_mpgaf->octetrate = octetrate;
+        UBASE_FATAL(upipe, uref_block_flow_set_octetrate(flow_def, octetrate))
+
+        upipe_mpgaf_store_flow_def(upipe, NULL);
+        uref_free(upipe_mpgaf->flow_def_requested);
+        upipe_mpgaf->flow_def_requested = NULL;
+        flow_def = upipe_mpgaf_store_flow_def_attr(upipe, flow_def);
+        if (flow_def != NULL)
+            upipe_mpgaf_require_flow_format(upipe, flow_def);
+    }
+
+    if (unlikely(upipe_mpgaf->flow_def_requested == NULL))
+        return false;
+
+    lldiv_t div = lldiv((uint64_t)upipe_mpgaf->samples * UCLOCK_FREQ +
+                        upipe_mpgaf->duration_residue,
+                        upipe_mpgaf->samplerate);
+    uint64_t duration = div.quot;
+    upipe_mpgaf->duration_residue = div.rem;
+
+    /* We work on encoded data so in the DTS domain. Rebase on DTS. */
+    uint64_t date;
+#define SET_DATE(dv)                                                        \
+    if (ubase_check(uref_clock_get_dts_##dv(uref, &date)))                  \
+        uref_clock_set_dts_##dv(&upipe_mpgaf->au_uref_s, date + duration);  \
+    else if (ubase_check(uref_clock_get_dts_##dv(&upipe_mpgaf->au_uref_s,   \
+                                                 &date))) {                 \
+        uref_clock_set_dts_##dv(uref, date);                                \
+        uref_clock_set_dts_##dv(&upipe_mpgaf->au_uref_s, date + duration);  \
+    }
+    SET_DATE(sys)
+    SET_DATE(prog)
+    SET_DATE(orig)
+#undef SET_DATE
+
+    /* PTS = DTS for MPEG audio */
+    uref_clock_set_dts_pts_delay(uref, 0);
+
+    UBASE_FATAL(upipe, uref_clock_set_duration(uref, duration))
+
+    if (upipe_mpgaf->encaps_output == UREF_MPGA_ENCAPS_ADTS) {
+        uint8_t buffer[ADTS_HEADER_SIZE];
+        adts_set_sync(buffer);
+        adts_set_sampling_freq(buffer, upipe_mpgaf->samplerate_idx);
+        adts_set_channels(buffer, upipe_mpgaf->channels);
+        adts_set_length(buffer, size + ADTS_HEADER_SIZE);
+        adts_set_num_blocks(buffer, 0);
+
+        struct ubuf *ubuf =
+            ubuf_block_alloc_from_opaque(upipe_mpgaf->ubuf_mgr,
+                                         buffer, ADTS_HEADER_SIZE);
+        if (unlikely(ubuf == NULL))
+            upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
+        else {
+            ubuf_block_append(ubuf, uref_detach_ubuf(uref));
+            uref_attach_ubuf(uref, ubuf);
+        }
+    }
+
+    upipe_mpgaf_output(upipe, uref, upump_p);
+    return true;
 }
 
 /** @internal @This receives data.
@@ -795,23 +1016,43 @@ static bool upipe_mpgaf_handle(struct upipe *upipe, struct uref *uref,
     if (unlikely(ubase_check(uref_flow_get_def(uref, &def)))) {
         upipe_mpgaf->input_latency = 0;
         uref_clock_get_latency(uref, &upipe_mpgaf->input_latency);
+        upipe_mpgaf->encaps_input = uref_mpga_flow_infer_encaps(uref);
         upipe_mpgaf->type = UPIPE_MPGAF_UNKNOWN;
         if (!ubase_ncmp(def, "block.mp2."))
             upipe_mpgaf->type = UPIPE_MPGAF_MP2;
         else if (!ubase_ncmp(def, "block.aac."))
             upipe_mpgaf->type = UPIPE_MPGAF_AAC;
+        upipe_mpgaf->complete_input = ubase_check(uref_flow_get_complete(uref));
         upipe_mpgaf_store_flow_def(upipe, NULL);
         uref_free(upipe_mpgaf->flow_def_requested);
         upipe_mpgaf->flow_def_requested = NULL;
         uref = upipe_mpgaf_store_flow_def_input(upipe, uref);
         if (uref != NULL)
             upipe_mpgaf_require_flow_format(upipe, uref);
+        if (upipe_mpgaf->type == UPIPE_MPGAF_AAC &&
+            upipe_mpgaf->encaps_input == UREF_MPGA_ENCAPS_RAW)
+            upipe_mpgaf_handle_global(upipe);
         return true;
     }
 
     if (upipe_mpgaf->flow_def_requested == NULL &&
         upipe_mpgaf->flow_def_attr != NULL)
         return false;
+
+    if (upipe_mpgaf->flow_def_input == NULL) {
+        upipe_throw_error(upipe, UBASE_ERR_INVALID);
+        uref_free(uref);
+        return true;
+    }
+
+    if (upipe_mpgaf->type == UPIPE_MPGAF_AAC) {
+        switch (upipe_mpgaf->encaps_input) {
+            case UREF_MPGA_ENCAPS_RAW:
+                return upipe_mpgaf_work_raw(upipe, uref, upump_p);
+            default:
+                break;
+        }
+    }
 
     if (unlikely(ubase_check(uref_flow_get_discontinuity(uref)))) {
         /* Drop the current frame and resync. */
@@ -823,7 +1064,7 @@ static bool upipe_mpgaf_handle(struct upipe *upipe, struct uref *uref,
     }
 
     upipe_mpgaf_append_uref_stream(upipe, uref);
-    upipe_mpgaf_work(upipe, upump_p);
+    upipe_mpgaf_work_adts(upipe, upump_p);
     return true;
 }
 
@@ -861,9 +1102,38 @@ static int upipe_mpgaf_check_flow_format(struct upipe *upipe,
     if (flow_format == NULL)
         return UBASE_ERR_INVALID;
 
+    upipe_mpgaf_require_ubuf_mgr(upipe, flow_format);
+    return UBASE_ERR_NONE;
+}
+
+/** @internal @This receives the result of a ubuf manager request.
+ *
+ * @param upipe description structure of the pipe
+ * @param flow_format amended flow format
+ * @return an error code
+ */
+static int upipe_mpgaf_check_ubuf_mgr(struct upipe *upipe,
+                                      struct uref *flow_format)
+{
+    struct upipe_mpgaf *upipe_mpgaf = upipe_mpgaf_from_upipe(upipe);
+    if (flow_format == NULL)
+        return UBASE_ERR_INVALID;
+    if (upipe_mpgaf->flow_def_attr == NULL) {
+        /* temporary ubuf manager, will be overwritten later */
+        uref_free(flow_format);
+        return UBASE_ERR_NONE;
+    }
+
     uref_free(upipe_mpgaf->flow_def_requested);
     upipe_mpgaf->flow_def_requested = flow_format;
+    upipe_mpgaf->encaps_output = uref_mpga_flow_infer_encaps(flow_format);
+
     upipe_mpgaf_build_flow_def(upipe);
+
+    if (upipe_mpgaf->uref_output) {
+        upipe_mpgaf_output_frame(upipe, upipe_mpgaf->uref_output, NULL);
+        upipe_mpgaf->uref_output = NULL;
+    }
 
     bool was_buffered = !upipe_mpgaf_check_input(upipe);
     upipe_mpgaf_output_input(upipe);
@@ -954,8 +1224,10 @@ static void upipe_mpgaf_free(struct upipe *upipe)
     upipe_mpgaf_clean_input(upipe);
     upipe_mpgaf_clean_output(upipe);
     uref_free(upipe_mpgaf->flow_def_requested);
+    uref_free(upipe_mpgaf->uref_output);
     upipe_mpgaf_clean_flow_format(upipe);
     upipe_mpgaf_clean_flow_def(upipe);
+    upipe_mpgaf_clean_ubuf_mgr(upipe);
     upipe_mpgaf_clean_sync(upipe);
 
     upipe_mpgaf_clean_urefcount(upipe);

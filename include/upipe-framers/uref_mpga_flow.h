@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2015 OpenHeadend S.A.R.L.
+ * Copyright (C) 2015-2017 OpenHeadend S.A.R.L.
  *
  * Authors: Christophe Massiot
  *
@@ -37,8 +37,33 @@ extern "C" {
 #include <upipe/uref.h>
 #include <upipe/uref_attr.h>
 
+/** @This defines encapsulation types for AAC. */
+enum uref_mpga_encaps {
+    /** No encapsulation */
+    UREF_MPGA_ENCAPS_RAW = 0,
+    /** ADTS encapsulation */
+    UREF_MPGA_ENCAPS_ADTS
+    /* TODO LOAS and LATM */
+};
+
+UREF_ATTR_SMALL_UNSIGNED(mpga_flow, encaps, "mpga.encaps", AAC encapsulation type)
 UREF_ATTR_SMALL_UNSIGNED(mpga_flow, mode, "mpga.mode", MPEG audio mode)
-UREF_ATTR_VOID(mpga_flow, adts, "mpga.adts", MPEG-2 AAC ADTS)
+
+/** @This infers the encapsulation type from a flow definition packet.
+ *
+ * @param flow_def flow definition packet
+ * @return encapsulation type
+ */
+static inline enum uref_mpga_encaps
+    uref_mpga_flow_infer_encaps(struct uref *flow_def)
+{
+    uint8_t encaps;
+    if (ubase_check(uref_mpga_flow_get_encaps(flow_def, &encaps)))
+        return encaps;
+    else if (ubase_check(uref_flow_get_global(flow_def)))
+        return UREF_MPGA_ENCAPS_RAW;
+    return UREF_MPGA_ENCAPS_ADTS;
+}
 
 #ifdef __cplusplus
 }
