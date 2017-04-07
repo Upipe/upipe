@@ -169,6 +169,35 @@ static void upipe_netmap_source_worker(struct upump *upump)
     struct netmap_ring *rxring = NETMAP_RXRING(upipe_netmap_source->d->nifp,
             upipe_netmap_source->ring_idx);
 
+    uint32_t cur = rxring->cur;
+    uint64_t slab = 0;
+    while (cur != rxring->tail) {
+        slab += rxring->slot[cur].len;
+
+        cur = nm_ring_next(rxring, cur);
+    }
+
+    if (!cur)
+        return;
+
+    struct uref *uref = uref_block_alloc(upipe_netmap_source->uref_mgr,
+                                         upipe_netmap_source->ubuf_mgr,
+                                         slab);
+    if (unlikely(uref == NULL)) {
+        upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
+        return;
+    }
+
+    uint8_t *buffer;
+    int output_size = -1;
+    if (unlikely(!ubase_check(uref_block_write(uref, 0, &output_size,
+                                               &buffer)))) {
+        uref_free(uref);
+        upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
+        return;
+    }
+
+    uint64_t pkts = 0;
     while (!nm_ring_empty(rxring)) {
         const uint32_t cur = rxring->cur;
         uint8_t *src = (uint8_t*)NETMAP_BUF(rxring, rxring->slot[cur].buf_idx);
@@ -184,32 +213,27 @@ static void upipe_netmap_source_worker(struct upump *upump)
         const uint8_t *rtp = udp_payload(udp);
         uint16_t payload_len = udp_get_len(udp) - UDP_HEADER_SIZE;
 
-        struct uref *uref = uref_block_alloc(upipe_netmap_source->uref_mgr,
-                                             upipe_netmap_source->ubuf_mgr,
-                                             payload_len);
-        if (unlikely(uref == NULL)) {
-            upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
-            return;
-        }
-
-        uint8_t *buffer;
-        int output_size = -1;
-        if (unlikely(!ubase_check(uref_block_write(uref, 0, &output_size,
-                                                   &buffer)))) {
-            uref_free(uref);
-            upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
-            return;
-        }
-
-        memcpy(buffer, rtp, payload_len);
-        uref_block_unmap(uref, 0);
-
-        uref_clock_set_cr_sys(uref, systime);
-
-        upipe_netmap_source_output(upipe, uref, &upipe_netmap_source->upump);
+        memcpy(&buffer[pkts*payload_len], rtp, payload_len);
+        pkts++;
 next:
         rxring->head = rxring->cur = nm_ring_next(rxring, cur);
     }
+    uref_block_unmap(uref, 0);
+
+
+    for (uint64_t pkt = 0; pkt < pkts; pkt++) {
+        /* XXX: assumes payloads all the same size */
+        struct uref *uref2 = uref_block_splice(uref, pkt*(1376+8+12), (1376+8+12));
+        if (!uref2) {
+            upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
+            return;
+        }
+
+        uref_clock_set_cr_sys(uref2, systime);
+
+        upipe_netmap_source_output(upipe, uref2, &upipe_netmap_source->upump);
+    }
+    uref_free(uref);    
 }
 
 /** @internal @This checks if the pump may be allocated.
