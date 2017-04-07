@@ -19,7 +19,7 @@
  */
 
 /** @file
- * @short Upipe module building frames from chunks of an ISO 13818-10-B stream
+ * @short Upipe module building frames from chunks of an ITU-T H.265 stream
  */
 
 #ifndef _UPIPE_FRAMERS_UPIPE_H265_FRAMER_H_

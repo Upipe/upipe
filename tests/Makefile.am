@@ -24,6 +24,7 @@ dist_check_DATA = \
 	uprobe_stdio_color_test.txt \
 	uprobe_prefix_test.txt \
 	upipe_ts_test.ts \
+	upipe_h264_framer_test.h \
 	uref_uri_test.txt \
 	ustring_test.txt \
 	upipe_m3u_reader_test_files/1.m3u \
@@ -246,6 +247,7 @@ check_PROGRAMS += \
 	upipe_rtp_test \
 	upipe_mpgv_framer_test \
 	upipe_mpga_framer_test \
+	upipe_h264_framer_test \
 	upipe_a52_framer_test \
 	upipe_video_trim_test \
 	upipe_ts_check_test \
@@ -281,6 +283,7 @@ TESTS += \
 	upipe_rtp_test \
 	upipe_mpgv_framer_test \
 	upipe_mpga_framer_test \
+	upipe_h264_framer_test \
 	upipe_a52_framer_test \
 	upipe_video_trim_test \
 	upipe_ts_check_test \
@@ -313,7 +316,6 @@ TESTS += \
 
 if HAVE_EV
 check_PROGRAMS += \
-	upipe_h264_framer_test \
 	upipe_ts_scte35_probe_test \
 	upipe_ts_test
 TESTS += \
@@ -322,7 +324,9 @@ TESTS += \
 endif
 
 if HAVE_X264
-check_PROGRAMS += upipe_x264_test
+check_PROGRAMS += \
+	upipe_x264_test \
+	upipe_h264_framer_test_build
 TESTS += upipe_x264_test
 endif
 endif
@@ -455,6 +459,8 @@ upipe_speexdsp_test_LDADD = $(LDADD) $(top_builddir)/lib/upipe-speexdsp/libupipe
 
 upipe_x264_test_LDADD = $(LDADD) $(X264_LIBS) $(top_builddir)/lib/upipe-x264/libupipe_x264.la
 upipe_x264_test_CFLAGS = $(AM_CFLAGS) $(X264_CFLAGS)
+upipe_h264_framer_test_build_LDADD = $(LDADD) $(X264_LIBS) $(top_builddir)/lib/upipe-x264/libupipe_x264.la
+upipe_h264_framer_test_build_CFLAGS = $(AM_CFLAGS) $(X264_CFLAGS)
 
 upipe_alsa_sink_test_LDADD = $(LDADD) -lasound $(top_builddir)/lib/upipe-alsa/libupipe_alsa.la $(top_builddir)/lib/upipe-modules/libupipe_modules.la -lev $(top_builddir)/lib/upump-ev/libupump_ev.la
 upump_ecore_test_LDADD = $(LDADD) $(ECORE_LIBS) $(top_builddir)/lib/upump-ecore/libupump_ecore.la

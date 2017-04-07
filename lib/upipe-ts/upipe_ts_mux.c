@@ -63,8 +63,8 @@
 #include <upipe/upipe_helper_inner.h>
 #include <upipe/upipe_helper_bin_input.h>
 #include <upipe/upipe_helper_subpipe.h>
-#include <upipe-framers/uref_h264_flow.h>
 #include <upipe-framers/uref_h265_flow.h>
+#include <upipe-framers/uref_h26x_flow.h>
 #include <upipe-framers/uref_mpga_flow.h>
 #include <upipe-framers/uref_mpgv_flow.h>
 #include <upipe-ts/uref_ts_flow.h>
@@ -1373,10 +1373,8 @@ static int upipe_ts_mux_provide_flow_format(struct upipe *upipe,
     uref_flow_delete_global(flow_format);
     const char *def;
     if (likely(ubase_check(uref_flow_get_def(flow_format, &def)))) {
-        if (!ubase_ncmp(def, "block.h264."))
-            uref_h264_flow_set_annexb(flow_format);
-        else if (!ubase_ncmp(def, "block.hevc."))
-            uref_h265_flow_set_annexb(flow_format);
+        if (!ubase_ncmp(def, "block.h264.") || !ubase_ncmp(def, "block.hevc."))
+            uref_h26x_flow_set_encaps(flow_format, UREF_H26X_ENCAPS_ANNEXB);
         else if (!ubase_ncmp(def, "block.aac."))
             /* FIXME support LATM */
             uref_mpga_flow_set_encaps(flow_format, UREF_MPGA_ENCAPS_ADTS);

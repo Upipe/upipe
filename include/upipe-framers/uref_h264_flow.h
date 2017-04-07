@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2013-2015 OpenHeadend S.A.R.L.
+ * Copyright (C) 2013-2017 OpenHeadend S.A.R.L.
  *
  * Authors: Christophe Massiot
  *
@@ -38,8 +38,9 @@ extern "C" {
 #include <upipe/uref_attr.h>
 
 UREF_ATTR_SMALL_UNSIGNED(h264_flow, profile, "h264.profile", profile)
+UREF_ATTR_SMALL_UNSIGNED(h264_flow, profile_compatibility, "h264.profilecomp",
+        profile compatibility)
 UREF_ATTR_SMALL_UNSIGNED(h264_flow, level, "h264.level", level)
-UREF_ATTR_VOID(h264_flow, annexb, "h264.annexb", Annex B syntax)
 
 #ifdef __cplusplus
 }

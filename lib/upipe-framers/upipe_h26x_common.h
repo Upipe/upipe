@@ -29,6 +29,9 @@
 #include <stdlib.h>
 #include <stdint.h>
 
+/** @hidden */
+enum uref_h26x_encaps;
+
 /** @This translates the h26x aspect_ratio_idc to urational */
 extern const struct urational upipe_h26xf_sar_from_idc[17];
 
@@ -76,3 +79,24 @@ uint32_t upipe_h26xf_stream_ue(struct ubuf_block_stream *s);
  * @return code read
  */
 int32_t upipe_h26xf_stream_se(struct ubuf_block_stream *s);
+
+/** @This allocates a ubuf containing an annex B header.
+ *
+ * @param ubuf_mgr pointer to ubuf manager
+ * @return pointer to ubuf containing an annex B header
+ */
+struct ubuf *upipe_h26xf_alloc_annexb(struct ubuf_mgr *ubuf_mgr);
+
+/** @This converts a frame from an encapsulation to another.
+ *
+ * @param upipe description structure of the pipe
+ * @param uref pointer to uref
+ * @param encaps_input input H26x encapsulation
+ * @param encaps_output output H26x encapsulation
+ * @param ubuf_mgr ubuf manager
+ * @param annexb_header pointer to ubuf containing an annex B startcode
+ * @return an error code
+ */
+int upipe_h26xf_convert_frame(struct uref *uref,
+        enum uref_h26x_encaps encaps_input, enum uref_h26x_encaps encaps_output,
+        struct ubuf_mgr *ubuf_mgr, struct ubuf *annexb_header);
