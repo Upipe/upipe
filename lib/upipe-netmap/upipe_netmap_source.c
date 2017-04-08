@@ -177,7 +177,7 @@ static void upipe_netmap_source_worker(struct upump *upump)
         cur = nm_ring_next(rxring, cur);
     }
 
-    if (!cur)
+    if (!slab)
         return;
 
     struct uref *uref = uref_block_alloc(upipe_netmap_source->uref_mgr,
