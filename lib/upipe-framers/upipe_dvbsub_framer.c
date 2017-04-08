@@ -183,6 +183,7 @@ static void upipe_dvbsubf_work(struct upipe *upipe, struct upump **upump_p)
             goto upipe_dvbsubf_work_err;
         }
 
+        UBASE_FATAL(upipe, uref_flow_set_complete(flow_def))
         UBASE_FATAL(upipe, uref_block_flow_set_octetrate(flow_def,
                                 display_def ? TB_RATE_DVBSUB_DISP :
                                               TB_RATE_DVBSUB))
