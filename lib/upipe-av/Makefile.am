@@ -1,12 +1,26 @@
+NULL =
 lib_LTLIBRARIES = libupipe_av.la
 BUILT_SOURCES = upipe_av_codecs.h
 
 nodist_libupipe_av_la_SOURCES = upipe_av_codecs.h
 CLEANFILES = upipe_av_codecs.h
-libupipe_av_la_SOURCES = upipe_av.c upipe_av_internal.h upipe_av_codecs.c upipe_avformat_sink.c upipe_avformat_source.c upipe_avcodec_decode.c upipe_avcodec_encode.c upipe_av_codecs.pl avcodec_include.h
+libupipe_av_la_SOURCES = \
+	upipe_av.c \
+	upipe_av_internal.h \
+	upipe_av_codecs.c \
+	upipe_avformat_sink.c \
+	upipe_avformat_source.c \
+	upipe_avcodec_decode.c \
+	upipe_avcodec_encode.c \
+	upipe_av_codecs.pl \
+	avcodec_include.h \
+	$(NULL)
+
 libupipe_av_la_CPPFLAGS = -I$(top_builddir)/include -I$(top_srcdir)/include -I$(builddir)
 libupipe_av_la_CFLAGS = $(AM_CFLAGS) $(AVFORMAT_CFLAGS)
-libupipe_av_la_LIBADD = $(top_builddir)/lib/upipe/libupipe.la $(AVFORMAT_LIBS)
+libupipe_av_la_LIBADD = $(top_builddir)/lib/upipe/libupipe.la \
+			$(top_builddir)/lib/upipe-modules/libupipe_modules.la \
+			$(AVFORMAT_LIBS)
 libupipe_av_la_LDFLAGS = -no-undefined
 
 pkgconfigdir = $(libdir)/pkgconfig
