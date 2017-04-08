@@ -388,7 +388,11 @@ static void upipe_ts_pmtd_parse_descs(struct upipe *upipe,
                     UBASE_FATAL(upipe,
                             uref_ts_flow_set_component_type(flow_def,
                                 desc50_get_component_type(desc)))
+                    UBASE_FATAL(upipe,
+                            uref_ts_flow_set_component_tag(flow_def,
+                                desc50_get_component_tag(desc)))
                 }
+                copy = true;
                 break;
 
             case 0x51: /* Mosaic descriptor */
@@ -403,6 +407,7 @@ static void upipe_ts_pmtd_parse_descs(struct upipe *upipe,
                                 "block.mpegts.mpegtspes.dvb_teletext.pic.sub."))
                     UBASE_FATAL(upipe, uref_ts_flow_set_max_delay(flow_def,
                                     MAX_DELAY_TELX))
+                    UBASE_FATAL(upipe, uref_flow_set_complete(flow_def))
 
                     uint8_t j = 0;
                     uint8_t *language;
@@ -433,6 +438,7 @@ static void upipe_ts_pmtd_parse_descs(struct upipe *upipe,
                                 "block.mpegts.mpegtspes.dvb_subtitle.pic.sub."))
                     UBASE_FATAL(upipe, uref_ts_flow_set_max_delay(flow_def,
                                     MAX_DELAY_DVBSUB))
+                    UBASE_FATAL(upipe, uref_flow_set_complete(flow_def))
 
                     uint8_t j = 0;
                     uint8_t *language;
