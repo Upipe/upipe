@@ -311,6 +311,14 @@ static struct upipe *upipe_h265f_alloc(struct upipe_mgr *mgr,
     upipe_h265f->pps_rap = UINT64_MAX;
     upipe_h265f->iframe_rap = UINT64_MAX;
     upipe_h265f->input_latency = 0;
+    upipe_h265f->profile_space = 0;
+    upipe_h265f->tier = false;
+    upipe_h265f->profile_idc = 0;
+    upipe_h265f->profile_compatibility = 0;
+    upipe_h265f->level_idc = 0;
+    upipe_h265f->general_progressive = 0;
+    upipe_h265f->general_interlaced = 0;
+    upipe_h265f->constraint_indicator = 0;
     upipe_h265f->pic_struct = -1;
     upipe_h265f->duration = 0;
     upipe_h265f->got_discontinuity = false;
@@ -416,6 +424,9 @@ static void upipe_h265f_stream_parse_ptl(struct upipe *upipe,
     constraint_indicator |=
         (uint64_t)ubuf_block_stream_show_bits(s, 16);
     ubuf_block_stream_skip_bits(s, 16);
+    if (constraint_indicator_p != NULL)
+        *constraint_indicator_p = constraint_indicator;
+
     upipe_h26xf_stream_fill_bits(s, 8);
     uint8_t level_idc = ubuf_block_stream_show_bits(s, 8);
     ubuf_block_stream_skip_bits(s, 8);
