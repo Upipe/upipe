@@ -99,7 +99,7 @@ struct upipe_netmap_source {
     /** netmap descriptor **/
     struct nm_desc *d;
 
-    /** netmape uri **/
+    /** netmap uri **/
     char *uri;
 
     /** netmap ring **/
