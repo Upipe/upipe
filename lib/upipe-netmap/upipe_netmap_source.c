@@ -30,6 +30,7 @@
 #include <upipe/uref.h>
 #include <upipe/uref_block.h>
 #include <upipe/uref_block_flow.h>
+#include <upipe/uref_pic_flow.h>
 #include <upipe/uref_clock.h>
 #include <upipe/upump.h>
 #include <upipe/ubuf.h>
@@ -53,9 +54,10 @@
 
 #include <poll.h>
 
+#include <bitstream/ieee/ethernet.h>
 #include <bitstream/ietf/ip.h>
 #include <bitstream/ietf/udp.h>
-#include <bitstream/ieee/ethernet.h>
+#include <bitstream/ietf/rtp.h>
 
 /** @hidden */
 static int upipe_netmap_source_check(struct upipe *upipe, struct uref *flow_format);
@@ -105,6 +107,34 @@ struct upipe_netmap_source {
     /** netmap ring **/
     unsigned int ring_idx;
 
+    /** got a discontinuity */
+    bool discontinuity;
+
+    /** expected sequence number */
+    int expected_seqnum;
+
+    /** Packed block destination */
+    uint8_t *dst_buf;
+    int dst_size;
+
+    /** current frame **/
+    struct uref *uref;
+    
+    /** frame number */
+    uint64_t frame;
+
+    /* SDI offsets */
+    const struct sdi_offsets_fmt *f;
+
+    /** unpack */
+    void (*sdi_to_uyvy)(const uint8_t *src, uint16_t *y, uintptr_t pixels);
+
+    /** unpack scratch buffer */
+    uint8_t unpack_scratch_buffer[5];
+
+    /** bytes in scratch buffer */
+    uint8_t unpack_scratch_buffer_count;
+    
     /** public upipe structure */
     struct upipe upipe;
 };
@@ -152,11 +182,256 @@ static struct upipe *upipe_netmap_source_alloc(struct upipe_mgr *mgr,
     upipe_netmap_source_init_uclock(upipe);
     upipe_netmap_source->uri = NULL;
     upipe_netmap_source->d = NULL;
+    
+    upipe_netmap_source->uref     = NULL;
+    upipe_netmap_source->dst_buf  = NULL;
+    upipe_netmap_source->dst_size = 0;
+    upipe_netmap_source->f = NULL;
+
+    upipe_netmap_source->expected_seqnum = -1;
+    upipe_netmap_source->discontinuity = false;
+    upipe_netmap_source->frame = 0;
+    upipe_netmap_source->unpack_scratch_buffer_count = 0;
+
+    upipe_netmap_source->sdi_to_uyvy = upipe_sdi_unpack_c;
+
+#if defined(__i686__) || defined(__x86_64__)
+#if !defined(__APPLE__) /* macOS clang doesn't support that builtin yet */
+#if defined(__clang__) && /* clang 3.8 doesn't know ssse3 */ \
+     (__clang_major__ < 3 || (__clang_major__ == 3 && __clang_minor__ <= 8))
+# ifdef __SSSE3__
+        if (1)
+# else
+        if (0)
+# endif
+#else
+        if (__builtin_cpu_supports("ssse3"))
+#endif
+            upipe_netmap_source->sdi_to_uyvy = upipe_sdi_to_uyvy_unaligned_ssse3;
+
+    if (__builtin_cpu_supports("avx2"))
+        upipe_netmap_source->sdi_to_uyvy = upipe_sdi_to_uyvy_unaligned_avx2;
+#endif
+#endif  
+    
     upipe_throw_ready(upipe);
     return upipe;
 }
 
-static void upipe_netmap_source_worker(struct upump *upump)
+/** @internal */
+static int upipe_netmap_source_set_flow(struct upipe *upipe, uint8_t frate, uint8_t frame)
+{
+    struct upipe_netmap_source *upipe_netmap_source = upipe_netmap_source_from_upipe(upipe);
+
+    if (frate < 0x10 || frate > 0x1b) {
+        upipe_err_va(upipe, "Invalid hbrmt frate 0x%x", frate);
+        return UBASE_ERR_INVALID;
+    }
+
+    static const struct urational frate_fps[12] = {
+        { 60,    1    }, // 0x10
+        { 60000, 1001 }, // 0x11
+        { 50,    1    }, // 0x12
+        { 0,     0    }, // 0x13
+        { 48,    1    }, // 0x14
+        { 48000, 1001 }, // 0x15
+        { 30,    1    }, // 0x16
+        { 30000, 1001 }, // 0x17
+        { 25,    1    }, // 0x18
+        { 0,     0    }, // 0x19
+        { 24,    1    }, // 0x1A
+        { 24000, 1001 }, // 0x1B
+    };
+
+    const struct urational *fps = &frate_fps[frate - 0x10];
+    if (fps->num == 0) {
+        upipe_err_va(upipe, "Invalid hbrmt frate 0x%x", frate);
+        return UBASE_ERR_INVALID;
+    }
+
+    struct uref *flow_format = uref_dup(upipe_netmap_source->flow_def);
+    uref_pic_flow_set_fps(flow_format, *fps);
+    if (frame == 0x10) {
+        uref_pic_flow_set_hsize(flow_format, 720);
+        uref_pic_flow_set_vsize(flow_format, 486);
+    } else if (frame == 0x11) {
+        uref_pic_flow_set_hsize(flow_format, 720);
+        uref_pic_flow_set_vsize(flow_format, 576);
+    } else if (frame >= 0x20 && frame <= 0x22) {
+        uref_pic_flow_set_hsize(flow_format, 1920);
+        uref_pic_flow_set_vsize(flow_format, 1080);
+    } else if (frame >= 0x23 && frame <= 0x24) {
+        uref_pic_flow_set_hsize(flow_format, 2048);
+        uref_pic_flow_set_vsize(flow_format, 1080);
+    } else if (frame == 0x30) {
+        uref_pic_flow_set_hsize(flow_format, 1280);
+        uref_pic_flow_set_vsize(flow_format, 720);
+    } else {
+        upipe_err_va(upipe, "Invalid hbrmt frame 0x%x", frame);
+        uref_free(flow_format);
+        return UBASE_ERR_INVALID;
+    }
+
+    upipe_netmap_source->f = sdi_get_offsets(flow_format);
+    if (!upipe_netmap_source->f) {
+        upipe_err(upipe, "Couldn't figure out sdi offsets");
+        uref_free(flow_format);
+        return UBASE_ERR_INVALID;
+    }
+
+    uint64_t latency;
+    if (!ubase_check(uref_clock_get_latency(flow_format, &latency)))
+        latency = 0;
+    latency += UCLOCK_FREQ * fps->den / fps->num;
+    uref_clock_set_latency(flow_format, latency);
+    upipe_netmap_source_store_flow_def(upipe, flow_format);
+
+    return UBASE_ERR_NONE;
+}
+
+/** @internal */
+static int upipe_netmap_source_alloc_output_uref(struct upipe *upipe)
+{
+    struct upipe_netmap_source *upipe_netmap_source = upipe_netmap_source_from_upipe(upipe);
+
+    const struct sdi_offsets_fmt *f = upipe_netmap_source->f;
+
+    /* Only 422 accepted, so this assumption is fine */
+    uint64_t samples = f->width * f->height * 2;
+
+    upipe_netmap_source->uref = uref_block_alloc(upipe_netmap_source->uref_mgr,
+                                                 upipe_netmap_source->ubuf_mgr,
+                                                 2 * samples);
+    if (unlikely(upipe_netmap_source->uref == NULL)) {
+        upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
+        return UBASE_ERR_ALLOC;
+    }
+
+    upipe_netmap_source->dst_size = -1;
+    if (unlikely(!ubase_check(uref_block_write(upipe_netmap_source->uref, 0,
+                                               &upipe_netmap_source->dst_size,
+                                               &upipe_netmap_source->dst_buf)))) {
+        uref_free(upipe_netmap_source->uref);
+        upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
+        return UBASE_ERR_ALLOC;
+    }
+
+    return UBASE_ERR_NONE;
+}
+
+static inline void handle_hbrmt_packet(struct upipe *upipe, struct upump *upump, 
+                                       uint8_t *src, uint16_t src_size)
+{
+    struct upipe_netmap_source *upipe_netmap_source = upipe_netmap_source_from_upipe(upipe);
+    bool marker = false;
+
+    marker = rtp_check_marker(src);
+    uint16_t seqnum = rtp_get_seqnum(src);
+
+    src_size -= RTP_HEADER_SIZE;
+    const uint8_t *hbrmt = &src[RTP_HEADER_SIZE];
+
+    if (unlikely(!upipe_netmap_source->f)) {
+        const uint8_t frate = smpte_hbrmt_get_frate(hbrmt);
+        const uint8_t frame = smpte_hbrmt_get_frame(hbrmt);
+        if (!ubase_check(upipe_netmap_source_set_flow(upipe, frate, frame)))
+            goto end;
+    }
+
+    if (unlikely(upipe_netmap_source->expected_seqnum != -1 &&
+                 seqnum != upipe_netmap_source->expected_seqnum)) {
+        upipe_warn_va(upipe, "potentially lost %d RTP packets, got %u expected %u",
+                      (seqnum + UINT16_MAX + 1 - upipe_netmap_source->expected_seqnum) &
+                      UINT16_MAX, seqnum, upipe_netmap_source->expected_seqnum);
+        upipe_netmap_source->discontinuity = true;
+    }
+
+    upipe_netmap_source->expected_seqnum = (seqnum + 1) & UINT16_MAX;
+
+    if (upipe_netmap_source->discontinuity)
+        goto end;
+
+    if (unlikely(!upipe_netmap_source->uref))
+        goto end;
+
+    src_size -= HBRMT_HEADER_ONLY_SIZE;
+    const uint8_t *payload = &hbrmt[HBRMT_HEADER_ONLY_SIZE];
+    if (smpte_hbrmt_get_clock_frequency(hbrmt)) {
+        payload += 4;
+        src_size -= 4;
+    }
+    uint8_t ext = smpte_hbrmt_get_ext(hbrmt);
+    if (ext) {
+        payload += 4 * ext;
+        src_size -= 4 * ext;
+    }
+
+    if (src_size < HBRMT_DATA_SIZE) {
+        upipe_err(upipe, "Too small packet, reading anyway");
+    }
+    int foo = src_size;
+
+    /* If there is data in the scratch buffer... */
+
+    unsigned n = upipe_netmap_source->unpack_scratch_buffer_count;
+    if (n && upipe_netmap_source->dst_size > 4 * 2) {
+        /* Copy from the new "packet" into the end... */
+        memcpy(&upipe_netmap_source->unpack_scratch_buffer[n], payload, 5 - n);
+
+        /* Advance input buffer. */
+        payload += 5-n;
+        src_size -= 5-n;
+
+        /* Unpack from the scratch buffer. */
+        upipe_sdi_unpack_c(upipe_netmap_source->unpack_scratch_buffer,
+                (uint16_t*)upipe_netmap_source->dst_buf, 2);
+
+        /* Advance output buffer by 2 pixels */
+        upipe_netmap_source->dst_buf += 4 * 2;
+        upipe_netmap_source->dst_size -= 4 * 2;
+        //printf("HI SCRATCH 2\n");
+
+        /* Set scratch count to 0. */
+        upipe_netmap_source->unpack_scratch_buffer_count = 0;
+    }
+
+    if (src_size > upipe_netmap_source->dst_size * 5 / 8) {
+        src_size = upipe_netmap_source->dst_size * 5 / 8;
+        if (!marker)
+            upipe_err_va(upipe, "Not overflowing output packet: %d, %d",
+                    src_size, upipe_netmap_source->dst_size);
+    }
+
+    int unpack_bytes = (src_size / 5) * 5;
+    int unpack_pixels = (unpack_bytes * 2) / 5;
+    upipe_netmap_source->sdi_to_uyvy(payload, (uint16_t*)upipe_netmap_source->dst_buf, unpack_pixels);
+    upipe_netmap_source->dst_buf += 4 * unpack_pixels;
+    upipe_netmap_source->dst_size -= 4 * unpack_pixels;
+
+    /* If we have any bytes remaining... */
+    if (unpack_bytes < src_size) {
+        /* Copy them into the scratch buffer. */
+        memcpy(upipe_netmap_source->unpack_scratch_buffer, &payload[unpack_bytes],
+                src_size - unpack_bytes);
+        upipe_netmap_source->unpack_scratch_buffer_count = src_size - unpack_bytes;
+    }
+
+end:
+    if ((marker || upipe_netmap_source->discontinuity) && upipe_netmap_source->uref) {
+        /* output current block */
+        uref_block_unmap(upipe_netmap_source->uref, 0);
+        upipe_netmap_source_output(upipe, upipe_netmap_source->uref, &upipe_netmap_source->upump);
+        upipe_netmap_source->uref = NULL;
+    }
+
+    if (marker) {
+        /* reset discontinuity when we see the next marker */
+        upipe_netmap_source->discontinuity = false;
+        upipe_netmap_source_alloc_output_uref(upipe);
+    }
+}
+
+static void upipe_netmap_source_worker(struct upump *upump, uint8_t *pkt)
 {
     struct upipe *upipe = upump_get_opaque(upump, struct upipe *);
     struct upipe_netmap_source *upipe_netmap_source = upipe_netmap_source_from_upipe(upipe);
@@ -168,34 +443,6 @@ static void upipe_netmap_source_worker(struct upump *upump)
     ioctl(NETMAP_FD(upipe_netmap_source->d), NIOCRXSYNC, NULL);
     struct netmap_ring *rxring = NETMAP_RXRING(upipe_netmap_source->d->nifp,
             upipe_netmap_source->ring_idx);
-
-    uint32_t cur = rxring->cur;
-    uint64_t slab = 0;
-    while (cur != rxring->tail) {
-        slab += rxring->slot[cur].len;
-
-        cur = nm_ring_next(rxring, cur);
-    }
-
-    if (!slab)
-        return;
-
-    struct uref *uref = uref_block_alloc(upipe_netmap_source->uref_mgr,
-                                         upipe_netmap_source->ubuf_mgr,
-                                         slab);
-    if (unlikely(uref == NULL)) {
-        upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
-        return;
-    }
-
-    uint8_t *buffer;
-    int output_size = -1;
-    if (unlikely(!ubase_check(uref_block_write(uref, 0, &output_size,
-                                               &buffer)))) {
-        uref_free(uref);
-        upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
-        return;
-    }
 
     uint64_t pkts = 0;
     while (!nm_ring_empty(rxring)) {
@@ -212,28 +459,14 @@ static void upipe_netmap_source_worker(struct upump *upump)
         uint8_t *udp = ip_payload(ip);
         const uint8_t *rtp = udp_payload(udp);
         uint16_t payload_len = udp_get_len(udp) - UDP_HEADER_SIZE;
+        
+        // XXX: verify packet length
 
-        memcpy(&buffer[pkts*payload_len], rtp, payload_len);
-        pkts++;
+        
+
 next:
         rxring->head = rxring->cur = nm_ring_next(rxring, cur);
-    }
-    uref_block_unmap(uref, 0);
-
-
-    for (uint64_t pkt = 0; pkt < pkts; pkt++) {
-        /* XXX: assumes payloads all the same size */
-        struct uref *uref2 = uref_block_splice(uref, pkt*(1376+8+12), (1376+8+12));
-        if (!uref2) {
-            upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
-            return;
-        }
-
-        uref_clock_set_cr_sys(uref2, systime);
-
-        upipe_netmap_source_output(upipe, uref2, &upipe_netmap_source->upump);
-    }
-    uref_free(uref);    
+    }   
 }
 
 /** @internal @This checks if the pump may be allocated.
@@ -419,6 +652,8 @@ static void upipe_netmap_source_free(struct upipe *upipe)
 
     upipe_throw_dead(upipe);
 
+    // FIXME handle mapped uref
+    uref_free(upipe_netmap_source->uref);
     free(upipe_netmap_source->uri);
     upipe_netmap_source_clean_uclock(upipe);
     upipe_netmap_source_clean_upump(upipe);
