@@ -46,6 +46,9 @@
 #include <upipe/upipe_helper_uclock.h>
 #include <upipe-netmap/upipe_netmap_source.h>
 
+#include "../upipe-hbrmt/sdidec.h"
+#include "../upipe-hbrmt/upipe_hbrmt_common.h"
+
 #include <net/if.h>
 
 #define NETMAP_WITH_LIBS
@@ -53,11 +56,6 @@
 #include <net/netmap_user.h>
 
 #include <poll.h>
-
-#include <bitstream/ieee/ethernet.h>
-#include <bitstream/ietf/ip.h>
-#include <bitstream/ietf/udp.h>
-#include <bitstream/ietf/rtp.h>
 
 /** @hidden */
 static int upipe_netmap_source_check(struct upipe *upipe, struct uref *flow_format);
@@ -119,7 +117,7 @@ struct upipe_netmap_source {
 
     /** current frame **/
     struct uref *uref;
-    
+
     /** frame number */
     uint64_t frame;
 
@@ -134,7 +132,7 @@ struct upipe_netmap_source {
 
     /** bytes in scratch buffer */
     uint8_t unpack_scratch_buffer_count;
-    
+
     /** public upipe structure */
     struct upipe upipe;
 };
@@ -182,7 +180,7 @@ static struct upipe *upipe_netmap_source_alloc(struct upipe_mgr *mgr,
     upipe_netmap_source_init_uclock(upipe);
     upipe_netmap_source->uri = NULL;
     upipe_netmap_source->d = NULL;
-    
+
     upipe_netmap_source->uref     = NULL;
     upipe_netmap_source->dst_buf  = NULL;
     upipe_netmap_source->dst_size = 0;
@@ -212,8 +210,8 @@ static struct upipe *upipe_netmap_source_alloc(struct upipe_mgr *mgr,
     if (__builtin_cpu_supports("avx2"))
         upipe_netmap_source->sdi_to_uyvy = upipe_sdi_to_uyvy_unaligned_avx2;
 #endif
-#endif  
-    
+#endif
+
     upipe_throw_ready(upipe);
     return upipe;
 }
@@ -290,7 +288,7 @@ static int upipe_netmap_source_set_flow(struct upipe *upipe, uint8_t frate, uint
 }
 
 /** @internal */
-static int upipe_netmap_source_alloc_output_uref(struct upipe *upipe)
+static int upipe_netmap_source_alloc_output_uref(struct upipe *upipe, uint64_t systime)
 {
     struct upipe_netmap_source *upipe_netmap_source = upipe_netmap_source_from_upipe(upipe);
 
@@ -316,11 +314,13 @@ static int upipe_netmap_source_alloc_output_uref(struct upipe *upipe)
         return UBASE_ERR_ALLOC;
     }
 
+    uref_clock_set_cr_sys(upipe_netmap_source->uref, systime);
+    
     return UBASE_ERR_NONE;
 }
 
-static inline void handle_hbrmt_packet(struct upipe *upipe, struct upump *upump, 
-                                       uint8_t *src, uint16_t src_size)
+static inline void handle_hbrmt_packet(struct upipe *upipe, struct upump *upump,
+                                       uint8_t *src, uint16_t src_size, uint64_t systime)
 {
     struct upipe_netmap_source *upipe_netmap_source = upipe_netmap_source_from_upipe(upipe);
     bool marker = false;
@@ -354,8 +354,8 @@ static inline void handle_hbrmt_packet(struct upipe *upipe, struct upump *upump,
     if (unlikely(!upipe_netmap_source->uref))
         goto end;
 
-    src_size -= HBRMT_HEADER_ONLY_SIZE;
-    const uint8_t *payload = &hbrmt[HBRMT_HEADER_ONLY_SIZE];
+    src_size -= HBRMT_HEADER_SIZE;
+    const uint8_t *payload = &hbrmt[HBRMT_HEADER_SIZE];
     if (smpte_hbrmt_get_clock_frequency(hbrmt)) {
         payload += 4;
         src_size -= 4;
@@ -427,11 +427,11 @@ end:
     if (marker) {
         /* reset discontinuity when we see the next marker */
         upipe_netmap_source->discontinuity = false;
-        upipe_netmap_source_alloc_output_uref(upipe);
+        upipe_netmap_source_alloc_output_uref(upipe, systime);
     }
 }
 
-static void upipe_netmap_source_worker(struct upump *upump, uint8_t *pkt)
+static void upipe_netmap_source_worker(struct upump *upump)
 {
     struct upipe *upipe = upump_get_opaque(upump, struct upipe *);
     struct upipe_netmap_source *upipe_netmap_source = upipe_netmap_source_from_upipe(upipe);
@@ -460,10 +460,9 @@ static void upipe_netmap_source_worker(struct upump *upump, uint8_t *pkt)
         const uint8_t *rtp = udp_payload(udp);
         uint16_t payload_len = udp_get_len(udp) - UDP_HEADER_SIZE;
         
-        // XXX: verify packet length
-
+        if (payload_len == HBRMT_DATA_SIZE)
+            upipe_netmap_source_alloc_output_uref(upipe, systime);
         
-
 next:
         rxring->head = rxring->cur = nm_ring_next(rxring, cur);
     }   
@@ -652,7 +651,8 @@ static void upipe_netmap_source_free(struct upipe *upipe)
 
     upipe_throw_dead(upipe);
 
-    // FIXME handle mapped uref
+    if (upipe_netmap_source->uref)
+        uref_block_unmap(upipe_netmap_source->uref, 0);
     uref_free(upipe_netmap_source->uref);
     free(upipe_netmap_source->uri);
     upipe_netmap_source_clean_uclock(upipe);

@@ -9,9 +9,8 @@ extern "C" {
 #include <bitstream/ieee/ethernet.h>
 #include <bitstream/ietf/ip.h>
 #include <bitstream/ietf/udp.h>
+#include <bitstream/smpte/2022_6_hbrmt.h>
 
-#define HBRMT_HEADER_ONLY_SIZE 8
-#define HBRMT_DATA_SIZE 1376
 #define RAW_HEADER_SIZE (IP_HEADER_MINSIZE + UDP_HEADER_SIZE)
 #define HBRMT_DATA_OFFSET (RTP_HEADER_SIZE + HBRMT_HEADER_ONLY_SIZE)
 #define HBRMT_LEN (ETHERNET_HEADER_LEN + IP_HEADER_MINSIZE + UDP_HEADER_SIZE + RTP_HEADER_SIZE + HBRMT_HEADER_ONLY_SIZE + HBRMT_DATA_SIZE)
