@@ -337,8 +337,8 @@ static void upipe_hbrmt_dec_input(struct upipe *upipe, struct uref *uref,
     if (unlikely(!upipe_hbrmt_dec->ubuf))
         goto end;
 
-    src_size -= HBRMT_HEADER_ONLY_SIZE;
-    const uint8_t *payload = &hbrmt[HBRMT_HEADER_ONLY_SIZE];
+    src_size -= HBRMT_HEADER_SIZE;
+    const uint8_t *payload = &hbrmt[HBRMT_HEADER_SIZE];
     if (smpte_hbrmt_get_clock_frequency(hbrmt)) {
         payload += 4;
         src_size -= 4;
