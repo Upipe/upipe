@@ -351,7 +351,8 @@ static uint64_t uclock_netmap_sink_now(struct uclock *uclock)
     struct upipe_netmap_sink *upipe_netmap_sink = upipe_netmap_sink_from_uclock(uclock);
     struct upipe *upipe = &upipe_netmap_sink->upipe;
 
-    struct upipe_netmap_intf *intf = &upipe_netmap_sink->intf[0 /* FIXME */];
+    // seems to work even with intf down
+    struct upipe_netmap_intf *intf = &upipe_netmap_sink->intf[0];
 
     struct ifreq ifr = intf->ifr;
     struct {
@@ -762,7 +763,8 @@ static int worker_hbrmt(struct upipe *upipe, uint8_t **dst, const uint8_t *src,
 {
     struct upipe_netmap_sink *upipe_netmap_sink = upipe_netmap_sink_from_upipe(upipe);
     const uint8_t packed_bytes = upipe_netmap_sink->packed_bytes;
-    bool copy = dst[1] != NULL;
+    bool copy = dst[1] != NULL && dst[0] != NULL;
+    int idx = (dst[0] != NULL) ? 0 : 1;
 
     /* available payload size */
     int pack_bytes_left = bytes_left * 5 / 8 + packed_bytes;
@@ -789,10 +791,10 @@ static int worker_hbrmt(struct upipe *upipe, uint8_t **dst, const uint8_t *src,
         (frame_duration * upipe_netmap_sink->pkt++ * HBRMT_DATA_SIZE) /
         upipe_netmap_sink->frame_size;
 
-    for (size_t i = 0; i < (copy ? 2 : 1); i++) {
+    for (size_t i = 0; i < 2; i++) {
         struct upipe_netmap_intf *intf = &upipe_netmap_sink->intf[i];
-        if (!intf->d)
-            break;
+        if (!intf->d || !intf->up)
+            continue;
 
         uint8_t *header = &intf->header[0];
 
@@ -824,7 +826,7 @@ static int worker_hbrmt(struct upipe *upipe, uint8_t **dst, const uint8_t *src,
     if (copy)
         upipe_netmap_sink->pack2(dst[0], dst[1], src, pixels);
     else
-        upipe_netmap_sink->pack(dst[0], src, pixels);
+        upipe_netmap_sink->pack(dst[idx], src, pixels);
 
     /* bytes these pixels decoded to */
     int bytes = pixels * 4 * 5 / 8;
@@ -833,7 +835,7 @@ static int worker_hbrmt(struct upipe *upipe, uint8_t **dst, const uint8_t *src,
     int pkt_rem = bytes - (payload_len - packed_bytes);
     assert(pkt_rem <= sizeof(upipe_netmap_sink->packed_pixels));
     if (pkt_rem > 0) {
-        memcpy(upipe_netmap_sink->packed_pixels, dst[0] + bytes - pkt_rem, pkt_rem);
+        memcpy(upipe_netmap_sink->packed_pixels, dst[idx] + bytes - pkt_rem, pkt_rem);
         if (copy)
             memcpy(upipe_netmap_sink->packed_pixels, dst[1] + bytes - pkt_rem, pkt_rem);
     }
@@ -843,13 +845,13 @@ static int worker_hbrmt(struct upipe *upipe, uint8_t **dst, const uint8_t *src,
 
     /* padding */
     if (payload_len != HBRMT_DATA_SIZE) {
-        memset(dst[0] + payload_len, 0, HBRMT_DATA_SIZE - payload_len);
+        memset(dst[idx] + payload_len, 0, HBRMT_DATA_SIZE - payload_len);
         if (copy)
             memset(dst[1] + payload_len, 0, HBRMT_DATA_SIZE - payload_len);
     }
 
     /* packet size */
-    *len[0] = ETHERNET_HEADER_LEN + IP_HEADER_MINSIZE + UDP_HEADER_SIZE +
+    *len[idx] = ETHERNET_HEADER_LEN + IP_HEADER_MINSIZE + UDP_HEADER_SIZE +
         RTP_HEADER_SIZE + HBRMT_HEADER_SIZE + HBRMT_DATA_SIZE;
     if (copy)
         *len[1] = *len[0];
@@ -868,6 +870,10 @@ static void upipe_resync_queues(struct upipe *upipe, uint32_t packets)
 
     struct upipe_netmap_intf *intf0 = &upipe_netmap_sink->intf[0];
     struct upipe_netmap_intf *intf1 = &upipe_netmap_sink->intf[1];
+    if (!intf0->up) {
+        intf1 = &upipe_netmap_sink->intf[0];
+        intf0 = &upipe_netmap_sink->intf[1];
+    }
 
     struct netmap_ring *txring0 = NETMAP_TXRING(intf0->d->nifp, intf0->ring_idx);
     struct netmap_ring *txring1 = NETMAP_TXRING(intf1->d->nifp, intf1->ring_idx);
@@ -923,13 +929,15 @@ static void upipe_netmap_sink_worker(struct upump *upump)
 
     struct netmap_ring *txring[2] = { NULL, NULL };
     uint32_t cur[2];
-    uint32_t txavail = UINT32_MAX;
     bool up[2] = {false, false};
 
     for (size_t i = 0; i < 2; i++) {
         struct upipe_netmap_intf *intf = &upipe_netmap_sink->intf[i];
         if (!intf->d)
             break;
+
+        txring[i] = NETMAP_TXRING(intf->d->nifp, intf->ring_idx);
+
         struct ifreq ifr = intf->ifr;
         if (ioctl(intf->fd, SIOCGIFFLAGS, &ifr) < 0)
             perror("ioctl");
@@ -945,14 +953,13 @@ static void upipe_netmap_sink_worker(struct upump *upump)
 
     now = uclock_now(&upipe_netmap_sink->uclock);
 
+    uint32_t txavail = UINT32_MAX;
     for (size_t i = 0; i < 2; i++) {
         struct upipe_netmap_intf *intf = &upipe_netmap_sink->intf[i];
         if (!intf->d || !up[i]) {
             txring[i] = NULL;
             continue;
         }
-
-        txring[i] = NETMAP_TXRING(intf->d->nifp, intf->ring_idx);
 
         uint32_t t = nm_ring_space(txring[i]);
 
@@ -964,19 +971,19 @@ static void upipe_netmap_sink_worker(struct upump *upump)
             }
 
             // update other NIC
-            struct upipe_netmap_intf *intf0 = &upipe_netmap_sink->intf[0];
+            struct upipe_netmap_intf *intf0 = &upipe_netmap_sink->intf[!i];
             ioctl(NETMAP_FD(intf0->d), NIOCTXSYNC, NULL);
-            txavail = nm_ring_space(txring[0]);
+            txavail = nm_ring_space(txring[!i]);
 
             // synchronize within 400 packets
-            upipe_resync_queues(upipe, txring[0]->num_slots - 1 - txavail - 400);
+            upipe_resync_queues(upipe, txring[!i]->num_slots - 1 - txavail - 400);
 
             // update NIC, should start outputting packets
             ioctl(NETMAP_FD(intf->d), NIOCTXSYNC, NULL);
 
             // update other NIC again
             ioctl(NETMAP_FD(intf0->d), NIOCTXSYNC, NULL);
-            txavail = nm_ring_space(txring[0]);
+            txavail = nm_ring_space(txring[!i]);
             t = nm_ring_space(txring[i]);
             upipe_notice_va(upipe, "RESYNCED (#1), tx0 %u tx1 %u", txavail, t);
 
@@ -988,7 +995,7 @@ static void upipe_netmap_sink_worker(struct upump *upump)
             ioctl(NETMAP_FD(intf0->d), NIOCTXSYNC, NULL);
 
             // update NIC txavail
-            txavail = nm_ring_space(txring[0]);
+            txavail = nm_ring_space(txring[!i]);
             t = nm_ring_space(txring[i]);
 
             // we're up
@@ -1004,8 +1011,19 @@ static void upipe_netmap_sink_worker(struct upump *upump)
             txavail = t;
     }
 
-    assert(txring[0]);
-    uint32_t num_slots = txring[0]->num_slots;
+    uint32_t num_slots = 0;
+    for (size_t i = 0; i < 2; i++) {
+        if (txring[i]) {
+            num_slots = txring[i]->num_slots;
+            break;
+        }
+
+    }
+
+    if (!num_slots) {
+        upipe_err(upipe, "No interface is up!");
+        return;
+    }
 
     bool ddd = false;
     {
@@ -1160,10 +1178,12 @@ static void upipe_netmap_sink_worker(struct upump *upump)
             int s = worker_hbrmt(upipe, dst, src_buf, bytes_left, len);
             src_buf += s;
             bytes_left -= s;
-            assert(*len[0] == 1438);
+
+            uint16_t l = len[0] ? *len[0] : *len[1];
+            assert(l == 1438);
 
             /* 64 bits overflows after 375 years at 1.5G */
-            upipe_netmap_sink->bits += (*len[0] + 4 /* CRC */) * 8;
+            upipe_netmap_sink->bits += (l + 4 /* CRC */) * 8;
         }
 
         txavail--;
@@ -1177,7 +1197,7 @@ static void upipe_netmap_sink_worker(struct upump *upump)
             upipe_netmap_sink->frame_count++;
             for (size_t i = 0; i < 2; i++) {
                 struct upipe_netmap_intf *intf = &upipe_netmap_sink->intf[i];
-                if (!intf->d || !intf->up)
+                if (!intf->d)
                     continue;
 
                 /* update hbrmt header */
