@@ -862,6 +862,27 @@ static float pts_to_time(uint64_t pts)
     return (float)pts / 27000;
 }
 
+static void upipe_resync_queues(struct upipe *upipe, uint32_t packets)
+{
+    struct upipe_netmap_sink *upipe_netmap_sink = upipe_netmap_sink_from_upipe(upipe);
+
+    struct upipe_netmap_intf *intf0 = &upipe_netmap_sink->intf[0];
+    struct upipe_netmap_intf *intf1 = &upipe_netmap_sink->intf[1];
+
+    struct netmap_ring *txring0 = NETMAP_TXRING(intf0->d->nifp, intf0->ring_idx);
+    struct netmap_ring *txring1 = NETMAP_TXRING(intf1->d->nifp, intf1->ring_idx);
+
+    uint32_t cur = txring1->cur;
+    for (uint32_t i = 0; i < packets; i++) {
+        uint8_t *dst = (uint8_t*)NETMAP_BUF(txring1, txring1->slot[cur].buf_idx);
+        memset(dst, 0, 1438);
+        memcpy(dst, intf1->header, ETHERNET_HEADER_LEN);
+        txring1->slot[cur].len = 1438;
+        cur = nm_ring_next(txring1, cur);
+    }
+    txring1->head = txring1->cur = cur;
+}
+
 static void upipe_netmap_sink_worker(struct upump *upump)
 {
     struct upipe *upipe = upump_get_opaque(upump, struct upipe *);
@@ -914,7 +935,11 @@ static void upipe_netmap_sink_worker(struct upump *upump)
             perror("ioctl");
         up[i] = ifr.ifr_flags & IFF_RUNNING;
         if (up[i] != intf->up) {
-            upipe_warn_va(upipe, "LINK %d went %s", i, up[i] ? "UP" : "DOWN");
+            intf->up = false; /* will come up after waiting */
+            if (!intf->wait) {
+                intf->wait = now;
+                upipe_warn_va(upipe, "LINK %d went %s", i, up[i] ? "UP" : "DOWN");
+            }
         }
     }
 
@@ -922,24 +947,61 @@ static void upipe_netmap_sink_worker(struct upump *upump)
 
     for (size_t i = 0; i < 2; i++) {
         struct upipe_netmap_intf *intf = &upipe_netmap_sink->intf[i];
-        txring[i] = NULL;
-        if (!intf->d || !up[i])
+        if (!intf->d || !up[i]) {
+            txring[i] = NULL;
             continue;
+        }
 
         txring[i] = NETMAP_TXRING(intf->d->nifp, intf->ring_idx);
-        cur[i] = txring[i]->cur;
+
         uint32_t t = nm_ring_space(txring[i]);
 
-        if (!intf->up) { // just came up
-            intf->wait = now;
+        if (intf->wait && (now - intf->wait) > UCLOCK_FREQ / 10) {
+            ioctl(NETMAP_FD(intf->d), NIOCTXSYNC, NULL); // update userspace ring
+            if (t < txring[i]->num_slots - 1) {
+                upipe_notice_va(upipe, "waiting, %u", t);
+                continue;
+            }
+
+            // update other NIC
+            struct upipe_netmap_intf *intf0 = &upipe_netmap_sink->intf[0];
+            ioctl(NETMAP_FD(intf0->d), NIOCTXSYNC, NULL);
+            txavail = nm_ring_space(txring[0]);
+
+            // synchronize within 400 packets
+            upipe_resync_queues(upipe, txring[0]->num_slots - 1 - txavail - 400);
+
+            // update NIC, should start outputting packets
+            ioctl(NETMAP_FD(intf->d), NIOCTXSYNC, NULL);
+
+            // update other NIC again
+            ioctl(NETMAP_FD(intf0->d), NIOCTXSYNC, NULL);
+            txavail = nm_ring_space(txring[0]);
+            t = nm_ring_space(txring[i]);
+            upipe_notice_va(upipe, "RESYNCED (#1), tx0 %u tx1 %u", txavail, t);
+
+            // synchronize exactly
+            upipe_resync_queues(upipe, t - txavail);
+
+            // update both NICs
+            ioctl(NETMAP_FD(intf->d), NIOCTXSYNC, NULL); // start emptying 1
+            ioctl(NETMAP_FD(intf0->d), NIOCTXSYNC, NULL);
+
+            // update NIC txavail
+            txavail = nm_ring_space(txring[0]);
+            t = nm_ring_space(txring[i]);
+
+            // we're up
+            intf->up = true;
+            intf->wait = 0;
+
+            upipe_notice_va(upipe, "RESYNCED (#2), tx0 %u tx1 %u", txavail, t);
         }
+
+        cur[i] = txring[i]->cur;
 
         if (txavail > t)
             txavail = t;
-
-        intf->up = up[i];
-        if (intf->wait)
-            up[i] = false; // pretend still down
     }
 
     assert(txring[0]);
