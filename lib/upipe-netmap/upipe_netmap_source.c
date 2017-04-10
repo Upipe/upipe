@@ -58,6 +58,8 @@
 #include <bitstream/ietf/ip.h>
 #include <bitstream/ietf/udp.h>
 #include <bitstream/ietf/rtp.h>
+#include <bitstream/smpte/2022_6_hbrmt.h>
+
 
 /** @hidden */
 static int upipe_netmap_source_check(struct upipe *upipe, struct uref *flow_format);
