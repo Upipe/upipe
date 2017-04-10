@@ -160,6 +160,12 @@ struct upipe_netmap_intf {
     // TODO: rfc
     uint8_t header[ETHERNET_HEADER_LEN + IP_HEADER_MINSIZE + UDP_HEADER_SIZE +
         RTP_HEADER_SIZE + HBRMT_HEADER_SIZE];
+
+    /** if interface is up */
+    bool up;
+
+    /** time at which intf came back up */
+    uint64_t wait;
 };
 
 /** @internal @This is the private context of a netmap sink pipe. */
@@ -447,6 +453,8 @@ static struct upipe *upipe_netmap_sink_alloc(struct upipe_mgr *mgr,
         struct upipe_netmap_intf *intf = &upipe_netmap_sink->intf[i];
         intf->maxrate_uri = NULL;
         intf->d = NULL;
+        intf->up = true;
+        intf->wait = 0;
         intf->fd = socket(AF_INET, SOCK_DGRAM, 0);
         memset(&intf->ifr, 0, sizeof(intf->ifr));
     }
@@ -895,18 +903,43 @@ static void upipe_netmap_sink_worker(struct upump *upump)
     struct netmap_ring *txring[2] = { NULL, NULL };
     uint32_t cur[2];
     uint32_t txavail = UINT32_MAX;
+    bool up[2] = {false, false};
+
+    for (size_t i = 0; i < 2; i++) {
+        struct upipe_netmap_intf *intf = &upipe_netmap_sink->intf[i];
+        if (!intf->d)
+            break;
+        struct ifreq ifr = intf->ifr;
+        if (ioctl(intf->fd, SIOCGIFFLAGS, &ifr) < 0)
+            perror("ioctl");
+        up[i] = ifr.ifr_flags & IFF_RUNNING;
+        if (up[i] != intf->up) {
+            upipe_warn_va(upipe, "LINK %d went %s", i, up[i] ? "UP" : "DOWN");
+        }
+    }
+
+    now = uclock_now(&upipe_netmap_sink->uclock);
 
     for (size_t i = 0; i < 2; i++) {
         struct upipe_netmap_intf *intf = &upipe_netmap_sink->intf[i];
         txring[i] = NULL;
-        if (!intf->d)
-            break;
+        if (!intf->d || !up[i])
+            continue;
 
         txring[i] = NETMAP_TXRING(intf->d->nifp, intf->ring_idx);
         cur[i] = txring[i]->cur;
         uint32_t t = nm_ring_space(txring[i]);
+
+        if (!intf->up) { // just came up
+            intf->wait = now;
+        }
+
         if (txavail > t)
             txavail = t;
+
+        intf->up = up[i];
+        if (intf->wait)
+            up[i] = false; // pretend still down
     }
 
     assert(txring[0]);
@@ -937,8 +970,8 @@ static void upipe_netmap_sink_worker(struct upump *upump)
         //upipe_dbg_va(upipe, "bps %" PRIu64 " -> fake", (uint64_t) bps);
         for (size_t i = 0; i < 2; i++) {
             struct upipe_netmap_intf *intf = &upipe_netmap_sink->intf[i];
-            if (!intf->d)
-                break;
+            if (!intf->d || !intf->up)
+                continue;
             uint8_t *dst = (uint8_t*)NETMAP_BUF(txring[i], txring[i]->slot[cur[i]].buf_idx);
             memset(dst, 0, 1438);
             memcpy(dst, intf->header, ETHERNET_HEADER_LEN);
@@ -1039,8 +1072,8 @@ static void upipe_netmap_sink_worker(struct upump *upump)
 
         for (size_t i = 0; i < 2; i++) {
             struct upipe_netmap_intf *intf = &upipe_netmap_sink->intf[i];
-            if (!intf->d)
-                break;
+            if (!intf->d || !intf->up)
+                continue;
 
             struct netmap_slot *slot = &txring[i]->slot[cur[i]];
 
@@ -1082,8 +1115,8 @@ static void upipe_netmap_sink_worker(struct upump *upump)
             upipe_netmap_sink->frame_count++;
             for (size_t i = 0; i < 2; i++) {
                 struct upipe_netmap_intf *intf = &upipe_netmap_sink->intf[i];
-                if (!intf->d)
-                    break;
+                if (!intf->d || !intf->up)
+                    continue;
 
                 /* update hbrmt header */
                 uint8_t *hbrmt = &intf->header[ETHERNET_HEADER_LEN +
@@ -1124,8 +1157,8 @@ static void upipe_netmap_sink_worker(struct upump *upump)
 
     for (size_t i = 0; i < 2; i++) {
         struct upipe_netmap_intf *intf = &upipe_netmap_sink->intf[i];
-        if (!intf->d)
-            break;
+        if (!intf->d || !intf->up)
+            continue;
 
         txring[i]->head = txring[i]->cur = cur[i];
         ioctl(NETMAP_FD(intf->d), NIOCTXSYNC, NULL);
