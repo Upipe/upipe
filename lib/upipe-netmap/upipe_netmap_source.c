@@ -119,7 +119,7 @@ struct upipe_netmap_source {
 
     /** current frame **/
     struct uref *uref;
-    
+
     /** frame number */
     uint64_t frame;
 
@@ -134,7 +134,7 @@ struct upipe_netmap_source {
 
     /** bytes in scratch buffer */
     uint8_t unpack_scratch_buffer_count;
-    
+
     /** public upipe structure */
     struct upipe upipe;
 };
@@ -182,7 +182,7 @@ static struct upipe *upipe_netmap_source_alloc(struct upipe_mgr *mgr,
     upipe_netmap_source_init_uclock(upipe);
     upipe_netmap_source->uri = NULL;
     upipe_netmap_source->d = NULL;
-    
+
     upipe_netmap_source->uref     = NULL;
     upipe_netmap_source->dst_buf  = NULL;
     upipe_netmap_source->dst_size = 0;
@@ -212,8 +212,8 @@ static struct upipe *upipe_netmap_source_alloc(struct upipe_mgr *mgr,
     if (__builtin_cpu_supports("avx2"))
         upipe_netmap_source->sdi_to_uyvy = upipe_sdi_to_uyvy_unaligned_avx2;
 #endif
-#endif  
-    
+#endif
+
     upipe_throw_ready(upipe);
     return upipe;
 }
@@ -319,7 +319,7 @@ static int upipe_netmap_source_alloc_output_uref(struct upipe *upipe)
     return UBASE_ERR_NONE;
 }
 
-static inline void handle_hbrmt_packet(struct upipe *upipe, struct upump *upump, 
+static inline void handle_hbrmt_packet(struct upipe *upipe, struct upump *upump,
                                        uint8_t *src, uint16_t src_size)
 {
     struct upipe_netmap_source *upipe_netmap_source = upipe_netmap_source_from_upipe(upipe);
@@ -459,14 +459,14 @@ static void upipe_netmap_source_worker(struct upump *upump, uint8_t *pkt)
         uint8_t *udp = ip_payload(ip);
         const uint8_t *rtp = udp_payload(udp);
         uint16_t payload_len = udp_get_len(udp) - UDP_HEADER_SIZE;
-        
+
         // XXX: verify packet length
 
-        
+
 
 next:
         rxring->head = rxring->cur = nm_ring_next(rxring, cur);
-    }   
+    }
 }
 
 /** @internal @This checks if the pump may be allocated.
