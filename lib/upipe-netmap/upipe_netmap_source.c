@@ -354,8 +354,8 @@ static inline void handle_hbrmt_packet(struct upipe *upipe, struct upump *upump,
     if (unlikely(!upipe_netmap_source->uref))
         goto end;
 
-    src_size -= HBRMT_HEADER_ONLY_SIZE;
-    const uint8_t *payload = &hbrmt[HBRMT_HEADER_ONLY_SIZE];
+    src_size -= HBRMT_HEADER_SIZE;
+    const uint8_t *payload = &hbrmt[HBRMT_HEADER_SIZE];
     if (smpte_hbrmt_get_clock_frequency(hbrmt)) {
         payload += 4;
         src_size -= 4;
