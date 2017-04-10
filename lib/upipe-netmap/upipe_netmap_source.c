@@ -46,6 +46,9 @@
 #include <upipe/upipe_helper_uclock.h>
 #include <upipe-netmap/upipe_netmap_source.h>
 
+#include "../upipe-hbrmt/sdidec.h"
+#include "../upipe-hbrmt/upipe_hbrmt_common.h"
+
 #include <net/if.h>
 
 #define NETMAP_WITH_LIBS
