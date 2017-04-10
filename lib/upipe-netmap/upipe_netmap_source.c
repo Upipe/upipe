@@ -431,7 +431,7 @@ end:
     }
 }
 
-static void upipe_netmap_source_worker(struct upump *upump, uint8_t *pkt)
+static void upipe_netmap_source_worker(struct upump *upump)
 {
     struct upipe *upipe = upump_get_opaque(upump, struct upipe *);
     struct upipe_netmap_source *upipe_netmap_source = upipe_netmap_source_from_upipe(upipe);
