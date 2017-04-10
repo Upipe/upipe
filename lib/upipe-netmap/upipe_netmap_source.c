@@ -315,12 +315,12 @@ static int upipe_netmap_source_alloc_output_uref(struct upipe *upipe, uint64_t s
     }
 
     uref_clock_set_cr_sys(upipe_netmap_source->uref, systime);
-    
+
     return UBASE_ERR_NONE;
 }
 
-static inline void handle_hbrmt_packet(struct upipe *upipe, struct upump *upump,
-                                       uint8_t *src, uint16_t src_size, uint64_t systime)
+static inline void handle_hbrmt_packet(struct upipe *upipe, const uint8_t *src, uint16_t src_size,
+                                       uint64_t systime)
 {
     struct upipe_netmap_source *upipe_netmap_source = upipe_netmap_source_from_upipe(upipe);
     bool marker = false;
@@ -459,13 +459,13 @@ static void upipe_netmap_source_worker(struct upump *upump)
         uint8_t *udp = ip_payload(ip);
         const uint8_t *rtp = udp_payload(udp);
         uint16_t payload_len = udp_get_len(udp) - UDP_HEADER_SIZE;
-        
-        if (payload_len == HBRMT_DATA_SIZE)
-            upipe_netmap_source_alloc_output_uref(upipe, systime);
-        
+
+        if (payload_len == (RTP_HEADER_SIZE + HBRMT_HEADER_SIZE + HBRMT_DATA_SIZE))
+            handle_hbrmt_packet(upipe, rtp, payload_len, systime);
+
 next:
         rxring->head = rxring->cur = nm_ring_next(rxring, cur);
-    }   
+    }
 }
 
 /** @internal @This checks if the pump may be allocated.
