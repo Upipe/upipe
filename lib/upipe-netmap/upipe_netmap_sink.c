@@ -153,6 +153,9 @@ struct upipe_netmap_intf {
     /** netmap descriptor **/
     struct nm_desc *d;
 
+    int fd;
+    struct ifreq ifr;
+
     /** packet headers */
     // TODO: rfc
     uint8_t header[ETHERNET_HEADER_LEN + IP_HEADER_MINSIZE + UDP_HEADER_SIZE +
@@ -244,8 +247,6 @@ struct upipe_netmap_sink {
     uint8_t packed_bytes;
 
     struct uclock uclock;
-    int fd;
-    struct ifreq ifr;
 
     struct upipe_netmap_intf intf[2];
 
@@ -344,7 +345,9 @@ static uint64_t uclock_netmap_sink_now(struct uclock *uclock)
     struct upipe_netmap_sink *upipe_netmap_sink = upipe_netmap_sink_from_uclock(uclock);
     struct upipe *upipe = &upipe_netmap_sink->upipe;
 
-    struct ifreq ifr = upipe_netmap_sink->ifr;
+    struct upipe_netmap_intf *intf = &upipe_netmap_sink->intf[0 /* FIXME */];
+
+    struct ifreq ifr = intf->ifr;
     struct {
         unsigned timinc;
         unsigned h;
@@ -352,7 +355,7 @@ static uint64_t uclock_netmap_sink_now(struct uclock *uclock)
     } foo;
 
     ifr.ifr_data = (void*)&foo;
-    if (ioctl(upipe_netmap_sink->fd, SIOCDEVPRIVATE, &ifr) < 0)
+    if (ioctl(intf->fd, SIOCDEVPRIVATE, &ifr) < 0)
         perror("ioctl");
 
     // 1 cycle is 6.4ns in 10G, 64ns in 1G, 640ns in 100Mbps
@@ -444,6 +447,8 @@ static struct upipe *upipe_netmap_sink_alloc(struct upipe_mgr *mgr,
         struct upipe_netmap_intf *intf = &upipe_netmap_sink->intf[i];
         intf->maxrate_uri = NULL;
         intf->d = NULL;
+        intf->fd = socket(AF_INET, SOCK_DGRAM, 0);
+        memset(&intf->ifr, 0, sizeof(intf->ifr));
     }
     ulist_init(&upipe_netmap_sink->sink_queue);
     upipe_netmap_sink->n = 0;
@@ -496,8 +501,6 @@ static struct upipe *upipe_netmap_sink_alloc(struct upipe_mgr *mgr,
 
     upipe_netmap_sink->uclock.refcount = upipe->refcount;
     upipe_netmap_sink->uclock.uclock_now = uclock_netmap_sink_now;
-    upipe_netmap_sink->fd = socket(AF_INET, SOCK_DGRAM, 0);
-    memset(&upipe_netmap_sink->ifr, 0, sizeof(upipe_netmap_sink->ifr));
 
     upipe_throw_ready(upipe);
     return upipe;
@@ -778,7 +781,7 @@ static int worker_hbrmt(struct upipe *upipe, uint8_t **dst, const uint8_t *src,
         (frame_duration * upipe_netmap_sink->pkt++ * HBRMT_DATA_SIZE) /
         upipe_netmap_sink->frame_size;
 
-    for (size_t i = 0; i < 2; i++) {
+    for (size_t i = 0; i < (copy ? 2 : 1); i++) {
         struct upipe_netmap_intf *intf = &upipe_netmap_sink->intf[i];
         if (!intf->d)
             break;
@@ -1441,7 +1444,7 @@ static bool source_addr(const char *intf, uint8_t *mac, in_addr_t *ip)
 }
 
 static int upipe_netmap_sink_open_intf(struct upipe *upipe,
-        struct upipe_netmap_intf *intf, const char *uri, char *intf_name)
+        struct upipe_netmap_intf *intf, const char *uri)
 {
     if (sscanf(uri, "netmap:%*[^-]-%u/T", &intf->ring_idx) != 1) {
         upipe_err_va(upipe, "invalid netmap receive uri %s", uri);
@@ -1450,8 +1453,7 @@ static int upipe_netmap_sink_open_intf(struct upipe *upipe,
 
     char *intf_addr = strdup(&uri[strlen("netmap:")]);
     *strchr(intf_addr, '-') = '\0'; /* we already matched the - in sscanf */
-    if (intf_name)
-        strncpy(intf_name, intf_addr, IFNAMSIZ);
+    strncpy(intf->ifr.ifr_name, intf_addr, IFNAMSIZ);
 
     /* parse uri parameters */
     char *ip = NULL;
@@ -1629,12 +1631,11 @@ static int upipe_netmap_sink_set_uri(struct upipe *upipe, const char *uri)
         *p++ = '\0';
 
     struct upipe_netmap_intf *intf = &upipe_netmap_sink->intf[0];
-    UBASE_RETURN(upipe_netmap_sink_open_intf(upipe, intf,
-                upipe_netmap_sink->uri, upipe_netmap_sink->ifr.ifr_name));
+    UBASE_RETURN(upipe_netmap_sink_open_intf(upipe, intf, upipe_netmap_sink->uri));
 
     if (p) {
         p[-1] = '+';
-        UBASE_RETURN(upipe_netmap_sink_open_intf(upipe, intf+1, p, NULL));
+        UBASE_RETURN(upipe_netmap_sink_open_intf(upipe, intf+1, p));
     }
 
     upipe_notice_va(upipe, "opened %d netmap socket(s)", p ? 2 : 1);
@@ -1716,7 +1717,6 @@ static void upipe_netmap_sink_free(struct upipe *upipe)
         upipe_netmap_sink_from_upipe(upipe);
     upipe_throw_dead(upipe);
 
-    close(upipe_netmap_sink->fd);
     uref_free(upipe_netmap_sink->flow_def);
     free(upipe_netmap_sink->uri);
 
@@ -1724,6 +1724,7 @@ static void upipe_netmap_sink_free(struct upipe *upipe)
         struct upipe_netmap_intf *intf = &upipe_netmap_sink->intf[i];
         free(intf->maxrate_uri);
         nm_close(intf->d);
+        close(intf->fd);
     }
 
     upipe_netmap_sink_clean_upump(upipe);
