@@ -46,7 +46,30 @@ v210_enc_uyvy_luma_shuft_10: times 2 db -1, 2, 3, -1, 6, 7, 10, 11, -1, -1, -1, 
 
 uyvy_to_v210_store_mask: times 2 dq -1, 0
 
+sdi_vanc_shuf1: db 0,1,4,5,8,9,12,13, 2,3,6,7,10,11,14,15
+
 SECTION .text
+
+INIT_XMM ssse3
+
+cglobal sdi_vanc_deinterleave, 4, 4, 3, vanc_buf_, vanc_stride_, src_, src_stride_
+    mov            r3, vanc_buf_q
+    add         src_q, vanc_stride_q
+    add    vanc_buf_q, vanc_stride_q
+    sar vanc_stride_q, 1
+    add            r3, vanc_stride_q
+    neg vanc_stride_q
+
+    mova m0, [sdi_vanc_shuf1]
+    .loop:
+        movu                               m1, [src_q + 2*vanc_stride_q]
+        pshufb                             m1, m0
+        movq   [vanc_buf_q + 2*vanc_stride_q], m1
+        MOVHL                              m2, m1
+        movq             [r3 + vanc_stride_q], m2
+        add                        vanc_buf_q, mmsize/2
+    jl .loop
+RET
 
 %macro sdi_to_uyvy 1
 

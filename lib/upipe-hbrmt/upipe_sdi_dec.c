@@ -1041,6 +1041,21 @@ static bool upipe_sdi_dec_handle(struct upipe *upipe, struct uref *uref,
                     vbi_line++;
                 }
             } else {
+#if !defined(__APPLE__) /* macOS clang doesn't support that builtin yet */
+#if defined(__clang__) && /* clang 3.8 doesn't know ssse3 */ \
+     (__clang_major__ < 3 || (__clang_major__ == 3 && __clang_minor__ <= 8))
+# ifdef __SSSE3__
+                if (1)
+# else
+                if (0)
+# endif
+#else
+                if (__builtin_cpu_supports("ssse3"))
+#endif
+                    upipe_sdi_vanc_deinterleave_ssse3(vanc_buf, vanc_stride, src_line, 0);
+                else
+#endif
+                {
                 uint16_t *vanc_dst = (uint16_t*)vanc_buf;
                 if (uref_vanc) {
                     for (unsigned i = 0; i < vanc_stride / 4; i++) {
@@ -1048,6 +1063,7 @@ static bool upipe_sdi_dec_handle(struct upipe *upipe, struct uref *uref,
                         vanc_dst[vanc_stride/4 + i] = src_line[2*i+1];  // C
                     }
                     vanc_buf += vanc_stride;
+                }
                 }
             }
         } else {
