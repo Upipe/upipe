@@ -847,21 +847,19 @@ static void upipe_hd_sdi_enc_encode_line(struct upipe *upipe, int line_num, uint
          * chroma horizontal blanking */
         int dst_pos = hanc_start;
 
-        // FIXME this does not match BMD
         /* If more than a single audio packet must be put on a line
-         * then the following sequence will be sent: 1 1 2 2 3 3 4 4 */
-        for (int ch_group = 0; ch_group < UPIPE_SDI_CHANNELS_PER_GROUP; ch_group++) {
+         * then the following sequence will be sent: 1 2 3 4 1 2 3 4 */
+        for (int sample = 0; sample < samples_to_put; sample++) {
             /* Check if too many packets have been put on the line */
             if ((packets_put + 1) > max_audio_packets_per_line) {
                 upipe_err(upipe, "too many audio packets per line");
                 break;
             }
-
-            for (int sample = 0; sample < samples_to_put; sample++) {
+            for (int ch_group = 0; ch_group < UPIPE_SDI_CHANNELS_PER_GROUP; ch_group++) {
                 /* Packet belongs to another line */
                 uint8_t mpf_bit = 0;
 
-                /* mpf bit was set, which means that the packet was mean
+                /* mpf bit was set, which means that the packet was meant
                  * to arrive on the previous line */
                 if (upipe_sdi_enc->mpf_packet_bits[ch_group]) {
                     mpf_bit = 1;
@@ -885,8 +883,8 @@ static void upipe_hd_sdi_enc_encode_line(struct upipe *upipe, int line_num, uint
                                                     ch_group, mpf_bit, sample_clock);
                 packets_put++;
             }
+            upipe_sdi_enc->total_audio_samples_put++;
         }
-        upipe_sdi_enc->total_audio_samples_put += samples_to_put;
         upipe_sdi_enc->sample_pos += samples_to_put;
     } else {
         /* The current line is a switching line, so mark the next sample_diff
