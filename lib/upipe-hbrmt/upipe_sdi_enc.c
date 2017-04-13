@@ -197,8 +197,9 @@ static void sdi_init_crc_channel_status(uint8_t *data)
 
     memset(data, 0, 23);
 
-    data[0] = 0x03; /* Only indicates professional use and LPCM */
-    data[2] = 0x29; /* Forces 24 bits, leaves Level regulation default */
+    data[0] = 0x80; /* Only indicates professional use and LPCM */
+    data[1] = 0x40; /* Stereophonic Mode */
+    data[2] = 0x20; /* Forces 24 bits, leaves Level regulation default */
 
     uint8_t crc = 0xff;
     for (int i = 0; i < 23; i++)
@@ -369,8 +370,8 @@ static int put_sd_audio_data_packet(struct upipe_sdi_enc *upipe_sdi_enc, uint16_
 
             /* Channel status */
             uint8_t byte_pos = (total_samples % 192)/8;
-            uint8_t bit_pos = (total_samples % 24) % 8;
-            uint8_t ch_stat = !!(upipe_sdi_enc->aes_channel_status[byte_pos] & (1 << bit_pos));
+            uint8_t bit_pos = (7 - ((total_samples % 24) % 8));
+            uint8_t ch_stat = (upipe_sdi_enc->aes_channel_status[byte_pos] >> bit_pos) & 1;
 
             /* Block sync bit, channel status and validity
              * SMPTE 272 says both pairs must have Z=1 */
@@ -445,8 +446,8 @@ static int put_hd_audio_data_packet(struct upipe_sdi_enc *upipe_sdi_enc, uint16_
 
         /* Channel status */
         uint8_t byte_pos = (total_samples % 192)/8;
-        uint8_t bit_pos = (total_samples % 24) % 8;
-        uint8_t ch_stat = !!(upipe_sdi_enc->aes_channel_status[byte_pos] & (1 << bit_pos));
+        uint8_t bit_pos = (7 - ((total_samples % 24) % 8));
+        uint8_t ch_stat = (upipe_sdi_enc->aes_channel_status[byte_pos] >> bit_pos) & 1;
 
         /* Block sync bit, channel status and validity
          * Table 4 of SMPTE 299 makes it clear the second channel has Z=0 */
