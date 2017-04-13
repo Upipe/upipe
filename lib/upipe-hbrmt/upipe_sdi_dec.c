@@ -505,6 +505,7 @@ static void extract_hd_audio(struct upipe *upipe, const uint16_t *packet, int li
     int audio_group = S291_HD_AUDIO_GROUP1_DID - (packet[6] & 0xff);
     if (data_count != 0x18) {
         upipe_warn_va(upipe, "Invalid data count 0x%x", data_count);
+        return;
     }
 
     /* Audio packets are not allowed on the switching line + 1 */
@@ -656,6 +657,7 @@ static void extract_sd_audio(struct upipe *upipe, const uint16_t *packet, int li
     int data_count = packet[5] & 0xff;
     if (data_count % 12) {
         upipe_err_va(upipe, "Invalid data count %d", data_count);
+        return;
     }
 
     /* Slightly different to HD */
@@ -672,6 +674,7 @@ static void extract_sd_audio(struct upipe *upipe, const uint16_t *packet, int li
     if (checksum != stream_checksum) {
         upipe_err_va(upipe, "Invalid checksum: 0x%.3x != 0x%.3x",
                      checksum, stream_checksum);
+        return;
     }
 
     const uint16_t *src = &packet[6];
