@@ -516,8 +516,11 @@ static int extract_hd_audio(struct upipe *upipe, const uint16_t *packet, int lin
     /* FIXME: extract this to a generic HD validation function */
     uint16_t checksum = 0;
     int len = data_count + 3 /* DID / DBN / DC */;
-    for (int i = 0; i < len; i++)
-        checksum += packet[6 + 2*i];
+    for (int i = 0; i < len/3; i++) {
+        checksum += packet[6 + 2*3*i+0];
+        checksum += packet[6 + 2*3*i+2];
+        checksum += packet[6 + 2*3*i+4];
+    }
     checksum &= 0x1ff;
 
     uint16_t stream_checksum = packet[6+len*2] & 0x1ff;
