@@ -667,7 +667,7 @@ static void extract_sd_audio(struct upipe *upipe, const uint16_t *packet, int li
     uint16_t checksum = 0;
     int len = data_count + 3 /* DID / DBN / DC */;
     for (int i = 0; i < len; i++)
-        checksum += packet[3+i] & 0x1ff;
+        checksum += packet[3+i];
     checksum &= 0x1ff;
 
     uint16_t stream_checksum = packet[3+len] & 0x1ff;
