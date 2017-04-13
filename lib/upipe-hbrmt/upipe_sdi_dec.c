@@ -517,7 +517,7 @@ static int extract_hd_audio(struct upipe *upipe, const uint16_t *packet, int lin
     uint16_t checksum = 0;
     int len = data_count + 3 /* DID / DBN / DC */;
     for (int i = 0; i < len; i++)
-        checksum += packet[6 + 2*i] & 0x1ff;
+        checksum += packet[6 + 2*i];
     checksum &= 0x1ff;
 
     uint16_t stream_checksum = packet[6+len*2] & 0x1ff;
