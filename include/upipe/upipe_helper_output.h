@@ -333,7 +333,8 @@ static int UBASE_UNUSED STRUCTURE##_free_output_proxy(struct upipe *upipe,  \
     ulist_delete_foreach (&s->REQUEST_LIST, uchain, uchain_tmp) {           \
         struct urequest *proxy = urequest_from_uchain(uchain);              \
         if (urequest_get_opaque(proxy, struct urequest *) == urequest) {    \
-            STRUCTURE##_unregister_output_request(upipe, proxy);            \
+            int err = STRUCTURE##_unregister_output_request(upipe, proxy);  \
+            ubase_assert(err);                                              \
             urequest_clean(proxy);                                          \
             urequest_free(proxy);                                           \
             return UBASE_ERR_NONE;                                          \
@@ -404,7 +405,8 @@ static int STRUCTURE##_set_output(struct upipe *upipe, struct upipe *output)\
         struct uchain *uchain;                                              \
         ulist_foreach (&s->REQUEST_LIST, uchain) {                          \
             struct urequest *urequest = urequest_from_uchain(uchain);       \
-            upipe_unregister_request(s->OUTPUT, urequest);                  \
+            int err = upipe_unregister_request(s->OUTPUT, urequest);        \
+            ubase_assert(err);                                              \
         }                                                                   \
     }                                                                       \
     upipe_release(s->OUTPUT);                                               \
@@ -430,8 +432,10 @@ static void STRUCTURE##_clean_output(struct upipe *upipe)                   \
     struct uchain *uchain;                                                  \
     while ((uchain = ulist_pop(&s->REQUEST_LIST)) != NULL) {                \
         struct urequest *urequest = urequest_from_uchain(uchain);           \
-        if (likely(s->OUTPUT != NULL))                                      \
-            upipe_unregister_request(s->OUTPUT, urequest);                  \
+        if (likely(s->OUTPUT != NULL)) {                                    \
+            int err = upipe_unregister_request(s->OUTPUT, urequest);        \
+            ubase_assert(err);                                              \
+        }                                                                   \
         urequest_clean(urequest);                                           \
         urequest_free(urequest);                                            \
     }                                                                       \

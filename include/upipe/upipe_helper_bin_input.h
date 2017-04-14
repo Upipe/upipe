@@ -163,7 +163,8 @@ static void STRUCTURE##_store_bin_input(struct upipe *upipe,                \
         struct uchain *uchain;                                              \
         ulist_foreach (&s->REQUEST_LIST, uchain) {                          \
             struct urequest *urequest = urequest_from_uchain(uchain);       \
-            upipe_unregister_request(s->FIRST_INNER, urequest);             \
+            int err = upipe_unregister_request(s->FIRST_INNER, urequest);   \
+            ubase_assert(err);                                              \
         }                                                                   \
     }                                                                       \
     STRUCTURE##_store_##FIRST_INNER(upipe, first_inner);                    \
@@ -258,7 +259,8 @@ static int STRUCTURE##_free_bin_proxy(struct upipe *upipe,                  \
     ulist_delete_foreach (&s->REQUEST_LIST, uchain, uchain_tmp) {           \
         struct urequest *proxy = urequest_from_uchain(uchain);              \
         if (urequest_get_opaque(proxy, struct urequest *) == urequest) {    \
-            STRUCTURE##_unregister_bin_request(upipe, proxy);               \
+            int err = STRUCTURE##_unregister_bin_request(upipe, proxy);     \
+            ubase_assert(err);                                              \
             urequest_clean(proxy);                                          \
             urequest_free(proxy);                                           \
             return UBASE_ERR_NONE;                                          \
