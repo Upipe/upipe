@@ -594,9 +594,11 @@ static void cb(struct upump *upump)
         upipe_dbg_va(upipe, "no picture, repeating last one");
     }
 
-    assert(upipe_sync->uref);
-    struct uref *uref = uref_dup(upipe_sync->uref);
-    uref_clock_set_pts_sys(uref, upipe_sync->pts - upipe_sync->latency);
+    struct uref *uref = NULL;
+    if (upipe_sync->uref) {
+        uref = uref_dup(upipe_sync->uref);
+        uref_clock_set_pts_sys(uref, upipe_sync->pts - upipe_sync->latency);
+    }
     now = uclock_now(upipe_sync->uclock);
 
     if (0)
@@ -606,7 +608,9 @@ static void cb(struct upump *upump)
                 pts_to_time(now),
                 upipe_sync->latency / 27000
             );
-    upipe_sync_output(upipe, uref, NULL);
+
+    if (uref)
+        upipe_sync_output(upipe, uref, NULL);
 
     /* increment pts */
     upipe_sync->pts += upipe_sync->ticks_per_frame;
