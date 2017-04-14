@@ -1043,7 +1043,17 @@ static void upipe_netmap_sink_worker(struct upump *upump)
     bps *= UCLOCK_FREQ;
     bps /= now - upipe_netmap_sink->start;
 
-    int64_t err = (int64_t)bps - 1556494800;
+    uint64_t packets_per_frame = (upipe_netmap_sink->frame_size + HBRMT_DATA_SIZE - 1) / HBRMT_DATA_SIZE;
+    static const uint64_t eth_packet_size =
+        ETHERNET_HEADER_LEN + IP_HEADER_MINSIZE + UDP_HEADER_SIZE +
+        RTP_HEADER_SIZE + HBRMT_HEADER_SIZE + HBRMT_DATA_SIZE +
+        4 /* ethernet CRC */;
+
+    uint64_t rate = 8 * eth_packet_size * packets_per_frame * upipe_netmap_sink->fps.num;
+    bps *= upipe_netmap_sink->fps.den;
+
+    int64_t err = bps - rate;
+    err /= (int64_t)upipe_netmap_sink->fps.den;
 
     if (err > 0 && txavail) {
         // here for 3k (22.5ms) / 20ms latency
@@ -1067,7 +1077,7 @@ static void upipe_netmap_sink_worker(struct upump *upump)
         upipe_warn_va(upipe,
                 "txavail %d at %" PRIu64 " bps -> err %" PRId64 ", %zu urefs, "
                 "%zu fake",
-                txavail, (uint64_t)bps, err, upipe_netmap_sink->n,
+                txavail, (uint64_t)(bps / upipe_netmap_sink->fps.den), err, upipe_netmap_sink->n,
                 upipe_netmap_sink->fakes
                 );
     }
