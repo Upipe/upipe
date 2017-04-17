@@ -229,6 +229,15 @@ static inline int uref_block_extract(struct uref *uref, int offset, int size,
     return ubuf_block_extract(uref->ubuf, offset, size, buffer);
 }
 
+/** @see ubuf_block_extract_bits */
+static inline int uref_block_extract_bits(struct uref *uref,
+        int offset, int size, struct ubits *bw)
+{
+    if (uref->ubuf == NULL)
+        return UBASE_ERR_INVALID;
+    return ubuf_block_extract_bits(uref->ubuf, offset, size, bw);
+}
+
 /** @see ubuf_block_iovec_count */
 static inline int uref_block_iovec_count(struct uref *uref,
                                          int offset, int size)

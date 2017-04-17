@@ -37,6 +37,7 @@ extern "C" {
 
 #include <upipe/ubase.h>
 #include <upipe/ubuf.h>
+#include <upipe/ubits.h>
 
 #include <stdint.h>
 #include <stdbool.h>
@@ -695,6 +696,34 @@ static inline int ubuf_block_extract(struct ubuf *ubuf,
         UBASE_RETURN(ubuf_block_unmap(ubuf, offset))
         size -= read_size;
         buffer += read_size;
+        offset += read_size;
+    }
+    return UBASE_ERR_NONE;
+}
+
+/** @This extracts a ubuf to an ubits bit stream.
+ *
+ * @param ubuf pointer to ubuf
+ * @param offset offset of the buffer space wanted in the whole block, in
+ * octets, negative values start from the end
+ * @param size size of the buffer space wanted, in octets, or -1 for the end
+ * of the block
+ * @param bw ubits structure
+ * @return an error code
+ */
+static inline int ubuf_block_extract_bits(struct ubuf *ubuf,
+        int offset, int size, struct ubits *bw)
+{
+    UBASE_RETURN(ubuf_block_check_size(ubuf, &offset, &size))
+
+    while (size > 0) {
+        int read_size = size;
+        const uint8_t *read_buffer;
+        UBASE_RETURN(ubuf_block_read(ubuf, offset, &read_size, &read_buffer))
+        for (int i = 0; i < read_size; i++)
+            ubits_put(bw, 8, read_buffer[i]);
+        UBASE_RETURN(ubuf_block_unmap(ubuf, offset))
+        size -= read_size;
         offset += read_size;
     }
     return UBASE_ERR_NONE;
