@@ -42,8 +42,9 @@ enum uref_mpga_encaps {
     /** No encapsulation */
     UREF_MPGA_ENCAPS_RAW = 0,
     /** ADTS encapsulation */
-    UREF_MPGA_ENCAPS_ADTS
-    /* TODO LOAS and LATM */
+    UREF_MPGA_ENCAPS_ADTS,
+    /* LATM/LOAS */
+    UREF_MPGA_ENCAPS_LOAS
 };
 
 UREF_ATTR_SMALL_UNSIGNED(mpga_flow, encaps, "mpga.encaps", AAC encapsulation type)

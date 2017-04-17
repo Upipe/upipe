@@ -208,6 +208,15 @@ static void upipe_ts_pmtd_parse_streamtype(struct upipe *upipe,
                             UREF_MPGA_ENCAPS_ADTS))
             break;
 
+        case PMT_STREAMTYPE_AUDIO_LATM:
+            UBASE_FATAL(upipe, uref_flow_set_def(flow_def, "block.aac_latm.sound."))
+            UBASE_FATAL(upipe, uref_flow_set_raw_def(flow_def,
+                            "block.mpegts.mpegtspes.aac_latm.sound."))
+            UBASE_FATAL(upipe, uref_ts_flow_set_max_delay(flow_def, MAX_DELAY))
+            UBASE_FATAL(upipe, uref_mpga_flow_set_encaps(flow_def,
+                            UREF_MPGA_ENCAPS_LOAS))
+            break;
+
         case PMT_STREAMTYPE_VIDEO_AVC:
             UBASE_FATAL(upipe, uref_flow_set_def(flow_def, "block.h264.pic."))
             UBASE_FATAL(upipe, uref_flow_set_raw_def(flow_def,

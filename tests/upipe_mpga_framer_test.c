@@ -24,7 +24,7 @@
  */
 
 /** @file
- * @short unit tests for MPEG-1 layers 1, 2 or 3 audio framer module
+ * @short unit tests for MPEG-1 1/2/3 and AAC audio framer module
  */
 
 #undef NDEBUG
@@ -69,6 +69,8 @@
 
 static unsigned int nb_packets = 0;
 static bool need_global = false;
+static enum uref_mpga_encaps need_encaps = UREF_MPGA_ENCAPS_ADTS;
+static struct uref *last_output = NULL;
 
 /** definition of our uprobe */
 static int catch(struct uprobe *uprobe, struct upipe *upipe,
@@ -88,6 +90,18 @@ static int catch(struct uprobe *uprobe, struct upipe *upipe,
     return UBASE_ERR_NONE;
 }
 
+static void check_data(struct uref *uref, size_t offset, size_t size)
+{
+    int read_size = size;
+    const uint8_t *r;
+    ubase_assert(uref_block_read(uref, offset, &read_size, &r));
+    assert(read_size == size);
+    for (int i = 0; i < size; i++) {
+        assert(r[i] == i % 256);
+    }
+    uref_block_unmap(uref, offset);
+}
+
 /** helper phony pipe */
 static struct upipe *test_alloc(struct upipe_mgr *mgr, struct uprobe *uprobe,
                                 uint32_t signature, va_list args)
@@ -105,21 +119,46 @@ static void test_input(struct upipe *upipe, struct uref *uref,
     assert(uref != NULL);
     upipe_dbg_va(upipe, "frame: %u", nb_packets);
     uref_dump(uref, upipe->uprobe);
-    size_t size;
-    ubase_assert(uref_block_size(uref, &size));
     uint64_t systime_rap = UINT64_MAX;
     uint64_t pts_orig = UINT64_MAX, dts_orig = UINT64_MAX;
     uref_clock_get_rap_sys(uref, &systime_rap);
     uref_clock_get_pts_orig(uref, &pts_orig);
     uref_clock_get_dts_orig(uref, &dts_orig);
-    if (need_global)
-        assert(size == 768 - ADTS_HEADER_SIZE);
-    else
-        assert(size == 768);
     assert(systime_rap == 42);
     assert(pts_orig == 27000000);
     assert(dts_orig == 27000000);
-    uref_free(uref);
+    size_t size;
+    ubase_assert(uref_block_size(uref, &size));
+    upipe_dbg_va(upipe, "size: %zu", size);
+    switch (nb_packets) {
+        case 0:
+            assert(size == 768);
+            check_data(uref, MPGA_HEADER_SIZE, 768 - MPGA_HEADER_SIZE);
+            break;
+        case 1:
+        case 2:
+            assert(size == 768);
+            check_data(uref, ADTS_HEADER_SIZE, 768 - ADTS_HEADER_SIZE);
+            break;
+        case 3:
+        case 4:
+            assert(size == 768 - ADTS_HEADER_SIZE);
+            check_data(uref, 0, 768 - ADTS_HEADER_SIZE);
+            break;
+        case 5:
+        case 6:
+            assert(size == 768 - ADTS_HEADER_SIZE + 13);
+            break;
+        case 7:
+            /* + 1 because of rounding error */
+            assert(size == 768 - ADTS_HEADER_SIZE + 1);
+            check_data(uref, 0, 768 - ADTS_HEADER_SIZE);
+            break;
+        default:
+            assert(0);
+    }
+    uref_free(last_output);
+    last_output = uref;
     nb_packets++;
 }
 
@@ -136,14 +175,13 @@ static int test_control(struct upipe *upipe, int command, va_list args)
             uint8_t encaps;
             int err3 = uref_mpga_flow_get_encaps(flow_def, &encaps);
             ubase_assert(err3);
+            assert(encaps == need_encaps);
             if (need_global) {
                 assert(ubase_check(err1));
                 assert(ubase_check(err2));
-                assert(encaps == UREF_MPGA_ENCAPS_RAW);
             } else {
                 assert(!ubase_check(err1));
                 assert(!ubase_check(err2));
-                assert(encaps == UREF_MPGA_ENCAPS_ADTS);
             }
             return UBASE_ERR_NONE;
         }
@@ -152,15 +190,11 @@ static int test_control(struct upipe *upipe, int command, va_list args)
             if (urequest->type == UREQUEST_FLOW_FORMAT) {
                 struct uref *uref = uref_dup(urequest->uref);
                 assert(uref != NULL);
-                if (need_global) {
+                if (need_global)
                     ubase_assert(uref_flow_set_global(uref));
-                    ubase_assert(uref_mpga_flow_set_encaps(uref,
-                                UREF_MPGA_ENCAPS_RAW));
-                } else {
+                else
                     uref_flow_delete_global(uref);
-                    ubase_assert(uref_mpga_flow_set_encaps(uref,
-                                UREF_MPGA_ENCAPS_ADTS));
-                }
+                ubase_assert(uref_mpga_flow_set_encaps(uref, need_encaps));
                 return urequest_provide_flow_format(urequest, uref);
             }
             return upipe_throw_provide_request(upipe, urequest);
@@ -204,6 +238,12 @@ static void write_adts(uint8_t *buffer)
     adts_set_channels(buffer, 2);
     adts_set_length(buffer, 768);
     adts_set_num_blocks(buffer, 0);
+}
+
+static void write_data(uint8_t *buffer, size_t size)
+{
+    for (int i = 0; i < size; i++)
+        buffer[i] = i % 256;
 }
 
 int main(int argc, char *argv[])
@@ -250,6 +290,7 @@ int main(int argc, char *argv[])
     uint8_t *buffer;
     int size;
 
+    /* MPEG-1 */
     uref = uref_block_alloc(uref_mgr, ubuf_mgr, 42 + 768 + MPGA_HEADER_SIZE);
     assert(uref != NULL);
     size = -1;
@@ -259,6 +300,7 @@ int main(int argc, char *argv[])
 
     buffer += 42;
     write_mpga(buffer);
+    write_data(buffer + MPGA_HEADER_SIZE, 768 - MPGA_HEADER_SIZE);
 
     buffer += 768;
     write_mpga(buffer);
@@ -294,6 +336,7 @@ int main(int argc, char *argv[])
 
     buffer += 42;
     write_adts(buffer);
+    write_data(buffer + ADTS_HEADER_SIZE, 768 - ADTS_HEADER_SIZE);
 
     buffer += 768;
     write_adts(buffer);
@@ -340,7 +383,7 @@ int main(int argc, char *argv[])
     size = -1;
     ubase_assert(uref_block_write(uref, 0, &size, &buffer));
     assert(size == 768 - ADTS_HEADER_SIZE);
-    memset(buffer, 0, 768 - ADTS_HEADER_SIZE);
+    write_data(buffer, 768 - ADTS_HEADER_SIZE);
 
     uref_block_unmap(uref, 0);
     uref_clock_set_pts_orig(uref, 27000000);
@@ -354,6 +397,7 @@ int main(int argc, char *argv[])
 
     /* Try again with ADTS to raw conversion */
     need_global = true;
+    need_encaps = UREF_MPGA_ENCAPS_RAW;
     uref = uref_block_flow_alloc_def(uref_mgr, "aac.sound.");
     assert(uref != NULL);
 
@@ -374,6 +418,7 @@ int main(int argc, char *argv[])
 
     buffer += 42;
     write_adts(buffer);
+    write_data(buffer + ADTS_HEADER_SIZE, 768 - ADTS_HEADER_SIZE);
 
     buffer += 768;
     write_adts(buffer);
@@ -390,6 +435,7 @@ int main(int argc, char *argv[])
 
     /* Try again with raw pass-through */
     need_global = true;
+    need_encaps = UREF_MPGA_ENCAPS_RAW;
     uref = uref_block_flow_alloc_def(uref_mgr, "aac.sound.");
     assert(uref != NULL);
     ubase_assert(uref_mpga_flow_set_encaps(uref, UREF_MPGA_ENCAPS_RAW));
@@ -408,7 +454,7 @@ int main(int argc, char *argv[])
     size = -1;
     ubase_assert(uref_block_write(uref, 0, &size, &buffer));
     assert(size == 768 - ADTS_HEADER_SIZE);
-    memset(buffer, 0, 768 - ADTS_HEADER_SIZE);
+    write_data(buffer, 768 - ADTS_HEADER_SIZE);
 
     uref_block_unmap(uref, 0);
     uref_clock_set_pts_orig(uref, 27000000);
@@ -420,6 +466,96 @@ int main(int argc, char *argv[])
 
     upipe_release(upipe_mpgaf);
 
+    /* Try again with raw to LOAS conversion */
+    need_global = false;
+    need_encaps = UREF_MPGA_ENCAPS_LOAS;
+    uref = uref_block_flow_alloc_def(uref_mgr, "aac.sound.");
+    assert(uref != NULL);
+    ubase_assert(uref_mpga_flow_set_encaps(uref, UREF_MPGA_ENCAPS_RAW));
+    ubase_assert(uref_flow_set_headers(uref, headers, 2));
+
+    upipe_mpgaf = upipe_void_alloc(upipe_mpgaf_mgr,
+            uprobe_pfx_alloc(uprobe_use(uprobe_stdio), UPROBE_LOG_LEVEL,
+                             "mpgaf 6"));
+    assert(upipe_mpgaf != NULL);
+    ubase_assert(upipe_set_flow_def(upipe_mpgaf, uref));
+    ubase_assert(upipe_set_output(upipe_mpgaf, upipe_sink));
+    uref_free(uref);
+
+    uref = uref_block_alloc(uref_mgr, ubuf_mgr, 768 - ADTS_HEADER_SIZE);
+    assert(uref != NULL);
+    size = -1;
+    ubase_assert(uref_block_write(uref, 0, &size, &buffer));
+    assert(size == 768 - ADTS_HEADER_SIZE);
+    write_data(buffer, 768 - ADTS_HEADER_SIZE);
+
+    uref_block_unmap(uref, 0);
+    uref_clock_set_pts_orig(uref, 27000000);
+    uref_clock_set_dts_orig(uref, 27000000);
+    uref_clock_set_cr_sys(uref, 84);
+    uref_clock_set_rap_sys(uref, 42);
+    upipe_input(upipe_mpgaf, uref, NULL);
+    assert(nb_packets == 6);
+
+    upipe_release(upipe_mpgaf);
+
+    /* Try again with LOAS to LOAS pass-through */
+    need_global = false;
+    need_encaps = UREF_MPGA_ENCAPS_LOAS;
+    uref = uref_block_flow_alloc_def(uref_mgr, "aac_latm.sound.");
+    assert(uref != NULL);
+    ubase_assert(uref_mpga_flow_set_encaps(uref, UREF_MPGA_ENCAPS_LOAS));
+    ubase_assert(uref_flow_set_complete(uref));
+
+    upipe_mpgaf = upipe_void_alloc(upipe_mpgaf_mgr,
+            uprobe_pfx_alloc(uprobe_use(uprobe_stdio), UPROBE_LOG_LEVEL,
+                             "mpgaf 7"));
+    assert(upipe_mpgaf != NULL);
+    ubase_assert(upipe_set_flow_def(upipe_mpgaf, uref));
+    ubase_assert(upipe_set_output(upipe_mpgaf, upipe_sink));
+    uref_free(uref);
+
+    uref = uref_dup(last_output);
+    assert(uref != NULL);
+
+    uref_clock_set_pts_orig(uref, 27000000);
+    uref_clock_set_dts_orig(uref, 27000000);
+    uref_clock_set_cr_sys(uref, 84);
+    uref_clock_set_rap_sys(uref, 42);
+    upipe_input(upipe_mpgaf, uref, NULL);
+    assert(nb_packets == 7);
+
+    upipe_release(upipe_mpgaf);
+
+    /* Try again with LOAS to raw conversion */
+    need_global = false;
+    need_encaps = UREF_MPGA_ENCAPS_RAW;
+    uref = uref_block_flow_alloc_def(uref_mgr, "aac_latm.sound.");
+    assert(uref != NULL);
+    ubase_assert(uref_mpga_flow_set_encaps(uref, UREF_MPGA_ENCAPS_LOAS));
+    ubase_assert(uref_flow_set_complete(uref));
+
+    upipe_mpgaf = upipe_void_alloc(upipe_mpgaf_mgr,
+            uprobe_pfx_alloc(uprobe_use(uprobe_stdio), UPROBE_LOG_LEVEL,
+                             "mpgaf 8"));
+    assert(upipe_mpgaf != NULL);
+    ubase_assert(upipe_set_flow_def(upipe_mpgaf, uref));
+    ubase_assert(upipe_set_output(upipe_mpgaf, upipe_sink));
+    uref_free(uref);
+
+    uref = uref_dup(last_output);
+    assert(uref != NULL);
+
+    uref_clock_set_pts_orig(uref, 27000000);
+    uref_clock_set_dts_orig(uref, 27000000);
+    uref_clock_set_cr_sys(uref, 84);
+    uref_clock_set_rap_sys(uref, 42);
+    upipe_input(upipe_mpgaf, uref, NULL);
+    assert(nb_packets == 8);
+
+    upipe_release(upipe_mpgaf);
+
+    uref_free(last_output);
     test_free(upipe_sink);
     upipe_mgr_release(upipe_mpgaf_mgr);
 
