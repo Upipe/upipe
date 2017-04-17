@@ -332,7 +332,8 @@ static void upipe_ts_sig_service_build_eit(struct upipe *upipe)
     unsigned int nb_sections = 0;
     uint64_t i = 0;
     uint64_t event_number = 0;
-    uref_event_get_events(service->flow_def, &event_number);
+    if (!ubase_check(uref_event_get_events(service->flow_def, &event_number)))
+        event_number = 0;
     uint64_t total_size = 0;
 
     struct uchain *section_chain;
@@ -994,7 +995,8 @@ static void upipe_ts_sig_build_nit(struct upipe *upipe)
     unsigned int nb_sections = 0;
     uint64_t i = 0;
     uint64_t ts_number = 0;
-    uref_ts_flow_get_nit_ts(sig->flow_def, &ts_number);
+    if (!ubase_check(uref_ts_flow_get_nit_ts(sig->flow_def, &ts_number)))
+        ts_number = 0;
     uint64_t total_size = 0;
 
     struct uchain *section_chain;
