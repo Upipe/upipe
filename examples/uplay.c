@@ -83,6 +83,7 @@
 #include <upipe-av/upipe_avformat_source.h>
 #include <upipe-av/upipe_avcodec_decode.h>
 #include <upipe-swscale/upipe_sws.h>
+#include <upipe-swresample/upipe_swr.h>
 #include <upipe-gl/upipe_glx_sink.h>
 #include <upipe-gl/uprobe_gl_sink_cube.h>
 #ifdef UPIPE_HAVE_ALSA_ASOUNDLIB_H
@@ -438,6 +439,28 @@ static int catch_audio(struct uprobe *uprobe, struct upipe *upipe,
             DEC_IN_QUEUE_LENGTH, DEC_OUT_QUEUE_LENGTH);
     assert(avcdec != NULL);
     upipe_set_output(upipe, avcdec);
+
+    struct upipe_mgr *ffmt_mgr = upipe_ffmt_mgr_alloc();
+    struct upipe_mgr *swr_mgr = upipe_swr_mgr_alloc();
+    upipe_ffmt_mgr_set_swr_mgr(ffmt_mgr, swr_mgr);
+    upipe_mgr_release(swr_mgr);
+
+    /* request planar s16 */
+    struct uref *uref = uref_sibling_alloc(flow_def);
+    uref_flow_set_def(uref, "sound.u8.");
+    uref_sound_flow_set_channels(uref, 1);
+    uref_sound_flow_set_sample_size(uref, 1);
+    uref_sound_flow_set_planes(uref, 0);
+    uref_sound_flow_add_plane(uref, "l");
+    uref_sound_flow_set_rate(uref, 44100);
+
+    avcdec = upipe_flow_chain_output(avcdec, ffmt_mgr,
+            uprobe_pfx_alloc(uprobe_use(uprobe_main),
+                             UPROBE_LOG_VERBOSE, "ffmt"),
+            uref);
+    assert(avcdec != NULL);
+    uref_free(uref);
+    upipe_mgr_release(ffmt_mgr);
 
     if (trickp != NULL)
         avcdec = upipe_void_chain_output_sub(avcdec, trickp,
