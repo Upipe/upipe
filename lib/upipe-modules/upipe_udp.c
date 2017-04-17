@@ -348,6 +348,9 @@ int upipe_udp_open_socket(struct upipe *upipe, const char *_uri, int ttl,
     if (!uri)
         return -1;
 
+    if (!uri)
+        return -1;
+
     memset(&bind_addr, 0, sizeof(union sockaddru));
     memset(&connect_addr, 0, sizeof(union sockaddru));
 
