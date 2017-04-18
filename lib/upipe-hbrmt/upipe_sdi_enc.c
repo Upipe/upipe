@@ -173,7 +173,6 @@ struct upipe_sdi_enc_sub {
     struct upipe upipe;
 };
 
-/* TODO: Make static const once verified it's correct */
 static void sdi_init_crc_channel_status(uint8_t *data)
 {
     static const uint8_t sdi_aes_crc_table[256] =
