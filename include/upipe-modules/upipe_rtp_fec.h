@@ -28,13 +28,40 @@ enum rtp_fec_command {
     UPIPE_RTP_FEC_GET_ROW_SUB,
     /** returns the number of non recovered packets (uint64_t *) */
     UPIPE_RTP_FEC_GET_PACKETS_LOST,
+    /** returns the number of recovered packets (uint64_t *) */
+    UPIPE_RTP_FEC_GET_PACKETS_RECOVERED,
+    /** returns the number of rows (uint64_t *) */
+    UPIPE_RTP_FEC_GET_ROWS,
+    /** returns the number of columns (uint64_t *) */
+    UPIPE_RTP_FEC_GET_COLUMNS,
 };
+
+static inline int upipe_rtp_fec_get_rows(struct upipe *upipe,
+        uint64_t *rows)
+{
+    return upipe_control(upipe, UPIPE_RTP_FEC_GET_ROWS,
+            UPIPE_RTP_FEC_SIGNATURE, rows);
+}
+
+static inline int upipe_rtp_fec_get_columns(struct upipe *upipe,
+        uint64_t *columns)
+{
+    return upipe_control(upipe, UPIPE_RTP_FEC_GET_COLUMNS,
+            UPIPE_RTP_FEC_SIGNATURE, columns);
+}
 
 static inline int upipe_rtp_fec_get_packets_lost(struct upipe *upipe,
         uint64_t *lost)
 {
     return upipe_control(upipe, UPIPE_RTP_FEC_GET_PACKETS_LOST,
             UPIPE_RTP_FEC_SIGNATURE, lost);
+}
+
+static inline int upipe_rtp_fec_get_packets_recovered(struct upipe *upipe,
+        uint64_t *recovered)
+{
+    return upipe_control(upipe, UPIPE_RTP_FEC_GET_PACKETS_RECOVERED,
+            UPIPE_RTP_FEC_SIGNATURE, recovered);
 }
 
 /** @This returns the pic subpipe. The refcount is not incremented so you

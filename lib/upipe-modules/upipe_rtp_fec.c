@@ -85,6 +85,9 @@ struct upipe_rtp_fec {
     /* number of packets not recovered */
     uint64_t lost;
 
+    /* number of packets recovered */
+    uint64_t recovered;
+
     /** output pipe */
     struct upipe *output;
     /** flow_definition packet */
@@ -343,6 +346,7 @@ static void upipe_rtp_fec_correct_packets(struct upipe *upipe,
         }
 
     upipe_warn_va(&upipe_rtp_fec->upipe, "Corrected packet. Sequence number: %u", missing_seqnum);
+    upipe_rtp_fec->recovered++;
     fec_uref->priv = missing_seqnum;
     rtp_set_seqnum(dst, missing_seqnum);
     rtp_set_timestamp(dst, ts_rec);
@@ -849,6 +853,7 @@ static struct upipe *_upipe_rtp_fec_alloc(struct upipe_mgr *mgr,
     upipe_rtp_fec->cur_row_fec_snbase = UINT32_MAX;
 
     upipe_rtp_fec->lost = 0;
+    upipe_rtp_fec->recovered = 0;
 
     struct upipe *upipe = upipe_rtp_fec_to_upipe(upipe_rtp_fec);
     upipe_init(upipe, mgr, uprobe);
@@ -942,6 +947,25 @@ static int upipe_rtp_fec_control(struct upipe *upipe, int command, va_list args)
         uint64_t *lost = va_arg(args, uint64_t*);
         *lost = upipe_rtp_fec->lost;
         upipe_rtp_fec->lost = 0; /* reset counter */
+        return UBASE_ERR_NONE;
+    }
+    case UPIPE_RTP_FEC_GET_PACKETS_RECOVERED: {
+        UBASE_SIGNATURE_CHECK(args, UPIPE_RTP_FEC_SIGNATURE)
+        uint64_t *recovered = va_arg(args, uint64_t*);
+        *recovered = upipe_rtp_fec->recovered;
+        upipe_rtp_fec->recovered = 0; /* reset counter */
+        return UBASE_ERR_NONE;
+    }
+    case UPIPE_RTP_FEC_GET_ROWS: {
+        UBASE_SIGNATURE_CHECK(args, UPIPE_RTP_FEC_SIGNATURE)
+        uint64_t *rows = va_arg(args, uint64_t*);
+        *rows = upipe_rtp_fec->rows;
+        return UBASE_ERR_NONE;
+    }
+    case UPIPE_RTP_FEC_GET_COLUMNS: {
+        UBASE_SIGNATURE_CHECK(args, UPIPE_RTP_FEC_SIGNATURE)
+        uint64_t *columns = va_arg(args, uint64_t*);
+        *columns = upipe_rtp_fec->cols;
         return UBASE_ERR_NONE;
     }
     default:
