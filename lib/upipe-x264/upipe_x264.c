@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2013-2016 OpenHeadend S.A.R.L.
+ * Copyright (C) 2013-2017 OpenHeadend S.A.R.L.
  *
  * Authors: Benjamin Cohen
  *
@@ -510,6 +510,7 @@ static bool upipe_x264_open(struct upipe *upipe, int width, int height)
         upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
         return false;
     }
+    UBASE_FATAL(upipe, uref_flow_set_complete(flow_def_attr))
 
     /* set octetrate for CBR streams */
     if (params->rc.i_bitrate > 0) {

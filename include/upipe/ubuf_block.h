@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2012-2016 OpenHeadend S.A.R.L.
+ * Copyright (C) 2012-2017 OpenHeadend S.A.R.L.
  *
  * Authors: Christophe Massiot
  *
@@ -37,6 +37,7 @@ extern "C" {
 
 #include <upipe/ubase.h>
 #include <upipe/ubuf.h>
+#include <upipe/ubits.h>
 
 #include <stdint.h>
 #include <stdbool.h>
@@ -700,6 +701,34 @@ static inline int ubuf_block_extract(struct ubuf *ubuf,
     return UBASE_ERR_NONE;
 }
 
+/** @This extracts a ubuf to an ubits bit stream.
+ *
+ * @param ubuf pointer to ubuf
+ * @param offset offset of the buffer space wanted in the whole block, in
+ * octets, negative values start from the end
+ * @param size size of the buffer space wanted, in octets, or -1 for the end
+ * of the block
+ * @param bw ubits structure
+ * @return an error code
+ */
+static inline int ubuf_block_extract_bits(struct ubuf *ubuf,
+        int offset, int size, struct ubits *bw)
+{
+    UBASE_RETURN(ubuf_block_check_size(ubuf, &offset, &size))
+
+    while (size > 0) {
+        int read_size = size;
+        const uint8_t *read_buffer;
+        UBASE_RETURN(ubuf_block_read(ubuf, offset, &read_size, &read_buffer))
+        for (int i = 0; i < read_size; i++)
+            ubits_put(bw, 8, read_buffer[i]);
+        UBASE_RETURN(ubuf_block_unmap(ubuf, offset))
+        size -= read_size;
+        offset += read_size;
+    }
+    return UBASE_ERR_NONE;
+}
+
 /** @This returns the number of iovec needed to send part of a ubuf.
  *
  * @param ubuf pointer to ubuf
@@ -886,6 +915,34 @@ static inline int ubuf_block_merge(struct ubuf_mgr *mgr, struct ubuf **ubuf_p,
     ubuf_free(*ubuf_p);
     *ubuf_p = new_ubuf;
     return UBASE_ERR_NONE;
+}
+
+/** @This allocates a new ubuf and copies data from an opaque pointer to it.
+ *
+ * @param mgr management structure for this ubuf type
+ * @param p pointer to opaque data
+ * @param size size of opaque data, in octets
+ * @return pointer to newly allocated ubuf or NULL in case of error
+ */
+static inline struct ubuf *ubuf_block_alloc_from_opaque(struct ubuf_mgr *mgr,
+        const uint8_t *p, size_t size)
+{
+    struct ubuf *ubuf = ubuf_block_alloc(mgr, size);
+    if (unlikely(ubuf == NULL))
+        return NULL;
+
+    int copy_size = size;
+    uint8_t *buffer;
+    if (unlikely(!ubase_check(ubuf_block_write(ubuf, 0, &copy_size, &buffer))))
+        goto ubuf_block_alloc_from_opaque_err;
+    memcpy(buffer, p, size);
+    if (unlikely(!ubase_check(ubuf_block_unmap(ubuf, 0))))
+        goto ubuf_block_alloc_from_opaque_err;
+    return ubuf;
+
+ubuf_block_alloc_from_opaque_err:
+    ubuf_free(ubuf);
+    return NULL;
 }
 
 /** @This compares the content of a block ubuf in a larger ubuf.

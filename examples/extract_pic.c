@@ -58,8 +58,7 @@
 #include <upipe-swscale/upipe_sws.h>
 #include <upipe-filters/upipe_filter_blend.h>
 #include <upipe-ts/upipe_ts_demux.h>
-#include <upipe-framers/upipe_mpgv_framer.h>
-#include <upipe-framers/upipe_h264_framer.h>
+#include <upipe-framers/upipe_auto_framer.h>
 
 #include <stdbool.h>
 #include <stdlib.h>
@@ -339,12 +338,9 @@ int main(int argc, char **argv)
 
     /* upipe-ts */
     struct upipe_mgr *upipe_ts_demux_mgr = upipe_ts_demux_mgr_alloc();
-    struct upipe_mgr *upipe_mpgvf_mgr = upipe_mpgvf_mgr_alloc();
-    upipe_ts_demux_mgr_set_mpgvf_mgr(upipe_ts_demux_mgr, upipe_mpgvf_mgr);
-    upipe_mgr_release(upipe_mpgvf_mgr);
-    struct upipe_mgr *upipe_h264f_mgr = upipe_h264f_mgr_alloc();
-    upipe_ts_demux_mgr_set_h264f_mgr(upipe_ts_demux_mgr, upipe_h264f_mgr);
-    upipe_mgr_release(upipe_h264f_mgr);
+    struct upipe_mgr *upipe_autof_mgr = upipe_autof_mgr_alloc();
+    upipe_ts_demux_mgr_set_autof_mgr(upipe_ts_demux_mgr, upipe_autof_mgr);
+    upipe_mgr_release(upipe_autof_mgr);
     struct upipe *ts_demux = upipe_void_alloc_output(upipe_source,
             upipe_ts_demux_mgr,
             uprobe_pfx_alloc(

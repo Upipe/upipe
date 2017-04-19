@@ -279,13 +279,6 @@ static int upipe_avfsink_sub_set_flow_def(struct upipe *upipe,
         return UBASE_ERR_INVALID;
     }
 
-    if (!ubase_ncmp(def, "block.aac.") &&
-        ubase_check(uref_mpga_flow_get_adts(flow_def))) {
-        free(extradata_alloc);
-        upipe_err(upipe, "asc required");
-        return UBASE_ERR_INVALID;
-    }
-
     /* Extract relevant attributes to flow def check. */
     struct uref *flow_def_check =
         upipe_avfsink_sub_alloc_flow_def_check(upipe, flow_def);
@@ -430,7 +423,7 @@ static int upipe_avfsink_sub_provide_flow_format(struct upipe *upipe,
          !strcmp(upipe_avfsink->format, "flv") ||
          !strcmp(upipe_avfsink->format, "adts") ||
          !strcmp(upipe_avfsink->format, "aac")))
-        uref_mpga_flow_delete_adts(flow_format);
+        uref_mpga_flow_set_encaps(flow_format, UREF_MPGA_ENCAPS_RAW);
     return urequest_provide_flow_format(request, flow_format);
 }
 

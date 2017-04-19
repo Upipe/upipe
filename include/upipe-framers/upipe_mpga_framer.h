@@ -21,7 +21,7 @@
 /** @file
  * @short Upipe module building frames from an ISO 13818-3 or 7 stream
  * This framer supports levels 1, 2, 3 of ISO/IEC 11179-3 and ISO/IEC 13818-3,
- * and ISO/IEC 13818-7 (ADTS AAC) streams
+ * and ISO/IEC 13818-7 (ADTS AAC) and ISO/IEC 14496-3 (raw AAC) streams
  */
 
 #ifndef _UPIPE_FRAMERS_UPIPE_MPGA_FRAMER_H_

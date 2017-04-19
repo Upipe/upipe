@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2012-2015 OpenHeadend S.A.R.L.
+ * Copyright (C) 2012-2017 OpenHeadend S.A.R.L.
  *
  * Authors: Benjamin Cohen
  *          Christophe Massiot
@@ -923,6 +923,7 @@ static void upipe_avcenc_build_flow_def_attr(struct upipe *upipe)
     const char *codec_def = upipe_av_to_flow_def(codec->id);
     UBASE_FATAL(upipe, uref_flow_set_def_va(flow_def_attr, PREFIX_FLOW "%s",
                                       codec_def));
+    UBASE_FATAL(upipe, uref_flow_set_complete(flow_def_attr))
 
     /* Find out if flow def attributes have changed. */
     if (!upipe_avcenc_check_flow_def_attr(upipe, flow_def_attr)) {

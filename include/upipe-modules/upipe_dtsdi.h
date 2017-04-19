@@ -1,7 +1,7 @@
 /*
- * Copyright (C) 2013-2017 OpenHeadend S.A.R.L.
+ * Copyright (C) 2017 Open Broadcast Systems Ltd.
  *
- * Authors: Christophe Massiot
+ * Authors: Rafaël Carré
  *
  * Permission is hereby granted, free of charge, to any person obtaining
  * a copy of this software and associated documentation files (the
@@ -23,24 +23,18 @@
  * SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
  */
 
-/** @file
- * @short Upipe h264 flow definition attributes for uref
- */
-
-#ifndef _UPIPE_UREF_H264_FLOW_H_
+#ifndef _UPIPE_MODULES_UPIPE_DTSDI_H_
 /** @hidden */
-#define _UPIPE_UREF_H264_FLOW_H_
+#define _UPIPE_MODULES_UPIPE_DTSDI_H_
 #ifdef __cplusplus
 extern "C" {
 #endif
 
-#include <upipe/uref.h>
-#include <upipe/uref_attr.h>
+#include <upipe/upipe.h>
 
-UREF_ATTR_SMALL_UNSIGNED(h264_flow, profile, "h264.profile", profile)
-UREF_ATTR_SMALL_UNSIGNED(h264_flow, profile_compatibility, "h264.profilecomp",
-        profile compatibility)
-UREF_ATTR_SMALL_UNSIGNED(h264_flow, level, "h264.level", level)
+#define UPIPE_DTSDI_SIGNATURE UBASE_FOURCC('d', 't', 's', 'd')
+
+struct upipe_mgr *upipe_dtsdi_mgr_alloc(void);
 
 #ifdef __cplusplus
 }

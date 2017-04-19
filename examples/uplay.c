@@ -74,11 +74,7 @@
 #include <upipe-modules/upipe_worker_linear.h>
 #include <upipe-modules/upipe_worker_sink.h>
 #include <upipe-ts/upipe_ts_demux.h>
-#include <upipe-framers/upipe_mpgv_framer.h>
-#include <upipe-framers/upipe_h264_framer.h>
-#include <upipe-framers/upipe_h265_framer.h>
-#include <upipe-framers/upipe_mpga_framer.h>
-#include <upipe-framers/upipe_a52_framer.h>
+#include <upipe-framers/upipe_auto_framer.h>
 #include <upipe-filters/upipe_filter_decode.h>
 #include <upipe-filters/upipe_filter_format.h>
 #include <upipe-av/upipe_av.h>
@@ -87,6 +83,7 @@
 #include <upipe-av/upipe_avformat_source.h>
 #include <upipe-av/upipe_avcodec_decode.h>
 #include <upipe-swscale/upipe_sws.h>
+#include <upipe-swresample/upipe_swr.h>
 #include <upipe-gl/upipe_glx_sink.h>
 #include <upipe-gl/uprobe_gl_sink_cube.h>
 #ifdef UPIPE_HAVE_ALSA_ASOUNDLIB_H
@@ -443,6 +440,28 @@ static int catch_audio(struct uprobe *uprobe, struct upipe *upipe,
     assert(avcdec != NULL);
     upipe_set_output(upipe, avcdec);
 
+    struct upipe_mgr *ffmt_mgr = upipe_ffmt_mgr_alloc();
+    struct upipe_mgr *swr_mgr = upipe_swr_mgr_alloc();
+    upipe_ffmt_mgr_set_swr_mgr(ffmt_mgr, swr_mgr);
+    upipe_mgr_release(swr_mgr);
+
+    /* request planar s16 */
+    struct uref *uref = uref_sibling_alloc(flow_def);
+    uref_flow_set_def(uref, "sound.u8.");
+    uref_sound_flow_set_channels(uref, 1);
+    uref_sound_flow_set_sample_size(uref, 1);
+    uref_sound_flow_set_planes(uref, 0);
+    uref_sound_flow_add_plane(uref, "l");
+    uref_sound_flow_set_rate(uref, 44100);
+
+    avcdec = upipe_flow_chain_output(avcdec, ffmt_mgr,
+            uprobe_pfx_alloc(uprobe_use(uprobe_main),
+                             UPROBE_LOG_VERBOSE, "ffmt"),
+            uref);
+    assert(avcdec != NULL);
+    uref_free(uref);
+    upipe_mgr_release(ffmt_mgr);
+
     if (trickp != NULL)
         avcdec = upipe_void_chain_output_sub(avcdec, trickp,
                 uprobe_pfx_alloc(uprobe_use(uprobe_main),
@@ -594,21 +613,9 @@ static void uplay_start(struct upump *upump)
 
     /* ts demux */
     struct upipe_mgr *upipe_ts_demux_mgr = upipe_ts_demux_mgr_alloc();
-    struct upipe_mgr *upipe_mpgvf_mgr = upipe_mpgvf_mgr_alloc();
-    upipe_ts_demux_mgr_set_mpgvf_mgr(upipe_ts_demux_mgr, upipe_mpgvf_mgr);
-    upipe_mgr_release(upipe_mpgvf_mgr);
-    struct upipe_mgr *upipe_h264f_mgr = upipe_h264f_mgr_alloc();
-    upipe_ts_demux_mgr_set_h264f_mgr(upipe_ts_demux_mgr, upipe_h264f_mgr);
-    upipe_mgr_release(upipe_h264f_mgr);
-    struct upipe_mgr *upipe_h265f_mgr = upipe_h265f_mgr_alloc();
-    upipe_ts_demux_mgr_set_h265f_mgr(upipe_ts_demux_mgr, upipe_h265f_mgr);
-    upipe_mgr_release(upipe_h265f_mgr);
-    struct upipe_mgr *upipe_mpgaf_mgr = upipe_mpgaf_mgr_alloc();
-    upipe_ts_demux_mgr_set_mpgaf_mgr(upipe_ts_demux_mgr, upipe_mpgaf_mgr);
-    upipe_mgr_release(upipe_mpgaf_mgr);
-    struct upipe_mgr *upipe_a52f_mgr = upipe_a52f_mgr_alloc();
-    upipe_ts_demux_mgr_set_a52f_mgr(upipe_ts_demux_mgr, upipe_a52f_mgr);
-    upipe_mgr_release(upipe_a52f_mgr);
+    struct upipe_mgr *upipe_autof_mgr = upipe_autof_mgr_alloc();
+    upipe_ts_demux_mgr_set_autof_mgr(upipe_ts_demux_mgr, upipe_autof_mgr);
+    upipe_mgr_release(upipe_autof_mgr);
     struct upipe *ts_demux = upipe_void_alloc_output(upipe_src,
             upipe_ts_demux_mgr,
             uprobe_pfx_alloc(

@@ -58,6 +58,7 @@ UREF_ATTR_UNSIGNED(ts_flow, pes_min_duration, "t.pes_mindur",
 
 /* PMT */
 UREF_ATTR_SMALL_UNSIGNED(ts_flow, component_type, "t.ctype", component type)
+UREF_ATTR_SMALL_UNSIGNED(ts_flow, component_tag, "t.ctag", component tag)
 UREF_ATTR_UNSIGNED(ts_flow, descriptors, "t.descs", number of descriptors)
 UREF_ATTR_OPAQUE_VA(ts_flow, descriptor, "t.desc[%" PRIu64"]", descriptor,
         uint64_t nb, nb)
