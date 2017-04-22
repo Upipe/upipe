@@ -405,7 +405,10 @@ static void upipe_ts_pmtd_parse_descs(struct upipe *upipe,
                 break;
 
             case 0x51: /* Mosaic descriptor */
+                break;
+
             case 0x52: /* Stream identifier descriptor */
+                copy = true;
                 break;
 
             case 0x56: /* Teletext descriptor */
