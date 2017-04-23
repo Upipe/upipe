@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2013-2015 OpenHeadend S.A.R.L.
+ * Copyright (C) 2013-2017 OpenHeadend S.A.R.L.
  *
  * Authors: Christophe Massiot
  *
@@ -141,6 +141,10 @@ enum upipe_ts_mux_command {
     UPIPE_TS_MUX_GET_VERSION,
     /** sets the version number of the table (unsigned int) */
     UPIPE_TS_MUX_SET_VERSION,
+    /** returns the current encapsulation for AAC streams (int *) */
+    UPIPE_TS_MUX_GET_AAC_ENCAPS,
+    /** sets the encapsulation for AAC streams (int) */
+    UPIPE_TS_MUX_SET_AAC_ENCAPS,
     /** stops updating a PSI table upon sub removal */
     UPIPE_TS_MUX_FREEZE_PSI,
     /** prepares the next access unit/section for the given date
@@ -595,6 +599,32 @@ static inline int upipe_ts_mux_set_version(struct upipe *upipe,
 {
     return upipe_control(upipe, UPIPE_TS_MUX_SET_VERSION,
                          UPIPE_TS_MUX_SIGNATURE, version);
+}
+
+/** @This returns the current encapsulation for AAC streams
+ * (see @ref uref_mpga_encaps).
+ *
+ * @param upipe description structure of the pipe
+ * @param encaps_p filled in with the encapsulation
+ * @return an error code
+ */
+static inline int upipe_ts_mux_get_aac_encaps(struct upipe *upipe,
+                                              int *encaps_p)
+{
+    return upipe_control(upipe, UPIPE_TS_MUX_GET_AAC_ENCAPS,
+                         UPIPE_TS_MUX_SIGNATURE, encaps_p);
+}
+
+/** @This sets the encapsulation for AAC streams (see @ref uref_mpga_encaps).
+ *
+ * @param upipe description structure of the pipe
+ * @param encaps encapsulation
+ * @return an error code
+ */
+static inline int upipe_ts_mux_set_aac_encaps(struct upipe *upipe, int encaps)
+{
+    return upipe_control(upipe, UPIPE_TS_MUX_SET_AAC_ENCAPS,
+                         UPIPE_TS_MUX_SIGNATURE, encaps);
 }
 
 /** @This stops updating a PSI table upon sub removal.
