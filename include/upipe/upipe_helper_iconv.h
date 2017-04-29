@@ -52,7 +52,7 @@ extern "C" {
  * Supposing the name of your structure is upipe_foo, it declares:
  * @list
  * @item @code
- *  void upipe_foo_init_iconv(struct upipe_foo *s)
+ *  void upipe_foo_init_iconv(struct upipe *upipe)
  * @end code
  * Initializes the fields.
  *
@@ -62,14 +62,14 @@ extern "C" {
  * Called internally in cases where no conversion is needed.
  *
  * @item @code
- *  char *upipe_foo_iconv_wrapper(void *s, const char *encoding, char *string,
- *                                size_t length)
+ *  char *upipe_foo_iconv_wrapper(void *_upipe, const char *encoding,
+ *                                char *string, size_t length)
  * @end code
  * Wraps around iconv in biTStream calls. The returned string must be freed
  * by the user.
  *
  * @item @code
- *  void upipe_foo_clean_iconv(struct upipe_foo *s)
+ *  void upipe_foo_clean_iconv(struct upipe *upipe)
  * @end code
  * Releases the iconv handle.
  * @end list
