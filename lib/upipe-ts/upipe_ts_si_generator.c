@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2015-2016 OpenHeadend S.A.R.L.
+ * Copyright (C) 2015-2017 OpenHeadend S.A.R.L.
  *
  * Authors: Christophe Massiot
  *
@@ -47,6 +47,7 @@
 #include <upipe/upipe_helper_uclock.h>
 #include <upipe/upipe_helper_output.h>
 #include <upipe/upipe_helper_subpipe.h>
+#include <upipe/upipe_helper_dvb_string.h>
 #include <upipe-ts/upipe_ts_si_generator.h>
 #include <upipe-ts/upipe_ts_mux.h>
 #include <upipe-ts/uref_ts_flow.h>
@@ -56,6 +57,7 @@
 #include <stdbool.h>
 #include <stdarg.h>
 #include <string.h>
+#include <iconv.h>
 #include <assert.h>
 
 #include <bitstream/mpeg/ts.h>
@@ -72,7 +74,9 @@
 #define DEFAULT_TSID 65535
 /** default name */
 #define DEFAULT_NAME "Upipe"
-/** we only store UTF-8 at the moment */
+/** default encoding */
+#define DEFAULT_ENCODING "ISO6937"
+/** native encoding */
 #define NATIVE_ENCODING "UTF-8"
 /** define to get timing verbosity */
 #undef VERBOSE_TIMING
@@ -139,6 +143,13 @@ struct upipe_ts_sig {
     bool frozen;
     /** cr_sys of the next preparation */
     uint64_t cr_sys_status;
+    /** requested encoding */
+    const char *encoding;
+
+    /** encoding of the following iconv handle */
+    const char *current_encoding;
+    /** iconv handle */
+    iconv_t iconv_handle;
 
     /** NIT version number */
     uint8_t nit_version;
@@ -208,6 +219,8 @@ UPIPE_HELPER_UBUF_MGR(upipe_ts_sig, ubuf_mgr, flow_format, ubuf_mgr_request,
 UPIPE_HELPER_UCLOCK(upipe_ts_sig, uclock, uclock_request, NULL,
                     upipe_ts_sig_register_output_request,
                     upipe_ts_sig_unregister_output_request)
+UPIPE_HELPER_DVB_STRING(upipe_ts_sig, NATIVE_ENCODING, current_encoding,
+                        iconv_handle)
 
 UBASE_FROM_TO(upipe_ts_sig, upipe_mgr, output_mgr, output_mgr)
 UBASE_FROM_TO(upipe_ts_sig, upipe_ts_sig_output, nit_output, nit_output)
@@ -406,12 +419,11 @@ static void upipe_ts_sig_service_build_eit(struct upipe *upipe)
                 ubase_check(uref_event_get_description(service->flow_def,
                             &description_str, i));
             if (desc4d) {
-                name = dvb_string_set((const uint8_t *)name_str,
-                        strlen(name_str), NATIVE_ENCODING,
-                        &name_size);
-                description = dvb_string_set((const uint8_t *)description_str,
-                        strlen(description_str), NATIVE_ENCODING,
-                        &description_size);
+                name = upipe_ts_sig_alloc_dvb_string(upipe_ts_sig_to_upipe(sig),
+                        name_str, sig->encoding, &name_size);
+                description =
+                    upipe_ts_sig_alloc_dvb_string(upipe_ts_sig_to_upipe(sig),
+                        description_str, sig->encoding, &description_size);
             }
 
             size_t descriptors_size =
@@ -818,6 +830,7 @@ static struct upipe *_upipe_ts_sig_alloc(struct upipe_mgr *mgr,
     upipe_ts_sig_init_service_mgr(upipe);
     upipe_ts_sig_init_sub_services(upipe);
     upipe_ts_sig_init_output_mgr(upipe);
+    upipe_ts_sig_init_dvb_string(upipe);
     upipe_ts_sig_store_flow_def(upipe, NULL);
 
     upipe_ts_sig_output_init(upipe_ts_sig_output_to_upipe(
@@ -836,6 +849,7 @@ static struct upipe *_upipe_ts_sig_alloc(struct upipe_mgr *mgr,
     upipe_ts_sig->flow_def = NULL;
     upipe_ts_sig->frozen = false;
     upipe_ts_sig->cr_sys_status = UINT64_MAX;
+    upipe_ts_sig->encoding = DEFAULT_ENCODING;
 
     upipe_ts_sig->nit_version = 0;
     ulist_init(&upipe_ts_sig->nit_sections);
@@ -973,9 +987,8 @@ static void upipe_ts_sig_build_nit(struct upipe *upipe)
     uref_ts_flow_get_network_name(sig->flow_def, &network_name_str);
     size_t network_name_size;
     uint8_t *network_name =
-        dvb_string_set((const uint8_t *)network_name_str,
-            strlen(network_name_str), NATIVE_ENCODING,
-            &network_name_size);
+        upipe_ts_sig_alloc_dvb_string(upipe, network_name_str,
+                                      sig->encoding, &network_name_size);
 
     size_t nit_descriptors_size = DESC40_HEADER_SIZE + network_name_size +
         uref_ts_flow_size_nit_descriptors(sig->flow_def);
@@ -1298,13 +1311,11 @@ static void upipe_ts_sig_build_sdt(struct upipe *upipe)
                                            &provider_name_str);
             size_t service_name_size, provider_name_size;
             uint8_t *service_name =
-                dvb_string_set((const uint8_t *)service_name_str,
-                    strlen(service_name_str), NATIVE_ENCODING,
-                    &service_name_size);
+                upipe_ts_sig_alloc_dvb_string(upipe, service_name_str,
+                        sig->encoding, &service_name_size);
             uint8_t *provider_name =
-                dvb_string_set((const uint8_t *)provider_name_str,
-                    strlen(provider_name_str), NATIVE_ENCODING,
-                    &provider_name_size);
+                upipe_ts_sig_alloc_dvb_string(upipe, provider_name_str,
+                        sig->encoding, &provider_name_size);
 
 
             size_t descriptors_size =
@@ -1787,6 +1798,50 @@ static int upipe_ts_sig_prepare(struct upipe *upipe, uint64_t cr_sys,
     return UBASE_ERR_NONE;
 }
 
+/** @internal @This returns the current encoding.
+ *
+ * @param upipe description structure of the pipe
+ * @param encoding_p filled in with the encoding
+ * @return an error code
+ */
+static int upipe_ts_sig_get_encoding(struct upipe *upipe,
+                                     const char **encoding_p)
+{
+    struct upipe_ts_sig *upipe_ts_sig = upipe_ts_sig_from_upipe(upipe);
+    assert(encoding_p != NULL);
+    *encoding_p = upipe_ts_sig->encoding;
+    return UBASE_ERR_NONE;
+}
+
+/** @internal @This sets the encoding.
+ *
+ * @param upipe description structure of the pipe
+ * @param encoding encoding
+ * @return an error code
+ */
+static int upipe_ts_sig_set_encoding(struct upipe *upipe, const char *encoding)
+{
+    struct upipe_ts_sig *sig = upipe_ts_sig_from_upipe(upipe);
+    sig->encoding = encoding;
+    upipe_notice_va(upipe, "setting DVB encoding to %s", encoding);
+
+    upipe_ts_sig_build_nit(upipe);
+    upipe_ts_sig_build_nit_flow_def(upipe);
+
+    upipe_ts_sig_build_sdt(upipe);
+    upipe_ts_sig_build_sdt_flow_def(upipe);
+
+    struct uchain *uchain;
+    ulist_foreach (&sig->services, uchain) {
+        struct upipe_ts_sig_service *service =
+            upipe_ts_sig_service_from_uchain(uchain);
+        upipe_ts_sig_service_build_eit(upipe_ts_sig_service_to_upipe(service));
+    }
+    upipe_ts_sig_build_eit_flow_def(upipe);
+
+    return UBASE_ERR_NONE;
+}
+
 /** @internal @This processes control commands.
  *
  * @param upipe description structure of the pipe
@@ -1873,6 +1928,16 @@ static int upipe_ts_sig_control(struct upipe *upipe, int command, va_list args)
             upipe_ts_sig_update_status(upipe);
             return UBASE_ERR_NONE;
         }
+        case UPIPE_TS_MUX_GET_ENCODING: {
+            UBASE_SIGNATURE_CHECK(args, UPIPE_TS_MUX_SIGNATURE)
+            const char **encoding_p = va_arg(args, const char **);
+            return upipe_ts_sig_get_encoding(upipe, encoding_p);
+        }
+        case UPIPE_TS_MUX_SET_ENCODING: {
+            UBASE_SIGNATURE_CHECK(args, UPIPE_TS_MUX_SIGNATURE)
+            const char *encoding = va_arg(args, const char *);
+            return upipe_ts_sig_set_encoding(upipe, encoding);
+        }
         case UPIPE_TS_MUX_FREEZE_PSI: {
             UBASE_SIGNATURE_CHECK(args, UPIPE_TS_MUX_SIGNATURE)
             sig->frozen = true;
@@ -1948,6 +2013,7 @@ static void upipe_ts_sig_free(struct upipe *upipe)
         ubuf_free(ubuf_from_uchain(section_chain));
     uref_free(sig->flow_def);
 
+    upipe_ts_sig_clean_dvb_string(upipe);
     upipe_ts_sig_clean_sub_services(upipe);
     upipe_ts_sig_clean_ubuf_mgr(upipe);
     upipe_ts_sig_clean_uref_mgr(upipe);

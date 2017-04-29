@@ -179,7 +179,7 @@ static void test_input(struct upipe *upipe, struct uref *uref,
     if (!nit) {
         assert(nit_validate(buffer));
         assert(nit_get_nid(buffer) == 43);
-        assert(nit_get_desclength(buffer) == DESC40_HEADER_SIZE + 3);
+        assert(nit_get_desclength(buffer) == DESC40_HEADER_SIZE + 2);
 
         const uint8_t *desc =
             descs_get_desc(nit_get_descs((uint8_t *)buffer), 0);
@@ -213,7 +213,7 @@ static void test_input(struct upipe *upipe, struct uref *uref,
         assert(!sdtn_get_eitschedule(service));
         assert(sdtn_get_running(service) == 5);
         assert(!sdtn_get_ca(service));
-        assert(sdtn_get_desclength(service) == DESC48_HEADER_SIZE + 8);
+        assert(sdtn_get_desclength(service) == DESC48_HEADER_SIZE + 6);
 
         const uint8_t *desc =
             descs_get_desc(sdtn_get_descs((uint8_t *)service), 0);
@@ -246,7 +246,7 @@ static void test_input(struct upipe *upipe, struct uref *uref,
         assert(eitn_get_duration_bcd(event) == UINT32_C(0x014530));
         assert(eitn_get_running(event) == 5);
         assert(!eitn_get_ca(event));
-        assert(eitn_get_desclength(event) == DESC4D_HEADER_SIZE + 12);
+        assert(eitn_get_desclength(event) == DESC4D_HEADER_SIZE + 10);
 
         const uint8_t *desc =
             descs_get_desc(eitn_get_descs((uint8_t *)event), 0);

@@ -145,6 +145,10 @@ enum upipe_ts_mux_command {
     UPIPE_TS_MUX_GET_AAC_ENCAPS,
     /** sets the encapsulation for AAC streams (int) */
     UPIPE_TS_MUX_SET_AAC_ENCAPS,
+    /** returns the current encoding for strings (const char **) */
+    UPIPE_TS_MUX_GET_ENCODING,
+    /** sets the encoding for strings (const char *) */
+    UPIPE_TS_MUX_SET_ENCODING,
     /** stops updating a PSI table upon sub removal */
     UPIPE_TS_MUX_FREEZE_PSI,
     /** prepares the next access unit/section for the given date
@@ -625,6 +629,32 @@ static inline int upipe_ts_mux_set_aac_encaps(struct upipe *upipe, int encaps)
 {
     return upipe_control(upipe, UPIPE_TS_MUX_SET_AAC_ENCAPS,
                          UPIPE_TS_MUX_SIGNATURE, encaps);
+}
+
+/** @This returns the current encoding for strings.
+ *
+ * @param upipe description structure of the pipe
+ * @param encoding_p filled in with the encoding
+ * @return an error code
+ */
+static inline int upipe_ts_mux_get_encoding(struct upipe *upipe,
+                                            const char **encoding_p)
+{
+    return upipe_control(upipe, UPIPE_TS_MUX_GET_ENCODING,
+                         UPIPE_TS_MUX_SIGNATURE, encoding_p);
+}
+
+/** @This sets the encoding for strings.
+ *
+ * @param upipe description structure of the pipe
+ * @param encoding encoding (default: UTF-8)
+ * @return an error code
+ */
+static inline int upipe_ts_mux_set_encoding(struct upipe *upipe,
+                                            const char *encoding)
+{
+    return upipe_control(upipe, UPIPE_TS_MUX_SET_ENCODING,
+                         UPIPE_TS_MUX_SIGNATURE, encoding);
 }
 
 /** @This stops updating a PSI table upon sub removal.

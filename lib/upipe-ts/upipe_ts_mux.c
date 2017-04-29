@@ -167,6 +167,8 @@
 #define MAX_TDT_INTERVAL (UCLOCK_FREQ * 30)
 /** default AAC encapsulation */
 #define DEFAULT_AAC_ENCAPS UREF_MPGA_ENCAPS_ADTS
+/** default encoding */
+#define DEFAULT_ENCODING "UTF-8"
 /** default TSID */
 #define DEFAULT_TSID 1
 /** default first automatic SID */
@@ -309,6 +311,8 @@ struct upipe_ts_mux {
     uint64_t initial_cr_prog;
     /** AAC encapsulation */
     int aac_encaps;
+    /** encoding */
+    const char *encoding;
     /** last attributed automatic SID */
     uint16_t sid_auto;
     /** last attributed automatic PID */
@@ -2475,6 +2479,7 @@ static struct upipe *upipe_ts_mux_alloc(struct upipe_mgr *mgr,
     upipe_ts_mux->pcr_interval = DEFAULT_PCR_INTERVAL;
     upipe_ts_mux->scte35_interval = DEFAULT_SCTE35_INTERVAL;
     upipe_ts_mux->aac_encaps = DEFAULT_AAC_ENCAPS;
+    upipe_ts_mux->encoding = DEFAULT_ENCODING;
     upipe_ts_mux->max_delay = UINT64_MAX;
     upipe_ts_mux->mux_delay = DEFAULT_MUX_DELAY;
     upipe_ts_mux->initial_cr_prog = UINT64_MAX;
@@ -3452,6 +3457,7 @@ static void upipe_ts_mux_update_sig(struct upipe *upipe)
         upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
         return;
     }
+    upipe_ts_mux_set_encoding(mux->sig, mux->encoding);
 
     struct uchain *uchain;
     ulist_foreach (&mux->programs, uchain) {
@@ -4129,6 +4135,37 @@ static int _upipe_ts_mux_set_aac_encaps(struct upipe *upipe, int encaps)
     return UBASE_ERR_NONE;
 }
 
+/** @internal @This returns the current encoding.
+ *
+ * @param upipe description structure of the pipe
+ * @param encoding_p filled in with the encoding
+ * @return an error code
+ */
+static int _upipe_ts_mux_get_encoding(struct upipe *upipe,
+                                      const char **encoding_p)
+{
+    struct upipe_ts_mux *upipe_ts_mux = upipe_ts_mux_from_upipe(upipe);
+    assert(encoding_p != NULL);
+    *encoding_p = upipe_ts_mux->encoding;
+    return UBASE_ERR_NONE;
+}
+
+/** @internal @This sets the encoding.
+ *
+ * @param upipe description structure of the pipe
+ * @param encoding encoding
+ * @return an error code
+ */
+static int _upipe_ts_mux_set_encoding(struct upipe *upipe, const char *encoding)
+{
+    struct upipe_ts_mux *upipe_ts_mux = upipe_ts_mux_from_upipe(upipe);
+    upipe_ts_mux->encoding = encoding;
+
+    if (upipe_ts_mux->sig != NULL)
+        upipe_ts_mux_set_encoding(upipe_ts_mux->sig, encoding);
+    return UBASE_ERR_NONE;
+}
+
 /** @internal @This processes control commands on a ts_mux pipe.
  *
  * @param upipe description structure of the pipe
@@ -4343,6 +4380,16 @@ static int _upipe_ts_mux_control(struct upipe *upipe, int command, va_list args)
             int encaps = va_arg(args, int);
             return _upipe_ts_mux_set_aac_encaps(upipe, encaps);
         }
+        case UPIPE_TS_MUX_GET_ENCODING: {
+            UBASE_SIGNATURE_CHECK(args, UPIPE_TS_MUX_SIGNATURE)
+            const char **encoding_p = va_arg(args, const char **);
+            return _upipe_ts_mux_get_encoding(upipe, encoding_p);
+        }
+        case UPIPE_TS_MUX_SET_ENCODING: {
+            UBASE_SIGNATURE_CHECK(args, UPIPE_TS_MUX_SIGNATURE)
+            const char *encoding = va_arg(args, const char *);
+            return _upipe_ts_mux_set_encoding(upipe, encoding);
+        }
 
         case UPIPE_TS_MUX_GET_VERSION:
         case UPIPE_TS_MUX_SET_VERSION:
@@ -4552,6 +4599,8 @@ const char *upipe_ts_mux_command_str(int cmd)
         UBASE_CASE_TO_STR(UPIPE_TS_MUX_SET_VERSION);
         UBASE_CASE_TO_STR(UPIPE_TS_MUX_GET_AAC_ENCAPS);
         UBASE_CASE_TO_STR(UPIPE_TS_MUX_SET_AAC_ENCAPS);
+        UBASE_CASE_TO_STR(UPIPE_TS_MUX_GET_ENCODING);
+        UBASE_CASE_TO_STR(UPIPE_TS_MUX_SET_ENCODING);
         UBASE_CASE_TO_STR(UPIPE_TS_MUX_FREEZE_PSI);
         UBASE_CASE_TO_STR(UPIPE_TS_MUX_PREPARE);
         default: break;
