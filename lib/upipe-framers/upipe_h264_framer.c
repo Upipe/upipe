@@ -1781,7 +1781,7 @@ static void upipe_h264f_build_flow_def(struct upipe *upipe)
 
     if (upipe_h264f->duration) {
         UBASE_FATAL(upipe, uref_clock_set_latency(flow_def,
-                         upipe_h264f->input_latency + upipe_h264f->duration))
+                    upipe_h264f->input_latency + upipe_h264f->duration * 2))
     }
 
     upipe_h264f_store_flow_def(upipe, flow_def);
