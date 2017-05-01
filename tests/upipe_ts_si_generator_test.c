@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2015 OpenHeadend S.A.R.L.
+ * Copyright (C) 2015-2017 OpenHeadend S.A.R.L.
  *
  * Authors: Christophe Massiot
  *
@@ -69,7 +69,7 @@
 #define UDICT_POOL_DEPTH 0
 #define UREF_POOL_DEPTH 0
 #define UBUF_POOL_DEPTH 0
-#define UPROBE_LOG_LEVEL UPROBE_LOG_DEBUG
+#define UPROBE_LOG_LEVEL UPROBE_LOG_VERBOSE
 
 static bool nit = false;
 static bool sdt = false;
@@ -164,115 +164,156 @@ static void test_input(struct upipe *upipe, struct uref *uref,
     assert(uref != NULL);
     uint64_t cr;
     ubase_assert(uref_clock_get_cr_sys(uref, &cr));
-    assert(cr == UINT32_MAX);
     const uint8_t *buffer;
     int size = -1;
     ubase_assert(uref_block_read(uref, 0, &size, &buffer));
-    upipe_dbg_va(upipe, "received table %"PRIu8, psi_get_tableid(buffer));
+    upipe_dbg_va(upipe, "received table %"PRIx8, psi_get_tableid(buffer));
     assert(psi_validate(buffer));
-    if (!nit || !sdt || !eit) {
-        assert(psi_get_length(buffer) + PSI_HEADER_SIZE == size);
-        assert(psi_check_crc(buffer));
-        assert(psi_get_section(buffer) == 0);
-        assert(psi_get_lastsection(buffer) == 0);
+    switch (psi_get_tableid(buffer)) {
+        case NIT_TABLE_ID_ACTUAL: {
+            assert(!nit);
+            assert(cr == UINT32_MAX);
+            assert(psi_get_length(buffer) + PSI_HEADER_SIZE == size);
+            assert(psi_check_crc(buffer));
+            assert(psi_get_section(buffer) == 0);
+            assert(psi_get_lastsection(buffer) == 0);
+            assert(nit_validate(buffer));
+            assert(nit_get_nid(buffer) == 43);
+            assert(nit_get_desclength(buffer) == DESC40_HEADER_SIZE + 2);
+
+            const uint8_t *desc =
+                descs_get_desc(nit_get_descs((uint8_t *)buffer), 0);
+            assert(desc != NULL);
+            assert(desc40_validate(desc));
+            uint8_t networkname_length;
+            const uint8_t *networkname =
+                desc40_get_networkname(desc, &networkname_length);
+            char *networkname_string =
+                dvb_string_get(networkname, networkname_length,
+                               iconv_wrapper, NULL);
+            assert(!strncmp(networkname_string, "ga", networkname_length));
+            free(networkname_string);
+            const uint8_t *nith = nit_get_header2((uint8_t *)buffer);
+            assert(nith_get_tslength(nith) == NIT_TS_SIZE);
+            const uint8_t *ts = nit_get_ts((uint8_t *)buffer, 0);
+            assert(nitn_get_tsid(ts) == 45);
+            assert(nitn_get_onid(ts) == 46);
+            assert(nitn_get_desclength(ts) == 0);
+            nit = true;
+            upipe_dbg(upipe, "received NIT");
+            break;
+        }
+
+        case SDT_TABLE_ID_ACTUAL: {
+            assert(!sdt);
+            assert(cr == UINT32_MAX);
+            assert(psi_get_length(buffer) + PSI_HEADER_SIZE == size);
+            assert(psi_check_crc(buffer));
+            assert(psi_get_section(buffer) == 0);
+            assert(psi_get_lastsection(buffer) == 0);
+            assert(sdt_validate(buffer));
+            assert(sdt_get_tsid(buffer) == 42);
+            assert(sdt_get_onid(buffer) == 44);
+
+            const uint8_t *service = sdt_get_service((uint8_t *)buffer, 0);
+            assert(service != NULL);
+            assert(sdtn_get_sid(service) == 47);
+            assert(sdtn_get_eitpresent(service));
+            assert(!sdtn_get_eitschedule(service));
+            assert(sdtn_get_running(service) == 5);
+            assert(!sdtn_get_ca(service));
+            assert(sdtn_get_desclength(service) == DESC48_HEADER_SIZE + 6);
+
+            const uint8_t *desc =
+                descs_get_desc(sdtn_get_descs((uint8_t *)service), 0);
+            uint8_t provider_length, service_length;
+            const uint8_t *provider_name =
+                desc48_get_provider(desc, &provider_length);
+            const uint8_t *service_name =
+                desc48_get_service(desc, &service_length);
+            char *provider_string =
+                dvb_string_get(provider_name, provider_length, iconv_wrapper, NULL);
+            char *service_string =
+                dvb_string_get(service_name, service_length, iconv_wrapper, NULL);
+            assert(!strncmp(service_string, "bu", service_length));
+            assert(!strncmp(provider_string, "zo", provider_length));
+            free(service_string);
+            free(provider_string);
+            assert(desc48_get_type(desc) == 1);
+            sdt = true;
+            upipe_dbg(upipe, "received SDT");
+            break;
+        }
+
+        case EIT_TABLE_ID_PF_ACTUAL:
+        case EIT_TABLE_ID_SCHED_ACTUAL_FIRST: {
+            assert(psi_get_length(buffer) + PSI_HEADER_SIZE == size);
+            assert(psi_check_crc(buffer));
+            assert(eit_validate(buffer));
+            assert(eit_get_tsid(buffer) == 42);
+            assert(eit_get_onid(buffer) == 44);
+            const uint8_t *event = eit_get_event((uint8_t *)buffer, 0);
+            if (psi_get_tableid(buffer) == EIT_TABLE_ID_PF_ACTUAL) {
+                assert(psi_get_section(buffer) || !eit);
+                assert(psi_get_lastsection(buffer) == 1);
+                assert(eit_get_segment_last_sec_number(buffer) == 1);
+                assert(eit_get_last_table_id(buffer) == EIT_TABLE_ID_PF_ACTUAL);
+                assert(eitn_get_event_id(event) == psi_get_section(buffer));
+                if (psi_get_section(buffer)) {
+                    assert(cr > UINT32_MAX);
+                    eit = true;
+                } else
+                    assert(cr == UINT32_MAX);
+            } else {
+                assert(!eit);
+                assert(psi_get_tableid(buffer) == EIT_TABLE_ID_SCHED_ACTUAL_FIRST);
+                assert(psi_get_section(buffer) == 0);
+                assert(psi_get_lastsection(buffer) == 0);
+                assert(eit_get_segment_last_sec_number(buffer) == 0);
+                assert(eit_get_last_table_id(buffer) == EIT_TABLE_ID_SCHED_ACTUAL_FIRST);
+                assert(eitn_get_event_id(event) == 2);
+                assert(cr == UINT32_MAX + 2 * UCLOCK_FREQ / 4);
+                eit = true;
+            }
+
+            assert(eitn_get_start_time(event) == UINT64_C(0xC079124500));
+            assert(eitn_get_duration_bcd(event) == UINT32_C(0x014530));
+            assert(eitn_get_running(event) == 5);
+            assert(!eitn_get_ca(event));
+            assert(eitn_get_desclength(event) == DESC4D_HEADER_SIZE + 10);
+
+            const uint8_t *desc =
+                descs_get_desc(eitn_get_descs((uint8_t *)event), 0);
+            assert(!strncmp((const char *)desc4d_get_lang(desc), "unk", 3));
+            uint8_t event_name_length, text_length;
+            const uint8_t *event_name =
+                desc4d_get_event_name(desc, &event_name_length);
+            const uint8_t *text =
+                desc4d_get_text(desc, &text_length);
+            char *event_name_str =
+                dvb_string_get(event_name, event_name_length, iconv_wrapper, NULL);
+            char *text_str =
+                dvb_string_get(text, text_length, iconv_wrapper, NULL);
+            assert(!strncmp(event_name_str, "meuh", event_name_length));
+            assert(!strncmp(text_str, "gaga", text_length));
+            free(event_name_str);
+            free(text_str);
+            upipe_dbg(upipe, "received EIT");
+            break;
+        }
+
+        case TDT_TABLE_ID:
+            assert(!tdt);
+            assert(cr == UINT32_MAX);
+            assert(tdt_validate(buffer));
+            assert(tdt_get_utc(buffer) == UINT64_C(0xC079124500));
+            tdt = true;
+            upipe_dbg(upipe, "received TDT");
+            break;
+
+        default:
+            assert(0);
     }
-    if (!nit) {
-        assert(nit_validate(buffer));
-        assert(nit_get_nid(buffer) == 43);
-        assert(nit_get_desclength(buffer) == DESC40_HEADER_SIZE + 2);
-
-        const uint8_t *desc =
-            descs_get_desc(nit_get_descs((uint8_t *)buffer), 0);
-        assert(desc != NULL);
-        assert(desc40_validate(desc));
-        uint8_t networkname_length;
-        const uint8_t *networkname =
-            desc40_get_networkname(desc, &networkname_length);
-        char *networkname_string =
-            dvb_string_get(networkname, networkname_length,
-                           iconv_wrapper, NULL);
-        assert(!strncmp(networkname_string, "ga", networkname_length));
-        free(networkname_string);
-        const uint8_t *nith = nit_get_header2((uint8_t *)buffer);
-        assert(nith_get_tslength(nith) == NIT_TS_SIZE);
-        const uint8_t *ts = nit_get_ts((uint8_t *)buffer, 0);
-        assert(nitn_get_tsid(ts) == 45);
-        assert(nitn_get_onid(ts) == 46);
-        assert(nitn_get_desclength(ts) == 0);
-        nit = true;
-
-    } else if (!sdt) {
-        assert(sdt_validate(buffer));
-        assert(sdt_get_tsid(buffer) == 42);
-        assert(sdt_get_onid(buffer) == 44);
-
-        const uint8_t *service = sdt_get_service((uint8_t *)buffer, 0);
-        assert(service != NULL);
-        assert(sdtn_get_sid(service) == 47);
-        assert(sdtn_get_eitpresent(service));
-        assert(!sdtn_get_eitschedule(service));
-        assert(sdtn_get_running(service) == 5);
-        assert(!sdtn_get_ca(service));
-        assert(sdtn_get_desclength(service) == DESC48_HEADER_SIZE + 6);
-
-        const uint8_t *desc =
-            descs_get_desc(sdtn_get_descs((uint8_t *)service), 0);
-        uint8_t provider_length, service_length;
-        const uint8_t *provider_name =
-            desc48_get_provider(desc, &provider_length);
-        const uint8_t *service_name =
-            desc48_get_service(desc, &service_length);
-        char *provider_string =
-            dvb_string_get(provider_name, provider_length, iconv_wrapper, NULL);
-        char *service_string =
-            dvb_string_get(service_name, service_length, iconv_wrapper, NULL);
-        assert(!strncmp(service_string, "bu", service_length));
-        assert(!strncmp(provider_string, "zo", provider_length));
-        free(service_string);
-        free(provider_string);
-        assert(desc48_get_type(desc) == 1);
-        sdt = true;
-
-    } else if (!eit) {
-        assert(eit_validate(buffer));
-        assert(eit_get_tsid(buffer) == 42);
-        assert(eit_get_onid(buffer) == 44);
-        assert(eit_get_last_table_id(buffer) == EIT_TABLE_ID_PF_ACTUAL);
-        assert(eit_get_segment_last_sec_number(buffer) == 0);
-
-        const uint8_t *event = eit_get_event((uint8_t *)buffer, 0);
-        assert(eitn_get_event_id(event) == 1);
-        assert(eitn_get_start_time(event) == UINT64_C(0xC079124500));
-        assert(eitn_get_duration_bcd(event) == UINT32_C(0x014530));
-        assert(eitn_get_running(event) == 5);
-        assert(!eitn_get_ca(event));
-        assert(eitn_get_desclength(event) == DESC4D_HEADER_SIZE + 10);
-
-        const uint8_t *desc =
-            descs_get_desc(eitn_get_descs((uint8_t *)event), 0);
-        assert(!strncmp((const char *)desc4d_get_lang(desc), "unk", 3));
-        uint8_t event_name_length, text_length;
-        const uint8_t *event_name =
-            desc4d_get_event_name(desc, &event_name_length);
-        const uint8_t *text =
-            desc4d_get_text(desc, &text_length);
-        char *event_name_str =
-            dvb_string_get(event_name, event_name_length, iconv_wrapper, NULL);
-        char *text_str =
-            dvb_string_get(text, text_length, iconv_wrapper, NULL);
-        assert(!strncmp(event_name_str, "meuh", event_name_length));
-        assert(!strncmp(text_str, "gaga", text_length));
-        free(event_name_str);
-        free(text_str);
-        eit = true;
-
-    } else if (!tdt) {
-        assert(tdt_validate(buffer));
-        assert(tdt_get_utc(buffer) == UINT64_C(0xC079124500));
-        tdt = true;
-
-    } else
-        assert(0);
 
     uref_block_unmap(uref, 0);
     uref_free(uref);
@@ -392,6 +433,7 @@ int main(int argc, char *argv[])
     ubase_assert(upipe_ts_mux_set_nit_interval(upipe_ts_sig, UCLOCK_FREQ));
     ubase_assert(upipe_ts_mux_set_sdt_interval(upipe_ts_sig, UCLOCK_FREQ));
     ubase_assert(upipe_ts_mux_set_tdt_interval(upipe_ts_sig, UCLOCK_FREQ));
+    ubase_assert(upipe_ts_mux_set_eits_octetrate(upipe_ts_sig, 1000000));
     uref_free(uref);
 
     /* services */
@@ -406,8 +448,7 @@ int main(int argc, char *argv[])
     ubase_assert(uref_flow_set_name(uref, "bu"));
     ubase_assert(uref_ts_flow_set_provider_name(uref, "zo"));
     ubase_assert(uref_ts_flow_set_service_type(uref, 1));
-    ubase_assert(uref_event_set_events(uref, 1));
-    ubase_assert(uref_event_set_id(uref, 1, 0));
+    ubase_assert(uref_event_set_events(uref, 3));
     struct tm tm;
     tm.tm_year = 93;
     tm.tm_mon = 10 - 1;
@@ -416,6 +457,7 @@ int main(int argc, char *argv[])
     tm.tm_min = 45;
     tm.tm_sec = 0;
     tm.tm_isdst = 0;
+    ubase_assert(uref_event_set_id(uref, 0, 0));
     ubase_assert(uref_event_set_start(uref, (uint64_t)mktime(&tm) * UCLOCK_FREQ,
                 0));
     ubase_assert(uref_event_set_duration(uref, (uint64_t)6330 * UCLOCK_FREQ,
@@ -424,6 +466,24 @@ int main(int argc, char *argv[])
     ubase_assert(uref_event_set_language(uref, "unk", 0));
     ubase_assert(uref_event_set_name(uref, "meuh", 0));
     ubase_assert(uref_event_set_description(uref, "gaga", 0));
+    ubase_assert(uref_event_set_id(uref, 1, 1));
+    ubase_assert(uref_event_set_start(uref, (uint64_t)mktime(&tm) * UCLOCK_FREQ,
+                1));
+    ubase_assert(uref_event_set_duration(uref, (uint64_t)6330 * UCLOCK_FREQ,
+                1));
+    ubase_assert(uref_ts_event_set_running_status(uref, 5, 1));
+    ubase_assert(uref_event_set_language(uref, "unk", 1));
+    ubase_assert(uref_event_set_name(uref, "meuh", 1));
+    ubase_assert(uref_event_set_description(uref, "gaga", 1));
+    ubase_assert(uref_event_set_id(uref, 2, 2));
+    ubase_assert(uref_event_set_start(uref, (uint64_t)mktime(&tm) * UCLOCK_FREQ,
+                2));
+    ubase_assert(uref_event_set_duration(uref, (uint64_t)6330 * UCLOCK_FREQ,
+                2));
+    ubase_assert(uref_ts_event_set_running_status(uref, 5, 2));
+    ubase_assert(uref_event_set_language(uref, "unk", 2));
+    ubase_assert(uref_event_set_name(uref, "meuh", 2));
+    ubase_assert(uref_event_set_description(uref, "gaga", 2));
 
     struct upipe *upipe_ts_sig_service1 = upipe_void_alloc_sub(upipe_ts_sig,
             uprobe_pfx_alloc(uprobe_use(logger), UPROBE_LOG_LEVEL,
@@ -452,7 +512,13 @@ int main(int argc, char *argv[])
     ubase_assert(upipe_set_output(output, upipe_sink));
 
     ubase_assert(upipe_ts_mux_prepare(upipe_ts_sig, UINT32_MAX, 0));
+    assert(nit);
+    assert(sdt);
+    assert(eit);
     assert(tdt);
+    eit = false;
+    ubase_assert(upipe_ts_mux_prepare(upipe_ts_sig, UINT32_MAX + UCLOCK_FREQ / 2, 0));
+    assert(eit);
 
     upipe_release(upipe_ts_sig_service1);
 

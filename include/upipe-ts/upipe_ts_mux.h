@@ -133,6 +133,10 @@ enum upipe_ts_mux_command {
     UPIPE_TS_MUX_GET_PADDING_OCTETRATE,
     /** sets the padding octetrate (uint64_t) */
     UPIPE_TS_MUX_SET_PADDING_OCTETRATE,
+    /** returns the current octetrate for EIT schedule (uint64_t *) */
+    UPIPE_TS_MUX_GET_EITS_OCTETRATE,
+    /** sets the octetrate for EIT schedule (uint64_t) */
+    UPIPE_TS_MUX_SET_EITS_OCTETRATE,
     /** returns the current mode (int *) */
     UPIPE_TS_MUX_GET_MODE,
     /** sets the mode (int) */
@@ -548,6 +552,32 @@ static inline int
     upipe_ts_mux_set_padding_octetrate(struct upipe *upipe, uint64_t octetrate)
 {
     return upipe_control(upipe, UPIPE_TS_MUX_SET_PADDING_OCTETRATE,
+                         UPIPE_TS_MUX_SIGNATURE, octetrate);
+}
+
+/** @This returns the current EITs octetrate.
+ *
+ * @param upipe description structure of the pipe
+ * @param octetrate_p filled in with the octetrate
+ * @return an error code
+ */
+static inline int upipe_ts_mux_get_eits_octetrate(struct upipe *upipe,
+                                                  uint64_t *octetrate_p)
+{
+    return upipe_control(upipe, UPIPE_TS_MUX_GET_EITS_OCTETRATE,
+                         UPIPE_TS_MUX_SIGNATURE, octetrate_p);
+}
+
+/** @This sets the EITs octetrate.
+ *
+ * @param upipe description structure of the pipe
+ * @param octetrate new octetrate
+ * @return an error code
+ */
+static inline int upipe_ts_mux_set_eits_octetrate(struct upipe *upipe,
+                                                  uint64_t octetrate)
+{
+    return upipe_control(upipe, UPIPE_TS_MUX_SET_EITS_OCTETRATE,
                          UPIPE_TS_MUX_SIGNATURE, octetrate);
 }
 

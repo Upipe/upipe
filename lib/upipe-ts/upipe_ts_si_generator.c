@@ -181,6 +181,13 @@ struct upipe_ts_sig {
     /** false if a new SDT was built but not sent yet */
     bool sdt_sent;
 
+    /** EIT schedule octetrate */
+    uint64_t eits_octetrate;
+    /** number of EIT schedule sections */
+    uint16_t eits_nb_sections;
+    /** next EIT schedule cr_sys */
+    uint64_t eits_cr_sys;
+
     /** TDT interval */
     uint64_t tdt_interval;
     /** last TDT cr_sys */
@@ -249,18 +256,30 @@ struct upipe_ts_sig_service {
 
     /** EIT version number */
     uint8_t eit_version;
-    /** EIT sections */
+
+    /** EITp/f sections */
     struct uchain eit_sections;
-    /** number of EIT sections */
+    /** number of EITp/f sections */
     uint8_t eit_nb_sections;
-    /** size of EIT sections */
+    /** size of EITp/f sections */
     uint64_t eit_size;
-    /** EIT interval */
+    /** EITp/f interval */
     uint64_t eit_interval;
-    /** last EIT cr_sys */
+    /** last EITp/f cr_sys */
     uint64_t eit_cr_sys;
-    /** false if a new EIT was built but not sent yet */
+    /** false if a new EITp/f was built but not sent yet */
     bool eit_sent;
+
+    /** EIT schedule sections */
+    struct uchain eits_sections;
+    /** number of EIT schedule sections */
+    uint16_t eits_nb_sections;
+    /** size of EIT schedule sections */
+    uint64_t eits_size;
+    /** last EIT schedule cr_sys */
+    uint64_t eits_cr_sys;
+    /** next EIT schedule section number */
+    uint16_t eits_next_section;
 
     /** public upipe structure */
     struct upipe upipe;
@@ -298,6 +317,7 @@ static struct upipe *upipe_ts_sig_service_alloc(struct upipe_mgr *mgr,
     upipe_ts_sig_service_init_sub(upipe);
     service->flow_def = NULL;
     service->eit_version = 0;
+
     ulist_init(&service->eit_sections);
     service->eit_nb_sections = 0;
     service->eit_size = 0;
@@ -305,8 +325,100 @@ static struct upipe *upipe_ts_sig_service_alloc(struct upipe_mgr *mgr,
     service->eit_cr_sys = 0;
     service->eit_sent = false;
 
+    ulist_init(&service->eits_sections);
+    service->eits_nb_sections = 0;
+    service->eits_size = 0;
+    service->eits_cr_sys = 0;
+    service->eits_next_section = 0;
+
     upipe_throw_ready(upipe);
     return upipe;
+}
+
+/** @internal @This generates a new EIT event.
+ *
+ * @param upipe description structure of the pipe
+ * @param i event number
+ * @param buffer pointer to PSI section
+ * @param event pointer to event in PSI section
+ * @return an error code
+ */
+static int upipe_ts_sig_service_build_eit_event(struct upipe *upipe, uint64_t i,
+                                                uint8_t *buffer, uint8_t *event)
+{
+    struct upipe_ts_sig_service *service =
+        upipe_ts_sig_service_from_upipe(upipe);
+    struct upipe_ts_sig *sig =
+        upipe_ts_sig_from_service_mgr(upipe->mgr);
+    uint64_t event_id;
+    uint64_t start, duration;
+    uint8_t running;
+    if (!ubase_check(uref_event_get_id(service->flow_def, &event_id, i)) ||
+        !ubase_check(uref_event_get_start(service->flow_def, &start, i)) ||
+        !ubase_check(uref_event_get_duration(service->flow_def,
+                                             &duration, i)) ||
+        !ubase_check(uref_ts_event_get_running_status(service->flow_def,
+                                                      &running, i)))
+        return UBASE_ERR_INVALID;
+
+    bool ca =
+        ubase_check(uref_ts_event_get_scrambled(service->flow_def, i));
+    const char *language, *name_str = NULL, *description_str;
+    uint8_t *name = NULL, *description = NULL;
+    size_t name_size = 0, description_size = 0;
+    bool desc4d =
+        ubase_check(uref_event_get_language(service->flow_def, &language, i)) &&
+        ubase_check(uref_event_get_name(service->flow_def, &name_str, i)) &&
+        ubase_check(uref_event_get_description(service->flow_def,
+                                               &description_str, i));
+    if (desc4d) {
+        name = upipe_ts_sig_alloc_dvb_string(upipe_ts_sig_to_upipe(sig),
+                name_str, sig->encoding, &name_size);
+        description = upipe_ts_sig_alloc_dvb_string(upipe_ts_sig_to_upipe(sig),
+                description_str, sig->encoding, &description_size);
+    }
+
+    size_t descriptors_size =
+        uref_ts_event_size_descriptors(service->flow_def, i);
+    if (!eit_validate_event(buffer, event, descriptors_size +
+                            (desc4d ? (DESC4D_HEADER_SIZE + name_size + 1 +
+                                       description_size + 1) : 0))) {
+        free(name);
+        free(description);
+        return UBASE_ERR_NOSPC;
+    }
+
+    start /= UCLOCK_FREQ;
+    duration /= UCLOCK_FREQ;
+    upipe_notice_va(upipe,
+            " * event id=%"PRIu64" start=%"PRIu64" duration=%"PRIu64" name=\"%s\"",
+            event_id, start, duration, name_str);
+
+    eitn_init(event);
+    eitn_set_event_id(event, event_id);
+    eitn_set_start_time(event, dvb_time_encode_UTC(start));
+    eitn_set_duration_bcd(event, dvb_time_encode_duration(duration));
+    eitn_set_running(event, running);
+    if (ca)
+        eitn_set_ca(event);
+    eitn_set_desclength(event, descriptors_size +
+                        (desc4d ? (DESC4D_HEADER_SIZE + name_size + 1 +
+                                   description_size + 1) : 0));
+    uint16_t k = 0;
+    if (desc4d) {
+        uint8_t *desc = descs_get_desc(eitn_get_descs(event), k++);
+        desc4d_init(desc);
+        desc4d_set_lang(desc, (const uint8_t *)language);
+        desc4d_set_event_name(desc, name, name_size);
+        desc4d_set_text(desc, description, description_size);
+        desc4d_set_length(desc);
+        free(name);
+        free(description);
+    }
+    if (descriptors_size)
+        uref_ts_event_extract_descriptors(service->flow_def,
+                descs_get_desc(eitn_get_descs(event), k), i);
+    return UBASE_ERR_NONE;
 }
 
 /** @internal @This generates a new EIT PSI section.
@@ -388,91 +500,28 @@ static void upipe_ts_sig_service_build_eit(struct upipe *upipe)
 
         uint16_t j = 0;
         uint8_t *event;
-        while ((event = eit_get_event(buffer, j)) != NULL && i < event_number) {
+        while ((event = eit_get_event(buffer, j)) != NULL && i < event_number &&
+               i < 2) {
             if (j) /* DVB only allows 1 event per section for EITp/f */
                 break;
 
-            uint64_t event_id;
-            uint64_t start, duration;
-            uint8_t running;
-            if (!ubase_check(uref_event_get_id(service->flow_def,
-                            &event_id, i)) ||
-                !ubase_check(uref_event_get_start(service->flow_def,
-                            &start, i)) ||
-                !ubase_check(uref_event_get_duration(service->flow_def,
-                            &duration, i)) ||
-                !ubase_check(uref_ts_event_get_running_status(service->flow_def,
-                            &running, i))) {
+            int err = upipe_ts_sig_service_build_eit_event(upipe, i,
+                                                           buffer, event);
+
+            if (err != UBASE_ERR_NONE) {
+                if (err == UBASE_ERR_NOSPC) {
+                    if (j)
+                        break;
+                    upipe_warn_va(upipe, "EIT event too large");
+                } else
+                    upipe_warn_va(upipe, "EIT event invalid");
+
                 i++;
                 continue;
             }
-            bool ca =
-                ubase_check(uref_ts_event_get_scrambled(service->flow_def, i));
-            const char *language, *name_str = NULL, *description_str;
-            uint8_t *name = NULL, *description = NULL;
-            size_t name_size = 0, description_size = 0;
-            bool desc4d = 
-                ubase_check(uref_event_get_language(service->flow_def,
-                            &language, i)) &&
-                ubase_check(uref_event_get_name(service->flow_def,
-                            &name_str, i)) &&
-                ubase_check(uref_event_get_description(service->flow_def,
-                            &description_str, i));
-            if (desc4d) {
-                name = upipe_ts_sig_alloc_dvb_string(upipe_ts_sig_to_upipe(sig),
-                        name_str, sig->encoding, &name_size);
-                description =
-                    upipe_ts_sig_alloc_dvb_string(upipe_ts_sig_to_upipe(sig),
-                        description_str, sig->encoding, &description_size);
-            }
 
-            size_t descriptors_size =
-                uref_ts_event_size_descriptors(service->flow_def, i);
-            if (!eit_validate_event(buffer, event, descriptors_size +
-                        (desc4d ? (DESC4D_HEADER_SIZE + name_size + 1 +
-                         description_size + 1) : 0))) {
-                free(name);
-                free(description);
-                if (j)
-                    break;
-                upipe_err_va(upipe, "EIT event too large");
-                ubuf_free(ubuf);
-                upipe_throw_error(upipe, UBASE_ERR_INVALID);
-                return;
-            }
-
-            start /= UCLOCK_FREQ;
-            duration /= UCLOCK_FREQ;
-            upipe_notice_va(upipe,
-                    " * event id=%"PRIu64" start=%"PRIu64" duration=%"PRIu64" name=\"%s\"",
-                    event_id, start, duration, name_str);
-
-            j++;
-            eitn_init(event);
-            eitn_set_event_id(event, event_id);
-            eitn_set_start_time(event, dvb_time_encode_UTC(start));
-            eitn_set_duration_bcd(event, dvb_time_encode_duration(duration));
-            eitn_set_running(event, running);
-            if (ca)
-                eitn_set_ca(event);
-            eitn_set_desclength(event, descriptors_size +
-                        (desc4d ? (DESC4D_HEADER_SIZE + name_size + 1 +
-                                   description_size + 1) : 0));
-            uint16_t k = 0;
-            if (desc4d) {
-                uint8_t *desc = descs_get_desc(eitn_get_descs(event), k++);
-                desc4d_init(desc);
-                desc4d_set_lang(desc, (const uint8_t *)language);
-                desc4d_set_event_name(desc, name, name_size);
-                desc4d_set_text(desc, description, description_size);
-                desc4d_set_length(desc);
-                free(name);
-                free(description);
-            }
-            if (descriptors_size)
-                uref_ts_event_extract_descriptors(service->flow_def,
-                        descs_get_desc(eitn_get_descs(event), k), i);
             i++;
+            j++;
         }
 
         eit_set_length(buffer, event - buffer - EIT_HEADER_SIZE);
@@ -483,7 +532,7 @@ static void upipe_ts_sig_service_build_eit(struct upipe *upipe)
         ulist_add(&service->eit_sections, ubuf_to_uchain(ubuf));
         nb_sections++;
         total_size += eit_size;
-    } while (i < event_number);
+    } while (i < event_number && i < 2);
 
     ulist_foreach (&service->eit_sections, section_chain) {
         struct ubuf *ubuf = ubuf_from_uchain(section_chain);
@@ -501,11 +550,128 @@ static void upipe_ts_sig_service_build_eit(struct upipe *upipe)
         ubuf_block_unmap(ubuf, 0);
     }
 
-    upipe_notice_va(upipe, "end EIT (%u sections)", nb_sections);
-
     service->eit_nb_sections = nb_sections;
     service->eit_size = total_size;
     service->eit_sent = false;
+
+
+    /* EIT schedules */
+    total_size = 0;
+    nb_sections = 0;
+
+    while ((section_chain = ulist_pop(&service->eits_sections)) != NULL)
+        ubuf_free(ubuf_from_uchain(section_chain));
+    sig->eits_nb_sections -= service->eits_nb_sections;
+
+    uint8_t table_id = EIT_TABLE_ID_SCHED_ACTUAL_FIRST;
+
+    while (i < event_number) {
+        if (unlikely(table_id > EIT_TABLE_ID_SCHED_ACTUAL_LAST)) {
+            upipe_warn(upipe, "EIT too large");
+            upipe_throw_error(upipe, UBASE_ERR_INVALID);
+            break;
+        }
+        nb_sections = 0;
+
+        while (i < event_number) {
+            if (unlikely(nb_sections >= PSI_TABLE_MAX_SECTIONS)) {
+                table_id++;
+                break;
+            }
+
+            struct ubuf *ubuf = ubuf_block_alloc(sig->ubuf_mgr,
+                    PSI_PRIVATE_MAX_SIZE + PSI_HEADER_SIZE);
+            if (unlikely(ubuf == NULL)) {
+                upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
+                return;
+            }
+
+            uint8_t *buffer;
+            int size = -1;
+            if (!ubase_check(ubuf_block_write(ubuf, 0, &size, &buffer))) {
+                ubuf_free(ubuf);
+                upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
+                return;
+            }
+
+            psi_init(buffer, true);
+            psi_set_tableid(buffer, table_id);
+            /* set length later */
+            psi_set_length(buffer, PSI_PRIVATE_MAX_SIZE);
+            eit_set_sid(buffer, sid);
+            eit_set_tsid(buffer, tsid);
+            eit_set_onid(buffer, onid);
+            /* set last table id later */
+            psi_set_version(buffer, service->eit_version);
+            psi_set_current(buffer);
+            psi_set_section(buffer, nb_sections);
+            /* assume max number of sections, and overwrite later for the last
+             * table ID */
+            eit_set_segment_last_sec_number(buffer, PSI_TABLE_MAX_SECTIONS - 1);
+            psi_set_lastsection(buffer, PSI_TABLE_MAX_SECTIONS - 1);
+
+            uint16_t j = 0;
+            uint8_t *event;
+            while ((event = eit_get_event(buffer, j)) != NULL && i < event_number) {
+                int err = upipe_ts_sig_service_build_eit_event(upipe, i,
+                                                               buffer, event);
+
+                if (err != UBASE_ERR_NONE) {
+                    if (err == UBASE_ERR_NOSPC) {
+                        if (j)
+                            break;
+                        upipe_warn_va(upipe, "EIT event too large");
+                    } else
+                        upipe_warn_va(upipe, "EIT event invalid");
+
+                    i++;
+                    continue;
+                }
+
+                i++;
+                j++;
+            }
+
+            eit_set_length(buffer, event - buffer - EIT_HEADER_SIZE);
+            uint16_t eit_size = psi_get_length(buffer) + PSI_HEADER_SIZE;
+            ubuf_block_unmap(ubuf, 0);
+
+            ubuf_block_resize(ubuf, 0, eit_size);
+            ulist_add(&service->eits_sections, ubuf_to_uchain(ubuf));
+            nb_sections++;
+            total_size += eit_size;
+        }
+    }
+
+    ulist_foreach (&service->eits_sections, section_chain) {
+        struct ubuf *ubuf = ubuf_from_uchain(section_chain);
+        uint8_t *buffer;
+        int size = -1;
+        if (!ubase_check(ubuf_block_write(ubuf, 0, &size, &buffer))) {
+            upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
+            continue;
+        }
+
+        if (psi_get_tableid(buffer) == table_id) {
+            eit_set_segment_last_sec_number(buffer, nb_sections - 1);
+            psi_set_lastsection(buffer, nb_sections - 1);
+        }
+        eit_set_last_table_id(buffer, table_id);
+        psi_set_crc(buffer);
+
+        ubuf_block_unmap(ubuf, 0);
+    }
+
+    service->eits_nb_sections =
+        (table_id - EIT_TABLE_ID_SCHED_ACTUAL_FIRST) * PSI_TABLE_MAX_SECTIONS +
+        nb_sections;
+    sig->eits_nb_sections += service->eits_nb_sections;
+    service->eits_size = total_size;
+    service->eits_next_section = 0;
+
+    upipe_notice_va(upipe, "end EIT (%"PRIu8" sections p/f, %"PRIu16" sections schedule)",
+                    service->eit_nb_sections, service->eits_nb_sections);
+
     upipe_ts_sig_update_status(upipe_ts_sig_to_upipe(sig));
 }
 
@@ -679,6 +845,8 @@ static void upipe_ts_sig_service_free(struct upipe *upipe)
     upipe_ts_sig_service_clean_sub(upipe);
     struct uchain *section_chain;
     while ((section_chain = ulist_pop(&service->eit_sections)) != NULL)
+        ubuf_free(ubuf_from_uchain(section_chain));
+    while ((section_chain = ulist_pop(&service->eits_sections)) != NULL)
         ubuf_free(ubuf_from_uchain(section_chain));
     uref_free(service->flow_def);
 
@@ -867,6 +1035,10 @@ static struct upipe *_upipe_ts_sig_alloc(struct upipe_mgr *mgr,
     upipe_ts_sig->sdt_cr_sys = 0;
     upipe_ts_sig->sdt_sent = false;
 
+    upipe_ts_sig->eits_octetrate = 0;
+    upipe_ts_sig->eits_nb_sections = 0;
+    upipe_ts_sig->eits_cr_sys = 0;
+
     upipe_ts_sig->tdt_interval = 0;
     upipe_ts_sig->tdt_cr_sys = 0;
 
@@ -908,8 +1080,6 @@ static void upipe_ts_sig_send(struct upipe *upipe, struct upipe *output_pipe,
 
         uref_attach_ubuf(uref, ubuf);
         uref_block_set_start(uref);
-        if (last)
-            uref_block_set_end(uref);
         uref_clock_set_cr_sys(uref, output->cr_sys);
         upipe_ts_sig_output_output(output_pipe, uref, NULL);
         output->cr_sys +=
@@ -1474,6 +1644,8 @@ static void upipe_ts_sig_build_eit_flow_def(struct upipe *upipe)
         return;
     }
 
+    octetrate += sig->eits_octetrate;
+
     output->octetrate = octetrate;
     if (!output->octetrate)
         output->octetrate = 1;
@@ -1499,7 +1671,7 @@ static void upipe_ts_sig_build_eit_flow_def(struct upipe *upipe)
                                NULL, NULL);
 }
 
-/** @internal @This sends a EIT PSI section.
+/** @internal @This sends an EITp/f PSI section.
  *
  * @param upipe description structure of the pipe
  * @param cr_sys cr_sys of the next muxed packet
@@ -1536,6 +1708,73 @@ static void upipe_ts_sig_send_eit(struct upipe *upipe, uint64_t cr_sys)
                           &service->eit_sections);
         return;
     }
+}
+
+/** @internal @This sends an EIT schedule PSI section.
+ *
+ * @param upipe description structure of the pipe
+ * @param cr_sys cr_sys of the next muxed packet
+ */
+static void upipe_ts_sig_send_eits(struct upipe *upipe, uint64_t cr_sys)
+{
+    struct upipe_ts_sig *sig = upipe_ts_sig_from_upipe(upipe);
+    if (unlikely(sig->flow_def == NULL))
+        return;
+
+    if (!sig->eits_nb_sections ||
+        (sig->eits_cr_sys && sig->eits_cr_sys > cr_sys))
+        return;
+
+    struct upipe_ts_sig_output *output = upipe_ts_sig_to_eit_output(sig);
+    if (output->flow_def == NULL || cr_sys < output->cr_sys)
+        return;
+
+    uint64_t last_cr_sys = UINT64_MAX;
+    struct upipe_ts_sig_service *service = NULL;
+    struct uchain *uchain;
+    ulist_foreach (&sig->services, uchain) {
+        struct upipe_ts_sig_service *service_chain =
+            upipe_ts_sig_service_from_uchain(uchain);
+        if (service_chain->eits_nb_sections &&
+            service_chain->eits_cr_sys < last_cr_sys)
+            service = service_chain;
+    }
+
+    if (service == NULL)
+        return; /* This should not happen */
+
+    assert(service->eits_next_section < service->eits_nb_sections);
+
+    uchain = ulist_at(&service->eits_sections, service->eits_next_section);
+    assert(uchain != NULL);
+
+    output->cr_sys = cr_sys;
+    service->eits_next_section++;
+    if (service->eits_next_section >= service->eits_nb_sections) {
+        service->eits_cr_sys = cr_sys;
+        service->eits_next_section = 0;
+    }
+    if (!service->eit_sent) {
+        service->eit_version++;
+        service->eit_version &= 0x1f;
+        service->eit_sent = true;
+    }
+
+    size_t eits_size = 0;
+    ubuf_block_size(ubuf_from_uchain(uchain), &eits_size);
+    uint64_t eits_interval = UCLOCK_FREQ * (uint64_t)eits_size /
+                             sig->eits_octetrate;
+
+    upipe_verbose_va(upipe_ts_sig_service_to_upipe(service),
+                     "sending EITs (%"PRIu64")", cr_sys);
+    struct uchain uchain_bak = *uchain;
+    struct uchain ulist;
+    ulist_init(&ulist);
+    ulist_add(&ulist, uchain);
+    upipe_ts_sig_send(upipe, upipe_ts_sig_output_to_upipe(output), &ulist);
+    *uchain = uchain_bak;
+
+    sig->eits_cr_sys = cr_sys + eits_interval;
 }
 
 /** @internal @This builds a new output flow definition for TDT.
@@ -1632,7 +1871,6 @@ static void upipe_ts_sig_send_tdt(struct upipe *upipe, uint64_t cr_sys,
     uref_block_unmap(uref, 0);
 
     uref_block_set_start(uref);
-    uref_block_set_end(uref);
     uref_clock_set_cr_sys(uref, output->cr_sys);
     upipe_ts_sig_output_output(upipe_ts_sig_output_to_upipe(output),
                                uref, NULL);
@@ -1650,53 +1888,59 @@ static void upipe_ts_sig_update_status(struct upipe *upipe)
     struct upipe_ts_sig *sig = upipe_ts_sig_from_upipe(upipe);
     uint64_t cr_sys = UINT64_MAX;
 
-    if (likely(sig->flow_def != NULL)) {
-        if (likely(!ulist_empty(&sig->nit_sections) && sig->nit_interval)) {
-            uint64_t nit_cr_sys = sig->nit_cr_sys + sig->nit_interval;
-            struct upipe_ts_sig_output *output =
-                upipe_ts_sig_to_nit_output(sig);
-            if (unlikely(nit_cr_sys < output->cr_sys))
-                nit_cr_sys = output->cr_sys;
-            if (nit_cr_sys < cr_sys)
-                cr_sys = nit_cr_sys;
-        }
+    if (unlikely(sig->flow_def == NULL)) {
+        sig->cr_sys_status = cr_sys;
+        return;
+    }
 
-        if (likely(!ulist_empty(&sig->sdt_sections) && sig->sdt_interval)) {
-            uint64_t sdt_cr_sys = sig->sdt_cr_sys + sig->sdt_interval;
-            struct upipe_ts_sig_output *output =
-                upipe_ts_sig_to_sdt_output(sig);
-            if (unlikely(sdt_cr_sys < output->cr_sys))
-                sdt_cr_sys = output->cr_sys;
-            if (sdt_cr_sys < cr_sys)
-                cr_sys = sdt_cr_sys;
-        }
-
-        uint64_t eit_cr_sys = cr_sys;
-        struct uchain *uchain;
-        ulist_foreach (&sig->services, uchain) {
-            struct upipe_ts_sig_service *service =
-                upipe_ts_sig_service_from_uchain(uchain);
-            if (likely(!ulist_empty(&service->eit_sections) &&
-                       service->eit_interval &&
-                       eit_cr_sys > service->eit_cr_sys + service->eit_interval))
-                eit_cr_sys = service->eit_cr_sys + service->eit_interval;
-        }
+    if (likely(!ulist_empty(&sig->nit_sections) && sig->nit_interval)) {
+        uint64_t nit_cr_sys = sig->nit_cr_sys + sig->nit_interval;
         struct upipe_ts_sig_output *output =
-            upipe_ts_sig_to_eit_output(sig);
-        if (unlikely(eit_cr_sys < output->cr_sys))
-            eit_cr_sys = output->cr_sys;
-        if (eit_cr_sys < cr_sys)
-            cr_sys = eit_cr_sys;
+            upipe_ts_sig_to_nit_output(sig);
+        if (unlikely(nit_cr_sys < output->cr_sys))
+            nit_cr_sys = output->cr_sys;
+        if (nit_cr_sys < cr_sys)
+            cr_sys = nit_cr_sys;
+    }
 
-        if (likely(sig->uclock != NULL && sig->tdt_interval)) {
-            uint64_t tdt_cr_sys = sig->tdt_cr_sys + sig->tdt_interval;
-            struct upipe_ts_sig_output *output =
-                upipe_ts_sig_to_tdt_output(sig);
-            if (unlikely(tdt_cr_sys < output->cr_sys))
-                tdt_cr_sys = output->cr_sys;
-            if (tdt_cr_sys < cr_sys)
-                cr_sys = tdt_cr_sys;
-        }
+    if (likely(!ulist_empty(&sig->sdt_sections) && sig->sdt_interval)) {
+        uint64_t sdt_cr_sys = sig->sdt_cr_sys + sig->sdt_interval;
+        struct upipe_ts_sig_output *output =
+            upipe_ts_sig_to_sdt_output(sig);
+        if (unlikely(sdt_cr_sys < output->cr_sys))
+            sdt_cr_sys = output->cr_sys;
+        if (sdt_cr_sys < cr_sys)
+            cr_sys = sdt_cr_sys;
+    }
+
+    uint64_t eit_cr_sys = cr_sys;
+    struct uchain *uchain;
+    ulist_foreach (&sig->services, uchain) {
+        struct upipe_ts_sig_service *service =
+            upipe_ts_sig_service_from_uchain(uchain);
+        if (likely(!ulist_empty(&service->eit_sections) &&
+                   service->eit_interval &&
+                   eit_cr_sys > service->eit_cr_sys + service->eit_interval))
+            eit_cr_sys = service->eit_cr_sys + service->eit_interval;
+    }
+    struct upipe_ts_sig_output *output = upipe_ts_sig_to_eit_output(sig);
+    if (unlikely(eit_cr_sys < output->cr_sys))
+        eit_cr_sys = output->cr_sys;
+    if (eit_cr_sys < cr_sys)
+        cr_sys = eit_cr_sys;
+
+    if (sig->eits_octetrate && sig->eits_nb_sections &&
+        sig->eits_cr_sys < cr_sys)
+        cr_sys = sig->eits_cr_sys;
+
+    if (likely(sig->uclock != NULL && sig->tdt_interval)) {
+        uint64_t tdt_cr_sys = sig->tdt_cr_sys + sig->tdt_interval;
+        struct upipe_ts_sig_output *output =
+            upipe_ts_sig_to_tdt_output(sig);
+        if (unlikely(tdt_cr_sys < output->cr_sys))
+            tdt_cr_sys = output->cr_sys;
+        if (tdt_cr_sys < cr_sys)
+            cr_sys = tdt_cr_sys;
     }
 
 #ifdef VERBOSE_TIMING
@@ -1793,6 +2037,7 @@ static int upipe_ts_sig_prepare(struct upipe *upipe, uint64_t cr_sys,
     upipe_ts_sig_send_nit(upipe, cr_sys);
     upipe_ts_sig_send_sdt(upipe, cr_sys);
     upipe_ts_sig_send_eit(upipe, cr_sys);
+    upipe_ts_sig_send_eits(upipe, cr_sys);
     upipe_ts_sig_send_tdt(upipe, cr_sys, latency);
     upipe_ts_sig_update_status(upipe);
     return UBASE_ERR_NONE;
@@ -1925,6 +2170,18 @@ static int upipe_ts_sig_control(struct upipe *upipe, int command, va_list args)
             if (sig->tdt_interval)
                 upipe_ts_sig_require_uclock(upipe);
             upipe_ts_sig_build_tdt_flow_def(upipe);
+            upipe_ts_sig_update_status(upipe);
+            return UBASE_ERR_NONE;
+        }
+        case UPIPE_TS_MUX_GET_EITS_OCTETRATE: {
+            UBASE_SIGNATURE_CHECK(args, UPIPE_TS_MUX_SIGNATURE)
+            uint64_t *octetrate_p = va_arg(args, uint64_t *);
+            *octetrate_p = sig->eits_octetrate;
+            return UBASE_ERR_NONE;
+        }
+        case UPIPE_TS_MUX_SET_EITS_OCTETRATE: {
+            UBASE_SIGNATURE_CHECK(args, UPIPE_TS_MUX_SIGNATURE)
+            sig->eits_octetrate = va_arg(args, uint64_t);
             upipe_ts_sig_update_status(upipe);
             return UBASE_ERR_NONE;
         }

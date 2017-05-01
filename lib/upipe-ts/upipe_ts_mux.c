@@ -165,6 +165,8 @@
 #define MAX_EIT_INTERVAL (UCLOCK_FREQ * 2)
 /** max TDT interval */
 #define MAX_TDT_INTERVAL (UCLOCK_FREQ * 30)
+/** default EITs octetrate */
+#define DEFAULT_EITS_OCTETRATE 0
 /** default AAC encapsulation */
 #define DEFAULT_AAC_ENCAPS UREF_MPGA_ENCAPS_ADTS
 /** default encoding */
@@ -318,6 +320,8 @@ struct upipe_ts_mux {
     /** last attributed automatic PID */
     uint16_t pid_auto;
 
+    /** octetrate reserved for EITs */
+    uint64_t eits_octetrate;
     /** octetrate assigned by the application, or 0 */
     uint64_t fixed_octetrate;
     /** octetrate reserved for padding (and emergency situation) */
@@ -2485,6 +2489,7 @@ static struct upipe *upipe_ts_mux_alloc(struct upipe_mgr *mgr,
     upipe_ts_mux->initial_cr_prog = UINT64_MAX;
     upipe_ts_mux->sid_auto = DEFAULT_SID_AUTO;
     upipe_ts_mux->pid_auto = DEFAULT_PID_AUTO;
+    upipe_ts_mux->eits_octetrate = DEFAULT_EITS_OCTETRATE;
     upipe_ts_mux->fixed_octetrate = 0;
     upipe_ts_mux->padding_octetrate = 0;
     upipe_ts_mux->total_octetrate = 0;
@@ -3458,6 +3463,7 @@ static void upipe_ts_mux_update_sig(struct upipe *upipe)
         return;
     }
     upipe_ts_mux_set_encoding(mux->sig, mux->encoding);
+    upipe_ts_mux_set_eits_octetrate(mux->sig, mux->eits_octetrate);
 
     struct uchain *uchain;
     ulist_foreach (&mux->programs, uchain) {
@@ -4026,7 +4032,7 @@ static int _upipe_ts_mux_get_padding_octetrate(struct upipe *upipe,
     return UBASE_ERR_NONE;
 }
 
-/** @internal @This sets the PCR octetrate.
+/** @internal @This sets the padding octetrate.
  *
  * @param upipe description structure of the pipe
  * @param octetrate new octetrate
@@ -4067,6 +4073,38 @@ static int _upipe_ts_mux_set_octetrate(struct upipe *upipe, uint64_t octetrate)
     struct upipe_ts_mux *upipe_ts_mux = upipe_ts_mux_from_upipe(upipe);
     upipe_ts_mux->fixed_octetrate = octetrate;
     upipe_ts_mux_update(upipe);
+    return UBASE_ERR_NONE;
+}
+
+/** @internal @This returns the current EITs octetrate.
+ *
+ * @param upipe description structure of the pipe
+ * @param octetrate_p filled in with the octetrate
+ * @return an error code
+ */
+static int _upipe_ts_mux_get_eits_octetrate(struct upipe *upipe,
+                                            uint64_t *octetrate_p)
+{
+    struct upipe_ts_mux *upipe_ts_mux = upipe_ts_mux_from_upipe(upipe);
+    assert(octetrate_p != NULL);
+    *octetrate_p = upipe_ts_mux->eits_octetrate;
+    return UBASE_ERR_NONE;
+}
+
+/** @internal @This sets the EITs octetrate.
+ *
+ * @param upipe description structure of the pipe
+ * @param octetrate new octetrate
+ * @return an error code
+ */
+static int _upipe_ts_mux_set_eits_octetrate(struct upipe *upipe,
+                                            uint64_t octetrate)
+{
+    struct upipe_ts_mux *upipe_ts_mux = upipe_ts_mux_from_upipe(upipe);
+    upipe_ts_mux->eits_octetrate = octetrate;
+
+    if (upipe_ts_mux->sig != NULL)
+        upipe_ts_mux_set_eits_octetrate(upipe_ts_mux->sig, octetrate);
     return UBASE_ERR_NONE;
 }
 
@@ -4358,6 +4396,16 @@ static int _upipe_ts_mux_control(struct upipe *upipe, int command, va_list args)
             UBASE_SIGNATURE_CHECK(args, UPIPE_TS_MUX_SIGNATURE)
             uint64_t octetrate = va_arg(args, uint64_t);
             return _upipe_ts_mux_set_octetrate(upipe, octetrate);
+        }
+        case UPIPE_TS_MUX_GET_EITS_OCTETRATE: {
+            UBASE_SIGNATURE_CHECK(args, UPIPE_TS_MUX_SIGNATURE)
+            uint64_t *octetrate_p = va_arg(args, uint64_t *);
+            return _upipe_ts_mux_get_eits_octetrate(upipe, octetrate_p);
+        }
+        case UPIPE_TS_MUX_SET_EITS_OCTETRATE: {
+            UBASE_SIGNATURE_CHECK(args, UPIPE_TS_MUX_SIGNATURE)
+            uint64_t octetrate = va_arg(args, uint64_t);
+            return _upipe_ts_mux_set_eits_octetrate(upipe, octetrate);
         }
         case UPIPE_TS_MUX_GET_MODE: {
             UBASE_SIGNATURE_CHECK(args, UPIPE_TS_MUX_SIGNATURE)
