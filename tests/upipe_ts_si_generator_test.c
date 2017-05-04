@@ -219,7 +219,7 @@ static void test_input(struct upipe *upipe, struct uref *uref,
             assert(service != NULL);
             assert(sdtn_get_sid(service) == 47);
             assert(sdtn_get_eitpresent(service));
-            assert(!sdtn_get_eitschedule(service));
+            assert(sdtn_get_eitschedule(service));
             assert(sdtn_get_running(service) == 5);
             assert(!sdtn_get_ca(service));
             assert(sdtn_get_desclength(service) == DESC48_HEADER_SIZE + 6);
@@ -443,7 +443,6 @@ int main(int argc, char *argv[])
     ubase_assert(uref_flow_set_id(uref, 47));
     ubase_assert(uref_ts_flow_set_pid(uref, 48));
     ubase_assert(uref_ts_flow_set_service_type(uref, 1));
-    ubase_assert(uref_ts_flow_set_eit(uref));
     ubase_assert(uref_ts_flow_set_running_status(uref, 5));
     ubase_assert(uref_flow_set_name(uref, "bu"));
     ubase_assert(uref_ts_flow_set_provider_name(uref, "zo"));

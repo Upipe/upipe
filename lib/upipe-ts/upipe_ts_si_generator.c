@@ -438,26 +438,32 @@ static void upipe_ts_sig_service_build_eit(struct upipe *upipe)
                  !ubase_check(uref_flow_get_id(sig->flow_def, &tsid)) ||
                  !ubase_check(uref_ts_flow_get_onid(sig->flow_def, &onid))))
         return;
-    if (!ubase_check(uref_ts_flow_get_eit(service->flow_def))) {
-        /* no EIT */
-        struct uchain *section_chain;
-        while ((section_chain = ulist_pop(&service->eit_sections)) != NULL)
-            ubuf_free(ubuf_from_uchain(section_chain));
-        return;
-    }
     if (unlikely(sig->frozen)) {
         upipe_dbg_va(upipe, "not rebuilding an EIT");
         return;
     }
 
+    uint64_t event_number = 0;
+    uref_event_get_events(service->flow_def, &event_number);
+    if (!event_number) {
+        /* no EIT */
+        struct uchain *section_chain;
+        while ((section_chain = ulist_pop(&service->eit_sections)) != NULL)
+            ubuf_free(ubuf_from_uchain(section_chain));
+        while ((section_chain = ulist_pop(&service->eits_sections)) != NULL)
+            ubuf_free(ubuf_from_uchain(section_chain));
+        service->eit_nb_sections = 0;
+        service->eit_size = 0;
+        service->eits_nb_sections = 0;
+        service->eits_size = 0;
+        return;
+    }
 
     upipe_notice_va(upipe, "new EIT sid=%"PRIu64" version=%"PRIu8,
                     sid, service->eit_version);
 
     unsigned int nb_sections = 0;
     uint64_t i = 0;
-    uint64_t event_number = 0;
-    uref_event_get_events(service->flow_def, &event_number);
     uint64_t total_size = 0;
 
     struct uchain *section_chain;
@@ -733,11 +739,9 @@ static int upipe_ts_sig_service_set_flow_def(struct upipe *upipe,
         uref_ts_flow_cmp_provider_name(flow_def, service->flow_def) ||
         uref_ts_flow_compare_sdt_descriptors(flow_def, service->flow_def);
 
-    bool eit = ubase_check(uref_ts_flow_get_eit(flow_def));
     bool eit_change = service->flow_def == NULL ||
-        uref_flow_cmp_id(flow_def, service->flow_def) ||
-        uref_ts_flow_cmp_eit(flow_def, service->flow_def);
-    if (!eit_change && eit) {
+        uref_flow_cmp_id(flow_def, service->flow_def);
+    if (!eit_change) {
         eit_change = uref_event_cmp_events(flow_def, service->flow_def);
         if (!eit_change) {
             uint64_t event_number = 0;
@@ -758,7 +762,8 @@ static int upipe_ts_sig_service_set_flow_def(struct upipe *upipe,
                     uref_ts_event_compare_descriptors(flow_def,
                             service->flow_def, i);
             }
-        }
+        } else
+            sdt_change = true;
     }
 
     uref_free(service->flow_def);
@@ -823,6 +828,8 @@ static int upipe_ts_sig_service_control(struct upipe *upipe,
             UBASE_SIGNATURE_CHECK(args, UPIPE_TS_MUX_SIGNATURE)
             upipe_ts_sig_service->eit_interval = va_arg(args, uint64_t);
             upipe_ts_sig_build_eit_flow_def(upipe_ts_sig_to_upipe(sig));
+            upipe_ts_sig_build_sdt(upipe_ts_sig_to_upipe(sig));
+            upipe_ts_sig_build_sdt_flow_def(upipe_ts_sig_to_upipe(sig));
             return UBASE_ERR_NONE;
         }
 
@@ -1464,15 +1471,16 @@ static void upipe_ts_sig_build_sdt(struct upipe *upipe)
                             &sid)))
                 continue;
             uint8_t service_type = 1;
-            bool eit, eitschedule, ca;
+            bool eit = upipe_ts_sig_service->eit_interval &&
+                       upipe_ts_sig_service->eit_nb_sections;
+            bool eitschedule = sig->eits_octetrate &&
+                               upipe_ts_sig_service->eits_nb_sections;
+            bool ca = false; /* we do not support scrambled streams */
             uint8_t running = 4; /* running */
             const char *service_name_str = DEFAULT_NAME;
             const char *provider_name_str = DEFAULT_NAME;
             uref_ts_flow_get_service_type(upipe_ts_sig_service->flow_def,
                                           &service_type);
-            eit = ubase_check(uref_ts_flow_get_eit(upipe_ts_sig_service->flow_def));
-            eitschedule = ubase_check(uref_ts_flow_get_eit_schedule(upipe_ts_sig_service->flow_def));
-            ca = ubase_check(uref_ts_flow_get_scrambled(upipe_ts_sig_service->flow_def));
             uref_ts_flow_get_running_status(upipe_ts_sig_service->flow_def,
                                             &running);
             uref_flow_get_name(upipe_ts_sig_service->flow_def,
@@ -1721,7 +1729,7 @@ static void upipe_ts_sig_send_eits(struct upipe *upipe, uint64_t cr_sys)
     if (unlikely(sig->flow_def == NULL))
         return;
 
-    if (!sig->eits_nb_sections ||
+    if (!sig->eits_octetrate || !sig->eits_nb_sections ||
         (sig->eits_cr_sys && sig->eits_cr_sys > cr_sys))
         return;
 
@@ -2182,6 +2190,8 @@ static int upipe_ts_sig_control(struct upipe *upipe, int command, va_list args)
         case UPIPE_TS_MUX_SET_EITS_OCTETRATE: {
             UBASE_SIGNATURE_CHECK(args, UPIPE_TS_MUX_SIGNATURE)
             sig->eits_octetrate = va_arg(args, uint64_t);
+            upipe_ts_sig_build_sdt(upipe);
+            upipe_ts_sig_build_sdt_flow_def(upipe);
             upipe_ts_sig_update_status(upipe);
             return UBASE_ERR_NONE;
         }
