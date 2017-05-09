@@ -95,13 +95,13 @@ struct upipe_netmap_source {
     struct upump *upump;
 
     /** netmap descriptor **/
-    struct nm_desc *d;
+    struct nm_desc *d[2];
 
     /** netmap uri **/
     char *uri;
 
     /** netmap ring **/
-    unsigned int ring_idx;
+    unsigned int ring_idx[2];
 
     /** got a discontinuity */
     bool discontinuity;
@@ -177,7 +177,8 @@ static struct upipe *upipe_netmap_source_alloc(struct upipe_mgr *mgr,
     upipe_netmap_source_init_upump(upipe);
     upipe_netmap_source_init_uclock(upipe);
     upipe_netmap_source->uri = NULL;
-    upipe_netmap_source->d = NULL;
+    upipe_netmap_source->d[0] = NULL;
+    upipe_netmap_source->d[1] = NULL;
 
     upipe_netmap_source->uref     = NULL;
     upipe_netmap_source->dst_buf  = NULL;
@@ -438,31 +439,40 @@ static void upipe_netmap_source_worker(struct upump *upump)
     if (likely(upipe_netmap_source->uclock != NULL))
         systime = uclock_now(upipe_netmap_source->uclock);
 
-    ioctl(NETMAP_FD(upipe_netmap_source->d), NIOCRXSYNC, NULL);
-    struct netmap_ring *rxring = NETMAP_RXRING(upipe_netmap_source->d->nifp,
-            upipe_netmap_source->ring_idx);
+    for (int idx = 0; idx < 2; idx++) {
+        if (!upipe_netmap_source->d[idx])
+            break;
+        ioctl(NETMAP_FD(upipe_netmap_source->d[idx]), NIOCRXSYNC, NULL);
 
-    uint64_t pkts = 0;
-    while (!nm_ring_empty(rxring)) {
-        const uint32_t cur = rxring->cur;
-        uint8_t *src = (uint8_t*)NETMAP_BUF(rxring, rxring->slot[cur].buf_idx);
+        struct netmap_ring *rxring = NETMAP_RXRING(upipe_netmap_source->d[idx]->nifp,
+                upipe_netmap_source->ring_idx[idx]);
 
-        if (ethernet_get_lentype(src) != ETHERNET_TYPE_IP)
-            goto next;
+        uint64_t pkts = 0;
+        while (!nm_ring_empty(rxring)) {
+            const uint32_t cur = rxring->cur;
 
-        uint8_t *ip = &src[ETHERNET_HEADER_LEN];
-        if (ip_get_proto(ip) != IP_PROTO_UDP)
-            goto next;
+            if (idx) /* FIXME */
+                goto next;
 
-        uint8_t *udp = ip_payload(ip);
-        const uint8_t *rtp = udp_payload(udp);
-        uint16_t payload_len = udp_get_len(udp) - UDP_HEADER_SIZE;
+            uint8_t *src = (uint8_t*)NETMAP_BUF(rxring, rxring->slot[cur].buf_idx);
 
-        if (payload_len == (RTP_HEADER_SIZE + HBRMT_HEADER_SIZE + HBRMT_DATA_SIZE))
-            handle_hbrmt_packet(upipe, rtp, payload_len, systime);
+            if (ethernet_get_lentype(src) != ETHERNET_TYPE_IP)
+                goto next;
+
+            uint8_t *ip = &src[ETHERNET_HEADER_LEN];
+            if (ip_get_proto(ip) != IP_PROTO_UDP)
+                goto next;
+
+            uint8_t *udp = ip_payload(ip);
+            const uint8_t *rtp = udp_payload(udp);
+            uint16_t payload_len = udp_get_len(udp) - UDP_HEADER_SIZE;
+
+            if (payload_len == (RTP_HEADER_SIZE + HBRMT_HEADER_SIZE + HBRMT_DATA_SIZE))
+                handle_hbrmt_packet(upipe, rtp, payload_len, systime);
 
 next:
-        rxring->head = rxring->cur = nm_ring_next(rxring, cur);
+            rxring->head = rxring->cur = nm_ring_next(rxring, cur);
+        }
     }
 }
 
@@ -503,10 +513,11 @@ static int upipe_netmap_source_check(struct upipe *upipe, struct uref *flow_form
             != NULL)
         return UBASE_ERR_NONE;
 
-    if (!upipe_netmap_source->d)
+    int idx = 0; // only need to check first interface
+    if (!upipe_netmap_source->d[idx])
         return UBASE_ERR_NONE;
 
-    if (NETMAP_FD(upipe_netmap_source->d) == -1)
+    if (NETMAP_FD(upipe_netmap_source->d[idx]) == -1)
         return UBASE_ERR_NONE;
 
     if (upipe_netmap_source->upump)
@@ -546,34 +557,52 @@ static int upipe_netmap_source_set_uri(struct upipe *upipe, const char *uri)
 {
     struct upipe_netmap_source *upipe_netmap_source = upipe_netmap_source_from_upipe(upipe);
 
-    nm_close(upipe_netmap_source->d);
+    for (int idx = 0; idx < 2; idx++) {
+        if (upipe_netmap_source->d[idx]) {
+            nm_close(upipe_netmap_source->d[idx]);
+            upipe_netmap_source->d[idx] = NULL;
+        }
+    }
     ubase_clean_str(&upipe_netmap_source->uri);
     upipe_netmap_source_set_upump(upipe, NULL);
 
     if (unlikely(uri == NULL))
         return UBASE_ERR_NONE;
 
-    if (sscanf(uri, "%*[^-]-%u/R", &upipe_netmap_source->ring_idx) != 1) {
-        upipe_err_va(upipe, "invalid netmap receive uri %s", uri);
-        return UBASE_ERR_EXTERNAL;
-    }
-
-    upipe_netmap_source->d = nm_open(uri, NULL, 0, 0);
-    if (unlikely(!upipe_netmap_source->d)) {
-        upipe_err_va(upipe, "can't open netmap socket %s", uri);
-        return UBASE_ERR_EXTERNAL;
-    }
-
     upipe_netmap_source->uri = strdup(uri);
     if (unlikely(upipe_netmap_source->uri == NULL)) {
-        nm_close(upipe_netmap_source->d);
-        upipe_netmap_source->d = NULL;
         upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
         return UBASE_ERR_ALLOC;
     }
 
-    upipe_notice_va(upipe, "opening netmap socket %s ring %u",
-            upipe_netmap_source->uri, upipe_netmap_source->ring_idx);
+    char *p = strchr(upipe_netmap_source->uri, '+');
+    if (p)
+        *p++ = '\0';
+
+    for (int idx = 0; idx < 2; idx++) {
+        char *uri = upipe_netmap_source->uri;
+        if (idx) {
+            uri = p;
+            if (!uri)
+                break;
+        }
+
+        if (sscanf(uri, "%*[^-]-%u/R",
+                    &upipe_netmap_source->ring_idx[idx]) != 1) {
+            upipe_err_va(upipe, "invalid netmap receive uri %s", uri);
+            return UBASE_ERR_EXTERNAL;
+        }
+
+        upipe_netmap_source->d[idx] = nm_open(uri, NULL, 0, 0);
+        if (unlikely(!upipe_netmap_source->d[idx])) {
+            upipe_err_va(upipe, "can't open netmap socket %s", uri);
+            return UBASE_ERR_EXTERNAL;
+        }
+
+        upipe_notice_va(upipe, "opening netmap socket %s ring %u",
+                uri, upipe_netmap_source->ring_idx[idx]);
+    }
+
     return UBASE_ERR_NONE;
 }
 
@@ -645,7 +674,9 @@ static void upipe_netmap_source_free(struct upipe *upipe)
 {
     struct upipe_netmap_source *upipe_netmap_source = upipe_netmap_source_from_upipe(upipe);
 
-    nm_close(upipe_netmap_source->d);
+    for (int idx = 0; idx < 2; idx++)
+        if (upipe_netmap_source->d[idx])
+            nm_close(upipe_netmap_source->d[idx]);
 
     upipe_throw_dead(upipe);
 
