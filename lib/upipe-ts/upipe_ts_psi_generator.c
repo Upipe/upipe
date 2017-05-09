@@ -48,6 +48,7 @@
 #include <upipe-ts/upipe_ts_psi_generator.h>
 #include <upipe-ts/upipe_ts_mux.h>
 #include <upipe-ts/uref_ts_flow.h>
+#include <upipe-framers/uref_mpga_flow.h>
 
 #include <stdlib.h>
 #include <stdbool.h>
@@ -310,7 +311,8 @@ static int upipe_ts_psig_flow_check(struct upipe *upipe,
             *descriptors_size_p += DESC05_HEADER_SIZE;
         else if (ubase_ncmp(raw_def, "block.mp2.") &&
                    ubase_ncmp(raw_def, "block.mp3.") &&
-                   ubase_ncmp(raw_def, "block.aac.")) {
+                   ubase_ncmp(raw_def, "block.aac.") &&
+                   ubase_ncmp(raw_def, "block.aac_latm.")) {
             upipe_warn_va(upipe, "unknown flow definition \"%s\"", raw_def);
             return UBASE_ERR_UNHANDLED;
         }
@@ -360,10 +362,15 @@ static int upipe_ts_psig_flow_build(struct upipe *upipe, uint8_t *es,
         stream_type = PMT_STREAMTYPE_VIDEO_AVC;
     else if (!ubase_ncmp(raw_def, "block.hevc."))
         stream_type = PMT_STREAMTYPE_VIDEO_HEVC;
-    else if (!ubase_ncmp(raw_def, "block.aac."))
-        stream_type = PMT_STREAMTYPE_AUDIO_ADTS;
-    else if (!ubase_ncmp(raw_def, "block.mp2.") ||
-             !ubase_ncmp(raw_def, "block.mp3.")) {
+    else if (!ubase_ncmp(raw_def, "block.aac.") ||
+             !ubase_ncmp(raw_def, "block.aac_latm.")) {
+        uint8_t encaps = UREF_MPGA_ENCAPS_ADTS;
+        uref_mpga_flow_get_encaps(flow->flow_def, &encaps);
+        stream_type = encaps == UREF_MPGA_ENCAPS_LOAS ?
+                     PMT_STREAMTYPE_AUDIO_LATM :
+                     PMT_STREAMTYPE_AUDIO_ADTS;
+    } else if (!ubase_ncmp(raw_def, "block.mp2.") ||
+               !ubase_ncmp(raw_def, "block.mp3.")) {
         uint64_t rate;
         if (ubase_check(uref_sound_flow_get_rate(flow->flow_def, &rate)) &&
             rate >= 32000)

@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2015 OpenHeadend S.A.R.L.
+ * Copyright (C) 2015-2017 OpenHeadend S.A.R.L.
  *
  * Authors: Christophe Massiot
  *
@@ -24,12 +24,12 @@
  */
 
 /** @file
- * @short Upipe helper functions handling iconv (required by biTStream)
+ * @short Upipe helper functions writing DVB strings using iconv
  */
 
-#ifndef _UPIPE_UPIPE_HELPER_ICONV_H_
+#ifndef _UPIPE_UPIPE_HELPER_DVB_STRING_H_
 /** @hidden */
-#define _UPIPE_UPIPE_HELPER_ICONV_H_
+#define _UPIPE_UPIPE_HELPER_DVB_STRING_H_
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -38,8 +38,9 @@ extern "C" {
 #include <upipe/upipe.h>
 
 #include <iconv.h>
+#include <ctype.h>
 
-/** @This declares four functions handling iconv (required by biTStream).
+/** @This declares three functions writing DVB strings using iconv.
  *
  * You must add two members to your private pipe structure, for instance:
  * @code
@@ -52,82 +53,67 @@ extern "C" {
  * Supposing the name of your structure is upipe_foo, it declares:
  * @list
  * @item @code
- *  void upipe_foo_init_iconv(struct upipe *upipe)
+ *  void upipe_foo_init_dvb_string(struct upipe *upipe)
  * @end code
  * Initializes the fields.
  *
  * @item @code
- *  char *upipe_foo_iconv_append_null(const char *string, size_t length)
+ *  uint8_t *upipe_foo_alloc_dvb_string(struct upipe *upipe,
+        const char *string, const char *encoding, size_t *out_length_p)
  * @end code
- * Called internally in cases where no conversion is needed.
+ * Allocates a buffer and stores a DVB string with the given encoding.
  *
  * @item @code
- *  char *upipe_foo_iconv_wrapper(void *_upipe, const char *encoding,
- *                                char *string, size_t length)
- * @end code
- * Wraps around iconv in biTStream calls. The returned string must be freed
- * by the user.
- *
- * @item @code
- *  void upipe_foo_clean_iconv(struct upipe *upipe)
+ *  void upipe_foo_clean_dvb_string(struct upipe *upipe)
  * @end code
  * Releases the iconv handle.
  * @end list
  *
- * @param STRUCTURE name of your private upipe structure 
+ * @param STRUCTURE name of your private upipe structure
  * @param NATIVE_ENCODING native encoding to convert to ("UTF-8")
  * @param CURRENT_ENCODING name of the @tt{const char *} field of
  * your private upipe structure
  * @param ICONV_HANDLE name of the @tt{iconv_t} field of
  * your private upipe structure
  */
-#define UPIPE_HELPER_ICONV(STRUCTURE, NATIVE_ENCODING, CURRENT_ENCODING,    \
-                           ICONV_HANDLE)                                    \
+#define UPIPE_HELPER_DVB_STRING(STRUCTURE, NATIVE_ENCODING,                 \
+                                CURRENT_ENCODING, ICONV_HANDLE)             \
 /** @internal @This initializes the private members for this helper.        \
  *                                                                          \
  * @param upipe description structure of the pipe                           \
  */                                                                         \
-static void STRUCTURE##_init_iconv(struct upipe *upipe)                     \
+static void STRUCTURE##_init_dvb_string(struct upipe *upipe)                \
 {                                                                           \
     struct STRUCTURE *s = STRUCTURE##_from_upipe(upipe);                    \
     s->CURRENT_ENCODING = "";                                               \
     s->ICONV_HANDLE = (iconv_t)-1;                                          \
 }                                                                           \
-/** @internal @This wraps around iconv calls in cases where no conversion   \
- * is needed.                                                               \
+/** @internal @This allocates a buffer and stores a DVB string with the     \
+ * given encoding.                                                          \
  *                                                                          \
- * @param string string to convert (unterminated)                           \
- * @param length length of the string                                       \
- * @return allocated converted string (must be freed)                       \
- */                                                                         \
-static char *STRUCTURE##_iconv_append_null(const char *string,              \
-                                           size_t length)                   \
-{                                                                           \
-    char *output = malloc(length + 1);                                      \
-    if (unlikely(output == NULL))                                           \
-        return NULL;                                                        \
-    memcpy(output, string, length);                                         \
-    output[length] = '\0';                                                  \
-    return output;                                                          \
-}                                                                           \
-/** @internal @This wraps around iconv in biTStream calls.                  \
- *                                                                          \
- * @param _upipe description structure of the pipe                          \
+ * @param upipe description structure of the pipe                           \
+ * @param string input string in NATIVE_ENCODING                            \
  * @param encoding name of encoding in iconv (must be persistent)           \
- * @param string string to convert (unterminated)                           \
- * @param length length of the string                                       \
- * @return allocated converted string (must be freed)                       \
+ * @param filled in with the length of the allocated DVB string             \
+ * @return an error code                                                    \
  */                                                                         \
-static char *STRUCTURE##_iconv_wrapper(void *_upipe, const char *encoding,  \
-                                       char *string, size_t length)         \
+static uint8_t *STRUCTURE##_alloc_dvb_string(struct upipe *upipe,           \
+        const char *string, const char *encoding, size_t *out_length_p)     \
 {                                                                           \
-    struct upipe *upipe = (struct upipe *)_upipe;                           \
     struct STRUCTURE *s = STRUCTURE##_from_upipe(upipe);                    \
-    char *output, *p;                                                       \
-    size_t out_length;                                                      \
+    size_t length = strlen(string);                                         \
+    /* do not convert ASCII strings */                                      \
+    const char *c = string;                                                 \
+    while (*c)                                                              \
+        if (!isascii(*c++))                                                 \
+            break;                                                          \
+    if (!*c)                                                                \
+        return dvb_string_set((const uint8_t *)string, length, "ISO6937",   \
+                              out_length_p);                                \
                                                                             \
     if (!strcmp(encoding, NATIVE_ENCODING))                                 \
-        return STRUCTURE##_iconv_append_null(string, length);               \
+        return dvb_string_set((const uint8_t *)string, length, encoding,    \
+                              out_length_p);                                \
                                                                             \
     if (s->ICONV_HANDLE != (iconv_t)-1 &&                                   \
         strcmp(encoding, s->CURRENT_ENCODING)) {                            \
@@ -136,39 +122,36 @@ static char *STRUCTURE##_iconv_wrapper(void *_upipe, const char *encoding,  \
     }                                                                       \
                                                                             \
     if (s->ICONV_HANDLE == (iconv_t)-1)                                     \
-        s->ICONV_HANDLE = iconv_open(NATIVE_ENCODING, encoding);            \
+        s->ICONV_HANDLE = iconv_open(encoding, NATIVE_ENCODING);            \
     if (s->ICONV_HANDLE == (iconv_t)-1) {                                   \
         upipe_warn_va(upipe, "couldn't convert from %s to %s (%m)",         \
-                      encoding, NATIVE_ENCODING);                           \
-        return STRUCTURE##_iconv_append_null(string, length);               \
+                      NATIVE_ENCODING, encoding);                           \
+        *out_length_p = 0;                                                  \
+        return NULL;                                                        \
     }                                                                       \
     s->CURRENT_ENCODING = encoding;                                         \
                                                                             \
     /* converted strings can be up to six times larger */                   \
-    out_length = length * 6;                                                \
-    p = output = malloc(out_length);                                        \
-    if (unlikely(p == NULL)) {                                              \
-        upipe_err(upipe, "couldn't allocate");                              \
-        return STRUCTURE##_iconv_append_null(string, length);               \
-    }                                                                       \
-    if (iconv(s->ICONV_HANDLE, &string, &length, &p, &out_length) == -1) {  \
+    size_t tmp_length = length * 6;                                         \
+    char tmp[tmp_length];                                                   \
+    size_t tmp_available = tmp_length;                                      \
+    char *p = tmp;                                                          \
+    if (iconv(s->ICONV_HANDLE, (char **)&string, &length,                   \
+              &p, &tmp_available) == -1 || length) {                        \
         upipe_warn_va(upipe, "couldn't convert from %s to %s (%m)",         \
-                      encoding, NATIVE_ENCODING);                           \
-        free(output);                                                       \
-        return STRUCTURE##_iconv_append_null(string, length);               \
+                      NATIVE_ENCODING, encoding);                           \
+        *out_length_p = 0;                                                  \
+        return NULL;                                                        \
     }                                                                       \
-    if (length)                                                             \
-        upipe_warn_va(upipe, "partial conversion from %s to %s",            \
-                      encoding, NATIVE_ENCODING);                           \
                                                                             \
-    *p = '\0';                                                              \
-    return output;                                                          \
+    return dvb_string_set((const uint8_t *)tmp, tmp_length - tmp_available, \
+                          encoding, out_length_p);                          \
 }                                                                           \
 /** @internal @This cleans up the private members for this helper.          \
  *                                                                          \
  * @param upipe description structure of the pipe                           \
  */                                                                         \
-static void STRUCTURE##_clean_iconv(struct upipe *upipe)                    \
+static void STRUCTURE##_clean_dvb_string(struct upipe *upipe)               \
 {                                                                           \
     struct STRUCTURE *s = STRUCTURE##_from_upipe(upipe);                    \
     if (s->ICONV_HANDLE != (iconv_t)-1)                                     \

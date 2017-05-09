@@ -67,6 +67,7 @@
 #include <upipe-modules/upipe_setrap.h>
 #include <upipe-modules/upipe_idem.h>
 #include <upipe-ts/uref_ts_flow.h>
+#include <upipe-ts/uref_ts_event.h>
 #include <upipe-ts/upipe_ts_demux.h>
 #include <upipe-ts/upipe_ts_split.h>
 #include <upipe-ts/upipe_ts_sync.h>
@@ -110,6 +111,8 @@
 #define MAX_PCR_INTERVAL UCLOCK_FREQ
 /** max retention time for most streams (ISO/IEC 13818-1 2.4.2.6) */
 #define MAX_DELAY UCLOCK_FREQ
+/** number of EITs table IDs */
+#define EITS_TABLEIDS 16
 
 /** @internal @This is the private context of a ts_demux manager. */
 struct upipe_ts_demux_mgr {
@@ -324,12 +327,19 @@ struct upipe_ts_demux_program {
     /** systime_rap of the last PMT */
     uint64_t pmt_rap;
 
-    /** psi_pid structure for EIT */
+    /** psi_pid structure for EITp/f */
     struct upipe_ts_demux_psi_pid *psi_pid_eit;
-    /** ts_psi_split_output inner pipe for EIT */
+    /** ts_psi_split_output inner pipe for EITp/f */
     struct upipe *psi_split_output_eit;
-    /** pointer to optional ts_eitd inner pipe */
+    /** pointer to optional ts_eitd inner pipe for EITp/f */
     struct upipe *eitd;
+
+    /** psi_pid structure for EITs */
+    struct upipe_ts_demux_psi_pid *psi_pid_eits[EITS_TABLEIDS];
+    /** ts_psi_split_output inner pipe for EITs */
+    struct upipe *psi_split_output_eits[EITS_TABLEIDS];
+    /** pointer to optional ts_eitd inner pipe for EITs */
+    struct upipe *eitsd[EITS_TABLEIDS];
 
     /** PMT PID */
     uint64_t pmt_pid;
@@ -347,7 +357,7 @@ struct upipe_ts_demux_program {
 
     /** probe to get events from ts_pmtd inner pipe */
     struct uprobe pmtd_probe;
-    /** probe to get events from ts_eitd inner pipe */
+    /** probe to get events from ts_eitd inner pipes */
     struct uprobe eitd_probe;
     /** probe to get events from PCR ts_decaps inner pipe */
     struct uprobe pcr_probe;
@@ -1060,6 +1070,19 @@ static void upipe_ts_demux_program_build_flow_def(struct upipe *upipe)
         }
     }
 
+    /* 0 & 1 are for p/f */
+    uint64_t event = 2;
+    for (uint8_t n = 0; n < EITS_TABLEIDS; n++) {
+        struct uref *flow_def_event;
+        if (upipe_ts_demux_program->eitsd[n] != NULL &&
+            ubase_check(upipe_get_flow_def(upipe_ts_demux_program->eitsd[n],
+                                           &flow_def_event)) &&
+            flow_def_event != NULL) {
+            uref_ts_event_import(flow_def, flow_def_event, &event);
+        } else
+            break;
+    }
+
     upipe_ts_demux_program_store_flow_def(upipe, flow_def);
     /* Force sending flow def */
     struct upipe_ts_demux *demux = upipe_ts_demux_from_program_mgr(upipe->mgr);
@@ -1067,39 +1090,20 @@ static void upipe_ts_demux_program_build_flow_def(struct upipe *upipe)
     upipe_ts_demux_program_output(upipe, uref, NULL);
 }
 
-/** @internal @This catches new_flow_def events coming from pmtd inner pipe.
+/** @internal @This configures the pipes to decode EITp/f (or not).
  *
  * @param upipe description structure of the pipe
- * @param pmtd pointer to the inner pipe
- * @param event event triggered by the inner pipe
- * @param args arguments of the event
+ * @param flow_def PMTd flow definition
  * @return an error code
  */
-static int upipe_ts_demux_program_pmtd_new_flow_def(
-        struct upipe *upipe, struct upipe *pmtd, int event, va_list args)
+static int upipe_ts_demux_configure_eit(struct upipe *upipe,
+                                        struct uref *flow_def)
 {
     struct upipe_ts_demux_program *upipe_ts_demux_program =
         upipe_ts_demux_program_from_upipe(upipe);
     struct upipe_ts_demux *demux = upipe_ts_demux_from_program_mgr(upipe->mgr);
     struct upipe_ts_demux_mgr *ts_demux_mgr =
         upipe_ts_demux_mgr_from_upipe_mgr(upipe_ts_demux_to_upipe(demux)->mgr);
-
-    struct uref *flow_def = va_arg(args, struct uref *);
-    UBASE_ALLOC_RETURN(flow_def);
-    uint64_t pmtd_pcrpid;
-
-    UBASE_RETURN(uref_ts_flow_get_pcr_pid(flow_def, &pmtd_pcrpid))
-    if (upipe_ts_demux_program->pcr_pid != pmtd_pcrpid) {
-        if (upipe_ts_demux_program->pcr_split_output != NULL) {
-            upipe_release(upipe_ts_demux_program->pcr_split_output);
-            upipe_ts_demux_program->pcr_split_output = NULL;
-        }
-
-        upipe_ts_demux_program->pcr_pid = pmtd_pcrpid;
-        upipe_ts_demux_program_check_pcr(upipe);
-    }
-
-    upipe_ts_demux_program_build_flow_def(upipe);
 
     if (!ubase_check(uref_ts_flow_get_eit(flow_def))) {
         if (upipe_ts_demux_program->psi_split_output_eit != NULL) {
@@ -1163,10 +1167,139 @@ static int upipe_ts_demux_program_pmtd_new_flow_def(
                    uprobe_pfx_alloc(
                        uprobe_use(&upipe_ts_demux_program->eitd_probe),
                        UPROBE_LOG_VERBOSE, "eitd"));
-    if (unlikely(upipe_ts_demux_program->eitd == NULL))
+    if (unlikely(upipe_ts_demux_program->eitd == NULL)) {
         upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
+        return UBASE_ERR_ALLOC;
+    }
 
     return UBASE_ERR_NONE;
+}
+
+/** @internal @This configures the pipes to decode an EITs table ID (or not).
+ *
+ * @param upipe description structure of the pipe
+ * @param flow_def PMTd flow definition
+ * @param n table ID offset
+ * @return an error code
+ */
+static int upipe_ts_demux_configure_eits(struct upipe *upipe,
+                                         struct uref *flow_def, uint8_t n)
+{
+    struct upipe_ts_demux_program *upipe_ts_demux_program =
+        upipe_ts_demux_program_from_upipe(upipe);
+    struct upipe_ts_demux *demux = upipe_ts_demux_from_program_mgr(upipe->mgr);
+    struct upipe_ts_demux_mgr *ts_demux_mgr =
+        upipe_ts_demux_mgr_from_upipe_mgr(upipe_ts_demux_to_upipe(demux)->mgr);
+
+    if (!ubase_check(uref_ts_flow_get_eit_schedule(flow_def))) {
+        if (upipe_ts_demux_program->psi_split_output_eits[n] != NULL) {
+            upipe_release(upipe_ts_demux_program->psi_split_output_eits[n]);
+            upipe_ts_demux_psi_pid_release(upipe_ts_demux_program->psi_pid_eits[n]);
+            upipe_ts_demux_program->psi_split_output_eits[n] = NULL;
+        }
+        upipe_release(upipe_ts_demux_program->eitsd[n]);
+        upipe_ts_demux_program->eitsd[n] = NULL;
+        return UBASE_ERR_NONE;
+    }
+
+    if (upipe_ts_demux_program->eitsd[n] != NULL)
+        return UBASE_ERR_NONE;
+
+    /* get psi_split inner pipe */
+    upipe_ts_demux_program->psi_pid_eits[n] =
+        upipe_ts_demux_psi_pid_use(upipe_ts_demux_to_upipe(demux), EIT_PID);
+    if (unlikely(upipe_ts_demux_program->psi_pid_eits[n] == NULL)) {
+        upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
+        return UBASE_ERR_ALLOC;
+    }
+
+    /* set filter on table xx, current, sid */
+    uint8_t filter[PSI_HEADER_SIZE_SYNTAX1];
+    uint8_t mask[PSI_HEADER_SIZE_SYNTAX1];
+    memset(filter, 0, PSI_HEADER_SIZE_SYNTAX1);
+    memset(mask, 0, PSI_HEADER_SIZE_SYNTAX1);
+    psi_set_syntax(filter);
+    psi_set_syntax(mask);
+    psi_set_tableid(filter, EIT_TABLE_ID_SCHED_ACTUAL_FIRST + n);
+    psi_set_tableid(mask, 0xff);
+    psi_set_current(filter);
+    psi_set_current(mask);
+    eit_set_sid(filter, upipe_ts_demux_program->program);
+    eit_set_sid(mask, 0xffff);
+    flow_def = uref_alloc_control(demux->uref_mgr);
+    if (unlikely(flow_def == NULL ||
+                 !ubase_check(uref_flow_set_def(flow_def, "block.mpegtspsi.mpegtseit.")) ||
+                 !ubase_check(uref_ts_flow_set_psi_filter(flow_def, filter, mask,
+                                              PSI_HEADER_SIZE_SYNTAX1)) ||
+                 !ubase_check(uref_ts_flow_set_pid(flow_def, EIT_PID)) ||
+                 (upipe_ts_demux_program->psi_split_output_eits[n] =
+                      upipe_flow_alloc_sub(
+                          upipe_ts_demux_program->psi_pid_eits[n]->psi_split,
+                          uprobe_pfx_alloc_va(
+                              uprobe_use(&upipe_ts_demux_program->proxy_probe),
+                              UPROBE_LOG_VERBOSE,
+                              "psi_split output eits[%"PRIu8"]", n),
+                          flow_def)) == NULL)) {
+        if (flow_def != NULL)
+            uref_free(flow_def);
+        upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
+        return UBASE_ERR_ALLOC;
+    }
+    uref_free(flow_def);
+
+    /* allocate EIT decoder */
+    upipe_ts_demux_program->eitsd[n] =
+        upipe_void_alloc_output(upipe_ts_demux_program->psi_split_output_eits[n],
+                   ts_demux_mgr->ts_eitd_mgr,
+                   uprobe_pfx_alloc_va(
+                       uprobe_use(&upipe_ts_demux_program->eitd_probe),
+                       UPROBE_LOG_VERBOSE, "eitsd[%"PRIu8"]", n));
+    if (unlikely(upipe_ts_demux_program->eitsd[n] == NULL)) {
+        upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
+        return UBASE_ERR_ALLOC;
+    }
+
+    return UBASE_ERR_NONE;
+}
+
+/** @internal @This catches new_flow_def events coming from pmtd inner pipe.
+ *
+ * @param upipe description structure of the pipe
+ * @param pmtd pointer to the inner pipe
+ * @param event event triggered by the inner pipe
+ * @param args arguments of the event
+ * @return an error code
+ */
+static int upipe_ts_demux_program_pmtd_new_flow_def(
+        struct upipe *upipe, struct upipe *pmtd, int event, va_list args)
+{
+    struct upipe_ts_demux_program *upipe_ts_demux_program =
+        upipe_ts_demux_program_from_upipe(upipe);
+
+    struct uref *flow_def = va_arg(args, struct uref *);
+    UBASE_ALLOC_RETURN(flow_def);
+    uint64_t pmtd_pcrpid;
+
+    UBASE_RETURN(uref_ts_flow_get_pcr_pid(flow_def, &pmtd_pcrpid))
+    if (upipe_ts_demux_program->pcr_pid != pmtd_pcrpid) {
+        if (upipe_ts_demux_program->pcr_split_output != NULL) {
+            upipe_release(upipe_ts_demux_program->pcr_split_output);
+            upipe_ts_demux_program->pcr_split_output = NULL;
+        }
+
+        upipe_ts_demux_program->pcr_pid = pmtd_pcrpid;
+        upipe_ts_demux_program_check_pcr(upipe);
+    }
+
+    upipe_ts_demux_program_build_flow_def(upipe);
+
+    UBASE_RETURN(upipe_ts_demux_configure_eit(upipe, flow_def));
+
+    for (uint8_t n = 0; n < EITS_TABLEIDS; n++) {
+        UBASE_RETURN(upipe_ts_demux_configure_eits(upipe, flow_def, n));
+    }
+    return UBASE_ERR_NONE;
+
 }
 
 /** @internal @This catches split_update events coming from pmtd inner pipe.
@@ -1497,6 +1630,11 @@ static struct upipe *upipe_ts_demux_program_alloc(struct upipe_mgr *mgr,
     upipe_ts_demux_program->psi_split_output_pmt =
         upipe_ts_demux_program->psi_split_output_eit = NULL;
     upipe_ts_demux_program->pmtd = upipe_ts_demux_program->eitd = NULL;
+    for (uint8_t n = 0; n < EITS_TABLEIDS; n++) {
+        upipe_ts_demux_program->psi_pid_eits[n] = NULL;
+        upipe_ts_demux_program->psi_split_output_eits[n] = NULL;
+        upipe_ts_demux_program->eitsd[n] = NULL;
+    }
     upipe_ts_demux_program->timestamp_offset = 0;
     upipe_ts_demux_program->timestamp_highest = TS_CLOCK_MAX;
     upipe_ts_demux_program->last_pcr = TS_CLOCK_MAX;
@@ -1678,6 +1816,7 @@ static void upipe_ts_demux_program_no_input(struct upipe *upipe)
     struct upipe_ts_demux_program *upipe_ts_demux_program =
         upipe_ts_demux_program_from_upipe(upipe);
     upipe_ts_demux_program_throw_sub_outputs(upipe, UPROBE_SOURCE_END);
+
     /* close PMT to release ESs */
     if (upipe_ts_demux_program->psi_split_output_pmt != NULL) {
         upipe_release(upipe_ts_demux_program->psi_split_output_pmt);
@@ -1686,6 +1825,7 @@ static void upipe_ts_demux_program_no_input(struct upipe *upipe)
     }
     upipe_release(upipe_ts_demux_program->pmtd);
     upipe_ts_demux_program->pmtd = NULL;
+
     if (upipe_ts_demux_program->psi_split_output_eit != NULL) {
         upipe_release(upipe_ts_demux_program->psi_split_output_eit);
         upipe_ts_demux_psi_pid_release(upipe_ts_demux_program->psi_pid_eit);
@@ -1693,6 +1833,17 @@ static void upipe_ts_demux_program_no_input(struct upipe *upipe)
     }
     upipe_release(upipe_ts_demux_program->eitd);
     upipe_ts_demux_program->eitd = NULL;
+
+    for (uint8_t n = 0; n < EITS_TABLEIDS; n++) {
+        if (upipe_ts_demux_program->psi_split_output_eits[n] != NULL) {
+            upipe_release(upipe_ts_demux_program->psi_split_output_eits[n]);
+            upipe_ts_demux_psi_pid_release(upipe_ts_demux_program->psi_pid_eits[n]);
+            upipe_ts_demux_program->psi_split_output_eits[n] = NULL;
+        }
+        upipe_release(upipe_ts_demux_program->eitsd[n]);
+        upipe_ts_demux_program->eitsd[n] = NULL;
+    }
+
     upipe_split_throw_update(upipe);
 
     if (upipe_ts_demux_program->pcr_split_output != NULL)

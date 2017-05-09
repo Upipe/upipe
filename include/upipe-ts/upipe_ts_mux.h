@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2013-2015 OpenHeadend S.A.R.L.
+ * Copyright (C) 2013-2017 OpenHeadend S.A.R.L.
  *
  * Authors: Christophe Massiot
  *
@@ -133,6 +133,10 @@ enum upipe_ts_mux_command {
     UPIPE_TS_MUX_GET_PADDING_OCTETRATE,
     /** sets the padding octetrate (uint64_t) */
     UPIPE_TS_MUX_SET_PADDING_OCTETRATE,
+    /** returns the current octetrate for EIT schedule (uint64_t *) */
+    UPIPE_TS_MUX_GET_EITS_OCTETRATE,
+    /** sets the octetrate for EIT schedule (uint64_t) */
+    UPIPE_TS_MUX_SET_EITS_OCTETRATE,
     /** returns the current mode (int *) */
     UPIPE_TS_MUX_GET_MODE,
     /** sets the mode (int) */
@@ -141,6 +145,14 @@ enum upipe_ts_mux_command {
     UPIPE_TS_MUX_GET_VERSION,
     /** sets the version number of the table (unsigned int) */
     UPIPE_TS_MUX_SET_VERSION,
+    /** returns the current encapsulation for AAC streams (int *) */
+    UPIPE_TS_MUX_GET_AAC_ENCAPS,
+    /** sets the encapsulation for AAC streams (int) */
+    UPIPE_TS_MUX_SET_AAC_ENCAPS,
+    /** returns the current encoding for strings (const char **) */
+    UPIPE_TS_MUX_GET_ENCODING,
+    /** sets the encoding for strings (const char *) */
+    UPIPE_TS_MUX_SET_ENCODING,
     /** stops updating a PSI table upon sub removal */
     UPIPE_TS_MUX_FREEZE_PSI,
     /** prepares the next access unit/section for the given date
@@ -543,6 +555,32 @@ static inline int
                          UPIPE_TS_MUX_SIGNATURE, octetrate);
 }
 
+/** @This returns the current EITs octetrate.
+ *
+ * @param upipe description structure of the pipe
+ * @param octetrate_p filled in with the octetrate
+ * @return an error code
+ */
+static inline int upipe_ts_mux_get_eits_octetrate(struct upipe *upipe,
+                                                  uint64_t *octetrate_p)
+{
+    return upipe_control(upipe, UPIPE_TS_MUX_GET_EITS_OCTETRATE,
+                         UPIPE_TS_MUX_SIGNATURE, octetrate_p);
+}
+
+/** @This sets the EITs octetrate.
+ *
+ * @param upipe description structure of the pipe
+ * @param octetrate new octetrate
+ * @return an error code
+ */
+static inline int upipe_ts_mux_set_eits_octetrate(struct upipe *upipe,
+                                                  uint64_t octetrate)
+{
+    return upipe_control(upipe, UPIPE_TS_MUX_SET_EITS_OCTETRATE,
+                         UPIPE_TS_MUX_SIGNATURE, octetrate);
+}
+
 /** @This returns the current mode.
  *
  * @param upipe description structure of the pipe
@@ -595,6 +633,58 @@ static inline int upipe_ts_mux_set_version(struct upipe *upipe,
 {
     return upipe_control(upipe, UPIPE_TS_MUX_SET_VERSION,
                          UPIPE_TS_MUX_SIGNATURE, version);
+}
+
+/** @This returns the current encapsulation for AAC streams
+ * (see @ref uref_mpga_encaps).
+ *
+ * @param upipe description structure of the pipe
+ * @param encaps_p filled in with the encapsulation
+ * @return an error code
+ */
+static inline int upipe_ts_mux_get_aac_encaps(struct upipe *upipe,
+                                              int *encaps_p)
+{
+    return upipe_control(upipe, UPIPE_TS_MUX_GET_AAC_ENCAPS,
+                         UPIPE_TS_MUX_SIGNATURE, encaps_p);
+}
+
+/** @This sets the encapsulation for AAC streams (see @ref uref_mpga_encaps).
+ *
+ * @param upipe description structure of the pipe
+ * @param encaps encapsulation
+ * @return an error code
+ */
+static inline int upipe_ts_mux_set_aac_encaps(struct upipe *upipe, int encaps)
+{
+    return upipe_control(upipe, UPIPE_TS_MUX_SET_AAC_ENCAPS,
+                         UPIPE_TS_MUX_SIGNATURE, encaps);
+}
+
+/** @This returns the current encoding for strings.
+ *
+ * @param upipe description structure of the pipe
+ * @param encoding_p filled in with the encoding
+ * @return an error code
+ */
+static inline int upipe_ts_mux_get_encoding(struct upipe *upipe,
+                                            const char **encoding_p)
+{
+    return upipe_control(upipe, UPIPE_TS_MUX_GET_ENCODING,
+                         UPIPE_TS_MUX_SIGNATURE, encoding_p);
+}
+
+/** @This sets the encoding for strings.
+ *
+ * @param upipe description structure of the pipe
+ * @param encoding encoding (default: UTF-8)
+ * @return an error code
+ */
+static inline int upipe_ts_mux_set_encoding(struct upipe *upipe,
+                                            const char *encoding)
+{
+    return upipe_control(upipe, UPIPE_TS_MUX_SET_ENCODING,
+                         UPIPE_TS_MUX_SIGNATURE, encoding);
 }
 
 /** @This stops updating a PSI table upon sub removal.

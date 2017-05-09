@@ -38,6 +38,7 @@ pkginclude_HEADERS = \
 	upipe_dump.h \
 	upipe_helper_bin_input.h \
 	upipe_helper_bin_output.h \
+	upipe_helper_dvb_string.h \
 	upipe_helper_flow_def_check.h \
 	upipe_helper_flow_def.h \
 	upipe_helper_flow_format.h \

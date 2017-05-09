@@ -275,7 +275,7 @@ static int STRUCTURE##_unregister_output_request(struct upipe *upipe,       \
     struct STRUCTURE *s = STRUCTURE##_from_upipe(upipe);                    \
     ulist_delete(urequest_to_uchain(urequest));                             \
     int err;                                                                \
-    if (likely(s->OUTPUT != NULL &&                                         \
+    if (likely(s->OUTPUT != NULL && urequest->registered &&                 \
                (err = upipe_unregister_request(s->OUTPUT, urequest))        \
                  != UBASE_ERR_UNHANDLED))                                   \
         return err;                                                         \
@@ -411,12 +411,25 @@ static int STRUCTURE##_set_output(struct upipe *upipe, struct upipe *output)\
                                                                             \
     s->OUTPUT = upipe_use(output);                                          \
     s->OUTPUT_STATE = UPIPE_HELPER_OUTPUT_NONE;                             \
-    if (likely(s->OUTPUT != NULL)) {                                        \
+    if (unlikely(s->OUTPUT == NULL))                                        \
+        return UBASE_ERR_NONE;                                              \
+                                                                            \
+    /* Retry in a loop because the request list may change at any point. */ \
+    for ( ; ; ) {                                                           \
+        struct urequest *urequest = NULL;                                   \
         struct uchain *uchain;                                              \
         ulist_foreach (&s->REQUEST_LIST, uchain) {                          \
-            struct urequest *urequest = urequest_from_uchain(uchain);       \
-            upipe_register_request(s->OUTPUT, urequest);                    \
+            struct urequest *urequest_chain = urequest_from_uchain(uchain); \
+            if (!urequest_chain->registered) {                              \
+                urequest = urequest_chain;                                  \
+                break;                                                      \
+            }                                                               \
         }                                                                   \
+        if (urequest != NULL) {                                             \
+            upipe_register_request(s->OUTPUT, urequest);                    \
+            continue;                                                       \
+        }                                                                   \
+        break;                                                              \
     }                                                                       \
     return UBASE_ERR_NONE;                                                  \
 }                                                                           \

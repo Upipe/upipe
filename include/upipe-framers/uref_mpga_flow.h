@@ -66,6 +66,23 @@ static inline enum uref_mpga_encaps
     return UREF_MPGA_ENCAPS_ADTS;
 }
 
+/** @This encodes an encapsulation from a string.
+ *
+ * @param encaps string describing the encapsulation
+ * @return codec encapsulation
+ */
+static inline enum uref_mpga_encaps
+    uref_mpga_encaps_from_string(const char *encaps)
+{
+    if (encaps == NULL)
+        return UREF_MPGA_ENCAPS_ADTS;
+    if (!strcmp(encaps, "loas"))
+        return UREF_MPGA_ENCAPS_LOAS;
+    if (!strcmp(encaps, "raw"))
+        return UREF_MPGA_ENCAPS_RAW;
+    return UREF_MPGA_ENCAPS_ADTS;
+}
+
 #ifdef __cplusplus
 }
 #endif

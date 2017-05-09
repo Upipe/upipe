@@ -51,7 +51,7 @@ struct urequest;
 /** @This defines standard requests which upipe modules may need. */
 enum urequest_type {
     /** a uref manager is requested (struct uref_mgr *) */
-    UREQUEST_UREF_MGR,
+    UREQUEST_UREF_MGR = 0,
     /** a flow format is requested (struct uref *) */
     UREQUEST_FLOW_FORMAT,
     /** a ubuf manager is requested (struct ubuf_mgr *, struct uref *) */
@@ -78,6 +78,8 @@ struct urequest {
     struct uchain uchain;
     /** opaque - for use by the upstream pipe only */
     void *opaque;
+    /** true if the urequest was already registered */
+    bool registered;
 
     /** request type */
     int type;
@@ -105,6 +107,7 @@ static inline void urequest_init(struct urequest *urequest, int type,
 {
     assert(urequest != NULL);
     uchain_init(&urequest->uchain);
+    urequest->registered = false;
     urequest->type = type;
     urequest->uref = uref;
     urequest->urequest_provide = urequest_provide;
@@ -196,6 +199,7 @@ static inline void urequest_init_sink_latency(struct urequest *urequest,
 static inline void urequest_clean(struct urequest *urequest)
 {
     assert(urequest != NULL);
+    assert(!urequest->registered);
     uref_free(urequest->uref);
 }
 
