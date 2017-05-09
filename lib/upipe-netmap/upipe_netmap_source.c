@@ -55,8 +55,6 @@
 #include <net/netmap.h>
 #include <net/netmap_user.h>
 
-#include <poll.h>
-
 /** @hidden */
 static int upipe_netmap_source_check(struct upipe *upipe, struct uref *flow_format);
 
