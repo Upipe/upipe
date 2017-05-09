@@ -73,4 +73,5 @@ myinclude_HEADERS = \
 	upipe_rtp_pcm_unpack.h \
 	upipe_rtp_pcm_pack.h \
 	upipe_dtsdi.h \
+	upipe_sync.h \
 	$(NULL)
