@@ -258,7 +258,7 @@ static void upipe_rtp_fec_correct_packets(struct upipe *upipe,
     }
 
     if (processed != items - 1) {
-        upipe_err_va(upipe, "Too much packet loss: found only %d out of %d",
+        upipe_dbg_va(upipe, "Too much packet loss: found only %d out of %d",
                 processed, items);
         uref_free(fec_uref);
         return;
@@ -345,7 +345,7 @@ static void upipe_rtp_fec_correct_packets(struct upipe *upipe,
             break;
         }
 
-    upipe_warn_va(&upipe_rtp_fec->upipe, "Corrected packet. Sequence number: %u", missing_seqnum);
+    upipe_dbg_va(&upipe_rtp_fec->upipe, "Corrected packet. Sequence number: %u", missing_seqnum);
     upipe_rtp_fec->recovered++;
     fec_uref->priv = missing_seqnum;
     rtp_set_seqnum(dst, missing_seqnum);
