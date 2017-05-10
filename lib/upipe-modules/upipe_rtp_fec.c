@@ -316,9 +316,11 @@ static void upipe_rtp_fec_correct_packets(struct upipe *upipe,
             if (seqnum_list[i] == uref->priv) {
                 size_t size = 0;
                 uref_block_size(uref, &size);
-                assert(size >= RTP_HEADER_SIZE);
                 uint8_t payload_buf[TS_SIZE * 7 + RTP_HEADER_SIZE];
-                assert(size <= sizeof(payload_buf)); // FIXME
+                
+                if(size >= RTP_HEADER_SIZE || size <= sizeof(payload_buf))
+                    continue;
+                
                 // TODO: uref_block_read in a loop
                 const uint8_t *peek = uref_block_peek(uref, 0, size,
                         payload_buf);
