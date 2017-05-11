@@ -236,27 +236,30 @@ static void upipe_rtp_fec_correct_packets(struct upipe *upipe,
 
     bool found_seqnum[FEC_MAX] = {0};
 
+    /* Search to see if any packets are lost */
     int processed = 0;
     struct uchain *uchain, *uchain_tmp;
     ulist_foreach (&upipe_rtp_fec->main_queue, uchain) {
         struct uref *uref = uref_from_uchain(uchain);
         uint16_t seqnum = uref->priv;
 
-        // TODO: reduce complexity, both lists are ordered
         for (int i = 0; i < items; i++) {
-            if (seqnum_list[i] != seqnum)
-                continue;
+            if (seqnum_list[i] == seqnum) {
+                processed++;
+                found_seqnum[i] = 1;
+            }
 
-            found_seqnum[i] = true;
-            if (++processed < items)
-                break; /* next uref */
-
-            upipe_verbose_va(upipe, "no packets lost");
-            uref_free(fec_uref);
-            return;
+            if (processed == items)
+                break;
         }
     }
 
+    if (processed == items) {
+        upipe_verbose_va(upipe, "no packets lost");
+        uref_free(fec_uref);
+        return;
+    }
+    
     if (processed != items - 1) {
         upipe_dbg_va(upipe, "Too much packet loss: found only %d out of %d",
                 processed, items);
