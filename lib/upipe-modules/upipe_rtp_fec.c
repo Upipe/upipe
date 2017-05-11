@@ -247,19 +247,17 @@ static void upipe_rtp_fec_correct_packets(struct upipe *upipe,
             if (seqnum_list[i] == seqnum) {
                 processed++;
                 found_seqnum[i] = true;
-            }
-
-            if (processed == items)
                 break;
+            }
         }
+        
+        if (processed == items) {
+            upipe_verbose_va(upipe, "no packets lost");
+            uref_free(fec_uref);
+            return;
+        }     
     }
-
-    if (processed == items) {
-        upipe_verbose_va(upipe, "no packets lost");
-        uref_free(fec_uref);
-        return;
-    }
-    
+   
     if (processed != items - 1) {
         upipe_dbg_va(upipe, "Too much packet loss: found only %d out of %d",
                 processed, items);
@@ -310,9 +308,10 @@ static void upipe_rtp_fec_correct_packets(struct upipe *upipe,
     uint8_t *dst;
     int size = length_rec + RTP_HEADER_SIZE;
     uref_block_write(fec_uref, 0, &size, &dst);
-
+   
     bool copy_header = true;
 
+    processed = 0;
     ulist_foreach (&upipe_rtp_fec->main_queue, uchain) {
         struct uref *uref = uref_from_uchain(uchain);
         for (int i = 0; i < items; i++) {
@@ -334,15 +333,16 @@ static void upipe_rtp_fec_correct_packets(struct upipe *upipe,
                 for (int i = 0; i < size - RTP_HEADER_SIZE; i++)
                     dst[RTP_HEADER_SIZE + i] ^= peek[RTP_HEADER_SIZE + i];
                 uref_block_peek_unmap(uref, RTP_HEADER_SIZE, payload_buf, peek);
+                processed++;
                 break;
             }
         }
 
-        if (items == 1) // ???
+        if (processed == items-1)
             break;
     }
 
-    // XXX
+    /* Maybe possible to merge with above */
     uint16_t missing_seqnum = 0;
     for (int i = 0; i < items; i++)
         if (!found_seqnum[i]) {
