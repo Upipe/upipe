@@ -321,7 +321,7 @@ static void upipe_rtp_fec_correct_packets(struct upipe *upipe,
                 uref_block_size(uref, &size);
                 uint8_t payload_buf[TS_SIZE * 7 + RTP_HEADER_SIZE];
                 
-                if(size >= RTP_HEADER_SIZE || size <= sizeof(payload_buf))
+                if(size < sizeof(payload_buf))
                     continue;
                 
                 // TODO: uref_block_read in a loop
