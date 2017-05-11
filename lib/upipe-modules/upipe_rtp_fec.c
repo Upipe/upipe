@@ -246,7 +246,7 @@ static void upipe_rtp_fec_correct_packets(struct upipe *upipe,
         for (int i = 0; i < items; i++) {
             if (seqnum_list[i] == seqnum) {
                 processed++;
-                found_seqnum[i] = 1;
+                found_seqnum[i] = true;
             }
 
             if (processed == items)
