@@ -1,5 +1,17 @@
 /** @file
  * @short Upipe RTP FEC module
+ 
+    The code does not handle one special case:
+    X - lost
+    O - received
+ 
+    3x3 Matrix example:
+        XXOR
+        OOOR
+        OOOR
+        CXC
+   
+    This would require two passes of row FEC, adding significant complexity for an unlikely case. 
  */
 
 #include <upipe/ubase.h>
