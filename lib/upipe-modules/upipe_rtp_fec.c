@@ -389,10 +389,9 @@ static void upipe_rtp_fec_apply_col_fec(struct upipe *upipe)
         }
 
         /* Build a list of the expected sequence numbers in matrix column */
-        for (int i = 0; i < upipe_rtp_fec->rows; i++) {
-            seqnum_list[i] = snbase_low;
-            snbase_low += upipe_rtp_fec->cols;
-        }
+        seqnum_list[0] = snbase_low;
+        for (int i = 1; i < upipe_rtp_fec->rows; i++)
+            seqnum_list[i] = seqnum_list[i-1] + upipe_rtp_fec->cols;
 
         upipe_rtp_fec_correct_packets(upipe, fec_uref, seqnum_list,
                 upipe_rtp_fec->rows);
