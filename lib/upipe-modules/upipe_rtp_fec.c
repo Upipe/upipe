@@ -219,7 +219,7 @@ static void insert_ordered_uref(struct uchain *queue, struct uref *uref)
                 continue;
         }
 
-        //uref_clock_delete_date_sys(uref);
+        uref_clock_delete_date_sys(uref);
         ulist_insert(uchain->prev, uchain, uref_to_uchain(uref));
         return;
     }
@@ -602,12 +602,15 @@ static void upipe_rtp_fec_main_input(struct upipe *upipe, struct uref *uref)
         uref_free(uref);
     } else {
         upipe_rtp_fec->last_seqnum = seqnum;
-        insert_ordered_uref(&upipe_rtp_fec->main_queue, uref);
 
+        /* Get the date before inserting uref.
+           Inserting uref could delete the date if packet is reordered */
         int type;
         uint64_t date_sys = 0;
         uref_clock_get_date_sys(uref, &date_sys, &type);
 
+        insert_ordered_uref(&upipe_rtp_fec->main_queue, uref);
+        
         /* Owing to clock drift the latency of 2x the FEC matrix may increase
          * Build a continually updating duration and correct the latency if necessary.
          * Also helps with undershoot of latency calculation from initial packets */
