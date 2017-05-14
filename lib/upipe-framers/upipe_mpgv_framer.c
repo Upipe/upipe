@@ -48,8 +48,7 @@
 #include <upipe-framers/upipe_mpgv_framer.h>
 #include <upipe-framers/uref_mpgv.h>
 #include <upipe-framers/uref_mpgv_flow.h>
-
-#include "upipe_framers_common.h"
+#include <upipe-framers/upipe_framers_common.h>
 
 #include <stdlib.h>
 #include <stdbool.h>

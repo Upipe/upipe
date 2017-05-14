@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2013-2016 OpenHeadend S.A.R.L.
+ * Copyright (C) 2013-2017 OpenHeadend S.A.R.L.
  *
  * Authors: Christophe Massiot
  *
@@ -21,6 +21,13 @@
 /** @file
  * @short Common framer functions for H.26x
  */
+
+#ifndef _UPIPE_FRAMERS_UPIPE_H26X_COMMON_H_
+/** @hidden */
+#define _UPIPE_FRAMERS_UPIPE_H26X_COMMON_H_
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 #include <upipe/ubase.h>
 #include <upipe/ubuf.h>
@@ -100,3 +107,8 @@ struct ubuf *upipe_h26xf_alloc_annexb(struct ubuf_mgr *ubuf_mgr);
 int upipe_h26xf_convert_frame(struct uref *uref,
         enum uref_h26x_encaps encaps_input, enum uref_h26x_encaps encaps_output,
         struct ubuf_mgr *ubuf_mgr, struct ubuf *annexb_header);
+
+#ifdef __cplusplus
+}
+#endif
+#endif

@@ -26,7 +26,7 @@
 
 #include <stdint.h>
 
-#include "upipe_framers_common.h"
+#include <upipe-framers/upipe_framers_common.h>
 
 /** @This scans for an MPEG-style 3-octet start code in a linear buffer.
  *

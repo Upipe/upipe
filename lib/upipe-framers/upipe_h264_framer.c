@@ -51,9 +51,8 @@
 #include <upipe-framers/uref_h26x.h>
 #include <upipe-framers/uref_h264_flow.h>
 #include <upipe-framers/uref_h26x_flow.h>
-
-#include "upipe_framers_common.h"
-#include "upipe_h26x_common.h"
+#include <upipe-framers/upipe_framers_common.h>
+#include <upipe-framers/upipe_h26x_common.h>
 
 #include <stdlib.h>
 #include <stdbool.h>
