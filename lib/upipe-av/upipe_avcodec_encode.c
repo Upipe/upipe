@@ -57,6 +57,7 @@
 #include <upipe/upipe_helper_input.h>
 #include <upipe-av/upipe_avcodec_encode.h>
 #include <upipe/udict_dump.h>
+#include <upipe-framers/uref_mpga_flow.h>
 
 #include <stdlib.h>
 #include <stdbool.h>
@@ -98,6 +99,9 @@ static void upipe_avcenc_encode_audio(struct upipe *upipe,
 /** @hidden */
 static bool upipe_avcenc_handle(struct upipe *upipe, struct uref *uref,
                                 struct upump **upump_p);
+/** @hidden */
+static int upipe_avcenc_set_option(struct upipe *upipe,
+                                   const char *option, const char *content);
 
 /** upipe_avcenc structure with avcenc parameters */ 
 struct upipe_avcenc {
@@ -947,7 +951,7 @@ static void upipe_avcenc_build_flow_def_attr(struct upipe *upipe)
  * @return an error code
  */
 static int upipe_avcenc_check_flow_format(struct upipe *upipe,
-                                        struct uref *flow_format)
+                                          struct uref *flow_format)
 {
     struct upipe_avcenc *upipe_avcenc = upipe_avcenc_from_upipe(upipe);
     if (flow_format == NULL)
@@ -957,6 +961,23 @@ static int upipe_avcenc_check_flow_format(struct upipe *upipe,
         upipe_avcenc->context->flags |= CODEC_FLAG_GLOBAL_HEADER;
     else
         upipe_avcenc->context->flags &= ~CODEC_FLAG_GLOBAL_HEADER;
+
+    if (!strcmp(upipe_avcenc->context->codec->name, "libfdk_aac")) {
+        enum uref_mpga_encaps encaps = uref_mpga_flow_infer_encaps(flow_format);
+        switch (encaps) {
+            default:
+            case UREF_MPGA_ENCAPS_ADTS:
+                upipe_avcenc_set_option(upipe, "latm", "0");
+                break;
+            case UREF_MPGA_ENCAPS_LOAS:
+                upipe_avcenc_set_option(upipe, "latm", "1");
+                break;
+            case UREF_MPGA_ENCAPS_RAW:
+                upipe_avcenc->context->flags |= CODEC_FLAG_GLOBAL_HEADER;
+                upipe_avcenc_set_option(upipe, "latm", "0");
+                break;
+        }
+    }
 
     uref_free(upipe_avcenc->flow_def_requested);
     upipe_avcenc->flow_def_requested = NULL;
@@ -971,7 +992,7 @@ static int upipe_avcenc_check_flow_format(struct upipe *upipe,
  * @return an error code
  */
 static int upipe_avcenc_check_ubuf_mgr(struct upipe *upipe,
-                                     struct uref *flow_format)
+                                       struct uref *flow_format)
 {
     struct upipe_avcenc *upipe_avcenc = upipe_avcenc_from_upipe(upipe);
     if (flow_format == NULL)
