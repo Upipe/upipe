@@ -557,7 +557,7 @@ static int extract_hd_audio(struct upipe *upipe, const uint16_t *packet, int lin
     clock |= (packet[14] & 0x20) << 7;
     bool mpf = packet[14] & 0x10;
 
-    /* wtf */
+    /* FIXME */
     if ((line_num >= 9 && line_num <= 9 + 5) || (line_num >= 571 && line_num <= 571 + 5)) {
     } else
         mpf = false;
