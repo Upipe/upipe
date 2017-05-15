@@ -464,6 +464,20 @@ static void upipe_dtsdi_input(struct upipe *upipe, struct uref *uref,
         return;
     }
 
+    int s = -1;
+    uint8_t *buf;
+    if (!ubase_check(uref_block_write(uref, 0, &s, &buf))) {
+        upipe_err(upipe, "Could not map ubuf");
+        uref_free(uref);
+        return;
+    }
+
+    for (int i = 1; i < s; i+= 2) {
+        buf[i] &= 0x03; /* little endian, clamp to 0x3ff */
+    }
+
+    uref_block_unmap(uref, 0);
+
     upipe_dtsdi_output(upipe, uref, upump_p);
 }
 
