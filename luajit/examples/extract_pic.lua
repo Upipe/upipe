@@ -126,8 +126,7 @@ upipe_av_init(true, (pfx("av") .. probe):use())
 
 -- ts demux
 local ts_demux_mgr = upipe.ts_demux()
-ts_demux_mgr.mpgvf_mgr = upipe.mpgvf()
-ts_demux_mgr.h264f_mgr = upipe.h264f()
+ts_demux_mgr.autof_mgr = upipe.autof()
 
 source.output = ts_demux_mgr:new(
     pfx("ts demux") ..

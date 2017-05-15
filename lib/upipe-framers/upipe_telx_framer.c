@@ -159,6 +159,7 @@ static void upipe_telxf_work(struct upipe *upipe, struct upump **upump_p)
             goto upipe_telxf_work_err;
         }
 
+        UBASE_FATAL(upipe, uref_flow_set_complete(flow_def))
         UBASE_FATAL(upipe, uref_pic_flow_set_fps(flow_def, upipe_telxf->fps))
         UBASE_FATAL(upipe, uref_block_flow_set_octetrate(flow_def,
                                 upipe_telxf->octetrate))

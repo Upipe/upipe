@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2016 OpenHeadend S.A.R.L.
+ * Copyright (C) 2016-2017 OpenHeadend S.A.R.L.
  *
  * Authors: Christophe Massiot
  *
@@ -39,8 +39,11 @@ extern "C" {
 
 UREF_ATTR_VOID(h265_flow, tier, "h265.tier", tier)
 UREF_ATTR_SMALL_UNSIGNED(h265_flow, profile, "h265.profile", profile)
+UREF_ATTR_SMALL_UNSIGNED(h265_flow, profile_space, "h265.profilespace",
+        profile space)
+UREF_ATTR_SMALL_UNSIGNED(h265_flow, profile_compability, "h265.profilecomp",
+        profile compatibility)
 UREF_ATTR_SMALL_UNSIGNED(h265_flow, level, "h265.level", level)
-UREF_ATTR_VOID(h265_flow, annexb, "h265.annexb", Annex B syntax)
 
 #ifdef __cplusplus
 }

@@ -73,9 +73,7 @@ end
 local sink = count_mgr:new(pfx("count") .. probe)
 
 local ts_demux_mgr = upipe.ts_demux()
-ts_demux_mgr.mpgvf_mgr = upipe.mpgvf()
-ts_demux_mgr.h264f_mgr = upipe.h264f()
-ts_demux_mgr.h265f_mgr = upipe.h265f()
+ts_demux_mgr.autof_mgr = upipe.autof()
 
 src.output = ts_demux_mgr:new(
     pfx("ts demux") ..

@@ -480,6 +480,29 @@ static int upipe_ffmt_set_sws_flags(struct upipe *upipe, int flags)
 static int upipe_ffmt_control(struct upipe *upipe, int command, va_list args)
 {
     switch (command) {
+        case UPIPE_REGISTER_REQUEST: {
+            va_list args_copy;
+            va_copy(args_copy, args);
+            struct urequest *request = va_arg(args_copy, struct urequest *);
+            va_end(args_copy);
+
+            if (request->type == UREQUEST_UBUF_MGR ||
+                request->type == UREQUEST_FLOW_FORMAT)
+                return upipe_throw_provide_request(upipe, request);
+            break;
+        }
+        case UPIPE_UNREGISTER_REQUEST: {
+            va_list args_copy;
+            va_copy(args_copy, args);
+            struct urequest *request = va_arg(args_copy, struct urequest *);
+            va_end(args_copy);
+
+            if (request->type == UREQUEST_UBUF_MGR ||
+                request->type == UREQUEST_FLOW_FORMAT)
+                return UBASE_ERR_NONE;
+            break;
+        }
+
         case UPIPE_SET_FLOW_DEF: {
             struct uref *flow_def = va_arg(args, struct uref *);
             return upipe_ffmt_set_flow_def(upipe, flow_def);

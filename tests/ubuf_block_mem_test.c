@@ -218,6 +218,15 @@ int main(int argc, char **argv)
     assert(r[0] == 0 && r[3] == 3);
     ubase_assert(ubuf_block_peek_unmap(ubuf1, 0, buffer, r));
 
+    /* test ubuf_block_alloc_from_opaque */
+    ubuf2 = ubuf_block_alloc_from_opaque(mgr, buffer, 4);
+    assert(ubuf2 != NULL);
+    wanted = -1;
+    ubase_assert(ubuf_block_read(ubuf2, 0, &wanted, &r));
+    assert(!memcmp(r, buffer, 4));
+    ubase_assert(ubuf_block_unmap(ubuf2, 0));
+    ubuf_free(ubuf2);
+
     /* test refcounting */
     wanted = -1;
     ubase_nassert(ubuf_block_write(ubuf1, 32, &wanted, &w));

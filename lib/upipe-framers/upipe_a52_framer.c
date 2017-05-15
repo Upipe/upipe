@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2013-2015 OpenHeadend S.A.R.L.
+ * Copyright (C) 2013-2017 OpenHeadend S.A.R.L.
  *
  * Authors: Benjamin Cohen
  *
@@ -292,6 +292,7 @@ static bool upipe_a52f_parse_a52e(struct upipe *upipe)
         return false;
     }
 
+    UBASE_FATAL(upipe, uref_flow_set_complete(flow_def))
     UBASE_FATAL(upipe, uref_flow_set_def(flow_def, "block.eac3.sound."))
     UBASE_FATAL(upipe, uref_sound_flow_set_samples(flow_def, A52_FRAME_SAMPLES))
     UBASE_FATAL(upipe, uref_sound_flow_set_rate(flow_def, samplerate))
@@ -364,6 +365,7 @@ static bool upipe_a52f_parse_a52(struct upipe *upipe)
         return false;
     }
 
+    UBASE_FATAL(upipe, uref_flow_set_complete(flow_def))
     UBASE_FATAL(upipe, uref_flow_set_def(flow_def, "block.ac3.sound."))
     UBASE_FATAL(upipe, uref_sound_flow_set_rate(flow_def, samplerate))
     UBASE_FATAL(upipe, uref_block_flow_set_octetrate(flow_def, octetrate))

@@ -167,12 +167,25 @@ static void STRUCTURE##_store_bin_input(struct upipe *upipe,                \
         }                                                                   \
     }                                                                       \
     STRUCTURE##_store_##FIRST_INNER(upipe, first_inner);                    \
-    if (first_inner != NULL) {                                              \
+    if (unlikely(first_inner == NULL))                                      \
+        return;                                                             \
+                                                                            \
+    /* Retry in a loop because the request list may change at any point. */ \
+    for ( ; ; ) {                                                           \
+        struct urequest *urequest = NULL;                                   \
         struct uchain *uchain;                                              \
         ulist_foreach (&s->REQUEST_LIST, uchain) {                          \
-            struct urequest *urequest = urequest_from_uchain(uchain);       \
-            upipe_register_request(first_inner, urequest);                  \
+            struct urequest *urequest_chain = urequest_from_uchain(uchain); \
+            if (!urequest_chain->registered) {                              \
+                urequest = urequest_chain;                                  \
+                break;                                                      \
+            }                                                               \
         }                                                                   \
+        if (urequest != NULL) {                                             \
+            upipe_register_request(s->FIRST_INNER, urequest);               \
+            continue;                                                       \
+        }                                                                   \
+        break;                                                              \
     }                                                                       \
 }                                                                           \
 /** @internal @This registers a request to be forwarded downstream. The     \
@@ -203,7 +216,7 @@ static int STRUCTURE##_unregister_bin_request(struct upipe *upipe,          \
 {                                                                           \
     struct STRUCTURE *s = STRUCTURE##_from_upipe(upipe);                    \
     ulist_delete(urequest_to_uchain(urequest));                             \
-    if (likely(s->FIRST_INNER != NULL))                                     \
+    if (likely(s->FIRST_INNER != NULL && urequest->registered))             \
         return upipe_unregister_request(s->FIRST_INNER, urequest);          \
     return UBASE_ERR_NONE;                                                  \
 }                                                                           \

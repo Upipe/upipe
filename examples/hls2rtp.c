@@ -472,6 +472,7 @@ static int catch_seek(struct uprobe *uprobe, struct upipe *upipe,
 
     UBASE_SIGNATURE_CHECK(args, UPIPE_PROBE_UREF_SIGNATURE);
     struct uref *uref = va_arg(args, struct uref *);
+    va_arg(args, struct upump **);
     bool *drop = va_arg(args, bool *);
     *drop = false;
 
