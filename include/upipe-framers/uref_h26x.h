@@ -114,6 +114,18 @@ static inline int uref_h26x_prepend_nal(struct uref *uref, struct ubuf *ubuf)
     return UBASE_ERR_NONE;
 }
 
+/** @This deletes all NAL offsets.
+ *
+ * @param uref uref description structure
+ * @param ubuf ubuf to prepend
+ * @return an error code
+ */
+static inline void uref_h26x_delete_nal_offsets(struct uref *uref)
+{
+    uint64_t counter = 0;
+    while (ubase_check(uref_h26x_delete_nal_offset(uref, counter++)));
+}
+
 #ifdef __cplusplus
 }
 #endif
