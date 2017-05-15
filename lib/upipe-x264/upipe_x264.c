@@ -940,24 +940,31 @@ static bool upipe_x264_handle(struct upipe *upipe, struct uref *uref,
         return true;
     }
     ubuf_block_write(ubuf_block, 0, &size, &buf);
-    for (i = 0; i < nals_num; i++)
-        uref_h26x_set_nal_offset(uref, nals[i].i_payload, i);
-    uref_h26x_delete_nal_offset(uref, i - 1);
     memcpy(buf, nals[0].p_payload, size);
     ubuf_block_unmap(ubuf_block, 0);
     uref_attach_ubuf(uref, ubuf_block);
     uref_block_set_header_size(uref, header_size);
 
-    /* optionally convert NAL encapsulation */
-    enum uref_h26x_encaps encaps = upipe_x264->params.b_annexb ?
-        UREF_H26X_ENCAPS_ANNEXB : UREF_H26X_ENCAPS_LENGTH4;
-    /* no need for annex B header because if annexb is requested, there will
-     * be no conversion */
-    int err = upipe_h26xf_convert_frame(uref,
-            encaps, upipe_x264->encaps_requested, upipe_x264->ubuf_mgr, NULL);
-    if (!ubase_check(err)) {
-        upipe_warn(upipe, "invalid NAL encapsulation conversion");
-        upipe_throw_error(upipe, err);
+    if (!upipe_x264_mpeg2_enabled(upipe)) {
+        /* NAL offsets */
+        uint64_t offset = 0;
+        for (i = 0; i < nals_num - 1; i++) {
+            offset += nals[i].i_payload;
+            uref_h26x_set_nal_offset(uref, offset, i);
+        }
+
+        /* optionally convert NAL encapsulation */
+        enum uref_h26x_encaps encaps = upipe_x264->params.b_annexb ?
+            UREF_H26X_ENCAPS_ANNEXB : UREF_H26X_ENCAPS_LENGTH4;
+        /* no need for annex B header because if annexb is requested, there
+         * will be no conversion */
+        int err = upipe_h26xf_convert_frame(uref,
+                encaps, upipe_x264->encaps_requested, upipe_x264->ubuf_mgr,
+                NULL);
+        if (!ubase_check(err)) {
+            upipe_warn(upipe, "invalid NAL encapsulation conversion");
+            upipe_throw_error(upipe, err);
+        }
     }
 
     /* set dts */
