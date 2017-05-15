@@ -940,7 +940,7 @@ static bool upipe_sdi_dec_handle(struct upipe *upipe, struct uref *uref,
         uref_sound_flow_add_plane(uref_audio, "lrcLRS0123456789");
         uref_sound_flow_set_channels(uref_audio, 16);
         uref_sound_flow_set_rate(uref_audio, 48000);
-        uref_sound_flow_set_sample_size(uref_audio, 4 * 16);
+        uref_sound_flow_set_sample_size(uref_audio, sizeof(int32_t) * 16);
         upipe_sdi_dec_sub_require_ubuf_mgr(&audio_sub->upipe,
                 uref_audio);
         uref_flow_delete_def(uref_audio);
