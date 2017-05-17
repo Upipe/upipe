@@ -1616,7 +1616,7 @@ static int upipe_netmap_sink_open_intf(struct upipe *upipe,
         goto error;
     }
 
-    intf->src_port = intf->ring_idx * 1000;
+    intf->src_port = (intf->ring_idx+1) * 1000;
     intf->dst_port = intf->src_port;
 
     char *src_ip = strchr(ip, '@');
