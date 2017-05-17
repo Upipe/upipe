@@ -1654,7 +1654,7 @@ static int upipe_netmap_sink_open_intf(struct upipe *upipe,
         }
     } else {
         if (IN_MULTICAST(ntohl(intf->dst_ip))) {
-            uint32_t ip = intf->dst_ip;
+            uint32_t ip = ntohl(intf->dst_ip);
             intf->dst_mac[0] = 0x01;
             intf->dst_mac[1] = 0x00;
             intf->dst_mac[2] = 0x5e;
