@@ -892,6 +892,66 @@ static void upipe_resync_queues(struct upipe *upipe, uint32_t packets)
     txring1->head = txring1->cur = cur;
 }
 
+static struct uref *get_uref(struct upipe *upipe)
+{
+    struct upipe_netmap_sink *upipe_netmap_sink = upipe_netmap_sink_from_upipe(upipe);
+
+    struct uref *uref = upipe_netmap_sink->uref;
+    struct urational *fps = &upipe_netmap_sink->fps;
+
+    uint64_t now = uclock_now(&upipe_netmap_sink->uclock);
+
+    if (uref) {
+        uint64_t pts = 0;
+        uref_clock_get_pts_sys(uref, &pts);
+        pts += upipe_netmap_sink->latency;
+
+        if (pts + UCLOCK_FREQ * fps->den / fps->num + NETMAP_SINK_LATENCY < now) {
+            uref_block_unmap(uref, 0);
+            uref_free(uref);
+            uref = NULL;
+            upipe_warn_va(upipe, "drop late buffered frame, %" PRIu64 "ms, now %.2f pts %.2f latency %.2f",
+                    (now - pts) / 27000,
+                    pts_to_time(now),
+                    pts_to_time(pts - upipe_netmap_sink->latency),
+                    (float)upipe_netmap_sink->latency / 27000
+                    );
+        }
+    }
+
+    while (!uref) {
+        struct uchain *uchain = ulist_pop(&upipe_netmap_sink->sink_queue);
+        if (!uchain)
+            break;
+
+        upipe_netmap_sink->n--;
+        uref = uref_from_uchain(uchain);
+
+
+        if (upipe_netmap_sink->preroll) {
+            break;
+        }
+
+        uint64_t pts = 0;
+        uref_clock_get_pts_sys(uref, &pts);
+        pts += upipe_netmap_sink->latency;
+
+        if (pts + NETMAP_SINK_LATENCY < now) {
+            uref_free(uref);
+            uref = NULL;
+            upipe_warn_va(upipe, "drop late frame, %" PRIu64 "ms, now %.2f pts %.2f latency %.2f",
+                    (now - pts) / 27000,
+                    pts_to_time(now),
+                    pts_to_time(pts - upipe_netmap_sink->latency),
+                    (float)upipe_netmap_sink->latency / 27000
+                    );
+        }
+    }
+
+    upipe_netmap_sink->uref = uref;
+    return uref;
+}
+
 static void upipe_netmap_sink_worker(struct upump *upump)
 {
     struct upipe *upipe = upump_get_opaque(upump, struct upipe *);
@@ -911,7 +971,7 @@ static void upipe_netmap_sink_worker(struct upump *upump)
         return;
 
     /* Source */
-    struct uref *uref = upipe_netmap_sink->uref;
+    struct uref *uref = get_uref(upipe);
     const uint8_t *src_buf = NULL;
     int input_size = -1;
     int bytes_left = 0;
@@ -1035,7 +1095,29 @@ static void upipe_netmap_sink_worker(struct upump *upump)
     }
 
     if (!num_slots) {
-        upipe_err(upipe, "No interface is up!");
+        upipe_err(upipe, "No interface is up, reset!");
+        if (uref) {
+            uref_block_unmap(uref, 0);
+            uref_free(uref);
+        }
+
+        for (;;) {
+            struct uchain *uchain = ulist_pop(&upipe_netmap_sink->sink_queue);
+            if (!uchain)
+                break;
+            struct uref *uref = uref_from_uchain(uchain);
+            uref_free(uref);
+        }
+
+        upipe_netmap_sink->n = 0;
+        upipe_netmap_sink->fakes = 0;
+        upipe_netmap_sink->pkt = 0;
+        upipe_netmap_sink->bits = 0;
+        upipe_netmap_sink->start = 0;
+        upipe_netmap_sink->uref = NULL;
+        upipe_netmap_sink->preroll = true;
+        upipe_netmap_sink->packed_bytes = 0;
+
         return;
     }
 
@@ -1126,36 +1208,9 @@ static void upipe_netmap_sink_worker(struct upump *upump)
     /* fill ring buffer */
     while (txavail) {
         if (!uref) {
-            struct uchain *uchain = ulist_pop(&upipe_netmap_sink->sink_queue);
-            if (!uchain)
+            uref = get_uref(upipe);
+            if (!uref)
                 break;
-
-            upipe_netmap_sink->n--;
-            uref = uref_from_uchain(uchain);
-
-            uint64_t pts = 0;
-            uref_clock_get_pts_sys(uref, &pts);
-            pts += upipe_netmap_sink->latency;
-
-            //uint64_t now = uclock_now(&upipe_netmap_sink->uclock);
-
-            if (upipe_netmap_sink->preroll && pts + NETMAP_SINK_LATENCY > now) {
-                upipe_dbg(upipe, "waiting preroll after pop");
-                upipe_netmap_sink->uref = uref;
-                return;
-            }
-
-            if (pts + NETMAP_SINK_LATENCY < now) {
-                uref_free(uref);
-                uref = NULL;
-                upipe_warn_va(upipe, "drop late frame, %" PRIu64 "ms, now %.2f pts %.2f latency %.2f",
-                        (now - pts) / 27000,
-                        pts_to_time(now),
-                        pts_to_time(pts - upipe_netmap_sink->latency),
-                        (float)upipe_netmap_sink->latency / 27000
-                );
-                continue;
-            }
             input_size = -1;
         }
 
@@ -1217,6 +1272,7 @@ static void upipe_netmap_sink_worker(struct upump *upump)
             uref_block_unmap(uref, 0);
             uref_free(uref);
             uref = NULL;
+            upipe_netmap_sink->uref = NULL;
             upipe_netmap_sink->pkt = 0;
 
             upipe_netmap_sink->frame_count++;
