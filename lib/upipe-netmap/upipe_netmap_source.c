@@ -408,7 +408,23 @@ static inline void handle_hbrmt_packet(struct upipe *upipe, const uint8_t *src, 
     }
 }
 
-static const uint8_t *get_rtp(struct netmap_ring *rxring, struct netmap_slot *slot)
+static uint64_t get_vss(const uint8_t *vss)
+{
+    uint64_t s = (vss[0] << 24) |
+        (vss[1] << 16) |
+        (vss[2] <<  8) |
+        (vss[3]      );
+    uint8_t clksrc = vss[4] >> 6;
+    assert(clksrc == 0); // internal
+    uint32_t ns = ((vss[4] & 0x3f) << 24) |
+        (vss[5] << 16) |
+        (vss[6] <<  8) |
+        (vss[7]      );
+    return s * 1000000000 + ns;
+}
+
+static const uint8_t *get_rtp(struct upipe *upipe, struct netmap_ring *rxring,
+        struct netmap_slot *slot)
 {
     uint8_t *src = (uint8_t*)NETMAP_BUF(rxring, slot->buf_idx);
 
@@ -423,17 +439,28 @@ static const uint8_t *get_rtp(struct netmap_ring *rxring, struct netmap_slot *sl
     const uint8_t *rtp = udp_payload(udp);
     uint16_t payload_len = udp_get_len(udp) - UDP_HEADER_SIZE;
 
-    static const unsigned pkt_size = RTP_HEADER_SIZE + HBRMT_HEADER_SIZE
-        + HBRMT_DATA_SIZE;
+    unsigned pkt_size = RTP_HEADER_SIZE + HBRMT_HEADER_SIZE + HBRMT_DATA_SIZE;
 
     if (payload_len != pkt_size) {
         //upipe_err_va(upipe, "Incorrect packet len: %u", payload_len);
         return NULL;
     }
 
-    if (slot->len < pkt_size + UDP_HEADER_SIZE + IP_HEADER_MINSIZE +
-            ETHERNET_HEADER_LEN) {
+    pkt_size += UDP_HEADER_SIZE + IP_HEADER_MINSIZE + ETHERNET_HEADER_LEN;
+
+    if (slot->len < pkt_size) {
         return NULL;
+    }
+
+    if (slot->len - 9 >= pkt_size) {
+        const uint8_t *vss = &src[slot->len-9];
+        if (vss[8] == 0xc3) {
+            static uint64_t old;
+            uint64_t ts = get_vss(vss);
+            if (ts - old > 70 * 1000 /* us */)
+                upipe_err_va(upipe, "Spike: %" PRIu64, ts - old);
+            old = ts;
+        }
     }
 
     return rtp;
@@ -444,7 +471,7 @@ static bool do_packet(struct upipe *upipe, struct netmap_ring *rxring,
 {
     struct upipe_netmap_source *upipe_netmap_source = upipe_netmap_source_from_upipe(upipe);
 
-    const uint8_t *rtp = get_rtp(rxring, &rxring->slot[cur]);
+    const uint8_t *rtp = get_rtp(upipe, rxring, &rxring->slot[cur]);
     if (!rtp)
         return true;
 
