@@ -117,6 +117,9 @@ struct upipe_netmap_source {
     /** packets in uref */
     unsigned packets;
 
+    /** hbrmt packets per frame */
+    unsigned pkts_per_frame;
+
     /** Packed block destination */
     uint8_t *dst_buf;
     int dst_size;
@@ -277,12 +280,13 @@ static int upipe_netmap_source_set_flow(struct upipe *upipe, uint8_t frate, uint
         return UBASE_ERR_INVALID;
     }
 
-    upipe_netmap_source->f = sdi_get_offsets(flow_format);
-    if (!upipe_netmap_source->f) {
+    const struct sdi_offsets_fmt *f = sdi_get_offsets(flow_format);
+    if (!f) {
         upipe_err(upipe, "Couldn't figure out sdi offsets");
         uref_free(flow_format);
         return UBASE_ERR_INVALID;
     }
+    upipe_netmap_source->f = f;
 
     uint64_t latency;
     if (!ubase_check(uref_clock_get_latency(flow_format, &latency)))
@@ -290,6 +294,12 @@ static int upipe_netmap_source_set_flow(struct upipe *upipe, uint8_t frate, uint
     latency += UCLOCK_FREQ * fps->den / fps->num;
     uref_clock_set_latency(flow_format, latency);
     upipe_netmap_source_store_flow_def(upipe, flow_format);
+
+    uint64_t samples = f->width * f->height * 2;
+    uint64_t bytes_per_frame = samples * 2 * 5 / 8;
+
+    upipe_netmap_source->pkts_per_frame = (bytes_per_frame + HBRMT_DATA_SIZE - 1)
+        / HBRMT_DATA_SIZE;
 
     return UBASE_ERR_NONE;
 }
@@ -521,16 +531,15 @@ static bool do_packet(struct upipe *upipe, struct netmap_ring *rxring,
     //marker = upipe_netmap_source->packets == 5397;
 
     if ((marker || upipe_netmap_source->discontinuity) && upipe_netmap_source->uref) {
-        /* output current block */
-        if (upipe_netmap_source->discontinuity) {
-            upipe_err(upipe, "Output because of discontinuity");
-        }
         uref_block_unmap(upipe_netmap_source->uref, 0);
-        if (upipe_netmap_source->packets != 5397) {
-            upipe_dbg_va(upipe, "Output at %u packets", upipe_netmap_source->packets);
-            //abort();
+
+        if (upipe_netmap_source->packets != upipe_netmap_source->pkts_per_frame) {
+            upipe_dbg_va(upipe, "Dropping: %u packets", upipe_netmap_source->packets);
+            uref_free(upipe_netmap_source->uref);
+            upipe_netmap_source->discontinuity = true;
+        } else { /* output current block */
+            upipe_netmap_source_output(upipe, upipe_netmap_source->uref, &upipe_netmap_source->upump);
         }
-        upipe_netmap_source_output(upipe, upipe_netmap_source->uref, &upipe_netmap_source->upump);
         upipe_netmap_source->uref = NULL;
     }
 
