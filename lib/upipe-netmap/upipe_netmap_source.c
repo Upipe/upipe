@@ -365,8 +365,9 @@ static inline void handle_hbrmt_packet(struct upipe *upipe, const uint8_t *src, 
         src_size -= 4 * ext;
     }
 
-    if (src_size < HBRMT_DATA_SIZE) {
-        upipe_err(upipe, "Too small packet, reading anyway");
+    if (src_size != HBRMT_DATA_SIZE) {
+        upipe_dbg(upipe, "Too small packet, ignoring");
+        goto end;
     }
 
     /* If there is data in the scratch buffer... */
