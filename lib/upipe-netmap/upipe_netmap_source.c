@@ -326,7 +326,7 @@ static int upipe_netmap_source_alloc_output_uref(struct upipe *upipe, uint64_t s
     return UBASE_ERR_NONE;
 }
 
-static inline void handle_hbrmt_packet(struct upipe *upipe, const uint8_t *src, uint16_t src_size)
+static inline bool handle_hbrmt_packet(struct upipe *upipe, const uint8_t *src, uint16_t src_size)
 {
     struct upipe_netmap_source *upipe_netmap_source = upipe_netmap_source_from_upipe(upipe);
     bool marker = rtp_check_marker(src);
@@ -337,12 +337,14 @@ static inline void handle_hbrmt_packet(struct upipe *upipe, const uint8_t *src, 
     if (unlikely(!upipe_netmap_source->f)) {
         const uint8_t frate = smpte_hbrmt_get_frate(hbrmt);
         const uint8_t frame = smpte_hbrmt_get_frame(hbrmt);
-        if (!ubase_check(upipe_netmap_source_set_flow(upipe, frate, frame)))
-            return;
+        if (!ubase_check(upipe_netmap_source_set_flow(upipe, frate, frame))) {
+            return true;
+        }
     }
 
-    if (unlikely(!upipe_netmap_source->uref))
-        return;
+    if (unlikely(!upipe_netmap_source->uref)) {
+        return false;
+    }
 
     src_size -= HBRMT_HEADER_SIZE;
     const uint8_t *payload = &hbrmt[HBRMT_HEADER_SIZE];
@@ -358,7 +360,7 @@ static inline void handle_hbrmt_packet(struct upipe *upipe, const uint8_t *src, 
 
     if (src_size != HBRMT_DATA_SIZE) {
         upipe_dbg(upipe, "Too small packet, ignoring");
-        return;
+        return true; // discontinuity
     }
 
     /* If there is data in the scratch buffer... */
@@ -387,10 +389,11 @@ static inline void handle_hbrmt_packet(struct upipe *upipe, const uint8_t *src, 
 
     if (src_size > upipe_netmap_source->dst_size * 5 / 8) {
         src_size = upipe_netmap_source->dst_size * 5 / 8;
-        if (0) /* no per-packet debug */
-            if (!marker)
-                upipe_err_va(upipe, "Not overflowing output packet: %d, %d",
-                        src_size, upipe_netmap_source->dst_size);
+        if (!marker) {
+            return true; // discontinuity
+            upipe_err_va(upipe, "Not overflowing output packet: %d, %d",
+                    src_size, upipe_netmap_source->dst_size);
+        }
     }
 
     int unpack_bytes = (src_size / 5) * 5;
@@ -406,6 +409,8 @@ static inline void handle_hbrmt_packet(struct upipe *upipe, const uint8_t *src, 
                 src_size - unpack_bytes);
         upipe_netmap_source->unpack_scratch_buffer_count = src_size - unpack_bytes;
     }
+
+    return false;
 }
 
 static uint64_t get_vss(const uint8_t *vss)
@@ -506,7 +511,9 @@ static bool do_packet(struct upipe *upipe, struct netmap_ring *rxring,
         + HBRMT_DATA_SIZE;
 
     if (!upipe_netmap_source->discontinuity) {
-        handle_hbrmt_packet(upipe, rtp, pkt_size);
+        if (handle_hbrmt_packet(upipe, rtp, pkt_size)) {
+            return true;
+        }
         upipe_netmap_source->packets++;
     }
 
@@ -587,6 +594,9 @@ static void upipe_netmap_source_worker(struct upump *upump)
         if (discontinuity == sources) {
             upipe_err(upipe, "DISCONTINUITY"); // TODO: # of packets lost
             upipe_netmap_source->discontinuity = true;
+            uref_block_unmap(upipe_netmap_source->uref, 0);
+            uref_free(upipe_netmap_source->uref);
+            upipe_netmap_source->uref = NULL;
             upipe_netmap_source->expected_seqnum = UINT32_MAX;
         }
     }
