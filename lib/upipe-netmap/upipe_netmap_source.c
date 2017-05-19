@@ -55,6 +55,8 @@
 #include <net/netmap.h>
 #include <net/netmap_user.h>
 
+#include <bitstream/ietf/rtp.h>
+
 /** @hidden */
 static int upipe_netmap_source_check(struct upipe *upipe, struct uref *flow_format);
 
@@ -107,7 +109,13 @@ struct upipe_netmap_source {
     bool discontinuity;
 
     /** expected sequence number */
-    int expected_seqnum;
+    uint32_t expected_seqnum;
+
+    /** timestamp of seqnum-1 */
+    uint32_t last_timestamp;
+
+    /** packets in uref */
+    unsigned packets;
 
     /** Packed block destination */
     uint8_t *dst_buf;
@@ -185,7 +193,7 @@ static struct upipe *upipe_netmap_source_alloc(struct upipe_mgr *mgr,
     upipe_netmap_source->dst_size = 0;
     upipe_netmap_source->f = NULL;
 
-    upipe_netmap_source->expected_seqnum = -1;
+    upipe_netmap_source->expected_seqnum = UINT32_MAX;
     upipe_netmap_source->discontinuity = false;
     upipe_netmap_source->frame = 0;
     upipe_netmap_source->unpack_scratch_buffer_count = 0;
@@ -318,14 +326,10 @@ static int upipe_netmap_source_alloc_output_uref(struct upipe *upipe, uint64_t s
     return UBASE_ERR_NONE;
 }
 
-static inline void handle_hbrmt_packet(struct upipe *upipe, const uint8_t *src, uint16_t src_size,
-                                       uint64_t systime)
+static inline void handle_hbrmt_packet(struct upipe *upipe, const uint8_t *src, uint16_t src_size)
 {
     struct upipe_netmap_source *upipe_netmap_source = upipe_netmap_source_from_upipe(upipe);
-    bool marker = false;
-
-    marker = rtp_check_marker(src);
-    uint16_t seqnum = rtp_get_seqnum(src);
+    bool marker = rtp_check_marker(src);
 
     src_size -= RTP_HEADER_SIZE;
     const uint8_t *hbrmt = &src[RTP_HEADER_SIZE];
@@ -334,24 +338,11 @@ static inline void handle_hbrmt_packet(struct upipe *upipe, const uint8_t *src, 
         const uint8_t frate = smpte_hbrmt_get_frate(hbrmt);
         const uint8_t frame = smpte_hbrmt_get_frame(hbrmt);
         if (!ubase_check(upipe_netmap_source_set_flow(upipe, frate, frame)))
-            goto end;
+            return;
     }
-
-    if (unlikely(upipe_netmap_source->expected_seqnum != -1 &&
-                 seqnum != upipe_netmap_source->expected_seqnum)) {
-        upipe_warn_va(upipe, "potentially lost %d RTP packets, got %u expected %u",
-                      (seqnum + UINT16_MAX + 1 - upipe_netmap_source->expected_seqnum) &
-                      UINT16_MAX, seqnum, upipe_netmap_source->expected_seqnum);
-        upipe_netmap_source->discontinuity = true;
-    }
-
-    upipe_netmap_source->expected_seqnum = (seqnum + 1) & UINT16_MAX;
-
-    if (upipe_netmap_source->discontinuity)
-        goto end;
 
     if (unlikely(!upipe_netmap_source->uref))
-        goto end;
+        return;
 
     src_size -= HBRMT_HEADER_SIZE;
     const uint8_t *payload = &hbrmt[HBRMT_HEADER_SIZE];
@@ -396,9 +387,10 @@ static inline void handle_hbrmt_packet(struct upipe *upipe, const uint8_t *src, 
 
     if (src_size > upipe_netmap_source->dst_size * 5 / 8) {
         src_size = upipe_netmap_source->dst_size * 5 / 8;
-        if (!marker)
-            upipe_err_va(upipe, "Not overflowing output packet: %d, %d",
-                    src_size, upipe_netmap_source->dst_size);
+        if (0) /* no per-packet debug */
+            if (!marker)
+                upipe_err_va(upipe, "Not overflowing output packet: %d, %d",
+                        src_size, upipe_netmap_source->dst_size);
     }
 
     int unpack_bytes = (src_size / 5) * 5;
@@ -414,20 +406,110 @@ static inline void handle_hbrmt_packet(struct upipe *upipe, const uint8_t *src, 
                 src_size - unpack_bytes);
         upipe_netmap_source->unpack_scratch_buffer_count = src_size - unpack_bytes;
     }
+}
 
-end:
+static const uint8_t *get_rtp(struct netmap_ring *rxring, struct netmap_slot *slot)
+{
+    uint8_t *src = (uint8_t*)NETMAP_BUF(rxring, slot->buf_idx);
+
+    if (ethernet_get_lentype(src) != ETHERNET_TYPE_IP)
+        return NULL;
+
+    uint8_t *ip = &src[ETHERNET_HEADER_LEN];
+    if (ip_get_proto(ip) != IP_PROTO_UDP)
+        return NULL;
+
+    uint8_t *udp = ip_payload(ip);
+    const uint8_t *rtp = udp_payload(udp);
+    uint16_t payload_len = udp_get_len(udp) - UDP_HEADER_SIZE;
+
+    static const unsigned pkt_size = RTP_HEADER_SIZE + HBRMT_HEADER_SIZE
+        + HBRMT_DATA_SIZE;
+
+    if (payload_len != pkt_size) {
+        //upipe_err_va(upipe, "Incorrect packet len: %u", payload_len);
+        return NULL;
+    }
+
+    if (slot->len < pkt_size + UDP_HEADER_SIZE + IP_HEADER_MINSIZE +
+            ETHERNET_HEADER_LEN) {
+        return NULL;
+    }
+
+    return rtp;
+}
+
+static bool do_packet(struct upipe *upipe, struct netmap_ring *rxring,
+        const uint32_t cur, uint64_t systime)
+{
+    struct upipe_netmap_source *upipe_netmap_source = upipe_netmap_source_from_upipe(upipe);
+
+    const uint8_t *rtp = get_rtp(rxring, &rxring->slot[cur]);
+    if (!rtp)
+        return true;
+
+    uint16_t seqnum = rtp_get_seqnum(rtp);
+    uint32_t timestamp = rtp_get_timestamp(rtp);
+    bool marker = rtp_check_marker(rtp);
+
+    if (unlikely(upipe_netmap_source->expected_seqnum != UINT32_MAX &&
+                seqnum != upipe_netmap_source->expected_seqnum)) {
+        uint16_t diff = seqnum - upipe_netmap_source->expected_seqnum;
+        uint32_t timestamp_diff = timestamp - upipe_netmap_source->last_timestamp;
+
+        if (diff > 0x8000 ) {
+            return true; // seqnum < expected, drop
+        }
+
+        if (timestamp_diff > 0x80000000) {
+            return true;
+        }
+        if (timestamp_diff > 10000) {
+            printf("BAD %u (%u > %u)\n", timestamp_diff, seqnum, upipe_netmap_source->expected_seqnum);
+        }
+
+        if (0) upipe_warn_va(upipe, "potentially lost %d RTP packets, got %u expected %u, ts diff %x",
+                (seqnum + UINT16_MAX + 1 - upipe_netmap_source->expected_seqnum) &
+                UINT16_MAX, seqnum, upipe_netmap_source->expected_seqnum, timestamp_diff);
+
+        return false; // seqnum > expected, keep
+    }
+
+    static const unsigned pkt_size = RTP_HEADER_SIZE + HBRMT_HEADER_SIZE
+        + HBRMT_DATA_SIZE;
+
+    if (!upipe_netmap_source->discontinuity) {
+        handle_hbrmt_packet(upipe, rtp, pkt_size);
+        upipe_netmap_source->packets++;
+    }
+
+    // bit corruption??!
+    //marker = upipe_netmap_source->packets == 5397;
+
     if ((marker || upipe_netmap_source->discontinuity) && upipe_netmap_source->uref) {
         /* output current block */
+        if (upipe_netmap_source->discontinuity) {
+            upipe_err(upipe, "Output because of discontinuity");
+        }
         uref_block_unmap(upipe_netmap_source->uref, 0);
+        if (upipe_netmap_source->packets != 5397) {
+            upipe_dbg_va(upipe, "Output at %u packets", upipe_netmap_source->packets);
+            //abort();
+        }
         upipe_netmap_source_output(upipe, upipe_netmap_source->uref, &upipe_netmap_source->upump);
         upipe_netmap_source->uref = NULL;
     }
 
-    if (marker) {
+    if (marker && (upipe_netmap_source->discontinuity || !upipe_netmap_source->uref)) {
         /* reset discontinuity when we see the next marker */
         upipe_netmap_source->discontinuity = false;
         upipe_netmap_source_alloc_output_uref(upipe, systime);
+        upipe_netmap_source->packets = 0;
     }
+
+    upipe_netmap_source->expected_seqnum = ++seqnum & UINT16_MAX;
+    upipe_netmap_source->last_timestamp = timestamp;
+    return true;
 }
 
 static void upipe_netmap_source_worker(struct upump *upump)
@@ -439,39 +521,46 @@ static void upipe_netmap_source_worker(struct upump *upump)
     if (likely(upipe_netmap_source->uclock != NULL))
         systime = uclock_now(upipe_netmap_source->uclock);
 
-    for (int idx = 0; idx < 2; idx++) {
-        if (!upipe_netmap_source->d[idx])
-            break;
-        ioctl(NETMAP_FD(upipe_netmap_source->d[idx]), NIOCRXSYNC, NULL);
+    struct netmap_ring *rxring[2];
+    uint32_t pkts[2];
 
-        struct netmap_ring *rxring = NETMAP_RXRING(upipe_netmap_source->d[idx]->nifp,
-                upipe_netmap_source->ring_idx[idx]);
+    /* update both interfaces */
+    for (int i = 0; i < 2; i++) {
+        if (!upipe_netmap_source->d[i]) {
+            rxring[i] = NULL;
+            pkts[i] = 0;
+            continue;
+        }
 
-        uint64_t pkts = 0;
-        while (!nm_ring_empty(rxring)) {
-            const uint32_t cur = rxring->cur;
+        ioctl(NETMAP_FD(upipe_netmap_source->d[i]), NIOCRXSYNC, NULL);
+        rxring[i] = NETMAP_RXRING(upipe_netmap_source->d[i]->nifp,
+                upipe_netmap_source->ring_idx[i]);
 
-            if (idx) /* FIXME */
-                goto next;
+        pkts[i] = nm_ring_space(rxring[i]);
+    }
 
-            uint8_t *src = (uint8_t*)NETMAP_BUF(rxring, rxring->slot[cur].buf_idx);
+    int sources = !!pkts[0] + !!pkts[1];
+    while (pkts[0] || pkts[1]) {
+        int discontinuity = 0;
+        for (int idx = 0; idx < 2; idx++) { // one queue then the other
+            if (!upipe_netmap_source->d[idx] || !pkts[idx])
+                continue;
 
-            if (ethernet_get_lentype(src) != ETHERNET_TYPE_IP)
-                goto next;
+            do {
+                const uint32_t cur = rxring[idx]->cur;
+                if (!do_packet(upipe, rxring[idx], cur, systime)) {
+                    discontinuity++;
+                    break;
+                }
+                rxring[idx]->head = rxring[idx]->cur = nm_ring_next(rxring[idx], cur);
+                pkts[idx]--;
+            } while (pkts[idx]);
+        }
 
-            uint8_t *ip = &src[ETHERNET_HEADER_LEN];
-            if (ip_get_proto(ip) != IP_PROTO_UDP)
-                goto next;
-
-            uint8_t *udp = ip_payload(ip);
-            const uint8_t *rtp = udp_payload(udp);
-            uint16_t payload_len = udp_get_len(udp) - UDP_HEADER_SIZE;
-
-            if (payload_len == (RTP_HEADER_SIZE + HBRMT_HEADER_SIZE + HBRMT_DATA_SIZE))
-                handle_hbrmt_packet(upipe, rtp, payload_len, systime);
-
-next:
-            rxring->head = rxring->cur = nm_ring_next(rxring, cur);
+        if (discontinuity == sources) {
+            upipe_err(upipe, "DISCONTINUITY"); // TODO: # of packets lost
+            upipe_netmap_source->discontinuity = true;
+            upipe_netmap_source->expected_seqnum = UINT32_MAX;
         }
     }
 }
