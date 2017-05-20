@@ -1382,6 +1382,25 @@ static bool upipe_netmap_sink_output(struct upipe *upipe, struct uref *uref,
         }
     }
 
+    bool up = false;
+    for (size_t i = 0; i < 2; i++) {
+        struct upipe_netmap_intf *intf = &upipe_netmap_sink->intf[i];
+        if (!intf->d)
+            break;
+
+        struct ifreq ifr = intf->ifr;
+        if (ioctl(intf->fd, SIOCGIFFLAGS, &ifr) < 0)
+            perror("ioctl");
+
+        if (ifr.ifr_flags & IFF_RUNNING)
+            up = true;
+    }
+
+    if (!up) {
+        uref_free(uref);
+        return true;
+    }
+
     ulist_add(&upipe_netmap_sink->sink_queue, uref_to_uchain(uref));
     upipe_netmap_sink->n++;
     //upipe_notice_va(upipe, "push, urefs: %zu", upipe_netmap_sink->n);
