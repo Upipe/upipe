@@ -1006,9 +1006,10 @@ static void upipe_netmap_sink_worker(struct upump *upump)
             perror("ioctl");
         up[i] = ifr.ifr_flags & IFF_RUNNING;
         if (up[i] != intf->up) {
-            if (up[i] && !intf->wait) {
-                intf->wait = now;
+            if (!intf->wait) {
                 upipe_warn_va(upipe, "LINK %d went %s", i, up[i] ? "UP" : "DOWN");
+                if (up[i])
+                    intf->wait = now;
             }
             intf->up = false; /* will come up after waiting */
         }
