@@ -30,6 +30,7 @@
 #include <upipe/uref.h>
 #include <upipe/uref_block.h>
 #include <upipe/uref_block_flow.h>
+#include <upipe/uref_pic.h>
 #include <upipe/uref_pic_flow.h>
 #include <upipe/uref_clock.h>
 #include <upipe/upump.h>
@@ -262,18 +263,30 @@ static int upipe_netmap_source_set_flow(struct upipe *upipe, uint8_t frate, uint
     if (frame == 0x10) {
         uref_pic_flow_set_hsize(flow_format, 720);
         uref_pic_flow_set_vsize(flow_format, 486);
+        uref_pic_delete_progressive(flow_format);
+        uref_pic_set_tff(flow_format);
     } else if (frame == 0x11) {
         uref_pic_flow_set_hsize(flow_format, 720);
         uref_pic_flow_set_vsize(flow_format, 576);
+        uref_pic_delete_progressive(flow_format);
+        uref_pic_set_tff(flow_format);
     } else if (frame >= 0x20 && frame <= 0x22) {
         uref_pic_flow_set_hsize(flow_format, 1920);
         uref_pic_flow_set_vsize(flow_format, 1080);
+        if (frame == 0x20) {
+            uref_pic_delete_progressive(flow_format);
+            uref_pic_set_tff(flow_format);
+        }
+        else
+            uref_pic_set_progressive(flow_format);
     } else if (frame >= 0x23 && frame <= 0x24) {
         uref_pic_flow_set_hsize(flow_format, 2048);
         uref_pic_flow_set_vsize(flow_format, 1080);
+        uref_pic_set_progressive(flow_format);
     } else if (frame == 0x30) {
         uref_pic_flow_set_hsize(flow_format, 1280);
         uref_pic_flow_set_vsize(flow_format, 720);
+        uref_pic_set_progressive(flow_format);
     } else {
         upipe_err_va(upipe, "Invalid hbrmt frame 0x%x", frame);
         uref_free(flow_format);
