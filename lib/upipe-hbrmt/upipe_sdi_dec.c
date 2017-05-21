@@ -1553,7 +1553,7 @@ static void upipe_sdi_dec_free(struct upipe *upipe)
     upipe_sdi_dec_clean_ubuf_mgr(upipe);
     upipe_sdi_dec_clean_urefcount(upipe);
     upipe_clean(upipe);
-    free(upipe);
+    free(upipe_sdi_dec);
 }
 
 /** module manager static descriptor */
