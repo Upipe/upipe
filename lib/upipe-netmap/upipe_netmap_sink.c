@@ -1006,9 +1006,10 @@ static void upipe_netmap_sink_worker(struct upump *upump)
             perror("ioctl");
         up[i] = ifr.ifr_flags & IFF_RUNNING;
         if (up[i] != intf->up) {
-            if (up[i] && !intf->wait) {
-                intf->wait = now;
+            if (!intf->wait) {
                 upipe_warn_va(upipe, "LINK %d went %s", i, up[i] ? "UP" : "DOWN");
+                if (up[i])
+                    intf->wait = now;
             }
             intf->up = false; /* will come up after waiting */
         }
@@ -1379,6 +1380,25 @@ static bool upipe_netmap_sink_output(struct upipe *upipe, struct uref *uref,
                 fclose(f);
             }
         }
+    }
+
+    bool up = false;
+    for (size_t i = 0; i < 2; i++) {
+        struct upipe_netmap_intf *intf = &upipe_netmap_sink->intf[i];
+        if (!intf->d)
+            break;
+
+        struct ifreq ifr = intf->ifr;
+        if (ioctl(intf->fd, SIOCGIFFLAGS, &ifr) < 0)
+            perror("ioctl");
+
+        if (ifr.ifr_flags & IFF_RUNNING)
+            up = true;
+    }
+
+    if (!up) {
+        uref_free(uref);
+        return true;
     }
 
     ulist_add(&upipe_netmap_sink->sink_queue, uref_to_uchain(uref));

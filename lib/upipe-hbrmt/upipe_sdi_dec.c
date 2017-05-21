@@ -1548,12 +1548,16 @@ static void upipe_sdi_dec_free(struct upipe *upipe)
 
     upipe_throw_dead(upipe);
 
+    upipe_sdi_dec_sub_clean(upipe_sdi_dec_sub_to_upipe(&upipe_sdi_dec->vanc));
+    upipe_sdi_dec_sub_clean(upipe_sdi_dec_sub_to_upipe(&upipe_sdi_dec->vbi));
+    upipe_sdi_dec_sub_clean(upipe_sdi_dec_sub_to_upipe(&upipe_sdi_dec->audio));
+
     upipe_sdi_dec_clean_input(upipe);
     upipe_sdi_dec_clean_output(upipe);
     upipe_sdi_dec_clean_ubuf_mgr(upipe);
     upipe_sdi_dec_clean_urefcount(upipe);
     upipe_clean(upipe);
-    free(upipe);
+    free(upipe_sdi_dec);
 }
 
 /** module manager static descriptor */
