@@ -1012,6 +1012,10 @@ static void upipe_netmap_sink_worker(struct upump *upump)
                     intf->wait = now;
             }
             intf->up = false; /* will come up after waiting */
+            if (!upipe_netmap_sink->bits) {
+                intf->up = up[i];
+                intf->wait = 0;
+            }
         }
     }
 
