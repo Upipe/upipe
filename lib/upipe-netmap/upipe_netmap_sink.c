@@ -1118,6 +1118,8 @@ static void upipe_netmap_sink_worker(struct upump *upump)
         upipe_netmap_sink->uref = NULL;
         upipe_netmap_sink->preroll = true;
         upipe_netmap_sink->packed_bytes = 0;
+        upipe_netmap_sink->seqnum = 0;
+        upipe_netmap_sink->frame_count = 0;
 
         return;
     }
