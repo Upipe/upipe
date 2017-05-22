@@ -1100,7 +1100,8 @@ static void upipe_netmap_sink_worker(struct upump *upump)
     }
 
     if (!num_slots) {
-        upipe_err(upipe, "No interface is up, reset!");
+        if (upipe_netmap_sink->bits)
+            upipe_err(upipe, "No interface is up, reset!");
         if (uref) {
             uref_block_unmap(uref, 0);
             uref_free(uref);
