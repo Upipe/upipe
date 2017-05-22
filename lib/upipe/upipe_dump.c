@@ -236,11 +236,12 @@ upipe_dump_pipe_end:
  * @param pipe_label function to print pipe labels
  * @param flow_def_label function to print flow_def labels
  * @param file file pointer to write to
+ * @param ulist list of sources pipes in ulist format
  * @param args list of sources pipes terminated with NULL
  */
 void upipe_dump_va(upipe_dump_pipe_label pipe_label,
                    upipe_dump_flow_def_label flow_def_label,
-                   FILE *file, va_list args)
+                   FILE *file, struct uchain *ulist, va_list args)
 {
     pipe_label = pipe_label ?: upipe_dump_upipe_label_default;
     flow_def_label = flow_def_label ?: upipe_dump_flow_def_label_default;
@@ -255,6 +256,14 @@ void upipe_dump_va(upipe_dump_pipe_label pipe_label,
     fprintf(file, "edge [penwidth=1, color=\"#0e0e0e\", fontname=\"Arial\", fontsize=7, fontcolor=\"#0e0e0e\"];\n");
     fprintf(file, "node [shape=\"box\", style=\"filled\", color=\"#0e0e0e\", fillcolor=\"#f6f6f6\", fontname=\"Arial\", fontsize=10, fontcolor=\"#0e0e0e\"];\n");
     fprintf(file, "newrank=true;\n"); /* for rank=same */
+
+    if (ulist != NULL) {
+        ulist_foreach (ulist, uchain) {
+            struct upipe *source = upipe_from_uchain(uchain);
+            upipe_dump_pipe(pipe_label, flow_def_label, file, source,
+                            &uid, &list, false);
+        }
+    }
 
     struct upipe *source;
     while ((source = va_arg(args, struct upipe *)) != NULL)
@@ -301,18 +310,19 @@ void upipe_dump_va(upipe_dump_pipe_label pipe_label,
  * @param pipe_label function to print pipe labels
  * @param flow_def_label function to print flow_def labels
  * @param path path of the file to open
+ * @param ulist list of sources pipes in ulist format
  * @param args list of sources pipes terminated with NULL
  * @return an error code
  */
 int upipe_dump_open_va(upipe_dump_pipe_label pipe_label,
                        upipe_dump_flow_def_label flow_def_label,
-                       const char *path, va_list args)
+                       const char *path, struct uchain *ulist, va_list args)
 {
     FILE *file = fopen(path, "w");
     if (file == NULL)
         return UBASE_ERR_EXTERNAL;
 
-    upipe_dump_va(pipe_label, flow_def_label, file, args);
+    upipe_dump_va(pipe_label, flow_def_label, file, ulist, args);
     fclose(file);
     return UBASE_ERR_NONE;
 }

@@ -62,26 +62,28 @@ char *upipe_dump_flow_def_label_default(struct uref *flow_def);
  * @param pipe_label function to print pipe labels
  * @param flow_def_label function to print flow_def labels
  * @param file file pointer to write to
+ * @param ulist list of sources pipes in ulist format
  * @param args list of sources pipes terminated with NULL
  */
 void upipe_dump_va(upipe_dump_pipe_label pipe_label,
                    upipe_dump_flow_def_label flow_def_label,
-                   FILE *file, va_list args);
+                   FILE *file, struct uchain *ulist, va_list args);
 
 /** @This dumps a pipeline in dot format with a variable list of arguments.
  *
  * @param pipe_label function to print pipe labels
  * @param flow_def_label function to print flow_def labels
- * @param file file pointer to write to, followed by a list of source pipes
- * terminated by NULL
+ * @param file file pointer to write to
+ * @param ulist list of sources pipes in ulist format, followed by a list of
+ * source pipes terminated by NULL
  */
 static inline void upipe_dump(upipe_dump_pipe_label pipe_label,
                               upipe_dump_flow_def_label flow_def_label,
-                              FILE *file, ...)
+                              FILE *file, struct uchain *ulist, ...)
 {
     va_list args;
-    va_start(args, file);
-    upipe_dump_va(pipe_label, flow_def_label, file, args);
+    va_start(args, ulist);
+    upipe_dump_va(pipe_label, flow_def_label, file, ulist, args);
     va_end(args);
 }
 
@@ -90,29 +92,31 @@ static inline void upipe_dump(upipe_dump_pipe_label pipe_label,
  * @param pipe_label function to print pipe labels
  * @param flow_def_label function to print flow_def labels
  * @param path path of the file to open
+ * @param ulist list of sources pipes in ulist format
  * @param args list of sources pipes terminated with NULL
  * @return an error code
  */
 int upipe_dump_open_va(upipe_dump_pipe_label pipe_label,
                        upipe_dump_flow_def_label flow_def_label,
-                       const char *path, va_list args);
+                       const char *path, struct uchain *ulist, va_list args);
 
 /** @This opens a file and dumps a pipeline in dot format with a variable list
  * of arguments.
  *
  * @param pipe_label function to print pipe labels
  * @param flow_def_label function to print flow_def labels
- * @param path path of the file to open, followed by a list of source pipes
- * terminated by NULL
+ * @param path path of the file to open
+ * @param ulist list of sources pipes in ulist format, followed by a list of
+ * source pipes terminated by NULL
  * @return an error code
  */
 static inline int upipe_dump_open(upipe_dump_pipe_label pipe_label,
                                   upipe_dump_flow_def_label flow_def_label,
-                                  const char *path, ...)
+                                  const char *path, struct uchain *ulist, ...)
 {
     va_list args;
-    va_start(args, path);
-    int err = upipe_dump_open_va(pipe_label, flow_def_label, path, args);
+    va_start(args, ulist);
+    int err = upipe_dump_open_va(pipe_label, flow_def_label, path, ulist, args);
     va_end(args);
     return err;
 }
