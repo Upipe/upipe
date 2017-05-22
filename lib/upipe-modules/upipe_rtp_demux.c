@@ -69,20 +69,8 @@ struct upipe_rtp_demux_mgr {
     struct upipe_mgr *rtpd_mgr;
     /** pointer to idem manager */
     struct upipe_mgr *idem_mgr;
-
-    /* ES */
-    /** pointer to mpgaf manager */
-    struct upipe_mgr *mpgaf_mgr;
-    /** pointer to a52f manager */
-    struct upipe_mgr *a52f_mgr;
-    /** pointer to mpgvf manager */
-    struct upipe_mgr *mpgvf_mgr;
-    /** pointer to h264f manager */
-    struct upipe_mgr *h264f_mgr;
-    /** pointer to h265f manager */
-    struct upipe_mgr *h265f_mgr;
-    /** pointer to opusf manager */
-    struct upipe_mgr *opusf_mgr;
+    /** pointer to autof manager */
+    struct upipe_mgr *autof_mgr;
 
     /** public upipe_mgr structure */
     struct upipe_mgr mgr;
@@ -266,88 +254,13 @@ static int upipe_rtp_demux_sub_plumber(struct upipe *upipe,
     if (!uprobe_plumber(event, args, &flow_def, &def))
         return upipe_throw_proxy(upipe, inner, event, args);
 
-    if ((!ubase_ncmp(def, "block.mp2.") ||
-         !ubase_ncmp(def, "block.mp3.") ||
-         !ubase_ncmp(def, "block.aac.")) &&
-        rtp_demux_mgr->mpgaf_mgr != NULL) {
-        /* allocate mpgaf inner */
+    if (rtp_demux_mgr->autof_mgr != NULL) {
+        /* allocate autof inner */
         struct upipe *output =
-            upipe_void_alloc_output(inner, rtp_demux_mgr->mpgaf_mgr,
+            upipe_void_alloc_output(inner, rtp_demux_mgr->autof_mgr,
                 uprobe_pfx_alloc(
                     uprobe_use(&sub->last_inner_probe),
-                    UPROBE_LOG_VERBOSE, "mpgaf"));
-        if (unlikely(output == NULL))
-            return UBASE_ERR_ALLOC;
-        upipe_rtp_demux_sub_store_bin_output(upipe, output);
-        return UBASE_ERR_NONE;
-    }
-
-    if ((!ubase_ncmp(def, "block.ac3.") ||
-         !ubase_ncmp(def, "block.eac3.")) &&
-        rtp_demux_mgr->a52f_mgr != NULL) {
-        /* allocate a52f inner */
-        struct upipe *output =
-            upipe_void_alloc_output(inner, rtp_demux_mgr->a52f_mgr,
-                uprobe_pfx_alloc(
-                    uprobe_use(&sub->last_inner_probe),
-                    UPROBE_LOG_VERBOSE, "a52f"));
-        if (unlikely(output == NULL))
-            return UBASE_ERR_ALLOC;
-        upipe_rtp_demux_sub_store_bin_output(upipe, output);
-        return UBASE_ERR_NONE;
-    }
-
-    if ((!ubase_ncmp(def, "block.mpeg2video.") ||
-         !ubase_ncmp(def, "block.mpeg1video.")) &&
-        rtp_demux_mgr->mpgvf_mgr != NULL) {
-        /* allocate mpgvf inner */
-        struct upipe *output =
-            upipe_void_alloc_output(inner, rtp_demux_mgr->mpgvf_mgr,
-                uprobe_pfx_alloc(
-                    uprobe_use(&sub->last_inner_probe),
-                    UPROBE_LOG_VERBOSE, "mpgvf"));
-        if (unlikely(output == NULL))
-            return UBASE_ERR_ALLOC;
-        upipe_rtp_demux_sub_store_bin_output(upipe, output);
-        return UBASE_ERR_NONE;
-    }
-
-    if (!ubase_ncmp(def, "block.h264.") &&
-        rtp_demux_mgr->h264f_mgr != NULL) {
-        /* allocate h264f inner */
-        struct upipe *output =
-            upipe_void_alloc_output(inner, rtp_demux_mgr->h264f_mgr,
-                uprobe_pfx_alloc(
-                    uprobe_use(&sub->last_inner_probe),
-                    UPROBE_LOG_VERBOSE, "h264f"));
-        if (unlikely(output == NULL))
-            return UBASE_ERR_ALLOC;
-        upipe_rtp_demux_sub_store_bin_output(upipe, output);
-        return UBASE_ERR_NONE;
-    }
-
-    if (!ubase_ncmp(def, "block.hevc.") &&
-        rtp_demux_mgr->h265f_mgr != NULL) {
-        /* allocate h265f inner */
-        struct upipe *output =
-            upipe_void_alloc_output(inner, rtp_demux_mgr->h265f_mgr,
-                uprobe_pfx_alloc(
-                    uprobe_use(&sub->last_inner_probe),
-                    UPROBE_LOG_VERBOSE, "h265f"));
-        if (unlikely(output == NULL))
-            return UBASE_ERR_ALLOC;
-        upipe_rtp_demux_sub_store_bin_output(upipe, output);
-        return UBASE_ERR_NONE;
-    }
-
-    if (!ubase_ncmp(def, "block.opus.") &&
-        rtp_demux_mgr->opusf_mgr != NULL) {
-        /* allocate opusf inner */
-        struct upipe *output =
-            upipe_void_alloc_output(inner, rtp_demux_mgr->opusf_mgr,
-                uprobe_pfx_alloc(
-                    uprobe_use(&sub->last_inner_probe),
-                    UPROBE_LOG_VERBOSE, "opusf"));
+                    UPROBE_LOG_VERBOSE, "autof"));
         if (unlikely(output == NULL))
             return UBASE_ERR_ALLOC;
         upipe_rtp_demux_sub_store_bin_output(upipe, output);
@@ -667,12 +580,7 @@ static void upipe_rtp_demux_mgr_free(struct urefcount *urefcount)
         upipe_rtp_demux_mgr_from_urefcount(urefcount);
     upipe_mgr_release(rtp_demux_mgr->rtpd_mgr);
     upipe_mgr_release(rtp_demux_mgr->idem_mgr);
-    upipe_mgr_release(rtp_demux_mgr->mpgaf_mgr);
-    upipe_mgr_release(rtp_demux_mgr->a52f_mgr);
-    upipe_mgr_release(rtp_demux_mgr->mpgvf_mgr);
-    upipe_mgr_release(rtp_demux_mgr->h264f_mgr);
-    upipe_mgr_release(rtp_demux_mgr->h265f_mgr);
-    upipe_mgr_release(rtp_demux_mgr->opusf_mgr);
+    upipe_mgr_release(rtp_demux_mgr->autof_mgr);
 
     urefcount_clean(urefcount);
     free(rtp_demux_mgr);
@@ -711,13 +619,7 @@ static int upipe_rtp_demux_mgr_control(struct upipe_mgr *mgr,
 
         GET_SET_MGR(rtpd, RTPD)
         GET_SET_MGR(idem, IDEM)
-
-        GET_SET_MGR(mpgaf, MPGAF)
-        GET_SET_MGR(a52f, A52F)
-        GET_SET_MGR(mpgvf, MPGVF)
-        GET_SET_MGR(h264f, H264F)
-        GET_SET_MGR(h265f, H265F)
-        GET_SET_MGR(opusf, OPUSF)
+        GET_SET_MGR(autof, AUTOF)
 #undef GET_SET_MGR
 
         default:
@@ -739,13 +641,7 @@ struct upipe_mgr *upipe_rtp_demux_mgr_alloc(void)
     memset(rtp_demux_mgr, 0, sizeof(*rtp_demux_mgr));
     rtp_demux_mgr->rtpd_mgr = upipe_rtpd_mgr_alloc();
     rtp_demux_mgr->idem_mgr = upipe_idem_mgr_alloc();
-
-    rtp_demux_mgr->mpgaf_mgr = NULL;
-    rtp_demux_mgr->a52f_mgr = NULL;
-    rtp_demux_mgr->mpgvf_mgr = NULL;
-    rtp_demux_mgr->h264f_mgr = NULL;
-    rtp_demux_mgr->h265f_mgr = NULL;
-    rtp_demux_mgr->opusf_mgr = NULL;
+    rtp_demux_mgr->autof_mgr = NULL;
 
     urefcount_init(upipe_rtp_demux_mgr_to_urefcount(rtp_demux_mgr),
                    upipe_rtp_demux_mgr_free);
