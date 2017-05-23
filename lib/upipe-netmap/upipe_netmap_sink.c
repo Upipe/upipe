@@ -1012,6 +1012,10 @@ static void upipe_netmap_sink_worker(struct upump *upump)
                     intf->wait = now;
             }
             intf->up = false; /* will come up after waiting */
+            if (!upipe_netmap_sink->bits) {
+                intf->up = up[i];
+                intf->wait = 0;
+            }
         }
     }
 
@@ -1096,7 +1100,8 @@ static void upipe_netmap_sink_worker(struct upump *upump)
     }
 
     if (!num_slots) {
-        upipe_err(upipe, "No interface is up, reset!");
+        if (upipe_netmap_sink->bits)
+            upipe_err(upipe, "No interface is up, reset!");
         if (uref) {
             uref_block_unmap(uref, 0);
             uref_free(uref);
@@ -1118,6 +1123,8 @@ static void upipe_netmap_sink_worker(struct upump *upump)
         upipe_netmap_sink->uref = NULL;
         upipe_netmap_sink->preroll = true;
         upipe_netmap_sink->packed_bytes = 0;
+        upipe_netmap_sink->seqnum = 0;
+        upipe_netmap_sink->frame_count = 0;
 
         return;
     }
