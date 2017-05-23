@@ -866,7 +866,6 @@ static bool upipe_sdi_dec_handle(struct upipe *upipe, struct uref *uref,
             UBASE_RETURN(uref_pic_flow_set_macropixel(vbi_flow_def, 1))
                 UBASE_RETURN(uref_pic_flow_add_plane(vbi_flow_def, 1, 1, 1, "y8"))
                 upipe_sdi_dec_sub_require_ubuf_mgr(&vbi_sub->upipe, vbi_flow_def);
-            uref_free(vbi_flow_def);
         }
 
         uref_vbi = uref_dup(uref);
@@ -895,7 +894,6 @@ static bool upipe_sdi_dec_handle(struct upipe *upipe, struct uref *uref,
         UBASE_RETURN(uref_pic_flow_set_macropixel(vanc_flow_def, 1))
         UBASE_RETURN(uref_pic_flow_add_plane(vanc_flow_def, 1, 1, 2, "x10"))
         upipe_sdi_dec_sub_require_ubuf_mgr(&vanc_sub->upipe, vanc_flow_def);
-        uref_free(vanc_flow_def);
     }
 
     struct uref *uref_vanc = uref_dup(uref);
@@ -934,7 +932,7 @@ static bool upipe_sdi_dec_handle(struct upipe *upipe, struct uref *uref,
         uref_sound_flow_set_rate(uref_audio, 48000);
         uref_sound_flow_set_sample_size(uref_audio, sizeof(int32_t) * 16);
         upipe_sdi_dec_sub_require_ubuf_mgr(&audio_sub->upipe,
-                uref_audio);
+                uref_dup(uref_audio));
         uref_flow_delete_def(uref_audio);
     }
 
