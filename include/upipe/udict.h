@@ -37,6 +37,7 @@ extern "C" {
 #include <upipe/ubase.h>
 #include <upipe/urefcount.h>
 
+#include <stdio.h>
 #include <stdint.h>
 #include <stdbool.h>
 #include <stdarg.h>
@@ -567,6 +568,34 @@ static inline int udict_set_opaque(struct udict *udict,
     uint8_t *attr;
     UBASE_RETURN(udict_set(udict, name, type, value.size, &attr));
     memcpy(attr, v, value.size);
+    return UBASE_ERR_NONE;
+}
+
+/** @This sets the value of an opaque attribute, optionally creating it,
+ * from an hexadecimal string.
+ *
+ * @param udict the pointer to the udict
+ * @param value hexadecimal value to set
+ * @param type type of the attribute (potentially a shorthand)
+ * @param name name of the attribute
+ * @return an error code
+ */
+static inline int udict_set_opaque_from_hex(struct udict *udict,
+                                            const char *value,
+                                            enum udict_type type,
+                                            const char *name)
+{
+    size_t size = (strlen(value) + 1) / 2;
+    uint8_t v[size];
+    int i;
+    for (i = 0; i < size; i++) {
+        int ret = sscanf(value + (i * 2), "%2hhx", v + i);
+        if (!ret || ret == EOF)
+            return UBASE_ERR_INVALID;
+    }
+    uint8_t *attr;
+    UBASE_RETURN(udict_set(udict, name, type, size, &attr));
+    memcpy(attr, v, size);
     return UBASE_ERR_NONE;
 }
 
