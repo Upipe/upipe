@@ -1173,21 +1173,8 @@ static void upipe_sdi_dec_input(struct upipe *upipe, struct uref *uref,
 static int upipe_sdi_dec_sub_check(struct upipe *upipe, struct uref *flow_format)
 {
     struct upipe_sdi_dec_sub *upipe_sdi_dec_sub = upipe_sdi_dec_sub_from_upipe(upipe);
-    struct upipe_sdi_dec *upipe_sdi_dec = upipe_sdi_dec_from_sub_mgr(upipe->mgr);
-
-    if (flow_format != NULL) {
-        const char *def;
-        UBASE_RETURN(uref_flow_get_def(flow_format, &def));
-        if (upipe == &upipe_sdi_dec->audio.upipe)
-            if (strcmp(def, "sound.s32.")) {
-                upipe_err_va(upipe, "received def %s", def);
-                uref_dump(flow_format, upipe->uprobe);
-                ubuf_mgr_release(upipe_sdi_dec_sub->ubuf_mgr);
-                upipe_sdi_dec_sub->ubuf_mgr = NULL;
-                return UBASE_ERR_UNHANDLED;
-            }
+    if (flow_format != NULL)
         upipe_sdi_dec_sub_store_flow_def(upipe, flow_format);
-    }
 
     return UBASE_ERR_NONE;
 }
