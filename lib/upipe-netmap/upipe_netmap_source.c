@@ -520,7 +520,7 @@ static bool do_packet(struct upipe *upipe, struct netmap_ring *rxring,
             return true;
         }
         if (timestamp_diff > 10000) {
-            printf("BAD %u (%u > %u)\n", timestamp_diff, seqnum, upipe_netmap_source->expected_seqnum);
+            //printf("BAD %u (%u > %u)\n", timestamp_diff, seqnum, upipe_netmap_source->expected_seqnum);
         }
 
         if (0) upipe_warn_va(upipe, "potentially lost %d RTP packets, got %u expected %u, ts diff %x",
@@ -547,7 +547,7 @@ static bool do_packet(struct upipe *upipe, struct netmap_ring *rxring,
         uref_block_unmap(upipe_netmap_source->uref, 0);
 
         if (upipe_netmap_source->packets != upipe_netmap_source->pkts_per_frame) {
-            upipe_dbg_va(upipe, "Dropping: %u packets", upipe_netmap_source->packets);
+            //upipe_dbg_va(upipe, "Dropping: %u packets", upipe_netmap_source->packets);
             uref_free(upipe_netmap_source->uref);
             upipe_netmap_source->discontinuity = true;
         } else { /* output current block */
@@ -614,7 +614,7 @@ static void upipe_netmap_source_worker(struct upump *upump)
         }
 
         if (discontinuity == sources) {
-            upipe_err(upipe, "DISCONTINUITY"); // TODO: # of packets lost
+            //upipe_err(upipe, "DISCONTINUITY"); // TODO: # of packets lost
             upipe_netmap_source->discontinuity = true;
             if (upipe_netmap_source->uref) {
                 uref_block_unmap(upipe_netmap_source->uref, 0);
