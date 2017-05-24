@@ -620,8 +620,13 @@ static void upipe_netmap_source_worker(struct upump *upump)
 static int upipe_netmap_source_check(struct upipe *upipe, struct uref *flow_format)
 {
     struct upipe_netmap_source *upipe_netmap_source = upipe_netmap_source_from_upipe(upipe);
-    if (flow_format != NULL)
-        upipe_netmap_source_store_flow_def(upipe, flow_format);
+    if (flow_format != NULL) {
+        // FIXME WTF
+        if (upipe_netmap_source->flow_def == NULL)
+            upipe_netmap_source_store_flow_def(upipe, flow_format);
+        else
+            uref_free(flow_format);
+    }
 
     upipe_netmap_source_check_upump_mgr(upipe);
     if (upipe_netmap_source->upump_mgr == NULL)
