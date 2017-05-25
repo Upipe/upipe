@@ -382,7 +382,7 @@ static inline bool handle_hbrmt_packet(struct upipe *upipe, const uint8_t *src, 
     }
 
     if (src_size != HBRMT_DATA_SIZE) {
-        upipe_dbg(upipe, "Too small packet, ignoring");
+        upipe_dbg_va(upipe, "Too small packet, ignoring, %i", src_size);
         return true; // discontinuity
     }
 
@@ -452,7 +452,7 @@ static uint64_t get_vss(const uint8_t *vss)
 }
 
 static const uint8_t *get_rtp(struct upipe *upipe, struct netmap_ring *rxring,
-        struct netmap_slot *slot)
+        struct netmap_slot *slot, uint16_t *payload_len)
 {
     uint8_t *src = (uint8_t*)NETMAP_BUF(rxring, slot->buf_idx);
 
@@ -465,12 +465,11 @@ static const uint8_t *get_rtp(struct upipe *upipe, struct netmap_ring *rxring,
 
     uint8_t *udp = ip_payload(ip);
     const uint8_t *rtp = udp_payload(udp);
-    uint16_t payload_len = udp_get_len(udp) - UDP_HEADER_SIZE;
+    *payload_len = udp_get_len(udp) - UDP_HEADER_SIZE;
 
     unsigned min_pkt_size = RTP_HEADER_SIZE + HBRMT_HEADER_SIZE + HBRMT_DATA_SIZE;
 
-    if (payload_len < min_pkt_size) {
-        //upipe_err_va(upipe, "Incorrect packet len: %u", payload_len);
+    if (*payload_len < min_pkt_size) {
         return NULL;
     }
 
@@ -499,7 +498,8 @@ static bool do_packet(struct upipe *upipe, struct netmap_ring *rxring,
 {
     struct upipe_netmap_source *upipe_netmap_source = upipe_netmap_source_from_upipe(upipe);
 
-    const uint8_t *rtp = get_rtp(upipe, rxring, &rxring->slot[cur]);
+    uint16_t pkt_size;
+    const uint8_t *rtp = get_rtp(upipe, rxring, &rxring->slot[cur], &pkt_size);
     if (!rtp)
         return true;
 
@@ -529,9 +529,6 @@ static bool do_packet(struct upipe *upipe, struct netmap_ring *rxring,
 
         return false; // seqnum > expected, keep
     }
-
-    static const unsigned pkt_size = RTP_HEADER_SIZE + HBRMT_HEADER_SIZE
-        + HBRMT_DATA_SIZE;
 
     if (!upipe_netmap_source->discontinuity) {
         if (handle_hbrmt_packet(upipe, rtp, pkt_size)) {
