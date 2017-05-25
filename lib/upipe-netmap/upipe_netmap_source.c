@@ -635,8 +635,13 @@ static void upipe_netmap_source_worker(struct upump *upump)
 static int upipe_netmap_source_check(struct upipe *upipe, struct uref *flow_format)
 {
     struct upipe_netmap_source *upipe_netmap_source = upipe_netmap_source_from_upipe(upipe);
-    if (flow_format != NULL)
-        upipe_netmap_source_store_flow_def(upipe, flow_format);
+    if (flow_format != NULL) {
+        // FIXME WTF
+        if (upipe_netmap_source->flow_def == NULL)
+            upipe_netmap_source_store_flow_def(upipe, flow_format);
+        else
+            uref_free(flow_format);
+    }
 
     upipe_netmap_source_check_upump_mgr(upipe);
     if (upipe_netmap_source->upump_mgr == NULL)
@@ -737,17 +742,13 @@ static int upipe_netmap_source_set_uri(struct upipe *upipe, const char *uri)
                 break;
         }
 
-        if (sscanf(uri, "%*[^-]-%u/R",
-                    &upipe_netmap_source->ring_idx[idx]) != 1) {
-            upipe_err_va(upipe, "invalid netmap receive uri %s", uri);
-            return UBASE_ERR_EXTERNAL;
-        }
-
         upipe_netmap_source->d[idx] = nm_open(uri, NULL, 0, 0);
         if (unlikely(!upipe_netmap_source->d[idx])) {
             upipe_err_va(upipe, "can't open netmap socket %s", uri);
             return UBASE_ERR_EXTERNAL;
         }
+
+        upipe_netmap_source->ring_idx[idx] = 0;
 
         upipe_notice_va(upipe, "opening netmap socket %s ring %u",
                 uri, upipe_netmap_source->ring_idx[idx]);
