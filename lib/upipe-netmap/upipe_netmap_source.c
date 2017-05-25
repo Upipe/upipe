@@ -467,20 +467,20 @@ static const uint8_t *get_rtp(struct upipe *upipe, struct netmap_ring *rxring,
     const uint8_t *rtp = udp_payload(udp);
     uint16_t payload_len = udp_get_len(udp) - UDP_HEADER_SIZE;
 
-    unsigned pkt_size = RTP_HEADER_SIZE + HBRMT_HEADER_SIZE + HBRMT_DATA_SIZE;
+    unsigned min_pkt_size = RTP_HEADER_SIZE + HBRMT_HEADER_SIZE + HBRMT_DATA_SIZE;
 
-    if (payload_len != pkt_size) {
+    if (payload_len != min_pkt_size) {
         //upipe_err_va(upipe, "Incorrect packet len: %u", payload_len);
         return NULL;
     }
 
-    pkt_size += UDP_HEADER_SIZE + IP_HEADER_MINSIZE + ETHERNET_HEADER_LEN;
+    min_pkt_size += UDP_HEADER_SIZE + IP_HEADER_MINSIZE + ETHERNET_HEADER_LEN;
 
-    if (slot->len < pkt_size) {
+    if (slot->len < min_pkt_size) {
         return NULL;
     }
 
-    if (slot->len - 9 >= pkt_size) {
+    if (slot->len - 9 >= min_pkt_size) {
         const uint8_t *vss = &src[slot->len-9];
         if (vss[8] == 0xc3) {
             static uint64_t old;
