@@ -1082,7 +1082,7 @@ static bool upipe_sdi_dec_handle(struct upipe *upipe, struct uref *uref,
 
             if (samples_received < audio_ctx.group_offset[i])
                 samples_received = audio_ctx.group_offset[i];
-            upipe_err_va(upipe, "%zu samples on group %d", audio_ctx.group_offset[i], i);
+            //upipe_err_va(upipe, "%zu samples on group %d", audio_ctx.group_offset[i], i);
         }
 
         for (int i = 0; i < 8; i++) {
