@@ -603,8 +603,10 @@ static void upipe_netmap_source_worker(struct upump *upump)
         if (discontinuity == sources) {
             upipe_err(upipe, "DISCONTINUITY"); // TODO: # of packets lost
             upipe_netmap_source->discontinuity = true;
-            uref_block_unmap(upipe_netmap_source->uref, 0);
-            uref_free(upipe_netmap_source->uref);
+            if (upipe_netmap_source->uref) {
+                uref_block_unmap(upipe_netmap_source->uref, 0);
+                uref_free(upipe_netmap_source->uref);
+            }
             upipe_netmap_source->uref = NULL;
             upipe_netmap_source->expected_seqnum = UINT32_MAX;
         }
