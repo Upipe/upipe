@@ -127,14 +127,15 @@ struct upipe_netmap_source {
     /** current frame **/
     struct uref *uref;
 
-    /** frame number */
-    uint64_t frame;
-
     /* SDI offsets */
     const struct sdi_offsets_fmt *f;
 
     /** unpack */
     void (*sdi_to_uyvy)(const uint8_t *src, uint16_t *y, uintptr_t pixels);
+
+    /** detected format */
+    uint8_t frate;
+    uint8_t frame;
 
     /** unpack scratch buffer */
     uint8_t unpack_scratch_buffer[5];
@@ -195,10 +196,11 @@ static struct upipe *upipe_netmap_source_alloc(struct upipe_mgr *mgr,
     upipe_netmap_source->dst_buf  = NULL;
     upipe_netmap_source->dst_size = 0;
     upipe_netmap_source->f = NULL;
+    upipe_netmap_source->frate    = 0;
+    upipe_netmap_source->frame    = 0;
 
     upipe_netmap_source->expected_seqnum = UINT32_MAX;
     upipe_netmap_source->discontinuity = false;
-    upipe_netmap_source->frame = 0;
     upipe_netmap_source->unpack_scratch_buffer_count = 0;
 
     upipe_netmap_source->sdi_to_uyvy = upipe_sdi_unpack_c;
@@ -344,12 +346,20 @@ static inline bool handle_hbrmt_packet(struct upipe *upipe, const uint8_t *src, 
     src_size -= RTP_HEADER_SIZE;
     const uint8_t *hbrmt = &src[RTP_HEADER_SIZE];
 
+    const uint8_t frate = smpte_hbrmt_get_frate(hbrmt);
+    const uint8_t frame = smpte_hbrmt_get_frame(hbrmt);
+
     if (unlikely(!upipe_netmap_source->f)) {
-        const uint8_t frate = smpte_hbrmt_get_frate(hbrmt);
-        const uint8_t frame = smpte_hbrmt_get_frame(hbrmt);
         if (!ubase_check(upipe_netmap_source_set_flow(upipe, frate, frame))) {
             return true;
         }
+        upipe_netmap_source->frate = frate;
+        upipe_netmap_source->frame = frame;
+    }
+
+    if (frate != upipe_netmap_source->frate || frame != upipe_netmap_source->frame) {
+        upipe_err(upipe, "Incorrect format");
+        return true;
     }
 
     if (unlikely(!upipe_netmap_source->uref)) {
