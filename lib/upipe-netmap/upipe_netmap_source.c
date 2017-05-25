@@ -469,7 +469,7 @@ static const uint8_t *get_rtp(struct upipe *upipe, struct netmap_ring *rxring,
 
     unsigned min_pkt_size = RTP_HEADER_SIZE + HBRMT_HEADER_SIZE + HBRMT_DATA_SIZE;
 
-    if (payload_len != min_pkt_size) {
+    if (payload_len < min_pkt_size) {
         //upipe_err_va(upipe, "Incorrect packet len: %u", payload_len);
         return NULL;
     }
