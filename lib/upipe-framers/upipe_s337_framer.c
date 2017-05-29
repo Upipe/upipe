@@ -58,8 +58,8 @@ struct upipe_s337f {
     /** buffered uref */
     struct uref *uref;
 
-    /** offset of s337 sync word */
-    ssize_t sync;
+    /** offset of s337 sync word in buffered uref */
+    ssize_t offset;
 
     /** input flow definition packet */
     struct uref *flow_def_input;
@@ -97,7 +97,6 @@ static struct upipe *upipe_s337f_alloc(struct upipe_mgr *mgr,
     upipe_s337f_init_output(upipe);
     upipe_s337f_init_flow_def(upipe);
     upipe_s337f->uref = NULL;
-    upipe_s337f->sync = -1;
     upipe_throw_ready(&upipe_s337f->upipe);
     return &upipe_s337f->upipe;
 }
@@ -201,40 +200,30 @@ static void upipe_s337f_input(struct upipe *upipe, struct uref *uref, struct upu
         return;
     }
 
-    if (sync != upipe_s337f->sync) {
-        upipe_warn_va(upipe, "Sync word at offset %zu", sync);
-        upipe_s337f->sync = sync;
-        if (output) {
-            upipe_err_va(upipe, "Dropping buffered uref");
-            uref_free(output);
-            upipe_s337f->uref = NULL;
-            output = NULL;
-        }
-    }
-
     if (output) {
         size_t size[2];
         uref_sound_size(uref, &size[0], NULL);
         uref_sound_size(output, &size[1], NULL);
 
-        if (size[0] != size[1]) {
-            upipe_err_va(upipe, "uref sizes do not match: %zu != %zu", size[0],
-                    size[1]);
-            uref_free(output);
-            upipe_s337f->uref = uref;
-            return;
+        const int32_t *in;
+        if (!ubase_check(uref_sound_read_int32_t(uref, 0, sync, &in, 1))) {
+            upipe_err(upipe, "Could not map audio uref for reading");
         }
 
-        const int32_t *in;
-        uref_sound_read_int32_t(uref, 0, -1, &in, 1);
-
         int32_t *out;
-        uref_sound_write_int32_t(output, 0, -1, &out, 1);
+        if (!ubase_check(uref_sound_write_int32_t(output, 0, -1, &out, 1))) {
+            upipe_err(upipe, "Could not map buffered audio uref for writing");
+        }
 
-        size_t s = 2 /* stereo */ * 4 /* s32 */ * (size[0] - sync);
+        size_t out_size = size[0] - upipe_s337f->offset;
+        if (out_size < sync) {
+            upipe_verbose_va(upipe, "Reducing frame size from %zu to %zu",
+                upipe_s337f->offset + sync,
+                upipe_s337f->offset + out_size);
+            out_size = sync;
+        }
 
-        memmove(out, &out[2*sync], s); // discard up to sync word
-        memcpy(&out[s/4], &in[0], 2 * 4 * sync); // complete with next uref
+        memcpy(&out[2*upipe_s337f->offset], in, 2 /* stereo */ * 4 /* s32 */ * out_size);
 
         uint32_t hdr[2]; /* Pc + Pd */
         upipe_s337f_header(upipe, out, hdr);
@@ -252,8 +241,11 @@ static void upipe_s337f_input(struct upipe *upipe, struct uref *uref, struct upu
         if (unlikely(flow_def == NULL)) {
             upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
         } else {
-            // TODO: ntsc
-            uref_clock_set_latency(flow_def, UCLOCK_FREQ * size[0] * 2 / 48000);
+            size_t frame_size = size[0];
+            if (frame_size == 1601 || frame_size == 1602) { /* NTSC */
+                uref_clock_set_latency(flow_def, UCLOCK_FREQ * 2 * 1001 / 30000);
+            } else
+                uref_clock_set_latency(flow_def, UCLOCK_FREQ * 2 * frame_size / 48000);
 
             uref_attr_set_small_unsigned(flow_def, data_type,
                 UDICT_TYPE_SMALL_UNSIGNED, "data_type");
@@ -268,8 +260,22 @@ static void upipe_s337f_input(struct upipe *upipe, struct uref *uref, struct upu
         upipe_notice_va(upipe, "%u bytes", hdr[1] / 8);
 #endif
 
-        uref_sound_unmap(uref, 0, -1, 1);
+        uref_sound_unmap(uref, 0, sync, 1);
         uref_sound_unmap(output, 0, -1, 1);
+    }
+
+    /* discard leading samples up to sync word */
+    int32_t *samples;
+    if (ubase_check(uref_sound_write_int32_t(uref, 0, -1, &samples, 1))) {
+        size_t size;
+        uref_sound_size(uref, &size, NULL);
+        size_t s = 2 /* stereo */ * 4 /* s32 */ * (size - sync);
+        memmove(samples, &samples[2*sync], s); // discard up to sync word
+
+        uref_sound_unmap(uref, 0, -1, 1);
+        upipe_s337f->offset = size - sync;
+    } else {
+        upipe_err(upipe, "Could not map audio uref for writing");
     }
 
     /* buffer next uref */
