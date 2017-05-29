@@ -165,7 +165,8 @@ static int STRUCTURE##_set_bin_output(struct upipe *upipe,                  \
         struct uchain *uchain;                                              \
         ulist_foreach (&s->REQUEST_LIST, uchain) {                          \
             struct urequest *urequest = urequest_from_uchain(uchain);       \
-            upipe_unregister_request(s->OUTPUT, urequest);                  \
+            int err = upipe_unregister_request(s->OUTPUT, urequest);        \
+            ubase_assert(err);                                              \
         }                                                                   \
     }                                                                       \
     upipe_release(s->OUTPUT);                                               \
@@ -226,8 +227,10 @@ static void STRUCTURE##_clean_bin_output(struct upipe *upipe)               \
     struct uchain *uchain;                                                  \
     while ((uchain = ulist_pop(&s->REQUEST_LIST)) != NULL) {                \
         struct urequest *urequest = urequest_from_uchain(uchain);           \
-        if (likely(s->OUTPUT != NULL))                                      \
-            upipe_unregister_request(s->OUTPUT, urequest);                  \
+        if (likely(s->OUTPUT != NULL)) {                                    \
+            int err = upipe_unregister_request(s->OUTPUT, urequest);        \
+            ubase_assert(err);                                              \
+        }                                                                   \
         urequest_clean(urequest);                                           \
         urequest_free(urequest);                                            \
     }                                                                       \
