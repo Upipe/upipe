@@ -1,7 +1,7 @@
 /*
- * Copyright (C) 2013-2014 OpenHeadend S.A.R.L.
+ * Copyright (C) 2016-2017 Open Broadcast Systems Ltd
  *
- * Authors: Benjamin Cohen
+ * Authors: Rafaël Carré
  *
  * Permission is hereby granted, free of charge, to any person obtaining
  * a copy of this software and associated documentation files (the
@@ -24,7 +24,12 @@
  */
 
 /** @file
- * @short Upipe s337f module - free incoming urefs
+ * @short Upipe module building frames from chunks of a SMPTE 337 stream
+ *
+ * Normative references:
+ *  - SMPTE 337-2008 (non-PCM in AES3)
+ *  - SMPTE 338-2008 (non-PCM in AES3 - data types)
+ *  - SMPTE 340-2008 (non-PCM in AES3 - ATSC A/52B)
  */
 
 #include <upipe/ubase.h>
