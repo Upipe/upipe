@@ -204,7 +204,7 @@ struct upipe_bmd_sink_sub {
 
     bool dolby_e;
 
-    bool a52;
+    bool s337;
 
     /** position in the SDI stream */
     uint8_t channel_idx;
@@ -655,7 +655,7 @@ static void upipe_bmd_sink_sub_sound_get_samples_channel(struct upipe *upipe,
                 continue;
             }
 
-            if (upipe_bmd_sink_sub->dolby_e || upipe_bmd_sink_sub->a52) {
+            if (upipe_bmd_sink_sub->s337) {
                 /* do not drop first samples of s337 */
                 drop_duration = 0;
             }
@@ -704,7 +704,7 @@ static void upipe_bmd_sink_sub_sound_get_samples_channel(struct upipe *upipe,
         if (samples_offset != end_offset) {
             if (llabs((int64_t)samples_offset - (int64_t)end_offset) <= max_sample_drift)
                 samples_offset = end_offset;
-            else
+            else if (!upipe_bmd_sink_sub->s337)
                 upipe_err_va(upipe, "[%d] Mismatching offsets: SAMPLES %" PRIu64" != %u END",
                     upipe_bmd_sink_sub->channel_idx/2,
                     samples_offset, end_offset);
@@ -1145,11 +1145,11 @@ static bool upipe_bmd_sink_sub_output(struct upipe *upipe, struct uref *uref)
 
         uref_clock_get_latency(uref, &upipe_bmd_sink_sub->latency);
         upipe_dbg_va(upipe, "latency %" PRIu64, upipe_bmd_sink_sub->latency);
-        uint8_t data_type = 0;
-        uref_attr_get_small_unsigned(uref, &data_type, UDICT_TYPE_SMALL_UNSIGNED, "data_type");
-        upipe_bmd_sink_sub->dolby_e = data_type == 28; // dolby e, see s338m
-        upipe_bmd_sink_sub->a52 = data_type == S337_TYPE_A52 ||
-                                  data_type == S337_TYPE_A52E;
+
+        upipe_bmd_sink_sub->s337 = !ubase_ncmp(def, "sound.s32.s337.");
+        upipe_bmd_sink_sub->dolby_e = upipe_bmd_sink_sub->s337 &&
+            !ubase_ncmp(def, "sound.s32.s337.dolbye.");
+
         upipe_bmd_sink_sub_check_upump_mgr(upipe);
 
         uref_free(uref);
