@@ -147,9 +147,6 @@ public:
         return E_NOINTERFACE;
     }
 
-public:
-    uint64_t pts;
-
 private:
     struct uref *uref;
     void *data;
@@ -159,6 +156,9 @@ private:
 
     uatomic_uint32_t refcount;
     IDeckLinkVideoFrameAncillary *frame_anc;
+
+public:
+    uint64_t pts;
 };
 
 static float dur_to_time(int64_t dur)
