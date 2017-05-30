@@ -41,6 +41,8 @@
 #include <upipe/upipe_helper_flow_def.h>
 #include <upipe-framers/upipe_s337_framer.h>
 
+#include <bitstream/smpte/337.h>
+
 /** upipe_s337f structure */
 struct upipe_s337f {
     /** refcount management structure */
@@ -233,8 +235,20 @@ static void upipe_s337f_input(struct upipe *upipe, struct uref *uref, struct upu
             } else
                 uref_clock_set_latency(flow_def, UCLOCK_FREQ * 2 * frame_size / 48000);
 
-            uref_attr_set_small_unsigned(flow_def, data_type,
-                UDICT_TYPE_SMALL_UNSIGNED, "data_type");
+            switch (data_type) {
+            case S337_TYPE_DOLBY_E:
+                UBASE_FATAL(upipe, uref_flow_set_def(flow_def, "sound.s32.s337.dolbye."))
+                break;
+            case S337_TYPE_A52:
+                UBASE_FATAL(upipe, uref_flow_set_def(flow_def, "sound.s32.s337.a52."))
+                break;
+            case S337_TYPE_A52E:
+                UBASE_FATAL(upipe, uref_flow_set_def(flow_def, "sound.s32.s337.a52e."))
+                break;
+            default:
+                upipe_warn_va(upipe, "Unhandled data type %u", data_type);
+            }
+
             flow_def = upipe_s337f_store_flow_def_attr(upipe, flow_def);
             if (flow_def)
                 upipe_s337f_store_flow_def(upipe, flow_def);
