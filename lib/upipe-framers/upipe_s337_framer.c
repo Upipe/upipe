@@ -240,11 +240,11 @@ static void upipe_s337f_input(struct upipe *upipe, struct uref *uref, struct upu
                 upipe_s337f_store_flow_def(upipe, flow_def);
         }
 
-#if 0
-        upipe_notice_va(upipe, "%d %d %d %d %d",
-            data_stream_number, data_type_dependent, error_flag, data_mode, data_type);
-        upipe_notice_va(upipe, "%u bytes", hdr[1] / 8);
-#endif
+        if (0) {
+            upipe_notice_va(upipe, "%d %d %d %d %d", data_stream_number,
+                    data_type_dependent, error_flag, data_mode, data_type);
+            upipe_notice_va(upipe, "%u bytes", hdr[1] / 8);
+        }
 
         uref_sound_unmap(uref, 0, sync, 1);
         uref_sound_unmap(output, 0, -1, 1);
