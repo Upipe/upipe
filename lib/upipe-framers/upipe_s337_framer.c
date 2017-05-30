@@ -344,10 +344,12 @@ static int upipe_s337f_control(struct upipe *upipe, int command, va_list args)
     switch (command) {
         case UPIPE_REGISTER_REQUEST: {
             struct urequest *request = va_arg(args, struct urequest *);
-            return upipe_throw_provide_request(upipe, request);
+            return upipe_s337f_alloc_output_proxy(upipe, request);
         }
-        case UPIPE_UNREGISTER_REQUEST:
-            return UBASE_ERR_NONE;
+        case UPIPE_UNREGISTER_REQUEST: {
+            struct urequest *request = va_arg(args, struct urequest *);
+            return upipe_s337f_free_output_proxy(upipe, request);
+        }
 
         case UPIPE_GET_FLOW_DEF: {
             struct uref **p = va_arg(args, struct uref **);
