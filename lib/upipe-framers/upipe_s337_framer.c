@@ -61,6 +61,9 @@ struct upipe_s337f {
     /** offset of s337 sync word in buffered uref */
     ssize_t offset;
 
+    /** bits per raw sample */
+    uint8_t bits;
+
     /** input flow definition packet */
     struct uref *flow_def_input;
     /** frame definition packet */
@@ -299,13 +302,29 @@ out:
  */
 static int upipe_s337f_set_flow_def(struct upipe *upipe, struct uref *flow_def)
 {
+    struct upipe_s337f *upipe_s337f = upipe_s337f_from_upipe(upipe);
+
     if (flow_def == NULL)
         return UBASE_ERR_INVALID;
 
     const char *def;
-    if (unlikely(!ubase_check(uref_flow_get_def(flow_def, &def)) ||
-             (ubase_ncmp(def, "sound.s32.") && ubase_ncmp(def, "sound.s16."))))
+    if (unlikely(!ubase_check(uref_flow_get_def(flow_def, &def))))
         return UBASE_ERR_INVALID;
+
+    uint8_t bits;
+    if (!ubase_ncmp(def, "sound.s32.")) {
+        bits = 32;
+    } else if (!ubase_ncmp(def, "sound.s32.")) {
+        bits = 16;
+    } else {
+        return UBASE_ERR_INVALID;
+    }
+
+    if (bits == 32 && unlikely(!ubase_check(uref_sound_flow_get_raw_sample_size(flow_def, &bits)))) {
+        return UBASE_ERR_INVALID;
+    }
+
+    upipe_s337f->bits = bits;
 
     uint8_t planes = 0;
     if (unlikely(!ubase_check(uref_sound_flow_get_planes(flow_def, &planes) ||
