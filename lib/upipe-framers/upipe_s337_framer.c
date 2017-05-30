@@ -93,10 +93,12 @@ static struct upipe *upipe_s337f_alloc(struct upipe_mgr *mgr,
         return NULL;
 
     struct upipe_s337f *upipe_s337f = upipe_s337f_from_upipe(upipe);
+
     upipe_s337f_init_urefcount(upipe);
     upipe_s337f_init_output(upipe);
     upipe_s337f_init_flow_def(upipe);
     upipe_s337f->uref = NULL;
+
     upipe_throw_ready(&upipe_s337f->upipe);
     return &upipe_s337f->upipe;
 }
@@ -376,15 +378,16 @@ static int upipe_s337f_control(struct upipe *upipe, int command, va_list args)
 static void upipe_s337f_free(struct upipe *upipe)
 {
     struct upipe_s337f *upipe_s337f = upipe_s337f_from_upipe(upipe);
+
     upipe_throw_dead(upipe);
     upipe_s337f_clean_urefcount(upipe);
     upipe_s337f_clean_output(upipe);
     upipe_s337f_clean_flow_def(upipe);
     uref_free(upipe_s337f->uref);
+
     upipe_s337f_free_void(upipe);
 }
 
-/** upipe_s337f (/dev/s337f) */
 static struct upipe_mgr upipe_s337f_mgr = {
     .refcount = NULL,
     .signature = UPIPE_S337F_SIGNATURE,
