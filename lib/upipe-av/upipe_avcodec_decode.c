@@ -487,6 +487,11 @@ static int upipe_avcdec_get_buffer_sound(struct AVCodecContext *context,
     if (context->sample_rate)
         UBASE_FATAL(upipe, uref_sound_flow_set_rate(flow_def_attr,
                                               context->sample_rate))
+
+    if (context->bits_per_raw_sample)
+        UBASE_FATAL(upipe, uref_sound_flow_set_raw_sample_size(flow_def_attr,
+                                              context->bits_per_raw_sample))
+
     if (context->frame_size)
         UBASE_FATAL(upipe, uref_sound_flow_set_samples(flow_def_attr,
                                                  context->frame_size))
