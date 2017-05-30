@@ -240,6 +240,11 @@ static void upipe_s337f_input(struct upipe *upipe, struct uref *uref, struct upu
                 upipe_s337f_store_flow_def(upipe, flow_def);
         }
 
+        size_t samples = hdr[1] / upipe_s337f->bits / 2 /* channels */ + 2 /* header */;
+        if (samples > size[0]) {
+            upipe_err_va(upipe, "S337 frame truncated");
+        }
+
         if (0) {
             upipe_notice_va(upipe, "%d %d %d %d %d", data_stream_number,
                     data_type_dependent, error_flag, data_mode, data_type);
