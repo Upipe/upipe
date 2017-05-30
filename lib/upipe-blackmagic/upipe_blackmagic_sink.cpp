@@ -1428,7 +1428,7 @@ static struct upipe *upipe_bmd_sink_sub_alloc(struct upipe_mgr *mgr,
                                                  struct uprobe *uprobe,
                                                  uint32_t signature, va_list args)
 {
-    struct uref *flow_def;
+    struct uref *flow_def = NULL;
     struct upipe *upipe = upipe_bmd_sink_sub_alloc_flow(mgr,
             uprobe, signature, args, &flow_def);
     struct upipe_bmd_sink_sub *upipe_bmd_sink_sub;
