@@ -417,6 +417,125 @@ static uint64_t uclock_netmap_sink_now(struct uclock *uclock)
     return t;
 }
 
+/* get MAC and/or IP address of specified interface */
+static bool source_addr(const char *intf, uint8_t *mac, in_addr_t *ip)
+{
+    struct ifaddrs *ifaphead;
+    if (getifaddrs(&ifaphead) != 0)
+        return false;
+
+    bool got_mac = !mac;
+    bool got_ip = !ip;
+
+    for (struct ifaddrs *ifap = ifaphead; ifap; ifap = ifap->ifa_next) {
+        if (!ifap->ifa_addr)
+            continue;
+
+        if (strncmp(ifap->ifa_name, intf, IFNAMSIZ) != 0)
+            continue;
+
+        switch (ifap->ifa_addr->sa_family) {
+        case AF_PACKET: /* interface mac address */
+            if (mac) {
+                struct sockaddr_ll *sll = (struct sockaddr_ll *)ifap->ifa_addr;
+                memcpy(mac, sll->sll_addr, 6);
+                got_mac = true;
+            }
+            break;
+        case AF_INET:
+            if (ip) {
+                struct sockaddr_in *sin = (struct sockaddr_in *)ifap->ifa_addr;
+                *ip = sin->sin_addr.s_addr;
+                got_ip = true;
+            }
+            break;
+        }
+    }
+
+    freeifaddrs(ifaphead);
+    return got_mac && got_ip;
+}
+
+static int upipe_netmap_sink_open_intf(struct upipe *upipe,
+        struct upipe_netmap_intf *intf, const char *uri)
+{
+    if (sscanf(uri, "netmap:%*[^-]-%u/T", &intf->ring_idx) != 1) {
+        upipe_err_va(upipe, "invalid netmap receive uri %s", uri);
+        return UBASE_ERR_INVALID;
+    }
+
+    char *intf_addr = strdup(&uri[strlen("netmap:")]);
+    *strchr(intf_addr, '-') = '\0'; /* we already matched the - in sscanf */
+    strncpy(intf->ifr.ifr_name, intf_addr, IFNAMSIZ);
+
+    if (!source_addr(intf_addr, &intf->src_mac[0],
+                &intf->src_ip)) {
+        upipe_err(upipe, "Could not read interface address");
+        goto error;
+    }
+
+    intf->d = nm_open(uri, NULL, 0, 0);
+    if (unlikely(!intf->d)) {
+        upipe_err_va(upipe, "can't open netmap socket %s", uri);
+        free(intf_addr);
+        return UBASE_ERR_EXTERNAL;
+    }
+
+    if (asprintf(&intf->maxrate_uri,
+                "/sys/class/net/%s/queues/tx-%d/tx_maxrate",
+                intf_addr, intf->ring_idx) < 0) {
+        free(intf_addr);
+        upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
+        return UBASE_ERR_ALLOC;
+    }
+    free(intf_addr);
+
+    return UBASE_ERR_NONE;
+
+error:
+    free(intf_addr);
+
+    return UBASE_ERR_INVALID;
+}
+
+/** @internal @This asks to open the given socket.
+ *
+ * @param upipe description structure of the pipe
+ * @param uri relative or absolute uri of the socket
+ * @param mode mode of opening the socket
+ * @return an error code
+ */
+static int upipe_netmap_sink_open_dev(struct upipe *upipe, const char *dev)
+{
+    struct upipe_netmap_sink *upipe_netmap_sink =
+        upipe_netmap_sink_from_upipe(upipe);
+
+    if (unlikely(dev == NULL))
+        return UBASE_ERR_NONE;
+
+    dev = strdup(dev);
+    if (unlikely(dev == NULL))
+        return UBASE_ERR_ALLOC;
+
+    upipe_notice_va(upipe, "opening netmap device  %s", dev);
+
+    char *p = strchr(dev, '+');
+    if (p)
+        *p++ = '\0';
+
+    struct upipe_netmap_intf *intf = &upipe_netmap_sink->intf[0];
+    UBASE_RETURN(upipe_netmap_sink_open_intf(upipe, intf, dev));
+
+    if (p) {
+        p[-1] = '+';
+        UBASE_RETURN(upipe_netmap_sink_open_intf(upipe, intf+1, p));
+    }
+
+    upipe_notice_va(upipe, "opened %d netmap device(s)", p ? 2 : 1);
+
+    return UBASE_ERR_NONE;
+}
+
 
 /** @internal @This allocates a netmap sink pipe.
  *
@@ -448,10 +567,15 @@ static struct upipe *_upipe_netmap_sink_alloc(struct upipe_mgr *mgr,
     upipe_netmap_sink->line = 0;
     upipe_netmap_sink->pixel_offset = 0;
     upipe_netmap_sink->frame_size = 0;
+    upipe_netmap_sink->n = 0;
+    upipe_netmap_sink->fakes = 0;
+    upipe_netmap_sink->pkt = 0;
+    upipe_netmap_sink->bits = 0;
+    upipe_netmap_sink->start = 0;
+    upipe_netmap_sink->uref = NULL;
+    upipe_netmap_sink->preroll = true;
+    upipe_netmap_sink->packed_bytes = 0;
 
-    upipe_netmap_sink_init_urefcount(upipe);
-    upipe_netmap_sink_init_upump_mgr(upipe);
-    upipe_netmap_sink_init_upump(upipe);
     upipe_netmap_sink->uri = NULL;
     for (size_t i = 0; i < 2; i++) {
         struct upipe_netmap_intf *intf = &upipe_netmap_sink->intf[i];
@@ -462,15 +586,17 @@ static struct upipe *_upipe_netmap_sink_alloc(struct upipe_mgr *mgr,
         intf->fd = socket(AF_INET, SOCK_DGRAM, 0);
         memset(&intf->ifr, 0, sizeof(intf->ifr));
     }
+
+    if (!ubase_check(upipe_netmap_sink_open_dev(upipe, device))) {
+        upipe_clean(upipe);
+        free(upipe_netmap_sink);
+        return NULL;
+    }
+
+    upipe_netmap_sink_init_urefcount(upipe);
+    upipe_netmap_sink_init_upump_mgr(upipe);
+    upipe_netmap_sink_init_upump(upipe);
     ulist_init(&upipe_netmap_sink->sink_queue);
-    upipe_netmap_sink->n = 0;
-    upipe_netmap_sink->fakes = 0;
-    upipe_netmap_sink->pkt = 0;
-    upipe_netmap_sink->bits = 0;
-    upipe_netmap_sink->start = 0;
-    upipe_netmap_sink->uref = NULL;
-    upipe_netmap_sink->preroll = true;
-    upipe_netmap_sink->packed_bytes = 0;
 
     upipe_netmap_sink->pack_8_planar = upipe_planar_to_sdi_8_c;
     upipe_netmap_sink->pack_10_planar = upipe_planar_to_sdi_10_c;
@@ -1630,87 +1756,6 @@ static char *config_stropt(char *string)
     return ret;
 }
 
-/* get MAC and/or IP address of specified interface */
-static bool source_addr(const char *intf, uint8_t *mac, in_addr_t *ip)
-{
-    struct ifaddrs *ifaphead;
-    if (getifaddrs(&ifaphead) != 0)
-        return false;
-
-    bool got_mac = !mac;
-    bool got_ip = !ip;
-
-    for (struct ifaddrs *ifap = ifaphead; ifap; ifap = ifap->ifa_next) {
-        if (!ifap->ifa_addr)
-            continue;
-
-        if (strncmp(ifap->ifa_name, intf, IFNAMSIZ) != 0)
-            continue;
-
-        switch (ifap->ifa_addr->sa_family) {
-        case AF_PACKET: /* interface mac address */
-            if (mac) {
-                struct sockaddr_ll *sll = (struct sockaddr_ll *)ifap->ifa_addr;
-                memcpy(mac, sll->sll_addr, 6);
-                got_mac = true;
-            }
-            break;
-        case AF_INET:
-            if (ip) {
-                struct sockaddr_in *sin = (struct sockaddr_in *)ifap->ifa_addr;
-                *ip = sin->sin_addr.s_addr;
-                got_ip = true;
-            }
-            break;
-        }
-    }
-
-    freeifaddrs(ifaphead);
-    return got_mac && got_ip;
-}
-
-static int upipe_netmap_sink_open_intf(struct upipe *upipe,
-        struct upipe_netmap_intf *intf, const char *uri)
-{
-    if (sscanf(uri, "netmap:%*[^-]-%u/T", &intf->ring_idx) != 1) {
-        upipe_err_va(upipe, "invalid netmap receive uri %s", uri);
-        return UBASE_ERR_INVALID;
-    }
-
-    char *intf_addr = strdup(&uri[strlen("netmap:")]);
-    *strchr(intf_addr, '-') = '\0'; /* we already matched the - in sscanf */
-    strncpy(intf->ifr.ifr_name, intf_addr, IFNAMSIZ);
-
-    if (!source_addr(intf_addr, &intf->src_mac[0],
-                &intf->src_ip)) {
-        upipe_err(upipe, "Could not read interface address");
-        goto error;
-    }
-
-    intf->d = nm_open(uri, NULL, 0, 0);
-    if (unlikely(!intf->d)) {
-        upipe_err_va(upipe, "can't open netmap socket %s", uri);
-        free(intf_addr);
-        return UBASE_ERR_EXTERNAL;
-    }
-
-    if (asprintf(&intf->maxrate_uri,
-                "/sys/class/net/%s/queues/tx-%d/tx_maxrate",
-                intf_addr, intf->ring_idx) < 0) {
-        free(intf_addr);
-        upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
-        return UBASE_ERR_ALLOC;
-    }
-    free(intf_addr);
-
-    return UBASE_ERR_NONE;
-
-error:
-    free(intf_addr);
-
-    return UBASE_ERR_INVALID;
-}
-
 static int upipe_netmap_sink_ip_params(struct upipe *upipe,
         struct upipe_netmap_intf *intf, const char *params)
 {
@@ -1823,44 +1868,6 @@ static int upipe_netmap_sink_set_uri(struct upipe *upipe, const char *uri)
     return UBASE_ERR_NONE;
 }
 
-
-/** @internal @This asks to open the given socket.
- *
- * @param upipe description structure of the pipe
- * @param uri relative or absolute uri of the socket
- * @param mode mode of opening the socket
- * @return an error code
- */
-static int upipe_netmap_sink_open_dev(struct upipe *upipe, const char *dev)
-{
-    struct upipe_netmap_sink *upipe_netmap_sink =
-        upipe_netmap_sink_from_upipe(upipe);
-
-    if (unlikely(dev == NULL))
-        return UBASE_ERR_NONE;
-
-    dev = strdup(dev);
-    if (unlikely(dev == NULL))
-        return UBASE_ERR_ALLOC;
-
-    upipe_notice_va(upipe, "opening netmap device  %s", dev);
-
-    char *p = strchr(dev, '+');
-    if (p)
-        *p++ = '\0';
-
-    struct upipe_netmap_intf *intf = &upipe_netmap_sink->intf[0];
-    UBASE_RETURN(upipe_netmap_sink_open_intf(upipe, intf, dev));
-
-    if (p) {
-        p[-1] = '+';
-        UBASE_RETURN(upipe_netmap_sink_open_intf(upipe, intf+1, p));
-    }
-
-    upipe_notice_va(upipe, "opened %d netmap device(s)", p ? 2 : 1);
-
-    return UBASE_ERR_NONE;
-}
 
 /** @internal @This processes control commands on a netmap sink pipe.
  *
