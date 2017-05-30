@@ -1949,6 +1949,7 @@ static void upipe_netmap_sink_free(struct upipe *upipe)
     upipe_netmap_sink_clean_upump(upipe);
     upipe_netmap_sink_clean_upump_mgr(upipe);
     upipe_netmap_sink_clean_urefcount(upipe);
+    upipe_clean(upipe);
     free(upipe_netmap_sink);
 }
 
