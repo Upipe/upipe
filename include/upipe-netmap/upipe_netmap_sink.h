@@ -18,6 +18,13 @@ extern "C" {
  */
 struct upipe_mgr *upipe_netmap_sink_mgr_alloc(void);
 
+/** @hidden */
+#define ARGS_DECL , const char *device
+/** @hidden */
+#define ARGS , device
+UPIPE_HELPER_ALLOC(netmap_sink, UPIPE_NETMAP_SINK_SIGNATURE)
+#undef ARGS
+#undef ARGS_DECL
 
 /** @This extends upipe_command with specific commands for netmap sink. */
 enum upipe_netmap_sink_command {
