@@ -178,8 +178,8 @@ static void upipe_s337f_input(struct upipe *upipe, struct uref *uref, struct upu
             uref_free(output);
             upipe_s337f->uref = NULL;
         }
-        output = uref;
-        goto out;
+        upipe_s337f_output(upipe, uref, upump_p);
+        return;
     } else if (!output) {
         upipe_notice(upipe, "Found synchro");
     }
@@ -290,10 +290,6 @@ static void upipe_s337f_input(struct upipe *upipe, struct uref *uref, struct upu
 
     /* buffer next uref */
     upipe_s337f->uref = uref;
-
-out:
-    if (!upipe_s337f->flow_def)
-        upipe_s337f_store_flow_def(upipe, uref_dup(upipe_s337f->flow_def_input));
 
     if (output)
         upipe_s337f_output(upipe, output, upump_p);
