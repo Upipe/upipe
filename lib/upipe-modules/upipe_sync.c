@@ -259,18 +259,6 @@ static int upipe_sync_sub_set_flow_def(struct upipe *upipe, struct uref *flow_de
     if (!ubase_check(uref_clock_get_latency(flow_def, &latency)))
         latency = 0;
 
-    // FIXME : estimated latency added by processing
-    latency += UCLOCK_FREQ / 25;
-    uref_clock_set_latency(flow_def, latency);
-
-    if (latency > upipe_sync->latency) {
-        upipe_notice_va(upipe, "Latency %" PRIu64, latency);
-        upipe_sync->latency = latency;
-        upipe_sync_set_latency(upipe_sync_to_upipe(upipe_sync));
-    } else {
-        upipe_sync_sub_build_flow_def(upipe);
-    }
-
     uint8_t planes;
     UBASE_RETURN(uref_sound_flow_get_planes(flow_def, &planes));
     if (planes != 1)
@@ -283,9 +271,25 @@ static int upipe_sync_sub_set_flow_def(struct upipe *upipe, struct uref *flow_de
     if (rate != 48000)
         return UBASE_ERR_INVALID;
 
+    flow_def = uref_dup(flow_def);
+    if (!flow_def)
+        return UBASE_ERR_ALLOC;
+
+    // FIXME : estimated latency added by processing
+    latency += UCLOCK_FREQ / 25;
+    uref_clock_set_latency(flow_def, latency);
+
+    if (latency > upipe_sync->latency) {
+        upipe_notice_va(upipe, "Latency %" PRIu64, latency);
+        upipe_sync->latency = latency;
+        upipe_sync_set_latency(upipe_sync_to_upipe(upipe_sync));
+    } else {
+        upipe_sync_sub_build_flow_def(upipe);
+    }
+
     upipe_sync_sub->sound = true;
 
-    upipe_sync_sub_store_flow_def(upipe, uref_dup(flow_def));
+    upipe_sync_sub_store_flow_def(upipe, flow_def);
 
     return UBASE_ERR_NONE;
 }
