@@ -345,8 +345,6 @@ static int upipe_s337f_set_flow_def(struct upipe *upipe, struct uref *flow_def)
     }
 
     flow_def = upipe_s337f_store_flow_def_input(upipe, flow_def_dup);
-    if (flow_def != NULL)
-        upipe_s337f_store_flow_def(upipe, flow_def);
 
     return UBASE_ERR_NONE;
 }
