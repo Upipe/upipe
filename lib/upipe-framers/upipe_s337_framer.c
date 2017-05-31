@@ -315,7 +315,7 @@ static int upipe_s337f_set_flow_def(struct upipe *upipe, struct uref *flow_def)
     uint8_t bits;
     if (!ubase_ncmp(def, "sound.s32.")) {
         bits = 32;
-    } else if (!ubase_ncmp(def, "sound.s32.")) {
+    } else if (!ubase_ncmp(def, "sound.s16.")) {
         bits = 16;
     } else {
         return UBASE_ERR_INVALID;
