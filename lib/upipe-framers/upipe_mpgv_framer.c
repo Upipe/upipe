@@ -154,6 +154,8 @@ struct upipe_mpgvf {
     struct ubuf *sequence_display;
     /** true if the flag progressive sequence is true */
     bool progressive_sequence;
+    /* low delay */
+    bool low_delay;
     /** frames per second */
     struct urational fps;
     /** closed GOP */
@@ -194,6 +196,8 @@ struct upipe_mpgvf {
     struct uref au_uref_s;
     /** drift rate of the next picture */
     struct urational drift_rate;
+    /** coding type of the next picture */
+    uint8_t type;
     /** true if we have thrown the sync_acquired event (that means we found a
      * sequence header) */
     bool acquired;
@@ -246,6 +250,8 @@ static void upipe_mpgvf_flush_dates(struct upipe *upipe)
     uref_clock_set_date_orig(&upipe_mpgvf->au_uref_s, UINT64_MAX,
                              UREF_DATE_NONE);
     uref_clock_delete_dts_pts_delay(&upipe_mpgvf->au_uref_s);
+
+    upipe_mpgvf->drift_rate.num = upipe_mpgvf->drift_rate.den = 0;
 }
 
 /** @internal @This allocates an mpgvf pipe.
@@ -285,6 +291,7 @@ static struct upipe *upipe_mpgvf_alloc(struct upipe_mgr *mgr,
     upipe_mpgvf->last_picture_number = 0;
     upipe_mpgvf->last_temporal_reference = -1;
     upipe_mpgvf->got_discontinuity = false;
+    upipe_mpgvf->low_delay = false;
     upipe_mpgvf->fps.num = 0;
     upipe_mpgvf->field_number = 0;
     upipe_mpgvf->scan_context = UINT32_MAX;
@@ -299,6 +306,7 @@ static struct upipe *upipe_mpgvf_alloc(struct upipe_mgr *mgr,
     uref_init(&upipe_mpgvf->au_uref_s);
     upipe_mpgvf_flush_dates(upipe);
     upipe_mpgvf->drift_rate.num = upipe_mpgvf->drift_rate.den = 0;
+    upipe_mpgvf->type == UINT8_MAX;
     upipe_mpgvf->sequence_header = upipe_mpgvf->sequence_ext =
         upipe_mpgvf->sequence_display = NULL;
     upipe_throw_ready(upipe);
@@ -386,6 +394,7 @@ static bool upipe_mpgvf_parse_sequence(struct upipe *upipe)
     uint64_t max_octetrate = 1500000 / 8;
     bool progressive = true;
     uint8_t chroma = MP2VSEQX_CHROMA_420;
+    bool lowdelay = false;
     if (upipe_mpgvf->sequence_ext != NULL) {
         uint8_t ext_buffer[MP2VSEQX_HEADER_SIZE];
         const uint8_t *ext;
@@ -404,7 +413,7 @@ static bool upipe_mpgvf_parse_sequence(struct upipe *upipe)
         vertical |= mp2vseqx_get_vertical(ext) << 12;
         bitrate |= mp2vseqx_get_bitrate(ext) << 18;
         vbvbuffer |= mp2vseqx_get_vbvbuffer(ext) << 10;
-        bool lowdelay = mp2vseqx_get_lowdelay(ext);
+        lowdelay = mp2vseqx_get_lowdelay(ext);
         frame_rate.num *= mp2vseqx_get_frameraten(ext) + 1;
         frame_rate.den *= mp2vseqx_get_framerated(ext) + 1;
         urational_simplify(&frame_rate);
@@ -519,6 +528,7 @@ static bool upipe_mpgvf_parse_sequence(struct upipe *upipe)
             return false;
     }
     UBASE_FATAL(upipe, uref_pic_flow_set_sar(flow_def, upipe_mpgvf->sar))
+    upipe_mpgvf->low_delay = lowdelay;
     upipe_mpgvf->fps = frame_rate;
     if (max_octetrate < (uint64_t)bitrate * 400 / 8)
         UBASE_FATAL(upipe, uref_block_flow_set_octetrate(flow_def,
@@ -824,6 +834,7 @@ static bool upipe_mpgvf_parse_picture(struct upipe *upipe, struct uref *uref,
 {
     struct upipe_mpgvf *upipe_mpgvf = upipe_mpgvf_from_upipe(upipe);
     upipe_mpgvf->closed_gop = false;
+    upipe_mpgvf->type = UINT8_MAX;
     bool brokenlink = false;
     if (upipe_mpgvf->next_frame_gop_offset != -1) {
         uint8_t gop_buffer[MP2VGOP_HEADER_SIZE];
@@ -874,6 +885,7 @@ static bool upipe_mpgvf_parse_picture(struct upipe *upipe, struct uref *uref,
     }
     UBASE_FATAL(upipe, uref_pic_set_number(uref, picture_number))
     UBASE_FATAL(upipe, uref_mpgv_set_type(uref, codingtype))
+    upipe_mpgvf->type = codingtype;
 
     if (upipe_mpgvf->fps.num)
         *duration_p = UCLOCK_FREQ * upipe_mpgvf->fps.den / upipe_mpgvf->fps.num;
@@ -948,11 +960,7 @@ static bool upipe_mpgvf_handle_picture(struct upipe *upipe, struct uref *uref,
     if (unlikely(!upipe_mpgvf_parse_picture(upipe, uref, duration_p)))
         return false;
 
-    uint8_t type;
-    if (!ubase_check(uref_mpgv_get_type(uref, &type)))
-        return false;
-
-    switch (type) {
+    switch (upipe_mpgvf->type) {
         case MP2VPIC_TYPE_I: {
             if (upipe_mpgvf->next_frame_sequence)
                 uref_flow_set_random(uref);
@@ -975,6 +983,9 @@ static bool upipe_mpgvf_handle_picture(struct upipe *upipe, struct uref *uref,
         case MP2VPIC_TYPE_B:
             if (upipe_mpgvf->ref_rap != UINT64_MAX)
                 uref_clock_set_rap_sys(uref, upipe_mpgvf->ref_rap);
+            break;
+
+        default:
             break;
     }
 
@@ -1185,8 +1196,16 @@ static struct uref *upipe_mpgvf_handle_frame(struct upipe *upipe)
         return NULL;
     }
 
-    /* We work on encoded data so in the DTS domain. Rebase on DTS. */
     uint64_t date;
+    if (upipe_mpgvf->low_delay || upipe_mpgvf->type == MP2VPIC_TYPE_B) {
+        uref_clock_set_dts_pts_delay(&au_uref_s, 0);
+        uref_clock_set_dts_pts_delay(uref, 0);
+    } else if (ubase_check(uref_clock_get_dts_pts_delay(&au_uref_s, &date)))
+        uref_clock_set_dts_pts_delay(uref, date);
+    else
+        uref_clock_delete_dts_pts_delay(uref);
+
+    /* We work on encoded data so in the DTS domain. Rebase on DTS. */
 #define SET_DATE(dv)                                                        \
     if (ubase_check(uref_clock_get_dts_##dv(&au_uref_s, &date))) {          \
         uref_clock_set_dts_##dv(uref, date);                                \
@@ -1201,10 +1220,6 @@ static struct uref *upipe_mpgvf_handle_frame(struct upipe *upipe)
     SET_DATE(orig)
 #undef SET_DATE
 
-    if (ubase_check(uref_clock_get_dts_pts_delay(&au_uref_s, &date)))
-        uref_clock_set_dts_pts_delay(uref, date);
-    else
-        uref_clock_delete_dts_pts_delay(uref);
     if (drift_rate.den)
         uref_clock_set_rate(uref, drift_rate);
     else
@@ -1269,18 +1284,29 @@ static void upipe_mpgvf_output_frame(struct upipe *upipe, struct uref *uref,
 static void upipe_mpgvf_promote_uref(struct upipe *upipe)
 {
     struct upipe_mpgvf *upipe_mpgvf = upipe_mpgvf_from_upipe(upipe);
-    uint64_t date;
+    uint64_t date, dts;
+    if (ubase_check(uref_clock_get_dts_pts_delay(upipe_mpgvf->next_uref,
+                                                 &date)))
+        uref_clock_set_dts_pts_delay(&upipe_mpgvf->au_uref_s, date);
+    else if (ubase_check(uref_clock_get_pts_prog(upipe_mpgvf->next_uref,
+                                                 &date)) &&
+             ubase_check(uref_clock_get_dts_prog(&upipe_mpgvf->au_uref_s,
+                                                 &dts))) {
+        uref_clock_set_dts_pts_delay(&upipe_mpgvf->au_uref_s, date - dts);
+        uref_clock_set_dts_pts_delay(upipe_mpgvf->next_uref, date - dts);
+    }
+
 #define SET_DATE(dv)                                                        \
-    if (ubase_check(uref_clock_get_dts_##dv(upipe_mpgvf->next_uref, &date)))\
-        uref_clock_set_dts_##dv(&upipe_mpgvf->au_uref_s, date);
+    if (ubase_check(uref_clock_get_dts_##dv(upipe_mpgvf->next_uref, &dts))) \
+        uref_clock_set_dts_##dv(&upipe_mpgvf->au_uref_s, dts);              \
+    else if (ubase_check(uref_clock_get_pts_##dv(upipe_mpgvf->next_uref,    \
+                                                 &date)))                   \
+        uref_clock_set_pts_##dv(&upipe_mpgvf->au_uref_s, date);
     SET_DATE(sys)
     SET_DATE(prog)
     SET_DATE(orig)
 #undef SET_DATE
 
-    if (ubase_check(uref_clock_get_dts_pts_delay(upipe_mpgvf->next_uref,
-                                                 &date)))
-        uref_clock_set_dts_pts_delay(&upipe_mpgvf->au_uref_s, date);
     uref_clock_get_rate(upipe_mpgvf->next_uref, &upipe_mpgvf->drift_rate);
     if (ubase_check(uref_clock_get_dts_prog(upipe_mpgvf->next_uref, &date)))
         uref_clock_get_rap_sys(upipe_mpgvf->next_uref, &upipe_mpgvf->dts_rap);
