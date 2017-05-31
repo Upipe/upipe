@@ -207,10 +207,7 @@ static void upipe_s337f_input(struct upipe *upipe, struct uref *uref, struct upu
 
         size_t out_size = size[0] - upipe_s337f->samples;
         if (out_size < sync) {
-            upipe_verbose_va(upipe, "Reducing frame size from %zu to %zu",
-                upipe_s337f->samples + sync,
-                upipe_s337f->samples + out_size);
-            out_size = sync;
+            upipe_warn(upipe, "Frame too small");
         }
 
         out_size *= 2; /* channels */
