@@ -150,9 +150,14 @@ static void test_input(struct upipe *upipe, struct uref *uref,
             assert(size == 768 - ADTS_HEADER_SIZE + 13);
             break;
         case 7:
+        case 10:
             /* + 1 because of rounding error */
             assert(size == 768 - ADTS_HEADER_SIZE + 1);
             check_data(uref, 0, 768 - ADTS_HEADER_SIZE);
+            break;
+        case 8:
+        case 9:
+            assert(size == 768 - ADTS_HEADER_SIZE + 10);
             break;
         default:
             assert(0);
@@ -552,6 +557,95 @@ int main(int argc, char *argv[])
     uref_clock_set_rap_sys(uref, 42);
     upipe_input(upipe_mpgaf, uref, NULL);
     assert(nb_packets == 8);
+
+    upipe_release(upipe_mpgaf);
+
+    /* Try again with raw to LATM conversion */
+    need_global = false;
+    need_encaps = UREF_MPGA_ENCAPS_LATM;
+    uref = uref_block_flow_alloc_def(uref_mgr, "aac.sound.");
+    assert(uref != NULL);
+    ubase_assert(uref_mpga_flow_set_encaps(uref, UREF_MPGA_ENCAPS_RAW));
+    ubase_assert(uref_flow_set_headers(uref, headers, 2));
+
+    upipe_mpgaf = upipe_void_alloc(upipe_mpgaf_mgr,
+            uprobe_pfx_alloc(uprobe_use(uprobe_stdio), UPROBE_LOG_LEVEL,
+                             "mpgaf 9"));
+    assert(upipe_mpgaf != NULL);
+    ubase_assert(upipe_set_flow_def(upipe_mpgaf, uref));
+    ubase_assert(upipe_set_output(upipe_mpgaf, upipe_sink));
+    uref_free(uref);
+
+    uref = uref_block_alloc(uref_mgr, ubuf_mgr, 768 - ADTS_HEADER_SIZE);
+    assert(uref != NULL);
+    size = -1;
+    ubase_assert(uref_block_write(uref, 0, &size, &buffer));
+    assert(size == 768 - ADTS_HEADER_SIZE);
+    write_data(buffer, 768 - ADTS_HEADER_SIZE);
+
+    uref_block_unmap(uref, 0);
+    uref_clock_set_pts_orig(uref, 27000000);
+    uref_clock_set_dts_orig(uref, 27000000);
+    uref_clock_set_cr_sys(uref, 84);
+    uref_clock_set_rap_sys(uref, 42);
+    upipe_input(upipe_mpgaf, uref, NULL);
+    assert(nb_packets == 9);
+
+    upipe_release(upipe_mpgaf);
+
+    /* Try again with LATM to LATM pass-through */
+    need_global = false;
+    need_encaps = UREF_MPGA_ENCAPS_LATM;
+    uref = uref_block_flow_alloc_def(uref_mgr, "aac_latm.sound.");
+    assert(uref != NULL);
+    ubase_assert(uref_mpga_flow_set_encaps(uref, UREF_MPGA_ENCAPS_LATM));
+    ubase_assert(uref_flow_set_complete(uref));
+
+    upipe_mpgaf = upipe_void_alloc(upipe_mpgaf_mgr,
+            uprobe_pfx_alloc(uprobe_use(uprobe_stdio), UPROBE_LOG_LEVEL,
+                             "mpgaf 10"));
+    assert(upipe_mpgaf != NULL);
+    ubase_assert(upipe_set_flow_def(upipe_mpgaf, uref));
+    ubase_assert(upipe_set_output(upipe_mpgaf, upipe_sink));
+    uref_free(uref);
+
+    uref = uref_dup(last_output);
+    assert(uref != NULL);
+
+    uref_clock_set_pts_orig(uref, 27000000);
+    uref_clock_set_dts_orig(uref, 27000000);
+    uref_clock_set_cr_sys(uref, 84);
+    uref_clock_set_rap_sys(uref, 42);
+    upipe_input(upipe_mpgaf, uref, NULL);
+    assert(nb_packets == 10);
+
+    upipe_release(upipe_mpgaf);
+
+    /* Try again with LATM to raw conversion */
+    need_global = false;
+    need_encaps = UREF_MPGA_ENCAPS_RAW;
+    uref = uref_block_flow_alloc_def(uref_mgr, "aac_latm.sound.");
+    assert(uref != NULL);
+    ubase_assert(uref_mpga_flow_set_encaps(uref, UREF_MPGA_ENCAPS_LATM));
+    ubase_assert(uref_flow_set_complete(uref));
+
+    upipe_mpgaf = upipe_void_alloc(upipe_mpgaf_mgr,
+            uprobe_pfx_alloc(uprobe_use(uprobe_stdio), UPROBE_LOG_LEVEL,
+                             "mpgaf 11"));
+    assert(upipe_mpgaf != NULL);
+    ubase_assert(upipe_set_flow_def(upipe_mpgaf, uref));
+    ubase_assert(upipe_set_output(upipe_mpgaf, upipe_sink));
+    uref_free(uref);
+
+    uref = uref_dup(last_output);
+    assert(uref != NULL);
+
+    uref_clock_set_pts_orig(uref, 27000000);
+    uref_clock_set_dts_orig(uref, 27000000);
+    uref_clock_set_cr_sys(uref, 84);
+    uref_clock_set_rap_sys(uref, 42);
+    upipe_input(upipe_mpgaf, uref, NULL);
+    assert(nb_packets == 11);
 
     upipe_release(upipe_mpgaf);
 
