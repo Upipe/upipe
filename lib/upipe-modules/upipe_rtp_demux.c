@@ -191,9 +191,10 @@ static int upipe_rtp_demux_sub_clock_ts(struct upipe *upipe,
                                              uref, date_orig, false, sub->wrap);
 
         /* handle wrap-arounds */
-        uint64_t delta = (sub->wrap + date_orig -
-                          (demux->last_cr % sub->wrap)) % sub->wrap;
-        if (delta <= MAX_DELAY) {
+        int64_t delta = (sub->wrap * 3 / 2 + date_orig -
+                        (demux->last_cr % sub->wrap)) % sub->wrap -
+                        sub->wrap / 2;
+        if (delta <= (int64_t)MAX_DELAY && delta >= -(int64_t)MAX_DELAY) {
             uint64_t date_prog = demux->orig_prog_offset +
                                  demux->last_cr + delta;
             uref_clock_set_date_prog(uref, date_prog, type);
@@ -202,7 +203,7 @@ static int upipe_rtp_demux_sub_clock_ts(struct upipe *upipe,
                 demux->highest_date_prog = date_prog;
         } else
             upipe_warn_va(upipe,
-                          "too long delay for date %"PRIu64" (%"PRIu64")",
+                          "too long delay for date %"PRIu64" (%"PRId64")",
                           date_orig, delta);
     }
 
@@ -222,12 +223,15 @@ static int upipe_rtp_demux_sub_new_flow_def(struct upipe *upipe,
                                             int event, va_list args)
 {
     struct upipe_rtp_demux_sub *sub = upipe_rtp_demux_sub_from_upipe(upipe);
+    struct upipe_rtp_demux *demux = upipe_rtp_demux_from_sub_mgr(
+                upipe_rtp_demux_sub_to_upipe(sub)->mgr);
     struct uref *uref = va_arg(args, struct uref *);
     const char *def;
     UBASE_RETURN(uref_flow_get_def(uref, &def))
     sub->sound = ubase_ncmp(def, "sound.") || strstr(def, ".sound.");
     sub->rate = 1;
     uref_sound_flow_get_rate(uref, &sub->rate);
+    upipe_rtp_demux_check_clock_ref(upipe_rtp_demux_to_upipe(demux));
     return uref_clock_get_wrap(uref, &sub->wrap);
 }
 
