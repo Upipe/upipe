@@ -1484,7 +1484,6 @@ static void upipe_ts_demux_program_handle_pcr(struct upipe *upipe,
     if (delta <= MAX_PCR_INTERVAL && !discontinuity)
         upipe_ts_demux_program->last_pcr += delta;
     else {
-        /* FIXME same clock for all programs */
         upipe_warn_va(upipe, "PCR discontinuity %"PRIu64, delta);
         upipe_ts_demux_program->last_pcr = pcr_orig;
         upipe_ts_demux_program->timestamp_offset =
