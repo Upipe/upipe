@@ -33,6 +33,29 @@ extern "C" {
 
 #define UPIPE_TS_DECAPS_SIGNATURE UBASE_FOURCC('t','s','d','c')
 
+/** @This extends upipe_command with specific commands for upipe_ts_decaps pipes.
+ */
+enum upipe_ts_decaps_command {
+    UPIPE_TS_DECAPS_SENTINAL = UPIPE_CONTROL_LOCAL,
+
+    UPIPE_TS_DECAPS_GET_PACKETS_LOST, /* int sig, uint64_t * */
+};
+
+/** @This returns the number of packets presumed lost due to continuity errors
+ * since the last call to this function.
+ * The pipe's internal counter is reset to 0 each time this function is called.
+ *
+ * @param upipe description structure of the pipe
+ * @param lost_p filled in with the number of packets lost
+ * @return an error code
+ */
+static inline int upipe_ts_decaps_get_packets_lost(struct upipe *upipe,
+        uint64_t *lost_p)
+{
+    return upipe_control(upipe, UPIPE_TS_DECAPS_GET_PACKETS_LOST,
+            UPIPE_TS_DECAPS_SIGNATURE, lost_p);
+}
+
 /** @This returns the management structure for all ts_decaps pipes.
  *
  * @return pointer to manager
