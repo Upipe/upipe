@@ -965,6 +965,11 @@ static int upipe_ts_demux_output_control(struct upipe *upipe,
             return (*p != NULL) ? UBASE_ERR_NONE : UBASE_ERR_UNHANDLED;
         }
 
+        case UPIPE_TS_DECAPS_GET_PACKETS_LOST: {
+            struct upipe_ts_demux_output *upipe_ts_demux_output =
+                upipe_ts_demux_output_from_upipe(upipe);
+            return upipe_control_va(upipe_ts_demux_output->decaps, command, args);
+        }
         default:
             return upipe_ts_demux_output_control_bin_output(upipe, command,
                                                             args);
