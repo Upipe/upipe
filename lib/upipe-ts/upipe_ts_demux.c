@@ -410,6 +410,8 @@ struct upipe_ts_demux_output {
     struct upipe *split_output;
     /** setrap inner pipe */
     struct upipe *setrap;
+    /** decaps inner pipe */
+    struct upipe *decaps;
 
     /** maximum retention time in the pipeline */
     uint64_t max_delay;
@@ -714,16 +716,13 @@ static int upipe_ts_demux_output_plumber(struct upipe *upipe,
 
     if (!ubase_ncmp(def, "block.mpegts.")) {
         /* allocate ts_decaps inner */
-        struct upipe *output =
-            upipe_void_alloc_output(inner, ts_demux_mgr->ts_decaps_mgr,
-                   uprobe_pfx_alloc(uprobe_use(&upipe_ts_demux_output->probe),
-                                    UPROBE_LOG_VERBOSE, "decaps"));
-        if (unlikely(output == NULL)) {
+        if (unlikely(upipe_ts_demux_output->decaps == NULL)) {
             upipe_release(upipe_ts_demux_output->setrap);
             upipe_ts_demux_output->setrap = NULL;
             return UBASE_ERR_ALLOC;
         }
-        upipe_release(output);
+
+        upipe_set_output(inner, upipe_ts_demux_output->decaps);
         return UBASE_ERR_NONE;
     }
 
@@ -884,6 +883,12 @@ static struct upipe *upipe_ts_demux_output_alloc(struct upipe_mgr *mgr,
                                    upipe_ts_demux_output->pid))) == NULL))
         upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
 
+    upipe_ts_demux_output->decaps = upipe_void_alloc(ts_demux_mgr->ts_decaps_mgr,
+                uprobe_pfx_alloc(uprobe_use(&upipe_ts_demux_output->probe),
+                    UPROBE_LOG_VERBOSE, "decaps"));
+    if (unlikely(upipe_ts_demux_output->decaps == NULL))
+        upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
+
     upipe_ts_demux_program_check_pcr(upipe_ts_demux_program_to_upipe(program));
     return upipe;
 }
@@ -1000,6 +1005,7 @@ static void upipe_ts_demux_output_no_input(struct upipe *upipe)
         upipe_release(upipe_ts_demux_output->split_output);
     if (upipe_ts_demux_output->setrap != NULL)
         upipe_release(upipe_ts_demux_output->setrap);
+    upipe_release(upipe_ts_demux_output->decaps);
     upipe_ts_demux_output_clean_bin_output(upipe);
     upipe_ts_demux_output_clean_sub(upipe);
     upipe_ts_demux_program_check_pcr(upipe_ts_demux_program_to_upipe(program));
