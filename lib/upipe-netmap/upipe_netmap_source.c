@@ -30,6 +30,7 @@
 #include <upipe/uref.h>
 #include <upipe/uref_block.h>
 #include <upipe/uref_block_flow.h>
+#include <upipe/uref_pic.h>
 #include <upipe/uref_pic_flow.h>
 #include <upipe/uref_clock.h>
 #include <upipe/upump.h>
@@ -264,18 +265,30 @@ static int upipe_netmap_source_set_flow(struct upipe *upipe, uint8_t frate, uint
     if (frame == 0x10) {
         uref_pic_flow_set_hsize(flow_format, 720);
         uref_pic_flow_set_vsize(flow_format, 486);
+        uref_pic_delete_progressive(flow_format);
+        uref_pic_set_tff(flow_format);
     } else if (frame == 0x11) {
         uref_pic_flow_set_hsize(flow_format, 720);
         uref_pic_flow_set_vsize(flow_format, 576);
+        uref_pic_delete_progressive(flow_format);
+        uref_pic_set_tff(flow_format);
     } else if (frame >= 0x20 && frame <= 0x22) {
         uref_pic_flow_set_hsize(flow_format, 1920);
         uref_pic_flow_set_vsize(flow_format, 1080);
+        if (frame == 0x20) {
+            uref_pic_delete_progressive(flow_format);
+            uref_pic_set_tff(flow_format);
+        }
+        else
+            uref_pic_set_progressive(flow_format);
     } else if (frame >= 0x23 && frame <= 0x24) {
         uref_pic_flow_set_hsize(flow_format, 2048);
         uref_pic_flow_set_vsize(flow_format, 1080);
+        uref_pic_set_progressive(flow_format);
     } else if (frame == 0x30) {
         uref_pic_flow_set_hsize(flow_format, 1280);
         uref_pic_flow_set_vsize(flow_format, 720);
+        uref_pic_set_progressive(flow_format);
     } else {
         upipe_err_va(upipe, "Invalid hbrmt frame 0x%x", frame);
         uref_free(flow_format);
@@ -379,7 +392,7 @@ static inline bool handle_hbrmt_packet(struct upipe *upipe, const uint8_t *src, 
     }
 
     if (src_size != HBRMT_DATA_SIZE) {
-        upipe_dbg(upipe, "Too small packet, ignoring");
+        upipe_dbg_va(upipe, "Too small packet, ignoring, %i", src_size);
         return true; // discontinuity
     }
 
@@ -449,7 +462,7 @@ static uint64_t get_vss(const uint8_t *vss)
 }
 
 static const uint8_t *get_rtp(struct upipe *upipe, struct netmap_ring *rxring,
-        struct netmap_slot *slot)
+        struct netmap_slot *slot, uint16_t *payload_len)
 {
     uint8_t *src = (uint8_t*)NETMAP_BUF(rxring, slot->buf_idx);
 
@@ -462,22 +475,21 @@ static const uint8_t *get_rtp(struct upipe *upipe, struct netmap_ring *rxring,
 
     uint8_t *udp = ip_payload(ip);
     const uint8_t *rtp = udp_payload(udp);
-    uint16_t payload_len = udp_get_len(udp) - UDP_HEADER_SIZE;
+    *payload_len = udp_get_len(udp) - UDP_HEADER_SIZE;
 
-    unsigned pkt_size = RTP_HEADER_SIZE + HBRMT_HEADER_SIZE + HBRMT_DATA_SIZE;
+    unsigned min_pkt_size = RTP_HEADER_SIZE + HBRMT_HEADER_SIZE + HBRMT_DATA_SIZE;
 
-    if (payload_len != pkt_size) {
-        //upipe_err_va(upipe, "Incorrect packet len: %u", payload_len);
+    if (*payload_len < min_pkt_size) {
         return NULL;
     }
 
-    pkt_size += UDP_HEADER_SIZE + IP_HEADER_MINSIZE + ETHERNET_HEADER_LEN;
+    min_pkt_size += UDP_HEADER_SIZE + IP_HEADER_MINSIZE + ETHERNET_HEADER_LEN;
 
-    if (slot->len < pkt_size) {
+    if (slot->len < min_pkt_size) {
         return NULL;
     }
 
-    if (slot->len - 9 >= pkt_size) {
+    if (slot->len - 9 >= min_pkt_size) {
         const uint8_t *vss = &src[slot->len-9];
         if (vss[8] == 0xc3) {
             static uint64_t old;
@@ -496,7 +508,8 @@ static bool do_packet(struct upipe *upipe, struct netmap_ring *rxring,
 {
     struct upipe_netmap_source *upipe_netmap_source = upipe_netmap_source_from_upipe(upipe);
 
-    const uint8_t *rtp = get_rtp(upipe, rxring, &rxring->slot[cur]);
+    uint16_t pkt_size;
+    const uint8_t *rtp = get_rtp(upipe, rxring, &rxring->slot[cur], &pkt_size);
     if (!rtp)
         return true;
 
@@ -517,7 +530,7 @@ static bool do_packet(struct upipe *upipe, struct netmap_ring *rxring,
             return true;
         }
         if (timestamp_diff > 10000) {
-            printf("BAD %u (%u > %u)\n", timestamp_diff, seqnum, upipe_netmap_source->expected_seqnum);
+            //printf("BAD %u (%u > %u)\n", timestamp_diff, seqnum, upipe_netmap_source->expected_seqnum);
         }
 
         if (0) upipe_warn_va(upipe, "potentially lost %d RTP packets, got %u expected %u, ts diff %x",
@@ -526,9 +539,6 @@ static bool do_packet(struct upipe *upipe, struct netmap_ring *rxring,
 
         return false; // seqnum > expected, keep
     }
-
-    static const unsigned pkt_size = RTP_HEADER_SIZE + HBRMT_HEADER_SIZE
-        + HBRMT_DATA_SIZE;
 
     if (!upipe_netmap_source->discontinuity) {
         if (handle_hbrmt_packet(upipe, rtp, pkt_size)) {
@@ -544,7 +554,7 @@ static bool do_packet(struct upipe *upipe, struct netmap_ring *rxring,
         uref_block_unmap(upipe_netmap_source->uref, 0);
 
         if (upipe_netmap_source->packets != upipe_netmap_source->pkts_per_frame) {
-            upipe_dbg_va(upipe, "Dropping: %u packets", upipe_netmap_source->packets);
+            //upipe_dbg_va(upipe, "Dropping: %u packets", upipe_netmap_source->packets);
             uref_free(upipe_netmap_source->uref);
             upipe_netmap_source->discontinuity = true;
         } else { /* output current block */
@@ -611,7 +621,7 @@ static void upipe_netmap_source_worker(struct upump *upump)
         }
 
         if (discontinuity == sources) {
-            upipe_err(upipe, "DISCONTINUITY"); // TODO: # of packets lost
+            //upipe_err(upipe, "DISCONTINUITY"); // TODO: # of packets lost
             upipe_netmap_source->discontinuity = true;
             if (upipe_netmap_source->uref) {
                 uref_block_unmap(upipe_netmap_source->uref, 0);
