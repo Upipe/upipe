@@ -109,7 +109,7 @@ static void upipe_setrap_input(struct upipe *upipe, struct uref *uref,
     if (likely(upipe_setrap->rap_sys != UINT64_MAX))
         if (unlikely(!ubase_check(uref_clock_set_rap_sys(uref,
                             upipe_setrap->rap_sys))))
-            upipe_warn(upipe, "invalid clock ref for RAP");
+            upipe_dbg(upipe, "invalid clock ref for RAP");
     upipe_setrap_output(upipe, uref, upump_p);
 }
 
