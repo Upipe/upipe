@@ -183,6 +183,10 @@ struct upipe_sdi_dec {
     /* Per audio group number of samples written */
     uint64_t audio_samples[UPIPE_SDI_CHANNELS_PER_GROUP];
 
+    /** Average errors when getting incomplete audio frames.
+     * they might come from a converter using a corrupted SDI source e.g. when switching */
+    uint8_t audio_fix;
+
     /** used to generate PTS */
     uint64_t frame_num;
 
@@ -1085,6 +1089,33 @@ static bool upipe_sdi_dec_handle(struct upipe *upipe, struct uref *uref,
             //upipe_err_va(upipe, "%zu samples on group %d", audio_ctx.group_offset[i], i);
         }
 
+        unsigned expected = 48000 * fps->den / fps->num;
+        if (samples_received < expected) {
+            upipe_err_va(upipe, "Not enough audio samples (%u, expected %u), correting",
+                samples_received, expected);
+            samples_received = expected;
+
+            if (fps->den == 1001 && fps->num != 24000) {
+                if (unlikely(fps->num != 30000 && fps->num != 60000)) {
+                    upipe_err_va(upipe, "Unsupported rate %" PRIu64"/%" PRIu64,
+                            fps->num, fps->den);
+                } else {
+                    /* cyclic loop of 5 different sample counts */
+                    if (++upipe_sdi_dec->audio_fix == 5)
+                        upipe_sdi_dec->audio_fix = 0;
+
+                    static const uint8_t samples_increment[2][5] = {
+                        { 1, 0, 1, 0, 1 }, /* 30000 / 1001 */
+                        { 1, 1, 1, 1, 0 }  /* 60000 / 1001 */
+                    };
+
+                    bool rate5994 = !!(fps->num == 60000);
+
+                    samples_received += samples_increment[rate5994][upipe_sdi_dec->audio_fix];
+                }
+            }
+        }
+
         for (int i = 0; i < 8; i++) {
             if (audio_ctx.aes[i] != -1) {
                 int data_type = aes_parse(upipe, audio_ctx.buf_audio, samples_received, i, audio_ctx.aes[i]);
@@ -1486,6 +1517,8 @@ static struct upipe *_upipe_sdi_dec_alloc(struct upipe_mgr *mgr,
         upipe_sdi_dec->uyvy_to_planar_10 = upipe_uyvy_to_planar_10_unaligned_avx2;
     }
 #endif
+
+    upipe_sdi_dec->audio_fix = 0;
 
     upipe_sdi_dec->crc_y = 0;
     upipe_sdi_dec->crc_c = 0;
