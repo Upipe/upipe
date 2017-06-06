@@ -1091,8 +1091,7 @@ static bool upipe_sdi_dec_handle(struct upipe *upipe, struct uref *uref,
 
         unsigned expected = 48000 * fps->den / fps->num;
         if (samples_received < expected) {
-            upipe_err_va(upipe, "Not enough audio samples (%u, expected %u), correting",
-                samples_received, expected);
+            unsigned wrong_samples = samples_received;
             samples_received = expected;
 
             if (fps->den == 1001 && fps->num != 24000) {
@@ -1114,6 +1113,8 @@ static bool upipe_sdi_dec_handle(struct upipe *upipe, struct uref *uref,
                     samples_received += samples_increment[rate5994][upipe_sdi_dec->audio_fix];
                 }
             }
+            upipe_err_va(upipe, "Not enough audio samples correcting %u to %u",
+                wrong_samples, samples_received);
         }
 
         for (int i = 0; i < 8; i++) {
