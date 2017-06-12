@@ -172,6 +172,9 @@ struct upipe_sdi_enc_sub {
     /** AES */
     bool s337;
 
+    /** stereo pair position */
+    uint8_t channel_idx;
+
     /** public upipe structure */
     struct upipe upipe;
 };
@@ -529,6 +532,13 @@ static int upipe_sdi_enc_sub_control(struct upipe *upipe, int command, va_list a
             struct uref *flow = va_arg(args, struct uref *);
             if (flow == NULL)
                 return UBASE_ERR_INVALID;
+
+            if (!ubase_check(uref_attr_get_small_unsigned(flow, &sdi_enc_sub->channel_idx,
+                            UDICT_TYPE_SMALL_UNSIGNED, "channel_idx"))) {
+                upipe_err(upipe, "Could not read channel_idx");
+                return UBASE_ERR_INVALID;
+            }
+
             uint8_t planes;
             UBASE_RETURN(uref_flow_match_def(flow, "sound.s32."))
             sdi_enc_sub->s337 = ubase_check(uref_flow_match_def(flow, "sound.s32.s337."));
