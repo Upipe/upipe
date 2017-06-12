@@ -477,6 +477,10 @@ static void output_sound(struct upipe *upipe, const struct urational *fps,
 
         if (s337) {
             struct uchain *uchain = ulist_pop(&upipe_sync_sub->urefs);
+            if (!uchain) {
+                upipe_err_va(upipe_sub, "no urefs");
+                continue;
+            }
             struct uref *uref = uref_from_uchain(uchain);
             size_t src_samples = 0;
             uref_sound_size(uref, &src_samples, NULL);
