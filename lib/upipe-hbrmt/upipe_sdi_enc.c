@@ -976,6 +976,11 @@ static void upipe_sdi_enc_input(struct upipe *upipe, struct uref *uref,
     upipe_verbose_va(upipe, "urefs: %zu", ++upipe_sdi_enc->n);
 
     uref = uref_from_uchain(ulist_pop(&upipe_sdi_enc->urefs));
+    if (!uref) {
+        upipe_err_va(upipe, "no vid uref");
+        return;
+    }
+
     struct upipe_sdi_enc_sub *sdi_enc_sub = NULL;
     struct uref *uref_audio = NULL;
     struct uchain *uchain = ulist_peek(&upipe_sdi_enc->subs);
@@ -1006,11 +1011,6 @@ static void upipe_sdi_enc_input(struct upipe *upipe, struct uref *uref,
         uref_free(uref_audio);
     } else {
         samples = 0;
-    }
-
-    if (!uref) {
-        upipe_err_va(upipe, "no vid uref");
-        return;
     }
 
     size_t input_hsize, input_vsize;
