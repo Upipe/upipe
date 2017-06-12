@@ -980,8 +980,6 @@ static void upipe_sdi_enc_input(struct upipe *upipe, struct uref *uref,
         return;
     }
 
-    unsigned samples = audio_samples_count(upipe_sdi_enc);
-
     ulist_add(&upipe_sdi_enc->urefs, uref_to_uchain(uref)); // buffer uref
     upipe_verbose_va(upipe, "urefs: %zu", ++upipe_sdi_enc->n);
 
@@ -991,36 +989,35 @@ static void upipe_sdi_enc_input(struct upipe *upipe, struct uref *uref,
         return;
     }
 
-    struct upipe_sdi_enc_sub *sdi_enc_sub = NULL;
-    struct uref *uref_audio = NULL;
-    struct uchain *uchain = ulist_peek(&upipe_sdi_enc->subs);
-    if (uchain) {
-        sdi_enc_sub = upipe_sdi_enc_sub_from_uchain(uchain);
-        uref_audio = uref_from_uchain(ulist_pop(&sdi_enc_sub->urefs));
-    } else {
-        upipe_err(upipe, "no audio subpipe");
-    }
-    if (uref_audio) {
-        const uint8_t channels = sdi_enc_sub->channels;
+    // FIXME: make sure all tracks have same # of samples
+    unsigned samples = audio_samples_count(upipe_sdi_enc);
 
-        size_t size = 0;
-        uref_sound_size(uref_audio, &size, NULL);
-        samples = size;
+    struct uchain *uchain = NULL;
+    ulist_foreach(&upipe_sdi_enc->subs, uchain) {
+        struct upipe_sdi_enc_sub *sdi_enc_sub = upipe_sdi_enc_sub_from_uchain(uchain);
 
-        const int32_t *buf;
-        uref_sound_read_int32_t(uref_audio, 0, -1, &buf, 1);
+        struct uref *uref_audio = uref_from_uchain(ulist_pop(&sdi_enc_sub->urefs));
+        if (uref_audio) {
+            const uint8_t channels = sdi_enc_sub->channels;
 
-        int32_t *dst = &upipe_sdi_enc->audio_buf[0];
-        for (size_t i = 0; i < size; i++) {
-            memcpy(dst, buf, sizeof(int32_t) * channels);
-            dst += UPIPE_SDI_MAX_CHANNELS;
-            buf += channels;
+            size_t size = 0;
+            uref_sound_size(uref_audio, &size, NULL);
+            if (size > samples)
+                samples = size;
+
+            const int32_t *buf;
+            uref_sound_read_int32_t(uref_audio, 0, -1, &buf, 1);
+
+            int32_t *dst = &upipe_sdi_enc->audio_buf[2 * sdi_enc_sub->channel_idx];
+            for (size_t i = 0; i < size; i++) {
+                memcpy(dst, buf, sizeof(int32_t) * channels);
+                dst += UPIPE_SDI_MAX_CHANNELS;
+                buf += channels;
+            }
+
+            uref_sound_unmap(uref_audio, 0, -1, 1);
+            uref_free(uref_audio);
         }
-
-        uref_sound_unmap(uref_audio, 0, -1, 1);
-        uref_free(uref_audio);
-    } else {
-        samples = 0;
     }
 
     size_t input_hsize, input_vsize;
