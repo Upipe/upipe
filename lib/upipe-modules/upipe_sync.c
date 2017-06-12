@@ -124,6 +124,9 @@ struct upipe_sync_sub {
     /** subpic or sound */
     bool sound;
 
+    /** AES */
+    bool s337;
+
     /** channels */
     uint8_t channels;
 
@@ -165,6 +168,7 @@ static struct upipe *upipe_sync_sub_alloc(struct upipe_mgr *mgr,
     upipe_sync_sub->samples = 0;
     upipe_sync_sub->frame_idx = 0;
     upipe_sync_sub->sound = false;
+    upipe_sync_sub->s337 = false;
 
     upipe_sync_sub_init_urefcount(upipe);
     upipe_sync_sub_init_output(upipe);
@@ -254,6 +258,8 @@ static int upipe_sync_sub_set_flow_def(struct upipe *upipe, struct uref *flow_de
 
     if (ubase_ncmp(def, "sound.s32."))
         return UBASE_ERR_INVALID;
+
+    upipe_sync_sub->s337 = !ubase_ncmp(def, "sound.s32.s337.");
 
     uint64_t latency;
     if (!ubase_check(uref_clock_get_latency(flow_def, &latency)))
@@ -347,6 +353,8 @@ static bool sync_channel(struct upipe *upipe)
 
     const uint64_t video_pts = upipe_sync->pts;
 
+    const bool s337 = upipe_sync_sub->s337;
+
     struct uchain *uchain_uref = NULL, *uchain_tmp;
     ulist_delete_foreach(&upipe_sync_sub->urefs, uchain_uref, uchain_tmp) {
         struct uref *uref = uref_from_uchain(uchain_uref);
@@ -363,7 +371,6 @@ static bool sync_channel(struct upipe *upipe)
             pts_diff = 0;
         }
 
-        // TODO: s337
         if (pts_diff > 0) { /* audio too early, drop */
             size_t samples = 0;
             uref_sound_size(uref, &samples, NULL);
@@ -377,12 +384,14 @@ static bool sync_channel(struct upipe *upipe)
                     uref_free(uref);
                     continue;
                 }
-                // resize
-                upipe_notice_va(upipe_sync_sub_to_upipe(upipe_sync_sub),
-                        "RESIZE, skip %" PRIu64 " (%" PRId64 " < %" PRIu64 ")",
-                        drop_samples, pts_diff, duration);
-                uref_sound_resize(uref, drop_samples, -1);
-                upipe_sync_sub->samples -= drop_samples;
+                if (!s337) {
+                    // resize
+                    upipe_notice_va(upipe_sync_sub_to_upipe(upipe_sync_sub),
+                            "RESIZE, skip %" PRIu64 " (%" PRId64 " < %" PRIu64 ")",
+                            drop_samples, pts_diff, duration);
+                    uref_sound_resize(uref, drop_samples, -1);
+                    upipe_sync_sub->samples -= drop_samples;
+                }
                 pts = video_pts;
                 uref_clock_set_pts_sys(uref, pts);
             } else {
@@ -460,9 +469,23 @@ static void output_sound(struct upipe *upipe, const struct urational *fps,
         struct upipe_sync_sub *upipe_sync_sub = upipe_sync_sub_from_uchain(uchain);
         if (!upipe_sync_sub->sound)
             continue;
+
         struct upipe *upipe_sub = upipe_sync_sub_to_upipe(upipe_sync_sub);
         const uint8_t channels = upipe_sync_sub->channels;
         size_t samples = audio_samples_count(upipe_sub, fps);
+        const bool s337 = upipe_sync_sub->s337;
+
+        if (s337) {
+            struct uchain *uchain = ulist_pop(&upipe_sync_sub->urefs);
+            struct uref *uref = uref_from_uchain(uchain);
+            size_t src_samples = 0;
+            uref_sound_size(uref, &src_samples, NULL);
+            upipe_sync_sub->samples -= src_samples;
+            uref_clock_set_pts_sys(uref, upipe_sync->pts - upipe_sync->latency);
+            upipe_sync_sub_output(upipe_sub, uref, upump_p);
+
+            continue;
+        }
 
         /* look at first uref without dequeuing */
         struct uref *src = uref_from_uchain(ulist_peek(&upipe_sync_sub->urefs));
