@@ -169,6 +169,9 @@ struct upipe_sdi_enc_sub {
     /** channels */
     uint8_t channels;
 
+    /** AES */
+    bool s337;
+
     /** public upipe structure */
     struct upipe upipe;
 };
@@ -519,7 +522,7 @@ UPIPE_HELPER_SUBPIPE(upipe_sdi_enc, upipe_sdi_enc_sub, sub, sub_mgr, subs, uchai
 
 static int upipe_sdi_enc_sub_control(struct upipe *upipe, int command, va_list args)
 {
-        struct upipe_sdi_enc_sub *sdi_enc_sub = upipe_sdi_enc_sub_from_upipe(upipe);
+    struct upipe_sdi_enc_sub *sdi_enc_sub = upipe_sdi_enc_sub_from_upipe(upipe);
 
     switch (command) {
         case UPIPE_SET_FLOW_DEF: {
@@ -528,6 +531,7 @@ static int upipe_sdi_enc_sub_control(struct upipe *upipe, int command, va_list a
                 return UBASE_ERR_INVALID;
             uint8_t planes;
             UBASE_RETURN(uref_flow_match_def(flow, "sound.s32."))
+            sdi_enc_sub->s337 = ubase_check(uref_flow_match_def(flow, "sound.s32.s337."));
             UBASE_RETURN(uref_sound_flow_get_channels(flow, &sdi_enc_sub->channels))
             UBASE_RETURN(uref_sound_flow_get_planes(flow, &planes))
             if (planes != 1)
@@ -562,6 +566,7 @@ static struct upipe *upipe_sdi_enc_sub_alloc(struct upipe_mgr *mgr,
     struct upipe_sdi_enc_sub *sdi_enc_sub = upipe_sdi_enc_sub_from_upipe(upipe);
     ulist_init(&sdi_enc_sub->urefs);
     sdi_enc_sub->n = 0;
+    sdi_enc_sub->s337 = false;
     upipe_sdi_enc_sub_init_sub(upipe);
     upipe_sdi_enc_sub_init_urefcount(upipe);
 
