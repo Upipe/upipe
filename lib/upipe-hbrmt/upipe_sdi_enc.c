@@ -900,8 +900,8 @@ static void upipe_hd_sdi_enc_encode_line(struct upipe *upipe, int line_num, uint
                 packets_put++;
             }
             upipe_sdi_enc->total_audio_samples_put++;
+            upipe_sdi_enc->sample_pos++;
         }
-        upipe_sdi_enc->sample_pos += samples_to_put;
     } else {
         /* The current line is a switching line, so mark the next sample_diff
          * amount of packets for each audio group to be belonging to a line before */
