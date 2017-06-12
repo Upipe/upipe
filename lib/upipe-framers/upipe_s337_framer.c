@@ -207,7 +207,17 @@ static void upipe_s337f_input(struct upipe *upipe, struct uref *uref, struct upu
 
         size_t out_size = size[0] - upipe_s337f->samples;
         if (out_size < sync) {
-            upipe_warn(upipe, "Frame too small");
+            upipe_verbose(upipe, "Frame too small");
+        }
+
+        if (out_size > sync) {
+            upipe_verbose(upipe, "Frame too big, padding");
+            size_t padding = out_size - sync;
+            if (upipe_s337f->bits == 16) {
+                memset(&out16[2*(upipe_s337f->samples + out_size)], 0, 2 * padding);
+            } else {
+                memset(&out32[2*(upipe_s337f->samples + out_size)], 0, 4 * padding);
+            }
         }
 
         out_size *= 2; /* channels */
