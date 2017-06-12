@@ -661,7 +661,7 @@ static void upipe_rtp_fec_main_input(struct upipe *upipe, struct uref *uref)
 
         /* Wait for two rows to arrive to allow for late row FEC packets */
         uint16_t row_delta = seqnum - cur_row_fec_snbase - 1;
-        if (row_delta > 2 * upipe_rtp_fec->cols)
+        if (!seq_num_lt(seqnum, cur_row_fec_snbase) && row_delta > 2 * upipe_rtp_fec->cols)
             upipe_rtp_fec_apply_row_fec(super_pipe, cur_row_fec_snbase);
     }
 
