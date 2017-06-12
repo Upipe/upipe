@@ -147,6 +147,9 @@ struct upipe_sdi_enc {
     /* */
     bool started;
 
+    /* sample offset for dolby E to be on the right line */
+    unsigned dolby_offset;
+
     /* popped uref that still has samples */
     struct uref *uref_audio;
 
@@ -1009,6 +1012,13 @@ static void upipe_sdi_enc_input(struct upipe *upipe, struct uref *uref,
             uref_sound_read_int32_t(uref_audio, 0, -1, &buf, 1);
 
             int32_t *dst = &upipe_sdi_enc->audio_buf[sdi_enc_sub->channel_idx];
+            if (sdi_enc_sub->s337) {
+                size_t offset = upipe_sdi_enc->dolby_offset;
+                if (offset > size)
+                    offset = size;
+                dst += offset * UPIPE_SDI_MAX_CHANNELS;
+                size -= offset;
+            }
             for (size_t i = 0; i < size; i++) {
                 memcpy(dst, buf, sizeof(int32_t) * channels);
                 dst += UPIPE_SDI_MAX_CHANNELS;
@@ -1168,6 +1178,18 @@ static int upipe_sdi_enc_set_flow_def(struct upipe *upipe, struct uref *flow_def
     upipe_sdi_enc->input_bit_depth = u(uref_pic_flow_check_chroma(flow_def, 1, 1, 1, "y8")) ? 8 : 10;
     upipe_sdi_enc->input_is_v210 = u(uref_pic_flow_check_chroma(flow_def, 1, 1, 16, "u10y10v10y10u10y10v10y10u10y10v10y10"));
 #undef u
+
+    upipe_sdi_enc->dolby_offset = 0;
+    if (upipe_sdi_enc->f->height == 1125) { /* Full HD */
+        static const struct urational pal = { 25, 1 };
+        static const struct urational ntsc = { 30000, 1001 };
+        if (!urational_cmp(&upipe_sdi_enc->fps, &pal)) {
+            upipe_sdi_enc->dolby_offset = 34;
+        } else if (!urational_cmp(&upipe_sdi_enc->fps, &ntsc)) {
+            upipe_sdi_enc->dolby_offset = 32;
+        }
+    UBASE_RETURN(uref_pic_flow_get_fps(flow_def, &upipe_sdi_enc->fps))
+    }
 
     if (upipe_sdi_enc->input_is_v210) {
         upipe_sdi_enc->input_chroma_map[0] = "u10y10v10y10u10y10v10y10u10y10v10y10";
@@ -1355,6 +1377,7 @@ static struct upipe *upipe_sdi_enc_alloc(struct upipe_mgr *mgr,
 
     ulist_init(&upipe_sdi_enc->urefs);
     upipe_sdi_enc->n = 0;
+    upipe_sdi_enc->dolby_offset = 0;
 
     upipe_sdi_enc->blank             = upipe_sdi_blank_c;
     upipe_sdi_enc->planar_to_uyvy_8  = planar_to_uyvy_8_c;
