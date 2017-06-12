@@ -934,160 +934,6 @@ static void upipe_hd_sdi_enc_encode_line(struct upipe *upipe, int line_num, uint
             planes[f2][i] += input_strides[i] * (1 + (f2 ? 1 : !f->psf_ident));
 }
 
-static struct uref *upipe_sdi_enc_avsync(struct upipe *upipe, unsigned samples)
-{
-    struct upipe_sdi_enc *upipe_sdi_enc = upipe_sdi_enc_from_upipe(upipe);
-    struct uref *uref = uref_from_uchain(ulist_peek(&upipe_sdi_enc->urefs));
-
-    uint64_t pts;
-    if (!ubase_check(uref_clock_get_pts_sys(uref, &pts))) {
-        abort();
-    }
-    get_pts(pts);
-
-    if (ulist_empty(&upipe_sdi_enc->subs)) {
-        upipe_err(upipe, "no audio subpipe");
-        return NULL;
-    }
-
-    if (!ulist_is_last(&upipe_sdi_enc->subs, upipe_sdi_enc->subs.next)) {
-        upipe_err(upipe, "more than one audio subpipe");
-        return NULL;
-    }
-
-    struct upipe_sdi_enc_sub *sdi_enc_sub = upipe_sdi_enc_sub_from_uchain(upipe_sdi_enc->subs.next);
-    struct upipe *sub = &sdi_enc_sub->upipe;
-
-    uint64_t next_pts = pts +
-        UCLOCK_FREQ * upipe_sdi_enc->fps.den / upipe_sdi_enc->fps.num;
-    upipe_verbose_va(upipe, "VID PTS %.2f (next %.2f) - started %d",
-            get_pts(pts), get_pts(next_pts), upipe_sdi_enc->started);
-
-    struct uchain *uchain, *uchain_tmp;
-    bool first = true;
-
-    if (ulist_empty(&sdi_enc_sub->urefs)) {
-        upipe_verbose_va(upipe, "waiting for audio");
-        return NULL;
-    }
-
-    if (!upipe_sdi_enc->started)
-        ulist_delete_foreach(&sdi_enc_sub->urefs, uchain, uchain_tmp) {
-            struct uref *uref_audio = uref_from_uchain(uchain);
-            uint64_t pts_audio = 0;
-            ubase_assert(uref_clock_get_pts_sys(uref_audio, &pts_audio));
-            upipe_verbose_va(upipe, "AUD PTS %.2f", get_pts(pts_audio));
-
-            size_t size = 0;
-            uref_sound_size(uref_audio, &size, NULL);
-
-            /* if the first audio uref is later than vid pts, drop video */
-            if (first && pts_audio - UCLOCK_FREQ / 50 > next_pts) {
-                upipe_verbose_va(upipe,
-                        "audio > video (%.2f), dropping video, diff %.2f",
-                        get_pts(next_pts), get_pts(pts_audio) - get_pts(next_pts));
-                uref_free(uref_from_uchain(ulist_pop(&upipe_sdi_enc->urefs)));
-                upipe_verbose_va(upipe, "urefs: %zu", --upipe_sdi_enc->n);
-                return NULL;
-            }
-
-            uint64_t next_pts_audio = pts_audio + size * UCLOCK_FREQ / 48000;
-
-            /* if audio is earlier than video, drop audio */
-            if (next_pts_audio + UCLOCK_FREQ / 50 < pts) {
-                ulist_delete(uchain);
-                uref_free(uref_audio);
-                upipe_verbose_va(sub,
-                    "audio (%.2f) < video, dropping audio, diff %.2f",
-                    get_pts(next_pts_audio), get_pts(next_pts_audio) - get_pts(pts));
-                continue;
-            }
-
-            first = false;
-
-            /* drop a few samples */
-            if (pts_audio < pts) {
-                uint64_t pts_diff = pts - pts_audio;
-                size_t samples = pts_diff * 48000 / UCLOCK_FREQ;
-                if (samples > size) {
-                    ulist_delete(uchain);
-                    uref_free(uref_audio);
-                    first = true;
-                    continue;
-                }
-                ubase_assert(uref_sound_resize(uref_audio, samples, -1));
-                uref_clock_set_pts_sys(uref_audio, pts);
-                upipe_verbose_va(sub, "Resized audio, removed %zu samples", samples);
-            }
-
-            /* we have audio for 2 video frames */
-            if (next_pts + UCLOCK_FREQ * upipe_sdi_enc->fps.den / upipe_sdi_enc->fps.num < pts_audio) {
-                upipe_sdi_enc->started = true;
-                break;
-            }
-        }
-
-    /* we can't fill the video frame with all the audio we have */
-    if (!upipe_sdi_enc->started)
-        return NULL; /* wait for more audio */
-
-    uref = uref_from_uchain(ulist_pop(&upipe_sdi_enc->urefs));
-    upipe_verbose_va(upipe, "urefs: %zu", --upipe_sdi_enc->n);
-
-    /* start with previously buffered uref */
-    struct uref *uref_audio = upipe_sdi_enc->uref_audio;
-    upipe_sdi_enc->uref_audio = NULL;
-
-    const uint8_t channels = sdi_enc_sub->channels;
-    for (unsigned idx = 0; idx < samples; ) {
-        if (!uref_audio) {
-            uref_audio = uref_from_uchain(ulist_pop(&sdi_enc_sub->urefs));
-            upipe_verbose_va(upipe, "sub urefs: %zu", --sdi_enc_sub->n);
-        }
-        //assert(uref_audio);
-        if (!uref_audio)
-            break;
-
-        size_t size = 0;
-        uref_sound_size(uref_audio, &size, NULL);
-
-        const int32_t *buf;
-        uref_sound_read_int32_t(uref_audio, 0, -1, &buf, 1);
-
-        bool overlap = samples - idx < size;
-        if (overlap)
-            size = samples - idx;
-
-        int32_t *dst = &upipe_sdi_enc->audio_buf[idx * UPIPE_SDI_MAX_CHANNELS];
-        for (size_t i = 0; i < size; i++) {
-            memcpy(dst, buf, sizeof(int32_t) * channels);
-            dst += UPIPE_SDI_MAX_CHANNELS;
-            buf += channels;
-        }
-
-        uref_sound_unmap(uref_audio, 0, -1, 1);
-
-        idx += size;
-
-        /* uref has more audio than we want */
-        if (overlap) {
-            /* resize */
-            ubase_assert(uref_sound_resize(uref_audio, size, -1));
-            /* buffer */
-            upipe_sdi_enc->uref_audio = uref_audio;
-            /* we're done */
-            break;
-        }
-
-        uref_free(uref_audio);
-        uref_audio = NULL;
-    }
-
-    upipe_verbose_va(sub, "READ %u samples", samples);
-
-    return uref;
-}
-
 /** @internal @This receives incoming uref.
  *
  * @param upipe description structure of the pipe
@@ -1123,10 +969,7 @@ static void upipe_sdi_enc_input(struct upipe *upipe, struct uref *uref,
 
     ulist_add(&upipe_sdi_enc->urefs, uref_to_uchain(uref)); // buffer uref
     upipe_verbose_va(upipe, "urefs: %zu", ++upipe_sdi_enc->n);
-#if 0
-    uref = upipe_sdi_enc_avsync(upipe, samples);
-#else
-{
+
     uref = uref_from_uchain(ulist_pop(&upipe_sdi_enc->urefs));
     struct upipe_sdi_enc_sub *sdi_enc_sub = NULL;
     struct uref *uref_audio = NULL;
@@ -1159,8 +1002,7 @@ static void upipe_sdi_enc_input(struct upipe *upipe, struct uref *uref,
     } else {
         samples = 0;
     }
-}
-#endif
+
     if (!uref) {
         upipe_err_va(upipe, "no vid uref");
         return;
