@@ -68,7 +68,7 @@ case "${host_os}" in
     ;;
 esac
 
-AM_CONDITIONAL(HAVE_X86_ASM, test -n "${YASMFLAGS}")
+AM_CONDITIONAL(HAVE_X86_ASM, test -n "${YASM}")
 
 # add -prefer-non-pic so libtool doesn't add -fPIC, which yasm doesn't understand
 YASMFLAGS="${YASMFLAGS} -DPIC -prefer-non-pic -Pconfig.asm -I\$(top_builddir)/x86 -I\$(top_srcdir)/x86"
