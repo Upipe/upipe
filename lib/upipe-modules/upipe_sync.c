@@ -290,6 +290,8 @@ static int upipe_sync_sub_set_flow_def(struct upipe *upipe, struct uref *flow_de
         upipe_sync->latency = latency;
         upipe_sync_set_latency(upipe_sync_to_upipe(upipe_sync));
     } else {
+        latency = upipe_sync->latency;
+        uref_clock_set_latency(flow_def, latency);
         upipe_sync_sub_build_flow_def(upipe);
     }
 
