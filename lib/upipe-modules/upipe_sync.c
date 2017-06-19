@@ -815,9 +815,20 @@ static int upipe_sync_set_flow_def(struct upipe *upipe, struct uref *flow_def)
     const char *def;
     UBASE_RETURN(uref_flow_get_def(flow_def, &def))
 
+    if (ubase_ncmp(def, "pic.")) {
+        upipe_err_va(upipe, "Unknown def %s", def);
+        return UBASE_ERR_INVALID;
+    }
+
+    UBASE_RETURN(uref_pic_flow_get_fps(flow_def, &upipe_sync->fps));
+
     uint64_t latency;
     if (!ubase_check(uref_clock_get_latency(flow_def, &latency)))
         latency = 0;
+
+    flow_def = uref_dup(flow_def);
+    if (!flow_def)
+        return UBASE_ERR_ALLOC;
 
     // FIXME : estimated latency added by processing
     latency += UCLOCK_FREQ / 25;
@@ -831,16 +842,10 @@ static int upipe_sync_set_flow_def(struct upipe *upipe, struct uref *flow_def)
         upipe_sync_build_flow_def(upipe);
     }
 
-    if (ubase_ncmp(def, "pic.")) {
-        upipe_err_va(upipe, "Unknown def %s", def);
-        return UBASE_ERR_INVALID;
-    }
-
-    UBASE_RETURN(uref_pic_flow_get_fps(flow_def, &upipe_sync->fps));
     upipe_sync->ticks_per_frame = UCLOCK_FREQ *
         upipe_sync->fps.den / upipe_sync->fps.num;
 
-    upipe_sync_store_flow_def(upipe, uref_dup(flow_def));
+    upipe_sync_store_flow_def(upipe, flow_def);
 
     return UBASE_ERR_NONE;
 }
