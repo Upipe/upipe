@@ -62,6 +62,7 @@
 #include <bitstream/ietf/rtp.h>
 #include <bitstream/ietf/rtp3551.h>
 #include <bitstream/ietf/rtp2250.h>
+#include <bitstream/ietf/rtp3640.h>
 #include <bitstream/ietf/rtp6184.h>
 #include <bitstream/mpeg/h264.h>
 
@@ -92,10 +93,8 @@ enum upipe_rtpd_mode {
     UPIPE_RTPD_OPUS,
     /** ITU-T H.264 */
     UPIPE_RTPD_H264,
-    /** ISO/IEC 14496-3 */
+    /** ISO/IEC 14496-3 (RFC3640) */
     UPIPE_RTPD_MPEG4_AUDIO,
-    /** ISO/IEC 14496-3 with mux config */
-    UPIPE_RTPD_MPEG4_AUDIO_LATM,
     /** Unknown */
     UPIPE_RTPD_UNKNOWN
 };
@@ -114,7 +113,6 @@ static const char *upipe_rtpd_flow_defs[] = {
     "block.rtp.opus.sound.",
     "block.rtp.h264.pic.",
     "block.rtp.aac.sound.",
-    "block.rtp.aac_latm.sound.",
     "block.rtp.",
     NULL
 };
@@ -310,10 +308,6 @@ static inline void upipe_rtpd_build_flow_def(struct upipe *upipe)
             break;
         case UPIPE_RTPD_MPEG4_AUDIO:
             uref_mpga_flow_set_encaps(flow_def, UREF_MPGA_ENCAPS_RAW);
-            uref_flow_set_complete(flow_def);
-            break;
-        case UPIPE_RTPD_MPEG4_AUDIO_LATM:
-            uref_mpga_flow_set_encaps(flow_def, UREF_MPGA_ENCAPS_LATM);
             uref_flow_set_complete(flow_def);
             break;
         case UPIPE_RTPD_MPA:
@@ -539,19 +533,68 @@ static inline void upipe_rtpd_output_mpeg4_audio(struct upipe *upipe,
                                                  bool marker)
 {
     struct upipe_rtpd *upipe_rtpd = upipe_rtpd_from_upipe(upipe);
-    /* append to next uref */
-    if (upipe_rtpd->next_uref == NULL)
-        upipe_rtpd->next_uref = uref;
-    else {
-        uref_block_append(upipe_rtpd->next_uref, uref_detach_ubuf(uref));
+    uint8_t au_headers[RTP3640_AU_HEADERS_LENGTH_SIZE];
+    if (unlikely(!ubase_check(uref_block_extract(uref, 0,
+                        RTP3640_AU_HEADERS_LENGTH_SIZE, au_headers)))) {
+        upipe_warn(upipe, "invalid buffer received");
         uref_free(uref);
+        return;
+    }
+    uint16_t au_headers_length = rtp3640_get_au_headers_length(au_headers);
+    /* convert to octets */
+    au_headers_length /= 8;
+
+    if (au_headers_length == RTP3640_AU_HEADER_AAC_HBR_SIZE) {
+        /* one frame or fragment, ignore headers */
+        uref_block_resize(uref, RTP3640_AU_HEADERS_LENGTH_SIZE +
+                                RTP3640_AU_HEADER_AAC_HBR_SIZE, -1);
+
+        /* append to next uref */
+        if (upipe_rtpd->next_uref == NULL)
+            upipe_rtpd->next_uref = uref;
+        else {
+            uref_block_append(upipe_rtpd->next_uref, uref_detach_ubuf(uref));
+            uref_free(uref);
+        }
+
+        if (marker) {
+            upipe_rtpd_output(upipe, upipe_rtpd->next_uref, upump_p);
+            upipe_rtpd->next_uref = NULL;
+        }
+        return;
     }
 
-    if (!marker)
-        return;
+    /* concatenated frames */
+    if (upipe_rtpd->next_uref != NULL) {
+        upipe_dbg(upipe, "outputting a fragment");
+        upipe_rtpd_output(upipe, upipe_rtpd->next_uref, upump_p);
+        upipe_rtpd->next_uref = NULL;
+    }
 
-    upipe_rtpd_output(upipe, upipe_rtpd->next_uref, upump_p);
-    upipe_rtpd->next_uref = NULL;
+    uint16_t i;
+    size_t offset = au_headers_length;
+    for (i = 0; i < au_headers_length / RTP3640_AU_HEADER_AAC_HBR_SIZE; i++) {
+        uint8_t au_header[RTP3640_AU_HEADER_AAC_HBR_SIZE];
+        if (unlikely(!ubase_check(uref_block_extract(uref,
+                            RTP3640_AU_HEADERS_LENGTH_SIZE +
+                            RTP3640_AU_HEADER_AAC_HBR_SIZE * i,
+                            RTP3640_AU_HEADER_AAC_HBR_SIZE, au_header)))) {
+            upipe_warn(upipe, "invalid buffer received");
+            uref_free(uref);
+            return;
+        }
+
+        uint16_t au_size = rtp3640_get_aac_hbr_au_size(au_header);
+        struct uref *frame = uref_block_splice(uref, offset, au_size);
+        if (unlikely(frame == NULL)) {
+            upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
+            continue;
+        }
+        /* TODO support interleaving */
+        upipe_rtpd_output(upipe, frame, upump_p);
+        offset += au_size;
+    }
+    uref_free(uref);
 }
 
 /** @internal @This handles data.
@@ -639,7 +682,6 @@ static inline void upipe_rtpd_input(struct upipe *upipe, struct uref *uref,
         case UPIPE_RTPD_MPA:
         case UPIPE_RTPD_MPV:
         case UPIPE_RTPD_MPEG4_AUDIO:
-        case UPIPE_RTPD_MPEG4_AUDIO_LATM:
             if (timestamp == upipe_rtpd->last_timestamp)
                 break;
             /* We set DTS because we are in coded domain and we are sure
@@ -710,7 +752,6 @@ static inline void upipe_rtpd_input(struct upipe *upipe, struct uref *uref,
             upipe_rtpd_output_h264(upipe, uref, upump_p);
             break;
         case UPIPE_RTPD_MPEG4_AUDIO:
-        case UPIPE_RTPD_MPEG4_AUDIO_LATM:
             upipe_rtpd_output_mpeg4_audio(upipe, uref, upump_p, marker);
             break;
         default:
