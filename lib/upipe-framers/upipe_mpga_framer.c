@@ -1285,6 +1285,14 @@ static int upipe_mpgaf_encaps_frame(struct upipe *upipe, struct uref *uref)
     if (upipe_mpgaf->encaps_output == UREF_MPGA_ENCAPS_ADTS) {
         uint8_t buffer[ADTS_HEADER_SIZE];
         adts_set_sync(buffer);
+        switch (upipe_mpgaf->asc_aot) {
+            case ASC_TYPE_MAIN:
+                adts_set_profile(buffer, ADTS_PROFILE_MAIN);
+            case ASC_TYPE_SSR:
+                adts_set_profile(buffer, ADTS_PROFILE_SSR);
+            default:
+                adts_set_profile(buffer, ADTS_PROFILE_LC);
+        }
         adts_set_sampling_freq(buffer, upipe_mpgaf->base_samplerate_idx);
         adts_set_channels(buffer, upipe_mpgaf->channels);
         adts_set_length(buffer, size + ADTS_HEADER_SIZE);
