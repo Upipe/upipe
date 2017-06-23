@@ -382,7 +382,14 @@ static int upump_ev_mgr_run(struct upump_mgr *mgr, struct umutex *mutex)
         upump_ev_mgr_lock(ev_mgr->ev_loop);
     }
 
-    bool status = ev_run(ev_mgr->ev_loop, 0);
+    bool status;
+#if EV_VERSION_MAJOR > 4 || (EV_VERSION_MAJOR == 4 && EV_VERSION_MINOR > 11)
+	status = ev_run(ev_mgr->ev_loop, 0);
+#else
+	status = false;
+	ev_run(ev_mgr->ev_loop, 0);
+#endif
+
 
     if (mutex != NULL)
         upump_ev_mgr_unlock(ev_mgr->ev_loop);
