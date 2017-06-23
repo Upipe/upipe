@@ -142,22 +142,18 @@ static void test_input(struct upipe *upipe, struct uref *uref,
             break;
         case 3:
         case 4:
+        case 7:
+        case 10:
             assert(size == 768 - ADTS_HEADER_SIZE);
             check_data(uref, 0, 768 - ADTS_HEADER_SIZE);
             break;
         case 5:
         case 6:
-            assert(size == 768 - ADTS_HEADER_SIZE + 13);
-            break;
-        case 7:
-        case 10:
-            /* + 1 because of rounding error */
-            assert(size == 768 - ADTS_HEADER_SIZE + 1);
-            check_data(uref, 0, 768 - ADTS_HEADER_SIZE);
+            assert(size == 768 - ADTS_HEADER_SIZE + 12);
             break;
         case 8:
         case 9:
-            assert(size == 768 - ADTS_HEADER_SIZE + 10);
+            assert(size == 768 - ADTS_HEADER_SIZE + 9);
             break;
         default:
             assert(0);

@@ -1317,7 +1317,10 @@ static int upipe_mpgaf_encaps_frame(struct upipe *upipe, struct uref *uref)
         upipe_mpgaf->latm_config_duration = 0;
     upipe_mpgaf->latm_config_duration += duration;
 
-    int ubuf_size = size + 1 + (config ? MAX_ASC_SIZE : 0);
+    int ubuf_size = size + 2 + (config ? MAX_ASC_SIZE + 4 : 0);
+    int i;
+    for (i = 0; i < size - 255; i += 255)
+        ubuf_size++;
     if (upipe_mpgaf->encaps_output == UREF_MPGA_ENCAPS_LOAS)
         ubuf_size += LOAS_HEADER_SIZE;
     struct ubuf *ubuf = ubuf_block_alloc(upipe_mpgaf->ubuf_mgr, ubuf_size);
@@ -1329,18 +1332,18 @@ static int upipe_mpgaf_encaps_frame(struct upipe *upipe, struct uref *uref)
     }
 
     struct ubits bw;
-    ubits_init(&bw, w + (upipe_mpgaf->encaps_output == UREF_MPGA_ENCAPS_LOAS ?
-                         LOAS_HEADER_SIZE : 0), ubuf_size);
+    ubits_init(&bw, w, ubuf_size);
+    if (upipe_mpgaf->encaps_output == UREF_MPGA_ENCAPS_LOAS)
+        ubits_put(&bw, 24, 0);
 
     ubits_put(&bw, 1, config ? 0 : 1);
     if (config)
         upipe_mpgaf_build_latm_config(upipe, &bw);
 
     /* PayloadLengthInfo */
-    int i;
-    for (i = 0; i <= ubuf_size - 255; i += 255)
+    for (i = 0; i < size - 255; i += 255)
         ubits_put(&bw, 8, 255);
-    ubits_put(&bw, 8, ubuf_size - i);
+    ubits_put(&bw, 8, size - i);
 
     int err = uref_block_extract_bits(uref, 0, size, &bw);
     if (!ubase_check(err)) {
@@ -1356,7 +1359,7 @@ static int upipe_mpgaf_encaps_frame(struct upipe *upipe, struct uref *uref)
     if (upipe_mpgaf->encaps_output == UREF_MPGA_ENCAPS_LOAS) {
         if (end - w - LOAS_HEADER_SIZE > 0x1fff)
             upipe_warn_va(upipe, "LATM packet too large (%d)",
-                          end - w - LOAS_HEADER_SIZE > 0x1fff);
+                          end - w - LOAS_HEADER_SIZE);
 
         loas_set_sync(w);
         loas_set_length(w, end - w - LOAS_HEADER_SIZE);
@@ -1383,7 +1386,7 @@ static struct ubuf *upipe_mpgaf_extract_latm(struct upipe *upipe,
         upipe_throw_error(upipe, UBASE_ERR_INVALID);
         return NULL;
     }
-    uref_size -= upipe_mpgaf->latm_header_size / 8;
+    uref_size -= (upipe_mpgaf->latm_header_size + 7) / 8;
 
     struct ubuf *ubuf = ubuf_block_alloc(upipe_mpgaf->ubuf_mgr, uref_size);
     uint8_t *p;
