@@ -314,10 +314,12 @@ static int upipe_sync_sub_control(struct upipe *upipe, int command, va_list args
     switch (command) {
         case UPIPE_REGISTER_REQUEST: {
             struct urequest *request = va_arg(args, struct urequest *);
-            return upipe_throw_provide_request(upipe, request);
+            return upipe_sync_sub_alloc_output_proxy(upipe, request);
         }
-        case UPIPE_UNREGISTER_REQUEST:
-            return UBASE_ERR_NONE;
+        case UPIPE_UNREGISTER_REQUEST: {
+            struct urequest *request = va_arg(args, struct urequest *);
+            return upipe_sync_sub_free_output_proxy(upipe, request);
+        }
 
         case UPIPE_GET_OUTPUT: {
             struct upipe **p = va_arg(args, struct upipe **);
@@ -880,10 +882,12 @@ static int upipe_sync_control(struct upipe *upipe, int command, va_list args)
         }
         case UPIPE_REGISTER_REQUEST: {
             struct urequest *request = va_arg(args, struct urequest *);
-            return upipe_throw_provide_request(upipe, request);
+            return upipe_sync_alloc_output_proxy(upipe, request);
         }
-        case UPIPE_UNREGISTER_REQUEST:
-            return UBASE_ERR_NONE;
+        case UPIPE_UNREGISTER_REQUEST: {
+            struct urequest *request = va_arg(args, struct urequest *);
+            return upipe_sync_free_output_proxy(upipe, request);
+        }
         case UPIPE_GET_SUB_MGR: {
             struct upipe_mgr **p = va_arg(args, struct upipe_mgr **);
             return upipe_sync_get_sub_mgr(upipe, p);
