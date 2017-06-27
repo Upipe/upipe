@@ -170,8 +170,7 @@ static void upipe_s337f_input(struct upipe *upipe, struct uref *uref, struct upu
             uref_free(output);
             upipe_s337f->uref = NULL;
         }
-        upipe_err(upipe, "No sync");
-        uref_free(uref);
+        upipe_s337f_output(upipe, uref, upump_p);
         return;
     } else if (!output) {
         upipe_notice(upipe, "Found synchro");
