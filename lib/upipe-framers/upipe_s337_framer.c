@@ -170,6 +170,18 @@ static void upipe_s337f_input(struct upipe *upipe, struct uref *uref, struct upu
             uref_free(output);
             upipe_s337f->uref = NULL;
         }
+
+        struct uref *flow_def = upipe_s337f_alloc_flow_def_attr(upipe);
+        if (unlikely(flow_def == NULL)) {
+            upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
+        } else {
+            const char *def;
+            UBASE_FATAL(upipe, uref_flow_get_def(upipe_s337f->flow_def_input, &def));
+            UBASE_FATAL(upipe, uref_flow_set_def_va(flow_def, def));
+            flow_def = upipe_s337f_store_flow_def_attr(upipe, flow_def);
+            if (flow_def)
+                upipe_s337f_store_flow_def(upipe, flow_def);
+        }
         upipe_s337f_output(upipe, uref, upump_p);
         return;
     } else if (!output) {
