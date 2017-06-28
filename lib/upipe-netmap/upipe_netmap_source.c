@@ -372,6 +372,9 @@ static inline bool handle_hbrmt_packet(struct upipe *upipe, const uint8_t *src, 
 
     if (frate != upipe_netmap_source->frate || frame != upipe_netmap_source->frame) {
         upipe_err(upipe, "Incorrect format");
+        upipe_netmap_source->f = NULL;
+        uref_free(upipe_netmap_source->uref);
+        upipe_netmap_source->uref = NULL;
         return true;
     }
 
