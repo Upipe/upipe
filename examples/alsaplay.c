@@ -55,6 +55,8 @@
 #include <upipe-av/upipe_av.h>
 #include <upipe-av/upipe_avcodec_decode.h>
 #include <upipe-alsa/upipe_alsa_sink.h>
+#include <upipe-swresample/upipe_swr.h>
+#include <upipe-filters/upipe_filter_format.h>
 
 #include <stdlib.h>
 #include <stdint.h>
@@ -72,6 +74,7 @@
 #define UBUF_ALIGN          32
 #define UBUF_ALIGN_OFFSET   0
 #define QUEUE_LENGTH        10
+#define INPUT_SIZE          2048
 
 const char *device = "default";
 enum uprobe_log_level loglevel = UPROBE_LOG_LEVEL;
@@ -132,32 +135,54 @@ static int catch_avcdec(struct uprobe *uprobe, struct upipe *upipe,
     if (!uprobe_plumber(event, args, &flow_def, &def))
         return uprobe_throw_next(uprobe, upipe, event, args);
 
+    /* ffmt */
+    struct upipe_mgr *ffmt_mgr = upipe_ffmt_mgr_alloc();
+    struct upipe_mgr *swr_mgr = upipe_swr_mgr_alloc();
+    upipe_ffmt_mgr_set_swr_mgr(ffmt_mgr, swr_mgr);
+    upipe_mgr_release(swr_mgr);
+
+    /* request planar s16 */
+    struct uref *uref = uref_sibling_alloc(flow_def);
+    uref_flow_set_def(uref, "sound.u8.");
+    uref_sound_flow_set_channels(uref, 1);
+    uref_sound_flow_set_sample_size(uref, 1);
+    uref_sound_flow_set_planes(uref, 0);
+    uref_sound_flow_add_plane(uref, "l");
+    uref_sound_flow_set_rate(uref, 44100);
+
+    upipe = upipe_flow_alloc_output(upipe, ffmt_mgr,
+            uprobe_pfx_alloc(uprobe_use(logger),
+                             UPROBE_LOG_VERBOSE, "ffmt"),
+            uref);
+    assert(upipe != NULL);
+    uref_free(uref);
+    upipe_mgr_release(ffmt_mgr);
+
     /* trick play */
     struct upipe_mgr *upipe_trickp_mgr = upipe_trickp_mgr_alloc();
     struct upipe *trickp = upipe_void_alloc(upipe_trickp_mgr,
             uprobe_pfx_alloc_va(uprobe_use(logger), loglevel, "trickp"));
     upipe_mgr_release(upipe_trickp_mgr);
     upipe_attach_uclock(trickp);
-    struct upipe *trickp_audio = upipe_void_alloc_output_sub(upipe, trickp,
+    upipe = upipe_void_chain_output_sub(upipe, trickp,
             uprobe_pfx_alloc_va(uprobe_use(logger),
                                 loglevel, "trickp audio"));
     upipe_release(trickp);
 
     /* alsa sink */
     struct upipe_mgr *upipe_alsink_mgr = upipe_alsink_mgr_alloc();
-    struct upipe *alsink = upipe_void_alloc_output(trickp_audio,
+    upipe = upipe_void_chain_output(upipe,
                     upipe_alsink_mgr,
                     uprobe_pfx_alloc(uprobe_use(logger), loglevel, "alsink"));
-    if (alsink == NULL) {
+    if (upipe == NULL) {
         assert(0);
     }
     upipe_mgr_release(upipe_alsink_mgr);
-    upipe_attach_uclock(alsink);
-    if (!ubase_check(upipe_set_uri(alsink, device))) {
+    upipe_attach_uclock(upipe);
+    if (!ubase_check(upipe_set_uri(upipe, device))) {
         assert(0);
     }
-    upipe_release(trickp_audio);
-    upipe_release(alsink);
+    upipe_release(upipe);
     return true;
 }
 
@@ -223,7 +248,7 @@ int main(int argc, char **argv)
     uprobe_init(&uprobe_avcdec, catch_avcdec, uprobe_use(logger));
 
     /* upipe-av */
-    upipe_av_init(true, uprobe_use(logger));
+    upipe_av_init(true, uprobe_pfx_alloc(uprobe_use(logger), loglevel, "av"));
 
     /* file source */
     struct upipe_mgr *upipe_fsrc_mgr = upipe_fsrc_mgr_alloc();
@@ -237,7 +262,8 @@ int main(int argc, char **argv)
     if (unlikely(upipe_src == NULL))
         exit(1);
     upipe_attach_uclock(upipe_src);
-    if (!ubase_check(upipe_set_uri(upipe_src, uri)))
+    if (!ubase_check(upipe_set_uri(upipe_src, uri)) ||
+        !ubase_check(upipe_set_output_size(upipe_src, INPUT_SIZE)))
         return false;
 
     /* no demux */

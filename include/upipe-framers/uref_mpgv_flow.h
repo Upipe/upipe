@@ -39,8 +39,6 @@ extern "C" {
 
 UREF_ATTR_SMALL_UNSIGNED(mpgv_flow, profilelevel, "mpgv.profilelevel",
         profile and level)
-UREF_ATTR_VOID(mpgv_flow, repeated_sequence, "mpgv.repseq",
-        repeated sequence header flag)
 
 #ifdef __cplusplus
 }

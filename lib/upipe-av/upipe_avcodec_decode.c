@@ -54,6 +54,7 @@
 #include <upipe/upipe_helper_upump.h>
 #include <upipe/upipe_helper_input.h>
 #include <upipe-av/upipe_avcodec_decode.h>
+#include <upipe-framers/uref_h26x.h>
 
 #include <stdlib.h>
 #include <stdbool.h>
@@ -1073,6 +1074,8 @@ static void upipe_avcdec_output_pic(struct upipe *upipe, struct upump **upump_p)
 
     /* various time-related attributes */
     upipe_avcdec_set_time_attributes(upipe, uref);
+
+    uref_h26x_delete_nal_offsets(uref);
 
     /* Find out if flow def attributes have changed. */
     if (!upipe_avcdec_check_flow_def_attr(upipe, flow_def_attr)) {

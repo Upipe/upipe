@@ -361,6 +361,7 @@ static void upipe_dup_free(struct urefcount *urefcount_real)
 static void upipe_dup_no_input(struct upipe *upipe)
 {
     struct upipe_dup *upipe_dup = upipe_dup_from_upipe(upipe);
+    upipe_dbg(upipe, "throw source end");
     upipe_dup_throw_sub_outputs(upipe, UPROBE_SOURCE_END);
     urefcount_release(upipe_dup_to_urefcount_real(upipe_dup));
 }

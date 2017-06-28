@@ -259,6 +259,7 @@ static bool upipe_opusf_parse_header(struct upipe *upipe)
         return false;
     }
 
+    UBASE_FATAL(upipe, uref_flow_set_complete(flow_def))
     UBASE_FATAL(upipe, uref_flow_set_def(flow_def, "block.opus.sound."))
     UBASE_FATAL(upipe, uref_block_flow_set_octetrate(flow_def, octetrate))
     UBASE_FATAL(upipe, uref_sound_flow_set_rate(flow_def, upipe_opusf->samplerate))

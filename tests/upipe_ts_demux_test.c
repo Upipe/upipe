@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2013-2015 OpenHeadend S.A.R.L.
+ * Copyright (C) 2013-2017 OpenHeadend S.A.R.L.
  *
  * Authors: Christophe Massiot
  *
@@ -52,7 +52,7 @@
 #include <upipe-ts/upipe_ts_pmt_decoder.h>
 #include <upipe-ts/uref_ts_flow.h>
 #include <upipe-ts/upipe_ts_split.h>
-#include <upipe-framers/upipe_mpgv_framer.h>
+#include <upipe-framers/upipe_auto_framer.h>
 
 #include <stdbool.h>
 #include <stdlib.h>
@@ -167,13 +167,13 @@ int main(int argc, char *argv[])
                                    UBUF_POOL_DEPTH, UBUF_POOL_DEPTH);
     assert(logger != NULL);
 
-    struct upipe_mgr *upipe_mpgvf_mgr = upipe_mpgvf_mgr_alloc();
-    assert(upipe_mpgvf_mgr != NULL);
+    struct upipe_mgr *upipe_autof_mgr = upipe_autof_mgr_alloc();
+    assert(upipe_autof_mgr != NULL);
 
     struct upipe_mgr *upipe_ts_demux_mgr = upipe_ts_demux_mgr_alloc();
     assert(upipe_ts_demux_mgr != NULL);
-    ubase_assert(upipe_ts_demux_mgr_set_mpgvf_mgr(upipe_ts_demux_mgr,
-                                                  upipe_mpgvf_mgr));
+    ubase_assert(upipe_ts_demux_mgr_set_autof_mgr(upipe_ts_demux_mgr,
+                                                  upipe_autof_mgr));
 
     struct uref *uref;
     uref = uref_block_flow_alloc_def(uref_mgr, "mpegts.");
@@ -388,7 +388,7 @@ int main(int argc, char *argv[])
 
     mp2vend_init(payload);
     uref_block_unmap(uref, 0);
-    expect_new_flow_def = 2;
+    expect_new_flow_def = 1;
     upipe_input(upipe_ts_demux, uref, NULL);
     assert(!expect_new_flow_def);
 
@@ -397,7 +397,7 @@ int main(int argc, char *argv[])
     upipe_release(upipe_ts_demux);
 
     upipe_mgr_release(upipe_ts_demux_mgr);
-    upipe_mgr_release(upipe_mpgvf_mgr);
+    upipe_mgr_release(upipe_autof_mgr);
 
     uref_mgr_release(uref_mgr);
     ubuf_mgr_release(ubuf_mgr);

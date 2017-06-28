@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2013-2015 OpenHeadend S.A.R.L.
+ * Copyright (C) 2013-2017 OpenHeadend S.A.R.L.
  *
  * Authors: Christophe Massiot
  *
@@ -39,6 +39,7 @@
 #include <upipe/upipe_helper_urefcount.h>
 #include <upipe/upipe_helper_void.h>
 #include <upipe/upipe_helper_sync.h>
+#include <upipe/upipe_helper_ubuf_mgr.h>
 #include <upipe/upipe_helper_uref_stream.h>
 #include <upipe/upipe_helper_output.h>
 #include <upipe/upipe_helper_input.h>
@@ -47,8 +48,7 @@
 #include <upipe-framers/upipe_mpgv_framer.h>
 #include <upipe-framers/uref_mpgv.h>
 #include <upipe-framers/uref_mpgv_flow.h>
-
-#include "upipe_framers_common.h"
+#include <upipe-framers/upipe_framers_common.h>
 
 #include <stdlib.h>
 #include <stdbool.h>
@@ -102,6 +102,8 @@ struct upipe_mpgvf {
     struct uref *flow_def_attr;
     /** requested flow definition */
     struct uref *flow_def_requested;
+    /** complete input */
+    bool complete_input;
     /** true if we have to insert sequence headers before I frames,
      * if it is not already present */
     bool sequence_requested;
@@ -116,6 +118,15 @@ struct upipe_mpgvf {
     unsigned int max_urefs;
     /** list of blockers (used during urequest) */
     struct uchain blockers;
+    /** buffered output uref (used during urequest) */
+    struct uref *uref_output;
+
+    /** ubuf manager */
+    struct ubuf_mgr *ubuf_mgr;
+    /** flow format packet */
+    struct uref *flow_format;
+    /** ubuf manager request */
+    struct urequest ubuf_mgr_request;
 
     /** rap of the last dts */
     uint64_t dts_rap;
@@ -143,6 +154,8 @@ struct upipe_mpgvf {
     struct ubuf *sequence_display;
     /** true if the flag progressive sequence is true */
     bool progressive_sequence;
+    /* low delay */
+    bool low_delay;
     /** frames per second */
     struct urational fps;
     /** closed GOP */
@@ -183,6 +196,8 @@ struct upipe_mpgvf {
     struct uref au_uref_s;
     /** drift rate of the next picture */
     struct urational drift_rate;
+    /** coding type of the next picture */
+    uint8_t type;
     /** true if we have thrown the sync_acquired event (that means we found a
      * sequence header) */
     bool acquired;
@@ -199,6 +214,9 @@ static bool upipe_mpgvf_handle(struct upipe *upipe, struct uref *uref,
 /** @hidden */
 static int upipe_mpgvf_check_flow_format(struct upipe *upipe,
                                          struct uref *flow_format);
+/** @hidden */
+static int upipe_mpgvf_check_ubuf_mgr(struct upipe *upipe,
+                                      struct uref *flow_format);
 
 UPIPE_HELPER_UPIPE(upipe_mpgvf, upipe, UPIPE_MPGVF_SIGNATURE)
 UPIPE_HELPER_UREFCOUNT(upipe_mpgvf, urefcount, upipe_mpgvf_free)
@@ -213,6 +231,10 @@ UPIPE_HELPER_FLOW_FORMAT(upipe_mpgvf, request, upipe_mpgvf_check_flow_format,
                          upipe_mpgvf_register_output_request,
                          upipe_mpgvf_unregister_output_request)
 UPIPE_HELPER_FLOW_DEF(upipe_mpgvf, flow_def_input, flow_def_attr)
+UPIPE_HELPER_UBUF_MGR(upipe_mpgvf, ubuf_mgr, flow_format,
+                      ubuf_mgr_request, upipe_mpgvf_check_ubuf_mgr,
+                      upipe_mpgvf_register_output_request,
+                      upipe_mpgvf_unregister_output_request)
 
 /** @internal @This flushes all dates.
  *
@@ -228,6 +250,8 @@ static void upipe_mpgvf_flush_dates(struct upipe *upipe)
     uref_clock_set_date_orig(&upipe_mpgvf->au_uref_s, UINT64_MAX,
                              UREF_DATE_NONE);
     uref_clock_delete_dts_pts_delay(&upipe_mpgvf->au_uref_s);
+
+    upipe_mpgvf->drift_rate.num = upipe_mpgvf->drift_rate.den = 0;
 }
 
 /** @internal @This allocates an mpgvf pipe.
@@ -254,8 +278,11 @@ static struct upipe *upipe_mpgvf_alloc(struct upipe_mgr *mgr,
     upipe_mpgvf_init_input(upipe);
     upipe_mpgvf_init_flow_format(upipe);
     upipe_mpgvf_init_flow_def(upipe);
+    upipe_mpgvf_init_ubuf_mgr(upipe);
     upipe_mpgvf->flow_def_requested = NULL;
+    upipe_mpgvf->complete_input = false;
     upipe_mpgvf->sequence_requested = false;
+    upipe_mpgvf->uref_output = NULL;
     upipe_mpgvf->dts_rap = UINT64_MAX;
     upipe_mpgvf->seq_rap = UINT64_MAX;
     upipe_mpgvf->iframe_rap = UINT64_MAX;
@@ -264,6 +291,7 @@ static struct upipe *upipe_mpgvf_alloc(struct upipe_mgr *mgr,
     upipe_mpgvf->last_picture_number = 0;
     upipe_mpgvf->last_temporal_reference = -1;
     upipe_mpgvf->got_discontinuity = false;
+    upipe_mpgvf->low_delay = false;
     upipe_mpgvf->fps.num = 0;
     upipe_mpgvf->field_number = 0;
     upipe_mpgvf->scan_context = UINT32_MAX;
@@ -278,6 +306,7 @@ static struct upipe *upipe_mpgvf_alloc(struct upipe_mgr *mgr,
     uref_init(&upipe_mpgvf->au_uref_s);
     upipe_mpgvf_flush_dates(upipe);
     upipe_mpgvf->drift_rate.num = upipe_mpgvf->drift_rate.den = 0;
+    upipe_mpgvf->type == UINT8_MAX;
     upipe_mpgvf->sequence_header = upipe_mpgvf->sequence_ext =
         upipe_mpgvf->sequence_display = NULL;
     upipe_throw_ready(upipe);
@@ -360,10 +389,12 @@ static bool upipe_mpgvf_parse_sequence(struct upipe *upipe)
         upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
         return false;
     }
+    UBASE_FATAL(upipe, uref_flow_set_complete(flow_def))
 
     uint64_t max_octetrate = 1500000 / 8;
     bool progressive = true;
     uint8_t chroma = MP2VSEQX_CHROMA_420;
+    bool lowdelay = false;
     if (upipe_mpgvf->sequence_ext != NULL) {
         uint8_t ext_buffer[MP2VSEQX_HEADER_SIZE];
         const uint8_t *ext;
@@ -382,7 +413,7 @@ static bool upipe_mpgvf_parse_sequence(struct upipe *upipe)
         vertical |= mp2vseqx_get_vertical(ext) << 12;
         bitrate |= mp2vseqx_get_bitrate(ext) << 18;
         vbvbuffer |= mp2vseqx_get_vbvbuffer(ext) << 10;
-        bool lowdelay = mp2vseqx_get_lowdelay(ext);
+        lowdelay = mp2vseqx_get_lowdelay(ext);
         frame_rate.num *= mp2vseqx_get_frameraten(ext) + 1;
         frame_rate.den *= mp2vseqx_get_framerated(ext) + 1;
         urational_simplify(&frame_rate);
@@ -497,6 +528,7 @@ static bool upipe_mpgvf_parse_sequence(struct upipe *upipe)
             return false;
     }
     UBASE_FATAL(upipe, uref_pic_flow_set_sar(flow_def, upipe_mpgvf->sar))
+    upipe_mpgvf->low_delay = lowdelay;
     upipe_mpgvf->fps = frame_rate;
     if (max_octetrate < (uint64_t)bitrate * 400 / 8)
         UBASE_FATAL(upipe, uref_block_flow_set_octetrate(flow_def,
@@ -802,6 +834,7 @@ static bool upipe_mpgvf_parse_picture(struct upipe *upipe, struct uref *uref,
 {
     struct upipe_mpgvf *upipe_mpgvf = upipe_mpgvf_from_upipe(upipe);
     upipe_mpgvf->closed_gop = false;
+    upipe_mpgvf->type = UINT8_MAX;
     bool brokenlink = false;
     if (upipe_mpgvf->next_frame_gop_offset != -1) {
         uint8_t gop_buffer[MP2VGOP_HEADER_SIZE];
@@ -852,6 +885,7 @@ static bool upipe_mpgvf_parse_picture(struct upipe *upipe, struct uref *uref,
     }
     UBASE_FATAL(upipe, uref_pic_set_number(uref, picture_number))
     UBASE_FATAL(upipe, uref_mpgv_set_type(uref, codingtype))
+    upipe_mpgvf->type = codingtype;
 
     if (upipe_mpgvf->fps.num)
         *duration_p = UCLOCK_FREQ * upipe_mpgvf->fps.den / upipe_mpgvf->fps.num;
@@ -926,11 +960,7 @@ static bool upipe_mpgvf_handle_picture(struct upipe *upipe, struct uref *uref,
     if (unlikely(!upipe_mpgvf_parse_picture(upipe, uref, duration_p)))
         return false;
 
-    uint8_t type;
-    if (!ubase_check(uref_mpgv_get_type(uref, &type)))
-        return false;
-
-    switch (type) {
+    switch (upipe_mpgvf->type) {
         case MP2VPIC_TYPE_I: {
             if (upipe_mpgvf->next_frame_sequence)
                 uref_flow_set_random(uref);
@@ -954,11 +984,125 @@ static bool upipe_mpgvf_handle_picture(struct upipe *upipe, struct uref *uref,
             if (upipe_mpgvf->ref_rap != UINT64_MAX)
                 uref_clock_set_rap_sys(uref, upipe_mpgvf->ref_rap);
             break;
+
+        default:
+            break;
     }
 
     if (upipe_mpgvf->closed_gop)
         upipe_mpgvf->ref_rap = upipe_mpgvf->iframe_rap;
     return true;
+}
+
+/** @internal @This checks if there are global headers and uses them.
+ *
+ * @param upipe description structure of the pipe
+ */
+static void upipe_mpgvf_handle_global(struct upipe *upipe)
+{
+    struct upipe_mpgvf *upipe_mpgvf = upipe_mpgvf_from_upipe(upipe);
+    const uint8_t *p;
+    size_t size;
+    if (!ubase_check(uref_flow_get_headers(upipe_mpgvf->flow_def_input,
+                                           &p, &size)))
+        return;
+
+    if (unlikely(p[0] || p[1] || p[2] != 1)) {
+        upipe_warn(upipe, "invalid global headers");
+        return;
+    }
+
+    while (size > 4) {
+        const uint8_t *r = p + 1;
+        size--;
+        while (size > 4 && (r[0] || r[1] || r[2] != 1)) {
+            r++;
+            size--;
+        }
+        if (size <= 4) {
+            r += size;
+            size = 0;
+        }
+
+        if (p[3] == MP2VSEQ_START_CODE) {
+            upipe_mpgvf->sequence_header =
+                ubuf_block_alloc_from_opaque(upipe_mpgvf->ubuf_mgr, p, r - p);
+            if (unlikely(upipe_mpgvf->sequence_header == NULL)) {
+                upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
+                return;
+            }
+        } else if (p[3] == MP2VX_START_CODE && r - p > 4) {
+            switch (mp2vxst_get_id(p[4])) {
+                case MP2VX_ID_SEQX:
+                    upipe_mpgvf->sequence_ext =
+                        ubuf_block_alloc_from_opaque(upipe_mpgvf->ubuf_mgr,
+                                                     p, r - p);
+                    if (unlikely(upipe_mpgvf->sequence_ext == NULL)) {
+                        upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
+                        return;
+                    }
+                    break;
+
+                case MP2VX_ID_SEQDX:
+                    upipe_mpgvf->sequence_display =
+                        ubuf_block_alloc_from_opaque(upipe_mpgvf->ubuf_mgr,
+                                                     p, r - p);
+                    if (unlikely(upipe_mpgvf->sequence_display == NULL)) {
+                        upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
+                        return;
+                    }
+                    break;
+
+                default:
+                    break;
+            }
+        }
+        p = r;
+    }
+
+    if (!upipe_mpgvf_parse_sequence(upipe))
+        upipe_warn(upipe, "invalid global headers");
+}
+
+/** @internal @This builds the global headers of the flow definition packet.
+ *
+ * @param upipe description structure of the pipe
+ * @param flow_def flow definition packet
+ */
+static void upipe_mpgvf_build_global(struct upipe *upipe, struct uref *flow_def)
+{
+    struct upipe_mpgvf *upipe_mpgvf = upipe_mpgvf_from_upipe(upipe);
+    size_t total_size = 0;
+    size_t seq_size = 0;
+    ubuf_block_size(upipe_mpgvf->sequence_header, &seq_size);
+    total_size += seq_size;
+
+    size_t seqx_size = 0;
+    if (upipe_mpgvf->sequence_ext != NULL)
+        ubuf_block_size(upipe_mpgvf->sequence_ext, &seqx_size);
+    total_size += seqx_size;
+
+    size_t seqd_size = 0;
+    if (upipe_mpgvf->sequence_display != NULL)
+        ubuf_block_size(upipe_mpgvf->sequence_display, &seqd_size);
+    total_size += seqd_size;
+
+    uint8_t buffer[total_size];
+    int err;
+    if (seq_size) {
+        UBASE_FATAL(upipe, ubuf_block_extract(upipe_mpgvf->sequence_header,
+                                              0, seq_size, buffer))
+    }
+    if (seqx_size) {
+        UBASE_FATAL(upipe, ubuf_block_extract(upipe_mpgvf->sequence_ext,
+                                              0, seqx_size, buffer))
+    }
+    if (seqd_size) {
+        UBASE_FATAL(upipe, ubuf_block_extract(upipe_mpgvf->sequence_display,
+                                              0, seqd_size, buffer))
+    }
+
+    UBASE_FATAL(upipe, uref_flow_set_headers(flow_def, buffer, total_size))
 }
 
 /** @internal @This builds the flow definition packet.
@@ -977,27 +1121,28 @@ static void upipe_mpgvf_build_flow_def(struct upipe *upipe)
         return;
     }
 
+    const uint8_t *p;
+    size_t size;
+    if (!ubase_check(uref_flow_get_global(flow_def)))
+        uref_flow_delete_headers(flow_def);
+    else if (!ubase_check(uref_flow_get_headers(flow_def, &p, &size)))
+        upipe_mpgvf_build_global(upipe, flow_def);
+
     if (upipe_mpgvf->fps.num) {
         UBASE_FATAL(upipe, uref_clock_set_latency(flow_def,
                     upipe_mpgvf->input_latency +
                     UCLOCK_FREQ * upipe_mpgvf->fps.den / upipe_mpgvf->fps.num))
     }
 
-    upipe_mpgvf->sequence_requested =
-        ubase_check(uref_mpgv_flow_get_repeated_sequence(
-                    upipe_mpgvf->flow_def_requested));
-
     upipe_mpgvf_store_flow_def(upipe, flow_def);
 }
 
-/** @internal @This handles and outputs a frame.
+/** @internal @This handles a frame to make it ready for output.
  *
  * @param upipe description structure of the pipe
- * @param upump_p reference to pump that generated the buffer
- * @return false if the stream needs to be resync'd
+ * @return pointer to uref
  */
-static bool upipe_mpgvf_output_frame(struct upipe *upipe,
-                                     struct upump **upump_p)
+static struct uref *upipe_mpgvf_handle_frame(struct upipe *upipe)
 {
     struct upipe_mpgvf *upipe_mpgvf = upipe_mpgvf_from_upipe(upipe);
     struct uref *uref = NULL;
@@ -1005,7 +1150,7 @@ static bool upipe_mpgvf_output_frame(struct upipe *upipe,
     if (unlikely(upipe_mpgvf->sequence_header == NULL &&
                  !upipe_mpgvf->next_frame_sequence)) {
         upipe_mpgvf_consume_uref_stream(upipe, upipe_mpgvf->next_frame_size);
-        return true;
+        return NULL;
     }
 
     /* The PTS can be updated up to the first octet of the picture start code,
@@ -1016,7 +1161,7 @@ static bool upipe_mpgvf_output_frame(struct upipe *upipe,
                 upipe_mpgvf->next_frame_offset);
         if (unlikely(uref == NULL)) {
             upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
-            return true;
+            return NULL;
         }
     }
 
@@ -1029,7 +1174,8 @@ static bool upipe_mpgvf_output_frame(struct upipe *upipe,
             upipe_mpgvf->next_frame_size - upipe_mpgvf->next_frame_offset);
     if (unlikely(uref2 == NULL)) {
         upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
-        return true;
+        uref_free(uref);
+        return NULL;
     }
     if (uref != NULL) {
         uref_block_append(uref, uref_detach_ubuf(uref2));
@@ -1040,18 +1186,26 @@ static bool upipe_mpgvf_output_frame(struct upipe *upipe,
     if (upipe_mpgvf->next_frame_sequence) {
         if (unlikely(!upipe_mpgvf_handle_sequence(upipe, uref))) {
             uref_free(uref);
-            return false;
+            return NULL;
         }
     }
 
     uint64_t duration;
     if (unlikely(!upipe_mpgvf_handle_picture(upipe, uref, &duration))) {
         uref_free(uref);
-        return false;
+        return NULL;
     }
 
-    /* We work on encoded data so in the DTS domain. Rebase on DTS. */
     uint64_t date;
+    if (upipe_mpgvf->low_delay || upipe_mpgvf->type == MP2VPIC_TYPE_B) {
+        uref_clock_set_dts_pts_delay(&au_uref_s, 0);
+        uref_clock_set_dts_pts_delay(uref, 0);
+    } else if (ubase_check(uref_clock_get_dts_pts_delay(&au_uref_s, &date)))
+        uref_clock_set_dts_pts_delay(uref, date);
+    else
+        uref_clock_delete_dts_pts_delay(uref);
+
+    /* We work on encoded data so in the DTS domain. Rebase on DTS. */
 #define SET_DATE(dv)                                                        \
     if (ubase_check(uref_clock_get_dts_##dv(&au_uref_s, &date))) {          \
         uref_clock_set_dts_##dv(uref, date);                                \
@@ -1066,59 +1220,60 @@ static bool upipe_mpgvf_output_frame(struct upipe *upipe,
     SET_DATE(orig)
 #undef SET_DATE
 
-    if (ubase_check(uref_clock_get_dts_pts_delay(&au_uref_s, &date)))
-        uref_clock_set_dts_pts_delay(uref, date);
-    else
-        uref_clock_delete_dts_pts_delay(uref);
     if (drift_rate.den)
         uref_clock_set_rate(uref, drift_rate);
     else
         uref_clock_delete_rate(uref);
 
-    if (unlikely(upipe_mpgvf->flow_def == NULL))
-        upipe_mpgvf_build_flow_def(upipe);
+    return uref;
+}
 
-    if (unlikely(upipe_mpgvf->flow_def == NULL)) {
-        uref_free(uref);
-        upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
-        return true;
-    }
-
-    /* Force sending and possibly negotiating flow def before changing
-     * bitstream. */
-    upipe_mpgvf_output(upipe, NULL, upump_p);
-
+/** @internal @This outputs a frame.
+ *
+ * @param upipe description structure of the pipe
+ * @param uref pointer to uref
+ * @param upump_p reference to pump that generated the buffer
+ */
+static void upipe_mpgvf_output_frame(struct upipe *upipe, struct uref *uref,
+                                     struct upump **upump_p)
+{
+    struct upipe_mpgvf *upipe_mpgvf = upipe_mpgvf_from_upipe(upipe);
+    size_t orig_size;
     if (upipe_mpgvf->sequence_requested &&
         ubase_check(uref_pic_get_key(uref)) &&
-        !ubase_check(uref_flow_get_random(uref))) {
+        !ubase_check(uref_flow_get_random(uref)) &&
+        ubase_check(uref_block_size(uref, &orig_size))) {
         struct ubuf *ubuf;
         if (upipe_mpgvf->sequence_display != NULL) {
             ubuf = ubuf_dup(upipe_mpgvf->sequence_display);
-            if (unlikely(ubuf == NULL)) {
+            if (unlikely(ubuf == NULL))
                 upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
-                return false;
-            }
-            uref_block_insert(uref, 0, ubuf);
+            else
+                uref_block_insert(uref, 0, ubuf);
         }
         if (upipe_mpgvf->sequence_ext != NULL) {
             ubuf = ubuf_dup(upipe_mpgvf->sequence_ext);
-            if (unlikely(ubuf == NULL)) {
+            if (unlikely(ubuf == NULL))
                 upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
-                return false;
-            }
-            uref_block_insert(uref, 0, ubuf);
+            else
+                uref_block_insert(uref, 0, ubuf);
         }
         ubuf = ubuf_dup(upipe_mpgvf->sequence_header);
-        if (unlikely(ubuf == NULL)) {
+        if (unlikely(ubuf == NULL))
             upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
-            return false;
-        }
-        uref_block_insert(uref, 0, ubuf);
+        else
+            uref_block_insert(uref, 0, ubuf);
         uref_flow_set_random(uref);
+
+        size_t size;
+        if (likely(ubase_check(uref_block_size(uref, &size)))) {
+            uint64_t header_size = 0;
+            uref_block_get_header_size(uref, &header_size);
+            uref_block_set_header_size(uref, header_size + size - orig_size);
+        }
     }
 
     upipe_mpgvf_output(upipe, uref, upump_p);
-    return true;
 }
 
 /** @internal @This is called back by @ref upipe_mpgvf_append_uref_stream
@@ -1129,18 +1284,29 @@ static bool upipe_mpgvf_output_frame(struct upipe *upipe,
 static void upipe_mpgvf_promote_uref(struct upipe *upipe)
 {
     struct upipe_mpgvf *upipe_mpgvf = upipe_mpgvf_from_upipe(upipe);
-    uint64_t date;
+    uint64_t date, dts;
+    if (ubase_check(uref_clock_get_dts_pts_delay(upipe_mpgvf->next_uref,
+                                                 &date)))
+        uref_clock_set_dts_pts_delay(&upipe_mpgvf->au_uref_s, date);
+    else if (ubase_check(uref_clock_get_pts_prog(upipe_mpgvf->next_uref,
+                                                 &date)) &&
+             ubase_check(uref_clock_get_dts_prog(&upipe_mpgvf->au_uref_s,
+                                                 &dts))) {
+        uref_clock_set_dts_pts_delay(&upipe_mpgvf->au_uref_s, date - dts);
+        uref_clock_set_dts_pts_delay(upipe_mpgvf->next_uref, date - dts);
+    }
+
 #define SET_DATE(dv)                                                        \
-    if (ubase_check(uref_clock_get_dts_##dv(upipe_mpgvf->next_uref, &date)))\
-        uref_clock_set_dts_##dv(&upipe_mpgvf->au_uref_s, date);
+    if (ubase_check(uref_clock_get_dts_##dv(upipe_mpgvf->next_uref, &dts))) \
+        uref_clock_set_dts_##dv(&upipe_mpgvf->au_uref_s, dts);              \
+    else if (ubase_check(uref_clock_get_pts_##dv(upipe_mpgvf->next_uref,    \
+                                                 &date)))                   \
+        uref_clock_set_pts_##dv(&upipe_mpgvf->au_uref_s, date);
     SET_DATE(sys)
     SET_DATE(prog)
     SET_DATE(orig)
 #undef SET_DATE
 
-    if (ubase_check(uref_clock_get_dts_pts_delay(upipe_mpgvf->next_uref,
-                                                 &date)))
-        uref_clock_set_dts_pts_delay(&upipe_mpgvf->au_uref_s, date);
     uref_clock_get_rate(upipe_mpgvf->next_uref, &upipe_mpgvf->drift_rate);
     if (ubase_check(uref_clock_get_dts_prog(upipe_mpgvf->next_uref, &date)))
         uref_clock_get_rap_sys(upipe_mpgvf->next_uref, &upipe_mpgvf->dts_rap);
@@ -1173,20 +1339,30 @@ static void upipe_mpgvf_work(struct upipe *upipe, struct upump **upump_p)
     while (upipe_mpgvf->next_uref != NULL) {
         uint8_t start, next;
         if (!upipe_mpgvf_find(upipe, &start, &next))
-            return;
+            break;
 
         if (unlikely(!upipe_mpgvf->acquired)) {
-            upipe_mpgvf_consume_uref_stream(upipe,
-                                            upipe_mpgvf->next_frame_size - 4);
-            upipe_mpgvf->next_frame_size = 4;
+            bool discard = upipe_mpgvf->next_frame_size > 4;
+            if (discard) {
+                upipe_mpgvf_consume_uref_stream(upipe,
+                        upipe_mpgvf->next_frame_size - 4);
+                upipe_mpgvf->next_frame_size = 4;
+            }
 
             switch (start) {
-                case MP2VPIC_START_CODE:
-                    upipe_mpgvf_flush_dates(upipe);
-                    break;
                 case MP2VSEQ_START_CODE:
                     upipe_mpgvf_sync_acquired(upipe);
                     upipe_mpgvf->next_frame_sequence = true;
+                    upipe_mpgvf->seq_rap = upipe_mpgvf->dts_rap;
+                    break;
+                case MP2VPIC_START_CODE:
+                    if (discard)
+                        upipe_mpgvf_flush_dates(upipe);
+                    if (upipe_mpgvf->sequence_header != NULL) {
+                        upipe_mpgvf_sync_acquired(upipe);
+                        upipe_mpgvf->next_frame_offset =
+                            upipe_mpgvf->next_frame_size - 4;
+                    }
                     break;
                 default:
                     break;
@@ -1227,10 +1403,18 @@ static void upipe_mpgvf_work(struct upipe *upipe, struct upump **upump_p)
             continue;
         }
 
+        if (start != MP2VSEQ_START_CODE && start != MP2VGOP_START_CODE &&
+            start != MP2VPIC_START_CODE && start != MP2VEND_START_CODE) {
+            upipe_warn_va(upipe, "erroneous start code %x", start);
+            /* ignore the error as avformat outputs such nonsense */
+            continue;
+        }
+
         if (start != MP2VEND_START_CODE)
             upipe_mpgvf->next_frame_size -= 4;
 
-        if (unlikely(!upipe_mpgvf_output_frame(upipe, upump_p))) {
+        struct uref *uref = upipe_mpgvf_handle_frame(upipe);
+        if (unlikely(uref == NULL)) {
             upipe_warn(upipe, "erroneous frame headers");
             upipe_mpgvf->next_frame_size = 0;
             upipe_mpgvf->scan_context = UINT32_MAX;
@@ -1257,11 +1441,33 @@ static void upipe_mpgvf_work(struct upipe *upipe, struct upump **upump_p)
                 upipe_mpgvf_sync_lost(upipe);
                 break;
             default:
-                upipe_warn_va(upipe, "erroneous start code %x", start);
-                upipe_mpgvf_sync_lost(upipe);
                 break;
         }
+
+        if (unlikely(upipe_mpgvf->flow_def_requested == NULL)) {
+            upipe_mpgvf->uref_output = uref;
+            return;
+        }
+
+        upipe_mpgvf_output_frame(upipe, uref, upump_p);
     }
+
+    if (!upipe_mpgvf->complete_input || !upipe_mpgvf->next_frame_size)
+       return;
+
+    struct uref *uref = upipe_mpgvf_handle_frame(upipe);
+    upipe_mpgvf_reset(upipe);
+    upipe_mpgvf->next_frame_size = 0;
+
+    if (uref == NULL)
+        return;
+
+    if (unlikely(upipe_mpgvf->flow_def_requested == NULL)) {
+        upipe_mpgvf->uref_output = uref;
+        return;
+    }
+
+    upipe_mpgvf_output_frame(upipe, uref, upump_p);
 }
 
 /** @internal @This receives data.
@@ -1279,18 +1485,26 @@ static bool upipe_mpgvf_handle(struct upipe *upipe, struct uref *uref,
     if (unlikely(ubase_check(uref_flow_get_def(uref, &def)))) {
         upipe_mpgvf->input_latency = 0;
         uref_clock_get_latency(uref, &upipe_mpgvf->input_latency);
+        upipe_mpgvf->complete_input = ubase_check(uref_flow_get_complete(uref));
         upipe_mpgvf_store_flow_def(upipe, NULL);
         uref_free(upipe_mpgvf->flow_def_requested);
         upipe_mpgvf->flow_def_requested = NULL;
         uref = upipe_mpgvf_store_flow_def_input(upipe, uref);
         if (uref != NULL)
             upipe_mpgvf_require_flow_format(upipe, uref);
+        upipe_mpgvf_handle_global(upipe);
         return true;
     }
 
     if (upipe_mpgvf->flow_def_requested == NULL &&
         upipe_mpgvf->flow_def_attr != NULL)
         return false;
+
+    if (upipe_mpgvf->flow_def_input == NULL) {
+        upipe_throw_error(upipe, UBASE_ERR_INVALID);
+        uref_free(uref);
+        return true;
+    }
 
     if (unlikely(ubase_check(uref_flow_get_discontinuity(uref)))) {
         if (!upipe_mpgvf->next_frame_slice) {
@@ -1346,9 +1560,39 @@ static int upipe_mpgvf_check_flow_format(struct upipe *upipe,
     if (flow_format == NULL)
         return UBASE_ERR_INVALID;
 
+    upipe_mpgvf_require_ubuf_mgr(upipe, flow_format);
+    return UBASE_ERR_NONE;
+}
+
+/** @internal @This receives the result of a ubuf manager request.
+ *
+ * @param upipe description structure of the pipe
+ * @param flow_format amended flow format
+ * @return an error code
+ */
+static int upipe_mpgvf_check_ubuf_mgr(struct upipe *upipe,
+                                      struct uref *flow_format)
+{
+    struct upipe_mpgvf *upipe_mpgvf = upipe_mpgvf_from_upipe(upipe);
+    if (flow_format == NULL)
+        return UBASE_ERR_INVALID;
+    if (upipe_mpgvf->flow_def_attr == NULL) {
+        /* temporary ubuf manager, will be overwritten later */
+        uref_free(flow_format);
+        return UBASE_ERR_NONE;
+    }
+
     uref_free(upipe_mpgvf->flow_def_requested);
     upipe_mpgvf->flow_def_requested = flow_format;
+    upipe_mpgvf->sequence_requested =
+        !ubase_check(uref_flow_get_global(flow_format));
+
     upipe_mpgvf_build_flow_def(upipe);
+
+    if (upipe_mpgvf->uref_output) {
+        upipe_mpgvf_output_frame(upipe, upipe_mpgvf->uref_output, NULL);
+        upipe_mpgvf->uref_output = NULL;
+    }
 
     bool was_buffered = !upipe_mpgvf_check_input(upipe);
     upipe_mpgvf_output_input(upipe);
@@ -1369,6 +1613,7 @@ static int upipe_mpgvf_check_flow_format(struct upipe *upipe,
  */
 static int upipe_mpgvf_set_flow_def(struct upipe *upipe, struct uref *flow_def)
 {
+    struct upipe_mpgvf *upipe_mpgvf = upipe_mpgvf_from_upipe(upipe);
     if (flow_def == NULL)
         return UBASE_ERR_INVALID;
     const char *def;
@@ -1377,10 +1622,21 @@ static int upipe_mpgvf_set_flow_def(struct upipe *upipe, struct uref *flow_def)
                   ubase_ncmp(def, "block.mpeg2video.") &&
                   strcmp(def, "block."))))
         return UBASE_ERR_INVALID;
+
     struct uref *flow_def_dup;
     if (unlikely((flow_def_dup = uref_dup(flow_def)) == NULL)) {
         upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
         return UBASE_ERR_ALLOC;
+    }
+
+    if (upipe_mpgvf->ubuf_mgr == NULL) {
+        /* We have to get a ubuf manager to parse the global headers. */
+        upipe_mpgvf_demand_ubuf_mgr(upipe, flow_def_dup);
+
+        if (unlikely((flow_def_dup = uref_dup(flow_def)) == NULL)) {
+            upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
+            return UBASE_ERR_ALLOC;
+        }
     }
     upipe_input(upipe, flow_def_dup, NULL);
     return UBASE_ERR_NONE;
@@ -1432,14 +1688,24 @@ static int upipe_mpgvf_control(struct upipe *upipe, int command, va_list args)
 static void upipe_mpgvf_free(struct upipe *upipe)
 {
     struct upipe_mpgvf *upipe_mpgvf = upipe_mpgvf_from_upipe(upipe);
-    upipe_throw_dead(upipe);
+
+    /* Output any buffered frame. */
+    if (upipe_mpgvf->next_frame_size) {
+        struct uref *uref = upipe_mpgvf_handle_frame(upipe);
+        if (uref != NULL)
+            upipe_mpgvf_output_frame(upipe, uref, NULL);
+
+        upipe_throw_dead(upipe);
+    }
 
     upipe_mpgvf_clean_uref_stream(upipe);
     upipe_mpgvf_clean_input(upipe);
     upipe_mpgvf_clean_output(upipe);
     uref_free(upipe_mpgvf->flow_def_requested);
+    uref_free(upipe_mpgvf->uref_output);
     upipe_mpgvf_clean_flow_format(upipe);
     upipe_mpgvf_clean_flow_def(upipe);
+    upipe_mpgvf_clean_ubuf_mgr(upipe);
     upipe_mpgvf_clean_sync(upipe);
 
     if (upipe_mpgvf->sequence_header != NULL)

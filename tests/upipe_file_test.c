@@ -96,7 +96,7 @@ static int catch(struct uprobe *uprobe, struct upipe *upipe,
 int main(int argc, char *argv[])
 {
     const char *src_file, *sink_file;
-    uint64_t delay = 0;
+    int64_t delay = 0;
     enum upipe_fsink_mode mode = UPIPE_FSINK_CREATE;
     int opt;
     while ((opt = getopt(argc, argv, "d:ao")) != -1) {

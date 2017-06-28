@@ -68,6 +68,9 @@ struct upipe_ts_decaps {
     /** last TS packet */
     struct uref *last_uref;
 
+    /** lost packets based on cc errors */
+    uint64_t lost;
+
     /** public upipe structure */
     struct upipe upipe;
 };
@@ -98,6 +101,7 @@ static struct upipe *upipe_ts_decaps_alloc(struct upipe_mgr *mgr,
     upipe_ts_decaps_init_urefcount(upipe);
     upipe_ts_decaps_init_output(upipe);
     upipe_ts_decaps->last_cc = -1;
+    upipe_ts_decaps->lost = 0;
     upipe_ts_decaps->last_uref = NULL;
     upipe_throw_ready(upipe);
     return upipe;
@@ -195,13 +199,15 @@ static void upipe_ts_decaps_input(struct upipe *upipe, struct uref *uref,
             return;
         }
         upipe_warn_va(upipe, "potentially lost 16 packets");
+        upipe_ts_decaps->lost += 16;
         discontinuity = true;
     }
 
     if (unlikely(!discontinuity &&
                  ts_check_discontinuity(cc, upipe_ts_decaps->last_cc))) {
-        upipe_warn_va(upipe, "potentially lost %d packets",
-                      (0x10 + cc - upipe_ts_decaps->last_cc - 1) & 0xf);
+        int lost = (0x10 + cc - upipe_ts_decaps->last_cc - 1) & 0xf;
+        upipe_ts_decaps->lost += lost;
+        upipe_warn_va(upipe, "potentially lost %d packets", lost);
         discontinuity = true;
     }
     upipe_ts_decaps->last_cc = cc;
@@ -285,6 +291,14 @@ static int upipe_ts_decaps_control(struct upipe *upipe,
         case UPIPE_SET_OUTPUT: {
             struct upipe *output = va_arg(args, struct upipe *);
             return upipe_ts_decaps_set_output(upipe, output);
+        }
+        case UPIPE_TS_DECAPS_GET_PACKETS_LOST: {
+            struct upipe_ts_decaps *upipe_ts_decaps = upipe_ts_decaps_from_upipe(upipe);
+            UBASE_SIGNATURE_CHECK(args, UPIPE_TS_DECAPS_SIGNATURE)
+            uint64_t *lost = va_arg(args, uint64_t *);
+            *lost = upipe_ts_decaps->lost;
+            upipe_ts_decaps->lost = 0; /* reset counter */
+            return UBASE_ERR_NONE;
         }
         default:
             return UBASE_ERR_UNHANDLED;

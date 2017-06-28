@@ -66,9 +66,17 @@ static inline void udict_dump(struct udict *udict, struct uprobe *uprobe)
                 uprobe_dbg_va(uprobe, NULL, " - \"%s\" [unknown]", name);
                 break;
 
-            case UDICT_TYPE_OPAQUE:
-                uprobe_dbg_va(uprobe, NULL, " - \"%s\" [opaque]", name);
+            case UDICT_TYPE_OPAQUE: {
+                struct udict_opaque val;
+                if (likely(ubase_check(udict_get_opaque(udict, &val,
+                                                        itype, iname))))
+                    uprobe_dbg_va(uprobe, NULL, " - \"%s\" [opaque]: %zu octets",
+                                  name, val.size);
+                else
+                    uprobe_dbg_va(uprobe, NULL, " - \"%s\" [opaque]: [invalid]",
+                                  name);
                 break;
+            }
 
             case UDICT_TYPE_STRING: {
                 const char *val = "";

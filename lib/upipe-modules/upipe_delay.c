@@ -60,7 +60,7 @@ struct upipe_delay {
     struct uchain request_list;
 
     /** delay to set */
-    uint64_t delay;
+    int64_t delay;
 
     /** public upipe structure */
     struct upipe upipe;
@@ -137,7 +137,7 @@ static int upipe_delay_set_flow_def(struct upipe *upipe, struct uref *flow_def)
  * @param delay_p filled with the current delay
  * @return an error code
  */
-static int _upipe_delay_get_delay(struct upipe *upipe, uint64_t *delay_p)
+static int _upipe_delay_get_delay(struct upipe *upipe, int64_t *delay_p)
 {
     struct upipe_delay *upipe_delay = upipe_delay_from_upipe(upipe);
     *delay_p = upipe_delay->delay;
@@ -150,7 +150,7 @@ static int _upipe_delay_get_delay(struct upipe *upipe, uint64_t *delay_p)
  * @param delay delay to set
  * @return an error code
  */
-static int _upipe_delay_set_delay(struct upipe *upipe, uint64_t delay)
+static int _upipe_delay_set_delay(struct upipe *upipe, int64_t delay)
 {
     struct upipe_delay *upipe_delay = upipe_delay_from_upipe(upipe);
     upipe_delay->delay = delay;
@@ -194,12 +194,12 @@ static int upipe_delay_control(struct upipe *upipe, int command, va_list args)
 
         case UPIPE_DELAY_GET_DELAY: {
             UBASE_SIGNATURE_CHECK(args, UPIPE_DELAY_SIGNATURE)
-            uint64_t *delay_p = va_arg(args, uint64_t *);
+            int64_t *delay_p = va_arg(args, int64_t *);
             return _upipe_delay_get_delay(upipe, delay_p);
         }
         case UPIPE_DELAY_SET_DELAY: {
             UBASE_SIGNATURE_CHECK(args, UPIPE_DELAY_SIGNATURE)
-            uint64_t delay = va_arg(args, uint64_t);
+            int64_t delay = va_arg(args, int64_t);
             return _upipe_delay_set_delay(upipe, delay);
         }
         default:

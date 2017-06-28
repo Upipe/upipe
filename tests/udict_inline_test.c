@@ -65,6 +65,11 @@ int main(int argc, char **argv)
     o.v = opaque;
     o.size = sizeof(opaque);
     ubase_assert(udict_set_opaque(udict1, o, UDICT_TYPE_OPAQUE, "x.opaque"));
+    char opaque_hex[55];
+    memset(opaque_hex, 'a', sizeof(opaque_hex) - 1);
+    opaque_hex[sizeof(opaque_hex) - 1] = '\0';
+    ubase_assert(udict_set_opaque_from_hex(udict1, opaque_hex,
+                                           UDICT_TYPE_OPAQUE, "x.opaque_hex"));
     ubase_assert(udict_set_string(udict1, "pouet", UDICT_TYPE_FLOW_DEF, NULL));
     ubase_assert(udict_set_void(udict1, NULL, UDICT_TYPE_FLOW_ERROR, NULL));
     ubase_assert(udict_set_bool(udict1, true, UDICT_TYPE_BOOL, "x.truc"));
@@ -78,6 +83,9 @@ int main(int argc, char **argv)
     ubase_assert(udict_set_rational(udict1, rational, UDICT_TYPE_RATIONAL, "x.ar"));
 
     ubase_assert(udict_get_opaque(udict1, &o, UDICT_TYPE_OPAQUE, "x.opaque"));
+    assert(o.size == sizeof(opaque));
+    assert(!memcmp(opaque, o.v, sizeof(opaque)));
+    ubase_assert(udict_get_opaque(udict1, &o, UDICT_TYPE_OPAQUE, "x.opaque_hex"));
     assert(o.size == sizeof(opaque));
     assert(!memcmp(opaque, o.v, sizeof(opaque)));
     const char *string;

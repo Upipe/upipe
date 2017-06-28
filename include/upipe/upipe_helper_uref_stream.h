@@ -151,19 +151,19 @@ static UBASE_UNUSED void                                                    \
 {                                                                           \
     struct STRUCTURE *STRUCTURE = STRUCTURE##_from_upipe(upipe);            \
     assert(STRUCTURE->NEXT_UREF != NULL);                                   \
+    assert(STRUCTURE->NEXT_UREF->ubuf != NULL);                             \
+    struct ubuf *ubuf = ubuf_block_splice(STRUCTURE->NEXT_UREF->ubuf,       \
+                                          consumed, -1);                    \
     while (consumed >= STRUCTURE->NEXT_UREF_SIZE) {                         \
         struct uchain *uchain = ulist_pop(&STRUCTURE->UREFS);               \
         if (uchain == NULL) {                                               \
             uref_free(STRUCTURE->NEXT_UREF);                                \
             STRUCTURE->NEXT_UREF = NULL;                                    \
+            ubuf_free(ubuf);                                                \
             return;                                                         \
         }                                                                   \
-        struct ubuf *ubuf = uref_detach_ubuf(STRUCTURE->NEXT_UREF);         \
         uref_free(STRUCTURE->NEXT_UREF);                                    \
         STRUCTURE->NEXT_UREF = uref_from_uchain(uchain);                    \
-        uref_attach_ubuf(STRUCTURE->NEXT_UREF, ubuf);                       \
-        uref_block_resize(STRUCTURE->NEXT_UREF, STRUCTURE->NEXT_UREF_SIZE,  \
-                          -1);                                              \
         consumed -= STRUCTURE->NEXT_UREF_SIZE;                              \
         uint64_t size = 0;                                                  \
         uref_attr_get_priv(STRUCTURE->NEXT_UREF, &size);                    \
@@ -173,7 +173,7 @@ static UBASE_UNUSED void                                                    \
             cb(upipe);                                                      \
     }                                                                       \
     STRUCTURE->NEXT_UREF_SIZE -= consumed;                                  \
-    uref_block_resize(STRUCTURE->NEXT_UREF, consumed, -1);                  \
+    uref_attach_ubuf(STRUCTURE->NEXT_UREF, ubuf);                           \
 }                                                                           \
 /** @internal @This extracts the given number of octets from the uref       \
  * stream, and rotates the buffers accordingly.                             \
@@ -187,45 +187,11 @@ static struct uref *STRUCTURE##_extract_uref_stream(struct upipe *upipe,    \
 {                                                                           \
     struct STRUCTURE *STRUCTURE = STRUCTURE##_from_upipe(upipe);            \
     assert(STRUCTURE->NEXT_UREF != NULL);                                   \
-    size_t offset = 0;                                                      \
-    uint64_t rap_sys = UINT64_MAX;                                          \
-    uref_clock_get_rap_sys(STRUCTURE->NEXT_UREF, &rap_sys);                 \
-    bool error = ubase_check(uref_flow_get_error(STRUCTURE->NEXT_UREF));    \
-    bool disc =                                                             \
-        ubase_check(uref_flow_get_discontinuity(STRUCTURE->NEXT_UREF));     \
-    bool random = ubase_check(uref_flow_get_random(STRUCTURE->NEXT_UREF));  \
-    while (extracted >= STRUCTURE->NEXT_UREF_SIZE) {                        \
-        struct uchain *uchain = ulist_pop(&STRUCTURE->UREFS);               \
-        if (uchain == NULL) {                                               \
-            struct uref *uref = STRUCTURE->NEXT_UREF;                       \
-            STRUCTURE->NEXT_UREF = NULL;                                    \
-            return uref;                                                    \
-        }                                                                   \
-        struct ubuf *ubuf = uref_detach_ubuf(STRUCTURE->NEXT_UREF);         \
-        uref_free(STRUCTURE->NEXT_UREF);                                    \
-        STRUCTURE->NEXT_UREF = uref_from_uchain(uchain);                    \
-        uref_attach_ubuf(STRUCTURE->NEXT_UREF, ubuf);                       \
-        offset += STRUCTURE->NEXT_UREF_SIZE;                                \
-        extracted -= STRUCTURE->NEXT_UREF_SIZE;                             \
-        uint64_t size = 0;                                                  \
-        uref_attr_get_priv(STRUCTURE->NEXT_UREF, &size);                    \
-        STRUCTURE->NEXT_UREF_SIZE = size;                                   \
-        void (*cb)(struct upipe *) = APPEND_CB;                             \
-        if (cb != NULL)                                                     \
-            cb(upipe);                                                      \
-    }                                                                       \
-    offset += extracted;                                                    \
-    STRUCTURE->NEXT_UREF_SIZE -= extracted;                                 \
-    struct uref *uref = STRUCTURE->NEXT_UREF;                               \
-    STRUCTURE->NEXT_UREF = uref_block_split(uref, offset);                  \
-    if (rap_sys != UINT64_MAX)                                              \
-        uref_clock_set_rap_sys(uref, rap_sys);                              \
-    if (error)                                                              \
-        uref_flow_set_error(uref);                                          \
-    if (disc)                                                               \
-        uref_flow_set_discontinuity(uref);                                  \
-    if (random)                                                             \
-        uref_flow_set_random(uref);                                         \
+    struct uref *uref = uref_dup(STRUCTURE->NEXT_UREF);                     \
+    if (unlikely(uref == NULL))                                             \
+        return NULL;                                                        \
+    uref_block_truncate(uref, extracted);                                   \
+    STRUCTURE##_consume_uref_stream(upipe, extracted);                      \
     return uref;                                                            \
 }                                                                           \
 /** @internal @This cleans up the private members for this helper.          \

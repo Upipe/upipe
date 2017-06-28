@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2012-2016 OpenHeadend S.A.R.L.
+ * Copyright (C) 2012-2017 OpenHeadend S.A.R.L.
  *
  * Authors: Christophe Massiot
  *
@@ -39,8 +39,8 @@
 #include <upipe/upipe_helper_output.h>
 #include <upipe/upipe_helper_ubuf_mgr.h>
 #include <upipe/upipe_helper_flow_def.h>
-#include <upipe-framers/uref_h264_flow.h>
 #include <upipe-framers/uref_h265_flow.h>
+#include <upipe-framers/uref_h26x_flow.h>
 #include <upipe-framers/uref_mpga_flow.h>
 #include <upipe-ts/upipe_ts_pmt_decoder.h>
 #include <upipe-ts/uref_ts_flow.h>
@@ -204,7 +204,17 @@ static void upipe_ts_pmtd_parse_streamtype(struct upipe *upipe,
             UBASE_FATAL(upipe, uref_flow_set_raw_def(flow_def,
                             "block.mpegts.mpegtspes.aac.sound."))
             UBASE_FATAL(upipe, uref_ts_flow_set_max_delay(flow_def, MAX_DELAY))
-            UBASE_FATAL(upipe, uref_mpga_flow_set_adts(flow_def))
+            UBASE_FATAL(upipe, uref_mpga_flow_set_encaps(flow_def,
+                            UREF_MPGA_ENCAPS_ADTS))
+            break;
+
+        case PMT_STREAMTYPE_AUDIO_LATM:
+            UBASE_FATAL(upipe, uref_flow_set_def(flow_def, "block.aac_latm.sound."))
+            UBASE_FATAL(upipe, uref_flow_set_raw_def(flow_def,
+                            "block.mpegts.mpegtspes.aac_latm.sound."))
+            UBASE_FATAL(upipe, uref_ts_flow_set_max_delay(flow_def, MAX_DELAY))
+            UBASE_FATAL(upipe, uref_mpga_flow_set_encaps(flow_def,
+                            UREF_MPGA_ENCAPS_LOAS))
             break;
 
         case PMT_STREAMTYPE_VIDEO_AVC:
@@ -213,7 +223,8 @@ static void upipe_ts_pmtd_parse_streamtype(struct upipe *upipe,
                             "block.mpegts.mpegtspes.h264.pic."))
             UBASE_FATAL(upipe, uref_ts_flow_set_max_delay(flow_def,
                             MAX_DELAY_14496))
-            UBASE_FATAL(upipe, uref_h264_flow_set_annexb(flow_def))
+            UBASE_FATAL(upipe, uref_h26x_flow_set_encaps(flow_def,
+                            UREF_H26X_ENCAPS_ANNEXB))
             break;
 
         case PMT_STREAMTYPE_VIDEO_HEVC:
@@ -222,7 +233,8 @@ static void upipe_ts_pmtd_parse_streamtype(struct upipe *upipe,
                             "block.mpegts.mpegtspes.hevc.pic."))
             UBASE_FATAL(upipe, uref_ts_flow_set_max_delay(flow_def,
                             MAX_DELAY_HEVC))
-            UBASE_FATAL(upipe, uref_h265_flow_set_annexb(flow_def))
+            UBASE_FATAL(upipe, uref_h26x_flow_set_encaps(flow_def,
+                            UREF_H26X_ENCAPS_ANNEXB))
             break;
 
         case PMT_STREAMTYPE_ATSC_A52:
@@ -385,11 +397,18 @@ static void upipe_ts_pmtd_parse_descs(struct upipe *upipe,
                     UBASE_FATAL(upipe,
                             uref_ts_flow_set_component_type(flow_def,
                                 desc50_get_component_type(desc)))
+                    UBASE_FATAL(upipe,
+                            uref_ts_flow_set_component_tag(flow_def,
+                                desc50_get_component_tag(desc)))
                 }
+                copy = true;
                 break;
 
             case 0x51: /* Mosaic descriptor */
+                break;
+
             case 0x52: /* Stream identifier descriptor */
+                copy = true;
                 break;
 
             case 0x56: /* Teletext descriptor */
@@ -400,6 +419,7 @@ static void upipe_ts_pmtd_parse_descs(struct upipe *upipe,
                                 "block.mpegts.mpegtspes.dvb_teletext.pic.sub."))
                     UBASE_FATAL(upipe, uref_ts_flow_set_max_delay(flow_def,
                                     MAX_DELAY_TELX))
+                    UBASE_FATAL(upipe, uref_flow_set_complete(flow_def))
 
                     uint8_t j = 0;
                     uint8_t *language;
@@ -430,6 +450,7 @@ static void upipe_ts_pmtd_parse_descs(struct upipe *upipe,
                                 "block.mpegts.mpegtspes.dvb_subtitle.pic.sub."))
                     UBASE_FATAL(upipe, uref_ts_flow_set_max_delay(flow_def,
                                     MAX_DELAY_DVBSUB))
+                    UBASE_FATAL(upipe, uref_flow_set_complete(flow_def))
 
                     uint8_t j = 0;
                     uint8_t *language;

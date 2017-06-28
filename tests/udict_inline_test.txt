@@ -1,5 +1,6 @@
 debug: dumping udict
-debug:  - "x.opaque" [opaque]
+debug:  - "x.opaque" [opaque]: 27 octets
+debug:  - "x.opaque_hex" [opaque]: 27 octets
 debug:  - "x.truc" [bool]: true
 debug:  - "k.duration" [unsigned]: 18446744073709551615
 debug:  - "x.date" [int]: 9223372036854775807

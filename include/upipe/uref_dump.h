@@ -79,7 +79,7 @@ static inline void uref_dump(struct uref *uref, struct uprobe *uprobe)
                               date);                                        \
                 break;                                                      \
             case UREF_DATE_CR:                                              \
-                uprobe_dbg_va(uprobe, NULL, " - \"" name"\" [cr]: %" PRIu64, \
+                uprobe_dbg_va(uprobe, NULL, " - \"" name"\" [cr]: %" PRIu64,\
                               date);                                        \
                 break;                                                      \
             default:                                                        \
@@ -92,7 +92,7 @@ static inline void uref_dump(struct uref *uref, struct uprobe *uprobe)
 
 #define UREF_DUMP_UNSIGNED(name, member)                                    \
     if (uref->member != UINT64_MAX)                                         \
-        uprobe_dbg_va(uprobe, NULL, " - \" " name "\" [unsigned]: %" PRIu64,\
+        uprobe_dbg_va(uprobe, NULL, " - \"" name"\" [unsigned]: %" PRIu64,  \
                       uref->member);
     UREF_DUMP_UNSIGNED("k.dts_pts_delay", dts_pts_delay)
     UREF_DUMP_UNSIGNED("k.cr_dts_delay", cr_dts_delay)
