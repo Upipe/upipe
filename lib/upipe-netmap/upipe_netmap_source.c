@@ -325,6 +325,8 @@ static int upipe_netmap_source_alloc_output_uref(struct upipe *upipe, uint64_t s
     struct upipe_netmap_source *upipe_netmap_source = upipe_netmap_source_from_upipe(upipe);
 
     const struct sdi_offsets_fmt *f = upipe_netmap_source->f;
+    if (!f)
+        return UBASE_ERR_INVALID;
 
     /* Only 422 accepted, so this assumption is fine */
     uint64_t samples = f->width * f->height * 2;
