@@ -531,6 +531,8 @@ static int upipe_netmap_sink_open_dev(struct upipe *upipe, const char *dev)
         UBASE_RETURN(upipe_netmap_sink_open_intf(upipe, intf+1, p));
     }
 
+    free((char*)dev);
+
     upipe_notice_va(upipe, "opened %d netmap device(s)", p ? 2 : 1);
 
     return UBASE_ERR_NONE;
