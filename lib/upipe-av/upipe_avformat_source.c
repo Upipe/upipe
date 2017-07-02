@@ -596,14 +596,15 @@ static void upipe_avfsrc_worker(struct upump *upump)
 
     uint64_t dts_orig = UINT64_MAX, dts_pts_delay = 0;
     if (pkt.dts != (int64_t)AV_NOPTS_VALUE) {
-        dts_orig = pkt.dts * stream->time_base.num * UCLOCK_FREQ /
-                   stream->time_base.den;
+        dts_orig = pkt.dts * stream->time_base.num * (int64_t)UCLOCK_FREQ /
+                   stream->time_base.den - INT64_MIN;
         if (pkt.pts != (int64_t)AV_NOPTS_VALUE)
             dts_pts_delay = (pkt.pts - pkt.dts) * stream->time_base.num *
                             UCLOCK_FREQ / stream->time_base.den;
-    } else if (pkt.pts != (int64_t)AV_NOPTS_VALUE)
-        dts_orig = pkt.pts * stream->time_base.num * UCLOCK_FREQ /
-                   stream->time_base.den;
+    } else if (pkt.pts != (int64_t)AV_NOPTS_VALUE) {
+        dts_orig = pkt.pts * stream->time_base.num * (int64_t)UCLOCK_FREQ /
+                   stream->time_base.den - INT64_MIN;
+    }
 
     if (dts_orig != UINT64_MAX) {
         uref_clock_set_dts_orig(uref, dts_orig);
@@ -635,7 +636,6 @@ static void upipe_avfsrc_worker(struct upump *upump)
         upipe_throw_clock_ts(upipe, uref);
     av_packet_unref(&pkt);
 
-    av_packet_unref(&pkt);
     upipe_input(output->last_inner, uref, &upipe_avfsrc->upump);
 }
 
