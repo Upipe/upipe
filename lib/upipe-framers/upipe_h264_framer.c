@@ -1818,6 +1818,8 @@ static void upipe_h264f_build_flow_def(struct upipe *upipe)
     }
 
     upipe_h264f_store_flow_def(upipe, flow_def);
+    /* force sending flow definition immediately */
+    upipe_h264f_output(upipe, NULL, NULL);
 }
 
 /** @internal @This prepares an access unit for output.
