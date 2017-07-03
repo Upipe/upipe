@@ -1153,6 +1153,7 @@ static void upipe_netmap_sink_worker(struct upump *upump)
     now = uclock_now(&upipe_netmap_sink->uclock);
 
     uint32_t txavail = UINT32_MAX;
+    uint32_t max_slots = UINT32_MAX;
     for (size_t i = 0; i < 2; i++) {
         struct upipe_netmap_intf *intf = &upipe_netmap_sink->intf[i];
         if (!intf->d || !up[i]) {
@@ -1161,11 +1162,12 @@ static void upipe_netmap_sink_worker(struct upump *upump)
         }
 
         uint32_t t = nm_ring_space(txring[i]);
+        max_slots = txring[i]->num_slots - 1;
 
         if (intf->wait) {
             if ((now - intf->wait) > UCLOCK_FREQ) {
                 ioctl(NETMAP_FD(intf->d), NIOCTXSYNC, NULL); // update userspace ring
-                if (t < txring[i]->num_slots - 1) {
+                if (t < max_slots) {
                     upipe_notice_va(upipe, "waiting, %u", t);
                     continue;
                 }
