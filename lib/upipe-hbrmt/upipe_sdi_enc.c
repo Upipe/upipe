@@ -997,6 +997,8 @@ static void upipe_sdi_enc_input(struct upipe *upipe, struct uref *uref,
 
     struct uchain *uchain = NULL;
     ulist_foreach(&upipe_sdi_enc->subs, uchain) {
+        if (!uchain)
+            break;
         struct upipe_sdi_enc_sub *sdi_enc_sub = upipe_sdi_enc_sub_from_uchain(uchain);
 
         struct uref *uref_audio = uref_from_uchain(ulist_pop(&sdi_enc_sub->urefs));
