@@ -538,6 +538,21 @@ static int upipe_netmap_sink_open_dev(struct upipe *upipe, const char *dev)
     return UBASE_ERR_NONE;
 }
 
+static void upipe_netmap_sink_reset_counters(struct upipe *upipe)
+{
+    struct upipe_netmap_sink *upipe_netmap_sink = upipe_netmap_sink_from_upipe(upipe);
+
+    upipe_netmap_sink->n = 0;
+    upipe_netmap_sink->fakes = 0;
+    upipe_netmap_sink->pkt = 0;
+    upipe_netmap_sink->bits = 0;
+    upipe_netmap_sink->start = 0;
+    upipe_netmap_sink->preroll = true;
+    upipe_netmap_sink->packed_bytes = 0;
+    upipe_netmap_sink->seqnum = 0;
+    upipe_netmap_sink->frame_count = 0;
+}
+
 
 /** @internal @This allocates a netmap sink pipe.
  *
@@ -564,19 +579,11 @@ static struct upipe *_upipe_netmap_sink_alloc(struct upipe_mgr *mgr,
     upipe_init(upipe, mgr, uprobe);
 
     upipe_netmap_sink->flow_def = NULL;
-    upipe_netmap_sink->seqnum = 0;
-    upipe_netmap_sink->frame_count = 0;
     upipe_netmap_sink->line = 0;
     upipe_netmap_sink->pixel_offset = 0;
     upipe_netmap_sink->frame_size = 0;
-    upipe_netmap_sink->n = 0;
-    upipe_netmap_sink->fakes = 0;
-    upipe_netmap_sink->pkt = 0;
-    upipe_netmap_sink->bits = 0;
-    upipe_netmap_sink->start = 0;
     upipe_netmap_sink->uref = NULL;
-    upipe_netmap_sink->preroll = true;
-    upipe_netmap_sink->packed_bytes = 0;
+    upipe_netmap_sink_reset_counters(upipe);
 
     upipe_netmap_sink->uri = NULL;
     for (size_t i = 0; i < 2; i++) {
@@ -1248,16 +1255,8 @@ static void upipe_netmap_sink_worker(struct upump *upump)
             uref_free(uref);
         }
 
-        upipe_netmap_sink->n = 0;
-        upipe_netmap_sink->fakes = 0;
-        upipe_netmap_sink->pkt = 0;
-        upipe_netmap_sink->bits = 0;
-        upipe_netmap_sink->start = 0;
+        upipe_netmap_sink_reset_counters(upipe);
         upipe_netmap_sink->uref = NULL;
-        upipe_netmap_sink->preroll = true;
-        upipe_netmap_sink->packed_bytes = 0;
-        upipe_netmap_sink->seqnum = 0;
-        upipe_netmap_sink->frame_count = 0;
 
         return;
     }
