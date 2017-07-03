@@ -1429,6 +1429,10 @@ static void upipe_netmap_sink_worker(struct upump *upump)
         }
     }
 
+    if (txavail == max_slots) {
+        upipe_netmap_sink_reset_counters(upipe);
+    }
+
     /* */
     if (!rfc4175 && input_size != -1) {
         if (0) upipe_notice_va(upipe, "loop done, input pkts %d pkts left %d -> %d\n",
