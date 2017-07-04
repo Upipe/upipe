@@ -1467,7 +1467,7 @@ static void upipe_netmap_sink_worker(struct upump *upump)
 
     upipe_netmap_sink->uref = uref;
 
-    if (!upipe_netmap_sink->start)
+    if (!upipe_netmap_sink->start && txavail != max_slots)
         upipe_netmap_sink->start = uclock_now(&upipe_netmap_sink->uclock);
 
     for (size_t i = 0; i < 2; i++) {
