@@ -1724,6 +1724,17 @@ static int upipe_netmap_sink_set_flow_def(struct upipe *upipe,
         // TODO
     }
 
+    upipe_netmap_sink->frame_size = 0;
+    upipe_netmap_sink_reset_counters(upipe);
+    for (;;) {
+        struct uchain *uchain = ulist_pop(&upipe_netmap_sink->sink_queue);
+        if (!uchain)
+            break;
+        struct uref *uref = uref_from_uchain(uchain);
+        uref_free(uref);
+    }
+    upipe_netmap_sink->uref = NULL;
+
     flow_def = uref_dup(flow_def);
     UBASE_ALLOC_RETURN(flow_def)
     upipe_input(upipe, flow_def, NULL);
