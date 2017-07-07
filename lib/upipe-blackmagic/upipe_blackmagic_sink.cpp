@@ -1825,6 +1825,11 @@ static int _upipe_bmd_sink_get_genlock_status(struct upipe *upipe, int *status)
     struct upipe_bmd_sink *upipe_bmd_sink = upipe_bmd_sink_from_upipe(upipe);
     BMDReferenceStatus reference_status;
 
+    if (!upipe_bmd_sink->deckLinkOutput) {
+        upipe_err_va(upipe, "No output configured");
+        return UBASE_ERR_INVALID;
+    }
+
     HRESULT result = upipe_bmd_sink->deckLinkOutput->GetReferenceStatus(&reference_status);
     if (reference_status & bmdReferenceNotSupportedByHardware) {
         *status = UPIPE_BMD_SINK_GENLOCK_UNSUPPORTED;
@@ -1852,6 +1857,11 @@ static int _upipe_bmd_sink_get_genlock_offset(struct upipe *upipe, int64_t *offs
     BMDReferenceStatus reference_status;
     IDeckLinkConfiguration *decklink_configuration;
     HRESULT result;
+
+    if (!upipe_bmd_sink->deckLinkOutput) {
+        upipe_err_va(upipe, "No output configured");
+        return UBASE_ERR_INVALID;
+    }
 
     result = upipe_bmd_sink->deckLinkOutput->GetReferenceStatus(&reference_status);
     if ((reference_status & bmdReferenceNotSupportedByHardware) ||
@@ -1889,6 +1899,11 @@ static int _upipe_bmd_sink_set_genlock_offset(struct upipe *upipe, int64_t offse
     BMDReferenceStatus reference_status;
     IDeckLinkConfiguration *decklink_configuration;
     HRESULT result;
+
+    if (!upipe_bmd_sink->deckLinkOutput) {
+        upipe_err_va(upipe, "No output configured");
+        return UBASE_ERR_INVALID;
+    }
 
     result = upipe_bmd_sink->deckLinkOutput->GetReferenceStatus(&reference_status);
     if ((reference_status & bmdReferenceNotSupportedByHardware)) {
