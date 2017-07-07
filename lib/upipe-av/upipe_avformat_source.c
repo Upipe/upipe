@@ -620,9 +620,7 @@ static void upipe_avfsrc_worker(struct upump *upump)
         ts = true;
 
         /* this is subtly wrong, but whatever */
-        upipe_throw_clock_ref(upipe, uref,
-                              dts + upipe_avfsrc->timestamp_offset - PCR_OFFSET,
-                              0);
+        upipe_throw_clock_ref(upipe, uref, dts - PCR_OFFSET, 0);
     }
     if (pkt.duration > 0) {
         uint64_t duration = pkt.duration * stream->time_base.num * UCLOCK_FREQ /
