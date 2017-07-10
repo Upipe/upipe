@@ -558,13 +558,14 @@ static bool do_packet(struct upipe *upipe, struct netmap_ring *rxring,
     if ((marker || upipe_netmap_source->discontinuity) && upipe_netmap_source->uref) {
         uref_block_unmap(upipe_netmap_source->uref, 0);
 
-        if (upipe_netmap_source->packets != upipe_netmap_source->pkts_per_frame) {
-            //upipe_dbg_va(upipe, "Dropping: %u packets", upipe_netmap_source->packets);
-            uref_free(upipe_netmap_source->uref);
+        if (upipe_netmap_source->packets != upipe_netmap_source->pkts_per_frame)
             upipe_netmap_source->discontinuity = true;
-        } else { /* output current block */
-            upipe_netmap_source_output(upipe, upipe_netmap_source->uref, &upipe_netmap_source->upump);
-        }
+
+        if (upipe_netmap_source->discontinuity)
+            uref_flow_set_discontinuity(upipe_netmap_source->uref);
+
+        /* output current block */
+        upipe_netmap_source_output(upipe, upipe_netmap_source->uref, &upipe_netmap_source->upump);
         upipe_netmap_source->uref = NULL;
     }
 
