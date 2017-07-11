@@ -594,11 +594,11 @@ static void cb(struct upump *upump)
         /* frame duration */
         const uint64_t ticks = upipe_sync->ticks_per_frame;
 
-               if (pts < now - ticks / 2) {
+        if (pts < now - ticks / 2) {
             /* frame pts too much in the past */
             upipe_warn_va(upipe, "too late");
         } else if (pts > now + ticks / 2) {
-            upipe_warn_va(upipe, "audio too early: %.2f > %.2f",
+            upipe_warn_va(upipe, "video too early: %.2f > %.2f",
                 pts_to_time(pts), pts_to_time(now + ticks / 2)
             );
             uchain = NULL; /* do not drop */
