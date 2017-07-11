@@ -479,6 +479,8 @@ static void output_sound(struct upipe *upipe, const struct urational *fps,
         size_t samples = audio_samples_count(upipe_sub, fps);
         const bool s337 = upipe_sync_sub->s337;
 
+        /* FIXME: does not work for a52, since assumes only one uref should be popped.
+                  a52 has 1536 samples so in fact requires two pops on average */
         if (s337) {
             struct uchain *uchain = ulist_pop(&upipe_sync_sub->urefs);
             if (!uchain) {
