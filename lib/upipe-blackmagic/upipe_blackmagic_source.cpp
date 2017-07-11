@@ -749,10 +749,20 @@ static void upipe_bmd_src_work(struct upipe *upipe, struct upump *upump)
 
             if (type == UPIPE_BMD_SRC_PIC) {
                 if (unlikely(pts_prog <= upipe_bmd_src->timestamp_highest)) {
+                    uint64_t old = pts_prog;
+                    uint64_t highest = upipe_bmd_src->timestamp_highest;
+
                     pts_prog = upipe_bmd_src->timestamp_highest + cr_sys_delta;
                     upipe_warn_va(upipe, "timestamp is in the past, "
-                            "resetting to %" PRIu64,
-                            pts_prog / (UCLOCK_FREQ / 1000));
+                            "resetting %" PRIu64 " to %" PRIu64 " "
+                            "highest %" PRIu64 " "
+                            "orig %" PRIu64 " "
+                            "delta % " PRIu64 " ",
+                            old / (UCLOCK_FREQ / 1000),
+                            pts_prog / (UCLOCK_FREQ / 1000),
+                            highest / (UCLOCK_FREQ / 1000),
+                            pts_orig / (UCLOCK_FREQ / 1000),
+                            cr_sys_delta / (UCLOCK_FREQ / 1000));
                     upipe_bmd_src->timestamp_offset = pts_prog - pts_orig;
                 }
                 if (pts_prog > upipe_bmd_src->timestamp_highest)
