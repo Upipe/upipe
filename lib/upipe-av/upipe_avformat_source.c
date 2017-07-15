@@ -83,7 +83,7 @@
 /** lowest possible timestamp (just an arbitrarily high time) */
 #define AV_CLOCK_MIN UINT32_MAX
 /** offset between DTS and (artificial) clock references */
-#define PCR_OFFSET UCLOCK_FREQ
+#define PCR_OFFSET (UCLOCK_FREQ * 3)
 
 /** @internal @This is the private context of an avfsrc manager. */
 struct upipe_avfsrc_mgr {
