@@ -329,7 +329,7 @@ static int upipe_dup_control(struct upipe *upipe, int command, va_list args)
         }
         case UPIPE_ITERATE_SUB: {
             struct upipe **p = va_arg(args, struct upipe **);
-            return upipe_dup_iterate_sub(upipe, p);
+            return upipe_dup_iterate_output(upipe, p);
         }
 
         default:

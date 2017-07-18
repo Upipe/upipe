@@ -602,7 +602,7 @@ static int upipe_rtpr_control(struct upipe *upipe, int command, va_list args)
         }
         case UPIPE_ITERATE_SUB: {
             struct upipe **p = va_arg(args, struct upipe **);
-            return upipe_rtpr_iterate_sub(upipe, p);
+            return upipe_rtpr_iterate_input(upipe, p);
         }
         case UPIPE_RTPR_GET_DELAY: {
             UBASE_SIGNATURE_CHECK(args, UPIPE_RTPR_SIGNATURE)

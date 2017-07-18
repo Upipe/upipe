@@ -660,7 +660,7 @@ static int upipe_hls_void_control(struct upipe *upipe,
     }
     case UPIPE_ITERATE_SUB: {
         struct upipe **upipe_p = va_arg(args, struct upipe **);
-        return upipe_hls_void_iterate_sub(upipe, upipe_p);
+        return upipe_hls_void_iterate_pipe(upipe, upipe_p);
     }
     case UPIPE_SPLIT_ITERATE:
         return upipe_hls_void_control_pmt(upipe, command, args);
