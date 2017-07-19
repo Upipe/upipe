@@ -68,6 +68,7 @@ libupipe_modules_la_SOURCES = \
 	upipe_rtp_pcm_pack.c \
 	upipe_dtsdi.c \
 	upipe_void_source.c \
+	upipe_video_blank.c \
 	$(NULL)
 
 if HAVE_WRITEV

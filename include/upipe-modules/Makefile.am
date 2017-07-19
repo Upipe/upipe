@@ -75,4 +75,5 @@ myinclude_HEADERS = \
 	upipe_rtp_pcm_pack.h \
 	upipe_dtsdi.h \
 	upipe_void_source.h \
+	upipe_video_blank.h \
 	$(NULL)
