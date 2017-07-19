@@ -482,12 +482,22 @@ static void output_sound(struct upipe *upipe, const struct urational *fps,
         /* FIXME: does not work for a52, since assumes only one uref should be popped.
                   a52 has 1536 samples so in fact requires two pops on average */
         if (s337) {
-            struct uchain *uchain = ulist_pop(&upipe_sync_sub->urefs);
+            struct uchain *uchain = ulist_peek(&upipe_sync_sub->urefs);
             if (!uchain) {
                 upipe_err_va(upipe_sub, "no urefs");
                 continue;
             }
             struct uref *uref = uref_from_uchain(uchain);
+
+            uint64_t pts = 0;
+            uref_clock_get_pts_sys(uref, &pts);
+            if (pts + upipe_sync->latency > upipe_sync->pts + upipe_sync->ticks_per_frame) {
+                upipe_warn_va(upipe, "Waiting to buffer %" PRIu64 "",
+                        pts + upipe_sync->latency - upipe_sync->pts);
+                continue;
+            }
+
+            ulist_pop(&upipe_sync_sub->urefs);
             size_t src_samples = 0;
             uref_sound_size(uref, &src_samples, NULL);
             upipe_sync_sub->samples -= src_samples;
@@ -501,6 +511,14 @@ static void output_sound(struct upipe *upipe, const struct urational *fps,
         struct uref *src = uref_from_uchain(ulist_peek(&upipe_sync_sub->urefs));
         if (!src) {
             upipe_err_va(upipe_sub, "no urefs");
+            continue;
+        }
+
+        uint64_t pts = 0;
+        uref_clock_get_pts_sys(src, &pts);
+        if (pts + upipe_sync->latency > upipe_sync->pts + upipe_sync->ticks_per_frame) {
+            upipe_warn_va(upipe, "Waiting to buffer %" PRIu64 "",
+                    pts + upipe_sync->latency - upipe_sync->pts);
             continue;
         }
 
@@ -551,9 +569,6 @@ static void output_sound(struct upipe *upipe, const struct urational *fps,
                 uref_sound_resize(src, uref_samples, -1);
                 assert(samples == 0);
 
-                uint64_t pts = 0;
-                uref_clock_get_pts_sys(src, &pts);
-                pts += upipe_sync->latency;
                 pts += uref_samples * UCLOCK_FREQ / 48000;
                 uref_clock_set_pts_sys(src, pts);
             }
