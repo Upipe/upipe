@@ -492,8 +492,8 @@ static void output_sound(struct upipe *upipe, const struct urational *fps,
             uint64_t pts = 0;
             uref_clock_get_pts_sys(uref, &pts);
             if (pts + upipe_sync->latency > upipe_sync->pts + upipe_sync->ticks_per_frame) {
-                upipe_warn_va(upipe, "Waiting to buffer %" PRIu64 "",
-                        pts + upipe_sync->latency - upipe_sync->pts);
+                upipe_warn_va(upipe_sub, "Waiting to buffer %.0f",
+                        pts_to_time(pts + upipe_sync->latency - upipe_sync->pts));
                 continue;
             }
 
@@ -517,8 +517,8 @@ static void output_sound(struct upipe *upipe, const struct urational *fps,
         uint64_t pts = 0;
         uref_clock_get_pts_sys(src, &pts);
         if (pts + upipe_sync->latency > upipe_sync->pts + upipe_sync->ticks_per_frame) {
-            upipe_warn_va(upipe, "Waiting to buffer %" PRIu64 "",
-                    pts + upipe_sync->latency - upipe_sync->pts);
+            upipe_warn_va(upipe_sub, "Waiting to buffer %.0f",
+                    pts_to_time(pts + upipe_sync->latency - upipe_sync->pts));
             continue;
         }
 
