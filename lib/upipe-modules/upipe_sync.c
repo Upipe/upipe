@@ -395,9 +395,10 @@ static bool sync_channel(struct upipe *upipe)
                             drop_samples, pts_diff, duration);
                     uref_sound_resize(uref, drop_samples, -1);
                     upipe_sync_sub->samples -= drop_samples;
+                    pts += pts_diff;
+                    pts -= upipe_sync->latency;
+                    uref_clock_set_pts_sys(uref, pts);
                 }
-                pts = video_pts;
-                uref_clock_set_pts_sys(uref, pts);
             } else {
                 float f = (float)((int64_t)pts - (int64_t)video_pts) * 1000 / UCLOCK_FREQ;
                 upipe_notice_va(upipe_sync_sub_to_upipe(upipe_sync_sub),
@@ -569,6 +570,7 @@ static void output_sound(struct upipe *upipe, const struct urational *fps,
                 uref_sound_resize(src, uref_samples, -1);
                 assert(samples == 0);
 
+                uref_clock_get_pts_sys(src, &pts);
                 pts += uref_samples * UCLOCK_FREQ / 48000;
                 uref_clock_set_pts_sys(src, pts);
             }
