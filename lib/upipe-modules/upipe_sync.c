@@ -127,6 +127,9 @@ struct upipe_sync_sub {
     /** AES */
     bool s337;
 
+    /** AES/a52 */
+    bool a52;
+
     /** channels */
     uint8_t channels;
 
@@ -169,6 +172,7 @@ static struct upipe *upipe_sync_sub_alloc(struct upipe_mgr *mgr,
     upipe_sync_sub->frame_idx = 0;
     upipe_sync_sub->sound = false;
     upipe_sync_sub->s337 = false;
+    upipe_sync_sub->a52 = false;
 
     upipe_sync_sub_init_urefcount(upipe);
     upipe_sync_sub_init_output(upipe);
@@ -260,6 +264,9 @@ static int upipe_sync_sub_set_flow_def(struct upipe *upipe, struct uref *flow_de
         return UBASE_ERR_INVALID;
 
     upipe_sync_sub->s337 = !ubase_ncmp(def, "sound.s32.s337.");
+    if (upipe_sync_sub->s337)
+        upipe_sync_sub->a52 = !ubase_ncmp(def, "sound.s32.s337.a52.")
+            || !ubase_ncmp(def, "sound.s32.s337.a52e.");
 
     uint64_t latency;
     if (!ubase_check(uref_clock_get_latency(flow_def, &latency)))
@@ -358,6 +365,7 @@ static bool sync_channel(struct upipe *upipe)
     const uint64_t video_pts = upipe_sync->pts;
 
     const bool s337 = upipe_sync_sub->s337;
+    const bool a52 = upipe_sync_sub->a52;
 
     struct uchain *uchain_uref = NULL, *uchain_tmp;
     ulist_delete_foreach(&upipe_sync_sub->urefs, uchain_uref, uchain_tmp) {
@@ -388,12 +396,15 @@ static bool sync_channel(struct upipe *upipe)
                     uref_free(uref);
                     continue;
                 }
-                if (!s337) {
+                if (!s337 || a52) {
                     // resize
                     upipe_notice_va(upipe_sync_sub_to_upipe(upipe_sync_sub),
                             "RESIZE, skip %" PRIu64 " (%" PRId64 " < %" PRIu64 ")",
                             drop_samples, pts_diff, duration);
-                    uref_sound_resize(uref, drop_samples, -1);
+                    if (a52) /* drop from the end (padding) */
+                        uref_sound_resize(uref, 0, samples - drop_samples);
+                    else
+                        uref_sound_resize(uref, drop_samples, -1);
                     upipe_sync_sub->samples -= drop_samples;
                     pts += pts_diff;
                     pts -= upipe_sync->latency;
@@ -479,10 +490,9 @@ static void output_sound(struct upipe *upipe, const struct urational *fps,
         const uint8_t channels = upipe_sync_sub->channels;
         size_t samples = audio_samples_count(upipe_sub, fps);
         const bool s337 = upipe_sync_sub->s337;
+        const bool a52 = upipe_sync_sub->a52;
 
-        /* FIXME: does not work for a52, since assumes only one uref should be popped.
-                  a52 has 1536 samples so in fact requires two pops on average */
-        if (s337) {
+        if (s337 && !a52) {
             struct uchain *uchain = ulist_peek(&upipe_sync_sub->urefs);
             if (!uchain) {
                 upipe_err_va(upipe_sub, "no urefs");
