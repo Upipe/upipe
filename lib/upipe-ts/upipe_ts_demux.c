@@ -1338,18 +1338,30 @@ static int upipe_ts_demux_program_pmtd_update(struct upipe *upipe,
         upipe_use(upipe_ts_demux_output_to_upipe(output));
 
         struct uref *flow_def = NULL;
-        uint64_t id = 0;
+        bool match = false;
         while (ubase_check(upipe_split_iterate(pmtd, &flow_def)) &&
-               flow_def != NULL)
-            if (ubase_check(uref_flow_get_id(flow_def, &id)) &&
-                id == output->pid) {
+               flow_def != NULL) {
+            const char *def = NULL;
+            const char *def_input = NULL;
+            uint64_t id = 0;
+            if (!ubase_check(uref_flow_get_id(flow_def, &id))
+                || !ubase_check(uref_flow_get_def(flow_def, &def))
+                || !ubase_check(uref_flow_get_def(output->flow_def_input,
+                        &def_input)))
+                continue;
+
+            bool match = !strcmp(def, def_input) && id == output->pid;
+            if (match) {
+
                 if (!upipe_ts_demux_output_pmtd_update(
-                        upipe_ts_demux_output_to_upipe(output), flow_def))
+                            upipe_ts_demux_output_to_upipe(output), flow_def))
                     upipe_throw_source_end(
                             upipe_ts_demux_output_to_upipe(output));
                 break;
             }
-        if (id != output->pid)
+        }
+
+        if (!match)
             upipe_throw_source_end(upipe_ts_demux_output_to_upipe(output));
     }
 
