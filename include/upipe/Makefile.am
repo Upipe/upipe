@@ -85,6 +85,7 @@ pkginclude_HEADERS = \
 	upump.h \
 	uqueue.h \
 	urefcount.h \
+	urefcount_helper.h \
 	uref_attr.h \
 	uref_block_flow.h \
 	uref_block.h \
