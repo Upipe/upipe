@@ -431,6 +431,19 @@ end:
     uref_free(uref);
 }
 
+static void upipe_av_uref_sound_free(void *opaque, uint8_t *data)
+{
+    struct uref *uref = opaque;
+
+    struct uref *flow_def_attr = uref_from_uchain(uref->uchain.next);
+    assert(flow_def_attr);
+
+    uref_sound_unmap(uref, 0, -1, AV_NUM_DATA_POINTERS);
+
+    uref_free(flow_def_attr);
+    uref_free(uref);
+}
+
 /** @internal @This is called by avcodec when allocating a new audio buffer.
  * Used with audio decoders.
  *
@@ -446,17 +459,8 @@ static int upipe_avcdec_get_buffer_sound(struct AVCodecContext *context,
     if (unlikely(upipe_avcdec->uref == NULL))
         return -1;
 
-    struct uref *uref = upipe_avcdec->uref;
+    struct uref *uref = uref_dup(upipe_avcdec->uref);
     frame->opaque = uref;
-
-    if (uref->ubuf != NULL) {
-        if (context->codec->capabilities & CODEC_CAP_DR1)
-            uref_sound_unmap(uref, 0, -1, AV_NUM_DATA_POINTERS);
-        ubuf_free(uref_detach_ubuf(uref));
-    }
-    if (uref->uchain.next != NULL)
-        uref_free(uref_from_uchain(uref->uchain.next));
-    uref->uchain.next = NULL;
 
     uint64_t framenum = 0;
     uref_pic_get_number(frame->opaque, &framenum);
@@ -536,6 +540,10 @@ static int upipe_avcdec_get_buffer_sound(struct AVCodecContext *context,
     frame->linesize[0] = av_get_bytes_per_sample(context->sample_fmt) *
                          frame->nb_samples;
 
+    frame->buf[0] = av_buffer_create(frame->data[0],
+            frame->linesize[0] * context->channels, upipe_av_uref_sound_free,
+            uref, 0);
+
     if (!av_sample_fmt_is_planar(context->sample_fmt))
         frame->linesize[0] *= context->channels;
 
@@ -575,12 +583,6 @@ static bool upipe_avcdec_do_av_deal(struct upipe *upipe)
         upipe_notice_va(upipe, "codec %s (%s) %d closed", context->codec->name,
                         context->codec->long_name, context->codec->id);
 
-        if (upipe_avcdec->uref != NULL &&
-                upipe_avcdec->context->codec->type == AVMEDIA_TYPE_AUDIO &&
-                upipe_avcdec->uref->ubuf != NULL &&
-                upipe_avcdec->context->codec->capabilities & CODEC_CAP_DR1)
-            uref_sound_unmap(upipe_avcdec->uref, 0, -1, AV_NUM_DATA_POINTERS);
-
         avcodec_close(context);
         return false;
     }
@@ -597,7 +599,7 @@ static bool upipe_avcdec_do_av_deal(struct upipe *upipe)
             break;
         case AVMEDIA_TYPE_AUDIO:
             context->get_buffer2 = upipe_avcdec_get_buffer_sound;
-            /* audio frames are not refcounted */
+            context->refcounted_frames = 1;
             break;
         default:
             /* This should not happen */
@@ -1013,7 +1015,7 @@ static void upipe_avcdec_output_pic(struct upipe *upipe, struct upump **upump_p)
         return;
     }
 
-    if (!(upipe_avcdec->context->codec->capabilities & CODEC_CAP_DR1)) {
+    if (!(context->codec->capabilities & CODEC_CAP_DR1)) {
         /* Not direct rendering, copy data. */
         uint8_t planes;
         if (unlikely(!ubase_check(uref_pic_flow_get_planes(flow_def_attr, &planes)))) {
@@ -1111,8 +1113,6 @@ static void upipe_avcdec_output_sound(struct upipe *upipe,
     AVFrame *frame = upipe_avcdec->frame;
     struct uref *uref = frame->opaque;
     struct uref *flow_def_attr = uref_from_uchain(uref->uchain.next);
-    uref->uchain.next = NULL;
-    upipe_avcdec->uref = NULL;
 
     uint64_t framenum = 0;
     uref_pic_get_number(uref, &framenum);
@@ -1122,6 +1122,14 @@ static void upipe_avcdec_output_sound(struct upipe *upipe,
 
     /* In case it has been reduced. */
     UBASE_ERROR(upipe, uref_sound_resize(uref, 0, frame->nb_samples))
+
+    /* Duplicate uref because it is freed in _release, because the ubuf
+     * is still in use by avcodec. */
+    uref = uref_dup(uref);
+    if (unlikely(uref == NULL)) {
+        upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
+        return;
+    }
 
     if (!(context->codec->capabilities & CODEC_CAP_DR1)) {
         /* Not direct rendering, copy data. */
@@ -1139,8 +1147,7 @@ static void upipe_avcdec_output_sound(struct upipe *upipe,
                                             AV_NUM_DATA_POINTERS))
         if (err < 0)
             upipe_warn_va(upipe, "av_samples_copy error %d", err);
-    } else
-        uref_sound_unmap(uref, 0, -1, AV_NUM_DATA_POINTERS);
+    }
 
     /* samples in uref */
     UBASE_FATAL(upipe, uref_sound_flow_set_samples(uref, frame->nb_samples))
@@ -1157,14 +1164,20 @@ static void upipe_avcdec_output_sound(struct upipe *upipe,
 
     /* Find out if flow def attributes have changed. */
     if (!upipe_avcdec_check_flow_def_attr(upipe, flow_def_attr)) {
+        /* Make a copy as flow_def_attr is still used by _release. */
+        flow_def_attr = uref_dup(flow_def_attr);
+        if (unlikely(flow_def_attr == NULL)) {
+            uref_free(uref);
+            upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
+            return;
+        }
         struct uref *flow_def =
             upipe_avcdec_store_flow_def_attr(upipe, flow_def_attr);
         if (flow_def != NULL) {
             uref_block_flow_clear_format(flow_def);
             upipe_avcdec_store_flow_def(upipe, flow_def);
         }
-    } else
-        uref_free(flow_def_attr);
+    }
 
     upipe_avcdec_output(upipe, uref, upump_p);
 }
@@ -1242,11 +1255,6 @@ static bool upipe_avcdec_decode_avpkt(struct upipe *upipe, AVPacket *avpkt,
 static void upipe_avcdec_store_uref(struct upipe *upipe, struct uref *uref)
 {
     struct upipe_avcdec *upipe_avcdec = upipe_avcdec_from_upipe(upipe);
-    if (upipe_avcdec->uref != NULL &&
-        upipe_avcdec->context->codec->type == AVMEDIA_TYPE_AUDIO &&
-        upipe_avcdec->uref->ubuf != NULL &&
-        upipe_avcdec->context->codec->capabilities & CODEC_CAP_DR1)
-        uref_sound_unmap(upipe_avcdec->uref, 0, -1, AV_NUM_DATA_POINTERS);
     if (upipe_avcdec->uref != NULL && upipe_avcdec->uref->uchain.next != NULL)
         uref_free(uref_from_uchain(upipe_avcdec->uref->uchain.next));
     uref_free(upipe_avcdec->uref);
