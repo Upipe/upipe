@@ -84,7 +84,7 @@ static bool upipe_avcdec_decode_avpkt(struct upipe *upipe, AVPacket *avpkt,
 static bool upipe_avcdec_decode(struct upipe *upipe, struct uref *uref,
                                 struct upump **upump_p);
 
-/** upipe_avcdec structure with avcdec parameters */ 
+/** upipe_avcdec structure with avcdec parameters */
 struct upipe_avcdec {
     /** refcount management structure */
     struct urefcount urefcount;
@@ -215,17 +215,17 @@ static void upipe_av_uref_pic_free(void *opaque, uint8_t *data);
  * many data pointers as it can hold.  if CODEC_CAP_DR1 is not set then
  * get_buffer() must call avcodec_default_get_buffer() instead of providing
  * buffers allocated by some other means.
- * 
+ *
  * AVFrame.data[] should be 32- or 16-byte-aligned unless the CPU doesn't
  * need it.  avcodec_default_get_buffer() aligns the output buffer
  * properly, but if get_buffer() is overridden then alignment
  * considerations should be taken into account.
- * 
+ *
  * If pic.reference is set then the frame will be read later by libavcodec.
  * avcodec_align_dimensions2() should be used to find the required width
  * and height, as they normally need to be rounded up to the next multiple
  * of 16.
- * 
+ *
  * If frame multithreading is used and thread_safe_callbacks is set, it may
  * be called from a different thread, but not from more than one at once.
  * Does not need to be reentrant.
@@ -399,7 +399,7 @@ error:
 
 static void upipe_av_uref_pic_free(void *opaque, uint8_t *data)
 {
-	struct uref *uref = opaque;
+    struct uref *uref = opaque;
 
     uint64_t buffers;
     if (unlikely(!ubase_check(uref_attr_get_priv(uref, &buffers))))
@@ -572,7 +572,7 @@ static bool upipe_avcdec_do_av_deal(struct upipe *upipe)
     AVCodecContext *context = upipe_avcdec->context;
 
     if (upipe_avcdec->close) {
-        upipe_notice_va(upipe, "codec %s (%s) %d closed", context->codec->name, 
+        upipe_notice_va(upipe, "codec %s (%s) %d closed", context->codec->name,
                         context->codec->long_name, context->codec->id);
 
         if (upipe_avcdec->uref != NULL &&
@@ -614,7 +614,7 @@ static bool upipe_avcdec_do_av_deal(struct upipe *upipe)
         upipe_throw_fatal(upipe, UBASE_ERR_EXTERNAL);
         return false;
     }
-    upipe_notice_va(upipe, "codec %s (%s) %d opened", context->codec->name, 
+    upipe_notice_va(upipe, "codec %s (%s) %d opened", context->codec->name,
                     context->codec->long_name, context->codec->id);
 
     return true;
@@ -667,7 +667,7 @@ static void upipe_avcdec_start_av_deal(struct upipe *upipe)
     struct upipe_avcdec *upipe_avcdec = upipe_avcdec_from_upipe(upipe);
     /* abort a pending open request */
     upipe_avcdec_abort_av_deal(upipe);
- 
+
     /* use udeal/upump callback if available */
     upipe_avcdec_check_upump_mgr(upipe);
     if (upipe_avcdec->upump_mgr == NULL) {
@@ -927,7 +927,7 @@ static void upipe_avcdec_output_sub(struct upipe *upipe, AVSubtitle *sub,
             goto alloc_error;
         }
 
- #if LIBAVCODEC_VERSION_MAJOR < 59
+#if LIBAVCODEC_VERSION_MAJOR < 59
         uint8_t *src = r->pict.data[0];
         uint8_t *palette = r->pict.data[1];
 #else
@@ -1293,7 +1293,7 @@ static bool upipe_avcdec_decode(struct upipe *upipe, struct uref *uref,
         upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
         return true;
     }
-    uref_block_extract(uref, 0, avpkt.size, avpkt.data); 
+    uref_block_extract(uref, 0, avpkt.size, avpkt.data);
     ubuf_free(uref_detach_ubuf(uref));
     memset(avpkt.data + avpkt.size, 0, FF_INPUT_BUFFER_PADDING_SIZE);
 
