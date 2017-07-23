@@ -2087,7 +2087,8 @@ static struct uref *upipe_h264f_prepare_annexb(struct upipe *upipe)
     uref_clock_get_duration(uref, &duration);
 
     uint64_t date;
-    if (upipe_h264f->dpb_output_delay != UINT64_MAX) {
+    if (!ubase_check(uref_clock_get_dts_prog(&au_uref_s, &date)) &&
+            upipe_h264f->dpb_output_delay != UINT64_MAX) {
         uref_clock_set_dts_pts_delay(&au_uref_s,
                 upipe_h264f->dpb_output_delay * upipe_h264f->duration);
         uref_clock_set_dts_pts_delay(uref,
