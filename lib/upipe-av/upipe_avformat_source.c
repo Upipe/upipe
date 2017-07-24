@@ -768,9 +768,9 @@ static struct uref *alloc_video_def(struct upipe *upipe,
     UBASE_FATAL(upipe, uref_pic_flow_set_hsize(flow_def, codec->width))
     UBASE_FATAL(upipe, uref_pic_flow_set_vsize(flow_def, codec->height))
     int ticks = codec->ticks_per_frame ? codec->ticks_per_frame : 1;
-    if (codec->time_base.num) {
-        struct urational fps = { .num = codec->time_base.den,
-                                 .den = codec->time_base.num * ticks };
+    if (stream->time_base.num) {
+        struct urational fps = { .num = stream->time_base.den,
+                                 .den = stream->time_base.num * ticks };
         urational_simplify(&fps);
         UBASE_FATAL(upipe, uref_pic_flow_set_fps(flow_def, fps))
     }
