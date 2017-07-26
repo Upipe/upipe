@@ -121,11 +121,18 @@ static void test_input(struct upipe *upipe, struct uref *uref,
     blksrc_test->counter++;
     uref_free(uref);
 
-    if (unlikely(blksrc_test->counter == 1)) {
+    struct uref *current_flow_def;
+    ubase_assert(upipe_get_flow_def(blksrc, &current_flow_def));
+
+    if (unlikely(blksrc_test->counter == 1) &&
+        ubase_check(uref_flow_match_def(current_flow_def,
+                                        UREF_PIC_FLOW_DEF))) {
         struct uref *flow = uref_pic_flow_alloc_def(uref_mgr, 1);
         assert(flow);
         ubase_assert(uref_pic_flow_add_plane(flow, 1, 1, 3, "r8g8b8"));
-        upipe_set_flow_def(blksrc, flow);
+        ubase_assert(uref_pic_flow_set_hsize(flow, WIDTH));
+        ubase_assert(uref_pic_flow_set_vsize(flow, HEIGHT));
+        ubase_assert(upipe_set_flow_def(blksrc, flow));
         uref_free(flow);
 
         struct uref *uref = uref_alloc(uref_mgr);
