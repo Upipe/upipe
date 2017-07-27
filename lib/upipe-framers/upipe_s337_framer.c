@@ -212,7 +212,17 @@ static void upipe_s337f_input(struct upipe *upipe, struct uref *uref, struct upu
             }
 
             if (!ubase_check(uref_sound_write_int32_t(output, 0, -1, &out32, 1))) {
-                upipe_err(upipe, "Could not map buffered audio uref for writing");
+                // FIXME
+                struct ubuf *ubuf = ubuf_sound_copy(output->ubuf->mgr, output->ubuf,
+                    0, size[1]);
+                assert(ubuf);
+                ubuf_free(output->ubuf);
+                output->ubuf = ubuf;
+
+                if (!ubase_check(uref_sound_write_int32_t(output, 0, -1, &out32, 1))) {
+                    upipe_err(upipe, "Could not map buffered audio uref for writing");
+                    abort();
+                }
             }
         }
 
@@ -324,16 +334,27 @@ static void upipe_s337f_input(struct upipe *upipe, struct uref *uref, struct upu
         }
     } else {
         int32_t *samples;
-        if (ubase_check(uref_sound_write_int32_t(uref, 0, -1, &samples, 1))) {
-            size_t size;
-            uref_sound_size(uref, &size, NULL);
+        size_t size;
+        uref_sound_size(uref, &size, NULL);
+        if (!ubase_check(uref_sound_write_int32_t(uref, 0, -1, &samples, 1))) {
+            // FIXME
+            struct ubuf *ubuf = ubuf_sound_copy(uref->ubuf->mgr, uref->ubuf,
+                    0, size);
+            assert(ubuf);
+            ubuf_free(uref->ubuf);
+            uref->ubuf = ubuf;
+
+            if (!ubase_check(uref_sound_write_int32_t(uref, 0, -1, &samples, 1))) {
+                upipe_err(upipe, "Could not map buffered audio uref for writing");
+                abort();
+            }
+        }
+        {
             size_t s = 2 /* stereo */ * 4 /* s32 */ * (size - sync);
             memmove(samples, &samples[2*sync], s); // discard up to sync word
 
             uref_sound_unmap(uref, 0, -1, 1);
             upipe_s337f->samples = size - sync;
-        } else {
-            upipe_err(upipe, "Could not map audio uref for writing");
         }
     }
 
