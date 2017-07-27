@@ -1179,6 +1179,8 @@ static void upipe_mpgaf_build_flow_def(struct upipe *upipe)
     }
 
     upipe_mpgaf_store_flow_def(upipe, flow_def);
+    /* force sending flow definition immediately */
+    upipe_mpgaf_output(upipe, NULL, NULL);
 }
 
 /** @internal @This handles a frame to prepare for output.

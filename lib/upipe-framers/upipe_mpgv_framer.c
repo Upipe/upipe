@@ -1135,6 +1135,8 @@ static void upipe_mpgvf_build_flow_def(struct upipe *upipe)
     }
 
     upipe_mpgvf_store_flow_def(upipe, flow_def);
+    /* force sending flow definition immediately */
+    upipe_mpgvf_output(upipe, NULL, NULL);
 }
 
 /** @internal @This handles a frame to make it ready for output.

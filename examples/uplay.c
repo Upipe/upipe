@@ -319,7 +319,7 @@ static int catch_video(struct uprobe *uprobe, struct upipe *upipe,
     assert(avcdec != NULL);
     upipe_mgr_release(fdec_mgr);
     upipe_set_option(avcdec, "threads", "4");
-    upipe_set_option(avcdec, "thread_type", "1");
+    upipe_set_option(avcdec, "thread_type", "frame");
 
     uprobe_throw(uprobe_main, NULL, UPROBE_THAW_UPUMP_MGR);
 

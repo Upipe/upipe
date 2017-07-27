@@ -696,7 +696,7 @@ static int upipe_stream_switcher_control(struct upipe *upipe,
     }
     case UPIPE_ITERATE_SUB: {
         struct upipe **p = va_arg(args, struct upipe **);
-        return upipe_stream_switcher_iterate_sub(upipe, p);
+        return upipe_stream_switcher_iterate_input(upipe, p);
     }
 
     default:

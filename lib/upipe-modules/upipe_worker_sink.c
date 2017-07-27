@@ -345,9 +345,10 @@ static int upipe_wsink_get_last_inner(struct upipe *upipe, struct upipe **p)
  */
 static int upipe_wsink_control(struct upipe *upipe, int command, va_list args)
 {
+    struct upipe_wsink *upipe_wsink = upipe_wsink_from_upipe(upipe);
+
     switch (command) {
         case UPIPE_ATTACH_UPUMP_MGR: {
-            struct upipe_wsink *upipe_wsink = upipe_wsink_from_upipe(upipe);
             struct uchain *uchain;
             ulist_foreach (&upipe_wsink->upump_mgr_pipes, uchain) {
                 struct upipe *upump_mgr_pipe = upipe_from_uchain(uchain);
@@ -367,6 +368,8 @@ static int upipe_wsink_control(struct upipe *upipe, int command, va_list args)
             struct upipe **p = va_arg(args, struct upipe **);
             return upipe_wsink_get_last_inner(upipe, p);
         }
+        case UPIPE_SET_URI:
+            return upipe_control_va(upipe_wsink->last_remote_xfer, command, args);
         default:
             break;
     }
