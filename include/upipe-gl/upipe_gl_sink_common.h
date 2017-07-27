@@ -52,6 +52,18 @@ enum uprobe_gl_sink_event {
     UPROBE_GL_SINK_LOCAL
 };
 
+/** @This throws an UPROBE_GL_SINK_RENDER event.
+ *
+ * @param upipe pointer to pipe throwing the event
+ * @param uref uref structure describing the picture
+ * @return an error code
+ */
+static int upipe_gl_sink_throw_render(struct upipe *upipe, struct uref *uref)
+{
+    return upipe_throw(upipe, UPROBE_GL_SINK_RENDER,
+                       UPIPE_GL_SINK_SIGNATURE, uref);
+}
+
 /** @This extends upipe_command with specific commands for gl sink. */
 enum upipe_gl_sink_command {
     UPIPE_GL_SINK_SENTINEL = UPIPE_CONTROL_LOCAL,

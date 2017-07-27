@@ -120,6 +120,7 @@ graph {flow: east}
 #include <upipe-av/upipe_avcodec_decode.h>
 #include <upipe-swscale/upipe_sws.h>
 #include <upipe-gl/upipe_glx_sink.h>
+#include <upipe-gl/uprobe_gl_sink.h>
 #include <upipe-gl/uprobe_gl_sink_cube.h>
 #include <upipe-filters/upipe_filter_decode.h>
 #include <upipe-filters/upipe_filter_blend.h>
@@ -514,10 +515,11 @@ static int upipe_glxplayer_catch_glx_qsrc(struct uprobe *uprobe,
             /* glx sink */
             struct upipe *glx_sink = upipe_void_alloc_output(trickp_pic,
                     glxplayer->upipe_glx_mgr,
-                    uprobe_gl_sink_cube_alloc(
-                         uprobe_pfx_alloc(
-                             uprobe_use(&glxplayer->uprobe_glx_s),
-                             glxplayer->loglevel, "glx")));
+                    uprobe_gl_sink_alloc(
+                        uprobe_gl_sink_cube_alloc(
+                             uprobe_pfx_alloc(
+                                 uprobe_use(&glxplayer->uprobe_glx_s),
+                                 glxplayer->loglevel, "glx"))));
             if (glxplayer->trickp)
                 upipe_release(trickp_pic);
             if (unlikely(glx_sink == NULL))
