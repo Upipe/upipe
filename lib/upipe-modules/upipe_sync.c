@@ -87,6 +87,9 @@ struct upipe_sync {
     struct upump *upump;
     struct upump_mgr *upump_mgr;
 
+    /** ntsc */
+    uint8_t frame_idx;
+
     /** public upipe structure */
     struct upipe upipe;
 };
@@ -138,9 +141,6 @@ struct upipe_sync_sub {
 
     /** buffered duration */
     uint64_t samples;
-
-    /** ntsc */
-    uint8_t frame_idx;
 };
 
 UPIPE_HELPER_UPIPE(upipe_sync_sub, upipe, UPIPE_SYNC_SUB_SIGNATURE);
@@ -169,7 +169,6 @@ static struct upipe *upipe_sync_sub_alloc(struct upipe_mgr *mgr,
     struct upipe_sync_sub *upipe_sync_sub = upipe_sync_sub_from_upipe(upipe);
     ulist_init(&upipe_sync_sub->urefs);
     upipe_sync_sub->samples = 0;
-    upipe_sync_sub->frame_idx = 0;
     upipe_sync_sub->sound = false;
     upipe_sync_sub->s337 = false;
     upipe_sync_sub->a52 = false;
@@ -447,7 +446,7 @@ static bool sync_audio(struct upipe *upipe)
 static inline unsigned audio_samples_count(struct upipe *upipe,
         const struct urational *fps)
 {
-    struct upipe_sync_sub *upipe_sync_sub = upipe_sync_sub_from_upipe(upipe);
+    struct upipe_sync *upipe_sync = upipe_sync_from_upipe(upipe);
 
     const unsigned samples = (uint64_t)48000 * fps->den / fps->num;
 
@@ -462,8 +461,8 @@ static inline unsigned audio_samples_count(struct upipe *upipe,
     }
 
     /* cyclic loop of 5 different sample counts */
-    if (++upipe_sync_sub->frame_idx == 5)
-        upipe_sync_sub->frame_idx = 0;
+    if (++upipe_sync->frame_idx == 5)
+        upipe_sync->frame_idx = 0;
 
     static const uint8_t samples_increment[2][5] = {
         { 1, 0, 1, 0, 1 }, /* 30000 / 1001 */
@@ -472,13 +471,14 @@ static inline unsigned audio_samples_count(struct upipe *upipe,
 
     bool rate5994 = fps->num == 60000;
 
-    return samples + samples_increment[rate5994][upipe_sync_sub->frame_idx];
+    return samples + samples_increment[rate5994][upipe_sync->frame_idx];
 }
 
 static void output_sound(struct upipe *upipe, const struct urational *fps,
         struct upump **upump_p)
 {
     struct upipe_sync *upipe_sync = upipe_sync_from_upipe(upipe);
+    const size_t frame_samples = audio_samples_count(upipe, fps);
 
     struct uchain *uchain = NULL;
     ulist_foreach(&upipe_sync->subs, uchain) {
@@ -488,7 +488,8 @@ static void output_sound(struct upipe *upipe, const struct urational *fps,
 
         struct upipe *upipe_sub = upipe_sync_sub_to_upipe(upipe_sync_sub);
         const uint8_t channels = upipe_sync_sub->channels;
-        size_t samples = audio_samples_count(upipe_sub, fps);
+        size_t samples = frame_samples;
+
         const bool s337 = upipe_sync_sub->s337;
         const bool a52 = upipe_sync_sub->a52;
 
@@ -817,6 +818,7 @@ static struct upipe *upipe_sync_alloc(struct upipe_mgr *mgr,
     upipe_sync->latency = 0;
     upipe_sync->pts = 0;
     upipe_sync->ticks_per_frame = 0;
+    upipe_sync->frame_idx = 0;
     upipe_sync->uref = NULL;
     ulist_init(&upipe_sync->urefs);
 
