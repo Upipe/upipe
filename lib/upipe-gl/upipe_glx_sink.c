@@ -434,8 +434,7 @@ static bool upipe_glx_sink_output(struct upipe *upipe, struct uref *uref,
 
     glXMakeCurrent(upipe_glx_sink->display, upipe_glx_sink->window,
                    upipe_glx_sink->glxContext);
-    upipe_throw(upipe, UPROBE_GL_SINK_RENDER,
-                UPIPE_GL_SINK_SIGNATURE, uref);
+    upipe_gl_sink_throw_render(upipe, uref);
     upipe_glx_sink_flush(upipe);
     uref_free(uref);
     return true;

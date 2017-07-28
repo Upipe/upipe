@@ -85,9 +85,12 @@
 #include <upipe-swscale/upipe_sws.h>
 #include <upipe-swresample/upipe_swr.h>
 #include <upipe-gl/upipe_glx_sink.h>
+#include <upipe-gl/uprobe_gl_sink.h>
 #include <upipe-gl/uprobe_gl_sink_cube.h>
 #ifdef UPIPE_HAVE_ALSA_ASOUNDLIB_H
 #include <upipe-alsa/upipe_alsa_sink.h>
+#elif UPIPE_HAVE_AUDIOTOOLBOX_AUDIOTOOLBOX_H
+#include <upipe-osx/upipe_osx_audioqueue_sink.h>
 #endif
 
 #include <pthread.h>
@@ -110,6 +113,8 @@
 
 /* true if we receive raw udp */
 static bool udp = false;
+/** cube glx output */
+static bool cube = false;
 /** selflow string for video */
 static const char *select_video = "auto";
 /** selflow string for subtitle */
@@ -388,10 +393,21 @@ static int catch_video(struct uprobe *uprobe, struct upipe *upipe,
                              UPROBE_LOG_VERBOSE, "play video"));
 
     struct upipe_mgr *upipe_glx_mgr = upipe_glx_sink_mgr_alloc();
-    upipe = upipe_void_chain_output(upipe, upipe_glx_mgr,
-            uprobe_gl_sink_cube_alloc(
-                uprobe_pfx_alloc(uprobe_use(&uprobe_glx_s),
-                                 UPROBE_LOG_VERBOSE, "glx")));
+    if (cube) {
+        upipe = upipe_void_chain_output(
+                    upipe, upipe_glx_mgr,
+                    uprobe_gl_sink_alloc(
+                        uprobe_gl_sink_cube_alloc(
+                            uprobe_pfx_alloc(uprobe_use(&uprobe_glx_s),
+                                             UPROBE_LOG_VERBOSE, "glx"))));
+    }
+    else {
+        upipe = upipe_void_chain_output(
+                    upipe, upipe_glx_mgr,
+                    uprobe_gl_sink_alloc(
+                        uprobe_pfx_alloc(uprobe_use(&uprobe_glx_s),
+                                         UPROBE_LOG_VERBOSE, "glx")));
+    }
     assert(upipe != NULL);
     upipe_mgr_release(upipe_glx_mgr);
     upipe_glx_sink_init(upipe, 0, 0, 800, 480);
@@ -482,6 +498,15 @@ static int catch_audio(struct uprobe *uprobe, struct upipe *upipe,
     assert(sink != NULL);
     upipe_mgr_release(upipe_alsink_mgr);
     upipe_attach_uclock(sink);
+#elif UPIPE_HAVE_AUDIOTOOLBOX_AUDIOTOOLBOX_H
+	struct upipe_mgr *upipe_osx_audioqueue_sink_mgr =
+		upipe_osx_audioqueue_sink_mgr_alloc();
+	sink = upipe_void_alloc(upipe_osx_audioqueue_sink_mgr,
+			uprobe_pfx_alloc(uprobe_use(uprobe_main), UPROBE_LOG_VERBOSE,
+							 "osx_audioqueue_sink"));
+	assert(sink != NULL);
+	upipe_mgr_release(upipe_osx_audioqueue_sink_mgr);
+	upipe_attach_uclock(sink);
 #else
     struct upipe_mgr *upipe_null_mgr = upipe_null_mgr_alloc();
     sink = upipe_void_alloc(upipe_null_mgr,
@@ -683,10 +708,13 @@ int main(int argc, char **argv)
 {
     enum uprobe_log_level loglevel = UPROBE_LOG_LEVEL;
     int opt;
-    while ((opt = getopt(argc, argv, "udqA:V:S:P:R:s:D:")) != -1) {
+    while ((opt = getopt(argc, argv, "udqcA:V:S:P:R:s:D:")) != -1) {
         switch (opt) {
             case 'u':
                 udp = true;
+                break;
+            case 'c':
+                cube = true;
                 break;
             case 'd':
                 loglevel--;
