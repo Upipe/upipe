@@ -35,6 +35,7 @@
 #include <upipe/upipe.h>
 #include <upipe/upipe_helper_upipe.h>
 #include <upipe/upipe_helper_urefcount.h>
+#include <upipe/upipe_helper_urefcount_real.h>
 #include <upipe/upipe_helper_void.h>
 #include <upipe/upipe_helper_output.h>
 #include <upipe/upipe_helper_subpipe.h>
@@ -67,12 +68,8 @@ struct upipe_dup {
 
 UPIPE_HELPER_UPIPE(upipe_dup, upipe, UPIPE_DUP_SIGNATURE)
 UPIPE_HELPER_UREFCOUNT(upipe_dup, urefcount, upipe_dup_no_input)
+UPIPE_HELPER_UREFCOUNT_REAL(upipe_dup, urefcount_real, upipe_dup_free)
 UPIPE_HELPER_VOID(upipe_dup)
-
-UBASE_FROM_TO(upipe_dup, urefcount, urefcount_real, urefcount_real)
-
-/** @hidden */
-static void upipe_dup_free(struct urefcount *urefcount_real);
 
 /** @internal @This is the private context of an output of a dup pipe. */
 struct upipe_dup_output {
@@ -96,6 +93,7 @@ struct upipe_dup_output {
 
 UPIPE_HELPER_UPIPE(upipe_dup_output, upipe, UPIPE_DUP_OUTPUT_SIGNATURE)
 UPIPE_HELPER_UREFCOUNT(upipe_dup_output, urefcount, upipe_dup_output_free)
+UPIPE_HELPER_VOID(upipe_dup_output);
 UPIPE_HELPER_OUTPUT(upipe_dup_output, output, flow_def, output_state, request_list)
 
 UPIPE_HELPER_SUBPIPE(upipe_dup, upipe_dup_output, output, sub_mgr, outputs,
@@ -113,30 +111,30 @@ static struct upipe *upipe_dup_output_alloc(struct upipe_mgr *mgr,
                                             struct uprobe *uprobe,
                                             uint32_t signature, va_list args)
 {
-    if (signature != UPIPE_VOID_SIGNATURE ||
-        mgr->signature != UPIPE_DUP_OUTPUT_SIGNATURE)
-        return NULL;
-    struct upipe_dup *upipe_dup = upipe_dup_from_sub_mgr(mgr);
-    struct uref *flow_def_dup = NULL;
-    if (upipe_dup->flow_def != NULL &&
-        (flow_def_dup = uref_dup(upipe_dup->flow_def)) == NULL)
+    if (mgr->signature != UPIPE_DUP_OUTPUT_SIGNATURE)
         return NULL;
 
-    struct upipe_dup_output *upipe_dup_output =
-        malloc(sizeof(struct upipe_dup_output));
-    if (unlikely(upipe_dup_output == NULL)) {
-        if (flow_def_dup != NULL)
-            uref_free(flow_def_dup);
+    struct upipe *upipe =
+        upipe_dup_output_alloc_void(mgr, uprobe, signature, args);
+    if (unlikely(!upipe))
         return NULL;
-    }
-    struct upipe *upipe = upipe_dup_output_to_upipe(upipe_dup_output);
-    upipe_init(upipe, mgr, uprobe);
+
     upipe_dup_output_init_urefcount(upipe);
     upipe_dup_output_init_output(upipe);
     upipe_dup_output_init_sub(upipe);
 
-    upipe_dup_output_store_flow_def(upipe, flow_def_dup);
     upipe_throw_ready(upipe);
+
+    struct upipe_dup *upipe_dup = upipe_dup_from_sub_mgr(mgr);
+    struct uref *flow_def_dup = NULL;
+    if (upipe_dup->flow_def != NULL &&
+        (flow_def_dup = uref_dup(upipe_dup->flow_def)) == NULL) {
+        upipe_release(upipe);
+        return NULL;
+    }
+
+    upipe_dup_output_store_flow_def(upipe, flow_def_dup);
+
     return upipe;
 }
 
@@ -182,13 +180,13 @@ static void upipe_dup_output_free(struct upipe *upipe)
 {
     struct upipe_dup_output *upipe_dup_output =
         upipe_dup_output_from_upipe(upipe);
+
     upipe_throw_dead(upipe);
 
     upipe_dup_output_clean_output(upipe);
     upipe_dup_output_clean_sub(upipe);
     upipe_dup_output_clean_urefcount(upipe);
-    upipe_clean(upipe);
-    free(upipe_dup_output);
+    upipe_dup_output_free_void(upipe);
 }
 
 /** @internal @This initializes the output manager for a dup set pipe.
@@ -225,7 +223,7 @@ static struct upipe *upipe_dup_alloc(struct upipe_mgr *mgr,
 
     struct upipe_dup *upipe_dup = upipe_dup_from_upipe(upipe);
     upipe_dup_init_urefcount(upipe);
-    urefcount_init(upipe_dup_to_urefcount_real(upipe_dup), upipe_dup_free);
+    upipe_dup_init_urefcount_real(upipe);
     upipe_dup_init_sub_mgr(upipe);
     upipe_dup_init_sub_outputs(upipe);
     upipe_dup->flow_def = NULL;
@@ -341,15 +339,16 @@ static int upipe_dup_control(struct upipe *upipe, int command, va_list args)
  *
  * @param urefcount_real pointer to urefcount_real structure
  */
-static void upipe_dup_free(struct urefcount *urefcount_real)
+static void upipe_dup_free(struct upipe *upipe)
 {
-    struct upipe_dup *upipe_dup = upipe_dup_from_urefcount_real(urefcount_real);
-    struct upipe *upipe = upipe_dup_to_upipe(upipe_dup);
+    struct upipe_dup *upipe_dup = upipe_dup_from_upipe(upipe);
+
     upipe_throw_dead(upipe);
+
     upipe_dup_clean_sub_outputs(upipe);
     if (upipe_dup->flow_def != NULL)
         uref_free(upipe_dup->flow_def);
-    urefcount_clean(urefcount_real);
+    upipe_dup_clean_urefcount_real(upipe);
     upipe_dup_clean_urefcount(upipe);
     upipe_dup_free_void(upipe);
 }
