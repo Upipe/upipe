@@ -664,6 +664,9 @@ static int upipe_stream_switcher_set_flow_def(struct upipe *upipe,
 static int upipe_stream_switcher_control(struct upipe *upipe,
                                          int command, va_list args)
 {
+    UBASE_HANDLED_RETURN(
+        upipe_stream_switcher_control_inputs(upipe, command, args));
+
     switch (command) {
     case UPIPE_REGISTER_REQUEST: {
         struct urequest *request = va_arg(args, struct urequest *);
@@ -688,15 +691,6 @@ static int upipe_stream_switcher_control(struct upipe *upipe,
     case UPIPE_SET_OUTPUT: {
         struct upipe *output = va_arg(args, struct upipe *);
         return upipe_stream_switcher_set_output(upipe, output);
-    }
-
-    case UPIPE_GET_SUB_MGR: {
-        struct upipe_mgr **p = va_arg(args, struct upipe_mgr **);
-        return upipe_stream_switcher_get_sub_mgr(upipe, p);
-    }
-    case UPIPE_ITERATE_SUB: {
-        struct upipe **p = va_arg(args, struct upipe **);
-        return upipe_stream_switcher_iterate_input(upipe, p);
     }
 
     default:

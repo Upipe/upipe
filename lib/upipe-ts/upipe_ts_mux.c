@@ -2180,18 +2180,13 @@ static int _upipe_ts_mux_program_set_aac_encaps(struct upipe *upipe, int encaps)
 static int upipe_ts_mux_program_control(struct upipe *upipe,
                                         int command, va_list args)
 {
+    UBASE_HANDLED_RETURN(
+        upipe_ts_mux_program_control_inputs(upipe, command, args));
+
     switch (command) {
         case UPIPE_SET_FLOW_DEF: {
             struct uref *flow_def = va_arg(args, struct uref *);
             return upipe_ts_mux_program_set_flow_def(upipe, flow_def);
-        }
-        case UPIPE_GET_SUB_MGR: {
-            struct upipe_mgr **p = va_arg(args, struct upipe_mgr **);
-            return upipe_ts_mux_program_get_input_mgr(upipe, p);
-        }
-        case UPIPE_ITERATE_SUB: {
-            struct upipe **p = va_arg(args, struct upipe **);
-            return upipe_ts_mux_program_iterate_input(upipe, p);
         }
         case UPIPE_SUB_GET_SUPER: {
             struct upipe **p = va_arg(args, struct upipe **);
@@ -4213,6 +4208,9 @@ static int _upipe_ts_mux_set_encoding(struct upipe *upipe, const char *encoding)
  */
 static int _upipe_ts_mux_control(struct upipe *upipe, int command, va_list args)
 {
+    UBASE_HANDLED_RETURN(
+        upipe_ts_mux_control_programs(upipe, command, args));
+
     switch (command) {
         case UPIPE_ATTACH_UPUMP_MGR:
             upipe_ts_mux_set_upump(upipe, NULL);
@@ -4248,14 +4246,6 @@ static int _upipe_ts_mux_control(struct upipe *upipe, int command, va_list args)
         case UPIPE_SET_OUTPUT_SIZE: {
             unsigned int mtu = va_arg(args, unsigned int);
             return upipe_ts_mux_set_output_size(upipe, mtu);
-        }
-        case UPIPE_GET_SUB_MGR: {
-            struct upipe_mgr **p = va_arg(args, struct upipe_mgr **);
-            return upipe_ts_mux_get_program_mgr(upipe, p);
-        }
-        case UPIPE_ITERATE_SUB: {
-            struct upipe **p = va_arg(args, struct upipe **);
-            return upipe_ts_mux_iterate_program(upipe, p);
         }
         case UPIPE_END_PREROLL:
             return upipe_ts_mux_end_preroll(upipe);

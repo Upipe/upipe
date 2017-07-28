@@ -912,18 +912,12 @@ static int upipe_avfsink_set_uri(struct upipe *upipe, const char *uri)
  */
 static int upipe_avfsink_control(struct upipe *upipe, int command, va_list args)
 {
+    UBASE_HANDLED_RETURN(upipe_avfsink_control_subs(upipe, command, args));
+
     switch (command) {
         case UPIPE_SET_FLOW_DEF: {
             struct uref *flow_def = va_arg(args, struct uref *);
             return upipe_avfsink_set_flow_def(upipe, flow_def);
-        }
-        case UPIPE_GET_SUB_MGR: {
-            struct upipe_mgr **p = va_arg(args, struct upipe_mgr **);
-            return upipe_avfsink_get_sub_mgr(upipe, p);
-        }
-        case UPIPE_ITERATE_SUB: {
-            struct upipe **p = va_arg(args, struct upipe **);
-            return upipe_avfsink_iterate_sub(upipe, p);
         }
         case UPIPE_GET_OPTION: {
             const char *option = va_arg(args, const char *);

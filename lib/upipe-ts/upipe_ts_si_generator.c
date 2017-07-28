@@ -2106,6 +2106,8 @@ static int upipe_ts_sig_control(struct upipe *upipe, int command, va_list args)
 {
     struct upipe_ts_sig *sig = upipe_ts_sig_from_upipe(upipe);
 
+    UBASE_HANDLED_RETURN(upipe_ts_sig_control_services(upipe, command, args));
+
     switch (command) {
         case UPIPE_REGISTER_REQUEST: {
             struct urequest *request = va_arg(args, struct urequest *);
@@ -2130,14 +2132,6 @@ static int upipe_ts_sig_control(struct upipe *upipe, int command, va_list args)
         case UPIPE_SET_OUTPUT: {
             struct upipe *output = va_arg(args, struct upipe *);
             return upipe_ts_sig_set_output(upipe, output);
-        }
-        case UPIPE_GET_SUB_MGR: {
-            struct upipe_mgr **p = va_arg(args, struct upipe_mgr **);
-            return upipe_ts_sig_get_service_mgr(upipe, p);
-        }
-        case UPIPE_ITERATE_SUB: {
-            struct upipe **p = va_arg(args, struct upipe **);
-            return upipe_ts_sig_iterate_service(upipe, p);
         }
 
         case UPIPE_TS_MUX_GET_NIT_INTERVAL: {

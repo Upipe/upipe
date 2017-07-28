@@ -288,6 +288,8 @@ static struct upipe *upipe_ts_psi_join_alloc(struct upipe_mgr *mgr,
 static int upipe_ts_psi_join_control(struct upipe *upipe,
                                      int command, va_list args)
 {
+    UBASE_HANDLED_RETURN(upipe_ts_psi_join_control_subs(upipe, command, args));
+
     switch (command) {
         case UPIPE_GET_FLOW_DEF: {
             struct uref **p = va_arg(args, struct uref **);
@@ -300,14 +302,6 @@ static int upipe_ts_psi_join_control(struct upipe *upipe,
         case UPIPE_SET_OUTPUT: {
             struct upipe *output = va_arg(args, struct upipe *);
             return upipe_ts_psi_join_set_output(upipe, output);
-        }
-        case UPIPE_GET_SUB_MGR: {
-            struct upipe_mgr **p = va_arg(args, struct upipe_mgr **);
-            return upipe_ts_psi_join_get_sub_mgr(upipe, p);
-        }
-        case UPIPE_ITERATE_SUB: {
-            struct upipe **p = va_arg(args, struct upipe **);
-            return upipe_ts_psi_join_iterate_sub(upipe, p);
         }
 
         default:

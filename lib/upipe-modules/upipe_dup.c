@@ -304,6 +304,8 @@ static int upipe_dup_set_flow_def(struct upipe *upipe,
  */
 static int upipe_dup_control(struct upipe *upipe, int command, va_list args)
 {
+    UBASE_HANDLED_RETURN(upipe_dup_control_outputs(upipe, command, args));
+
     switch (command) {
         case UPIPE_REGISTER_REQUEST: {
             struct urequest *request = va_arg(args, struct urequest *);
@@ -316,14 +318,6 @@ static int upipe_dup_control(struct upipe *upipe, int command, va_list args)
         case UPIPE_SET_FLOW_DEF: {
             struct uref *uref = va_arg(args, struct uref *);
             return upipe_dup_set_flow_def(upipe, uref);
-        }
-        case UPIPE_GET_SUB_MGR: {
-            struct upipe_mgr **p = va_arg(args, struct upipe_mgr **);
-            return upipe_dup_get_sub_mgr(upipe, p);
-        }
-        case UPIPE_ITERATE_SUB: {
-            struct upipe **p = va_arg(args, struct upipe **);
-            return upipe_dup_iterate_output(upipe, p);
         }
 
         default:

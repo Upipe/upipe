@@ -500,6 +500,9 @@ static int upipe_audio_split_set_flow_def(struct upipe *upipe,
 static int upipe_audio_split_control(struct upipe *upipe,
                                      int command, va_list args)
 {
+    UBASE_HANDLED_RETURN(
+        upipe_audio_split_control_outputs(upipe, command, args));
+
     switch (command) {
         case UPIPE_REGISTER_REQUEST: {
             struct urequest *request = va_arg(args, struct urequest *);
@@ -511,15 +514,6 @@ static int upipe_audio_split_control(struct upipe *upipe,
             struct uref *uref = va_arg(args, struct uref *);
             return upipe_audio_split_set_flow_def(upipe, uref);
         }
-        case UPIPE_GET_SUB_MGR: {
-            struct upipe_mgr **p = va_arg(args, struct upipe_mgr **);
-            return upipe_audio_split_get_sub_mgr(upipe, p);
-        }
-        case UPIPE_ITERATE_SUB: {
-            struct upipe **p = va_arg(args, struct upipe **);
-            return upipe_audio_split_iterate_output(upipe, p);
-        }
-
         default:
             return UBASE_ERR_UNHANDLED;
     }

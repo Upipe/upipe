@@ -529,15 +529,9 @@ static inline int _upipe_trickp_set_rate(struct upipe *upipe,
  */
 static int upipe_trickp_control(struct upipe *upipe, int command, va_list args)
 {
+    UBASE_HANDLED_RETURN(upipe_trickp_control_subs(upipe, command, args));
+
     switch (command) {
-        case UPIPE_GET_SUB_MGR: {
-            struct upipe_mgr **p = va_arg(args, struct upipe_mgr **);
-            return upipe_trickp_get_sub_mgr(upipe, p);
-        }
-        case UPIPE_ITERATE_SUB: {
-            struct upipe **p = va_arg(args, struct upipe **);
-            return upipe_trickp_iterate_sub(upipe, p);
-        }
         case UPIPE_END_PREROLL: {
             struct upipe_trickp *upipe_trickp = upipe_trickp_from_upipe(upipe);
             upipe_trickp->preroll = false;

@@ -562,6 +562,8 @@ static int _upipe_rtpr_set_delay(struct upipe *upipe, uint64_t delay)
  */
 static int upipe_rtpr_control(struct upipe *upipe, int command, va_list args)
 {
+    UBASE_HANDLED_RETURN(upipe_rtpr_control_inputs(upipe, command, args));
+
     switch (command) {
         case UPIPE_ATTACH_UPUMP_MGR: {
             upipe_rtpr_set_upump(upipe, NULL);
@@ -595,14 +597,6 @@ static int upipe_rtpr_control(struct upipe *upipe, int command, va_list args)
         case UPIPE_SET_OUTPUT: {
             struct upipe *output = va_arg(args, struct upipe *);
             return upipe_rtpr_set_output(upipe, output);
-        }
-        case UPIPE_GET_SUB_MGR: {
-            struct upipe_mgr **p = va_arg(args, struct upipe_mgr **);
-            return upipe_rtpr_get_sub_mgr(upipe, p);
-        }
-        case UPIPE_ITERATE_SUB: {
-            struct upipe **p = va_arg(args, struct upipe **);
-            return upipe_rtpr_iterate_input(upipe, p);
         }
         case UPIPE_RTPR_GET_DELAY: {
             UBASE_SIGNATURE_CHECK(args, UPIPE_RTPR_SIGNATURE)

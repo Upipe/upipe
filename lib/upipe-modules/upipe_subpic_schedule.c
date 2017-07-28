@@ -374,17 +374,11 @@ static void upipe_subpic_schedule_input(struct upipe *upipe, struct uref *uref, 
 static int upipe_subpic_schedule_control(struct upipe *upipe, int command, va_list args)
 {
     struct upipe_subpic_schedule *upipe_subpic_schedule = upipe_subpic_schedule_from_upipe(upipe);
+
+    UBASE_HANDLED_RETURN(
+        upipe_subpic_schedule_control_subs(upipe, command, args));
+
     switch (command) {
-        case UPIPE_GET_SUB_MGR: {
-            struct upipe_mgr **p = va_arg(args, struct upipe_mgr **);
-            return upipe_subpic_schedule_get_sub_mgr(upipe, p);
-        }
-
-        case UPIPE_ITERATE_SUB: {
-            struct upipe **p = va_arg(args, struct upipe **);
-            return upipe_subpic_schedule_iterate_sub(upipe, p);
-        }
-
         case UPIPE_GET_OUTPUT: {
             struct upipe **p = va_arg(args, struct upipe **);
             return upipe_subpic_schedule_get_output(upipe, p);

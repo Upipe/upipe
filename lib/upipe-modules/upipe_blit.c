@@ -938,6 +938,8 @@ static int _upipe_blit_prepare(struct upipe *upipe, struct upump **upump_p)
  */
 static int upipe_blit_control(struct upipe *upipe, int command, va_list args)
 {
+    UBASE_HANDLED_RETURN(upipe_blit_control_subs(upipe, command, args));
+
     switch (command) {
         case UPIPE_REGISTER_REQUEST: {
             struct urequest *request = va_arg(args, struct urequest *);
@@ -962,14 +964,6 @@ static int upipe_blit_control(struct upipe *upipe, int command, va_list args)
         case UPIPE_SET_OUTPUT: {
             struct upipe *output = va_arg(args, struct upipe *);
             return upipe_blit_set_output(upipe, output);
-        }
-        case UPIPE_GET_SUB_MGR: {
-            struct upipe_mgr **p = va_arg(args, struct upipe_mgr **);
-            return upipe_blit_get_sub_mgr(upipe, p);
-        }
-        case UPIPE_ITERATE_SUB: {
-            struct upipe **p = va_arg(args, struct upipe **);
-            return upipe_blit_iterate_sub(upipe, p);
         }
 
         case UPIPE_BLIT_PREPARE: {

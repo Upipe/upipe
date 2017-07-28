@@ -1154,6 +1154,9 @@ static int upipe_ts_psig_program_set_version(struct upipe *upipe,
 static int upipe_ts_psig_program_control(struct upipe *upipe,
                                          int command, va_list args)
 {
+    UBASE_HANDLED_RETURN(
+        upipe_ts_psig_program_control_flows(upipe, command, args));
+
     switch (command) {
         case UPIPE_REGISTER_REQUEST: {
             struct upipe_ts_psig *upipe_ts_psig =
@@ -1184,14 +1187,6 @@ static int upipe_ts_psig_program_control(struct upipe *upipe,
         case UPIPE_SET_OUTPUT: {
             struct upipe *output = va_arg(args, struct upipe *);
             return upipe_ts_psig_program_set_output(upipe, output);
-        }
-        case UPIPE_GET_SUB_MGR: {
-            struct upipe_mgr **p = va_arg(args, struct upipe_mgr **);
-            return upipe_ts_psig_program_get_flow_mgr(upipe, p);
-        }
-        case UPIPE_ITERATE_SUB: {
-            struct upipe **p = va_arg(args, struct upipe **);
-            return upipe_ts_psig_program_iterate_flow(upipe, p);
         }
         case UPIPE_SUB_GET_SUPER: {
             struct upipe **p = va_arg(args, struct upipe **);
@@ -1688,6 +1683,8 @@ static int upipe_ts_psig_prepare(struct upipe *upipe, uint64_t cr_sys,
  */
 static int upipe_ts_psig_control(struct upipe *upipe, int command, va_list args)
 {
+    UBASE_HANDLED_RETURN(upipe_ts_psig_control_programs(upipe, command, args));
+
     switch (command) {
         case UPIPE_REGISTER_REQUEST: {
             struct urequest *request = va_arg(args, struct urequest *);
@@ -1712,14 +1709,6 @@ static int upipe_ts_psig_control(struct upipe *upipe, int command, va_list args)
         case UPIPE_SET_OUTPUT: {
             struct upipe *output = va_arg(args, struct upipe *);
             return upipe_ts_psig_set_output(upipe, output);
-        }
-        case UPIPE_GET_SUB_MGR: {
-            struct upipe_mgr **p = va_arg(args, struct upipe_mgr **);
-            return upipe_ts_psig_get_program_mgr(upipe, p);
-        }
-        case UPIPE_ITERATE_SUB: {
-            struct upipe **p = va_arg(args, struct upipe **);
-            return upipe_ts_psig_iterate_program(upipe, p);
         }
 
         case UPIPE_TS_MUX_GET_PAT_INTERVAL: {

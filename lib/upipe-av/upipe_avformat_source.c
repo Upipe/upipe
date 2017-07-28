@@ -1103,6 +1103,8 @@ static int _upipe_avfsrc_set_time(struct upipe *upipe, uint64_t time)
 static int _upipe_avfsrc_control(struct upipe *upipe,
                                  int command, va_list args)
 {
+    UBASE_HANDLED_RETURN(upipe_avfsrc_control_subs(upipe, command, args));
+
     switch (command) {
         case UPIPE_ATTACH_UPUMP_MGR:
             upipe_avfsrc_set_upump(upipe, NULL);
@@ -1128,14 +1130,6 @@ static int _upipe_avfsrc_control(struct upipe *upipe,
         case UPIPE_SPLIT_ITERATE: {
             struct uref **p = va_arg(args, struct uref **);
             return upipe_avfsrc_iterate(upipe, p);
-        }
-        case UPIPE_GET_SUB_MGR: {
-            struct upipe_mgr **p = va_arg(args, struct upipe_mgr **);
-            return upipe_avfsrc_get_sub_mgr(upipe, p);
-        }
-        case UPIPE_ITERATE_SUB: {
-            struct upipe **p = va_arg(args, struct upipe **);
-            return upipe_avfsrc_iterate_sub(upipe, p);
         }
 
         case UPIPE_GET_OPTION: {

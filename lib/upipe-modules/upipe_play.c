@@ -362,19 +362,7 @@ static void upipe_play_set_sink_latency(struct upipe *upipe, uint64_t latency)
  */
 static int upipe_play_control(struct upipe *upipe, int command, va_list args)
 {
-    switch (command) {
-        case UPIPE_GET_SUB_MGR: {
-            struct upipe_mgr **p = va_arg(args, struct upipe_mgr **);
-            return upipe_play_get_sub_mgr(upipe, p);
-        }
-        case UPIPE_ITERATE_SUB: {
-            struct upipe **p = va_arg(args, struct upipe **);
-            return upipe_play_iterate_sub(upipe, p);
-        }
-
-        default:
-            return UBASE_ERR_UNHANDLED;
-    }
+    return upipe_play_control_subs(upipe, command, args);
 }
 
 /** @This frees a upipe.

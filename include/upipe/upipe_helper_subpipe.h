@@ -288,6 +288,28 @@ static int STRUCTURE##_iterate_##SUB(struct upipe *upipe, struct upipe **p) \
     *p = STRUCTURE_SUB##_to_upipe(STRUCTURE_SUB##_from_uchain(u->next));    \
     return UBASE_ERR_NONE;                                                  \
 }                                                                           \
+/** @This handles specific super pipes commands.                            \
+ *                                                                          \
+ * @param upipe description structure of the super-pipe                     \
+ * @param command type of command to handle                                 \
+ * @param args optional arguments                                           \
+ * @return an error code                                                    \
+ */                                                                         \
+static inline int STRUCTURE##_control_##SUB##s(struct upipe *upipe,         \
+                                               int command, va_list args)   \
+{                                                                           \
+    switch (command) {                                                      \
+        case UPIPE_GET_SUB_MGR: {                                           \
+            struct upipe_mgr **mgr_p = va_arg(args, struct upipe_mgr **);   \
+            return STRUCTURE##_get_##MGR(upipe, mgr_p);                     \
+        }                                                                   \
+        case UPIPE_ITERATE_SUB: {                                           \
+            struct upipe **sub_p = va_arg(args, struct upipe **);           \
+            return STRUCTURE##_iterate_##SUB(upipe, sub_p);                 \
+        }                                                                   \
+    }                                                                       \
+    return UBASE_ERR_UNHANDLED;                                             \
+}                                                                           \
 /** @This throws an event from all subpipes.                                \
  *                                                                          \
  * @param upipe description structure of the pipe                           \

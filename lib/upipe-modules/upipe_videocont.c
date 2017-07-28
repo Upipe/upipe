@@ -688,6 +688,9 @@ static int upipe_videocont_control(struct upipe *upipe,
                                    int command, va_list args)
 {
     struct upipe_videocont *upipe_videocont = upipe_videocont_from_upipe(upipe);
+
+    UBASE_HANDLED_RETURN(upipe_videocont_control_subs(upipe, command, args));
+
     switch (command) {
         case UPIPE_REGISTER_REQUEST: {
             struct urequest *request = va_arg(args, struct urequest *);
@@ -712,14 +715,6 @@ static int upipe_videocont_control(struct upipe *upipe,
         case UPIPE_SET_OUTPUT: {
             struct upipe *output = va_arg(args, struct upipe *);
             return upipe_videocont_set_output(upipe, output);
-        }
-        case UPIPE_GET_SUB_MGR: {
-            struct upipe_mgr **p = va_arg(args, struct upipe_mgr **);
-            return upipe_videocont_get_sub_mgr(upipe, p);
-        }
-        case UPIPE_ITERATE_SUB: {
-            struct upipe **p = va_arg(args, struct upipe **);
-            return upipe_videocont_iterate_sub(upipe, p);
         }
 
         case UPIPE_VIDEOCONT_SET_INPUT: {

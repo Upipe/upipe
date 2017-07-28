@@ -408,6 +408,8 @@ static int upipe_ts_split_set_flow_def(struct upipe *upipe,
 static int upipe_ts_split_control(struct upipe *upipe,
                                   int command, va_list args)
 {
+    UBASE_HANDLED_RETURN(upipe_ts_split_control_subs(upipe, command, args));
+
     switch (command) {
         case UPIPE_REGISTER_REQUEST: {
             struct urequest *request = va_arg(args, struct urequest *);
@@ -420,14 +422,6 @@ static int upipe_ts_split_control(struct upipe *upipe,
         case UPIPE_SET_FLOW_DEF: {
             struct uref *flow_def = va_arg(args, struct uref *);
             return upipe_ts_split_set_flow_def(upipe, flow_def);
-        }
-        case UPIPE_GET_SUB_MGR: {
-            struct upipe_mgr **p = va_arg(args, struct upipe_mgr **);
-            return upipe_ts_split_get_sub_mgr(upipe, p);
-        }
-        case UPIPE_ITERATE_SUB: {
-            struct upipe **p = va_arg(args, struct upipe **);
-            return upipe_ts_split_iterate_sub(upipe, p);
         }
 
         default:

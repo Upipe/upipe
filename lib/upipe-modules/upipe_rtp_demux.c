@@ -544,21 +544,7 @@ static struct upipe *upipe_rtp_demux_alloc(struct upipe_mgr *mgr,
 static int upipe_rtp_demux_control(struct upipe *upipe,
                                    int command, va_list args)
 {
-    switch (command) {
-        case UPIPE_GET_SUB_MGR: {
-            struct upipe_mgr **p = va_arg(args, struct upipe_mgr **);
-            return upipe_rtp_demux_get_sub_mgr(upipe, p);
-        }
-        case UPIPE_ITERATE_SUB: {
-            struct upipe **p = va_arg(args, struct upipe **);
-            return upipe_rtp_demux_iterate_sub(upipe, p);
-        }
-
-        default:
-            break;
-    }
-
-    return UBASE_ERR_UNHANDLED;
+    return upipe_rtp_demux_control_subs(upipe, command, args);
 }
 
 /** @This frees a upipe.

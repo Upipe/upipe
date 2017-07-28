@@ -478,20 +478,12 @@ static int _upipe_hls_variant_control(struct upipe *upipe,
                                       int command,
                                       va_list args)
 {
+    UBASE_HANDLED_RETURN(upipe_hls_variant_control_pipes(upipe, command, args));
+
     switch (command) {
     case UPIPE_ATTACH_UPUMP_MGR:
         upipe_hls_variant_set_upump(upipe, NULL);
         return upipe_hls_variant_attach_upump_mgr(upipe);
-
-    case UPIPE_GET_SUB_MGR: {
-        struct upipe_mgr **sub_mgr_p = va_arg(args, struct upipe_mgr **);
-        return upipe_hls_variant_get_sub_mgr(upipe, sub_mgr_p);
-    }
-
-    case UPIPE_ITERATE_SUB: {
-        struct upipe **sub_p = va_arg(args, struct upipe **);
-        return upipe_hls_variant_iterate_pipe(upipe, sub_p);
-    }
 
     case UPIPE_SPLIT_ITERATE: {
         struct uref **uref_p = va_arg(args, struct uref **);

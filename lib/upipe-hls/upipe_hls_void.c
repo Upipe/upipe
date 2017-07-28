@@ -645,6 +645,8 @@ static int upipe_hls_void_control(struct upipe *upipe,
                                   int command,
                                   va_list args)
 {
+    UBASE_HANDLED_RETURN(upipe_hls_void_control_pipes(upipe, command, args));
+
     switch (command) {
     case UPIPE_ATTACH_UCLOCK:
         return upipe_hls_void_attach_uclock(upipe);
@@ -654,14 +656,6 @@ static int upipe_hls_void_control(struct upipe *upipe,
         return upipe_hls_void_set_uri(upipe, uri);
     }
 
-    case UPIPE_GET_SUB_MGR: {
-        struct upipe_mgr **sub_mgr = va_arg(args, struct upipe_mgr **);
-        return upipe_hls_void_get_sub_mgr(upipe, sub_mgr);
-    }
-    case UPIPE_ITERATE_SUB: {
-        struct upipe **upipe_p = va_arg(args, struct upipe **);
-        return upipe_hls_void_iterate_pipe(upipe, upipe_p);
-    }
     case UPIPE_SPLIT_ITERATE:
         return upipe_hls_void_control_pmt(upipe, command, args);
     case UPIPE_BIN_GET_FIRST_INNER: {

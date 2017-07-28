@@ -538,15 +538,9 @@ static int upipe_even_end_preroll(struct upipe *upipe)
  */
 static int upipe_even_control(struct upipe *upipe, int command, va_list args)
 {
+    UBASE_HANDLED_RETURN(upipe_even_control_subs(upipe, command, args));
+
     switch (command) {
-        case UPIPE_GET_SUB_MGR: {
-            struct upipe_mgr **p = va_arg(args, struct upipe_mgr **);
-            return upipe_even_get_sub_mgr(upipe, p);
-        }
-        case UPIPE_ITERATE_SUB: {
-            struct upipe **p = va_arg(args, struct upipe **);
-            return upipe_even_iterate_sub(upipe, p);
-        }
         case UPIPE_END_PREROLL:
             return upipe_even_end_preroll(upipe);
 
