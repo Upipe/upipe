@@ -485,18 +485,11 @@ static int _upipe_dveo_asi_src_control(struct upipe *upipe, int command, va_list
             upipe_dveo_asi_src_require_uclock(upipe);
             return UBASE_ERR_NONE;
 
-        case UPIPE_GET_FLOW_DEF: {
-            struct uref **p = va_arg(args, struct uref **);
-            return upipe_dveo_asi_src_get_flow_def(upipe, p);
-        }
-        case UPIPE_GET_OUTPUT: {
-            struct upipe **p = va_arg(args, struct upipe **);
-            return upipe_dveo_asi_src_get_output(upipe, p);
-        }
-        case UPIPE_SET_OUTPUT: {
-            struct upipe *output = va_arg(args, struct upipe *);
-            return upipe_dveo_asi_src_set_output(upipe, output);
-        }
+        case UPIPE_GET_FLOW_DEF:
+        case UPIPE_GET_OUTPUT:
+        case UPIPE_SET_OUTPUT:
+            return upipe_dveo_asi_src_control_output(upipe, command, args);
+
         case UPIPE_SET_OPTION: {
             const char *k = va_arg(args, const char *);
             const char *v = va_arg(args, const char *);

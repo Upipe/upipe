@@ -1114,18 +1114,11 @@ static int _upipe_avfsrc_control(struct upipe *upipe,
             upipe_avfsrc_set_upump(upipe, NULL);
             upipe_avfsrc_require_uclock(upipe);
             return UBASE_ERR_NONE;
-        case UPIPE_GET_FLOW_DEF: {
-            struct uref **p = va_arg(args, struct uref **);
-            return upipe_avfsrc_get_flow_def(upipe, p);
-        }
-        case UPIPE_GET_OUTPUT: {
-            struct upipe **p = va_arg(args, struct upipe **);
-            return upipe_avfsrc_get_output(upipe, p);
-        }
-        case UPIPE_SET_OUTPUT: {
-            struct upipe *output = va_arg(args, struct upipe *);
-            return upipe_avfsrc_set_output(upipe, output);
-        }
+
+        case UPIPE_GET_FLOW_DEF:
+        case UPIPE_GET_OUTPUT:
+        case UPIPE_SET_OUTPUT:
+            return upipe_avfsrc_control_output(upipe, command, args);
 
         case UPIPE_SPLIT_ITERATE: {
             struct uref **p = va_arg(args, struct uref **);

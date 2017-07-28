@@ -699,21 +699,13 @@ static int upipe_aes_decrypt_control(struct upipe *upipe,
             return UBASE_ERR_NONE;
         return upipe_aes_decrypt_free_output_proxy(upipe, urequest);
     }
-    case UPIPE_GET_OUTPUT: {
-        struct upipe **output_p = va_arg(args, struct upipe **);
-        return upipe_aes_decrypt_get_output(upipe, output_p);
-    }
-    case UPIPE_SET_OUTPUT: {
-        struct upipe *output = va_arg(args, struct upipe *);
-        return upipe_aes_decrypt_set_output(upipe, output);
-    }
+    case UPIPE_GET_OUTPUT:
+    case UPIPE_SET_OUTPUT:
+    case UPIPE_GET_FLOW_DEF:
+        return upipe_aes_decrypt_control(upipe, command, args);
     case UPIPE_SET_FLOW_DEF: {
         struct uref *flow_def = va_arg(args, struct uref *);
         return upipe_aes_decrypt_set_flow_def(upipe, flow_def);
-    }
-    case UPIPE_GET_FLOW_DEF: {
-        struct uref **flow_def_p = va_arg(args, struct uref **);
-        return upipe_aes_decrypt_get_flow_def(upipe, flow_def_p);
     }
     }
     return UBASE_ERR_UNHANDLED;

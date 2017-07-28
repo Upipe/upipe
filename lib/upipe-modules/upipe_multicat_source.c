@@ -606,26 +606,18 @@ static int _upipe_msrc_control(struct upipe *upipe, int command, va_list args)
         case UPIPE_ATTACH_UPUMP_MGR:
             upipe_msrc_set_upump(upipe, NULL);
             return upipe_msrc_attach_upump_mgr(upipe);
-        case UPIPE_GET_FLOW_DEF: {
-            struct uref **p = va_arg(args, struct uref **);
-            return upipe_msrc_get_flow_def(upipe, p);
-        }
         case UPIPE_SET_FLOW_DEF: {
             struct uref *flow_def = va_arg(args, struct uref *);
             return upipe_msrc_set_flow_def(upipe, flow_def);
-        }
-        case UPIPE_GET_OUTPUT: {
-            struct upipe **p = va_arg(args, struct upipe **);
-            return upipe_msrc_get_output(upipe, p);
-        }
-        case UPIPE_SET_OUTPUT: {
-            struct upipe *output = va_arg(args, struct upipe *);
-            return upipe_msrc_set_output(upipe, output);
         }
         case UPIPE_GET_OUTPUT_SIZE: {
             unsigned int *p = va_arg(args, unsigned int *);
             return upipe_msrc_get_output_size(upipe, p);
         }
+        case UPIPE_GET_FLOW_DEF:
+        case UPIPE_GET_OUTPUT:
+        case UPIPE_SET_OUTPUT:
+            return upipe_msrc_control_output(upipe, command, args);
         case UPIPE_SET_OUTPUT_SIZE: {
             unsigned int output_size = va_arg(args, unsigned int);
             return _upipe_msrc_set_output_size(upipe, output_size);

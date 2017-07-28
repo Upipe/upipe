@@ -146,30 +146,14 @@ static void upipe_subpic_schedule_sub_free(struct upipe *upipe)
 static int upipe_subpic_schedule_sub_control(struct upipe *upipe, int command, va_list args)
 {
     struct upipe_subpic_schedule_sub *upipe_subpic_schedule_sub = upipe_subpic_schedule_sub_from_upipe(upipe);
-    switch (command) {
-        case UPIPE_GET_OUTPUT: {
-            struct upipe **p = va_arg(args, struct upipe **);
-            return upipe_subpic_schedule_sub_get_output(upipe, p);
-        }
-        case UPIPE_SET_OUTPUT: {
-            struct upipe *output = va_arg(args, struct upipe *);
-            return upipe_subpic_schedule_sub_set_output(upipe, output);
-        }
 
+    UBASE_HANDLED_RETURN(
+        upipe_subpic_schedule_sub_control_output(upipe, command, args));
+    switch (command) {
         case UPIPE_SET_FLOW_DEF: {
             struct uref *uref = va_arg(args, struct uref *);
             upipe_subpic_schedule_sub_store_flow_def(upipe, uref_dup(uref));
             return UBASE_ERR_NONE;
-        }
-
-        case UPIPE_REGISTER_REQUEST: {
-            struct urequest *request = va_arg(args, struct urequest *);
-            return upipe_subpic_schedule_sub_alloc_output_proxy(upipe, request);
-        }
-
-        case UPIPE_UNREGISTER_REQUEST: {
-            struct urequest *request = va_arg(args, struct urequest *);
-            return upipe_subpic_schedule_sub_free_output_proxy(upipe, request);
         }
 
         default:
@@ -376,27 +360,11 @@ static int upipe_subpic_schedule_control(struct upipe *upipe, int command, va_li
     struct upipe_subpic_schedule *upipe_subpic_schedule = upipe_subpic_schedule_from_upipe(upipe);
 
     UBASE_HANDLED_RETURN(
+        upipe_subpic_schedule_control_output(upipe, command, args));
+    UBASE_HANDLED_RETURN(
         upipe_subpic_schedule_control_subs(upipe, command, args));
 
     switch (command) {
-        case UPIPE_GET_OUTPUT: {
-            struct upipe **p = va_arg(args, struct upipe **);
-            return upipe_subpic_schedule_get_output(upipe, p);
-        }
-        case UPIPE_SET_OUTPUT: {
-            struct upipe *output = va_arg(args, struct upipe *);
-            return upipe_subpic_schedule_set_output(upipe, output);
-        }
-
-        case UPIPE_REGISTER_REQUEST: {
-            struct urequest *request = va_arg(args, struct urequest *);
-            return upipe_subpic_schedule_alloc_output_proxy(upipe, request);
-        }
-        case UPIPE_UNREGISTER_REQUEST: {
-            struct urequest *request = va_arg(args, struct urequest *);
-            return upipe_subpic_schedule_free_output_proxy(upipe, request);
-        }
-
         case UPIPE_SET_FLOW_DEF: {
             struct uref *uref = va_arg(args, struct uref *);
             upipe_subpic_schedule_store_flow_def(upipe, uref_dup(uref));

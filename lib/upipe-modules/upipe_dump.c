@@ -157,32 +157,11 @@ static int upipe_dump_set_flow_def(struct upipe *upipe, struct uref *flow_def)
 
 static int upipe_dump_control(struct upipe *upipe, int command, va_list args)
 {
+    UBASE_HANDLED_RETURN(upipe_dump_control_output(upipe, command, args));
     switch (command) {
-    case UPIPE_REGISTER_REQUEST: {
-        struct urequest *request = va_arg(args, struct urequest *);
-        return upipe_dump_alloc_output_proxy(upipe, request);
-    }
-    case UPIPE_UNREGISTER_REQUEST: {
-        struct urequest *request = va_arg(args, struct urequest *);
-        return upipe_dump_free_output_proxy(upipe, request);
-    }
-
     case UPIPE_SET_FLOW_DEF: {
         struct uref *flow_def = va_arg(args, struct uref *);
         return upipe_dump_set_flow_def(upipe, flow_def);
-    }
-    case UPIPE_GET_FLOW_DEF: {
-        struct uref **flow_def_p = va_arg(args, struct uref **);
-        return upipe_dump_get_flow_def(upipe, flow_def_p);
-    }
-
-    case UPIPE_SET_OUTPUT: {
-        struct upipe *output = va_arg(args, struct upipe *);
-        return upipe_dump_set_output(upipe, output);
-    }
-    case UPIPE_GET_OUTPUT: {
-        struct upipe **output_p = va_arg(args, struct upipe **);
-        return upipe_dump_get_output(upipe, output_p);
     }
 
     case UPIPE_DUMP_SET_MAX_LEN: {

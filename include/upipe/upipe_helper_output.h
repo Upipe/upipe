@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2012-2015 OpenHeadend S.A.R.L.
+ * Copyright (C) 2012-2017 OpenHeadend S.A.R.L.
  *
  * Authors: Christophe Massiot
  *
@@ -55,7 +55,7 @@ enum upipe_helper_output_state {
     UPIPE_HELPER_OUTPUT_INVALID
 };
 
-/** @This declares twelve functions dealing with the output of a pipe,
+/** @This declares functions dealing with the output of a pipe,
  * and an associated uref which is the flow definition on the output.
  *
  * You must add four members to your private upipe structure, for instance:
@@ -147,6 +147,22 @@ enum upipe_helper_output_state {
  *  case UPIPE_SET_OUTPUT: {
  *      struct upipe *output = va_arg(args, struct upipe *);
  *      return upipe_foo_set_output(upipe, output);
+ *  }
+ * @end code
+ *
+ * @item @code
+ *  int upipe_foo_control_output(struct upipe *upipe,
+ *                               int command, va_list args)
+ * @end code
+ * This function handles the output helper control commands
+ * (upipe_foo_get_flow_def, upipe_foo_get_output, upipe_foo_set_output, ...).
+ * Typically called from your upipe_foo_control() handler, such as:
+ * @code
+ *  int upipe_foo_control(struct upipe *upipe, int command, va_list args)
+ *  {
+ *      ...
+ *      UBASE_HANDLED_RETURN(upipe_foo_control_output(upipe, command, args));
+ *      ...
  *  }
  * @end code
  *
@@ -432,6 +448,41 @@ static int STRUCTURE##_set_output(struct upipe *upipe, struct upipe *output)\
         break;                                                              \
     }                                                                       \
     return UBASE_ERR_NONE;                                                  \
+}                                                                           \
+/** @This handles get/set output controls.                                  \
+ *                                                                          \
+ * @param upipe description structure of the pipe                           \
+ * @param command type of command to process                                \
+ * @param args optional arguments                                           \
+ * @return an error code                                                    \
+ */                                                                         \
+static inline int STRUCTURE##_control_output(struct upipe *upipe,           \
+                                             int command,                   \
+                                             va_list args)                  \
+{                                                                           \
+    switch (command) {                                                      \
+        case UPIPE_REGISTER_REQUEST: {                                      \
+            struct urequest *urequest = va_arg(args, struct urequest *);    \
+            return STRUCTURE##_alloc_output_proxy(upipe, urequest);         \
+        }                                                                   \
+        case UPIPE_UNREGISTER_REQUEST: {                                    \
+            struct urequest *urequest = va_arg(args, struct urequest *);    \
+            return STRUCTURE##_free_output_proxy(upipe, urequest);          \
+        }                                                                   \
+        case UPIPE_GET_FLOW_DEF: {                                          \
+            struct uref **flow_def_p = va_arg(args, struct uref **);        \
+            return STRUCTURE##_get_flow_def(upipe, flow_def_p);             \
+        }                                                                   \
+        case UPIPE_GET_OUTPUT: {                                            \
+            struct upipe **output_p = va_arg(args, struct upipe **);        \
+            return STRUCTURE##_get_output(upipe, output_p);                 \
+        }                                                                   \
+        case UPIPE_SET_OUTPUT: {                                            \
+            struct upipe *output = va_arg(args, struct upipe *);            \
+            return STRUCTURE##_set_output(upipe, output);                   \
+        }                                                                   \
+    }                                                                       \
+    return UBASE_ERR_UNHANDLED;                                             \
 }                                                                           \
 /** @internal @This cleans up the private members for this helper.          \
  *                                                                          \

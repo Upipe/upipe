@@ -938,32 +938,13 @@ static int _upipe_blit_prepare(struct upipe *upipe, struct upump **upump_p)
  */
 static int upipe_blit_control(struct upipe *upipe, int command, va_list args)
 {
+    UBASE_HANDLED_RETURN(upipe_blit_control_output(upipe, command, args));
     UBASE_HANDLED_RETURN(upipe_blit_control_subs(upipe, command, args));
 
     switch (command) {
-        case UPIPE_REGISTER_REQUEST: {
-            struct urequest *request = va_arg(args, struct urequest *);
-            return upipe_blit_alloc_output_proxy(upipe, request);
-        }
-        case UPIPE_UNREGISTER_REQUEST: {
-            struct urequest *request = va_arg(args, struct urequest *);
-            return upipe_blit_free_output_proxy(upipe, request);
-        }
-        case UPIPE_GET_FLOW_DEF: {
-            struct uref **p = va_arg(args, struct uref **);
-            return upipe_blit_get_flow_def(upipe, p);
-        }
         case UPIPE_SET_FLOW_DEF: {
             struct uref *flow = va_arg(args, struct uref *);
             return upipe_blit_set_flow_def(upipe, flow);
-        }
-        case UPIPE_GET_OUTPUT: {
-            struct upipe **p = va_arg(args, struct upipe **);
-            return upipe_blit_get_output(upipe, p);
-        }
-        case UPIPE_SET_OUTPUT: {
-            struct upipe *output = va_arg(args, struct upipe *);
-            return upipe_blit_set_output(upipe, output);
         }
 
         case UPIPE_BLIT_PREPARE: {

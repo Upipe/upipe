@@ -913,18 +913,10 @@ static int upipe_ts_sig_output_control(struct upipe *upipe,
                                        int command, va_list args)
 {
     switch (command) {
-        case UPIPE_GET_FLOW_DEF: {
-            struct uref **p = va_arg(args, struct uref **);
-            return upipe_ts_sig_output_get_flow_def(upipe, p);
-        }
-        case UPIPE_GET_OUTPUT: {
-            struct upipe **p = va_arg(args, struct upipe **);
-            return upipe_ts_sig_output_get_output(upipe, p);
-        }
-        case UPIPE_SET_OUTPUT: {
-            struct upipe *output = va_arg(args, struct upipe *);
-            return upipe_ts_sig_output_set_output(upipe, output);
-        }
+        case UPIPE_GET_FLOW_DEF:
+        case UPIPE_GET_OUTPUT:
+        case UPIPE_SET_OUTPUT:
+            return upipe_ts_sig_output_control_output(upipe, command, args);
         case UPIPE_SUB_GET_SUPER: {
             struct upipe **p = va_arg(args, struct upipe **);
             *p = upipe_ts_sig_to_upipe(upipe_ts_sig_from_output_mgr(upipe->mgr));
@@ -2106,32 +2098,13 @@ static int upipe_ts_sig_control(struct upipe *upipe, int command, va_list args)
 {
     struct upipe_ts_sig *sig = upipe_ts_sig_from_upipe(upipe);
 
+    UBASE_HANDLED_RETURN(upipe_ts_sig_control_output(upipe, command, args));
     UBASE_HANDLED_RETURN(upipe_ts_sig_control_services(upipe, command, args));
 
     switch (command) {
-        case UPIPE_REGISTER_REQUEST: {
-            struct urequest *request = va_arg(args, struct urequest *);
-            return upipe_ts_sig_alloc_output_proxy(upipe, request);
-        }
-        case UPIPE_UNREGISTER_REQUEST: {
-            struct urequest *request = va_arg(args, struct urequest *);
-            return upipe_ts_sig_free_output_proxy(upipe, request);
-        }
-        case UPIPE_GET_FLOW_DEF: {
-            struct uref **p = va_arg(args, struct uref **);
-            return upipe_ts_sig_get_flow_def(upipe, p);
-        }
         case UPIPE_SET_FLOW_DEF: {
             struct uref *flow_def = va_arg(args, struct uref *);
             return upipe_ts_sig_set_flow_def(upipe, flow_def);
-        }
-        case UPIPE_GET_OUTPUT: {
-            struct upipe **p = va_arg(args, struct upipe **);
-            return upipe_ts_sig_get_output(upipe, p);
-        }
-        case UPIPE_SET_OUTPUT: {
-            struct upipe *output = va_arg(args, struct upipe *);
-            return upipe_ts_sig_set_output(upipe, output);
         }
 
         case UPIPE_TS_MUX_GET_NIT_INTERVAL: {

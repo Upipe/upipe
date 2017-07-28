@@ -291,18 +291,10 @@ static int upipe_ts_psi_join_control(struct upipe *upipe,
     UBASE_HANDLED_RETURN(upipe_ts_psi_join_control_subs(upipe, command, args));
 
     switch (command) {
-        case UPIPE_GET_FLOW_DEF: {
-            struct uref **p = va_arg(args, struct uref **);
-            return upipe_ts_psi_join_get_flow_def(upipe, p);
-        }
-        case UPIPE_GET_OUTPUT: {
-            struct upipe **p = va_arg(args, struct upipe **);
-            return upipe_ts_psi_join_get_output(upipe, p);
-        }
-        case UPIPE_SET_OUTPUT: {
-            struct upipe *output = va_arg(args, struct upipe *);
-            return upipe_ts_psi_join_set_output(upipe, output);
-        }
+        case UPIPE_GET_FLOW_DEF:
+        case UPIPE_GET_OUTPUT:
+        case UPIPE_SET_OUTPUT:
+            return upipe_ts_psi_join_control_output(upipe, command, args);
 
         default:
             return UBASE_ERR_UNHANDLED;

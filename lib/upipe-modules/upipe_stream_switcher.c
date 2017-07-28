@@ -665,23 +665,15 @@ static int upipe_stream_switcher_control(struct upipe *upipe,
     UBASE_HANDLED_RETURN(upipe_control_provide_request(upipe, command, args));
 
     switch (command) {
-    case UPIPE_GET_FLOW_DEF: {
-        struct uref **p = va_arg(args, struct uref **);
-        return upipe_stream_switcher_get_flow_def(upipe, p);
-    }
     case UPIPE_SET_FLOW_DEF: {
         struct uref *flow_def = va_arg(args, struct uref *);
         return upipe_stream_switcher_set_flow_def(upipe, flow_def);
     }
 
-    case UPIPE_GET_OUTPUT: {
-        struct upipe **p = va_arg(args, struct upipe **);
-        return upipe_stream_switcher_get_output(upipe, p);
-    }
-    case UPIPE_SET_OUTPUT: {
-        struct upipe *output = va_arg(args, struct upipe *);
-        return upipe_stream_switcher_set_output(upipe, output);
-    }
+    case UPIPE_GET_FLOW_DEF:
+    case UPIPE_GET_OUTPUT:
+    case UPIPE_SET_OUTPUT:
+        return upipe_stream_switcher_control_output(upipe, command, args);
 
     default:
         return UBASE_ERR_UNHANDLED;

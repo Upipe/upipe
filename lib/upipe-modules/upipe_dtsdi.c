@@ -310,19 +310,6 @@ static int upipe_dtsdi_control(struct upipe *upipe, int command, va_list args)
             struct uref *p = va_arg(args, struct uref *);
             return upipe_dtsdi_set_flow_def(upipe, p);
         }
-        case UPIPE_GET_FLOW_DEF: {
-            struct uref **p = va_arg(args, struct uref **);
-            return upipe_dtsdi_get_flow_def(upipe, p);
-        }
-        case UPIPE_GET_OUTPUT: {
-            struct upipe **p = va_arg(args, struct upipe **);
-            return upipe_dtsdi_get_output(upipe, p);
-        }
-        case UPIPE_SET_OUTPUT: {
-            struct upipe *output = va_arg(args, struct upipe *);
-            return upipe_dtsdi_set_output(upipe, output);
-        }
-
         case UPIPE_GET_OUTPUT_SIZE: {
             unsigned int *p = va_arg(args, unsigned int *);
             return upipe_dtsdi_get_output_size(upipe, p);
@@ -331,6 +318,11 @@ static int upipe_dtsdi_control(struct upipe *upipe, int command, va_list args)
             unsigned int output_size = va_arg(args, unsigned int);
             return upipe_dtsdi_set_output_size(upipe, output_size);
         }
+        case UPIPE_GET_FLOW_DEF:
+        case UPIPE_GET_OUTPUT:
+        case UPIPE_SET_OUTPUT:
+            return upipe_dtsdi_control_output(upipe, command, args);
+
         default:
             return UBASE_ERR_UNHANDLED;
     }

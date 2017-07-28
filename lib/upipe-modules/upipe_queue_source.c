@@ -393,18 +393,10 @@ static int _upipe_qsrc_control(struct upipe *upipe, int command, va_list args)
         case UPIPE_ATTACH_UPUMP_MGR:
             upipe_qsrc_set_upump(upipe, NULL);
             return upipe_qsrc_attach_upump_mgr(upipe);
-        case UPIPE_GET_FLOW_DEF: {
-            struct uref **p = va_arg(args, struct uref **);
-            return upipe_qsrc_get_flow_def(upipe, p);
-        }
-        case UPIPE_GET_OUTPUT: {
-            struct upipe **output_p = va_arg(args, struct upipe **);
-            return upipe_qsrc_get_output(upipe, output_p);
-        }
-        case UPIPE_SET_OUTPUT: {
-            struct upipe *output = va_arg(args, struct upipe *);
-            return upipe_qsrc_set_output(upipe, output);
-        }
+        case UPIPE_GET_FLOW_DEF:
+        case UPIPE_GET_OUTPUT:
+        case UPIPE_SET_OUTPUT:
+            return upipe_qsrc_control_output(upipe, command, args);
 
         case UPIPE_QSRC_GET_MAX_LENGTH: {
             UBASE_SIGNATURE_CHECK(args, UPIPE_QSRC_SIGNATURE)
