@@ -305,16 +305,10 @@ static int upipe_dup_set_flow_def(struct upipe *upipe,
 static int upipe_dup_control(struct upipe *upipe, int command, va_list args)
 {
     UBASE_HANDLED_RETURN(upipe_dup_control_outputs(upipe, command, args));
+    /* We do not pass through the requests ; which output would we use ? */
+    UBASE_HANDLED_RETURN(upipe_control_provide_request(upipe, command, args));
 
     switch (command) {
-        case UPIPE_REGISTER_REQUEST: {
-            struct urequest *request = va_arg(args, struct urequest *);
-            /* We do not pass through the requests ; which output would
-             * we use ? */
-            return upipe_throw_provide_request(upipe, request);
-        }
-        case UPIPE_UNREGISTER_REQUEST:
-            return UBASE_ERR_NONE;
         case UPIPE_SET_FLOW_DEF: {
             struct uref *uref = va_arg(args, struct uref *);
             return upipe_dup_set_flow_def(upipe, uref);

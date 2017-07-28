@@ -913,6 +913,7 @@ static int upipe_avfsink_set_uri(struct upipe *upipe, const char *uri)
 static int upipe_avfsink_control(struct upipe *upipe, int command, va_list args)
 {
     UBASE_HANDLED_RETURN(upipe_avfsink_control_subs(upipe, command, args));
+    UBASE_HANDLED_RETURN(upipe_control_provide_request(upipe, command, args));
 
     switch (command) {
         case UPIPE_SET_FLOW_DEF: {
@@ -955,12 +956,6 @@ static int upipe_avfsink_control(struct upipe *upipe, int command, va_list args)
             return _upipe_avfsink_get_duration(upipe, duration_p);
         }
 
-        case UPIPE_REGISTER_REQUEST: {
-            struct urequest *request = va_arg(args, struct urequest *);
-            return upipe_throw_provide_request(upipe, request);
-        }
-        case UPIPE_UNREGISTER_REQUEST:
-            return UBASE_ERR_NONE;
         case UPIPE_GET_URI: {
             const char **uri_p = va_arg(args, const char **);
             return upipe_avfsink_get_uri(upipe, uri_p);

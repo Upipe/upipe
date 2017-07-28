@@ -523,6 +523,8 @@ static int upipe_osx_audioqueue_sink_check(struct upipe *upipe)
 static int upipe_osx_audioqueue_sink_control_real(struct upipe *upipe,
                                                   int command, va_list args)
 {
+    UBASE_HANDLED_RETURN(upipe_control_provide_request(upipe, command, args));
+
     switch (command) {
         case UPIPE_ATTACH_UPUMP_MGR:
             upipe_osx_audioqueue_sink_set_listener(upipe, NULL);
@@ -533,12 +535,6 @@ static int upipe_osx_audioqueue_sink_control_real(struct upipe *upipe,
             upipe_osx_audioqueue_sink_require_uclock(upipe);
             return UBASE_ERR_NONE;
 
-        case UPIPE_REGISTER_REQUEST: {
-            struct urequest *request = va_arg(args, struct urequest *);
-            return upipe_throw_provide_request(upipe, request);
-        }
-        case UPIPE_UNREGISTER_REQUEST:
-            return UBASE_ERR_NONE;
         case UPIPE_SET_FLOW_DEF: {
             struct uref *flow_def = va_arg(args, struct uref *);
             return upipe_osx_audioqueue_sink_set_flow_def(upipe, flow_def);

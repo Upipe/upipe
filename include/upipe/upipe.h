@@ -823,6 +823,28 @@ static inline int upipe_throw_provide_request(struct upipe *upipe,
     return upipe_throw(upipe, UPROBE_PROVIDE_REQUEST, urequest);
 }
 
+/** @This handles control commands for registering/unregistering request when
+ * an event need to be thrown.
+ *
+ * @param upipe description structure of the pipe
+ * @param command control command to handle
+ * @param args optional arguments
+ * @return an error code
+ */
+static inline int upipe_control_provide_request(struct upipe *upipe,
+                                                int command, va_list args)
+{
+    switch (command) {
+        case UPIPE_REGISTER_REQUEST: {
+            struct urequest *request = va_arg(args, struct urequest *);
+            return upipe_throw_provide_request(upipe, request);
+        }
+        case UPIPE_UNREGISTER_REQUEST:
+            return UBASE_ERR_NONE;
+    }
+    return UBASE_ERR_UNHANDLED;
+}
+
 /** @This throws an event asking for a upump manager. Note that all parameters
  * belong to the caller, so there is no need to @ref upump_mgr_use the given
  * manager.

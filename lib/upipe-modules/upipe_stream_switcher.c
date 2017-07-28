@@ -278,13 +278,9 @@ static int upipe_stream_switcher_input_control(struct upipe *upipe,
         upipe_stream_switcher_from_sub_mgr(upipe_mgr);
     struct upipe *super = upipe_stream_switcher_to_upipe(upipe_stream_switcher);
 
+    UBASE_HANDLED_RETURN(upipe_control_provide_request(upipe, command, args));
+
     switch (command) {
-    case UPIPE_REGISTER_REQUEST: {
-        struct urequest *request = va_arg(args, struct urequest *);
-        return upipe_throw_provide_request(upipe, request);
-    }
-    case UPIPE_UNREGISTER_REQUEST:
-        return UBASE_ERR_NONE;
     case UPIPE_SUB_GET_SUPER: {
         struct upipe **p = va_arg(args, struct upipe **);
         return upipe_stream_switcher_input_get_super(upipe, p);
@@ -666,15 +662,9 @@ static int upipe_stream_switcher_control(struct upipe *upipe,
 {
     UBASE_HANDLED_RETURN(
         upipe_stream_switcher_control_inputs(upipe, command, args));
+    UBASE_HANDLED_RETURN(upipe_control_provide_request(upipe, command, args));
 
     switch (command) {
-    case UPIPE_REGISTER_REQUEST: {
-        struct urequest *request = va_arg(args, struct urequest *);
-        return upipe_throw_provide_request(upipe, request);
-    }
-    case UPIPE_UNREGISTER_REQUEST:
-        return UBASE_ERR_NONE;
-
     case UPIPE_GET_FLOW_DEF: {
         struct uref **p = va_arg(args, struct uref **);
         return upipe_stream_switcher_get_flow_def(upipe, p);

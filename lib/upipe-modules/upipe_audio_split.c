@@ -502,14 +502,9 @@ static int upipe_audio_split_control(struct upipe *upipe,
 {
     UBASE_HANDLED_RETURN(
         upipe_audio_split_control_outputs(upipe, command, args));
+    UBASE_HANDLED_RETURN(upipe_control_provide_request(upipe, command, args));
 
     switch (command) {
-        case UPIPE_REGISTER_REQUEST: {
-            struct urequest *request = va_arg(args, struct urequest *);
-            return upipe_throw_provide_request(upipe, request);
-        }
-        case UPIPE_UNREGISTER_REQUEST:
-            return UBASE_ERR_NONE;
         case UPIPE_SET_FLOW_DEF: {
             struct uref *uref = va_arg(args, struct uref *);
             return upipe_audio_split_set_flow_def(upipe, uref);
