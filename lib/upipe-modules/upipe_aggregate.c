@@ -217,18 +217,11 @@ static int upipe_agg_set_flow_def(struct upipe *upipe, struct uref *flow_def)
 static int upipe_agg_control(struct upipe *upipe, int command, va_list args)
 {
     UBASE_HANDLED_RETURN(upipe_agg_control_output(upipe, command, args));
+    UBASE_HANDLED_RETURN(upipe_agg_control_output_size(upipe, command, args));
     switch (command) {
         case UPIPE_SET_FLOW_DEF: {
             struct uref *flow_def = va_arg(args, struct uref *);
             return upipe_agg_set_flow_def(upipe, flow_def);
-        }
-        case UPIPE_GET_OUTPUT_SIZE: {
-            unsigned int *output_size_p = va_arg(args, unsigned int *);
-            return upipe_agg_get_output_size(upipe, output_size_p);
-        }
-        case UPIPE_SET_OUTPUT_SIZE: {
-            unsigned int output_size = va_arg(args, unsigned int);
-            return upipe_agg_set_output_size(upipe, output_size);
         }
         default:
             return UBASE_ERR_UNHANDLED;

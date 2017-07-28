@@ -387,19 +387,14 @@ static int _upipe_udpsrc_control(struct upipe *upipe,
             upipe_udpsrc_require_uclock(upipe);
             return UBASE_ERR_NONE;
 
-        case UPIPE_GET_OUTPUT_SIZE: {
-            unsigned int *p = va_arg(args, unsigned int *);
-            return upipe_udpsrc_get_output_size(upipe, p);
-        }
-        case UPIPE_SET_OUTPUT_SIZE: {
-            unsigned int output_size = va_arg(args, unsigned int);
-            return upipe_udpsrc_set_output_size(upipe, output_size);
-        }
         case UPIPE_GET_FLOW_DEF:
         case UPIPE_GET_OUTPUT:
         case UPIPE_SET_OUTPUT:
             return upipe_udpsrc_control_output(upipe, command, args);
 
+        case UPIPE_GET_OUTPUT_SIZE:
+        case UPIPE_SET_OUTPUT_SIZE:
+            return upipe_udpsrc_control_output_size(upipe, command, args);
 
         case UPIPE_GET_URI: {
             const char **uri_p = va_arg(args, const char **);

@@ -611,10 +611,8 @@ static int _upipe_fsrc_control(struct upipe *upipe, int command, va_list args)
         case UPIPE_SET_OUTPUT:
             return upipe_fsrc_control_output(upipe, command, args);
 
-        case UPIPE_GET_OUTPUT_SIZE: {
-            unsigned int *p = va_arg(args, unsigned int *);
-            return upipe_fsrc_get_output_size(upipe, p);
-        }
+        case UPIPE_GET_OUTPUT_SIZE:
+            return upipe_fsrc_control_output_size(upipe, command, args);
         case UPIPE_SET_OUTPUT_SIZE: {
             unsigned int output_size = va_arg(args, unsigned int);
             UBASE_RETURN(upipe_fsrc_set_output_size(upipe, output_size))

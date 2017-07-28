@@ -313,18 +313,12 @@ static int upipe_ts_sync_control(struct upipe *upipe,
                                  int command, va_list args)
 {
     UBASE_HANDLED_RETURN(upipe_ts_sync_control_output(upipe, command, args));
+    UBASE_HANDLED_RETURN(
+        upipe_ts_sync_control_output_size(upipe, command, args));
     switch (command) {
         case UPIPE_SET_FLOW_DEF: {
             struct uref *flow_def = va_arg(args, struct uref *);
             return upipe_ts_sync_set_flow_def(upipe, flow_def);
-        }
-        case UPIPE_GET_OUTPUT_SIZE: {
-            unsigned int *size_p = va_arg(args, unsigned int *);
-            return upipe_ts_sync_get_output_size(upipe, size_p);
-        }
-        case UPIPE_SET_OUTPUT_SIZE: {
-            unsigned int size = va_arg(args, unsigned int);
-            return upipe_ts_sync_set_output_size(upipe, size);
         }
 
         case UPIPE_TS_SYNC_GET_SYNC: {

@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2012-2015 OpenHeadend S.A.R.L.
+ * Copyright (C) 2012-2017 OpenHeadend S.A.R.L.
  *
  * Permission is hereby granted, free of charge, to any person obtaining
  * a copy of this software and associated documentation files (the
@@ -39,7 +39,7 @@ extern "C" {
 
 #include <stdbool.h>
 
-/** @This declares four functions dealing with the output size of a pipe.
+/** @This declares functions dealing with the output size of a pipe.
  *
  * You must add one member to your private upipe structure, for instance:
  * @code
@@ -76,6 +76,21 @@ extern "C" {
  *  case UPIPE_SET_OUTPUT_SIZE: {
  *      unsigned int output_size = va_arg(args, unsigned int);
  *      return upipe_foo_set_output_size(upipe, output_size);
+ *  }
+ * @end code
+ *
+ * @item @code
+ *  int upipe_foo_control_output_size(struct upipe *upipe,
+ *                                    int command, va_list args)
+ * @end code
+ * Typically called from your upipe_foo_control() handler, such as:
+ * @code
+ *  int upipe_foo_control(struct upipe *upipe, int command, va_list args)
+ *  {
+ *      ...
+ *      UBASE_HANDLED_RETURN(
+ *          upipe_foo_control_output_size(upipe, command, args));
+ *      ...
  *  }
  * @end code
  *
@@ -133,6 +148,29 @@ static int STRUCTURE##_set_output_size(struct upipe *upipe,                 \
         STRUCTURE##_store_flow_def(upipe, flow_def);                        \
     }                                                                       \
     return UBASE_ERR_NONE;                                                  \
+}                                                                           \
+/** @This handles set/get output size control commands.                     \
+ *                                                                          \
+ * @param upipe description structure of the pipe                           \
+ * @param command type of command to process                                \
+ * @param args optional arguments                                           \
+ * @return an error code                                                    \
+ */                                                                         \
+static inline int STRUCTURE##_control_output_size(struct upipe *upipe,      \
+                                                  int command,              \
+                                                  va_list args)             \
+{                                                                           \
+    switch (command) {                                                      \
+        case UPIPE_GET_OUTPUT_SIZE: {                                       \
+            unsigned int *output_size_p = va_arg(args, unsigned int *);     \
+            return STRUCTURE##_get_output_size(upipe, output_size_p);       \
+        }                                                                   \
+        case UPIPE_SET_OUTPUT_SIZE: {                                       \
+            unsigned int output_size = va_arg(args, unsigned int);          \
+            return STRUCTURE##_set_output_size(upipe, output_size);         \
+        }                                                                   \
+    }                                                                       \
+    return UBASE_ERR_UNHANDLED;                                             \
 }                                                                           \
 /** @internal @This cleans up the private members for this helper.          \
  *                                                                          \
