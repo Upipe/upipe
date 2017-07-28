@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2012-2014 OpenHeadend S.A.R.L.
+ * Copyright (C) 2012-2017 OpenHeadend S.A.R.L.
  *
  * Authors: Christophe Massiot
  *
@@ -28,10 +28,8 @@
  */
 
 #include <upipe/ubase.h>
-#include <upipe/ulist.h>
 #include <upipe/uprobe.h>
 #include <upipe/uref.h>
-#include <upipe/ubuf.h>
 #include <upipe/upipe.h>
 #include <upipe/upipe_helper_upipe.h>
 #include <upipe/upipe_helper_urefcount.h>
@@ -45,7 +43,6 @@
 #include <stdbool.h>
 #include <stdarg.h>
 #include <string.h>
-#include <assert.h>
 
 /** @internal @This is the private context of a dup pipe. */
 struct upipe_dup {
@@ -245,9 +242,9 @@ static void upipe_dup_input(struct upipe *upipe, struct uref *uref,
     ulist_foreach (&upipe_dup->outputs, uchain) {
         struct upipe_dup_output *upipe_dup_output =
             upipe_dup_output_from_uchain(uchain);
+        struct upipe *output = upipe_dup_output_to_upipe(upipe_dup_output);
         if (ulist_is_last(&upipe_dup->outputs, uchain)) {
-            upipe_dup_output_output(upipe_dup_output_to_upipe(upipe_dup_output),
-                                    uref, upump_p);
+            upipe_dup_output_output(output, uref, upump_p);
             uref = NULL;
         } else {
             struct uref *new_uref = uref_dup(uref);
@@ -256,8 +253,7 @@ static void upipe_dup_input(struct upipe *upipe, struct uref *uref,
                 upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
                 return;
             }
-            upipe_dup_output_output(upipe_dup_output_to_upipe(upipe_dup_output),
-                                    new_uref, upump_p);
+            upipe_dup_output_output(output, new_uref, upump_p);
         }
     }
     if (uref != NULL)
