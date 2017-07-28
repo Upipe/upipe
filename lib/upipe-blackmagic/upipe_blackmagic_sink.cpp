@@ -268,6 +268,9 @@ struct upipe_bmd_sink {
 
     IDeckLinkDisplayMode *displayMode;
 
+    /** card name */
+    const char *modelName;
+
     /** hardware uclock */
     struct uclock uclock;
 
@@ -292,8 +295,8 @@ struct upipe_bmd_sink {
     /** audio buffer to merge tracks */
     int32_t *audio_buf;
 
-    /** offset between audio sample 0 and line 21 */
-    uint8_t line21_offset;
+    /** offset between audio sample 0 and dolby e first sample*/
+    uint8_t dolbye_offset;
 
     /** pass through closed captions */
     uatomic_uint32_t cc;
@@ -563,13 +566,13 @@ static void copy_samples(upipe_bmd_sink_sub *upipe_bmd_sink_sub,
 
     uint64_t offset = 0;
     if (upipe_bmd_sink_sub->dolby_e) {
-        if (upipe_bmd_sink->line21_offset >= samples) {
-            upipe_err_va(upipe, "offsetting for line21 would overflow audio: "
-                "line 21 %hu, %" PRIu64" samples",
-                upipe_bmd_sink->line21_offset, samples);
+        if (upipe_bmd_sink->dolbye_offset >= samples) {
+            upipe_err_va(upipe, "offsetting for dolbye would overflow audio: "
+                "dolbye %hu, %" PRIu64" samples",
+                upipe_bmd_sink->dolbye_offset, samples);
         } else {
-            offset   = upipe_bmd_sink->line21_offset;
-            samples -= upipe_bmd_sink->line21_offset;
+            offset   = upipe_bmd_sink->dolbye_offset;
+            samples -= upipe_bmd_sink->dolbye_offset;
         }
     }
 
@@ -1124,6 +1127,50 @@ static int upipe_bmd_sink_sub_set_flow_def(struct upipe *upipe,
             uref_dump(flow_def, upipe->uprobe);
             return UBASE_ERR_EXTERNAL;
         }
+
+        struct dolbye_offset {
+            BMDDisplayMode mode;
+            uint8_t offset;
+        };
+
+        static const struct dolbye_offset table[2][2] = {
+            /* All others */
+            {
+                {
+                    bmdModeHD1080i50, 33,
+                },
+                {
+                    bmdModeHD1080i5994, 31,
+                },
+            },
+
+            /* SDI (including Duo) */
+            {
+                {
+                    bmdModeHD1080i50, 54,
+                },
+                {
+                    bmdModeHD1080i5994, 48,
+                },
+            },
+
+        };
+
+        const struct dolbye_offset *t = &table[0][0];
+        if (upipe_bmd_sink->modelName && !strcmp(upipe_bmd_sink->modelName, "DeckLink SDI")) {
+            t = &table[1][0];
+        }
+
+        const size_t n = sizeof(table) / 2 / sizeof(**table);
+
+        for (size_t i = 0; i < n; i++) {
+            const struct dolbye_offset *e = &t[i];
+            if (e->mode == bmdMode) {
+                upipe_bmd_sink->dolbye_offset = e->offset;
+                break;
+            }
+        }
+
         upipe_bmd_sink->frame_idx = 0;
     }
 
@@ -1493,16 +1540,9 @@ static int upipe_bmd_sink_open_card(struct upipe *upipe)
         goto end;
     }
 
-    const char *modelName;
-    upipe_bmd_sink->line21_offset = 33; /* tested on Duo 2, Quad 2, SDI 4K */
-    if (deckLink->GetModelName(&modelName) != S_OK) {
+    if (deckLink->GetModelName(&upipe_bmd_sink->modelName) != S_OK) {
         upipe_err(upipe, "Could not read card model name");
-        modelName = NULL;
-    } else if (!strcmp(modelName, "DeckLink SDI")) {
-        upipe_bmd_sink->line21_offset = 54;
     }
-
-    free((void*)modelName);
 
     if (deckLink->QueryInterface(IID_IDeckLinkOutput,
                                  (void**)&upipe_bmd_sink->deckLinkOutput) != S_OK) {
@@ -1746,6 +1786,7 @@ static void upipe_bmd_sink_free(struct upipe *upipe)
     free(upipe_bmd_sink->audio_buf);
 
     if (upipe_bmd_sink->deckLink) {
+        free((void*)upipe_bmd_sink->modelName);
         upipe_bmd_sink->deckLinkOutput->Release();
         upipe_bmd_sink->deckLink->Release();
     }
