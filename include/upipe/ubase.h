@@ -236,6 +236,18 @@ do {                                                                        \
         return ubase_err_tmp;                                               \
 } while (0);
 
+/** @This runs the given function and returns if the error code is not
+ * UBASE_ERR_UNHANDLER.
+ *
+ * @param command command whose return code is to be checked
+ */
+#define UBASE_HANDLED_RETURN(command)                                       \
+do {                                                                        \
+    int ubase_err_tmp = command;                                            \
+    if (ubase_err_tmp != UBASE_ERR_UNHANDLED)                               \
+        return ubase_err_tmp;                                               \
+} while (0);
+
 /** @This runs the given function and throws a fatal error in case of failure.
  *
  * @param command command whose return code is to be checked
