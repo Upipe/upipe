@@ -534,7 +534,7 @@ static void output_sound(struct upipe *upipe, const struct urational *fps,
         /* look at first uref without dequeuing */
         struct uref *src = uref_from_uchain(ulist_peek(&upipe_sync_sub->urefs));
         if (!src) {
-            upipe_err_va(upipe_sub, "no urefs");
+            upipe_dbg_va(upipe_sub, "no urefs");
             continue;
         }
 
@@ -655,7 +655,7 @@ static void cb(struct upump *upump)
 
     /* sync audio */
     if (!sync_audio(upipe_sync_to_upipe(upipe_sync))) {
-        upipe_err_va(upipe, "not enough samples");
+        upipe_dbg_va(upipe, "not enough samples");
     }
 
     /* output audio */
