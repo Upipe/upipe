@@ -79,7 +79,7 @@ struct upipe_pack10bit {
     struct uchain blockers;
 
     /** packing */
-    void (*pack)(uint8_t *dst, const uint8_t *y, int64_t size);
+    void (*pack)(uint8_t *dst, const uint8_t *y, uintptr_t size);
 
     /** public upipe structure */
     struct upipe upipe;
@@ -147,7 +147,7 @@ static bool upipe_pack10bit_handle(struct upipe *upipe, struct uref *uref,
         return true;
     }
 
-    int pixels = buf_size / 2;
+    int pixels = buf_size / 4;
 
     upipe_pack10bit->pack(buffer, src, pixels);
 
@@ -322,7 +322,7 @@ static int upipe_pack10bit_control(struct upipe *upipe, int command, va_list arg
     }
 }
 
-static void upipe_sdi_pack_c(uint8_t *dst, const uint8_t *y, int64_t size)
+static void upipe_sdi_pack_c(uint8_t *dst, const uint8_t *y, uintptr_t size)
 {
     struct ubits s;
     ubits_init(&s, dst, size * 10 / 8);
@@ -370,13 +370,13 @@ static struct upipe *upipe_pack10bit_alloc(struct upipe_mgr *mgr,
 #else
 	if (__builtin_cpu_supports("ssse3"))
 #endif
-        upipe_pack10bit->pack = upipe_sdi_pack_10_ssse3;
+        upipe_pack10bit->pack = upipe_uyvy_to_sdi_unaligned_ssse3;
 
 	if (__builtin_cpu_supports("avx"))
-        upipe_pack10bit->pack = upipe_sdi_pack_10_avx;
+        upipe_pack10bit->pack = upipe_uyvy_to_sdi_avx;
 
     if (__builtin_cpu_supports("avx2"))
-        upipe_pack10bit->pack = upipe_sdi_pack_10_avx2;
+        upipe_pack10bit->pack = upipe_uyvy_to_sdi_avx2;
 #endif
 #endif
 

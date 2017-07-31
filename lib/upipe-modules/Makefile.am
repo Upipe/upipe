@@ -70,6 +70,7 @@ libupipe_modules_la_SOURCES = \
 	upipe_rtp_pcm_pack.c \
 	upipe_rtp_fec.c \
 	upipe_dtsdi.c \
+	upipe_sync.c \
 	$(NULL)
 
 if HAVE_WRITEV
