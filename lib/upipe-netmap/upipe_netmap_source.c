@@ -508,7 +508,7 @@ static const uint8_t *get_rtp(struct upipe *upipe, struct netmap_ring *rxring,
     return rtp;
 }
 
-static bool do_packet(struct upipe *upipe, struct netmap_ring *rxring,
+static uint64_t do_packet(struct upipe *upipe, struct netmap_ring *rxring,
         const uint32_t cur, uint64_t systime)
 {
     struct upipe_netmap_source *upipe_netmap_source = upipe_netmap_source_from_upipe(upipe);
@@ -516,10 +516,12 @@ static bool do_packet(struct upipe *upipe, struct netmap_ring *rxring,
     uint16_t pkt_size;
     const uint8_t *rtp = get_rtp(upipe, rxring, &rxring->slot[cur], &pkt_size);
     if (!rtp)
-        return true;
+        return 0;
 
     uint16_t seqnum = rtp_get_seqnum(rtp);
     uint32_t timestamp = rtp_get_timestamp(rtp);
+
+    uint64_t ret = (UINT64_C(1) << 48) | (((uint64_t)timestamp) << 16) | seqnum;
     bool marker = rtp_check_marker(rtp);
 
     if (unlikely(upipe_netmap_source->expected_seqnum != UINT32_MAX &&
@@ -528,11 +530,11 @@ static bool do_packet(struct upipe *upipe, struct netmap_ring *rxring,
         uint32_t timestamp_diff = timestamp - upipe_netmap_source->last_timestamp;
 
         if (diff > 0x8000 ) {
-            return true; // seqnum < expected, drop
+            return ret; // seqnum < expected, drop
         }
 
         if (timestamp_diff > 0x80000000) {
-            return true;
+            return ret;
         }
         if (timestamp_diff > 10000) {
             //printf("BAD %u (%u > %u)\n", timestamp_diff, seqnum, upipe_netmap_source->expected_seqnum);
@@ -542,12 +544,12 @@ static bool do_packet(struct upipe *upipe, struct netmap_ring *rxring,
                 (seqnum + UINT16_MAX + 1 - upipe_netmap_source->expected_seqnum) &
                 UINT16_MAX, seqnum, upipe_netmap_source->expected_seqnum, timestamp_diff);
 
-        return false; // seqnum > expected, keep
+        return UINT64_MAX; // seqnum > expected, keep
     }
 
     if (!upipe_netmap_source->discontinuity) {
         if (handle_hbrmt_packet(upipe, rtp, pkt_size)) {
-            return true;
+            return ret;
         }
         upipe_netmap_source->packets++;
     }
@@ -578,7 +580,7 @@ static bool do_packet(struct upipe *upipe, struct netmap_ring *rxring,
 
     upipe_netmap_source->expected_seqnum = ++seqnum & UINT16_MAX;
     upipe_netmap_source->last_timestamp = timestamp;
-    return true;
+    return ret;
 }
 
 static void upipe_netmap_source_worker(struct upump *upump)
@@ -608,7 +610,10 @@ static void upipe_netmap_source_worker(struct upump *upump)
         pkts[i] = nm_ring_space(rxring[i]);
     }
 
+    uint64_t seq_pts[2] = {UINT64_MAX, UINT64_MAX};
+
     int sources = !!pkts[0] + !!pkts[1];
+    bool same = false;
     while (pkts[0] || pkts[1]) {
         int discontinuity = 0;
         for (int idx = 0; idx < 2; idx++) { // one queue then the other
@@ -617,9 +622,17 @@ static void upipe_netmap_source_worker(struct upump *upump)
 
             do {
                 const uint32_t cur = rxring[idx]->cur;
-                if (!do_packet(upipe, rxring[idx], cur, systime)) {
+                uint64_t ret = do_packet(upipe, rxring[idx], cur, systime);
+                if (ret == UINT64_MAX) {
                     discontinuity++;
                     break;
+                } else if (!same && ret != 0) {
+                    if (seq_pts[idx] == UINT64_MAX) {
+                        seq_pts[idx] = ret;
+                    } else {
+                        /* seq_pts already set for this stream */
+                        same = seq_pts[!idx] == ret;
+                    }
                 }
                 rxring[idx]->head = rxring[idx]->cur = nm_ring_next(rxring[idx], cur);
                 pkts[idx]--;
@@ -637,6 +650,8 @@ static void upipe_netmap_source_worker(struct upump *upump)
             upipe_netmap_source->expected_seqnum = UINT32_MAX;
         }
     }
+
+    //if (!same) upipe_verbose_va(upipe, "streams differ");
 }
 
 /** @internal @This checks if the pump may be allocated.

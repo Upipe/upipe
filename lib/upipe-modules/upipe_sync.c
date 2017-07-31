@@ -87,6 +87,9 @@ struct upipe_sync {
     struct upump *upump;
     struct upump_mgr *upump_mgr;
 
+    /** ntsc */
+    uint8_t frame_idx;
+
     /** public upipe structure */
     struct upipe upipe;
 };
@@ -127,6 +130,9 @@ struct upipe_sync_sub {
     /** AES */
     bool s337;
 
+    /** AES/a52 */
+    bool a52;
+
     /** channels */
     uint8_t channels;
 
@@ -135,9 +141,6 @@ struct upipe_sync_sub {
 
     /** buffered duration */
     uint64_t samples;
-
-    /** ntsc */
-    uint8_t frame_idx;
 };
 
 UPIPE_HELPER_UPIPE(upipe_sync_sub, upipe, UPIPE_SYNC_SUB_SIGNATURE);
@@ -166,9 +169,9 @@ static struct upipe *upipe_sync_sub_alloc(struct upipe_mgr *mgr,
     struct upipe_sync_sub *upipe_sync_sub = upipe_sync_sub_from_upipe(upipe);
     ulist_init(&upipe_sync_sub->urefs);
     upipe_sync_sub->samples = 0;
-    upipe_sync_sub->frame_idx = 0;
     upipe_sync_sub->sound = false;
     upipe_sync_sub->s337 = false;
+    upipe_sync_sub->a52 = false;
 
     upipe_sync_sub_init_urefcount(upipe);
     upipe_sync_sub_init_output(upipe);
@@ -260,6 +263,9 @@ static int upipe_sync_sub_set_flow_def(struct upipe *upipe, struct uref *flow_de
         return UBASE_ERR_INVALID;
 
     upipe_sync_sub->s337 = !ubase_ncmp(def, "sound.s32.s337.");
+    if (upipe_sync_sub->s337)
+        upipe_sync_sub->a52 = !ubase_ncmp(def, "sound.s32.s337.a52.")
+            || !ubase_ncmp(def, "sound.s32.s337.a52e.");
 
     uint64_t latency;
     if (!ubase_check(uref_clock_get_latency(flow_def, &latency)))
@@ -358,6 +364,7 @@ static bool sync_channel(struct upipe *upipe)
     const uint64_t video_pts = upipe_sync->pts;
 
     const bool s337 = upipe_sync_sub->s337;
+    const bool a52 = upipe_sync_sub->a52;
 
     struct uchain *uchain_uref = NULL, *uchain_tmp;
     ulist_delete_foreach(&upipe_sync_sub->urefs, uchain_uref, uchain_tmp) {
@@ -388,16 +395,20 @@ static bool sync_channel(struct upipe *upipe)
                     uref_free(uref);
                     continue;
                 }
-                if (!s337) {
+                if (!s337 || a52) {
                     // resize
                     upipe_notice_va(upipe_sync_sub_to_upipe(upipe_sync_sub),
                             "RESIZE, skip %" PRIu64 " (%" PRId64 " < %" PRIu64 ")",
                             drop_samples, pts_diff, duration);
-                    uref_sound_resize(uref, drop_samples, -1);
+                    if (a52) /* drop from the end (padding) */
+                        uref_sound_resize(uref, 0, samples - drop_samples);
+                    else
+                        uref_sound_resize(uref, drop_samples, -1);
                     upipe_sync_sub->samples -= drop_samples;
+                    pts += pts_diff;
+                    pts -= upipe_sync->latency;
+                    uref_clock_set_pts_sys(uref, pts);
                 }
-                pts = video_pts;
-                uref_clock_set_pts_sys(uref, pts);
             } else {
                 float f = (float)((int64_t)pts - (int64_t)video_pts) * 1000 / UCLOCK_FREQ;
                 upipe_notice_va(upipe_sync_sub_to_upipe(upipe_sync_sub),
@@ -435,7 +446,7 @@ static bool sync_audio(struct upipe *upipe)
 static inline unsigned audio_samples_count(struct upipe *upipe,
         const struct urational *fps)
 {
-    struct upipe_sync_sub *upipe_sync_sub = upipe_sync_sub_from_upipe(upipe);
+    struct upipe_sync *upipe_sync = upipe_sync_from_upipe(upipe);
 
     const unsigned samples = (uint64_t)48000 * fps->den / fps->num;
 
@@ -450,8 +461,8 @@ static inline unsigned audio_samples_count(struct upipe *upipe,
     }
 
     /* cyclic loop of 5 different sample counts */
-    if (++upipe_sync_sub->frame_idx == 5)
-        upipe_sync_sub->frame_idx = 0;
+    if (++upipe_sync->frame_idx == 5)
+        upipe_sync->frame_idx = 0;
 
     static const uint8_t samples_increment[2][5] = {
         { 1, 0, 1, 0, 1 }, /* 30000 / 1001 */
@@ -460,13 +471,14 @@ static inline unsigned audio_samples_count(struct upipe *upipe,
 
     bool rate5994 = fps->num == 60000;
 
-    return samples + samples_increment[rate5994][upipe_sync_sub->frame_idx];
+    return samples + samples_increment[rate5994][upipe_sync->frame_idx];
 }
 
 static void output_sound(struct upipe *upipe, const struct urational *fps,
         struct upump **upump_p)
 {
     struct upipe_sync *upipe_sync = upipe_sync_from_upipe(upipe);
+    const size_t frame_samples = audio_samples_count(upipe, fps);
 
     struct uchain *uchain = NULL;
     ulist_foreach(&upipe_sync->subs, uchain) {
@@ -476,22 +488,44 @@ static void output_sound(struct upipe *upipe, const struct urational *fps,
 
         struct upipe *upipe_sub = upipe_sync_sub_to_upipe(upipe_sync_sub);
         const uint8_t channels = upipe_sync_sub->channels;
-        size_t samples = audio_samples_count(upipe_sub, fps);
-        const bool s337 = upipe_sync_sub->s337;
+        size_t samples = frame_samples;
 
-        /* FIXME: does not work for a52, since assumes only one uref should be popped.
-                  a52 has 1536 samples so in fact requires two pops on average */
-        if (s337) {
-            struct uchain *uchain = ulist_pop(&upipe_sync_sub->urefs);
+        const bool s337 = upipe_sync_sub->s337;
+        const bool a52 = upipe_sync_sub->a52;
+
+        if (s337 && !a52) {
+            struct uchain *uchain = ulist_peek(&upipe_sync_sub->urefs);
             if (!uchain) {
                 upipe_err_va(upipe_sub, "no urefs");
                 continue;
             }
             struct uref *uref = uref_from_uchain(uchain);
+
+            uint64_t pts = 0;
+            uref_clock_get_pts_sys(uref, &pts);
+            if (pts + upipe_sync->latency > upipe_sync->pts + upipe_sync->ticks_per_frame) {
+                upipe_warn_va(upipe_sub, "Waiting to buffer %.0f",
+                        pts_to_time(pts + upipe_sync->latency - upipe_sync->pts));
+                continue;
+            }
+
+            ulist_pop(&upipe_sync_sub->urefs);
             size_t src_samples = 0;
             uref_sound_size(uref, &src_samples, NULL);
             upipe_sync_sub->samples -= src_samples;
             uref_clock_set_pts_sys(uref, upipe_sync->pts - upipe_sync->latency);
+            if (samples != src_samples) {
+                if (samples - 1 != src_samples && samples + 1 != src_samples) {
+                    upipe_err_va(upipe, "Problem with s337 framing: got %zu instead of %zu",
+                        src_samples, samples);
+                } else {
+                    struct ubuf *ubuf = ubuf_sound_copy(uref->ubuf->mgr, uref->ubuf,
+                            0, samples);
+                    assert(ubuf);
+                    ubuf_free(uref->ubuf);
+                    uref->ubuf = ubuf;
+                }
+            }
             upipe_sync_sub_output(upipe_sub, uref, upump_p);
 
             continue;
@@ -500,7 +534,15 @@ static void output_sound(struct upipe *upipe, const struct urational *fps,
         /* look at first uref without dequeuing */
         struct uref *src = uref_from_uchain(ulist_peek(&upipe_sync_sub->urefs));
         if (!src) {
-            upipe_err_va(upipe_sub, "no urefs");
+            upipe_dbg_va(upipe_sub, "no urefs");
+            continue;
+        }
+
+        uint64_t pts = 0;
+        uref_clock_get_pts_sys(src, &pts);
+        if (pts + upipe_sync->latency > upipe_sync->pts + upipe_sync->ticks_per_frame) {
+            upipe_warn_va(upipe_sub, "Waiting to buffer %.0f",
+                    pts_to_time(pts + upipe_sync->latency - upipe_sync->pts));
             continue;
         }
 
@@ -551,9 +593,7 @@ static void output_sound(struct upipe *upipe, const struct urational *fps,
                 uref_sound_resize(src, uref_samples, -1);
                 assert(samples == 0);
 
-                uint64_t pts = 0;
                 uref_clock_get_pts_sys(src, &pts);
-                pts += upipe_sync->latency;
                 pts += uref_samples * UCLOCK_FREQ / 48000;
                 uref_clock_set_pts_sys(src, pts);
             }
@@ -615,7 +655,7 @@ static void cb(struct upump *upump)
 
     /* sync audio */
     if (!sync_audio(upipe_sync_to_upipe(upipe_sync))) {
-        upipe_err_va(upipe, "not enough samples");
+        upipe_dbg_va(upipe, "not enough samples");
     }
 
     /* output audio */
@@ -790,6 +830,7 @@ static struct upipe *upipe_sync_alloc(struct upipe_mgr *mgr,
     upipe_sync->latency = 0;
     upipe_sync->pts = 0;
     upipe_sync->ticks_per_frame = 0;
+    upipe_sync->frame_idx = 0;
     upipe_sync->uref = NULL;
     ulist_init(&upipe_sync->urefs);
 
