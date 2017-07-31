@@ -72,6 +72,7 @@
 #include <upipe-modules/upipe_multicat_sink.h>
 #include <upipe-modules/upipe_probe_uref.h>
 #include <upipe-ts/upipe_ts_demux.h>
+#include <upipe-framers/upipe_auto_framer.h>
 #include <upipe-framers/upipe_mpga_framer.h>
 
 #include <stdbool.h>
@@ -365,9 +366,9 @@ int main(int argc, char *argv[])
 
         /* ts demux */
         struct upipe_mgr *ts_demux_mgr = upipe_ts_demux_mgr_alloc();
-        struct upipe_mgr *mpgaf_mgr = upipe_mpgaf_mgr_alloc();
-        upipe_ts_demux_mgr_set_mpgaf_mgr(ts_demux_mgr, mpgaf_mgr);
-        upipe_mgr_release(mpgaf_mgr);
+        struct upipe_mgr *autof_mgr = upipe_autof_mgr_alloc();
+        upipe_ts_demux_mgr_set_autof_mgr(ts_demux_mgr, autof_mgr);
+        upipe_mgr_release(autof_mgr);
         struct upipe *ts_demux = upipe_void_alloc_output(source, ts_demux_mgr,
                 uprobe_pfx_alloc(
                     uprobe_selflow_alloc(uprobe_use(logger),

@@ -1,10 +1,8 @@
 NULL =
 lib_LTLIBRARIES = libupipe_framers.la
 
-noinst_HEADERS = upipe_framers_common.h \
-	upipe_h26x_common.h
-
 libupipe_framers_la_SOURCES = \
+	upipe_auto_framer.c \
 	upipe_framers_common.c \
 	upipe_h26x_common.c \
 	upipe_h264_framer.c \
@@ -21,6 +19,7 @@ libupipe_framers_la_SOURCES = \
 	$(NULL)
 
 libupipe_framers_la_CPPFLAGS = -I$(top_builddir)/include -I$(top_srcdir)/include
+libupipe_framers_la_LIBADD = $(top_builddir)/lib/upipe-modules/libupipe_modules.la
 libupipe_framers_la_LDFLAGS = -no-undefined
 
 pkgconfigdir = $(libdir)/pkgconfig

@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2013 OpenHeadend S.A.R.L.
+ * Copyright (C) 2013-2017 OpenHeadend S.A.R.L.
  *
  * Authors: Christophe Massiot
  *
@@ -64,11 +64,11 @@ struct ubuf_block_stream {
     bool overflow;
 };
 
-/** @This initializes the helper structure for octet stream.
+/** @This initializes the helper structure for octet stream using a ubuf.
  *
  * @param s helper structure
  * @param ubuf pointer to block ubuf
- * @param offset start offset
+ * @param offset start offset in octets
  * @return an error code
  */
 static inline int ubuf_block_stream_init(struct ubuf_block_stream *s,
@@ -85,6 +85,28 @@ static inline int ubuf_block_stream_init(struct ubuf_block_stream *s,
     return UBASE_ERR_NONE;
 }
 
+/** @This initializes the helper structure for octet stream using an opaque.
+ * Note that the opaque must remain allocated until @ref ubuf_block_stream_clean
+ * is called.
+ *
+ * @param s helper structure
+ * @param buffer pointer to opaque buffer
+ * @param size size of the opaque buffer
+ */
+static inline void
+    ubuf_block_stream_init_from_opaque(struct ubuf_block_stream *s,
+                                       const uint8_t *buffer, size_t size)
+{
+    s->size = size;
+    s->buffer = buffer;
+    s->ubuf = NULL;
+    s->offset = 0;
+    s->end = s->buffer + s->size;
+    s->bits = 0;
+    s->available = 0;
+    s->overflow = false;
+}
+
 /** @This cleans up the helper structure for octet stream.
  *
  * @param s helper structure
@@ -98,6 +120,16 @@ static inline int
     return UBASE_ERR_NONE;
 }
 
+/** @This computes the position (in bits) since the beginning of the ubuf.
+ *
+ * @param s helper structure
+ * @return position in bits
+ */
+static inline int ubuf_block_stream_position(struct ubuf_block_stream *s)
+{
+    return (s->offset + s->size - (s->end - s->buffer)) * 8 - s->available;
+}
+
 /** @This gets the next octet in the ubuf.
  *
  * @param s helper structure
@@ -107,9 +139,9 @@ static inline int
 static inline int ubuf_block_stream_get(struct ubuf_block_stream *s,
                                         uint8_t *octet_p)
 {
-    if (s->ubuf == NULL)
-        return UBASE_ERR_INVALID;
     if (unlikely(s->buffer >= s->end)) {
+        if (s->ubuf == NULL)
+            return UBASE_ERR_INVALID;
         ubuf_block_unmap(s->ubuf, s->offset);
         s->offset += s->size;
         s->size = -1;
@@ -171,6 +203,26 @@ static inline int ubuf_block_stream_get(struct ubuf_block_stream *s,
         (s)->bits <<= (nb);                                                 \
         (s)->available -= (nb);                                             \
     } while (0)
+
+/** @This initializes the helper structure for octet stream using a ubuf,
+ * with an offset in bits
+ *
+ * @param s helper structure
+ * @param ubuf pointer to block ubuf
+ * @param offset start offset in bits
+ * @return an error code
+ */
+static inline int ubuf_block_stream_init_bits(struct ubuf_block_stream *s,
+                                              struct ubuf *ubuf, int offset)
+{
+    UBASE_RETURN(ubuf_block_stream_init(s, ubuf, offset / 8));
+    int bits = offset % 8;
+    if (bits) {
+        ubuf_block_stream_fill_bits(s, bits);
+        ubuf_block_stream_skip_bits(s, bits);
+    }
+    return UBASE_ERR_NONE;
+}
 
 #ifdef __cplusplus
 }

@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2012 OpenHeadend S.A.R.L.
+ * Copyright (C) 2012-2017 OpenHeadend S.A.R.L.
  *
  * Authors: Christophe Massiot
  *
@@ -49,12 +49,6 @@ enum upipe_avfsrc_command {
     /** asks to read at the given time (uint64_t) */
     UPIPE_AVFSRC_SET_TIME
 };
-
-/** @This returns the management structure for all avformat sources.
- *
- * @return pointer to manager
- */
-struct upipe_mgr *upipe_avfsrc_mgr_alloc(void);
 
 /** @deprecated @This returns the content of an avformat option.
  *
@@ -108,6 +102,61 @@ static inline int upipe_avfsrc_set_time(struct upipe *upipe, uint64_t time)
     return upipe_control(upipe, UPIPE_AVFSRC_SET_TIME, UPIPE_AVFSRC_SIGNATURE,
                          time);
 }
+
+/** @This returns the management structure for all avformat sources.
+ *
+ * @return pointer to manager
+ */
+struct upipe_mgr *upipe_avfsrc_mgr_alloc(void);
+
+/** @This extends upipe_mgr_command with specific commands for avfsrc. */
+enum upipe_avfsrc_mgr_command {
+    UPIPE_AVFSRC_MGR_SENTINEL = UPIPE_MGR_CONTROL_LOCAL,
+
+/** @hidden */
+#define UPIPE_AVFSRC_MGR_GET_SET_MGR(name, NAME)                            \
+    /** returns the current manager for name inner pipes                    \
+     * (struct upipe_mgr **) */                                             \
+    UPIPE_AVFSRC_MGR_GET_##NAME##_MGR,                                      \
+    /** sets the manager for name inner pipes (struct upipe_mgr *) */       \
+    UPIPE_AVFSRC_MGR_SET_##NAME##_MGR,
+
+    UPIPE_AVFSRC_MGR_GET_SET_MGR(autof, AUTOF)
+#undef UPIPE_AVFSRC_MGR_GET_SET_MGR
+};
+
+/** @hidden */
+#define UPIPE_AVFSRC_MGR_GET_SET_MGR2(name, NAME)                           \
+/** @This returns the current manager for name inner pipes.                 \
+ *                                                                          \
+ * @param mgr pointer to manager                                            \
+ * @param p filled in with the name manager                                 \
+ * @return an error code                                                    \
+ */                                                                         \
+static inline int                                                           \
+    upipe_avfsrc_mgr_get_##name##_mgr(struct upipe_mgr *mgr,                \
+                                      struct upipe_mgr *p)                  \
+{                                                                           \
+    return upipe_mgr_control(mgr, UPIPE_AVFSRC_MGR_GET_##NAME##_MGR,        \
+                             UPIPE_AVFSRC_SIGNATURE, p);                    \
+}                                                                           \
+/** @This sets the manager for name inner pipes. This may only be called    \
+ * before any pipe has been allocated.                                      \
+ *                                                                          \
+ * @param mgr pointer to manager                                            \
+ * @param m pointer to name manager                                         \
+ * @return an error code                                                    \
+ */                                                                         \
+static inline int                                                           \
+    upipe_avfsrc_mgr_set_##name##_mgr(struct upipe_mgr *mgr,                \
+                                      struct upipe_mgr *m)                  \
+{                                                                           \
+    return upipe_mgr_control(mgr, UPIPE_AVFSRC_MGR_SET_##NAME##_MGR,        \
+                             UPIPE_AVFSRC_SIGNATURE, m);                    \
+}
+
+UPIPE_AVFSRC_MGR_GET_SET_MGR2(autof, AUTOF)
+#undef UPIPE_AVFSRC_MGR_GET_SET_MGR2
 
 #ifdef __cplusplus
 }

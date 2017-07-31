@@ -238,6 +238,43 @@ UREF_ATTR_TEMPLATE(float, double)
 UREF_ATTR_TEMPLATE(rational, struct urational)
 #undef UREF_ATTR_TEMPLATE
 
+/** @This sets the value of an opaque attribute, optionally creating it,
+ * from an hexadecimal string.
+ *
+ * @param uref pointer to the uref
+ * @param v value to set
+ * @param type type of the attribute (potentially a shorthand)
+ * @param name name of the attribute
+ * @return an error code
+ */
+static inline int uref_attr_set_opaque_from_hex(struct uref *uref,
+        const char *v, enum udict_type type, const char *name)
+{
+    if (uref->udict == NULL) {
+        uref->udict = udict_alloc(uref->mgr->udict_mgr, 0);
+        if (unlikely(uref->udict == NULL))
+            return UBASE_ERR_ALLOC;
+    }
+    return udict_set_opaque_from_hex(uref->udict, v, type, name);
+}
+
+/** @This sets the value of an opaque attribute, optionally creating it,
+ * from an hexadecimal string, with printf-style name generation.
+ *
+ * @param uref pointer to the uref
+ * @param v value to set
+ * @param type type of the attribute (potentially a shorthand)
+ * @param format printf-style format of the attribute, followed by a
+ * variable list of arguments
+ * @return an error code
+ */
+static inline int uref_attr_set_opaque_from_hex_va(struct uref *uref,
+        const char *v, enum udict_type type, const char *format, ...)
+{
+    UBASE_VARARG(uref_attr_set_opaque_from_hex(uref, v, type, string))
+}
+
+
 /*
  * Opaque attributes
  */
@@ -254,6 +291,7 @@ UREF_ATTR_TEMPLATE(rational, struct urational)
  *                                                                          \
  * @param uref pointer to the uref                                          \
  * @param p pointer to the retrieved value (modified during execution)      \
+ * @param size_p filled in with the size of the value                       \
  * @return an error code                                                    \
  */                                                                         \
 static inline int uref_##group##_get_##attr(struct uref *uref,              \
@@ -272,6 +310,7 @@ static inline int uref_##group##_get_##attr(struct uref *uref,              \
  *                                                                          \
  * @param uref pointer to the uref                                          \
  * @param v value to set                                                    \
+ * @param size size of the value                                            \
  * @return an error code                                                    \
  */                                                                         \
 static inline int uref_##group##_set_##attr(struct uref *uref,              \
@@ -281,6 +320,17 @@ static inline int uref_##group##_set_##attr(struct uref *uref,              \
     opaque.v = v;                                                           \
     opaque.size = size;                                                     \
     return uref_attr_set_opaque(uref, opaque, UDICT_TYPE_OPAQUE, name);     \
+}                                                                           \
+/** @This sets the desc attribute of a uref, from an hexadecimal string.    \
+ *                                                                          \
+ * @param uref pointer to the uref                                          \
+ * @param v value to set                                                    \
+ * @return an error code                                                    \
+ */                                                                         \
+static inline int uref_##group##_set_##attr##_from_hex(struct uref *uref,   \
+                                                       const char *v)       \
+{                                                                           \
+    return uref_attr_set_opaque_from_hex(uref, v, UDICT_TYPE_OPAQUE, name); \
 }                                                                           \
 /** @This deletes the desc attribute of a uref.                             \
  *                                                                          \

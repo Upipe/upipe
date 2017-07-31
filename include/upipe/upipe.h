@@ -1246,6 +1246,8 @@ static inline int upipe_attach_ubuf_mgr(struct upipe *upipe)
 static inline int upipe_register_request(struct upipe *upipe,
                                          struct urequest *urequest)
 {
+    assert(!urequest->registered);
+    urequest->registered = true;
     return upipe_control(upipe, UPIPE_REGISTER_REQUEST, urequest);
 }
 
@@ -1258,6 +1260,8 @@ static inline int upipe_register_request(struct upipe *upipe,
 static inline int upipe_unregister_request(struct upipe *upipe,
                                            struct urequest *urequest)
 {
+    assert(urequest->registered);
+    urequest->registered = false;
     return upipe_control(upipe, UPIPE_UNREGISTER_REQUEST, urequest);
 }
 

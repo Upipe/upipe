@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2013-2015 OpenHeadend S.A.R.L.
+ * Copyright (C) 2013-2017 OpenHeadend S.A.R.L.
  *
  * Authors: Christophe Massiot
  *
@@ -43,6 +43,7 @@ extern "C" {
 #include <upipe/upipe.h>
 
 #include <stdbool.h>
+#include <assert.h>
 
 /** @This declares nine functions helping a pipe to block source pumps,
  * and to hold urefs that can't be immediately output.
@@ -267,7 +268,8 @@ static UBASE_UNUSED bool STRUCTURE##_output_input(struct upipe *upipe)      \
         struct uref *uref = uref_from_uchain(uchain);                       \
         bool (*output)(struct upipe *, struct uref *, struct upump **) =    \
             OUTPUT;                                                         \
-        if (output != NULL && !output(upipe, uref, NULL)) {                 \
+        assert(output != NULL);                                             \
+        if (!output(upipe, uref, NULL)) {                                   \
             STRUCTURE##_unshift_input(upipe, uref);                         \
             return false;                                                   \
         }                                                                   \

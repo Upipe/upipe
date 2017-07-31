@@ -38,6 +38,7 @@ extern "C" {
 #include <upipe/ubuf.h>
 #include <upipe/upipe.h>
 #include <upipe/urequest.h>
+#include <upipe/uref_dump.h>
 
 #include <stdbool.h>
 
@@ -117,6 +118,7 @@ static int STRUCTURE##_provide_flow_format(struct urequest *urequest,       \
     struct upipe *upipe = urequest_get_opaque(urequest, struct upipe *);    \
     struct uref *flow_format = va_arg(args, struct uref *);                 \
     upipe_dbg_va(upipe, "provided flow_format");                            \
+    uref_dump(flow_format, upipe->uprobe);                                  \
     upipe_helper_flow_format_check check = CHECK;                           \
     if (check != NULL)                                                      \
         return check(upipe, flow_format);                                   \
@@ -145,6 +147,7 @@ static void STRUCTURE##_require_flow_format(struct upipe *upipe,            \
                               STRUCTURE##_provide_flow_format, NULL);       \
     urequest_set_opaque(&s->REQUEST, upipe);                                \
     upipe_dbg(upipe, "require flow_format");                                \
+    uref_dump(flow_format, upipe->uprobe);                                  \
     if (reg != NULL)                                                        \
         reg(upipe, &s->REQUEST);                                            \
 }                                                                           \

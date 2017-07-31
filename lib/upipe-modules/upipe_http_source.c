@@ -504,11 +504,9 @@ static int upipe_http_src_body_cb(http_parser *parser, const char *at, size_t le
  *
  * @param upipe description structure of the pipe
  * @param uref uref structure
- * @param upump_p reference to pump that generated the buffer
  */
 static void upipe_http_src_process(struct upipe *upipe,
-                                   struct uref *uref,
-                                   struct upump **upump_p)
+                                   struct uref *uref)
 {
     struct upipe_http_src *upipe_http_src = upipe_http_src_from_upipe(upipe);
 
@@ -597,7 +595,7 @@ static void upipe_http_src_worker(struct upump *upump)
     else {
         if (unlikely(len != upipe_http_src->output_size))
             uref_block_resize(uref, 0, len);
-        upipe_http_src_process(upipe, uref, &upump);
+        upipe_http_src_process(upipe, uref);
     }
 }
 
@@ -962,8 +960,7 @@ static int upipe_http_src_set_uri(struct upipe *upipe, const char *url)
 
     upipe_notice_va(upipe, "opening %s", url);
 
-    UBASE_RETURN(upipe_http_src_check(upipe, NULL));
-
+    upipe_http_src_require_uref_mgr(upipe);
     if (unlikely(upipe_http_src->uref_mgr == NULL)) {
         upipe_err(upipe, "no uref mgr");
         return UBASE_ERR_ALLOC;

@@ -13,9 +13,6 @@ PKG_PROG_PKG_CONFIG
 
 # Checks for programs.
 AC_CHECK_PROGS(PERL, perl)
-AC_CHECK_PROGS(LUAJIT, luajit)
-AC_CHECK_PROGS(EU_READELF, eu-readelf)
-AC_CHECK_PROGS(LLVM_DWARFDUMP, [llvm-dwarfdump "xcrun llvm-dwarfdump"])
 AC_PATH_PROG(MOC, [moc-qt4 moc], moc)
 AC_PATH_PROG(YASM, yasm)
 AC_PROG_CXX
@@ -28,7 +25,17 @@ AC_PROG_LN_S
 AC_PROG_MAKE_SET
 AM_PROG_CC_C_O
 LT_INIT([win32-dll])
-AM_CONDITIONAL(BUILD_LUAJIT, test "$OBJDUMP" != false -a "$enable_shared" != no)
+
+AC_ARG_ENABLE(
+    [luajit],
+    AS_HELP_STRING(
+        [--enable-luajit],
+        [Enable build of luajit bindings]))
+AM_CONDITIONAL(BUILD_LUAJIT, test "$enable_luajit" = yes -a "$OBJDUMP" != false -a "$enable_shared" != no)
+AM_COND_IF(BUILD_LUAJIT,
+           AC_CHECK_PROGS(LUAJIT, luajit)
+           AC_CHECK_PROGS(EU_READELF, eu-readelf)
+           AC_CHECK_PROGS(LLVM_DWARFDUMP, [llvm-dwarfdump "xcrun llvm-dwarfdump"]))
 
 YASMFLAGS=""
 ARCH_X86_64=0
@@ -68,7 +75,7 @@ case "${host_os}" in
     ;;
 esac
 
-AM_CONDITIONAL(HAVE_X86_ASM, test -n "${YASMFLAGS}")
+AM_CONDITIONAL(HAVE_X86_ASM, test -n "${YASM}" -a -n "${YASMFLAGS}")
 
 # add -prefer-non-pic so libtool doesn't add -fPIC, which yasm doesn't understand
 YASMFLAGS="${YASMFLAGS} -DPIC -prefer-non-pic -Pconfig.asm -I\$(top_builddir)/x86 -I\$(top_srcdir)/x86"

@@ -189,6 +189,7 @@ static void upipe_s302f_work(struct upipe *upipe, struct upump **upump_p)
         goto upipe_s302f_work_err;
     }
 
+    UBASE_FATAL(upipe, uref_flow_set_complete(flow_def))
     UBASE_FATAL(upipe, uref_flow_set_def(flow_def, "block.s302m.sound."))
     UBASE_FATAL(upipe, uref_block_flow_set_octetrate(flow_def,
                             upipe_s302f->octetrate))

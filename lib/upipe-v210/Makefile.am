@@ -1,8 +1,8 @@
 lib_LTLIBRARIES = libupipe_v210.la
 
-libupipe_v210_la_SOURCES = upipe_v210enc.c
+libupipe_v210_la_SOURCES = upipe_v210dec.c upipe_v210enc.c
 if HAVE_X86_ASM
-libupipe_v210_la_SOURCES += v210enc.asm v210enc.h
+libupipe_v210_la_SOURCES += v210dec.asm v210dec.h v210enc.asm v210enc.h
 endif
 libupipe_v210_la_CPPFLAGS = -I$(top_builddir)/include -I$(top_srcdir)/include
 libupipe_v210_la_CFLAGS = $(AM_CFLAGS) $(AVUTIL_CFLAGS)

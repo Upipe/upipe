@@ -74,6 +74,9 @@ extern "C" {
 
 #define DECKLINK_CHANNELS 16
 
+static const unsigned max_samples = (uint64_t)48000 * 1001 / 24000;
+static const size_t audio_buf_size = max_samples * DECKLINK_CHANNELS * sizeof(int32_t);
+
 class upipe_bmd_sink_frame : public IDeckLinkVideoFrame
 {
 public:
@@ -147,9 +150,6 @@ public:
         return E_NOINTERFACE;
     }
 
-public:
-    uint64_t pts;
-
 private:
     struct uref *uref;
     void *data;
@@ -159,6 +159,9 @@ private:
 
     uatomic_uint32_t refcount;
     IDeckLinkVideoFrameAncillary *frame_anc;
+
+public:
+    uint64_t pts;
 };
 
 static float dur_to_time(int64_t dur)
@@ -204,7 +207,7 @@ struct upipe_bmd_sink_sub {
 
     bool dolby_e;
 
-    bool a52;
+    bool s337;
 
     /** position in the SDI stream */
     uint8_t channel_idx;
@@ -265,6 +268,9 @@ struct upipe_bmd_sink {
 
     IDeckLinkDisplayMode *displayMode;
 
+    /** card name */
+    const char *modelName;
+
     /** hardware uclock */
     struct uclock uclock;
 
@@ -289,8 +295,8 @@ struct upipe_bmd_sink {
     /** audio buffer to merge tracks */
     int32_t *audio_buf;
 
-    /** offset between audio sample 0 and line 21 */
-    uint8_t line21_offset;
+    /** offset between audio sample 0 and dolby e first sample*/
+    uint8_t dolbye_offset;
 
     /** pass through closed captions */
     uatomic_uint32_t cc;
@@ -551,21 +557,22 @@ static int upipe_bmd_sink_sub_read_uref_attributes(struct uref *uref,
 }
 
 static void copy_samples(upipe_bmd_sink_sub *upipe_bmd_sink_sub,
-        struct uref *uref, uint64_t offset, uint64_t samples)
+        struct uref *uref, uint64_t samples)
 {
     struct upipe *upipe = &upipe_bmd_sink_sub->upipe;
     struct upipe_bmd_sink *upipe_bmd_sink = upipe_bmd_sink_from_sub_mgr(upipe->mgr);
     uint8_t idx = upipe_bmd_sink_sub->channel_idx;
     int32_t *out = upipe_bmd_sink->audio_buf;
 
+    uint64_t offset = 0;
     if (upipe_bmd_sink_sub->dolby_e) {
-        if (upipe_bmd_sink->line21_offset >= samples) {
-            upipe_err_va(upipe, "offsetting for line21 would overflow audio: "
-                "offset %" PRIu64" + line 21 %hu, %" PRIu64" samples",
-                offset, upipe_bmd_sink->line21_offset, samples);
+        if (upipe_bmd_sink->dolbye_offset >= samples) {
+            upipe_err_va(upipe, "offsetting for dolbye would overflow audio: "
+                "dolbye %hu, %" PRIu64" samples",
+                upipe_bmd_sink->dolbye_offset, samples);
         } else {
-            offset  += upipe_bmd_sink->line21_offset;
-            samples -= upipe_bmd_sink->line21_offset;
+            offset   = upipe_bmd_sink->dolbye_offset;
+            samples -= upipe_bmd_sink->dolbye_offset;
         }
     }
 
@@ -585,202 +592,47 @@ static inline uint64_t length_to_samples(const uint64_t length)
 
 /** @internal @This fills the audio samples for one single stereo pair
  */
-static void upipe_bmd_sink_sub_sound_get_samples_channel(struct upipe *upipe,
-        const uint64_t video_pts, const unsigned samples,
-        struct upipe_bmd_sink_sub *upipe_bmd_sink_sub)
+static unsigned upipe_bmd_sink_sub_sound_get_samples_channel(struct upipe *upipe,
+        const uint64_t video_pts, struct upipe_bmd_sink_sub *upipe_bmd_sink_sub)
 {
     struct upipe_bmd_sink *upipe_bmd_sink = upipe_bmd_sink_from_upipe(upipe);
+    size_t samples;
+    struct uref *uref = uqueue_pop(&upipe_bmd_sink_sub->uqueue, struct uref *);
+    if (!uref) {
+        upipe_err(&upipe_bmd_sink_sub->upipe, "no audio");
+        return 0;
+    }
 
-    /* timestamp of next video frame */
-    const uint64_t last_pts = video_pts + samples * UCLOCK_FREQ / 48000;
-
-    /* maximum drift allowed */
-    static const unsigned int max_sample_drift = 10;
-
-    /* first sample that has not been written to yet */
-    uint64_t start_offset = UINT64_MAX;
-
-    /* last sample that has been written to */
-    uint64_t end_offset = 0;
-
-    while (end_offset < samples) {
-        /* buffered uref if any */
-        struct uref *uref = upipe_bmd_sink_sub->uref;
-        if (uref)
-            upipe_bmd_sink_sub->uref = NULL;
-        else { /* thread-safe queue */
-            uref = uqueue_pop(&upipe_bmd_sink_sub->uqueue, struct uref *);
-            if (!uref)
-                break;
-        }
-
-        size_t uref_samples = 0;                /* samples in the uref */
-        uint64_t duration;                      /* uref real duration */
-        uint64_t pts = UINT64_MAX;              /* presentation timestamp */
-
-        /* read uref attributes */
-        if (!ubase_check(upipe_bmd_sink_sub_read_uref_attributes(uref,
-            &pts, &uref_samples))) {
-            upipe_err(upipe, "Could not read uref attributes");
-            uref_dump(uref, upipe->uprobe);
-            uref_free(uref);
-            continue;
-        }
-
-        pts += upipe_bmd_sink_sub->latency;
-
-        /* samples / sample rate = duration */
-        duration = uref_samples * UCLOCK_FREQ / 48000;
-
-        /* delay between uref start and video frame */
-        int64_t time_offset = pts - video_pts;
-
-        /* likely to happen when starting but not after */
-        if (unlikely(time_offset < 0)) {
-            /* audio PTS is earlier than video PTS */
-
-            /* duration of audio to discard */
-            uint64_t drop_duration = -time_offset;
-
-            /* too late */
-            if (unlikely(duration < drop_duration && uref_samples > max_sample_drift)) {
-                upipe_err_va(upipe, "[%d] TOO LATE by %" PRIu64" ticks, dropping %zu samples (%f + %f < %f)",
-                        upipe_bmd_sink_sub->channel_idx/2,
-                        video_pts - pts - duration,
-                        uref_samples,
-                        pts_to_time(pts), dur_to_time(duration), pts_to_time(video_pts)
-                        );
-
-                uref_free(uref);
-                continue;
-            }
-
-            if (upipe_bmd_sink_sub->dolby_e || upipe_bmd_sink_sub->a52) {
-                /* do not drop first samples of s337 */
-                drop_duration = 0;
-            }
-
-            /* drop beginning of uref */
-            size_t drop_samples = length_to_samples(drop_duration);
-            if (drop_samples <= max_sample_drift)
-                drop_samples = 0;
-
-            if (drop_samples) {
-                if (drop_samples > uref_samples)
-                    drop_samples = uref_samples;
-
-                upipe_dbg_va(upipe, "[%d] DROPPING %zu samples for PTS %f / %" PRIu64" ticks (%f)",
-                        upipe_bmd_sink_sub->channel_idx/2,
-                        drop_samples, pts_to_time(pts), drop_duration, dur_to_time(drop_duration));
-
-                /* resize buffer */
-                uref_sound_resize(uref, drop_samples, -1);
-            }
-
-            pts = video_pts;
-            time_offset = 0;
-            uref_samples -= drop_samples;
-        } else if (unlikely(pts - max_sample_drift * UCLOCK_FREQ / 48000 > last_pts)) { /* too far in the future ? */
-            upipe_err_va(upipe, "[%d] TOO EARLY (%f > %f) by %fs (%" PRIu64" ticks)",
-                upipe_bmd_sink_sub->channel_idx/2,
-                    pts_to_time(pts), pts_to_time(last_pts),
-                    dur_to_time(pts - last_pts), pts - last_pts
-                    );
-            upipe_dbg_va(upipe, "\t\tStart %" PRId64" End %u", start_offset, end_offset);
-            upipe_bmd_sink_sub->uref = uref;
-            break;
-        }
-
-        if (upipe_bmd_sink_sub->dolby_e) {
-            /* do not drop last samples of s337 */
-            time_offset = 0;
-            pts = video_pts;
-        }
-
-        /* samples already written / writing position in the outgoing block */
-        uint64_t samples_offset = length_to_samples(time_offset);
-
-        /* FIXME */
-        if (samples_offset != end_offset) {
-            if (llabs((int64_t)samples_offset - (int64_t)end_offset) <= max_sample_drift)
-                samples_offset = end_offset;
-            else
-                upipe_err_va(upipe, "[%d] Mismatching offsets: SAMPLES %" PRIu64" != %u END",
-                    upipe_bmd_sink_sub->channel_idx/2,
-                    samples_offset, end_offset);
-        }
-
-        /* we can't write past the end of the buffer */
-        if (samples_offset >= samples) {
-            upipe_err_va(upipe, "FIXING offset: %" PRIu64" > %u",
-                samples_offset, samples - 1);
-            samples_offset = samples - 1;
-        }
-
-        /* The earliest in the outgoing block we've written to */
-        if (start_offset > samples_offset)
-            start_offset = samples_offset;
-
-        /* how many samples we want to read */
-        uint64_t missing_samples = samples - samples_offset;
-
-        /* is our uref too small ? */
-        if (missing_samples > uref_samples)
-            missing_samples = uref_samples;
-
-        /* read the samples into our final buffer */
-        copy_samples(upipe_bmd_sink_sub, uref, samples_offset, missing_samples);
-
-        /* The latest in the outgoing block we've written to */
-        if (end_offset < samples_offset + missing_samples)
-            end_offset = samples_offset + missing_samples;
-
-        if (uref_samples - missing_samples > 0) {
-            /* we did not exhaust this uref, resize it and we're done */
-            pts -= upipe_bmd_sink_sub->latency;
-            pts += missing_samples * UCLOCK_FREQ / 48000;
-            uref_clock_set_pts_sys(uref, pts);
-            uref_sound_resize(uref, missing_samples, -1);
-            upipe_bmd_sink_sub->uref = uref;
-            break;
-        }
-
+    if (!ubase_check(uref_sound_size(uref, &samples, NULL /* sample_size */))) {
+        upipe_err(&upipe_bmd_sink_sub->upipe, "can't read sound size");
         uref_free(uref);
+        return 0;
     }
 
-    /* We didn't even start writing audio */
-    if (start_offset == UINT64_MAX) {
-        upipe_err_va(upipe, "[%d] NO AUDIO for vid PTS %f (%u urefs)",
-                upipe_bmd_sink_sub->channel_idx/2, pts_to_time(video_pts),
-                uqueue_length(&upipe_bmd_sink_sub->uqueue));
-        return;
+    if (samples > max_samples) {
+        upipe_err_va(&upipe_bmd_sink_sub->upipe, "too much samples (%zu)", samples);
+        samples = max_samples;
     }
 
-    /* We didn't write the first sample */
-    if (start_offset) {
-        upipe_err_va(upipe, "[%d] MISSED %" PRId64" start samples",
-                upipe_bmd_sink_sub->channel_idx/2, start_offset);
-    }
+    /* read the samples into our final buffer */
+    copy_samples(upipe_bmd_sink_sub, uref, samples);
 
-    /* We didn't write the last sample */
-    if (end_offset < samples) {
-        upipe_err_va(upipe, "[%d] MISSED %" PRIu64" end samples, last pts %f (%u urefs buffered)",
-                upipe_bmd_sink_sub->channel_idx/2,
-                samples - end_offset, pts_to_time(last_pts),
-                uqueue_length(&upipe_bmd_sink_sub->uqueue));
-    }
+    uref_free(uref);
+
+    return samples;
 }
 
 /** @internal @This fills one video frame worth of audio samples
  */
-static void upipe_bmd_sink_sub_sound_get_samples(struct upipe *upipe,
-        const uint64_t video_pts, const unsigned samples)
+static unsigned upipe_bmd_sink_sub_sound_get_samples(struct upipe *upipe,
+        const uint64_t video_pts)
 {
     struct upipe_bmd_sink *upipe_bmd_sink = upipe_bmd_sink_from_upipe(upipe);
 
     /* Clear buffer */
-    memset(upipe_bmd_sink->audio_buf, 0,
-            samples * DECKLINK_CHANNELS * sizeof(int32_t));
+    memset(upipe_bmd_sink->audio_buf, 0, audio_buf_size);
+
+    unsigned samples = 0;
 
     /* interate through input subpipes */
     pthread_mutex_lock(&upipe_bmd_sink->lock);
@@ -788,42 +640,16 @@ static void upipe_bmd_sink_sub_sound_get_samples(struct upipe *upipe,
     ulist_foreach(&upipe_bmd_sink->inputs, uchain) {
         struct upipe_bmd_sink_sub *upipe_bmd_sink_sub =
             upipe_bmd_sink_sub_from_uchain(uchain);
-        if (upipe_bmd_sink_sub->sound)
-            upipe_bmd_sink_sub_sound_get_samples_channel(upipe, video_pts, samples, upipe_bmd_sink_sub);
+        if (!upipe_bmd_sink_sub->sound)
+            continue;
+
+        unsigned s = upipe_bmd_sink_sub_sound_get_samples_channel(upipe, video_pts, upipe_bmd_sink_sub);
+        if (samples < s)
+            samples = s;
     }
     pthread_mutex_unlock(&upipe_bmd_sink->lock);
-}
 
-static inline unsigned audio_samples_count(struct upipe_bmd_sink *upipe_bmd_sink)
-{
-    BMDTimeValue timeValue;
-    BMDTimeScale timeScale;
-    upipe_bmd_sink->displayMode->GetFrameRate(&timeValue, &timeScale);
-
-    const unsigned samples = (uint64_t)48000 * timeValue / timeScale;
-
-    /* fixed number of samples for 48kHz */
-    if (timeValue != 1001 || timeScale == 24000)
-        return samples;
-
-    if (unlikely(timeScale != 30000 && timeScale != 60000)) {
-        upipe_err_va(&upipe_bmd_sink->upipe,
-                "Unsupported rate %" PRIu64"/%" PRIu64, timeScale, timeValue);
-        return samples;
-    }
-
-    /* cyclic loop of 5 different sample counts */
-    if (++upipe_bmd_sink->frame_idx == 5)
-        upipe_bmd_sink->frame_idx = 0;
-
-    static const uint8_t samples_increment[2][5] = {
-        { 1, 0, 1, 0, 1 }, /* 30000 / 1001 */
-        { 1, 1, 1, 1, 0 }  /* 60000 / 1001 */
-    };
-
-    bool rate5994 = !!(timeScale == 60000);
-
-    return samples + samples_increment[rate5994][upipe_bmd_sink->frame_idx];
+    return samples;
 }
 
 static upipe_bmd_sink_frame *get_video_frame(struct upipe *upipe,
@@ -981,9 +807,7 @@ static void schedule_frame(struct upipe *upipe, struct uref *uref, uint64_t pts)
         upipe_err_va(upipe, "DROPPED FRAME %x", result);
 
     /* audio */
-
-    const unsigned samples = audio_samples_count(upipe_bmd_sink);
-    upipe_bmd_sink_sub_sound_get_samples(&upipe_bmd_sink->upipe, pts, samples);
+    unsigned samples = upipe_bmd_sink_sub_sound_get_samples(&upipe_bmd_sink->upipe, pts);
 
     uint32_t written;
     result = upipe_bmd_sink->deckLinkOutput->ScheduleAudioSamples(
@@ -1028,82 +852,7 @@ static void output_cb(struct upipe *upipe, uint64_t pts)
             uqueue_length(&upipe_bmd_sink_sub->uqueue));
 
     /* Find a picture */
-    struct uref *uref = NULL;
-#if 0
-    for (;;) {
-        /* pop first available picture */
-        uref = upipe_bmd_sink_sub->uref;
-        upipe_bmd_sink_sub->uref = NULL;
-        if (!uref)
-            uref = uqueue_pop(&upipe_bmd_sink_sub->uqueue, struct uref *);
-        if (!uref) {
-            upipe_err(upipe, "no uref");
-            break;
-        }
-
-        /* read its timestamp */
-        uint64_t vid_pts = 0;
-        if (unlikely(!ubase_check(uref_clock_get_pts_sys(uref, &vid_pts)))) {
-            uref_free(uref);
-            upipe_err(upipe, "Could not read pts");
-            return;
-        }
-        vid_pts += upipe_bmd_sink_sub->latency;
-
-        if (now < vid_pts) {
-            upipe_err_va(upipe, "Picture buffering screwed (%.2f < %.2f), rebuffering",
-                    pts_to_time(now), pts_to_time(vid_pts));
-
-            uref_free(uref);
-            upipe_bmd_sink->deckLinkOutput->StopScheduledPlayback(0, NULL, 0);
-            upipe_bmd_sink->genlock_transition_time = 0;
-            if (upipe_bmd_sink->deckLinkOutput->BeginAudioPreroll() != S_OK)
-                upipe_err(upipe, "Could not begin audio preroll");
-
-            upipe_bmd_sink->start_pts = 0;
-            __sync_synchronize();
-            uqueue_uref_flush(&upipe_bmd_sink_sub->uqueue);
-            uatomic_store(&upipe_bmd_sink->preroll, PREROLL_FRAMES);
-            return;
-        }
-
-        upipe_verbose_va(upipe, "\texamining pic %.2f", pts_to_time(vid_pts));
-
-        /* frame pts too much in the past */
-        if (pts > vid_pts + upipe_bmd_sink->ticks_per_frame / 2) {
-            upipe_warn_va(upipe, "late uref dropped (%.2f)",
-                    dur_to_time(pts - vid_pts));
-            /* look at next picture */
-            uref_free(uref);
-            continue;
-        }
-
-        if (pts + upipe_bmd_sink->ticks_per_frame / 2 < vid_pts) {
-            upipe_err_va(upipe, "pic %.2f too early by %.2f ms | %" PRIu64"",
-                    pts_to_time(vid_pts),
-                    dur_to_time(1000 * (vid_pts - pts)),
-                    vid_pts - pts
-                    );
-
-            if (vid_pts - pts > 10 * UCLOCK_FREQ) {
-                upipe_err_va(upipe, "dropping uref");
-                uref_free(uref);
-                uref = NULL;
-                continue;
-            }
-            upipe_bmd_sink_sub->uref = uref;
-            uref = NULL;
-            break;
-        }
-
-        if (0) upipe_dbg_va(upipe, "found uref %.2f, PTS diff %.2f",
-                pts_to_time(vid_pts),
-                dur_to_time(vid_pts - pts));
-        break;
-    }
-#else
-    uref = uqueue_pop(&upipe_bmd_sink_sub->uqueue, struct uref *);
-#endif
+    struct uref *uref = uqueue_pop(&upipe_bmd_sink_sub->uqueue, struct uref *);
 
     schedule_frame(upipe, uref, pts);
 
@@ -1145,11 +894,11 @@ static bool upipe_bmd_sink_sub_output(struct upipe *upipe, struct uref *uref)
 
         uref_clock_get_latency(uref, &upipe_bmd_sink_sub->latency);
         upipe_dbg_va(upipe, "latency %" PRIu64, upipe_bmd_sink_sub->latency);
-        uint8_t data_type = 0;
-        uref_attr_get_small_unsigned(uref, &data_type, UDICT_TYPE_SMALL_UNSIGNED, "data_type");
-        upipe_bmd_sink_sub->dolby_e = data_type == 28; // dolby e, see s338m
-        upipe_bmd_sink_sub->a52 = data_type == S337_TYPE_A52 ||
-                                  data_type == S337_TYPE_A52E;
+
+        upipe_bmd_sink_sub->s337 = !ubase_ncmp(def, "sound.s32.s337.");
+        upipe_bmd_sink_sub->dolby_e = upipe_bmd_sink_sub->s337 &&
+            !ubase_ncmp(def, "sound.s32.s337.dolbye.");
+
         upipe_bmd_sink_sub_check_upump_mgr(upipe);
 
         uref_free(uref);
@@ -1378,6 +1127,50 @@ static int upipe_bmd_sink_sub_set_flow_def(struct upipe *upipe,
             uref_dump(flow_def, upipe->uprobe);
             return UBASE_ERR_EXTERNAL;
         }
+
+        struct dolbye_offset {
+            BMDDisplayMode mode;
+            uint8_t offset;
+        };
+
+        static const struct dolbye_offset table[2][2] = {
+            /* All others */
+            {
+                {
+                    bmdModeHD1080i50, 33,
+                },
+                {
+                    bmdModeHD1080i5994, 31,
+                },
+            },
+
+            /* SDI (including Duo) */
+            {
+                {
+                    bmdModeHD1080i50, 54,
+                },
+                {
+                    bmdModeHD1080i5994, 48,
+                },
+            },
+
+        };
+
+        const struct dolbye_offset *t = &table[0][0];
+        if (upipe_bmd_sink->modelName && !strcmp(upipe_bmd_sink->modelName, "DeckLink SDI")) {
+            t = &table[1][0];
+        }
+
+        const size_t n = sizeof(table) / 2 / sizeof(**table);
+
+        for (size_t i = 0; i < n; i++) {
+            const struct dolbye_offset *e = &t[i];
+            if (e->mode == bmdMode) {
+                upipe_bmd_sink->dolbye_offset = e->offset;
+                break;
+            }
+        }
+
         upipe_bmd_sink->frame_idx = 0;
     }
 
@@ -1428,7 +1221,7 @@ static struct upipe *upipe_bmd_sink_sub_alloc(struct upipe_mgr *mgr,
                                                  struct uprobe *uprobe,
                                                  uint32_t signature, va_list args)
 {
-    struct uref *flow_def;
+    struct uref *flow_def = NULL;
     struct upipe *upipe = upipe_bmd_sink_sub_alloc_flow(mgr,
             uprobe, signature, args, &flow_def);
     struct upipe_bmd_sink_sub *upipe_bmd_sink_sub;
@@ -1562,8 +1355,6 @@ static struct upipe *upipe_bmd_sink_alloc(struct upipe_mgr *mgr,
     upipe_bmd_sink_sub_init(upipe_bmd_sink_sub_to_upipe(upipe_bmd_sink_to_subpic_subpipe(upipe_bmd_sink)),
                             &upipe_bmd_sink->sub_mgr, uprobe_subpic, true);
 
-    const unsigned max_samples = (uint64_t)48000 * 1001 / 24000;
-    const size_t audio_buf_size = max_samples * DECKLINK_CHANNELS * sizeof(int32_t);
     upipe_bmd_sink->audio_buf = (int32_t*)malloc(audio_buf_size);
 
     upipe_bmd_sink->uclock.refcount = upipe->refcount;
@@ -1749,16 +1540,9 @@ static int upipe_bmd_sink_open_card(struct upipe *upipe)
         goto end;
     }
 
-    const char *modelName;
-    upipe_bmd_sink->line21_offset = 33; /* tested on Duo 2, Quad 2, SDI 4K */
-    if (deckLink->GetModelName(&modelName) != S_OK) {
+    if (deckLink->GetModelName(&upipe_bmd_sink->modelName) != S_OK) {
         upipe_err(upipe, "Could not read card model name");
-        modelName = NULL;
-    } else if (!strcmp(modelName, "DeckLink SDI")) {
-        upipe_bmd_sink->line21_offset = 54;
     }
-
-    free((void*)modelName);
 
     if (deckLink->QueryInterface(IID_IDeckLinkOutput,
                                  (void**)&upipe_bmd_sink->deckLinkOutput) != S_OK) {
@@ -2017,6 +1801,7 @@ static void upipe_bmd_sink_free(struct upipe *upipe)
     free(upipe_bmd_sink->audio_buf);
 
     if (upipe_bmd_sink->deckLink) {
+        free((void*)upipe_bmd_sink->modelName);
         upipe_bmd_sink->deckLinkOutput->Release();
         upipe_bmd_sink->deckLink->Release();
     }

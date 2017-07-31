@@ -59,7 +59,7 @@
 #include <upipe-modules/upipe_rtp_demux.h>
 #include <upipe-modules/upipe_udp_source.h>
 #include <upipe-modules/upipe_setflowdef.h>
-#include <upipe-framers/upipe_mpga_framer.h>
+#include <upipe-framers/upipe_auto_framer.h>
 
 #include <stdbool.h>
 #include <stdlib.h>
@@ -253,10 +253,10 @@ int main(int argc, char *argv[])
 
     struct upipe_mgr *rtp_demux_mgr = upipe_rtp_demux_mgr_alloc();
     assert(rtp_demux_mgr != NULL);
-    struct upipe_mgr *mpgaf_mgr = upipe_mpgaf_mgr_alloc();
-    assert(mpgaf_mgr != NULL);
-    upipe_rtp_demux_mgr_set_mpgaf_mgr(rtp_demux_mgr, mpgaf_mgr);
-    upipe_mgr_release(mpgaf_mgr);
+    struct upipe_mgr *autof_mgr = upipe_autof_mgr_alloc();
+    assert(autof_mgr != NULL);
+    upipe_rtp_demux_mgr_set_autof_mgr(rtp_demux_mgr, autof_mgr);
+    upipe_mgr_release(autof_mgr);
     struct upipe *demux = upipe_void_alloc(rtp_demux_mgr,
             uprobe_pfx_alloc(uprobe_use(logger), UPROBE_LOG_LEVEL,
                              "rtp demux"));

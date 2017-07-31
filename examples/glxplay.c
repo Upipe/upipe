@@ -113,8 +113,7 @@ graph {flow: east}
 #include <upipe-modules/upipe_trickplay.h>
 #include <upipe-pthread/uprobe_pthread_upump_mgr.h>
 #include <upipe-ts/upipe_ts_demux.h>
-#include <upipe-framers/upipe_mpgv_framer.h>
-#include <upipe-framers/upipe_h264_framer.h>
+#include <upipe-framers/upipe_auto_framer.h>
 #include <upipe-av/upipe_av.h>
 #include <upipe-av/uref_av_flow.h>
 #include <upipe-av/upipe_avformat_source.h>
@@ -122,6 +121,7 @@ graph {flow: east}
 #include <upipe-swscale/upipe_sws.h>
 #include <upipe-gl/upipe_glx_sink.h>
 #include <upipe-gl/uprobe_gl_sink_cube.h>
+#include <upipe-filters/upipe_filter_decode.h>
 #include <upipe-filters/upipe_filter_blend.h>
 
 #include <pthread.h>
@@ -383,11 +383,15 @@ static int upipe_glxplayer_catch_dec_qsrc(struct uprobe *uprobe,
         case UPROBE_NEED_OUTPUT: {
             struct upipe_glxplayer *glxplayer =
                 container_of(uprobe, struct upipe_glxplayer, uprobe_dec_qsrc_s);
-            struct upipe *avcdec = upipe_void_alloc_output(upipe,
-                    glxplayer->upipe_avcdec_mgr,
+            struct upipe_mgr *fdec_mgr = upipe_fdec_mgr_alloc();
+            struct upipe_mgr *avcdec_mgr = upipe_avcdec_mgr_alloc();
+            upipe_fdec_mgr_set_avcdec_mgr(fdec_mgr, avcdec_mgr);
+            upipe_mgr_release(avcdec_mgr);
+            struct upipe *avcdec = upipe_void_alloc_output(upipe, fdec_mgr,
                     uprobe_pfx_alloc_va(
                             uprobe_use(&glxplayer->uprobe_avcdec_s),
-                        glxplayer->loglevel, "avcdec"));
+                        glxplayer->loglevel, "fdec"));
+            upipe_mgr_release(fdec_mgr);
             if (unlikely(avcdec == NULL))
                 return UBASE_ERR_ALLOC;
             upipe_set_option(avcdec, "threads", "2");
@@ -633,7 +637,9 @@ static struct upipe_glxplayer *upipe_glxplayer_alloc(enum uprobe_log_level logle
         goto fail_probe_logger;
 
     /* upipe-av */
-    if (unlikely(!upipe_av_init(false, uprobe_use(glxplayer->uprobe_logger))))
+    if (unlikely(!upipe_av_init(false,
+                    uprobe_pfx_alloc(uprobe_use(glxplayer->uprobe_logger),
+                                     UPROBE_LOG_VERBOSE, "av"))))
         goto fail_av;
 
     /* pipes managers */
@@ -765,6 +771,11 @@ static bool upipe_glxplayer_play(struct upipe_glxplayer *glxplayer,
         struct upipe_mgr *upipe_avfsrc_mgr = upipe_avfsrc_mgr_alloc();
         if (unlikely(upipe_avfsrc_mgr == NULL))
             return false;
+        struct upipe_mgr *upipe_autof_mgr = upipe_autof_mgr_alloc();
+        if (upipe_autof_mgr != NULL) {
+            upipe_avfsrc_mgr_set_autof_mgr(upipe_avfsrc_mgr, upipe_autof_mgr);
+            upipe_mgr_release(upipe_autof_mgr);
+        }
 
         upipe_src = upipe_void_alloc(upipe_avfsrc_mgr,
                     uprobe_pfx_alloc(uprobe_use(glxplayer->uprobe_selflow),
@@ -837,17 +848,11 @@ static bool upipe_glxplayer_play(struct upipe_glxplayer *glxplayer,
             upipe_release(upipe_src);
             return false;
         }
-        struct upipe_mgr *upipe_mpgvf_mgr = upipe_mpgvf_mgr_alloc();
-        if (upipe_mpgvf_mgr != NULL) {
-            upipe_ts_demux_mgr_set_mpgvf_mgr(upipe_ts_demux_mgr,
-                                             upipe_mpgvf_mgr);
-            upipe_mgr_release(upipe_mpgvf_mgr);
-        }
-        struct upipe_mgr *upipe_h264f_mgr = upipe_h264f_mgr_alloc();
-        if (upipe_h264f_mgr != NULL) {
-            upipe_ts_demux_mgr_set_h264f_mgr(upipe_ts_demux_mgr,
-                                             upipe_h264f_mgr);
-            upipe_mgr_release(upipe_h264f_mgr);
+        struct upipe_mgr *upipe_autof_mgr = upipe_autof_mgr_alloc();
+        if (upipe_autof_mgr != NULL) {
+            upipe_ts_demux_mgr_set_autof_mgr(upipe_ts_demux_mgr,
+                                             upipe_autof_mgr);
+            upipe_mgr_release(upipe_autof_mgr);
         }
 
         struct upipe *upipe_ts_demux =

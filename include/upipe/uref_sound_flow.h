@@ -50,6 +50,8 @@ UREF_ATTR_STRING_VA(sound_flow, channel, "s.channel[%" PRIu8"]",
 UREF_ATTR_SMALL_UNSIGNED(sound_flow, channels, "s.channels", number of channels)
 UREF_ATTR_SMALL_UNSIGNED(sound_flow, sample_size, "s.sample_size",
         size in octets of a sample of an audio plane)
+UREF_ATTR_SMALL_UNSIGNED(sound_flow, raw_sample_size, "s.sample_bits",
+        size in bits of an audio sample)
 UREF_ATTR_UNSIGNED(sound_flow, rate, "s.rate", samples per second)
 UREF_ATTR_UNSIGNED(sound_flow, samples, "s.samples", number of samples)
 UREF_ATTR_UNSIGNED(sound_flow, align, "s.align", alignment in octets)

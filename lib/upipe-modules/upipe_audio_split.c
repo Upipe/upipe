@@ -517,7 +517,7 @@ static int upipe_audio_split_control(struct upipe *upipe,
         }
         case UPIPE_ITERATE_SUB: {
             struct upipe **p = va_arg(args, struct upipe **);
-            return upipe_audio_split_iterate_sub(upipe, p);
+            return upipe_audio_split_iterate_output(upipe, p);
         }
 
         default:
