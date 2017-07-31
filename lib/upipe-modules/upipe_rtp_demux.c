@@ -372,16 +372,8 @@ static struct upipe *upipe_rtp_demux_sub_alloc(struct upipe_mgr *mgr,
 static int upipe_rtp_demux_sub_control(struct upipe *upipe,
                                        int command, va_list args)
 {
-    switch (command) {
-        case UPIPE_SUB_GET_SUPER: {
-            struct upipe **p = va_arg(args, struct upipe **);
-            return upipe_rtp_demux_sub_get_super(upipe, p);
-        }
-
-        default:
-            break;
-    }
-
+    UBASE_HANDLED_RETURN(
+        upipe_rtp_demux_sub_control_super(upipe, command, args));
     int err = upipe_rtp_demux_sub_control_bin_input(upipe, command, args);
     if (err == UBASE_ERR_UNHANDLED)
         return upipe_rtp_demux_sub_control_bin_output(upipe, command, args);

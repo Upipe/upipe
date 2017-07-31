@@ -293,6 +293,8 @@ static inline int _upipe_videocont_sub_set_input(struct upipe *upipe)
 static int upipe_videocont_sub_control(struct upipe *upipe,
                                        int command, va_list args)
 {
+    UBASE_HANDLED_RETURN(
+        upipe_videocont_sub_control_super(upipe, command, args));
     switch (command) {
         case UPIPE_REGISTER_REQUEST: {
             struct urequest *request = va_arg(args, struct urequest *);
@@ -311,10 +313,6 @@ static int upipe_videocont_sub_control(struct upipe *upipe,
         case UPIPE_SET_FLOW_DEF: {
             struct uref *flow_def = va_arg(args, struct uref *);
             return upipe_videocont_sub_set_flow_def(upipe, flow_def);
-        }
-        case UPIPE_SUB_GET_SUPER: {
-            struct upipe **p = va_arg(args, struct upipe **);
-            return upipe_videocont_sub_get_super(upipe, p);
         }
 
         case UPIPE_VIDEOCONT_SUB_SET_INPUT: {

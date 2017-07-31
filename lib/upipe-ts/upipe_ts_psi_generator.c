@@ -677,6 +677,8 @@ static int upipe_ts_psig_flow_set_flow_def(struct upipe *upipe,
 static int upipe_ts_psig_flow_control(struct upipe *upipe,
                                       int command, va_list args)
 {
+    UBASE_HANDLED_RETURN(
+        upipe_ts_psig_flow_control_super(upipe, command, args));
     switch (command) {
         case UPIPE_REGISTER_REQUEST: {
             struct upipe_ts_psig_program *upipe_ts_psig_program =
@@ -699,10 +701,6 @@ static int upipe_ts_psig_flow_control(struct upipe *upipe,
         case UPIPE_SET_FLOW_DEF: {
             struct uref *flow_def = va_arg(args, struct uref *);
             return upipe_ts_psig_flow_set_flow_def(upipe, flow_def);
-        }
-        case UPIPE_SUB_GET_SUPER: {
-            struct upipe **p = va_arg(args, struct upipe **);
-            return upipe_ts_psig_flow_get_super(upipe, p);
         }
 
         default:
@@ -1156,6 +1154,8 @@ static int upipe_ts_psig_program_control(struct upipe *upipe,
 {
     UBASE_HANDLED_RETURN(
         upipe_ts_psig_program_control_flows(upipe, command, args));
+    UBASE_HANDLED_RETURN(
+        upipe_ts_psig_program_control_super(upipe, command, args));
 
     switch (command) {
         case UPIPE_REGISTER_REQUEST: {
@@ -1180,10 +1180,6 @@ static int upipe_ts_psig_program_control(struct upipe *upipe,
         case UPIPE_GET_OUTPUT:
         case UPIPE_SET_OUTPUT:
             return upipe_ts_psig_program_control_output(upipe, command, args);
-        case UPIPE_SUB_GET_SUPER: {
-            struct upipe **p = va_arg(args, struct upipe **);
-            return upipe_ts_psig_program_get_super(upipe, p);
-        }
 
         case UPIPE_TS_PSIG_PROGRAM_GET_PCR_PID: {
             UBASE_SIGNATURE_CHECK(args, UPIPE_TS_PSIG_PROGRAM_SIGNATURE)

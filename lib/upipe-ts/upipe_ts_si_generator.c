@@ -798,6 +798,9 @@ static int upipe_ts_sig_service_control(struct upipe *upipe,
         upipe_ts_sig_service_from_upipe(upipe);
     struct upipe_ts_sig *sig = upipe_ts_sig_from_service_mgr(upipe->mgr);
 
+    UBASE_HANDLED_RETURN(
+        upipe_ts_sig_service_control_super(upipe, command, args));
+
     switch (command) {
         case UPIPE_REGISTER_REQUEST: {
             struct urequest *request = va_arg(args, struct urequest *);
@@ -812,10 +815,6 @@ static int upipe_ts_sig_service_control(struct upipe *upipe,
         case UPIPE_SET_FLOW_DEF: {
             struct uref *flow_def = va_arg(args, struct uref *);
             return upipe_ts_sig_service_set_flow_def(upipe, flow_def);
-        }
-        case UPIPE_SUB_GET_SUPER: {
-            struct upipe **p = va_arg(args, struct upipe **);
-            return upipe_ts_sig_service_get_super(upipe, p);
         }
 
         case UPIPE_TS_MUX_GET_EIT_INTERVAL: {

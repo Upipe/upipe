@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2013-2014 OpenHeadend S.A.R.L.
+ * Copyright (C) 2013-2017 OpenHeadend S.A.R.L.
  *
  * Authors: Christophe Massiot
  *
@@ -40,7 +40,7 @@ extern "C" {
 
 #include <assert.h>
 
-/** @This declares nine functions dealing with subpipes of split and join pipes.
+/** @This declares functions dealing with subpipes of split and join pipes.
  *
  * You must add two members to your private pipe structure:
  * @code
@@ -99,6 +99,24 @@ extern "C" {
  * @end code
  *
  * @item @code
+ *  int upipe_foo_output_control_super(struct upipe *upipe,
+ *                                     int command, va_list args)
+ * @end code
+ * This function handles the helper control commands
+ * (upipe_foo_output_get_super) of the sub pipe in one call.
+ * Typically called from your upipe_foo_output_control() handler, such as:
+ * @code
+ *  int upipe_foo_output_control(struct upipe *upipe,
+ *                               int command, va_list args)
+ *  {
+ *      ...
+ *      UBASE_HANDLED_RETURN(
+ *          upipe_foo_output_control_super(upipe, command, args));
+ *      ...
+ *  }
+ * @end code
+ *
+ * @item @code
  *  void upipe_foo_output_clean_sub(struct upipe *upipe)
  * @end code
  * Cleans up the private members of upipe_foo_output for this helper and
@@ -128,6 +146,21 @@ extern "C" {
  *  case UPIPE_ITERATE_SUB: {
  *      struct upipe **p = va_arg(args, struct upipe **);
  *      return upipe_foo_iterate_sub(upipe, p);
+ *  }
+ * @end code
+ *
+ * @item @code
+ *  int upipe_foo_control_subs(struct upipe *upipe, int command, va_list args)
+ * @end code
+ * This function handles the helper control commands (upipe_foo_get_sub_mgr,
+ * upipe_foo_iterate_sub, ...) in one call.
+ * Typically called from your upipe_foo_control() handler, such as:
+ * @code
+ *  int upipe_foo_control(struct upipe *upipe, int command, va_list args)
+ *  {
+ *      ...
+ *      UBASE_HANDLED_RETURN(upipe_foo_control_subs(upipe, command, args));
+ *      ...
  *  }
  * @end code
  *
@@ -230,6 +263,24 @@ static int STRUCTURE_SUB##_get_super(struct upipe *upipe, struct upipe **p) \
     struct STRUCTURE *s = STRUCTURE##_from_##MGR(upipe->mgr);               \
     *p = STRUCTURE##_to_upipe(s);                                           \
     return UBASE_ERR_NONE;                                                  \
+}                                                                           \
+/** @This handles sub pipe helper control commands.                         \
+ *                                                                          \
+ * @param upipe description structure of the subpipe                        \
+ * @param command type of command to handle                                 \
+ * @param args optional arguments                                           \
+ * @return an error code                                                    \
+ */                                                                         \
+static inline int STRUCTURE_SUB##_control_super(struct upipe *upipe,        \
+                                                int command, va_list args)  \
+{                                                                           \
+    switch (command) {                                                      \
+        case UPIPE_SUB_GET_SUPER: {                                         \
+            struct upipe **super_p = va_arg(args, struct upipe **);         \
+            return STRUCTURE_SUB##_get_super(upipe, super_p);               \
+        }                                                                   \
+    }                                                                       \
+    return UBASE_ERR_UNHANDLED;                                             \
 }                                                                           \
 /** @This cleans up the private members for this helper in STRUCTURE_SUB,   \
  * and removes it from the ULIST in STRUCTURE.                              \

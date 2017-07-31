@@ -279,12 +279,10 @@ static int upipe_stream_switcher_input_control(struct upipe *upipe,
     struct upipe *super = upipe_stream_switcher_to_upipe(upipe_stream_switcher);
 
     UBASE_HANDLED_RETURN(upipe_control_provide_request(upipe, command, args));
+    UBASE_HANDLED_RETURN(
+        upipe_stream_switcher_input_control_super(upipe, command, args));
 
     switch (command) {
-    case UPIPE_SUB_GET_SUPER: {
-        struct upipe **p = va_arg(args, struct upipe **);
-        return upipe_stream_switcher_input_get_super(upipe, p);
-    }
     case UPIPE_GET_MAX_LENGTH: {
         unsigned int *p = va_arg(args, unsigned int *);
         return upipe_stream_switcher_input_get_max_length(upipe, p);

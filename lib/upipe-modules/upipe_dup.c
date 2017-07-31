@@ -146,15 +146,12 @@ static struct upipe *upipe_dup_output_alloc(struct upipe_mgr *mgr,
 static int upipe_dup_output_control(struct upipe *upipe,
                                     int command, va_list args)
 {
+    UBASE_HANDLED_RETURN(upipe_dup_output_control_super(upipe, command, args));
     switch (command) {
         case UPIPE_GET_FLOW_DEF:
         case UPIPE_GET_OUTPUT:
         case UPIPE_SET_OUTPUT:
             return upipe_dup_output_control_output(upipe, command, args);
-        case UPIPE_SUB_GET_SUPER: {
-            struct upipe **p = va_arg(args, struct upipe **);
-            return upipe_dup_output_get_super(upipe, p);
-        }
 
         default:
             return UBASE_ERR_UNHANDLED;

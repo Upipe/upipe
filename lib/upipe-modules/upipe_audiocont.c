@@ -306,6 +306,8 @@ static int upipe_audiocont_sub_provide_flow_format(struct upipe *upipe,
 static int upipe_audiocont_sub_control(struct upipe *upipe,
                                        int command, va_list args)
 {
+    UBASE_HANDLED_RETURN(
+        upipe_audiocont_sub_control_super(upipe, command, args));
     switch (command) {
         case UPIPE_REGISTER_REQUEST: {
             struct urequest *request = va_arg(args, struct urequest *);
@@ -334,11 +336,6 @@ static int upipe_audiocont_sub_control(struct upipe *upipe,
             struct uref *flow_def = va_arg(args, struct uref *);
             return upipe_audiocont_sub_set_flow_def(upipe, flow_def);
         }
-        case UPIPE_SUB_GET_SUPER: {
-            struct upipe **p = va_arg(args, struct upipe **);
-            return upipe_audiocont_sub_get_super(upipe, p);
-        }
-
         case UPIPE_AUDIOCONT_SUB_SET_INPUT: {
             UBASE_SIGNATURE_CHECK(args, UPIPE_AUDIOCONT_SUB_SIGNATURE)
             return _upipe_audiocont_sub_set_input(upipe);

@@ -274,14 +274,11 @@ static int upipe_trickp_sub_control(struct upipe *upipe,
                                     int command, va_list args)
 {
     UBASE_HANDLED_RETURN(upipe_trickp_sub_control_output(upipe, command, args));
+    UBASE_HANDLED_RETURN(upipe_trickp_sub_control_super(upipe, command, args));
     switch (command) {
         case UPIPE_SET_FLOW_DEF: {
             struct uref *flow_def = va_arg(args, struct uref *);
             return upipe_trickp_sub_set_flow_def(upipe, flow_def);
-        }
-        case UPIPE_SUB_GET_SUPER: {
-            struct upipe **p = va_arg(args, struct upipe **);
-            return upipe_trickp_sub_get_super(upipe, p);
         }
 
         case UPIPE_GET_MAX_LENGTH: {

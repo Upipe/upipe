@@ -199,12 +199,8 @@ static int upipe_hls_master_sub_control(struct upipe *upipe,
                                         int command,
                                         va_list args)
 {
-    switch (command) {
-    case UPIPE_SUB_GET_SUPER: {
-        struct upipe **super_p = va_arg(args, struct upipe **);
-        return upipe_hls_master_sub_get_super(upipe, super_p);
-    }
-    }
+    UBASE_HANDLED_RETURN(
+        upipe_hls_master_sub_control_super(upipe, command, args));
     return upipe_hls_master_sub_control_bin_output(upipe, command, args);
 }
 

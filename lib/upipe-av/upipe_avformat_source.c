@@ -383,11 +383,9 @@ static int upipe_avfsrc_sub_unregister_request(struct upipe *upipe,
 static int upipe_avfsrc_sub_control(struct upipe *upipe,
                                     int command, va_list args)
 {
+    UBASE_HANDLED_RETURN(upipe_avfsrc_sub_control_super(upipe, command, args));
+
     switch (command) {
-        case UPIPE_SUB_GET_SUPER: {
-            struct upipe **p = va_arg(args, struct upipe **);
-            return upipe_avfsrc_sub_get_super(upipe, p);
-        }
         case UPIPE_BIN_GET_FIRST_INNER: {
             struct upipe_avfsrc_sub *upipe_avfsrc_sub =
                 upipe_avfsrc_sub_from_upipe(upipe);

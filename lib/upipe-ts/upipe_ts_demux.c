@@ -941,11 +941,9 @@ static bool upipe_ts_demux_output_pmtd_update(struct upipe *upipe,
 static int upipe_ts_demux_output_control(struct upipe *upipe,
                                          int command, va_list args)
 {
+    UBASE_HANDLED_RETURN(
+        upipe_ts_demux_output_control_super(upipe, command, args));
     switch (command) {
-        case UPIPE_SUB_GET_SUPER: {
-            struct upipe **p = va_arg(args, struct upipe **);
-            return upipe_ts_demux_output_get_super(upipe, p);
-        }
         case UPIPE_GET_FLOW_DEF: {
             int err = upipe_ts_demux_output_control_bin_output(upipe, command,
                                                                args);
@@ -1776,16 +1774,14 @@ static int upipe_ts_demux_program_control(struct upipe *upipe,
 {
     UBASE_HANDLED_RETURN(
         upipe_ts_demux_program_control_outputs(upipe, command, args));
+    UBASE_HANDLED_RETURN(
+        upipe_ts_demux_program_control_super(upipe, command, args));
 
     switch (command) {
         case UPIPE_GET_FLOW_DEF:
         case UPIPE_GET_OUTPUT:
         case UPIPE_SET_OUTPUT:
             return upipe_ts_demux_program_control_output(upipe, command, args);
-        case UPIPE_SUB_GET_SUPER: {
-            struct upipe **p = va_arg(args, struct upipe **);
-            return upipe_ts_demux_program_get_super(upipe, p);
-        }
         case UPIPE_SPLIT_ITERATE: {
             struct uref **p = va_arg(args, struct uref **);
             struct upipe_ts_demux_program *upipe_ts_demux_program =

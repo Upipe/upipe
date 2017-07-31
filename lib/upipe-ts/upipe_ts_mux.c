@@ -1478,6 +1478,8 @@ static int _upipe_ts_mux_input_set_aac_encaps(struct upipe *upipe, int encaps)
 static int upipe_ts_mux_input_control(struct upipe *upipe,
                                       int command, va_list args)
 {
+    UBASE_HANDLED_RETURN(
+        upipe_ts_mux_input_control_super(upipe, command, args));
     switch (command) {
         case UPIPE_REGISTER_REQUEST: {
             struct urequest *request = va_arg(args, struct urequest *);
@@ -1491,10 +1493,6 @@ static int upipe_ts_mux_input_control(struct upipe *upipe,
         case UPIPE_SET_FLOW_DEF: {
             struct uref *flow_def = va_arg(args, struct uref *);
             return upipe_ts_mux_input_set_flow_def(upipe, flow_def);
-        }
-        case UPIPE_SUB_GET_SUPER: {
-            struct upipe **p = va_arg(args, struct upipe **);
-            return upipe_ts_mux_input_get_super(upipe, p);
         }
         case UPIPE_TS_MUX_GET_SCTE35_INTERVAL: {
             UBASE_SIGNATURE_CHECK(args, UPIPE_TS_MUX_SIGNATURE)
@@ -2182,15 +2180,13 @@ static int upipe_ts_mux_program_control(struct upipe *upipe,
 {
     UBASE_HANDLED_RETURN(
         upipe_ts_mux_program_control_inputs(upipe, command, args));
+    UBASE_HANDLED_RETURN(
+        upipe_ts_mux_program_control_super(upipe, command, args));
 
     switch (command) {
         case UPIPE_SET_FLOW_DEF: {
             struct uref *flow_def = va_arg(args, struct uref *);
             return upipe_ts_mux_program_set_flow_def(upipe, flow_def);
-        }
-        case UPIPE_SUB_GET_SUPER: {
-            struct upipe **p = va_arg(args, struct upipe **);
-            return upipe_ts_mux_program_get_super(upipe, p);
         }
 
         case UPIPE_TS_MUX_GET_PMT_INTERVAL: {
