@@ -113,7 +113,7 @@ struct upipe_osx_audioqueue_sink {
     char uqueue_extra[uqueue_sizeof(N_BUFFER)];
     /** audio buffer size */
     size_t buffer_size;
-    /** audio queue is running ? */
+    /** audio queue is running? */
     bool running;
     /** listener event fd */
     struct ueventfd ev;

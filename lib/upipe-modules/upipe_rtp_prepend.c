@@ -585,7 +585,7 @@ static struct upipe *upipe_rtp_prepend_alloc(struct upipe_mgr *mgr,
     upipe_rtp_prepend->clockrate = 0;
     upipe_rtp_prepend->type_overwrite = false;
     upipe_rtp_prepend->type = RTP_TYPE_INVALID;
-    upipe_rtp_prepend->seqnum = 0; /* FIXME random init ?*/
+    upipe_rtp_prepend->seqnum = 0; /* FIXME random init?*/
     upipe_rtp_prepend->mpa = false;
 
     upipe_throw_ready(upipe);

@@ -1151,7 +1151,7 @@ static int upipe_bmd_src_set_uri(struct upipe *upipe, const char *uri)
         return UBASE_ERR_EXTERNAL;
     }
 
-    /* format detection available ? */
+    /* format detection available? */
     IDeckLinkAttributes *deckLinkAttr = NULL;
     if (deckLink->QueryInterface(IID_IDeckLinkAttributes,
                                  (void**)&deckLinkAttr) != S_OK) {

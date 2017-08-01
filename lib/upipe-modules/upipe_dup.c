@@ -294,7 +294,7 @@ static int upipe_dup_set_flow_def(struct upipe *upipe,
 static int upipe_dup_control(struct upipe *upipe, int command, va_list args)
 {
     UBASE_HANDLED_RETURN(upipe_dup_control_outputs(upipe, command, args));
-    /* We do not pass through the requests ; which output would we use ? */
+    /* We do not pass through the requests; which output would we use? */
     UBASE_HANDLED_RETURN(upipe_control_provide_request(upipe, command, args));
 
     switch (command) {
