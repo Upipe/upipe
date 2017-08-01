@@ -133,6 +133,12 @@ struct upipe_sync_sub {
     /** AES/a52 */
     bool a52;
 
+    /** frames without dolby e */
+    uint8_t missed_dolby_e;
+
+    /** last dolby e frame sent */
+    struct uref *uref;
+
     /** channels */
     uint8_t channels;
 
@@ -172,6 +178,8 @@ static struct upipe *upipe_sync_sub_alloc(struct upipe_mgr *mgr,
     upipe_sync_sub->sound = false;
     upipe_sync_sub->s337 = false;
     upipe_sync_sub->a52 = false;
+    upipe_sync_sub->missed_dolby_e = 0;
+    upipe_sync_sub->uref = NULL;
 
     upipe_sync_sub_init_urefcount(upipe);
     upipe_sync_sub_init_output(upipe);
@@ -474,6 +482,21 @@ static inline unsigned audio_samples_count(struct upipe *upipe,
     return samples + samples_increment[rate5994][upipe_sync->frame_idx];
 }
 
+static struct uref *upipe_sync_get_cached_dolby(struct upipe *upipe)
+{
+    struct upipe_sync_sub *upipe_sync_sub = upipe_sync_sub_from_upipe(upipe);
+
+    if (upipe_sync_sub->missed_dolby_e >= 5)
+        return NULL;
+
+    upipe_sync_sub->missed_dolby_e++;
+
+    if (upipe_sync_sub->uref == NULL)
+        return NULL;
+
+    return uref_dup(upipe_sync_sub->uref);
+}
+
 static void output_sound(struct upipe *upipe, const struct urational *fps,
         struct upump **upump_p)
 {
@@ -494,22 +517,35 @@ static void output_sound(struct upipe *upipe, const struct urational *fps,
         const bool a52 = upipe_sync_sub->a52;
 
         if (s337 && !a52) {
+            struct uref *uref = NULL;
             struct uchain *uchain = ulist_peek(&upipe_sync_sub->urefs);
             if (!uchain) {
                 upipe_err_va(upipe_sub, "no urefs");
-                continue;
-            }
-            struct uref *uref = uref_from_uchain(uchain);
 
-            uint64_t pts = 0;
-            uref_clock_get_pts_sys(uref, &pts);
-            if (pts + upipe_sync->latency > upipe_sync->pts + upipe_sync->ticks_per_frame) {
-                upipe_warn_va(upipe_sub, "Waiting to buffer %.0f",
-                        pts_to_time(pts + upipe_sync->latency - upipe_sync->pts));
-                continue;
+                uref = upipe_sync_get_cached_dolby(upipe_sub);
+                if (!uref)
+                    continue;
+            } else {
+                uref = uref_from_uchain(uchain);
+
+                uint64_t pts = 0;
+                uref_clock_get_pts_sys(uref, &pts);
+                if (pts + upipe_sync->latency > upipe_sync->pts + upipe_sync->ticks_per_frame) {
+                    upipe_warn_va(upipe_sub, "Waiting to buffer %.0f",
+                            pts_to_time(pts + upipe_sync->latency - upipe_sync->pts));
+
+                    uref = upipe_sync_get_cached_dolby(upipe_sub);
+                    if (!uref)
+                        continue;
+                } else {
+                    ulist_pop(&upipe_sync_sub->urefs);
+                    upipe_sync_sub->missed_dolby_e = 0;
+                    /* cache uref */
+                    uref_free(upipe_sync_sub->uref);
+                    upipe_sync_sub->uref = uref_dup(uref);
+                }
             }
 
-            ulist_pop(&upipe_sync_sub->urefs);
             size_t src_samples = 0;
             uref_sound_size(uref, &src_samples, NULL);
             upipe_sync_sub->samples -= src_samples;
@@ -993,6 +1029,7 @@ static void upipe_sync_sub_free(struct upipe *upipe)
     upipe_throw_dead(upipe);
 
     ulist_uref_flush(&upipe_sync_sub->urefs);
+    uref_free(upipe_sync_sub->uref);
 
     upipe_sync_sub_clean_urefcount(upipe);
     upipe_sync_sub_clean_output(upipe);
