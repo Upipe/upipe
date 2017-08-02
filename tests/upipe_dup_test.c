@@ -40,6 +40,7 @@
 #include <upipe/uref_std.h>
 #include <upipe/uref_flow.h>
 #include <upipe/uref_block_flow.h>
+#include <upipe/uref_dump.h>
 #include <upipe/upipe.h>
 #include <upipe-modules/upipe_dup.h>
 
@@ -52,6 +53,8 @@
 #define UPROBE_LOG_LEVEL UPROBE_LOG_DEBUG
 
 static int counter = 0;
+static int flow_foo_counter = 0;
+static int flow_bar_counter = 0;
 
 /** definition of our uprobe */
 static int catch(struct uprobe *uprobe, struct upipe *upipe,
@@ -93,8 +96,17 @@ static void test_input(struct upipe *upipe, struct uref *uref,
 static int test_control(struct upipe *upipe, int command, va_list args)
 {
     switch (command) {
-        case UPIPE_SET_FLOW_DEF:
+        case UPIPE_SET_FLOW_DEF: {
+            struct uref *flow_def = va_arg(args, struct uref *);
+            uref_dump(flow_def, upipe->uprobe);
+            if (ubase_check(uref_flow_match_def(flow_def, "block.foo.")))
+                flow_foo_counter++;
+            else if (ubase_check(uref_flow_match_def(flow_def, "block.bar.")))
+                flow_bar_counter++;
+            else
+                abort();
             return UBASE_ERR_NONE;
+        }
         default:
             assert(0);
             return UBASE_ERR_UNHANDLED;
@@ -171,10 +183,17 @@ int main(int argc, char *argv[])
     ubase_assert(upipe_set_output(upipe_dup_output1, upipe_sink1));
     assert(counter == 0);
 
+    uref = uref_block_flow_alloc_def(uref_mgr, "bar.");
+    assert(uref);
+    ubase_assert(upipe_set_flow_def(upipe_dup, uref));
+    uref_free(uref);
+
     uref = uref_alloc(uref_mgr);
     assert(uref != NULL);
     upipe_input(upipe_dup, uref, NULL);
     assert(counter == 2);
+    assert(flow_foo_counter == 1);
+    assert(flow_bar_counter == 2);
 
     upipe_release(upipe_dup);
     upipe_release(upipe_dup_output0);
