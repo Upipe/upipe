@@ -306,6 +306,8 @@ static int upipe_audiocont_sub_provide_flow_format(struct upipe *upipe,
 static int upipe_audiocont_sub_control(struct upipe *upipe,
                                        int command, va_list args)
 {
+    UBASE_HANDLED_RETURN(
+        upipe_audiocont_sub_control_super(upipe, command, args));
     switch (command) {
         case UPIPE_REGISTER_REQUEST: {
             struct urequest *request = va_arg(args, struct urequest *);
@@ -334,11 +336,6 @@ static int upipe_audiocont_sub_control(struct upipe *upipe,
             struct uref *flow_def = va_arg(args, struct uref *);
             return upipe_audiocont_sub_set_flow_def(upipe, flow_def);
         }
-        case UPIPE_SUB_GET_SUPER: {
-            struct upipe **p = va_arg(args, struct upipe **);
-            return upipe_audiocont_sub_get_super(upipe, p);
-        }
-
         case UPIPE_AUDIOCONT_SUB_SET_INPUT: {
             UBASE_SIGNATURE_CHECK(args, UPIPE_AUDIOCONT_SUB_SIGNATURE)
             return _upipe_audiocont_sub_set_input(upipe);
@@ -870,6 +867,9 @@ static int upipe_audiocont_control(struct upipe *upipe,
                                    int command, va_list args)
 {
     struct upipe_audiocont *upipe_audiocont = upipe_audiocont_from_upipe(upipe);
+
+    UBASE_HANDLED_RETURN(upipe_audiocont_control_subs(upipe, command, args));
+
     switch (command) {
         case UPIPE_REGISTER_REQUEST: {
             struct urequest *request = va_arg(args, struct urequest *);
@@ -889,26 +889,10 @@ static int upipe_audiocont_control(struct upipe *upipe,
             struct uref *flow_def = va_arg(args, struct uref *);
             return upipe_audiocont_set_flow_def(upipe, flow_def);
         }
-        case UPIPE_GET_FLOW_DEF: {
-            struct uref **p = va_arg(args, struct uref **);
-            return upipe_audiocont_get_flow_def(upipe, p);
-        }
-        case UPIPE_GET_OUTPUT: {
-            struct upipe **p = va_arg(args, struct upipe **);
-            return upipe_audiocont_get_output(upipe, p);
-        }
-        case UPIPE_SET_OUTPUT: {
-            struct upipe *output = va_arg(args, struct upipe *);
-            return upipe_audiocont_set_output(upipe, output);
-        }
-        case UPIPE_GET_SUB_MGR: {
-            struct upipe_mgr **p = va_arg(args, struct upipe_mgr **);
-            return upipe_audiocont_get_sub_mgr(upipe, p);
-        }
-        case UPIPE_ITERATE_SUB: {
-            struct upipe **p = va_arg(args, struct upipe **);
-            return upipe_audiocont_iterate_sub(upipe, p);
-        }
+        case UPIPE_GET_FLOW_DEF:
+        case UPIPE_GET_OUTPUT:
+        case UPIPE_SET_OUTPUT:
+            return upipe_audiocont_control_output(upipe, command, args);
 
         case UPIPE_AUDIOCONT_SET_INPUT: {
             UBASE_SIGNATURE_CHECK(args, UPIPE_AUDIOCONT_SIGNATURE)

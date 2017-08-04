@@ -522,18 +522,10 @@ static int _upipe_alsource_control(struct upipe *upipe, int command, va_list arg
             upipe_alsource_set_upump(upipe, NULL);
             upipe_alsource_require_uclock(upipe);
             return UBASE_ERR_NONE;
-        case UPIPE_GET_FLOW_DEF: {
-            struct uref **p = va_arg(args, struct uref **);
-            return upipe_alsource_get_flow_def(upipe, p);
-        }
-        case UPIPE_GET_OUTPUT: {
-            struct upipe **p = va_arg(args, struct upipe **);
-            return upipe_alsource_get_output(upipe, p);
-        }
-        case UPIPE_SET_OUTPUT: {
-            struct upipe *output = va_arg(args, struct upipe *);
-            return upipe_alsource_set_output(upipe, output);
-        }
+        case UPIPE_GET_FLOW_DEF:
+        case UPIPE_GET_OUTPUT:
+        case UPIPE_SET_OUTPUT:
+            return upipe_alsource_control_output(upipe, command, args);
 
         case UPIPE_GET_URI: {
             const char **uri_p = va_arg(args, const char **);

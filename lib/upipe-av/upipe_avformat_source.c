@@ -383,11 +383,9 @@ static int upipe_avfsrc_sub_unregister_request(struct upipe *upipe,
 static int upipe_avfsrc_sub_control(struct upipe *upipe,
                                     int command, va_list args)
 {
+    UBASE_HANDLED_RETURN(upipe_avfsrc_sub_control_super(upipe, command, args));
+
     switch (command) {
-        case UPIPE_SUB_GET_SUPER: {
-            struct upipe **p = va_arg(args, struct upipe **);
-            return upipe_avfsrc_sub_get_super(upipe, p);
-        }
         case UPIPE_BIN_GET_FIRST_INNER: {
             struct upipe_avfsrc_sub *upipe_avfsrc_sub =
                 upipe_avfsrc_sub_from_upipe(upipe);
@@ -1103,6 +1101,8 @@ static int _upipe_avfsrc_set_time(struct upipe *upipe, uint64_t time)
 static int _upipe_avfsrc_control(struct upipe *upipe,
                                  int command, va_list args)
 {
+    UBASE_HANDLED_RETURN(upipe_avfsrc_control_subs(upipe, command, args));
+
     switch (command) {
         case UPIPE_ATTACH_UPUMP_MGR:
             upipe_avfsrc_set_upump(upipe, NULL);
@@ -1112,30 +1112,15 @@ static int _upipe_avfsrc_control(struct upipe *upipe,
             upipe_avfsrc_set_upump(upipe, NULL);
             upipe_avfsrc_require_uclock(upipe);
             return UBASE_ERR_NONE;
-        case UPIPE_GET_FLOW_DEF: {
-            struct uref **p = va_arg(args, struct uref **);
-            return upipe_avfsrc_get_flow_def(upipe, p);
-        }
-        case UPIPE_GET_OUTPUT: {
-            struct upipe **p = va_arg(args, struct upipe **);
-            return upipe_avfsrc_get_output(upipe, p);
-        }
-        case UPIPE_SET_OUTPUT: {
-            struct upipe *output = va_arg(args, struct upipe *);
-            return upipe_avfsrc_set_output(upipe, output);
-        }
+
+        case UPIPE_GET_FLOW_DEF:
+        case UPIPE_GET_OUTPUT:
+        case UPIPE_SET_OUTPUT:
+            return upipe_avfsrc_control_output(upipe, command, args);
 
         case UPIPE_SPLIT_ITERATE: {
             struct uref **p = va_arg(args, struct uref **);
             return upipe_avfsrc_iterate(upipe, p);
-        }
-        case UPIPE_GET_SUB_MGR: {
-            struct upipe_mgr **p = va_arg(args, struct upipe_mgr **);
-            return upipe_avfsrc_get_sub_mgr(upipe, p);
-        }
-        case UPIPE_ITERATE_SUB: {
-            struct upipe **p = va_arg(args, struct upipe **);
-            return upipe_avfsrc_iterate_sub(upipe, p);
         }
 
         case UPIPE_GET_OPTION: {

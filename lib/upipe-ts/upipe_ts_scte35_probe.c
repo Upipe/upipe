@@ -357,17 +357,13 @@ static int upipe_ts_scte35p_set_flow_def(struct upipe *upipe,
 static int upipe_ts_scte35p_control(struct upipe *upipe,
                                     int command, va_list args)
 {
+    UBASE_HANDLED_RETURN(upipe_control_provide_request(upipe, command, args));
+
     switch (command) {
         case UPIPE_ATTACH_UPUMP_MGR:
             return upipe_ts_scte35p_attach_upump_mgr(upipe);
         case UPIPE_ATTACH_UCLOCK:
             upipe_ts_scte35p_require_uclock(upipe);
-            return UBASE_ERR_NONE;
-        case UPIPE_REGISTER_REQUEST: {
-            struct urequest *request = va_arg(args, struct urequest *);
-            return upipe_throw_provide_request(upipe, request);
-        }
-        case UPIPE_UNREGISTER_REQUEST:
             return UBASE_ERR_NONE;
         case UPIPE_SET_FLOW_DEF: {
             struct uref *flow_def = va_arg(args, struct uref *);

@@ -176,7 +176,7 @@ static int probe_playlist(struct uprobe *uprobe, struct upipe *inner,
         struct uref *flow_def = va_arg(args, struct uref *);
         struct upipe *output = upipe_use(inner);
 
-        /* AES decrypt ?
+        /* AES decrypt?
          */
         if (ubase_check(uref_flow_match_def(flow_def, "block.aes."))) {
             struct upipe_mgr *upipe_aes_decrypt_mgr =

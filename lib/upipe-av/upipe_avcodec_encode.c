@@ -1431,22 +1431,14 @@ static int upipe_avcenc_control(struct upipe *upipe,
             upipe_avcenc_abort_av_deal(upipe);
             return upipe_avcenc_attach_upump_mgr(upipe);
 
-        case UPIPE_GET_FLOW_DEF: {
-            struct uref **p = va_arg(args, struct uref **);
-            return upipe_avcenc_get_flow_def(upipe, p);
-        }
         case UPIPE_SET_FLOW_DEF: {
             struct uref *flow_def = va_arg(args, struct uref *);
             return upipe_avcenc_set_flow_def(upipe, flow_def);
         }
-        case UPIPE_GET_OUTPUT: {
-            struct upipe **p = va_arg(args, struct upipe **);
-            return upipe_avcenc_get_output(upipe, p);
-        }
-        case UPIPE_SET_OUTPUT: {
-            struct upipe *output = va_arg(args, struct upipe *);
-            return upipe_avcenc_set_output(upipe, output);
-        }
+        case UPIPE_GET_FLOW_DEF:
+        case UPIPE_GET_OUTPUT:
+        case UPIPE_SET_OUTPUT:
+            return upipe_avcenc_control_output(upipe, command, args);
 
         case UPIPE_SET_OPTION: {
             const char *option = va_arg(args, const char *);

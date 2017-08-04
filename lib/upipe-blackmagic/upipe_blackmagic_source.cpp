@@ -564,18 +564,10 @@ static int upipe_bmd_src_output_control(struct upipe *upipe,
                                         int command, va_list args)
 {
     switch (command) {
-        case UPIPE_GET_FLOW_DEF: {
-            struct uref **p = va_arg(args, struct uref **);
-            return upipe_bmd_src_output_get_flow_def(upipe, p);
-        }
-        case UPIPE_GET_OUTPUT: {
-            struct upipe **p = va_arg(args, struct upipe **);
-            return upipe_bmd_src_output_get_output(upipe, p);
-        }
-        case UPIPE_SET_OUTPUT: {
-            struct upipe *output = va_arg(args, struct upipe *);
-            return upipe_bmd_src_output_set_output(upipe, output);
-        }
+        case UPIPE_GET_FLOW_DEF:
+        case UPIPE_GET_OUTPUT:
+        case UPIPE_SET_OUTPUT:
+            return upipe_bmd_src_output_control_output(upipe, command, args);
         case UPIPE_SUB_GET_SUPER: {
             struct upipe **p = va_arg(args, struct upipe **);
             *p = upipe_bmd_src_to_upipe(upipe_bmd_src_from_sub_mgr(upipe->mgr));
@@ -1159,7 +1151,7 @@ static int upipe_bmd_src_set_uri(struct upipe *upipe, const char *uri)
         return UBASE_ERR_EXTERNAL;
     }
 
-    /* format detection available ? */
+    /* format detection available? */
     IDeckLinkAttributes *deckLinkAttr = NULL;
     if (deckLink->QueryInterface(IID_IDeckLinkAttributes,
                                  (void**)&deckLinkAttr) != S_OK) {

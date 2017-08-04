@@ -1478,6 +1478,8 @@ static int _upipe_ts_mux_input_set_aac_encaps(struct upipe *upipe, int encaps)
 static int upipe_ts_mux_input_control(struct upipe *upipe,
                                       int command, va_list args)
 {
+    UBASE_HANDLED_RETURN(
+        upipe_ts_mux_input_control_super(upipe, command, args));
     switch (command) {
         case UPIPE_REGISTER_REQUEST: {
             struct urequest *request = va_arg(args, struct urequest *);
@@ -1491,10 +1493,6 @@ static int upipe_ts_mux_input_control(struct upipe *upipe,
         case UPIPE_SET_FLOW_DEF: {
             struct uref *flow_def = va_arg(args, struct uref *);
             return upipe_ts_mux_input_set_flow_def(upipe, flow_def);
-        }
-        case UPIPE_SUB_GET_SUPER: {
-            struct upipe **p = va_arg(args, struct upipe **);
-            return upipe_ts_mux_input_get_super(upipe, p);
         }
         case UPIPE_TS_MUX_GET_SCTE35_INTERVAL: {
             UBASE_SIGNATURE_CHECK(args, UPIPE_TS_MUX_SIGNATURE)
@@ -2180,22 +2178,15 @@ static int _upipe_ts_mux_program_set_aac_encaps(struct upipe *upipe, int encaps)
 static int upipe_ts_mux_program_control(struct upipe *upipe,
                                         int command, va_list args)
 {
+    UBASE_HANDLED_RETURN(
+        upipe_ts_mux_program_control_inputs(upipe, command, args));
+    UBASE_HANDLED_RETURN(
+        upipe_ts_mux_program_control_super(upipe, command, args));
+
     switch (command) {
         case UPIPE_SET_FLOW_DEF: {
             struct uref *flow_def = va_arg(args, struct uref *);
             return upipe_ts_mux_program_set_flow_def(upipe, flow_def);
-        }
-        case UPIPE_GET_SUB_MGR: {
-            struct upipe_mgr **p = va_arg(args, struct upipe_mgr **);
-            return upipe_ts_mux_program_get_input_mgr(upipe, p);
-        }
-        case UPIPE_ITERATE_SUB: {
-            struct upipe **p = va_arg(args, struct upipe **);
-            return upipe_ts_mux_program_iterate_input(upipe, p);
-        }
-        case UPIPE_SUB_GET_SUPER: {
-            struct upipe **p = va_arg(args, struct upipe **);
-            return upipe_ts_mux_program_get_super(upipe, p);
         }
 
         case UPIPE_TS_MUX_GET_PMT_INTERVAL: {
@@ -2356,14 +2347,9 @@ static int upipe_ts_mux_inner_sink_control(struct upipe *sink,
     struct upipe_ts_mux *upipe_ts_mux = upipe_ts_mux_from_inner_sink(sink);
     struct upipe *upipe = upipe_ts_mux_to_upipe(upipe_ts_mux);
     switch (command) {
-        case UPIPE_REGISTER_REQUEST: {
-            struct urequest *request = va_arg(args, struct urequest *);
-            return upipe_ts_mux_alloc_output_proxy(upipe, request);
-        }
-        case UPIPE_UNREGISTER_REQUEST: {
-            struct urequest *request = va_arg(args, struct urequest *);
-            return upipe_ts_mux_free_output_proxy(upipe, request);
-        }
+        case UPIPE_REGISTER_REQUEST:
+        case UPIPE_UNREGISTER_REQUEST:
+            return upipe_ts_mux_control_output(upipe, command, args);
         case UPIPE_SET_FLOW_DEF:
             return UBASE_ERR_NONE;
 
@@ -4213,6 +4199,9 @@ static int _upipe_ts_mux_set_encoding(struct upipe *upipe, const char *encoding)
  */
 static int _upipe_ts_mux_control(struct upipe *upipe, int command, va_list args)
 {
+    UBASE_HANDLED_RETURN(
+        upipe_ts_mux_control_programs(upipe, command, args));
+
     switch (command) {
         case UPIPE_ATTACH_UPUMP_MGR:
             upipe_ts_mux_set_upump(upipe, NULL);
@@ -4225,22 +4214,14 @@ static int _upipe_ts_mux_control(struct upipe *upipe, int command, va_list args)
             upipe_ts_mux_update(upipe);
             return UBASE_ERR_NONE;
         }
-        case UPIPE_GET_FLOW_DEF: {
-            struct uref **p = va_arg(args, struct uref **);
-            return upipe_ts_mux_get_flow_def(upipe, p);
-        }
         case UPIPE_SET_FLOW_DEF: {
             struct uref *flow_def = va_arg(args, struct uref *);
             return upipe_ts_mux_set_flow_def(upipe, flow_def);
         }
-        case UPIPE_GET_OUTPUT: {
-            struct upipe **p = va_arg(args, struct upipe **);
-            return upipe_ts_mux_get_output(upipe, p);
-        }
-        case UPIPE_SET_OUTPUT: {
-            struct upipe *output = va_arg(args, struct upipe *);
-            return upipe_ts_mux_set_output(upipe, output);
-        }
+        case UPIPE_GET_FLOW_DEF:
+        case UPIPE_GET_OUTPUT:
+        case UPIPE_SET_OUTPUT:
+            return upipe_ts_mux_control_output(upipe, command, args);
         case UPIPE_GET_OUTPUT_SIZE: {
             unsigned int *mtu_p = va_arg(args, unsigned int *);
             return upipe_ts_mux_get_output_size(upipe, mtu_p);
@@ -4248,14 +4229,6 @@ static int _upipe_ts_mux_control(struct upipe *upipe, int command, va_list args)
         case UPIPE_SET_OUTPUT_SIZE: {
             unsigned int mtu = va_arg(args, unsigned int);
             return upipe_ts_mux_set_output_size(upipe, mtu);
-        }
-        case UPIPE_GET_SUB_MGR: {
-            struct upipe_mgr **p = va_arg(args, struct upipe_mgr **);
-            return upipe_ts_mux_get_program_mgr(upipe, p);
-        }
-        case UPIPE_ITERATE_SUB: {
-            struct upipe **p = va_arg(args, struct upipe **);
-            return upipe_ts_mux_iterate_program(upipe, p);
         }
         case UPIPE_END_PREROLL:
             return upipe_ts_mux_end_preroll(upipe);

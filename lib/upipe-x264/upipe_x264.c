@@ -1251,22 +1251,14 @@ static int upipe_x264_control(struct upipe *upipe, int command, va_list args)
             return upipe_x264_free_output_proxy(upipe, request);
         }
 
-        case UPIPE_GET_FLOW_DEF: {
-            struct uref **p = va_arg(args, struct uref **);
-            return upipe_x264_get_flow_def(upipe, p);
-        }
         case UPIPE_SET_FLOW_DEF: {
             struct uref *flow_def = va_arg(args, struct uref *);
             return upipe_x264_set_flow_def(upipe, flow_def);
         }
-        case UPIPE_GET_OUTPUT: {
-            struct upipe **p = va_arg(args, struct upipe **);
-            return upipe_x264_get_output(upipe, p);
-        }
-        case UPIPE_SET_OUTPUT: {
-            struct upipe *output = va_arg(args, struct upipe *);
-            return upipe_x264_set_output(upipe, output);
-        }
+        case UPIPE_GET_OUTPUT:
+        case UPIPE_SET_OUTPUT:
+        case UPIPE_GET_FLOW_DEF:
+            return upipe_x264_control_output(upipe, command, args);
 
         case UPIPE_X264_RECONFIG: {
             UBASE_SIGNATURE_CHECK(args, UPIPE_X264_SIGNATURE)

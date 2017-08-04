@@ -256,34 +256,15 @@ static int upipe_burst_check(struct upipe *upipe)
 static int _upipe_burst_control(struct upipe *upipe, int command,
                                 va_list args)
 {
+    UBASE_HANDLED_RETURN(upipe_burst_control_output(upipe, command, args));
     switch (command) {
     case UPIPE_ATTACH_UPUMP_MGR:
         upipe_burst_set_upump(upipe, NULL);
         return upipe_burst_attach_upump_mgr(upipe);
 
-    case UPIPE_REGISTER_REQUEST: {
-        struct urequest *urequest = va_arg(args, struct urequest *);
-        return upipe_burst_alloc_output_proxy(upipe, urequest);
-    }
-    case UPIPE_UNREGISTER_REQUEST: {
-        struct urequest *urequest = va_arg(args, struct urequest *);
-        return upipe_burst_free_output_proxy(upipe, urequest);
-    }
-    case UPIPE_GET_FLOW_DEF: {
-        struct uref **flow_def_p = va_arg(args, struct uref **);
-        return upipe_burst_get_flow_def(upipe, flow_def_p);
-    }
     case UPIPE_SET_FLOW_DEF: {
         struct uref *flow_def = va_arg(args, struct uref *);
         return upipe_burst_set_flow_def(upipe, flow_def);
-    }
-    case UPIPE_GET_OUTPUT: {
-        struct upipe **output_p = va_arg(args, struct upipe **);
-        return upipe_burst_get_output(upipe, output_p);
-    }
-    case UPIPE_SET_OUTPUT: {
-        struct upipe *output = va_arg(args, struct upipe *);
-        return upipe_burst_set_output(upipe, output);
     }
     }
 

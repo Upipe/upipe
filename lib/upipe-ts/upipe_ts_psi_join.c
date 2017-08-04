@@ -191,6 +191,8 @@ static int upipe_ts_psi_join_sub_set_flow_def(struct upipe *upipe,
 static int upipe_ts_psi_join_sub_control(struct upipe *upipe,
                                      int command, va_list args)
 {
+    UBASE_HANDLED_RETURN(
+        upipe_ts_psi_join_sub_control_super(upipe, command, args));
     switch (command) {
         case UPIPE_REGISTER_REQUEST: {
             struct upipe_ts_psi_join *upipe_ts_psi_join =
@@ -209,10 +211,6 @@ static int upipe_ts_psi_join_sub_control(struct upipe *upipe,
         case UPIPE_SET_FLOW_DEF: {
             struct uref *flow_def = va_arg(args, struct uref *);
             return upipe_ts_psi_join_sub_set_flow_def(upipe, flow_def);
-        }
-        case UPIPE_SUB_GET_SUPER: {
-            struct upipe **p = va_arg(args, struct upipe **);
-            return upipe_ts_psi_join_sub_get_super(upipe, p);
         }
 
         default:
@@ -288,27 +286,13 @@ static struct upipe *upipe_ts_psi_join_alloc(struct upipe_mgr *mgr,
 static int upipe_ts_psi_join_control(struct upipe *upipe,
                                      int command, va_list args)
 {
+    UBASE_HANDLED_RETURN(upipe_ts_psi_join_control_subs(upipe, command, args));
+
     switch (command) {
-        case UPIPE_GET_FLOW_DEF: {
-            struct uref **p = va_arg(args, struct uref **);
-            return upipe_ts_psi_join_get_flow_def(upipe, p);
-        }
-        case UPIPE_GET_OUTPUT: {
-            struct upipe **p = va_arg(args, struct upipe **);
-            return upipe_ts_psi_join_get_output(upipe, p);
-        }
-        case UPIPE_SET_OUTPUT: {
-            struct upipe *output = va_arg(args, struct upipe *);
-            return upipe_ts_psi_join_set_output(upipe, output);
-        }
-        case UPIPE_GET_SUB_MGR: {
-            struct upipe_mgr **p = va_arg(args, struct upipe_mgr **);
-            return upipe_ts_psi_join_get_sub_mgr(upipe, p);
-        }
-        case UPIPE_ITERATE_SUB: {
-            struct upipe **p = va_arg(args, struct upipe **);
-            return upipe_ts_psi_join_iterate_sub(upipe, p);
-        }
+        case UPIPE_GET_FLOW_DEF:
+        case UPIPE_GET_OUTPUT:
+        case UPIPE_SET_OUTPUT:
+            return upipe_ts_psi_join_control_output(upipe, command, args);
 
         default:
             return UBASE_ERR_UNHANDLED;

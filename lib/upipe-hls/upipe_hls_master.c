@@ -199,12 +199,8 @@ static int upipe_hls_master_sub_control(struct upipe *upipe,
                                         int command,
                                         va_list args)
 {
-    switch (command) {
-    case UPIPE_SUB_GET_SUPER: {
-        struct upipe **super_p = va_arg(args, struct upipe **);
-        return upipe_hls_master_sub_get_super(upipe, super_p);
-    }
-    }
+    UBASE_HANDLED_RETURN(
+        upipe_hls_master_sub_control_super(upipe, command, args));
     return upipe_hls_master_sub_control_bin_output(upipe, command, args);
 }
 
@@ -449,14 +445,10 @@ static int upipe_hls_master_control(struct upipe *upipe,
                                     int command,
                                     va_list args)
 {
-    switch (command) {
-    case UPIPE_REGISTER_REQUEST: {
-        struct urequest *urequest = va_arg(args, struct urequest *);
-        return upipe_throw_provide_request(upipe, urequest);
-    }
-    case UPIPE_UNREGISTER_REQUEST:
-        return UBASE_ERR_NONE;
+    UBASE_HANDLED_RETURN(upipe_hls_master_control_pipes(upipe, command, args));
+    UBASE_HANDLED_RETURN(upipe_control_provide_request(upipe, command, args));
 
+    switch (command) {
     case UPIPE_SET_FLOW_DEF: {
         struct uref *flow_def = va_arg(args, struct uref *);
         return upipe_hls_master_set_flow_def(upipe, flow_def);
@@ -465,15 +457,6 @@ static int upipe_hls_master_control(struct upipe *upipe,
     case UPIPE_SPLIT_ITERATE: {
         struct uref **uref_p = va_arg(args, struct uref **);
         return upipe_hls_master_split_iterate(upipe, uref_p);
-    }
-
-    case UPIPE_GET_SUB_MGR: {
-        struct upipe_mgr **sub_mgr_p = va_arg(args, struct upipe_mgr **);
-        return upipe_hls_master_get_sub_mgr(upipe, sub_mgr_p);
-    }
-    case UPIPE_ITERATE_SUB: {
-        struct upipe **sub_p = va_arg(args, struct upipe **);
-        return upipe_hls_master_iterate_pipe(upipe, sub_p);
     }
     }
     return UBASE_ERR_UNHANDLED;

@@ -509,30 +509,12 @@ _upipe_rtp_prepend_set_ts_sync(struct upipe *upipe,
 static int upipe_rtp_prepend_control(struct upipe *upipe,
                                      int command, va_list args)
 {
+    UBASE_HANDLED_RETURN(
+        upipe_rtp_prepend_control_output(upipe, command, args));
     switch (command) {
-        case UPIPE_REGISTER_REQUEST: {
-            struct urequest *request = va_arg(args, struct urequest *);
-            return upipe_rtp_prepend_alloc_output_proxy(upipe, request);
-        }
-        case UPIPE_UNREGISTER_REQUEST: {
-            struct urequest *request = va_arg(args, struct urequest *);
-            return upipe_rtp_prepend_free_output_proxy(upipe, request);
-        }
-        case UPIPE_GET_FLOW_DEF: {
-            struct uref **p = va_arg(args, struct uref **);
-            return upipe_rtp_prepend_get_flow_def(upipe, p);
-        }
         case UPIPE_SET_FLOW_DEF: {
             struct uref *flow_def = va_arg(args, struct uref *);
             return upipe_rtp_prepend_set_flow_def(upipe, flow_def);
-        }
-        case UPIPE_GET_OUTPUT: {
-            struct upipe **p = va_arg(args, struct upipe **);
-            return upipe_rtp_prepend_get_output(upipe, p);
-        }
-        case UPIPE_SET_OUTPUT: {
-            struct upipe *output = va_arg(args, struct upipe *);
-            return upipe_rtp_prepend_set_output(upipe, output);
         }
 
         case UPIPE_RTP_PREPEND_GET_TYPE: {
@@ -603,7 +585,7 @@ static struct upipe *upipe_rtp_prepend_alloc(struct upipe_mgr *mgr,
     upipe_rtp_prepend->clockrate = 0;
     upipe_rtp_prepend->type_overwrite = false;
     upipe_rtp_prepend->type = RTP_TYPE_INVALID;
-    upipe_rtp_prepend->seqnum = 0; /* FIXME random init ?*/
+    upipe_rtp_prepend->seqnum = 0; /* FIXME random init?*/
     upipe_rtp_prepend->mpa = false;
 
     upipe_throw_ready(upipe);

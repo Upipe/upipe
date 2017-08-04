@@ -941,11 +941,9 @@ static bool upipe_ts_demux_output_pmtd_update(struct upipe *upipe,
 static int upipe_ts_demux_output_control(struct upipe *upipe,
                                          int command, va_list args)
 {
+    UBASE_HANDLED_RETURN(
+        upipe_ts_demux_output_control_super(upipe, command, args));
     switch (command) {
-        case UPIPE_SUB_GET_SUPER: {
-            struct upipe **p = va_arg(args, struct upipe **);
-            return upipe_ts_demux_output_get_super(upipe, p);
-        }
         case UPIPE_GET_FLOW_DEF: {
             int err = upipe_ts_demux_output_control_bin_output(upipe, command,
                                                                args);
@@ -1774,31 +1772,16 @@ static struct upipe *upipe_ts_demux_program_alloc(struct upipe_mgr *mgr,
 static int upipe_ts_demux_program_control(struct upipe *upipe,
                                           int command, va_list args)
 {
+    UBASE_HANDLED_RETURN(
+        upipe_ts_demux_program_control_outputs(upipe, command, args));
+    UBASE_HANDLED_RETURN(
+        upipe_ts_demux_program_control_super(upipe, command, args));
+
     switch (command) {
-        case UPIPE_GET_FLOW_DEF: {
-            struct uref **p = va_arg(args, struct uref **);
-            return upipe_ts_demux_program_get_flow_def(upipe, p);
-        }
-        case UPIPE_GET_OUTPUT: {
-            struct upipe **p = va_arg(args, struct upipe **);
-            return upipe_ts_demux_program_get_output(upipe, p);
-        }
-        case UPIPE_SET_OUTPUT: {
-            struct upipe *output = va_arg(args, struct upipe *);
-            return upipe_ts_demux_program_set_output(upipe, output);
-        }
-        case UPIPE_GET_SUB_MGR: {
-            struct upipe_mgr **p = va_arg(args, struct upipe_mgr **);
-            return upipe_ts_demux_program_get_output_mgr(upipe, p);
-        }
-        case UPIPE_ITERATE_SUB: {
-            struct upipe **p = va_arg(args, struct upipe **);
-            return upipe_ts_demux_program_iterate_output(upipe, p);
-        }
-        case UPIPE_SUB_GET_SUPER: {
-            struct upipe **p = va_arg(args, struct upipe **);
-            return upipe_ts_demux_program_get_super(upipe, p);
-        }
+        case UPIPE_GET_FLOW_DEF:
+        case UPIPE_GET_OUTPUT:
+        case UPIPE_SET_OUTPUT:
+            return upipe_ts_demux_program_control_output(upipe, command, args);
         case UPIPE_SPLIT_ITERATE: {
             struct uref **p = va_arg(args, struct uref **);
             struct upipe_ts_demux_program *upipe_ts_demux_program =
@@ -2938,37 +2921,18 @@ static int _upipe_ts_demux_set_conformance(struct upipe *upipe,
 static int upipe_ts_demux_control(struct upipe *upipe,
                                   int command, va_list args)
 {
+    UBASE_HANDLED_RETURN(upipe_ts_demux_control_programs(upipe, command, args));
+    UBASE_HANDLED_RETURN(upipe_control_provide_request(upipe, command, args));
+
     switch (command) {
-        case UPIPE_REGISTER_REQUEST: {
-            struct urequest *request = va_arg(args, struct urequest *);
-            return upipe_throw_provide_request(upipe, request);
-        }
-        case UPIPE_UNREGISTER_REQUEST:
-            return UBASE_ERR_NONE;
-        case UPIPE_GET_FLOW_DEF: {
-            struct uref **p = va_arg(args, struct uref **);
-            return upipe_ts_demux_get_flow_def(upipe, p);
-        }
         case UPIPE_SET_FLOW_DEF: {
             struct uref *flow_def = va_arg(args, struct uref *);
             return upipe_ts_demux_set_flow_def(upipe, flow_def);
         }
-        case UPIPE_GET_OUTPUT: {
-            struct upipe **p = va_arg(args, struct upipe **);
-            return upipe_ts_demux_get_output(upipe, p);
-        }
-        case UPIPE_SET_OUTPUT: {
-            struct upipe *output = va_arg(args, struct upipe *);
-            return upipe_ts_demux_set_output(upipe, output);
-        }
-        case UPIPE_GET_SUB_MGR: {
-            struct upipe_mgr **p = va_arg(args, struct upipe_mgr **);
-            return upipe_ts_demux_get_program_mgr(upipe, p);
-        }
-        case UPIPE_ITERATE_SUB: {
-            struct upipe **p = va_arg(args, struct upipe **);
-            return upipe_ts_demux_iterate_program(upipe, p);
-        }
+        case UPIPE_GET_FLOW_DEF:
+        case UPIPE_GET_OUTPUT:
+        case UPIPE_SET_OUTPUT:
+            return upipe_ts_demux_control_output(upipe, command, args);
         case UPIPE_SPLIT_ITERATE: {
             struct uref **p = va_arg(args, struct uref **);
             return upipe_ts_demux_iterate(upipe, p);

@@ -621,6 +621,8 @@ static int _upipe_blit_sub_set_z_index(struct upipe *upipe, int z_index)
 static int upipe_blit_sub_control(struct upipe *upipe,
                                   int command, va_list args)
 {
+    UBASE_HANDLED_RETURN(upipe_blit_sub_control_super(upipe, command, args));
+
     switch (command) {
         case UPIPE_REGISTER_REQUEST: {
             struct upipe_blit *upipe_blit = upipe_blit_from_sub_mgr(upipe->mgr);
@@ -645,10 +647,6 @@ static int upipe_blit_sub_control(struct upipe *upipe,
         case UPIPE_SET_FLOW_DEF: {
             struct uref *flow_def = va_arg(args, struct uref *);
             return upipe_blit_sub_set_flow_def(upipe, flow_def);
-        }
-        case UPIPE_SUB_GET_SUPER: {
-            struct upipe **p = va_arg(args, struct upipe **);
-            return upipe_blit_sub_get_super(upipe, p);
         }
 
         case UPIPE_BLIT_SUB_GET_RECT: {
@@ -938,38 +936,13 @@ static int _upipe_blit_prepare(struct upipe *upipe, struct upump **upump_p)
  */
 static int upipe_blit_control(struct upipe *upipe, int command, va_list args)
 {
+    UBASE_HANDLED_RETURN(upipe_blit_control_output(upipe, command, args));
+    UBASE_HANDLED_RETURN(upipe_blit_control_subs(upipe, command, args));
+
     switch (command) {
-        case UPIPE_REGISTER_REQUEST: {
-            struct urequest *request = va_arg(args, struct urequest *);
-            return upipe_blit_alloc_output_proxy(upipe, request);
-        }
-        case UPIPE_UNREGISTER_REQUEST: {
-            struct urequest *request = va_arg(args, struct urequest *);
-            return upipe_blit_free_output_proxy(upipe, request);
-        }
-        case UPIPE_GET_FLOW_DEF: {
-            struct uref **p = va_arg(args, struct uref **);
-            return upipe_blit_get_flow_def(upipe, p);
-        }
         case UPIPE_SET_FLOW_DEF: {
             struct uref *flow = va_arg(args, struct uref *);
             return upipe_blit_set_flow_def(upipe, flow);
-        }
-        case UPIPE_GET_OUTPUT: {
-            struct upipe **p = va_arg(args, struct upipe **);
-            return upipe_blit_get_output(upipe, p);
-        }
-        case UPIPE_SET_OUTPUT: {
-            struct upipe *output = va_arg(args, struct upipe *);
-            return upipe_blit_set_output(upipe, output);
-        }
-        case UPIPE_GET_SUB_MGR: {
-            struct upipe_mgr **p = va_arg(args, struct upipe_mgr **);
-            return upipe_blit_get_sub_mgr(upipe, p);
-        }
-        case UPIPE_ITERATE_SUB: {
-            struct upipe **p = va_arg(args, struct upipe **);
-            return upipe_blit_iterate_sub(upipe, p);
         }
 
         case UPIPE_BLIT_PREPARE: {
