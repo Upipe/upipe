@@ -85,6 +85,7 @@ pkginclude_HEADERS = \
 	upump.h \
 	uqueue.h \
 	urefcount.h \
+	urefcount_helper.h \
 	uref_attr.h \
 	uref_block_flow.h \
 	uref_block.h \
@@ -105,6 +106,7 @@ pkginclude_HEADERS = \
 	uref_m3u_flow.h \
 	uref_m3u_playlist_flow.h \
 	uref_uri.h \
+	uref_void_flow.h \
 	urequest.h \
 	uring.h \
 	ustring.h \

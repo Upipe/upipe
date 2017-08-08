@@ -45,9 +45,7 @@ libupipe_modules_la_SOURCES = \
 	upipe_audiocont.c \
 	upipe_blank_source.c \
 	upipe_sine_wave_source.c \
-	upipe_worker_linear.c \
-	upipe_worker_sink.c \
-	upipe_worker_source.c \
+	upipe_worker.c \
 	upipe_stream_switcher.c \
 	upipe_rtp_h264.c \
 	upipe_rtp_mpeg4.c \
