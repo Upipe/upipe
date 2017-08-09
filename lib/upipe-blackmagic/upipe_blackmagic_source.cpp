@@ -1017,7 +1017,7 @@ static int upipe_bmd_src_set_uri(struct upipe *upipe, const char *uri)
     char *audio = NULL;
     char *video_bits = NULL;
     char *audio_bits = NULL;
-    bool mirror = true;
+    char *passthrough = NULL;
     const char *params = strchr(idx, '/');
     if (params) {
         char *paramsdup = strdup(params);
@@ -1038,8 +1038,9 @@ static int upipe_bmd_src_set_uri(struct upipe *upipe, const char *uri)
             } else if (IS_OPTION("video_bits=")) {
                 free(video_bits);
                 video_bits = config_stropt(ARG_OPTION("video_bits="));
-            } else if (IS_OPTION("nomirror")) {
-                mirror = false;
+            } else if (IS_OPTION("passthrough=")) {
+                free(passthrough);
+                passthrough = config_stropt(ARG_OPTION("passthrough="));
             }
 #undef IS_OPTION
 #undef ARG_OPTION
@@ -1048,10 +1049,28 @@ static int upipe_bmd_src_set_uri(struct upipe *upipe, const char *uri)
         free(paramsdup);
     }
 
-    deckLinkConfiguration->SetInt(bmdDeckLinkConfigCapturePassThroughMode,
-            mirror ? bmdDeckLinkCapturePassthroughModeDirect :
-            bmdDeckLinkCapturePassthroughModeDisabled);
+    if (passthrough != NULL) {
+        BMDDeckLinkCapturePassthroughMode passthrough_mode;
 
+        if (!strcmp(passthrough, "disabled"))
+            passthrough_mode = bmdDeckLinkCapturePassthroughModeDisabled;
+        else if (!strcmp(passthrough, "direct"))
+            passthrough_mode = bmdDeckLinkCapturePassthroughModeDirect;
+        else if (!strcmp(passthrough, "clean switch"))
+            passthrough_mode = bmdDeckLinkCapturePassthroughModeCleanSwitch;
+        else {
+            upipe_err_va(upipe, "invalid passthrough mode: %s", passthrough);
+            deckLinkInput->Release();
+            deckLink->Release();
+            return UBASE_ERR_EXTERNAL;
+        }
+
+        upipe_notice_va(upipe, "passthrough mode: %s", passthrough);
+        deckLinkConfiguration->SetInt(
+                bmdDeckLinkConfigCapturePassThroughMode,
+                passthrough_mode);
+        free(passthrough);
+    }
 
     if (audio != NULL) {
         int i = 0;
