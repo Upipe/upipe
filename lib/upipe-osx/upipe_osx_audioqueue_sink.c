@@ -257,7 +257,7 @@ static void upipe_osx_audioqueue_sink_worker(struct upump *upump)
     ubase_assert(uref_sound_size(uref, &size, &sample_size));
 
     const void *audios[1];
-    ubase_assert(uref_sound_read_void(uref, 0, size * sample_size, audios, 1));
+    ubase_assert(uref_sound_read_void(uref, 0, size, audios, 1));
 
     assert(size * sample_size < qbuf->mAudioDataBytesCapacity);
     memcpy(qbuf->mAudioData, audios[0], size * sample_size);
@@ -309,7 +309,7 @@ static int upipe_osx_audioqueue_sink_set_flow_def_real(struct upipe *upipe,
     fmt.mSampleRate = sample_rate;
     fmt.mFormatID = kAudioFormatLinearPCM;
     fmt.mFormatFlags = kAudioFormatFlagIsPacked;
-    if (ubase_check(uref_flow_match_def(flow, EXPECTED_FLOW_DEF "i")))
+    if (ubase_check(uref_flow_match_def(flow, EXPECTED_FLOW_DEF "s")))
         fmt.mFormatFlags |= kAudioFormatFlagIsSignedInteger;
     fmt.mFramesPerPacket = 1;
     fmt.mChannelsPerFrame = channels;
