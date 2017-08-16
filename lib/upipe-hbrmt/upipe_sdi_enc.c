@@ -1163,6 +1163,7 @@ static int upipe_sdi_enc_set_flow_def(struct upipe *upipe, struct uref *flow_def
 
     UBASE_RETURN(uref_flow_match_def(flow_def, "pic."))
 
+    upipe_sdi_enc_clean_urefs(&upipe_sdi_enc->urefs);
     upipe_sdi_enc->f = sdi_get_offsets(flow_def);
     if (!upipe_sdi_enc->f) {
         upipe_err(upipe, "Could not figure out SDI offsets");
