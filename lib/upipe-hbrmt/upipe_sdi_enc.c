@@ -1053,6 +1053,15 @@ static void upipe_sdi_enc_input(struct upipe *upipe, struct uref *uref,
         return;
     }
 
+    const struct sdi_offsets_fmt *f = upipe_sdi_enc->f;
+    if (input_hsize != f->pict_fmt->active_width ||
+        input_vsize != f->pict_fmt->active_height) {
+        upipe_warn(upipe, "invalid picture received, size does not match");
+        uref_dump(uref, upipe->uprobe);
+        uref_free(uref);
+        return;
+    }
+
     /* map input */
     const uint8_t *input_planes[UPIPE_SDI_MAX_PLANES];
     int input_strides[UPIPE_SDI_MAX_PLANES];
@@ -1074,8 +1083,6 @@ static void upipe_sdi_enc_input(struct upipe *upipe, struct uref *uref,
         input_planes[i] = data;
         input_strides[i] = stride;
     }
-
-    const struct sdi_offsets_fmt *f = upipe_sdi_enc->f;
 
     /* FIXME FIXME: When doing 23.94/24 fps the assembly packing will overwrite
      * so alignment here would be required to make them work */
