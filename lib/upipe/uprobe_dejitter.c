@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2013-2015 OpenHeadend S.A.R.L.
+ * Copyright (C) 2013-2017 OpenHeadend S.A.R.L.
  *
  * Authors: Christophe Massiot
  *
@@ -102,7 +102,8 @@ static int uprobe_dejitter_clock_ref(struct uprobe *uprobe, struct upipe *upipe,
     double offset = (double)((int64_t)cr_sys - (int64_t)cr_prog);
     if (unlikely(discontinuity))
         upipe_warn(upipe, "[dejitter] discontinuity");
-    else if (unlikely(fabs(offset - uprobe_dejitter->offset) > MAX_JITTER)) {
+    else if (unlikely(fabs(offset - uprobe_dejitter->offset) >
+                      MAX_JITTER + 3 * uprobe_dejitter->deviation)) {
         upipe_warn_va(upipe, "[dejitter] max jitter reached (%f ms)",
                       (offset - uprobe_dejitter->offset) * 1000 / UCLOCK_FREQ);
         discontinuity = 1;

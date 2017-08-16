@@ -44,7 +44,9 @@ enum uref_mpga_encaps {
     /** ADTS encapsulation */
     UREF_MPGA_ENCAPS_ADTS,
     /* LATM/LOAS */
-    UREF_MPGA_ENCAPS_LOAS
+    UREF_MPGA_ENCAPS_LOAS,
+    /* LATM (aligned AudioMuxElement with mux config) */
+    UREF_MPGA_ENCAPS_LATM
 };
 
 UREF_ATTR_SMALL_UNSIGNED(mpga_flow, encaps, "mpga.encaps", AAC encapsulation type)
@@ -76,6 +78,8 @@ static inline enum uref_mpga_encaps
 {
     if (encaps == NULL)
         return UREF_MPGA_ENCAPS_ADTS;
+    if (!strcmp(encaps, "latm"))
+        return UREF_MPGA_ENCAPS_LATM;
     if (!strcmp(encaps, "loas"))
         return UREF_MPGA_ENCAPS_LOAS;
     if (!strcmp(encaps, "raw"))

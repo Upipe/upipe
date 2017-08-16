@@ -1,10 +1,6 @@
 NULL =
 lib_LTLIBRARIES = libupipe_framers.la
 
-noinst_HEADERS = \
-	upipe_framers_common.h \
-	upipe_h26x_common.h
-
 libupipe_framers_la_SOURCES = \
 	upipe_auto_framer.c \
 	upipe_framers_common.c \

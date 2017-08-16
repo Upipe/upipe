@@ -918,25 +918,21 @@ static bool upipe_mpgaf_handle_latm_config(struct upipe *upipe,
     return true;
 }
 
-/** @internal @This parses an LATM frame with a LOAS header.
+/** @internal @This parses an LATM frame.
  *
  * @param upipe description structure of the pipe
  * @param ubuf ubuf containing frame
  * @return false if the header is invalid or we miss the mux configuration
  */
-static bool upipe_mpgaf_handle_loas(struct upipe *upipe, struct ubuf *ubuf)
+static bool upipe_mpgaf_handle_latm(struct upipe *upipe, struct ubuf *ubuf,
+                                    size_t frame_offset, size_t frame_length)
 {
     struct upipe_mpgaf *upipe_mpgaf = upipe_mpgaf_from_upipe(upipe);
     struct ubuf_block_stream s;
-    if (!ubase_check(ubuf_block_stream_init(&s, ubuf, 0))) {
+    if (!ubase_check(ubuf_block_stream_init(&s, ubuf, frame_offset))) {
         upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
         return false;
     }
-
-    ubuf_block_stream_fill_bits(&s, 24);
-    ubuf_block_stream_skip_bits(&s, 11); /* syncword */
-    uint16_t frame_length = ubuf_block_stream_show_bits(&s, 13);
-    ubuf_block_stream_skip_bits(&s, 13);
 
     ubuf_block_stream_fill_bits(&s, 8);
     bool same_stream_mux = ubuf_block_stream_show_bits(&s, 1);
@@ -1012,8 +1008,8 @@ static bool upipe_mpgaf_handle_loas(struct upipe *upipe, struct ubuf *ubuf)
     }
 
     /* Calculate octetrate assuming the stream is CBR. */
-    uint64_t octetrate = (frame_length + LOAS_HEADER_SIZE) *
-                         upipe_mpgaf->samplerate / upipe_mpgaf->samples;
+    uint64_t octetrate = frame_length * upipe_mpgaf->samplerate /
+                         upipe_mpgaf->samples;
     /* Round up to a multiple of 8 kbits/s. */
     octetrate += 999;
     octetrate -= octetrate % 1000;
@@ -1029,6 +1025,22 @@ static bool upipe_mpgaf_handle_loas(struct upipe *upipe, struct ubuf *ubuf)
     return true;
 }
 
+/** @internal @This parses an LATM frame with a LOAS header.
+ *
+ * @param upipe description structure of the pipe
+ * @param ubuf ubuf containing frame
+ * @return false if the header is invalid or we miss the mux configuration
+ */
+static bool upipe_mpgaf_handle_loas(struct upipe *upipe, struct ubuf *ubuf)
+{
+    uint8_t loas_header[LOAS_HEADER_SIZE];
+    if (!ubase_check(ubuf_block_extract(ubuf, 0, LOAS_HEADER_SIZE,
+                                        loas_header)))
+        return false;
+
+    uint16_t frame_length = loas_get_length(loas_header);
+    return upipe_mpgaf_handle_latm(upipe, ubuf, LOAS_HEADER_SIZE, frame_length);
+}
 
 /** @internal @This checks if there are global headers and uses them.
  *
@@ -1167,6 +1179,8 @@ static void upipe_mpgaf_build_flow_def(struct upipe *upipe)
     }
 
     upipe_mpgaf_store_flow_def(upipe, flow_def);
+    /* force sending flow definition immediately */
+    upipe_mpgaf_output(upipe, NULL, NULL);
 }
 
 /** @internal @This handles a frame to prepare for output.
@@ -1273,6 +1287,14 @@ static int upipe_mpgaf_encaps_frame(struct upipe *upipe, struct uref *uref)
     if (upipe_mpgaf->encaps_output == UREF_MPGA_ENCAPS_ADTS) {
         uint8_t buffer[ADTS_HEADER_SIZE];
         adts_set_sync(buffer);
+        switch (upipe_mpgaf->asc_aot) {
+            case ASC_TYPE_MAIN:
+                adts_set_profile(buffer, ADTS_PROFILE_MAIN);
+            case ASC_TYPE_SSR:
+                adts_set_profile(buffer, ADTS_PROFILE_SSR);
+            default:
+                adts_set_profile(buffer, ADTS_PROFILE_LC);
+        }
         adts_set_sampling_freq(buffer, upipe_mpgaf->base_samplerate_idx);
         adts_set_channels(buffer, upipe_mpgaf->channels);
         adts_set_length(buffer, size + ADTS_HEADER_SIZE);
@@ -1288,7 +1310,7 @@ static int upipe_mpgaf_encaps_frame(struct upipe *upipe, struct uref *uref)
         return UBASE_ERR_NONE;
     }
 
-    /* LOAS */
+    /* LOAS/LATM */
     uint64_t duration = 0;
     uref_clock_get_duration(uref, &duration);
     bool config = !upipe_mpgaf->latm_config_duration ||
@@ -1297,7 +1319,12 @@ static int upipe_mpgaf_encaps_frame(struct upipe *upipe, struct uref *uref)
         upipe_mpgaf->latm_config_duration = 0;
     upipe_mpgaf->latm_config_duration += duration;
 
-    int ubuf_size = size + LOAS_HEADER_SIZE + 1 + (config ? MAX_ASC_SIZE : 0);
+    int ubuf_size = size + 2 + (config ? MAX_ASC_SIZE + 4 : 0);
+    int i;
+    for (i = 0; i + 255 < size; i += 255)
+        ubuf_size++;
+    if (upipe_mpgaf->encaps_output == UREF_MPGA_ENCAPS_LOAS)
+        ubuf_size += LOAS_HEADER_SIZE;
     struct ubuf *ubuf = ubuf_block_alloc(upipe_mpgaf->ubuf_mgr, ubuf_size);
     uint8_t *w;
     if (unlikely(ubuf == NULL ||
@@ -1307,17 +1334,18 @@ static int upipe_mpgaf_encaps_frame(struct upipe *upipe, struct uref *uref)
     }
 
     struct ubits bw;
-    ubits_init(&bw, w + LOAS_HEADER_SIZE, ubuf_size);
+    ubits_init(&bw, w, ubuf_size);
+    if (upipe_mpgaf->encaps_output == UREF_MPGA_ENCAPS_LOAS)
+        ubits_put(&bw, 24, 0);
 
     ubits_put(&bw, 1, config ? 0 : 1);
     if (config)
         upipe_mpgaf_build_latm_config(upipe, &bw);
 
     /* PayloadLengthInfo */
-    int i;
-    for (i = 0; i <= ubuf_size - 255; i += 255)
+    for (i = 0; i + 255 < size; i += 255)
         ubits_put(&bw, 8, 255);
-    ubits_put(&bw, 8, ubuf_size - i);
+    ubits_put(&bw, 8, size - i);
 
     int err = uref_block_extract_bits(uref, 0, size, &bw);
     if (!ubase_check(err)) {
@@ -1330,12 +1358,14 @@ static int upipe_mpgaf_encaps_frame(struct upipe *upipe, struct uref *uref)
     err = ubits_clean(&bw, &end);
     ubase_assert(err);
 
-    if (end - w - LOAS_HEADER_SIZE > 0x1fff)
-        upipe_warn_va(upipe, "LATM packet too large (%d)",
-                      end - w - LOAS_HEADER_SIZE > 0x1fff);
+    if (upipe_mpgaf->encaps_output == UREF_MPGA_ENCAPS_LOAS) {
+        if (end - w - LOAS_HEADER_SIZE > 0x1fff)
+            upipe_warn_va(upipe, "LATM packet too large (%d)",
+                          end - w - LOAS_HEADER_SIZE);
 
-    loas_set_sync(w);
-    loas_set_length(w, end - w - LOAS_HEADER_SIZE);
+        loas_set_sync(w);
+        loas_set_length(w, end - w - LOAS_HEADER_SIZE);
+    }
     ubuf_block_unmap(ubuf, 0);
     ubuf_block_resize(ubuf, 0, end - w);
 
@@ -1343,13 +1373,13 @@ static int upipe_mpgaf_encaps_frame(struct upipe *upipe, struct uref *uref)
     return UBASE_ERR_NONE;
 }
 
-/** @internal @This extracts a LOAS payload.
+/** @internal @This extracts a LOAS/LATM payload.
  *
  * @param upipe description structure of the pipe
  * @param uref pointer to uref
  * @return ubuf containing payload
  */
-static struct ubuf *upipe_mpgaf_extract_loas(struct upipe *upipe,
+static struct ubuf *upipe_mpgaf_extract_latm(struct upipe *upipe,
                                              struct uref *uref)
 {
     struct upipe_mpgaf *upipe_mpgaf = upipe_mpgaf_from_upipe(upipe);
@@ -1358,7 +1388,7 @@ static struct ubuf *upipe_mpgaf_extract_loas(struct upipe *upipe,
         upipe_throw_error(upipe, UBASE_ERR_INVALID);
         return NULL;
     }
-    uref_size -= upipe_mpgaf->latm_header_size / 8;
+    uref_size -= (upipe_mpgaf->latm_header_size + 7) / 8;
 
     struct ubuf *ubuf = ubuf_block_alloc(upipe_mpgaf->ubuf_mgr, uref_size);
     uint8_t *p;
@@ -1391,6 +1421,32 @@ static struct ubuf *upipe_mpgaf_extract_loas(struct upipe *upipe,
     return ubuf;
 }
 
+/** @internal @This decapsulates a frame to raw.
+ *
+ * @param upipe description structure of the pipe
+ * @param uref pointer to uref
+ * @return an error code
+ */
+static int upipe_mpgaf_decaps_frame(struct upipe *upipe, struct uref *uref)
+{
+    struct upipe_mpgaf *upipe_mpgaf = upipe_mpgaf_from_upipe(upipe);
+    if (upipe_mpgaf->encaps_input == UREF_MPGA_ENCAPS_RAW)
+        return UBASE_ERR_NONE;
+
+    if (upipe_mpgaf->encaps_input == UREF_MPGA_ENCAPS_ADTS)
+        return uref_block_resize(uref, ADTS_HEADER_SIZE +
+                (upipe_mpgaf->has_crc ? ADTS_CRC_SIZE : 0), -1);
+
+    struct ubuf *ubuf = upipe_mpgaf_extract_latm(upipe, uref);
+
+    if (unlikely(ubuf == NULL)) {
+        uref_free(uref);
+        return UBASE_ERR_INVALID;
+    }
+    uref_attach_ubuf(uref, ubuf);
+    return UBASE_ERR_NONE;
+}
+
 /** @internal @This outputs a frame.
  *
  * @param upipe description structure of the pipe
@@ -1407,17 +1463,9 @@ static void upipe_mpgaf_output_frame(struct upipe *upipe, struct uref *uref,
         return;
     }
 
-    if (upipe_mpgaf->encaps_input == UREF_MPGA_ENCAPS_ADTS) {
-        uref_block_resize(uref, ADTS_HEADER_SIZE +
-                (upipe_mpgaf->has_crc ? ADTS_CRC_SIZE : 0), -1);
-    } else {
-        /* Cannot be raw (output elsewhere) so LOAS input. */
-        struct ubuf *ubuf = upipe_mpgaf_extract_loas(upipe, uref);
-        if (unlikely(ubuf == NULL)) {
-            uref_free(uref);
-            return;
-        }
-        uref_attach_ubuf(uref, ubuf);
+    if (!ubase_check(upipe_mpgaf_decaps_frame(upipe, uref))) {
+        uref_free(uref);
+        return;
     }
 
     if (!ubase_check(upipe_mpgaf_encaps_frame(upipe, uref))) {
@@ -1585,6 +1633,10 @@ static bool upipe_mpgaf_work_raw(struct upipe *upipe, struct uref *uref,
         return true;
     }
 
+    if (upipe_mpgaf->encaps_input == UREF_MPGA_ENCAPS_LATM &&
+        !upipe_mpgaf_handle_latm(upipe, uref->ubuf, 0, size))
+        return true;
+
     if (unlikely(!upipe_mpgaf->acquired)) {
         upipe_mpgaf_sync_acquired(upipe);
         struct uref *flow_def = upipe_mpgaf_alloc_flow_def_attr(upipe);
@@ -1598,7 +1650,7 @@ static bool upipe_mpgaf_work_raw(struct upipe *upipe, struct uref *uref,
             UBASE_FATAL(upipe, uref_sound_flow_set_channels(flow_def, upipe_mpgaf->channels))
         }
         UBASE_FATAL(upipe,
-                uref_mpga_flow_set_encaps(flow_def, UREF_MPGA_ENCAPS_RAW))
+                uref_mpga_flow_set_encaps(flow_def, upipe_mpgaf->encaps_input))
         UBASE_FATAL(upipe,
                 uref_sound_flow_set_rate(flow_def, upipe_mpgaf->samplerate))
         UBASE_FATAL(upipe,
@@ -1650,12 +1702,7 @@ static bool upipe_mpgaf_work_raw(struct upipe *upipe, struct uref *uref,
 
     UBASE_FATAL(upipe, uref_clock_set_duration(uref, duration))
 
-    if (!ubase_check(upipe_mpgaf_encaps_frame(upipe, uref))) {
-        uref_free(uref);
-        return true;
-    }
-
-    upipe_mpgaf_output(upipe, uref, upump_p);
+    upipe_mpgaf_output_frame(upipe, uref, upump_p);
     return true;
 }
 
@@ -1692,7 +1739,8 @@ static bool upipe_mpgaf_handle(struct upipe *upipe, struct uref *uref,
         if (uref != NULL)
             upipe_mpgaf_require_flow_format(upipe, uref);
         if (upipe_mpgaf->type == UPIPE_MPGAF_AAC &&
-            upipe_mpgaf->encaps_input == UREF_MPGA_ENCAPS_RAW)
+            (upipe_mpgaf->encaps_input == UREF_MPGA_ENCAPS_RAW ||
+             upipe_mpgaf->encaps_input == UREF_MPGA_ENCAPS_LATM))
             upipe_mpgaf_handle_global(upipe);
         return true;
     }
@@ -1710,6 +1758,7 @@ static bool upipe_mpgaf_handle(struct upipe *upipe, struct uref *uref,
     if (upipe_mpgaf->type == UPIPE_MPGAF_AAC) {
         switch (upipe_mpgaf->encaps_input) {
             case UREF_MPGA_ENCAPS_RAW:
+            case UREF_MPGA_ENCAPS_LATM:
                 return upipe_mpgaf_work_raw(upipe, uref, upump_p);
             default:
                 break;

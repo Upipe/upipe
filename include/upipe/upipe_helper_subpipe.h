@@ -256,8 +256,8 @@ static void STRUCTURE##_init_sub_##SUB##s(struct upipe *upipe)              \
  * @param p filled in with a pointer to the subpipe manager                 \
  * @return an error code                                                    \
  */                                                                         \
-static int STRUCTURE##_get_sub_mgr(struct upipe *upipe,                     \
-                                   struct upipe_mgr **p)                    \
+static int STRUCTURE##_get_##MGR(struct upipe *upipe,                       \
+                                 struct upipe_mgr **p)                      \
 {                                                                           \
     assert(p != NULL);                                                      \
     struct STRUCTURE *s = STRUCTURE##_from_upipe(upipe);                    \
@@ -270,7 +270,7 @@ static int STRUCTURE##_get_sub_mgr(struct upipe *upipe,                     \
  * @param p filled in with the next subpipe, initialize with NULL           \
  * return an error code                                                     \
  */                                                                         \
-static int STRUCTURE##_iterate_sub(struct upipe *upipe, struct upipe **p)   \
+static int STRUCTURE##_iterate_##SUB(struct upipe *upipe, struct upipe **p) \
 {                                                                           \
     struct STRUCTURE *s = STRUCTURE##_from_upipe(upipe);                    \
     assert(p != NULL);                                                      \

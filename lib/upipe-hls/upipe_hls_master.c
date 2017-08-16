@@ -473,7 +473,7 @@ static int upipe_hls_master_control(struct upipe *upipe,
     }
     case UPIPE_ITERATE_SUB: {
         struct upipe **sub_p = va_arg(args, struct upipe **);
-        return upipe_hls_master_iterate_sub(upipe, sub_p);
+        return upipe_hls_master_iterate_pipe(upipe, sub_p);
     }
     }
     return UBASE_ERR_UNHANDLED;

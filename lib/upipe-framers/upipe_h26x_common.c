@@ -29,8 +29,7 @@
 #include <upipe/uref_block.h>
 #include <upipe-framers/uref_h26x_flow.h>
 #include <upipe-framers/uref_h26x.h>
-
-#include "upipe_h26x_common.h"
+#include <upipe-framers/upipe_h26x_common.h>
 
 #include <stdlib.h>
 #include <stdint.h>

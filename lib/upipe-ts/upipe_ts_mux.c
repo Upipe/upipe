@@ -2187,11 +2187,11 @@ static int upipe_ts_mux_program_control(struct upipe *upipe,
         }
         case UPIPE_GET_SUB_MGR: {
             struct upipe_mgr **p = va_arg(args, struct upipe_mgr **);
-            return upipe_ts_mux_program_get_sub_mgr(upipe, p);
+            return upipe_ts_mux_program_get_input_mgr(upipe, p);
         }
         case UPIPE_ITERATE_SUB: {
             struct upipe **p = va_arg(args, struct upipe **);
-            return upipe_ts_mux_program_iterate_sub(upipe, p);
+            return upipe_ts_mux_program_iterate_input(upipe, p);
         }
         case UPIPE_SUB_GET_SUPER: {
             struct upipe **p = va_arg(args, struct upipe **);
@@ -4251,11 +4251,11 @@ static int _upipe_ts_mux_control(struct upipe *upipe, int command, va_list args)
         }
         case UPIPE_GET_SUB_MGR: {
             struct upipe_mgr **p = va_arg(args, struct upipe_mgr **);
-            return upipe_ts_mux_get_sub_mgr(upipe, p);
+            return upipe_ts_mux_get_program_mgr(upipe, p);
         }
         case UPIPE_ITERATE_SUB: {
             struct upipe **p = va_arg(args, struct upipe **);
-            return upipe_ts_mux_iterate_sub(upipe, p);
+            return upipe_ts_mux_iterate_program(upipe, p);
         }
         case UPIPE_END_PREROLL:
             return upipe_ts_mux_end_preroll(upipe);

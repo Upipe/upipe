@@ -25,9 +25,11 @@
 
 #undef NDEBUG
 
+#include <upipe/uclock.h>
 #include <upipe/uprobe.h>
 #include <upipe/uprobe_stdio.h>
 #include <upipe/uprobe_prefix.h>
+#include <upipe/uprobe_ubuf_mem.h>
 #include <upipe/umem.h>
 #include <upipe/umem_alloc.h>
 #include <upipe/udict.h>
@@ -48,6 +50,9 @@
 #include <assert.h>
 
 #include <bitstream/ietf/rtp.h>
+#include <bitstream/ietf/rtp3551.h>
+#include <bitstream/ietf/rtp6184.h>
+#include <bitstream/mpeg/h264.h>
 
 #define UDICT_POOL_DEPTH    0
 #define UREF_POOL_DEPTH     0
@@ -56,12 +61,16 @@
 #define UBUF_APPEND         0
 #define UBUF_ALIGN          32
 #define UBUF_ALIGN_OFFSET   0
+#define UBUF_POOL_DEPTH     0
+#define UBUF_SHARED_POOL_DEPTH 0
 #define SIZE                1328
+#define NAL_SIZE            42
 
 #define UPROBE_LOG_LEVEL UPROBE_LOG_VERBOSE
 
 static unsigned int nb_packets = 0;
 static bool expect_discontinuity = false;
+static bool h264_mode = false;
 
 /** helper phony pipe */
 static struct upipe *test_alloc(struct upipe_mgr *mgr, struct uprobe *uprobe,
@@ -79,12 +88,12 @@ static void test_input(struct upipe *upipe, struct uref *uref,
                        struct upump **upump_p)
 {
     const uint8_t *buf;
-    int size;
-
-    size = -1;
-    ubase_assert(uref_block_read(uref, 0, &size, &buf));
-    assert(size == SIZE - RTP_HEADER_SIZE);
-    uref_block_unmap(uref, 0);
+    size_t uref_size;
+    ubase_assert(uref_block_size(uref, &uref_size));
+    if (!h264_mode)
+        assert(uref_size == SIZE - RTP_HEADER_SIZE);
+    else
+        assert(uref_size == 4 * NAL_SIZE);
     assert(ubase_check(uref_flow_get_discontinuity(uref)) ==
            expect_discontinuity);
     nb_packets--;
@@ -99,7 +108,10 @@ static int test_control(struct upipe *upipe, int command, va_list args)
             struct uref *flow_def = va_arg(args, struct uref *);
             const char *def;
             ubase_assert(uref_flow_get_def(flow_def, &def));
-            assert(!strcmp(def, "block.mpegtsaligned."));
+            if (!h264_mode)
+                assert(!strcmp(def, "block.mpegtsaligned."));
+            else
+                assert(!strcmp(def, "block.h264.pic."));
             return UBASE_ERR_NONE;
         }
         case UPIPE_REGISTER_REQUEST: {
@@ -139,6 +151,7 @@ static int catch(struct uprobe *uprobe, struct upipe *upipe, int event, va_list 
         case UPROBE_DEAD:
         case UPROBE_NEW_FLOW_DEF:
         case UPROBE_CLOCK_REF:
+        case UPROBE_CLOCK_TS:
             break;
         default:
             assert(0);
@@ -177,11 +190,20 @@ int main(int argc, char **argv)
     struct uprobe *uprobe_stdio = uprobe_stdio_alloc(&uprobe, stdout,
                                                      UPROBE_LOG_DEBUG);
     assert(uprobe_stdio != NULL);
+    uprobe_stdio = uprobe_ubuf_mem_alloc(uprobe_stdio, umem_mgr,
+                                         UBUF_POOL_DEPTH,
+                                         UBUF_SHARED_POOL_DEPTH);
+    assert(uprobe_stdio != NULL);
 
-    uref = uref_block_flow_alloc_def(uref_mgr, "rtp.");
-    assert(uref);
+    /* rtpd_test */
+    struct upipe *rtpd_test = upipe_void_alloc(&rtpd_test_mgr,
+            uprobe_pfx_alloc(uprobe_use(uprobe_stdio), UPROBE_LOG_LEVEL,
+                             "rtpdtest"));
+    assert(rtpd_test != NULL);
 
     /* build rtpd pipe */
+    uref = uref_block_flow_alloc_def(uref_mgr, "rtp.");
+    assert(uref);
     struct upipe_mgr *upipe_rtpd_mgr = upipe_rtpd_mgr_alloc();
     assert(upipe_rtpd_mgr);
     struct upipe *rtpd = upipe_void_alloc(upipe_rtpd_mgr,
@@ -190,21 +212,15 @@ int main(int argc, char **argv)
     assert(rtpd);
     ubase_assert(upipe_set_flow_def(rtpd, uref));
     uref_free(uref);
-
-    /* rtpd_test */
-    struct upipe *rtpd_test = upipe_void_alloc(&rtpd_test_mgr,
-            uprobe_pfx_alloc(uprobe_use(uprobe_stdio), UPROBE_LOG_LEVEL,
-                             "rtpdtest"));
-    assert(rtpd_test != NULL);
     ubase_assert(upipe_set_output(rtpd, rtpd_test));
-    upipe_release(rtpd_test);
 
     /* Now send uref */
     uref = uref_block_alloc(uref_mgr, block_mgr, SIZE);
+    assert(uref != NULL);
     size = -1;
     uref_block_write(uref, 0, &size, &buf);
     rtp_set_hdr(buf);
-    rtp_set_type(buf, RTP_TYPE_TS);
+    rtp_set_type(buf, RTP_TYPE_MP2T);
     rtp_set_seqnum(buf, 1);
     rtp_set_timestamp(buf, 0);
     uref_block_unmap(uref, 0);
@@ -213,10 +229,11 @@ int main(int argc, char **argv)
     assert(!nb_packets);
 
     uref = uref_block_alloc(uref_mgr, block_mgr, SIZE);
+    assert(uref != NULL);
     size = -1;
     uref_block_write(uref, 0, &size, &buf);
     rtp_set_hdr(buf);
-    rtp_set_type(buf, RTP_TYPE_TS);
+    rtp_set_type(buf, RTP_TYPE_MP2T);
     rtp_set_seqnum(buf, 42);
     rtp_set_timestamp(buf, 0);
     uref_block_unmap(uref, 0);
@@ -229,8 +246,127 @@ int main(int argc, char **argv)
     ubase_assert(upipe_rtpd_get_packets_lost(rtpd, &lost));
     assert(lost == 42 - 1 - 1);
 
-    /* release pipe */
+    /* try again with an h264 access unit */
     upipe_release(rtpd);
+    h264_mode = true;
+    expect_discontinuity = false;
+    uref = uref_block_flow_alloc_def(uref_mgr, "rtp.h264.pic.");
+    assert(uref);
+    rtpd = upipe_void_alloc(upipe_rtpd_mgr,
+                uprobe_pfx_alloc(uprobe_use(uprobe_stdio), UPROBE_LOG_LEVEL,
+                                 "rtpd 2"));
+    assert(rtpd);
+    ubase_assert(upipe_set_flow_def(rtpd, uref));
+    uref_free(uref);
+    ubase_assert(upipe_set_output(rtpd, rtpd_test));
+
+    /* single NAL unit */
+    uref = uref_block_alloc(uref_mgr, block_mgr, NAL_SIZE + RTP_HEADER_SIZE);
+    assert(uref != NULL);
+    size = -1;
+    uref_block_write(uref, 0, &size, &buf);
+    rtp_set_hdr(buf);
+    rtp_set_type(buf, RTP_TYPE_DYNAMIC_FIRST);
+    rtp_set_seqnum(buf, 1);
+    rtp_set_timestamp(buf, 0);
+    buf += RTP_HEADER_SIZE;
+    h264nalst_init(buf);
+    h264nalst_set_type(buf, H264NAL_TYPE_SPS);
+    uref_block_unmap(uref, 0);
+    upipe_input(rtpd, uref, NULL);
+    assert(!nb_packets);
+
+    /* STAP */
+    uref = uref_block_alloc(uref_mgr, block_mgr,
+            (NAL_SIZE + RTP_6184_STAP_HEADER_SIZE) * 2 + RTP_HEADER_SIZE + 1);
+    assert(uref != NULL);
+    size = -1;
+    uref_block_write(uref, 0, &size, &buf);
+    rtp_set_hdr(buf);
+    rtp_set_type(buf, RTP_TYPE_DYNAMIC_FIRST);
+    rtp_set_seqnum(buf, 2);
+    rtp_set_timestamp(buf, 0);
+    buf += RTP_HEADER_SIZE;
+    h264nalst_init(buf);
+    h264nalst_set_type(buf, RTP_6184_STAP_A);
+    buf++;
+    rtp_6184_stap_set_size(buf, NAL_SIZE);
+    buf += RTP_6184_STAP_HEADER_SIZE;
+    h264nalst_init(buf);
+    h264nalst_set_type(buf, H264NAL_TYPE_PPS);
+    buf += NAL_SIZE;
+    rtp_6184_stap_set_size(buf, NAL_SIZE);
+    buf += RTP_6184_STAP_HEADER_SIZE;
+    h264nalst_init(buf);
+    h264nalst_set_type(buf, H264NAL_TYPE_SEI);
+    uref_block_unmap(uref, 0);
+    upipe_input(rtpd, uref, NULL);
+    assert(!nb_packets);
+
+    /* FU #1 */
+    uref = uref_block_alloc(uref_mgr, block_mgr,
+            (NAL_SIZE / 2) + RTP_HEADER_SIZE + 1);
+    assert(uref != NULL);
+    size = -1;
+    uref_block_write(uref, 0, &size, &buf);
+    rtp_set_hdr(buf);
+    rtp_set_type(buf, RTP_TYPE_DYNAMIC_FIRST);
+    rtp_set_seqnum(buf, 3);
+    rtp_set_timestamp(buf, 0);
+    buf += RTP_HEADER_SIZE;
+    h264nalst_init(buf);
+    h264nalst_set_type(buf, RTP_6184_FU_A);
+    buf++;
+    h264nalst_init(buf);
+    h264nalst_set_type(buf, H264NAL_TYPE_IDR);
+    rtp_6184_fu_set_start(buf);
+    uref_block_unmap(uref, 0);
+    upipe_input(rtpd, uref, NULL);
+    assert(!nb_packets);
+
+    /* FU #2 */
+    uref = uref_block_alloc(uref_mgr, block_mgr,
+            (NAL_SIZE / 2) + RTP_HEADER_SIZE + 2);
+    assert(uref != NULL);
+    size = -1;
+    uref_block_write(uref, 0, &size, &buf);
+    rtp_set_hdr(buf);
+    rtp_set_type(buf, RTP_TYPE_DYNAMIC_FIRST);
+    rtp_set_seqnum(buf, 4);
+    rtp_set_timestamp(buf, 0);
+    buf += RTP_HEADER_SIZE;
+    h264nalst_init(buf);
+    h264nalst_set_type(buf, RTP_6184_FU_A);
+    buf++;
+    h264nalst_init(buf);
+    h264nalst_set_type(buf, H264NAL_TYPE_IDR);
+    rtp_6184_fu_set_end(buf);
+    uref_block_unmap(uref, 0);
+    upipe_input(rtpd, uref, NULL);
+    assert(!nb_packets);
+
+    /* single NAL unit */
+    uref = uref_block_alloc(uref_mgr, block_mgr,
+            NAL_SIZE * 4 + RTP_HEADER_SIZE);
+    assert(uref != NULL);
+    size = -1;
+    uref_block_write(uref, 0, &size, &buf);
+    rtp_set_hdr(buf);
+    rtp_set_type(buf, RTP_TYPE_DYNAMIC_FIRST);
+    rtp_set_seqnum(buf, 5);
+    rtp_set_timestamp(buf, UCLOCK_FREQ / 25);
+    buf += RTP_HEADER_SIZE;
+    h264nalst_init(buf);
+    h264nalst_set_type(buf, H264NAL_TYPE_SPS);
+    uref_block_unmap(uref, 0);
+    nb_packets = 1;
+    upipe_input(rtpd, uref, NULL);
+    assert(!nb_packets);
+
+    /* release pipe */
+    nb_packets = 1;
+    upipe_release(rtpd);
+    assert(!nb_packets);
     test_free(rtpd_test);
 
     /* release managers */

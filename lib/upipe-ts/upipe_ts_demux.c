@@ -66,6 +66,7 @@
 #include <upipe-modules/upipe_null.h>
 #include <upipe-modules/upipe_setrap.h>
 #include <upipe-modules/upipe_idem.h>
+#include <upipe-modules/upipe_setflowdef.h>
 #include <upipe-ts/uref_ts_flow.h>
 #include <upipe-ts/uref_ts_event.h>
 #include <upipe-ts/upipe_ts_demux.h>
@@ -324,6 +325,8 @@ struct upipe_ts_demux_program {
     struct upipe *psi_split_output_pmt;
     /** pointer to ts_pmtd inner pipe */
     struct upipe *pmtd;
+    /** setflowdef to give SDT attributes to PMT */
+    struct upipe *setflowdef;
     /** systime_rap of the last PMT */
     uint64_t pmt_rap;
 
@@ -410,6 +413,8 @@ struct upipe_ts_demux_output {
     struct upipe *split_output;
     /** setrap inner pipe */
     struct upipe *setrap;
+    /** decaps inner pipe */
+    struct upipe *decaps;
 
     /** maximum retention time in the pipeline */
     uint64_t max_delay;
@@ -714,16 +719,13 @@ static int upipe_ts_demux_output_plumber(struct upipe *upipe,
 
     if (!ubase_ncmp(def, "block.mpegts.")) {
         /* allocate ts_decaps inner */
-        struct upipe *output =
-            upipe_void_alloc_output(inner, ts_demux_mgr->ts_decaps_mgr,
-                   uprobe_pfx_alloc(uprobe_use(&upipe_ts_demux_output->probe),
-                                    UPROBE_LOG_VERBOSE, "decaps"));
-        if (unlikely(output == NULL)) {
+        if (unlikely(upipe_ts_demux_output->decaps == NULL)) {
             upipe_release(upipe_ts_demux_output->setrap);
             upipe_ts_demux_output->setrap = NULL;
             return UBASE_ERR_ALLOC;
         }
-        upipe_release(output);
+
+        upipe_set_output(inner, upipe_ts_demux_output->decaps);
         return UBASE_ERR_NONE;
     }
 
@@ -884,6 +886,12 @@ static struct upipe *upipe_ts_demux_output_alloc(struct upipe_mgr *mgr,
                                    upipe_ts_demux_output->pid))) == NULL))
         upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
 
+    upipe_ts_demux_output->decaps = upipe_void_alloc(ts_demux_mgr->ts_decaps_mgr,
+                uprobe_pfx_alloc(uprobe_use(&upipe_ts_demux_output->probe),
+                    UPROBE_LOG_VERBOSE, "decaps"));
+    if (unlikely(upipe_ts_demux_output->decaps == NULL))
+        upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
+
     upipe_ts_demux_program_check_pcr(upipe_ts_demux_program_to_upipe(program));
     return upipe;
 }
@@ -960,6 +968,11 @@ static int upipe_ts_demux_output_control(struct upipe *upipe,
             return (*p != NULL) ? UBASE_ERR_NONE : UBASE_ERR_UNHANDLED;
         }
 
+        case UPIPE_TS_DECAPS_GET_PACKETS_LOST: {
+            struct upipe_ts_demux_output *upipe_ts_demux_output =
+                upipe_ts_demux_output_from_upipe(upipe);
+            return upipe_control_va(upipe_ts_demux_output->decaps, command, args);
+        }
         default:
             return upipe_ts_demux_output_control_bin_output(upipe, command,
                                                             args);
@@ -1000,6 +1013,7 @@ static void upipe_ts_demux_output_no_input(struct upipe *upipe)
         upipe_release(upipe_ts_demux_output->split_output);
     if (upipe_ts_demux_output->setrap != NULL)
         upipe_release(upipe_ts_demux_output->setrap);
+    upipe_release(upipe_ts_demux_output->decaps);
     upipe_ts_demux_output_clean_bin_output(upipe);
     upipe_ts_demux_output_clean_sub(upipe);
     upipe_ts_demux_program_check_pcr(upipe_ts_demux_program_to_upipe(program));
@@ -1327,18 +1341,30 @@ static int upipe_ts_demux_program_pmtd_update(struct upipe *upipe,
         upipe_use(upipe_ts_demux_output_to_upipe(output));
 
         struct uref *flow_def = NULL;
-        uint64_t id = 0;
+        bool match = false;
         while (ubase_check(upipe_split_iterate(pmtd, &flow_def)) &&
-               flow_def != NULL)
-            if (ubase_check(uref_flow_get_id(flow_def, &id)) &&
-                id == output->pid) {
+               flow_def != NULL) {
+            const char *def = NULL;
+            const char *def_input = NULL;
+            uint64_t id = 0;
+            if (!ubase_check(uref_flow_get_id(flow_def, &id))
+                || !ubase_check(uref_flow_get_def(flow_def, &def))
+                || !ubase_check(uref_flow_get_def(output->flow_def_input,
+                        &def_input)))
+                continue;
+
+            bool match = !strcmp(def, def_input) && id == output->pid;
+            if (match) {
+
                 if (!upipe_ts_demux_output_pmtd_update(
-                        upipe_ts_demux_output_to_upipe(output), flow_def))
+                            upipe_ts_demux_output_to_upipe(output), flow_def))
                     upipe_throw_source_end(
                             upipe_ts_demux_output_to_upipe(output));
                 break;
             }
-        if (id != output->pid)
+        }
+
+        if (!match)
             upipe_throw_source_end(upipe_ts_demux_output_to_upipe(output));
     }
 
@@ -1484,7 +1510,6 @@ static void upipe_ts_demux_program_handle_pcr(struct upipe *upipe,
     if (delta <= MAX_PCR_INTERVAL && !discontinuity)
         upipe_ts_demux_program->last_pcr += delta;
     else {
-        /* FIXME same clock for all programs */
         upipe_warn_va(upipe, "PCR discontinuity %"PRIu64, delta);
         upipe_ts_demux_program->last_pcr = pcr_orig;
         upipe_ts_demux_program->timestamp_offset =
@@ -1630,6 +1655,7 @@ static struct upipe *upipe_ts_demux_program_alloc(struct upipe_mgr *mgr,
     upipe_ts_demux_program->psi_split_output_pmt =
         upipe_ts_demux_program->psi_split_output_eit = NULL;
     upipe_ts_demux_program->pmtd = upipe_ts_demux_program->eitd = NULL;
+    upipe_ts_demux_program->setflowdef = NULL;
     for (uint8_t n = 0; n < EITS_TABLEIDS; n++) {
         upipe_ts_demux_program->psi_pid_eits[n] = NULL;
         upipe_ts_demux_program->psi_split_output_eits[n] = NULL;
@@ -1699,15 +1725,34 @@ static struct upipe *upipe_ts_demux_program_alloc(struct upipe_mgr *mgr,
         return upipe;
     }
 
+    struct upipe_mgr *upipe_setflowdef_mgr = upipe_setflowdef_mgr_alloc();
+    assert(upipe_setflowdef_mgr != NULL);
+    upipe_ts_demux_program->setflowdef = upipe_void_alloc_output(
+            upipe_ts_demux_program->psi_split_output_pmt,
+            upipe_setflowdef_mgr,
+            uprobe_pfx_alloc(
+                uprobe_use(&upipe_ts_demux_program->pmtd_probe),
+                UPROBE_LOG_VERBOSE, "setflowdef"));
+    upipe_mgr_release(upipe_setflowdef_mgr);
+
+    if (unlikely(upipe_ts_demux_program->setflowdef == NULL)) {
+        upipe_release(upipe_ts_demux_program->psi_split_output_pmt);
+        upipe_ts_demux_psi_pid_release(upipe_ts_demux_program->psi_pid_pmt);
+        upipe_ts_demux_program->psi_pid_pmt = NULL;
+        upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
+        return upipe;
+    }
+
     struct upipe_ts_demux_mgr *ts_demux_mgr =
         upipe_ts_demux_mgr_from_upipe_mgr(upipe_ts_demux_to_upipe(demux)->mgr);
     upipe_ts_demux_program->pmtd =
-        upipe_void_alloc_output(upipe_ts_demux_program->psi_split_output_pmt,
+        upipe_void_alloc_output(upipe_ts_demux_program->setflowdef,
                 ts_demux_mgr->ts_pmtd_mgr,
                 uprobe_pfx_alloc(
                     uprobe_use(&upipe_ts_demux_program->pmtd_probe),
                     UPROBE_LOG_VERBOSE, "pmtd"));
     if (unlikely(upipe_ts_demux_program->pmtd == NULL)) {
+        upipe_release(upipe_ts_demux_program->setflowdef);
         upipe_release(upipe_ts_demux_program->psi_split_output_pmt);
         upipe_ts_demux_psi_pid_release(upipe_ts_demux_program->psi_pid_pmt);
         upipe_ts_demux_program->psi_pid_pmt = NULL;
@@ -1744,11 +1789,11 @@ static int upipe_ts_demux_program_control(struct upipe *upipe,
         }
         case UPIPE_GET_SUB_MGR: {
             struct upipe_mgr **p = va_arg(args, struct upipe_mgr **);
-            return upipe_ts_demux_program_get_sub_mgr(upipe, p);
+            return upipe_ts_demux_program_get_output_mgr(upipe, p);
         }
         case UPIPE_ITERATE_SUB: {
             struct upipe **p = va_arg(args, struct upipe **);
-            return upipe_ts_demux_program_iterate_sub(upipe, p);
+            return upipe_ts_demux_program_iterate_output(upipe, p);
         }
         case UPIPE_SUB_GET_SUPER: {
             struct upipe **p = va_arg(args, struct upipe **);
@@ -1825,6 +1870,8 @@ static void upipe_ts_demux_program_no_input(struct upipe *upipe)
     }
     upipe_release(upipe_ts_demux_program->pmtd);
     upipe_ts_demux_program->pmtd = NULL;
+    upipe_release(upipe_ts_demux_program->setflowdef);
+    upipe_ts_demux_program->setflowdef = NULL;
 
     if (upipe_ts_demux_program->psi_split_output_eit != NULL) {
         upipe_release(upipe_ts_demux_program->psi_split_output_eit);
@@ -1950,7 +1997,8 @@ static int upipe_ts_demux_build_pat_programs(struct upipe *upipe)
             struct upipe_ts_demux_program *upipe_ts_demux_program =
                 upipe_ts_demux_program_from_uchain(uchain);
             if (upipe_ts_demux_program->program == program_number) {
-                upipe_set_flow_def(upipe_ts_demux_program->pmtd, uref);
+                upipe_setflowdef_set_dict(upipe_ts_demux_program->setflowdef,
+                        uref);
                 break;
             }
         }
@@ -2915,11 +2963,11 @@ static int upipe_ts_demux_control(struct upipe *upipe,
         }
         case UPIPE_GET_SUB_MGR: {
             struct upipe_mgr **p = va_arg(args, struct upipe_mgr **);
-            return upipe_ts_demux_get_sub_mgr(upipe, p);
+            return upipe_ts_demux_get_program_mgr(upipe, p);
         }
         case UPIPE_ITERATE_SUB: {
             struct upipe **p = va_arg(args, struct upipe **);
-            return upipe_ts_demux_iterate_sub(upipe, p);
+            return upipe_ts_demux_iterate_program(upipe, p);
         }
         case UPIPE_SPLIT_ITERATE: {
             struct uref **p = va_arg(args, struct uref **);

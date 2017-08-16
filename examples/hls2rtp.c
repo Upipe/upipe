@@ -264,7 +264,7 @@ static void cmd_quit(void)
 #endif
 
     if (dump != NULL)
-        upipe_dump_open(NULL, NULL, dump, src, NULL);
+        upipe_dump_open(NULL, NULL, dump, NULL, src, NULL);
 
     cmd_stop();
     upipe_cleanup(&hls);
