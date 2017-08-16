@@ -244,6 +244,31 @@ static void upipe_sync_set_latency(struct upipe *upipe)
     upipe_sync_build_flow_def(upipe);
 }
 
+/** @internal @This finds the maximum latency across all the subpipes
+ *
+ * @param upipe description structure of the pipe
+ */
+static uint64_t upipe_sync_get_max_latency(struct upipe *upipe)
+{
+    struct upipe_sync *upipe_sync = upipe_sync_from_upipe(upipe);
+    uint64_t max_latency = 0;
+
+    struct uchain *uchain;
+    ulist_foreach (&upipe_sync->subs, uchain) {
+        struct upipe_sync_sub *upipe_sync_sub =
+            upipe_sync_sub_from_uchain(uchain);
+        struct uref *flow_def = upipe_sync_sub->flow_def;
+        if (flow_def == NULL)
+            continue;
+        uint64_t latency;
+        if (!ubase_check(uref_clock_get_latency(flow_def, &latency)))
+            continue;
+        if (max_latency < latency)
+            max_latency = latency;
+    }
+
+    return max_latency;
+}
 
 /** @internal @This sets the input flow definition.
  *
@@ -916,14 +941,13 @@ static int upipe_sync_set_flow_def(struct upipe *upipe, struct uref *flow_def)
     // FIXME : estimated latency added by processing
     latency += UCLOCK_FREQ / 25;
     uref_clock_set_latency(flow_def, latency);
+    uint64_t max_latency = upipe_sync_get_max_latency(upipe);
+    if (latency < max_latency)
+        latency = max_latency;
 
-    if (latency > upipe_sync->latency) {
-        upipe_notice_va(upipe, "Latency %" PRIu64, latency);
-        upipe_sync->latency = latency;
-        upipe_sync_set_latency(upipe_sync_to_upipe(upipe_sync));
-    } else {
-        upipe_sync_build_flow_def(upipe);
-    }
+    upipe_notice_va(upipe, "Latency %" PRIu64, latency);
+    upipe_sync->latency = latency;
+    upipe_sync_set_latency(upipe_sync_to_upipe(upipe_sync));
 
     upipe_sync->ticks_per_frame = UCLOCK_FREQ *
         upipe_sync->fps.den / upipe_sync->fps.num;
