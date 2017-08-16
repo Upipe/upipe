@@ -559,6 +559,17 @@ static int upipe_sdi_enc_sub_control(struct upipe *upipe, int command, va_list a
     }
 }
 
+static void upipe_sdi_enc_clean_urefs(struct uchain *urefs)
+{
+    for (;;) {
+        struct uchain *uchain = ulist_pop(urefs);
+        if (!uchain)
+            return;
+        struct uref *uref = uref_from_uchain(uchain);
+        uref_free(uref);
+    }
+}
+
 static void upipe_sdi_enc_sub_input(struct upipe *upipe, struct uref *uref,
                                  struct upump **upump_p)
 {
@@ -589,7 +600,9 @@ static struct upipe *upipe_sdi_enc_sub_alloc(struct upipe_mgr *mgr,
 
 static void upipe_sdi_enc_sub_free(struct upipe *upipe)
 {
+    struct upipe_sdi_enc_sub *sdi_enc_sub = upipe_sdi_enc_sub_from_upipe(upipe);
     upipe_throw_dead(upipe);
+    upipe_sdi_enc_clean_urefs(&sdi_enc_sub->urefs);
     upipe_sdi_enc_sub_clean_sub(upipe);
     upipe_sdi_enc_sub_clean_urefcount(upipe);
     upipe_sdi_enc_sub_free_void(upipe);
@@ -1488,6 +1501,7 @@ static void upipe_sdi_enc_free(struct upipe *upipe)
 {
     struct upipe_sdi_enc *upipe_sdi_enc = upipe_sdi_enc_from_upipe(upipe);
     upipe_throw_dead(upipe);
+    upipe_sdi_enc_clean_urefs(&upipe_sdi_enc->urefs);
     uref_free(upipe_sdi_enc->uref_audio);
     upipe_sdi_enc_clean_output(upipe);
     upipe_sdi_enc_clean_ubuf_mgr(upipe);
