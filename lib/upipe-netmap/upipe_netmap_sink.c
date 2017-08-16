@@ -1396,7 +1396,10 @@ static void upipe_netmap_sink_worker(struct upump *upump)
         } else {
             int s = worker_hbrmt(upipe, dst, src_buf, bytes_left, len);
             src_buf += s;
-            bytes_left -= s;
+            if (s < bytes_left)
+                bytes_left -= s;
+            else
+                bytes_left = 0;
 
             // FIXME
             uint16_t l = 1438;//len[0] ? *len[0] : *len[1];
