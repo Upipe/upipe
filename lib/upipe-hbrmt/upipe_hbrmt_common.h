@@ -63,8 +63,8 @@ static inline void sdi_crc_update(uint32_t *sdi_crc_lut, uint32_t *crc, uint16_t
 
 static inline void sdi_crc_update_blk(uint32_t sdi_crc_lut[8][1024], uint32_t *crc_c, uint32_t *crc_y, const uint16_t *buf)
 {
-    *crc_c ^= (buf[2] << 10) | buf[0];
-    *crc_y ^= (buf[3] << 10) | buf[1];
+    uint32_t c = *crc_c ^ ((buf[2] << 10) | buf[0]);
+    uint32_t y = *crc_y ^ ((buf[3] << 10) | buf[1]);
 
     *crc_c = sdi_crc_lut[0][buf[14]] ^
              sdi_crc_lut[1][buf[12]] ^
@@ -72,8 +72,8 @@ static inline void sdi_crc_update_blk(uint32_t sdi_crc_lut[8][1024], uint32_t *c
              sdi_crc_lut[3][buf[8]] ^
              sdi_crc_lut[4][buf[6]] ^
              sdi_crc_lut[5][buf[4]] ^
-             sdi_crc_lut[6][*crc_c >> 10] ^
-             sdi_crc_lut[7][*crc_c & 0x3ff];
+             sdi_crc_lut[6][c >> 10] ^
+             sdi_crc_lut[7][c & 0x3ff];
 
     *crc_y = sdi_crc_lut[0][buf[15]] ^
              sdi_crc_lut[1][buf[13]] ^
@@ -81,8 +81,8 @@ static inline void sdi_crc_update_blk(uint32_t sdi_crc_lut[8][1024], uint32_t *c
              sdi_crc_lut[3][buf[9]] ^
              sdi_crc_lut[4][buf[7]] ^
              sdi_crc_lut[5][buf[5]] ^
-             sdi_crc_lut[6][*crc_y >> 10] ^
-             sdi_crc_lut[7][*crc_y & 0x3ff];
+             sdi_crc_lut[6][y >> 10] ^
+             sdi_crc_lut[7][y & 0x3ff];
 }
 
 #define NOT_BIT8(x) ((!(((x) >> 8) & 1)) << 9)
