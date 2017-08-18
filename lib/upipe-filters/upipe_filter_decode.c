@@ -174,6 +174,7 @@ static int upipe_fdec_set_flow_def(struct upipe *upipe, struct uref *flow_def)
     if (flow_def == NULL)
         return UBASE_ERR_INVALID;
 
+    /* check if last inner is set, see comment below */
     if (upipe_fdec->last_inner != NULL) {
         if (ubase_check(upipe_set_flow_def(upipe_fdec->last_inner, flow_def)))
             return UBASE_ERR_NONE;
@@ -210,8 +211,12 @@ static int upipe_fdec_set_flow_def(struct upipe *upipe, struct uref *flow_def)
         }
     }
 
-    upipe_fdec_store_bin_input(upipe, upipe_use(avcdec));
+    /* store last inner first to prevent infinite urequest loop.
+     * If bin input is stored before bin output, urequest may be forward and
+     * cause upipe_fdec_set_flow_def to be called before we store last inner.
+     * starting an infinite loop. see comment above */
     upipe_fdec_store_bin_output(upipe, avcdec);
+    upipe_fdec_store_bin_input(upipe, upipe_use(avcdec));
     return UBASE_ERR_NONE;
 }
 
