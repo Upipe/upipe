@@ -177,8 +177,8 @@ static int upipe_fenc_alloc_inner(struct upipe *upipe)
     if (unlikely(enc == NULL))
         return UBASE_ERR_INVALID;
 
-    upipe_fenc_store_bin_input(upipe, upipe_use(enc));
     upipe_fenc_store_bin_output(upipe, enc);
+    upipe_fenc_store_bin_input(upipe, upipe_use(enc));
     return UBASE_ERR_NONE;
 }
 
