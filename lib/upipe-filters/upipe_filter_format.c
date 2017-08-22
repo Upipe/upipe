@@ -353,11 +353,11 @@ static int upipe_ffmt_check_flow_format(struct upipe *upipe,
             if (unlikely(sws == NULL)) {
                 upipe_warn_va(upipe, "couldn't allocate swscale");
                 udict_dump(flow_def_dup->udict, upipe->uprobe);
-            } else if (!need_deint)
-                upipe_ffmt_store_bin_input(upipe, upipe_use(sws));
-            else
+            } else if (need_deint)
                 upipe_set_output(upipe_ffmt->first_inner, sws);
             upipe_ffmt_store_bin_output(upipe, sws);
+            if (!need_deint)
+                upipe_ffmt_store_bin_input(upipe, upipe_use(sws));
             if (upipe_ffmt->sws_flags)
                 upipe_sws_set_flags(sws, upipe_ffmt->sws_flags);
         } else {
@@ -368,11 +368,11 @@ static int upipe_ffmt_check_flow_format(struct upipe *upipe,
             upipe_mgr_release(setflowdef_mgr);
             if (unlikely(setflowdef == NULL)) {
                 upipe_warn_va(upipe, "couldn't allocate setflowdef");
-            } else if (!need_deint)
-                upipe_ffmt_store_bin_input(upipe, upipe_use(setflowdef));
-            else
+            } else if (need_deint)
                 upipe_set_output(upipe_ffmt->first_inner, setflowdef);
             upipe_ffmt_store_bin_output(upipe, setflowdef);
+            if (!need_deint)
+                upipe_ffmt_store_bin_input(upipe, upipe_use(setflowdef));
             upipe_setflowdef_set_dict(setflowdef, flow_def_dup);
         }
 
@@ -387,8 +387,8 @@ static int upipe_ffmt_check_flow_format(struct upipe *upipe,
                 upipe_warn_va(upipe, "couldn't allocate swresample");
                 udict_dump(flow_def_dup->udict, upipe->uprobe);
             } else {
-                upipe_ffmt_store_bin_input(upipe, upipe_use(input));
                 upipe_ffmt_store_bin_output(upipe, input);
+                upipe_ffmt_store_bin_input(upipe, upipe_use(input));
             }
         }
     }
@@ -403,8 +403,8 @@ static int upipe_ffmt_check_flow_format(struct upipe *upipe,
             upipe_warn_va(upipe, "couldn't allocate setflowdef");
         else {
             upipe_setflowdef_set_dict(input, flow_def_dup);
-            upipe_ffmt_store_bin_input(upipe, upipe_use(input));
             upipe_ffmt_store_bin_output(upipe, input);
+            upipe_ffmt_store_bin_input(upipe, upipe_use(input));
         }
     }
     uref_free(flow_def_dup);
