@@ -145,34 +145,40 @@ static int upipe_fenc_alloc_inner(struct upipe *upipe)
 {
     struct upipe_fenc *upipe_fenc = upipe_fenc_from_upipe(upipe);
     struct upipe_fenc_mgr *fenc_mgr = upipe_fenc_mgr_from_upipe_mgr(upipe->mgr);
-    const char *def, *codec;
-    if (ubase_check(uref_flow_get_def(upipe_fenc->flow_def_input, &def)) &&
-        !ubase_check(uref_avcenc_get_codec_name(upipe_fenc->flow_def_input,
-                                                &codec)) &&
-        fenc_mgr->x264_mgr != NULL) {
-        struct upipe *enc = upipe_void_alloc(fenc_mgr->x264_mgr,
+
+    bool use_avcenc =
+        ubase_check(uref_avcenc_get_codec_name(
+                        upipe_fenc->flow_def_input, NULL));
+
+    struct upipe *enc = NULL;
+    if (use_avcenc) {
+        if (fenc_mgr->avcenc_mgr)
+            enc = upipe_flow_alloc(
+                fenc_mgr->avcenc_mgr,
                 uprobe_pfx_alloc(
                     uprobe_use(&upipe_fenc->last_inner_probe),
-                    UPROBE_LOG_VERBOSE, "x264"));
-        if (unlikely(enc == NULL))
-            return UBASE_ERR_INVALID;
-        if (!ubase_ncmp(def, "block.mpeg2video."))
-            upipe_fenc->x262 = true;
-
-        upipe_fenc_store_bin_input(upipe, upipe_use(enc));
-        upipe_fenc_store_bin_output(upipe, enc);
-        return UBASE_ERR_NONE;
+                    UPROBE_LOG_VERBOSE, "avcenc"),
+                upipe_fenc->flow_def_input);
     }
+    else {
+        const char *def = NULL;
+        uref_flow_get_def(upipe_fenc->flow_def_input, &def);
 
-    struct upipe *enc = upipe_flow_alloc(fenc_mgr->avcenc_mgr,
-            uprobe_pfx_alloc(
-                uprobe_use(&upipe_fenc->last_inner_probe),
-                UPROBE_LOG_VERBOSE, "avcenc"), upipe_fenc->flow_def_input);
+        if (fenc_mgr->x264_mgr && def)
+            enc = upipe_void_alloc(
+                    fenc_mgr->x264_mgr,
+                    uprobe_pfx_alloc(
+                        uprobe_use(&upipe_fenc->last_inner_probe),
+                        UPROBE_LOG_VERBOSE, "x264"));
+
+        if (likely(enc) && !ubase_ncmp(def, "block.mpeg2video."))
+            upipe_fenc->x262 = true;
+    }
     if (unlikely(enc == NULL))
         return UBASE_ERR_INVALID;
 
-    upipe_fenc_store_bin_input(upipe, upipe_use(enc));
     upipe_fenc_store_bin_output(upipe, enc);
+    upipe_fenc_store_bin_input(upipe, upipe_use(enc));
     return UBASE_ERR_NONE;
 }
 
