@@ -53,8 +53,10 @@ endif
 if HAVE_BITSTREAM
 noinst_PROGRAMS += upipe_duration
 noinst_PROGRAMS += ts2es
-noinst_PROGRAMS += mpthree2rtp
 noinst_PROGRAMS += ts2mpthreemulticat
+if HAVE_AVFORMAT
+noinst_PROGRAMS += mpthree2rtp
+endif
 endif
 
 if HAVE_AVFORMAT
