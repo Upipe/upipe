@@ -36,7 +36,7 @@ local probe =
     uprobe.ubuf_mem(umem_mgr, UBUF_POOL_DEPTH, UBUF_SHARED_POOL_DEPTH) ..
     uprobe.upump_mgr(upump_mgr) ..
     uprobe.uref_mgr(uref_mgr) ..
-    uprobe.stdio_color(ffi.C.stderr, UPROBE_LOG_LEVEL)
+    uprobe.stdio(ffi.C.stderr, UPROBE_LOG_LEVEL)
 
 local function pfx(tag)
     return uprobe.pfx(UPROBE_LOG_LEVEL, tag)

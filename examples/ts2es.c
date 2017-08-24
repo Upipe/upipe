@@ -26,7 +26,7 @@
 #include <stdio.h>
 
 #include <upipe/uprobe.h>
-#include <upipe/uprobe_stdio_color.h>
+#include <upipe/uprobe_stdio.h>
 #include <upipe/uprobe_prefix.h>
 #include <upipe/uprobe_select_flows.h>
 #include <upipe/uprobe_uref_mgr.h>
@@ -99,7 +99,7 @@ int main(int argc, char **argv)
 
     /* probes */
     struct uprobe *uprobe;
-    uprobe = uprobe_stdio_color_alloc(NULL, stderr, UPROBE_LOG_DEBUG);
+    uprobe = uprobe_stdio_alloc(NULL, stderr, UPROBE_LOG_DEBUG);
     assert(uprobe != NULL);
     uprobe = uprobe_uref_mgr_alloc(uprobe, uref_mgr);
     assert(uprobe != NULL);

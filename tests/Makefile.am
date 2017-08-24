@@ -3,7 +3,6 @@ AM_LOG_FLAGS = $(srcdir)
 
 dist_check_SCRIPTS = \
 	uprobe_stdio_test.sh \
-	uprobe_stdio_color_test.sh \
 	uprobe_syslog_test.sh \
 	uprobe_prefix_test.sh \
 	udict_inline_test.sh \
@@ -21,7 +20,6 @@ dist_check_DATA = \
 	valgrind_osx.supp \
 	udict_inline_test.txt \
 	uprobe_stdio_test.txt \
-	uprobe_stdio_color_test.txt \
 	uprobe_prefix_test.txt \
 	upipe_ts_test.ts \
 	upipe_h264_framer_test.h \
@@ -53,7 +51,6 @@ check_PROGRAMS = \
 	uuri_test \
 	ucookie_test \
 	uprobe_stdio_test \
-	uprobe_stdio_color_test \
 	uprobe_syslog_test \
 	uprobe_prefix_test \
 	uprobe_dejitter_test \
@@ -113,7 +110,6 @@ TESTS = \
 	ubuf_pic_mem_test \
 	ubuf_sound_mem_test \
 	uprobe_stdio_test.sh \
-	uprobe_stdio_color_test.sh \
 	uprobe_syslog_test.sh \
 	uprobe_prefix_test.sh \
 	uprobe_dejitter_test \
