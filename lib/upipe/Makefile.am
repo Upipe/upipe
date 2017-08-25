@@ -23,7 +23,6 @@ libupipe_la_SOURCES = \
 	uprobe_select_flows.c \
 	uprobe_source_mgr.c \
 	uprobe_stdio.c \
-	uprobe_stdio_color.c \
 	uprobe_syslog.c \
 	uprobe_transfer.c \
 	uprobe_ubuf_mem.c \

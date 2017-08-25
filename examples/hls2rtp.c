@@ -40,7 +40,6 @@
 #include <upipe/uprobe_helper_urefcount.h>
 #include <upipe/uprobe_helper_alloc.h>
 #include <upipe/uprobe_stdio.h>
-#include <upipe/uprobe_stdio_color.h>
 #include <upipe/uprobe_syslog.h>
 #include <upipe/uprobe_loglevel.h>
 #include <upipe/uprobe_prefix.h>
@@ -1422,10 +1421,11 @@ int main(int argc, char **argv)
     if (syslog_tag != NULL)
         main_probe = uprobe_syslog_alloc(NULL, syslog_tag, LOG_NDELAY | LOG_PID,
                                          LOG_USER, log_level);
-    else
-        main_probe = color ?
-            uprobe_stdio_color_alloc(NULL, stderr, log_level) :
+    else {
+        main_probe =
             uprobe_stdio_alloc(NULL, stderr, log_level);
+        uprobe_stdio_set_color(main_probe, color);
+    }
     assert(main_probe);
 
     struct uprobe probe_error;

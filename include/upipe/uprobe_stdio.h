@@ -1,7 +1,8 @@
 /*
- * Copyright (C) 2013 OpenHeadend S.A.R.L.
+ * Copyright (C) 2013-2017 OpenHeadend S.A.R.L.
  *
  * Authors: Christophe Massiot
+ *          Arnaud de Turckheim
  *
  * Permission is hereby granted, free of charge, to any person obtaining
  * a copy of this software and associated documentation files (the
@@ -44,6 +45,8 @@ struct uprobe_stdio {
     FILE *stream;
     /** minimum level of printed messages */
     enum uprobe_log_level min_level;
+    /** colored output enabled? */
+    bool colored;
 
     /** structure exported to modules */
     struct uprobe uprobe;
@@ -78,6 +81,13 @@ void uprobe_stdio_clean(struct uprobe_stdio *uprobe_stdio);
  */
 struct uprobe *uprobe_stdio_alloc(struct uprobe *next, FILE *stream,
                                   enum uprobe_log_level min_level);
+
+/** @This enables or disables colored output.
+ *
+ * @param uprobe pointer to probe
+ * @param enabled enable (or disable) colored output
+ */
+void uprobe_stdio_set_color(struct uprobe *uprobe, bool enabled);
 
 #ifdef __cplusplus
 }

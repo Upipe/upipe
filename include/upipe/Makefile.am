@@ -72,7 +72,6 @@ pkginclude_HEADERS = \
 	uprobe_select_flows.h \
 	uprobe_source_mgr.h \
 	uprobe_stdio.h \
-	uprobe_stdio_color.h \
 	uprobe_syslog.h \
 	uprobe_transfer.h \
 	uprobe_ubuf_mem.h \

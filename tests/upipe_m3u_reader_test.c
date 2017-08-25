@@ -5,7 +5,7 @@
 #include <upipe/uref_m3u_playlist.h>
 #include <upipe/uref_m3u_master.h>
 #include <upipe/uprobe_prefix.h>
-#include <upipe/uprobe_stdio_color.h>
+#include <upipe/uprobe_stdio.h>
 #include <upipe/uprobe_uref_mgr.h>
 #include <upipe/uprobe_upump_mgr.h>
 #include <upipe/uprobe_ubuf_mem.h>
@@ -176,7 +176,7 @@ int main(int argc, char *argv[])
                                                    0);
     /* main probe */
     struct uprobe *logger =
-        uprobe_stdio_color_alloc(NULL, stderr, UPROBE_LOG_VERBOSE);
+        uprobe_stdio_alloc(NULL, stderr, UPROBE_LOG_VERBOSE);
     assert(logger != NULL);
     logger = uprobe_uref_mgr_alloc(logger, uref_mgr);
     assert(logger != NULL);
