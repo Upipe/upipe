@@ -344,8 +344,9 @@ static inline int udict_get_string(struct udict *udict, const char **p,
     size_t size;
     const uint8_t *attr;
     UBASE_RETURN(udict_get(udict, name, type, &size, &attr));
-    *p = (const char *)attr;
-    assert(size > strlen(*p));
+    if (p)
+        *p = (const char *)attr;
+    assert(size > strlen((const char *)attr));
     return UBASE_ERR_NONE;
 }
 
@@ -379,7 +380,8 @@ static inline int udict_get_bool(struct udict *udict, bool *p,
     const uint8_t *attr;
     UBASE_RETURN(udict_get(udict, name, type, &size, &attr));
     assert(size == 1);
-    *p = !!*attr;
+    if (p)
+        *p = !!*attr;
     return UBASE_ERR_NONE;
 }
 
@@ -399,7 +401,8 @@ static inline int udict_get_small_unsigned(struct udict *udict, uint8_t *p,
     const uint8_t *attr;
     UBASE_RETURN(udict_get(udict, name, type, &size, &attr));
     assert(size == 1);
-    *p = *attr;
+    if (p)
+        *p = *attr;
     return UBASE_ERR_NONE;
 }
 
@@ -418,7 +421,8 @@ static inline int udict_get_small_int(struct udict *udict, int8_t *p,
     const uint8_t *attr;
     UBASE_RETURN(udict_get(udict, name, type, &size, &attr));
     assert(size == 1);
-    *p = *(int8_t *)attr;
+    if (p)
+        *p = *(int8_t *)attr;
     return UBASE_ERR_NONE;
 }
 
@@ -467,7 +471,8 @@ static inline int udict_get_unsigned(struct udict *udict, uint64_t *p,
     const uint8_t *attr;
     UBASE_RETURN(udict_get(udict, name, type, &size, &attr));
     assert(size == 8);
-    *p = udict_get_uint64(attr);
+    if (p)
+        *p = udict_get_uint64(attr);
     return UBASE_ERR_NONE;
 }
 
@@ -486,7 +491,8 @@ static inline int udict_get_int(struct udict *udict, int64_t *p,
     const uint8_t *attr;
     UBASE_RETURN(udict_get(udict, name, type, &size, &attr));
     assert(size == 8);
-    *p = udict_get_int64(attr);
+    if (p)
+        *p = udict_get_int64(attr);
     return UBASE_ERR_NONE;
 }
 
@@ -511,7 +517,8 @@ static inline int udict_get_float(struct udict *udict, double *p,
     UBASE_RETURN(udict_get(udict, name, type, &size, &attr));
     assert(size == 8);
     u.i = udict_get_uint64(attr);
-    *p = u.f;
+    if (p)
+        *p = u.f;
     return UBASE_ERR_NONE;
 }
 
@@ -530,8 +537,10 @@ static inline int udict_get_rational(struct udict *udict, struct urational *p,
     const uint8_t *attr;
     UBASE_RETURN(udict_get(udict, name, type, &size, &attr));
     assert(size == 16);
-    p->num = udict_get_int64(attr);
-    p->den = udict_get_uint64(attr + 8);
+    if (p) {
+        p->num = udict_get_int64(attr);
+        p->den = udict_get_uint64(attr + 8);
+    }
     return UBASE_ERR_NONE;
 }
 
