@@ -199,6 +199,22 @@ static inline struct ustring ustring_while(const struct ustring sub,
     return sub;
 }
 
+/** @This returns the end of an ustring containing only characters from set.
+ *
+ * @param sub an ustring
+ * @param set set of allowed characters
+ * @return an ustring containing the end of sub
+ */
+static inline struct ustring ustring_while_reverse(const struct ustring sub,
+                                                   const char *set)
+{
+    for (size_t i = sub.len; i > 0; i--)
+        for (size_t j = 0; set[j] != sub.at[i - 1]; j++)
+            if (!set[j])
+                return ustring_shift(sub, i);
+    return sub;
+}
+
 /** @This returns the beginning of an ustring containing only characters
  * absent from set.
  *
@@ -216,6 +232,23 @@ static inline struct ustring ustring_until(const struct ustring sub,
     return sub;
 }
 
+/** @This returns the end of an ustring containing only characters absent from
+ * set.
+ *
+ * @param sub an ustring
+ * @param set set of rejected characters
+ * @return an ustring containing the end of sub
+ */
+static inline struct ustring ustring_until_reverse(const struct ustring sub,
+                                                   const char *set)
+{
+    for (size_t i = sub.len; i > 0; i--)
+        for (size_t j = 0; set[j]; j++)
+            if (set[j] == sub.at[i - 1])
+                return ustring_shift(sub, i);
+    return sub;
+}
+
 /** @This returns a shifted ustring while characters are present in set.
  *
  * @param sub an ustring
@@ -229,6 +262,32 @@ static inline struct ustring ustring_shift_while(const struct ustring sub,
     return ustring_shift(sub, tmp.len);
 }
 
+/** @This removes the characters of a set from the end of an ustring.
+ *
+ * @param sub an ustring
+ * @param set set of truncated characters
+ * @return a truncated ustring
+ */
+static inline struct ustring ustring_truncate_while(const struct ustring sub,
+                                                    const char *set)
+{
+    struct ustring tmp = ustring_while_reverse(sub, set);
+    return ustring_truncate(sub, sub.len - tmp.len);
+}
+
+/** @This removes the characters of a set from the beginning and the end
+ * of an ustring.
+ *
+ * @param sub an ustring
+ * @param set set of removed characters
+ * @return a sub ustring
+ */
+static inline struct ustring
+ustring_shift_truncate_while(const struct ustring sub, const char *set)
+{
+    return ustring_truncate_while(ustring_shift_while(sub, set), set);
+}
+
 /** @This returns a shifted ustring while characters are absent from set.
  *
  * @param sub an ustring
@@ -240,6 +299,32 @@ static inline struct ustring ustring_shift_until(const struct ustring sub,
 {
     struct ustring tmp = ustring_until(sub, set);
     return ustring_shift(sub, tmp.len);
+}
+
+/** @This removes the characters absent from set from the end of an ustring.
+ *
+ * @param sub an ustring
+ * @param set set of non-truncated characters
+ * @return a truncated ustring
+ */
+static inline struct ustring ustring_truncate_until(const struct ustring sub,
+                                                    const char *set)
+{
+    struct ustring tmp = ustring_until_reverse(sub, set);
+    return ustring_truncate(sub, sub.len - tmp.len);
+}
+
+/** @This removes the characters absent from a set at the beginning and at
+ * the end of an ustring.
+ *
+ * @param sub an ustring
+ * @param set set of non-removed characters
+ * @return a sub ustring
+ */
+static inline struct ustring
+ustring_shift_truncate_until(const struct ustring sub, const char *set)
+{
+    return ustring_truncate_until(ustring_shift_until(sub, set), set);
 }
 
 /** @This compares at most len characters from two ustrings.
