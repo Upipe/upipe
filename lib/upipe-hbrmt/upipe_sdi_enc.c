@@ -279,7 +279,7 @@ static inline void put_payload_identifier(uint16_t *dst, const struct sdi_offset
     dst[gap*5] = 4;
 
     /* UDW */
-    dst[gap*6] = f->pict_fmt.sd ? 0x81 : f->height == 750 ? 0x84 : 0x85;
+    dst[gap*6] = f->pict_fmt->sd ? 0x81 : f->height == 750 ? 0x84 : 0x85;
     dst[gap*7] = (f->psf_ident << 6) | f->frame_rate;
     dst[gap*8] = 0x80;
     dst[gap*9] = 0x01;
