@@ -279,10 +279,10 @@ static inline void put_payload_identifier(uint16_t *dst, const struct sdi_offset
     dst[gap*5] = 4;
 
     /* UDW */
-    dst[gap*6] = 0x04;
+    dst[gap*6] = f->pict_fmt.sd ? 0x81 : f->height == 750 ? 0x84 : 0x85;
     dst[gap*7] = (f->psf_ident << 6) | f->frame_rate;
-    dst[gap*8] = f->psf_ident == 0x0 ? 0x1 : 0x5;
-    dst[gap*9] = 0x00;
+    dst[gap*8] = 0x80;
+    dst[gap*9] = 0x01;
 
     /* Parity + CS */
     sdi_fill_anc_parity_checksum_hd(&dst[gap*3], true);
