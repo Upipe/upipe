@@ -819,7 +819,11 @@ static inline int upipe_throw_need_source_mgr(struct upipe *upipe,
 static inline int upipe_throw_provide_request(struct upipe *upipe,
                                               struct urequest *urequest)
 {
-    upipe_dbg_va(upipe, "throw provide request type %d", urequest->type);
+    const char *type_str = urequest_type_str(urequest->type);
+    if (likely(type_str))
+        upipe_dbg_va(upipe, "throw provide request type %s", type_str);
+    else
+        upipe_dbg_va(upipe, "throw provide request type %d", urequest->type);
     return upipe_throw(upipe, UPROBE_PROVIDE_REQUEST, urequest);
 }
 
