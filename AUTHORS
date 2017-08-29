@@ -17,3 +17,7 @@ D: design and implementation of the core
 N: Clément Vasseur
 E: clement.vasseur AT gmail DOT com
 D: luajit bindings
+
+N: Arnaud de Turckheim
+E: quarium AT gmail DOT com
+D: a few modules
