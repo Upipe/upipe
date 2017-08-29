@@ -760,6 +760,7 @@ static void upipe_hd_sdi_enc_encode_line(struct upipe *upipe, int line_num, uint
     struct upipe_sdi_enc *upipe_sdi_enc = upipe_sdi_enc_from_upipe(upipe);
     const struct sdi_offsets_fmt *f = upipe_sdi_enc->f;
     const struct sdi_picture_fmt *p = upipe_sdi_enc->p;
+    uint16_t switching_line_offset = p->field_offset - 1;
     uint16_t *active_start = &dst[2*f->active_offset];
     const uint8_t hanc_start = UPIPE_HD_SDI_EAV_LENGTH;
 
@@ -834,12 +835,12 @@ static void upipe_hd_sdi_enc_encode_line(struct upipe *upipe, int line_num, uint
     /* These packets are written in the first Luma sample after SAV */
     /* Payload identifier */
     if ((line_num == p->payload_id_line) ||
-        (f->psf_ident != UPIPE_SDI_PSF_IDENT_P && line_num == p->payload_id_line + p->field_offset)) {
+        (f->psf_ident != UPIPE_SDI_PSF_IDENT_P && line_num == p->payload_id_line + switching_line_offset)) {
         put_payload_identifier_hd(&dst[hanc_start+1], f);
     }
     /* Audio control packet on Switching Line + 2 */
     else if ((line_num == p->switching_line + 2) ||
-             (f->psf_ident != UPIPE_SDI_PSF_IDENT_P && line_num == p->switching_line + p->field_offset + 2)) {
+             (f->psf_ident != UPIPE_SDI_PSF_IDENT_P && line_num == p->switching_line + 2 + switching_line_offset)) {
         int dst_pos = hanc_start + 1;
         for (int i = 0; i < UPIPE_SDI_CHANNELS_PER_GROUP; i++) {
             dst_pos += put_audio_control_packet(upipe_sdi_enc, &dst[dst_pos], i);

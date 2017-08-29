@@ -503,6 +503,7 @@ static void extract_hd_audio(struct upipe *upipe, const uint16_t *packet, int li
     struct upipe_sdi_dec *upipe_sdi_dec = upipe_sdi_dec_from_upipe(upipe);
     const struct sdi_offsets_fmt *f = upipe_sdi_dec->f;
     const struct sdi_picture_fmt *p = upipe_sdi_dec->p;
+    uint16_t switching_line_offset = p->field_offset - 1;
 
     int data_count = packet[10] & 0xff;
 
@@ -512,9 +513,9 @@ static void extract_hd_audio(struct upipe *upipe, const uint16_t *packet, int li
         return;
     }
 
-    /* Audio packets are not allowed on the switching line + 1 */
-    if (line_num == p->switching_line + 1 ||
-        (p->field_offset && line_num == p->switching_line + p->field_offset + 1))
+    /* Audio packets are not allowed on the switching line + 2 */
+    if (line_num == p->switching_line + 2 ||
+        (p->field_offset && line_num == p->switching_line + 2 + switching_line_offset))
         upipe_warn_va(upipe, "Audio packet on invalid line %d", line_num);
 
     /* FIXME: extract this to a generic HD validation function */

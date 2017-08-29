@@ -115,7 +115,8 @@ struct sdi_picture_fmt {
     uint16_t active_width;
     uint16_t active_height;
     
-    /* Offset between fields */
+    /* Offset between fields.
+       Note this is not the field offset between switching lines.  */
     uint16_t field_offset;
 
     /* SMPTE RP168 Switch Line */
@@ -180,7 +181,7 @@ static inline const struct sdi_offsets_fmt *sdi_get_offsets(struct uref *flow_de
 
     static const struct sdi_picture_fmt pict_fmts[] = {
         /* 1125 Interlaced (1080 active) lines */
-        {0, 1920, 1080, 562, 7, 10, {1, 20}, {21, 560}, {561, 563}, {564, 583}, {584, 1123}, {1124, 1125}},
+        {0, 1920, 1080, 563, 7, 10, {1, 20}, {21, 560}, {561, 563}, {564, 583}, {584, 1123}, {1124, 1125}},
         /* 1125 Progressive (1080 active) lines */
         {0, 1920, 1080, 0, 7, 10, {1, 41}, {42, 1121}, {1122, 1125}, {0, 0}, {0, 0}, {0, 0}},
         /* 750 Progressive (720 active) lines */
