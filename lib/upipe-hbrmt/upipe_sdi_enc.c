@@ -21,6 +21,7 @@
 #include <upipe/upipe_helper_input.h>
 
 #include <bitstream/smpte/291.h>
+#include <bitstream/dvb/vbi.h>
 
 #include <libavutil/common.h>
 #include <libavutil/bswap.h>
@@ -29,6 +30,7 @@
 #include "upipe_hbrmt_common.h"
 
 #include "sdienc.h"
+#include "sdi.h"
 
 #define UPIPE_SDI_MAX_PLANES 3
 #define UPIPE_SDI_MAX_CHANNELS 16
@@ -51,6 +53,34 @@ static const bool parity_tab[512] = {
 #   define P6(n) P4(n), P4(n^1), P4(n^1), P4(n)
     P6(0), P6(1), P6(1), P6(0),
     P6(1), P6(0), P6(0), P6(1)
+};
+
+/** input subpipe */
+struct upipe_sdi_enc_sub {
+    /** refcount management structure */
+    struct urefcount urefcount;
+
+    /** buffered urefs */
+    struct uchain urefs;
+    size_t n;
+
+    /** structure for double-linked lists */
+    struct uchain uchain;
+
+    /** channels */
+    uint8_t channels;
+
+    /** AES */
+    bool s337;
+
+    /** stereo pair position */
+    uint8_t channel_idx;
+
+    /** audio or subpic */
+    bool sound;
+
+    /** public upipe structure */
+    struct upipe upipe;
 };
 
 /** upipe_sdi_enc structure with sdi_enc parameters */
@@ -76,6 +106,9 @@ struct upipe_sdi_enc {
     struct uchain subs;
     /** manager to create input subpipes */
     struct upipe_mgr sub_mgr;
+
+    /** subpic subpipe */
+    struct upipe_sdi_enc_sub subpic_subpipe;
 
     /** ubuf manager */
     struct ubuf_mgr *ubuf_mgr;
@@ -153,30 +186,16 @@ struct upipe_sdi_enc {
     /* popped uref that still has samples */
     struct uref *uref_audio;
 
-    /** public upipe structure */
-    struct upipe upipe;
-};
+    /** OP47 teletext sequence counter **/
+    uint16_t op47_sequence_counter[2];
 
-/** audio input subpipe */
-struct upipe_sdi_enc_sub {
-    /** refcount management structure */
-    struct urefcount urefcount;
+    /** vbi **/
+    vbi_sampling_par sp;
 
-    /** buffered urefs */
-    struct uchain urefs;
-    size_t n;
-
-    /** structure for double-linked lists */
-    struct uchain uchain;
-
-    /** channels */
-    uint8_t channels;
-
-    /** AES */
-    bool s337;
-
-    /** stereo pair position */
-    uint8_t channel_idx;
+    /* teletext data */
+    const uint8_t *ttx_packet[2][5];
+    int ttx_packets[2];
+    int ttx_line[2][5];
 
     /** public upipe structure */
     struct upipe upipe;
@@ -513,7 +532,6 @@ static int upipe_sdi_enc_check(struct upipe *upipe, struct uref *flow_format);
 
 UPIPE_HELPER_UPIPE(upipe_sdi_enc, upipe, UPIPE_SDI_ENC_SIGNATURE);
 UPIPE_HELPER_UREFCOUNT(upipe_sdi_enc, urefcount, upipe_sdi_enc_free);
-UPIPE_HELPER_VOID(upipe_sdi_enc);
 UPIPE_HELPER_OUTPUT(upipe_sdi_enc, output, flow_def, output_state, request_list)
 UPIPE_HELPER_UBUF_MGR(upipe_sdi_enc, ubuf_mgr, flow_format, ubuf_mgr_request,
                       upipe_sdi_enc_check,
@@ -523,6 +541,8 @@ UPIPE_HELPER_UBUF_MGR(upipe_sdi_enc, ubuf_mgr, flow_format, ubuf_mgr_request,
 UPIPE_HELPER_UPIPE(upipe_sdi_enc_sub, upipe, UPIPE_SDI_ENC_SUB_SIGNATURE);
 UPIPE_HELPER_UREFCOUNT(upipe_sdi_enc_sub, urefcount, upipe_sdi_enc_sub_free);
 UPIPE_HELPER_VOID(upipe_sdi_enc_sub);
+
+UBASE_FROM_TO(upipe_sdi_enc, upipe_sdi_enc_sub, subpic_subpipe, subpic_subpipe)
 
 UPIPE_HELPER_SUBPIPE(upipe_sdi_enc, upipe_sdi_enc_sub, sub, sub_mgr, subs, uchain)
 
@@ -535,6 +555,9 @@ static int upipe_sdi_enc_sub_control(struct upipe *upipe, int command, va_list a
             struct uref *flow = va_arg(args, struct uref *);
             if (flow == NULL)
                 return UBASE_ERR_INVALID;
+
+            if (!sdi_enc_sub->sound)
+                return UBASE_ERR_NONE;
 
             if (!ubase_check(uref_attr_get_small_unsigned(flow, &sdi_enc_sub->channel_idx,
                             UDICT_TYPE_SMALL_UNSIGNED, "channel_idx"))) {
@@ -574,9 +597,40 @@ static void upipe_sdi_enc_sub_input(struct upipe *upipe, struct uref *uref,
                                  struct upump **upump_p)
 {
     struct upipe_sdi_enc_sub *sdi_enc_sub = upipe_sdi_enc_sub_from_upipe(upipe);
-    upipe_verbose_va(upipe, "receiving audio uref");
     ulist_add(&sdi_enc_sub->urefs, uref_to_uchain(uref));
     upipe_verbose_va(upipe, "sub urefs: %zu", ++sdi_enc_sub->n);
+}
+
+/** @internal @This initializes an subpipe of a sdi enc pipe.
+ *
+ * @param upipe pointer to subpipe
+ * @param sub_mgr manager of the subpipe
+ * @param uprobe structure used to raise events by the subpipe
+ */
+static void upipe_sdi_enc_sub_init(struct upipe *upipe,
+        struct upipe_mgr *sub_mgr, struct uprobe *uprobe, bool static_pipe)
+{
+    struct upipe_sdi_enc *upipe_sdi_enc = upipe_sdi_enc_from_sub_mgr(sub_mgr);
+
+    if (static_pipe) {
+        upipe_init(upipe, sub_mgr, uprobe);
+        /* increment super pipe refcount only when the static pipes are retrieved */
+        upipe_mgr_release(sub_mgr);
+        upipe->refcount = &upipe_sdi_enc->urefcount;
+    } else
+        upipe_sdi_enc_sub_init_urefcount(upipe);
+
+    struct upipe_sdi_enc_sub *sdi_enc_sub = upipe_sdi_enc_sub_from_upipe(upipe);
+
+    upipe_sdi_enc_sub_init_sub(upipe);
+
+    sdi_enc_sub->sound = !static_pipe;
+
+    ulist_init(&sdi_enc_sub->urefs);
+    sdi_enc_sub->n = 0;
+    sdi_enc_sub->s337 = false;
+
+    upipe_throw_ready(upipe);
 }
 
 static struct upipe *upipe_sdi_enc_sub_alloc(struct upipe_mgr *mgr,
@@ -587,14 +641,8 @@ static struct upipe *upipe_sdi_enc_sub_alloc(struct upipe_mgr *mgr,
     if (unlikely(upipe == NULL))
         return NULL;
 
-    struct upipe_sdi_enc_sub *sdi_enc_sub = upipe_sdi_enc_sub_from_upipe(upipe);
-    ulist_init(&sdi_enc_sub->urefs);
-    sdi_enc_sub->n = 0;
-    sdi_enc_sub->s337 = false;
-    upipe_sdi_enc_sub_init_sub(upipe);
-    upipe_sdi_enc_sub_init_urefcount(upipe);
+    upipe_sdi_enc_sub_init(upipe, mgr, uprobe, false);
 
-    upipe_throw_ready(upipe);
     return upipe;
 }
 
@@ -940,6 +988,22 @@ static void upipe_hd_sdi_enc_encode_line(struct upipe *upipe, int line_num, uint
     if(vbi) {
         /* black */
         upipe_sdi_enc->blank(active_start, input_hsize);
+        const uint8_t **ttx = NULL;
+        int num_ttx = 0;
+        if (line_num == OP47_LINE1 + 563*f2) {
+            num_ttx = upipe_sdi_enc->ttx_packets[f2];
+            if (num_ttx)
+                ttx = &upipe_sdi_enc->ttx_packet[f2][0];
+        }
+        if (ttx) {
+            uint16_t buf[input_hsize];
+            memset(buf, 0, sizeof(buf));
+
+            sdi_encode_ttx(buf, num_ttx, ttx, &upipe_sdi_enc->op47_sequence_counter[f2]);
+            // TODO: make sdi_encode_ttx work in place
+            for (int i = 0; i < input_hsize; i++)
+                active_start[2*i] = buf[i];
+        }
     } else {
         const uint8_t *y = planes[f2][0];
         const uint8_t *u = planes[f2][1];
@@ -1107,6 +1171,63 @@ static void upipe_sdi_enc_input(struct upipe *upipe, struct uref *uref,
 
     upipe_sdi_enc->sample_pos = 0;
 
+    upipe_sdi_enc->ttx_packets[0] = 0;
+    upipe_sdi_enc->ttx_packets[1] = 0;
+
+    struct uref *subpic = NULL;
+    /* buffered uref if any */
+    struct upipe_sdi_enc_sub *subpic_sub = &upipe_sdi_enc->subpic_subpipe;
+    struct uchain *uchain_subpic = ulist_pop(&subpic_sub->urefs);
+    if (uchain_subpic) {
+        subpic = uref_from_uchain(uchain_subpic);
+
+        const uint8_t *buf;
+        int size = -1;
+        if (ubase_check(uref_block_read(subpic, 0, &size, &buf))) {
+            bool sd = upipe_sdi_enc->p->sd;
+            const uint8_t *pic_data = buf;
+            int pic_data_size = size;
+
+            const uint8_t *packet[2][5] = {0};
+            int packets[2] = {0};
+
+            if (pic_data[0] != DVBVBI_DATA_IDENTIFIER)
+                return;
+
+            pic_data++;
+            pic_data_size--;
+
+            static const unsigned dvb_unit_size = DVBVBI_UNIT_HEADER_SIZE + DVBVBI_LENGTH;
+            for (; pic_data_size >= dvb_unit_size; pic_data += dvb_unit_size, pic_data_size -= dvb_unit_size) {
+                uint8_t data_unit_id  = pic_data[0];
+                uint8_t data_unit_len = pic_data[1];
+
+                if (data_unit_id != DVBVBI_ID_TTX_SUB && data_unit_id != DVBVBI_ID_TTX_NONSUB)
+                    continue;
+
+                if (data_unit_len != DVBVBI_LENGTH)
+                    continue;
+
+                uint8_t line_offset = dvbvbittx_get_line(&pic_data[DVBVBI_UNIT_HEADER_SIZE]);
+
+                uint8_t f2 = !dvbvbittx_get_field(&pic_data[DVBVBI_UNIT_HEADER_SIZE]);
+                if (f2 == 0 && line_offset == 0) // line == 0
+                    continue;
+
+                if (upipe_sdi_enc->ttx_packets[f2] < sd ? 5 : 1) {
+                    if (sd)
+                        upipe_sdi_enc->ttx_line[f2][upipe_sdi_enc->ttx_packets[f2]] =
+                            line_offset + PAL_FIELD_OFFSET * f2;
+                    upipe_sdi_enc->ttx_packet[f2][upipe_sdi_enc->ttx_packets[f2]++] = pic_data;
+                }
+            }
+        } else {
+            upipe_err(upipe, "Could not map subpic");
+            uref_free(subpic);
+            subpic = NULL;
+        }
+    }
+
     for (int h = 0; h < f->height; h++) {
         /* Note conversion to 1-indexed line-number */
         uint16_t *dst_line = &dst[h * f->width * 2];
@@ -1122,6 +1243,11 @@ static void upipe_sdi_enc_input(struct upipe *upipe, struct uref *uref,
                                          input_hsize, input_vsize);
             upipe_sdi_enc->eav_clock += f->width;
         }
+    }
+
+    if (subpic) {
+        uref_block_unmap(subpic, 0);
+        uref_free(subpic);
     }
 
     ubuf_block_unmap(ubuf, 0);
@@ -1177,6 +1303,27 @@ static int upipe_sdi_enc_set_flow_def(struct upipe *upipe, struct uref *flow_def
         return UBASE_ERR_INVALID;
     }
     upipe_sdi_enc->p = upipe_sdi_enc->f->pict_fmt;
+
+    if (upipe_sdi_enc->p->active_height == 576) {
+        upipe_sdi_enc->sp.scanning         = 625; /* PAL */
+        upipe_sdi_enc->sp.sampling_format  = VBI_PIXFMT_YUV420;
+        upipe_sdi_enc->sp.sampling_rate    = 13.5e6;
+        upipe_sdi_enc->sp.bytes_per_line   = 720;
+        upipe_sdi_enc->sp.start[0]     = 6;
+        upipe_sdi_enc->sp.count[0]     = 17;
+        upipe_sdi_enc->sp.start[1]     = 319;
+        upipe_sdi_enc->sp.count[1]     = 17;
+        upipe_sdi_enc->sp.interlaced   = FALSE;
+        upipe_sdi_enc->sp.synchronous  = FALSE;
+        upipe_sdi_enc->sp.offset       = 128;
+    } else if (upipe_sdi_enc->p->active_height == 486) {
+        upipe_sdi_enc->sp.scanning         = 525; /* NTSC */
+        upipe_sdi_enc->sp.sampling_format  = VBI_PIXFMT_YUV420;
+        upipe_sdi_enc->sp.sampling_rate    = 13.5e6;
+        upipe_sdi_enc->sp.bytes_per_line   = 720;
+        upipe_sdi_enc->sp.interlaced   = FALSE;
+        upipe_sdi_enc->sp.synchronous  = TRUE;
+    }
 
     struct uref *flow_def_dup;
 
@@ -1359,6 +1506,15 @@ static int upipe_sdi_enc_control(struct upipe *upipe, int command, va_list args)
             struct uref *flow = va_arg(args, struct uref *);
             return upipe_sdi_enc_set_flow_def(upipe, flow);
         }
+        case UPIPE_SDI_ENC_GET_SUBPIC_SUB: {
+            UBASE_SIGNATURE_CHECK(args, UPIPE_SDI_ENC_SIGNATURE)
+            struct upipe **upipe_p = va_arg(args, struct upipe **);
+            *upipe_p =  upipe_sdi_enc_sub_to_upipe(
+                    upipe_sdi_enc_to_subpic_subpipe(
+                        upipe_sdi_enc_from_upipe(upipe)));
+            return UBASE_ERR_NONE;
+        }
+
 
         default:
             return UBASE_ERR_UNHANDLED;
@@ -1421,15 +1577,21 @@ static void v210_uyvy_unpack_c(const uint32_t *src, uint16_t *uyvy, uintptr_t wi
  * @param args optional arguments
  * @return pointer to upipe or NULL in case of allocation error
  */
-static struct upipe *upipe_sdi_enc_alloc(struct upipe_mgr *mgr,
+static struct upipe *_upipe_sdi_enc_alloc(struct upipe_mgr *mgr,
                                      struct uprobe *uprobe,
                                      uint32_t signature, va_list args)
 {
-    struct upipe *upipe = upipe_sdi_enc_alloc_void(mgr, uprobe, signature, args);
-    if (unlikely(upipe == NULL))
+    if (signature != UPIPE_SDI_ENC_SIGNATURE)
         return NULL;
 
-    struct upipe_sdi_enc *upipe_sdi_enc = upipe_sdi_enc_from_upipe(upipe);
+    struct uprobe *uprobe_subpic = va_arg(args, struct uprobe *);
+
+    struct upipe_sdi_enc *upipe_sdi_enc = calloc(1, sizeof(*upipe_sdi_enc));
+    if (unlikely(upipe_sdi_enc == NULL))
+        return NULL;
+
+    struct upipe *upipe = &upipe_sdi_enc->upipe;
+    upipe_init(upipe, mgr, uprobe);
 
     ulist_init(&upipe_sdi_enc->urefs);
     upipe_sdi_enc->n = 0;
@@ -1480,6 +1642,10 @@ static struct upipe *upipe_sdi_enc_alloc(struct upipe_mgr *mgr,
     upipe_sdi_enc_init_sub_mgr(upipe);
     upipe_sdi_enc_init_sub_subs(upipe);
 
+    /* Initalise subpipes */
+    upipe_sdi_enc_sub_init(upipe_sdi_enc_sub_to_upipe(upipe_sdi_enc_to_subpic_subpipe(upipe_sdi_enc)),
+            &upipe_sdi_enc->sub_mgr, uprobe_subpic, true);
+
     upipe_sdi_enc->crc_c = 0;
     upipe_sdi_enc->crc_y = 0;
 
@@ -1515,7 +1681,7 @@ static void upipe_sdi_enc_free(struct upipe *upipe)
     upipe_sdi_enc_clean_ubuf_mgr(upipe);
     upipe_sdi_enc_clean_urefcount(upipe);
     upipe_sdi_enc_clean_sub_subs(upipe);
-    upipe_sdi_enc_free_void(upipe);
+    free(upipe_sdi_enc);
 }
 
 /** module manager static descriptor */
@@ -1523,7 +1689,7 @@ static struct upipe_mgr upipe_sdi_enc_mgr = {
     .refcount = NULL,
     .signature = UPIPE_SDI_ENC_SIGNATURE,
 
-    .upipe_alloc = upipe_sdi_enc_alloc,
+    .upipe_alloc = _upipe_sdi_enc_alloc,
     .upipe_input = upipe_sdi_enc_input,
     .upipe_control = upipe_sdi_enc_control,
 
