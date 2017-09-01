@@ -1274,7 +1274,8 @@ static void upipe_netmap_sink_worker(struct upump *upump)
         ddd = true;
 
     __uint128_t bps = upipe_netmap_sink->bits;
-    bps -= (num_slots - 1 - txavail) * 1442 * 8;
+    if (bps)
+        bps -= (num_slots - 1 - txavail) * 1442 * 8;
 
     bps *= UCLOCK_FREQ;
     bps /= now - upipe_netmap_sink->start;
