@@ -66,6 +66,7 @@
 #include <upipe-swresample/upipe_swr.h>
 #include <upipe-swscale/upipe_sws.h>
 #include <upipe-filters/upipe_filter_format.h>
+#include <upipe-framers/upipe_auto_framer.h>
 
 #include <stdbool.h>
 #include <stdlib.h>
@@ -422,6 +423,12 @@ int main(int argc, char *argv[])
     upipe_ffmt_mgr = upipe_ffmt_mgr_alloc();
     upipe_ffmt_mgr_set_sws_mgr(upipe_ffmt_mgr, upipe_sws_mgr);
     upipe_ffmt_mgr_set_swr_mgr(upipe_ffmt_mgr, upipe_swr_mgr);
+
+    struct upipe_mgr *upipe_autof_mgr = upipe_autof_mgr_alloc();
+    if (upipe_autof_mgr != NULL) {
+        upipe_avfsrc_mgr_set_autof_mgr(upipe_avfsrc_mgr, upipe_autof_mgr);
+        upipe_mgr_release(upipe_autof_mgr);
+    }
 
     /* avformat sink */
     avfsink = upipe_void_alloc(upipe_avfsink_mgr,
