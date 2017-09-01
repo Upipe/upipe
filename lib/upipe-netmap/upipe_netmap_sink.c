@@ -480,6 +480,13 @@ static int upipe_netmap_sink_open_intf(struct upipe *upipe,
         free(intf_addr);
         return UBASE_ERR_EXTERNAL;
     }
+    if (intf->d->req.nr_tx_slots < 4096) {
+        upipe_err_va(upipe, "Card is not giving enough slots (%u)",
+                intf->d->req.nr_tx_slots);
+        nm_close(intf->d);
+        free(intf_addr);
+        return UBASE_ERR_EXTERNAL;
+    }
 
     if (asprintf(&intf->maxrate_uri,
                 "/sys/class/net/%s/queues/tx-%d/tx_maxrate",
