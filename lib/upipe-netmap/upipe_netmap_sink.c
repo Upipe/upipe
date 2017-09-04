@@ -1450,6 +1450,7 @@ static void upipe_netmap_sink_worker(struct upump *upump)
             uref_free(uref);
         }
         upipe_netmap_sink->uref = NULL;
+        upipe_netmap_sink_set_upump(upipe, NULL);
     }
 
     /* */
