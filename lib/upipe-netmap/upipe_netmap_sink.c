@@ -1948,6 +1948,16 @@ static int _upipe_netmap_sink_control(struct upipe *upipe,
         }
         case UPIPE_SET_URI: {
             const char *uri = va_arg(args, const char *);
+            upipe_netmap_sink_reset_counters(upipe);
+            for (;;) {
+                struct uchain *uchain = ulist_pop(&upipe_netmap_sink->sink_queue);
+                if (!uchain)
+                    break;
+                struct uref *uref = uref_from_uchain(uchain);
+                uref_free(uref);
+            }
+            upipe_netmap_sink->uref = NULL;
+            upipe_netmap_sink_set_upump(upipe, NULL);
             return upipe_netmap_sink_set_uri(upipe, uri);
         }
         default:
