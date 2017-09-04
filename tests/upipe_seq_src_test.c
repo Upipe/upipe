@@ -91,7 +91,7 @@ unsigned source_nb = SOURCE_MAX + 1;
 
 int main(int argc, char *argv[])
 {
-    uint64_t delay = 0;
+    int64_t delay = 0;
     int opt;
     while ((opt = getopt(argc, argv, "d:ao")) != -1) {
         switch (opt) {

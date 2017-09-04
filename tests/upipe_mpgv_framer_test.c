@@ -371,8 +371,8 @@ int main(int argc, char *argv[])
                              "mpgvf 2"));
     assert(upipe_mpgvf != NULL);
     need_global = false;
-    ubase_assert(upipe_set_flow_def(upipe_mpgvf, uref));
     ubase_assert(upipe_set_output(upipe_mpgvf, upipe_sink));
+    ubase_assert(upipe_set_flow_def(upipe_mpgvf, uref));
     uref_free(uref);
 
     uref = uref_block_alloc(uref_mgr, ubuf_mgr,
@@ -494,8 +494,8 @@ int main(int argc, char *argv[])
                              "mpgvf 4"));
     assert(upipe_mpgvf != NULL);
     need_global = true;
-    ubase_assert(upipe_set_flow_def(upipe_mpgvf, uref));
     ubase_assert(upipe_set_output(upipe_mpgvf, upipe_sink));
+    ubase_assert(upipe_set_flow_def(upipe_mpgvf, uref));
     uref_free(uref);
 
     uref = uref_block_alloc(uref_mgr, ubuf_mgr,

@@ -136,6 +136,27 @@ static struct upipe *upipe_filter_blend_alloc(struct upipe_mgr *mgr,
  * @param _s2 second source line
  * @param bytes length in bytes
  */
+static void upipe_filter_merge16bit( void *_dest, const void *_s1,
+                       const void *_s2, size_t bytes )
+{
+    uint16_t *dest = _dest;
+    const uint16_t *s1 = _s1;
+    const uint16_t *s2 = _s2;
+
+    bytes /= 2;
+    for( ; bytes > 0; bytes-- )
+        *dest++ = ( *s1++ + *s2++ ) >> 1;
+}
+
+/** @internal @This computes the per-pixel mean of two lines
+ * Code from VLC.
+ * - modules/video_filter/deinterlace/merge.c
+ *
+ * @param _dest dest line
+ * @param _s1 first source line
+ * @param _s2 second source line
+ * @param bytes length in bytes
+ */
 static void upipe_filter_merge8bit( void *_dest, const void *_s1,
                        const void *_s2, size_t bytes )
 {
@@ -159,7 +180,7 @@ static void upipe_filter_merge8bit( void *_dest, const void *_s1,
  */
 static void upipe_filter_blend_plane(const uint8_t *in, uint8_t *out,
                                      size_t stride_in, size_t stride_out,
-                                     size_t height)
+                                     size_t height, uint8_t macropixel_size)
 {
     uint8_t *out_end = out + stride_out * height;
 
@@ -169,8 +190,12 @@ static void upipe_filter_blend_plane(const uint8_t *in, uint8_t *out,
 
     // Compute mean value for remaining lines
     while (out < out_end) {
-        upipe_filter_merge8bit(out, in, in+stride_in,
-           (stride_in < stride_out) ? stride_in : stride_out);
+        if (macropixel_size == 2)
+            upipe_filter_merge16bit(out, in, in+stride_in,
+                    (stride_in < stride_out) ? stride_in : stride_out);
+        else
+            upipe_filter_merge8bit(out, in, in+stride_in,
+                    (stride_in < stride_out) ? stride_in : stride_out);
 
         out += stride_out;
         in += stride_in;
@@ -200,7 +225,7 @@ static bool upipe_filter_blend_handle(struct upipe *upipe, struct uref *uref,
 
     const uint8_t *in;
     uint8_t *out;
-    uint8_t hsub, vsub;
+    uint8_t hsub, vsub, macropixel_size;
     size_t stride_in = 0, stride_out = 0, width, height;
     const char *chroma = NULL;
     struct ubuf *ubuf_deint = NULL;
@@ -220,7 +245,7 @@ static bool upipe_filter_blend_handle(struct upipe *upipe, struct uref *uref,
     while (ubase_check(uref_pic_plane_iterate(uref, &chroma)) && chroma) {
         // map all
         if (unlikely(!ubase_check(uref_pic_plane_size(uref, chroma, &stride_in,
-                                                &hsub, &vsub, NULL)))) {
+                                                &hsub, &vsub, &macropixel_size)))) {
             upipe_err_va(upipe, "Could not read origin chroma %s", chroma);
             goto error;
         }
@@ -233,7 +258,7 @@ static bool upipe_filter_blend_handle(struct upipe *upipe, struct uref *uref,
         ubuf_pic_plane_write(ubuf_deint, chroma, 0, 0, -1, -1, &out);
 
         // process plane
-        upipe_filter_blend_plane(in, out, stride_in, stride_out, (size_t) height/vsub);
+        upipe_filter_blend_plane(in, out, stride_in, stride_out, (size_t) height/vsub, macropixel_size);
 
         // unmap all
         uref_pic_plane_unmap(uref, chroma, 0, 0, -1, -1);

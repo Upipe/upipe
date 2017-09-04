@@ -375,8 +375,8 @@ static int upipe_avfsink_sub_set_flow_def(struct upipe *upipe,
             codec->sample_aspect_ratio.den = sar.den;
         stream->avg_frame_rate.num = 25;
         stream->avg_frame_rate.den = 1;
-        codec->time_base.num = fps.den;
-        codec->time_base.den = fps.num * 2;
+        stream->time_base.num = fps.den;
+        stream->time_base.den = fps.num * 2;
         codec->ticks_per_frame = 2;
         codec->framerate.num = fps.num;
         codec->framerate.den = fps.den;
@@ -384,7 +384,7 @@ static int upipe_avfsink_sub_set_flow_def(struct upipe *upipe,
         codec->codec_type = AVMEDIA_TYPE_AUDIO;
         codec->channels = channels;
         codec->sample_rate = rate;
-        codec->time_base = (AVRational){ 1, codec->sample_rate };
+        stream->time_base = (AVRational){ 1, codec->sample_rate };
         codec->frame_size = samples;
     }
 

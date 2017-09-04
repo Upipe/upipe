@@ -51,9 +51,8 @@
 #include <upipe-framers/uref_h26x.h>
 #include <upipe-framers/uref_h264_flow.h>
 #include <upipe-framers/uref_h26x_flow.h>
-
-#include "upipe_framers_common.h"
-#include "upipe_h26x_common.h"
+#include <upipe-framers/upipe_framers_common.h>
+#include <upipe-framers/upipe_h26x_common.h>
 
 #include <stdlib.h>
 #include <stdbool.h>
@@ -164,8 +163,6 @@ struct upipe_h264f {
     bool separate_colour_plane;
     /** frame mbs only field */
     bool frame_mbs_only;
-    /** time scale */
-    uint32_t time_scale;
     /** true if hrd structures are present */
     bool hrd;
     /** length of the field */
@@ -176,16 +173,20 @@ struct upipe_h264f {
     uint8_t dpb_output_delay_length;
     /** octet rate */
     uint64_t octet_rate;
-    /** duration of a frame */
+    /** duration of a field */
     uint64_t duration;
     /** true if picture structure is present */
     bool pic_struct_present;
     /** true if bottom_field_pic_order_in_frame is present */
     bool bf_poc;
+    /** maximum frame buffering */
+    uint32_t max_dec_frame_buffering;
 
     /* parsing results - slice */
     /** picture structure */
     int pic_struct;
+    /** DPB output delay */
+    uint64_t dpb_output_delay;
     /** frame number */
     uint32_t frame_num;
     /** slice type */
@@ -288,6 +289,7 @@ static void upipe_h264f_flush_dates(struct upipe *upipe)
     uref_clock_set_date_orig(&upipe_h264f->au_uref_s, UINT64_MAX,
                              UREF_DATE_NONE);
     uref_clock_delete_dts_pts_delay(&upipe_h264f->au_uref_s);
+
     upipe_h264f->drift_rate.num = upipe_h264f->drift_rate.den = 0;
 }
 
@@ -330,7 +332,9 @@ static struct upipe *upipe_h264f_alloc(struct upipe_mgr *mgr,
     upipe_h264f->input_latency = 0;
     upipe_h264f->last_picture_number = 0;
     upipe_h264f->last_frame_num = -1;
+    upipe_h264f->max_dec_frame_buffering = UINT32_MAX;
     upipe_h264f->pic_struct = -1;
+    upipe_h264f->dpb_output_delay = UINT64_MAX;
     upipe_h264f->duration = 0;
     upipe_h264f->got_discontinuity = false;
     upipe_h264f->scan_context = UINT32_MAX;
@@ -808,28 +812,35 @@ static bool upipe_h264f_activate_sps(struct upipe *upipe, uint32_t sps_id)
             upipe_h26xf_stream_fill_bits(s, 24);
             num_units_in_ticks |= ubuf_block_stream_show_bits(s, 8);
             ubuf_block_stream_skip_bits(s, 8);
-            upipe_h264f->time_scale = ubuf_block_stream_show_bits(s, 16) << 16;
+            uint32_t time_scale = ubuf_block_stream_show_bits(s, 16) << 16;
             ubuf_block_stream_skip_bits(s, 16);
 
             upipe_h26xf_stream_fill_bits(s, 17);
-            upipe_h264f->time_scale |= ubuf_block_stream_show_bits(s, 16);
+            time_scale |= ubuf_block_stream_show_bits(s, 16);
             ubuf_block_stream_skip_bits(s, 16);
-            if (ubuf_block_stream_show_bits(s, 1)) { /* fixed_frame_rate */
+
+            bool fixed_frame_rate = ubuf_block_stream_show_bits(s, 1);
+            ubuf_block_stream_skip_bits(s, 1);
+
+            if (time_scale && num_units_in_ticks) {
                 struct urational frame_rate = {
-                    .num = upipe_h264f->time_scale,
+                    .num = time_scale,
                     .den = num_units_in_ticks * 2
                 };
                 urational_simplify(&frame_rate);
-                UBASE_FATAL(upipe, uref_pic_flow_set_fps(flow_def, frame_rate))
-                if (frame_rate.num) {
-                    upipe_h264f->duration = UCLOCK_FREQ * frame_rate.den /
-                                            frame_rate.num / 2;
-                    UBASE_FATAL(upipe, uref_clock_set_latency(flow_def,
-                                upipe_h264f->input_latency +
-                                upipe_h264f->duration * 2))
+                if (fixed_frame_rate) {
+                    UBASE_FATAL(upipe,
+                            uref_pic_flow_set_fps(flow_def, frame_rate))
                 }
+                upipe_h264f->duration = UCLOCK_FREQ * frame_rate.den /
+                                        frame_rate.num / 2;
+                UBASE_FATAL(upipe, uref_clock_set_latency(flow_def,
+                            upipe_h264f->input_latency +
+                            upipe_h264f->duration * 2))
             }
-            ubuf_block_stream_skip_bits(s, 1);
+
+            if (!fixed_frame_rate)
+                upipe_warn(upipe, "VFR stream");
         }
 
         uint64_t octetrate, cpb_size;
@@ -871,13 +882,27 @@ static bool upipe_h264f_activate_sps(struct upipe *upipe, uint32_t sps_id)
         } else
             upipe_h264f->hrd = false;
 
-        upipe_h26xf_stream_fill_bits(s, 1);
+        upipe_h26xf_stream_fill_bits(s, 2);
         upipe_h264f->pic_struct_present = !!ubuf_block_stream_show_bits(s, 1);
         ubuf_block_stream_skip_bits(s, 1);
+        bool bitstream_restriction = !!ubuf_block_stream_show_bits(s, 1);
+        ubuf_block_stream_skip_bits(s, 1);
+
+        if (bitstream_restriction) {
+            upipe_h26xf_stream_fill_bits(s, 1);
+            ubuf_block_stream_skip_bits(s, 1);
+            upipe_h26xf_stream_ue(s);
+            upipe_h26xf_stream_ue(s);
+            upipe_h26xf_stream_ue(s);
+            upipe_h26xf_stream_ue(s);
+            upipe_h26xf_stream_ue(s);
+            upipe_h264f->max_dec_frame_buffering = upipe_h26xf_stream_ue(s);
+        }
     } else {
         upipe_h264f->duration = 0;
         upipe_h264f->pic_struct_present = false;
         upipe_h264f->hrd = false;
+        upipe_h264f->max_dec_frame_buffering = UINT32_MAX;
     }
 
     const char *video_format_str = NULL;
@@ -1265,13 +1290,20 @@ static int upipe_h264f_handle_sei_pic_timing(struct upipe *upipe,
 
         size_t dpb_output_delay_length =
             upipe_h264f->dpb_output_delay_length;
+        uint64_t dpb_output_delay = 0;
         while (dpb_output_delay_length > 24) {
+            dpb_output_delay <<= 24;
             upipe_h26xf_stream_fill_bits(s, 24);
+            dpb_output_delay |= ubuf_block_stream_show_bits(s, 24);
             ubuf_block_stream_skip_bits(s, 24);
             dpb_output_delay_length -= 24;
         }
+        dpb_output_delay <<= dpb_output_delay_length;
         upipe_h26xf_stream_fill_bits(s, dpb_output_delay_length);
+        dpb_output_delay |=
+            ubuf_block_stream_show_bits(s, dpb_output_delay_length);
         ubuf_block_stream_skip_bits(s, dpb_output_delay_length);
+        upipe_h264f->dpb_output_delay = dpb_output_delay;
     }
 
     if (upipe_h264f->pic_struct_present) {
@@ -1499,7 +1531,8 @@ static void upipe_h264f_handle_global_annexb(struct upipe *upipe,
                                              const uint8_t *p, size_t size)
 {
     struct upipe_h264f *upipe_h264f = upipe_h264f_from_upipe(upipe);
-    if (upipe_h264f->encaps_input != UREF_H26X_ENCAPS_ANNEXB) {
+    if (upipe_h264f->encaps_input != UREF_H26X_ENCAPS_ANNEXB &&
+        upipe_h264f->encaps_input != UREF_H26X_ENCAPS_NALU) {
         upipe_warn_va(upipe,
                       "fixing up input encapsulation to annex B (from %d)",
                       upipe_h264f->encaps_input);
@@ -1785,6 +1818,8 @@ static void upipe_h264f_build_flow_def(struct upipe *upipe)
     }
 
     upipe_h264f_store_flow_def(upipe, flow_def);
+    /* force sending flow definition immediately */
+    upipe_h264f_output(upipe, NULL, NULL);
 }
 
 /** @internal @This prepares an access unit for output.
@@ -2011,6 +2046,7 @@ static struct uref *upipe_h264f_prepare_annexb(struct upipe *upipe)
         upipe_h264f->au_slice = false;
         upipe_h264f->au_slice_nal = UINT8_MAX;
         upipe_h264f->pic_struct = -1;
+        upipe_h264f->dpb_output_delay = UINT64_MAX;
         return NULL;
     }
     if (upipe_h264f->au_slice_nal == UINT8_MAX ||
@@ -2023,6 +2059,7 @@ static struct uref *upipe_h264f_prepare_annexb(struct upipe *upipe)
         upipe_h264f->au_slice = false;
         upipe_h264f->au_slice_nal = UINT8_MAX;
         upipe_h264f->pic_struct = -1;
+        upipe_h264f->dpb_output_delay = UINT64_MAX;
         return NULL;
     }
 
@@ -2049,8 +2086,26 @@ static struct uref *upipe_h264f_prepare_annexb(struct upipe *upipe)
     uint64_t duration = 0;
     uref_clock_get_duration(uref, &duration);
 
-    /* We work on encoded data so in the DTS domain. Rebase on DTS. */
     uint64_t date;
+    if (!ubase_check(uref_clock_get_dts_prog(&au_uref_s, &date)) &&
+            upipe_h264f->dpb_output_delay != UINT64_MAX) {
+        uref_clock_set_dts_pts_delay(&au_uref_s,
+                upipe_h264f->dpb_output_delay * upipe_h264f->duration);
+        uref_clock_set_dts_pts_delay(uref,
+                upipe_h264f->dpb_output_delay * upipe_h264f->duration);
+    } else if (ubase_check(uref_clock_get_dts_pts_delay(&au_uref_s, &date)))
+        uref_clock_set_dts_pts_delay(uref, date);
+    else if (upipe_h264f->max_dec_frame_buffering != UINT32_MAX &&
+             ubase_check(uref_clock_get_pts_prog(&au_uref_s, &date))) {
+        upipe_dbg(upipe, "approximate a DTS from a PTS");
+        uref_clock_set_dts_pts_delay(&au_uref_s,
+                upipe_h264f->max_dec_frame_buffering * upipe_h264f->duration);
+        uref_clock_set_dts_pts_delay(uref,
+                upipe_h264f->max_dec_frame_buffering * upipe_h264f->duration);
+    } else
+        uref_clock_delete_dts_pts_delay(uref);
+
+    /* We work on encoded data so in the DTS domain. Rebase on DTS. */
 #define SET_DATE(dv)                                                        \
     if (ubase_check(uref_clock_get_dts_##dv(&au_uref_s, &date))) {          \
         uref_clock_set_dts_##dv(uref, date);                                \
@@ -2065,10 +2120,6 @@ static struct uref *upipe_h264f_prepare_annexb(struct upipe *upipe)
     SET_DATE(orig)
 #undef SET_DATE
 
-    if (ubase_check(uref_clock_get_dts_pts_delay(&au_uref_s, &date)))
-        uref_clock_set_dts_pts_delay(uref, date);
-    else
-        uref_clock_delete_dts_pts_delay(uref);
     if (drift_rate.den)
         uref_clock_set_rate(uref, drift_rate);
     else
@@ -2079,6 +2130,7 @@ static struct uref *upipe_h264f_prepare_annexb(struct upipe *upipe)
     upipe_h264f->au_slice = false;
     upipe_h264f->au_slice_nal = UINT8_MAX;
     upipe_h264f->pic_struct = -1;
+    upipe_h264f->dpb_output_delay = UINT64_MAX;
 
     return uref;
 }
@@ -2279,18 +2331,39 @@ static bool upipe_h264f_begin_annexb(struct upipe *upipe,
 static void upipe_h264f_promote_uref(struct upipe *upipe)
 {
     struct upipe_h264f *upipe_h264f = upipe_h264f_from_upipe(upipe);
-    uint64_t date;
+    uint64_t date, dts;
+    if (ubase_check(uref_clock_get_dts_pts_delay(upipe_h264f->next_uref,
+                                                 &date)))
+        uref_clock_set_dts_pts_delay(&upipe_h264f->au_uref_s, date);
+    else if (ubase_check(uref_clock_get_pts_prog(upipe_h264f->next_uref,
+                                                 &date)) &&
+             ubase_check(uref_clock_get_dts_prog(&upipe_h264f->au_uref_s,
+                                                 &dts))) {
+        if (date < dts) {
+            upipe_dbg(upipe, "fixing up DTS overflow");
+            date = dts;
+        } else if (upipe_h264f->max_dec_frame_buffering != UINT32_MAX &&
+                   date > dts + upipe_h264f->max_dec_frame_buffering *
+                                upipe_h264f->duration * 2) {
+            upipe_dbg(upipe, "fixing up DTS underflow");
+            date = dts + upipe_h264f->max_dec_frame_buffering *
+                         upipe_h264f->duration * 2;
+        }
+        uref_clock_set_dts_pts_delay(&upipe_h264f->au_uref_s, date - dts);
+        uref_clock_set_dts_pts_delay(upipe_h264f->next_uref, date - dts);
+    }
+
 #define SET_DATE(dv)                                                        \
-    if (ubase_check(uref_clock_get_dts_##dv(upipe_h264f->next_uref, &date)))\
-        uref_clock_set_dts_##dv(&upipe_h264f->au_uref_s, date);
+    if (ubase_check(uref_clock_get_dts_##dv(upipe_h264f->next_uref, &dts))) \
+        uref_clock_set_dts_##dv(&upipe_h264f->au_uref_s, dts);              \
+    else if (ubase_check(uref_clock_get_pts_##dv(upipe_h264f->next_uref,    \
+                                                 &date)))                   \
+        uref_clock_set_pts_##dv(&upipe_h264f->au_uref_s, date);
     SET_DATE(sys)
     SET_DATE(prog)
     SET_DATE(orig)
 #undef SET_DATE
 
-    if (ubase_check(uref_clock_get_dts_pts_delay(upipe_h264f->next_uref,
-                                                 &date)))
-        uref_clock_set_dts_pts_delay(&upipe_h264f->au_uref_s, date);
     uref_clock_get_rate(upipe_h264f->next_uref, &upipe_h264f->drift_rate);
     if (ubase_check(uref_clock_get_dts_prog(upipe_h264f->next_uref, &date)))
         uref_clock_get_rap_sys(upipe_h264f->next_uref, &upipe_h264f->dts_rap);
@@ -2389,6 +2462,71 @@ static void upipe_h264f_work_annexb(struct upipe *upipe, struct upump **upump_p)
     upipe_h264f_output_au(upipe, uref, upump_p);
 }
 
+/** @internal @This prepares a raw access unit.
+ *
+ * @param upipe description structure of the pipe
+ * @param uref uref structure containing one frame
+ */
+static void upipe_h264f_prepare_raw(struct upipe *upipe, struct uref *uref)
+{
+    struct upipe_h264f *upipe_h264f = upipe_h264f_from_upipe(upipe);
+    int err = upipe_h264f_prepare_au(upipe, uref);
+    UBASE_FATAL(upipe, err);
+
+    uint64_t duration = 0;
+    uref_clock_get_duration(uref, &duration);
+
+    uint64_t date, pts;
+    if (upipe_h264f->dpb_output_delay != UINT64_MAX)
+        uref_clock_set_dts_pts_delay(uref,
+                upipe_h264f->dpb_output_delay * upipe_h264f->duration * 2);
+    else if (!upipe_h264f->max_dec_frame_buffering)
+        uref_clock_set_dts_pts_delay(uref, 0);
+    else if (!ubase_check(uref_clock_get_dts_pts_delay(uref, &date)) &&
+             ubase_check(uref_clock_get_pts_prog(uref, &pts))) {
+        if (ubase_check(uref_clock_get_dts_prog(&upipe_h264f->au_uref_s,
+                                                &date))) {
+            if (pts < date) {
+                upipe_dbg(upipe, "fixing up DTS overflow");
+                pts = date;
+            } else if (upipe_h264f->max_dec_frame_buffering != UINT32_MAX &&
+                       pts > date + upipe_h264f->max_dec_frame_buffering *
+                                    upipe_h264f->duration * 2) {
+                upipe_dbg(upipe, "fixing up DTS underflow");
+                pts = date + upipe_h264f->max_dec_frame_buffering *
+                             upipe_h264f->duration * 2;
+            }
+            uref_clock_set_dts_pts_delay(&upipe_h264f->au_uref_s, pts - date);
+            uref_clock_set_dts_pts_delay(uref, pts - date);
+
+        } else if (upipe_h264f->max_dec_frame_buffering != UINT32_MAX) {
+            upipe_dbg(upipe, "approximate a DTS from a PTS");
+            uref_clock_set_dts_pts_delay(uref,
+                                         upipe_h264f->max_dec_frame_buffering *
+                                         upipe_h264f->duration * 2);
+        }
+    }
+
+    /* We work on encoded data so in the DTS domain. Rebase on DTS. */
+#define SET_DATE(dv)                                                        \
+    if (ubase_check(uref_clock_get_dts_##dv(uref, &date))) {                \
+        uref_clock_rebase_dts_##dv(uref);                                   \
+        uref_clock_set_dts_##dv(&upipe_h264f->au_uref_s, date + duration);  \
+    } else if (ubase_check(uref_clock_get_dts_##dv(&upipe_h264f->au_uref_s, \
+                                                   &date))) {               \
+        uref_clock_set_dts_##dv(uref, date);                                \
+        uref_clock_set_dts_##dv(&upipe_h264f->au_uref_s, date + duration);  \
+    }
+    SET_DATE(sys)
+    SET_DATE(prog)
+    SET_DATE(orig)
+#undef SET_DATE
+
+    uref_clock_delete_dts_pts_delay(&upipe_h264f->au_uref_s);
+    upipe_h264f->pic_struct = -1;
+    upipe_h264f->dpb_output_delay = UINT64_MAX;
+}
+
 /** @internal @This works on incoming frames in NALU format (supposedly
  * one frame per uref guaranteed by demux).
  *
@@ -2414,6 +2552,8 @@ static bool upipe_h264f_work_nalu(struct upipe *upipe, struct uref *uref,
         if (!ubase_check(err)) {
             upipe_warn(upipe, "invalid NAL received");
             upipe_throw_error(upipe, err);
+            uref_free(uref);
+            return true;
         }
         uint8_t nal_type = h264nalst_get_type(nal);
         if (nal_type == H264NAL_TYPE_IDR)
@@ -2424,6 +2564,7 @@ static bool upipe_h264f_work_nalu(struct upipe *upipe, struct uref *uref,
 
     UBASE_RETURN(uref_block_set_header_size(uref, vcl_offset))
 
+    upipe_h264f_prepare_raw(upipe, uref);
     upipe_h264f_output_au(upipe, uref, upump_p);
     return true;
 }
@@ -2502,6 +2643,7 @@ static bool upipe_h264f_work_length(struct upipe *upipe, struct uref *uref,
 
     UBASE_RETURN(uref_block_set_header_size(uref, vcl_offset))
 
+    upipe_h264f_prepare_raw(upipe, uref);
     upipe_h264f_output_au(upipe, uref, upump_p);
     return true;
 }

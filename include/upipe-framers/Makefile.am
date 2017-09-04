@@ -1,6 +1,8 @@
 NULL =
 myincludedir = $(includedir)/upipe-framers
 myinclude_HEADERS = \
+	upipe_framers_common.h \
+	upipe_h26x_common.h \
 	upipe_auto_framer.h \
 	upipe_h264_framer.h \
 	upipe_h265_framer.h \

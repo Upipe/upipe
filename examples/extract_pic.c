@@ -133,7 +133,7 @@ static int uref_catch(struct uprobe *uprobe, struct upipe *upipe,
     if (upipe_source != NULL) {
         /* dump the pipeline before leaving */
         if (dump != NULL)
-            upipe_dump_open(NULL, NULL, dump, upipe_source, NULL);
+            upipe_dump_open(NULL, NULL, dump, NULL, upipe_source, NULL);
 
         /* release the source to exit */
         upipe_release(upipe_source);

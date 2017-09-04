@@ -3,7 +3,7 @@ lib_LTLIBRARIES = libupipe_x264.la
 libupipe_x264_la_SOURCES = upipe_x264.c
 libupipe_x264_la_CPPFLAGS = -I$(top_builddir)/include -I$(top_srcdir)/include
 libupipe_x264_la_CFLAGS = $(AM_CFLAGS) $(X264_CFLAGS)
-libupipe_x264_la_LIBADD = $(X264_LIBS)
+libupipe_x264_la_LIBADD = $(X264_LIBS) $(top_builddir)/lib/upipe-framers/libupipe_framers.la
 libupipe_x264_la_LDFLAGS = -no-undefined
 
 if HAVE_X264_OBE

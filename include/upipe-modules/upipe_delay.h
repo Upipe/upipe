@@ -43,9 +43,9 @@ extern "C" {
 enum upipe_delay_command {
     UPIPE_DELAY_SENTINEL = UPIPE_CONTROL_LOCAL,
 
-    /** returns the current delay being set into urefs (uint64_t **) */
+    /** returns the current delay being set into urefs (int64_t **) */
     UPIPE_DELAY_GET_DELAY,
-    /** sets the delay to set into urefs (uint64_t *) */
+    /** sets the delay to set into urefs (int64_t *) */
     UPIPE_DELAY_SET_DELAY
 };
 
@@ -61,7 +61,7 @@ struct upipe_mgr *upipe_delay_mgr_alloc(void);
  * @param delay_p filled with the current delay
  * @return an error code
  */
-static inline int upipe_delay_get_delay(struct upipe *upipe, uint64_t *delay_p)
+static inline int upipe_delay_get_delay(struct upipe *upipe, int64_t *delay_p)
 {
     return upipe_control(upipe, UPIPE_DELAY_GET_DELAY,
                          UPIPE_DELAY_SIGNATURE, delay_p);
@@ -73,7 +73,7 @@ static inline int upipe_delay_get_delay(struct upipe *upipe, uint64_t *delay_p)
  * @param delay delay to set
  * @return an error code
  */
-static inline int upipe_delay_set_delay(struct upipe *upipe, uint64_t delay)
+static inline int upipe_delay_set_delay(struct upipe *upipe, int64_t delay)
 {
     return upipe_control(upipe, UPIPE_DELAY_SET_DELAY,
                          UPIPE_DELAY_SIGNATURE, delay);

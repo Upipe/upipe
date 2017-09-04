@@ -83,7 +83,7 @@
 /** lowest possible timestamp (just an arbitrarily high time) */
 #define AV_CLOCK_MIN UINT32_MAX
 /** offset between DTS and (artificial) clock references */
-#define PCR_OFFSET UCLOCK_FREQ
+#define PCR_OFFSET (UCLOCK_FREQ * 3)
 
 /** @internal @This is the private context of an avfsrc manager. */
 struct upipe_avfsrc_mgr {
@@ -596,14 +596,15 @@ static void upipe_avfsrc_worker(struct upump *upump)
 
     uint64_t dts_orig = UINT64_MAX, dts_pts_delay = 0;
     if (pkt.dts != (int64_t)AV_NOPTS_VALUE) {
-        dts_orig = pkt.dts * stream->time_base.num * UCLOCK_FREQ /
-                   stream->time_base.den;
+        dts_orig = pkt.dts * stream->time_base.num * (int64_t)UCLOCK_FREQ /
+                   stream->time_base.den - INT64_MIN;
         if (pkt.pts != (int64_t)AV_NOPTS_VALUE)
             dts_pts_delay = (pkt.pts - pkt.dts) * stream->time_base.num *
                             UCLOCK_FREQ / stream->time_base.den;
-    } else if (pkt.pts != (int64_t)AV_NOPTS_VALUE)
-        dts_orig = pkt.pts * stream->time_base.num * UCLOCK_FREQ /
-                   stream->time_base.den;
+    } else if (pkt.pts != (int64_t)AV_NOPTS_VALUE) {
+        dts_orig = pkt.pts * stream->time_base.num * (int64_t)UCLOCK_FREQ /
+                   stream->time_base.den - INT64_MIN;
+    }
 
     if (dts_orig != UINT64_MAX) {
         uref_clock_set_dts_orig(uref, dts_orig);
@@ -619,9 +620,7 @@ static void upipe_avfsrc_worker(struct upump *upump)
         ts = true;
 
         /* this is subtly wrong, but whatever */
-        upipe_throw_clock_ref(upipe, uref,
-                              dts + upipe_avfsrc->timestamp_offset - PCR_OFFSET,
-                              0);
+        upipe_throw_clock_ref(upipe, uref, dts - PCR_OFFSET, 0);
     }
     if (pkt.duration > 0) {
         uint64_t duration = pkt.duration * stream->time_base.num * UCLOCK_FREQ /
@@ -635,7 +634,6 @@ static void upipe_avfsrc_worker(struct upump *upump)
         upipe_throw_clock_ts(upipe, uref);
     av_packet_unref(&pkt);
 
-    av_packet_unref(&pkt);
     upipe_input(output->last_inner, uref, &upipe_avfsrc->upump);
 }
 
@@ -770,9 +768,9 @@ static struct uref *alloc_video_def(struct upipe *upipe,
     UBASE_FATAL(upipe, uref_pic_flow_set_hsize(flow_def, codec->width))
     UBASE_FATAL(upipe, uref_pic_flow_set_vsize(flow_def, codec->height))
     int ticks = codec->ticks_per_frame ? codec->ticks_per_frame : 1;
-    if (codec->time_base.num) {
-        struct urational fps = { .num = codec->time_base.den,
-                                 .den = codec->time_base.num * ticks };
+    if (stream->time_base.num) {
+        struct urational fps = { .num = stream->time_base.den,
+                                 .den = stream->time_base.num * ticks };
         urational_simplify(&fps);
         UBASE_FATAL(upipe, uref_pic_flow_set_fps(flow_def, fps))
     }

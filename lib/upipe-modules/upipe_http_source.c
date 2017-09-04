@@ -960,8 +960,7 @@ static int upipe_http_src_set_uri(struct upipe *upipe, const char *url)
 
     upipe_notice_va(upipe, "opening %s", url);
 
-    UBASE_RETURN(upipe_http_src_check(upipe, NULL));
-
+    upipe_http_src_require_uref_mgr(upipe);
     if (unlikely(upipe_http_src->uref_mgr == NULL)) {
         upipe_err(upipe, "no uref mgr");
         return UBASE_ERR_ALLOC;

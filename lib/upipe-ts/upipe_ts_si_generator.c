@@ -2133,11 +2133,11 @@ static int upipe_ts_sig_control(struct upipe *upipe, int command, va_list args)
         }
         case UPIPE_GET_SUB_MGR: {
             struct upipe_mgr **p = va_arg(args, struct upipe_mgr **);
-            return upipe_ts_sig_get_sub_mgr(upipe, p);
+            return upipe_ts_sig_get_service_mgr(upipe, p);
         }
         case UPIPE_ITERATE_SUB: {
             struct upipe **p = va_arg(args, struct upipe **);
-            return upipe_ts_sig_iterate_sub(upipe, p);
+            return upipe_ts_sig_iterate_service(upipe, p);
         }
 
         case UPIPE_TS_MUX_GET_NIT_INTERVAL: {

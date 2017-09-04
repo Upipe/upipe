@@ -51,9 +51,8 @@
 #include <upipe-framers/uref_h26x.h>
 #include <upipe-framers/uref_h265_flow.h>
 #include <upipe-framers/uref_h26x_flow.h>
-
-#include "upipe_framers_common.h"
-#include "upipe_h26x_common.h"
+#include <upipe-framers/upipe_framers_common.h>
+#include <upipe-framers/upipe_h26x_common.h>
 
 #include <stdlib.h>
 #include <stdbool.h>
@@ -1919,6 +1918,8 @@ static void upipe_h265f_build_flow_def(struct upipe *upipe)
     }
 
     upipe_h265f_store_flow_def(upipe, flow_def);
+    /* force sending flow definition immediately */
+    upipe_h265f_output(upipe, NULL, NULL);
 }
 
 /** @internal @This prepares an access unit for output.

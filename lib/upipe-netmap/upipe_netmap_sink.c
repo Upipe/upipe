@@ -1281,7 +1281,8 @@ static void upipe_netmap_sink_worker(struct upump *upump)
         ddd = true;
 
     __uint128_t bps = upipe_netmap_sink->bits;
-    bps -= (num_slots - 1 - txavail) * 1442 * 8;
+    if (bps)
+        bps -= (num_slots - 1 - txavail) * 1442 * 8;
 
     bps *= UCLOCK_FREQ;
     bps /= now - upipe_netmap_sink->start;
@@ -1403,7 +1404,10 @@ static void upipe_netmap_sink_worker(struct upump *upump)
         } else {
             int s = worker_hbrmt(upipe, dst, src_buf, bytes_left, len);
             src_buf += s;
-            bytes_left -= s;
+            if (s < bytes_left)
+                bytes_left -= s;
+            else
+                bytes_left = 0;
 
             // FIXME
             uint16_t l = 1438;//len[0] ? *len[0] : *len[1];
@@ -1436,7 +1440,7 @@ static void upipe_netmap_sink_worker(struct upump *upump)
         }
     }
 
-    if (txavail == max_slots) {
+    if (txavail >= max_slots - 32) {
         upipe_netmap_sink_reset_counters(upipe);
         for (;;) {
             struct uchain *uchain = ulist_pop(&upipe_netmap_sink->sink_queue);
@@ -1446,6 +1450,7 @@ static void upipe_netmap_sink_worker(struct upump *upump)
             uref_free(uref);
         }
         upipe_netmap_sink->uref = NULL;
+        upipe_netmap_sink_set_upump(upipe, NULL);
     }
 
     /* */
@@ -1474,7 +1479,7 @@ static void upipe_netmap_sink_worker(struct upump *upump)
 
     upipe_netmap_sink->uref = uref;
 
-    if (!upipe_netmap_sink->start && txavail != max_slots)
+    if (!upipe_netmap_sink->start && txavail < max_slots - 32)
         upipe_netmap_sink->start = uclock_now(&upipe_netmap_sink->uclock);
 
     for (size_t i = 0; i < 2; i++) {
