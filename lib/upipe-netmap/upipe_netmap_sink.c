@@ -1440,7 +1440,7 @@ static void upipe_netmap_sink_worker(struct upump *upump)
         }
     }
 
-    if (txavail == max_slots) {
+    if (txavail >= max_slots - 32) {
         upipe_netmap_sink_reset_counters(upipe);
         for (;;) {
             struct uchain *uchain = ulist_pop(&upipe_netmap_sink->sink_queue);
@@ -1479,7 +1479,7 @@ static void upipe_netmap_sink_worker(struct upump *upump)
 
     upipe_netmap_sink->uref = uref;
 
-    if (!upipe_netmap_sink->start && txavail != max_slots)
+    if (!upipe_netmap_sink->start && txavail < max_slots - 32)
         upipe_netmap_sink->start = uclock_now(&upipe_netmap_sink->uclock);
 
     for (size_t i = 0; i < 2; i++) {
