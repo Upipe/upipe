@@ -450,9 +450,7 @@ static int aes_parse(struct upipe *upipe, int32_t *buf, size_t samples, int pair
         }
 
         if (n == samples - 1) {
-            if (upipe_sdi_dec->debug) {
-                upipe_err(upipe, "AES synchro was found on last sample");
-            }
+            upipe_err(upipe, "AES synchro was found on last sample");
             break;
         }
 
@@ -478,23 +476,19 @@ static int aes_parse(struct upipe *upipe, int32_t *buf, size_t samples, int pair
 
         const int frame_bits = samples * 2 * bits;
 
-        if (upipe_sdi_dec->debug) {
-            upipe_notice_va(upipe, "[%d] line %d: AES (%d bits) stream %d (error=%d), mode %s, type %s (length %d/%d bits)",
-                    pair,
-                    line,
-                    bits,
-                    data_stream_number, error_flag,
-                    data_mode_str[data_mode],
-                    data_type_str[data_type],
-                    pd, frame_bits
-                    );
-        }
+        upipe_notice_va(upipe, "[%d] line %d: AES (%d bits) stream %d (error=%d), mode %s, type %s (length %d/%d bits)",
+            pair,
+            line,
+            bits,
+            data_stream_number, error_flag,
+            data_mode_str[data_mode],
+            data_type_str[data_type],
+            pd, frame_bits
+            );
 
         if (pd + 40 > frame_bits) {
-            if (upipe_sdi_dec->debug) {
-                upipe_err_va(upipe, "AES frame probably truncated, need %d bits, only got %d",
-                        pd, frame_bits);
-            }
+            upipe_err_va(upipe, "AES frame probably truncated, need %d bits, only got %d",
+                pd, frame_bits);
         }
 
         break;
@@ -585,7 +579,7 @@ static void extract_hd_audio(struct upipe *upipe, const uint16_t *packet, int li
 
     if (offset + 1 < clock || offset - 1 > clock) {
         upipe_sdi_dec->eav_clock -= clock - offset;
-        if (0 && upipe_sdi_dec->debug) upipe_notice_va(upipe,
+        if (0) upipe_notice_va(upipe,
                 "audio group %d on line %d: wrong audio phase (mpf %d) CLK %d != %d => %"PRId64"",
                 audio_group, line_num, mpf, clock, offset, offset - clock);
     }
@@ -601,7 +595,7 @@ static void extract_hd_audio(struct upipe *upipe, const uint16_t *packet, int li
                         (s ==  0x54e1f000  && ctx->buf_audio[prev] ==  0x6f872000) ||
                         (s ==   0x4e1f0000 && ctx->buf_audio[prev] ==   0xf8720000)) {
                     uint8_t pair = audio_group * 2 + (i >> 1);
-                    if (ctx->aes[pair] != -1 && upipe_sdi_dec->debug) {
+                    if (ctx->aes[pair] != -1) {
                         upipe_err_va(upipe, "SMPTE 337 sync at line %d AND %d", ctx->aes[pair], line_num);
                     }
                     ctx->aes[pair] = line_num;
@@ -1132,12 +1126,10 @@ static bool upipe_sdi_dec_handle(struct upipe *upipe, struct uref *uref,
             }
             if (audio_ctx.aes[i] != upipe_sdi_dec->aes_detected[i]) {
                 if (upipe_sdi_dec->aes_detected[i] > 0) {
-                if (upipe_sdi_dec->debug) {
                     upipe_err_va(upipe, "[%d] : %s AES 337 stream %d -> %d)",
                             i,
                             (audio_ctx.aes[i] != -1) ? "moved" : "lost",
                             upipe_sdi_dec->aes_detected[i], audio_ctx.aes[i]);
-                }
                     if (audio_ctx.aes[i] == -1)
                         memset(upipe_sdi_dec->aes_preamble[i], 0, sizeof(upipe_sdi_dec->aes_preamble[i]));
                 }
