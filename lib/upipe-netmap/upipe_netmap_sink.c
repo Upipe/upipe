@@ -947,7 +947,7 @@ static int worker_hbrmt(struct upipe *upipe, uint8_t **dst, const uint8_t *src,
         uint8_t *rtp = &header[ETHERNET_HEADER_LEN + IP_HEADER_MINSIZE + UDP_HEADER_SIZE];
         rtp_set_seqnum(rtp, upipe_netmap_sink->seqnum & UINT16_MAX);
         rtp_set_timestamp(rtp, timestamp & UINT32_MAX);
-        if (bytes_left == pixels * 4)
+        if (bytes_left <= pixels * 4)
             rtp_set_marker(rtp);
 
         /* copy header */
@@ -955,7 +955,7 @@ static int worker_hbrmt(struct upipe *upipe, uint8_t **dst, const uint8_t *src,
         dst[i] += sizeof(upipe_netmap_sink->intf[i].header);
 
         /* unset rtp marker if needed */
-        if (bytes_left == pixels * 4)
+        if (bytes_left <= pixels * 4)
             rtp_clear_marker(rtp);
 
         /* use previous scratch buffer */
