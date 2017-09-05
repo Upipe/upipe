@@ -602,7 +602,7 @@ static void upipe_sdi_enc_sub_input(struct upipe *upipe, struct uref *uref,
     struct upipe_sdi_enc_sub *sdi_enc_sub = upipe_sdi_enc_sub_from_upipe(upipe);
     struct upipe_sdi_enc *upipe_sdi_enc = upipe_sdi_enc_from_sub_mgr(upipe->mgr);
 
-    if (!upipe_sdi_enc->ttx) {
+    if (!upipe_sdi_enc->ttx && !sdi_enc_sub->sound) {
         uref_free(uref);
         return;
     }
