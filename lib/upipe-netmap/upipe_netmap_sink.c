@@ -1318,7 +1318,7 @@ static void upipe_netmap_sink_worker(struct upump *upump)
     }
 
     if (ddd) {
-        upipe_warn_va(upipe,
+        upipe_dbg_va(upipe,
                 "txavail %d at %" PRIu64 " bps -> err %" PRId64 ", %zu urefs, "
                 "%zu fake",
                 txavail, (uint64_t)(bps / upipe_netmap_sink->fps.den), err, upipe_netmap_sink->n,
