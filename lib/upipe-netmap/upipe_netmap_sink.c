@@ -936,6 +936,9 @@ static int worker_hbrmt(struct upipe *upipe, uint8_t **dst, const uint8_t *src,
         (frame_duration * upipe_netmap_sink->pkt++ * HBRMT_DATA_SIZE) /
         upipe_netmap_sink->frame_size;
 
+    /* we might be trying to read more than available */
+    bool end = bytes_left <= pixels * 4;
+
     for (size_t i = 0; i < 2; i++) {
         struct upipe_netmap_intf *intf = &upipe_netmap_sink->intf[i];
         if (!intf->d || !intf->up)
@@ -947,7 +950,7 @@ static int worker_hbrmt(struct upipe *upipe, uint8_t **dst, const uint8_t *src,
         uint8_t *rtp = &header[ETHERNET_HEADER_LEN + IP_HEADER_MINSIZE + UDP_HEADER_SIZE];
         rtp_set_seqnum(rtp, upipe_netmap_sink->seqnum & UINT16_MAX);
         rtp_set_timestamp(rtp, timestamp & UINT32_MAX);
-        if (bytes_left == pixels * 4)
+        if (end)
             rtp_set_marker(rtp);
 
         /* copy header */
@@ -955,7 +958,7 @@ static int worker_hbrmt(struct upipe *upipe, uint8_t **dst, const uint8_t *src,
         dst[i] += sizeof(upipe_netmap_sink->intf[i].header);
 
         /* unset rtp marker if needed */
-        if (bytes_left == pixels * 4)
+        if (end)
             rtp_clear_marker(rtp);
 
         /* use previous scratch buffer */
@@ -1003,6 +1006,11 @@ static int worker_hbrmt(struct upipe *upipe, uint8_t **dst, const uint8_t *src,
             RTP_HEADER_SIZE + HBRMT_HEADER_SIZE + HBRMT_DATA_SIZE;
     if (copy)
         *len[!idx] = *len[idx];
+
+    if (end) {
+        upipe_netmap_sink->packed_bytes = 0;
+        return bytes_left;
+    }
 
     return pixels * 4;
 }
@@ -1404,10 +1412,8 @@ static void upipe_netmap_sink_worker(struct upump *upump)
         } else {
             int s = worker_hbrmt(upipe, dst, src_buf, bytes_left, len);
             src_buf += s;
-            if (s < bytes_left)
-                bytes_left -= s;
-            else
-                bytes_left = 0;
+            bytes_left -= s;
+            assert(bytes_left >= 0);
 
             // FIXME
             uint16_t l = 1438;//len[0] ? *len[0] : *len[1];

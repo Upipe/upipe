@@ -197,6 +197,9 @@ struct upipe_sdi_enc {
     int ttx_packets[2];
     int ttx_line[2][5];
 
+    /** teletext option */
+    bool ttx;
+
     /** public upipe structure */
     struct upipe upipe;
 };
@@ -597,6 +600,12 @@ static void upipe_sdi_enc_sub_input(struct upipe *upipe, struct uref *uref,
                                  struct upump **upump_p)
 {
     struct upipe_sdi_enc_sub *sdi_enc_sub = upipe_sdi_enc_sub_from_upipe(upipe);
+    struct upipe_sdi_enc *upipe_sdi_enc = upipe_sdi_enc_from_sub_mgr(upipe->mgr);
+
+    if (!upipe_sdi_enc->ttx && !sdi_enc_sub->sound) {
+        uref_free(uref);
+        return;
+    }
     ulist_add(&sdi_enc_sub->urefs, uref_to_uchain(uref));
     upipe_verbose_va(upipe, "sub urefs: %zu", ++sdi_enc_sub->n);
 }
@@ -1466,6 +1475,8 @@ static int upipe_sdi_enc_provide_flow_format(struct upipe *upipe,
  */
 static int upipe_sdi_enc_control(struct upipe *upipe, int command, va_list args)
 {
+    struct upipe_sdi_enc *upipe_sdi_enc = upipe_sdi_enc_from_upipe(upipe);
+
     switch (command) {
         case UPIPE_GET_SUB_MGR: {
             struct upipe_mgr **p = va_arg(args, struct upipe_mgr **);
@@ -1513,6 +1524,16 @@ static int upipe_sdi_enc_control(struct upipe *upipe, int command, va_list args)
             *upipe_p =  upipe_sdi_enc_sub_to_upipe(
                     upipe_sdi_enc_to_subpic_subpipe(
                         upipe_sdi_enc_from_upipe(upipe)));
+            return UBASE_ERR_NONE;
+        }
+        case UPIPE_SET_OPTION: {
+            const char *k = va_arg(args, const char *);
+            const char *v = va_arg(args, const char *);
+            if (!strcmp(k, "teletext")) {
+                upipe_sdi_enc->ttx = strcmp(v, "0");
+            } else
+                return UBASE_ERR_INVALID;
+
             return UBASE_ERR_NONE;
         }
 
@@ -1597,6 +1618,7 @@ static struct upipe *_upipe_sdi_enc_alloc(struct upipe_mgr *mgr,
     ulist_init(&upipe_sdi_enc->urefs);
     upipe_sdi_enc->n = 0;
     upipe_sdi_enc->dolby_offset = 0;
+    upipe_sdi_enc->ttx = false;
 
     upipe_sdi_enc->blank             = upipe_sdi_blank_c;
     upipe_sdi_enc->planar_to_uyvy_8  = planar_to_uyvy_8_c;
