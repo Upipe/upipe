@@ -249,7 +249,7 @@ static void sdi_increment_dbn(uint8_t *dbn)
 
 /** Ancillary Parity and Checksum */
 static inline void sdi_fill_anc_parity_checksum(uint16_t *buf, bool do_parity,
-        int gap)
+                                                const int gap)
 {
     uint16_t checksum = 0;
     int len = buf[2*gap] + 3; /* Data count + 3 = did + sdid + dc + udw */
