@@ -553,7 +553,7 @@ static void extract_hd_audio(struct upipe *upipe, const uint16_t *packet, int li
     }
 
     if (memcmp(ecc, stream_ecc, sizeof(ecc))) {
-        upipe_err_va(upipe, "Wrong ECC, %.2x%.2x%.2x%.2x%.2x%.2x != %.2x%.2x%.2x%.2x%.2x%.2x",
+        upipe_dbg_va(upipe, "Wrong ECC, %.2x%.2x%.2x%.2x%.2x%.2x != %.2x%.2x%.2x%.2x%.2x%.2x",
                 ecc[0], ecc[1], ecc[2], ecc[3], ecc[4], ecc[5],
                 stream_ecc[0], stream_ecc[1], stream_ecc[2], stream_ecc[3], stream_ecc[4], stream_ecc[5]);
     }
@@ -584,7 +584,7 @@ static void extract_hd_audio(struct upipe *upipe, const uint16_t *packet, int li
                 audio_group, line_num, mpf, clock, offset, offset - clock);
     }
 
-    if (ctx->buf_audio)
+    if (ctx->buf_audio && upipe_sdi_dec->debug)
         for (int i = 0; i < UPIPE_SDI_CHANNELS_PER_GROUP; i++) {
             int32_t s = extract_hd_audio_sample(upipe, &packet[UPIPE_SDI_MAX_CHANNELS + i * 8]);
             ctx->buf_audio[ctx->group_offset[audio_group] * UPIPE_SDI_MAX_CHANNELS + 4 * audio_group + i] = s;
@@ -1118,22 +1118,24 @@ static bool upipe_sdi_dec_handle(struct upipe *upipe, struct uref *uref,
                 wrong_samples, samples_received);
         }
 
-        for (int i = 0; i < 8; i++) {
-            if (audio_ctx.aes[i] != -1) {
-                int data_type = aes_parse(upipe, audio_ctx.buf_audio, samples_received, i, audio_ctx.aes[i]);
-                if (data_type == S337_TYPE_A52 || data_type == S337_TYPE_A52E || data_type == -1)
-                    audio_ctx.aes[i] = data_type;
-            }
-            if (audio_ctx.aes[i] != upipe_sdi_dec->aes_detected[i]) {
-                if (upipe_sdi_dec->aes_detected[i] > 0) {
-                    upipe_err_va(upipe, "[%d] : %s AES 337 stream %d -> %d)",
-                            i,
-                            (audio_ctx.aes[i] != -1) ? "moved" : "lost",
-                            upipe_sdi_dec->aes_detected[i], audio_ctx.aes[i]);
-                    if (audio_ctx.aes[i] == -1)
-                        memset(upipe_sdi_dec->aes_preamble[i], 0, sizeof(upipe_sdi_dec->aes_preamble[i]));
+        if (upipe_sdi_dec->debug) {
+            for (int i = 0; i < 8; i++) {
+                if (audio_ctx.aes[i] != -1) {
+                    int data_type = aes_parse(upipe, audio_ctx.buf_audio, samples_received, i, audio_ctx.aes[i]);
+                    if (data_type == S337_TYPE_A52 || data_type == S337_TYPE_A52E || data_type == -1)
+                        audio_ctx.aes[i] = data_type;
                 }
-                upipe_sdi_dec->aes_detected[i] = audio_ctx.aes[i];
+                if (audio_ctx.aes[i] != upipe_sdi_dec->aes_detected[i]) {
+                    if (upipe_sdi_dec->aes_detected[i] > 0) {
+                        upipe_err_va(upipe, "[%d] : %s AES 337 stream %d -> %d)",
+                                i,
+                                (audio_ctx.aes[i] != -1) ? "moved" : "lost",
+                                upipe_sdi_dec->aes_detected[i], audio_ctx.aes[i]);
+                        if (audio_ctx.aes[i] == -1)
+                            memset(upipe_sdi_dec->aes_preamble[i], 0, sizeof(upipe_sdi_dec->aes_preamble[i]));
+                    }
+                    upipe_sdi_dec->aes_detected[i] = audio_ctx.aes[i];
+                }
             }
         }
 
