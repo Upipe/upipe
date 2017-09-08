@@ -253,9 +253,18 @@ static inline void sdi_fill_anc_parity_checksum(uint16_t *buf, bool do_parity,
 {
     uint16_t checksum = 0;
     int len = buf[2*gap] + 3; /* Data count + 3 = did + sdid + dc + udw */
+    int i;
+    bool parity;
 
-    for (int i = 0; i < gap*len; i += gap) {
-        bool parity;
+    /* DID + SDID (DBN) + DC are parity */
+    for (i = 0; < gap*3; i += gap) {
+        parity = parity_tab[buf[i] & 0xff];
+        buf[i] |= (!parity << 9) | (parity << 8);
+
+        checksum += buf[i];
+    }
+
+    for ( ; i < gap*len; i += gap) {
         if (do_parity) {
             parity = parity_tab[buf[i] & 0xff];
             buf[i] |= (parity << 8);
