@@ -417,7 +417,7 @@ static int put_sd_audio_data_packet(struct upipe_sdi_enc *upipe_sdi_enc, uint16_
              * SMPTE 272 says both pairs must have Z=1 */
             uint8_t aes_block_sync = !(total_samples % 192);
             /* P (calculated later) | C | U | V */
-            uint8_t aes_status_validity = (ch_stat << 2) | (0 << 1) | 1;
+            uint8_t aes_status_validity = (ch_stat << 2) | (0 << 1) | 0;
 
             audio_words[0] = ((sample.u & 0x3f   ) <<  3) | (i << 1) | aes_block_sync;
             audio_words[1] = ((sample.u & 0x7fc0 ) >>  6) ;
