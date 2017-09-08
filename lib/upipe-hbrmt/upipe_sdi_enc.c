@@ -259,9 +259,11 @@ static inline void sdi_fill_anc_parity_checksum(uint16_t *buf, bool do_parity,
     /* DID + SDID (DBN) + DC are parity */
     for (i = 0; i < gap*3; i += gap) {
         parity = parity_tab[buf[i] & 0xff];
-        buf[i] |= (!parity << 9) | (parity << 8);
+        buf[i] |= (parity << 8);
 
+        /* Checksum applies to only 9 bits */
         checksum += buf[i];
+        buf[i] |= (!parity << 9);
     }
 
     for ( ; i < gap*len; i += gap) {
@@ -273,6 +275,7 @@ static inline void sdi_fill_anc_parity_checksum(uint16_t *buf, bool do_parity,
             parity = (buf[i] & 0x100) >> 8;
         }
 
+        /* Checksum applies to only 9 bits */
         checksum += buf[i];
         buf[i] |= (!parity << 9);
     }
