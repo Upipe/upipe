@@ -430,7 +430,7 @@ static int put_sd_audio_data_packet(struct upipe_sdi_enc *upipe_sdi_enc, uint16_
             uint8_t par = 0;
             par += parity_tab[audio_words[0] & 0x1ff];
             par += parity_tab[audio_words[1] & 0x1ff];
-            par += parity_tab[audio_words[2] & 0x1ff];
+            par += parity_tab[audio_words[2] & 0xff];
             audio_words[2] |= (par & 1) << 8;
             audio_words += 3;
         }
