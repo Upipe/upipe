@@ -514,7 +514,7 @@ static void extract_hd_audio(struct upipe *upipe, const uint16_t *packet, int li
     }
 
     /* Audio packets are not allowed on the switching line + 2 */
-    if (line_num == p->switching_line + 2 ||
+    if (upipe_sdi_dec->debug && (line_num == p->switching_line + 2 ||
         (p->field_offset && line_num == p->switching_line + 2 + switching_line_offset))
         upipe_warn_va(upipe, "Audio packet on invalid line %d", line_num);
 
@@ -529,7 +529,7 @@ static void extract_hd_audio(struct upipe *upipe, const uint16_t *packet, int li
     checksum &= 0x1ff;
 
     uint16_t stream_checksum = packet[6+len*2] & 0x1ff;
-    if (checksum != stream_checksum) {
+    if (upipe_sdi_dec->debug && checksum != stream_checksum) {
         upipe_err_va(upipe, "Invalid checksum: 0x%.3x != 0x%.3x",
                 checksum, stream_checksum
                 );
@@ -552,7 +552,7 @@ static void extract_hd_audio(struct upipe *upipe, const uint16_t *packet, int li
         ecc[5] = in;
     }
 
-    if (memcmp(ecc, stream_ecc, sizeof(ecc))) {
+    if (upipe_sdi_dec->debug && memcmp(ecc, stream_ecc, sizeof(ecc))) {
         upipe_dbg_va(upipe, "Wrong ECC, %.2x%.2x%.2x%.2x%.2x%.2x != %.2x%.2x%.2x%.2x%.2x%.2x",
                 ecc[0], ecc[1], ecc[2], ecc[3], ecc[4], ecc[5],
                 stream_ecc[0], stream_ecc[1], stream_ecc[2], stream_ecc[3], stream_ecc[4], stream_ecc[5]);
