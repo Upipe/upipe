@@ -632,9 +632,10 @@ static inline void validate_dbn(struct upipe *upipe, uint8_t did, uint8_t dbn, i
 static int parse_hd_hanc(struct upipe *upipe, const uint16_t *packet, int line_num,
                          struct audio_ctx *ctx)
 {
+    struct upipe_sdi_dec *upipe_sdi_dec = upipe_sdi_dec_from_upipe(upipe);   
     uint8_t did = packet[6] & 0xff;
 
-    if (did >= 0x80) { /* type 1 packet */
+    if (upipe_sdi_dec->debug && did >= 0x80) { /* type 1 packet */
         validate_dbn(upipe, did, packet[8] & 0xff, line_num);
     }
 
@@ -676,7 +677,7 @@ static void extract_sd_audio(struct upipe *upipe, const uint16_t *packet, int li
     checksum &= 0x1ff;
 
     uint16_t stream_checksum = packet[3+len] & 0x1ff;
-    if (checksum != stream_checksum) {
+    if (upipe_sdi_dec->debug && checksum != stream_checksum) {
         upipe_err_va(upipe, "Invalid checksum: 0x%.3x != 0x%.3x",
                      checksum, stream_checksum);
         return;
