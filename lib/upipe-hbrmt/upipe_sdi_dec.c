@@ -585,12 +585,12 @@ static void extract_hd_audio(struct upipe *upipe, const uint16_t *packet, int li
                 audio_group, line_num, mpf, clock, offset, offset - clock);
     }
 
-    if (ctx->buf_audio && upipe_sdi_dec->debug)
+    if (ctx->buf_audio)
         for (int i = 0; i < UPIPE_SDI_CHANNELS_PER_GROUP; i++) {
             int32_t s = extract_hd_audio_sample(upipe, &packet[UPIPE_SDI_MAX_CHANNELS + i * 8]);
             ctx->buf_audio[ctx->group_offset[audio_group] * UPIPE_SDI_MAX_CHANNELS + 4 * audio_group + i] = s;
 
-            if (i & 0x01) { // check 2nd syncword
+            if (upipe_sdi_dec->debug && (i & 0x01) { // check 2nd syncword
                 size_t prev = ctx->group_offset[audio_group] * 16 + 4 * audio_group + i - 1;
                 if ((s == 0xa54e1f00   && ctx->buf_audio[prev] == 0x96f87200) ||
                         (s ==  0x54e1f000  && ctx->buf_audio[prev] ==  0x6f872000) ||
