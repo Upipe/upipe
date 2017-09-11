@@ -114,7 +114,7 @@ static struct ubuf *ubuf_pic_bmd_alloc(struct ubuf_mgr *mgr,
     pic_bmd->shared = VideoFrame;
     VideoFrame->AddRef();
     ubuf_pic_common_init(ubuf,
-            0, 0, VideoFrame->GetWidth() / pic_mgr->common_mgr.macropixel,
+            0, 0, (VideoFrame->GetWidth() + pic_mgr->common_mgr.macropixel - 1)/ pic_mgr->common_mgr.macropixel,
             0, 0, VideoFrame->GetHeight());
 
     void *buffer;
