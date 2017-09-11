@@ -154,8 +154,8 @@ static void test_input(struct upipe *upipe, struct uref *uref,
         test_sucessful = true;
     }
 
-    else if (ubase_check(uref_pic_plane_read(uref, "y10", 0, 0, -1, -1, &buffer)) &&
-             ubase_check(uref_pic_plane_size(uref, "y10", &stride, NULL, NULL, NULL))) {
+    else if (ubase_check(uref_pic_plane_read(uref, "y10l", 0, 0, -1, -1, &buffer)) &&
+             ubase_check(uref_pic_plane_size(uref, "y10l", &stride, NULL, NULL, NULL))) {
         /* test y10 plane */
         for (int y = 0; y < h; y++) {
             const uint16_t *src = (uint16_t*)buffer;
@@ -168,7 +168,7 @@ static void test_input(struct upipe *upipe, struct uref *uref,
         }
 
         upipe_dbg(upipe, "y10 plane tested correctly");
-        uref_pic_plane_unmap(uref, "y10", 0, 0, -1, -1);
+        uref_pic_plane_unmap(uref, "y10l", 0, 0, -1, -1);
         test_sucessful = true;
     }
 
@@ -272,9 +272,9 @@ int main(int argc, char **argv)
 
     struct uref *out_flow_10 = uref_pic_flow_alloc_def(uref_mgr, 1);
     assert(out_flow_10);
-    ubase_assert(uref_pic_flow_add_plane(out_flow_10, 1, 1, 2, "y10"));
-    ubase_assert(uref_pic_flow_add_plane(out_flow_10, 2, 1, 2, "u10"));
-    ubase_assert(uref_pic_flow_add_plane(out_flow_10, 2, 1, 2, "v10"));
+    ubase_assert(uref_pic_flow_add_plane(out_flow_10, 1, 1, 2, "y10l"));
+    ubase_assert(uref_pic_flow_add_plane(out_flow_10, 2, 1, 2, "u10l"));
+    ubase_assert(uref_pic_flow_add_plane(out_flow_10, 2, 1, 2, "v10l"));
     ubase_assert(uref_pic_flow_set_hsize(out_flow_10, TEST_WIDTH));
     ubase_assert(uref_pic_flow_set_vsize(out_flow_10, TEST_HEIGHT));
 
