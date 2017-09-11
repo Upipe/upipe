@@ -251,9 +251,16 @@ static bool upipe_v210dec_handle(struct upipe *upipe, struct uref *uref,
         return true;
     }
 
+    uint64_t output_hsize;
+    if (unlikely(!ubase_check(uref_pic_flow_get_hsize(v210dec->flow_def, &output_hsize)))) {
+        upipe_warn(upipe, "could not find output picture size");
+        uref_free(uref);
+        return true;
+    }
+
     uint8_t *output_planes[3];
     size_t output_strides[3];
-    struct ubuf *ubuf = ubuf_pic_alloc(v210dec->ubuf_mgr, input_hsize, input_vsize);
+    struct ubuf *ubuf = ubuf_pic_alloc(v210dec->ubuf_mgr, output_hsize, input_vsize);
     if (unlikely(!ubuf)) {
         // TODO free allocated memory
         uref_free(uref);
@@ -286,7 +293,7 @@ static bool upipe_v210dec_handle(struct upipe *upipe, struct uref *uref,
                 uint8_t *v = output_planes[2];
                 const uint32_t *src = (uint32_t*)input_plane;
 
-                int w = (input_hsize / 6) * 6;
+                int w = (output_hsize / 6) * 6;
                 v210dec->v210_to_planar_8(src, y, u, v, w);
 
                 y += w;
@@ -294,12 +301,12 @@ static bool upipe_v210dec_handle(struct upipe *upipe, struct uref *uref,
                 v += w >> 1;
                 src += (w * 2) / 3;
 
-                if (w < input_hsize - 1) {
+                if (w < output_hsize - 1) {
                     READ_PIXELS_8(u, y, v);
                     uint32_t val = *src++;
                     *y++ = (val >> 2) & 255;
 
-                    if (w < input_hsize - 3) {
+                    if (w < output_hsize - 3) {
                         *u++ = (val >> 12) & 255;
                         *y++ = (val >> 22) & 255;
 
@@ -323,7 +330,7 @@ static bool upipe_v210dec_handle(struct upipe *upipe, struct uref *uref,
                 uint16_t *v = (uint16_t*)output_planes[2];
                 const uint32_t *src = (uint32_t*)input_plane;
 
-                int w = (input_hsize / 6) * 6;
+                int w = (output_hsize / 6) * 6;
                 v210dec->v210_to_planar_10(src, y, u, v, w);
 
                 y += w;
@@ -331,13 +338,13 @@ static bool upipe_v210dec_handle(struct upipe *upipe, struct uref *uref,
                 v += w >> 1;
                 src += (w * 2) / 3;
 
-                if (w < input_hsize - 1) {
+                if (w < output_hsize - 1) {
                     READ_PIXELS_10(u, y, v);
                     uint32_t val = AV_RL32(src);
                     src++;
                     *y++ = val & 1023;
 
-                    if (w < input_hsize - 3) {
+                    if (w < output_hsize - 3) {
                         *u++ = (val >> 10) & 1023;
                         *y++ = (val >> 20) & 1023;
 
