@@ -171,6 +171,47 @@ static void v210_to_planar_10_c(const void *src, uint16_t *y, uint16_t *u, uint1
     }
 }
 
+/** @internal @This setups convert functions
+ *
+ * @param upipe description structure of the pipe
+ * @param assembly whether to use assembly
+ */
+static void v210dec_setup_asm(struct upipe *upipe, bool assembly)
+{
+    struct upipe_v210dec *v210dec = upipe_v210dec_from_upipe(upipe);
+
+    v210dec->v210_to_planar_8  = v210_to_planar_8_c;
+    v210dec->v210_to_planar_10 = v210_to_planar_10_c;
+
+    if (!assembly)
+        return;
+
+#if !defined (__APPLE__)
+#if defined(__clang__) && (__clang_major__ < 3 || (__clang_major__ == 3 && __clang_minor__ <= 8))
+#ifdef __SSSE3__
+    if (1)
+#else
+    if (0)
+#endif
+#else /* not clang <= 3.8*/
+    if (__builtin_cpu_supports("ssse3"))
+#endif
+    {
+        v210dec->v210_to_planar_8  = upipe_v210_to_planar_8_aligned_ssse3;
+        v210dec->v210_to_planar_10 = upipe_v210_to_planar_10_aligned_ssse3;
+    }
+    if (__builtin_cpu_supports("avx")) {
+        v210dec->v210_to_planar_8  = upipe_v210_to_planar_8_aligned_avx;
+        v210dec->v210_to_planar_10 = upipe_v210_to_planar_10_aligned_avx;
+    }
+    if (__builtin_cpu_supports("avx2")) {
+        v210dec->v210_to_planar_8  = upipe_v210_to_planar_8_aligned_avx2;
+        v210dec->v210_to_planar_10 = upipe_v210_to_planar_10_aligned_avx2;
+    }
+#endif
+
+}
+
 /** @internal @This handles data.
  *
  * @param upipe description structure of the pipe
@@ -428,11 +469,10 @@ static int upipe_v210dec_set_flow_def(struct upipe *upipe, struct uref *flow_def
     }
 
     uint64_t align;
-    UBASE_RETURN(uref_pic_flow_get_align(flow_def, &align))
-    if (!align || align % UBUF_ALIGN) {
-        upipe_err(upipe, "unaligned input flow def");
-        return UBASE_ERR_INVALID;
-    }
+    if (!ubase_check(uref_pic_flow_get_align(flow_def, &align)))
+        align = 0;
+
+    v210dec_setup_asm(upipe, align && (align % UBUF_ALIGN) == 0);
 
     struct uref *output_flow = uref_dup(flow_def);
     if (output_flow == NULL)
@@ -585,33 +625,6 @@ static struct upipe *upipe_v210dec_alloc(struct upipe_mgr *manager,
     }
 
 #undef PRINT_OUTPUT_TYPE
-
-    v210dec->v210_to_planar_8  = v210_to_planar_8_c;
-    v210dec->v210_to_planar_10 = v210_to_planar_10_c;
-
-#if !defined (__APPLE__)
-#if defined(__clang__) && (__clang_major__ < 3 || (__clang_major__ == 3 && __clang_minor__ <= 8))
-#ifdef __SSSE3__
-    if (1)
-#else
-    if (0)
-#endif
-#else /* not clang <= 3.8*/
-    if (__builtin_cpu_supports("ssse3"))
-#endif
-    {
-        v210dec->v210_to_planar_8  = upipe_v210_to_planar_8_aligned_ssse3;
-        v210dec->v210_to_planar_10 = upipe_v210_to_planar_10_aligned_ssse3;
-    }
-    if (__builtin_cpu_supports("avx")) {
-        v210dec->v210_to_planar_8  = upipe_v210_to_planar_8_aligned_avx;
-        v210dec->v210_to_planar_10 = upipe_v210_to_planar_10_aligned_avx;
-    }
-    if (__builtin_cpu_supports("avx2")) {
-        v210dec->v210_to_planar_8  = upipe_v210_to_planar_8_aligned_avx2;
-        v210dec->v210_to_planar_10 = upipe_v210_to_planar_10_aligned_avx2;
-    }
-#endif
 
     upipe_v210dec_init_urefcount(upipe);
     upipe_v210dec_init_ubuf_mgr(upipe);
