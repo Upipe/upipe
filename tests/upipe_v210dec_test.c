@@ -255,10 +255,10 @@ int main(int argc, char **argv)
     /* create input flow definition */
     struct uref *in_flow_def = uref_pic_flow_alloc_def(uref_mgr, 1);
     assert(in_flow_def);
-    ubase_assert(uref_pic_flow_add_plane(in_flow_def, 1, 1, 128, v210_chroma));
+    ubase_assert(uref_pic_flow_add_plane(in_flow_def, 1, 1, 16, v210_chroma));
     ubase_assert(uref_pic_flow_set_hsize(in_flow_def, TEST_WIDTH));
     ubase_assert(uref_pic_flow_set_vsize(in_flow_def, TEST_HEIGHT));
-    ubase_assert(uref_pic_flow_set_macropixel(in_flow_def, 48));
+    ubase_assert(uref_pic_flow_set_macropixel(in_flow_def, 6));
     ubase_assert(uref_pic_flow_set_align(in_flow_def, UBUF_ALIGN));
 
     /* create output flow definition */

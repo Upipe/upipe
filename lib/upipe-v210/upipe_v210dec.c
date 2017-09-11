@@ -421,7 +421,7 @@ static int upipe_v210dec_set_flow_def(struct upipe *upipe, struct uref *flow_def
 
     struct upipe_v210dec *v210dec = upipe_v210dec_from_upipe(upipe);
 
-    if (unlikely(!ubase_check(uref_pic_flow_check_chroma(flow_def, 1, 1, 128, v210_chroma_str)))) {
+    if (unlikely(!ubase_check(uref_pic_flow_check_chroma(flow_def, 1, 1, 16, v210_chroma_str)))) {
         upipe_err(upipe, "incompatible input flow def");
         uref_dump(flow_def, upipe->uprobe);
         return UBASE_ERR_EXTERNAL;
