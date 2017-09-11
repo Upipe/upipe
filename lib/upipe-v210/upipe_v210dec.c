@@ -453,15 +453,15 @@ static int upipe_v210dec_set_flow_def(struct upipe *upipe, struct uref *flow_def
         } break;
 
         case V2D_OUTPUT_PLANAR_10: {
-            v210dec->output_chroma_map[0] = "y10";
-            v210dec->output_chroma_map[1] = "u10";
-            v210dec->output_chroma_map[2] = "v10";
+            v210dec->output_chroma_map[0] = "y10l";
+            v210dec->output_chroma_map[1] = "u10l";
+            v210dec->output_chroma_map[2] = "v10l";
             uref_pic_flow_clear_format(output_flow);
             UBASE_RETURN(uref_pic_flow_set_align(output_flow, 32));
             UBASE_RETURN(uref_pic_flow_set_macropixel(output_flow, 1))
-            UBASE_RETURN(uref_pic_flow_add_plane(output_flow, 1, 1, 2, "y10"))
-            UBASE_RETURN(uref_pic_flow_add_plane(output_flow, 2, 1, 2, "u10"))
-            UBASE_RETURN(uref_pic_flow_add_plane(output_flow, 2, 1, 2, "v10"))
+            UBASE_RETURN(uref_pic_flow_add_plane(output_flow, 1, 1, 2, "y10l"))
+            UBASE_RETURN(uref_pic_flow_add_plane(output_flow, 2, 1, 2, "u10l"))
+            UBASE_RETURN(uref_pic_flow_add_plane(output_flow, 2, 1, 2, "v10l"))
             UBASE_RETURN(uref_pic_flow_set_hmappend(output_flow, 6 + 8));
         } break;
 
@@ -581,9 +581,9 @@ static struct upipe *upipe_v210dec_alloc(struct upipe_mgr *manager,
         PRINT_OUTPUT_TYPE(V2D_OUTPUT_PLANAR_8);
     }
 
-    else if (ubase_check(uref_pic_flow_check_chroma(flow_def, 1, 1, 2, "y10")) &&
-             ubase_check(uref_pic_flow_check_chroma(flow_def, 2, 1, 2, "u10")) &&
-             ubase_check(uref_pic_flow_check_chroma(flow_def, 2, 1, 2, "v10"))) {
+    else if (ubase_check(uref_pic_flow_check_chroma(flow_def, 1, 1, 2, "y10l")) &&
+             ubase_check(uref_pic_flow_check_chroma(flow_def, 2, 1, 2, "u10l")) &&
+             ubase_check(uref_pic_flow_check_chroma(flow_def, 2, 1, 2, "v10l"))) {
         v210dec->output_type = V2D_OUTPUT_PLANAR_10;
         PRINT_OUTPUT_TYPE(V2D_OUTPUT_PLANAR_10);
     }
