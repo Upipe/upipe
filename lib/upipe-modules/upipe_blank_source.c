@@ -107,6 +107,11 @@ UPIPE_HELPER_BIN_OUTPUT(upipe_blksrc, blk, output, blk_requests);
  */
 static int upipe_blksrc_control(struct upipe *upipe, int command, va_list args)
 {
+    switch (command) {
+        case UPIPE_REGISTER_REQUEST:
+        case UPIPE_UNREGISTER_REQUEST:
+            return UBASE_ERR_UNHANDLED;
+    }
     int ret = upipe_blksrc_control_bin_input(upipe, command, args);
     if (ret != UBASE_ERR_UNHANDLED)
         return ret;
