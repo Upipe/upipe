@@ -276,7 +276,7 @@ static int upipe_ablk_set_flow_def(struct upipe *upipe,
     }
 
     if (upipe_ablk->ubuf_mgr &&
-        !ubuf_mgr_check(upipe_ablk->ubuf_mgr, flow_def_dup)) {
+        !ubase_check(ubuf_mgr_check(upipe_ablk->ubuf_mgr, flow_def_dup))) {
         ubuf_mgr_release(upipe_ablk->ubuf_mgr);
         upipe_ablk->ubuf_mgr = NULL;
     }
