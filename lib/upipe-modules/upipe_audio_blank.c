@@ -284,6 +284,23 @@ static int upipe_ablk_set_flow_def(struct upipe *upipe,
     return UBASE_ERR_NONE;
 }
 
+/** @internal @This sets the reference sound.
+ *
+ * @param upipe description structure of the pipe
+ * @param uref reference sound buffer
+ * @return an error code
+ */
+static int upipe_ablk_set_sound_real(struct upipe *upipe, struct uref *uref)
+{
+    struct upipe_ablk *upipe_ablk = upipe_ablk_from_upipe(upipe);
+    if (upipe_ablk->ubuf)
+        ubuf_free(upipe_ablk->ubuf);
+    upipe_ablk->ubuf = uref->ubuf;
+    uref->ubuf = NULL;
+    uref_free(uref);
+    return UBASE_ERR_NONE;
+}
+
 /** @internal @This handles pipe control commands.
  *
  * @param upipe description structure of the pipe
@@ -300,6 +317,11 @@ static int upipe_ablk_control_real(struct upipe *upipe,
         case UPIPE_SET_FLOW_DEF: {
             struct uref *flow_def = va_arg(args, struct uref *);
             return upipe_ablk_set_flow_def(upipe, flow_def);
+        }
+        case UPIPE_ABLK_SET_SOUND: {
+            UBASE_SIGNATURE_CHECK(args, UPIPE_ABLK_SIGNATURE);
+            struct uref *uref = va_arg(args, struct uref *);
+            return upipe_ablk_set_sound_real(upipe, uref);
         }
     }
 

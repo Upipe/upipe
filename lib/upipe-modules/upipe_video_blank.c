@@ -300,6 +300,23 @@ static int upipe_vblk_set_flow_def(struct upipe *upipe,
     return UBASE_ERR_NONE;
 }
 
+/** @internal @This sets the reference picture.
+ *
+ * @param upipe description structure of the pipe
+ * @param uref picture buffer
+ * @return an error code
+ */
+static int upipe_vblk_set_pic_real(struct upipe *upipe, struct uref *uref)
+{
+    struct upipe_vblk *upipe_vblk = upipe_vblk_from_upipe(upipe);
+    if (upipe_vblk->ubuf)
+        ubuf_free(upipe_vblk->ubuf);
+    upipe_vblk->ubuf = uref->ubuf;
+    uref->ubuf = NULL;
+    uref_free(uref);
+    return UBASE_ERR_NONE;
+}
+
 /** @internal @This checks the ubuf manager.
  *
  * @param upipe description structure of the pipe
@@ -340,6 +357,12 @@ static int upipe_vblk_control_real(struct upipe *upipe,
         case UPIPE_SET_FLOW_DEF: {
             struct uref *flow_def = va_arg(args, struct uref *);
             return upipe_vblk_set_flow_def(upipe, flow_def);
+        }
+
+        case UPIPE_VBLK_SET_PIC: {
+            UBASE_SIGNATURE_CHECK(args, UPIPE_VBLK_SIGNATURE);
+            struct uref *uref = va_arg(args, struct uref *);
+            return upipe_vblk_set_pic_real(upipe, uref);
         }
     }
     return UBASE_ERR_UNHANDLED;
