@@ -972,6 +972,10 @@ static bool upipe_sdi_dec_handle(struct upipe *upipe, struct uref *uref,
         const int hanc_len = 2 * f->active_offset - hanc_start - sav_len;
         int line_num = h + 1;
 
+        /* Use wraparound arithmetic to start at line 4 */
+        if (ntsc)
+            line_num = ((line_num + 2) % 525) + 1;
+
         // FIXME check EAV
 
         /* Horizontal Blanking */
