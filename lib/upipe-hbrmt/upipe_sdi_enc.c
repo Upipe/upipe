@@ -789,11 +789,11 @@ static void upipe_sdi_enc_encode_line(struct upipe *upipe, int line_num, uint16_
     dst[1] = 0x000;
     dst[2] = 0x000;
     dst[3] = eav_fvh_cword[f2][vbi];
-    dst += 4;
 
     /* HBI */
     const uint8_t hanc_start = UPIPE_SDI_EAV_LENGTH;
     upipe_sdi_enc->blank(&dst[hanc_start], f->active_offset - UPIPE_SDI_SAV_LENGTH);
+    dst += hanc_start;
 
     /* Ideal number of samples that should've been put */
     unsigned samples_put_target = samples * (line_num) / f->height;
