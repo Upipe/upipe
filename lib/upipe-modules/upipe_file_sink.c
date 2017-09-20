@@ -694,9 +694,10 @@ static void upipe_fsink_free(struct upipe *upipe)
 {
     struct upipe_fsink *upipe_fsink = upipe_fsink_from_upipe(upipe);
     if (likely(upipe_fsink->fd != -1)) {
-        if (likely(upipe_fsink->path != NULL))
+        if (likely(upipe_fsink->path != NULL)) {
             upipe_notice_va(upipe, "closing file %s", upipe_fsink->path);
-        close(upipe_fsink->fd);
+            close(upipe_fsink->fd);
+        }
     }
     upipe_throw_dead(upipe);
 
