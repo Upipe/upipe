@@ -67,6 +67,8 @@ extern "C" {
 /** @This marks a function or variable as deprecated (forces compiler
  * warnings). */
 #define UBASE_DEPRECATED __attribute__ ((deprecated))
+/** @This marks a function as taking printf style arguments */
+#define UBASE_FMT_PRINTF(idx,first) __attribute__ ((format(printf,idx,first)))
 
 #else /* mkdoc:skip */
 #define likely(x)       !!(x)

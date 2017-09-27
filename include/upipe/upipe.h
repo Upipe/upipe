@@ -593,6 +593,7 @@ static inline int upipe_throw(struct upipe *upipe, int event, ...)
  * @param level level of importance of the message
  * @param format format of the textual message, followed by optional arguments
  */
+UBASE_FMT_PRINTF(3, 4)
 static inline void upipe_log_va(struct upipe *upipe,
                                 enum uprobe_log_level level,
                                 const char *format, ...)
@@ -613,6 +614,7 @@ static inline void upipe_log_va(struct upipe *upipe,
  * @param upipe description structure of the pipe
  * @param format format of the textual message, followed by optional arguments
  */
+UBASE_FMT_PRINTF(2, 3)
 static inline void upipe_err_va(struct upipe *upipe, const char *format, ...)
 {
     UBASE_VARARG(upipe_err(upipe, string))
@@ -631,6 +633,7 @@ static inline void upipe_err_va(struct upipe *upipe, const char *format, ...)
  * @param upipe description structure of the pipe
  * @param format format of the textual message, followed by optional arguments
  */
+UBASE_FMT_PRINTF(2, 3)
 static inline void upipe_warn_va(struct upipe *upipe, const char *format, ...)
 {
     UBASE_VARARG(upipe_warn(upipe, string))
@@ -649,6 +652,7 @@ static inline void upipe_warn_va(struct upipe *upipe, const char *format, ...)
  * @param upipe description structure of the pipe
  * @param format format of the textual message, followed by optional arguments
  */
+UBASE_FMT_PRINTF(2, 3)
 static inline void upipe_notice_va(struct upipe *upipe, const char *format, ...)
 {
     UBASE_VARARG(upipe_notice(upipe, string))
@@ -667,6 +671,7 @@ static inline void upipe_notice_va(struct upipe *upipe, const char *format, ...)
  * @param upipe description structure of the pipe
  * @param format format of the textual message, followed by optional arguments
  */
+UBASE_FMT_PRINTF(2, 3)
 static inline void upipe_dbg_va(struct upipe *upipe, const char *format, ...)
 {
     UBASE_VARARG(upipe_dbg(upipe, string))
@@ -686,6 +691,7 @@ static inline void upipe_dbg_va(struct upipe *upipe, const char *format, ...)
  * @param upipe description structure of the pipe
  * @param format format of the textual message, followed by optional arguments
  */
+UBASE_FMT_PRINTF(2, 3)
 static inline void upipe_verbose_va(struct upipe *upipe,
                                     const char *format, ...)
 {
