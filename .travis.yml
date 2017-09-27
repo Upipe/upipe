@@ -13,9 +13,9 @@ matrix:
   include:
 
     - os: linux
-      compiler: gcc-6
+      compiler: gcc-7
       env:
-        - GCC_VERSION=6
+        - GCC_VERSION=7
         - APT_REPOS="ppa:ubuntu-toolchain-r/test ppa:mc3man/testing6"
         - APT_PACKAGES="gcc-$GCC_VERSION g++-$GCC_VERSION $APT_PACKAGES_COMMON"
         - HOST_CC=gcc-$GCC_VERSION
@@ -24,7 +24,7 @@ matrix:
     - os: linux
       compiler: gcc-m32
       env:
-        - GCC_VERSION=6
+        - GCC_VERSION=7
         - APT_REPOS="ppa:ubuntu-toolchain-r/test ppa:mc3man/testing6"
         - APT_PACKAGES="gcc-$GCC_VERSION-multilib g++-$GCC_VERSION-multilib $(echo $APT_PACKAGES_COMMON | sed 's/\(\S*\)/\1:i386/g') libgl1-mesa-dev:i386 libglu1-mesa-dev:i386 libc6-dbg:i386"
         - HOST_CC="gcc-$GCC_VERSION -m32"
