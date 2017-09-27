@@ -179,7 +179,9 @@ static bool compare_chroma(struct uref **urefs, const char *chroma, uint8_t hsub
         str = string;
         for (x = 0; x < hsize[0]; x++) {
             if (buffer[0][x] != buffer[1][x]) {
-                uprobe_dbg_va(uprobe, NULL, "####### Pos %d %d differs: %"PRIu8" - %"PRIu8" !", x, y);
+                uprobe_dbg_va(uprobe, NULL,
+                              "####### Pos %d %d differs: %"PRIu8" - %"PRIu8" !",
+                              x, y, buffer[0][x], buffer[1][x]);
                 return false;
             }
             str += snprintf(str, 5, "%02"PRIx8" ", buffer[0][x]);

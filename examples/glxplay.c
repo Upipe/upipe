@@ -558,7 +558,7 @@ static int upipe_glxplayer_catch_glx(struct uprobe *uprobe,
             switch (key) {
                 case 27:
                 case 'q': {
-                    upipe_notice_va(upipe, "exit key pressed (%d), exiting",
+                    upipe_notice_va(upipe, "exit key pressed (%lu), exiting",
                                     key);
                     upipe_release(glxplayer->upipe_src_xfer);
                     upipe_mgr_release(glxplayer->src_xfer);
@@ -579,7 +579,7 @@ static int upipe_glxplayer_catch_glx(struct uprobe *uprobe,
                     break;
                 }
                 default:
-                    upipe_dbg_va(upipe, "key pressed (%d)", key);
+                    upipe_dbg_va(upipe, "key pressed (%lu)", key);
                     break;
             }
             return UBASE_ERR_NONE;
