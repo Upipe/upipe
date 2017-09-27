@@ -1290,8 +1290,10 @@ static int upipe_mpgaf_encaps_frame(struct upipe *upipe, struct uref *uref)
         switch (upipe_mpgaf->asc_aot) {
             case ASC_TYPE_MAIN:
                 adts_set_profile(buffer, ADTS_PROFILE_MAIN);
+                break;
             case ASC_TYPE_SSR:
                 adts_set_profile(buffer, ADTS_PROFILE_SSR);
+                break;
             default:
                 adts_set_profile(buffer, ADTS_PROFILE_LC);
         }
