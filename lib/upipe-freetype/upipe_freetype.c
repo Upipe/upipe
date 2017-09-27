@@ -202,6 +202,10 @@ static void upipe_freetype_input(struct upipe *upipe, struct uref *uref, struct 
 
     ubuf_pic_clear(ubuf, 0, 0, -1, -1, 0);
 
+    size_t stride_a, stride_y;
+    ubase_assert(ubuf_pic_plane_size(ubuf, "y8", &stride_y, NULL, NULL, NULL));
+    ubase_assert(ubuf_pic_plane_size(ubuf, "a8", &stride_a, NULL, NULL, NULL));
+
     uint8_t *dst;
     ubase_assert(ubuf_pic_plane_write(ubuf, "y8", 0, 0, -1, -1, &dst));
     uint8_t *dsta;
@@ -243,8 +247,8 @@ static void upipe_freetype_input(struct upipe *upipe, struct uref *uref, struct 
 
         for (FT_Int i = (x < 0 ? 0 : x); i < x_max; i++)
             for (FT_Int j = (y < 0 ? 0 : y); j < y_max; j++) {
-                dst[j*h + i] |= bitmap->buffer[(j - y) * bitmap->width + (i - x)];
-                dsta[j*h + i] |= bitmap->buffer[(j - y) * bitmap->width + (i - x)];
+                dst[j*stride_y + i] |= bitmap->buffer[(j - y) * bitmap->width + (i - x)];
+                dsta[j*stride_a + i] |= bitmap->buffer[(j - y) * bitmap->width + (i - x)];
             }
 
         /* increment pen position */
@@ -256,10 +260,10 @@ static void upipe_freetype_input(struct upipe *upipe, struct uref *uref, struct 
 
     if (text_w < h)
         for (int i = 0; i < v; i++) {
-            memmove(&dst[i*h + (h - text_w) / 2], &dst[i*h], text_w);
-            memset(&dst[i*h], 0, (h - text_w) / 2);
-            memmove(&dsta[i*h + (h - text_w) / 2], &dsta[i*h], text_w);
-            memset(&dsta[i*h], 0, (h - text_w) / 2);
+            memmove(&dst[i*stride_y + (h - text_w) / 2], &dst[i*stride_y], text_w);
+            memset(&dst[i*stride_y], 0, (h - text_w) / 2);
+            memmove(&dsta[i*stride_a + (h - text_w) / 2], &dsta[i*stride_a], text_w);
+            memset(&dsta[i*stride_a], 0, (h - text_w) / 2);
         }
 
     ubuf_pic_plane_unmap(ubuf, "y8", 0, 0, -1, -1);
