@@ -460,8 +460,7 @@ static int upipe_netmap_sink_open_intf(struct upipe *upipe,
         struct upipe_netmap_intf *intf, const char *uri)
 {
     if (sscanf(uri, "netmap:%*[^-]-%u/T", &intf->ring_idx) != 1) {
-        upipe_err_va(upipe, "invalid netmap receive uri %s", uri);
-        return UBASE_ERR_INVALID;
+        intf->ring_idx = 0;
     }
 
     char *intf_addr = strdup(&uri[strlen("netmap:")]);
