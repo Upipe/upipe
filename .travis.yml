@@ -35,14 +35,13 @@ matrix:
         - PKG_CONFIG_LIBDIR="/usr/lib/i386-linux-gnu/pkgconfig"
 
     - os: linux
-      compiler: clang-3.8
+      compiler: clang-5.0
       env:
-        - CLANG_VERSION=3.8
+        - CLANG_VERSION=5.0
         - APT_REPOS="ppa:ubuntu-toolchain-r/test ppa:mc3man/testing6"
         - APT_PACKAGES="clang-$CLANG_VERSION $APT_PACKAGES_COMMON"
         - HOST_CC=clang-$CLANG_VERSION
         - HOST_CXX=clang++-$CLANG_VERSION
-        - CFLAGS="-Wno-error=unused-function"
 
     - os: osx
       compiler: clang
