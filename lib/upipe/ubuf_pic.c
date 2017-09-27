@@ -86,7 +86,7 @@ int ubuf_pic_plane_clear(struct ubuf *ubuf, const char *chroma,
 #define MATCH(a) (strcmp(chroma, a) == 0)
 #define LINELOOP(a) for (a=0; a < height/vsub; a++)
 
-    if (MATCH("y8") || MATCH("y16l") || MATCH("y16b")
+    if (MATCH("y8") || MATCH("y16l") || MATCH("y16b") || MATCH("a8")
      || MATCH("r8g8b8") || MATCH("r8g8b8a8") || MATCH("a8r8g8b8")
      || MATCH("b8g8r8") || MATCH("b8g8r8a8") || MATCH("a8b8g8r8")) {
         LINELOOP(j) {

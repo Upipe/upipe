@@ -206,7 +206,6 @@ static void upipe_freetype_input(struct upipe *upipe, struct uref *uref, struct 
     ubase_assert(ubuf_pic_plane_write(ubuf, "y8", 0, 0, -1, -1, &dst));
     uint8_t *dsta;
     ubase_assert(ubuf_pic_plane_write(ubuf, "a8", 0, 0, -1, -1, &dsta));
-    memset(dsta, 0, h * v);
 
     /* the pen position in 26.6 cartesian space coordinates */
     FT_Vector pen; /* untransformed origin  */
