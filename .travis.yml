@@ -130,12 +130,3 @@ script: CONFIGURE_FLAGS="--disable-silent-rules $HOST
 after_failure:
   - test -r config.log && cat config.log
   - test -r tests.log && cat tests.log
-
-notifications:
-  irc:
-    channels:
-      - "chat.freenode.net#upipe"
-    on_success: never
-    on_failure: always
-    use_notice: true
-    skip_join: true
