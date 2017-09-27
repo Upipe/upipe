@@ -530,7 +530,7 @@ static int upipe_ts_psig_flow_build(struct upipe *upipe, uint8_t *es,
                 default:
                     upipe_warn_va(upipe, "invalid DTS sample rate %"PRIu64,
                                   rate);
-                    /* intended pass-through */
+                    /* fallthrough */
                 case 48000: desc7b_set_sample_rate_code(desc, 13); break;
                 case 96000: desc7b_set_sample_rate_code(desc, 14); break;
                 case 192000: desc7b_set_sample_rate_code(desc, 15); break;
