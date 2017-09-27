@@ -320,7 +320,7 @@ static int upipe_m3u_reader_process_version(struct upipe *upipe,
         upipe_warn_va(upipe, "invalid version %s", line);
         return UBASE_ERR_INVALID;
     }
-    upipe_dbg_va(upipe, "version: %u", version);
+    upipe_dbg_va(upipe, "version: %lu", version);
     return uref_m3u_flow_set_version(flow_def, version);
 }
 
@@ -568,7 +568,7 @@ static int upipe_m3u_reader_process_byte_range(struct upipe *upipe,
         return UBASE_ERR_INVALID;
     }
 
-    upipe_verbose_va(upipe, "byte range length: %"PRIu64, byte_range_len);
+    upipe_verbose_va(upipe, "byte range length: %llu", byte_range_len);
     if (*endptr == '@') {
         line = endptr + 1;
         unsigned long long byte_range_off = strtoull(line, &endptr, 10);
@@ -577,7 +577,7 @@ static int upipe_m3u_reader_process_byte_range(struct upipe *upipe,
             return UBASE_ERR_INVALID;
         }
 
-        upipe_verbose_va(upipe, "byte range offset: %"PRIu64, byte_range_off);
+        upipe_verbose_va(upipe, "byte range offset: %llu", byte_range_off);
         UBASE_RETURN(uref_m3u_playlist_set_byte_range_off(
                 item, byte_range_off));
     }

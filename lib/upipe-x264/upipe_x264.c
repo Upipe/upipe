@@ -608,7 +608,7 @@ static bool upipe_x264_open(struct upipe *upipe, int width, int height)
                     max_bs = 135000000 / 8;
                     break;
                 default:
-                    upipe_warn_va(upipe, "unknown level %"PRIu8,
+                    upipe_warn_va(upipe, "unknown level %d",
                                   params->i_level_idc);
                     /* intended fall-through */
                 case 51:

@@ -949,7 +949,7 @@ static void upipe_avcdec_output_sub(struct upipe *upipe, AVSubtitle *sub,
             for (int j = 0; j < w; j++) {
                 uint8_t idx = src[j];
                 if (unlikely(idx >= r->nb_colors)) {
-                    upipe_err_va(upipe, "Invalid palette index %hu", idx);
+                    upipe_err_va(upipe, "Invalid palette index %" PRIu8, idx);
                     continue;
                 }
 
@@ -1300,7 +1300,7 @@ static bool upipe_avcdec_decode(struct upipe *upipe, struct uref *uref,
     }
     avpkt.size = size;
 
-    upipe_verbose_va(upipe, "Received packet %"PRIu64" - size : %zu",
+    upipe_verbose_va(upipe, "Received packet %"PRIu64" - size : %d",
                      upipe_avcdec->counter, avpkt.size);
     /* TODO replace with umem */
     avpkt.data = malloc(avpkt.size + FF_INPUT_BUFFER_PADDING_SIZE);

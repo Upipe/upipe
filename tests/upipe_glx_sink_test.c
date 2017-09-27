@@ -83,11 +83,11 @@ static void keyhandler(struct upipe *upipe, unsigned long key)
     switch (key) {
         case 27:
         case 'q': {
-            upipe_notice_va(upipe, "exit key pressed (%d), exiting", key);
+            upipe_notice_va(upipe, "exit key pressed (%lu), exiting", key);
             exit(0);
         }
         default:
-            upipe_dbg_va(upipe, "key pressed (%d)", key);
+            upipe_dbg_va(upipe, "key pressed (%lu)", key);
             break;
     }
 }

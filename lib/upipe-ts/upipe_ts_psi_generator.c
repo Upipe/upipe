@@ -856,7 +856,7 @@ static void upipe_ts_psig_program_build(struct upipe *upipe)
     size_t descriptors_size = uref_ts_flow_size_descriptors(program->flow_def);
 
     upipe_notice_va(upipe,
-                    "new PMT program=%"PRIu16" version=%"PRIu8" pcrpid=%"PRIu16,
+                    "new PMT program=%"PRIu64" version=%"PRIu8" pcrpid=%"PRIu16,
                     program_number, program->pmt_version, program->pcr_pid);
 
     struct ubuf *ubuf = ubuf_block_alloc(psig->ubuf_mgr,
