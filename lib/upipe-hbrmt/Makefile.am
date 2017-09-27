@@ -17,5 +17,9 @@ libupipe_hbrmt_la_LDFLAGS = -no-undefined
 pkgconfigdir = $(libdir)/pkgconfig
 pkgconfig_DATA = libupipe_hbrmt.pc
 
+V_ASM = $(V_ASM_@AM_V@)
+V_ASM_ = $(V_ASM_@AM_DEFAULT_VERBOSITY@)
+V_ASM_0 = @echo "  ASM     " $@;
+
 .asm.lo:
-	$(LIBTOOL) --mode=compile --tag=CC $(YASM) $(YASMFLAGS) $< -o $@
+	$(V_ASM)$(LIBTOOL) $(AM_V_lt) --mode=compile --tag=CC $(YASM) $(YASMFLAGS) $< -o $@
