@@ -204,6 +204,7 @@ static const enum uprobe_log_level loglevel_map[] = {
  * @param format string format
  * @param args arguments
  */
+UBASE_FMT_PRINTF(3, 0)
 static void upipe_x264_log(void *_upipe, int loglevel,
                            const char *format, va_list args)
 {

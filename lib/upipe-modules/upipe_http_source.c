@@ -601,6 +601,7 @@ static void upipe_http_src_worker(struct upump *upump)
     }
 }
 
+UBASE_FMT_PRINTF(3, 4)
 static int request_add(char **req_p, size_t *len, const char *fmt, ...)
 {
     va_list args;
