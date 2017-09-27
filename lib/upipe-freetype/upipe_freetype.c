@@ -171,8 +171,12 @@ static void upipe_freetype_input(struct upipe *upipe, struct uref *uref, struct 
     struct upipe_freetype *upipe_freetype = upipe_freetype_from_upipe(upipe);
 
     uint64_t h, v;
-    ubase_assert(uref_pic_flow_get_hsize(upipe_freetype->flow_output, &h));
-    ubase_assert(uref_pic_flow_get_vsize(upipe_freetype->flow_output, &v));
+    if (!ubase_check(uref_pic_flow_get_hsize(upipe_freetype->flow_output, &h)) ||
+            !ubase_check(uref_pic_flow_get_vsize(upipe_freetype->flow_output, &v))) {
+        upipe_err_va(upipe, "Could not read output dimensions");
+        uref_free(uref);
+        return;
+    }
 
     if (!upipe_freetype->ubuf_mgr) {
         struct uref *flow_def = uref_sibling_alloc(uref);
@@ -203,13 +207,29 @@ static void upipe_freetype_input(struct upipe *upipe, struct uref *uref, struct 
     ubuf_pic_clear(ubuf, 0, 0, -1, -1, 0);
 
     size_t stride_a, stride_y;
-    ubase_assert(ubuf_pic_plane_size(ubuf, "y8", &stride_y, NULL, NULL, NULL));
-    ubase_assert(ubuf_pic_plane_size(ubuf, "a8", &stride_a, NULL, NULL, NULL));
+    if (!ubase_check(ubuf_pic_plane_size(ubuf, "y8", &stride_y, NULL, NULL, NULL)) ||
+            !ubase_check(ubuf_pic_plane_size(ubuf, "a8", &stride_a, NULL, NULL, NULL))) {
+        upipe_err(upipe, "Could not read ubuf plane sizes");
+        ubuf_free(ubuf);
+        uref_free(uref);
+        return;
+    }
 
     uint8_t *dst;
-    ubase_assert(ubuf_pic_plane_write(ubuf, "y8", 0, 0, -1, -1, &dst));
     uint8_t *dsta;
-    ubase_assert(ubuf_pic_plane_write(ubuf, "a8", 0, 0, -1, -1, &dsta));
+    if (!ubase_check(ubuf_pic_plane_write(ubuf, "y8", 0, 0, -1, -1, &dst))) {
+        upipe_err(upipe, "Could not map luma plane");
+        ubuf_free(ubuf);
+        uref_free(uref);
+        return;
+    }
+    if (!ubase_check(ubuf_pic_plane_write(ubuf, "a8", 0, 0, -1, -1, &dsta))) {
+        upipe_err(upipe, "Could not map alpha plane");
+        ubuf_pic_plane_unmap(ubuf, "y8", 0, 0, -1, -1);
+        ubuf_free(ubuf);
+        uref_free(uref);
+        return;
+    }
 
     /* the pen position in 26.6 cartesian space coordinates */
     FT_Vector pen; /* untransformed origin  */
@@ -291,14 +311,17 @@ static int upipe_freetype_set_option(struct upipe *upipe,
 
     if (upipe_freetype->face)
         FT_Done_Face(upipe_freetype->face);
+
+    upipe_freetype->face = NULL;
+
+    uint64_t v;
+    UBASE_RETURN(uref_pic_flow_get_vsize(upipe_freetype->flow_output, &v));
+
     if (FT_New_Face(upipe_freetype->library, value, 0, &upipe_freetype->face)) {
         upipe_err_va(upipe, "Couldn't open font %s", value);
         upipe_freetype->face = NULL;
         return UBASE_ERR_EXTERNAL;
     }
-
-    uint64_t v;
-    ubase_assert(uref_pic_flow_get_vsize(upipe_freetype->flow_output, &v));
 
     if (FT_Set_Pixel_Sizes(upipe_freetype->face, v, v)) {
         upipe_err(upipe, "Couldn't set pixel size");
