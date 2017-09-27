@@ -81,7 +81,14 @@ AM_CONDITIONAL(HAVE_X86_ASM, test -n "${YASM}" -a -n "${YASMFLAGS}")
 YASMFLAGS="${YASMFLAGS} -DPIC -prefer-non-pic -Pconfig.asm -I\$(top_builddir)/x86 -I\$(top_srcdir)/x86"
 
 WARN_FLAGS="-Wall -Wextra -Wno-unused -Wno-unused-parameter -Wno-sign-compare -Wmissing-declarations -Wwrite-strings -Wredundant-decls -Wundef -Wmissing-include-dirs"
-AC_SUBST([AM_CFLAGS], ["$WARN_FLAGS -Wstrict-prototypes -Wmissing-prototypes -Wold-style-definition"])
+WARN_FLAGS_C="-Wstrict-prototypes -Wmissing-prototypes -Wold-style-definition"
+WARN_FLAGS_OPT="-Wduplicated-cond -Wduplicated-branches -Wrestrict -Wformat=2"
+# TODO: add -Wnull-dereference and -Wlogical-op once all warnings are fixed
+for flag in $WARN_FLAGS_OPT; do
+    AX_CHECK_COMPILE_FLAG([$flag],[WARN_FLAGS="$WARN_FLAGS $flag"],,-Werror)
+done
+
+AC_SUBST([AM_CFLAGS], ["$WARN_FLAGS $WARN_FLAGS_C"])
 AC_SUBST([AM_CXXFLAGS], ["$WARN_FLAGS"])
 AC_SUBST(YASMFLAGS)
 AC_SUBST(ARCH_X86_64)
