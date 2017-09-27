@@ -236,12 +236,12 @@ static void upipe_freetype_input(struct upipe *upipe, struct uref *uref, struct 
         FT_Int y = v - slot->bitmap_top;
         FT_Int x_max = x + bitmap->width;
         if (x_max > h) {
-            fprintf(stderr, "clipping x, %"PRIu64" < %d\n", h, x_max);
+            upipe_err_va(upipe, "clipping x, %"PRIu64" < %d", h, x_max);
             x_max = h;
         }
         FT_Int y_max = y + bitmap->rows;
         if (y_max > v) {
-            fprintf(stderr, "clipping y, %"PRIu64" < %d\n", v, y_max);
+            upipe_err_va(upipe, "clipping y, %"PRIu64" < %d", v, y_max);
             y_max = v;
         }
 
