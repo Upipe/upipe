@@ -1,6 +1,6 @@
 sudo: required
 dist: trusty
-osx_image: xcode7.3
+osx_image: xcode9
 language: c
 
 env:
@@ -13,9 +13,9 @@ matrix:
   include:
 
     - os: linux
-      compiler: gcc-6
+      compiler: gcc-7
       env:
-        - GCC_VERSION=6
+        - GCC_VERSION=7
         - APT_REPOS="ppa:ubuntu-toolchain-r/test ppa:mc3man/testing6"
         - APT_PACKAGES="gcc-$GCC_VERSION g++-$GCC_VERSION $APT_PACKAGES_COMMON"
         - HOST_CC=gcc-$GCC_VERSION
@@ -24,7 +24,7 @@ matrix:
     - os: linux
       compiler: gcc-m32
       env:
-        - GCC_VERSION=6
+        - GCC_VERSION=7
         - APT_REPOS="ppa:ubuntu-toolchain-r/test ppa:mc3man/testing6"
         - APT_PACKAGES="gcc-$GCC_VERSION-multilib g++-$GCC_VERSION-multilib $(echo $APT_PACKAGES_COMMON | sed 's/\(\S*\)/\1:i386/g') libgl1-mesa-dev:i386 libglu1-mesa-dev:i386 libc6-dbg:i386"
         - HOST_CC="gcc-$GCC_VERSION -m32"
@@ -35,21 +35,20 @@ matrix:
         - PKG_CONFIG_LIBDIR="/usr/lib/i386-linux-gnu/pkgconfig"
 
     - os: linux
-      compiler: clang-3.8
+      compiler: clang-5.0
       env:
-        - CLANG_VERSION=3.8
+        - CLANG_VERSION=5.0
         - APT_REPOS="ppa:ubuntu-toolchain-r/test ppa:mc3man/testing6"
         - APT_PACKAGES="clang-$CLANG_VERSION $APT_PACKAGES_COMMON"
         - HOST_CC=clang-$CLANG_VERSION
         - HOST_CXX=clang++-$CLANG_VERSION
-        - CFLAGS="-Wno-error=unused-function"
 
     - os: osx
       compiler: clang
       env:
         - HOST_CC=clang
         - HOST_CXX=clang++
-        - CFLAGS="-Wno-error=unused-function -Wno-error=unused-command-line-argument"
+        - CFLAGS="-Wno-error=unused-command-line-argument"
 
 before_install:
   - if type apt-get 2>/dev/null; then
@@ -130,12 +129,3 @@ script: CONFIGURE_FLAGS="--disable-silent-rules $HOST
 after_failure:
   - test -r config.log && cat config.log
   - test -r tests.log && cat tests.log
-
-notifications:
-  irc:
-    channels:
-      - "chat.freenode.net#upipe"
-    on_success: never
-    on_failure: always
-    use_notice: true
-    skip_join: true

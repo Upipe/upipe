@@ -320,7 +320,7 @@ static int upipe_m3u_reader_process_version(struct upipe *upipe,
         upipe_warn_va(upipe, "invalid version %s", line);
         return UBASE_ERR_INVALID;
     }
-    upipe_dbg_va(upipe, "version: %u", version);
+    upipe_dbg_va(upipe, "version: %lu", version);
     return uref_m3u_flow_set_version(flow_def, version);
 }
 

@@ -89,7 +89,7 @@
 #include <upipe-gl/uprobe_gl_sink_cube.h>
 #ifdef UPIPE_HAVE_ALSA_ASOUNDLIB_H
 #include <upipe-alsa/upipe_alsa_sink.h>
-#elif UPIPE_HAVE_AUDIOTOOLBOX_AUDIOTOOLBOX_H
+#elif defined(UPIPE_HAVE_AUDIOTOOLBOX_AUDIOTOOLBOX_H)
 #include <upipe-osx/upipe_osx_audioqueue_sink.h>
 #endif
 
@@ -184,7 +184,7 @@ static int catch_glx(struct uprobe *uprobe, struct upipe *upipe,
         case 27:
         case 'q': {
             if (main_upump_mgr != NULL) {
-                upipe_notice_va(upipe, "exit key pressed (%d), exiting",
+                upipe_notice_va(upipe, "exit key pressed (%lu), exiting",
                                 key);
                 struct upump *idler_stop = upump_alloc_idler(main_upump_mgr,
                         uplay_stop, (void *)1, NULL);
@@ -208,7 +208,7 @@ static int catch_glx(struct uprobe *uprobe, struct upipe *upipe,
             break;
         }
         default:
-            upipe_dbg_va(upipe, "key pressed (%d)", key);
+            upipe_dbg_va(upipe, "key pressed (%lu)", key);
             break;
     }
     return UBASE_ERR_NONE;
@@ -498,7 +498,7 @@ static int catch_audio(struct uprobe *uprobe, struct upipe *upipe,
     assert(sink != NULL);
     upipe_mgr_release(upipe_alsink_mgr);
     upipe_attach_uclock(sink);
-#elif UPIPE_HAVE_AUDIOTOOLBOX_AUDIOTOOLBOX_H
+#elif defined(UPIPE_HAVE_AUDIOTOOLBOX_AUDIOTOOLBOX_H)
 	struct upipe_mgr *upipe_osx_audioqueue_sink_mgr =
 		upipe_osx_audioqueue_sink_mgr_alloc();
 	sink = upipe_void_alloc(upipe_osx_audioqueue_sink_mgr,

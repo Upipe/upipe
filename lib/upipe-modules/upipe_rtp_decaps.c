@@ -317,7 +317,7 @@ static inline void upipe_rtpd_build_flow_def(struct upipe *upipe)
         case UPIPE_RTPD_PCM:
             if (channels)
                 uref_sound_flow_set_channels(flow_def, channels);
-            /* intended fall-through */
+            /* fallthrough */
         case UPIPE_RTPD_UNKNOWN:
         case UPIPE_RTPD_PCMA:
         case UPIPE_RTPD_PCMU:

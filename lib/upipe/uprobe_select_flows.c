@@ -256,6 +256,7 @@ static int uprobe_selflow_set_internal(struct uprobe *uprobe, const char *flows)
  * @param uprobe pointer to probe
  * @param format of the syntax, followed by optional arguments
  */
+UBASE_FMT_PRINTF(2, 3)
 static int uprobe_selflow_set_internal_va(struct uprobe *uprobe,
                                           const char *format, ...)
 {

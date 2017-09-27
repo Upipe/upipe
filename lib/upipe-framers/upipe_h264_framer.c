@@ -545,7 +545,7 @@ static bool upipe_h264f_activate_sps(struct upipe *upipe, uint32_t sps_id)
             break;
         default:
             upipe_warn_va(upipe, "unknown level %"PRIu8, level);
-            /* intended fall-through */
+            /* fallthrough */
         case 51:
         case 52:
             max_octetrate = 240000000 / 8;

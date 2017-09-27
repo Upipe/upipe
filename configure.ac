@@ -81,6 +81,12 @@ AM_CONDITIONAL(HAVE_X86_ASM, test -n "${YASM}" -a -n "${YASMFLAGS}")
 YASMFLAGS="${YASMFLAGS} -DPIC -prefer-non-pic -Pconfig.asm -I\$(top_builddir)/x86 -I\$(top_srcdir)/x86"
 
 WARN_FLAGS="-Wall -Wextra -Wno-unused -Wno-unused-parameter -Wno-sign-compare -Wmissing-declarations -Wwrite-strings -Wredundant-decls -Wundef -Wmissing-include-dirs"
+AX_CHECK_COMPILE_FLAG([-Wduplicated-cond],[WARN_FLAGS="$WARN_FLAGS -Wduplicated-cond"],,-Werror)
+AX_CHECK_COMPILE_FLAG([-Wduplicated-branches],[WARN_FLAGS="$WARN_FLAGS -Wduplicated-branches"],,-Werror)
+AX_CHECK_COMPILE_FLAG([-Wlogical-op],[WARN_FLAGS="$WARN_FLAGS -Wlogical-op"],,-Werror)
+AX_CHECK_COMPILE_FLAG([-Wrestrict],[WARN_FLAGS="$WARN_FLAGS -Wrestrict"],,-Werror)
+AX_CHECK_COMPILE_FLAG([-Wnull-dereference],[WARN_FLAGS="$WARN_FLAGS -Wnull-dereference"],,-Werror)
+AX_CHECK_COMPILE_FLAG([-Wformat=2],[WARN_FLAGS="$WARN_FLAGS -Wformat=2"],,-Werror)
 AC_SUBST([AM_CFLAGS], ["$WARN_FLAGS -Wstrict-prototypes -Wmissing-prototypes -Wold-style-definition"])
 AC_SUBST([AM_CXXFLAGS], ["$WARN_FLAGS"])
 AC_SUBST(YASMFLAGS)

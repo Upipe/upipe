@@ -40,7 +40,7 @@ extern "C" {
 
 /** @This defines encapsulation types for H26x */
 enum uref_h26x_encaps {
-    /** NAL units delimited by @uref uref_h26x_get_nal_offset */
+    /** NAL units delimited by @ref uref_h26x_get_nal_offset */
     UREF_H26X_ENCAPS_NALU = 0,
     /** startcode-based, such as ISO 14496-10 annex B */
     UREF_H26X_ENCAPS_ANNEXB,

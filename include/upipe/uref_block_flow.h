@@ -92,6 +92,7 @@ static inline struct uref *uref_block_flow_alloc_def(struct uref_mgr *mgr,
  * @param def_suffix suffix to append to "block." flow definition
  * @return pointer to uref control packet, or NULL in case of error
  */
+UBASE_FMT_PRINTF(2, 3)
 static inline struct uref *uref_block_flow_alloc_def_va(struct uref_mgr *mgr,
                                                         const char *format, ...)
 {

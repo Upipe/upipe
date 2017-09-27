@@ -434,7 +434,8 @@ static void upipe_dtsdi_input(struct upipe *upipe, struct uref *uref,
                 upipe_dtsdi->frame_size);
 
         if (!uref->ubuf) {
-            upipe_err_va(upipe, "Could not split ubuf at %zu+%zu", upipe_dtsdi->frame_size);
+            upipe_err_va(upipe, "Could not split ubuf at %zu",
+                         upipe_dtsdi->frame_size);
             uref_free(uref);
             return;
         }

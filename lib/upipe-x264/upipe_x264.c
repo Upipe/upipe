@@ -610,7 +610,7 @@ static bool upipe_x264_open(struct upipe *upipe, int width, int height)
                 default:
                     upipe_warn_va(upipe, "unknown level %"PRIu8,
                                   params->i_level_idc);
-                    /* intended fall-through */
+                    /* fallthrough */
                 case 51:
                 case 52:
                     max_octetrate = 240000000 / 8;
