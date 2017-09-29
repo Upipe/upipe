@@ -460,8 +460,7 @@ static int upipe_netmap_sink_open_intf(struct upipe *upipe,
         struct upipe_netmap_intf *intf, const char *uri)
 {
     if (sscanf(uri, "netmap:%*[^-]-%u/T", &intf->ring_idx) != 1) {
-        upipe_err_va(upipe, "invalid netmap receive uri %s", uri);
-        return UBASE_ERR_INVALID;
+        intf->ring_idx = 0;
     }
 
     char *intf_addr = strdup(&uri[strlen("netmap:")]);
@@ -1189,7 +1188,7 @@ static void upipe_netmap_sink_worker(struct upump *upump)
         if (intf->wait) {
             if ((now - intf->wait) > UCLOCK_FREQ) {
                 ioctl(NETMAP_FD(intf->d), NIOCTXSYNC, NULL); // update userspace ring
-                if (t < max_slots) {
+                if (t < max_slots - 32) {
                     upipe_notice_va(upipe, "waiting, %u", t);
                     continue;
                 }

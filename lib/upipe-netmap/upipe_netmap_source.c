@@ -138,6 +138,8 @@ struct upipe_netmap_source {
     uint8_t frate;
     uint8_t frame;
 
+    uint64_t old_vss;
+
     /** unpack scratch buffer */
     uint8_t unpack_scratch_buffer[5];
 
@@ -199,6 +201,7 @@ static struct upipe *upipe_netmap_source_alloc(struct upipe_mgr *mgr,
     upipe_netmap_source->f = NULL;
     upipe_netmap_source->frate    = 0;
     upipe_netmap_source->frame    = 0;
+    upipe_netmap_source->old_vss  = 0;
 
     upipe_netmap_source->expected_seqnum = UINT32_MAX;
     upipe_netmap_source->discontinuity = false;
@@ -497,11 +500,11 @@ static const uint8_t *get_rtp(struct upipe *upipe, struct netmap_ring *rxring,
     if (slot->len - 9 >= min_pkt_size) {
         const uint8_t *vss = &src[slot->len-9];
         if (vss[8] == 0xc3) {
-            static uint64_t old;
+            struct upipe_netmap_source *upipe_netmap_source = upipe_netmap_source_from_upipe(upipe);
             uint64_t ts = get_vss(vss);
-            if (ts - old > 70 * 1000 /* us */)
-                upipe_err_va(upipe, "Spike: %" PRIu64, ts - old);
-            old = ts;
+            if (ts - upipe_netmap_source->old_vss > 70 * 1000 /* us */)
+                upipe_err_va(upipe, "Spike: %" PRIu64, ts - upipe_netmap_source->old_vss);
+            upipe_netmap_source->old_vss = ts;
         }
     }
 

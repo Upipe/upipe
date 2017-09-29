@@ -171,6 +171,47 @@ static void v210_to_planar_10_c(const void *src, uint16_t *y, uint16_t *u, uint1
     }
 }
 
+/** @internal @This setups convert functions
+ *
+ * @param upipe description structure of the pipe
+ * @param assembly whether to use assembly
+ */
+static void v210dec_setup_asm(struct upipe *upipe, bool assembly)
+{
+    struct upipe_v210dec *v210dec = upipe_v210dec_from_upipe(upipe);
+
+    v210dec->v210_to_planar_8  = v210_to_planar_8_c;
+    v210dec->v210_to_planar_10 = v210_to_planar_10_c;
+
+    if (!assembly)
+        return;
+
+#if !defined (__APPLE__)
+#if defined(__clang__) && (__clang_major__ < 3 || (__clang_major__ == 3 && __clang_minor__ <= 8))
+#ifdef __SSSE3__
+    if (1)
+#else
+    if (0)
+#endif
+#else /* not clang <= 3.8*/
+    if (__builtin_cpu_supports("ssse3"))
+#endif
+    {
+        v210dec->v210_to_planar_8  = upipe_v210_to_planar_8_aligned_ssse3;
+        v210dec->v210_to_planar_10 = upipe_v210_to_planar_10_aligned_ssse3;
+    }
+    if (__builtin_cpu_supports("avx")) {
+        v210dec->v210_to_planar_8  = upipe_v210_to_planar_8_aligned_avx;
+        v210dec->v210_to_planar_10 = upipe_v210_to_planar_10_aligned_avx;
+    }
+    if (__builtin_cpu_supports("avx2")) {
+        v210dec->v210_to_planar_8  = upipe_v210_to_planar_8_aligned_avx2;
+        v210dec->v210_to_planar_10 = upipe_v210_to_planar_10_aligned_avx2;
+    }
+#endif
+
+}
+
 /** @internal @This handles data.
  *
  * @param upipe description structure of the pipe
@@ -210,9 +251,16 @@ static bool upipe_v210dec_handle(struct upipe *upipe, struct uref *uref,
         return true;
     }
 
+    uint64_t output_hsize;
+    if (unlikely(!ubase_check(uref_pic_flow_get_hsize(v210dec->flow_def, &output_hsize)))) {
+        upipe_warn(upipe, "could not find output picture size");
+        uref_free(uref);
+        return true;
+    }
+
     uint8_t *output_planes[3];
     size_t output_strides[3];
-    struct ubuf *ubuf = ubuf_pic_alloc(v210dec->ubuf_mgr, input_hsize, input_vsize);
+    struct ubuf *ubuf = ubuf_pic_alloc(v210dec->ubuf_mgr, output_hsize, input_vsize);
     if (unlikely(!ubuf)) {
         // TODO free allocated memory
         uref_free(uref);
@@ -245,7 +293,7 @@ static bool upipe_v210dec_handle(struct upipe *upipe, struct uref *uref,
                 uint8_t *v = output_planes[2];
                 const uint32_t *src = (uint32_t*)input_plane;
 
-                int w = (input_hsize / 6) * 6;
+                int w = (output_hsize / 6) * 6;
                 v210dec->v210_to_planar_8(src, y, u, v, w);
 
                 y += w;
@@ -253,12 +301,12 @@ static bool upipe_v210dec_handle(struct upipe *upipe, struct uref *uref,
                 v += w >> 1;
                 src += (w * 2) / 3;
 
-                if (w < input_hsize - 1) {
+                if (w < output_hsize - 1) {
                     READ_PIXELS_8(u, y, v);
                     uint32_t val = *src++;
                     *y++ = (val >> 2) & 255;
 
-                    if (w < input_hsize - 3) {
+                    if (w < output_hsize - 3) {
                         *u++ = (val >> 12) & 255;
                         *y++ = (val >> 22) & 255;
 
@@ -282,7 +330,7 @@ static bool upipe_v210dec_handle(struct upipe *upipe, struct uref *uref,
                 uint16_t *v = (uint16_t*)output_planes[2];
                 const uint32_t *src = (uint32_t*)input_plane;
 
-                int w = (input_hsize / 6) * 6;
+                int w = (output_hsize / 6) * 6;
                 v210dec->v210_to_planar_10(src, y, u, v, w);
 
                 y += w;
@@ -290,13 +338,13 @@ static bool upipe_v210dec_handle(struct upipe *upipe, struct uref *uref,
                 v += w >> 1;
                 src += (w * 2) / 3;
 
-                if (w < input_hsize - 1) {
+                if (w < output_hsize - 1) {
                     READ_PIXELS_10(u, y, v);
                     uint32_t val = AV_RL32(src);
                     src++;
                     *y++ = val & 1023;
 
-                    if (w < input_hsize - 3) {
+                    if (w < output_hsize - 3) {
                         *u++ = (val >> 10) & 1023;
                         *y++ = (val >> 20) & 1023;
 
@@ -421,18 +469,17 @@ static int upipe_v210dec_set_flow_def(struct upipe *upipe, struct uref *flow_def
 
     struct upipe_v210dec *v210dec = upipe_v210dec_from_upipe(upipe);
 
-    if (unlikely(!ubase_check(uref_pic_flow_check_chroma(flow_def, 1, 1, 128, v210_chroma_str)))) {
+    if (unlikely(!ubase_check(uref_pic_flow_check_chroma(flow_def, 1, 1, 16, v210_chroma_str)))) {
         upipe_err(upipe, "incompatible input flow def");
         uref_dump(flow_def, upipe->uprobe);
         return UBASE_ERR_EXTERNAL;
     }
 
     uint64_t align;
-    UBASE_RETURN(uref_pic_flow_get_align(flow_def, &align))
-    if (!align || align % UBUF_ALIGN) {
-        upipe_err(upipe, "unaligned input flow def");
-        return UBASE_ERR_INVALID;
-    }
+    if (!ubase_check(uref_pic_flow_get_align(flow_def, &align)))
+        align = 0;
+
+    v210dec_setup_asm(upipe, align && (align % UBUF_ALIGN) == 0);
 
     struct uref *output_flow = uref_dup(flow_def);
     if (output_flow == NULL)
@@ -453,15 +500,15 @@ static int upipe_v210dec_set_flow_def(struct upipe *upipe, struct uref *flow_def
         } break;
 
         case V2D_OUTPUT_PLANAR_10: {
-            v210dec->output_chroma_map[0] = "y10";
-            v210dec->output_chroma_map[1] = "u10";
-            v210dec->output_chroma_map[2] = "v10";
+            v210dec->output_chroma_map[0] = "y10l";
+            v210dec->output_chroma_map[1] = "u10l";
+            v210dec->output_chroma_map[2] = "v10l";
             uref_pic_flow_clear_format(output_flow);
             UBASE_RETURN(uref_pic_flow_set_align(output_flow, 32));
             UBASE_RETURN(uref_pic_flow_set_macropixel(output_flow, 1))
-            UBASE_RETURN(uref_pic_flow_add_plane(output_flow, 1, 1, 2, "y10"))
-            UBASE_RETURN(uref_pic_flow_add_plane(output_flow, 2, 1, 2, "u10"))
-            UBASE_RETURN(uref_pic_flow_add_plane(output_flow, 2, 1, 2, "v10"))
+            UBASE_RETURN(uref_pic_flow_add_plane(output_flow, 1, 1, 2, "y10l"))
+            UBASE_RETURN(uref_pic_flow_add_plane(output_flow, 2, 1, 2, "u10l"))
+            UBASE_RETURN(uref_pic_flow_add_plane(output_flow, 2, 1, 2, "v10l"))
             UBASE_RETURN(uref_pic_flow_set_hmappend(output_flow, 6 + 8));
         } break;
 
@@ -581,9 +628,9 @@ static struct upipe *upipe_v210dec_alloc(struct upipe_mgr *manager,
         PRINT_OUTPUT_TYPE(V2D_OUTPUT_PLANAR_8);
     }
 
-    else if (ubase_check(uref_pic_flow_check_chroma(flow_def, 1, 1, 2, "y10")) &&
-             ubase_check(uref_pic_flow_check_chroma(flow_def, 2, 1, 2, "u10")) &&
-             ubase_check(uref_pic_flow_check_chroma(flow_def, 2, 1, 2, "v10"))) {
+    else if (ubase_check(uref_pic_flow_check_chroma(flow_def, 1, 1, 2, "y10l")) &&
+             ubase_check(uref_pic_flow_check_chroma(flow_def, 2, 1, 2, "u10l")) &&
+             ubase_check(uref_pic_flow_check_chroma(flow_def, 2, 1, 2, "v10l"))) {
         v210dec->output_type = V2D_OUTPUT_PLANAR_10;
         PRINT_OUTPUT_TYPE(V2D_OUTPUT_PLANAR_10);
     }
@@ -595,33 +642,6 @@ static struct upipe *upipe_v210dec_alloc(struct upipe_mgr *manager,
     }
 
 #undef PRINT_OUTPUT_TYPE
-
-    v210dec->v210_to_planar_8  = v210_to_planar_8_c;
-    v210dec->v210_to_planar_10 = v210_to_planar_10_c;
-
-#if !defined (__APPLE__)
-#if defined(__clang__) && (__clang_major__ < 3 || (__clang_major__ == 3 && __clang_minor__ <= 8))
-#ifdef __SSSE3__
-    if (1)
-#else
-    if (0)
-#endif
-#else /* not clang <= 3.8*/
-    if (__builtin_cpu_supports("ssse3"))
-#endif
-    {
-        v210dec->v210_to_planar_8  = upipe_v210_to_planar_8_aligned_ssse3;
-        v210dec->v210_to_planar_10 = upipe_v210_to_planar_10_aligned_ssse3;
-    }
-    if (__builtin_cpu_supports("avx")) {
-        v210dec->v210_to_planar_8  = upipe_v210_to_planar_8_aligned_avx;
-        v210dec->v210_to_planar_10 = upipe_v210_to_planar_10_aligned_avx;
-    }
-    if (__builtin_cpu_supports("avx2")) {
-        v210dec->v210_to_planar_8  = upipe_v210_to_planar_8_aligned_avx2;
-        v210dec->v210_to_planar_10 = upipe_v210_to_planar_10_aligned_avx2;
-    }
-#endif
 
     upipe_v210dec_init_urefcount(upipe);
     upipe_v210dec_init_ubuf_mgr(upipe);
