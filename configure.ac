@@ -113,6 +113,7 @@ PKG_CHECK_UPIPE(GLX, gl glu x11, [GL/glx.h GL/glu.h GL/gl.h])
 PKG_CHECK_UPIPE(X264, x264, [x264.h])
 PKG_CHECK_UPIPE(ECORE, ecore, [Ecore.h])
 PKG_CHECK_UPIPE(ZVBI, zvbi-0.2, [libzvbi.h])
+PKG_CHECK_UPIPE(FREETYPE, freetype2, [ft2build.h])
 AC_LANG_PUSH([C++])
 PKG_CHECK_UPIPE(QTWEBKIT, QtWebKit, [QtWebKit])
 AC_LANG_POP([C++])
@@ -212,6 +213,7 @@ AC_CONFIG_FILES([Makefile
                  include/upump-ev/Makefile
                  include/upump-ecore/Makefile
                  include/upipe-modules/Makefile
+                 include/upipe-freetype/Makefile
                  include/upipe-pthread/Makefile
                  include/upipe-framers/Makefile
                  include/upipe-av/Makefile
@@ -241,6 +243,8 @@ AC_CONFIG_FILES([Makefile
                  lib/upump-ev/libupump_ev.pc
                  lib/upump-ecore/Makefile
                  lib/upump-ecore/libupump_ecore.pc
+                 lib/upipe-freetype/Makefile
+                 lib/upipe-freetype/libupipe_freetype.pc
                  lib/upipe-modules/Makefile
                  lib/upipe-modules/libupipe_modules.pc
                  lib/upipe-pthread/Makefile

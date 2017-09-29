@@ -59,6 +59,10 @@ SUBDIRS += upipe-netmap
 endif
 endif
 
+if HAVE_FREETYPE
+SUBDIRS += upipe-freetype
+endif
+
 if HAVE_AVFORMAT
 SUBDIRS += upipe-av
 endif
