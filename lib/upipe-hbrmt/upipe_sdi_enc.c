@@ -171,9 +171,6 @@ struct upipe_sdi_enc {
     /* fps */
     struct urational fps;
 
-    /* video frame index (modulo 5) */
-    uint8_t frame_idx;
-
     /* worst case audio buffer (~128kB) */
     int32_t audio_buf[UPIPE_SDI_MAX_CHANNELS /* channels */ * 48000 * 1001 / 24000];
 
@@ -689,35 +686,6 @@ static void upipe_sdi_enc_init_sub_mgr(struct upipe *upipe)
     sub_mgr->upipe_mgr_control = NULL;
 }
 
-static inline unsigned audio_samples_count(struct upipe_sdi_enc *upipe_sdi_enc)
-{
-    struct urational *fps = &upipe_sdi_enc->fps;
-    const unsigned samples = (uint64_t)48000 * fps->den / fps->num;
-
-    /* fixed number of samples for 48kHz */
-    if (fps->den != 1001 || unlikely(fps->num == 24000))
-        return samples;
-
-    if (unlikely(fps->num != 30000 && fps->num != 60000)) {
-        upipe_err_va(&upipe_sdi_enc->upipe,
-                "Unsupported rate %"PRIu64"/%"PRIu64, fps->num, fps->den);
-        return samples;
-    }
-
-    /* cyclic loop of 5 different sample counts */
-    if (++upipe_sdi_enc->frame_idx == 5)
-        upipe_sdi_enc->frame_idx = 0;
-
-    static const uint8_t samples_increment[2][5] = {
-        { 1, 0, 1, 0, 1 }, /* 30000 / 1001 */
-        { 1, 1, 1, 1, 0 }  /* 60000 / 1001 */
-    };
-
-    bool rate5994 = !!(fps->num == 60000);
-
-    return samples + samples_increment[rate5994][upipe_sdi_enc->frame_idx];
-}
-
 static float get_pts(uint64_t pts)
 {
     static uint64_t first_pts;
@@ -1095,8 +1063,7 @@ static void upipe_sdi_enc_input(struct upipe *upipe, struct uref *uref,
         return;
     }
 
-    // FIXME: make sure all tracks have same # of samples
-    unsigned samples = audio_samples_count(upipe_sdi_enc);
+    unsigned samples = 0;
 
     struct uchain *uchain = NULL;
     ulist_foreach(&upipe_sdi_enc->subs, uchain) {
@@ -1698,7 +1665,6 @@ static struct upipe *_upipe_sdi_enc_alloc(struct upipe_mgr *mgr,
 
     sdi_crc_setup(upipe_sdi_enc->crc_lut);
 
-    upipe_sdi_enc->frame_idx = 0;
     upipe_sdi_enc->uref_audio = NULL;
     upipe_sdi_enc->started = 0;
 

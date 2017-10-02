@@ -45,6 +45,8 @@
 #include <upipe/upipe_helper_subpipe.h>
 #include <upipe/upipe_helper_urefcount.h>
 #include <upipe/upipe_helper_void.h>
+#include <upipe/upipe_helper_uref_mgr.h>
+#include <upipe/upipe_helper_ubuf_mgr.h>
 #include <upipe-modules/upipe_sync.h>
 
 /** upipe_sync structure */
@@ -124,6 +126,18 @@ struct upipe_sync_sub {
     /** linked list of subpipes */
     struct uchain uchain;
 
+    /** uref manager */
+    struct uref_mgr *uref_mgr;
+    /** uref manager request */
+    struct urequest uref_mgr_request;
+
+    /** ubuf manager */
+    struct ubuf_mgr *ubuf_mgr;
+    /** flow format packet */
+    struct uref *flow_format;
+    /** ubuf manager request */
+    struct urequest ubuf_mgr_request;
+
     /** subpic or sound */
     bool sound;
 
@@ -149,11 +163,22 @@ struct upipe_sync_sub {
     uint64_t samples;
 };
 
+/** @hidden */
+static int upipe_sync_sub_check(struct upipe *upipe, struct uref *flow_format);
+
 UPIPE_HELPER_UPIPE(upipe_sync_sub, upipe, UPIPE_SYNC_SUB_SIGNATURE);
 UPIPE_HELPER_UREFCOUNT(upipe_sync_sub, urefcount, upipe_sync_sub_free)
 UPIPE_HELPER_VOID(upipe_sync_sub);
 UPIPE_HELPER_OUTPUT(upipe_sync_sub, output, flow_def, output_state, request_list);
 
+UPIPE_HELPER_UREF_MGR(upipe_sync_sub, uref_mgr, uref_mgr_request,
+                      NULL,
+                      upipe_sync_sub_register_output_request,
+                      upipe_sync_sub_unregister_output_request)
+UPIPE_HELPER_UBUF_MGR(upipe_sync_sub, ubuf_mgr, flow_format, ubuf_mgr_request,
+                      NULL,
+                      upipe_sync_sub_register_output_request,
+                      upipe_sync_sub_unregister_output_request)
 UPIPE_HELPER_SUBPIPE(upipe_sync, upipe_sync_sub, sub, sub_mgr, subs, uchain);
 
 /** @internal @This allocates a sync_sub pipe.
@@ -183,9 +208,12 @@ static struct upipe *upipe_sync_sub_alloc(struct upipe_mgr *mgr,
 
     upipe_sync_sub_init_urefcount(upipe);
     upipe_sync_sub_init_output(upipe);
+    upipe_sync_sub_init_uref_mgr(upipe);
+    upipe_sync_sub_init_ubuf_mgr(upipe);
     upipe_sync_sub_init_sub(upipe);
 
     upipe_throw_ready(upipe);
+
     return upipe;
 }
 
@@ -315,6 +343,11 @@ static int upipe_sync_sub_set_flow_def(struct upipe *upipe, struct uref *flow_de
     UBASE_RETURN(uref_sound_flow_get_rate(flow_def, &rate));
     if (rate != 48000)
         return UBASE_ERR_INVALID;
+
+    if (!upipe_sync_sub->uref_mgr)
+        upipe_sync_sub_require_uref_mgr(upipe);
+    if (!upipe_sync_sub->ubuf_mgr)
+        upipe_sync_sub_require_ubuf_mgr(upipe, flow_def);
 
     flow_def = uref_dup(flow_def);
     if (!flow_def)
@@ -522,6 +555,32 @@ static struct uref *upipe_sync_get_cached_dolby(struct upipe *upipe)
     return uref_dup(upipe_sync_sub->uref);
 }
 
+static struct uref *get_silence(struct upipe *upipe, size_t samples)
+{
+    struct upipe_sync_sub *upipe_sync_sub = upipe_sync_sub_from_upipe(upipe);
+
+    if (!upipe_sync_sub->uref_mgr || !upipe_sync_sub->ubuf_mgr)
+        return NULL;
+
+    struct uref *uref = uref_sound_alloc(upipe_sync_sub->uref_mgr,
+            upipe_sync_sub->ubuf_mgr, samples);
+
+    if (!uref)
+        return NULL;
+
+    int32_t *buf;
+    if (!ubase_check(uref_sound_write_int32_t(uref, 0, -1, &buf, 1))) {
+        upipe_err_va(upipe, "Could not map uref");
+        return uref;
+    }
+
+    memset(buf, 0, samples * sizeof(int32_t) * upipe_sync_sub->channels);
+
+    uref_sound_unmap(uref, 0, -1, 1);
+
+    return uref;
+}
+
 static void output_sound(struct upipe *upipe, const struct urational *fps,
         struct upump **upump_p)
 {
@@ -561,6 +620,8 @@ static void output_sound(struct upipe *upipe, const struct urational *fps,
 
                     uref = upipe_sync_get_cached_dolby(upipe_sub);
                     if (!uref)
+                        uref = get_silence(upipe_sub, samples);
+                    if (!uref)
                         continue;
                 } else {
                     ulist_pop(&upipe_sync_sub->urefs);
@@ -594,6 +655,11 @@ static void output_sound(struct upipe *upipe, const struct urational *fps,
 
         /* look at first uref without dequeuing */
         struct uref *src = uref_from_uchain(ulist_peek(&upipe_sync_sub->urefs));
+        if (!src) {
+            src = get_silence(upipe_sub, samples);
+            if (src)
+                uref_clock_set_pts_sys(src, upipe_sync->pts - upipe_sync->latency);
+        }
         if (!src) {
             upipe_dbg_va(upipe_sub, "no urefs");
             continue;
@@ -1058,6 +1124,8 @@ static void upipe_sync_sub_free(struct upipe *upipe)
     upipe_sync_sub_clean_urefcount(upipe);
     upipe_sync_sub_clean_output(upipe);
     upipe_sync_sub_clean_sub(upipe);
+    upipe_sync_sub_clean_uref_mgr(upipe);
+    upipe_sync_sub_clean_ubuf_mgr(upipe);
     upipe_sync_sub_free_void(upipe);
 }
 
