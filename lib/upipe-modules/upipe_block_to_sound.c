@@ -129,6 +129,34 @@ static void upipe_block_to_sound_input(struct upipe *upipe, struct uref *uref, s
     upipe_block_to_sound_output(upipe, uref, upump_p);
 }
 
+/** @internal @This sets the input flow definition.
+ *
+ * @param upipe description structure of the pipe
+ * @param flow_def flow definition packet
+ * @return an error code
+ */
+static int upipe_block_to_sound_set_flow_def(struct upipe *upipe,
+                                       struct uref *flow_def)
+{
+    if (flow_def == NULL)
+        return UBASE_ERR_INVALID;
+
+    const char *def;
+    if (unlikely(!ubase_check(uref_flow_get_def(flow_def, &def)) ||
+                (ubase_ncmp(def, "block."))))
+        return UBASE_ERR_INVALID;
+
+    flow_def = uref_dup(flow_def);
+    if (unlikely(flow_def == NULL)) {
+        upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
+        return UBASE_ERR_ALLOC;
+    }
+
+    upipe_input(upipe, flow_def, NULL);
+
+    return UBASE_ERR_NONE;
+}
+
 /** @internal @This processes control commands.
  *
  * @param upipe description structure of the pipe
@@ -146,9 +174,10 @@ static int upipe_block_to_sound_control(struct upipe *upipe, int command, va_lis
         }
         case UPIPE_UNREGISTER_REQUEST:
             return UBASE_ERR_NONE;
-        case UPIPE_SET_FLOW_DEF:
-            return UBASE_ERR_NONE;
-
+        case UPIPE_SET_FLOW_DEF: {
+            struct uref *flow_def = va_arg(args, struct uref *);
+            return upipe_block_to_sound_set_flow_def(upipe, flow_def);
+        }
         case UPIPE_BLOCK_TO_SOUND_DUMP_DICT: {
             UBASE_SIGNATURE_CHECK(args, UPIPE_BLOCK_TO_SOUND_SIGNATURE)
             return UBASE_ERR_NONE;
@@ -175,13 +204,13 @@ static bool upipe_block_to_sound_handle(struct upipe *upipe, struct uref *uref,
 	struct upipe_block_to_sound *upipe_block_to_sound = upipe_block_to_sound_from_upipe(upipe);
     const char *def;
     if (unlikely(ubase_check(uref_flow_get_def(uref, &def)))) {
-        if (!ubase_ncmp(def, "block.")) {
-            flow_def = uref_dup(uref);
-        } else
-            return false;
-
-        upipe_input(upipe, flow_def, NULL);
+        upipe_block_to_sound_store_flow_def(upipe, uref);
+        uref_free(uref);
         return true;
+    }
+
+    upipe_block_to_sound_output(upipe, uref, upump_p);
+    return true;
 }
 
 /** @internal @This frees all resources allocated.
