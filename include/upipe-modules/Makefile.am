@@ -79,4 +79,5 @@ myinclude_HEADERS = \
 	upipe_audio_blank.h \
 	upipe_grid.h \
 	upipe_sync.h \
+	upipe_block_to_sound.h \
 	$(NULL)
