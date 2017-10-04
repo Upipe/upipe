@@ -123,10 +123,16 @@ static struct upipe *upipe_block_to_sound_alloc(struct upipe_mgr *mgr,
  */
 static void upipe_block_to_sound_input(struct upipe *upipe, struct uref *uref, struct upump **upump_p)
 {
-    struct upipe_block_to_sound *upipe_block_to_sound = upipe_block_to_sound_from_upipe(upipe);
-    upipe_verbose(upipe, "sending uref to block_to_sound");
-    uref_free(uref);
-    upipe_block_to_sound_output(upipe, uref, upump_p);
+    if (!upipe_block_to_sound_check_input(upipe)) {
+        upipe_block_to_sound_hold_input(upipe, uref);
+        upipe_block_to_sound_block_input(upipe, upump_p);
+    } else if (!upipe_block_to_sound_handle(upipe, uref, upump_p)) {
+        upipe_block_to_sound_hold_input(upipe, uref);
+        upipe_block_to_sound_block_input(upipe, upump_p);
+        /* Increment upipe refcount to avoid disappearing before all packets
+         * have been sent. */
+        upipe_use(upipe);
+    }
 }
 
 /** @internal @This sets the input flow definition.
