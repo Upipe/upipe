@@ -204,13 +204,13 @@ static bool upipe_block_to_sound_handle(struct upipe *upipe, struct uref *uref,
 	struct upipe_block_to_sound *upipe_block_to_sound = upipe_block_to_sound_from_upipe(upipe);
     const char *def;
     if (unlikely(ubase_check(uref_flow_get_def(uref, &def)))) {
-        if (!ubase_ncmp(def, "block.")) {
-            flow_def = uref_dup(uref);
-        } else
-            return false;
-
-        upipe_input(upipe, flow_def, NULL);
+        upipe_block_to_sound_store_flow_def(upipe, uref);
+        uref_free(uref);
         return true;
+    }
+
+    upipe_block_to_sound_output(upipe, uref, upump_p);
+    return true;
 }
 
 /** @internal @This frees all resources allocated.
