@@ -162,7 +162,7 @@ static int upipe_block_to_sound_set_flow_def(struct upipe *upipe,
 
     uref_block_flow_clear_format(flow_def);
     uref_flow_set_def(flow_def, "sound.s32.");
-    uint8_t sample_size = 20;
+    uint8_t sample_size = 8;
     uref_sound_flow_set_raw_sample_size(flow_def, sample_size);
     uint8_t planes = 1;
     uref_sound_flow_set_planes(flow_def, planes);
