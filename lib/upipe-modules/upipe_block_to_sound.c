@@ -39,6 +39,8 @@
 #include <upipe/upipe_helper_input.h>
 #include <upipe/upipe_helper_output.h>
 #include <upipe-modules/upipe_block_to_sound.h>
+#include <upipe/uref_sound_flow.h>
+#include <upipe/uref_block_flow.h>
 
 #include <stdlib.h>
 #include <stdbool.h>
@@ -158,6 +160,14 @@ static int upipe_block_to_sound_set_flow_def(struct upipe *upipe,
         return UBASE_ERR_ALLOC;
     }
 
+    uref_block_flow_clear_format(flow_def);
+    uref_flow_set_def(flow_def, "sound.s32.");
+    uint8_t sample_size = 20;
+    uref_sound_flow_set_raw_sample_size(flow_def, sample_size);
+    uint8_t planes = 1;
+    uref_sound_flow_set_planes(flow_def, planes);
+    uint8_t channels = 2;
+    uref_sound_flow_set_channels(flow_def, channels);
     upipe_input(upipe, flow_def, NULL);
 
     return UBASE_ERR_NONE;
@@ -180,6 +190,7 @@ static int upipe_block_to_sound_control(struct upipe *upipe, int command, va_lis
         }
         case UPIPE_UNREGISTER_REQUEST:
             return UBASE_ERR_NONE;
+
         case UPIPE_SET_FLOW_DEF: {
             struct uref *flow_def = va_arg(args, struct uref *);
             return upipe_block_to_sound_set_flow_def(upipe, flow_def);
@@ -211,7 +222,7 @@ static bool upipe_block_to_sound_handle(struct upipe *upipe, struct uref *uref,
     const char *def;
     if (unlikely(ubase_check(uref_flow_get_def(uref, &def)))) {
         upipe_block_to_sound_store_flow_def(upipe, uref);
-        uref_free(uref);
+        //uref_free(uref);
         return true;
     }
 
