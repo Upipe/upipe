@@ -764,7 +764,7 @@ static void upipe_sdi_enc_encode_line(struct upipe *upipe, int line_num, uint16_
 
     /* HBI */
     const uint8_t hanc_start = UPIPE_SDI_EAV_LENGTH;
-    upipe_sdi_enc->blank(&dst[hanc_start], f->active_offset - UPIPE_SDI_SAV_LENGTH);
+    upipe_sdi_enc->blank(&dst[hanc_start], f->active_offset - UPIPE_SDI_EAV_LENGTH/2 - UPIPE_SDI_SAV_LENGTH/2);
     dst += hanc_start;
 
     /* Ideal number of samples that should've been put */
@@ -884,7 +884,7 @@ static void upipe_hd_sdi_enc_encode_line(struct upipe *upipe, int line_num, uint
     sdi_crc_end(&upipe_sdi_enc->crc_y, &dst[13]);
 
     /* HBI */
-    upipe_sdi_enc->blank(&dst[hanc_start], f->active_offset - UPIPE_HD_SDI_SAV_LENGTH);
+    upipe_sdi_enc->blank(&dst[hanc_start], f->active_offset - UPIPE_HD_SDI_EAV_LENGTH/2 - UPIPE_HD_SDI_SAV_LENGTH/2);
 
     /* These packets are written in the first Luma sample after SAV */
     /* Payload identifier */
