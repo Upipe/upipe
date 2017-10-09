@@ -715,9 +715,8 @@ static void upipe_sdi_enc_encode_line(struct upipe *upipe, int line_num, uint16_
     input_hsize = p->active_width;
 
     /* Returns the total amount of samples per channel that can be put on
-     * a line, so convert that to packets (multiplying it by 4 since you have
-     * 4 channel groups) */
-    unsigned max_audio_packets_per_line = 4 * audio_packets_per_line(f);
+     * a line, so convert that to packets */
+    unsigned max_audio_packets_per_line = UPIPE_SDI_CHANNELS_PER_GROUP * audio_packets_per_line(f);
 
     // FIXME factor out common code
 
