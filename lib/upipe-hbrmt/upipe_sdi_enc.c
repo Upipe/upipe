@@ -708,6 +708,8 @@ static void upipe_sdi_enc_encode_line(struct upipe *upipe, int line_num, uint16_
     bool vbi = 0, f2 = 0, special_case = 0, ntsc;
     ntsc = p->active_height == 486;
 
+    unsigned line_num_audio = line_num;
+
     /* Use wraparound arithmetic to start at line 4 */
     if (ntsc)
         line_num = ((line_num + 2) % 525) + 1;
@@ -767,7 +769,7 @@ static void upipe_sdi_enc_encode_line(struct upipe *upipe, int line_num, uint16_
     dst += hanc_start;
 
     /* Ideal number of samples that should've been put */
-    unsigned samples_put_target = samples * (line_num) / f->height;
+    unsigned samples_put_target = samples * (line_num_audio) / f->height;
 
     /* All channel groups should have the same samples to put on a line */
     const int samples_to_put = samples_put_target - upipe_sdi_enc->sample_pos;
