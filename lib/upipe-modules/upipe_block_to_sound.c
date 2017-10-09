@@ -46,8 +46,6 @@
 #include <upipe/upipe_helper_ubuf_mgr.h>
 #include <upipe-modules/upipe_block_to_sound.h>
 
-
-
 #include <stdlib.h>
 #include <stdbool.h>
 #include <stdint.h>
@@ -272,6 +270,8 @@ static bool upipe_block_to_sound_handle(struct upipe *upipe, struct uref *uref,
     /* alloc sound ubuf */
     int samples;
     samples = block_size / 4 /*s32 */ / 2 /*stereo */;
+    block_size = samples * 8;             //block_size %2 != 0
+    
     assert(upipe_block_to_sound->ubuf_mgr);
     struct ubuf *ubuf_block_to_sound = ubuf_sound_alloc(upipe_block_to_sound->ubuf_mgr,
                                                         samples);
