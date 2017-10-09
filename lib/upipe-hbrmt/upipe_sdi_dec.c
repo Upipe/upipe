@@ -655,7 +655,7 @@ static int parse_hd_hanc(struct upipe *upipe, const uint16_t *packet, int line_n
     return 2 * (S291_HEADER_SIZE + (packet[10] & 0xff) + S291_FOOTER_SIZE);
 }
 
-static void extract_sd_audio(struct upipe *upipe, const uint16_t *packet, int line_num,
+static void extract_sd_audio(struct upipe *upipe, const uint16_t *packet,
                             struct audio_ctx *ctx)
 {
     struct upipe_sdi_dec *upipe_sdi_dec = upipe_sdi_dec_from_upipe(upipe);
@@ -695,7 +695,7 @@ static void extract_sd_audio(struct upipe *upipe, const uint16_t *packet, int li
     }
 }
 
-static int parse_sd_hanc(struct upipe *upipe, const uint16_t *packet, int line_num,
+static int parse_sd_hanc(struct upipe *upipe, const uint16_t *packet,
                          struct audio_ctx *ctx)
 {
     switch (packet[3] & 0xff) {
@@ -703,7 +703,7 @@ static int parse_sd_hanc(struct upipe *upipe, const uint16_t *packet, int line_n
     case S291_SD_AUDIO_GROUP2_DID:
     case S291_SD_AUDIO_GROUP3_DID:
     case S291_SD_AUDIO_GROUP4_DID:
-        extract_sd_audio(upipe, packet, line_num, ctx);
+        extract_sd_audio(upipe, packet, ctx);
         break;
 
     default:
@@ -989,7 +989,7 @@ static bool upipe_sdi_dec_handle(struct upipe *upipe, struct uref *uref,
                     validate_anc_len(packet, left, true))
                 {
                     /* - 1 to compensate for v++ above */
-                    v += parse_sd_hanc(upipe, packet, line_num, &audio_ctx) - 1;
+                    v += parse_sd_hanc(upipe, packet, &audio_ctx) - 1;
                 }
                 else
                 {
