@@ -285,14 +285,14 @@ static bool upipe_block_to_sound_handle(struct upipe *upipe, struct uref *uref,
 
     /* map sound ubuf for writing */
     uint8_t *w;
-    ubuf_sound_write_uint8_t(ubuf_block_to_sound, 0, -1, &w,
+    ubuf_sound_write_int32_t(ubuf_block_to_sound, 0, -1, &w,
                              upipe_block_to_sound->planes);
     /* map block ubuf for reading */
     const uint8_t *r;
     int end = -1;
     uref_block_read(uref, 0, &end, &r);
     /* copy block to sound */
-    memcpy(w, r, samples);
+    memcpy(w, r, block_size);
     /* unmap ubufs */
     ubuf_sound_unmap(ubuf_block_to_sound, 0, -1,
                      upipe_block_to_sound->planes);
