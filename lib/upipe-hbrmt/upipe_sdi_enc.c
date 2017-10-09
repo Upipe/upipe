@@ -771,7 +771,7 @@ static void upipe_sdi_enc_encode_line(struct upipe *upipe, int line_num, uint16_
     unsigned samples_put_target = samples * (line_num) / f->height;
 
     /* All channel groups should have the same samples to put on a line */
-    int samples_to_put = samples_put_target - upipe_sdi_enc->sample_pos;
+    const int samples_to_put = samples_put_target - upipe_sdi_enc->sample_pos;
 
     for (int ch_group = 0; ch_group < UPIPE_SDI_CHANNELS_PER_GROUP; ch_group++) {
         dst += put_sd_audio_data_packet(upipe_sdi_enc, dst, ch_group, samples_to_put);
