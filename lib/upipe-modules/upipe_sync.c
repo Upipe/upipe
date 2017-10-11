@@ -347,7 +347,7 @@ static int upipe_sync_sub_set_flow_def(struct upipe *upipe, struct uref *flow_de
     if (!upipe_sync_sub->uref_mgr)
         upipe_sync_sub_require_uref_mgr(upipe);
     if (!upipe_sync_sub->ubuf_mgr)
-        upipe_sync_sub_require_ubuf_mgr(upipe, flow_def);
+        upipe_sync_sub_require_ubuf_mgr(upipe, uref_dup(flow_def));
 
     flow_def = uref_dup(flow_def);
     if (!flow_def)
