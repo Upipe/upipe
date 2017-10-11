@@ -589,6 +589,13 @@ static int upipe_sdi_enc_sub_control(struct upipe *upipe, int command, va_list a
             return UBASE_ERR_NONE;
         }
 
+        case UPIPE_REGISTER_REQUEST: {
+            struct urequest *request = va_arg(args, struct urequest *);
+            return upipe_throw_provide_request(upipe, request);
+        }
+        case UPIPE_UNREGISTER_REQUEST:
+            return UBASE_ERR_NONE;
+
         default:
             return UBASE_ERR_UNHANDLED;
     }
