@@ -276,7 +276,10 @@ static inline int STRUCTURE_SUB##_control_super(struct upipe *upipe,        \
 {                                                                           \
     switch (command) {                                                      \
         case UPIPE_SUB_GET_SUPER: {                                         \
-            struct upipe **super_p = va_arg(args, struct upipe **);         \
+            va_list args_copy;                                              \
+            va_copy(args_copy, args);                                       \
+            struct upipe **super_p = va_arg(args_copy, struct upipe **);    \
+            va_end(args_copy);                                              \
             return STRUCTURE_SUB##_get_super(upipe, super_p);               \
         }                                                                   \
     }                                                                       \
@@ -349,17 +352,24 @@ static int STRUCTURE##_iterate_##SUB(struct upipe *upipe, struct upipe **p) \
 static inline int STRUCTURE##_control_##SUB##s(struct upipe *upipe,         \
                                                int command, va_list args)   \
 {                                                                           \
+    int ret = UBASE_ERR_UNHANDLED;                                          \
+    va_list args_copy;                                                      \
+    va_copy(args_copy, args);                                               \
     switch (command) {                                                      \
         case UPIPE_GET_SUB_MGR: {                                           \
-            struct upipe_mgr **mgr_p = va_arg(args, struct upipe_mgr **);   \
-            return STRUCTURE##_get_##MGR(upipe, mgr_p);                     \
+            struct upipe_mgr **mgr_p =                                      \
+                va_arg(args_copy, struct upipe_mgr **);                     \
+            ret = STRUCTURE##_get_##MGR(upipe, mgr_p);                      \
+            break;                                                          \
         }                                                                   \
         case UPIPE_ITERATE_SUB: {                                           \
-            struct upipe **sub_p = va_arg(args, struct upipe **);           \
-            return STRUCTURE##_iterate_##SUB(upipe, sub_p);                 \
+            struct upipe **sub_p = va_arg(args_copy, struct upipe **);      \
+            ret = STRUCTURE##_iterate_##SUB(upipe, sub_p);                  \
+            break;                                                          \
         }                                                                   \
     }                                                                       \
-    return UBASE_ERR_UNHANDLED;                                             \
+    va_end(args_copy);                                                      \
+    return ret;                                                             \
 }                                                                           \
 /** @This throws an event from all subpipes.                                \
  *                                                                          \

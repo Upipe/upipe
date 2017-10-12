@@ -197,24 +197,33 @@ static int STRUCTURE##_control_bin_output(struct upipe *upipe,              \
                                           int command, va_list args)        \
 {                                                                           \
     struct STRUCTURE *s = STRUCTURE##_from_upipe(upipe);                    \
+    int ret;                                                                \
+    va_list args_copy;                                                      \
+    va_copy(args_copy, args);                                               \
     switch (command) {                                                      \
         case UPIPE_GET_OUTPUT: {                                            \
-            struct upipe **p = va_arg(args, struct upipe **);               \
+            struct upipe **p = va_arg(args_copy, struct upipe **);          \
             *p = s->OUTPUT;                                                 \
-            return UBASE_ERR_NONE;                                          \
+            ret = UBASE_ERR_NONE;                                           \
+            break;                                                          \
         }                                                                   \
         case UPIPE_SET_OUTPUT: {                                            \
-            struct upipe *output = va_arg(args, struct upipe *);            \
-            return STRUCTURE##_set_bin_output(upipe, output);               \
+            struct upipe *output = va_arg(args_copy, struct upipe *);       \
+            ret = STRUCTURE##_set_bin_output(upipe, output);                \
+            break;                                                          \
         }                                                                   \
         case UPIPE_BIN_GET_LAST_INNER: {                                    \
-            struct upipe **p = va_arg(args, struct upipe **);               \
+            struct upipe **p = va_arg(args_copy, struct upipe **);          \
             *p = s->LAST_INNER;                                             \
-            return (*p != NULL) ? UBASE_ERR_NONE : UBASE_ERR_UNHANDLED;     \
+            ret =  (*p != NULL) ? UBASE_ERR_NONE : UBASE_ERR_UNHANDLED;     \
+            break;                                                          \
         }                                                                   \
         default:                                                            \
-            return STRUCTURE##_control_##LAST_INNER(upipe, command, args);  \
+            ret = STRUCTURE##_control_##LAST_INNER(upipe, command,          \
+                                                   args_copy);              \
     }                                                                       \
+    va_end(args_copy);                                                      \
+    return ret;                                                             \
 }                                                                           \
 /** @internal @This cleans up the private members for this helper.          \
  *                                                                          \
