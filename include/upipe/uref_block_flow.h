@@ -95,7 +95,7 @@ static inline struct uref *uref_block_flow_alloc_def(struct uref_mgr *mgr,
 static inline struct uref *uref_block_flow_alloc_def_va(struct uref_mgr *mgr,
                                                         const char *format, ...)
 {
-    UBASE_VARARG(uref_block_flow_alloc_def(mgr, string))
+    UBASE_VARARG(uref_block_flow_alloc_def(mgr, string), NULL)
 }
 
 /** @This clears the attributes that are no longer relevant when the block is
