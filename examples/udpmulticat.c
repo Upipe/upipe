@@ -17,7 +17,7 @@
 #include <upipe/ubase.h>
 #include <upipe/uprobe.h>
 #include <upipe/uprobe_helper_alloc.h>
-#include <upipe/uprobe_stdio_color.h>
+#include <upipe/uprobe_stdio.h>
 #include <upipe/uprobe_prefix.h>
 #include <upipe/uprobe_select_flows.h>
 #include <upipe/uprobe_uref_mgr.h>
@@ -88,7 +88,7 @@ int main(int argc, char **argv)
     udict_mgr_release(udict_mgr);
 
     /* probes */
-    uprobe_main = uprobe_stdio_color_alloc(NULL, stdout, loglevel);
+    uprobe_main = uprobe_stdio_alloc(NULL, stdout, loglevel);
 
     assert(uprobe_main);
     uprobe_main = uprobe_uref_mgr_alloc(uprobe_main, uref_mgr);
