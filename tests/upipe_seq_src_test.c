@@ -28,7 +28,7 @@
 #undef NDEBUG
 
 #include <upipe/uprobe.h>
-#include <upipe/uprobe_stdio_color.h>
+#include <upipe/uprobe_stdio.h>
 #include <upipe/uprobe_prefix.h>
 #include <upipe/uprobe_uref_mgr.h>
 #include <upipe/uprobe_upump_mgr.h>
@@ -122,7 +122,7 @@ int main(int argc, char *argv[])
     struct uprobe uprobe;
     uprobe_init(&uprobe, catch, NULL);
     struct uprobe *logger =
-        uprobe_stdio_color_alloc(&uprobe, stdout, UPROBE_LOG_LEVEL);
+        uprobe_stdio_alloc(&uprobe, stdout, UPROBE_LOG_LEVEL);
     assert(logger != NULL);
     logger = uprobe_uref_mgr_alloc(logger, uref_mgr);
     assert(logger != NULL);

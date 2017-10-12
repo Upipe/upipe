@@ -381,18 +381,10 @@ static int upipe_speexdsp_control(struct upipe *upipe, int command, va_list args
             return upipe_speexdsp_free_output_proxy(upipe, request);
         }
 
-        case UPIPE_GET_OUTPUT: {
-            struct upipe **p = va_arg(args, struct upipe **);
-            return upipe_speexdsp_get_output(upipe, p);
-        }
-        case UPIPE_SET_OUTPUT: {
-            struct upipe *output = va_arg(args, struct upipe *);
-            return upipe_speexdsp_set_output(upipe, output);
-        }
-        case UPIPE_GET_FLOW_DEF: {
-            struct uref **p = va_arg(args, struct uref **);
-            return upipe_speexdsp_get_flow_def(upipe, p);
-        }
+        case UPIPE_GET_OUTPUT:
+        case UPIPE_SET_OUTPUT:
+        case UPIPE_GET_FLOW_DEF:
+            return upipe_speexdsp_control_output(upipe, command, args);
         case UPIPE_SET_FLOW_DEF: {
             struct uref *flow = va_arg(args, struct uref *);
             return upipe_speexdsp_set_flow_def(upipe, flow);

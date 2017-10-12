@@ -830,30 +830,12 @@ static int upipe_rtpd_set_flow_def(struct upipe *upipe, struct uref *flow_def)
 static int upipe_rtpd_control(struct upipe *upipe, int command, va_list args)
 {
     struct upipe_rtpd *upipe_rtpd = upipe_rtpd_from_upipe(upipe);
+
+    UBASE_HANDLED_RETURN(upipe_rtpd_control_output(upipe, command, args));
     switch (command) {
-        case UPIPE_REGISTER_REQUEST: {
-            struct urequest *request = va_arg(args, struct urequest *);
-            return upipe_rtpd_alloc_output_proxy(upipe, request);
-        }
-        case UPIPE_UNREGISTER_REQUEST: {
-            struct urequest *request = va_arg(args, struct urequest *);
-            return upipe_rtpd_free_output_proxy(upipe, request);
-        }
-        case UPIPE_GET_FLOW_DEF: {
-            struct uref **p = va_arg(args, struct uref **);
-            return upipe_rtpd_get_flow_def(upipe, p);
-        }
         case UPIPE_SET_FLOW_DEF: {
             struct uref *flow_def = va_arg(args, struct uref *);
             return upipe_rtpd_set_flow_def(upipe, flow_def);
-        }
-        case UPIPE_GET_OUTPUT: {
-            struct upipe **p = va_arg(args, struct upipe **);
-            return upipe_rtpd_get_output(upipe, p);
-        }
-        case UPIPE_SET_OUTPUT: {
-            struct upipe *output = va_arg(args, struct upipe *);
-            return upipe_rtpd_set_output(upipe, output);
         }
         case UPIPE_RTPD_GET_PACKETS_LOST: {
             UBASE_SIGNATURE_CHECK(args, UPIPE_RTPD_SIGNATURE)

@@ -241,6 +241,14 @@ static inline void uprobe_clean(struct uprobe *uprobe)
     uprobe_release(uprobe->next);
 }
 
+/** @This allocates and initializes a probe.
+ *
+ * @param func function called when an event is raised
+ * @param next next probe to test if this one doesn't catch the event
+ * @return an allocated probe
+ */
+struct uprobe *uprobe_alloc(uprobe_throw_func func, struct uprobe *next);
+
 /** @internal @This throws generic events with optional arguments.
  *
  * @param uprobe pointer to probe hierarchy

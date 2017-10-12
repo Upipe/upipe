@@ -16,13 +16,13 @@ libupipe_la_SOURCES = \
 	uref_std.c \
 	uref_uri.c \
 	upipe_dump.c \
+	uprobe.c \
 	uprobe_dejitter.c \
 	uprobe_loglevel.c \
 	uprobe_prefix.c \
 	uprobe_select_flows.c \
 	uprobe_source_mgr.c \
 	uprobe_stdio.c \
-	uprobe_stdio_color.c \
 	uprobe_syslog.c \
 	uprobe_transfer.c \
 	uprobe_ubuf_mem.c \

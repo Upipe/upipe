@@ -3,7 +3,6 @@ AM_LOG_FLAGS = $(srcdir)
 
 dist_check_SCRIPTS = \
 	uprobe_stdio_test.sh \
-	uprobe_stdio_color_test.sh \
 	uprobe_syslog_test.sh \
 	uprobe_prefix_test.sh \
 	udict_inline_test.sh \
@@ -21,7 +20,6 @@ dist_check_DATA = \
 	valgrind_osx.supp \
 	udict_inline_test.txt \
 	uprobe_stdio_test.txt \
-	uprobe_stdio_color_test.txt \
 	uprobe_prefix_test.txt \
 	upipe_ts_test.ts \
 	upipe_h264_framer_test.h \
@@ -53,7 +51,6 @@ check_PROGRAMS = \
 	uuri_test \
 	ucookie_test \
 	uprobe_stdio_test \
-	uprobe_stdio_color_test \
 	uprobe_syslog_test \
 	uprobe_prefix_test \
 	uprobe_dejitter_test \
@@ -98,7 +95,10 @@ check_PROGRAMS = \
 	upipe_audio_max_test \
 	upipe_audio_bar_test \
 	upipe_audio_graph_test \
-	upipe_filter_blend_test
+	upipe_filter_blend_test	\
+	upipe_video_blank_test \
+	upipe_audio_blank_test \
+	upipe_grid_test
 
 TESTS = \
 	ulist_test \
@@ -113,7 +113,6 @@ TESTS = \
 	ubuf_pic_mem_test \
 	ubuf_sound_mem_test \
 	uprobe_stdio_test.sh \
-	uprobe_stdio_color_test.sh \
 	uprobe_syslog_test.sh \
 	uprobe_prefix_test.sh \
 	uprobe_dejitter_test \
@@ -152,7 +151,10 @@ TESTS = \
 	upipe_audio_max_test \
 	upipe_audio_bar_test \
 	upipe_audio_graph_test \
-	upipe_filter_blend_test
+	upipe_filter_blend_test \
+	upipe_video_blank_test \
+	upipe_audio_blank_test \
+	upipe_grid_test
 
 if HAVE_SPEEXDSP
 check_PROGRAMS += \
@@ -179,7 +181,9 @@ check_PROGRAMS += \
 	upipe_worker_linear_test \
 	upipe_worker_sink_test \
 	upipe_worker_source_test \
-	upipe_m3u_reader_test
+	upipe_worker_test \
+	upipe_m3u_reader_test \
+	upipe_void_source_test
 
 TESTS += \
 	upump_ev_test \
@@ -197,7 +201,9 @@ TESTS += \
 	upipe_worker_linear_test \
 	upipe_worker_sink_test \
 	upipe_worker_source_test \
-	upipe_m3u_reader_test.sh
+	upipe_worker_test \
+	upipe_m3u_reader_test.sh \
+	upipe_void_source_test
 
 if HAVE_PTHREAD
 check_PROGRAMS += \
@@ -367,6 +373,7 @@ upipe_transfer_test_LDADD = $(LDADD) -lev $(top_builddir)/lib/upump-ev/libupump_
 upipe_worker_linear_test_LDADD = $(LDADD) -lev $(top_builddir)/lib/upump-ev/libupump_ev.la $(top_builddir)/lib/upipe-modules/libupipe_modules.la $(top_builddir)/lib/upipe-pthread/libupipe_pthread.la -lpthread
 upipe_worker_sink_test_LDADD = $(LDADD) -lev $(top_builddir)/lib/upump-ev/libupump_ev.la $(top_builddir)/lib/upipe-modules/libupipe_modules.la $(top_builddir)/lib/upipe-pthread/libupipe_pthread.la -lpthread
 upipe_worker_source_test_LDADD = $(LDADD) -lev $(top_builddir)/lib/upump-ev/libupump_ev.la $(top_builddir)/lib/upipe-modules/libupipe_modules.la $(top_builddir)/lib/upipe-pthread/libupipe_pthread.la -lpthread
+upipe_worker_test_LDADD = $(LDADD) -lev $(top_builddir)/lib/upump-ev/libupump_ev.la $(top_builddir)/lib/upipe-modules/libupipe_modules.la $(top_builddir)/lib/upipe-pthread/libupipe_pthread.la -lpthread
 upipe_multicat_test_LDADD = $(LDADD) -lev $(top_builddir)/lib/upump-ev/libupump_ev.la $(top_builddir)/lib/upipe-modules/libupipe_modules.la
 upipe_http_src_test_LDADD = $(LDADD) -lev $(top_builddir)/lib/upump-ev/libupump_ev.la $(top_builddir)/lib/upipe-modules/libupipe_modules.la
 upipe_blank_source_test_LDADD = $(LDADD) -lev $(top_builddir)/lib/upump-ev/libupump_ev.la $(top_builddir)/lib/upipe-modules/libupipe_modules.la
@@ -471,3 +478,7 @@ upump_ecore_test_CFLAGS = $(AM_CFLAGS) $(ECORE_CFLAGS)
 upipe_m3u_reader_test_LDADD = $(LDADD) -lev $(top_builddir)/lib/upump-ev/libupump_ev.la $(top_builddir)/lib/upipe-modules/libupipe_modules.la
 ustring_test_CFLAGS = $(AM_CFLAGS) -fno-inline
 upipe_seq_src_test_LDADD = $(LDADD) -lev $(top_builddir)/lib/upump-ev/libupump_ev.la $(top_builddir)/lib/upipe-modules/libupipe_modules.la
+upipe_void_source_test_LDADD = $(LDADD) -lev $(top_builddir)/lib/upump-ev/libupump_ev.la $(top_builddir)/lib/upipe-modules/libupipe_modules.la
+upipe_video_blank_test_LDADD = $(LDADD) $(top_builddir)/lib/upipe-modules/libupipe_modules.la
+upipe_audio_blank_test_LDADD = $(LDADD) $(top_builddir)/lib/upipe-modules/libupipe_modules.la
+upipe_grid_test_LDADD = $(LDADD) $(top_builddir)/lib/upipe-modules/libupipe_modules.la

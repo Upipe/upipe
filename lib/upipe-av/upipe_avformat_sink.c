@@ -438,6 +438,7 @@ static int upipe_avfsink_sub_provide_flow_format(struct upipe *upipe,
 static int upipe_avfsink_sub_control(struct upipe *upipe,
                                      int command, va_list args)
 {
+    UBASE_HANDLED_RETURN(upipe_avfsink_sub_control_super(upipe, command, args));
     switch (command) {
         case UPIPE_REGISTER_REQUEST: {
             struct urequest *request = va_arg(args, struct urequest *);
@@ -452,11 +453,6 @@ static int upipe_avfsink_sub_control(struct upipe *upipe,
             struct uref *flow_def = va_arg(args, struct uref *);
             return upipe_avfsink_sub_set_flow_def(upipe, flow_def);
         }
-        case UPIPE_SUB_GET_SUPER: {
-            struct upipe **p = va_arg(args, struct upipe **);
-            return upipe_avfsink_sub_get_super(upipe, p);
-        }
-
         default:
             return UBASE_ERR_UNHANDLED;
     }
@@ -912,18 +908,13 @@ static int upipe_avfsink_set_uri(struct upipe *upipe, const char *uri)
  */
 static int upipe_avfsink_control(struct upipe *upipe, int command, va_list args)
 {
+    UBASE_HANDLED_RETURN(upipe_avfsink_control_subs(upipe, command, args));
+    UBASE_HANDLED_RETURN(upipe_control_provide_request(upipe, command, args));
+
     switch (command) {
         case UPIPE_SET_FLOW_DEF: {
             struct uref *flow_def = va_arg(args, struct uref *);
             return upipe_avfsink_set_flow_def(upipe, flow_def);
-        }
-        case UPIPE_GET_SUB_MGR: {
-            struct upipe_mgr **p = va_arg(args, struct upipe_mgr **);
-            return upipe_avfsink_get_sub_mgr(upipe, p);
-        }
-        case UPIPE_ITERATE_SUB: {
-            struct upipe **p = va_arg(args, struct upipe **);
-            return upipe_avfsink_iterate_sub(upipe, p);
         }
         case UPIPE_GET_OPTION: {
             const char *option = va_arg(args, const char *);
@@ -961,12 +952,6 @@ static int upipe_avfsink_control(struct upipe *upipe, int command, va_list args)
             return _upipe_avfsink_get_duration(upipe, duration_p);
         }
 
-        case UPIPE_REGISTER_REQUEST: {
-            struct urequest *request = va_arg(args, struct urequest *);
-            return upipe_throw_provide_request(upipe, request);
-        }
-        case UPIPE_UNREGISTER_REQUEST:
-            return UBASE_ERR_NONE;
         case UPIPE_GET_URI: {
             const char **uri_p = va_arg(args, const char **);
             return upipe_avfsink_get_uri(upipe, uri_p);

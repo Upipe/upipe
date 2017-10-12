@@ -174,7 +174,8 @@ static struct upipe *upipe_autof_alloc_framer(struct upipe *upipe,
 
     if ((!ubase_ncmp(def, "block.mp2.") ||
          !ubase_ncmp(def, "block.mp3.") ||
-         !ubase_ncmp(def, "block.aac.")) &&
+         !ubase_ncmp(def, "block.aac.") ||
+         !ubase_ncmp(def, "block.aac_latm.")) &&
         autof_mgr->mpgaf_mgr != NULL)
         return upipe_void_alloc(autof_mgr->mpgaf_mgr,
                 uprobe_pfx_alloc(

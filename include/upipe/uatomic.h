@@ -43,7 +43,29 @@ extern "C" {
 #include <stdint.h>
 #include <stdbool.h>
 
-#ifdef UPIPE_HAVE_ATOMIC_OPS
+/* TODO: make C11 support interoperable with C++ code
+ * e.g. a refcount could be allocated by C11 code then used by C++ code */
+#if 0 && !defined(__cplusplus) && (__STDC_VERSION__ >= 201112L) && !defined(__STDC_NO_ATOMICS__)
+
+#include <stdatomic.h>
+typedef uint32_t _Atomic uatomic_uint32_t;
+typedef void * _Atomic uatomic_ptr_t;
+
+#define uatomic_init atomic_init
+#define uatomic_ptr_init atomic_init
+#define uatomic_store atomic_store
+#define uatomic_ptr_store atomic_store
+#define uatomic_load atomic_load
+#define uatomic_ptr_load atomic_load
+#define uatomic_clean(a)
+#define uatomic_ptr_clean(a)
+#define uatomic_compare_exchange atomic_compare_exchange_strong
+#define uatomic_ptr_compare_exchange atomic_compare_exchange_strong
+
+#define uatomic_fetch_add atomic_fetch_add
+#define uatomic_fetch_sub atomic_fetch_sub
+
+#elif defined(UPIPE_HAVE_ATOMIC_OPS)
 
 /*
  * Preferred method: gcc atomic operations
@@ -51,10 +73,10 @@ extern "C" {
 
 /** @This defines an atomic 32-bits unsigned integer. ARM platforms do not
  * support larger atomic operations. */
-typedef volatile uint32_t uatomic_uint32_t;
+typedef uint32_t uatomic_uint32_t;
 
 /** @This defines an atomic pointer. */
-typedef void * volatile uatomic_ptr_t;
+typedef void * uatomic_ptr_t;
 
 /** @This defines a set of functions to manipulate atomic variables. */
 #define UATOMIC_TEMPLATE(type, ctype, atomictype)                           \
@@ -225,7 +247,6 @@ static inline uint32_t uatomic_fetch_sub(uatomic_uint32_t *obj,
 
 /*
  * FIXME: TBW
- * TODO: write C11 support
  */
 
 #error no atomic support

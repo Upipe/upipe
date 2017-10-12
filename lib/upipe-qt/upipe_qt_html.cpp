@@ -311,18 +311,10 @@ static int _upipe_qt_html_control(struct upipe *upipe, int command, va_list args
             upipe_qt_html_attach_upump_mgr(upipe);
             return UBASE_ERR_NONE;
         }
-        case UPIPE_GET_OUTPUT: {
-            struct upipe **p = va_arg(args, struct upipe **);
-            return upipe_qt_html_get_output(upipe, p);
-        }
-        case UPIPE_SET_OUTPUT: {
-            struct upipe *output = va_arg(args, struct upipe *);
-            return upipe_qt_html_set_output(upipe, output);
-        }
-        case UPIPE_GET_FLOW_DEF: {
-            struct uref **p = va_arg(args, struct uref **);
-            return upipe_qt_html_get_flow_def(upipe, p);
-        }
+        case UPIPE_GET_OUTPUT:
+        case UPIPE_SET_OUTPUT:
+        case UPIPE_GET_FLOW_DEF:
+            return upipe_qt_html_control_output(upipe, command, args);
         case UPIPE_QT_HTML_SET_URL: {
             UBASE_SIGNATURE_CHECK(args, UPIPE_QT_HTML_SIGNATURE);
             html->url = va_arg(args, const char*);

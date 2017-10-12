@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2014 OpenHeadend S.A.R.L.
+ * Copyright (C) 2014-2017 OpenHeadend S.A.R.L.
  *
  * Authors: Christophe Massiot
  *
@@ -54,6 +54,7 @@ extern "C" {
 #endif
 
 #include <upipe/upipe.h>
+#include <upipe-modules/upipe_worker.h>
 
 #define UPIPE_WSINK_SIGNATURE UBASE_FOURCC('w','s','n','k')
 
@@ -62,27 +63,14 @@ extern "C" {
  * @param xfer_mgr manager to transfer pipes to the remote thread
  * @return pointer to manager
  */
-struct upipe_mgr *upipe_wsink_mgr_alloc(struct upipe_mgr *xfer_mgr);
-
-/** @This extends upipe_mgr_command with specific commands for wsink. */
-enum upipe_wsink_mgr_command {
-    UPIPE_WSINK_MGR_SENTINEL = UPIPE_MGR_CONTROL_LOCAL,
-
-/** @hidden */
-#define UPIPE_WSINK_MGR_GET_SET_MGR(name, NAME)                             \
-    /** returns the current manager for name inner pipes                    \
-     * (struct upipe_mgr **) */                                             \
-    UPIPE_WSINK_MGR_GET_##NAME##_MGR,                                       \
-    /** sets the manager for name inner pipes (struct upipe_mgr *) */       \
-    UPIPE_WSINK_MGR_SET_##NAME##_MGR,
-
-    UPIPE_WSINK_MGR_GET_SET_MGR(qsrc, QSRC)
-    UPIPE_WSINK_MGR_GET_SET_MGR(qsink, QSINK)
-#undef UPIPE_WSINK_MGR_GET_SET_MGR
-};
+static inline struct upipe_mgr *
+upipe_wsink_mgr_alloc(struct upipe_mgr *xfer_mgr)
+{
+    return upipe_work_mgr_alloc(xfer_mgr);
+}
 
 /** @hidden */
-#define UPIPE_WSINK_MGR_GET_SET_MGR2(name, NAME)                            \
+#define UPIPE_WSINK_MGR_GET_SET_MGR(name)                                   \
 /** @This returns the current manager for name inner pipes.                 \
  *                                                                          \
  * @param mgr pointer to manager                                            \
@@ -93,8 +81,7 @@ static inline int                                                           \
     upipe_wsink_mgr_get_##name##_mgr(struct upipe_mgr *mgr,                 \
                                      struct upipe_mgr *p)                   \
 {                                                                           \
-    return upipe_mgr_control(mgr, UPIPE_WSINK_MGR_GET_##NAME##_MGR,         \
-                             UPIPE_WSINK_SIGNATURE, p);                     \
+    return upipe_work_mgr_get_##name##_mgr(mgr, p);                         \
 }                                                                           \
 /** @This sets the manager for name inner pipes. This may only be called    \
  * before any pipe has been allocated.                                      \
@@ -107,13 +94,12 @@ static inline int                                                           \
     upipe_wsink_mgr_set_##name##_mgr(struct upipe_mgr *mgr,                 \
                                      struct upipe_mgr *m)                   \
 {                                                                           \
-    return upipe_mgr_control(mgr, UPIPE_WSINK_MGR_SET_##NAME##_MGR,         \
-                             UPIPE_WSINK_SIGNATURE, m);                     \
+    return upipe_work_mgr_set_##name##_mgr(mgr, m);                         \
 }
 
-UPIPE_WSINK_MGR_GET_SET_MGR2(qsrc, QSRC)
-UPIPE_WSINK_MGR_GET_SET_MGR2(qsink, QSINK)
-#undef UPIPE_WSINK_MGR_GET_SET_MGR2
+UPIPE_WSINK_MGR_GET_SET_MGR(qsrc)
+UPIPE_WSINK_MGR_GET_SET_MGR(qsink)
+#undef UPIPE_WSINK_MGR_GET_SET_MGR
 
 /** @hidden */
 #define ARGS_DECL , struct upipe *upipe_remote, struct uprobe *uprobe_remote, unsigned int input_queue_length

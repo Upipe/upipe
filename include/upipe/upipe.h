@@ -819,8 +819,34 @@ static inline int upipe_throw_need_source_mgr(struct upipe *upipe,
 static inline int upipe_throw_provide_request(struct upipe *upipe,
                                               struct urequest *urequest)
 {
-    upipe_dbg_va(upipe, "throw provide request type %d", urequest->type);
+    const char *type_str = urequest_type_str(urequest->type);
+    if (likely(type_str))
+        upipe_dbg_va(upipe, "throw provide request type %s", type_str);
+    else
+        upipe_dbg_va(upipe, "throw provide request type %d", urequest->type);
     return upipe_throw(upipe, UPROBE_PROVIDE_REQUEST, urequest);
+}
+
+/** @This handles control commands for registering/unregistering request when
+ * an event need to be thrown.
+ *
+ * @param upipe description structure of the pipe
+ * @param command control command to handle
+ * @param args optional arguments
+ * @return an error code
+ */
+static inline int upipe_control_provide_request(struct upipe *upipe,
+                                                int command, va_list args)
+{
+    switch (command) {
+        case UPIPE_REGISTER_REQUEST: {
+            struct urequest *request = va_arg(args, struct urequest *);
+            return upipe_throw_provide_request(upipe, request);
+        }
+        case UPIPE_UNREGISTER_REQUEST:
+            return UBASE_ERR_NONE;
+    }
+    return UBASE_ERR_UNHANDLED;
 }
 
 /** @This throws an event asking for a upump manager. Note that all parameters

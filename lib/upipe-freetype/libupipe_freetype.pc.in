@@ -1,0 +1,10 @@
+prefix=@prefix@
+exec_prefix=@exec_prefix@
+libdir=@libdir@
+includedir=@includedir@
+Name: libupipe_freetype
+Description: Upipe multimedia framework, freetype text renderer module
+Version: @VERSION@
+Requires: freetype2 libupipe
+Libs: -L${libdir} -lupipe_freetype
+Cflags: -I${includedir}

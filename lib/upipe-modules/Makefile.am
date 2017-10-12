@@ -45,9 +45,7 @@ libupipe_modules_la_SOURCES = \
 	upipe_audiocont.c \
 	upipe_blank_source.c \
 	upipe_sine_wave_source.c \
-	upipe_worker_linear.c \
-	upipe_worker_sink.c \
-	upipe_worker_source.c \
+	upipe_worker.c \
 	upipe_stream_switcher.c \
 	upipe_rtp_h264.c \
 	upipe_rtp_mpeg4.c \
@@ -70,6 +68,10 @@ libupipe_modules_la_SOURCES = \
 	upipe_rtp_pcm_pack.c \
 	upipe_rtp_fec.c \
 	upipe_dtsdi.c \
+	upipe_void_source.c \
+	upipe_video_blank.c \
+	upipe_audio_blank.c \
+	upipe_grid.c \
 	upipe_sync.c \
 	$(NULL)
 

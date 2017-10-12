@@ -584,6 +584,8 @@ static int _upipe_fsink_get_sync_period(struct upipe *upipe, uint64_t *p)
  */
 static int  _upipe_fsink_control(struct upipe *upipe, int command, va_list args)
 {
+    UBASE_HANDLED_RETURN(upipe_control_provide_request(upipe, command, args));
+
     switch (command) {
         case UPIPE_ATTACH_UPUMP_MGR:
             upipe_fsink_set_upump(upipe, NULL);
@@ -593,12 +595,6 @@ static int  _upipe_fsink_control(struct upipe *upipe, int command, va_list args)
             upipe_fsink_set_upump(upipe, NULL);
             upipe_fsink_set_upump_sync(upipe, NULL);
             upipe_fsink_require_uclock(upipe);
-            return UBASE_ERR_NONE;
-        case UPIPE_REGISTER_REQUEST: {
-            struct urequest *request = va_arg(args, struct urequest *);
-            return upipe_throw_provide_request(upipe, request);
-        }
-        case UPIPE_UNREGISTER_REQUEST:
             return UBASE_ERR_NONE;
         case UPIPE_SET_FLOW_DEF: {
             struct uref *flow_def = va_arg(args, struct uref *);
@@ -698,9 +694,10 @@ static void upipe_fsink_free(struct upipe *upipe)
 {
     struct upipe_fsink *upipe_fsink = upipe_fsink_from_upipe(upipe);
     if (likely(upipe_fsink->fd != -1)) {
-        if (likely(upipe_fsink->path != NULL))
+        if (likely(upipe_fsink->path != NULL)) {
             upipe_notice_va(upipe, "closing file %s", upipe_fsink->path);
-        close(upipe_fsink->fd);
+            close(upipe_fsink->fd);
+        }
     }
     upipe_throw_dead(upipe);
 

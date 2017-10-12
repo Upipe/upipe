@@ -1056,27 +1056,14 @@ static int _upipe_http_src_control(struct upipe *upipe,
             upipe_http_src_require_uclock(upipe);
             return UBASE_ERR_NONE;
 
-        case UPIPE_GET_FLOW_DEF: {
-            struct uref **p = va_arg(args, struct uref **);
-            return upipe_http_src_get_flow_def(upipe, p);
-        }
-        case UPIPE_GET_OUTPUT: {
-            struct upipe **p = va_arg(args, struct upipe **);
-            return upipe_http_src_get_output(upipe, p);
-        }
-        case UPIPE_SET_OUTPUT: {
-            struct upipe *output = va_arg(args, struct upipe *);
-            return upipe_http_src_set_output(upipe, output);
-        }
+        case UPIPE_GET_FLOW_DEF:
+        case UPIPE_GET_OUTPUT:
+        case UPIPE_SET_OUTPUT:
+            return upipe_http_src_control_output(upipe, command, args);
 
-        case UPIPE_GET_OUTPUT_SIZE: {
-            unsigned int *p = va_arg(args, unsigned int *);
-            return upipe_http_src_get_output_size(upipe, p);
-        }
-        case UPIPE_SET_OUTPUT_SIZE: {
-            unsigned int output_size = va_arg(args, unsigned int);
-            return upipe_http_src_set_output_size(upipe, output_size);
-        }
+        case UPIPE_GET_OUTPUT_SIZE:
+        case UPIPE_SET_OUTPUT_SIZE:
+            return upipe_http_src_control_output_size(upipe, command, args);
 
         case UPIPE_GET_URI: {
             const char **uri_p = va_arg(args, const char **);

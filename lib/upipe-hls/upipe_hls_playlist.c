@@ -1044,14 +1044,9 @@ static int upipe_hls_playlist_control_internal(struct upipe *upipe,
 					       int command,
 					       va_list args)
 {
-    switch (command) {
-    case UPIPE_REGISTER_REQUEST: {
-        struct urequest *urequest = va_arg(args, struct urequest *);
-        return upipe_throw_provide_request(upipe, urequest);
-    }
-    case UPIPE_UNREGISTER_REQUEST:
-        return UBASE_ERR_NONE;
+    UBASE_HANDLED_RETURN(upipe_control_provide_request(upipe, command, args));
 
+    switch (command) {
     case UPIPE_ATTACH_UCLOCK:
         return upipe_hls_playlist_attach_uclock(upipe);
 

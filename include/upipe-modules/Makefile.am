@@ -22,6 +22,7 @@ myinclude_HEADERS = \
 	upipe_worker_linear.h \
 	upipe_worker_sink.h \
 	upipe_worker_source.h \
+	upipe_worker.h \
 	upipe_htons.h \
 	upipe_chunk_stream.h \
 	upipe_queue_sink.h \
@@ -74,5 +75,9 @@ myinclude_HEADERS = \
 	upipe_rtp_pcm_pack.h \
 	upipe_rtp_fec.h \
 	upipe_dtsdi.h \
+	upipe_void_source.h \
+	upipe_video_blank.h \
+	upipe_audio_blank.h \
+	upipe_grid.h \
 	upipe_sync.h \
 	$(NULL)

@@ -196,6 +196,10 @@ static bool upipe_sws_handle(struct upipe *upipe, struct uref *uref,
     }
 
     int progressive = ubase_check(uref_pic_get_progressive(uref)) ? 1 : 0;
+    if (unlikely(!progressive && input_vsize % 2)) {
+        upipe_warn(upipe, "interlaced picture has odd vertical size");
+        progressive = 1;
+    }
 
     uint64_t output_hsize, output_vsize;
     if (!ubase_check(uref_pic_flow_get_hsize(upipe_sws->flow_def_attr, &output_hsize)) ||
@@ -588,18 +592,10 @@ static int upipe_sws_control(struct upipe *upipe, int command, va_list args)
             return upipe_sws_free_output_proxy(upipe, request);
         }
 
-        case UPIPE_GET_OUTPUT: {
-            struct upipe **p = va_arg(args, struct upipe **);
-            return upipe_sws_get_output(upipe, p);
-        }
-        case UPIPE_SET_OUTPUT: {
-            struct upipe *output = va_arg(args, struct upipe *);
-            return upipe_sws_set_output(upipe, output);
-        }
-        case UPIPE_GET_FLOW_DEF: {
-            struct uref **p = va_arg(args, struct uref **);
-            return upipe_sws_get_flow_def(upipe, p);
-        }
+        case UPIPE_GET_OUTPUT:
+        case UPIPE_SET_OUTPUT:
+        case UPIPE_GET_FLOW_DEF:
+            return upipe_sws_control_output(upipe, command, args);
         case UPIPE_SET_FLOW_DEF: {
             struct uref *flow = va_arg(args, struct uref *);
             return upipe_sws_set_flow_def(upipe, flow);

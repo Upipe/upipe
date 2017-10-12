@@ -180,5 +180,27 @@ int main(int argc, char *argv[])
             assert(!ustring_match(ustring_from_str(strings[i]),
                                   ustring_from_str("this")));
     }
+
+    {
+        struct ustring str =
+            ustring_while_reverse(
+                ustring_from_str("    \t   \nhouba  \n\t\t "), " \t\n");
+        assert(!ustring_cmp(str, ustring_from_str("  \n\t\t ")));
+
+        str =
+            ustring_truncate_while(
+                ustring_from_str("    \t   \nhouba  \n\t\t "), " \t\n");
+        assert(!ustring_cmp(str, ustring_from_str("    \t   \nhouba")));
+
+        str =
+            ustring_until_reverse(
+                ustring_from_str("    \t   \nhouba  \n\t\t "), "houba");
+        assert(!ustring_cmp(str, ustring_from_str("  \n\t\t ")));
+
+        str =
+            ustring_truncate_until(
+                ustring_from_str("    \t   \nhouba  \n\t\t "), "houba");
+        assert(!ustring_cmp(str, ustring_from_str("    \t   \nhouba")));
+    }
     return 0;
 }

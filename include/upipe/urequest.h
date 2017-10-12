@@ -66,6 +66,24 @@ enum urequest_type {
     UREQUEST_LOCAL = 0x8000
 };
 
+/** @This converts an urequest type into a string.
+ *
+ * @param type urequest type id to convert
+ * @return a string or NULL if unknown
+ */
+static inline const char *urequest_type_str(int type)
+{
+    switch ((enum urequest_type)type) {
+        case UREQUEST_UREF_MGR:     return "uref mgr";
+        case UREQUEST_FLOW_FORMAT:  return "flow format";
+        case UREQUEST_UBUF_MGR:     return "ubuf mgr";
+        case UREQUEST_UCLOCK:       return "uclock";
+        case UREQUEST_SINK_LATENCY: return "sink latency";
+        case UREQUEST_LOCAL:        break;
+    }
+    return NULL;
+}
+
 /** @This is the call-back type for urequest structures. */
 typedef int (*urequest_func)(struct urequest *, va_list);
 /** @This frees the request. */

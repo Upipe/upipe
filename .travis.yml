@@ -7,7 +7,8 @@ env:
   global:
     - MAKEFLAGS=-j2
     - FFMPEG="libavcodec-ffmpeg-dev libavformat-ffmpeg-dev libswresample-ffmpeg-dev libswscale-ffmpeg-dev"
-    - APT_PACKAGES_COMMON="libev-dev libasound2-dev libx264-dev luajit libspeexdsp-dev yasm $FFMPEG"
+    - APT_PACKAGES_COMMON="libev-dev libasound2-dev libx264-dev luajit libspeexdsp-dev yasm libpng-dev libfreetype6-dev $FFMPEG"
+    - BREW_PACKAGES="valgrind libev yasm x264 ffmpeg speex luajit freetype"
 
 matrix:
   include:
@@ -77,13 +78,9 @@ before_install:
       brew update;
       brew upgrade libtool;
       brew upgrade pkg-config;
-      brew install valgrind;
-      brew install libev;
-      brew install yasm;
-      brew install x264;
-      brew install ffmpeg;
-      brew install speex;
-      brew install luajit;
+      for PKG in $BREW_PACKAGES; do
+          brew install $PKG;
+      done
     fi
 
   # bitstream

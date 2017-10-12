@@ -14,6 +14,7 @@ UPIPEHLS_LIBS = $(top_builddir)/lib/upipe-hls/libupipe_hls.la
 UPIPEX264_LIBS = $(X264_LIBS) $(top_builddir)/lib/upipe-x264/libupipe_x264.la
 UPIPEALSA_LIBS = -lasound $(top_builddir)/lib/upipe-alsa/libupipe_alsa.la
 UPIPEBMD_LIBS = $(top_builddir)/lib/upipe-blackmagic/libupipe_blackmagic.la -lstdc++
+UPIPEOSX_LIBS = $(top_builddir)/lib/upipe-osx/libupipe_osx.la
 
 noinst_PROGRAMS = 
 
@@ -26,6 +27,9 @@ uplay_LDADD = $(LDADD) $(UPUMPEV_LIBS) $(UPIPEMODULES_LIBS) $(UPIPEPTHREAD_LIBS)
 if HAVE_ALSA
 uplay_LDADD += $(UPIPEALSA_LIBS)
 endif
+if HAVE_AUDIOTOOLBOX
+uplay_LDADD += $(UPIPEOSX_LIBS)
+endif
 transcode_LDADD = $(LDADD) $(UPUMPEV_LIBS) $(UPIPEMODULES_LIBS) $(UPIPEAV_LIBS) $(UPIPESWR_LIBS) $(UPIPESWS_LIBS) $(UPIPEFILTERS_LIBS)
 upipe_duration_LDADD = $(LDADD) $(UPUMPEV_LIBS) $(UPIPEMODULES_LIBS) $(UPIPEFRAMERS_LIBS) $(UPIPETS_LIBS)
 alsaplay_LDADD = $(LDADD) $(UPUMPEV_LIBS) $(UPIPEMODULES_LIBS) $(UPIPEFRAMERS_LIBS) $(UPIPEAV_LIBS) $(UPIPEALSA_LIBS) $(UPIPESWR_LIBS) $(UPIPEFILTERS_LIBS)
@@ -35,7 +39,7 @@ ts2es_LDADD = $(LDADD) $(UPUMPEV_LIBS) $(UPIPEMODULES_LIBS) $(UPIPEFRAMERS_LIBS)
 decrypt_LDADD = $(LDADD) $(UPUMPEV_LIBS) $(UPIPEMODULES_LIBS)
 mpthree2rtp_LDADD = $(LDADD) $(UPUMPEV_LIBS) $(UPIPEMODULES_LIBS) $(UPIPEFRAMERS_LIBS) $(UPIPEAV_LIBS) $(UPIPESWR_LIBS)
 ts2mpthreemulticat_LDADD = $(LDADD) $(UPUMPEV_LIBS) $(UPIPEMODULES_LIBS) $(UPIPEFRAMERS_LIBS) $(UPIPETS_LIBS) 
-
+ugrid_LDADD = $(LDADD) $(UPIPEMODULES_LIBS) $(UPUMPEV_LIBS) $(UPIPETS_LIBS) $(UPIPEFRAMERS_LIBS) $(UPIPEFILTERS_LIBS) $(UPIPEAV_LIBS) $(UPIPEX264_LIBS) $(UPIPEPTHREAD_LIBS) $(UPIPESWS_LIBS) $(UPIPESWR_LIBS)
 
 if HAVE_EV
 if HAVE_WRITEV
@@ -49,14 +53,19 @@ endif
 if HAVE_BITSTREAM
 noinst_PROGRAMS += upipe_duration
 noinst_PROGRAMS += ts2es
-noinst_PROGRAMS += mpthree2rtp
 noinst_PROGRAMS += ts2mpthreemulticat
+if HAVE_AVFORMAT
+noinst_PROGRAMS += mpthree2rtp
+endif
 endif
 
 if HAVE_AVFORMAT
 if HAVE_SWSCALE
 if HAVE_SWRESAMPLE
 noinst_PROGRAMS += transcode
+if HAVE_EV
+noinst_PROGRAMS += ugrid
+endif
 
 if HAVE_DLFCN_H
 noinst_PROGRAMS += blackmagic
