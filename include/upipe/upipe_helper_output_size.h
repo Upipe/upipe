@@ -160,17 +160,23 @@ static inline int STRUCTURE##_control_output_size(struct upipe *upipe,      \
                                                   int command,              \
                                                   va_list args)             \
 {                                                                           \
+    int ret = UBASE_ERR_UNHANDLED;                                          \
+    va_list args_copy;                                                      \
+    va_copy(args_copy, args);                                               \
     switch (command) {                                                      \
         case UPIPE_GET_OUTPUT_SIZE: {                                       \
-            unsigned int *output_size_p = va_arg(args, unsigned int *);     \
-            return STRUCTURE##_get_output_size(upipe, output_size_p);       \
+            unsigned int *output_size_p = va_arg(args_copy, unsigned int *);\
+            ret = STRUCTURE##_get_output_size(upipe, output_size_p);        \
+            break;                                                          \
         }                                                                   \
         case UPIPE_SET_OUTPUT_SIZE: {                                       \
-            unsigned int output_size = va_arg(args, unsigned int);          \
-            return STRUCTURE##_set_output_size(upipe, output_size);         \
+            unsigned int output_size = va_arg(args_copy, unsigned int);     \
+            ret = STRUCTURE##_set_output_size(upipe, output_size);          \
+            break;                                                          \
         }                                                                   \
     }                                                                       \
-    return UBASE_ERR_UNHANDLED;                                             \
+    va_end(args_copy);                                                      \
+    return ret;                                                             \
 }                                                                           \
 /** @internal @This cleans up the private members for this helper.          \
  *                                                                          \
