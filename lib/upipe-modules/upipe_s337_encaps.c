@@ -236,12 +236,12 @@ static int upipe_s337_encaps_set_flow_def(struct upipe *upipe,
         return UBASE_ERR_INVALID;
 
     struct uref *flow_def_dup = uref_dup(flow_def);
+    if (flow_def_dup == NULL)
+        return UBASE_ERR_ALLOC;
+
     uref_flow_set_def(flow_def_dup, "sound.s32.s337.a52.");
     uref_sound_flow_set_channels(flow_def_dup, 2);
     uref_sound_flow_set_sample_size(flow_def_dup, 2*4);
-
-    if (flow_def_dup == NULL)
-        return UBASE_ERR_ALLOC;
 
     if (!ubase_check(uref_sound_flow_add_plane(flow_def_dup, "lr")) ||
         !ubase_check(uref_sound_flow_set_rate(flow_def_dup, rate))) {
