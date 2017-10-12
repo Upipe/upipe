@@ -266,7 +266,15 @@ static int upipe_avcdec_get_buffer_pic(struct AVCodecContext *context,
 
     /* Use avcodec width/height alignement, then resize pic. */
     int width_aligned = frame->width, height_aligned = frame->height;
-    avcodec_align_dimensions(context, &width_aligned, &height_aligned);
+    int linesize_align[AV_NUM_DATA_POINTERS];
+    memset(linesize_align, 0, sizeof(linesize_align));
+    avcodec_align_dimensions2(context, &width_aligned, &height_aligned,
+                              linesize_align);
+    int align = linesize_align[0];
+    for (int i = 1; i < AV_NUM_DATA_POINTERS; i++)
+        if (linesize_align[i] > 0)
+            align = align * linesize_align[i] /
+                ubase_gcd(align, linesize_align[i]);
 
     /* Prepare flow definition attributes. */
     struct uref *flow_def_attr = upipe_avcdec_alloc_flow_def_attr(upipe);
@@ -284,7 +292,7 @@ static int upipe_avcdec_get_buffer_pic(struct AVCodecContext *context,
         return -1;
     }
 
-    UBASE_FATAL(upipe, uref_pic_flow_set_align(flow_def_attr, 16))
+    UBASE_FATAL(upipe, uref_pic_flow_set_align(flow_def_attr, align))
     UBASE_FATAL(upipe, uref_pic_flow_set_hsize(flow_def_attr, context->width))
     UBASE_FATAL(upipe, uref_pic_flow_set_vsize(flow_def_attr, context->height))
     UBASE_FATAL(upipe, uref_pic_flow_set_hsize_visible(flow_def_attr, context->width))
