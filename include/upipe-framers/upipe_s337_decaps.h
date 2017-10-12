@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2016 OpenHeadend S.A.R.L.
+ * Copyright (C) 2016-2017 OpenHeadend S.A.R.L.
  *
  * Authors: Christophe Massiot
  *
@@ -28,22 +28,22 @@
  *  - SMPTE 340-2008 (non-PCM in AES3 - ATSC A/52B)
  */
 
-#ifndef _UPIPE_FRAMERS_UPIPE_S337_FRAMER_H_
+#ifndef _UPIPE_FRAMERS_UPIPE_S337_DECAPS_H_
 /** @hidden */
-#define _UPIPE_FRAMERS_UPIPE_S337_FRAMER_H_
+#define _UPIPE_FRAMERS_UPIPE_S337_DECAPS_H_
 #ifdef __cplusplus
 extern "C" {
 #endif
 
 #include <upipe/upipe.h>
 
-#define UPIPE_S337F_SIGNATURE UBASE_FOURCC('3','3','7','f')
+#define UPIPE_S337D_SIGNATURE UBASE_FOURCC('3','3','7','d')
 
-/** @This returns the management structure for all s337f pipes.
+/** @This returns the management structure for all s337d pipes.
  *
  * @return pointer to manager
  */
-struct upipe_mgr *upipe_s337f_mgr_alloc(void);
+struct upipe_mgr *upipe_s337d_mgr_alloc(void);
 
 #ifdef __cplusplus
 }
