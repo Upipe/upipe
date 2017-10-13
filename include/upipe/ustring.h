@@ -137,6 +137,9 @@ static inline int ustring_to_str(const struct ustring sub, char **str_p)
 static inline int ustring_cpy(const struct ustring sub,
                               char *buffer, size_t len)
 {
+    if (len == 0)
+        return UBASE_ERR_NOSPC;
+
     memset(buffer, 0, len);
     memcpy(buffer, sub.at, sub.len >= len ? len - 1 : sub.len);
     return sub.len < len ? UBASE_ERR_NONE : UBASE_ERR_NOSPC;
