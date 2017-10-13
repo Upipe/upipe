@@ -1,0 +1,10 @@
+prefix=@prefix@
+exec_prefix=@exec_prefix@
+libdir=@libdir@
+includedir=@includedir@
+Name: libupipe_dvbcsa
+Description: Upipe multimedia framework, libdvbcsa interface module
+Version: @VERSION@
+Requires: libupipe
+Libs: -L${libdir} -lupipe_dvbcsa
+Cflags: -I${includedir}

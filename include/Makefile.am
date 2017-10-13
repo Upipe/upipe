@@ -83,3 +83,7 @@ endif
 if HAVE_NETMAP
 SUBDIRS += upipe-netmap
 endif
+
+if HAVE_DVBCSA
+SUBDIRS += upipe-dvbcsa
+endif

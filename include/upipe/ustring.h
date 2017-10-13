@@ -652,6 +652,89 @@ struct ustring_size {
 
 struct ustring_size ustring_to_size(const struct ustring str);
 
+/** @This stores a parsed digit. */
+struct ustring_digit {
+    /** matching part of the string */
+    struct ustring str;
+    /** digit value */
+    uint8_t value;
+};
+
+/** @This parses a digit from an ustring.
+ *
+ * @param str string to parse from
+ * @return a parsed digit
+ */
+static inline struct ustring_digit ustring_to_digit(const struct ustring str)
+{
+    struct ustring_digit ret = { .str = ustring_null(), .value = 0 };
+    if (str.len && str.at[0] >= '0' && str.at[0] <= '9') {
+        ret.str = ustring_truncate(str, 1);
+        ret.value = str.at[0] - '0';
+    }
+    return ret;
+}
+
+/** @This stores a parsed hexadecimal digit. */
+struct ustring_hexdigit {
+    /** matching part of the string */
+    struct ustring str;
+    /** hexdecimal value */
+    uint8_t value;
+};
+
+/** @This parses a hexadecimal digit from an ustring.
+ *
+ * @param str string to parse from
+ * @return a parsed hexadecimal digit
+ */
+static inline struct ustring_hexdigit
+ustring_to_hexdigit(const struct ustring str)
+{
+    struct ustring_digit d = ustring_to_digit(str);
+    struct ustring_hexdigit ret = { .str = d.str, .value = d.value };
+    if (ustring_is_empty(str) || !ustring_is_empty(ret.str))
+        return ret;
+    if (str.at[0] >= 'a' && str.at[0] <= 'f') {
+        ret.str = ustring_truncate(str, 1);
+        ret.value = 10 + str.at[0] - 'a';
+    }
+    else if (str.at[0] >= 'A' && str.at[0] <= 'F') {
+        ret.str = ustring_truncate(str, 1);
+        ret.value = 10 + str.at[0] - 'a';
+    }
+    return ret;
+}
+
+/** @This stores a parsed byte. */
+struct ustring_byte {
+    /** matching part of the string */
+    struct ustring str;
+    /** value of the parsed byte */
+    uint8_t value;
+};
+
+/** @This parsed a byte from an ustring.
+ *
+ * @param str string to parse from
+ * @return a parsed byte
+ */
+static inline struct ustring_byte ustring_to_byte(const struct ustring str)
+{
+    struct ustring_byte ret = { .str = ustring_null(), .value = 0 };
+    struct ustring_hexdigit hexdigit = ustring_to_hexdigit(str);
+    if (ustring_is_empty(hexdigit.str))
+        return ret;
+    ret.str = hexdigit.str;
+    ret.value = hexdigit.value;
+    hexdigit = ustring_to_hexdigit(ustring_shift(str, ret.str.len));
+    if (ustring_is_empty(hexdigit.str))
+        return ret;
+    ret.str = ustring_truncate(str, ret.str.len + hexdigit.str.len);
+    ret.value = ret.value * 16 + hexdigit.value;
+    return ret;
+}
+
 #ifdef __cplusplus
 }
 #endif
