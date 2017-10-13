@@ -7,7 +7,7 @@ env:
   global:
     - MAKEFLAGS=-j2
     - FFMPEG="libavcodec-ffmpeg-dev libavformat-ffmpeg-dev libswresample-ffmpeg-dev libswscale-ffmpeg-dev"
-    - APT_PACKAGES_COMMON="libev-dev libasound2-dev libx264-dev luajit libspeexdsp-dev yasm libpng-dev libfreetype6-dev $FFMPEG"
+    - APT_PACKAGES_COMMON="libev-dev libasound2-dev libx264-dev luajit libspeexdsp-dev yasm libpng-dev libfreetype6-dev libzvbi-dev $FFMPEG"
     - BREW_PACKAGES="valgrind libev yasm x264 ffmpeg speex luajit freetype"
 
 matrix:

@@ -67,7 +67,6 @@
 #include <pthread.h>
 
 #include "include/DeckLinkAPI.h"
-#include "include/DeckLinkAPIDispatch.cpp"
 
 /** uqueue length */
 #define MAX_QUEUE_LENGTH 255
