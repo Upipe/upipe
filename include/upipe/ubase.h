@@ -508,6 +508,19 @@ static inline uint32_t ubase_get_signature(va_list args)
     return signature;
 }
 
+/** @This clips an integer into the given range
+ *
+ * @param args the va list to copy from
+ * @return a signature
+ */
+static inline int ubase_clip(int i, int min, int max)
+{
+    if      (i < min) return min;
+    else if (i > max) return max;
+    else               return i;
+}
+
+
 #ifdef __cplusplus
 }
 #endif
