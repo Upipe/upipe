@@ -118,21 +118,20 @@ static UBASE_UNUSED inline struct STRUCTURE *                               \
 }
 
 /** @internal @This is a helper to simplify printf-style functions. */
-#define UBASE_VARARG(command)                                               \
-    size_t len;                                                             \
+#define UBASE_VARARG(command, ...)                                          \
+    int len;                                                                \
     va_list args;                                                           \
     va_start(args, format);                                                 \
     len = vsnprintf(NULL, 0, format, args);                                 \
     va_end(args);                                                           \
-    if (len > 0) {                                                          \
+    if (len >= 0) {                                                         \
         char string[len + 1];                                               \
         va_start(args, format);                                             \
         vsnprintf(string, len + 1, format, args);                           \
         va_end(args);                                                       \
         return command;                                                     \
     } else {                                                                \
-        char *string = NULL;                                                \
-        return command;                                                     \
+        return __VA_ARGS__;                                                 \
     }
 
 /** @This is designed to chain uref and ubuf in a list. */

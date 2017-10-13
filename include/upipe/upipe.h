@@ -840,7 +840,11 @@ static inline int upipe_control_provide_request(struct upipe *upipe,
 {
     switch (command) {
         case UPIPE_REGISTER_REQUEST: {
-            struct urequest *request = va_arg(args, struct urequest *);
+            va_list args_copy;
+            va_copy(args_copy, args);
+            struct urequest *request = va_arg(args_copy, struct urequest *);
+            va_end(args_copy);
+
             return upipe_throw_provide_request(upipe, request);
         }
         case UPIPE_UNREGISTER_REQUEST:
