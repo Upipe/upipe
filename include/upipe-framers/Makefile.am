@@ -14,6 +14,7 @@ myinclude_HEADERS = \
 	upipe_dvbsub_framer.h \
 	upipe_s302_framer.h \
 	upipe_s337_decaps.h \
+	upipe_s337_framer.h \
 	upipe_video_trim.h \
 	uref_mpgv.h \
 	uref_h264.h \
