@@ -845,6 +845,7 @@ static int upipe_rtp_fec_sub_control(struct upipe *upipe,
     case UPIPE_SUB_GET_SUPER: {
         struct upipe **p = va_arg(args, struct upipe **);
         *p = upipe_rtp_fec_to_upipe(upipe_rtp_fec);
+        return UBASE_ERR_NONE;
     }
 
     default:
