@@ -55,9 +55,6 @@
 
 #include "v210enc.h"
 
-#include <libavutil/common.h>
-#include <libavutil/intreadwrite.h>
-
 #define UPIPE_V210_MAX_PLANES 3
 
 /** @This defines an 8-bit packing function. */
@@ -133,25 +130,32 @@ UPIPE_HELPER_UBUF_MGR(upipe_v210enc, ubuf_mgr, flow_format, ubuf_mgr_request,
                       upipe_v210enc_unregister_output_request)
 UPIPE_HELPER_INPUT(upipe_v210enc, urefs, nb_urefs, max_urefs, blockers, upipe_v210enc_handle)
 
+#define CLIP(v) ubase_clip(v, 4, 1019)
+#define CLIP8(v) ubase_clip(v, 1, 254)
 
-#define CLIP(v) av_clip(v, 4, 1019)
-#define CLIP8(v) av_clip(v, 1, 254)
+static inline void wl32(uint8_t *dst, uint32_t u)
+{
+    *dst++ = (u      ) & 0xff;
+    *dst++ = (u >>  8) & 0xff;
+    *dst++ = (u >> 16) & 0xff;
+    *dst++ = (u >> 24) & 0xff;
+}
 
 #define WRITE_PIXELS(a, b, c)           \
     do {                                \
         val =   CLIP(*a++);             \
         val |= (CLIP(*b++) << 10) |     \
                (CLIP(*c++) << 20);      \
-        AV_WL32(dst, val);              \
+        wl32(dst, val);                 \
         dst += 4;                       \
     } while (0)
 
 #define WRITE_PIXELS8(a, b, c)          \
     do {                                \
-        val =  (CLIP8(*a++) << 2);       \
-        val |= (CLIP8(*b++) << 12) |     \
-               (CLIP8(*c++) << 22);      \
-        AV_WL32(dst, val);              \
+        val =  (CLIP8(*a++) << 2);      \
+        val |= (CLIP8(*b++) << 12) |    \
+               (CLIP8(*c++) << 22);     \
+        wl32(dst, val);                 \
         dst += 4;                       \
     } while (0)
 
@@ -304,17 +308,17 @@ static bool upipe_v210enc_handle(struct upipe *upipe, struct uref *uref,
 
                 val = CLIP(*y++);
                 if (w == input_hsize - 2) {
-                    AV_WL32(dst, val);
+                    wl32(dst, val);
                     dst += 4;
                 }
             }
             if (w < input_hsize - 3) {
                 val |= (CLIP(*u++) << 10) | (CLIP(*y++) << 20);
-                AV_WL32(dst, val);
+                wl32(dst, val);
                 dst += 4;
 
                 val = CLIP(*v++) | (CLIP(*y++) << 10);
-                AV_WL32(dst, val);
+                wl32(dst, val);
                 dst += 4;
             }
 
@@ -350,17 +354,17 @@ static bool upipe_v210enc_handle(struct upipe *upipe, struct uref *uref,
 
                 val = CLIP8(*y++) << 2;
                 if (w == input_hsize - 2) {
-                    AV_WL32(dst, val);
+                    wl32(dst, val);
                     dst += 4;
                 }
             }
             if (w < input_hsize - 3) {
                 val |= (CLIP8(*u++) << 12) | (CLIP8(*y++) << 22);
-                AV_WL32(dst, val);
+                wl32(dst, val);
                 dst += 4;
 
                 val = (CLIP8(*v++) << 2) | (CLIP8(*y++) << 12);
-                AV_WL32(dst, val);
+                wl32(dst, val);
                 dst += 4;
             }
             memset(dst, 0, line_padding);
