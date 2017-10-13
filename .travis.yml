@@ -115,17 +115,19 @@ before_script:
   - autoreconf -i
   - sed -i='' 's/|-stdlib=\*)/|-stdlib=\*|-fsanitize=*)/' autotools/ltmain.sh
 
-script: CONFIGURE_FLAGS="--disable-silent-rules $HOST
-          CC=\"$HOST_CC\"
-          CXX=\"$HOST_CXX\"
-          CPPFLAGS=\"-I$PWD/nacl_sdk/pepper_49/include\"
-          CFLAGS=\"-Werror -Wno-error=deprecated-declarations -O2 -g $CFLAGS\"
-          CXXFLAGS=\"-Werror -O2 -g $CXXFLAGS\"" &&
-        eval ./configure $CONFIGURE_FLAGS &&
-        ASAN_OPTIONS="detect_stack_use_after_return=1,detect_leaks=1" &&
-        make distcheck
-          DISTCHECK_CONFIGURE_FLAGS="$CONFIGURE_FLAGS"
-          TEST_SUITE_LOG="$PWD/tests.log"
+script:
+  - CONFIGURE_FLAGS="--disable-silent-rules $HOST
+      CC=\"$HOST_CC\"
+      CXX=\"$HOST_CXX\"
+      CPPFLAGS=\"-I$PWD/nacl_sdk/pepper_49/include\"
+      CFLAGS=\"-Werror -Wno-error=deprecated-declarations -O2 -g $CFLAGS\"
+      CXXFLAGS=\"-Werror -O2 -g $CXXFLAGS\"" &&
+    eval ./configure $CONFIGURE_FLAGS &&
+    ASAN_OPTIONS="detect_stack_use_after_return=1,detect_leaks=1" &&
+    make distcheck
+      DISTCHECK_CONFIGURE_FLAGS="$CONFIGURE_FLAGS"
+      TEST_SUITE_LOG="$PWD/tests.log"
+  - make check-whitespace
 
 after_failure:
   - test -r config.log && cat config.log
