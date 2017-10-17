@@ -319,6 +319,7 @@ static inline void uprobe_log(struct uprobe *uprobe, struct upipe *upipe,
  * @param level level of importance of the message
  * @param format format of the textual message, followed by optional arguments
  */
+UBASE_FMT_PRINTF(4, 5)
 static inline void uprobe_log_va(struct uprobe *uprobe, struct upipe *upipe,
                                 enum uprobe_log_level level,
                                 const char *format, ...)
@@ -342,6 +343,7 @@ static inline void uprobe_log_va(struct uprobe *uprobe, struct upipe *upipe,
  * @param upipe description structure of the pipe
  * @param format format of the textual message, followed by optional arguments
  */
+UBASE_FMT_PRINTF(3, 4)
 static inline void uprobe_err_va(struct uprobe *uprobe, struct upipe *upipe,
                                  const char *format, ...)
 {
@@ -364,6 +366,7 @@ static inline void uprobe_err_va(struct uprobe *uprobe, struct upipe *upipe,
  * @param upipe description structure of the pipe
  * @param format format of the textual message, followed by optional arguments
  */
+UBASE_FMT_PRINTF(3, 4)
 static inline void uprobe_warn_va(struct uprobe *uprobe, struct upipe *upipe,
                                   const char *format, ...)
 {
@@ -386,6 +389,7 @@ static inline void uprobe_warn_va(struct uprobe *uprobe, struct upipe *upipe,
  * @param upipe description structure of the pipe
  * @param format format of the textual message, followed by optional arguments
  */
+UBASE_FMT_PRINTF(3, 4)
 static inline void uprobe_notice_va(struct uprobe *uprobe, struct upipe *upipe,
                                     const char *format, ...)
 {
@@ -408,6 +412,7 @@ static inline void uprobe_notice_va(struct uprobe *uprobe, struct upipe *upipe,
  * @param upipe description structure of the pipe
  * @param format format of the textual message, followed by optional arguments
  */
+UBASE_FMT_PRINTF(3, 4)
 static inline void uprobe_dbg_va(struct uprobe *uprobe, struct upipe *upipe,
                                  const char *format, ...)
 {
@@ -431,6 +436,7 @@ static inline void uprobe_dbg_va(struct uprobe *uprobe, struct upipe *upipe,
  * @param upipe description structure of the pipe
  * @param format format of the textual message, followed by optional arguments
  */
+UBASE_FMT_PRINTF(3, 4)
 static inline void uprobe_verbose_va(struct uprobe *uprobe, struct upipe *upipe,
                                  const char *format, ...)
 {

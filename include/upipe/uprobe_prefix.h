@@ -99,6 +99,7 @@ struct uprobe *uprobe_pfx_alloc(struct uprobe *next,
  * arguments
  * @return pointer to uprobe, or NULL in case of error
  */
+UBASE_FMT_PRINTF(3, 4)
 struct uprobe *uprobe_pfx_alloc_va(struct uprobe *next,
                                    enum uprobe_log_level min_level,
                                    const char *format, ...);

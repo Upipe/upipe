@@ -184,7 +184,7 @@ static int catch_glx(struct uprobe *uprobe, struct upipe *upipe,
         case 27:
         case 'q': {
             if (main_upump_mgr != NULL) {
-                upipe_notice_va(upipe, "exit key pressed (%d), exiting",
+                upipe_notice_va(upipe, "exit key pressed (%lu), exiting",
                                 key);
                 struct upump *idler_stop = upump_alloc_idler(main_upump_mgr,
                         uplay_stop, (void *)1, NULL);
@@ -208,7 +208,7 @@ static int catch_glx(struct uprobe *uprobe, struct upipe *upipe,
             break;
         }
         default:
-            upipe_dbg_va(upipe, "key pressed (%d)", key);
+            upipe_dbg_va(upipe, "key pressed (%lu)", key);
             break;
     }
     return UBASE_ERR_NONE;

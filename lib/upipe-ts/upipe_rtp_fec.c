@@ -509,7 +509,7 @@ static void upipe_rtp_fec_timer(struct upump *upump)
         if (upipe_rtp_fec->last_send_seqnum != UINT32_MAX) {
             uint16_t expected = upipe_rtp_fec->last_send_seqnum + 1;
             if (expected != seqnum) {
-                upipe_warn_va(upipe, "FEC output LOST, expected seqnum %hu got %hu",
+                upipe_warn_va(upipe, "FEC output LOST, expected seqnum %hu got %" PRIu64,
                         expected, seqnum);
                 upipe_rtp_fec->lost +=
                     (seqnum + UINT16_MAX + 1 - expected) & UINT16_MAX;
@@ -845,6 +845,7 @@ static int upipe_rtp_fec_sub_control(struct upipe *upipe,
     case UPIPE_SUB_GET_SUPER: {
         struct upipe **p = va_arg(args, struct upipe **);
         *p = upipe_rtp_fec_to_upipe(upipe_rtp_fec);
+        return UBASE_ERR_NONE;
     }
 
     default:

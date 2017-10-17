@@ -171,16 +171,17 @@ static inline int uref_clock_get_pts_##dv(struct uref *uref,                \
     int type;                                                               \
     uref_clock_get_date_##dv(uref, &date, &type);                           \
     switch (type) {                                                         \
-        /* intended pass-throughs */                                        \
         default:                                                            \
         case UREF_DATE_NONE:                                                \
             return UBASE_ERR_INVALID;                                       \
         case UREF_DATE_CR:                                                  \
             UBASE_RETURN(uref_clock_get_cr_dts_delay(uref, &delay))         \
             date += delay;                                                  \
+            /* fallthrough */                                               \
         case UREF_DATE_DTS:                                                 \
             UBASE_RETURN(uref_clock_get_dts_pts_delay(uref, &delay))        \
             date += delay;                                                  \
+            /* fallthrough */                                               \
         case UREF_DATE_PTS:                                                 \
             break;                                                          \
     }                                                                       \
@@ -209,13 +210,13 @@ static inline int uref_clock_get_dts_##dv(struct uref *uref,                \
     int type;                                                               \
     uref_clock_get_date_##dv(uref, &date, &type);                           \
     switch (type) {                                                         \
-        /* intended pass-throughs */                                        \
         default:                                                            \
         case UREF_DATE_NONE:                                                \
             return UBASE_ERR_INVALID;                                       \
         case UREF_DATE_CR:                                                  \
             UBASE_RETURN(uref_clock_get_cr_dts_delay(uref, &delay))         \
             date += delay;                                                  \
+            /* fallthrough */                                               \
         case UREF_DATE_DTS:                                                 \
             break;                                                          \
         case UREF_DATE_PTS:                                                 \
@@ -248,16 +249,17 @@ static inline int uref_clock_get_cr_##dv(struct uref *uref,                 \
     int type;                                                               \
     uref_clock_get_date_##dv(uref, &date, &type);                           \
     switch (type) {                                                         \
-        /* intended pass-throughs */                                        \
         default:                                                            \
         case UREF_DATE_NONE:                                                \
             return UBASE_ERR_INVALID;                                       \
         case UREF_DATE_PTS:                                                 \
             UBASE_RETURN(uref_clock_get_dts_pts_delay(uref, &delay))        \
             date -= delay;                                                  \
+            /* fallthrough */                                               \
         case UREF_DATE_DTS:                                                 \
             UBASE_RETURN(uref_clock_get_cr_dts_delay(uref, &delay))         \
             date -= delay;                                                  \
+            /* fallthrough */                                               \
         case UREF_DATE_CR:                                                  \
             break;                                                          \
     }                                                                       \
@@ -286,16 +288,17 @@ static inline int uref_clock_get_rap_##dv(struct uref *uref,                \
     int type;                                                               \
     uref_clock_get_date_##dv(uref, &date, &type);                           \
     switch (type) {                                                         \
-        /* intended pass-throughs */                                        \
         default:                                                            \
         case UREF_DATE_NONE:                                                \
             return UBASE_ERR_INVALID;                                       \
         case UREF_DATE_PTS:                                                 \
             UBASE_RETURN(uref_clock_get_dts_pts_delay(uref, &delay))        \
             date -= delay;                                                  \
+            /* fallthrough */                                               \
         case UREF_DATE_DTS:                                                 \
             UBASE_RETURN(uref_clock_get_cr_dts_delay(uref, &delay))         \
             date -= delay;                                                  \
+            /* fallthrough */                                               \
         case UREF_DATE_CR:                                                  \
             UBASE_RETURN(uref_clock_get_rap_cr_delay(uref, &delay))         \
             date -= delay;                                                  \

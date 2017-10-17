@@ -79,6 +79,7 @@ struct uprobe *uprobe_selflow_alloc(struct uprobe *next,
  * arguments
  * @return pointer to uprobe, or NULL in case of error
  */
+UBASE_FMT_PRINTF(4, 5)
 struct uprobe *uprobe_selflow_alloc_va(struct uprobe *next,
                                        struct uprobe *subprobe,
                                        enum uprobe_selflow_type type,
@@ -109,6 +110,7 @@ int uprobe_selflow_set(struct uprobe *uprobe, const char *flows);
  * @param format format of the syntax, followed by optional arguments
  * @return an error code
  */
+UBASE_FMT_PRINTF(2, 3)
 int uprobe_selflow_set_va(struct uprobe *uprobe, const char *format, ...);
 
 #ifdef __cplusplus

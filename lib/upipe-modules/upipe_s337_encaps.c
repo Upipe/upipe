@@ -170,7 +170,7 @@ static bool upipe_s337_encaps_handle(struct upipe *upipe, struct uref *uref,
         return false;
 
     if (block_size / 2 > A52_FRAME_SAMPLES - 4) {
-        upipe_err_va(upipe, "AC-3 block size %d too big", block_size);
+        upipe_err_va(upipe, "AC-3 block size %zu too big", block_size);
         block_size = (A52_FRAME_SAMPLES - 4) * 2;
     }
 

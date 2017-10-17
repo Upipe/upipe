@@ -769,7 +769,7 @@ static bool upipe_mpgaf_handle_asc(struct upipe *upipe,
         case ASC_TYPE_TWINVQ:
             break;
         default:
-            upipe_err_va(upipe, "unsupported Audio Object Type %"PRIu16,
+            upipe_err_va(upipe, "unsupported Audio Object Type %" PRIu8,
                          upipe_mpgaf->asc_base_aot);
             return false;
     }
@@ -1362,7 +1362,7 @@ static int upipe_mpgaf_encaps_frame(struct upipe *upipe, struct uref *uref)
 
     if (upipe_mpgaf->encaps_output == UREF_MPGA_ENCAPS_LOAS) {
         if (end - w - LOAS_HEADER_SIZE > 0x1fff)
-            upipe_warn_va(upipe, "LATM packet too large (%d)",
+            upipe_warn_va(upipe, "LATM packet too large (%td)",
                           end - w - LOAS_HEADER_SIZE);
 
         loas_set_sync(w);

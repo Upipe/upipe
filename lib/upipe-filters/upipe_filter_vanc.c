@@ -643,7 +643,7 @@ static void upipe_vanc_process_op47sdp(struct upipe *upipe, struct uref *uref,
 
     uint8_t length = rdd08sdp_get_length(r);
     if (unlikely(size < length)) {
-        upipe_warn_va(upipe, "OP47 SDP length is too big (%zu)", length);
+        upipe_warn_va(upipe, "OP47 SDP length is too big (%u)", length);
         return;
     }
 

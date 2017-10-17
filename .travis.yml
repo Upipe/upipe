@@ -1,6 +1,6 @@
 sudo: required
 dist: trusty
-osx_image: xcode7.3
+osx_image: xcode9
 language: c
 
 env:
@@ -14,9 +14,9 @@ matrix:
   include:
 
     - os: linux
-      compiler: gcc-6
+      compiler: gcc-7
       env:
-        - GCC_VERSION=6
+        - GCC_VERSION=7
         - APT_REPOS="ppa:ubuntu-toolchain-r/test ppa:mc3man/testing6"
         - APT_PACKAGES="gcc-$GCC_VERSION g++-$GCC_VERSION $APT_PACKAGES_COMMON"
         - HOST_CC=gcc-$GCC_VERSION
@@ -25,7 +25,7 @@ matrix:
     - os: linux
       compiler: gcc-m32
       env:
-        - GCC_VERSION=6
+        - GCC_VERSION=7
         - APT_REPOS="ppa:ubuntu-toolchain-r/test ppa:mc3man/testing6"
         - APT_PACKAGES="gcc-$GCC_VERSION-multilib g++-$GCC_VERSION-multilib $(echo $APT_PACKAGES_COMMON | sed 's/\(\S*\)/\1:i386/g') libgl1-mesa-dev:i386 libglu1-mesa-dev:i386 libc6-dbg:i386"
         - HOST_CC="gcc-$GCC_VERSION -m32"
@@ -36,21 +36,21 @@ matrix:
         - PKG_CONFIG_LIBDIR="/usr/lib/i386-linux-gnu/pkgconfig"
 
     - os: linux
-      compiler: clang-3.8
+      compiler: clang-5.0
       env:
-        - CLANG_VERSION=3.8
+        - CLANG_VERSION=5.0
         - APT_REPOS="ppa:ubuntu-toolchain-r/test ppa:mc3man/testing6"
         - APT_PACKAGES="clang-$CLANG_VERSION $APT_PACKAGES_COMMON"
         - HOST_CC=clang-$CLANG_VERSION
         - HOST_CXX=clang++-$CLANG_VERSION
-        - CFLAGS="-Wno-error=unused-function"
 
     - os: osx
       compiler: clang
       env:
         - HOST_CC=clang
         - HOST_CXX=clang++
-        - CFLAGS="-Wno-error=unused-function -Wno-error=unused-command-line-argument"
+        - CFLAGS="-Wno-error=unused-command-line-argument -fsanitize=undefined -fsanitize=address -fsanitize-address-use-after-scope -fno-omit-frame-pointer -fno-optimize-sibling-calls"
+        - LDFLAGS="-fsanitize=undefined -fsanitize=address"
 
 before_install:
   - if type apt-get 2>/dev/null; then
@@ -59,20 +59,20 @@ before_install:
         sudo add-apt-repository -y $APT_REPO;
       done;
       if [ "$CLANG_VERSION" ]; then
-        curl -sSL "http://llvm.org/apt/llvm-snapshot.gpg.key" |
+        curl -sSL "http://apt.llvm.org/llvm-snapshot.gpg.key" |
           sudo -E apt-key add -;
         sudo add-apt-repository -y "deb
-          http://llvm.org/apt/trusty/
+          http://apt.llvm.org/trusty/
           llvm-toolchain-trusty-$CLANG_VERSION
           main";
       fi;
-      sudo apt-get update;
+      sudo apt-get update || exit 1;
       sudo apt-get install -y
         valgrind
         libc6:i386
-        $APT_PACKAGES;
+        $APT_PACKAGES || exit 1;
       sudo apt-get remove -y
-        libqtwebkit-dev;
+        libqtwebkit-dev || exit 1;
     fi
   - if type brew 2>/dev/null; then
       brew update;
@@ -111,7 +111,9 @@ before_install:
       export DISABLE_VALGRIND=1;
     fi
 
-before_script: autoreconf -i
+before_script:
+  - autoreconf -i
+  - sed -i='' 's/|-stdlib=\*)/|-stdlib=\*|-fsanitize=*)/' autotools/ltmain.sh
 
 script: CONFIGURE_FLAGS="--disable-silent-rules $HOST
           CC=\"$HOST_CC\"
@@ -120,6 +122,7 @@ script: CONFIGURE_FLAGS="--disable-silent-rules $HOST
           CFLAGS=\"-Werror -Wno-error=deprecated-declarations -O2 -g $CFLAGS\"
           CXXFLAGS=\"-Werror -O2 -g $CXXFLAGS\"" &&
         eval ./configure $CONFIGURE_FLAGS &&
+        ASAN_OPTIONS="detect_stack_use_after_return=1,detect_leaks=1" &&
         make distcheck
           DISTCHECK_CONFIGURE_FLAGS="$CONFIGURE_FLAGS"
           TEST_SUITE_LOG="$PWD/tests.log"
