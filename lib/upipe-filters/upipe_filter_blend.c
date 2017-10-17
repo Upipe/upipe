@@ -24,7 +24,7 @@
  *
  * Adapted from VLC video_filter (blend deinterlace) :
  * - modules/video_filter/deinterlace/merge.c
- * - modules/video_filter/deinterlace/algo_basic.c 
+ * - modules/video_filter/deinterlace/algo_basic.c
  */
 
 #include <upipe/ulist.h>
@@ -170,7 +170,7 @@ static void upipe_filter_merge8bit( void *_dest, const void *_s1,
 
 /** @internal @This processes a picture plane
  * Adapted from VLC.
- * - modules/video_filter/deinterlace/algo_basic.c 
+ * - modules/video_filter/deinterlace/algo_basic.c
  *
  * @param in input buffer
  * @param out output buffer

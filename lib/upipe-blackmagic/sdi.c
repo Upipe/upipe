@@ -56,8 +56,8 @@ void sdi_calc_parity_checksum(uint16_t *buf)
 
 void sdi_clear_vbi(uint8_t *dst, int w)
 {
-	memset(&dst[0], 0x10, w);
-	memset(&dst[w], 0x80, w);
+    memset(&dst[0], 0x10, w);
+    memset(&dst[w], 0x80, w);
 }
 
 void sdi_clear_vanc(uint16_t *dst)

@@ -77,7 +77,7 @@ extern "C" {
  * Typically called from your upipe_foo_free() function.
  * @end list
  *
- * @param STRUCTURE name of your private upipe structure 
+ * @param STRUCTURE name of your private upipe structure
  * @param UPUMP_MGR name of the @tt {struct upump_mgr *} field of
  * your private upipe structure
  */

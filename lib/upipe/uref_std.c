@@ -174,7 +174,7 @@ struct uref_mgr *uref_std_mgr_alloc(uint16_t uref_pool_depth,
     std_mgr->mgr.uref_alloc = uref_std_alloc;
     std_mgr->mgr.uref_free = uref_std_free;
     std_mgr->mgr.uref_mgr_control = uref_std_mgr_control;
-    
+
     upool_init(&std_mgr->uref_pool, std_mgr->mgr.refcount, uref_pool_depth,
                std_mgr->upool_extra, uref_std_alloc_inner, uref_std_free_inner);
 

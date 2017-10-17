@@ -71,7 +71,7 @@
 /** mux number of missing segments */
 #define MISSING_SEGMENTS        5
 
-/** @internal @This is the private context of a multicat source pipe. */ 
+/** @internal @This is the private context of a multicat source pipe. */
 struct upipe_msrc {
     /** refcount management structure */
     struct urefcount urefcount;

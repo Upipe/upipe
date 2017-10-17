@@ -349,7 +349,7 @@ static void upipe_nacl_audio_worker(void *sample_buffer, uint32_t buffer_size,
         upipe_nacl_audio_consume(upipe, copied_frames);
         frames -= copied_frames;
     }
-} 
+}
 
 /** @internal @This opens the NaCl audio interface.
  *
@@ -387,9 +387,9 @@ static bool upipe_nacl_audio_handle(struct upipe *upipe, struct uref *uref,
  * @param uref uref structure
  * @param upump_p reference to upump structure
  */
-static void upipe_nacl_audio_input(struct upipe *upipe, struct uref *uref, 
+static void upipe_nacl_audio_input(struct upipe *upipe, struct uref *uref,
                                    struct upump **upump_p)
-{    
+{
     struct upipe_nacl_audio *upipe_nacl_audio =
         upipe_nacl_audio_from_upipe(upipe);
     size_t uref_size;
@@ -577,4 +577,3 @@ struct upipe_mgr *upipe_nacl_audio_mgr_alloc(void)
 {
     return &upipe_nacl_audio_mgr;
 }
-    

@@ -204,7 +204,7 @@ static struct upipe *upipe_nacl_g2d_alloc(struct upipe_mgr *mgr,
  * @param uref uref structure
  * @param upump_p reference to upump structure
  */
-static bool upipe_nacl_g2d_output(struct upipe *upipe, struct uref *uref, 
+static bool upipe_nacl_g2d_output(struct upipe *upipe, struct uref *uref,
                                   struct upump **upump_p)
 {
     struct upipe_nacl_g2d *upipe_nacl_g2d = upipe_nacl_g2d_from_upipe(upipe);
@@ -271,7 +271,7 @@ static bool upipe_nacl_g2d_output(struct upipe *upipe, struct uref *uref,
     for (int y = 0; y < vsize; y++)
         memcpy(dst + y * desc.stride, src + y * stride, 4 * hsize);
 
-    upipe_nacl_g2d->ppb_imagedata_interface->Unmap(image);  
+    upipe_nacl_g2d->ppb_imagedata_interface->Unmap(image);
     uref_pic_plane_unmap(uref, upipe_nacl_g2d->native_chroma,
                          0, 0, -1, -1);
 

@@ -1041,8 +1041,8 @@ static int upipe_hls_playlist_attach_uclock(struct upipe *upipe)
  * @param args optional arguments
  */
 static int upipe_hls_playlist_control_internal(struct upipe *upipe,
-					       int command,
-					       va_list args)
+                                               int command,
+                                               va_list args)
 {
 
     switch (command) {
@@ -1107,18 +1107,18 @@ static int upipe_hls_playlist_control_internal(struct upipe *upipe,
 }
 
 static int upipe_hls_playlist_check(struct upipe *upipe,
-				    struct uref *flow_def)
+                                    struct uref *flow_def)
 {
-	upipe_hls_playlist_check_upump_mgr(upipe);
-	return UBASE_ERR_NONE;
+    upipe_hls_playlist_check_upump_mgr(upipe);
+    return UBASE_ERR_NONE;
 }
 
 static int upipe_hls_playlist_control(struct upipe *upipe,
                                       int command,
                                       va_list args)
 {
-	UBASE_RETURN(upipe_hls_playlist_control_internal(upipe, command, args));
-	return upipe_hls_playlist_check(upipe, NULL);
+    UBASE_RETURN(upipe_hls_playlist_control_internal(upipe, command, args));
+    return upipe_hls_playlist_check(upipe, NULL);
 }
 
 /** @internal m3u playlist manager static descriptor */

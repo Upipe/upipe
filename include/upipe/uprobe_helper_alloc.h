@@ -62,7 +62,7 @@ extern "C" {
  * respectively with the declaration of arguments of uprobe_foo_alloc, and
  * the use of them in the call to uprobe_foo_init.
  *
- * @param STRUCTURE name of your public uprobe super-structure 
+ * @param STRUCTURE name of your public uprobe super-structure
  * your private uprobe structure
  */
 #define UPROBE_HELPER_ALLOC(STRUCTURE)                                      \

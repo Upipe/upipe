@@ -153,7 +153,7 @@ static inline int
 /** @This returns the fsink manager.
  *
  * @param upipe description structure of the pipe
- * @param fsink_mgr fsink manager 
+ * @param fsink_mgr fsink manager
  * @return an error code
  */
 static inline int
@@ -167,7 +167,7 @@ static inline int
 /** @This sets the fsink manager.
  *
  * @param upipe description structure of the pipe
- * @param fsink_mgr fsink manager 
+ * @param fsink_mgr fsink manager
  * @return an error code
  */
 static inline int

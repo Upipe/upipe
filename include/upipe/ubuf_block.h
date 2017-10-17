@@ -893,7 +893,7 @@ ubuf_block_copy_err:
     return NULL;
 }
 
-/** @This merges part of a (possibly segmented) ubuf to a newly allocated 
+/** @This merges part of a (possibly segmented) ubuf to a newly allocated
  * (non-segmented) ubuf, and replaces the old ubuf with the new ubuf.
  *
  * @param mgr management structure for this ubuf type

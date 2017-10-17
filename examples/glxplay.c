@@ -986,6 +986,5 @@ int main(int argc, char** argv)
     upipe_glxplayer_free(glxplayer);
     upump_mgr_release(upump_mgr);
 
-    return 0; 
+    return 0;
 }
-

@@ -60,7 +60,7 @@
 #define DEFAULT_MTU 1460 /* 1500 - 20 - 8 - 12 (eth - ip - udp - rtp) */
 #define DEFAULT_ALIGN 4 /* 2ch s16 packed audio */
 
-/** upipe_chunk_stream structure */ 
+/** upipe_chunk_stream structure */
 struct upipe_chunk_stream {
     /** refcount management structure */
     struct urefcount urefcount;
@@ -117,7 +117,7 @@ static void upipe_chunk_stream_input(struct upipe *upipe,
           && ubase_check(uref_block_size(upipe_chunk_stream->next_uref,
                                          &remaining))
                           && (remaining >= upipe_chunk_stream->size)) {
-        uref = upipe_chunk_stream_extract_uref_stream(upipe, 
+        uref = upipe_chunk_stream_extract_uref_stream(upipe,
                                     upipe_chunk_stream->size);
         if (unlikely(!uref)) {
             upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
@@ -171,7 +171,7 @@ static void upipe_chunk_stream_flush(struct upipe *upipe)
             upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
             return;
         }
-        
+
         upipe_chunk_stream_output(upipe, uref, NULL);
     }
     upipe_chunk_stream_clean_uref_stream(upipe);

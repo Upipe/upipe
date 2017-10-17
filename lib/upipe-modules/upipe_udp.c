@@ -736,4 +736,3 @@ int upipe_udp_open_socket(struct upipe *upipe, const char *_uri, int ttl,
 
     return fd;
 }
-

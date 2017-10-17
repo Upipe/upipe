@@ -116,7 +116,7 @@ static void test_input(struct upipe *upipe, struct uref *uref,
     upipe_dbg(upipe, "===> received input uref");
     uref_dump(uref, upipe->uprobe);
 
-	size_t samples;
+    size_t samples;
     uint8_t sample_size;
     ubase_assert(uref_sound_size(uref, &samples, &sample_size));
     assert(samples == A52_FRAME_SAMPLES);
@@ -207,7 +207,7 @@ int main(int argc, char **argv)
     assert(umem_mgr != NULL);
     struct udict_mgr *udict_mgr = udict_inline_mgr_alloc(UDICT_POOL_DEPTH, umem_mgr, -1, -1);
     assert(udict_mgr != NULL);
-    struct uref_mgr *uref_mgr = uref_std_mgr_alloc(UREF_POOL_DEPTH, udict_mgr, 0); 
+    struct uref_mgr *uref_mgr = uref_std_mgr_alloc(UREF_POOL_DEPTH, udict_mgr, 0);
     assert(uref_mgr != NULL);
 
     /* block */

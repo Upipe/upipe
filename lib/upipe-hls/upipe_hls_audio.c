@@ -476,7 +476,7 @@ static struct upipe_mgr upipe_hls_audio_mgr = {
 
 /** @This returns the management structure.
  *
- * @return a pointer to the manager. 
+ * @return a pointer to the manager.
  */
 struct upipe_mgr *upipe_hls_audio_mgr_alloc(void)
 {

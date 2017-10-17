@@ -332,7 +332,7 @@ int main (int argc, char **argv)
     assert(umem_mgr != NULL);
     struct udict_mgr *udict_mgr = udict_inline_mgr_alloc(UDICT_POOL_DEPTH, umem_mgr, -1, -1);
     assert(udict_mgr != NULL);
-    uref_mgr = uref_std_mgr_alloc(UREF_POOL_DEPTH, udict_mgr, 0); 
+    uref_mgr = uref_std_mgr_alloc(UREF_POOL_DEPTH, udict_mgr, 0);
     assert(uref_mgr != NULL);
 
     /* block */
@@ -435,7 +435,7 @@ int main (int argc, char **argv)
             uprobe_pfx_alloc(uprobe_use(logger), UPROBE_LOG_LEVEL,
                              "avcdec_test"));
     ubase_assert(upipe_set_output(avcdec, avcdec_test));
-    
+
     // null pipe
     struct upipe_mgr *nullpipe_mgr = upipe_null_mgr_alloc();
     struct upipe *nullpipe = upipe_void_alloc(nullpipe_mgr,
@@ -527,7 +527,7 @@ int main (int argc, char **argv)
     upipe_release(nullpipe);
     test_free(avcdec_test);
     upipe_mgr_release(upipe_avcdec_mgr);
-	upump_free(write_pump);
+    upump_free(write_pump);
 
     // release managers
     upump_mgr_release(upump_mgr);

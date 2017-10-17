@@ -82,7 +82,7 @@ static struct upipe *test_alloc(struct upipe_mgr *mgr, struct uprobe *uprobe,
                                 uint32_t signature, va_list args)
 {
     struct upipe *upipe = malloc(sizeof(struct upipe));
-	upipe_init(upipe, mgr, uprobe);
+    upipe_init(upipe, mgr, uprobe);
     upipe_throw_ready(upipe);
     return upipe;
 }

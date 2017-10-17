@@ -230,7 +230,7 @@ UPIPE_HELPER_UBUF_MGR(upipe_avfsrc_sub, ubuf_mgr, flow_format, ubuf_mgr_request,
                       upipe_avfsrc_sub_check,
                       upipe_avfsrc_sub_register_request,
                       upipe_avfsrc_sub_unregister_request)
-    
+
 UPIPE_HELPER_SUBPIPE(upipe_avfsrc, upipe_avfsrc_sub, sub, sub_mgr,
                      subs, uchain)
 
@@ -855,7 +855,7 @@ static void upipe_avfsrc_probe(struct upump *upump)
         struct uref *flow_def;
 
         // discard all packets from this stream
-        stream->discard = AVDISCARD_ALL; 
+        stream->discard = AVDISCARD_ALL;
 
         switch (codec->codec_type) {
             case AVMEDIA_TYPE_AUDIO:
@@ -1208,7 +1208,7 @@ static void upipe_avfsrc_free(struct urefcount *urefcount_real)
     if (likely(upipe_avfsrc->context != NULL)) {
         if (likely(upipe_avfsrc->url != NULL))
             upipe_notice_va(upipe, "closing URL %s", upipe_avfsrc->url);
-        
+
         for (int i = 0; i < upipe_avfsrc->context->nb_streams; i++)
             if (upipe_avfsrc->context->streams[i]->codec->opaque != NULL)
                 uref_free((struct uref *)upipe_avfsrc->context->streams[i]->codec->opaque);

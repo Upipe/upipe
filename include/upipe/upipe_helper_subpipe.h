@@ -168,7 +168,7 @@ extern "C" {
  *  void upipe_foo_throw_sub_outputs(struct upipe *upipe,
  *                                   int event, ...)
  * @end code
- * Throws the given event from all subpipes.                              
+ * Throws the given event from all subpipes.
  *
  * @item @code
  *  void upipe_foo_clean_sub_outputs(struct upipe *upipe)
@@ -176,8 +176,8 @@ extern "C" {
  * Cleans up the list in upipe_foo.
  * @end list
  *
- * @param STRUCTURE name of your private upipe structure 
- * @param STRUCTURE_SUB name of your private subpipe structure 
+ * @param STRUCTURE name of your private upipe structure
+ * @param STRUCTURE_SUB name of your private subpipe structure
  * @param SUB suffix to use in upipe_foo_init_sub_XXX and
  * upipe_foo_clean_sub_XXX
  * @param MGR name of the @tt{struct upipe_mgr} member of your private upipe

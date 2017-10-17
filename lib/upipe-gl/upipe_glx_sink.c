@@ -191,7 +191,7 @@ static void upipe_glx_sink_event_process(struct upipe *upipe)
             case KeyRelease:
                 upipe_glx_sink_keyhandler(upipe, &evt, UPROBE_GLX_SINK_KEYRELEASE);
                 break;
-            case KeyPress: 
+            case KeyPress:
                 upipe_glx_sink_keyhandler(upipe, &evt, UPROBE_GLX_SINK_KEYPRESS);
                 break;
             default:
@@ -315,7 +315,7 @@ static int upipe_glx_sink_init_glx(struct upipe *upipe, int x, int y, int width,
     XStoreName(display, window, "upipe-glx");
     glXMakeCurrent(display, window, glxContext);
     XMapRaised(display, window);
-    
+
     upipe_glx_sink->visual = visual;
     upipe_glx_sink->display = display;
     upipe_glx_sink->window = window;

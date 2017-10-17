@@ -263,7 +263,7 @@ int main(int argc, char **argv)
     ubase_assert(upipe_x264_set_default_preset(x264, "faster", NULL));
     ubase_assert(upipe_x264_set_profile(x264, "high"));
     ubase_assert(upipe_x264_set_default(x264));
-    
+
     /* encoding test */
     for (counter = 0; counter < LIMIT; counter ++) {
         printf("Sending pic %d\n", counter);

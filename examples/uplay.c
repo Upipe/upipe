@@ -499,14 +499,14 @@ static int catch_audio(struct uprobe *uprobe, struct upipe *upipe,
     upipe_mgr_release(upipe_alsink_mgr);
     upipe_attach_uclock(sink);
 #elif defined(UPIPE_HAVE_AUDIOTOOLBOX_AUDIOTOOLBOX_H)
-	struct upipe_mgr *upipe_osx_audioqueue_sink_mgr =
-		upipe_osx_audioqueue_sink_mgr_alloc();
-	sink = upipe_void_alloc(upipe_osx_audioqueue_sink_mgr,
-			uprobe_pfx_alloc(uprobe_use(uprobe_main), UPROBE_LOG_VERBOSE,
-							 "osx_audioqueue_sink"));
-	assert(sink != NULL);
-	upipe_mgr_release(upipe_osx_audioqueue_sink_mgr);
-	upipe_attach_uclock(sink);
+    struct upipe_mgr *upipe_osx_audioqueue_sink_mgr =
+        upipe_osx_audioqueue_sink_mgr_alloc();
+    sink = upipe_void_alloc(upipe_osx_audioqueue_sink_mgr,
+                            uprobe_pfx_alloc(uprobe_use(uprobe_main), UPROBE_LOG_VERBOSE,
+                                             "osx_audioqueue_sink"));
+    assert(sink != NULL);
+    upipe_mgr_release(upipe_osx_audioqueue_sink_mgr);
+    upipe_attach_uclock(sink);
 #else
     struct upipe_mgr *upipe_null_mgr = upipe_null_mgr_alloc();
     sink = upipe_void_alloc(upipe_null_mgr,
@@ -860,4 +860,3 @@ int main(int argc, char **argv)
 
     return 0;
 }
-

@@ -515,7 +515,7 @@ static int upipe_h265f_stream_parse_hrd(struct upipe *upipe,
     if (!fixed_pic_rate) {
         fixed_pic_rate_within_cvs = !!ubuf_block_stream_show_bits(s, 1);
         ubuf_block_stream_skip_bits(s, 1);
-    } 
+    }
     bool low_delay = false;
     if (fixed_pic_rate_within_cvs)
         upipe_h26xf_stream_ue(s); /* elemental_duration_in_tc_minus1 */
@@ -868,7 +868,7 @@ static bool upipe_h265f_activate_sps(struct upipe *upipe, uint32_t sps_id)
                 num_delta_pocs)) {
             upipe_err(upipe, "invalid SPS (short_term_ref_pic_sets)");
             ubuf_block_stream_clean(s);
-            return false; 
+            return false;
         }
     }
 

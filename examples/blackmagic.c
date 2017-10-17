@@ -130,7 +130,7 @@ int main(int argc, char **argv)
             case 'a':
                 audio_codec = optarg;
                 break;
-                
+
             default:
                 usage(argv[0]);
         }
@@ -206,7 +206,7 @@ int main(int argc, char **argv)
     assert(bmdsrc);
     upipe_attach_uclock(bmdsrc);
     upipe_set_uri(bmdsrc, bmd_uri);
-   
+
     /* video source subpipe */
     struct upipe *bmdvideo = NULL;
     upipe_bmd_src_get_pic_sub(bmdsrc, &bmdvideo);
@@ -231,7 +231,7 @@ int main(int argc, char **argv)
     assert(avcenc);
     upipe_set_option(avcenc, "b", "12000000");
     uref_free(flow);
-    
+
     /* mux input */
     struct upipe *sink = upipe_void_alloc_output_sub(avcenc, avfsink,
         uprobe_pfx_alloc(uprobe_use(logger), loglevel, "videosink"));
@@ -241,7 +241,7 @@ int main(int argc, char **argv)
 
     upipe_set_output(bmdvideo, ffmt);
     upipe_release(ffmt);
- 
+
     /* audio source subpipe */
     struct upipe *bmdaudio = NULL;
     upipe_bmd_src_get_sound_sub(bmdsrc, &bmdaudio);
@@ -267,7 +267,7 @@ int main(int argc, char **argv)
                 loglevel, "audioenc"), flow);
         assert(audioenc);
         uref_free(flow);
-        
+
         /* mux input */
         struct upipe *sink = upipe_void_alloc_output_sub(audioenc, avfsink,
             uprobe_pfx_alloc(uprobe_use(logger), loglevel, "audiosink"));

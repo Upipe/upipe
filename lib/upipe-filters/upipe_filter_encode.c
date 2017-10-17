@@ -423,7 +423,7 @@ static int upipe_fenc_set_sc_latency(struct upipe *upipe, uint64_t sc_latency)
     upipe_fenc->sc_latency = sc_latency;
 
     if (upipe_fenc->last_inner != NULL) {
-        UBASE_RETURN(upipe_x264_set_sc_latency(upipe_fenc->last_inner, 
+        UBASE_RETURN(upipe_x264_set_sc_latency(upipe_fenc->last_inner,
                                                sc_latency))
     }
     return UBASE_ERR_NONE;
@@ -619,4 +619,3 @@ struct upipe_mgr *upipe_fenc_mgr_alloc(void)
     fenc_mgr->mgr.upipe_mgr_control = upipe_fenc_mgr_control;
     return upipe_fenc_mgr_to_upipe_mgr(fenc_mgr);
 }
-

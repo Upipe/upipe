@@ -91,7 +91,7 @@ typedef int (*upipe_helper_uref_mgr_register)(struct upipe *, struct urequest *)
  * Typically called from your upipe_foo_free() function.
  * @end list
  *
- * @param STRUCTURE name of your private upipe structure 
+ * @param STRUCTURE name of your private upipe structure
  * @param UREF_MGR name of the @tt {struct uref_mgr *} field of
  * your private upipe structure
  * @param REQUEST name of the @tt {struct urequest} field of

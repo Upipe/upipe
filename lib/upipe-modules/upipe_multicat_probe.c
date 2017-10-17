@@ -52,7 +52,7 @@
 #include <assert.h>
 #include <sys/param.h>
 
-/** upipe_multicat_probe structure */ 
+/** upipe_multicat_probe structure */
 struct upipe_multicat_probe {
     /** refcount management structure */
     struct urefcount urefcount;

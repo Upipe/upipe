@@ -1,5 +1,3 @@
-
-
 /** @file
  * @short Upipe rtp-fec (ffmpeg) module
  */

@@ -170,4 +170,3 @@ int uprobe_xfer_add(struct uprobe *uprobe, enum uprobe_xfer_event xfer_event,
     ulist_add(&uprobe_xfer->subs, uprobe_xfer_sub_to_uchain(sub));
     return UBASE_ERR_NONE;
 }
-

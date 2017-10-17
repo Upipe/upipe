@@ -134,7 +134,7 @@ typedef uatomic_uint32_t uring_lifo;
 /** @internal @This returns the index of an element from a LIFO value.
  *
  * @param lifo uring LIFO multiplexed structure
- * @return index of the element in the ring 
+ * @return index of the element in the ring
  */
 static inline uring_index uring_lifo_to_index(struct uring *uring,
                                               uring_lifo_val lifo)

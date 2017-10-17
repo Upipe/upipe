@@ -70,7 +70,7 @@ extern "C" {
  * Currently does nothing.
  * @end list
  *
- * @param STRUCTURE name of your private upipe structure 
+ * @param STRUCTURE name of your private upipe structure
  * @param ACQUIRED name of the @tt{bool} field of
  * your private upipe structure
  */

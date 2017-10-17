@@ -267,7 +267,7 @@ static int catch_demux(struct uprobe *uprobe, struct upipe *upipe,
                                     loglevel, "dec %"PRIu64, id));
             upipe_release(decoder);
             incoming = decoder;
-            
+
             /* stream type */
             const char *ffmt_def = NULL;
             if (strstr(def, ".sound.")) {
