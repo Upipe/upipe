@@ -1338,6 +1338,16 @@ static inline int upipe_split_iterate(struct upipe *upipe, struct uref **p)
     return upipe_control(upipe, UPIPE_SPLIT_ITERATE, p);
 }
 
+/** @This defines a helper to iterate over split.
+ *
+ * @param UPIPE description of the pipe structure
+ * @param FLOW_DEF name of the struct uref * used to iterate
+ */
+#define upipe_split_foreach(UPIPE, FLOW_DEF)                    \
+    for (struct uref *FLOW_DEF = NULL;                          \
+         ubase_check(upipe_split_iterate(UPIPE, &FLOW_DEF)) &&  \
+         FLOW_DEF != NULL;)
+
 /** @This returns the subpipe manager of a super-pipe.
  *
  * @param upipe description structure of the super-pipe
@@ -1361,6 +1371,16 @@ static inline int upipe_iterate_sub(struct upipe *upipe, struct upipe **p)
 {
     return upipe_control(upipe, UPIPE_ITERATE_SUB, p);
 }
+
+/** @This defines a helper to iterate over sub pipes.
+ *
+ * @param UPIPE description of the pipe structure
+ * @param SUB name of the struct upipe * used to iterate
+ */
+#define upipe_foreach_sub(UPIPE, SUB)                           \
+    for (struct upipe *SUB = NULL;                              \
+         ubase_check(upipe_iterate_sub(UPIPE, &SUB)) &&         \
+         SUB != NULL;)
 
 /** @This returns the super-pipe of a subpipe.
  *

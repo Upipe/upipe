@@ -15,6 +15,7 @@ UPIPEX264_LIBS = $(X264_LIBS) $(top_builddir)/lib/upipe-x264/libupipe_x264.la
 UPIPEALSA_LIBS = -lasound $(top_builddir)/lib/upipe-alsa/libupipe_alsa.la
 UPIPEBMD_LIBS = $(top_builddir)/lib/upipe-blackmagic/libupipe_blackmagic.la -lstdc++
 UPIPEOSX_LIBS = $(top_builddir)/lib/upipe-osx/libupipe_osx.la
+UPIPEDVBCSA_LIBS = $(top_builddir)/lib/upipe-dvbcsa/libupipe_dvbcsa.la
 
 noinst_PROGRAMS = 
 
@@ -43,6 +44,7 @@ mpthree2rtp_LDADD = $(LDADD) $(UPUMPEV_LIBS) $(UPIPEMODULES_LIBS) $(UPIPEFRAMERS
 ts2mpthreemulticat_LDADD = $(LDADD) $(UPUMPEV_LIBS) $(UPIPEMODULES_LIBS) $(UPIPEFRAMERS_LIBS) $(UPIPETS_LIBS) 
 ugrid_LDADD = $(LDADD) $(UPIPEMODULES_LIBS) $(UPUMPEV_LIBS) $(UPIPETS_LIBS) $(UPIPEFRAMERS_LIBS) $(UPIPEFILTERS_LIBS) $(UPIPEAV_LIBS) $(UPIPEX264_LIBS) $(UPIPEPTHREAD_LIBS) $(UPIPESWS_LIBS) $(UPIPESWR_LIBS)
 ugrid_CFLAGS = $(SWSCALE_CFLAGS)
+ts_encrypt_LDADD = $(LDADD) $(UPIPEMODULES_LIBS) $(UPUMPEV_LIBS) $(UPIPETS_LIBS) $(UPIPEDVBCSA_LIBS) $(UPIPEPTHREAD_LIBS) -lpthread
 
 if HAVE_EV
 if HAVE_WRITEV
@@ -59,6 +61,11 @@ noinst_PROGRAMS += ts2es
 noinst_PROGRAMS += ts2mpthreemulticat
 if HAVE_AVFORMAT
 noinst_PROGRAMS += mpthree2rtp
+endif
+if HAVE_EV
+if HAVE_DVBCSA
+noinst_PROGRAMS += ts_encrypt
+endif
 endif
 endif
 

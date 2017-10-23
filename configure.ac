@@ -110,6 +110,9 @@ AC_CHECK_HEADERS([ev.h], [
                         AM_CONDITIONAL(HAVE_EV, true),
                         AM_CONDITIONAL(HAVE_EV, false))])],
         AM_CONDITIONAL(HAVE_EV, false))
+AC_CHECK_HEADERS([dvbcsa/dvbcsa.h],
+                 AM_CONDITIONAL(HAVE_DVBCSA, true),
+                 AM_CONDITIONAL(HAVE_DVBCSA, false))
 
 PKG_CHECK_UPIPE(AVUTIL, libavutil, [libavutil/avutil.h])
 PKG_CHECK_UPIPE(AVFORMAT, [libavformat >= 53.32.0 libavcodec libavutil], [libavformat/avformat.h libavformat/avio.h libavutil/avutil.h])
@@ -243,6 +246,7 @@ AC_CONFIG_FILES([Makefile
                  include/upipe-zvbi/Makefile
                  include/upipe-dveo/Makefile
                  include/upipe-netmap/Makefile
+                 include/upipe-dvbcsa/Makefile
                  lib/Makefile
                  lib/upipe/Makefile
                  lib/upipe/libupipe.pc
@@ -298,6 +302,8 @@ AC_CONFIG_FILES([Makefile
                  lib/upipe-dveo/libupipe_dveo.pc
                  lib/upipe-netmap/Makefile
                  lib/upipe-netmap/libupipe_netmap.pc
+                 lib/upipe-dvbcsa/Makefile
+                 lib/upipe-dvbcsa/libupipe_dvbcsa.pc
                  x86/Makefile
                  x86/config.asm
                  tests/Makefile
