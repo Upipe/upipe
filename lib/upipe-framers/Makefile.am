@@ -15,6 +15,7 @@ libupipe_framers_la_SOURCES = \
 	upipe_dvbsub_framer.c \
 	upipe_s302_framer.c \
 	upipe_s337_decaps.c \
+	upipe_s337_framer.c \
 	upipe_video_trim.c \
 	$(NULL)
 
