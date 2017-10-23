@@ -147,10 +147,10 @@ struct upipe_sync_sub {
     /** AES/a52 */
     bool a52;
 
-    /** frames without dolby e */
-    uint8_t missed_dolby_e;
+    /** frames without compressed_audio e */
+    uint8_t missed_compressed_audio_e;
 
-    /** last dolby e frame sent */
+    /** last compressed_audio e frame sent */
     struct uref *uref;
 
     /** channels */
@@ -203,7 +203,7 @@ static struct upipe *upipe_sync_sub_alloc(struct upipe_mgr *mgr,
     upipe_sync_sub->sound = false;
     upipe_sync_sub->s337 = false;
     upipe_sync_sub->a52 = false;
-    upipe_sync_sub->missed_dolby_e = 0;
+    upipe_sync_sub->missed_compressed_audio_e = 0;
     upipe_sync_sub->uref = NULL;
 
     upipe_sync_sub_init_urefcount(upipe);
@@ -540,14 +540,14 @@ static inline unsigned audio_samples_count(struct upipe *upipe,
     return samples + samples_increment[rate5994][upipe_sync->frame_idx];
 }
 
-static struct uref *upipe_sync_get_cached_dolby(struct upipe *upipe)
+static struct uref *upipe_sync_get_cached_compressed_audio(struct upipe *upipe)
 {
     struct upipe_sync_sub *upipe_sync_sub = upipe_sync_sub_from_upipe(upipe);
 
-    if (upipe_sync_sub->missed_dolby_e >= 5)
+    if (upipe_sync_sub->missed_compressed_audio_e >= 5)
         return NULL;
 
-    upipe_sync_sub->missed_dolby_e++;
+    upipe_sync_sub->missed_compressed_audio_e++;
 
     if (upipe_sync_sub->uref == NULL)
         return NULL;
@@ -606,7 +606,7 @@ static void output_sound(struct upipe *upipe, const struct urational *fps,
             if (!uchain) {
                 upipe_err_va(upipe_sub, "no urefs");
 
-                uref = upipe_sync_get_cached_dolby(upipe_sub);
+                uref = upipe_sync_get_cached_compressed_audio(upipe_sub);
                 if (!uref)
                     continue;
             } else {
@@ -618,14 +618,14 @@ static void output_sound(struct upipe *upipe, const struct urational *fps,
                     upipe_warn_va(upipe_sub, "Waiting to buffer %.0f",
                             pts_to_time(pts + upipe_sync->latency - upipe_sync->pts));
 
-                    uref = upipe_sync_get_cached_dolby(upipe_sub);
+                    uref = upipe_sync_get_cached_compressed_audio(upipe_sub);
                     if (!uref)
                         uref = get_silence(upipe_sub, samples);
                     if (!uref)
                         continue;
                 } else {
                     ulist_pop(&upipe_sync_sub->urefs);
-                    upipe_sync_sub->missed_dolby_e = 0;
+                    upipe_sync_sub->missed_compressed_audio_e = 0;
                     /* cache uref */
                     uref_free(upipe_sync_sub->uref);
                     upipe_sync_sub->uref = uref_dup(uref);

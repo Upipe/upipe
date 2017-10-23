@@ -82,3 +82,7 @@ endif
 if HAVE_ZVBI
 SUBDIRS += upipe-zvbi
 endif
+
+if HAVE_DVBCSA
+SUBDIRS += upipe-dvbcsa
+endif

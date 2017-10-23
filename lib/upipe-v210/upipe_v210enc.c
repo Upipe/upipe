@@ -130,39 +130,32 @@ UPIPE_HELPER_UBUF_MGR(upipe_v210enc, ubuf_mgr, flow_format, ubuf_mgr_request,
                       upipe_v210enc_unregister_output_request)
 UPIPE_HELPER_INPUT(upipe_v210enc, urefs, nb_urefs, max_urefs, blockers, upipe_v210enc_handle)
 
-static inline int clip(int a, int amin, int amax)
-{
-    if      (a < amin) return amin;
-    else if (a > amax) return amax;
-    else               return a;
-}
+#define CLIP(v) ubase_clip(v, 4, 1019)
+#define CLIP8(v) ubase_clip(v, 1, 254)
 
 static inline void wl32(uint8_t *dst, uint32_t u)
 {
-	*dst++ = (u      ) & 0xff;
-	*dst++ = (u >>  8) & 0xff;
-	*dst++ = (u >> 16) & 0xff;
-	*dst++ = (u >> 24) & 0xff;
+    *dst++ = (u      ) & 0xff;
+    *dst++ = (u >>  8) & 0xff;
+    *dst++ = (u >> 16) & 0xff;
+    *dst++ = (u >> 24) & 0xff;
 }
-
-#define CLIP(v) clip(v, 4, 1019)
-#define CLIP8(v) clip(v, 1, 254)
 
 #define WRITE_PIXELS(a, b, c)           \
     do {                                \
         val =   CLIP(*a++);             \
         val |= (CLIP(*b++) << 10) |     \
                (CLIP(*c++) << 20);      \
-        wl32(dst, val);              \
+        wl32(dst, val);                 \
         dst += 4;                       \
     } while (0)
 
 #define WRITE_PIXELS8(a, b, c)          \
     do {                                \
-        val =  (CLIP8(*a++) << 2);       \
-        val |= (CLIP8(*b++) << 12) |     \
-               (CLIP8(*c++) << 22);      \
-        wl32(dst, val);              \
+        val =  (CLIP8(*a++) << 2);      \
+        val |= (CLIP8(*b++) << 12) |    \
+               (CLIP8(*c++) << 22);     \
+        wl32(dst, val);                 \
         dst += 4;                       \
     } while (0)
 

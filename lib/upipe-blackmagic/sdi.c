@@ -120,7 +120,10 @@ void sdi_write_cdp(const uint8_t *src, size_t src_size,
 static inline uint32_t to_le32(uint32_t a)
 {
 #ifdef UPIPE_WORDS_BIGENDIAN
-    return __builtin_bswap32(a);
+    return  ((a << 24) & 0xff000000 ) |
+        ((a <<  8) & 0x00ff0000 ) |
+        ((a >>  8) & 0x0000ff00 ) |
+        ((a >> 24) & 0x000000ff );
 #else
     return a;
 #endif

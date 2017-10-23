@@ -24,6 +24,13 @@
  * SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
  */
 
+#ifndef _UPIPE_UREFCOUNT_HELPER_H_
+/** @hidden */
+#define _UPIPE_UREFCOUNT_HELPER_H_
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 /** @This defines functions to deal with refcounted structures. */
 #define UREFCOUNT_HELPER(STRUCT, UREFCOUNT, DEAD)                       \
 UBASE_FROM_TO(STRUCT, urefcount, UREFCOUNT, UREFCOUNT)                  \
@@ -46,3 +53,8 @@ static void STRUCT##_clean_##UREFCOUNT(struct STRUCT *obj)              \
 {                                                                       \
     urefcount_clean(STRUCT##_to_##UREFCOUNT(obj));                      \
 }
+
+#ifdef __cplusplus
+}
+#endif
+#endif

@@ -79,10 +79,11 @@ UREF_ATTR_STRING(flow, name, "f.name", flow name)
  * variable list of arguments
  * @return an error code
  */
+UBASE_FMT_PRINTF(2, 3)
 static inline int uref_flow_set_def_va(struct uref *uref,
                                        const char *format, ...)
 {
-    UBASE_VARARG(uref_flow_set_def(uref, string))
+    UBASE_VARARG(uref_flow_set_def(uref, string), UBASE_ERR_INVALID)
 }
 
 #ifdef __cplusplus

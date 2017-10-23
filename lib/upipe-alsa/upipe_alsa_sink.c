@@ -650,7 +650,8 @@ static void upipe_alsink_timer(struct upump *upump)
         struct uchain *uchain = ulist_peek(&upipe_alsink->urefs);
         snd_pcm_sframes_t result;
         if (unlikely(uchain == NULL)) {
-            upipe_dbg_va(upipe, "playing %u frames of silence (empty)", frames);
+            upipe_dbg_va(upipe, "playing %lu frames of silence (empty)",
+                         frames);
             result = upipe_alsink_silence(upipe, frames);
             if (result <= 0)
                 break;
@@ -675,7 +676,7 @@ static void upipe_alsink_timer(struct upump *upump)
                     tolerance * upipe_alsink->rate / UCLOCK_FREQ;
                 if (silence_frames > frames)
                     silence_frames = frames;
-                upipe_dbg_va(upipe, "playing %u frames of silence (wait)",
+                upipe_dbg_va(upipe, "playing %lu frames of silence (wait)",
                              silence_frames);
                 result = upipe_alsink_silence(upipe, silence_frames);
                 if (result <= 0)
@@ -685,7 +686,7 @@ static void upipe_alsink_timer(struct upump *upump)
             } else if (-tolerance > (int64_t)PTS_TOLERANCE) {
                 snd_pcm_uframes_t dropped_frames =
                     (-tolerance) * upipe_alsink->rate / UCLOCK_FREQ;
-                upipe_warn_va(upipe, "late buffer received, dropping %u frames",
+                upipe_warn_va(upipe, "late buffer received, dropping %lu frames",
                               dropped_frames);
                 upipe_alsink_consume(upipe, dropped_frames);
                 continue;

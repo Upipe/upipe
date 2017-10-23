@@ -37,7 +37,7 @@ extern "C" {
 enum upipe_bmd_sink_genlock {
     UPIPE_BMD_SINK_GENLOCK_UNLOCKED,
     UPIPE_BMD_SINK_GENLOCK_LOCKED,
-    UPIPE_BMD_SINK_GENLOCK_UNSUPPORTED,    
+    UPIPE_BMD_SINK_GENLOCK_UNSUPPORTED,
 };
 
 /** @This extends upipe_command with specific commands for avformat source. */
@@ -94,7 +94,7 @@ static inline int upipe_bmd_sink_get_subpic_sub(struct upipe *upipe,
                           UPIPE_BMD_SINK_SIGNATURE, upipe_p);
 }
 
-/** @This returns the bmd_sink uclock. 
+/** @This returns the bmd_sink uclock.
  *
  * @param upipe description structure of the super pipe
  * @param upipe_p filled in with a pointer to the subpic subpipe
@@ -107,10 +107,10 @@ static inline int upipe_bmd_sink_get_uclock(struct upipe *upipe,
                           UPIPE_BMD_SINK_SIGNATURE, uclock_p);
 }
 
-/** @This returns the bmd_sink genlock status. 
+/** @This returns the bmd_sink genlock status.
  *
  * @param upipe description structure of the super pipe
- * @param status filled with a upipe_bmd_sink_genlock value 
+ * @param status filled with a upipe_bmd_sink_genlock value
  * @return an error code
  */
 static inline int upipe_bmd_sink_get_genlock_status(struct upipe *upipe,
@@ -120,7 +120,7 @@ static inline int upipe_bmd_sink_get_genlock_status(struct upipe *upipe,
                           UPIPE_BMD_SINK_SIGNATURE, status);
 }
 
-/** @This returns the bmd_sink genlock offset. 
+/** @This returns the bmd_sink genlock offset.
  *
  * @param upipe description structure of the super pipe
  * @param offset filled with the genlock offset in pixels
@@ -133,7 +133,7 @@ static inline int upipe_bmd_sink_get_genlock_offset(struct upipe *upipe,
                           UPIPE_BMD_SINK_SIGNATURE, offset);
 }
 
-/** @This sets the bmd_sink genlock offset. 
+/** @This sets the bmd_sink genlock offset.
  *
  * @param upipe description structure of the super pipe
  * @param offset filled with the genlock offset in pixels

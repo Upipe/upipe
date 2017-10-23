@@ -5,7 +5,6 @@ if HAVE_X86_ASM
 libupipe_v210_la_SOURCES += v210dec.asm v210dec.h v210enc.asm v210enc.h
 endif
 libupipe_v210_la_CPPFLAGS = -I$(top_builddir)/include -I$(top_srcdir)/include
-libupipe_v210_la_CFLAGS = $(AM_CFLAGS) $(AVUTIL_CFLAGS)
 libupipe_v210_la_LIBADD = $(top_builddir)/lib/upipe/libupipe.la
 libupipe_v210_la_LDFLAGS = -no-undefined
 

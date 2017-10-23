@@ -5,10 +5,13 @@ libupipe_blackmagic_la_SOURCES = ubuf_pic_blackmagic.cpp \
                                  ubuf_sound_blackmagic.cpp \
                                  upipe_blackmagic_source.cpp \
                                  upipe_blackmagic_extract_vanc.cpp \
-                                 upipe_blackmagic_sink.cpp \
                                  include/DeckLinkAPIDispatch.cpp \
-                                 sdi.c \
                                  $(NULL)
+
+if HAVE_ZVBI
+libupipe_blackmagic_la_SOURCES += upipe_blackmagic_sink.cpp \
+                                  sdi.c
+endif
 
 EXTRA_libupipe_blackmagic_la_SOURCES = include/DeckLinkAPIConfiguration.h \
                                        include/DeckLinkAPIDeckControl.h \

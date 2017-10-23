@@ -353,7 +353,9 @@ static int upipe_http_src_header_value(http_parser *parser,
     upipe_http_src->header_field = HEADER(NULL, 0);
     assert(field.value != NULL);
 
-    upipe_verbose_va(upipe, "%.*s: %.*s", field.len, field.value, len, at);
+    upipe_verbose_va(upipe, "%.*s: %.*s",
+                     (int)field.len, field.value,
+                     (int)len, at);
     if (!strncasecmp("Location", field.value, field.len)) {
         upipe_http_src->location = strndup(at, len);
     }
@@ -599,6 +601,7 @@ static void upipe_http_src_worker(struct upump *upump)
     }
 }
 
+UBASE_FMT_PRINTF(3, 4)
 static int request_add(char **req_p, size_t *len, const char *fmt, ...)
 {
     va_list args;

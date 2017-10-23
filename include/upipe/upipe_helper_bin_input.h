@@ -290,27 +290,35 @@ static int STRUCTURE##_control_bin_input(struct upipe *upipe,               \
                                          int command, va_list args)         \
 {                                                                           \
     struct STRUCTURE *s = STRUCTURE##_from_upipe(upipe);                    \
+    int ret = UBASE_ERR_UNHANDLED;                                          \
+    va_list args_copy;                                                      \
+    va_copy(args_copy, args);                                               \
     switch (command) {                                                      \
         case UPIPE_REGISTER_REQUEST: {                                      \
-            struct urequest *request = va_arg(args, struct urequest *);     \
-            return STRUCTURE##_alloc_bin_proxy(upipe, request);             \
+            struct urequest *request = va_arg(args_copy, struct urequest *);\
+            ret = STRUCTURE##_alloc_bin_proxy(upipe, request);              \
+            break;                                                          \
         }                                                                   \
         case UPIPE_UNREGISTER_REQUEST: {                                    \
-            struct urequest *request = va_arg(args, struct urequest *);     \
-            return STRUCTURE##_free_bin_proxy(upipe, request);              \
+            struct urequest *request = va_arg(args_copy, struct urequest *);\
+            ret = STRUCTURE##_free_bin_proxy(upipe, request);               \
+            break;                                                          \
         }                                                                   \
         case UPIPE_SET_FLOW_DEF:                                            \
             if (s->FIRST_INNER == NULL)                                     \
-                return UBASE_ERR_INVALID;                                   \
-            return upipe_control_va(s->FIRST_INNER, command, args);         \
+                ret = UBASE_ERR_INVALID;                                    \
+            else                                                            \
+                ret = upipe_control_va(s->FIRST_INNER, command, args_copy); \
+            break;                                                          \
         case UPIPE_BIN_GET_FIRST_INNER: {                                   \
-            struct upipe **p = va_arg(args, struct upipe **);               \
+            struct upipe **p = va_arg(args_copy, struct upipe **);          \
             *p = s->FIRST_INNER;                                            \
-            return (*p != NULL) ? UBASE_ERR_NONE : UBASE_ERR_UNHANDLED;     \
+            ret = (*p != NULL) ? UBASE_ERR_NONE : UBASE_ERR_UNHANDLED;      \
+            break;                                                          \
         }                                                                   \
-        default:                                                            \
-            return UBASE_ERR_UNHANDLED;                                     \
     }                                                                       \
+    va_end(args_copy);                                                      \
+    return ret;                                                             \
 }                                                                           \
 /** @internal @This cleans up the private members for this helper.          \
  *                                                                          \

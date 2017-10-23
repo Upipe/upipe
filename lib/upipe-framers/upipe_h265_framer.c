@@ -773,7 +773,7 @@ static bool upipe_h265f_activate_sps(struct upipe *upipe, uint32_t sps_id)
         default:
             upipe_warn_va(upipe, "unknown level %"PRIu8,
                           upipe_h265f->level_idc);
-            /* intended fall-through */
+            /* fallthrough */
         case H265VPS_LEVEL_6_2:
             max_octetrate = max_bs = tier ? (800000000 / 8) : (240000000 / 8);
             break;

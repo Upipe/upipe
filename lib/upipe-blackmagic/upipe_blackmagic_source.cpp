@@ -748,7 +748,7 @@ static void upipe_bmd_src_work(struct upipe *upipe, struct upump *upump)
                             "resetting %" PRIu64 " to %" PRIu64 " "
                             "highest %" PRIu64 " "
                             "orig %" PRIu64 " "
-                            "delta % " PRIu64 " ",
+                            "delta %" PRIu64 " ",
                             old / (UCLOCK_FREQ / 1000),
                             pts_prog / (UCLOCK_FREQ / 1000),
                             highest / (UCLOCK_FREQ / 1000),
