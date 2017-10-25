@@ -25,4 +25,4 @@ V_ASM_ = $(V_ASM_@AM_DEFAULT_VERBOSITY@)
 V_ASM_0 = @echo "  ASM     " $@;
 
 .asm.lo:
-	$(V_ASM)$(LIBTOOL) $(AM_V_lt) --mode=compile --tag=CC $(YASM) $(YASMFLAGS) $< -o $@
+	$(V_ASM)$(LIBTOOL) $(AM_V_lt) --mode=compile --tag=CC $(NASM) $(NASMFLAGS) $< -o $@
