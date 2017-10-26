@@ -479,9 +479,11 @@ static int _upipe_udpsink_control(struct upipe *upipe,
 {
     struct upipe_udpsink *upipe_udpsink = upipe_udpsink_from_upipe(upipe);
 
-    UBASE_HANDLED_RETURN(upipe_control_provide_request(upipe, command, args));
-
     switch (command) {
+        case UPIPE_REGISTER_REQUEST:
+        case UPIPE_UNREGISTER_REQUEST:
+            return upipe_control_provide_request(upipe, command, args);
+
         case UPIPE_ATTACH_UPUMP_MGR:
             upipe_udpsink_set_upump(upipe, NULL);
             return upipe_udpsink_attach_upump_mgr(upipe);

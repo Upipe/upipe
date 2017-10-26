@@ -2922,9 +2922,12 @@ static int upipe_ts_demux_control(struct upipe *upipe,
                                   int command, va_list args)
 {
     UBASE_HANDLED_RETURN(upipe_ts_demux_control_programs(upipe, command, args));
-    UBASE_HANDLED_RETURN(upipe_control_provide_request(upipe, command, args));
 
     switch (command) {
+        case UPIPE_REGISTER_REQUEST:
+        case UPIPE_UNREGISTER_REQUEST:
+            return upipe_control_provide_request(upipe, command, args);
+
         case UPIPE_SET_FLOW_DEF: {
             struct uref *flow_def = va_arg(args, struct uref *);
             return upipe_ts_demux_set_flow_def(upipe, flow_def);
