@@ -1617,6 +1617,10 @@ static struct upipe *_upipe_sdi_enc_alloc(struct upipe_mgr *mgr,
     upipe_sdi_enc->v210_to_uyvy      = v210_uyvy_unpack_c;
 
 #if !defined(__APPLE__) /* macOS clang doesn't support that builtin yet */
+    if (__builtin_cpu_supports("sse")) {
+        upipe_sdi_enc->blank         = upipe_sdi_blank_sse;
+    }
+
     if (__builtin_cpu_supports("sse2")) {
         upipe_sdi_enc->planar_to_uyvy_8 = upipe_planar_to_uyvy_8_unaligned_sse2;
         upipe_sdi_enc->planar_to_uyvy_10 = upipe_planar_to_uyvy_10_unaligned_sse2;

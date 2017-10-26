@@ -33,6 +33,7 @@ void upipe_v210_to_uyvy_unaligned_ssse3(const uint32_t *src, uint16_t *uyvy, uin
 void upipe_v210_to_uyvy_unaligned_avx  (const uint32_t *src, uint16_t *uyvy, uintptr_t pixels);
 void upipe_v210_to_uyvy_unaligned_avx2 (const uint32_t *src, uint16_t *uyvy, uintptr_t pixels);
 
+void upipe_sdi_blank_sse(uint16_t *dst, uintptr_t pixels);
 void upipe_sdi_blank_avx(uint16_t *dst, uintptr_t pixels);
 
 /* process mmsize samples per iteration */
