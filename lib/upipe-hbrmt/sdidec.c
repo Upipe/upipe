@@ -1,3 +1,4 @@
+#include <stddef.h>
 #include <inttypes.h>
 #include "sdidec.h"
 
