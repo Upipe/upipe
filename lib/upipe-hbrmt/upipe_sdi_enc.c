@@ -1691,6 +1691,9 @@ static struct upipe *_upipe_sdi_enc_alloc(struct upipe_mgr *mgr,
 static void upipe_sdi_enc_free(struct upipe *upipe)
 {
     struct upipe_sdi_enc *upipe_sdi_enc = upipe_sdi_enc_from_upipe(upipe);
+
+    upipe_clean(&upipe_sdi_enc->subpic_subpipe.upipe);
+
     upipe_throw_dead(upipe);
     upipe_sdi_enc_clean_urefs(&upipe_sdi_enc->urefs);
     uref_free(upipe_sdi_enc->uref_audio);
@@ -1698,6 +1701,7 @@ static void upipe_sdi_enc_free(struct upipe *upipe)
     upipe_sdi_enc_clean_ubuf_mgr(upipe);
     upipe_sdi_enc_clean_urefcount(upipe);
     upipe_sdi_enc_clean_sub_subs(upipe);
+    upipe_clean(upipe);
     free(upipe_sdi_enc);
 }
 
