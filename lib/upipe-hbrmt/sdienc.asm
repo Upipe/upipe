@@ -163,6 +163,9 @@ cglobal sdi_blank, 2, 2, 1, dst, pixels
     RET
 %endmacro
 
+INIT_XMM sse
+sdi_blank
+
 INIT_XMM avx
 sdi_blank
 
