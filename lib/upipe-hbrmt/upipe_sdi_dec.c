@@ -633,7 +633,7 @@ static inline void validate_dbn(struct upipe *upipe, uint8_t did, uint8_t dbn, i
 static int parse_hd_hanc(struct upipe *upipe, const uint16_t *packet, int line_num,
                          struct audio_ctx *ctx)
 {
-    struct upipe_sdi_dec *upipe_sdi_dec = upipe_sdi_dec_from_upipe(upipe);   
+    struct upipe_sdi_dec *upipe_sdi_dec = upipe_sdi_dec_from_upipe(upipe);
     uint8_t did = packet[6] & 0xff;
 
     if (upipe_sdi_dec->debug && did >= 0x80) { /* type 1 packet */
