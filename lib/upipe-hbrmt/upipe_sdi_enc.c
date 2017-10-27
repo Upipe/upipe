@@ -1119,8 +1119,8 @@ static void upipe_sdi_enc_input(struct upipe *upipe, struct uref *uref,
     }
 
     const struct sdi_offsets_fmt *f = upipe_sdi_enc->f;
-    if (input_hsize != f->pict_fmt->active_width ||
-        input_vsize != f->pict_fmt->active_height) {
+    if (input_hsize < f->pict_fmt->active_width ||
+        input_vsize < f->pict_fmt->active_height) {
         upipe_warn(upipe, "invalid picture received, size does not match");
         uref_dump(uref, upipe->uprobe);
         uref_free(uref);
