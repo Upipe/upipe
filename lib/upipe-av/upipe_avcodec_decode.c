@@ -601,8 +601,11 @@ static bool upipe_avcdec_do_av_deal(struct upipe *upipe)
             break;
         case AVMEDIA_TYPE_VIDEO:
             context->get_buffer2 = upipe_avcdec_get_buffer_pic;
+
+#if LIBAVCODEC_VERSION_INT < AV_VERSION_INT(55, 48, 102)
             /* otherwise we need specific prepend/append/align */
             context->flags |= CODEC_FLAG_EMU_EDGE;
+#endif
             context->refcounted_frames = 1;
             break;
         case AVMEDIA_TYPE_AUDIO:
