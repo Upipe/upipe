@@ -101,10 +101,11 @@ static int upipe_rtp_h264_set_flow_def(struct upipe *upipe,
 static int upipe_rtp_h264_control(struct upipe *upipe, int command,
                                   va_list args)
 {
-    //FIXME
-    UBASE_HANDLED_RETURN(upipe_control_provide_request(upipe, command, args));
-
     switch (command) {
+        case UPIPE_REGISTER_REQUEST:
+        case UPIPE_UNREGISTER_REQUEST:
+            return upipe_control_provide_request(upipe, command, args);
+
         case UPIPE_SET_FLOW_DEF: {
             struct uref *flow_def = va_arg(args, struct uref *);
             return upipe_rtp_h264_set_flow_def(upipe, flow_def);

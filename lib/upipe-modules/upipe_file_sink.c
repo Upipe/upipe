@@ -584,9 +584,11 @@ static int _upipe_fsink_get_sync_period(struct upipe *upipe, uint64_t *p)
  */
 static int  _upipe_fsink_control(struct upipe *upipe, int command, va_list args)
 {
-    UBASE_HANDLED_RETURN(upipe_control_provide_request(upipe, command, args));
-
     switch (command) {
+        case UPIPE_REGISTER_REQUEST:
+        case UPIPE_UNREGISTER_REQUEST:
+            return upipe_control_provide_request(upipe, command, args);
+
         case UPIPE_ATTACH_UPUMP_MGR:
             upipe_fsink_set_upump(upipe, NULL);
             upipe_fsink_set_upump_sync(upipe, NULL);
