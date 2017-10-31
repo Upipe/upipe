@@ -192,6 +192,7 @@ static void v210dec_setup_asm(struct upipe *upipe, bool assembly)
     if (!assembly)
         return;
 
+#if defined(HAVE_X86_ASM)
 #if !defined (__APPLE__)
 #if defined(__clang__) && (__clang_major__ < 3 || (__clang_major__ == 3 && __clang_minor__ <= 8))
 #ifdef __SSSE3__
@@ -215,7 +216,7 @@ static void v210dec_setup_asm(struct upipe *upipe, bool assembly)
         v210dec->v210_to_planar_10 = upipe_v210_to_planar_10_aligned_avx2;
     }
 #endif
-
+#endif
 }
 
 /** @internal @This handles data.
