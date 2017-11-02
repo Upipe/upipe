@@ -142,7 +142,7 @@ static struct upipe *upipe_freetype_alloc(struct upipe_mgr *mgr,
 
     struct upipe_freetype *upipe_freetype = upipe_freetype_from_upipe(upipe);
 
-    upipe_freetype->flow_output = uref_dup(flow_def);
+    upipe_freetype->flow_output = flow_def;
 
     if (FT_Init_FreeType(&upipe_freetype->library)) {
         uref_free(upipe_freetype->flow_output);
