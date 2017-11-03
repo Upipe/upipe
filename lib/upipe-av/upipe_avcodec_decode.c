@@ -1202,11 +1202,14 @@ static bool upipe_avcdec_decode_avpkt(struct upipe *upipe, AVPacket *avpkt,
 {
     struct upipe_avcdec *upipe_avcdec = upipe_avcdec_from_upipe(upipe);
     int gotframe = 0, len;
-    switch (upipe_avcdec->context->codec->type) {
+    AVCodecContext *context = upipe_avcdec->context;
+
+    switch (context->codec->type) {
         case AVMEDIA_TYPE_SUBTITLE: {
             AVSubtitle subtitle;
-            len = avcodec_decode_subtitle2(upipe_avcdec->context,
+            len = avcodec_decode_subtitle2(context,
                     &subtitle, &gotframe, avpkt);
+
             if (len < 0)
                 upipe_warn(upipe, "Error while decoding subtitle");
 
@@ -1218,7 +1221,7 @@ static bool upipe_avcdec_decode_avpkt(struct upipe *upipe, AVPacket *avpkt,
         }
 
         case AVMEDIA_TYPE_VIDEO:
-            len = avcodec_decode_video2(upipe_avcdec->context,
+            len = avcodec_decode_video2(context,
                                         upipe_avcdec->frame,
                                         &gotframe, avpkt);
             if (len < 0) {
@@ -1232,7 +1235,7 @@ static bool upipe_avcdec_decode_avpkt(struct upipe *upipe, AVPacket *avpkt,
             break;
 
         case AVMEDIA_TYPE_AUDIO:
-            len = avcodec_decode_audio4(upipe_avcdec->context,
+            len = avcodec_decode_audio4(context,
                                         upipe_avcdec->frame,
                                         &gotframe, avpkt);
             if (len < 0) {
@@ -1248,7 +1251,7 @@ static bool upipe_avcdec_decode_avpkt(struct upipe *upipe, AVPacket *avpkt,
         default:
             /* should never be here */
             upipe_err_va(upipe, "Unsupported media type (%d)",
-                         upipe_avcdec->context->codec->type);
+                         context->codec->type);
             break;
     }
     return !!gotframe;
