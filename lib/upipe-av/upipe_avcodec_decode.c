@@ -73,6 +73,8 @@
 #include <upipe-av/upipe_av_samplefmt.h>
 #include "upipe_av_internal.h"
 
+#include <bitstream/dvb/sub.h>
+
 #define EXPECTED_FLOW_DEF "block."
 
 /** @hidden */
@@ -1207,9 +1209,21 @@ static bool upipe_avcdec_decode_avpkt(struct upipe *upipe, AVPacket *avpkt,
     switch (context->codec->type) {
         case AVMEDIA_TYPE_SUBTITLE: {
             AVSubtitle subtitle;
+            /* store original pointer */
+            void *data = avpkt->data;
+
+            if (context->codec_id == AV_CODEC_ID_DVB_SUBTITLE
+                    && avpkt->size >= DVBSUB_HEADER_SIZE) {
+                /* skip header, avcodec doesn't know to do it */
+                avpkt->data += DVBSUB_HEADER_SIZE;
+                avpkt->size -= DVBSUB_HEADER_SIZE;
+            }
             len = avcodec_decode_subtitle2(context,
                     &subtitle, &gotframe, avpkt);
-
+            if (context->codec_id == AV_CODEC_ID_DVB_SUBTITLE) {
+                /* restore original pointer */
+                avpkt->data = data;
+            }
             if (len < 0)
                 upipe_warn(upipe, "Error while decoding subtitle");
 
