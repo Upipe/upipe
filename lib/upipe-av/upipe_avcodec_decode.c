@@ -830,24 +830,29 @@ static void upipe_avcdec_output_sub(struct upipe *upipe, AVSubtitle *sub,
     struct upipe_avcdec *upipe_avcdec = upipe_avcdec_from_upipe(upipe);
     struct uref *uref = upipe_avcdec->uref;
 
-    AVSubtitleRect *r = NULL;
-    uint64_t w = 0, h = 0;
+    uint64_t w = 0, h = 0, x = 0, y = 0;
 
-    if (sub->num_rects) {
-        r = sub->rects[0];
-        if (sub->num_rects > 1) { // TODO
-            upipe_warn_va(upipe, "Only decoding the first of %u regions",
-                    sub->num_rects);
-        }
+    for (int i = 0; i < sub->num_rects; i++) {
+        AVSubtitleRect *r = sub->rects[i];
 
         if (r->type != SUBTITLE_BITMAP) {
             upipe_err_va(upipe, "Not handling subtitle type %d", r->type);
-            return;
+            continue;
         }
+        if (w < r->w)
+            w = r->w;
+        if (h < r->h)
+            h = r->h;
+        if (x < r->x)
+            x = r->x;
+        if (y < r->y)
+            y = r->y;
+    }
 
-        w = r->w;
-        h = r->h;
-    } else {
+    w = w + x;
+    h = h + y;
+
+    if (sub->num_rects == 0) {
         /* blank sub */
         if (!upipe_avcdec->flow_def_attr)
             return;
@@ -899,7 +904,7 @@ static void upipe_avcdec_output_sub(struct upipe *upipe, AVSubtitle *sub,
 
     flow_def_attr = uref_dup(upipe_avcdec->flow_def_provided);
 
-    if (r) {
+    if (sub->num_rects) {
         /* Allocate a ubuf */
         struct ubuf *ubuf = ubuf_pic_alloc(upipe_avcdec->ubuf_mgr, width_aligned, height_aligned);
         if (unlikely(ubuf == NULL)) {
@@ -928,44 +933,46 @@ static void upipe_avcdec_output_sub(struct upipe *upipe, AVSubtitle *sub,
     uref_clock_set_date_prog(uref,
             prog + UCLOCK_FREQ * sub->start_display_time / 1000, type);
 
-    if (r) {
-        /* Decode palettized to bgra */
-        uint8_t *dst;
+    if (sub->num_rects) {
+        uint8_t *buf;
         const char *chroma;
         if (unlikely(!ubase_check(uref_pic_flow_get_chroma(flow_def_attr,
                             &chroma, 0)) ||
                     !ubase_check(ubuf_pic_plane_write(uref->ubuf, chroma,
-                            0, 0, -1, -1, &dst)))) {
+                            0, 0, -1, -1, &buf)))) {
             goto alloc_error;
         }
 
+        /* Decode palettized to bgra */
+        for (int i = 0; i < sub->num_rects; i++) {
+            AVSubtitleRect *r = sub->rects[i];
+            uint8_t *dst = buf + 4 * ((width_aligned * r->y) + r->x);
+
 #if LIBAVCODEC_VERSION_MAJOR < 59
-        uint8_t *src = r->pict.data[0];
-        uint8_t *palette = r->pict.data[1];
+            uint8_t *src = r->pict.data[0];
+            uint8_t *palette = r->pict.data[1];
 #else
-        uint8_t *src = r->data[0];
-        uint8_t *palette = r->data[1];
+            uint8_t *src = r->data[0];
+            uint8_t *palette = r->data[1];
 #endif
 
-        for (int i = 0; i < h; i++) {
-            for (int j = 0; j < w; j++) {
-                uint8_t idx = src[j];
-                if (unlikely(idx >= r->nb_colors)) {
-                    upipe_err_va(upipe, "Invalid palette index %" PRIu8, idx);
-                    continue;
+            for (int i = 0; i < r->h; i++) {
+                for (int j = 0; j < r->w; j++) {
+                    uint8_t idx = src[j];
+                    if (unlikely(idx >= r->nb_colors)) {
+                        upipe_err_va(upipe, "Invalid palette index %" PRIu8, idx);
+                        continue;
+                    }
+
+                    memcpy(&dst[j*4], &palette[idx*4], 4);
                 }
 
-                memcpy(&dst[j*4], &palette[idx*4], 4);
+                dst += width_aligned * 4;
+                src += r->w;
             }
-
-            dst += width_aligned * 4;
-            src += w;
         }
 
         ubuf_pic_plane_unmap(uref->ubuf, chroma, 0, 0, -1, -1);
-
-        UBASE_FATAL(upipe, uref_pic_set_hposition(uref, r->x))
-        UBASE_FATAL(upipe, uref_pic_set_vposition(uref, r->y))
     }
 
     /* Find out if flow def attributes have changed. */
