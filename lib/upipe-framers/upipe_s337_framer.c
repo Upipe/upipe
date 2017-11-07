@@ -66,7 +66,7 @@ struct upipe_s337f {
     struct uref *uref;
 
     /** size in samples of buffered uref */
-    ssize_t samples;
+    ssize_t buffered_samples;
 
     /** input flow definition packet */
     struct uref *flow_def_input;
@@ -137,7 +137,7 @@ static ssize_t upipe_s337f_sync(struct upipe *upipe, struct uref *uref)
 
 /** @internal @This buffers last uref
  */
-static int upipe_s337f_buffer(struct upipe *upipe, struct uref *uref, ssize_t sync)
+static int upipe_s337f_buffer(struct upipe *upipe, struct uref *uref, ssize_t sync_pos)
 {
     struct upipe_s337f *upipe_s337f = upipe_s337f_from_upipe(upipe);
 
@@ -161,11 +161,11 @@ static int upipe_s337f_buffer(struct upipe *upipe, struct uref *uref, ssize_t sy
         }
     }
 
-    size_t s = 2 /* stereo */ * 4 /* s32 */ * (size - sync);
-    memmove(samples, &samples[2*sync], s); // discard up to sync word
+    size_t s = 2 /* stereo */ * 4 /* s32 */ * (size - sync_pos);
+    memmove(samples, &samples[2*sync_pos], s); // discard up to sync word
 
     uref_sound_unmap(uref, 0, -1, 1);
-    upipe_s337f->samples = size - sync;
+    upipe_s337f->buffered_samples = size - sync_pos;
 
     /* buffer next uref */
     upipe_s337f->uref = uref;
@@ -213,7 +213,7 @@ static void upipe_s337f_throw_flow_def(struct upipe *upipe, size_t frame_size,
 
 /** @internal @This handles current uref
  */
-static int upipe_s337f_handle(struct upipe *upipe, struct uref *uref, ssize_t sync)
+static int upipe_s337f_handle(struct upipe *upipe, struct uref *uref, ssize_t sync_pos)
 {
     struct upipe_s337f *upipe_s337f = upipe_s337f_from_upipe(upipe);
     struct uref *output = upipe_s337f->uref;
@@ -228,12 +228,12 @@ static int upipe_s337f_handle(struct upipe *upipe, struct uref *uref, ssize_t sy
     if (!ubase_check(uref_sound_size(output, &out_size, NULL)))
         return UBASE_ERR_INVALID;
 
-    if (in_size < upipe_s337f->samples)
+    if (in_size < upipe_s337f->buffered_samples)
         return UBASE_ERR_INVALID;
 
     /* how much data to copy from current to buffered uref */
-    size_t missing_size = in_size - upipe_s337f->samples;
-    if (missing_size < sync)
+    size_t missing_size = in_size - upipe_s337f->buffered_samples;
+    if (missing_size < sync_pos)
         upipe_verbose(upipe, "Frame too small");
 
     /* NTSC sequence */
@@ -244,13 +244,13 @@ static int upipe_s337f_handle(struct upipe *upipe, struct uref *uref, ssize_t sy
         out_size++;
     } else if (in_size > out_size) {
         upipe_warn_va(upipe, "Too large frame, dropping buffered uref");
-        upipe_s337f->samples = 0;
+        upipe_s337f->buffered_samples = 0;
         return UBASE_ERR_INVALID;
     }
 
     /* map current uref until sync word */
     const int32_t *in32;
-    if (!ubase_check(uref_sound_read_int32_t(uref, 0, sync, &in32, 1))) {
+    if (!ubase_check(uref_sound_read_int32_t(uref, 0, sync_pos, &in32, 1))) {
         upipe_err(upipe, "Could not map audio uref for reading");
         return UBASE_ERR_INVALID;
     }
@@ -262,28 +262,28 @@ static int upipe_s337f_handle(struct upipe *upipe, struct uref *uref, ssize_t sy
         struct ubuf *ubuf = ubuf_sound_copy(output->ubuf->mgr, output->ubuf,
                 0, out_size);
         if (!ubuf) {
-            uref_sound_unmap(uref, 0, sync, 1);
+            uref_sound_unmap(uref, 0, sync_pos, 1);
             return UBASE_ERR_INVALID;
         }
         uref_attach_ubuf(output, ubuf);
 
         if (!ubase_check(uref_sound_write_int32_t(output, 0, -1, &out32, 1))) {
             upipe_err(upipe, "Could not map buffered audio uref for writing");
-            uref_sound_unmap(uref, 0, sync, 1);
+            uref_sound_unmap(uref, 0, sync_pos, 1);
             return UBASE_ERR_INVALID;
         }
     }
 
     /* data from current uref won't be enough */
-    if (missing_size > sync) {
+    if (missing_size > sync_pos) {
         upipe_verbose(upipe, "Frame too big, padding");
-        size_t padding = out_size - missing_size - upipe_s337f->samples;
-        memset(&out32[2*(upipe_s337f->samples + missing_size)], 0, 4 * padding);
+        size_t padding = out_size - missing_size - upipe_s337f->buffered_samples;
+        memset(&out32[2*(upipe_s337f->buffered_samples + missing_size)], 0, 4 * padding);
     }
 
-    memcpy(&out32[2*upipe_s337f->samples], in32,
+    memcpy(&out32[2*upipe_s337f->buffered_samples], in32,
             missing_size * 2 /* channels */ * 4 /* s32 */);
-    uref_sound_unmap(uref, 0, sync, 1);
+    uref_sound_unmap(uref, 0, sync_pos, 1);
 
     /* header */
     int bits = (out32[0] == 0x6f872 << 12) ? 20 : 24;
@@ -324,9 +324,9 @@ static void upipe_s337f_input(struct upipe *upipe, struct uref *uref, struct upu
     struct upipe_s337f *upipe_s337f = upipe_s337f_from_upipe(upipe);
     struct uref *output = upipe_s337f->uref;
 
-    const ssize_t sync = upipe_s337f_sync(upipe, uref);
+    const ssize_t sync_pos = upipe_s337f_sync(upipe, uref);
 
-    if (sync == -1) {
+    if (sync_pos == -1) {
         if (output) {
             upipe_err(upipe, "Sync lost");
             uref_free(output);
@@ -353,7 +353,7 @@ static void upipe_s337f_input(struct upipe *upipe, struct uref *uref, struct upu
     /* handle current uref */
 
     if (output) {
-        if (!ubase_check(upipe_s337f_handle(upipe, uref, sync))) {
+        if (!ubase_check(upipe_s337f_handle(upipe, uref, sync_pos))) {
             goto error;
         }
         upipe_s337f_output(upipe, output, upump_p);
@@ -361,7 +361,7 @@ static void upipe_s337f_input(struct upipe *upipe, struct uref *uref, struct upu
 
     /* buffer next uref */
 
-    if (!ubase_check(upipe_s337f_buffer(upipe, uref, sync)))
+    if (!ubase_check(upipe_s337f_buffer(upipe, uref, sync_pos)))
         goto error;
 
     return;
