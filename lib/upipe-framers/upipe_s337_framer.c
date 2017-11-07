@@ -134,6 +134,45 @@ static ssize_t upipe_s337f_sync(struct upipe *upipe, struct uref *uref)
     return -1;
 }
 
+
+/** @internal @This buffers last uref
+ */
+static int upipe_s337f_buffer(struct upipe *upipe, struct uref *uref, ssize_t sync)
+{
+    struct upipe_s337f *upipe_s337f = upipe_s337f_from_upipe(upipe);
+
+    /* discard leading samples up to sync word */
+
+    size_t size;
+    uref_sound_size(uref, &size, NULL);
+
+    int32_t *samples;
+    if (!ubase_check(uref_sound_write_int32_t(uref, 0, -1, &samples, 1))) {
+        // FIXME
+        struct ubuf *ubuf = ubuf_sound_copy(uref->ubuf->mgr, uref->ubuf,
+                0, size);
+        if (!ubuf)
+            return UBASE_ERR_ALLOC;
+        uref_attach_ubuf(uref, ubuf);
+
+        if (!ubase_check(uref_sound_write_int32_t(uref, 0, -1, &samples, 1))) {
+            upipe_err(upipe, "Could not map buffered audio uref for writing");
+            return UBASE_ERR_INVALID;
+        }
+    }
+
+    size_t s = 2 /* stereo */ * 4 /* s32 */ * (size - sync);
+    memmove(samples, &samples[2*sync], s); // discard up to sync word
+
+    uref_sound_unmap(uref, 0, -1, 1);
+    upipe_s337f->samples = size - sync;
+
+    /* buffer next uref */
+    upipe_s337f->uref = uref;
+
+    return UBASE_ERR_NONE;
+}
+
 /** @internal
  *
  * @param upipe description structure of the pipe
@@ -275,37 +314,14 @@ static void upipe_s337f_input(struct upipe *upipe, struct uref *uref, struct upu
 
         uref_sound_unmap(uref, 0, sync, 1);
         uref_sound_unmap(output, 0, -1, 1);
-    }
 
-    /* discard leading samples up to sync word */
-    int32_t *samples;
-    size_t size;
-    uref_sound_size(uref, &size, NULL);
-    if (!ubase_check(uref_sound_write_int32_t(uref, 0, -1, &samples, 1))) {
-        // FIXME
-        struct ubuf *ubuf = ubuf_sound_copy(uref->ubuf->mgr, uref->ubuf,
-                0, size);
-        if (!ubuf)
-            goto error;
-        uref_attach_ubuf(uref, ubuf);
-
-        if (!ubase_check(uref_sound_write_int32_t(uref, 0, -1, &samples, 1))) {
-            upipe_err(upipe, "Could not map buffered audio uref for writing");
-            goto error;
-        }
-    }
-
-    size_t s = 2 /* stereo */ * 4 /* s32 */ * (size - sync);
-    memmove(samples, &samples[2*sync], s); // discard up to sync word
-
-    uref_sound_unmap(uref, 0, -1, 1);
-    upipe_s337f->samples = size - sync;
-
-    /* buffer next uref */
-    upipe_s337f->uref = uref;
-
-    if (output)
         upipe_s337f_output(upipe, output, upump_p);
+        output = NULL;
+    }
+
+    if (!ubase_check(upipe_s337f_buffer(upipe, uref, sync)))
+        goto error;
+
     return;
 
 error:
