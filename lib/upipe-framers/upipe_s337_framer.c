@@ -462,7 +462,6 @@ static void upipe_s337f_free(struct upipe *upipe)
     upipe_s337f_free_void(upipe);
 }
 
-/** upipe_s337f (/dev/s337f) */
 static struct upipe_mgr upipe_s337f_mgr = {
     .refcount = NULL,
     .signature = UPIPE_S337F_SIGNATURE,
