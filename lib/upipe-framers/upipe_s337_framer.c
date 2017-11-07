@@ -228,6 +228,26 @@ static int upipe_s337f_handle(struct upipe *upipe, struct uref *uref, ssize_t sy
     if (!ubase_check(uref_sound_size(output, &out_size, NULL)))
         return UBASE_ERR_INVALID;
 
+    if (in_size < upipe_s337f->samples)
+        return UBASE_ERR_INVALID;
+
+    /* how much data to copy from current to buffered uref */
+    size_t missing_size = in_size - upipe_s337f->samples;
+    if (missing_size < sync)
+        upipe_verbose(upipe, "Frame too small");
+
+    /* NTSC sequence */
+    bool enlarge_output = false;
+
+    if (in_size == out_size + 1) {
+        enlarge_output = true;
+        out_size++;
+    } else if (in_size > out_size) {
+        upipe_warn_va(upipe, "Too large frame, dropping buffered uref");
+        upipe_s337f->samples = 0;
+        return UBASE_ERR_INVALID;
+    }
+
     /* map current uref until sync word */
     const int32_t *in32;
     if (!ubase_check(uref_sound_read_int32_t(uref, 0, sync, &in32, 1))) {
@@ -237,31 +257,21 @@ static int upipe_s337f_handle(struct upipe *upipe, struct uref *uref, ssize_t sy
 
     /* map buffered uref for filling */
     int32_t *out32;
-    if (!ubase_check(uref_sound_write_int32_t(output, 0, -1, &out32, 1))) {
+    if (enlarge_output ||
+            !ubase_check(uref_sound_write_int32_t(output, 0, -1, &out32, 1))) {
         struct ubuf *ubuf = ubuf_sound_copy(output->ubuf->mgr, output->ubuf,
                 0, out_size);
-        if (!ubuf)
+        if (!ubuf) {
+            uref_sound_unmap(uref, 0, sync, 1);
             return UBASE_ERR_INVALID;
+        }
         uref_attach_ubuf(output, ubuf);
 
         if (!ubase_check(uref_sound_write_int32_t(output, 0, -1, &out32, 1))) {
             upipe_err(upipe, "Could not map buffered audio uref for writing");
+            uref_sound_unmap(uref, 0, sync, 1);
             return UBASE_ERR_INVALID;
         }
-    }
-
-    /* how much data to copy from current to buffered uref */
-    size_t missing_size = in_size - upipe_s337f->samples;
-    if (missing_size < sync) {
-        upipe_verbose(upipe, "Frame too small");
-    }
-
-    if (missing_size > out_size - upipe_s337f->samples) {
-        upipe_warn_va(upipe, "Too large frame, dropping buffered uref");
-        uref_sound_unmap(uref, 0, sync, 1);
-        uref_sound_unmap(output, 0, -1, 1);
-        upipe_s337f->samples = 0;
-        return UBASE_ERR_INVALID;
     }
 
     /* data from current uref won't be enough */
