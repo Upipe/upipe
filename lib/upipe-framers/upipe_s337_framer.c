@@ -173,6 +173,120 @@ static int upipe_s337f_buffer(struct upipe *upipe, struct uref *uref, ssize_t sy
     return UBASE_ERR_NONE;
 }
 
+/** @internal @This handles current uref
+ */
+static int upipe_s337f_handle(struct upipe *upipe, struct uref *uref, ssize_t sync)
+{
+    struct upipe_s337f *upipe_s337f = upipe_s337f_from_upipe(upipe);
+    struct uref *output = upipe_s337f->uref;
+
+    size_t size[2];
+    if (!ubase_check(uref_sound_size(uref, &size[0], NULL)) ||
+            !ubase_check(uref_sound_size(output, &size[1], NULL)))
+        return UBASE_ERR_INVALID;
+
+    const int32_t *in32;
+    int32_t *out32;
+
+    if (!ubase_check(uref_sound_read_int32_t(uref, 0, sync, &in32, 1))) {
+        upipe_err(upipe, "Could not map audio uref for reading");
+        return UBASE_ERR_INVALID;
+    }
+
+    if (!ubase_check(uref_sound_write_int32_t(output, 0, -1, &out32, 1))) {
+        struct ubuf *ubuf = ubuf_sound_copy(output->ubuf->mgr, output->ubuf,
+                0, size[1]);
+        if (!ubuf)
+            return UBASE_ERR_INVALID;
+        ubuf_free(output->ubuf);
+        output->ubuf = ubuf;
+
+        if (!ubase_check(uref_sound_write_int32_t(output, 0, -1, &out32, 1))) {
+            upipe_err(upipe, "Could not map buffered audio uref for writing");
+            return UBASE_ERR_INVALID;
+        }
+    }
+
+    size_t out_size = size[0] - upipe_s337f->samples;
+    if (out_size < sync) {
+        upipe_verbose(upipe, "Frame too small");
+    }
+
+    if (out_size > size[1] - upipe_s337f->samples) {
+        upipe_warn_va(upipe, "Too large frame, dropping buffered uref");
+        uref_sound_unmap(uref, 0, sync, 1);
+        uref_sound_unmap(output, 0, -1, 1);
+        upipe_s337f->samples = 0;
+        return UBASE_ERR_INVALID;
+    }
+
+    if (out_size > sync) {
+        upipe_verbose(upipe, "Frame too big, padding");
+        size_t padding = size[1] - out_size - upipe_s337f->samples;
+        memset(&out32[2*(upipe_s337f->samples + out_size)], 0, 4 * padding);
+    }
+
+    out_size *= 2; /* channels */
+
+    uint32_t hdr[2]; /* Pc + Pd */
+
+    out_size *= 4; /* s32 */
+    memcpy(&out32[2*upipe_s337f->samples], in32, out_size);
+
+    int bits = (out32[0] == 0x6f872 << 12) ? 20 : 24;
+
+    hdr[0] = out32[2] >> 16;
+    hdr[1] = out32[3] >> (32 - bits);
+
+    unsigned data_stream_number =  hdr[0] >> 13;
+    unsigned data_type_dependent= (hdr[0] >>  8) & 0x1f;
+    unsigned error_flag         = (hdr[0] >>  7) & 0x1;
+    unsigned data_mode          = (hdr[0] >>  5) & 0x3;
+    unsigned data_type          = (hdr[0] >>  0) & 0x1f;
+
+    if (error_flag)
+        upipe_err(upipe, "error flag set");
+
+    struct uref *flow_def = upipe_s337f_alloc_flow_def_attr(upipe);
+    if (unlikely(flow_def == NULL)) {
+        upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
+    } else {
+        size_t frame_size = size[0];
+        if (frame_size == 1601 || frame_size == 1602) { /* NTSC */
+            uref_clock_set_latency(flow_def, UCLOCK_FREQ * 2 * 1001 / 30000);
+        } else
+            uref_clock_set_latency(flow_def, UCLOCK_FREQ * 2 * frame_size / 48000);
+
+        switch (data_type) {
+            case S337_TYPE_DOLBY_E:
+                UBASE_FATAL(upipe, uref_flow_set_def(flow_def, "sound.s32.s337.dolbye."))
+                    break;
+            case S337_TYPE_A52:
+                UBASE_FATAL(upipe, uref_flow_set_def(flow_def, "sound.s32.s337.a52."))
+                    break;
+            case S337_TYPE_A52E:
+                UBASE_FATAL(upipe, uref_flow_set_def(flow_def, "sound.s32.s337.a52e."))
+                    break;
+            default:
+                upipe_warn_va(upipe, "Unhandled data type %u", data_type);
+        }
+
+        flow_def = upipe_s337f_store_flow_def_attr(upipe, flow_def);
+        if (flow_def)
+            upipe_s337f_store_flow_def(upipe, flow_def);
+    }
+
+    size_t samples = hdr[1] / 32 / 2 /* channels */ + 2 /* header */;
+    if (samples > size[0]) {
+        upipe_err_va(upipe, "S337 frame truncated");
+    }
+
+    uref_sound_unmap(uref, 0, sync, 1);
+    uref_sound_unmap(output, 0, -1, 1);
+
+    return UBASE_ERR_NONE;
+}
+
 /** @internal
  *
  * @param upipe description structure of the pipe
@@ -210,114 +324,16 @@ static void upipe_s337f_input(struct upipe *upipe, struct uref *uref, struct upu
         upipe_notice(upipe, "Found synchro");
     }
 
+    /* handle current uref */
+
     if (output) {
-        size_t size[2];
-        if (!ubase_check(uref_sound_size(uref, &size[0], NULL)) ||
-                !ubase_check(uref_sound_size(output, &size[1], NULL)))
-            goto error;
-
-        const int32_t *in32;
-        int32_t *out32;
-
-        if (!ubase_check(uref_sound_read_int32_t(uref, 0, sync, &in32, 1))) {
-            upipe_err(upipe, "Could not map audio uref for reading");
+        if (!ubase_check(upipe_s337f_handle(upipe, uref, sync))) {
             goto error;
         }
-
-        if (!ubase_check(uref_sound_write_int32_t(output, 0, -1, &out32, 1))) {
-            struct ubuf *ubuf = ubuf_sound_copy(output->ubuf->mgr, output->ubuf,
-                    0, size[1]);
-            if (!ubuf)
-                goto error;
-            ubuf_free(output->ubuf);
-            output->ubuf = ubuf;
-
-            if (!ubase_check(uref_sound_write_int32_t(output, 0, -1, &out32, 1))) {
-                upipe_err(upipe, "Could not map buffered audio uref for writing");
-                goto error;
-            }
-        }
-
-        size_t out_size = size[0] - upipe_s337f->samples;
-        if (out_size < sync) {
-            upipe_verbose(upipe, "Frame too small");
-        }
-
-        if (out_size > size[1] - upipe_s337f->samples) {
-            upipe_warn_va(upipe, "Too large frame, dropping buffered uref");
-            uref_sound_unmap(uref, 0, sync, 1);
-            uref_sound_unmap(output, 0, -1, 1);
-            upipe_s337f->samples = 0;
-            goto error;
-        }
-
-        if (out_size > sync) {
-            upipe_verbose(upipe, "Frame too big, padding");
-            size_t padding = size[1] - out_size - upipe_s337f->samples;
-            memset(&out32[2*(upipe_s337f->samples + out_size)], 0, 4 * padding);
-        }
-
-        out_size *= 2; /* channels */
-
-        uint32_t hdr[2]; /* Pc + Pd */
-
-        out_size *= 4; /* s32 */
-        memcpy(&out32[2*upipe_s337f->samples], in32, out_size);
-
-        int bits = (out32[0] == 0x6f872 << 12) ? 20 : 24;
-
-        hdr[0] = out32[2] >> 16;
-        hdr[1] = out32[3] >> (32 - bits);
-
-        unsigned data_stream_number =  hdr[0] >> 13;
-        unsigned data_type_dependent= (hdr[0] >>  8) & 0x1f;
-        unsigned error_flag         = (hdr[0] >>  7) & 0x1;
-        unsigned data_mode          = (hdr[0] >>  5) & 0x3;
-        unsigned data_type          = (hdr[0] >>  0) & 0x1f;
-
-        if (error_flag)
-            upipe_err(upipe, "error flag set");
-
-        struct uref *flow_def = upipe_s337f_alloc_flow_def_attr(upipe);
-        if (unlikely(flow_def == NULL)) {
-            upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
-        } else {
-            size_t frame_size = size[0];
-            if (frame_size == 1601 || frame_size == 1602) { /* NTSC */
-                uref_clock_set_latency(flow_def, UCLOCK_FREQ * 2 * 1001 / 30000);
-            } else
-                uref_clock_set_latency(flow_def, UCLOCK_FREQ * 2 * frame_size / 48000);
-
-            switch (data_type) {
-            case S337_TYPE_DOLBY_E:
-                UBASE_FATAL(upipe, uref_flow_set_def(flow_def, "sound.s32.s337.dolbye."))
-                break;
-            case S337_TYPE_A52:
-                UBASE_FATAL(upipe, uref_flow_set_def(flow_def, "sound.s32.s337.a52."))
-                break;
-            case S337_TYPE_A52E:
-                UBASE_FATAL(upipe, uref_flow_set_def(flow_def, "sound.s32.s337.a52e."))
-                break;
-            default:
-                upipe_warn_va(upipe, "Unhandled data type %u", data_type);
-            }
-
-            flow_def = upipe_s337f_store_flow_def_attr(upipe, flow_def);
-            if (flow_def)
-                upipe_s337f_store_flow_def(upipe, flow_def);
-        }
-
-        size_t samples = hdr[1] / 32 / 2 /* channels */ + 2 /* header */;
-        if (samples > size[0]) {
-            upipe_err_va(upipe, "S337 frame truncated");
-        }
-
-        uref_sound_unmap(uref, 0, sync, 1);
-        uref_sound_unmap(output, 0, -1, 1);
-
         upipe_s337f_output(upipe, output, upump_p);
-        output = NULL;
     }
+
+    /* buffer next uref */
 
     if (!ubase_check(upipe_s337f_buffer(upipe, uref, sync)))
         goto error;
