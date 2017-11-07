@@ -242,8 +242,7 @@ static int upipe_s337f_handle(struct upipe *upipe, struct uref *uref, ssize_t sy
                 0, out_size);
         if (!ubuf)
             return UBASE_ERR_INVALID;
-        ubuf_free(output->ubuf);
-        output->ubuf = ubuf;
+        uref_attach_ubuf(output, ubuf);
 
         if (!ubase_check(uref_sound_write_int32_t(output, 0, -1, &out32, 1))) {
             upipe_err(upipe, "Could not map buffered audio uref for writing");
