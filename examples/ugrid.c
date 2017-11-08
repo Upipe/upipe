@@ -383,15 +383,16 @@ static void cmd_connect(char *arg)
             return;
         }
 
-        uprobe_notice_va(uprobe_main, NULL, "connect %i -> %i", in_id, out_id);
+        uprobe_notice_va(uprobe_main, NULL, "connect %li -> %li",
+                         in_id, out_id);
         struct input *input = input_get(in_id);
         struct output *output = output_get(out_id);
         if (!input && in_id >= 0) {
-            uprobe_warn_va(uprobe_main, NULL, "no input for %i", in_id);
+            uprobe_warn_va(uprobe_main, NULL, "no input for %li", in_id);
             return;
         }
         if (!output) {
-            uprobe_warn_va(uprobe_main, NULL, "no output for %i", out_id);
+            uprobe_warn_va(uprobe_main, NULL, "no output for %li", out_id);
             return;
         }
 

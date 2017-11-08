@@ -55,6 +55,7 @@ static struct uprobe *logprobe = NULL;
  * subsequent arguments are converted to output.
  * @param args optional arguments
  */
+UBASE_FMT_PRINTF(3, 0)
 static void upipe_av_vlog(void *avcl, int level,
                           const char *fmt, va_list args)
 {

@@ -37,6 +37,7 @@ LIST_C = upipe-modules upipe-filters upipe-dveo
 @HAVE_PTHREAD_TRUE@LIST_C += upipe-pthread
 @HAVE_EV_TRUE@LIST_C += upump-ev
 @HAVE_ECORE_TRUE@LIST_C += upump-ecore
+@HAVE_DVBCSA_TRUE@LIST_C += upipe-dvbcsa
 
 INCLUDEDIR   = $(top_srcdir)/include
 LIST         = upipe $(LIST_C)

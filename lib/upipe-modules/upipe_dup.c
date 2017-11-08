@@ -55,6 +55,12 @@ struct upipe_dup {
     struct uchain outputs;
     /** flow definition packet */
     struct uref *flow_def;
+    /** main output */
+    struct upipe *output;
+    /** main output state */
+    enum upipe_helper_output_state output_state;
+    /** main output requests */
+    struct uchain requests;
 
     /** manager to create output subpipes */
     struct upipe_mgr sub_mgr;
@@ -67,6 +73,7 @@ UPIPE_HELPER_UPIPE(upipe_dup, upipe, UPIPE_DUP_SIGNATURE)
 UPIPE_HELPER_UREFCOUNT(upipe_dup, urefcount, upipe_dup_no_input)
 UPIPE_HELPER_UREFCOUNT_REAL(upipe_dup, urefcount_real, upipe_dup_free)
 UPIPE_HELPER_VOID(upipe_dup)
+UPIPE_HELPER_OUTPUT(upipe_dup, output, flow_def, output_state, requests);
 
 /** @internal @This is the private context of an output of a dup pipe. */
 struct upipe_dup_output {
@@ -212,6 +219,7 @@ static struct upipe *upipe_dup_alloc(struct upipe_mgr *mgr,
     upipe_dup_init_urefcount_real(upipe);
     upipe_dup_init_sub_mgr(upipe);
     upipe_dup_init_sub_outputs(upipe);
+    upipe_dup_init_output(upipe);
     upipe_dup->flow_def = NULL;
     upipe_throw_ready(upipe);
     return upipe;
@@ -227,12 +235,13 @@ static void upipe_dup_input(struct upipe *upipe, struct uref *uref,
                             struct upump **upump_p)
 {
     struct upipe_dup *upipe_dup = upipe_dup_from_upipe(upipe);
+    struct upipe *output = upipe_dup->output;
     struct uchain *uchain;
     ulist_foreach (&upipe_dup->outputs, uchain) {
         struct upipe_dup_output *upipe_dup_output =
             upipe_dup_output_from_uchain(uchain);
         struct upipe *output = upipe_dup_output_to_upipe(upipe_dup_output);
-        if (ulist_is_last(&upipe_dup->outputs, uchain)) {
+        if (ulist_is_last(&upipe_dup->outputs, uchain) && !output) {
             upipe_dup_output_output(output, uref, upump_p);
             uref = NULL;
         } else {
@@ -245,7 +254,10 @@ static void upipe_dup_input(struct upipe *upipe, struct uref *uref,
             upipe_dup_output_output(output, new_uref, upump_p);
         }
     }
-    if (uref != NULL)
+
+    if (output)
+        upipe_dup_output(upipe, uref, upump_p);
+    else if (uref != NULL)
         uref_free(uref);
 }
 
@@ -255,19 +267,15 @@ static void upipe_dup_input(struct upipe *upipe, struct uref *uref,
  * @param flow_def new flow definition
  * @return an error code
  */
-static int upipe_dup_set_flow_def(struct upipe *upipe,
-                                             struct uref *flow_def)
+static int upipe_dup_set_flow_def(struct upipe *upipe, struct uref *flow_def)
 {
+    struct upipe_dup *upipe_dup = upipe_dup_from_upipe(upipe);
+
     if (flow_def == NULL)
         return UBASE_ERR_INVALID;
-    struct uref *flow_def_dup;
-    if ((flow_def_dup = uref_dup(flow_def)) == NULL)
-        return UBASE_ERR_ALLOC;
-
-    struct upipe_dup *upipe_dup = upipe_dup_from_upipe(upipe);
-    if (upipe_dup->flow_def != NULL)
-        uref_free(upipe_dup->flow_def);
-    upipe_dup->flow_def = flow_def_dup;
+    struct uref *flow_def_dup = uref_dup(flow_def);
+    UBASE_ALLOC_RETURN(flow_def_dup);
+    upipe_dup_store_flow_def(upipe, flow_def_dup);
 
     struct uchain *uchain;
     ulist_foreach (&upipe_dup->outputs, uchain) {
@@ -293,9 +301,8 @@ static int upipe_dup_set_flow_def(struct upipe *upipe,
  */
 static int upipe_dup_control(struct upipe *upipe, int command, va_list args)
 {
+    UBASE_HANDLED_RETURN(upipe_dup_control_output(upipe, command, args));
     UBASE_HANDLED_RETURN(upipe_dup_control_outputs(upipe, command, args));
-    /* We do not pass through the requests; which output would we use? */
-    UBASE_HANDLED_RETURN(upipe_control_provide_request(upipe, command, args));
 
     switch (command) {
         case UPIPE_SET_FLOW_DEF: {
@@ -319,8 +326,7 @@ static void upipe_dup_free(struct upipe *upipe)
     upipe_throw_dead(upipe);
 
     upipe_dup_clean_sub_outputs(upipe);
-    if (upipe_dup->flow_def != NULL)
-        uref_free(upipe_dup->flow_def);
+    upipe_dup_clean_output(upipe);
     upipe_dup_clean_urefcount_real(upipe);
     upipe_dup_clean_urefcount(upipe);
     upipe_dup_free_void(upipe);

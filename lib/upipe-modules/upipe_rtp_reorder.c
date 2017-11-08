@@ -243,10 +243,13 @@ static struct upipe *upipe_rtpr_sub_alloc(struct upipe_mgr *mgr,
 static int upipe_rtpr_sub_control(struct upipe *upipe,
                                          int command, va_list args)
 {
-    UBASE_HANDLED_RETURN(upipe_control_provide_request(upipe, command, args));
     UBASE_HANDLED_RETURN(upipe_rtpr_sub_control_super(upipe, command, args));
 
     switch (command) {
+        case UPIPE_REGISTER_REQUEST:
+        case UPIPE_UNREGISTER_REQUEST:
+            return upipe_control_provide_request(upipe, command, args);
+
         case UPIPE_GET_FLOW_DEF: {
             struct uref **p = va_arg(args, struct uref **);
             return upipe_rtpr_sub_get_flow_def(upipe, p);

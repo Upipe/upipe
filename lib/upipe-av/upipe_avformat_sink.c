@@ -909,9 +909,12 @@ static int upipe_avfsink_set_uri(struct upipe *upipe, const char *uri)
 static int upipe_avfsink_control(struct upipe *upipe, int command, va_list args)
 {
     UBASE_HANDLED_RETURN(upipe_avfsink_control_subs(upipe, command, args));
-    UBASE_HANDLED_RETURN(upipe_control_provide_request(upipe, command, args));
 
     switch (command) {
+        case UPIPE_REGISTER_REQUEST:
+        case UPIPE_UNREGISTER_REQUEST:
+            return upipe_control_provide_request(upipe, command, args);
+
         case UPIPE_SET_FLOW_DEF: {
             struct uref *flow_def = va_arg(args, struct uref *);
             return upipe_avfsink_set_flow_def(upipe, flow_def);

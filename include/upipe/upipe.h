@@ -593,6 +593,7 @@ static inline int upipe_throw(struct upipe *upipe, int event, ...)
  * @param level level of importance of the message
  * @param format format of the textual message, followed by optional arguments
  */
+UBASE_FMT_PRINTF(3, 4)
 static inline void upipe_log_va(struct upipe *upipe,
                                 enum uprobe_log_level level,
                                 const char *format, ...)
@@ -613,6 +614,7 @@ static inline void upipe_log_va(struct upipe *upipe,
  * @param upipe description structure of the pipe
  * @param format format of the textual message, followed by optional arguments
  */
+UBASE_FMT_PRINTF(2, 3)
 static inline void upipe_err_va(struct upipe *upipe, const char *format, ...)
 {
     UBASE_VARARG(upipe_err(upipe, string))
@@ -631,6 +633,7 @@ static inline void upipe_err_va(struct upipe *upipe, const char *format, ...)
  * @param upipe description structure of the pipe
  * @param format format of the textual message, followed by optional arguments
  */
+UBASE_FMT_PRINTF(2, 3)
 static inline void upipe_warn_va(struct upipe *upipe, const char *format, ...)
 {
     UBASE_VARARG(upipe_warn(upipe, string))
@@ -649,6 +652,7 @@ static inline void upipe_warn_va(struct upipe *upipe, const char *format, ...)
  * @param upipe description structure of the pipe
  * @param format format of the textual message, followed by optional arguments
  */
+UBASE_FMT_PRINTF(2, 3)
 static inline void upipe_notice_va(struct upipe *upipe, const char *format, ...)
 {
     UBASE_VARARG(upipe_notice(upipe, string))
@@ -667,6 +671,7 @@ static inline void upipe_notice_va(struct upipe *upipe, const char *format, ...)
  * @param upipe description structure of the pipe
  * @param format format of the textual message, followed by optional arguments
  */
+UBASE_FMT_PRINTF(2, 3)
 static inline void upipe_dbg_va(struct upipe *upipe, const char *format, ...)
 {
     UBASE_VARARG(upipe_dbg(upipe, string))
@@ -686,6 +691,7 @@ static inline void upipe_dbg_va(struct upipe *upipe, const char *format, ...)
  * @param upipe description structure of the pipe
  * @param format format of the textual message, followed by optional arguments
  */
+UBASE_FMT_PRINTF(2, 3)
 static inline void upipe_verbose_va(struct upipe *upipe,
                                     const char *format, ...)
 {
@@ -840,7 +846,11 @@ static inline int upipe_control_provide_request(struct upipe *upipe,
 {
     switch (command) {
         case UPIPE_REGISTER_REQUEST: {
-            struct urequest *request = va_arg(args, struct urequest *);
+            va_list args_copy;
+            va_copy(args_copy, args);
+            struct urequest *request = va_arg(args_copy, struct urequest *);
+            va_end(args_copy);
+
             return upipe_throw_provide_request(upipe, request);
         }
         case UPIPE_UNREGISTER_REQUEST:
@@ -1328,6 +1338,16 @@ static inline int upipe_split_iterate(struct upipe *upipe, struct uref **p)
     return upipe_control(upipe, UPIPE_SPLIT_ITERATE, p);
 }
 
+/** @This defines a helper to iterate over split.
+ *
+ * @param UPIPE description of the pipe structure
+ * @param FLOW_DEF name of the struct uref * used to iterate
+ */
+#define upipe_split_foreach(UPIPE, FLOW_DEF)                    \
+    for (struct uref *FLOW_DEF = NULL;                          \
+         ubase_check(upipe_split_iterate(UPIPE, &FLOW_DEF)) &&  \
+         FLOW_DEF != NULL;)
+
 /** @This returns the subpipe manager of a super-pipe.
  *
  * @param upipe description structure of the super-pipe
@@ -1351,6 +1371,16 @@ static inline int upipe_iterate_sub(struct upipe *upipe, struct upipe **p)
 {
     return upipe_control(upipe, UPIPE_ITERATE_SUB, p);
 }
+
+/** @This defines a helper to iterate over sub pipes.
+ *
+ * @param UPIPE description of the pipe structure
+ * @param SUB name of the struct upipe * used to iterate
+ */
+#define upipe_foreach_sub(UPIPE, SUB)                           \
+    for (struct upipe *SUB = NULL;                              \
+         ubase_check(upipe_iterate_sub(UPIPE, &SUB)) &&         \
+         SUB != NULL;)
 
 /** @This returns the super-pipe of a subpipe.
  *

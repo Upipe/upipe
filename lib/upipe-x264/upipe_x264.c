@@ -204,6 +204,7 @@ static const enum uprobe_log_level loglevel_map[] = {
  * @param format string format
  * @param args arguments
  */
+UBASE_FMT_PRINTF(3, 0)
 static void upipe_x264_log(void *_upipe, int loglevel,
                            const char *format, va_list args)
 {
@@ -608,9 +609,9 @@ static bool upipe_x264_open(struct upipe *upipe, int width, int height)
                     max_bs = 135000000 / 8;
                     break;
                 default:
-                    upipe_warn_va(upipe, "unknown level %"PRIu8,
+                    upipe_warn_va(upipe, "unknown level %d",
                                   params->i_level_idc);
-                    /* intended fall-through */
+                    /* fallthrough */
                 case 51:
                 case 52:
                     max_octetrate = 240000000 / 8;

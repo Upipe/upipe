@@ -373,7 +373,7 @@ static int upipe_osx_audioqueue_sink_set_flow_def_real(struct upipe *upipe,
     upipe_osx_audioqueue_sink->queue = queue;
     upipe_osx_audioqueue_sink_store_flow_def_input(upipe, flow);
 
-    upipe_notice_va(upipe, "audioqueue started (%uHz, %hhuch, %db)",
+    upipe_notice_va(upipe, "audioqueue started (%" PRIu64 "Hz, %hhuch, %db)",
                     sample_rate, channels, sample_size*8);
 
     return UBASE_ERR_NONE;
@@ -523,9 +523,11 @@ static int upipe_osx_audioqueue_sink_check(struct upipe *upipe)
 static int upipe_osx_audioqueue_sink_control_real(struct upipe *upipe,
                                                   int command, va_list args)
 {
-    UBASE_HANDLED_RETURN(upipe_control_provide_request(upipe, command, args));
-
     switch (command) {
+        case UPIPE_REGISTER_REQUEST:
+        case UPIPE_UNREGISTER_REQUEST:
+            return upipe_control_provide_request(upipe, command, args);
+
         case UPIPE_ATTACH_UPUMP_MGR:
             upipe_osx_audioqueue_sink_set_listener(upipe, NULL);
             upipe_osx_audioqueue_sink_set_watcher(upipe, NULL);

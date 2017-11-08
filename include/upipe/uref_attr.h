@@ -97,14 +97,11 @@ static inline int uref_attr_delete(struct uref *uref, enum udict_type type,
  * variable list of arguments
  * @return an error code
  */
-static inline int uref_attr_delete_va(struct uref *uref, enum udict_type type,
-                                      const char *format, ...)
-                   __attribute__ ((format(printf, 3, 4)));
-/** @hidden */
+UBASE_FMT_PRINTF(3, 4)
 static inline int uref_attr_delete_va(struct uref *uref, enum udict_type type,
                                       const char *format, ...)
 {
-    UBASE_VARARG(uref_attr_delete(uref, type, string))
+    UBASE_VARARG(uref_attr_delete(uref, type, string), UBASE_ERR_INVALID)
 }
 
 /** @This deletes multiple attributes.
@@ -150,10 +147,12 @@ static inline int uref_attr_get_##utype(struct uref *uref,                  \
  * variable list of arguments                                               \
  * @return an error code                                                    \
  */                                                                         \
+UBASE_FMT_PRINTF(4, 5)                                                      \
 static inline int uref_attr_get_##utype##_va(struct uref *uref,             \
         ctype *p, enum udict_type type, const char *format, ...)            \
 {                                                                           \
-    UBASE_VARARG(uref_attr_get_##utype(uref, p, type, string))              \
+    UBASE_VARARG(uref_attr_get_##utype(uref, p, type, string),              \
+                 UBASE_ERR_INVALID)                                         \
 }                                                                           \
 /** @This sets the value of a utype attribute, optionally creating it.      \
  *                                                                          \
@@ -183,10 +182,12 @@ static inline int uref_attr_set_##utype(struct uref *uref,                  \
  * variable list of arguments                                               \
  * @return an error code                                                    \
  */                                                                         \
+UBASE_FMT_PRINTF(4, 5)                                                      \
 static inline int uref_attr_set_##utype##_va(struct uref *uref,             \
         ctype v, enum udict_type type, const char *format, ...)             \
 {                                                                           \
-    UBASE_VARARG(uref_attr_set_##utype(uref, v, type, string))              \
+    UBASE_VARARG(uref_attr_set_##utype(uref, v, type, string),              \
+                 UBASE_ERR_INVALID)                                         \
 }                                                                           \
 /** @This copies the desc attribute from an uref to another.                \
  *                                                                          \
@@ -218,12 +219,14 @@ static inline int uref_attr_copy_##utype(struct uref *uref,                 \
  * variable list of arguments                                               \
  * @return an error code                                                    \
  */                                                                         \
+UBASE_FMT_PRINTF(4, 5)                                                      \
 static inline int uref_attr_copy_##utype##_va(struct uref *uref,            \
                                                 struct uref *uref_src,      \
                                                 enum udict_type type,       \
                                                 const char *format, ...)    \
 {                                                                           \
-    UBASE_VARARG(uref_attr_copy_##utype(uref, uref_src, type, string))      \
+    UBASE_VARARG(uref_attr_copy_##utype(uref, uref_src, type, string),      \
+                 UBASE_ERR_INVALID)                                         \
 }
 
 UREF_ATTR_TEMPLATE(opaque, struct udict_opaque)
@@ -268,10 +271,12 @@ static inline int uref_attr_set_opaque_from_hex(struct uref *uref,
  * variable list of arguments
  * @return an error code
  */
+UBASE_FMT_PRINTF(4, 5)
 static inline int uref_attr_set_opaque_from_hex_va(struct uref *uref,
         const char *v, enum udict_type type, const char *format, ...)
 {
-    UBASE_VARARG(uref_attr_set_opaque_from_hex(uref, v, type, string))
+    UBASE_VARARG(uref_attr_set_opaque_from_hex(uref, v, type, string),
+                 UBASE_ERR_INVALID)
 }
 
 

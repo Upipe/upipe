@@ -67,6 +67,8 @@ extern "C" {
 /** @This marks a function or variable as deprecated (forces compiler
  * warnings). */
 #define UBASE_DEPRECATED __attribute__ ((deprecated))
+/** @This marks a function as taking printf style arguments */
+#define UBASE_FMT_PRINTF(idx,first) __attribute__ ((format(printf,idx,first)))
 
 #else /* mkdoc:skip */
 #define likely(x)       !!(x)
@@ -118,21 +120,20 @@ static UBASE_UNUSED inline struct STRUCTURE *                               \
 }
 
 /** @internal @This is a helper to simplify printf-style functions. */
-#define UBASE_VARARG(command)                                               \
-    size_t len;                                                             \
+#define UBASE_VARARG(command, ...)                                          \
+    int len;                                                                \
     va_list args;                                                           \
     va_start(args, format);                                                 \
     len = vsnprintf(NULL, 0, format, args);                                 \
     va_end(args);                                                           \
-    if (len > 0) {                                                          \
+    if (len >= 0) {                                                         \
         char string[len + 1];                                               \
         va_start(args, format);                                             \
         vsnprintf(string, len + 1, format, args);                           \
         va_end(args);                                                       \
         return command;                                                     \
     } else {                                                                \
-        char *string = NULL;                                                \
-        return command;                                                     \
+        return __VA_ARGS__;                                                 \
     }
 
 /** @This is designed to chain uref and ubuf in a list. */
@@ -507,6 +508,19 @@ static inline uint32_t ubase_get_signature(va_list args)
     va_end(args_copy);
     return signature;
 }
+
+/** @This clips an integer into the given range
+ *
+ * @param args the va list to copy from
+ * @return a signature
+ */
+static inline int ubase_clip(int i, int min, int max)
+{
+    if      (i < min) return min;
+    else if (i > max) return max;
+    else               return i;
+}
+
 
 #ifdef __cplusplus
 }

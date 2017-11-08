@@ -615,7 +615,7 @@ static int upipe_dveo_asi_sink_open(struct upipe *upipe)
         case ASI_CTL_TX_MODE_204:
             break;
         default:
-            upipe_err_va(upipe, "Unknown TX mode %d", mode);
+            upipe_err_va(upipe, "Unknown TX mode %lu", mode);
             goto error;
     }
 

@@ -530,7 +530,7 @@ static int upipe_ts_psig_flow_build(struct upipe *upipe, uint8_t *es,
                 default:
                     upipe_warn_va(upipe, "invalid DTS sample rate %"PRIu64,
                                   rate);
-                    /* intended pass-through */
+                    /* fallthrough */
                 case 48000: desc7b_set_sample_rate_code(desc, 13); break;
                 case 96000: desc7b_set_sample_rate_code(desc, 14); break;
                 case 192000: desc7b_set_sample_rate_code(desc, 15); break;
@@ -856,7 +856,7 @@ static void upipe_ts_psig_program_build(struct upipe *upipe)
     size_t descriptors_size = uref_ts_flow_size_descriptors(program->flow_def);
 
     upipe_notice_va(upipe,
-                    "new PMT program=%"PRIu16" version=%"PRIu8" pcrpid=%"PRIu16,
+                    "new PMT program=%"PRIu64" version=%"PRIu8" pcrpid=%"PRIu16,
                     program_number, program->pmt_version, program->pcr_pid);
 
     struct ubuf *ubuf = ubuf_block_alloc(psig->ubuf_mgr,

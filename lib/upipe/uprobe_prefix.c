@@ -139,5 +139,5 @@ struct uprobe *uprobe_pfx_alloc_va(struct uprobe *next,
                                    enum uprobe_log_level min_level,
                                    const char *format, ...)
 {
-    UBASE_VARARG(uprobe_pfx_alloc(next, min_level, string))
+    UBASE_VARARG(uprobe_pfx_alloc(next, min_level, string), NULL)
 }

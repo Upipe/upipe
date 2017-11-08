@@ -643,7 +643,7 @@ static void upipe_vanc_process_op47sdp(struct upipe *upipe, struct uref *uref,
 
     uint8_t length = rdd08sdp_get_length(r);
     if (unlikely(size < length)) {
-        upipe_warn_va(upipe, "OP47 SDP length is too big (%zu)", length);
+        upipe_warn_va(upipe, "OP47 SDP length is too big (%u)", length);
         return;
     }
 
@@ -964,9 +964,11 @@ static int upipe_vanc_set_flow_def(struct upipe *upipe, struct uref *flow_def)
  */
 static int upipe_vanc_control(struct upipe *upipe, int command, va_list args)
 {
-    UBASE_HANDLED_RETURN(upipe_control_provide_request(upipe, command, args));
-
     switch (command) {
+        case UPIPE_REGISTER_REQUEST:
+        case UPIPE_UNREGISTER_REQUEST:
+            return upipe_control_provide_request(upipe, command, args);
+
         case UPIPE_SET_FLOW_DEF: {
             struct uref *flow_def = va_arg(args, struct uref *);
             return upipe_vanc_set_flow_def(upipe, flow_def);

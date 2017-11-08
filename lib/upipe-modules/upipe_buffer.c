@@ -229,7 +229,7 @@ static void upipe_buffer_update(struct upipe *upipe)
 
     uint64_t duration;
     if (ubase_check(upipe_buffer_get_duration(upipe, &duration)))
-        upipe_verbose_va(upipe, "duration: %zums",
+        upipe_verbose_va(upipe, "duration: %" PRIu64 "ms",
                          duration / (UCLOCK_FREQ / 1000));
 }
 

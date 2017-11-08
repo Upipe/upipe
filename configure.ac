@@ -14,7 +14,6 @@ PKG_PROG_PKG_CONFIG
 # Checks for programs.
 AC_CHECK_PROGS(PERL, perl)
 AC_PATH_PROG(MOC, [moc-qt4 moc], moc)
-AC_PATH_PROG(YASM, yasm)
 AC_PROG_CXX
 AC_PROG_AWK
 AC_PROG_CC_C99
@@ -37,16 +36,18 @@ AM_COND_IF(BUILD_LUAJIT,
            AC_CHECK_PROGS(EU_READELF, eu-readelf)
            AC_CHECK_PROGS(LLVM_DWARFDUMP, [llvm-dwarfdump "xcrun llvm-dwarfdump"]))
 
-YASMFLAGS=""
+AC_PATH_PROG(NASM, nasm)
+
+NASMFLAGS=""
 ARCH_X86_64=0
 case "${host_os}" in
     darwin*)
     case "${host}" in
         i?86*)
-        YASMFLAGS="-f macho32 -DPREFIX"
+        NASMFLAGS="-f macho32 -DPREFIX"
         ;;
         x86_64*)
-        YASMFLAGS="-f macho64 -DPREFIX"
+        NASMFLAGS="-f macho64 -DPREFIX"
         ARCH_X86_64=1
         ;;
     esac
@@ -54,10 +55,10 @@ case "${host_os}" in
     *mingw32*)
     case "${host}" in
         i?86*)
-        YASMFLAGS="-f win32 -DPREFIX"
+        NASMFLAGS="-f win32 -DPREFIX"
         ;;
         amd64*|x86_64*)
-        YASMFLAGS="-f win64 -DPREFIX"
+        NASMFLAGS="-f win64 -DPREFIX"
         ARCH_X86_64=1
         ;;
     esac
@@ -65,25 +66,47 @@ case "${host_os}" in
     *)
     case "${host}" in
         i?86*)
-        YASMFLAGS="-f elf32"
+        NASMFLAGS="-f elf32"
         ;;
         x86_64*)
-        YASMFLAGS="-f elf64"
+        NASMFLAGS="-f elf64"
         ARCH_X86_64=1
         ;;
     esac
     ;;
 esac
 
-AM_CONDITIONAL(HAVE_X86_ASM, test -n "${YASM}" -a -n "${YASMFLAGS}")
+if test -n "${NASM}"
+then
+    nasm_major="`echo __NASM_MAJOR__|nasm -E /dev/stdin|grep -v ^%`"
+    if test "$nasm_major" -lt "2"
+    then
+        unset NASM
+    else
+        nasm_minor="`echo __NASM_MINOR__|nasm -E /dev/stdin|grep -v ^%`"
+       if test "$nasm_minor" -lt "13"
+        then
+            unset NASM
+        fi
+    fi
+fi
 
-# add -prefer-non-pic so libtool doesn't add -fPIC, which yasm doesn't understand
-YASMFLAGS="${YASMFLAGS} -DPIC -prefer-non-pic -Pconfig.asm -I\$(top_builddir)/x86 -I\$(top_srcdir)/x86"
+AM_CONDITIONAL(HAVE_X86_ASM, test -n "${NASM}" -a -n "${NASMFLAGS}")
+
+# add -prefer-non-pic so libtool doesn't add -fPIC, which nasm doesn't understand
+NASMFLAGS="${NASMFLAGS} -DPIC -prefer-non-pic -Pconfig.asm -I\$(top_builddir)/x86/ -I\$(top_srcdir)/x86/"
 
 WARN_FLAGS="-Wall -Wextra -Wno-unused -Wno-unused-parameter -Wno-sign-compare -Wmissing-declarations -Wwrite-strings -Wredundant-decls -Wundef -Wmissing-include-dirs"
-AC_SUBST([AM_CFLAGS], ["$WARN_FLAGS -Wstrict-prototypes -Wmissing-prototypes -Wold-style-definition"])
+WARN_FLAGS_C="-Wstrict-prototypes -Wmissing-prototypes -Wold-style-definition"
+WARN_FLAGS_OPT="-Wduplicated-cond -Wduplicated-branches -Wrestrict -Wformat=2"
+# TODO: add -Wnull-dereference and -Wlogical-op once all warnings are fixed
+for flag in $WARN_FLAGS_OPT; do
+    AX_CHECK_COMPILE_FLAG([$flag],[WARN_FLAGS="$WARN_FLAGS $flag"],,-Werror)
+done
+
+AC_SUBST([AM_CFLAGS], ["$WARN_FLAGS $WARN_FLAGS_C"])
 AC_SUBST([AM_CXXFLAGS], ["$WARN_FLAGS"])
-AC_SUBST(YASMFLAGS)
+AC_SUBST(NASMFLAGS)
 AC_SUBST(ARCH_X86_64)
 
 # Checks for libraries.
@@ -103,6 +126,9 @@ AC_CHECK_HEADERS([ev.h], [
                         AM_CONDITIONAL(HAVE_EV, true),
                         AM_CONDITIONAL(HAVE_EV, false))])],
         AM_CONDITIONAL(HAVE_EV, false))
+AC_CHECK_HEADERS([dvbcsa/dvbcsa.h],
+                 AM_CONDITIONAL(HAVE_DVBCSA, true),
+                 AM_CONDITIONAL(HAVE_DVBCSA, false))
 
 PKG_CHECK_UPIPE(AVUTIL, libavutil, [libavutil/avutil.h])
 PKG_CHECK_UPIPE(AVFORMAT, [libavformat >= 53.32.0 libavcodec libavutil], [libavformat/avformat.h libavformat/avio.h libavutil/avutil.h])
@@ -236,6 +262,7 @@ AC_CONFIG_FILES([Makefile
                  include/upipe-zvbi/Makefile
                  include/upipe-dveo/Makefile
                  include/upipe-netmap/Makefile
+                 include/upipe-dvbcsa/Makefile
                  lib/Makefile
                  lib/upipe/Makefile
                  lib/upipe/libupipe.pc
@@ -291,6 +318,8 @@ AC_CONFIG_FILES([Makefile
                  lib/upipe-dveo/libupipe_dveo.pc
                  lib/upipe-netmap/Makefile
                  lib/upipe-netmap/libupipe_netmap.pc
+                 lib/upipe-dvbcsa/Makefile
+                 lib/upipe-dvbcsa/libupipe_dvbcsa.pc
                  x86/Makefile
                  x86/config.asm
                  tests/Makefile

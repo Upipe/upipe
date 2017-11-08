@@ -256,10 +256,12 @@ static int uprobe_selflow_set_internal(struct uprobe *uprobe, const char *flows)
  * @param uprobe pointer to probe
  * @param format of the syntax, followed by optional arguments
  */
+UBASE_FMT_PRINTF(2, 3)
 static int uprobe_selflow_set_internal_va(struct uprobe *uprobe,
                                           const char *format, ...)
 {
-    UBASE_VARARG(uprobe_selflow_set_internal(uprobe, string))
+    UBASE_VARARG(uprobe_selflow_set_internal(uprobe, string),
+                 UBASE_ERR_INVALID)
 }
 
 /** @internal @This checks that there is at least one selected flow, or
@@ -574,7 +576,7 @@ struct uprobe *uprobe_selflow_alloc_va(struct uprobe *next,
                                        enum uprobe_selflow_type type,
                                        const char *format, ...)
 {
-    UBASE_VARARG(uprobe_selflow_alloc(next, subprobe, type, string))
+    UBASE_VARARG(uprobe_selflow_alloc(next, subprobe, type, string), NULL)
 }
 
 /** @This changes the flows selected by this probe, with printf-style
@@ -585,5 +587,6 @@ struct uprobe *uprobe_selflow_alloc_va(struct uprobe *next,
  */
 int uprobe_selflow_set_va(struct uprobe *uprobe, const char *format, ...)
 {
-    UBASE_VARARG(uprobe_selflow_set(uprobe, string))
+    UBASE_VARARG(uprobe_selflow_set(uprobe, string),
+                 UBASE_ERR_INVALID)
 }

@@ -288,6 +288,7 @@ static int upipe_seg_src_control(struct upipe *upipe,
 
     case UPIPE_SET_URI:
         upipe_seg_src_clean_src(upipe);
+        /* fallthrough */
     case UPIPE_GET_OUTPUT_SIZE:
     case UPIPE_SET_OUTPUT_SIZE:
     case UPIPE_SRC_GET_SIZE:

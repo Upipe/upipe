@@ -232,7 +232,7 @@ static bool upipe_filter_blend_handle(struct upipe *upipe, struct uref *uref,
 
     // Now process frames
     uref_pic_size(uref, &width, &height, NULL);
-    upipe_verbose_va(upipe, "received pic (%dx%d)", width, height);
+    upipe_verbose_va(upipe, "received pic (%zux%zu)", width, height);
 
     assert(upipe_filter_blend->ubuf_mgr);
     ubuf_deint = ubuf_pic_alloc(upipe_filter_blend->ubuf_mgr, width, height);

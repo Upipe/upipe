@@ -460,29 +460,40 @@ static inline int STRUCTURE##_control_output(struct upipe *upipe,           \
                                              int command,                   \
                                              va_list args)                  \
 {                                                                           \
+    int ret = UBASE_ERR_UNHANDLED;                                          \
+    va_list args_copy;                                                      \
+    va_copy(args_copy, args);                                               \
     switch (command) {                                                      \
         case UPIPE_REGISTER_REQUEST: {                                      \
-            struct urequest *urequest = va_arg(args, struct urequest *);    \
-            return STRUCTURE##_alloc_output_proxy(upipe, urequest);         \
+            struct urequest *urequest =                                     \
+                va_arg(args_copy, struct urequest *);                       \
+            ret = STRUCTURE##_alloc_output_proxy(upipe, urequest);          \
+            break;                                                          \
         }                                                                   \
         case UPIPE_UNREGISTER_REQUEST: {                                    \
-            struct urequest *urequest = va_arg(args, struct urequest *);    \
-            return STRUCTURE##_free_output_proxy(upipe, urequest);          \
+            struct urequest *urequest =                                     \
+                va_arg(args_copy, struct urequest *);                       \
+            ret = STRUCTURE##_free_output_proxy(upipe, urequest);           \
+            break;                                                          \
         }                                                                   \
         case UPIPE_GET_FLOW_DEF: {                                          \
-            struct uref **flow_def_p = va_arg(args, struct uref **);        \
-            return STRUCTURE##_get_flow_def(upipe, flow_def_p);             \
+            struct uref **flow_def_p = va_arg(args_copy, struct uref **);   \
+            ret = STRUCTURE##_get_flow_def(upipe, flow_def_p);              \
+            break;                                                          \
         }                                                                   \
         case UPIPE_GET_OUTPUT: {                                            \
-            struct upipe **output_p = va_arg(args, struct upipe **);        \
-            return STRUCTURE##_get_output(upipe, output_p);                 \
+            struct upipe **output_p = va_arg(args_copy, struct upipe **);   \
+            ret =  STRUCTURE##_get_output(upipe, output_p);                 \
+            break;                                                          \
         }                                                                   \
         case UPIPE_SET_OUTPUT: {                                            \
-            struct upipe *output = va_arg(args, struct upipe *);            \
-            return STRUCTURE##_set_output(upipe, output);                   \
+            struct upipe *output = va_arg(args_copy, struct upipe *);       \
+            ret = STRUCTURE##_set_output(upipe, output);                    \
+            break;                                                          \
         }                                                                   \
     }                                                                       \
-    return UBASE_ERR_UNHANDLED;                                             \
+    va_end(args_copy);                                                      \
+    return ret;                                                             \
 }                                                                           \
 /** @internal @This cleans up the private members for this helper.          \
  *                                                                          \

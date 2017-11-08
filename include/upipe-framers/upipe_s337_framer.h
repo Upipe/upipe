@@ -1,7 +1,7 @@
 /*
- * Copyright (C) 2016 OpenHeadend S.A.R.L.
+ * Copyright (C) 2016-2017 Open Broadcast Systems Ltd
  *
- * Authors: Christophe Massiot
+ * Authors: Rafaël Carré
  *
  * This program is free software; you can redistribute it and/or modify it
  * under the terms of the GNU Lesser General Public License as published by
@@ -19,13 +19,6 @@
  */
 
 /** @file
- * @short Upipe module building frames from chunks of a SMPTE 337 stream
- * This pipe only supports the 16-bit mode.
- *
- * Normative references:
- *  - SMPTE 337-2008 (non-PCM in AES3)
- *  - SMPTE 338-2008 (non-PCM in AES3 - data types)
- *  - SMPTE 340-2008 (non-PCM in AES3 - ATSC A/52B)
  */
 
 #ifndef _UPIPE_FRAMERS_UPIPE_S337_FRAMER_H_
@@ -37,7 +30,7 @@ extern "C" {
 
 #include <upipe/upipe.h>
 
-#define UPIPE_S337F_SIGNATURE UBASE_FOURCC('3','3','7','f')
+#define UPIPE_S337F_SIGNATURE UBASE_FOURCC('s','3','3','7')
 
 /** @This returns the management structure for all s337f pipes.
  *

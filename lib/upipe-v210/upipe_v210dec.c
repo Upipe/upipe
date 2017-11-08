@@ -55,9 +55,6 @@
 
 #include "v210dec.h"
 
-#include <libavutil/common.h>
-#include <libavutil/intreadwrite.h>
-
 #define UPIPE_V210_MAX_PLANES 3
 #define UBUF_ALIGN 32
 
@@ -132,9 +129,18 @@ UPIPE_HELPER_INPUT(upipe_v210dec, urefs, nb_urefs, max_urefs, blockers, upipe_v2
 
 // TODO: handle endianess
 
+static inline uint32_t rl32(const void *src)
+{
+    const uint8_t *s = src;
+    return s[0] |
+        (s[1] <<  8) |
+        (s[2] << 16) |
+        (s[3] << 24);
+}
+
 #define READ_PIXELS_8(a, b, c) \
     do { \
-        uint32_t val = AV_RL32(src); \
+        uint32_t val = rl32(src); \
         src += 4; \
         *(a)++ = (val >> 2)  & 255; \
         *(b)++ = (val >> 12) & 255; \
@@ -143,7 +149,7 @@ UPIPE_HELPER_INPUT(upipe_v210dec, urefs, nb_urefs, max_urefs, blockers, upipe_v2
 
 #define READ_PIXELS_10(a, b, c) \
     do { \
-        uint32_t val = AV_RL32(src); \
+        uint32_t val = rl32(src); \
         src += 4; \
         *(a)++ = (val)       & 1023; \
         *(b)++ = (val >> 10) & 1023; \
@@ -186,6 +192,7 @@ static void v210dec_setup_asm(struct upipe *upipe, bool assembly)
     if (!assembly)
         return;
 
+#if defined(HAVE_X86_ASM)
 #if !defined (__APPLE__)
 #if defined(__clang__) && (__clang_major__ < 3 || (__clang_major__ == 3 && __clang_minor__ <= 8))
 #ifdef __SSSE3__
@@ -209,7 +216,7 @@ static void v210dec_setup_asm(struct upipe *upipe, bool assembly)
         v210dec->v210_to_planar_10 = upipe_v210_to_planar_10_aligned_avx2;
     }
 #endif
-
+#endif
 }
 
 /** @internal @This handles data.
@@ -310,7 +317,7 @@ static bool upipe_v210dec_handle(struct upipe *upipe, struct uref *uref,
                         *u++ = (val >> 12) & 255;
                         *y++ = (val >> 22) & 255;
 
-                        val = AV_RL32(src);
+                        val = rl32(src);
                         src++;
                         *v++ = (val >>  2) & 255;
                         *y++ = (val >> 12) & 255;
@@ -340,7 +347,7 @@ static bool upipe_v210dec_handle(struct upipe *upipe, struct uref *uref,
 
                 if (w < output_hsize - 1) {
                     READ_PIXELS_10(u, y, v);
-                    uint32_t val = AV_RL32(src);
+                    uint32_t val = rl32(src);
                     src++;
                     *y++ = val & 1023;
 
@@ -348,7 +355,7 @@ static bool upipe_v210dec_handle(struct upipe *upipe, struct uref *uref,
                         *u++ = (val >> 10) & 1023;
                         *y++ = (val >> 20) & 1023;
 
-                        val = AV_RL32(src);
+                        val = rl32(src);
                         src++;
                         *v++ = val & 1023;
                         *y++ = (val >> 10) & 1023;
