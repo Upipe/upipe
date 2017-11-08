@@ -71,7 +71,9 @@ libupipe_modules_la_SOURCES = \
 	upipe_video_blank.c \
 	upipe_audio_blank.c \
 	upipe_grid.c \
+	upipe_block_to_sound.c \
 	upipe_sync.c \
+	upipe_block_to_sound.c \
 	$(NULL)
 
 if HAVE_WRITEV
