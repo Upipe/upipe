@@ -25,6 +25,7 @@ LIST_C = upipe-modules upipe-filters upipe-dveo
 @HAVE_OSX_DARWIN_TRUE@LIST_C += upipe-osx
 @HAVE_ALSA_TRUE@LIST_C += upipe-alsa
 @HAVE_AMT_TRUE@LIST_C += upipe-amt
+@HAVE_DVBV5_TRUE@LIST_C += upipe-dvb
 @HAVE_NACL_TRUE@LIST_C += upipe-nacl
 @HAVE_GLX_TRUE@LIST_C += upipe-gl
 @HAVE_SWSCALE_TRUE@LIST_C += upipe-swscale
