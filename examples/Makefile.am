@@ -20,6 +20,8 @@ UPIPEDVBCSA_LIBS = $(top_builddir)/lib/upipe-dvbcsa/libupipe_dvbcsa.la
 noinst_PROGRAMS = 
 
 fec_LDADD = $(LDADD) $(UPUMPEV_LIBS) $(UPIPEMODULES_LIBS) $(UPIPETS_LIBS)
+arq_rx_LDADD = $(LDADD) $(UPUMPEV_LIBS) $(UPIPEMODULES_LIBS) $(UPIPEFILTERS_LIBS)
+arq_tx_LDADD = $(LDADD) $(UPUMPEV_LIBS) $(UPIPEMODULES_LIBS) $(UPIPEFILTERS_LIBS)
 udpmulticat_LDADD = $(LDADD) $(UPUMPEV_LIBS) $(UPIPEMODULES_LIBS)
 multicatudp_LDADD = $(LDADD) $(UPUMPEV_LIBS) $(UPIPEMODULES_LIBS) $(UPIPEPTHREAD_LIBS) -lpthread
 hls2rtp_LDADD= $(LDADD) $(UPUMPEV_LIBS) $(UPIPEMODULES_LIBS) $(UPIPEFRAMERS_LIBS) $(UPIPETS_LIBS) $(UPIPEHLS_LIBS) $(UPIPEPTHREAD_LIBS) -lpthread
@@ -48,7 +50,7 @@ ts_encrypt_LDADD = $(LDADD) $(UPIPEMODULES_LIBS) $(UPUMPEV_LIBS) $(UPIPETS_LIBS)
 
 if HAVE_EV
 if HAVE_WRITEV
-noinst_PROGRAMS += udpmulticat multicatudp fec
+noinst_PROGRAMS += udpmulticat multicatudp fec arq_rx arq_tx
 noinst_PROGRAMS += decrypt
 if HAVE_BITSTREAM
 noinst_PROGRAMS += hls2rtp

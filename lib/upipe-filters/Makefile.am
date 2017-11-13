@@ -13,7 +13,9 @@ libupipe_filters_la_SOURCES = \
 	ebur128/ebur128.h
 
 if HAVE_BITSTREAM
-libupipe_filters_la_SOURCES += upipe_filter_vanc.c
+libupipe_filters_la_SOURCES += upipe_filter_vanc.c \
+    upipe_rtp_feedback.c \
+    upipe_rtcp_fb_receiver.c
 endif
 
 libupipe_filters_la_CPPFLAGS = -I$(top_builddir)/include -I$(top_srcdir)/include

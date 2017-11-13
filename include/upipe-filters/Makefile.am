@@ -8,4 +8,6 @@ myinclude_HEADERS = \
 	upipe_audio_max.h \
 	upipe_audio_bar.h \
 	upipe_audio_graph.h \
+	upipe_rtp_feedback.h \
+	upipe_rtcp_fb_receiver.h \
 	upipe_filter_vanc.h
