@@ -1,6 +1,10 @@
 LOG_COMPILER = $(srcdir)/valgrind_wrapper.sh
 AM_LOG_FLAGS = $(srcdir)
 
+if HAVE_AVUTIL
+SUBDIRS = checkasm
+endif
+
 dist_check_SCRIPTS = \
 	uprobe_stdio_test.sh \
 	uprobe_syslog_test.sh \

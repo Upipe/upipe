@@ -332,6 +332,7 @@ AC_CONFIG_FILES([Makefile
                  x86/Makefile
                  x86/config.asm
                  tests/Makefile
+                 tests/checkasm/Makefile
                  examples/Makefile
                  luajit/Makefile])
 AC_OUTPUT
