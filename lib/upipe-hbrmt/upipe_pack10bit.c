@@ -350,18 +350,9 @@ static struct upipe *upipe_pack10bit_alloc(struct upipe_mgr *mgr,
 
     upipe_pack10bit->pack = upipe_sdi_pack_c;
 
+#if defined(HAVE_X86_ASM)
 #if defined(__i686__) || defined(__x86_64__)
-#if !defined(__APPLE__) /* macOS clang doesn't support that builtin yet */
-#if defined(__clang__) && /* clang 3.8 doesn't know ssse3 */ \
-     (__clang_major__ < 3 || (__clang_major__ == 3 && __clang_minor__ <= 8))
-# ifdef __SSSE3__
-	if (1)
-# else
-    if (0)
-# endif
-#else
 	if (__builtin_cpu_supports("ssse3"))
-#endif
         upipe_pack10bit->pack = upipe_uyvy_to_sdi_unaligned_ssse3;
 
 	if (__builtin_cpu_supports("avx"))

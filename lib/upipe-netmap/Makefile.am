@@ -15,4 +15,4 @@ pkgconfigdir = $(libdir)/pkgconfig
 pkgconfig_DATA = libupipe_netmap.pc
 
 .asm.lo:
-	$(LIBTOOL) --mode=compile --tag=CC $(YASM) $(YASMFLAGS) $< -o $@
+	$(LIBTOOL) --mode=compile --tag=CC $(NASM) $(NASMFLAGS) $< -o $@

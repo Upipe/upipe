@@ -89,6 +89,7 @@ static inline void uref_dump(struct uref *uref, struct uprobe *uprobe)
     UREF_DUMP_DATE("k.sys", sys);
     UREF_DUMP_DATE("k.prog", prog);
     UREF_DUMP_DATE("k.orig", orig);
+#undef UREF_DUMP_DATE
 
 #define UREF_DUMP_UNSIGNED(name, member)                                    \
     if (uref->member != UINT64_MAX)                                         \

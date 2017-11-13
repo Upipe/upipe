@@ -73,6 +73,8 @@
 #include <upipe-av/upipe_av_samplefmt.h>
 #include "upipe_av_internal.h"
 
+#include <bitstream/dvb/sub.h>
+
 #define EXPECTED_FLOW_DEF "block."
 
 /** @hidden */
@@ -212,7 +214,7 @@ static void upipe_av_uref_pic_free(void *opaque, uint8_t *data);
  * AVFrame.extended_data[] must also be set, but it should be the same as
  * AVFrame.data[] except for planar audio with more channels than can fit
  * in AVFrame.data[].  In that case, AVFrame.data[] shall still contain as
- * many data pointers as it can hold.  if CODEC_CAP_DR1 is not set then
+ * many data pointers as it can hold.  if AV_CODEC_CAP_DR1 is not set then
  * get_buffer() must call avcodec_default_get_buffer() instead of providing
  * buffers allocated by some other means.
  *
@@ -361,7 +363,7 @@ static int upipe_avcdec_get_buffer_pic(struct AVCodecContext *context,
      * later. */
     uref->uchain.next = uref_to_uchain(flow_def_attr);
 
-    if (!(context->codec->capabilities & CODEC_CAP_DR1)) {
+    if (!(context->codec->capabilities & AV_CODEC_CAP_DR1)) {
         upipe_verbose(upipe, "no direct rendering, using default");
         return avcodec_default_get_buffer2(context, frame, 0);
     }
@@ -533,7 +535,7 @@ static int upipe_avcdec_get_buffer_sound(struct AVCodecContext *context,
      * later. */
     uref->uchain.next = uref_to_uchain(flow_def_attr);
 
-    if (!(context->codec->capabilities & CODEC_CAP_DR1))
+    if (!(context->codec->capabilities & AV_CODEC_CAP_DR1))
         return avcodec_default_get_buffer2(context, frame, 0);
 
     /* Direct rendering */
@@ -601,8 +603,11 @@ static bool upipe_avcdec_do_av_deal(struct upipe *upipe)
             break;
         case AVMEDIA_TYPE_VIDEO:
             context->get_buffer2 = upipe_avcdec_get_buffer_pic;
+
+#if LIBAVCODEC_VERSION_INT < AV_VERSION_INT(55, 48, 102)
             /* otherwise we need specific prepend/append/align */
             context->flags |= CODEC_FLAG_EMU_EDGE;
+#endif
             context->refcounted_frames = 1;
             break;
         case AVMEDIA_TYPE_AUDIO:
@@ -730,7 +735,7 @@ static void upipe_avcdec_close(struct upipe *upipe)
         return;
     }
 
-    if (upipe_avcdec->context->codec->capabilities & CODEC_CAP_DELAY) {
+    if (upipe_avcdec->context->codec->capabilities & AV_CODEC_CAP_DELAY) {
         /* Feed avcodec with NULL packets to output the remaining frames */
         AVPacket avpkt;
         memset(&avpkt, 0, sizeof(AVPacket));
@@ -828,24 +833,29 @@ static void upipe_avcdec_output_sub(struct upipe *upipe, AVSubtitle *sub,
     struct upipe_avcdec *upipe_avcdec = upipe_avcdec_from_upipe(upipe);
     struct uref *uref = upipe_avcdec->uref;
 
-    AVSubtitleRect *r = NULL;
-    uint64_t w = 0, h = 0;
+    uint64_t w = 0, h = 0, x = 0, y = 0;
 
-    if (sub->num_rects) {
-        r = sub->rects[0];
-        if (sub->num_rects > 1) { // TODO
-            upipe_warn_va(upipe, "Only decoding the first of %u regions",
-                    sub->num_rects);
-        }
+    for (int i = 0; i < sub->num_rects; i++) {
+        AVSubtitleRect *r = sub->rects[i];
 
         if (r->type != SUBTITLE_BITMAP) {
             upipe_err_va(upipe, "Not handling subtitle type %d", r->type);
-            return;
+            continue;
         }
+        if (w < r->w)
+            w = r->w;
+        if (h < r->h)
+            h = r->h;
+        if (x < r->x)
+            x = r->x;
+        if (y < r->y)
+            y = r->y;
+    }
 
-        w = r->w;
-        h = r->h;
-    } else {
+    w = w + x;
+    h = h + y;
+
+    if (sub->num_rects == 0) {
         /* blank sub */
         if (!upipe_avcdec->flow_def_attr)
             return;
@@ -897,7 +907,7 @@ static void upipe_avcdec_output_sub(struct upipe *upipe, AVSubtitle *sub,
 
     flow_def_attr = uref_dup(upipe_avcdec->flow_def_provided);
 
-    if (r) {
+    if (sub->num_rects) {
         /* Allocate a ubuf */
         struct ubuf *ubuf = ubuf_pic_alloc(upipe_avcdec->ubuf_mgr, width_aligned, height_aligned);
         if (unlikely(ubuf == NULL)) {
@@ -926,44 +936,46 @@ static void upipe_avcdec_output_sub(struct upipe *upipe, AVSubtitle *sub,
     uref_clock_set_date_prog(uref,
             prog + UCLOCK_FREQ * sub->start_display_time / 1000, type);
 
-    if (r) {
-        /* Decode palettized to bgra */
-        uint8_t *dst;
+    if (sub->num_rects) {
+        uint8_t *buf;
         const char *chroma;
         if (unlikely(!ubase_check(uref_pic_flow_get_chroma(flow_def_attr,
                             &chroma, 0)) ||
                     !ubase_check(ubuf_pic_plane_write(uref->ubuf, chroma,
-                            0, 0, -1, -1, &dst)))) {
+                            0, 0, -1, -1, &buf)))) {
             goto alloc_error;
         }
 
+        /* Decode palettized to bgra */
+        for (int i = 0; i < sub->num_rects; i++) {
+            AVSubtitleRect *r = sub->rects[i];
+            uint8_t *dst = buf + 4 * ((width_aligned * r->y) + r->x);
+
 #if LIBAVCODEC_VERSION_MAJOR < 59
-        uint8_t *src = r->pict.data[0];
-        uint8_t *palette = r->pict.data[1];
+            uint8_t *src = r->pict.data[0];
+            uint8_t *palette = r->pict.data[1];
 #else
-        uint8_t *src = r->data[0];
-        uint8_t *palette = r->data[1];
+            uint8_t *src = r->data[0];
+            uint8_t *palette = r->data[1];
 #endif
 
-        for (int i = 0; i < h; i++) {
-            for (int j = 0; j < w; j++) {
-                uint8_t idx = src[j];
-                if (unlikely(idx >= r->nb_colors)) {
-                    upipe_err_va(upipe, "Invalid palette index %" PRIu8, idx);
-                    continue;
+            for (int i = 0; i < r->h; i++) {
+                for (int j = 0; j < r->w; j++) {
+                    uint8_t idx = src[j];
+                    if (unlikely(idx >= r->nb_colors)) {
+                        upipe_err_va(upipe, "Invalid palette index %" PRIu8, idx);
+                        continue;
+                    }
+
+                    memcpy(&dst[j*4], &palette[idx*4], 4);
                 }
 
-                memcpy(&dst[j*4], &palette[idx*4], 4);
+                dst += width_aligned * 4;
+                src += r->w;
             }
-
-            dst += width_aligned * 4;
-            src += w;
         }
 
         ubuf_pic_plane_unmap(uref->ubuf, chroma, 0, 0, -1, -1);
-
-        UBASE_FATAL(upipe, uref_pic_set_hposition(uref, r->x))
-        UBASE_FATAL(upipe, uref_pic_set_vposition(uref, r->y))
     }
 
     /* Find out if flow def attributes have changed. */
@@ -1023,7 +1035,7 @@ static void upipe_avcdec_output_pic(struct upipe *upipe, struct upump **upump_p)
         return;
     }
 
-    if (!(context->codec->capabilities & CODEC_CAP_DR1)) {
+    if (!(context->codec->capabilities & AV_CODEC_CAP_DR1)) {
         /* Not direct rendering, copy data. */
         uint8_t planes;
         if (unlikely(!ubase_check(uref_pic_flow_get_planes(flow_def_attr, &planes)))) {
@@ -1139,7 +1151,7 @@ static void upipe_avcdec_output_sound(struct upipe *upipe,
         return;
     }
 
-    if (!(context->codec->capabilities & CODEC_CAP_DR1)) {
+    if (!(context->codec->capabilities & AV_CODEC_CAP_DR1)) {
         /* Not direct rendering, copy data. */
         uint8_t *buffers[AV_NUM_DATA_POINTERS];
         if (unlikely(!ubase_check(uref_sound_write_uint8_t(uref, 0, -1,
@@ -1202,11 +1214,26 @@ static bool upipe_avcdec_decode_avpkt(struct upipe *upipe, AVPacket *avpkt,
 {
     struct upipe_avcdec *upipe_avcdec = upipe_avcdec_from_upipe(upipe);
     int gotframe = 0, len;
-    switch (upipe_avcdec->context->codec->type) {
+    AVCodecContext *context = upipe_avcdec->context;
+
+    switch (context->codec->type) {
         case AVMEDIA_TYPE_SUBTITLE: {
             AVSubtitle subtitle;
-            len = avcodec_decode_subtitle2(upipe_avcdec->context,
+            /* store original pointer */
+            void *data = avpkt->data;
+
+            if (context->codec_id == AV_CODEC_ID_DVB_SUBTITLE
+                    && avpkt->size >= DVBSUB_HEADER_SIZE) {
+                /* skip header, avcodec doesn't know to do it */
+                avpkt->data += DVBSUB_HEADER_SIZE;
+                avpkt->size -= DVBSUB_HEADER_SIZE;
+            }
+            len = avcodec_decode_subtitle2(context,
                     &subtitle, &gotframe, avpkt);
+            if (context->codec_id == AV_CODEC_ID_DVB_SUBTITLE) {
+                /* restore original pointer */
+                avpkt->data = data;
+            }
             if (len < 0)
                 upipe_warn(upipe, "Error while decoding subtitle");
 
@@ -1218,7 +1245,7 @@ static bool upipe_avcdec_decode_avpkt(struct upipe *upipe, AVPacket *avpkt,
         }
 
         case AVMEDIA_TYPE_VIDEO:
-            len = avcodec_decode_video2(upipe_avcdec->context,
+            len = avcodec_decode_video2(context,
                                         upipe_avcdec->frame,
                                         &gotframe, avpkt);
             if (len < 0) {
@@ -1232,7 +1259,7 @@ static bool upipe_avcdec_decode_avpkt(struct upipe *upipe, AVPacket *avpkt,
             break;
 
         case AVMEDIA_TYPE_AUDIO:
-            len = avcodec_decode_audio4(upipe_avcdec->context,
+            len = avcodec_decode_audio4(context,
                                         upipe_avcdec->frame,
                                         &gotframe, avpkt);
             if (len < 0) {
@@ -1248,7 +1275,7 @@ static bool upipe_avcdec_decode_avpkt(struct upipe *upipe, AVPacket *avpkt,
         default:
             /* should never be here */
             upipe_err_va(upipe, "Unsupported media type (%d)",
-                         upipe_avcdec->context->codec->type);
+                         context->codec->type);
             break;
     }
     return !!gotframe;
@@ -1288,7 +1315,7 @@ static bool upipe_avcdec_decode(struct upipe *upipe, struct uref *uref,
     av_init_packet(&avpkt);
 
     /* avcodec input buffer needs to be at least 4-byte aligned and
-       FF_INPUT_BUFFER_PADDING_SIZE larger than actual input size.
+       AV_INPUT_BUFFER_PADDING_SIZE larger than actual input size.
        Thus, extract ubuf content in a properly allocated buffer.
        Padding must be zeroed. */
     size_t size = 0;
@@ -1303,7 +1330,7 @@ static bool upipe_avcdec_decode(struct upipe *upipe, struct uref *uref,
     upipe_verbose_va(upipe, "Received packet %"PRIu64" - size : %d",
                      upipe_avcdec->counter, avpkt.size);
     /* TODO replace with umem */
-    avpkt.data = malloc(avpkt.size + FF_INPUT_BUFFER_PADDING_SIZE);
+    avpkt.data = malloc(avpkt.size + AV_INPUT_BUFFER_PADDING_SIZE);
     if (unlikely(avpkt.data == NULL)) {
         uref_free(uref);
         upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
@@ -1311,7 +1338,7 @@ static bool upipe_avcdec_decode(struct upipe *upipe, struct uref *uref,
     }
     uref_block_extract(uref, 0, avpkt.size, avpkt.data);
     ubuf_free(uref_detach_ubuf(uref));
-    memset(avpkt.data + avpkt.size, 0, FF_INPUT_BUFFER_PADDING_SIZE);
+    memset(avpkt.data + avpkt.size, 0, AV_INPUT_BUFFER_PADDING_SIZE);
 
     uref_pic_set_number(uref, upipe_avcdec->counter++);
     uref_clock_get_rate(uref, &upipe_avcdec->drift_rate);
@@ -1380,14 +1407,14 @@ static int upipe_avcdec_set_flow_def(struct upipe *upipe, struct uref *flow_def)
     const uint8_t *extradata;
     size_t extradata_size = 0;
     if (ubase_check(uref_flow_get_headers(flow_def, &extradata, &extradata_size))) {
-        extradata_alloc = malloc(extradata_size + FF_INPUT_BUFFER_PADDING_SIZE);
+        extradata_alloc = malloc(extradata_size + AV_INPUT_BUFFER_PADDING_SIZE);
         if (unlikely(extradata_alloc == NULL)) {
             upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
             return UBASE_ERR_ALLOC;
         }
         memcpy(extradata_alloc, extradata, extradata_size);
         memset(extradata_alloc + extradata_size, 0,
-               FF_INPUT_BUFFER_PADDING_SIZE);
+               AV_INPUT_BUFFER_PADDING_SIZE);
     }
 
     /* Extract relevant attributes to flow def check. */

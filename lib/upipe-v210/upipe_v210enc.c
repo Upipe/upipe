@@ -613,23 +613,13 @@ static struct upipe *upipe_v210enc_alloc(struct upipe_mgr *mgr,
     upipe_v210enc->pack_line_8  = v210enc_planar_pack_8_c;
     upipe_v210enc->pack_line_10 = v210enc_planar_pack_10_c;
 
+#if defined(HAVE_X86_ASM)
 #if defined(__i686__) || defined(__x86_64__)
-#if !defined(__APPLE__) /* macOS clang doesn't support that builtin yet */
     if (__builtin_cpu_supports("avx2")) {
         upipe_v210enc->pack_line_8  = upipe_v210_planar_pack_8_avx2;
         upipe_v210enc->pack_line_10 = upipe_v210_planar_pack_10_avx2;
     } else {
-#if defined(__clang__) && /* clang 3.8 doesn't know ssse3 */ \
-     (__clang_major__ < 3 || (__clang_major__ == 3 && __clang_minor__ <= 8))
-# ifdef __SSSE3__
-        if (1)
-# else
-        if (0)
-# endif
-#else
-        if (__builtin_cpu_supports("ssse3"))
-#endif
-        {
+        if (__builtin_cpu_supports("ssse3")) {
             upipe_v210enc->pack_line_8  = upipe_v210_planar_pack_8_ssse3;
             upipe_v210enc->pack_line_10 = upipe_v210_planar_pack_10_ssse3;
         }

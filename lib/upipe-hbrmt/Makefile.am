@@ -10,6 +10,12 @@ libupipe_hbrmt_la_SOURCES = upipe_pack10bit.c \
     ../upipe-blackmagic/sdi.c \
     ../upipe-blackmagic/sdi.h \
     $(NULL)
+
+libupipe_hbrmt_la_CPPFLAGS = -I$(top_builddir)/include -I$(top_srcdir)/include
+libupipe_hbrmt_la_CFLAGS = $(AM_CFLAGS) $(AVUTIL_CFLAGS)  -I$(top_srcdir)/lib/upipe-blackmagic
+libupipe_hbrmt_la_LIBADD = $(top_builddir)/lib/upipe/libupipe.la
+libupipe_hbrmt_la_LDFLAGS = -no-undefined
+
 if HAVE_X86_ASM
 libupipe_hbrmt_la_SOURCES += \
     rfc4175_dec.asm \
@@ -20,11 +26,8 @@ libupipe_hbrmt_la_SOURCES += \
     sdidec.h \
     sdienc.asm \
     sdienc.h
+libupipe_hbrmt_la_CPPFLAGS += -DHAVE_X86_ASM
 endif
-libupipe_hbrmt_la_CPPFLAGS = -I$(top_builddir)/include -I$(top_srcdir)/include
-libupipe_hbrmt_la_CFLAGS = $(AM_CFLAGS) $(AVUTIL_CFLAGS) -I$(top_srcdir)/lib/upipe-blackmagic
-libupipe_hbrmt_la_LIBADD = $(top_builddir)/lib/upipe/libupipe.la
-libupipe_hbrmt_la_LDFLAGS = -no-undefined
 
 pkgconfigdir = $(libdir)/pkgconfig
 pkgconfig_DATA = libupipe_hbrmt.pc
@@ -34,4 +37,4 @@ V_ASM_ = $(V_ASM_@AM_DEFAULT_VERBOSITY@)
 V_ASM_0 = @echo "  ASM     " $@;
 
 .asm.lo:
-	$(V_ASM)$(LIBTOOL) $(AM_V_lt) --mode=compile --tag=CC $(YASM) $(YASMFLAGS) $< -o $@
+	$(V_ASM)$(LIBTOOL) $(AM_V_lt) --mode=compile --tag=CC $(NASM) $(NASMFLAGS) $< -o $@

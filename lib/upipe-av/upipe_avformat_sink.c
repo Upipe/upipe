@@ -265,14 +265,14 @@ static int upipe_avfsink_sub_set_flow_def(struct upipe *upipe,
     const uint8_t *extradata;
     size_t extradata_size = 0;
     if (ubase_check(uref_flow_get_headers(flow_def, &extradata, &extradata_size))) {
-        extradata_alloc = malloc(extradata_size + FF_INPUT_BUFFER_PADDING_SIZE);
+        extradata_alloc = malloc(extradata_size + AV_INPUT_BUFFER_PADDING_SIZE);
         if (unlikely(extradata_alloc == NULL)) {
             upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
             return UBASE_ERR_ALLOC;
         }
         memcpy(extradata_alloc, extradata, extradata_size);
         memset(extradata_alloc + extradata_size, 0,
-               FF_INPUT_BUFFER_PADDING_SIZE);
+               AV_INPUT_BUFFER_PADDING_SIZE);
     } else if (!ubase_ncmp(def, "block.h264.") ||
                !ubase_ncmp(def, "block.aac.")) {
         upipe_err(upipe, "global headers required");
@@ -389,7 +389,7 @@ static int upipe_avfsink_sub_set_flow_def(struct upipe *upipe,
     }
 
     if (extradata_alloc != NULL) {
-        codec->flags |= CODEC_FLAG_GLOBAL_HEADER;
+        codec->flags |= AV_CODEC_FLAG_GLOBAL_HEADER;
         codec->extradata_size = extradata_size;
         codec->extradata = extradata_alloc;
     }
@@ -909,9 +909,12 @@ static int upipe_avfsink_set_uri(struct upipe *upipe, const char *uri)
 static int upipe_avfsink_control(struct upipe *upipe, int command, va_list args)
 {
     UBASE_HANDLED_RETURN(upipe_avfsink_control_subs(upipe, command, args));
-    UBASE_HANDLED_RETURN(upipe_control_provide_request(upipe, command, args));
 
     switch (command) {
+        case UPIPE_REGISTER_REQUEST:
+        case UPIPE_UNREGISTER_REQUEST:
+            return upipe_control_provide_request(upipe, command, args);
+
         case UPIPE_SET_FLOW_DEF: {
             struct uref *flow_def = va_arg(args, struct uref *);
             return upipe_avfsink_set_flow_def(upipe, flow_def);

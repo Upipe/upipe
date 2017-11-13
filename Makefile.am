@@ -5,7 +5,18 @@ if BUILD_LUAJIT
 SUBDIRS += luajit
 endif
 
-dist_pkgdata_DATA = doc/fdl-1.3.mkdoc doc/intro.mkdoc doc/overview.mkdoc doc/template.mkdoc doc/top.mkdoc doc/html_title.tmpl doc/mkdoc.conf doc/rules.mkdoc doc/reference.mkdoc doc/tutorials.mkdoc doc/dependencies.dot
+EXTRA_DIST = doc/changelog.mkdoc \
+             doc/dependencies.dot \
+             doc/fdl-1.3.mkdoc \
+             doc/html_title.tmpl \
+             doc/intro.mkdoc \
+             doc/mkdoc.conf \
+             doc/overview.mkdoc \
+             doc/reference.mkdoc \
+             doc/rules.mkdoc \
+             doc/template.mkdoc \
+             doc/top.mkdoc \
+             doc/tutorials.mkdoc
 
 doc: doc/dependencies.png
 	mkdoc -I include `cd include; ls */*.h`

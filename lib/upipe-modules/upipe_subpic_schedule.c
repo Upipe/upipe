@@ -293,7 +293,7 @@ static void upipe_subpic_schedule_sub_handle_subpic(struct upipe *upipe,
         uref_clock_get_pts_prog(next, &date_next);
 
         if (date_next > date) /* The next subpicture is in advance */
-            return;
+            break;
 
         uint64_t duration;
         if (unlikely(!ubase_check(uref_clock_get_duration(next, &duration))))
@@ -308,7 +308,9 @@ static void upipe_subpic_schedule_sub_handle_subpic(struct upipe *upipe,
         upipe_subpic_schedule_sub->uref = next;
     }
 
-    /* did not find a newer subpicture */
+    uref = upipe_subpic_schedule_sub->uref;
+    if (uref && uref->ubuf)
+        upipe_subpic_schedule_sub_output(upipe, uref_dup(uref), NULL);
 }
 
 /** @internal @This schedules sub pictures
@@ -325,9 +327,6 @@ static void upipe_subpic_schedule_handle_subpics(struct upipe *upipe, uint64_t d
         struct upipe *sub = &upipe_subpic_schedule_sub->upipe;
 
         upipe_subpic_schedule_sub_handle_subpic(sub, date);
-        struct uref *uref = upipe_subpic_schedule_sub->uref;
-        if (uref && uref->ubuf)
-            upipe_subpic_schedule_sub_output(sub, uref_dup(uref), NULL);
     }
 }
 
