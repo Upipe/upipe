@@ -76,7 +76,9 @@ if HAVE_SWSCALE
 if HAVE_SWRESAMPLE
 noinst_PROGRAMS += transcode
 if HAVE_EV
+if HAVE_X264
 noinst_PROGRAMS += ugrid
+endif
 endif
 
 if HAVE_DLFCN_H
