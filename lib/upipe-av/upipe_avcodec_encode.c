@@ -409,7 +409,7 @@ static void upipe_avcenc_close(struct upipe *upipe)
             /* Feed avcodec with the last incomplete uref (sound only). */
             upipe_avcenc_encode_audio(upipe, NULL);
 
-        if (context->codec->capabilities & CODEC_CAP_DELAY) {
+        if (context->codec->capabilities & AV_CODEC_CAP_DELAY) {
             /* Feed avcodec with NULL frames to output the remaining packets. */
             while (upipe_avcenc_encode_frame(upipe, NULL, NULL));
         }
@@ -739,7 +739,7 @@ static void upipe_avcenc_encode_audio(struct upipe *upipe,
     frame->channel_layout = context->channel_layout;
 
     /* TODO replace with umem */
-    uint8_t *buf = malloc(size + FF_INPUT_BUFFER_PADDING_SIZE);
+    uint8_t *buf = malloc(size + AV_INPUT_BUFFER_PADDING_SIZE);
     if (unlikely(buf == NULL)) {
         upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
         return;
@@ -958,9 +958,9 @@ static int upipe_avcenc_check_flow_format(struct upipe *upipe,
         return UBASE_ERR_INVALID;
 
     if (ubase_check(uref_flow_get_global(flow_format)))
-        upipe_avcenc->context->flags |= CODEC_FLAG_GLOBAL_HEADER;
+        upipe_avcenc->context->flags |= AV_CODEC_FLAG_GLOBAL_HEADER;
     else
-        upipe_avcenc->context->flags &= ~CODEC_FLAG_GLOBAL_HEADER;
+        upipe_avcenc->context->flags &= ~AV_CODEC_FLAG_GLOBAL_HEADER;
 
     if (!strcmp(upipe_avcenc->context->codec->name, "libfdk_aac")) {
         enum uref_mpga_encaps encaps = uref_mpga_flow_infer_encaps(flow_format);
@@ -973,7 +973,7 @@ static int upipe_avcenc_check_flow_format(struct upipe *upipe,
                 upipe_avcenc_set_option(upipe, "latm", "1");
                 break;
             case UREF_MPGA_ENCAPS_RAW:
-                upipe_avcenc->context->flags |= CODEC_FLAG_GLOBAL_HEADER;
+                upipe_avcenc->context->flags |= AV_CODEC_FLAG_GLOBAL_HEADER;
                 upipe_avcenc_set_option(upipe, "latm", "0");
                 break;
         }
@@ -1143,8 +1143,8 @@ static int upipe_avcenc_set_flow_def(struct upipe *upipe, struct uref *flow_def)
         context->height = vsize;
 
         if (!ubase_check(uref_pic_get_progressive(flow_def))) {
-            context->flags |= CODEC_FLAG_INTERLACED_DCT |
-                              CODEC_FLAG_INTERLACED_ME;
+            context->flags |= AV_CODEC_FLAG_INTERLACED_DCT |
+                              AV_CODEC_FLAG_INTERLACED_ME;
         }
 
         upipe_avcenc_store_flow_def_check(upipe, flow_def_check);

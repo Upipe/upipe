@@ -212,7 +212,7 @@ static void upipe_av_uref_pic_free(void *opaque, uint8_t *data);
  * AVFrame.extended_data[] must also be set, but it should be the same as
  * AVFrame.data[] except for planar audio with more channels than can fit
  * in AVFrame.data[].  In that case, AVFrame.data[] shall still contain as
- * many data pointers as it can hold.  if CODEC_CAP_DR1 is not set then
+ * many data pointers as it can hold.  if AV_CODEC_CAP_DR1 is not set then
  * get_buffer() must call avcodec_default_get_buffer() instead of providing
  * buffers allocated by some other means.
  *
@@ -361,7 +361,7 @@ static int upipe_avcdec_get_buffer_pic(struct AVCodecContext *context,
      * later. */
     uref->uchain.next = uref_to_uchain(flow_def_attr);
 
-    if (!(context->codec->capabilities & CODEC_CAP_DR1)) {
+    if (!(context->codec->capabilities & AV_CODEC_CAP_DR1)) {
         upipe_verbose(upipe, "no direct rendering, using default");
         return avcodec_default_get_buffer2(context, frame, 0);
     }
@@ -533,7 +533,7 @@ static int upipe_avcdec_get_buffer_sound(struct AVCodecContext *context,
      * later. */
     uref->uchain.next = uref_to_uchain(flow_def_attr);
 
-    if (!(context->codec->capabilities & CODEC_CAP_DR1))
+    if (!(context->codec->capabilities & AV_CODEC_CAP_DR1))
         return avcodec_default_get_buffer2(context, frame, 0);
 
     /* Direct rendering */
@@ -601,8 +601,11 @@ static bool upipe_avcdec_do_av_deal(struct upipe *upipe)
             break;
         case AVMEDIA_TYPE_VIDEO:
             context->get_buffer2 = upipe_avcdec_get_buffer_pic;
+
+#if LIBAVCODEC_VERSION_INT < AV_VERSION_INT(55, 48, 102)
             /* otherwise we need specific prepend/append/align */
             context->flags |= CODEC_FLAG_EMU_EDGE;
+#endif
             context->refcounted_frames = 1;
             break;
         case AVMEDIA_TYPE_AUDIO:
@@ -730,7 +733,7 @@ static void upipe_avcdec_close(struct upipe *upipe)
         return;
     }
 
-    if (upipe_avcdec->context->codec->capabilities & CODEC_CAP_DELAY) {
+    if (upipe_avcdec->context->codec->capabilities & AV_CODEC_CAP_DELAY) {
         /* Feed avcodec with NULL packets to output the remaining frames */
         AVPacket avpkt;
         memset(&avpkt, 0, sizeof(AVPacket));
@@ -1023,7 +1026,7 @@ static void upipe_avcdec_output_pic(struct upipe *upipe, struct upump **upump_p)
         return;
     }
 
-    if (!(context->codec->capabilities & CODEC_CAP_DR1)) {
+    if (!(context->codec->capabilities & AV_CODEC_CAP_DR1)) {
         /* Not direct rendering, copy data. */
         uint8_t planes;
         if (unlikely(!ubase_check(uref_pic_flow_get_planes(flow_def_attr, &planes)))) {
@@ -1139,7 +1142,7 @@ static void upipe_avcdec_output_sound(struct upipe *upipe,
         return;
     }
 
-    if (!(context->codec->capabilities & CODEC_CAP_DR1)) {
+    if (!(context->codec->capabilities & AV_CODEC_CAP_DR1)) {
         /* Not direct rendering, copy data. */
         uint8_t *buffers[AV_NUM_DATA_POINTERS];
         if (unlikely(!ubase_check(uref_sound_write_uint8_t(uref, 0, -1,
@@ -1288,7 +1291,7 @@ static bool upipe_avcdec_decode(struct upipe *upipe, struct uref *uref,
     av_init_packet(&avpkt);
 
     /* avcodec input buffer needs to be at least 4-byte aligned and
-       FF_INPUT_BUFFER_PADDING_SIZE larger than actual input size.
+       AV_INPUT_BUFFER_PADDING_SIZE larger than actual input size.
        Thus, extract ubuf content in a properly allocated buffer.
        Padding must be zeroed. */
     size_t size = 0;
@@ -1303,7 +1306,7 @@ static bool upipe_avcdec_decode(struct upipe *upipe, struct uref *uref,
     upipe_verbose_va(upipe, "Received packet %"PRIu64" - size : %d",
                      upipe_avcdec->counter, avpkt.size);
     /* TODO replace with umem */
-    avpkt.data = malloc(avpkt.size + FF_INPUT_BUFFER_PADDING_SIZE);
+    avpkt.data = malloc(avpkt.size + AV_INPUT_BUFFER_PADDING_SIZE);
     if (unlikely(avpkt.data == NULL)) {
         uref_free(uref);
         upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
@@ -1311,7 +1314,7 @@ static bool upipe_avcdec_decode(struct upipe *upipe, struct uref *uref,
     }
     uref_block_extract(uref, 0, avpkt.size, avpkt.data);
     ubuf_free(uref_detach_ubuf(uref));
-    memset(avpkt.data + avpkt.size, 0, FF_INPUT_BUFFER_PADDING_SIZE);
+    memset(avpkt.data + avpkt.size, 0, AV_INPUT_BUFFER_PADDING_SIZE);
 
     uref_pic_set_number(uref, upipe_avcdec->counter++);
     uref_clock_get_rate(uref, &upipe_avcdec->drift_rate);
@@ -1380,14 +1383,14 @@ static int upipe_avcdec_set_flow_def(struct upipe *upipe, struct uref *flow_def)
     const uint8_t *extradata;
     size_t extradata_size = 0;
     if (ubase_check(uref_flow_get_headers(flow_def, &extradata, &extradata_size))) {
-        extradata_alloc = malloc(extradata_size + FF_INPUT_BUFFER_PADDING_SIZE);
+        extradata_alloc = malloc(extradata_size + AV_INPUT_BUFFER_PADDING_SIZE);
         if (unlikely(extradata_alloc == NULL)) {
             upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
             return UBASE_ERR_ALLOC;
         }
         memcpy(extradata_alloc, extradata, extradata_size);
         memset(extradata_alloc + extradata_size, 0,
-               FF_INPUT_BUFFER_PADDING_SIZE);
+               AV_INPUT_BUFFER_PADDING_SIZE);
     }
 
     /* Extract relevant attributes to flow def check. */
