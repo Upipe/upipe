@@ -6,7 +6,6 @@ libupipe_v210_la_LIBADD = $(top_builddir)/lib/upipe/libupipe.la
 libupipe_v210_la_LDFLAGS = -no-undefined
 if HAVE_X86ASM
 libupipe_v210_la_SOURCES += v210dec.asm v210dec.h v210enc.asm v210enc.h
-libupipe_v210_la_CPPFLAGS += -DHAVE_X86ASM
 endif
 
 pkgconfigdir = $(libdir)/pkgconfig

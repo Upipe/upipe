@@ -14,7 +14,6 @@ libupipe_hbrmt_la_SOURCES += sdidec.asm \
     sdidec.h \
     sdienc.asm \
     sdienc.h
-libupipe_hbrmt_la_CPPFLAGS += -DHAVE_X86ASM
 endif
 
 pkgconfigdir = $(libdir)/pkgconfig
