@@ -91,7 +91,7 @@ then
     fi
 fi
 
-AM_CONDITIONAL(HAVE_X86_ASM, test -n "${NASM}" -a -n "${NASMFLAGS}")
+AM_CONDITIONAL(HAVE_X86ASM, test -n "${NASM}" -a -n "${NASMFLAGS}")
 
 # add -prefer-non-pic so libtool doesn't add -fPIC, which nasm doesn't understand
 NASMFLAGS="${NASMFLAGS} -DPIC -prefer-non-pic -Pconfig.asm -I\$(top_builddir)/x86/ -I\$(top_srcdir)/x86/"
