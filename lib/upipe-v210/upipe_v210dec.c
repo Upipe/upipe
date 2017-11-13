@@ -193,17 +193,8 @@ static void v210dec_setup_asm(struct upipe *upipe, bool assembly)
         return;
 
 #if defined(HAVE_X86_ASM)
-#if !defined (__APPLE__)
-#if defined(__clang__) && (__clang_major__ < 3 || (__clang_major__ == 3 && __clang_minor__ <= 8))
-#ifdef __SSSE3__
-    if (1)
-#else
-    if (0)
-#endif
-#else /* not clang <= 3.8*/
-    if (__builtin_cpu_supports("ssse3"))
-#endif
-    {
+#if defined(__i686__) || defined(__x86_64__)
+    if (__builtin_cpu_supports("ssse3")) {
         v210dec->v210_to_planar_8  = upipe_v210_to_planar_8_aligned_ssse3;
         v210dec->v210_to_planar_10 = upipe_v210_to_planar_10_aligned_ssse3;
     }
