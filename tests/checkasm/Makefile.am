@@ -7,6 +7,7 @@ checkasm_LDADD = $(LDADD) $(AVUTIL_LIBS) \
     $(top_builddir)/lib/upipe-v210/libupipe_v210.la
 
 checkasm_SOURCES = checkasm.c checkasm.h timer.h \
+    v210dec.c \
     v210enc.c
 
 if HAVE_X86ASM
