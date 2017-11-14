@@ -47,13 +47,13 @@ enum upipe_rtpd_command {
 };
 
 static inline int upipe_rtpfb_get_stats(struct upipe *upipe,
-		unsigned *expected_seqnum, unsigned *last_output_seqnum,
-		size_t *buffered, size_t *nacks, size_t *repaired,
-		size_t *lost, size_t *duplicates)
+        unsigned *expected_seqnum, unsigned *last_output_seqnum,
+        size_t *buffered, size_t *nacks, size_t *repaired,
+        size_t *lost, size_t *duplicates)
 {
     return upipe_control(upipe, UPIPE_RTPFB_GET_STATS,
             UPIPE_RTPFB_SIGNATURE, expected_seqnum, last_output_seqnum,
-			buffered, nacks, repaired, lost, duplicates);
+            buffered, nacks, repaired, lost, duplicates);
 }
 
 /** @This returns the management structure for rtpfb pipes.

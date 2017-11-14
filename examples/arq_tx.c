@@ -119,21 +119,21 @@ static int catch(struct uprobe *uprobe, struct upipe *upipe,
         va_arg(args, struct upump **);
         bool *drop = va_arg(args, bool *);
 
-		const uint8_t *buf;
-		int s = -1;
-		if (!ubase_check(uref_block_read(uref, 0, &s, &buf)))
-			return UBASE_ERR_INVALID;
+        const uint8_t *buf;
+        int s = -1;
+        if (!ubase_check(uref_block_read(uref, 0, &s, &buf)))
+            return UBASE_ERR_INVALID;
 
         if (s < RTCP_SR_SIZE)
             goto unmap;
 
-		bool valid = rtp_check_hdr(buf);
-		uint8_t pt = rtcp_get_pt(buf);
+        bool valid = rtp_check_hdr(buf);
+        uint8_t pt = rtcp_get_pt(buf);
 
-		if (unlikely(!valid))
+        if (unlikely(!valid))
             goto unmap;
 
-		if (pt == RTCP_PT_SR) {
+        if (pt == RTCP_PT_SR) {
             uint32_t ntp_msw = rtcp_sr_get_ntp_time_msw(buf);
             uint32_t ntp_lsw = rtcp_sr_get_ntp_time_lsw(buf);
             if (!ubase_check(uref_clock_get_cr_sys(uref, &last_sr_cr)))
