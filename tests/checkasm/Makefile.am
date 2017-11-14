@@ -3,9 +3,11 @@ check_PROGRAMS = checkasm
 TESTS = checkasm
 
 checkasm_CPPFLAGS = -I$(top_srcdir) -I$(top_srcdir)/include -I$(top_builddir) -I$(top_builddir)/include $(AVUTIL_CFLAGS)
-checkasm_LDADD = $(LDADD) $(AVUTIL_LIBS)
+checkasm_LDADD = $(LDADD) $(AVUTIL_LIBS) \
+    $(top_builddir)/lib/upipe-v210/libupipe_v210.la
 
-checkasm_SOURCES = checkasm.c checkasm.h timer.h
+checkasm_SOURCES = checkasm.c checkasm.h timer.h \
+    v210enc.c
 
 if HAVE_X86ASM
 checkasm_SOURCES += checkasm_x86.asm timer_x86.h

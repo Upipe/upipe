@@ -67,6 +67,8 @@
 #define HAVE_RDTSC 0
 #include "timer.h"
 
+void checkasm_check_v210enc(void);
+
 struct CheckasmPerf;
 
 void *checkasm_check_func(void *func, const char *name, ...) av_printf_format(2, 3);
