@@ -724,4 +724,3 @@ struct upipe_mgr *upipe_sws_mgr_alloc(void)
 {
     return &upipe_sws_mgr;
 }
-

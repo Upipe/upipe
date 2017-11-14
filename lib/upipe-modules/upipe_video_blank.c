@@ -183,7 +183,7 @@ static void upipe_vblk_input(struct upipe *upipe,
         uref_free(uref);
         return;
     }
-    
+
     if (unlikely(!flow_def)) {
         upipe_warn(upipe, "no output flow definition");
         uref_free(uref);

@@ -260,4 +260,3 @@ static inline int upipe_ts_psid_table_merge(struct uref **sections,
     }
     return UBASE_ERR_NONE;
 }
-

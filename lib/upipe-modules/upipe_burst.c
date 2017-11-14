@@ -298,7 +298,7 @@ static struct upipe_mgr upipe_burst_mgr = {
 
 /** @This returns the burst manager.
  *
- * @return a pointer to the burst manager. 
+ * @return a pointer to the burst manager.
  */
 struct upipe_mgr *upipe_burst_mgr_alloc(void)
 {

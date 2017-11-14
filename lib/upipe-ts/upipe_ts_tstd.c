@@ -47,7 +47,7 @@
 #include <stdarg.h>
 #include <string.h>
 
-/** upipe_ts_tstd structure */ 
+/** upipe_ts_tstd structure */
 struct upipe_ts_tstd {
     /** refcount management structure */
     struct urefcount urefcount;

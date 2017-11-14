@@ -697,6 +697,6 @@ struct udict_mgr *udict_inline_mgr_alloc(unsigned int udict_pool_depth,
          i++)
         inline_mgr->stats[i] = 0;
 #endif
-    
+
     return udict_inline_mgr_to_udict_mgr(inline_mgr);
 }

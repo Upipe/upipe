@@ -84,7 +84,7 @@ static int catch(struct uprobe *uprobe, struct upipe *upipe,
 int main(int argc, char **argv)
 {
     printf("Compiled %s %s (%s)\n", __DATE__, __TIME__, __FILE__);
-    static int counter = 0; 
+    static int counter = 0;
     int x, y;
     uint8_t *buf, macropixel = 0;
     size_t stride = 0;

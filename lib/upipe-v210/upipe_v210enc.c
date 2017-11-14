@@ -455,7 +455,7 @@ static int upipe_v210enc_amend_ubuf_mgr(struct upipe *upipe,
         uref_pic_flow_set_align(flow_format, 32);
         align = 32;
     }
-    
+
 
     if (align % 32) {
         align = align * 32 / ubase_gcd(align, 32);
@@ -672,4 +672,3 @@ struct upipe_mgr *upipe_v210enc_mgr_alloc(void)
 {
     return &upipe_v210enc_mgr;
 }
-

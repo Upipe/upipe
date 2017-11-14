@@ -207,7 +207,7 @@ static void upipe_ts_pese_work(struct upipe *upipe, struct upump **upump_p)
     size_t pes_length = upipe_ts_pese->next_pes_size + header_size -
                         PES_HEADER_SIZE;
     if (pes_length > UINT16_MAX) {
-        if (unlikely((upipe_ts_pese->pes_id & PES_STREAM_ID_VIDEO_MPEG) != 
+        if (unlikely((upipe_ts_pese->pes_id & PES_STREAM_ID_VIDEO_MPEG) !=
                      PES_STREAM_ID_VIDEO_MPEG))
             upipe_warn(upipe, "PES length > 65535 for a non-video stream");
         pes_set_length(buffer, 0);

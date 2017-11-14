@@ -135,8 +135,8 @@ UPIPE_HELPER_UPUMP_MGR(upipe_osx_audioqueue_sink, upump_mgr);
 UPIPE_HELPER_UPUMP(upipe_osx_audioqueue_sink, watcher, upump_mgr);
 UPIPE_HELPER_UPUMP(upipe_osx_audioqueue_sink, listener, upump_mgr);
 UPIPE_HELPER_UCLOCK(upipe_osx_audioqueue_sink, uclock, uclock_request,
-					NULL, upipe_throw_provide_request,
-                                        NULL);
+                    NULL, upipe_throw_provide_request,
+                    NULL);
 
 /** @internal @This is called by AudioQueue after reading a buffer
  * @param user_data description structure of the pipe (void)
@@ -339,7 +339,7 @@ static int upipe_osx_audioqueue_sink_set_flow_def_real(struct upipe *upipe,
     }
 
     /* change volume */
-    status = AudioQueueSetParameter(queue, kAudioQueueParam_Volume, 
+    status = AudioQueueSetParameter(queue, kAudioQueueParam_Volume,
                                     upipe_osx_audioqueue_sink->volume);
     if (unlikely(status))
         upipe_warn(upipe, "fail to set volume");

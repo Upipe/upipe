@@ -223,7 +223,7 @@ static void upipe_ts_scte35p_event_wait(struct upipe *upipe,
         upipe_err(upipe, "can't create watcher");
         upipe_throw_fatal(upipe, UBASE_ERR_UPUMP);
         return;
-    } 
+    }
 
     event->upump = watcher;
     upump_start(watcher);

@@ -100,7 +100,7 @@ extern "C" {
  * Typically called from your upipe_foo_free() function.
  * @end list
  *
- * @param STRUCTURE name of your private upipe structure 
+ * @param STRUCTURE name of your private upipe structure
  * @param OUTPUT_SIZE name of the @tt {unsigned int} field of
  * your private upipe structure
  */

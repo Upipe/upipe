@@ -666,7 +666,7 @@ static void upipe_avfsink_mux(struct upipe *upipe, struct upump **upump_p)
             upipe_release(upipe_avfsink_sub_to_upipe(input));
             return;
         }
-        uref_block_extract(uref, 0, avpkt.size, avpkt.data); 
+        uref_block_extract(uref, 0, avpkt.size, avpkt.data);
         uref_free(uref);
 
         if (input->next_dts > upipe_avfsink->highest_next_dts) {

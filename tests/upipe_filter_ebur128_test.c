@@ -92,7 +92,7 @@ int main(int argc, char **argv)
                                                          umem_mgr, -1, -1);
     assert(udict_mgr != NULL);
     struct uref_mgr *uref_mgr = uref_std_mgr_alloc(UREF_POOL_DEPTH,
-                                                   udict_mgr, 0); 
+                                                   udict_mgr, 0);
     assert(uref_mgr != NULL);
 
     /* sound */

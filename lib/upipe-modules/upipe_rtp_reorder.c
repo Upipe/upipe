@@ -318,7 +318,7 @@ static void upipe_rtpr_list_add(struct upipe *upipe, struct uref *uref)
         /* Assume new stream if too many consecutive late packets */
         if (rtpr->num_consecutive_late > 200)
             rtpr->last_sent_seqnum = UINT64_MAX;
-        
+
         return;
     }
 
@@ -609,7 +609,7 @@ static void upipe_rtpr_free(struct urefcount *urefcount_real)
     struct upipe_rtpr *upipe_rtpr =
            upipe_rtpr_from_urefcount_real(urefcount_real);
     struct upipe *upipe = upipe_rtpr_to_upipe(upipe_rtpr);
-    
+
     upipe_dbg_va(upipe, "releasing pipe %p", upipe);
     upipe_throw_dead(upipe);
 

@@ -27,7 +27,7 @@
 #define __STDC_FORMAT_MACROS   1
 #define __STDC_CONSTANT_MACROS 1
 
-#include <QImage>   
+#include <QImage>
 #include <QPaintDevice>
 #include <QWebFrame>
 #include <QTimer>

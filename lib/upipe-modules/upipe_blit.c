@@ -3,7 +3,7 @@
  *
  * Authors: Sebastien Gougelet
  *          Christophe Massiot
- *          
+ *
  * Permission is hereby granted, free of charge, to any person obtaining
  * a copy of this software and associated documentation files (the
  * "Software"), to deal in the Software without restriction, including
@@ -796,7 +796,7 @@ static void upipe_blit_sort(struct upipe *upipe)
  * @param upump_p reference to pump that generated the buffer
  *
  */
-static void upipe_blit_input(struct upipe *upipe, struct uref *uref, 
+static void upipe_blit_input(struct upipe *upipe, struct uref *uref,
                              struct upump **upump_p)
 {
     struct upipe_blit *upipe_blit = upipe_blit_from_upipe(upipe);

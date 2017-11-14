@@ -69,7 +69,7 @@ static bool upipe_sws_thumbs_handle(struct upipe *upipe, struct uref *uref,
 /** @hidden */
 static int upipe_sws_thumbs_check(struct upipe *upipe, struct uref *flow_format);
 
-/** upipe_sws_thumbs structure with swscale parameters */ 
+/** upipe_sws_thumbs structure with swscale parameters */
 struct upipe_sws_thumbs {
     /** refcount management structure */
     struct urefcount urefcount;
@@ -146,7 +146,7 @@ UPIPE_HELPER_INPUT(upipe_sws_thumbs, urefs, nb_urefs, max_urefs, blockers, upipe
  *
  * @param upipe_sws_thumbs upipe_sws_thumbs structure
  */
-static inline bool upipe_sws_thumbs_set_context(struct upipe *upipe, 
+static inline bool upipe_sws_thumbs_set_context(struct upipe *upipe,
                                          struct picsize *srcsize,
                                          struct picsize *dstsize) {
     struct upipe_sws_thumbs *upipe_sws_thumbs = upipe_sws_thumbs_from_upipe(upipe);
@@ -247,16 +247,16 @@ static bool upipe_sws_thumbs_handle(struct upipe *upipe, struct uref *uref,
     surface.hsize = thumbsize->hsize;
     surface.vsize = thumbsize->vsize;
 
-    if (ratio.num * upipe_sws_thumbs->thumbratio.den > 
+    if (ratio.num * upipe_sws_thumbs->thumbratio.den >
         ratio.den * upipe_sws_thumbs->thumbratio.num ) {
         surface.vsize = (surface.hsize * ratio.den) / ratio.num;
         if (surface.vsize & 1) surface.vsize--;
-    } else if (ratio.num * upipe_sws_thumbs->thumbratio.den < 
+    } else if (ratio.num * upipe_sws_thumbs->thumbratio.den <
                ratio.den * upipe_sws_thumbs->thumbratio.num ){
         surface.hsize = (surface.vsize * ratio.num) / ratio.den;
         if (surface.hsize & 1) surface.hsize--;
     }
-    
+
     /* margins */
     margins.hsize = (thumbsize->hsize - surface.hsize)/2;
     margins.vsize = (thumbsize->vsize - surface.vsize)/2;
@@ -712,4 +712,3 @@ struct upipe_mgr *upipe_sws_thumbs_mgr_alloc(void)
 {
     return &upipe_sws_thumbs_mgr;
 }
-

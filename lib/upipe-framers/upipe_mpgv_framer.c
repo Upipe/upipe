@@ -744,7 +744,7 @@ static struct ubuf *upipe_mpgvf_extract_display(struct upipe *upipe,
     uint8_t word;
     if (unlikely(!ubase_check(uref_block_extract(uref, offset + 4, 1, &word))))
         return NULL;
-    return ubuf_block_splice(uref->ubuf, offset, MP2VSEQDX_HEADER_SIZE + 
+    return ubuf_block_splice(uref->ubuf, offset, MP2VSEQDX_HEADER_SIZE +
                                    ((word & 0x1) ? MP2VSEQDX_COLOR_SIZE : 0));
 }
 

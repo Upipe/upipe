@@ -22,7 +22,7 @@
  * TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE
  * SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
  *
- 
+
 [udp] -- data --> [dup] --> {start: front,0;} [datasink], [genaux]
 [genaux] -- aux --> [auxsink]
 
@@ -203,7 +203,7 @@ int main(int argc, char *argv[])
         }
         upipe_release(upipe_sink);
     }
-    else 
+    else
     {
         /* dup */
         struct upipe_mgr *upipe_dup_mgr = upipe_dup_mgr_alloc();

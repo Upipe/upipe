@@ -333,4 +333,3 @@ struct upipe_mgr *upipe_rtpsrc_mgr_alloc(void)
     rtpsrc_mgr->mgr.upipe_mgr_control = upipe_rtpsrc_mgr_control;
     return upipe_rtpsrc_mgr_to_upipe_mgr(rtpsrc_mgr);
 }
-

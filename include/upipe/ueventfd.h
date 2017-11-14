@@ -52,7 +52,7 @@ extern "C" {
 
 /* Test whether ueventfd can be implemented */
 #if !(defined(UPIPE_HAVE_EVENTFD) || defined(UPIPE_HAVE_PIPE))
-    #error no ueventfd implementation 
+    #error no ueventfd implementation
 #endif
 
 #ifndef FD_CLOEXEC
@@ -134,7 +134,7 @@ static inline bool ueventfd_read(struct ueventfd *fd)
                     return false;
             }
         }
-    } else 
+    } else
 #endif
     if (likely(fd->mode == UEVENTFD_MODE_PIPE)) {
         for ( ; ; ) {

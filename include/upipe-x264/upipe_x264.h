@@ -43,7 +43,7 @@ extern "C" {
 /** @This extends upipe_command with specific commands for x264. */
 enum upipe_x264_command {
     UPIPE_X264_SENTINEL = UPIPE_CONTROL_LOCAL,
-    
+
     /** reconfigure encoder with updated parameters */
     UPIPE_X264_RECONFIG,
 

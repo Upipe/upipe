@@ -847,7 +847,7 @@ static int _upipe_audiocont_get_current_input(struct upipe *upipe,
 
     *name_p = NULL;
     if (upipe_audiocont->input_cur) {
-        struct upipe_audiocont_sub *sub = 
+        struct upipe_audiocont_sub *sub =
                upipe_audiocont_sub_from_upipe(upipe_audiocont->input_cur);
         if (sub->flow_def) {
             uref_flow_get_name(sub->flow_def, name_p);

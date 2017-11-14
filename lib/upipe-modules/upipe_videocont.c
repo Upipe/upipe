@@ -535,7 +535,7 @@ static void upipe_videocont_input(struct upipe *upipe, struct uref *uref,
     if (unlikely(!upipe_videocont->input_cur)) {
         goto output;
     }
-    struct upipe_videocont_sub *input = 
+    struct upipe_videocont_sub *input =
            upipe_videocont_sub_from_upipe(upipe_videocont->input_cur);
     if (unlikely(ulist_empty(&input->urefs))) {
         goto output;
@@ -668,7 +668,7 @@ static int _upipe_videocont_get_current_input(struct upipe *upipe,
 
     *name_p = NULL;
     if (upipe_videocont->input_cur) {
-        struct upipe_videocont_sub *sub = 
+        struct upipe_videocont_sub *sub =
                upipe_videocont_sub_from_upipe(upipe_videocont->input_cur);
         *name_p = sub->flow_name;
     }

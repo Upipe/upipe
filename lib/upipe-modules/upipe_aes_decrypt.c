@@ -263,14 +263,14 @@ static void aes_inv_shift_rows(uint8_t state[4][4])
 {
     uint8_t tmp;
 
-    // Rotate first row 1 columns to right  
+    // Rotate first row 1 columns to right
     tmp = state[3][1];
     state[3][1] = state[2][1];
     state[2][1] = state[1][1];
     state[1][1] = state[0][1];
     state[0][1] = tmp;
 
-    // Rotate second row 2 columns to right 
+    // Rotate second row 2 columns to right
     tmp = state[0][2];
     state[0][2] = state[2][2];
     state[2][2] = tmp;

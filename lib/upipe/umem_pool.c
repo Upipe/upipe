@@ -64,7 +64,7 @@ static unsigned int umem_pool_find(struct umem_mgr *mgr, size_t wanted,
                                    size_t *real_p)
 {
     struct umem_pool_mgr *pool_mgr = umem_pool_mgr_from_umem_mgr(mgr);
-    size_t size = pool_mgr->pool0_size; 
+    size_t size = pool_mgr->pool0_size;
     unsigned int pool;
 
     for (pool = 0; pool < pool_mgr->nb_pools; pool++)

@@ -103,7 +103,7 @@ static bool upipe_avcenc_handle(struct upipe *upipe, struct uref *uref,
 static int upipe_avcenc_set_option(struct upipe *upipe,
                                    const char *option, const char *content);
 
-/** upipe_avcenc structure with avcenc parameters */ 
+/** upipe_avcenc structure with avcenc parameters */
 struct upipe_avcenc {
     /** refcount management structure */
     struct urefcount urefcount;
@@ -283,7 +283,7 @@ static bool upipe_avcenc_do_av_deal(struct upipe *upipe)
     AVCodecContext *context = upipe_avcenc->context;
 
     if (upipe_avcenc->close) {
-        upipe_notice_va(upipe, "codec %s (%s) %d closed", context->codec->name, 
+        upipe_notice_va(upipe, "codec %s (%s) %d closed", context->codec->name,
                         context->codec->long_name, context->codec->id);
         avcodec_close(context);
         return false;
@@ -297,7 +297,7 @@ static bool upipe_avcenc_do_av_deal(struct upipe *upipe)
         upipe_throw_fatal(upipe, UBASE_ERR_EXTERNAL);
         return false;
     }
-    upipe_notice_va(upipe, "codec %s (%s) %d opened", context->codec->name, 
+    upipe_notice_va(upipe, "codec %s (%s) %d opened", context->codec->name,
                     context->codec->long_name, context->codec->id);
 
     return true;
@@ -332,7 +332,7 @@ static void upipe_avcenc_cb_av_deal(struct upump *upump)
     }
 
     bool was_buffered = !upipe_avcenc_check_input(upipe);
-    if (ret) 
+    if (ret)
         upipe_avcenc_output_input(upipe);
     else
         upipe_avcenc_flush_input(upipe);
@@ -1524,7 +1524,7 @@ static struct upipe *upipe_avcenc_alloc(struct upipe_mgr *mgr,
             codec = avcodec_find_encoder(codec_id);
         }
     }
-    
+
     if ((codec == NULL) ||
             (upipe_avcenc->context = avcodec_alloc_context3(codec)) == NULL) {
         uref_free(flow_def);

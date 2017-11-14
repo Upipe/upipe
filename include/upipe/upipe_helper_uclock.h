@@ -85,7 +85,7 @@ typedef int (*upipe_helper_uclock_register)(struct upipe *, struct urequest *);
  * Typically called from your upipe_foo_free() function.
  * @end list
  *
- * @param STRUCTURE name of your private upipe structure 
+ * @param STRUCTURE name of your private upipe structure
  * @param UCLOCK name of the @tt {struct uclock *} field of
  * your private upipe structure
  * @param REQUEST name of the @tt {struct urequest} field of

@@ -65,4 +65,3 @@ const uint8_t *upipe_framers_mpeg_scan(const uint8_t *restrict p,
     return p;
 }
 /* End code */
-

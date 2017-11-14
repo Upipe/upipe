@@ -57,4 +57,3 @@ static inline struct uref *uref_void_flow_alloc_def(struct uref_mgr *mgr)
 }
 #endif /* !_UPIPE_UREF_VOID_FLOW_H_ */
 #endif
-

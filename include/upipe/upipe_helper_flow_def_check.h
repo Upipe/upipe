@@ -39,7 +39,7 @@ extern "C" {
 #include <upipe/udict.h>
 #include <upipe/upipe.h>
 
-/** @This declares five functions dealing with the checking of input 
+/** @This declares five functions dealing with the checking of input
  * flow definitions in pipes.
  *
  * You must add one member to your private upipe structure, for instance:

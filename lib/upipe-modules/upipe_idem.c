@@ -44,7 +44,7 @@
 #include <stdarg.h>
 #include <assert.h>
 
-/** upipe_idem structure */ 
+/** upipe_idem structure */
 struct upipe_idem {
     /** refcount management structure */
     struct urefcount urefcount;

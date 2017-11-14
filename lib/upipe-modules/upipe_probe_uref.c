@@ -51,7 +51,7 @@
 #include <assert.h>
 #include <sys/param.h>
 
-/** upipe_probe_uref structure */ 
+/** upipe_probe_uref structure */
 struct upipe_probe_uref {
     /** refcount management structure */
     struct urefcount urefcount;
