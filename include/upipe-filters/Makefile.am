@@ -10,4 +10,5 @@ myinclude_HEADERS = \
 	upipe_audio_graph.h \
 	upipe_rtp_feedback.h \
 	upipe_rtcp_fb_receiver.h \
-	upipe_filter_vanc.h
+	upipe_filter_vanc.h \
+	upipe_zoneplate_source.h

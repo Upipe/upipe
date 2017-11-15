@@ -10,7 +10,10 @@ libupipe_filters_la_SOURCES = \
 	upipe_audio_bar.c \
 	upipe_audio_graph.c \
 	ebur128/ebur128.c \
-	ebur128/ebur128.h
+	ebur128/ebur128.h \
+	upipe_zoneplate_source.c \
+	zoneplate/videotestsrc.c \
+	zoneplate/videotestsrc.h
 
 if HAVE_BITSTREAM
 libupipe_filters_la_SOURCES += upipe_filter_vanc.c \
