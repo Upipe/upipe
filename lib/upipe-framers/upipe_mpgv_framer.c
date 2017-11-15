@@ -306,7 +306,7 @@ static struct upipe *upipe_mpgvf_alloc(struct upipe_mgr *mgr,
     uref_init(&upipe_mpgvf->au_uref_s);
     upipe_mpgvf_flush_dates(upipe);
     upipe_mpgvf->drift_rate.num = upipe_mpgvf->drift_rate.den = 0;
-    upipe_mpgvf->type == UINT8_MAX;
+    upipe_mpgvf->type = UINT8_MAX;
     upipe_mpgvf->sequence_header = upipe_mpgvf->sequence_ext =
         upipe_mpgvf->sequence_display = NULL;
     upipe_throw_ready(upipe);
