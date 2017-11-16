@@ -9,6 +9,7 @@ checkasm_LDADD = $(LDADD) $(AVUTIL_LIBS) \
 
 checkasm_SOURCES = checkasm.c checkasm.h timer.h \
     sdidec.c \
+    sdienc.c \
     v210dec.c \
     v210enc.c
 

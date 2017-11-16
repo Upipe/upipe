@@ -75,6 +75,7 @@ static const struct {
     void (*func)(void);
 } tests[] = {
     { "sdidec", checkasm_check_sdidec },
+    { "sdienc", checkasm_check_sdienc },
     { "v210dec", checkasm_check_v210dec },
     { "v210enc", checkasm_check_v210enc },
     { NULL, NULL }
