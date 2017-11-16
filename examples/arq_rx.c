@@ -200,7 +200,7 @@ static int catch(struct uprobe *uprobe, struct upipe *upipe,
 
 int main(int argc, char *argv[])
 {
-    const char *dirpath, *latency, *suffix = NULL;
+    const char *dirpath, *latency;
     int opt;
 
     /* parse options */
