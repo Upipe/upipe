@@ -74,6 +74,7 @@ static const struct {
     const char *name;
     void (*func)(void);
 } tests[] = {
+    { "sdidec", checkasm_check_sdidec },
     { "v210dec", checkasm_check_v210dec },
     { "v210enc", checkasm_check_v210enc },
     { NULL, NULL }
