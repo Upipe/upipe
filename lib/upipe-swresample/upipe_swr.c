@@ -419,7 +419,7 @@ static int upipe_swr_control(struct upipe *upipe, int command, va_list args)
  * @param mgr common management structure
  * @param uprobe structure used to raise events
  * @param signature signature of the pipe allocator
- * @param args optional arguments, requires flowdef  
+ * @param args optional arguments, requires flowdef
  * @return pointer to upipe or NULL in case of allocation error
  */
 static struct upipe *upipe_swr_alloc(struct upipe_mgr *mgr,
