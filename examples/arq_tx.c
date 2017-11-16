@@ -78,8 +78,9 @@
 #define READ_SIZE 4096
 
 static void usage(const char *argv0) {
-    fprintf(stdout, "Usage: %s [-d] <udp source> <dest dir/prefix>\n", argv0);
-    fprintf(stdout, "   -d: force debug log level\n");
+    fprintf(stdout, "Usage: %s [-d] <udp source> <udp dest> <latency>\n", argv0);
+    fprintf(stdout, "   -d: more verbose\n");
+    fprintf(stdout, "   -q: more quiet\n");
     exit(EXIT_FAILURE);
 }
 
@@ -227,8 +228,11 @@ int main(int argc, char *argv[])
     enum uprobe_log_level loglevel = UPROBE_LOG_DEBUG;
 
     /* parse options */
-    while ((opt = getopt(argc, argv, "d")) != -1) {
+    while ((opt = getopt(argc, argv, "qd")) != -1) {
         switch (opt) {
+            case 'q':
+                loglevel++;
+                break;
             case 'd':
                 loglevel--;
                 break;
