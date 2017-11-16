@@ -1,3 +1,5 @@
+void upipe_uyvy_to_sdi_c(uint8_t *dst, const uint8_t *y, uintptr_t pixels);
+
 /* process mmsize/2 samples per iteration */
 void upipe_uyvy_to_sdi_aligned_ssse3(uint8_t *dst, const uint8_t *y, uintptr_t pixels);
 void upipe_uyvy_to_sdi_unaligned_ssse3(uint8_t *dst, const uint8_t *y, uintptr_t pixels);
