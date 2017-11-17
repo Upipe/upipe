@@ -63,7 +63,7 @@ static bool upipe_genaux_handle(struct upipe *upipe, struct uref *uref,
 /** @hidden */
 static int upipe_genaux_check(struct upipe *upipe, struct uref *flow_format);
 
-/** upipe_genaux structure */ 
+/** upipe_genaux structure */
 struct upipe_genaux {
     /** refcount management structure */
     struct urefcount urefcount;

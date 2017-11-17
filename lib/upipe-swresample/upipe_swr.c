@@ -70,7 +70,7 @@ static bool upipe_swr_handle(struct upipe *upipe, struct uref *uref,
 /** @hidden */
 static int upipe_swr_check(struct upipe *upipe, struct uref *flow_format);
 
-/** upipe_swr structure with swresample parameters */ 
+/** upipe_swr structure with swresample parameters */
 struct upipe_swr {
     /** refcount management structure */
     struct urefcount urefcount;
@@ -542,4 +542,3 @@ struct upipe_mgr *upipe_swr_mgr_alloc(void)
 {
     return &upipe_swr_mgr;
 }
-

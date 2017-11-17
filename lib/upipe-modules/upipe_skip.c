@@ -55,7 +55,7 @@
 
 #define EXPECTED_FLOW_DEF "block."
 
-/** upipe_skip structure */ 
+/** upipe_skip structure */
 struct upipe_skip {
     /** refcount management structure */
     struct urefcount urefcount;

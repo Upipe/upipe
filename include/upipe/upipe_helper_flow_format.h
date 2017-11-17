@@ -89,7 +89,7 @@ typedef int (*upipe_helper_flow_format_register)(struct upipe *,
  * Typically called from your upipe_foo_free() function.
  * @end list
  *
- * @param STRUCTURE name of your private upipe structure 
+ * @param STRUCTURE name of your private upipe structure
  * @param REQUEST name of the @tt {struct urequest} field of
  * your private upipe structure
  * @param CHECK function called after a uref manager has been received

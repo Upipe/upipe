@@ -172,7 +172,7 @@ static void upipe_s302f_work(struct upipe *upipe, struct upump **upump_p)
     pair_length = pair_lengths[bits_per_sample];
     if (!pair_length)
         goto upipe_s302f_work_err;
-    
+
     num_samples = audio_packet_size / (pair_length * (num_channels / 2));
     octetrate = (uint64_t)S302_FREQUENCY * audio_packet_size / num_samples;
 

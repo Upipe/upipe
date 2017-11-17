@@ -47,7 +47,7 @@ enum upipe_qt_html_command {
     UPIPE_QT_HTML_SET_URL,
 
     UPIPE_QT_HTML_SET_SIZE,
-    
+
     UPIPE_QT_HTML_GET_SIZE,
 
     UPIPE_QT_HTML_SET_FRAMERATE,

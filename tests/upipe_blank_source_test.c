@@ -77,7 +77,7 @@
 struct upipe *blksrc;
 
 /** uref manager */
-struct uref_mgr *uref_mgr; 
+struct uref_mgr *uref_mgr;
 
 /** phony pipe to test upipe_blksrc */
 struct blksrc_test {

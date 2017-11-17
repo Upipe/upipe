@@ -60,7 +60,7 @@ static inline void ip_set_len(uint8_t *p_ip, uint16_t len)
 
 static inline void ip_set_id(uint8_t *p_ip, uint16_t id)
 {
-    
+
     p_ip[4] = (id & 0xff00) >> 8;
     p_ip[5] = (id & 0xff);
 }
@@ -165,4 +165,3 @@ int upipe_udp_open_socket(struct upipe *upipe, const char *_uri, int ttl,
                           bool *use_raw, uint8_t *raw_header);
 
 void udp_raw_set_len(uint8_t *raw_header, uint16_t len);
-

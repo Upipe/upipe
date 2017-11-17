@@ -406,4 +406,3 @@ struct upipe_mgr *upipe_fdec_mgr_alloc(void)
     fdec_mgr->mgr.upipe_mgr_control = upipe_fdec_mgr_control;
     return upipe_fdec_mgr_to_upipe_mgr(fdec_mgr);
 }
-

@@ -58,7 +58,7 @@ extern "C" {
  * Returns a pointer to the private uprobe_foo structure.
  * @end list
  *
- * @param STRUCTURE name of your private uprobe structure 
+ * @param STRUCTURE name of your private uprobe structure
  * @param UPROBE name of the @tt{struct uprobe} field of
  * your private uprobe structure
  */

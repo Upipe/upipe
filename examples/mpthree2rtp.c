@@ -172,7 +172,7 @@ int main(int argc, char **argv)
     /* event-loop management */
     struct upump_mgr *upump_mgr = upump_ev_mgr_alloc_default(UPUMP_POOL,
             UPUMP_BLOCKER_POOL);
-    
+
     /* mem management */
     struct umem_mgr *umem_mgr = umem_pool_mgr_alloc_simple(UMEM_POOL);
     struct udict_mgr *udict_mgr = udict_inline_mgr_alloc(UDICT_POOL_DEPTH,
@@ -181,7 +181,7 @@ int main(int argc, char **argv)
                                                    0);
     /* monotonic clock */
     struct uclock *uclock = uclock_std_alloc(0);
-    
+
     /* global probes */
     mainprobe = uprobe_stdio_alloc(NULL, stdout, loglevel);
     assert(mainprobe != NULL);

@@ -633,4 +633,3 @@ struct upipe_mgr *upipe_ffmt_mgr_alloc(void)
     ffmt_mgr->mgr.upipe_mgr_control = upipe_ffmt_mgr_control;
     return upipe_ffmt_mgr_to_upipe_mgr(ffmt_mgr);
 }
-

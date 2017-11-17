@@ -74,7 +74,7 @@ extern "C" {
  * Releases the iconv handle.
  * @end list
  *
- * @param STRUCTURE name of your private upipe structure 
+ * @param STRUCTURE name of your private upipe structure
  * @param NATIVE_ENCODING native encoding to convert to ("UTF-8")
  * @param CURRENT_ENCODING name of the @tt{const char *} field of
  * your private upipe structure

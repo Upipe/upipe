@@ -214,7 +214,7 @@ static struct upipe *test_alloc(struct upipe_mgr *mgr, struct uprobe *uprobe,
     struct sws_test *sws_test = malloc(sizeof(struct sws_test));
     assert(sws_test != NULL);
     sws_test->pic = NULL;
-	upipe_init(&sws_test->upipe, mgr, uprobe);
+    upipe_init(&sws_test->upipe, mgr, uprobe);
     upipe_throw_ready(&sws_test->upipe);
     return &sws_test->upipe;
 }
@@ -398,7 +398,7 @@ int main(int argc, char **argv)
 
     struct upipe *sws = upipe_flow_alloc(upipe_sws_mgr,
             uprobe_pfx_alloc(uprobe_use(logger), UPROBE_LOG_LEVEL, "sws"),
-            output_flow); 
+            output_flow);
     assert(sws != NULL);
     ubase_assert(upipe_set_flow_def(sws, pic_flow));
     uref_free(output_flow);
@@ -434,7 +434,7 @@ int main(int argc, char **argv)
 
     /* release managers */
     ubuf_mgr_release(ubuf_mgr);
-    uref_mgr_release(uref_mgr); 
+    uref_mgr_release(uref_mgr);
     uprobe_release(logger);
     uprobe_clean(&uprobe);
     udict_mgr_release(udict_mgr);

@@ -114,7 +114,7 @@ static int uprobe_gl_sink_render(struct uprobe *uprobe,
 
     if (!upipe_gl_texture_load_uref(uref, uprobe_gl_sink->texture)) {
         upipe_err(upipe, "Could not map picture plane");
-        return UBASE_ERR_EXTERNAL; 
+        return UBASE_ERR_EXTERNAL;
     }
 
     uref_pic_size(uref, &w, &h, NULL);

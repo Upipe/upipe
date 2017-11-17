@@ -1302,7 +1302,7 @@ static inline int uref_##group##_cmp_##attr(struct uref *uref1,             \
         return -1;                                                          \
     return v1 - v2;                                                         \
 }
- 
+
 
 /* @This allows to define accessors for a small_unsigned attribute, with a name
  * depending on printf arguments.

@@ -52,7 +52,7 @@
 
 #define EXPECTED_FLOW_DEF "block."
 
-/** upipe_htons structure */ 
+/** upipe_htons structure */
 struct upipe_htons {
     /** refcount management structure */
     struct urefcount urefcount;

@@ -175,10 +175,10 @@ int main(int argc, char **argv)
     /* uref and mem management */
     struct umem_mgr *umem_mgr = umem_alloc_mgr_alloc();
     assert(umem_mgr != NULL);
-    struct udict_mgr *udict_mgr = udict_inline_mgr_alloc(UDICT_POOL_DEPTH, 
+    struct udict_mgr *udict_mgr = udict_inline_mgr_alloc(UDICT_POOL_DEPTH,
                 umem_mgr, -1, -1);
-    assert(udict_mgr != NULL);                                     
-    struct uref_mgr *uref_mgr = uref_std_mgr_alloc(UREF_POOL_DEPTH, udict_mgr, 0); 
+    assert(udict_mgr != NULL);
+    struct uref_mgr *uref_mgr = uref_std_mgr_alloc(UREF_POOL_DEPTH, udict_mgr, 0);
     assert(uref_mgr != NULL);
     main_upump_mgr = upump_ev_mgr_alloc_default(UPUMP_POOL, UPUMP_BLOCKER_POOL);
     assert(main_upump_mgr != NULL);

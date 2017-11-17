@@ -518,4 +518,3 @@ int ubuf_sound_mem_mgr_add_plane(struct ubuf_mgr *mgr, const char *channel)
 
     return ubuf_sound_common_mgr_add_plane(mgr, channel);
 }
-

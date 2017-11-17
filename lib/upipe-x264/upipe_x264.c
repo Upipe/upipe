@@ -912,7 +912,7 @@ static bool upipe_x264_handle(struct upipe *upipe, struct uref *uref,
                                   &nals, &nals_num, NULL, &pic);
         x264_encoder_parameters(upipe_x264->encoder, &curparams);
     }
-    
+
     if (unlikely(ret < 0)) {
         upipe_warn(upipe, "Error encoding frame");
         uref_free(uref);

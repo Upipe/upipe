@@ -58,7 +58,7 @@
 
 #define EXPECTED_FLOW_DEF "block."
 
-/** upipe_multicat_sink structure */ 
+/** upipe_multicat_sink structure */
 struct upipe_multicat_sink {
     /** refcount management structure */
     struct urefcount urefcount;
