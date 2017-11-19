@@ -44,9 +44,7 @@ if HAVE_DLFCN_H
 SUBDIRS += upipe-blackmagic
 endif
 
-if HAVE_AVUTIL
 SUBDIRS += upipe-v210
-endif
 
 if HAVE_BITSTREAM
 SUBDIRS += upipe-ts upipe-framers upipe-hls upipe-hbrmt
