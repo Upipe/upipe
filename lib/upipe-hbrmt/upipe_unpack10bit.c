@@ -349,7 +349,7 @@ static struct upipe *upipe_unpack10bit_alloc(struct upipe_mgr *mgr,
     struct upipe_unpack10bit *upipe_unpack10bit = upipe_unpack10bit_from_upipe(upipe);
 
     upipe_unpack10bit->unpack = upipe_sdi_unpack_c;
-#if defined(HAVE_X86_ASM)
+#if defined(HAVE_X86ASM)
 #if defined(__i686__) || defined(__x86_64__)
     if (__builtin_cpu_supports("ssse3"))
         upipe_unpack10bit->unpack = upipe_sdi_unpack_10_ssse3;

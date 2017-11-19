@@ -9,12 +9,11 @@ libupipe_hbrmt_la_CFLAGS = $(AM_CFLAGS) $(AVUTIL_CFLAGS)
 libupipe_hbrmt_la_LIBADD = $(top_builddir)/lib/upipe/libupipe.la
 libupipe_hbrmt_la_LDFLAGS = -no-undefined
 
-if HAVE_X86_ASM
+if HAVE_X86ASM
 libupipe_hbrmt_la_SOURCES += sdidec.asm \
     sdidec.h \
     sdienc.asm \
     sdienc.h
-libupipe_hbrmt_la_CPPFLAGS += -DHAVE_X86_ASM
 endif
 
 pkgconfigdir = $(libdir)/pkgconfig
