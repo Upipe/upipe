@@ -350,7 +350,7 @@ static struct upipe *upipe_pack10bit_alloc(struct upipe_mgr *mgr,
 
     upipe_pack10bit->pack = upipe_sdi_pack_c;
 
-#if defined(HAVE_X86_ASM)
+#if defined(HAVE_X86ASM)
 #if defined(__i686__) || defined(__x86_64__)
 	if (__builtin_cpu_supports("ssse3"))
         upipe_pack10bit->pack = upipe_uyvy_to_sdi_unaligned_ssse3;

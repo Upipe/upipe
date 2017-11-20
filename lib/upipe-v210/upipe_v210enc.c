@@ -613,7 +613,7 @@ static struct upipe *upipe_v210enc_alloc(struct upipe_mgr *mgr,
     upipe_v210enc->pack_line_8  = v210enc_planar_pack_8_c;
     upipe_v210enc->pack_line_10 = v210enc_planar_pack_10_c;
 
-#if defined(HAVE_X86_ASM)
+#if defined(HAVE_X86ASM)
 #if defined(__i686__) || defined(__x86_64__)
     if (__builtin_cpu_supports("avx2")) {
         upipe_v210enc->pack_line_8  = upipe_v210_planar_pack_8_avx2;

@@ -88,8 +88,9 @@ static struct sockaddr_storage addr;
 static socklen_t addr_len;
 
 static void usage(const char *argv0) {
-    fprintf(stdout, "Usage: %s [-d]  <udp source> <dest dir/prefix> <latency>", argv0);
-    fprintf(stdout, "   -d: force debug log level\n");
+    fprintf(stdout, "Usage: %s [-d]  <udp source> <udp dest> <latency>", argv0);
+    fprintf(stdout, "   -d: more verbose\n");
+    fprintf(stdout, "   -q: more quiet\n");
     exit(EXIT_FAILURE);
 }
 
@@ -200,7 +201,7 @@ static int catch(struct uprobe *uprobe, struct upipe *upipe,
 
 int main(int argc, char *argv[])
 {
-    const char *dirpath, *latency, *suffix = NULL;
+    const char *dirpath, *latency;
     int opt;
 
     /* parse options */

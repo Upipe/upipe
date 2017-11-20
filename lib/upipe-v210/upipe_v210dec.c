@@ -192,7 +192,7 @@ static void v210dec_setup_asm(struct upipe *upipe, bool assembly)
     if (!assembly)
         return;
 
-#if defined(HAVE_X86_ASM)
+#if defined(HAVE_X86ASM)
 #if defined(__i686__) || defined(__x86_64__)
     if (__builtin_cpu_supports("ssse3")) {
         v210dec->v210_to_planar_8  = upipe_v210_to_planar_8_aligned_ssse3;
