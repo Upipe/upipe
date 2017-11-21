@@ -24,9 +24,10 @@
 
 #include "sdienc.h"
 
-void upipe_uyvy_to_sdi_c(uint8_t *dst, const uint8_t *y, uintptr_t size)
+void upipe_uyvy_to_sdi_c(uint8_t *dst, const uint8_t *y, uintptr_t pixels)
 {
     struct ubits s;
+    uintptr_t size = pixels * 2; /* change to number of samples */
     ubits_init(&s, dst, size * 10 / 8);
 
     for (int i = 0; i < size; i ++)
