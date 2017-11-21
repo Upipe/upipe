@@ -406,7 +406,7 @@ static int catch_rewrite_date(struct uprobe *uprobe, struct upipe *upipe,
     if (type == UREF_DATE_NONE)
         return UBASE_ERR_NONE;
 
-    if (probe_rewrite_date->video) {
+    if (probe_rewrite_date->video || !video_output.pipe) {
         uint64_t delta = (TS_CLOCK_MAX + date -
                           (last_cr % TS_CLOCK_MAX)) % TS_CLOCK_MAX;
         if (delta < MAX_GAP)
