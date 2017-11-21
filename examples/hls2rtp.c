@@ -790,11 +790,11 @@ static int catch_variant(struct uprobe *uprobe,
                     uref_audio = uref;
             }
             else if (ubase_check(uref_flow_match_def(uref, "sound."))) {
-                if (ubase_check(uref_hls_get_default(uref)))
+                if (ubase_check(uref_hls_get_default(uref)) || !uref_audio)
                     uref_audio = uref;
             }
             else if (ubase_check(uref_flow_match_def(uref, "pic."))) {
-                if (ubase_check(uref_hls_get_default(uref)))
+                if (ubase_check(uref_hls_get_default(uref)) || !uref_video)
                     uref_video = uref;
             }
             else {
