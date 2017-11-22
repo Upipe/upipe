@@ -23,6 +23,7 @@
 
 #include "checkasm.h"
 #include "lib/upipe-hbrmt/sdidec.h"
+#include "lib/upipe-hbrmt/rfc4175_dec.h"
 
 #define NUM_SAMPLES 512
 
@@ -39,8 +40,10 @@ void checkasm_check_sdidec(void)
 {
     struct {
         void (*uyvy)(const uint8_t *src, uint16_t *dst, uintptr_t pixels);
+        void (*v210)(const uint8_t *src, uint32_t *dst, uintptr_t pixels);
     } s = {
         .uyvy = upipe_sdi_to_uyvy_c,
+        .v210 = upipe_sdi_to_v210_c,
     };
 
     int cpu_flags = av_get_cpu_flags();
@@ -48,9 +51,14 @@ void checkasm_check_sdidec(void)
 #ifdef HAVE_X86ASM
     if (cpu_flags & AV_CPU_FLAG_SSSE3) {
         s.uyvy = upipe_sdi_to_uyvy_aligned_ssse3;
+        s.v210 = upipe_sdi_to_v210_ssse3;
+    }
+    if (cpu_flags & AV_CPU_FLAG_AVX) {
+        s.v210 = upipe_sdi_to_v210_avx;
     }
     if (cpu_flags & AV_CPU_FLAG_AVX2) {
         s.uyvy = upipe_sdi_to_uyvy_aligned_avx2;
+        s.v210 = upipe_sdi_to_v210_avx2;
     }
 #endif
 
@@ -70,4 +78,22 @@ void checkasm_check_sdidec(void)
         bench_new(src1, dst1, NUM_SAMPLES / 2);
     }
     report("sdi_to_uyvy");
+
+    if (check_func(s.v210, "sdi_to_v210")) {
+        uint8_t src0[NUM_SAMPLES * 10 / 8];
+        uint8_t src1[NUM_SAMPLES * 10 / 8];
+        DECLARE_ALIGNED(32, uint32_t, dst0)[NUM_SAMPLES / 3 + 8];
+        DECLARE_ALIGNED(32, uint32_t, dst1)[NUM_SAMPLES / 3 + 8];
+        declare_func(void, const uint8_t *src, uint32_t *dst, uintptr_t pixels);
+        const int pixels = NUM_SAMPLES / 2 / 6 * 6;
+
+        randomize_buffers(src0, src1);
+        call_ref(src0, dst0, pixels);
+        call_new(src1, dst1, pixels);
+        if (memcmp(src0, src1, NUM_SAMPLES * 10 / 8)
+                || memcmp(dst0, dst1, 2*pixels / 3 * sizeof dst0[0]))
+            fail();
+        bench_new(src1, dst1, pixels);
+    }
+    report("sdi_to_v210");
 }
