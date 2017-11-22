@@ -39,9 +39,11 @@ static void randomize_buffers(uint8_t *src0, uint8_t *src1)
 void checkasm_check_sdidec(void)
 {
     struct {
+        void (*planar10)(const uint8_t *src, uint16_t *y, uint16_t *u, uint16_t *v, uintptr_t pixels);
         void (*uyvy)(const uint8_t *src, uint16_t *dst, uintptr_t pixels);
         void (*v210)(const uint8_t *src, uint32_t *dst, uintptr_t pixels);
     } s = {
+        .planar10 = upipe_sdi_to_planar_10_c,
         .uyvy = upipe_sdi_to_uyvy_c,
         .v210 = upipe_sdi_to_v210_c,
     };
@@ -50,17 +52,44 @@ void checkasm_check_sdidec(void)
 
 #ifdef HAVE_X86ASM
     if (cpu_flags & AV_CPU_FLAG_SSSE3) {
+        s.planar10 = upipe_sdi_to_planar_10_ssse3;
         s.uyvy = upipe_sdi_to_uyvy_aligned_ssse3;
         s.v210 = upipe_sdi_to_v210_ssse3;
     }
     if (cpu_flags & AV_CPU_FLAG_AVX) {
+        s.planar10 = upipe_sdi_to_planar_10_avx;
         s.v210 = upipe_sdi_to_v210_avx;
     }
     if (cpu_flags & AV_CPU_FLAG_AVX2) {
+        s.planar10 = upipe_sdi_to_planar_10_avx2;
         s.uyvy = upipe_sdi_to_uyvy_aligned_avx2;
         s.v210 = upipe_sdi_to_v210_avx2;
     }
 #endif
+
+    if (check_func(s.planar10, "sdi_to_planar10")) {
+        uint8_t src0[NUM_SAMPLES * 10 / 8];
+        uint8_t src1[NUM_SAMPLES * 10 / 8];
+        uint16_t y0[NUM_SAMPLES/2 + 16];
+        uint16_t y1[NUM_SAMPLES/2 + 16];
+        uint16_t u0[NUM_SAMPLES/4 + 16];
+        uint16_t u1[NUM_SAMPLES/4 + 16];
+        uint16_t v0[NUM_SAMPLES/4 + 16];
+        uint16_t v1[NUM_SAMPLES/4 + 16];
+
+        declare_func(void, const uint8_t *src, uint16_t *y, uint16_t *u, uint16_t *v, uintptr_t size);
+
+        randomize_buffers(src0, src1);
+        call_ref(src0, y0, u0, v0, NUM_SAMPLES / 2);
+        call_new(src1, y1, u1, v1, NUM_SAMPLES / 2);
+        if (memcmp(src0, src1, NUM_SAMPLES * 10 / 8)
+                || memcmp(y0, y1, NUM_SAMPLES / 2 * sizeof(y0[0]))
+                || memcmp(u0, u1, NUM_SAMPLES / 4 * sizeof(u0[0]))
+                || memcmp(v0, v1, NUM_SAMPLES / 4 * sizeof(v0[0])))
+            fail();
+        bench_new(src1, y1, u1, v1, NUM_SAMPLES / 2);
+    }
+    report("sdi_to_planar10");
 
     if (check_func(s.uyvy, "sdi_to_uyvy")) {
         uint8_t  src0[NUM_SAMPLES * 10 / 8];
