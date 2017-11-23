@@ -22,6 +22,8 @@
 
 #include <arpa/inet.h>
 
+#include <libavutil/bswap.h>
+
 #include "sdienc.h"
 
 void upipe_uyvy_to_sdi_c(uint8_t *dst, const uint8_t *y, uintptr_t pixels)
@@ -38,5 +40,26 @@ void upipe_uyvy_to_sdi_c(uint8_t *dst, const uint8_t *y, uintptr_t pixels)
         // error
     } else {
         // check buffer end?
+    }
+}
+
+#define READ_PIXELS(a, b, c)         \
+    do {                             \
+        val  = av_le2ne32(*src++);   \
+        *a++ =  val & 0x3FF;         \
+        *b++ = (val >> 10) & 0x3FF;  \
+        *c++ = (val >> 20) & 0x3FF;  \
+    } while (0)
+
+void upipe_v210_to_uyvy_c(const uint32_t *src, uint16_t *uyvy, uintptr_t width)
+{
+    uint32_t val;
+    int i;
+
+    for( i = 0; i < width; i += 6 ){
+        READ_PIXELS(uyvy, uyvy, uyvy);
+        READ_PIXELS(uyvy, uyvy, uyvy);
+        READ_PIXELS(uyvy, uyvy, uyvy);
+        READ_PIXELS(uyvy, uyvy, uyvy);
     }
 }
