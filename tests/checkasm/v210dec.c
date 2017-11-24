@@ -24,6 +24,7 @@
 
 #include "checkasm.h"
 #include "lib/upipe-v210/v210dec.h"
+#include "lib/upipe-hbrmt/sdienc.h"
 
 static uint32_t clip(uint32_t value)
 {
@@ -47,6 +48,7 @@ static void write_v210(uint32_t *src0, uint32_t *src1)
 }
 
 #define BUF_SIZE 512
+#define NUM_SAMPLES 512
 
 static void randomize_buffers(uint32_t *src0, uint32_t *src1, int len)
 {
@@ -72,9 +74,11 @@ void checkasm_check_v210dec(void)
     struct {
         void (*planar_10)(const void *src, uint16_t *y, uint16_t *u, uint16_t *v, uintptr_t pixels);
         void (*planar_8)(const void *src, uint8_t *y, uint8_t *u, uint8_t *v, uintptr_t pixels);
+        void (*uyvy)(const uint32_t *src, uint16_t *dst, uintptr_t width);
     } s = {
         .planar_10 = upipe_v210_to_planar_10_c,
         .planar_8  = upipe_v210_to_planar_8_c,
+        .uyvy      = upipe_v210_to_uyvy_c,
     };
 
     int cpu_flags = av_get_cpu_flags();
@@ -83,14 +87,17 @@ void checkasm_check_v210dec(void)
     if (cpu_flags & AV_CPU_FLAG_SSSE3) {
         s.planar_10 = upipe_v210_to_planar_10_aligned_ssse3;
         s.planar_8  = upipe_v210_to_planar_8_aligned_ssse3;
+        s.uyvy      = upipe_v210_to_uyvy_unaligned_ssse3;
     }
     if (cpu_flags & AV_CPU_FLAG_AVX) {
         s.planar_10 = upipe_v210_to_planar_10_aligned_avx;
         s.planar_8  = upipe_v210_to_planar_8_aligned_avx;
+        s.uyvy      = upipe_v210_to_uyvy_unaligned_avx;
     }
     if (cpu_flags & AV_CPU_FLAG_AVX2) {
         s.planar_10 = upipe_v210_to_planar_10_aligned_avx2;
         s.planar_8  = upipe_v210_to_planar_8_aligned_avx2;
+        s.uyvy      = upipe_v210_to_uyvy_unaligned_avx2;
     }
 #endif
 
@@ -119,4 +126,21 @@ void checkasm_check_v210dec(void)
         }
     }
     report("v210_to_planar10");
+
+    if (check_func(s.uyvy, "v210_to_uyvy")) {
+        uint32_t src0[NUM_SAMPLES / 3];
+        uint32_t src1[NUM_SAMPLES / 3];
+        uint16_t dst0[NUM_SAMPLES];
+        uint16_t dst1[NUM_SAMPLES];
+        declare_func(void, const void *src, uint16_t *dst, uintptr_t width);
+
+        randomize_buffers(src0, src1, NUM_SAMPLES / 3);
+        call_ref(src0, dst0, NUM_SAMPLES / 2);
+        call_new(src1, dst1, NUM_SAMPLES / 2);
+        if (memcmp(src0, src1, sizeof(src0))
+                || memcmp(dst0, dst1, sizeof(dst0)))
+            fail();
+        bench_new(src1, dst1, NUM_SAMPLES / 2);
+    }
+    report("v210_to_uyvy");
 }
