@@ -15,9 +15,11 @@ checkasm_SOURCES = checkasm.c checkasm.h timer.h \
 
 if HAVE_BITSTREAM
 checkasm_LDADD += \
+    $(top_builddir)/lib/upipe-hbrmt/libupipe_hbrmt_la-rfc4175.o \
     $(top_builddir)/lib/upipe-hbrmt/libupipe_hbrmt_la-sdidec.o \
     $(top_builddir)/lib/upipe-hbrmt/libupipe_hbrmt_la-sdienc.o \
     $(top_builddir)/lib/upipe-hbrmt/rfc4175_dec.o \
+    $(top_builddir)/lib/upipe-hbrmt/rfc4175_enc.o \
     $(top_builddir)/lib/upipe-hbrmt/sdidec.o \
     $(top_builddir)/lib/upipe-hbrmt/sdienc.o
 

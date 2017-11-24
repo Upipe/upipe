@@ -25,6 +25,7 @@
 #include "checkasm.h"
 #include "lib/upipe-v210/v210dec.h"
 #include "lib/upipe-hbrmt/sdienc.h"
+#include "lib/upipe-hbrmt/rfc4175_enc.h"
 
 static uint32_t clip(uint32_t value)
 {
@@ -74,10 +75,12 @@ void checkasm_check_v210dec(void)
     struct {
         void (*planar_10)(const void *src, uint16_t *y, uint16_t *u, uint16_t *v, uintptr_t pixels);
         void (*planar_8)(const void *src, uint8_t *y, uint8_t *u, uint8_t *v, uintptr_t pixels);
+        void (*sdi)(const uint32_t *src, uint8_t *dst, uintptr_t pixels);
         void (*uyvy)(const uint32_t *src, uint16_t *dst, uintptr_t width);
     } s = {
         .planar_10 = upipe_v210_to_planar_10_c,
         .planar_8  = upipe_v210_to_planar_8_c,
+        .sdi       = upipe_v210_to_sdi_c,
         .uyvy      = upipe_v210_to_uyvy_c,
     };
 
@@ -87,16 +90,19 @@ void checkasm_check_v210dec(void)
     if (cpu_flags & AV_CPU_FLAG_SSSE3) {
         s.planar_10 = upipe_v210_to_planar_10_aligned_ssse3;
         s.planar_8  = upipe_v210_to_planar_8_aligned_ssse3;
+        s.sdi       = upipe_v210_to_sdi_ssse3;
         s.uyvy      = upipe_v210_to_uyvy_unaligned_ssse3;
     }
     if (cpu_flags & AV_CPU_FLAG_AVX) {
         s.planar_10 = upipe_v210_to_planar_10_aligned_avx;
         s.planar_8  = upipe_v210_to_planar_8_aligned_avx;
+        s.sdi       = upipe_v210_to_sdi_avx;
         s.uyvy      = upipe_v210_to_uyvy_unaligned_avx;
     }
     if (cpu_flags & AV_CPU_FLAG_AVX2) {
         s.planar_10 = upipe_v210_to_planar_10_aligned_avx2;
         s.planar_8  = upipe_v210_to_planar_8_aligned_avx2;
+        s.sdi       = upipe_v210_to_sdi_avx2;
         s.uyvy      = upipe_v210_to_uyvy_unaligned_avx2;
     }
 #endif
@@ -143,4 +149,22 @@ void checkasm_check_v210dec(void)
         bench_new(src1, dst1, NUM_SAMPLES / 2);
     }
     report("v210_to_uyvy");
+
+    if (check_func(s.sdi, "v210_to_sdi")) {
+        uint32_t src0[NUM_SAMPLES / 3];
+        uint32_t src1[NUM_SAMPLES / 3];
+        uint8_t dst0[NUM_SAMPLES / 4 * 5];
+        uint8_t dst1[NUM_SAMPLES / 4 * 5];
+        declare_func(void, const uint32_t *src, uint8_t *dst, uintptr_t pixels);
+        const int pixels = NUM_SAMPLES / 2 / 6 * 6;
+
+        randomize_buffers(src0, src1, NUM_SAMPLES / 3);
+        call_ref(src0, dst0, pixels);
+        call_new(src1, dst1, pixels);
+        if (memcmp(src0, src1, sizeof(src0))
+                || memcmp(dst0, dst1, 2*pixels / 3 * sizeof dst0[0]))
+            fail();
+        bench_new(src1, dst1, pixels);
+    }
+    report("v210_to_sdi");
 }
