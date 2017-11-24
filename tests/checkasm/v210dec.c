@@ -34,7 +34,7 @@ static uint32_t clip(uint32_t value)
     return value;
 }
 
-static void write_v210(void *src0, void *src1)
+static void write_v210(uint32_t *src0, uint32_t *src1)
 {
     uint32_t t0 = rnd() & 0x3ff,
              t1 = rnd() & 0x3ff,
@@ -48,12 +48,10 @@ static void write_v210(void *src0, void *src1)
 
 #define BUF_SIZE 512
 
-static void randomize_buffers(void *src0, void *src1)
+static void randomize_buffers(uint32_t *src0, uint32_t *src1, int len)
 {
-    for (int i = 0; i < BUF_SIZE * 8 / 3 / 4; i++) {
-        write_v210(src0, src1);
-        src0 += 4;
-        src1 += 4;
+    for (int i = 0; i < len; i++) {
+        write_v210(src0 + i, src1 + i);
     }
 }
 
@@ -99,7 +97,7 @@ void checkasm_check_v210dec(void)
     if (check_func(s.planar_8, "v210_to_planar8")) {
         declare(uint8_t);
         for (width = step; width < BUF_SIZE - 15; width += step) {
-            randomize_buffers(src0, src1);
+            randomize_buffers(src0, src1, BUF_SIZE * 8 / 3 / 4);
             call_ref(src0, y0, u0, v0, width);
             call_new(src1, y1, u1, v1, width);
             if (memcmp(y0, y1, width) || memcmp(u0, u1, width / 2) || memcmp(v0, v1, width / 2))
@@ -112,7 +110,7 @@ void checkasm_check_v210dec(void)
     if (check_func(s.planar_10, "v210_to_planar10")) {
         declare(uint16_t);
         for (width = step; width < BUF_SIZE - 15; width += step) {
-            randomize_buffers(src0, src1);
+            randomize_buffers(src0, src1, BUF_SIZE * 8 / 3 / 4);
             call_ref(src0, y0, u0, v0, width);
             call_new(src1, y1, u1, v1, width);
             if (memcmp(y0, y1, width) || memcmp(u0, u1, width / 2) || memcmp(v0, v1, width / 2))
