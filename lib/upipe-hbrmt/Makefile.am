@@ -12,6 +12,7 @@ libupipe_hbrmt_la_SOURCES = upipe_pack10bit.c \
     upipe_unpack_rfc4175.c \
     ../upipe-blackmagic/sdi.c \
     ../upipe-blackmagic/sdi.h \
+    rfc4175.c \
     $(NULL)
 
 libupipe_hbrmt_la_CPPFLAGS = -I$(top_builddir) -I$(top_builddir)/include -I$(top_srcdir)/include
