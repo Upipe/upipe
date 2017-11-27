@@ -67,7 +67,7 @@
 #define HAVE_RDTSC 0
 #include "timer.h"
 
-void checkasm_check_sdidec(void);
+void checkasm_check_sdi_input(void);
 void checkasm_check_uyvy_input(void);
 void checkasm_check_v210_input(void);
 void checkasm_check_v210enc(void);

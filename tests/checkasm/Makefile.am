@@ -10,6 +10,7 @@ checkasm_LDADD = $(LDADD) $(AVUTIL_LIBS) \
     $(top_builddir)/lib/upipe-v210/v210enc.o
 
 checkasm_SOURCES = checkasm.c checkasm.h timer.h \
+    sdi_input.c \
     uyvy_input.c \
     v210_input.c \
     v210enc.c
@@ -24,7 +25,6 @@ checkasm_LDADD += \
     $(top_builddir)/lib/upipe-hbrmt/sdidec.o \
     $(top_builddir)/lib/upipe-hbrmt/sdienc.o
 
-checkasm_SOURCES += sdidec.c
 checkasm_CPPFLAGS += -DHAVE_SDI
 endif
 

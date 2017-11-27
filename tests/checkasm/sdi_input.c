@@ -36,7 +36,7 @@ static void randomize_buffers(uint8_t *src0, uint8_t *src1)
     }
 }
 
-void checkasm_check_sdidec(void)
+void checkasm_check_sdi_input(void)
 {
     struct {
         void (*planar10)(const uint8_t *src, uint16_t *y, uint16_t *u, uint16_t *v, uintptr_t pixels);
