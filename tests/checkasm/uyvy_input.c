@@ -23,6 +23,7 @@
 
 #include "checkasm.h"
 #include "lib/upipe-hbrmt/sdidec.h"
+#include "lib/upipe-hbrmt/sdienc.h"
 #include "lib/upipe-hbrmt/rfc4175_dec.h"
 
 #define NUM_SAMPLES 512
@@ -46,6 +47,7 @@ void checkasm_check_uyvy_input(void)
     } s = {
         .planar10 = upipe_uyvy_to_planar_10_c,
         .planar8 = upipe_uyvy_to_planar_8_c,
+        .sdi = upipe_uyvy_to_sdi_c,
     };
 
     int cpu_flags = av_get_cpu_flags();
@@ -53,14 +55,17 @@ void checkasm_check_uyvy_input(void)
     if (cpu_flags & AV_CPU_FLAG_SSSE3) {
         s.planar10 = upipe_uyvy_to_planar_10_unaligned_ssse3;
         s.planar8 = upipe_uyvy_to_planar_8_unaligned_ssse3;
+        s.sdi = upipe_uyvy_to_sdi_unaligned_ssse3;
     }
     if (cpu_flags & AV_CPU_FLAG_AVX) {
         s.planar10 = upipe_uyvy_to_planar_10_unaligned_avx;
         s.planar8 = upipe_uyvy_to_planar_8_unaligned_avx;
+        s.sdi = upipe_uyvy_to_sdi_avx;
     }
     if (cpu_flags & AV_CPU_FLAG_AVX2) {
         s.planar10 = upipe_uyvy_to_planar_10_unaligned_avx2;
         s.planar8 = upipe_uyvy_to_planar_8_unaligned_avx2;
+        s.sdi = upipe_uyvy_to_sdi_avx2;
     }
 
     if (check_func(s.planar10, "uyvy_to_planar10")) {
@@ -108,4 +113,21 @@ void checkasm_check_uyvy_input(void)
         bench_new(y1, u1, v1, src1, NUM_SAMPLES / 2);
     }
     report("uyvy_to_planar8");
+
+    if (check_func(s.sdi, "uyvy_to_sdi")) {
+        uint16_t src0[NUM_SAMPLES];
+        uint16_t src1[NUM_SAMPLES];
+        uint8_t dst0[NUM_SAMPLES * 10 / 8];
+        uint8_t dst1[NUM_SAMPLES * 10 / 8];
+        declare_func(void, uint8_t *dst, const uint8_t *src, uintptr_t samples);
+
+        randomize_buffers(src0, src1);
+        call_ref(dst0, (const uint8_t*)src0, NUM_SAMPLES / 2);
+        call_new(dst1, (const uint8_t*)src1, NUM_SAMPLES / 2);
+        if (memcmp(src0, src1, NUM_SAMPLES * sizeof src0[0])
+                || memcmp(dst0, dst1, NUM_SAMPLES * 10 / 8))
+            fail();
+        bench_new(dst1, (const uint8_t*)src1, NUM_SAMPLES / 2);
+    }
+    report("uyvy_to_sdi");
 }

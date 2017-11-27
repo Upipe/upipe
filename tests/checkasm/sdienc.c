@@ -44,10 +44,8 @@ static void upipe_uyvy_to_sdi_2_c(uint8_t *dst1, uint8_t *dst2, const uint8_t *y
 void checkasm_check_sdienc(void)
 {
     struct {
-        void (*uyvy)(uint8_t *dst, const uint8_t *src, uintptr_t pixels);
         void (*uyvy_2)(uint8_t *dst1, uint8_t *dst2, const uint8_t *src, uintptr_t pixels);
     } s = {
-        .uyvy = upipe_uyvy_to_sdi_c,
         .uyvy_2 = upipe_uyvy_to_sdi_2_c,
     };
 
@@ -55,35 +53,15 @@ void checkasm_check_sdienc(void)
 
 #ifdef HAVE_X86ASM
     if (cpu_flags & AV_CPU_FLAG_SSSE3) {
-        s.uyvy = upipe_uyvy_to_sdi_aligned_ssse3;
         s.uyvy_2 = upipe_uyvy_to_sdi_2_unaligned_ssse3;
     }
     if (cpu_flags & AV_CPU_FLAG_AVX) {
-        s.uyvy = upipe_uyvy_to_sdi_avx;
         s.uyvy_2 = upipe_uyvy_to_sdi_2_avx;
     }
     if (cpu_flags & AV_CPU_FLAG_AVX2) {
-        s.uyvy = upipe_uyvy_to_sdi_avx2;
         s.uyvy_2 = upipe_uyvy_to_sdi_2_avx2;
     }
 #endif
-
-    if (check_func(s.uyvy, "uyvy_to_sdi")) {
-        DECLARE_ALIGNED(16, uint16_t, src0)[NUM_SAMPLES];
-        DECLARE_ALIGNED(16, uint16_t, src1)[NUM_SAMPLES];
-        uint8_t dst0[NUM_SAMPLES * 10 / 8 + 32];
-        uint8_t dst1[NUM_SAMPLES * 10 / 8 + 32];
-        declare_func(void, uint8_t *dst, const uint8_t *src, uintptr_t pixels);
-
-        randomize_buffers(src0, src1);
-        call_ref(dst0, (const uint8_t*)src0, NUM_SAMPLES / 2);
-        call_new(dst1, (const uint8_t*)src1, NUM_SAMPLES / 2);
-        if (memcmp(src0, src1, NUM_SAMPLES)
-                || memcmp(dst0, dst1, NUM_SAMPLES * 10 / 8))
-            fail();
-        bench_new(dst1, (const uint8_t*)src1, NUM_SAMPLES / 2);
-    }
-    report("uyvy_to_sdi");
 
     if (check_func(s.uyvy_2, "uyvy_to_sdi_2")) {
         DECLARE_ALIGNED(16, uint16_t, src0)[NUM_SAMPLES];
