@@ -19,8 +19,6 @@
  */
 
 #include <string.h>
-#include <libavutil/intreadwrite.h>
-#include <libavutil/mem.h>
 
 #include "checkasm.h"
 #include "lib/upipe-v210/v210dec.h"
@@ -36,7 +34,7 @@ static uint32_t clip(uint32_t value)
     return value;
 }
 
-static void write_v210(uint32_t *src0, uint32_t *src1)
+static uint32_t get_v210(void)
 {
     uint32_t t0 = rnd() & 0x3ff,
              t1 = rnd() & 0x3ff,
@@ -44,31 +42,19 @@ static void write_v210(uint32_t *src0, uint32_t *src1)
     uint32_t value =  clip(t0)
                    | (clip(t1) << 10)
                    | (clip(t2) << 20);
-    AV_WL32(src0, value);
-    AV_WL32(src1, value);
+    return value;
 }
 
-#define BUF_SIZE 512
 #define NUM_SAMPLES 512
 
 static void randomize_buffers(uint32_t *src0, uint32_t *src1, int len)
 {
     for (int i = 0; i < len; i++) {
-        write_v210(src0 + i, src1 + i);
+        uint32_t value = get_v210();
+        src0[i] = value;
+        src1[i] = value;
     }
 }
-
-#define declare(type) \
-        type y0[BUF_SIZE]; \
-        type y1[BUF_SIZE]; \
-        type u0[BUF_SIZE / 2]; \
-        type u1[BUF_SIZE / 2]; \
-        type v0[BUF_SIZE / 2]; \
-        type v1[BUF_SIZE / 2]; \
-        DECLARE_ALIGNED(32, uint32_t, src0)[BUF_SIZE * 8 / 3 / 4]; \
-        DECLARE_ALIGNED(32, uint32_t, src1)[BUF_SIZE * 8 / 3 / 4]; \
-        declare_func(void, const void *src, type *y, type *u, type *v, ptrdiff_t width); \
-        ptrdiff_t width, step = 12 / sizeof(type)
 
 void checkasm_check_v210_input(void)
 {
@@ -108,28 +94,50 @@ void checkasm_check_v210_input(void)
 #endif
 
     if (check_func(s.planar_8, "v210_to_planar8")) {
-        declare(uint8_t);
-        for (width = step; width < BUF_SIZE - 15; width += step) {
-            randomize_buffers(src0, src1, BUF_SIZE * 8 / 3 / 4);
-            call_ref(src0, y0, u0, v0, width);
-            call_new(src1, y1, u1, v1, width);
-            if (memcmp(y0, y1, width) || memcmp(u0, u1, width / 2) || memcmp(v0, v1, width / 2))
-                fail();
-            bench_new(src1, y1, u1, v1, width);
-        }
+        uint32_t src0[NUM_SAMPLES/3];
+        uint32_t src1[NUM_SAMPLES/3];
+        uint8_t y0[NUM_SAMPLES/2];
+        uint8_t y1[NUM_SAMPLES/2];
+        uint8_t u0[NUM_SAMPLES/4];
+        uint8_t u1[NUM_SAMPLES/4];
+        uint8_t v0[NUM_SAMPLES/4];
+        uint8_t v1[NUM_SAMPLES/4];
+        declare_func(void, const void *src, uint8_t *y, uint8_t *u, uint8_t *v, uintptr_t width);
+        const int pixels = NUM_SAMPLES / 2 / 6 * 6;
+
+        randomize_buffers(src0, src1, NUM_SAMPLES/3);
+        call_ref(src0, y0, u0, v0, pixels);
+        call_new(src1, y1, u1, v1, pixels);
+        if (memcmp(src0, src1, NUM_SAMPLES/3 * sizeof src0[0])
+                || memcmp(y0, y1, pixels)
+                || memcmp(u0, u1, pixels/2)
+                || memcmp(v0, v1, pixels/2))
+            fail();
+        bench_new(src1, y1, u1, v1, pixels);
     }
     report("v210_to_planar8");
 
     if (check_func(s.planar_10, "v210_to_planar10")) {
-        declare(uint16_t);
-        for (width = step; width < BUF_SIZE - 15; width += step) {
-            randomize_buffers(src0, src1, BUF_SIZE * 8 / 3 / 4);
-            call_ref(src0, y0, u0, v0, width);
-            call_new(src1, y1, u1, v1, width);
-            if (memcmp(y0, y1, width) || memcmp(u0, u1, width / 2) || memcmp(v0, v1, width / 2))
-                fail();
-            bench_new(src1, y1, u1, v1, width);
-        }
+        uint32_t src0[NUM_SAMPLES/3];
+        uint32_t src1[NUM_SAMPLES/3];
+        uint16_t y0[NUM_SAMPLES/2];
+        uint16_t y1[NUM_SAMPLES/2];
+        uint16_t u0[NUM_SAMPLES/4];
+        uint16_t u1[NUM_SAMPLES/4];
+        uint16_t v0[NUM_SAMPLES/4];
+        uint16_t v1[NUM_SAMPLES/4];
+        declare_func(void, const void *src, uint16_t *y, uint16_t *u, uint16_t *v, uintptr_t width);
+        const int pixels = NUM_SAMPLES / 2 / 6 * 6;
+
+        randomize_buffers(src0, src1, NUM_SAMPLES/3);
+        call_ref(src0, y0, u0, v0, pixels);
+        call_new(src1, y1, u1, v1, pixels);
+        if (memcmp(src0, src1, NUM_SAMPLES/3 * sizeof src0[0])
+                || memcmp(y0, y1, pixels * sizeof y0[0])
+                || memcmp(u0, u1, pixels/2 * sizeof u0[0])
+                || memcmp(v0, v1, pixels/2 * sizeof v0[0]))
+            fail();
+        bench_new(src1, y1, u1, v1, pixels);
     }
     report("v210_to_planar10");
 
@@ -139,12 +147,13 @@ void checkasm_check_v210_input(void)
         uint16_t dst0[NUM_SAMPLES];
         uint16_t dst1[NUM_SAMPLES];
         declare_func(void, const void *src, uint16_t *dst, uintptr_t width);
+        const int pixels = NUM_SAMPLES / 2 / 6 * 6;
 
         randomize_buffers(src0, src1, NUM_SAMPLES / 3);
-        call_ref(src0, dst0, NUM_SAMPLES / 2);
-        call_new(src1, dst1, NUM_SAMPLES / 2);
+        call_ref(src0, dst0, pixels);
+        call_new(src1, dst1, pixels);
         if (memcmp(src0, src1, sizeof(src0))
-                || memcmp(dst0, dst1, sizeof(dst0)))
+                || memcmp(dst0, dst1, 2*pixels * sizeof dst0[0]))
             fail();
         bench_new(src1, dst1, NUM_SAMPLES / 2);
     }
