@@ -70,7 +70,7 @@ static void randomize_buffers(uint32_t *src0, uint32_t *src1, int len)
         declare_func(void, const void *src, type *y, type *u, type *v, ptrdiff_t width); \
         ptrdiff_t width, step = 12 / sizeof(type)
 
-void checkasm_check_v210dec(void)
+void checkasm_check_v210_input(void)
 {
     struct {
         void (*planar_10)(const void *src, uint16_t *y, uint16_t *u, uint16_t *v, uintptr_t pixels);

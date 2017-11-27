@@ -11,7 +11,7 @@ checkasm_LDADD = $(LDADD) $(AVUTIL_LIBS) \
 
 checkasm_SOURCES = checkasm.c checkasm.h timer.h \
     uyvy_input.c \
-    v210dec.c \
+    v210_input.c \
     v210enc.c
 
 if HAVE_BITSTREAM
