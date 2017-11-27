@@ -128,6 +128,10 @@ script:
       DISTCHECK_CONFIGURE_FLAGS="$CONFIGURE_FLAGS"
       TEST_SUITE_LOG="$PWD/tests.log"
   - make check-whitespace
+  - for i in bitstream SSMAMTtools nacl_sdk.zip nacl_sdk upipe-*.tar.gz; do
+      echo "/$i" >> .gitignore;
+    done &&
+    make check-untracked
 
 after_failure:
   - test -r config.log && cat config.log
