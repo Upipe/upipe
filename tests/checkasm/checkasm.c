@@ -76,7 +76,6 @@ static const struct {
 } tests[] = {
 #ifdef HAVE_SDI
     { "sdidec", checkasm_check_sdidec },
-    { "sdienc", checkasm_check_sdienc },
 #endif
     { "uyvy_input", checkasm_check_uyvy_input },
     { "v210dec", checkasm_check_v210dec },

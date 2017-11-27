@@ -24,7 +24,7 @@ checkasm_LDADD += \
     $(top_builddir)/lib/upipe-hbrmt/sdidec.o \
     $(top_builddir)/lib/upipe-hbrmt/sdienc.o
 
-checkasm_SOURCES += sdidec.c sdienc.c
+checkasm_SOURCES += sdidec.c
 checkasm_CPPFLAGS += -DHAVE_SDI
 endif
 
