@@ -20,6 +20,8 @@
 
 #include <stddef.h>
 #include <inttypes.h>
+#include <libavutil/common.h>
+#include <libavutil/intreadwrite.h>
 #include "sdidec.h"
 
 void upipe_sdi_to_uyvy_c(const uint8_t *src, uint16_t *y, uintptr_t pixels)
@@ -125,5 +127,31 @@ void upipe_uyvy_to_planar_10_c(uint16_t *y, uint16_t *u, uint16_t *v, const uint
         y += 2;
         u += 1;
         v += 1;
+    }
+}
+
+#define CLIP(v) av_clip(v, 4, 1019)
+
+#define WRITE_PIXELS_UYVY(a)            \
+    do {                                \
+        val  = CLIP(*a++);              \
+        tmp1 = CLIP(*a++);              \
+        tmp2 = CLIP(*a++);              \
+        val |= (tmp1 << 10) |           \
+               (tmp2 << 20);            \
+        AV_WL32(dst, val);              \
+        dst += 4;                       \
+    } while (0)
+
+void upipe_uyvy_to_v210_c(const uint16_t *y, uint8_t *dst, uintptr_t width)
+{
+    uint32_t val, tmp1, tmp2;
+    int i;
+
+    for (i = 0; i < width - 5; i += 6) {
+        WRITE_PIXELS_UYVY(y);
+        WRITE_PIXELS_UYVY(y);
+        WRITE_PIXELS_UYVY(y);
+        WRITE_PIXELS_UYVY(y);
     }
 }
