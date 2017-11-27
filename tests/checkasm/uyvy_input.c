@@ -48,6 +48,7 @@ void checkasm_check_uyvy_input(void)
         .planar10 = upipe_uyvy_to_planar_10_c,
         .planar8 = upipe_uyvy_to_planar_8_c,
         .sdi = upipe_uyvy_to_sdi_c,
+        .v210 = upipe_uyvy_to_v210_c,
     };
 
     int cpu_flags = av_get_cpu_flags();
@@ -56,16 +57,19 @@ void checkasm_check_uyvy_input(void)
         s.planar10 = upipe_uyvy_to_planar_10_unaligned_ssse3;
         s.planar8 = upipe_uyvy_to_planar_8_unaligned_ssse3;
         s.sdi = upipe_uyvy_to_sdi_unaligned_ssse3;
+        s.v210 = upipe_uyvy_to_v210_unaligned_ssse3;
     }
     if (cpu_flags & AV_CPU_FLAG_AVX) {
         s.planar10 = upipe_uyvy_to_planar_10_unaligned_avx;
         s.planar8 = upipe_uyvy_to_planar_8_unaligned_avx;
         s.sdi = upipe_uyvy_to_sdi_avx;
+        s.v210 = upipe_uyvy_to_v210_unaligned_avx;
     }
     if (cpu_flags & AV_CPU_FLAG_AVX2) {
         s.planar10 = upipe_uyvy_to_planar_10_unaligned_avx2;
         s.planar8 = upipe_uyvy_to_planar_8_unaligned_avx2;
         s.sdi = upipe_uyvy_to_sdi_avx2;
+        s.v210 = upipe_uyvy_to_v210_unaligned_avx2;
     }
 
     if (check_func(s.planar10, "uyvy_to_planar10")) {
@@ -130,4 +134,22 @@ void checkasm_check_uyvy_input(void)
         bench_new(dst1, (const uint8_t*)src1, NUM_SAMPLES / 2);
     }
     report("uyvy_to_sdi");
+
+    if (check_func(s.v210, "uyvy_to_v210")) {
+        uint16_t src0[NUM_SAMPLES];
+        uint16_t src1[NUM_SAMPLES];
+        uint32_t dst0[NUM_SAMPLES/3];
+        uint32_t dst1[NUM_SAMPLES/3];
+        declare_func(void, const uint16_t *src, uint8_t *dst, uintptr_t pixels);
+        const int pixels = NUM_SAMPLES / 2 / 6 * 6;
+
+        randomize_buffers(src0, src1);
+        call_ref(src0, (uint8_t*)dst0, pixels);
+        call_new(src1, (uint8_t*)dst1, pixels);
+        if (memcmp(src0, src1, NUM_SAMPLES * sizeof src0[0])
+                || memcmp(dst0, dst1, 2*pixels/3 * sizeof dst0[0]))
+            fail();
+        bench_new(src1, (uint8_t*)dst1, NUM_SAMPLES / 2);
+    }
+    report("uyvy_to_v210");
 }
