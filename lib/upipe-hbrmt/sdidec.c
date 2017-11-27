@@ -97,3 +97,33 @@ void upipe_sdi_to_planar_10_c(const uint8_t *src, uint16_t *y, uint16_t *u, uint
         *y++ = ((d & 0x03) << 8) | e;                 //4455555555
     }
 }
+
+void upipe_uyvy_to_planar_8_c(uint8_t *y, uint8_t *u, uint8_t *v, const uint16_t *l, uintptr_t width)
+{
+    int j;
+    for (j = 0; j < width / 2; j++) {
+        u[0] = l[0] >> 2;
+        y[0] = l[1] >> 2;
+        v[0] = l[2] >> 2;
+        y[1] = l[3] >> 2;
+        l += 4;
+        y += 2;
+        u += 1;
+        v += 1;
+    }
+}
+
+void upipe_uyvy_to_planar_10_c(uint16_t *y, uint16_t *u, uint16_t *v, const uint16_t *l, uintptr_t width)
+{
+    int j;
+    for (j = 0; j < width/2; j++) {
+        u[0] = l[0];
+        y[0] = l[1];
+        v[0] = l[2];
+        y[1] = l[3];
+        l += 4;
+        y += 2;
+        u += 1;
+        v += 1;
+    }
+}
