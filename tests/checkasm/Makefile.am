@@ -10,6 +10,7 @@ checkasm_LDADD = $(LDADD) $(AVUTIL_LIBS) \
     $(top_builddir)/lib/upipe-v210/v210enc.o
 
 checkasm_SOURCES = checkasm.c checkasm.h timer.h \
+    uyvy_input.c \
     v210dec.c \
     v210enc.c
 

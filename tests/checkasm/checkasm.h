@@ -69,6 +69,7 @@
 
 void checkasm_check_sdidec(void);
 void checkasm_check_sdienc(void);
+void checkasm_check_uyvy_input(void);
 void checkasm_check_v210dec(void);
 void checkasm_check_v210enc(void);
 

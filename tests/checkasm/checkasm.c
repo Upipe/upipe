@@ -78,6 +78,7 @@ static const struct {
     { "sdidec", checkasm_check_sdidec },
     { "sdienc", checkasm_check_sdienc },
 #endif
+    { "uyvy_input", checkasm_check_uyvy_input },
     { "v210dec", checkasm_check_v210dec },
     { "v210enc", checkasm_check_v210enc },
     { NULL, NULL }
