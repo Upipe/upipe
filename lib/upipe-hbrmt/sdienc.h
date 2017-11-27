@@ -1,4 +1,5 @@
 void upipe_uyvy_to_sdi_c(uint8_t *dst, const uint8_t *y, uintptr_t pixels);
+void upipe_uyvy_to_sdi_2_c(uint8_t *dst1, uint8_t *dst2, const uint8_t *y, uintptr_t pixels);
 void upipe_v210_to_uyvy_c(const uint32_t *src, uint16_t *dst, uintptr_t pixels);
 
 /* process mmsize/2 samples per iteration */

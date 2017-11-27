@@ -43,6 +43,12 @@ void upipe_uyvy_to_sdi_c(uint8_t *dst, const uint8_t *y, uintptr_t pixels)
     }
 }
 
+void upipe_uyvy_to_sdi_2_c(uint8_t *dst1, uint8_t *dst2, const uint8_t *y, uintptr_t pixels)
+{
+    upipe_uyvy_to_sdi_c(dst1, y, pixels);
+    memcpy(dst2, dst1, 2*pixels * 10 / 8);
+}
+
 #define READ_PIXELS(a, b, c)         \
     do {                             \
         val  = av_le2ne32(*src++);   \

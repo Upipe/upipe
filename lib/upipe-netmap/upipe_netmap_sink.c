@@ -333,12 +333,6 @@ static void upipe_udp_raw_fill_headers(uint8_t *header,
     udp_set_cksum(header, 0);
 }
 
-static void upipe_sdi_pack2_c(uint8_t *dst1, uint8_t *dst2, const uint8_t *y, uintptr_t pixels)
-{
-    upipe_uyvy_to_sdi_c(dst1, y, pixels);
-    memcpy(dst2, dst1, 2*pixels * 10 / 8);
-}
-
 static uint64_t uclock_netmap_sink_now(struct uclock *uclock)
 {
     struct upipe_netmap_sink *upipe_netmap_sink = upipe_netmap_sink_from_uclock(uclock);
@@ -613,7 +607,7 @@ static struct upipe *_upipe_netmap_sink_alloc(struct upipe_mgr *mgr,
     upipe_netmap_sink->unpack_v210 = upipe_v210_sdi_unpack_c;
 
     upipe_netmap_sink->pack = upipe_uyvy_to_sdi_c;
-    upipe_netmap_sink->pack2 = upipe_sdi_pack2_c;
+    upipe_netmap_sink->pack2 = upipe_uyvy_to_sdi_2_c;
 
 #if defined(HAVE_X86ASM)
 #if defined(__i686__) || defined(__x86_64__)
