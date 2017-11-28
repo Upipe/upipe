@@ -19,6 +19,7 @@
  */
 
 #include <string.h>
+#include <libavutil/mem.h>
 
 #include "checkasm.h"
 #include "lib/upipe-v210/v210dec.h"
@@ -94,8 +95,8 @@ void checkasm_check_v210_input(void)
 #endif
 
     if (check_func(s.planar_8, "v210_to_planar8")) {
-        uint32_t src0[NUM_SAMPLES/3];
-        uint32_t src1[NUM_SAMPLES/3];
+        DECLARE_ALIGNED(32, uint32_t, src0)[NUM_SAMPLES/3];
+        DECLARE_ALIGNED(32, uint32_t, src1)[NUM_SAMPLES/3];
         uint8_t y0[NUM_SAMPLES/2];
         uint8_t y1[NUM_SAMPLES/2];
         uint8_t u0[NUM_SAMPLES/4];
@@ -118,8 +119,8 @@ void checkasm_check_v210_input(void)
     report("v210_to_planar8");
 
     if (check_func(s.planar_10, "v210_to_planar10")) {
-        uint32_t src0[NUM_SAMPLES/3];
-        uint32_t src1[NUM_SAMPLES/3];
+        DECLARE_ALIGNED(32, uint32_t, src0)[NUM_SAMPLES/3];
+        DECLARE_ALIGNED(32, uint32_t, src1)[NUM_SAMPLES/3];
         uint16_t y0[NUM_SAMPLES/2];
         uint16_t y1[NUM_SAMPLES/2];
         uint16_t u0[NUM_SAMPLES/4];
