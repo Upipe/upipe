@@ -89,8 +89,6 @@ enum {
     OPT_DECRYPT = 'D',
     OPT_KEY     = 'k',
     OPT_UDP     = 'U',
-    OPT_MTU     = 'M',
-    OPT_CONFORMANCE = 'K',
     OPT_LATENCY = 'L',
     OPT_RT_PRIORITY = 'i',
 };
@@ -176,7 +174,7 @@ int main(int argc, char *argv[])
     int latency = -1;
     int c;
 
-    while ((c = getopt(argc, argv, "vbk:M:K:L:i:D")) != -1) {
+    while ((c = getopt(argc, argv, "vbk:L:i:D")) != -1) {
         switch (c) {
             case OPT_DEBUG:
                 if (log_level == UPROBE_LOG_DEBUG)
@@ -189,10 +187,6 @@ int main(int argc, char *argv[])
                 break;
             case OPT_KEY:
                 key = optarg;
-                break;
-            case OPT_UDP:
-            case OPT_MTU:
-            case OPT_CONFORMANCE:
                 break;
             case OPT_LATENCY:
                 latency = atoi(optarg);
