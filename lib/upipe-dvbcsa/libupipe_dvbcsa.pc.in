@@ -5,6 +5,6 @@ includedir=@includedir@
 Name: libupipe_dvbcsa
 Description: Upipe multimedia framework, libdvbcsa interface module
 Version: @VERSION@
-Requires: libupipe
+Requires: libupipe libupipe_ts
 Libs: -L${libdir} -lupipe_dvbcsa
 Cflags: -I${includedir}
