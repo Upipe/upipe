@@ -23,20 +23,6 @@
 
 SECTION_RODATA 32
 
-sdi_v210_shuf_easy:       times 2 db 1, 0, -1, -1, 4, 3, 7, 6, 8, 7, 11, 10, 12, 11, -1, -1
-sdi_v210_rshift_easy:     times 2 dw 0x200, 0x7fff, 0x7fff, 0x7fff, 0x2000, 0x2000, 0x800, 0x7fff
-sdi_v210_mask_easy:       times 2 db 0xff, 0x03, 0x00, 0x00, 0xff, 0x03, 0xf0, 0x3f, 0xff, 0x03, 0xf0, 0x3f, 0xff, 0x03, 0x00, 0x00
-
-sdi_v210_shuf_hard_1:     times 2 db 3, 2, 9, 8, 14, 13, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1
-sdi_v210_mult_hard_1:     times 2 dw 4, 4, 16, 1, 1, 1, 1, 1
-sdi_v210_mask_hard_1:     times 2 db 0xf0, 0x3f, 0xfc, 0x0f, 0xf0, 0x3f, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00
-sdi_v210_shuf_hard_1_end: times 2 db -1, -1, 0, 1, -1, -1, -1, -1, -1, 2, 3, -1, -1, -1, 4, 5
-
-sdi_v210_shuf_hard_2:     times 2 db 2, 1, 6, 5, 13, 12, -1, -1,  -1, -1, -1, -1,  -1, -1, -1, -1
-sdi_v210_rshift_hard_2:   times 2 dw 0x2000, 0x800, 0x7fff, 0x7fff, 0x7fff, 0x7fff, 0x7fff, 0x7fff
-sdi_v210_mask_hard_2:     times 2 db 0xfc, 0x0f, 0xfc, 0x0f, 0xfc, 0x0f, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00
-sdi_v210_shuf_hard_2_end: times 2 db -1, 0, 1, -1, -1, 2, 3, -1, -1, -1, -1, -1, -1, 4, 5, -1
-
 planar_8_c_shuf:       times 2 db 0, 5,10,-1,-1,-1,-1,-1, 3, 2, 8, 7,13,12,-1,-1
 planar_8_v_shuf_after: times 2 db 9,11,13,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1
 
@@ -52,38 +38,35 @@ sdi_to_planar10_shuf_c: times 2 db 1, 0, 6, 5,11,10,-1,-1, 3, 2, 8, 7,13,12,-1,-
 sdi_to_planar10_mult_y: times 2 dw 2048, 32767, 2048, 32767, 2048, 32767, 0, 0
 sdi_to_planar10_mult_c: times 2 dw 1024, 1024, 1024, 0, 16384, 16384, 16384, 0
 
+; U1, V2, U3, Y5
+jd_shuf_easy1: times 2 db 1,0, -1,-1, -1,-1, -1,-1, 8,7, 11,10, 12,11, -1,-1
+jd_mask_easy1: times 2 dw 0xffc0, 0, 0, 0, 0xffc, 0xffc0, 0x3ff0, 0
+jd_mult_easy1: times 2 dw 1<<(16-6), 0, 0, 0, 1<<(16-2), 1<<(16-2), 1<<(16-4), 0
+
+; V1, Y2, Y3, Y6
+jd_shuf_easy2: times 2 db -1,-1, 3,2, 4,3, 7,6, -1,-1, -1,-1, -1,-1, 14,13
+jd_mask_easy2: times 2 dw 0, 0xffc, 0x3ff, 0x3ff0, 0, 0, 0, 0x3ff
+jd_mult_easy2: times 2 dw 0, 4, 1, 1, 0, 0, 0, 16
+
+; Y1, U2, V3
+jd_shuf_hard1: times 2 db 2,1, 6,5, 13,12, -1,-1, -1,-1, -1,-1, -1,-1, -1,-1
+jd_mask_hard1: times 2 dw 0x3ff0, 0xffc0, 0xffc, 0, 0, 0, 0, 0
+jd_mult_hard:  times 2 dw 8192, 2048, 32767, 0, 0, 0, 0, 0
+jd_mask_hard2: times 2 dw 0xffc, 0xffc, 0xffc, 0, 0, 0, 0, 0
+jd_shuf_hard2: times 2 db -1, 0,1, -1,-1, 2,3, -1,-1, -1,-1, -1,-1, 4,5, -1
+
 SECTION .text
 
 %macro sdi_to_v210 0
 
 ; sdi_v210_unpack(const uint8_t *src, uint32_t *dst, int64_t width)
-cglobal sdi_to_v210, 3, 3, 3+11*ARCH_X86_64, src, dst, pixels
+cglobal sdi_to_v210, 3, 4 + cpuflag(avx2), 3+11*ARCH_X86_64, src, dst, pixels
 
-%if ARCH_X86_64
-    mova    m3,  [sdi_v210_shuf_easy]
-    mova    m4,  [sdi_v210_shuf_hard_1]
-    mova    m5,  [sdi_v210_shuf_hard_2]
-    mova    m6,  [sdi_v210_rshift_easy]
-    mova    m7,  [sdi_v210_mult_hard_1]
-    mova    m8,  [sdi_v210_rshift_hard_2]
-    mova    m9,  [sdi_v210_mask_easy]
-    mova    m10, [sdi_v210_mask_hard_1]
-    mova    m11, [sdi_v210_mask_hard_2]
-    mova    m12, [sdi_v210_shuf_hard_1_end]
-    mova    m13, [sdi_v210_shuf_hard_2_end]
+%if cpuflag(avx2)
+DECLARE_REG_TMP 3,4
 %else
-    %define m3  [sdi_v210_shuf_easy]
-    %define m4  [sdi_v210_shuf_hard_1]
-    %define m5  [sdi_v210_shuf_hard_2]
-    %define m6  [sdi_v210_rshift_easy]
-    %define m7  [sdi_v210_mult_hard_1]
-    %define m8  [sdi_v210_rshift_hard_2]
-    %define m9  [sdi_v210_mask_easy]
-    %define m10 [sdi_v210_mask_hard_1]
-    %define m11 [sdi_v210_mask_hard_2]
-    %define m12 [sdi_v210_shuf_hard_1_end]
-    %define m13 [sdi_v210_shuf_hard_2_end]
-%endif ; ARCH_X86_64
+DECLARE_REG_TMP 3
+%endif
 
 .loop:
     movu     xm0, [srcq]
@@ -91,25 +74,30 @@ cglobal sdi_to_v210, 3, 3, 3+11*ARCH_X86_64, src, dst, pixels
     vinserti128 m0, m0, [srcq + 15], 1
 %endif
 
-    pshufb   m1, m0, m3
-    pshufb   m2, m0, m4
-    pshufb   m0, m5
+    pshufb  m1,  m0, [jd_shuf_easy1]
+    pshufb  m2,  m0, [jd_shuf_easy2]
+    pshufb       m0, [jd_shuf_hard1]
 
-    pmulhrsw m1, m6
-    pmullw   m2, m7
-    pmulhrsw m0, m8
+    pand         m1, [jd_mask_easy1]
+    pand         m2, [jd_mask_easy2]
+    pand         m0, [jd_mask_hard1]
 
-    pand     m1, m9      ; U1, Y2, Y3, V2, U3, Y5
-    pand     m2, m10
-    pand     m0, m11
+    pmulhuw      m1, [jd_mult_easy1]
+    pmullw       m2, [jd_mult_easy2]
+    pmulhrsw     m0, [jd_mult_hard]
 
-    pshufb   m2, m12     ; V1, Y4, Y6
-    pshufb   m0, m13     ; Y1, U2, V3
+    pand         m0, [jd_mask_hard2]
+    pshufb       m0, [jd_shuf_hard2]
 
-    por      m1, m2
-    por      m1, m0
+    por          m1,  m2
+    por          m1,  m0
+    mova     [dstq],  m1
 
-    mova     [dstq], m1
+    mov         t0d, [srcq+8]
+    bswap       t0d
+    shr         t0d,  6
+    and         t0d,  0xffc00
+    or     [dstq+8],  t0d
 
     add      dstq, mmsize
     add      srcq, (15*mmsize)/16
