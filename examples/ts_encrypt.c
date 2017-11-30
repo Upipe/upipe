@@ -403,7 +403,8 @@ int main(int argc, char *argv[])
         upipe_void_chain_output(
             output, upipe_dvbcsa_mgr,
             uprobe_pfx_alloc(uprobe_use(uprobe_main),
-                             UPROBE_LOG_VERBOSE, "encrypt"));
+                             UPROBE_LOG_VERBOSE,
+                             decryption ? "decrypt" : "encrypt"));
     assert(output);
     upipe_mgr_release(upipe_dvbcsa_mgr);
     ubase_assert(upipe_dvbcsa_set_key(output, key));
