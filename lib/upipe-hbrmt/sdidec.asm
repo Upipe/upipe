@@ -326,7 +326,7 @@ cglobal uyvy_to_v210_%1, 3, 6, 6+cpuflag(avx2), y, dst, pixels
     por     m1, m3
 
 %if notcpuflag(avx2)
-    movu    [dstq+0], m0
+    movq    [dstq+0], m0
     movq    [dstq+8], m1
 %else
     pslldq m1, 8
