@@ -140,7 +140,7 @@ static int catch(struct uprobe *uprobe, struct upipe *upipe,
             if (!ubase_check(uref_clock_get_cr_sys(uref, &last_sr_cr)))
                 upipe_err(upipe, "no cr for rtcp");
             last_sr_ntp = ((uint64_t)ntp_msw << 32) | ntp_lsw;
-            upipe_dbg_va(upipe, "RTCP SR, CR %"PRIu64" NTP %"PRIu64, last_sr_cr,
+            upipe_verbose_va(upipe, "RTCP SR, CR %"PRIu64" NTP %"PRIu64, last_sr_cr,
                 last_sr_ntp);
             uref_block_unmap(uref, 0);
         } else if (pt == RTCP_PT_RR) {
@@ -167,7 +167,7 @@ static int catch(struct uprobe *uprobe, struct upipe *upipe,
             cr -= last_sr_cr;
             cr -= delay * UCLOCK_FREQ / 65536;
 
-            upipe_dbg_va(upipe, "RTCP RR: RTT %f", (float) cr / UCLOCK_FREQ);
+            upipe_verbose_va(upipe, "RTCP RR: RTT %f", (float) cr / UCLOCK_FREQ);
             uref_block_unmap(uref, 0);
 
             // send RTT back to receiver as an Application-Defined RTCP packet
@@ -202,7 +202,7 @@ static int catch(struct uprobe *uprobe, struct upipe *upipe,
             uref_block_unmap(rtt, 0);
             uref_block_resize(rtt, 0, rtt_len);
 
-            upipe_dbg_va(upipe, "sending RTT");
+            upipe_verbose_va(upipe, "sending RTT");
             upipe_input(upipe_udpsink, rtt, NULL);
         } else {
             upipe_err_va(upipe, "unhandled RTCP PT %u", pt);

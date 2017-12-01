@@ -725,14 +725,14 @@ static void upipe_rtpfb_handle_sr(struct upipe *upipe, struct uref *uref)
     if (!ubase_check(uref_clock_get_cr_sys(uref, &cr))) {
         upipe_err(upipe, "SR packet not timed");
     }
-    upipe_dbg_va(upipe, "len %d NTP %"PRIx64" rtp %u pkts %u bytes %u, CR %"PRIu64"",
+    upipe_verbose_va(upipe, "len %d NTP %"PRIx64" rtp %u pkts %u bytes %u, CR %"PRIu64"",
             len, ntp, rtp_pts, pkt_cnt, byte_cnt, cr);
 
     if (upipe_rtpfb->sr_cr != UINT64_MAX) {
         uint32_t prev_pkt = rtcp_sr_get_packet_count(upipe_rtpfb->sr);
         uint32_t prev_byt = rtcp_sr_get_octet_count(upipe_rtpfb->sr);
 
-        upipe_dbg_va(upipe, "%.2f pkts/s %.2fMbps",
+        upipe_verbose_va(upipe, "%.2f pkts/s %.2fMbps",
                 (float)(pkt_cnt - prev_pkt) * UCLOCK_FREQ / (cr - upipe_rtpfb->sr_cr),
                 (float)(byte_cnt - prev_byt) * 8 * UCLOCK_FREQ / (cr - upipe_rtpfb->sr_cr) / 1000 / 1000);
     }
@@ -781,12 +781,12 @@ static void upipe_rtpfb_input(struct upipe *upipe, struct uref *uref,
     }
 
     if (pt == RTCP_PT_SR) {
-        upipe_warn(upipe, "received sender report");
+        upipe_verbose(upipe, "received sender report");
         upipe_rtpfb_handle_sr(upipe, uref);
         uref_free(uref);
         return;
     } else if (pt == 204) {
-        upipe_warn(upipe, "application-defined RTCP");
+        upipe_verbose(upipe, "application-defined RTCP");
         const uint8_t *buf;
         int s = -1;
         if (ubase_check(uref_block_read(uref, 0, &s, &buf))) {
@@ -794,7 +794,7 @@ static void upipe_rtpfb_input(struct upipe *upipe, struct uref *uref,
                 if (buf[8] == 'O' && buf[9] == 'B' && buf[10] == 'S' && buf[11] == 'R') {
                     uint32_t rtt = (buf[12] << 24) | (buf[13] << 16) |
                         (buf[14] << 8) | buf[15];
-                    upipe_dbg_va(upipe, "RTT %f", (float)rtt / UCLOCK_FREQ);
+                    upipe_verbose_va(upipe, "RTT %f", (float)rtt / UCLOCK_FREQ);
                     upipe_rtpfb->rtt = rtt;
 
                     upump_stop(upipe_rtpfb->upump_timer_lost);
