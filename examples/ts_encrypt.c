@@ -46,6 +46,7 @@
 
 #include <upipe-modules/upipe_file_source.h>
 #include <upipe-modules/upipe_file_sink.h>
+#include <upipe-modules/upipe_udp_source.h>
 #include <upipe-modules/upipe_rtp_source.h>
 #include <upipe-modules/upipe_rtp_prepend.h>
 #include <upipe-modules/upipe_udp_sink.h>
@@ -89,8 +90,6 @@ enum {
     OPT_DECRYPT = 'D',
     OPT_KEY     = 'k',
     OPT_UDP     = 'U',
-    OPT_MTU     = 'M',
-    OPT_CONFORMANCE = 'K',
     OPT_LATENCY = 'L',
     OPT_RT_PRIORITY = 'i',
 };
@@ -142,7 +141,8 @@ static void usage(const char *name)
             "\t-k   : set BISS key\n"
             "\t-L   : set the maximum latency in milliseconds\n"
             "\t-i   : RT priority for source and sink\n"
-            "\t-D   : decrypt instead of encrypt\n",
+            "\t-D   : decrypt instead of encrypt\n"
+            "\t-U   : UDP rather than RTP\n",
             name);
 }
 
@@ -171,12 +171,13 @@ int main(int argc, char *argv[])
     unsigned int rt_priority = 0;
     int log_level = UPROBE_LOG_NOTICE;
     bool decryption = false;
+    bool udp = false;
     bool use_batch = false;
     const char *key = NULL;
     int latency = -1;
     int c;
 
-    while ((c = getopt(argc, argv, "vbk:M:K:L:i:D")) != -1) {
+    while ((c = getopt(argc, argv, "vbk:L:i:DU")) != -1) {
         switch (c) {
             case OPT_DEBUG:
                 if (log_level == UPROBE_LOG_DEBUG)
@@ -189,10 +190,6 @@ int main(int argc, char *argv[])
                 break;
             case OPT_KEY:
                 key = optarg;
-                break;
-            case OPT_UDP:
-            case OPT_MTU:
-            case OPT_CONFORMANCE:
                 break;
             case OPT_LATENCY:
                 latency = atoi(optarg);
@@ -207,6 +204,9 @@ int main(int argc, char *argv[])
                 break;
             case OPT_DECRYPT:
                 decryption = true;
+                break;
+            case OPT_UDP:
+                udp = true;
                 break;
             default:
                 usage(argv[0]);
@@ -321,13 +321,14 @@ int main(int argc, char *argv[])
         /* try rtp source */
         upipe_release(source);
 
-        struct upipe_mgr *upipe_rtpsrc_mgr = upipe_rtpsrc_mgr_alloc();
-        assert(upipe_rtpsrc_mgr);
-        source = upipe_void_alloc(upipe_rtpsrc_mgr,
+        struct upipe_mgr *upipe_src_mgr = udp ?
+            upipe_udpsrc_mgr_alloc() : upipe_rtpsrc_mgr_alloc();
+        assert(upipe_src_mgr);
+        source = upipe_void_alloc(upipe_src_mgr,
                                   uprobe_pfx_alloc(uprobe_use(uprobe_src),
                                                    UPROBE_LOG_VERBOSE, "src"));
         assert(source);
-        upipe_mgr_release(upipe_rtpsrc_mgr);
+        upipe_mgr_release(upipe_src_mgr);
         ubase_assert(upipe_attach_uclock(source));
         ubase_assert(upipe_set_uri(source, in));
         src_queue_length = SRC_QUEUE_LENGTH;
@@ -403,7 +404,8 @@ int main(int argc, char *argv[])
         upipe_void_chain_output(
             output, upipe_dvbcsa_mgr,
             uprobe_pfx_alloc(uprobe_use(uprobe_main),
-                             UPROBE_LOG_VERBOSE, "encrypt"));
+                             UPROBE_LOG_VERBOSE,
+                             decryption ? "decrypt" : "encrypt"));
     assert(output);
     upipe_mgr_release(upipe_dvbcsa_mgr);
     ubase_assert(upipe_dvbcsa_set_key(output, key));
@@ -431,27 +433,29 @@ int main(int argc, char *argv[])
      */
     struct upipe *sink = NULL;
 
-    /* try rtp */
-    struct upipe_mgr *upipe_rtp_prepend_mgr = upipe_rtp_prepend_mgr_alloc();
-    assert(upipe_rtp_prepend_mgr);
-    sink =
-        upipe_void_alloc(
-            upipe_rtp_prepend_mgr,
-            uprobe_pfx_alloc(uprobe_use(uprobe_main),
-                             UPROBE_LOG_VERBOSE, "rtpp"));
-    assert(sink);
-    upipe_mgr_release(upipe_rtp_prepend_mgr);
+    /* try udp/rtp */
+    if (!udp) {
+        struct upipe_mgr *upipe_rtp_prepend_mgr = upipe_rtp_prepend_mgr_alloc();
+        assert(upipe_rtp_prepend_mgr);
+        sink =
+            upipe_void_alloc(
+                    upipe_rtp_prepend_mgr,
+                    uprobe_pfx_alloc(uprobe_use(uprobe_main),
+                        UPROBE_LOG_VERBOSE, "rtpp"));
+        assert(sink);
+        upipe_mgr_release(upipe_rtp_prepend_mgr);
+    }
 
     struct upipe_mgr *upipe_udpsink_mgr = upipe_udpsink_mgr_alloc();
     assert(upipe_udpsink_mgr);
     struct upipe *udpsink =
-        upipe_void_alloc_output(
-            sink, upipe_udpsink_mgr,
+        upipe_void_alloc(upipe_udpsink_mgr,
             uprobe_pfx_alloc(uprobe_use(uprobe_main),
                              UPROBE_LOG_VERBOSE, "udp"));
     assert(udpsink);
     ubase_assert(upipe_attach_uclock(udpsink));
     upipe_mgr_release(upipe_udpsink_mgr);
+
     if (!ubase_check(upipe_set_uri(udpsink, out))) {
         upipe_release(udpsink);
         upipe_release(sink);
@@ -468,9 +472,11 @@ int main(int argc, char *argv[])
 
         ubase_assert(upipe_fsink_set_path(sink, out, UPIPE_FSINK_OVERWRITE));
     }
-    else {
+    else if (!udp) {
         ubase_assert(upipe_set_output(sink, udpsink));
         upipe_release(udpsink);
+    } else {
+        sink = udpsink;
     }
 
     sink = upipe_wsink_alloc(upipe_wsink_mgr,
