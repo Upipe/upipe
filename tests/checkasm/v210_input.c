@@ -25,24 +25,16 @@
 #include "lib/upipe-v210/v210dec.h"
 #include "lib/upipe-hbrmt/sdienc.h"
 #include "lib/upipe-hbrmt/rfc4175_enc.h"
-
-static uint32_t clip(uint32_t value)
-{
-    if (value < 4)
-        return 4;
-    if (value > 1019)
-        return 1019;
-    return value;
-}
+#include "upipe/ubase.h"
 
 static uint32_t get_v210(void)
 {
     uint32_t t0 = rnd() & 0x3ff,
              t1 = rnd() & 0x3ff,
              t2 = rnd() & 0x3ff;
-    uint32_t value =  clip(t0)
-                   | (clip(t1) << 10)
-                   | (clip(t2) << 20);
+    uint32_t value =  ubase_clip(t0, 4, 1019)
+                   | (ubase_clip(t1, 4, 1019) << 10)
+                   | (ubase_clip(t2, 4, 1019) << 20);
     return value;
 }
 
