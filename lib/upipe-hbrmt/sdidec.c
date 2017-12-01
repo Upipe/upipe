@@ -23,6 +23,9 @@
 #include <libavutil/common.h>
 #include <libavutil/intreadwrite.h>
 #include "sdidec.h"
+#include "upipe/ubase.h"
+
+#define CLIP(v) ubase_clip(v, 4, 1019)
 
 void upipe_sdi_to_uyvy_c(const uint8_t *src, uint16_t *y, uintptr_t pixels)
 {
@@ -129,8 +132,6 @@ void upipe_uyvy_to_planar_10_c(uint16_t *y, uint16_t *u, uint16_t *v, const uint
         v += 1;
     }
 }
-
-#define CLIP(v) av_clip(v, 4, 1019)
 
 #define WRITE_PIXELS_UYVY(a)            \
     do {                                \

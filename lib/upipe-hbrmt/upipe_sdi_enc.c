@@ -25,8 +25,6 @@
 #include <bitstream/smpte/291.h>
 #include <bitstream/dvb/vbi.h>
 
-#include <libavutil/common.h>
-
 #include <upipe-hbrmt/upipe_sdi_enc.h>
 #include "upipe_hbrmt_common.h"
 
@@ -1556,8 +1554,8 @@ static int upipe_sdi_enc_control(struct upipe *upipe, int command, va_list args)
     }
 }
 
-#define CLIP8(c) (av_clip((*(c)), 1,  254))
-#define CLIP(c)  (av_clip((*(c)), 4, 1019))
+#define CLIP8(c) (ubase_clip((*(c)), 1,  254))
+#define CLIP(c)  (ubase_clip((*(c)), 4, 1019))
 
 static void planar_to_uyvy_8_c(uint16_t *dst, const uint8_t *y, const uint8_t *u, const uint8_t *v, const uintptr_t width)
 {
