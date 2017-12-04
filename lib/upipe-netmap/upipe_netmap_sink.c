@@ -1204,8 +1204,8 @@ static void upipe_netmap_sink_worker(struct upump *upump)
                 ioctl(NETMAP_FD(intf0->d), NIOCTXSYNC, NULL);
                 txavail = nm_ring_space(txring[!i]);
 
-                // synchronize within 400 packets
-                upipe_resync_queues(upipe, txring[!i]->num_slots - 1 - txavail - 400);
+                // synchronize within 1024 packets
+                upipe_resync_queues(upipe, txring[!i]->num_slots - 1 - txavail - 1024);
 
                 // update NIC, should start outputting packets
                 ioctl(NETMAP_FD(intf->d), NIOCTXSYNC, NULL);
