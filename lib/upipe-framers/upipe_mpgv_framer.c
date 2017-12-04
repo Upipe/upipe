@@ -1524,6 +1524,8 @@ static bool upipe_mpgvf_handle(struct upipe *upipe, struct uref *uref,
             uref_flow_set_error(upipe_mpgvf->next_uref);
     }
 
+    uref_flow_delete_random(uref);
+    uref_pic_delete_key(uref);
     upipe_mpgvf_append_uref_stream(upipe, uref);
     upipe_mpgvf_work(upipe, upump_p);
     return true;
