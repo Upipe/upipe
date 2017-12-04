@@ -85,7 +85,6 @@ if HAVE_DLFCN_H
 noinst_PROGRAMS += blackmagic
 endif
 endif # swresample
-endif # swscale
 
 if HAVE_BITSTREAM
 if HAVE_WRITEV
@@ -96,6 +95,7 @@ if HAVE_GLX
 noinst_PROGRAMS += glxplay
 noinst_PROGRAMS += uplay
 endif
+endif # swscale
 
 if HAVE_ALSA
 noinst_PROGRAMS += alsaplay

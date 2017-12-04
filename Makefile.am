@@ -46,3 +46,6 @@ check-whitespace:
 	  test -n "$$out" && echo "$$out" && ret=1; \
 	  test -z "$$ret"; \
 	done
+
+check-untracked:
+	@if git ls-files --others --exclude-standard | grep .; then exit 1; fi

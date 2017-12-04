@@ -306,7 +306,7 @@ static struct upipe *upipe_mpgvf_alloc(struct upipe_mgr *mgr,
     uref_init(&upipe_mpgvf->au_uref_s);
     upipe_mpgvf_flush_dates(upipe);
     upipe_mpgvf->drift_rate.num = upipe_mpgvf->drift_rate.den = 0;
-    upipe_mpgvf->type == UINT8_MAX;
+    upipe_mpgvf->type = UINT8_MAX;
     upipe_mpgvf->sequence_header = upipe_mpgvf->sequence_ext =
         upipe_mpgvf->sequence_display = NULL;
     upipe_throw_ready(upipe);
@@ -877,6 +877,7 @@ static bool upipe_mpgvf_parse_picture(struct upipe *upipe, struct uref *uref,
     UBASE_FATAL(upipe, uref_block_peek_unmap(uref, upipe_mpgvf->next_frame_offset,
                                       picture_buffer, picture))
 
+    bool same_frame = temporalreference == upipe_mpgvf->last_temporal_reference;
     uint64_t picture_number = upipe_mpgvf->last_picture_number +
         (temporalreference - upipe_mpgvf->last_temporal_reference);
     if (temporalreference > upipe_mpgvf->last_temporal_reference) {
@@ -911,25 +912,25 @@ static bool upipe_mpgvf_parse_picture(struct upipe *upipe, struct uref *uref,
                                           ext_buffer, ext))
 
         if (upipe_mpgvf->progressive_sequence) {
+            upipe_mpgvf->field_number = 0;
             if (rff)
                 *duration_p *= 1 + tff;
+        } else if (structure == MP2VPICX_FRAME_PICTURE) {
+            upipe_mpgvf->field_number = 0;
+            if (rff)
+                *duration_p += *duration_p / 2;
         } else {
-            if (structure == MP2VPICX_FRAME_PICTURE) {
-                if (rff)
-                    *duration_p += *duration_p / 2;
-            } else
-                *duration_p /= 2;
+            if (!same_frame)
+                upipe_mpgvf->field_number = 0;
+            upipe_mpgvf->field_number %= 2;
+            upipe_mpgvf->field_number++;
+            *duration_p /= 2;
         }
 
-        upipe_mpgvf->field_number %= 2;
         if (structure & MP2VPICX_TOP_FIELD)
             UBASE_FATAL(upipe, uref_pic_set_tf(uref))
-        else
-            upipe_mpgvf->field_number++;
         if (structure & MP2VPICX_BOTTOM_FIELD)
             UBASE_FATAL(upipe, uref_pic_set_bf(uref))
-        else
-            upipe_mpgvf->field_number++;
         if (tff)
             UBASE_FATAL(upipe, uref_pic_set_tff(uref))
         if (progressive)
@@ -1523,6 +1524,8 @@ static bool upipe_mpgvf_handle(struct upipe *upipe, struct uref *uref,
             uref_flow_set_error(upipe_mpgvf->next_uref);
     }
 
+    uref_flow_delete_random(uref);
+    uref_pic_delete_key(uref);
     upipe_mpgvf_append_uref_stream(upipe, uref);
     upipe_mpgvf_work(upipe, upump_p);
     return true;

@@ -73,13 +73,13 @@ const char dvbm_sys_fmt[] = "/sys/class/dvbm/%u/%s";
 
 /** default size of buffers when unspecified, extra 8-byte timestamp on capture */
 #define BYPASS_MODE           (1)
-#define CAPTURE_DEFAULT_SIZE  ((188+8)*112)
+#define CAPTURE_DEFAULT_SIZE  (188*112)
 #define RX_DEFAULT_SIZE       (188*7)
 #define BUFFERS               (2)
 #define OPERATING_MODE        (1)
-#define TIMESTAMP_MODE        (2)
+#define TIMESTAMP_MODE        (0)
 #define TS_PACKETS            (7)
-#define MAX_DELAY             (UCLOCK_FREQ/10)
+#define MAX_DELAY             (UCLOCK_FREQ/5)
 
 /** @hidden */
 static int upipe_dveo_asi_src_check(struct upipe *upipe, struct uref *flow_format);
@@ -221,7 +221,8 @@ static void upipe_dveo_asi_src_worker(struct upump *upump)
 {
     struct upipe *upipe = upump_get_opaque(upump, struct upipe *);
     struct upipe_dveo_asi_src *upipe_dveo_asi_src = upipe_dveo_asi_src_from_upipe(upipe);
-    uint64_t systime = 0, first_ts = UINT64_MAX;
+    uint64_t systime = 0, systime_delta = 0, cr_sys = 0;
+    int total_pkts = 0, pkt_count = 0;
     if (upipe_dveo_asi_src->uclock != NULL)
         systime = uclock_now(upipe_dveo_asi_src->uclock);
 
@@ -266,34 +267,22 @@ static void upipe_dveo_asi_src_worker(struct upump *upump)
         return;
     }
 
-    if (upipe_dveo_asi_src->uclock != NULL)
-        uref_clock_set_cr_sys(uref, systime);
     if (unlikely(ret != CAPTURE_DEFAULT_SIZE))
         uref_block_resize(uref, 0, ret);
 
+    /* Latter condition can happen if buffer contains data from before
+     * cable unplug and after replug. Causes cr_sys with long delays */
+    if (upipe_dveo_asi_src->last_ts == -1 || systime - upipe_dveo_asi_src->last_ts > MAX_DELAY) {
+        uref_free(uref);
+        upipe_dveo_asi_src->last_ts = systime;
+        return;
+    }
 
+    /* Do all calculations in terms of TS packets, except pkt_count which is in terms of 7 TS packets */
+    total_pkts = ret / (188*TS_PACKETS);
     while (ret > 0) {
-        int discontinuity;
-        uint64_t ts;
-        uint8_t tmp[8];
-        const uint8_t *ptr = uref_block_peek(uref, 0, 8, tmp);
-        ts = ((uint64_t)ptr[7] << 56) | ((uint64_t)ptr[6] << 48) | ((uint64_t)ptr[5] << 40) | ((uint64_t)ptr[4] << 32) |
-             ((uint64_t)ptr[3] << 24) | ((uint64_t)ptr[2] << 16) | ((uint64_t)ptr[1] <<  8) | ((uint64_t)ptr[0] <<  0);
-        discontinuity = ts < upipe_dveo_asi_src->last_ts;
-        upipe_dveo_asi_src->last_ts = ts;
-        uref_block_peek_unmap(uref, 0, tmp, ptr);
-
-        /* Latter condition can happen if buffer contains data from before
-         * cable unplug and after replug. Causes cr_sys with long delays */
-        if (first_ts == UINT64_MAX || ts - first_ts > MAX_DELAY)
-            first_ts = ts;
-
-        /* Delete rest of timestamps */
-        for (int i = 0; i < TS_PACKETS; i++)
-            uref_block_delete(uref, 188*i, 8);
-
         struct uref *output;
-        if (ret > (188+8)*TS_PACKETS) {
+        if (ret > (188*TS_PACKETS)) {
             output = uref_block_splice(uref, 0, 188*TS_PACKETS);
             if (unlikely(output == NULL)) {
                 uref_free(uref);
@@ -304,13 +293,19 @@ static void upipe_dveo_asi_src_worker(struct upump *upump)
         else
             output = uref;
 
-        uref_clock_set_cr_sys(output, systime + (ts - first_ts));
+        systime_delta = systime - upipe_dveo_asi_src->last_ts;
+        cr_sys = upipe_dveo_asi_src->last_ts + (pkt_count * systime_delta) / total_pkts;
+
+        uref_clock_set_cr_sys(output, cr_sys);
         upipe_dveo_asi_src_output(upipe, output, &upipe_dveo_asi_src->upump);
 
-        if (ret > (188+8)*TS_PACKETS)
+        if (ret > (188*TS_PACKETS))
             uref_block_delete(uref, 0, 188*TS_PACKETS);
-        ret -= (188+8)*TS_PACKETS;
+        ret -= (188*TS_PACKETS);
+        pkt_count++;
     }
+
+    upipe_dveo_asi_src->last_ts = systime;
 }
 
 /** @internal @This checks if the pump may be allocated.

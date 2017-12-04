@@ -32,9 +32,6 @@
 #include <upipe/uref_block.h>
 #include <upipe/uprobe_prefix.h>
 
-#include <upipe-ts/upipe_ts_demux.h>
-#include <upipe-ts/upipe_ts_split.h>
-
 #include <upipe-dvbcsa/upipe_dvbcsa_encrypt.h>
 #include <upipe-dvbcsa/upipe_dvbcsa_common.h>
 
