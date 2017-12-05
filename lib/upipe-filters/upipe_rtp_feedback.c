@@ -326,6 +326,10 @@ static void upipe_rtpfb_timer_lost(struct upump *upump)
 
     uint64_t expected_seq = UINT64_MAX;
 
+    /* Wait to know RTT before asking for retransmits */
+    if (upipe_rtpfb->rtt == 0)
+        return;
+
     uint64_t now = uclock_now(upipe_rtpfb->uclock);
 
     /* space out NACKs a bit more than RTT. XXX: tune me */
@@ -618,7 +622,7 @@ static struct upipe *upipe_rtpfb_alloc(struct upipe_mgr *mgr,
     upipe_rtpfb_init_uclock(upipe);
     ulist_init(&upipe_rtpfb->queue);
     memset(upipe_rtpfb->last_nack, 0, sizeof(upipe_rtpfb->last_nack));
-    upipe_rtpfb->rtt = UCLOCK_FREQ / 100; /* will be updated later */
+    upipe_rtpfb->rtt = 0;
     upipe_rtpfb_require_uclock(upipe);
     upipe_rtpfb->rtpfb_output = NULL;
     upipe_rtpfb->uprobe = uprobe_use(uprobe);
