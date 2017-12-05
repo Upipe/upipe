@@ -7,4 +7,5 @@ Description: Upipe multimedia framework, libdvbcsa interface module
 Version: @VERSION@
 Requires: libupipe libupipe_ts
 Libs: -L${libdir} -lupipe_dvbcsa
+Libs.private: -ldvbcsa
 Cflags: -I${includedir}
