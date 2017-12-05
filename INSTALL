@@ -34,6 +34,7 @@ Upipe has the following optional dependencies:
       upipe-ts, upipe-framers, and a few upipe-modules components.
       bitstream should always be fetched from the latest git.
 @item @url http://www.videolan.org/developers/x264.html for upipe-x264
+@item @url http://x265.org/ for upipe-x265
 @item a GL/GLU/GLX and X11 implementation for upipe-gl
 @end list
 

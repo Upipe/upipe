@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2014 OpenHeadend S.A.R.L.
+ * Copyright (C) 2014-2017 OpenHeadend S.A.R.L.
  *
  * Authors: Christophe Massiot
  *
@@ -59,6 +59,7 @@ enum upipe_fenc_mgr_command {
 
     UPIPE_FENC_MGR_GET_SET_MGR(avcenc, AVCENC)
     UPIPE_FENC_MGR_GET_SET_MGR(x264, X264)
+    UPIPE_FENC_MGR_GET_SET_MGR(x265, X265)
 #undef UPIPE_FENC_MGR_GET_SET_MGR
 };
 
@@ -94,6 +95,7 @@ static inline int                                                           \
 
 UPIPE_FENC_MGR_GET_SET_MGR2(avcenc, AVCENC)
 UPIPE_FENC_MGR_GET_SET_MGR2(x264, X264)
+UPIPE_FENC_MGR_GET_SET_MGR2(x265, X265)
 #undef UPIPE_FENC_MGR_GET_SET_MGR2
 
 #ifdef __cplusplus

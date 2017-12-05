@@ -335,6 +335,11 @@ check_PROGRAMS += \
 	upipe_h264_framer_test_build
 TESTS += upipe_x264_test
 endif
+
+if HAVE_X265
+check_PROGRAMS += upipe_x265_test
+TESTS += upipe_x265_test
+endif
 endif
 
 if HAVE_ECORE
@@ -468,6 +473,9 @@ upipe_x264_test_LDADD = $(LDADD) $(X264_LIBS) $(top_builddir)/lib/upipe-x264/lib
 upipe_x264_test_CFLAGS = $(AM_CFLAGS) $(X264_CFLAGS)
 upipe_h264_framer_test_build_LDADD = $(LDADD) $(X264_LIBS) $(top_builddir)/lib/upipe-x264/libupipe_x264.la
 upipe_h264_framer_test_build_CFLAGS = $(AM_CFLAGS) $(X264_CFLAGS)
+
+upipe_x265_test_LDADD = $(LDADD) $(X265_LIBS) $(top_builddir)/lib/upipe-x265/libupipe_x265.la
+upipe_x265_test_CFLAGS = $(AM_CFLAGS) $(X265_CFLAGS)
 
 upipe_alsa_sink_test_LDADD = $(LDADD) -lasound $(top_builddir)/lib/upipe-alsa/libupipe_alsa.la $(top_builddir)/lib/upipe-modules/libupipe_modules.la -lev $(top_builddir)/lib/upump-ev/libupump_ev.la
 upump_ecore_test_LDADD = $(LDADD) $(ECORE_LIBS) $(top_builddir)/lib/upump-ecore/libupump_ecore.la

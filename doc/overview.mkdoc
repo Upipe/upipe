@@ -126,6 +126,7 @@
         @item @ref upipe_fenc_mgr_alloc @item linear pipe encoding a stream @item @tt -lupipe-filters
         @item @ref upipe_filter_blend_mgr_alloc @item linear pipe deinterlacing pictures using a blending algorithm @item @tt -lupipe-filters
         @item @ref upipe_x264_mgr_alloc @item linear pipe encoding to MPEG-4 AVC using libx264 @item @tt -lupipe-x264
+        @item @ref upipe_x265_mgr_alloc @item linear pipe encoding to H.265/HEVC using libx265 @item @tt -lupipe-x265
         @item @ref upipe_glx_sink_mgr_alloc @item sink pipe displaying picture on a GLX output @item @tt -lupipe-gl
 
       @end table

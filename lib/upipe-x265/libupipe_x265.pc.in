@@ -1,0 +1,10 @@
+prefix=@prefix@
+exec_prefix=@exec_prefix@
+libdir=@libdir@
+includedir=@includedir@
+Name: libupipe_x265
+Description: Upipe multimedia framework, x265 interface module
+Version: @VERSION@
+Requires: x265 libupipe
+Libs: -L${libdir} -lupipe_x265
+Cflags: -I${includedir}
