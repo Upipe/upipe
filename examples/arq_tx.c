@@ -93,7 +93,14 @@ static uint64_t last_sr_cr;
 static int catch_udp(struct uprobe *uprobe, struct upipe *upipe,
                  int event, va_list args)
 {
+    const char *uri;
+
     switch (event) {
+    case UPROBE_SOURCE_END:
+        upipe_warn(upipe, "Remote end not listening, can't receive RTCP");
+        /* This control can not fail, and will trigger restart of upump */
+        upipe_get_uri(upipe, &uri);
+        return UBASE_ERR_NONE;
     case UPROBE_UDPSRC_NEW_PEER:
         return UBASE_ERR_NONE;
     default:
