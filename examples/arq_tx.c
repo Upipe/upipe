@@ -278,10 +278,8 @@ int main(int argc, char *argv[])
 
     /* rtp source */
     struct upipe_mgr *upipe_udpsrc_mgr = upipe_udpsrc_mgr_alloc();
-    struct uprobe uprobe_udp_main;
-    uprobe_init(&uprobe_udp_main, catch_udp, uprobe_pfx_alloc(uprobe_use(logger),
-                             loglevel, "udp source"));
-    struct upipe *upipe_udpsrc = upipe_void_alloc(upipe_udpsrc_mgr, &uprobe_udp_main);
+    struct upipe *upipe_udpsrc = upipe_void_alloc(upipe_udpsrc_mgr,
+            uprobe_pfx_alloc(uprobe_use(logger), loglevel, "udp source"));
 
     if (!ubase_check(upipe_set_uri(upipe_udpsrc, srcpath))) {
         return EXIT_FAILURE;
@@ -366,7 +364,6 @@ int main(int argc, char *argv[])
      * release everything */
     uprobe_release(logger);
     uprobe_clean(&uprobe);
-    uprobe_clean(&uprobe_udp_main);
     uprobe_clean(&uprobe_udp_rtcp);
 
     upump_mgr_release(upump_mgr);
