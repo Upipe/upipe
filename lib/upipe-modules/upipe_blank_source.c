@@ -103,7 +103,7 @@ UPIPE_HELPER_BIN_OUTPUT(upipe_blksrc, blk, output, blk_requests);
 /** @internal @This stores the flow definition.
  *
  * @param upipe description structure of the pipe
- * @param flow_def flow defintion to set
+ * @param flow_def flow definition to set
  */
 static inline void upipe_blksrc_store_flow_def(struct upipe *upipe,
                                                struct uref *flow_def)

@@ -72,7 +72,7 @@ UPIPE_HELPER_UREFCOUNT(upipe_dvbcsa_dec, urefcount, upipe_dvbcsa_dec_free);
 UPIPE_HELPER_VOID(upipe_dvbcsa_dec);
 UPIPE_HELPER_OUTPUT(upipe_dvbcsa_dec, output, flow_def, output_state, requests);
 
-/** @interal @This frees a dvbcsa decription pipe.
+/** @internal @This frees a dvbcsa decription pipe.
  *
  * @param upipe description structure of the pipe
  */

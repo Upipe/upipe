@@ -120,7 +120,7 @@ UPIPE_HELPER_UPUMP(upipe_dvbcsa_bs_dec, upump, upump_mgr);
 UPIPE_HELPER_INPUT(upipe_dvbcsa_bs_dec, urefs, nb_urefs, max_urefs, blockers,
                    NULL);
 
-/** @interal @This frees a dvbcsa decription pipe.
+/** @internal @This frees a dvbcsa decription pipe.
  *
  * @param upipe description structure of the pipe
  */

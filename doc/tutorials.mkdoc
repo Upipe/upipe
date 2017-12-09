@@ -98,7 +98,7 @@ ev_loop(loop, 0);
     @end section
     @section {Decoding pipeline}
 
-      In all probes, the first argument is the next probe to call if the event wasn't caught. For selflow, the second argument is the probe to pass to subpipes when they are allocated. In that second case, we pass &uprobe_catch, an application-defined probe intialized earlier:
+      In all probes, the first argument is the next probe to call if the event wasn't caught. For selflow, the second argument is the probe to pass to subpipes when they are allocated. In that second case, we pass &uprobe_catch, an application-defined probe initialized earlier:
 
       @code
 struct uprobe uprobe_catch;
