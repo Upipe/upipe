@@ -156,8 +156,12 @@ struct upipe_x265 {
     int width;
     /** input height */
     int height;
-    /** input SAR */
-    struct urational sar;
+    /** input aspect ratio idc (0 = unspecified) */
+    int aspect_ratio_idc;
+    /** input sar width (if aspect_ratio_idc == X265_EXTENDED_SAR) */
+    int sar_width;
+    /** input sar height (if aspect_ratio_idc == X265_EXTENDED_SAR) */
+    int sar_height;
     /** input overscan */
     int overscan;
 
@@ -383,7 +387,7 @@ static struct upipe *upipe_x265_alloc(struct upipe_mgr *mgr,
     upipe_x265->flow_def_requested = NULL;
     upipe_x265->headers_requested = false;
     upipe_x265->encaps_requested = UREF_H26X_ENCAPS_ANNEXB;
-    upipe_x265->sar.num = upipe_x265->sar.den = 1;
+    upipe_x265->aspect_ratio_idc = 0;
     upipe_x265->overscan = 0; /* undef */
 
     upipe_x265->last_dts = UINT64_MAX;
@@ -413,8 +417,11 @@ static void apply_params(struct upipe *upipe)
         params->fpsDenom = fps.den;
     }
 
-    params->vui.sarWidth = upipe_x265->sar.num;
-    params->vui.sarHeight = upipe_x265->sar.den;
+    params->vui.aspectRatioIdc = upipe_x265->aspect_ratio_idc;
+    if (params->vui.aspectRatioIdc == X265_EXTENDED_SAR) {
+        params->vui.sarWidth = upipe_x265->sar_width;
+        params->vui.sarHeight = upipe_x265->sar_height;
+    }
     params->vui.bEnableOverscanInfoPresentFlag = upipe_x265->overscan;
     params->vui.bEnableOverscanAppropriateFlag = upipe_x265->overscan;
     params->sourceWidth = upipe_x265->width;
@@ -671,11 +678,67 @@ static inline bool upipe_x265_need_update(struct upipe *upipe,
 {
     struct upipe_x265 *upipe_x265 = upipe_x265_from_upipe(upipe);
     x265_param *params = &upipe_x265->params;
-    return params->sourceWidth != width ||
-           params->sourceHeight != height ||
-           params->vui.sarWidth != upipe_x265->sar.num ||
-           params->vui.sarHeight != upipe_x265->sar.den ||
+    return upipe_x265->width != width ||
+           upipe_x265->height != height ||
+           params->vui.aspectRatioIdc != upipe_x265->aspect_ratio_idc ||
+           (params->vui.aspectRatioIdc == X265_EXTENDED_SAR &&
+            (params->vui.sarWidth != upipe_x265->sar_width ||
+             params->vui.sarHeight != upipe_x265->sar_height)) ||
            params->vui.bEnableOverscanAppropriateFlag != upipe_x265->overscan;
+}
+
+/** @internal @This fetches aspect ratio information from flow def.
+ *
+ * @param upipe description structure of the pipe
+ * @param flow_def flow definition packet
+ */
+static void upipe_x265_get_aspect_ratio(struct upipe *upipe,
+                                        struct uref *flow_def)
+{
+    struct upipe_x265 *upipe_x265 = upipe_x265_from_upipe(upipe);
+    struct urational sar;
+
+    static const struct {
+        int idc;
+        int num;
+        int den;
+    } sar_to_idc[] = {
+        {  1,   1,  1, },
+        {  2,  12, 11, },
+        {  3,  10, 11, },
+        {  4,  16, 11, },
+        {  5,  40, 33, },
+        {  6,  24, 11, },
+        {  7,  20, 11, },
+        {  8,  32, 11, },
+        {  9,  80, 33, },
+        { 10,  18, 11, },
+        { 11,  15, 11, },
+        { 12,  64, 33, },
+        { 13, 160, 99, },
+        { 14,   4,  3, },
+        { 15,   3,  2, },
+        { 16,   2,  1, },
+    };
+
+    if (uref_pic_flow_get_sar(flow_def, &sar) != UBASE_ERR_NONE) {
+        // unspecified aspect ratio
+        upipe_x265->aspect_ratio_idc = 0;
+        return;
+    }
+
+    // look for predefined aspect ratio
+    for (unsigned i = 0; i < UBASE_ARRAY_SIZE(sar_to_idc); i++)
+        if (sar.num == sar_to_idc[i].num &&
+            sar.den == sar_to_idc[i].den) {
+            upipe_x265->aspect_ratio_idc = sar_to_idc[i].idc;
+            return;
+        }
+
+    // extended aspect ratio
+    upipe_x265->aspect_ratio_idc = X265_EXTENDED_SAR;
+    upipe_x265->sar_width = sar.num;
+    upipe_x265->sar_height = sar.den;
 }
 
 /** @internal @This processes pictures.
@@ -698,8 +761,7 @@ static bool upipe_x265_handle(struct upipe *upipe,
         uref_free(upipe_x265->flow_def_requested);
         upipe_x265->flow_def_requested = NULL;
 
-        upipe_x265->sar.num = upipe_x265->sar.den = 1;
-        uref_pic_flow_get_sar(uref, &upipe_x265->sar);
+        upipe_x265_get_aspect_ratio(upipe, uref);
 
         bool overscan;
         if (!ubase_check(uref_pic_flow_get_overscan(uref, &overscan)))
@@ -744,17 +806,20 @@ static bool upipe_x265_handle(struct upipe *upipe,
         /* open encoder if not already opened or if update needed */
         if (unlikely(!upipe_x265->encoder)) {
             needopen = true;
-#if 0
         } else if (unlikely(upipe_x265_need_update(upipe, width, height))) {
             x265_param *params = &upipe_x265_from_upipe(upipe)->params;
-            upipe_notice_va(upipe, "Flow parameters changed, reconfiguring encoder (%d:%zu, %d:%zu, %d:%"PRId64", %d:%"PRIu64", %d:%d)",
-                params->sourceWidth, width,
-                params->sourceHeight, height,
-                params->vui.sarWidth, upipe_x265->sar.num,
-                params->vui.sarHeight, upipe_x265->sar.den,
+            upipe_notice_va(upipe, "Flow parameters changed, reconfiguring encoder "
+                            "(%d:%zu, %d:%zu, %d/%d/%d:%d/%d/%d, %d:%d)",
+                upipe_x265->width, width,
+                upipe_x265->height, height,
+                params->vui.aspectRatioIdc,
+                params->vui.aspectRatioIdc == X265_EXTENDED_SAR ? params->vui.sarWidth : 0,
+                params->vui.aspectRatioIdc == X265_EXTENDED_SAR ? params->vui.sarHeight : 0,
+                upipe_x265->aspect_ratio_idc,
+                upipe_x265->aspect_ratio_idc == X265_EXTENDED_SAR ? upipe_x265->sar_width : 0,
+                upipe_x265->aspect_ratio_idc == X265_EXTENDED_SAR ? upipe_x265->sar_height : 0,
                 params->vui.bEnableOverscanAppropriateFlag, upipe_x265->overscan);
             needopen = true;
-#endif
         }
         if (unlikely(needopen)) {
             if (unlikely(!upipe_x265_open(upipe, width, height))) {
