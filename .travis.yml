@@ -85,7 +85,8 @@ before_install:
 
   # bitstream
   - git clone --depth 1 https://code.videolan.org/videolan/bitstream.git
-  - sudo make -C bitstream install
+  - make -C bitstream install PREFIX="$PWD/usr-bitstream"
+  - export PKG_CONFIG_PATH="$PKG_CONFIG_PATH:$PWD/usr-bitstream/lib/pkgconfig"
 
   # nacl sdk
   - if [ "$TRAVIS_OS_NAME" = "linux" ]; then
@@ -134,7 +135,7 @@ script:
       DISTCHECK_CONFIGURE_FLAGS="$CONFIGURE_FLAGS"
       TEST_SUITE_LOG="$PWD/tests.log"
   - make check-whitespace
-  - for i in bitstream SSMAMTtools nacl_sdk.zip nacl_sdk upipe-*.tar.gz; do
+  - for i in bitstream usr-bitstream SSMAMTtools nacl_sdk.zip nacl_sdk upipe-*; do
       echo "/$i" >> .gitignore;
     done &&
     make check-untracked

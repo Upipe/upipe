@@ -221,11 +221,14 @@ endif
 # avcodec/avformat tests currently depend on ev
 if HAVE_AVFORMAT
 check_PROGRAMS += \
-	upipe_avformat_test \
+	upipe_avformat_test
+if HAVE_BITSTREAM
+check_PROGRAMS += \
 	upipe_avcodec_decode_test \
 	upipe_avcodec_test
 TESTS += \
 	upipe_avcodec_test
+endif
 endif
 
 if HAVE_GLX
@@ -346,6 +349,11 @@ if HAVE_X265
 check_PROGRAMS += upipe_x265_test
 TESTS += upipe_x265_test
 endif
+
+if HAVE_DVBCSA
+check_PROGRAMS += upipe_dvbcsa_test
+TESTS += upipe_dvbcsa_test
+endif
 endif
 
 if HAVE_ECORE
@@ -365,13 +373,6 @@ check_PROGRAMS += \
 	upipe_v210dec_test upipe_v210enc_test
 TESTS += \
 	upipe_v210dec_test upipe_v210enc_test
-endif
-
-if HAVE_DVBCSA
-check_PROGRAMS += \
-	upipe_dvbcsa_test
-TESTS += \
-	 upipe_dvbcsa_test
 endif
 
 AM_CPPFLAGS = -I$(top_builddir)/include -I$(top_srcdir)/include
@@ -487,7 +488,7 @@ upipe_speexdsp_test_LDADD = $(LDADD) $(top_builddir)/lib/upipe-speexdsp/libupipe
 upipe_x264_test_LDADD = $(LDADD) $(X264_LIBS) $(top_builddir)/lib/upipe-x264/libupipe_x264.la
 upipe_x264_test_CFLAGS = $(AM_CFLAGS) $(X264_CFLAGS)
 upipe_h264_framer_test_build_LDADD = $(LDADD) $(X264_LIBS) $(top_builddir)/lib/upipe-x264/libupipe_x264.la
-upipe_h264_framer_test_build_CFLAGS = $(AM_CFLAGS) $(X264_CFLAGS)
+upipe_h264_framer_test_build_CFLAGS = $(AM_CFLAGS) $(X264_CFLAGS) $(BITSTREAM_CFLAGS)
 
 upipe_x265_test_LDADD = $(LDADD) $(X265_LIBS) $(top_builddir)/lib/upipe-x265/libupipe_x265.la
 upipe_x265_test_CFLAGS = $(AM_CFLAGS) $(X265_CFLAGS)
@@ -502,6 +503,36 @@ upipe_void_source_test_LDADD = $(LDADD) -lev $(top_builddir)/lib/upump-ev/libupu
 upipe_video_blank_test_LDADD = $(LDADD) $(top_builddir)/lib/upipe-modules/libupipe_modules.la
 upipe_audio_blank_test_LDADD = $(LDADD) $(top_builddir)/lib/upipe-modules/libupipe_modules.la
 upipe_grid_test_LDADD = $(LDADD) $(top_builddir)/lib/upipe-modules/libupipe_modules.la
-
 upipe_block_to_sound_test_LDADD = $(LDADD) $(top_builddir)/lib/upipe-modules/libupipe_modules.la
 upipe_dvbcsa_test_LDADD = $(LDADD) $(top_builddir)/lib/upipe-dvbcsa/libupipe_dvbcsa.la
+upipe_a52_framer_test_CFLAGS = $(AM_CFLAGS) $(BITSTREAM_CFLAGS)
+upipe_h264_framer_test_CFLAGS = $(AM_CFLAGS) $(BITSTREAM_CFLAGS)
+upipe_mpga_framer_test_CFLAGS = $(AM_CFLAGS) $(BITSTREAM_CFLAGS)
+upipe_mpgv_framer_test_CFLAGS = $(AM_CFLAGS) $(BITSTREAM_CFLAGS)
+upipe_rtp_decaps_test_CFLAGS = $(AM_CFLAGS) $(BITSTREAM_CFLAGS)
+upipe_rtp_prepend_test_CFLAGS = $(AM_CFLAGS) $(BITSTREAM_CFLAGS)
+upipe_rtp_test_CFLAGS = $(AM_CFLAGS) $(BITSTREAM_CFLAGS)
+upipe_s337_encaps_test_CFLAGS = $(AM_CFLAGS) $(BITSTREAM_CFLAGS)
+upipe_ts_check_test_CFLAGS = $(AM_CFLAGS) $(BITSTREAM_CFLAGS)
+upipe_ts_decaps_test_CFLAGS = $(AM_CFLAGS) $(BITSTREAM_CFLAGS)
+upipe_ts_demux_test_CFLAGS = $(AM_CFLAGS) $(BITSTREAM_CFLAGS)
+upipe_ts_eit_decoder_test_CFLAGS = $(AM_CFLAGS) $(BITSTREAM_CFLAGS)
+upipe_ts_encaps_test_CFLAGS = $(AM_CFLAGS) $(BITSTREAM_CFLAGS)
+upipe_ts_nit_decoder_test_CFLAGS = $(AM_CFLAGS) $(BITSTREAM_CFLAGS)
+upipe_ts_pat_decoder_test_CFLAGS = $(AM_CFLAGS) $(BITSTREAM_CFLAGS)
+upipe_ts_pes_decaps_test_CFLAGS = $(AM_CFLAGS) $(BITSTREAM_CFLAGS)
+upipe_ts_pes_encaps_test_CFLAGS = $(AM_CFLAGS) $(BITSTREAM_CFLAGS)
+upipe_ts_pid_filter_test_CFLAGS = $(AM_CFLAGS) $(BITSTREAM_CFLAGS)
+upipe_ts_pmt_decoder_test_CFLAGS = $(AM_CFLAGS) $(BITSTREAM_CFLAGS)
+upipe_ts_psi_generator_test_CFLAGS = $(AM_CFLAGS) $(BITSTREAM_CFLAGS)
+upipe_ts_psi_join_test_CFLAGS = $(AM_CFLAGS) $(BITSTREAM_CFLAGS)
+upipe_ts_psi_merge_test_CFLAGS = $(AM_CFLAGS) $(BITSTREAM_CFLAGS)
+upipe_ts_psi_split_test_CFLAGS = $(AM_CFLAGS) $(BITSTREAM_CFLAGS)
+upipe_ts_scte35_decoder_test_CFLAGS = $(AM_CFLAGS) $(BITSTREAM_CFLAGS)
+upipe_ts_scte35_generator_test_CFLAGS = $(AM_CFLAGS) $(BITSTREAM_CFLAGS)
+upipe_ts_sdt_decoder_test_CFLAGS = $(AM_CFLAGS) $(BITSTREAM_CFLAGS)
+upipe_ts_si_generator_test_CFLAGS = $(AM_CFLAGS) $(BITSTREAM_CFLAGS)
+upipe_ts_split_test_CFLAGS = $(AM_CFLAGS) $(BITSTREAM_CFLAGS)
+upipe_ts_sync_test_CFLAGS = $(AM_CFLAGS) $(BITSTREAM_CFLAGS)
+upipe_ts_tdt_decoder_test_CFLAGS = $(AM_CFLAGS) $(BITSTREAM_CFLAGS)
+upipe_video_trim_test_CFLAGS = $(AM_CFLAGS) $(BITSTREAM_CFLAGS)

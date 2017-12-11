@@ -35,6 +35,7 @@ libupipe_ts_la_SOURCES = \
 	$(NULL)
 
 libupipe_ts_la_CPPFLAGS = -I$(top_builddir)/include -I$(top_srcdir)/include
+libupipe_ts_la_CFLAGS = $(AM_CFLAGS) $(BITSTREAM_CFLAGS)
 libupipe_ts_la_LIBADD = $(top_builddir)/lib/upipe-modules/libupipe_modules.la \
 			@LTLIBICONV@
 libupipe_ts_la_LDFLAGS = -no-undefined
