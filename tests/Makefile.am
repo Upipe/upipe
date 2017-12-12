@@ -98,7 +98,8 @@ check_PROGRAMS = \
 	upipe_filter_blend_test	\
 	upipe_video_blank_test \
 	upipe_audio_blank_test \
-	upipe_grid_test
+	upipe_grid_test \
+	upipe_block_to_sound_test
 
 TESTS = \
 	ulist_test \
@@ -154,7 +155,8 @@ TESTS = \
 	upipe_filter_blend_test \
 	upipe_video_blank_test \
 	upipe_audio_blank_test \
-	upipe_grid_test
+	upipe_grid_test \
+	upipe_block_to_sound_test
 
 if HAVE_SPEEXDSP
 check_PROGRAMS += \
@@ -479,3 +481,6 @@ upipe_void_source_test_LDADD = $(LDADD) -lev $(top_builddir)/lib/upump-ev/libupu
 upipe_video_blank_test_LDADD = $(LDADD) $(top_builddir)/lib/upipe-modules/libupipe_modules.la
 upipe_audio_blank_test_LDADD = $(LDADD) $(top_builddir)/lib/upipe-modules/libupipe_modules.la
 upipe_grid_test_LDADD = $(LDADD) $(top_builddir)/lib/upipe-modules/libupipe_modules.la
+
+upipe_block_to_sound_test_LDADD = $(LDADD) $(top_builddir)/lib/upipe-modules/libupipe_modules.la
+
