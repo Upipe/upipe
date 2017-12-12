@@ -30,10 +30,10 @@ struct ustring_time ustring_to_time(const struct ustring str)
         struct ustring sfx;
         uint64_t mul;
     } sfxs[] = {
-        /* milisecond */ { USTRING_FROM_STR("ms"), UCLOCK_FREQ / 1000 },
-        /* second */     { USTRING_FROM_STR("s"), UCLOCK_FREQ },
-        /* minute */     { USTRING_FROM_STR("m"), UCLOCK_FREQ * 60 },
-        /* heure */      { USTRING_FROM_STR("h"), UCLOCK_FREQ * 60 * 60 },
+        /* millisecond */ { USTRING_FROM_STR("ms"), UCLOCK_FREQ / 1000 },
+        /* second */      { USTRING_FROM_STR("s"), UCLOCK_FREQ },
+        /* minute */      { USTRING_FROM_STR("m"), UCLOCK_FREQ * 60 },
+        /* hour */        { USTRING_FROM_STR("h"), UCLOCK_FREQ * 60 * 60 },
     };
 
     struct ustring_time ret = { ustring_null(), 0 };

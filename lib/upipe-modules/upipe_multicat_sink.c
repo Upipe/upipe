@@ -144,7 +144,7 @@ static void upipe_multicat_sink_input(struct upipe *upipe, struct uref *uref,
              upipe_multicat_sink->rotate;
     if (upipe_multicat_sink->fileidx != newidx) {
         if (unlikely(! _upipe_multicat_sink_change_file(upipe, newidx))) {
-            upipe_warn(upipe, "couldnt change file path");
+            upipe_warn(upipe, "couldn't change file path");
             uref_free(uref);
             return;
         }

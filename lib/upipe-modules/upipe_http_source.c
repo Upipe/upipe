@@ -924,7 +924,7 @@ static int upipe_http_src_open_url(struct upipe *upipe)
         return UBASE_ERR_EXTERNAL;
     }
 
-    /* connect to first working ressource */
+    /* connect to first working resource */
     for (res = info; res; res = res->ai_next) {
         fd = socket(res->ai_family, res->ai_socktype,
                                           res->ai_protocol);
@@ -937,7 +937,7 @@ static int upipe_http_src_open_url(struct upipe *upipe)
     freeaddrinfo(info);
 
     if (fd < 0) {
-        upipe_err(upipe, "could not connect to any ressource");
+        upipe_err(upipe, "could not connect to any resource");
         return UBASE_ERR_EXTERNAL;
     }
 

@@ -927,7 +927,7 @@ static struct upipe *_upipe_rtp_fec_alloc(struct upipe_mgr *mgr,
     upipe_rtp_fec_init_sub_mgr(upipe);
     upipe_rtp_fec_init_output(upipe);
 
-    /* Initalise subpipes */
+    /* Initialize subpipes */
     upipe_rtp_fec_sub_init(upipe_rtp_fec_to_main_subpipe(upipe_rtp_fec),
                             &upipe_rtp_fec->sub_mgr, uprobe_main);
     upipe_rtp_fec_sub_init(upipe_rtp_fec_to_col_subpipe(upipe_rtp_fec),

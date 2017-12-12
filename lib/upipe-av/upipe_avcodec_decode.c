@@ -266,7 +266,7 @@ static int upipe_avcdec_get_buffer_pic(struct AVCodecContext *context,
         upipe_avcdec->pix_fmt = context->pix_fmt;
     }
 
-    /* Use avcodec width/height alignement, then resize pic. */
+    /* Use avcodec width/height alignment, then resize pic. */
     int width_aligned = frame->width, height_aligned = frame->height;
     int linesize_align[AV_NUM_DATA_POINTERS];
     memset(linesize_align, 0, sizeof(linesize_align));

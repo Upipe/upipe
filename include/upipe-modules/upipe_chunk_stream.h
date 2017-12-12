@@ -53,7 +53,7 @@ enum upipe_chunk_stream_command {
  *
  * @param upipe description structure of the pipe
  * @param mtu_p filled in with the configured mtu, in octets
- * @param align_p filled in with the configured alignement, in octets
+ * @param align_p filled in with the configured alignment, in octets
  * @return an error code
  */
 static inline int upipe_chunk_stream_get_mtu(struct upipe *upipe,
@@ -66,7 +66,7 @@ static inline int upipe_chunk_stream_get_mtu(struct upipe *upipe,
 /** @This sets the configured mtu of TS packets.
  * @param upipe description structure of the pipe
  * @param mtu max packet size, in octets
- * @param align packet chunk alignement, in octets
+ * @param align packet chunk alignment, in octets
  * @return an error code
  */
 static inline int upipe_chunk_stream_set_mtu(struct upipe *upipe,

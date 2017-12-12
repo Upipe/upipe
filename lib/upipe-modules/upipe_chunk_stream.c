@@ -181,7 +181,7 @@ static void upipe_chunk_stream_flush(struct upipe *upipe)
 /** @This sets the configured mtu of TS packets.
  * @param upipe description structure of the pipe
  * @param mtu max packet size, in octets
- * @param align packet chunk alignement, in octets
+ * @param align packet chunk alignment, in octets
  * @return an error code
  */
 static int _upipe_chunk_stream_set_mtu(struct upipe *upipe,
@@ -190,7 +190,7 @@ static int _upipe_chunk_stream_set_mtu(struct upipe *upipe,
     struct upipe_chunk_stream *upipe_chunk_stream =
                        upipe_chunk_stream_from_upipe(upipe);
     if (unlikely(mtu == 0 || align == 0 || align >= mtu)) {
-        upipe_warn_va(upipe, "invalid mtu (%u) or alignement (%u)",
+        upipe_warn_va(upipe, "invalid mtu (%u) or alignment (%u)",
                       mtu, align);
         return UBASE_ERR_INVALID;
     }
@@ -204,7 +204,7 @@ static int _upipe_chunk_stream_set_mtu(struct upipe *upipe,
  *
  * @param upipe description structure of the pipe
  * @param mtu_p filled in with the configured mtu, in octets
- * @param align_p filled in with the configured alignement, in octets
+ * @param align_p filled in with the configured alignment, in octets
  * @return an error code
  */
 static int _upipe_chunk_stream_get_mtu(struct upipe *upipe,
