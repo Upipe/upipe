@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2014-2015 OpenHeadend S.A.R.L.
+ * Copyright (C) 2014-2017 OpenHeadend S.A.R.L.
  *
  * Authors: Christophe Massiot
  *
@@ -46,6 +46,7 @@
 #include <upipe-modules/upipe_idem.h>
 #include <upipe-filters/upipe_filter_encode.h>
 #include <upipe-x264/upipe_x264.h>
+#include <upipe-x265/upipe_x265.h>
 #include <upipe-av/upipe_avcodec_encode.h>
 
 #include <stdlib.h>
@@ -63,6 +64,8 @@ struct upipe_fenc_mgr {
     struct upipe_mgr *avcenc_mgr;
     /** pointer to x264 manager */
     struct upipe_mgr *x264_mgr;
+    /** pointer to x265 manager */
+    struct upipe_mgr *x265_mgr;
 
     /** public upipe_mgr structure */
     struct upipe_mgr mgr;
@@ -89,15 +92,17 @@ struct upipe_fenc {
     struct uref *flow_def_input;
     /** uref serving as a dictionary for options */
     struct uref *options;
-    /** x264 preset */
+    /** x265 bit depth */
+    int bit_depth;
+    /** x264/x265 preset */
     char *preset;
-    /** x264 tune */
+    /** x264/x265 tune */
     char *tune;
-    /** x264 profile */
+    /** x264/x265 profile */
     char *profile;
-    /** x264 speed control */
+    /** x264/x265 speed control */
     uint64_t sc_latency;
-    /** x264 slice type enforce */
+    /** x264/x265 slice type enforce */
     bool slice_type_enforce;
     /** x262 */
     bool x262;
@@ -163,13 +168,23 @@ static int upipe_fenc_alloc_inner(struct upipe *upipe)
     else {
         const char *def = NULL;
         uref_flow_get_def(upipe_fenc->flow_def_input, &def);
+        if (unlikely(def == NULL))
+            return UBASE_ERR_INVALID;
 
-        if (fenc_mgr->x264_mgr && def)
+        if (fenc_mgr->x264_mgr && (!ubase_ncmp(def, "block.h264.") ||
+                                   !ubase_ncmp(def, "block.mpeg2video.")))
             enc = upipe_void_alloc(
                     fenc_mgr->x264_mgr,
                     uprobe_pfx_alloc(
                         uprobe_use(&upipe_fenc->last_inner_probe),
                         UPROBE_LOG_VERBOSE, "x264"));
+
+        else if (fenc_mgr->x265_mgr && !ubase_ncmp(def, "block.hevc."))
+            enc = upipe_void_alloc(
+                    fenc_mgr->x265_mgr,
+                    uprobe_pfx_alloc(
+                        uprobe_use(&upipe_fenc->last_inner_probe),
+                        UPROBE_LOG_VERBOSE, "x265"));
 
         if (likely(enc) && !ubase_ncmp(def, "block.mpeg2video."))
             upipe_fenc->x262 = true;
@@ -265,17 +280,32 @@ static int upipe_fenc_set_flow_def(struct upipe *upipe, struct uref *flow_def)
     if (upipe_fenc->x262) {
         UBASE_RETURN(upipe_x264_set_default_mpeg2(upipe_fenc->last_inner))
     }
-    if (upipe_fenc->preset != NULL || upipe_fenc->tune != NULL)
+    if (upipe_fenc->bit_depth) {
+        UBASE_RETURN(upipe_x265_set_default(upipe_fenc->last_inner,
+                                            upipe_fenc->bit_depth))
+    }
+    if (upipe_fenc->preset != NULL || upipe_fenc->tune != NULL) {
         upipe_x264_set_default_preset(upipe_fenc->last_inner,
                                       upipe_fenc->preset, upipe_fenc->tune);
-    if (upipe_fenc->profile != NULL)
+        upipe_x265_set_default_preset(upipe_fenc->last_inner,
+                                      upipe_fenc->preset, upipe_fenc->tune);
+    }
+    if (upipe_fenc->profile != NULL) {
         upipe_x264_set_profile(upipe_fenc->last_inner, upipe_fenc->profile);
-    if (upipe_fenc->sc_latency != UINT64_MAX)
+        upipe_x265_set_profile(upipe_fenc->last_inner, upipe_fenc->profile);
+    }
+    if (upipe_fenc->sc_latency != UINT64_MAX) {
         upipe_x264_set_sc_latency(upipe_fenc->last_inner,
                                   upipe_fenc->sc_latency);
-    if (upipe_fenc->slice_type_enforce)
+        upipe_x265_set_sc_latency(upipe_fenc->last_inner,
+                                  upipe_fenc->sc_latency);
+    }
+    if (upipe_fenc->slice_type_enforce) {
         upipe_x264_set_slice_type_enforce(upipe_fenc->last_inner,
                                           upipe_fenc->slice_type_enforce);
+        upipe_x265_set_slice_type_enforce(upipe_fenc->last_inner,
+                                          upipe_fenc->slice_type_enforce);
+    }
 
     if (upipe_fenc->options != NULL && upipe_fenc->options->udict != NULL) {
         const char *key = NULL;
@@ -364,15 +394,42 @@ static int upipe_fenc_set_default_mpeg2(struct upipe *upipe)
     return UBASE_ERR_NONE;
 }
 
-/** @internal @This sets the x264 default preset.
+/** @internal @This sets default parameters (and runs CPU detection).
  *
  * @param upipe description structure of the pipe
+ * @param signature signature of the inner encoder
+ * @param bit_depth codec bit depth (8, 10 or 12)
+ * @return an error code
+ */
+static int upipe_fenc_set_default(struct upipe *upipe,
+                                  unsigned int signature,
+                                  int bit_depth)
+{
+    struct upipe_fenc *upipe_fenc = upipe_fenc_from_upipe(upipe);
+
+    upipe_fenc->bit_depth = bit_depth;
+
+    if (upipe_fenc->last_inner != NULL) {
+        if (signature == UPIPE_X265_SIGNATURE) {
+            UBASE_RETURN(upipe_x265_set_default(upipe_fenc->last_inner,
+                                                bit_depth))
+        }
+    }
+    return UBASE_ERR_NONE;
+}
+
+/** @internal @This sets the x264/x265 default preset.
+ *
+ * @param upipe description structure of the pipe
+ * @param signature signature of the inner encoder
  * @param preset preset
  * @param tune tune
  * @return an error code
  */
 static int upipe_fenc_set_default_preset(struct upipe *upipe,
-                                         const char *preset, const char *tune)
+                                         unsigned int signature,
+                                         const char *preset,
+                                         const char *tune)
 {
     struct upipe_fenc *upipe_fenc = upipe_fenc_from_upipe(upipe);
 
@@ -384,19 +441,26 @@ static int upipe_fenc_set_default_preset(struct upipe *upipe,
         upipe_fenc->tune = strdup(tune);
 
     if (upipe_fenc->last_inner != NULL) {
-        UBASE_RETURN(upipe_x264_set_default_preset(upipe_fenc->last_inner,
-                                                   preset, tune))
+        if (signature == UPIPE_X264_SIGNATURE)
+            UBASE_RETURN(upipe_x264_set_default_preset(upipe_fenc->last_inner,
+                                                       preset, tune))
+        else if (signature == UPIPE_X265_SIGNATURE)
+            UBASE_RETURN(upipe_x265_set_default_preset(upipe_fenc->last_inner,
+                                                       preset, tune))
     }
     return UBASE_ERR_NONE;
 }
 
-/** @internal @This sets the x264 profile.
+/** @internal @This sets the x264/x265 profile.
  *
  * @param upipe description structure of the pipe
+ * @param signature signature of the inner encoder
  * @param profile profile
  * @return an error code
  */
-static int upipe_fenc_set_profile(struct upipe *upipe, const char *profile)
+static int upipe_fenc_set_profile(struct upipe *upipe,
+                                  unsigned int signature,
+                                  const char *profile)
 {
     struct upipe_fenc *upipe_fenc = upipe_fenc_from_upipe(upipe);
 
@@ -405,26 +469,38 @@ static int upipe_fenc_set_profile(struct upipe *upipe, const char *profile)
         upipe_fenc->profile = strdup(profile);
 
     if (upipe_fenc->last_inner != NULL) {
-        UBASE_RETURN(upipe_x264_set_profile(upipe_fenc->last_inner, profile))
+        if (signature == UPIPE_X264_SIGNATURE)
+            UBASE_RETURN(upipe_x264_set_profile(upipe_fenc->last_inner,
+                                                profile))
+        else if (signature == UPIPE_X265_SIGNATURE)
+            UBASE_RETURN(upipe_x265_set_profile(upipe_fenc->last_inner,
+                                                profile))
     }
     return UBASE_ERR_NONE;
 }
 
-/** @internal @This sets the x264 speed control latency.
+/** @internal @This sets the x264/x265 speed control latency.
  *
  * @param upipe description structure of the pipe
+ * @param signature signature of the inner encoder
  * @param sc_latency latency
  * @return an error code
  */
-static int upipe_fenc_set_sc_latency(struct upipe *upipe, uint64_t sc_latency)
+static int upipe_fenc_set_sc_latency(struct upipe *upipe,
+                                     unsigned int signature,
+                                     uint64_t sc_latency)
 {
     struct upipe_fenc *upipe_fenc = upipe_fenc_from_upipe(upipe);
 
     upipe_fenc->sc_latency = sc_latency;
 
     if (upipe_fenc->last_inner != NULL) {
-        UBASE_RETURN(upipe_x264_set_sc_latency(upipe_fenc->last_inner,
-                                               sc_latency))
+        if (signature == UPIPE_X264_SIGNATURE)
+                UBASE_RETURN(upipe_x264_set_sc_latency(upipe_fenc->last_inner,
+                                                       sc_latency))
+        else if (signature == UPIPE_X265_SIGNATURE)
+                UBASE_RETURN(upipe_x265_set_sc_latency(upipe_fenc->last_inner,
+                                                       sc_latency))
     }
     return UBASE_ERR_NONE;
 }
@@ -432,17 +508,24 @@ static int upipe_fenc_set_sc_latency(struct upipe *upipe, uint64_t sc_latency)
 /** @This sets the slice type enforcement mode (true or false).
  *
  * @param upipe description structure of the pipe
+ * @param signature signature of the inner encoder
  * @param enforce true if the incoming slice types must be enforced
  * @return an error code
  */
-static int upipe_fenc_set_slice_type_enforce(struct upipe *upipe, bool enforce)
+static int upipe_fenc_set_slice_type_enforce(struct upipe *upipe,
+                                             unsigned int signature,
+                                             bool enforce)
 {
     struct upipe_fenc *upipe_fenc = upipe_fenc_from_upipe(upipe);
     upipe_fenc->slice_type_enforce = enforce;
 
     if (upipe_fenc->last_inner != NULL) {
-        UBASE_RETURN(upipe_x264_set_slice_type_enforce(upipe_fenc->last_inner,
-                                                       enforce))
+        if (signature == UPIPE_X264_SIGNATURE)
+            UBASE_RETURN(upipe_x264_set_slice_type_enforce(upipe_fenc->last_inner,
+                                                           enforce))
+        else if (signature == UPIPE_X265_SIGNATURE)
+            UBASE_RETURN(upipe_x265_set_slice_type_enforce(upipe_fenc->last_inner,
+                                                           enforce))
     }
     return UBASE_ERR_NONE;
 }
@@ -471,35 +554,80 @@ static int upipe_fenc_control(struct upipe *upipe, int command, va_list args)
             struct uref *flow_def = va_arg(args, struct uref *);
             return upipe_fenc_set_flow_def(upipe, flow_def);
         }
+    }
 
-        case UPIPE_X264_SET_DEFAULT_MPEG2: {
-            UBASE_SIGNATURE_CHECK(args, UPIPE_X264_SIGNATURE)
-            return upipe_fenc_set_default_mpeg2(upipe);
+    if (command >= UPIPE_CONTROL_LOCAL) {
+        switch (ubase_get_signature(args)) {
+            case UPIPE_X264_SIGNATURE:
+                UBASE_SIGNATURE_CHECK(args, UPIPE_X264_SIGNATURE);
+                switch (command) {
+                    case UPIPE_X264_SET_DEFAULT_MPEG2: {
+                        return upipe_fenc_set_default_mpeg2(upipe);
+                    }
+                    case UPIPE_X264_SET_DEFAULT_PRESET: {
+                        const char *preset = va_arg(args, const char *);
+                        const char *tune = va_arg(args, const char *);
+                        return upipe_fenc_set_default_preset(upipe,
+                                                             UPIPE_X264_SIGNATURE,
+                                                             preset, tune);
+                    }
+                    case UPIPE_X264_SET_PROFILE: {
+                        const char *profile = va_arg(args, const char *);
+                        return upipe_fenc_set_profile(upipe,
+                                                      UPIPE_X264_SIGNATURE,
+                                                      profile);
+                    }
+                    case UPIPE_X264_SET_SC_LATENCY: {
+                        uint64_t sc_latency = va_arg(args, uint64_t);
+                        return upipe_fenc_set_sc_latency(upipe,
+                                                         UPIPE_X264_SIGNATURE,
+                                                         sc_latency);
+                    }
+                    case UPIPE_X264_SET_SLICE_TYPE_ENFORCE: {
+                        bool enforce = va_arg(args, int);
+                        return upipe_fenc_set_slice_type_enforce(upipe,
+                                                                 UPIPE_X264_SIGNATURE,
+                                                                 enforce);
+                    }
+                }
+                break;
+            case UPIPE_X265_SIGNATURE:
+                UBASE_SIGNATURE_CHECK(args, UPIPE_X265_SIGNATURE);
+                switch (command) {
+                    case UPIPE_X265_SET_DEFAULT: {
+                        int bit_depth = va_arg(args, int);
+                        return upipe_fenc_set_default(upipe,
+                                                      UPIPE_X265_SIGNATURE,
+                                                      bit_depth);
+                    }
+                    case UPIPE_X265_SET_DEFAULT_PRESET: {
+                        const char *preset = va_arg(args, const char *);
+                        const char *tune = va_arg(args, const char *);
+                        return upipe_fenc_set_default_preset(upipe,
+                                                             UPIPE_X265_SIGNATURE,
+                                                             preset, tune);
+                    }
+                    case UPIPE_X265_SET_PROFILE: {
+                        const char *profile = va_arg(args, const char *);
+                        return upipe_fenc_set_profile(upipe,
+                                                      UPIPE_X265_SIGNATURE,
+                                                      profile);
+                    }
+                    case UPIPE_X265_SET_SC_LATENCY: {
+                        uint64_t sc_latency = va_arg(args, uint64_t);
+                        return upipe_fenc_set_sc_latency(upipe,
+                                                         UPIPE_X265_SIGNATURE,
+                                                         sc_latency);
+                    }
+                    case UPIPE_X265_SET_SLICE_TYPE_ENFORCE: {
+                        bool enforce = va_arg(args, int);
+                        return upipe_fenc_set_slice_type_enforce(upipe,
+                                                                 UPIPE_X265_SIGNATURE,
+                                                                 enforce);
+                    }
+                }
+                break;
         }
-        case UPIPE_X264_SET_DEFAULT_PRESET: {
-            UBASE_SIGNATURE_CHECK(args, UPIPE_X264_SIGNATURE)
-            const char *preset = va_arg(args, const char *);
-            const char *tune = va_arg(args, const char *);
-            return upipe_fenc_set_default_preset(upipe, preset, tune);
-        }
-        case UPIPE_X264_SET_PROFILE: {
-            UBASE_SIGNATURE_CHECK(args, UPIPE_X264_SIGNATURE)
-            const char *profile = va_arg(args, const char *);
-            return upipe_fenc_set_profile(upipe, profile);
-        }
-        case UPIPE_X264_SET_SC_LATENCY: {
-            UBASE_SIGNATURE_CHECK(args, UPIPE_X264_SIGNATURE)
-            uint64_t sc_latency = va_arg(args, uint64_t);
-            return upipe_fenc_set_sc_latency(upipe, sc_latency);
-        }
-        case UPIPE_X264_SET_SLICE_TYPE_ENFORCE: {
-            UBASE_SIGNATURE_CHECK(args, UPIPE_X264_SIGNATURE)
-            bool enforce = !(va_arg(args, int) == 0);
-            return upipe_fenc_set_slice_type_enforce(upipe, enforce);
-        }
-
-        default:
-            break;
     }
 
     int err = upipe_fenc_control_bin_input(upipe, command, args);
@@ -551,6 +679,7 @@ static void upipe_fenc_mgr_free(struct urefcount *urefcount)
     struct upipe_fenc_mgr *fenc_mgr = upipe_fenc_mgr_from_urefcount(urefcount);
     upipe_mgr_release(fenc_mgr->avcenc_mgr);
     upipe_mgr_release(fenc_mgr->x264_mgr);
+    upipe_mgr_release(fenc_mgr->x265_mgr);
 
     urefcount_clean(urefcount);
     free(fenc_mgr);
@@ -588,6 +717,7 @@ static int upipe_fenc_mgr_control(struct upipe_mgr *mgr,
 
         GET_SET_MGR(avcenc, AVCENC)
         GET_SET_MGR(x264, X264)
+        GET_SET_MGR(x265, X265)
 #undef GET_SET_MGR
 
         default:
@@ -608,6 +738,7 @@ struct upipe_mgr *upipe_fenc_mgr_alloc(void)
     memset(fenc_mgr, 0, sizeof(*fenc_mgr));
     fenc_mgr->avcenc_mgr = NULL;
     fenc_mgr->x264_mgr = NULL;
+    fenc_mgr->x265_mgr = NULL;
 
     urefcount_init(upipe_fenc_mgr_to_urefcount(fenc_mgr),
                    upipe_fenc_mgr_free);

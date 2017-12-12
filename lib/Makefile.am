@@ -52,6 +52,10 @@ if HAVE_X264
 SUBDIRS += upipe-x264
 endif
 
+if HAVE_X265
+SUBDIRS += upipe-x265
+endif
+
 if HAVE_NETMAP
 SUBDIRS += upipe-netmap
 endif

@@ -142,6 +142,7 @@ PKG_CHECK_UPIPE(SWRESAMPLE, libswresample libavutil, [libswresample/swresample.h
 PKG_CHECK_UPIPE(SPEEXDSP, speexdsp, [speex/speex_resampler.h])
 PKG_CHECK_UPIPE(GLX, gl glu x11, [GL/glx.h GL/glu.h GL/gl.h])
 PKG_CHECK_UPIPE(X264, x264, [x264.h])
+PKG_CHECK_UPIPE(X265, x265, [x265.h])
 PKG_CHECK_UPIPE(ECORE, ecore, [Ecore.h])
 PKG_CHECK_UPIPE(ZVBI, zvbi-0.2, [libzvbi.h])
 PKG_CHECK_UPIPE(FREETYPE, freetype2, [ft2build.h])
@@ -253,6 +254,7 @@ AC_CONFIG_FILES([Makefile
                  include/upipe-gl/Makefile
                  include/upipe-filters/Makefile
                  include/upipe-x264/Makefile
+                 include/upipe-x265/Makefile
                  include/upipe-osx/Makefile
                  include/upipe-alsa/Makefile
                  include/upipe-swresample/Makefile
@@ -295,6 +297,8 @@ AC_CONFIG_FILES([Makefile
                  lib/upipe-filters/libupipe_filters.pc
                  lib/upipe-x264/Makefile
                  lib/upipe-x264/libupipe_x264.pc
+                 lib/upipe-x265/Makefile
+                 lib/upipe-x265/libupipe_x265.pc
                  lib/upipe-osx/Makefile
                  lib/upipe-osx/libupipe_osx.pc
                  lib/upipe-alsa/Makefile
