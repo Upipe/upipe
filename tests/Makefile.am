@@ -250,10 +250,8 @@ if HAVE_BITSTREAM
 check_PROGRAMS += \
 	upipe_rtp_decaps_test \
 	upipe_rtp_prepend_test \
-	upipe_rtp_test \
 	upipe_mpgv_framer_test \
 	upipe_mpga_framer_test \
-	upipe_h264_framer_test \
 	upipe_a52_framer_test \
 	upipe_video_trim_test \
 	upipe_ts_check_test \
@@ -286,10 +284,8 @@ check_PROGRAMS += \
 TESTS += \
 	upipe_rtp_decaps_test \
 	upipe_rtp_prepend_test \
-	upipe_rtp_test \
 	upipe_mpgv_framer_test \
 	upipe_mpga_framer_test \
-	upipe_h264_framer_test \
 	upipe_a52_framer_test \
 	upipe_video_trim_test \
 	upipe_ts_check_test \
@@ -322,9 +318,13 @@ TESTS += \
 
 if HAVE_EV
 check_PROGRAMS += \
+	upipe_h264_framer_test \
+	upipe_rtp_test \
 	upipe_ts_scte35_probe_test \
 	upipe_ts_test
 TESTS += \
+	upipe_h264_framer_test \
+	upipe_rtp_test \
 	upipe_ts_scte35_probe_test \
 	upipe_ts_test.sh
 endif
