@@ -491,7 +491,7 @@ static const uint8_t *get_rtp(struct upipe *upipe, struct netmap_ring *rxring,
         return NULL;
     }
 
-    min_pkt_size += UDP_HEADER_SIZE + IP_HEADER_MINSIZE + ETHERNET_HEADER_LEN;
+    min_pkt_size += UDP_HEADER_SIZE + 4 * ip_get_ihl(ip) + ETHERNET_HEADER_LEN;
 
     if (slot->len < min_pkt_size) {
         return NULL;
