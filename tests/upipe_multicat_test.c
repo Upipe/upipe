@@ -307,7 +307,8 @@ int main(int argc, char *argv[])
     for (i=0; i < SLICES_NUM; i++){
         snprintf(filepath, MAXPATHLEN, "%s%"PRId64"%s", dirpath, (systime/rotate), suffix);
         printf("Opening %s ... ", filepath);
-        assert(fd = open(filepath, O_RDONLY));
+        fd = open(filepath, O_RDONLY);
+        assert(fd != -1);
         for (j = 0; j < UREF_PER_SLICE; j++) {
             uint8_t buf[8];
             ret = read(fd, buf, sizeof(uint64_t));
