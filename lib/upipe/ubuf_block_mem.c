@@ -49,7 +49,7 @@
 #include <string.h>
 #include <assert.h>
 
-/** default alignement of buffer when unspecified */
+/** default alignment of buffer when unspecified */
 #define UBUF_DEFAULT_ALIGN          0
 /** default minimum extra space before buffer when unspecified */
 #define UBUF_DEFAULT_PREPEND        32

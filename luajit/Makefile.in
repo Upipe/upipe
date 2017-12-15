@@ -33,6 +33,7 @@ LIST_C = upipe-modules upipe-filters upipe-dveo
 @HAVE_AVUTIL_TRUE@LIST_C += upipe-v210
 @HAVE_BITSTREAM_TRUE@LIST_C += upipe-ts upipe-framers upipe-hls
 @HAVE_BITSTREAM_TRUE@@HAVE_X264_TRUE@LIST_C += upipe-x264
+@HAVE_BITSTREAM_TRUE@@HAVE_X265_TRUE@LIST_C += upipe-x265
 @HAVE_AVFORMAT_TRUE@LIST_C += upipe-av
 @HAVE_PTHREAD_TRUE@LIST_C += upipe-pthread
 @HAVE_EV_TRUE@LIST_C += upump-ev

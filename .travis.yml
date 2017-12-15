@@ -7,8 +7,8 @@ env:
   global:
     - MAKEFLAGS=-j2
     - FFMPEG="libavcodec-ffmpeg-dev libavformat-ffmpeg-dev libswresample-ffmpeg-dev libswscale-ffmpeg-dev"
-    - APT_PACKAGES_COMMON="libev-dev libasound2-dev libx264-dev luajit libspeexdsp-dev nasm libpng-dev libfreetype6-dev libzvbi-dev $FFMPEG"
-    - BREW_PACKAGES="valgrind libev nasm x264 ffmpeg speex luajit freetype"
+    - APT_PACKAGES_COMMON="libev-dev libasound2-dev libx264-dev libx265-dev luajit libspeexdsp-dev nasm libpng-dev libfreetype6-dev libzvbi-dev $FFMPEG"
+    - BREW_PACKAGES="valgrind libev nasm x264 x265 ffmpeg speex luajit freetype"
 
 matrix:
   include:
@@ -137,10 +137,14 @@ after_failure:
   - test -r config.log && cat config.log
   - test -r tests.log && cat tests.log
 
+# The channel name "chat.freenode.net#upipe" is encrypted against Upipe/upipe
+# to prevent IRC notifications from forks. This was created using:
+# $ travis encrypt -r "Upipe/upipe" "chat.freenode.net#upipe"
+
 notifications:
   irc:
     channels:
-      - "chat.freenode.net#upipe"
+      - secure: "D/X/4RAuhLqaz5xuB9+J0gUTAUR8OUEqzkpC+YnSjOH/T6GwVv8/aGNYcK7T5Wh2K1QRAiHdrq4L8DTe5f/2MfeqI0H6WRGrgmTf7nmn8H3yyZNz4J5+HmRmjc8zgISEiexi1j34EirALzsVVF80Ek9EIQibajyae8MMklQGlso5ir6q2uSRtIerzUUBT5Jvf3lG6KExCY++pKsQmElfIr5JmYjEAeNXehmGje/00LsDQnGUZdsqWJ+JHtgElcdG2YqRzQ1Hb4vSSyyBOnZ3PIARb/Z7qsVCmjRvrEgm6LNALvp5aVR1VJ49jxWNQEiLuMk1lJFi+KNXfetqdyfZLrhvhMyxSxwKWPFwXTG8myysT2tRxjTo5c88IDqujeR0AGL0suvY5FD23eZFwrk2fJGDOuz1nkh3wVFuuLlJrzsCNLgqgdS1penS+Kp718xS43SdHVdWzrjSqq2ycvBskLMaLep29mZIEfTlv0FuCcgMe241cdvJ+Ie8ZQbZYcApP1x1rWeU0/zvC4m64rpJ8CzpWpHo4gse7teFCuzKlfe9bFbim4X6ces3KmkT0LpnjqDW1Slcu1bgUWMq6momN1jjwpHOiYrpeisU1J8OfHu/ljHL2ggnvvIOUy1TRQyDJbLH0jZFNf/bGnkPfio6oiq+PFd+OoG2c+uQtnBSeJI="
     on_success: never
     on_failure: always
     use_notice: true

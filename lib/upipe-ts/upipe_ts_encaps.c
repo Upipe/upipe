@@ -767,7 +767,7 @@ static size_t upipe_ts_encaps_pes_header_size(struct upipe *upipe,
  *
  * @param upipe description structure of the pipe
  * @param payload_size size of the payload
- * @param alignement true if the data alignment flag must be set
+ * @param alignment true if the data alignment flag must be set
  * @param pts_prog value of the PTS field, in 27 MHz units
  * @param dts_prog value of the DTS field, in 27 MHz units
  * @return allocated PES header

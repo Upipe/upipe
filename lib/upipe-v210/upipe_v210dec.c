@@ -127,7 +127,7 @@ UPIPE_HELPER_UBUF_MGR(upipe_v210dec, ubuf_mgr, flow_format, ubuf_mgr_request,
                       upipe_v210dec_unregister_output_request)
 UPIPE_HELPER_INPUT(upipe_v210dec, urefs, nb_urefs, max_urefs, blockers, upipe_v210dec_handle)
 
-// TODO: handle endianess
+// TODO: handle endianness
 
 static inline uint32_t rl32(const void *src)
 {

@@ -1693,7 +1693,7 @@ int main(int argc, char **argv)
     upump_mgr_run(upump_mgr, NULL);
 
     /*
-     * release ressources
+     * release resources
      */
     upump_stop(sigint_pump);
     upump_free(sigint_pump);
