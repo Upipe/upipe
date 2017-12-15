@@ -41,7 +41,7 @@ extern "C" {
 
 
 enum upipe_rtpd_command {
-    UPIPE_RTPFB_SENTINAL = UPIPE_CONTROL_LOCAL,
+    UPIPE_RTPFB_SENTINEL = UPIPE_CONTROL_LOCAL,
 
     UPIPE_RTPFB_GET_STATS, /* int sig, unsigned *, unsigned *, size_t *, size_t *, size_t *, size_t *, size_t * */
 };
