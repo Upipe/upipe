@@ -184,6 +184,10 @@ struct upipe_netmap_sink {
     int input_bit_depth;
     bool input_is_v210;
 
+    /** picture size */
+    uint64_t hsize;
+    uint64_t vsize;
+
     /** sequence number **/
     uint64_t seqnum;
     uint64_t frame_count;
@@ -765,19 +769,16 @@ static int worker_rfc4175(struct upipe *upipe, uint8_t **dst, uint16_t *len)
     uint16_t pixels2 = 0;
     uint8_t marker = 0, continuation = 0;
 
-    /* FIXME: hardcoded 1080 */
-#define WIDTH  1920
-#define HEIGHT 1080
-    uint8_t field = upipe_netmap_sink->line >= HEIGHT / 2;
+    uint8_t field = upipe_netmap_sink->line >= upipe_netmap_sink->vsize / 2;
 
     /* Going to write a second partial line so limit data_len */
-    if (upipe_netmap_sink->pixel_offset + pixels1 > WIDTH) {
-        if (upipe_netmap_sink->line+1 == (HEIGHT/2) || upipe_netmap_sink->line+1 == HEIGHT)
+    if (upipe_netmap_sink->pixel_offset + pixels1 > upipe_netmap_sink->hsize) {
+        if (upipe_netmap_sink->line+1 == (upipe_netmap_sink->vsize/2) || upipe_netmap_sink->line+1 == upipe_netmap_sink->vsize)
             marker = 1;
         else
             continuation = 1;
 
-        pixels1 = WIDTH - upipe_netmap_sink->pixel_offset;
+        pixels1 = upipe_netmap_sink->hsize - upipe_netmap_sink->pixel_offset;
     }
 
     uint16_t data_len1 = (pixels1 / 2) * UPIPE_RFC4175_PIXEL_PAIR_BYTES;
@@ -795,8 +796,6 @@ static int worker_rfc4175(struct upipe *upipe, uint8_t **dst, uint16_t *len)
 
         /** XXX check for zero case */
     }
-#undef WIDTH
-#undef HEIGHT
 
     uint16_t payload_size = eth_frame_len - ETHERNET_HEADER_LEN - UDP_HEADER_SIZE - IP_HEADER_MINSIZE;
 
@@ -1667,24 +1666,23 @@ static int upipe_netmap_sink_set_flow_def(struct upipe *upipe,
         upipe_netmap_sink->rfc4175 = 0;
     }
 
-    uint64_t hsize, vsize;
-    UBASE_RETURN(uref_pic_flow_get_hsize(flow_def, &hsize));
-    UBASE_RETURN(uref_pic_flow_get_vsize(flow_def, &vsize));
+    UBASE_RETURN(uref_pic_flow_get_hsize(flow_def, &upipe_netmap_sink->hsize));
+    UBASE_RETURN(uref_pic_flow_get_vsize(flow_def, &upipe_netmap_sink->vsize));
 
-    if (hsize == 720) {
-        if (vsize == 486) {
+    if (upipe_netmap_sink->hsize == 720) {
+        if (upipe_netmap_sink->vsize == 486) {
             upipe_netmap_sink->frame = 0x10;
-        } else if (vsize == 576) {
+        } else if (upipe_netmap_sink->vsize == 576) {
             upipe_netmap_sink->frame = 0x11;
         } else
             return UBASE_ERR_INVALID;
-    } else if (hsize == 1920 && vsize == 1080) {
+    } else if (upipe_netmap_sink->hsize == 1920 && upipe_netmap_sink->vsize == 1080) {
         upipe_netmap_sink->frame = 0x20; // interlaced
         // FIXME: progressive/interlaced is per-picture
         // XXX: should we do PSF at all?
         // 0x21 progressive
         // 0x22 psf
-    } else if (hsize == 1280 && vsize == 720) {
+    } else if (upipe_netmap_sink->hsize == 1280 && upipe_netmap_sink->vsize == 720) {
         upipe_netmap_sink->frame = 0x30; // progressive
     } else
         return UBASE_ERR_INVALID;
