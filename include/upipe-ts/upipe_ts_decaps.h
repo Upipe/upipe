@@ -36,7 +36,7 @@ extern "C" {
 /** @This extends upipe_command with specific commands for upipe_ts_decaps pipes.
  */
 enum upipe_ts_decaps_command {
-    UPIPE_TS_DECAPS_SENTINAL = UPIPE_CONTROL_LOCAL,
+    UPIPE_TS_DECAPS_SENTINEL = UPIPE_CONTROL_LOCAL,
 
     UPIPE_TS_DECAPS_GET_PACKETS_LOST, /* int sig, uint64_t * */
 };
