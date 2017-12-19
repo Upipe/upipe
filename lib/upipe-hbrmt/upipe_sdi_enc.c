@@ -1215,7 +1215,7 @@ static void upipe_sdi_enc_input(struct upipe *upipe, struct uref *uref,
                 if (f2 == 0 && line_offset == 0) // line == 0
                     continue;
 
-                if (upipe_sdi_enc->ttx_packets[f2] < sd ? 5 : 1) {
+                if (upipe_sdi_enc->ttx_packets[f2] < (sd ? 5 : 1)) {
                     if (sd)
                         upipe_sdi_enc->ttx_line[f2][upipe_sdi_enc->ttx_packets[f2]] =
                             line_offset + PAL_FIELD_OFFSET * f2;
