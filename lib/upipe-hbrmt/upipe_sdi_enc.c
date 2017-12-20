@@ -192,7 +192,7 @@ struct upipe_sdi_enc {
     /* teletext data */
     const uint8_t *ttx_packet[2][5];
     int ttx_packets[2];
-    int ttx_line[2][5];
+    int ttx_line[2];
 
     /** teletext option */
     bool ttx;
@@ -1226,9 +1226,9 @@ static void upipe_sdi_enc_input(struct upipe *upipe, struct uref *uref,
                     continue;
 
                 if (upipe_sdi_enc->ttx_packets[f2] < (sd ? 5 : 1)) {
-                    if (sd)
-                        upipe_sdi_enc->ttx_line[f2][upipe_sdi_enc->ttx_packets[f2]] =
-                            line_offset + PAL_FIELD_OFFSET * f2;
+                    if (sd && upipe_sdi_enc->ttx_packets[f2] == 0) {
+                        upipe_sdi_enc->ttx_line[f2] = line_offset + PAL_FIELD_OFFSET * f2;
+                    }
                     upipe_sdi_enc->ttx_packet[f2][upipe_sdi_enc->ttx_packets[f2]++] = pic_data;
                 }
             }
