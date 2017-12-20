@@ -31,6 +31,8 @@
 #include <upipe/uprobe.h>
 #include <upipe/uref.h>
 #include <upipe/uref_clock.h>
+#include <upipe/uref_pic_flow.h>
+#include <upipe/uclock.h>
 #include <upipe/upipe.h>
 #include <upipe/udict.h>
 #include <upipe/upipe_helper_upipe.h>
@@ -60,6 +62,9 @@ struct upipe_subpic_schedule {
 
     /** list of subpipes */
     struct uchain subs;
+
+    /** frame duration */
+    uint64_t frame_duration;
 
     /** manager to create output subpipes */
     struct upipe_mgr sub_mgr;
@@ -286,6 +291,8 @@ static void upipe_subpic_schedule_sub_handle_subpic(struct upipe *upipe,
         uint64_t duration;
         if (unlikely(!ubase_check(uref_clock_get_duration(uref, &duration))))
             duration = 0;
+        if (duration == 0)
+            duration = upipe_subpic_schedule->frame_duration;
 
         uint64_t pts_end = date_uref + duration;
 
@@ -359,6 +366,13 @@ static int upipe_subpic_schedule_control(struct upipe *upipe, int command, va_li
     switch (command) {
         case UPIPE_SET_FLOW_DEF: {
             struct uref *uref = va_arg(args, struct uref *);
+            struct urational fps;
+            if (!ubase_check(uref_pic_flow_get_fps(uref, &fps))) {
+                upipe_subpic_schedule->frame_duration = 0;
+            } else {
+                upipe_subpic_schedule->frame_duration =
+                    fps.den * UCLOCK_FREQ / fps.num;
+            }
             upipe_subpic_schedule_store_flow_def(upipe, uref_dup(uref));
             return UBASE_ERR_NONE;
         }
