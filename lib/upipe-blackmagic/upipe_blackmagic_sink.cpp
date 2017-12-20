@@ -452,7 +452,7 @@ static void upipe_bmd_sink_extract_ttx(IDeckLinkVideoFrameAncillary *ancillary,
         if (f2 == 0 && line_offset == 0) // line == 0
             continue;
 
-        if (packets[f2] < (sd ? 5 : 1))
+        if (packets[f2] < (sd ? 1 : 5))
             packet[f2][packets[f2]++] = pic_data;
     }
 
