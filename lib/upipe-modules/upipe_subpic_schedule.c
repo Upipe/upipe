@@ -31,6 +31,8 @@
 #include <upipe/uprobe.h>
 #include <upipe/uref.h>
 #include <upipe/uref_clock.h>
+#include <upipe/uref_pic_flow.h>
+#include <upipe/uclock.h>
 #include <upipe/upipe.h>
 #include <upipe/udict.h>
 #include <upipe/upipe_helper_upipe.h>
@@ -61,6 +63,9 @@ struct upipe_subpic_schedule {
     /** list of subpipes */
     struct uchain subs;
 
+    /** frame duration */
+    uint64_t frame_duration;
+
     /** manager to create output subpipes */
     struct upipe_mgr sub_mgr;
 
@@ -86,12 +91,6 @@ struct upipe_subpic_schedule_sub {
 
     /** structure for double-linked lists */
     struct uchain uchain;
-
-    /** uref currently being output */
-    struct uref *uref;
-
-    /** pts + duration of current uref */
-    uint64_t pts_end;
 
     /** buffered urefs */
     struct uchain urefs;
@@ -129,7 +128,6 @@ static void upipe_subpic_schedule_sub_free(struct upipe *upipe)
             break;
         uref_free(uref_from_uchain(uchain));
     }
-    uref_free(upipe_subpic_schedule_sub->uref);
     upipe_subpic_schedule_sub_clean_urefcount(upipe);
     upipe_subpic_schedule_sub_clean_output(upipe);
     upipe_subpic_schedule_sub_clean_sub(upipe);
@@ -198,7 +196,6 @@ static struct upipe *upipe_subpic_schedule_sub_alloc(struct upipe_mgr *mgr,
         return NULL;
 
     struct upipe_subpic_schedule_sub *upipe_subpic_schedule_sub = upipe_subpic_schedule_sub_from_upipe(upipe);
-    upipe_subpic_schedule_sub->uref = NULL;
     ulist_init(&upipe_subpic_schedule_sub->urefs);
 
     upipe_subpic_schedule_sub_init_urefcount(upipe);
@@ -278,39 +275,37 @@ static void upipe_subpic_schedule_sub_handle_subpic(struct upipe *upipe,
     struct upipe_subpic_schedule_sub *upipe_subpic_schedule_sub =
         upipe_subpic_schedule_sub_from_upipe(upipe);
 
-    struct uref *uref = upipe_subpic_schedule_sub->uref;
-    if (uref && upipe_subpic_schedule_sub->pts_end < date) {
-        upipe_verbose(upipe, "Subpicture elapsed");
-        uref_free(uref);
-        upipe_subpic_schedule_sub->uref = NULL;
-    }
+    struct upipe_subpic_schedule *upipe_subpic_schedule = upipe_subpic_schedule_from_sub_mgr(upipe->mgr);
+
 
     struct uchain *uchain, *uchain_tmp;
     ulist_delete_foreach(&upipe_subpic_schedule_sub->urefs, uchain, uchain_tmp) {
-        struct uref *next = uref_from_uchain(uchain);
+        struct uref *uref = uref_from_uchain(uchain);
 
-        uint64_t date_next = 0;
-        uref_clock_get_pts_prog(next, &date_next);
+        uint64_t date_uref = 0;
+        uref_clock_get_pts_prog(uref, &date_uref);
 
-        if (date_next > date) /* The next subpicture is in advance */
+        if (date_uref > date) /* The uref subpicture is in advance */
             break;
 
         uint64_t duration;
-        if (unlikely(!ubase_check(uref_clock_get_duration(next, &duration))))
+        if (unlikely(!ubase_check(uref_clock_get_duration(uref, &duration))))
             duration = 0;
-        upipe_subpic_schedule_sub->pts_end = date_next + duration;
+        if (duration == 0)
+            duration = upipe_subpic_schedule->frame_duration;
 
-        upipe_verbose_va(upipe, "subpicture updated to: %"PRIu64" until %"PRIu64,
-                date_next, upipe_subpic_schedule_sub->pts_end);
+        uint64_t pts_end = date_uref + duration;
 
-        uref_free(upipe_subpic_schedule_sub->uref);     /* free previous */
-        ulist_delete(uchain);
-        upipe_subpic_schedule_sub->uref = next;
+        if (pts_end < date) {
+            ulist_delete(uchain);
+            uref_free(uref);
+            upipe_verbose_va(upipe, "subpicture elapsed");
+            continue;
+        }
+
+        if (uref->ubuf)
+            upipe_subpic_schedule_sub_output(upipe, uref_dup(uref), NULL);
     }
-
-    uref = upipe_subpic_schedule_sub->uref;
-    if (uref && uref->ubuf)
-        upipe_subpic_schedule_sub_output(upipe, uref_dup(uref), NULL);
 }
 
 /** @internal @This schedules sub pictures
@@ -338,11 +333,16 @@ static void upipe_subpic_schedule_handle_subpics(struct upipe *upipe, uint64_t d
  */
 static void upipe_subpic_schedule_input(struct upipe *upipe, struct uref *uref, struct upump **upump_p)
 {
+    struct upipe_subpic_schedule *upipe_subpic_schedule = upipe_subpic_schedule_from_upipe(upipe);
     int type;
     uint64_t date;
-    uref_clock_get_date_prog(uref, &date, &type);
-    if (type != UREF_DATE_NONE)
-        upipe_subpic_schedule_handle_subpics(upipe, date);
+    if (!ubase_check(uref_clock_get_pts_prog(uref, &date))) {
+        upipe_warn(upipe, "undated uref");
+        uref_free(uref);
+        return;
+    }
+
+    upipe_subpic_schedule_handle_subpics(upipe, date);
 
     upipe_subpic_schedule_output(upipe, uref, upump_p);
 }
@@ -366,6 +366,13 @@ static int upipe_subpic_schedule_control(struct upipe *upipe, int command, va_li
     switch (command) {
         case UPIPE_SET_FLOW_DEF: {
             struct uref *uref = va_arg(args, struct uref *);
+            struct urational fps;
+            if (!ubase_check(uref_pic_flow_get_fps(uref, &fps))) {
+                upipe_subpic_schedule->frame_duration = 0;
+            } else {
+                upipe_subpic_schedule->frame_duration =
+                    fps.den * UCLOCK_FREQ / fps.num;
+            }
             upipe_subpic_schedule_store_flow_def(upipe, uref_dup(uref));
             return UBASE_ERR_NONE;
         }
