@@ -1177,16 +1177,24 @@ static void upipe_sdi_enc_input(struct upipe *upipe, struct uref *uref,
     upipe_sdi_enc->ttx_packets[0] = 0;
     upipe_sdi_enc->ttx_packets[1] = 0;
 
-    struct uref *subpic = NULL;
+    struct uref *subpic[2] = { NULL, NULL };
     /* buffered uref if any */
     struct upipe_sdi_enc_sub *subpic_sub = &upipe_sdi_enc->subpic_subpipe;
-    struct uchain *uchain_subpic = ulist_pop(&subpic_sub->urefs);
-    if (uchain_subpic) {
-        subpic = uref_from_uchain(uchain_subpic);
+    int i = 0;
+    for (;;) {
+        struct uchain *uchain_subpic = ulist_pop(&subpic_sub->urefs);
+        if (!uchain_subpic)
+            break;
+        if (i >= 2) {
+            uref_free(uref_from_uchain(uchain_subpic));
+            upipe_err(upipe, "Too many subpics");
+            continue;
+        }
+        subpic[i] = uref_from_uchain(uchain_subpic);
 
         const uint8_t *buf;
         int size = -1;
-        if (ubase_check(uref_block_read(subpic, 0, &size, &buf))) {
+        if (ubase_check(uref_block_read(subpic[i], 0, &size, &buf))) {
             bool sd = upipe_sdi_enc->p->sd;
             const uint8_t *pic_data = buf;
             int pic_data_size = size;
@@ -1224,10 +1232,11 @@ static void upipe_sdi_enc_input(struct upipe *upipe, struct uref *uref,
                     upipe_sdi_enc->ttx_packet[f2][upipe_sdi_enc->ttx_packets[f2]++] = pic_data;
                 }
             }
+            i++;
         } else {
             upipe_err(upipe, "Could not map subpic");
-            uref_free(subpic);
-            subpic = NULL;
+            uref_free(subpic[i]);
+            subpic[i] = NULL;
         }
     }
 
@@ -1248,9 +1257,11 @@ static void upipe_sdi_enc_input(struct upipe *upipe, struct uref *uref,
         }
     }
 
-    if (subpic) {
-        uref_block_unmap(subpic, 0);
-        uref_free(subpic);
+    for (int i = 0; i < 2; i++) {
+        if (subpic[i]) {
+            uref_block_unmap(subpic[i], 0);
+            uref_free(subpic[i]);
+        }
     }
 
     ubuf_block_unmap(ubuf, 0);
