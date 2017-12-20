@@ -7,7 +7,7 @@ extern "C" {
 # define UPIPE_DUMP_SIGNATURE UBASE_FOURCC('d','u','m','p')
 
 enum upipe_dump_command {
-    UPIPE_DUMP_SENTINAL = UPIPE_CONTROL_LOCAL,
+    UPIPE_DUMP_SENTINEL = UPIPE_CONTROL_LOCAL,
 
     UPIPE_DUMP_SET_MAX_LEN,
 };

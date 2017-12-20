@@ -39,7 +39,7 @@ extern "C" {
 #define UPIPE_RTPD_SIGNATURE UBASE_FOURCC('r','t','p','d')
 
 enum upipe_rtpd_command {
-    UPIPE_RTPD_SENTINAL = UPIPE_CONTROL_LOCAL,
+    UPIPE_RTPD_SENTINEL = UPIPE_CONTROL_LOCAL,
 
     UPIPE_RTPD_GET_PACKETS_LOST, /* int sig, uint64_t * */
 };
