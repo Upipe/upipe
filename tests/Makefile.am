@@ -363,6 +363,13 @@ TESTS += \
 	upipe_v210dec_test upipe_v210enc_test
 endif
 
+if HAVE_DVBCSA
+check_PROGRAMS += \
+	upipe_dvbcsa_test
+TESTS += \
+	 upipe_dvbcsa_test
+endif
+
 AM_CPPFLAGS = -I$(top_builddir)/include -I$(top_srcdir)/include
 LDADD = $(top_builddir)/lib/upipe/libupipe.la
 
@@ -491,4 +498,4 @@ upipe_audio_blank_test_LDADD = $(LDADD) $(top_builddir)/lib/upipe-modules/libupi
 upipe_grid_test_LDADD = $(LDADD) $(top_builddir)/lib/upipe-modules/libupipe_modules.la
 
 upipe_block_to_sound_test_LDADD = $(LDADD) $(top_builddir)/lib/upipe-modules/libupipe_modules.la
-
+upipe_dvbcsa_test_LDDADD = $(LDADD) $(top_builddir)/lib/upipe-dvbcsa/libupipe_dvbcsa.la
