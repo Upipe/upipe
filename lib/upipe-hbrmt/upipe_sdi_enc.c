@@ -796,6 +796,17 @@ static void upipe_sdi_enc_encode_line(struct upipe *upipe, int line_num, uint16_
     if(vbi || special_case) {
         /* black */
         upipe_sdi_enc->blank(active_start, input_hsize);
+
+        if (upipe_sdi_enc->ttx_packets[f2] && line_num == upipe_sdi_enc->ttx_line[f2]) {
+            const uint8_t *ttx = upipe_sdi_enc->ttx_packet[f2][0];
+            uint8_t buf[input_hsize];
+            memset(buf, 0, sizeof(buf));
+
+            sdi_encode_ttx_sd(buf, ttx, &upipe_sdi_enc->sp);
+            // TODO: make sdi_encode_ttx work in place
+            for (int i = 0; i < input_hsize; i++)
+                active_start[i] = buf[i];
+        }
     } else {
         const uint8_t *y = planes[f2][0];
         const uint8_t *u = planes[f2][1];
