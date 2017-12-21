@@ -4,6 +4,7 @@ libupipe_netmap_la_SOURCES = upipe_netmap_source.c \
     upipe_netmap_sink.c \
     sdi.h \
     sdienc.asm \
+    ../upipe-hbrmt/sdienc.asm \
     v210.asm \
     ../upipe-hbrmt/sdidec.c \
     $(NULL)
