@@ -701,7 +701,7 @@ ustring_to_hexdigit(const struct ustring str)
     }
     else if (str.at[0] >= 'A' && str.at[0] <= 'F') {
         ret.str = ustring_truncate(str, 1);
-        ret.value = 10 + str.at[0] - 'a';
+        ret.value = 10 + str.at[0] - 'A';
     }
     return ret;
 }
