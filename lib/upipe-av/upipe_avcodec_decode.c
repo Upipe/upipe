@@ -603,16 +603,9 @@ static bool upipe_avcdec_do_av_deal(struct upipe *upipe)
             break;
         case AVMEDIA_TYPE_VIDEO:
             context->get_buffer2 = upipe_avcdec_get_buffer_pic;
-
-#if LIBAVCODEC_VERSION_INT < AV_VERSION_INT(55, 48, 102)
-            /* otherwise we need specific prepend/append/align */
-            context->flags |= CODEC_FLAG_EMU_EDGE;
-#endif
-            context->refcounted_frames = 1;
             break;
         case AVMEDIA_TYPE_AUDIO:
             context->get_buffer2 = upipe_avcdec_get_buffer_sound;
-            context->refcounted_frames = 1;
             break;
         default:
             /* This should not happen */
@@ -736,13 +729,12 @@ static void upipe_avcdec_close(struct upipe *upipe)
     }
 
     if (upipe_avcdec->context->codec->capabilities & AV_CODEC_CAP_DELAY) {
-        /* Feed avcodec with NULL packets to output the remaining frames */
+        /* Feed avcodec with NULL packet to output the remaining frames */
         AVPacket avpkt;
-        memset(&avpkt, 0, sizeof(AVPacket));
         av_init_packet(&avpkt);
         avpkt.size = 0;
         avpkt.data = NULL;
-        while (upipe_avcdec_decode_avpkt(upipe, &avpkt, NULL));
+        upipe_avcdec_decode_avpkt(upipe, &avpkt, NULL);
     }
     upipe_avcdec->close = true;
     upipe_avcdec_start_av_deal(upipe);
@@ -949,14 +941,8 @@ static void upipe_avcdec_output_sub(struct upipe *upipe, AVSubtitle *sub,
         for (int i = 0; i < sub->num_rects; i++) {
             AVSubtitleRect *r = sub->rects[i];
             uint8_t *dst = buf + 4 * ((width_aligned * r->y) + r->x);
-
-#if LIBAVCODEC_VERSION_MAJOR < 59
-            uint8_t *src = r->pict.data[0];
-            uint8_t *palette = r->pict.data[1];
-#else
             uint8_t *src = r->data[0];
             uint8_t *palette = r->data[1];
-#endif
 
             for (int i = 0; i < r->h; i++) {
                 for (int j = 0; j < r->w; j++) {
@@ -1212,7 +1198,7 @@ static bool upipe_avcdec_decode_avpkt(struct upipe *upipe, AVPacket *avpkt,
                                       struct upump **upump_p)
 {
     struct upipe_avcdec *upipe_avcdec = upipe_avcdec_from_upipe(upipe);
-    int gotframe = 0, len;
+    int gotframe = 0, len, err;
     AVCodecContext *context = upipe_avcdec->context;
 
     switch (context->codec->type) {
@@ -1244,30 +1230,29 @@ static bool upipe_avcdec_decode_avpkt(struct upipe *upipe, AVPacket *avpkt,
         }
 
         case AVMEDIA_TYPE_VIDEO:
-            len = avcodec_decode_video2(context,
-                                        upipe_avcdec->frame,
-                                        &gotframe, avpkt);
-            if (len < 0) {
-                upipe_warn(upipe, "Error while decoding frame");
-            }
-
-            /* output frame if any has been decoded */
-            if (gotframe) {
-                upipe_avcdec_output_pic(upipe, upump_p);
-            }
-            break;
-
         case AVMEDIA_TYPE_AUDIO:
-            len = avcodec_decode_audio4(context,
-                                        upipe_avcdec->frame,
-                                        &gotframe, avpkt);
-            if (len < 0) {
-                upipe_warn(upipe, "Error while decoding frame");
+            err = avcodec_send_packet(context, avpkt);
+            if (err) {
+                upipe_err_va(upipe, "avcodec_send_packet: %s",
+                             av_err2str(err));
+                break;
             }
 
-            /* output samples if any has been decoded */
-            if (gotframe) {
-                upipe_avcdec_output_sound(upipe, upump_p);
+            while (1) {
+                err = avcodec_receive_frame(context, upipe_avcdec->frame);
+                if (unlikely(err)) {
+                    if (err != AVERROR(EAGAIN) &&
+                        err != AVERROR_EOF)
+                        upipe_err_va(upipe, "avcodec_receive_frame: %s",
+                                     av_err2str(err));
+                    break;
+                }
+
+                gotframe = 1;
+                if (context->codec->type == AVMEDIA_TYPE_VIDEO)
+                    upipe_avcdec_output_pic(upipe, upump_p);
+                else if (context->codec->type == AVMEDIA_TYPE_AUDIO)
+                    upipe_avcdec_output_sound(upipe, upump_p);
             }
             break;
 
@@ -1309,14 +1294,7 @@ static bool upipe_avcdec_decode(struct upipe *upipe, struct uref *uref,
     assert(uref);
 
     struct upipe_avcdec *upipe_avcdec = upipe_avcdec_from_upipe(upipe);
-    AVPacket avpkt;
-    memset(&avpkt, 0, sizeof(AVPacket));
-    av_init_packet(&avpkt);
 
-    /* avcodec input buffer needs to be at least 4-byte aligned and
-       AV_INPUT_BUFFER_PADDING_SIZE larger than actual input size.
-       Thus, extract ubuf content in a properly allocated buffer.
-       Padding must be zeroed. */
     size_t size = 0;
     uref_block_size(uref, &size);
     if (unlikely(!size)) {
@@ -1324,20 +1302,18 @@ static bool upipe_avcdec_decode(struct upipe *upipe, struct uref *uref,
         uref_free(uref);
         return true;
     }
-    avpkt.size = size;
 
-    upipe_verbose_va(upipe, "Received packet %"PRIu64" - size : %d",
-                     upipe_avcdec->counter, avpkt.size);
-    /* TODO replace with umem */
-    avpkt.data = malloc(avpkt.size + AV_INPUT_BUFFER_PADDING_SIZE);
-    if (unlikely(avpkt.data == NULL)) {
+    AVPacket avpkt;
+    if (unlikely(av_new_packet(&avpkt, size) < 0)) {
         uref_free(uref);
         upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
         return true;
     }
+
+    upipe_verbose_va(upipe, "Received packet %"PRIu64" - size : %d",
+                     upipe_avcdec->counter, avpkt.size);
     uref_block_extract(uref, 0, avpkt.size, avpkt.data);
     ubuf_free(uref_detach_ubuf(uref));
-    memset(avpkt.data + avpkt.size, 0, AV_INPUT_BUFFER_PADDING_SIZE);
 
     uref_pic_set_number(uref, upipe_avcdec->counter++);
     uref_clock_get_rate(uref, &upipe_avcdec->drift_rate);
@@ -1350,8 +1326,8 @@ static bool upipe_avcdec_decode(struct upipe *upipe, struct uref *uref,
 
     upipe_avcdec_store_uref(upipe, uref);
     upipe_avcdec_decode_avpkt(upipe, &avpkt, upump_p);
+    av_packet_unref(&avpkt);
 
-    free(avpkt.data);
     return true;
 }
 
@@ -1499,7 +1475,7 @@ static bool upipe_avcdec_check_option(struct upipe *upipe, const char *option,
     if (!strcmp(option, "lowres")) {
         if (!content) return true;
         uint8_t lowres = strtoul(content, NULL, 10);
-        if (lowres > av_codec_get_max_lowres(upipe_avcdec->context->codec)) {
+        if (lowres > upipe_avcdec->context->codec->max_lowres) {
             return false;
         }
     }
