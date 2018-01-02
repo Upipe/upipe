@@ -97,7 +97,7 @@ static inline int upipe_dvbcsa_add_pid(struct upipe *upipe,
 /** @This deletes a pid from the encryption/decryption list.
  *
  * @param upipe description structure of the pipe
- * @oaram pid pid to delete
+ * @param pid pid to delete
  * @return an error code
  */
 static inline int upipe_dvbcsa_del_pid(struct upipe *upipe,
