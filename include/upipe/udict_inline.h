@@ -49,7 +49,7 @@ extern "C" {
  * (if set to -1, a default sensible value is used)
  * @return pointer to manager, or NULL in case of error
  */
-struct udict_mgr *udict_inline_mgr_alloc(unsigned int udict_pool_depth,
+struct udict_mgr *udict_inline_mgr_alloc(uint16_t udict_pool_depth,
                                          struct umem_mgr *umem_mgr,
                                          int min_size, int extra_size);
 
