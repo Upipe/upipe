@@ -19,7 +19,7 @@ void upipe_sdi_unpack_c(const uint8_t *src, uint16_t *y, uintptr_t pixels)
 
 void upipe_sdi_v210_unpack_c(const uint8_t *src, uint32_t *dst, uintptr_t pixels)
 {
-    for (int i = 0; i < pixels; i += 3 * 4) {
+    for (int i = 0; i < pixels - 5; i += 6) {
         uint16_t a, b, c;
 
         a = ((src[0]  & 0xff) << 2) | (src[1] >> 6);
@@ -39,14 +39,15 @@ void upipe_sdi_v210_unpack_c(const uint8_t *src, uint32_t *dst, uintptr_t pixels
 
         a = ((src[11] & 0x3f) << 4) | (src[12] >> 4);
         b = ((src[12] & 0x0f) << 6) | (src[13] >> 2);
-        c = ((src[14] & 0x03) << 8) | (src[15]);
+        c = ((src[13] & 0x03) << 8) | (src[14]);
         *dst++ = (((c << 20) | (b << 10)) | a);
+        src += 15;
     }
 }
 
 void upipe_sdi_to_planar_8_c(const uint8_t *src, uint8_t *y, uint8_t *u, uint8_t *v, uintptr_t pixels)
 {
-    for (int i = 0; i < pixels; i += 4) {
+    for (int i = 0; i < pixels; i += 2) {
         uint8_t a = *src++; // UUUUUUUU
         uint8_t b = *src++; // ..YYYYYY
         uint8_t c = *src++; // YY..VVVV
