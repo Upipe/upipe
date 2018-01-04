@@ -19,7 +19,8 @@ void upipe_sdi_unpack_c(const uint8_t *src, uint16_t *y, uintptr_t pixels)
 
 void upipe_sdi_v210_unpack_c(const uint8_t *src, uint32_t *dst, uintptr_t pixels)
 {
-    for (int i = 0; i < pixels - 5; i += 6) {
+    while (pixels >= 6) {
+        pixels -= 6;
         uint16_t a, b, c;
 
         a = ((src[0]  & 0xff) << 2) | (src[1] >> 6);
