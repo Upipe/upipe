@@ -25,7 +25,6 @@
 #include <upipe/ubase.h>
 #include <upipe/uprobe.h>
 #include <upipe/uref.h>
-#include <upipe/ubits.h>
 #include <upipe/ubuf.h>
 #include <upipe/uref_block_flow.h>
 #include <upipe/upipe.h>
@@ -41,8 +40,6 @@
 #include <upipe/upipe_helper_input.h>
 
 #include <upipe-hbrmt/upipe_pack10bit.h>
-
-#include <arpa/inet.h>
 
 #include "sdienc.h"
 
@@ -311,22 +308,6 @@ static int upipe_pack10bit_control(struct upipe *upipe, int command, va_list arg
         }
         default:
             return UBASE_ERR_UNHANDLED;
-    }
-}
-
-static void upipe_sdi_pack_c(uint8_t *dst, const uint8_t *y, int64_t size)
-{
-    struct ubits s;
-    ubits_init(&s, dst, size * 10 / 8);
-
-    for (int i = 0; i < size; i ++)
-        ubits_put(&s, 10, htons((y[2*i+0] << 8) | y[2*i+1]));
-
-    uint8_t *end;
-    if (!ubase_check(ubits_clean(&s, &end))) {
-        // error
-    } else {
-        // check buffer end?
     }
 }
 
