@@ -28,6 +28,10 @@
 
 #include <upipe/ubase.h>
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 #define UPIPE_ABLK_SIGNATURE    UBASE_FOURCC('a','b','l','k')
 
 /** @This enumerates the audio blank control commands. */
@@ -57,4 +61,7 @@ static inline int upipe_ablk_set_sound(struct upipe *upipe, struct uref *uref)
  */
 struct upipe_mgr *upipe_ablk_mgr_alloc(void);
 
+#ifdef __cplusplus
+}
+#endif
 #endif

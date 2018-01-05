@@ -35,6 +35,10 @@
 #include <upipe/uprobe_helper_uprobe.h>
 #include <upipe/uatomic.h>
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 /** @hidden */
 struct umem_mgr;
 
@@ -106,4 +110,7 @@ struct uprobe *uprobe_ubuf_mem_pool_alloc(struct uprobe *next,
  */
 void uprobe_ubuf_mem_pool_set(struct uprobe *uprobe, struct umem_mgr *umem_mgr);
 
+#ifdef __cplusplus
+}
+#endif
 #endif
