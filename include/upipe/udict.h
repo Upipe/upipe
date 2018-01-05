@@ -596,7 +596,7 @@ static inline int udict_set_opaque_from_hex(struct udict *udict,
 {
     size_t size = (strlen(value) + 1) / 2;
     uint8_t v[size];
-    int i;
+    size_t i;
     for (i = 0; i < size; i++) {
         int ret = sscanf(value + (i * 2), "%2hhx", v + i);
         if (!ret || ret == EOF)

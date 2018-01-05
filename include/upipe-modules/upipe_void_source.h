@@ -25,6 +25,9 @@
 
 #ifndef _UPIPE_MODULES_UPIPE_VOID_SOURCE_H_
 # define _UPIPE_MODULES_UPIPE_VOID_SOURCE_H_
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 /** @This defines the void source pipe signature. */
 # define UPIPE_VOIDSRC_SIGNATURE    UBASE_FOURCC('v','o','i','d')
@@ -35,4 +38,7 @@
  */
 struct upipe_mgr *upipe_voidsrc_mgr_alloc(void);
 
+#ifdef __cplusplus
+}
+#endif
 #endif
