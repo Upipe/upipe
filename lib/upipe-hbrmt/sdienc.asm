@@ -32,14 +32,13 @@ SECTION .text
 %macro uyvy_to_sdi 0
 
 ; uyvy_to_sdi(uint8_t *dst, const uint8_t *y, int64_t size)
-cglobal uyvy_to_sdi, 3, 4, 3, dst, y, size
-    add     sizeq, sizeq
-    add     yq, sizeq
-    neg     sizeq
+cglobal uyvy_to_sdi, 3, 4, 3, dst, y, pixels
+    lea     yq, [yq + 4*pixelsq]
+    neg     pixelsq
     mova    m2, [sdi_enc_mult_10]
 
 .loop:
-    pmullw  m0, m2, [yq+sizeq]
+    pmullw  m0, m2, [yq+4*pixelsq]
     pshufb  m1, m0, [sdi_chroma_shuf_10]
     pshufb  m0, [sdi_luma_shuf_10]
     por     m0, m1
@@ -50,7 +49,7 @@ cglobal uyvy_to_sdi, 3, 4, 3, dst, y, size
 %endif
 
     add     dstq, (mmsize*5)/8
-    add     sizeq, mmsize
+    add     pixelsq, mmsize/4
     jl .loop
 
     RET
