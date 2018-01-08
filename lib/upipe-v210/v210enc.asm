@@ -51,10 +51,10 @@ v210_enc_uyvy_luma_shuft_10: times 2 db -1, 2, 3, -1, 6, 7, 10, 11, -1, -1, -1, 
 
 SECTION .text
 
-%macro v210_planar_pack_10 0
+%macro planar_to_v210_10 0
 
-; v210_planar_pack_10(const uint16_t *y, const uint16_t *u, const uint16_t *v, uint8_t *dst, ptrdiff_t width)
-cglobal v210_planar_pack_10, 5, 5, 4+cpuflag(avx2), y, u, v, dst, width
+; planar_to_v210_10(const uint16_t *y, const uint16_t *u, const uint16_t *v, uint8_t *dst, ptrdiff_t width)
+cglobal planar_to_v210_10, 5, 5, 4+cpuflag(avx2), y, u, v, dst, width
     lea     r0, [yq+2*widthq]
     add     uq, widthq
     add     vq, widthq
@@ -97,10 +97,10 @@ cglobal v210_planar_pack_10, 5, 5, 4+cpuflag(avx2), y, u, v, dst, width
 %endmacro
 
 INIT_XMM ssse3
-v210_planar_pack_10
+planar_to_v210_10
 
 INIT_YMM avx2
-v210_planar_pack_10
+planar_to_v210_10
 
 %macro v210_uyvy_pack_10 0
 
@@ -148,10 +148,10 @@ cglobal v210_uyvy_pack_10, 3, 6, 6, y, dst, width
 INIT_XMM ssse3
 v210_uyvy_pack_10
 
-%macro v210_planar_pack_8 0
+%macro planar_to_v210_8 0
 
-; v210_planar_pack_8(const uint8_t *y, const uint8_t *u, const uint8_t *v, uint8_t *dst, ptrdiff_t width)
-cglobal v210_planar_pack_8, 5, 5, 7, y, u, v, dst, width
+; planar_to_v210_8(const uint8_t *y, const uint8_t *u, const uint8_t *v, uint8_t *dst, ptrdiff_t width)
+cglobal planar_to_v210_8, 5, 5, 7, y, u, v, dst, width
     add     yq, widthq
     shr     widthq, 1
     add     uq, widthq
@@ -215,8 +215,8 @@ cglobal v210_planar_pack_8, 5, 5, 7, y, u, v, dst, width
 %endmacro
 
 INIT_XMM ssse3
-v210_planar_pack_8
+planar_to_v210_8
 INIT_XMM avx
-v210_planar_pack_8
+planar_to_v210_8
 INIT_YMM avx2
-v210_planar_pack_8
+planar_to_v210_8

@@ -59,7 +59,7 @@ static inline void wl32(uint8_t *dst, uint32_t u)
         dst += 4;                       \
     } while (0)
 
-void upipe_v210enc_planar_pack_8_c(const uint8_t *y, const uint8_t *u,
+void upipe_planar_to_v210_8_c(const uint8_t *y, const uint8_t *u,
                                  const uint8_t *v, uint8_t *dst, ptrdiff_t width)
 {
     uint32_t val;
@@ -78,7 +78,7 @@ void upipe_v210enc_planar_pack_8_c(const uint8_t *y, const uint8_t *u,
     }
 }
 
-void upipe_v210enc_planar_pack_10_c(const uint16_t *y, const uint16_t *u,
+void upipe_planar_to_v210_10_c(const uint16_t *y, const uint16_t *u,
                                   const uint16_t *v, uint8_t *dst, ptrdiff_t width)
 {
     uint32_t val;

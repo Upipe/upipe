@@ -83,30 +83,30 @@ void checkasm_check_v210enc(void)
         void (*planar_10)(const uint16_t *y, const uint16_t *u, const uint16_t *v, uint8_t *dst, ptrdiff_t width);
         void (*planar_8)(const uint8_t *y, const uint8_t *u, const uint8_t *v, uint8_t *dst, ptrdiff_t width);
     } s = {
-        .planar_10 = upipe_v210enc_planar_pack_10_c,
-        .planar_8  = upipe_v210enc_planar_pack_8_c,
+        .planar_10 = upipe_planar_to_v210_10_c,
+        .planar_8  = upipe_planar_to_v210_8_c,
     };
 
     int cpu_flags = av_get_cpu_flags();
 
 #if HAVE_X86ASM
     if (cpu_flags & AV_CPU_FLAG_SSSE3) {
-        s.planar_10 = upipe_v210_planar_pack_10_ssse3;
-        s.planar_8  = upipe_v210_planar_pack_8_ssse3;
+        s.planar_10 = upipe_planar_to_v210_10_ssse3;
+        s.planar_8  = upipe_planar_to_v210_8_ssse3;
     }
     if (cpu_flags & AV_CPU_FLAG_AVX)
-        s.planar_8  = upipe_v210_planar_pack_8_avx;
+        s.planar_8  = upipe_planar_to_v210_8_avx;
     if (cpu_flags & AV_CPU_FLAG_AVX2) {
-        s.planar_10 = upipe_v210_planar_pack_10_avx2;
-        s.planar_8  = upipe_v210_planar_pack_8_avx2;
+        s.planar_10 = upipe_planar_to_v210_10_avx2;
+        s.planar_8  = upipe_planar_to_v210_8_avx2;
     }
 #endif
 
-    if (check_func(s.planar_8, "planar8_to_v210"))
+    if (check_func(s.planar_8, "planar_to_v210_8"))
         check_pack_line(uint8_t, 0xffffffff);
-    report("planar8_to_v210");
+    report("planar_to_v210_8");
 
-    if (check_func(s.planar_10, "planar10_to_v210"))
+    if (check_func(s.planar_10, "planar_to_v210_10"))
         check_pack_line(uint16_t, 0x03ff03ff);
-    report("planar10_to_v210");
+    report("planar_to_v210_10");
 }
