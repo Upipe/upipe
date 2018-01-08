@@ -40,17 +40,17 @@ void checkasm_check_sdidec(void)
     struct {
         void (*uyvy)(const uint8_t *src, uint16_t *dst, int64_t size);
     } s = {
-        .uyvy = upipe_sdi_unpack_c,
+        .uyvy = upipe_sdi_to_uyvy_c,
     };
 
     int cpu_flags = av_get_cpu_flags();
 
 #if HAVE_X86ASM
     if (cpu_flags & AV_CPU_FLAG_SSSE3) {
-        s.uyvy = upipe_sdi_unpack_10_ssse3;
+        s.uyvy = upipe_sdi_to_uyvy_ssse3;
     }
     if (cpu_flags & AV_CPU_FLAG_AVX2) {
-        s.uyvy = upipe_sdi_unpack_10_avx2;
+        s.uyvy = upipe_sdi_to_uyvy_avx2;
     }
 #endif
 

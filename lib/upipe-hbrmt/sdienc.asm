@@ -58,10 +58,10 @@ pb_0: times 32 db 0
 
 SECTION .text
 
-%macro sdi_pack_10 0
+%macro uyvy_to_sdi 0
 
-; sdi_pack_10(uint8_t *dst, const uint8_t *y, int64_t size)
-cglobal sdi_pack_10, 3, 4, 3, dst, y, size
+; uyvy_to_sdi(uint8_t *dst, const uint8_t *y, int64_t size)
+cglobal uyvy_to_sdi, 3, 4, 3, dst, y, size
     add     sizeq, sizeq
     add     yq, sizeq
     neg     sizeq
@@ -86,11 +86,11 @@ cglobal sdi_pack_10, 3, 4, 3, dst, y, size
 %endmacro
 
 INIT_XMM ssse3
-sdi_pack_10
+uyvy_to_sdi
 INIT_XMM avx
-sdi_pack_10
+uyvy_to_sdi
 INIT_YMM avx2
-sdi_pack_10
+uyvy_to_sdi
 
 %macro sdi_blank 0
 
