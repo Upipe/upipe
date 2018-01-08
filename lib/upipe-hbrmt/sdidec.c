@@ -2,7 +2,7 @@
 #include <inttypes.h>
 #include "sdidec.h"
 
-void upipe_sdi_unpack_c(const uint8_t *src, uint16_t *y, uintptr_t pixels)
+void upipe_sdi_to_uyvy_c(const uint8_t *src, uint16_t *y, uintptr_t pixels)
 {
     for (int i = 0; i < 2*pixels; i += 4) {
         uint8_t a = *src++;
@@ -17,7 +17,7 @@ void upipe_sdi_unpack_c(const uint8_t *src, uint16_t *y, uintptr_t pixels)
     }
 }
 
-void upipe_sdi_v210_unpack_c(const uint8_t *src, uint32_t *dst, uintptr_t pixels)
+void upipe_sdi_to_v210_c(const uint8_t *src, uint32_t *dst, uintptr_t pixels)
 {
     while (pixels >= 6) {
         pixels -= 6;
