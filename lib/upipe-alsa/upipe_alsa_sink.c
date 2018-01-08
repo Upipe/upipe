@@ -71,9 +71,9 @@
 /** default period duration */
 #define DEFAULT_PERIOD_DURATION (UCLOCK_FREQ / 25)
 /** tolerance on PTSs (plus or minus) */
-#define PTS_TOLERANCE (UCLOCK_FREQ / 10)
+#define PTS_TOLERANCE (UCLOCK_FREQ / 25)
 /** number of periods to buffer */
-#define BUFFER_PERIODS 4
+#define BUFFER_PERIODS 2
 /** max number of urefs to buffer */
 #define BUFFER_UREFS 5
 /** we expect sound */
@@ -380,15 +380,14 @@ static bool upipe_alsink_open(struct upipe *upipe)
     upipe_alsink->period_duration = (uint64_t)frames_in_period *
                                     UCLOCK_FREQ / upipe_alsink->rate;
 
-    snd_pcm_uframes_t buffer_size = frames_in_period * BUFFER_PERIODS;
+    snd_pcm_uframes_t buffer_size = frames_in_period * 4;
     if (snd_pcm_hw_params_set_buffer_size_min(upipe_alsink->handle, hwparams,
                                               &buffer_size) < 0) {
         upipe_err_va(upipe, "error setting buffer size on device %s", uri);
         goto open_error;
     }
 
-    upipe_alsink_update_latency(upipe,
-            upipe_alsink->period_duration * BUFFER_PERIODS);
+    upipe_alsink_update_latency(upipe, upipe_alsink->period_duration * 3);
 
     /* Apply HW parameter settings to PCM device. */
     if (snd_pcm_hw_params(upipe_alsink->handle, hwparams) < 0) {
@@ -401,16 +400,9 @@ static bool upipe_alsink_open(struct upipe *upipe)
     snd_pcm_sw_params_alloca(&swparams);
     snd_pcm_sw_params_current(upipe_alsink->handle, swparams);
 
-    /* Start ASAP. */
+    /* Start when the buffer is full enough. */
     if (snd_pcm_sw_params_set_start_threshold(upipe_alsink->handle, swparams,
-                                              1) < 0) {
-        upipe_err_va(upipe, "error setting threshold on device %s", uri);
-        goto open_error;
-    }
-
-    /* Never stop playback. */
-    if (snd_pcm_sw_params_set_stop_threshold(upipe_alsink->handle, swparams,
-                                             0) < 0) {
+                                              frames_in_period * 2) < 0) {
         upipe_err_va(upipe, "error setting threshold on device %s", uri);
         goto open_error;
     }
@@ -426,10 +418,9 @@ static bool upipe_alsink_open(struct upipe *upipe)
         goto open_error;
     }
 
-    /* I have no idea why / 2. But it doesn't work without. --Meuuh */
     struct upump *timer = upump_alloc_timer(upipe_alsink->upump_mgr,
             upipe_alsink_timer, upipe, upipe->refcount, 0,
-            upipe_alsink->period_duration / 2);
+            upipe_alsink->period_duration);
     if (unlikely(timer == NULL)) {
         upipe_err(upipe, "can't create timer");
         goto open_error;
@@ -480,7 +471,7 @@ static bool upipe_alsink_recover(struct upipe *upipe, int err)
 {
     struct upipe_alsink *upipe_alsink = upipe_alsink_from_upipe(upipe);
     upipe_warn_va(upipe, "recovering stream: %s", snd_strerror(err));
-    int val = snd_pcm_recover(upipe_alsink->handle, err, 0);
+    int val = snd_pcm_recover(upipe_alsink->handle, err, 1);
     if (val < 0 && val != -EAGAIN) {
         upipe_err_va(upipe, "cannot recover playback stream: %s",
                      snd_strerror(val));
@@ -510,14 +501,18 @@ static snd_pcm_sframes_t upipe_alsink_output_frames(struct upipe *upipe,
             frames = snd_pcm_writen(upipe_alsink->handle, (void **)buffers,
                                     buffer_frames);
         if (frames >= 0)
-            return frames;
+            break;
         if (frames == -EAGAIN) {
             upipe_warn_va(upipe, "ALSA FIFO full, skipping tick");
-            return 0;
+            frames = 0;
+            break;
         }
-        if (unlikely(!upipe_alsink_recover(upipe, frames)))
-            return -1;
+        if (unlikely(!upipe_alsink_recover(upipe, frames))) {
+            frames = -1;
+            break;
+        }
     }
+    return frames;
 }
 
 /** @internal @This is called to output data to alsa.
@@ -868,8 +863,8 @@ static int upipe_alsink_register_request(struct upipe *upipe,
               upipe_alsink_request_to_uchain(proxy));
 
     return urequest_provide_sink_latency(proxy->upstream,
-            upipe_alsink->handle != NULL ?
-            upipe_alsink->period_duration * BUFFER_PERIODS : 0);
+            upipe_alsink->handle != NULL ? upipe_alsink->period_duration * 3 :
+                                           0);
 }
 
 /** @internal @This unregisters a urequest.
