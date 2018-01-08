@@ -582,16 +582,16 @@ static struct upipe *upipe_v210enc_alloc(struct upipe_mgr *mgr,
 
 #if defined(HAVE_X86ASM)
 #if defined(__i686__) || defined(__x86_64__)
+    if (__builtin_cpu_supports("ssse3")) {
+        upipe_v210enc->pack_line_8  = upipe_planar_to_v210_8_ssse3;
+        upipe_v210enc->pack_line_10 = upipe_planar_to_v210_10_ssse3;
+    }
+    if (__builtin_cpu_supports("avx"))
+        upipe_v210enc->pack_line_8  = upipe_planar_to_v210_8_avx;
+
     if (__builtin_cpu_supports("avx2")) {
         upipe_v210enc->pack_line_8  = upipe_planar_to_v210_8_avx2;
         upipe_v210enc->pack_line_10 = upipe_planar_to_v210_10_avx2;
-    } else {
-        if (__builtin_cpu_supports("ssse3")) {
-            upipe_v210enc->pack_line_8  = upipe_planar_to_v210_8_ssse3;
-            upipe_v210enc->pack_line_10 = upipe_planar_to_v210_10_ssse3;
-        }
-        if (__builtin_cpu_supports("avx"))
-            upipe_v210enc->pack_line_8  = upipe_planar_to_v210_8_avx;
     }
 #endif
 #endif
