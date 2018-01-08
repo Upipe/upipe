@@ -55,7 +55,7 @@ void upipe_sdi_to_planar_8_c(const uint8_t *src, uint8_t *y, uint8_t *u, uint8_t
         uint8_t d = *src++; // VVVV..YY
         uint8_t e = *src++; // YYYYYY..
 
-		*u++ = a;
+        *u++ = a;
         *y++ = (b << 2) | (c >> 6);
         *v++ = (c << 4) | (d >> 4);
         *y++ = (d << 6) | (e >> 2);

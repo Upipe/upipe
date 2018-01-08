@@ -1506,7 +1506,7 @@ static int upipe_sdi_enc_control(struct upipe *upipe, int command, va_list args)
             if (request->type == UREQUEST_UBUF_MGR)
                 return upipe_sdi_enc_amend_ubuf_mgr(upipe, request);
             if (request->type == UREQUEST_FLOW_FORMAT)
-				return upipe_sdi_enc_provide_flow_format(upipe, request);
+                return upipe_sdi_enc_provide_flow_format(upipe, request);
             return upipe_sdi_enc_alloc_output_proxy(upipe, request);
         }
         case UPIPE_UNREGISTER_REQUEST: {
