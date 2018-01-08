@@ -43,12 +43,6 @@ v210_enc_chroma_shuf2_8: times 2 db 3,-1,4,-1,5,-1,7,-1,11,-1,12,-1,13,-1,15,-1
 
 v210_enc_chroma_mult_8: times 2 dw 4,16,64,0,64,4,16,0
 
-v210_enc_uyvy_chroma_shift_10: times 2 dw 1, 0, 16, 0, 4, 0, 0, 0
-v210_enc_uyvy_chroma_shuff_10: times 2 db 0, 1, 4, 5, -1, 8, 9, -1, -1, -1, -1, -1, -1, -1, -1, -1
-
-v210_enc_uyvy_luma_shift_10: times 2 dw 0, 4, 0, 1, 0, 16, 0, 0
-v210_enc_uyvy_luma_shuft_10: times 2 db -1, 2, 3, -1, 6, 7, 10, 11, -1, -1, -1, -1, -1, -1, -1, -1
-
 SECTION .text
 
 %macro planar_to_v210_10 0
@@ -101,52 +95,6 @@ planar_to_v210_10
 
 INIT_YMM avx2
 planar_to_v210_10
-
-%macro v210_uyvy_pack_10 0
-
-; v210_uyvy_pack_10(const uint16_t *y, uint8_t *dst, ptrdiff_t width)
-cglobal v210_uyvy_pack_10, 3, 6, 6, y, dst, width
-    shl     widthq, 2
-    add     yq, widthq
-    neg     widthq
-
-    mova    m4, [v210_enc_min_10]
-    mova    m5, [v210_enc_max_10]
-
-.loop:
-    movu    m0, [yq+widthq+ 0]
-    movu    m1, [yq+widthq+12]
-
-    CLIPW   m0, m4, m5
-    CLIPW   m1, m4, m5
-
-    pmullw  m2, m0, [v210_enc_uyvy_luma_shift_10]
-    pmullw  m3, m1, [v210_enc_uyvy_luma_shift_10]
-
-    pmullw  m0, [v210_enc_uyvy_chroma_shift_10]
-    pshufb  m0, [v210_enc_uyvy_chroma_shuff_10]
-
-    pmullw  m1, [v210_enc_uyvy_chroma_shift_10]
-    pshufb  m1, [v210_enc_uyvy_chroma_shuff_10]
-
-    pshufb  m2, [v210_enc_uyvy_luma_shuft_10]
-    pshufb  m3, [v210_enc_uyvy_luma_shuft_10]
-
-    por     m0, m2
-    por     m1, m3
-
-    movu    [dstq+0], m0
-    movq    [dstq+8], m1
-
-    add     dstq, mmsize
-    add     widthq, 24
-    jl .loop
-
-    RET
-%endmacro
-
-INIT_XMM ssse3
-v210_uyvy_pack_10
 
 %macro planar_to_v210_8 0
 
