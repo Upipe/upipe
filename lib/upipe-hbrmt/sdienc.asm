@@ -70,7 +70,7 @@ SECTION .text
 
 %macro uyvy_to_sdi 0-1
 
-; sdi_pack_10(uint8_t *dst, const uint8_t *y, int64_t size)
+; uyvy_to_sdi(uint8_t *dst, const uint8_t *y, int64_t size)
 cglobal uyvy_to_sdi%1, 3, 4, 5, dst, y, pixels
     lea     yq, [yq + 4*pixelsq]
     neg     pixelsq
@@ -385,7 +385,7 @@ planar_to_uyvy_10 unaligned
     %define move movu
 %endif
 
-; v210_uyvy_unpack(const uint32_t *src, uint16_t *uyvy, int64_t width)
+; v210_to_uyvy(const uint32_t *src, uint16_t *uyvy, int64_t width)
 cglobal v210_to_uyvy_%1, 3, 3, 8+7*ARCH_X86_64, src, dst, pixels
     shl    pixelsq, 2
     add    dstq,    pixelsq

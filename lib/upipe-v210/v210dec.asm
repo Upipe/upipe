@@ -41,7 +41,7 @@ SECTION .text
 
 %macro v210_to_planar_10 1
 
-; v210_planar_unpack(const uint32_t *src, uint16_t *y, uint16_t *u, uint16_t *v, int64_t width)
+; v210_to_planar10(const uint32_t *src, uint16_t *y, uint16_t *u, uint16_t *v, int64_t width)
 cglobal v210_to_planar_10_%1, 5, 5, 7, src, y, u, v, pixels
     lea    yq, [yq + 2*pixelsq]
     add    uq, pixelsq

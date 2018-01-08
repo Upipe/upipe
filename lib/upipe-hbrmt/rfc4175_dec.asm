@@ -59,7 +59,7 @@ SECTION .text
 
 %macro sdi_to_v210 0
 
-; sdi_v210_unpack(const uint8_t *src, uint32_t *dst, int64_t width)
+; sdi_to_v210(const uint8_t *src, uint32_t *dst, int64_t width)
 cglobal sdi_to_v210, 3, 4 + cpuflag(avx2), 3+11*ARCH_X86_64, src, dst, pixels
 
 %if cpuflag(avx2)

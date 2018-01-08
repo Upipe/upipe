@@ -73,7 +73,7 @@ RET
 
 %macro sdi_to_uyvy 1
 
-; sdi_unpack_10(const uint8_t *src, uint16_t *y, int64_t size)
+; sdi_to_uyvy(const uint8_t *src, uint16_t *y, int64_t size)
 cglobal sdi_to_uyvy_%1, 3, 3, 7, src, y, pixels
     lea yq,     [yq + 4*pixelsq]
     neg pixelsq
