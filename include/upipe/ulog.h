@@ -34,7 +34,6 @@ extern "C" {
 
 #include <upipe/ubase.h>
 #include <upipe/ulist.h>
-#include <upipe/uprobe.h>
 
 /** @This defines the levels of log messages. */
 enum uprobe_log_level {

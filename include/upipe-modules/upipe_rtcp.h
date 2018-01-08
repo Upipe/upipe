@@ -30,7 +30,7 @@
 extern "C" {
 #endif
 
-#include <upipe/ubase.h>
+#include <upipe/upipe.h>
 
 #define UPIPE_RTCP_SIGNATURE UBASE_FOURCC('r','t','c','p')
 

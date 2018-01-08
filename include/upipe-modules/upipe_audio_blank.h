@@ -26,7 +26,7 @@
 #ifndef _UPIPE_MODULES_UPIPE_ABLK_H_
 # define _UPIPE_MODULES_UPIPE_ABLK_H_
 
-#include <upipe/ubase.h>
+#include <upipe/upipe.h>
 
 #ifdef __cplusplus
 extern "C" {
