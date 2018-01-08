@@ -40,20 +40,20 @@ void checkasm_check_sdienc(void)
     struct {
         void (*uyvy)(uint8_t *dst, const uint8_t *src, int64_t samples);
     } s = {
-        .uyvy = upipe_sdi_pack_c,
+        .uyvy = upipe_uyvy_to_sdi_c,
     };
 
     int cpu_flags = av_get_cpu_flags();
 
 #if HAVE_X86ASM
     if (cpu_flags & AV_CPU_FLAG_SSSE3) {
-        s.uyvy = upipe_sdi_pack_10_ssse3;
+        s.uyvy = upipe_uyvy_to_sdi_ssse3;
     }
     if (cpu_flags & AV_CPU_FLAG_AVX) {
-        s.uyvy = upipe_sdi_pack_10_avx;
+        s.uyvy = upipe_uyvy_to_sdi_avx;
     }
     if (cpu_flags & AV_CPU_FLAG_AVX2) {
-        s.uyvy = upipe_sdi_pack_10_avx2;
+        s.uyvy = upipe_uyvy_to_sdi_avx2;
     }
 #endif
 

@@ -329,18 +329,18 @@ static struct upipe *upipe_pack10bit_alloc(struct upipe_mgr *mgr,
 
     struct upipe_pack10bit *upipe_pack10bit = upipe_pack10bit_from_upipe(upipe);
 
-    upipe_pack10bit->pack = upipe_sdi_pack_c;
+    upipe_pack10bit->pack = upipe_uyvy_to_sdi_c;
 
 #if defined(HAVE_X86ASM)
 #if defined(__i686__) || defined(__x86_64__)
     if (__builtin_cpu_supports("ssse3"))
-        upipe_pack10bit->pack = upipe_sdi_pack_10_ssse3;
+        upipe_pack10bit->pack = upipe_uyvy_to_sdi_ssse3;
 
     if (__builtin_cpu_supports("avx"))
-        upipe_pack10bit->pack = upipe_sdi_pack_10_avx;
+        upipe_pack10bit->pack = upipe_uyvy_to_sdi_avx;
 
     if (__builtin_cpu_supports("avx2"))
-        upipe_pack10bit->pack = upipe_sdi_pack_10_avx2;
+        upipe_pack10bit->pack = upipe_uyvy_to_sdi_avx2;
 #endif
 #endif
 

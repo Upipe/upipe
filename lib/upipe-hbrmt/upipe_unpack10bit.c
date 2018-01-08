@@ -330,14 +330,14 @@ static struct upipe *upipe_unpack10bit_alloc(struct upipe_mgr *mgr,
 
     struct upipe_unpack10bit *upipe_unpack10bit = upipe_unpack10bit_from_upipe(upipe);
 
-    upipe_unpack10bit->unpack = upipe_sdi_unpack_c;
+    upipe_unpack10bit->unpack = upipe_sdi_to_uyvy_c;
 #if defined(HAVE_X86ASM)
 #if defined(__i686__) || defined(__x86_64__)
     if (__builtin_cpu_supports("ssse3"))
-        upipe_unpack10bit->unpack = upipe_sdi_unpack_10_ssse3;
+        upipe_unpack10bit->unpack = upipe_sdi_to_uyvy_ssse3;
 
     if (__builtin_cpu_supports("avx2"))
-        upipe_unpack10bit->unpack = upipe_sdi_unpack_10_avx2;
+        upipe_unpack10bit->unpack = upipe_sdi_to_uyvy_avx2;
 #endif
 #endif
 

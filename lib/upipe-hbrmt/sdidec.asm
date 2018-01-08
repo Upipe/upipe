@@ -54,10 +54,10 @@ planar_8_y_shuf_after: db 1, 3, 5, 7, 9, 11, -1, -1, -1, -1, -1, -1, -1, -1, -1,
 
 SECTION .text
 
-%macro sdi_unpack_10 0
+%macro sdi_to_uyvy 0
 
-; sdi_unpack_10(const uint8_t *src, uint16_t *y, int64_t size)
-cglobal sdi_unpack_10, 3, 3, 7, src, y, size
+; sdi_to_uyvy(const uint8_t *src, uint16_t *y, int64_t size)
+cglobal sdi_to_uyvy, 3, 3, 7, src, y, size
     add      srcq, sizeq
     neg      sizeq
 
@@ -94,9 +94,9 @@ cglobal sdi_unpack_10, 3, 3, 7, src, y, size
 %endmacro
 
 INIT_XMM ssse3
-sdi_unpack_10
+sdi_to_uyvy
 INIT_YMM avx2
-sdi_unpack_10
+sdi_to_uyvy
 
 %macro sdi_v210_unpack 0
 

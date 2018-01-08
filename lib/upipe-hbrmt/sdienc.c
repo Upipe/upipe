@@ -24,7 +24,7 @@
 
 #include "sdienc.h"
 
-void upipe_sdi_pack_c(uint8_t *dst, const uint8_t *y, int64_t size)
+void upipe_uyvy_to_sdi_c(uint8_t *dst, const uint8_t *y, int64_t size)
 {
     struct ubits s;
     ubits_init(&s, dst, size * 10 / 8);
