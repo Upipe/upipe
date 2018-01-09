@@ -390,8 +390,8 @@ static int upipe_unpack_rfc4175_set_flow_def(struct upipe *upipe, struct uref *f
         upipe_unpack_rfc4175->output_chroma_map[2] = NULL;
         uref_pic_flow_set_align(flow_def_dup, 16);
         uref_pic_flow_set_planes(flow_def_dup, 1);
-        uref_pic_flow_set_macropixel(flow_def_dup, 48);
-        uref_pic_flow_set_macropixel_size(flow_def_dup, 128, 0);
+        uref_pic_flow_set_macropixel(flow_def_dup, 6);
+        uref_pic_flow_set_macropixel_size(flow_def_dup, 16, 0);
         uref_pic_flow_set_chroma(flow_def_dup, upipe_unpack_rfc4175->output_chroma_map[0], 0);
     } else {
         upipe_unpack_rfc4175->output_chroma_map[0] = "y8";
@@ -491,10 +491,10 @@ static struct upipe *upipe_unpack_rfc4175_alloc(struct upipe_mgr *mgr,
         return NULL;
     }
 
-    upipe_unpack_rfc4175->output_is_v210 = ubase_check(uref_pic_flow_check_chroma(flow_def, 1, 1, 128, "u10y10v10y10u10y10v10y10u10y10v10y10"));
+    upipe_unpack_rfc4175->output_is_v210 = ubase_check(uref_pic_flow_check_chroma(flow_def, 1, 1, 16, "u10y10v10y10u10y10v10y10u10y10v10y10"));
 
     if (upipe_unpack_rfc4175->output_is_v210) {
-        upipe_unpack_rfc4175->hsize = (upipe_unpack_rfc4175->hsize + 47) / 48 * 48;
+        upipe_unpack_rfc4175->hsize = (upipe_unpack_rfc4175->hsize + 5) / 6 * 6;
     }
 
     upipe_unpack_rfc4175->bitpacked_to_v210 = upipe_sdi_to_v210_c;
