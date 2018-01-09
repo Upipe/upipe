@@ -99,6 +99,14 @@ DECLARE_REG_TMP 3
     and         t0d,  0xffc00
     or     [dstq+8],  t0d
 
+%if cpuflag(avx2)
+    mov         t1d, [srcq+23]
+    bswap       t1d
+    shr         t1d,  6
+    and         t1d,  0xffc00
+    or     [dstq+24],  t1d
+%endif
+
     add      dstq, mmsize
     add      srcq, (15*mmsize)/16
     sub   pixelsq, (6*mmsize)/16
