@@ -34,6 +34,10 @@
 #include <upipe/uprobe.h>
 #include <upipe/uprobe_helper_uprobe.h>
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 /** @hidden */
 struct uclock;
 
@@ -81,4 +85,7 @@ struct uprobe *uprobe_uclock_alloc(struct uprobe *next, struct uclock *uclock);
  */
 void uprobe_uclock_set(struct uprobe *uprobe, struct uclock *uclock);
 
+#ifdef __cplusplus
+}
+#endif
 #endif

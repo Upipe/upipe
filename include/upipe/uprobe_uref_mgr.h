@@ -34,6 +34,10 @@
 #include <upipe/uprobe.h>
 #include <upipe/uprobe_helper_uprobe.h>
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 /** @hidden */
 struct uref_mgr;
 
@@ -82,4 +86,7 @@ struct uprobe *uprobe_uref_mgr_alloc(struct uprobe *next,
  */
 void uprobe_uref_mgr_set(struct uprobe *uprobe, struct uref_mgr *uref_mgr);
 
+#ifdef __cplusplus
+}
+#endif
 #endif

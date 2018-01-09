@@ -6,7 +6,9 @@ libupipe_hbrmt_la_SOURCES = upipe_pack10bit.c \
     upipe_sdi_dec.c \
     upipe_hbrmt_dec.c \
     sdidec.c \
+    sdidec.h \
     sdienc.c \
+    sdienc.h \
     upipe_unpack_rfc4175.c \
     ../upipe-blackmagic/sdi.c \
     ../upipe-blackmagic/sdi.h \
@@ -24,9 +26,7 @@ libupipe_hbrmt_la_SOURCES += \
     rfc4175_enc.asm \
     rfc4175_enc.h \
     sdidec.asm \
-    sdidec.h \
-    sdienc.asm \
-    sdienc.h
+    sdienc.asm
 endif
 
 pkgconfigdir = $(libdir)/pkgconfig

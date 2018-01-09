@@ -34,6 +34,10 @@
 
 #include <upipe/upump.h>
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 #define UPUMP_ECORE_SIGNATURE UBASE_FOURCC('e','c','o','r')
 
 /** @This allocates and initializes a upump_ecore_mgr structure.
@@ -46,4 +50,7 @@
 struct upump_mgr *upump_ecore_mgr_alloc(uint16_t upump_pool_depth,
                                         uint16_t upump_blocker_pool_depth);
 
+#ifdef __cplusplus
+}
+#endif
 #endif

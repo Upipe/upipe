@@ -23,6 +23,10 @@
 
 #include <upipe/ubase.h>
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 /** @This is the signature of a zoneplate source pipe. */
 #define UPIPE_ZONEPLATE_SIGNATURE    UBASE_FOURCC('z','o','n','e')
 
@@ -32,4 +36,7 @@
  */
 struct upipe_mgr *upipe_zoneplate_mgr_alloc(void);
 
+#ifdef __cplusplus
+}
+#endif
 #endif /* !_UPIPE_MODULES_UPIPE_ZONEPLATE_H_ */

@@ -156,27 +156,6 @@ static inline uint32_t rl32(const void *src)
         *(c)++ = (val >> 20) & 1023; \
     } while (0)
 
-static void v210_to_planar_8_c(const void *src, uint8_t *y, uint8_t *u, uint8_t *v, uintptr_t pixels)
-{
-    /* unroll this to match the assembly */
-    for(int i = 0; i < pixels-5; i += 6 ){
-        READ_PIXELS_8(u, y, v);
-        READ_PIXELS_8(y, u, y);
-        READ_PIXELS_8(v, y, u);
-        READ_PIXELS_8(y, v, y);
-    }
-}
-
-static void v210_to_planar_10_c(const void *src, uint16_t *y, uint16_t *u, uint16_t *v, uintptr_t pixels)
-{
-    for(int i = 0; i < pixels-5; i += 6 ){
-        READ_PIXELS_10(u, y, v);
-        READ_PIXELS_10(y, u, y);
-        READ_PIXELS_10(v, y, u);
-        READ_PIXELS_10(y, v, y);
-    }
-}
-
 /** @internal @This setups convert functions
  *
  * @param upipe description structure of the pipe
@@ -186,8 +165,8 @@ static void v210dec_setup_asm(struct upipe *upipe, bool assembly)
 {
     struct upipe_v210dec *v210dec = upipe_v210dec_from_upipe(upipe);
 
-    v210dec->v210_to_planar_8  = v210_to_planar_8_c;
-    v210dec->v210_to_planar_10 = v210_to_planar_10_c;
+    v210dec->v210_to_planar_8  = upipe_v210_to_planar_8_c;
+    v210dec->v210_to_planar_10 = upipe_v210_to_planar_10_c;
 
     if (!assembly)
         return;

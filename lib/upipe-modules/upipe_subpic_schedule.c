@@ -285,7 +285,7 @@ static void upipe_subpic_schedule_sub_handle_subpic(struct upipe *upipe,
         uint64_t date_uref = 0;
         uref_clock_get_pts_prog(uref, &date_uref);
 
-        if (date_uref > date) /* The uref subpicture is in advance */
+        if (date_uref > date) /* The next subpicture is in advance */
             break;
 
         uint64_t duration;

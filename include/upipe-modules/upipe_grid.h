@@ -28,6 +28,10 @@
 
 #include <upipe/upipe.h>
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 /** @This is the grid pipe signature. */
 #define UPIPE_GRID_SIGNATURE   UBASE_FOURCC('g','r','i','d')
 
@@ -58,4 +62,7 @@ int upipe_grid_out_set_input(struct upipe *upipe, struct upipe *input);
 struct upipe *upipe_grid_alloc_output(struct upipe *upipe,
                                       struct uprobe *uprobe);
 
+#ifdef __cplusplus
+}
+#endif
 #endif
