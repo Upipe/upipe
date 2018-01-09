@@ -233,7 +233,7 @@ static bool upipe_unpack_rfc4175_handle(struct upipe *upipe, struct uref *uref,
 
     if (unlikely(upipe_unpack_rfc4175->expected_seqnum != -1 &&
                  seqnum != upipe_unpack_rfc4175->expected_seqnum)) {
-        upipe_warn_va(upipe, "potentially lost %d RTP packets, got %u expected %u",
+        upipe_warn_va(upipe, "potentially lost %" PRIu64 " RTP packets, got %u expected %" PRIu64,
                       (seqnum + UINT16_MAX + 1 - upipe_unpack_rfc4175->expected_seqnum) &
                       UINT16_MAX, seqnum, upipe_unpack_rfc4175->expected_seqnum);
         upipe_unpack_rfc4175->discontinuity = 1;
