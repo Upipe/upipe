@@ -128,17 +128,6 @@ UPIPE_HELPER_UBUF_MGR(upipe_unpack_rfc4175, ubuf_mgr, flow_format, ubuf_mgr_requ
                       upipe_unpack_rfc4175_unregister_output_request)
 UPIPE_HELPER_INPUT(upipe_unpack_rfc4175, urefs, nb_urefs, max_urefs, blockers, upipe_unpack_rfc4175_handle)
 
-/* One indexed separated IN, Zero indexed interleaved OUT */
-static inline int get_interleaved_line(int line_number)
-{
-    assert(line_number <= 1080); // FIXME
-    if (line_number > 540){
-        return (line_number - 540) * 2 - 1;
-    } else {
-        return (line_number - 1) * 2;
-    }
-}
-
 /** @internal */
 static void upipe_unpack_rfc4175_alloc_output(struct upipe *upipe)
 {
@@ -272,7 +261,7 @@ static bool upipe_unpack_rfc4175_handle(struct upipe *upipe, struct uref *uref,
         goto end;
 
     for (int i = 0; i < 1 + !!continuation; i++) {
-        int interleaved_line = get_interleaved_line(line_number[i]);
+        int interleaved_line = line_number[i] * 2 + (field[i] ? 1 : 0);
 
         if (upipe_unpack_rfc4175->output_is_v210) {
             /* Start */
