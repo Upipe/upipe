@@ -1398,8 +1398,11 @@ static int upipe_avcdec_set_flow_def(struct upipe *upipe, struct uref *flow_def)
     if (unlikely(ubase_ncmp(def, EXPECTED_FLOW_DEF) ||
                  !(codec_id =
                      upipe_av_from_flow_def(def + strlen(EXPECTED_FLOW_DEF))) ||
-                 (codec = avcodec_find_decoder(codec_id)) == NULL))
+                 (codec = avcodec_find_decoder(codec_id)) == NULL)) {
+        upipe_err_va(upipe, "No decoder found for \"%s\"",
+                def + strlen(EXPECTED_FLOW_DEF));
         return UBASE_ERR_INVALID;
+    }
 
     struct upipe_avcdec *upipe_avcdec = upipe_avcdec_from_upipe(upipe);
 

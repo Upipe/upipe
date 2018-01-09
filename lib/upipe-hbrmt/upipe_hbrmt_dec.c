@@ -159,7 +159,7 @@ static struct upipe *upipe_hbrmt_dec_alloc(struct upipe_mgr *mgr,
     upipe_hbrmt_dec->frame = 0;
     upipe_hbrmt_dec->unpack_scratch_buffer_count = 0;
 
-    upipe_hbrmt_dec->sdi_to_uyvy = upipe_sdi_unpack_c;
+    upipe_hbrmt_dec->sdi_to_uyvy = upipe_sdi_to_uyvy_c;
 
 #if defined(__i686__) || defined(__x86_64__)
 #if !defined(__APPLE__) /* macOS clang doesn't support that builtin yet */
@@ -366,7 +366,7 @@ static void upipe_hbrmt_dec_input(struct upipe *upipe, struct uref *uref,
         src_size -= 5-n;
 
         /* Unpack from the scratch buffer. */
-        upipe_sdi_unpack_c(upipe_hbrmt_dec->unpack_scratch_buffer,
+        upipe_sdi_to_uyvy_c(upipe_hbrmt_dec->unpack_scratch_buffer,
                 (uint16_t*)upipe_hbrmt_dec->dst_buf, 2);
 
         /* Advance output buffer by 2 pixels */

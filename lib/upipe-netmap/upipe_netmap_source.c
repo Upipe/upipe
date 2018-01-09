@@ -207,7 +207,7 @@ static struct upipe *upipe_netmap_source_alloc(struct upipe_mgr *mgr,
     upipe_netmap_source->discontinuity = false;
     upipe_netmap_source->unpack_scratch_buffer_count = 0;
 
-    upipe_netmap_source->sdi_to_uyvy = upipe_sdi_unpack_c;
+    upipe_netmap_source->sdi_to_uyvy = upipe_sdi_to_uyvy_c;
 
 #if defined(__i686__) || defined(__x86_64__)
 #if !defined(__APPLE__) /* macOS clang doesn't support that builtin yet */
@@ -416,7 +416,7 @@ static inline bool handle_hbrmt_packet(struct upipe *upipe, const uint8_t *src, 
         src_size -= 5-n;
 
         /* Unpack from the scratch buffer. */
-        upipe_sdi_unpack_c(upipe_netmap_source->unpack_scratch_buffer,
+        upipe_sdi_to_uyvy_c(upipe_netmap_source->unpack_scratch_buffer,
                 (uint16_t*)upipe_netmap_source->dst_buf, 2);
 
         /* Advance output buffer by 2 pixels */

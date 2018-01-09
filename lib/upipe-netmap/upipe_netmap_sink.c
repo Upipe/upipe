@@ -1934,7 +1934,7 @@ static int upipe_netmap_sink_amend_ubuf_mgr(struct upipe *upipe,
         uref_pic_flow_set_align(flow_format, align);
     }
 
-	return upipe_throw_provide_request(upipe, request);
+    return upipe_throw_provide_request(upipe, request);
 }
 
 /** @internal @This provides a flow format suggestion.

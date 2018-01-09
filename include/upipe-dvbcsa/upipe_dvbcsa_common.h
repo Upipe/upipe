@@ -97,7 +97,7 @@ static inline int upipe_dvbcsa_add_pid(struct upipe *upipe,
 /** @This deletes a pid from the encryption/decryption list.
  *
  * @param upipe description structure of the pipe
- * @oaram pid pid to delete
+ * @param pid pid to delete
  * @return an error code
  */
 static inline int upipe_dvbcsa_del_pid(struct upipe *upipe,
@@ -115,6 +115,64 @@ struct ustring_dvbcsa_cw {
     dvbcsa_cw_t value;
 };
 
+/** @This parse a 64 bits dvbcsa control word from an ustring.
+ *
+ * @param str string to parse from
+ * @return a parsed control word
+ */
+static inline struct ustring_dvbcsa_cw
+ustring_to_dvbcsa_cw64(const struct ustring str)
+{
+    struct ustring tmp = str;
+    struct ustring_dvbcsa_cw ret;
+    ret.str = ustring_null();
+    for (uint8_t i = 0; i < 8; i++) {
+        struct ustring_byte b = ustring_to_byte(tmp);
+        if (b.str.len != 2)
+            return ret;
+
+        if (i == 3 || i == 7) {
+            ret.value[i] =
+                ret.value[i - 3] + ret.value[i - 2] + ret.value[i - 1];
+            if (b.value != ret.value[i])
+                return ret;
+        }
+        else
+            ret.value[i] = b.value;
+        tmp = ustring_shift(tmp, 2);
+    }
+    ret.str = ustring_truncate(str, 16);
+    return ret;
+}
+
+/** @This parsed a 48 bits dvbcsa control word from an ustring.
+ *
+ * @param str string to parse from
+ * @return a parsed control word
+ */
+static inline struct ustring_dvbcsa_cw
+ustring_to_dvbcsa_cw48(const struct ustring str)
+{
+    struct ustring tmp = str;
+    struct ustring_dvbcsa_cw ret;
+    ret.str = ustring_null();
+    for (uint8_t i = 0; i < 8; i++) {
+        if (i == 3 || i == 7) {
+            ret.value[i] =
+                ret.value[i - 3] + ret.value[i - 2] + ret.value[i - 1];
+        }
+        else {
+            struct ustring_byte b = ustring_to_byte(tmp);
+            if (b.str.len != 2)
+                return ret;
+            tmp = ustring_shift(tmp, 2);
+            ret.value[i] = b.value;
+        }
+    }
+    ret.str = ustring_truncate(str, 6 * 2);
+    return ret;
+}
+
 /** @This parsed a dvbcsa control word from an ustring.
  *
  * @param str string to parse from
@@ -123,20 +181,10 @@ struct ustring_dvbcsa_cw {
 static inline struct ustring_dvbcsa_cw
 ustring_to_dvbcsa_cw(const struct ustring str)
 {
-    struct ustring tmp = str;
     struct ustring_dvbcsa_cw ret;
-    ret.str = ustring_null();
-    for (uint8_t i = 0; i < 6; i++) {
-        struct ustring_byte b = ustring_to_byte(tmp);
-        if (b.str.len != 2)
-            return ret;
-        tmp = ustring_shift(tmp, 2);
-        ret.value[i < 3 ? i : i + 1] = b.value;
-    }
-    ret.value[3] = ret.value[0] + ret.value[1] + ret.value[2];
-    ret.value[7] = ret.value[4] + ret.value[5] + ret.value[6];
-    ret.str = ustring_truncate(str, 6 * 2);
-    return ret;
+    if (str.len >= 16)
+        return ustring_to_dvbcsa_cw64(str);
+    return ustring_to_dvbcsa_cw48(str);
 }
 
 #ifdef __cplusplus

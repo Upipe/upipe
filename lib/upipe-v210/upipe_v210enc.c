@@ -159,39 +159,6 @@ static inline void wl32(uint8_t *dst, uint32_t u)
         dst += 4;                       \
     } while (0)
 
-static void v210enc_planar_pack_8_c(const uint8_t *y, const uint8_t *u,
-                                 const uint8_t *v, uint8_t *dst, ptrdiff_t width)
-{
-    uint32_t val;
-    int i;
-
-    /* unroll this to match the assembly */
-    for( i = 0; i < width-11; i += 12 ){
-        WRITE_PIXELS8(u, y, v);
-        WRITE_PIXELS8(y, u, y);
-        WRITE_PIXELS8(v, y, u);
-        WRITE_PIXELS8(y, v, y);
-        WRITE_PIXELS8(u, y, v);
-        WRITE_PIXELS8(y, u, y);
-        WRITE_PIXELS8(v, y, u);
-        WRITE_PIXELS8(y, v, y);
-    }
-}
-
-static void v210enc_planar_pack_10_c(const uint16_t *y, const uint16_t *u,
-                                  const uint16_t *v, uint8_t *dst, ptrdiff_t width)
-{
-    uint32_t val;
-    int i;
-
-    for( i = 0; i < width-5; i += 6 ){
-        WRITE_PIXELS(u, y, v);
-        WRITE_PIXELS(y, u, y);
-        WRITE_PIXELS(v, y, u);
-        WRITE_PIXELS(y, v, y);
-    }
-}
-
 /** @internal @This handles data.
  *
  * @param upipe description structure of the pipe
@@ -610,21 +577,21 @@ static struct upipe *upipe_v210enc_alloc(struct upipe_mgr *mgr,
 
     struct upipe_v210enc *upipe_v210enc = upipe_v210enc_from_upipe(upipe);
 
-    upipe_v210enc->pack_line_8  = v210enc_planar_pack_8_c;
-    upipe_v210enc->pack_line_10 = v210enc_planar_pack_10_c;
+    upipe_v210enc->pack_line_8  = upipe_planar_to_v210_8_c;
+    upipe_v210enc->pack_line_10 = upipe_planar_to_v210_10_c;
 
 #if defined(HAVE_X86ASM)
 #if defined(__i686__) || defined(__x86_64__)
+    if (__builtin_cpu_supports("ssse3")) {
+        upipe_v210enc->pack_line_8  = upipe_planar_to_v210_8_ssse3;
+        upipe_v210enc->pack_line_10 = upipe_planar_to_v210_10_ssse3;
+    }
+    if (__builtin_cpu_supports("avx"))
+        upipe_v210enc->pack_line_8  = upipe_planar_to_v210_8_avx;
+
     if (__builtin_cpu_supports("avx2")) {
-        upipe_v210enc->pack_line_8  = upipe_v210_planar_pack_8_avx2;
-        upipe_v210enc->pack_line_10 = upipe_v210_planar_pack_10_avx2;
-    } else {
-        if (__builtin_cpu_supports("ssse3")) {
-            upipe_v210enc->pack_line_8  = upipe_v210_planar_pack_8_ssse3;
-            upipe_v210enc->pack_line_10 = upipe_v210_planar_pack_10_ssse3;
-        }
-        if (__builtin_cpu_supports("avx"))
-            upipe_v210enc->pack_line_8  = upipe_v210_planar_pack_8_avx;
+        upipe_v210enc->pack_line_8  = upipe_planar_to_v210_8_avx2;
+        upipe_v210enc->pack_line_10 = upipe_planar_to_v210_10_avx2;
     }
 #endif
 #endif

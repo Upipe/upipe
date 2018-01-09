@@ -497,7 +497,7 @@ static struct upipe *upipe_unpack_rfc4175_alloc(struct upipe_mgr *mgr,
         upipe_unpack_rfc4175->hsize = (upipe_unpack_rfc4175->hsize + 47) / 48 * 48;
     }
 
-    upipe_unpack_rfc4175->bitpacked_to_v210 = upipe_sdi_v210_unpack_c;
+    upipe_unpack_rfc4175->bitpacked_to_v210 = upipe_sdi_to_v210_c;
     upipe_unpack_rfc4175->bitpacked_to_planar_8 = upipe_sdi_to_planar_8_c;
 
 #if !defined(__APPLE__) /* macOS clang doesn't support that builtin yet */

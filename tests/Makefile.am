@@ -1,6 +1,10 @@
 LOG_COMPILER = $(srcdir)/valgrind_wrapper.sh
 AM_LOG_FLAGS = $(srcdir)
 
+if HAVE_AVUTIL
+SUBDIRS = checkasm
+endif
+
 dist_check_SCRIPTS = \
 	uprobe_stdio_test.sh \
 	uprobe_syslog_test.sh \
@@ -365,6 +369,13 @@ TESTS += \
 	upipe_v210dec_test upipe_v210enc_test
 endif
 
+if HAVE_DVBCSA
+check_PROGRAMS += \
+	upipe_dvbcsa_test
+TESTS += \
+	 upipe_dvbcsa_test
+endif
+
 AM_CPPFLAGS = -I$(top_builddir)/include -I$(top_srcdir)/include
 LDADD = $(top_builddir)/lib/upipe/libupipe.la
 
@@ -424,7 +435,7 @@ upipe_pack10_test_LDADD = $(LDADD) $(top_builddir)/lib/upipe-hbrmt/libupipe_hbrm
 upipe_unpack10_test_LDADD = $(LDADD) $(top_builddir)/lib/upipe-hbrmt/libupipe_hbrmt.la
 upipe_v210dec_test_LDADD = $(LDADD) $(top_builddir)/lib/upipe-v210/libupipe_v210.la
 upipe_v210enc_test_LDADD = $(LDADD) $(top_builddir)/lib/upipe-v210/libupipe_v210.la
-upipe_sdi_test_LDADD = $(LDADD) $(top_builddir)/lib/upipe-hbrmt/libupipe_hbrmt.la
+upipe_sdi_test_LDADD = $(LDADD) $(top_builddir)/lib/upipe-hbrmt/libupipe_hbrmt.la $(ZVBI_LIBS)
 
 upipe_avformat_test_CFLAGS = $(AM_CFLAGS) $(AVFORMAT_CFLAGS)
 upipe_avformat_test_LDADD = $(LDADD) -lev $(top_builddir)/lib/upump-ev/libupump_ev.la $(top_builddir)/lib/upipe-av/libupipe_av.la $(AVFORMAT_LIBS)
@@ -494,4 +505,4 @@ upipe_audio_blank_test_LDADD = $(LDADD) $(top_builddir)/lib/upipe-modules/libupi
 upipe_grid_test_LDADD = $(LDADD) $(top_builddir)/lib/upipe-modules/libupipe_modules.la
 
 upipe_block_to_sound_test_LDADD = $(LDADD) $(top_builddir)/lib/upipe-modules/libupipe_modules.la
-
+upipe_dvbcsa_test_LDDADD = $(LDADD) $(top_builddir)/lib/upipe-dvbcsa/libupipe_dvbcsa.la

@@ -35,6 +35,10 @@
 
 #include <ev.h>
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 #define UPUMP_EV_SIGNATURE UBASE_FOURCC('e','v',' ',' ')
 
 /** @This allocates and initializes a upump_mgr structure bound to a given
@@ -72,4 +76,7 @@ struct upump_mgr *upump_ev_mgr_alloc_default(uint16_t upump_pool_depth,
 struct upump_mgr *upump_ev_mgr_alloc_loop(uint16_t upump_pool_depth,
                                           uint16_t upump_blocker_pool_depth);
 
+#ifdef __cplusplus
+}
+#endif
 #endif
