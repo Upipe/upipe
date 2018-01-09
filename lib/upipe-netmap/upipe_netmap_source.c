@@ -128,6 +128,9 @@ struct upipe_netmap_source {
     /** current frame **/
     struct uref *uref;
 
+    /** hbrmt or rfc4175 */
+    bool hbrmt;
+
     /* SDI offsets */
     const struct sdi_offsets_fmt *f;
 
@@ -202,6 +205,7 @@ static struct upipe *upipe_netmap_source_alloc(struct upipe_mgr *mgr,
     upipe_netmap_source->frate    = 0;
     upipe_netmap_source->frame    = 0;
     upipe_netmap_source->old_vss  = 0;
+    upipe_netmap_source->hbrmt = true; // RFC
 
     upipe_netmap_source->expected_seqnum = UINT32_MAX;
     upipe_netmap_source->discontinuity = false;
@@ -472,6 +476,7 @@ static uint64_t get_vss(const uint8_t *vss)
 static const uint8_t *get_rtp(struct upipe *upipe, struct netmap_ring *rxring,
         struct netmap_slot *slot, uint16_t *payload_len)
 {
+    struct upipe_netmap_source *upipe_netmap_source = upipe_netmap_source_from_upipe(upipe);
     uint8_t *src = (uint8_t*)NETMAP_BUF(rxring, slot->buf_idx);
 
     if (ethernet_get_lentype(src) != ETHERNET_TYPE_IP)
@@ -484,6 +489,9 @@ static const uint8_t *get_rtp(struct upipe *upipe, struct netmap_ring *rxring,
     uint8_t *udp = ip_payload(ip);
     const uint8_t *rtp = udp_payload(udp);
     *payload_len = udp_get_len(udp) - UDP_HEADER_SIZE;
+
+    if (!upipe_netmap_source->hbrmt)
+        return rtp;
 
     unsigned min_pkt_size = RTP_HEADER_SIZE + HBRMT_HEADER_SIZE + HBRMT_DATA_SIZE;
 
@@ -551,10 +559,31 @@ static uint64_t do_packet(struct upipe *upipe, struct netmap_ring *rxring,
     }
 
     if (!upipe_netmap_source->discontinuity) {
-        if (handle_hbrmt_packet(upipe, rtp, pkt_size)) {
-            return ret;
+        bool hbrmt = upipe_netmap_source->hbrmt;
+        if (hbrmt) {
+            if (handle_hbrmt_packet(upipe, rtp, pkt_size))
+                return ret;
+        } else {
+            struct uref *uref = uref_block_alloc(upipe_netmap_source->uref_mgr,
+                                                 upipe_netmap_source->ubuf_mgr,
+                                                 pkt_size);
+
+            uint8_t *dst_buf;
+            int dst_size;
+            if (unlikely(!ubase_check(uref_block_write(uref, 0, &dst_size, &dst_buf)))) {
+                abort();
+            }
+            memcpy(dst_buf, rtp, pkt_size);
+            uref_block_unmap(uref, 0);
+            uref_clock_set_cr_sys(uref, systime);
+            upipe_netmap_source_output(upipe, uref, &upipe_netmap_source->upump);
         }
+
+        upipe_netmap_source->expected_seqnum = ++seqnum & UINT16_MAX;
+        upipe_netmap_source->last_timestamp = timestamp;
         upipe_netmap_source->packets++;
+        if (!hbrmt)
+            return ret;
     }
 
     // bit corruption??!
