@@ -60,13 +60,13 @@ static inline void wl32(uint8_t *dst, uint32_t u)
     } while (0)
 
 void upipe_planar_to_v210_8_c(const uint8_t *y, const uint8_t *u,
-                                 const uint8_t *v, uint8_t *dst, ptrdiff_t width)
+                                 const uint8_t *v, uint8_t *dst, ptrdiff_t pixels)
 {
     uint32_t val;
     int i;
 
     /* unroll this to match the assembly */
-    for( i = 0; i < width-11; i += 12 ){
+    for( i = 0; i < pixels-11; i += 12 ){
         WRITE_PIXELS8(u, y, v);
         WRITE_PIXELS8(y, u, y);
         WRITE_PIXELS8(v, y, u);
@@ -79,12 +79,12 @@ void upipe_planar_to_v210_8_c(const uint8_t *y, const uint8_t *u,
 }
 
 void upipe_planar_to_v210_10_c(const uint16_t *y, const uint16_t *u,
-                                  const uint16_t *v, uint8_t *dst, ptrdiff_t width)
+                                  const uint16_t *v, uint8_t *dst, ptrdiff_t pixels)
 {
     uint32_t val;
     int i;
 
-    for( i = 0; i < width-5; i += 6 ){
+    for( i = 0; i < pixels-5; i += 6 ){
         WRITE_PIXELS(u, y, v);
         WRITE_PIXELS(y, u, y);
         WRITE_PIXELS(v, y, u);

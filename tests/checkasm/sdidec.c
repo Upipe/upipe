@@ -38,7 +38,7 @@ static void randomize_buffers(uint8_t *src0, uint8_t *src1)
 void checkasm_check_sdidec(void)
 {
     struct {
-        void (*uyvy)(const uint8_t *src, uint16_t *dst, int64_t size);
+        void (*uyvy)(const uint8_t *src, uint16_t *dst, int64_t pixels);
     } s = {
         .uyvy = upipe_sdi_to_uyvy_c,
     };
@@ -59,15 +59,15 @@ void checkasm_check_sdidec(void)
         uint8_t  src1[NUM_SAMPLES * 10 / 8];
         DECLARE_ALIGNED(32, uint16_t, dst0)[NUM_SAMPLES];
         DECLARE_ALIGNED(32, uint16_t, dst1)[NUM_SAMPLES];
-        declare_func(void, const uint8_t *src, uint16_t *dst, int64_t size);
+        declare_func(void, const uint8_t *src, uint16_t *dst, int64_t pixels);
 
         randomize_buffers(src0, src1);
-        call_ref(src0, dst0, NUM_SAMPLES * 10 / 8);
-        call_new(src1, dst1, NUM_SAMPLES * 10 / 8);
+        call_ref(src0, dst0, NUM_SAMPLES / 2);
+        call_new(src1, dst1, NUM_SAMPLES / 2);
         if (memcmp(src0, src1, NUM_SAMPLES * 10 / 8)
                 || memcmp(dst0, dst1, NUM_SAMPLES))
             fail();
-        bench_new(src1, dst1, NUM_SAMPLES * 10 / 8);
+        bench_new(src1, dst1, NUM_SAMPLES / 2);
     }
     report("sdi_to_uyvy");
 }
