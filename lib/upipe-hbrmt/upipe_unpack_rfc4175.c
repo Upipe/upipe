@@ -393,7 +393,7 @@ static int upipe_unpack_rfc4175_set_flow_def(struct upipe *upipe, struct uref *f
     }
 
     // FIXME
-    struct urational fps = { .num = 30000, .den = 1001 };
+    struct urational fps = { .num = 25, .den = 1 };
     uref_pic_flow_set_fps(flow_def_dup, fps);
 
     uref_pic_flow_set_hsize(flow_def_dup, upipe_unpack_rfc4175->hsize);
