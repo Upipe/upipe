@@ -890,6 +890,8 @@ static int worker_rfc4175(struct upipe *upipe, uint8_t **dst, uint16_t *len)
 
     *len = eth_frame_len;
 
+    upipe_netmap_sink->bits += (*len + 4 /* CRC */) * 8;
+
     /* Release consumed frame */
     if (marker && field) {
         upipe_netmap_sink->line = 0;
