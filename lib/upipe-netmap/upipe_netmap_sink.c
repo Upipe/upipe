@@ -676,10 +676,15 @@ static int upipe_netmap_put_rtp_headers(struct upipe *upipe, uint8_t *buf,
         rtp_set_seqnum(buf, upipe_netmap_sink->seqnum & UINT16_MAX);
 
         const struct urational *fps = &upipe_netmap_sink->fps;
-        uint64_t frame_duration = UCLOCK_FREQ * fps->den / fps->num;
-        uint64_t timestamp = upipe_netmap_sink->frame_count * frame_duration +
-            (frame_duration * upipe_netmap_sink->pkt * HBRMT_DATA_SIZE) /
-            upipe_netmap_sink->frame_size;
+        uint64_t timestamp;
+        if (upipe_netmap_sink->rfc4175) {
+            timestamp = upipe_netmap_sink->frame_count * 90000 * fps->den / fps->num;
+        } else {
+            uint64_t frame_duration = UCLOCK_FREQ * fps->den / fps->num;
+            timestamp = upipe_netmap_sink->frame_count * frame_duration +
+                (frame_duration * upipe_netmap_sink->pkt * HBRMT_DATA_SIZE) /
+                upipe_netmap_sink->frame_size;
+        }
         rtp_set_timestamp(buf, timestamp & UINT32_MAX);
     }
 
