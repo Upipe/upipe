@@ -1330,27 +1330,7 @@ static void upipe_netmap_sink_worker(struct upump *upump)
         //printf("%" PRIu64 " %" PRIu64 "\n", now - upipe_netmap_sink->start, (int64_t)bps);
     }
 
-    bool rfc4175 = upipe_netmap_sink->rfc4175;
-
-    /* map picture */
-    if (rfc4175) {
-        for (int i = 0; i < UPIPE_RFC4175_MAX_PLANES; i++) {
-            const char *chroma = upipe_netmap_sink->input_chroma_map[i];
-            if (!chroma)
-                break;
-            if (unlikely(!ubase_check(uref_pic_plane_read(uref, chroma,
-                                0, 0, -1, -1,
-                                &upipe_netmap_sink->pixel_buffers[i])) ||
-                        !ubase_check(uref_pic_plane_size(uref, chroma,
-                                &upipe_netmap_sink->strides[i], NULL, NULL,
-                                NULL)))) {
-                upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
-                uref_free(uref);
-                upipe_netmap_sink->uref = NULL;
-                return;
-            }
-        }
-    }
+    const bool rfc4175 = upipe_netmap_sink->rfc4175;
 
     /* fill ring buffer */
     while (txavail) {
@@ -1361,13 +1341,34 @@ static void upipe_netmap_sink_worker(struct upump *upump)
             input_size = -1;
         }
 
-        if (!rfc4175 && input_size == -1) {
-            /* Get the buffer */
-            if (unlikely(uref_block_read(uref, 0, &input_size, &src_buf))) {
-                uref_free(uref);
-                upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
-                uref = NULL;
-                break;
+        if (input_size == -1) {
+            if (!rfc4175) {
+                /* Get the buffer */
+                if (unlikely(uref_block_read(uref, 0, &input_size, &src_buf))) {
+                    uref_free(uref);
+                    upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
+                    uref = NULL;
+                    break;
+                }
+            } else {
+                /* map picture */
+                for (int i = 0; i < UPIPE_RFC4175_MAX_PLANES; i++) {
+                    const char *chroma = upipe_netmap_sink->input_chroma_map[i];
+                    if (!chroma)
+                        break;
+                    if (unlikely(!ubase_check(uref_pic_plane_read(uref, chroma,
+                                        0, 0, -1, -1,
+                                        &upipe_netmap_sink->pixel_buffers[i])) ||
+                                !ubase_check(uref_pic_plane_size(uref, chroma,
+                                        &upipe_netmap_sink->strides[i], NULL, NULL,
+                                        NULL)))) {
+                        upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
+                        uref_free(uref);
+                        upipe_netmap_sink->uref = NULL;
+                        return;
+                    }
+                }
+                input_size = 1;
             }
 
             bytes_left = input_size;
@@ -1399,6 +1400,8 @@ static void upipe_netmap_sink_worker(struct upump *upump)
                 }
                 uref_free(uref);
                 uref = NULL;
+                upipe_netmap_sink->uref = NULL;
+                bytes_left = 0;
             }
         } else {
             int s = worker_hbrmt(upipe, dst, src_buf, bytes_left, len);
@@ -1412,29 +1415,29 @@ static void upipe_netmap_sink_worker(struct upump *upump)
 
             /* 64 bits overflows after 375 years at 1.5G */
             upipe_netmap_sink->bits += (l + 4 /* CRC */) * 8;
+
+            if (!bytes_left) {
+                uref_block_unmap(uref, 0);
+                uref_free(uref);
+                uref = NULL;
+                upipe_netmap_sink->uref = NULL;
+                upipe_netmap_sink->pkt = 0;
+
+                upipe_netmap_sink->frame_count++;
+                for (size_t i = 0; i < 2; i++) {
+                    struct upipe_netmap_intf *intf = &upipe_netmap_sink->intf[i];
+                    if (!intf->d)
+                        continue;
+
+                    /* update hbrmt header */
+                    uint8_t *hbrmt = &intf->header[ETHERNET_HEADER_LEN +
+                        IP_HEADER_MINSIZE + UDP_HEADER_SIZE + RTP_HEADER_SIZE];
+                    smpte_hbrmt_set_frame_count(hbrmt, upipe_netmap_sink->frame_count & UINT8_MAX);
+                }
+            }
         }
 
         txavail--;
-
-        if (!rfc4175 && !bytes_left) {
-            uref_block_unmap(uref, 0);
-            uref_free(uref);
-            uref = NULL;
-            upipe_netmap_sink->uref = NULL;
-            upipe_netmap_sink->pkt = 0;
-
-            upipe_netmap_sink->frame_count++;
-            for (size_t i = 0; i < 2; i++) {
-                struct upipe_netmap_intf *intf = &upipe_netmap_sink->intf[i];
-                if (!intf->d)
-                    continue;
-
-                /* update hbrmt header */
-                uint8_t *hbrmt = &intf->header[ETHERNET_HEADER_LEN +
-                    IP_HEADER_MINSIZE + UDP_HEADER_SIZE + RTP_HEADER_SIZE];
-                smpte_hbrmt_set_frame_count(hbrmt, upipe_netmap_sink->frame_count & UINT8_MAX);
-            }
-        }
     }
 
     if (txavail >= max_slots - 32) {
@@ -1450,22 +1453,11 @@ static void upipe_netmap_sink_worker(struct upump *upump)
         upipe_netmap_sink_set_upump(upipe, NULL);
     }
 
-    /* */
-    if (!rfc4175 && input_size != -1) {
-        if (0) upipe_notice_va(upipe, "loop done, input pkts %d pkts left %d -> %d\n",
-                (input_size + HBRMT_DATA_SIZE - 1) / HBRMT_DATA_SIZE,
-                (bytes_left + HBRMT_DATA_SIZE - 1) / HBRMT_DATA_SIZE,
-                (input_size - bytes_left + HBRMT_DATA_SIZE - 1) / HBRMT_DATA_SIZE
-                );
-    }
-
-    /* resize current buffer (if any) */
-    if (uref) {
+    if (uref && bytes_left > 0) {
         if (!rfc4175) {
-            if (bytes_left > 0) {
-                uref_block_unmap(uref, 0);
-                uref_block_resize(uref, input_size - bytes_left, -1);
-            }
+            /* resize current buffer */
+            uref_block_unmap(uref, 0);
+            uref_block_resize(uref, input_size - bytes_left, -1);
         } else for (int i = 0; i < UPIPE_RFC4175_MAX_PLANES; i++) {
             const char *chroma = upipe_netmap_sink->input_chroma_map[i];
             if (!chroma)
