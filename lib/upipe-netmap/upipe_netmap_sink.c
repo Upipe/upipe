@@ -199,6 +199,7 @@ struct upipe_netmap_sink {
     /** tr-03 stuff */
     int line; /* zero-indexed for consistency with below */
     int pixel_offset;
+    uint64_t payload;
 
     /** input chroma map */
     const char *input_chroma_map[UPIPE_RFC4175_MAX_PLANES];
@@ -256,6 +257,9 @@ struct upipe_netmap_sink {
     uint8_t packed_bytes;
 
     struct uclock uclock;
+
+    /** rate * fps.num */
+    uint64_t rate;
 
     struct upipe_netmap_intf intf[2];
 
@@ -1290,21 +1294,11 @@ static void upipe_netmap_sink_worker(struct upump *upump)
     bps *= UCLOCK_FREQ;
     bps /= now - upipe_netmap_sink->start;
 
-    uint64_t packets_per_frame = (upipe_netmap_sink->frame_size + HBRMT_DATA_SIZE - 1) / HBRMT_DATA_SIZE;
-    static const uint64_t eth_packet_size =
-        ETHERNET_HEADER_LEN + IP_HEADER_MINSIZE + UDP_HEADER_SIZE +
-        RTP_HEADER_SIZE + HBRMT_HEADER_SIZE + HBRMT_DATA_SIZE +
-        4 /* ethernet CRC */;
-
-    uint64_t rate = 8 * eth_packet_size * packets_per_frame * upipe_netmap_sink->fps.num;
-    bps *= upipe_netmap_sink->fps.den;
-
-    int64_t err = bps - rate;
+    int64_t err = bps * upipe_netmap_sink->fps.den - upipe_netmap_sink->rate;
     err /= (int64_t)upipe_netmap_sink->fps.den;
 
     if (err > 0 && txavail) {
         // here for 3k (22.5ms) / 20ms latency
-        //upipe_dbg_va(upipe, "bps %" PRIu64 " -> fake", (uint64_t) bps);
         for (size_t i = 0; i < 2; i++) {
             struct upipe_netmap_intf *intf = &upipe_netmap_sink->intf[i];
             if (!intf->d || !intf->up)
@@ -1324,7 +1318,7 @@ static void upipe_netmap_sink_worker(struct upump *upump)
         upipe_dbg_va(upipe,
                 "txavail %d at %" PRIu64 " bps -> err %" PRId64 ", %zu urefs, "
                 "%zu fake",
-                txavail, (uint64_t)(bps / upipe_netmap_sink->fps.den), err, upipe_netmap_sink->n,
+                txavail, (uint64_t)bps, err, upipe_netmap_sink->n,
                 upipe_netmap_sink->fakes
                 );
     }
@@ -1515,7 +1509,6 @@ static bool upipe_netmap_sink_output(struct upipe *upipe, struct uref *uref,
     }
 
     if (upipe_netmap_sink->frame_size == 0) {
-        uint64_t rate = 0;
         if (!upipe_netmap_sink->rfc4175) {
             uref_block_size(uref, &upipe_netmap_sink->frame_size);
             upipe_netmap_sink->frame_size = upipe_netmap_sink->frame_size * 5 / 8;
@@ -1525,10 +1518,24 @@ static bool upipe_netmap_sink_output(struct upipe *upipe, struct uref *uref,
                 RTP_HEADER_SIZE + HBRMT_HEADER_SIZE + HBRMT_DATA_SIZE +
                     4 /* ethernet CRC */;
 
-            rate = 8 * eth_packet_size * packets_per_frame * upipe_netmap_sink->fps.num /
+            upipe_netmap_sink->rate = 8 * eth_packet_size * packets_per_frame * upipe_netmap_sink->fps.num /
                 upipe_netmap_sink->fps.den;
         } else {
-            // TODO
+            uint64_t pixels = upipe_netmap_sink->hsize * upipe_netmap_sink->vsize;
+            upipe_netmap_sink->frame_size = pixels * UPIPE_RFC4175_PIXEL_PAIR_BYTES / 2;
+            const uint16_t eth_header_len = ETHERNET_HEADER_LEN + UDP_HEADER_SIZE + IP_HEADER_MINSIZE + RTP_HEADER_SIZE + RFC_4175_HEADER_LEN + RFC_4175_EXT_SEQ_NUM_LEN;
+            const uint16_t bytes_available = 1500 - eth_header_len;
+            const uint64_t payload = (bytes_available / UPIPE_RFC4175_PIXEL_PAIR_BYTES) * UPIPE_RFC4175_PIXEL_PAIR_BYTES;
+            upipe_netmap_sink->payload = payload;
+
+            uint64_t full_packets_per_frame = upipe_netmap_sink->frame_size / payload;
+            uint64_t packets_per_frame = (upipe_netmap_sink->frame_size + payload - 1) / payload;
+            uint64_t last_packet = 0;
+            if (packets_per_frame != full_packets_per_frame) {
+                last_packet = eth_header_len + (upipe_netmap_sink->frame_size % payload) + 4 /* CRC */;
+            }
+
+            upipe_netmap_sink->rate = 8 * (full_packets_per_frame * (eth_header_len + payload + 4 /* CRC */) + last_packet) * upipe_netmap_sink->fps.num;
         }
 
         for (size_t i = 0; i < 2; i++) {
@@ -1540,7 +1547,7 @@ static bool upipe_netmap_sink_output(struct upipe *upipe, struct uref *uref,
                 upipe_err_va(upipe, "Could not open maxrate sysctl %s",
                         intf->maxrate_uri);
             } else {
-                fprintf(f, "%" PRIu64, rate);
+                fprintf(f, "%" PRIu64, upipe_netmap_sink->rate / upipe_netmap_sink->fps.den);
                 fclose(f);
             }
         }
