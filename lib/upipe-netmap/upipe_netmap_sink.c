@@ -743,6 +743,8 @@ static int upipe_put_rfc4175_headers(struct upipe_netmap_sink *upipe_netmap_sink
                                      uint16_t len, uint8_t field_id, uint16_t line_number,
                                      uint8_t continuation, uint16_t offset)
 {
+    if (field_id)
+        line_number -= 540;
     memset(buf, 0, RFC_4175_HEADER_LEN);
     rfc4175_set_line_length(buf, len);
     rfc4175_set_line_field_id(buf, field_id);
@@ -818,14 +820,14 @@ static int worker_rfc4175(struct upipe *upipe, uint8_t **dst, uint16_t *len)
     upipe_netmap_sink->seqnum++;
     upipe_netmap_sink->seqnum &= UINT32_MAX;
     *dst += RFC_4175_EXT_SEQ_NUM_LEN;
-    *dst += upipe_put_rfc4175_headers(upipe_netmap_sink, *dst, data_len1, field, upipe_netmap_sink->line+1, continuation,
+    *dst += upipe_put_rfc4175_headers(upipe_netmap_sink, *dst, data_len1, field, upipe_netmap_sink->line, continuation,
             upipe_netmap_sink->pixel_offset);
 
     if (data_len2) {
         /* Guaranteed to be from same field so continuation 0
          * Guaranteed to also start from offset 0
          */
-        *dst += upipe_put_rfc4175_headers(upipe_netmap_sink, *dst, data_len2, field, upipe_netmap_sink->line+1+1, 0, 0);
+        *dst += upipe_put_rfc4175_headers(upipe_netmap_sink, *dst, data_len2, field, upipe_netmap_sink->line+1, 0, 0);
     }
 
     int interleaved_line = get_interleaved_line(upipe_netmap_sink->line);
