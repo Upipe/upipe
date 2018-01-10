@@ -68,7 +68,6 @@
 
 #define UPIPE_RFC4175_MAX_PLANES 3
 #define UPIPE_RFC4175_PIXEL_PAIR_BYTES 5
-#define UPIPE_RFC4175_BLOCK_SIZE 15
 
 /* the maximum ever delay between 2 TX buffers refill */
 #define NETMAP_SINK_LATENCY (UCLOCK_FREQ / 25)
@@ -767,14 +766,17 @@ static int worker_rfc4175(struct upipe *upipe, uint8_t **dst, uint16_t *len)
 
     uint16_t eth_frame_len = ETHERNET_HEADER_LEN + UDP_HEADER_SIZE + IP_HEADER_MINSIZE + RTP_HEADER_SIZE + RFC_4175_HEADER_LEN + RFC_4175_EXT_SEQ_NUM_LEN;
     uint16_t bytes_available = (1500 - eth_frame_len);
-    uint16_t pixels1 = (((bytes_available / UPIPE_RFC4175_BLOCK_SIZE) * UPIPE_RFC4175_BLOCK_SIZE) / UPIPE_RFC4175_PIXEL_PAIR_BYTES) * 2;
+    //uint16_t pixels1 = upipe_netmap_sink->payload * 2 / UPIPE_RFC4175_PIXEL_PAIR_BYTES;
+    uint16_t pixels1 = (bytes_available / UPIPE_RFC4175_PIXEL_PAIR_BYTES) * 2;
+    pixels1 = 480;
+
     uint16_t pixels2 = 0;
     uint8_t marker = 0, continuation = 0;
 
     uint8_t field = upipe_netmap_sink->line >= upipe_netmap_sink->vsize / 2;
 
     /* Going to write a second partial line so limit data_len */
-    if (upipe_netmap_sink->pixel_offset + pixels1 > upipe_netmap_sink->hsize) {
+    if (upipe_netmap_sink->pixel_offset + pixels1 >= upipe_netmap_sink->hsize) {
         if (upipe_netmap_sink->line+1 == (upipe_netmap_sink->vsize/2) || upipe_netmap_sink->line+1 == upipe_netmap_sink->vsize)
             marker = 1;
         else
@@ -782,21 +784,26 @@ static int worker_rfc4175(struct upipe *upipe, uint8_t **dst, uint16_t *len)
 
         pixels1 = upipe_netmap_sink->hsize - upipe_netmap_sink->pixel_offset;
     }
+    continuation = 0; // /xxx
 
     uint16_t data_len1 = (pixels1 / 2) * UPIPE_RFC4175_PIXEL_PAIR_BYTES;
+    bytes_available -= data_len1;
     uint16_t data_len2 = 0;
 
     eth_frame_len += data_len1;
 
     if (continuation) {
-        bytes_available = 1500 - (eth_frame_len + RFC_4175_HEADER_LEN);
-        pixels2 = (((bytes_available / UPIPE_RFC4175_BLOCK_SIZE) * UPIPE_RFC4175_BLOCK_SIZE) / UPIPE_RFC4175_PIXEL_PAIR_BYTES) * 2;
+        bytes_available -= RFC_4175_HEADER_LEN;
+        pixels2 = (((bytes_available / UPIPE_RFC4175_PIXEL_PAIR_BYTES) * UPIPE_RFC4175_PIXEL_PAIR_BYTES) / UPIPE_RFC4175_PIXEL_PAIR_BYTES) * 2;
         data_len2 = (pixels2 / 2) * UPIPE_RFC4175_PIXEL_PAIR_BYTES;
 
-        eth_frame_len += RFC_4175_HEADER_LEN;
-        eth_frame_len += data_len2;
-
-        /** XXX check for zero case */
+        if (data_len2 == 0) {
+            bytes_available += RFC_4175_HEADER_LEN;
+            continuation = false;
+        } else {
+            eth_frame_len += RFC_4175_HEADER_LEN;
+            eth_frame_len += data_len2;
+        }
     }
 
     uint16_t payload_size = eth_frame_len - ETHERNET_HEADER_LEN - UDP_HEADER_SIZE - IP_HEADER_MINSIZE;
@@ -850,6 +857,11 @@ static int worker_rfc4175(struct upipe *upipe, uint8_t **dst, uint16_t *len)
     }
 
     upipe_netmap_sink->pixel_offset += pixels1;
+    if (upipe_netmap_sink->pixel_offset >= upipe_netmap_sink->hsize) {
+        upipe_netmap_sink->pixel_offset = 0;
+        continuation = 1;
+    }
+
     *dst += data_len1;
 
     if (continuation || marker) {
