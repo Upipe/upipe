@@ -1733,7 +1733,16 @@ static int upipe_netmap_sink_set_flow_def(struct upipe *upipe,
             assert(header == &intf->header[sizeof(intf->header)]);
         }
     } else {
-        // TODO
+        for (size_t i = 0; i < 2; i++) {
+            struct upipe_netmap_intf *intf = &upipe_netmap_sink->intf[i];
+            if (!intf->d)
+                break;
+            uint8_t *header = &intf->header[0];
+            static const uint16_t udp_payload_size = RTP_HEADER_SIZE +
+                RFC_4175_HEADER_LEN + RFC_4175_EXT_SEQ_NUM_LEN;
+            header += upipe_netmap_put_ip_headers(intf, header, udp_payload_size);
+            header += upipe_netmap_put_rtp_headers(upipe, header, 98, false);
+        }
     }
 
     upipe_netmap_sink->frame_size = 0;
