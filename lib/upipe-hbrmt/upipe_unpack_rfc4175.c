@@ -489,18 +489,9 @@ static struct upipe *upipe_unpack_rfc4175_alloc(struct upipe_mgr *mgr,
     upipe_unpack_rfc4175->bitpacked_to_v210 = upipe_sdi_to_v210_c;
     upipe_unpack_rfc4175->bitpacked_to_planar_8 = upipe_sdi_to_planar_8_c;
 
-#if !defined(__APPLE__) /* macOS clang doesn't support that builtin yet */
-#if defined(__clang__) && /* clang 3.8 doesn't know ssse3 */ \
-     (__clang_major__ < 3 || (__clang_major__ == 3 && __clang_minor__ <= 8))
-# ifdef __SSSE3__
-    if (1)
-# else
-    if (0)
-# endif
-#else
-    if (__builtin_cpu_supports("ssse3"))
-#endif
-    {
+#if defined(HAVE_X86_ASM)
+#if defined(__i686__) || defined(__x86_64__)
+    if (__builtin_cpu_supports("ssse3")) {
         upipe_unpack_rfc4175->bitpacked_to_v210 = upipe_sdi_to_v210_ssse3;
         upipe_unpack_rfc4175->bitpacked_to_planar_8 = upipe_sdi_to_planar_8_ssse3;
     }
@@ -514,6 +505,7 @@ static struct upipe *upipe_unpack_rfc4175_alloc(struct upipe_mgr *mgr,
         upipe_unpack_rfc4175->bitpacked_to_v210 = upipe_sdi_to_v210_avx2;
         upipe_unpack_rfc4175->bitpacked_to_planar_8 = upipe_sdi_to_planar_8_avx2;
    }
+#endif
 #endif
 
     upipe_unpack_rfc4175_init_urefcount(upipe);

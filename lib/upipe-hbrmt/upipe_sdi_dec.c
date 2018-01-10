@@ -1048,19 +1048,12 @@ static bool upipe_sdi_dec_handle(struct upipe *upipe, struct uref *uref,
                     vbi_line++;
                 }
             } else {
-#if !defined(__APPLE__) /* macOS clang doesn't support that builtin yet */
-#if defined(__clang__) && /* clang 3.8 doesn't know ssse3 */ \
-     (__clang_major__ < 3 || (__clang_major__ == 3 && __clang_minor__ <= 8))
-# ifdef __SSSE3__
-                if (1)
-# else
-                if (0)
-# endif
-#else
+#if defined(HAVE_X86_ASM)
+#if defined(__i686__) || defined(__x86_64__)
                 if (__builtin_cpu_supports("ssse3"))
-#endif
                     upipe_sdi_vanc_deinterleave_ssse3(vanc_buf, vanc_stride, src_line, 0);
                 else
+#endif
 #endif
                 {
                 uint16_t *vanc_dst = (uint16_t*)vanc_buf;
@@ -1514,18 +1507,9 @@ static struct upipe *_upipe_sdi_dec_alloc(struct upipe_mgr *mgr,
     upipe_sdi_dec->uyvy_to_planar_8 = uyvy_to_planar_8_c;
     upipe_sdi_dec->uyvy_to_planar_10 = uyvy_to_planar_10_c;
 
-#if !defined(__APPLE__) /* macOS clang doesn't support that builtin yet */
-#if defined(__clang__) && /* clang 3.8 doesn't know ssse3 */ \
-     (__clang_major__ < 3 || (__clang_major__ == 3 && __clang_minor__ <= 8))
-# ifdef __SSSE3__
-    if (1)
-# else
-    if (0)
-# endif
-#else
-    if (__builtin_cpu_supports("ssse3"))
-#endif
-    {
+#if defined(HAVE_X86_ASM)
+#if defined(__i686__) || defined(__x86_64__)
+    if (__builtin_cpu_supports("ssse3")) {
         upipe_sdi_dec->uyvy_to_v210 = upipe_uyvy_to_v210_unaligned_ssse3;
         upipe_sdi_dec->uyvy_to_planar_8 = upipe_uyvy_to_planar_8_unaligned_ssse3;
         upipe_sdi_dec->uyvy_to_planar_10 = upipe_uyvy_to_planar_10_unaligned_ssse3;
@@ -1542,6 +1526,7 @@ static struct upipe *_upipe_sdi_dec_alloc(struct upipe_mgr *mgr,
         upipe_sdi_dec->uyvy_to_planar_8 = upipe_uyvy_to_planar_8_unaligned_avx2;
         upipe_sdi_dec->uyvy_to_planar_10 = upipe_uyvy_to_planar_10_unaligned_avx2;
     }
+#endif
 #endif
 
     upipe_sdi_dec->audio_fix = 0;

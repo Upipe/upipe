@@ -1640,7 +1640,8 @@ static struct upipe *_upipe_sdi_enc_alloc(struct upipe_mgr *mgr,
     upipe_sdi_enc->planar_to_uyvy_10 = planar_to_uyvy_10_c;
     upipe_sdi_enc->v210_to_uyvy      = v210_uyvy_unpack_c;
 
-#if !defined(__APPLE__) /* macOS clang doesn't support that builtin yet */
+#if defined(HAVE_X86_ASM)
+#if defined(__i686__) || defined(__x86_64__)
     if (__builtin_cpu_supports("sse")) {
         upipe_sdi_enc->blank         = upipe_sdi_blank_sse;
     }
@@ -1650,17 +1651,7 @@ static struct upipe *_upipe_sdi_enc_alloc(struct upipe_mgr *mgr,
         upipe_sdi_enc->planar_to_uyvy_10 = upipe_planar_to_uyvy_10_unaligned_sse2;
     }
 
-#if defined(__clang__) && /* clang 3.8 doesn't know ssse3 */ \
-     (__clang_major__ < 3 || (__clang_major__ == 3 && __clang_minor__ <= 8))
-# ifdef __SSSE3__
-    if (1)
-# else
-    if (0)
-# endif
-#else
-    if (__builtin_cpu_supports("ssse3"))
-#endif
-    {
+    if (__builtin_cpu_supports("ssse3")) {
         upipe_sdi_enc->v210_to_uyvy      = upipe_v210_to_uyvy_unaligned_ssse3;
     }
 
@@ -1676,6 +1667,7 @@ static struct upipe *_upipe_sdi_enc_alloc(struct upipe_mgr *mgr,
         upipe_sdi_enc->planar_to_uyvy_10 = upipe_planar_to_uyvy_10_unaligned_avx2;
         upipe_sdi_enc->v210_to_uyvy      = upipe_v210_to_uyvy_unaligned_avx2;
     }
+#endif
 #endif
 
     upipe_sdi_enc_init_urefcount(upipe);
