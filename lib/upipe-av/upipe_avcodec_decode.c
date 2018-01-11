@@ -1465,6 +1465,13 @@ static int upipe_avcdec_set_flow_def(struct upipe *upipe, struct uref *flow_def)
             upipe_avcdec->context->extradata_size = extradata_size;
         }
 
+        uint64_t width, height;
+        if (ubase_check(uref_pic_flow_get_hsize(flow_def, &width)) &&
+            ubase_check(uref_pic_flow_get_vsize(flow_def, &height))) {
+            upipe_avcdec->context->width = width;
+            upipe_avcdec->context->height = height;
+        }
+
         upipe_avcdec_store_flow_def_check(upipe, flow_def_check);
     }
     flow_def = uref_dup(flow_def);
