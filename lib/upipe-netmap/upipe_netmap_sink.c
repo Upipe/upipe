@@ -1525,8 +1525,7 @@ static bool upipe_netmap_sink_output(struct upipe *upipe, struct uref *uref,
                 RTP_HEADER_SIZE + HBRMT_HEADER_SIZE + HBRMT_DATA_SIZE +
                     4 /* ethernet CRC */;
 
-            upipe_netmap_sink->rate = 8 * eth_packet_size * packets_per_frame * upipe_netmap_sink->fps.num /
-                upipe_netmap_sink->fps.den;
+            upipe_netmap_sink->rate = 8 * eth_packet_size * packets_per_frame * upipe_netmap_sink->fps.num;
         } else {
             uint64_t pixels = upipe_netmap_sink->hsize * upipe_netmap_sink->vsize;
             upipe_netmap_sink->frame_size = pixels * UPIPE_RFC4175_PIXEL_PAIR_BYTES / 2;
