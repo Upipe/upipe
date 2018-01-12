@@ -812,7 +812,7 @@ static int worker_rfc4175(struct upipe *upipe, uint8_t **dst, uint16_t *len)
     *dst += upipe_netmap_put_ip_headers(&upipe_netmap_sink->intf[0], *dst, payload_size);
 
     /* RTP HEADER */
-    int rtp_size = upipe_netmap_put_rtp_headers(upipe, *dst, 103, true, field);
+    int rtp_size = upipe_netmap_put_rtp_headers(upipe, *dst, 96, true, field);
     upipe_netmap_sink->pkt++;
     if (marker)
         rtp_set_marker(*dst);
