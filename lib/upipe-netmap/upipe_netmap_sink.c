@@ -1048,12 +1048,14 @@ static void upipe_resync_queues(struct upipe *upipe, uint32_t packets)
     struct netmap_ring *txring0 = NETMAP_TXRING(intf0->d->nifp, intf0->ring_idx);
     struct netmap_ring *txring1 = NETMAP_TXRING(intf1->d->nifp, intf1->ring_idx);
 
+    const unsigned len = upipe_netmap_sink->rfc4175 ? 1262 : 1438;
+
     uint32_t cur = txring1->cur;
     for (uint32_t i = 0; i < packets; i++) {
         uint8_t *dst = (uint8_t*)NETMAP_BUF(txring1, txring1->slot[cur].buf_idx);
-        memset(dst, 0, 1438);
+        memset(dst, 0, len);
         memcpy(dst, intf1->header, ETHERNET_HEADER_LEN);
-        txring1->slot[cur].len = 1438;
+        txring1->slot[cur].len = len;
         cur = nm_ring_next(txring1, cur);
     }
     txring1->head = txring1->cur = cur;
@@ -1299,12 +1301,14 @@ static void upipe_netmap_sink_worker(struct upump *upump)
         }
     }
 
+    const bool rfc4175 = upipe_netmap_sink->rfc4175;
+
     if (txavail > (num_slots / 2) && !upipe_netmap_sink->n)
         ddd = true;
 
     __uint128_t bps = upipe_netmap_sink->bits;
     if (bps)
-        bps -= (num_slots - 1 - txavail) * 1442 * 8;
+        bps -= (num_slots - 1 - txavail) * (rfc4175 ? 1266 : 1442) * 8;
 
     bps *= UCLOCK_FREQ;
     bps /= now - upipe_netmap_sink->start;
@@ -1314,14 +1318,15 @@ static void upipe_netmap_sink_worker(struct upump *upump)
 
     if (err > 0 && txavail) {
         // here for 3k (22.5ms) / 20ms latency
+        const unsigned len = rfc4175 ? 1262 : 1438;
         for (size_t i = 0; i < 2; i++) {
             struct upipe_netmap_intf *intf = &upipe_netmap_sink->intf[i];
             if (!intf->d || !intf->up)
                 continue;
             uint8_t *dst = (uint8_t*)NETMAP_BUF(txring[i], txring[i]->slot[cur[i]].buf_idx);
-            memset(dst, 0, 1438);
+            memset(dst, 0, len);
             memcpy(dst, intf->header, ETHERNET_HEADER_LEN);
-            txring[i]->slot[cur[i]].len = 1438;
+            txring[i]->slot[cur[i]].len = len;
             cur[i] = nm_ring_next(txring[i], cur[i]);
         }
         txavail--;
@@ -1342,8 +1347,6 @@ static void upipe_netmap_sink_worker(struct upump *upump)
         // for gnuplot
         //printf("%" PRIu64 " %" PRIu64 "\n", now - upipe_netmap_sink->start, (int64_t)bps);
     }
-
-    const bool rfc4175 = upipe_netmap_sink->rfc4175;
 
     /* fill ring buffer */
     while (txavail) {
