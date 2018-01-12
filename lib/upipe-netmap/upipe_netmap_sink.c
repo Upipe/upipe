@@ -183,6 +183,8 @@ struct upipe_netmap_sink {
     int input_bit_depth;
     bool input_is_v210;
 
+    unsigned gap_fakes;
+
     /** picture size */
     uint64_t hsize;
     uint64_t vsize;
@@ -597,6 +599,7 @@ static struct upipe *_upipe_netmap_sink_alloc(struct upipe_mgr *mgr,
     upipe_netmap_sink->frame_size = 0;
     upipe_netmap_sink->uref = NULL;
     upipe_netmap_sink_reset_counters(upipe);
+    upipe_netmap_sink->gap_fakes = 4 * 22 + 2;
 
     upipe_netmap_sink->uri = NULL;
     for (size_t i = 0; i < 2; i++) {
@@ -1407,17 +1410,35 @@ static void upipe_netmap_sink_worker(struct upump *upump)
 
         if (rfc4175) {
             // TODO: -7
-            if (worker_rfc4175(upipe, &dst[0], len[0])) {
-                for (int i = 0; i < UPIPE_RFC4175_MAX_PLANES; i++) {
-                    const char *chroma = upipe_netmap_sink->input_chroma_map[i];
-                    if (!chroma)
-                        break;
-                    uref_pic_plane_unmap(uref, chroma, 0, 0, -1, -1);
+            if ((upipe_netmap_sink->line == 0 ||
+                    upipe_netmap_sink->line == upipe_netmap_sink->vsize / 2) && upipe_netmap_sink->pixel_offset == 0 && upipe_netmap_sink->gap_fakes) {
+
+                for (size_t i = 0; i < 2; i++) {
+                    struct upipe_netmap_intf *intf = &upipe_netmap_sink->intf[i];
+                    if (!intf->d || !intf->up)
+                        continue;
+                    memset(dst[i], 0, 1262);
+                    memcpy(dst[i], intf->header, ETHERNET_HEADER_LEN);
+                    *len[i] = 1262;
                 }
-                uref_free(uref);
-                uref = NULL;
-                upipe_netmap_sink->uref = NULL;
-                bytes_left = 0;
+                upipe_netmap_sink->bits += 1266 * 8;
+                upipe_netmap_sink->gap_fakes--;
+            } else {
+                // 22.5 lines, 4 packets between fields
+                upipe_netmap_sink->gap_fakes = 4 * 22 + 2;
+
+                if (worker_rfc4175(upipe, &dst[0], len[0])) {
+                    for (int i = 0; i < UPIPE_RFC4175_MAX_PLANES; i++) {
+                        const char *chroma = upipe_netmap_sink->input_chroma_map[i];
+                        if (!chroma)
+                            break;
+                        uref_pic_plane_unmap(uref, chroma, 0, 0, -1, -1);
+                    }
+                    uref_free(uref);
+                    uref = NULL;
+                    upipe_netmap_sink->uref = NULL;
+                    bytes_left = 0;
+                }
             }
         } else {
             int s = worker_hbrmt(upipe, dst, src_buf, bytes_left, len);
@@ -1545,6 +1566,8 @@ static bool upipe_netmap_sink_output(struct upipe *upipe, struct uref *uref,
             }
 
             upipe_netmap_sink->rate = 8 * (full_packets_per_frame * (eth_header_len + payload + 4 /* CRC */) + last_packet) * upipe_netmap_sink->fps.num;
+            // FIXME : hardcoded to 1080i50 with no continuation
+            upipe_netmap_sink->rate = 8 * 1266 * (1125*4) * upipe_netmap_sink->fps.num;
         }
 
         for (size_t i = 0; i < 2; i++) {
