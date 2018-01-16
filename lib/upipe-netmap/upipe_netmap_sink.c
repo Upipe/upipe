@@ -752,14 +752,19 @@ static int upipe_put_rfc4175_headers(struct upipe_netmap_sink *upipe_netmap_sink
     return RFC_4175_HEADER_LEN;
 }
 
-/* IN: zero-indexed separated fields, OUT: zero-index interleaved fields */
-static inline int get_interleaved_line(int line_number)
+static inline int get_interleaved_line(struct upipe *upipe)
 {
-    assert(line_number < 1080);
-    if (line_number >= 540)
-        return (line_number - 540) * 2 + 1;
+    struct upipe_netmap_sink *upipe_netmap_sink = upipe_netmap_sink_from_upipe(upipe);
+    uint64_t vsize = upipe_netmap_sink->vsize;
+    int line = upipe_netmap_sink->line;
 
-    return line_number*2;
+    if (line >= vsize / 2) {
+        assert(line < vsize);
+        line -= vsize / 2;
+        return line * 2 + 1;
+    }
+
+    return line * 2;
 }
 
 /* returns 1 if uref exhausted */
@@ -835,7 +840,7 @@ static int worker_rfc4175(struct upipe *upipe, uint8_t **dst, uint16_t *len)
         *dst += upipe_put_rfc4175_headers(upipe_netmap_sink, *dst, data_len2, field, upipe_netmap_sink->line+1, 0, 0);
     }
 
-    int interleaved_line = get_interleaved_line(upipe_netmap_sink->line);
+    int interleaved_line = get_interleaved_line(upipe);
     if (upipe_netmap_sink->input_is_v210) {
         const uint8_t *src = upipe_netmap_sink->pixel_buffers[0] +
             upipe_netmap_sink->strides[0]*interleaved_line;
@@ -875,8 +880,7 @@ static int worker_rfc4175(struct upipe *upipe, uint8_t **dst, uint16_t *len)
     }
 
     if (data_len2) {
-        interleaved_line = get_interleaved_line(upipe_netmap_sink->line);
-        //printf("\n line %i \n", interleaved_line);
+        interleaved_line = get_interleaved_line(upipe);
         if (upipe_netmap_sink->input_is_v210) {
             const uint8_t *src = upipe_netmap_sink->pixel_buffers[0] +
                 upipe_netmap_sink->strides[0]*interleaved_line;
