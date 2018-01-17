@@ -399,7 +399,7 @@ static int ubuf_sound_mem_mgr_check(struct ubuf_mgr *mgr,
     if (common_mgr->sample_size != sample_size ||
         common_mgr->nb_planes != planes)
         return UBASE_ERR_INVALID;
-    if (align && sound_mgr->align % align)
+    if (align && (!sound_mgr->align || sound_mgr->align % align))
         return UBASE_ERR_INVALID;
 
     for (uint8_t i = 0; i < planes; i++) {
@@ -462,6 +462,7 @@ static void ubuf_sound_mem_mgr_free(struct urefcount *urefcount)
  * @param shared_pool_depth maximum number of shared structures in the pool
  * @param umem_mgr memory allocator to use for buffers
  * @param sample_size number of octets in a sample for a plane
+ * @param align alignment in octets
  * @return pointer to manager, or NULL in case of error
  */
 struct ubuf_mgr *ubuf_sound_mem_mgr_alloc(uint16_t ubuf_pool_depth,
