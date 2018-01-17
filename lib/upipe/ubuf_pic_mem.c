@@ -466,7 +466,8 @@ static int ubuf_pic_mem_mgr_check(struct ubuf_mgr *mgr,
         pic_mgr->hmprepend != hmprepend || pic_mgr->hmappend != hmappend ||
         pic_mgr->vprepend != vprepend || pic_mgr->vappend != vappend)
         return UBASE_ERR_INVALID;
-    if (align && (pic_mgr->align % align ||
+    if (align && (!pic_mgr->align ||
+                  pic_mgr->align % align ||
                   pic_mgr->align_hmoffset != align_hmoffset))
         return UBASE_ERR_INVALID;
 

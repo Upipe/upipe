@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2015 Arnaud de Turckheim <quarium@gmail.com>
- * Copyright (c) 2016-2017 OpenHeadend S.A.R.L.
+ * Copyright (c) 2016-2018 OpenHeadend S.A.R.L.
  *
  * Permission is hereby granted, free of charge, to any person obtaining
  * a copy of this software and associated documentation files (the
@@ -150,6 +150,7 @@ static uint64_t last_cr = TS_CLOCK_MAX;
 static uint64_t timestamp_highest = TS_CLOCK_MAX;
 static uint64_t seek = 0;
 static uint64_t sequence = 0;
+static uint64_t mux_max_delay = UINT64_MAX;
 static struct upipe *src = NULL;
 static struct upipe *hls = NULL;
 static struct upipe *variant = NULL;
@@ -1226,6 +1227,7 @@ enum opt {
     OPT_NO_STDIN,
     OPT_DUMP,
     OPT_HELP,
+    OPT_MUX_MAX_DELAY,
 };
 
 static struct option options[] = {
@@ -1251,6 +1253,7 @@ static struct option options[] = {
     { "no-stdin", no_argument, NULL, OPT_NO_STDIN },
     { "dump", required_argument, NULL, OPT_DUMP },
     { "help", no_argument, NULL, OPT_HELP },
+    { "mux-max-delay", required_argument, NULL, OPT_MUX_MAX_DELAY },
     { 0, 0, 0, 0 },
 };
 
@@ -1370,6 +1373,9 @@ int main(int argc, char **argv)
             break;
         case OPT_DUMP:
             dump = optarg;
+            break;
+        case OPT_MUX_MAX_DELAY:
+            mux_max_delay = strtoull(optarg, NULL, 10);
             break;
 
         case OPT_HELP:
@@ -1565,6 +1571,9 @@ int main(int argc, char **argv)
         upipe_attach_uclock(ts_mux);
         if (conformance != UPIPE_TS_CONFORMANCE_AUTO)
             upipe_ts_mux_set_conformance(ts_mux, conformance);
+        if (mux_max_delay != UINT64_MAX)
+            upipe_ts_mux_set_max_delay(ts_mux,
+                                       mux_max_delay * (UCLOCK_FREQ / 1000));
 
         struct uref *flow_def = uref_alloc_control(uref_mgr);
         uref_flow_set_def(flow_def, "void.");

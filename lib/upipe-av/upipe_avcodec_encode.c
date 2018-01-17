@@ -1193,25 +1193,26 @@ static int upipe_avcenc_set_flow_def(struct upipe *upipe, struct uref *flow_def)
         context->time_base.den = 1;//rate; FIXME
 
         uint8_t channels;
-        const uint64_t *channel_layouts =
-            upipe_avcenc->context->codec->channel_layouts;
         if (!ubase_check(uref_sound_flow_get_channels(flow_def, &channels))) {
             upipe_err_va(upipe, "unsupported channels");
             uref_free(flow_def_check);
             return UBASE_ERR_INVALID;
         }
-        while (*channel_layouts != 0) {
-            if (av_get_channel_layout_nb_channels(*channel_layouts) == channels)
-                break;
-            channel_layouts++;
-        }
-        if (*channel_layouts == 0) {
-            upipe_err_va(upipe, "unsupported channel layout %"PRIu8, channels);
-            uref_free(flow_def_check);
-            return UBASE_ERR_INVALID;
+        const uint64_t *channel_layouts = context->codec->channel_layouts;
+        if (channel_layouts) {
+            while (*channel_layouts != 0) {
+                if (av_get_channel_layout_nb_channels(*channel_layouts) == channels)
+                    break;
+                channel_layouts++;
+            }
+            if (*channel_layouts == 0) {
+                upipe_err_va(upipe, "unsupported channel layout %"PRIu8, channels);
+                uref_free(flow_def_check);
+                return UBASE_ERR_INVALID;
+            }
+            context->channel_layout = *channel_layouts;
         }
         context->channels = channels;
-        context->channel_layout = *channel_layouts;
 
         upipe_avcenc_store_flow_def_check(upipe, flow_def_check);
     }
