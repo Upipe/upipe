@@ -29,6 +29,7 @@
 extern "C" {
 #endif
 
+#include <upipe/ustring.h>
 #include <upipe/uref_attr.h>
 
 UREF_ATTR_UNSIGNED(m3u_master, bandwidth, "m3u.master.bandwidth",
@@ -78,6 +79,35 @@ static inline int uref_m3u_master_copy(struct uref *uref,
     };
     return uref_attr_copy_list(uref, uref_src, list, UBASE_ARRAY_SIZE(list));
 }
+
+static inline int uref_m3u_master_iterate_codecs(struct uref *uref,
+                                                 struct ustring *codec)
+{
+    if (!codec)
+        return UBASE_ERR_INVALID;
+
+    struct ustring tmp;
+    if (ustring_is_null(*codec)) {
+        const char *c;
+        int ret = uref_m3u_master_get_codecs(uref, &c);
+        if (unlikely(!ubase_check(ret)))
+            return ret;
+        tmp = ustring_from_str(c);
+    }
+    else
+        tmp = ustring_from_str(codec->at + codec->len);
+
+    *codec = ustring_shift_truncate_while(
+        ustring_until(ustring_shift_while(tmp, " ,"), ","), " ");
+    if (ustring_is_empty(*codec))
+        *codec = ustring_null();
+    return UBASE_ERR_NONE;
+}
+
+#define uref_m3u_master_foreach_codec(uref, codec)                      \
+    for (struct ustring codec = ustring_null();                         \
+         ubase_check(uref_m3u_master_iterate_codecs(uref, &codec)) &&   \
+         !ustring_is_null(codec);)
 
 #ifdef __cplusplus
 }
