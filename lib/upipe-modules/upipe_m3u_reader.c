@@ -452,8 +452,9 @@ static int upipe_m3u_reader_process_extinf(struct upipe *upipe,
     const char *endptr;
     uint64_t duration;
     UBASE_RETURN(duration_to_uclock(line, &endptr, &duration));
-    if (line == endptr || *endptr != ',') {
-        upipe_err_va(upipe, "invalid segment duration `%s'", line);
+    if (line == endptr || (*endptr != ',' && *endptr != '\0')) {
+        upipe_err_va(upipe, "invalid segment duration `%s' at `%s'",
+                     line, endptr);
         return UBASE_ERR_INVALID;
     }
     upipe_verbose_va(upipe, "segment duration: %"PRIu64, duration);
