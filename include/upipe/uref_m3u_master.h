@@ -37,6 +37,8 @@ UREF_ATTR_UNSIGNED(m3u_master, bandwidth, "m3u.master.bandwidth",
 UREF_ATTR_STRING(m3u_master, codecs, "m3u.master.codecs", codecs)
 UREF_ATTR_STRING(m3u_master, resolution, "m3u.master.resolution", resolution)
 UREF_ATTR_STRING(m3u_master, audio, "m3u.master.audio", audio group)
+UREF_ATTR_STRING(m3u_master, video, "m3u.master.video", video group)
+UREF_ATTR_STRING(m3u_master, subtitles, "m3u.master.subtitles", subtitles group)
 UREF_ATTR_STRING(m3u_master, media_type, "m3u.master.media.type", media type)
 UREF_ATTR_VOID(m3u_master, media_default, "m3u.master.media.default",
                media default)

@@ -524,6 +524,16 @@ static int upipe_m3u_reader_ext_x_stream_inf(struct upipe *upipe,
             if (unlikely(!ubase_check(err)))
                 upipe_err_va(upipe, "fail to set audio to %s", value_str);
         }
+        else if (!ustring_cmp_str(name, "VIDEO")) {
+            err = uref_m3u_master_set_video(item, value_str);
+            if (unlikely(!ubase_check(err)))
+                upipe_err_va(upipe, "fail to set video to %s", value_str);
+        }
+        else if (!ustring_cmp_str(name, "SUBTITLES")) {
+            err = uref_m3u_master_set_subtitles(item, value_str);
+            if (unlikely(!ubase_check(err)))
+                upipe_err_va(upipe, "fail to set subtitle to %s", value_str);
+        }
         else if (!ustring_cmp_str(name, "RESOLUTION")) {
             err = uref_m3u_master_set_resolution(item, value_str);
             if (unlikely(!ubase_check(err)))
