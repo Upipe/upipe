@@ -44,7 +44,6 @@
 
 #include <upipe/uref_m3u.h>
 #include <upipe/uref_uri.h>
-#include <upipe/uref_dump.h>
 
 #include <libgen.h>
 
