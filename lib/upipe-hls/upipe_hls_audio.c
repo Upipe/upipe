@@ -25,11 +25,15 @@
 #include <upipe-hls/upipe_hls_variant.h>
 #include <upipe-hls/upipe_hls_playlist.h>
 
+#include <upipe-ts/upipe_ts_demux.h>
+
 #include <upipe-modules/upipe_aes_decrypt.h>
 #include <upipe-modules/upipe_id3v2.h>
 #include <upipe-modules/upipe_m3u_reader.h>
+#include <upipe-modules/upipe_probe_uref.h>
 
 #include <upipe-framers/upipe_mpga_framer.h>
+#include <upipe-framers/upipe_auto_framer.h>
 
 #include <upipe/upipe_helper_uprobe.h>
 #include <upipe/upipe_helper_bin_output.h>
@@ -39,7 +43,21 @@
 #include <upipe/upipe_helper_urefcount.h>
 #include <upipe/upipe_helper_upipe.h>
 
+#include <upipe/uprobe_select_flows.h>
 #include <upipe/uprobe_prefix.h>
+#include <upipe/uref_block.h>
+
+/** @internal @This enumatates the possible guess for playlist type. */
+enum upipe_hls_audio_guess {
+    /** no guess */
+    UPIPE_HLS_AUDIO_GUESS_NONE,
+    /** maybe AAC */
+    UPIPE_HLS_AUDIO_GUESS_AAC,
+    /** maybe TS */
+    UPIPE_HLS_AUDIO_GUESS_TS,
+    /** impossible to guess */
+    UPIPE_HLS_AUDIO_GUESS_UNKNOWN,
+};
 
 /** @internal @This is the private context of an audio rendition pipe. */
 struct upipe_hls_audio {
@@ -67,16 +85,26 @@ struct upipe_hls_audio {
     struct uprobe probe_reader;
     /** playlist probe */
     struct uprobe probe_playlist;
+    /** probe uref */
+    struct uprobe probe_uref;
     /** id3v2 probe */
     struct uprobe probe_id3v2;
     /** last inner probe */
     struct uprobe probe_last_inner;
     /** aes decrypt inner probe */
     struct uprobe probe_aes_decrypt;
+    /** ts demux proxy probe */
+    struct uprobe probe_ts_demux;
+    /** ts demuxed prog proxy probe */
+    struct uprobe probe_ts_prog;
+    /** ts demux audio flow proxy probe */
+    struct uprobe probe_ts_audio;
     /** attach uclock needed */
     bool attach_uclock;
     /** current uri */
     char *uri;
+    /** last guess */
+    enum upipe_hls_audio_guess guess;
 };
 
 /** @hidden */
@@ -85,6 +113,22 @@ static int probe_src(struct uprobe *uprobe, struct upipe *inner,
 
 /** @hidden */
 static int probe_playlist(struct uprobe *uprobe, struct upipe *inner,
+                          int event, va_list args);
+
+/** @hidden */
+static int probe_uref(struct uprobe *uprobe, struct upipe *inner,
+                      int event, va_list args);
+
+/** @hidden */
+static int probe_ts_demux(struct uprobe *uprobe, struct upipe *inner,
+                          int event, va_list args);
+
+/** @hidden */
+static int probe_ts_prog(struct uprobe *uprobe, struct upipe *inner,
+                         int event, va_list args);
+
+/** @hidden */
+static int probe_ts_audio(struct uprobe *uprobe, struct upipe *inner,
                           int event, va_list args);
 
 /** @hidden */
@@ -101,10 +145,19 @@ UPIPE_HELPER_INNER(upipe_hls_audio, playlist);
 UPIPE_HELPER_INNER(upipe_hls_audio, last_inner);
 UPIPE_HELPER_UPROBE(upipe_hls_audio, urefcount_real, probe_src, probe_src);
 UPIPE_HELPER_UPROBE(upipe_hls_audio, urefcount_real, probe_reader, NULL);
-UPIPE_HELPER_UPROBE(upipe_hls_audio, urefcount_real, probe_playlist, probe_playlist);
+UPIPE_HELPER_UPROBE(upipe_hls_audio, urefcount_real, probe_playlist,
+                    probe_playlist);
+UPIPE_HELPER_UPROBE(upipe_hls_audio, urefcount_real, probe_uref,
+                    probe_uref);
 UPIPE_HELPER_UPROBE(upipe_hls_audio, urefcount_real, probe_id3v2, NULL);
 UPIPE_HELPER_UPROBE(upipe_hls_audio, urefcount_real, probe_last_inner, NULL);
 UPIPE_HELPER_UPROBE(upipe_hls_audio, urefcount_real, probe_aes_decrypt, NULL);
+UPIPE_HELPER_UPROBE(upipe_hls_audio, urefcount_real, probe_ts_demux,
+                    probe_ts_demux);
+UPIPE_HELPER_UPROBE(upipe_hls_audio, urefcount_real, probe_ts_prog,
+                    probe_ts_prog);
+UPIPE_HELPER_UPROBE(upipe_hls_audio, urefcount_real, probe_ts_audio,
+                    probe_ts_audio);
 UPIPE_HELPER_BIN_OUTPUT(upipe_hls_audio, last_inner, output, requests);
 
 /** @internal @This checks if source manager is set and asks for it if not.
@@ -120,25 +173,17 @@ static int upipe_hls_audio_check_source_mgr(struct upipe *upipe)
     return UBASE_ERR_NONE;
 }
 
+/** @internal @This reloads the playlist.
+ *
+ * @param upipe description structure of the pipe
+ * @return an error code
+ */
 static int upipe_hls_audio_reload(struct upipe *upipe)
 {
     struct upipe_hls_audio *upipe_hls_audio =
         upipe_hls_audio_from_upipe(upipe);
 
     UBASE_RETURN(upipe_hls_audio_check_source_mgr(upipe));
-
-    struct upipe *src = upipe_hls_audio->src;
-    if (unlikely(!src)) {
-        upipe_warn(upipe, "no source pipe to reload");
-        return UBASE_ERR_INVALID;
-    }
-
-    struct upipe *output;
-    int ret = upipe_get_output(src, &output);
-    if (unlikely(!ubase_check(ret))) {
-        upipe_warn(upipe, "source pipe has no output pipe");
-        return ret;
-    }
 
     upipe_dbg_va(upipe, "reloading %s", upipe_hls_audio->uri);
 
@@ -148,22 +193,234 @@ static int upipe_hls_audio_reload(struct upipe *upipe)
                          UPROBE_LOG_VERBOSE, "src"));
     UBASE_ALLOC_RETURN(inner);
 
-    ret = upipe_set_output(inner, output);
-    if (unlikely(!ubase_check(ret))) {
-        upipe_release(inner);
-        return UBASE_ERR_INVALID;
-    }
-
-    ret = upipe_set_uri(inner, upipe_hls_audio->uri);
+    int ret = upipe_set_uri(inner, upipe_hls_audio->uri);
     if (unlikely(!ubase_check(ret))) {
         upipe_release(inner);
         return ret;
+    }
+
+    if (likely(upipe_hls_audio->src)) {
+        struct upipe *src = upipe_hls_audio->src;
+        struct upipe *output;
+        if (unlikely(!ubase_check(upipe_get_output(src, &output))))
+            upipe_warn(upipe, "fail to get inner pipe output");
+        else if (unlikely(!ubase_check(upipe_set_output(inner, output))))
+            upipe_warn(upipe, "fail to set inner pipe output");
     }
 
     upipe_hls_audio_store_src(upipe, inner);
     return UBASE_ERR_NONE;
 }
 
+/** @internal @This catches events from the ts demux.
+ *
+ * @param uprobe structure used to raise events
+ * @param upipe description structure of the pipe
+ * @param event event raised
+ * @param args optional arguments
+ * @return an error code
+ */
+static int probe_ts_demux(struct uprobe *uprobe, struct upipe *inner,
+                          int event, va_list args)
+{
+    struct upipe_hls_audio *upipe_hls_audio =
+        upipe_hls_audio_from_probe_ts_demux(uprobe);
+    struct upipe *upipe = upipe_hls_audio_to_upipe(upipe_hls_audio);
+
+    switch (event) {
+        case UPROBE_LOG:
+        case UPROBE_FATAL:
+        case UPROBE_ERROR:
+        case UPROBE_PROVIDE_REQUEST:
+            return upipe_throw_proxy(upipe, inner, event, args);
+    }
+    return UBASE_ERR_NONE;
+}
+
+/** @internal @This catches events from the ts demuxed prog.
+ *
+ * @param uprobe structure used to raise events
+ * @param upipe description structure of the pipe
+ * @param event event raised
+ * @param args optional arguments
+ * @return an error code
+ */
+static int probe_ts_prog(struct uprobe *uprobe, struct upipe *inner,
+                         int event, va_list args)
+{
+    struct upipe_hls_audio *upipe_hls_audio =
+        upipe_hls_audio_from_probe_ts_prog(uprobe);
+    struct upipe *upipe = upipe_hls_audio_to_upipe(upipe_hls_audio);
+
+    switch (event) {
+        case UPROBE_LOG:
+        case UPROBE_FATAL:
+        case UPROBE_ERROR:
+        case UPROBE_PROVIDE_REQUEST:
+            return upipe_throw_proxy(upipe, inner, event, args);
+    }
+    return UBASE_ERR_NONE;
+}
+
+/** @internal @This catches events from the audio selflow of the ts demux.
+ *
+ * @param uprobe structure used to raise events
+ * @param upipe description structure of the pipe
+ * @param event event raised
+ * @param args optional arguments
+ */
+static int probe_ts_audio(struct uprobe *uprobe, struct upipe *inner,
+                          int event, va_list args)
+{
+    struct upipe_hls_audio *upipe_hls_audio =
+        upipe_hls_audio_from_probe_ts_audio(uprobe);
+    struct upipe *upipe = upipe_hls_audio_to_upipe(upipe_hls_audio);
+
+    switch (event) {
+        case UPROBE_LOG:
+        case UPROBE_FATAL:
+        case UPROBE_ERROR:
+        case UPROBE_PROVIDE_REQUEST:
+            return upipe_throw_proxy(upipe, inner, event, args);
+
+        case UPROBE_NEED_OUTPUT:
+            upipe_hls_audio_store_bin_output(upipe, upipe_use(inner));
+            return upipe_throw_proxy(upipe, inner, event, args);
+    }
+
+    return UBASE_ERR_NONE;
+}
+
+/** @internal @This catches events from probe uref pipe.
+ *
+ * @param upipe description structure of the pipe
+ * @param event event raised
+ * @param args optional arguments
+ * @return an error code
+ */
+static int probe_uref(struct uprobe *uprobe, struct upipe *inner,
+                      int event, va_list args)
+{
+    struct upipe_hls_audio *upipe_hls_audio =
+        upipe_hls_audio_from_probe_uref(uprobe);
+    struct upipe *upipe = upipe_hls_audio_to_upipe(upipe_hls_audio);
+
+    if (event == UPROBE_NEED_OUTPUT) {
+        switch (upipe_hls_audio->guess) {
+            case UPIPE_HLS_AUDIO_GUESS_NONE:
+            case UPIPE_HLS_AUDIO_GUESS_UNKNOWN:
+                break;
+
+            case UPIPE_HLS_AUDIO_GUESS_AAC: {
+                /* id3v2 pipe
+                */
+                struct upipe_mgr *upipe_id3v2_mgr = upipe_id3v2_mgr_alloc();
+                UBASE_ALLOC_RETURN(upipe_id3v2_mgr);
+                struct upipe *output = upipe_void_alloc_output(
+                    inner, upipe_id3v2_mgr,
+                    uprobe_pfx_alloc(
+                        uprobe_use(&upipe_hls_audio->probe_id3v2),
+                        UPROBE_LOG_VERBOSE, "id3v2"));
+                upipe_mgr_release(upipe_id3v2_mgr);
+                UBASE_ALLOC_RETURN(output);
+
+                /* aac framer
+                */
+                struct upipe_mgr *upipe_mpgaf_mgr = upipe_mpgaf_mgr_alloc();
+                if (unlikely(upipe_mpgaf_mgr == NULL)) {
+                    upipe_release(output);
+                    return UBASE_ERR_ALLOC;
+                }
+                output = upipe_void_chain_output(
+                    output, upipe_mpgaf_mgr,
+                    uprobe_pfx_alloc(
+                        uprobe_use(&upipe_hls_audio->probe_last_inner),
+                        UPROBE_LOG_VERBOSE, "mpgaf"));
+                upipe_mgr_release(upipe_mpgaf_mgr);
+                UBASE_ALLOC_RETURN(output);
+                upipe_hls_audio_store_bin_output(upipe, output);
+                break;
+            }
+
+            case UPIPE_HLS_AUDIO_GUESS_TS: {
+                /* ts demux
+                 */
+                struct upipe_mgr *upipe_ts_demux_mgr =
+                    upipe_ts_demux_mgr_alloc();
+                UBASE_ALLOC_RETURN(upipe_ts_demux_mgr);
+                struct upipe_mgr *upipe_autof_mgr =
+                    upipe_autof_mgr_alloc();
+                upipe_ts_demux_mgr_set_autof_mgr(upipe_ts_demux_mgr,
+                                                 upipe_autof_mgr);
+                upipe_mgr_release(upipe_autof_mgr);
+                struct upipe *output = upipe_void_alloc_output(
+                    inner, upipe_ts_demux_mgr,
+                    uprobe_pfx_alloc(
+                        uprobe_selflow_alloc(
+                            uprobe_use(&upipe_hls_audio->probe_ts_demux),
+                            uprobe_selflow_alloc(
+                                uprobe_use(
+                                    &upipe_hls_audio->probe_ts_prog),
+                                uprobe_use(
+                                    &upipe_hls_audio->probe_ts_audio),
+                                UPROBE_SELFLOW_SOUND, "auto"),
+                            UPROBE_SELFLOW_VOID, "auto"),
+                        UPROBE_LOG_VERBOSE, "ts"));
+                upipe_mgr_release(upipe_ts_demux_mgr);
+                UBASE_ALLOC_RETURN(output);
+                upipe_release(output);
+                break;
+            }
+        }
+        return UBASE_ERR_NONE;
+    }
+    else if (event == UPROBE_PROBE_UREF &&
+             ubase_get_signature(args) == UPIPE_PROBE_UREF_SIGNATURE) {
+        UBASE_SIGNATURE_CHECK(args, UPIPE_PROBE_UREF_SIGNATURE);
+        struct uref *uref = va_arg(args, struct uref *);
+
+        struct upipe *output;
+        UBASE_RETURN(upipe_get_output(inner, &output));
+        if (likely(output))
+            return UBASE_ERR_NONE;
+
+        struct uref *flow_def;
+        UBASE_RETURN(upipe_get_flow_def(inner, &flow_def));
+        UBASE_RETURN(uref_flow_match_def(flow_def, "block."));
+
+        static const uint8_t size = 6;
+        uint8_t tag[size];
+        UBASE_RETURN(uref_block_extract(uref, 0, size, tag));
+
+        if (tag[0] == 'I' && tag[1] == 'D' && tag[2] == '3') {
+            /* probably AAC */
+            upipe_dbg(upipe, "playlist is probably AAC");
+            upipe_hls_audio->guess = UPIPE_HLS_AUDIO_GUESS_AAC;
+        }
+        else if (tag[0] == 0x47) {
+            /* probably TS */
+            upipe_dbg(upipe, "playlist is probably TS");
+            upipe_hls_audio->guess = UPIPE_HLS_AUDIO_GUESS_TS;
+        }
+        else {
+            upipe_warn_va(upipe, "cannot guess audio playlist type"
+                          " (tag %02x%02x%02x)",
+                          tag[0], tag[1], tag[2]);
+            upipe_hls_audio->guess = UPIPE_HLS_AUDIO_GUESS_UNKNOWN;
+        }
+        return UBASE_ERR_NONE;
+    }
+
+    return upipe_throw_proxy(upipe, inner, event, args);
+}
+
+/** @internal @This catches event from the inner playlist.
+ *
+ * @param inner inner pipe
+ * @param event event raised
+ * @param args optional arguments
+ * @return an error code
+ */
 static int probe_playlist(struct uprobe *uprobe, struct upipe *inner,
                           int event, va_list args)
 {
@@ -194,36 +451,19 @@ static int probe_playlist(struct uprobe *uprobe, struct upipe *inner,
             UBASE_ALLOC_RETURN(output);
         }
 
-        //FIXME: handle ts format
-
-        /** id3v2 pipe
-         */
-        struct upipe_mgr *upipe_id3v2_mgr = upipe_id3v2_mgr_alloc();
-        if (unlikely(upipe_id3v2_mgr == NULL)) {
+        /** guess playlist type (AAC or TS) */
+        struct upipe_mgr *upipe_probe_uref_mgr = upipe_probe_uref_mgr_alloc();
+        if (unlikely(!upipe_probe_uref_mgr)) {
             upipe_release(output);
             return UBASE_ERR_ALLOC;
         }
         output = upipe_void_chain_output(
-            output, upipe_id3v2_mgr,
-            uprobe_pfx_alloc(uprobe_use(&upipe_hls_audio->probe_id3v2),
-                             UPROBE_LOG_VERBOSE, "id3v2"));
-        upipe_mgr_release(upipe_id3v2_mgr);
+            output, upipe_probe_uref_mgr,
+            uprobe_pfx_alloc(uprobe_use(&upipe_hls_audio->probe_uref),
+                             UPROBE_LOG_VERBOSE, "probe"));
+        upipe_mgr_release(upipe_probe_uref_mgr);
         UBASE_ALLOC_RETURN(output);
-
-        /** aac framer
-         */
-        struct upipe_mgr *upipe_mpgaf_mgr = upipe_mpgaf_mgr_alloc();
-        if (unlikely(upipe_mpgaf_mgr == NULL)) {
-            upipe_release(output);
-            return UBASE_ERR_ALLOC;
-        }
-        output = upipe_void_chain_output(
-            output, upipe_mpgaf_mgr,
-            uprobe_pfx_alloc(uprobe_use(&upipe_hls_audio->probe_last_inner),
-                             UPROBE_LOG_VERBOSE, "mpgaf"));
-        upipe_mgr_release(upipe_mpgaf_mgr);
-        UBASE_ALLOC_RETURN(output);
-        upipe_hls_audio_store_bin_output(upipe, output);
+        upipe_release(output);
         return UBASE_ERR_NONE;
     }
     }
@@ -241,6 +481,14 @@ static int probe_playlist(struct uprobe *uprobe, struct upipe *inner,
     return upipe_throw_proxy(upipe, inner, event, args);
 }
 
+/** @internal @This catches events from the source probe.
+ *
+ * @param uprobe structure used to raise events
+ * @param inner sender of the probe
+ * @param event event raised
+ * @param args optional arguments
+ * @return an error code
+ */
 static int probe_src(struct uprobe *uprobe, struct upipe *inner,
                      int event, va_list args)
 {
@@ -313,8 +561,12 @@ static struct upipe *upipe_hls_audio_alloc(struct upipe_mgr *mgr,
     upipe_hls_audio_init_probe_src(upipe);
     upipe_hls_audio_init_probe_reader(upipe);
     upipe_hls_audio_init_probe_playlist(upipe);
+    upipe_hls_audio_init_probe_uref(upipe);
     upipe_hls_audio_init_probe_aes_decrypt(upipe);
     upipe_hls_audio_init_probe_last_inner(upipe);
+    upipe_hls_audio_init_probe_ts_demux(upipe);
+    upipe_hls_audio_init_probe_ts_prog(upipe);
+    upipe_hls_audio_init_probe_ts_audio(upipe);
     upipe_hls_audio_init_src(upipe);
     upipe_hls_audio_init_playlist(upipe);
     upipe_hls_audio_init_bin_output(upipe);
@@ -324,6 +576,7 @@ static struct upipe *upipe_hls_audio_alloc(struct upipe_mgr *mgr,
     upipe_hls_audio->attach_uclock = false;
     upipe_hls_audio->source_mgr = NULL;
     upipe_hls_audio->uri = NULL;
+    upipe_hls_audio->guess = UPIPE_HLS_AUDIO_GUESS_NONE;
 
     upipe_throw_ready(upipe);
 
@@ -343,10 +596,14 @@ static void upipe_hls_audio_free(struct upipe *upipe)
 
     free(upipe_hls_audio->uri);
     upipe_hls_audio_clean_bin_output(upipe);
+    upipe_hls_audio_clean_probe_ts_audio(upipe);
+    upipe_hls_audio_clean_probe_ts_prog(upipe);
+    upipe_hls_audio_clean_probe_ts_demux(upipe);
     upipe_hls_audio_clean_probe_last_inner(upipe);
     upipe_hls_audio_clean_probe_id3v2(upipe);
     upipe_hls_audio_clean_probe_src(upipe);
     upipe_hls_audio_clean_probe_reader(upipe);
+    upipe_hls_audio_clean_probe_uref(upipe);
     upipe_hls_audio_clean_probe_playlist(upipe);
     upipe_hls_audio_clean_probe_aes_decrypt(upipe);
     upipe_hls_audio_clean_urefcount(upipe);
@@ -400,20 +657,10 @@ static int upipe_hls_audio_set_uri(struct upipe *upipe, const char *uri)
     struct upipe_hls_audio *upipe_hls_audio = upipe_hls_audio_from_upipe(upipe);
 
     upipe_hls_audio_clean_src(upipe);
-
+    upipe_hls_audio->uri = uri ? strdup(uri) : NULL;
     if (unlikely(uri == NULL))
         return UBASE_ERR_NONE;
-
-    UBASE_RETURN(upipe_hls_audio_check_source_mgr(upipe));
-
-    struct upipe *src = upipe_void_alloc(
-        upipe_hls_audio->source_mgr,
-        uprobe_pfx_alloc(uprobe_use(&upipe_hls_audio->probe_src),
-                         UPROBE_LOG_VERBOSE, "src"));
-    UBASE_ALLOC_RETURN(src);
-    upipe_hls_audio->uri = uri ? strdup(uri) : NULL;
-    upipe_hls_audio_store_src(upipe, src);
-    return upipe_set_uri(src, uri);
+    return upipe_hls_audio_reload(upipe);
 }
 
 /** @internal @This attaches an uclock.
