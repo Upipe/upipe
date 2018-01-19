@@ -858,10 +858,7 @@ static int catch_variant(struct uprobe *uprobe,
 
                 struct uprobe *probe_playlist =
                     uprobe_playlist_alloc(
-                        uprobe_selflow_alloc(
-                            uprobe_use(main_probe),
-                            probe_audio,
-                            UPROBE_SELFLOW_SOUND, "auto"),
+                        probe_audio,
                         probe_variant->id,
                         probe_variant->at);
 
