@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2013-2015 OpenHeadend S.A.R.L.
+ * Copyright (C) 2013-2018 OpenHeadend S.A.R.L.
  *
  * Authors: Benjamin Cohen
  *
@@ -963,7 +963,7 @@ static int upipe_http_src_set_uri(struct upipe *upipe, const char *url)
 
     upipe_notice_va(upipe, "opening %s", url);
 
-    upipe_http_src_require_uref_mgr(upipe);
+    upipe_http_src_demand_uref_mgr(upipe);
     if (unlikely(upipe_http_src->uref_mgr == NULL)) {
         upipe_err(upipe, "no uref mgr");
         return UBASE_ERR_ALLOC;
