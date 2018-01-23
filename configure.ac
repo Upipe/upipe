@@ -36,7 +36,7 @@ AM_COND_IF(BUILD_LUAJIT,
            AC_CHECK_PROGS(EU_READELF, eu-readelf)
            AC_CHECK_PROGS(LLVM_DWARFDUMP, [llvm-dwarfdump "xcrun llvm-dwarfdump"]))
 
-AC_PATH_PROG(NASM, nasm)
+AC_PATH_PROGS(NASM, [nasm yasm])
 
 NASMFLAGS=""
 ARCH_X86_64=0
