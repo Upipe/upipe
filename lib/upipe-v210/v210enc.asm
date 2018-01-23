@@ -48,7 +48,7 @@ SECTION .text
 %macro planar_to_v210_10 0
 
 ; planar_to_v210_10(const uint16_t *y, const uint16_t *u, const uint16_t *v, uint8_t *dst, ptrdiff_t width)
-cglobal planar_to_v210_10, 5, 5, 4+cpuflag(avx2), y, u, v, dst, width
+cvisible planar_to_v210_10, 5, 5, 4+cpuflag(avx2), y, u, v, dst, width
     lea     r0, [yq+2*widthq]
     add     uq, widthq
     add     vq, widthq
@@ -99,7 +99,7 @@ planar_to_v210_10
 %macro planar_to_v210_8 0
 
 ; planar_to_v210_8(const uint8_t *y, const uint8_t *u, const uint8_t *v, uint8_t *dst, ptrdiff_t width)
-cglobal planar_to_v210_8, 5, 5, 7, y, u, v, dst, width
+cvisible planar_to_v210_8, 5, 5, 7, y, u, v, dst, width
     add     yq, widthq
     shr     widthq, 1
     add     uq, widthq
