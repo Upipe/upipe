@@ -4,3 +4,4 @@
 %define ARCH_X86_64 @ARCH_X86_64@
 
 %define private_prefix upipe
+%define public_prefix upipe
