@@ -36,7 +36,7 @@ AM_COND_IF(BUILD_LUAJIT,
            AC_CHECK_PROGS(EU_READELF, eu-readelf)
            AC_CHECK_PROGS(LLVM_DWARFDUMP, [llvm-dwarfdump "xcrun llvm-dwarfdump"]))
 
-AC_PATH_PROG(NASM, nasm)
+AC_PATH_PROGS(NASM, [nasm yasm])
 
 NASMFLAGS=""
 ARCH_X86_64=0
@@ -79,19 +79,7 @@ esac
 HAVE_X86ASM=0
 if test -n "${NASM}"
 then
-    nasm_major="`echo __NASM_MAJOR__|nasm -E /dev/stdin|grep -v ^%`"
-    if test "$nasm_major" -lt "2"
-    then
-        unset NASM
-    else
-        nasm_minor="`echo __NASM_MINOR__|nasm -E /dev/stdin|grep -v ^%`"
-       if test "$nasm_minor" -lt "13"
-        then
-            unset NASM
-        else
-            HAVE_X86ASM=1
-        fi
-    fi
+    HAVE_X86ASM=1
 fi
 
 AM_CONDITIONAL(HAVE_X86ASM, test -n "${NASM}" -a -n "${NASMFLAGS}")
