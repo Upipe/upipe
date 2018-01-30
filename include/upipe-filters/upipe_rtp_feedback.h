@@ -40,7 +40,7 @@ extern "C" {
 #define UPIPE_RTPFB_OUTPUT_SIGNATURE UBASE_FOURCC('r','t','f','b')
 
 
-enum upipe_rtpd_command {
+enum upipe_rtpfb_command {
     UPIPE_RTPFB_SENTINEL = UPIPE_CONTROL_LOCAL,
 
     UPIPE_RTPFB_GET_STATS, /* int sig, unsigned *, unsigned *, size_t *, size_t *, size_t *, size_t *, size_t * */
