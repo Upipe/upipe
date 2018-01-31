@@ -254,138 +254,6 @@ static void upipe_rtpfb_output_free(struct upipe *upipe)
     free(upipe_rtpfb_output);
 }
 
-static int upipe_rtpfb_check(struct upipe *upipe, struct uref *flow_format)
-{
-    struct upipe_rtpfb *upipe_rtpfb = upipe_rtpfb_from_upipe(upipe);
-
-    if (flow_format != NULL)
-        upipe_rtpfb_store_flow_def(upipe, flow_format);
-
-    if (upipe_rtpfb->flow_def == NULL)
-        return UBASE_ERR_NONE;
-
-    if (upipe_rtpfb->uref_mgr == NULL) {
-        upipe_rtpfb_require_uref_mgr(upipe);
-        return UBASE_ERR_NONE;
-    }
-
-    if (upipe_rtpfb->ubuf_mgr == NULL) {
-        struct uref *flow_format =
-            uref_block_flow_alloc_def(upipe_rtpfb->uref_mgr, NULL);
-        if (unlikely(flow_format == NULL)) {
-            upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
-            return UBASE_ERR_ALLOC;
-        }
-        upipe_rtpfb_require_ubuf_mgr(upipe, flow_format);
-        return UBASE_ERR_NONE;
-    }
-
-    return UBASE_ERR_NONE;
-}
-
-/** @internal @This processes control commands on an output subpipe of a dup
- * pipe.
- *
- * @param upipe description structure of the pipe
- * @param command type of command to process
- * @param args arguments of the command
- * @return an error code
- */
-static int upipe_rtpfb_output_control(struct upipe *upipe,
-                                    int command, va_list args)
-{
-    switch (command) {
-        case UPIPE_GET_FLOW_DEF: {
-            struct uref **p = va_arg(args, struct uref **);
-            return upipe_rtpfb_output_get_flow_def(upipe, p);
-        }
-        case UPIPE_GET_OUTPUT: {
-            struct upipe **p = va_arg(args, struct upipe **);
-            return upipe_rtpfb_output_get_output(upipe, p);
-        }
-        case UPIPE_SET_OUTPUT: {
-            struct upipe *output = va_arg(args, struct upipe *);
-            return upipe_rtpfb_output_set_output(upipe, output);
-        }
-        case UPIPE_SUB_GET_SUPER: {
-            struct upipe **p = va_arg(args, struct upipe **);
-            return upipe_rtpfb_output_get_super(upipe, p);
-        }
-
-        default:
-            return UBASE_ERR_UNHANDLED;
-    }
-}
-
-/** @internal @This initializes the output manager for a rtpfb set pipe.
- *
- * @param upipe description structure of the pipe
- */
-static void upipe_rtpfb_init_sub_mgr(struct upipe *upipe)
-{
-    struct upipe_rtpfb *upipe_rtpfb = upipe_rtpfb_from_upipe(upipe);
-    struct upipe_mgr *sub_mgr = &upipe_rtpfb->sub_mgr;
-    sub_mgr->refcount = upipe_rtpfb_to_urefcount_real(upipe_rtpfb);
-    sub_mgr->signature = UPIPE_RTPFB_OUTPUT_SIGNATURE;
-    sub_mgr->upipe_alloc = upipe_rtpfb_output_alloc;
-    sub_mgr->upipe_input = NULL;
-    sub_mgr->upipe_control = upipe_rtpfb_output_control;
-    sub_mgr->upipe_mgr_control = NULL;
-}
-
-static void upipe_rtpfb_send_rr(struct upipe *upipe, uint64_t cr)
-{
-    struct upipe_rtpfb *upipe_rtpfb = upipe_rtpfb_from_upipe(upipe);
-
-    int s = RTCP_RR_SIZE;
-
-    /* Allocate NACK packet */
-    struct uref *pkt = uref_block_alloc(upipe_rtpfb->uref_mgr,
-        upipe_rtpfb->ubuf_mgr, s);
-    if (unlikely(!pkt)) {
-        upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
-        return;
-    }
-
-    uint8_t *buf;
-    uref_block_write(pkt, 0, &s, &buf);
-    memset(buf, 0, s);
-
-    /* Header */
-    rtcp_set_rtp_version(buf);
-    rtcp_rr_set_pt(buf);
-    rtcp_set_length(buf, s / 4 - 1);
-
-    // XXX: useless if loss < 1/256
-    rtcp_rr_set_fraction_lost(buf, 0);
-
-    // XXX: https://tools.ietf.org/html/rfc3550#appendix-A.3
-    // XXX: this is a signed number
-    rtcp_rr_set_cumulative_packets_lost(buf, upipe_rtpfb->loss - upipe_rtpfb->dups);
-
-    // XXX: top 16 bits is number of cycles
-    rtcp_rr_set_highest_seqnum(buf, upipe_rtpfb->last_output_seqnum);
-
-    // XXX: we don't need that
-    rtcp_rr_set_inter_arrival_jitter(buf, 0);
-
-    if (upipe_rtpfb->sr_cr == UINT64_MAX) {
-        rtcp_rr_set_last_sr(buf, 0);
-        rtcp_rr_set_delay_since_last_sr(buf, 0);
-    } else {
-        uint32_t ntp_msw = rtcp_sr_get_ntp_time_msw(upipe_rtpfb->sr);
-        uint32_t ntp_lsw = rtcp_sr_get_ntp_time_lsw(upipe_rtpfb->sr);
-        rtcp_rr_set_last_sr(buf, ((ntp_msw & 0xffff) << 16) | (ntp_lsw >> 16));
-
-        rtcp_rr_set_delay_since_last_sr(buf,
-                (cr - upipe_rtpfb->sr_cr) * 65536 / UCLOCK_FREQ);
-    }
-
-    uref_block_unmap(pkt, 0);
-
-    upipe_rtpfb_output_output(upipe_rtpfb->rtpfb_output, pkt, NULL);
-}
-
 /** @internal @This sends a retransmission request for a number of seqnums.
  *
  * @param upipe description structure of the pipe
@@ -568,6 +436,138 @@ static void upipe_rtpfb_timer(struct upump *upump)
             upipe_rtpfb->expected_seqnum = UINT_MAX;
         }
     }
+}
+
+static int upipe_rtpfb_check(struct upipe *upipe, struct uref *flow_format)
+{
+    struct upipe_rtpfb *upipe_rtpfb = upipe_rtpfb_from_upipe(upipe);
+
+    if (flow_format != NULL)
+        upipe_rtpfb_store_flow_def(upipe, flow_format);
+
+    if (upipe_rtpfb->flow_def == NULL)
+        return UBASE_ERR_NONE;
+
+    if (upipe_rtpfb->uref_mgr == NULL) {
+        upipe_rtpfb_require_uref_mgr(upipe);
+        return UBASE_ERR_NONE;
+    }
+
+    if (upipe_rtpfb->ubuf_mgr == NULL) {
+        struct uref *flow_format =
+            uref_block_flow_alloc_def(upipe_rtpfb->uref_mgr, NULL);
+        if (unlikely(flow_format == NULL)) {
+            upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
+            return UBASE_ERR_ALLOC;
+        }
+        upipe_rtpfb_require_ubuf_mgr(upipe, flow_format);
+        return UBASE_ERR_NONE;
+    }
+
+    return UBASE_ERR_NONE;
+}
+
+/** @internal @This processes control commands on an output subpipe of a dup
+ * pipe.
+ *
+ * @param upipe description structure of the pipe
+ * @param command type of command to process
+ * @param args arguments of the command
+ * @return an error code
+ */
+static int upipe_rtpfb_output_control(struct upipe *upipe,
+                                    int command, va_list args)
+{
+    switch (command) {
+        case UPIPE_GET_FLOW_DEF: {
+            struct uref **p = va_arg(args, struct uref **);
+            return upipe_rtpfb_output_get_flow_def(upipe, p);
+        }
+        case UPIPE_GET_OUTPUT: {
+            struct upipe **p = va_arg(args, struct upipe **);
+            return upipe_rtpfb_output_get_output(upipe, p);
+        }
+        case UPIPE_SET_OUTPUT: {
+            struct upipe *output = va_arg(args, struct upipe *);
+            return upipe_rtpfb_output_set_output(upipe, output);
+        }
+        case UPIPE_SUB_GET_SUPER: {
+            struct upipe **p = va_arg(args, struct upipe **);
+            return upipe_rtpfb_output_get_super(upipe, p);
+        }
+
+        default:
+            return UBASE_ERR_UNHANDLED;
+    }
+}
+
+/** @internal @This initializes the output manager for a rtpfb set pipe.
+ *
+ * @param upipe description structure of the pipe
+ */
+static void upipe_rtpfb_init_sub_mgr(struct upipe *upipe)
+{
+    struct upipe_rtpfb *upipe_rtpfb = upipe_rtpfb_from_upipe(upipe);
+    struct upipe_mgr *sub_mgr = &upipe_rtpfb->sub_mgr;
+    sub_mgr->refcount = upipe_rtpfb_to_urefcount_real(upipe_rtpfb);
+    sub_mgr->signature = UPIPE_RTPFB_OUTPUT_SIGNATURE;
+    sub_mgr->upipe_alloc = upipe_rtpfb_output_alloc;
+    sub_mgr->upipe_input = NULL;
+    sub_mgr->upipe_control = upipe_rtpfb_output_control;
+    sub_mgr->upipe_mgr_control = NULL;
+}
+
+static void upipe_rtpfb_send_rr(struct upipe *upipe, uint64_t cr)
+{
+    struct upipe_rtpfb *upipe_rtpfb = upipe_rtpfb_from_upipe(upipe);
+
+    int s = RTCP_RR_SIZE;
+
+    /* Allocate NACK packet */
+    struct uref *pkt = uref_block_alloc(upipe_rtpfb->uref_mgr,
+        upipe_rtpfb->ubuf_mgr, s);
+    if (unlikely(!pkt)) {
+        upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
+        return;
+    }
+
+    uint8_t *buf;
+    uref_block_write(pkt, 0, &s, &buf);
+    memset(buf, 0, s);
+
+    /* Header */
+    rtcp_set_rtp_version(buf);
+    rtcp_rr_set_pt(buf);
+    rtcp_set_length(buf, s / 4 - 1);
+
+    // XXX: useless if loss < 1/256
+    rtcp_rr_set_fraction_lost(buf, 0);
+
+    // XXX: https://tools.ietf.org/html/rfc3550#appendix-A.3
+    // XXX: this is a signed number
+    rtcp_rr_set_cumulative_packets_lost(buf, upipe_rtpfb->loss - upipe_rtpfb->dups);
+
+    // XXX: top 16 bits is number of cycles
+    rtcp_rr_set_highest_seqnum(buf, upipe_rtpfb->last_output_seqnum);
+
+    // XXX: we don't need that
+    rtcp_rr_set_inter_arrival_jitter(buf, 0);
+
+    if (upipe_rtpfb->sr_cr == UINT64_MAX) {
+        rtcp_rr_set_last_sr(buf, 0);
+        rtcp_rr_set_delay_since_last_sr(buf, 0);
+    } else {
+        uint32_t ntp_msw = rtcp_sr_get_ntp_time_msw(upipe_rtpfb->sr);
+        uint32_t ntp_lsw = rtcp_sr_get_ntp_time_lsw(upipe_rtpfb->sr);
+        rtcp_rr_set_last_sr(buf, ((ntp_msw & 0xffff) << 16) | (ntp_lsw >> 16));
+
+        rtcp_rr_set_delay_since_last_sr(buf,
+                (cr - upipe_rtpfb->sr_cr) * 65536 / UCLOCK_FREQ);
+    }
+
+    uref_block_unmap(pkt, 0);
+
+    upipe_rtpfb_output_output(upipe_rtpfb->rtpfb_output, pkt, NULL);
 }
 
 static void upipe_rtpfb_free(struct urefcount *urefcount_real);
