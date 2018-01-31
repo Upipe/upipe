@@ -68,12 +68,6 @@
 #include <assert.h>
 #include <alsa/asoundlib.h>
 
-#ifndef O_CLOEXEC
-#   define O_CLOEXEC 0
-#endif
-
-#define UBUF_POOL_DEPTH 2
-
 /** default device name */
 #define DEFAULT_DEVICE "plughw:0,0"
 /** default period duration */
