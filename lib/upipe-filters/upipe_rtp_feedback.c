@@ -442,6 +442,8 @@ static int upipe_rtpfb_check(struct upipe *upipe, struct uref *flow_format)
 {
     struct upipe_rtpfb *upipe_rtpfb = upipe_rtpfb_from_upipe(upipe);
 
+    upipe_rtpfb_check_upump_mgr(upipe);
+
     if (flow_format != NULL)
         upipe_rtpfb_store_flow_def(upipe, flow_format);
 
@@ -462,6 +464,20 @@ static int upipe_rtpfb_check(struct upipe *upipe, struct uref *flow_format)
         }
         upipe_rtpfb_require_ubuf_mgr(upipe, flow_format);
         return UBASE_ERR_NONE;
+    }
+
+    if (upipe_rtpfb->upump_mgr && !upipe_rtpfb->upump_timer) {
+        upipe_rtpfb->upump_timer = upump_alloc_timer(upipe_rtpfb->upump_mgr,
+                upipe_rtpfb_timer, upipe, upipe->refcount,
+                UCLOCK_FREQ/300, UCLOCK_FREQ/300);
+        upump_start(upipe_rtpfb->upump_timer);
+
+        /* every 10ms, check for lost packets
+         * interval is reduced each time we get the current RTT from sender */
+        upipe_rtpfb->upump_timer_lost = upump_alloc_timer(upipe_rtpfb->upump_mgr,
+                upipe_rtpfb_timer_lost, upipe, upipe->refcount,
+                upipe_rtpfb->rtt / 10, upipe_rtpfb->rtt / 10);
+        upump_start(upipe_rtpfb->upump_timer_lost);
     }
 
     return UBASE_ERR_NONE;
@@ -599,7 +615,6 @@ static struct upipe *upipe_rtpfb_alloc(struct upipe_mgr *mgr,
     upipe_rtpfb_init_ubuf_mgr(upipe);
     upipe_rtpfb_init_uref_mgr(upipe);
     upipe_rtpfb_init_upump_mgr(upipe);
-    upipe_rtpfb_check_upump_mgr(upipe);
     upipe_rtpfb_init_uclock(upipe);
     ulist_init(&upipe_rtpfb->queue);
     memset(upipe_rtpfb->last_nack, 0, sizeof(upipe_rtpfb->last_nack));
@@ -616,19 +631,6 @@ static struct upipe *upipe_rtpfb_alloc(struct upipe_mgr *mgr,
     upipe_rtpfb->sr_cr = UINT64_MAX;
 
     upipe_rtpfb->latency = 1000; /* 1 second */
-
-    /* every 3ms, actually output stuff */
-    upipe_rtpfb->upump_timer = upump_alloc_timer(upipe_rtpfb->upump_mgr,
-            upipe_rtpfb_timer, upipe, upipe->refcount,
-            UCLOCK_FREQ/300, UCLOCK_FREQ/300);
-    upump_start(upipe_rtpfb->upump_timer);
-
-    /* every 10ms, check for lost packets
-     * interval is reduced each time we get the current RTT from sender */
-    upipe_rtpfb->upump_timer_lost = upump_alloc_timer(upipe_rtpfb->upump_mgr,
-            upipe_rtpfb_timer_lost, upipe, upipe->refcount,
-            upipe_rtpfb->rtt / 10, upipe_rtpfb->rtt / 10);
-    upump_start(upipe_rtpfb->upump_timer_lost);
 
     upipe_throw_ready(upipe);
     return upipe;
@@ -780,6 +782,12 @@ static void upipe_rtpfb_input(struct upipe *upipe, struct uref *uref,
         return;
     }
 
+    if (upipe_rtpfb->uref_mgr == NULL || upipe_rtpfb->ubuf_mgr == NULL ||
+        upipe_rtpfb->upump_mgr == NULL) {
+        uref_free(uref);
+        return;
+    }
+
     if (pt == RTCP_PT_SR) {
         upipe_verbose(upipe, "received sender report");
         upipe_rtpfb_handle_sr(upipe, uref);
@@ -799,9 +807,11 @@ static void upipe_rtpfb_input(struct upipe *upipe, struct uref *uref,
 
                     upump_stop(upipe_rtpfb->upump_timer_lost);
                     upump_free(upipe_rtpfb->upump_timer_lost);
-                    upipe_rtpfb->upump_timer_lost = upump_alloc_timer(upipe_rtpfb->upump_mgr,
-                            upipe_rtpfb_timer_lost, upipe, upipe->refcount,
-                            0, rtt / 10);
+                    if (upipe_rtpfb->upump_mgr) {
+                        upipe_rtpfb->upump_timer_lost = upump_alloc_timer(upipe_rtpfb->upump_mgr,
+                                upipe_rtpfb_timer_lost, upipe, upipe->refcount,
+                                0, rtt / 10);
+                    }
                     upump_start(upipe_rtpfb->upump_timer_lost);
                 }
             } else {
