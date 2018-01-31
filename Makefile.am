@@ -50,3 +50,27 @@ check-whitespace:
 
 check-untracked:
 	@if git ls-files $(srcdir) --others --exclude-standard | grep .; then exit 1; fi
+
+check-headers:
+	@if test -t 1; then \
+	  red='[0;31m'; grn='[0;32m'; std='[m'; \
+	fi; \
+	for header in $(srcdir)/include/*/*.h; do \
+	  h=$${header#$(srcdir)/include/}; \
+	  if [ $$h != "upipe/config.h" ]; then \
+	    guard=$$(echo _$${h}_ | tr [a-z] [A-Z] | tr '/.-' _); \
+	    if ! grep -q $$guard $$header; then \
+	      echo "$${red}FAIL$${std}: $$h: invalid guard"; ret=1; \
+	    fi; \
+	    if ! grep -q Copyright $$header; then \
+	      echo "$${red}FAIL$${std}: $$h: missing copyright"; ret=1; \
+	    fi; \
+	  fi; \
+	  if $(CC) -I$(srcdir)/include -I$(builddir)/include \
+	    $(CPPFLAGS) $(CFLAGS) $(AM_CFLAGS) -Werror \
+	    -include $$header -c -x c /dev/null -o /dev/null; \
+	  then echo "$${grn}PASS$${std}: $$h"; \
+	  else echo "$${red}FAIL$${std}: $$h"; ret=1; \
+	  fi; \
+	done; \
+	test -z "$$ret"
