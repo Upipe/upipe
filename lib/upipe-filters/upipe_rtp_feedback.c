@@ -254,138 +254,6 @@ static void upipe_rtpfb_output_free(struct upipe *upipe)
     free(upipe_rtpfb_output);
 }
 
-static int upipe_rtpfb_check(struct upipe *upipe, struct uref *flow_format)
-{
-    struct upipe_rtpfb *upipe_rtpfb = upipe_rtpfb_from_upipe(upipe);
-
-    if (flow_format != NULL)
-        upipe_rtpfb_store_flow_def(upipe, flow_format);
-
-    if (upipe_rtpfb->flow_def == NULL)
-        return UBASE_ERR_NONE;
-
-    if (upipe_rtpfb->uref_mgr == NULL) {
-        upipe_rtpfb_require_uref_mgr(upipe);
-        return UBASE_ERR_NONE;
-    }
-
-    if (upipe_rtpfb->ubuf_mgr == NULL) {
-        struct uref *flow_format =
-            uref_block_flow_alloc_def(upipe_rtpfb->uref_mgr, NULL);
-        if (unlikely(flow_format == NULL)) {
-            upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
-            return UBASE_ERR_ALLOC;
-        }
-        upipe_rtpfb_require_ubuf_mgr(upipe, flow_format);
-        return UBASE_ERR_NONE;
-    }
-
-    return UBASE_ERR_NONE;
-}
-
-/** @internal @This processes control commands on an output subpipe of a dup
- * pipe.
- *
- * @param upipe description structure of the pipe
- * @param command type of command to process
- * @param args arguments of the command
- * @return an error code
- */
-static int upipe_rtpfb_output_control(struct upipe *upipe,
-                                    int command, va_list args)
-{
-    switch (command) {
-        case UPIPE_GET_FLOW_DEF: {
-            struct uref **p = va_arg(args, struct uref **);
-            return upipe_rtpfb_output_get_flow_def(upipe, p);
-        }
-        case UPIPE_GET_OUTPUT: {
-            struct upipe **p = va_arg(args, struct upipe **);
-            return upipe_rtpfb_output_get_output(upipe, p);
-        }
-        case UPIPE_SET_OUTPUT: {
-            struct upipe *output = va_arg(args, struct upipe *);
-            return upipe_rtpfb_output_set_output(upipe, output);
-        }
-        case UPIPE_SUB_GET_SUPER: {
-            struct upipe **p = va_arg(args, struct upipe **);
-            return upipe_rtpfb_output_get_super(upipe, p);
-        }
-
-        default:
-            return UBASE_ERR_UNHANDLED;
-    }
-}
-
-/** @internal @This initializes the output manager for a rtpfb set pipe.
- *
- * @param upipe description structure of the pipe
- */
-static void upipe_rtpfb_init_sub_mgr(struct upipe *upipe)
-{
-    struct upipe_rtpfb *upipe_rtpfb = upipe_rtpfb_from_upipe(upipe);
-    struct upipe_mgr *sub_mgr = &upipe_rtpfb->sub_mgr;
-    sub_mgr->refcount = upipe_rtpfb_to_urefcount_real(upipe_rtpfb);
-    sub_mgr->signature = UPIPE_RTPFB_OUTPUT_SIGNATURE;
-    sub_mgr->upipe_alloc = upipe_rtpfb_output_alloc;
-    sub_mgr->upipe_input = NULL;
-    sub_mgr->upipe_control = upipe_rtpfb_output_control;
-    sub_mgr->upipe_mgr_control = NULL;
-}
-
-static void upipe_rtpfb_send_rr(struct upipe *upipe, uint64_t cr)
-{
-    struct upipe_rtpfb *upipe_rtpfb = upipe_rtpfb_from_upipe(upipe);
-
-    int s = RTCP_RR_SIZE;
-
-    /* Allocate NACK packet */
-    struct uref *pkt = uref_block_alloc(upipe_rtpfb->uref_mgr,
-        upipe_rtpfb->ubuf_mgr, s);
-    if (unlikely(!pkt)) {
-        upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
-        return;
-    }
-
-    uint8_t *buf;
-    uref_block_write(pkt, 0, &s, &buf);
-    memset(buf, 0, s);
-
-    /* Header */
-    rtcp_set_rtp_version(buf);
-    rtcp_rr_set_pt(buf);
-    rtcp_set_length(buf, s / 4 - 1);
-
-    // XXX: useless if loss < 1/256
-    rtcp_rr_set_fraction_lost(buf, 0);
-
-    // XXX: https://tools.ietf.org/html/rfc3550#appendix-A.3
-    // XXX: this is a signed number
-    rtcp_rr_set_cumulative_packets_lost(buf, upipe_rtpfb->loss - upipe_rtpfb->dups);
-
-    // XXX: top 16 bits is number of cycles
-    rtcp_rr_set_highest_seqnum(buf, upipe_rtpfb->last_output_seqnum);
-
-    // XXX: we don't need that
-    rtcp_rr_set_inter_arrival_jitter(buf, 0);
-
-    if (upipe_rtpfb->sr_cr == UINT64_MAX) {
-        rtcp_rr_set_last_sr(buf, 0);
-        rtcp_rr_set_delay_since_last_sr(buf, 0);
-    } else {
-        uint32_t ntp_msw = rtcp_sr_get_ntp_time_msw(upipe_rtpfb->sr);
-        uint32_t ntp_lsw = rtcp_sr_get_ntp_time_lsw(upipe_rtpfb->sr);
-        rtcp_rr_set_last_sr(buf, ((ntp_msw & 0xffff) << 16) | (ntp_lsw >> 16));
-
-        rtcp_rr_set_delay_since_last_sr(buf,
-                (cr - upipe_rtpfb->sr_cr) * 65536 / UCLOCK_FREQ);
-    }
-
-    uref_block_unmap(pkt, 0);
-
-    upipe_rtpfb_output_output(upipe_rtpfb->rtpfb_output, pkt, NULL);
-}
-
 /** @internal @This sends a retransmission request for a number of seqnums.
  *
  * @param upipe description structure of the pipe
@@ -546,7 +414,7 @@ static void upipe_rtpfb_timer(struct upump *upump)
         if (unlikely(!ubase_check(uref_clock_get_cr_sys(uref, &cr_sys))))
             upipe_warn_va(upipe, "Couldn't read cr_sys in %s()", __func__);
 
-        if (now - cr_sys <= upipe_rtpfb->latency * UCLOCK_FREQ / 1000)
+        if (now - cr_sys <= upipe_rtpfb->latency)
             break;
 
         upipe_verbose_va(upipe, "Output seq %"PRIu64" after %"PRIu64" clocks", seqnum, now - cr_sys);
@@ -568,6 +436,154 @@ static void upipe_rtpfb_timer(struct upump *upump)
             upipe_rtpfb->expected_seqnum = UINT_MAX;
         }
     }
+}
+
+static int upipe_rtpfb_check(struct upipe *upipe, struct uref *flow_format)
+{
+    struct upipe_rtpfb *upipe_rtpfb = upipe_rtpfb_from_upipe(upipe);
+
+    upipe_rtpfb_check_upump_mgr(upipe);
+
+    if (flow_format != NULL)
+        upipe_rtpfb_store_flow_def(upipe, flow_format);
+
+    if (upipe_rtpfb->flow_def == NULL)
+        return UBASE_ERR_NONE;
+
+    if (upipe_rtpfb->uref_mgr == NULL) {
+        upipe_rtpfb_require_uref_mgr(upipe);
+        return UBASE_ERR_NONE;
+    }
+
+    if (upipe_rtpfb->ubuf_mgr == NULL) {
+        struct uref *flow_format =
+            uref_block_flow_alloc_def(upipe_rtpfb->uref_mgr, NULL);
+        if (unlikely(flow_format == NULL)) {
+            upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
+            return UBASE_ERR_ALLOC;
+        }
+        upipe_rtpfb_require_ubuf_mgr(upipe, flow_format);
+        return UBASE_ERR_NONE;
+    }
+
+    if (upipe_rtpfb->upump_mgr && !upipe_rtpfb->upump_timer) {
+        upipe_rtpfb->upump_timer = upump_alloc_timer(upipe_rtpfb->upump_mgr,
+                upipe_rtpfb_timer, upipe, upipe->refcount,
+                UCLOCK_FREQ/300, UCLOCK_FREQ/300);
+        upump_start(upipe_rtpfb->upump_timer);
+
+        /* every 10ms, check for lost packets
+         * interval is reduced each time we get the current RTT from sender */
+        upipe_rtpfb->upump_timer_lost = upump_alloc_timer(upipe_rtpfb->upump_mgr,
+                upipe_rtpfb_timer_lost, upipe, upipe->refcount,
+                upipe_rtpfb->rtt / 10, upipe_rtpfb->rtt / 10);
+        upump_start(upipe_rtpfb->upump_timer_lost);
+    }
+
+    return UBASE_ERR_NONE;
+}
+
+/** @internal @This processes control commands on an output subpipe of a dup
+ * pipe.
+ *
+ * @param upipe description structure of the pipe
+ * @param command type of command to process
+ * @param args arguments of the command
+ * @return an error code
+ */
+static int upipe_rtpfb_output_control(struct upipe *upipe,
+                                    int command, va_list args)
+{
+    switch (command) {
+        case UPIPE_GET_FLOW_DEF: {
+            struct uref **p = va_arg(args, struct uref **);
+            return upipe_rtpfb_output_get_flow_def(upipe, p);
+        }
+        case UPIPE_GET_OUTPUT: {
+            struct upipe **p = va_arg(args, struct upipe **);
+            return upipe_rtpfb_output_get_output(upipe, p);
+        }
+        case UPIPE_SET_OUTPUT: {
+            struct upipe *output = va_arg(args, struct upipe *);
+            return upipe_rtpfb_output_set_output(upipe, output);
+        }
+        case UPIPE_SUB_GET_SUPER: {
+            struct upipe **p = va_arg(args, struct upipe **);
+            return upipe_rtpfb_output_get_super(upipe, p);
+        }
+
+        default:
+            return UBASE_ERR_UNHANDLED;
+    }
+}
+
+/** @internal @This initializes the output manager for a rtpfb set pipe.
+ *
+ * @param upipe description structure of the pipe
+ */
+static void upipe_rtpfb_init_sub_mgr(struct upipe *upipe)
+{
+    struct upipe_rtpfb *upipe_rtpfb = upipe_rtpfb_from_upipe(upipe);
+    struct upipe_mgr *sub_mgr = &upipe_rtpfb->sub_mgr;
+    sub_mgr->refcount = upipe_rtpfb_to_urefcount_real(upipe_rtpfb);
+    sub_mgr->signature = UPIPE_RTPFB_OUTPUT_SIGNATURE;
+    sub_mgr->upipe_alloc = upipe_rtpfb_output_alloc;
+    sub_mgr->upipe_input = NULL;
+    sub_mgr->upipe_control = upipe_rtpfb_output_control;
+    sub_mgr->upipe_mgr_control = NULL;
+}
+
+static void upipe_rtpfb_send_rr(struct upipe *upipe, uint64_t cr)
+{
+    struct upipe_rtpfb *upipe_rtpfb = upipe_rtpfb_from_upipe(upipe);
+
+    int s = RTCP_RR_SIZE;
+
+    /* Allocate NACK packet */
+    struct uref *pkt = uref_block_alloc(upipe_rtpfb->uref_mgr,
+        upipe_rtpfb->ubuf_mgr, s);
+    if (unlikely(!pkt)) {
+        upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
+        return;
+    }
+
+    uint8_t *buf;
+    uref_block_write(pkt, 0, &s, &buf);
+    memset(buf, 0, s);
+
+    /* Header */
+    rtcp_set_rtp_version(buf);
+    rtcp_rr_set_pt(buf);
+    rtcp_set_length(buf, s / 4 - 1);
+
+    // XXX: useless if loss < 1/256
+    rtcp_rr_set_fraction_lost(buf, 0);
+
+    // XXX: https://tools.ietf.org/html/rfc3550#appendix-A.3
+    // XXX: this is a signed number
+    rtcp_rr_set_cumulative_packets_lost(buf, upipe_rtpfb->loss - upipe_rtpfb->dups);
+
+    // XXX: top 16 bits is number of cycles
+    rtcp_rr_set_highest_seqnum(buf, upipe_rtpfb->last_output_seqnum);
+
+    // XXX: we don't need that
+    rtcp_rr_set_inter_arrival_jitter(buf, 0);
+
+    if (upipe_rtpfb->sr_cr == UINT64_MAX) {
+        rtcp_rr_set_last_sr(buf, 0);
+        rtcp_rr_set_delay_since_last_sr(buf, 0);
+    } else {
+        uint32_t ntp_msw = rtcp_sr_get_ntp_time_msw(upipe_rtpfb->sr);
+        uint32_t ntp_lsw = rtcp_sr_get_ntp_time_lsw(upipe_rtpfb->sr);
+        rtcp_rr_set_last_sr(buf, ((ntp_msw & 0xffff) << 16) | (ntp_lsw >> 16));
+
+        rtcp_rr_set_delay_since_last_sr(buf,
+                (cr - upipe_rtpfb->sr_cr) * 65536 / UCLOCK_FREQ);
+    }
+
+    uref_block_unmap(pkt, 0);
+
+    upipe_rtpfb_output_output(upipe_rtpfb->rtpfb_output, pkt, NULL);
 }
 
 static void upipe_rtpfb_free(struct urefcount *urefcount_real);
@@ -599,7 +615,6 @@ static struct upipe *upipe_rtpfb_alloc(struct upipe_mgr *mgr,
     upipe_rtpfb_init_ubuf_mgr(upipe);
     upipe_rtpfb_init_uref_mgr(upipe);
     upipe_rtpfb_init_upump_mgr(upipe);
-    upipe_rtpfb_check_upump_mgr(upipe);
     upipe_rtpfb_init_uclock(upipe);
     ulist_init(&upipe_rtpfb->queue);
     memset(upipe_rtpfb->last_nack, 0, sizeof(upipe_rtpfb->last_nack));
@@ -615,20 +630,7 @@ static struct upipe *upipe_rtpfb_alloc(struct upipe_mgr *mgr,
     upipe_rtpfb->dups = 0;
     upipe_rtpfb->sr_cr = UINT64_MAX;
 
-    upipe_rtpfb->latency = 1000; /* 1 second */
-
-    /* every 3ms, actually output stuff */
-    upipe_rtpfb->upump_timer = upump_alloc_timer(upipe_rtpfb->upump_mgr,
-            upipe_rtpfb_timer, upipe, upipe->refcount,
-            UCLOCK_FREQ/300, UCLOCK_FREQ/300);
-    upump_start(upipe_rtpfb->upump_timer);
-
-    /* every 10ms, check for lost packets
-     * interval is reduced each time we get the current RTT from sender */
-    upipe_rtpfb->upump_timer_lost = upump_alloc_timer(upipe_rtpfb->upump_mgr,
-            upipe_rtpfb_timer_lost, upipe, upipe->refcount,
-            upipe_rtpfb->rtt / 10, upipe_rtpfb->rtt / 10);
-    upump_start(upipe_rtpfb->upump_timer_lost);
+    upipe_rtpfb->latency = UCLOCK_FREQ;
 
     upipe_throw_ready(upipe);
     return upipe;
@@ -725,14 +727,14 @@ static void upipe_rtpfb_handle_sr(struct upipe *upipe, struct uref *uref)
     if (!ubase_check(uref_clock_get_cr_sys(uref, &cr))) {
         upipe_err(upipe, "SR packet not timed");
     }
-    upipe_dbg_va(upipe, "len %d NTP %"PRIx64" rtp %u pkts %u bytes %u, CR %"PRIu64"",
+    upipe_verbose_va(upipe, "len %d NTP %"PRIx64" rtp %u pkts %u bytes %u, CR %"PRIu64"",
             len, ntp, rtp_pts, pkt_cnt, byte_cnt, cr);
 
     if (upipe_rtpfb->sr_cr != UINT64_MAX) {
         uint32_t prev_pkt = rtcp_sr_get_packet_count(upipe_rtpfb->sr);
         uint32_t prev_byt = rtcp_sr_get_octet_count(upipe_rtpfb->sr);
 
-        upipe_dbg_va(upipe, "%.2f pkts/s %.2fMbps",
+        upipe_verbose_va(upipe, "%.2f pkts/s %.2fMbps",
                 (float)(pkt_cnt - prev_pkt) * UCLOCK_FREQ / (cr - upipe_rtpfb->sr_cr),
                 (float)(byte_cnt - prev_byt) * 8 * UCLOCK_FREQ / (cr - upipe_rtpfb->sr_cr) / 1000 / 1000);
     }
@@ -780,13 +782,19 @@ static void upipe_rtpfb_input(struct upipe *upipe, struct uref *uref,
         return;
     }
 
+    if (upipe_rtpfb->uref_mgr == NULL || upipe_rtpfb->ubuf_mgr == NULL ||
+        upipe_rtpfb->upump_mgr == NULL) {
+        uref_free(uref);
+        return;
+    }
+
     if (pt == RTCP_PT_SR) {
-        upipe_warn(upipe, "received sender report");
+        upipe_verbose(upipe, "received sender report");
         upipe_rtpfb_handle_sr(upipe, uref);
         uref_free(uref);
         return;
     } else if (pt == 204) {
-        upipe_warn(upipe, "application-defined RTCP");
+        upipe_verbose(upipe, "application-defined RTCP");
         const uint8_t *buf;
         int s = -1;
         if (ubase_check(uref_block_read(uref, 0, &s, &buf))) {
@@ -794,14 +802,16 @@ static void upipe_rtpfb_input(struct upipe *upipe, struct uref *uref,
                 if (buf[8] == 'O' && buf[9] == 'B' && buf[10] == 'S' && buf[11] == 'R') {
                     uint32_t rtt = (buf[12] << 24) | (buf[13] << 16) |
                         (buf[14] << 8) | buf[15];
-                    upipe_dbg_va(upipe, "RTT %f", (float)rtt / UCLOCK_FREQ);
+                    upipe_verbose_va(upipe, "RTT %f", (float)rtt / UCLOCK_FREQ);
                     upipe_rtpfb->rtt = rtt;
 
                     upump_stop(upipe_rtpfb->upump_timer_lost);
                     upump_free(upipe_rtpfb->upump_timer_lost);
-                    upipe_rtpfb->upump_timer_lost = upump_alloc_timer(upipe_rtpfb->upump_mgr,
-                            upipe_rtpfb_timer_lost, upipe, upipe->refcount,
-                            0, rtt / 10);
+                    if (upipe_rtpfb->upump_mgr) {
+                        upipe_rtpfb->upump_timer_lost = upump_alloc_timer(upipe_rtpfb->upump_mgr,
+                                upipe_rtpfb_timer_lost, upipe, upipe->refcount,
+                                0, rtt / 10);
+                    }
                     upump_start(upipe_rtpfb->upump_timer_lost);
                 }
             } else {
@@ -891,9 +901,8 @@ static int upipe_rtpfb_set_option(struct upipe *upipe, const char *k, const char
     if (!k || !v) {
         return UBASE_ERR_INVALID;
     } else if (!strcmp(k, "latency")) {
-        upipe_rtpfb->latency = atoi(v);
-        upipe_dbg_va(upipe, "Setting latency to %"PRIu64" msecs",
-                upipe_rtpfb->latency);
+        upipe_dbg_va(upipe, "Setting latency to %s msecs", v);
+        upipe_rtpfb->latency = atoi(v) * UCLOCK_FREQ / 1000;
     } else
         return UBASE_ERR_INVALID;
 
