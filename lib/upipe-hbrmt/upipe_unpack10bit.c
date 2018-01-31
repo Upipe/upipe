@@ -22,6 +22,8 @@
  * @short Upipe pack10bit module
  */
 
+#include <config.h>
+
 #include <upipe/ubase.h>
 #include <upipe/uprobe.h>
 #include <upipe/uref.h>

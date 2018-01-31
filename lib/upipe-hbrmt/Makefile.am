@@ -14,7 +14,7 @@ libupipe_hbrmt_la_SOURCES = upipe_pack10bit.c \
     ../upipe-blackmagic/sdi.h \
     $(NULL)
 
-libupipe_hbrmt_la_CPPFLAGS = -I$(top_builddir)/include -I$(top_srcdir)/include
+libupipe_hbrmt_la_CPPFLAGS = -I$(top_builddir) -I$(top_builddir)/include -I$(top_srcdir)/include
 libupipe_hbrmt_la_CFLAGS = $(AM_CFLAGS) $(AVUTIL_CFLAGS)  -I$(top_srcdir)/lib/upipe-blackmagic
 libupipe_hbrmt_la_LIBADD = $(top_builddir)/lib/upipe/libupipe.la
 libupipe_hbrmt_la_LDFLAGS = -no-undefined

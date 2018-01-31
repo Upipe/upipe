@@ -60,8 +60,8 @@ void checkasm_check_sdienc(void)
     if (check_func(s.uyvy, "uyvy_to_sdi")) {
         DECLARE_ALIGNED(16, uint16_t, src0)[NUM_SAMPLES];
         DECLARE_ALIGNED(16, uint16_t, src1)[NUM_SAMPLES];
-        uint8_t dst0[NUM_SAMPLES * 10 / 8];
-        uint8_t dst1[NUM_SAMPLES * 10 / 8];
+        uint8_t dst0[NUM_SAMPLES * 10 / 8 + 32];
+        uint8_t dst1[NUM_SAMPLES * 10 / 8 + 32];
         declare_func(void, uint8_t *dst, const uint8_t *src, int64_t pixels);
 
         randomize_buffers(src0, src1);
