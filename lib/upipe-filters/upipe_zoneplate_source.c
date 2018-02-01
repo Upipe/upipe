@@ -237,6 +237,10 @@ static void upipe_zp_worker(struct upump *upump)
     /* derive timer from (next) pts and current time */
     current_time = uclock_now(upipe_zp->uclock);
     int64_t wait = upipe_zp->pts - current_time;
+    if (wait < 0) {
+        upipe_warn_va(upipe, "Late frame (%" PRId64 ")", -wait);
+        wait = 0;
+    }
 
     upipe_verbose_va(upipe,
         "interval %"PRIu64" nextpts %"PRIu64" current %"PRIu64" wait %"PRId64,

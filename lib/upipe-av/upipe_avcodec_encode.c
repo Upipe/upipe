@@ -1145,6 +1145,10 @@ static int upipe_avcenc_set_flow_def(struct upipe *upipe, struct uref *flow_def)
         if (!ubase_check(uref_pic_get_progressive(flow_def))) {
             context->flags |= AV_CODEC_FLAG_INTERLACED_DCT |
                               AV_CODEC_FLAG_INTERLACED_ME;
+            if (ubase_check(uref_pic_get_tff(flow_def)))
+                context->field_order = AV_FIELD_TT;
+            else
+                context->field_order = AV_FIELD_BB;
         }
 
         upipe_avcenc_store_flow_def_check(upipe, flow_def_check);

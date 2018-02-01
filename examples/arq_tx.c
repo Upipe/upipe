@@ -93,7 +93,14 @@ static uint64_t last_sr_cr;
 static int catch_udp(struct uprobe *uprobe, struct upipe *upipe,
                  int event, va_list args)
 {
+    const char *uri;
+
     switch (event) {
+    case UPROBE_SOURCE_END:
+        upipe_warn(upipe, "Remote end not listening, can't receive RTCP");
+        /* This control can not fail, and will trigger restart of upump */
+        upipe_get_uri(upipe, &uri);
+        return UBASE_ERR_NONE;
     case UPROBE_UDPSRC_NEW_PEER:
         return UBASE_ERR_NONE;
     default:
@@ -140,7 +147,7 @@ static int catch(struct uprobe *uprobe, struct upipe *upipe,
             if (!ubase_check(uref_clock_get_cr_sys(uref, &last_sr_cr)))
                 upipe_err(upipe, "no cr for rtcp");
             last_sr_ntp = ((uint64_t)ntp_msw << 32) | ntp_lsw;
-            upipe_dbg_va(upipe, "RTCP SR, CR %"PRIu64" NTP %"PRIu64, last_sr_cr,
+            upipe_verbose_va(upipe, "RTCP SR, CR %"PRIu64" NTP %"PRIu64, last_sr_cr,
                 last_sr_ntp);
             uref_block_unmap(uref, 0);
         } else if (pt == RTCP_PT_RR) {
@@ -167,7 +174,7 @@ static int catch(struct uprobe *uprobe, struct upipe *upipe,
             cr -= last_sr_cr;
             cr -= delay * UCLOCK_FREQ / 65536;
 
-            upipe_dbg_va(upipe, "RTCP RR: RTT %f", (float) cr / UCLOCK_FREQ);
+            upipe_verbose_va(upipe, "RTCP RR: RTT %f", (float) cr / UCLOCK_FREQ);
             uref_block_unmap(uref, 0);
 
             // send RTT back to receiver as an Application-Defined RTCP packet
@@ -202,7 +209,7 @@ static int catch(struct uprobe *uprobe, struct upipe *upipe,
             uref_block_unmap(rtt, 0);
             uref_block_resize(rtt, 0, rtt_len);
 
-            upipe_dbg_va(upipe, "sending RTT");
+            upipe_verbose_va(upipe, "sending RTT");
             upipe_input(upipe_udpsink, rtt, NULL);
         } else {
             upipe_err_va(upipe, "unhandled RTCP PT %u", pt);
@@ -278,10 +285,8 @@ int main(int argc, char *argv[])
 
     /* rtp source */
     struct upipe_mgr *upipe_udpsrc_mgr = upipe_udpsrc_mgr_alloc();
-    struct uprobe uprobe_udp_main;
-    uprobe_init(&uprobe_udp_main, catch_udp, uprobe_pfx_alloc(uprobe_use(logger),
-                             loglevel, "udp source"));
-    struct upipe *upipe_udpsrc = upipe_void_alloc(upipe_udpsrc_mgr, &uprobe_udp_main);
+    struct upipe *upipe_udpsrc = upipe_void_alloc(upipe_udpsrc_mgr,
+            uprobe_pfx_alloc(uprobe_use(logger), loglevel, "udp source"));
 
     if (!ubase_check(upipe_set_uri(upipe_udpsrc, srcpath))) {
         return EXIT_FAILURE;
@@ -366,7 +371,6 @@ int main(int argc, char *argv[])
      * release everything */
     uprobe_release(logger);
     uprobe_clean(&uprobe);
-    uprobe_clean(&uprobe_udp_main);
     uprobe_clean(&uprobe_udp_rtcp);
 
     upump_mgr_release(upump_mgr);
