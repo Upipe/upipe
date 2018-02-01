@@ -448,8 +448,13 @@ static int upipe_rtpfb_check(struct upipe *upipe, struct uref *flow_format)
 
     upipe_rtpfb_check_upump_mgr(upipe);
 
-    if (flow_format != NULL)
+    if (flow_format != NULL) {
+        uint64_t latency;
+        if (!ubase_check(uref_clock_get_latency(flow_format, &latency)))
+            latency = 0;
+        uref_clock_set_latency(flow_format, latency + upipe_rtpfb->latency);
         upipe_rtpfb_store_flow_def(upipe, flow_format);
+    }
 
     if (upipe_rtpfb->flow_def == NULL)
         return UBASE_ERR_NONE;
@@ -884,9 +889,13 @@ static int upipe_rtpfb_set_flow_def(struct upipe *upipe, struct uref *flow_def)
     struct upipe_rtpfb *upipe_rtpfb = upipe_rtpfb_from_upipe(upipe);
     uref_free(upipe_rtpfb->flow_def_input);
     upipe_rtpfb->flow_def_input = flow_def_dup;
+    flow_def_dup = uref_dup(flow_def);
+    uint64_t latency = 0;
+    if (!ubase_check(uref_clock_get_latency(flow_def, &latency)))
+        latency = 0;
+    uref_clock_set_latency(flow_def, latency + upipe_rtpfb->latency);
     upipe_rtpfb_store_flow_def(upipe, flow_def);
 
-    flow_def_dup = uref_dup(flow_def);
     if (unlikely(flow_def_dup == NULL)) {
         upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
         return UBASE_ERR_ALLOC;
