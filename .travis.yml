@@ -111,12 +111,18 @@ before_install:
       export DISABLE_VALGRIND=1;
     fi
 
+  # luajit bindings
+  - if [ "$TRAVIS_OS_NAME" = "linux" ]; then
+      CONFIGURE_FLAGS="$CONFIGURE_FLAGS --enable-luajit";
+    fi
+
 before_script:
   - autoreconf -i
   - sed -i='' 's/|-stdlib=\*)/|-stdlib=\*|-fsanitize=*)/' autotools/ltmain.sh
 
 script:
-  - CONFIGURE_FLAGS="--disable-silent-rules $HOST
+  - CONFIGURE_FLAGS="$CONFIGURE_FLAGS
+      --disable-silent-rules $HOST
       CC=\"$HOST_CC\"
       CXX=\"$HOST_CXX\"
       CPPFLAGS=\"-I$PWD/nacl_sdk/pepper_49/include\"
