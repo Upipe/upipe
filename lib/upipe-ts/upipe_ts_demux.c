@@ -839,6 +839,21 @@ static struct upipe *upipe_ts_demux_output_alloc(struct upipe_mgr *mgr,
     upipe_ts_demux_output_init_last_inner_probe(upipe);
     upipe_ts_demux_output_init_bin_output(upipe);
     upipe_ts_demux_output->flow_def_input = flow_def;
+
+    struct upipe_ts_demux_program *program =
+        upipe_ts_demux_program_from_output_mgr(upipe->mgr);
+    struct upipe_ts_demux *demux = upipe_ts_demux_from_program_mgr(
+                upipe_ts_demux_program_to_upipe(program)->mgr);
+
+    if (demux->flow_def_input) {
+        uint64_t latency, latency_sub;
+        if (!ubase_check(uref_clock_get_latency(demux->flow_def_input,
+                        &latency)))
+            latency = 0;
+        if (!ubase_check(uref_clock_get_latency(flow_def, &latency_sub)))
+            latency_sub = 0;
+        uref_clock_set_latency(flow_def, latency + latency_sub);
+    }
     upipe_ts_demux_output->pcr = false;
     upipe_ts_demux_output->split_output = NULL;
     upipe_ts_demux_output->setrap = NULL;
@@ -862,10 +877,6 @@ static struct upipe *upipe_ts_demux_output_alloc(struct upipe_mgr *mgr,
         return upipe;
     }
 
-    struct upipe_ts_demux_program *program =
-        upipe_ts_demux_program_from_output_mgr(upipe->mgr);
-    struct upipe_ts_demux *demux = upipe_ts_demux_from_program_mgr(
-                upipe_ts_demux_program_to_upipe(program)->mgr);
     struct upipe_ts_demux_mgr *ts_demux_mgr =
         upipe_ts_demux_mgr_from_upipe_mgr(upipe_ts_demux_to_upipe(demux)->mgr);
     /* set up split_output and set rap inner pipes */
