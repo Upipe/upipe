@@ -27,9 +27,9 @@
  * @short Upipe h264 attributes for uref
  */
 
-#ifndef _UPIPE_UREF_H264_H_
+#ifndef _UPIPE_FRAMERS_UREF_H264_H_
 /** @hidden */
-#define _UPIPE_UREF_H264_H_
+#define _UPIPE_FRAMERS_UREF_H264_H_
 #ifdef __cplusplus
 extern "C" {
 #endif

@@ -27,9 +27,9 @@
  * @short Upipe helper functions for public uprobe structure
  */
 
-#ifndef _UPROBE_UPROBE_HELPER_UPROBE_H_
+#ifndef _UPIPE_UPROBE_HELPER_UPROBE_H_
 /** @hidden */
-#define _UPROBE_UPROBE_HELPER_UPROBE_H_
+#define _UPIPE_UPROBE_HELPER_UPROBE_H_
 #ifdef __cplusplus
 extern "C" {
 #endif

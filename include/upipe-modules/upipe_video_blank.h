@@ -23,8 +23,8 @@
  * SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
  */
 
-#ifndef _UPIPE_MODULES_UPIPE_VBLK_H_
-#define _UPIPE_MODULES_UPIPE_VBLK_H_
+#ifndef _UPIPE_MODULES_UPIPE_VIDEO_BLANK_H_
+#define _UPIPE_MODULES_UPIPE_VIDEO_BLANK_H_
 
 #include <upipe/upipe.h>
 
@@ -57,4 +57,4 @@ static inline int upipe_vblk_set_pic(struct upipe *upipe, struct uref *uref)
  */
 struct upipe_mgr *upipe_vblk_mgr_alloc(void);
 
-#endif /* !_UPIPE_MODULES_UPIPE_VBLK_H_ */
+#endif /* !_UPIPE_MODULES_UPIPE_VIDEO_BLANK_H_ */

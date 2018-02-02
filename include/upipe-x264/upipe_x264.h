@@ -29,9 +29,9 @@
  * @short Upipe x264 module
  */
 
-#ifndef _UPIPE_MODULES_UPIPE_X264_H_
+#ifndef _UPIPE_X264_UPIPE_X264_H_
 /** @hidden */
-#define _UPIPE_MODULES_UPIPE_X264_H_
+#define _UPIPE_X264_UPIPE_X264_H_
 #ifdef __cplusplus
 extern "C" {
 #endif

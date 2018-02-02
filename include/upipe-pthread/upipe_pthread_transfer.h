@@ -28,9 +28,9 @@
  * This is particularly helpful for multithreaded applications.
  */
 
-#ifndef _UPIPE_MODULES_UPIPE_PTHREAD_TRANSFER_H_
+#ifndef _UPIPE_PTHREAD_UPIPE_PTHREAD_TRANSFER_H_
 /** @hidden */
-#define _UPIPE_MODULES_UPIPE_PTHREAD_TRANSFER_H_
+#define _UPIPE_PTHREAD_UPIPE_PTHREAD_TRANSFER_H_
 #ifdef __cplusplus
 extern "C" {
 #endif

@@ -27,9 +27,9 @@
  * @short Upipe module adding SMPTE 337 encapsulation
  */
 
-#ifndef _UPIPE_MODULES_UPIPE_SMPTE_337_ENCAP_H_
+#ifndef _UPIPE_MODULES_UPIPE_S337_ENCAPS_H_
 /** @hidden */
-#define _UPIPE_MODULES_UPIPE_SMPTE_337_ENCAP_H_
+#define _UPIPE_MODULES_UPIPE_S337_ENCAPS_H_
 #ifdef __cplusplus
 extern "C" {
 #endif

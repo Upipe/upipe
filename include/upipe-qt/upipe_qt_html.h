@@ -23,9 +23,9 @@
  * SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
  */
 
-#ifndef _UPIPE_MODULES_UPIPE_QT_HTML_H_
+#ifndef _UPIPE_QT_UPIPE_QT_HTML_H_
 /** @hidden */
-#define _UPIPE_MODULES_UPIPE_QT_HTML_H_
+#define _UPIPE_QT_UPIPE_QT_HTML_H_
 #ifdef __cplusplus
 extern "C" {
 #endif

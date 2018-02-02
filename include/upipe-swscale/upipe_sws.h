@@ -27,9 +27,9 @@
  * @short Upipe swscale (ffmpeg) module
  */
 
-#ifndef _UPIPE_MODULES_UPIPE_SWS_H_
+#ifndef _UPIPE_SWSCALE_UPIPE_SWS_H_
 /** @hidden */
-#define _UPIPE_MODULES_UPIPE_SWS_H_
+#define _UPIPE_SWSCALE_UPIPE_SWS_H_
 #ifdef __cplusplus
 extern "C" {
 #endif
