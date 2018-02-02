@@ -28,9 +28,9 @@
  * @short Upipe NaCl module to play video frames
  */
 
-#ifndef _UPIPE_MODULES_UPIPE_NACL_GRAPHICS2D_H_
+#ifndef _UPIPE_NACL_UPIPE_NACL_GRAPHICS2D_H_
 /** @hidden */
-#define _UPIPE_MODULES_UPIPE_NACL_GRAPHICS2D_H_
+#define _UPIPE_NACL_UPIPE_NACL_GRAPHICS2D_H_
 #ifdef __cplusplus
 extern "C" {
 #endif

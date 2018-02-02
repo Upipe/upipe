@@ -27,9 +27,9 @@
  * @short Upipe mpgv attributes for uref
  */
 
-#ifndef _UPIPE_UREF_MPGV_H_
+#ifndef _UPIPE_FRAMERS_UREF_MPGV_H_
 /** @hidden */
-#define _UPIPE_UREF_MPGV_H_
+#define _UPIPE_FRAMERS_UREF_MPGV_H_
 #ifdef __cplusplus
 extern "C" {
 #endif

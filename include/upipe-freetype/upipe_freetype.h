@@ -1,5 +1,5 @@
-#ifndef _UPIPE_MODULES_UPIPE_FREETYPE_H_
-# define _UPIPE_MODULES_UPIPE_FREETYPE_H_
+#ifndef _UPIPE_FREETYPE_UPIPE_FREETYPE_H_
+# define _UPIPE_FREETYPE_UPIPE_FREETYPE_H_
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -11,4 +11,4 @@ struct upipe_mgr *upipe_freetype_mgr_alloc(void);
 #ifdef __cplusplus
 }
 #endif
-#endif /* !_UPIPE_MODULES_UPIPE_FREETYPE_H_ */
+#endif /* !_UPIPE_FREETYPE_UPIPE_FREETYPE_H_ */

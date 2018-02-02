@@ -22,9 +22,9 @@
  * @short Upipe pack10bit module
  */
 
-#ifndef _UPIPE_MODULES_UPIPE_PACK10BIT_H_
+#ifndef _UPIPE_HBRMT_UPIPE_PACK10BIT_H_
 /** @hidden */
-#define _UPIPE_MODULES_UPIPE_PACK10BIT_H_
+#define _UPIPE_HBRMT_UPIPE_PACK10BIT_H_
 #ifdef __cplusplus
 extern "C" {
 #endif

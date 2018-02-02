@@ -25,8 +25,8 @@
  * @short Upipe helper functions for inner pipes
  */
 
-#ifndef UPIPE_HELPER_INNER_H_
-# define UPIPE_HELPER_INNER_H_
+#ifndef _UPIPE_UPIPE_HELPER_INNER_H_
+# define _UPIPE_UPIPE_HELPER_INNER_H_
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -122,4 +122,4 @@ static UBASE_UNUSED int STRUCTURE##_control_##INNER(struct upipe *upipe,\
 #ifdef __cplusplus
 }
 #endif
-#endif /* !UPIPE_HELPER_INNER_H_ */
+#endif /* !_UPIPE_UPIPE_HELPER_INNER_H_ */

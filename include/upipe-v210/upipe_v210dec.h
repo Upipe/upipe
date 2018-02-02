@@ -26,9 +26,9 @@
  * @short Upipe v210dec module
  */
 
-#ifndef _UPIPE_MODULES_UPIPE_V210DEC_H_
+#ifndef _UPIPE_V210_UPIPE_V210DEC_H_
 /** @hidden */
-#define _UPIPE_MODULES_UPIPE_V210DEC_H_
+#define _UPIPE_V210_UPIPE_V210DEC_H_
 #ifdef __cplusplus
 extern "C" {
 #endif

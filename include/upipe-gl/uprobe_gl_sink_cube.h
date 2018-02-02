@@ -27,9 +27,9 @@
  * @short Upipe GL sink cube animation
  */
 
-#ifndef _UPIPE_GL_UPIPE_GL_SINK_CUBE_H_
+#ifndef _UPIPE_GL_UPROBE_GL_SINK_CUBE_H_
 /** @hidden */
-#define _UPIPE_GL_UPIPE_GL_SINK_CUBE_H_
+#define _UPIPE_GL_UPROBE_GL_SINK_CUBE_H_
 #ifdef __cplusplus
 extern "C" {
 #endif

@@ -2,9 +2,9 @@
  * @short Upipe netmap source module
  */
 
-#ifndef _UPIPE_MODULES_UPIPE_NETMAP_SOURCE_H_
+#ifndef _UPIPE_NETMAP_UPIPE_NETMAP_SOURCE_H_
 /** @hidden */
-#define _UPIPE_MODULES_UPIPE_NETMAP_SOURCE_H_
+#define _UPIPE_NETMAP_UPIPE_NETMAP_SOURCE_H_
 #ifdef __cplusplus
 extern "C" {
 #endif

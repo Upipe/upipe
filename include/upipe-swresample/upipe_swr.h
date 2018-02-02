@@ -27,9 +27,9 @@
  * @short Upipe swrcale (ffmpeg) module
  */
 
-#ifndef _UPIPE_MODULES_UPIPE_SWR_H_
+#ifndef _UPIPE_SWRESAMPLE_UPIPE_SWR_H_
 /** @hidden */
-#define _UPIPE_MODULES_UPIPE_SWR_H_
+#define _UPIPE_SWRESAMPLE_UPIPE_SWR_H_
 #ifdef __cplusplus
 extern "C" {
 #endif

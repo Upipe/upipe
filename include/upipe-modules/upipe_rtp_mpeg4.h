@@ -21,9 +21,9 @@
  * SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
  */
 
-#ifndef _UPIPE_MODULES_RTP_MPEG4_H_
+#ifndef _UPIPE_MODULES_UPIPE_RTP_MPEG4_H_
 /** @hidden */
-# define _UPIPE_MODULES_RTP_MPEG4_H_
+# define _UPIPE_MODULES_UPIPE_RTP_MPEG4_H_
 
 #ifdef __cplusplus
 extern "C" {
