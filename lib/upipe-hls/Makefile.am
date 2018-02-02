@@ -11,6 +11,7 @@ libupipe_hls_la_SOURCES = \
     upipe_hls_playlist.c
 
 libupipe_hls_la_CPPFLAGS = -I$(top_builddir)/include -I$(top_srcdir)/include
+libupipe_hls_la_CFLAGS = $(AM_CFLAGS) $(BITSTREAM_FLAGS)
 libupipe_hls_la_LIBADD = \
 	$(top_builddir)/lib/upipe-modules/libupipe_modules.la \
 	$(top_builddir)/lib/upipe-ts/libupipe_ts.la \

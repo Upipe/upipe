@@ -59,6 +59,10 @@ endif
 if HAVE_NETMAP
 SUBDIRS += upipe-netmap
 endif
+
+if HAVE_DVBCSA
+SUBDIRS += upipe-dvbcsa
+endif
 endif
 
 if HAVE_FREETYPE
@@ -83,8 +87,4 @@ endif
 
 if HAVE_ZVBI
 SUBDIRS += upipe-zvbi
-endif
-
-if HAVE_DVBCSA
-SUBDIRS += upipe-dvbcsa
 endif
