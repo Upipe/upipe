@@ -39,6 +39,8 @@ extern "C" {
 
 #include <upipe/udict.h>
 
+struct umem_mgr;
+
 /** @This allocates a new instance of the inline udict manager.
  *
  * @param udict_pool_depth maximum number of udict structures in the pool

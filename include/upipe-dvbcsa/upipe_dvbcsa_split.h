@@ -31,6 +31,8 @@
 extern "C" {
 #endif
 
+#include <upipe/uprobe.h>
+
 #define UPIPE_DVBCSA_SPLIT_SIGNATURE    UBASE_FOURCC('c','s','a','s')
 
 /** @This enumarates the privates events for dvbcsa pipes. */
