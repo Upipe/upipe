@@ -433,6 +433,8 @@ upipe_pack10_test_LDADD = $(LDADD) $(top_builddir)/lib/upipe-hbrmt/libupipe_hbrm
 upipe_unpack10_test_LDADD = $(LDADD) $(top_builddir)/lib/upipe-hbrmt/libupipe_hbrmt.la
 upipe_v210dec_test_LDADD = $(LDADD) $(top_builddir)/lib/upipe-v210/libupipe_v210.la
 upipe_v210enc_test_LDADD = $(LDADD) $(top_builddir)/lib/upipe-v210/libupipe_v210.la
+upipe_v210enc_test_CFLAGS = $(AM_CFLAGS) $(AVUTIL_CFLAGS)
+upipe_v210dec_test_CFLAGS = $(AM_CFLAGS) $(AVUTIL_CFLAGS)
 
 upipe_avformat_test_CFLAGS = $(AM_CFLAGS) $(AVFORMAT_CFLAGS)
 upipe_avformat_test_LDADD = $(LDADD) -lev $(top_builddir)/lib/upump-ev/libupump_ev.la $(top_builddir)/lib/upipe-av/libupipe_av.la $(AVFORMAT_LIBS)
