@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2013-2017 OpenHeadend S.A.R.L.
+ * Copyright (C) 2013-2018 OpenHeadend S.A.R.L.
  *
  * Authors: Benjamin Cohen
  *
@@ -467,7 +467,7 @@ static bool upipe_x264_open(struct upipe *upipe, int width, int height)
                      "videoformat", content, ret);
     content =
         ubase_check(uref_pic_flow_get_full_range(upipe_x264->flow_def_input)) ?
-        "1" : "0";
+        "on" : "off";
     if ((ret = x264_param_parse(&upipe_x264->params, "fullrange", content)) < 0)
         upipe_err_va(upipe, "can't set option %s:%s (%d)",
                      "fullrange", content, ret);
