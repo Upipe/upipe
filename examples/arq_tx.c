@@ -63,6 +63,7 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <unistd.h>
+#include <fcntl.h>
 #include <inttypes.h>
 #include <signal.h>
 
@@ -360,6 +361,10 @@ int main(int argc, char *argv[])
 
     int udp_fd = -1;
     ubase_assert(upipe_udpsink_get_fd(upipe_udpsink, &udp_fd));
+    int flags = fcntl(udp_fd, F_GETFL);
+    flags |= O_NONBLOCK;
+    if (fcntl(udp_fd, F_SETFL, flags) < 0)
+        upipe_err(upipe_udpsink, "Could not set flags");;
     ubase_assert(upipe_udpsrc_set_fd(upipe_udpsrc_sub, udp_fd));
 
     upipe_set_output(rtcp, upipe_udpsink);
