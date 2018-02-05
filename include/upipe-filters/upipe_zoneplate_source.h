@@ -18,8 +18,8 @@
  * Inc., 51 Franklin Street, Fifth Floor, Boston MA 02110-1301, USA.
  */
 
-#ifndef _UPIPE_MODULES_UPIPE_ZONEPLATE_H_
-#define _UPIPE_MODULES_UPIPE_ZONEPLATE_H_
+#ifndef _UPIPE_FILTERS_UPIPE_ZONEPLATE_SOURCE_H_
+#define _UPIPE_FILTERS_UPIPE_ZONEPLATE_SOURCE_H_
 
 #include <upipe/ubase.h>
 
@@ -39,4 +39,4 @@ struct upipe_mgr *upipe_zoneplate_mgr_alloc(void);
 #ifdef __cplusplus
 }
 #endif
-#endif /* !_UPIPE_MODULES_UPIPE_ZONEPLATE_H_ */
+#endif /* !_UPIPE_FILTERS_UPIPE_ZONEPLATE_SOURCE_H_ */

@@ -9,8 +9,10 @@ libupipe_blackmagic_la_SOURCES = ubuf_pic_blackmagic.cpp \
                                  $(NULL)
 
 if HAVE_ZVBI
+if HAVE_BITSTREAM
 libupipe_blackmagic_la_SOURCES += upipe_blackmagic_sink.cpp \
                                   sdi.c
+endif
 endif
 
 EXTRA_libupipe_blackmagic_la_SOURCES = include/DeckLinkAPIConfiguration.h \
@@ -28,7 +30,7 @@ libupipe_blackmagic_la_CPPFLAGS = -I$(top_builddir)/include -I$(top_srcdir)/incl
 libupipe_blackmagic_la_CXXFLAGS = $(AM_CXXFLAGS) -Wno-missing-declarations
 libupipe_blackmagic_la_LIBADD = $(top_builddir)/lib/upipe/libupipe.la -ldl -lpthread
 if HAVE_ZVBI
-libupipe_blackmagic_la_CPPFLAGS += $(ZVBI_CFLAGS)
+libupipe_blackmagic_la_CPPFLAGS += $(ZVBI_CFLAGS) $(BITSTREAM_CFLAGS)
 libupipe_blackmagic_la_LIBADD += $(ZVBI_LIBS)
 endif
 

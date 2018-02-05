@@ -27,9 +27,9 @@
  * @short Upipe module converting sound and pic ubuf to block
  */
 
-#ifndef _UPIPE_MODULES_UPIPE_TBLK_H_
+#ifndef _UPIPE_MODULES_UPIPE_CONVERT_TO_BLOCK_H_
 /** @hidden */
-#define _UPIPE_MODULES_UPIPE_TBLK_H_
+#define _UPIPE_MODULES_UPIPE_CONVERT_TO_BLOCK_H_
 #ifdef __cplusplus
 extern "C" {
 #endif

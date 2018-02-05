@@ -22,9 +22,9 @@
  * @short Upipe zvbi encoding module
  */
 
-#ifndef _UPIPE_MODULES_UPIPE_ZVBIENC_H_
+#ifndef _UPIPE_ZVBI_UPIPE_ZVBIENC_H_
 /** @hidden */
-#define _UPIPE_MODULES_UPIPE_ZVBIENC_H_
+#define _UPIPE_ZVBI_UPIPE_ZVBIENC_H_
 #ifdef __cplusplus
 extern "C" {
 #endif

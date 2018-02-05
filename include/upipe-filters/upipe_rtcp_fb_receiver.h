@@ -27,9 +27,9 @@
  * @short Upipe module receiving rfc4585 feedback
  */
 
-#ifndef _UPIPE_MODULES_UPIPE_RTCP_FB_RECEIVER_H_
+#ifndef _UPIPE_FILTERS_UPIPE_RTCP_FB_RECEIVER_H_
 /** @hidden */
-#define _UPIPE_MODULES_UPIPE_RTCP_FB_RECEIVER_H_
+#define _UPIPE_FILTERS_UPIPE_RTCP_FB_RECEIVER_H_
 #ifdef __cplusplus
 extern "C" {
 #endif

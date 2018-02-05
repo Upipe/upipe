@@ -28,9 +28,9 @@
  * @short declarations for a Upipe main loop using Ecore
  */
 
-#ifndef _UPIPE_ECORE_UPUMP_ECORE_H_
+#ifndef _UPUMP_ECORE_UPUMP_ECORE_H_
 /** @hidden */
-#define _UPIPE_ECORE_UPUMP_ECORE_H_
+#define _UPUMP_ECORE_UPUMP_ECORE_H_
 
 #include <upipe/upump.h>
 

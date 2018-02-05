@@ -25,9 +25,9 @@
  * @short Upipe module to play output of a m3u reader pipe
  */
 
-#ifndef _UPIPE_MODULES_UPIPE_HLS_PLAYLIST_H_
+#ifndef _UPIPE_HLS_UPIPE_HLS_PLAYLIST_H_
 /** @hidden */
-# define _UPIPE_MODULES_UPIPE_HLS_PLAYLIST_H_
+# define _UPIPE_HLS_UPIPE_HLS_PLAYLIST_H_
 #ifdef __cplusplus
 extern "C" {
 #endif

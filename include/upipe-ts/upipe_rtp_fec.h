@@ -2,9 +2,9 @@
  * @short Upipe rtp-fec (ffmpeg) module
  */
 
-#ifndef _UPIPE_MODULES_UPIPE_RTP_FEC_H_
+#ifndef _UPIPE_TS_UPIPE_RTP_FEC_H_
 /** @hidden */
-#define _UPIPE_MODULES_UPIPE_RTP_FEC_H_
+#define _UPIPE_TS_UPIPE_RTP_FEC_H_
 #ifdef __cplusplus
 extern "C" {
 #endif

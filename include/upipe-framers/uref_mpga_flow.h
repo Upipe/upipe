@@ -27,15 +27,16 @@
  * @short Upipe mpga flow definition attributes for uref
  */
 
-#ifndef _UPIPE_UREF_MPGA_FLOW_H_
+#ifndef _UPIPE_FRAMERS_UREF_MPGA_FLOW_H_
 /** @hidden */
-#define _UPIPE_UREF_MPGA_FLOW_H_
+#define _UPIPE_FRAMERS_UREF_MPGA_FLOW_H_
 #ifdef __cplusplus
 extern "C" {
 #endif
 
 #include <upipe/uref.h>
 #include <upipe/uref_attr.h>
+#include <upipe/uref_flow.h>
 
 /** @This defines encapsulation types for AAC. */
 enum uref_mpga_encaps {

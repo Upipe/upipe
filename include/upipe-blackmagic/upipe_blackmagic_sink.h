@@ -22,9 +22,9 @@
  * @short Upipe blackmagic sink
  */
 
-#ifndef _UPIPE_BMD_SINK_H_
+#ifndef _UPIPE_BLACKMAGIC_UPIPE_BLACKMAGIC_SINK_H_
 /** @hidden */
-#define _UPIPE_BMD_SINK_H_
+#define _UPIPE_BLACKMAGIC_UPIPE_BLACKMAGIC_SINK_H_
 #ifdef __cplusplus
 extern "C" {
 #endif

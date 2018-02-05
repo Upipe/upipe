@@ -74,8 +74,10 @@ static const struct {
     const char *name;
     void (*func)(void);
 } tests[] = {
+#ifdef HAVE_SDI
     { "sdidec", checkasm_check_sdidec },
     { "sdienc", checkasm_check_sdienc },
+#endif
     { "v210dec", checkasm_check_v210dec },
     { "v210enc", checkasm_check_v210enc },
     { NULL, NULL }

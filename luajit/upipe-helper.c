@@ -161,6 +161,7 @@ static void append_cb(struct upipe *upipe)
 }
 
 #define static
+#define inline
 
 UPIPE_HELPER_UPIPE(upipe_helper, upipe, upipe->mgr->signature);
 UPIPE_HELPER_UREFCOUNT(upipe_helper, urefcount, upipe_helper_free);

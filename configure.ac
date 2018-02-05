@@ -123,6 +123,7 @@ AC_CHECK_HEADERS([dvbcsa/dvbcsa.h],
                  AM_CONDITIONAL(HAVE_DVBCSA, true),
                  AM_CONDITIONAL(HAVE_DVBCSA, false))
 
+PKG_CHECK_UPIPE(BITSTREAM, bitstream >= 1.3, [bitstream/common.h])
 PKG_CHECK_UPIPE(AVUTIL, libavutil, [libavutil/avutil.h])
 PKG_CHECK_UPIPE(AVFORMAT, [libavformat >= 53.32.0 libavcodec libavutil], [libavformat/avformat.h libavformat/avio.h libavutil/avutil.h])
 PKG_CHECK_UPIPE(SWSCALE, libswscale >= 2.1.0 libavutil, [libswscale/swscale.h libavutil/avutil.h])
@@ -164,7 +165,6 @@ AC_CHECK_FUNC(writev,
                 AM_CONDITIONAL(HAVE_WRITEV, true),
                 AM_CONDITIONAL(HAVE_WRITEV, false)
 )
-AC_CHECK_HEADERS([bitstream/common.h], AM_CONDITIONAL(HAVE_BITSTREAM, true), AM_CONDITIONAL(HAVE_BITSTREAM, false))
 AC_CHECK_HEADERS([ppapi/c/ppb.h], AM_CONDITIONAL(HAVE_NACL, true), AM_CONDITIONAL(HAVE_NACL, false))
 AM_CONDITIONAL(HAVE_OSX_DARWIN, false)
 AC_CHECK_HEADERS([AudioToolbox/AudioToolbox.h], [AM_CONDITIONAL(HAVE_AUDIOTOOLBOX, true) AM_CONDITIONAL(HAVE_OSX_DARWIN, true)], AM_CONDITIONAL(HAVE_AUDIOTOOLBOX, false))

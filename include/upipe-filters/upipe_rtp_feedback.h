@@ -27,9 +27,9 @@
  * @short Upipe module sending retransmit requests for lost RTP packets
  */
 
-#ifndef _UPIPE_MODULES_UPIPE_RTP_FEEDBACK_H_
+#ifndef _UPIPE_FILTERS_UPIPE_RTP_FEEDBACK_H_
 /** @hidden */
-#define _UPIPE_MODULES_UPIPE_RTP_FEEDBACK_H_
+#define _UPIPE_FILTERS_UPIPE_RTP_FEEDBACK_H_
 #ifdef __cplusplus
 extern "C" {
 #endif

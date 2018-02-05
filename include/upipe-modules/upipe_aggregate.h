@@ -27,9 +27,9 @@
  * @short Upipe module to aggregate complete packets up to specified MTU
  */
 
-#ifndef _UPIPE_MODULES_UPIPE_AGG_H_
+#ifndef _UPIPE_MODULES_UPIPE_AGGREGATE_H_
 /** @hidden */
-#define _UPIPE_MODULES_UPIPE_AGG_H_
+#define _UPIPE_MODULES_UPIPE_AGGREGATE_H_
 #ifdef __cplusplus
 extern "C" {
 #endif

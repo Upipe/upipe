@@ -4,6 +4,7 @@ UPIPEMODULES_LIBS = $(top_builddir)/lib/upipe-modules/libupipe_modules.la
 UPIPEPTHREAD_LIBS = $(top_builddir)/lib/upipe-pthread/libupipe_pthread.la
 UPUMPEV_LIBS = -lev $(top_builddir)/lib/upump-ev/libupump_ev.la
 UPIPEAV_LIBS = $(top_builddir)/lib/upipe-av/libupipe_av.la @AVFORMAT_LIBS@
+UPIPEAV_CFLAGS = $(AVUTIL_CFLAGS)
 UPIPESWS_LIBS = $(SWSCALE_LIBS) $(top_builddir)/lib/upipe-swscale/libupipe_swscale.la
 UPIPESWR_LIBS = $(SWRESAMPLE_LIBS) $(top_builddir)/lib/upipe-swresample/libupipe_swresample.la
 UPIPEGL_LIBS = $(GLX_LIBS) $(top_builddir)/lib/upipe-gl/libupipe_gl.la
@@ -21,6 +22,7 @@ noinst_PROGRAMS =
 
 fec_LDADD = $(LDADD) $(UPUMPEV_LIBS) $(UPIPEMODULES_LIBS) $(UPIPETS_LIBS)
 arq_rx_LDADD = $(LDADD) $(UPUMPEV_LIBS) $(UPIPEMODULES_LIBS) $(UPIPEFILTERS_LIBS)
+arq_tx_CFLAGS = $(AM_CFLAGS) $(BITSTREAM_CFLAGS)
 arq_tx_LDADD = $(LDADD) $(UPUMPEV_LIBS) $(UPIPEMODULES_LIBS) $(UPIPEFILTERS_LIBS)
 udpmulticat_LDADD = $(LDADD) $(UPUMPEV_LIBS) $(UPIPEMODULES_LIBS)
 multicatudp_LDADD = $(LDADD) $(UPUMPEV_LIBS) $(UPIPEMODULES_LIBS) $(UPIPEPTHREAD_LIBS) -lpthread
@@ -35,6 +37,7 @@ endif
 if HAVE_AUDIOTOOLBOX
 uplay_LDADD += $(UPIPEOSX_LIBS)
 endif
+uplay_CFLAGS = $(AM_CFLAGS) $(UPIPEAV_CFLAGS)
 transcode_LDADD = $(LDADD) $(UPUMPEV_LIBS) $(UPIPEMODULES_LIBS) $(UPIPEAV_LIBS) $(UPIPESWR_LIBS) $(UPIPESWS_LIBS) $(UPIPEFILTERS_LIBS) $(UPIPEFRAMERS_LIBS)
 upipe_duration_LDADD = $(LDADD) $(UPUMPEV_LIBS) $(UPIPEMODULES_LIBS) $(UPIPEFRAMERS_LIBS) $(UPIPETS_LIBS)
 alsaplay_LDADD = $(LDADD) $(UPUMPEV_LIBS) $(UPIPEMODULES_LIBS) $(UPIPEFRAMERS_LIBS) $(UPIPEAV_LIBS) $(UPIPEALSA_LIBS) $(UPIPESWR_LIBS) $(UPIPEFILTERS_LIBS)
@@ -43,17 +46,18 @@ blackmagic_LDADD = $(LDADD) $(UPUMPEV_LIBS) $(UPIPEMODULES_LIBS) $(UPIPEAV_LIBS)
 ts2es_LDADD = $(LDADD) $(UPUMPEV_LIBS) $(UPIPEMODULES_LIBS) $(UPIPEFRAMERS_LIBS) $(UPIPETS_LIBS)
 decrypt_LDADD = $(LDADD) $(UPUMPEV_LIBS) $(UPIPEMODULES_LIBS)
 mpthree2rtp_LDADD = $(LDADD) $(UPUMPEV_LIBS) $(UPIPEMODULES_LIBS) $(UPIPEFRAMERS_LIBS) $(UPIPEAV_LIBS) $(UPIPESWR_LIBS)
+ts2mpthreemulticat_CFLAGS = $(AM_CFLAGS) $(BITSTREAM_CFLAGS)
 ts2mpthreemulticat_LDADD = $(LDADD) $(UPUMPEV_LIBS) $(UPIPEMODULES_LIBS) $(UPIPEFRAMERS_LIBS) $(UPIPETS_LIBS) 
 ugrid_LDADD = $(LDADD) $(UPIPEMODULES_LIBS) $(UPUMPEV_LIBS) $(UPIPETS_LIBS) $(UPIPEFRAMERS_LIBS) $(UPIPEFILTERS_LIBS) $(UPIPEAV_LIBS) $(UPIPEX264_LIBS) $(UPIPEPTHREAD_LIBS) $(UPIPESWS_LIBS) $(UPIPESWR_LIBS)
-ugrid_CFLAGS = $(SWSCALE_CFLAGS)
+ugrid_CFLAGS = $(AM_CFLAGS) $(SWSCALE_CFLAGS) $(UPIPEAV_CFLAGS)
 ts_encrypt_LDADD = $(LDADD) $(UPIPEMODULES_LIBS) $(UPUMPEV_LIBS) $(UPIPETS_LIBS) $(UPIPEDVBCSA_LIBS) $(UPIPEPTHREAD_LIBS) -lpthread
 
 if HAVE_EV
 if HAVE_WRITEV
-noinst_PROGRAMS += udpmulticat multicatudp fec arq_rx arq_tx
+noinst_PROGRAMS += udpmulticat multicatudp
 noinst_PROGRAMS += decrypt
 if HAVE_BITSTREAM
-noinst_PROGRAMS += hls2rtp
+noinst_PROGRAMS += hls2rtp fec arq_rx arq_tx
 endif
 endif
 
@@ -64,18 +68,16 @@ noinst_PROGRAMS += ts2mpthreemulticat
 if HAVE_AVFORMAT
 noinst_PROGRAMS += mpthree2rtp
 endif
-if HAVE_EV
 if HAVE_DVBCSA
 noinst_PROGRAMS += ts_encrypt
-endif
 endif
 endif
 
 if HAVE_AVFORMAT
 if HAVE_SWSCALE
 if HAVE_SWRESAMPLE
+if HAVE_BITSTREAM
 noinst_PROGRAMS += transcode
-if HAVE_EV
 if HAVE_X264
 noinst_PROGRAMS += ugrid
 endif
@@ -95,8 +97,10 @@ if HAVE_GLX
 noinst_PROGRAMS += glxplay
 noinst_PROGRAMS += uplay
 endif
+endif
 endif # swscale
 
+if HAVE_BITSTREAM
 if HAVE_ALSA
 noinst_PROGRAMS += alsaplay
 endif

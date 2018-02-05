@@ -27,9 +27,9 @@
  * @short Upipe mpgv flow definition attributes for uref
  */
 
-#ifndef _UPIPE_UREF_MPGV_FLOW_H_
+#ifndef _UPIPE_FRAMERS_UREF_MPGV_FLOW_H_
 /** @hidden */
-#define _UPIPE_UREF_MPGV_FLOW_H_
+#define _UPIPE_FRAMERS_UREF_MPGV_FLOW_H_
 #ifdef __cplusplus
 extern "C" {
 #endif

@@ -10,7 +10,6 @@ libupipe_av_la_SOURCES = \
 	upipe_av_codecs.c \
 	upipe_avformat_sink.c \
 	upipe_avformat_source.c \
-	upipe_avcodec_decode.c \
 	upipe_avcodec_encode.c \
 	upipe_av_codecs.pl \
 	avcodec_include.h \
@@ -22,6 +21,11 @@ libupipe_av_la_LIBADD = $(top_builddir)/lib/upipe/libupipe.la \
 			$(top_builddir)/lib/upipe-modules/libupipe_modules.la \
 			$(AVFORMAT_LIBS)
 libupipe_av_la_LDFLAGS = -no-undefined
+
+if HAVE_BITSTREAM
+libupipe_av_la_SOURCES += upipe_avcodec_decode.c
+libupipe_av_la_CFLAGS += $(BITSTREAM_CFLAGS)
+endif
 
 pkgconfigdir = $(libdir)/pkgconfig
 pkgconfig_DATA = libupipe_av.pc

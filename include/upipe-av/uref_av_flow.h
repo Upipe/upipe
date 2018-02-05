@@ -27,9 +27,9 @@
  * @short Upipe flow definition attributes for libav
  */
 
-#ifndef _UPIPE_UREF_AV_FLOW_H_
+#ifndef _UPIPE_AV_UREF_AV_FLOW_H_
 /** @hidden */
-#define _UPIPE_UREF_AV_FLOW_H_
+#define _UPIPE_AV_UREF_AV_FLOW_H_
 #ifdef __cplusplus
 extern "C" {
 #endif

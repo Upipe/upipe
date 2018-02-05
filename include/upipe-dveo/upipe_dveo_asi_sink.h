@@ -27,9 +27,9 @@
  * @short Upipe linear module sending output identical to input
  */
 
-#ifndef _UPIPE_MODULES_UPIPE_DVEO_ASI_SINK_H_
+#ifndef _UPIPE_DVEO_UPIPE_DVEO_ASI_SINK_H_
 /** @hidden */
-#define _UPIPE_MODULES_UPIPE_DVEO_ASI_SINK_H_
+#define _UPIPE_DVEO_UPIPE_DVEO_ASI_SINK_H_
 #ifdef __cplusplus
 extern "C" {
 #endif
