@@ -581,7 +581,7 @@ static void extract_hd_audio(struct upipe *upipe, const uint16_t *packet, int li
     if (offset + 1 < clock || offset - 1 > clock) {
         upipe_sdi_dec->eav_clock -= clock - offset;
         if (0) upipe_notice_va(upipe,
-                "audio group %d on line %d: wrong audio phase (mpf %d) CLK %d != %d => %"PRId64"",
+                "audio group %d on line %d: wrong audio phase (mpf %d) CLK %d != %" PRId64 " => %"PRId64"",
                 audio_group, line_num, mpf, clock, offset, offset - clock);
     }
 
