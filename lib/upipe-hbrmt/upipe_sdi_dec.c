@@ -889,7 +889,7 @@ static bool upipe_sdi_dec_handle(struct upipe *upipe, struct uref *uref,
                                 0, 0, -1, -1, &vbi_buf)))) {
                 uref_free(uref_vbi);
                 uref_vbi = NULL;
-                upipe_throw_fatal(upipe, "Could not map vbi buffer");
+                upipe_err(upipe, "Could not map vbi buffer");
             }
         }
     }
@@ -926,7 +926,7 @@ static bool upipe_sdi_dec_handle(struct upipe *upipe, struct uref *uref,
                             0, 0, -1, -1, &vanc_buf)))) {
             uref_free(uref_vanc);
             uref_vanc = NULL;
-            upipe_throw_fatal(upipe, "Could not map vanc buffer");
+            upipe_err(upipe, "Could not map vanc buffer");
         }
     }
 
@@ -947,7 +947,7 @@ static bool upipe_sdi_dec_handle(struct upipe *upipe, struct uref *uref,
     if (audio_sub->ubuf_mgr) {
         ubuf_sound = ubuf_sound_alloc(audio_sub->ubuf_mgr, 1125*2);
         if (!ubuf_sound)
-            upipe_throw_fatal(upipe, "Unable to allocate a sound buffer");
+            upipe_err(upipe, "Unable to allocate a sound buffer");
     }
     if (unlikely(!ubuf_sound)) {
         uref_free(uref_audio);
@@ -958,7 +958,7 @@ static bool upipe_sdi_dec_handle(struct upipe *upipe, struct uref *uref,
                             "lrcLRS0123456789", 0, -1, &audio_ctx.buf_audio)))) {
             uref_free(uref_audio);
             uref_audio = NULL;
-            upipe_throw_fatal(upipe, "Could not map audio buffer");
+            upipe_err(upipe, "Could not map audio buffer");
         }
     }
 
