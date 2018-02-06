@@ -542,7 +542,7 @@ static void upipe_rtpfb_init_sub_mgr(struct upipe *upipe)
     sub_mgr->upipe_mgr_control = NULL;
 }
 
-static void upipe_rtpfb_send_rr(struct upipe *upipe, uint64_t cr)
+static void upipe_rtpfb_send_rr(struct upipe *upipe)
 {
     struct upipe_rtpfb *upipe_rtpfb = upipe_rtpfb_from_upipe(upipe);
 
@@ -586,8 +586,7 @@ static void upipe_rtpfb_send_rr(struct upipe *upipe, uint64_t cr)
         uint32_t ntp_lsw = rtcp_sr_get_ntp_time_lsw(upipe_rtpfb->sr);
         rtcp_rr_set_last_sr(buf, ((ntp_msw & 0xffff) << 16) | (ntp_lsw >> 16));
 
-        rtcp_rr_set_delay_since_last_sr(buf,
-                (cr - upipe_rtpfb->sr_cr) * 65536 / UCLOCK_FREQ);
+        rtcp_rr_set_delay_since_last_sr(buf, 0);
     }
 
     uref_block_unmap(pkt, 0);
@@ -755,7 +754,7 @@ static void upipe_rtpfb_handle_sr(struct upipe *upipe, struct uref *uref)
 
     uref_block_peek_unmap(uref, 0, sr_buf, sr);
 
-    upipe_rtpfb_send_rr(upipe, cr);
+    upipe_rtpfb_send_rr(upipe);
 }
 
 /** @internal @This handles data.
