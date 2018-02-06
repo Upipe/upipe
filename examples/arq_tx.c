@@ -133,7 +133,7 @@ static int catch(struct uprobe *uprobe, struct upipe *upipe,
         if (!ubase_check(uref_block_read(uref, 0, &s, &buf)))
             return UBASE_ERR_INVALID;
 
-        if (s < RTCP_SR_SIZE)
+        if (s < 2)
             goto unmap;
 
         bool valid = rtp_check_hdr(buf);
@@ -143,6 +143,8 @@ static int catch(struct uprobe *uprobe, struct upipe *upipe,
             goto unmap;
 
         if (pt == RTCP_PT_SR) {
+            if (s < RTCP_SR_SIZE)
+                goto unmap;
             uint32_t ntp_msw = rtcp_sr_get_ntp_time_msw(buf);
             uint32_t ntp_lsw = rtcp_sr_get_ntp_time_lsw(buf);
             if (!ubase_check(uref_clock_get_cr_sys(uref, &last_sr_cr)))
