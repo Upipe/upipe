@@ -562,6 +562,7 @@ static void upipe_rtpfb_send_rr(struct upipe *upipe)
 
     /* Header */
     rtcp_set_rtp_version(buf);
+    rtcp_set_rc(buf, 1);
     rtcp_rr_set_pt(buf);
     rtcp_set_length(buf, s / 4 - 1);
 
