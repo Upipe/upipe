@@ -22,7 +22,9 @@
 /** @file
  * @short Upipe sink module for netmap
  */
-#define _GNU_SOURCE
+
+#include <config.h>
+
 #include <upipe/ubase.h>
 #include <upipe/ulist.h>
 #include <upipe/uprobe.h>
@@ -630,7 +632,7 @@ static struct upipe *_upipe_netmap_sink_alloc(struct upipe_mgr *mgr,
     upipe_netmap_sink->pack = upipe_sdi_pack_c;
     upipe_netmap_sink->pack2 = upipe_sdi_pack2_c;
 
-#if defined(HAVE_X86_ASM)
+#if defined(HAVE_X86ASM)
 #if defined(__i686__) || defined(__x86_64__)
     if (__builtin_cpu_supports("ssse3")) {
         upipe_netmap_sink->pack = upipe_uyvy_to_sdi_unaligned_ssse3;

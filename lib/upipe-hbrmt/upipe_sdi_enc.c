@@ -1,3 +1,5 @@
+#include <config.h>
+
 #include <upipe/ubase.h>
 #include <upipe/uprobe.h>
 #include <upipe/uref.h>
@@ -1640,7 +1642,7 @@ static struct upipe *_upipe_sdi_enc_alloc(struct upipe_mgr *mgr,
     upipe_sdi_enc->planar_to_uyvy_10 = planar_to_uyvy_10_c;
     upipe_sdi_enc->v210_to_uyvy      = v210_uyvy_unpack_c;
 
-#if defined(HAVE_X86_ASM)
+#if defined(HAVE_X86ASM)
 #if defined(__i686__) || defined(__x86_64__)
     if (__builtin_cpu_supports("sse")) {
         upipe_sdi_enc->blank         = upipe_sdi_blank_sse;

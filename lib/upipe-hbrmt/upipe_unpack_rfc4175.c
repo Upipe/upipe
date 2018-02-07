@@ -22,6 +22,8 @@
  * @short Upipe unpack rfc 4175 module
  */
 
+#include <config.h>
+
 #include <upipe/ubase.h>
 #include <upipe/uprobe.h>
 #include <upipe/uclock.h>
@@ -489,7 +491,7 @@ static struct upipe *upipe_unpack_rfc4175_alloc(struct upipe_mgr *mgr,
     upipe_unpack_rfc4175->bitpacked_to_v210 = upipe_sdi_to_v210_c;
     upipe_unpack_rfc4175->bitpacked_to_planar_8 = upipe_sdi_to_planar_8_c;
 
-#if defined(HAVE_X86_ASM)
+#if defined(HAVE_X86ASM)
 #if defined(__i686__) || defined(__x86_64__)
     if (__builtin_cpu_supports("ssse3")) {
         upipe_unpack_rfc4175->bitpacked_to_v210 = upipe_sdi_to_v210_ssse3;

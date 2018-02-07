@@ -22,6 +22,8 @@
  * @short Upipe sdi_dec module
  */
 
+#include <config.h>
+
 #include <upipe/ubase.h>
 #include <upipe/uprobe.h>
 #include <upipe/uref.h>
@@ -1048,7 +1050,7 @@ static bool upipe_sdi_dec_handle(struct upipe *upipe, struct uref *uref,
                     vbi_line++;
                 }
             } else {
-#if defined(HAVE_X86_ASM)
+#if defined(HAVE_X86ASM)
 #if defined(__i686__) || defined(__x86_64__)
                 if (__builtin_cpu_supports("ssse3"))
                     upipe_sdi_vanc_deinterleave_ssse3(vanc_buf, vanc_stride, src_line, 0);
@@ -1507,7 +1509,7 @@ static struct upipe *_upipe_sdi_dec_alloc(struct upipe_mgr *mgr,
     upipe_sdi_dec->uyvy_to_planar_8 = uyvy_to_planar_8_c;
     upipe_sdi_dec->uyvy_to_planar_10 = uyvy_to_planar_10_c;
 
-#if defined(HAVE_X86_ASM)
+#if defined(HAVE_X86ASM)
 #if defined(__i686__) || defined(__x86_64__)
     if (__builtin_cpu_supports("ssse3")) {
         upipe_sdi_dec->uyvy_to_v210 = upipe_uyvy_to_v210_unaligned_ssse3;
