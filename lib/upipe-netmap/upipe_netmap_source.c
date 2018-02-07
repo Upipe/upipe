@@ -569,10 +569,10 @@ static uint64_t do_packet(struct upipe *upipe, struct netmap_ring *rxring,
             uref_block_unmap(uref, 0);
             uref_clock_set_cr_sys(uref, systime);
             upipe_netmap_source_output(upipe, uref, &upipe_netmap_source->upump);
+            upipe_netmap_source->expected_seqnum = ++seqnum & UINT16_MAX;
+            upipe_netmap_source->last_timestamp = timestamp;
         }
 
-        upipe_netmap_source->expected_seqnum = ++seqnum & UINT16_MAX;
-        upipe_netmap_source->last_timestamp = timestamp;
         upipe_netmap_source->packets++;
         if (!hbrmt)
             return ret;
