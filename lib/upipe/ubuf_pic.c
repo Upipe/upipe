@@ -106,7 +106,7 @@ int ubuf_pic_plane_clear(struct ubuf *ubuf, const char *chroma,
 #undef MATCH
     UBASE_RETURN(ubuf_pic_plane_unmap(ubuf, chroma, hoffset, voffset,
                                       hsize, vsize))
-    return known ? UBASE_ERR_INVALID : UBASE_ERR_NONE;
+    return known ? UBASE_ERR_NONE : UBASE_ERR_INVALID;
 }
 
 /** @This clears (part of) the specified picture, depending on plane type
@@ -136,7 +136,7 @@ int ubuf_pic_clear(struct ubuf *ubuf, int hoffset, int voffset,
     const char *chroma = NULL;
     while (ubase_check(ubuf_pic_plane_iterate(ubuf, &chroma)) &&
            chroma != NULL) {
-        ret = ubase_check(ubuf_pic_plane_clear(ubuf, chroma,
+        ret = !ubase_check(ubuf_pic_plane_clear(ubuf, chroma,
             hoffset, voffset, hsize, vsize, fullrange)) || ret;
     }
 
