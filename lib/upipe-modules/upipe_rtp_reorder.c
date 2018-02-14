@@ -446,6 +446,7 @@ static void upipe_rtpr_sub_free(struct upipe *upipe)
     upipe_rtpr_sub_clean_input(upipe);
     upipe_rtpr_sub_clean_sub(upipe);
     upipe_rtpr_sub_clean_urefcount(upipe);
+    upipe_rtpr_sub_free_void(upipe);
 }
 
 /** @internal @This initializes the output manager for an rtpr sub pipe.
