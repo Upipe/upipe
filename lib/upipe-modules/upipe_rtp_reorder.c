@@ -95,9 +95,8 @@ struct upipe_rtpr {
 
     /** upump manager */
     struct upump_mgr *upump_mgr;
-    struct upump *upump;
     /** reorder timer */
-    struct upump *upump2;
+    struct upump *upump;
 
     /** manager to create subs */
     struct upipe_mgr sub_mgr;
@@ -215,11 +214,11 @@ static int upipe_rtpr_check(struct upipe *upipe, struct uref *flow_format)
 		return UBASE_ERR_NONE;
     }
 
-    upipe_rtpr->upump2 = upump_alloc_timer(upipe_rtpr->upump_mgr,
+    upipe_rtpr->upump = upump_alloc_timer(upipe_rtpr->upump_mgr,
                                             upipe_rtpr_timer, upipe, upipe->refcount,
                                             UCLOCK_FREQ/300, UCLOCK_FREQ/300);
 
-    upump_start(upipe_rtpr->upump2);
+    upump_start(upipe_rtpr->upump);
 
     return UBASE_ERR_NONE;
 }
@@ -638,8 +637,6 @@ static void upipe_rtpr_free(struct urefcount *urefcount_real)
     upipe_dbg_va(upipe, "releasing pipe %p", upipe);
     upipe_throw_dead(upipe);
 
-    upump_stop(upipe_rtpr->upump2);
-    upump_free(upipe_rtpr->upump2);
     upipe_rtpr_clean_queue(upipe);
 
     upipe_rtpr_clean_uclock(upipe);
