@@ -519,24 +519,6 @@ static struct upipe *upipe_rtpr_alloc(struct upipe_mgr *mgr,
     return upipe;
 }
 
-/** @internal @This sets the input flow definition.
- *
- * @param upipe description structure of the pipe
- * @param flow_def flow definition packet
- * @return an error code
- */
-static int upipe_rtpr_set_flow_def(struct upipe *upipe, struct uref *flow_def)
-{
-    if (flow_def == NULL)
-        return UBASE_ERR_INVALID;
-    struct uref *flow_def_dup;
-    if (unlikely((flow_def_dup = uref_dup(flow_def)) == NULL))
-        return UBASE_ERR_ALLOC;
-    struct upipe_rtpr *upipe_rtpr = upipe_rtpr_from_upipe(upipe);
-    upipe_rtpr->flow_def = flow_def_dup;
-    return UBASE_ERR_NONE;
-}
-
 /** @internal @This returns the current delay being set into urefs.
  *
  * @param upipe description structure of the pipe
@@ -584,10 +566,6 @@ static int _upipe_rtpr_control(struct upipe *upipe, int command, va_list args)
             upipe_rtpr_set_upump(upipe, NULL);
             upipe_rtpr_require_uclock(upipe);
             return UBASE_ERR_NONE;
-        }
-        case UPIPE_SET_FLOW_DEF: {
-            struct uref *flow_def = va_arg(args, struct uref *);
-            return upipe_rtpr_set_flow_def(upipe, flow_def);
         }
         case UPIPE_RTPR_GET_DELAY: {
             UBASE_SIGNATURE_CHECK(args, UPIPE_RTPR_SIGNATURE)
