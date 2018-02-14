@@ -240,19 +240,10 @@ static int upipe_rtpr_sub_set_flow_def(struct upipe *upipe,
     struct upipe_rtpr *upipe_rtpr =
         upipe_rtpr_from_sub_mgr(upipe->mgr);
     struct upipe_rtpr_sub *upipe_rtpr_sub =
-        upipe_rtpr_sub_from_upipe(upipe);
+                            upipe_rtpr_sub_from_upipe(upipe);
 
-    if (flow_def == NULL)
-        return UBASE_ERR_INVALID;
-
-    flow_def = uref_dup(flow_def);
-    UBASE_ALLOC_RETURN(flow_def)
-    upipe_rtpr_sub->flow_def = flow_def;
-    if (!upipe_rtpr->flow_def) {
-        flow_def = uref_dup(flow_def);
-        UBASE_ALLOC_RETURN(flow_def)
-        upipe_rtpr->flow_def = flow_def;
-    }
+    upipe_rtpr_store_flow_def(&upipe_rtpr->upipe, uref_dup(flow_def));
+    upipe_rtpr_sub->flow_def = uref_dup(flow_def);
     return UBASE_ERR_NONE;
 }
 
@@ -443,6 +434,9 @@ static void upipe_rtpr_sub_free(struct upipe *upipe)
 
     upipe_throw_dead(upipe);
 
+    if (upipe_rtpr_sub->flow_def)
+        uref_free(upipe_rtpr_sub->flow_def);
+
     upipe_rtpr_sub_clean_input(upipe);
     upipe_rtpr_sub_clean_sub(upipe);
     upipe_rtpr_sub_clean_urefcount(upipe);
@@ -616,8 +610,6 @@ static void upipe_rtpr_free(struct urefcount *urefcount_real)
 
     upipe_rtpr_clean_uclock(upipe);
     upipe_rtpr_clean_sub_inputs(upipe);
-    if (upipe_rtpr->flow_def != NULL)
-        uref_free(upipe_rtpr->flow_def);
     urefcount_clean(urefcount_real);
 
     upipe_rtpr_clean_upump(upipe);
