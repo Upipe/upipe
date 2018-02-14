@@ -214,6 +214,9 @@ static int upipe_rtpr_check(struct upipe *upipe, struct uref *flow_format)
 		return UBASE_ERR_NONE;
     }
 
+    if (upipe_rtpr->upump)
+        return UBASE_ERR_NONE;
+
     upipe_rtpr->upump = upump_alloc_timer(upipe_rtpr->upump_mgr,
                                             upipe_rtpr_timer, upipe, upipe->refcount,
                                             UCLOCK_FREQ/300, UCLOCK_FREQ/300);
