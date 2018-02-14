@@ -84,8 +84,6 @@ struct upipe_rtpr {
 
     /** output pipe */
     struct upipe *output;
-    /** input flow definition packet */
-    struct uref *flow_def_input;
     /** flow definition packet */
     struct uref *flow_def;
     /** output state */
@@ -509,8 +507,6 @@ static struct upipe *upipe_rtpr_alloc(struct upipe_mgr *mgr,
     upipe_rtpr_init_sub_mgr(upipe);
     upipe_rtpr_init_sub_inputs(upipe);
 
-    upipe_rtpr->flow_def_input = NULL;
-
     ulist_init(&upipe_rtpr->queue);
 
     upipe_rtpr->last_sent_seqnum = UINT64_MAX;
@@ -537,8 +533,6 @@ static int upipe_rtpr_set_flow_def(struct upipe *upipe, struct uref *flow_def)
     if (unlikely((flow_def_dup = uref_dup(flow_def)) == NULL))
         return UBASE_ERR_ALLOC;
     struct upipe_rtpr *upipe_rtpr = upipe_rtpr_from_upipe(upipe);
-    uref_free(upipe_rtpr->flow_def_input);
-    upipe_rtpr->flow_def_input = flow_def_dup;
     upipe_rtpr->flow_def = flow_def_dup;
     return UBASE_ERR_NONE;
 }
