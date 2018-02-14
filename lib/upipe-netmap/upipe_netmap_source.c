@@ -650,6 +650,8 @@ static void upipe_netmap_source_worker(struct upump *upump)
                 uint64_t ret = do_packet(upipe, rxring[idx], cur, systime);
                 if (ret == UINT64_MAX) {
                     discontinuity++;
+                    if (pkts[!idx] == 0)
+                        pkts[idx] = 0;
                     break;
                 } else if (!same && ret != 0) {
                     if (seq_pts[idx] == UINT64_MAX) {
