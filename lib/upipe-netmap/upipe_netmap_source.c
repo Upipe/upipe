@@ -512,6 +512,22 @@ static const uint8_t *get_rtp(struct upipe *upipe, struct netmap_ring *rxring,
     return rtp;
 }
 
+#define GOT_SEQNUM (1LLU<<49)
+/*
+ * do_packet : examine next packet in queue and handle if possible
+ *
+ * Return value:
+ * UINT64_MAX       discontinuity, packet is in the future, keep it for later
+ * != UINT64_MAX    packet handled or discontinuity, drop it
+ * 0 -              invalid packet, drop it
+ * 0000000XTTTTTTTTTTTTTTTTSSSSSSSS
+ *      T = 32-bit RTP timestamp
+ *      S = 16-bit RTP seqnum
+ *      bit 48 is set to account for timestamp == seqnum == 0
+ *      bit 49 is set when we found the seqnum we were looking for
+ *
+ *
+ */
 static uint64_t do_packet(struct upipe *upipe, struct netmap_ring *rxring,
         const uint32_t cur, uint64_t systime)
 {
@@ -534,29 +550,27 @@ static uint64_t do_packet(struct upipe *upipe, struct netmap_ring *rxring,
         uint32_t timestamp_diff = timestamp - upipe_netmap_source->last_timestamp;
 
         if (diff > 0x8000 ) {
-            return ret; // seqnum < expected, drop
+            /* seqnum < expected, drop */
+            return ret;
         }
 
         if (timestamp_diff > 0x80000000) {
+            /* packet is way too far in the future, drop */
             return ret;
         }
-        if (timestamp_diff > 10000) {
-            //printf("BAD %u (%u > %u)\n", timestamp_diff, seqnum, upipe_netmap_source->expected_seqnum);
-        }
 
-        if (0) upipe_warn_va(upipe, "potentially lost %d RTP packets, got %u expected %u, ts diff %x",
-                (seqnum + UINT16_MAX + 1 - upipe_netmap_source->expected_seqnum) &
-                UINT16_MAX, seqnum, upipe_netmap_source->expected_seqnum, timestamp_diff);
-
-        return UINT64_MAX; // seqnum > expected, keep
+        /* seqnum > expected, keep */
+        return UINT64_MAX;
     }
 
+    ret |= GOT_SEQNUM;
     /* We have a valid packet and expected sequence number from here on */
 
     if (!upipe_netmap_source->discontinuity) {
         bool hbrmt = upipe_netmap_source->hbrmt;
         if (hbrmt) {
             if (handle_hbrmt_packet(upipe, rtp, pkt_size))
+                /* error handling packet, drop */
                 return ret;
         } else {
             struct uref *uref = uref_block_alloc(upipe_netmap_source->uref_mgr,
@@ -646,13 +660,20 @@ static void upipe_netmap_source_worker(struct upump *upump)
                 const uint32_t cur = rxring[idx]->cur;
                 uint64_t ret = do_packet(upipe, rxring[idx], cur, systime);
                 if (ret == UINT64_MAX) {
+                    /* discontinuity, packet is in the future */
                     discontinuity++;
-                    if (pkts[!idx] == 0)
+
+                    /* we did not find the packet we wanted */
+                    if (pkts[!idx] == 0) {
+                        /* if the other queue is empty, end the loop here.
+                         * we might find the packet we want in the other queue,
+                         * when it fills again
+                         */
                         pkts[idx] = 0;
-                    break;
-                } else if (ret != 0) {
-                    if (discontinuity)
-                        discontinuity--;
+                    }
+                    break; /* keep packet */
+                } else if (ret & GOT_SEQNUM) {
+                    discontinuity = 0;
                 }
                 rxring[idx]->head = rxring[idx]->cur = nm_ring_next(rxring[idx], cur);
                 pkts[idx]--;
