@@ -519,7 +519,7 @@ static uint64_t do_packet(struct upipe *upipe, struct netmap_ring *rxring,
 
     uint16_t pkt_size;
     const uint8_t *rtp = get_rtp(upipe, rxring, &rxring->slot[cur], &pkt_size);
-    if (!rtp)
+    if (!rtp || !rtp_check_hdr(rtp))
         return 0;
 
     uint16_t seqnum = rtp_get_seqnum(rtp);
@@ -527,10 +527,6 @@ static uint64_t do_packet(struct upipe *upipe, struct netmap_ring *rxring,
 
     /* 1 << 48 to signal valid packet */
     uint64_t ret = (UINT64_C(1) << 48) | (((uint64_t)timestamp) << 16) | seqnum;
-    bool marker = rtp_check_marker(rtp);
-
-    if (!rtp_check_hdr(rtp))
-        return 0;
 
     if (unlikely(upipe_netmap_source->expected_seqnum != UINT32_MAX &&
                 seqnum != upipe_netmap_source->expected_seqnum)) {
@@ -585,9 +581,7 @@ static uint64_t do_packet(struct upipe *upipe, struct netmap_ring *rxring,
             return ret;
     }
 
-    // bit corruption??!
-    //marker = upipe_netmap_source->packets == 5397;
-
+    bool marker = rtp_check_marker(rtp);
     if ((marker || upipe_netmap_source->discontinuity) && upipe_netmap_source->uref) {
         uref_block_unmap(upipe_netmap_source->uref, 0);
 
