@@ -641,10 +641,7 @@ static void upipe_netmap_source_worker(struct upump *upump)
         pkts[i] = nm_ring_space(rxring[i]);
     }
 
-    uint64_t seq_pts[2] = {UINT64_MAX, UINT64_MAX};
-
     int sources = !!pkts[0] + !!pkts[1];
-    bool same = false;
     while (pkts[0] || pkts[1]) {
         int discontinuity = 0;
         for (int idx = 0; idx < 2; idx++) { // one queue then the other
@@ -659,13 +656,6 @@ static void upipe_netmap_source_worker(struct upump *upump)
                     if (pkts[!idx] == 0)
                         pkts[idx] = 0;
                     break;
-                } else if (!same && ret != 0) {
-                    if (seq_pts[idx] == UINT64_MAX) {
-                        seq_pts[idx] = ret;
-                    } else {
-                        /* seq_pts already set for this stream */
-                        same = seq_pts[!idx] == ret;
-                    }
                 }
                 rxring[idx]->head = rxring[idx]->cur = nm_ring_next(rxring[idx], cur);
                 pkts[idx]--;
@@ -683,8 +673,6 @@ static void upipe_netmap_source_worker(struct upump *upump)
             upipe_netmap_source->expected_seqnum = UINT32_MAX;
         }
     }
-
-    //if (!same) upipe_verbose_va(upipe, "streams differ");
 }
 
 /** @internal @This checks if the pump may be allocated.
