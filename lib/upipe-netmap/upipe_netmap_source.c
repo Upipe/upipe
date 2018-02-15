@@ -656,6 +656,9 @@ static void upipe_netmap_source_worker(struct upump *upump)
                     if (pkts[!idx] == 0)
                         pkts[idx] = 0;
                     break;
+                } else if (ret != 0) {
+                    if (discontinuity)
+                        discontinuity--;
                 }
                 rxring[idx]->head = rxring[idx]->cur = nm_ring_next(rxring[idx], cur);
                 pkts[idx]--;
