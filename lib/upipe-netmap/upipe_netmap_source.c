@@ -528,6 +528,9 @@ static uint64_t do_packet(struct upipe *upipe, struct netmap_ring *rxring,
     uint64_t ret = (UINT64_C(1) << 48) | (((uint64_t)timestamp) << 16) | seqnum;
     bool marker = rtp_check_marker(rtp);
 
+    if (!rtp_check_hdr(rtp))
+        return 0;
+
     if (unlikely(upipe_netmap_source->expected_seqnum != UINT32_MAX &&
                 seqnum != upipe_netmap_source->expected_seqnum)) {
         uint16_t diff = seqnum - upipe_netmap_source->expected_seqnum;
