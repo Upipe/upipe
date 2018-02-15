@@ -525,6 +525,7 @@ static uint64_t do_packet(struct upipe *upipe, struct netmap_ring *rxring,
     uint16_t seqnum = rtp_get_seqnum(rtp);
     uint32_t timestamp = rtp_get_timestamp(rtp);
 
+    /* 1 << 48 to signal valid packet */
     uint64_t ret = (UINT64_C(1) << 48) | (((uint64_t)timestamp) << 16) | seqnum;
     bool marker = rtp_check_marker(rtp);
 
@@ -553,6 +554,8 @@ static uint64_t do_packet(struct upipe *upipe, struct netmap_ring *rxring,
 
         return UINT64_MAX; // seqnum > expected, keep
     }
+
+    /* We have a valid packet and expected sequence number from here on */
 
     if (!upipe_netmap_source->discontinuity) {
         bool hbrmt = upipe_netmap_source->hbrmt;
