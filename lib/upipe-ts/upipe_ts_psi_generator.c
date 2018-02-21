@@ -1067,8 +1067,10 @@ static int _upipe_ts_psig_program_set_pcr_pid(struct upipe *upipe,
 {
     struct upipe_ts_psig_program *upipe_ts_psig_program =
         upipe_ts_psig_program_from_upipe(upipe);
+    bool pmt_change = upipe_ts_psig_program->pcr_pid != pcr_pid;
     upipe_ts_psig_program->pcr_pid = pcr_pid;
-    upipe_ts_psig_program_build(upipe);
+    if (pmt_change)
+        upipe_ts_psig_program_build(upipe);
     return UBASE_ERR_NONE;
 }
 
