@@ -911,23 +911,23 @@ static struct upipe *upipe_ts_demux_output_alloc(struct upipe_mgr *mgr,
  * coming from pmtd.
  *
  * @param upipe description structure of the pipe
- * @param flow_def flow definition packet
+ * @param flow_def_pmtd flow definition packet
  * @return false if the new flow def couldn't be applied
  */
 static bool upipe_ts_demux_output_pmtd_update(struct upipe *upipe,
-                                              struct uref *flow_def)
+                                              struct uref *flow_def_pmtd)
 {
     struct upipe_ts_demux_output *upipe_ts_demux_output =
         upipe_ts_demux_output_from_upipe(upipe);
     if (likely(upipe_ts_demux_output->setrap != NULL)) {
-        flow_def = uref_dup(flow_def);
+        struct uref *flow_def = uref_dup(flow_def_pmtd);
         if (unlikely(flow_def == NULL)) {
             upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
             return false;
         }
 
         const char *def;
-        if (unlikely(!ubase_check(uref_flow_get_raw_def(flow_def, &def)) ||
+        if (unlikely(!ubase_check(uref_flow_get_raw_def(flow_def_pmtd, &def)) ||
                      !ubase_check(uref_flow_set_def(flow_def, def)) ||
                      !ubase_check(uref_flow_delete_raw_def(flow_def)))) {
             uref_free(flow_def);
@@ -1349,22 +1349,22 @@ static int upipe_ts_demux_program_pmtd_update(struct upipe *upipe,
         /* to avoid having the uchain disappear during upipe_throw_source_end */
         upipe_use(upipe_ts_demux_output_to_upipe(output));
 
+        const char *def_input = NULL;
+        uref_flow_get_def(output->flow_def_input, &def_input);
+
         struct uref *flow_def = NULL;
         bool match = false;
         while (ubase_check(upipe_split_iterate(pmtd, &flow_def)) &&
                flow_def != NULL) {
             const char *def = NULL;
-            const char *def_input = NULL;
             uint64_t id = 0;
             if (!ubase_check(uref_flow_get_id(flow_def, &id))
-                || !ubase_check(uref_flow_get_def(flow_def, &def))
-                || !ubase_check(uref_flow_get_def(output->flow_def_input,
-                        &def_input)))
+                || !ubase_check(uref_flow_get_raw_def(flow_def, &def))
+                || def_input == NULL)
                 continue;
 
-            bool match = !strcmp(def, def_input) && id == output->pid;
+            match = !strcmp(def, def_input) && id == output->pid;
             if (match) {
-
                 if (!upipe_ts_demux_output_pmtd_update(
                             upipe_ts_demux_output_to_upipe(output), flow_def))
                     upipe_throw_source_end(
