@@ -825,10 +825,15 @@ static int upipe_ts_sig_service_control(struct upipe *upipe,
         }
         case UPIPE_TS_MUX_SET_EIT_INTERVAL: {
             UBASE_SIGNATURE_CHECK(args, UPIPE_TS_MUX_SIGNATURE)
-            upipe_ts_sig_service->eit_interval = va_arg(args, uint64_t);
+            uint64_t eit_interval = va_arg(args, uint64_t);
+            bool sdt_change = (upipe_ts_sig_service->eit_interval == 0) !=
+                              (eit_interval == 0);
+            upipe_ts_sig_service->eit_interval = eit_interval;
             upipe_ts_sig_build_eit_flow_def(upipe_ts_sig_to_upipe(sig));
-            upipe_ts_sig_build_sdt(upipe_ts_sig_to_upipe(sig));
-            upipe_ts_sig_build_sdt_flow_def(upipe_ts_sig_to_upipe(sig));
+            if (sdt_change) {
+                upipe_ts_sig_build_sdt(upipe_ts_sig_to_upipe(sig));
+                upipe_ts_sig_build_sdt_flow_def(upipe_ts_sig_to_upipe(sig));
+            }
             return UBASE_ERR_NONE;
         }
 
@@ -2141,7 +2146,7 @@ static int upipe_ts_sig_control(struct upipe *upipe, int command, va_list args)
         case UPIPE_TS_MUX_SET_TDT_INTERVAL: {
             UBASE_SIGNATURE_CHECK(args, UPIPE_TS_MUX_SIGNATURE)
             sig->tdt_interval = va_arg(args, uint64_t);
-            if (sig->tdt_interval)
+            if (sig->tdt_interval && sig->uclock == NULL)
                 upipe_ts_sig_require_uclock(upipe);
             upipe_ts_sig_build_tdt_flow_def(upipe);
             upipe_ts_sig_update_status(upipe);
@@ -2155,9 +2160,14 @@ static int upipe_ts_sig_control(struct upipe *upipe, int command, va_list args)
         }
         case UPIPE_TS_MUX_SET_EITS_OCTETRATE: {
             UBASE_SIGNATURE_CHECK(args, UPIPE_TS_MUX_SIGNATURE)
-            sig->eits_octetrate = va_arg(args, uint64_t);
-            upipe_ts_sig_build_sdt(upipe);
-            upipe_ts_sig_build_sdt_flow_def(upipe);
+            uint64_t eits_octetrate = va_arg(args, uint64_t);
+            bool sdt_change = (sig->eits_octetrate == 0) !=
+                              (eits_octetrate == 0);
+            sig->eits_octetrate = eits_octetrate;
+            if (sdt_change) {
+                upipe_ts_sig_build_sdt(upipe_ts_sig_to_upipe(sig));
+                upipe_ts_sig_build_sdt_flow_def(upipe_ts_sig_to_upipe(sig));
+            }
             upipe_ts_sig_update_status(upipe);
             return UBASE_ERR_NONE;
         }
