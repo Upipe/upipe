@@ -98,6 +98,14 @@ int ubuf_pic_plane_clear(struct ubuf *ubuf, const char *chroma,
             memset(buf, 0x80, memset_width);
             buf += stride;
         }
+    } else if (MATCH("u10l") || MATCH("v10l")) {
+        size_t new_width = width/hsub;
+        LINELOOP(j) {
+            uint16_t *new_buf = (uint16_t*)buf;
+            for (int x = 0; x < new_width; x++)
+                new_buf[x] = 0x200;
+            buf += stride;
+        }
     } else {
         known = false;
     }
