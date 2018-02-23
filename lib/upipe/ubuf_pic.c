@@ -98,39 +98,6 @@ int ubuf_pic_plane_clear(struct ubuf *ubuf, const char *chroma,
             memset(buf, 0x80, memset_width);
             buf += stride;
         }
-    } else if (MATCH("y10l") && macropixel_size == 2) {
-        LINELOOP(j) {
-            if (fullrange)
-                memset(buf, 0, memset_width);
-            else for (int i = 0; i < memset_width; i += macropixel_size) {
-                buf[i]   = 16 << 2;
-                buf[i+1] = 0;
-            }
-            buf += stride;
-        }
-    } else if ((MATCH("u10l") || MATCH("v10l")) && macropixel_size == 2) {
-        LINELOOP(j) {
-            for (int i = 0; i < memset_width; i += macropixel_size) {
-                buf[i]   = 0;
-                buf[i+1] = 2; /* 0x80 << 2 */
-            }
-            buf += stride;
-        }
-    } else if (MATCH("u10y10v10y10u10y10v10y10u10y10v10y10") && fullrange &&
-        macropixel_size == 16) {
-        /* this pattern repeated 2 times form a full macropixel */
-        static const uint8_t pattern[8] = {
-            // u y v + 2 bits, le
-            0x00, 0x02, 0x00, 0x20,
-            // y u y + 2 bits, le
-            0x00, 0x00, 0x08, 0x00,
-        };
-        LINELOOP(j) {
-            for (int i = 0; i < memset_width; i += macropixel_size / 2) {
-                memcpy(&buf[i], pattern, sizeof(pattern));
-            }
-            buf += stride;
-        }
     } else {
         known = false;
     }
