@@ -2685,6 +2685,9 @@ static bool upipe_h265f_handle(struct upipe *upipe, struct uref *uref,
         uref_attach_ubuf(uref, ubuf);
     }
 
+    uref_flow_delete_random(uref);
+    uref_pic_delete_key(uref);
+
     switch (upipe_h265f->encaps_input) {
         case UREF_H26X_ENCAPS_NALU:
             return upipe_h265f_work_nalu(upipe, uref, upump_p);
