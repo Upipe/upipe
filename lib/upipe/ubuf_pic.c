@@ -104,6 +104,7 @@ int ubuf_pic_plane_clear(struct ubuf *ubuf, const char *chroma,
             uint16_t *new_buf = (uint16_t*)buf;
             for (int x = 0; x < new_width; x++)
                 new_buf[x] = 0x200;
+            buf += stride;
         }
     } else if (MATCH("y10l") && macropixel_size == 2) {
         LINELOOP(j) {
