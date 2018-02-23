@@ -1311,7 +1311,6 @@ static uint64_t uclock_bmd_sink_now(struct uclock *uclock)
     BMDTimeValue hardware_time = UINT64_MAX, time_in_frame, ticks_per_frame;
 
     if (!upipe_bmd_sink->deckLinkOutput) {
-        upipe_err_va(upipe, "No output configured");
         return UINT64_MAX;
     }
 
@@ -1319,7 +1318,6 @@ static uint64_t uclock_bmd_sink_now(struct uclock *uclock)
     HRESULT res = upipe_bmd_sink->deckLinkOutput->GetHardwareReferenceClock(
             UCLOCK_FREQ, &hardware_time, &time_in_frame, &ticks_per_frame);
     if (res != S_OK) {
-        upipe_err_va(upipe, "\t\tCouldn't read hardware clock: 0x%08x", res);
         hardware_time = 0;
     }
 
