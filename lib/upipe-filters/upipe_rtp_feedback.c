@@ -814,14 +814,16 @@ static void upipe_rtpfb_input(struct upipe *upipe, struct uref *uref,
                     upipe_verbose_va(upipe, "RTT %f", (float)rtt / UCLOCK_FREQ);
                     upipe_rtpfb->rtt = rtt;
 
-                    upump_stop(upipe_rtpfb->upump_timer_lost);
-                    upump_free(upipe_rtpfb->upump_timer_lost);
+                    if (upipe_rtpfb->upump_timer_lost) {
+                        upump_stop(upipe_rtpfb->upump_timer_lost);
+                        upump_free(upipe_rtpfb->upump_timer_lost);
+                    }
                     if (upipe_rtpfb->upump_mgr) {
                         upipe_rtpfb->upump_timer_lost = upump_alloc_timer(upipe_rtpfb->upump_mgr,
                                 upipe_rtpfb_timer_lost, upipe, upipe->refcount,
                                 0, rtt / 10);
+                        upump_start(upipe_rtpfb->upump_timer_lost);
                     }
-                    upump_start(upipe_rtpfb->upump_timer_lost);
                 }
             } else {
                 upipe_err(upipe, "malformed RTCP APP obe packet");
@@ -1017,10 +1019,14 @@ static void upipe_rtpfb_free(struct urefcount *urefcount_real)
     upipe_rtpfb_clean_ubuf_mgr(upipe);
     upipe_rtpfb_clean_uref_mgr(upipe);
     upipe_release(upipe_rtpfb->rtpfb_output);
-    upump_stop(upipe_rtpfb->upump_timer);
-    upump_free(upipe_rtpfb->upump_timer);
-    upump_stop(upipe_rtpfb->upump_timer_lost);
-    upump_free(upipe_rtpfb->upump_timer_lost);
+    if (upipe_rtpfb->upump_timer) {
+        upump_stop(upipe_rtpfb->upump_timer);
+        upump_free(upipe_rtpfb->upump_timer);
+    }
+    if (upipe_rtpfb->upump_timer_lost) {
+        upump_stop(upipe_rtpfb->upump_timer_lost);
+        upump_free(upipe_rtpfb->upump_timer_lost);
+    }
     upipe_rtpfb_clean_upump_mgr(upipe);
     upipe_rtpfb_clean_uclock(upipe);
     uprobe_release(upipe_rtpfb->uprobe);
