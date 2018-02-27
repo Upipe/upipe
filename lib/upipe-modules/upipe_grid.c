@@ -310,9 +310,11 @@ static void upipe_grid_in_input(struct upipe *upipe,
         return;
     }
 
-    if (pts + upipe_grid->tolerance + upipe_grid_in->latency <
-        upipe_grid_in->last_update) {
-        upipe_warn(upipe, "PTS is too far in the past");
+    uint64_t rebase_pts = pts + upipe_grid_in->latency;
+    if (rebase_pts + upipe_grid->tolerance < upipe_grid_in->last_update) {
+        upipe_warn_va(upipe, "PTS is too far in the past %"PRIu64"ms",
+                     (upipe_grid_in->last_update - rebase_pts) /
+                     (UCLOCK_FREQ / 1000));
         uref_free(uref);
         return;
     }
