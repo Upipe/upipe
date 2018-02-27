@@ -43,9 +43,6 @@
 
 #include <upipe-modules/upipe_grid.h>
 
-#define UPIPE_GRID_IN_SIGNATURE        UBASE_FOURCC('i','n',' ',' ')
-#define UPIPE_GRID_OUT_SIGNATURE       UBASE_FOURCC('o','u','t',' ')
-
 /** expected flow def for reference input */
 #define REF_EXPECTED_FLOW "void."
 /** default pts tolerance (late packets) */
@@ -69,8 +66,12 @@ struct upipe_grid {
     struct uchain inputs;
     /** output sub pipe list */
     struct uchain outputs;
-    /** pts latency */
-    uint64_t latency;
+    /** late buffer tolerance */
+    uint64_t tolerance;
+    /** last update pts */
+    uint64_t last_update_pts;
+    /** next update diff */
+    uint64_t next_update;
 };
 
 /** @hidden */
@@ -100,6 +101,14 @@ struct upipe_grid_in {
     struct uref *flow_attr;
     /** proxy probe */
     struct uprobe proxy;
+    /** last received PTS */
+    uint64_t last_pts;
+    /** last update PTS */
+    uint64_t last_update;
+    /** input latency */
+    uint64_t latency;
+    /** next update diff */
+    uint64_t next_update;
 };
 
 UPIPE_HELPER_UPIPE(upipe_grid_in, upipe, UPIPE_GRID_IN_SIGNATURE);
@@ -108,17 +117,6 @@ UPIPE_HELPER_VOID(upipe_grid_in);
 UPIPE_HELPER_SUBPIPE(upipe_grid, upipe_grid_in, input, in_mgr,
                      inputs, uchain);
 UPIPE_HELPER_FLOW_DEF(upipe_grid_in, flow_def, flow_attr);
-
-/** @internal @This enumerates the grid output control commands. */
-enum upipe_grid_out_command {
-    /** sentinel */
-    UPIPE_GRID_OUT_SENTINEL = UPIPE_CONTROL_LOCAL,
-
-    /** get the grid output input pipe (struct upipe **) */
-    UPIPE_GRID_OUT_GET_INPUT,
-    /** set the grid output input pipe (struct upipe *) */
-    UPIPE_GRID_OUT_SET_INPUT,
-};
 
 /** @internal @This enumatates the grid output inner pipe events. */
 enum uprobe_grid_out_event {
@@ -157,6 +155,8 @@ struct upipe_grid_out {
     bool flow_def_uptodate;
     /** uchain for super pipe list */
     struct uchain uchain;
+    /** output tolerance */
+    uint64_t tolerance;
 };
 
 static void upipe_grid_out_handle_input_changed(struct upipe *upipe,
@@ -221,6 +221,10 @@ static struct upipe *upipe_grid_in_alloc(struct upipe_mgr *mgr,
     struct upipe_grid_in *upipe_grid_in =
         upipe_grid_in_from_upipe(upipe);
     ulist_init(&upipe_grid_in->urefs);
+    upipe_grid_in->last_pts = 0;
+    upipe_grid_in->last_update = 0;
+    upipe_grid_in->latency = 0;
+    upipe_grid_in->next_update = 0;
 
     upipe_throw_ready(upipe);
 
@@ -277,9 +281,19 @@ static void upipe_grid_in_input(struct upipe *upipe,
 {
     struct upipe_grid_in *upipe_grid_in =
         upipe_grid_in_from_upipe(upipe);
+    struct upipe_grid *upipe_grid = upipe_grid_from_in_mgr(upipe->mgr);
 
+    /* handle flow format */
     if (unlikely(ubase_check(uref_flow_get_def(uref, NULL)))) {
+        upipe_grid_in->latency = 0;
+        uref_clock_get_latency(uref, &upipe_grid_in->latency);
         ulist_add(&upipe_grid_in->urefs, uref_to_uchain(uref));
+        return;
+    }
+
+    if (unlikely(!uref->ubuf)) {
+        upipe_warn(upipe, "received empty buffer");
+        uref_free(uref);
         return;
     }
 
@@ -290,31 +304,46 @@ static void upipe_grid_in_input(struct upipe *upipe,
         return;
     }
 
+    if (pts <= upipe_grid_in->last_pts) {
+        upipe_warn(upipe, "PTS is in the past");
+        uref_free(uref);
+        return;
+    }
+
+    if (pts + upipe_grid->tolerance + upipe_grid_in->latency <
+        upipe_grid_in->last_update) {
+        upipe_warn(upipe, "PTS is too far in the past");
+        uref_free(uref);
+        return;
+    }
+
+    upipe_grid_in->last_pts = pts;
     ulist_add(&upipe_grid_in->urefs, uref_to_uchain(uref));
 
-    struct uchain *uchain, *uchain_tmp;
-    ulist_delete_foreach(&upipe_grid_in->urefs, uchain, uchain_tmp) {
-        uref = uref_from_uchain(uchain);
+    struct uref *last_flow_def = NULL;
+    struct uchain *uchain;
+    while ((uchain = ulist_pop(&upipe_grid_in->urefs))) {
+        struct uref *uref = uref_from_uchain(uchain);
 
-        if (unlikely(ubase_check(uref_flow_get_def(uref, NULL))))
-            continue;
-
-        uint64_t current_pts;
-        ubase_assert(uref_clock_get_pts_sys(uref, &current_pts));
-        if (unlikely(current_pts > pts)) {
-            ulist_delete(uchain);
-            uref_free(uref);
+        if (unlikely(ubase_check(uref_flow_get_def(uref, NULL)))) {
+            uref_free(last_flow_def);
+            last_flow_def = uref;
             continue;
         }
 
-        if (unlikely(pts - current_pts > MAX_RETENTION)) {
-            ulist_delete(uchain);
-            uref_free(uref);
-            continue;
-        };
+        ubase_assert(uref_clock_get_pts_sys(uref, &pts));
+        if (pts + MAX_RETENTION > upipe_grid_in->last_pts) {
+            ulist_unshift(&upipe_grid_in->urefs, uchain);
+            break;
+        }
 
-        break;
+        upipe_warn_va(upipe, "drop late frame %"PRIu64"ms",
+                      (upipe_grid_in->last_pts - pts) / (UCLOCK_FREQ / 1000));
+        uref_free(uref);
     }
+
+    if (last_flow_def)
+        ulist_unshift(&upipe_grid_in->urefs, uref_to_uchain(last_flow_def));
 }
 
 /** @internal @This sets the input flow def for real.
@@ -380,6 +409,17 @@ static int upipe_grid_in_get_flow_def(struct upipe *upipe,
 static void upipe_grid_in_update_pts(struct upipe *upipe, uint64_t next_pts)
 {
     struct upipe_grid_in *upipe_grid_in = upipe_grid_in_from_upipe(upipe);
+    struct upipe_grid *upipe_grid = upipe_grid_from_in_mgr(upipe->mgr);
+    struct uref *flow_def = upipe_grid_in->flow_def;
+    uint64_t latency = 0;
+
+    upipe_verbose_va(upipe, "update PTS %"PRIu64, next_pts);
+
+    /* get current input latency */
+    if (flow_def) {
+        latency = 0;
+        uref_clock_get_latency(flow_def, &latency);
+    }
 
     /* iterarte through the input buffers */
     struct uchain *uchain, *uchain_tmp;
@@ -387,28 +427,51 @@ static void upipe_grid_in_update_pts(struct upipe *upipe, uint64_t next_pts)
         struct uref *uref = uref_from_uchain(uchain);
 
         /* if this is a new flow def, apply it and continue */
-        const char *def;
-        if (unlikely(ubase_check(uref_flow_get_def(uref, &def)))) {
+        if (unlikely(ubase_check(uref_flow_get_def(uref, NULL)))) {
             ulist_delete(uchain);
             upipe_grid_in_set_flow_def_real(upipe, uref);
+            /* update current input latency */
+            flow_def = upipe_grid_in->flow_def;
+            latency = 0;
+            uref_clock_get_latency(flow_def, &latency);
+            continue;
+        }
+
+        if (unlikely(!flow_def)) {
+            /* no input flow definition set, drop */
+            upipe_warn(upipe, "no input flow def set");
+            ulist_delete(uchain);
+            uref_free(uref);
             continue;
         }
 
         /* if late buffer, free it and continue */
-        uint64_t pts = 0;
-        uref_clock_get_pts_sys(uref, &pts);
-        if ((!ulist_is_last(&upipe_grid_in->urefs, uchain) &&
-             pts < next_pts) ||
-            (next_pts > MAX_RETENTION && pts < next_pts - MAX_RETENTION)) {
+        uint64_t pts;
+        /* checked in upipe_grid_in_input */
+        ubase_assert(uref_clock_get_pts_sys(uref, &pts));
+
+        uint64_t retention = ulist_is_last(&upipe_grid_in->urefs, uchain) ?
+            MAX_RETENTION : 0;
+
+        if (pts + latency + upipe_grid->tolerance + retention < next_pts) {
             upipe_verbose_va(upipe, "drop uref pts %"PRIu64, pts);
             ulist_delete(uchain);
             uref_free(uref);
             continue;
         }
 
+        upipe_grid_in->next_update = 0;
+        if (pts + latency + upipe_grid->tolerance > next_pts)
+            upipe_grid_in->next_update =
+                pts + latency + upipe_grid->tolerance - next_pts;
+        if (upipe_grid_in->next_update < upipe_grid->next_update)
+            upipe_grid->next_update = upipe_grid_in->next_update;
+
         /* remaining buffers are up to date,.. */
         break;
     }
+
+    upipe_grid_in->last_update = next_pts;
 }
 
 /** @internal @This handles grid input controls.
@@ -486,6 +549,7 @@ static struct upipe *upipe_grid_out_alloc(struct upipe_mgr *mgr,
     upipe_grid_out->flow_def_uptodate = false;
     upipe_grid_out->flow_def_input = false;
     upipe_grid_out->input = NULL;
+    upipe_grid_out->tolerance = DEFAULT_TOLERANCE;
 
     upipe_throw_ready(upipe);
 
@@ -521,15 +585,15 @@ static int upipe_grid_out_catch(struct uprobe *uprobe, struct upipe *inner,
     return uprobe_throw_next(uprobe, inner, event, args);
 }
 
-/** @internal @This copies format-related information from
- * input flow to output flow.
+/** @internal @This imports format-related information from input flow to
+ * output flow.
  *
  * @param upipe description structure of the pipe
  * @param out_flow destination flow
  * @param in_flow input flow
  * @return an error code
  */
-static int upipe_grid_out_switch_format(struct upipe *upipe,
+static int upipe_grid_out_import_format(struct upipe *upipe,
                                         struct uref *out_flow,
                                         struct uref *in_flow)
 {
@@ -595,128 +659,100 @@ static int upipe_grid_out_switch_format(struct upipe *upipe,
  */
 static int upipe_grid_out_throw_update_pts(struct upipe *upipe, uint64_t pts)
 {
+    upipe_verbose_va(upipe, "update PTS %"PRIu64, pts);
     return upipe_throw(upipe, UPROBE_GRID_OUT_UPDATE_PTS,
                        UPIPE_GRID_OUT_SIGNATURE, pts);
 }
 
-static int upipe_grid_out_extract_pic(struct upipe *upipe,
-                                      struct uref *uref,
-                                      struct uchain *urefs)
+/** @internal @This extracts picture data from selected input pipe.
+ *
+ * @param upipe description structure of the output pipe
+ * @param uref picture buffer filled with input picture data
+ * @return an error code
+ */
+static int upipe_grid_out_extract_pic(struct upipe *upipe, struct uref *uref)
 {
     struct upipe_grid_out *upipe_grid_out = upipe_grid_out_from_upipe(upipe);
     struct upipe_grid_in *upipe_grid_in =
         upipe_grid_in_from_upipe(upipe_grid_out->input);
 
-    if (unlikely(ulist_empty(&upipe_grid_in->urefs))) {
-        upipe_dbg(upipe, "input underflow");
+    uint64_t pts = 0;
+    /* checked in upipe_grid_out_input */
+    ubase_assert(uref_clock_get_pts_sys(uref, &pts));
+
+    /* get first picture */
+    struct uchain *uchain = ulist_peek(&upipe_grid_in->urefs);
+    if (unlikely(!uchain)) {
+        upipe_warn(upipe, "no input buffer available");
         return UBASE_ERR_INVALID;
     }
+    struct uref *input_uref = uref_from_uchain(uchain);
 
-    struct uref *input_ref =
-        uref_from_uchain(ulist_peek(&upipe_grid_in->urefs));
-    struct ubuf *ubuf = ubuf_dup(input_ref->ubuf);
+    /* duplicate picture buffer */
+    struct ubuf *ubuf = ubuf_dup(input_uref->ubuf);
     if (unlikely(!ubuf)) {
         upipe_err(upipe, "fail to duplicate ubuf");
         return UBASE_ERR_ALLOC;
     }
 
-    uint64_t ref_pts = 0;
-    uref_clock_get_pts_sys(uref, &ref_pts);
-    uint64_t pts = 0;
-    uref_clock_get_pts_sys(input_ref, &pts);
-    uint64_t diff = pts >= ref_pts ? pts - ref_pts : ref_pts - pts;
-    if (diff > 41 * (UCLOCK_FREQ / 1000))
-        upipe_warn_va(upipe, "diff %s%"PRIu64" ms",
-                      pts > ref_pts ? "" : "-",  diff / (UCLOCK_FREQ / 1000));
-
-    ulist_init(urefs);
+    /* attach buffer to the uref */
     uref_attach_ubuf(uref, ubuf);
-    uref_attr_import(uref, input_ref);
+    uref_attr_import(uref, input_uref);
     uref_clock_delete_rate(uref);
-    ulist_add(urefs, uref_to_uchain(uref));
     return UBASE_ERR_NONE;
 }
 
-static int upipe_grid_out_extract_sound(struct upipe *upipe,
-                                        struct uref *uref,
-                                        struct uchain *urefs)
+/** @internal @This extracts sound data from selected input pipe to an uref.
+ *
+ * @param upipe description structure of the output pipe
+ * @param uref sound buffer filled with input sound data
+ * @return an error code
+ */
+static int upipe_grid_out_extract_sound(struct upipe *upipe, struct uref *uref)
 {
     struct upipe_grid_out *upipe_grid_out = upipe_grid_out_from_upipe(upipe);
     struct upipe_grid_in *upipe_grid_in =
         upipe_grid_in_from_upipe(upipe_grid_out->input);
+    struct uref *output_flow_def = upipe_grid_out->flow_def;
     struct uref *input_flow_def = upipe_grid_in->flow_def;
-    uint64_t next_pts = 0, next_duration = 0;
+    uint64_t next_pts;
     int ret = UBASE_ERR_NONE;
 
+    /* checked before */
+    assert(input_flow_def && output_flow_def);
+    /* checked before */
     ubase_assert(uref_clock_get_pts_sys(uref, &next_pts));
-    ubase_assert(uref_clock_get_duration(uref, &next_duration));
 
-    ulist_init(urefs);
-
-    struct uchain *uchain;
-    bool first = true;
-    ulist_foreach(&upipe_grid_in->urefs, uchain) {
-        struct uref *input_ref = uref_from_uchain(uchain);
-
-        const char *def;
-        if (unlikely(ubase_check(uref_flow_get_def(input_ref, &def))))
-            break;
-
-        uint64_t pts = 0, duration = 0;
-        ubase_assert(uref_clock_get_pts_sys(input_ref, &pts));
-        ubase_assert(uref_clock_get_duration(input_ref, &duration));
-
-        if (pts > next_pts + next_duration)
-            break;
-
-        struct uref *next_uref;
-        if (first) {
-            next_uref = uref;
-        }
-        else {
-            next_uref = uref_sibling_alloc_control(uref);
-            if (unlikely(!next_uref)) {
-                ret = UBASE_ERR_ALLOC;
-                break;
-            }
-            uref_clock_set_pts_prog(next_uref, next_pts);
-        }
-
-        struct ubuf *ubuf = ubuf_dup(input_ref->ubuf);
-        if (unlikely(!ubuf)) {
-            if (!first)
-                uref_free(next_uref);
-            ret = UBASE_ERR_ALLOC;
-            break;
-        }
-        uref_attach_ubuf(next_uref, ubuf);
-        uref_attr_import(uref, input_ref);
-        ubase_assert(uref_clock_set_duration(next_uref, duration));
-        ulist_add(urefs, uref_to_uchain(next_uref));
-
-        if (duration > next_duration)
-            break;
-        next_pts += duration;
-        next_duration -= duration;
-        first = false;
+    struct uchain *uchain = ulist_peek(&upipe_grid_in->urefs);
+    if (unlikely(!uchain)) {
+        upipe_warn(upipe, "no input buffer available");
+        return UBASE_ERR_INVALID;
     }
-
-    if (unlikely(!ubase_check(ret))) {
-        while ((uchain = ulist_pop(urefs)))
-            uref_free(uref_from_uchain(uchain));
+    struct uref *input_uref = uref_from_uchain(uchain);
+    struct ubuf *ubuf = ubuf_dup(input_uref->ubuf);
+    if (unlikely(!ubuf)) {
+        upipe_err(upipe, "fail to duplicate buffer");
+        return UBASE_ERR_ALLOC;
     }
-
-    return ret;
+    uref_attach_ubuf(uref, ubuf);
+    uref_attr_import(uref, input_uref);
+    return UBASE_ERR_NONE;
 }
 
-static int upipe_grid_out_extract_input(struct upipe *upipe,
-                                        struct uref *uref,
-                                        struct uchain *urefs)
+/** @internal @This extracts data from the selected input pipe.
+ *
+ * @param upipe description structure of the output pipe
+ * @param uref buffer filled with input data
+ * @return an error code
+ */
+static int upipe_grid_out_extract_input(struct upipe *upipe, struct uref *uref)
 {
     struct upipe_grid_out *upipe_grid_out = upipe_grid_out_from_upipe(upipe);
 
-    if (!upipe_grid_out->input)
+    if (!upipe_grid_out->input) {
+        upipe_verbose(upipe, "no input set");
         return UBASE_ERR_INVALID;
+    }
 
     struct upipe_grid_in *upipe_grid_in =
         upipe_grid_in_from_upipe(upipe_grid_out->input);
@@ -725,10 +761,14 @@ static int upipe_grid_out_extract_input(struct upipe *upipe,
         return UBASE_ERR_INVALID;
 
     if (ubase_check(uref_flow_match_def(input_flow_def, UREF_PIC_FLOW_DEF)))
-        return upipe_grid_out_extract_pic(upipe, uref, urefs);
+        return upipe_grid_out_extract_pic(upipe, uref);
     else if (ubase_check(uref_flow_match_def(input_flow_def,
                                              UREF_SOUND_FLOW_DEF)))
-        return upipe_grid_out_extract_sound(upipe, uref, urefs);
+        return upipe_grid_out_extract_sound(upipe, uref);
+
+    const char *def = "(none)";
+    uref_flow_get_def(input_flow_def, &def);
+    upipe_warn_va(upipe, "invalid input %s", def);
     return UBASE_ERR_UNHANDLED;
 }
 
@@ -748,7 +788,7 @@ static void upipe_grid_out_input(struct upipe *upipe,
 
     /* check the input flow def */
     if (unlikely(!upipe_grid_out->input_flow_def)) {
-        upipe_warn(upipe, "flow def set");
+        upipe_warn(upipe, "input flow def is no set");
         uref_free(uref);
         return;
     }
@@ -762,19 +802,17 @@ static void upipe_grid_out_input(struct upipe *upipe,
     }
 
     /* notify new received pts */
-    //if (pts > DEFAULT_TOLERANCE)
-    //    pts -= DEFAULT_TOLERANCE;
     upipe_grid_out_throw_update_pts(upipe, pts);
 
-    if (!upipe_grid_out->input) {
+    if (unlikely(!upipe_grid_out->input)) {
         upipe_verbose(upipe, "no input set");
         goto output;
     }
 
+    /* extract from current input */
     struct upipe_grid_in *upipe_grid_in =
         upipe_grid_in_from_upipe(upipe_grid_out->input);
-    struct uchain urefs;
-    int ret = upipe_grid_out_extract_input(upipe, uref, &urefs);
+    int ret = upipe_grid_out_extract_input(upipe, uref);
     if (unlikely(!ubase_check(ret)))
         goto output;
 
@@ -793,31 +831,19 @@ output:
         /* has input? */
         if (sub_attached) {
             /* import input flow def */
-            upipe_grid_out_switch_format(upipe, flow_def,
-                                          upipe_grid_in->flow_def);
+            upipe_grid_out_import_format(
+                upipe, flow_def, upipe_grid_in->flow_def);
         }
 
         /* store new flow def */
         upipe_notice(upipe, "change output flow def");
         uref_dump(flow_def, upipe->uprobe);
-        upipe_grid_out_store_flow_def(upipe, NULL);
         upipe_grid_out_store_flow_def(upipe, flow_def);
         upipe_grid_out->flow_def_uptodate = true;
         upipe_grid_out->flow_def_input = sub_attached;
     }
 
-    upipe_use(upipe);
-    /* output buffer */
-    if (sub_attached) {
-        struct uchain *uchain;
-
-        while ((uchain = ulist_pop(&urefs)))
-            upipe_grid_out_output(upipe, uref_from_uchain(uchain), upump_p);
-    }
-    else {
-        upipe_grid_out_output(upipe, uref, upump_p);
-    }
-    upipe_release(upipe);
+    upipe_grid_out_output(upipe, uref, upump_p);
 }
 
 /** @internal @This set the grid output flow format.
@@ -832,7 +858,6 @@ static int upipe_grid_out_set_flow_def(struct upipe *upipe,
     struct upipe_grid_out *upipe_grid_out =
         upipe_grid_out_from_upipe(upipe);
 
-    UBASE_RETURN(uref_flow_match_def(flow_def, UREF_VOID_FLOW_DEF));
     struct uref *flow_def_dup = uref_dup(flow_def);
     UBASE_ALLOC_RETURN(flow_def_dup);
     upipe_grid_out_store_flow_def_input(upipe, flow_def_dup);
@@ -875,6 +900,22 @@ static int upipe_grid_out_get_input_real(struct upipe *upipe,
     return UBASE_ERR_NONE;
 }
 
+/** @internal @This iterates the grid output possible input.
+ *
+ * @param upipe description structure of the output pipe
+ * @param input_p pointer filled with the next input, must be set to NULL the first time.
+ * @return an error code
+ */
+static int upipe_grid_out_iterate_input_real(struct upipe *upipe,
+                                             struct upipe **input_p)
+{
+    struct upipe_grid_out *upipe_grid_out =
+        upipe_grid_out_from_upipe(upipe);
+    struct upipe_grid *upipe_grid = upipe_grid_from_out_mgr(upipe->mgr);
+    struct upipe *super = upipe_grid_to_upipe(upipe_grid);
+    return upipe_grid_iterate_input(super, input_p);
+}
+
 /** @internal @This handles an input changed.
  *
  * @param upipe output pipe description
@@ -905,30 +946,6 @@ static void upipe_grid_out_handle_input_removed(struct upipe *upipe,
         upipe_grid_out_set_input_real(upipe, NULL);
 }
 
-/** @This exports the input setter of a grid output pipe.
- *
- * @param upipe description structure of the pipe
- * @param input description of the input pipe to set
- * @return an error code
- */
-int upipe_grid_out_set_input(struct upipe *upipe, struct upipe *input)
-{
-    return upipe_control(upipe, UPIPE_GRID_OUT_SET_INPUT,
-                         UPIPE_GRID_OUT_SIGNATURE, input);
-}
-
-/** @This exports the input getter of a grid output pipe.
- *
- * @param upipe description structure of the pipe
- * @param input_p filled with the input pipe
- * @return an error code
- */
-int upipe_grid_out_get_input(struct upipe *upipe, struct upipe **input_p)
-{
-    return upipe_control(upipe, UPIPE_GRID_OUT_GET_INPUT,
-                         UPIPE_GRID_OUT_SIGNATURE, input_p);
-}
-
 /** @internal @This handles control commands of the grid outputs.
  *
  * @param upipe description structure of the pipe
@@ -956,6 +973,11 @@ static int upipe_grid_out_control(struct upipe *upipe,
             UBASE_SIGNATURE_CHECK(args, UPIPE_GRID_OUT_SIGNATURE);
             struct upipe **input_p = va_arg(args, struct upipe **);
             return upipe_grid_out_get_input_real(upipe, input_p);
+        }
+        case UPIPE_GRID_OUT_ITERATE_INPUT: {
+            UBASE_SIGNATURE_CHECK(args, UPIPE_GRID_OUT_SIGNATURE);
+            struct upipe **input_p = va_arg(args, struct upipe **);
+            return upipe_grid_out_iterate_input_real(upipe, input_p);
         }
     }
 
@@ -986,6 +1008,7 @@ static const char *upipe_grid_out_command_str(int command)
     switch ((enum upipe_grid_out_command)command) {
         UBASE_CASE_TO_STR(UPIPE_GRID_OUT_SET_INPUT);
         UBASE_CASE_TO_STR(UPIPE_GRID_OUT_GET_INPUT);
+        UBASE_CASE_TO_STR(UPIPE_GRID_OUT_ITERATE_INPUT);
         case UPIPE_GRID_OUT_SENTINEL: break;
     }
     return NULL;
@@ -1072,7 +1095,9 @@ static struct upipe *upipe_grid_alloc(struct upipe_mgr *mgr,
     upipe_grid_init_out_mgr(upipe);
 
     struct upipe_grid *upipe_grid = upipe_grid_from_upipe(upipe);
-    upipe_grid->latency = 0;
+    upipe_grid->tolerance = DEFAULT_TOLERANCE;
+    upipe_grid->last_update_pts = 0;
+    upipe_grid->next_update = 0;
 
     upipe_throw_ready(upipe);
 
@@ -1101,6 +1126,11 @@ static int upipe_grid_control(struct upipe *upipe,
 static int upipe_grid_update_pts(struct upipe *upipe, uint64_t next_pts)
 {
     struct upipe_grid *upipe_grid = upipe_grid_from_upipe(upipe);
+
+    if (upipe_grid->last_update_pts &&
+        upipe_grid->last_update_pts + upipe_grid->next_update >= next_pts)
+        return UBASE_ERR_NONE;
+    upipe_grid->last_update_pts = next_pts;
 
     /* iterate through the input pipes */
     struct upipe *in = NULL;
