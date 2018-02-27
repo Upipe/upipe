@@ -11,6 +11,7 @@ libupipe_filters_la_SOURCES = \
 	upipe_audio_graph.c \
 	ebur128/ebur128.c \
 	ebur128/ebur128.h \
+	upipe_zoneplate.c \
 	upipe_zoneplate_source.c \
 	zoneplate/videotestsrc.c \
 	zoneplate/videotestsrc.h

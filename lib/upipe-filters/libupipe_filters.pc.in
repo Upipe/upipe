@@ -5,6 +5,6 @@ includedir=@includedir@
 Name: libupipe_filters
 Description: Upipe multimedia framework, filters
 Version: @VERSION@
-Requires: libupipe
+Requires: libupipe libupipe_modules
 Libs: -L${libdir} -lupipe_filters
 Cflags: -I${includedir}
