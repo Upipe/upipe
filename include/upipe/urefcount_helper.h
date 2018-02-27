@@ -51,6 +51,19 @@ static void STRUCT##_init_##UREFCOUNT(struct STRUCT *obj)               \
 static void STRUCT##_clean_##UREFCOUNT(struct STRUCT *obj)              \
 {                                                                       \
     urefcount_clean(STRUCT##_to_##UREFCOUNT(obj));                      \
+}                                                                       \
+                                                                        \
+static inline struct STRUCT *                                           \
+STRUCT##_use_##UREFCOUNT(struct STRUCT *obj)                            \
+{                                                                       \
+    return STRUCT##_from_##UREFCOUNT(                                   \
+        urefcount_use(STRUCT##_to_##UREFCOUNT(obj)));                   \
+}                                                                       \
+                                                                        \
+static inline void                                                      \
+STRUCT##_release_##UREFCOUNT(struct STRUCT *obj)                        \
+{                                                                       \
+    urefcount_release(STRUCT##_to_##UREFCOUNT(obj));                    \
 }
 
 #ifdef __cplusplus
