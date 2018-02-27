@@ -227,7 +227,6 @@ static bool upipe_filter_blend_handle(struct upipe *upipe, struct uref *uref,
     uint8_t *out;
     uint8_t hsub, vsub, macropixel_size;
     size_t stride_in = 0, stride_out = 0, width, height;
-    const char *chroma = NULL;
     struct ubuf *ubuf_deint = NULL;
 
     // Now process frames
@@ -242,7 +241,7 @@ static bool upipe_filter_blend_handle(struct upipe *upipe, struct uref *uref,
     }
 
     // Iterate planes
-    while (ubase_check(uref_pic_plane_iterate(uref, &chroma)) && chroma) {
+    uref_pic_plane_foreach(uref, chroma) {
         // map all
         if (unlikely(!ubase_check(uref_pic_plane_size(uref, chroma, &stride_in,
                                                 &hsub, &vsub, &macropixel_size)))) {
