@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2017 OpenHeadend S.A.R.L.
+ * Copyright (C) 2017-2018 OpenHeadend S.A.R.L.
  *
  * Authors: Arnaud de Turckheim
  *
@@ -713,13 +713,12 @@ static int upipe_grid_out_extract_sound(struct upipe *upipe, struct uref *uref)
     struct upipe_grid_out *upipe_grid_out = upipe_grid_out_from_upipe(upipe);
     struct upipe_grid_in *upipe_grid_in =
         upipe_grid_in_from_upipe(upipe_grid_out->input);
-    struct uref *output_flow_def = upipe_grid_out->flow_def;
     struct uref *input_flow_def = upipe_grid_in->flow_def;
     uint64_t next_pts;
     int ret = UBASE_ERR_NONE;
 
     /* checked before */
-    assert(input_flow_def && output_flow_def);
+    assert(input_flow_def);
     /* checked before */
     ubase_assert(uref_clock_get_pts_sys(uref, &next_pts));
 
