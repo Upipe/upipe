@@ -115,6 +115,12 @@ static inline int upipe_grid_out_iterate_input(struct upipe *upipe,
                          UPIPE_GRID_OUT_SIGNATURE, input_p);
 }
 
+/** @This is an helper for upipe_grid_out_iterate_input. */
+#define upipe_grid_out_foreach_input(UPIPE, INPUT)                          \
+    for (INPUT = NULL;                                                      \
+         ubase_check(upipe_grid_out_iterate_input(UPIPE, &INPUT)) &&        \
+         INPUT != NULL;)
+
 #ifdef __cplusplus
 }
 #endif
