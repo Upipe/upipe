@@ -163,7 +163,8 @@ static inline int uref_pic_flow_find_chroma(struct uref *uref,
         const char *plane_chroma;
         UBASE_RETURN(uref_pic_flow_get_chroma(uref, &plane_chroma, plane))
         if (unlikely(!strcmp(chroma, plane_chroma))) {
-            *plane_p = plane;
+            if (plane_p)
+                *plane_p = plane;
             return UBASE_ERR_NONE;
         }
     }
