@@ -125,7 +125,6 @@ static int upipe_freetype_check_flow_format(struct upipe *upipe,
 {
     UBASE_RETURN(uref_flow_match_def(flow_format, UREF_PIC_FLOW_DEF));
     UBASE_RETURN(uref_pic_flow_find_chroma(flow_format, "y8", NULL));
-    UBASE_RETURN(uref_pic_flow_find_chroma(flow_format, "a8", NULL));
     UBASE_RETURN(uref_pic_flow_get_hsize(flow_format, NULL));
     UBASE_RETURN(uref_pic_flow_get_vsize(flow_format, NULL));
     return UBASE_ERR_NONE;
@@ -266,10 +265,23 @@ static bool upipe_freetype_handle(struct upipe *upipe, struct uref *uref,
 
     ubuf_pic_clear(ubuf, 0, 0, -1, -1, 0);
 
+    bool has_alpha = false;
+    if (ubase_check(uref_pic_flow_find_chroma(flow_format, "a8", NULL)))
+        has_alpha = true;
+
     size_t stride_a, stride_y;
-    if (!ubase_check(ubuf_pic_plane_size(ubuf, "y8", &stride_y, NULL, NULL, NULL)) ||
-        !ubase_check(ubuf_pic_plane_size(ubuf, "a8", &stride_a, NULL, NULL, NULL))) {
-        upipe_err(upipe, "Could not read ubuf plane sizes");
+    if (!ubase_check(
+            ubuf_pic_plane_size(ubuf, "y8", &stride_y, NULL, NULL, NULL))) {
+        upipe_err(upipe, "Could not read ubuf luma plane sizes");
+        ubuf_free(ubuf);
+        uref_free(uref);
+        return true;
+    }
+
+    if (has_alpha &&
+        !ubase_check(
+            ubuf_pic_plane_size(ubuf, "a8", &stride_a, NULL, NULL, NULL))) {
+        upipe_err(upipe, "Could not read ubuf alpha plane sizes");
         ubuf_free(ubuf);
         uref_free(uref);
         return true;
@@ -283,7 +295,8 @@ static bool upipe_freetype_handle(struct upipe *upipe, struct uref *uref,
         uref_free(uref);
         return true;
     }
-    if (!ubase_check(ubuf_pic_plane_write(ubuf, "a8", 0, 0, -1, -1, &dsta))) {
+    if (has_alpha &&
+        !ubase_check(ubuf_pic_plane_write(ubuf, "a8", 0, 0, -1, -1, &dsta))) {
         upipe_err(upipe, "Could not map alpha plane");
         ubuf_pic_plane_unmap(ubuf, "y8", 0, 0, -1, -1);
         ubuf_free(ubuf);
@@ -327,8 +340,11 @@ static bool upipe_freetype_handle(struct upipe *upipe, struct uref *uref,
 
         for (FT_Int i = (x < 0 ? 0 : x); i < x_max; i++)
             for (FT_Int j = (y < 0 ? 0 : y); j < y_max; j++) {
-                dst[j*stride_y + i] |= bitmap->buffer[(j - y) * bitmap->width + (i - x)];
-                dsta[j*stride_a + i] |= bitmap->buffer[(j - y) * bitmap->width + (i - x)];
+                dst[j*stride_y + i] |=
+                    bitmap->buffer[(j - y) * bitmap->width + (i - x)];
+                if (has_alpha)
+                    dsta[j*stride_a + i] |=
+                        bitmap->buffer[(j - y) * bitmap->width + (i - x)];
             }
 
         /* increment pen position */
@@ -340,14 +356,19 @@ static bool upipe_freetype_handle(struct upipe *upipe, struct uref *uref,
 
     if (text_w < h)
         for (int i = 0; i < v; i++) {
-            memmove(&dst[i*stride_y + (h - text_w) / 2], &dst[i*stride_y], text_w);
+            memmove(&dst[i*stride_y + (h - text_w) / 2],
+                    &dst[i*stride_y], text_w);
             memset(&dst[i*stride_y], 0, (h - text_w) / 2);
-            memmove(&dsta[i*stride_a + (h - text_w) / 2], &dsta[i*stride_a], text_w);
-            memset(&dsta[i*stride_a], 0, (h - text_w) / 2);
-        }
+            if (has_alpha) {
+                memmove(&dsta[i*stride_a + (h - text_w) / 2],
+                        &dsta[i*stride_a], text_w);
+                memset(&dsta[i*stride_a], 0, (h - text_w) / 2);
+            }
+    }
 
     ubuf_pic_plane_unmap(ubuf, "y8", 0, 0, -1, -1);
-    ubuf_pic_plane_unmap(ubuf, "a8", 0, 0, -1, -1);
+    if (has_alpha)
+        ubuf_pic_plane_unmap(ubuf, "a8", 0, 0, -1, -1);
 
     uref_attach_ubuf(uref, ubuf);
 
