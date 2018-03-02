@@ -2,7 +2,7 @@ prefix=@prefix@
 exec_prefix=@exec_prefix@
 libdir=@libdir@
 includedir=@includedir@     
-Name: libupipe_framers
+Name: libupipe_filters
 Description: Upipe multimedia framework, filters
 Version: @VERSION@
 Requires: libupipe
