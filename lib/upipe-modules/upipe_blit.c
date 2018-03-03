@@ -39,6 +39,8 @@
 #include <upipe/upipe_helper_void.h>
 #include <upipe/upipe_helper_subpipe.h>
 #include <upipe/upipe_helper_output.h>
+#include <upipe/upipe_helper_upump_mgr.h>
+#include <upipe/upipe_helper_upump.h>
 #include <upipe-modules/upipe_blit.h>
 
 #include <stdlib.h>
@@ -70,6 +72,11 @@ struct upipe_blit {
     /** manager to create input subpipes */
     struct upipe_mgr sub_mgr;
 
+    /** upump manager */
+    struct upump_mgr *upump_mgr;
+    /** idler */
+    struct upump *idler;
+
     /** number of pixels in a macropixel of the output picture */
     uint8_t macropixel;
     /** highest horizontal subsampling of the output picture */
@@ -94,6 +101,8 @@ UPIPE_HELPER_UPIPE(upipe_blit, upipe, UPIPE_BLIT_SIGNATURE);
 UPIPE_HELPER_UREFCOUNT(upipe_blit, urefcount, upipe_blit_free)
 UPIPE_HELPER_VOID(upipe_blit)
 UPIPE_HELPER_OUTPUT(upipe_blit, output, flow_def, output_state, request_list)
+UPIPE_HELPER_UPUMP_MGR(upipe_blit, upump_mgr);
+UPIPE_HELPER_UPUMP(upipe_blit, idler, upump_mgr);
 
 static void upipe_blit_sort(struct upipe *upipe);
 
@@ -771,6 +780,8 @@ static struct upipe *upipe_blit_alloc(struct upipe_mgr *mgr,
     upipe_blit_init_output(upipe);
     upipe_blit_init_sub_mgr(upipe);
     upipe_blit_init_sub_subs(upipe);
+    upipe_blit_init_upump_mgr(upipe);
+    upipe_blit_init_idler(upipe);
     upipe_blit->hsize = upipe_blit->vsize = UINT64_MAX;
     upipe_blit->uref = NULL;
 
@@ -808,6 +819,8 @@ static void upipe_blit_input(struct upipe *upipe, struct uref *uref,
 
     uref_free(upipe_blit->uref);
     upipe_blit->uref = uref;
+    if (upipe_blit->idler)
+        upump_start(upipe_blit->idler);
 }
 
 /** @internal @This sets the input flow definition.
@@ -926,6 +939,45 @@ static int _upipe_blit_prepare(struct upipe *upipe, struct upump **upump_p)
     return UBASE_ERR_NONE;
 }
 
+/** @internal @This is the idler callback.
+ *
+ * @param upump idler structure
+ */
+static void upipe_blit_idler_cb(struct upump *upump)
+{
+    struct upipe *upipe = upump_get_opaque(upump, struct upipe *);
+    struct upipe_blit *upipe_blit = upipe_blit_from_upipe(upipe);
+
+    upump_stop(upump);
+    upipe_throw(upipe, UPROBE_BLIT_PREPARE_READY, UPIPE_BLIT_SIGNATURE,
+                &upipe_blit->idler);
+}
+
+/** @internal @This checks the blit pipe state.
+ *
+ * @param upipe description structure of the pipe
+ * @return an error code
+ */
+static int upipe_blit_check(struct upipe *upipe)
+{
+    struct upipe_blit *upipe_blit = upipe_blit_from_upipe(upipe);
+
+    if (!upipe_blit->upump_mgr)
+        return UBASE_ERR_NONE;
+
+    if (unlikely(!upipe_blit->idler)) {
+        struct upump *idler =
+            upump_alloc_idler(upipe_blit->upump_mgr,
+                              upipe_blit_idler_cb, upipe,
+                              upipe_blit_to_urefcount(upipe_blit));
+        if (unlikely(!idler))
+            return UBASE_ERR_UPUMP;
+
+        upipe_blit_set_idler(upipe, idler);
+    }
+    return UBASE_ERR_NONE;
+}
+
 /** @internal @This processes control commands on a file source pipe, and
  * checks the status of the pipe afterwards.
  *
@@ -934,7 +986,8 @@ static int _upipe_blit_prepare(struct upipe *upipe, struct upump **upump_p)
  * @param args arguments of the command
  * @return an error code
  */
-static int upipe_blit_control(struct upipe *upipe, int command, va_list args)
+static int upipe_blit_control_real(struct upipe *upipe,
+                                   int command, va_list args)
 {
     UBASE_HANDLED_RETURN(upipe_blit_control_output(upipe, command, args));
     UBASE_HANDLED_RETURN(upipe_blit_control_subs(upipe, command, args));
@@ -950,11 +1003,28 @@ static int upipe_blit_control(struct upipe *upipe, int command, va_list args)
             struct upump **upump_p = va_arg(args, struct upump **);
             return _upipe_blit_prepare(upipe, upump_p);
         }
+
+        case UPIPE_ATTACH_UPUMP_MGR:
+            upipe_blit_set_idler(upipe, NULL);
+            return upipe_blit_attach_upump_mgr(upipe);
+
         default:
             return UBASE_ERR_UNHANDLED;
     }
 }
 
+/** @internal @This processes control commands and checks the pipe state.
+ *
+ * @param upipe description structure of the pipe
+ * @param command type of command
+ * @param args arguments of the command
+ * @return an error code
+ */
+static int upipe_blit_control(struct upipe *upipe, int command, va_list args)
+{
+    UBASE_RETURN(upipe_blit_control_real(upipe, command, args));
+    return upipe_blit_check(upipe);
+}
 /** @This frees a upipe.
  *
  * @param upipe description structure of the pipe
@@ -965,6 +1035,8 @@ static void upipe_blit_free(struct upipe *upipe)
 
     struct upipe_blit *upipe_blit = upipe_blit_from_upipe(upipe);
     uref_free(upipe_blit->uref);
+    upipe_blit_clean_idler(upipe);
+    upipe_blit_clean_upump_mgr(upipe);
     upipe_blit_clean_sub_subs(upipe);
     upipe_blit_clean_output(upipe);
     upipe_blit_clean_urefcount(upipe);

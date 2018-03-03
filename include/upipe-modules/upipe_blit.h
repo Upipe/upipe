@@ -46,6 +46,15 @@ extern "C" {
  */
 struct upipe_mgr *upipe_blit_mgr_alloc(void);
 
+/** @This extends uprobe_event with specific events for upipe_blit pipes.
+ */
+enum uprobe_blit_event {
+    UPROBE_BLIT_SENTINEL = UPROBE_LOCAL,
+
+    /** upipe_blit is ready for upipe_blit_prepare (struct upump **) */
+    UPROBE_BLIT_PREPARE_READY,
+};
+
 /** @This extends upipe_command with specific commands for upipe_blit pipes.
  */
 enum upipe_blit_command {
