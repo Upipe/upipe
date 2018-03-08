@@ -202,14 +202,14 @@ static int upipe_rtpr_check(struct upipe *upipe, struct uref *flow_format)
 {
     struct upipe_rtpr *upipe_rtpr = upipe_rtpr_from_upipe(upipe);
 
-	if (!upipe_rtpr->upump_mgr) {
-		upipe_rtpr_check_upump_mgr(upipe);
+    if (!upipe_rtpr->upump_mgr) {
+        upipe_rtpr_check_upump_mgr(upipe);
         return UBASE_ERR_NONE;
-	}
+    }
 
-	if (!upipe_rtpr->uclock) {
+    if (!upipe_rtpr->uclock) {
         upipe_rtpr_require_uclock(upipe);
-		return UBASE_ERR_NONE;
+        return UBASE_ERR_NONE;
     }
 
     if (upipe_rtpr->upump)

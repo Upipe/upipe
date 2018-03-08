@@ -47,6 +47,7 @@ myinclude_HEADERS = \
 	upipe_rtp_opus.h \
 	upipe_rtcp.h \
 	upipe_blit.h \
+	uprobe_blit_prepare.h \
 	upipe_crop.h \
 	upipe_audio_split.h \
 	upipe_videocont.h \

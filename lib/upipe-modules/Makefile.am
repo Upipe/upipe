@@ -39,6 +39,7 @@ libupipe_modules_la_SOURCES = \
 	upipe_setrap.c \
 	upipe_match_attr.c \
 	upipe_blit.c \
+	uprobe_blit_prepare.c \
 	upipe_crop.c \
 	upipe_audio_split.c \
 	upipe_videocont.c \

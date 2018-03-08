@@ -88,13 +88,6 @@ before_install:
   - make -C bitstream install PREFIX="$PWD/usr-bitstream"
   - export PKG_CONFIG_PATH="$PKG_CONFIG_PATH:$PWD/usr-bitstream/lib/pkgconfig"
 
-  # nacl sdk
-  - if [ "$TRAVIS_OS_NAME" = "linux" ]; then
-      wget http://storage.googleapis.com/nativeclient-mirror/nacl/nacl_sdk/nacl_sdk.zip;
-      unzip nacl_sdk.zip;
-      nacl_sdk/naclsdk update pepper_49;
-    fi
-
   # libamt
   - if [ "$TRAVIS_OS_NAME" = "linux" ]; then
       git clone --depth 1 https://github.com/cisco/SSMAMTtools.git;
@@ -126,7 +119,6 @@ script:
       --disable-silent-rules $HOST
       CC=\"$HOST_CC\"
       CXX=\"$HOST_CXX\"
-      CPPFLAGS=\"-I$PWD/nacl_sdk/pepper_49/include\"
       CFLAGS=\"-Werror -Wno-error=deprecated-declarations -O2 -g $CFLAGS\"
       CXXFLAGS=\"-Werror -O2 -g $CXXFLAGS\"" &&
     eval ./configure $CONFIGURE_FLAGS &&
@@ -135,7 +127,7 @@ script:
       DISTCHECK_CONFIGURE_FLAGS="$CONFIGURE_FLAGS"
       TEST_SUITE_LOG="$PWD/tests.log"
   - make check-whitespace
-  - for i in bitstream usr-bitstream SSMAMTtools nacl_sdk.zip nacl_sdk upipe-*; do
+  - for i in bitstream usr-bitstream SSMAMTtools upipe-*; do
       echo "/$i" >> .gitignore;
     done &&
     make check-untracked
