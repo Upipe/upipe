@@ -84,8 +84,6 @@ struct upipe_rtpr {
 
     /** output pipe */
     struct upipe *output;
-    /** input flow definition packet */
-    struct uref *flow_def_input;
     /** flow definition packet */
     struct uref *flow_def;
     /** output state */
@@ -95,9 +93,8 @@ struct upipe_rtpr {
 
     /** upump manager */
     struct upump_mgr *upump_mgr;
-    struct upump *upump;
     /** reorder timer */
-    struct upump *upump2;
+    struct upump *upump;
 
     /** manager to create subs */
     struct upipe_mgr sub_mgr;
@@ -114,13 +111,15 @@ struct upipe_rtpr {
     struct upipe upipe;
 };
 
+static int upipe_rtpr_check(struct upipe *upipe, struct uref *flow_format);
+
 UPIPE_HELPER_UPIPE(upipe_rtpr, upipe, UPIPE_RTPR_SIGNATURE);
 UPIPE_HELPER_UREFCOUNT(upipe_rtpr, urefcount, upipe_rtpr_no_input);
 UPIPE_HELPER_VOID(upipe_rtpr);
 UPIPE_HELPER_UPUMP_MGR(upipe_rtpr, upump_mgr)
 UPIPE_HELPER_UPUMP(upipe_rtpr, upump, upump_mgr)
 UPIPE_HELPER_OUTPUT(upipe_rtpr, output, flow_def, output_state, request_list);
-UPIPE_HELPER_UCLOCK(upipe_rtpr, uclock, uclock_request, NULL, upipe_throw_provide_request, NULL)
+UPIPE_HELPER_UCLOCK(upipe_rtpr, uclock, uclock_request, upipe_rtpr_check, upipe_throw_provide_request, NULL)
 
 UBASE_FROM_TO(upipe_rtpr, urefcount, urefcount_real, urefcount_real)
 
@@ -172,6 +171,59 @@ static inline bool seq_num_lt(uint16_t s1, uint16_t s2)
         return 0;
 }
 
+static void upipe_rtpr_timer(struct upump *upump)
+{
+    struct upipe *upipe = upump_get_opaque(upump, struct upipe *);
+    struct upipe_rtpr *rtpr = upipe_rtpr_from_upipe(upipe);
+    uint64_t now = uclock_now(rtpr->uclock);
+    uint64_t date_sys;
+    int type;
+    struct uchain *uchain, *uchain_tmp;
+    struct uref *uref;
+
+    ulist_delete_foreach(&rtpr->queue, uchain, uchain_tmp) {
+        uref = uref_from_uchain(uchain);
+        uref_clock_get_date_sys(uref, &date_sys, &type);
+        uint64_t seqnum = 0;
+        uref_attr_get_priv(uref, &seqnum);
+
+        if (now >= date_sys || date_sys == UINT64_MAX) {
+            ulist_delete(uchain);
+            upipe_rtpr_output(upipe, uref, NULL);
+            rtpr->last_sent_seqnum = seqnum;
+        }
+        else {
+            break;
+        }
+    }
+}
+
+static int upipe_rtpr_check(struct upipe *upipe, struct uref *flow_format)
+{
+    struct upipe_rtpr *upipe_rtpr = upipe_rtpr_from_upipe(upipe);
+
+    if (!upipe_rtpr->upump_mgr) {
+        upipe_rtpr_check_upump_mgr(upipe);
+        return UBASE_ERR_NONE;
+    }
+
+    if (!upipe_rtpr->uclock) {
+        upipe_rtpr_require_uclock(upipe);
+        return UBASE_ERR_NONE;
+    }
+
+    if (upipe_rtpr->upump)
+        return UBASE_ERR_NONE;
+
+    upipe_rtpr->upump = upump_alloc_timer(upipe_rtpr->upump_mgr,
+                                            upipe_rtpr_timer, upipe, upipe->refcount,
+                                            UCLOCK_FREQ/300, UCLOCK_FREQ/300);
+
+    upump_start(upipe_rtpr->upump);
+
+    return UBASE_ERR_NONE;
+}
+
 static int upipe_rtpr_sub_get_flow_def(struct upipe *upipe,
                                               struct uref **p)
 {
@@ -188,19 +240,10 @@ static int upipe_rtpr_sub_set_flow_def(struct upipe *upipe,
     struct upipe_rtpr *upipe_rtpr =
         upipe_rtpr_from_sub_mgr(upipe->mgr);
     struct upipe_rtpr_sub *upipe_rtpr_sub =
-        upipe_rtpr_sub_from_upipe(upipe);
+                            upipe_rtpr_sub_from_upipe(upipe);
 
-    if (flow_def == NULL)
-        return UBASE_ERR_INVALID;
-
-    flow_def = uref_dup(flow_def);
-    UBASE_ALLOC_RETURN(flow_def)
-    upipe_rtpr_sub->flow_def = flow_def;
-    if (!upipe_rtpr->flow_def) {
-        flow_def = uref_dup(flow_def);
-        UBASE_ALLOC_RETURN(flow_def)
-        upipe_rtpr->flow_def = flow_def;
-    }
+    upipe_rtpr_store_flow_def(&upipe_rtpr->upipe, uref_dup(flow_def));
+    upipe_rtpr_sub->flow_def = uref_dup(flow_def);
     return UBASE_ERR_NONE;
 }
 
@@ -260,33 +303,6 @@ static int upipe_rtpr_sub_control(struct upipe *upipe,
         }
         default:
             return UBASE_ERR_UNHANDLED;
-    }
-}
-
-static void upipe_rtpr_timer(struct upump *upump)
-{
-    struct upipe *upipe = upump_get_opaque(upump, struct upipe *);
-    struct upipe_rtpr *rtpr = upipe_rtpr_from_upipe(upipe);
-    uint64_t now = uclock_now(rtpr->uclock);
-    uint64_t date_sys;
-    int type;
-    struct uchain *uchain, *uchain_tmp;
-    struct uref *uref;
-
-    ulist_delete_foreach(&rtpr->queue, uchain, uchain_tmp) {
-        uref = uref_from_uchain(uchain);
-        uref_clock_get_date_sys(uref, &date_sys, &type);
-        uint64_t seqnum = 0;
-        uref_attr_get_priv(uref, &seqnum);
-
-        if (now >= date_sys || date_sys == UINT64_MAX) {
-            ulist_delete(uchain);
-            upipe_rtpr_output(upipe, uref, NULL);
-            rtpr->last_sent_seqnum = seqnum;
-        }
-        else {
-            break;
-        }
     }
 }
 
@@ -418,9 +434,13 @@ static void upipe_rtpr_sub_free(struct upipe *upipe)
 
     upipe_throw_dead(upipe);
 
+    if (upipe_rtpr_sub->flow_def)
+        uref_free(upipe_rtpr_sub->flow_def);
+
     upipe_rtpr_sub_clean_input(upipe);
     upipe_rtpr_sub_clean_sub(upipe);
     upipe_rtpr_sub_clean_urefcount(upipe);
+    upipe_rtpr_sub_free_void(upipe);
 }
 
 /** @internal @This initializes the output manager for an rtpr sub pipe.
@@ -482,8 +502,6 @@ static struct upipe *upipe_rtpr_alloc(struct upipe_mgr *mgr,
     upipe_rtpr_init_sub_mgr(upipe);
     upipe_rtpr_init_sub_inputs(upipe);
 
-    upipe_rtpr->flow_def_input = NULL;
-
     ulist_init(&upipe_rtpr->queue);
 
     upipe_rtpr->last_sent_seqnum = UINT64_MAX;
@@ -492,34 +510,8 @@ static struct upipe *upipe_rtpr_alloc(struct upipe_mgr *mgr,
 
     upipe_rtpr_check_upump_mgr(upipe);
 
-    upipe_rtpr->upump2 = upump_alloc_timer(upipe_rtpr->upump_mgr,
-                                            upipe_rtpr_timer, upipe, upipe->refcount,
-                                            UCLOCK_FREQ/300, UCLOCK_FREQ/300);
-
-    upump_start(upipe_rtpr->upump2);
-
     upipe_throw_ready(upipe);
     return upipe;
-}
-
-/** @internal @This sets the input flow definition.
- *
- * @param upipe description structure of the pipe
- * @param flow_def flow definition packet
- * @return an error code
- */
-static int upipe_rtpr_set_flow_def(struct upipe *upipe, struct uref *flow_def)
-{
-    if (flow_def == NULL)
-        return UBASE_ERR_INVALID;
-    struct uref *flow_def_dup;
-    if (unlikely((flow_def_dup = uref_dup(flow_def)) == NULL))
-        return UBASE_ERR_ALLOC;
-    struct upipe_rtpr *upipe_rtpr = upipe_rtpr_from_upipe(upipe);
-    uref_free(upipe_rtpr->flow_def_input);
-    upipe_rtpr->flow_def_input = flow_def_dup;
-    upipe_rtpr->flow_def = flow_def_dup;
-    return UBASE_ERR_NONE;
 }
 
 /** @internal @This returns the current delay being set into urefs.
@@ -555,7 +547,7 @@ static int _upipe_rtpr_set_delay(struct upipe *upipe, uint64_t delay)
  * @param args arguments of the command
  * @return an error code
  */
-static int upipe_rtpr_control(struct upipe *upipe, int command, va_list args)
+static int _upipe_rtpr_control(struct upipe *upipe, int command, va_list args)
 {
     UBASE_HANDLED_RETURN(upipe_rtpr_control_output(upipe, command, args));
     UBASE_HANDLED_RETURN(upipe_rtpr_control_inputs(upipe, command, args));
@@ -570,10 +562,6 @@ static int upipe_rtpr_control(struct upipe *upipe, int command, va_list args)
             upipe_rtpr_require_uclock(upipe);
             return UBASE_ERR_NONE;
         }
-        case UPIPE_SET_FLOW_DEF: {
-            struct uref *flow_def = va_arg(args, struct uref *);
-            return upipe_rtpr_set_flow_def(upipe, flow_def);
-        }
         case UPIPE_RTPR_GET_DELAY: {
             UBASE_SIGNATURE_CHECK(args, UPIPE_RTPR_SIGNATURE)
             uint64_t *delay_p = va_arg(args, uint64_t *);
@@ -587,6 +575,12 @@ static int upipe_rtpr_control(struct upipe *upipe, int command, va_list args)
         default:
             return UBASE_ERR_UNHANDLED;
     }
+}
+
+static int upipe_rtpr_control(struct upipe *upipe, int command, va_list args)
+{
+    UBASE_RETURN(_upipe_rtpr_control(upipe, command, args))
+    return upipe_rtpr_check(upipe, NULL);
 }
 
 /** @This is called when there is no external reference to the pipe anymore.
@@ -610,17 +604,12 @@ static void upipe_rtpr_free(struct urefcount *urefcount_real)
            upipe_rtpr_from_urefcount_real(urefcount_real);
     struct upipe *upipe = upipe_rtpr_to_upipe(upipe_rtpr);
 
-    upipe_dbg_va(upipe, "releasing pipe %p", upipe);
     upipe_throw_dead(upipe);
 
-    upump_stop(upipe_rtpr->upump2);
-    upump_free(upipe_rtpr->upump2);
     upipe_rtpr_clean_queue(upipe);
 
     upipe_rtpr_clean_uclock(upipe);
     upipe_rtpr_clean_sub_inputs(upipe);
-    if (upipe_rtpr->flow_def != NULL)
-        uref_free(upipe_rtpr->flow_def);
     urefcount_clean(urefcount_real);
 
     upipe_rtpr_clean_upump(upipe);
