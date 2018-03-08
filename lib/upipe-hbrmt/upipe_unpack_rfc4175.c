@@ -89,6 +89,7 @@ struct upipe_unpack_rfc4175 {
 
     /** Set from reading the input flow def */
     bool output_is_v210;
+    int output_bit_depth;
 
     /* RTP packet stuff */
     bool discontinuity;
@@ -384,7 +385,7 @@ static int upipe_unpack_rfc4175_set_flow_def(struct upipe *upipe, struct uref *f
         uref_pic_flow_set_macropixel(flow_def_dup, 6);
         uref_pic_flow_set_macropixel_size(flow_def_dup, 16, 0);
         uref_pic_flow_set_chroma(flow_def_dup, upipe_unpack_rfc4175->output_chroma_map[0], 0);
-    } else {
+    } else if (upipe_unpack_rfc4175->output_bit_depth == 8) {
         upipe_unpack_rfc4175->output_chroma_map[0] = "y8";
         upipe_unpack_rfc4175->output_chroma_map[1] = "u8";
         upipe_unpack_rfc4175->output_chroma_map[2] = "v8";
@@ -392,6 +393,14 @@ static int upipe_unpack_rfc4175_set_flow_def(struct upipe *upipe, struct uref *f
         UBASE_RETURN(uref_pic_flow_add_plane(flow_def_dup, 1, 1, 1, "y8"))
         UBASE_RETURN(uref_pic_flow_add_plane(flow_def_dup, 2, 1, 1, "u8"))
         UBASE_RETURN(uref_pic_flow_add_plane(flow_def_dup, 2, 1, 1, "v8"))
+    } else {
+        upipe_unpack_rfc4175->output_chroma_map[0] = "y10l";
+        upipe_unpack_rfc4175->output_chroma_map[1] = "u10l";
+        upipe_unpack_rfc4175->output_chroma_map[2] = "v10l";
+        UBASE_RETURN(uref_pic_flow_set_macropixel(flow_def_dup, 1))
+        UBASE_RETURN(uref_pic_flow_add_plane(flow_def_dup, 1, 1, 2, "y10l"))
+        UBASE_RETURN(uref_pic_flow_add_plane(flow_def_dup, 2, 1, 2, "u10l"))
+        UBASE_RETURN(uref_pic_flow_add_plane(flow_def_dup, 2, 1, 2, "v10l"))
     }
 
     // FIXME
@@ -483,8 +492,9 @@ static struct upipe *upipe_unpack_rfc4175_alloc(struct upipe_mgr *mgr,
     }
 
     upipe_unpack_rfc4175->output_is_v210 = ubase_check(uref_pic_flow_check_chroma(flow_def, 1, 1, 16, "u10y10v10y10u10y10v10y10u10y10v10y10"));
-
-    if (upipe_unpack_rfc4175->output_is_v210) {
+    if (!upipe_unpack_rfc4175->output_is_v210)
+         upipe_unpack_rfc4175->output_bit_depth = ubase_check(uref_pic_flow_check_chroma(flow_def, 1, 1, 1, "y8")) ? 8 : 10;
+    else {
         upipe_unpack_rfc4175->hsize = (upipe_unpack_rfc4175->hsize + 5) / 6 * 6;
     }
 
