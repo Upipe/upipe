@@ -107,6 +107,8 @@ struct upipe_unpack_rfc4175 {
 
     /** Bitpacked to Planar 8 conversion */
     void (*bitpacked_to_planar_8)(const uint8_t *src, uint8_t *y, uint8_t *u, uint8_t *v, uintptr_t pixels);
+    /** Bitpacked to Planar 10 conversion */
+    void (*bitpacked_to_planar_10)(const uint8_t *src, uint16_t *y, uint16_t *u, uint16_t *v, uintptr_t pixels);
 
     /** last RTP timestamp */
     uint64_t last_rtp_timestamp;
@@ -277,16 +279,24 @@ static bool upipe_unpack_rfc4175_handle(struct upipe *upipe, struct uref *uref,
             upipe_unpack_rfc4175->bitpacked_to_v210(rfc4175_data,
                     (uint32_t *)dst, (2 * length[i]) / 5);
         } else {
+            const int bit_depth =upipe_unpack_rfc4175->output_bit_depth;
             uint8_t *plane[UPIPE_UNPACK_RFC4175_MAX_PLANES];
             for (int j = 0 ; j < UPIPE_UNPACK_RFC4175_MAX_PLANES; j++) {
                 plane[j] = upipe_unpack_rfc4175->output_plane[j] +
                     upipe_unpack_rfc4175->output_stride[j] * interleaved_line +
-                    line_offset[i] / (j ? 2 : 1); // XXX: hsub
+                    (bit_depth == 10 ? 2 : 1) * line_offset[i] / (j ? 2 : 1); // XXX: hsub
             }
 
-            upipe_unpack_rfc4175->bitpacked_to_planar_8(rfc4175_data,
-                    plane[0], plane[1], plane[2], (2 * length[i]) / 5);
+            if (bit_depth == 8)  {
+                upipe_unpack_rfc4175->bitpacked_to_planar_8(rfc4175_data,
+                        plane[0], plane[1], plane[2], (2 * length[i]) / 5);
+            } else {
+                upipe_unpack_rfc4175->bitpacked_to_planar_10(rfc4175_data,
+                        (uint16_t*)plane[0], (uint16_t*)plane[1],
+                        (uint16_t*)plane[2], (2 * length[i]) / 5);
+            }
         }
+
         rfc4175_data += length[i];
     }
 
@@ -500,22 +510,26 @@ static struct upipe *upipe_unpack_rfc4175_alloc(struct upipe_mgr *mgr,
 
     upipe_unpack_rfc4175->bitpacked_to_v210 = upipe_sdi_to_v210_c;
     upipe_unpack_rfc4175->bitpacked_to_planar_8 = upipe_sdi_to_planar_8_c;
+    upipe_unpack_rfc4175->bitpacked_to_planar_10 = upipe_sdi_to_planar_10_c;
 
 #if defined(HAVE_X86ASM)
 #if defined(__i686__) || defined(__x86_64__)
     if (__builtin_cpu_supports("ssse3")) {
         upipe_unpack_rfc4175->bitpacked_to_v210 = upipe_sdi_to_v210_ssse3;
         upipe_unpack_rfc4175->bitpacked_to_planar_8 = upipe_sdi_to_planar_8_ssse3;
+        upipe_unpack_rfc4175->bitpacked_to_planar_10 = upipe_sdi_to_planar_10_ssse3;
     }
 
    if (__builtin_cpu_supports("avx")) {
         upipe_unpack_rfc4175->bitpacked_to_v210 = upipe_sdi_to_v210_avx;
         upipe_unpack_rfc4175->bitpacked_to_planar_8 = upipe_sdi_to_planar_8_avx;
+        upipe_unpack_rfc4175->bitpacked_to_planar_10 = upipe_sdi_to_planar_10_avx;
     }
 
    if (__builtin_cpu_supports("avx2")) {
         upipe_unpack_rfc4175->bitpacked_to_v210 = upipe_sdi_to_v210_avx2;
         upipe_unpack_rfc4175->bitpacked_to_planar_8 = upipe_sdi_to_planar_8_avx2;
+        upipe_unpack_rfc4175->bitpacked_to_planar_10 = upipe_sdi_to_planar_10_avx2;
    }
 #endif
 #endif
