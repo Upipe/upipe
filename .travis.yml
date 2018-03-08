@@ -36,9 +36,9 @@ matrix:
         - PKG_CONFIG_LIBDIR="/usr/lib/i386-linux-gnu/pkgconfig"
 
     - os: linux
-      compiler: clang-5.0
+      compiler: clang-6.0
       env:
-        - CLANG_VERSION=5.0
+        - CLANG_VERSION=6.0
         - APT_REPOS="ppa:ubuntu-toolchain-r/test ppa:mc3man/testing6"
         - APT_PACKAGES="clang-$CLANG_VERSION $APT_PACKAGES_COMMON"
         - HOST_CC=clang-$CLANG_VERSION
