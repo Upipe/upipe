@@ -95,7 +95,6 @@ check_PROGRAMS = \
 	upipe_audio_split_test \
 	upipe_videocont_test \
 	upipe_audiocont_test \
-	upipe_filter_ebur128_test \
 	upipe_audio_max_test \
 	upipe_audio_bar_test \
 	upipe_audio_graph_test \
@@ -153,7 +152,6 @@ TESTS = \
 	upipe_audio_split_test \
 	upipe_videocont_test \
 	upipe_audiocont_test \
-	upipe_filter_ebur128_test \
 	upipe_audio_max_test \
 	upipe_audio_bar_test \
 	upipe_audio_graph_test \
@@ -163,6 +161,11 @@ TESTS = \
 	upipe_grid_test \
 	upipe_block_to_sound_test \
 	upipe_audio_copy_test
+
+if HAVE_EBUR128
+check_PROGRAMS += upipe_ebur128_test
+TESTS += upipe_ebur128_test
+endif
 
 if HAVE_SPEEXDSP
 check_PROGRAMS += \
@@ -483,7 +486,7 @@ upipe_ts_tstd_test_LDADD = $(LDADD) $(top_builddir)/lib/upipe-ts/libupipe_ts.la
 upipe_glx_sink_test_LDADD = $(LDADD) $(GLX_LIBS) $(top_builddir)/lib/upipe-gl/libupipe_gl.la -lev $(top_builddir)/lib/upump-ev/libupump_ev.la
 upipe_glx_sink_test_CFLAGS = $(AM_CFLAGS) $(GLX_CFLAGS)
 upipe_filter_blend_test_LDADD = $(LDADD) $(top_builddir)/lib/upipe-filters/libupipe_filters.la $(top_builddir)/lib/upipe-modules/libupipe_modules.la
-upipe_filter_ebur128_test_LDADD = $(LDADD) -lm $(top_builddir)/lib/upipe-filters/libupipe_filters.la $(top_builddir)/lib/upipe-modules/libupipe_modules.la
+upipe_ebur128_test_LDADD = $(LDADD) -lm $(top_builddir)/lib/upipe-ebur128/libupipe_ebur128.la $(top_builddir)/lib/upipe-modules/libupipe_modules.la
 upipe_audio_max_test_LDADD = $(LDADD) -lm $(top_builddir)/lib/upipe-filters/libupipe_filters.la $(top_builddir)/lib/upipe-modules/libupipe_modules.la
 upipe_audio_bar_test_LDADD = $(LDADD) -lm $(top_builddir)/lib/upipe-filters/libupipe_filters.la $(top_builddir)/lib/upipe-modules/libupipe_modules.la
 upipe_audio_graph_test_LDADD = $(LDADD) -lm $(top_builddir)/lib/upipe-filters/libupipe_filters.la $(top_builddir)/lib/upipe-modules/libupipe_modules.la
