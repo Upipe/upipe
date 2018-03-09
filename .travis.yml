@@ -100,6 +100,17 @@ before_install:
       sudo ldconfig;
     fi
 
+  # libebur128
+  - wget https://github.com/jiixyj/libebur128/archive/v1.2.4.tar.gz;
+    tar xf v1.2.4.tar.gz;
+    cd libebur128-1.2.4;
+    mkdir build;
+    cd build;
+    CC=$HOST_CC cmake ..;
+    sudo make install || exit 1;
+    sudo ldconfig;
+    cd ../..
+
   # disable valgrind on os x
   - if [ "$TRAVIS_OS_NAME" = "osx" ]; then
       export DISABLE_VALGRIND=1;
@@ -127,7 +138,7 @@ script:
       DISTCHECK_CONFIGURE_FLAGS="$CONFIGURE_FLAGS"
       TEST_SUITE_LOG="$PWD/tests.log"
   - make check-whitespace
-  - for i in bitstream usr-bitstream SSMAMTtools upipe-*; do
+  - for i in bitstream usr-bitstream SSMAMTtools v1.2.4.tar.gz libebur128-1.2.4 upipe-*; do
       echo "/$i" >> .gitignore;
     done &&
     make check-untracked

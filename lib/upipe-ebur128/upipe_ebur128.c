@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2013-2014 OpenHeadend S.A.R.L.
+ * Copyright (C) 2013-2018 OpenHeadend S.A.R.L.
  *
  * Authors: Benjamin Cohen
  *
@@ -39,25 +39,25 @@
 #include <upipe/upipe_helper_urefcount.h>
 #include <upipe/upipe_helper_void.h>
 #include <upipe/upipe_helper_output.h>
-#include <upipe-filters/upipe_filter_ebur128.h>
+#include <upipe-ebur128/upipe_ebur128.h>
 
 #include <stdlib.h>
 #include <strings.h>
 #include <stdint.h>
 #include <stdio.h>
 
-#include "ebur128/ebur128.h"
+#include <ebur128.h>
 
 /** @internal supported sample formats */
-enum upipe_filter_ebur128_fmt {
-    UPIPE_FILTER_EBUR128_SHORT,
-    UPIPE_FILTER_EBUR128_INT,
-    UPIPE_FILTER_EBUR128_FLOAT,
-    UPIPE_FILTER_EBUR128_DOUBLE
+enum upipe_ebur128_fmt {
+    UPIPE_EBUR128_SHORT,
+    UPIPE_EBUR128_INT,
+    UPIPE_EBUR128_FLOAT,
+    UPIPE_EBUR128_DOUBLE
 };
 
-/** @internal upipe_filter_ebur128 private structure */
-struct upipe_filter_ebur128 {
+/** @internal upipe_ebur128 private structure */
+struct upipe_ebur128 {
     /** refcount management structure */
     struct urefcount urefcount;
 
@@ -77,19 +77,17 @@ struct upipe_filter_ebur128 {
     /** number of planes */
     uint8_t planes;
     /** sample format */
-    enum upipe_filter_ebur128_fmt fmt;
+    enum upipe_ebur128_fmt fmt;
 
     /** public structure */
     struct upipe upipe;
 };
 
-UPIPE_HELPER_UPIPE(upipe_filter_ebur128, upipe,
-                   UPIPE_FILTER_EBUR128_SIGNATURE);
-UPIPE_HELPER_UREFCOUNT(upipe_filter_ebur128, urefcount,
-                       upipe_filter_ebur128_free)
-UPIPE_HELPER_VOID(upipe_filter_ebur128)
-UPIPE_HELPER_OUTPUT(upipe_filter_ebur128, output,
-                    output_flow, output_state, request_list)
+UPIPE_HELPER_UPIPE(upipe_ebur128, upipe, UPIPE_EBUR128_SIGNATURE);
+UPIPE_HELPER_UREFCOUNT(upipe_ebur128, urefcount, upipe_ebur128_free)
+UPIPE_HELPER_VOID(upipe_ebur128)
+UPIPE_HELPER_OUTPUT(upipe_ebur128, output, output_flow, output_state,
+                    request_list)
 
 /** @internal @This allocates a filter pipe.
  *
@@ -99,21 +97,20 @@ UPIPE_HELPER_OUTPUT(upipe_filter_ebur128, output,
  * @param args optional arguments
  * @return pointer to upipe or NULL in case of allocation error
  */
-static struct upipe *upipe_filter_ebur128_alloc(struct upipe_mgr *mgr,
-                                                struct uprobe *uprobe,
-                                                uint32_t signature,
-                                                va_list args)
+static struct upipe *upipe_ebur128_alloc(struct upipe_mgr *mgr,
+                                         struct uprobe *uprobe,
+                                         uint32_t signature,
+                                         va_list args)
 {
-    struct upipe *upipe = upipe_filter_ebur128_alloc_void(mgr, uprobe, signature,
-                                                        args);
+    struct upipe *upipe = upipe_ebur128_alloc_void(mgr, uprobe, signature,
+                                                   args);
     if (unlikely(upipe == NULL))
         return NULL;
-    struct upipe_filter_ebur128 *upipe_filter_ebur128 =
-                                 upipe_filter_ebur128_from_upipe(upipe);
-    upipe_filter_ebur128->st = NULL;
+    struct upipe_ebur128 *upipe_ebur128 = upipe_ebur128_from_upipe(upipe);
+    upipe_ebur128->st = NULL;
 
-    upipe_filter_ebur128_init_urefcount(upipe);
-    upipe_filter_ebur128_init_output(upipe);
+    upipe_ebur128_init_urefcount(upipe);
+    upipe_ebur128_init_output(upipe);
     upipe_throw_ready(upipe);
     return upipe;
 }
@@ -124,14 +121,13 @@ static struct upipe *upipe_filter_ebur128_alloc(struct upipe_mgr *mgr,
  * @param uref uref structure
  * @param upump_p reference to upump structure
  */
-static void upipe_filter_ebur128_input(struct upipe *upipe, struct uref *uref,
-                                       struct upump **upump_p)
+static void upipe_ebur128_input(struct upipe *upipe, struct uref *uref,
+                                struct upump **upump_p)
 {
-    struct upipe_filter_ebur128 *upipe_filter_ebur128 =
-                                 upipe_filter_ebur128_from_upipe(upipe);
+    struct upipe_ebur128 *upipe_ebur128 = upipe_ebur128_from_upipe(upipe);
     double loud = 0, lra = 0, global = 0;
 
-    if (unlikely(upipe_filter_ebur128->output_flow == NULL)) {
+    if (unlikely(upipe_ebur128->output_flow == NULL)) {
         upipe_err_va(upipe, "invalid input");
         uref_free(uref);
         return;
@@ -147,7 +143,7 @@ static void upipe_filter_ebur128_input(struct upipe *upipe, struct uref *uref,
 
     void *buf = NULL;
     const char *channel = NULL;
-    if (upipe_filter_ebur128->planes == 1) {
+    if (upipe_ebur128->planes == 1) {
         if (ubase_check(uref_sound_plane_iterate(uref, &channel)) && channel) {
             if (unlikely(!ubase_check(uref_sound_plane_read_void(uref,
                     channel, 0, -1, (const void **)&buf)))) {
@@ -158,7 +154,7 @@ static void upipe_filter_ebur128_input(struct upipe *upipe, struct uref *uref,
         }
 
     } else {
-        buf = malloc(sample_size * upipe_filter_ebur128->channels * samples);
+        buf = malloc(sample_size * upipe_ebur128->channels * samples);
         if (buf == NULL) {
             upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
             uref_free(uref);
@@ -166,7 +162,7 @@ static void upipe_filter_ebur128_input(struct upipe *upipe, struct uref *uref,
         }
         if (!ubase_check(uref_sound_interleave(uref, (uint8_t *)buf, 0,
                                                samples, sample_size,
-                                               upipe_filter_ebur128->planes))) {
+                                               upipe_ebur128->planes))) {
             upipe_warn(upipe, "error mapping sound buffer");
             uref_free(uref);
             return;
@@ -176,41 +172,41 @@ static void upipe_filter_ebur128_input(struct upipe *upipe, struct uref *uref,
     if (unlikely((uintptr_t)buf & 1))
         upipe_warn(upipe, "unaligned buffer");
 
-    switch (upipe_filter_ebur128->fmt) {
-        case UPIPE_FILTER_EBUR128_SHORT:
-            ebur128_add_frames_short(upipe_filter_ebur128->st, (short *)buf,
+    switch (upipe_ebur128->fmt) {
+        case UPIPE_EBUR128_SHORT:
+            ebur128_add_frames_short(upipe_ebur128->st, (short *)buf,
                                      samples);
             break;
 
-        case UPIPE_FILTER_EBUR128_INT:
-            ebur128_add_frames_int(upipe_filter_ebur128->st, (int *)buf,
+        case UPIPE_EBUR128_INT:
+            ebur128_add_frames_int(upipe_ebur128->st, (int *)buf,
                                    samples);
             break;
 
-        case UPIPE_FILTER_EBUR128_FLOAT:
-            ebur128_add_frames_float(upipe_filter_ebur128->st, (float *)buf,
+        case UPIPE_EBUR128_FLOAT:
+            ebur128_add_frames_float(upipe_ebur128->st, (float *)buf,
                                      samples);
             break;
 
-        case UPIPE_FILTER_EBUR128_DOUBLE:
-            ebur128_add_frames_double(upipe_filter_ebur128->st, (double *)buf,
+        case UPIPE_EBUR128_DOUBLE:
+            ebur128_add_frames_double(upipe_ebur128->st, (double *)buf,
                                       samples);
             break;
 
         default:
             upipe_warn_va(upipe, "unknown sample format %d",
-                          upipe_filter_ebur128->fmt);
+                          upipe_ebur128->fmt);
             break;
     }
 
-    if (upipe_filter_ebur128->planes == 1)
+    if (upipe_ebur128->planes == 1)
         uref_sound_plane_unmap(uref, channel, 0, -1);
     else
         free(buf);
 
-    ebur128_loudness_momentary(upipe_filter_ebur128->st, &loud);
-    ebur128_loudness_range(upipe_filter_ebur128->st, &lra);
-    ebur128_loudness_global(upipe_filter_ebur128->st, &global);
+    ebur128_loudness_momentary(upipe_ebur128->st, &loud);
+    ebur128_loudness_range(upipe_ebur128->st, &lra);
+    ebur128_loudness_global(upipe_ebur128->st, &global);
 
     uref_ebur128_set_momentary(uref, loud);
     uref_ebur128_set_lra(uref, lra);
@@ -218,7 +214,7 @@ static void upipe_filter_ebur128_input(struct upipe *upipe, struct uref *uref,
 
     upipe_verbose_va(upipe, "loud %f lra %f global %f", loud, lra, global);
 
-    upipe_filter_ebur128_output(upipe, uref, upump_p);
+    upipe_ebur128_output(upipe, uref, upump_p);
 }
 
 /** @internal @This sets the input flow definition.
@@ -227,34 +223,33 @@ static void upipe_filter_ebur128_input(struct upipe *upipe, struct uref *uref,
  * @param flow flow definition packet
  * @return an error code
  */
-static int upipe_filter_ebur128_set_flow_def(struct upipe *upipe,
-                                             struct uref *flow)
+static int upipe_ebur128_set_flow_def(struct upipe *upipe,
+                                      struct uref *flow)
 {
-    struct upipe_filter_ebur128 *upipe_filter_ebur128 =
-                                 upipe_filter_ebur128_from_upipe(upipe);
+    struct upipe_ebur128 *upipe_ebur128 = upipe_ebur128_from_upipe(upipe);
     if (flow == NULL)
         return UBASE_ERR_INVALID;
 
-    enum upipe_filter_ebur128_fmt fmt;
+    enum upipe_ebur128_fmt fmt;
     const char *def;
     UBASE_RETURN(uref_flow_get_def(flow, &def))
     if (!ubase_ncmp(def, "sound.s16."))
-        fmt = UPIPE_FILTER_EBUR128_SHORT;
+        fmt = UPIPE_EBUR128_SHORT;
     else if (!ubase_ncmp(def, "sound.s32."))
-        fmt = UPIPE_FILTER_EBUR128_INT;
+        fmt = UPIPE_EBUR128_INT;
     else if (!ubase_ncmp(def, "sound.f32."))
-        fmt = UPIPE_FILTER_EBUR128_FLOAT;
+        fmt = UPIPE_EBUR128_FLOAT;
     else if (!ubase_ncmp(def, "sound.f64."))
-        fmt = UPIPE_FILTER_EBUR128_DOUBLE;
+        fmt = UPIPE_EBUR128_DOUBLE;
     else
         return UBASE_ERR_INVALID;
 
     uint64_t rate;
-    if (unlikely(!ubase_check(uref_sound_flow_get_rate(flow, &rate))
-            || !ubase_check(uref_sound_flow_get_channels(flow,
-                    &upipe_filter_ebur128->channels))
-            || !ubase_check(uref_sound_flow_get_planes(flow,
-                    &upipe_filter_ebur128->planes))))
+    if (unlikely(!ubase_check(uref_sound_flow_get_rate(flow, &rate)) ||
+                 !ubase_check(uref_sound_flow_get_channels(flow,
+                     &upipe_ebur128->channels)) ||
+                 !ubase_check(uref_sound_flow_get_planes(flow,
+                     &upipe_ebur128->planes))))
         return UBASE_ERR_INVALID;
 
     struct uref *flow_dup;
@@ -262,19 +257,19 @@ static int upipe_filter_ebur128_set_flow_def(struct upipe *upipe,
         upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
         return UBASE_ERR_ALLOC;
     }
-    upipe_filter_ebur128->fmt = fmt;
+    upipe_ebur128->fmt = fmt;
 
-    if (unlikely(upipe_filter_ebur128->st)) {
-        //ebur128_destroy(&upipe_filter_ebur128->st);
-        ebur128_change_parameters(upipe_filter_ebur128->st,
-                                  upipe_filter_ebur128->channels, rate);
+    if (unlikely(upipe_ebur128->st)) {
+        //ebur128_destroy(&upipe_ebur128->st);
+        ebur128_change_parameters(upipe_ebur128->st,
+                                  upipe_ebur128->channels, rate);
     } else {
-        upipe_filter_ebur128->st =
-            ebur128_init(upipe_filter_ebur128->channels, rate,
+        upipe_ebur128->st =
+            ebur128_init(upipe_ebur128->channels, rate,
             EBUR128_MODE_LRA | EBUR128_MODE_I | EBUR128_MODE_HISTOGRAM);
     }
 
-    upipe_filter_ebur128_store_flow_def(upipe, flow_dup);
+    upipe_ebur128_store_flow_def(upipe, flow_dup);
     return UBASE_ERR_NONE;
 }
 
@@ -284,8 +279,8 @@ static int upipe_filter_ebur128_set_flow_def(struct upipe *upipe,
  * @param request description structure of the request
  * @return an error code
  */
-static int upipe_filter_ebur128_provide_flow_format(struct upipe *upipe,
-                                                    struct urequest *request)
+static int upipe_ebur128_provide_flow_format(struct upipe *upipe,
+                                             struct urequest *request)
 {
     const char *def;
     UBASE_RETURN(uref_flow_get_def(request->uref, &def))
@@ -305,28 +300,28 @@ static int upipe_filter_ebur128_provide_flow_format(struct upipe *upipe,
  * @param args arguments of the command
  * @return an error code
  */
-static int upipe_filter_ebur128_control(struct upipe *upipe,
-                                        int command, va_list args)
+static int upipe_ebur128_control(struct upipe *upipe,
+                                 int command, va_list args)
 {
     switch (command) {
         case UPIPE_REGISTER_REQUEST: {
             struct urequest *request = va_arg(args, struct urequest *);
             if (request->type == UREQUEST_FLOW_FORMAT)
-                return upipe_filter_ebur128_provide_flow_format(upipe, request);
-            return upipe_filter_ebur128_alloc_output_proxy(upipe, request);
+                return upipe_ebur128_provide_flow_format(upipe, request);
+            return upipe_ebur128_alloc_output_proxy(upipe, request);
         }
         case UPIPE_UNREGISTER_REQUEST: {
             struct urequest *request = va_arg(args, struct urequest *);
-            return upipe_filter_ebur128_free_output_proxy(upipe, request);
+            return upipe_ebur128_free_output_proxy(upipe, request);
         }
         case UPIPE_SET_FLOW_DEF: {
             struct uref *flow_def = va_arg(args, struct uref *);
-            return upipe_filter_ebur128_set_flow_def(upipe, flow_def);
+            return upipe_ebur128_set_flow_def(upipe, flow_def);
         }
         case UPIPE_GET_FLOW_DEF:
         case UPIPE_GET_OUTPUT:
         case UPIPE_SET_OUTPUT:
-            return upipe_filter_ebur128_control_output(upipe, command, args);
+            return upipe_ebur128_control_output(upipe, command, args);
         default:
             return UBASE_ERR_UNHANDLED;
     }
@@ -336,35 +331,34 @@ static int upipe_filter_ebur128_control(struct upipe *upipe,
  *
  * @param upipe description structure of the pipe
  */
-static void upipe_filter_ebur128_free(struct upipe *upipe)
+static void upipe_ebur128_free(struct upipe *upipe)
 {
-    struct upipe_filter_ebur128 *upipe_filter_ebur128 =
-                                 upipe_filter_ebur128_from_upipe(upipe);
-    if (likely(upipe_filter_ebur128->st)) {
-        ebur128_destroy(&upipe_filter_ebur128->st);
+    struct upipe_ebur128 *upipe_ebur128 = upipe_ebur128_from_upipe(upipe);
+    if (likely(upipe_ebur128->st)) {
+        ebur128_destroy(&upipe_ebur128->st);
     }
     upipe_throw_dead(upipe);
 
-    upipe_filter_ebur128_clean_output(upipe);
-    upipe_filter_ebur128_clean_urefcount(upipe);
-    upipe_filter_ebur128_free_void(upipe);
+    upipe_ebur128_clean_output(upipe);
+    upipe_ebur128_clean_urefcount(upipe);
+    upipe_ebur128_free_void(upipe);
 }
 
 /** module manager static descriptor */
-static struct upipe_mgr upipe_filter_ebur128_mgr = {
+static struct upipe_mgr upipe_ebur128_mgr = {
     .refcount = NULL,
-    .signature = UPIPE_FILTER_EBUR128_SIGNATURE,
+    .signature = UPIPE_EBUR128_SIGNATURE,
 
-    .upipe_alloc = upipe_filter_ebur128_alloc,
-    .upipe_input = upipe_filter_ebur128_input,
-    .upipe_control = upipe_filter_ebur128_control
+    .upipe_alloc = upipe_ebur128_alloc,
+    .upipe_input = upipe_ebur128_input,
+    .upipe_control = upipe_ebur128_control
 };
 
 /** @This returns the management structure for glx_sink pipes
  *
  * @return pointer to manager
  */
-struct upipe_mgr *upipe_filter_ebur128_mgr_alloc(void)
+struct upipe_mgr *upipe_ebur128_mgr_alloc(void)
 {
-    return &upipe_filter_ebur128_mgr;
+    return &upipe_ebur128_mgr;
 }

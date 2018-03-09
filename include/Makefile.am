@@ -91,3 +91,7 @@ endif
 if HAVE_DVBCSA
 SUBDIRS += upipe-dvbcsa
 endif
+
+if HAVE_EBUR128
+SUBDIRS += upipe-ebur128
+endif
