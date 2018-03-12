@@ -1,7 +1,9 @@
 /*
  * Copyright (C) 2016 Open Broadcast Systems Ltd
+ * Copyright (C) 2018 OpenHeadend S.A.R.L.
  *
  * Authors: Rafaël Carré
+ *          Arnaud de Turckheim
  *
  * Permission is hereby granted, free of charge, to any person obtaining
  * a copy of this software and associated documentation files (the
@@ -42,6 +44,7 @@
 #include <upipe/upipe_helper_urefcount.h>
 #include <upipe/upipe_helper_ubuf_mgr.h>
 #include <upipe/upipe_helper_flow.h>
+#include <upipe/upipe_helper_input.h>
 #include <upipe-freetype/upipe_freetype.h>
 
 #include <ft2build.h>
@@ -62,6 +65,14 @@ struct upipe_freetype {
     enum upipe_helper_output_state output_state;
     /** list of output requests */
     struct uchain request_list;
+    /** list of retained urefs */
+    struct uchain urefs;
+    /** number of retained urefs */
+    unsigned nb_urefs;
+    /** maximum number of retained urefs */
+    unsigned max_urefs;
+    /** list of blockers */
+    struct uchain blockers;
 
     /** ubuf manager */
     struct ubuf_mgr *ubuf_mgr;
@@ -89,13 +100,18 @@ static int upipe_freetype_check_flow_format(struct upipe *upipe,
 /** @hidden */
 static int upipe_freetype_check(struct upipe *upipe, struct uref *uref);
 
+/** @hidden */
+static bool upipe_freetype_handle(struct upipe *upipe, struct uref *uref,
+                                  struct upump **upump);
+
 UPIPE_HELPER_UPIPE(upipe_freetype, upipe, UPIPE_FREETYPE_SIGNATURE);
 UPIPE_HELPER_OUTPUT(upipe_freetype, output, flow_def, output_state, request_list)
 UPIPE_HELPER_UREFCOUNT(upipe_freetype, urefcount, upipe_freetype_free)
 UPIPE_HELPER_UBUF_MGR(upipe_freetype, ubuf_mgr, flow_format, ubuf_mgr_request,
         upipe_freetype_check, upipe_freetype_register_output_request,
                       upipe_freetype_unregister_output_request)
-
+UPIPE_HELPER_INPUT(upipe_freetype, urefs, nb_urefs, max_urefs, blockers,
+                   upipe_freetype_handle);
 UPIPE_HELPER_FLOW(upipe_freetype, UREF_PIC_FLOW_DEF);
 
 /** @internal @This checks the compatibility of a flow format.
@@ -126,17 +142,23 @@ static int upipe_freetype_check(struct upipe *upipe, struct uref *flow_format)
     struct upipe_freetype *upipe_freetype = upipe_freetype_from_upipe(upipe);
 
     if (flow_format) {
-        int ret = upipe_freetype_check_flow_format(upipe, flow_format);
-        if (unlikely(!ubase_check(ret))) {
-            uref_free(flow_format);
-            return ret;
-        }
+        ubase_assert(upipe_freetype_check_flow_format(upipe, flow_format));
         upipe_freetype_store_flow_def(upipe, flow_format);
     }
 
-    if (!upipe_freetype->ubuf_mgr)
+    if (!upipe_freetype->ubuf_mgr) {
         upipe_freetype_require_ubuf_mgr(upipe,
                                         uref_dup(upipe_freetype->flow_output));
+        return UBASE_ERR_NONE;
+    }
+
+    if (upipe_freetype_check_input(upipe))
+        return UBASE_ERR_NONE;
+
+    upipe_freetype_output_input(upipe);
+    upipe_freetype_unblock_input(upipe);
+    if (upipe_freetype_check_input(upipe))
+        upipe_release(upipe);
     return UBASE_ERR_NONE;
 }
 
@@ -156,6 +178,7 @@ static void upipe_freetype_free(struct upipe *upipe)
     FT_Done_FreeType(upipe_freetype->library);
 
     uref_free(upipe_freetype->flow_output);
+    upipe_freetype_clean_input(upipe);
     upipe_freetype_clean_urefcount(upipe);
     upipe_freetype_clean_output(upipe);
     upipe_freetype_clean_ubuf_mgr(upipe);
@@ -196,6 +219,7 @@ static struct upipe *upipe_freetype_alloc(struct upipe_mgr *mgr,
     upipe_freetype_init_urefcount(upipe);
     upipe_freetype_init_output(upipe);
     upipe_freetype_init_ubuf_mgr(upipe);
+    upipe_freetype_init_input(upipe);
 
     upipe_throw_ready(upipe);
 
@@ -209,25 +233,20 @@ static struct upipe *upipe_freetype_alloc(struct upipe_mgr *mgr,
     return upipe;
 }
 
-/** @internal
+/** @internal @This tries to output input buffers.
  *
  * @param upipe description structure of the pipe
- * @param uref uref structure
+ * @param uref input buffer to output
  * @param upump_p reference to pump that generated the buffer
+ * @return true if the buffer was output
  */
-static void upipe_freetype_input(struct upipe *upipe, struct uref *uref, struct upump **upump_p)
+static bool upipe_freetype_handle(struct upipe *upipe, struct uref *uref,
+                                  struct upump **upump_p)
 {
     struct upipe_freetype *upipe_freetype = upipe_freetype_from_upipe(upipe);
 
-    if (!upipe_freetype->ubuf_mgr) {
-        upipe_freetype_demand_ubuf_mgr(upipe,
-                                       uref_dup(upipe_freetype->flow_output));
-        if (unlikely(!upipe_freetype->ubuf_mgr)) {
-            upipe_warn(upipe, "no ubuf manager provided, drop...");
-            uref_free(uref);
-            return;
-        }
-    }
+    if (!upipe_freetype->ubuf_mgr)
+            return false;
 
     struct uref *flow_format = upipe_freetype->flow_format;
     uint64_t h, v;
@@ -235,14 +254,14 @@ static void upipe_freetype_input(struct upipe *upipe, struct uref *uref, struct 
         !ubase_check(uref_pic_flow_get_vsize(flow_format, &v))) {
         upipe_err_va(upipe, "Could not read output dimensions");
         uref_free(uref);
-        return;
+        return true;
     }
 
     struct ubuf *ubuf = ubuf_pic_alloc(upipe_freetype->ubuf_mgr, h, v);
     if (!ubuf) {
         upipe_err(upipe, "Could not allocate pic");
         uref_free(uref);
-        return;
+        return true;
     }
 
     ubuf_pic_clear(ubuf, 0, 0, -1, -1, 0);
@@ -253,7 +272,7 @@ static void upipe_freetype_input(struct upipe *upipe, struct uref *uref, struct 
         upipe_err(upipe, "Could not read ubuf plane sizes");
         ubuf_free(ubuf);
         uref_free(uref);
-        return;
+        return true;
     }
 
     uint8_t *dst;
@@ -262,14 +281,14 @@ static void upipe_freetype_input(struct upipe *upipe, struct uref *uref, struct 
         upipe_err(upipe, "Could not map luma plane");
         ubuf_free(ubuf);
         uref_free(uref);
-        return;
+        return true;
     }
     if (!ubase_check(ubuf_pic_plane_write(ubuf, "a8", 0, 0, -1, -1, &dsta))) {
         upipe_err(upipe, "Could not map alpha plane");
         ubuf_pic_plane_unmap(ubuf, "y8", 0, 0, -1, -1);
         ubuf_free(ubuf);
         uref_free(uref);
-        return;
+        return true;
     }
 
     /* the pen position in 26.6 cartesian space coordinates */
@@ -333,6 +352,27 @@ static void upipe_freetype_input(struct upipe *upipe, struct uref *uref, struct 
     uref_attach_ubuf(uref, ubuf);
 
     upipe_freetype_output(upipe, uref, upump_p);
+    return true;
+}
+
+/** @internal
+ *
+ * @param upipe description structure of the pipe
+ * @param uref uref structure
+ * @param upump_p reference to pump that generated the buffer
+ */
+static void upipe_freetype_input(struct upipe *upipe, struct uref *uref,
+                                 struct upump **upump_p)
+{
+    if (!upipe_freetype_check_input(upipe)) {
+        upipe_freetype_hold_input(upipe, uref);
+        upipe_freetype_block_input(upipe, upump_p);
+    }
+    else if (!upipe_freetype_handle(upipe, uref, upump_p)) {
+        upipe_freetype_hold_input(upipe, uref);
+        upipe_freetype_block_input(upipe, upump_p);
+        upipe_use(upipe);
+    }
 }
 
 /** @internal @This sets a freetype option.
