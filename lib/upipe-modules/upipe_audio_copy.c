@@ -305,11 +305,23 @@ static int upipe_audio_copy_set_flow_def(struct upipe *upipe,
                                           &upipe_audio_copy->samplerate));
     UBASE_RETURN(uref_sound_flow_get_planes(flow_def,
                                             &upipe_audio_copy->planes));
+    if (unlikely(!upipe_audio_copy->samplerate))
+        return UBASE_ERR_INVALID;
+
     struct uref *flow_def_dup = uref_dup(flow_def);
     UBASE_ALLOC_RETURN(flow_def_dup);
     struct uref *output_flow_def =
         upipe_audio_copy_store_flow_def_input(upipe, flow_def_dup);
     UBASE_ALLOC_RETURN(output_flow_def);
+    uint64_t latency = 0;
+    uref_clock_get_latency(flow_def, &latency);
+    latency += upipe_audio_copy->samples * UCLOCK_FREQ /
+        upipe_audio_copy->samplerate;
+    int ret = uref_clock_set_latency(output_flow_def, latency);
+    if (unlikely(!ubase_check(ret))) {
+        uref_free(output_flow_def);
+        return ret;
+    }
     upipe_audio_copy_store_flow_def(upipe, output_flow_def);
 
     struct uchain *uchain;
