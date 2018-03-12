@@ -29,6 +29,7 @@
 #include <upipe/uprobe.h>
 #include <upipe/uclock.h>
 #include <upipe/uref.h>
+#include <upipe/uref_dump.h>
 #include <upipe/uref_block.h>
 #include <upipe/uref_block_flow.h>
 #include <upipe/uref_pic.h>
@@ -39,7 +40,7 @@
 #include <upipe/upipe.h>
 #include <upipe/upipe_helper_upipe.h>
 #include <upipe/upipe_helper_urefcount.h>
-#include <upipe/upipe_helper_void.h>
+#include <upipe/upipe_helper_flow.h>
 #include <upipe/upipe_helper_uref_mgr.h>
 #include <upipe/upipe_helper_ubuf_mgr.h>
 #include <upipe/upipe_helper_output.h>
@@ -49,6 +50,7 @@
 #include <upipe-netmap/upipe_netmap_source.h>
 
 #include "../upipe-hbrmt/sdidec.h"
+#include "../upipe-hbrmt/rfc4175_dec.h"
 #include "../upipe-hbrmt/upipe_hbrmt_common.h"
 
 #include <net/if.h>
@@ -57,6 +59,7 @@
 #include <net/netmap.h>
 #include <net/netmap_user.h>
 
+#include <bitstream/ietf/rfc4175.h>
 #include <bitstream/ietf/rtp.h>
 
 /** @hidden */
@@ -132,11 +135,34 @@ struct upipe_netmap_source {
     /** hbrmt or rfc4175 */
     bool hbrmt;
 
+    /** rfc4175 */
+    struct uref *rfc_def;
+    uint64_t hsize;
+    uint64_t vsize;
+    struct urational fps;
+    bool output_is_v210;
+    int output_bit_depth;
+
+#define UPIPE_UNPACK_RFC4175_MAX_PLANES 3
+    /** output chroma map */
+    const char *output_chroma_map[UPIPE_UNPACK_RFC4175_MAX_PLANES];
+
+    uint8_t *output_plane[UPIPE_UNPACK_RFC4175_MAX_PLANES];
+    size_t output_stride[UPIPE_UNPACK_RFC4175_MAX_PLANES];
+
     /* SDI offsets */
     const struct sdi_offsets_fmt *f;
 
     /** unpack */
     void (*sdi_to_uyvy)(const uint8_t *src, uint16_t *y, uintptr_t pixels);
+
+    /** Bitpacked to V210 conversion */
+    void (*bitpacked_to_v210)(const uint8_t *src, uint32_t *dst, uintptr_t pixels);
+
+    /** Bitpacked to Planar 8 conversion */
+    void (*bitpacked_to_planar_8)(const uint8_t *src, uint8_t *y, uint8_t *u, uint8_t *v, uintptr_t pixels);
+    /** Bitpacked to Planar 10 conversion */
+    void (*bitpacked_to_planar_10)(const uint8_t *src, uint16_t *y, uint16_t *u, uint16_t *v, uintptr_t pixels);
 
     /** detected format */
     uint8_t frate;
@@ -156,7 +182,7 @@ struct upipe_netmap_source {
 
 UPIPE_HELPER_UPIPE(upipe_netmap_source, upipe, UPIPE_NETMAP_SOURCE_SIGNATURE)
 UPIPE_HELPER_UREFCOUNT(upipe_netmap_source, urefcount, upipe_netmap_source_free)
-UPIPE_HELPER_VOID(upipe_netmap_source)
+UPIPE_HELPER_FLOW(upipe_netmap_source, NULL)
 
 UPIPE_HELPER_OUTPUT(upipe_netmap_source, output, flow_def, output_state, request_list)
 UPIPE_HELPER_UREF_MGR(upipe_netmap_source, uref_mgr, uref_mgr_request,
@@ -186,8 +212,40 @@ static struct upipe *upipe_netmap_source_alloc(struct upipe_mgr *mgr,
                                         struct uprobe *uprobe,
                                         uint32_t signature, va_list args)
 {
-    struct upipe *upipe = upipe_netmap_source_alloc_void(mgr, uprobe, signature, args);
+    struct uref *flow_def;
+    struct upipe *upipe = upipe_netmap_source_alloc_flow(mgr, uprobe, signature, args, &flow_def);
+    if (!upipe)
+        return NULL;
     struct upipe_netmap_source *upipe_netmap_source = upipe_netmap_source_from_upipe(upipe);
+
+    if (flow_def) {
+        upipe_netmap_source->hbrmt = false;
+        if (!ubase_check(uref_pic_flow_get_hsize(flow_def,
+                        &upipe_netmap_source->hsize)) ||
+            !ubase_check(uref_pic_flow_get_vsize(flow_def,
+                    &upipe_netmap_source->vsize)) ||
+            !ubase_check(uref_pic_flow_get_fps(flow_def,
+                    &upipe_netmap_source->fps))) {
+            upipe_netmap_source_free_flow(upipe);
+            upipe_err(upipe, "Missing picture dimensions");
+            return NULL;
+        }
+
+        upipe_netmap_source->output_is_v210 = ubase_check(uref_pic_flow_check_chroma(flow_def, 1, 1, 16, "u10y10v10y10u10y10v10y10u10y10v10y10"));
+        if (!upipe_netmap_source->output_is_v210)
+            upipe_netmap_source->output_bit_depth = ubase_check(uref_pic_flow_check_chroma(flow_def, 1, 1, 1, "y8")) ? 8 : 10;
+        else {
+            upipe_netmap_source->hsize = (upipe_netmap_source->hsize + 5) / 6 * 6; // XXX 720
+        }
+
+        upipe_netmap_source->rfc_def = uref_dup(flow_def);;
+        uref_pic_flow_set_hsize(upipe_netmap_source->rfc_def,
+                upipe_netmap_source->hsize);
+    } else {
+        upipe_netmap_source->hbrmt = true;
+        upipe_netmap_source->rfc_def = NULL;
+    }
+
     upipe_netmap_source_init_urefcount(upipe);
     upipe_netmap_source_init_uref_mgr(upipe);
     upipe_netmap_source_init_ubuf_mgr(upipe);
@@ -206,21 +264,36 @@ static struct upipe *upipe_netmap_source_alloc(struct upipe_mgr *mgr,
     upipe_netmap_source->frate    = 0;
     upipe_netmap_source->frame    = 0;
     upipe_netmap_source->old_vss  = 0;
-    upipe_netmap_source->hbrmt = true; // RFC
 
     upipe_netmap_source->expected_seqnum = UINT32_MAX;
     upipe_netmap_source->discontinuity = false;
     upipe_netmap_source->unpack_scratch_buffer_count = 0;
 
     upipe_netmap_source->sdi_to_uyvy = upipe_sdi_to_uyvy_c;
+    upipe_netmap_source->bitpacked_to_v210 = upipe_sdi_to_v210_c;
+    upipe_netmap_source->bitpacked_to_planar_8 = upipe_sdi_to_planar_8_c;
 
 #if defined(HAVE_X86ASM)
 #if defined(__i686__) || defined(__x86_64__)
-    if (__builtin_cpu_supports("ssse3"))
+    if (__builtin_cpu_supports("ssse3")) {
         upipe_netmap_source->sdi_to_uyvy = upipe_sdi_to_uyvy_unaligned_ssse3;
+        upipe_netmap_source->bitpacked_to_v210 = upipe_sdi_to_v210_ssse3;
+        upipe_netmap_source->bitpacked_to_planar_8 = upipe_sdi_to_planar_8_ssse3;
+        upipe_netmap_source->bitpacked_to_planar_10 = upipe_sdi_to_planar_10_ssse3;
+    }
 
-    if (__builtin_cpu_supports("avx2"))
+   if (__builtin_cpu_supports("avx")) {
+        upipe_netmap_source->bitpacked_to_v210 = upipe_sdi_to_v210_avx;
+        upipe_netmap_source->bitpacked_to_planar_8 = upipe_sdi_to_planar_8_avx;
+        upipe_netmap_source->bitpacked_to_planar_10 = upipe_sdi_to_planar_10_avx;
+    }
+
+   if (__builtin_cpu_supports("avx2")) {
         upipe_netmap_source->sdi_to_uyvy = upipe_sdi_to_uyvy_unaligned_avx2;
+        upipe_netmap_source->bitpacked_to_v210 = upipe_sdi_to_v210_avx2;
+        upipe_netmap_source->bitpacked_to_planar_8 = upipe_sdi_to_planar_8_avx2;
+        upipe_netmap_source->bitpacked_to_planar_10 = upipe_sdi_to_planar_10_avx2;
+   }
 #endif
 #endif
 
@@ -322,34 +395,149 @@ static int upipe_netmap_source_set_flow(struct upipe *upipe, uint8_t frate, uint
 static int upipe_netmap_source_alloc_output_uref(struct upipe *upipe, uint64_t systime)
 {
     struct upipe_netmap_source *upipe_netmap_source = upipe_netmap_source_from_upipe(upipe);
+    bool hbrmt = upipe_netmap_source->hbrmt;
 
-    const struct sdi_offsets_fmt *f = upipe_netmap_source->f;
-    if (!f)
-        return UBASE_ERR_INVALID;
+    if (hbrmt) {
+        const struct sdi_offsets_fmt *f = upipe_netmap_source->f;
+        if (!f)
+            return UBASE_ERR_INVALID;
 
-    /* Only 422 accepted, so this assumption is fine */
-    uint64_t samples = f->width * f->height * 2;
+        /* Only 422 accepted, so this assumption is fine */
+        uint64_t samples = f->width * f->height * 2;
 
-    upipe_netmap_source->uref = uref_block_alloc(upipe_netmap_source->uref_mgr,
-                                                 upipe_netmap_source->ubuf_mgr,
-                                                 2 * samples);
-    if (unlikely(upipe_netmap_source->uref == NULL)) {
-        upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
-        return UBASE_ERR_ALLOC;
-    }
+        upipe_netmap_source->uref = uref_block_alloc(upipe_netmap_source->uref_mgr,
+                upipe_netmap_source->ubuf_mgr,
+                2 * samples);
+        if (unlikely(upipe_netmap_source->uref == NULL)) {
+            upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
+            return UBASE_ERR_ALLOC;
+        }
 
-    upipe_netmap_source->dst_size = -1;
-    if (unlikely(!ubase_check(uref_block_write(upipe_netmap_source->uref, 0,
-                                               &upipe_netmap_source->dst_size,
-                                               &upipe_netmap_source->dst_buf)))) {
-        uref_free(upipe_netmap_source->uref);
-        upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
-        return UBASE_ERR_ALLOC;
+        upipe_netmap_source->dst_size = -1;
+        if (unlikely(!ubase_check(uref_block_write(upipe_netmap_source->uref, 0,
+                            &upipe_netmap_source->dst_size,
+                            &upipe_netmap_source->dst_buf)))) {
+            uref_free(upipe_netmap_source->uref);
+            upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
+            return UBASE_ERR_ALLOC;
+        }
+    } else {
+        struct uref *uref = uref_pic_alloc(upipe_netmap_source->uref_mgr,
+                upipe_netmap_source->ubuf_mgr, upipe_netmap_source->hsize,
+                upipe_netmap_source->vsize);
+
+        if (unlikely(uref == NULL)) {
+            upipe_netmap_source->uref = NULL;
+            upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
+            return UBASE_ERR_ALLOC;
+        }
+
+        /* map output */
+        for (int i = 0; i < UPIPE_UNPACK_RFC4175_MAX_PLANES ; i++) {
+            const char *chroma = upipe_netmap_source->output_chroma_map[i];
+            if (chroma == NULL)
+                break;
+
+            if (unlikely(!ubase_check(uref_pic_plane_write(uref, chroma,
+                                0, 0, -1, -1,
+                                &upipe_netmap_source->output_plane[i])) ||
+                        !ubase_check(uref_pic_plane_size(uref, chroma,
+                                &upipe_netmap_source->output_stride[i],
+                                NULL, NULL, NULL)))) {
+                upipe_warn(upipe, "unable to map output");
+                uref_free(uref);
+                uref = NULL;
+                break;
+            }
+        }
+
+        upipe_netmap_source->uref = uref;
     }
 
     uref_clock_set_cr_sys(upipe_netmap_source->uref, systime);
 
     return UBASE_ERR_NONE;
+}
+
+static inline bool handle_rfc_packet(struct upipe *upipe, const uint8_t *src, uint16_t src_size, bool *eof)
+{
+    struct upipe_netmap_source *upipe_netmap_source = upipe_netmap_source_from_upipe(upipe);
+
+    src += RTP_HEADER_SIZE;
+    src_size -= RTP_HEADER_SIZE;
+
+    if (unlikely(!upipe_netmap_source->uref))
+        return false;
+
+    if (src_size < RFC_4175_EXT_SEQ_NUM_LEN)
+        return false;
+
+    src += RFC_4175_EXT_SEQ_NUM_LEN;
+    src_size -= RFC_4175_EXT_SEQ_NUM_LEN;
+
+    uint16_t length[2], field[2], line_number[2], line_offset[2];
+
+    uint8_t continuation = rfc4175_get_line_continuation(src);
+    for (int i = 0; i < 1 + !!continuation; i++) {
+        if (src_size < RFC_4175_HEADER_LEN)
+            return false;
+
+        length[i]      = rfc4175_get_line_length(src);
+        field[i]       = rfc4175_get_line_field_id(src);
+        line_number[i] = rfc4175_get_line_number(src);
+        line_offset[i] = rfc4175_get_line_offset(src);
+        src += RFC_4175_HEADER_LEN;
+        src_size -= RFC_4175_HEADER_LEN;
+    }
+
+    assert(!continuation);
+
+    *eof = !!field[0];
+
+    for (int i = 0; i < 1 + !!continuation; i++) {
+        int interleaved_line = line_number[i] * 2 + !!field[i];
+        if (src_size < length[i])
+            return false;
+
+        const size_t pixels = 2 * length[i] / 5;
+
+        if (upipe_netmap_source->output_is_v210) {
+            /* Start */
+            uint8_t *dst = upipe_netmap_source->output_plane[0] +
+                upipe_netmap_source->output_stride[0] * interleaved_line;
+
+            /* Offset to a pixel/pblock within the line */
+            dst += (line_offset[i] / 6) * 16;
+
+            upipe_netmap_source->bitpacked_to_v210(src,
+                    (uint32_t *)dst, pixels);
+        } else {
+            const int bit_depth = upipe_netmap_source->output_bit_depth;
+            const unsigned pixel_size = (bit_depth == 10) ? 2 : 1;
+
+            uint8_t *plane[UPIPE_UNPACK_RFC4175_MAX_PLANES];
+            for (int j = 0 ; j < UPIPE_UNPACK_RFC4175_MAX_PLANES; j++) {
+                const unsigned hsub = j ? 2 : 1;
+                plane[j] = upipe_netmap_source->output_plane[j] +
+                    upipe_netmap_source->output_stride[j] * interleaved_line +
+                    pixel_size * line_offset[i] / hsub;
+            }
+
+            if (bit_depth == 8)  {
+                upipe_netmap_source->bitpacked_to_planar_8(src,
+                        plane[0], plane[1], plane[2], pixels);
+            } else {
+                upipe_netmap_source->bitpacked_to_planar_10(src,
+                        (uint16_t*)plane[0], (uint16_t*)plane[1],
+                        (uint16_t*)plane[2], pixels);
+            }
+        }
+
+        src += length[i];
+        src_size -= length[i];
+    }
+
+    return false;
 }
 
 static inline bool handle_hbrmt_packet(struct upipe *upipe, const uint8_t *src, uint16_t src_size)
@@ -512,6 +700,37 @@ static const uint8_t *get_rtp(struct upipe *upipe, struct netmap_ring *rxring,
     return rtp;
 }
 
+/** @internal */
+static void upipe_netmap_source_prepare_frame(struct upipe *upipe, uint32_t timestamp)
+{
+    struct upipe_netmap_source *upipe_netmap_source = upipe_netmap_source_from_upipe(upipe);
+    struct uref *uref = upipe_netmap_source->uref;
+
+    /* unmap output */
+    for (int i = 0; i < UPIPE_UNPACK_RFC4175_MAX_PLANES; i++) {
+        const char *chroma = upipe_netmap_source->output_chroma_map[i];
+        if (chroma == NULL)
+            break;
+        uref_pic_plane_unmap(upipe_netmap_source->uref,
+                chroma, 0, 0, -1, -1);
+    }
+
+    uint64_t delta =
+        (UINT32_MAX + timestamp -
+         (upipe_netmap_source->last_timestamp % UINT32_MAX)) % UINT32_MAX;
+    upipe_netmap_source->last_timestamp += delta;
+
+    uint64_t pts = upipe_netmap_source->last_timestamp;
+    pts = pts * UCLOCK_FREQ / 90000;
+
+    uref_clock_set_pts_prog(uref, pts);
+    uref_clock_set_pts_orig(uref, timestamp * UCLOCK_FREQ / 90000);
+    uref_clock_set_dts_pts_delay(uref, 0);
+
+    upipe_throw_clock_ref(upipe, uref, pts, 0);
+    upipe_throw_clock_ts(upipe, uref);
+}
+
 #define GOT_SEQNUM (1LLU<<49)
 /*
  * do_packet : examine next packet in queue and handle if possible
@@ -566,41 +785,35 @@ static uint64_t do_packet(struct upipe *upipe, struct netmap_ring *rxring,
     ret |= GOT_SEQNUM;
     /* We have a valid packet and expected sequence number from here on */
 
+    bool marker = rtp_check_marker(rtp);
+    bool hbrmt = upipe_netmap_source->hbrmt;
+
     if (!upipe_netmap_source->discontinuity) {
-        bool hbrmt = upipe_netmap_source->hbrmt;
         if (hbrmt) {
             if (handle_hbrmt_packet(upipe, rtp, pkt_size))
                 /* error handling packet, drop */
                 return ret;
         } else {
-            struct uref *uref = uref_block_alloc(upipe_netmap_source->uref_mgr,
-                                                 upipe_netmap_source->ubuf_mgr,
-                                                 pkt_size);
+            bool eof = false;
+            if (handle_rfc_packet(upipe, rtp, pkt_size, &eof))
+                /* error handling packet, drop */
+                return ret;
 
-            uint8_t *dst_buf;
-            int dst_size;
-            if (unlikely(!ubase_check(uref_block_write(uref, 0, &dst_size, &dst_buf)))) {
-                abort();
-            }
-            memcpy(dst_buf, rtp, pkt_size);
-            uref_block_unmap(uref, 0);
-            uref_clock_set_cr_sys(uref, systime);
-            upipe_netmap_source_output(upipe, uref, &upipe_netmap_source->upump);
-            upipe_netmap_source->expected_seqnum = ++seqnum & UINT16_MAX;
-            upipe_netmap_source->last_timestamp = timestamp;
+            marker &= eof;
         }
 
         upipe_netmap_source->packets++;
-        if (!hbrmt)
-            return ret;
     }
 
-    bool marker = rtp_check_marker(rtp);
     if ((marker || upipe_netmap_source->discontinuity) && upipe_netmap_source->uref) {
-        uref_block_unmap(upipe_netmap_source->uref, 0);
+        if (hbrmt) {
+            uref_block_unmap(upipe_netmap_source->uref, 0);
 
-        if (upipe_netmap_source->packets != upipe_netmap_source->pkts_per_frame)
-            upipe_netmap_source->discontinuity = true;
+            if (upipe_netmap_source->packets != upipe_netmap_source->pkts_per_frame)
+                upipe_netmap_source->discontinuity = true;
+        } else {
+            upipe_netmap_source_prepare_frame(upipe, timestamp);
+        }
 
         if (upipe_netmap_source->discontinuity)
             uref_flow_set_discontinuity(upipe_netmap_source->uref);
@@ -684,7 +897,19 @@ static void upipe_netmap_source_worker(struct upump *upump)
             //upipe_err(upipe, "DISCONTINUITY"); // TODO: # of packets lost
             upipe_netmap_source->discontinuity = true;
             if (upipe_netmap_source->uref) {
-                uref_block_unmap(upipe_netmap_source->uref, 0);
+                if (upipe_netmap_source->hbrmt) {
+                    uref_block_unmap(upipe_netmap_source->uref, 0);
+                } else {
+                    /* unmap output */
+                    for (int i = 0; i < UPIPE_UNPACK_RFC4175_MAX_PLANES; i++) {
+                        const char *chroma = upipe_netmap_source->output_chroma_map[i];
+                        if (chroma == NULL)
+                            break;
+                        uref_pic_plane_unmap(upipe_netmap_source->uref,
+                                chroma, 0, 0, -1, -1);
+                    }
+                }
+
                 uref_free(upipe_netmap_source->uref);
             }
             upipe_netmap_source->uref = NULL;
@@ -720,13 +945,34 @@ static int upipe_netmap_source_check(struct upipe *upipe, struct uref *flow_form
     }
 
     if (upipe_netmap_source->ubuf_mgr == NULL) {
-        struct uref *flow_format =
-            uref_block_flow_alloc_def(upipe_netmap_source->uref_mgr, NULL);
-        if (unlikely(flow_format == NULL)) {
-            upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
-            return UBASE_ERR_ALLOC;
+        struct uref *flow_def = NULL;
+        if (upipe_netmap_source->hbrmt) {
+            flow_def = uref_block_flow_alloc_def(upipe_netmap_source->uref_mgr,
+                    NULL);
+            if (unlikely(flow_def == NULL)) {
+                upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
+                return UBASE_ERR_ALLOC;
+            }
+        } else {
+            flow_def = uref_dup(upipe_netmap_source->rfc_def);
+            uref_dump(flow_def, upipe->uprobe);
+
+            if (upipe_netmap_source->output_is_v210) {
+                upipe_netmap_source->output_chroma_map[0] = "u10y10v10y10u10y10v10y10u10y10v10y10";
+                upipe_netmap_source->output_chroma_map[1] = NULL;
+                upipe_netmap_source->output_chroma_map[2] = NULL;
+            } else if (upipe_netmap_source->output_bit_depth == 8) {
+                upipe_netmap_source->output_chroma_map[0] = "y8";
+                upipe_netmap_source->output_chroma_map[1] = "u8";
+                upipe_netmap_source->output_chroma_map[2] = "v8";
+            } else {
+                upipe_netmap_source->output_chroma_map[0] = "y10l";
+                upipe_netmap_source->output_chroma_map[1] = "u10l";
+                upipe_netmap_source->output_chroma_map[2] = "v10l";
+            }
         }
-        upipe_netmap_source_require_ubuf_mgr(upipe, flow_format);
+
+        upipe_netmap_source_require_ubuf_mgr(upipe, flow_def);
         return UBASE_ERR_NONE;
     }
 
@@ -890,10 +1136,24 @@ static void upipe_netmap_source_free(struct upipe *upipe)
 
     upipe_throw_dead(upipe);
 
-    if (upipe_netmap_source->uref)
-        uref_block_unmap(upipe_netmap_source->uref, 0);
-    uref_free(upipe_netmap_source->uref);
+    if (upipe_netmap_source->uref) {
+        if (upipe_netmap_source->hbrmt) {
+            uref_block_unmap(upipe_netmap_source->uref, 0);
+        } else {
+            /* unmap output */
+            for (int i = 0; i < UPIPE_UNPACK_RFC4175_MAX_PLANES; i++) {
+                const char *chroma = upipe_netmap_source->output_chroma_map[i];
+                if (chroma == NULL)
+                    break;
+                uref_pic_plane_unmap(upipe_netmap_source->uref,
+                        chroma, 0, 0, -1, -1);
+            }
+        }
+        uref_free(upipe_netmap_source->uref);
+    }
     free(upipe_netmap_source->uri);
+
+    uref_free(upipe_netmap_source->rfc_def);
     upipe_netmap_source_clean_uclock(upipe);
     upipe_netmap_source_clean_upump(upipe);
     upipe_netmap_source_clean_upump_mgr(upipe);
@@ -901,7 +1161,7 @@ static void upipe_netmap_source_free(struct upipe *upipe)
     upipe_netmap_source_clean_ubuf_mgr(upipe);
     upipe_netmap_source_clean_uref_mgr(upipe);
     upipe_netmap_source_clean_urefcount(upipe);
-    upipe_netmap_source_free_void(upipe);
+    upipe_netmap_source_free_flow(upipe);
 }
 
 /** module manager static descriptor */
