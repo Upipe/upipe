@@ -11,4 +11,5 @@ myinclude_HEADERS = \
 	upipe_rtp_feedback.h \
 	upipe_rtcp_fb_receiver.h \
 	upipe_filter_vanc.h \
-	upipe_zoneplate_source.h
+	upipe_zoneplate_source.h \
+	upipe_zoneplate.h

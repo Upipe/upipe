@@ -104,6 +104,11 @@ static inline int uref_pic_plane_iterate(struct uref *uref,
     return ubuf_pic_plane_iterate(uref->ubuf, chroma_p);
 }
 
+/** helper for uref_pic_plane_iterate */
+#define uref_pic_plane_foreach(UREF, CHROMA)                                \
+    for (const char *CHROMA = NULL;                                         \
+         ubase_check(uref_pic_plane_iterate(UREF, &CHROMA)) && CHROMA != NULL;)
+
 /** @see ubuf_pic_plane_size */
 static inline int uref_pic_plane_size(struct uref *uref,
         const char *chroma, size_t *stride_p, uint8_t *hsub_p, uint8_t *vsub_p,

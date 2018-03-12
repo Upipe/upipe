@@ -189,7 +189,8 @@ check_PROGRAMS += \
 	upipe_worker_source_test \
 	upipe_worker_test \
 	upipe_m3u_reader_test \
-	upipe_void_source_test
+	upipe_void_source_test \
+	upipe_zoneplate_source_test
 
 TESTS += \
 	upump_ev_test \
@@ -209,7 +210,8 @@ TESTS += \
 	upipe_worker_source_test \
 	upipe_worker_test \
 	upipe_m3u_reader_test.sh \
-	upipe_void_source_test
+	upipe_void_source_test \
+	upipe_zoneplate_source_test
 
 if HAVE_PTHREAD
 check_PROGRAMS += \
@@ -505,6 +507,7 @@ upipe_audio_blank_test_LDADD = $(LDADD) $(top_builddir)/lib/upipe-modules/libupi
 upipe_grid_test_LDADD = $(LDADD) $(top_builddir)/lib/upipe-modules/libupipe_modules.la
 upipe_block_to_sound_test_LDADD = $(LDADD) $(top_builddir)/lib/upipe-modules/libupipe_modules.la
 upipe_dvbcsa_test_LDADD = $(LDADD) $(top_builddir)/lib/upipe-dvbcsa/libupipe_dvbcsa.la
+upipe_zoneplate_source_test_LDADD = $(LDADD) $(top_builddir)/lib/upipe-filters/libupipe_filters.la $(top_builddir)/lib/upipe-modules/libupipe_modules.la $(top_builddir)/lib/upump-ev/libupump_ev.la
 upipe_a52_framer_test_CFLAGS = $(AM_CFLAGS) $(BITSTREAM_CFLAGS)
 upipe_h264_framer_test_CFLAGS = $(AM_CFLAGS) $(BITSTREAM_CFLAGS)
 upipe_mpga_framer_test_CFLAGS = $(AM_CFLAGS) $(BITSTREAM_CFLAGS)
