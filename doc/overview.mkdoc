@@ -128,6 +128,7 @@
         @item @ref upipe_x264_mgr_alloc @item linear pipe encoding to MPEG-4 AVC using libx264 @item @tt -lupipe-x264
         @item @ref upipe_x265_mgr_alloc @item linear pipe encoding to H.265/HEVC using libx265 @item @tt -lupipe-x265
         @item @ref upipe_glx_sink_mgr_alloc @item sink pipe displaying picture on a GLX output @item @tt -lupipe-gl
+        @item @ref upipe_audio_copy_mgr_alloc @item output fixed size sound buffers @item @tt -upipe-modules
 
       @end table
 
