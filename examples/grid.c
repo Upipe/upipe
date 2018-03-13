@@ -113,7 +113,7 @@ struct input {
     struct uprobe uprobe_video;
     struct uprobe uprobe_audio;
     struct upipe *source;
-    struct upipe *upipe;
+    struct upipe *video;
     struct upipe *sound;
     const char *uri;
     unsigned int id;
@@ -201,8 +201,8 @@ static void sig_cb(struct upump *upump)
         struct input *input = input_from_uchain(uchain);
         upipe_release(input->source);
         input->source = NULL;
-        upipe_release(input->upipe);
-        input->upipe = NULL;
+        upipe_release(input->video);
+        input->video = NULL;
         upipe_release(input->sound);
         input->sound = NULL;
     }
@@ -228,7 +228,7 @@ static struct input *input_from_upipe(struct upipe *upipe)
     struct uchain *uchain;
     ulist_foreach(&inputs, uchain) {
         struct input *input = input_from_uchain(uchain);
-        if (input->upipe == upipe)
+        if (input->video == upipe)
             return input;
     }
     return NULL;
@@ -294,7 +294,7 @@ static int catch_video(struct uprobe *uprobe, struct upipe *upipe,
 
     ubase_assert(upipe_set_output(upipe, avcdec));
 
-    ubase_assert(upipe_set_output(avcdec, input->upipe));
+    ubase_assert(upipe_set_output(avcdec, input->video));
     upipe_release(avcdec);
     return UBASE_ERR_NONE;
 }
@@ -407,7 +407,7 @@ static void cmd_connect(char *arg)
         }
 
         ubase_assert(upipe_grid_out_set_input(output->upipe,
-                                               input ? input->upipe : NULL));
+                                               input ? input->video : NULL));
         ubase_assert(upipe_grid_out_set_input(output->sound,
                                                input ? input->sound : NULL));
     }
@@ -444,7 +444,7 @@ static struct input *input_new(const char *uri)
     input->id = input_id++;
     input->uri = uri;
 
-    struct uprobe * uprobe_dejitter =
+    struct uprobe *uprobe_dejitter =
         uprobe_dejitter_alloc(uprobe_use(uprobe_main), false, 0);
     assert(uprobe_dejitter);
     uprobe_dejitter_set(uprobe_dejitter, true, 0);
@@ -487,19 +487,19 @@ static struct input *input_new(const char *uri)
     upipe_release(ts_demux);
     upipe_mgr_release(upipe_ts_demux_mgr);
 
-    input->upipe =
+    input->video =
         upipe_grid_alloc_input(
             upipe_grid,
             uprobe_pfx_alloc_va(uprobe_use(uprobe_main),
                                 UPROBE_LOG_VERBOSE, "in pic %u", input->id));
-    assert(input->upipe);
+    assert(input->video);
 
     input->sound =
         upipe_grid_alloc_input(
             upipe_grid,
             uprobe_pfx_alloc_va(uprobe_use(uprobe_main),
                                 UPROBE_LOG_VERBOSE, "in snd %u", input->id));
-    assert(input->upipe);
+    assert(input->sound);
 
     ulist_add(&inputs, input_to_uchain(input));
     return input;
@@ -1078,7 +1078,7 @@ int main(int argc, char *argv[])
     ulist_delete_foreach(&inputs, uchain, uchain_tmp) {
         struct input *input = input_from_uchain(uchain);
         upipe_release(input->source);
-        upipe_release(input->upipe);
+        upipe_release(input->video);
         upipe_release(input->sound);
         uprobe_clean(&input->uprobe_video);
         uprobe_clean(&input->uprobe_audio);
