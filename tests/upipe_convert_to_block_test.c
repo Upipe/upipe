@@ -68,7 +68,7 @@ static void pic_fill_in(struct ubuf *ubuf)
     ubase_assert(ubuf_pic_size(ubuf, &hsize, &vsize, &macropixel));
 
     const char *chroma = NULL;
-    while (ubase_check(ubuf_pic_plane_iterate(ubuf, &chroma)) &&
+    while (ubase_check(ubuf_pic_iterate_plane(ubuf, &chroma)) &&
            chroma != NULL) {
         size_t stride;
         uint8_t hsub, vsub, macropixel_size;
@@ -95,7 +95,7 @@ static void sound_fill_in(struct ubuf *ubuf)
     int octets = size * sample_size;
 
     const char *channel = NULL;
-    while (ubase_check(ubuf_sound_plane_iterate(ubuf, &channel)) &&
+    while (ubase_check(ubuf_sound_iterate_plane(ubuf, &channel)) &&
            channel != NULL) {
         uint8_t *buffer;
         ubase_assert(ubuf_sound_plane_write_uint8_t(ubuf, channel, 0, -1,

@@ -73,7 +73,7 @@ static void test_I420(struct ubuf_mgr *mgr)
 
     const char *chroma = NULL;
     unsigned int nb_planes = 0;
-    while (ubase_check(ubuf_pic_plane_iterate(ubuf, &chroma)) &&
+    while (ubase_check(ubuf_pic_iterate_plane(ubuf, &chroma)) &&
            chroma != NULL) {
         nb_planes++;
         size_t stride;
@@ -132,7 +132,7 @@ static void test_YUYV(struct ubuf_mgr *mgr)
 
     const char *chroma = NULL;
     unsigned int nb_planes = 0;
-    while (ubase_check(ubuf_pic_plane_iterate(ubuf, &chroma)) &&
+    while (ubase_check(ubuf_pic_iterate_plane(ubuf, &chroma)) &&
            chroma != NULL) {
         nb_planes++;
         size_t stride;

@@ -244,7 +244,7 @@ static int ubuf_sound_mem_control(struct ubuf *ubuf, int command, va_list args)
         }
         case UBUF_ITERATE_SOUND_PLANE: {
             const char **channel_p = va_arg(args, const char **);
-            return ubuf_sound_common_plane_iterate(ubuf, channel_p);
+            return ubuf_sound_common_iterate_plane(ubuf, channel_p);
         }
         case UBUF_READ_SOUND_PLANE: {
             const char *channel = va_arg(args, const char *);

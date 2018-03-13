@@ -84,10 +84,18 @@ static inline int ubuf_pic_size(struct ubuf *ubuf,
  * @param chroma_p reference written with chroma type of the next plane
  * @return an error code
  */
-static inline int ubuf_pic_plane_iterate(struct ubuf *ubuf,
+static inline int ubuf_pic_iterate_plane(struct ubuf *ubuf,
                                          const char **chroma_p)
 {
     return ubuf_control(ubuf, UBUF_ITERATE_PICTURE_PLANE, chroma_p);
+}
+
+/** DO NOT USE: deprecated, use ubuf_pic_iterate_plane instead  */
+static inline UBASE_DEPRECATED
+int ubuf_pic_plane_iterate(struct ubuf *ubuf,
+                           const char **chroma_p)
+{
+    return ubuf_pic_iterate_plane(ubuf, chroma_p);
 }
 
 /** @This returns the sizes of a plane of the picture ubuf.
@@ -364,7 +372,7 @@ static inline int ubuf_pic_blit_alpha(struct ubuf *dest, struct ubuf *src,
         return UBASE_ERR_INVALID;
 
     const char *chroma = NULL;
-    while (ubase_check(ubuf_pic_plane_iterate(dest, &chroma)) &&
+    while (ubase_check(ubuf_pic_iterate_plane(dest, &chroma)) &&
            chroma != NULL) {
         size_t src_stride;
         uint8_t src_hsub, src_vsub, src_macropixel_size;

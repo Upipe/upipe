@@ -282,7 +282,7 @@ static int ubuf_pic_mem_control(struct ubuf *ubuf, int command, va_list args)
         }
         case UBUF_ITERATE_PICTURE_PLANE: {
             const char **chroma_p = va_arg(args, const char **);
-            return ubuf_pic_common_plane_iterate(ubuf, chroma_p);
+            return ubuf_pic_common_iterate_plane(ubuf, chroma_p);
         }
         case UBUF_SIZE_PICTURE_PLANE: {
             const char *chroma = va_arg(args, const char *);

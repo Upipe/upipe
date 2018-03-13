@@ -167,7 +167,7 @@ int ubuf_pic_clear(struct ubuf *ubuf, int hoffset, int voffset,
 
     bool ret = false;
     const char *chroma = NULL;
-    while (ubase_check(ubuf_pic_plane_iterate(ubuf, &chroma)) &&
+    while (ubase_check(ubuf_pic_iterate_plane(ubuf, &chroma)) &&
            chroma != NULL) {
         ret = !ubase_check(ubuf_pic_plane_clear(ubuf, chroma,
             hoffset, voffset, hsize, vsize, fullrange)) || ret;

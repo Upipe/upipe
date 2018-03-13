@@ -159,7 +159,7 @@ static void fill_in(struct ubuf *ubuf)
 
     const char *channel = NULL;
     int16_t v = 0;
-    while (ubase_check(ubuf_sound_plane_iterate(ubuf, &channel)) &&
+    while (ubase_check(ubuf_sound_iterate_plane(ubuf, &channel)) &&
            channel != NULL) {
         int16_t *buffer;
         ubase_assert(ubuf_sound_plane_write_int16_t(ubuf, channel, 0, -1,

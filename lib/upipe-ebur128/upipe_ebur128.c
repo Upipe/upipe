@@ -144,7 +144,7 @@ static void upipe_ebur128_input(struct upipe *upipe, struct uref *uref,
     void *buf = NULL;
     const char *channel = NULL;
     if (upipe_ebur128->planes == 1) {
-        if (ubase_check(uref_sound_plane_iterate(uref, &channel)) && channel) {
+        if (ubase_check(uref_sound_iterate_plane(uref, &channel)) && channel) {
             if (unlikely(!ubase_check(uref_sound_plane_read_void(uref,
                     channel, 0, -1, (const void **)&buf)))) {
                 upipe_warn(upipe, "error mapping sound buffer");

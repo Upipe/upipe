@@ -219,7 +219,7 @@ static void upipe_audio_split_sub_process(struct upipe *upipe,
     /* interate through output channels */
     uint8_t in_idx = 0;
     const char *channel = NULL;
-    while (ubase_check(ubuf_sound_plane_iterate(ubuf, &channel)) && channel) {
+    while (ubase_check(ubuf_sound_iterate_plane(ubuf, &channel)) && channel) {
         uint8_t out_idx = 0;
 
         do {
