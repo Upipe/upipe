@@ -569,53 +569,78 @@ static struct output *output_new(const char *uri)
                                 "vblk %u", output->id),
             vblk_flow_def);
     upipe_mgr_release(upipe_vblk_mgr);
-    uref_free(vblk_flow_def);
     assert(upipe_vblk);
 
-    struct upipe_mgr *upipe_x264_mgr = upipe_x264_mgr_alloc();
-    assert(upipe_x264_mgr);
-    struct upipe *upipe_x264 =
-        upipe_void_alloc(upipe_x264_mgr,
+    struct upipe_mgr *ffmt_mgr = upipe_ffmt_mgr_alloc();
+    struct upipe_mgr *sws_mgr = upipe_sws_mgr_alloc();
+    upipe_ffmt_mgr_set_sws_mgr(ffmt_mgr, sws_mgr);
+    upipe_mgr_release(sws_mgr);
+    struct upipe_mgr *swr_mgr = upipe_swr_mgr_alloc();
+    upipe_ffmt_mgr_set_swr_mgr(ffmt_mgr, swr_mgr);
+    upipe_mgr_release(swr_mgr);
+    struct upipe *ffmt = upipe_flow_alloc(ffmt_mgr,
+            uprobe_pfx_alloc(
+                uprobe_use(uprobe_main),
+                UPROBE_LOG_VERBOSE, "ffmt"),
+            vblk_flow_def);
+    assert(ffmt != NULL);
+    upipe_sws_set_flags(ffmt, SWS_FLAGS);
+    upipe_mgr_release(ffmt_mgr);
+
+    struct upipe_mgr *fenc_mgr = upipe_fenc_mgr_alloc();
+    struct upipe_mgr *x264_mgr = upipe_x264_mgr_alloc();
+    upipe_fenc_mgr_set_x264_mgr(fenc_mgr, x264_mgr);
+    upipe_mgr_release(x264_mgr);
+
+    uref_flow_set_def(vblk_flow_def, "block.h264.");
+    assert(fenc_mgr);
+    struct upipe *venc =
+        upipe_flow_alloc(fenc_mgr,
             uprobe_pfx_alloc_va(
                 uprobe_use(uprobe_main), log_level,
-                "x264 %u", output->id));
-    upipe_mgr_release(upipe_x264_mgr);
-    assert(upipe_x264);
-    ubase_assert(upipe_x264_set_profile(upipe_x264, "baseline"));
-    ubase_assert(upipe_x264_set_default_preset(upipe_x264,
+                "venc %u", output->id),
+            vblk_flow_def);
+    uref_free(vblk_flow_def);
+    upipe_mgr_release(fenc_mgr);
+    assert(venc);
+    ubase_assert(upipe_x264_set_profile(venc, "baseline"));
+    ubase_assert(upipe_x264_set_default_preset(venc,
                                                "ultrafast", NULL));
-    ubase_assert(upipe_set_option(upipe_x264, "threads", "1"));
-    ubase_assert(upipe_set_option(upipe_x264, "bitrate", "1536"));
-    ubase_assert(upipe_set_option(upipe_x264, "vbv-maxrate", "1536"));
-    ubase_assert(upipe_set_option(upipe_x264, "vbv-bufsize", "1536"));
-    ubase_assert(upipe_set_option(upipe_x264, "repeat-headers", "1"));
-    ubase_assert(upipe_set_option(upipe_x264, "nal-hrd", "vbr"));
-    ubase_assert(upipe_set_option(upipe_x264, "keyint", "25"));
+    ubase_assert(upipe_set_option(venc, "threads", "1"));
+    ubase_assert(upipe_set_option(venc, "bitrate", "1536"));
+    ubase_assert(upipe_set_option(venc, "vbv-maxrate", "1536"));
+    ubase_assert(upipe_set_option(venc, "vbv-bufsize", "1536"));
+    ubase_assert(upipe_set_option(venc, "repeat-headers", "1"));
+    ubase_assert(upipe_set_option(venc, "nal-hrd", "vbr"));
+    ubase_assert(upipe_set_option(venc, "keyint", "25"));
 
-    struct upipe_mgr *upipe_x264_xfer_mgr =
+    ubase_assert(upipe_set_output(ffmt, venc));
+    upipe_release(venc);
+
+    struct upipe_mgr *enc_xfer_mgr =
         upipe_pthread_xfer_mgr_alloc(
              XFER_QUEUE, XFER_POOL,
              uprobe_use(uprobe_main),
              upump_ev_mgr_alloc_loop,
              UPUMP_POOL, UPUMP_BLOCKER_POOL, NULL, NULL, NULL);
-    assert(upipe_x264_xfer_mgr);
-    struct upipe_mgr *upipe_worker_x264_mgr =
-        upipe_wlin_mgr_alloc(upipe_x264_xfer_mgr);
-    assert(upipe_worker_x264_mgr);
-    upipe_mgr_release(upipe_x264_xfer_mgr);
-    upipe_x264 =
+    assert(enc_xfer_mgr);
+    struct upipe_mgr *worker_enc_mgr =
+        upipe_wlin_mgr_alloc(enc_xfer_mgr);
+    assert(worker_enc_mgr);
+    upipe_mgr_release(enc_xfer_mgr);
+    venc =
         upipe_wlin_alloc(
-            upipe_worker_x264_mgr,
+            worker_enc_mgr,
             uprobe_pfx_alloc_va(uprobe_use(uprobe_main),
-                                log_level, "wx264 %u", output->id),
-            upipe_x264,
+                                log_level, "wenc %u", output->id),
+            ffmt,
             uprobe_pfx_alloc_va(uprobe_use(uprobe_main),
-                                log_level, "wx264_x %u", output->id),
+                                log_level, "wenc_x %u", output->id),
             QUEUE_LENGTH, QUEUE_LENGTH);
-    assert(upipe_x264);
-    ubase_assert(upipe_set_output(upipe_vblk, upipe_x264));
+    assert(venc);
+    ubase_assert(upipe_set_output(upipe_vblk, venc));
     upipe_release(upipe_vblk);
-    upipe_mgr_release(upipe_worker_x264_mgr);
+    upipe_mgr_release(worker_enc_mgr);
 
     /* audio */
     output->sound_src =
@@ -653,13 +678,13 @@ static struct output *output_new(const char *uri)
     upipe_mgr_release(upipe_ablk_mgr);
 
     /* audio encoder */
-    struct upipe_mgr *ffmt_mgr = upipe_ffmt_mgr_alloc();
+    ffmt_mgr = upipe_ffmt_mgr_alloc();
     assert(ffmt_mgr);
-    struct upipe_mgr *swr_mgr = upipe_swr_mgr_alloc();
+    swr_mgr = upipe_swr_mgr_alloc();
     assert(swr_mgr);
     upipe_ffmt_mgr_set_swr_mgr(ffmt_mgr, swr_mgr);
 
-    struct upipe *ffmt =
+    ffmt =
         upipe_flow_alloc(
             ffmt_mgr,
             uprobe_pfx_alloc_va(uprobe_use(uprobe_main),
@@ -673,7 +698,7 @@ static struct output *output_new(const char *uri)
     struct uref *sound_flow_def_enc = uref_block_flow_alloc_def(uref_mgr, NULL);
     assert(sound_flow_def_enc);
     uref_avcenc_set_codec_name(sound_flow_def_enc, "mp2");
-    struct upipe_mgr *fenc_mgr = upipe_fenc_mgr_alloc();
+    fenc_mgr = upipe_fenc_mgr_alloc();
     assert(fenc_mgr);
     struct upipe_mgr *avcenc_mgr = upipe_avcenc_mgr_alloc();
     assert(avcenc_mgr);
@@ -777,12 +802,12 @@ static struct output *output_new(const char *uri)
     assert(upipe_setflowdef_mgr);
     struct upipe *upipe_setflowdef =
         upipe_void_alloc_output(
-            upipe_x264, upipe_setflowdef_mgr,
+            venc, upipe_setflowdef_mgr,
             uprobe_pfx_alloc_va(uprobe_use(uprobe_main),
                                 UPROBE_LOG_VERBOSE, "setflowdef pic %u",
                                 output->id));
     assert(upipe_setflowdef);
-    upipe_release(upipe_x264);
+    upipe_release(venc);
 
     struct upipe *sound_setflowdef =
         upipe_void_alloc_output(
