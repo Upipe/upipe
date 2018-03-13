@@ -107,6 +107,12 @@
 #define XFER_POOL                       20
 #define QUEUE_LENGTH                    255
 #define SWS_FLAGS                       (SWS_FULL_CHR_H_INP | SWS_BICUBIC)
+#define DEFAULT_RATE                    48000
+#define DEFAULT_FPS                     25
+#define DEFAULT_HEIGHT                  1280
+#define DEFAULT_WIDTH                   720
+#define DEFAULT_DURATION                (UCLOCK_FREQ / DEFAULT_FPS)
+#define DEFAULT_SAMPLES                 (DEFAULT_RATE / DEFAULT_FPS)
 
 struct input {
     struct uchain uchain;
@@ -530,13 +536,13 @@ static struct output *output_new(const char *uri)
 
     struct uref *vblk_flow_def = uref_pic_flow_alloc_def(uref_mgr, 1);
     assert(vblk_flow_def);
-    ubase_assert(uref_pic_flow_set_hsize(vblk_flow_def, 1920));
-    ubase_assert(uref_pic_flow_set_vsize(vblk_flow_def, 1080));
+    ubase_assert(uref_pic_flow_set_hsize(vblk_flow_def, DEFAULT_HEIGHT));
+    ubase_assert(uref_pic_flow_set_vsize(vblk_flow_def, DEFAULT_WIDTH));
     ubase_assert(uref_pic_flow_add_plane(vblk_flow_def, 1, 1, 1, "y8"));
     ubase_assert(uref_pic_flow_add_plane(vblk_flow_def, 2, 2, 1, "u8"));
     ubase_assert(uref_pic_flow_add_plane(vblk_flow_def, 2, 2, 1, "v8"));
     ubase_assert(uref_pic_flow_set_macropixel(vblk_flow_def, 1));
-    struct urational fps = { .num = 25, .den = 1 };
+    struct urational fps = { .num = DEFAULT_FPS, .den = 1 };
     ubase_assert(uref_pic_flow_set_fps(vblk_flow_def, fps));
     struct upipe_mgr *upipe_vblk_mgr = upipe_vblk_mgr_alloc();
     assert(upipe_vblk_mgr);
@@ -616,8 +622,8 @@ static struct output *output_new(const char *uri)
     assert(ablk_flow_def);
     ubase_assert(uref_sound_flow_add_plane(ablk_flow_def, "l"));
     ubase_assert(uref_sound_flow_add_plane(ablk_flow_def, "r"));
-    ubase_assert(uref_sound_flow_set_rate(ablk_flow_def, 48000));
-    ubase_assert(uref_sound_flow_set_samples(ablk_flow_def, 1536));
+    ubase_assert(uref_sound_flow_set_rate(ablk_flow_def, DEFAULT_RATE));
+    ubase_assert(uref_sound_flow_set_samples(ablk_flow_def, DEFAULT_SAMPLES));
 
     struct upipe_mgr *upipe_ablk_mgr = upipe_ablk_mgr_alloc();
     assert(upipe_ablk_mgr);
@@ -1002,7 +1008,7 @@ int main(int argc, char *argv[])
     assert(upipe_voidsrc_mgr);
     struct uref *flow_def = uref_void_flow_alloc_def(uref_mgr);
     assert(flow_def);
-    ubase_assert(uref_clock_set_duration(flow_def, UCLOCK_FREQ / 25));
+    ubase_assert(uref_clock_set_duration(flow_def, DEFAULT_DURATION));
     upipe_voidsrc =
         upipe_flow_alloc(upipe_voidsrc_mgr,
                          uprobe_pfx_alloc(uprobe_use(uprobe_main),
