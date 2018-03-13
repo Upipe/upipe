@@ -36,6 +36,7 @@
 #include <upipe-modules/upipe_setflowdef.h>
 #include <upipe-modules/upipe_worker_sink.h>
 #include <upipe-modules/upipe_worker_linear.h>
+#include <upipe-modules/upipe_audio_copy.h>
 
 #include <upipe-swresample/upipe_swr.h>
 #include <upipe-swscale/upipe_sws.h>
@@ -358,8 +359,24 @@ static int catch_audio(struct uprobe *uprobe, struct upipe *upipe,
 
     ubase_assert(upipe_set_output(upipe, avcdec));
 
-    ubase_assert(upipe_set_output(avcdec, input->sound));
-    upipe_release(avcdec);
+    struct uref *flow_def_dup = uref_sibling_alloc_control(flow_def);
+    assert(flow_def_dup);
+    ubase_assert(uref_flow_set_def(flow_def_dup, UREF_SOUND_FLOW_DEF));
+    ubase_assert(uref_sound_flow_set_samples(flow_def_dup, DEFAULT_SAMPLES));
+    struct upipe_mgr *upipe_audio_copy_mgr = upipe_audio_copy_mgr_alloc();
+    assert(upipe_audio_copy_mgr);
+    struct upipe *upipe_audio_copy =
+        upipe_flow_chain_output(
+            avcdec, upipe_audio_copy_mgr,
+            uprobe_pfx_alloc_va(uprobe_use(uprobe_main),
+                                UPROBE_LOG_VERBOSE, "frame %u", input->id),
+            flow_def_dup);
+    uref_free(flow_def_dup);
+    upipe_mgr_release(upipe_audio_copy_mgr);
+    assert(upipe_audio_copy);
+
+    ubase_assert(upipe_set_output(upipe_audio_copy, input->sound));
+    upipe_release(upipe_audio_copy);
     return UBASE_ERR_NONE;
 }
 
