@@ -723,8 +723,8 @@ static void upipe_audiocont_input(struct upipe *upipe, struct uref *uref,
     uref_sound_size(uref, NULL, &sample_size);
 
     /* clear sound buffer */
-    const char *channel = NULL;
-    while (ubase_check(uref_sound_iterate_plane(uref, &channel)) && channel) {
+    const char *channel;
+    uref_sound_foreach_plane(uref, channel) {
         float *buf;
         uref_sound_plane_write_float(uref, channel, 0, -1, &buf);
         for (int i = 0; i < ref_size; i++)

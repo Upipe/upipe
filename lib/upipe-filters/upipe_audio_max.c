@@ -153,7 +153,7 @@ static void upipe_amax_input(struct upipe *upipe, struct uref *uref,
     }
     const char *channel = NULL;
     uint8_t j = 0;
-    while (ubase_check(uref_sound_iterate_plane(uref, &channel)) && channel) {
+    uref_sound_foreach_plane(uref, channel) {
         double maxf = upipe_amax->process(upipe, uref, channel, samples);
         uref_amax_set_amplitude(uref, maxf, j++);
     }

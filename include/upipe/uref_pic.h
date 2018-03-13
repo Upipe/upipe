@@ -113,8 +113,8 @@ int uref_pic_plane_iterate(struct uref *uref,
 }
 
 /** helper for uref_pic_iterate_plane */
-#define uref_pic_plane_foreach(UREF, CHROMA)                                \
-    for (const char *CHROMA = NULL;                                         \
+#define uref_pic_foreach_plane(UREF, CHROMA)                                \
+    for (CHROMA = NULL;                                                     \
          ubase_check(uref_pic_iterate_plane(UREF, &CHROMA)) && CHROMA != NULL;)
 
 /** @see ubuf_pic_plane_size */

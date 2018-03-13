@@ -140,10 +140,9 @@ int main(int argc, char **argv)
     for (i=0; i < ITERATIONS; i++) {
         struct uref *uref = uref_sound_alloc(uref_mgr, sound_mgr, SAMPLES);
         assert(uref);
-        const char *channel = NULL;
+        const char *channel;
         int16_t *sample = NULL;
-        while (ubase_check(uref_sound_iterate_plane(uref, &channel))
-                                                           && channel) {
+        uref_sound_foreach_plane(uref, channel) {
             uref_sound_plane_write_int16_t(uref, channel, 0, -1, &sample);
             memset(sample, 0, 2 * CHANNELS * SAMPLES);
             #if 1
