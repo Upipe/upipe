@@ -173,7 +173,7 @@ static void fill_pic(struct ubuf *ubuf)
     int i, j;
 
     ubuf_pic_size(ubuf, &width, &height, NULL);
-    while (ubase_check(ubuf_pic_plane_iterate(ubuf, &chroma)) && chroma) {
+    while (ubase_check(ubuf_pic_iterate_plane(ubuf, &chroma)) && chroma) {
         ubuf_pic_plane_write(ubuf, chroma, 0, 0, -1, -1, &buf);
         ubuf_pic_plane_size(ubuf, chroma, &stride, &hsub, &vsub, NULL);
         for (j = 0; j < height/vsub; j++) {

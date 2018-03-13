@@ -216,7 +216,7 @@ static void upipe_ablk_input(struct upipe *upipe,
 
         const char *channel = NULL;
         uint8_t *buf = NULL;
-        while (ubase_check(ubuf_sound_plane_iterate(ubuf, &channel)) &&
+        while (ubase_check(ubuf_sound_iterate_plane(ubuf, &channel)) &&
                channel) {
             ubuf_sound_plane_write_uint8_t(ubuf, channel, 0, -1, &buf);
             memset(buf, 0, sample_size * samples);

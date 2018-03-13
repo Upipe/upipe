@@ -54,7 +54,7 @@ static void fill_in(struct ubuf *ubuf)
     ubase_assert(ubuf_pic_size(ubuf, &hsize, &vsize, &macropixel));
 
     const char *chroma = NULL;
-    while (ubase_check(ubuf_pic_plane_iterate(ubuf, &chroma)) &&
+    while (ubase_check(ubuf_pic_iterate_plane(ubuf, &chroma)) &&
            chroma != NULL) {
         size_t stride;
         uint8_t hsub, vsub, macropixel_size;
@@ -109,7 +109,7 @@ int main(int argc, char **argv)
 
     chroma = NULL;
     unsigned int nb_planes = 0;
-    while (ubase_check(ubuf_pic_plane_iterate(ubuf1, &chroma)) &&
+    while (ubase_check(ubuf_pic_iterate_plane(ubuf1, &chroma)) &&
            chroma != NULL) {
         nb_planes++;
         size_t stride;
@@ -222,7 +222,7 @@ int main(int argc, char **argv)
 
     chroma = NULL;
     nb_planes = 0;
-    while (ubase_check(ubuf_pic_plane_iterate(ubuf1, &chroma)) &&
+    while (ubase_check(ubuf_pic_iterate_plane(ubuf1, &chroma)) &&
            chroma != NULL) {
         nb_planes++;
         size_t stride;

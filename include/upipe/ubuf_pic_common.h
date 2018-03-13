@@ -252,7 +252,7 @@ int ubuf_pic_common_size(struct ubuf *ubuf, size_t *hsize_p, size_t *vsize_p,
  * @param chroma_p reference written with chroma type of the next plane
  * @return an error code
  */
-int ubuf_pic_common_plane_iterate(struct ubuf *ubuf, const char **chroma_p);
+int ubuf_pic_common_iterate_plane(struct ubuf *ubuf, const char **chroma_p);
 
 /** @This returns the sizes of a plane of the picture ubuf.
  *

@@ -98,7 +98,7 @@ int ubuf_sound_common_size(struct ubuf *ubuf, size_t *size_p,
  * @param channel_p reference written with channel type of the next plane
  * @return an error code
  */
-int ubuf_sound_common_plane_iterate(struct ubuf *ubuf, const char **channel_p)
+int ubuf_sound_common_iterate_plane(struct ubuf *ubuf, const char **channel_p)
 {
     struct ubuf_sound_common_mgr *common_mgr =
         ubuf_sound_common_mgr_from_ubuf_mgr(ubuf->mgr);

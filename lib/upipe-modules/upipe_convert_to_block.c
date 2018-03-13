@@ -156,7 +156,7 @@ static void upipe_tblk_handle_pic(struct upipe *upipe, struct uref *uref,
     /* Always operate on the first chroma plane. */
     const char *chroma = NULL;
     if (unlikely(uref->ubuf == NULL ||
-                 !ubase_check(ubuf_pic_plane_iterate(uref->ubuf, &chroma)) ||
+                 !ubase_check(ubuf_pic_iterate_plane(uref->ubuf, &chroma)) ||
                  chroma == NULL)) {
         uref_free(uref);
         upipe_throw_error(upipe, UBASE_ERR_INVALID);
@@ -229,7 +229,7 @@ static void upipe_tblk_handle_sound(struct upipe *upipe, struct uref *uref,
     /* Always operate on the first channel plane. */
     const char *channel = NULL;
     if (unlikely(uref->ubuf == NULL ||
-                 !ubase_check(ubuf_sound_plane_iterate(uref->ubuf, &channel)) ||
+                 !ubase_check(ubuf_sound_iterate_plane(uref->ubuf, &channel)) ||
                  channel == NULL)) {
         uref_free(uref);
         upipe_throw_error(upipe, UBASE_ERR_INVALID);
