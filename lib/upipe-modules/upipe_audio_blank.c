@@ -214,10 +214,9 @@ static void upipe_ablk_input(struct upipe *upipe,
             return;
         }
 
-        const char *channel = NULL;
+        const char *channel;
         uint8_t *buf = NULL;
-        while (ubase_check(ubuf_sound_iterate_plane(ubuf, &channel)) &&
-               channel) {
+        ubuf_sound_foreach_plane(ubuf, channel) {
             ubuf_sound_plane_write_uint8_t(ubuf, channel, 0, -1, &buf);
             memset(buf, 0, sample_size * samples);
             ubuf_sound_plane_unmap(ubuf, channel, 0, -1);

@@ -167,13 +167,13 @@ static int catch_avcenc(struct uprobe *uprobe, struct upipe *upipe,
 /* fill picture with some stuff */
 static void fill_pic(struct ubuf *ubuf)
 {
-    const char *chroma = NULL;
+    const char *chroma;
     uint8_t *buf, hsub, vsub;
     size_t stride, width, height;
     int i, j;
 
     ubuf_pic_size(ubuf, &width, &height, NULL);
-    while (ubase_check(ubuf_pic_iterate_plane(ubuf, &chroma)) && chroma) {
+    ubuf_pic_foreach_plane(ubuf, chroma) {
         ubuf_pic_plane_write(ubuf, chroma, 0, 0, -1, -1, &buf);
         ubuf_pic_plane_size(ubuf, chroma, &stride, &hsub, &vsub, NULL);
         for (j = 0; j < height/vsub; j++) {

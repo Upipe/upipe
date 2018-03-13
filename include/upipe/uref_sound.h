@@ -95,6 +95,12 @@ int uref_sound_plane_iterate(struct uref *uref,
     return uref_sound_iterate_plane(uref, channel_p);
 }
 
+/** helper for uref_sound_iterate_plane */
+#define uref_sound_foreach_plane(UREF, CHANNEL)                              \
+    for (CHANNEL = NULL;                                                     \
+         ubase_check(uref_sound_iterate_plane(UREF, &CHANNEL)) &&            \
+         CHANNEL != NULL;)
+
 /** @see ubuf_sound_plane_unmap */
 static inline int uref_sound_plane_unmap(struct uref *uref, const char *channel,
                                          int offset, int size)
