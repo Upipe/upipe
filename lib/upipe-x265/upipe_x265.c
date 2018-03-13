@@ -152,6 +152,12 @@ struct upipe_x265 {
     /** list of output requests */
     struct uchain request_list;
 
+    /** input pixel format */
+    enum {
+        PIX_FMT_YUV420P,
+        PIX_FMT_YUV420P10LE,
+    } pixel_format;
+
     /** input width */
     int width;
     /** input height */
@@ -777,7 +783,11 @@ static bool upipe_x265_handle(struct upipe *upipe,
         return true;
     }
 
-    static const char *const chromas[] = {"y8", "u8", "v8"};
+    static const char *const chromas_list[][3] = {
+        [PIX_FMT_YUV420P] = {"y8", "u8", "v8"},
+        [PIX_FMT_YUV420P10LE] = {"y10l", "u10l", "v10l"},
+    };
+    const char * const *chromas = chromas_list[upipe_x265->pixel_format];
     size_t width, height;
     x265_picture pic;
     x265_nal *nals = NULL;
@@ -798,7 +808,7 @@ static bool upipe_x265_handle(struct upipe *upipe,
 
     if (likely(uref)) {
         pic.userData = uref;
-        pic.bitDepth = 8;
+        pic.bitDepth = upipe_x265->pixel_format == PIX_FMT_YUV420P ? 8 : 10;
         pic.colorSpace = X265_CSP_I420;
 
         uref_pic_size(uref, &width, &height, NULL);
@@ -1109,17 +1119,30 @@ static int upipe_x265_check_ubuf_mgr(struct upipe *upipe,
 static int upipe_x265_set_flow_def(struct upipe *upipe,
                                    struct uref *flow_def)
 {
-    if (flow_def == NULL)
+    struct upipe_x265 *upipe_x265 = upipe_x265_from_upipe(upipe);
+
+    if (unlikely(flow_def == NULL))
         return UBASE_ERR_INVALID;
 
-    /* We only accept YUV420P for the moment. */
     uint8_t macropixel;
     if (unlikely(!ubase_check(uref_flow_match_def(flow_def, EXPECTED_FLOW)) ||
                  !ubase_check(uref_pic_flow_get_macropixel(flow_def, &macropixel)) ||
-                 macropixel != 1 ||
-                 !ubase_check(uref_pic_flow_check_chroma(flow_def, 1, 1, 1, "y8")) ||
-                 !ubase_check(uref_pic_flow_check_chroma(flow_def, 2, 2, 1, "u8")) ||
-                 !ubase_check(uref_pic_flow_check_chroma(flow_def, 2, 2, 1, "v8"))))
+                 macropixel != 1))
+        return UBASE_ERR_INVALID;
+
+    /* check for yuv420p */
+    if (ubase_check(uref_pic_flow_check_chroma(flow_def, 1, 1, 1, "y8")) &&
+        ubase_check(uref_pic_flow_check_chroma(flow_def, 2, 2, 1, "u8")) &&
+        ubase_check(uref_pic_flow_check_chroma(flow_def, 2, 2, 1, "v8")))
+        upipe_x265->pixel_format = PIX_FMT_YUV420P;
+
+    /* check for yuv420p10le */
+    else if (ubase_check(uref_pic_flow_check_chroma(flow_def, 1, 1, 2, "y10l")) &&
+             ubase_check(uref_pic_flow_check_chroma(flow_def, 2, 2, 2, "u10l")) &&
+             ubase_check(uref_pic_flow_check_chroma(flow_def, 2, 2, 2, "v10l")))
+        upipe_x265->pixel_format = PIX_FMT_YUV420P10LE;
+
+    else
         return UBASE_ERR_INVALID;
 
     /* Extract relevant attributes to flow def check. */
@@ -1148,8 +1171,6 @@ static int upipe_x265_set_flow_def(struct upipe *upipe,
         upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
         return UBASE_ERR_ALLOC;
     }
-
-    struct upipe_x265 *upipe_x265 = upipe_x265_from_upipe(upipe);
 
     if (upipe_x265->flow_def_check != NULL) {
         /* Die if the attributes changed. */
@@ -1188,14 +1209,21 @@ static int upipe_x265_set_flow_def(struct upipe *upipe,
 static int _upipe_x265_provide_flow_format(struct upipe *upipe,
                                            struct urequest *request)
 {
+    struct upipe_x265 *upipe_x265 = upipe_x265_from_upipe(upipe);
     struct uref *flow_format = uref_dup(request->uref);
     UBASE_ALLOC_RETURN(flow_format);
     uref_pic_flow_clear_format(flow_format);
     uref_pic_flow_set_macropixel(flow_format, 1);
     uref_pic_flow_set_planes(flow_format, 0);
-    uref_pic_flow_add_plane(flow_format, 1, 1, 1, "y8");
-    uref_pic_flow_add_plane(flow_format, 2, 2, 1, "u8");
-    uref_pic_flow_add_plane(flow_format, 2, 2, 1, "v8");
+    if (upipe_x265->params.internalBitDepth >= 10) {
+        uref_pic_flow_add_plane(flow_format, 1, 1, 2, "y10l");
+        uref_pic_flow_add_plane(flow_format, 2, 2, 2, "u10l");
+        uref_pic_flow_add_plane(flow_format, 2, 2, 2, "v10l");
+    } else {
+        uref_pic_flow_add_plane(flow_format, 1, 1, 1, "y8");
+        uref_pic_flow_add_plane(flow_format, 2, 2, 1, "u8");
+        uref_pic_flow_add_plane(flow_format, 2, 2, 1, "v8");
+    }
     return urequest_provide_flow_format(request, flow_format);
 }
 
