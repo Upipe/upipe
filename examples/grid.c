@@ -139,6 +139,7 @@ enum opt {
     OPT_INPUT   = 'i',
     OPT_OUTPUT  = 'o',
     OPT_VERBOSE = 'v',
+    OPT_HELP = 'h',
 };
 
 static struct option options[] = {
@@ -163,6 +164,15 @@ static unsigned output_id = 0;
 
 static void usage(const char *name, int exit_code)
 {
+    fprintf(stderr, "name [options]\n"
+            "\t-h                   : print this help\n"
+            "\t-v\n"
+            "\t--verbose            : be more verbose\n"
+            "\t-i <input>\n"
+            "\t--input <input>      : create a new input\n"
+            "\t-o <output>\n"
+            "\t--output <output>    : create a new output\n"
+            );
     exit(exit_code);
 }
 
@@ -915,7 +925,7 @@ int main(int argc, char *argv[])
     ulist_init(&outputs);
 
     while (1) {
-        switch ((c = getopt_long(argc, argv, "v", options, NULL))) {
+        switch ((c = getopt_long(argc, argv, "vhi:o:", options, NULL))) {
             case OPT_INPUT:
             case OPT_OUTPUT: {
                 struct grid_entry *e = malloc(sizeof (*e));
@@ -937,6 +947,10 @@ int main(int argc, char *argv[])
                         break;
                 }
                 continue;
+
+            case OPT_HELP:
+                usage(argv[0], 0);
+                break;
 
             case -1:
                 break;
