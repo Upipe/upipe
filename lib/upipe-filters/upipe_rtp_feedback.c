@@ -638,6 +638,8 @@ static struct upipe *upipe_rtpfb_alloc(struct upipe_mgr *mgr,
     upipe_rtpfb->loss = 0;
     upipe_rtpfb->dups = 0;
     upipe_rtpfb->sr_cr = UINT64_MAX;
+    upipe_rtpfb->upump_timer = NULL;
+    upipe_rtpfb->upump_timer_lost = NULL;
 
     upipe_rtpfb->latency = UCLOCK_FREQ;
 
