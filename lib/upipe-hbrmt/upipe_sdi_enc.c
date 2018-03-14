@@ -196,6 +196,11 @@ struct upipe_sdi_enc {
     int ttx_packets[2];
     int ttx_line[2];
 
+    /* closed captions */
+    uint16_t cdp_hdr_sequence_cntr;
+    const uint8_t *cea708;
+    size_t cea708_size;
+
     /** teletext option */
     bool ttx;
 
@@ -1019,6 +1024,19 @@ static void upipe_hd_sdi_enc_encode_line(struct upipe *upipe, int line_num, uint
             for (int i = 0; i < input_hsize; i++)
                 active_start[2*i] = buf[i];
         }
+
+        if (upipe_sdi_enc->cea708_size && line_num == 21 /* ? */) {
+            uint16_t buf[input_hsize];
+            memset(buf, 0, sizeof(buf));
+
+            sdi_write_cdp(upipe_sdi_enc->cea708, upipe_sdi_enc->cea708_size, buf,
+                    &upipe_sdi_enc->cdp_hdr_sequence_cntr, 0x4 /* 29.97 fps only */);
+            sdi_calc_parity_checksum(buf);
+
+            // TODO: work in place
+            for (int i = 0; i < input_hsize; i++)
+                active_start[i] = buf[i];
+        }
     } else {
         const uint8_t *y = planes[f2][0];
         const uint8_t *u = planes[f2][1];
@@ -1252,6 +1270,8 @@ static void upipe_sdi_enc_input(struct upipe *upipe, struct uref *uref,
             subpic[i] = NULL;
         }
     }
+
+    uref_pic_get_cea_708(uref, &upipe_sdi_enc->cea708, &upipe_sdi_enc->cea708_size);
 
     for (int h = 0; h < f->height; h++) {
         /* Note conversion to 1-indexed line-number */
@@ -1636,6 +1656,7 @@ static struct upipe *_upipe_sdi_enc_alloc(struct upipe_mgr *mgr,
     upipe_sdi_enc->n = 0;
     upipe_sdi_enc->dolby_offset = 0;
     upipe_sdi_enc->ttx = false;
+    upipe_sdi_enc->cdp_hdr_sequence_cntr = 0;
 
     upipe_sdi_enc->blank             = upipe_sdi_blank_c;
     upipe_sdi_enc->planar_to_uyvy_8  = planar_to_uyvy_8_c;
