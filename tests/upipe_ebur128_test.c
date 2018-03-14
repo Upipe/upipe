@@ -41,7 +41,7 @@
 #include <upipe/uref_sound_flow.h>
 #include <upipe/uref_clock.h>
 #include <upipe/ubuf_sound_mem.h>
-#include <upipe-filters/upipe_filter_ebur128.h>
+#include <upipe-ebur128/upipe_ebur128.h>
 #include <upipe-modules/upipe_null.h>
 
 #include <stdio.h>
@@ -112,9 +112,9 @@ int main(int argc, char **argv)
     assert(logger != NULL);
 
     /* build r128 pipe */
-    struct upipe_mgr *upipe_filter_ebur128_mgr = upipe_filter_ebur128_mgr_alloc();
-    assert(upipe_filter_ebur128_mgr);
-    struct upipe *r128 = upipe_void_alloc(upipe_filter_ebur128_mgr,
+    struct upipe_mgr *upipe_ebur128_mgr = upipe_ebur128_mgr_alloc();
+    assert(upipe_ebur128_mgr);
+    struct upipe *r128 = upipe_void_alloc(upipe_ebur128_mgr,
         uprobe_pfx_alloc(uprobe_use(logger), UPROBE_LOG_LEVEL, "r128"));
     assert(r128);
 
@@ -170,7 +170,7 @@ int main(int argc, char **argv)
     upipe_release(r128);
 
     /* release managers */
-    upipe_mgr_release(upipe_filter_ebur128_mgr); // no-op
+    upipe_mgr_release(upipe_ebur128_mgr); // no-op
     ubuf_mgr_release(sound_mgr);
     uref_mgr_release(uref_mgr);
     umem_mgr_release(umem_mgr);

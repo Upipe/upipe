@@ -116,7 +116,11 @@ static UBASE_UNUSED int STRUCTURE##_control_##INNER(struct upipe *upipe,\
     struct STRUCTURE *s = STRUCTURE##_from_upipe(upipe);                \
     if (s->INNER == NULL)                                               \
         return UBASE_ERR_UNHANDLED;                                     \
-    return upipe_control_va(s->INNER, command, args);                   \
+    va_list args_copy;                                                  \
+    va_copy(args_copy, args);                                           \
+    int ret = upipe_control_va(s->INNER, command, args_copy);           \
+    va_end(args_copy);                                                  \
+    return ret;                                                         \
 }
 
 #ifdef __cplusplus

@@ -1,7 +1,9 @@
 /*
  * Copyright (C) 2017 Open Broadcast Systems Ltd.
+ * Copyright (C) 2018 OpenHeadend S.A.R.L.
  *
  * Authors: James Darnley
+ *          Arnaud de Turckheim
  *
  * This program is free software; you can redistribute it and/or modify it
  * under the terms of the GNU Lesser General Public License as published by
@@ -24,6 +26,7 @@
 
 #include <upipe/upipe_helper_upipe.h>
 #include <upipe/upipe_helper_urefcount.h>
+#include <upipe/upipe_helper_urefcount_real.h>
 #include <upipe/upipe_helper_flow.h>
 #include <upipe/upipe_helper_output.h>
 #include <upipe/upipe_helper_uref_mgr.h>
@@ -31,91 +34,88 @@
 #include <upipe/upipe_helper_uclock.h>
 #include <upipe/upipe_helper_upump_mgr.h>
 #include <upipe/upipe_helper_upump.h>
+#include <upipe/upipe_helper_uprobe.h>
+#include <upipe/upipe_helper_inner.h>
+#include <upipe/upipe_helper_bin_output.h>
 
+#include <upipe/uprobe_prefix.h>
+#include <upipe/uref_void_flow.h>
 #include <upipe/uref_pic_flow.h>
 #include <upipe/uref_pic.h>
 #include <upipe/uref_clock.h>
 
+#include <upipe-modules/upipe_void_source.h>
+#include <upipe-filters/upipe_zoneplate.h>
 #include <upipe-filters/upipe_zoneplate_source.h>
 
-#include "zoneplate/videotestsrc.h"
-
 /** @internal @This is the private structure of a zoneplate source pipe. */
-struct upipe_zp {
+struct upipe_zpsrc {
     /* UPIPE_HELPER_UPIPE */
     struct upipe upipe;
 
     /* UPIPE_HELPER_UREFCOUNT */
     struct urefcount urefcount;
+    /** real refcount */
+    struct urefcount urefcount_real;
 
-    /* UPIPE_HELPER_OUTPUT */
+    /** inner source pipe probe */
+    struct uprobe src_probe;
+    /** last inner pipe probe */
+    struct uprobe zp_probe;
+
+    /** inner source pipe */
+    struct upipe *src;
+    /** last inner pipe */
+    struct upipe *zp;
+
+    /** output pipe  */
     struct upipe *output;
+    /** output flow format */
     struct uref *flow_def;
-    enum upipe_helper_output_state output_state;
+    /** list of requests */
     struct uchain requests;
-
-    /* UPIPE_HELPER_UREF_MGR */
-    struct uref_mgr *uref_mgr;
-    struct urequest uref_mgr_request;
-
-    /* UPIPE_HELPER_UBUF_MGR */
-    struct ubuf_mgr *ubuf_mgr;
-    struct uref *flow_format;
-    struct urequest ubuf_mgr_request;
-
-    /* UPIPE_HELPER_UCLOCK */
-    struct uclock *uclock;
-    struct urequest uclock_request;
-
-    /* UPIPE_HELPER_UPUMP_MGR */
-    struct upump_mgr *upump_mgr;
-
-    /* UPIPE_HELPER_UPUMP */
-    struct upump *upump;
-
-    int frame_counter;
-    uint64_t pts, interval;
 };
 
-/** @hidden */
-static int upipe_zp_check(struct upipe *upipe, struct uref *flow_format);
-
-UPIPE_HELPER_UPIPE(upipe_zp, upipe, UPIPE_ZONEPLATE_SIGNATURE);
-UPIPE_HELPER_UREFCOUNT(upipe_zp, urefcount, upipe_zp_free);
-UPIPE_HELPER_FLOW(upipe_zp, UREF_PIC_FLOW_DEF);
-UPIPE_HELPER_OUTPUT(upipe_zp, output, flow_def, output_state, requests);
-UPIPE_HELPER_UREF_MGR(upipe_zp, uref_mgr, uref_mgr_request,
-                      upipe_zp_check,
-                      upipe_zp_register_output_request,
-                      upipe_zp_unregister_output_request)
-UPIPE_HELPER_UBUF_MGR(upipe_zp, ubuf_mgr, flow_format, ubuf_mgr_request,
-                      upipe_zp_check,
-                      upipe_zp_register_output_request,
-                      upipe_zp_unregister_output_request)
-UPIPE_HELPER_UCLOCK(upipe_zp, uclock, uclock_request, upipe_zp_check,
-                    upipe_zp_register_output_request,
-                    upipe_zp_unregister_output_request)
-UPIPE_HELPER_UPUMP_MGR(upipe_zp, upump_mgr)
-UPIPE_HELPER_UPUMP(upipe_zp, upump, upump_mgr)
+UPIPE_HELPER_UPIPE(upipe_zpsrc, upipe, UPIPE_ZPSRC_SIGNATURE);
+UPIPE_HELPER_UREFCOUNT(upipe_zpsrc, urefcount, upipe_zpsrc_noref);
+UPIPE_HELPER_UREFCOUNT_REAL(upipe_zpsrc, urefcount_real, upipe_zpsrc_free);
+UPIPE_HELPER_FLOW(upipe_zpsrc, UREF_PIC_FLOW_DEF);
+UPIPE_HELPER_UPROBE(upipe_zpsrc, urefcount_real, src_probe, NULL);
+UPIPE_HELPER_UPROBE(upipe_zpsrc, urefcount_real, zp_probe, NULL);
+UPIPE_HELPER_INNER(upipe_zpsrc, src);
+UPIPE_HELPER_INNER(upipe_zpsrc, zp);
+UPIPE_HELPER_BIN_OUTPUT(upipe_zpsrc, zp, output, requests);
 
 /** @internal @This frees a zoneplate source pipe.
  *
  * @param upipe description structure of the pipe
  */
-static void upipe_zp_free(struct upipe *upipe)
+static void upipe_zpsrc_free(struct upipe *upipe)
 {
-    struct upipe_zp *upipe_zp = upipe_zp_from_upipe(upipe);
+    struct upipe_zpsrc *upipe_zpsrc = upipe_zpsrc_from_upipe(upipe);
 
     upipe_throw_dead(upipe);
 
-    upipe_zp_clean_urefcount(upipe);
-    upipe_zp_clean_uref_mgr(upipe);
-    upipe_zp_clean_uclock(upipe);
-    upipe_zp_clean_output(upipe);
-    upipe_zp_clean_upump_mgr(upipe);
-    upipe_zp_clean_upump(upipe);
+    uref_free(upipe_zpsrc->flow_def);
+    upipe_zpsrc_clean_bin_output(upipe);
+    upipe_zpsrc_clean_src(upipe);
+    upipe_zpsrc_clean_zp_probe(upipe);
+    upipe_zpsrc_clean_src_probe(upipe);
+    upipe_zpsrc_clean_urefcount_real(upipe);
+    upipe_zpsrc_clean_urefcount(upipe);
+    upipe_zpsrc_free_flow(upipe);
+}
 
-    upipe_zp_free_flow(upipe);
+/** @internal @This is called when there is no more external reference on the
+ * pipe.
+ *
+ * @param upipe description structure of the pipe
+ */
+static void upipe_zpsrc_noref(struct upipe *upipe)
+{
+    upipe_zpsrc_store_src(upipe, NULL);
+    upipe_zpsrc_store_zp(upipe, NULL);
+    upipe_zpsrc_release_urefcount_real(upipe);
 }
 
 /** @internal @This allocates a zoneplate source pipe.
@@ -126,18 +126,18 @@ static void upipe_zp_free(struct upipe *upipe)
  * @param args optional arguments
  * @return an allocated pipe
  */
-static struct upipe *upipe_zp_alloc(struct upipe_mgr *mgr,
+static struct upipe *upipe_zpsrc_alloc(struct upipe_mgr *mgr,
                                       struct uprobe *uprobe,
                                       uint32_t signature, va_list args)
 {
     struct uref *flow_def;
-    struct upipe *upipe = upipe_zp_alloc_flow(mgr, uprobe, signature, args,
+    struct upipe *upipe = upipe_zpsrc_alloc_flow(mgr, uprobe, signature, args,
                                                 &flow_def);
     if (unlikely(!upipe)) {
         return NULL;
     }
 
-    struct upipe_zp *upipe_zp = upipe_zp_from_upipe(upipe);
+    struct upipe_zpsrc *upipe_zpsrc = upipe_zpsrc_from_upipe(upipe);
 
     struct urational fps;
     uint8_t planes;
@@ -146,157 +146,81 @@ static struct upipe *upipe_zp_alloc(struct upipe_mgr *mgr,
             || !ubase_check(uref_pic_flow_get_fps(flow_def, &fps))
             || !ubase_check(uref_pic_flow_get_hsize(flow_def, &hsize))
             || !ubase_check(uref_pic_flow_get_vsize(flow_def, &vsize))) {
-        upipe_zp_free_flow(upipe);
+        upipe_zpsrc_free_flow(upipe);
         return NULL;
     }
-    upipe_zp->interval = (uint64_t)UCLOCK_FREQ * fps.den / fps.num;
 
-    upipe_zp_init_urefcount(upipe);
-    upipe_zp_init_uref_mgr(upipe);
-    upipe_zp_init_uclock(upipe);
-    upipe_zp_init_output(upipe);
-    upipe_zp_init_upump_mgr(upipe);
-    upipe_zp_init_upump(upipe);
-
-    upipe_zp_store_flow_def(upipe, flow_def);
-
-    upipe_zp->pts = UINT64_MAX;
+    upipe_zpsrc_init_urefcount(upipe);
+    upipe_zpsrc_init_urefcount_real(upipe);
+    upipe_zpsrc_init_src_probe(upipe);
+    upipe_zpsrc_init_zp_probe(upipe);
+    upipe_zpsrc_init_src(upipe);
+    upipe_zpsrc_init_bin_output(upipe);
+    upipe_zpsrc->flow_def = flow_def;
 
     upipe_throw_ready(upipe);
+
+    uint64_t duration = (uint64_t)UCLOCK_FREQ * fps.den / fps.num;
+    struct uref *flow_def_src = uref_sibling_alloc_control(flow_def);
+    int ret = uref_flow_set_def(flow_def_src, UREF_VOID_FLOW_DEF);
+    if (unlikely(!ubase_check(ret))) {
+        upipe_err(upipe, "fail to set flow def");
+        uref_free(flow_def_src);
+        upipe_release(upipe);
+        return NULL;
+    }
+    ret = uref_clock_set_duration(flow_def_src, duration);
+    if (unlikely(!ubase_check(ret))) {
+        upipe_err(upipe, "fail to set duration");
+        uref_free(flow_def_src);
+        upipe_release(upipe);
+        return NULL;
+    }
+    if (unlikely(!flow_def_src)) {
+        upipe_err(upipe, "fail to duplicate flow def");
+        upipe_release(upipe);
+        return NULL;
+    }
+
+    struct upipe_mgr *upipe_voidsrc_mgr = upipe_voidsrc_mgr_alloc();
+    if (unlikely(!upipe_voidsrc_mgr)) {
+        upipe_release(upipe);
+        uref_free(flow_def_src);
+        return NULL;
+    }
+    struct upipe *src = upipe_flow_alloc(
+        upipe_voidsrc_mgr,
+        uprobe_pfx_alloc(uprobe_use(&upipe_zpsrc->src_probe),
+                         UPROBE_LOG_VERBOSE, "src"),
+        flow_def_src);
+    uref_free(flow_def_src);
+    upipe_mgr_release(upipe_voidsrc_mgr);
+    if (unlikely(!src)) {
+        upipe_err(upipe, "fail to allocate source pipe");
+        upipe_release(upipe);
+        return NULL;
+    }
+    upipe_zpsrc_store_src(upipe, src);
+
+    struct upipe_mgr *upipe_zp_mgr = upipe_zp_mgr_alloc();
+    if (unlikely(!upipe_zp_mgr)) {
+        upipe_release(upipe);
+        return NULL;
+    }
+    struct upipe *zp = upipe_flow_alloc_output(
+        src, upipe_zp_mgr,
+        uprobe_pfx_alloc(uprobe_use(&upipe_zpsrc->zp_probe),
+                         UPROBE_LOG_VERBOSE, "zp"),
+        flow_def);
+    upipe_mgr_release(upipe_zp_mgr);
+    if (unlikely(!zp)) {
+        upipe_err(upipe, "fail to allocate zoneplate pipe");
+        upipe_release(upipe);
+        return NULL;
+    }
+    upipe_zpsrc_store_zp(upipe, zp);
+
     return upipe;
-}
-
-static int draw_zoneplate(struct upipe *upipe, struct uref *uref, int frame)
-{
-    const char *chroma = NULL;
-    while (ubase_check(uref_pic_plane_iterate(uref, &chroma)) &&
-            chroma != NULL) {
-        if (!strncmp(chroma, "y8", 2)) {
-            uint8_t *buf;
-            size_t stride, width, height;
-            UBASE_RETURN(uref_pic_size(uref, &width, &height, NULL));
-            UBASE_RETURN(uref_pic_plane_size(uref, chroma, &stride, NULL, NULL, NULL));
-            UBASE_RETURN(uref_pic_plane_write(uref, chroma, 0, 0, -1, -1, &buf));
-            gst_video_test_src_zoneplate_8bit(buf, width, height, stride, frame);
-            UBASE_RETURN(uref_pic_plane_unmap(uref, chroma, 0, 0, -1, -1));
-        }
-
-        else if (!strncmp(chroma, "y10", 3)) {
-            uint8_t *buf;
-            size_t stride, width, height;
-            UBASE_RETURN(uref_pic_size(uref, &width, &height, NULL));
-            UBASE_RETURN(uref_pic_plane_size(uref, chroma, &stride, NULL, NULL, NULL));
-            UBASE_RETURN(uref_pic_plane_write(uref, chroma, 0, 0, -1, -1, &buf));
-            gst_video_test_src_zoneplate_10bit((uint16_t*)buf, width, height, stride, frame);
-            UBASE_RETURN(uref_pic_plane_unmap(uref, chroma, 0, 0, -1, -1));
-        }
-
-        else {
-            UBASE_RETURN(uref_pic_plane_clear(uref, chroma, 0, 0, -1, -1, 1));
-        }
-    }
-    return UBASE_ERR_NONE;
-}
-
-/** @internal @This creates blank data and outputs it.
- *
- * @param upump description structure of the timer
- */
-static void upipe_zp_worker(struct upump *upump)
-{
-    struct upipe *upipe = upump_get_opaque(upump, struct upipe *);
-    struct upipe_zp *upipe_zp = upipe_zp_from_upipe(upipe);
-    uint64_t current_time;
-
-    uint64_t hsize, vsize;
-    ubase_assert(uref_pic_flow_get_hsize(upipe_zp->flow_def, &hsize));
-    ubase_assert(uref_pic_flow_get_vsize(upipe_zp->flow_def, &vsize));
-
-    struct uref *uref = uref_pic_alloc(upipe_zp->uref_mgr, upipe_zp->ubuf_mgr, hsize, vsize);
-    if (unlikely(!uref)) {
-        upipe_err(upipe, "failed to allocate picture");
-        upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
-        return;
-    }
-    draw_zoneplate(upipe, uref, upipe_zp->frame_counter++);
-
-    if (unlikely(upipe_zp->pts == UINT64_MAX)) {
-        upipe_zp->pts = uclock_now(upipe_zp->uclock);
-    }
-
-    current_time = uclock_now(upipe_zp->uclock);
-    upipe_verbose_va(upipe, "delay %"PRId64, current_time - upipe_zp->pts);
-
-    uref_clock_set_duration(uref, upipe_zp->interval);
-    uref_clock_set_pts_sys(uref, upipe_zp->pts);
-    uref_clock_set_pts_prog(uref, upipe_zp->pts);
-    upipe_zp->pts += upipe_zp->interval;
-
-    upipe_zp_output(upipe, uref, &upipe_zp->upump);
-
-    /* derive timer from (next) pts and current time */
-    current_time = uclock_now(upipe_zp->uclock);
-    int64_t wait = upipe_zp->pts - current_time;
-    if (wait < 0) {
-        upipe_warn_va(upipe, "Late frame (%" PRId64 ")", -wait);
-        wait = 0;
-    }
-
-    upipe_verbose_va(upipe,
-        "interval %"PRIu64" nextpts %"PRIu64" current %"PRIu64" wait %"PRId64,
-        upipe_zp->interval, upipe_zp->pts,
-        current_time, wait);
-
-    /* realloc oneshot timer */
-    upipe_zp_wait_upump(upipe, wait, upipe_zp_worker);
-}
-
-/** @internal @This checks if the pump may be allocated.
- *
- * @param upipe description structure of the pipe
- * @param flow_format amended flow format
- * @return an error code
- */
-static int upipe_zp_check(struct upipe *upipe, struct uref *flow_format)
-{
-    struct upipe_zp *upipe_zp = upipe_zp_from_upipe(upipe);
-    if (flow_format != NULL)
-        upipe_zp_store_flow_def(upipe, flow_format);
-
-    upipe_zp_check_upump_mgr(upipe);
-    if (upipe_zp->upump_mgr == NULL)
-        return UBASE_ERR_NONE;
-
-    if (upipe_zp->uref_mgr == NULL) {
-        upipe_zp_require_uref_mgr(upipe);
-        return UBASE_ERR_NONE;
-    }
-
-    if (upipe_zp->flow_def == NULL)
-        return UBASE_ERR_NONE;
-
-    if (upipe_zp->ubuf_mgr == NULL) {
-        upipe_zp_require_ubuf_mgr(upipe, uref_dup(upipe_zp->flow_def));
-        return UBASE_ERR_NONE;
-    }
-
-    if (upipe_zp->uclock == NULL) {
-        upipe_zp_require_uclock(upipe);
-        return UBASE_ERR_NONE;
-    }
-
-    if (upipe_zp->upump == NULL) {
-        struct upump *upump = upump_alloc_timer(upipe_zp->upump_mgr,
-            upipe_zp_worker, upipe, upipe->refcount,
-            upipe_zp->interval, 0);
-        if (unlikely(upump == NULL)) {
-            upipe_throw_fatal(upipe, UBASE_ERR_UPUMP);
-            return UBASE_ERR_UPUMP;
-        }
-        upipe_zp_set_upump(upipe, upump);
-        upump_start(upump);
-    }
-    return UBASE_ERR_NONE;
 }
 
 /** @internal @This handles the pipe control commands.
@@ -306,40 +230,31 @@ static int upipe_zp_check(struct upipe *upipe, struct uref *flow_format)
  * @param args optional arguments
  * @return an error code
  */
-static int upipe_zp_control_real(struct upipe *upipe,
-                                   int command, va_list args)
+static int upipe_zpsrc_control(struct upipe *upipe,
+                            int command, va_list args)
 {
-    UBASE_HANDLED_RETURN(upipe_zp_control_output(upipe, command, args));
-    return UBASE_ERR_UNHANDLED;
-}
-
-/** @internal @This handles control commands and checks the status of the pipe.
- *
- * @param upipe description structure of the pipe
- * @param command control command to handle
- * @param args optional arguments
- * @return an error code
- */
-static int upipe_zp_control(struct upipe *upipe,
-                              int command, va_list args)
-{
-    UBASE_RETURN(upipe_zp_control_real(upipe, command, args));
-    return upipe_zp_check(upipe, NULL);
+    switch (command) {
+        case UPIPE_GET_OUTPUT:
+        case UPIPE_SET_OUTPUT:
+        case UPIPE_GET_FLOW_DEF:
+            return upipe_zpsrc_control_bin_output(upipe, command, args);
+    }
+    return upipe_zpsrc_control_src(upipe, command, args);
 }
 
 /** @internal @This is the static zoneplate source pipe manager. */
-static struct upipe_mgr upipe_zp_mgr = {
+static struct upipe_mgr upipe_zpsrc_mgr = {
     .refcount = NULL,
-    .signature = UPIPE_ZONEPLATE_SIGNATURE,
-    .upipe_alloc = upipe_zp_alloc,
-    .upipe_control = upipe_zp_control,
+    .signature = UPIPE_ZPSRC_SIGNATURE,
+    .upipe_alloc = upipe_zpsrc_alloc,
+    .upipe_control = upipe_zpsrc_control,
 };
 
 /** @This returns the zoneplate source pipe manager.
  *
  * @return a pointer to the zoneplate source pipe manager
  */
-struct upipe_mgr *upipe_zoneplate_mgr_alloc(void)
+struct upipe_mgr *upipe_zpsrc_mgr_alloc(void)
 {
-    return &upipe_zp_mgr;
+    return &upipe_zpsrc_mgr;
 }

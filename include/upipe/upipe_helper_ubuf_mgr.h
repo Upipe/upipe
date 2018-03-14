@@ -50,8 +50,8 @@ typedef int (*upipe_helper_ubuf_mgr_check)(struct upipe *, struct uref *);
  * request. */
 typedef int (*upipe_helper_ubuf_mgr_register)(struct upipe *, struct urequest *);
 
-/** @This declares five functions dealing with the ubuf manager used on the
- * output of a pipe.
+/** @This declares functions dealing with the ubuf manager used on the output
+ * of a pipe.
  *
  * You must add three members to your private upipe structure, for instance:
  * @code
@@ -95,6 +95,14 @@ typedef int (*upipe_helper_ubuf_mgr_register)(struct upipe *, struct urequest *)
  *  void upipe_foo_clean_ubuf_mgr(struct upipe *upipe)
  * @end code
  * Typically called from your upipe_foo_free() function.
+ *
+ * @item @code
+ *  int upipe_foo_control_ubuf_mgr(struct upipe *upipe, int command,
+ *                                 va_list args);
+ * @end code
+ * Typically called from your upipe_foo_control function. Make sure to call
+ * this function before the output control helper function
+ * upipe_foo_control_output.
  * @end list
  *
  * @param STRUCTURE name of your private upipe structure
@@ -206,6 +214,43 @@ static void STRUCTURE##_clean_ubuf_mgr(struct upipe *upipe)                 \
     uref_free(s->FLOW_FORMAT);                                              \
     /* If the request was registered, it should be unregistered             \
      * automatically. Otherwise it has not been initialized. */             \
+}                                                                           \
+/** @internal @This handles the ubuf manager and flow format request        \
+ * register/unregister.                                                     \
+ *                                                                          \
+ * Make sure to call this helper before the control output helper which     \
+ * handle all the register/unregister request.                              \
+ *                                                                          \
+ * @param upipe description structure of the pipe                           \
+ * @param command control command to handle if needed                       \
+ * @param args optional arguments                                           \
+ * @return an error code                                                    \
+ */                                                                         \
+static UBASE_UNUSED int STRUCTURE##_control_ubuf_mgr(struct upipe *upipe,   \
+                                                     int command,           \
+                                                     va_list args)          \
+{                                                                           \
+    if (command != UPIPE_REGISTER_REQUEST &&                                \
+        command != UPIPE_UNREGISTER_REQUEST)                                \
+        return UBASE_ERR_UNHANDLED;                                         \
+    va_list args_copy;                                                      \
+    va_copy(args_copy, args);                                               \
+    struct urequest *urequest = va_arg(args_copy, struct urequest *);       \
+    int ret = UBASE_ERR_UNHANDLED;                                          \
+    switch (command) {                                                      \
+        case UPIPE_REGISTER_REQUEST:                                        \
+            if (urequest->type == UREQUEST_UBUF_MGR ||                      \
+                urequest->type == UREQUEST_FLOW_FORMAT)                     \
+                ret = upipe_throw_provide_request(upipe, urequest);         \
+            break;                                                          \
+        case UPIPE_UNREGISTER_REQUEST:                                      \
+            if (urequest->type == UREQUEST_UBUF_MGR ||                      \
+                urequest->type == UREQUEST_FLOW_FORMAT)                     \
+                ret = UBASE_ERR_NONE;                                       \
+            break;                                                          \
+    }                                                                       \
+    va_end(args_copy);                                                      \
+    return ret;                                                             \
 }
 
 #ifdef __cplusplus

@@ -1,7 +1,7 @@
 /*
- * Copyright (C) 2013-2014 OpenHeadend S.A.R.L.
+ * Copyright (C) 2018 OpenHeadend S.A.R.L.
  *
- * Authors: Benjamin Cohen
+ * Authors: Arnaud de Turckheim
  *
  * Permission is hereby granted, free of charge, to any person obtaining
  * a copy of this software and associated documentation files (the
@@ -24,31 +24,25 @@
  */
 
 /** @file
- * @short Upipe ebur128
+ * @short Upipe module to output fixed size sound buffers.
  */
 
-#ifndef _UPIPE_FILTERS_UPIPE_FILTER_EBUR128_H_
-/** @hidden */
-#define _UPIPE_FILTERS_UPIPE_FILTER_EBUR128_H_
+#ifndef _UPIPE_MODULES_UPIPE_AUDIO_COPY_H_
+#define _UPIPE_MODULES_UPIPE_AUDIO_COPY_H_
 #ifdef __cplusplus
 extern "C" {
 #endif
 
-#include <upipe/upipe.h>
-#include <upipe/uref_attr.h>
-#include <stdint.h>
+#include <upipe/ubase.h>
 
-UREF_ATTR_FLOAT(ebur128, momentary, "ebur128.momentary", momentary loudness)
-UREF_ATTR_FLOAT(ebur128, lra, "ebur128.lra", loudness range)
-UREF_ATTR_FLOAT(ebur128, global, "ebur128.global", global integrated loudness)
+/** @hidden */
+struct upipe_mgr;
 
-#define UPIPE_FILTER_EBUR128_SIGNATURE UBASE_FOURCC('r', '1', '2', '8')
+/** @This is the audio frame pipe signature. */
+#define UPIPE_AUDIO_COPY_SIGNATURE UBASE_FOURCC('a','c','p','y')
 
-/** @This returns the management structure for all avformat sources.
- *
- * @return pointer to manager
- */
-struct upipe_mgr *upipe_filter_ebur128_mgr_alloc(void);
+/** @This returns the audio frame pipe management structure. */
+struct upipe_mgr *upipe_audio_copy_mgr_alloc(void);
 
 #ifdef __cplusplus
 }

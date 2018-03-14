@@ -221,7 +221,7 @@ int main(int argc, char *argv[])
         upipe_void_alloc(upipe_grid_mgr,
                          uprobe_pfx_alloc(uprobe_use(logger),
                                           UPROBE_LOG_LEVEL,
-                                          "vgrid"));
+                                          "grid"));
     assert(upipe_grid);
 
     struct uref *pic_flow_def = uref_pic_flow_alloc_def(uref_mgr, 0);

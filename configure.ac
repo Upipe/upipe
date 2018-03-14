@@ -135,6 +135,7 @@ PKG_CHECK_UPIPE(X265, x265, [x265.h])
 PKG_CHECK_UPIPE(ECORE, ecore, [Ecore.h])
 PKG_CHECK_UPIPE(ZVBI, zvbi-0.2, [libzvbi.h])
 PKG_CHECK_UPIPE(FREETYPE, freetype2, [ft2build.h])
+PKG_CHECK_UPIPE(EBUR128, libebur128, [ebur128.h])
 AC_LANG_PUSH([C++])
 PKG_CHECK_UPIPE(QTWEBKIT, QtWebKit, [QtWebKit])
 AC_LANG_POP([C++])
@@ -258,6 +259,7 @@ AC_CONFIG_FILES([Makefile
                  include/upipe-dveo/Makefile
                  include/upipe-netmap/Makefile
                  include/upipe-dvbcsa/Makefile
+                 include/upipe-ebur128/Makefile
                  lib/Makefile
                  lib/upipe/Makefile
                  lib/upipe/libupipe.pc
@@ -317,6 +319,8 @@ AC_CONFIG_FILES([Makefile
                  lib/upipe-netmap/libupipe_netmap.pc
                  lib/upipe-dvbcsa/Makefile
                  lib/upipe-dvbcsa/libupipe_dvbcsa.pc
+                 lib/upipe-ebur128/Makefile
+                 lib/upipe-ebur128/libupipe_ebur128.pc
                  x86/Makefile
                  x86/config.asm
                  tests/Makefile
