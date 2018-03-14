@@ -84,7 +84,7 @@ before_install:
     fi
 
   # bitstream
-  - git clone --depth 1 https://code.videolan.org/videolan/bitstream.git
+  - git clone --depth 1 https://github.com/videolan/bitstream.git
   - make -C bitstream install PREFIX="$PWD/usr-bitstream"
   - export PKG_CONFIG_PATH="$PKG_CONFIG_PATH:$PWD/usr-bitstream/lib/pkgconfig"
 
