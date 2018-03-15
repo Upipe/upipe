@@ -153,29 +153,19 @@ void sdi_encode_v210_sd(uint32_t *dst, uint8_t *src, int width)
     }
 }
 
-void sdi_encode_v210(uint32_t *dst, uint16_t *src, int width)
+void sdi_encode_v210(uint32_t *dst, uint16_t *y, int width)
 {
     /* 1280 isn't mod-6 so long vanc packets will be truncated */
-    uint16_t *y = src;
-    uint16_t *u = &y[width];
 
     /* don't clip the v210 anc data */
 #define WRITE_PIXELS(a, b, c)           \
-    *dst++ = to_le32(*(a) | (*(b) << 10) | (*(c) << 20))
+    *dst++ = to_le32((a) | ((b) << 10) | ((c) << 20))
 
     for (int w = 0; w < width; w += 6) {
-        WRITE_PIXELS(u, y, u+1);
-        y += 1;
-        u += 2;
-        WRITE_PIXELS(y, u, y+1);
-        y += 2;
-        u += 1;
-        WRITE_PIXELS(u, y, u+1);
-        y += 1;
-        u += 2;
-        WRITE_PIXELS(y, u, y+1);
-        y += 2;
-        u += 1;
+        WRITE_PIXELS(0, y[w+0], 0);
+        WRITE_PIXELS(y[w+1], 0, y[w+2]);
+        WRITE_PIXELS(0, y[w+3], 0);
+        WRITE_PIXELS(y[w+4], 0, y[w+5]);
     }
 }
 

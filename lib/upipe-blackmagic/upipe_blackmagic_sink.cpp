@@ -470,7 +470,7 @@ static void upipe_bmd_sink_extract_ttx(IDeckLinkVideoFrameAncillary *ancillary,
             ancillary->GetBufferForVerticalBlankingLine(line, &vanc);
             sdi_encode_v210_sd((uint32_t*)vanc, buf, w);
         } else {
-            uint16_t buf[VANC_WIDTH*2];
+            uint16_t buf[VANC_WIDTH];
 
             sdi_clear_vanc(buf);
             sdi_encode_ttx(&buf[0], packets[i], &packet[i][0], &ctr_array[i]);
@@ -718,7 +718,7 @@ static upipe_bmd_sink_frame *get_video_frame(struct upipe *upipe,
                 upipe_bmd_sink->mode == bmdModeHD1080i5994 ? 0x4 : 0x7;
             void *vanc;
             ancillary->GetBufferForVerticalBlankingLine(CC_LINE, &vanc);
-            uint16_t buf[VANC_WIDTH*2];
+            uint16_t buf[VANC_WIDTH];
             sdi_write_cdp(pic_data, pic_data_size, buf,
                     &upipe_bmd_sink->cdp_hdr_sequence_cntr, fps);
             sdi_calc_parity_checksum(buf);
