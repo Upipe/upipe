@@ -37,14 +37,6 @@
 #define UPIPE_SDI_MAX_PLANES 3
 #define UPIPE_SDI_MAX_CHANNELS 16
 
-static void upipe_sdi_blank_c(uint16_t *dst, uintptr_t pixels)
-{
-    for (int w = 0; w < pixels; w++) {
-        dst[2*w+0] = 0x200;
-        dst[2*w+1] = 0x40;
-    }
-}
-
 /* [Field][VBI] */
 static const uint16_t sav_fvh_cword[2][2] = {{0x200, 0x2ac}, {0x31c, 0x3b0}};
 static const uint16_t eav_fvh_cword[2][2] = {{0x274, 0x2d8}, {0x368, 0x3c4}};
@@ -1016,26 +1008,13 @@ static void upipe_hd_sdi_enc_encode_line(struct upipe *upipe, int line_num, uint
                 ttx = &upipe_sdi_enc->ttx_packet[f2][0];
         }
         if (ttx) {
-            uint16_t buf[input_hsize];
-            memset(buf, 0, sizeof(buf));
-
-            sdi_encode_ttx(buf, num_ttx, ttx, &upipe_sdi_enc->op47_sequence_counter[f2]);
-            // TODO: make sdi_encode_ttx work in place
-            for (int i = 0; i < input_hsize; i++)
-                active_start[2*i] = buf[i];
+            sdi_encode_ttx(active_start, num_ttx, ttx, &upipe_sdi_enc->op47_sequence_counter[f2]);
         }
 
         if (upipe_sdi_enc->cea708_size && line_num == 21 /* ? */) {
-            uint16_t buf[input_hsize];
-            memset(buf, 0, sizeof(buf));
-
-            sdi_write_cdp(upipe_sdi_enc->cea708, upipe_sdi_enc->cea708_size, buf,
+            sdi_write_cdp(upipe_sdi_enc->cea708, upipe_sdi_enc->cea708_size, active_start,
                     &upipe_sdi_enc->cdp_hdr_sequence_cntr, 0x4 /* 29.97 fps only */);
-            sdi_calc_parity_checksum(buf);
-
-            // TODO: work in place
-            for (int i = 0; i < input_hsize; i++)
-                active_start[i] = buf[i];
+            sdi_calc_parity_checksum(active_start);
         }
     } else {
         const uint8_t *y = planes[f2][0];

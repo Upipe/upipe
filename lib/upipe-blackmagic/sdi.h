@@ -21,7 +21,7 @@ void sdi_calc_parity_checksum(uint16_t *buf);
 
 void sdi_clear_vbi(uint8_t *dst, int w);
 
-void sdi_clear_vanc(uint16_t *dst);
+void upipe_sdi_blank_c(uint16_t *dst, uintptr_t pixels);
 
 void sdi_write_cdp(const uint8_t *src, size_t src_size,
         uint16_t *dst, uint16_t *ctr, uint8_t fps);
