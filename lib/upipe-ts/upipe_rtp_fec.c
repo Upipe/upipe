@@ -560,8 +560,7 @@ static void clear_fec(struct upipe *upipe)
     upipe_rtp_fec->last_seqnum = UINT32_MAX;
     upipe_rtp_fec->latency = 0;
 
-    memset(upipe_rtp_fec->recent, 0xff, 2 * upipe_rtp_fec->rows *
-            upipe_rtp_fec->cols * sizeof(*upipe_rtp_fec->recent));
+    memset(upipe_rtp_fec->recent, 0xff, sizeof(upipe_rtp_fec->recent));
 }
 
 static void upipe_rtp_fec_start_timer(struct upipe *upipe, uint16_t seqnum)
