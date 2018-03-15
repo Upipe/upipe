@@ -655,7 +655,9 @@ static void upipe_rtp_fec_main_input(struct upipe *upipe, struct uref *uref)
         upipe_warn_va(upipe, "resync");
         fec_change = true;
         uref_free(uref);
-    } else if (upipe_rtp_fec->last_send_seqnum != UINT32_MAX && seq_num_lt(seqnum, upipe_rtp_fec->last_send_seqnum)) {
+    } else if (upipe_rtp_fec->last_seqnum != UINT32_MAX &&
+               upipe_rtp_fec->last_send_seqnum != UINT32_MAX &&
+               seq_num_lt(seqnum, upipe_rtp_fec->last_send_seqnum)) {
         /* Packet is older than the last sent packet but within the two-matrix window so don't insert
            But don't resync either. Packet is late but not late enough to resync */
         uref_free(uref);
