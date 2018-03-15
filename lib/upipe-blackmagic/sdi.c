@@ -42,7 +42,7 @@ void sdi_calc_parity_checksum(uint16_t *buf)
 
     /* +3 = did + sdid + dc itself */
     for (uint16_t i = 0; i < dc+3; i++) {
-        uint16_t *b = &buf[2*(3+1)];
+        uint16_t *b = &buf[2*(3+i)];
         uint8_t parity = parity_tab[*b & 0xff];
         *b |= (!parity << 9) | (parity << 8);
 
