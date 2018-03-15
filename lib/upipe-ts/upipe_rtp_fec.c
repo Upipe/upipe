@@ -64,6 +64,7 @@
 
 #define UPIPE_FEC_JITTER UCLOCK_FREQ/25
 #define FEC_MAX 255
+#define LATENCY_MAX (UCLOCK_FREQ*2)
 
 /** upipe_rtp_fec structure with rtp-fec parameters */
 struct upipe_rtp_fec {
@@ -680,10 +681,14 @@ static void upipe_rtp_fec_main_input(struct upipe *upipe, struct uref *uref)
         uint8_t new_idx = later_seqnum % two_matrix_size;
 
         /* Make sure the sequence number is exactly two matrices behind and not more,
-         * otherwise the latency calculation will be too large */
-        if (prev_date_sys != UINT64_MAX && prev_seqnum != UINT64_MAX && seqnum == expected_seqnum) {
+         * otherwise the latency calculation will be too large.
+         * date_sys or prev_date_sys could be reordered */
+        if (date_sys != UINT64_MAX && prev_date_sys != UINT64_MAX && prev_seqnum != UINT64_MAX && seqnum == expected_seqnum) {
             uint64_t latency = date_sys - prev_date_sys;
-            if (upipe_rtp_fec->latency < latency) {
+            if (latency > LATENCY_MAX) {
+                upipe_warn_va(upipe,"resync. Latency too high. date_sys %"PRIu64" prev_date_sys %"PRIu64", seqnum %u, prev_seqnum %"PRIu64"", date_sys, prev_date_sys, seqnum, prev_seqnum);
+                fec_change = true;
+            } else if (upipe_rtp_fec->latency < latency) {
                 upipe_rtp_fec->latency = latency + UPIPE_FEC_JITTER;
                 upipe_warn_va(upipe, "Late packets increasing buffer-size/latency to %f seconds", (double)upipe_rtp_fec->latency / UCLOCK_FREQ);
             }
