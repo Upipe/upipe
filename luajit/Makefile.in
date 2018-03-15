@@ -131,6 +131,9 @@ distdir: $(DISTFILES)
 
 dvi:
 
+Makefile: $(srcdir)/Makefile.in
+	cd $(top_builddir) && $(SHELL) ./config.status luajit/$@
+
 .PHONY: all install uninstall clean distclean check installcheck distdir dvi
 
 #-------------------------------------------------------------------------------
