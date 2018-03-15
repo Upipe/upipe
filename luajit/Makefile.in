@@ -140,11 +140,13 @@ Makefile: $(srcdir)/Makefile.in
 # static so
 #-------------------------------------------------------------------------------
 
+CPPFLAGS_INC = $$($(SED) -n 's/^\#include <\(.*\)>/-include \1/p' $(INCLUDEDIR)/$*/*.h | \
+	       grep -v 'include $*/' | sort -u)
+
 %.static.c:
 	$(V_GEN){ \
 	  echo "#define static"; \
 	  echo "#define inline"; \
-	  echo "#define av_always_inline"; \
 	  cd $(INCLUDEDIR) && ls $*/*.h | \
 	    $(SED) 's/\(.*\)/#include <\1>/'; \
 	} > $@
@@ -152,7 +154,7 @@ Makefile: $(srcdir)/Makefile.in
 libupipe-av.static.so: CFLAGS += @AVFORMAT_CFLAGS@
 
 lib%.static.so: %.static.c
-	$(V_CCLD)$(CC) $(CFLAGS) $(CPPFLAGS) $(LDFLAGS) -shared -fPIC -o $@ $<
+	$(V_CCLD)$(CC) $(CFLAGS) $(CPPFLAGS) $(CPPFLAGS_INC) $(LDFLAGS) -shared -fPIC -o $@ $<
 
 %-sigs.lua: %.static.c
 	$(V_GEN)$(SED) -n \
