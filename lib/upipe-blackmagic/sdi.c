@@ -135,7 +135,7 @@ void sdi_encode_v210_sd(uint32_t *dst, uint8_t *src, int width)
 #define WRITE_PIXELS8(a, b, c) \
     *dst++ = to_le32((*(a) << 2) | (*(b) << 12) | (*(c) << 22))
 
-    for (int w = 0; w < width; w += 6) {
+    for (int w = 0; w < width - 5; w += 6) {
         WRITE_PIXELS8(u, y, u+1);
         y += 1;
         u += 2;
