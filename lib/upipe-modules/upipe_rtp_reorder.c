@@ -268,6 +268,8 @@ static struct upipe *upipe_rtpr_sub_alloc(struct upipe_mgr *mgr,
     struct upipe_rtpr_sub *upipe_rtpr_sub =
                             upipe_rtpr_sub_from_upipe(upipe);
 
+    upipe_rtpr_sub->flow_def = NULL;
+
     upipe_rtpr_sub_init_urefcount(upipe);
     upipe_rtpr_sub_init_input(upipe);
     upipe_rtpr_sub_init_sub(upipe);
