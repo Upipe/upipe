@@ -72,6 +72,8 @@ struct upipe_grid {
     uint64_t last_update_pts;
     /** next update diff */
     uint64_t next_update;
+    /** grid max rentention */
+    uint64_t max_retention;
 };
 
 /** @hidden */
@@ -334,7 +336,7 @@ static void upipe_grid_in_input(struct upipe *upipe,
         }
 
         ubase_assert(uref_clock_get_pts_sys(uref, &pts));
-        if (pts + MAX_RETENTION > upipe_grid_in->last_pts) {
+        if (pts + upipe_grid->max_retention > upipe_grid_in->last_pts) {
             ulist_unshift(&upipe_grid_in->urefs, uchain);
             break;
         }
@@ -453,7 +455,7 @@ static void upipe_grid_in_update_pts(struct upipe *upipe, uint64_t next_pts)
         ubase_assert(uref_clock_get_pts_sys(uref, &pts));
 
         uint64_t retention = ulist_is_last(&upipe_grid_in->urefs, uchain) ?
-            MAX_RETENTION : 0;
+            upipe_grid->max_retention : 0;
 
         if (pts + latency + upipe_grid->tolerance + retention < next_pts) {
             upipe_verbose_va(upipe, "drop uref pts %"PRIu64, pts);
@@ -1099,10 +1101,25 @@ static struct upipe *upipe_grid_alloc(struct upipe_mgr *mgr,
     upipe_grid->tolerance = DEFAULT_TOLERANCE;
     upipe_grid->last_update_pts = 0;
     upipe_grid->next_update = 0;
+    upipe_grid->max_retention = MAX_RETENTION;
 
     upipe_throw_ready(upipe);
 
     return upipe;
+}
+
+/** @internal @This sets the max retention time for input buffers.
+ *
+ * @param upipe description structure of the pipe
+ * @param max_retention max retention time value in 27MHz ticks
+ * @return an error code
+ */
+static int upipe_grid_set_max_retention_real(struct upipe *upipe,
+                                             uint64_t max_retention)
+{
+    struct upipe_grid *upipe_grid = upipe_grid_from_upipe(upipe);
+    upipe_grid->max_retention = max_retention;
+    return UBASE_ERR_NONE;
 }
 
 /** @internal @This handles control command of the grid pipe.
@@ -1115,6 +1132,18 @@ static struct upipe *upipe_grid_alloc(struct upipe_mgr *mgr,
 static int upipe_grid_control(struct upipe *upipe,
                               int command, va_list args)
 {
+    if (command >= UPIPE_CONTROL_LOCAL &&
+        ubase_get_signature(args) != UPIPE_GRID_SIGNATURE)
+        return UBASE_ERR_UNHANDLED;
+
+    switch (command) {
+        case UPIPE_GRID_SET_MAX_RETENTION: {
+            UBASE_SIGNATURE_CHECK(args, UPIPE_GRID_SIGNATURE);
+            uint64_t max_retention = va_arg(args, uint64_t);
+            return upipe_grid_set_max_retention_real(upipe, max_retention);
+        }
+    }
+
     return UBASE_ERR_UNHANDLED;
 }
 
@@ -1174,6 +1203,7 @@ static struct upipe_mgr upipe_grid_mgr = {
     .signature = UPIPE_GRID_SIGNATURE,
 
     .upipe_alloc = upipe_grid_alloc,
+    .upipe_control = upipe_grid_control,
 };
 
 /** @This returns grid pipe manager.
