@@ -206,7 +206,7 @@ int ubuf_sound_common_size(struct ubuf *ubuf, size_t *size_p,
  * @param channel_p reference written with channel type of the next plane
  * @return an error code
  */
-int ubuf_sound_common_plane_iterate(struct ubuf *ubuf, const char **channel_p);
+int ubuf_sound_common_iterate_plane(struct ubuf *ubuf, const char **channel_p);
 
 /** @This returns a pointer to the buffer space of a plane.
  *

@@ -241,7 +241,8 @@ static bool upipe_filter_blend_handle(struct upipe *upipe, struct uref *uref,
     }
 
     // Iterate planes
-    uref_pic_plane_foreach(uref, chroma) {
+    const char *chroma;
+    uref_pic_foreach_plane(uref, chroma) {
         // map all
         if (unlikely(!ubase_check(uref_pic_plane_size(uref, chroma, &stride_in,
                                                 &hsub, &vsub, &macropixel_size)))) {

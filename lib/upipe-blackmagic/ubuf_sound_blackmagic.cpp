@@ -176,7 +176,7 @@ static int ubuf_sound_bmd_control(struct ubuf *ubuf, int command, va_list args)
         }
         case UBUF_ITERATE_SOUND_PLANE: {
             const char **chroma_p = va_arg(args, const char **);
-            return ubuf_sound_common_plane_iterate(ubuf, chroma_p);
+            return ubuf_sound_common_iterate_plane(ubuf, chroma_p);
         }
         case UBUF_READ_SOUND_PLANE: {
             const char *chroma = va_arg(args, const char *);

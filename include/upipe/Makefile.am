@@ -64,6 +64,7 @@ pkginclude_HEADERS = \
 	upool.h \
 	uprobe.h \
 	uprobe_dejitter.h \
+	uprobe_helper.h \
 	uprobe_helper_alloc.h \
 	uprobe_helper_uprobe.h \
 	uprobe_helper_urefcount.h \

@@ -160,8 +160,8 @@ static void fill_pic(struct uref *uref, int counter)
     uint8_t macropixel;
     assert(ubase_check(uref_pic_size(uref, &hsize, &vsize, &macropixel)));
 
-    const char *chroma = NULL;
-    while (ubase_check(uref_pic_plane_iterate(uref, &chroma)) && chroma != NULL) {
+    const char *chroma;
+    uref_pic_foreach_plane(uref, chroma) {
         size_t stride;
         uint8_t hsub, vsub, macropixel_size;
         assert(ubase_check(uref_pic_plane_size(uref, chroma, &stride, &hsub, &vsub,

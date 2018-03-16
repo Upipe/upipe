@@ -78,14 +78,28 @@ static inline int uref_sound_size(struct uref *uref, size_t *size_p,
     return ubuf_sound_size(uref->ubuf, size_p, sample_size_p);
 }
 
-/** @see ubuf_sound_plane_iterate */
-static inline int uref_sound_plane_iterate(struct uref *uref,
+/** @see ubuf_sound_iterate_plane */
+static inline int uref_sound_iterate_plane(struct uref *uref,
                                            const char **channel_p)
 {
     if (uref->ubuf == NULL)
         return UBASE_ERR_INVALID;
-    return ubuf_sound_plane_iterate(uref->ubuf, channel_p);
+    return ubuf_sound_iterate_plane(uref->ubuf, channel_p);
 }
+
+/** DO NOT USE: deprecated, use uref_sound_iterate_plane instead  */
+static inline UBASE_DEPRECATED
+int uref_sound_plane_iterate(struct uref *uref,
+                             const char **channel_p)
+{
+    return uref_sound_iterate_plane(uref, channel_p);
+}
+
+/** helper for uref_sound_iterate_plane */
+#define uref_sound_foreach_plane(UREF, CHANNEL)                              \
+    for (CHANNEL = NULL;                                                     \
+         ubase_check(uref_sound_iterate_plane(UREF, &CHANNEL)) &&            \
+         CHANNEL != NULL;)
 
 /** @see ubuf_sound_plane_unmap */
 static inline int uref_sound_plane_unmap(struct uref *uref, const char *channel,

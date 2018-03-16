@@ -71,10 +71,9 @@ static void test_I420(struct ubuf_mgr *mgr)
     assert(vsize == 32);
     assert(macropixel == 1);
 
-    const char *chroma = NULL;
+    const char *chroma;
     unsigned int nb_planes = 0;
-    while (ubase_check(ubuf_pic_plane_iterate(ubuf, &chroma)) &&
-           chroma != NULL) {
+    ubuf_pic_foreach_plane(ubuf, chroma) {
         nb_planes++;
         size_t stride;
         uint8_t hsub, vsub, macropixel_size;
@@ -130,10 +129,9 @@ static void test_YUYV(struct ubuf_mgr *mgr)
     assert(vsize == 32);
     assert(macropixel == 2);
 
-    const char *chroma = NULL;
+    const char *chroma;
     unsigned int nb_planes = 0;
-    while (ubase_check(ubuf_pic_plane_iterate(ubuf, &chroma)) &&
-           chroma != NULL) {
+    ubuf_pic_foreach_plane(ubuf, chroma) {
         nb_planes++;
         size_t stride;
         uint8_t hsub, vsub, macropixel_size;

@@ -166,9 +166,8 @@ int ubuf_pic_clear(struct ubuf *ubuf, int hoffset, int voffset,
         return UBASE_ERR_INVALID;
 
     bool ret = false;
-    const char *chroma = NULL;
-    while (ubase_check(ubuf_pic_plane_iterate(ubuf, &chroma)) &&
-           chroma != NULL) {
+    const char *chroma;
+    ubuf_pic_foreach_plane(ubuf, chroma) {
         ret = !ubase_check(ubuf_pic_plane_clear(ubuf, chroma,
             hoffset, voffset, hsize, vsize, fullrange)) || ret;
     }

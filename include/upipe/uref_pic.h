@@ -95,19 +95,27 @@ static inline int uref_pic_size(struct uref *uref,
     return ubuf_pic_size(uref->ubuf, hsize_p, vsize_p, macropixel_p);
 }
 
-/** @see ubuf_pic_plane_iterate */
-static inline int uref_pic_plane_iterate(struct uref *uref,
+/** @see ubuf_pic_iterate_plane */
+static inline int uref_pic_iterate_plane(struct uref *uref,
                                          const char **chroma_p)
 {
     if (uref->ubuf == NULL)
         return UBASE_ERR_INVALID;
-    return ubuf_pic_plane_iterate(uref->ubuf, chroma_p);
+    return ubuf_pic_iterate_plane(uref->ubuf, chroma_p);
 }
 
-/** helper for uref_pic_plane_iterate */
-#define uref_pic_plane_foreach(UREF, CHROMA)                                \
-    for (const char *CHROMA = NULL;                                         \
-         ubase_check(uref_pic_plane_iterate(UREF, &CHROMA)) && CHROMA != NULL;)
+/** DO NOT USE: deprecated, use uref_pic_iterate_plane instead  */
+static inline UBASE_DEPRECATED
+int uref_pic_plane_iterate(struct uref *uref,
+                           const char **chroma_p)
+{
+    return uref_pic_iterate_plane(uref, chroma_p);
+}
+
+/** helper for uref_pic_iterate_plane */
+#define uref_pic_foreach_plane(UREF, CHROMA)                                \
+    for (CHROMA = NULL;                                                     \
+         ubase_check(uref_pic_iterate_plane(UREF, &CHROMA)) && CHROMA != NULL;)
 
 /** @see ubuf_pic_plane_size */
 static inline int uref_pic_plane_size(struct uref *uref,

@@ -174,7 +174,8 @@ static int upipe_zp_draw(struct upipe *upipe, struct uref *uref)
     UBASE_ALLOC_RETURN(ubuf);
     uref_attach_ubuf(uref, ubuf);
 
-    uref_pic_plane_foreach(uref, chroma) {
+    const char *chroma;
+    uref_pic_foreach_plane(uref, chroma) {
         if (!strncmp(chroma, "y8", 2)) {
             uint8_t *buf;
             size_t stride, width, height;

@@ -66,9 +66,8 @@ static void fill_in(struct ubuf *ubuf)
     ubase_assert(ubuf_sound_size(ubuf, &size, &sample_size));
     int octets = size * sample_size;
 
-    const char *channel = NULL;
-    while (ubase_check(ubuf_sound_plane_iterate(ubuf, &channel)) &&
-           channel != NULL) {
+    const char *channel;
+    ubuf_sound_foreach_plane(ubuf, channel) {
         uint8_t *buffer;
         ubase_assert(ubuf_sound_plane_write_uint8_t(ubuf, channel, 0, -1,
                                                     &buffer));

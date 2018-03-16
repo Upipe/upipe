@@ -909,9 +909,8 @@ static int _upipe_blit_prepare(struct upipe *upipe, struct upump **upump_p)
 
     /* Check if we can write on the planes */
     bool writable = true;
-    const char *chroma = NULL;
-    while (ubase_check(uref_pic_plane_iterate(uref, &chroma)) &&
-           chroma != NULL) {
+    const char *chroma;
+    uref_pic_foreach_plane(uref, chroma) {
         if (!ubase_check(uref_pic_plane_write(uref, chroma, 0, 0, -1, -1,
                                               NULL)) ||
             !ubase_check(uref_pic_plane_unmap(uref, chroma, 0, 0, -1, -1))) {

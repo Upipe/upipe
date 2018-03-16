@@ -50,9 +50,8 @@ static void fill_in(struct ubuf *ubuf)
     ubase_assert(ubuf_sound_size(ubuf, &size, &sample_size));
     int octets = size * sample_size;
 
-    const char *channel = NULL;
-    while (ubase_check(ubuf_sound_plane_iterate(ubuf, &channel)) &&
-           channel != NULL) {
+    const char *channel;
+    ubuf_sound_foreach_plane(ubuf, channel) {
         uint8_t *buffer;
         ubase_assert(ubuf_sound_plane_write_uint8_t(ubuf, channel, 0, -1,
                                                     &buffer));
@@ -89,10 +88,8 @@ int main(int argc, char **argv)
     assert(size == 32);
     assert(sample_size == 4);
 
-    channel = NULL;
     unsigned int nb_planes = 0;
-    while (ubase_check(ubuf_sound_plane_iterate(ubuf1, &channel)) &&
-           channel != NULL) {
+    ubuf_sound_foreach_plane(ubuf1, channel) {
         nb_planes++;
         assert(!strcmp(channel, "lr"));
     }
@@ -143,10 +140,8 @@ int main(int argc, char **argv)
     assert(size == 32);
     assert(sample_size == sizeof(float));
 
-    channel = NULL;
     nb_planes = 0;
-    while (ubase_check(ubuf_sound_plane_iterate(ubuf1, &channel)) &&
-           channel != NULL)
+    ubuf_sound_foreach_plane(ubuf1, channel)
         nb_planes++;
     assert(nb_planes == 6);
 

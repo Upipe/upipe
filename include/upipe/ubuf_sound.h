@@ -79,11 +79,25 @@ static inline int ubuf_sound_size(struct ubuf *ubuf, size_t *size_p,
  * @param channel_p reference written with channel type of the next plane
  * @return an error code
  */
-static inline int ubuf_sound_plane_iterate(struct ubuf *ubuf,
+static inline int ubuf_sound_iterate_plane(struct ubuf *ubuf,
                                            const char **channel_p)
 {
     return ubuf_control(ubuf, UBUF_ITERATE_SOUND_PLANE, channel_p);
 }
+
+/** DO NOT USE: deprecated, use ubuf_sound_iterate_plane instead  */
+static inline UBASE_DEPRECATED
+int ubuf_sound_plane_iterate(struct ubuf *ubuf,
+                             const char **channel_p)
+{
+    return ubuf_sound_iterate_plane(ubuf, channel_p);
+}
+
+/** helper for ubuf_sound_iterate_plane */
+#define ubuf_sound_foreach_plane(UBUF, CHANNEL)                             \
+    for (CHANNEL = NULL;                                                    \
+         ubase_check(ubuf_sound_iterate_plane(UBUF, &CHANNEL)) &&           \
+         CHANNEL != NULL;)
 
 /** @This marks the buffer space as being currently unused, and the pointer
  * will be invalid until the next time the ubuf is mapped.
@@ -118,7 +132,7 @@ static inline int ubuf_sound_unmap(struct ubuf *ubuf, int offset, int size,
     unsigned int i = 0;
     bool ret = true;
     while (i < planes &&
-           ubase_check(ubuf_sound_plane_iterate(ubuf, &channel)) &&
+           ubase_check(ubuf_sound_iterate_plane(ubuf, &channel)) &&
            channel != NULL) {
         ret = ubase_check(ubuf_sound_plane_unmap(ubuf, channel, offset,
                                                  size)) && ret;
@@ -185,7 +199,7 @@ static inline int ubuf_sound_read_##type(struct ubuf *ubuf,                 \
     const char *channel = NULL;                                             \
     unsigned int i = 0;                                                     \
     while (i < planes &&                                                    \
-           ubase_check(ubuf_sound_plane_iterate(ubuf, &channel)) &&         \
+           ubase_check(ubuf_sound_iterate_plane(ubuf, &channel)) &&         \
            channel != NULL) {                                               \
         if (unlikely(!ubase_check(ubuf_sound_plane_read_##type(ubuf,        \
                             channel, offset, size, &buffers_p[i])))) {      \
@@ -217,7 +231,7 @@ static inline int ubuf_sound_write_##type(struct ubuf *ubuf,                \
     const char *channel = NULL;                                             \
     unsigned int i = 0;                                                     \
     while (i < planes &&                                                    \
-           ubase_check(ubuf_sound_plane_iterate(ubuf, &channel)) &&         \
+           ubase_check(ubuf_sound_iterate_plane(ubuf, &channel)) &&         \
            channel != NULL) {                                               \
         if (unlikely(!ubase_check(ubuf_sound_plane_write_##type(ubuf,       \
                             channel, offset, size, &buffers_p[i])))) {      \
@@ -287,7 +301,6 @@ static inline struct ubuf *ubuf_sound_copy(struct ubuf_mgr *mgr,
     uint8_t new_sample_size;
     int extract_offset, extract_skip;
     int extract_size;
-    const char *channel = NULL;
     if (unlikely(!ubase_check(ubuf_sound_size(new_ubuf, NULL,
                                               &new_sample_size)) ||
                  new_sample_size != sample_size))
@@ -304,8 +317,8 @@ static inline struct ubuf *ubuf_sound_copy(struct ubuf_mgr *mgr,
         new_size - extract_offset <= (int)ubuf_size - extract_skip ?
         new_size - extract_offset : (int)ubuf_size - extract_skip;
 
-    while (ubase_check(ubuf_sound_plane_iterate(ubuf, &channel)) &&
-           channel != NULL) {
+    const char *channel;
+    ubuf_sound_foreach_plane(ubuf, channel) {
         uint8_t *new_buffer;
         const uint8_t *buffer;
         if (unlikely(!ubase_check(ubuf_sound_plane_write_uint8_t(new_ubuf,
