@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2013-2017 OpenHeadend S.A.R.L.
+ * Copyright (C) 2013-2018 OpenHeadend S.A.R.L.
  *
  * Authors: Christophe Massiot
  *
@@ -67,6 +67,7 @@
 #include <upipe-modules/upipe_setrap.h>
 #include <upipe-modules/upipe_idem.h>
 #include <upipe-modules/upipe_setflowdef.h>
+#include <upipe-modules/upipe_probe_uref.h>
 #include <upipe-ts/uref_ts_flow.h>
 #include <upipe-ts/uref_ts_event.h>
 #include <upipe-ts/upipe_ts_demux.h>
@@ -114,6 +115,8 @@
 #define MAX_DELAY UCLOCK_FREQ
 /** number of EITs table IDs */
 #define EITS_TABLEIDS 16
+/** teletext frame rate */
+#define TELX_FPS 25
 
 /** @internal @This is the private context of a ts_demux manager. */
 struct upipe_ts_demux_mgr {
@@ -126,6 +129,8 @@ struct upipe_ts_demux_mgr {
     struct upipe_mgr *setrap_mgr;
     /** pointer to idem manager */
     struct upipe_mgr *idem_mgr;
+    /** pointer to probe_uref manager */
+    struct upipe_mgr *probe_uref_mgr;
 
     /** pointer to ts_split manager */
     struct upipe_mgr *ts_split_mgr;
@@ -418,7 +423,11 @@ struct upipe_ts_demux_output {
 
     /** maximum retention time in the pipeline */
     uint64_t max_delay;
+    /** last DTS orig (used for telx) */
+    uint64_t last_dts_orig;
 
+    /** probe to get events from probe_uref telx inner pipe */
+    struct uprobe telx_probe;
     /** probe to get events from inner pipes */
     struct uprobe probe;
 
@@ -759,6 +768,18 @@ static int upipe_ts_demux_output_plumber(struct upipe *upipe,
         return UBASE_ERR_NONE;
     }
 
+    if (!ubase_ncmp(def, "block.dvb_teletext.") &&
+        ts_demux_mgr->probe_uref_mgr != NULL) {
+        /* allocate probe_uref for teletext without PTS */
+        inner = upipe_void_alloc_output(inner, ts_demux_mgr->probe_uref_mgr,
+                uprobe_pfx_alloc(
+                    uprobe_use(&upipe_ts_demux_output->telx_probe),
+                    UPROBE_LOG_VERBOSE, "telx_probe"));
+        if (unlikely(inner == NULL))
+            return UBASE_ERR_ALLOC;
+        upipe_release(inner);
+    }
+
     if (ts_demux_mgr->autof_mgr != NULL) {
         /* allocate autof inner */
         struct upipe *output =
@@ -813,6 +834,65 @@ static int upipe_ts_demux_output_probe(struct uprobe *uprobe,
     }
 }
 
+/** @internal @This catches events coming from output inner pipes for telx,
+ * and fixes the DTS if it is not present in the original stream.
+ *
+ * @param uprobe pointer to the probe in upipe_ts_demux_output
+ * @param inner pointer to the inner pipe
+ * @param event event triggered by the inner pipe
+ * @param args arguments of the event
+ * @return an error code
+ */
+static int upipe_ts_demux_output_telx_probe(struct uprobe *uprobe,
+                                            struct upipe *inner,
+                                            int event, va_list args)
+{
+    struct upipe_ts_demux_output *output =
+        container_of(uprobe, struct upipe_ts_demux_output, telx_probe);
+    struct upipe *upipe = upipe_ts_demux_output_to_upipe(output);
+
+    if (event != UPROBE_PROBE_UREF)
+        return upipe_throw_proxy(upipe, inner, event, args);
+
+    va_list args_copy;
+    va_copy(args_copy, args);
+    if (va_arg(args_copy, unsigned int) != UPIPE_PROBE_UREF_SIGNATURE) {
+        va_end(args_copy);
+        return uprobe_throw_next(uprobe, upipe, event, args);
+    }
+
+    struct uref *uref = va_arg(args_copy, struct uref *);
+    va_end(args_copy);
+
+    if (ubase_check(uref_clock_get_dts_orig(uref, &output->last_dts_orig)))
+        return UBASE_ERR_NONE; /* compliant teletext */
+
+    struct upipe_ts_demux_program *program =
+        upipe_ts_demux_program_from_output_mgr(upipe->mgr);
+    if (program->last_pcr == TS_CLOCK_MAX)
+        return UBASE_ERR_NONE;
+
+    uint64_t dts_orig;
+    if (output->last_dts_orig != UINT64_MAX) {
+        dts_orig = output->last_dts_orig + (UCLOCK_FREQ / TELX_FPS);
+        dts_orig %= TS_CLOCK_MAX;
+        while (dts_orig < program->last_pcr) {
+            dts_orig += UCLOCK_FREQ / TELX_FPS;
+            dts_orig %= TS_CLOCK_MAX;
+        }
+    } else {
+        dts_orig = program->last_pcr + (UCLOCK_FREQ / TELX_FPS);
+        dts_orig %= TS_CLOCK_MAX;
+    }
+    /* We should maybe realign the DTS on the video DTS, and we could do
+     * it by instrumenting @ref upipe_ts_demux_output_clock_ts, but the
+     * spec doesn't mention it and I don't bother. */
+
+    uref_clock_set_dts_orig(uref, dts_orig);
+    va_arg(args, unsigned int); /* remove signature */
+    return upipe_ts_demux_output_clock_ts(upipe, inner, UPROBE_CLOCK_TS, args);
+}
+
 /** @internal @This allocates an output subpipe of a ts_demux_program subpipe.
  *
  * @param mgr common management structure
@@ -858,9 +938,13 @@ static struct upipe *upipe_ts_demux_output_alloc(struct upipe_mgr *mgr,
     upipe_ts_demux_output->split_output = NULL;
     upipe_ts_demux_output->setrap = NULL;
     upipe_ts_demux_output->max_delay = MAX_DELAY;
+    upipe_ts_demux_output->last_dts_orig = UINT64_MAX;
     uref_ts_flow_get_max_delay(flow_def, &upipe_ts_demux_output->max_delay);
+    uprobe_init(&upipe_ts_demux_output->telx_probe,
+                upipe_ts_demux_output_telx_probe, NULL);
     uprobe_init(&upipe_ts_demux_output->probe,
                 upipe_ts_demux_output_probe, NULL);
+    upipe_ts_demux_output->telx_probe.refcount =
     upipe_ts_demux_output->probe.refcount =
         upipe_ts_demux_output_to_urefcount_real(upipe_ts_demux_output);
 
@@ -1002,6 +1086,7 @@ static void upipe_ts_demux_output_free(struct urefcount *urefcount_real)
     uref_free(upipe_ts_demux_output->flow_def_input);
     upipe_ts_demux_output_clean_last_inner_probe(upipe);
     uprobe_clean(&upipe_ts_demux_output->probe);
+    uprobe_clean(&upipe_ts_demux_output->telx_probe);
     urefcount_clean(urefcount_real);
     upipe_ts_demux_output_clean_urefcount(upipe);
     upipe_ts_demux_output_free_flow(upipe);
@@ -3090,6 +3175,7 @@ static void upipe_ts_demux_mgr_free(struct urefcount *urefcount)
     upipe_mgr_release(ts_demux_mgr->null_mgr);
     upipe_mgr_release(ts_demux_mgr->setrap_mgr);
     upipe_mgr_release(ts_demux_mgr->idem_mgr);
+    upipe_mgr_release(ts_demux_mgr->probe_uref_mgr);
     upipe_mgr_release(ts_demux_mgr->ts_split_mgr);
     upipe_mgr_release(ts_demux_mgr->ts_sync_mgr);
     upipe_mgr_release(ts_demux_mgr->ts_check_mgr);
@@ -3144,6 +3230,7 @@ static int upipe_ts_demux_mgr_control(struct upipe_mgr *mgr,
         GET_SET_MGR(null, NULL)
         GET_SET_MGR(setrap, SETRAP)
         GET_SET_MGR(idem, IDEM)
+        GET_SET_MGR(probe_uref, PROBE_UREF)
 
         GET_SET_MGR(ts_split, TS_SPLIT)
         GET_SET_MGR(ts_sync, TS_SYNC)
@@ -3183,6 +3270,7 @@ struct upipe_mgr *upipe_ts_demux_mgr_alloc(void)
     ts_demux_mgr->null_mgr = upipe_null_mgr_alloc();
     ts_demux_mgr->setrap_mgr = upipe_setrap_mgr_alloc();
     ts_demux_mgr->idem_mgr = upipe_idem_mgr_alloc();
+    ts_demux_mgr->probe_uref_mgr = upipe_probe_uref_mgr_alloc();
 
     ts_demux_mgr->ts_split_mgr = upipe_ts_split_mgr_alloc();
     ts_demux_mgr->ts_sync_mgr = upipe_ts_sync_mgr_alloc();
