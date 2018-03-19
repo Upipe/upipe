@@ -176,6 +176,9 @@ prefix_base    = upipe_ uprobe_ ubuf_ uref_ uchain_ upump_ ustring_ udict_ \
 
 prefix_modules = upipe_ uprobe_ uref_ upump_
 
+# override enum prefix
+enum_upipe-ts = uprobe_ts_
+
 libupipe.lua: $(srcdir)/gen-ffi-cdef.pl $(srcdir)/libc.defs upipe.debug_info upipe.static.debug_info
 	$(V_GEN)$(PERL) $< \
 	  --format $(FMT_DEBUG_INFO) \
@@ -203,7 +206,7 @@ $(srcdir)/upipe.lua $(srcdir)/ffi-stdarg.lua:
 	  --output $@ \
 	  --read-defs $(srcdir)/libc.defs \
 	  --read-defs upipe.defs \
-	  --enum 'uprobe_*' \
+	  --enum '$(or $(enum_$*),uprobe_)*' \
 	  $(addprefix --prefix ,$(prefix_modules)) \
 	  --load $($*_dlname) \
 	  --load lib$*.static.so \
