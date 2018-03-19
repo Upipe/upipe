@@ -295,8 +295,8 @@ static int upipe_avcdec_get_buffer_pic(struct AVCodecContext *context,
     }
 
     UBASE_FATAL(upipe, uref_pic_flow_set_align(flow_def_attr, align))
-    UBASE_FATAL(upipe, uref_pic_flow_set_hsize(flow_def_attr, context->width))
-    UBASE_FATAL(upipe, uref_pic_flow_set_vsize(flow_def_attr, context->height))
+    UBASE_FATAL(upipe, uref_pic_flow_set_hsize(flow_def_attr, context->coded_width))
+    UBASE_FATAL(upipe, uref_pic_flow_set_vsize(flow_def_attr, context->coded_height))
     UBASE_FATAL(upipe, uref_pic_flow_set_hsize_visible(flow_def_attr, context->width))
     UBASE_FATAL(upipe, uref_pic_flow_set_vsize_visible(flow_def_attr, context->height))
     struct urational fps;
