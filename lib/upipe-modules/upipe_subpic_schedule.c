@@ -40,6 +40,7 @@
 #include <upipe/upipe_helper_urefcount.h>
 #include <upipe/upipe_helper_void.h>
 #include <upipe/upipe_helper_subpipe.h>
+#include <upipe-ts/uref_ts_flow.h>
 #include <upipe-modules/upipe_subpic_schedule.h>
 
 /** upipe_subpic_schedule structure */
@@ -88,6 +89,9 @@ struct upipe_subpic_schedule_sub {
     enum upipe_helper_output_state output_state;
     /** list of output requests */
     struct uchain request_list;
+
+    /** if this stream is teletext */
+    bool teletext;
 
     /** structure for double-linked lists */
     struct uchain uchain;
@@ -150,6 +154,8 @@ static int upipe_subpic_schedule_sub_control(struct upipe *upipe, int command, v
     switch (command) {
         case UPIPE_SET_FLOW_DEF: {
             struct uref *uref = va_arg(args, struct uref *);
+            upipe_subpic_schedule_sub->teletext =
+                ubase_check(uref_ts_flow_get_telx_type(uref, NULL, 0));
             upipe_subpic_schedule_sub_store_flow_def(upipe, uref_dup(uref));
             return UBASE_ERR_NONE;
         }
@@ -277,6 +283,7 @@ static void upipe_subpic_schedule_sub_handle_subpic(struct upipe *upipe,
 
     struct upipe_subpic_schedule *upipe_subpic_schedule = upipe_subpic_schedule_from_sub_mgr(upipe->mgr);
 
+    const bool teletext = upipe_subpic_schedule_sub->teletext;
 
     struct uchain *uchain, *uchain_tmp;
     ulist_delete_foreach(&upipe_subpic_schedule_sub->urefs, uchain, uchain_tmp) {
@@ -287,6 +294,22 @@ static void upipe_subpic_schedule_sub_handle_subpic(struct upipe *upipe,
 
         if (date_uref > date) /* The next subpicture is in advance */
             break;
+
+        if (teletext && uchain->next != &upipe_subpic_schedule_sub->urefs) {
+            /* For teletext, the next subpicture replaces the previous one.
+             * There can not be multiple active subpictures. */
+            struct uref *uref_next = uref_from_uchain(uchain->next);
+
+            uint64_t date_uref_next = 0;
+            uref_clock_get_pts_prog(uref_next, &date_uref_next);
+
+            if (date_uref_next <= date) {
+                ulist_delete(uchain);
+                uref_free(uref);
+                upipe_verbose_va(upipe, "subpicture replaced");
+                continue;
+            }
+        }
 
         uint64_t duration;
         if (unlikely(!ubase_check(uref_clock_get_duration(uref, &duration))))
