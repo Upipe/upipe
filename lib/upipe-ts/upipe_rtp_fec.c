@@ -394,7 +394,12 @@ static void upipe_rtp_fec_correct_packets(struct upipe *upipe,
     uref_block_unmap(fec_uref, 0);
     uref_block_resize(fec_uref, 0, size);
 
-    insert_ordered_uref(&upipe_rtp_fec->main_queue, fec_uref);
+    /* Don't insert an FEC corrected packet from the past */
+    if (upipe_rtp_fec->last_send_seqnum != UINT32_MAX &&
+       (seq_num_lt(missing_seqnum, upipe_rtp_fec->last_send_seqnum) || upipe_rtp_fec->last_send_seqnum == missing_seqnum))
+        uref_free(fec_uref);
+    else
+        insert_ordered_uref(&upipe_rtp_fec->main_queue, fec_uref);
 }
 
 static void upipe_rtp_fec_apply_col_fec(struct upipe *upipe)
