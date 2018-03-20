@@ -126,6 +126,9 @@ struct upipe_alsource {
     /** poll fd **/
     struct pollfd pfd;
 
+    /** period */
+    uint64_t period;
+
     /** pipe acting as output */
     struct upipe *output;
     /** flow definition packet */
@@ -184,8 +187,9 @@ static struct upipe *upipe_alsource_alloc(struct upipe_mgr *mgr,
     upipe_alsource->rate = 48000;
     upipe_alsource->channels = 2;
     upipe_alsource->format = SND_PCM_FORMAT_FLOAT;
-    upipe_alsource->uri = strdup(DEFAULT_DEVICE);
+    upipe_alsource->uri = NULL;
     upipe_alsource->pfd.fd = -1;
+    upipe_alsource->period = DEFAULT_PERIOD_DURATION;
     upipe_alsource->handle = NULL;
 
     upipe_throw_ready(upipe);
@@ -298,7 +302,7 @@ static bool upipe_alsource_open(struct upipe *upipe)
         goto open_error;
     }
 
-    snd_pcm_uframes_t frames_in_period = (uint64_t)DEFAULT_PERIOD_DURATION *
+    snd_pcm_uframes_t frames_in_period = upipe_alsource->period *
                                          upipe_alsource->rate / UCLOCK_FREQ;
     if (snd_pcm_hw_params_set_period_size_near(upipe_alsource->handle, hwparams,
                                                &frames_in_period, NULL) < 0) {
@@ -499,6 +503,30 @@ static int upipe_alsource_check(struct upipe *upipe, struct uref *flow_format)
     return UBASE_ERR_NONE;
 }
 
+/** @internal @This sets the content of an avcodec option. It only take effect
+ * after the next call to @ref upipe_avcdec_set_url.
+ *
+ * @param upipe description structure of the pipe
+ * @param option name of the option
+ * @param content content of the option, or NULL to delete it
+ * @return an error code
+ */
+static int upipe_alsource_set_option(struct upipe *upipe,
+                                   const char *option, const char *content)
+{
+    struct upipe_alsource *upipe_alsource = upipe_alsource_from_upipe(upipe);
+    if (upipe_alsource->uri)
+        return UBASE_ERR_BUSY;
+    assert(option != NULL && content != NULL);
+
+    if (!strcmp(option, "period"))
+        upipe_alsource->period = atoi(content);
+    else
+        return UBASE_ERR_INVALID;
+
+    return UBASE_ERR_NONE;
+}
+
 /** @internal @This processes control commands on an ALSA source pipe.
  *
  * @param upipe description structure of the pipe
@@ -524,6 +552,11 @@ static int _upipe_alsource_control(struct upipe *upipe, int command, va_list arg
         case UPIPE_GET_URI: {
             const char **uri_p = va_arg(args, const char **);
             return upipe_alsource_get_uri(upipe, uri_p);
+        }
+        case UPIPE_SET_OPTION: {
+            const char *option = va_arg(args, const char *);
+            const char *content = va_arg(args, const char *);
+            return upipe_alsource_set_option(upipe, option, content);
         }
         case UPIPE_SET_URI: {
             const char *uri = va_arg(args, const char *);
