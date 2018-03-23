@@ -45,6 +45,27 @@ extern "C" {
  */
 struct upipe_mgr *upipe_grid_mgr_alloc(void);
 
+/** @This enumerates the grid control commands. */
+enum upipe_grid_command {
+    /** sentinel */
+    UPIPE_GRID_SENTINEL = UPIPE_CONTROL_LOCAL,
+    /** set the max retention time (uint64_t) */
+    UPIPE_GRID_SET_MAX_RETENTION,
+};
+
+/** @This sets the max retention time for input buffers.
+ *
+ * @param upipe description structure of the pipe
+ * @param max_retention max retention time value in 27MHz ticks
+ * @return an error code
+ */
+static inline int upipe_grid_set_max_retention(struct upipe *upipe,
+                                               uint64_t max_retention)
+{
+    return upipe_control(upipe, UPIPE_GRID_SET_MAX_RETENTION,
+                         UPIPE_GRID_SIGNATURE, max_retention);
+}
+
 /** @This allocates a new grid input.
  *
  * @param upipe description structure of the pipe

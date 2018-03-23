@@ -131,17 +131,22 @@ distdir: $(DISTFILES)
 
 dvi:
 
+Makefile: $(srcdir)/Makefile.in
+	cd $(top_builddir) && $(SHELL) ./config.status luajit/$@
+
 .PHONY: all install uninstall clean distclean check installcheck distdir dvi
 
 #-------------------------------------------------------------------------------
 # static so
 #-------------------------------------------------------------------------------
 
+CPPFLAGS_INC = $$($(SED) -n 's/^\#include <\(.*\)>/-include \1/p' $(INCLUDEDIR)/$*/*.h | \
+	       grep -v 'include $*/' | sort -u)
+
 %.static.c:
 	$(V_GEN){ \
 	  echo "#define static"; \
 	  echo "#define inline"; \
-	  echo "#define av_always_inline"; \
 	  cd $(INCLUDEDIR) && ls $*/*.h | \
 	    $(SED) 's/\(.*\)/#include <\1>/'; \
 	} > $@
@@ -149,7 +154,7 @@ dvi:
 libupipe-av.static.so: CFLAGS += @AVFORMAT_CFLAGS@
 
 lib%.static.so: %.static.c
-	$(V_CCLD)$(CC) $(CFLAGS) $(CPPFLAGS) $(LDFLAGS) -shared -fPIC -o $@ $<
+	$(V_CCLD)$(CC) $(CFLAGS) $(CPPFLAGS) $(CPPFLAGS_INC) $(LDFLAGS) -shared -fPIC -o $@ $<
 
 %-sigs.lua: %.static.c
 	$(V_GEN)$(SED) -n \
@@ -170,6 +175,9 @@ prefix_base    = upipe_ uprobe_ ubuf_ uref_ uchain_ upump_ ustring_ udict_ \
 		 ulifo_ upool_ ulist_ udeal_ ulog_
 
 prefix_modules = upipe_ uprobe_ uref_ upump_
+
+# override enum prefix
+enum_upipe-ts = uprobe_ts_
 
 libupipe.lua: $(srcdir)/gen-ffi-cdef.pl $(srcdir)/libc.defs upipe.debug_info upipe.static.debug_info
 	$(V_GEN)$(PERL) $< \
@@ -198,7 +206,7 @@ $(srcdir)/upipe.lua $(srcdir)/ffi-stdarg.lua:
 	  --output $@ \
 	  --read-defs $(srcdir)/libc.defs \
 	  --read-defs upipe.defs \
-	  --enum 'uprobe_*' \
+	  --enum '$(or $(enum_$*),uprobe_)*' \
 	  $(addprefix --prefix ,$(prefix_modules)) \
 	  --load $($*_dlname) \
 	  --load lib$*.static.so \

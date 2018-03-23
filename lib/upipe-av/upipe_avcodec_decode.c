@@ -907,21 +907,19 @@ static void upipe_avcdec_output_sub(struct upipe *upipe, AVSubtitle *sub,
 
     flow_def_attr = uref_dup(upipe_avcdec->flow_def_provided);
 
-    if (sub->num_rects) {
-        /* Allocate a ubuf */
-        struct ubuf *ubuf = ubuf_pic_alloc(upipe_avcdec->ubuf_mgr, width_aligned, height_aligned);
-        if (unlikely(ubuf == NULL)) {
-            uref_free(uref);
-            uref_free(flow_def_attr);
-            upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
-            return;
-        }
-
-        uref_pic_set_progressive(uref);
-        ubuf_pic_clear(ubuf, 0, 0, -1, -1, 0);
-
-        uref_attach_ubuf(uref, ubuf);
+    /* Allocate a ubuf */
+    struct ubuf *ubuf = ubuf_pic_alloc(upipe_avcdec->ubuf_mgr, width_aligned, height_aligned);
+    if (unlikely(ubuf == NULL)) {
+        uref_free(uref);
+        uref_free(flow_def_attr);
+        upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
+        return;
     }
+
+    uref_pic_set_progressive(uref);
+    ubuf_pic_clear(ubuf, 0, 0, -1, -1, 0);
+
+    uref_attach_ubuf(uref, ubuf);
 
     /* Chain the new flow def attributes to the uref so we can apply them
      * later. */
