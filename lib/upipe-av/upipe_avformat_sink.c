@@ -648,6 +648,11 @@ static void upipe_avfsink_mux(struct upipe *upipe, struct upump **upump_p)
                          stream->time_base.den + UCLOCK_FREQ / 2) /
                         UCLOCK_FREQ / stream->time_base.num;
 
+        uint64_t duration;
+        if (ubase_check(uref_clock_get_duration(uref, &duration)))
+            avpkt.duration = (duration * stream->time_base.den + UCLOCK_FREQ / 2) /
+                             UCLOCK_FREQ / stream->time_base.num;
+
         size_t size = 0;
         uref_block_size(uref, &size);
         if (unlikely(!size)) {
