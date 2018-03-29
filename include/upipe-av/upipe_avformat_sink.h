@@ -53,6 +53,10 @@ enum upipe_avfsink_command {
     UPIPE_AVFSINK_SET_FORMAT,
     /** returns the current duration (uint64_t *) */
     UPIPE_AVFSINK_GET_DURATION,
+    /** returns the currently configured init section uri (const char **) */
+    UPIPE_AVFSINK_GET_INIT_URI,
+    /** sets the init section uri (const char *) */
+    UPIPE_AVFSINK_SET_INIT_URI,
 };
 
 /** @This returns the management structure for all avformat sinks.
@@ -125,6 +129,32 @@ static inline int upipe_avfsink_get_duration(struct upipe *upipe,
 {
     return upipe_control(upipe, UPIPE_AVFSINK_GET_DURATION,
                          UPIPE_AVFSINK_SIGNATURE, duration_p);
+}
+
+/** @This returns the currently configured init section uri
+ *
+ * @param upipe description structure of the pipe
+ * @param uri_p filled in with the current initialization section URI
+ * @return an error code
+ */
+static inline int upipe_avfsink_get_init_uri(struct upipe *upipe,
+                                             const char **uri_p)
+{
+    return upipe_control(upipe, UPIPE_AVFSINK_GET_INIT_URI,
+                         UPIPE_AVFSINK_SIGNATURE, uri_p);
+}
+
+/** @This sets the init section uri
+ *
+ * @param upipe description structure of the pipe
+ * @param uri initialization section URI
+ * @return an error code
+ */
+static inline int upipe_avfsink_set_init_uri(struct upipe *upipe,
+                                             const char *uri)
+{
+    return upipe_control(upipe, UPIPE_AVFSINK_SET_INIT_URI,
+                         UPIPE_AVFSINK_SIGNATURE, uri);
 }
 
 #ifdef __cplusplus
