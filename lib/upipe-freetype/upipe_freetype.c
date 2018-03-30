@@ -289,7 +289,7 @@ static struct upipe *upipe_freetype_alloc(struct upipe_mgr *mgr,
         return NULL;
     }
     upipe_freetype->pixel_size = vsize > UINT_MAX ? UINT_MAX : vsize;
-    upipe_freetype->yoff = vsize * 8 / 64;
+    upipe_freetype->yoff = vsize - vsize / 8;
 
     return upipe;
 }
@@ -374,8 +374,9 @@ static bool upipe_freetype_handle(struct upipe *upipe, struct uref *uref,
         return true;
     }
 
-    FT_Int xoff = upipe_freetype->xoff;
-    FT_Int yoff = upipe_freetype->yoff;
+    /* scale offset to 16.16 */
+    int64_t xoff = upipe_freetype->xoff << 16;
+    int64_t yoff = upipe_freetype->yoff << 16;
     for (int i = 0; i < length; i++) {
         FT_UInt index = FTC_CMapCache_Lookup(upipe_freetype->cmap_cache,
                                              upipe_freetype->font, -1, text[i]);
@@ -408,8 +409,8 @@ static bool upipe_freetype_handle(struct upipe *upipe, struct uref *uref,
             top = slot->top;
             width = slot->bitmap.width;
             height = slot->bitmap.rows;
-            xadvance = glyph->advance.x >> 16;
-            yadvance = glyph->advance.y >> 16;
+            xadvance = glyph->advance.x;
+            yadvance = glyph->advance.y;
             buffer = slot->bitmap.buffer;
         }
         else {
@@ -417,40 +418,27 @@ static bool upipe_freetype_handle(struct upipe *upipe, struct uref *uref,
             top = sbit->top;
             width = sbit->width;
             height = sbit->height;
-            xadvance = sbit->xadvance;
-            yadvance = sbit->yadvance;
+            /* scale to 16.16 */
+            xadvance = sbit->xadvance << 16;
+            yadvance = sbit->yadvance << 16;
             buffer = sbit->buffer;
         }
-        FT_Int x = xoff + left;
-        FT_Int y = v - yoff - top;
-        FT_Int x_max = x + width;
-        FT_Int y_max = y + height;
+        FT_Int x = (xoff >> 16) + left;
+        FT_Int y = (yoff >> 16) - top;
 
-        if (x < 0) {
-            upipe_err_va(upipe, "clipping x, %i < 0", x);
-            x = 0;
-        }
-        if (y < 0) {
-            upipe_err_va(upipe, "clipping y, %i < 0", y);
-            y = 0;
-        }
-        if (x_max > h) {
-            upipe_err_va(upipe, "clipping x, %"PRIu64" < %d", h, x_max);
-            x_max = h;
-        }
-        if (y_max > v) {
-            upipe_err_va(upipe, "clipping y, %"PRIu64" < %d", v, y_max);
-            y_max = v;
-        }
+        for (FT_Int i = 0; i < width; i++) {
+            if (x + i < 0 || x + i >= h)
+                continue;
 
-        for (FT_Int i = x; i < x_max; i++)
-            for (FT_Int j = y; j < y_max; j++) {
-                dst[j * stride_y + i] |=
-                    buffer[(j - y) * width + (i - x)];
+            for (FT_Int j = 0; j < height; j++) {
+                if (y + j < 0 || y + j >= v)
+                    continue;
+
+                dst[(y + j) * stride_y + x + i] |= buffer[j * width + i];
                 if (has_alpha)
-                    dsta[j * stride_a + i] |=
-                        buffer[(j - y) * width + (i - x)];
+                    dsta[(y + i) * stride_a + x + i] |= buffer[(j * width + i)];
             }
+        }
 
         /* increment pen position */
         xoff += xadvance;
@@ -544,6 +532,113 @@ static int upipe_freetype_set_flow_def(struct upipe *upipe, struct uref *flow_de
     return UBASE_ERR_NONE;
 }
 
+/** @internal @This sets the freetype pixel size.
+ *
+ * @param upipe description structure of the pipe
+ * @param pixel_size pixel size to set
+ * @return an error code
+ */
+static int _upipe_freetype_set_pixel_size(struct upipe *upipe,
+                                          uint64_t pixel_size)
+{
+    struct upipe_freetype *upipe_freetype = upipe_freetype_from_upipe(upipe);
+    upipe_freetype->pixel_size = pixel_size;
+
+    FT_Size size;
+    FTC_ScalerRec scaler;
+    scaler.face_id = upipe_freetype->face;
+    scaler.width = upipe_freetype->pixel_size;
+    scaler.height = upipe_freetype->pixel_size;
+    scaler.pixel = 1;
+    if (FTC_Manager_LookupSize(upipe_freetype->cache_manager,
+                               &scaler, &size)) {
+        upipe_err(upipe, "fail to get size");
+        return UBASE_ERR_EXTERNAL;
+    }
+    return UBASE_ERR_NONE;
+}
+
+/** @internal @This gets the x and y minimum and maximum values of the rendered
+ * characters.
+ *
+ * @param upipe description structure of the pipe
+ * @param str a string with the rendered characters
+ * @param bbox_p filled with x and y mininum and maximum value
+ * @return an error code
+ */
+static int _upipe_freetype_get_bbox(struct upipe *upipe,
+                                    const char *str,
+                                    struct upipe_freetype_bbox *bbox_p)
+{
+    struct upipe_freetype *upipe_freetype = upipe_freetype_from_upipe(upipe);
+    size_t length = str ? strlen(str) : 0;
+
+    struct upipe_freetype_bbox bbox;
+    bbox.x = 0;
+    bbox.y = 0;
+    bbox.width = 0;
+    bbox.height = 0;
+
+    FT_Pos yMax = 0;
+    int64_t width = 0;
+    for (int i = 0; i < length; i++) {
+        FT_UInt index = FTC_CMapCache_Lookup(upipe_freetype->cmap_cache,
+                                             upipe_freetype->font, -1, str[i]);
+        if (unlikely(!index))
+            return UBASE_ERR_EXTERNAL;
+
+        FTC_ImageTypeRec type;
+        type.face_id = upipe_freetype->font;
+        type.width = upipe_freetype->pixel_size;
+        type.height = upipe_freetype->pixel_size;
+        type.flags = FT_LOAD_DEFAULT;
+        FT_Glyph glyph;
+        if (FTC_ImageCache_Lookup(upipe_freetype->img_cache,
+                                  &type, index,
+                                  &glyph, NULL))
+            return UBASE_ERR_EXTERNAL;
+
+        FT_BBox ft_bbox;
+        FT_Glyph_Get_CBox(glyph, FT_GLYPH_BBOX_PIXELS, &ft_bbox);
+
+        if (!i)
+            bbox.x = ft_bbox.xMin;
+        if (ft_bbox.yMin < bbox.y)
+            bbox.y = ft_bbox.yMin;
+        if (ft_bbox.yMax > yMax)
+            yMax = ft_bbox.yMax;
+        width += glyph->advance.x;
+    }
+
+    if (yMax > bbox.y)
+        bbox.height = yMax - bbox.y;
+    bbox.height = yMax - bbox.y;
+
+    if (width > 0)
+        /* get width ceil and downscale 16.16 integer */
+        bbox.width = (width + 0xffff) >> 16;
+
+    if (bbox_p)
+        *bbox_p = bbox;
+    return UBASE_ERR_NONE;
+}
+
+/** @internal @This sets the baseline offsets in the picture buffer.
+ *
+ * @param upipe description structure of the pipe
+ * @param xoff offset from the left of the buffer
+ * @param yoff offset from the top of the buffer
+ * @return an error code
+ */
+static int _upipe_freetype_set_baseline(struct upipe *upipe,
+                                        int64_t xoff, int64_t yoff)
+{
+    struct upipe_freetype *upipe_freetype = upipe_freetype_from_upipe(upipe);
+    upipe_freetype->xoff = xoff;
+    upipe_freetype->yoff = yoff;
+    return UBASE_ERR_NONE;
+}
+
 /** @internal @This processes control commands.
  *
  * @param upipe description structure of the pipe
@@ -570,10 +665,34 @@ static int upipe_freetype_control_real(struct upipe *upipe,
             const char *value  = va_arg(args, const char *);
             return upipe_freetype_set_option(upipe, option, value);
         }
-
-        default:
-            return UBASE_ERR_UNHANDLED;
     }
+
+    if (command >= UPIPE_CONTROL_LOCAL &&
+        ubase_get_signature(args) == UPIPE_FREETYPE_SIGNATURE) {
+        UBASE_SIGNATURE_CHECK(args, UPIPE_FREETYPE_SIGNATURE);
+
+        switch (command) {
+            case UPIPE_FREETYPE_GET_BBOX: {
+                const char *str = va_arg(args, const char *);
+                struct upipe_freetype_bbox *bbox_p =
+                    va_arg(args, struct upipe_freetype_bbox *);
+                return _upipe_freetype_get_bbox(upipe, str, bbox_p);
+            }
+
+            case UPIPE_FREETYPE_SET_PIXEL_SIZE: {
+                unsigned pixel_size = va_arg(args, unsigned);
+                return _upipe_freetype_set_pixel_size(upipe, pixel_size);
+            }
+
+            case UPIPE_FREETYPE_SET_BASELINE: {
+                int64_t xoff = va_arg(args, int64_t);
+                int64_t yoff = va_arg(args, int64_t);
+                return _upipe_freetype_set_baseline(upipe, xoff, yoff);
+            }
+        }
+    }
+
+    return UBASE_ERR_UNHANDLED;
 }
 
 /** @internal @This handles control commands and checks the pipe state.
