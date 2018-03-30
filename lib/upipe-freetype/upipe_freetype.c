@@ -48,7 +48,10 @@
 #include <upipe-freetype/upipe_freetype.h>
 
 #include <ft2build.h>
+
 #include FT_FREETYPE_H
+#include FT_GLYPH_H
+#include FT_CACHE_H
 
 /** upipe_freetype structure */
 struct upipe_freetype {
@@ -84,11 +87,26 @@ struct upipe_freetype {
     /** request output */
     struct uref *flow_output;
 
+    /** font */
+    char *font;
+    /** current pixel size */
+    unsigned pixel_size;
     /** freetype handle */
     FT_Library library;
-
+    /** freetype cache manager */
+    FTC_Manager cache_manager;
+    /** freetype cmap cache */
+    FTC_CMapCache cmap_cache;
+    /** freetype image cache */
+    FTC_ImageCache img_cache;
+    /** fretype sbit cache */
+    FTC_SBitCache sbit_cache;
     /** font handle */
     FT_Face face;
+    /** baseline left offset */
+    int64_t xoff;
+    /** baseline right offset */
+    int64_t yoff;
 
     /** public upipe structure */
     struct upipe upipe;
@@ -171,9 +189,8 @@ static void upipe_freetype_free(struct upipe *upipe)
 
     upipe_throw_dead(upipe);
 
-    if (upipe_freetype->face)
-        FT_Done_Face(upipe_freetype->face);
-
+    free(upipe_freetype->font);
+    FTC_Manager_Done(upipe_freetype->cache_manager);
     FT_Done_FreeType(upipe_freetype->library);
 
     uref_free(upipe_freetype->flow_output);
@@ -182,6 +199,25 @@ static void upipe_freetype_free(struct upipe *upipe)
     upipe_freetype_clean_output(upipe);
     upipe_freetype_clean_ubuf_mgr(upipe);
     upipe_freetype_free_flow(upipe);
+}
+
+/** @internal @This is called by freetype to translate face id to real face.
+ *
+ * @param face_id face id to translate
+ * @param library freetype library handle
+ * @param data private data
+ * @param face translated font face
+ * @return a freetype error code
+ */
+static FT_Error upipe_freetype_face_requester(FTC_FaceID face_id,
+                                              FT_Library library,
+                                              FT_Pointer data,
+                                              FT_Face *face)
+{
+    struct upipe *upipe = data;
+    struct upipe_freetype *upipe_freetype = upipe_freetype_from_upipe(upipe);
+
+    return FT_New_Face(upipe_freetype->library, upipe_freetype->font, 0, face);
 }
 
 /** @internal @This allocates a freetype pipe.
@@ -203,31 +239,57 @@ static struct upipe *upipe_freetype_alloc(struct upipe_mgr *mgr,
     if (unlikely(upipe == NULL))
         return NULL;
 
-    struct upipe_freetype *upipe_freetype = upipe_freetype_from_upipe(upipe);
-
-    upipe_freetype->flow_output = flow_def;
-
-    if (FT_Init_FreeType(&upipe_freetype->library)) {
-        uref_free(upipe_freetype->flow_output);
-        upipe_freetype_free_flow(upipe);
-        return NULL;
-    }
-
-    upipe_freetype->face = NULL;
-
     upipe_freetype_init_urefcount(upipe);
     upipe_freetype_init_output(upipe);
     upipe_freetype_init_ubuf_mgr(upipe);
     upipe_freetype_init_input(upipe);
 
+    struct upipe_freetype *upipe_freetype = upipe_freetype_from_upipe(upipe);
+    upipe_freetype->flow_output = flow_def;
+    upipe_freetype->library = NULL;
+    upipe_freetype->cache_manager = NULL;
+    upipe_freetype->face = NULL;
+    upipe_freetype->xoff = 0;
+    upipe_freetype->yoff = 0;
+    upipe_freetype->font = NULL;
+    upipe_freetype->pixel_size = 0;
+
     upipe_throw_ready(upipe);
 
-    if (unlikely(!ubase_check(
-                upipe_freetype_check_flow_format(upipe, flow_def)))) {
+    if (FT_Init_FreeType(&upipe_freetype->library)) {
+        upipe_release(upipe);
+        return NULL;
+    }
+
+    if (FTC_Manager_New(upipe_freetype->library,
+                        0, 0, 0,
+                        upipe_freetype_face_requester,
+                        upipe,
+                        &upipe_freetype->cache_manager)) {
+        upipe_release(upipe);
+        return NULL;
+    }
+
+    if (FTC_CMapCache_New(upipe_freetype->cache_manager,
+                          &upipe_freetype->cmap_cache) ||
+        FTC_ImageCache_New(upipe_freetype->cache_manager,
+                           &upipe_freetype->img_cache) ||
+        FTC_SBitCache_New(upipe_freetype->cache_manager,
+                          &upipe_freetype->sbit_cache)) {
+        upipe_release(upipe);
+        return NULL;
+    }
+
+    uint64_t vsize;
+    if (unlikely(
+            !ubase_check(upipe_freetype_check_flow_format(upipe, flow_def)) ||
+            !ubase_check(uref_pic_flow_get_vsize(flow_def, &vsize)))) {
         upipe_err(upipe, "invalid flow format");
         upipe_release(upipe);
         return NULL;
     }
+    upipe_freetype->pixel_size = vsize > UINT_MAX ? UINT_MAX : vsize;
+    upipe_freetype->yoff = vsize * 8 / 64;
 
     return upipe;
 }
@@ -255,6 +317,14 @@ static bool upipe_freetype_handle(struct upipe *upipe, struct uref *uref,
         uref_free(uref);
         return true;
     }
+
+    const char *text;
+    int r = uref_attr_get_string(uref, &text, UDICT_TYPE_STRING, "text");
+    if (!ubase_check(r) || !text) {
+        uref_dump(uref, upipe->uprobe);
+        text = "fail";
+    }
+    size_t length = strlen(text);
 
     struct ubuf *ubuf = ubuf_pic_alloc(upipe_freetype->ubuf_mgr, h, v);
     if (!ubuf) {
@@ -304,66 +374,89 @@ static bool upipe_freetype_handle(struct upipe *upipe, struct uref *uref,
         return true;
     }
 
-    /* the pen position in 26.6 cartesian space coordinates */
-    FT_Vector pen; /* untransformed origin  */
-    pen.x = 0;
-    pen.y = v*8;
+    FT_Int xoff = upipe_freetype->xoff;
+    FT_Int yoff = upipe_freetype->yoff;
+    for (int i = 0; i < length; i++) {
+        FT_UInt index = FTC_CMapCache_Lookup(upipe_freetype->cmap_cache,
+                                             upipe_freetype->font, -1, text[i]);
+        if (unlikely(!index))
+            continue;
 
-    FT_GlyphSlot slot = upipe_freetype->face->glyph;
-    const char *text;
-    int r = uref_attr_get_string(uref, &text, UDICT_TYPE_STRING, "text");
-    if (!ubase_check(r)) {
-        uref_dump(uref, upipe->uprobe);
-        text = "fail";
-    }
-    for (int i = 0; i < strlen(text); i++) {
-        FT_Set_Transform(upipe_freetype->face, NULL, &pen);
+        FT_Glyph glyph = NULL;
+        FTC_ImageTypeRec type;
+        type.face_id = upipe_freetype->font;
+        type.width = upipe_freetype->pixel_size;
+        type.height = upipe_freetype->pixel_size;
+        type.flags = FT_LOAD_DEFAULT;
+        FTC_SBit sbit;
+        if (FTC_SBitCache_Lookup(upipe_freetype->sbit_cache,
+                                 &type, index, &sbit, NULL))
+            continue;
 
-        /* load glyph image into the slot(erase previous one) */
-        if (FT_Load_Char(upipe_freetype->face, text[i], FT_LOAD_RENDER))
-            continue;                 /* ignore errors */
+        int left, top, width, height, xadvance, yadvance;
+        unsigned char *buffer;
+        if (!sbit->buffer) {
+            if (FTC_ImageCache_Lookup(upipe_freetype->img_cache,
+                                      &type, index, &glyph, NULL))
+                continue;
 
-        /* now, draw to our target surface(convert position) */
-        FT_Bitmap *bitmap = &slot->bitmap;
-        FT_Int x = slot->bitmap_left;
-        FT_Int y = v - slot->bitmap_top;
-        FT_Int x_max = x + bitmap->width;
+            if (FT_Glyph_To_Bitmap(&glyph, FT_RENDER_MODE_NORMAL, 0, 0))
+                continue;
+
+            FT_BitmapGlyph slot = (FT_BitmapGlyph)glyph;
+            left = slot->left;
+            top = slot->top;
+            width = slot->bitmap.width;
+            height = slot->bitmap.rows;
+            xadvance = glyph->advance.x >> 16;
+            yadvance = glyph->advance.y >> 16;
+            buffer = slot->bitmap.buffer;
+        }
+        else {
+            left = sbit->left;
+            top = sbit->top;
+            width = sbit->width;
+            height = sbit->height;
+            xadvance = sbit->xadvance;
+            yadvance = sbit->yadvance;
+            buffer = sbit->buffer;
+        }
+        FT_Int x = xoff + left;
+        FT_Int y = v - yoff - top;
+        FT_Int x_max = x + width;
+        FT_Int y_max = y + height;
+
+        if (x < 0) {
+            upipe_err_va(upipe, "clipping x, %i < 0", x);
+            x = 0;
+        }
+        if (y < 0) {
+            upipe_err_va(upipe, "clipping y, %i < 0", y);
+            y = 0;
+        }
         if (x_max > h) {
             upipe_err_va(upipe, "clipping x, %"PRIu64" < %d", h, x_max);
             x_max = h;
         }
-        FT_Int y_max = y + bitmap->rows;
         if (y_max > v) {
             upipe_err_va(upipe, "clipping y, %"PRIu64" < %d", v, y_max);
             y_max = v;
         }
 
-        for (FT_Int i = (x < 0 ? 0 : x); i < x_max; i++)
-            for (FT_Int j = (y < 0 ? 0 : y); j < y_max; j++) {
-                dst[j*stride_y + i] |=
-                    bitmap->buffer[(j - y) * bitmap->width + (i - x)];
+        for (FT_Int i = x; i < x_max; i++)
+            for (FT_Int j = y; j < y_max; j++) {
+                dst[j * stride_y + i] |=
+                    buffer[(j - y) * width + (i - x)];
                 if (has_alpha)
-                    dsta[j*stride_a + i] |=
-                        bitmap->buffer[(j - y) * bitmap->width + (i - x)];
+                    dsta[j * stride_a + i] |=
+                        buffer[(j - y) * width + (i - x)];
             }
 
         /* increment pen position */
-        pen.x += slot->advance.x;
-        pen.y += slot->advance.y;
-    }
+        xoff += xadvance;
+        yoff += yadvance;
 
-    unsigned text_w = pen.x / 64;
-
-    if (text_w < h)
-        for (int i = 0; i < v; i++) {
-            memmove(&dst[i*stride_y + (h - text_w) / 2],
-                    &dst[i*stride_y], text_w);
-            memset(&dst[i*stride_y], 0, (h - text_w) / 2);
-            if (has_alpha) {
-                memmove(&dsta[i*stride_a + (h - text_w) / 2],
-                        &dsta[i*stride_a], text_w);
-                memset(&dsta[i*stride_a], 0, (h - text_w) / 2);
-            }
+        FT_Done_Glyph(glyph);
     }
 
     ubuf_pic_plane_unmap(ubuf, "y8", 0, 0, -1, -1);
@@ -404,35 +497,41 @@ static void upipe_freetype_input(struct upipe *upipe, struct uref *uref,
  * @return an error code
  */
 static int upipe_freetype_set_option(struct upipe *upipe,
-                                 const char *option, const char *value)
+                                     const char *option, const char *value)
 {
     struct upipe_freetype *upipe_freetype = upipe_freetype_from_upipe(upipe);
 
-    if (strcmp(option, "font"))
-        return UBASE_ERR_INVALID;
+    if (!strcmp(option, "font")) {
+        if (value && upipe_freetype->font &&
+            !strcmp(value, upipe_freetype->font))
+            return UBASE_ERR_NONE;
+        if (!value && !upipe_freetype->font)
+            return UBASE_ERR_NONE;
 
-    if (upipe_freetype->face)
-        FT_Done_Face(upipe_freetype->face);
+        free(upipe_freetype->font);
+        upipe_freetype->font = value ? strdup(value) : NULL;
 
-    upipe_freetype->face = NULL;
+        uint64_t v;
+        UBASE_RETURN(uref_pic_flow_get_vsize(upipe_freetype->flow_output, &v));
 
-    uint64_t v;
-    UBASE_RETURN(uref_pic_flow_get_vsize(upipe_freetype->flow_output, &v));
-
-    if (FT_New_Face(upipe_freetype->library, value, 0, &upipe_freetype->face)) {
-        upipe_err_va(upipe, "Couldn't open font %s", value);
-        upipe_freetype->face = NULL;
-        return UBASE_ERR_EXTERNAL;
+        if (FTC_Manager_LookupFace(upipe_freetype->cache_manager,
+                                   upipe_freetype->font,
+                                   &upipe_freetype->face)) {
+            upipe_err_va(upipe, "Couldn't open font %s", value);
+            upipe_freetype->face = NULL;
+            return UBASE_ERR_EXTERNAL;
+        }
+        return UBASE_ERR_NONE;
     }
-
-    if (FT_Set_Pixel_Sizes(upipe_freetype->face, v, v)) {
-        upipe_err(upipe, "Couldn't set pixel size");
-        return UBASE_ERR_EXTERNAL;
-    }
-
-    return UBASE_ERR_NONE;
+    return UBASE_ERR_INVALID;
 }
 
+/** @internal @This sets the input flow def.
+ *
+ * @param upipe description structure of the pipe
+ * @param flow_def new flow def to set
+ * @return an error code
+ */
 static int upipe_freetype_set_flow_def(struct upipe *upipe, struct uref *flow_def)
 {
     if (!flow_def)
