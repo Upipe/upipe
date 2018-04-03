@@ -1,5 +1,6 @@
 local ffi = require "ffi"
-local va_args = require "ffi-stdarg"
+local stdarg = require "ffi-stdarg"
+local va_args, va_copy = stdarg.va_args, stdarg.va_copy
 local fmt = string.format
 local C = ffi.C
 
@@ -124,14 +125,11 @@ end
 
 local probe_args = require "uprobe-args"
 
-local function get_probe_args(args, args_list)
-    if not args_list then return args end
-    return va_args(args, unpack(args_list))
-end
-
 local function ubase_err(ret)
     return type(ret) == "string" and C["UBASE_ERR_" .. ret:upper()] or ret or C.UBASE_ERR_NONE
 end
+
+local void_cb = ffi.typeof("void (*)(void *)")
 
 uprobe = setmetatable({ }, {
     __call = function (_, uprobe_throw)
@@ -139,6 +137,19 @@ uprobe = setmetatable({ }, {
             local events = { }
             for k, v in pairs(uprobe_throw) do
                 local k = k:upper()
+                if k == "PROVIDE_REQUEST" and type(v) ~= 'function' then
+                    local events = { }
+                    for k, v in pairs(v) do
+                        events[C[fmt("UREQUEST_%s", k:upper())]] = { func = v }
+                    end
+                    v = function (probe, pipe, request, args)
+                        local e = events[request.type]
+                        if e then
+                            return ubase_err(e.func(probe, pipe, request))
+                        end
+                        return probe:throw_next(pipe, C.UPROBE_PROVIDE_REQUEST, args)
+                    end
+                end
                 events[C[fmt("UPROBE_%s", k)]] = { func = v, args = probe_args[k] }
             end
             uprobe_throw = function (probe, pipe, event, args)
@@ -150,10 +161,21 @@ uprobe = setmetatable({ }, {
                             return C.UBASE_ERR_UNHANDLED
                         end
                     end
-                    return ubase_err(e.func(probe, pipe, get_probe_args(args, e.args)))
-                else
-                    return probe:throw_next(pipe, event, args)
+                    local ret
+                    local cb = void_cb(function (args_copy)
+                        local function get_probe_args(args, args_list)
+                            if not args_list then return args end
+                            local args_list = {va_args(args, unpack(args_list))}
+                            table.insert(args_list, args_copy)
+                            return unpack(args_list)
+                        end
+                        ret = ubase_err(e.func(probe, pipe, get_probe_args(args, e.args)))
+                    end)
+                    va_copy(args, cb)
+                    cb:free()
+                    return ret
                 end
+                return probe:throw_next(pipe, event, args)
             end
         end
         return uprobe_alloc(uprobe_throw, ffi.cast("struct uprobe *", nil))
@@ -348,6 +370,12 @@ ffi.metatype("struct uclock", {
             return props[k]
         end
         return C[fmt("uclock_%s", key)]
+    end
+})
+
+ffi.metatype("struct urequest", {
+    __index = function (_, key)
+        return C[fmt("urequest_%s", key)]
     end
 })
 

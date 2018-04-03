@@ -189,6 +189,7 @@ libupipe.lua: $(srcdir)/gen-ffi-cdef.pl $(srcdir)/libc.defs upipe.debug_info upi
 	  --enum upipe_command \
 	  --enum uref_date_type \
 	  --enum uprobe_event \
+	  --enum 'urequest_*' \
 	  $(addprefix --prefix ,$(prefix_base)) \
 	  --load $(upipe_dlname) \
 	  --load libupipe.static.so \
