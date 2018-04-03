@@ -80,6 +80,8 @@ struct upipe_helper {
 
     // bin_output
     struct upipe *last_inner;
+    struct upipe *bin_output;
+    struct uchain output_request_list;
 
     // sync
     bool acquired;
@@ -184,7 +186,7 @@ UPIPE_HELPER_UBUF_MGR(upipe_helper, ubuf_mgr, flow_format, ubuf_mgr_request,
 UPIPE_HELPER_INNER(upipe_helper, first_inner);
 UPIPE_HELPER_BIN_INPUT(upipe_helper, first_inner, input_request_list);
 UPIPE_HELPER_INNER(upipe_helper, last_inner);
-UPIPE_HELPER_BIN_OUTPUT(upipe_helper, last_inner, output, request_list);
+UPIPE_HELPER_BIN_OUTPUT(upipe_helper, last_inner, bin_output, output_request_list);
 UPIPE_HELPER_SYNC(upipe_helper, acquired);
 UPIPE_HELPER_UREF_STREAM(upipe_helper, next_uref, next_uref_size, stream_urefs,
                          append_cb);
