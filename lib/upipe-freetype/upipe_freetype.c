@@ -374,6 +374,8 @@ static bool upipe_freetype_handle(struct upipe *upipe, struct uref *uref,
         return true;
     }
 
+    FT_Bool use_kerning = FT_HAS_KERNING(upipe_freetype->face);
+    FT_UInt previous = 0;
     /* scale offset to 16.16 */
     int64_t xoff = upipe_freetype->xoff << 16;
     int64_t yoff = upipe_freetype->yoff << 16;
@@ -383,6 +385,13 @@ static bool upipe_freetype_handle(struct upipe *upipe, struct uref *uref,
         if (unlikely(!index))
             continue;
 
+        if (use_kerning && previous) {
+            FT_Vector delta;
+            FT_Get_Kerning(upipe_freetype->face, previous, index,
+                           FT_KERNING_DEFAULT, &delta);
+            /* delta is 26.6, scale to 16.16 */
+            xoff += delta.x << 10;
+        }
         FT_Glyph glyph = NULL;
         FTC_ImageTypeRec type;
         type.face_id = upipe_freetype->font;
@@ -443,6 +452,8 @@ static bool upipe_freetype_handle(struct upipe *upipe, struct uref *uref,
         /* increment pen position */
         xoff += xadvance;
         yoff += yadvance;
+
+        previous = index;
 
         FT_Done_Glyph(glyph);
     }
@@ -579,6 +590,8 @@ static int _upipe_freetype_get_bbox(struct upipe *upipe,
     bbox.width = 0;
     bbox.height = 0;
 
+    FT_Bool use_kerning = FT_HAS_KERNING(upipe_freetype->face);
+    FT_UInt previous = 0;
     FT_Pos yMax = 0;
     int64_t width = 0;
     for (int i = 0; i < length; i++) {
@@ -586,6 +599,14 @@ static int _upipe_freetype_get_bbox(struct upipe *upipe,
                                              upipe_freetype->font, -1, str[i]);
         if (unlikely(!index))
             return UBASE_ERR_EXTERNAL;
+
+        if (use_kerning && previous) {
+            FT_Vector delta;
+            FT_Get_Kerning(upipe_freetype->face, previous, index,
+                           FT_KERNING_DEFAULT, &delta);
+            /* delta is 26.6, scale to 16.16 */
+            width += delta.x << 10;
+        }
 
         FTC_ImageTypeRec type;
         type.face_id = upipe_freetype->font;
@@ -608,6 +629,8 @@ static int _upipe_freetype_get_bbox(struct upipe *upipe,
         if (ft_bbox.yMax > yMax)
             yMax = ft_bbox.yMax;
         width += glyph->advance.x;
+
+        previous = index;
     }
 
     if (yMax > bbox.y)
@@ -620,6 +643,7 @@ static int _upipe_freetype_get_bbox(struct upipe *upipe,
 
     if (bbox_p)
         *bbox_p = bbox;
+
     return UBASE_ERR_NONE;
 }
 
