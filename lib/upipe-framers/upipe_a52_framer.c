@@ -367,7 +367,11 @@ static bool upipe_a52f_parse_a52(struct upipe *upipe)
 
     UBASE_FATAL(upipe, uref_flow_set_complete(flow_def))
     UBASE_FATAL(upipe, uref_flow_set_def(flow_def, "block.ac3.sound."))
+    UBASE_FATAL(upipe, uref_sound_flow_set_samples(flow_def, A52_FRAME_SAMPLES))
     UBASE_FATAL(upipe, uref_sound_flow_set_rate(flow_def, samplerate))
+    UBASE_FATAL(upipe, uref_clock_set_latency(flow_def,
+                upipe_a52f->input_latency +
+                UCLOCK_FREQ * A52_FRAME_SAMPLES / samplerate))
     UBASE_FATAL(upipe, uref_block_flow_set_octetrate(flow_def, octetrate))
 
     flow_def = upipe_a52f_store_flow_def_attr(upipe, flow_def);
