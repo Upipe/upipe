@@ -18,3 +18,11 @@ intptr_t ffi_va_arg(va_list *ap, const char *type)
     va(uint64_t);
     else abort();
 }
+
+void ffi_va_copy(va_list *args, void (*cb)(va_list *args))
+{
+    va_list ap;
+    va_copy(ap, *args);
+    (*cb)(&ap);
+    va_end(ap);
+}
