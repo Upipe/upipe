@@ -173,7 +173,7 @@ struct upipe_h265f {
     uint64_t cpb_size;
     /** SPS chroma format idc */
     uint32_t chroma_idc;
-    /** duration of a frame */
+    /** duration of a field */
     uint64_t duration;
     /** true if frame_field is present */
     bool frame_field_present;
@@ -1024,9 +1024,9 @@ static bool upipe_h265f_activate_sps(struct upipe *upipe, uint32_t sps_id)
     }
 
     if (frame_rate.num) {
-        upipe_h265f->duration = UCLOCK_FREQ * frame_rate.den / frame_rate.num;
+        upipe_h265f->duration = UCLOCK_FREQ * frame_rate.den / frame_rate.num / 2;
         UBASE_FATAL(upipe, uref_clock_set_latency(flow_def,
-                    upipe_h265f->input_latency + upipe_h265f->duration))
+                    upipe_h265f->input_latency + upipe_h265f->duration * 2))
 
         if (field_seq_flag)
             frame_rate.den *= 2;
