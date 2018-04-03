@@ -262,6 +262,15 @@ ffi.metatype("struct upipe_mgr", {
 
 ffi.metatype("struct upump_mgr", {
     __index = function (mgr, key)
+        local alloc_type = key:match("^new_(.*)")
+        if alloc_type then
+            return function (...)
+                local alloc_func = "upump_alloc_" .. alloc_type
+                local pump = C[alloc_func](...)
+                assert(pump ~= nil, alloc_func .. " failed")
+                return pump
+            end
+        end
         return C[fmt("upump_mgr_%s", key)]
     end
 })
@@ -278,7 +287,15 @@ ffi.metatype("struct upipe", {
     __index = function (pipe, key)
         if key == 'new' then
             return function (pipe, probe)
-                return ffi.gc(C.upipe_void_alloc_sub(pipe, uprobe_use(probe)), C.upipe_release)
+                local pipe = C.upipe_void_alloc_sub(pipe, C.uprobe_use(probe))
+                assert(pipe ~= nil, "upipe_void_alloc_sub failed")
+                return ffi.gc(pipe, C.upipe_release)
+            end
+        elseif key == 'new_flow' then
+            return function (pipe, probe, flow)
+                local pipe = C.upipe_flow_alloc_sub(pipe, C.uprobe_use(probe), flow)
+                assert(pipe ~= nil, "upipe_flow_alloc_sub failed")
+                return ffi.gc(pipe, C.upipe_release)
             end
         elseif key == 'props' then
             local k = tostring(pipe):match(": 0x(.*)")
