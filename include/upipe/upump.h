@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2012-2017 OpenHeadend S.A.R.L.
+ * Copyright (C) 2012-2018 OpenHeadend S.A.R.L.
  *
  * Authors: Christophe Massiot
  *
@@ -90,6 +90,8 @@ enum upump_command {
     UPUMP_ALLOC_BLOCKER,
     /** frees a blocker (struct upump_blocker *) */
     UPUMP_FREE_BLOCKER,
+    /** restarts the pump (void) */
+    UPUMP_RESTART,
 
     /** non-standard commands implemented by a upump handler can start
      * from there (first arg = signature) */
@@ -342,6 +344,18 @@ static inline void upump_start(struct upump *upump)
 static inline void upump_stop(struct upump *upump)
 {
     upump_control(upump, UPUMP_STOP);
+}
+
+/** @This asks the event loop to restart a timer pump.
+ * The timer will be restart to its initial value, as if it was stop, set to
+ * its inital value and start. This could be useful to implement IO timeout
+ * without freeing and allocating a pump each time data is received.
+ *
+ * @param pump description structure of the pump
+ */
+static inline void upump_restart(struct upump *upump)
+{
+    upump_control(upump, UPUMP_RESTART);
 }
 
 /** @This frees a upump structure.

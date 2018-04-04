@@ -114,6 +114,30 @@ static void read_watcher_cb(struct upump *unused)
     }
 }
 
+static void timer_again_cb(struct upump *upump)
+{
+    printf("timer again passed\n");
+    if (timer_done) {
+        assert(timeout_count >= MIN_TIMEOUT);
+        upump_stop(timer);
+    }
+    else {
+        assert(timeout_count == 0);
+        timer_done = true;
+    }
+}
+
+static void timer_cb(struct upump *upump)
+{
+    printf("timer passed\n");
+    assert(timer_done);
+    if (++timeout_count > MIN_TIMEOUT)
+        return;
+    else {
+        upump_restart(timer_again);
+    }
+}
+
 void run(struct upump_mgr *mgr)
 {
     long flags;
@@ -149,6 +173,23 @@ void run(struct upump_mgr *mgr)
     upump_free(write_watcher);
     upump_free(read_timer);
     upump_free(read_watcher);
+
+    timer_again =
+        upump_alloc_timer(mgr, timer_again_cb, NULL, NULL,
+                          timeout / 2, timeout);
+    assert(timer_again != NULL);
+    timer =
+        upump_alloc_timer(mgr, timer_cb, NULL, NULL, timeout, timeout);
+    assert(timer != NULL);
+
+    upump_start(timer);
+    upump_start(timer_again);
+    upump_set_status(timer_again, 0);
+    upump_mgr_run(mgr, NULL);
+    assert(timer_done);
+    assert(timeout_count > MIN_TIMEOUT);
+    upump_free(timer);
+    upump_free(timer_again);
 
     upump_mgr_release(mgr);
 }

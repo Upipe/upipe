@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2012-2017 OpenHeadend S.A.R.L.
+ * Copyright (C) 2012-2018 OpenHeadend S.A.R.L.
  *
  * Authors: Christophe Massiot
  *
@@ -92,6 +92,12 @@ void upump_common_dispatch(struct upump *upump);
  */
 void upump_common_start(struct upump *upump);
 
+/** @This restarts a pump if allowed.
+ *
+ * @param upump description structure of the pump
+ */
+void upump_common_restart(struct upump *upump);
+
 /** @This stops a pump if needed.
  *
  * @param upump description structure of the pump
@@ -129,6 +135,8 @@ struct upump_common_mgr {
 
     /** function to really start a watcher */
     void (*upump_real_start)(struct upump *, bool);
+    /** function to really restart a watcher */
+    void (*upump_real_restart)(struct upump *, bool);
     /** function to really stop a watcher */
     void (*upump_real_stop)(struct upump *, bool);
 
@@ -175,6 +183,7 @@ void upump_common_mgr_clean(struct upump_mgr *mgr);
  * @param pool_extra extra buffer space (see @ref upump_common_mgr_sizeof)
  * @param upump_real_start function of the real manager that starts a pump
  * @param upump_real_stop function of the real manager that stops a pump
+ * @param upump_real_restart function of the real manager that restarts a pump
  * @param upump_alloc_inner function to call to allocate a upump buffer
  * @param upump_free_inner function to call to release a upump buffer
  */
@@ -183,6 +192,7 @@ void upump_common_mgr_init(struct upump_mgr *mgr,
                            uint16_t upump_blocker_pool_depth, void *pool_extra,
                            void (*upump_real_start)(struct upump *, bool),
                            void (*upump_real_stop)(struct upump *, bool),
+                           void (*upump_real_restart)(struct upump *, bool),
                            void *(*upump_alloc_inner)(struct upool *),
                            void (*upump_free_inner)(struct upool *, void *));
 
