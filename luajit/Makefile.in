@@ -47,6 +47,8 @@ LIST_C = upipe-modules upipe-filters upipe-dveo
 INCLUDEDIR   = $(top_srcdir)/include
 LIST         = upipe $(LIST_C)
 STATIC_SO    = $(LIST:%=lib%.static.so)
+STATIC_SRC   = $(LIST:%=%.static.c)
+STATIC_DEP   = $(STATIC_SRC:.c=.d)
 LIST_CDEF    = $(LIST_C:%=%.lua) libupipe.lua upipe-helper.lua
 SIG_LUA      = $(LIST:%=%-sigs.lua)
 CDEF_LUA     = $(LIST_CDEF)
@@ -143,7 +145,7 @@ Makefile: $(srcdir)/Makefile.in
 CPPFLAGS_INC = $$($(SED) -n 's/^\#include <\(.*\)>/-include \1/p' $(INCLUDEDIR)/$*/*.h | \
 	       grep -v 'include $*/' | sort -u)
 
-%.static.c:
+%.static.c: Makefile
 	$(V_GEN){ \
 	  echo "#define static"; \
 	  echo "#define inline"; \
@@ -154,16 +156,24 @@ CPPFLAGS_INC = $$($(SED) -n 's/^\#include <\(.*\)>/-include \1/p' $(INCLUDEDIR)/
 libupipe-av.static.so: CFLAGS += @AVFORMAT_CFLAGS@
 
 lib%.static.so: %.static.c
-	$(V_CCLD)$(CC) $(CFLAGS) $(CPPFLAGS) $(CPPFLAGS_INC) $(LDFLAGS) -shared -fPIC -o $@ $<
+	$(V_CCLD)$(CC) \
+	  $(CPPFLAGS) $(CPPFLAGS_INC) \
+	  $(CFLAGS) -MD -MP -MF $(<:.c=.d) \
+	  $(LDFLAGS) -shared -fPIC \
+	  -o $@ $<
 
-%-sigs.lua: %.static.c
+%-sigs.lua: lib%.static.so
 	$(V_GEN)$(SED) -n \
 	  's/^#define UPIPE_\(.*\)_SIGNATURE UBASE_FOURCC(\(.*\))/upipe_sig("\L\1\E", \2)/p' \
 	  $(INCLUDEDIR)/$*/*.h > $@
 
 clean-static-so-%:
-	$(RM) $*.static.c lib$*.static.so
+	$(RM) $*.static.c $*.static.d lib$*.static.so
 	$(RM) $*.debug_info $*.static.debug_info
+
+-include $(STATIC_DEP)
+
+.SECONDARY: $(STATIC_SRC)
 
 #-------------------------------------------------------------------------------
 # cdef
