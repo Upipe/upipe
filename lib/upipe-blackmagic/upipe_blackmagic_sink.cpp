@@ -1239,7 +1239,7 @@ static struct upipe *upipe_bmd_sink_sub_alloc(struct upipe_mgr *mgr,
     struct uref *flow_def = NULL;
     struct upipe *upipe = upipe_bmd_sink_sub_alloc_flow(mgr,
             uprobe, signature, args, &flow_def);
-    struct upipe_bmd_sink_sub *upipe_bmd_sink_sub;
+    struct upipe_bmd_sink_sub *upipe_bmd_sink_sub = upipe_bmd_sink_sub_from_upipe(upipe);
 
     if (unlikely(upipe == NULL || flow_def == NULL))
         goto error;
@@ -1266,7 +1266,6 @@ static struct upipe *upipe_bmd_sink_sub_alloc(struct upipe_mgr *mgr,
 
     upipe_bmd_sink_sub_init(upipe, mgr, uprobe, false);
 
-    upipe_bmd_sink_sub = upipe_bmd_sink_sub_from_upipe(upipe);
     upipe_bmd_sink_sub->channel_idx = channel_idx;
 
     /* different subpipe type */
@@ -1277,7 +1276,10 @@ static struct upipe *upipe_bmd_sink_sub_alloc(struct upipe_mgr *mgr,
 
 error:
     uref_free(flow_def);
-    upipe_release(upipe);
+    if (upipe) {
+        upipe_clean(upipe);
+        free(upipe_bmd_sink_sub);
+    }
     return NULL;
 }
 
