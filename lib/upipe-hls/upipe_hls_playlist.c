@@ -214,7 +214,7 @@ static int probe_key(struct uprobe *uprobe, struct upipe *inner,
     case UPROBE_PROBE_UREF: {
         UBASE_SIGNATURE_CHECK(args, UPIPE_PROBE_UREF_SIGNATURE);
         struct uref *uref = va_arg(args, struct uref *);
-        struct upump **upump_p = va_arg(args, struct upump **);
+        va_arg(args, struct upump **);
         bool *drop = va_arg(args, bool *);
         *drop = true;
 
