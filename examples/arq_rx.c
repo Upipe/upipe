@@ -141,6 +141,7 @@ static int catch_udp(struct uprobe *uprobe, struct upipe *upipe,
         } else {
             const struct sockaddr_in *in = (const struct sockaddr_in*) s;
             addr_len = sizeof(*in);
+            assert(*len >= addr_len);
             memcpy(&addr, in, addr_len);
 
             upipe_dbg_va(upipe, "GOT NEW REMOTE: %s:%hu ",
