@@ -220,9 +220,16 @@ static struct upipe *upipe_rtpfb_output_alloc(struct upipe_mgr *mgr,
         return NULL;
 
     struct uref *flow_def_dup = NULL;
-    if (upipe_rtpfb->flow_def != NULL &&
-        (flow_def_dup = uref_dup(upipe_rtpfb->flow_def)) == NULL)
-        return NULL;
+    if (upipe_rtpfb->flow_def) {
+        flow_def_dup = uref_dup(upipe_rtpfb->flow_def);
+        if (!flow_def_dup) {
+            struct upipe_rtpfb_output *upipe_rtpfb_output =
+                upipe_rtpfb_output_from_upipe(upipe);
+            upipe_clean(upipe);
+            free(upipe_rtpfb_output);
+            return NULL;
+        }
+    }
 
     upipe_rtpfb_output_init_urefcount(upipe);
     upipe_rtpfb_output_init_output(upipe);
