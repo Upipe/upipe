@@ -165,8 +165,6 @@ struct upipe_h265f {
     bool general_progressive;
     /** VPS general interlaced flag */
     bool general_interlaced;
-    /** VPS time scale */
-    uint32_t time_scale;
     /** VPS frame rate */
     struct urational frame_rate;
     /** VPS octet rate */
@@ -894,7 +892,6 @@ static bool upipe_h265f_activate_sps(struct upipe *upipe, uint32_t sps_id)
     uint8_t colour_primaries = 2;
     uint8_t transfer_characteristics = 2;
     uint8_t matrix_coefficients = 2;
-    uint32_t time_scale = upipe_h265f->time_scale;
     struct urational frame_rate = upipe_h265f->frame_rate;
     uint64_t octet_rate = upipe_h265f->octet_rate;
     uint64_t cpb_size = upipe_h265f->cpb_size;
@@ -991,7 +988,7 @@ static bool upipe_h265f_activate_sps(struct upipe *upipe, uint32_t sps_id)
             upipe_h26xf_stream_fill_bits(s, 24);
             num_units_in_ticks |= ubuf_block_stream_show_bits(s, 8);
             ubuf_block_stream_skip_bits(s, 8);
-            time_scale = ubuf_block_stream_show_bits(s, 16) << 16;
+            uint32_t time_scale = ubuf_block_stream_show_bits(s, 16) << 16;
             ubuf_block_stream_skip_bits(s, 16);
 
             upipe_h26xf_stream_fill_bits(s, 17);
