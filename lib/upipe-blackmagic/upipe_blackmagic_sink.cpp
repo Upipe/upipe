@@ -1630,6 +1630,9 @@ static int _upipe_bmd_sink_get_genlock_status(struct upipe *upipe, int *status)
     }
 
     HRESULT result = upipe_bmd_sink->deckLinkOutput->GetReferenceStatus(&reference_status);
+    if (result != S_OK)
+        return UBASE_ERR_EXTERNAL;
+
     if (reference_status & bmdReferenceNotSupportedByHardware) {
         *status = UPIPE_BMD_SINK_GENLOCK_UNSUPPORTED;
         return UBASE_ERR_NONE;
@@ -1663,6 +1666,8 @@ static int _upipe_bmd_sink_get_genlock_offset(struct upipe *upipe, int64_t *offs
     }
 
     result = upipe_bmd_sink->deckLinkOutput->GetReferenceStatus(&reference_status);
+    if (result != S_OK)
+        return UBASE_ERR_EXTERNAL;
     if ((reference_status & bmdReferenceNotSupportedByHardware) ||
         !(reference_status & bmdReferenceLocked)) {
         *offset = 0;
@@ -1705,6 +1710,9 @@ static int _upipe_bmd_sink_set_genlock_offset(struct upipe *upipe, int64_t offse
     }
 
     result = upipe_bmd_sink->deckLinkOutput->GetReferenceStatus(&reference_status);
+    if (result != S_OK)
+        return UBASE_ERR_EXTERNAL;
+
     if ((reference_status & bmdReferenceNotSupportedByHardware)) {
         return UBASE_ERR_EXTERNAL;
     }
