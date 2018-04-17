@@ -294,10 +294,7 @@ static int upipe_s337f_handle(struct upipe *upipe, struct uref *uref, ssize_t sy
 
     uref_sound_unmap(output, 0, -1, 1);
 
-    unsigned data_stream_number =  hdr[0] >> 13;
-    unsigned data_type_dependent= (hdr[0] >>  8) & 0x1f;
     unsigned error_flag         = (hdr[0] >>  7) & 0x1;
-    unsigned data_mode          = (hdr[0] >>  5) & 0x3;
     unsigned data_type          = (hdr[0] >>  0) & 0x1f;
 
     if (error_flag)
