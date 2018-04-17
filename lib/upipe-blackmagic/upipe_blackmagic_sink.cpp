@@ -600,7 +600,6 @@ static inline uint64_t length_to_samples(const uint64_t length)
 static unsigned upipe_bmd_sink_sub_sound_get_samples_channel(struct upipe *upipe,
         const uint64_t video_pts, struct upipe_bmd_sink_sub *upipe_bmd_sink_sub)
 {
-    struct upipe_bmd_sink *upipe_bmd_sink = upipe_bmd_sink_from_upipe(upipe);
     size_t samples;
     struct uref *uref = uqueue_pop(&upipe_bmd_sink_sub->uqueue, struct uref *);
     if (!uref) {
