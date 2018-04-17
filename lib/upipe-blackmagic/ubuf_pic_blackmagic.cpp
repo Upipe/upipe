@@ -256,7 +256,6 @@ static int ubuf_pic_bmd_control(struct ubuf *ubuf, int command, va_list args)
  */
 static void ubuf_pic_bmd_free(struct ubuf *ubuf)
 {
-    struct ubuf_mgr *mgr = ubuf->mgr;
     struct ubuf_pic_bmd_mgr *pic_mgr =
         ubuf_pic_bmd_mgr_from_ubuf_mgr(ubuf->mgr);
     struct ubuf_pic_bmd *pic_bmd = ubuf_pic_bmd_from_ubuf(ubuf);
