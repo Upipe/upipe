@@ -1561,7 +1561,6 @@ static void upipe_mpgvf_input(struct upipe *upipe, struct uref *uref,
 static int upipe_mpgvf_check_flow_format(struct upipe *upipe,
                                          struct uref *flow_format)
 {
-    struct upipe_mpgvf *upipe_mpgvf = upipe_mpgvf_from_upipe(upipe);
     if (flow_format == NULL)
         return UBASE_ERR_INVALID;
 

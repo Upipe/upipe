@@ -171,9 +171,6 @@ static int upipe_dup_output_control(struct upipe *upipe,
  */
 static void upipe_dup_output_free(struct upipe *upipe)
 {
-    struct upipe_dup_output *upipe_dup_output =
-        upipe_dup_output_from_upipe(upipe);
-
     upipe_throw_dead(upipe);
 
     upipe_dup_output_clean_output(upipe);
@@ -321,8 +318,6 @@ static int upipe_dup_control(struct upipe *upipe, int command, va_list args)
  */
 static void upipe_dup_free(struct upipe *upipe)
 {
-    struct upipe_dup *upipe_dup = upipe_dup_from_upipe(upipe);
-
     upipe_throw_dead(upipe);
 
     upipe_dup_clean_sub_outputs(upipe);

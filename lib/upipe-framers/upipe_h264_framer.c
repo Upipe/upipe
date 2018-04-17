@@ -1325,7 +1325,6 @@ static int upipe_h264f_handle_sei_pic_timing(struct upipe *upipe,
 static int upipe_h264f_handle_sei(struct upipe *upipe, struct ubuf *ubuf,
                                   size_t offset, size_t size)
 {
-    struct upipe_h264f *upipe_h264f = upipe_h264f_from_upipe(upipe);
     uint8_t type;
     if (unlikely(!ubase_check(ubuf_block_extract(ubuf, offset + 1, 1, &type))))
         return UBASE_ERR_INVALID;
@@ -2755,7 +2754,6 @@ static void upipe_h264f_input(struct upipe *upipe, struct uref *uref,
 static int upipe_h264f_check_flow_format(struct upipe *upipe,
                                          struct uref *flow_format)
 {
-    struct upipe_h264f *upipe_h264f = upipe_h264f_from_upipe(upipe);
     if (flow_format == NULL)
         return UBASE_ERR_INVALID;
 

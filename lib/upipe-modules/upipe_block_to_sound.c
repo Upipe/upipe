@@ -276,7 +276,6 @@ static int upipe_block_to_sound_set_flow_def(struct upipe *upipe,
  */
 static int upipe_block_to_sound_control(struct upipe *upipe, int command, va_list args)
 {
-    struct upipe_block_to_sound *upipe_block_to_sound = upipe_block_to_sound_from_upipe(upipe);
     switch (command) {
         case UPIPE_REGISTER_REQUEST: {
             struct urequest *request = va_arg(args, struct urequest *);

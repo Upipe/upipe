@@ -455,8 +455,6 @@ static int upipe_freetype_set_flow_def(struct upipe *upipe, struct uref *flow_de
 static int upipe_freetype_control_real(struct upipe *upipe,
                                        int command, va_list args)
 {
-    struct upipe_freetype *upipe_freetype = upipe_freetype_from_upipe(upipe);
-
     UBASE_HANDLED_RETURN(upipe_freetype_control_ubuf_mgr(upipe, command, args));
     UBASE_HANDLED_RETURN(upipe_freetype_control_output(upipe, command, args));
 

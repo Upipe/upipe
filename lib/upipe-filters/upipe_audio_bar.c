@@ -393,7 +393,6 @@ static void upipe_audiobar_input(struct upipe *upipe, struct uref *uref,
 static int upipe_audiobar_check_flow_format(struct upipe *upipe,
                                             struct uref *flow_format)
 {
-    struct upipe_audiobar *upipe_audiobar = upipe_audiobar_from_upipe(upipe);
     if (flow_format != NULL)
         upipe_audiobar_require_ubuf_mgr(upipe, flow_format);
 
