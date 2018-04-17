@@ -913,7 +913,6 @@ static int upipe_rtpfb_set_flow_def(struct upipe *upipe, struct uref *flow_def)
 static int upipe_rtpfb_set_option(struct upipe *upipe, const char *k, const char *v)
 {
     struct upipe_rtpfb *upipe_rtpfb = upipe_rtpfb_from_upipe(upipe);
-    struct uprobe *uprobe = upipe_rtpfb->uprobe;
 
     if (!k || !v) {
         return UBASE_ERR_INVALID;
