@@ -803,8 +803,8 @@ static bool upipe_h265f_activate_sps(struct upipe *upipe, uint32_t sps_id)
         upipe_h26xf_stream_ue(s); /* bottom offset */
     }
 
-    uint32_t junk1 = upipe_h26xf_stream_ue(s); /* bit_depth_luma */
-    uint32_t junk2 = upipe_h26xf_stream_ue(s); /* bit_depth_chroma */
+    upipe_h26xf_stream_ue(s); /* bit_depth_luma */
+    upipe_h26xf_stream_ue(s); /* bit_depth_chroma */
 
     uint32_t log2_max_pic_order_cnt = upipe_h26xf_stream_ue(s) + 4;
     if (log2_max_pic_order_cnt > 16) {
