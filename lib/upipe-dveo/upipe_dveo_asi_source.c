@@ -372,20 +372,11 @@ static int upipe_dveo_asi_src_open(struct upipe *upipe)
 {
     struct upipe_dveo_asi_src *upipe_dveo_asi_src = upipe_dveo_asi_src_from_upipe(upipe);
     char path[20], sys[50], buf[20];
-    int ret, granularity;
+    int ret;
 
     snprintf(sys, sizeof(sys), dvbm_sys_fmt, upipe_dveo_asi_src->card_idx, "bypass_mode");
     snprintf(buf, sizeof(buf), "%u", BYPASS_MODE);
     util_write(sys, buf, sizeof(buf)); /* Not all cards have this so don't fail */
-
-    snprintf(sys, sizeof(sys), sys_fmt, upipe_dveo_asi_src->card_idx, "granularity");
-    if (util_read(sys, buf, 1) < 0) {
-        upipe_err_va(upipe, "Couldn't read granularity");
-        return UBASE_ERR_EXTERNAL;
-    }
-
-    buf[1] = '\0';
-    granularity = atoi(buf);
 
     snprintf(sys, sizeof(sys), sys_fmt, upipe_dveo_asi_src->card_idx, "buffers");
     snprintf(buf, sizeof(buf), "%u", BUFFERS);
