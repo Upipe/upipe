@@ -69,7 +69,7 @@ char *upipe_dump_upipe_label_default(struct upipe *upipe)
         uprobe = uprobe->next;
     }
 
-    char *string = malloc(strlen(prefix) + sizeof(" (aaaa)"));
+    char *string = malloc(prefix ? strlen(prefix) : 0 + sizeof(" (aaaa)"));
     sprintf(string, "%s (%4.4s)", prefix ?: "",
             (const char *)&upipe->mgr->signature);
     return string;
