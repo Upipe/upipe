@@ -294,7 +294,6 @@ static struct upipe *upipe_rtcpfb_input_alloc(struct upipe_mgr *mgr,
     if (signature != UPIPE_VOID_SIGNATURE ||
         mgr->signature != UPIPE_RTCPFB_INPUT_SIGNATURE)
         return NULL;
-    struct upipe_rtcpfb *upipe_rtcpfb = upipe_rtcpfb_from_sub_mgr(mgr);
 
     struct upipe_rtcpfb_input *upipe_rtcpfb_input =
         malloc(sizeof(struct upipe_rtcpfb_input));

@@ -673,8 +673,6 @@ static int _upipe_freetype_set_baseline(struct upipe *upipe,
 static int upipe_freetype_control_real(struct upipe *upipe,
                                        int command, va_list args)
 {
-    struct upipe_freetype *upipe_freetype = upipe_freetype_from_upipe(upipe);
-
     UBASE_HANDLED_RETURN(upipe_freetype_control_ubuf_mgr(upipe, command, args));
     UBASE_HANDLED_RETURN(upipe_freetype_control_output(upipe, command, args));
 

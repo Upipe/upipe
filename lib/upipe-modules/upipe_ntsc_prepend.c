@@ -76,8 +76,6 @@ UPIPE_HELPER_OUTPUT(upipe_ntsc_prepend, output, flow_def, output_state, request_
 static void upipe_ntsc_prepend_input(struct upipe *upipe, struct uref *uref,
                                      struct upump **upump_p)
 {
-    struct upipe_ntsc_prepend *upipe_ntsc_prepend = upipe_ntsc_prepend_from_upipe(upipe);
-
     uref_pic_delete_tff(uref);
     UBASE_FATAL(upipe, uref_pic_resize(uref, 0, -UPIPE_NTSC_PREPEND_LINES, -1, 486))
     UBASE_FATAL(upipe, uref_pic_clear(uref, 0, 0, -1, UPIPE_NTSC_PREPEND_LINES, 0))

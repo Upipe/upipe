@@ -243,7 +243,6 @@ static struct upipe *upipe_rtp_pcm_pack_alloc(struct upipe_mgr *mgr,
         upipe_rtp_pcm_pack_alloc_void(mgr, uprobe, signature, args);
     if (unlikely(upipe == NULL))
         return NULL;
-    struct upipe_rtp_pcm_pack *upipe_rtp_pcm_pack = upipe_rtp_pcm_pack_from_upipe(upipe);
 
     upipe_rtp_pcm_pack_init_urefcount(upipe);
     upipe_rtp_pcm_pack_init_input(upipe);

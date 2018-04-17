@@ -515,8 +515,6 @@ static void upipe_vanc_process_scte104(struct upipe *upipe, struct uref *uref,
                                        const uint16_t *r, size_t size)
 {
     struct upipe_vanc *upipe_vanc = upipe_vanc_from_upipe(upipe);
-    struct upipe_vanc_output *upipe_vanc_scte104 =
-        upipe_vanc_to_scte104_subpipe(upipe_vanc);
 
     if (unlikely(s2010_get_version(r) != S2010_VERSION)) {
         upipe_warn_va(upipe, "invalid SMPTE 2010 version (%"PRIu8")",

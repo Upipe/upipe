@@ -325,8 +325,6 @@ static int upipe_dtsdi_control(struct upipe *upipe, int command, va_list args)
 
 static int upipe_dtsdi_header(struct upipe *upipe, struct uref *uref)
 {
-    struct upipe_dtsdi *upipe_dtsdi = upipe_dtsdi_from_upipe(upipe);
-
     uint8_t buf[24];
 
     const uint8_t *header = uref_block_peek(uref, 0, sizeof(buf), buf);

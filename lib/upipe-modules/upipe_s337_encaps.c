@@ -308,8 +308,6 @@ static struct upipe *upipe_s337_encaps_alloc(struct upipe_mgr *mgr,
     if (unlikely(upipe == NULL))
         return NULL;
 
-    struct upipe_s337_encaps *upipe_s337_encaps =
-        upipe_s337_encaps_from_upipe(upipe);
     upipe_s337_encaps_init_urefcount(upipe);
     upipe_s337_encaps_init_output(upipe);
     upipe_s337_encaps_init_input(upipe);

@@ -410,7 +410,6 @@ static void upipe_agraph_input(struct upipe *upipe, struct uref *uref,
 static int upipe_agraph_check_flow_format(struct upipe *upipe,
                                           struct uref *flow_format)
 {
-    struct upipe_agraph *upipe_agraph = upipe_agraph_from_upipe(upipe);
     if (flow_format != NULL)
         upipe_agraph_require_ubuf_mgr(upipe, flow_format);
 

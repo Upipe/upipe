@@ -527,8 +527,6 @@ static void upipe_rtp_fec_timer(struct upump *upump)
  */
 static int upipe_rtp_fec_build_flow_def(struct upipe *upipe, struct uref *flow_def)
 {
-    struct upipe_rtp_fec *upipe_rtp_fec = upipe_rtp_fec_from_upipe(upipe);
-
     flow_def = uref_dup(flow_def);
     if (unlikely(flow_def == NULL)) {
         upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);

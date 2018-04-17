@@ -112,8 +112,6 @@ static struct upipe *upipe_s337f_alloc(struct upipe_mgr *mgr,
  */
 static ssize_t upipe_s337f_sync(struct upipe *upipe, struct uref *uref)
 {
-    struct upipe_s337f *upipe_s337f = upipe_s337f_from_upipe(upipe);
-
     size_t size = 0;
     if (!ubase_check(uref_sound_size(uref, &size, NULL))) {
         return -1;
@@ -179,8 +177,6 @@ static int upipe_s337f_buffer(struct upipe *upipe, struct uref *uref, ssize_t sy
 static void upipe_s337f_throw_flow_def(struct upipe *upipe, size_t frame_size,
         unsigned data_type)
 {
-    struct upipe_s337f *upipe_s337f = upipe_s337f_from_upipe(upipe);
-
     struct uref *flow_def = upipe_s337f_alloc_flow_def_attr(upipe);
     if (unlikely(flow_def == NULL)) {
         upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
@@ -377,8 +373,6 @@ error:
  */
 static int upipe_s337f_set_flow_def(struct upipe *upipe, struct uref *flow_def)
 {
-    struct upipe_s337f *upipe_s337f = upipe_s337f_from_upipe(upipe);
-
     if (flow_def == NULL)
         return UBASE_ERR_INVALID;
 
@@ -423,7 +417,6 @@ static int upipe_s337f_set_flow_def(struct upipe *upipe, struct uref *flow_def)
  */
 static int upipe_s337f_control(struct upipe *upipe, int command, va_list args)
 {
-    struct upipe_s337f *upipe_s337f = upipe_s337f_from_upipe(upipe);
     switch (command) {
         case UPIPE_REGISTER_REQUEST: {
             struct urequest *request = va_arg(args, struct urequest *);

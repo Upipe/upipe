@@ -540,8 +540,6 @@ static int upipe_audiocont_sub_extract(struct upipe *upipe, struct ubuf *ubuf,
 static int upipe_audiocont_sub_import_attr(struct upipe *upipe, struct uref *uref)
 {
     struct upipe_audiocont_sub *sub = upipe_audiocont_sub_from_upipe(upipe);
-    struct upipe_audiocont *upipe_audiocont =
-                            upipe_audiocont_from_sub_mgr(upipe->mgr);
 
     struct uchain *uchain = ulist_peek(&sub->urefs);
     if (unlikely(!uchain)) {

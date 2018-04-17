@@ -473,8 +473,6 @@ static void upipe_rtp_demux_check_clock_ref(struct upipe *upipe)
     if (upipe_dead(upipe) || ulist_empty(&demux->subs))
         return;
 
-    struct upipe_rtp_demux_mgr *rtp_demux_mgr =
-        upipe_rtp_demux_mgr_from_upipe_mgr(upipe_rtp_demux_to_upipe(demux)->mgr);
     struct uchain *uchain;
     struct upipe_rtp_demux_sub *selected = NULL;
     uint64_t selected_rate = 0;
@@ -545,7 +543,6 @@ static int upipe_rtp_demux_control(struct upipe *upipe,
  */
 static void upipe_rtp_demux_free(struct upipe *upipe)
 {
-    struct upipe_rtp_demux *demux = upipe_rtp_demux_from_upipe(upipe);
     upipe_throw_dead(upipe);
     upipe_rtp_demux_clean_sub_subs(upipe);
     upipe_rtp_demux_clean_urefcount(upipe);
