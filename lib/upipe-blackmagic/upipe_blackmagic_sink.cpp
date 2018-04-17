@@ -581,8 +581,8 @@ static void copy_samples(upipe_bmd_sink_sub *upipe_bmd_sink_sub,
     }
 
     const uint8_t c = upipe_bmd_sink_sub->channels;
-    const int32_t *in;
-    uref_sound_read_int32_t(uref, 0, samples, &in, 1);
+    const int32_t *in = NULL;
+    UBASE_FATAL_RETURN(upipe, uref_sound_read_int32_t(uref, 0, samples, &in, 1));
     for (int i = 0; i < samples; i++)
         memcpy(&out[DECKLINK_CHANNELS * (offset + i) + idx], &in[c*i], c * sizeof(int32_t));
 
