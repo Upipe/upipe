@@ -82,6 +82,7 @@ struct upipe_rtcpfb {
     /** ubuf mgr structures */
     struct ubuf_mgr *ubuf_mgr;
     struct urequest ubuf_mgr_request;
+    struct uref *flow_format;
 
     struct upipe_mgr sub_mgr;
 
@@ -126,7 +127,7 @@ UPIPE_HELPER_UREF_MGR(upipe_rtcpfb, uref_mgr, uref_mgr_request,
                       upipe_rtcpfb_check,
                       upipe_rtcpfb_register_output_request,
                       upipe_rtcpfb_unregister_output_request)
-UPIPE_HELPER_UBUF_MGR(upipe_rtcpfb, ubuf_mgr, flow_def, ubuf_mgr_request,
+UPIPE_HELPER_UBUF_MGR(upipe_rtcpfb, ubuf_mgr, flow_format, ubuf_mgr_request,
                       upipe_rtcpfb_check,
                       upipe_rtcpfb_register_output_request,
                       upipe_rtcpfb_unregister_output_request)
