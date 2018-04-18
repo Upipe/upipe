@@ -65,6 +65,8 @@ struct upipe_rtcp {
     /** ubuf mgr structures */
     struct ubuf_mgr *ubuf_mgr;
     struct urequest ubuf_mgr_request;
+    /** ubuf flow format */
+    struct uref *flow_format;
 
     uint32_t clockrate;
     uint32_t packet_count;
@@ -87,7 +89,7 @@ UPIPE_HELPER_UREF_MGR(upipe_rtcp, uref_mgr, uref_mgr_request,
                       upipe_rtcp_check,
                       upipe_rtcp_register_output_request,
                       upipe_rtcp_unregister_output_request)
-UPIPE_HELPER_UBUF_MGR(upipe_rtcp, ubuf_mgr, flow_def, ubuf_mgr_request,
+UPIPE_HELPER_UBUF_MGR(upipe_rtcp, ubuf_mgr, flow_format, ubuf_mgr_request,
                       upipe_rtcp_check,
                       upipe_rtcp_register_output_request,
                       upipe_rtcp_unregister_output_request)
