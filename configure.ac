@@ -76,13 +76,8 @@ case "${host_os}" in
     ;;
 esac
 
-HAVE_X86ASM=0
-if test -n "${NASM}"
-then
-    HAVE_X86ASM=1
-fi
-
 AM_CONDITIONAL(HAVE_X86ASM, test -n "${NASM}" -a -n "${NASMFLAGS}")
+AM_COND_IF(HAVE_X86ASM, AC_DEFINE(HAVE_X86ASM, 1, Define to 1 if an x86 assembler is available))
 
 # add -prefer-non-pic so libtool doesn't add -fPIC, which nasm doesn't understand
 NASMFLAGS="${NASMFLAGS} -DPIC -prefer-non-pic -Pconfig.asm -I\$(top_builddir)/x86/ -I\$(top_srcdir)/x86/"
@@ -99,8 +94,6 @@ AC_SUBST([AM_CFLAGS], ["$WARN_FLAGS $WARN_FLAGS_C"])
 AC_SUBST([AM_CXXFLAGS], ["$WARN_FLAGS"])
 AC_SUBST(NASMFLAGS)
 AC_SUBST(ARCH_X86_64)
-AC_DEFINE_UNQUOTED(HAVE_X86ASM, ${HAVE_X86ASM},
-                   Define to 1 if an x86 assembler is available)
 
 # Checks for libraries.
 AC_CHECK_LIB(rt, clock_gettime, libadd_rt_lib="-lrt", libadd_rt_lib="")

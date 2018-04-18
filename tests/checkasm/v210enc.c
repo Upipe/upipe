@@ -89,7 +89,7 @@ void checkasm_check_v210enc(void)
 
     int cpu_flags = av_get_cpu_flags();
 
-#if HAVE_X86ASM
+#ifdef HAVE_X86ASM
     if (cpu_flags & AV_CPU_FLAG_SSSE3) {
         s.planar_10 = upipe_planar_to_v210_10_ssse3;
         s.planar_8  = upipe_planar_to_v210_8_ssse3;
