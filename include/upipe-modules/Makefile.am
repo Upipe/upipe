@@ -82,4 +82,5 @@ myinclude_HEADERS = \
 	upipe_sync.h \
 	upipe_block_to_sound.h \
 	upipe_audio_copy.h \
+	upipe_auto_inner.h \
 	$(NULL)
