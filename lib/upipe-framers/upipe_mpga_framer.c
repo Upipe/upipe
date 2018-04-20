@@ -865,7 +865,6 @@ static bool upipe_mpgaf_handle_latm_config(struct upipe *upipe,
     upipe_mpgaf->frame_length_type = ubuf_block_stream_show_bits(s, 3);
     ubuf_block_stream_skip_bits(s, 3);
 
-    uint16_t frame_length = 0;
     switch (upipe_mpgaf->frame_length_type) {
         case ASC_FLT_VARIABLE:
             ubuf_block_stream_fill_bits(s, 8);
@@ -873,7 +872,8 @@ static bool upipe_mpgaf_handle_latm_config(struct upipe *upipe,
             break;
         case ASC_FLT_FIXED:
             ubuf_block_stream_fill_bits(s, 9);
-            frame_length = (ubuf_block_stream_show_bits(s, 9) + 20) * 8;
+            /* currently unused */
+            /* frame_length = (ubuf_block_stream_show_bits(s, 9) + 20) * 8; */
             ubuf_block_stream_skip_bits(s, 9);
             break;
         case ASC_FLT_CELP_2:
