@@ -51,15 +51,14 @@ LIST_CDEF    = $(LIST_C:%=%.lua) libupipe.lua upipe-helper.lua
 SIG_LUA      = $(LIST:%=%-sigs.lua)
 CDEF_LUA     = $(LIST_CDEF)
 GETTERS_LUA  = upipe-getters.lua uref-getters.lua
-ARGS_LUA     = $(srcdir)/uprobe-args.lua $(srcdir)/upipe-control-args.lua
+ARGS_LUA     = uprobe-event-args.lua upipe-command-args.lua
 SO           = libffi-stdarg.so libupipe-helper.so
 SRC_LUA      = $(srcdir)/upipe.lua $(srcdir)/ffi-stdarg.lua \
 	       $(CDEF_LUA) $(SIG_LUA) $(GETTERS_LUA) $(ARGS_LUA)
 
 EXAMPLES     = extract_pic.lua upipe_duration.lua upipe_xor.lua
 DISTFILES    = ffi-stdarg.c ffi-stdarg.lua gen-ffi-cdef.pl libc.defs \
-	       luajit upipe-control-args.lua upipe-helper.c upipe.lua \
-	       uprobe-args.lua
+	       luajit upipe-helper.c upipe.lua gen-args.pl
 
 CPPFLAGS := -I$(top_builddir)/include $(CPPFLAGS)
 CPPFLAGS := -I$(INCLUDEDIR) $(CPPFLAGS)
@@ -101,6 +100,7 @@ uninstall:
 clean: $(LIST:%=clean-static-so-%) clean-upipe-helper
 	$(RM) $(SIG_LUA)
 	$(RM) $(GETTERS_LUA)
+	$(RM) $(ARGS_LUA)
 	$(RM) $(LIST_CDEF)
 	$(RM) $(SO)
 	$(RM) upipe.defs
@@ -271,6 +271,13 @@ clean-upipe-helper:
 	  $(SED) -n -e 's/^int $*_\(\(.*_\)\?get_.*\)(struct $* \*, \([^,]*[^ ]\) *\*);$$/    \1 = "\3",/p' $^; \
 	  echo "}"; \
 	} > $@
+
+#-------------------------------------------------------------------------------
+# va args prototypes
+#-------------------------------------------------------------------------------
+
+%-args.lua: $(srcdir)/gen-args.pl $(wildcard $(top_srcdir)/include/upipe*/*.h)
+	$(V_GEN)$(PERL) $< $* $(top_srcdir)/include/upipe*/*.h > $@
 
 #-------------------------------------------------------------------------------
 # generic rules
