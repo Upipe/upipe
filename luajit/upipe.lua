@@ -123,7 +123,7 @@ for _, name in ipairs { 'upump', 'udict', 'uref', 'umem', 'ubuf' } do
     _G[name] = setmetatable({ name = name }, mgr_mt)
 end
 
-local probe_args = require "uprobe-args"
+local probe_args = require "uprobe-event-args"
 
 local function ubase_err(ret)
     return type(ret) == "string" and C["UBASE_ERR_" .. ret:upper()] or ret or C.UBASE_ERR_NONE
@@ -401,7 +401,7 @@ local function container_of(ptr, ct, member)
     return ffi.cast(ffi.typeof("$ *", ct), ffi.cast("char *", ptr) - ffi.offsetof(ct, member))
 end
 
-local ctrl_args = require "upipe-control-args"
+local ctrl_args = require "upipe-command-args"
 
 local function control_args(cmd, args)
     if not ctrl_args[cmd] then return args end

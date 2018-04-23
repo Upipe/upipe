@@ -12,7 +12,6 @@ luajit bindings:
  - finish macOS support
  - add syntax shortcut for setting controls during pipe creation
  - write documentation
- - upipe-control-args.lua and uprobe-args.lua should be generated
  - fix global namespace pollution
  - fix callbacks leaks
  - improve va_list support
