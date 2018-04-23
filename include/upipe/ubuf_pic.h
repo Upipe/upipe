@@ -367,7 +367,7 @@ static inline int ubuf_pic_blit_alpha(struct ubuf *dest, struct ubuf *src,
                                 const uint8_t *alpha_plane, int alpha_stride,
                                 const uint8_t alpha, const uint8_t threshold)
 {
-    if (alpha_plane == NULL && alpha < threshold)
+    if (alpha_plane == NULL && alpha < threshold && threshold != 0xff)
         return UBASE_ERR_NONE; /* nothing to do */
 
     uint8_t src_macropixel;

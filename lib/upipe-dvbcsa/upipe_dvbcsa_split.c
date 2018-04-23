@@ -57,8 +57,10 @@ struct upipe_dvbcsa_split {
     struct urefcount urefcount;
     /** real refcount structure */
     struct urefcount urefcount_real;
-    /** urequest list */
-    struct uchain requests;
+    /** input urequest list */
+    struct uchain input_requests;
+    /** output request list */
+    struct uchain output_requests;
     /** output pipe */
     struct upipe *output;
     /** first inner dup pipe */
@@ -89,8 +91,8 @@ UPIPE_HELPER_UPROBE(upipe_dvbcsa_split, urefcount_real, demux_probe,
                     upipe_dvbcsa_split_catch_demux);
 UPIPE_HELPER_INNER(upipe_dvbcsa_split, dup);
 UPIPE_HELPER_INNER(upipe_dvbcsa_split, demux);
-UPIPE_HELPER_BIN_INPUT(upipe_dvbcsa_split, dup, requests);
-UPIPE_HELPER_BIN_OUTPUT(upipe_dvbcsa_split, dup, output, requests);
+UPIPE_HELPER_BIN_INPUT(upipe_dvbcsa_split, dup, input_requests);
+UPIPE_HELPER_BIN_OUTPUT(upipe_dvbcsa_split, dup, output, output_requests);
 
 static int upipe_dvbcsa_split_throw_add_pid(struct upipe *upipe,
                                             uint64_t pid)

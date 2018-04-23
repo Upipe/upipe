@@ -17,4 +17,7 @@ return {
     PROBE_UREF            = { "struct uref *", "bool *" },
     MULTICAT_PROBE_ROTATE = { "struct uref *", "uint64_t" },
     HTTP_SRC_REDIRECT     = { "const char *" },
+
+    -- upipe-ts
+    TS_SCTE35P_EVENT      = { "struct uref *" },
 }

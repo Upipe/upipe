@@ -1648,10 +1648,8 @@ static inline struct upipe *                                                \
                                  struct uprobe *uprobe  ARGS_DECL)          \
 {                                                                           \
     struct upipe *output = upipe_##GROUP##_alloc(upipe_mgr, uprobe  ARGS);  \
-    if (unlikely(output == NULL)) {                                         \
-        uprobe_release(uprobe);                                             \
+    if (unlikely(output == NULL))                                           \
         return NULL;                                                        \
-    }                                                                       \
     if (unlikely(!ubase_check(upipe_set_output(upipe, output)))) {          \
         upipe_release(output);                                              \
         return NULL;                                                        \

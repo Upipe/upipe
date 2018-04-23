@@ -45,7 +45,7 @@ void checkasm_check_sdidec(void)
 
     int cpu_flags = av_get_cpu_flags();
 
-#if HAVE_X86ASM
+#ifdef HAVE_X86ASM
     if (cpu_flags & AV_CPU_FLAG_SSSE3) {
         s.uyvy = upipe_sdi_to_uyvy_aligned_ssse3;
     }
