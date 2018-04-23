@@ -1,7 +1,7 @@
 /*
- * Copyright (C) 2012-2018 OpenHeadend S.A.R.L.
+ * Copyright (C) 2018 OpenHeadend S.A.R.L.
  *
- * Authors: Christophe Massiot
+ * Authors: Arnaud de Turckheim
  *
  * Permission is hereby granted, free of charge, to any person obtaining
  * a copy of this software and associated documentation files (the
@@ -23,23 +23,7 @@
  * SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
  */
 
-/** @file
- * @short unit tests for upump manager with ecore event loop
- */
-
-#undef NDEBUG
-
-#include <upump-ecore/upump_ecore.h>
-
-#include <Ecore.h>
-
-#include "upump_common_test.h"
-
-#define UPUMP_POOL 1
-#define UPUMP_BLOCKER_POOL 1
-
-int main(int argc, char **argv)
-{
-    run(upump_ecore_mgr_alloc(UPUMP_POOL, UPUMP_BLOCKER_POOL));
-    return 0;
-}
+#ifndef _TESTS_UPUMP_COMMON_TEST_H_
+#define _TESTS_UPUMP_COMMON_TEST_H_
+void run(struct upump_mgr *mgr);
+#endif
