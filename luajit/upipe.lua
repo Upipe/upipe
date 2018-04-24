@@ -15,6 +15,10 @@ ffi.cdef [[
 
     // time.h
     typedef long time_t;
+
+    // pthread.h
+    typedef unsigned long pthread_t;
+    typedef union pthread_attr_t pthread_attr_t;
 ]]
 
 require "libupipe"
