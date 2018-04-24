@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2012-2016 OpenHeadend S.A.R.L.
+ * Copyright (C) 2012-2018 OpenHeadend S.A.R.L.
  *
  * Authors: Christophe Massiot
  *
@@ -154,11 +154,11 @@ enum upipe_command {
     UPIPE_SRC_GET_POSITION,
     /** asks to read at the given position (uint64_t) */
     UPIPE_SRC_SET_POSITION,
-    /** asks to read at the given position (uint64_t),
-     * the given size (uint64_t) or to the end ((uint64_t)-1) */
+    /** asks to read at the given position and size in octets,
+     * or to the end with size = -1 (uint64_t, uint64_t) */
     UPIPE_SRC_SET_RANGE,
-    /** return the reading range of the currently opened file,
-     * position (uint64_t) and length (uint64_t) */
+    /** return the reading position and length of the currently opened file,
+     * in octets (uint64_t *, uint64_t *) */
     UPIPE_SRC_GET_RANGE,
 
     /** non-standard commands implemented by a module type can start from

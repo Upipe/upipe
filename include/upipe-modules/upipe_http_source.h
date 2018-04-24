@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2013 OpenHeadend S.A.R.L.
+ * Copyright (C) 2013-2018 OpenHeadend S.A.R.L.
  *
  * Authors: Benjamin Cohen
  *
@@ -42,7 +42,7 @@ extern "C" {
 enum uprobe_http_src_event {
     UPROBE_HTTP_SRC_SENTINEL = UPROBE_LOCAL,
 
-    /** request receive a redirect (302) response
+    /** request receive a HTTP 302 redirect response
      * with the url (const char *) */
     UPROBE_HTTP_SRC_REDIRECT,
     /** request receive an error code response
