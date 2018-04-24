@@ -60,7 +60,7 @@ SRC_LUA      = $(srcdir)/upipe.lua $(srcdir)/ffi-stdarg.lua \
 
 EXAMPLES     = extract_pic.lua upipe_duration.lua upipe_xor.lua
 DISTFILES    = ffi-stdarg.c ffi-stdarg.lua gen-ffi-cdef.pl libc.defs \
-	       luajit upipe-helper.c upipe.lua gen-args.pl
+	       luajit upipe-helper.c upipe.lua gen-args.pl check.lua
 
 CPPFLAGS := -I$(top_builddir)/include $(CPPFLAGS)
 CPPFLAGS := -I$(INCLUDEDIR) $(CPPFLAGS)
@@ -111,11 +111,13 @@ distclean: clean
 	$(RM) Makefile
 
 space := $(null) $(null)
+LIBRARY_PATH = $(LIST:%=$(top_builddir)/lib/%/.libs)
 
 check: all
 ifneq ($(LUAJIT),)
-	LUA_PATH="?.lua;$(srcdir)/?.lua" \
-	LD_LIBRARY_PATH=.:$(subst $(space),:,$(LIST:%=$(top_builddir)/lib/%/.libs)) \
+	export LUA_PATH="?.lua;$(srcdir)/?.lua"; \
+	export LD_LIBRARY_PATH=.:$(subst $(space),:,$(LIBRARY_PATH)):$$LD_LIBRARY_PATH; \
+	$(LUAJIT) $(srcdir)/check.lua $(LIST) && \
 	$(LUAJIT) $(srcdir)/examples/upipe_duration.lua \
 	  $(top_srcdir)/tests/upipe_ts_test.ts
 endif
