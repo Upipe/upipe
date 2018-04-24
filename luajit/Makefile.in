@@ -178,6 +178,7 @@ prefix_modules = upipe_ uprobe_ uref_ upump_
 
 # override enum prefix
 enum_upipe-ts = uprobe_ts_
+enum_upipe-hls = uprobe_hls_
 
 libupipe.lua: $(srcdir)/gen-ffi-cdef.pl $(srcdir)/libc.defs upipe.debug_info upipe.static.debug_info
 	$(V_GEN)$(PERL) $< \
