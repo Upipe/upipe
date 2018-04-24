@@ -1309,7 +1309,6 @@ static void upipe_bmd_sink_init_sub_mgr(struct upipe *upipe)
 static uint64_t uclock_bmd_sink_now(struct uclock *uclock)
 {
     struct upipe_bmd_sink *upipe_bmd_sink = upipe_bmd_sink_from_uclock(uclock);
-    struct upipe *upipe = &upipe_bmd_sink->upipe;
 
     BMDTimeValue hardware_time = UINT64_MAX, time_in_frame, ticks_per_frame;
 
@@ -1325,9 +1324,6 @@ static uint64_t uclock_bmd_sink_now(struct uclock *uclock)
     }
 
     hardware_time += upipe_bmd_sink->offset;
-
-    if (0) upipe_notice_va(upipe, "CLOCK THR 0x%llx VAL %" PRIu64,
-        (unsigned long long)pthread_self(), (uint64_t)hardware_time);
 
     return (uint64_t)hardware_time;
 }
