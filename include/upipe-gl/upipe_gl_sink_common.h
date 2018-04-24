@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2012-2013 OpenHeadend S.A.R.L.
+ * Copyright (C) 2012-2018 OpenHeadend S.A.R.L.
  *
  * Authors: Benjamin Cohen
  *
@@ -42,11 +42,11 @@ extern "C" {
 enum uprobe_gl_sink_event {
     UPROBE_GL_SINK_SENTINEL = UPROBE_LOCAL,
 
-    /** init GL context (int SIGNATURE, int width, int height) */
+    /** init GL context (int width, int height) */
     UPROBE_GL_SINK_INIT,
-    /** render GL (int SIGNATURE, struct uref*) */
+    /** render GL (struct uref *) */
     UPROBE_GL_SINK_RENDER,
-    /** reshape GL (int SIGNATURE, int width, int height) */
+    /** reshape GL (int width, int height) */
     UPROBE_GL_SINK_RESHAPE,
 
     UPROBE_GL_SINK_LOCAL
