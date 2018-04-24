@@ -725,6 +725,7 @@ static void upipe_sdi_enc_encode_line(struct upipe *upipe, int line_num, uint16_
     /* Returns the total amount of samples per channel that can be put on
      * a line, so convert that to packets */
     unsigned max_audio_packets_per_line = UPIPE_SDI_CHANNELS_PER_GROUP * audio_packets_per_line(f);
+    /* FIXME: max_audio_packets_per_line unused */
 
     // FIXME factor out common code
 
@@ -962,6 +963,7 @@ static void upipe_hd_sdi_enc_encode_line(struct upipe *upipe, int line_num, uint
                  * signal the bit in the packet to indicate it was meant to arrive on
                  * the previous line which happened to be a switching point */
                 uint64_t eav_clock = upipe_sdi_enc->eav_clock - mpf_bit*f->width;
+                // FIXME: eav_clock unused
 
                 /* Clock is the samples times the pixel clock divided by the audio
                  * clockrate */
