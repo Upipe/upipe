@@ -285,7 +285,6 @@ static int upipe_amax_control(struct upipe *upipe, int command, va_list args)
  */
 static void upipe_amax_free(struct upipe *upipe)
 {
-    struct upipe_amax *upipe_amax = upipe_amax_from_upipe(upipe);
     upipe_throw_dead(upipe);
 
     upipe_amax_clean_output(upipe);

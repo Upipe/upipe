@@ -165,8 +165,6 @@ struct upipe_h265f {
     bool general_progressive;
     /** VPS general interlaced flag */
     bool general_interlaced;
-    /** VPS time scale */
-    uint32_t time_scale;
     /** VPS frame rate */
     struct urational frame_rate;
     /** VPS octet rate */
@@ -376,7 +374,6 @@ static void upipe_h265f_stream_parse_ptl(struct upipe *upipe,
                                          bool *general_interlaced_p,
                                          uint64_t *constraint_indicator_p)
 {
-    struct upipe_h265f *upipe_h265f = upipe_h265f_from_upipe(upipe);
     upipe_h26xf_stream_fill_bits(s, 8);
     uint8_t profile_space = ubuf_block_stream_show_bits(s, 2);
     ubuf_block_stream_skip_bits(s, 2);
@@ -475,7 +472,6 @@ static int upipe_h265f_stream_parse_hrd(struct upipe *upipe,
                                         uint64_t *octetrate_p,
                                         uint64_t *cpb_size_p)
 {
-    struct upipe_h265f *upipe_h265f = upipe_h265f_from_upipe(upipe);
     upipe_h26xf_stream_fill_bits(s, 2);
     bool nal_hrd_present = !!ubuf_block_stream_show_bits(s, 1);
     ubuf_block_stream_skip_bits(s, 1);
@@ -805,8 +801,8 @@ static bool upipe_h265f_activate_sps(struct upipe *upipe, uint32_t sps_id)
         upipe_h26xf_stream_ue(s); /* bottom offset */
     }
 
-    uint32_t junk1 = upipe_h26xf_stream_ue(s); /* bit_depth_luma */
-    uint32_t junk2 = upipe_h26xf_stream_ue(s); /* bit_depth_chroma */
+    upipe_h26xf_stream_ue(s); /* bit_depth_luma */
+    upipe_h26xf_stream_ue(s); /* bit_depth_chroma */
 
     uint32_t log2_max_pic_order_cnt = upipe_h26xf_stream_ue(s) + 4;
     if (log2_max_pic_order_cnt > 16) {
@@ -894,7 +890,6 @@ static bool upipe_h265f_activate_sps(struct upipe *upipe, uint32_t sps_id)
     uint8_t colour_primaries = 2;
     uint8_t transfer_characteristics = 2;
     uint8_t matrix_coefficients = 2;
-    uint32_t time_scale = upipe_h265f->time_scale;
     struct urational frame_rate = upipe_h265f->frame_rate;
     uint64_t octet_rate = upipe_h265f->octet_rate;
     uint64_t cpb_size = upipe_h265f->cpb_size;
@@ -991,7 +986,7 @@ static bool upipe_h265f_activate_sps(struct upipe *upipe, uint32_t sps_id)
             upipe_h26xf_stream_fill_bits(s, 24);
             num_units_in_ticks |= ubuf_block_stream_show_bits(s, 8);
             ubuf_block_stream_skip_bits(s, 8);
-            time_scale = ubuf_block_stream_show_bits(s, 16) << 16;
+            uint32_t time_scale = ubuf_block_stream_show_bits(s, 16) << 16;
             ubuf_block_stream_skip_bits(s, 16);
 
             upipe_h26xf_stream_fill_bits(s, 17);
@@ -1444,7 +1439,6 @@ static int upipe_h265f_handle_sei_pic_timing(struct upipe *upipe,
 static int upipe_h265f_handle_sei(struct upipe *upipe, struct ubuf *ubuf,
                                   size_t offset, size_t size)
 {
-    struct upipe_h265f *upipe_h265f = upipe_h265f_from_upipe(upipe);
     uint8_t type;
     if (unlikely(!ubase_check(ubuf_block_extract(ubuf, offset + 2, 1, &type))))
         return UBASE_ERR_INVALID;
@@ -2741,7 +2735,6 @@ static void upipe_h265f_input(struct upipe *upipe, struct uref *uref,
 static int upipe_h265f_check_flow_format(struct upipe *upipe,
                                          struct uref *flow_format)
 {
-    struct upipe_h265f *upipe_h265f = upipe_h265f_from_upipe(upipe);
     if (flow_format == NULL)
         return UBASE_ERR_INVALID;
 

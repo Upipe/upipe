@@ -323,6 +323,7 @@ int main(int argc, char *argv[])
     struct upipe *upipe_rtcp_sub = upipe_void_alloc_output_sub(upipe_probe_uref,
         upipe_rtcpfb,
         uprobe_pfx_alloc(uprobe_use(logger), loglevel, "rtcp fb sub"));
+    assert(upipe_rtcp_sub);
 
     struct upipe_mgr *dup_mgr = upipe_dup_mgr_alloc();
     struct upipe *dup = upipe_void_alloc_output(upipe_rtcpfb, dup_mgr,

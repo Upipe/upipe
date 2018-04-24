@@ -112,8 +112,6 @@ static struct upipe *upipe_s337f_alloc(struct upipe_mgr *mgr,
  */
 static ssize_t upipe_s337f_sync(struct upipe *upipe, struct uref *uref)
 {
-    struct upipe_s337f *upipe_s337f = upipe_s337f_from_upipe(upipe);
-
     size_t size = 0;
     if (!ubase_check(uref_sound_size(uref, &size, NULL))) {
         return -1;
@@ -179,8 +177,6 @@ static int upipe_s337f_buffer(struct upipe *upipe, struct uref *uref, ssize_t sy
 static void upipe_s337f_throw_flow_def(struct upipe *upipe, size_t frame_size,
         unsigned data_type)
 {
-    struct upipe_s337f *upipe_s337f = upipe_s337f_from_upipe(upipe);
-
     struct uref *flow_def = upipe_s337f_alloc_flow_def_attr(upipe);
     if (unlikely(flow_def == NULL)) {
         upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
@@ -294,10 +290,7 @@ static int upipe_s337f_handle(struct upipe *upipe, struct uref *uref, ssize_t sy
 
     uref_sound_unmap(output, 0, -1, 1);
 
-    unsigned data_stream_number =  hdr[0] >> 13;
-    unsigned data_type_dependent= (hdr[0] >>  8) & 0x1f;
     unsigned error_flag         = (hdr[0] >>  7) & 0x1;
-    unsigned data_mode          = (hdr[0] >>  5) & 0x3;
     unsigned data_type          = (hdr[0] >>  0) & 0x1f;
 
     if (error_flag)
@@ -380,8 +373,6 @@ error:
  */
 static int upipe_s337f_set_flow_def(struct upipe *upipe, struct uref *flow_def)
 {
-    struct upipe_s337f *upipe_s337f = upipe_s337f_from_upipe(upipe);
-
     if (flow_def == NULL)
         return UBASE_ERR_INVALID;
 
@@ -411,6 +402,8 @@ static int upipe_s337f_set_flow_def(struct upipe *upipe, struct uref *flow_def)
     }
 
     flow_def = upipe_s337f_store_flow_def_input(upipe, flow_def_dup);
+    if (flow_def)
+        upipe_s337f_store_flow_def(upipe, flow_def);
 
     return UBASE_ERR_NONE;
 }
@@ -424,7 +417,6 @@ static int upipe_s337f_set_flow_def(struct upipe *upipe, struct uref *flow_def)
  */
 static int upipe_s337f_control(struct upipe *upipe, int command, va_list args)
 {
-    struct upipe_s337f *upipe_s337f = upipe_s337f_from_upipe(upipe);
     switch (command) {
         case UPIPE_REGISTER_REQUEST: {
             struct urequest *request = va_arg(args, struct urequest *);

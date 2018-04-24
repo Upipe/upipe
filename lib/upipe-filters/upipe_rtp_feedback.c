@@ -221,9 +221,16 @@ static struct upipe *upipe_rtpfb_output_alloc(struct upipe_mgr *mgr,
         return NULL;
 
     struct uref *flow_def_dup = NULL;
-    if (upipe_rtpfb->flow_def != NULL &&
-        (flow_def_dup = uref_dup(upipe_rtpfb->flow_def)) == NULL)
-        return NULL;
+    if (upipe_rtpfb->flow_def) {
+        flow_def_dup = uref_dup(upipe_rtpfb->flow_def);
+        if (!flow_def_dup) {
+            struct upipe_rtpfb_output *upipe_rtpfb_output =
+                upipe_rtpfb_output_from_upipe(upipe);
+            upipe_clean(upipe);
+            free(upipe_rtpfb_output);
+            return NULL;
+        }
+    }
 
     upipe_rtpfb_output_init_urefcount(upipe);
     upipe_rtpfb_output_init_output(upipe);
@@ -914,7 +921,6 @@ static int upipe_rtpfb_set_flow_def(struct upipe *upipe, struct uref *flow_def)
 static int upipe_rtpfb_set_option(struct upipe *upipe, const char *k, const char *v)
 {
     struct upipe_rtpfb *upipe_rtpfb = upipe_rtpfb_from_upipe(upipe);
-    struct uprobe *uprobe = upipe_rtpfb->uprobe;
 
     if (!k || !v) {
         return UBASE_ERR_INVALID;

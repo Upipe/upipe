@@ -210,7 +210,6 @@ static int ubuf_sound_bmd_control(struct ubuf *ubuf, int command, va_list args)
  */
 static void ubuf_sound_bmd_free(struct ubuf *ubuf)
 {
-    struct ubuf_mgr *mgr = ubuf->mgr;
     struct ubuf_sound_bmd_mgr *sound_mgr =
         ubuf_sound_bmd_mgr_from_ubuf_mgr(ubuf->mgr);
     struct ubuf_sound_bmd *sound_bmd = ubuf_sound_bmd_from_ubuf(ubuf);

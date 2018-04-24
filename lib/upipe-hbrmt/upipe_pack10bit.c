@@ -281,8 +281,6 @@ static int upipe_pack10bit_set_flow_def(struct upipe *upipe, struct uref *flow_d
  */
 static int upipe_pack10bit_control(struct upipe *upipe, int command, va_list args)
 {
-    struct upipe_pack10bit *upipe_pack10bit = upipe_pack10bit_from_upipe(upipe);
-
     switch (command) {
         case UPIPE_REGISTER_REQUEST: {
             struct urequest *request = va_arg(args, struct urequest *);

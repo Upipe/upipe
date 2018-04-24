@@ -360,10 +360,6 @@ static void upipe_grid_in_input(struct upipe *upipe,
 static void upipe_grid_in_set_flow_def_real(struct upipe *upipe,
                                             struct uref *flow_def)
 {
-    struct upipe_grid_in *upipe_grid_in =
-        upipe_grid_in_from_upipe(upipe);
-    struct upipe_grid *upipe_grid = upipe_grid_from_in_mgr(upipe->mgr);
-    struct upipe *super = upipe_grid_to_upipe(upipe_grid);
     upipe_grid_in_store_flow_def_input(upipe, flow_def);
     upipe_throw_new_flow_def(upipe, flow_def);
 }
@@ -510,9 +506,6 @@ static int upipe_grid_in_control(struct upipe *upipe,
  */
 static void upipe_grid_out_free(struct upipe *upipe)
 {
-    struct upipe_grid_out *upipe_grid_out =
-        upipe_grid_out_from_upipe(upipe);
-
     upipe_throw_dead(upipe);
 
     upipe_grid_out_clean_flow_def(upipe);
@@ -912,8 +905,6 @@ static int upipe_grid_out_get_input_real(struct upipe *upipe,
 static int upipe_grid_out_iterate_input_real(struct upipe *upipe,
                                              struct upipe **input_p)
 {
-    struct upipe_grid_out *upipe_grid_out =
-        upipe_grid_out_from_upipe(upipe);
     struct upipe_grid *upipe_grid = upipe_grid_from_out_mgr(upipe->mgr);
     struct upipe *super = upipe_grid_to_upipe(upipe_grid);
     return upipe_grid_iterate_input(super, input_p);

@@ -395,8 +395,6 @@ static bool upipe_rtpr_sub_output(struct upipe *upipe, struct uref *uref,
 {
   struct upipe_rtpr *upipe_rtpr =
         upipe_rtpr_from_sub_mgr(upipe->mgr);
-    struct upipe_rtpr_sub *upipe_rtpr_sub =
-                              upipe_rtpr_sub_from_upipe(upipe);
 
     uint64_t date_sys;
     int type;
@@ -419,9 +417,6 @@ static bool upipe_rtpr_sub_output(struct upipe *upipe, struct uref *uref,
 static void upipe_rtpr_sub_input(struct upipe *upipe, struct uref *uref,
                                         struct upump **upump_p)
 {
-    struct upipe_rtpr *upipe_rtpr =
-        upipe_rtpr_from_sub_mgr(upipe->mgr);
-
      upipe_rtpr_sub_output(upipe, uref, upump_p);
 }
 

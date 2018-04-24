@@ -581,8 +581,8 @@ static void copy_samples(upipe_bmd_sink_sub *upipe_bmd_sink_sub,
     }
 
     const uint8_t c = upipe_bmd_sink_sub->channels;
-    const int32_t *in;
-    uref_sound_read_int32_t(uref, 0, samples, &in, 1);
+    const int32_t *in = NULL;
+    UBASE_FATAL_RETURN(upipe, uref_sound_read_int32_t(uref, 0, samples, &in, 1));
     for (int i = 0; i < samples; i++)
         memcpy(&out[DECKLINK_CHANNELS * (offset + i) + idx], &in[c*i], c * sizeof(int32_t));
 
@@ -600,7 +600,6 @@ static inline uint64_t length_to_samples(const uint64_t length)
 static unsigned upipe_bmd_sink_sub_sound_get_samples_channel(struct upipe *upipe,
         const uint64_t video_pts, struct upipe_bmd_sink_sub *upipe_bmd_sink_sub)
 {
-    struct upipe_bmd_sink *upipe_bmd_sink = upipe_bmd_sink_from_upipe(upipe);
     size_t samples;
     struct uref *uref = uqueue_pop(&upipe_bmd_sink_sub->uqueue, struct uref *);
     if (!uref) {
@@ -1242,7 +1241,7 @@ static struct upipe *upipe_bmd_sink_sub_alloc(struct upipe_mgr *mgr,
     struct uref *flow_def = NULL;
     struct upipe *upipe = upipe_bmd_sink_sub_alloc_flow(mgr,
             uprobe, signature, args, &flow_def);
-    struct upipe_bmd_sink_sub *upipe_bmd_sink_sub;
+    struct upipe_bmd_sink_sub *upipe_bmd_sink_sub = upipe_bmd_sink_sub_from_upipe(upipe);
 
     if (unlikely(upipe == NULL || flow_def == NULL))
         goto error;
@@ -1269,7 +1268,6 @@ static struct upipe *upipe_bmd_sink_sub_alloc(struct upipe_mgr *mgr,
 
     upipe_bmd_sink_sub_init(upipe, mgr, uprobe, false);
 
-    upipe_bmd_sink_sub = upipe_bmd_sink_sub_from_upipe(upipe);
     upipe_bmd_sink_sub->channel_idx = channel_idx;
 
     /* different subpipe type */
@@ -1280,7 +1278,10 @@ static struct upipe *upipe_bmd_sink_sub_alloc(struct upipe_mgr *mgr,
 
 error:
     uref_free(flow_def);
-    upipe_release(upipe);
+    if (upipe) {
+        upipe_clean(upipe);
+        free(upipe_bmd_sink_sub);
+    }
     return NULL;
 }
 
@@ -1631,6 +1632,9 @@ static int _upipe_bmd_sink_get_genlock_status(struct upipe *upipe, int *status)
     }
 
     HRESULT result = upipe_bmd_sink->deckLinkOutput->GetReferenceStatus(&reference_status);
+    if (result != S_OK)
+        return UBASE_ERR_EXTERNAL;
+
     if (reference_status & bmdReferenceNotSupportedByHardware) {
         *status = UPIPE_BMD_SINK_GENLOCK_UNSUPPORTED;
         return UBASE_ERR_NONE;
@@ -1664,6 +1668,8 @@ static int _upipe_bmd_sink_get_genlock_offset(struct upipe *upipe, int64_t *offs
     }
 
     result = upipe_bmd_sink->deckLinkOutput->GetReferenceStatus(&reference_status);
+    if (result != S_OK)
+        return UBASE_ERR_EXTERNAL;
     if ((reference_status & bmdReferenceNotSupportedByHardware) ||
         !(reference_status & bmdReferenceLocked)) {
         *offset = 0;
@@ -1706,6 +1712,9 @@ static int _upipe_bmd_sink_set_genlock_offset(struct upipe *upipe, int64_t offse
     }
 
     result = upipe_bmd_sink->deckLinkOutput->GetReferenceStatus(&reference_status);
+    if (result != S_OK)
+        return UBASE_ERR_EXTERNAL;
+
     if ((reference_status & bmdReferenceNotSupportedByHardware)) {
         return UBASE_ERR_EXTERNAL;
     }

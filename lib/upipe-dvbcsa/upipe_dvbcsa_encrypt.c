@@ -213,8 +213,6 @@ static void upipe_dvbcsa_enc_input(struct upipe *upipe,
 static int upipe_dvbcsa_enc_set_flow_def(struct upipe *upipe,
                                          struct uref *flow_def)
 {
-    struct upipe_dvbcsa_enc *upipe_dvbcsa_enc =
-        upipe_dvbcsa_enc_from_upipe(upipe);
     UBASE_RETURN(uref_flow_match_def(flow_def, EXPECTED_FLOW_DEF));
     struct uref *flow_def_dup = uref_dup(flow_def);
     UBASE_ALLOC_RETURN(flow_def_dup);

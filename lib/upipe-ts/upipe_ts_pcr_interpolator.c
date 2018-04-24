@@ -240,7 +240,6 @@ static void upipe_ts_pcr_interpolator_free(struct upipe *upipe)
 {
     upipe_throw_dead(upipe);
 
-    struct upipe_ts_pcr_interpolator *upipe_ts_pcr_interpolator = upipe_ts_pcr_interpolator_from_upipe(upipe);
     upipe_ts_pcr_interpolator_clean_output(upipe);
     upipe_ts_pcr_interpolator_clean_urefcount(upipe);
     upipe_ts_pcr_interpolator_free_void(upipe);
