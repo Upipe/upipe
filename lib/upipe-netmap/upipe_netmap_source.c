@@ -228,6 +228,8 @@ static struct upipe *upipe_netmap_source_alloc(struct upipe_mgr *mgr,
                     &upipe_netmap_source->fps))) {
             upipe_netmap_source_free_flow(upipe);
             upipe_err(upipe, "Missing picture dimensions");
+            upipe_clean(upipe);
+            free(upipe_netmap_source);
             return NULL;
         }
 
