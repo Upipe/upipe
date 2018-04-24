@@ -1209,9 +1209,6 @@ static void upipe_sdi_enc_input(struct upipe *upipe, struct uref *uref,
             const uint8_t *pic_data = buf;
             int pic_data_size = size;
 
-            const uint8_t *packet[2][5] = {0};
-            int packets[2] = {0};
-
             if (pic_data[0] != DVBVBI_DATA_IDENTIFIER)
                 return;
 
@@ -1301,7 +1298,6 @@ static void upipe_sdi_enc_input(struct upipe *upipe, struct uref *uref,
  */
 static int upipe_sdi_enc_check(struct upipe *upipe, struct uref *flow_format)
 {
-    struct upipe_sdi_enc *upipe_sdi_enc = upipe_sdi_enc_from_upipe(upipe);
     if (flow_format != NULL)
         upipe_sdi_enc_store_flow_def(upipe, flow_format);
 

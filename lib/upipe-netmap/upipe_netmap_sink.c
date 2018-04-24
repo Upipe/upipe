@@ -358,7 +358,6 @@ static void upipe_sdi_pack2_c(uint8_t *dst1, uint8_t *dst2, const uint8_t *y, ui
 static uint64_t uclock_netmap_sink_now(struct uclock *uclock)
 {
     struct upipe_netmap_sink *upipe_netmap_sink = upipe_netmap_sink_from_uclock(uclock);
-    struct upipe *upipe = &upipe_netmap_sink->upipe;
 
     // seems to work even with intf down
     struct upipe_netmap_intf *intf = &upipe_netmap_sink->intf[0];
@@ -711,8 +710,6 @@ static int upipe_netmap_put_ip_headers(struct upipe_netmap_intf *intf,
                                intf->dst_port,
                                10, 0x1c, payload_size);
 
-    buf += IP_HEADER_MINSIZE + UDP_HEADER_SIZE;
-
     return ETHERNET_HEADER_LEN + IP_HEADER_MINSIZE + UDP_HEADER_SIZE;
 }
 
@@ -808,7 +805,6 @@ static int worker_rfc4175(struct upipe *upipe, uint8_t **dst, uint16_t *len)
         data_len2 = (pixels2 / 2) * UPIPE_RFC4175_PIXEL_PAIR_BYTES;
 
         if (data_len2 == 0) {
-            bytes_available += RFC_4175_HEADER_LEN;
             continuation = false;
         } else {
             eth_frame_len += RFC_4175_HEADER_LEN;
@@ -1783,7 +1779,7 @@ static int upipe_netmap_sink_set_flow_def(struct upipe *upipe,
             static const uint16_t udp_payload_size = RTP_HEADER_SIZE +
                 RFC_4175_HEADER_LEN + RFC_4175_EXT_SEQ_NUM_LEN;
             header += upipe_netmap_put_ip_headers(intf, header, udp_payload_size);
-            header += upipe_netmap_put_rtp_headers(upipe, header, 98, false, false);
+            /* header += */ upipe_netmap_put_rtp_headers(upipe, header, 98, false, false);
         }
     }
 
@@ -1815,7 +1811,6 @@ static int _upipe_netmap_sink_get_uri(struct upipe *upipe, const char **uri_p)
 {
     struct upipe_netmap_sink *upipe_netmap_sink =
         upipe_netmap_sink_from_upipe(upipe);
-    struct upipe_netmap_intf *intf = &upipe_netmap_sink->intf[0];
     assert(uri_p != NULL);
     *uri_p = upipe_netmap_sink->uri;
     return UBASE_ERR_NONE;

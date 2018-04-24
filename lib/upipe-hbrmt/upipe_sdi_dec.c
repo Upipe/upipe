@@ -257,8 +257,6 @@ static int upipe_sdi_dec_set_option(struct upipe *upipe, const char *option,
 
 static int upipe_sdi_dec_sub_control(struct upipe *upipe, int command, va_list args)
 {
-    struct upipe_sdi_dec_sub *sdi_dec_sub = upipe_sdi_dec_sub_from_upipe(upipe);
-
     switch (command) {
         case UPIPE_GET_FLOW_DEF: {
             struct uref **p = va_arg(args, struct uref **);
@@ -471,7 +469,7 @@ static int aes_parse(struct upipe *upipe, int32_t *buf, size_t samples, int pair
         pd >>= 32 - bits;
 
         unsigned data_stream_number =  pc >> 13;
-        unsigned data_type_dependent= (pc >>  8) & 0x1f;
+        //unsigned data_type_dependent= (pc >>  8) & 0x1f;
         unsigned error_flag         = (pc >>  7) & 0x1;
         unsigned data_mode          = (pc >>  5) & 0x3;
         data_type                   = (pc >>  0) & 0x1f;
@@ -661,7 +659,6 @@ static void extract_sd_audio(struct upipe *upipe, const uint16_t *packet,
                             struct audio_ctx *ctx)
 {
     struct upipe_sdi_dec *upipe_sdi_dec = upipe_sdi_dec_from_upipe(upipe);
-    const struct sdi_offsets_fmt *f = upipe_sdi_dec->f;
 
     int data_count = packet[5] & 0xff;
     if (data_count % 12) {
@@ -1222,7 +1219,6 @@ static void upipe_sdi_dec_input(struct upipe *upipe, struct uref *uref,
  */
 static int upipe_sdi_dec_sub_check(struct upipe *upipe, struct uref *flow_format)
 {
-    struct upipe_sdi_dec_sub *upipe_sdi_dec_sub = upipe_sdi_dec_sub_from_upipe(upipe);
     if (flow_format != NULL)
         upipe_sdi_dec_sub_store_flow_def(upipe, flow_format);
 

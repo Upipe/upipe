@@ -345,10 +345,8 @@ static void upipe_hbrmt_dec_input(struct upipe *upipe, struct uref *uref,
     if (src_size < HBRMT_DATA_SIZE) {
         upipe_err(upipe, "Too small packet, reading anyway");
     }
-    int foo = src_size;
 
     /* If there is data in the scratch buffer... */
-
     unsigned n = upipe_hbrmt_dec->unpack_scratch_buffer_count;
     if (n && upipe_hbrmt_dec->dst_size > 4 * 2) {
         /* Copy from the new "packet" into the end... */
@@ -420,7 +418,6 @@ end:
  */
 static int upipe_hbrmt_dec_set_flow_def(struct upipe *upipe, struct uref *flow_def)
 {
-    struct upipe_hbrmt_dec *upipe_hbrmt_dec = upipe_hbrmt_dec_from_upipe(upipe);
     if (flow_def == NULL)
         return UBASE_ERR_INVALID;
     UBASE_RETURN(uref_flow_match_def(flow_def, "block."))
