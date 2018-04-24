@@ -1047,27 +1047,24 @@ static void upipe_resync_queues(struct upipe *upipe, uint32_t packets)
 {
     struct upipe_netmap_sink *upipe_netmap_sink = upipe_netmap_sink_from_upipe(upipe);
 
-    struct upipe_netmap_intf *intf0 = &upipe_netmap_sink->intf[0];
-    struct upipe_netmap_intf *intf1 = &upipe_netmap_sink->intf[1];
-    if (!intf0->up) {
-        intf1 = &upipe_netmap_sink->intf[0];
-        intf0 = &upipe_netmap_sink->intf[1];
+    struct upipe_netmap_intf *intf = &upipe_netmap_sink->intf[0];
+    if (!intf->up) {
+        intf = &upipe_netmap_sink->intf[1];
     }
 
-    struct netmap_ring *txring0 = NETMAP_TXRING(intf0->d->nifp, intf0->ring_idx);
-    struct netmap_ring *txring1 = NETMAP_TXRING(intf1->d->nifp, intf1->ring_idx);
+    struct netmap_ring *txring = NETMAP_TXRING(intf->d->nifp, intf->ring_idx);
 
     const unsigned len = upipe_netmap_sink->rfc4175 ? 1262 : 1438;
 
-    uint32_t cur = txring1->cur;
+    uint32_t cur = txring->cur;
     for (uint32_t i = 0; i < packets; i++) {
-        uint8_t *dst = (uint8_t*)NETMAP_BUF(txring1, txring1->slot[cur].buf_idx);
+        uint8_t *dst = (uint8_t*)NETMAP_BUF(txring, txring->slot[cur].buf_idx);
         memset(dst, 0, len);
-        memcpy(dst, intf1->header, ETHERNET_HEADER_LEN);
-        txring1->slot[cur].len = len;
-        cur = nm_ring_next(txring1, cur);
+        memcpy(dst, intf->header, ETHERNET_HEADER_LEN);
+        txring->slot[cur].len = len;
+        cur = nm_ring_next(txring, cur);
     }
-    txring1->head = txring1->cur = cur;
+    txring->head = txring->cur = cur;
 }
 
 static struct uref *get_uref(struct upipe *upipe)
