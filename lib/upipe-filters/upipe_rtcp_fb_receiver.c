@@ -110,6 +110,12 @@ struct upipe_rtcpfb {
     /** list of output requests */
     struct uchain request_list;
 
+    /** retransmit seqnum */
+    uint16_t retransmit_seq;
+
+    /** retransmit payload type */
+    uint8_t type;
+
     /** buffer latency */
     uint64_t latency;
 
@@ -255,7 +261,50 @@ static void upipe_rtcpfb_lost_sub(struct upipe *upipe, uint16_t seq, uint16_t ma
             continue;
 
         upipe_warn_va(upipe, "Retransmit %hu", seq);
-        upipe_rtcpfb_output(upipe_super, uref_dup(uref), NULL);
+        size_t size;
+        UBASE_FATAL_RETURN(upipe, uref_block_size(uref, &size));
+
+        struct ubuf *retransmit = ubuf_block_alloc(upipe_rtcpfb->ubuf_mgr,
+                size + 2 /* OSN */);
+
+        if (!retransmit) {
+            upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
+            return;
+        }
+
+        int s = -1;
+        const uint8_t *buf;
+        uint8_t *buf_retransmit;
+
+        ubuf_block_write(retransmit, 0, &s, &buf_retransmit);
+        uref_block_read(uref, 0, &s, &buf);
+
+        uint32_t ts = rtp_get_timestamp(buf);
+        memcpy(buf_retransmit, buf, RTP_HEADER_SIZE);
+
+        uint8_t ssrc[4];
+        rtp_get_ssrc(buf, ssrc);
+
+        rtp_set_type(buf_retransmit, upipe_rtcpfb->type);
+        rtp_set_seqnum(buf_retransmit,
+                upipe_rtcpfb->retransmit_seq++);
+        rtp_set_timestamp(buf_retransmit, ts);
+        ssrc[3]++; /* XXX */
+        rtp_set_ssrc(buf_retransmit, ssrc);
+
+        uint16_t osn = rtp_get_seqnum(buf);
+
+        buf_retransmit[RTP_HEADER_SIZE] = osn >> 8;
+        buf_retransmit[RTP_HEADER_SIZE + 1] = osn & 0xff;
+
+        memcpy(&buf_retransmit[RTP_HEADER_SIZE+2],
+                &buf[RTP_HEADER_SIZE], s - RTP_HEADER_SIZE);
+
+        ubuf_block_unmap(retransmit, 0);
+        uref_block_unmap(uref, 0);
+
+        upipe_rtcpfb_output(upipe_super,
+                uref_fork(uref, retransmit), NULL);
 
         if (!mask)
             return;
@@ -484,6 +533,8 @@ static struct upipe *upipe_rtcpfb_alloc(struct upipe_mgr *mgr,
     upipe_rtcpfb->last_seq = UINT_MAX;
     upipe_rtcpfb_require_uclock(upipe);
     upipe_rtcpfb->latency = 1000; /* 1 sec */
+    upipe_rtcpfb->retransmit_seq = 0;
+    upipe_rtcpfb->type = 1; /* reserved */
 
     /* This timer does not need to run frequently */
     upipe_rtcpfb->upump_timer = upump_alloc_timer(upipe_rtcpfb->upump_mgr,
@@ -556,6 +607,14 @@ static int upipe_rtcpfb_set_flow_def(struct upipe *upipe, struct uref *flow_def)
     return UBASE_ERR_NONE;
 }
 
+static int _upipe_rtcpfb_set_pt(struct upipe *upipe, uint8_t pt)
+{
+    struct upipe_rtcpfb *upipe_rtcpfb = upipe_rtcpfb_from_upipe(upipe);
+    upipe_rtcpfb->type = pt;
+
+    return UBASE_ERR_NONE;
+}
+
 /** @internal @This processes control commands on a rtcpfb pipe.
  *
  * @param upipe description structure of the pipe
@@ -606,6 +665,12 @@ static int _upipe_rtcpfb_control(struct upipe *upipe, int command, va_list args)
                     upipe_rtcpfb->latency);
             return UBASE_ERR_NONE;
         }
+        case UPIPE_RTCPFB_SET_RTX_PT: {
+            UBASE_SIGNATURE_CHECK(args, UPIPE_RTCPFB_SIGNATURE);
+            uint8_t pt = va_arg(args, unsigned);
+            return _upipe_rtcpfb_set_pt(upipe, pt);
+        }
+
         default:
             return UBASE_ERR_UNHANDLED;
     }
