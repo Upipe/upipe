@@ -68,6 +68,7 @@
 #include <signal.h>
 
 #include <bitstream/ietf/rtcp_sr.h>
+#include <bitstream/ietf/rtcp3611.h>
 #include <bitstream/ietf/rtcp_rr.h>
 #include <bitstream/ietf/rtp.h>
 
@@ -161,7 +162,6 @@ static int catch(struct uprobe *uprobe, struct upipe *upipe,
 
             uint32_t delay = rtcp_rr_get_delay_since_last_sr(buf);
             uint32_t last_sr = rtcp_rr_get_last_sr(buf);
-
             if (last_sr != ((last_sr_ntp >> 16) & 0xffffffff)) {
                 upipe_err(upipe, "RR not for last SR");
                 goto unmap;
@@ -176,46 +176,72 @@ static int catch(struct uprobe *uprobe, struct upipe *upipe,
 
             cr -= last_sr_cr;
             cr -= delay * UCLOCK_FREQ / 65536;
-
             upipe_verbose_va(upipe, "RTCP RR: RTT %f", (float) cr / UCLOCK_FREQ);
             uref_block_unmap(uref, 0);
+        } else if (pt == RTCP_PT_XR) {
+            *drop = true; // do not let XR go to rtcp_fb
 
-            // send RTT back to receiver as an Application-Defined RTCP packet
-            struct uref *rtt = uref_dup_inner(uref);
-            if (!rtt)
+            if (s < RTCP_XR_HEADER_SIZE + RTCP_XR_RRTP_SIZE)
+                goto unmap;
+            if ((rtcp_get_length(buf) + 1) * 4 < RTCP_XR_HEADER_SIZE + RTCP_XR_RRTP_SIZE)
+                goto unmap;
+
+            uint8_t ssrc[4];
+            rtcp_xr_get_ssrc_sender(buf, ssrc);
+            buf += RTCP_XR_HEADER_SIZE;
+
+            if (rtcp_xr_get_bt(buf) != RTCP_XR_RRTP_BT)
+                goto unmap;
+            if ((rtcp_xr_get_length(buf) + 1) * 4 != RTCP_XR_RRTP_SIZE)
+                goto unmap;
+
+            uint64_t ntp = rtcp_xr_rrtp_get_ntp(buf);
+
+            uref_block_unmap(uref, 0);
+
+            struct uref *xr = uref_dup_inner(uref);
+            if (!xr)
                 return UBASE_ERR_INVALID;
 
-            const size_t rtt_len = 16;
-            struct ubuf *ubuf = ubuf_block_alloc(uref->ubuf->mgr, rtt_len);
+            const size_t xr_len = RTCP_XR_HEADER_SIZE + RTCP_XR_DLRR_SIZE;
+            struct ubuf *ubuf = ubuf_block_alloc(uref->ubuf->mgr, xr_len);
             if (!ubuf) {
-                uref_free(rtt);
+                uref_free(xr);
                 return UBASE_ERR_INVALID;
             }
 
-            uref_attach_ubuf(rtt, ubuf);
+            uref_attach_ubuf(xr, ubuf);
 
-            uint8_t *buf_rtt;
-            uref_block_write(rtt, 0, &s, &buf_rtt);
-            memset(buf_rtt, 0, rtt_len);
-            rtp_set_hdr(buf_rtt);
-            rtcp_set_pt(buf_rtt, 204); // APP
-            rtcp_set_length(buf_rtt, rtt_len / 4 - 1);
-            buf_rtt[8]  = 'O';
-            buf_rtt[9]  = 'B';
-            buf_rtt[10] = 'S';
-            buf_rtt[11] = 'R'; // RTT
-            buf_rtt[12] = (cr >> 24) & 0xff;
-            buf_rtt[13] = (cr >> 16) & 0xff;
-            buf_rtt[14] = (cr >>  8) & 0xff;
-            buf_rtt[15] = (cr      ) & 0xff;
+            uint8_t *buf_xr;
+            s = 0;
+            uref_block_write(xr, 0, &s, &buf_xr);
 
-            uref_block_unmap(rtt, 0);
-            uref_block_resize(rtt, 0, rtt_len);
+            rtcp_set_rtp_version(buf_xr);
+            rtcp_set_pt(buf_xr, RTCP_PT_XR);
+            rtcp_set_length(buf_xr, xr_len / 4 - 1);
 
-            upipe_verbose_va(upipe, "sending RTT");
-            upipe_input(upipe_udpsink, rtt, NULL);
+            static const uint8_t pi_ssrc[4] = { 0, 0, 0, 0 };
+            rtcp_xr_set_ssrc_sender(buf_xr, pi_ssrc);
+
+            buf_xr += RTCP_XR_HEADER_SIZE;
+            rtcp_xr_set_bt(buf_xr, RTCP_XR_DLRR_BT);
+            rtcp_xr_dlrr_set_reserved(buf_xr);
+            rtcp_xr_set_length(buf_xr, RTCP_XR_DLRR_SIZE / 4 - 1);
+            rtcp_xr_dlrr_set_ssrc_receiver(buf_xr, ssrc);
+
+            ntp >>= 16;
+            rtcp_xr_dlrr_set_lrr(buf_xr, (uint32_t)ntp);
+
+            rtcp_xr_dlrr_set_dlrr(buf_xr, 0); // delay = 0, we answer immediately
+
+            uref_block_unmap(xr, 0);
+            uref_block_resize(xr, 0, xr_len);
+
+            upipe_verbose_va(upipe, "sending XR");
+            upipe_input(upipe_udpsink, xr, NULL);
         } else {
-            upipe_err_va(upipe, "unhandled RTCP PT %u", pt);
+            if (pt != 205)
+                upipe_err_va(upipe, "unhandled RTCP PT %u", pt);
             uref_block_unmap(uref, 0);
         }
 
@@ -313,7 +339,7 @@ int main(int argc, char *argv[])
 
     upipe_mgr_release(upipe_udpsrc_mgr);
 
-    /* catch RTCP RR/NACK messages before they're output to rtcp_fb */
+    /* catch RTCP XR/NACK messages before they're output to rtcp_fb */
     struct upipe_mgr *upipe_probe_uref_mgr = upipe_probe_uref_mgr_alloc();
     struct upipe *upipe_probe_uref = upipe_void_alloc_output(upipe_udpsrc_sub,
             upipe_probe_uref_mgr, uprobe_use(logger));
