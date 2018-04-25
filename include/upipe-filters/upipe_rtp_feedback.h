@@ -44,6 +44,7 @@ enum upipe_rtpfb_command {
     UPIPE_RTPFB_SENTINEL = UPIPE_CONTROL_LOCAL,
 
     UPIPE_RTPFB_GET_STATS, /* int sig, unsigned *, unsigned *, size_t *, size_t *, size_t *, size_t *, size_t * */
+    UPIPE_RTPFB_SET_RTX_PT, /* int sig, unsigned */
 };
 
 static inline int upipe_rtpfb_get_stats(struct upipe *upipe,
@@ -55,6 +56,20 @@ static inline int upipe_rtpfb_get_stats(struct upipe *upipe,
             UPIPE_RTPFB_SIGNATURE, expected_seqnum, last_output_seqnum,
             buffered, nacks, repaired, lost, duplicates);
 }
+
+/** @This sets the value of the rtx_pt channel.
+ *
+ * @param upipe description structure of the pipe
+ * @param rtx_pt value of the rtx_pt channel
+ * @return an error code
+ */
+static inline int upipe_rtpfb_set_rtx_pt(struct upipe *upipe,
+        uint8_t rtx_pt)
+{
+    return upipe_control(upipe, UPIPE_RTPFB_SET_RTX_PT,
+                         UPIPE_RTPFB_SIGNATURE, (unsigned)rtx_pt);
+}
+
 
 /** @This returns the management structure for rtpfb pipes.
  *
