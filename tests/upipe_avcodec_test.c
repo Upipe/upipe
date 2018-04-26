@@ -331,9 +331,9 @@ int main(int argc, char **argv)
     assert(upipe_av_init(false, uprobe_use(logger)));
 
     /* global managers */
-    assert(upipe_avcdec_mgr = upipe_avcdec_mgr_alloc());
-    assert(upipe_avcenc_mgr = upipe_avcenc_mgr_alloc());
-    assert(upipe_null_mgr = upipe_null_mgr_alloc());
+    assert((upipe_avcdec_mgr = upipe_avcdec_mgr_alloc()));
+    assert((upipe_avcenc_mgr = upipe_avcenc_mgr_alloc()));
+    assert((upipe_null_mgr = upipe_null_mgr_alloc()));
 
     /* multi-threaded test with upump_mgr */
     if (thread_num > 0) {
