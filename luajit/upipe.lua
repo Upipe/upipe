@@ -15,6 +15,10 @@ ffi.cdef [[
 
     // time.h
     typedef long time_t;
+
+    // pthread.h
+    typedef unsigned long pthread_t;
+    typedef union pthread_attr_t pthread_attr_t;
 ]]
 
 require "libupipe"
@@ -123,7 +127,7 @@ for _, name in ipairs { 'upump', 'udict', 'uref', 'umem', 'ubuf' } do
     _G[name] = setmetatable({ name = name }, mgr_mt)
 end
 
-local probe_args = require "uprobe-args"
+local probe_args = require "uprobe-event-args"
 
 local function ubase_err(ret)
     return type(ret) == "string" and C["UBASE_ERR_" .. ret:upper()] or ret or C.UBASE_ERR_NONE
@@ -396,12 +400,33 @@ ffi.metatype("struct urequest", {
     end
 })
 
+ffi.metatype("struct umem_mgr", {
+    __index = function (_, key)
+        return C[fmt("umem_mgr_%s", key)]
+    end
+})
+
+ffi.metatype("struct uref_mgr", {
+    __index = function (_, key)
+        local alloc_type = key:match("^new_(.*)")
+        if alloc_type then
+            return function (...)
+                local alloc_func = fmt("uref_%s_alloc", alloc_type)
+                local ref = C[alloc_func](...)
+                assert(ref ~= nil, alloc_func .. " failed")
+                return ref
+            end
+        end
+        return C[fmt("uref_mgr_%s", key)]
+    end
+})
+
 local function container_of(ptr, ct, member)
     if type(ct) == 'string' then ct = ffi.typeof(ct) end
     return ffi.cast(ffi.typeof("$ *", ct), ffi.cast("char *", ptr) - ffi.offsetof(ct, member))
 end
 
-local ctrl_args = require "upipe-control-args"
+local ctrl_args = require "upipe-command-args"
 
 local function control_args(cmd, args)
     if not ctrl_args[cmd] then return args end

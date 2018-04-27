@@ -64,6 +64,12 @@ static inline void                                                      \
 STRUCT##_release_##UREFCOUNT(struct STRUCT *obj)                        \
 {                                                                       \
     urefcount_release(STRUCT##_to_##UREFCOUNT(obj));                    \
+}                                                                       \
+                                                                        \
+static inline bool                                                      \
+STRUCT##_single_##UREFCOUNT(struct STRUCT *obj)                         \
+{                                                                       \
+    return urefcount_single(STRUCT##_to_##UREFCOUNT(obj));              \
 }
 
 #ifdef __cplusplus
