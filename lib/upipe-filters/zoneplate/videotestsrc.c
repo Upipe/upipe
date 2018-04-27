@@ -29,8 +29,8 @@
 #define V_POINTER_KXT     0
 #define V_POINTER_KYT     0
 #define V_POINTER_KXY     0
-#define V_POINTER_KX2     20
-#define V_POINTER_KY2     20
+#define V_POINTER_KX2     128
+#define V_POINTER_KY2     128
 #define V_POINTER_KT2     0
 #define V_POINTER_XOFFSET 0
 #define V_POINTER_YOFFSET 0
