@@ -895,25 +895,28 @@ static int upipe_rtpfb_set_flow_def(struct upipe *upipe, struct uref *flow_def)
     if (flow_def == NULL)
         return UBASE_ERR_INVALID;
     UBASE_RETURN(uref_flow_match_def(flow_def, EXPECTED_FLOW_DEF))
-    struct uref *flow_def_dup;
-    if (unlikely((flow_def_dup = uref_dup(flow_def)) == NULL))
-        return UBASE_ERR_ALLOC;
+
     struct upipe_rtpfb *upipe_rtpfb = upipe_rtpfb_from_upipe(upipe);
     uref_free(upipe_rtpfb->flow_def_input);
-    upipe_rtpfb->flow_def_input = flow_def_dup;
-    flow_def_dup = uref_dup(flow_def);
+    upipe_rtpfb->flow_def_input = uref_dup(flow_def);
+
+    struct uref *flow_def_dup = uref_dup(flow_def);
+    if (unlikely(flow_def_dup == NULL))
+        return UBASE_ERR_ALLOC;
+
+    flow_def = uref_dup(flow_def);
+    if (unlikely(flow_def == NULL))
+        return UBASE_ERR_ALLOC;
     uint64_t latency = 0;
     if (!ubase_check(uref_clock_get_latency(flow_def, &latency)))
         latency = 0;
     uref_clock_set_latency(flow_def, latency + upipe_rtpfb->latency);
     upipe_rtpfb_store_flow_def(upipe, flow_def);
 
-    if (unlikely(flow_def_dup == NULL)) {
-        upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
-        return UBASE_ERR_ALLOC;
-    }
     if (upipe_rtpfb->rtpfb_output)
         upipe_rtpfb_output_store_flow_def(upipe_rtpfb->rtpfb_output, flow_def_dup);
+    else
+        uref_free(flow_def_dup);
 
     return UBASE_ERR_NONE;
 }
