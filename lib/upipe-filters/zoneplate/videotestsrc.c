@@ -93,6 +93,9 @@ gst_video_test_src_zoneplate_8bit (uint8_t *data,
   int scale_kxy = 0xffff / (w / 2);
   int scale_kx2 = 0xffff / w;
 
+  const int KX2 = (h > w) ? V_POINTER_KX2 * w / h : V_POINTER_KX2;
+  const int KY2 = (w > h) ? V_POINTER_KY2 * h / w : V_POINTER_KY2;
+
   /* Zoneplate equation:
    *
    * phase = k0 + kx*x + ky*y + kt*t
@@ -142,7 +145,7 @@ gst_video_test_src_zoneplate_8bit (uint8_t *data,
     accum_kyt += V_POINTER_KYT * t;
     delta_kxy = V_POINTER_KXY * y * scale_kxy;
     accum_kxy = delta_kxy * xreset;
-    ky2 = (V_POINTER_KY2 * y * y) / h;
+    ky2 = (KY2 * y * y) / h;
     for (i = 0, x = xreset; i < w; i++, x++) {
 
       /* zero order */
@@ -166,7 +169,7 @@ gst_video_test_src_zoneplate_8bit (uint8_t *data,
       /*second order */
       /*normalise x/y terms to rate of change of phase at the picture edge */
       /*phase = phase + ((v->kx2 * x * x)/w) + ((v->ky2 * y * y)/h) + ((v->kt2 * t * t)>>1); */
-      phase = phase + ((V_POINTER_KX2 * x * x * scale_kx2) >> 16) + ky2 + (kt2 >> 1);
+      phase = phase + ((KX2 * x * x * scale_kx2) >> 16) + ky2 + (kt2 >> 1);
 
       data[j*stride + i] = sine_table[phase & 0xff];
     }
@@ -197,6 +200,9 @@ gst_video_test_src_zoneplate_10bit (uint16_t *data,
   int scale_kxy = 0xffff / (w / 2);
   int scale_kx2 = 0xffff / w;
 
+  const int KX2 = (h > w) ? V_POINTER_KX2 * w / h : V_POINTER_KX2;
+  const int KY2 = (w > h) ? V_POINTER_KY2 * h / w : V_POINTER_KY2;
+
   stride /= 2;
 
   accum_ky = 0;
@@ -210,7 +216,7 @@ gst_video_test_src_zoneplate_10bit (uint16_t *data,
     accum_kyt += V_POINTER_KYT * t;
     delta_kxy = V_POINTER_KXY * y * scale_kxy;
     accum_kxy = delta_kxy * xreset;
-    ky2 = (V_POINTER_KY2 * y * y) / h;
+    ky2 = (KY2 * y * y) / h;
     for (i = 0, x = xreset; i < w; i++, x++) {
 
       /* zero order */
@@ -229,7 +235,7 @@ gst_video_test_src_zoneplate_10bit (uint16_t *data,
 
       /*second order */
       /*normalise x/y terms to rate of change of phase at the picture edge */
-      phase = phase + ((V_POINTER_KX2 * x * x * scale_kx2) >> 16) + ky2 + (kt2 >> 1);
+      phase = phase + ((KX2 * x * x * scale_kx2) >> 16) + ky2 + (kt2 >> 1);
 
       data[j*stride + i] = sine_table[phase & 0xff] << 2;
     }
