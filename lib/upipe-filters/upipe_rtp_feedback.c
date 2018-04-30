@@ -111,6 +111,12 @@ struct upipe_rtpfb {
     size_t loss;
     size_t dups;
 
+    /** retransmit payload type */
+    uint8_t rtx_pt;
+
+    /* RTP payload type */
+    uint16_t type;
+
     /** output pipe */
     struct upipe *output;
     /** input flow definition packet */
@@ -131,6 +137,9 @@ struct upipe_rtpfb {
     uint8_t sr[RTCP_SR_SIZE];
     /** timestamp of last SR */
     uint64_t sr_cr;
+
+    /** timestamp of last XR */
+    uint64_t xr_cr;
 
     /** last time a NACK was sent */
     uint64_t last_nack[65536];
@@ -550,6 +559,55 @@ static void upipe_rtpfb_init_sub_mgr(struct upipe *upipe)
     sub_mgr->upipe_mgr_control = NULL;
 }
 
+static void upipe_rtpfb_send_xr(struct upipe *upipe)
+{
+    struct upipe_rtpfb *upipe_rtpfb = upipe_rtpfb_from_upipe(upipe);
+
+    int s = 20;
+
+    /* Allocate NACK packet */
+    struct uref *pkt = uref_block_alloc(upipe_rtpfb->uref_mgr,
+        upipe_rtpfb->ubuf_mgr, s);
+    if (unlikely(!pkt)) {
+        upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
+        return;
+    }
+
+    uint8_t *buf;
+    uref_block_write(pkt, 0, &s, &buf);
+    memset(buf, 0, s);
+
+    /* Header */
+    rtcp_set_rtp_version(buf);
+    rtcp_set_pt(buf, 207); // XR
+    rtcp_set_length(buf, s / 4 - 1);
+
+    memset(&buf[4], 0, 4); // SSRC
+
+    buf[8] = 4; // BT=4 // Receiver Reference Time Report Block
+    buf[9] = 0; // reserved
+
+    buf[10] = 0;
+    buf[11] = 2; // block_length = 2
+
+    uint64_t now = uclock_now(upipe_rtpfb->uclock);
+    upipe_rtpfb->xr_cr = now;
+    uint32_t msw = (now >> 32) & 0xffffffff;
+    uint32_t lsw = (now      ) & 0xffffffff;
+    buf[12] = (msw >> 24) & 0xff;
+    buf[13] = (msw >> 16) & 0xff;
+    buf[14] = (msw >>  8) & 0xff;
+    buf[15] = (msw      ) & 0xff;
+    buf[16] = (lsw >> 24) & 0xff;
+    buf[17] = (lsw >> 16) & 0xff;
+    buf[18] = (lsw >>  8) & 0xff;
+    buf[19] = (lsw      ) & 0xff;
+
+    uref_block_unmap(pkt, 0);
+
+    upipe_rtpfb_output_output(upipe_rtpfb->rtpfb_output, pkt, NULL);
+}
+
 static void upipe_rtpfb_send_rr(struct upipe *upipe)
 {
     struct upipe_rtpfb *upipe_rtpfb = upipe_rtpfb_from_upipe(upipe);
@@ -645,7 +703,10 @@ static struct upipe *upipe_rtpfb_alloc(struct upipe_mgr *mgr,
     upipe_rtpfb->repaired = 0;
     upipe_rtpfb->loss = 0;
     upipe_rtpfb->dups = 0;
+    upipe_rtpfb->type = UINT16_MAX;
+    upipe_rtpfb->rtx_pt = 1; /* Reserved */
     upipe_rtpfb->sr_cr = UINT64_MAX;
+    upipe_rtpfb->xr_cr = UINT64_MAX;
     upipe_rtpfb->upump_timer = NULL;
     upipe_rtpfb->upump_timer_lost = NULL;
 
@@ -764,6 +825,7 @@ static void upipe_rtpfb_handle_sr(struct upipe *upipe, struct uref *uref)
     uref_block_peek_unmap(uref, 0, sr_buf, sr);
 
     upipe_rtpfb_send_rr(upipe);
+    upipe_rtpfb_send_xr(upipe);
 }
 
 /** @internal @This handles data.
@@ -812,6 +874,46 @@ static void upipe_rtpfb_input(struct upipe *upipe, struct uref *uref,
         upipe_rtpfb_handle_sr(upipe, uref);
         uref_free(uref);
         return;
+    } else if (pt == 207) {
+        upipe_verbose(upipe, "XR RTCP");
+        const uint8_t *buf;
+        int s = -1;
+        if (ubase_check(uref_block_read(uref, 0, &s, &buf))) {
+            if (s == 24 && buf[8] == 5) {
+                uint32_t last_rr = (buf[16] << 24) | (buf[17] << 16) |
+                    (buf[18] << 8) | buf[19];
+                if (last_rr == ((upipe_rtpfb->xr_cr >> 16) & 0xffffffff)) {
+                    uint32_t delay = (buf[20] << 24) | (buf[21] << 16) |
+                    (buf[22] << 8) | buf[23];
+
+                    uint64_t rtt = uclock_now(upipe_rtpfb->uclock) -
+                        upipe_rtpfb->xr_cr - delay * UCLOCK_FREQ / 65536;
+
+                    upipe_notice_va(upipe, "RTT %f", (float)rtt / UCLOCK_FREQ);
+                    upipe_rtpfb->rtt = rtt;
+
+                    if (upipe_rtpfb->upump_timer_lost) {
+                        upump_stop(upipe_rtpfb->upump_timer_lost);
+                        upump_free(upipe_rtpfb->upump_timer_lost);
+                    }
+                    if (upipe_rtpfb->upump_mgr) {
+                        upipe_rtpfb->upump_timer_lost = upump_alloc_timer(upipe_rtpfb->upump_mgr,
+                                upipe_rtpfb_timer_lost, upipe, upipe->refcount,
+                                0, rtt / 10);
+                        upump_start(upipe_rtpfb->upump_timer_lost);
+                    }
+                } else {
+                    upipe_warn_va(upipe,
+                            "DLRR not for last RRT : %" PRIx64 " , %x",
+                            (upipe_rtpfb->xr_cr >> 16) & 0xffffffff, last_rr);
+                }
+            } else {
+                upipe_err(upipe, "malformed RTCP APP obe packet");
+            }
+            uref_block_unmap(uref, 0);
+        }
+        uref_free(uref);
+        return;
     } else if (pt == 204) {
         upipe_verbose(upipe, "application-defined RTCP");
         const uint8_t *buf;
@@ -842,6 +944,38 @@ static void upipe_rtpfb_input(struct upipe *upipe, struct uref *uref,
         }
         uref_free(uref);
         return;
+    } else if (pt == upipe_rtpfb->rtx_pt) {
+        if (upipe_rtpfb->type == UINT16_MAX) {
+            /* We did not receive a non-rtx packet yet? */
+            upipe_err(upipe, "RTX but not normal");
+            uref_free(uref);
+            return;
+        }
+
+        uint8_t *buf;
+        int s = -1;
+        int ret = uref_block_write(uref, 0, &s, &buf);
+        if (!ubase_check(ret)) {
+            upipe_throw_fatal(upipe, ret);
+            uref_free(uref);
+            return;
+        }
+
+        uint16_t osn = (buf[RTP_HEADER_SIZE] << 8) | buf[RTP_HEADER_SIZE+1];
+        rtp_set_seqnum(buf, osn); // XXX: verify seqnum before overwrite?
+        seqnum = osn;
+        upipe_notice_va(upipe, "RTX %hu",osn);
+        rtp_set_type(buf, upipe_rtpfb->type);
+
+        memmove(&buf[RTP_HEADER_SIZE], &buf[RTP_HEADER_SIZE+2],
+                s - RTP_HEADER_SIZE - 2);
+        uref_block_unmap(uref, 0);
+        uref_block_resize(uref, 0, s-2);
+    } else {
+        if (upipe_rtpfb->type != pt) {
+            upipe_dbg_va(upipe, "Payload type now %hhu (rtx %hhu)", pt, upipe_rtpfb->rtx_pt);
+            upipe_rtpfb->type = pt;
+        }
     }
 
     /* store seqnum in uref */
@@ -942,6 +1076,8 @@ static int upipe_rtpfb_set_option(struct upipe *upipe, const char *k, const char
  */
 static int _upipe_rtpfb_control(struct upipe *upipe, int command, va_list args)
 {
+    struct upipe_rtpfb *upipe_rtpfb = upipe_rtpfb_from_upipe(upipe);
+
     switch (command) {
         case UPIPE_REGISTER_REQUEST: {
             struct urequest *request = va_arg(args, struct urequest *);
@@ -986,7 +1122,6 @@ static int _upipe_rtpfb_control(struct upipe *upipe, int command, va_list args)
             size_t   *loss               = va_arg(args, size_t*);
             size_t   *dups               = va_arg(args, size_t*);
 
-            struct upipe_rtpfb *upipe_rtpfb = upipe_rtpfb_from_upipe(upipe);
             *buffered = upipe_rtpfb->buffered;
             *expected_seqnum = upipe_rtpfb->expected_seqnum;
             *last_output_seqnum = upipe_rtpfb->last_output_seqnum;
@@ -998,6 +1133,11 @@ static int _upipe_rtpfb_control(struct upipe *upipe, int command, va_list args)
             upipe_rtpfb->nacks = 0;
             upipe_rtpfb->repaired = 0;
 
+            return UBASE_ERR_NONE;
+
+        case UPIPE_RTPFB_SET_RTX_PT:
+            UBASE_SIGNATURE_CHECK(args, UPIPE_RTPFB_SIGNATURE)
+            upipe_rtpfb->rtx_pt = va_arg(args, unsigned);
             return UBASE_ERR_NONE;
 
         default:
