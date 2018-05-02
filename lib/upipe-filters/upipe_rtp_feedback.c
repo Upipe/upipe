@@ -66,6 +66,7 @@
 #include <bitstream/ietf/rtcp_fb.h>
 #include <bitstream/ietf/rtcp_rr.h>
 #include <bitstream/ietf/rtcp_sr.h>
+#include <bitstream/ietf/rtcp3611.h>
 
 #define EXPECTED_FLOW_DEF "block."
 
@@ -137,6 +138,9 @@ struct upipe_rtpfb {
     uint8_t sr[RTCP_SR_SIZE];
     /** timestamp of last SR */
     uint64_t sr_cr;
+
+    /** timestamp of last XR */
+    uint64_t xr_cr;
 
     /** last time a NACK was sent */
     uint64_t last_nack[65536];
@@ -556,6 +560,46 @@ static void upipe_rtpfb_init_sub_mgr(struct upipe *upipe)
     sub_mgr->upipe_mgr_control = NULL;
 }
 
+static void upipe_rtpfb_send_xr(struct upipe *upipe)
+{
+    struct upipe_rtpfb *upipe_rtpfb = upipe_rtpfb_from_upipe(upipe);
+
+    int s = RTCP_XR_HEADER_SIZE + RTCP_XR_RRTP_SIZE;
+
+    /* Allocate NACK packet */
+    struct uref *pkt = uref_block_alloc(upipe_rtpfb->uref_mgr,
+        upipe_rtpfb->ubuf_mgr, s);
+    if (unlikely(!pkt)) {
+        upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
+        return;
+    }
+
+    uint8_t *buf;
+    uref_block_write(pkt, 0, &s, &buf);
+    memset(buf, 0, s);
+
+    /* Header */
+    rtcp_set_rtp_version(buf);
+    rtcp_set_pt(buf, RTCP_PT_XR); // XR
+    rtcp_set_length(buf, s / 4 - 1);
+
+    static const uint8_t ssrc[4] = { 0, 0, 0, 0 };
+    rtcp_xr_set_ssrc_sender(buf, ssrc);
+
+    buf += RTCP_XR_HEADER_SIZE;
+    rtcp_xr_set_bt(buf, RTCP_XR_RRTP_BT);
+    rtcp_xr_rrtp_set_reserved(buf);
+    rtcp_xr_set_length(buf, RTCP_XR_RRTP_SIZE / 4 - 1);
+
+    uint64_t now = uclock_now(upipe_rtpfb->uclock);
+    upipe_rtpfb->xr_cr = now;
+    rtcp_xr_rrtp_set_ntp(buf, now);
+
+    uref_block_unmap(pkt, 0);
+
+    upipe_rtpfb_output_output(upipe_rtpfb->rtpfb_output, pkt, NULL);
+}
+
 static void upipe_rtpfb_send_rr(struct upipe *upipe)
 {
     struct upipe_rtpfb *upipe_rtpfb = upipe_rtpfb_from_upipe(upipe);
@@ -654,6 +698,7 @@ static struct upipe *upipe_rtpfb_alloc(struct upipe_mgr *mgr,
     upipe_rtpfb->type = UINT16_MAX;
     upipe_rtpfb->rtx_pt = 1; /* Reserved */
     upipe_rtpfb->sr_cr = UINT64_MAX;
+    upipe_rtpfb->xr_cr = UINT64_MAX;
     upipe_rtpfb->upump_timer = NULL;
     upipe_rtpfb->upump_timer_lost = NULL;
 
@@ -772,6 +817,7 @@ static void upipe_rtpfb_handle_sr(struct upipe *upipe, struct uref *uref)
     uref_block_peek_unmap(uref, 0, sr_buf, sr);
 
     upipe_rtpfb_send_rr(upipe);
+    upipe_rtpfb_send_xr(upipe);
 }
 
 /** @internal @This handles data.
@@ -818,6 +864,57 @@ static void upipe_rtpfb_input(struct upipe *upipe, struct uref *uref,
     if (pt == RTCP_PT_SR) {
         upipe_verbose(upipe, "received sender report");
         upipe_rtpfb_handle_sr(upipe, uref);
+        uref_free(uref);
+        return;
+    } else if (pt == RTCP_PT_XR) {
+        upipe_verbose(upipe, "XR RTCP");
+        const uint8_t *buf;
+        int s = -1;
+        if (!ubase_check(uref_block_read(uref, 0, &s, &buf)))
+            goto free;
+
+        if (s < RTCP_XR_HEADER_SIZE + RTCP_XR_DLRR_SIZE)
+            goto unmap;
+        if ((rtcp_get_length(buf) + 1) * 4 < RTCP_XR_HEADER_SIZE + RTCP_XR_DLRR_SIZE)
+            goto unmap;
+
+        buf += RTCP_XR_HEADER_SIZE;
+
+        if (rtcp_xr_get_bt(buf) != RTCP_XR_DLRR_BT)
+            goto unmap;
+        if ((rtcp_xr_get_length(buf) + 1) * 4 != RTCP_XR_DLRR_SIZE)
+            goto unmap;
+
+        uint32_t last_rr = rtcp_xr_dlrr_get_lrr(buf);
+
+        if (last_rr != ((upipe_rtpfb->xr_cr >> 16) & 0xffffffff)) {
+            upipe_warn_va(upipe,
+                    "DLRR not for last RRT : %" PRIx64 " , %x",
+                    (upipe_rtpfb->xr_cr >> 16) & 0xffffffff, last_rr);
+            goto unmap;
+        }
+
+        uint32_t delay = rtcp_xr_dlrr_get_dlrr(buf);
+
+        uint64_t rtt = uclock_now(upipe_rtpfb->uclock) -
+            upipe_rtpfb->xr_cr - delay * UCLOCK_FREQ / 65536;
+
+        upipe_notice_va(upipe, "RTT %f", (float)rtt / UCLOCK_FREQ);
+        upipe_rtpfb->rtt = rtt;
+
+        if (upipe_rtpfb->upump_timer_lost) {
+            upump_stop(upipe_rtpfb->upump_timer_lost);
+            upump_free(upipe_rtpfb->upump_timer_lost);
+        }
+        if (upipe_rtpfb->upump_mgr) {
+            upipe_rtpfb->upump_timer_lost = upump_alloc_timer(upipe_rtpfb->upump_mgr,
+                    upipe_rtpfb_timer_lost, upipe, upipe->refcount,
+                    0, rtt / 10);
+            upump_start(upipe_rtpfb->upump_timer_lost);
+        }
+unmap:
+        uref_block_unmap(uref, 0);
+free:
         uref_free(uref);
         return;
     } else if (pt == 204) {
