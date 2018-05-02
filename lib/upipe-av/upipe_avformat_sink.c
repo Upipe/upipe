@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2013-2015 OpenHeadend S.A.R.L.
+ * Copyright (C) 2013-2018 OpenHeadend S.A.R.L.
  *
  * Authors: Christophe Massiot
  *
@@ -523,7 +523,7 @@ static struct upipe *upipe_avfsink_alloc(struct upipe_mgr *mgr,
     upipe_avfsink->options = NULL;
     upipe_avfsink->context = NULL;
     upipe_avfsink->opened = false;
-    upipe_avfsink->ts_offset = 0;
+    upipe_avfsink->ts_offset = UINT64_MAX;
     upipe_avfsink->first_dts = 0;
     upipe_avfsink->highest_next_dts = 0;
     upipe_throw_ready(upipe);
@@ -599,8 +599,11 @@ static void upipe_avfsink_mux(struct upipe *upipe, struct upump **upump_p)
         if (unlikely(!upipe_avfsink->opened)) {
             upipe_dbg(upipe, "writing header");
             /* avformat dts for formats other than mpegts should start at 0 */
-            if (strcmp(upipe_avfsink->context->oformat->name, "mpegts")) {
+            if (strcmp(upipe_avfsink->context->oformat->name, "mpegts") &&
+                upipe_avfsink->ts_offset == UINT64_MAX) {
                 upipe_avfsink->ts_offset = input->next_dts;
+                upipe_throw(upipe, UPROBE_AVFSINK_TS_OFFSET,
+                            UPIPE_AVFSINK_SIGNATURE, upipe_avfsink->ts_offset);
             }
             upipe_avfsink->first_dts = input->next_dts;
             if (upipe_avfsink->init_uri != NULL) {
@@ -975,6 +978,33 @@ static int _upipe_avfsink_set_init_uri(struct upipe *upipe, const char *uri)
     return UBASE_ERR_NONE;
 }
 
+/** @internal @This gets the timestamp offset
+ *
+ * @param upipe description structure of the pipe
+ * @param ts_offset_p filled with the current timestamp offset
+ * @return an error code
+ */
+static int _upipe_avfsink_get_ts_offset(struct upipe *upipe, uint64_t *ts_offset_p)
+{
+    struct upipe_avfsink *upipe_avfsink = upipe_avfsink_from_upipe(upipe);
+    assert(ts_offset_p != NULL);
+    *ts_offset_p = upipe_avfsink->ts_offset;
+    return UBASE_ERR_NONE;
+}
+
+/** @internal @This sets the timestamp offset
+ *
+ * @param upipe description structure of the pipe
+ * @param ts_offset timestamp offset
+ * @return an error code
+ */
+static int _upipe_avfsink_set_ts_offset(struct upipe *upipe, uint64_t ts_offset)
+{
+    struct upipe_avfsink *upipe_avfsink = upipe_avfsink_from_upipe(upipe);
+    upipe_avfsink->ts_offset = ts_offset;
+    return UBASE_ERR_NONE;
+}
+
 /** @internal @This processes control commands on an avformat source pipe.
  *
  * @param upipe description structure of the pipe
@@ -1039,6 +1069,16 @@ static int upipe_avfsink_control(struct upipe *upipe, int command, va_list args)
             UBASE_SIGNATURE_CHECK(args, UPIPE_AVFSINK_SIGNATURE)
             const char *uri = va_arg(args, const char *);
             return _upipe_avfsink_set_init_uri(upipe, uri);
+        }
+        case UPIPE_AVFSINK_GET_TS_OFFSET: {
+            UBASE_SIGNATURE_CHECK(args, UPIPE_AVFSINK_SIGNATURE)
+            uint64_t *ts_offset_p = va_arg(args, uint64_t *);
+            return _upipe_avfsink_get_ts_offset(upipe, ts_offset_p);
+        }
+        case UPIPE_AVFSINK_SET_TS_OFFSET: {
+            UBASE_SIGNATURE_CHECK(args, UPIPE_AVFSINK_SIGNATURE)
+            uint64_t ts_offset = va_arg(args, uint64_t);
+            return _upipe_avfsink_set_ts_offset(upipe, ts_offset);
         }
 
         case UPIPE_GET_URI: {
