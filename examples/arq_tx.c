@@ -161,6 +161,7 @@ static int catch(struct uprobe *uprobe, struct upipe *upipe,
 
             uint32_t delay = rtcp_rr_get_delay_since_last_sr(buf);
             uint32_t last_sr = rtcp_rr_get_last_sr(buf);
+
             if (last_sr != ((last_sr_ntp >> 16) & 0xffffffff)) {
                 upipe_err(upipe, "RR not for last SR");
                 goto unmap;
@@ -175,67 +176,46 @@ static int catch(struct uprobe *uprobe, struct upipe *upipe,
 
             cr -= last_sr_cr;
             cr -= delay * UCLOCK_FREQ / 65536;
+
             upipe_verbose_va(upipe, "RTCP RR: RTT %f", (float) cr / UCLOCK_FREQ);
             uref_block_unmap(uref, 0);
-        } else if (pt == 207 /* XR */) {
-            *drop = true; // do not let XR go to rtcp_fb
 
-            if (s < 20)
-                goto unmap;
-
-            uint32_t ntp_msw = (buf[12] << 24) | (buf[13] << 16) |
-                (buf[14] <<  8) | buf[15];
-            uint32_t ntp_lsw = (buf[16] << 24) | (buf[17] << 16) |
-                (buf[18] <<  8) | buf[19];
-            uint8_t ssrc[4];
-            memcpy(ssrc, &buf[4], 4);
-
-            uref_block_unmap(uref, 0);
-
-            struct uref *xr = uref_dup_inner(uref);
-            if (!xr)
+            // send RTT back to receiver as an Application-Defined RTCP packet
+            struct uref *rtt = uref_dup_inner(uref);
+            if (!rtt)
                 return UBASE_ERR_INVALID;
 
-            const size_t xr_len = 24;
-            struct ubuf *ubuf = ubuf_block_alloc(uref->ubuf->mgr, xr_len);
+            const size_t rtt_len = 16;
+            struct ubuf *ubuf = ubuf_block_alloc(uref->ubuf->mgr, rtt_len);
             if (!ubuf) {
-                uref_free(xr);
+                uref_free(rtt);
                 return UBASE_ERR_INVALID;
             }
 
-            uref_attach_ubuf(xr, ubuf);
+            uref_attach_ubuf(rtt, ubuf);
 
-            uint8_t *buf_xr;
-            uref_block_write(xr, 0, &s, &buf_xr);
-            memset(buf_xr, 0, xr_len);
+            uint8_t *buf_rtt;
+            uref_block_write(rtt, 0, &s, &buf_rtt);
+            memset(buf_rtt, 0, rtt_len);
+            rtp_set_hdr(buf_rtt);
+            rtcp_set_pt(buf_rtt, 204); // APP
+            rtcp_set_length(buf_rtt, rtt_len / 4 - 1);
+            buf_rtt[8]  = 'O';
+            buf_rtt[9]  = 'B';
+            buf_rtt[10] = 'S';
+            buf_rtt[11] = 'R'; // RTT
+            buf_rtt[12] = (cr >> 24) & 0xff;
+            buf_rtt[13] = (cr >> 16) & 0xff;
+            buf_rtt[14] = (cr >>  8) & 0xff;
+            buf_rtt[15] = (cr      ) & 0xff;
 
-            rtcp_set_rtp_version(buf_xr);
-            rtcp_set_pt(buf_xr, 207); // XR
-            rtcp_set_length(buf_xr, s / 4 - 1);
+            uref_block_unmap(rtt, 0);
+            uref_block_resize(rtt, 0, rtt_len);
 
-            memset(&buf_xr[4], 0, 4); // SSRC
-
-            buf_xr[8] = 5; // BT=5 // DLRR
-            buf_xr[9] = 0; // reserved
-
-            buf_xr[10] = 0;
-            buf_xr[11] = 3; // block_length = 3
-
-            memcpy(&buf_xr[12], ssrc, 4); // SSRC of first receiver
-            buf_xr[16] = (ntp_msw >>  8) & 0xff;
-            buf_xr[17] = (ntp_msw      ) & 0xff;
-            buf_xr[18] = (ntp_lsw >> 24) & 0xff;
-            buf_xr[19] = (ntp_lsw >> 16) & 0xff;
-            memset(&buf_xr[20], 0, 4); // delay = 0, we answer immediately
-
-            uref_block_unmap(xr, 0);
-            uref_block_resize(xr, 0, xr_len);
-
-            upipe_verbose_va(upipe, "sending XR");
-            upipe_input(upipe_udpsink, xr, NULL);
+            upipe_verbose_va(upipe, "sending RTT");
+            upipe_input(upipe_udpsink, rtt, NULL);
         } else {
-            if (pt != 205)
-                upipe_err_va(upipe, "unhandled RTCP PT %u", pt);
+            upipe_err_va(upipe, "unhandled RTCP PT %u", pt);
             uref_block_unmap(uref, 0);
         }
 
@@ -338,7 +318,7 @@ int main(int argc, char *argv[])
 
     upipe_mgr_release(upipe_udpsrc_mgr);
 
-    /* catch RTCP XR/NACK messages before they're output to rtcp_fb */
+    /* catch RTCP RR/NACK messages before they're output to rtcp_fb */
     struct upipe_mgr *upipe_probe_uref_mgr = upipe_probe_uref_mgr_alloc();
     struct upipe *upipe_probe_uref = upipe_void_alloc_output(upipe_udpsrc_sub,
             upipe_probe_uref_mgr, uprobe_use(logger));
