@@ -925,7 +925,8 @@ static void upipe_avcdec_output_sub(struct upipe *upipe, AVSubtitle *sub,
      * later. */
     uref->uchain.next = uref_to_uchain(flow_def_attr);
 
-    uref_clock_set_duration(uref, UCLOCK_FREQ * sub->end_display_time / 1000);
+    if (sub->end_display_time != UINT32_MAX)
+        uref_clock_set_duration(uref, UCLOCK_FREQ * sub->end_display_time / 1000);
 
     uint64_t prog;
     int type;
