@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2014-2017 OpenHeadend S.A.R.L.
+ * Copyright (C) 2014-2018 OpenHeadend S.A.R.L.
  *
  * Authors: Benjamin Cohen
  *          Cedric Bail <cedric.bail@free.fr>
@@ -28,6 +28,7 @@
  * @short implementation of a Upipe event loop using Ecore
  */
 
+#include <upipe/urefcount_helper.h>
 #include <upipe/ubase.h>
 #include <upipe/urefcount.h>
 #include <upipe/uclock.h>
@@ -45,6 +46,8 @@
 struct upump_ecore_mgr {
     /** refcount management structure */
     struct urefcount urefcount;
+    /** event refcount management structure */
+    struct urefcount urefcount_event;
 
     /** common structure */
     struct upump_common_mgr common_mgr;
@@ -55,6 +58,7 @@ struct upump_ecore_mgr {
 
 UBASE_FROM_TO(upump_ecore_mgr, upump_mgr, upump_mgr, common_mgr.mgr)
 UBASE_FROM_TO(upump_ecore_mgr, urefcount, urefcount, urefcount)
+UREFCOUNT_HELPER(upump_ecore_mgr, urefcount_event, upump_ecore_mgr_no_event);
 
 /** @This stores local structures.
  */
@@ -73,6 +77,8 @@ struct upump_ecore {
 
     /** common structure */
     struct upump_common common;
+    /** pointer to manager event refcount is needed */
+    struct urefcount *urefcount_event;
 };
 
 UBASE_FROM_TO(upump_ecore, upump, upump, common.upump)
@@ -87,7 +93,11 @@ static Eina_Bool upump_ecore_dispatch_fd(void *_upump_ecore, Ecore_Fd_Handler *f
 {
     struct upump_ecore *upump_ecore = _upump_ecore;
     struct upump *upump = upump_ecore_to_upump(upump_ecore);
+    struct upump_ecore_mgr *ecore_mgr =
+        upump_ecore_mgr_from_upump_mgr(upump->mgr);
     upump_common_dispatch(upump);
+    if (upump_ecore_mgr_single_urefcount_event(ecore_mgr))
+        ecore_main_loop_quit();
     return EINA_TRUE;
 }
 
@@ -100,9 +110,13 @@ static Eina_Bool upump_ecore_dispatch_timer(void *_upump_ecore)
 {
     struct upump_ecore *upump_ecore = _upump_ecore;
     struct upump *upump = upump_ecore_to_upump(upump_ecore);
+    struct upump_ecore_mgr *ecore_mgr =
+        upump_ecore_mgr_from_upump_mgr(upump->mgr);
 
     if (unlikely(!upump_ecore->repeat)) {
         ecore_timer_freeze(upump_ecore->timer);
+        urefcount_release(upump_ecore->urefcount_event);
+        upump_ecore->urefcount_event = NULL;
     } else if (unlikely(!upump_ecore->repeated)) {
         ecore_timer_interval_set(upump_ecore->timer,
                     (double) upump_ecore->repeat / UCLOCK_FREQ);
@@ -110,6 +124,8 @@ static Eina_Bool upump_ecore_dispatch_timer(void *_upump_ecore)
     }
 
     upump_common_dispatch(upump);
+    if (upump_ecore_mgr_single_urefcount_event(ecore_mgr))
+        ecore_main_loop_quit();
 
     return EINA_TRUE;
 }
@@ -123,7 +139,11 @@ static Eina_Bool upump_ecore_dispatch_idle(void *_upump_ecore)
 {
     struct upump_ecore *upump_ecore = _upump_ecore;
     struct upump *upump = upump_ecore_to_upump(upump_ecore);
+    struct upump_ecore_mgr *ecore_mgr =
+        upump_ecore_mgr_from_upump_mgr(upump->mgr);
     upump_common_dispatch(upump);
+    if (upump_ecore_mgr_single_urefcount_event(ecore_mgr))
+        ecore_main_loop_quit();
 
     return EINA_TRUE;
 }
@@ -182,6 +202,7 @@ static struct upump *upump_ecore_alloc(struct upump_mgr *mgr,
             return NULL;
     }
     upump_ecore->event = event;
+    upump_ecore->urefcount_event = NULL;
 
     upump_mgr_use(mgr);
     upump_common_init(upump);
@@ -197,7 +218,8 @@ static struct upump *upump_ecore_alloc(struct upump_mgr *mgr,
 static void upump_ecore_real_start(struct upump *upump, bool status)
 {
     struct upump_ecore *upump_ecore = upump_ecore_from_upump(upump);
-    abort(status); /* FIXME not implemented */
+    struct upump_ecore_mgr *ecore_mgr =
+        upump_ecore_mgr_from_upump_mgr(upump->mgr);
 
     switch (upump_ecore->event) {
         case UPUMP_TYPE_IDLER:
@@ -216,6 +238,13 @@ static void upump_ecore_real_start(struct upump *upump, bool status)
         default:
             break;
     }
+
+    if (status) {
+        assert(!upump_ecore->urefcount_event);
+        upump_ecore_mgr_use_urefcount_event(ecore_mgr);
+        upump_ecore->urefcount_event =
+            &ecore_mgr->urefcount_event;
+    }
 }
 
 /** @This stops a pump.
@@ -226,7 +255,8 @@ static void upump_ecore_real_start(struct upump *upump, bool status)
 static void upump_ecore_real_stop(struct upump *upump, bool status)
 {
     struct upump_ecore *upump_ecore = upump_ecore_from_upump(upump);
-    abort(status); /* FIXME not implemented */
+    struct upump_ecore_mgr *ecore_mgr =
+        upump_ecore_mgr_from_upump_mgr(upump->mgr);
 
     switch (upump_ecore->event) {
         case UPUMP_TYPE_IDLER:
@@ -244,6 +274,11 @@ static void upump_ecore_real_stop(struct upump *upump, bool status)
             break;
         default:
             break;
+    }
+
+    if (status) {
+        urefcount_release(upump_ecore->urefcount_event);
+        upump_ecore->urefcount_event = NULL;
     }
 }
 
@@ -334,6 +369,14 @@ static int upump_ecore_control(struct upump *upump, int command, va_list args)
     }
 }
 
+/** @internal @This is called when there is no more event in the loop.
+ *
+ * @param upump_ecore_mgr ecore management structure
+ */
+static void upump_ecore_mgr_no_event(struct upump_ecore_mgr *ecore_mgr)
+{
+}
+
 /** @internal @This runs an event loop.
  *
  * @param mgr pointer to a upump_mgr structure
@@ -343,9 +386,12 @@ static int upump_ecore_control(struct upump *upump, int command, va_list args)
  */
 static int upump_ecore_mgr_run(struct upump_mgr *mgr, struct umutex *mutex)
 {
+    struct upump_ecore_mgr *ecore_mgr = upump_ecore_mgr_from_upump_mgr(mgr);
     if (mutex != NULL)
         return UBASE_ERR_UNHANDLED;
 
+    if (upump_ecore_mgr_single_urefcount_event(ecore_mgr))
+        return UBASE_ERR_NONE;
     ecore_main_loop_begin();
 
     return UBASE_ERR_NONE;
@@ -381,6 +427,7 @@ static int upump_ecore_mgr_control(struct upump_mgr *mgr,
 static void upump_ecore_mgr_free(struct urefcount *urefcount)
 {
     struct upump_ecore_mgr *ecore_mgr = upump_ecore_mgr_from_urefcount(urefcount);
+    upump_ecore_mgr_clean_urefcount_event(ecore_mgr);
     upump_common_mgr_clean(upump_ecore_mgr_to_upump_mgr(ecore_mgr));
     free(ecore_mgr);
     ecore_shutdown();
@@ -409,6 +456,7 @@ struct upump_mgr *upump_ecore_mgr_alloc(uint16_t upump_pool_depth,
     struct upump_mgr *mgr = upump_ecore_mgr_to_upump_mgr(ecore_mgr);
     mgr->signature = UPUMP_ECORE_SIGNATURE;
     urefcount_init(upump_ecore_mgr_to_urefcount(ecore_mgr), upump_ecore_mgr_free);
+    upump_ecore_mgr_init_urefcount_event(ecore_mgr);
     ecore_mgr->common_mgr.mgr.refcount = upump_ecore_mgr_to_urefcount(ecore_mgr);
     ecore_mgr->common_mgr.mgr.upump_alloc = upump_ecore_alloc;
     ecore_mgr->common_mgr.mgr.upump_control = upump_ecore_control;

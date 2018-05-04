@@ -660,6 +660,13 @@ static inline void upipe_rtpd_input(struct upipe *upipe, struct uref *uref,
     }
     uref_block_resize(uref, offset, -1);
 
+    if (type >= 72 && type <= 95 && marker) {
+        upipe_warn_va(upipe, "Payload type %d is probably RTCP, dropping",
+            type + 128);
+        uref_free(uref);
+        return;
+    }
+
     if (unlikely(upipe_rtpd->expected_seqnum != -1 &&
                  seqnum != upipe_rtpd->expected_seqnum)) {
         upipe_dbg_va(upipe, "potentially lost %d RTP packets, got %u expected %u",

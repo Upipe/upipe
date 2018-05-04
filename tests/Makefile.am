@@ -389,6 +389,9 @@ endif
 AM_CPPFLAGS = -I$(top_builddir)/include -I$(top_srcdir)/include
 LDADD = $(top_builddir)/lib/upipe/libupipe.la
 
+upump_ev_test_SOURCES = upump_common_test.h \
+			upump_common_test.c \
+			upump_ev_test.c
 upump_ev_test_LDADD = $(LDADD) -lev $(top_builddir)/lib/upump-ev/libupump_ev.la
 ulifo_uqueue_test_CFLAGS = $(AM_CFLAGS) -pthread
 ulifo_uqueue_test_LDADD = $(LDADD) -lev $(top_builddir)/lib/upump-ev/libupump_ev.la
@@ -506,6 +509,9 @@ upipe_x265_test_LDADD = $(LDADD) $(X265_LIBS) $(top_builddir)/lib/upipe-x265/lib
 upipe_x265_test_CFLAGS = $(AM_CFLAGS) $(X265_CFLAGS)
 
 upipe_alsa_sink_test_LDADD = $(LDADD) -lasound $(top_builddir)/lib/upipe-alsa/libupipe_alsa.la $(top_builddir)/lib/upipe-modules/libupipe_modules.la -lev $(top_builddir)/lib/upump-ev/libupump_ev.la
+upump_ecore_test_SOURCES = upump_common_test.h \
+			   upump_common_test.c \
+			   upump_ecore_test.c
 upump_ecore_test_LDADD = $(LDADD) $(ECORE_LIBS) $(top_builddir)/lib/upump-ecore/libupump_ecore.la
 upump_ecore_test_CFLAGS = $(AM_CFLAGS) $(ECORE_CFLAGS)
 upipe_m3u_reader_test_LDADD = $(LDADD) -lev $(top_builddir)/lib/upump-ev/libupump_ev.la $(top_builddir)/lib/upipe-modules/libupipe_modules.la

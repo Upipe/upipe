@@ -796,6 +796,15 @@ static void upipe_rtp_fec_sub_input(struct upipe *upipe, struct uref *uref,
         return;
     }
 
+    bool marker = rtp_check_marker(rtp_header);
+    uint8_t type = rtp_get_type(rtp_header);
+    if (type >= 72 && type <= 95 && marker) {
+        upipe_warn_va(upipe, "Payload type %d is probably RTCP, dropping",
+            type + 128);
+        uref_free(uref);
+        return;
+    }
+
     uref->priv = rtp_get_seqnum(rtp_header);
     uref_block_peek_unmap(uref, 0, rtp_buffer, rtp_header);
 

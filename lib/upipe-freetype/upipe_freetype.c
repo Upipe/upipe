@@ -36,6 +36,7 @@
 #include <upipe/uref_pic_flow.h>
 #include <upipe/uref_pic.h>
 #include <upipe/uref_dump.h>
+#include <upipe/uref_void.h>
 #include <upipe/uclock.h>
 #include <upipe/upipe.h>
 #include <upipe/udict.h>
@@ -319,7 +320,7 @@ static bool upipe_freetype_handle(struct upipe *upipe, struct uref *uref,
     }
 
     const char *text;
-    int r = uref_attr_get_string(uref, &text, UDICT_TYPE_STRING, "text");
+    int r = uref_void_get_text(uref, &text);
     if (!ubase_check(r) || !text) {
         uref_dump(uref, upipe->uprobe);
         text = "fail";
