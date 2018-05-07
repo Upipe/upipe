@@ -373,38 +373,37 @@ static int upipe_avfsink_sub_set_flow_def(struct upipe *upipe,
         av_dict_set(&stream->metadata, "language", lang, 0);
     }
 
-    AVCodecContext *codec = stream->codec;
-    codec->bit_rate = octetrate * 8;
-    codec->codec_tag =
+    AVCodecParameters *codecpar = stream->codecpar;
+    codecpar->bit_rate = octetrate * 8;
+    codecpar->codec_tag =
         av_codec_get_tag(upipe_avfsink->context->oformat->codec_tag, codec_id);
-    codec->codec_id = codec_id;
+    codecpar->codec_id = codec_id;
     if (codec_id < AV_CODEC_ID_FIRST_AUDIO) {
-        codec->codec_type = AVMEDIA_TYPE_VIDEO;
-        codec->width = width;
-        codec->height = height;
+        codecpar->codec_type = AVMEDIA_TYPE_VIDEO;
+        codecpar->width = width;
+        codecpar->height = height;
         stream->sample_aspect_ratio.num =
-            codec->sample_aspect_ratio.num = sar.num;
+            codecpar->sample_aspect_ratio.num = sar.num;
         stream->sample_aspect_ratio.den =
-            codec->sample_aspect_ratio.den = sar.den;
+            codecpar->sample_aspect_ratio.den = sar.den;
         stream->avg_frame_rate.num = 25;
         stream->avg_frame_rate.den = 1;
         stream->time_base.num = fps.den;
         stream->time_base.den = fps.num * 2;
-        codec->ticks_per_frame = 2;
-        codec->framerate.num = fps.num;
-        codec->framerate.den = fps.den;
+        stream->r_frame_rate.num = fps.num;
+        stream->r_frame_rate.den = fps.den;
     } else {
-        codec->codec_type = AVMEDIA_TYPE_AUDIO;
-        codec->channels = channels;
-        codec->sample_rate = rate;
-        stream->time_base = (AVRational){ 1, codec->sample_rate };
-        codec->frame_size = samples;
+        codecpar->codec_type = AVMEDIA_TYPE_AUDIO;
+        codecpar->channels = channels;
+        codecpar->sample_rate = rate;
+        stream->time_base = (AVRational){ 1, codecpar->sample_rate };
+        codecpar->frame_size = samples;
     }
 
     if (extradata_alloc != NULL) {
-        codec->flags |= AV_CODEC_FLAG_GLOBAL_HEADER;
-        codec->extradata_size = extradata_size;
-        codec->extradata = extradata_alloc;
+        // FIXME stream->codec->flags |= AV_CODEC_FLAG_GLOBAL_HEADER;
+        codecpar->extradata_size = extradata_size;
+        codecpar->extradata = extradata_alloc;
     }
 
     return UBASE_ERR_NONE;
@@ -1111,6 +1110,9 @@ static int upipe_avfsink_set_uri(struct upipe *upipe, const char *uri)
     if (unlikely(uri == NULL))
         return UBASE_ERR_NONE;
 
+    if (unlikely(strlen(uri) >= sizeof(upipe_avfsink->context->filename)))
+        return UBASE_ERR_INVALID;
+
     AVOutputFormat *format = NULL;
     format = av_guess_format(upipe_avfsink->format, uri, upipe_avfsink->mime);
     if (unlikely(format == NULL))
@@ -1122,9 +1124,7 @@ static int upipe_avfsink_set_uri(struct upipe *upipe, const char *uri)
         return UBASE_ERR_EXTERNAL;
     }
     upipe_avfsink->context->oformat = format;
-    strncpy(upipe_avfsink->context->filename, uri,
-            sizeof(upipe_avfsink->context->filename) - 1);
-    upipe_avfsink->context->filename[sizeof(upipe_avfsink->context->filename) - 1] = '\0';
+    strcpy(upipe_avfsink->context->filename, uri);
 
     upipe_avfsink->uri = strdup(uri);
     upipe_avfsink->opened = false;
