@@ -92,3 +92,7 @@ endif
 if HAVE_EBUR128
 SUBDIRS += upipe-ebur128
 endif
+
+if HAVE_DVBV5
+SUBDIRS += upipe-dvb
+endif
