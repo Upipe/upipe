@@ -1,7 +1,7 @@
 /*****************************************************************************
  * upipe_x265.h: application interface for x265 module
  *****************************************************************************
- * Copyright (C) 2017 OpenHeadend S.A.R.L.
+ * Copyright (C) 2017-2018 OpenHeadend S.A.R.L.
  *
  * Authors: Clément Vasseur
  *
@@ -47,7 +47,7 @@ enum upipe_x265_command {
     /** reconfigure encoder with updated parameters */
     UPIPE_X265_RECONFIG,
 
-    /** set default params */
+    /** set default params and bit depth (int) */
     UPIPE_X265_SET_DEFAULT,
 
     /** set default params for preset (const char *, const char *) */
@@ -76,7 +76,7 @@ static inline int upipe_x265_reconfigure(struct upipe *upipe)
 /** @This sets default parameters (and runs CPU detection).
  *
  * @param upipe description structure of the pipe
- * @param bit_depth codec bit depth (8, 10 or 12)
+ * @param bit_depth output bit depth: 0 (auto), 8, 10 or 12
  * @return an error code
  */
 static inline int upipe_x265_set_default(struct upipe *upipe,

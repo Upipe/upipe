@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2017 OpenHeadend S.A.R.L.
+ * Copyright (C) 2017-2018 OpenHeadend S.A.R.L.
  *
  * Authors: Clément Vasseur
  *
@@ -86,6 +86,14 @@
 //   7 veryslow
 //     placebo
 
+struct option {
+    char *name;
+    char *value;
+    struct uchain uchain;
+};
+
+UBASE_FROM_TO(option, uchain, uchain, uchain);
+
 /** @internal upipe_x265 private structure */
 struct upipe_x265 {
     /** refcount management structure */
@@ -97,6 +105,16 @@ struct upipe_x265 {
     x265_encoder *encoder;
     /** x265 params */
     x265_param params;
+    /** configured bit depth */
+    int bit_depth;
+    /** configured preset */
+    char *preset;
+    /** configured tune */
+    char *tune;
+    /** configured profile */
+    char *profile;
+    /** configured options */
+    struct uchain options;
     /** latency in the input flow */
     uint64_t input_latency;
     /** buffered frames count */
@@ -153,9 +171,10 @@ struct upipe_x265 {
     struct uchain request_list;
 
     /** input pixel format */
-    enum {
+    enum pixel_format {
         PIX_FMT_YUV420P,
         PIX_FMT_YUV420P10LE,
+        PIX_FMT_YUV420P12LE,
     } pixel_format;
 
     /** input width */
@@ -193,12 +212,6 @@ struct upipe_x265 {
     /** speedcontrol buffer fullness */
     int64_t sc_buffer_fill;
 
-    struct option {
-        const char *name;
-        const char *value;
-        struct option *next;
-    } *options;
-
     /** public structure */
     struct upipe upipe;
 };
@@ -230,6 +243,125 @@ UPIPE_HELPER_UBUF_MGR(upipe_x265, ubuf_mgr, flow_format, ubuf_mgr_request,
                       upipe_x265_unregister_output_request)
 UPIPE_HELPER_UCLOCK(upipe_x265, uclock, uclock_request, NULL, upipe_throw_provide_request, NULL)
 
+/** @internal @This sets the content of an x265 option.
+ * upipe_x265_reconfigure must be called to apply changes.
+ *
+ * @param upipe description structure of the pipe
+ * @param params params structure where the option should be set
+ * @param name name of the option
+ * @param value content of the option
+ * @return an error code
+ */
+static int upipe_x265_set_option(struct upipe *upipe,
+                                 x265_param *params,
+                                 const char *name,
+                                 const char *value)
+{
+    struct upipe_x265 *upipe_x265 = upipe_x265_from_upipe(upipe);
+
+    if (unlikely(upipe_x265->api == NULL || name == NULL))
+        return UBASE_ERR_INVALID;
+
+    int ret = upipe_x265->api->param_parse(params, name, value);
+    if (unlikely(ret < 0)) {
+        const char *reason = "";
+        if (ret == X265_PARAM_BAD_NAME)
+            reason = ": bad name";
+        else if (ret == X265_PARAM_BAD_VALUE)
+            reason = ": bad value";
+        upipe_err_va(upipe, "cannot set option %s=%s%s",
+                     name, value ?: "true", reason);
+        return UBASE_ERR_EXTERNAL;
+    }
+
+    return UBASE_ERR_NONE;
+}
+
+static void apply_params(struct upipe *upipe, x265_param *params)
+{
+    struct upipe_x265 *upipe_x265 = upipe_x265_from_upipe(upipe);
+    struct uref *flow_def = upipe_x265->flow_def_input;
+    const char *value;
+
+    if (flow_def == NULL)
+        return;
+
+    params->logLevel = X265_LOG_DEBUG;
+
+    struct urational fps = {0, 0};
+    if (likely(ubase_check(uref_pic_flow_get_fps(flow_def, &fps)))) {
+        params->fpsNum = fps.num;
+        params->fpsDenom = fps.den;
+    }
+
+    params->vui.aspectRatioIdc = upipe_x265->aspect_ratio_idc;
+    if (params->vui.aspectRatioIdc == X265_EXTENDED_SAR) {
+        params->vui.sarWidth = upipe_x265->sar_width;
+        params->vui.sarHeight = upipe_x265->sar_height;
+    }
+    params->vui.bEnableOverscanInfoPresentFlag = upipe_x265->overscan;
+    params->vui.bEnableOverscanAppropriateFlag = upipe_x265->overscan;
+    params->sourceWidth = upipe_x265->width;
+    params->sourceHeight = upipe_x265->height;
+
+    if (!ubase_check(uref_pic_get_progressive(flow_def)))
+        params->interlaceMode = 1;
+
+    upipe_x265_set_option(upipe, params, "range",
+                          ubase_check(uref_pic_flow_get_full_range(flow_def)) ?
+                          "full" : "limited");
+
+    if (ubase_check(uref_pic_flow_get_video_format(flow_def, &value)))
+        upipe_x265_set_option(upipe, params, "videoformat", value);
+
+    if (ubase_check(uref_pic_flow_get_colour_primaries(flow_def, &value)))
+        upipe_x265_set_option(upipe, params, "colorprim", value);
+
+    if (ubase_check(uref_pic_flow_get_transfer_characteristics(flow_def, &value)))
+        upipe_x265_set_option(upipe, params, "transfer", value);
+
+    if (ubase_check(uref_pic_flow_get_matrix_coefficients(flow_def, &value)))
+        upipe_x265_set_option(upipe, params, "colormatrix", value);
+}
+
+static int setup_encoder_params(struct upipe *upipe)
+{
+    struct upipe_x265 *upipe_x265 = upipe_x265_from_upipe(upipe);
+    const struct x265_api *api = upipe_x265->api;
+    x265_param params;
+
+    if (unlikely(api == NULL))
+        return UBASE_ERR_NONE;
+
+    if (unlikely(api->param_default_preset(&params,
+                                           upipe_x265->preset,
+                                           upipe_x265->tune) < 0)) {
+        upipe_err_va(upipe, "cannot set default preset=%s tune=%s",
+                     upipe_x265->preset, upipe_x265->tune);
+        return UBASE_ERR_EXTERNAL;
+    }
+
+    apply_params(upipe, &params);
+
+    struct uchain *uchain;
+    ulist_foreach(&upipe_x265->options, uchain) {
+        struct option *option = option_from_uchain(uchain);
+        int ret = upipe_x265_set_option(upipe, &params,
+                                        option->name,
+                                        option->value);
+        if (unlikely(!ubase_check(ret)))
+            return ret;
+    }
+
+    if (unlikely(api->param_apply_profile(&params, upipe_x265->profile) < 0)) {
+        upipe_err_va(upipe, "cannot apply profile %s", upipe_x265->profile);
+        return UBASE_ERR_EXTERNAL;
+    }
+
+    upipe_x265->params = params;
+    return UBASE_ERR_NONE;
+}
+
 /** @internal @This reconfigures encoder with updated parameters
  *
  * @param upipe description structure of the pipe
@@ -239,8 +371,9 @@ static int _upipe_x265_reconfigure(struct upipe *upipe)
 {
     struct upipe_x265 *upipe_x265 = upipe_x265_from_upipe(upipe);
 
-    if (unlikely(!upipe_x265->encoder))
-        return UBASE_ERR_UNHANDLED;
+    /* encoder not initialized yet, params will be applied later */
+    if (unlikely(upipe_x265->encoder == NULL))
+        return UBASE_ERR_NONE;
 
     int ret = upipe_x265->api->encoder_reconfig(upipe_x265->encoder,
                                                 &upipe_x265->params);
@@ -250,7 +383,7 @@ static int _upipe_x265_reconfigure(struct upipe *upipe)
 /** @internal @This reset parameters to default
  *
  * @param upipe description structure of the pipe
- * @param bit_depth codec bit depth (8, 10 or 12)
+ * @param bit_depth output bit depth: 0 (auto), 8, 10 or 12
  * @return an error code
  */
 static int _upipe_x265_set_default(struct upipe *upipe, int bit_depth)
@@ -261,7 +394,13 @@ static int _upipe_x265_set_default(struct upipe *upipe, int bit_depth)
     if (unlikely(upipe_x265->api == NULL))
         return UBASE_ERR_INVALID;
 
-    upipe_x265->api->param_default_preset(&upipe_x265->params, "slow", NULL);
+    int ret = upipe_x265->api->param_default_preset(&upipe_x265->params,
+                                                    "slow", NULL);
+    if (unlikely(ret < 0))
+        return UBASE_ERR_EXTERNAL;
+    upipe_x265->bit_depth = bit_depth;
+    free(upipe_x265->preset);
+    upipe_x265->preset = strdup("slow");
     upipe_x265->sc_preset = 4;
 
     upipe_notice_va(upipe, "bit depth: %d", upipe_x265->params.internalBitDepth);
@@ -273,7 +412,7 @@ static int _upipe_x265_set_default(struct upipe *upipe, int bit_depth)
  *
  * @param upipe description structure of the pipe
  * @param preset x265 preset
- * @param tuning x265 tuning
+ * @param tune x265 tuning
  * @return an error code
  */
 static int _upipe_x265_set_default_preset(struct upipe *upipe,
@@ -281,9 +420,12 @@ static int _upipe_x265_set_default_preset(struct upipe *upipe,
                                           const char *tune)
 {
     struct upipe_x265 *upipe_x265 = upipe_x265_from_upipe(upipe);
+
+    if (unlikely(upipe_x265->api == NULL))
+        return UBASE_ERR_INVALID;
     int ret = upipe_x265->api->param_default_preset(&upipe_x265->params,
                                                     preset, tune);
-    return ret < 0 ? UBASE_ERR_EXTERNAL : UBASE_ERR_NONE;
+    return unlikely(ret < 0) ? UBASE_ERR_EXTERNAL : UBASE_ERR_NONE;
 }
 
 /** @internal @This enforces profile.
@@ -295,32 +437,12 @@ static int _upipe_x265_set_default_preset(struct upipe *upipe,
 static int _upipe_x265_set_profile(struct upipe *upipe, const char *profile)
 {
     struct upipe_x265 *upipe_x265 = upipe_x265_from_upipe(upipe);
+
+    if (unlikely(upipe_x265->api == NULL))
+        return UBASE_ERR_INVALID;
     int ret = upipe_x265->api->param_apply_profile(&upipe_x265->params,
                                                    profile);
-    return ret < 0 ? UBASE_ERR_EXTERNAL : UBASE_ERR_NONE;
-}
-
-/** @internal @This sets the content of an x265 option.
- * upipe_x265_reconfigure must be called to apply changes.
- *
- * @param upipe description structure of the pipe
- * @param option name of the option
- * @param content content of the option
- * @return an error code
- */
-static int upipe_x265_set_option(struct upipe *upipe,
-                                 const char *name,
-                                 const char *value)
-{
-    struct upipe_x265 *upipe_x265 = upipe_x265_from_upipe(upipe);
-
-    int ret = upipe_x265->api->param_parse(&upipe_x265->params, name, value);
-    if (unlikely(ret < 0)) {
-        upipe_err_va(upipe, "can't set option %s=%s (%d)", name, value, ret);
-        return UBASE_ERR_EXTERNAL;
-    }
-
-    return UBASE_ERR_NONE;
+    return unlikely(ret < 0) ? UBASE_ERR_EXTERNAL : UBASE_ERR_NONE;
 }
 
 /** @This switches upipe-x265 into speedcontrol mode, with the given latency
@@ -373,8 +495,13 @@ static struct upipe *upipe_x265_alloc(struct upipe_mgr *mgr,
 
     struct upipe_x265 *upipe_x265 = upipe_x265_from_upipe(upipe);
 
+    upipe_x265->api = NULL;
     upipe_x265->encoder = NULL;
-    _upipe_x265_set_default(upipe, 0);
+    upipe_x265->bit_depth = 0;
+    upipe_x265->preset = NULL;
+    upipe_x265->tune = NULL;
+    upipe_x265->profile = NULL;
+    ulist_init(&upipe_x265->options);
     upipe_x265->input_latency = 0;
     upipe_x265->latency_frames = 3;
     upipe_x265->initial_latency = 0;
@@ -402,55 +529,8 @@ static struct upipe *upipe_x265_alloc(struct upipe_mgr *mgr,
     upipe_x265->input_pts = UINT64_MAX;
     upipe_x265->input_pts_sys = UINT64_MAX;
 
-    upipe_x265->options = NULL;
-
     upipe_throw_ready(upipe);
     return upipe;
-}
-
-static void apply_params(struct upipe *upipe)
-{
-    struct upipe_x265 *upipe_x265 = upipe_x265_from_upipe(upipe);
-    struct uref *flow_def = upipe_x265->flow_def_input;
-    x265_param *params = &upipe_x265->params;
-    const char *value;
-
-    params->logLevel = X265_LOG_DEBUG;
-
-    struct urational fps = {0, 0};
-    if (likely(ubase_check(uref_pic_flow_get_fps(flow_def, &fps)))) {
-        params->fpsNum = fps.num;
-        params->fpsDenom = fps.den;
-    }
-
-    params->vui.aspectRatioIdc = upipe_x265->aspect_ratio_idc;
-    if (params->vui.aspectRatioIdc == X265_EXTENDED_SAR) {
-        params->vui.sarWidth = upipe_x265->sar_width;
-        params->vui.sarHeight = upipe_x265->sar_height;
-    }
-    params->vui.bEnableOverscanInfoPresentFlag = upipe_x265->overscan;
-    params->vui.bEnableOverscanAppropriateFlag = upipe_x265->overscan;
-    params->sourceWidth = upipe_x265->width;
-    params->sourceHeight = upipe_x265->height;
-
-    if (!ubase_check(uref_pic_get_progressive(flow_def)))
-        params->interlaceMode = 1;
-
-    upipe_x265_set_option(upipe, "range",
-                          ubase_check(uref_pic_flow_get_full_range(flow_def)) ?
-                          "full" : "limited");
-
-    if (ubase_check(uref_pic_flow_get_video_format(flow_def, &value)))
-        upipe_x265_set_option(upipe, "videoformat", value);
-
-    if (ubase_check(uref_pic_flow_get_colour_primaries(flow_def, &value)))
-        upipe_x265_set_option(upipe, "colorprim", value);
-
-    if (ubase_check(uref_pic_flow_get_transfer_characteristics(flow_def, &value)))
-        upipe_x265_set_option(upipe, "transfer", value);
-
-    if (ubase_check(uref_pic_flow_get_matrix_coefficients(flow_def, &value)))
-        upipe_x265_set_option(upipe, "colormatrix", value);
 }
 
 static void speedcontrol_update(struct upipe *upipe)
@@ -478,16 +558,20 @@ static void speedcontrol_update(struct upipe *upipe)
 
         upipe_verbose_va(upipe, "apply speedcontrol preset %s", preset);
 
-        if (_upipe_x265_set_default_preset(upipe, preset, NULL) != UBASE_ERR_NONE)
+        if (!ubase_check(_upipe_x265_set_default_preset(upipe, preset,
+                                                        upipe_x265->tune)))
             upipe_err_va(upipe, "x265 set_default_preset failed");
 
-        apply_params(upipe);
+        apply_params(upipe, &upipe_x265->params);
 
-        struct option *opt;
-        for (opt = upipe_x265->options; opt != NULL; opt = opt->next)
-            upipe_x265_set_option(upipe, opt->name, opt->value);
+        struct uchain *uchain;
+        ulist_foreach(&upipe_x265->options, uchain) {
+            struct option *option = option_from_uchain(uchain);
+            upipe_x265_set_option(upipe, &upipe_x265->params,
+                                  option->name, option->value);
+        }
 
-        if (_upipe_x265_reconfigure(upipe) == UBASE_ERR_NONE)
+        if (ubase_check(_upipe_x265_reconfigure(upipe)))
             upipe_x265->sc_preset = set;
     }
 }
@@ -505,7 +589,9 @@ static bool upipe_x265_open(struct upipe *upipe, int width, int height)
 
     upipe_x265->width = width;
     upipe_x265->height = height;
-    apply_params(upipe);
+
+    if (!ubase_check(setup_encoder_params(upipe)))
+        return false;
 
     /* reconfigure encoder with new parameters and return */
     if (unlikely(upipe_x265->encoder)) {
@@ -727,7 +813,7 @@ static void upipe_x265_get_aspect_ratio(struct upipe *upipe,
         { 16,   2,  1, },
     };
 
-    if (uref_pic_flow_get_sar(flow_def, &sar) != UBASE_ERR_NONE) {
+    if (!ubase_check(uref_pic_flow_get_sar(flow_def, &sar))) {
         // unspecified aspect ratio
         upipe_x265->aspect_ratio_idc = 0;
         return;
@@ -747,6 +833,44 @@ static void upipe_x265_get_aspect_ratio(struct upipe *upipe,
     upipe_x265->sar_height = sar.den;
 }
 
+static int get_pixel_format(struct uref *flow_def,
+                            enum pixel_format *pixel_format)
+{
+    /* check for yuv420p */
+    if (ubase_check(uref_pic_flow_check_chroma(flow_def, 1, 1, 1, "y8")) &&
+        ubase_check(uref_pic_flow_check_chroma(flow_def, 2, 2, 1, "u8")) &&
+        ubase_check(uref_pic_flow_check_chroma(flow_def, 2, 2, 1, "v8")))
+        *pixel_format = PIX_FMT_YUV420P;
+
+    /* check for yuv420p10le */
+    else if (ubase_check(uref_pic_flow_check_chroma(flow_def, 1, 1, 2, "y10l")) &&
+             ubase_check(uref_pic_flow_check_chroma(flow_def, 2, 2, 2, "u10l")) &&
+             ubase_check(uref_pic_flow_check_chroma(flow_def, 2, 2, 2, "v10l")))
+        *pixel_format = PIX_FMT_YUV420P10LE;
+
+    /* check for yuv420p12le */
+    else if (ubase_check(uref_pic_flow_check_chroma(flow_def, 1, 1, 2, "y12l")) &&
+             ubase_check(uref_pic_flow_check_chroma(flow_def, 2, 2, 2, "u12l")) &&
+             ubase_check(uref_pic_flow_check_chroma(flow_def, 2, 2, 2, "v12l")))
+        *pixel_format = PIX_FMT_YUV420P12LE;
+
+    else
+        return UBASE_ERR_INVALID;
+
+    return UBASE_ERR_NONE;
+}
+
+static int pixel_format_to_bit_depth(enum pixel_format pixel_format)
+{
+    static const int bit_depth[] = {
+        [PIX_FMT_YUV420P]     = 8,
+        [PIX_FMT_YUV420P10LE] = 10,
+        [PIX_FMT_YUV420P12LE] = 12,
+    };
+
+    return bit_depth[pixel_format];
+}
+
 /** @internal @This processes pictures.
  *
  * @param upipe description structure of the pipe
@@ -759,8 +883,8 @@ static bool upipe_x265_handle(struct upipe *upipe,
                               struct upump **upump_p)
 {
     struct upipe_x265 *upipe_x265 = upipe_x265_from_upipe(upipe);
-    const char *def;
-    if (unlikely(uref != NULL && ubase_check(uref_flow_get_def(uref, &def)))) {
+
+    if (unlikely(uref != NULL && ubase_check(uref_flow_get_def(uref, NULL)))) {
         upipe_x265->input_latency = 0;
         uref_clock_get_latency(uref, &upipe_x265->input_latency);
         upipe_x265_store_flow_def(upipe, NULL);
@@ -775,17 +899,47 @@ static bool upipe_x265_handle(struct upipe *upipe,
         else
             upipe_x265->overscan = overscan ? 2 : 1;
 
+        uint64_t hsize, vsize;
+        if (ubase_check(uref_pic_flow_get_hsize(uref, &hsize)) &&
+            ubase_check(uref_pic_flow_get_vsize(uref, &vsize))) {
+            upipe_x265->width = hsize;
+            upipe_x265->height = vsize;
+        }
+
         uref = upipe_x265_store_flow_def_input(upipe, uref);
         if (uref != NULL) {
             uref_pic_flow_clear_format(uref);
             upipe_x265_require_flow_format(upipe, uref);
         }
+
+        /* setup encoder params */
+        int bit_depth = upipe_x265->bit_depth;
+        int ret = get_pixel_format(upipe_x265->flow_def_input,
+                                   &upipe_x265->pixel_format);
+        if (unlikely(!ubase_check(ret)))
+            goto err_invalid;
+        if (bit_depth == 0)
+            bit_depth = pixel_format_to_bit_depth(upipe_x265->pixel_format);
+
+        upipe_x265->api = x265_api_get(bit_depth);
+        if (unlikely(upipe_x265->api == NULL))
+            goto err_invalid;
+
+        ret = setup_encoder_params(upipe);
+        if (unlikely(!ubase_check(ret)))
+            goto err_invalid;
+
+        return true;
+
+err_invalid:
+        upipe_throw_fatal(upipe, UBASE_ERR_INVALID);
         return true;
     }
 
     static const char *const chromas_list[][3] = {
-        [PIX_FMT_YUV420P] = {"y8", "u8", "v8"},
+        [PIX_FMT_YUV420P]     = {"y8", "u8", "v8"},
         [PIX_FMT_YUV420P10LE] = {"y10l", "u10l", "v10l"},
+        [PIX_FMT_YUV420P12LE] = {"y12l", "u12l", "v12l"},
     };
     const char * const *chromas = chromas_list[upipe_x265->pixel_format];
     size_t width, height;
@@ -795,7 +949,6 @@ static bool upipe_x265_handle(struct upipe *upipe,
     uint32_t nals_num = 0;
     struct ubuf *ubuf_block;
     uint8_t *buf = NULL;
-    x265_param curparams;
     bool needopen = false;
     int ret = 0;
 
@@ -808,7 +961,7 @@ static bool upipe_x265_handle(struct upipe *upipe,
 
     if (likely(uref)) {
         pic.userData = uref;
-        pic.bitDepth = upipe_x265->pixel_format == PIX_FMT_YUV420P ? 8 : 10;
+        pic.bitDepth = pixel_format_to_bit_depth(upipe_x265->pixel_format);
         pic.colorSpace = X265_CSP_I420;
 
         uref_pic_size(uref, &width, &height, NULL);
@@ -817,7 +970,7 @@ static bool upipe_x265_handle(struct upipe *upipe,
         if (unlikely(!upipe_x265->encoder)) {
             needopen = true;
         } else if (unlikely(upipe_x265_need_update(upipe, width, height))) {
-            x265_param *params = &upipe_x265_from_upipe(upipe)->params;
+            x265_param *params = &upipe_x265->params;
             upipe_notice_va(upipe, "Flow parameters changed, reconfiguring encoder "
                             "(%d:%zu, %d:%zu, %d/%d/%d:%d/%d/%d, %d:%d)",
                 upipe_x265->width, width,
@@ -841,8 +994,6 @@ static bool upipe_x265_handle(struct upipe *upipe,
         if (upipe_x265->flow_def_requested == NULL)
             return false;
 
-        upipe_x265->api->encoder_parameters(upipe_x265->encoder, &curparams);
-
         uref_clock_get_rate(uref, &upipe_x265->drift_rate);
         uref_clock_get_pts_prog(uref, &upipe_x265->input_pts);
         uref_clock_get_pts_sys(uref, &upipe_x265->input_pts_sys);
@@ -861,7 +1012,7 @@ static bool upipe_x265_handle(struct upipe *upipe,
                         pic.sliceType = X265_TYPE_B;
                         break;
                     case H265SLI_TYPE_I:
-                        pic.sliceType = curparams.bOpenGOP ?
+                        pic.sliceType = upipe_x265->params.bOpenGOP ?
                             X265_TYPE_I :
                             X265_TYPE_IDR;
                         break;
@@ -908,7 +1059,6 @@ static bool upipe_x265_handle(struct upipe *upipe,
                                               NULL, &pic);
         if (ret <= 0)
             upipe_x265->delayed_frames = false;
-        upipe_x265->api->encoder_parameters(upipe_x265->encoder, &curparams);
     }
 
     if (unlikely(ret < 0)) {
@@ -1130,20 +1280,23 @@ static int upipe_x265_set_flow_def(struct upipe *upipe,
                  macropixel != 1))
         return UBASE_ERR_INVALID;
 
-    /* check for yuv420p */
-    if (ubase_check(uref_pic_flow_check_chroma(flow_def, 1, 1, 1, "y8")) &&
-        ubase_check(uref_pic_flow_check_chroma(flow_def, 2, 2, 1, "u8")) &&
-        ubase_check(uref_pic_flow_check_chroma(flow_def, 2, 2, 1, "v8")))
-        upipe_x265->pixel_format = PIX_FMT_YUV420P;
-
-    /* check for yuv420p10le */
-    else if (ubase_check(uref_pic_flow_check_chroma(flow_def, 1, 1, 2, "y10l")) &&
-             ubase_check(uref_pic_flow_check_chroma(flow_def, 2, 2, 2, "u10l")) &&
-             ubase_check(uref_pic_flow_check_chroma(flow_def, 2, 2, 2, "v10l")))
-        upipe_x265->pixel_format = PIX_FMT_YUV420P10LE;
-
-    else
+    /* check bit depth */
+    enum pixel_format pixel_format;
+    int ret = get_pixel_format(flow_def, &pixel_format);
+    if (unlikely(!ubase_check(ret)))
+        return ret;
+    int bit_depth = upipe_x265->bit_depth;
+    int input_bit_depth = pixel_format_to_bit_depth(pixel_format);
+    if (bit_depth == 0)
+        bit_depth = input_bit_depth;
+    else if (bit_depth != input_bit_depth)
         return UBASE_ERR_INVALID;
+
+    const struct x265_api *api = x265_api_get(bit_depth);
+    if (unlikely(api == NULL)) {
+        upipe_err_va(upipe, "unsupported bit depth %d", bit_depth);
+        return UBASE_ERR_INVALID;
+    }
 
     /* Extract relevant attributes to flow def check. */
     struct uref *flow_def_check =
@@ -1212,17 +1365,23 @@ static int _upipe_x265_provide_flow_format(struct upipe *upipe,
     struct upipe_x265 *upipe_x265 = upipe_x265_from_upipe(upipe);
     struct uref *flow_format = uref_dup(request->uref);
     UBASE_ALLOC_RETURN(flow_format);
-    uref_pic_flow_clear_format(flow_format);
-    uref_pic_flow_set_macropixel(flow_format, 1);
-    uref_pic_flow_set_planes(flow_format, 0);
-    if (upipe_x265->params.internalBitDepth >= 10) {
-        uref_pic_flow_add_plane(flow_format, 1, 1, 2, "y10l");
-        uref_pic_flow_add_plane(flow_format, 2, 2, 2, "u10l");
-        uref_pic_flow_add_plane(flow_format, 2, 2, 2, "v10l");
-    } else {
-        uref_pic_flow_add_plane(flow_format, 1, 1, 1, "y8");
-        uref_pic_flow_add_plane(flow_format, 2, 2, 1, "u8");
-        uref_pic_flow_add_plane(flow_format, 2, 2, 1, "v8");
+    if (upipe_x265->bit_depth != 0) {
+        uref_pic_flow_clear_format(flow_format);
+        uref_pic_flow_set_macropixel(flow_format, 1);
+        uref_pic_flow_set_planes(flow_format, 0);
+        if (upipe_x265->bit_depth == 8) {
+            uref_pic_flow_add_plane(flow_format, 1, 1, 1, "y8");
+            uref_pic_flow_add_plane(flow_format, 2, 2, 1, "u8");
+            uref_pic_flow_add_plane(flow_format, 2, 2, 1, "v8");
+        } else if (upipe_x265->bit_depth == 10) {
+            uref_pic_flow_add_plane(flow_format, 1, 1, 2, "y10l");
+            uref_pic_flow_add_plane(flow_format, 2, 2, 2, "u10l");
+            uref_pic_flow_add_plane(flow_format, 2, 2, 2, "v10l");
+        } else if (upipe_x265->bit_depth == 12) {
+            uref_pic_flow_add_plane(flow_format, 1, 1, 2, "y12l");
+            uref_pic_flow_add_plane(flow_format, 2, 2, 2, "u12l");
+            uref_pic_flow_add_plane(flow_format, 2, 2, 2, "v12l");
+        }
     }
     return urequest_provide_flow_format(request, flow_format);
 }
@@ -1236,6 +1395,8 @@ static int _upipe_x265_provide_flow_format(struct upipe *upipe,
  */
 static int upipe_x265_control(struct upipe *upipe, int command, va_list args)
 {
+    struct upipe_x265 *upipe_x265 = upipe_x265_from_upipe(upipe);
+
     switch (command) {
         case UPIPE_ATTACH_UCLOCK:
             upipe_x265_require_uclock(upipe);
@@ -1267,39 +1428,80 @@ static int upipe_x265_control(struct upipe *upipe, int command, va_list args)
 
         case UPIPE_X265_RECONFIG: {
             UBASE_SIGNATURE_CHECK(args, UPIPE_X265_SIGNATURE)
+            int ret = setup_encoder_params(upipe);
+            if (unlikely(!ubase_check(ret)))
+                return ret;
             return _upipe_x265_reconfigure(upipe);
         }
         case UPIPE_X265_SET_DEFAULT: {
             UBASE_SIGNATURE_CHECK(args, UPIPE_X265_SIGNATURE)
             int bit_depth = va_arg(args, int);
-            return _upipe_x265_set_default(upipe, bit_depth);
+            upipe_x265->bit_depth = bit_depth;
+            return UBASE_ERR_NONE;
         }
         case UPIPE_X265_SET_DEFAULT_PRESET: {
             UBASE_SIGNATURE_CHECK(args, UPIPE_X265_SIGNATURE)
             const char *preset = va_arg(args, const char *);
             const char *tune = va_arg(args, const char *);
-            return _upipe_x265_set_default_preset(upipe, preset, tune);
+            char *preset_dup = preset ? strdup(preset) : NULL;
+            char *tune_dup = tune ? strdup(tune) : NULL;
+            if ((preset && !preset_dup) || (tune && !tune_dup)) {
+                free(preset_dup);
+                free(tune_dup);
+                return UBASE_ERR_ALLOC;
+            }
+            free(upipe_x265->preset);
+            upipe_x265->preset = preset_dup;
+            free(upipe_x265->tune);
+            upipe_x265->tune = tune_dup;
+            return UBASE_ERR_NONE;
         }
         case UPIPE_X265_SET_PROFILE: {
             UBASE_SIGNATURE_CHECK(args, UPIPE_X265_SIGNATURE)
             const char *profile = va_arg(args, const char *);
-            return _upipe_x265_set_profile(upipe, profile);
+            char *profile_dup = profile ? strdup(profile) : NULL;
+            if (profile && !profile_dup)
+                return UBASE_ERR_ALLOC;
+            free(upipe_x265->profile);
+            upipe_x265->profile = profile_dup;
+            return UBASE_ERR_NONE;
         }
         case UPIPE_SET_OPTION: {
             const char *name = va_arg(args, const char *);
             const char *value = va_arg(args, const char *);
-            upipe_dbg_va(upipe, "set %s=%s", name, value);
-            int ret = upipe_x265_set_option(upipe, name, value);
-            if (likely(ret == UBASE_ERR_NONE)) {
-                struct upipe_x265 *upipe_x265 = upipe_x265_from_upipe(upipe);
-                struct option *opt = malloc(sizeof (*opt));
-                UBASE_ALLOC_RETURN(opt);
-                opt->name = name;
-                opt->value = value;
-                opt->next = upipe_x265->options;
-                upipe_x265->options = opt;
+            struct option *option = NULL;
+            struct uchain *uchain;
+            ulist_foreach(&upipe_x265->options, uchain) {
+                struct option *opt = option_from_uchain(uchain);
+                if (!strcmp(opt->name, name)) {
+                    option = opt;
+                    break;
+                }
             }
-            return ret;
+            char *value_dup = value ? strdup(value) : NULL;
+            if (value && !value_dup)
+                return UBASE_ERR_ALLOC;
+            if (option == NULL) {
+                option = malloc(sizeof (*option));
+                if (option == NULL) {
+                    free(value_dup);
+                    return UBASE_ERR_ALLOC;
+                }
+                option->name = strdup(name);
+                if (option->name == NULL) {
+                    free(value_dup);
+                    free(option);
+                    return UBASE_ERR_ALLOC;
+                }
+            } else {
+                ulist_delete(uchain);
+                free(option->value);
+            }
+            option->value = value_dup;
+            uchain_init(&option->uchain);
+            ulist_add(&upipe_x265->options, &option->uchain);
+            upipe_dbg_va(upipe, "set %s=%s", name, value ?: "true");
+            return UBASE_ERR_NONE;
         }
         case UPIPE_X265_SET_SC_LATENCY: {
             UBASE_SIGNATURE_CHECK(args, UPIPE_X265_SIGNATURE)
@@ -1323,15 +1525,15 @@ static int upipe_x265_control(struct upipe *upipe, int command, va_list args)
 static void upipe_x265_free_options(struct upipe *upipe)
 {
     struct upipe_x265 *upipe_x265 = upipe_x265_from_upipe(upipe);
-    struct option *opt = upipe_x265->options;
+    struct uchain *uchain, *uchain_tmp;
 
-    while (opt != NULL) {
-        struct option *p = opt;
-        opt = opt->next;
-        free(p);
+    ulist_delete_foreach(&upipe_x265->options, uchain, uchain_tmp) {
+        struct option *option = option_from_uchain(uchain);
+        ulist_delete(uchain);
+        free(option->name);
+        free(option->value);
+        free(option);
     }
-
-    upipe_x265->options = NULL;
 }
 
 /** @This frees a upipe.
@@ -1344,6 +1546,9 @@ static void upipe_x265_free(struct upipe *upipe)
 
     upipe_x265_close(upipe);
     upipe_x265_free_options(upipe);
+    free(upipe_x265->preset);
+    free(upipe_x265->tune);
+    free(upipe_x265->profile);
     upipe_throw_dead(upipe);
     upipe_x265_clean_uclock(upipe);
     upipe_x265_clean_ubuf_mgr(upipe);
