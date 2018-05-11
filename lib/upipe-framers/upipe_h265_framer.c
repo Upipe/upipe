@@ -994,11 +994,11 @@ static bool upipe_h265f_activate_sps(struct upipe *upipe, uint32_t sps_id)
             ubuf_block_stream_skip_bits(s, 16);
             bool poc_proportional_to_timing = ubuf_block_stream_show_bits(s, 1);
             ubuf_block_stream_skip_bits(s, 1);
-            if (poc_proportional_to_timing) {
-                uint32_t num_ticks_poc_diff = upipe_h26xf_stream_ue(s) + 1;
-                frame_rate.num = time_scale;
-                frame_rate.den = num_units_in_ticks * num_ticks_poc_diff;
-            }
+            uint32_t num_ticks_poc_diff = 1;
+            if (poc_proportional_to_timing)
+                num_ticks_poc_diff = upipe_h26xf_stream_ue(s) + 1;
+            frame_rate.num = time_scale;
+            frame_rate.den = num_units_in_ticks * num_ticks_poc_diff;
 
             bool hrd_present = ubuf_block_stream_show_bits(s, 1);
             ubuf_block_stream_skip_bits(s, 1);
