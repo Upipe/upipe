@@ -72,7 +72,9 @@ struct sdi_ioctl_fan {
 };
 
 struct sdi_ioctl_dma {
-    uint8_t loopback_enable;
+    uint8_t fill;
+    uint8_t tx_rx_loopback_enable;
+    uint8_t rx_tx_loopback_enable;
 };
 
 struct sdi_ioctl_dma_writer {
@@ -107,6 +109,7 @@ struct sdi_ioctl_rx {
     uint8_t locked;
     uint8_t mode;
     uint8_t family;
+    uint8_t scan;
     uint8_t rate;
 };
 
@@ -121,31 +124,37 @@ struct sdi_ioctl_tx_spi {
 
 struct sdi_ioctl_tx {
     uint8_t crc_enable;
+    uint8_t mode;
     uint8_t txen;
     uint8_t slew;
 };
 
+struct sdi_ioctl_tx_rx_loopback {
+    uint8_t config;
+};
+
 #define SDI_IOCTL 'S'
 
-#define SDI_IOCTL_REG         _IOWR(SDI_IOCTL,  0, struct sdi_ioctl_reg)
-#define SDI_IOCTL_FLASH       _IOWR(SDI_IOCTL,  1, struct sdi_ioctl_flash)
-#define SDI_IOCTL_ICAP        _IOWR(SDI_IOCTL,  2, struct sdi_ioctl_flash)
-#define SDI_IOCTL_REFCLK      _IOWR(SDI_IOCTL,  4, struct sdi_ioctl_refclk)
-#define SDI_IOCTL_VCXO        _IOW(SDI_IOCTL,   5, struct sdi_ioctl_vcxo)
-#define SDI_IOCTL_SI5324_VCXO _IOW(SDI_IOCTL,   6, struct sdi_ioctl_si5324_vcxo)
-#define SDI_IOCTL_SI5324_SPI  _IOWR(SDI_IOCTL,  6, struct sdi_ioctl_si5324_spi)
-#define SDI_IOCTL_FAN         _IOW(SDI_IOCTL,   7, struct sdi_ioctl_fan)
-#define SDI_IOCTL_DMA         _IOW(SDI_IOCTL,   8, struct sdi_ioctl_dma)
-#define SDI_IOCTL_DMA_WRITER  _IOWR(SDI_IOCTL,  9, struct sdi_ioctl_dma_writer)
-#define SDI_IOCTL_DMA_READER  _IOWR(SDI_IOCTL, 10, struct sdi_ioctl_dma_reader)
+#define SDI_IOCTL_REG               _IOWR(SDI_IOCTL,  0, struct sdi_ioctl_reg)
+#define SDI_IOCTL_FLASH             _IOWR(SDI_IOCTL,  1, struct sdi_ioctl_flash)
+#define SDI_IOCTL_ICAP              _IOWR(SDI_IOCTL,  2, struct sdi_ioctl_flash)
+#define SDI_IOCTL_REFCLK            _IOWR(SDI_IOCTL,  4, struct sdi_ioctl_refclk)
+#define SDI_IOCTL_VCXO              _IOW(SDI_IOCTL,   5, struct sdi_ioctl_vcxo)
+#define SDI_IOCTL_SI5324_VCXO       _IOW(SDI_IOCTL,   6, struct sdi_ioctl_si5324_vcxo)
+#define SDI_IOCTL_SI5324_SPI        _IOWR(SDI_IOCTL,  6, struct sdi_ioctl_si5324_spi)
+#define SDI_IOCTL_FAN               _IOW(SDI_IOCTL,   7, struct sdi_ioctl_fan)
+#define SDI_IOCTL_DMA               _IOW(SDI_IOCTL,   8, struct sdi_ioctl_dma)
+#define SDI_IOCTL_DMA_WRITER        _IOWR(SDI_IOCTL,  9, struct sdi_ioctl_dma_writer)
+#define SDI_IOCTL_DMA_READER        _IOWR(SDI_IOCTL, 10, struct sdi_ioctl_dma_reader)
 
-#define SDI_IOCTL_PATTERN     _IOW(SDI_IOCTL,  11, struct sdi_ioctl_pattern)
-#define SDI_IOCTL_RX_SPI_CS   _IOW(SDI_IOCTL,  12, struct sdi_ioctl_rx_spi_cs)
-#define SDI_IOCTL_RX_SPI      _IOWR(SDI_IOCTL, 13, struct sdi_ioctl_rx_spi)
-#define SDI_IOCTL_RX          _IOWR(SDI_IOCTL, 14, struct sdi_ioctl_rx)
-#define SDI_IOCTL_TX_SPI_CS   _IOW(SDI_IOCTL,  15, struct sdi_ioctl_rx_spi_cs)
-#define SDI_IOCTL_TX_SPI      _IOWR(SDI_IOCTL, 16, struct sdi_ioctl_tx_spi)
-#define SDI_IOCTL_TX          _IOWR(SDI_IOCTL, 17, struct sdi_ioctl_tx)
+#define SDI_IOCTL_PATTERN           _IOW(SDI_IOCTL,  11, struct sdi_ioctl_pattern)
+#define SDI_IOCTL_RX_SPI_CS         _IOW(SDI_IOCTL,  12, struct sdi_ioctl_rx_spi_cs)
+#define SDI_IOCTL_RX_SPI            _IOWR(SDI_IOCTL, 13, struct sdi_ioctl_rx_spi)
+#define SDI_IOCTL_RX                _IOWR(SDI_IOCTL, 14, struct sdi_ioctl_rx)
+#define SDI_IOCTL_TX_SPI_CS         _IOW(SDI_IOCTL,  15, struct sdi_ioctl_rx_spi_cs)
+#define SDI_IOCTL_TX_SPI            _IOWR(SDI_IOCTL, 16, struct sdi_ioctl_tx_spi)
+#define SDI_IOCTL_TX                _IOWR(SDI_IOCTL, 17, struct sdi_ioctl_tx)
+#define SDI_IOCTL_TX_RX_LOOPBACK    _IOW(SDI_IOCTL,  18, struct sdi_ioctl_tx_rx_loopback)
 
 
 #endif /* _LINUX_SDI_H */

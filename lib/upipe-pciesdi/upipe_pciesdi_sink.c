@@ -236,7 +236,7 @@ static int upipe_pciesdi_set_uri(struct upipe *upipe, const char *path)
 
     sdi_writel(upipe_pciesdi_sink->fd, CSR_SDI_REFCLK_SEL_OUT_ADDR, 1);
 
-    sdi_dma_loopback(upipe_pciesdi_sink->fd, 0); // disable loopback
+    sdi_dma(upipe_pciesdi_sink->fd, 1, 0, 0); // disable loopback
 
     return UBASE_ERR_NONE;
 }

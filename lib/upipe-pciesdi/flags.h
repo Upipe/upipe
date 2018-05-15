@@ -1,9 +1,13 @@
 #ifndef __HW_FLAGS_H
 #define __HW_FLAGS_H
 
+/* xo */
+#define XO_148P50MHZ_SEL 0
+#define XO_148P35MHZ_SEL 1
+
 /* refclk */
-#define REFCLK0_SEL = (1<<0)
-#define REFCLK1_SEL = (1<<1)
+#define REFCLK0_SEL (1<<0)
+#define REFCLK1_SEL (1<<1)
 
 /* spi */
 #define SPI_CTRL_START 0x1

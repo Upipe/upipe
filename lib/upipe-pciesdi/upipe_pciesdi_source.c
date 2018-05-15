@@ -174,6 +174,15 @@ static const char *sdi_decode_family(uint8_t family)
     }
 }
 
+static const char *sdi_decode_scan(uint8_t scan)
+{
+    switch (scan) {
+    case 0: return "I";
+    case 1: return "P";
+    default: return "?";
+    }
+}
+
 static const char *sdi_decode_rate(uint8_t rate)
 {
     switch (rate) {
@@ -219,14 +228,15 @@ static void upipe_pciesdi_src_worker(struct upump *upump)
     struct upipe *upipe = upump_get_opaque(upump, struct upipe *);
     struct upipe_pciesdi_src *upipe_pciesdi_src = upipe_pciesdi_src_from_upipe(upipe);
 
-    uint8_t locked, mode, family, rate;
-    sdi_rx(upipe_pciesdi_src->fd, &locked, &mode, &family, &rate);
+    uint8_t locked, mode, family, scan, rate;
+    sdi_rx(upipe_pciesdi_src->fd, &locked, &mode, &family, &scan, &rate);
 
     // TODO : monitor changes
-    if (0) upipe_notice_va(upipe, "%s | mode %s | family %s | rate %s",
+    if (0) upipe_notice_va(upipe, "%s | mode %s | family %s | scan %s | rate %s",
         locked ? "LOCK" : "",
         sdi_decode_mode(mode),
         sdi_decode_family(family),
+        sdi_decode_scan(scan),
         sdi_decode_rate(rate));
 
     struct uref *uref = uref_pic_alloc(upipe_pciesdi_src->uref_mgr,
@@ -445,16 +455,17 @@ static int upipe_pciesdi_set_uri(struct upipe *upipe, const char *path)
         return UBASE_ERR_EXTERNAL;
     }
 
-    uint8_t locked, mode, family, rate;
-    sdi_rx(upipe_pciesdi_src->fd, &locked, &mode, &family, &rate);
+    uint8_t locked, mode, family, scan, rate;
+    sdi_rx(upipe_pciesdi_src->fd, &locked, &mode, &family, &scan, &rate);
 
-    upipe_notice_va(upipe, "%s | mode %s | family %s | rate %s",
+    upipe_notice_va(upipe, "%s | mode %s | family %s | scan %s | rate %s",
         locked ? "LOCK" : "",
         sdi_decode_mode(mode),
         sdi_decode_family(family),
+        sdi_decode_scan(scan),
         sdi_decode_rate(rate));
 
-    sdi_dma_loopback(upipe_pciesdi_src->fd, 0); // disable loopback
+    sdi_dma(upipe_pciesdi_src->fd, 1, 0, 0); // disable loopback
     int64_t hw, sw;
     sdi_dma_writer(upipe_pciesdi_src->fd, 1, &hw, &sw); // enable
 

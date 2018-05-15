@@ -1,8 +1,6 @@
 /*
  * PCIeSDI library
  *
- * Copyright (C) 2018 / LambdaConcept / ramtin@lambdaconcept.com
- * Copyright (C) 2018 / LambdaConcept / po@lambdaconcept.com
  * Copyright (C) 2018 / EnjoyDigital  / florent@enjoy-digital.fr
  *
  * This program is free software: you can redistribute it and/or modify
@@ -38,6 +36,8 @@
 
 #include "libsdi.h"
 
+#include <bitstream/smpte/291.h>
+
 int64_t get_time_ms(void)
 {
     struct timespec ts;
@@ -63,6 +63,12 @@ void sdi_writel(int fd, uint32_t addr, uint32_t val) {
     ioctl(fd, SDI_IOCTL_REG, &m);
 }
 
+void sdi_icap(int fd) {
+    struct sdi_ioctl_icap m;
+    m.prog = 1;
+    ioctl(fd, SDI_IOCTL_ICAP, &m);
+}
+
 void sdi_vcxo(int fd, uint32_t width, uint32_t period) {
     struct sdi_ioctl_vcxo m;
     m.pwm_enable = 1;
@@ -86,17 +92,23 @@ void sdi_si5324_spi(int fd, uint32_t tx_data, uint32_t *rx_data) {
     *rx_data = m.rx_data;
 }
 
-void sdi_refclk(int fd, uint8_t refclk_sel, uint32_t *refclk0_freq, uint32_t *refclk1_freq) {
+void sdi_refclk(int fd, uint8_t refclk_sel,
+    uint32_t *refclk0_freq, uint32_t *refclk1_freq,
+    uint32_t *refclk0_counter, uint32_t *refclk1_counter) {
     struct sdi_ioctl_refclk m;
     m.refclk_sel = refclk_sel;
     ioctl(fd, SDI_IOCTL_REFCLK, &m);
     *refclk0_freq = m.refclk0_freq*2;
     *refclk1_freq = m.refclk1_freq*2;
+    *refclk0_counter = m.refclk0_counter*2;
+    *refclk1_counter = m.refclk1_counter*2;
 }
 
-void sdi_dma_loopback(int fd, uint8_t enable) {
+void sdi_dma(int fd, uint8_t fill, uint8_t rx_tx_loopback_enable, uint8_t tx_rx_loopback_enable) {
     struct sdi_ioctl_dma m;
-    m.loopback_enable = enable;
+    m.fill = fill;
+    m.rx_tx_loopback_enable = rx_tx_loopback_enable;
+    m.tx_rx_loopback_enable = tx_rx_loopback_enable;
     ioctl(fd, SDI_IOCTL_DMA, &m);
 }
 
@@ -136,12 +148,14 @@ void sdi_rx_spi(int fd, uint32_t tx_data, uint32_t *rx_data) {
     *rx_data = m.rx_data;
 }
 
-void sdi_rx(int fd, uint8_t *locked, uint8_t *mode, uint8_t *family, uint8_t *rate) {
+void sdi_rx(int fd, uint8_t *locked, uint8_t *mode, uint8_t *family, uint8_t *scan, uint8_t *rate) {
     struct sdi_ioctl_rx m;
+    m.crc_enable = 1;
     ioctl(fd, SDI_IOCTL_RX, &m);
     *locked = m.locked;
     *mode = m.mode;
     *family = m.family;
+    *scan = m.scan;
     *rate = m.rate;
 }
 
@@ -158,11 +172,19 @@ void sdi_tx_spi(int fd, uint32_t tx_data, uint32_t *rx_data) {
     *rx_data = m.rx_data;
 }
 
-void sdi_tx(int fd, uint8_t *txen, uint8_t *slew) {
+void sdi_tx(int fd, uint8_t mode, uint8_t *txen, uint8_t *slew) {
     struct sdi_ioctl_tx m;
+    m.crc_enable = 1;
+    m.mode = mode;
     ioctl(fd, SDI_IOCTL_TX, &m);
     *txen = m.txen;
     *slew = m.slew;
+}
+
+void sdi_tx_rx_loopback(int fd, uint8_t config) {
+    struct sdi_ioctl_tx_rx_loopback m;
+    m.config = config;
+    ioctl(fd, SDI_IOCTL_TX_RX_LOOPBACK, &m);
 }
 
 /* flash */
