@@ -2,6 +2,7 @@ SUBDIRS = \
 	  upipe \
 	  upipe-modules \
 	  upipe-filters \
+	  upipe-pciesdi \
 	  upipe-dveo
 
 if HAVE_QTWEBKIT

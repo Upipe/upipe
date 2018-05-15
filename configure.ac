@@ -251,6 +251,7 @@ AC_CONFIG_FILES([Makefile
                  include/upipe-hbrmt/Makefile
                  include/upipe-hls/Makefile
                  include/upipe-zvbi/Makefile
+                 include/upipe-pciesdi/Makefile
                  include/upipe-dveo/Makefile
                  include/upipe-netmap/Makefile
                  include/upipe-dvbcsa/Makefile
@@ -310,6 +311,8 @@ AC_CONFIG_FILES([Makefile
                  lib/upipe-hls/libupipe_hls.pc
                  lib/upipe-zvbi/Makefile
                  lib/upipe-zvbi/libupipe_zvbi.pc
+                 lib/upipe-pciesdi/Makefile
+                 lib/upipe-pciesdi/libupipe_pciesdi.pc
                  lib/upipe-dveo/Makefile
                  lib/upipe-dveo/libupipe_dveo.pc
                  lib/upipe-netmap/Makefile
