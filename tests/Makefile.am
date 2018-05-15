@@ -197,7 +197,9 @@ check_PROGRAMS += \
 	upipe_worker_test \
 	upipe_m3u_reader_test \
 	upipe_void_source_test \
-	upipe_zoneplate_source_test
+	upipe_zoneplate_source_test \
+	upipe_row_split_test \
+	upipe_separate_fields_test
 
 TESTS += \
 	upump_ev_test \
@@ -218,7 +220,9 @@ TESTS += \
 	upipe_worker_test \
 	upipe_m3u_reader_test.sh \
 	upipe_void_source_test \
-	upipe_zoneplate_source_test
+	upipe_zoneplate_source_test \
+	upipe_row_split_test \
+	upipe_separate_fields_test
 
 if HAVE_PTHREAD
 check_PROGRAMS += \
@@ -448,6 +452,8 @@ upipe_v210dec_test_LDADD = $(LDADD) $(top_builddir)/lib/upipe-v210/libupipe_v210
 upipe_v210enc_test_LDADD = $(LDADD) $(top_builddir)/lib/upipe-v210/libupipe_v210.la
 upipe_v210enc_test_CFLAGS = $(AM_CFLAGS) $(AVUTIL_CFLAGS)
 upipe_v210dec_test_CFLAGS = $(AM_CFLAGS) $(AVUTIL_CFLAGS)
+upipe_row_split_test_LDADD = $(LDADD) -lev $(top_builddir)/lib/upump-ev/libupump_ev.la $(top_builddir)/lib/upipe-modules/libupipe_modules.la
+upipe_separate_fields_test_LDADD = $(LDADD) -lev $(top_builddir)/lib/upump-ev/libupump_ev.la $(top_builddir)/lib/upipe-modules/libupipe_modules.la
 
 upipe_avformat_test_CFLAGS = $(AM_CFLAGS) $(AVFORMAT_CFLAGS)
 upipe_avformat_test_LDADD = $(LDADD) -lev $(top_builddir)/lib/upump-ev/libupump_ev.la $(top_builddir)/lib/upipe-av/libupipe_av.la $(AVFORMAT_LIBS)
