@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2013-2015 OpenHeadend S.A.R.L.
+ * Copyright (C) 2013-2018 OpenHeadend S.A.R.L.
  *
  * Authors: Christophe Massiot
  *
@@ -76,6 +76,8 @@ struct upipe_avfsink {
 
     /** URI */
     char *uri;
+    /** init URI */
+    char *init_uri;
     /** MIME type */
     char *mime;
     /** format name */
@@ -514,13 +516,14 @@ static struct upipe *upipe_avfsink_alloc(struct upipe_mgr *mgr,
     upipe_avfsink_init_sub_subs(upipe);
 
     upipe_avfsink->uri = NULL;
+    upipe_avfsink->init_uri = NULL;
     upipe_avfsink->mime = NULL;
     upipe_avfsink->format = NULL;
 
     upipe_avfsink->options = NULL;
     upipe_avfsink->context = NULL;
     upipe_avfsink->opened = false;
-    upipe_avfsink->ts_offset = 0;
+    upipe_avfsink->ts_offset = UINT64_MAX;
     upipe_avfsink->first_dts = 0;
     upipe_avfsink->highest_next_dts = 0;
     upipe_throw_ready(upipe);
@@ -555,6 +558,34 @@ static struct upipe_avfsink_sub *upipe_avfsink_find_input(struct upipe *upipe)
     return earliest_input;
 }
 
+static int upipe_avfsink_avio_open(struct upipe *upipe, struct upipe_avfsink_sub *input)
+{
+    struct upipe_avfsink *upipe_avfsink = upipe_avfsink_from_upipe(upipe);
+
+    if (upipe_avfsink->context->oformat->flags & AVFMT_NOFILE)
+        return UBASE_ERR_NONE;
+
+    AVDictionary *options = NULL;
+    av_dict_copy(&options, upipe_avfsink->options, 0);
+    int error = avio_open2(&upipe_avfsink->context->pb,
+                           upipe_avfsink->context->filename,
+                           AVIO_FLAG_WRITE, NULL, &options);
+    av_dict_free(&options);
+    if (error < 0) {
+        upipe_av_strerror(error, buf);
+        upipe_err_va(upipe, "couldn't open file %s (%s)",
+                     upipe_avfsink->context->filename, buf);
+        upipe_throw_fatal(upipe, UBASE_ERR_EXTERNAL);
+        while (!ulist_empty(&input->urefs)) {
+            uref_free(uref_from_uchain(ulist_pop(&input->urefs)));
+        }
+        upipe_release(upipe_avfsink_sub_to_upipe(input));
+        return UBASE_ERR_EXTERNAL;
+    }
+
+    return UBASE_ERR_NONE;
+}
+
 /** @internal @This asks avformat to multiplex some data.
  *
  * @param upipe description structure of the pipe
@@ -568,29 +599,22 @@ static void upipe_avfsink_mux(struct upipe *upipe, struct upump **upump_p)
         if (unlikely(!upipe_avfsink->opened)) {
             upipe_dbg(upipe, "writing header");
             /* avformat dts for formats other than mpegts should start at 0 */
-            if (strcmp(upipe_avfsink->context->oformat->name, "mpegts")) {
+            if (strcmp(upipe_avfsink->context->oformat->name, "mpegts") &&
+                upipe_avfsink->ts_offset == UINT64_MAX) {
                 upipe_avfsink->ts_offset = input->next_dts;
+                upipe_throw(upipe, UPROBE_AVFSINK_TS_OFFSET,
+                            UPIPE_AVFSINK_SIGNATURE, upipe_avfsink->ts_offset);
             }
             upipe_avfsink->first_dts = input->next_dts;
-            if (!(upipe_avfsink->context->oformat->flags & AVFMT_NOFILE)) {
-                AVDictionary *options = NULL;
-                av_dict_copy(&options, upipe_avfsink->options, 0);
-                int error = avio_open2(&upipe_avfsink->context->pb,
-                                       upipe_avfsink->context->filename,
-                                       AVIO_FLAG_WRITE, NULL, &options);
-                av_dict_free(&options);
-                if (error < 0) {
-                    upipe_av_strerror(error, buf);
-                    upipe_err_va(upipe, "couldn't open file %s (%s)",
-                                 upipe_avfsink->context->filename, buf);
-                    upipe_throw_fatal(upipe, UBASE_ERR_EXTERNAL);
-                    while (!ulist_empty(&input->urefs)) {
-                        uref_free(uref_from_uchain(ulist_pop(&input->urefs)));
-                    }
-                    upipe_release(upipe_avfsink_sub_to_upipe(input));
-                    return;
-                }
+            if (upipe_avfsink->init_uri != NULL) {
+                upipe_notice_va(upipe, "opening init URI %s",
+                                upipe_avfsink->init_uri);
+                snprintf(upipe_avfsink->context->filename,
+                         sizeof (upipe_avfsink->context->filename),
+                         "%s", upipe_avfsink->init_uri);
             }
+            if (!ubase_check(upipe_avfsink_avio_open(upipe, input)))
+                return;
 
             AVDictionary *options = NULL;
             av_dict_copy(&options, upipe_avfsink->options, 0);
@@ -609,6 +633,28 @@ static void upipe_avfsink_mux(struct upipe *upipe, struct upump **upump_p)
             while ((e = av_dict_get(options, "", e, AV_DICT_IGNORE_SUFFIX)))
                 upipe_warn_va(upipe, "unknown option \"%s\"", e->key);
             av_dict_free(&options);
+
+            /* write init section */
+            if (upipe_avfsink->init_uri != NULL) {
+                int error = av_write_frame(upipe_avfsink->context, NULL);
+                if (unlikely(error < 0)) {
+                    upipe_av_strerror(error, buf);
+                    upipe_warn_va(upipe, "write error to %s (%s)",
+                                  upipe_avfsink->init_uri, buf);
+                    upipe_throw_error(upipe, UBASE_ERR_EXTERNAL);
+                    return;
+                }
+                upipe_notice_va(upipe, "closing init URI %s",
+                                upipe_avfsink->init_uri);
+                if (!(upipe_avfsink->context->oformat->flags & AVFMT_NOFILE))
+                    avio_close(upipe_avfsink->context->pb);
+                snprintf(upipe_avfsink->context->filename,
+                         sizeof (upipe_avfsink->context->filename),
+                         "%s", upipe_avfsink->uri);
+                if (!ubase_check(upipe_avfsink_avio_open(upipe, input)))
+                    return;
+            }
+
             upipe_avfsink->opened = true;
         }
 
@@ -647,6 +693,11 @@ static void upipe_avfsink_mux(struct upipe *upipe, struct upump **upump_p)
             avpkt.pts = ((pts - upipe_avfsink->ts_offset) *
                          stream->time_base.den + UCLOCK_FREQ / 2) /
                         UCLOCK_FREQ / stream->time_base.num;
+
+        uint64_t duration;
+        if (ubase_check(uref_clock_get_duration(uref, &duration)))
+            avpkt.duration = (duration * stream->time_base.den + UCLOCK_FREQ / 2) /
+                             UCLOCK_FREQ / stream->time_base.num;
 
         size_t size = 0;
         uref_block_size(uref, &size);
@@ -899,6 +950,61 @@ static int upipe_avfsink_set_uri(struct upipe *upipe, const char *uri)
     return UBASE_ERR_NONE;
 }
 
+/** @internal @This gets the init section uri
+ *
+ * @param upipe description structure of the pipe
+ * @param uri_p filled in with the current initialization section URI
+ * @return an error code
+ */
+static int _upipe_avfsink_get_init_uri(struct upipe *upipe, const char **uri_p)
+{
+    struct upipe_avfsink *upipe_avfsink = upipe_avfsink_from_upipe(upipe);
+    assert(uri_p != NULL);
+    *uri_p = upipe_avfsink->init_uri;
+    return UBASE_ERR_NONE;
+}
+
+/** @internal @This sets the init section uri
+ *
+ * @param upipe description structure of the pipe
+ * @param uri initialization section URI
+ * @return an error code
+ */
+static int _upipe_avfsink_set_init_uri(struct upipe *upipe, const char *uri)
+{
+    struct upipe_avfsink *upipe_avfsink = upipe_avfsink_from_upipe(upipe);
+    free(upipe_avfsink->init_uri);
+    upipe_avfsink->init_uri = uri ? strdup(uri) : NULL;
+    return UBASE_ERR_NONE;
+}
+
+/** @internal @This gets the timestamp offset
+ *
+ * @param upipe description structure of the pipe
+ * @param ts_offset_p filled with the current timestamp offset
+ * @return an error code
+ */
+static int _upipe_avfsink_get_ts_offset(struct upipe *upipe, uint64_t *ts_offset_p)
+{
+    struct upipe_avfsink *upipe_avfsink = upipe_avfsink_from_upipe(upipe);
+    assert(ts_offset_p != NULL);
+    *ts_offset_p = upipe_avfsink->ts_offset;
+    return UBASE_ERR_NONE;
+}
+
+/** @internal @This sets the timestamp offset
+ *
+ * @param upipe description structure of the pipe
+ * @param ts_offset timestamp offset
+ * @return an error code
+ */
+static int _upipe_avfsink_set_ts_offset(struct upipe *upipe, uint64_t ts_offset)
+{
+    struct upipe_avfsink *upipe_avfsink = upipe_avfsink_from_upipe(upipe);
+    upipe_avfsink->ts_offset = ts_offset;
+    return UBASE_ERR_NONE;
+}
+
 /** @internal @This processes control commands on an avformat source pipe.
  *
  * @param upipe description structure of the pipe
@@ -954,6 +1060,26 @@ static int upipe_avfsink_control(struct upipe *upipe, int command, va_list args)
             uint64_t *duration_p = va_arg(args, uint64_t *);
             return _upipe_avfsink_get_duration(upipe, duration_p);
         }
+        case UPIPE_AVFSINK_GET_INIT_URI: {
+            UBASE_SIGNATURE_CHECK(args, UPIPE_AVFSINK_SIGNATURE)
+            const char **uri_p = va_arg(args, const char **);
+            return _upipe_avfsink_get_init_uri(upipe, uri_p);
+        }
+        case UPIPE_AVFSINK_SET_INIT_URI: {
+            UBASE_SIGNATURE_CHECK(args, UPIPE_AVFSINK_SIGNATURE)
+            const char *uri = va_arg(args, const char *);
+            return _upipe_avfsink_set_init_uri(upipe, uri);
+        }
+        case UPIPE_AVFSINK_GET_TS_OFFSET: {
+            UBASE_SIGNATURE_CHECK(args, UPIPE_AVFSINK_SIGNATURE)
+            uint64_t *ts_offset_p = va_arg(args, uint64_t *);
+            return _upipe_avfsink_get_ts_offset(upipe, ts_offset_p);
+        }
+        case UPIPE_AVFSINK_SET_TS_OFFSET: {
+            UBASE_SIGNATURE_CHECK(args, UPIPE_AVFSINK_SIGNATURE)
+            uint64_t ts_offset = va_arg(args, uint64_t);
+            return _upipe_avfsink_set_ts_offset(upipe, ts_offset);
+        }
 
         case UPIPE_GET_URI: {
             const char **uri_p = va_arg(args, const char **);
@@ -978,6 +1104,7 @@ static void upipe_avfsink_free(struct upipe *upipe)
     upipe_avfsink_clean_sub_subs(upipe);
 
     upipe_avfsink_set_uri(upipe, NULL);
+    upipe_avfsink_set_init_uri(upipe, NULL);
     upipe_throw_dead(upipe);
 
     free(upipe_avfsink->mime);

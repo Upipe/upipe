@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2012-2017 OpenHeadend S.A.R.L.
+ * Copyright (C) 2012-2018 OpenHeadend S.A.R.L.
  *
  * Authors: Christophe Massiot
  *
@@ -257,6 +257,29 @@ static void upump_ev_real_stop(struct upump *upump, bool status)
     }
 }
 
+/** @This restarts a pump.
+ *
+ * @param upump description structure of the pump
+ * @param status blocking status of the pump
+ */
+static void upump_ev_real_restart(struct upump *upump, bool status)
+{
+    struct upump_ev *upump_ev = upump_ev_from_upump(upump);
+    struct upump_ev_mgr *ev_mgr = upump_ev_mgr_from_upump_mgr(upump->mgr);
+
+    switch (upump_ev->event) {
+        case UPUMP_TYPE_TIMER: {
+            bool active = ev_is_active(&upump_ev->ev_timer);
+            ev_timer_again(ev_mgr->ev_loop, &upump_ev->ev_timer);
+            if (!active && !status)
+                ev_unref(ev_mgr->ev_loop);
+            break;
+        }
+        default:
+            break;
+    }
+}
+
 /** @This released the memory space previously used by a pump.
  * Please note that the pump must be stopped before.
  *
@@ -310,6 +333,9 @@ static int upump_ev_control(struct upump *upump, int command, va_list args)
     switch (command) {
         case UPUMP_START:
             upump_common_start(upump);
+            return UBASE_ERR_NONE;
+        case UPUMP_RESTART:
+            upump_common_restart(upump);
             return UBASE_ERR_NONE;
         case UPUMP_STOP:
             upump_common_stop(upump);
@@ -458,10 +484,10 @@ struct upump_mgr *upump_ev_mgr_alloc(struct ev_loop *ev_loop,
     ev_mgr->common_mgr.mgr.upump_alloc = upump_ev_alloc;
     ev_mgr->common_mgr.mgr.upump_control = upump_ev_control;
     ev_mgr->common_mgr.mgr.upump_mgr_control = upump_ev_mgr_control;
-
     upump_common_mgr_init(mgr, upump_pool_depth, upump_blocker_pool_depth,
                           ev_mgr->upool_extra,
                           upump_ev_real_start, upump_ev_real_stop,
+                          upump_ev_real_restart,
                           upump_ev_alloc_inner, upump_ev_free_inner);
 
     ev_mgr->ev_loop = ev_loop;

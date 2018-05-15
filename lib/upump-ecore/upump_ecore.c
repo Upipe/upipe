@@ -247,6 +247,26 @@ static void upump_ecore_real_start(struct upump *upump, bool status)
     }
 }
 
+/** @This restarts a pump.
+ *
+ * @param upump description structure of the pump
+ * @param status blocking status of the pump
+ */
+static void upump_ecore_real_restart(struct upump *upump, bool status)
+{
+    struct upump_ecore *upump_ecore = upump_ecore_from_upump(upump);
+    struct upump_ecore_mgr *ecore_mgr =
+        upump_ecore_mgr_from_upump_mgr(upump->mgr);
+
+    switch (upump_ecore->event) {
+        case UPUMP_TYPE_TIMER:
+            ecore_timer_reset(upump_ecore->timer);
+            break;
+        default:
+            break;
+    }
+}
+
 /** @This stops a pump.
  *
  * @param upump description structure of the pump
@@ -336,6 +356,9 @@ static int upump_ecore_control(struct upump *upump, int command, va_list args)
     switch (command) {
         case UPUMP_START:
             upump_common_start(upump);
+            return UBASE_ERR_NONE;
+        case UPUMP_RESTART:
+            upump_common_restart(upump);
             return UBASE_ERR_NONE;
         case UPUMP_STOP:
             upump_common_stop(upump);
@@ -465,6 +488,7 @@ struct upump_mgr *upump_ecore_mgr_alloc(uint16_t upump_pool_depth,
     upump_common_mgr_init(mgr, upump_pool_depth, upump_blocker_pool_depth,
                           ecore_mgr->upool_extra,
                           upump_ecore_real_start, upump_ecore_real_stop,
+                          upump_ecore_real_restart,
                           upump_ecore_alloc_inner, upump_ecore_free_inner);
     return mgr;
 }
