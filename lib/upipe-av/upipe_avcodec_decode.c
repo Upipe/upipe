@@ -54,6 +54,8 @@
 #include <upipe/upipe_helper_upump.h>
 #include <upipe/upipe_helper_input.h>
 #include <upipe-av/upipe_avcodec_decode.h>
+#include <upipe-av/ubuf_av.h>
+#include <upipe-av/uref_av_flow.h>
 #include <upipe-framers/uref_h26x.h>
 
 #include <stdlib.h>
@@ -69,6 +71,7 @@
 #include <libavutil/avutil.h>
 #include <libavutil/pixdesc.h>
 #include <libavutil/opt.h>
+#include <libavutil/hwcontext.h>
 #include <upipe-av/upipe_av_pixfmt.h>
 #include <upipe-av/upipe_av_samplefmt.h>
 #include "upipe_av_internal.h"
@@ -162,6 +165,14 @@ struct upipe_avcdec {
     /** last input DTS (system time) */
     uint64_t input_dts_sys;
 
+    /** configured hardware device type */
+    enum AVHWDeviceType hw_device_type;
+    /** hardware device, or NULL for default device */
+    char *hw_device;
+    /** reference to hardware device context */
+    AVBufferRef *hw_device_ctx;
+    /** hw pixel format */
+    enum AVPixelFormat hw_pix_fmt;
     /** avcodec context */
     AVCodecContext *context;
     /** avcodec frame */
@@ -233,6 +244,14 @@ static void upipe_av_uref_pic_free(void *opaque, uint8_t *data);
  * Does not need to be reentrant.
  */
 
+static void buffer_uref_free(void *opaque, uint8_t *data)
+{
+    struct uref *uref = (struct uref *)data;
+    struct uref *flow_def_attr = uref_from_uchain(uref->uchain.next);
+    uref_free(flow_def_attr);
+    uref_free(uref);
+}
+
 /** @internal @This is called by avcodec when allocating a new picture.
  *
  * @param context current avcodec context
@@ -244,26 +263,56 @@ static int upipe_avcdec_get_buffer_pic(struct AVCodecContext *context,
 {
     struct upipe *upipe = context->opaque;
     struct upipe_avcdec *upipe_avcdec = upipe_avcdec_from_upipe(upipe);
+    struct uref *uref;
+    bool internal_frame = false;
 
-    if (unlikely(upipe_avcdec->uref == NULL)) {
-        upipe_dbg(upipe, "get_buffer called without uref");
-        return -1;
+    if (frame->opaque_ref == NULL) {
+        if (unlikely(upipe_avcdec->uref == NULL)) {
+            upipe_warn(upipe, "get_buffer called without uref");
+            return -1;
+        }
+
+        uref = uref_dup(upipe_avcdec->uref);
+        if (uref == NULL) {
+            upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
+            return -1;
+        }
+        frame->opaque_ref = av_buffer_create((uint8_t *)uref, sizeof (*uref),
+                                             buffer_uref_free, NULL, 0);
+        if (frame->opaque_ref == NULL) {
+            upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
+            uref_free(uref);
+            return -1;
+        }
+        internal_frame = true;
     }
 
-    struct uref *uref = uref_dup(upipe_avcdec->uref);
-    frame->opaque = uref;
+    uref = (struct uref *)frame->opaque_ref->data;
 
     uint64_t framenum = 0;
-    uref_pic_get_number(frame->opaque, &framenum);
+    uref_pic_get_number(uref, &framenum);
 
-    upipe_verbose_va(upipe, "Allocating frame for %"PRIu64" (%p) - %dx%d",
-                     framenum, frame->opaque, frame->width, frame->height);
+    upipe_verbose_va(upipe, "Allocating %s frame for %"PRIu64" (%p) - %dx%d",
+                     av_get_pix_fmt_name(frame->format), framenum,
+                     uref, frame->width, frame->height);
+
+    if (internal_frame &&
+        (frame->format == upipe_avcdec->hw_pix_fmt ||
+         !(context->codec->capabilities & AV_CODEC_CAP_DR1))) {
+        int ret = avcodec_default_get_buffer2(context, frame, flags);
+        if (ret < 0) {
+            upipe_err_va(upipe, "avcodec_default_get_buffer2 failed: %s",
+                         av_err2str(ret));
+            upipe_throw_fatal(upipe, UBASE_ERR_EXTERNAL);
+        }
+        return ret;
+    }
 
     /* Check if we have a new pixel format. */
-    if (unlikely(context->pix_fmt != upipe_avcdec->pix_fmt)) {
+    if (unlikely(frame->format != upipe_avcdec->pix_fmt)) {
         ubuf_mgr_release(upipe_avcdec->ubuf_mgr);
         upipe_avcdec->ubuf_mgr = NULL;
-        upipe_avcdec->pix_fmt = context->pix_fmt;
+        upipe_avcdec->pix_fmt = frame->format;
     }
 
     /* Use avcodec width/height alignment, then resize pic. */
@@ -285,14 +334,23 @@ static int upipe_avcdec_get_buffer_pic(struct AVCodecContext *context,
         upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
         return -1;
     }
-    if (unlikely(!ubase_check(upipe_av_pixfmt_to_flow_def(upipe_avcdec->pix_fmt,
+    enum AVPixelFormat pix_fmt = upipe_avcdec->pix_fmt;
+    if (context->hw_frames_ctx) {
+        AVHWFramesContext *hw_frames_ctx =
+            (AVHWFramesContext *) context->hw_frames_ctx->data;
+        pix_fmt = hw_frames_ctx->sw_format;
+    }
+    if (unlikely(!ubase_check(upipe_av_pixfmt_to_flow_def(pix_fmt,
                                                           flow_def_attr)))) {
         uref_free(uref);
         uref_free(flow_def_attr);
-        upipe_err_va(upipe, "unhandled pixel format %d", upipe_avcdec->pix_fmt);
+        upipe_err_va(upipe, "unhandled pixel format %d", pix_fmt);
         upipe_throw_fatal(upipe, UBASE_ERR_INVALID);
         return -1;
     }
+
+    if (frame->format == AV_PIX_FMT_VAAPI)
+        uref_pic_flow_set_surface_type(flow_def_attr, "av.vaapi");
 
     UBASE_FATAL(upipe, uref_pic_flow_set_align(flow_def_attr, align))
     UBASE_FATAL(upipe, uref_pic_flow_set_hsize(flow_def_attr, context->width))
@@ -341,9 +399,18 @@ static int upipe_avcdec_get_buffer_pic(struct AVCodecContext *context,
 
     if (unlikely(upipe_avcdec->ubuf_mgr == NULL)) {
         upipe_avcdec->flow_def_format = uref_dup(flow_def_attr);
-        if (unlikely(!upipe_avcdec_demand_ubuf_mgr(upipe, flow_def_attr))) {
-            uref_free(uref);
-            return -1;
+        if (frame->format == upipe_avcdec->hw_pix_fmt) {
+            upipe_avcdec->ubuf_mgr = ubuf_av_mgr_alloc();
+            upipe_avcdec->flow_def_provided = flow_def_attr;
+            if (upipe_avcdec->ubuf_mgr == NULL) {
+                uref_free(uref);
+                return -1;
+            }
+        } else {
+            if (unlikely(!upipe_avcdec_demand_ubuf_mgr(upipe, flow_def_attr))) {
+                uref_free(uref);
+                return -1;
+            }
         }
     } else
         uref_free(flow_def_attr);
@@ -351,22 +418,35 @@ static int upipe_avcdec_get_buffer_pic(struct AVCodecContext *context,
     flow_def_attr = uref_dup(upipe_avcdec->flow_def_provided);
 
     /* Allocate a ubuf */
-    struct ubuf *ubuf = ubuf_pic_alloc(upipe_avcdec->ubuf_mgr,
-                                       width_aligned, height_aligned);
-    if (unlikely(ubuf == NULL))
-        goto error;
+    struct ubuf *ubuf;
+    if (frame->format == upipe_avcdec->hw_pix_fmt ||
+        !(context->codec->capabilities & AV_CODEC_CAP_DR1)) {
+        av_buffer_unref(&frame->opaque_ref);
+        ubuf = ubuf_pic_av_alloc(upipe_avcdec->ubuf_mgr, frame);
+        if (unlikely(ubuf == NULL)) {
+            upipe_err_va(upipe, "cannot alloc ubuf for %s frame",
+                         av_get_pix_fmt_name(pix_fmt));
+            goto error;
+        }
+    } else {
+        ubuf = ubuf_pic_alloc(upipe_avcdec->ubuf_mgr,
+                              width_aligned, height_aligned);
+        if (unlikely(ubuf == NULL)) {
+            upipe_err_va(upipe, "cannot alloc ubuf");
+            goto error;
+        }
 
-    ubuf_pic_clear(ubuf, 0, 0, -1, -1, 0);
+        ubuf_pic_clear(ubuf, 0, 0, -1, -1, 0);
+    }
     uref_attach_ubuf(uref, ubuf);
 
     /* Chain the new flow def attributes to the uref so we can apply them
      * later. */
     uref->uchain.next = uref_to_uchain(flow_def_attr);
 
-    if (!(context->codec->capabilities & AV_CODEC_CAP_DR1)) {
-        upipe_verbose(upipe, "no direct rendering, using default");
-        return avcodec_default_get_buffer2(context, frame, 0);
-    }
+    if (frame->format == upipe_avcdec->hw_pix_fmt ||
+        !(context->codec->capabilities & AV_CODEC_CAP_DR1))
+        return 0;
 
     /* Direct rendering */
     /* Iterate over the flow def attr because it's designed to be in the correct
@@ -374,9 +454,6 @@ static int upipe_avcdec_get_buffer_pic(struct AVCodecContext *context,
     uint8_t planes;
     if (unlikely(!ubase_check(uref_pic_flow_get_planes(flow_def_attr, &planes))))
         goto error;
-
-    /* Use this as an avcodec refcount */
-    uref_attr_set_priv(uref, planes);
 
     for (uint8_t plane = 0; plane < planes; plane++) {
         const char *chroma;
@@ -392,8 +469,8 @@ static int upipe_avcdec_get_buffer_pic(struct AVCodecContext *context,
         }
 
         frame->linesize[plane] = stride;
-        frame->buf[plane] = av_buffer_create(frame->data[plane], stride * height_aligned / vsub,
-                upipe_av_uref_pic_free, uref, 0);
+        frame->buf[plane] = av_buffer_create((uint8_t*)chroma, 0,
+                upipe_av_uref_pic_free, av_buffer_ref(frame->opaque_ref), 0);
     }
 
     frame->extended_data = frame->data;
@@ -409,36 +486,10 @@ error:
 
 static void upipe_av_uref_pic_free(void *opaque, uint8_t *data)
 {
-    struct uref *uref = opaque;
-
-    uint64_t buffers;
-    if (unlikely(!ubase_check(uref_attr_get_priv(uref, &buffers))))
-        return;
-    if (--buffers) {
-        uref_attr_set_priv(uref, buffers);
-        return;
-    }
-
-    struct uref *flow_def_attr = uref_from_uchain(uref->uchain.next);
-
-    assert(flow_def_attr);
-
-    uint8_t planes;
-    if (unlikely(!ubase_check(uref_pic_flow_get_planes(flow_def_attr, &planes))))
-        goto end;
-
-    for (uint8_t plane = 0; plane < planes; plane++) {
-        const char *chroma;
-        if (!ubase_check(uref_pic_flow_get_chroma(flow_def_attr, &chroma, plane)))
-            goto end;
-
-        /* unmap call in avcodec get_buffer2 */
-        ubuf_pic_plane_unmap(uref->ubuf, chroma, 0, 0, -1, -1);
-    }
-
-end:
-    uref_free(flow_def_attr);
-    uref_free(uref);
+    AVBufferRef *opaque_ref = opaque;
+    struct uref *uref = (struct uref *)opaque_ref->data;
+    uref_pic_plane_unmap(uref, (const char *)data, 0, 0, -1, -1);
+    av_buffer_unref(&opaque_ref);
 }
 
 static void upipe_av_uref_sound_free(void *opaque, uint8_t *data)
@@ -577,6 +628,22 @@ static void upipe_avcdec_abort_av_deal(struct upipe *upipe)
     }
 }
 
+static enum AVPixelFormat upipe_avcodec_get_format(AVCodecContext *context,
+                                                   const enum AVPixelFormat *pix_fmts)
+{
+    struct upipe *upipe = context->opaque;
+    struct upipe_avcdec *upipe_avcdec = upipe_avcdec_from_upipe(upipe);
+
+    for (const enum AVPixelFormat *p = pix_fmts; *p != AV_PIX_FMT_NONE; p++)
+        if (*p == upipe_avcdec->hw_pix_fmt)
+            return *p;
+
+    upipe_warn_va(upipe, "failed to get hw surface format %s",
+                  av_get_pix_fmt_name(upipe_avcdec->hw_pix_fmt));
+
+    return AV_PIX_FMT_NONE;
+}
+
 /** @internal @This actually calls avcodec_open(). It may only be called by
  * one thread at a time.
  *
@@ -603,6 +670,8 @@ static bool upipe_avcdec_do_av_deal(struct upipe *upipe)
             break;
         case AVMEDIA_TYPE_VIDEO:
             context->get_buffer2 = upipe_avcdec_get_buffer_pic;
+            if (upipe_avcdec->hw_pix_fmt != AV_PIX_FMT_NONE)
+                context->get_format = upipe_avcodec_get_format;
             break;
         case AVMEDIA_TYPE_AUDIO:
             context->get_buffer2 = upipe_avcdec_get_buffer_sound;
@@ -614,8 +683,32 @@ static bool upipe_avcdec_do_av_deal(struct upipe *upipe)
             return false;
     }
 
-    /* open new context */
+    /* open hardware decoder */
     int err;
+    if (upipe_avcdec->hw_device_type != AV_HWDEVICE_TYPE_NONE) {
+        if (unlikely((err = av_hwdevice_ctx_create(&upipe_avcdec->hw_device_ctx,
+                                                   upipe_avcdec->hw_device_type,
+                                                   upipe_avcdec->hw_device,
+                                                   NULL, 0)) < 0)) {
+            upipe_av_strerror(err, buf);
+            upipe_warn_va(upipe, "could not create hw device context (%s)", buf);
+            upipe_throw_fatal(upipe, UBASE_ERR_EXTERNAL);
+            return false;
+        }
+        context->hw_device_ctx = av_buffer_ref(upipe_avcdec->hw_device_ctx);
+        if (context->hw_device_ctx == NULL) {
+            upipe_warn_va(upipe, "could not create hw device reference");
+            upipe_throw_fatal(upipe, UBASE_ERR_EXTERNAL);
+            return false;
+        }
+#if LIBAVCODEC_VERSION_INT >= AV_VERSION_INT(58, 11, 100)
+        context->extra_hw_frames = 16;
+#endif
+        upipe_notice_va(upipe, "created %s hw device context",
+                        av_hwdevice_get_type_name(upipe_avcdec->hw_device_type));
+    }
+
+    /* open new context */
     if (unlikely((err = avcodec_open2(context, context->codec, NULL)) < 0)) {
         upipe_av_strerror(err, buf);
         upipe_warn_va(upipe, "could not open codec (%s)", buf);
@@ -996,7 +1089,11 @@ static void upipe_avcdec_output_pic(struct upipe *upipe, struct upump **upump_p)
     AVCodecContext *context = upipe_avcdec->context;
     AVFrame *frame = upipe_avcdec->frame;
     AVFrameSideData *side_data;
-    struct uref *uref = frame->opaque;
+
+    if (frame->opaque_ref == NULL)
+        return;
+
+    struct uref *uref = (struct uref *)frame->opaque_ref->data;
     struct uref *flow_def_attr = uref_from_uchain(uref->uchain.next);
 
     uint64_t framenum = 0;
@@ -1005,13 +1102,17 @@ static void upipe_avcdec_output_pic(struct upipe *upipe, struct upump **upump_p)
     upipe_verbose_va(upipe, "%"PRIu64"\t - Picture decoded ! %dx%d - %"PRIu64,
                  upipe_avcdec->counter, frame->width, frame->height, framenum);
 
-    /* Resize the picture (was allocated too big). */
-    if (unlikely(!ubase_check(uref_pic_resize(uref, 0, 0, frame->width, frame->height)))) {
-        upipe_warn_va(upipe, "couldn't resize picture to %dx%d",
-                      frame->width, frame->height);
-        upipe_throw_error(upipe, UBASE_ERR_EXTERNAL);
+    /* allocate new ubuf with wrapped avframe */
+    if (uref->ubuf == NULL) {
+        int ret;
+        if (unlikely((ret = upipe_avcdec_get_buffer_pic(context, frame, 0)) < 0)) {
+            upipe_err_va(upipe, "couldn't get frame buffer: %s", av_err2str(ret));
+            upipe_throw_error(upipe, UBASE_ERR_EXTERNAL);
+            return;
+        }
     }
 
+    flow_def_attr = uref_from_uchain(uref->uchain.next);
     /* Duplicate uref because it is freed in _release, because the ubuf
      * is still in use by avcodec. */
     uref = uref_dup(uref);
@@ -1020,39 +1121,11 @@ static void upipe_avcdec_output_pic(struct upipe *upipe, struct upump **upump_p)
         return;
     }
 
-    if (!(context->codec->capabilities & AV_CODEC_CAP_DR1)) {
-        /* Not direct rendering, copy data. */
-        uint8_t planes;
-        if (unlikely(!ubase_check(uref_pic_flow_get_planes(flow_def_attr, &planes)))) {
-            uref_free(uref);
-            upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
-            return;
-        }
-
-        for (uint8_t plane = 0; plane < planes; plane++) {
-            uint8_t *dst, *src, hsub, vsub;
-            size_t sstride, dstride, stride;
-            const char *chroma;
-            if (unlikely(!ubase_check(uref_pic_flow_get_chroma(flow_def_attr, &chroma,
-                                                   plane)) ||
-                         !ubase_check(ubuf_pic_plane_write(uref->ubuf, chroma,
-                                               0, 0, -1, -1, &dst)) ||
-                         !ubase_check(ubuf_pic_plane_size(uref->ubuf, chroma, &dstride,
-                                              &hsub, &vsub, NULL)))) {
-                uref_free(uref);
-                upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
-                return;
-            }
-            src = frame->data[plane];
-            sstride = frame->linesize[plane];
-            stride = sstride < dstride ? sstride : dstride;
-            for (int j = 0; j < frame->height / vsub; j++) {
-                memcpy(dst, src, stride);
-                dst += dstride;
-                src += sstride;
-            }
-            ubuf_pic_plane_unmap(uref->ubuf, chroma, 0, 0, -1, -1);
-        }
+    /* Resize the picture (was allocated too big). */
+    if (unlikely(!ubase_check(uref_pic_resize(uref, 0, 0, frame->width, frame->height)))) {
+        upipe_warn_va(upipe, "couldn't resize picture to %dx%d",
+                      frame->width, frame->height);
+        upipe_throw_error(upipe, UBASE_ERR_EXTERNAL);
     }
 
     UBASE_FATAL(upipe, uref_pic_set_tf(uref))
@@ -1310,6 +1383,16 @@ static bool upipe_avcdec_decode(struct upipe *upipe, struct uref *uref,
         return true;
     }
 
+    uint64_t pts;
+    uint64_t dts;
+    uint64_t duration;
+    if (ubase_check(uref_clock_get_pts_prog(uref, &pts)))
+        avpkt.pts = pts;
+    if (ubase_check(uref_clock_get_dts_prog(uref, &dts)))
+        avpkt.dts = dts;
+    if (ubase_check(uref_clock_get_duration(uref, &duration)))
+        avpkt.duration = duration;
+
     upipe_verbose_va(upipe, "Received packet %"PRIu64" - size : %d",
                      upipe_avcdec->counter, avpkt.size);
     uref_block_extract(uref, 0, avpkt.size, avpkt.data);
@@ -1412,6 +1495,29 @@ static int upipe_avcdec_set_flow_def(struct upipe *upipe, struct uref *flow_def)
         uref_free(flow_def_check);
         upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
         return UBASE_ERR_ALLOC;
+    }
+
+    /* Select hw accel for this codec. */
+    if (upipe_avcdec->hw_device_type != AV_HWDEVICE_TYPE_NONE) {
+#if LIBAVCODEC_VERSION_INT >= AV_VERSION_INT(58, 4, 100)
+        for (int i = 0;; i++) {
+            const AVCodecHWConfig *config = avcodec_get_hw_config(codec, i);
+            if (config == NULL) {
+                upipe_err_va(upipe, "decoder %s does not support device type %s",
+                             codec->name,
+                             av_hwdevice_get_type_name(upipe_avcdec->hw_device_type));
+                free(extradata_alloc);
+                uref_free(flow_def_check);
+                upipe_throw_fatal(upipe, UBASE_ERR_EXTERNAL);
+                return UBASE_ERR_EXTERNAL;
+            }
+            if (config->methods & AV_CODEC_HW_CONFIG_METHOD_HW_DEVICE_CTX &&
+                config->device_type == upipe_avcdec->hw_device_type) {
+                upipe_avcdec->hw_pix_fmt = config->pix_fmt;
+                break;
+            }
+        }
+#endif
     }
 
     if (upipe_avcdec->context != NULL) {
@@ -1557,6 +1663,22 @@ static int upipe_avcdec_control(struct upipe *upipe, int command, va_list args)
             return upipe_avcdec_set_option(upipe, option, content);
         }
 
+        case UPIPE_AVCDEC_SET_HW_CONFIG: {
+            UBASE_SIGNATURE_CHECK(args, UPIPE_AVCDEC_SIGNATURE)
+            const char *device_type = va_arg(args, const char *);
+            const char *device = va_arg(args, const char *);
+            struct upipe_avcdec *upipe_avcdec = upipe_avcdec_from_upipe(upipe);
+            enum AVHWDeviceType type = AV_HWDEVICE_TYPE_NONE;
+            if (device_type != NULL) {
+                type = av_hwdevice_find_type_by_name(device_type);
+                if (type == AV_HWDEVICE_TYPE_NONE)
+                    return UBASE_ERR_INVALID;
+            }
+            upipe_avcdec->hw_device_type = type;
+            upipe_avcdec->hw_device = device ? strdup(device) : NULL;
+            return UBASE_ERR_NONE;
+        }
+
         default:
             return UBASE_ERR_UNHANDLED;
     }
@@ -1575,6 +1697,8 @@ static void upipe_avcdec_free(struct upipe *upipe)
         av_free(upipe_avcdec->context);
     }
     av_frame_free(&upipe_avcdec->frame);
+    av_buffer_unref(&upipe_avcdec->hw_device_ctx);
+    free(upipe_avcdec->hw_device);
 
     upipe_throw_dead(upipe);
     uref_free(upipe_avcdec->uref);
@@ -1623,6 +1747,10 @@ static struct upipe *upipe_avcdec_alloc(struct upipe_mgr *mgr,
     upipe_avcdec_init_input(upipe);
 
     struct upipe_avcdec *upipe_avcdec = upipe_avcdec_from_upipe(upipe);
+    upipe_avcdec->hw_device_type = AV_HWDEVICE_TYPE_NONE;
+    upipe_avcdec->hw_device = NULL;
+    upipe_avcdec->hw_device_ctx = NULL;
+    upipe_avcdec->hw_pix_fmt = AV_PIX_FMT_NONE;
     upipe_avcdec->context = NULL;
     upipe_avcdec->frame = frame;
     upipe_avcdec->counter = 0;
