@@ -26,6 +26,20 @@
 
 #include "sdienc.h"
 
+#define CLIP8(c) (ubase_clip((*(c)), 1,  254))
+
+void upipe_planar_to_uyvy_8_c(uint16_t *dst, const uint8_t *y, const uint8_t *u, const uint8_t *v, const uintptr_t width)
+{
+    int j;
+    for (j = 0; j < width/2; j++) {
+        dst[0] = CLIP8(u++) << 2;
+        dst[1] = CLIP8(y++) << 2;
+        dst[2] = CLIP8(v++) << 2;
+        dst[3] = CLIP8(y++) << 2;
+        dst += 4;
+    }
+}
+
 void upipe_uyvy_to_sdi_c(uint8_t *dst, const uint8_t *y, uintptr_t pixels)
 {
     struct ubits s;
