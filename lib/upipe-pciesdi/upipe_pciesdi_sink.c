@@ -45,6 +45,7 @@
 #include "libsdi.h"
 #include "sdi_config.h"
 #include "csr.h"
+#include "flags.h"
 
 /** upipe_pciesdi_sink structure */
 struct upipe_pciesdi_sink {
@@ -137,6 +138,11 @@ static void upipe_pciesdi_sink_worker(struct upump *upump)
         return;
     }
 
+    uint8_t txen, slew;
+    sdi_tx(upipe_pciesdi_sink->fd, SDI_TX_MODE_HD, &txen, &slew);
+    if (txen || slew)
+        printf("txen %d slew %d\n", txen, slew);
+
     int64_t hw = 0, sw = 0;
     sdi_dma_reader(upipe_pciesdi_sink->fd, upipe_pciesdi_sink->first == 0, &hw, &sw); // enable
 
@@ -178,6 +184,9 @@ static void upipe_pciesdi_sink_input(struct upipe *upipe, struct uref *uref, str
     if (upipe_pciesdi_sink->upump || n < 2)
         return;
 
+    uint8_t txen, slew;
+    sdi_tx(upipe_pciesdi_sink->fd, SDI_TX_MODE_HD, &txen, &slew);
+
     int64_t hw = 0, sw = 0;
     sdi_dma_reader(upipe_pciesdi_sink->fd, upipe_pciesdi_sink->first == 0, &hw, &sw);
 
@@ -209,6 +218,95 @@ static int upipe_pciesdi_sink_set_flow_def(struct upipe *upipe, struct uref *flo
     return UBASE_ERR_NONE;
 }
 
+static void init(struct upipe *upipe)
+{
+    struct upipe_pciesdi_sink *upipe_pciesdi_sink = upipe_pciesdi_sink_from_upipe(upipe);
+    int fd = upipe_pciesdi_sink->fd;
+
+    int64_t hw_count, sw_count;
+        /* reset sdi cores */
+    printf("Reset SDI cores...\n");
+    sdi_writel(fd, CSR_SDI0_CORE_TX_RESET_ADDR, 1);
+#ifdef CSR_SDI1_CORE_TX_RESET_ADDR
+    sdi_writel(fd, CSR_SDI1_CORE_TX_RESET_ADDR, 1);
+#endif
+#ifdef CSR_SDI2_CORE_TX_RESET_ADDR
+    sdi_writel(fd, CSR_SDI2_CORE_TX_RESET_ADDR, 1);
+#endif
+#ifdef CSR_SDI3_CORE_TX_RESET_ADDR
+    sdi_writel(fd, CSR_SDI3_CORE_TX_RESET_ADDR, 1);
+#endif
+
+    sdi_writel(fd, CSR_SDI0_CORE_RX_RESET_ADDR, 1);
+#ifdef CSR_SDI1_CORE_RX_RESET_ADDR
+    sdi_writel(fd, CSR_SDI1_CORE_RX_RESET_ADDR, 1);
+#endif
+#ifdef CSR_SDI2_CORE_RX_RESET_ADDR
+    sdi_writel(fd, CSR_SDI2_CORE_RX_RESET_ADDR, 1);
+#endif
+#ifdef CSR_SDI3_CORE_RX_RESET_ADDR
+    sdi_writel(fd, CSR_SDI3_CORE_RX_RESET_ADDR, 1);
+#endif
+
+    /* reset driver */
+    printf("Reset Driver...\n");
+    /* disable loopback */
+    sdi_dma(fd, 1, 0, 0);
+    /* disable dmas */
+    sdi_dma_reader(fd, 0, &hw_count, &sw_count);
+    sdi_dma_writer(fd, 0, &hw_count, &sw_count);
+
+    /* si5324 reset */
+    printf("Reseting SI5324...\n");
+    si5324_spi_write(fd, 136, 80);
+
+    /* si5324 configuration */
+    if (1 /* PAL */) { // TODO
+        printf("Configure SI5324 for PAL (148.5MHz)...\n");
+        sdi_si5324_vcxo(fd, 512<<10, 1024<<10);
+        for(int i = 0; i < countof(si5324_148_5_mhz_regs); i++) {
+            si5324_spi_write(fd, si5324_148_5_mhz_regs[i][0], si5324_148_5_mhz_regs[i][1]);
+        }
+    } else {
+        printf("Configure SI5324 for NTSC (148.5MHz/1.001)...\n");
+        sdi_si5324_vcxo(fd, 512<<10, 1024<<10);
+        for(int i = 0; i < countof(si5324_148_35_mhz_regs); i++) {
+            si5324_spi_write(fd, si5324_148_35_mhz_regs[i][0], si5324_148_35_mhz_regs[i][1]);
+        }
+    }
+    sleep(1);
+
+    /* reference clock selection */
+    printf("Select SI5324 output as reference clock...\n");
+    sdi_writel(fd, CSR_SDI_QPLL_PLL0_REFCLK_SEL_ADDR, REFCLK1_SEL);
+
+    /* un-reset sdi cores */
+    printf("Un-reset SDI cores...\n");
+    sdi_writel(fd, CSR_SDI0_CORE_TX_RESET_ADDR, 0);
+#ifdef CSR_SDI1_CORE_TX_RESET_ADDR
+    sdi_writel(fd, CSR_SDI1_CORE_TX_RESET_ADDR, 0);
+#endif
+#ifdef CSR_SDI2_CORE_TX_RESET_ADDR
+    sdi_writel(fd, CSR_SDI2_CORE_TX_RESET_ADDR, 0);
+#endif
+#ifdef CSR_SDI3_CORE_TX_RESET_ADDR
+    sdi_writel(fd, CSR_SDI3_CORE_TX_RESET_ADDR, 0);
+#endif
+
+    sdi_writel(fd, CSR_SDI0_CORE_RX_RESET_ADDR, 0);
+#ifdef CSR_SDI1_CORE_RX_RESET_ADDR
+    sdi_writel(fd, CSR_SDI1_CORE_RX_RESET_ADDR, 0);
+#endif
+#ifdef CSR_SDI2_CORE_RX_RESET_ADDR
+    sdi_writel(fd, CSR_SDI2_CORE_RX_RESET_ADDR, 0);
+#endif
+#ifdef CSR_SDI3_CORE_RX_RESET_ADDR
+    sdi_writel(fd, CSR_SDI3_CORE_RX_RESET_ADDR, 0);
+#endif
+
+    close(fd);
+}
+
 /** @internal @This asks to open the given device.
  *
  * @param upipe description structure of the pipe
@@ -219,10 +317,6 @@ static int upipe_pciesdi_set_uri(struct upipe *upipe, const char *path)
 {
     struct upipe_pciesdi_sink *upipe_pciesdi_sink = upipe_pciesdi_sink_from_upipe(upipe);
 
-    upipe_pciesdi_sink_check_upump_mgr(upipe);
-    if (upipe_pciesdi_sink->upump_mgr == NULL)
-        return UBASE_ERR_BUSY;
-
     ubase_clean_fd(&upipe_pciesdi_sink->fd);
     upipe_pciesdi_sink_set_upump(upipe, NULL);
 
@@ -232,11 +326,17 @@ static int upipe_pciesdi_set_uri(struct upipe *upipe, const char *path)
         return UBASE_ERR_EXTERNAL;
     }
 
+    init(upipe);
+
+    upipe_pciesdi_sink->fd = open(path, O_RDWR | O_CLOEXEC | O_NONBLOCK);
+    if (unlikely(upipe_pciesdi_sink->fd < 0)) {
+        upipe_err_va(upipe, "can't open %s (%m)", path);
+        return UBASE_ERR_EXTERNAL;
+    }
+
     sdi_set_pattern(upipe_pciesdi_sink->fd, 0, 0);
 
-    sdi_writel(upipe_pciesdi_sink->fd, CSR_SDI_REFCLK_SEL_OUT_ADDR, 1);
-
-    sdi_dma(upipe_pciesdi_sink->fd, 1, 0, 0); // disable loopback
+    sdi_dma(upipe_pciesdi_sink->fd, 0, 0, 0); // disable loopback
 
     return UBASE_ERR_NONE;
 }
