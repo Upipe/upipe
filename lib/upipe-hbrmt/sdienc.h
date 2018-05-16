@@ -22,6 +22,7 @@ void upipe_planar_to_uyvy_8_unaligned_sse2(uint16_t *dst, const uint8_t *y, cons
 void upipe_planar_to_uyvy_8_unaligned_avx (uint16_t *dst, const uint8_t *y, const uint8_t *u, const uint8_t *v, uintptr_t pixels);
 void upipe_planar_to_uyvy_8_unaligned_avx2(uint16_t *dst, const uint8_t *y, const uint8_t *u, const uint8_t *v, uintptr_t pixels);
 
+void upipe_planar_to_uyvy_10_c(uint16_t *dst, const uint16_t *y, const uint16_t *u, const uint16_t *v, const uintptr_t width);
 /* process mmsize pixels per iteration */
 void upipe_planar_to_uyvy_10_aligned_sse2  (uint16_t *dst, const uint16_t *y, const uint16_t *u, const uint16_t *v, uintptr_t pixels);
 void upipe_planar_to_uyvy_10_aligned_avx   (uint16_t *dst, const uint16_t *y, const uint16_t *u, const uint16_t *v, uintptr_t pixels);

@@ -1554,20 +1554,6 @@ static int upipe_sdi_enc_control(struct upipe *upipe, int command, va_list args)
     }
 }
 
-#define CLIP(c)  (ubase_clip((*(c)), 4, 1019))
-
-static void planar_to_uyvy_10_c(uint16_t *dst, const uint16_t *y, const uint16_t *u, const uint16_t *v, const uintptr_t width)
-{
-    int j;
-    for (j = 0; j < width/2; j++) {
-        dst[0] = CLIP(u++);
-        dst[1] = CLIP(y++);
-        dst[2] = CLIP(v++);
-        dst[3] = CLIP(y++);
-        dst += 4;
-    }
-}
-
 /** @internal @This allocates a sdi_enc pipe.
  *
  * @param mgr common management structure
@@ -1600,7 +1586,7 @@ static struct upipe *_upipe_sdi_enc_alloc(struct upipe_mgr *mgr,
 
     upipe_sdi_enc->blank             = upipe_sdi_blank_c;
     upipe_sdi_enc->planar_to_uyvy_8  = upipe_planar_to_uyvy_8_c;
-    upipe_sdi_enc->planar_to_uyvy_10 = planar_to_uyvy_10_c;
+    upipe_sdi_enc->planar_to_uyvy_10 = upipe_planar_to_uyvy_10_c;
     upipe_sdi_enc->v210_to_uyvy      = upipe_v210_to_uyvy_c;
 
 #if defined(HAVE_X86ASM)
