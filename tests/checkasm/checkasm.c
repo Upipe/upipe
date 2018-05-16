@@ -74,6 +74,7 @@ static const struct {
     const char *name;
     void (*func)(void);
 } tests[] = {
+    { "planar10_input", checkasm_check_planar10_input },
     { "planar8_input", checkasm_check_planar8_input },
     { "sdi_input", checkasm_check_sdi_input },
     { "uyvy_input", checkasm_check_uyvy_input },
