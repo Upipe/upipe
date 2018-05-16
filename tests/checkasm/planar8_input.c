@@ -23,6 +23,7 @@
 
 #include "checkasm.h"
 #include "lib/upipe-hbrmt/sdienc.h"
+#include "lib/upipe-v210/v210enc.h"
 
 #define NUM_SAMPLES 512
 
@@ -39,20 +40,25 @@ void checkasm_check_planar8_input(void)
 {
     struct {
         void (*uyvy)(uint16_t *dst, const uint8_t *y, const uint8_t *u, const uint8_t *v, uintptr_t pixels);
+        void (*v210)(const uint8_t *y, const uint8_t *u, const uint8_t *v, uint8_t *dst, ptrdiff_t pixels);
     } s = {
         .uyvy = upipe_planar_to_uyvy_8_c,
+        .v210 = upipe_planar_to_v210_8_c,
     };
 
     int cpu_flags = av_get_cpu_flags();
 
     if (cpu_flags & AV_CPU_FLAG_SSSE3) {
        s.uyvy =  upipe_planar_to_uyvy_8_unaligned_sse2;
+       s.v210  = upipe_planar_to_v210_8_ssse3;
     }
     if (cpu_flags & AV_CPU_FLAG_AVX) {
        s.uyvy =  upipe_planar_to_uyvy_8_unaligned_avx;
+       s.v210  = upipe_planar_to_v210_8_avx;
     }
     if (cpu_flags & AV_CPU_FLAG_AVX2) {
        s.uyvy =  upipe_planar_to_uyvy_8_unaligned_avx2;
+       s.v210  = upipe_planar_to_v210_8_avx2;
     }
 
     if (check_func(s.uyvy, "planar_to_uyvy_8")) {
@@ -80,4 +86,31 @@ void checkasm_check_planar8_input(void)
         bench_new(dst1, y1, u1, v1, NUM_SAMPLES / 2);
     }
     report("planar_to_uyvy_8");
+
+    if (check_func(s.v210, "planar_to_v210_8")) {
+        uint8_t y0[NUM_SAMPLES/2];
+        uint8_t y1[NUM_SAMPLES/2];
+        uint8_t u0[NUM_SAMPLES/4];
+        uint8_t u1[NUM_SAMPLES/4];
+        uint8_t v0[NUM_SAMPLES/4];
+        uint8_t v1[NUM_SAMPLES/4];
+        uint8_t dst0[NUM_SAMPLES * 4 / 3 + 32];
+        uint8_t dst1[NUM_SAMPLES * 4 / 3 + 32];
+        const int pixels = NUM_SAMPLES / 2 / 6 * 6;
+
+        declare_func(void, const uint8_t *y, const uint8_t *u, const uint8_t *v, uint8_t *dst, ptrdiff_t pixels);
+
+        randomize_buffers(y0, y1, NUM_SAMPLES/2);
+        randomize_buffers(u0, u1, NUM_SAMPLES/4);
+        randomize_buffers(v0, v1, NUM_SAMPLES/4);
+        call_ref(y0, u0, v0, dst0, pixels);
+        call_new(y1, u1, v1, dst1, pixels);
+        if (memcmp(dst0, dst1, pixels * 2 * 4 / 3)
+                || memcmp(y0, y1, sizeof y0)
+                || memcmp(u0, u1, sizeof u0)
+                || memcmp(v0, v1, sizeof v0))
+            fail();
+        bench_new(y1, u1, v1, dst1, pixels);
+    }
+    report("planar_to_v210_8");
 }
