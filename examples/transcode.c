@@ -112,19 +112,22 @@ struct upipe_mgr *upipe_noclock_mgr;
 
 static bool file_mode;
 
+static const char *hw_accel;
+
 static struct uprobe *logger;
 static struct upipe *avfsrc;
 static struct upipe *avfsink;
 struct uchain eslist;
 
 static void usage(const char *argv0) {
-    fprintf(stderr, "Usage: %s [-d] [-F] [-m <mime>] [-f <format>] [-p <id> -c <codec> [-g <filters>] [-o <option=value>] ...] ... <source file> <sink file>\n", argv0);
+    fprintf(stderr, "Usage: %s [-d] [-F] [-m <mime>] [-f <format>] [-p <id> -c <codec> [-x <hwaccel>] [-g <filters>] [-o <option=value>] ...] ... <source file> <sink file>\n", argv0);
     fprintf(stderr, "   -d: show more debug logs\n");
     fprintf(stderr, "   -F: file mode\n");
     fprintf(stderr, "   -f: output format name\n");
     fprintf(stderr, "   -m: output mime type\n");
     fprintf(stderr, "   -p: add stream with id\n");
     fprintf(stderr, "   -c: stream encoder\n");
+    fprintf(stderr, "   -x: decoder hw accel\n");
     fprintf(stderr, "   -g: filter graph\n");
     fprintf(stderr, "   -o: encoder option (key=value)\n");
     exit(EXIT_FAILURE);
@@ -298,6 +301,14 @@ static int catch_demux(struct uprobe *uprobe, struct upipe *upipe,
             upipe_release(decoder);
             incoming = decoder;
 
+            /* hw config */
+            if (!ubase_check(upipe_avcdec_set_hw_config(decoder,
+                                                        hw_accel,
+                                                        NULL))) {
+                upipe_err_va(upipe, "hw config unsupported: %s", hw_accel);
+                exit(EXIT_FAILURE);
+            }
+
             /* stream type */
             const char *ffmt_def = NULL;
             if (strstr(def, ".sound.")) {
@@ -400,6 +411,11 @@ static int catch_demux(struct uprobe *uprobe, struct upipe *upipe,
                 upipe_avcenc_mgr,
                 uprobe_pfx_alloc_va(uprobe_use(logger),
                                     loglevel, "enc %"PRIu64, id), flow);
+            if (encoder == NULL) {
+                upipe_err_va(upipe, "could not allocate encoder %"PRIu64, id);
+                exit(EXIT_FAILURE);
+            }
+
             upipe_release(encoder);
             uref_free(flow);
             if (strstr(def, ".pic.")) {
@@ -461,7 +477,7 @@ int main(int argc, char *argv[])
     ulist_init(&eslist);
 
     /* parse options */
-    while ((opt = getopt(argc, argv, "dFm:f:p:c:g:o:")) != -1) {
+    while ((opt = getopt(argc, argv, "dFm:f:p:c:g:o:x:")) != -1) {
         switch(opt) {
             case 'd':
                 if (loglevel > 0) loglevel--;
@@ -474,6 +490,9 @@ int main(int argc, char *argv[])
                 break;
             case 'f':
                 format = optarg;
+                break;
+            case 'x':
+                hw_accel = optarg;
                 break;
 
             case 'p': {
@@ -531,7 +550,8 @@ int main(int argc, char *argv[])
     assert(logger != NULL);
     uprobe_init(&uprobe_demux_s, catch_demux, uprobe_use(logger));
 
-    upipe_av_init(false, uprobe_use(logger));
+    upipe_av_init(false, uprobe_pfx_alloc(uprobe_use(logger),
+                                          UPROBE_LOG_VERBOSE, "av"));
 
     /* sighandler */
     struct upump *sigint_pump = upump_alloc_signal(upump_mgr, sighandler,

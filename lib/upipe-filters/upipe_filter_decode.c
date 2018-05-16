@@ -45,6 +45,7 @@
 #include <upipe/upipe_helper_bin_output.h>
 #include <upipe-modules/upipe_idem.h>
 #include <upipe-filters/upipe_filter_decode.h>
+#include <upipe-av/upipe_avcodec_decode.h>
 
 #include <stdlib.h>
 #include <stdbool.h>
@@ -83,6 +84,10 @@ struct upipe_fdec {
 
     /** uref serving as a dictionary for options */
     struct uref *options;
+    /** configured hardware device type */
+    char *hw_type;
+    /** hardware device, or NULL for default device */
+    char *hw_device;
 
     /** probe for the last inner pipe */
     struct uprobe last_inner_probe;
@@ -142,6 +147,8 @@ static struct upipe *upipe_fdec_alloc(struct upipe_mgr *mgr,
     upipe_fdec_init_bin_input(upipe);
     upipe_fdec_init_bin_output(upipe);
     upipe_fdec->options = NULL;
+    upipe_fdec->hw_type = NULL;
+    upipe_fdec->hw_device = NULL;
     upipe_throw_ready(upipe);
     upipe_fdec_demand_uref_mgr(upipe);
     return upipe;
@@ -190,6 +197,15 @@ static int upipe_fdec_set_flow_def(struct upipe *upipe, struct uref *flow_def)
     if (unlikely(avcdec == NULL)) {
         upipe_err_va(upipe, "couldn't allocate avcdec");
         return UBASE_ERR_UNHANDLED;
+    }
+    if (upipe_fdec->hw_type != NULL) {
+        if (unlikely(!ubase_check(upipe_avcdec_set_hw_config(avcdec,
+                                                             upipe_fdec->hw_type,
+                                                             upipe_fdec->hw_device)))) {
+            upipe_err_va(upipe, "couldn't set avcdec hw config");
+            upipe_release(avcdec);
+            return UBASE_ERR_UNHANDLED;
+        }
     }
     if (unlikely(!ubase_check(upipe_set_flow_def(avcdec, flow_def)))) {
         upipe_err_va(upipe, "couldn't set avcdec flow def");
@@ -267,6 +283,32 @@ static int upipe_fdec_set_option(struct upipe *upipe,
     return UBASE_ERR_NONE;
 }
 
+/** @internal @This sets the hardware accel configuration.
+ *
+ * @param upipe description structure of the pipe
+ * @param type hardware acceleration type (use NULL to disable)
+ * @param device hardware device to open (use NULL for default)
+ * @return an error code
+ */
+static int upipe_fdec_set_hw_config(struct upipe *upipe,
+                                    const char *type,
+                                    const char *device)
+{
+    struct upipe_fdec *upipe_fdec = upipe_fdec_from_upipe(upipe);
+
+    free(upipe_fdec->hw_type);
+    free(upipe_fdec->hw_device);
+
+    upipe_fdec->hw_type = type ? strdup(type) : NULL;
+    upipe_fdec->hw_device = device ? strdup(device) : NULL;
+
+    if (upipe_fdec->last_inner != NULL) {
+            UBASE_RETURN(upipe_avcdec_set_hw_config(upipe_fdec->last_inner,
+                                                    type, device))
+    }
+    return UBASE_ERR_NONE;
+}
+
 /** @internal @This processes control commands on a fdec pipe.
  *
  * @param upipe description structure of the pipe
@@ -296,6 +338,21 @@ static int upipe_fdec_control(struct upipe *upipe, int command, va_list args)
             break;
     }
 
+    if (command >= UPIPE_CONTROL_LOCAL) {
+        switch (ubase_get_signature(args)) {
+            case UPIPE_AVCDEC_SIGNATURE:
+                UBASE_SIGNATURE_CHECK(args, UPIPE_AVCDEC_SIGNATURE);
+                switch (command) {
+                    case UPIPE_AVCDEC_SET_HW_CONFIG: {
+                        const char *type = va_arg(args, const char *);
+                        const char *device = va_arg(args, const char *);
+                        return upipe_fdec_set_hw_config(upipe, type, device);
+                    }
+                }
+                break;
+        }
+    }
+
     int err = upipe_fdec_control_bin_input(upipe, command, args);
     if (err == UBASE_ERR_UNHANDLED)
         return upipe_fdec_control_bin_output(upipe, command, args);
@@ -313,6 +370,8 @@ static void upipe_fdec_free(struct urefcount *urefcount_real)
     struct upipe *upipe = upipe_fdec_to_upipe(upipe_fdec);
     upipe_throw_dead(upipe);
     uref_free(upipe_fdec->options);
+    free(upipe_fdec->hw_type);
+    free(upipe_fdec->hw_device);
     upipe_fdec_clean_last_inner_probe(upipe);
     upipe_fdec_clean_uref_mgr(upipe);
     urefcount_clean(urefcount_real);

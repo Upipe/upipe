@@ -58,6 +58,7 @@ UREF_ATTR_SMALL_UNSIGNED_VA(pic_flow, macropixel_size, "p.macropix[%" PRIu8"]",
         size of a compound, uint8_t plane, plane)
 UREF_ATTR_STRING_VA(pic_flow, chroma, "p.chroma[%" PRIu8"]",
         chroma type, uint8_t plane, plane)
+UREF_ATTR_STRING(pic_flow, surface_type, "p.surface_type", surface type)
 
 UREF_ATTR_RATIONAL(pic_flow, fps, "p.fps", frames per second)
 UREF_ATTR_SMALL_UNSIGNED(pic_flow, hmprepend, "p.hmprepend",
