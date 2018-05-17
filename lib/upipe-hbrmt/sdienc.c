@@ -22,7 +22,36 @@
 
 #include <arpa/inet.h>
 
+#include <libavutil/bswap.h>
+
 #include "sdienc.h"
+
+#define CLIP8(c) (ubase_clip((*(c)), 1,  254))
+#define CLIP(c)  (ubase_clip((*(c)), 4, 1019))
+
+void upipe_planar_to_uyvy_8_c(uint16_t *dst, const uint8_t *y, const uint8_t *u, const uint8_t *v, const uintptr_t width)
+{
+    int j;
+    for (j = 0; j < width/2; j++) {
+        dst[0] = CLIP8(u++) << 2;
+        dst[1] = CLIP8(y++) << 2;
+        dst[2] = CLIP8(v++) << 2;
+        dst[3] = CLIP8(y++) << 2;
+        dst += 4;
+    }
+}
+
+void upipe_planar_to_uyvy_10_c(uint16_t *dst, const uint16_t *y, const uint16_t *u, const uint16_t *v, const uintptr_t width)
+{
+    int j;
+    for (j = 0; j < width/2; j++) {
+        dst[0] = CLIP(u++);
+        dst[1] = CLIP(y++);
+        dst[2] = CLIP(v++);
+        dst[3] = CLIP(y++);
+        dst += 4;
+    }
+}
 
 void upipe_uyvy_to_sdi_c(uint8_t *dst, const uint8_t *y, uintptr_t pixels)
 {
@@ -38,5 +67,32 @@ void upipe_uyvy_to_sdi_c(uint8_t *dst, const uint8_t *y, uintptr_t pixels)
         // error
     } else {
         // check buffer end?
+    }
+}
+
+void upipe_uyvy_to_sdi_2_c(uint8_t *dst1, uint8_t *dst2, const uint8_t *y, uintptr_t pixels)
+{
+    upipe_uyvy_to_sdi_c(dst1, y, pixels);
+    memcpy(dst2, dst1, 2*pixels * 10 / 8);
+}
+
+#define READ_PIXELS(a, b, c)         \
+    do {                             \
+        val  = av_le2ne32(*src++);   \
+        *a++ =  val & 0x3FF;         \
+        *b++ = (val >> 10) & 0x3FF;  \
+        *c++ = (val >> 20) & 0x3FF;  \
+    } while (0)
+
+void upipe_v210_to_uyvy_c(const uint32_t *src, uint16_t *uyvy, uintptr_t width)
+{
+    uint32_t val;
+    int i;
+
+    for( i = 0; i < width; i += 6 ){
+        READ_PIXELS(uyvy, uyvy, uyvy);
+        READ_PIXELS(uyvy, uyvy, uyvy);
+        READ_PIXELS(uyvy, uyvy, uyvy);
+        READ_PIXELS(uyvy, uyvy, uyvy);
     }
 }

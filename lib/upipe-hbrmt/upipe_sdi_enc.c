@@ -25,9 +25,6 @@
 #include <bitstream/smpte/291.h>
 #include <bitstream/dvb/vbi.h>
 
-#include <libavutil/common.h>
-#include <libavutil/bswap.h>
-
 #include <upipe-hbrmt/upipe_sdi_enc.h>
 #include "upipe_hbrmt_common.h"
 
@@ -1557,54 +1554,6 @@ static int upipe_sdi_enc_control(struct upipe *upipe, int command, va_list args)
     }
 }
 
-#define CLIP8(c) (av_clip((*(c)), 1,  254))
-#define CLIP(c)  (av_clip((*(c)), 4, 1019))
-
-static void planar_to_uyvy_8_c(uint16_t *dst, const uint8_t *y, const uint8_t *u, const uint8_t *v, const uintptr_t width)
-{
-    int j;
-    for (j = 0; j < width/2; j++) {
-        dst[0] = CLIP8(u++) << 2;
-        dst[1] = CLIP8(y++) << 2;
-        dst[2] = CLIP8(v++) << 2;
-        dst[3] = CLIP8(y++) << 2;
-        dst += 4;
-    }
-}
-
-static void planar_to_uyvy_10_c(uint16_t *dst, const uint16_t *y, const uint16_t *u, const uint16_t *v, const uintptr_t width)
-{
-    int j;
-    for (j = 0; j < width/2; j++) {
-        dst[0] = CLIP(u++);
-        dst[1] = CLIP(y++);
-        dst[2] = CLIP(v++);
-        dst[3] = CLIP(y++);
-        dst += 4;
-    }
-}
-
-#define READ_PIXELS(a, b, c)         \
-    do {                             \
-        val  = av_le2ne32(*src++);   \
-        *a++ =  val & 0x3FF;         \
-        *b++ = (val >> 10) & 0x3FF;  \
-        *c++ = (val >> 20) & 0x3FF;  \
-    } while (0)
-
-static void v210_uyvy_unpack_c(const uint32_t *src, uint16_t *uyvy, uintptr_t width)
-{
-    uint32_t val;
-    int i;
-
-    for( i = 0; i < width; i += 6 ){
-        READ_PIXELS(uyvy, uyvy, uyvy);
-        READ_PIXELS(uyvy, uyvy, uyvy);
-        READ_PIXELS(uyvy, uyvy, uyvy);
-        READ_PIXELS(uyvy, uyvy, uyvy);
-    }
-}
-
 /** @internal @This allocates a sdi_enc pipe.
  *
  * @param mgr common management structure
@@ -1636,9 +1585,9 @@ static struct upipe *_upipe_sdi_enc_alloc(struct upipe_mgr *mgr,
     upipe_sdi_enc->cdp_hdr_sequence_cntr = 0;
 
     upipe_sdi_enc->blank             = upipe_sdi_blank_c;
-    upipe_sdi_enc->planar_to_uyvy_8  = planar_to_uyvy_8_c;
-    upipe_sdi_enc->planar_to_uyvy_10 = planar_to_uyvy_10_c;
-    upipe_sdi_enc->v210_to_uyvy      = v210_uyvy_unpack_c;
+    upipe_sdi_enc->planar_to_uyvy_8  = upipe_planar_to_uyvy_8_c;
+    upipe_sdi_enc->planar_to_uyvy_10 = upipe_planar_to_uyvy_10_c;
+    upipe_sdi_enc->v210_to_uyvy      = upipe_v210_to_uyvy_c;
 
 #if defined(HAVE_X86ASM)
 #if defined(__i686__) || defined(__x86_64__)

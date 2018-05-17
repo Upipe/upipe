@@ -20,7 +20,12 @@
 
 #include <stddef.h>
 #include <inttypes.h>
+#include <libavutil/common.h>
+#include <libavutil/intreadwrite.h>
 #include "sdidec.h"
+#include "upipe/ubase.h"
+
+#define CLIP(v) ubase_clip(v, 4, 1019)
 
 void upipe_sdi_to_uyvy_c(const uint8_t *src, uint16_t *y, uintptr_t pixels)
 {
@@ -95,5 +100,59 @@ void upipe_sdi_to_planar_10_c(const uint8_t *src, uint16_t *y, uint16_t *u, uint
         *y++ = ((b & 0x3f) << 4) | ((c >> 4) & 0x0f); //2222223333
         *v++ = ((c & 0x0f) << 6) | ((d >> 2) & 0x3f); //3333444444
         *y++ = ((d & 0x03) << 8) | e;                 //4455555555
+    }
+}
+
+void upipe_uyvy_to_planar_8_c(uint8_t *y, uint8_t *u, uint8_t *v, const uint16_t *l, uintptr_t width)
+{
+    int j;
+    for (j = 0; j < width / 2; j++) {
+        u[0] = l[0] >> 2;
+        y[0] = l[1] >> 2;
+        v[0] = l[2] >> 2;
+        y[1] = l[3] >> 2;
+        l += 4;
+        y += 2;
+        u += 1;
+        v += 1;
+    }
+}
+
+void upipe_uyvy_to_planar_10_c(uint16_t *y, uint16_t *u, uint16_t *v, const uint16_t *l, uintptr_t width)
+{
+    int j;
+    for (j = 0; j < width/2; j++) {
+        u[0] = l[0];
+        y[0] = l[1];
+        v[0] = l[2];
+        y[1] = l[3];
+        l += 4;
+        y += 2;
+        u += 1;
+        v += 1;
+    }
+}
+
+#define WRITE_PIXELS_UYVY(a)            \
+    do {                                \
+        val  = CLIP(*a++);              \
+        tmp1 = CLIP(*a++);              \
+        tmp2 = CLIP(*a++);              \
+        val |= (tmp1 << 10) |           \
+               (tmp2 << 20);            \
+        AV_WL32(dst, val);              \
+        dst += 4;                       \
+    } while (0)
+
+void upipe_uyvy_to_v210_c(const uint16_t *y, uint8_t *dst, uintptr_t width)
+{
+    uint32_t val, tmp1, tmp2;
+    int i;
+
+    for (i = 0; i < width - 5; i += 6) {
+        WRITE_PIXELS_UYVY(y);
+        WRITE_PIXELS_UYVY(y);
+        WRITE_PIXELS_UYVY(y);
+        WRITE_PIXELS_UYVY(y);
     }
 }

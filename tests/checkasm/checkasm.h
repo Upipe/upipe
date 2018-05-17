@@ -67,10 +67,11 @@
 #define HAVE_RDTSC 0
 #include "timer.h"
 
-void checkasm_check_sdidec(void);
-void checkasm_check_sdienc(void);
-void checkasm_check_v210dec(void);
-void checkasm_check_v210enc(void);
+void checkasm_check_planar10_input(void);
+void checkasm_check_planar8_input(void);
+void checkasm_check_sdi_input(void);
+void checkasm_check_uyvy_input(void);
+void checkasm_check_v210_input(void);
 
 struct CheckasmPerf;
 

@@ -46,7 +46,6 @@
 
 #include <upipe-v210/upipe_v210dec.h>
 
-#include <libavutil/common.h>
 #include <libavutil/intreadwrite.h>
 
 #include <stdio.h>
@@ -65,7 +64,7 @@
 
 const char *v210_chroma = "u10y10v10y10u10y10v10y10u10y10v10y10";
 
-#define CLIP_10(v) av_clip(v, 4, 1019)
+#define CLIP_10(v) ubase_clip(v, 4, 1019)
 
 #define WRITE_PIXELS_10(a, b, c)           \
     do {                                \

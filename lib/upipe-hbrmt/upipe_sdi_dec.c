@@ -62,9 +62,6 @@
 #include "sdidec.h"
 #include "upipe_hbrmt_common.h"
 
-#include <libavutil/common.h>
-#include <libavutil/intreadwrite.h>
-
 #define UPIPE_SDI_DEC_MAX_PLANES 3
 #define UPIPE_SDI_MAX_CHANNELS 16
 
@@ -1407,62 +1404,6 @@ static int upipe_sdi_dec_control(struct upipe *upipe, int command, va_list args)
     }
 }
 
-static void uyvy_to_planar_8_c(uint8_t *y, uint8_t *u, uint8_t *v, const uint16_t *l, uintptr_t width)
-{
-    int j;
-    for (j = 0; j < width / 2; j++) {
-        u[0] = l[0] >> 2;
-        y[0] = l[1] >> 2;
-        v[0] = l[2] >> 2;
-        y[1] = l[3] >> 2;
-        l += 4;
-        y += 2;
-        u += 1;
-        v += 1;
-    }
-}
-
-static void uyvy_to_planar_10_c(uint16_t *y, uint16_t *u, uint16_t *v, const uint16_t *l, uintptr_t width)
-{
-    int j;
-    for (j = 0; j < width/2; j++) {
-        u[0] = l[0];
-        y[0] = l[1];
-        v[0] = l[2];
-        y[1] = l[3];
-        l += 4;
-        y += 2;
-        u += 1;
-        v += 1;
-    }
-}
-
-#define CLIP(v) av_clip(v, 4, 1019)
-
-#define WRITE_PIXELS_UYVY(a)            \
-    do {                                \
-        val  = CLIP(*a++);              \
-        tmp1 = CLIP(*a++);              \
-        tmp2 = CLIP(*a++);              \
-        val |= (tmp1 << 10) |           \
-               (tmp2 << 20);            \
-        AV_WL32(dst, val);              \
-        dst += 4;                       \
-    } while (0)
-
-static void uyvy_to_v210_c(const uint16_t *y, uint8_t *dst, uintptr_t width)
-{
-    uint32_t val, tmp1, tmp2;
-    int i;
-
-    for (i = 0; i < width - 5; i += 6) {
-        WRITE_PIXELS_UYVY(y);
-        WRITE_PIXELS_UYVY(y);
-        WRITE_PIXELS_UYVY(y);
-        WRITE_PIXELS_UYVY(y);
-    }
-}
-
 /** @internal @This allocates a sdi_dec pipe.
  *
  * @param mgr common management structure
@@ -1501,9 +1442,9 @@ static struct upipe *_upipe_sdi_dec_alloc(struct upipe_mgr *mgr,
 
     uref_free(flow_def);
 
-    upipe_sdi_dec->uyvy_to_v210 = uyvy_to_v210_c;
-    upipe_sdi_dec->uyvy_to_planar_8 = uyvy_to_planar_8_c;
-    upipe_sdi_dec->uyvy_to_planar_10 = uyvy_to_planar_10_c;
+    upipe_sdi_dec->uyvy_to_v210 = upipe_uyvy_to_v210_c;
+    upipe_sdi_dec->uyvy_to_planar_8 = upipe_uyvy_to_planar_8_c;
+    upipe_sdi_dec->uyvy_to_planar_10 = upipe_uyvy_to_planar_10_c;
 
 #if defined(HAVE_X86ASM)
 #if defined(__i686__) || defined(__x86_64__)
