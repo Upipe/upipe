@@ -188,7 +188,11 @@ struct upipe_x265 {
     /** input sar height (if aspect_ratio_idc == X265_EXTENDED_SAR) */
     int sar_height;
     /** input overscan */
-    int overscan;
+    enum {
+        OVERSCAN_UNDEF,
+        OVERSCAN_SHOW,
+        OVERSCAN_CROP,
+    } overscan;
 
     /** last DTS */
     uint64_t last_dts;
@@ -277,6 +281,16 @@ static int upipe_x265_set_option(struct upipe *upipe,
     return UBASE_ERR_NONE;
 }
 
+static const char *overscan_to_str(int overscan)
+{
+    switch (overscan) {
+        case OVERSCAN_UNDEF: return "undef";
+        case OVERSCAN_SHOW: return "show";
+        case OVERSCAN_CROP: return "crop";
+    }
+    return NULL;
+}
+
 static void apply_params(struct upipe *upipe, x265_param *params)
 {
     struct upipe_x265 *upipe_x265 = upipe_x265_from_upipe(upipe);
@@ -299,8 +313,10 @@ static void apply_params(struct upipe *upipe, x265_param *params)
         params->vui.sarWidth = upipe_x265->sar_width;
         params->vui.sarHeight = upipe_x265->sar_height;
     }
-    params->vui.bEnableOverscanInfoPresentFlag = upipe_x265->overscan;
-    params->vui.bEnableOverscanAppropriateFlag = upipe_x265->overscan;
+
+    upipe_x265_set_option(upipe, params, "overscan",
+                          overscan_to_str(upipe_x265->overscan));
+
     params->sourceWidth = upipe_x265->width;
     params->sourceHeight = upipe_x265->height;
 
@@ -521,7 +537,7 @@ static struct upipe *upipe_x265_alloc(struct upipe_mgr *mgr,
     upipe_x265->headers_requested = false;
     upipe_x265->encaps_requested = UREF_H26X_ENCAPS_ANNEXB;
     upipe_x265->aspect_ratio_idc = 0;
-    upipe_x265->overscan = 0; /* undef */
+    upipe_x265->overscan = OVERSCAN_UNDEF;
 
     upipe_x265->last_dts = UINT64_MAX;
     upipe_x265->last_dts_sys = UINT64_MAX;
@@ -758,6 +774,14 @@ static void upipe_x265_build_flow_def(struct upipe *upipe)
     upipe_x265_store_flow_def(upipe, flow_def);
 }
 
+static int params_overscan(x265_param *params)
+{
+    if (!params->vui.bEnableOverscanInfoPresentFlag)
+        return OVERSCAN_UNDEF;
+    return params->vui.bEnableOverscanAppropriateFlag ?
+        OVERSCAN_CROP : OVERSCAN_SHOW;
+}
+
 /** @internal @This checks incoming pic against cached parameters.
  *
  * @param upipe description structure of the pipe
@@ -776,7 +800,7 @@ static inline bool upipe_x265_need_update(struct upipe *upipe,
            (params->vui.aspectRatioIdc == X265_EXTENDED_SAR &&
             (params->vui.sarWidth != upipe_x265->sar_width ||
              params->vui.sarHeight != upipe_x265->sar_height)) ||
-           params->vui.bEnableOverscanAppropriateFlag != upipe_x265->overscan;
+           params_overscan(params) != upipe_x265->overscan;
 }
 
 /** @internal @This fetches aspect ratio information from flow def.
@@ -895,9 +919,10 @@ static bool upipe_x265_handle(struct upipe *upipe,
 
         bool overscan;
         if (!ubase_check(uref_pic_flow_get_overscan(uref, &overscan)))
-            upipe_x265->overscan = 0; /* undef */
+            upipe_x265->overscan = OVERSCAN_UNDEF;
         else
-            upipe_x265->overscan = overscan ? 2 : 1;
+            upipe_x265->overscan = overscan ?
+                OVERSCAN_CROP : OVERSCAN_SHOW;
 
         uint64_t hsize, vsize;
         if (ubase_check(uref_pic_flow_get_hsize(uref, &hsize)) &&
@@ -972,7 +997,7 @@ err_invalid:
         } else if (unlikely(upipe_x265_need_update(upipe, width, height))) {
             x265_param *params = &upipe_x265->params;
             upipe_notice_va(upipe, "Flow parameters changed, reconfiguring encoder "
-                            "(%d:%zu, %d:%zu, %d/%d/%d:%d/%d/%d, %d:%d)",
+                            "(%d:%zu, %d:%zu, %d/%d/%d:%d/%d/%d, %s:%s)",
                 upipe_x265->width, width,
                 upipe_x265->height, height,
                 params->vui.aspectRatioIdc,
@@ -981,7 +1006,8 @@ err_invalid:
                 upipe_x265->aspect_ratio_idc,
                 upipe_x265->aspect_ratio_idc == X265_EXTENDED_SAR ? upipe_x265->sar_width : 0,
                 upipe_x265->aspect_ratio_idc == X265_EXTENDED_SAR ? upipe_x265->sar_height : 0,
-                params->vui.bEnableOverscanAppropriateFlag, upipe_x265->overscan);
+                overscan_to_str(params_overscan(params)),
+                overscan_to_str(upipe_x265->overscan));
             needopen = true;
         }
         if (unlikely(needopen)) {
