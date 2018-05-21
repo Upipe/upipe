@@ -159,6 +159,8 @@ struct upipe_grid_out {
     struct uchain uchain;
     /** output tolerance */
     uint64_t tolerance;
+    /** last input pts */
+    uint64_t last_input_pts;
 };
 
 static void upipe_grid_out_handle_input_changed(struct upipe *upipe,
@@ -547,6 +549,7 @@ static struct upipe *upipe_grid_out_alloc(struct upipe_mgr *mgr,
     upipe_grid_out->flow_def_input = false;
     upipe_grid_out->input = NULL;
     upipe_grid_out->tolerance = DEFAULT_TOLERANCE;
+    upipe_grid_out->last_input_pts = UINT64_MAX;
 
     upipe_throw_ready(upipe);
 
@@ -725,6 +728,20 @@ static int upipe_grid_out_extract_sound(struct upipe *upipe, struct uref *uref)
         return UBASE_ERR_INVALID;
     }
     struct uref *input_uref = uref_from_uchain(uchain);
+
+    uint64_t input_pts;
+    /* checked before */
+    ubase_assert(uref_clock_get_pts_sys(input_uref, &input_pts));
+    if (input_pts > next_pts + upipe_grid_out->tolerance) {
+        upipe_dbg(upipe, "next input in the futur");
+        return UBASE_ERR_INVALID;
+    }
+
+    if (upipe_grid_out->last_input_pts != UINT64_MAX &&
+        input_pts == upipe_grid_out->last_input_pts) {
+        upipe_warn(upipe, "drop duplicate output");
+        return UBASE_ERR_INVALID;
+    }
     struct ubuf *ubuf = ubuf_dup(input_uref->ubuf);
     if (unlikely(!ubuf)) {
         upipe_err(upipe, "fail to duplicate buffer");
@@ -732,6 +749,7 @@ static int upipe_grid_out_extract_sound(struct upipe *upipe, struct uref *uref)
     }
     uref_attach_ubuf(uref, ubuf);
     uref_attr_import(uref, input_uref);
+    upipe_grid_out->last_input_pts = input_pts;
     return UBASE_ERR_NONE;
 }
 
@@ -877,6 +895,7 @@ static int upipe_grid_out_set_input_real(struct upipe *upipe,
                     upipe_grid_out->input, input);
     upipe_grid_out->input = input;
     upipe_grid_out->flow_def_uptodate = false;
+    upipe_grid_out->last_input_pts = UINT64_MAX;
     return UBASE_ERR_NONE;
 }
 
