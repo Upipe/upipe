@@ -56,6 +56,8 @@
 #include <upipe/upipe_helper_upump.h>
 #include <upipe/upipe_helper_input.h>
 #include <upipe-av/upipe_avcodec_encode.h>
+#include <upipe-av/ubuf_av.h>
+#include <upipe-av/uref_av_flow.h>
 #include <upipe/udict_dump.h>
 #include <upipe-framers/uref_h264.h>
 #include <upipe-framers/uref_mpgv.h>
@@ -180,6 +182,8 @@ struct upipe_avcenc {
 
     /** true if the existing slice types must be enforced */
     bool slice_type_enforce;
+    /** uref serving as a dictionary for options */
+    struct uref *options;
 
     /** avcodec context */
     AVCodecContext *context;
@@ -187,6 +191,8 @@ struct upipe_avcenc {
     AVFrame *frame;
     /** true if the context will be closed */
     bool close;
+    /** true if the context will be reinitialized */
+    bool reinit;
     /** true if the pipe need to be released after output_input */
     bool release_needed;
 
@@ -280,6 +286,74 @@ static void upipe_avcenc_abort_av_deal(struct upipe *upipe)
     }
 }
 
+/** @internal @This closes and reinitializes the avcodec context.
+ *
+ * @param upipe description structure of the pipe
+ * @return an error code
+ */
+static int upipe_avcenc_do_reinit(struct upipe *upipe)
+{
+    struct upipe_avcenc *upipe_avcenc = upipe_avcenc_from_upipe(upipe);
+    AVCodecContext *context = upipe_avcenc->context;
+
+    const struct AVCodec *codec = context->codec;
+    int flags = context->flags;
+    int width = context->width;
+    int height = context->height;
+    enum AVPixelFormat pix_fmt = context->pix_fmt;
+    AVRational time_base = context->time_base;
+    AVRational framerate = context->framerate;
+    AVRational sample_aspect_ratio = context->sample_aspect_ratio;
+    enum AVFieldOrder field_order = context->field_order;
+    enum AVColorRange color_range = context->color_range;
+    enum AVColorPrimaries color_primaries = context->color_primaries;
+    enum AVColorTransferCharacteristic color_trc = context->color_trc;
+    enum AVColorSpace colorspace = context->colorspace;
+
+    avcodec_free_context(&context);
+    context = avcodec_alloc_context3(codec);
+    if (context == NULL) {
+        upipe_err(upipe, "cannot allocate codec context");
+        upipe_throw_error(upipe, UBASE_ERR_ALLOC);
+        return UBASE_ERR_ALLOC;
+    }
+
+    context->opaque = upipe;
+    context->flags = flags;
+    context->width = width;
+    context->height = height;
+    context->pix_fmt = pix_fmt;
+    context->time_base = time_base;
+    context->framerate = framerate;
+    context->sample_aspect_ratio = sample_aspect_ratio;
+    context->field_order = field_order;
+    context->color_range = color_range;
+    context->color_primaries = color_primaries;
+    context->color_trc = color_trc;
+    context->colorspace = colorspace;
+
+    if (upipe_avcenc->options != NULL &&
+        upipe_avcenc->options->udict != NULL) {
+        const char *key = NULL;
+        enum udict_type type = UDICT_TYPE_END;
+        while (ubase_check(udict_iterate(upipe_avcenc->options->udict, &key,
+                                         &type)) && type != UDICT_TYPE_END) {
+            const char *value;
+            if (key == NULL ||
+                !ubase_check(udict_get_string(upipe_avcenc->options->udict,
+                                              &value, type, key)))
+                continue;
+            int err = av_opt_set(context, key, value, AV_OPT_SEARCH_CHILDREN);
+            if (err < 0)
+                upipe_warn_va(upipe, "invalid option %s=%s (%s)", key, value,
+                              av_err2str(err));
+        }
+    }
+
+    upipe_avcenc->context = context;
+    return UBASE_ERR_NONE;
+}
+
 /** @internal @This actually calls avcodec_open(). It may only be called by
  * one thread at a time.
  *
@@ -298,6 +372,10 @@ static bool upipe_avcenc_do_av_deal(struct upipe *upipe)
         avcodec_close(context);
         return false;
     }
+
+    /* reinit context */
+    if (upipe_avcenc->reinit)
+        return ubase_check(upipe_avcenc_do_reinit(upipe));
 
     /* open new context */
     int err;
@@ -398,6 +476,19 @@ static void upipe_avcenc_open(struct upipe *upipe)
 {
     struct upipe_avcenc *upipe_avcenc = upipe_avcenc_from_upipe(upipe);
     upipe_avcenc->close = false;
+    upipe_avcenc->reinit = false;
+    upipe_avcenc_start_av_deal(upipe);
+}
+
+/** @internal @This is called to trigger context reinitialization.
+ *
+ * @param upipe description structure of the pipe
+ */
+static void upipe_avcenc_reinit(struct upipe *upipe)
+{
+    struct upipe_avcenc *upipe_avcenc = upipe_avcenc_from_upipe(upipe);
+    upipe_avcenc->close = false;
+    upipe_avcenc->reinit = true;
     upipe_avcenc_start_av_deal(upipe);
 }
 
@@ -648,26 +739,33 @@ static void upipe_avcenc_encode_video(struct upipe *upipe,
         return;
     }
 
-    int i;
-    for (i = 0; i < UPIPE_AV_MAX_PLANES && upipe_avcenc->chroma_map[i] != NULL;
-         i++) {
-        const uint8_t *data;
-        size_t stride;
-        if (unlikely(!ubase_check(uref_pic_plane_read(uref, upipe_avcenc->chroma_map[i],
-                                          0, 0, -1, -1, &data)) ||
-                     !ubase_check(uref_pic_plane_size(uref, upipe_avcenc->chroma_map[i],
-                                          &stride, NULL, NULL, NULL)))) {
-            upipe_warn(upipe, "invalid buffer received");
-            uref_free(uref);
-            return;
+    av_frame_unref(frame);
+    if (!ubase_check(ubuf_av_get_avframe(uref->ubuf, frame))) {
+        for (int i = 0; i < UPIPE_AV_MAX_PLANES &&
+             upipe_avcenc->chroma_map[i] != NULL; i++) {
+            const uint8_t *data;
+            size_t stride;
+            if (unlikely(!ubase_check(uref_pic_plane_read(
+                            uref, upipe_avcenc->chroma_map[i],
+                            0, 0, -1, -1, &data)) ||
+                    !ubase_check(uref_pic_plane_size(
+                            uref, upipe_avcenc->chroma_map[i],
+                            &stride, NULL, NULL, NULL)))) {
+                upipe_warn(upipe, "invalid buffer received");
+                uref_free(uref);
+                return;
+            }
+            frame->data[i] = (uint8_t *)data;
+            frame->linesize[i] = stride;
         }
-        frame->data[i] = (uint8_t *)data;
-        frame->linesize[i] = stride;
-    }
 
-    /* set frame dimensions */
-    frame->width = hsize;
-    frame->height = vsize;
+        /* set frame pixel format */
+        frame->format = context->pix_fmt;
+
+        /* set frame dimensions */
+        frame->width = hsize;
+        frame->height = vsize;
+    }
 
     /* set picture type */
     frame->pict_type = AV_PICTURE_TYPE_NONE;
@@ -855,6 +953,47 @@ static bool upipe_avcenc_handle(struct upipe *upipe, struct uref *uref,
 
     if (upipe_avcenc->flow_def_requested == NULL)
         return false;
+
+    if (context->pix_fmt == AV_PIX_FMT_VAAPI) {
+        AVFrame *frame = av_frame_alloc();
+        if (frame == NULL) {
+            upipe_err(upipe, "cannot allocate avframe");
+            upipe_throw_error(upipe, UBASE_ERR_ALLOC);
+            uref_free(uref);
+            return true;
+        }
+        int err = ubuf_av_get_avframe(uref->ubuf, frame);
+        if (!ubase_check(err)) {
+            upipe_err(upipe, "cannot get avframe from uref");
+            upipe_throw_error(upipe, err);
+            av_frame_free(&frame);
+            uref_free(uref);
+            return true;
+        }
+        if (context->hw_frames_ctx != NULL &&
+            context->hw_frames_ctx->data != frame->hw_frames_ctx->data) {
+            upipe_notice(upipe, "hw frames ctx changed");
+            if (context->codec->capabilities & AV_CODEC_CAP_DELAY)
+                upipe_avcenc_encode_frame(upipe, NULL, upump_p);
+            upipe_avcenc_reinit(upipe);
+            if (avcodec_is_open(upipe_avcenc->context)) {
+                av_frame_free(&frame);
+                return false;
+            }
+            context = upipe_avcenc->context;
+        }
+        if (context->hw_frames_ctx == NULL) {
+            context->hw_frames_ctx = av_buffer_ref(frame->hw_frames_ctx);
+            if (context->hw_frames_ctx == NULL) {
+                upipe_err(upipe, "cannot create avframe ref");
+                upipe_throw_error(upipe, UBASE_ERR_ALLOC);
+                av_frame_free(&frame);
+                uref_free(uref);
+                return true;
+            }
+        }
+        av_frame_free(&frame);
+    }
 
     while (unlikely(!avcodec_is_open(upipe_avcenc->context))) {
         if (upipe_avcenc->upump_av_deal != NULL)
@@ -1142,8 +1281,24 @@ static int upipe_avcenc_set_flow_def(struct upipe *upipe, struct uref *flow_def)
         uref_free(flow_def_check);
 
     } else if (!ubase_ncmp(def, "pic.")) {
-        context->pix_fmt = upipe_av_pixfmt_from_flow_def(flow_def,
-                    codec->pix_fmts, upipe_avcenc->chroma_map);
+        uint64_t hsize = 0, vsize = 0;
+        uref_pic_flow_get_hsize(flow_def, &hsize);
+        uref_pic_flow_get_vsize(flow_def, &vsize);
+        context->width = hsize;
+        context->height = vsize;
+
+        const char *surface_type;
+        if ((ubase_check(uref_pic_flow_get_surface_type(flow_def,
+                                                        &surface_type))) &&
+            !strcmp(surface_type, "av.vaapi") &&
+            codec->pix_fmts[0] == AV_PIX_FMT_VAAPI) {
+            context->pix_fmt = AV_PIX_FMT_VAAPI;
+            upipe_avcenc->chroma_map[0] = NULL;
+        } else {
+            context->pix_fmt = upipe_av_pixfmt_from_flow_def(
+                flow_def, codec->pix_fmts, upipe_avcenc->chroma_map);
+        }
+
         if (context->pix_fmt == AV_PIX_FMT_NONE) {
             upipe_err_va(upipe, "unsupported pixel format");
             uref_dump(flow_def, upipe->uprobe);
@@ -1209,12 +1364,6 @@ static int upipe_avcenc_set_flow_def(struct upipe *upipe, struct uref *flow_def)
                               AV_OPT_SEARCH_CHILDREN)) < 0)
             upipe_err_va(upipe, "can't set option %s:%s (%d)",
                          "colorspace", content, ret);
-
-        uint64_t hsize = 0, vsize = 0;
-        uref_pic_flow_get_hsize(flow_def, &hsize);
-        uref_pic_flow_get_vsize(flow_def, &vsize);
-        context->width = hsize;
-        context->height = vsize;
 
         if (!ubase_check(uref_pic_get_progressive(flow_def))) {
             context->flags |= AV_CODEC_FLAG_INTERLACED_DCT |
@@ -1330,14 +1479,22 @@ static int _upipe_avcenc_provide_flow_format(struct upipe *upipe,
         if (unlikely(codec->pix_fmts == NULL || codec->pix_fmts[0] == -1))
             goto upipe_avcenc_provide_flow_format_err;
 
-        const char *chroma_map[UPIPE_AV_MAX_PLANES];
-        enum AVPixelFormat pix_fmt = upipe_av_pixfmt_from_flow_def(flow_format,
-                    codec->pix_fmts, chroma_map);
-        if (pix_fmt == AV_PIX_FMT_NONE) {
+        if (codec->pix_fmts[0] == AV_PIX_FMT_VAAPI) {
             uref_pic_flow_clear_format(flow_format);
             if (unlikely(!ubase_check(upipe_av_pixfmt_to_flow_def(
-                                codec->pix_fmts[0], flow_format))))
+                            AV_PIX_FMT_NV12, flow_format))))
                 goto upipe_avcenc_provide_flow_format_err;
+            uref_pic_flow_set_surface_type(flow_format, "av.vaapi");
+        } else {
+            const char *chroma_map[UPIPE_AV_MAX_PLANES];
+            enum AVPixelFormat pix_fmt = upipe_av_pixfmt_from_flow_def(flow_format,
+                        codec->pix_fmts, chroma_map);
+            if (pix_fmt == AV_PIX_FMT_NONE) {
+                uref_pic_flow_clear_format(flow_format);
+                if (unlikely(!ubase_check(upipe_av_pixfmt_to_flow_def(
+                                codec->pix_fmts[0], flow_format))))
+                    goto upipe_avcenc_provide_flow_format_err;
+            }
         }
 
         const AVRational *supported_framerates = codec->supported_framerates;
@@ -1474,6 +1631,13 @@ static int upipe_avcenc_set_option(struct upipe *upipe,
                      buf);
         return UBASE_ERR_EXTERNAL;
     }
+
+    if (content != NULL)
+        udict_set_string(upipe_avcenc->options->udict, content,
+                         UDICT_TYPE_STRING, option);
+    else
+        udict_delete(upipe_avcenc->options->udict, UDICT_TYPE_STRING, option);
+
     upipe_avcenc_build_flow_def_attr(upipe);
     return UBASE_ERR_NONE;
 }
@@ -1575,6 +1739,7 @@ static void upipe_avcenc_free(struct upipe *upipe)
 
     upipe_throw_dead(upipe);
     uref_free(upipe_avcenc->flow_def_requested);
+    uref_free(upipe_avcenc->options);
     upipe_avcenc_abort_av_deal(upipe);
     upipe_avcenc_clean_input(upipe);
     upipe_avcenc_clean_ubuf_mgr(upipe);
@@ -1612,6 +1777,13 @@ static struct upipe *upipe_avcenc_alloc(struct upipe_mgr *mgr,
         return NULL;
     }
 
+    struct uref *options = uref_alloc_control(flow_def->mgr);
+    if (options == NULL) {
+        av_frame_free(&frame);
+        upipe_avcenc_free_flow(upipe);
+        return NULL;
+    }
+
     struct upipe_avcenc *upipe_avcenc = upipe_avcenc_from_upipe(upipe);
     const char *def, *name;
     enum AVCodecID codec_id;
@@ -1629,6 +1801,7 @@ static struct upipe *upipe_avcenc_alloc(struct upipe_mgr *mgr,
             (upipe_avcenc->context = avcodec_alloc_context3(codec)) == NULL) {
         uref_free(flow_def);
         av_frame_free(&frame);
+        uref_free(options);
         upipe_avcenc_free_flow(upipe);
         return NULL;
     }
@@ -1649,6 +1822,7 @@ static struct upipe *upipe_avcenc_alloc(struct upipe_mgr *mgr,
     upipe_avcenc_store_flow_def_attr(upipe, flow_def);
     upipe_avcenc->flow_def_requested = NULL;
     upipe_avcenc->slice_type_enforce = false;
+    upipe_avcenc->options = options;
     upipe_avcenc->release_needed = false;
 
     ulist_init(&upipe_avcenc->sound_urefs);
