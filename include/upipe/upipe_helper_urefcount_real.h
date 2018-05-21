@@ -83,6 +83,16 @@ static void STRUCTURE##_dead_##UREFCOUNT(struct urefcount *urefcount)       \
     struct STRUCTURE *s = STRUCTURE##_from_##UREFCOUNT(urefcount);          \
     DEAD(STRUCTURE##_to_upipe(s));                                          \
 }                                                                           \
+/** @internal @This uses the refcount.                                      \
+ *                                                                          \
+ * @param upipe description structure of the pipe                           \
+ */                                                                         \
+static struct upipe *STRUCTURE##_use_##UREFCOUNT(struct upipe *upipe)       \
+{                                                                           \
+    struct STRUCTURE *s = STRUCTURE##_from_upipe(upipe);                    \
+    s = STRUCTURE##_from_##UREFCOUNT(urefcount_use(&s->UREFCOUNT));         \
+    return STRUCTURE##_to_upipe(s);                                         \
+}                                                                           \
 /** @internal @This releases the refcount.                                  \
  *                                                                          \
  * @param upipe description structure of the pipe                           \
