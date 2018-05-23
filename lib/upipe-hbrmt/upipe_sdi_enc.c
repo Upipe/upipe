@@ -306,10 +306,11 @@ static inline void put_payload_identifier(uint16_t *dst, const struct sdi_offset
     dst[gap*5] = 4;
 
     /* UDW */
-    dst[gap*6] = f->pict_fmt->sd ? 0x81 : f->height == 750 ? 0x84 : 0x85;
+    dst[gap*6] = f->pict_fmt->sd ? S352_PAYLOAD_SD : f->height == 750 ?
+                                   S352_PAYLOAD_720_INTERFACE_1_POINT_5_GBPS : S352_PAYLOAD_1080_INTERFACE_1_POINT_5_GBPS;
     dst[gap*7] = (f->psf_ident << 6) | f->frame_rate;
-    dst[gap*8] = 0x80;
-    dst[gap*9] = 0x01;
+    dst[gap*8] = S352_ASPECT_RATIO_16_9 << 7;
+    dst[gap*9] = S352_BIT_DEPTH_10;
 
     /* Parity + CS */
     sdi_fill_anc_parity_checksum_hd(&dst[gap*3], true);

@@ -9,6 +9,7 @@ extern "C" {
 #include <bitstream/ieee/ethernet.h>
 #include <bitstream/ietf/ip.h>
 #include <bitstream/ietf/udp.h>
+#include <bitstream/smpte/352.h>
 #include <bitstream/smpte/2022_6_hbrmt.h>
 
 #define RAW_HEADER_SIZE (IP_HEADER_MINSIZE + UDP_HEADER_SIZE)
@@ -149,19 +150,6 @@ struct sdi_offsets_fmt {
     /* 0x0 (Interlace), 0x1 (Segmented frame), 0x3 (Progressive) */
     uint8_t psf_ident;
 
-    /* frame_rate
-     * 0x0 Undefined
-     * 0x1 Reserved
-     * 0x2 24/1.001Hz
-     * 0x3 24Hz
-     * 0x4 Reserved
-     * 0x5 25Hz
-     * 0x6 30/1.001 Hz
-     * 0x7 30Hz
-     * 0x8 Reserved
-     * 0x9 50Hz
-     * 0xA 60/1.001 Hz
-     */
     uint8_t frame_rate;
 
     struct urational fps;
@@ -195,21 +183,21 @@ static inline const struct sdi_offsets_fmt *sdi_get_offsets(struct uref *flow_de
 
     static const struct sdi_offsets_fmt fmts_data[] = {
         /* 1125 Lines */
-        { 2640, 1125, 720, &pict_fmts[0], 0x0, 0x5, { 25, 1} },        /* 25 Hz I */
-        { 2640, 1125, 720, &pict_fmts[1], 0x3, 0x9, { 50, 1} },        /* 50 Hz P */
+        { 2640, 1125, 720, &pict_fmts[0], 0x0, S352_PICTURE_RATE_25, { 25, 1} }, /* 25 Hz I */
+        { 2640, 1125, 720, &pict_fmts[1], 0x3, S352_PICTURE_RATE_50, { 50, 1} }, /* 50 Hz P */
 
-        { 2200, 1125, 280, &pict_fmts[0], 0x0, 0x6, { 30000, 1001 } }, /* 30/1.001 Hz I */
-        { 2200, 1125, 280, &pict_fmts[1], 0x3, 0xA, { 60000, 1001 } }, /* 60/1.001 Hz P */
+        { 2200, 1125, 280, &pict_fmts[0], 0x0, S352_PICTURE_RATE_30000_1001, { 30000, 1001 } }, /* 30/1.001 Hz I */
+        { 2200, 1125, 280, &pict_fmts[1], 0x3, S352_PICTURE_RATE_60000_1001, { 60000, 1001 } }, /* 60/1.001 Hz P */
 
-        { 2750, 1125, 830, &pict_fmts[1], 0x3, 0x2, { 24000, 1001 } }, /* 24/1.001 Hz */
-        { 2750, 1125, 830, &pict_fmts[1], 0x3, 0x3, { 24, 1 } },       /* 24 Hz */
+        { 2750, 1125, 830, &pict_fmts[1], 0x3, S352_PICTURE_RATE_24000_1001, { 24000, 1001 } }, /* 24/1.001 Hz */
+        { 2750, 1125, 830, &pict_fmts[1], 0x3, S352_PICTURE_RATE_24, { 24, 1 } },               /* 24 Hz */
 
         /* 750 Lines */
-        { 1980, 750, 700, &pict_fmts[2], 0x3, 0x9, { 50, 1} },        /* 50 Hz P */
-        { 1650, 750, 370, &pict_fmts[2], 0x3, 0xA, { 60000, 1001 } }, /* 60/1.001 Hz P */
+        { 1980, 750, 700, &pict_fmts[2], 0x3, S352_PICTURE_RATE_50, { 50, 1} },                /* 50 Hz P */
+        { 1650, 750, 370, &pict_fmts[2], 0x3, S352_PICTURE_RATE_60000_1001, { 60000, 1001 } }, /* 60/1.001 Hz P */
 
-        { 864,  625, 144, &pict_fmts[3], 0x0, 0x5, { 25, 1} },        /* 625-line 25 Hz I */
-        { 858,  525, 138, &pict_fmts[4], 0x0, 0x6, { 30000, 1001 } }, /* 525-line 30/1.001 Hz I */
+        { 864,  625, 144, &pict_fmts[3], 0x0, S352_PICTURE_RATE_25, { 25, 1} },                /* 625-line 25 Hz I */
+        { 858,  525, 138, &pict_fmts[4], 0x0, S352_PICTURE_RATE_30000_1001, { 30000, 1001 } }, /* 525-line 30/1.001 Hz I */
     };
 
     for (size_t i = 0; i < sizeof(fmts_data) / sizeof(struct sdi_offsets_fmt); i++)
