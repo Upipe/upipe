@@ -9,3 +9,7 @@ myinclude_HEADERS = \
 	upipe_avformat_source.h \
 	uref_av_flow.h \
 	ubuf_av.h
+
+if HAVE_AVFILTER
+myinclude_HEADERS += upipe_avfilter.h
+endif

@@ -28,6 +28,12 @@ libupipe_av_la_SOURCES += upipe_avcodec_decode.c
 libupipe_av_la_CFLAGS += $(BITSTREAM_CFLAGS)
 endif
 
+if HAVE_AVFILTER
+libupipe_av_la_SOURCES += upipe_avfilter.c
+libupipe_av_la_CFLAGS += $(AVFILTER_CFLAGS)
+libupipe_av_la_LIBADD += $(AVFILTER_LIBS)
+endif
+
 pkgconfigdir = $(libdir)/pkgconfig
 pkgconfig_DATA = libupipe_av.pc
 
