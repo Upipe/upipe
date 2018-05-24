@@ -91,9 +91,9 @@ enum udict_type {
     UDICT_TYPE_CLOCK_DURATION,
     /** k.rate */
     UDICT_TYPE_CLOCK_RATE,
-    /** f.latency */
+    /** k.latency */
     UDICT_TYPE_CLOCK_LATENCY,
-    /** f.wrap */
+    /** k.wrap */
     UDICT_TYPE_CLOCK_WRAP,
 
     /** b.end */
