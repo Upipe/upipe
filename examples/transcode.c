@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2012-2014 OpenHeadend S.A.R.L.
+ * Copyright (C) 2012-2018 OpenHeadend S.A.R.L.
  *
  * Authors: Benjamin Cohen
  *
@@ -63,6 +63,7 @@
 #include <upipe-av/upipe_avformat_sink.h>
 #include <upipe-av/upipe_avcodec_decode.h>
 #include <upipe-av/upipe_avcodec_encode.h>
+#include <upipe-av/upipe_avfilter.h>
 #include <upipe-swresample/upipe_swr.h>
 #include <upipe-swscale/upipe_sws.h>
 #include <upipe-filters/upipe_filter_format.h>
@@ -93,6 +94,7 @@ struct es_conf {
     struct uchain uchain;
     uint64_t id;
     const char *codec;
+    const char *filters;
     struct udict *options;
 };
 
@@ -101,6 +103,7 @@ struct uref_mgr *uref_mgr;
 
 struct upipe_mgr *upipe_avcdec_mgr;
 struct upipe_mgr *upipe_avcenc_mgr;
+struct upipe_mgr *upipe_avfilt_mgr;
 struct upipe_mgr *upipe_ffmt_mgr;
 struct upipe_mgr *upipe_null_mgr;
 struct upipe_mgr *upipe_noclock_mgr;
@@ -113,13 +116,14 @@ static struct upipe *avfsink;
 struct uchain eslist;
 
 static void usage(const char *argv0) {
-    fprintf(stderr, "Usage: %s [-d] [-F] [-m <mime>] [-f <format>] [-p <id> -c <codec> [-o <option=value>] ...] ... <source file> <sink file>\n", argv0);
+    fprintf(stderr, "Usage: %s [-d] [-F] [-m <mime>] [-f <format>] [-p <id> -c <codec> [-g <filters>] [-o <option=value>] ...] ... <source file> <sink file>\n", argv0);
     fprintf(stderr, "   -d: show more debug logs\n");
     fprintf(stderr, "   -F: file mode\n");
     fprintf(stderr, "   -f: output format name\n");
     fprintf(stderr, "   -m: output mime type\n");
     fprintf(stderr, "   -p: add stream with id\n");
     fprintf(stderr, "   -c: stream encoder\n");
+    fprintf(stderr, "   -g: filter graph\n");
     fprintf(stderr, "   -o: encoder option (key=value)\n");
     exit(EXIT_FAILURE);
 }
@@ -302,6 +306,23 @@ static int catch_demux(struct uprobe *uprobe, struct upipe *upipe,
                              id, def);
                 exit(EXIT_FAILURE);
             }
+            /* filtering */
+            if (conf->filters != NULL) {
+                struct upipe *avfilt = upipe_void_alloc_output(incoming,
+                    upipe_avfilt_mgr,
+                    uprobe_pfx_alloc_va(uprobe_use(logger),
+                                        loglevel, "filt %"PRIu64, id));
+                assert(avfilt != NULL);
+                if (unlikely(!ubase_check(upipe_avfilt_set_filters_desc(avfilt,
+                    conf->filters)))) {
+                    upipe_err_va(upipe, "cannot set filters for %"PRIu64" (%s)",
+                                 id, def);
+                    exit(EXIT_FAILURE);
+                }
+                upipe_release(avfilt);
+                incoming = avfilt;
+            }
+
             /* format conversion */
             struct uref *ffmt_flow = uref_alloc_control(uref_mgr);
             uref_flow_set_def(ffmt_flow, ffmt_def);
@@ -391,7 +412,7 @@ int main(int argc, char *argv[])
     ulist_init(&eslist);
 
     /* parse options */
-    while ((opt = getopt(argc, argv, "dFm:f:p:c:o:")) != -1) {
+    while ((opt = getopt(argc, argv, "dFm:f:p:c:g:o:")) != -1) {
         switch(opt) {
             case 'd':
                 if (loglevel > 0) loglevel--;
@@ -414,6 +435,11 @@ int main(int argc, char *argv[])
             case 'c': {
                 check_exit(es_cur, "no stream id specified\n");
                 es_cur->codec = optarg;
+                break;
+            }
+            case 'g': {
+                check_exit(es_cur, "no stream id specified\n");
+                es_cur->filters = optarg;
                 break;
             }
             case 'o': {
@@ -475,6 +501,7 @@ int main(int argc, char *argv[])
     struct upipe_mgr *upipe_sws_mgr = upipe_sws_mgr_alloc();
     upipe_avcdec_mgr = upipe_avcdec_mgr_alloc();
     upipe_avcenc_mgr = upipe_avcenc_mgr_alloc();
+    upipe_avfilt_mgr = upipe_avfilt_mgr_alloc();
     upipe_ffmt_mgr = upipe_ffmt_mgr_alloc();
     upipe_ffmt_mgr_set_sws_mgr(upipe_ffmt_mgr, upipe_sws_mgr);
     upipe_ffmt_mgr_set_swr_mgr(upipe_ffmt_mgr, upipe_swr_mgr);
@@ -520,6 +547,7 @@ int main(int argc, char *argv[])
 
     upipe_mgr_release(upipe_null_mgr);
     upipe_mgr_release(upipe_noclock_mgr);
+    upipe_mgr_release(upipe_avfilt_mgr);
     upipe_mgr_release(upipe_ffmt_mgr);
     upipe_mgr_release(upipe_sws_mgr); /* nop */
     upipe_mgr_release(upipe_swr_mgr); /* nop */
