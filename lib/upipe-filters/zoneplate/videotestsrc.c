@@ -22,18 +22,18 @@
 
 #include "videotestsrc.h"
 
-#define V_POINTER_K0      0
-#define V_POINTER_KX      0
-#define V_POINTER_KY      0
-#define V_POINTER_KT      1
-#define V_POINTER_KXT     0
-#define V_POINTER_KYT     0
-#define V_POINTER_KXY     0
-#define V_POINTER_KX2     128
-#define V_POINTER_KY2     128
-#define V_POINTER_KT2     0
-#define V_POINTER_XOFFSET 0
-#define V_POINTER_YOFFSET 0
+#define V_POINTER_K0      0 /* Zoneplate zero order phase, for generating plain fields or phase offsets */
+#define V_POINTER_KX      0 /* Zoneplate 1st order x phase, for generating constant horizontal frequencies */
+#define V_POINTER_KY      0 /* Zoneplate 1st order y phase, for generating contant vertical frequencies */
+#define V_POINTER_KT      1 /* Zoneplate 1st order t phase, for generating phase rotation as a function of time */
+#define V_POINTER_KXT     0 /* Zoneplate x*t product phase, normalised to kxy/256 cycles per vertical pixel at width/2 from origin */
+#define V_POINTER_KYT     0 /* Zoneplate y*t product phase */
+#define V_POINTER_KXY     0 /* Zoneplate x*y product phase */
+#define V_POINTER_KX2     128 /* Zoneplate 2nd order x phase, normalised to kx2/256 cycles per horizontal pixel at width/2 from origin */
+#define V_POINTER_KY2     128 /* Zoneplate 2nd order y phase, normailsed to ky2/256 cycles per vertical pixel at height/2 from origin */
+#define V_POINTER_KT2     0 /* Zoneplate 2nd order t phase, t*t/256 cycles per picture */
+#define V_POINTER_XOFFSET 0 /* Zoneplate 2nd order products x offset */
+#define V_POINTER_YOFFSET 0 /* Zoneplate 2nd order products y offset */
 
 static const uint8_t sine_table[256] = {
   128, 131, 134, 137, 140, 143, 146, 149,
