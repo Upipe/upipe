@@ -26,8 +26,8 @@
 #define V_POINTER_KX      0 /* Zoneplate 1st order x phase, for generating constant horizontal frequencies */
 #define V_POINTER_KY      0 /* Zoneplate 1st order y phase, for generating contant vertical frequencies */
 #define V_POINTER_KT      1 /* Zoneplate 1st order t phase, for generating phase rotation as a function of time */
-#define V_POINTER_KXT     0 /* Zoneplate x*t product phase, normalised to kxy/256 cycles per vertical pixel at width/2 from origin */
-#define V_POINTER_KYT     0 /* Zoneplate y*t product phase */
+#define V_POINTER_KXT     2 /* Zoneplate x*t product phase, normalised to kxy/256 cycles per vertical pixel at width/2 from origin */
+#define V_POINTER_KYT     (-3) /* Zoneplate y*t product phase */
 #define V_POINTER_KXY     0 /* Zoneplate x*y product phase */
 #define V_POINTER_KX2     128 /* Zoneplate 2nd order x phase, normalised to kx2/256 cycles per horizontal pixel at width/2 from origin */
 #define V_POINTER_KY2     128 /* Zoneplate 2nd order y phase, normailsed to ky2/256 cycles per vertical pixel at height/2 from origin */
