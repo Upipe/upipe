@@ -109,6 +109,14 @@ struct upipe_freetype {
     /** baseline right offset */
     int64_t yoff;
 
+    /** full range */
+    bool fullrange;
+
+    /** background color YUVA */
+    uint8_t background[4];
+    /** foreground color YUVA */
+    uint8_t foreground[4];
+
     /** public upipe structure */
     struct upipe upipe;
 };
@@ -254,6 +262,18 @@ static struct upipe *upipe_freetype_alloc(struct upipe_mgr *mgr,
     upipe_freetype->yoff = 0;
     upipe_freetype->font = NULL;
     upipe_freetype->pixel_size = 0;
+    upipe_freetype->fullrange =
+        ubase_check(uref_pic_flow_get_full_range(flow_def));
+    /* black */
+    upipe_freetype->background[0] = upipe_freetype->fullrange ? 0 : 16;
+    upipe_freetype->background[1] = 0x80;
+    upipe_freetype->background[2] = 0x80;
+    upipe_freetype->background[3] = 0x0;
+    /* white */
+    upipe_freetype->foreground[0] = 255;
+    upipe_freetype->foreground[1] = 0x80;
+    upipe_freetype->foreground[2] = 0x80;
+    upipe_freetype->foreground[3] = 0x0;
 
     upipe_throw_ready(upipe);
 
@@ -306,14 +326,15 @@ static bool upipe_freetype_handle(struct upipe *upipe, struct uref *uref,
                                   struct upump **upump_p)
 {
     struct upipe_freetype *upipe_freetype = upipe_freetype_from_upipe(upipe);
+    int ret;
 
     if (!upipe_freetype->ubuf_mgr)
             return false;
 
     struct uref *flow_format = upipe_freetype->flow_format;
-    uint64_t h, v;
-    if (!ubase_check(uref_pic_flow_get_hsize(flow_format, &h)) ||
-        !ubase_check(uref_pic_flow_get_vsize(flow_format, &v))) {
+    uint64_t hsize, vsize;
+    if (!ubase_check(uref_pic_flow_get_hsize(flow_format, &hsize)) ||
+        !ubase_check(uref_pic_flow_get_vsize(flow_format, &vsize))) {
         upipe_err_va(upipe, "Could not read output dimensions");
         uref_free(uref);
         return true;
@@ -327,52 +348,106 @@ static bool upipe_freetype_handle(struct upipe *upipe, struct uref *uref,
     }
     size_t length = strlen(text);
 
-    struct ubuf *ubuf = ubuf_pic_alloc(upipe_freetype->ubuf_mgr, h, v);
+    struct ubuf *ubuf = ubuf_pic_alloc(upipe_freetype->ubuf_mgr, hsize, vsize);
     if (!ubuf) {
         upipe_err(upipe, "Could not allocate pic");
         uref_free(uref);
         return true;
     }
 
-    ubuf_pic_clear(ubuf, 0, 0, -1, -1, 0);
-
-    bool has_alpha = false;
-    if (ubase_check(uref_pic_flow_find_chroma(flow_format, "a8", NULL)))
-        has_alpha = true;
-
-    size_t stride_a, stride_y;
-    if (!ubase_check(
-            ubuf_pic_plane_size(ubuf, "y8", &stride_y, NULL, NULL, NULL))) {
-        upipe_err(upipe, "Could not read ubuf luma plane sizes");
+    size_t width, height;
+    uint8_t macropixel;
+    ret = ubuf_pic_size(ubuf, &width, &height, &macropixel);
+    if (unlikely(!ubase_check(ret))) {
+        upipe_err(upipe, "fail to get pic buffer size");
         ubuf_free(ubuf);
         uref_free(uref);
         return true;
     }
 
-    if (has_alpha &&
-        !ubase_check(
-            ubuf_pic_plane_size(ubuf, "a8", &stride_a, NULL, NULL, NULL))) {
-        upipe_err(upipe, "Could not read ubuf alpha plane sizes");
-        ubuf_free(ubuf);
-        uref_free(uref);
-        return true;
+    struct plane {
+        size_t stride;
+        uint8_t hsub;
+        uint8_t vsub;
+        uint8_t macropixel_size;
+        size_t memset_width;
+        uint8_t *p;
+    };
+    struct plane y;
+    struct plane u;
+    struct plane v;
+    struct plane a;
+
+    memset(&y, 0, sizeof (y));
+    memset(&u, 0, sizeof (u));
+    memset(&v, 0, sizeof (v));
+    memset(&a, 0, sizeof (a));
+
+    const char *chroma;
+    ubuf_pic_foreach_plane(ubuf, chroma) {
+        struct plane *plane = NULL;
+
+        if (!strcmp(chroma, "y8")) {
+            plane = &y;
+        } else if (!strcmp(chroma, "u8")) {
+            plane = &u;
+        } else if (!strcmp(chroma, "v8")) {
+            plane = &v;
+        } else if (!strcmp(chroma, "a8")) {
+            plane = &a;
+        } else {
+            upipe_warn_va(upipe, "unsupported plane %s", chroma);
+            continue;
+        }
+
+        ret = ubuf_pic_plane_size(ubuf, chroma, &plane->stride,
+                                  &plane->hsub, &plane->vsub,
+                                  &plane->macropixel_size);
+        if (unlikely(!ubase_check(ret))) {
+            upipe_warn_va(upipe, "fail to get plane %s size", chroma);
+            continue;
+        }
+        plane->memset_width = width * plane->macropixel_size /
+            plane->hsub / macropixel;
+
+        ret = ubuf_pic_plane_write(ubuf, chroma, 0, 0, -1, -1, &plane->p);
+        if (unlikely(!ubase_check(ret))) {
+            upipe_warn_va(upipe, "fail to map %s plane", chroma);
+            plane->p = NULL;
+            continue;
+        }
     }
 
-    uint8_t *dst;
-    uint8_t *dsta;
-    if (!ubase_check(ubuf_pic_plane_write(ubuf, "y8", 0, 0, -1, -1, &dst))) {
-        upipe_err(upipe, "Could not map luma plane");
-        ubuf_free(ubuf);
-        uref_free(uref);
-        return true;
+    if (y.p) {
+        uint8_t *buf = y.p;
+        for (size_t i = 0; i < height / y.vsub; i++) {
+            memset(buf, upipe_freetype->background[0], y.memset_width);
+            buf += y.stride;
+        }
     }
-    if (has_alpha &&
-        !ubase_check(ubuf_pic_plane_write(ubuf, "a8", 0, 0, -1, -1, &dsta))) {
-        upipe_err(upipe, "Could not map alpha plane");
-        ubuf_pic_plane_unmap(ubuf, "y8", 0, 0, -1, -1);
-        ubuf_free(ubuf);
-        uref_free(uref);
-        return true;
+
+    if (u.p) {
+        uint8_t *buf = u.p;
+        for (size_t i = 0; i < height / u.vsub; i++) {
+            memset(buf, upipe_freetype->background[1], u.memset_width);
+            buf += u.stride;
+        }
+    }
+
+    if (v.p) {
+        uint8_t *buf = v.p;
+        for (size_t i = 0; i < height / v.vsub; i++) {
+            memset(buf, upipe_freetype->background[2], v.memset_width);
+            buf += v.stride;
+        }
+    }
+
+    if (a.p) {
+        uint8_t *buf = a.p;
+        for (size_t i = 0; i < height / a.vsub; i++) {
+            memset(buf, upipe_freetype->background[3], a.memset_width);
+            buf += a.stride;
+        }
     }
 
     FT_Bool use_kerning = FT_HAS_KERNING(upipe_freetype->face);
@@ -433,20 +508,31 @@ static bool upipe_freetype_handle(struct upipe *upipe, struct uref *uref,
             yadvance = sbit->yadvance << 16;
             buffer = sbit->buffer;
         }
-        FT_Int x = (xoff >> 16) + left;
-        FT_Int y = (yoff >> 16) - top;
+        FT_Int xpos = (xoff >> 16) + left;
+        FT_Int ypos = (yoff >> 16) - top;
 
         for (FT_Int i = 0; i < width; i++) {
-            if (x + i < 0 || x + i >= h)
+            if (xpos + i < 0 || xpos + i >= hsize)
                 continue;
 
             for (FT_Int j = 0; j < height; j++) {
-                if (y + j < 0 || y + j >= v)
+                if (ypos + j < 0 || ypos + j >= vsize)
                     continue;
 
-                dst[(y + j) * stride_y + x + i] |= buffer[j * width + i];
-                if (has_alpha)
-                    dsta[(y + i) * stride_a + x + i] |= buffer[(j * width + i)];
+                uint8_t px = buffer[j * width + i] * upipe_freetype->foreground[3] / 0xff;
+
+#define DO_PLANE(Plane, Val)                                                \
+                if (Plane.p) {                                              \
+                    FT_Int p_y = (ypos + j) / Plane.vsub * Plane.stride;    \
+                    FT_Int p_x = (xpos + i) / Plane.hsub;                   \
+                    FT_Int p = p_y + p_x;                                   \
+                    Plane.p[p] = (Plane.p[p] * (0xff - px) + Val * px) / 0xff; \
+                }
+
+                DO_PLANE(y, upipe_freetype->foreground[0]);
+                DO_PLANE(u, upipe_freetype->foreground[1]);
+                DO_PLANE(v, upipe_freetype->foreground[2]);
+                DO_PLANE(a, 0xff);
             }
         }
 
@@ -459,12 +545,16 @@ static bool upipe_freetype_handle(struct upipe *upipe, struct uref *uref,
         FT_Done_Glyph(glyph);
     }
 
-    ubuf_pic_plane_unmap(ubuf, "y8", 0, 0, -1, -1);
-    if (has_alpha)
+    if (y.p)
+        ubuf_pic_plane_unmap(ubuf, "y8", 0, 0, -1, -1);
+    if (u.p)
+        ubuf_pic_plane_unmap(ubuf, "u8", 0, 0, -1, -1);
+    if (v.p)
+        ubuf_pic_plane_unmap(ubuf, "v8", 0, 0, -1, -1);
+    if (a.p)
         ubuf_pic_plane_unmap(ubuf, "a8", 0, 0, -1, -1);
 
     uref_attach_ubuf(uref, ubuf);
-
     upipe_freetype_output(upipe, uref, upump_p);
     return true;
 }
@@ -487,6 +577,46 @@ static void upipe_freetype_input(struct upipe *upipe, struct uref *uref,
         upipe_freetype_block_input(upipe, upump_p);
         upipe_use(upipe);
     }
+}
+
+/** @internal @This sets the background color.
+ *
+ * @param upipe description structure of the pipe
+ * @param r red component
+ * @param g green component
+ * @param b blue component
+ * @param a alpha componenet
+ * @return an error code
+ */
+static int _upipe_freetype_set_background_color(struct upipe *upipe,
+                                                uint8_t r, uint8_t g,
+                                                uint8_t b, uint8_t a)
+{
+    struct upipe_freetype *upipe_freetype = upipe_freetype_from_upipe(upipe);
+    uint8_t rgba[4] = { r, g, b, a };
+    ubuf_pic_rgba_to_yuva(rgba, upipe_freetype->fullrange ? 1 : 0,
+                          upipe_freetype->background);
+    return UBASE_ERR_NONE;
+}
+
+/** @internal @This sets the foreground color.
+ *
+ * @param upipe description structure of the pipe
+ * @param r red component
+ * @param g green component
+ * @param b blue component
+ * @param a alpha componenet
+ * @return an error code
+ */
+static int _upipe_freetype_set_foreground_color(struct upipe *upipe,
+                                                uint8_t r, uint8_t g,
+                                                uint8_t b, uint8_t a)
+{
+    struct upipe_freetype *upipe_freetype = upipe_freetype_from_upipe(upipe);
+    uint8_t rgba[4] = { r, g, b, a };
+    ubuf_pic_rgba_to_yuva(rgba, upipe_freetype->fullrange ? 1 : 0,
+                          upipe_freetype->foreground);
+    return UBASE_ERR_NONE;
 }
 
 /** @internal @This sets a freetype option.
@@ -522,6 +652,24 @@ static int upipe_freetype_set_option(struct upipe *upipe,
             return UBASE_ERR_EXTERNAL;
         }
         return UBASE_ERR_NONE;
+    }
+    else if (!strcmp(option, "foreground-color")) {
+        uint8_t rgba[4];
+        int ret = ubuf_pic_parse_rgba(value, rgba);
+        if (unlikely(!ubase_check(ret)))
+            return ret;
+
+        return _upipe_freetype_set_foreground_color(upipe, rgba[0], rgba[1],
+                                                    rgba[2], rgba[3]);
+    }
+    else if (!strcmp(option, "background-color")) {
+        uint8_t rgba[4];
+        int ret = ubuf_pic_parse_rgba(value, rgba);
+        if (unlikely(!ubase_check(ret)))
+            return ret;
+
+        return _upipe_freetype_set_background_color(upipe, rgba[0], rgba[1],
+                                                    rgba[2], rgba[3]);
     }
     return UBASE_ERR_INVALID;
 }
