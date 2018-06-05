@@ -454,6 +454,7 @@ int main(int argc, char *argv[])
                              UPROBE_LOG_VERBOSE, "udp"));
     assert(udpsink);
     ubase_assert(upipe_attach_uclock(udpsink));
+    upipe_set_max_length(udpsink, UINT16_MAX);
     upipe_mgr_release(upipe_udpsink_mgr);
 
     if (!ubase_check(upipe_set_uri(udpsink, out))) {
