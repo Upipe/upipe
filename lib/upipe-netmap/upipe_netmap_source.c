@@ -492,8 +492,6 @@ static inline bool handle_rfc_packet(struct upipe *upipe, const uint8_t *src, ui
         src_size -= RFC_4175_HEADER_LEN;
     }
 
-    assert(!continuation);
-
     *eof = !!field[0];
 
     for (int i = 0; i < 1 + !!continuation; i++) {
