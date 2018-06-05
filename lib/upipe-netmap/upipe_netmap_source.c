@@ -465,8 +465,13 @@ static inline bool handle_rfc_packet(struct upipe *upipe, const uint8_t *src, ui
 {
     struct upipe_netmap_source *upipe_netmap_source = upipe_netmap_source_from_upipe(upipe);
 
-    src += RTP_HEADER_SIZE;
-    src_size -= RTP_HEADER_SIZE;
+    const uint8_t *payload = rtp_payload((uint8_t*)src);
+    size_t header_size = payload - src;
+    if (header_size > src_size)
+        return false;
+
+    src = payload;
+    src_size -= header_size;
 
     if (unlikely(!upipe_netmap_source->uref))
         return false;
