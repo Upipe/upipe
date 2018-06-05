@@ -619,6 +619,19 @@ static int _upipe_blit_sub_set_z_index(struct upipe *upipe, int z_index)
     return UBASE_ERR_NONE;
 }
 
+/** @internal @This flushes the sub blit.
+ *
+ * @param upipe description structure of the pipe
+ * @return an error code
+ */
+static int _upipe_blit_sub_flush(struct upipe *upipe)
+{
+    struct upipe_blit_sub *sub = upipe_blit_sub_from_upipe(upipe);
+    ubuf_free(sub->ubuf);
+    sub->ubuf = NULL;
+    return UBASE_ERR_NONE;
+}
+
 /** @internal @This processes control commands on a subpipe of a blit
 * pipe.
 *
@@ -657,6 +670,9 @@ static int upipe_blit_sub_control(struct upipe *upipe,
             struct uref *flow_def = va_arg(args, struct uref *);
             return upipe_blit_sub_set_flow_def(upipe, flow_def);
         }
+
+        case UPIPE_FLUSH:
+            return _upipe_blit_sub_flush(upipe);
 
         case UPIPE_BLIT_SUB_GET_RECT: {
             UBASE_SIGNATURE_CHECK(args, UPIPE_BLIT_SUB_SIGNATURE);
