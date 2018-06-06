@@ -68,6 +68,11 @@
 #include <stdio.h>
 #include <ctype.h>
 
+/* fix undef warning in x265.h */
+#ifndef ENABLE_LIBVMAF
+# define ENABLE_LIBVMAF 0
+#endif
+
 #include <x265.h>
 #include <bitstream/itu/h265.h>
 
