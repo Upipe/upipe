@@ -185,6 +185,7 @@ static bool upipe_s337_encaps_handle(struct upipe *upipe, struct uref *uref,
     out_data[3] = ((block_size * 8) & 0xffff) << 16;
 
     int offset = 0;
+    uint8_t tmp = 0;
     while (block_size) {
         const uint8_t *buf;
         int size = block_size;
@@ -196,8 +197,18 @@ static bool upipe_s337_encaps_handle(struct upipe *upipe, struct uref *uref,
             return true;
         }
 
+        if (offset & 1) {
+            out_data[4 + offset/2] = (tmp << 24) | (buf[0] << 16);
+            buf++;
+            offset++;
+            block_size--;
+            size--;
+        }
+
         for (int i = 0; i < size/2; i++)
             out_data[4 + offset/2 + i] = (buf[2*i + 0] << 24) | (buf[2*i + 1] << 16);
+        if (size & 1)
+            tmp = buf[size-1];
 
         uref_block_unmap(uref, offset);
 
