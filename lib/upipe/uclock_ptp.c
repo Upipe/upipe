@@ -33,12 +33,14 @@
 #include <upipe/uclock_ptp.h>
 
 #include <sys/ioctl.h>
-#include <linux/ethtool.h>
 #include <unistd.h>
 #include <sys/stat.h>
 #include <fcntl.h>
 #include <net/if.h>
+#ifdef __linux__
 #include <linux/sockios.h>
+#include <linux/ethtool.h>
+#endif
 #include <string.h>
 #include <stdlib.h>
 #include <time.h>
@@ -105,6 +107,7 @@ static void uclock_ptp_free(struct urefcount *urefcount)
 /** @internal */
 static int uclock_ptp_nic_clock_idx(struct uprobe *uprobe, const char *interface)
 {
+#ifdef __linux__
     struct ethtool_ts_info info;
     struct ifreq ifr;
 
@@ -129,6 +132,10 @@ static int uclock_ptp_nic_clock_idx(struct uprobe *uprobe, const char *interface
     close(fd);
 
     return info.phc_index;
+#else
+    /* TODO */
+    return -1;
+#endif
 }
 
 /** @internal */
