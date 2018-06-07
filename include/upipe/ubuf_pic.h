@@ -668,6 +668,22 @@ static inline void ubuf_pic_rgba_to_yuva(const uint8_t rgba[4],
     yuva[3] = rgba[3];
 }
 
+/** @This parses a 8 bits RGB value.
+ *
+ * @param value value to parse
+ * @param rgb filled with the parsed value
+ * @return an error code
+ */
+int ubuf_pic_parse_rgb(const char *value, uint8_t rgb[3]);
+
+/** @This parses a 8 bits RGBA value.
+ *
+ * @param value value to parse
+ * @param rgba filled with the parsed value
+ * @return an error code
+ */
+int ubuf_pic_parse_rgba(const char *value, uint8_t rgba[4]);
+
 #ifdef __cplusplus
 }
 #endif
