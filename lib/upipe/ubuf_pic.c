@@ -174,3 +174,30 @@ int ubuf_pic_clear(struct ubuf *ubuf, int hoffset, int voffset,
 
     return ret ? UBASE_ERR_INVALID : UBASE_ERR_NONE;
 }
+
+/** @This converts 8 bits RGB color to 8 bits YUV.
+ *
+ * @param rgb RGB color to convert
+ * @param fullrange use full range if not 0
+ * @param yuv filled with the converted YUV color
+ */
+void ubuf_pic_rgb_to_yuv(const uint8_t rgb[3], int fullrange, uint8_t yuv[3])
+{
+    int mat[3 * 3] = {
+         66, 129,  25,
+        -38, -74, 112,
+        112, -94, -18,
+    };
+    int fullrange_mat[3 * 3] = {
+         77,  150,  29,
+        -43,  -84, 127,
+        127, -106, -21,
+    };
+    int *m = fullrange ? fullrange_mat : mat;
+    int yuv_i[3] = { 0, 0, 0 };
+    for (unsigned i = 0; i < 3; i++)
+        for (unsigned j = 0; j < 3; j++)
+            yuv_i[i] += mat[i * 3 + j] * rgb[j];
+    for (unsigned i = 0; i < 3; i++)
+        yuv[i] = ((yuv_i[i] + 128) >> 8) + (i ? 128 : 16);
+}
