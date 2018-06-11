@@ -2,7 +2,8 @@
 
 # gen-ffi-cdef.pl
 #
-# Copyright (C) 2016 Clément Vasseur <clement.vasseur@gmail.com>
+# Copyright (C) 2016-2017 Clément Vasseur <clement.vasseur@gmail.com>
+# Copyright (C) 2018 OpenHeadend S.A.R.L.
 #
 # This program is free software; you can redistribute it and/or
 # modify it under the terms of the GNU General Public License
@@ -293,8 +294,9 @@ $_ =~ s/\*/.+/ foreach @structs;
   grep {
     my $n = $_->{attr}{name} || '';
     ($_->{type} eq 'structure_type' and grep {$n =~ m/^$_$/} @structs) or
-    ($_->{type} eq 'enumeration_type' and grep {$n =~ m/^$_$/} @enums)
-  } values %$info;
+    ($_->{type} eq 'enumeration_type' and grep {$n =~ m/^$_$/} @enums)}
+  grep {not $_->{attr}{declaration}}
+  values %$info;
 
 print &p($_), ";\n" for
   sort {$a->{attr}{name} cmp $b->{attr}{name}}
