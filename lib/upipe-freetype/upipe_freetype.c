@@ -654,7 +654,11 @@ static int upipe_freetype_set_option(struct upipe *upipe,
         return UBASE_ERR_NONE;
     }
     else if (!strcmp(option, "foreground-color")) {
-        uint8_t rgba[4];
+        uint8_t rgba[4] = { 0xff, 0xff, 0xff, 0xff };
+        if (!value)
+            return _upipe_freetype_set_foreground_color(
+                upipe, rgba[0], rgba[1], rgba[2], rgba[3]);
+
         int ret = ubuf_pic_parse_rgba(value, rgba);
         if (unlikely(!ubase_check(ret)))
             return ret;
@@ -663,7 +667,11 @@ static int upipe_freetype_set_option(struct upipe *upipe,
                                                     rgba[2], rgba[3]);
     }
     else if (!strcmp(option, "background-color")) {
-        uint8_t rgba[4];
+        uint8_t rgba[4] = { 0, 0, 0, 0xff };
+
+        if (!value)
+            return _upipe_freetype_set_background_color(
+                upipe, rgba[0], rgba[1], rgba[2], rgba[3]);
         int ret = ubuf_pic_parse_rgba(value, rgba);
         if (unlikely(!ubase_check(ret)))
             return ret;
