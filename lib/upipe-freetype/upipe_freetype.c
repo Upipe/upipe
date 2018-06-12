@@ -268,12 +268,12 @@ static struct upipe *upipe_freetype_alloc(struct upipe_mgr *mgr,
     upipe_freetype->background[0] = upipe_freetype->fullrange ? 0 : 16;
     upipe_freetype->background[1] = 0x80;
     upipe_freetype->background[2] = 0x80;
-    upipe_freetype->background[3] = 0x0;
+    upipe_freetype->background[3] = 0xff;
     /* white */
-    upipe_freetype->foreground[0] = 255;
+    upipe_freetype->foreground[0] = upipe_freetype->fullrange ? 255 : 240;
     upipe_freetype->foreground[1] = 0x80;
     upipe_freetype->foreground[2] = 0x80;
-    upipe_freetype->foreground[3] = 0x0;
+    upipe_freetype->foreground[3] = 0xff;
 
     upipe_throw_ready(upipe);
 
