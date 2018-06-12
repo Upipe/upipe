@@ -213,7 +213,7 @@ int ubuf_pic_parse_rgb(const char *value, uint8_t rgb[3])
     memset(rgb, 0, 4);
 
     if (!value)
-        return UBASE_ERR_NONE;
+        return UBASE_ERR_INVALID;
 
     int ret = sscanf(value, "rgb(%hhu, %hhu, %hhu)",
                      &rgb[0], &rgb[1], &rgb[2]);
@@ -233,7 +233,7 @@ int ubuf_pic_parse_rgba(const char *value, uint8_t rgba[4])
     memset(rgba, 0, 4);
 
     if (!value)
-        return UBASE_ERR_NONE;
+        return UBASE_ERR_INVALID;
 
     if (ubase_check(ubuf_pic_parse_rgb(value, rgba))) {
         rgba[3] = 0xff;
