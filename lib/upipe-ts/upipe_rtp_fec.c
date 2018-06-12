@@ -89,6 +89,8 @@ struct upipe_rtp_fec {
     int cols;
     int rows;
 
+    uint64_t prev_sys;
+
     uint32_t first_seqnum;
     uint32_t last_seqnum;
     uint32_t last_send_seqnum;
@@ -552,6 +554,8 @@ static void clear_fec(struct upipe *upipe)
 
     upipe_rtp_fec_clear(upipe_rtp_fec);
 
+    upipe_rtp_fec->prev_sys = UINT64_MAX;
+
     upipe_rtp_fec->first_seqnum = UINT32_MAX;
     upipe_rtp_fec->last_seqnum = UINT32_MAX;
     upipe_rtp_fec->latency = 0;
@@ -647,6 +651,20 @@ static void upipe_rtp_fec_main_input(struct upipe *upipe, struct uref *uref)
         upipe_rtp_fec_output(&upipe_rtp_fec->upipe, uref, NULL);
         return;
     }
+
+    /* We use timestamp difference to measure the duration of 2 matrices.
+     * When we start receiving packets, the Linux buffer is emptied at once,
+     * and all the packets have the same timestamp.
+     * Discard these until we can make a good measurement */
+    if (upipe_rtp_fec->prev_sys != UINT64_MAX) {
+        if (upipe_rtp_fec->prev_sys == date_sys) {
+            clear_fec(super_pipe);
+            uref_free(uref);
+            return;
+        }
+    }
+
+    upipe_rtp_fec->prev_sys = date_sys;
 
     /* Difference between last received sequence number and current sequence number */
     uint16_t seq_delta = upipe_rtp_fec->last_seqnum - seqnum;
@@ -940,6 +958,7 @@ static struct upipe *_upipe_rtp_fec_alloc(struct upipe_mgr *mgr,
     upipe_rtp_fec->lost = 0;
     upipe_rtp_fec->prev_date_sys = UINT64_MAX;
     upipe_rtp_fec->recovered = 0;
+    upipe_rtp_fec->prev_sys = UINT64_MAX;
 
     struct upipe *upipe = upipe_rtp_fec_to_upipe(upipe_rtp_fec);
     upipe_init(upipe, mgr, uprobe);
