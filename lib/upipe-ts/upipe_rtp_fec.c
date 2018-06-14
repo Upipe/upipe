@@ -106,6 +106,9 @@ struct upipe_rtp_fec {
     } recent[2 * FEC_MAX * FEC_MAX];
     uint64_t latency;
 
+    /** detected payload type */
+    uint8_t pt;
+
     /** main subpipe **/
     struct upipe main_subpipe;
     /** col subpipe */
@@ -821,20 +824,18 @@ static void upipe_rtp_fec_sub_input(struct upipe *upipe, struct uref *uref,
         return;
     }
 
-    bool marker = rtp_check_marker(rtp_header);
-    uint8_t type = rtp_get_type(rtp_header);
-    if (type >= 72 && type <= 95 && marker) {
-        upipe_warn_va(upipe, "Payload type %d is probably RTCP, forwarding",
-            type + 128);
-        upipe_rtp_fec_output(upipe_rtp_fec_to_upipe(upipe_rtp_fec), uref, NULL);
-        return;
-    }
-
     uref->priv = rtp_get_seqnum(rtp_header);
     uref_block_peek_unmap(uref, 0, rtp_buffer, rtp_header);
 
     if (upipe != upipe_rtp_fec_to_main_subpipe(upipe_rtp_fec)) {
         upipe_rtp_fec_colrow_input(upipe, uref);
+        return;
+    }
+
+    uint8_t pt = rtp_get_type(rtp_header);
+    if (upipe_rtp_fec->pt != pt) {
+        upipe_dbg_va(upipe, "Forwarding payload type %u", pt);
+        upipe_rtp_fec_output(upipe_rtp_fec_to_upipe(upipe_rtp_fec), uref, NULL);
         return;
     }
 
@@ -949,6 +950,7 @@ static struct upipe *_upipe_rtp_fec_alloc(struct upipe_mgr *mgr,
     upipe_rtp_fec->last_send_seqnum = UINT32_MAX;
     upipe_rtp_fec->cur_matrix_snbase = UINT32_MAX;
     upipe_rtp_fec->cur_row_fec_snbase = UINT32_MAX;
+    upipe_rtp_fec->pt = UINT8_MAX;
 
     upipe_rtp_fec->lost = 0;
     upipe_rtp_fec->prev_date_sys = UINT64_MAX;
@@ -1066,6 +1068,11 @@ static int upipe_rtp_fec_control(struct upipe *upipe, int command, va_list args)
         UBASE_SIGNATURE_CHECK(args, UPIPE_RTP_FEC_SIGNATURE)
         uint64_t *columns = va_arg(args, uint64_t*);
         *columns = upipe_rtp_fec->cols;
+        return UBASE_ERR_NONE;
+    }
+    case UPIPE_RTP_FEC_SET_PT: {
+        UBASE_SIGNATURE_CHECK(args, UPIPE_RTP_FEC_SIGNATURE)
+        upipe_rtp_fec->pt = va_arg(args, unsigned);
         return UBASE_ERR_NONE;
     }
     default:
