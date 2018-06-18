@@ -1425,13 +1425,13 @@ static int upipe_sdi_enc_amend_ubuf_mgr(struct upipe *upipe,
 
     uint64_t align;
     if (!ubase_check(uref_pic_flow_get_align(flow_format, &align)) || !align) {
-        uref_pic_flow_set_align(flow_format, 32);
-        align = 32;
+        uref_pic_flow_set_align(flow_format, 64);
+        align = 64;
     }
 
 
-    if (align % 32) {
-        align = align * 32 / ubase_gcd(align, 32);
+    if (align % 64) {
+        align = align * 64 / ubase_gcd(align, 64);
         uref_pic_flow_set_align(flow_format, align);
     }
 

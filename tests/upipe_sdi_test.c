@@ -164,7 +164,7 @@ int main(int argc, char *argv[])
 
     /* v210 */
     pic_mgr[2] = ubuf_pic_mem_mgr_alloc(UBUF_POOL_DEPTH, UBUF_POOL_DEPTH, umem_mgr, 6,
-            0, 0, 0, 0, 32, 0);
+            0, 0, 0, 0, 64, 0);
     assert(pic_mgr[2] != NULL);
     ubase_assert(ubuf_pic_mem_mgr_add_plane(pic_mgr[2],
                 "u10y10v10y10u10y10v10y10u10y10v10y10", 1, 1, 16));
