@@ -254,6 +254,7 @@ int main(int argc, char *argv[])
 
 
             uref = uref_pic_alloc(uref_mgr, pic_mgr[p], w, h);
+            assert(uref);
             ubase_assert(ubuf_pic_clear(uref->ubuf, 0, 0, -1, -1, 1));
             assert(uref != NULL);
             uref_clock_set_pts_sys(uref, UINT32_MAX);
