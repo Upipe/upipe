@@ -225,7 +225,7 @@ int main(int argc, char *argv[])
 
             struct uref *uref;
 
-            uref = uref_pic_flow_alloc_def(uref_mgr, 1);
+            uref = uref_pic_flow_alloc_def(uref_mgr, (p == 2) ? 6 : 1);
             assert(uref != NULL);
             ubase_assert(uref_pic_flow_set_hsize(uref, w));
             ubase_assert(uref_pic_flow_set_vsize(uref, h));
