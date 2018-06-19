@@ -37,7 +37,10 @@ static int STRUCT##_catch_##UPROBE(struct uprobe *uprobe,                   \
                                    struct upipe *upipe,                     \
                                    int event, va_list args)                 \
 {                                                                           \
-    return THROW(STRUCT##_from_##UPROBE(uprobe), upipe, event, args);       \
+    int (*throw_cb)(struct STRUCT *, struct upipe *, int, va_list) = THROW; \
+    if (throw_cb == NULL)                                                   \
+        return uprobe_throw_next(uprobe, upipe, event, args);               \
+    return throw_cb(STRUCT##_from_##UPROBE(uprobe), upipe, event, args);    \
 }                                                                           \
                                                                             \
 static void STRUCT##_init_##UPROBE(struct STRUCT *obj, struct uprobe *next) \

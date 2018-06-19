@@ -30,6 +30,7 @@
 #include <upipe/upipe_helper_subpipe.h>
 #include <upipe/upipe_helper_output.h>
 #include <upipe/upipe_helper_flow_def.h>
+#include <upipe/upipe_helper_uclock.h>
 
 #include <upipe/uclock.h>
 #include <upipe/uref_clock.h>
@@ -66,6 +67,10 @@ struct upipe_grid {
     struct uchain inputs;
     /** output sub pipe list */
     struct uchain outputs;
+    /** uclock */
+    struct uclock *uclock;
+    /** uclock request */
+    struct urequest uclock_request;
     /** late buffer tolerance */
     uint64_t tolerance;
     /** last update pts */
@@ -79,6 +84,8 @@ struct upipe_grid {
 /** @hidden */
 static int upipe_grid_update_pts(struct upipe *upipe, uint64_t next_pts);
 /** @hidden */
+static int upipe_grid_uclock_now(struct upipe *upipe, uint64_t *now);
+/** @hidden */
 static int upipe_grid_catch_out(struct uprobe *uprobe, struct upipe *upipe,
                                  int event, va_list args);
 
@@ -86,6 +93,8 @@ UPIPE_HELPER_UPIPE(upipe_grid, upipe, UPIPE_GRID_SIGNATURE);
 UPIPE_HELPER_UREFCOUNT(upipe_grid, urefcount, upipe_grid_no_ref);
 UPIPE_HELPER_UREFCOUNT_REAL(upipe_grid, urefcount_real, upipe_grid_free);
 UPIPE_HELPER_VOID(upipe_grid);
+UPIPE_HELPER_UCLOCK(upipe_grid, uclock, uclock_request, NULL,
+                    upipe_throw_provide_request, NULL);
 
 /** @internal @This is the private structure for grid input sub pipe. */
 struct upipe_grid_in {
@@ -159,6 +168,8 @@ struct upipe_grid_out {
     struct uchain uchain;
     /** output tolerance */
     uint64_t tolerance;
+    /** last input pts */
+    uint64_t last_input_pts;
 };
 
 static void upipe_grid_out_handle_input_changed(struct upipe *upipe,
@@ -324,25 +335,41 @@ static void upipe_grid_in_input(struct upipe *upipe,
     upipe_grid_in->last_pts = pts;
     ulist_add(&upipe_grid_in->urefs, uref_to_uchain(uref));
 
+    uint64_t now;
+    if (unlikely(!ubase_check(
+            upipe_grid_uclock_now(upipe_grid_to_upipe(upipe_grid), &now)))) {
+        upipe_warn(upipe, "no clock set");
+        return;
+    }
+
     struct uref *last_flow_def = NULL;
     struct uchain *uchain;
+    uint64_t latency = 0;
+    if (upipe_grid_in->flow_def)
+        uref_clock_get_latency(upipe_grid_in->flow_def, &latency);
     while ((uchain = ulist_pop(&upipe_grid_in->urefs))) {
         struct uref *uref = uref_from_uchain(uchain);
 
         if (unlikely(ubase_check(uref_flow_get_def(uref, NULL)))) {
             uref_free(last_flow_def);
             last_flow_def = uref;
+            latency = 0;
+            uref_clock_get_latency(uref, &latency);
             continue;
         }
 
         ubase_assert(uref_clock_get_pts_sys(uref, &pts));
-        if (pts + upipe_grid->max_retention > upipe_grid_in->last_pts) {
+        if (pts + latency + upipe_grid->max_retention >= now) {
             ulist_unshift(&upipe_grid_in->urefs, uchain);
             break;
         }
 
-        upipe_warn_va(upipe, "drop late frame %"PRIu64"ms",
-                      (upipe_grid_in->last_pts - pts) / (UCLOCK_FREQ / 1000));
+        upipe_warn_va(upipe, "drop late frame %"PRIu64"ms, "
+                      "latency %"PRIu64"ms "
+                      "retention %"PRIu64"ms",
+                      (now - pts) / (UCLOCK_FREQ / 1000),
+                      latency / (UCLOCK_FREQ / 1000),
+                      upipe_grid->max_retention / (UCLOCK_FREQ / 1000));
         uref_free(uref);
     }
 
@@ -547,6 +574,7 @@ static struct upipe *upipe_grid_out_alloc(struct upipe_mgr *mgr,
     upipe_grid_out->flow_def_input = false;
     upipe_grid_out->input = NULL;
     upipe_grid_out->tolerance = DEFAULT_TOLERANCE;
+    upipe_grid_out->last_input_pts = UINT64_MAX;
 
     upipe_throw_ready(upipe);
 
@@ -725,6 +753,20 @@ static int upipe_grid_out_extract_sound(struct upipe *upipe, struct uref *uref)
         return UBASE_ERR_INVALID;
     }
     struct uref *input_uref = uref_from_uchain(uchain);
+
+    uint64_t input_pts;
+    /* checked before */
+    ubase_assert(uref_clock_get_pts_sys(input_uref, &input_pts));
+    if (input_pts > next_pts + upipe_grid_out->tolerance) {
+        upipe_dbg(upipe, "next input in the futur");
+        return UBASE_ERR_INVALID;
+    }
+
+    if (upipe_grid_out->last_input_pts != UINT64_MAX &&
+        input_pts == upipe_grid_out->last_input_pts) {
+        upipe_warn(upipe, "drop duplicate output");
+        return UBASE_ERR_INVALID;
+    }
     struct ubuf *ubuf = ubuf_dup(input_uref->ubuf);
     if (unlikely(!ubuf)) {
         upipe_err(upipe, "fail to duplicate buffer");
@@ -732,6 +774,7 @@ static int upipe_grid_out_extract_sound(struct upipe *upipe, struct uref *uref)
     }
     uref_attach_ubuf(uref, ubuf);
     uref_attr_import(uref, input_uref);
+    upipe_grid_out->last_input_pts = input_pts;
     return UBASE_ERR_NONE;
 }
 
@@ -877,6 +920,7 @@ static int upipe_grid_out_set_input_real(struct upipe *upipe,
                     upipe_grid_out->input, input);
     upipe_grid_out->input = input;
     upipe_grid_out->flow_def_uptodate = false;
+    upipe_grid_out->last_input_pts = UINT64_MAX;
     return UBASE_ERR_NONE;
 }
 
@@ -1047,6 +1091,7 @@ static void upipe_grid_free(struct upipe *upipe)
 {
     upipe_throw_dead(upipe);
 
+    upipe_grid_clean_uclock(upipe);
     upipe_grid_clean_sub_outputs(upipe);
     upipe_grid_clean_sub_inputs(upipe);
     upipe_grid_clean_urefcount(upipe);
@@ -1087,6 +1132,7 @@ static struct upipe *upipe_grid_alloc(struct upipe_mgr *mgr,
     upipe_grid_init_sub_outputs(upipe);
     upipe_grid_init_in_mgr(upipe);
     upipe_grid_init_out_mgr(upipe);
+    upipe_grid_init_uclock(upipe);
 
     struct upipe_grid *upipe_grid = upipe_grid_from_upipe(upipe);
     upipe_grid->tolerance = DEFAULT_TOLERANCE;
@@ -1097,6 +1143,21 @@ static struct upipe *upipe_grid_alloc(struct upipe_mgr *mgr,
     upipe_throw_ready(upipe);
 
     return upipe;
+}
+
+/** @internal @This get the current system time.
+ *
+ * @param upipe description of the pipe structure
+ * @return an error code
+ */
+static int upipe_grid_uclock_now(struct upipe *upipe, uint64_t *now)
+{
+    struct upipe_grid *upipe_grid = upipe_grid_from_upipe(upipe);
+    if (!upipe_grid->uclock)
+        return UBASE_ERR_INVALID;
+    if (now)
+        *now = uclock_now(upipe_grid->uclock);
+    return UBASE_ERR_NONE;
 }
 
 /** @internal @This sets the max retention time for input buffers.
@@ -1123,6 +1184,12 @@ static int upipe_grid_set_max_retention_real(struct upipe *upipe,
 static int upipe_grid_control(struct upipe *upipe,
                               int command, va_list args)
 {
+    switch (command) {
+        case UPIPE_ATTACH_UCLOCK:
+            upipe_grid_require_uclock(upipe);
+            return UBASE_ERR_NONE;
+    }
+
     if (command >= UPIPE_CONTROL_LOCAL &&
         ubase_get_signature(args) != UPIPE_GRID_SIGNATURE)
         return UBASE_ERR_UNHANDLED;

@@ -2,7 +2,8 @@
 
 # gen-ffi-cdef.pl
 #
-# Copyright (C) 2016 Clément Vasseur <clement.vasseur@gmail.com>
+# Copyright (C) 2016-2017 Clément Vasseur <clement.vasseur@gmail.com>
+# Copyright (C) 2018 OpenHeadend S.A.R.L.
 #
 # This program is free software; you can redistribute it and/or
 # modify it under the terms of the GNU General Public License
@@ -25,9 +26,16 @@ my %aliases = ( _Bool => 'bool' );
 my %defs = map {$_ => 1} @builtins;
 my $enum_value;
 
+use constant {
+  PREDEFINED => 1,
+  DEFINED    => 2,
+  DECLARED   => 3,
+  UNKNOWN    => 4,
+};
+
 # workaround for x86_64 va_list
 $aliases{'struct __va_list_tag *'} = 'va_list';
-$defs{'struct __va_list_tag'} = 1;
+$defs{'struct __va_list_tag'} = PREDEFINED;
 
 sub parse_input_objdump {
   my %info;
@@ -133,14 +141,6 @@ sub pre {
   defined $str ? $prefix . $str : '';
 }
 
-sub once {
-  my ($name, $cb) = @_;
-  unless ($defs{$name}) {
-    $defs{$name} = 2;
-    print &$cb(), ";\n";
-  }
-}
-
 sub p {
   my ($e, $name) = @_;
   return 'void' . &pre(' ', $name) unless defined $e;
@@ -174,7 +174,7 @@ sub p {
       my $td = &p($a->{type}, $a->{name});
       unless ($defs{$a->{name}}) {
         print 'typedef ', $td, ";\n";
-        $defs{$a->{name}} = 2;
+        $defs{$a->{name}} = DEFINED;
       }
     }
     &$tname();
@@ -191,11 +191,14 @@ sub p {
   my $p_children = sub {
     my ($kw, $ct, $sep, $term) = @_;
     if (defined $a->{name}) {
-      &once("$kw $a->{name}", sub {
+      my $dname = "$kw $a->{name}";
+      my $def = $a->{declaration} ? DECLARED : DEFINED;
+      if ($def < ($defs{$dname} || UNKNOWN)) {
+        $defs{$dname} = $def;
         $enum_value = 0;
-        "$kw $a->{name}" . (defined $e->{children} ?
-          sprintf(" { %s }", &$ch($ct, $sep, $term)) : '');
-      });
+        print "$kw $a->{name}", (defined $e->{children} ?
+          sprintf(" { %s }", &$ch($ct, $sep, $term)) : ''), ";\n";
+      }
       $kw . ' ' . &$tname();
     } else {
       sprintf("$kw { %s }", &$ch($ct, $sep, $term)) . &pre(' ', $name);
@@ -269,7 +272,7 @@ foreach (@read_defs) {
   open my $file, '<', $_ or die "$_: $!\n";
   while (<$file>) {
     chomp;
-    $defs{$_} = 1;
+    $defs{$_} = PREDEFINED;
   }
   close $file;
 }
@@ -293,12 +296,13 @@ $_ =~ s/\*/.+/ foreach @structs;
   grep {
     my $n = $_->{attr}{name} || '';
     ($_->{type} eq 'structure_type' and grep {$n =~ m/^$_$/} @structs) or
-    ($_->{type} eq 'enumeration_type' and grep {$n =~ m/^$_$/} @enums)
-  } values %$info;
+    ($_->{type} eq 'enumeration_type' and grep {$n =~ m/^$_$/} @enums)}
+  grep {not $_->{attr}{declaration}}
+  values %$info;
 
 print &p($_), ";\n" for
   sort {$a->{attr}{name} cmp $b->{attr}{name}}
-  map {$defs{$_->{attr}{name}} = 2; $_}
+  map {$defs{$_->{attr}{name}} = DEFINED; $_}
   grep {my $n = $_->{attr}{name}; @prefix == 0 or grep {$n =~ /^$_/} @prefix}
   grep {not $defs{$_->{attr}{name}}}
   grep {$_->{attr}{external} and not $_->{attr}{declaration}}
@@ -315,6 +319,6 @@ foreach (@libs) {
 
 if (defined $write_defs) {
   open my $file, '>', $write_defs or die "$write_defs: $!\n";
-  print $file "$_\n" for sort grep {$defs{$_} == 2} keys %defs;
+  print $file "$_\n" for sort grep {$defs{$_} == DEFINED} keys %defs;
   close $file;
 }

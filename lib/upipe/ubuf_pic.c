@@ -174,3 +174,77 @@ int ubuf_pic_clear(struct ubuf *ubuf, int hoffset, int voffset,
 
     return ret ? UBASE_ERR_INVALID : UBASE_ERR_NONE;
 }
+
+/** @This converts 8 bits RGB color to 8 bits YUV.
+ *
+ * @param rgb RGB color to convert
+ * @param fullrange use full range if not 0
+ * @param yuv filled with the converted YUV color
+ */
+void ubuf_pic_rgb_to_yuv(const uint8_t rgb[3], int fullrange, uint8_t yuv[3])
+{
+    int mat[3 * 3] = {
+         66, 129,  25,
+        -38, -74, 112,
+        112, -94, -18,
+    };
+    int fullrange_mat[3 * 3] = {
+         77,  150,  29,
+        -43,  -84, 127,
+        127, -106, -21,
+    };
+    int *m = fullrange ? fullrange_mat : mat;
+    int yuv_i[3] = { 0, 0, 0 };
+    for (unsigned i = 0; i < 3; i++)
+        for (unsigned j = 0; j < 3; j++)
+            yuv_i[i] += mat[i * 3 + j] * rgb[j];
+    for (unsigned i = 0; i < 3; i++)
+        yuv[i] = ((yuv_i[i] + 128) >> 8) + (i ? 128 : 16);
+}
+
+/** @This parses a 8 bits RGB value.
+ *
+ * @param value value to parse
+ * @param rgb filled with the parsed value
+ * @return an error code
+ */
+int ubuf_pic_parse_rgb(const char *value, uint8_t rgb[3])
+{
+    memset(rgb, 0, 4);
+
+    if (!value)
+        return UBASE_ERR_INVALID;
+
+    int ret = sscanf(value, "rgb(%hhu, %hhu, %hhu)",
+                     &rgb[0], &rgb[1], &rgb[2]);
+    if (ret != 3)
+        return UBASE_ERR_INVALID;
+    return UBASE_ERR_NONE;
+}
+
+/** @This parses a 8 bits RGBA value.
+ *
+ * @param value value to parse
+ * @param rgba filled with the parsed value
+ * @return an error code
+ */
+int ubuf_pic_parse_rgba(const char *value, uint8_t rgba[4])
+{
+    memset(rgba, 0, 4);
+
+    if (!value)
+        return UBASE_ERR_INVALID;
+
+    if (ubase_check(ubuf_pic_parse_rgb(value, rgba))) {
+        rgba[3] = 0xff;
+        return UBASE_ERR_NONE;
+    }
+
+    float alpha;
+    int ret = sscanf(value, "rgba(%hhu, %hhu, %hhu, %f)",
+                     &rgba[0], &rgba[1], &rgba[2], &alpha);
+    if (ret != 4)
+        return UBASE_ERR_INVALID;
+    rgba[3] = 0xff * alpha;
+    return UBASE_ERR_NONE;
+}

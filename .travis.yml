@@ -69,7 +69,6 @@ before_install:
       sudo apt-get update || exit 1;
       sudo apt-get install -y
         valgrind
-        libc6:i386
         $APT_PACKAGES || exit 1;
       sudo apt-get remove -y
         libqtwebkit-dev || exit 1;

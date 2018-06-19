@@ -647,6 +647,43 @@ int ubuf_pic_plane_clear(struct ubuf *ubuf, const char *chroma,
 int ubuf_pic_clear(struct ubuf *ubuf, int hoffset, int voffset,
                    int hsize, int vsize, int fullrange);
 
+/** @This converts 8 bits RGB color to 8 bits YUV.
+ *
+ * @param rgb RGB color to convert
+ * @param fullrange use full range if not 0
+ * @param yuv filled with the converted YUV color
+ */
+void ubuf_pic_rgb_to_yuv(const uint8_t rgb[3], int fullrange, uint8_t yuv[3]);
+
+/** @This converts 8 bits RGBA color to 8 bits YUVA.
+ *
+ * @param rgba RGBA color to convert
+ * @param fullrange use full range if not 0
+ * @param yuva filled with the converted YUVA color
+ */
+static inline void ubuf_pic_rgba_to_yuva(const uint8_t rgba[4],
+                                         int fullrange, uint8_t yuva[4])
+{
+    ubuf_pic_rgb_to_yuv(rgba, fullrange, yuva);
+    yuva[3] = rgba[3];
+}
+
+/** @This parses a 8 bits RGB value.
+ *
+ * @param value value to parse
+ * @param rgb filled with the parsed value
+ * @return an error code
+ */
+int ubuf_pic_parse_rgb(const char *value, uint8_t rgb[3]);
+
+/** @This parses a 8 bits RGBA value.
+ *
+ * @param value value to parse
+ * @param rgba filled with the parsed value
+ * @return an error code
+ */
+int ubuf_pic_parse_rgba(const char *value, uint8_t rgba[4]);
+
 #ifdef __cplusplus
 }
 #endif
