@@ -32,6 +32,7 @@
 #include <upipe/uclock.h>
 #include <upipe/uclock_ptp.h>
 
+#include <stdbool.h>
 #include <sys/ioctl.h>
 #include <unistd.h>
 #include <sys/stat.h>
@@ -51,7 +52,15 @@ struct uclock_ptp {
     struct urefcount urefcount;
 
     /** clock device fd */
-    int fd;
+    int fd[2];
+
+#ifdef __linux__
+    /** interface device fd */
+    int if_fd[2];
+
+    /** interface struct */
+    struct ifreq ifr[2];
+#endif
 
     /** structure exported to modules */
     struct uclock uclock;
@@ -59,6 +68,19 @@ struct uclock_ptp {
 
 UBASE_FROM_TO(uclock_ptp, uclock, uclock, uclock)
 UBASE_FROM_TO(uclock_ptp, urefcount, urefcount, urefcount)
+
+/** @internal */
+static bool uclock_ptp_intf_up(struct uclock *uclock, int i)
+{
+    struct uclock_ptp *ptp = uclock_ptp_from_uclock(uclock);
+
+#ifdef __linux__
+    if (ioctl(ptp->if_fd[i], SIOCGIFFLAGS, &ptp->ifr[i]) >= 0)
+        return ptp->ifr[i].ifr_flags & IFF_UP;
+#endif
+
+    return false;
+}
 
 /** @This returns the current time in the given clock.
  *
@@ -72,8 +94,10 @@ static uint64_t uclock_ptp_now_inner(struct uclock *uclock)
 #define CLOCKFD 3
 #define FD_TO_CLOCKID(fd) ((~(clockid_t) (fd) << 3) | CLOCKFD)
 
+    int idx = uclock_ptp_intf_up(uclock, 0) ? 0 : 1;
+
     struct timespec ts;
-    if (unlikely(clock_gettime(FD_TO_CLOCKID(ptp->fd), &ts) == -1))
+    if (unlikely(clock_gettime(FD_TO_CLOCKID(ptp->fd[idx]), &ts) == -1))
         return UINT64_MAX;
 
     uint64_t now = ts.tv_sec * UCLOCK_FREQ +
@@ -100,22 +124,28 @@ static void uclock_ptp_free(struct urefcount *urefcount)
 {
     struct uclock_ptp *ptp = uclock_ptp_from_urefcount(urefcount);
     urefcount_clean(urefcount);
-    close(ptp->fd);
+    for (int i = 0; i < 2; i++) {
+        if (ptp->fd[i] < 0)
+            break;
+        close(ptp->fd[i]);
+#ifdef __linux__
+        close(ptp->if_fd[i]);
+#endif
+    }
     free(ptp);
 }
 
 /** @internal */
-static int uclock_ptp_nic_clock_idx(struct uprobe *uprobe, const char *interface)
+static int uclock_ptp_nic_clock_idx(struct uclock_ptp *ptp,
+        struct uprobe *uprobe, int i, const char *interface)
 {
 #ifdef __linux__
     struct ethtool_ts_info info;
-    struct ifreq ifr;
 
-    memset(&ifr, 0, sizeof(ifr));
     memset(&info, 0, sizeof(info));
     info.cmd = ETHTOOL_GET_TS_INFO;
-    strncpy(ifr.ifr_name, interface, IFNAMSIZ - 1);
-    ifr.ifr_data = (char *) &info;
+    strncpy(ptp->ifr[i].ifr_name, interface, IFNAMSIZ - 1);
+    ptp->ifr[i].ifr_data = (char *) &info;
     int fd = socket(AF_INET, SOCK_DGRAM, 0);
 
     if (fd < 0) {
@@ -123,7 +153,7 @@ static int uclock_ptp_nic_clock_idx(struct uprobe *uprobe, const char *interface
         return -1;
     }
 
-    if (ioctl(fd, SIOCETHTOOL, &ifr) < 0) {
+    if (ioctl(fd, SIOCETHTOOL, &ptp->ifr[i]) < 0) {
         uprobe_err_va(uprobe, NULL, "Couldn't get ethtool ts information for %s: %m",
             interface);
         info.phc_index = -1;
@@ -139,47 +169,59 @@ static int uclock_ptp_nic_clock_idx(struct uprobe *uprobe, const char *interface
 }
 
 /** @internal */
-static int uclock_ptp_open_nic(struct uprobe *uprobe, const char *interface)
+static int uclock_ptp_open_nic(struct uclock_ptp *ptp, struct uprobe *uprobe,
+        int i, const char *interface)
 {
-    int idx = uclock_ptp_nic_clock_idx(uprobe, interface);
+    int idx = uclock_ptp_nic_clock_idx(ptp, uprobe, i, interface);
 
     if (idx < 0) {
         uprobe_err_va(uprobe, NULL, "No PTP device found for %s", interface);
-        return -1;
+        return UBASE_ERR_EXTERNAL;
     }
 
     char clkdev[32];
     snprintf(clkdev, sizeof(clkdev), "/dev/ptp%u", idx);
 
-    int fd = open(clkdev, O_RDWR);
-    if (fd < 0)
+    ptp->fd[i] = open(clkdev, O_RDWR);
+    if (ptp->fd[i] < 0) {
         uprobe_err_va(uprobe, NULL, "Could not open PTP device %s: %m", clkdev);
+        return UBASE_ERR_EXTERNAL;
+    }
 
-    return fd;
+    return UBASE_ERR_NONE;;
 }
 
 /** @This allocates a new uclock structure.
  *
  * @param uprobe probe catching log events for error reporting
- * @param interface NIC name
+ * @param interface NIC names
  * @return pointer to uclock, or NULL in case of error
  */
-struct uclock *uclock_ptp_alloc(struct uprobe *uprobe, const char *interface)
+struct uclock *uclock_ptp_alloc(struct uprobe *uprobe, const char *interface[2])
 {
     struct uclock_ptp *ptp = malloc(sizeof(struct uclock_ptp));
     if (unlikely(ptp == NULL))
         return NULL;
-
-    ptp->fd = uclock_ptp_open_nic(uprobe, interface);
-    if (ptp->fd < 0) {
-        free(ptp);
-        return NULL;
-    }
 
     urefcount_init(uclock_ptp_to_urefcount(ptp), uclock_ptp_free);
     ptp->uclock.refcount = uclock_ptp_to_urefcount(ptp);
     ptp->uclock.uclock_now = uclock_ptp_now;
     ptp->uclock.uclock_to_real = NULL;
     ptp->uclock.uclock_from_real = NULL;
+
+    for (int i = 0; i < 2; i++) {
+        ptp->fd[i] = -1;
+#ifdef __linux__
+        ptp->if_fd[i] = -1;
+        memset(&ptp->ifr[i], 0, sizeof(ptp->ifr[i]));
+#endif
+        if (!interface[i])
+            break;
+        if (!ubase_check(uclock_ptp_open_nic(ptp, uprobe, 0, interface[i]))) {
+            uclock_ptp_free(uclock_ptp_to_urefcount(ptp));
+            return NULL;
+        }
+    }
+
     return uclock_ptp_to_uclock(ptp);
 }

@@ -40,10 +40,10 @@ extern "C" {
 /** @This allocates a new uclock structure.
  *
  * @param uprobe probe catching log events for error reporting
- * @param interface NIC name
+ * @param interface NIC names, or NULL
  * @return pointer to uclock, or NULL in case of error
  */
-struct uclock *uclock_ptp_alloc(struct uprobe *uprobe, const char *interface);
+struct uclock *uclock_ptp_alloc(struct uprobe *uprobe, const char *interface[2]);
 
 #ifdef __cplusplus
 }
