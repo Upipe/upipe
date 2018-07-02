@@ -1122,8 +1122,17 @@ static int upipe_bmd_sink_sub_set_flow_def(struct upipe *upipe,
 
         BMDDisplayMode bmdMode = upipe_bmd_mode_from_flow_def(&upipe_bmd_sink->upipe, flow_def);
         if (bmdMode != upipe_bmd_sink->mode) {
-            upipe_err(upipe, "Flow def doesn't correspond to configured mode");
-            return UBASE_ERR_UNHANDLED;
+            struct uref *flow_def2 = uref_dup(flow_def);
+            uref_pic_delete_progressive(flow_def2);
+            BMDDisplayMode bmdMode2 = upipe_bmd_mode_from_flow_def(&upipe_bmd_sink->upipe, flow_def2);
+            uref_free(flow_def2);
+            if (bmdMode2 != upipe_bmd_sink->mode) {
+                upipe_err_va(upipe,
+                        "Flow def (%4.4s, %4.4s) doesn't correspond to configured mode %4.4s",
+                            (char*)&bmdMode, (char*)&bmdMode2, (char*)&upipe_bmd_sink->mode
+                        );
+                return UBASE_ERR_INVALID;
+            }
         }
 
         if (macropixel != 6 || !ubase_check(
