@@ -209,6 +209,9 @@ static int upipe_avcdec_check(struct upipe *upipe, struct uref *flow_format)
 
 static void upipe_av_uref_pic_free(void *opaque, uint8_t *data);
 
+static void draw_horiz_band(AVCodecContext *avctx, const AVFrame *frame,
+        int offset[AV_NUM_DATA_POINTERS], int y, int type, int height);
+
 /* Documentation from libavcodec.h (get_buffer) :
  * The function will set AVFrame.data[], AVFrame.linesize[].
  * AVFrame.extended_data[] must also be set, but it should be the same as
@@ -999,6 +1002,16 @@ alloc_error:
     return;
 }
 
+static void draw_horiz_band(AVCodecContext *avctx, const AVFrame *frame,
+        int offset[AV_NUM_DATA_POINTERS], int y, int type, int height)
+{
+    struct upipe *upipe = avctx->opaque;
+#if 1
+    upipe_notice_va(upipe, "draw_horiz_band y: %d, height: %d, type: %d",
+            y, height, type);
+#endif
+}
+
 /** @internal @This outputs video frames.
  *
  * @param upipe description structure of the pipe
@@ -1457,6 +1470,7 @@ static int upipe_avcdec_set_flow_def(struct upipe *upipe, struct uref *flow_def)
             return UBASE_ERR_EXTERNAL;
         }
 
+        upipe_avcdec->context->draw_horiz_band = draw_horiz_band;
         upipe_avcdec->context->codec = codec;
         upipe_avcdec->context->opaque = upipe;
         if (extradata_alloc != NULL) {
