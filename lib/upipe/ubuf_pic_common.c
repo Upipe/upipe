@@ -288,6 +288,53 @@ int ubuf_pic_common_check_skip(struct ubuf_mgr *mgr, int hskip, int vskip)
     return UBASE_ERR_NONE;
 }
 
+/** @This splits an interlaced picture ubuf in its two fields.
+ *
+ * Two extra ubufs are allocated, one per field.
+ *
+ * @param ubuf pointer to ubuf
+ * @param odd pointer to pointer to odd field ubuf
+ * @param even pointer to pointer to even field ubuf
+ * @return an error code
+*/
+int ubuf_pic_common_split_fields(struct ubuf *ubuf, struct ubuf **odd,
+        struct ubuf **even)
+{
+    *odd = ubuf_dup(ubuf);
+    if (!*odd)
+        return UBASE_ERR_ALLOC;
+
+    *even = ubuf_dup(ubuf);
+    if (!*odd) {
+        ubuf_free(*odd);
+        return UBASE_ERR_ALLOC;
+    }
+
+
+    for (int i = 0; i < 2; i++) {
+        struct ubuf *field = i ? *odd : *even;
+        struct ubuf_pic_common *pic_common = ubuf_pic_common_from_ubuf(field);
+        pic_common->vsize /= 2;
+
+        const char *chroma = NULL;
+        while (ubase_check(ubuf_pic_iterate_plane(ubuf, &chroma)) && chroma) {
+            int plane = ubuf_pic_common_plane(ubuf->mgr, chroma);
+            if (plane < 0) {
+                abort();
+            }
+
+            struct ubuf_pic_common_plane *p = &pic_common->planes[plane];
+            size_t stride = p->stride;
+            uint8_t *buffer = p->buffer;
+            if (i)
+                buffer += stride;
+            ubuf_pic_common_plane_init(field, plane, buffer, 2 * stride);
+        }
+    }
+
+    return UBASE_ERR_NONE;
+}
+
 /** @This resizes a picture ubuf, if the ubuf has enough space, and it is not
  * shared.
  *

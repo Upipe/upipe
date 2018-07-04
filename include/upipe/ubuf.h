@@ -125,6 +125,8 @@ enum ubuf_command {
     UBUF_ITERATE_PICTURE_PLANE,
     /** iterate on sound plane channel (const char **) */
     UBUF_ITERATE_SOUND_PLANE,
+    /** split an interlaced picture into its two fields */
+    UBUF_PICTURE_SPLIT_FIELDS,
 
     /** non-standard commands implemented by a ubuf manager can start from
      * there */

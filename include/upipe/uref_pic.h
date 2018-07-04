@@ -171,6 +171,26 @@ static inline int uref_pic_plane_clear(struct uref *uref,
                                 hsize, vsize, fullrange);
 }
 
+/** @see ubuf_split_fields */
+static inline int uref_split_fields(struct uref *uref, struct uref **odd,
+        struct uref **even)
+{
+    int ret = UBASE_ERR_ALLOC;
+
+    *odd = uref_dup_inner(uref);
+    *even = uref_dup_inner(uref);
+
+    if (*odd && *even)
+        ret = ubuf_split_fields(uref->ubuf, &(*odd)->ubuf, &(*even)->ubuf);
+
+    if (!ubase_check(ret)) {
+        uref_free(*odd);
+        uref_free(*even);
+    }
+
+    return ret;
+}
+
 /** @see ubuf_pic_resize */
 static inline int uref_pic_resize(struct uref *uref,
         int hskip, int vskip, int new_hsize, int new_vsize)
