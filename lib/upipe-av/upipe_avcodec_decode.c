@@ -1076,11 +1076,38 @@ static int set_output_pic_properties(struct upipe *upipe, struct uref *uref,
 static void draw_horiz_band(AVCodecContext *avctx, const AVFrame *frame,
         int offset[AV_NUM_DATA_POINTERS], int y, int type, int height)
 {
+    /* TODO: handle errors, clocks. */
+
     struct upipe *upipe = avctx->opaque;
 #if 1
     upipe_notice_va(upipe, "draw_horiz_band y: %d, height: %d, type: %d",
             y, height, type);
 #endif
+
+    struct uref *uref = frame->opaque;
+    if (!ubase_check(set_output_pic_properties(upipe, uref, avctx, frame))) {
+        upipe_err(upipe, "set_output_pic_properties failed");
+        return;
+    }
+
+    struct ubuf *ubuf_chunk = ubuf_dup(uref->ubuf);
+    if (!ubuf_chunk)
+        return;
+    if (!ubase_check(ubuf_pic_resize(ubuf_chunk, 0, y, -1, height)))
+        return;
+    struct uref *uref_chunk = uref_fork(uref, ubuf_chunk);
+    if (!uref_chunk)
+        return;
+    uref_pic_set_vposition(uref_chunk, y);
+
+#if 1
+    struct upipe_avcdec *upipe_avcdec = upipe_avcdec_from_upipe(upipe);
+    upipe_avcdec_output(upipe, uref_chunk, NULL);
+#else
+    uref_free(uref_chunk);
+#endif
+
+    upipe_notice(upipe, "draw_horiz_band succeeded");
 }
 
 /** @internal @This outputs video frames.
