@@ -240,7 +240,7 @@ static struct upipe *upipe_netmap_source_alloc(struct upipe_mgr *mgr,
             upipe_netmap_source->hsize = (upipe_netmap_source->hsize + 5) / 6 * 6; // XXX 720
         }
 
-        upipe_netmap_source->rfc_def = uref_dup(flow_def);;
+        upipe_netmap_source->rfc_def = flow_def;
         uref_pic_flow_set_hsize(upipe_netmap_source->rfc_def,
                 upipe_netmap_source->hsize);
     } else {
