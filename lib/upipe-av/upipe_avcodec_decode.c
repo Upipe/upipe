@@ -1087,18 +1087,12 @@ static void draw_horiz_band(AVCodecContext *avctx, const AVFrame *frame,
         return;
     }
 
-    struct ubuf *ubuf_chunk = ubuf_dup(uref->ubuf);
-    if (!ubuf_chunk)
+    if (!ubase_check(ubuf_pic_resize(uref->ubuf, 0, y, -1, height)))
         return;
-    if (!ubase_check(ubuf_pic_resize(ubuf_chunk, 0, y, -1, height)))
-        return;
-    struct uref *uref_chunk = uref_fork(uref, ubuf_chunk);
-    if (!uref_chunk)
-        return;
-    uref_pic_set_vposition(uref_chunk, y);
+    uref_pic_set_vposition(uref, y);
 
     struct upipe_avcdec *upipe_avcdec = upipe_avcdec_from_upipe(upipe);
-    upipe_avcdec_output(upipe, uref_chunk, NULL);
+    upipe_avcdec_output(upipe, uref, NULL);
 }
 
 /** @internal @This outputs video frames.
