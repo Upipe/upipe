@@ -1002,10 +1002,11 @@ alloc_error:
     return;
 }
 
-static int set_output_pic_properties(struct upipe *upipe, struct uref *uref,
+static int set_output_pic_properties(struct upipe *upipe, struct uref **uref_input,
         AVCodecContext *context, const AVFrame *frame)
 {
     struct upipe_avcdec *upipe_avcdec = upipe_avcdec_from_upipe(upipe);
+    struct uref *uref = *uref_input;
     struct uref *flow_def_attr = uref_from_uchain(uref->uchain.next);
 
     /* Resize the picture (was allocated too big). */
@@ -1070,6 +1071,7 @@ static int set_output_pic_properties(struct upipe *upipe, struct uref *uref,
         }
     }
 
+    *uref_input = uref;
     return UBASE_ERR_NONE;
 }
 
@@ -1080,7 +1082,7 @@ static void draw_horiz_band(AVCodecContext *avctx, const AVFrame *frame,
 
     struct upipe *upipe = avctx->opaque;
     struct uref *uref = frame->opaque;
-    if (!ubase_check(set_output_pic_properties(upipe, uref, avctx, frame))) {
+    if (!ubase_check(set_output_pic_properties(upipe, &uref, avctx, frame))) {
         upipe_err(upipe, "set_output_pic_properties failed");
         return;
     }
