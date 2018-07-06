@@ -1078,7 +1078,7 @@ static int set_output_pic_properties(struct upipe *upipe, struct uref **uref_inp
 static void draw_horiz_band(AVCodecContext *avctx, const AVFrame *frame,
         int offset[AV_NUM_DATA_POINTERS], int y, int type, int height)
 {
-    /* TODO: handle errors, clocks. */
+    /* TODO: handle errors. */
 
     struct upipe *upipe = avctx->opaque;
     struct uref *uref = frame->opaque;
@@ -1090,6 +1090,13 @@ static void draw_horiz_band(AVCodecContext *avctx, const AVFrame *frame,
     if (!ubase_check(ubuf_pic_resize(uref->ubuf, 0, y, -1, height)))
         return;
     uref_pic_set_vposition(uref, y);
+    uint64_t duration;
+    if (ubase_check(uref_clock_get_duration(uref, &duration))) {
+        uref_clock_set_duration(uref, height * duration / frame->height);
+        uref_clock_add_date_sys(uref,  y * duration / frame->height);
+        uref_clock_add_date_prog(uref, y * duration / frame->height);
+        uref_clock_add_date_orig(uref, y * duration / frame->height);
+    }
 
     struct upipe_avcdec *upipe_avcdec = upipe_avcdec_from_upipe(upipe);
     upipe_avcdec_output(upipe, uref, NULL);
