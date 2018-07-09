@@ -1023,13 +1023,6 @@ static int set_output_pic_properties(struct upipe *upipe, struct uref **uref_inp
         return UBASE_ERR_ALLOC;
     }
 
-    UBASE_RETURN(uref_pic_set_tf(uref))
-    UBASE_RETURN(uref_pic_set_bf(uref))
-    if (!frame->interlaced_frame)
-        UBASE_RETURN(uref_pic_set_progressive(uref))
-    else if (frame->top_field_first)
-        UBASE_RETURN(uref_pic_set_tff(uref))
-
     if (context->time_base.den)
         UBASE_RETURN(uref_clock_set_duration(uref,
                 (uint64_t)(2 + frame->repeat_pict) * context->ticks_per_frame *
@@ -1097,6 +1090,14 @@ static void draw_horiz_band(AVCodecContext *avctx, const AVFrame *frame,
         uref_clock_add_date_prog(uref, y * duration / frame->height);
         uref_clock_add_date_orig(uref, y * duration / frame->height);
     }
+
+    if (type == 3)
+        uref_pic_set_progressive(uref);
+    else if (type == 1)
+        uref_pic_set_tf(uref);
+    else if (type == 2)
+        uref_pic_set_bf(uref);
+    /* Other values are undocumented/invalid. */
 
     struct upipe_avcdec *upipe_avcdec = upipe_avcdec_from_upipe(upipe);
     upipe_avcdec_output(upipe, uref, NULL);
