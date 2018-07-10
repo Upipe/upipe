@@ -603,7 +603,7 @@ static unsigned upipe_bmd_sink_sub_sound_get_samples_channel(struct upipe *upipe
     size_t samples;
     struct uref *uref = uqueue_pop(&upipe_bmd_sink_sub->uqueue, struct uref *);
     if (!uref) {
-        upipe_err(&upipe_bmd_sink_sub->upipe, "no audio");
+        upipe_dbg(&upipe_bmd_sink_sub->upipe, "no audio");
         return 0;
     }
 

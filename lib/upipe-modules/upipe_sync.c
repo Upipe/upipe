@@ -604,7 +604,7 @@ static void output_sound(struct upipe *upipe, const struct urational *fps,
             struct uref *uref = NULL;
             struct uchain *uchain = ulist_peek(&upipe_sync_sub->urefs);
             if (!uchain) {
-                upipe_err_va(upipe_sub, "no urefs");
+                upipe_dbg_va(upipe_sub, "no urefs");
 
                 uref = upipe_sync_get_cached_compressed_audio(upipe_sub);
                 if (!uref)
@@ -749,7 +749,7 @@ static void cb(struct upump *upump)
     for (;;) {
         uchain = ulist_peek(&upipe_sync->urefs);
         if (!uchain) {
-            upipe_err_va(upipe, "no pictures");
+            upipe_dbg_va(upipe, "no pictures");
             break;
         }
 
