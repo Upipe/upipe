@@ -562,6 +562,7 @@ static int upipe_work_mgr_control(struct upipe_mgr *mgr,
 
         GET_SET_MGR(qsrc, QSRC)
         GET_SET_MGR(qsink, QSINK)
+        GET_SET_MGR(xfer, XFER)
 #undef GET_SET_MGR
 
         default:

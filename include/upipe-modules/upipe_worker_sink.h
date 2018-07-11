@@ -99,6 +99,7 @@ static inline int                                                           \
 
 UPIPE_WSINK_MGR_GET_SET_MGR(qsrc)
 UPIPE_WSINK_MGR_GET_SET_MGR(qsink)
+UPIPE_WSINK_MGR_GET_SET_MGR(xfer)
 #undef UPIPE_WSINK_MGR_GET_SET_MGR
 
 /** @hidden */
