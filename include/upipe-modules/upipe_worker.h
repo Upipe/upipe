@@ -80,6 +80,7 @@ enum upipe_work_mgr_command {
 
     UPIPE_WORK_MGR_GET_SET_MGR(qsrc, QSRC)
     UPIPE_WORK_MGR_GET_SET_MGR(qsink, QSINK)
+    UPIPE_WORK_MGR_GET_SET_MGR(xfer, XFER)
 #undef UPIPE_WORK_MGR_GET_SET_MGR
 };
 
@@ -115,6 +116,7 @@ static inline int                                                           \
 
 UPIPE_WORK_MGR_GET_SET_MGR2(qsrc, QSRC)
 UPIPE_WORK_MGR_GET_SET_MGR2(qsink, QSINK)
+UPIPE_WORK_MGR_GET_SET_MGR2(xfer, XFER)
 #undef UPIPE_WORK_MGR_GET_SET_MGR2
 
 /** @hidden */
