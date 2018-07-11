@@ -93,7 +93,7 @@ enum upipe_work_mgr_command {
  */                                                                         \
 static inline int                                                           \
     upipe_work_mgr_get_##name##_mgr(struct upipe_mgr *mgr,                  \
-                                    struct upipe_mgr *p)                    \
+                                    struct upipe_mgr **p)                   \
 {                                                                           \
     return upipe_mgr_control(mgr, UPIPE_WORK_MGR_GET_##NAME##_MGR,          \
                              UPIPE_WORK_SIGNATURE, p);                      \

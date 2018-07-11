@@ -79,7 +79,7 @@ upipe_wsink_mgr_alloc(struct upipe_mgr *xfer_mgr)
  */                                                                         \
 static inline int                                                           \
     upipe_wsink_mgr_get_##name##_mgr(struct upipe_mgr *mgr,                 \
-                                     struct upipe_mgr *p)                   \
+                                     struct upipe_mgr **p)                  \
 {                                                                           \
     return upipe_work_mgr_get_##name##_mgr(mgr, p);                         \
 }                                                                           \
