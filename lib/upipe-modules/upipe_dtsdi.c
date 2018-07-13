@@ -213,10 +213,10 @@ static int set_flow_def(struct upipe *upipe, struct uref *flow_format)
     } else if (std >= DTSDI_TYPE_SDI_720P23_98 && std <= DTSDI_TYPE_SDI_720P60) {
         if (fps.num == 50) {
             cols = 1980;
-        } else if (fps.num == 60000) {
+        } else if (fps.num == 60 || fps.num == 60000) {
             cols = 1650;
         } else {
-            /* Missing: 23.98, 24, 25, 29.97, 30, 60 */
+            /* Missing: 23.98, 24, 25, 29.97, 30 */
             upipe_err_va(upipe, "Unknown SDI size for 720p %" PRId64 "/%" PRIu64,
                 fps.num, fps.den);
             return UBASE_ERR_INVALID;
