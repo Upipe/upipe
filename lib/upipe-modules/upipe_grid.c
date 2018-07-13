@@ -370,12 +370,12 @@ static void upipe_grid_in_input(struct upipe *upipe,
             break;
         }
 
-        upipe_warn_va(upipe, "drop late frame %"PRIu64"ms, "
-                      "latency %"PRIu64"ms "
-                      "retention %"PRIu64"ms",
-                      (now - pts) / (UCLOCK_FREQ / 1000),
-                      latency / (UCLOCK_FREQ / 1000),
-                      upipe_grid->max_retention / (UCLOCK_FREQ / 1000));
+        upipe_verbose_va(upipe, "drop late frame %"PRIu64"ms, "
+                         "latency %"PRIu64"ms "
+                         "retention %"PRIu64"ms",
+                         (now - pts) / (UCLOCK_FREQ / 1000),
+                         latency / (UCLOCK_FREQ / 1000),
+                         upipe_grid->max_retention / (UCLOCK_FREQ / 1000));
         uref_free(uref);
     }
 
