@@ -188,6 +188,7 @@ static inline const struct sdi_offsets_fmt *sdi_get_offsets(struct uref *flow_de
 
         { 2200, 1125, 280, &pict_fmts[0], 0x0, S352_PICTURE_RATE_30000_1001, { 30000, 1001 } }, /* 30/1.001 Hz I */
         { 2200, 1125, 280, &pict_fmts[1], 0x3, S352_PICTURE_RATE_60000_1001, { 60000, 1001 } }, /* 60/1.001 Hz P */
+        { 2200, 1125, 280, &pict_fmts[1], 0x3, S352_PICTURE_RATE_60, { 60, 1 } },               /* 60 Hz P */
 
         { 2750, 1125, 830, &pict_fmts[1], 0x3, S352_PICTURE_RATE_24000_1001, { 24000, 1001 } }, /* 24/1.001 Hz */
         { 2750, 1125, 830, &pict_fmts[1], 0x3, S352_PICTURE_RATE_24, { 24, 1 } },               /* 24 Hz */
@@ -195,6 +196,7 @@ static inline const struct sdi_offsets_fmt *sdi_get_offsets(struct uref *flow_de
         /* 750 Lines */
         { 1980, 750, 700, &pict_fmts[2], 0x3, S352_PICTURE_RATE_50, { 50, 1} },                /* 50 Hz P */
         { 1650, 750, 370, &pict_fmts[2], 0x3, S352_PICTURE_RATE_60000_1001, { 60000, 1001 } }, /* 60/1.001 Hz P */
+        { 1650, 750, 370, &pict_fmts[2], 0x3, S352_PICTURE_RATE_60, { 60, 1 } },               /* 60 Hz P */
 
         { 864,  625, 144, &pict_fmts[3], 0x0, S352_PICTURE_RATE_25, { 25, 1} },                /* 625-line 25 Hz I */
         { 858,  525, 138, &pict_fmts[4], 0x0, S352_PICTURE_RATE_30000_1001, { 30000, 1001 } }, /* 525-line 30/1.001 Hz I */
