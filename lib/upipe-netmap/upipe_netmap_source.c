@@ -555,6 +555,11 @@ static inline bool handle_hbrmt_packet(struct upipe *upipe, const uint8_t *src, 
 
     const uint8_t frate = smpte_hbrmt_get_frate(hbrmt);
     const uint8_t frame = smpte_hbrmt_get_frame(hbrmt);
+    const uint8_t map   = smpte_hbrmt_get_map(hbrmt);
+
+    /* Level B not supported */
+    if (map)
+        return true;
 
     if (unlikely(!upipe_netmap_source->f)) {
         if (!ubase_check(upipe_netmap_source_set_flow(upipe, frate, frame))) {
