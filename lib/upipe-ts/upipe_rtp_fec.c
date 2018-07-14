@@ -665,10 +665,10 @@ static void upipe_rtp_fec_main_input(struct upipe *upipe, struct uref *uref)
 
     upipe_rtp_fec->prev_sys = date_sys;
 
-    /* Difference between last received sequence number and current sequence number */
+    /* Calculate absolute difference between last received sequence number and current sequence number */
     uint16_t seq_delta = upipe_rtp_fec->last_seqnum - seqnum;
     if (seq_delta > 0x8000)
-        seq_delta = -seq_delta; // XXX ?
+        seq_delta = -seq_delta;
 
     unsigned int two_matrix_size = 2 * upipe_rtp_fec->cols * upipe_rtp_fec->rows;
     bool fec_change = false;
