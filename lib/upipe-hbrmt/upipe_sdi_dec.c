@@ -510,9 +510,9 @@ static void extract_hd_audio(struct upipe *upipe, const uint16_t *packet, int li
         return;
     }
 
-    /* Audio packets are not allowed on the switching line + 2 */
-    if (upipe_sdi_dec->debug && (line_num == p->switching_line + 2 ||
-        (p->field_offset && line_num == p->switching_line + 2 + switching_line_offset))) {
+    /* Audio packets are not allowed on the switching line + 1 */
+    if (upipe_sdi_dec->debug && (line_num == p->switching_line + 1 ||
+        (p->field_offset && line_num == p->switching_line + 1 + switching_line_offset))) {
         upipe_warn_va(upipe, "Audio packet on invalid line %d", line_num);
     }
 
