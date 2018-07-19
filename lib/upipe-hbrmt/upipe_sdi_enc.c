@@ -130,6 +130,9 @@ struct upipe_sdi_enc {
     /** input chroma map */
     const char *input_chroma_map[UPIPE_SDI_MAX_PLANES];
 
+    /* whether to compute crc */
+    bool crc;
+
     /* CRC LUT */
     uint32_t crc_lut[8][1024];
 
@@ -890,15 +893,17 @@ static void upipe_hd_sdi_enc_encode_line(struct upipe *upipe, int line_num, uint
     dst[10] = (1 << 9) | (((line_num >> 7) & 0xf) << 2);
     dst[11] = dst[10];
 
-    /* update CRC */
-    for (int i = 0; i < 12; i += 2) {
-        sdi_crc_update(upipe_sdi_enc->crc_lut[0], &upipe_sdi_enc->crc_c, dst[i + 0]);
-        sdi_crc_update(upipe_sdi_enc->crc_lut[0], &upipe_sdi_enc->crc_y, dst[i + 1]);
-    }
+    if (upipe_sdi_enc->crc) {
+        /* update CRC */
+        for (int i = 0; i < 12; i += 2) {
+            sdi_crc_update(upipe_sdi_enc->crc_lut[0], &upipe_sdi_enc->crc_c, dst[i + 0]);
+            sdi_crc_update(upipe_sdi_enc->crc_lut[0], &upipe_sdi_enc->crc_y, dst[i + 1]);
+        }
 
-    /* finalize, reset, and encode the CRCs */
-    sdi_crc_end(&upipe_sdi_enc->crc_c, &dst[12]);
-    sdi_crc_end(&upipe_sdi_enc->crc_y, &dst[13]);
+        /* finalize, reset, and encode the CRCs */
+        sdi_crc_end(&upipe_sdi_enc->crc_c, &dst[12]);
+        sdi_crc_end(&upipe_sdi_enc->crc_y, &dst[13]);
+    }
 
     /* HBI */
     upipe_sdi_enc->blank(&dst[hanc_start], f->active_offset - UPIPE_HD_SDI_EAV_LENGTH/2 - UPIPE_HD_SDI_SAV_LENGTH/2);
@@ -1030,9 +1035,11 @@ static void upipe_hd_sdi_enc_encode_line(struct upipe *upipe, int line_num, uint
     }
 
     /* Update CRCs */
-    for (int i = 0; i < 2*input_hsize; i+=16) {
-        const uint16_t *crc_src = &active_start[i];
-        sdi_crc_update_blk(upipe_sdi_enc->crc_lut, &upipe_sdi_enc->crc_c, &upipe_sdi_enc->crc_y, crc_src);
+    if (upipe_sdi_enc->crc) {
+        for (int i = 0; i < 2*input_hsize; i+=16) {
+            const uint16_t *crc_src = &active_start[i];
+            sdi_crc_update_blk(upipe_sdi_enc->crc_lut, &upipe_sdi_enc->crc_c, &upipe_sdi_enc->crc_y, crc_src);
+        }
     }
 
     /* FIXME: support PSF */
@@ -1543,6 +1550,8 @@ static int upipe_sdi_enc_control(struct upipe *upipe, int command, va_list args)
             const char *v = va_arg(args, const char *);
             if (!strcmp(k, "teletext")) {
                 upipe_sdi_enc->ttx = strcmp(v, "0");
+            } else if (!strcmp(k, "crc")) {
+                upipe_sdi_enc->crc = strcmp(v, "0");
             } else
                 return UBASE_ERR_INVALID;
 
@@ -1578,6 +1587,9 @@ static struct upipe *_upipe_sdi_enc_alloc(struct upipe_mgr *mgr,
 
     struct upipe *upipe = &upipe_sdi_enc->upipe;
     upipe_init(upipe, mgr, uprobe);
+
+    /* should calculate crc by default */
+    upipe_sdi_enc->crc = true;
 
     ulist_init(&upipe_sdi_enc->urefs);
     upipe_sdi_enc->n = 0;
