@@ -78,6 +78,7 @@ libupipe_modules_la_SOURCES = \
 	upipe_auto_inner.c \
 	upipe_row_split.c \
 	upipe_separate_fields.c \
+	upipe_row_join.c \
 	$(NULL)
 
 if HAVE_WRITEV
