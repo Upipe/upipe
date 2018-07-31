@@ -359,13 +359,14 @@ static void upipe_grid_in_input(struct upipe *upipe,
         }
 
         ubase_assert(uref_clock_get_pts_sys(uref, &pts));
-        if (pts + latency >= now) {
+        uint64_t pts_max = pts + latency + upipe_grid->tolerance;
+        if (pts_max >= now) {
             ulist_unshift(&upipe_grid_in->urefs, uchain);
             break;
         }
 
         if (ulist_empty(&upipe_grid_in->urefs) &&
-            pts + latency + upipe_grid->max_retention >= now) {
+            pts_max + upipe_grid->max_retention >= now) {
             ulist_unshift(&upipe_grid_in->urefs, uchain);
             break;
         }
