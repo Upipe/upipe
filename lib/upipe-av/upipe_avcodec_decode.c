@@ -1356,7 +1356,7 @@ static bool upipe_avcdec_decode_avpkt(struct upipe *upipe, AVPacket *avpkt,
             }
 
             /* output frame if any has been decoded */
-            if (gotframe) {
+            if (gotframe && !upipe_avcdec->context->draw_horiz_band) {
                 upipe_avcdec_output_pic(upipe, upump_p);
             }
             break;
