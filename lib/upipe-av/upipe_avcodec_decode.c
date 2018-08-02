@@ -1091,12 +1091,19 @@ static void draw_horiz_band(AVCodecContext *avctx, const AVFrame *frame,
         uref_clock_add_date_orig(uref, y * duration / frame->height);
     }
 
-    if (type == 3)
+    if (type == 3) {
         uref_pic_set_progressive(uref);
-    else if (type == 1)
         uref_pic_set_tf(uref);
-    else if (type == 2)
         uref_pic_set_bf(uref);
+    }
+    else if (type == 1) {
+        uref_pic_delete_progressive(uref);
+        uref_pic_set_tf(uref);
+    }
+    else if (type == 2) {
+        uref_pic_delete_progressive(uref);
+        uref_pic_set_bf(uref);
+    }
     /* Other values are undocumented/invalid. */
 
     struct upipe_avcdec *upipe_avcdec = upipe_avcdec_from_upipe(upipe);
