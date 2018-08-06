@@ -81,7 +81,7 @@ upipe_wlin_mgr_alloc(struct upipe_mgr *xfer_mgr)
  */                                                                         \
 static inline int                                                           \
     upipe_wlin_mgr_get_##name##_mgr(struct upipe_mgr *mgr,                  \
-                                    struct upipe_mgr *p)                    \
+                                    struct upipe_mgr **p)                   \
 {                                                                           \
     return upipe_work_mgr_get_##name##_mgr(mgr, p);                         \
 }                                                                           \
@@ -101,6 +101,7 @@ static inline int                                                           \
 
 UPIPE_WLIN_MGR_GET_SET_MGR(qsrc)
 UPIPE_WLIN_MGR_GET_SET_MGR(qsink)
+UPIPE_WLIN_MGR_GET_SET_MGR(xfer)
 #undef UPIPE_WLIN_MGR_GET_SET_MGR
 
 /** @hidden */

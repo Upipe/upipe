@@ -624,11 +624,6 @@ static void upipe_rtp_fec_main_input(struct upipe *upipe, struct uref *uref)
     uint64_t date_sys = UINT64_MAX;
     int type;
     uref_clock_get_date_sys(uref, &date_sys, &type);
-    if (date_sys == UINT64_MAX) {
-        upipe_err(upipe, "Undated uref");
-        uref_free(uref);
-        return;
-    }
 
     if (upipe_rtp_fec->prev_date_sys == UINT64_MAX ||
             upipe_rtp_fec->prev_date_sys == date_sys) {

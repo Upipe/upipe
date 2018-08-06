@@ -359,17 +359,23 @@ static void upipe_grid_in_input(struct upipe *upipe,
         }
 
         ubase_assert(uref_clock_get_pts_sys(uref, &pts));
-        if (pts + latency + upipe_grid->max_retention >= now) {
+        if (pts + latency >= now) {
             ulist_unshift(&upipe_grid_in->urefs, uchain);
             break;
         }
 
-        upipe_warn_va(upipe, "drop late frame %"PRIu64"ms, "
-                      "latency %"PRIu64"ms "
-                      "retention %"PRIu64"ms",
-                      (now - pts) / (UCLOCK_FREQ / 1000),
-                      latency / (UCLOCK_FREQ / 1000),
-                      upipe_grid->max_retention / (UCLOCK_FREQ / 1000));
+        if (ulist_empty(&upipe_grid_in->urefs) &&
+            pts + latency + upipe_grid->max_retention >= now) {
+            ulist_unshift(&upipe_grid_in->urefs, uchain);
+            break;
+        }
+
+        upipe_verbose_va(upipe, "drop late frame %"PRIu64"ms, "
+                         "latency %"PRIu64"ms "
+                         "retention %"PRIu64"ms",
+                         (now - pts) / (UCLOCK_FREQ / 1000),
+                         latency / (UCLOCK_FREQ / 1000),
+                         upipe_grid->max_retention / (UCLOCK_FREQ / 1000));
         uref_free(uref);
     }
 
