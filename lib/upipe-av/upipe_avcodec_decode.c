@@ -297,6 +297,9 @@ static int upipe_avcdec_get_buffer_pic(struct AVCodecContext *context,
         return -1;
     }
 
+    if (frame->interlaced_frame)
+        UBASE_FATAL(upipe, uref_attr_set_void(flow_def_attr, NULL, UDICT_TYPE_VOID, "sepfields"));
+
     UBASE_FATAL(upipe, uref_pic_flow_set_align(flow_def_attr, align))
     UBASE_FATAL(upipe, uref_pic_flow_set_hsize(flow_def_attr, context->width))
     UBASE_FATAL(upipe, uref_pic_flow_set_vsize(flow_def_attr, context->height))
@@ -1099,10 +1102,12 @@ static void draw_horiz_band(AVCodecContext *avctx, const AVFrame *frame,
     else if (type == 1) {
         uref_pic_delete_progressive(uref);
         uref_pic_set_tf(uref);
+        uref_attr_set_void(uref, NULL, UDICT_TYPE_VOID, "sepfields");
     }
     else if (type == 2) {
         uref_pic_delete_progressive(uref);
         uref_pic_set_bf(uref);
+        uref_attr_set_void(uref, NULL, UDICT_TYPE_VOID, "sepfields");
     }
     /* Other values are undocumented/invalid. */
 
