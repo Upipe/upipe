@@ -1125,7 +1125,7 @@ static bool upipe_sdi_dec_handle(struct upipe *upipe, struct uref *uref,
                     samples_received += samples_increment[rate5994][upipe_sdi_dec->audio_fix];
                 }
             }
-            upipe_err_va(upipe, "Not enough audio samples correcting %u to %u",
+            upipe_dbg_va(upipe, "Not enough audio samples correcting %u to %u",
                 wrong_samples, samples_received);
         }
 

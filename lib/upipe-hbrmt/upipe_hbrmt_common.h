@@ -111,11 +111,11 @@ struct sdi_line_range {
 
 struct sdi_picture_fmt {
     bool sd;
-    
+
     /* Active picture dimensions */
     uint16_t active_width;
     uint16_t active_height;
-    
+
     /* Offset between fields.
        Note this is not the field offset between switching lines.  */
     uint16_t field_offset;
@@ -141,7 +141,7 @@ struct sdi_offsets_fmt {
     /* Full SDI width and height */
     uint16_t width;
     uint16_t height;
- 
+
     /* Number of samples (pairs) between EAV and start of active data */
     uint16_t active_offset;
 
