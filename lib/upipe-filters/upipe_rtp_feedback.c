@@ -397,7 +397,8 @@ static void upipe_rtpfb_timer_lost(struct upump *upump)
                 - check the following packets to fill in bitmask
                 - send request in a single batch (multiple FCI)
              */
-            upipe_rtpfb_lost(upipe, expected_seq, seqnum, ssrc);
+            if (upipe_rtpfb->rtpfb_output)
+                upipe_rtpfb_lost(upipe, expected_seq, seqnum, ssrc);
             holes++;
         }
 
@@ -815,6 +816,9 @@ static void upipe_rtpfb_handle_sr(struct upipe *upipe, struct uref *uref)
     upipe_rtpfb->sr_cr = cr;
 
     uref_block_peek_unmap(uref, 0, sr_buf, sr);
+
+    if (!upipe_rtpfb->rtpfb_output)
+        return;
 
     upipe_rtpfb_send_rr(upipe);
     upipe_rtpfb_send_xr(upipe);
