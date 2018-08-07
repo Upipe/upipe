@@ -306,6 +306,21 @@ static inline int ubuf_pic_check_resize(struct ubuf *ubuf,
     return UBASE_ERR_NONE;
 }
 
+/** @This splits an interlaced picture ubuf in its two fields.
+ *
+ * Two extra ubufs are allocated, one per field.
+ *
+ * @param ubuf pointer to ubuf
+ * @param odd pointer to pointer to odd field ubuf
+ * @param even pointer to pointer to even field ubuf
+ * @return an error code
+ */
+static inline int ubuf_split_fields(struct ubuf *ubuf, struct ubuf **odd,
+        struct ubuf **even)
+{
+    return ubuf_control(ubuf, UBUF_PICTURE_SPLIT_FIELDS, ubuf, odd, even);
+}
+
 /** @This resizes a picture ubuf, if possible. This will only work if:
  * @list
  * @item the ubuf is only shrunk in one or both directions, or

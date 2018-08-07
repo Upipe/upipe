@@ -76,6 +76,8 @@ libupipe_modules_la_SOURCES = \
 	upipe_block_to_sound.c \
 	upipe_audio_copy.c \
 	upipe_auto_inner.c \
+	upipe_row_split.c \
+	upipe_separate_fields.c \
 	$(NULL)
 
 if HAVE_WRITEV

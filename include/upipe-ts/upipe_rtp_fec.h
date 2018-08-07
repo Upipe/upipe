@@ -32,6 +32,8 @@ enum rtp_fec_command {
     UPIPE_RTP_FEC_GET_ROWS,
     /** returns the number of columns (uint64_t *) */
     UPIPE_RTP_FEC_GET_COLUMNS,
+    /** sets expected payload type (unsigned) */
+    UPIPE_RTP_FEC_SET_PT,
 };
 
 static inline int upipe_rtp_fec_get_rows(struct upipe *upipe,
@@ -102,6 +104,18 @@ static inline int upipe_rtp_fec_get_row_sub(struct upipe *upipe,
 {
     return upipe_control(upipe, UPIPE_RTP_FEC_GET_ROW_SUB,
                          UPIPE_RTP_FEC_SIGNATURE, upipe_p);
+}
+
+/** @This sets the expected payload type
+ *
+ * @param upipe description structure of the super pipe
+ * @param pt expected payload type
+ * @return an error code
+ */
+static inline int upipe_rtp_fec_set_pt(struct upipe *upipe, unsigned pt)
+{
+    return upipe_control(upipe, UPIPE_RTP_FEC_SET_PT,
+                         UPIPE_RTP_FEC_SIGNATURE, pt);
 }
 
 /** @This returns the management structure for rtp_fec pipes.

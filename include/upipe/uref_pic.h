@@ -57,6 +57,7 @@ UREF_ATTR_VOID_SH(pic, bf, UDICT_TYPE_PIC_BF, bottom field present)
 UREF_ATTR_VOID_SH(pic, tff, UDICT_TYPE_PIC_TFF, top field first)
 UREF_ATTR_SMALL_UNSIGNED_SH(pic, afd, UDICT_TYPE_PIC_AFD, active format description)
 UREF_ATTR_OPAQUE_SH(pic, cea_708, UDICT_TYPE_PIC_CEA_708, cea-708 captions)
+UREF_ATTR_UNSIGNED(pic, original_height, "p.original_height", original picture height before chunking)
 
 /** @This returns a new uref pointing to a new ubuf pointing to a picture.
  * This is equivalent to the two operations sequentially, and is a shortcut.
@@ -169,6 +170,26 @@ static inline int uref_pic_plane_clear(struct uref *uref,
         return UBASE_ERR_INVALID;
     return ubuf_pic_plane_clear(uref->ubuf, chroma, hoffset, voffset,
                                 hsize, vsize, fullrange);
+}
+
+/** @see ubuf_split_fields */
+static inline int uref_split_fields(struct uref *uref, struct uref **odd,
+        struct uref **even)
+{
+    int ret = UBASE_ERR_ALLOC;
+
+    *odd = uref_dup_inner(uref);
+    *even = uref_dup_inner(uref);
+
+    if (*odd && *even)
+        ret = ubuf_split_fields(uref->ubuf, &(*odd)->ubuf, &(*even)->ubuf);
+
+    if (!ubase_check(ret)) {
+        uref_free(*odd);
+        uref_free(*even);
+    }
+
+    return ret;
 }
 
 /** @see ubuf_pic_resize */
