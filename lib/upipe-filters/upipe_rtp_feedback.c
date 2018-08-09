@@ -445,7 +445,7 @@ static void upipe_rtpfb_timer(struct upump *upump)
             uint16_t diff = seqnum - upipe_rtpfb->last_output_seqnum - 1;
             if (diff) {
                 upipe_rtpfb->loss += diff;
-                upipe_err_va(upipe, "PKT LOSS: %u -> %"PRIu64" DIFF %hu",
+                upipe_dbg_va(upipe, "PKT LOSS: %u -> %"PRIu64" DIFF %hu",
                         upipe_rtpfb->last_output_seqnum, seqnum, diff);
             }
         }
@@ -732,7 +732,7 @@ static bool upipe_rtpfb_insert_inner(struct upipe *upipe, struct uref *uref,
     /* if there's no previous packet we're too late */
     struct uchain *uchain = uref_to_uchain(next);
     if (unlikely(ulist_is_first(&upipe_rtpfb->queue, uchain))) {
-        upipe_err_va(upipe,
+        upipe_dbg_va(upipe,
                 "LATE packet drop: Expected %u, got %hu, didn't insert after %"PRIu64,
                 upipe_rtpfb->expected_seqnum, seqnum, next_seqnum);
         uref_free(uref);
