@@ -371,6 +371,8 @@ static void upipe_rtcpfb_input_free(struct upipe *upipe)
         upipe_rtcpfb_input_from_upipe(upipe);
     upipe_throw_dead(upipe);
 
+    uref_free(upipe_rtcpfb_input->flow_def);
+
     upipe_rtcpfb_input_clean_input(upipe);
     upipe_rtcpfb_input_clean_sub(upipe);
     upipe_rtcpfb_input_clean_urefcount(upipe);
@@ -414,7 +416,7 @@ static int upipe_rtcpfb_input_set_flow_def(struct upipe *upipe, struct uref *flo
         return UBASE_ERR_INVALID;
     UBASE_RETURN(uref_flow_match_def(flow_def, EXPECTED_FLOW_DEF))
 
-        struct uref *flow_def_dup = uref_dup(flow_def) ;
+    struct uref *flow_def_dup = uref_dup(flow_def) ;
     if (unlikely(flow_def_dup == NULL))
         return UBASE_ERR_ALLOC;
 
@@ -602,7 +604,7 @@ static int upipe_rtcpfb_set_flow_def(struct upipe *upipe, struct uref *flow_def)
     struct upipe_rtcpfb *upipe_rtcpfb = upipe_rtcpfb_from_upipe(upipe);
     uref_free(upipe_rtcpfb->flow_def_input);
     upipe_rtcpfb->flow_def_input = flow_def_dup;
-    upipe_rtcpfb_store_flow_def(upipe, flow_def);
+    upipe_rtcpfb_store_flow_def(upipe, uref_dup(flow_def));
 
     return UBASE_ERR_NONE;
 }

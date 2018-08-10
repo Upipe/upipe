@@ -87,6 +87,7 @@ static void usage(const char *argv0) {
 }
 
 static struct upipe *upipe_udpsink;
+static struct upipe *upipe_udpsrc_sub;
 
 static uint64_t last_sr_ntp;
 static uint64_t last_sr_cr;
@@ -257,6 +258,16 @@ unmap:
     return UBASE_ERR_INVALID;
 }
 
+static void stop(struct upump *upump)
+{
+    struct upipe *udpsrc = upump_get_opaque(upump, struct upipe*);
+    upump_stop(upump);
+    upump_free(upump);
+
+    upipe_release(upipe_udpsrc_sub);
+    upipe_release(udpsrc);
+}
+
 int main(int argc, char *argv[])
 {
     uint8_t rtx_pt = 96;
@@ -339,7 +350,7 @@ int main(int argc, char *argv[])
     struct uprobe uprobe_udp_rtcp;
     uprobe_init(&uprobe_udp_rtcp, catch_udp, uprobe_pfx_alloc(uprobe_use(logger),
                              loglevel, "udp source rtcp"));
-    struct upipe *upipe_udpsrc_sub = upipe_void_alloc(upipe_udpsrc_mgr, &uprobe_udp_rtcp);
+    upipe_udpsrc_sub = upipe_void_alloc(upipe_udpsrc_mgr, &uprobe_udp_rtcp);
     upipe_attach_uclock(upipe_udpsrc_sub);
 
     upipe_mgr_release(upipe_udpsrc_mgr);
@@ -347,17 +358,18 @@ int main(int argc, char *argv[])
     /* catch RTCP XR/NACK messages before they're output to rtcp_fb */
     struct upipe_mgr *upipe_probe_uref_mgr = upipe_probe_uref_mgr_alloc();
     struct upipe *upipe_probe_uref = upipe_void_alloc_output(upipe_udpsrc_sub,
-            upipe_probe_uref_mgr, uprobe_use(logger));
+            upipe_probe_uref_mgr, uprobe_pfx_alloc(uprobe_use(logger), loglevel, "probe"));
     assert(upipe_probe_uref);
     upipe_mgr_release(upipe_probe_uref_mgr);
 
-    struct upipe *upipe_rtcp_sub = upipe_void_alloc_output_sub(upipe_probe_uref,
+    struct upipe *upipe_rtcp_sub = upipe_void_chain_output_sub(upipe_probe_uref,
         upipe_rtcpfb,
         uprobe_pfx_alloc(uprobe_use(logger), loglevel, "rtcp fb sub"));
     assert(upipe_rtcp_sub);
+    upipe_release(upipe_rtcp_sub);
 
     struct upipe_mgr *dup_mgr = upipe_dup_mgr_alloc();
-    struct upipe *dup = upipe_void_alloc_output(upipe_rtcpfb, dup_mgr,
+    struct upipe *dup = upipe_void_chain_output(upipe_rtcpfb, dup_mgr,
             uprobe_pfx_alloc(uprobe_use(logger),
                              loglevel, "dup"));
     upipe_mgr_release(dup_mgr);
@@ -370,6 +382,8 @@ int main(int argc, char *argv[])
             uprobe_pfx_alloc(uprobe_use(logger),
                              loglevel, "dup 2"));
 
+    upipe_release(dup);
+
     struct upipe_mgr *rtcp_mgr = upipe_rtcp_mgr_alloc();
     struct upipe *rtcp = upipe_void_alloc_output(rtcp_dup, rtcp_mgr,
             uprobe_pfx_alloc(uprobe_use(logger),
@@ -379,7 +393,7 @@ int main(int argc, char *argv[])
     /* catch RTCP SR messages before they're output */
     upipe_probe_uref_mgr = upipe_probe_uref_mgr_alloc();
     rtcp = upipe_void_chain_output(rtcp,
-            upipe_probe_uref_mgr, uprobe_use(logger));
+            upipe_probe_uref_mgr, uprobe_pfx_alloc(uprobe_use(logger), loglevel, "probe2"));
     assert(rtcp);
     upipe_mgr_release(upipe_probe_uref_mgr);
 
@@ -402,6 +416,14 @@ int main(int argc, char *argv[])
     ubase_assert(upipe_udpsrc_set_fd(upipe_udpsrc_sub, udp_fd));
 
     upipe_set_output(rtcp, upipe_udpsink);
+    upipe_release(rtcp);
+    upipe_release(upipe_udpsink);
+
+    if (0) {
+        struct upump *u = upump_alloc_timer(upump_mgr, stop, upipe_udpsrc,
+                NULL, UCLOCK_FREQ, 0);
+        upump_start(u);
+    }
 
     /* fire loop ! */
     upump_mgr_run(upump_mgr, NULL);

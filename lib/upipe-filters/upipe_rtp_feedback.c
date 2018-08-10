@@ -283,8 +283,12 @@ static void upipe_rtpfb_lost(struct upipe *upipe, uint16_t lost_seqnum, uint16_t
 {
     struct upipe_rtpfb *upipe_rtpfb = upipe_rtpfb_from_upipe(upipe);
 
-    /* Send a single NACK packet, with a single FCI */
-    int s = RTCP_FB_HEADER_SIZE + 1 * RTCP_FB_FCI_GENERIC_NACK_SIZE;
+    uint16_t pkts = seqnum - lost_seqnum;
+    uint16_t nacks = (pkts + 16) / 17;
+    if (nacks > 350) // TODO
+        nacks = 350;
+
+    int s = RTCP_FB_HEADER_SIZE + nacks * RTCP_FB_FCI_GENERIC_NACK_SIZE;
 
     /* Allocate NACK packet */
     struct uref *pkt = uref_block_alloc(upipe_rtpfb->uref_mgr,
@@ -308,24 +312,26 @@ static void upipe_rtpfb_lost(struct upipe *upipe, uint16_t lost_seqnum, uint16_t
     rtcp_fb_set_ssrc_pkt_sender(buf, ssrc_sender);
     rtcp_fb_set_ssrc_media_src(buf, ssrc);
 
-    uint8_t *fci = &buf[RTCP_FB_HEADER_SIZE];
-    rtcp_fb_nack_set_packet_id(fci, lost_seqnum);
+    for (int i = 0; i < nacks; i++) {
+        uint8_t *nack = &buf[RTCP_FB_HEADER_SIZE + i * RTCP_FB_FCI_GENERIC_NACK_SIZE];
+        rtcp_fb_nack_set_packet_id(nack, lost_seqnum + 17 * i);
 
-    uint16_t pkts = seqnum - 1 - lost_seqnum;
-    // TODO : add several FCI if more than 17 packets are missing
-    if (pkts > 16)
-        pkts = 16;
+        uint16_t bits = 0;
+        if (i == nacks - 1) {
+            for (size_t i = 0; i < pkts - 1 - 17 * (nacks-1); i++)
+                bits |= 1 << i;
+        } else {
+            bits = 0xffff;
+        }
 
-    uint16_t bits = 0;
-    for (size_t i = 0; i < pkts; i++)
-        bits |= 1 << i;
+        rtcp_fb_nack_set_bitmask_lost(nack, bits);
 
-    rtcp_fb_nack_set_bitmask_lost(fci, bits);
+        upipe_verbose_va(upipe, "NACKing %hu (+0x%hx)", lost_seqnum + 17 * i, bits);
+    }
+
     upipe_rtpfb->nacks += pkts + 1;
 
     rtcp_set_length(buf, s / 4 - 1);
-
-    upipe_verbose_va(upipe, "NACKing %hu (+0x%hx)", lost_seqnum, bits);
 
     uref_block_unmap(pkt, 0);
 
@@ -352,6 +358,9 @@ static void upipe_rtpfb_timer_lost(struct upump *upump)
 
     /* space out NACKs a bit more than RTT. XXX: tune me */
     uint64_t next_nack = now - upipe_rtpfb->rtt * 12 / 10;
+    if (upipe_rtpfb->latency > 10 * upipe_rtpfb->rtt)
+        next_nack = now - upipe_rtpfb->latency / 10;
+    //
 
     /* TODO: do not look at the last pkts/s * rtt
      * It it too late to send a NACK for these
@@ -903,6 +912,12 @@ static void upipe_rtpfb_input(struct upipe *upipe, struct uref *uref,
         uint64_t rtt = uclock_now(upipe_rtpfb->uclock) -
             upipe_rtpfb->xr_cr - delay * UCLOCK_FREQ / 65536;
 
+        if (upipe_rtpfb->rtt) {
+            if (rtt > upipe_rtpfb->rtt * 12 / 10)
+                rtt = upipe_rtpfb->rtt * 12 / 10;
+            if (rtt < upipe_rtpfb->rtt * 8 / 10)
+                rtt = upipe_rtpfb->rtt * 8 / 10;
+        }
         upipe_notice_va(upipe, "RTT %f", (float)rtt / UCLOCK_FREQ);
         upipe_rtpfb->rtt = rtt;
 
