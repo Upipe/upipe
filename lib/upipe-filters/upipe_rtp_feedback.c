@@ -906,6 +906,12 @@ static void upipe_rtpfb_input(struct upipe *upipe, struct uref *uref,
         uint64_t rtt = uclock_now(upipe_rtpfb->uclock) -
             upipe_rtpfb->xr_cr - delay * UCLOCK_FREQ / 65536;
 
+        if (upipe_rtpfb->rtt) {
+            if (rtt > upipe_rtpfb->rtt * 12 / 10)
+                rtt = upipe_rtpfb->rtt * 12 / 10;
+            if (rtt < upipe_rtpfb->rtt * 8 / 10)
+                rtt = upipe_rtpfb->rtt * 8 / 10;
+        }
         upipe_notice_va(upipe, "RTT %f", (float)rtt / UCLOCK_FREQ);
         upipe_rtpfb->rtt = rtt;
 
