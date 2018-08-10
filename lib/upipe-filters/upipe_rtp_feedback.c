@@ -352,6 +352,9 @@ static void upipe_rtpfb_timer_lost(struct upump *upump)
 
     /* space out NACKs a bit more than RTT. XXX: tune me */
     uint64_t next_nack = now - upipe_rtpfb->rtt * 12 / 10;
+    if (upipe_rtpfb->latency > 10 * upipe_rtpfb->rtt)
+        next_nack = now - upipe_rtpfb->latency / 10;
+    //
 
     /* TODO: do not look at the last pkts/s * rtt
      * It it too late to send a NACK for these
