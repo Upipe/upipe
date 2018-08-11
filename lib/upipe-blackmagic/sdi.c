@@ -55,12 +55,14 @@ void sdi_calc_parity_checksum(uint16_t *buf)
     buf[2*(ANC_START_LEN+dc)] = checksum;
 }
 
+/* Writes 8-bit black to buffer consisting of y line, then interleaved uv line */
 void sdi_clear_vbi(uint8_t *dst, int w)
 {
     memset(&dst[0], 0x10, w);
     memset(&dst[w], 0x80, w);
 }
 
+/* Writes 10-bit black to interleaved 10-bit uyvy buffer */
 void upipe_sdi_blank_c(uint16_t *dst, uintptr_t pixels)
 {
     for (int w = 0; w < pixels; w++) {
