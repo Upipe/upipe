@@ -1005,6 +1005,9 @@ static void upipe_hd_sdi_enc_encode_line(struct upipe *upipe, int line_num, uint
     if(vbi) {
         /* black */
         upipe_sdi_enc->blank(active_start, input_hsize);
+        /* +1 to write into the Y plane */
+        const uint8_t *vanc_start = &active_start[1];
+
         const uint8_t **ttx = NULL;
         int num_ttx = 0;
         if (line_num == OP47_LINE1 + 563*f2) {
@@ -1013,13 +1016,13 @@ static void upipe_hd_sdi_enc_encode_line(struct upipe *upipe, int line_num, uint
                 ttx = &upipe_sdi_enc->ttx_packet[f2][0];
         }
         if (ttx) {
-            sdi_encode_ttx(active_start, num_ttx, ttx, &upipe_sdi_enc->op47_sequence_counter[f2]);
+            sdi_encode_ttx(vanc_start, num_ttx, ttx, &upipe_sdi_enc->op47_sequence_counter[f2]);
         }
 
         if (upipe_sdi_enc->cea708_size && line_num == CC_LINE) {
-            sdi_write_cdp(upipe_sdi_enc->cea708, upipe_sdi_enc->cea708_size, active_start,
-                    &upipe_sdi_enc->cdp_hdr_sequence_cntr, 0x4 /* 29.97 fps only */);
-            sdi_calc_parity_checksum(active_start);
+            sdi_write_cdp(upipe_sdi_enc->cea708, upipe_sdi_enc->cea708_size, vanc_start, 2,
+                          &upipe_sdi_enc->cdp_hdr_sequence_cntr, 0x4 /* 29.97 fps only */);
+            sdi_calc_parity_checksum(vanc_start);
         }
     } else {
         const uint8_t *y = planes[f2][0];
