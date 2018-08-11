@@ -129,6 +129,7 @@ static inline uint32_t to_le32(uint32_t a)
 #endif
 }
 
+/* Takes 8-bit data (from libzvbi luma), shifts to 10-bit words and writes to v210 */
 void sdi_encode_v210_sd(uint32_t *dst, uint8_t *src, int width)
 {
     uint8_t *y = src;
