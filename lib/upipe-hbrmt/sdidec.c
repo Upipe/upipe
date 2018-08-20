@@ -23,6 +23,7 @@
 #include <libavutil/common.h>
 #include <libavutil/intreadwrite.h>
 #include "sdidec.h"
+#include "rfc4175_dec.h"
 #include "upipe/ubase.h"
 
 #define CLIP(v) ubase_clip(v, 4, 1019)
