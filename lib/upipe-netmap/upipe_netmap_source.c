@@ -1067,8 +1067,7 @@ static int upipe_netmap_source_set_uri(struct upipe *upipe, const char *uri)
 
         if (sscanf(uri, "%*[^-]-%u/R",
                     &upipe_netmap_source->ring_idx[idx]) != 1) {
-            upipe_err_va(upipe, "invalid netmap receive uri %s", uri);
-            return UBASE_ERR_EXTERNAL;
+            upipe_netmap_source->ring_idx[idx] = 0;
         }
 
         upipe_netmap_source->d[idx] = nm_open(uri, NULL, 0, 0);
