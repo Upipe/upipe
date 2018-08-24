@@ -1054,6 +1054,18 @@ static bool upipe_sdi_dec_handle(struct upipe *upipe, struct uref *uref,
                         && src[7] != eav_fvh_cword[f2][vbi])
                     upipe_err_va(upipe, "HD EAV incorrect, line %d", h);
 
+                int line_num_check[2] = {
+                    (line_num & 0x7f) << 2,
+                    (1 << 9) | (((line_num >> 7) & 0xf) << 2),
+                };
+                line_num_check[0] |= NOT_BIT8(line_num_check[0]);
+
+                if (src[8] != line_num_check[0]
+                        && src[ 9] != line_num_check[0]
+                        && src[10] != line_num_check[1]
+                        && src[11] != line_num_check[1])
+                    upipe_err_va(upipe, "HD line num incorrect, line %d", h);
+
                 if ( active_start[-8] != 0x3ff
                         && active_start[-7] != 0x3ff
                         && active_start[-6] != 0x000
