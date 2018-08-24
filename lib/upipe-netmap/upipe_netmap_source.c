@@ -473,9 +473,6 @@ static inline bool handle_rfc_packet(struct upipe *upipe, const uint8_t *src, ui
     src = payload;
     src_size -= header_size;
 
-    if (unlikely(!upipe_netmap_source->uref))
-        return false;
-
     if (src_size < RFC_4175_EXT_SEQ_NUM_LEN)
         return false;
 
@@ -498,6 +495,9 @@ static inline bool handle_rfc_packet(struct upipe *upipe, const uint8_t *src, ui
     }
 
     *eof = !!field[0];
+
+    if (unlikely(!upipe_netmap_source->uref))
+        return false;
 
     for (int i = 0; i < 1 + !!continuation; i++) {
         int interleaved_line = line_number[i] * 2 + !!field[i];
