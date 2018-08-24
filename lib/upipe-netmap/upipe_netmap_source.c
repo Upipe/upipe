@@ -1065,13 +1065,17 @@ static int upipe_netmap_source_set_uri(struct upipe *upipe, const char *uri)
                 break;
         }
 
+        if (sscanf(uri, "%*[^-]-%u/R",
+                    &upipe_netmap_source->ring_idx[idx]) != 1) {
+            upipe_err_va(upipe, "invalid netmap receive uri %s", uri);
+            return UBASE_ERR_EXTERNAL;
+        }
+
         upipe_netmap_source->d[idx] = nm_open(uri, NULL, 0, 0);
         if (unlikely(!upipe_netmap_source->d[idx])) {
             upipe_err_va(upipe, "can't open netmap socket %s", uri);
             return UBASE_ERR_EXTERNAL;
         }
-
-        upipe_netmap_source->ring_idx[idx] = 0;
 
         upipe_notice_va(upipe, "opening netmap socket %s ring %u",
                 uri, upipe_netmap_source->ring_idx[idx]);
