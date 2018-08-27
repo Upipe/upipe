@@ -315,6 +315,61 @@ static struct upipe *upipe_freetype_alloc(struct upipe_mgr *mgr,
     return upipe;
 }
 
+/** @internal @This reads a unicode character from a string
+ *
+ * @param str the string to read
+ * @param i the string position to read, returns the number of bytes read or 0 if error
+ * @return the Unicode character number
+ */
+static uint32_t unicode_character(const char *str, size_t *i)
+{
+    uint32_t c = 0;
+
+    unsigned char c1 = (unsigned char)str[0];
+    if (c1 == '\0') {
+        /* EOS */
+        goto error;
+    } else if (!(c1 & 0x80)) {
+        /* 1 byte : ASCII */
+        *i = 1;
+        c = c1;
+    } else {
+        if (!(c1 & 0x40))
+            goto error;
+
+        unsigned char c2 = (unsigned char)str[1];
+        if ((c2 & 0xc0) != 0x80)
+            goto error;
+
+        if (!(c1 & 0x20)) {
+            *i = 2;
+            c = ((c1 & 0x1f) << 6) | (c2 & 0x3f);
+        } else {
+            unsigned char c3 = (unsigned char)str[2];
+            if ((c3 & 0xc0) != 0x80)
+                goto error;
+
+            if (!(c1 & 0x10)) {
+                *i = 3;
+                c = ((c1 & 0xf) << 12) | ((c2 & 0x3f) << 6) | (c3 & 0x3f);
+            } else {
+                unsigned char c4 = (unsigned char)str[3];
+                if ((c4 & 0xc0) != 0x80)
+                    goto error;
+                *i = 4;
+                c = ((c1 & 0x7) << 18) | ((c2 & 0x3f) << 12) |
+                    ((c3 & 0x3f) << 6) | (c4 & 0x3f);
+            }
+        }
+    }
+
+    return c;
+
+error:
+    *i = 0;
+    return 0;
+}
+
 /** @internal @This tries to output input buffers.
  *
  * @param upipe description structure of the pipe
@@ -346,8 +401,6 @@ static bool upipe_freetype_handle(struct upipe *upipe, struct uref *uref,
         uref_dump(uref, upipe->uprobe);
         text = "fail";
     }
-    size_t length = strlen(text);
-
     struct ubuf *ubuf = ubuf_pic_alloc(upipe_freetype->ubuf_mgr, hsize, vsize);
     if (!ubuf) {
         upipe_err(upipe, "Could not allocate pic");
@@ -455,11 +508,17 @@ static bool upipe_freetype_handle(struct upipe *upipe, struct uref *uref,
     /* scale offset to 16.16 */
     int64_t xoff = upipe_freetype->xoff << 16;
     int64_t yoff = upipe_freetype->yoff << 16;
-    for (int i = 0; i < length; i++) {
+
+    for (size_t i = 0; text[i] != '\0';) {
+        size_t char_size = 0;
+        uint32_t c = unicode_character(&text[i], &char_size);
+        if (char_size == 0)
+            break;
+
+        i += char_size;
+
         FT_UInt index = FTC_CMapCache_Lookup(upipe_freetype->cmap_cache,
-                                             upipe_freetype->font, -1, text[i]);
-        if (unlikely(!index))
-            continue;
+                                             upipe_freetype->font, -1, c);
 
         if (use_kerning && previous) {
             FT_Vector delta;
@@ -739,7 +798,6 @@ static int _upipe_freetype_get_bbox(struct upipe *upipe,
                                     struct upipe_freetype_bbox *bbox_p)
 {
     struct upipe_freetype *upipe_freetype = upipe_freetype_from_upipe(upipe);
-    size_t length = str ? strlen(str) : 0;
 
     struct upipe_freetype_bbox bbox;
     bbox.x = 0;
@@ -751,12 +809,16 @@ static int _upipe_freetype_get_bbox(struct upipe *upipe,
     FT_UInt previous = 0;
     FT_Pos yMax = 0;
     int64_t width = 0;
-    for (int i = 0; i < length; i++) {
-        FT_UInt index = FTC_CMapCache_Lookup(upipe_freetype->cmap_cache,
-                                             upipe_freetype->font, -1, str[i]);
-        if (unlikely(!index))
-            return UBASE_ERR_EXTERNAL;
 
+    for (size_t i = 0; str[i] != '\0';) {
+        size_t char_size = 0;
+        uint32_t c = unicode_character(&str[i], &char_size);
+        if (char_size == 0)
+            break;
+        i += char_size;
+
+        FT_UInt index = FTC_CMapCache_Lookup(upipe_freetype->cmap_cache,
+                                             upipe_freetype->font, -1, c);
         if (use_kerning && previous) {
             FT_Vector delta;
             FT_Get_Kerning(upipe_freetype->face, previous, index,
@@ -774,7 +836,7 @@ static int _upipe_freetype_get_bbox(struct upipe *upipe,
         if (FTC_ImageCache_Lookup(upipe_freetype->img_cache,
                                   &type, index,
                                   &glyph, NULL))
-            return UBASE_ERR_EXTERNAL;
+            continue;
 
         FT_BBox ft_bbox;
         FT_Glyph_Get_CBox(glyph, FT_GLYPH_BBOX_PIXELS, &ft_bbox);
