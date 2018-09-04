@@ -85,4 +85,5 @@ myinclude_HEADERS = \
 	upipe_auto_inner.h \
 	upipe_row_split.h \
 	upipe_separate_fields.h \
+	upipe_row_join.h \
 	$(NULL)
