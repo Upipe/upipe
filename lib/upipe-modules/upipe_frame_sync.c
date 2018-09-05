@@ -24,7 +24,7 @@
  */
 
 /** @file
- * @short Upipe sync module - synchronize streams for muxing
+ * @short Upipe frame synchroniser module - frame synchronize streams for muxing
  */
 
 #include <upipe/ubase.h>
@@ -47,10 +47,10 @@
 #include <upipe/upipe_helper_void.h>
 #include <upipe/upipe_helper_uref_mgr.h>
 #include <upipe/upipe_helper_ubuf_mgr.h>
-#include <upipe-modules/upipe_sync.h>
+#include <upipe-modules/upipe_frame_sync.h>
 
-/** upipe_sync structure */
-struct upipe_sync {
+/** upipe_frame_sync structure */
+struct upipe_frame_sync {
     /** refcount management structure */
     struct urefcount urefcount;
 
@@ -96,18 +96,18 @@ struct upipe_sync {
     struct upipe upipe;
 };
 
-UPIPE_HELPER_UPIPE(upipe_sync, upipe, UPIPE_SYNC_SIGNATURE);
-UPIPE_HELPER_UREFCOUNT(upipe_sync, urefcount, upipe_sync_free)
-UPIPE_HELPER_VOID(upipe_sync);
+UPIPE_HELPER_UPIPE(upipe_frame_sync, upipe, UPIPE_FRAME_SYNC_SIGNATURE);
+UPIPE_HELPER_UREFCOUNT(upipe_frame_sync, urefcount, upipe_frame_sync_free)
+UPIPE_HELPER_VOID(upipe_frame_sync);
 
-UPIPE_HELPER_UCLOCK(upipe_sync, uclock, uclock_request, NULL,
+UPIPE_HELPER_UCLOCK(upipe_frame_sync, uclock, uclock_request, NULL,
                     upipe_throw_provide_request, NULL);
-UPIPE_HELPER_UPUMP(upipe_sync, upump, upump_mgr);
-UPIPE_HELPER_UPUMP_MGR(upipe_sync, upump_mgr);
-UPIPE_HELPER_OUTPUT(upipe_sync, output, flow_def, output_state, request_list);
+UPIPE_HELPER_UPUMP(upipe_frame_sync, upump, upump_mgr);
+UPIPE_HELPER_UPUMP_MGR(upipe_frame_sync, upump_mgr);
+UPIPE_HELPER_OUTPUT(upipe_frame_sync, output, flow_def, output_state, request_list);
 
-/** upipe_sync_sub structure */
-struct upipe_sync_sub {
+/** upipe_frame_sync_sub structure */
+struct upipe_frame_sync_sub {
     /** refcount management structure */
     struct urefcount urefcount;
 
@@ -164,22 +164,22 @@ struct upipe_sync_sub {
 };
 
 /** @hidden */
-static int upipe_sync_sub_check(struct upipe *upipe, struct uref *flow_format);
+static int upipe_frame_sync_sub_check(struct upipe *upipe, struct uref *flow_format);
 
-UPIPE_HELPER_UPIPE(upipe_sync_sub, upipe, UPIPE_SYNC_SUB_SIGNATURE);
-UPIPE_HELPER_UREFCOUNT(upipe_sync_sub, urefcount, upipe_sync_sub_free)
-UPIPE_HELPER_VOID(upipe_sync_sub);
-UPIPE_HELPER_OUTPUT(upipe_sync_sub, output, flow_def, output_state, request_list);
+UPIPE_HELPER_UPIPE(upipe_frame_sync_sub, upipe, UPIPE_FRAME_SYNC_SUB_SIGNATURE);
+UPIPE_HELPER_UREFCOUNT(upipe_frame_sync_sub, urefcount, upipe_frame_sync_sub_free)
+UPIPE_HELPER_VOID(upipe_frame_sync_sub);
+UPIPE_HELPER_OUTPUT(upipe_frame_sync_sub, output, flow_def, output_state, request_list);
 
-UPIPE_HELPER_UREF_MGR(upipe_sync_sub, uref_mgr, uref_mgr_request,
+UPIPE_HELPER_UREF_MGR(upipe_frame_sync_sub, uref_mgr, uref_mgr_request,
                       NULL,
-                      upipe_sync_sub_register_output_request,
-                      upipe_sync_sub_unregister_output_request)
-UPIPE_HELPER_UBUF_MGR(upipe_sync_sub, ubuf_mgr, flow_format, ubuf_mgr_request,
+                      upipe_frame_sync_sub_register_output_request,
+                      upipe_frame_sync_sub_unregister_output_request)
+UPIPE_HELPER_UBUF_MGR(upipe_frame_sync_sub, ubuf_mgr, flow_format, ubuf_mgr_request,
                       NULL,
-                      upipe_sync_sub_register_output_request,
-                      upipe_sync_sub_unregister_output_request)
-UPIPE_HELPER_SUBPIPE(upipe_sync, upipe_sync_sub, sub, sub_mgr, subs, uchain);
+                      upipe_frame_sync_sub_register_output_request,
+                      upipe_frame_sync_sub_unregister_output_request)
+UPIPE_HELPER_SUBPIPE(upipe_frame_sync, upipe_frame_sync_sub, sub, sub_mgr, subs, uchain);
 
 /** @internal @This allocates a sync_sub pipe.
  *
@@ -189,28 +189,28 @@ UPIPE_HELPER_SUBPIPE(upipe_sync, upipe_sync_sub, sub, sub_mgr, subs, uchain);
  * @param args optional arguments
  * @return pointer to upipe or NULL in case of allocation error
  */
-static struct upipe *upipe_sync_sub_alloc(struct upipe_mgr *mgr,
+static struct upipe *upipe_frame_sync_sub_alloc(struct upipe_mgr *mgr,
                                       struct uprobe *uprobe,
                                       uint32_t signature, va_list args)
 {
-    struct upipe *upipe = upipe_sync_sub_alloc_void(mgr, uprobe, signature, args);
+    struct upipe *upipe = upipe_frame_sync_sub_alloc_void(mgr, uprobe, signature, args);
     if (unlikely(upipe == NULL))
         return NULL;
 
-    struct upipe_sync_sub *upipe_sync_sub = upipe_sync_sub_from_upipe(upipe);
-    ulist_init(&upipe_sync_sub->urefs);
-    upipe_sync_sub->samples = 0;
-    upipe_sync_sub->sound = false;
-    upipe_sync_sub->s337 = false;
-    upipe_sync_sub->a52 = false;
-    upipe_sync_sub->missed_compressed_audio_e = 0;
-    upipe_sync_sub->uref = NULL;
+    struct upipe_frame_sync_sub *upipe_frame_sync_sub = upipe_frame_sync_sub_from_upipe(upipe);
+    ulist_init(&upipe_frame_sync_sub->urefs);
+    upipe_frame_sync_sub->samples = 0;
+    upipe_frame_sync_sub->sound = false;
+    upipe_frame_sync_sub->s337 = false;
+    upipe_frame_sync_sub->a52 = false;
+    upipe_frame_sync_sub->missed_compressed_audio_e = 0;
+    upipe_frame_sync_sub->uref = NULL;
 
-    upipe_sync_sub_init_urefcount(upipe);
-    upipe_sync_sub_init_output(upipe);
-    upipe_sync_sub_init_uref_mgr(upipe);
-    upipe_sync_sub_init_ubuf_mgr(upipe);
-    upipe_sync_sub_init_sub(upipe);
+    upipe_frame_sync_sub_init_urefcount(upipe);
+    upipe_frame_sync_sub_init_output(upipe);
+    upipe_frame_sync_sub_init_uref_mgr(upipe);
+    upipe_frame_sync_sub_init_ubuf_mgr(upipe);
+    upipe_frame_sync_sub_init_sub(upipe);
 
     upipe_throw_ready(upipe);
 
@@ -221,71 +221,71 @@ static struct upipe *upipe_sync_sub_alloc(struct upipe_mgr *mgr,
  *
   * @param upipe description structure of the pipe
  */
-static void upipe_sync_build_flow_def(struct upipe *upipe)
+static void upipe_frame_sync_build_flow_def(struct upipe *upipe)
 {
-    struct upipe_sync *upipe_sync = upipe_sync_from_upipe(upipe);
-    struct uref *flow_def = upipe_sync->flow_def;
+    struct upipe_frame_sync *upipe_frame_sync = upipe_frame_sync_from_upipe(upipe);
+    struct uref *flow_def = upipe_frame_sync->flow_def;
     if (flow_def == NULL)
         return;
-    upipe_sync->flow_def = NULL;
+    upipe_frame_sync->flow_def = NULL;
 
-    if (!ubase_check(uref_clock_set_latency(flow_def, upipe_sync->latency)))
+    if (!ubase_check(uref_clock_set_latency(flow_def, upipe_frame_sync->latency)))
         upipe_throw_error(upipe, UBASE_ERR_ALLOC);
 
-    upipe_sync_store_flow_def(upipe, flow_def);
+    upipe_frame_sync_store_flow_def(upipe, flow_def);
 }
 
 /** @internal @This builds the output flow definition.
  *
   * @param upipe description structure of the pipe
  */
-static void upipe_sync_sub_build_flow_def(struct upipe *upipe)
+static void upipe_frame_sync_sub_build_flow_def(struct upipe *upipe)
 {
-    struct upipe_sync_sub *upipe_sync_sub = upipe_sync_sub_from_upipe(upipe);
-    struct uref *flow_def = upipe_sync_sub->flow_def;
+    struct upipe_frame_sync_sub *upipe_frame_sync_sub = upipe_frame_sync_sub_from_upipe(upipe);
+    struct uref *flow_def = upipe_frame_sync_sub->flow_def;
     if (flow_def == NULL)
         return;
-    upipe_sync_sub->flow_def = NULL;
+    upipe_frame_sync_sub->flow_def = NULL;
 
-    struct upipe_sync *upipe_sync = upipe_sync_from_sub_mgr(upipe->mgr);
-    if (!ubase_check(uref_clock_set_latency(flow_def, upipe_sync->latency)))
+    struct upipe_frame_sync *upipe_frame_sync = upipe_frame_sync_from_sub_mgr(upipe->mgr);
+    if (!ubase_check(uref_clock_set_latency(flow_def, upipe_frame_sync->latency)))
         upipe_throw_error(upipe, UBASE_ERR_ALLOC);
 
-    upipe_sync_sub_store_flow_def(upipe, flow_def);
+    upipe_frame_sync_sub_store_flow_def(upipe, flow_def);
 }
 
 /** @internal @This sets the latency and rebuilds flow definitions.
  *
  * @param upipe description structure of the pipe
  */
-static void upipe_sync_set_latency(struct upipe *upipe)
+static void upipe_frame_sync_set_latency(struct upipe *upipe)
 {
-    struct upipe_sync *upipe_sync = upipe_sync_from_upipe(upipe);
+    struct upipe_frame_sync *upipe_frame_sync = upipe_frame_sync_from_upipe(upipe);
 
     struct uchain *uchain;
-    ulist_foreach (&upipe_sync->subs, uchain) {
-        struct upipe_sync_sub *upipe_sync_sub =
-            upipe_sync_sub_from_uchain(uchain);
-        upipe_sync_sub_build_flow_def(upipe_sync_sub_to_upipe(upipe_sync_sub));
+    ulist_foreach (&upipe_frame_sync->subs, uchain) {
+        struct upipe_frame_sync_sub *upipe_frame_sync_sub =
+            upipe_frame_sync_sub_from_uchain(uchain);
+        upipe_frame_sync_sub_build_flow_def(upipe_frame_sync_sub_to_upipe(upipe_frame_sync_sub));
     }
 
-    upipe_sync_build_flow_def(upipe);
+    upipe_frame_sync_build_flow_def(upipe);
 }
 
 /** @internal @This finds the maximum latency across all the subpipes
  *
  * @param upipe description structure of the pipe
  */
-static uint64_t upipe_sync_get_max_latency(struct upipe *upipe)
+static uint64_t upipe_frame_sync_get_max_latency(struct upipe *upipe)
 {
-    struct upipe_sync *upipe_sync = upipe_sync_from_upipe(upipe);
+    struct upipe_frame_sync *upipe_frame_sync = upipe_frame_sync_from_upipe(upipe);
     uint64_t max_latency = 0;
 
     struct uchain *uchain;
-    ulist_foreach (&upipe_sync->subs, uchain) {
-        struct upipe_sync_sub *upipe_sync_sub =
-            upipe_sync_sub_from_uchain(uchain);
-        struct uref *flow_def = upipe_sync_sub->flow_def;
+    ulist_foreach (&upipe_frame_sync->subs, uchain) {
+        struct upipe_frame_sync_sub *upipe_frame_sync_sub =
+            upipe_frame_sync_sub_from_uchain(uchain);
+        struct uref *flow_def = upipe_frame_sync_sub->flow_def;
         if (flow_def == NULL)
             continue;
         uint64_t latency;
@@ -304,10 +304,10 @@ static uint64_t upipe_sync_get_max_latency(struct upipe *upipe)
  * @param flow_def flow definition packet
  * @return an error code
  */
-static int upipe_sync_sub_set_flow_def(struct upipe *upipe, struct uref *flow_def)
+static int upipe_frame_sync_sub_set_flow_def(struct upipe *upipe, struct uref *flow_def)
 {
-    struct upipe_sync_sub *upipe_sync_sub = upipe_sync_sub_from_upipe(upipe);
-    struct upipe_sync *upipe_sync = upipe_sync_from_sub_mgr(upipe->mgr);
+    struct upipe_frame_sync_sub *upipe_frame_sync_sub = upipe_frame_sync_sub_from_upipe(upipe);
+    struct upipe_frame_sync *upipe_frame_sync = upipe_frame_sync_from_sub_mgr(upipe->mgr);
 
     if (flow_def == NULL)
         return UBASE_ERR_INVALID;
@@ -323,9 +323,9 @@ static int upipe_sync_sub_set_flow_def(struct upipe *upipe, struct uref *flow_de
     if (ubase_ncmp(def, "sound.s32."))
         return UBASE_ERR_INVALID;
 
-    upipe_sync_sub->s337 = !ubase_ncmp(def, "sound.s32.s337.");
-    if (upipe_sync_sub->s337)
-        upipe_sync_sub->a52 = !ubase_ncmp(def, "sound.s32.s337.a52.")
+    upipe_frame_sync_sub->s337 = !ubase_ncmp(def, "sound.s32.s337.");
+    if (upipe_frame_sync_sub->s337)
+        upipe_frame_sync_sub->a52 = !ubase_ncmp(def, "sound.s32.s337.a52.")
             || !ubase_ncmp(def, "sound.s32.s337.a52e.");
 
     uint64_t latency;
@@ -337,17 +337,17 @@ static int upipe_sync_sub_set_flow_def(struct upipe *upipe, struct uref *flow_de
     if (planes != 1)
         return UBASE_ERR_INVALID;
 
-    UBASE_RETURN(uref_sound_flow_get_channels(flow_def, &upipe_sync_sub->channels));
+    UBASE_RETURN(uref_sound_flow_get_channels(flow_def, &upipe_frame_sync_sub->channels));
 
     uint64_t rate;
     UBASE_RETURN(uref_sound_flow_get_rate(flow_def, &rate));
     if (rate != 48000)
         return UBASE_ERR_INVALID;
 
-    if (!upipe_sync_sub->uref_mgr)
-        upipe_sync_sub_require_uref_mgr(upipe);
-    if (!upipe_sync_sub->ubuf_mgr)
-        upipe_sync_sub_require_ubuf_mgr(upipe, uref_dup(flow_def));
+    if (!upipe_frame_sync_sub->uref_mgr)
+        upipe_frame_sync_sub_require_uref_mgr(upipe);
+    if (!upipe_frame_sync_sub->ubuf_mgr)
+        upipe_frame_sync_sub_require_ubuf_mgr(upipe, uref_dup(flow_def));
 
     flow_def = uref_dup(flow_def);
     if (!flow_def)
@@ -357,19 +357,19 @@ static int upipe_sync_sub_set_flow_def(struct upipe *upipe, struct uref *flow_de
     latency += UCLOCK_FREQ / 25;
     uref_clock_set_latency(flow_def, latency);
 
-    if (latency > upipe_sync->latency) {
+    if (latency > upipe_frame_sync->latency) {
         upipe_notice_va(upipe, "Latency %" PRIu64, latency);
-        upipe_sync->latency = latency;
-        upipe_sync_set_latency(upipe_sync_to_upipe(upipe_sync));
+        upipe_frame_sync->latency = latency;
+        upipe_frame_sync_set_latency(upipe_frame_sync_to_upipe(upipe_frame_sync));
     } else {
-        latency = upipe_sync->latency;
+        latency = upipe_frame_sync->latency;
         uref_clock_set_latency(flow_def, latency);
-        upipe_sync_sub_build_flow_def(upipe);
+        upipe_frame_sync_sub_build_flow_def(upipe);
     }
 
-    upipe_sync_sub->sound = true;
+    upipe_frame_sync_sub->sound = true;
 
-    upipe_sync_sub_store_flow_def(upipe, flow_def);
+    upipe_frame_sync_sub_store_flow_def(upipe, flow_def);
 
     return UBASE_ERR_NONE;
 }
@@ -381,33 +381,33 @@ static int upipe_sync_sub_set_flow_def(struct upipe *upipe, struct uref *flow_de
  * @param args arguments of the command
  * @return an error code
  */
-static int upipe_sync_sub_control(struct upipe *upipe, int command, va_list args)
+static int upipe_frame_sync_sub_control(struct upipe *upipe, int command, va_list args)
 {
     switch (command) {
         case UPIPE_REGISTER_REQUEST: {
             struct urequest *request = va_arg(args, struct urequest *);
-            return upipe_sync_sub_alloc_output_proxy(upipe, request);
+            return upipe_frame_sync_sub_alloc_output_proxy(upipe, request);
         }
         case UPIPE_UNREGISTER_REQUEST: {
             struct urequest *request = va_arg(args, struct urequest *);
-            return upipe_sync_sub_free_output_proxy(upipe, request);
+            return upipe_frame_sync_sub_free_output_proxy(upipe, request);
         }
 
         case UPIPE_GET_OUTPUT: {
             struct upipe **p = va_arg(args, struct upipe **);
-            return upipe_sync_sub_get_output(upipe, p);
+            return upipe_frame_sync_sub_get_output(upipe, p);
         }
         case UPIPE_SET_OUTPUT: {
             struct upipe *output = va_arg(args, struct upipe *);
-            return upipe_sync_sub_set_output(upipe, output);
+            return upipe_frame_sync_sub_set_output(upipe, output);
         }
         case UPIPE_GET_FLOW_DEF: {
             struct uref **p = va_arg(args, struct uref **);
-            return upipe_sync_sub_get_flow_def(upipe, p);
+            return upipe_frame_sync_sub_get_flow_def(upipe, p);
         }
         case UPIPE_SET_FLOW_DEF: {
             struct uref *flow = va_arg(args, struct uref *);
-            return upipe_sync_sub_set_flow_def(upipe, flow);
+            return upipe_frame_sync_sub_set_flow_def(upipe, flow);
         }
 
         default:
@@ -422,23 +422,23 @@ static float pts_to_time(uint64_t pts)
 
 static bool sync_channel(struct upipe *upipe)
 {
-    struct upipe_sync_sub *upipe_sync_sub = upipe_sync_sub_from_upipe(upipe);
-    struct upipe_sync *upipe_sync = upipe_sync_from_sub_mgr(upipe->mgr);
+    struct upipe_frame_sync_sub *upipe_frame_sync_sub = upipe_frame_sync_sub_from_upipe(upipe);
+    struct upipe_frame_sync *upipe_frame_sync = upipe_frame_sync_from_sub_mgr(upipe->mgr);
 
-    const struct urational *fps = &upipe_sync->fps;
+    const struct urational *fps = &upipe_frame_sync->fps;
 
-    const uint64_t video_pts = upipe_sync->pts;
+    const uint64_t video_pts = upipe_frame_sync->pts;
 
-    const bool s337 = upipe_sync_sub->s337;
-    const bool a52 = upipe_sync_sub->a52;
+    const bool s337 = upipe_frame_sync_sub->s337;
+    const bool a52 = upipe_frame_sync_sub->a52;
 
     struct uchain *uchain_uref = NULL, *uchain_tmp;
-    ulist_delete_foreach(&upipe_sync_sub->urefs, uchain_uref, uchain_tmp) {
+    ulist_delete_foreach(&upipe_frame_sync_sub->urefs, uchain_uref, uchain_tmp) {
         struct uref *uref = uref_from_uchain(uchain_uref);
 
         uint64_t pts = 0;
         uref_clock_get_pts_sys(uref, &pts);
-        pts += upipe_sync->latency;
+        pts += upipe_frame_sync->latency;
 
         int64_t pts_diff = video_pts - pts;
 
@@ -455,7 +455,7 @@ static bool sync_channel(struct upipe *upipe)
             if (pts_diff < duration) {
                 uint64_t drop_samples = pts_diff * 48000 / UCLOCK_FREQ;
                 if (drop_samples >= samples) {
-                    upipe_notice_va(upipe_sync_sub_to_upipe(upipe_sync_sub),
+                    upipe_notice_va(upipe_frame_sync_sub_to_upipe(upipe_frame_sync_sub),
                             "LOLDROP, duration in CLOCK %" PRIu64 "", duration);
                     ulist_delete(uchain_uref);
                     uref_free(uref);
@@ -463,46 +463,46 @@ static bool sync_channel(struct upipe *upipe)
                 }
                 if (!s337 || a52) {
                     // resize
-                    upipe_notice_va(upipe_sync_sub_to_upipe(upipe_sync_sub),
+                    upipe_notice_va(upipe_frame_sync_sub_to_upipe(upipe_frame_sync_sub),
                             "RESIZE, skip %" PRIu64 " (%" PRId64 " < %" PRIu64 ")",
                             drop_samples, pts_diff, duration);
                     if (a52) /* drop from the end (padding) */
                         uref_sound_resize(uref, 0, samples - drop_samples);
                     else
                         uref_sound_resize(uref, drop_samples, -1);
-                    upipe_sync_sub->samples -= drop_samples;
+                    upipe_frame_sync_sub->samples -= drop_samples;
                     pts += pts_diff;
-                    pts -= upipe_sync->latency;
+                    pts -= upipe_frame_sync->latency;
                     uref_clock_set_pts_sys(uref, pts);
                 }
             } else {
                 float f = (float)((int64_t)pts - (int64_t)video_pts) * 1000 / UCLOCK_FREQ;
-                upipe_notice_va(upipe_sync_sub_to_upipe(upipe_sync_sub),
+                upipe_notice_va(upipe_frame_sync_sub_to_upipe(upipe_frame_sync_sub),
                         "DROP %.2f, duration in CLOCK %" PRIu64 "", f, duration);
                 ulist_delete(uchain_uref);
                 uref_free(uref);
-                upipe_sync_sub->samples -= samples;
+                upipe_frame_sync_sub->samples -= samples;
                 continue;
             }
         }
     }
 
-    if (upipe_sync_sub->samples < 48000 * fps->den / fps->num)
-        upipe_notice_va(&upipe_sync_sub->upipe, "SAMPLES %" PRIu64, upipe_sync_sub->samples);
-    return upipe_sync_sub->samples >= 48000 * fps->den / fps->num;
+    if (upipe_frame_sync_sub->samples < 48000 * fps->den / fps->num)
+        upipe_notice_va(&upipe_frame_sync_sub->upipe, "SAMPLES %" PRIu64, upipe_frame_sync_sub->samples);
+    return upipe_frame_sync_sub->samples >= 48000 * fps->den / fps->num;
 }
 
 static bool sync_audio(struct upipe *upipe)
 {
-    struct upipe_sync *upipe_sync = upipe_sync_from_upipe(upipe);
+    struct upipe_frame_sync *upipe_frame_sync = upipe_frame_sync_from_upipe(upipe);
 
     bool full = true;
 
     struct uchain *uchain = NULL;
-    ulist_foreach(&upipe_sync->subs, uchain) {
-        struct upipe_sync_sub *upipe_sync_sub = upipe_sync_sub_from_uchain(uchain);
-        if (upipe_sync_sub->sound)
-            if (!sync_channel(upipe_sync_sub_to_upipe(upipe_sync_sub)))
+    ulist_foreach(&upipe_frame_sync->subs, uchain) {
+        struct upipe_frame_sync_sub *upipe_frame_sync_sub = upipe_frame_sync_sub_from_uchain(uchain);
+        if (upipe_frame_sync_sub->sound)
+            if (!sync_channel(upipe_frame_sync_sub_to_upipe(upipe_frame_sync_sub)))
                 full = false;
     }
 
@@ -512,7 +512,7 @@ static bool sync_audio(struct upipe *upipe)
 static inline unsigned audio_samples_count(struct upipe *upipe,
         const struct urational *fps)
 {
-    struct upipe_sync *upipe_sync = upipe_sync_from_upipe(upipe);
+    struct upipe_frame_sync *upipe_frame_sync = upipe_frame_sync_from_upipe(upipe);
 
     const unsigned samples = (uint64_t)48000 * fps->den / fps->num;
 
@@ -527,8 +527,8 @@ static inline unsigned audio_samples_count(struct upipe *upipe,
     }
 
     /* cyclic loop of 5 different sample counts */
-    if (++upipe_sync->frame_idx == 5)
-        upipe_sync->frame_idx = 0;
+    if (++upipe_frame_sync->frame_idx == 5)
+        upipe_frame_sync->frame_idx = 0;
 
     static const uint8_t samples_increment[2][5] = {
         { 1, 0, 1, 0, 1 }, /* 30000 / 1001 */
@@ -537,33 +537,33 @@ static inline unsigned audio_samples_count(struct upipe *upipe,
 
     bool rate5994 = fps->num == 60000;
 
-    return samples + samples_increment[rate5994][upipe_sync->frame_idx];
+    return samples + samples_increment[rate5994][upipe_frame_sync->frame_idx];
 }
 
-static struct uref *upipe_sync_get_cached_compressed_audio(struct upipe *upipe)
+static struct uref *upipe_frame_sync_get_cached_compressed_audio(struct upipe *upipe)
 {
-    struct upipe_sync_sub *upipe_sync_sub = upipe_sync_sub_from_upipe(upipe);
+    struct upipe_frame_sync_sub *upipe_frame_sync_sub = upipe_frame_sync_sub_from_upipe(upipe);
 
-    if (upipe_sync_sub->missed_compressed_audio_e >= 5)
+    if (upipe_frame_sync_sub->missed_compressed_audio_e >= 5)
         return NULL;
 
-    upipe_sync_sub->missed_compressed_audio_e++;
+    upipe_frame_sync_sub->missed_compressed_audio_e++;
 
-    if (upipe_sync_sub->uref == NULL)
+    if (upipe_frame_sync_sub->uref == NULL)
         return NULL;
 
-    return uref_dup(upipe_sync_sub->uref);
+    return uref_dup(upipe_frame_sync_sub->uref);
 }
 
 static struct uref *get_silence(struct upipe *upipe, size_t samples)
 {
-    struct upipe_sync_sub *upipe_sync_sub = upipe_sync_sub_from_upipe(upipe);
+    struct upipe_frame_sync_sub *upipe_frame_sync_sub = upipe_frame_sync_sub_from_upipe(upipe);
 
-    if (!upipe_sync_sub->uref_mgr || !upipe_sync_sub->ubuf_mgr)
+    if (!upipe_frame_sync_sub->uref_mgr || !upipe_frame_sync_sub->ubuf_mgr)
         return NULL;
 
-    struct uref *uref = uref_sound_alloc(upipe_sync_sub->uref_mgr,
-            upipe_sync_sub->ubuf_mgr, samples);
+    struct uref *uref = uref_sound_alloc(upipe_frame_sync_sub->uref_mgr,
+            upipe_frame_sync_sub->ubuf_mgr, samples);
 
     if (!uref)
         return NULL;
@@ -574,7 +574,7 @@ static struct uref *get_silence(struct upipe *upipe, size_t samples)
         return uref;
     }
 
-    memset(buf, 0, samples * sizeof(int32_t) * upipe_sync_sub->channels);
+    memset(buf, 0, samples * sizeof(int32_t) * upipe_frame_sync_sub->channels);
 
     uref_sound_unmap(uref, 0, -1, 1);
 
@@ -584,29 +584,29 @@ static struct uref *get_silence(struct upipe *upipe, size_t samples)
 static void output_sound(struct upipe *upipe, const struct urational *fps,
         struct upump **upump_p)
 {
-    struct upipe_sync *upipe_sync = upipe_sync_from_upipe(upipe);
+    struct upipe_frame_sync *upipe_frame_sync = upipe_frame_sync_from_upipe(upipe);
     const size_t frame_samples = audio_samples_count(upipe, fps);
 
     struct uchain *uchain = NULL;
-    ulist_foreach(&upipe_sync->subs, uchain) {
-        struct upipe_sync_sub *upipe_sync_sub = upipe_sync_sub_from_uchain(uchain);
-        if (!upipe_sync_sub->sound)
+    ulist_foreach(&upipe_frame_sync->subs, uchain) {
+        struct upipe_frame_sync_sub *upipe_frame_sync_sub = upipe_frame_sync_sub_from_uchain(uchain);
+        if (!upipe_frame_sync_sub->sound)
             continue;
 
-        struct upipe *upipe_sub = upipe_sync_sub_to_upipe(upipe_sync_sub);
-        const uint8_t channels = upipe_sync_sub->channels;
+        struct upipe *upipe_sub = upipe_frame_sync_sub_to_upipe(upipe_frame_sync_sub);
+        const uint8_t channels = upipe_frame_sync_sub->channels;
         size_t samples = frame_samples;
 
-        const bool s337 = upipe_sync_sub->s337;
-        const bool a52 = upipe_sync_sub->a52;
+        const bool s337 = upipe_frame_sync_sub->s337;
+        const bool a52 = upipe_frame_sync_sub->a52;
 
         if (s337 && !a52) {
             struct uref *uref = NULL;
-            struct uchain *uchain = ulist_peek(&upipe_sync_sub->urefs);
+            struct uchain *uchain = ulist_peek(&upipe_frame_sync_sub->urefs);
             if (!uchain) {
                 upipe_dbg_va(upipe_sub, "no urefs");
 
-                uref = upipe_sync_get_cached_compressed_audio(upipe_sub);
+                uref = upipe_frame_sync_get_cached_compressed_audio(upipe_sub);
                 if (!uref)
                     continue;
             } else {
@@ -614,28 +614,28 @@ static void output_sound(struct upipe *upipe, const struct urational *fps,
 
                 uint64_t pts = 0;
                 uref_clock_get_pts_sys(uref, &pts);
-                if (pts + upipe_sync->latency > upipe_sync->pts + upipe_sync->ticks_per_frame) {
+                if (pts + upipe_frame_sync->latency > upipe_frame_sync->pts + upipe_frame_sync->ticks_per_frame) {
                     upipe_warn_va(upipe_sub, "Waiting to buffer %.0f",
-                            pts_to_time(pts + upipe_sync->latency - upipe_sync->pts));
+                            pts_to_time(pts + upipe_frame_sync->latency - upipe_frame_sync->pts));
 
-                    uref = upipe_sync_get_cached_compressed_audio(upipe_sub);
+                    uref = upipe_frame_sync_get_cached_compressed_audio(upipe_sub);
                     if (!uref)
                         uref = get_silence(upipe_sub, samples);
                     if (!uref)
                         continue;
                 } else {
-                    ulist_pop(&upipe_sync_sub->urefs);
-                    upipe_sync_sub->missed_compressed_audio_e = 0;
+                    ulist_pop(&upipe_frame_sync_sub->urefs);
+                    upipe_frame_sync_sub->missed_compressed_audio_e = 0;
                     /* cache uref */
-                    uref_free(upipe_sync_sub->uref);
-                    upipe_sync_sub->uref = uref_dup(uref);
+                    uref_free(upipe_frame_sync_sub->uref);
+                    upipe_frame_sync_sub->uref = uref_dup(uref);
                 }
             }
 
             size_t src_samples = 0;
             uref_sound_size(uref, &src_samples, NULL);
-            upipe_sync_sub->samples -= src_samples;
-            uref_clock_set_pts_sys(uref, upipe_sync->pts - upipe_sync->latency);
+            upipe_frame_sync_sub->samples -= src_samples;
+            uref_clock_set_pts_sys(uref, upipe_frame_sync->pts - upipe_frame_sync->latency);
             if (samples != src_samples) {
                 if (samples - 1 != src_samples && samples + 1 != src_samples) {
                     upipe_err_va(upipe, "Problem with s337 framing: got %zu instead of %zu",
@@ -648,17 +648,17 @@ static void output_sound(struct upipe *upipe, const struct urational *fps,
                     uref->ubuf = ubuf;
                 }
             }
-            upipe_sync_sub_output(upipe_sub, uref, upump_p);
+            upipe_frame_sync_sub_output(upipe_sub, uref, upump_p);
 
             continue;
         }
 
         /* look at first uref without dequeuing */
-        struct uref *src = uref_from_uchain(ulist_peek(&upipe_sync_sub->urefs));
+        struct uref *src = uref_from_uchain(ulist_peek(&upipe_frame_sync_sub->urefs));
         if (!src) {
             src = get_silence(upipe_sub, samples);
             if (src)
-                uref_clock_set_pts_sys(src, upipe_sync->pts - upipe_sync->latency);
+                uref_clock_set_pts_sys(src, upipe_frame_sync->pts - upipe_frame_sync->latency);
         }
         if (!src) {
             upipe_dbg_va(upipe_sub, "no urefs");
@@ -667,9 +667,9 @@ static void output_sound(struct upipe *upipe, const struct urational *fps,
 
         uint64_t pts = 0;
         uref_clock_get_pts_sys(src, &pts);
-        if (pts + upipe_sync->latency > upipe_sync->pts + upipe_sync->ticks_per_frame) {
+        if (pts + upipe_frame_sync->latency > upipe_frame_sync->pts + upipe_frame_sync->ticks_per_frame) {
             upipe_warn_va(upipe_sub, "Waiting to buffer %.0f",
-                    pts_to_time(pts + upipe_sync->latency - upipe_sync->pts));
+                    pts_to_time(pts + upipe_frame_sync->latency - upipe_frame_sync->pts));
             continue;
         }
 
@@ -707,13 +707,13 @@ static void output_sound(struct upipe *upipe, const struct urational *fps,
 
             src_samples -= uref_samples;
             samples -= uref_samples;
-            upipe_sync_sub->samples -= uref_samples;
-            //upipe_notice_va(upipe_sub, "pop, samples %" PRIu64, upipe_sync_sub->samples);
+            upipe_frame_sync_sub->samples -= uref_samples;
+            //upipe_notice_va(upipe_sub, "pop, samples %" PRIu64, upipe_frame_sync_sub->samples);
 
             if (src_samples == 0) {
-                ulist_pop(&upipe_sync_sub->urefs);
+                ulist_pop(&upipe_frame_sync_sub->urefs);
                 uref_free(src);
-                src = uref_from_uchain(ulist_peek(&upipe_sync_sub->urefs));
+                src = uref_from_uchain(ulist_peek(&upipe_frame_sync_sub->urefs));
                 if (!src)
                     break;
             } else {
@@ -729,25 +729,25 @@ static void output_sound(struct upipe *upipe, const struct urational *fps,
         }
 
         uref_sound_unmap(uref, 0, -1, 1);
-        uref_clock_set_pts_sys(uref, upipe_sync->pts - upipe_sync->latency);
-        upipe_sync_sub_output(upipe_sub, uref, upump_p);
+        uref_clock_set_pts_sys(uref, upipe_frame_sync->pts - upipe_frame_sync->latency);
+        upipe_frame_sync_sub_output(upipe_sub, uref, upump_p);
     }
 }
 
 static void cb(struct upump *upump)
 {
     struct upipe *upipe = upump_get_opaque(upump, struct upipe *);
-    struct upipe_sync *upipe_sync = upipe_sync_from_upipe(upipe);
+    struct upipe_frame_sync *upipe_frame_sync = upipe_frame_sync_from_upipe(upipe);
 
-    uint64_t now = uclock_now(upipe_sync->uclock);
-    if (now - upipe_sync->ticks_per_frame > upipe_sync->pts)
+    uint64_t now = uclock_now(upipe_frame_sync->uclock);
+    if (now - upipe_frame_sync->ticks_per_frame > upipe_frame_sync->pts)
         upipe_dbg_va(upipe, "cb after %" PRId64 "ms",
-        (int64_t)((int64_t)now - (int64_t)upipe_sync->pts) / 27000);
+        (int64_t)((int64_t)now - (int64_t)upipe_frame_sync->pts) / 27000);
 
-    now = upipe_sync->pts; // the upump was scheduled for now
+    now = upipe_frame_sync->pts; // the upump was scheduled for now
     struct uchain *uchain = NULL;
     for (;;) {
-        uchain = ulist_peek(&upipe_sync->urefs);
+        uchain = ulist_peek(&upipe_frame_sync->urefs);
         if (!uchain) {
             upipe_dbg_va(upipe, "no pictures");
             break;
@@ -756,10 +756,10 @@ static void cb(struct upump *upump)
         struct uref *uref = uref_from_uchain(uchain);
         uint64_t pts = 0;
         uref_clock_get_pts_sys(uref, &pts);
-        pts += upipe_sync->latency;
+        pts += upipe_frame_sync->latency;
 
         /* frame duration */
-        const uint64_t ticks = upipe_sync->ticks_per_frame;
+        const uint64_t ticks = upipe_frame_sync->ticks_per_frame;
 
         if (pts < now - ticks / 2) {
             /* frame pts too much in the past */
@@ -774,59 +774,59 @@ static void cb(struct upump *upump)
             break; // ok
         }
 
-        ulist_pop(&upipe_sync->urefs);
+        ulist_pop(&upipe_frame_sync->urefs);
         uref_free(uref);
         int64_t u = pts - now;
         upipe_err_va(upipe, "Drop pic (pts-now == %" PRId64 "ms)", u / 27000);
     }
 
     /* sync audio */
-    if (!sync_audio(upipe_sync_to_upipe(upipe_sync))) {
+    if (!sync_audio(upipe_frame_sync_to_upipe(upipe_frame_sync))) {
         upipe_dbg_va(upipe, "not enough samples");
     }
 
     /* output audio */
-    output_sound(upipe_sync_to_upipe(upipe_sync), &upipe_sync->fps, NULL);
+    output_sound(upipe_frame_sync_to_upipe(upipe_frame_sync), &upipe_frame_sync->fps, NULL);
 
     /* output pic */
     if (uchain) {
-        ulist_pop(&upipe_sync->urefs);
+        ulist_pop(&upipe_frame_sync->urefs);
         /* buffer picture */
-        uref_free(upipe_sync->uref);
-        upipe_sync->uref = uref_from_uchain(uchain);
+        uref_free(upipe_frame_sync->uref);
+        upipe_frame_sync->uref = uref_from_uchain(uchain);
     } else {
         upipe_dbg_va(upipe, "no picture, repeating last one");
     }
 
     struct uref *uref = NULL;
-    if (upipe_sync->uref) {
-        uref = uref_dup(upipe_sync->uref);
-        uref_clock_set_pts_sys(uref, upipe_sync->pts - upipe_sync->latency);
+    if (upipe_frame_sync->uref) {
+        uref = uref_dup(upipe_frame_sync->uref);
+        uref_clock_set_pts_sys(uref, upipe_frame_sync->pts - upipe_frame_sync->latency);
     }
 
     if (0) {
-        now = uclock_now(upipe_sync->uclock);
+        now = uclock_now(upipe_frame_sync->uclock);
         upipe_notice_va(upipe,
                 "output %.2f now %.2f latency %" PRIu64,
-                pts_to_time(upipe_sync->pts - upipe_sync->latency),
+                pts_to_time(upipe_frame_sync->pts - upipe_frame_sync->latency),
                 pts_to_time(now),
-                upipe_sync->latency / 27000
+                upipe_frame_sync->latency / 27000
             );
     }
 
     if (uref)
-        upipe_sync_output(upipe, uref, NULL);
+        upipe_frame_sync_output(upipe, uref, NULL);
 
     /* increment pts */
-    upipe_sync->pts += upipe_sync->ticks_per_frame;
+    upipe_frame_sync->pts += upipe_frame_sync->ticks_per_frame;
 
     /* schedule next pic */
-    now = uclock_now(upipe_sync->uclock);
-    while (now > upipe_sync->pts) {
-        upipe_sync->pts += upipe_sync->ticks_per_frame;
+    now = uclock_now(upipe_frame_sync->uclock);
+    while (now > upipe_frame_sync->pts) {
+        upipe_frame_sync->pts += upipe_frame_sync->ticks_per_frame;
         upipe_err_va(upipe, "skipping a beat");
     }
-    upipe_sync_wait_upump(upipe, upipe_sync->pts - now, cb);
+    upipe_frame_sync_wait_upump(upipe, upipe_frame_sync->pts - now, cb);
 }
 
 /** @internal @This receives data.
@@ -835,19 +835,19 @@ static void cb(struct upump *upump)
  * @param uref uref structure
  * @param upump_p reference to pump that generated the buffer
  */
-static void upipe_sync_sub_input(struct upipe *upipe, struct uref *uref,
+static void upipe_frame_sync_sub_input(struct upipe *upipe, struct uref *uref,
         struct upump **upump_p)
 {
-    struct upipe_sync_sub *upipe_sync_sub = upipe_sync_sub_from_upipe(upipe);
+    struct upipe_frame_sync_sub *upipe_frame_sync_sub = upipe_frame_sync_sub_from_upipe(upipe);
 
-    if (!upipe_sync_sub->sound) {
+    if (!upipe_frame_sync_sub->sound) {
         // TODO subpics
         uref_free(uref);
         return;
     }
 
 #if 0
-    struct upipe_sync *upipe_sync = upipe_sync_from_sub_mgr(upipe->mgr);
+    struct upipe_frame_sync *upipe_frame_sync = upipe_frame_sync_from_sub_mgr(upipe->mgr);
     /* get uref date */
     uint64_t pts;
     if (!ubase_check(uref_clock_get_pts_sys(uref, &pts))) {
@@ -855,35 +855,35 @@ static void upipe_sync_sub_input(struct upipe *upipe, struct uref *uref,
         uref_free(uref);
         return;
     }
-    pts += upipe_sync->latency;
+    pts += upipe_frame_sync->latency;
 
-    uint64_t now = uclock_now(upipe_sync->uclock);
+    uint64_t now = uclock_now(upipe_frame_sync->uclock);
     upipe_dbg_va(upipe, "push PTS in %" PRIu64 " ms", (pts - now) / 27000);
 #endif
 
     /* buffer audio */
     size_t samples = 0;
     uref_sound_size(uref, &samples, NULL);
-    upipe_sync_sub->samples += samples;
-    //upipe_notice_va(upipe, "push, samples %" PRIu64, upipe_sync_sub->samples);
+    upipe_frame_sync_sub->samples += samples;
+    //upipe_notice_va(upipe, "push, samples %" PRIu64, upipe_frame_sync_sub->samples);
 
-    ulist_add(&upipe_sync_sub->urefs, uref_to_uchain(uref));
+    ulist_add(&upipe_frame_sync_sub->urefs, uref_to_uchain(uref));
 }
 
 /** @internal @This initializes the output manager for a dup set pipe.
  *
  * @param upipe description structure of the pipe
  */
-static void upipe_sync_init_sub_mgr(struct upipe *upipe)
+static void upipe_frame_sync_init_sub_mgr(struct upipe *upipe)
 {
-    struct upipe_sync *upipe_sync = upipe_sync_from_upipe(upipe);
-    struct upipe_mgr *sub_mgr = &upipe_sync->sub_mgr;
+    struct upipe_frame_sync *upipe_frame_sync = upipe_frame_sync_from_upipe(upipe);
+    struct upipe_mgr *sub_mgr = &upipe_frame_sync->sub_mgr;
     memset(sub_mgr, 0, sizeof(*sub_mgr));
     sub_mgr->refcount = upipe->refcount;
-    sub_mgr->signature = UPIPE_SYNC_SUB_SIGNATURE;
-    sub_mgr->upipe_alloc = upipe_sync_sub_alloc;
-    sub_mgr->upipe_input = upipe_sync_sub_input;
-    sub_mgr->upipe_control = upipe_sync_sub_control;
+    sub_mgr->signature = UPIPE_FRAME_SYNC_SUB_SIGNATURE;
+    sub_mgr->upipe_alloc = upipe_frame_sync_sub_alloc;
+    sub_mgr->upipe_input = upipe_frame_sync_sub_input;
+    sub_mgr->upipe_control = upipe_frame_sync_sub_control;
 }
 
 /** @internal @This receives data.
@@ -892,10 +892,10 @@ static void upipe_sync_init_sub_mgr(struct upipe *upipe)
  * @param uref uref structure
  * @param upump_p reference to pump that generated the buffer
  */
-static void upipe_sync_input(struct upipe *upipe, struct uref *uref,
+static void upipe_frame_sync_input(struct upipe *upipe, struct uref *uref,
         struct upump **upump_p)
 {
-    struct upipe_sync *upipe_sync = upipe_sync_from_upipe(upipe);
+    struct upipe_frame_sync *upipe_frame_sync = upipe_frame_sync_from_upipe(upipe);
 
     /* get uref date */
     uint64_t pts;
@@ -904,9 +904,9 @@ static void upipe_sync_input(struct upipe *upipe, struct uref *uref,
         uref_free(uref);
         return;
     }
-    pts += upipe_sync->latency;
+    pts += upipe_frame_sync->latency;
 
-    uint64_t now = uclock_now(upipe_sync->uclock);
+    uint64_t now = uclock_now(upipe_frame_sync->uclock);
 
     /* reject late pics */
     if (now > pts) {
@@ -921,20 +921,20 @@ static void upipe_sync_input(struct upipe *upipe, struct uref *uref,
     //upipe_dbg_va(upipe, "push PTS in %" PRIu64 " ms", (pts - now) / 27000);
 
     /* buffer pic */
-    ulist_add(&upipe_sync->urefs, uref_to_uchain(uref));
+    ulist_add(&upipe_frame_sync->urefs, uref_to_uchain(uref));
 
 
     /* timer already active */
-    if (upipe_sync->upump)
+    if (upipe_frame_sync->upump)
         return;
 
     /* need upump mgr */
-    if (!ubase_check(upipe_sync_check_upump_mgr(upipe_sync_to_upipe(upipe_sync))))
+    if (!ubase_check(upipe_frame_sync_check_upump_mgr(upipe_frame_sync_to_upipe(upipe_frame_sync))))
         return;
 
     /* start timer */
-    upipe_sync->pts = pts;
-    upipe_sync_wait_upump(upipe_sync_to_upipe(upipe_sync), pts - now, cb);
+    upipe_frame_sync->pts = pts;
+    upipe_frame_sync_wait_upump(upipe_frame_sync_to_upipe(upipe_frame_sync), pts - now, cb);
 }
 
 /** @internal @This allocates a sync pipe.
@@ -945,30 +945,30 @@ static void upipe_sync_input(struct upipe *upipe, struct uref *uref,
  * @param args optional arguments
  * @return pointer to upipe or NULL in case of allocation error
  */
-static struct upipe *upipe_sync_alloc(struct upipe_mgr *mgr,
+static struct upipe *upipe_frame_sync_alloc(struct upipe_mgr *mgr,
                                       struct uprobe *uprobe,
                                       uint32_t signature, va_list args)
 {
-    struct upipe *upipe = upipe_sync_alloc_void(mgr, uprobe, signature, args);
+    struct upipe *upipe = upipe_frame_sync_alloc_void(mgr, uprobe, signature, args);
     if (unlikely(upipe == NULL))
         return NULL;
 
-    struct upipe_sync *upipe_sync = upipe_sync_from_upipe(upipe);
+    struct upipe_frame_sync *upipe_frame_sync = upipe_frame_sync_from_upipe(upipe);
 
-    upipe_sync->latency = 0;
-    upipe_sync->pts = 0;
-    upipe_sync->ticks_per_frame = 0;
-    upipe_sync->frame_idx = 0;
-    upipe_sync->uref = NULL;
-    ulist_init(&upipe_sync->urefs);
+    upipe_frame_sync->latency = 0;
+    upipe_frame_sync->pts = 0;
+    upipe_frame_sync->ticks_per_frame = 0;
+    upipe_frame_sync->frame_idx = 0;
+    upipe_frame_sync->uref = NULL;
+    ulist_init(&upipe_frame_sync->urefs);
 
-    upipe_sync_init_urefcount(upipe);
-    upipe_sync_init_uclock(upipe);
-    upipe_sync_init_upump(upipe);
-    upipe_sync_init_upump_mgr(upipe);
-    upipe_sync_init_output(upipe);
-    upipe_sync_init_sub_subs(upipe);
-    upipe_sync_init_sub_mgr(upipe);
+    upipe_frame_sync_init_urefcount(upipe);
+    upipe_frame_sync_init_uclock(upipe);
+    upipe_frame_sync_init_upump(upipe);
+    upipe_frame_sync_init_upump_mgr(upipe);
+    upipe_frame_sync_init_output(upipe);
+    upipe_frame_sync_init_sub_subs(upipe);
+    upipe_frame_sync_init_sub_mgr(upipe);
 
     upipe_throw_ready(upipe);
     return upipe;
@@ -980,9 +980,9 @@ static struct upipe *upipe_sync_alloc(struct upipe_mgr *mgr,
  * @param flow_def flow definition packet
  * @return an error code
  */
-static int upipe_sync_set_flow_def(struct upipe *upipe, struct uref *flow_def)
+static int upipe_frame_sync_set_flow_def(struct upipe *upipe, struct uref *flow_def)
 {
-    struct upipe_sync *upipe_sync = upipe_sync_from_upipe(upipe);
+    struct upipe_frame_sync *upipe_frame_sync = upipe_frame_sync_from_upipe(upipe);
 
     if (flow_def == NULL)
         return UBASE_ERR_INVALID;
@@ -995,7 +995,7 @@ static int upipe_sync_set_flow_def(struct upipe *upipe, struct uref *flow_def)
         return UBASE_ERR_INVALID;
     }
 
-    UBASE_RETURN(uref_pic_flow_get_fps(flow_def, &upipe_sync->fps));
+    UBASE_RETURN(uref_pic_flow_get_fps(flow_def, &upipe_frame_sync->fps));
 
     uint64_t latency;
     if (!ubase_check(uref_clock_get_latency(flow_def, &latency)))
@@ -1008,18 +1008,18 @@ static int upipe_sync_set_flow_def(struct upipe *upipe, struct uref *flow_def)
     // FIXME : estimated latency added by processing
     latency += UCLOCK_FREQ / 25;
     uref_clock_set_latency(flow_def, latency);
-    uint64_t max_latency = upipe_sync_get_max_latency(upipe);
+    uint64_t max_latency = upipe_frame_sync_get_max_latency(upipe);
     if (latency < max_latency)
         latency = max_latency;
 
     upipe_notice_va(upipe, "Latency %" PRIu64, latency);
-    upipe_sync->latency = latency;
-    upipe_sync_set_latency(upipe_sync_to_upipe(upipe_sync));
+    upipe_frame_sync->latency = latency;
+    upipe_frame_sync_set_latency(upipe_frame_sync_to_upipe(upipe_frame_sync));
 
-    upipe_sync->ticks_per_frame = UCLOCK_FREQ *
-        upipe_sync->fps.den / upipe_sync->fps.num;
+    upipe_frame_sync->ticks_per_frame = UCLOCK_FREQ *
+        upipe_frame_sync->fps.den / upipe_frame_sync->fps.num;
 
-    upipe_sync_store_flow_def(upipe, flow_def);
+    upipe_frame_sync_store_flow_def(upipe, flow_def);
 
     return UBASE_ERR_NONE;
 }
@@ -1031,47 +1031,47 @@ static int upipe_sync_set_flow_def(struct upipe *upipe, struct uref *flow_def)
  * @param args arguments of the command
  * @return an error code
  */
-static int upipe_sync_control(struct upipe *upipe, int command, va_list args)
+static int upipe_frame_sync_control(struct upipe *upipe, int command, va_list args)
 {
     switch (command) {
         case UPIPE_GET_OUTPUT: {
             struct upipe **p = va_arg(args, struct upipe **);
-            return upipe_sync_get_output(upipe, p);
+            return upipe_frame_sync_get_output(upipe, p);
         }
         case UPIPE_SET_OUTPUT: {
             struct upipe *output = va_arg(args, struct upipe *);
-            return upipe_sync_set_output(upipe, output);
+            return upipe_frame_sync_set_output(upipe, output);
         }
         case UPIPE_GET_FLOW_DEF: {
             struct uref **p = va_arg(args, struct uref **);
-            return upipe_sync_get_flow_def(upipe, p);
+            return upipe_frame_sync_get_flow_def(upipe, p);
         }
         case UPIPE_SET_FLOW_DEF: {
             struct uref *flow = va_arg(args, struct uref *);
-            return upipe_sync_set_flow_def(upipe, flow);
+            return upipe_frame_sync_set_flow_def(upipe, flow);
         }
         case UPIPE_REGISTER_REQUEST: {
             struct urequest *request = va_arg(args, struct urequest *);
-            return upipe_sync_alloc_output_proxy(upipe, request);
+            return upipe_frame_sync_alloc_output_proxy(upipe, request);
         }
         case UPIPE_UNREGISTER_REQUEST: {
             struct urequest *request = va_arg(args, struct urequest *);
-            return upipe_sync_free_output_proxy(upipe, request);
+            return upipe_frame_sync_free_output_proxy(upipe, request);
         }
         case UPIPE_GET_SUB_MGR: {
             struct upipe_mgr **p = va_arg(args, struct upipe_mgr **);
-            return upipe_sync_get_sub_mgr(upipe, p);
+            return upipe_frame_sync_get_sub_mgr(upipe, p);
         }
         case UPIPE_ITERATE_SUB: {
             struct upipe **p = va_arg(args, struct upipe **);
-            return upipe_sync_iterate_sub(upipe, p);
+            return upipe_frame_sync_iterate_sub(upipe, p);
         }
         case UPIPE_ATTACH_UCLOCK:
-           upipe_sync_set_upump(upipe, NULL);
-           upipe_sync_require_uclock(upipe);
+           upipe_frame_sync_set_upump(upipe, NULL);
+           upipe_frame_sync_require_uclock(upipe);
            return UBASE_ERR_NONE;
         case UPIPE_ATTACH_UPUMP_MGR:
-           return upipe_sync_attach_upump_mgr(upipe);
+           return upipe_frame_sync_attach_upump_mgr(upipe);
 
         default:
             return UBASE_ERR_UNHANDLED;
@@ -1092,52 +1092,52 @@ static void ulist_uref_flush(struct uchain *ulist)
  *
  * @param upipe description structure of the pipe
  */
-static void upipe_sync_free(struct upipe *upipe)
+static void upipe_frame_sync_free(struct upipe *upipe)
 {
-    struct upipe_sync *upipe_sync = upipe_sync_from_upipe(upipe);
+    struct upipe_frame_sync *upipe_frame_sync = upipe_frame_sync_from_upipe(upipe);
 
     upipe_throw_dead(upipe);
 
-    ulist_uref_flush(&upipe_sync->urefs);
-    uref_free(upipe_sync->uref);
+    ulist_uref_flush(&upipe_frame_sync->urefs);
+    uref_free(upipe_frame_sync->uref);
 
-    upipe_sync_clean_urefcount(upipe);
-    upipe_sync_clean_uclock(upipe);
-    upipe_sync_clean_output(upipe);
-    upipe_sync_clean_upump(upipe);
-    upipe_sync_clean_upump_mgr(upipe);
-    upipe_sync_clean_sub_subs(upipe);
-    upipe_sync_free_void(upipe);
+    upipe_frame_sync_clean_urefcount(upipe);
+    upipe_frame_sync_clean_uclock(upipe);
+    upipe_frame_sync_clean_output(upipe);
+    upipe_frame_sync_clean_upump(upipe);
+    upipe_frame_sync_clean_upump_mgr(upipe);
+    upipe_frame_sync_clean_sub_subs(upipe);
+    upipe_frame_sync_free_void(upipe);
 }
 
 /** @internal @This frees all resources allocated.
  *
  * @param upipe description structure of the pipe
  */
-static void upipe_sync_sub_free(struct upipe *upipe)
+static void upipe_frame_sync_sub_free(struct upipe *upipe)
 {
-    struct upipe_sync_sub *upipe_sync_sub = upipe_sync_sub_from_upipe(upipe);
+    struct upipe_frame_sync_sub *upipe_frame_sync_sub = upipe_frame_sync_sub_from_upipe(upipe);
     upipe_throw_dead(upipe);
 
-    ulist_uref_flush(&upipe_sync_sub->urefs);
-    uref_free(upipe_sync_sub->uref);
+    ulist_uref_flush(&upipe_frame_sync_sub->urefs);
+    uref_free(upipe_frame_sync_sub->uref);
 
-    upipe_sync_sub_clean_urefcount(upipe);
-    upipe_sync_sub_clean_output(upipe);
-    upipe_sync_sub_clean_sub(upipe);
-    upipe_sync_sub_clean_uref_mgr(upipe);
-    upipe_sync_sub_clean_ubuf_mgr(upipe);
-    upipe_sync_sub_free_void(upipe);
+    upipe_frame_sync_sub_clean_urefcount(upipe);
+    upipe_frame_sync_sub_clean_output(upipe);
+    upipe_frame_sync_sub_clean_sub(upipe);
+    upipe_frame_sync_sub_clean_uref_mgr(upipe);
+    upipe_frame_sync_sub_clean_ubuf_mgr(upipe);
+    upipe_frame_sync_sub_free_void(upipe);
 }
 
-/** upipe_sync */
-static struct upipe_mgr upipe_sync_mgr = {
+/** upipe_frame_sync */
+static struct upipe_mgr upipe_frame_sync_mgr = {
     .refcount = NULL,
-    .signature = UPIPE_SYNC_SIGNATURE,
+    .signature = UPIPE_FRAME_SYNC_SIGNATURE,
 
-    .upipe_alloc = upipe_sync_alloc,
-    .upipe_input = upipe_sync_input,
-    .upipe_control = upipe_sync_control,
+    .upipe_alloc = upipe_frame_sync_alloc,
+    .upipe_input = upipe_frame_sync_input,
+    .upipe_control = upipe_frame_sync_control,
 
     .upipe_mgr_control = NULL
 };
@@ -1146,7 +1146,7 @@ static struct upipe_mgr upipe_sync_mgr = {
  *
  * @return pointer to manager
  */
-struct upipe_mgr *upipe_sync_mgr_alloc(void)
+struct upipe_mgr *upipe_frame_sync_mgr_alloc(void)
 {
-    return &upipe_sync_mgr;
+    return &upipe_frame_sync_mgr;
 }

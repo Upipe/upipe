@@ -24,26 +24,26 @@
  */
 
 /** @file
- * @short Upipe sync module - synchronize streams for muxing
+ * @short Upipe sync module - frame synchronize streams for muxing
  */
 
-#ifndef _UPIPE_MODULES_UPIPE_SYNC_H_
+#ifndef _UPIPE_MODULES_UPIPE_FRAME_SYNC_H_
 /** @hidden */
-#define _UPIPE_MODULES_UPIPE_SYNC_H_
+#define _UPIPE_MODULES_UPIPE_FRAME_SYNC_H_
 #ifdef __cplusplus
 extern "C" {
 #endif
 
 #include <upipe/upipe.h>
 
-#define UPIPE_SYNC_SIGNATURE UBASE_FOURCC('s', 'y', 'n', 'c')
-#define UPIPE_SYNC_SUB_SIGNATURE UBASE_FOURCC('s', 'y', 'n', 's')
+#define UPIPE_FRAME_SYNC_SIGNATURE UBASE_FOURCC('s', 'y', 'n', 'c')
+#define UPIPE_FRAME_SYNC_SUB_SIGNATURE UBASE_FOURCC('s', 'y', 'n', 's')
 
 /** @This returns the management structure for sync pipes.
  *
  * @return pointer to manager
  */
-struct upipe_mgr *upipe_sync_mgr_alloc(void);
+struct upipe_mgr *upipe_frame_sync_mgr_alloc(void);
 
 #ifdef __cplusplus
 }
