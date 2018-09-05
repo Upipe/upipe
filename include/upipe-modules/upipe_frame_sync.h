@@ -36,8 +36,8 @@ extern "C" {
 
 #include <upipe/upipe.h>
 
-#define UPIPE_FRAME_SYNC_SIGNATURE UBASE_FOURCC('s', 'y', 'n', 'c')
-#define UPIPE_FRAME_SYNC_SUB_SIGNATURE UBASE_FOURCC('s', 'y', 'n', 's')
+#define UPIPE_FRAME_SYNC_SIGNATURE UBASE_FOURCC('f', 's', 'y', 'c')
+#define UPIPE_FRAME_SYNC_SUB_SIGNATURE UBASE_FOURCC('f', 's', 'y', 's')
 
 /** @This returns the management structure for sync pipes.
  *
