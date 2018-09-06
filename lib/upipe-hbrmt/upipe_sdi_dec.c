@@ -198,6 +198,9 @@ struct upipe_sdi_dec {
     /** audio output */
     struct upipe_sdi_dec_sub audio;
 
+    /** latency */
+    uint64_t latency;
+
     /** public upipe structure */
     struct upipe upipe;
 };
@@ -1216,8 +1219,11 @@ static void upipe_sdi_dec_input(struct upipe *upipe, struct uref *uref,
  */
 static int upipe_sdi_dec_sub_check(struct upipe *upipe, struct uref *flow_format)
 {
-    if (flow_format != NULL)
+    if (flow_format != NULL) {
+        struct upipe_sdi_dec *upipe_sdi_dec = upipe_sdi_dec_from_sub_mgr(upipe->mgr);
+        uref_clock_set_latency(flow_format, upipe_sdi_dec->latency);
         upipe_sdi_dec_sub_store_flow_def(upipe, flow_format);
+    }
 
     return UBASE_ERR_NONE;
 }
@@ -1267,6 +1273,9 @@ static int upipe_sdi_dec_set_flow_def(struct upipe *upipe, struct uref *flow_def
         return UBASE_ERR_INVALID;
     }
     upipe_sdi_dec->p = upipe_sdi_dec->f->pict_fmt;
+
+    if (!ubase_check(uref_clock_get_latency(flow_def, &upipe_sdi_dec->latency)))
+        upipe_sdi_dec->latency = 0;
 
     struct uref *flow_def_dup;
     if ((flow_def_dup = uref_dup(flow_def)) == NULL)
