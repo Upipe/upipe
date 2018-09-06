@@ -104,6 +104,7 @@ check_PROGRAMS = \
 	upipe_grid_test \
 	upipe_block_to_sound_test \
 	upipe_audio_copy_test \
+	upipe_row_join_test \
 	upipe_auto_inner_test
 
 TESTS = \
@@ -162,6 +163,7 @@ TESTS = \
 	upipe_grid_test \
 	upipe_block_to_sound_test \
 	upipe_audio_copy_test \
+	upipe_row_join_test \
 	upipe_auto_inner_test
 
 if HAVE_EBUR128
@@ -562,4 +564,5 @@ upipe_ts_sync_test_CFLAGS = $(AM_CFLAGS) $(BITSTREAM_CFLAGS)
 upipe_ts_tdt_decoder_test_CFLAGS = $(AM_CFLAGS) $(BITSTREAM_CFLAGS)
 upipe_video_trim_test_CFLAGS = $(AM_CFLAGS) $(BITSTREAM_CFLAGS)
 upipe_audio_copy_test_LDADD = $(LDADD) $(top_builddir)/lib/upipe-modules/libupipe_modules.la
+upipe_row_join_test_LDADD = $(LDADD) -lev $(top_builddir)/lib/upump-ev/libupump_ev.la $(top_builddir)/lib/upipe-modules/libupipe_modules.la
 upipe_auto_inner_test_LDADD = $(LDADD) $(top_builddir)/lib/upipe-modules/libupipe_modules.la

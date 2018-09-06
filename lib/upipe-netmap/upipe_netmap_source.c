@@ -473,9 +473,6 @@ static inline bool handle_rfc_packet(struct upipe *upipe, const uint8_t *src, ui
     src = payload;
     src_size -= header_size;
 
-    if (unlikely(!upipe_netmap_source->uref))
-        return false;
-
     if (src_size < RFC_4175_EXT_SEQ_NUM_LEN)
         return false;
 
@@ -498,6 +495,9 @@ static inline bool handle_rfc_packet(struct upipe *upipe, const uint8_t *src, ui
     }
 
     *eof = !!field[0];
+
+    if (unlikely(!upipe_netmap_source->uref))
+        return false;
 
     for (int i = 0; i < 1 + !!continuation; i++) {
         int interleaved_line = line_number[i] * 2 + !!field[i];
@@ -1065,13 +1065,16 @@ static int upipe_netmap_source_set_uri(struct upipe *upipe, const char *uri)
                 break;
         }
 
+        if (sscanf(uri, "%*[^-]-%u/R",
+                    &upipe_netmap_source->ring_idx[idx]) != 1) {
+            upipe_netmap_source->ring_idx[idx] = 0;
+        }
+
         upipe_netmap_source->d[idx] = nm_open(uri, NULL, 0, 0);
         if (unlikely(!upipe_netmap_source->d[idx])) {
             upipe_err_va(upipe, "can't open netmap socket %s", uri);
             return UBASE_ERR_EXTERNAL;
         }
-
-        upipe_netmap_source->ring_idx[idx] = 0;
 
         upipe_notice_va(upipe, "opening netmap socket %s ring %u",
                 uri, upipe_netmap_source->ring_idx[idx]);
