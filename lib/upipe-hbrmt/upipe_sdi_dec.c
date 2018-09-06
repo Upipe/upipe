@@ -1089,9 +1089,9 @@ static bool upipe_sdi_dec_handle(struct upipe *upipe, struct uref *uref,
         // FIXME: ntsc - a/v pts need to be mostly equal, in case we receive
         // frames without audio
         //uint64_t pts = UINT32_MAX + audio_sub->samples * UCLOCK_FREQ / 48000;
-        uref_clock_set_pts_prog(uref_audio, pts);
-        uref_clock_set_pts_orig(uref_audio, pts);
-        uref_clock_set_dts_pts_delay(uref_audio, 0);
+        //uref_clock_set_pts_prog(uref_audio, pts);
+        //uref_clock_set_pts_orig(uref_audio, pts);
+        //uref_clock_set_dts_pts_delay(uref_audio, 0);
 
         int samples_received = audio_ctx.group_offset[0];
         for (int i = 1; i < UPIPE_SDI_CHANNELS_PER_GROUP; i++) {
