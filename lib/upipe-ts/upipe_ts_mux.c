@@ -1188,6 +1188,10 @@ static int upipe_ts_mux_input_set_flow_def(struct upipe *upipe,
                 buffer_size = BS_ADTS_12;
             else if (channels > 2)
                 buffer_size = BS_ADTS_8;
+            /* SCTE 193-2 6.2.1 and 6.3.1 */
+            if (upipe_ts_mux->conformance == UPIPE_TS_CONFORMANCE_ATSC ||
+                upipe_ts_mux->conformance == UPIPE_TS_CONFORMANCE_ISDB)
+                pes_alignment = true;
 
             UBASE_FATAL(upipe, uref_ts_flow_set_pes_id(flow_def_dup,
                                                 PES_STREAM_ID_AUDIO_MPEG));
