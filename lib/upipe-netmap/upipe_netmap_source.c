@@ -670,7 +670,13 @@ static const uint8_t *get_rtp(struct upipe *upipe, struct netmap_ring *rxring,
     struct upipe_netmap_source *upipe_netmap_source = upipe_netmap_source_from_upipe(upipe);
     uint8_t *src = (uint8_t*)NETMAP_BUF(rxring, slot->buf_idx);
 
+    if (ethernet_get_lentype(src) != ETHERNET_TYPE_IP)
+        return NULL;
+
     uint8_t *ip = &src[ETHERNET_HEADER_LEN];
+    if (ip_get_proto(ip) != IP_PROTO_UDP)
+        return NULL;
+
     uint8_t *udp = ip_payload(ip);
     const uint8_t *rtp = udp_payload(udp);
     *payload_len = udp_get_len(udp) - UDP_HEADER_SIZE;
