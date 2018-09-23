@@ -829,6 +829,8 @@ static int upipe_ts_demux_output_probe(struct uprobe *uprobe,
             return upipe_ts_demux_output_clock_ts(upipe, inner, event, args);
         case UPROBE_NEED_OUTPUT:
             return upipe_ts_demux_output_plumber(upipe, inner, event, args);
+        case UPROBE_SOURCE_END:
+            return UBASE_ERR_NONE;
         default:
             return upipe_throw_proxy(upipe, inner, event, args);
     }
