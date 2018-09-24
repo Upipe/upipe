@@ -83,16 +83,16 @@ void checkasm_check_v210dec(void)
     int cpu_flags = av_get_cpu_flags();
 
     if (cpu_flags & AV_CPU_FLAG_SSSE3) {
-        s.planar_10 = upipe_v210_to_planar_10_aligned_ssse3;
-        s.planar_8  = upipe_v210_to_planar_8_aligned_ssse3;
+        s.planar_10 = upipe_v210_to_planar_10_ssse3;
+        s.planar_8  = upipe_v210_to_planar_8_ssse3;
     }
     if (cpu_flags & AV_CPU_FLAG_AVX) {
-        s.planar_10 = upipe_v210_to_planar_10_aligned_avx;
-        s.planar_8  = upipe_v210_to_planar_8_aligned_avx;
+        s.planar_10 = upipe_v210_to_planar_10_avx;
+        s.planar_8  = upipe_v210_to_planar_8_avx;
     }
     if (cpu_flags & AV_CPU_FLAG_AVX2) {
-        s.planar_10 = upipe_v210_to_planar_10_aligned_avx2;
-        s.planar_8  = upipe_v210_to_planar_8_aligned_avx2;
+        s.planar_10 = upipe_v210_to_planar_10_avx2;
+        s.planar_8  = upipe_v210_to_planar_8_avx2;
     }
 #endif
 
