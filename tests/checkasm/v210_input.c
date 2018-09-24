@@ -67,28 +67,28 @@ void checkasm_check_v210_input(void)
 
 #ifdef HAVE_X86ASM
     if (cpu_flags & AV_CPU_FLAG_SSSE3) {
-        s.planar_10 = upipe_v210_to_planar_10_aligned_ssse3;
-        s.planar_8  = upipe_v210_to_planar_8_aligned_ssse3;
+        s.planar_10 = upipe_v210_to_planar_10_ssse3;
+        s.planar_8  = upipe_v210_to_planar_8_ssse3;
         s.sdi       = upipe_v210_to_sdi_ssse3;
         s.uyvy      = upipe_v210_to_uyvy_unaligned_ssse3;
     }
     if (cpu_flags & AV_CPU_FLAG_AVX) {
-        s.planar_10 = upipe_v210_to_planar_10_aligned_avx;
-        s.planar_8  = upipe_v210_to_planar_8_aligned_avx;
+        s.planar_10 = upipe_v210_to_planar_10_avx;
+        s.planar_8  = upipe_v210_to_planar_8_avx;
         s.sdi       = upipe_v210_to_sdi_avx;
         s.uyvy      = upipe_v210_to_uyvy_unaligned_avx;
     }
     if (cpu_flags & AV_CPU_FLAG_AVX2) {
-        s.planar_10 = upipe_v210_to_planar_10_aligned_avx2;
-        s.planar_8  = upipe_v210_to_planar_8_aligned_avx2;
+        s.planar_10 = upipe_v210_to_planar_10_avx2;
+        s.planar_8  = upipe_v210_to_planar_8_avx2;
         s.sdi       = upipe_v210_to_sdi_avx2;
         s.uyvy      = upipe_v210_to_uyvy_unaligned_avx2;
     }
 #endif
 
     if (check_func(s.planar_8, "v210_to_planar8")) {
-        DECLARE_ALIGNED(32, uint32_t, src0)[NUM_SAMPLES/3];
-        DECLARE_ALIGNED(32, uint32_t, src1)[NUM_SAMPLES/3];
+        uint32_t src0[NUM_SAMPLES/3];
+        uint32_t src1[NUM_SAMPLES/3];
         uint8_t y0[NUM_SAMPLES/2];
         uint8_t y1[NUM_SAMPLES/2];
         uint8_t u0[NUM_SAMPLES/4];
@@ -111,8 +111,8 @@ void checkasm_check_v210_input(void)
     report("v210_to_planar8");
 
     if (check_func(s.planar_10, "v210_to_planar10")) {
-        DECLARE_ALIGNED(32, uint32_t, src0)[NUM_SAMPLES/3];
-        DECLARE_ALIGNED(32, uint32_t, src1)[NUM_SAMPLES/3];
+        uint32_t src0[NUM_SAMPLES/3];
+        uint32_t src1[NUM_SAMPLES/3];
         uint16_t y0[NUM_SAMPLES/2];
         uint16_t y1[NUM_SAMPLES/2];
         uint16_t u0[NUM_SAMPLES/4];
