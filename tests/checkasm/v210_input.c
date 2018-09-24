@@ -70,19 +70,19 @@ void checkasm_check_v210_input(void)
         s.planar_10 = upipe_v210_to_planar_10_ssse3;
         s.planar_8  = upipe_v210_to_planar_8_ssse3;
         s.sdi       = upipe_v210_to_sdi_ssse3;
-        s.uyvy      = upipe_v210_to_uyvy_unaligned_ssse3;
+        s.uyvy      = upipe_v210_to_uyvy_ssse3;
     }
     if (cpu_flags & AV_CPU_FLAG_AVX) {
         s.planar_10 = upipe_v210_to_planar_10_avx;
         s.planar_8  = upipe_v210_to_planar_8_avx;
         s.sdi       = upipe_v210_to_sdi_avx;
-        s.uyvy      = upipe_v210_to_uyvy_unaligned_avx;
+        s.uyvy      = upipe_v210_to_uyvy_avx;
     }
     if (cpu_flags & AV_CPU_FLAG_AVX2) {
         s.planar_10 = upipe_v210_to_planar_10_avx2;
         s.planar_8  = upipe_v210_to_planar_8_avx2;
         s.sdi       = upipe_v210_to_sdi_avx2;
-        s.uyvy      = upipe_v210_to_uyvy_unaligned_avx2;
+        s.uyvy      = upipe_v210_to_uyvy_avx2;
     }
 #endif
 

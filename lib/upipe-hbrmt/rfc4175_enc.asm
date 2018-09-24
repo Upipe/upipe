@@ -80,7 +80,7 @@ cglobal v210_to_sdi, 3, 3, 8 + 7*ARCH_X86_64, src, dst, pixels
 %endif
 
     .loop:
-        mova     m0, [srcq]
+        movu     m0, [srcq]
 
         pand m2, m0, m3
         pand m1, m0, m4

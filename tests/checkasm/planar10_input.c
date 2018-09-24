@@ -47,14 +47,14 @@ void checkasm_check_planar10_input(void)
     int cpu_flags = av_get_cpu_flags();
 
     if (cpu_flags & AV_CPU_FLAG_SSSE3) {
-       s.uyvy =  upipe_planar_to_uyvy_10_unaligned_sse2;
+       s.uyvy =  upipe_planar_to_uyvy_10_sse2;
        s.v210  = upipe_planar_to_v210_10_ssse3;
     }
     if (cpu_flags & AV_CPU_FLAG_AVX) {
-       s.uyvy =  upipe_planar_to_uyvy_10_unaligned_avx;
+       s.uyvy =  upipe_planar_to_uyvy_10_avx;
     }
     if (cpu_flags & AV_CPU_FLAG_AVX2) {
-       s.uyvy =  upipe_planar_to_uyvy_10_unaligned_avx2;
+       s.uyvy =  upipe_planar_to_uyvy_10_avx2;
        s.v210  = upipe_planar_to_v210_10_avx2;
     }
 

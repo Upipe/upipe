@@ -56,25 +56,25 @@ void checkasm_check_uyvy_input(void)
     int cpu_flags = av_get_cpu_flags();
 
     if (cpu_flags & AV_CPU_FLAG_SSSE3) {
-        s.planar10 = upipe_uyvy_to_planar_10_unaligned_ssse3;
-        s.planar8 = upipe_uyvy_to_planar_8_unaligned_ssse3;
-        s.sdi = upipe_uyvy_to_sdi_unaligned_ssse3;
-        s.sdi_2 = upipe_uyvy_to_sdi_2_unaligned_ssse3;
-        s.v210 = upipe_uyvy_to_v210_unaligned_ssse3;
+        s.planar10 = upipe_uyvy_to_planar_10_ssse3;
+        s.planar8 = upipe_uyvy_to_planar_8_ssse3;
+        s.sdi = upipe_uyvy_to_sdi_ssse3;
+        s.sdi_2 = upipe_uyvy_to_sdi_2_ssse3;
+        s.v210 = upipe_uyvy_to_v210_ssse3;
     }
     if (cpu_flags & AV_CPU_FLAG_AVX) {
-        s.planar10 = upipe_uyvy_to_planar_10_unaligned_avx;
-        s.planar8 = upipe_uyvy_to_planar_8_unaligned_avx;
+        s.planar10 = upipe_uyvy_to_planar_10_avx;
+        s.planar8 = upipe_uyvy_to_planar_8_avx;
         s.sdi = upipe_uyvy_to_sdi_avx;
         s.sdi_2 = upipe_uyvy_to_sdi_2_avx;
-        s.v210 = upipe_uyvy_to_v210_unaligned_avx;
+        s.v210 = upipe_uyvy_to_v210_avx;
     }
     if (cpu_flags & AV_CPU_FLAG_AVX2) {
-        s.planar10 = upipe_uyvy_to_planar_10_unaligned_avx2;
-        s.planar8 = upipe_uyvy_to_planar_8_unaligned_avx2;
+        s.planar10 = upipe_uyvy_to_planar_10_avx2;
+        s.planar8 = upipe_uyvy_to_planar_8_avx2;
         s.sdi = upipe_uyvy_to_sdi_avx2;
         s.sdi_2 = upipe_uyvy_to_sdi_2_avx2;
-        s.v210 = upipe_uyvy_to_v210_unaligned_avx2;
+        s.v210 = upipe_uyvy_to_v210_avx2;
     }
 
     if (check_func(s.planar10, "uyvy_to_planar10")) {
