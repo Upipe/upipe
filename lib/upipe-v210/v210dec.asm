@@ -39,10 +39,10 @@ planar_8_avx2_shuf1:   db 0, 1, 2, 8, 9,10,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1
 
 SECTION .text
 
-%macro v210_to_planar_10 1
+%macro v210_to_planar_10 0
 
-; v210_planar_unpack(const uint32_t *src, uint16_t *y, uint16_t *u, uint16_t *v, int64_t width)
-cglobal v210_to_planar_10_%1, 5, 5, 7, src, y, u, v, pixels
+; v210_to_planar10(const uint32_t *src, uint16_t *y, uint16_t *u, uint16_t *v, int64_t width)
+cglobal v210_to_planar_10, 5, 5, 7, src, y, u, v, pixels
     lea    yq, [yq + 2*pixelsq]
     add    uq, pixelsq
     add    vq, pixelsq
@@ -54,11 +54,7 @@ cglobal v210_to_planar_10_%1, 5, 5, 7, src, y, u, v, pixels
     mova   m6, [v210_chroma_shuf]
 
     .loop:
-%ifidn %1, unaligned
         movu   m0, [srcq]
-%else
-        mova   m0, [srcq]
-%endif
 
         pmullw m1, m0, m3
         psrld  m0, 10
@@ -89,15 +85,15 @@ RET
 %endmacro
 
 INIT_XMM ssse3
-v210_to_planar_10 aligned
+v210_to_planar_10
 INIT_XMM avx
-v210_to_planar_10 aligned
+v210_to_planar_10
 INIT_YMM avx2
-v210_to_planar_10 aligned
+v210_to_planar_10
 
-%macro v210_to_planar_8 1
+%macro v210_to_planar_8 0
 
-cglobal v210_to_planar_8_%1, 5, 5, 7, src, y, u, v, pixels
+cglobal v210_to_planar_8, 5, 5, 7, src, y, u, v, pixels
     shr pixelsq, 1
     lea    yq, [yq + 2*pixelsq]
     add    uq, pixelsq
@@ -107,11 +103,7 @@ cglobal v210_to_planar_8_%1, 5, 5, 7, src, y, u, v, pixels
     mova   m3, [v210_mult]
 
     .loop:
-%ifidn %1, unaligned
         movu   m0, [srcq]
-%else
-        mova   m0, [srcq]
-%endif
 
         pmullw m1, m0, m3
         pslld  m0, 4
@@ -146,8 +138,8 @@ RET
 %endmacro
 
 INIT_XMM ssse3
-v210_to_planar_8 aligned
+v210_to_planar_8
 INIT_XMM avx
-v210_to_planar_8 aligned
+v210_to_planar_8
 INIT_YMM avx2
-v210_to_planar_8 aligned
+v210_to_planar_8

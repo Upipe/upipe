@@ -176,16 +176,16 @@ static void v210dec_setup_asm(struct upipe *upipe, bool assembly)
 #ifdef HAVE_X86ASM
 #if defined(__i686__) || defined(__x86_64__)
     if (__builtin_cpu_supports("ssse3")) {
-        v210dec->v210_to_planar_8  = upipe_v210_to_planar_8_aligned_ssse3;
-        v210dec->v210_to_planar_10 = upipe_v210_to_planar_10_aligned_ssse3;
+        v210dec->v210_to_planar_8  = upipe_v210_to_planar_8_ssse3;
+        v210dec->v210_to_planar_10 = upipe_v210_to_planar_10_ssse3;
     }
     if (__builtin_cpu_supports("avx")) {
-        v210dec->v210_to_planar_8  = upipe_v210_to_planar_8_aligned_avx;
-        v210dec->v210_to_planar_10 = upipe_v210_to_planar_10_aligned_avx;
+        v210dec->v210_to_planar_8  = upipe_v210_to_planar_8_avx;
+        v210dec->v210_to_planar_10 = upipe_v210_to_planar_10_avx;
     }
     if (__builtin_cpu_supports("avx2")) {
-        v210dec->v210_to_planar_8  = upipe_v210_to_planar_8_aligned_avx2;
-        v210dec->v210_to_planar_10 = upipe_v210_to_planar_10_aligned_avx2;
+        v210dec->v210_to_planar_8  = upipe_v210_to_planar_8_avx2;
+        v210dec->v210_to_planar_10 = upipe_v210_to_planar_10_avx2;
     }
 #endif
 #endif
