@@ -42,8 +42,8 @@
 #include <fcntl.h>
 #include <errno.h>
 
-#include "libsdi.h"
 #include "sdi_config.h"
+#include "libsdi.h"
 #include "csr.h"
 #include "flags.h"
 
