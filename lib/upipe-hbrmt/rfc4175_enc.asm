@@ -48,6 +48,8 @@ v210_sdi_shuf_after_1: times 2 db -1,-1, 1, 0,-1,-1,-1,-1, 3, 2,-1,-1,-1, 5, 4,-
 v210_sdi_shuf_after_2: times 2 db  1, 0,-1, 3, 2,-1, 5, 4,-1,-1, 7, 6, 9, 8,-1,-1
 v210_sdi_shuf_after_3: times 2 db -1, 1, 0,-1,-1, 3, 2, 5, 4,-1,-1, 7, 6,-1,-1,-1
 
+SECTION .text
+
 %macro v210_to_sdi 0
 
 ; v210_to_sdi(const uint32_t *src, uint8_t *dst, int64_t width)
