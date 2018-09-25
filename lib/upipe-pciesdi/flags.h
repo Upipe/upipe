@@ -18,4 +18,15 @@
 #define DMA_TABLE_LOOP_INDEX (1 << 0)
 #define DMA_TABLE_LOOP_COUNT (1 << 16)
 
+/* sdi */
+
+#define SDI_TX_MODE_HD 0b00
+#define SDI_TX_MODE_SD 0b01
+#define SDI_TX_MODE_3G 0b10
+
+#define SDI_LOOPBACK_NEAR_END_PCS 0b001
+#define SDI_LOOPBACK_NEAR_END_PMA 0b010
+#define SDI_LOOPBACK_FAR_END_PMA  0b100
+#define SDI_LOOPBACK_FAR_END_PCS  0b110
+
 #endif /* __HW_FLAGS_H */

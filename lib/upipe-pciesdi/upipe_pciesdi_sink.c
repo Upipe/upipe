@@ -334,7 +334,7 @@ static int upipe_pciesdi_set_uri(struct upipe *upipe, const char *path)
         return UBASE_ERR_EXTERNAL;
     }
 
-    sdi_set_pattern(upipe_pciesdi_sink->fd, 0, 0);
+    sdi_set_pattern(upipe_pciesdi_sink->fd, SDI_TX_MODE_HD, 0, 0);
 
     sdi_dma(upipe_pciesdi_sink->fd, 0, 0, 0); // disable loopback
 
