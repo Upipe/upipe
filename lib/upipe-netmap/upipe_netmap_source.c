@@ -749,18 +749,18 @@ static void upipe_netmap_source_prepare_frame(struct upipe *upipe, uint32_t time
 }
 
 #define GOT_SEQNUM (1LLU<<49)
+#define GOT_FUTURE (1LLU<<50)
 /*
  * do_packet : examine next packet in queue and handle if possible
  *
  * Return value:
- * UINT64_MAX       discontinuity, packet is in the future, keep it for later
- * != UINT64_MAX    packet handled or discontinuity, drop it
  * 0 -              invalid packet, drop it
  * 0000000XTTTTTTTTTTTTTTTTSSSSSSSS
  *      T = 32-bit RTP timestamp
  *      S = 16-bit RTP seqnum
  *      bit 48 is set to account for timestamp == seqnum == 0
  *      bit 49 is set when we found the seqnum we were looking for
+ *      bit 50 is set when we found a future packet
  *
  *
  */
@@ -796,7 +796,7 @@ static uint64_t do_packet(struct upipe *upipe, struct netmap_ring *rxring,
         }
 
         /* seqnum > expected, keep */
-        return UINT64_MAX;
+        return ret | GOT_FUTURE;
     }
 
     ret |= GOT_SEQNUM;
@@ -882,6 +882,7 @@ static void upipe_netmap_source_worker(struct upump *upump)
     int sources = !!pkts[0] + !!pkts[1];
     while (pkts[0] || pkts[1]) {
         int discontinuity = 0;
+        uint64_t ret_intf[2] = {0, 0};
         for (int idx = 0; idx < 2; idx++) { // one queue then the other
             if (!upipe_netmap_source->d[idx] || !pkts[idx])
                 continue;
@@ -889,8 +890,9 @@ static void upipe_netmap_source_worker(struct upump *upump)
             do {
                 const uint32_t cur = rxring[idx]->cur;
                 uint64_t ret = do_packet(upipe, rxring[idx], cur, systime);
-                if (ret == UINT64_MAX) {
+                if (ret & GOT_FUTURE) {
                     /* discontinuity, packet is in the future */
+                    ret_intf[idx] = ret;
                     discontinuity++;
 
                     /* we did not find the packet we wanted */
@@ -911,7 +913,10 @@ static void upipe_netmap_source_worker(struct upump *upump)
         }
 
         if (discontinuity == sources) {
-            //upipe_err(upipe, "DISCONTINUITY"); // TODO: # of packets lost
+            uint16_t got = (ret_intf[0] ? ret_intf[0] : ret_intf[1]) & 0xffff;
+            upipe_err_va(upipe, "DISCONTINUITY: got 0x%.8x expected 0x%.8x",
+                    got, upipe_netmap_source->expected_seqnum);
+
             upipe_netmap_source->discontinuity = true;
             if (upipe_netmap_source->uref) {
                 if (upipe_netmap_source->hbrmt) {
