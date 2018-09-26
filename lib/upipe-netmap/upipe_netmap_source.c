@@ -670,11 +670,22 @@ static const uint8_t *get_rtp(struct upipe *upipe, struct netmap_ring *rxring,
     struct upipe_netmap_source *upipe_netmap_source = upipe_netmap_source_from_upipe(upipe);
     uint8_t *src = (uint8_t*)NETMAP_BUF(rxring, slot->buf_idx);
 
+    /* enough to read IP header size */
+    if (slot->len < ETHERNET_HEADER_LEN + IP_HEADER_MINSIZE)
+        return NULL;
+
     if (ethernet_get_lentype(src) != ETHERNET_TYPE_IP)
         return NULL;
 
     uint8_t *ip = &src[ETHERNET_HEADER_LEN];
     if (ip_get_proto(ip) != IP_PROTO_UDP)
+        return NULL;
+
+    uint8_t ip_header_size = 4 * ip_get_ihl(ip);
+
+    /* enough to read RTP header */
+    unsigned min_pkt_size = ETHERNET_HEADER_LEN + ip_header_size + UDP_HEADER_SIZE + RTP_HEADER_SIZE;
+    if (slot->len < min_pkt_size)
         return NULL;
 
     uint8_t *udp = ip_payload(ip);
@@ -684,17 +695,13 @@ static const uint8_t *get_rtp(struct upipe *upipe, struct netmap_ring *rxring,
     if (!upipe_netmap_source->hbrmt)
         return rtp;
 
-    unsigned min_pkt_size = RTP_HEADER_SIZE + HBRMT_HEADER_SIZE + HBRMT_DATA_SIZE;
+    unsigned min_payload_size = RTP_HEADER_SIZE + HBRMT_HEADER_SIZE + HBRMT_DATA_SIZE;
 
-    if (*payload_len < min_pkt_size) {
+    if (*payload_len < min_payload_size) {
         return NULL;
     }
 
-    min_pkt_size += UDP_HEADER_SIZE + 4 * ip_get_ihl(ip) + ETHERNET_HEADER_LEN;
-
-    if (slot->len < min_pkt_size) {
-        return NULL;
-    }
+    min_pkt_size += min_payload_size;
 
     if (slot->len - 9 >= min_pkt_size) {
         const uint8_t *vss = &src[slot->len-9];
