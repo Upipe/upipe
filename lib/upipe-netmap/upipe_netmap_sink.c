@@ -67,6 +67,7 @@
 #include "sdi.h"
 
 #include "../upipe-hbrmt/sdienc.h"
+#include "../upipe-hbrmt/rfc4175_enc.h"
 
 #define UPIPE_RFC4175_MAX_PLANES 3
 #define UPIPE_RFC4175_PIXEL_PAIR_BYTES 5
@@ -184,7 +185,7 @@ struct upipe_netmap_sink {
     /** tr-03 functions */
     void (*pack_8_planar)(const uint8_t *y, const uint8_t *u, const uint8_t *v, uint8_t *l, const int64_t width);
     void (*pack_10_planar)(const uint16_t *y, const uint16_t *u, const uint16_t *v, uint8_t *l, const int64_t width);
-    void (*unpack_v210)(const uint32_t *src, uint8_t *dst, int64_t width);
+    void (*unpack_v210)(const uint32_t *src, uint8_t *dst, uintptr_t width);
 
     /** upump manager */
     struct upump_mgr *upump_mgr;
@@ -572,7 +573,7 @@ static struct upipe *_upipe_netmap_sink_alloc(struct upipe_mgr *mgr,
 
     upipe_netmap_sink->pack_8_planar = upipe_planar_to_sdi_8_c;
     upipe_netmap_sink->pack_10_planar = upipe_planar_to_sdi_10_c;
-    upipe_netmap_sink->unpack_v210 = upipe_v210_sdi_unpack_c;
+    upipe_netmap_sink->unpack_v210 = upipe_v210_to_sdi_c;
 
     upipe_netmap_sink->pack = upipe_uyvy_to_sdi_c;
     upipe_netmap_sink->pack2 = upipe_uyvy_to_sdi_2_c;
@@ -584,6 +585,7 @@ static struct upipe *_upipe_netmap_sink_alloc(struct upipe_mgr *mgr,
         upipe_netmap_sink->pack2 = upipe_uyvy_to_sdi_2_ssse3;
         upipe_netmap_sink->pack_10_planar = upipe_planar_to_sdi_10_ssse3;
         upipe_netmap_sink->pack_8_planar = upipe_planar_to_sdi_8_ssse3;
+        upipe_netmap_sink->unpack_v210 = upipe_v210_to_sdi_ssse3;
     }
 
     if (__builtin_cpu_supports("avx")) {
@@ -591,7 +593,7 @@ static struct upipe *_upipe_netmap_sink_alloc(struct upipe_mgr *mgr,
         upipe_netmap_sink->pack2 = upipe_uyvy_to_sdi_2_avx;
         upipe_netmap_sink->pack_8_planar = upipe_planar_to_sdi_8_avx;
         upipe_netmap_sink->pack_10_planar = upipe_planar_to_sdi_10_avx;
-        upipe_netmap_sink->unpack_v210 = upipe_v210_sdi_unpack_aligned_avx;
+        upipe_netmap_sink->unpack_v210 = upipe_v210_to_sdi_avx;
     }
 
     if (__builtin_cpu_supports("avx2")) {
