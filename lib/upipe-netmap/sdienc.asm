@@ -79,6 +79,8 @@ cglobal planar_to_sdi_8, 5, 5, 3, y, u, v, l, width, size
     RET
 %endmacro
 
+INIT_XMM ssse3
+planar_to_sdi_8
 INIT_XMM avx
 planar_to_sdi_8
 
@@ -114,5 +116,7 @@ cglobal planar_to_sdi_10, 5, 5, 3, y, u, v, l, width, size
     RET
 %endmacro
 
+INIT_XMM ssse3
+planar_to_sdi_10
 INIT_XMM avx
 planar_to_sdi_10

@@ -582,6 +582,8 @@ static struct upipe *_upipe_netmap_sink_alloc(struct upipe_mgr *mgr,
     if (__builtin_cpu_supports("ssse3")) {
         upipe_netmap_sink->pack = upipe_uyvy_to_sdi_ssse3;
         upipe_netmap_sink->pack2 = upipe_uyvy_to_sdi_2_ssse3;
+        upipe_netmap_sink->pack_10_planar = upipe_planar_to_sdi_10_ssse3;
+        upipe_netmap_sink->pack_8_planar = upipe_planar_to_sdi_8_ssse3;
     }
 
     if (__builtin_cpu_supports("avx")) {
