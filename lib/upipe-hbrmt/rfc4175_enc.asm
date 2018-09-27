@@ -23,11 +23,6 @@
 
 SECTION_RODATA 32
 
-v210_mask:        times 8 dd 0x3ff
-v210_mult:        times 2 dw 64, 4, 64, 4, 64, 4, 64, 4
-v210_luma_shuf:   times 2 db 8, 9, 0, 1, 2, 3,12,13, 4, 5, 6, 7,-1,-1,-1,-1
-v210_chroma_shuf: times 2 db 0, 1, 8, 9, 6, 7,-1,-1, 2, 3, 4, 5,12,13,-1,-1
-
 ;1:  V1 Y4 Y6
 ;2:  U1 Y2 Y3 U3 V3
 ;3:  Y1 U2 V2 Y5
