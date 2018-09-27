@@ -25,10 +25,10 @@ void upipe_planar_to_sdi_10_c(const uint16_t *y, const uint16_t *u, const uint16
         uint16_t y1 = *y++;
         uint16_t y2 = *y++;
 
-        *l++ = (u1 >> 2) & 0xff;                        // uuuuuuuu
-        *l++ = ((u1 & 0x3) << 6) | ((y1 >> 4) & 0x3f);  // uuyyyyyy
-        *l++ = ((y1 & 0xf) << 4) | ((v1 >> 6) & 0xf);   // yyyyvvvv
-        *l++ = ((v1 & 0xf) << 4) | ((y2 >> 8) & 0x3);   // vvvvvvyy
-        *l++ = y2 & 0xff;                               // yyyyyyyy
+        *l++ = u1 >> 2;               // uuuuuuuu
+        *l++ = (u1 << 6) | (y1 >> 4); // uuyyyyyy
+        *l++ = (y1 << 4) | (v1 >> 6); // yyyyvvvv
+        *l++ = (v1 << 2) | (y2 >> 8); // vvvvvvyy
+        *l++ = y2;                    // yyyyyyyy
     }
 }
