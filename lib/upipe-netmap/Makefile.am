@@ -2,6 +2,7 @@ lib_LTLIBRARIES = libupipe_netmap.la
 
 libupipe_netmap_la_SOURCES = upipe_netmap_source.c \
     upipe_netmap_sink.c \
+    sdi.c \
     sdi.h \
     sdienc.asm \
     ../upipe-hbrmt/sdienc.asm \
