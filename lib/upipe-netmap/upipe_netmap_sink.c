@@ -34,7 +34,6 @@
 #include <upipe/uref_block.h>
 #include <upipe/uref_clock.h>
 #include <upipe/upump.h>
-#include <upipe/ubits.h>
 #include <upipe/ubuf.h>
 #include <upipe/upipe.h>
 #include <upipe/uref_pic.h>
@@ -74,29 +73,6 @@
 
 /* the maximum ever delay between 2 TX buffers refill */
 #define NETMAP_SINK_LATENCY (UCLOCK_FREQ / 25)
-
-static void upipe_v210_sdi_unpack_c(const uint32_t *src, uint8_t *sdi, int64_t width)
-{
-#define WRITE_SDI \
-    do { \
-        uint32_t val = *src++; \
-        uint16_t a =  val & 0x3FF; \
-        uint16_t b = (val >> 10) & 0x3FF; \
-        uint16_t c = (val >> 20) & 0x3FF; \
-        ubits_put(&s, 30, (a << 20) | (b << 10) | c); \
-    } while (0)
-
-    struct ubits s;
-    ubits_init(&s, sdi, (width*10*2) >> 3);
-    for (int i = 0; i < width-5; i += 6) {
-        WRITE_SDI;
-        WRITE_SDI;
-        WRITE_SDI;
-        WRITE_SDI;
-    }
-    ubits_clean(&s, &sdi);
-#undef WRITE_SDI
-}
 
 /** @hidden */
 static bool upipe_netmap_sink_output(struct upipe *upipe, struct uref *uref,

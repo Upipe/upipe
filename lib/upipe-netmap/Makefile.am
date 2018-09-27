@@ -8,7 +8,6 @@ libupipe_netmap_la_SOURCES = upipe_netmap_source.c \
     ../upipe-hbrmt/sdienc.asm \
     ../upipe-hbrmt/sdidec.asm \
     ../upipe-hbrmt/rfc4175_dec.asm \
-    v210.asm \
     ../upipe-hbrmt/sdidec.c \
     $(NULL)
 libupipe_netmap_la_CPPFLAGS = $(AVUTIL_CFLAGS) -I$(top_builddir) -I$(top_builddir)/include -I$(top_srcdir)/include
