@@ -54,7 +54,7 @@ cglobal planar_to_sdi_8, 5, 5, 3, y, u, v, l, width, size
 .loop:
     movq   m0, [yq + widthq*2]
     movd   m1, [uq + widthq*1]
-    movu   m2, [vq + widthq*1]
+    movd   m2, [vq + widthq*1]
 
     pshufb m0, [planar_8_y_shuf]
     pmullw m0, [planar_8_y_mult]
