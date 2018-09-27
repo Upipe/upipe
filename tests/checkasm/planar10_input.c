@@ -46,8 +46,10 @@ void checkasm_check_planar10_input(void)
 
     int cpu_flags = av_get_cpu_flags();
 
-    if (cpu_flags & AV_CPU_FLAG_SSSE3) {
+    if (cpu_flags & AV_CPU_FLAG_SSE2) {
        s.uyvy =  upipe_planar_to_uyvy_10_sse2;
+    }
+    if (cpu_flags & AV_CPU_FLAG_SSSE3) {
        s.v210  = upipe_planar_to_v210_10_ssse3;
     }
     if (cpu_flags & AV_CPU_FLAG_AVX) {
