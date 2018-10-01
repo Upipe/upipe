@@ -198,8 +198,6 @@ static int select_variant(struct uprobe *uprobe)
          ubase_check(upipe_split_iterate(hls, &uref)) && uref;) {
         uint64_t id;
         ubase_assert(uref_flow_get_id(uref, &id));
-        const char *uri = "(none)";
-        uref_m3u_get_uri(uref, &uri);
         uint64_t bandwidth = 0;
         uref_m3u_master_get_bandwidth(uref, &bandwidth);
 
