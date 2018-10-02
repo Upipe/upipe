@@ -385,6 +385,8 @@ static void init(struct upipe *upipe)
     sdi_dma_reader(fd, 0, &hw_count, &sw_count);
     sdi_dma_writer(fd, 0, &hw_count, &sw_count);
 
+#ifdef PCIE_SDI_HW
+
     /* si5324 reset */
     upipe_dbg(upipe, "Reseting SI5324...");
     si5324_spi_write(fd, 136, 80);
@@ -408,6 +410,21 @@ static void init(struct upipe *upipe)
     /* reference clock selection */
     upipe_dbg(upipe, "Select SI5324 output as reference clock...");
     sdi_writel(fd, CSR_SDI_QPLL_PLL0_REFCLK_SEL_ADDR, REFCLK1_SEL);
+
+#endif
+
+#ifdef DUO2_HW
+
+    /* reference clock selection */
+    if (1 /* !strcmp(rate, "pal") */) {
+        upipe_dbg(upipe, "Configure for PAL (148.5MHz)...");
+        sdi_writel(fd, CSR_SDI_QPLL_PLL0_REFCLK_SEL_ADDR, REFCLK0_SEL);
+    } else if (0 /* !strcmp(rate, "ntsc") */) {
+        upipe_dbg(upipe, "Configure for NTSC (148.35MHz)...");
+        sdi_writel(fd, CSR_SDI_QPLL_PLL0_REFCLK_SEL_ADDR, REFCLK1_SEL);
+    }
+
+#endif
 
     /* un-reset sdi cores */
     upipe_dbg(upipe, "Un-reset SDI cores...");
