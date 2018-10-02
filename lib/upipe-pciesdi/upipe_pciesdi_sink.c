@@ -30,12 +30,17 @@
 #include <upipe/ulist.h>
 #include <upipe/udict.h>
 #include <upipe/upump.h>
+#include <upipe/uref_clock.h>
 #include <upipe/upipe_helper_upump_mgr.h>
 #include <upipe/upipe_helper_upump.h>
 #include <upipe/upipe_helper_upipe.h>
 #include <upipe/upipe_helper_urefcount.h>
 #include <upipe/upipe_helper_void.h>
+#include <upipe/upipe_helper_uclock.h>
 #include <upipe-pciesdi/upipe_pciesdi_sink.h>
+
+#include <upipe/uref_pic.h>
+#include <upipe/uref_dump.h>
 
 #include <sys/types.h>
 #include <sys/stat.h>
@@ -52,6 +57,11 @@ struct upipe_pciesdi_sink {
     /** refcount management structure */
     struct urefcount urefcount;
 
+    /** uclock structure, if not NULL we are in live mode */
+    struct uclock *uclock;
+    /** uclock request */
+    struct urequest uclock_request;
+
     /** file descriptor */
     int fd;
 
@@ -61,6 +71,9 @@ struct upipe_pciesdi_sink {
     size_t written;
 
     int first;
+
+    /** delay applied to systime attribute when uclock is provided */
+    uint64_t latency;
 
     /** upump manager */
     struct upump_mgr *upump_mgr;
@@ -76,6 +89,7 @@ UPIPE_HELPER_UREFCOUNT(upipe_pciesdi_sink, urefcount, upipe_pciesdi_sink_free)
 UPIPE_HELPER_VOID(upipe_pciesdi_sink);
 UPIPE_HELPER_UPUMP_MGR(upipe_pciesdi_sink, upump_mgr)
 UPIPE_HELPER_UPUMP(upipe_pciesdi_sink, upump, upump_mgr)
+UPIPE_HELPER_UCLOCK(upipe_pciesdi_sink, uclock, uclock_request, NULL, upipe_throw_provide_request, NULL)
 
 /** @internal @This allocates a null pipe.
  *
@@ -98,7 +112,9 @@ static struct upipe *upipe_pciesdi_sink_alloc(struct upipe_mgr *mgr,
     upipe_pciesdi_sink_init_upump_mgr(upipe);
     upipe_pciesdi_sink_init_upump(upipe);
     upipe_pciesdi_sink_check_upump_mgr(upipe);
+    upipe_pciesdi_sink_init_uclock(upipe);
 
+    upipe_pciesdi_sink->latency = 0;
     upipe_pciesdi_sink->fd = -1;
     ulist_init(&upipe_pciesdi_sink->urefs);
     upipe_pciesdi_sink->uref = NULL;
@@ -107,6 +123,32 @@ static struct upipe *upipe_pciesdi_sink_alloc(struct upipe_mgr *mgr,
     upipe_throw_ready(&upipe_pciesdi_sink->upipe);
 
     return upipe;
+}
+
+static inline bool hd_eav_match(const uint16_t *src)
+{
+    if (src[0] == 0x3ff
+            && src[1] == 0x3ff
+            && src[2] == 0x000
+            && src[3] == 0x000
+            && src[4] == 0x000
+            && src[5] == 0x000
+            && src[6] == src[7])
+        return true;
+    return false;
+}
+
+static inline bool hd_sav_match(const uint16_t *src)
+{
+    if (src[-8] == 0x3ff
+            && src[-7] == 0x3ff
+            && src[-6] == 0x000
+            && src[-5] == 0x000
+            && src[-4] == 0x000
+            && src[-3] == 0x000
+            && src[-2] == src[-1])
+        return true;
+    return false;
 }
 
 /** @internal
@@ -119,10 +161,14 @@ static void upipe_pciesdi_sink_worker(struct upump *upump)
     struct uref *uref = upipe_pciesdi_sink->uref;
     if (!uref) {
         struct uchain *uchain = ulist_pop(&upipe_pciesdi_sink->urefs);
+        static bool underrun = false; /* FIXME: static variable */
         if (!uchain) {
-//            upipe_err(upipe, "underrun");
+            if (!underrun)
+            upipe_err(upipe, "underrun");
+            underrun = true;
             return;
         }
+        underrun = false;
         uref = uref_from_uchain(uchain);
         upipe_pciesdi_sink->uref = uref;
         upipe_pciesdi_sink->written = 0;
@@ -142,6 +188,18 @@ static void upipe_pciesdi_sink_worker(struct upump *upump)
     sdi_tx(upipe_pciesdi_sink->fd, SDI_TX_MODE_HD, &txen, &slew);
     if (txen || slew)
         printf("txen %d slew %d\n", txen, slew);
+
+#if 1
+    if (!hd_eav_match(buf)) {
+        upipe_err(upipe, "EAV not found");
+        abort();
+    }
+
+    if (!hd_sav_match(buf + (2200-1920)*4)) {
+        upipe_err(upipe, "SAV not found");
+        abort();
+    }
+#endif
 
     int64_t hw = 0, sw = 0;
     sdi_dma_reader(upipe_pciesdi_sink->fd, upipe_pciesdi_sink->first == 0, &hw, &sw); // enable
@@ -167,6 +225,26 @@ static void upipe_pciesdi_sink_worker(struct upump *upump)
     }
 }
 
+/** @internal @This is called when the file descriptor can be written again.
+ * Unblock the sink and unqueue all queued buffers.
+ *
+ * @param upump description structure of the watcher
+ */
+static void upipe_pciesdi_sink_watcher(struct upump *upump)
+{
+    struct upipe *upipe = upump_get_opaque(upump, struct upipe *);
+    struct upipe_pciesdi_sink *upipe_pciesdi_sink = upipe_pciesdi_sink_from_upipe(upipe);
+    struct upump *upump2 = upump_alloc_fd_write(upipe_pciesdi_sink->upump_mgr,
+            upipe_pciesdi_sink_worker, upipe,
+            upipe->refcount, upipe_pciesdi_sink->fd);
+    if (unlikely(upump2 == NULL)) {
+        upipe_throw_fatal(upipe, UBASE_ERR_UPUMP);
+        return;
+    }
+    upipe_pciesdi_sink_set_upump(upipe, upump2);
+    upump_start(upump2);
+}
+
 /** @internal
  *
  * @param upipe description structure of the pipe
@@ -177,15 +255,66 @@ static void upipe_pciesdi_sink_input(struct upipe *upipe, struct uref *uref, str
 {
     struct upipe_pciesdi_sink *upipe_pciesdi_sink = upipe_pciesdi_sink_from_upipe(upipe);
 
+    const char *def;
+    if (unlikely(ubase_check(uref_flow_get_def(uref, &def)))) {
+        uint64_t latency = 0;
+        uref_clock_get_latency(uref, &latency);
+        if (latency > upipe_pciesdi_sink->latency)
+            upipe_pciesdi_sink->latency = latency;
+        uref_free(uref);
+        return;
+    }
+
+#define CHUNK_BUFFER_COUNT 32
+#define BUFFER_COUNT_PRINT_THRESHOLD(num, den) (num * CHUNK_BUFFER_COUNT / den)
+
     ulist_add(&upipe_pciesdi_sink->urefs, uref_to_uchain(uref));
     size_t n = ulist_depth(&upipe_pciesdi_sink->urefs);
-    upipe_dbg_va(upipe, "Buffered %zu urefs", n);
+    if (n < BUFFER_COUNT_PRINT_THRESHOLD(2,3))
+        upipe_dbg_va(upipe, "buffered %zu urefs", n);
 
-    if (upipe_pciesdi_sink->upump || n < 2)
+    /* check if pump is already running */
+    if (upipe_pciesdi_sink->upump)
         return;
 
     uint8_t txen, slew;
     sdi_tx(upipe_pciesdi_sink->fd, SDI_TX_MODE_HD, &txen, &slew);
+
+    /* check for chunks or whole frames */
+    uint64_t vpos;
+    int ret = uref_pic_get_vposition(uref, &vpos);
+    if (!ubase_check(ret) && n < 2)
+        return;
+
+    /* check for enough chunks to fill DMA buffers assuming DMA_BUFFER_SIZE is a line */
+    if (ubase_check(ret) && n < CHUNK_BUFFER_COUNT)
+        return;
+
+    uint64_t ts, now = uclock_now(upipe_pciesdi_sink->uclock);
+    upipe_dbg_va(upipe, "%s, now: %" PRIu64 ", buffer %zu", __func__, now, n);
+    uref_dump(uref, upipe->uprobe);
+
+    if (unlikely(!ubase_check(uref_clock_get_cr_sys(uref, &ts)))) {
+        upipe_warn(upipe, "received non-dated buffer");
+        goto write_buffer;
+    }
+    ts += upipe_pciesdi_sink->latency;
+
+    //upipe_verbose_va(upipe, "now: %"PRIu64", ts: %"PRIu64", diff: %"PRId64,
+            //now, ts, (int64_t)ts - (int64_t)now);
+    if (now < ts) {
+        upipe_pciesdi_sink_check_upump_mgr(upipe);
+        if (likely(upipe_pciesdi_sink->upump_mgr != NULL)) {
+            upipe_verbose_va(upipe, "sleeping %"PRIu64" (%"PRIu64")",
+                    ts - now, ts);
+            upipe_pciesdi_sink_wait_upump(upipe, ts - now,
+                    upipe_pciesdi_sink_watcher);
+            return;
+        }
+    }
+
+write_buffer:
+    (void)0;
 
     int64_t hw = 0, sw = 0;
     sdi_dma_reader(upipe_pciesdi_sink->fd, upipe_pciesdi_sink->first == 0, &hw, &sw);
@@ -317,6 +446,7 @@ static int upipe_pciesdi_set_uri(struct upipe *upipe, const char *path)
 {
     struct upipe_pciesdi_sink *upipe_pciesdi_sink = upipe_pciesdi_sink_from_upipe(upipe);
 
+    upipe_pciesdi_sink_check_upump_mgr(upipe);
     ubase_clean_fd(&upipe_pciesdi_sink->fd);
     upipe_pciesdi_sink_set_upump(upipe, NULL);
 
@@ -328,6 +458,12 @@ static int upipe_pciesdi_set_uri(struct upipe *upipe, const char *path)
 
     init(upipe);
 
+    int64_t hw = 0, sw = 0;
+    sdi_dma_reader(upipe_pciesdi_sink->fd, 0, &hw, &sw); //disable
+    sdi_release_dma_reader(upipe_pciesdi_sink->fd); // release
+
+    close(upipe_pciesdi_sink->fd);
+
     upipe_pciesdi_sink->fd = open(path, O_RDWR | O_CLOEXEC | O_NONBLOCK);
     if (unlikely(upipe_pciesdi_sink->fd < 0)) {
         upipe_err_va(upipe, "can't open %s (%m)", path);
@@ -336,7 +472,16 @@ static int upipe_pciesdi_set_uri(struct upipe *upipe, const char *path)
 
     sdi_set_pattern(upipe_pciesdi_sink->fd, SDI_TX_MODE_HD, 0, 0);
 
+    /* Configure for NTSC (148.35MHz) */
+    sdi_writel(upipe_pciesdi_sink->fd, CSR_SDI_QPLL_PLL0_REFCLK_SEL_ADDR, REFCLK1_SEL);
+
     sdi_dma(upipe_pciesdi_sink->fd, 0, 0, 0); // disable loopback
+
+    /* request dma */
+    if (sdi_request_dma_reader(upipe_pciesdi_sink->fd) == 0) {
+        upipe_err(upipe, "DMA not available");
+        return UBASE_ERR_EXTERNAL;
+    }
 
     return UBASE_ERR_NONE;
 }
@@ -360,12 +505,11 @@ static int upipe_pciesdi_sink_control(struct upipe *upipe, int command, va_list 
         case UPIPE_ATTACH_UPUMP_MGR:
             upipe_pciesdi_sink_set_upump(upipe, NULL);
             return upipe_pciesdi_sink_attach_upump_mgr(upipe);
-/*
+
         case UPIPE_ATTACH_UCLOCK:
            upipe_pciesdi_sink_set_upump(upipe, NULL);
            upipe_pciesdi_sink_require_uclock(upipe);
            return UBASE_ERR_NONE;
-*/
 
         case UPIPE_SET_FLOW_DEF: {
             struct uref *flow = va_arg(args, struct uref *);
@@ -399,6 +543,7 @@ static void upipe_pciesdi_sink_free(struct upipe *upipe)
         ulist_delete(uchain);
     }
 
+    upipe_pciesdi_sink_clean_uclock(upipe);
     upipe_pciesdi_sink_clean_upump(upipe);
     upipe_pciesdi_sink_clean_upump_mgr(upipe);
     upipe_pciesdi_sink_clean_urefcount(upipe);

@@ -9,7 +9,7 @@ libupipe_pciesdi_la_SOURCES = upipe_pciesdi_source.c \
 	libsdi.h \
 	libsdi.c
 
-libupipe_pciesdi_la_CPPFLAGS = -I$(top_builddir)/include -I$(top_srcdir)/include
+libupipe_pciesdi_la_CPPFLAGS = -I$(top_builddir) -I$(top_builddir)/include -I$(top_srcdir)/include
 libupipe_pciesdi_la_LIBADD = $(top_builddir)/lib/upipe/libupipe.la
 libupipe_pciesdi_la_LDFLAGS = -no-undefined
 

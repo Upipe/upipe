@@ -22,6 +22,8 @@
  * @short Upipe source module PCIE SDI cards
  */
 
+#include <config.h>
+
 #include <upipe/ubase.h>
 #include <upipe/uprobe.h>
 #include <upipe/urequest.h>
@@ -93,11 +95,35 @@ struct upipe_pciesdi_src {
     /** read watcher */
     struct upump *upump;
 
+    /** UYVY to 10-bit Planar */
+    void (*uyvy_to_planar_10)(uint16_t *y, uint16_t *u, uint16_t *v, const uint16_t *l, uintptr_t width);
+
     /** lines granularity */
     unsigned lines;
 
+    /* cached output uref */
+    struct uref *output_uref;
+    int cached_output_lines;
+
+    /* vposition of next chunk to be output */
+    int vposition;
+
+    /* pts of current frame or field */
+    uint64_t pts_prog;
+    /* duration of frame or field */
+    uint64_t duration_f;
+
+    /* have seen the start of picture */
+    bool start;
+
     /** file descriptor */
     int fd;
+
+    int previous_sdi_line_number;
+
+    /* EAV offset from start of block, in bytes */
+    ssize_t eav_position;
+    uint8_t eav_buffer[DMA_BUFFER_SIZE];
 
     /** public upipe structure */
     struct upipe upipe;
@@ -143,8 +169,30 @@ static struct upipe *upipe_pciesdi_src_alloc(struct upipe_mgr *mgr,
     upipe_pciesdi_src_init_upump_mgr(upipe);
     upipe_pciesdi_src_init_upump(upipe);
     upipe_pciesdi_src_init_uclock(upipe);
+
+    upipe_pciesdi_src->uyvy_to_planar_10 = upipe_uyvy_to_planar_10_c;
+
+#if defined(HAVE_X86ASM)
+#if defined(__i686__) || defined(__x86_64__)
+    if (__builtin_cpu_supports("ssse3")) {
+        upipe_pciesdi_src->uyvy_to_planar_10 = upipe_uyvy_to_planar_10_unaligned_ssse3;
+    }
+
+    if (__builtin_cpu_supports("avx")) {
+        upipe_pciesdi_src->uyvy_to_planar_10 = upipe_uyvy_to_planar_10_unaligned_avx;
+    }
+
+    if (__builtin_cpu_supports("avx2")) {
+        upipe_pciesdi_src->uyvy_to_planar_10 = upipe_uyvy_to_planar_10_unaligned_avx2;
+    }
+#endif
+#endif
+
+    upipe_pciesdi_src->start = false;
+    upipe_pciesdi_src->output_uref = NULL;
     upipe_pciesdi_src->fd = -1;
     upipe_pciesdi_src->lines = 0;
+    upipe_pciesdi_src->previous_sdi_line_number = -1;
     upipe_throw_ready(upipe);
 
     return upipe;
@@ -201,24 +249,106 @@ static const char *sdi_decode_rate(uint8_t rate)
     }
 }
 
-static void upipe_sdi_to_planar_10_c(const uint8_t *src, uint16_t *y, uint16_t *u, uint16_t *v, uintptr_t pixels)
+static void dump_and_exit_clean(struct upipe *upipe, uint8_t *buf, size_t size)
 {
-    for (int i = 0; i < pixels; i += 2) {
-        uint8_t a = *src++;
-        uint8_t b = *src++;
-        uint8_t c = *src++;
-        uint8_t d = *src++;
-        uint8_t e = *src++;
-        uint8_t f = *src++;
-        uint8_t g = *src++;
-        uint8_t h = *src++;
-        *u++ = (b << 8) | a;
-        *y++ = (d << 8) | c;
-        *v++ = (f << 8) | e;
-        *y++ = (h << 8) | g;
+    struct upipe_pciesdi_src *upipe_pciesdi_src = upipe_pciesdi_src_from_upipe(upipe);
+    int64_t hw, sw;
+    sdi_dma_writer(upipe_pciesdi_src->fd, 0, &hw, &sw); // disable
+    sdi_release_dma_writer(upipe_pciesdi_src->fd); // release old locks
+    close(upipe_pciesdi_src->fd);
+
+    if (buf) {
+        FILE *fh = fopen("dump.bin", "wb");
+        if (!fh) {
+            upipe_err(upipe, "could not open dump file");
+            abort();
+        }
+        fwrite(buf, 1, size, fh);
+        fclose(fh);
+        upipe_dbg(upipe, "dumped to dump.bin");
     }
+
+    abort();
 }
 
+static int output_chunk(struct upipe *upipe, struct uref *uref, struct upump **upump)
+{
+    struct upipe_pciesdi_src *upipe_pciesdi_src = upipe_pciesdi_src_from_upipe(upipe);
+
+    /* unmap planes */
+    static const char *chroma[3] = { "y10l", "u10l", "v10l" };
+    for (int i = 0; i < 3; i++)
+        uref_pic_plane_unmap(uref, chroma[i], 0, 0, -1, -1);
+
+    int vpos = upipe_pciesdi_src->vposition;
+    int lines = upipe_pciesdi_src->cached_output_lines;
+
+    /* set picture properties */
+    uref_pic_set_vposition(uref, vpos);
+    uref_attr_set_unsigned(uref, 1080, UDICT_TYPE_UNSIGNED, "original_height");
+
+    /* set clock properties */
+    uref_clock_set_pts_prog(uref, upipe_pciesdi_src->pts_prog
+            + upipe_pciesdi_src->duration_f * vpos / 540);
+    uref_clock_set_duration(uref, upipe_pciesdi_src->duration_f * lines / 540 );
+    if (upipe_pciesdi_src->uclock != NULL)
+        uref_clock_set_cr_sys(uref, uclock_now(upipe_pciesdi_src->uclock));
+
+    upipe_pciesdi_src->vposition += lines;
+    if (upipe_pciesdi_src->vposition >= 540) {
+        upipe_pciesdi_src->vposition = 0;
+        upipe_pciesdi_src->pts_prog += upipe_pciesdi_src->duration_f;
+    }
+
+    /* output */
+    upipe_pciesdi_src_output(upipe, uref, upump);
+    uref = upipe_pciesdi_src->output_uref = NULL;
+    upipe_pciesdi_src->cached_output_lines = 0;
+
+    /* allocate a new uref */
+    uref = uref_pic_alloc(upipe_pciesdi_src->uref_mgr,
+            upipe_pciesdi_src->ubuf_mgr, 1920, upipe_pciesdi_src->lines);
+    if (!uref)
+        return UBASE_ERR_ALLOC;
+    upipe_pciesdi_src->output_uref = uref;
+
+    return UBASE_ERR_NONE;
+}
+
+static inline bool hd_eav_match(const uint16_t *src)
+{
+    if (src[0] == 0x3ff
+            && src[1] == 0x3ff
+            && src[2] == 0x000
+            && src[3] == 0x000
+            && src[4] == 0x000
+            && src[5] == 0x000
+            && src[6] == src[7])
+        return true;
+    return false;
+}
+
+static inline bool hd_sav_match(const uint16_t *src)
+{
+    if (src[-8] == 0x3ff
+            && src[-7] == 0x3ff
+            && src[-6] == 0x000
+            && src[-5] == 0x000
+            && src[-4] == 0x000
+            && src[-3] == 0x000
+            && src[-2] == src[-1])
+        return true;
+    return false;
+}
+
+static ssize_t hd_eav_find(const uint16_t *src, ssize_t size)
+{
+    for (ssize_t i = 0; i < size-8; i++) {
+        if (hd_eav_match(src+i))
+            return i * sizeof(uint16_t);
+    }
+    return -1;
+}
 
 /** @internal @This reads data from the source and outputs it.
 *   @param upump description structure of the read watcher
@@ -239,26 +369,30 @@ static void upipe_pciesdi_src_worker(struct upump *upump)
         sdi_decode_scan(scan),
         sdi_decode_rate(rate));
 
-    struct uref *uref = uref_pic_alloc(upipe_pciesdi_src->uref_mgr,
-                                         upipe_pciesdi_src->ubuf_mgr,
-                                         1920, upipe_pciesdi_src->lines);
-    UBASE_FATAL_RETURN(upipe, uref ? UBASE_ERR_NONE : UBASE_ERR_ALLOC);
+    struct uref *uref = upipe_pciesdi_src->output_uref;
+    if (!uref) {
+        uref = uref_pic_alloc(upipe_pciesdi_src->uref_mgr,
+                upipe_pciesdi_src->ubuf_mgr,
+                1920, upipe_pciesdi_src->lines);
+        UBASE_FATAL_RETURN(upipe, uref ? UBASE_ERR_NONE : UBASE_ERR_ALLOC);
+        upipe_pciesdi_src->output_uref = uref;
+    }
 
 
-    uint8_t *buf[3];
+    uint8_t *plane[3];
     size_t stride[3];
     static const char *chroma[3] = { "y10l", "u10l", "v10l" };
     for (int i = 0; i < 3; i++) {
-        uref_pic_plane_size(uref, chroma[i], &stride[i], NULL, NULL, NULL);
-        uref_pic_plane_write(uref, chroma[i], 0, 0, -1, -1, &buf[i]);
+        if (!ubase_check(uref_pic_plane_size(uref, chroma[i], &stride[i], NULL, NULL, NULL))
+                || !ubase_check(uref_pic_plane_write(uref, chroma[i], 0, 0, -1, -1, &plane[i]))) {
+            upipe_err(upipe, "unable to map planes for writing");
+            dump_and_exit_clean(upipe, NULL, 0);
+        }
     }
 
     /* FIXME */
-    static int lines; // # of buffered lines
-    static uint8_t foo[DMA_BUFFER_SIZE * 18];
-    ssize_t ret = read(upipe_pciesdi_src->fd,
-            &foo[lines * DMA_BUFFER_SIZE],
-            sizeof(foo) - lines * DMA_BUFFER_SIZE);
+    uint8_t read_buffer[DMA_BUFFER_SIZE * 19];
+    ssize_t ret = read(upipe_pciesdi_src->fd, read_buffer + DMA_BUFFER_SIZE, 18*DMA_BUFFER_SIZE);
 
     if (family == 15 || !locked) {
         ret = -1;
@@ -268,7 +402,6 @@ static void upipe_pciesdi_src_worker(struct upump *upump)
     if (unlikely(ret == -1)) {
         for (int i = 0; i < 3; i++)
             uref_pic_plane_unmap(uref, chroma[i], 0, 0, -1, -1);
-        uref_free(uref);
         switch (errno) {
             case EINTR:
             case EAGAIN:
@@ -286,94 +419,110 @@ static void upipe_pciesdi_src_worker(struct upump *upump)
         return;
     }
 
-    size_t got_lines = ret / DMA_BUFFER_SIZE;
+    memcpy(read_buffer, upipe_pciesdi_src->eav_buffer, DMA_BUFFER_SIZE);
+    ssize_t eav_position = hd_eav_find((const uint16_t*)read_buffer, (ret + DMA_BUFFER_SIZE) / sizeof(uint16_t));
+    if (eav_position < 0) {
+        upipe_err_va(upipe, "cannot find EAV position in %zd bytes", ret);
+        dump_and_exit_clean(upipe, read_buffer, sizeof(read_buffer));
+    }
 
-    static bool start;
+    if (upipe_pciesdi_src->eav_position != eav_position) {
+        upipe_warn_va(upipe, "EAV position changed from %zd to %zd",
+                upipe_pciesdi_src->eav_position, eav_position);
+        upipe_pciesdi_src->eav_position = eav_position;
+    }
 
-    {
-        bool prev_vbi = false, prev_f2 = false;
-        for (int i = 0; i < (ret / DMA_BUFFER_SIZE); i++) {
-            uint8_t *l = &foo[(lines + i) * DMA_BUFFER_SIZE];
-            uint16_t *f = (uint16_t*)l;
+    for (int i = 0; i < (ret / DMA_BUFFER_SIZE); i++) {
+        const uint16_t *sdi_line = (uint16_t*)(read_buffer + i * DMA_BUFFER_SIZE + eav_position);
 
-            int line = (f[8] & 0x1ff) >> 2;
-            line |= ((f[9] & 0x1ff) >> 2) << 7;
-            uint16_t fvh = f[6];
-            bool vbi, f2;
-            if (fvh == 0x274) {
-                f2 = 0;
-                vbi = 0;
-                if (prev_vbi && !prev_f2) {
-                    start = true;
-//                    upipe_dbg_va(upipe, "Start on line %d", line);
+        if (!hd_eav_match(sdi_line)) {
+            upipe_err(upipe, "EAV not found");
+            dump_and_exit_clean(upipe, read_buffer, sizeof(read_buffer));
+        }
+
+        int line = (sdi_line[8] & 0x1ff) >> 2;
+        line |= ((sdi_line[10] & 0x1ff) >> 2) << 7;
+        if (line > 1125  || line < 1) {
+            upipe_err_va(upipe, "line %d out of range (1-1125)", line);
+            dump_and_exit_clean(upipe, read_buffer, sizeof(read_buffer));
+        }
+
+        if (line == 1)
+            upipe_pciesdi_src->start = true;
+
+        if (upipe_pciesdi_src->start) {
+            if (upipe_pciesdi_src->previous_sdi_line_number != 1125
+                    && line != upipe_pciesdi_src->previous_sdi_line_number + 1) {
+                upipe_warn_va(upipe, "sdi_line_number not linearly increasing (%d -> %d)",
+                        upipe_pciesdi_src->previous_sdi_line_number, line);
+            }
+        }
+        upipe_pciesdi_src->previous_sdi_line_number = line;
+
+        uint16_t fvh = sdi_line[6];
+        bool vbi, f2;
+        if (fvh == 0x274) {
+            f2 = 0;
+            vbi = 0;
+        } else if (fvh == 0x2d8) {
+            f2 = 0;
+            vbi = 1;
+        } else if (fvh == 0x368) {
+            f2 = 1;
+            vbi = 0;
+        } else if (fvh == 0x3c4) {
+            f2 = 1;
+            vbi = 1;
+        } else {
+            upipe_err_va(upipe, "Unknown fvh 0x%x at %" PRIuPTR ", line %d",
+                    fvh, (uintptr_t)(sdi_line+6) - (uintptr_t)read_buffer, line);
+            dump_and_exit_clean(upipe, read_buffer, sizeof(read_buffer));
+        }
+        //upipe_dbg_va(upipe, "Line %d | f2 %d | vbi %d", line, f2, vbi);
+
+        const uint16_t *active_start = sdi_line + (2200-1920)*2;
+        if (!hd_sav_match(active_start)) {
+            upipe_err(upipe, "SAV not found");
+            dump_and_exit_clean(upipe, read_buffer, sizeof(read_buffer));
+        }
+
+        if (!vbi && upipe_pciesdi_src->start) {
+            int row = upipe_pciesdi_src->cached_output_lines;
+            /* copy active line into output_uref */
+            upipe_pciesdi_src->uyvy_to_planar_10(
+                    (uint16_t *)(plane[0] + row*stride[0]),
+                    (uint16_t *)(plane[1] + row*stride[1]),
+                    (uint16_t *)(plane[2] + row*stride[2]),
+                    active_start,
+                    1920);
+            upipe_pciesdi_src->cached_output_lines += 1;
+
+            if (upipe_pciesdi_src->cached_output_lines == upipe_pciesdi_src->lines) {
+                /* have 18 lines, output uref */
+                UBASE_FATAL_RETURN(upipe, output_chunk(upipe, uref,
+                            &upipe_pciesdi_src->upump));
+
+                /* map the new planes */
+                uref = upipe_pciesdi_src->output_uref;
+                for (int i = 0; i < 3; i++) {
+                    uref_pic_plane_size(uref, chroma[i], &stride[i], NULL, NULL, NULL);
+                    uref_pic_plane_write(uref, chroma[i], 0, 0, -1, -1, &plane[i]);
                 }
-            } else if (fvh == 0x2d8) {
-                f2 = 0;
-                vbi = 1;
-            } else if (fvh == 0x368) {
-                vbi = 0;
-                f2 = 1;
-            } else if (fvh == 0x3c4) {
-                f2 = 1;
-                vbi = 1;
-            } else {
-                upipe_err_va(upipe, "Unknown fvh 0x%x", fvh);
-                abort();
             }
-            //upipe_dbg_va(upipe, "Line %d | f2 %d | vbi %d", line, f2, vbi);
-
-            if (vbi || !start) {
-                if (lines + i < 17)
-                    memmove(l, &foo[(lines + i + 1) * DMA_BUFFER_SIZE],
-                            (17 - lines - i ) * DMA_BUFFER_SIZE);
-                got_lines--;
-                i--;
-                ret -= DMA_BUFFER_SIZE;
-            }
-
-            prev_vbi = vbi;
-            prev_f2  = f2;
         }
     }
 
-    if (got_lines + lines < 18) {
-        lines += got_lines;
-        for (int i = 0; i < 3; i++)
-            uref_pic_plane_unmap(uref, chroma[i], 0, 0, -1, -1);
-        uref_free(uref);
-        return;
-    }
-
-    lines = 0;
-
-    for (int i = 0; i < 18; i++) {
-        upipe_sdi_to_planar_10_c(&foo[i*DMA_BUFFER_SIZE + 4 * (2200-1920)],
-                (uint16_t *)(&buf[0][i*stride[0]]),
-                (uint16_t *)(&buf[1][i*stride[1]]),
-                (uint16_t *)(&buf[2][i*stride[2]]),
-                1920);
-    }
-
-//    uref_pic_set_tff(uref);
-    static int x;
-    uref_pic_set_vposition(uref, x);
-    x += 18;
-    x %= 540;
-    static uint64_t pts_prog;
-    uref_clock_set_pts_prog(uref, pts_prog);
-    pts_prog += 18 * UCLOCK_FREQ  * 1001 / 30000 / 1080;
-    uref_attr_set_unsigned(uref,
-            1080, UDICT_TYPE_UNSIGNED, "original_height");
-    uref_attr_set_unsigned(uref,
-            (18 * UCLOCK_FREQ * 1001 / 30000) / 1080,
-            UDICT_TYPE_UNSIGNED, "fraction_duration");
-
+    if (uref)
     for (int i = 0; i < 3; i++)
         uref_pic_plane_unmap(uref, chroma[i], 0, 0, -1, -1);
 
-    if (upipe_pciesdi_src->uclock != NULL)
-        uref_clock_set_cr_sys(uref, uclock_now(upipe_pciesdi_src->uclock));
-    upipe_pciesdi_src_output(upipe, uref, &upipe_pciesdi_src->upump);
+    /* If the EAV is aligned then copying a whole DMA buffer will duplicate a
+     * line.  Check the alignment and erase cached data if aligned otherwise
+     * copy data into cache. */
+    if (eav_position % DMA_BUFFER_SIZE)
+        memcpy(upipe_pciesdi_src->eav_buffer, read_buffer + ret, DMA_BUFFER_SIZE);
+    else
+        memset(upipe_pciesdi_src->eav_buffer, 0, sizeof(upipe_pciesdi_src->eav_buffer));
 }
 
 /** @internal @This checks if the pump may be allocated.
@@ -410,6 +559,8 @@ static int upipe_pciesdi_src_check(struct upipe *upipe, struct uref *flow_format
         uref_pic_flow_add_plane(flow_format, 1, 1, 2, "y10l");
         uref_pic_flow_add_plane(flow_format, 2, 1, 2, "u10l");
         uref_pic_flow_add_plane(flow_format, 2, 1, 2, "v10l");
+
+        upipe_pciesdi_src->duration_f = UCLOCK_FREQ * fps.den / fps.num;
 
         if (unlikely(flow_format == NULL)) {
             upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
@@ -455,6 +606,23 @@ static int upipe_pciesdi_set_uri(struct upipe *upipe, const char *path)
         return UBASE_ERR_EXTERNAL;
     }
 
+    int64_t hw, sw;
+    sdi_dma_writer(upipe_pciesdi_src->fd, 0, &hw, &sw); // disable
+    sdi_release_dma_writer(upipe_pciesdi_src->fd); // release old locks
+
+    close(upipe_pciesdi_src->fd);
+    upipe_pciesdi_src->fd = open(path, O_RDWR);
+    if (unlikely(upipe_pciesdi_src->fd < 0)) {
+        upipe_err_va(upipe, "can't open %s (%m)", path);
+        return UBASE_ERR_EXTERNAL;
+    }
+
+    /* request dma */
+    if (sdi_request_dma_writer(upipe_pciesdi_src->fd) == 0) {
+        upipe_err(upipe, "DMA not available");
+        return UBASE_ERR_EXTERNAL;
+    }
+
     uint8_t locked, mode, family, scan, rate;
     sdi_rx(upipe_pciesdi_src->fd, &locked, &mode, &family, &scan, &rate);
 
@@ -465,8 +633,7 @@ static int upipe_pciesdi_set_uri(struct upipe *upipe, const char *path)
         sdi_decode_scan(scan),
         sdi_decode_rate(rate));
 
-    sdi_dma(upipe_pciesdi_src->fd, 1, 0, 0); // disable loopback
-    int64_t hw, sw;
+    sdi_dma(upipe_pciesdi_src->fd, 0, 0, 0); // disable loopback
     sdi_dma_writer(upipe_pciesdi_src->fd, 1, &hw, &sw); // enable
 
     return UBASE_ERR_NONE;
@@ -475,6 +642,10 @@ static int upipe_pciesdi_set_uri(struct upipe *upipe, const char *path)
 static void upipe_pciesdi_src_close(struct upipe *upipe)
 {
     struct upipe_pciesdi_src *upipe_pciesdi_src = upipe_pciesdi_src_from_upipe(upipe);
+
+    int64_t hw, sw;
+    sdi_dma_writer(upipe_pciesdi_src->fd, 0, &hw, &sw); // disable
+    sdi_release_dma_writer(upipe_pciesdi_src->fd); // release old locks
 
     ubase_clean_fd(&upipe_pciesdi_src->fd);
     upipe_pciesdi_src_set_upump(upipe, NULL);
