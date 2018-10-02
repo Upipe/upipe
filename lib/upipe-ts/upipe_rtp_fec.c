@@ -796,6 +796,12 @@ static void upipe_rtp_fec_colrow_input(struct upipe *upipe, struct uref *uref)
     }
 
     insert_ordered_uref(queue, uref);
+    int max_urefs = 2 * (col ? upipe_rtp_fec->cols : upipe_rtp_fec->rows);
+    if (ulist_depth(queue) >  max_urefs) {
+        struct uchain *uchain = ulist_pop(queue);
+        struct uref *uref = uref_from_uchain(uchain);
+        uref_free(uref);
+    }
     upipe_rtp_fec->pkts_since_last_fec = 0;
     return;
 
