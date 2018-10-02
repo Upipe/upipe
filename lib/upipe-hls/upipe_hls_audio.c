@@ -283,6 +283,10 @@ static int probe_ts_audio(struct uprobe *uprobe, struct upipe *inner,
         case UPROBE_PROVIDE_REQUEST:
             return upipe_throw_proxy(upipe, inner, event, args);
 
+        case UPROBE_SOURCE_END:
+            upipe_hls_audio_store_bin_output(upipe, NULL);
+            return UBASE_ERR_NONE;
+
         case UPROBE_NEED_OUTPUT:
             upipe_hls_audio_store_bin_output(upipe, upipe_use(inner));
             return upipe_throw_proxy(upipe, inner, event, args);

@@ -262,6 +262,10 @@ static int probe_demux_in(struct uprobe *uprobe, struct upipe *inner,
     struct upipe *upipe = upipe_hls_void_to_upipe(upipe_hls_void);
 
     switch (event) {
+    case UPROBE_SOURCE_END:
+        upipe_hls_void_store_pmt(upipe, NULL);
+        return UBASE_ERR_NONE;
+
     case UPROBE_SPLIT_UPDATE:
         upipe_hls_void_store_pmt(upipe, upipe_use(inner));
         UBASE_ALLOC_RETURN(upipe_hls_void->pmt);
