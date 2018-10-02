@@ -187,7 +187,7 @@ static void upipe_pciesdi_sink_worker(struct upump *upump)
     uint8_t txen, slew;
     sdi_tx(upipe_pciesdi_sink->fd, SDI_TX_MODE_HD, &txen, &slew);
     if (txen || slew)
-        printf("txen %d slew %d\n", txen, slew);
+        upipe_dbg_va(upipe, "txen %d slew %d", txen, slew);
 
 #if 1
     if (!hd_eav_match(buf)) {
@@ -354,7 +354,7 @@ static void init(struct upipe *upipe)
 
     int64_t hw_count, sw_count;
         /* reset sdi cores */
-    printf("Reset SDI cores...\n");
+    upipe_dbg(upipe, "Reset SDI cores...");
     sdi_writel(fd, CSR_SDI0_CORE_TX_RESET_ADDR, 1);
 #ifdef CSR_SDI1_CORE_TX_RESET_ADDR
     sdi_writel(fd, CSR_SDI1_CORE_TX_RESET_ADDR, 1);
@@ -378,7 +378,7 @@ static void init(struct upipe *upipe)
 #endif
 
     /* reset driver */
-    printf("Reset Driver...\n");
+    upipe_dbg(upipe, "Reset Driver...");
     /* disable loopback */
     sdi_dma(fd, 1, 0, 0);
     /* disable dmas */
@@ -386,18 +386,18 @@ static void init(struct upipe *upipe)
     sdi_dma_writer(fd, 0, &hw_count, &sw_count);
 
     /* si5324 reset */
-    printf("Reseting SI5324...\n");
+    upipe_dbg(upipe, "Reseting SI5324...");
     si5324_spi_write(fd, 136, 80);
 
     /* si5324 configuration */
     if (1 /* PAL */) { // TODO
-        printf("Configure SI5324 for PAL (148.5MHz)...\n");
+        upipe_dbg(upipe, "Configure SI5324 for PAL (148.5MHz)...");
         sdi_si5324_vcxo(fd, 512<<10, 1024<<10);
         for(int i = 0; i < countof(si5324_148_5_mhz_regs); i++) {
             si5324_spi_write(fd, si5324_148_5_mhz_regs[i][0], si5324_148_5_mhz_regs[i][1]);
         }
     } else {
-        printf("Configure SI5324 for NTSC (148.5MHz/1.001)...\n");
+        upipe_dbg(upipe, "Configure SI5324 for NTSC (148.5MHz/1.001)...");
         sdi_si5324_vcxo(fd, 512<<10, 1024<<10);
         for(int i = 0; i < countof(si5324_148_35_mhz_regs); i++) {
             si5324_spi_write(fd, si5324_148_35_mhz_regs[i][0], si5324_148_35_mhz_regs[i][1]);
@@ -406,11 +406,11 @@ static void init(struct upipe *upipe)
     sleep(1);
 
     /* reference clock selection */
-    printf("Select SI5324 output as reference clock...\n");
+    upipe_dbg(upipe, "Select SI5324 output as reference clock...");
     sdi_writel(fd, CSR_SDI_QPLL_PLL0_REFCLK_SEL_ADDR, REFCLK1_SEL);
 
     /* un-reset sdi cores */
-    printf("Un-reset SDI cores...\n");
+    upipe_dbg(upipe, "Un-reset SDI cores...");
     sdi_writel(fd, CSR_SDI0_CORE_TX_RESET_ADDR, 0);
 #ifdef CSR_SDI1_CORE_TX_RESET_ADDR
     sdi_writel(fd, CSR_SDI1_CORE_TX_RESET_ADDR, 0);
