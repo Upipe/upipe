@@ -303,7 +303,11 @@ static inline bool hd_eav_match(const uint16_t *src)
             && src[3] == 0x000
             && src[4] == 0x000
             && src[5] == 0x000
-            && src[6] == src[7])
+            && src[6] == src[7]
+            && (src[6] == 0x274
+                || src[6] == 0x2d8
+                || src[6] == 0x368
+                || src[6] == 0x3c4))
         return true;
     return false;
 }
@@ -316,7 +320,11 @@ static inline bool hd_sav_match(const uint16_t *src)
             && src[-5] == 0x000
             && src[-4] == 0x000
             && src[-3] == 0x000
-            && src[-2] == src[-1])
+            && src[-2] == src[-1]
+            && (src[-2] == 0x200
+                || src[-2] == 0x2ac
+                || src[-2] == 0x31c
+                || src[-2] == 0x3b0))
         return true;
     return false;
 }
@@ -441,10 +449,6 @@ static void upipe_pciesdi_src_worker(struct upump *upump)
         } else if (fvh == 0x3c4) {
             f2 = 1;
             vbi = 1;
-        } else {
-            upipe_err_va(upipe, "Unknown fvh 0x%x at %" PRIuPTR ", line %d",
-                    fvh, (uintptr_t)(sdi_line+6) - (uintptr_t)read_buffer, line);
-            dump_and_exit_clean(upipe, read_buffer, sizeof(read_buffer));
         }
         //upipe_dbg_va(upipe, "Line %d | f2 %d | vbi %d", line, f2, vbi);
 
