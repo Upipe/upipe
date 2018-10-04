@@ -560,7 +560,6 @@ static void upipe_pciesdi_src_worker(struct upump *upump)
     }
 
     int processed_bytes = (ret / sdi_line_width) * sdi_line_width;
-    upipe_dbg_va(upipe, "moving %zd bytes to start of buffer", ret - processed_bytes);
     if (ret != processed_bytes) {
         memmove(upipe_pciesdi_src->read_buffer,
                 upipe_pciesdi_src->read_buffer + processed_bytes,
