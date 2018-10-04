@@ -96,8 +96,8 @@ struct upipe_pciesdi_src {
     /** read watcher */
     struct upump *upump;
 
-    /** lines granularity */
-    unsigned lines;
+    /** output chunk height */
+    int chunk_height;
 
     /* cached output uref */
     struct uref *output_uref;
@@ -174,7 +174,7 @@ static struct upipe *upipe_pciesdi_src_alloc(struct upipe_mgr *mgr,
     upipe_pciesdi_src->start = false;
     upipe_pciesdi_src->output_uref = NULL;
     upipe_pciesdi_src->fd = -1;
-    upipe_pciesdi_src->lines = 0;
+    upipe_pciesdi_src->chunk_height = 0;
     upipe_pciesdi_src->previous_sdi_line_number = -1;
     upipe_throw_ready(upipe);
 
@@ -642,6 +642,14 @@ static int upipe_pciesdi_src_check(struct upipe *upipe, struct uref *flow_format
         return UBASE_ERR_NONE;
     }
 
+    if (upipe_pciesdi_src->chunk_height > upipe_pciesdi_src->sdi_format->height
+            || upipe_pciesdi_src->chunk_height < 1) {
+        upipe_err_va(upipe, "chunk_height option (%d) out of range (1-%d)",
+                upipe_pciesdi_src->chunk_height,
+                upipe_pciesdi_src->sdi_format->height);
+        return UBASE_ERR_INVALID;
+    }
+
     if (upipe_pciesdi_src->uclock == NULL &&
         urequest_get_opaque(&upipe_pciesdi_src->uclock_request, struct upipe *)
             != NULL)
@@ -739,9 +747,9 @@ static int upipe_pciesdi_src_set_option(struct upipe *upipe,
     if (unlikely(upipe_pciesdi_src->fd != -1))
         upipe_pciesdi_src_close(upipe);
 
-    if (!strcmp(k, "slice_height"))
-        upipe_pciesdi_src->lines = atoi(v);
-    else 
+    if (!strcmp(k, "chunk_height"))
+        upipe_pciesdi_src->chunk_height = atoi(v);
+    else
         return UBASE_ERR_INVALID;
 
     return UBASE_ERR_NONE;
