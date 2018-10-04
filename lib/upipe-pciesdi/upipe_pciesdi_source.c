@@ -411,23 +411,28 @@ static void upipe_pciesdi_src_worker(struct upump *upump)
     for (int i = 0; i < (ret / DMA_BUFFER_SIZE); i++) {
         const uint16_t *sdi_line = (uint16_t*)(read_buffer + i * DMA_BUFFER_SIZE + eav_position);
 
+        /* Check EAV is present. */
         if (!hd_eav_match(sdi_line)) {
             upipe_err(upipe, "EAV not found");
             dump_and_exit_clean(upipe, read_buffer, sizeof(read_buffer));
         }
 
+        /* Check line number. */
         int line = (sdi_line[8] & 0x1ff) >> 2;
         line |= ((sdi_line[10] & 0x1ff) >> 2) << 7;
-        if (line > 1125  || line < 1) {
-            upipe_err_va(upipe, "line %d out of range (1-1125)", line);
+        if (line > upipe_pciesdi_src->sdi_format->height  || line < 1) {
+            upipe_err_va(upipe, "line %d out of range (1-%d)", line,
+                    upipe_pciesdi_src->sdi_format->height);
             dump_and_exit_clean(upipe, read_buffer, sizeof(read_buffer));
         }
 
+        /* If top of picture is present start output. */
         if (line == 1)
             upipe_pciesdi_src->start = true;
 
+        /* Check line number is increasing correctly. */
         if (upipe_pciesdi_src->start) {
-            if (upipe_pciesdi_src->previous_sdi_line_number != 1125
+            if (upipe_pciesdi_src->previous_sdi_line_number != upipe_pciesdi_src->sdi_format->height
                     && line != upipe_pciesdi_src->previous_sdi_line_number + 1) {
                 upipe_warn_va(upipe, "sdi_line_number not linearly increasing (%d -> %d)",
                         upipe_pciesdi_src->previous_sdi_line_number, line);
@@ -452,7 +457,7 @@ static void upipe_pciesdi_src_worker(struct upump *upump)
         }
         //upipe_dbg_va(upipe, "Line %d | f2 %d | vbi %d", line, f2, vbi);
 
-        const uint16_t *active_start = sdi_line + (2200-1920)*2;
+        const uint16_t *active_start = sdi_line + 2*upipe_pciesdi_src->sdi_format->active_offset;
         if (!hd_sav_match(active_start)) {
             upipe_err(upipe, "SAV not found");
             dump_and_exit_clean(upipe, read_buffer, sizeof(read_buffer));
