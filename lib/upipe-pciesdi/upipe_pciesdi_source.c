@@ -29,6 +29,7 @@
 #include <upipe/urequest.h>
 #include <upipe/uclock.h>
 #include <upipe/uref.h>
+#include <upipe/uref_dump.h>
 #include <upipe/uref_block.h>
 #include <upipe/uref_pic.h>
 #include <upipe/uref_pic_flow.h>
@@ -690,6 +691,7 @@ static int get_flow_def(struct upipe *upipe, struct uref **flow_format)
     upipe_pciesdi_src->sdi_format = sdi_get_offsets(flow_def);
     if (!upipe_pciesdi_src->sdi_format) {
         upipe_err(upipe, "unable to get SDI offsets/picture format");
+        uref_dump(flow_def, upipe->uprobe);
         return UBASE_ERR_INVALID;
     }
 
