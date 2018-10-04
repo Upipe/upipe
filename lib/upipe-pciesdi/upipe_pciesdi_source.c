@@ -548,6 +548,8 @@ static int get_flow_def(struct upipe *upipe, struct uref **flow_format)
             fps = (struct urational){25, 1};
         else if (rate == 7)
             fps = (struct urational){30, 1};
+        else if (rate == 9)
+            fps = (struct urational){50, 1};
         else if (rate == 11)
             fps = (struct urational){60, 1};
         else {
