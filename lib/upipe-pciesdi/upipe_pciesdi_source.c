@@ -118,6 +118,7 @@ struct upipe_pciesdi_src {
     int fd;
 
     int previous_sdi_line_number;
+    uint16_t previous_fvh;
 
     /* EAV offset from start of block, in bytes */
     ssize_t eav_position;
@@ -340,6 +341,32 @@ static inline bool hd_sav_match(const uint16_t *src)
     return false;
 }
 
+static inline bool sd_eav_match(const uint16_t *src)
+{
+    if (src[0] == 0x3ff
+            && src[1] == 0x000
+            && src[2] == 0x000
+            && (src[3] == 0x274
+                || src[3] == 0x2d8
+                || src[3] == 0x368
+                || src[3] == 0x3c4))
+        return true;
+    return false;
+}
+
+static inline bool sd_sav_match(const uint16_t *src)
+{
+    if (src[-4] == 0x3ff
+            && src[-3] == 0x000
+            && src[-2] == 0x000
+            && (src[-1] == 0x200
+                || src[-1] == 0x2ac
+                || src[-1] == 0x31c
+                || src[-1] == 0x3b0))
+        return true;
+    return false;
+}
+
 static ssize_t hd_eav_find(const uint16_t *src, ssize_t size)
 {
     for (ssize_t i = 0; i < size-8; i++) {
@@ -431,63 +458,86 @@ static void upipe_pciesdi_src_worker(struct upump *upump)
     ret += upipe_pciesdi_src->cached_read_bytes;
 
     for (int i = 0; i < ret / sdi_line_width; i++) {
-        const uint16_t *sdi_line = (uint16_t*)(upipe_pciesdi_src->read_buffer +
-                i * sdi_line_width);
+        const uint16_t *sdi_line = (uint16_t*)(upipe_pciesdi_src->read_buffer + i * sdi_line_width);
+        const uint16_t *active_start = sdi_line + 2 * upipe_pciesdi_src->sdi_format->active_offset;
 
-        /* Check EAV is present. */
-        if (!hd_eav_match(sdi_line)) {
-            upipe_err(upipe, "EAV not found");
-            dump_and_exit_clean(upipe, upipe_pciesdi_src->read_buffer,
-                    DMA_BUFFER_SIZE * DMA_BUFFER_COUNT);
-        }
-
-        /* Check line number. */
-        int line = (sdi_line[8] & 0x1ff) >> 2;
-        line |= ((sdi_line[10] & 0x1ff) >> 2) << 7;
-        if (line > upipe_pciesdi_src->sdi_format->height  || line < 1) {
-            upipe_err_va(upipe, "line %d out of range (1-%d)", line,
-                    upipe_pciesdi_src->sdi_format->height);
-            dump_and_exit_clean(upipe, upipe_pciesdi_src->read_buffer,
-                    DMA_BUFFER_SIZE * DMA_BUFFER_COUNT);
-        }
-
-        /* If top of picture is present start output. */
-        if (line == 1)
-            upipe_pciesdi_src->start = true;
-
-        /* Check line number is increasing correctly. */
-        if (upipe_pciesdi_src->start) {
-            if (upipe_pciesdi_src->previous_sdi_line_number != upipe_pciesdi_src->sdi_format->height
-                    && line != upipe_pciesdi_src->previous_sdi_line_number + 1) {
-                upipe_warn_va(upipe, "sdi_line_number not linearly increasing (%d -> %d)",
-                        upipe_pciesdi_src->previous_sdi_line_number, line);
+        if (upipe_pciesdi_src->sdi_format->pict_fmt->sd) {
+            /* Check EAV is present. */
+            if (!sd_eav_match(sdi_line)) {
+                upipe_err(upipe, "SD EAV not found");
+                dump_and_exit_clean(upipe, upipe_pciesdi_src->read_buffer,
+                        DMA_BUFFER_SIZE * DMA_BUFFER_COUNT);
             }
-        }
-        upipe_pciesdi_src->previous_sdi_line_number = line;
 
-        uint16_t fvh = sdi_line[6];
-        bool vbi, f2;
-        if (fvh == 0x274) {
-            f2 = 0;
-            vbi = 0;
-        } else if (fvh == 0x2d8) {
-            f2 = 0;
-            vbi = 1;
-        } else if (fvh == 0x368) {
-            f2 = 1;
-            vbi = 0;
-        } else if (fvh == 0x3c4) {
-            f2 = 1;
-            vbi = 1;
-        }
-        //upipe_dbg_va(upipe, "Line %d | f2 %d | vbi %d", line, f2, vbi);
+            /* Check SAV is present. */
+            if (!sd_sav_match(active_start)) {
+                upipe_err(upipe, "SD SAV not found");
+                dump_and_exit_clean(upipe, upipe_pciesdi_src->read_buffer,
+                        DMA_BUFFER_SIZE * DMA_BUFFER_COUNT);
+            }
 
-        const uint16_t *active_start = sdi_line + 2*upipe_pciesdi_src->sdi_format->active_offset;
-        if (!hd_sav_match(active_start)) {
-            upipe_err(upipe, "SAV not found");
-            dump_and_exit_clean(upipe, upipe_pciesdi_src->read_buffer,
-                    DMA_BUFFER_SIZE * DMA_BUFFER_COUNT);
-        }
+            uint16_t fvh = sdi_line[3];
+            bool vbi, f2;
+            if (fvh == 0x274) {
+                f2 = 0;
+                vbi = 0;
+            } else if (fvh == 0x2d8) {
+                f2 = 0;
+                vbi = 1;
+            } else if (fvh == 0x368) {
+                f2 = 1;
+                vbi = 0;
+            } else if (fvh == 0x3c4) {
+                f2 = 1;
+                vbi = 1;
+            }
+
+            /* Watch for transition from field2 VBI to field1 VBI. */
+            if (upipe_pciesdi_src->previous_fvh == 0x3c4 && fvh == 0x2d8)
+                upipe_pciesdi_src->start = true;
+
+            upipe_pciesdi_src->previous_fvh = fvh;
+
+        } else { /* HD */
+            /* Check EAV is present. */
+            if (!hd_eav_match(sdi_line)) {
+                upipe_err(upipe, "HD EAV not found");
+                dump_and_exit_clean(upipe, upipe_pciesdi_src->read_buffer,
+                        DMA_BUFFER_SIZE * DMA_BUFFER_COUNT);
+            }
+
+            /* Check SAV is present. */
+            if (!hd_sav_match(active_start)) {
+                upipe_err(upipe, "HD SAV not found");
+                dump_and_exit_clean(upipe, upipe_pciesdi_src->read_buffer,
+                        DMA_BUFFER_SIZE * DMA_BUFFER_COUNT);
+            }
+
+            /* Check line number. */
+            int line = (sdi_line[8] & 0x1ff) >> 2;
+            line |= ((sdi_line[10] & 0x1ff) >> 2) << 7;
+            if (line > upipe_pciesdi_src->sdi_format->height  || line < 1) {
+                upipe_err_va(upipe, "line %d out of range (1-%d)", line,
+                        upipe_pciesdi_src->sdi_format->height);
+                dump_and_exit_clean(upipe, upipe_pciesdi_src->read_buffer,
+                        DMA_BUFFER_SIZE * DMA_BUFFER_COUNT);
+            }
+
+            /* If top of picture is present start output. */
+            if (line == 1)
+                upipe_pciesdi_src->start = true;
+
+            /* Check line number is increasing correctly. */
+            if (upipe_pciesdi_src->start) {
+                if (upipe_pciesdi_src->previous_sdi_line_number != upipe_pciesdi_src->sdi_format->height
+                        && line != upipe_pciesdi_src->previous_sdi_line_number + 1) {
+                    upipe_warn_va(upipe, "sdi_line_number not linearly increasing (%d -> %d)",
+                            upipe_pciesdi_src->previous_sdi_line_number, line);
+                }
+            }
+            upipe_pciesdi_src->previous_sdi_line_number = line;
+
+        } /* end HD */
 
         if (upipe_pciesdi_src->start) {
             int row = upipe_pciesdi_src->cached_output_lines;
@@ -569,6 +619,10 @@ static int get_flow_def(struct upipe *upipe, struct uref **flow_format)
         /* SMPTE296:720 */
         width = 1280;
         height = 720;
+    } else if (family == 9) {
+        /* PAL:576 */
+        width = 720;
+        height = 576;
     } else {
         upipe_err_va(upipe, "invalid/unknown family value: %s (%d)", sdi_decode_family(family), family);
         return UBASE_ERR_INVALID;
@@ -605,8 +659,10 @@ static int get_flow_def(struct upipe *upipe, struct uref **flow_format)
 
     if (scan == 0) {
         /* interlaced */
+#if 0
         height /= 2;
         fps.num *= 2;
+#endif
         interlaced = true;
     } else if (scan == 1) {
         /* progressive */
