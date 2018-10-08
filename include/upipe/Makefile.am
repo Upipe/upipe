@@ -95,6 +95,7 @@ pkginclude_HEADERS = \
 	uref_flow.h \
 	uref.h \
 	uref_pic_flow.h \
+	uref_pic_flow_formats.h \
 	uref_pic.h \
 	uref_program_flow.h \
 	uref_sound.h \
