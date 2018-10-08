@@ -1002,7 +1002,7 @@ static void upipe_hd_sdi_enc_encode_line(struct upipe *upipe, int line_num, uint
         /* black */
         upipe_sdi_enc->blank(active_start, input_hsize);
         /* +1 to write into the Y plane */
-        const uint16_t *vanc_start = &active_start[1];
+        uint16_t *vanc_start = &active_start[1];
 
         const uint8_t **ttx = NULL;
         int num_ttx = 0;
