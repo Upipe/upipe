@@ -23,6 +23,7 @@
 
 #include "checkasm.h"
 #include "lib/upipe-hbrmt/sdienc.h"
+#include "lib/upipe-netmap/sdi.h"
 #include "lib/upipe-v210/v210enc.h"
 
 #define NUM_SAMPLES 512
@@ -39,27 +40,59 @@ static void randomize_buffers(uint8_t *src0, uint8_t *src1, int len)
 void checkasm_check_planar8_input(void)
 {
     struct {
+        void (*sdi)(const uint8_t *y, const uint8_t *u, const uint8_t *v, uint8_t *l, const int64_t width);
         void (*uyvy)(uint16_t *dst, const uint8_t *y, const uint8_t *u, const uint8_t *v, uintptr_t pixels);
         void (*v210)(const uint8_t *y, const uint8_t *u, const uint8_t *v, uint8_t *dst, ptrdiff_t pixels);
     } s = {
+        .sdi = upipe_planar_to_sdi_8_c,
         .uyvy = upipe_planar_to_uyvy_8_c,
         .v210 = upipe_planar_to_v210_8_c,
     };
 
     int cpu_flags = av_get_cpu_flags();
 
+    if (cpu_flags & AV_CPU_FLAG_SSE2) {
+       s.uyvy =  upipe_planar_to_uyvy_8_sse2;
+    }
     if (cpu_flags & AV_CPU_FLAG_SSSE3) {
-       s.uyvy =  upipe_planar_to_uyvy_8_unaligned_sse2;
+       s.sdi =  upipe_planar_to_sdi_8_ssse3;
        s.v210  = upipe_planar_to_v210_8_ssse3;
     }
     if (cpu_flags & AV_CPU_FLAG_AVX) {
-       s.uyvy =  upipe_planar_to_uyvy_8_unaligned_avx;
+       s.sdi =  upipe_planar_to_sdi_8_avx;
+       s.uyvy =  upipe_planar_to_uyvy_8_avx;
        s.v210  = upipe_planar_to_v210_8_avx;
     }
     if (cpu_flags & AV_CPU_FLAG_AVX2) {
-       s.uyvy =  upipe_planar_to_uyvy_8_unaligned_avx2;
+       s.uyvy =  upipe_planar_to_uyvy_8_avx2;
        s.v210  = upipe_planar_to_v210_8_avx2;
     }
+
+    if (check_func(s.sdi, "planar_to_sdi_8")) {
+        uint8_t y0[NUM_SAMPLES/2];
+        uint8_t y1[NUM_SAMPLES/2];
+        uint8_t u0[NUM_SAMPLES/4];
+        uint8_t u1[NUM_SAMPLES/4];
+        uint8_t v0[NUM_SAMPLES/4];
+        uint8_t v1[NUM_SAMPLES/4];
+        uint8_t dst0[NUM_SAMPLES * 10 / 8];
+        uint8_t dst1[NUM_SAMPLES * 10 / 8];
+
+        declare_func(void, const uint8_t *y, const uint8_t *u, const uint8_t *v, uint8_t *l, const int64_t width);
+
+        randomize_buffers(y0, y1, NUM_SAMPLES/2);
+        randomize_buffers(u0, u1, NUM_SAMPLES/4);
+        randomize_buffers(v0, v1, NUM_SAMPLES/4);
+        call_ref(y0, u0, v0, dst0, NUM_SAMPLES / 2);
+        call_new(y1, u1, v1, dst1, NUM_SAMPLES / 2);
+        if (memcmp(dst0, dst1, sizeof dst0)
+                || memcmp(y0, y1, sizeof y0)
+                || memcmp(u0, u1, sizeof u0)
+                || memcmp(v0, v1, sizeof v0))
+            fail();
+        bench_new(dst1, y1, u1, v1, NUM_SAMPLES / 2);
+    }
+    report("planar_to_sdi_8");
 
     if (check_func(s.uyvy, "planar_to_uyvy_8")) {
         uint8_t y0[NUM_SAMPLES/2];

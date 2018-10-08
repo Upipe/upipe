@@ -91,11 +91,7 @@ DECLARE_REG_TMP 3
 
     por          m1,  m2
     por          m1,  m0
-%if cpuflag(avx2)
     movu     [dstq],  m1
-%else
-    mova     [dstq],  m1
-%endif
 
     mov         t0d, [srcq+8]
     bswap       t0d
