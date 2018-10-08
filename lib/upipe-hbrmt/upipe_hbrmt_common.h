@@ -25,6 +25,10 @@ extern "C" {
 #define UPIPE_SDI_SAV_LENGTH    4
 #define UPIPE_HD_SDI_SAV_LENGTH 8
 
+/* [Field][VBI] */
+static const uint16_t sav_fvh_cword[2][2] = {{0x200, 0x2ac}, {0x31c, 0x3b0}};
+static const uint16_t eav_fvh_cword[2][2] = {{0x274, 0x2d8}, {0x368, 0x3c4}};
+
 #define UPIPE_SDI_PSF_IDENT_I   0
 #define UPIPE_SDI_PSF_IDENT_PSF 1
 #define UPIPE_SDI_PSF_IDENT_P   3

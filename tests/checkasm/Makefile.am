@@ -30,6 +30,15 @@ checkasm_LDADD += \
 checkasm_CPPFLAGS += -DHAVE_SDI
 endif
 
+if HAVE_NETMAP
+checkasm_LDADD += \
+    $(top_builddir)/lib/upipe-netmap/libupipe_netmap_la-sdi.o \
+    $(top_builddir)/lib/upipe-netmap/sdienc.o \
+    $(NULL)
+
+checkasm_CPPFLAGS += -DHAVE_NETMAP
+endif
+
 if HAVE_X86ASM
 checkasm_SOURCES += checkasm_x86.asm timer_x86.h
 endif

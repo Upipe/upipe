@@ -36,8 +36,6 @@
 
 #include "libsdi.h"
 
-#include <bitstream/smpte/291.h>
-
 int64_t get_time_ms(void)
 {
     struct timespec ts;
@@ -63,12 +61,23 @@ void sdi_writel(int fd, uint32_t addr, uint32_t val) {
     ioctl(fd, SDI_IOCTL_REG, &m);
 }
 
-void sdi_icap(int fd) {
+void sdi_refclk(int fd, uint8_t refclk_sel, uint32_t *refclk_freq, uint32_t *refclk_counter) {
+    struct sdi_ioctl_refclk m;
+    m.refclk_sel = refclk_sel;
+    ioctl(fd, SDI_IOCTL_REFCLK, &m);
+    *refclk_freq = m.refclk_freq;
+    *refclk_counter = m.refclk_counter;
+}
+
+
+void sdi_reload(int fd) {
     struct sdi_ioctl_icap m;
-    m.prog = 1;
+	m.addr = 0x4;
+	m.data = 0xf;
     ioctl(fd, SDI_IOCTL_ICAP, &m);
 }
 
+#ifdef HAS_VCXOS
 void sdi_vcxo(int fd, uint32_t width, uint32_t period) {
     struct sdi_ioctl_vcxo m;
     m.pwm_enable = 1;
@@ -91,18 +100,25 @@ void sdi_si5324_spi(int fd, uint32_t tx_data, uint32_t *rx_data) {
     ioctl(fd, SDI_IOCTL_SI5324_SPI, &m);
     *rx_data = m.rx_data;
 }
+#endif
 
-void sdi_refclk(int fd, uint8_t refclk_sel,
-    uint32_t *refclk0_freq, uint32_t *refclk1_freq,
-    uint32_t *refclk0_counter, uint32_t *refclk1_counter) {
-    struct sdi_ioctl_refclk m;
-    m.refclk_sel = refclk_sel;
-    ioctl(fd, SDI_IOCTL_REFCLK, &m);
-    *refclk0_freq = m.refclk0_freq*2;
-    *refclk1_freq = m.refclk1_freq*2;
-    *refclk0_counter = m.refclk0_counter*2;
-    *refclk1_counter = m.refclk1_counter*2;
+#ifdef HAS_GENLOCK
+void sdi_genlock_hsync(int fd, uint8_t *active, uint64_t *period, uint64_t *seen) {
+    struct sdi_ioctl_genlock m;
+    ioctl(fd, SDI_IOCTL_GENLOCK_HSYNC, &m);
+    *active = m.active;
+    *period = m.period;
+    *seen = m.seen;
 }
+
+void sdi_genlock_vsync(int fd, uint8_t *active, uint64_t *period, uint64_t *seen) {
+    struct sdi_ioctl_genlock m;
+    ioctl(fd, SDI_IOCTL_GENLOCK_VSYNC, &m);
+    *active = m.active;
+    *period = m.period;
+    *seen = m.seen;
+}
+#endif
 
 void sdi_dma(int fd, uint8_t fill, uint8_t rx_tx_loopback_enable, uint8_t tx_rx_loopback_enable) {
     struct sdi_ioctl_dma m;
@@ -128,25 +144,64 @@ void sdi_dma_reader(int fd, uint8_t enable, int64_t *hw_count, int64_t *sw_count
     *sw_count = m.sw_count;
 }
 
-void sdi_set_pattern(int fd, uint8_t enable, uint8_t format) {
+void sdi_set_pattern(int fd, uint8_t mode, uint8_t enable, uint8_t format) {
     struct sdi_ioctl_pattern m;
+    m.mode = mode;
     m.enable = enable;
     m.format = format;
     ioctl(fd, SDI_IOCTL_PATTERN, &m);
 }
 
-void sdi_rx_spi_cs(int fd, uint8_t cs_n) {
-    struct sdi_ioctl_rx_spi_cs m;
+#ifdef HAS_GS12241
+void sdi_gs12241_spi_cs(int fd, uint8_t cs_n) {
+    struct sdi_ioctl_gs12241_spi_cs m;
     m.cs_n = cs_n;
     ioctl(fd, SDI_IOCTL_RX_SPI_CS, &m);
 }
 
-void sdi_rx_spi(int fd, uint32_t tx_data, uint32_t *rx_data) {
-    struct sdi_ioctl_rx_spi m;
+void sdi_gs12241_spi(int fd, uint32_t tx_data, uint32_t *rx_data) {
+    struct sdi_ioctl_gs12241_spi m;
     m.tx_data = tx_data;
     ioctl(fd, SDI_IOCTL_RX_SPI, &m);
     *rx_data = m.rx_data;
 }
+#endif
+
+#ifdef HAS_GS12281
+void sdi_gs12281_spi_cs(int fd, uint8_t cs_n) {
+    struct sdi_ioctl_gs12281_spi_cs m;
+    m.cs_n = cs_n;
+    ioctl(fd, SDI_IOCTL_TX_SPI_CS, &m);
+}
+
+void sdi_gs12281_spi(int fd, uint32_t tx_data, uint32_t *rx_data) {
+    struct sdi_ioctl_gs12281_spi m;
+    m.tx_data = tx_data;
+    ioctl(fd, SDI_IOCTL_TX_SPI, &m);
+    *rx_data = m.rx_data;
+}
+#endif
+
+#ifdef HAS_LMH0387
+void sdi_set_direction(int fd, uint8_t tx_enable) {
+    struct sdi_ioctl_lmh0387_direction m;
+    m.tx_enable = tx_enable;
+    ioctl(fd, SDI_IOCTL_DIRECTION, &m);
+}
+
+void sdi_spi_cs(int fd, uint8_t cs_n) {
+    struct sdi_ioctl_lmh0387_spi_cs m;
+    m.cs_n = cs_n;
+    ioctl(fd, SDI_IOCTL_SPI_CS, &m);
+}
+
+void sdi_spi(int fd, uint32_t tx_data, uint32_t *rx_data) {
+    struct sdi_ioctl_lmh0387_spi m;
+    m.tx_data = tx_data;
+    ioctl(fd, SDI_IOCTL_SPI, &m);
+    *rx_data = m.rx_data;
+}
+#endif
 
 void sdi_rx(int fd, uint8_t *locked, uint8_t *mode, uint8_t *family, uint8_t *scan, uint8_t *rate) {
     struct sdi_ioctl_rx m;
@@ -157,19 +212,6 @@ void sdi_rx(int fd, uint8_t *locked, uint8_t *mode, uint8_t *family, uint8_t *sc
     *family = m.family;
     *scan = m.scan;
     *rate = m.rate;
-}
-
-void sdi_tx_spi_cs(int fd, uint8_t cs_n) {
-    struct sdi_ioctl_tx_spi_cs m;
-    m.cs_n = cs_n;
-    ioctl(fd, SDI_IOCTL_TX_SPI_CS, &m);
-}
-
-void sdi_tx_spi(int fd, uint32_t tx_data, uint32_t *rx_data) {
-    struct sdi_ioctl_tx_spi m;
-    m.tx_data = tx_data;
-    ioctl(fd, SDI_IOCTL_TX_SPI, &m);
-    *rx_data = m.rx_data;
 }
 
 void sdi_tx(int fd, uint8_t mode, uint8_t *txen, uint8_t *slew) {
@@ -187,6 +229,46 @@ void sdi_tx_rx_loopback(int fd, uint8_t config) {
     ioctl(fd, SDI_IOCTL_TX_RX_LOOPBACK, &m);
 }
 
+/* lock */
+
+uint8_t sdi_request_dma_reader(int fd) {
+    struct sdi_ioctl_lock m;
+    m.dma_reader_request = 1;
+    m.dma_writer_request = 0;
+    m.dma_reader_release = 0;
+    m.dma_writer_release = 0;
+    ioctl(fd, SDI_IOCTL_LOCK, &m);
+    return m.dma_reader_status;
+}
+
+uint8_t sdi_request_dma_writer(int fd) {
+    struct sdi_ioctl_lock m;
+    m.dma_reader_request = 0;
+    m.dma_writer_request = 1;
+    m.dma_reader_release = 0;
+    m.dma_writer_release = 0;
+    ioctl(fd, SDI_IOCTL_LOCK, &m);
+    return m.dma_writer_status;
+}
+
+void sdi_release_dma_reader(int fd) {
+    struct sdi_ioctl_lock m;
+    m.dma_reader_request = 0;
+    m.dma_writer_request = 0;
+    m.dma_reader_release = 1;
+    m.dma_writer_release = 0;
+    ioctl(fd, SDI_IOCTL_LOCK, &m);
+}
+
+void sdi_release_dma_writer(int fd) {
+    struct sdi_ioctl_lock m;
+    m.dma_reader_request = 0;
+    m.dma_writer_request = 0;
+    m.dma_reader_release = 0;
+    m.dma_writer_release = 1;
+    ioctl(fd, SDI_IOCTL_LOCK, &m);
+}
+
 /* flash */
 
 static uint64_t flash_spi(int fd, int tx_len, uint8_t cmd,
@@ -202,7 +284,7 @@ static uint64_t flash_spi(int fd, int tx_len, uint8_t cmd,
     return m.rx_data;
 }
 
-static uint32_t flash_read_id(int fd)
+uint32_t flash_read_id(int fd)
 {
     return flash_spi(fd, 32, FLASH_READ_ID, 0) & 0xffffff;
 }
@@ -257,17 +339,18 @@ int sdi_flash_get_erase_block_size(int fd)
     return FLASH_SECTOR_SIZE;
 }
 
-void sdi_flash_write(int fd,
+int sdi_flash_write(int fd,
                      const uint8_t *buf, uint32_t base, uint32_t size,
                      void (*progress_cb)(void *opaque, const char *fmt, ...),
                      void *opaque)
 {
-    int i;
+    int i, errors, retry;
 
     /* dummy command because in some case the first erase does not
        work. */
     flash_read_id(fd);
 
+#if 0
     /* erase */
     for(i = 0; i < size; i += FLASH_SECTOR_SIZE) {
         if (progress_cb) {
@@ -282,123 +365,66 @@ void sdi_flash_write(int fd,
     if (progress_cb) {
         progress_cb(opaque, "\n");
     }
+#else
+    /* erase full flash */
+    printf("Erasing...\n");
+    flash_write_enable(fd);
+    flash_spi(fd, 8, 0xC7, 0);
+    while (flash_read_status(fd) & FLASH_WIP) {
+        usleep(10 * 1000);
+    }
+#endif
     flash_write_disable(fd);
 
-    /* program */
-    for(i = 0; i < size; i++) {
+    i = errors = retry = 0;
+    while (i < size) {
         if (progress_cb && (i % FLASH_SECTOR_SIZE) == 0) {
             progress_cb(opaque, "Writing %08x\r", base + i);
         }
+
+        /* program */
         while (flash_read_status(fd) & FLASH_WIP) {
             usleep(10 * 1000);
         }
         flash_write_enable(fd);
         flash_write(fd, base + i, buf[i]);
         flash_write_disable(fd);
+
+        /* verify */
+        while (flash_read_status(fd) & FLASH_WIP)
+            usleep(10 * 1000);
+        if (sdi_flash_read(fd, base + i) != buf[i]) {
+            retry += 1;
+        } else {
+            if (retry && progress_cb) {
+                progress_cb(opaque, "Retried %d times at 0x%08x\n",
+                        retry, base+i);
+            }
+            i += 1;
+            retry = 0;
+        }
+
+        if (retry > 10) {
+            if (retry && progress_cb) {
+                progress_cb(opaque, "Max retry reached at 0x%08x, continuing\n",
+                        base+i);
+            }
+            retry = 0;
+            i += 1;
+            errors += 1;
+        }
     }
+
     if (progress_cb) {
         progress_cb(opaque, "\n");
     }
+
+    return errors;
 }
 
 /* spi */
 
-void rx_spi_write(int fd, uint8_t channel, uint16_t adr, uint16_t data)
-{
-    uint32_t cmd;
-    uint32_t tx_data, rx_data;
-
-    /* set chip_select */
-    sdi_rx_spi_cs(fd, 0b1111 ^ (1 << channel));
-
-    /* send cmd */
-    cmd = (0 << 31) | (0 << 30) | (1 << 29) | adr;
-    tx_data = (cmd >> 16) & 0xffff;
-    sdi_rx_spi(fd, tx_data, &rx_data);
-    tx_data = cmd & 0xffff;
-    sdi_rx_spi(fd, tx_data, &rx_data);
-
-    /* send data */
-    tx_data = data;
-    sdi_rx_spi(fd, tx_data, &rx_data);
-
-    /* release chip_select */
-    sdi_rx_spi_cs(fd, 0b1111);
-}
-
-uint16_t rx_spi_read(int fd, uint8_t channel, uint16_t adr)
-{
-    uint32_t cmd;
-    uint32_t tx_data, rx_data;
-
-    /* set chip_select */
-    sdi_rx_spi_cs(fd, 0b1111 ^ (1 << channel));
-
-    /* send cmd */
-    cmd = (1 << 31) | (0 << 30) | (1 << 29) | adr;
-    tx_data = (cmd >> 16) & 0xffff;
-    sdi_rx_spi(fd, tx_data, &rx_data);
-    tx_data = cmd & 0xffff;
-    sdi_rx_spi(fd, tx_data, &rx_data);
-
-    /* receive data */
-    tx_data = 0;
-    sdi_rx_spi(fd, tx_data, &rx_data);
-
-    /* release chip_select */
-    sdi_rx_spi_cs(fd, 0b1111);
-
-    return rx_data & 0xffff;
-}
-
-void tx_spi_write(int fd, uint8_t channel, uint16_t adr, uint16_t data)
-{
-    uint32_t cmd;
-    uint32_t tx_data, rx_data;
-
-    /* set chip_select */
-    sdi_tx_spi_cs(fd, 0b1111 ^ (1 << channel));
-
-    /* send cmd */
-    cmd = (0 << 31) | (0 << 30) | (1 << 29) | adr;
-    tx_data = (cmd >> 16) & 0xffff;
-    sdi_tx_spi(fd, tx_data, &rx_data);
-    tx_data = cmd & 0xffff;
-    sdi_tx_spi(fd, tx_data, &rx_data);
-
-    /* send data */
-    tx_data = data;
-    sdi_tx_spi(fd, tx_data, &rx_data);
-
-    /* release chip_select */
-    sdi_tx_spi_cs(fd, 0b1111);
-}
-
-uint16_t tx_spi_read(int fd, uint8_t channel, uint16_t adr)
-{
-    uint32_t cmd;
-    uint32_t tx_data, rx_data;
-
-    /* set chip_select */
-    sdi_tx_spi_cs(fd, 0b1111 ^ (1 << channel));
-
-    /* send cmd */
-    cmd = (1 << 31) | (0 << 30) | (1 << 29) | adr;
-    tx_data = (cmd >> 16) & 0xffff;
-    sdi_tx_spi(fd, tx_data, &rx_data);
-    tx_data = cmd & 0xffff;
-    sdi_tx_spi(fd, tx_data, &rx_data);
-
-    /* receive data */
-    tx_data = 0;
-    sdi_tx_spi(fd, tx_data, &rx_data);
-
-    /* release chip_select */
-    sdi_tx_spi_cs(fd, 0b1111);
-
-    return rx_data & 0xffff;
-}
-
+#ifdef HAS_SI5324
 void si5324_spi_write(int fd, uint8_t adr, uint8_t data)
 {
     uint32_t tx_data, rx_data;
@@ -421,3 +447,263 @@ uint8_t si5324_spi_read(int fd, uint16_t adr)
     sdi_si5324_spi(fd, tx_data, &rx_data);
     return rx_data & 0xff;
 }
+#endif
+
+#ifdef HAS_GS12241
+void rx_spi_write(int fd, uint8_t channel, uint16_t adr, uint16_t data)
+{
+    uint32_t cmd;
+    uint32_t tx_data, rx_data;
+
+    /* set chip_select */
+    sdi_gs12241_spi_cs(fd, 0b1111 ^ (1 << channel));
+
+    /* send cmd */
+    cmd = (0 << 31) | (0 << 30) | (1 << 29) | adr;
+    tx_data = (cmd >> 16) & 0xffff;
+    sdi_gs12241_spi(fd, tx_data, &rx_data);
+    tx_data = cmd & 0xffff;
+    sdi_gs12241_spi(fd, tx_data, &rx_data);
+
+    /* send data */
+    tx_data = data;
+    sdi_gs12241_spi(fd, tx_data, &rx_data);
+
+    /* release chip_select */
+    sdi_gs12241_spi_cs(fd, 0b1111);
+}
+
+uint16_t rx_spi_read(int fd, uint8_t channel, uint16_t adr)
+{
+    uint32_t cmd;
+    uint32_t tx_data, rx_data;
+
+    /* set chip_select */
+    sdi_gs12241_spi_cs(fd, 0b1111 ^ (1 << channel));
+
+    /* send cmd */
+    cmd = (1 << 31) | (0 << 30) | (1 << 29) | adr;
+    tx_data = (cmd >> 16) & 0xffff;
+    sdi_gs12241_spi(fd, tx_data, &rx_data);
+    tx_data = cmd & 0xffff;
+    sdi_gs12241_spi(fd, tx_data, &rx_data);
+
+    /* receive data */
+    tx_data = 0;
+    sdi_gs12241_spi(fd, tx_data, &rx_data);
+
+    /* release chip_select */
+    sdi_gs12241_spi_cs(fd, 0b1111);
+
+    return rx_data & 0xffff;
+}
+#endif
+
+#ifdef HAS_GS12281
+void tx_spi_write(int fd, uint8_t channel, uint16_t adr, uint16_t data)
+{
+    uint32_t cmd;
+    uint32_t tx_data, rx_data;
+
+    /* set chip_select */
+    sdi_gs12281_spi_cs(fd, 0b1111 ^ (1 << channel));
+
+    /* send cmd */
+    cmd = (0 << 31) | (0 << 30) | (1 << 29) | adr;
+    tx_data = (cmd >> 16) & 0xffff;
+    sdi_gs12281_spi(fd, tx_data, &rx_data);
+    tx_data = cmd & 0xffff;
+    sdi_gs12281_spi(fd, tx_data, &rx_data);
+
+    /* send data */
+    tx_data = data;
+    sdi_gs12281_spi(fd, tx_data, &rx_data);
+
+    /* release chip_select */
+    sdi_gs12281_spi_cs(fd, 0b1111);
+}
+
+uint16_t tx_spi_read(int fd, uint8_t channel, uint16_t adr)
+{
+    uint32_t cmd;
+    uint32_t tx_data, rx_data;
+
+    /* set chip_select */
+    sdi_gs12281_spi_cs(fd, 0b1111 ^ (1 << channel));
+
+    /* send cmd */
+    cmd = (1 << 31) | (0 << 30) | (1 << 29) | adr;
+    tx_data = (cmd >> 16) & 0xffff;
+    sdi_gs12281_spi(fd, tx_data, &rx_data);
+    tx_data = cmd & 0xffff;
+    sdi_gs12281_spi(fd, tx_data, &rx_data);
+
+    /* receive data */
+    tx_data = 0;
+    sdi_gs12281_spi(fd, tx_data, &rx_data);
+
+    /* release chip_select */
+    sdi_gs12281_spi_cs(fd, 0b1111);
+
+    return rx_data & 0xffff;
+}
+#endif
+
+#ifdef HAS_LMH0387
+void sdi_spi_write(int fd, uint8_t channel, uint16_t adr, uint16_t data)
+{
+    uint32_t tx_data, rx_data;
+
+    /* set chip_select */
+    sdi_spi_cs(fd, 0b1111 ^ (1 << channel));
+
+    /* send cmd & data*/
+    tx_data = (0 << 15) | ((adr & 0x3f) << 8) | (data & 0xff);
+    sdi_spi(fd, tx_data, &rx_data);
+
+    /* release chip_select */
+    sdi_spi_cs(fd, 0b1111);
+}
+
+uint16_t sdi_spi_read(int fd, uint8_t channel, uint16_t adr)
+{
+    uint32_t tx_data, rx_data;
+
+    /* set chip_select */
+    sdi_spi_cs(fd, 0b1111 ^ (1 << channel));
+
+    /* send cmd  & data*/
+    tx_data = (1 << 15) | ((adr & 0x3f) << 8);
+    sdi_spi(fd, tx_data, &rx_data);
+
+    /* release chip_select */
+    sdi_spi_cs(fd, 0b1111);
+
+    return rx_data & 0xff;
+}
+#endif
+
+/* genlock */
+
+#ifdef HAS_GENLOCK
+static int hsync_check(uint64_t reference, uint64_t value) {
+    if (value < (reference - GENLOCK_HSYNC_MARGIN))
+        return 0;
+    if (value > reference + GENLOCK_HSYNC_MARGIN)
+        return 0;
+    return 1;
+}
+
+static int vsync_check(uint64_t reference, uint64_t value) {
+    if (value < (reference - GENLOCK_VSYNC_MARGIN))
+        return 0;
+    if (value > reference + GENLOCK_VSYNC_MARGIN)
+        return 0;
+    return 1;
+}
+
+void si5324_genlock(int fd)
+{
+    int i;
+
+    uint8_t hsync_active;
+    uint64_t hsync_period;
+    uint64_t hsync_seen;
+
+    uint8_t vsync_active;
+    uint64_t vsync_period;
+    uint64_t vsync_seen;
+
+    /* get hsync */
+    sdi_genlock_hsync(fd, &hsync_active, &hsync_period, &hsync_seen);
+    printf("HSYNC_ACTIVE: %d, HSYNC_PERIOD: %" PRIu64 " ns\n", hsync_active, hsync_period);
+
+    /* get vsync */
+    sdi_genlock_vsync(fd, &vsync_active, &vsync_period, &vsync_seen);
+    printf("VSYNC_ACTIVE: %d, VSYNC_PERIOD: %" PRIu64 " ns\n", vsync_active, vsync_period);
+
+    /* configure vcxo to 50% */
+    sdi_si5324_vcxo(fd, 512<<10, 1024<<10);
+
+    /* detect video format */
+    /* SMPTE259M */
+    if (hsync_check(SMPTE259M_PAL_HSYNC_PERIOD, hsync_period) &
+        vsync_check(SMPTE259M_PAL_VSYNC_PERIOD, vsync_period*2)) {
+        printf("SMPTE259M_PAL detected, configuring SI5324...\n");
+        for(i = 0; i < countof(si5324_genlock_smpte259m_pal_regs); i++) {
+            si5324_spi_write(fd, si5324_genlock_smpte259m_pal_regs[i][0], si5324_genlock_smpte259m_pal_regs[i][1]);
+        }
+    } else if (hsync_check(SMPTE259M_NTSC_HSYNC_PERIOD, hsync_period) &
+               vsync_check(SMPTE259M_NTSC_VSYNC_PERIOD, vsync_period*2)) {
+        printf("SMPTE259M_NTSC detected, configuring SI5324...\n");
+        for(i = 0; i < countof(si5324_genlock_smpte259m_ntsc_regs); i++) {
+            si5324_spi_write(fd, si5324_genlock_smpte259m_ntsc_regs[i][0], si5324_genlock_smpte259m_ntsc_regs[i][1]);
+        }
+    /* SMPTE296M */
+    } else if (hsync_check(SMPTE296M_720P60_HSYNC_PERIOD, hsync_period) &
+               vsync_check(SMPTE296M_720P60_VSYNC_PERIOD, vsync_period)) {
+        printf("SMPTE296M_720P60 detected, configuring SI5324...\n");
+        for(i = 0; i < countof(si5324_genlock_smpte296m_720p60_regs); i++) {
+            si5324_spi_write(fd, si5324_genlock_smpte296m_720p60_regs[i][0], si5324_genlock_smpte296m_720p60_regs[i][1]);
+        }
+    } else if (hsync_check(SMPTE296M_720P50_HSYNC_PERIOD, hsync_period) &
+               vsync_check(SMPTE296M_720P50_VSYNC_PERIOD, vsync_period)) {
+        printf("SMPTE296M_720P50 detected, configuring SI5324...\n");
+        for(i = 0; i < countof(si5324_genlock_smpte296m_720p50_regs); i++) {
+            si5324_spi_write(fd, si5324_genlock_smpte296m_720p50_regs[i][0], si5324_genlock_smpte296m_720p50_regs[i][1]);
+        }
+    } else if (hsync_check(SMPTE296M_720P30_HSYNC_PERIOD, hsync_period) &
+               vsync_check(SMPTE296M_720P30_VSYNC_PERIOD, vsync_period)) {
+        printf("SMPTE296M_720P30 detected, configuring SI5324...\n");
+        for(i = 0; i < countof(si5324_genlock_smpte296m_720p30_regs); i++) {
+            si5324_spi_write(fd, si5324_genlock_smpte296m_720p30_regs[i][0], si5324_genlock_smpte296m_720p30_regs[i][1]);
+        }
+    } else if (hsync_check(SMPTE296M_720P25_HSYNC_PERIOD, hsync_period) &
+               vsync_check(SMPTE296M_720P25_VSYNC_PERIOD, vsync_period)) {
+        printf("SMPTE296M_720P25 detected, configuring SI5324...\n");
+        for(i = 0; i < countof(si5324_genlock_smpte296m_720p25_regs); i++) {
+            si5324_spi_write(fd, si5324_genlock_smpte296m_720p25_regs[i][0], si5324_genlock_smpte296m_720p25_regs[i][1]);
+        }
+    } else if (hsync_check(SMPTE296M_720P24_HSYNC_PERIOD, hsync_period) &
+               vsync_check(SMPTE296M_720P24_VSYNC_PERIOD, vsync_period)) {
+        printf("SMPTE296M_720P24 detected, configuring SI5324...\n");
+        for(i = 0; i < countof(si5324_genlock_smpte296m_720p24_regs); i++) {
+            si5324_spi_write(fd, si5324_genlock_smpte296m_720p24_regs[i][0], si5324_genlock_smpte296m_720p24_regs[i][1]);
+        }
+    /* SMPTE274M */
+    } else if (hsync_check(SMPTE274M_1080I60_HSYNC_PERIOD, hsync_period) &
+               vsync_check(SMPTE274M_1080I60_VSYNC_PERIOD, vsync_period*2)) {
+        printf("SMPTE274M_1080I60 detected, configuring SI5324...\n");
+        for(i = 0; i < countof(si5324_genlock_smpte274m_1080i60_regs); i++) {
+            si5324_spi_write(fd, si5324_genlock_smpte274m_1080i60_regs[i][0], si5324_genlock_smpte274m_1080i60_regs[i][1]);
+        }
+    } else if (hsync_check(SMPTE274M_1080I40_HSYNC_PERIOD, hsync_period) &
+               vsync_check(SMPTE274M_1080I40_VSYNC_PERIOD, vsync_period*2)) {
+        printf("SMPTE274M_1080I40 detected, configuring SI5324...\n");
+        for(i = 0; i < countof(si5324_genlock_smpte274m_1080i40_regs); i++) {
+            si5324_spi_write(fd, si5324_genlock_smpte274m_1080i40_regs[i][0], si5324_genlock_smpte274m_1080i40_regs[i][1]);
+        }
+    } else if (hsync_check(SMPTE274M_1080I30_HSYNC_PERIOD, hsync_period) &
+               vsync_check(SMPTE274M_1080I30_VSYNC_PERIOD, vsync_period*2)) {
+        printf("SMPTE274M_1080I30 detected, configuring SI5324...\n");
+        for(i = 0; i < countof(si5324_genlock_smpte274m_1080i30_regs); i++) {
+            si5324_spi_write(fd, si5324_genlock_smpte274m_1080i30_regs[i][0], si5324_genlock_smpte274m_1080i30_regs[i][1]);
+        }
+    } else if (hsync_check(SMPTE274M_1080I25_HSYNC_PERIOD, hsync_period) &
+               vsync_check(SMPTE274M_1080I25_VSYNC_PERIOD, vsync_period*2)) {
+        printf("SMPTE274M_1080I25 detected, configuring SI5324...\n");
+        for(i = 0; i < countof(si5324_genlock_smpte274m_1080i25_regs); i++) {
+            si5324_spi_write(fd, si5324_genlock_smpte274m_1080i25_regs[i][0], si5324_genlock_smpte274m_1080i25_regs[i][1]);
+        }
+    } else if (hsync_check(SMPTE274M_1080I24_HSYNC_PERIOD, hsync_period) &
+               vsync_check(SMPTE274M_1080I24_VSYNC_PERIOD, vsync_period*2)) {
+        printf("SMPTE274M_1080I24 detected, configuring SI5324...\n");
+        for(i = 0; i < countof(si5324_genlock_smpte274m_1080i24_regs); i++) {
+            si5324_spi_write(fd, si5324_genlock_smpte274m_1080i24_regs[i][0], si5324_genlock_smpte274m_1080i24_regs[i][1]);
+        }
+    } else {
+        printf("No valid video format detected\n");
+
+    }
+}
+#endif

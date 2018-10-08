@@ -979,8 +979,6 @@ static bool upipe_sdi_dec_handle(struct upipe *upipe, struct uref *uref,
         if (ntsc)
             line_num = ((line_num + 2) % 525) + 1;
 
-        // FIXME check EAV
-
         /* Horizontal Blanking */
         uint16_t *line = (uint16_t *)input_buf + h * f->width * 2 + hanc_start;
         if (p->sd) {
@@ -1035,7 +1033,57 @@ static bool upipe_sdi_dec_handle(struct upipe *upipe, struct uref *uref,
                 active = 1;
         }
 
-        // FIXME check SAV (and perhaps verify against known line number???)
+        if (upipe_sdi_dec->debug) {
+            const uint16_t *src = (uint16_t*)&input_buf[h * 2 * sizeof(uint16_t) * f->width];
+            const uint16_t *active_start = &src[2*f->active_offset];
+            bool vbi = !active;
+
+            if (p->sd) {
+                if (src[0] != 0x3ff
+                        && src[1] != 0x000
+                        && src[2] != 0x000
+                        && src[3] != eav_fvh_cword[f2][vbi])
+                    upipe_err_va(upipe, "SD EAV incorrect, line %d", h);
+
+                if (active_start[-4] != 0x3ff
+                        && active_start[-3] != 0x000
+                        && active_start[-2] != 0x000
+                        && active_start[-1] != sav_fvh_cword[f2][vbi])
+                    upipe_err_va(upipe, "SD SAV incorrect, line %d", h);
+            } else {
+                if (src[0] != 0x3ff
+                        && src[1] != 0x3ff
+                        && src[2] != 0x000
+                        && src[3] != 0x000
+                        && src[4] != 0x000
+                        && src[5] != 0x000
+                        && src[6] != eav_fvh_cword[f2][vbi]
+                        && src[7] != eav_fvh_cword[f2][vbi])
+                    upipe_err_va(upipe, "HD EAV incorrect, line %d", h);
+
+                int line_num_check[2] = {
+                    (line_num & 0x7f) << 2,
+                    (1 << 9) | (((line_num >> 7) & 0xf) << 2),
+                };
+                line_num_check[0] |= NOT_BIT8(line_num_check[0]);
+
+                if (src[8] != line_num_check[0]
+                        && src[ 9] != line_num_check[0]
+                        && src[10] != line_num_check[1]
+                        && src[11] != line_num_check[1])
+                    upipe_err_va(upipe, "HD line num incorrect, line %d", h);
+
+                if ( active_start[-8] != 0x3ff
+                        && active_start[-7] != 0x3ff
+                        && active_start[-6] != 0x000
+                        && active_start[-5] != 0x000
+                        && active_start[-4] != 0x000
+                        && active_start[-3] != 0x000
+                        && active_start[-2] != sav_fvh_cword[f2][vbi]
+                        && active_start[-1] != sav_fvh_cword[f2][vbi])
+                    upipe_err_va(upipe, "HD SAV incorrect, line %d", h);
+            }
+        }
 
         uint16_t *src_line = (uint16_t*)input_buf + (h * f->width + f->active_offset) * 2;
         if (!active || special_case) {
@@ -1460,21 +1508,21 @@ static struct upipe *_upipe_sdi_dec_alloc(struct upipe_mgr *mgr,
 #if defined(HAVE_X86ASM)
 #if defined(__i686__) || defined(__x86_64__)
     if (__builtin_cpu_supports("ssse3")) {
-        upipe_sdi_dec->uyvy_to_v210 = upipe_uyvy_to_v210_unaligned_ssse3;
-        upipe_sdi_dec->uyvy_to_planar_8 = upipe_uyvy_to_planar_8_unaligned_ssse3;
-        upipe_sdi_dec->uyvy_to_planar_10 = upipe_uyvy_to_planar_10_unaligned_ssse3;
+        upipe_sdi_dec->uyvy_to_v210 = upipe_uyvy_to_v210_ssse3;
+        upipe_sdi_dec->uyvy_to_planar_8 = upipe_uyvy_to_planar_8_ssse3;
+        upipe_sdi_dec->uyvy_to_planar_10 = upipe_uyvy_to_planar_10_ssse3;
     }
 
     if (__builtin_cpu_supports("avx")) {
-        upipe_sdi_dec->uyvy_to_v210 = upipe_uyvy_to_v210_unaligned_avx;
-        upipe_sdi_dec->uyvy_to_planar_8 = upipe_uyvy_to_planar_8_unaligned_avx;
-        upipe_sdi_dec->uyvy_to_planar_10 = upipe_uyvy_to_planar_10_unaligned_avx;
+        upipe_sdi_dec->uyvy_to_v210 = upipe_uyvy_to_v210_avx;
+        upipe_sdi_dec->uyvy_to_planar_8 = upipe_uyvy_to_planar_8_avx;
+        upipe_sdi_dec->uyvy_to_planar_10 = upipe_uyvy_to_planar_10_avx;
     }
 
     if (__builtin_cpu_supports("avx2")) {
-        upipe_sdi_dec->uyvy_to_v210 = upipe_uyvy_to_v210_unaligned_avx2;
-        upipe_sdi_dec->uyvy_to_planar_8 = upipe_uyvy_to_planar_8_unaligned_avx2;
-        upipe_sdi_dec->uyvy_to_planar_10 = upipe_uyvy_to_planar_10_unaligned_avx2;
+        upipe_sdi_dec->uyvy_to_v210 = upipe_uyvy_to_v210_avx2;
+        upipe_sdi_dec->uyvy_to_planar_8 = upipe_uyvy_to_planar_8_avx2;
+        upipe_sdi_dec->uyvy_to_planar_10 = upipe_uyvy_to_planar_10_avx2;
     }
 #endif
 #endif

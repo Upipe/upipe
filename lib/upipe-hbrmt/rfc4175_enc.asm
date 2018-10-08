@@ -23,11 +23,6 @@
 
 SECTION_RODATA 32
 
-v210_mask:        times 8 dd 0x3ff
-v210_mult:        times 2 dw 64, 4, 64, 4, 64, 4, 64, 4
-v210_luma_shuf:   times 2 db 8, 9, 0, 1, 2, 3,12,13, 4, 5, 6, 7,-1,-1,-1,-1
-v210_chroma_shuf: times 2 db 0, 1, 8, 9, 6, 7,-1,-1, 2, 3, 4, 5,12,13,-1,-1
-
 ;1:  V1 Y4 Y6
 ;2:  U1 Y2 Y3 U3 V3
 ;3:  Y1 U2 V2 Y5
@@ -47,6 +42,8 @@ v210_sdi_mul_3: times 2 dw 4, 16, 4, 16, 0,0,0,0
 v210_sdi_shuf_after_1: times 2 db -1,-1, 1, 0,-1,-1,-1,-1, 3, 2,-1,-1,-1, 5, 4,-1
 v210_sdi_shuf_after_2: times 2 db  1, 0,-1, 3, 2,-1, 5, 4,-1,-1, 7, 6, 9, 8,-1,-1
 v210_sdi_shuf_after_3: times 2 db -1, 1, 0,-1,-1, 3, 2, 5, 4,-1,-1, 7, 6,-1,-1,-1
+
+SECTION .text
 
 %macro v210_to_sdi 0
 
@@ -78,7 +75,7 @@ cglobal v210_to_sdi, 3, 3, 8 + 7*ARCH_X86_64, src, dst, pixels
 %endif
 
     .loop:
-        mova     m0, [srcq]
+        movu     m0, [srcq]
 
         pand m2, m0, m3
         pand m1, m0, m4

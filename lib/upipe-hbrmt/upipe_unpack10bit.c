@@ -336,10 +336,10 @@ static struct upipe *upipe_unpack10bit_alloc(struct upipe_mgr *mgr,
 #if defined(HAVE_X86ASM)
 #if defined(__i686__) || defined(__x86_64__)
     if (__builtin_cpu_supports("ssse3"))
-        upipe_unpack10bit->unpack = upipe_sdi_to_uyvy_unaligned_ssse3;
+        upipe_unpack10bit->unpack = upipe_sdi_to_uyvy_ssse3;
 
     if (__builtin_cpu_supports("avx2"))
-        upipe_unpack10bit->unpack = upipe_sdi_to_uyvy_unaligned_avx2;
+        upipe_unpack10bit->unpack = upipe_sdi_to_uyvy_avx2;
 #endif
 #endif
 

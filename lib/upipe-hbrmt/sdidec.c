@@ -91,7 +91,7 @@ void upipe_sdi_to_planar_8_c(const uint8_t *src, uint8_t *y, uint8_t *u, uint8_t
 
 void upipe_sdi_to_planar_10_c(const uint8_t *src, uint16_t *y, uint16_t *u, uint16_t *v, uintptr_t pixels)
 {
-    for (int i = 0; i < 2*pixels; i += 2) {
+    for (int i = 0; i < pixels; i += 2) {
         uint8_t a = *src++;
         uint8_t b = *src++;
         uint8_t c = *src++;
