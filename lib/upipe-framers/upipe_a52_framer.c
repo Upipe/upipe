@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2013-2017 OpenHeadend S.A.R.L.
+ * Copyright (C) 2013-2018 OpenHeadend S.A.R.L.
  *
  * Authors: Benjamin Cohen
  *
@@ -82,7 +82,7 @@ struct upipe_a52f {
     /** true we have had a discontinuity recently */
     bool got_discontinuity;
     /** sync header */
-    uint8_t sync_header[A52_SYNCINFO_SIZE];
+    uint8_t sync_header[A52_SYNCINFO_SIZE + 2];
 
     /* octet stream stuff */
     /** next uref to be processed */
@@ -105,6 +105,21 @@ struct upipe_a52f {
 
     /** public upipe structure */
     struct upipe upipe;
+};
+
+/** @hidden */
+static const struct {
+    int nfchans;
+    int lfe_offset;
+} acmod_chans[] = {
+    { 2, 0 }, /* 1+1 */
+    { 1, 0 }, /* 1/0 */
+    { 2, 2 }, /* 2/0 */
+    { 3, 2 }, /* 3/0 */
+    { 3, 2 }, /* 2/1 */
+    { 4, 4 }, /* 3/1 */
+    { 4, 2 }, /* 2/2 */
+    { 5, 4 }, /* 3/2 */
 };
 
 /** @hidden */
@@ -235,7 +250,7 @@ static bool upipe_a52f_parse_a52e(struct upipe *upipe)
     struct upipe_a52f *upipe_a52f = upipe_a52f_from_upipe(upipe);
     uint8_t header[A52_SYNCINFO_SIZE];
     if (unlikely(!ubase_check(uref_block_extract(upipe_a52f->next_uref, 0,
-                                                 A52_SYNCINFO_SIZE, header))))
+                                                 sizeof(header), header))))
         return true; /* not enough data */
 
     if (likely(a52e_sync_compare_formats(header, upipe_a52f->sync_header))) {
@@ -280,6 +295,10 @@ static bool upipe_a52f_parse_a52e(struct upipe *upipe)
     /* frame size */
     upipe_a52f->next_frame_size = a52e_get_frame_size(a52e_get_frmsiz(header));
 
+    /* channels */
+    int acmod = a52e_get_acmod(header);
+    int channels = acmod_chans[acmod].nfchans + a52e_get_lfeon(header);
+
     uint64_t octetrate =
           (upipe_a52f->next_frame_size * samplerate + A52_FRAME_SAMPLES - 1) /
           A52_FRAME_SAMPLES;
@@ -296,6 +315,7 @@ static bool upipe_a52f_parse_a52e(struct upipe *upipe)
     UBASE_FATAL(upipe, uref_flow_set_def(flow_def, "block.eac3.sound."))
     UBASE_FATAL(upipe, uref_sound_flow_set_samples(flow_def, A52_FRAME_SAMPLES))
     UBASE_FATAL(upipe, uref_sound_flow_set_rate(flow_def, samplerate))
+    UBASE_FATAL(upipe, uref_sound_flow_set_channels(flow_def, channels))
     UBASE_FATAL(upipe, uref_clock_set_latency(flow_def,
                 upipe_a52f->input_latency +
                 UCLOCK_FREQ * A52_FRAME_SAMPLES / samplerate))
@@ -319,9 +339,9 @@ static bool upipe_a52f_parse_a52e(struct upipe *upipe)
 static bool upipe_a52f_parse_a52(struct upipe *upipe)
 {
     struct upipe_a52f *upipe_a52f = upipe_a52f_from_upipe(upipe);
-    uint8_t header[A52_SYNCINFO_SIZE];
+    uint8_t header[A52_SYNCINFO_SIZE + 2];
     if (unlikely(!ubase_check(uref_block_extract(upipe_a52f->next_uref, 0,
-                                                 A52_SYNCINFO_SIZE, header))))
+                                                 sizeof(header), header))))
         return true; /* not enough data */
 
     ssize_t next_frame_size = a52_get_frame_size(a52_get_fscod(header),
@@ -329,7 +349,9 @@ static bool upipe_a52f_parse_a52(struct upipe *upipe)
     if (!next_frame_size)
         return false;
 
-    if (likely(a52_sync_compare_formats(header, upipe_a52f->sync_header))) {
+    if (likely(a52_sync_compare_formats(header, upipe_a52f->sync_header) &&
+               header[5] == upipe_a52f->sync_header[5] &&
+               header[6] == upipe_a52f->sync_header[6])) {
         /* identical sync */
         upipe_a52f->next_frame_size = next_frame_size;
         return true;
@@ -355,8 +377,13 @@ static bool upipe_a52f_parse_a52(struct upipe *upipe)
     /* frame size */
     upipe_a52f->next_frame_size = next_frame_size;
 
+    /* channels */
+    int acmod = a52_get_acmod(header);
+    int channels = acmod_chans[acmod].nfchans +
+        ((header[6] >> (4 - acmod_chans[acmod].lfe_offset)) & 1);
+
     uint64_t octetrate = a52_bitrate_tab[a52_get_frmsizecod(header)] * 1000 / 8;
-    memcpy(upipe_a52f->sync_header, header, A52_SYNCINFO_SIZE);
+    memcpy(upipe_a52f->sync_header, header, A52_SYNCINFO_SIZE + 2);
     upipe_a52f->samplerate = samplerate;
 
     struct uref *flow_def = upipe_a52f_alloc_flow_def_attr(upipe);
@@ -369,6 +396,7 @@ static bool upipe_a52f_parse_a52(struct upipe *upipe)
     UBASE_FATAL(upipe, uref_flow_set_def(flow_def, "block.ac3.sound."))
     UBASE_FATAL(upipe, uref_sound_flow_set_samples(flow_def, A52_FRAME_SAMPLES))
     UBASE_FATAL(upipe, uref_sound_flow_set_rate(flow_def, samplerate))
+    UBASE_FATAL(upipe, uref_sound_flow_set_channels(flow_def, channels))
     UBASE_FATAL(upipe, uref_clock_set_latency(flow_def,
                 upipe_a52f->input_latency +
                 UCLOCK_FREQ * A52_FRAME_SAMPLES / samplerate))
@@ -394,7 +422,7 @@ static bool upipe_a52f_parse_header(struct upipe *upipe)
     struct upipe_a52f *upipe_a52f = upipe_a52f_from_upipe(upipe);
     uint8_t header[6];
     if (unlikely(!ubase_check(uref_block_extract(upipe_a52f->next_uref, 0,
-                        A52_SYNCINFO_SIZE + 1, header))))
+                        sizeof(header), header))))
         return true;
 
     switch (a52_get_bsid(header)) {

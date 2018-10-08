@@ -198,8 +198,6 @@ static int select_variant(struct uprobe *uprobe)
          ubase_check(upipe_split_iterate(hls, &uref)) && uref;) {
         uint64_t id;
         ubase_assert(uref_flow_get_id(uref, &id));
-        const char *uri = "(none)";
-        uref_m3u_get_uri(uref, &uri);
         uint64_t bandwidth = 0;
         uref_m3u_master_get_bandwidth(uref, &bandwidth);
 
@@ -406,7 +404,7 @@ static int catch_rewrite_date(struct uprobe *uprobe, struct upipe *upipe,
     if (type == UREF_DATE_NONE)
         return UBASE_ERR_NONE;
 
-    if (probe_rewrite_date->video) {
+    if (probe_rewrite_date->video || !video_output.pipe) {
         uint64_t delta = (TS_CLOCK_MAX + date -
                           (last_cr % TS_CLOCK_MAX)) % TS_CLOCK_MAX;
         if (delta < MAX_GAP)
@@ -669,7 +667,6 @@ static int catch_playlist(struct uprobe *uprobe,
             ret = upipe_hls_playlist_set_index(upipe, sequence);
             if (!ubase_check(ret))
                 cmd_quit();
-            return ret;
         }
 
         ret = upipe_hls_playlist_play(upipe);
@@ -790,11 +787,11 @@ static int catch_variant(struct uprobe *uprobe,
                     uref_audio = uref;
             }
             else if (ubase_check(uref_flow_match_def(uref, "sound."))) {
-                if (ubase_check(uref_hls_get_default(uref)))
+                if (ubase_check(uref_hls_get_default(uref)) || !uref_audio)
                     uref_audio = uref;
             }
             else if (ubase_check(uref_flow_match_def(uref, "pic."))) {
-                if (ubase_check(uref_hls_get_default(uref)))
+                if (ubase_check(uref_hls_get_default(uref)) || !uref_video)
                     uref_video = uref;
             }
             else {
@@ -859,10 +856,7 @@ static int catch_variant(struct uprobe *uprobe,
 
                 struct uprobe *probe_playlist =
                     uprobe_playlist_alloc(
-                        uprobe_selflow_alloc(
-                            uprobe_use(main_probe),
-                            probe_audio,
-                            UPROBE_SELFLOW_SOUND, "auto"),
+                        probe_audio,
                         probe_variant->id,
                         probe_variant->at);
 
