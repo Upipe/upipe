@@ -694,6 +694,11 @@ static int get_flow_def(struct upipe *upipe, struct uref **flow_format)
         return UBASE_ERR_INVALID;
     }
 
+    if (upipe_pciesdi_src->sdi_format->pict_fmt->active_f2.start && interlaced == false)
+        upipe_warn(upipe, "SDI signal is progressive but interlaced sdi_offset struct returned");
+    else if (!upipe_pciesdi_src->sdi_format->pict_fmt->active_f2.start && interlaced == true)
+        upipe_warn(upipe, "SDI signal is interlaced but progressive sdi_offset struct returned");
+
     upipe_pciesdi_src->duration_f = UCLOCK_FREQ * fps.den / fps.num;
 
     *flow_format = flow_def;
