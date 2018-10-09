@@ -214,13 +214,17 @@ uint8_t si5324_spi_read(int fd, uint16_t adr);
 #endif
 
 #ifdef HAS_GS12241
-void rx_spi_write(int fd, uint8_t channel, uint16_t adr, uint16_t data);
-uint16_t rx_spi_read(int fd, uint8_t channel, uint16_t adr);
+void gs12241_spi_write(int fd, uint8_t channel, uint16_t adr, uint16_t data);
+uint16_t gs12241_spi_read(int fd, uint8_t channel, uint16_t adr);
+void gs12241_spi_init(int fd);
+void gs12241_reset(int fd, int n);
+void gs12241_config_for_sd(int fd, int n);
 #endif
 
 #ifdef HAS_GS12281
-void tx_spi_write(int fd, uint8_t channel, uint16_t adr, uint16_t data);
-uint16_t tx_spi_read(int fd, uint8_t channel, uint16_t adr);
+void gs12281_spi_write(int fd, uint8_t channel, uint16_t adr, uint16_t data);
+uint16_t gs12281_spi_read(int fd, uint8_t channel, uint16_t adr);
+void gs12281_spi_init(int fd);
 #endif
 
 #ifdef HAS_LMH0387

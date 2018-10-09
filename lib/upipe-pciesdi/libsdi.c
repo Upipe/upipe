@@ -450,7 +450,7 @@ uint8_t si5324_spi_read(int fd, uint16_t adr)
 #endif
 
 #ifdef HAS_GS12241
-void rx_spi_write(int fd, uint8_t channel, uint16_t adr, uint16_t data)
+void gs12241_spi_write(int fd, uint8_t channel, uint16_t adr, uint16_t data)
 {
     uint32_t cmd;
     uint32_t tx_data, rx_data;
@@ -473,7 +473,7 @@ void rx_spi_write(int fd, uint8_t channel, uint16_t adr, uint16_t data)
     sdi_gs12241_spi_cs(fd, 0b1111);
 }
 
-uint16_t rx_spi_read(int fd, uint8_t channel, uint16_t adr)
+uint16_t gs12241_spi_read(int fd, uint8_t channel, uint16_t adr)
 {
     uint32_t cmd;
     uint32_t tx_data, rx_data;
@@ -497,10 +497,42 @@ uint16_t rx_spi_read(int fd, uint8_t channel, uint16_t adr)
 
     return rx_data & 0xffff;
 }
+
+void gs12241_spi_init(int fd)
+{
+    int i;
+    /* sdo sharing */
+    for (i=0; i<4; i++)
+        gs12241_spi_write(fd, i, 0, 1 << 13); /* gspi_bus_through_enable */
+}
+
+void gs12241_reset(int fd, int n)
+{
+    gs12241_spi_write(fd, n, 0x7f, 0xad00); /* chip reset (pulse/release) */
+}
+
+void gs12241_config_for_sd(int fd, int n)
+{
+    int i;
+    /* FIXME: loop since not taken into account if too early after reset */
+    for (i=0; i<128; i++) {
+        gs12241_spi_write(fd, n, 0x2b, (35 << 8) | 0x70);
+        gs12241_spi_write(fd, n, 0x29, (35 << 8) | 0x70);
+        gs12241_spi_write(fd, n, 0x2d, (35 << 8) | 0x70);
+        gs12241_spi_write(fd, n, 0x2f, (35 << 8) | 0x70);
+        gs12241_spi_write(fd, n, 0x31, (35 << 8) | 0x70);
+        gs12241_spi_write(fd, n, 0x33, (35 << 8) | 0x70);
+        gs12241_spi_write(fd, n, 0x35, (35 << 8) | 0x70);
+        gs12241_spi_write(fd, n, 0x37, (35 << 8) | 0x70);
+        gs12241_spi_write(fd, n, 0x39, (35 << 8) | 0x70);
+        gs12241_spi_write(fd, n, 0x3b, (35 << 8) | 0x70);
+    }
+}
+
 #endif
 
 #ifdef HAS_GS12281
-void tx_spi_write(int fd, uint8_t channel, uint16_t adr, uint16_t data)
+void gs12281_spi_write(int fd, uint8_t channel, uint16_t adr, uint16_t data)
 {
     uint32_t cmd;
     uint32_t tx_data, rx_data;
@@ -523,7 +555,7 @@ void tx_spi_write(int fd, uint8_t channel, uint16_t adr, uint16_t data)
     sdi_gs12281_spi_cs(fd, 0b1111);
 }
 
-uint16_t tx_spi_read(int fd, uint8_t channel, uint16_t adr)
+uint16_t gs12281_spi_read(int fd, uint8_t channel, uint16_t adr)
 {
     uint32_t cmd;
     uint32_t tx_data, rx_data;
@@ -547,6 +579,15 @@ uint16_t tx_spi_read(int fd, uint8_t channel, uint16_t adr)
 
     return rx_data & 0xffff;
 }
+
+void gs12281_spi_init(int fd)
+{
+    int i;
+    /* sdo sharing */
+    for (i=0; i<4; i++)
+        gs12281_spi_write(fd, i, 0, 1 << 13); /* gspi_bus_through_enable */
+}
+
 #endif
 
 #ifdef HAS_LMH0387
