@@ -216,6 +216,69 @@ static inline const struct sdi_offsets_fmt *sdi_get_offsets(struct uref *flow_de
     return NULL;
 }
 
+/* These functions check that the EAV marker and "fvh" word is at the address's
+ * location, or that the SAV and "fvh" preceed the address's location. */
+
+static inline bool hd_eav_match(const uint16_t *src)
+{
+    if (src[0] == 0x3ff
+            && src[1] == 0x3ff
+            && src[2] == 0x000
+            && src[3] == 0x000
+            && src[4] == 0x000
+            && src[5] == 0x000
+            && src[6] == src[7]
+            && (src[6] == 0x274
+                || src[6] == 0x2d8
+                || src[6] == 0x368
+                || src[6] == 0x3c4))
+        return true;
+    return false;
+}
+
+static inline bool hd_sav_match(const uint16_t *src)
+{
+    if (src[-8] == 0x3ff
+            && src[-7] == 0x3ff
+            && src[-6] == 0x000
+            && src[-5] == 0x000
+            && src[-4] == 0x000
+            && src[-3] == 0x000
+            && src[-2] == src[-1]
+            && (src[-2] == 0x200
+                || src[-2] == 0x2ac
+                || src[-2] == 0x31c
+                || src[-2] == 0x3b0))
+        return true;
+    return false;
+}
+
+static inline bool sd_eav_match(const uint16_t *src)
+{
+    if (src[0] == 0x3ff
+            && src[1] == 0x000
+            && src[2] == 0x000
+            && (src[3] == 0x274
+                || src[3] == 0x2d8
+                || src[3] == 0x368
+                || src[3] == 0x3c4))
+        return true;
+    return false;
+}
+
+static inline bool sd_sav_match(const uint16_t *src)
+{
+    if (src[-4] == 0x3ff
+            && src[-3] == 0x000
+            && src[-2] == 0x000
+            && (src[-1] == 0x200
+                || src[-1] == 0x2ac
+                || src[-1] == 0x31c
+                || src[-1] == 0x3b0))
+        return true;
+    return false;
+}
+
 #ifdef __cplusplus
 }
 #endif

@@ -308,66 +308,6 @@ static int output_chunk(struct upipe *upipe, struct uref *uref, struct upump **u
     return UBASE_ERR_NONE;
 }
 
-static inline bool hd_eav_match(const uint16_t *src)
-{
-    if (src[0] == 0x3ff
-            && src[1] == 0x3ff
-            && src[2] == 0x000
-            && src[3] == 0x000
-            && src[4] == 0x000
-            && src[5] == 0x000
-            && src[6] == src[7]
-            && (src[6] == 0x274
-                || src[6] == 0x2d8
-                || src[6] == 0x368
-                || src[6] == 0x3c4))
-        return true;
-    return false;
-}
-
-static inline bool hd_sav_match(const uint16_t *src)
-{
-    if (src[-8] == 0x3ff
-            && src[-7] == 0x3ff
-            && src[-6] == 0x000
-            && src[-5] == 0x000
-            && src[-4] == 0x000
-            && src[-3] == 0x000
-            && src[-2] == src[-1]
-            && (src[-2] == 0x200
-                || src[-2] == 0x2ac
-                || src[-2] == 0x31c
-                || src[-2] == 0x3b0))
-        return true;
-    return false;
-}
-
-static inline bool sd_eav_match(const uint16_t *src)
-{
-    if (src[0] == 0x3ff
-            && src[1] == 0x000
-            && src[2] == 0x000
-            && (src[3] == 0x274
-                || src[3] == 0x2d8
-                || src[3] == 0x368
-                || src[3] == 0x3c4))
-        return true;
-    return false;
-}
-
-static inline bool sd_sav_match(const uint16_t *src)
-{
-    if (src[-4] == 0x3ff
-            && src[-3] == 0x000
-            && src[-2] == 0x000
-            && (src[-1] == 0x200
-                || src[-1] == 0x2ac
-                || src[-1] == 0x31c
-                || src[-1] == 0x3b0))
-        return true;
-    return false;
-}
-
 static ssize_t hd_eav_find(const uint16_t *src, ssize_t size)
 {
     for (ssize_t i = 0; i < size-8; i++) {
