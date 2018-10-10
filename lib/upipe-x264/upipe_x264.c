@@ -41,6 +41,7 @@
 #include <upipe/ubuf.h>
 #include <upipe/uref_pic.h>
 #include <upipe/uref_pic_flow.h>
+#include <upipe/uref_pic_flow_formats.h>
 #include <upipe/uref_block.h>
 #include <upipe/uref_block_flow.h>
 #include <upipe/ubuf_block.h>
@@ -147,6 +148,8 @@ struct upipe_x264 {
     int overscan;
     /** MPEG-2 aspect ratio information */
     uint8_t mpeg2_ar;
+    /** chroma subsampling */
+    int chroma_subsampling;
 
     /** last DTS */
     uint64_t last_dts;
@@ -452,6 +455,7 @@ static bool upipe_x264_open(struct upipe *upipe, int width, int height)
         params->vui.i_sar_height = upipe_x264->sar.den;
         params->vui.i_overscan = upipe_x264->overscan;
     }
+    params->i_csp = upipe_x264->chroma_subsampling;
     params->i_width = width;
     params->i_height = height;
     params->b_interlaced =
@@ -726,10 +730,12 @@ static inline bool upipe_x264_need_update(struct upipe *upipe,
     if (upipe_x264_mpeg2_enabled(upipe))
         return (params->i_width != width ||
                 params->i_height != height ||
+                params->i_csp != upipe_x264->chroma_subsampling ||
                 params->vui.i_aspect_ratio_information != upipe_x264->mpeg2_ar);
 #endif
     return (params->i_width != width ||
             params->i_height != height ||
+            params->i_csp != upipe_x264->chroma_subsampling ||
             params->vui.i_sar_width != upipe_x264->sar.num ||
             params->vui.i_sar_height != upipe_x264->sar.den ||
             params->vui.i_overscan != upipe_x264->overscan);
@@ -781,6 +787,15 @@ static bool upipe_x264_handle(struct upipe *upipe, struct uref *uref,
                 upipe_x264->overscan = overscan ? 2 : 1;
         }
 
+        if (ubase_check(uref_pic_flow_check_yuv420p(uref)))
+            upipe_x264->chroma_subsampling = X264_CSP_I420;
+        else if (ubase_check(uref_pic_flow_check_yuv422p(uref)))
+            upipe_x264->chroma_subsampling = X264_CSP_I422;
+        else if (ubase_check(uref_pic_flow_check_yuv444p(uref)))
+            upipe_x264->chroma_subsampling = X264_CSP_I444;
+        else
+            upipe_err(upipe, "invalid chroma subsampling");
+
         uref = upipe_x264_store_flow_def_input(upipe, uref);
         if (uref != NULL) {
             uref_pic_flow_clear_format(uref);
@@ -805,7 +820,6 @@ static bool upipe_x264_handle(struct upipe *upipe, struct uref *uref,
 
     if (likely(uref)) {
         pic.opaque = uref;
-        pic.img.i_csp = X264_CSP_I420;
 
         uref_pic_size(uref, &width, &height, NULL);
 
@@ -832,6 +846,8 @@ static bool upipe_x264_handle(struct upipe *upipe, struct uref *uref,
             return false;
 
         x264_encoder_parameters(upipe_x264->encoder, &curparams);
+
+        pic.img.i_csp = upipe_x264->chroma_subsampling;
 
         /* set pts in x264 timebase */
         pic.i_pts = upipe_x264->x264_ts;
@@ -1128,14 +1144,11 @@ static int upipe_x264_set_flow_def(struct upipe *upipe,
     if (flow_def == NULL)
         return UBASE_ERR_INVALID;
 
-    /* We only accept YUV420P for the moment. */
-    uint8_t macropixel;
-    if (unlikely(!ubase_check(uref_flow_match_def(flow_def, EXPECTED_FLOW)) ||
-                 !ubase_check(uref_pic_flow_get_macropixel(flow_def, &macropixel)) ||
-                 macropixel != 1 ||
-                 !ubase_check(uref_pic_flow_check_chroma(flow_def, 1, 1, 1, "y8")) ||
-                 !ubase_check(uref_pic_flow_check_chroma(flow_def, 2, 2, 1, "u8")) ||
-                 !ubase_check(uref_pic_flow_check_chroma(flow_def, 2, 2, 1, "v8"))))
+    UBASE_RETURN(uref_flow_match_def(flow_def, EXPECTED_FLOW));
+
+    if (unlikely(!ubase_check(uref_pic_flow_check_yuv420p(flow_def)) &&
+                 !ubase_check(uref_pic_flow_check_yuv422p(flow_def)) &&
+                 !ubase_check(uref_pic_flow_check_yuv444p(flow_def))))
         return UBASE_ERR_INVALID;
 
     /* Extract relevant attributes to flow def check. */
@@ -1214,12 +1227,17 @@ static int _upipe_x264_provide_flow_format(struct upipe *upipe,
 {
     struct uref *flow_format = uref_dup(request->uref);
     UBASE_ALLOC_RETURN(flow_format);
-    uref_pic_flow_clear_format(flow_format);
+
+    uint8_t macropixel;
+    if (ubase_check(uref_pic_flow_get_macropixel(flow_format, &macropixel)) &&
+        macropixel == 1 &&
+        (ubase_check(uref_pic_flow_check_yuv420p(flow_format)) ||
+         ubase_check(uref_pic_flow_check_yuv422p(flow_format)) ||
+         ubase_check(uref_pic_flow_check_yuv444p(flow_format))))
+        return urequest_provide_flow_format(request, flow_format);
+
     uref_pic_flow_set_macropixel(flow_format, 1);
-    uref_pic_flow_set_planes(flow_format, 0);
-    uref_pic_flow_add_plane(flow_format, 1, 1, 1, "y8");
-    uref_pic_flow_add_plane(flow_format, 2, 2, 1, "u8");
-    uref_pic_flow_add_plane(flow_format, 2, 2, 1, "v8");
+    uref_pic_flow_set_yuv420p(flow_format);
     return urequest_provide_flow_format(request, flow_format);
 }
 
