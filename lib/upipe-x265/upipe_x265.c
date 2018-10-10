@@ -41,6 +41,7 @@
 #include <upipe/ubuf.h>
 #include <upipe/uref_pic.h>
 #include <upipe/uref_pic_flow.h>
+#include <upipe/uref_pic_flow_formats.h>
 #include <upipe/uref_block.h>
 #include <upipe/uref_block_flow.h>
 #include <upipe/ubuf_block.h>
@@ -331,8 +332,8 @@ static void apply_params(struct upipe *upipe, x265_param *params)
     params->sourceWidth = upipe_x265->width;
     params->sourceHeight = upipe_x265->height;
 
-    if (!ubase_check(uref_pic_get_progressive(flow_def)))
-        params->interlaceMode = 1;
+    params->interlaceMode =
+        !ubase_check(uref_pic_get_progressive(flow_def));
 
     upipe_x265_set_option(upipe, params, "range",
                           ubase_check(uref_pic_flow_get_full_range(flow_def)) ?
