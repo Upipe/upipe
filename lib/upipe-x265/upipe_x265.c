@@ -185,8 +185,14 @@ struct upipe_x265 {
     /** input pixel format */
     enum pixel_format {
         PIX_FMT_YUV420P,
+        PIX_FMT_YUV422P,
+        PIX_FMT_YUV444P,
         PIX_FMT_YUV420P10LE,
+        PIX_FMT_YUV422P10LE,
+        PIX_FMT_YUV444P10LE,
         PIX_FMT_YUV420P12LE,
+        PIX_FMT_YUV422P12LE,
+        PIX_FMT_YUV444P12LE,
     } pixel_format;
 
     /** input width */
@@ -205,6 +211,8 @@ struct upipe_x265 {
         OVERSCAN_SHOW,
         OVERSCAN_CROP,
     } overscan;
+    /** color space */
+    int color_space;
 
     /** last DTS */
     uint64_t last_dts;
@@ -258,6 +266,78 @@ UPIPE_HELPER_UBUF_MGR(upipe_x265, ubuf_mgr, flow_format, ubuf_mgr_request,
                       upipe_x265_register_output_request,
                       upipe_x265_unregister_output_request)
 UPIPE_HELPER_UCLOCK(upipe_x265, uclock, uclock_request, NULL, upipe_throw_provide_request, NULL)
+
+/** @internal @This describes the supported pixel formats. */
+static const struct uref_pic_flow_format *pixel_format_desc[] = {
+    [PIX_FMT_YUV420P] = &uref_pic_flow_format_yuv420p,
+    [PIX_FMT_YUV422P] = &uref_pic_flow_format_yuv422p,
+    [PIX_FMT_YUV444P] = &uref_pic_flow_format_yuv444p,
+    [PIX_FMT_YUV420P10LE] = &uref_pic_flow_format_yuv420p10le,
+    [PIX_FMT_YUV422P10LE] = &uref_pic_flow_format_yuv422p10le,
+    [PIX_FMT_YUV444P10LE] = &uref_pic_flow_format_yuv444p10le,
+    [PIX_FMT_YUV420P12LE] = &uref_pic_flow_format_yuv420p12le,
+    [PIX_FMT_YUV422P12LE] = &uref_pic_flow_format_yuv422p12le,
+    [PIX_FMT_YUV444P12LE] = &uref_pic_flow_format_yuv444p12le,
+};
+
+/** @internal @This gets the pixel format from the flow definition.
+ *
+ * @param flow_def flow definition
+ * @param pixel_format pointer filled with the pixel format
+ * @return an error code
+ */
+static int get_pixel_format(struct uref *flow_def,
+                            enum pixel_format *pixel_format)
+{
+    for (size_t i = 0; i < UBASE_ARRAY_SIZE(pixel_format_desc); i++)
+        if (ubase_check(uref_pic_flow_check_format(flow_def,
+                                                   pixel_format_desc[i]))) {
+            *pixel_format = i;
+            return UBASE_ERR_NONE;
+        }
+    return UBASE_ERR_INVALID;
+}
+
+/** @internal @This get the bit depth from a pixel format.
+ *
+ * @param pixel_format pixel format
+ * @return the bit depth or -1
+ */
+static int pixel_format_to_bit_depth(enum pixel_format pixel_format)
+{
+    return pixel_format_desc[pixel_format]->planes[0].mpixel_bits;
+}
+
+/** @internal @This gets the color space from pixel format.
+ *
+ * @param pixel_format pixel format
+ * @return the color spave
+ */
+static int pixel_format_to_color_space(enum pixel_format pixel_format)
+{
+    const struct uref_pic_flow_format *fmt = pixel_format_desc[pixel_format];
+    if (fmt->planes[1].hsub == 1 && fmt->planes[2].hsub == 1)
+        return X265_CSP_I444;
+    else if (fmt->planes[1].vsub == 1 && fmt->planes[2].vsub == 1)
+        return X265_CSP_I422;
+    return X265_CSP_I420;
+}
+
+/** @interal @This returns the pixel format corresponding to the given bit
+ * depth and color space.
+ *
+ * @param bit_depth bit depth
+ * @param color_space color spave
+ * @return a pixel format
+ */
+static enum pixel_format pixel_format_find(int bit_depth, int color_space)
+{
+    for (size_t i = 0; i < UBASE_ARRAY_SIZE(pixel_format_desc); i++)
+        if (pixel_format_to_bit_depth(i) == bit_depth &&
+            pixel_format_to_color_space(i) == color_space)
+            return i;
+    return PIX_FMT_YUV420P;
+}
 
 /** @internal @This sets the content of an x265 option.
  * upipe_x265_reconfigure must be called to apply changes.
@@ -331,6 +411,7 @@ static void apply_params(struct upipe *upipe, x265_param *params)
 
     params->sourceWidth = upipe_x265->width;
     params->sourceHeight = upipe_x265->height;
+    params->internalCsp = upipe_x265->color_space;
 
     params->interlaceMode =
         !ubase_check(uref_pic_get_progressive(flow_def));
@@ -812,7 +893,8 @@ static inline bool upipe_x265_need_update(struct upipe *upipe,
            (params->vui.aspectRatioIdc == X265_EXTENDED_SAR &&
             (params->vui.sarWidth != upipe_x265->sar_width ||
              params->vui.sarHeight != upipe_x265->sar_height)) ||
-           params_overscan(params) != upipe_x265->overscan;
+           params_overscan(params) != upipe_x265->overscan ||
+           params->internalCsp != upipe_x265->color_space;
 }
 
 /** @internal @This fetches aspect ratio information from flow def.
@@ -869,44 +951,6 @@ static void upipe_x265_get_aspect_ratio(struct upipe *upipe,
     upipe_x265->sar_height = sar.den;
 }
 
-static int get_pixel_format(struct uref *flow_def,
-                            enum pixel_format *pixel_format)
-{
-    /* check for yuv420p */
-    if (ubase_check(uref_pic_flow_check_chroma(flow_def, 1, 1, 1, "y8")) &&
-        ubase_check(uref_pic_flow_check_chroma(flow_def, 2, 2, 1, "u8")) &&
-        ubase_check(uref_pic_flow_check_chroma(flow_def, 2, 2, 1, "v8")))
-        *pixel_format = PIX_FMT_YUV420P;
-
-    /* check for yuv420p10le */
-    else if (ubase_check(uref_pic_flow_check_chroma(flow_def, 1, 1, 2, "y10l")) &&
-             ubase_check(uref_pic_flow_check_chroma(flow_def, 2, 2, 2, "u10l")) &&
-             ubase_check(uref_pic_flow_check_chroma(flow_def, 2, 2, 2, "v10l")))
-        *pixel_format = PIX_FMT_YUV420P10LE;
-
-    /* check for yuv420p12le */
-    else if (ubase_check(uref_pic_flow_check_chroma(flow_def, 1, 1, 2, "y12l")) &&
-             ubase_check(uref_pic_flow_check_chroma(flow_def, 2, 2, 2, "u12l")) &&
-             ubase_check(uref_pic_flow_check_chroma(flow_def, 2, 2, 2, "v12l")))
-        *pixel_format = PIX_FMT_YUV420P12LE;
-
-    else
-        return UBASE_ERR_INVALID;
-
-    return UBASE_ERR_NONE;
-}
-
-static int pixel_format_to_bit_depth(enum pixel_format pixel_format)
-{
-    static const int bit_depth[] = {
-        [PIX_FMT_YUV420P]     = 8,
-        [PIX_FMT_YUV420P10LE] = 10,
-        [PIX_FMT_YUV420P12LE] = 12,
-    };
-
-    return bit_depth[pixel_format];
-}
-
 /** @internal @This processes pictures.
  *
  * @param upipe description structure of the pipe
@@ -957,6 +1001,8 @@ static bool upipe_x265_handle(struct upipe *upipe,
             goto err_invalid;
         if (bit_depth == 0)
             bit_depth = pixel_format_to_bit_depth(upipe_x265->pixel_format);
+        upipe_x265->color_space =
+            pixel_format_to_color_space(upipe_x265->pixel_format);
 
         upipe_x265->api = x265_api_get(bit_depth);
         if (unlikely(upipe_x265->api == NULL))
@@ -975,8 +1021,14 @@ err_invalid:
 
     static const char *const chromas_list[][3] = {
         [PIX_FMT_YUV420P]     = {"y8", "u8", "v8"},
+        [PIX_FMT_YUV422P]     = {"y8", "u8", "v8"},
+        [PIX_FMT_YUV444P]     = {"y8", "u8", "v8"},
         [PIX_FMT_YUV420P10LE] = {"y10l", "u10l", "v10l"},
+        [PIX_FMT_YUV422P10LE] = {"y10l", "u10l", "v10l"},
+        [PIX_FMT_YUV444P10LE] = {"y10l", "u10l", "v10l"},
         [PIX_FMT_YUV420P12LE] = {"y12l", "u12l", "v12l"},
+        [PIX_FMT_YUV422P12LE] = {"y12l", "u12l", "v12l"},
+        [PIX_FMT_YUV444P12LE] = {"y12l", "u12l", "v12l"},
     };
     const char * const *chromas = chromas_list[upipe_x265->pixel_format];
     size_t width, height;
@@ -999,7 +1051,7 @@ err_invalid:
     if (likely(uref)) {
         pic.userData = uref;
         pic.bitDepth = pixel_format_to_bit_depth(upipe_x265->pixel_format);
-        pic.colorSpace = X265_CSP_I420;
+        pic.colorSpace = pixel_format_to_color_space(upipe_x265->pixel_format);
 
         uref_pic_size(uref, &width, &height, NULL);
 
@@ -1403,24 +1455,21 @@ static int _upipe_x265_provide_flow_format(struct upipe *upipe,
     struct upipe_x265 *upipe_x265 = upipe_x265_from_upipe(upipe);
     struct uref *flow_format = uref_dup(request->uref);
     UBASE_ALLOC_RETURN(flow_format);
-    if (upipe_x265->bit_depth != 0) {
-        uref_pic_flow_clear_format(flow_format);
-        uref_pic_flow_set_macropixel(flow_format, 1);
-        uref_pic_flow_set_planes(flow_format, 0);
-        if (upipe_x265->bit_depth == 8) {
-            uref_pic_flow_add_plane(flow_format, 1, 1, 1, "y8");
-            uref_pic_flow_add_plane(flow_format, 2, 2, 1, "u8");
-            uref_pic_flow_add_plane(flow_format, 2, 2, 1, "v8");
-        } else if (upipe_x265->bit_depth == 10) {
-            uref_pic_flow_add_plane(flow_format, 1, 1, 2, "y10l");
-            uref_pic_flow_add_plane(flow_format, 2, 2, 2, "u10l");
-            uref_pic_flow_add_plane(flow_format, 2, 2, 2, "v10l");
-        } else if (upipe_x265->bit_depth == 12) {
-            uref_pic_flow_add_plane(flow_format, 1, 1, 2, "y12l");
-            uref_pic_flow_add_plane(flow_format, 2, 2, 2, "u12l");
-            uref_pic_flow_add_plane(flow_format, 2, 2, 2, "v12l");
-        }
+
+    enum pixel_format pixel_format;
+    if (unlikely(!ubase_check(get_pixel_format(flow_format, &pixel_format)))) {
+        uref_pic_flow_set_yuv420p(flow_format);
+        return urequest_provide_flow_format(request, flow_format);
     }
+
+    int bit_depth = pixel_format_to_bit_depth(pixel_format);
+    int color_space = pixel_format_to_color_space(pixel_format);
+    if (upipe_x265->bit_depth == 0 || upipe_x265->bit_depth == bit_depth)
+        return urequest_provide_flow_format(request, flow_format);
+
+    pixel_format = pixel_format_find(upipe_x265->bit_depth, color_space);
+    const struct uref_pic_flow_format *fmt = pixel_format_desc[pixel_format];
+    uref_pic_flow_set_format(flow_format, fmt);
     return urequest_provide_flow_format(request, flow_format);
 }
 
