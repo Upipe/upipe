@@ -121,10 +121,6 @@ struct upipe_pciesdi_src {
     int previous_sdi_line_number;
     uint16_t previous_fvh;
 
-    /* EAV offset from start of block, in bytes */
-    ssize_t eav_position;
-    uint8_t eav_buffer[DMA_BUFFER_SIZE];
-
     /* picture properties, same units as upipe_hbrmt_common.h, pixels */
     const struct sdi_offsets_fmt *sdi_format;
 
@@ -308,15 +304,6 @@ static int output_chunk(struct upipe *upipe, struct uref *uref, struct upump **u
     return UBASE_ERR_NONE;
 }
 
-static ssize_t hd_eav_find(const uint16_t *src, ssize_t size)
-{
-    for (ssize_t i = 0; i < size-8; i++) {
-        if (hd_eav_match(src+i))
-            return i * sizeof(uint16_t);
-    }
-    return -1;
-}
-
 /** @internal @This reads data from the source and outputs it.
 *   @param upump description structure of the read watcher
  */
@@ -375,21 +362,6 @@ static void upipe_pciesdi_src_worker(struct upump *upump)
 //        upipe_throw_source_end(upipe);
         return;
     }
-
-#if 0
-    memcpy(read_buffer, upipe_pciesdi_src->eav_buffer, DMA_BUFFER_SIZE);
-    ssize_t eav_position = hd_eav_find((const uint16_t*)read_buffer, (ret + DMA_BUFFER_SIZE) / sizeof(uint16_t));
-    if (eav_position < 0) {
-        upipe_err_va(upipe, "cannot find EAV position in %zd bytes", ret);
-        dump_and_exit_clean(upipe, read_buffer, sizeof(read_buffer));
-    }
-
-    if (upipe_pciesdi_src->eav_position != eav_position) {
-        upipe_warn_va(upipe, "EAV position changed from %zd to %zd",
-                upipe_pciesdi_src->eav_position, eav_position);
-        upipe_pciesdi_src->eav_position = eav_position;
-    }
-#endif
 
     ret += upipe_pciesdi_src->cached_read_bytes;
 
@@ -462,16 +434,6 @@ static void upipe_pciesdi_src_worker(struct upump *upump)
     uref_block_unmap(uref, 0);
     uref_block_resize(uref, 0, processed_bytes);
     upipe_pciesdi_src_output(upipe, uref, &upipe_pciesdi_src->upump);
-
-#if 0
-    /* If the EAV is aligned then copying a whole DMA buffer will duplicate a
-     * line.  Check the alignment and erase cached data if aligned otherwise
-     * copy data into cache. */
-    if (eav_position % DMA_BUFFER_SIZE)
-        memcpy(upipe_pciesdi_src->eav_buffer, read_buffer + ret, DMA_BUFFER_SIZE);
-    else
-        memset(upipe_pciesdi_src->eav_buffer, 0, sizeof(upipe_pciesdi_src->eav_buffer));
-#endif
 }
 
 static int get_flow_def(struct upipe *upipe, struct uref **flow_format)
