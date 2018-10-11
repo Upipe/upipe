@@ -416,29 +416,6 @@ static void upipe_pciesdi_src_worker(struct upump *upump)
                 dump_and_exit_clean(upipe, upipe_pciesdi_src->read_buffer,
                         DMA_BUFFER_SIZE * DMA_BUFFER_COUNT);
             }
-
-            uint16_t fvh = sdi_line[3];
-            bool vbi, f2;
-            if (fvh == 0x274) {
-                f2 = 0;
-                vbi = 0;
-            } else if (fvh == 0x2d8) {
-                f2 = 0;
-                vbi = 1;
-            } else if (fvh == 0x368) {
-                f2 = 1;
-                vbi = 0;
-            } else if (fvh == 0x3c4) {
-                f2 = 1;
-                vbi = 1;
-            }
-
-            /* Watch for transition from field2 VBI to field1 VBI. */
-            if (upipe_pciesdi_src->previous_fvh == 0x3c4 && fvh == 0x2d8)
-                upipe_pciesdi_src->start = true;
-
-            upipe_pciesdi_src->previous_fvh = fvh;
-
         } else { /* HD */
             /* Check EAV is present. */
             if (!hd_eav_match(sdi_line)) {
@@ -464,23 +441,15 @@ static void upipe_pciesdi_src_worker(struct upump *upump)
                         DMA_BUFFER_SIZE * DMA_BUFFER_COUNT);
             }
 
-            /* If top of picture is present start output. */
-            if (line == 1)
-                upipe_pciesdi_src->start = true;
-
             /* Check line number is increasing correctly. */
-            if (upipe_pciesdi_src->start) {
-                if (upipe_pciesdi_src->previous_sdi_line_number != upipe_pciesdi_src->sdi_format->height
-                        && line != upipe_pciesdi_src->previous_sdi_line_number + 1) {
-                    upipe_warn_va(upipe, "sdi_line_number not linearly increasing (%d -> %d)",
-                            upipe_pciesdi_src->previous_sdi_line_number, line);
-                }
+            if (upipe_pciesdi_src->previous_sdi_line_number != upipe_pciesdi_src->sdi_format->height
+                    && line != upipe_pciesdi_src->previous_sdi_line_number + 1) {
+                upipe_warn_va(upipe, "sdi_line_number not linearly increasing (%d -> %d)",
+                        upipe_pciesdi_src->previous_sdi_line_number, line);
             }
             upipe_pciesdi_src->previous_sdi_line_number = line;
-
         } /* end HD */
 
-        if (upipe_pciesdi_src->start) {
             int row = upipe_pciesdi_src->cached_output_lines;
             memcpy(block_buf + row * sdi_line_width, sdi_line, sdi_line_width);
             row = upipe_pciesdi_src->cached_output_lines += 1;
@@ -496,7 +465,6 @@ static void upipe_pciesdi_src_worker(struct upump *upump)
                     dump_and_exit_clean(upipe, NULL, 0);
                 }
             }
-        }
     }
 
     int processed_bytes = (ret / sdi_line_width) * sdi_line_width;
