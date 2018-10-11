@@ -1035,25 +1035,15 @@ static bool upipe_sdi_dec_handle(struct upipe *upipe, struct uref *uref,
             bool vbi = !active;
 
             if (p->sd) {
-                if (src[0] != 0x3ff
-                        || src[1] != 0x000
-                        || src[2] != 0x000
+                if (!sd_eav_match(src)
                         || src[3] != eav_fvh_cword[f2][vbi])
                     upipe_err_va(upipe, "SD EAV incorrect, line %d", h);
 
-                if (active_start[-4] != 0x3ff
-                        || active_start[-3] != 0x000
-                        || active_start[-2] != 0x000
+                if (!sd_sav_match(active_start)
                         || active_start[-1] != sav_fvh_cword[f2][vbi])
                     upipe_err_va(upipe, "SD SAV incorrect, line %d", h);
             } else {
-                if (src[0] != 0x3ff
-                        || src[1] != 0x3ff
-                        || src[2] != 0x000
-                        || src[3] != 0x000
-                        || src[4] != 0x000
-                        || src[5] != 0x000
-                        || src[6] != eav_fvh_cword[f2][vbi]
+                if (!hd_eav_match(src)
                         || src[7] != eav_fvh_cword[f2][vbi])
                     upipe_err_va(upipe, "HD EAV incorrect, line %d", h);
 
@@ -1069,13 +1059,7 @@ static bool upipe_sdi_dec_handle(struct upipe *upipe, struct uref *uref,
                         || src[11] != line_num_check[1])
                     upipe_err_va(upipe, "HD line num incorrect, line %d", h);
 
-                if ( active_start[-8] != 0x3ff
-                        || active_start[-7] != 0x3ff
-                        || active_start[-6] != 0x000
-                        || active_start[-5] != 0x000
-                        || active_start[-4] != 0x000
-                        || active_start[-3] != 0x000
-                        || active_start[-2] != sav_fvh_cword[f2][vbi]
+                if (!hd_sav_match(active_start)
                         || active_start[-1] != sav_fvh_cword[f2][vbi])
                     upipe_err_va(upipe, "HD SAV incorrect, line %d", h);
             }
