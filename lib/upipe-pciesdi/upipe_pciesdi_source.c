@@ -337,14 +337,9 @@ static void upipe_pciesdi_src_worker(struct upump *upump)
         sdi_decode_rate(rate));
 
     int sdi_line_width = upipe_pciesdi_src->sdi_format->width * 4;
-    struct uref *uref = upipe_pciesdi_src->output_uref;
-    if (!uref) {
-        uref = uref_block_alloc(upipe_pciesdi_src->uref_mgr,
-                upipe_pciesdi_src->ubuf_mgr,
-                upipe_pciesdi_src->chunk_height * sdi_line_width);
-        UBASE_FATAL_RETURN(upipe, uref ? UBASE_ERR_NONE : UBASE_ERR_ALLOC);
-        upipe_pciesdi_src->output_uref = uref;
-    }
+    struct uref *uref = uref_block_alloc(upipe_pciesdi_src->uref_mgr,
+            upipe_pciesdi_src->ubuf_mgr, DMA_BUFFER_SIZE * DMA_BUFFER_COUNT);
+    UBASE_FATAL_RETURN(upipe, uref ? UBASE_ERR_NONE : UBASE_ERR_ALLOC);
 
     uint8_t *block_buf;
     int block_size = -1;
@@ -355,7 +350,7 @@ static void upipe_pciesdi_src_worker(struct upump *upump)
 
     ssize_t ret = read(upipe_pciesdi_src->fd,
             upipe_pciesdi_src->read_buffer + upipe_pciesdi_src->cached_read_bytes,
-            DMA_BUFFER_SIZE * 16);
+            DMA_BUFFER_SIZE * DMA_BUFFER_COUNT/2);
 
     if (family == 15 || !locked) {
         ret = -1;
@@ -450,21 +445,8 @@ static void upipe_pciesdi_src_worker(struct upump *upump)
             upipe_pciesdi_src->previous_sdi_line_number = line;
         } /* end HD */
 
-            int row = upipe_pciesdi_src->cached_output_lines;
-            memcpy(block_buf + row * sdi_line_width, sdi_line, sdi_line_width);
-            row = upipe_pciesdi_src->cached_output_lines += 1;
-
-            if (row == upipe_pciesdi_src->chunk_height) {
-                UBASE_FATAL_RETURN(upipe, output_chunk(upipe, uref,
-                            &upipe_pciesdi_src->upump));
-
-                /* Remap block buffer. */
-                uref = upipe_pciesdi_src->output_uref;
-                if (!ubase_check(uref_block_write(uref, 0, &block_size, &block_buf))) {
-                    upipe_err(upipe, "unable to map block for writing");
-                    dump_and_exit_clean(upipe, NULL, 0);
-                }
-            }
+        /* Copy line to output uref. */
+        memcpy(block_buf + i * sdi_line_width, sdi_line, sdi_line_width);
     }
 
     int processed_bytes = (ret / sdi_line_width) * sdi_line_width;
@@ -477,8 +459,9 @@ static void upipe_pciesdi_src_worker(struct upump *upump)
         upipe_pciesdi_src->cached_read_bytes = 0;
     }
 
-    if (uref)
-        uref_block_unmap(uref, 0);
+    uref_block_unmap(uref, 0);
+    uref_block_resize(uref, 0, processed_bytes);
+    upipe_pciesdi_src_output(upipe, uref, &upipe_pciesdi_src->upump);
 
 #if 0
     /* If the EAV is aligned then copying a whole DMA buffer will duplicate a
