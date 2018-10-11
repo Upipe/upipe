@@ -97,26 +97,10 @@ struct upipe_pciesdi_src {
     /** read watcher */
     struct upump *upump;
 
-    /* cached output uref */
-    struct uref *output_uref;
-    int cached_output_lines;
-
-    /* vposition of next chunk to be output */
-    int vposition;
-
-    /* pts of current frame or field */
-    uint64_t pts_prog;
-    /* duration of frame or field */
-    uint64_t duration_f;
-
-    /* have seen the start of picture */
-    bool start;
-
     /** file descriptor */
     int fd;
 
     int previous_sdi_line_number;
-    uint16_t previous_fvh;
 
     /* picture properties, same units as upipe_hbrmt_common.h, pixels */
     const struct sdi_offsets_fmt *sdi_format;
@@ -173,8 +157,6 @@ static struct upipe *upipe_pciesdi_src_alloc(struct upipe_mgr *mgr,
     if (!upipe_pciesdi_src->read_buffer)
         return NULL;
 
-    upipe_pciesdi_src->start = false;
-    upipe_pciesdi_src->output_uref = NULL;
     upipe_pciesdi_src->fd = -1;
     upipe_pciesdi_src->previous_sdi_line_number = -1;
     upipe_throw_ready(upipe);
@@ -494,8 +476,6 @@ static int get_flow_def(struct upipe *upipe, struct uref **flow_format)
         upipe_warn(upipe, "SDI signal is progressive but interlaced sdi_offset struct returned");
     else if (!upipe_pciesdi_src->sdi_format->pict_fmt->active_f2.start && interlaced == true)
         upipe_warn(upipe, "SDI signal is interlaced but progressive sdi_offset struct returned");
-
-    upipe_pciesdi_src->duration_f = UCLOCK_FREQ * fps.den / fps.num;
 
     *flow_format = flow_def;
     return UBASE_ERR_NONE;
