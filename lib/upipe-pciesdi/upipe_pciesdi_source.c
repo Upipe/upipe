@@ -569,32 +569,24 @@ static int get_flow_def(struct upipe *upipe, struct uref **flow_format)
     }
 
     /* set framerate */
-    if (1 /* pal */) {
-        if (rate == 3)
-            fps = (struct urational){24, 1};
-        else if (rate == 5)
-            fps = (struct urational){25, 1};
-        else if (rate == 7)
-            fps = (struct urational){30, 1};
-        else if (rate == 9)
-            fps = (struct urational){50, 1};
-        else if (rate == 11)
-            fps = (struct urational){60, 1};
-        else {
-            upipe_err_va(upipe, "invalid/unknown rate value: %s (%d)", sdi_decode_rate(rate), rate);
-            return UBASE_ERR_INVALID;
-        }
-    } else {
-        if (rate == 2)
-            fps = (struct urational){24000, 1001};
-        else if (rate == 6)
-            fps = (struct urational){30000, 1001};
-        else if (rate == 10)
-            fps = (struct urational){60000, 1001};
-        else {
-            upipe_err_va(upipe, "invalid/unknown rate value: %s (%d)", sdi_decode_rate(rate), rate);
-            return UBASE_ERR_INVALID;
-        }
+    static const struct urational framerates[] = {
+        { 24000, 1001 },
+        { 24, 1 },
+        { 48000, 1001 },
+        { 25, 1 },
+        { 30000, 1001 },
+        { 30, 1 },
+        { 48, 1 },
+        { 50, 1 },
+        { 60000, 1001 },
+        { 60, 1 }
+    };
+
+    if (rate >= 2 && rate <= 11)
+        fps = framerates[rate - 2];
+    else {
+        upipe_err_va(upipe, "invalid/unknown rate value: %s (%d)", sdi_decode_rate(rate), rate);
+        return UBASE_ERR_INVALID;
     }
 
     if (scan == 0) {
