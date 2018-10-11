@@ -201,6 +201,11 @@ static inline const struct sdi_offsets_fmt *sdi_get_offsets(struct uref *flow_de
         { 2750, 1125, 830, &pict_fmts[1], 0x3, S352_PICTURE_RATE_24000_1001, { 24000, 1001 } }, /* 24/1.001 Hz */
         { 2750, 1125, 830, &pict_fmts[1], 0x3, S352_PICTURE_RATE_24, { 24, 1 } },               /* 24 Hz */
 
+        { 2750, 1125, 830, &pict_fmts[0], 0x0, S352_PICTURE_RATE_24, { 24, 1 } }, /* 1080i24 */
+        { 2200, 1125, 280, &pict_fmts[0], 0x0, S352_PICTURE_RATE_30, { 30, 1 } }, /* 1080i30 */
+        { 2200, 1125, 280, &pict_fmts[1], 0x3, S352_PICTURE_RATE_30, { 30, 1 } }, /* 1080p30 */
+        { 2640, 1125, 720, &pict_fmts[1], 0x3, S352_PICTURE_RATE_25, { 25, 1 } }, /* 1080p25 */
+
         /* 750 Lines */
         { 1980, 750, 700, &pict_fmts[2], 0x3, S352_PICTURE_RATE_50, { 50, 1} },                /* 50 Hz P */
         { 1650, 750, 370, &pict_fmts[2], 0x3, S352_PICTURE_RATE_60000_1001, { 60000, 1001 } }, /* 60/1.001 Hz P */
