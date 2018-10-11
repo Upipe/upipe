@@ -5,6 +5,8 @@
 extern "C" {
 #endif
 
+#include <upipe/uref_pic.h>
+
 #include <bitstream/ietf/rtp.h>
 #include <bitstream/ieee/ethernet.h>
 #include <bitstream/ietf/ip.h>
@@ -171,6 +173,8 @@ static inline const struct sdi_offsets_fmt *sdi_get_offsets(struct uref *flow_de
         !ubase_check(uref_pic_flow_get_vsize(flow_def, &vsize)))
         return NULL;
 
+    bool interlaced = !ubase_check(uref_pic_get_progressive(flow_def));
+
     static const struct sdi_picture_fmt pict_fmts[] = {
         /* 1125 Interlaced (1080 active) lines */
         {0, 1920, 1080, 563, 7, 10, {1, 20}, {21, 560}, {561, 563}, {564, 583}, {584, 1123}, {1124, 1125}},
@@ -210,7 +214,8 @@ static inline const struct sdi_offsets_fmt *sdi_get_offsets(struct uref *flow_de
         if (!urational_cmp(&fps, &fmts_data[i].fps))
             if (fmts_data[i].pict_fmt->active_width == hsize)
                 if (fmts_data[i].pict_fmt->active_height == vsize)
-                    return &fmts_data[i];
+                    if (interlaced == (fmts_data[i].psf_ident != UPIPE_SDI_PSF_IDENT_P))
+                            return &fmts_data[i];
 
     return NULL;
 }
