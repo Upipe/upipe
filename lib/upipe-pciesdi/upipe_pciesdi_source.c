@@ -259,51 +259,6 @@ static void dump_and_exit_clean(struct upipe *upipe, uint8_t *buf, size_t size)
     abort();
 }
 
-static int output_chunk(struct upipe *upipe, struct uref *uref, struct upump **upump)
-{
-    struct upipe_pciesdi_src *upipe_pciesdi_src = upipe_pciesdi_src_from_upipe(upipe);
-
-    uref_block_unmap(uref, 0);
-
-#if 0
-    int vpos = upipe_pciesdi_src->vposition;
-    int lines = upipe_pciesdi_src->cached_output_lines;
-
-    /* set picture properties */
-    uref_pic_set_vposition(uref, vpos);
-    uref_attr_set_unsigned(uref, 1080, UDICT_TYPE_UNSIGNED, "original_height");
-
-    /* set clock properties */
-    uref_clock_set_pts_prog(uref, upipe_pciesdi_src->pts_prog
-            + upipe_pciesdi_src->duration_f * vpos / 540);
-    uref_clock_set_duration(uref, upipe_pciesdi_src->duration_f * lines / 540 );
-    if (upipe_pciesdi_src->uclock != NULL)
-        uref_clock_set_cr_sys(uref, uclock_now(upipe_pciesdi_src->uclock));
-
-    upipe_pciesdi_src->vposition += lines;
-    if (upipe_pciesdi_src->vposition >= 540) {
-        upipe_pciesdi_src->vposition = 0;
-        upipe_pciesdi_src->pts_prog += upipe_pciesdi_src->duration_f;
-    }
-#endif
-
-    /* output */
-    upipe_pciesdi_src_output(upipe, uref, upump);
-    uref = upipe_pciesdi_src->output_uref = NULL;
-    upipe_pciesdi_src->cached_output_lines = 0;
-
-    int sdi_line_width = upipe_pciesdi_src->sdi_format->width * 4;
-    /* allocate a new uref */
-    uref = uref_block_alloc(upipe_pciesdi_src->uref_mgr,
-            upipe_pciesdi_src->ubuf_mgr,
-            upipe_pciesdi_src->chunk_height * sdi_line_width);
-    if (!uref)
-        return UBASE_ERR_ALLOC;
-    upipe_pciesdi_src->output_uref = uref;
-
-    return UBASE_ERR_NONE;
-}
-
 /** @internal @This reads data from the source and outputs it.
 *   @param upump description structure of the read watcher
  */
