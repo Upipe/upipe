@@ -289,9 +289,6 @@ static void upipe_ts_pesd_decaps(struct upipe *upipe, struct upump **upump_p)
         upipe_throw_clock_ts(upipe, upipe_ts_pesd->next_uref);
     }
 
-    if (alignment)
-        uref_flow_set_random(upipe_ts_pesd->next_uref);
-
     UBASE_FATAL(upipe, uref_block_resize(upipe_ts_pesd->next_uref,
                             PES_HEADER_SIZE_NOPTS + headerlength, -1))
     upipe_ts_pesd_check_output(upipe, upump_p);

@@ -134,6 +134,7 @@ static void upipe_ts_decaps_input(struct upipe *upipe, struct uref *uref,
     UBASE_FATAL(upipe, uref_block_resize(uref, TS_HEADER_SIZE, -1))
 
     bool discontinuity = upipe_ts_decaps->last_cc == -1;
+    bool random = false;
     if (unlikely(has_adaptation)) {
         uint8_t af_length;
         if (unlikely(!ubase_check(uref_block_extract(uref, 0, 1, &af_length)))) {
@@ -161,6 +162,8 @@ static void upipe_ts_decaps_input(struct upipe *upipe, struct uref *uref,
                 upipe_warn(upipe, "discontinuity flagged");
                 discontinuity = true;
             }
+
+            random = tsaf_has_randomaccess(&af_header - 1 - TS_HEADER_SIZE);
 
             if (tsaf_has_pcr(&af_header - 1 - TS_HEADER_SIZE)) {
                 uint8_t buffer2[TS_HEADER_SIZE_PCR - TS_HEADER_SIZE_AF];
@@ -219,6 +222,8 @@ static void upipe_ts_decaps_input(struct upipe *upipe, struct uref *uref,
 
     if (unlikely(discontinuity))
         uref_flow_set_discontinuity(uref);
+    if (unlikely(random))
+        uref_flow_set_random(uref);
     if (unlikely(unitstart))
         uref_block_set_start(uref);
     if (unlikely(transporterror))
