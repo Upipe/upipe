@@ -77,6 +77,73 @@ extern "C" {
 static const unsigned max_samples = (uint64_t)48000 * 1001 / 24000;
 static const size_t audio_buf_size = max_samples * DECKLINK_CHANNELS * sizeof(int32_t);
 
+inline static unsigned bcd2uint(uint8_t bcd)
+{
+   unsigned low  = bcd & 0xf;
+   unsigned high = bcd >> 4;
+   if (low > 9 || high > 9)
+       return 0;
+   return low + 10*high;
+}
+
+class upipe_bmd_sink_timecode : public IDeckLinkTimecode
+{
+public:
+    upipe_bmd_sink_timecode(uint32_t _BCD) : BCD(_BCD) { }
+
+    virtual BMDTimecodeBCD STDMETHODCALLTYPE GetBCD (void) {
+       return BCD;
+    }
+
+    virtual HRESULT STDMETHODCALLTYPE GetComponents(uint8_t *hours, uint8_t *minutes, uint8_t *seconds, uint8_t *frames) {
+        *hours   = bcd2uint( BCD & 0x3f);
+        *minutes = bcd2uint((BCD >> 8) & 0x7f);
+        *seconds = bcd2uint((BCD >> 16) & 0x7f);
+        *frames  = bcd2uint((BCD >> 24) & 0x3f);
+        return S_OK;
+    }
+
+    virtual BMDTimecodeFlags STDMETHODCALLTYPE GetFlags() {
+       return !!(BCD & (1 << 30)) ? bmdTimecodeIsDropFrame : bmdTimecodeFlagDefault;
+    }
+
+    virtual HRESULT STDMETHODCALLTYPE GetTimecodeUserBits(BMDTimecodeUserBits *userBits) {
+         *userBits = GetBCD();
+         return S_OK;
+    }
+
+    virtual HRESULT GetString (const char **timecode) {
+        uint8_t h, m, s, f, drop = (this->GetFlags() == bmdTimecodeIsDropFrame);
+        GetComponents(&h, &m, &s, &f);
+
+        if (!(*timecode = (const char*)calloc(16, sizeof(char)))) {
+            return S_FALSE;
+        }
+
+        snprintf((char*)*timecode, 16, "%02u:%02u:%02u%c%02u", h, m, s, drop ? ';' : ':', f);
+        return S_OK;
+    }
+
+    virtual ULONG STDMETHODCALLTYPE AddRef(void) {
+        return uatomic_fetch_add(&refcount, 1) + 1;
+    }
+
+    virtual ULONG STDMETHODCALLTYPE Release(void) {
+        uint32_t new_ref = uatomic_fetch_sub(&refcount, 1) - 1;
+        if (new_ref == 0)
+            delete this;
+        return new_ref;
+    }
+
+    virtual HRESULT STDMETHODCALLTYPE QueryInterface(REFIID iid, LPVOID *ppv) {
+        return E_NOINTERFACE;
+    }
+
+private:
+    uint32_t BCD;
+    uatomic_uint32_t refcount;
+};
+
 class upipe_bmd_sink_frame : public IDeckLinkVideoFrame
 {
 public:
@@ -117,8 +184,14 @@ public:
     }
 
     virtual HRESULT STDMETHODCALLTYPE GetTimecode(BMDTimecodeFormat format,
-                                                  IDeckLinkTimecode **timecode) {
-        *timecode = NULL;
+                                                  IDeckLinkTimecode **_timecode) {
+        timecode->AddRef();
+        *_timecode = timecode;
+        return S_FALSE;
+    }
+
+    virtual HRESULT STDMETHODCALLTYPE SetTimecode(upipe_bmd_sink_timecode &_timecode) {
+        timecode = &_timecode;
         return S_FALSE;
     }
 
@@ -159,6 +232,7 @@ private:
 
     uatomic_uint32_t refcount;
     IDeckLinkVideoFrameAncillary *frame_anc;
+    upipe_bmd_sink_timecode *timecode;
 
 public:
     uint64_t pts;
@@ -306,6 +380,9 @@ struct upipe_bmd_sink {
 
     /** pass through teletext */
     uatomic_uint32_t ttx;
+
+    /** pass through timecode */
+    uatomic_uint32_t timecode;
 
     /** last frame output */
     upipe_bmd_sink_frame *video_frame;
@@ -787,8 +864,17 @@ static upipe_bmd_sink_frame *get_video_frame(struct upipe *upipe,
         uref_free(subpic);
     }
 
-    video_frame->SetAncillaryData(ancillary);
+    if (uatomic_load(&upipe_bmd_sink->timecode)) {
+        const uint32_t *tc_data;
+        size_t tc_data_size;
+        // bmdVideoOutputRP188
+        if (ubase_check(uref_pic_get_s12m(uref, (const uint8_t**)&tc_data, &tc_data_size))) {
+           upipe_bmd_sink_timecode timecode(tc_data[1]);
+           video_frame->SetTimecode(timecode);
+        }
+    }
 
+    video_frame->SetAncillaryData(ancillary);
     video_frame->AddRef(); // we're gonna buffer this frame
     upipe_bmd_sink->video_frame = video_frame;
 
@@ -1609,6 +1695,8 @@ static int upipe_bmd_sink_set_option(struct upipe *upipe,
         uatomic_store(&upipe_bmd_sink->cc, strcmp(v, "0"));
     } else if (!strcmp(k, "teletext")) {
         uatomic_store(&upipe_bmd_sink->ttx, strcmp(v, "0"));
+    } else if (!strcmp(k, "timecode")) {
+        uatomic_store(&upipe_bmd_sink->timecode, strcmp(v, "0"));
     } else
         return UBASE_ERR_INVALID;
 
