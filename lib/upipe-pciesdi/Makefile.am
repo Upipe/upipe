@@ -2,6 +2,7 @@ lib_LTLIBRARIES = libupipe_pciesdi.la
 
 libupipe_pciesdi_la_SOURCES = upipe_pciesdi_source.c \
 	upipe_pciesdi_sink.c \
+	levelb.c \
 	csr.h \
 	sdi.h \
 	sdi_config.h \

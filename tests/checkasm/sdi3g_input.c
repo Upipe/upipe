@@ -22,46 +22,52 @@
 #include <libavutil/mem.h>
 
 #include "checkasm.h"
-#include "lib/upipe-hbrmt/sdidec.h"
-#include "lib/upipe-hbrmt/rfc4175_dec.h"
+#include "lib/upipe-pciesdi/levelb.h"
 
 #define NUM_SAMPLES 512
 
-static void randomize_buffers(uint16_t *src0, uint16_t *src1)
+static void randomize_buffers_unpacked(uint16_t *src0, uint16_t *src1)
 {
     for (int i = 0; i < NUM_SAMPLES; i++) {
         src0[i] = src1[i] = rnd() & 0x3ff;
     }
 }
 
-void upipe_sdi3g_levelb_unpack_sse2(const uint16_t *src, uint16_t *dst1, uint16_t *dst2, uintptr_t pixels);
-static void levelb_unpack(const uint16_t *src, uint16_t *dst1, uint16_t *dst2, uintptr_t pixels)
+static void randomize_buffers_packed(uint8_t *src0, uint8_t *src1)
 {
-    for (int i = 0; i < pixels; i++) {
-        dst1[2*i + 0] = src[4*i + 0];
-        dst1[2*i + 1] = src[4*i + 1];
-        dst2[2*i + 0] = src[4*i + 2];
-        dst2[2*i + 1] = src[4*i + 3];
+    for (int i = 0; i < 2 * NUM_SAMPLES * 10 / 8; i++) {
+        src0[i] = src1[i] = rnd();
     }
 }
 
 void checkasm_check_sdi3g_input(void)
 {
     struct {
-        void (*uyvy)(const uint16_t *src, uint16_t *dst1, uint16_t *dst2, uintptr_t pixels);
+        void (*packed)(const uint8_t *src, uint16_t *dst1, uint16_t *dst2, uintptr_t pixels);
+        void (*unpacked)(const uint16_t *src, uint16_t *dst1, uint16_t *dst2, uintptr_t pixels);
     } s = {
-        .uyvy = levelb_unpack,
+        .packed = upipe_sdi3g_to_uyvy_2_c,
+        .unpacked = upipe_levelb_unpack_c,
     };
 
     int cpu_flags = av_get_cpu_flags();
 
 #ifdef HAVE_X86ASM
     if (cpu_flags & AV_CPU_FLAG_SSE2) {
-        s.uyvy = upipe_sdi3g_levelb_unpack_sse2;
+        s.unpacked = upipe_sdi3g_levelb_unpack_sse2;
+    }
+    if (cpu_flags & AV_CPU_FLAG_SSSE3) {
+        s.packed = upipe_sdi3g_to_uyvy_2_ssse3;
+    }
+    if (cpu_flags & AV_CPU_FLAG_AVX) {
+        s.packed = upipe_sdi3g_to_uyvy_2_avx;
+    }
+    if (cpu_flags & AV_CPU_FLAG_AVX2) {
+        s.packed = upipe_sdi3g_to_uyvy_2_avx2;
     }
 #endif
 
-    if (check_func(s.uyvy, "sdi3g_levelb_unpack")) {
+    if (check_func(s.unpacked, "unpacked")) {
         uint16_t src0[NUM_SAMPLES];
         uint16_t src1[NUM_SAMPLES];
         uint16_t dst0[NUM_SAMPLES / 2];
@@ -70,7 +76,7 @@ void checkasm_check_sdi3g_input(void)
         uint16_t dst3[NUM_SAMPLES / 2];
         declare_func(void, const uint16_t *src, uint16_t *dst1, uint16_t *dst2, uintptr_t pixels);
 
-        randomize_buffers(src0, src1);
+        randomize_buffers_unpacked(src0, src1);
         call_ref(src0, dst0, dst2, NUM_SAMPLES / 4);
         call_new(src1, dst1, dst3, NUM_SAMPLES / 4);
         if (memcmp(src0, src1, sizeof src0)
@@ -79,5 +85,25 @@ void checkasm_check_sdi3g_input(void)
             fail();
         bench_new(src1, dst1, dst3, NUM_SAMPLES / 4);
     }
-    report("sdi3g_levelb_unpack");
+    report("unpacked");
+
+    if (check_func(s.packed, "packed")) {
+        uint8_t  src0[2 * NUM_SAMPLES * 10 / 8];
+        uint8_t  src1[2 * NUM_SAMPLES * 10 / 8];
+        uint16_t dst0[NUM_SAMPLES];
+        uint16_t dst1[NUM_SAMPLES];
+        uint16_t dst2[NUM_SAMPLES];
+        uint16_t dst3[NUM_SAMPLES];
+        declare_func(void, const uint8_t *src, uint16_t *dst1, uint16_t *dst2, uintptr_t pixels);
+
+        randomize_buffers_packed(src0, src1);
+        call_ref(src0, dst0, dst2, NUM_SAMPLES / 2);
+        call_new(src1, dst1, dst3, NUM_SAMPLES / 2);
+        if (memcmp(src0, src1, sizeof src0)
+                || memcmp(dst0, dst1, sizeof dst0)
+                || memcmp(dst2, dst3, sizeof dst2))
+            fail();
+        bench_new(src1, dst1, dst3, NUM_SAMPLES / 2);
+    }
+    report("packed");
 }

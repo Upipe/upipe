@@ -28,6 +28,7 @@ checkasm_LDADD += \
     $(top_builddir)/lib/upipe-hbrmt/sdidec.o \
     $(top_builddir)/lib/upipe-hbrmt/sdienc.o \
     $(top_builddir)/lib/upipe-pciesdi/levelb.o \
+    $(top_builddir)/lib/upipe-pciesdi/libupipe_pciesdi_la-levelb.o \
     $(NULL)
 
 checkasm_CPPFLAGS += -DHAVE_SDI

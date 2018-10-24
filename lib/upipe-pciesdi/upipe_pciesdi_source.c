@@ -57,13 +57,11 @@
 #include "libsdi.h"
 #include "sdi_config.h"
 
+#include "levelb.h"
 #include "../upipe-hbrmt/upipe_hbrmt_common.h"
 #include "../upipe-hbrmt/sdidec.h"
 
 #define DEVICE_IS_BITPACKED 1
-
-static void levelb_unpack(const uint16_t *src, uint16_t *dst1, uint16_t *dst2, uintptr_t pixels);
-void upipe_sdi3g_levelb_unpack_sse2(const uint16_t *src, uint16_t *dst1, uint16_t *dst2, uintptr_t pixels);
 
 /** @hidden */
 static int upipe_pciesdi_src_check(struct upipe *upipe, struct uref *flow_format);
@@ -169,7 +167,7 @@ static struct upipe *upipe_pciesdi_src_alloc(struct upipe_mgr *mgr,
     if (!upipe_pciesdi_src->read_buffer)
         return NULL;
 
-    upipe_pciesdi_src->sdi3g_levelb_unpack = levelb_unpack;
+    upipe_pciesdi_src->sdi3g_levelb_unpack = upipe_levelb_unpack_c;
     upipe_pciesdi_src->sdi_to_uyvy = upipe_sdi_to_uyvy_c;
 #if defined(HAVE_X86ASM)
 #if defined(__i686__) || defined(__x86_64__)
@@ -355,16 +353,6 @@ static inline bool sd_sav_match_bitpacked(const uint8_t *src)
                 || (src[-2] == 3 && src[-1] == 0xb0)))
         return true;
     return false;
-}
-
-static void levelb_unpack(const uint16_t *src, uint16_t *dst1, uint16_t *dst2, uintptr_t pixels)
-{
-    for (int i = 0; i < pixels; i++) {
-        dst1[2*i + 0] = src[4*i + 0];
-        dst1[2*i + 1] = src[4*i + 1];
-        dst2[2*i + 0] = src[4*i + 2];
-        dst2[2*i + 1] = src[4*i + 3];
-    }
 }
 
 static void dump_and_exit_clean(struct upipe *upipe, uint8_t *buf, size_t size)
