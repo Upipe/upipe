@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2013-2015 OpenHeadend S.A.R.L.
+ * Copyright (C) 2013-2018 OpenHeadend S.A.R.L.
  *
  * Authors: Christophe Massiot
  *
@@ -100,6 +100,8 @@ static inline enum upipe_ts_conformance
 {
     if (conformance == NULL)
         return UPIPE_TS_CONFORMANCE_AUTO;
+    if (!strcmp(conformance, "iso"))
+        return UPIPE_TS_CONFORMANCE_ISO;
     if (!strcmp(conformance, "dvb_no_tables"))
         return UPIPE_TS_CONFORMANCE_DVB_NO_TABLES;
     if (!strcmp(conformance, "dvb"))
