@@ -79,6 +79,8 @@ static inline int upipe_ts_conformance_to_flow_def(struct uref *flow_def,
         default:
             uref_ts_flow_delete_conformance(flow_def);
             return UBASE_ERR_NONE;
+        case UPIPE_TS_CONFORMANCE_ISO:
+            return uref_ts_flow_set_conformance(flow_def, "iso");
         case UPIPE_TS_CONFORMANCE_DVB_NO_TABLES:
             return uref_ts_flow_set_conformance(flow_def, "dvb_no_tables");
         case UPIPE_TS_CONFORMANCE_DVB:
