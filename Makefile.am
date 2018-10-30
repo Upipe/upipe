@@ -32,7 +32,7 @@ check-whitespace:
 	  git check-attr $$2 "$$1" | grep -q ": $$3$$"; \
 	}; \
 	pfx="^ *\([0-9]*\)	"; \
-	git ls-files -- :*.[ch] | while read file; do \
+	git ls-files -- :$(srcdir)/*.[ch] | while read file; do \
 	  check_attr "$$file" binary set && continue; \
 	  check_attr "$$file" check-coding-style unset && continue; \
 	  out=$$({ \
@@ -49,4 +49,4 @@ check-whitespace:
 	done
 
 check-untracked:
-	@if git ls-files --others --exclude-standard | grep .; then exit 1; fi
+	@if git ls-files $(srcdir) --others --exclude-standard | grep .; then exit 1; fi
