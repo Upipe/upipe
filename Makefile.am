@@ -19,9 +19,10 @@ EXTRA_DIST = doc/changelog.mkdoc \
              doc/tutorials.mkdoc
 
 doc: doc/dependencies.png
-	mkdoc -I include `cd include; ls */*.h`
+	mkdoc --doc-path $(srcdir)/doc -I $(srcdir)/include `cd $(srcdir)/include; ls */*.h`
 
-doc/dependencies.png: doc/dependencies.dot
+doc/dependencies.png: $(srcdir)/doc/dependencies.dot
+	$(MKDIR_P) doc/
 	dot -Tpng $< > $@
 
 .PHONY: doc
