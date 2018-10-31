@@ -95,6 +95,21 @@ UREF_TS_ATTR_DESCRIPTOR(ts_flow, sdt_descriptor)
 UREF_ATTR_SMALL_UNSIGNED(ts_flow, last_table_id, "t.lasttid",
         last table ID)
 
+/* CAT */
+UREF_ATTR_SMALL_UNSIGNED(ts_flow, cat_esid_n, "t.cat.esid_n",
+        number of entitlement session ID)
+UREF_ATTR_UNSIGNED_VA(ts_flow, cat_esid, "t.cat.esid[%" PRIu8"]",
+        entitlement session ID, uint8_t nb, nb)
+UREF_ATTR_UNSIGNED_VA(ts_flow, cat_onid, "t.cat.onid[%" PRIu8"]",
+        ts original network ID, uint8_t nb, nb)
+UREF_ATTR_UNSIGNED(ts_flow, capid, "t.emmpid", EMM PID)
+UREF_ATTR_UNSIGNED(ts_flow, sysid, "t.casysid", CA system ID)
+UREF_ATTR_UNSIGNED(ts_flow, cat_descriptors, "t.cat.descs",
+        number of CAT descriptors)
+UREF_ATTR_OPAQUE_VA(ts_flow, cat_descriptor, "t.cat.desc[%" PRIu64"]",
+        CAT descriptor, uint64_t nb, nb)
+UREF_TS_ATTR_DESCRIPTOR(ts_flow, cat_descriptor)
+
 /* NIT */
 UREF_ATTR_UNSIGNED(ts_flow, nid, "t.nid", network ID)
 UREF_ATTR_STRING(ts_flow, network_name, "t.netwname", network name)
