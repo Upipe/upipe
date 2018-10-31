@@ -90,10 +90,14 @@ static struct upipe *upipe_pciesdi_source_framer_alloc(struct upipe_mgr *mgr, st
         return NULL;
     struct upipe_pciesdi_source_framer *ctx = upipe_pciesdi_source_framer_from_upipe(upipe);
 
-    ctx->cached_lines = 0;
+    ctx->f = NULL;
+    ctx->prev_fvh = 0;
     ctx->start = false;
     ctx->progressive = false;
-    ctx->prev_fvh = 0;
+    ctx->progressive_seen_end_of_picture = false;
+    ctx->progressive_bottom_vbi_lines = 0;
+    ctx->uref = NULL;
+    ctx->cached_lines = 0;
 
     upipe_pciesdi_source_framer_init_output(upipe);
     upipe_pciesdi_source_framer_init_urefcount(upipe);
