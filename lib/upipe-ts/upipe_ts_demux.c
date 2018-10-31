@@ -80,6 +80,7 @@
 #include <upipe-ts/upipe_ts_psi_merge.h>
 #include <upipe-ts/upipe_ts_psi_split.h>
 #include <upipe-ts/upipe_ts_pat_decoder.h>
+#include <upipe-ts/upipe_ts_cat_decoder.h>
 #include <upipe-ts/upipe_ts_pmt_decoder.h>
 #include <upipe-ts/upipe_ts_pes_decaps.h>
 #include <upipe-ts/upipe_ts_scte35_decoder.h>
@@ -151,6 +152,8 @@ struct upipe_ts_demux_mgr {
     struct upipe_mgr *ts_psi_split_mgr;
     /** pointer to ts_patd manager */
     struct upipe_mgr *ts_patd_mgr;
+    /** pointer to ts_catd manager */
+    struct upipe_mgr *ts_catd_mgr;
     /** pointer to ts_nitd manager */
     struct upipe_mgr *ts_nitd_mgr;
     /** pointer to ts_sdtd manager */
@@ -226,6 +229,15 @@ struct upipe_ts_demux {
     /** list of available programs (from PAT) */
     struct uchain pat_programs;
 
+    /** psi_pid structure for CAT */
+    struct upipe_ts_demux_psi_pid *psi_pid_cat;
+    /** ts_psi_split_output inner pipe for CAT */
+    struct upipe *psi_split_output_cat;
+    /** pointer to ts_catd inner pipe */
+    struct upipe *catd;
+    /** list of available entitlements (from CAT) */
+    struct uchain cat_bissca_entitlements;
+
     /** psi_pid structure for NIT */
     struct upipe_ts_demux_psi_pid *psi_pid_nit;
     /** ts_psi_split_output inner pipe for NIT */
@@ -264,6 +276,8 @@ struct upipe_ts_demux {
     struct uprobe psim_probe;
     /** probe to get events from ts_patd inner pipe */
     struct uprobe patd_probe;
+    /** probe to get events from ts_catd inner pipe */
+    struct uprobe catd_probe;
     /** probe to get events from ts_nitd inner pipe */
     struct uprobe nitd_probe;
     /** probe to get events from ts_sdtd inner pipe */
@@ -2625,6 +2639,30 @@ static int upipe_ts_demux_patd_probe(struct uprobe *uprobe,
     }
 }
 
+/** @internal @This catches events coming from catd inner pipe.
+ *
+ * @param uprobe pointer to the probe in upipe_ts_demux
+ * @param catd pointer to the inner pipe
+ * @param event event triggered by the inner pipe
+ * @param args arguments of the event
+ * @return an error code
+ */
+static int upipe_ts_demux_catd_probe(struct uprobe *uprobe,
+                                     struct upipe *catd,
+                                     int event, va_list args)
+{
+    struct upipe_ts_demux *upipe_ts_demux =
+        container_of(uprobe, struct upipe_ts_demux, catd_probe);
+    struct upipe *upipe = upipe_ts_demux_to_upipe(upipe_ts_demux);
+
+    switch (event) {
+        case UPROBE_NEED_OUTPUT:
+            return UBASE_ERR_NONE;
+        default:
+            return upipe_throw_proxy(upipe, catd, event, args);
+    }
+}
+
 /** @internal @This catches events coming from nitd inner pipe.
  *
  * @param uprobe pointer to the probe in upipe_ts_demux
@@ -2782,9 +2820,12 @@ static struct upipe *upipe_ts_demux_alloc(struct upipe_mgr *mgr,
     upipe_ts_demux->psi_split_output_nit = upipe_ts_demux->nitd = NULL;
     upipe_ts_demux->psi_split_output_sdt = upipe_ts_demux->sdtd = NULL;
     upipe_ts_demux->psi_split_output_tdt = upipe_ts_demux->tdtd = NULL;
+    upipe_ts_demux->psi_split_output_cat = upipe_ts_demux->catd = NULL;
     upipe_ts_demux->psi_pid_pat = upipe_ts_demux->psi_pid_nit =
-        upipe_ts_demux->psi_pid_sdt = upipe_ts_demux->psi_pid_tdt = NULL;
+        upipe_ts_demux->psi_pid_sdt = upipe_ts_demux->psi_pid_tdt =
+        upipe_ts_demux->psi_pid_cat = NULL;
     ulist_init(&upipe_ts_demux->pat_programs);
+    ulist_init(&upipe_ts_demux->cat_bissca_entitlements);
 
     ulist_init(&upipe_ts_demux->psi_pids);
     upipe_ts_demux->conformance = UPIPE_TS_CONFORMANCE_DVB_NO_TABLES;
@@ -2801,6 +2842,9 @@ static struct upipe *upipe_ts_demux_alloc(struct upipe_mgr *mgr,
         upipe_ts_demux_to_urefcount_real(upipe_ts_demux);
     uprobe_init(&upipe_ts_demux->patd_probe, upipe_ts_demux_patd_probe, NULL);
     upipe_ts_demux->patd_probe.refcount =
+        upipe_ts_demux_to_urefcount_real(upipe_ts_demux);
+    uprobe_init(&upipe_ts_demux->catd_probe, upipe_ts_demux_catd_probe, NULL);
+    upipe_ts_demux->catd_probe.refcount =
         upipe_ts_demux_to_urefcount_real(upipe_ts_demux);
     uprobe_init(&upipe_ts_demux->nitd_probe, upipe_ts_demux_nitd_probe, NULL);
     upipe_ts_demux->nitd_probe.refcount =
@@ -2842,6 +2886,8 @@ static struct upipe *upipe_ts_demux_alloc(struct upipe_mgr *mgr,
                         uprobe_pfx_alloc(
                             uprobe_use(&upipe_ts_demux->proxy_probe),
                             UPROBE_LOG_NOTICE, "null"))) == NULL ||
+                 (upipe_ts_demux->psi_pid_cat =
+                    upipe_ts_demux_psi_pid_use(upipe, CAT_PID)) == NULL ||
                  (upipe_ts_demux->psi_pid_pat =
                     upipe_ts_demux_psi_pid_use(upipe, PAT_PID)) == NULL)) {
         upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
@@ -2878,6 +2924,40 @@ static struct upipe *upipe_ts_demux_alloc(struct upipe_mgr *mgr,
                       ts_demux_mgr->ts_patd_mgr,
                       uprobe_pfx_alloc(uprobe_use(&upipe_ts_demux->patd_probe),
                                        UPROBE_LOG_VERBOSE, "patd"))) == NULL)) {
+        uref_free(flow_def);
+        upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
+        return upipe;
+    }
+    uref_free(flow_def);
+
+    /* set filter on table 1, current */
+    memset(filter, 0, PSI_HEADER_SIZE_SYNTAX1);
+    memset(mask, 0, PSI_HEADER_SIZE_SYNTAX1);
+    psi_set_syntax(filter);
+    psi_set_syntax(mask);
+    psi_set_tableid(filter, CAT_TABLE_ID);
+    psi_set_tableid(mask, 0xff);
+    psi_set_current(filter);
+    psi_set_current(mask);
+    flow_def = uref_alloc_control(upipe_ts_demux->uref_mgr);
+    if (unlikely(flow_def == NULL ||
+                 !ubase_check(uref_flow_set_def(flow_def,
+                         "block.mpegtspsi.mpegtscat.")) ||
+                 !ubase_check(uref_ts_flow_set_psi_filter(flow_def,
+                         filter, mask, PSI_HEADER_SIZE_SYNTAX1)) ||
+                 !ubase_check(uref_ts_flow_set_pid(flow_def, CAT_PID)) ||
+                 (upipe_ts_demux->psi_split_output_cat =
+                      upipe_flow_alloc_sub(
+                          upipe_ts_demux->psi_pid_cat->psi_split,
+                          uprobe_pfx_alloc(
+                              uprobe_use(&upipe_ts_demux->proxy_probe),
+                              UPROBE_LOG_VERBOSE, "psi_split output cat"),
+                          flow_def)) == NULL ||
+                 (upipe_ts_demux->catd =
+                  upipe_void_alloc_output(upipe_ts_demux->psi_split_output_cat,
+                      ts_demux_mgr->ts_catd_mgr,
+                      uprobe_pfx_alloc(uprobe_use(&upipe_ts_demux->catd_probe),
+                                       UPROBE_LOG_VERBOSE, "catd"))) == NULL)) {
         uref_free(flow_def);
         upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
         return upipe;
@@ -3082,6 +3162,7 @@ static void upipe_ts_demux_free(struct urefcount *urefcount_real)
     uprobe_clean(&upipe_ts_demux->psim_probe);
     uprobe_clean(&upipe_ts_demux->nitd_probe);
     uprobe_clean(&upipe_ts_demux->patd_probe);
+    uprobe_clean(&upipe_ts_demux->catd_probe);
     uprobe_clean(&upipe_ts_demux->sdtd_probe);
     uprobe_clean(&upipe_ts_demux->input_probe);
     uprobe_clean(&upipe_ts_demux->split_probe);
@@ -3117,6 +3198,18 @@ static void upipe_ts_demux_no_input(struct upipe *upipe)
     }
     upipe_release(upipe_ts_demux->patd);
     upipe_ts_demux->patd = NULL;
+
+    /* close CAT */
+    if (upipe_ts_demux->psi_split_output_cat != NULL) {
+        upipe_release(upipe_ts_demux->psi_split_output_cat);
+        upipe_ts_demux->psi_split_output_cat = NULL;
+    }
+    if (upipe_ts_demux->psi_pid_cat != NULL) {
+        upipe_ts_demux_psi_pid_release(upipe_ts_demux->psi_pid_cat);
+        upipe_ts_demux->psi_pid_cat = NULL;
+    }
+    upipe_release(upipe_ts_demux->catd);
+    upipe_ts_demux->catd = NULL;
 
     /* close NIT */
     if (upipe_ts_demux->psi_split_output_nit != NULL) {
@@ -3187,6 +3280,7 @@ static void upipe_ts_demux_mgr_free(struct urefcount *urefcount)
     upipe_mgr_release(ts_demux_mgr->ts_psim_mgr);
     upipe_mgr_release(ts_demux_mgr->ts_psi_split_mgr);
     upipe_mgr_release(ts_demux_mgr->ts_patd_mgr);
+    upipe_mgr_release(ts_demux_mgr->ts_catd_mgr);
     upipe_mgr_release(ts_demux_mgr->ts_nitd_mgr);
     upipe_mgr_release(ts_demux_mgr->ts_sdtd_mgr);
     upipe_mgr_release(ts_demux_mgr->ts_tdtd_mgr);
@@ -3283,6 +3377,7 @@ struct upipe_mgr *upipe_ts_demux_mgr_alloc(void)
     ts_demux_mgr->ts_psim_mgr = upipe_ts_psim_mgr_alloc();
     ts_demux_mgr->ts_psi_split_mgr = upipe_ts_psi_split_mgr_alloc();
     ts_demux_mgr->ts_patd_mgr = upipe_ts_patd_mgr_alloc();
+    ts_demux_mgr->ts_catd_mgr = upipe_ts_catd_mgr_alloc();
     ts_demux_mgr->ts_nitd_mgr = upipe_ts_nitd_mgr_alloc();
     ts_demux_mgr->ts_sdtd_mgr = upipe_ts_sdtd_mgr_alloc();
     ts_demux_mgr->ts_tdtd_mgr = upipe_ts_tdtd_mgr_alloc();
