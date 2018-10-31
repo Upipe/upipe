@@ -235,7 +235,7 @@ static int upipe_avfsink_sub_set_flow_def(struct upipe *upipe,
     if (ubase_ncmp(def, "block.") ||
         !(codec_id = upipe_av_from_flow_def(def + strlen("block."))) ||
         codec_id >= AV_CODEC_ID_FIRST_SUBTITLE) {
-        upipe_err(upipe, "bad codec");
+        upipe_err_va(upipe, "bad codec for %s", def);
         return UBASE_ERR_INVALID;
     }
     uint64_t octetrate = 0;
