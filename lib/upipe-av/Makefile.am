@@ -30,11 +30,11 @@ endif
 pkgconfigdir = $(libdir)/pkgconfig
 pkgconfig_DATA = libupipe_av.pc
 
-include ./$(DEPDIR)/upipe_av_codecs_h.Plo
+@AMDEP_TRUE@include ./$(DEPDIR)/upipe_av_codecs_h.Plo
 
 upipe_av_codecs.h: upipe_av_codecs.pl avcodec_include.h
-	$(AM_V_CC) $(CPP) $(CFLAGS) $(CPPFLAGS) @AVFORMAT_CFLAGS@ -M $(srcdir)/avcodec_include.h -MT $@ -o $@.Tpo
-	$(AM_V_at)$(am__mv) $@.Tpo $(DEPDIR)/upipe_av_codecs_h.Plo
+@am__fastdepCC_TRUE@	$(AM_V_CC) $(CPP) $(CFLAGS) $(CPPFLAGS) @AVFORMAT_CFLAGS@ -M $(srcdir)/avcodec_include.h -MT $@ -o $@.Tpo
+@am__fastdepCC_TRUE@	$(AM_V_at)$(am__mv) $@.Tpo $(DEPDIR)/upipe_av_codecs_h.Plo
 	$(AM_V_GEN) \
 	  CPP="$(CPP)" \
 	  CFLAGS="$(CFLAGS) $(CPPFLAGS) @AVFORMAT_CFLAGS@" \
