@@ -68,19 +68,6 @@ static inline int upipe_dvbcsa_set_key(struct upipe *upipe, const char *key)
                          UPIPE_DVBCSA_COMMON_SIGNATURE, key);
 }
 
-/** @This sets the maximum latency of the pipe.
- *
- * @param upipe description structure of the pipe
- * @param latency maximum latency
- * @return an error code
- */
-static inline int upipe_dvbcsa_set_max_latency(struct upipe *upipe,
-                                               uint64_t latency)
-{
-    return upipe_control(upipe, UPIPE_DVBCSA_SET_MAX_LATENCY,
-                         UPIPE_DVBCSA_COMMON_SIGNATURE, latency);
-}
-
 /** @This adds a pid to the encryption/decryption list.
  *
  * @param upipe description structure of the pipe
