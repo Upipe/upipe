@@ -33,6 +33,7 @@
 #include <upipe/udict_inline.h>
 
 #include <upipe/uref_std.h>
+#include <upipe/uref_clock.h>
 
 #include <upipe/uclock_std.h>
 
@@ -174,7 +175,7 @@ int main(int argc, char *argv[])
     bool udp = false;
     bool use_batch = false;
     const char *key = NULL;
-    int latency = -1;
+    int latency = 0;
     int c;
 
     while ((c = getopt(argc, argv, "vbk:L:i:DU")) != -1) {
@@ -388,10 +389,7 @@ int main(int argc, char *argv[])
 
     struct upipe_mgr *upipe_dvbcsa_mgr;
     if (decryption) {
-        if (use_batch)
-            upipe_dvbcsa_mgr = upipe_dvbcsa_bs_dec_mgr_alloc();
-        else
-            upipe_dvbcsa_mgr = upipe_dvbcsa_dec_mgr_alloc();
+        upipe_dvbcsa_mgr = upipe_dvbcsa_bs_dec_mgr_alloc();
     }
     else {
         if (use_batch)
@@ -400,16 +398,25 @@ int main(int argc, char *argv[])
             upipe_dvbcsa_mgr = upipe_dvbcsa_enc_mgr_alloc();
     }
     assert(upipe_dvbcsa_mgr);
-    output =
-        upipe_void_chain_output(
-            output, upipe_dvbcsa_mgr,
-            uprobe_pfx_alloc(uprobe_use(uprobe_main),
-                             UPROBE_LOG_VERBOSE,
-                             decryption ? "decrypt" : "encrypt"));
+    if (decryption && use_batch) {
+        struct uref *flow_def = uref_alloc(uref_mgr);
+        uref_clock_set_latency(flow_def, latency * (UCLOCK_FREQ / 1000));
+        output = upipe_flow_chain_output(output, upipe_dvbcsa_mgr,
+                uprobe_pfx_alloc(uprobe_use(uprobe_main),
+                    UPROBE_LOG_VERBOSE, "decrypt"), flow_def);
+        uref_free(flow_def);
+    } else {
+        output =
+            upipe_void_chain_output(
+                    output, upipe_dvbcsa_mgr,
+                    uprobe_pfx_alloc(uprobe_use(uprobe_main),
+                        UPROBE_LOG_VERBOSE,
+                        decryption ? "decrypt" : "encrypt"));
+    }
     assert(output);
     upipe_mgr_release(upipe_dvbcsa_mgr);
     ubase_assert(upipe_dvbcsa_set_key(output, key));
-    if (use_batch && latency > 0)
+    if (use_batch && !decryption)
         ubase_assert(
             upipe_dvbcsa_set_max_latency(output,
                                          latency * (UCLOCK_FREQ / 1000)));
