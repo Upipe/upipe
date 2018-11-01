@@ -58,7 +58,6 @@
 #include <upipe-ts/upipe_ts_align.h>
 #include <upipe-ts/upipe_ts_check.h>
 
-#include <upipe-dvbcsa/upipe_dvbcsa_bs_encrypt.h>
 #include <upipe-dvbcsa/upipe_dvbcsa_encrypt.h>
 #include <upipe-dvbcsa/upipe_dvbcsa_decrypt.h>
 #include <upipe-dvbcsa/upipe_dvbcsa_common.h>
@@ -86,7 +85,6 @@ static struct upipe *source = NULL;
 
 enum {
     OPT_DEBUG   = 'v',
-    OPT_BATCH   = 'b',
     OPT_DECRYPT = 'D',
     OPT_KEY     = 'k',
     OPT_UDP     = 'U',
@@ -137,7 +135,6 @@ static void usage(const char *name)
 {
     fprintf(stderr, "%s [options] <input> <output>\n"
             "\t-v   : be more verbose\n"
-            "\t-b   : use batch dvbcsa\n"
             "\t-k   : set BISS key\n"
             "\t-L   : set the maximum latency in milliseconds\n"
             "\t-i   : RT priority for source and sink\n"
@@ -172,9 +169,8 @@ int main(int argc, char *argv[])
     int log_level = UPROBE_LOG_NOTICE;
     bool decryption = false;
     bool udp = false;
-    bool use_batch = false;
     const char *key = NULL;
-    int latency = 0;
+    int latency = -1;
     int c;
 
     while ((c = getopt(argc, argv, "vbk:L:i:DU")) != -1) {
@@ -184,9 +180,6 @@ int main(int argc, char *argv[])
                     log_level = UPROBE_LOG_VERBOSE;
                 else
                     log_level = UPROBE_LOG_DEBUG;
-                break;
-            case OPT_BATCH:
-                use_batch = true;
                 break;
             case OPT_KEY:
                 key = optarg;
@@ -390,24 +383,23 @@ int main(int argc, char *argv[])
     if (decryption) {
         upipe_dvbcsa_mgr = upipe_dvbcsa_dec_mgr_alloc();
     } else {
-        upipe_dvbcsa_mgr = upipe_dvbcsa_bs_enc_mgr_alloc();
+        upipe_dvbcsa_mgr = upipe_dvbcsa_enc_mgr_alloc();
     }
     assert(upipe_dvbcsa_mgr);
-    struct uref *flow_def = uref_alloc(uref_mgr);
-    if (use_batch)
-        uref_clock_set_latency(flow_def, latency * (UCLOCK_FREQ / 1000));
 
-    if (decryption) {
+    if (latency >= 0) {
+        struct uref *flow_def = uref_alloc(uref_mgr);
+        uref_clock_set_latency(flow_def, latency * (UCLOCK_FREQ / 1000));
         output = upipe_flow_chain_output(output, upipe_dvbcsa_mgr,
                 uprobe_pfx_alloc(uprobe_use(uprobe_main),
                     UPROBE_LOG_VERBOSE, decryption ? "decrypt" : "encrypt"),
                 flow_def);
+        uref_free(flow_def);
     } else {
         output = upipe_void_chain_output(output, upipe_dvbcsa_mgr,
                 uprobe_pfx_alloc(uprobe_use(uprobe_main),
                     UPROBE_LOG_VERBOSE, decryption ? "decrypt" : "encrypt"));
     }
-    uref_free(flow_def);
     assert(output);
     upipe_mgr_release(upipe_dvbcsa_mgr);
     ubase_assert(upipe_dvbcsa_set_key(output, key));
