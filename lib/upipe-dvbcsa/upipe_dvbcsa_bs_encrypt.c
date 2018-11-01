@@ -28,7 +28,7 @@
 
 #include <upipe/upipe_helper_upipe.h>
 #include <upipe/upipe_helper_urefcount.h>
-#include <upipe/upipe_helper_void.h>
+#include <upipe/upipe_helper_flow.h>
 #include <upipe/upipe_helper_input.h>
 #include <upipe/upipe_helper_output.h>
 #include <upipe/upipe_helper_upump_mgr.h>
@@ -51,6 +51,11 @@
 #define PMT_FLOW_DEF "block.mpegtspsi.mpegtspmt."
 /** Approximation worst dvbcsa encrypt latency on normal hardware (20ms) */
 #define DVBCSA_LATENCY  (UCLOCK_FREQ / 50)
+
+enum mode {
+    CSA,
+    CSA_BS,
+};
 
 /** @internal @This is the private structure of dvbcsa encryption pipe. */
 struct upipe_dvbcsa_bs_enc {
@@ -85,13 +90,18 @@ struct upipe_dvbcsa_bs_enc {
     /** encryption batch size */
     unsigned batch_size;
     /** encryption key */
-    dvbcsa_bs_key_t *key;
+    union {
+        dvbcsa_bs_key_t *key_bs;
+        dvbcsa_key_t *key;
+    };
     /** batch list */
     struct dvbcsa_bs_batch_s *batch;
     /** batch current item */
     unsigned current;
     /** mapped list */
     struct uref **mapped;
+    /** operation mode */
+    enum mode mode;
     /** common dvbcsa structure */
     struct upipe_dvbcsa_common common;
 };
@@ -106,7 +116,7 @@ static int upipe_dvbcsa_bs_enc_check(struct upipe *upipe,
 UPIPE_HELPER_UPIPE(upipe_dvbcsa_bs_enc, upipe, UPIPE_DVBCSA_BS_ENC_SIGNATURE);
 UPIPE_HELPER_UREFCOUNT(upipe_dvbcsa_bs_enc, urefcount,
                        upipe_dvbcsa_bs_enc_free);
-UPIPE_HELPER_VOID(upipe_dvbcsa_bs_enc);
+UPIPE_HELPER_FLOW(upipe_dvbcsa_bs_enc, NULL);
 UPIPE_HELPER_INPUT(upipe_dvbcsa_bs_enc, urefs, nb_urefs, max_urefs, blockers,
                    NULL);
 UPIPE_HELPER_OUTPUT(upipe_dvbcsa_bs_enc, output, flow_def, output_state,
@@ -117,6 +127,25 @@ UPIPE_HELPER_UCLOCK(upipe_dvbcsa_bs_enc, uclock, uclock_request,
                     upipe_dvbcsa_bs_enc_unregister_output_request);
 UPIPE_HELPER_UPUMP_MGR(upipe_dvbcsa_bs_enc, upump_mgr);
 UPIPE_HELPER_UPUMP(upipe_dvbcsa_bs_enc, upump, upump_mgr);
+
+/** @internal @This frees a decryption key structure
+ *
+ * @param upipe description structure of the pipe
+ */
+static void upipe_dvbcsa_bs_enc_free_key(struct upipe *upipe)
+{
+    struct upipe_dvbcsa_bs_enc *upipe_dvbcsa_bs_enc =
+        upipe_dvbcsa_bs_enc_from_upipe(upipe);
+
+    switch (upipe_dvbcsa_bs_enc->mode) {
+    case CSA:
+        dvbcsa_key_free(upipe_dvbcsa_bs_enc->key);
+        break;
+    case CSA_BS:
+        dvbcsa_bs_key_free(upipe_dvbcsa_bs_enc->key_bs);
+        break;
+    }
+}
 
 /** @internal @This frees a dvbcsa encryption pipe.
  *
@@ -133,7 +162,8 @@ static void upipe_dvbcsa_bs_enc_free(struct upipe *upipe)
 
     for (unsigned i = 0; i < upipe_dvbcsa_bs_enc->current; i++)
         uref_block_unmap(upipe_dvbcsa_bs_enc->mapped[i], 0);
-    dvbcsa_bs_key_free(upipe_dvbcsa_bs_enc->key);
+
+    upipe_dvbcsa_bs_enc_free_key(upipe);
     free(upipe_dvbcsa_bs_enc->mapped);
     free(upipe_dvbcsa_bs_enc->batch);
     upipe_dvbcsa_common_clean(common);
@@ -143,7 +173,7 @@ static void upipe_dvbcsa_bs_enc_free(struct upipe *upipe)
     upipe_dvbcsa_bs_enc_clean_input(upipe);
     upipe_dvbcsa_bs_enc_clean_uclock(upipe);
     upipe_dvbcsa_bs_enc_clean_urefcount(upipe);
-    upipe_dvbcsa_bs_enc_free_void(upipe);
+    upipe_dvbcsa_bs_enc_free_flow(upipe);
 }
 
 /** @internal @This allocates and initializes a dvbcsa encryption pipe.
@@ -159,8 +189,9 @@ static struct upipe *upipe_dvbcsa_bs_enc_alloc(struct upipe_mgr *mgr,
                                                uint32_t signature,
                                                va_list args)
 {
+    struct uref *flow_def;
     struct upipe *upipe =
-        upipe_dvbcsa_bs_enc_alloc_void(mgr, uprobe, signature, args);
+        upipe_dvbcsa_bs_enc_alloc_flow(mgr, uprobe, signature, args, &flow_def);
     if (unlikely(!upipe))
         return NULL;
     struct upipe_dvbcsa_bs_enc *upipe_dvbcsa_bs_enc =
@@ -182,6 +213,17 @@ static struct upipe *upipe_dvbcsa_bs_enc_alloc(struct upipe_mgr *mgr,
                                         sizeof (struct dvbcsa_bs_batch_s));
     upipe_dvbcsa_bs_enc->mapped = malloc(bs_size * sizeof (struct uref *));
     upipe_dvbcsa_bs_enc->current = 0;
+
+    if (flow_def) {
+        uint64_t latency;
+        if (!ubase_check(uref_clock_get_latency(flow_def, &latency)))
+            latency = 0;
+        uref_free(flow_def);
+        upipe_dvbcsa_bs_enc->mode = CSA_BS;
+        upipe_dvbcsa_set_max_latency(upipe, latency);
+    } else {
+        upipe_dvbcsa_bs_enc->mode = CSA;
+    }
 
     upipe_throw_ready(upipe);
 
@@ -207,10 +249,12 @@ static int upipe_dvbcsa_bs_enc_set_flow_def_real(struct upipe *upipe,
         upipe_dvbcsa_bs_enc_from_upipe(upipe);
     struct upipe_dvbcsa_common *common =
         upipe_dvbcsa_bs_enc_to_common(upipe_dvbcsa_bs_enc);
-    uint64_t latency = 0;
-    uref_clock_get_latency(flow_def, &latency);
-    latency += common->latency + DVBCSA_LATENCY;
-    uref_clock_set_latency(flow_def, latency);
+    if (upipe_dvbcsa_bs_enc->mode == CSA_BS) {
+        uint64_t latency = 0;
+        uref_clock_get_latency(flow_def, &latency);
+        latency += common->latency + DVBCSA_LATENCY;
+        uref_clock_set_latency(flow_def, latency);
+    }
     upipe_dvbcsa_bs_enc_store_flow_def(upipe, flow_def);
     return UBASE_ERR_NONE;
 }
@@ -235,7 +279,7 @@ static void upipe_dvbcsa_bs_enc_flush(struct upipe *upipe,
         upipe_dvbcsa_bs_enc->batch[current].len = 0;
 
         uint64_t before = uclock_now(upipe_dvbcsa_bs_enc->uclock);
-        dvbcsa_bs_encrypt(upipe_dvbcsa_bs_enc->key,
+        dvbcsa_bs_encrypt(upipe_dvbcsa_bs_enc->key_bs,
                           upipe_dvbcsa_bs_enc->batch, 184);
         uint64_t after = uclock_now(upipe_dvbcsa_bs_enc->uclock);
         if ((after - before) > DVBCSA_LATENCY)
@@ -365,8 +409,16 @@ static void upipe_dvbcsa_bs_enc_input(struct upipe *upipe,
         return;
     }
 
-    uint8_t current = upipe_dvbcsa_bs_enc->current;
     ts_set_scrambling(ts, 0x2);
+
+    if (upipe_dvbcsa_bs_enc->mode == CSA) {
+        dvbcsa_encrypt(upipe_dvbcsa_bs_enc->key,
+                ts + ts_header_size,
+                size - ts_header_size);
+        return upipe_dvbcsa_bs_enc_output(upipe, uref, upump_p);
+    }
+
+    uint8_t current = upipe_dvbcsa_bs_enc->current;
     upipe_dvbcsa_bs_enc->batch[current].data = ts + ts_header_size;
     upipe_dvbcsa_bs_enc->batch[current].len = size - ts_header_size;
     upipe_dvbcsa_bs_enc->mapped[current] = uref;
@@ -434,7 +486,7 @@ static int upipe_dvbcsa_bs_enc_set_key(struct upipe *upipe,
     struct upipe_dvbcsa_bs_enc *upipe_dvbcsa_bs_enc =
         upipe_dvbcsa_bs_enc_from_upipe(upipe);
 
-    dvbcsa_bs_key_free(upipe_dvbcsa_bs_enc->key);
+    upipe_dvbcsa_bs_enc_free_key(upipe);
     upipe_dvbcsa_bs_enc->key = NULL;
     if (!key)
         return UBASE_ERR_NONE;
@@ -444,9 +496,19 @@ static int upipe_dvbcsa_bs_enc_set_key(struct upipe *upipe,
         return UBASE_ERR_INVALID;
 
     upipe_notice(upipe, "key changed");
-    upipe_dvbcsa_bs_enc->key = dvbcsa_bs_key_alloc();
-    UBASE_ALLOC_RETURN(upipe_dvbcsa_bs_enc->key);
-    dvbcsa_bs_key_set(cw.value, upipe_dvbcsa_bs_enc->key);
+    // TODO
+    switch (upipe_dvbcsa_bs_enc->mode) {
+    case CSA:
+        upipe_dvbcsa_bs_enc->key = dvbcsa_key_alloc();
+        UBASE_ALLOC_RETURN(upipe_dvbcsa_bs_enc->key);
+        dvbcsa_key_set(cw.value, upipe_dvbcsa_bs_enc->key);
+        break;
+    case CSA_BS:
+        upipe_dvbcsa_bs_enc->key_bs = dvbcsa_bs_key_alloc();
+        UBASE_ALLOC_RETURN(upipe_dvbcsa_bs_enc->key_bs);
+        dvbcsa_bs_key_set(cw.value, upipe_dvbcsa_bs_enc->key_bs);
+        break;
+    }
     return UBASE_ERR_NONE;
 
 }
