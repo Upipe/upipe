@@ -389,36 +389,28 @@ int main(int argc, char *argv[])
     struct upipe_mgr *upipe_dvbcsa_mgr;
     if (decryption) {
         upipe_dvbcsa_mgr = upipe_dvbcsa_dec_mgr_alloc();
-    }
-    else {
-        if (use_batch)
-            upipe_dvbcsa_mgr = upipe_dvbcsa_bs_enc_mgr_alloc();
-        else
-            upipe_dvbcsa_mgr = upipe_dvbcsa_enc_mgr_alloc();
+    } else {
+        upipe_dvbcsa_mgr = upipe_dvbcsa_bs_enc_mgr_alloc();
     }
     assert(upipe_dvbcsa_mgr);
-    if (decryption && use_batch) {
-        struct uref *flow_def = uref_alloc(uref_mgr);
+    struct uref *flow_def = uref_alloc(uref_mgr);
+    if (use_batch)
         uref_clock_set_latency(flow_def, latency * (UCLOCK_FREQ / 1000));
+
+    if (decryption) {
         output = upipe_flow_chain_output(output, upipe_dvbcsa_mgr,
                 uprobe_pfx_alloc(uprobe_use(uprobe_main),
-                    UPROBE_LOG_VERBOSE, "decrypt"), flow_def);
-        uref_free(flow_def);
+                    UPROBE_LOG_VERBOSE, decryption ? "decrypt" : "encrypt"),
+                flow_def);
     } else {
-        output =
-            upipe_void_chain_output(
-                    output, upipe_dvbcsa_mgr,
-                    uprobe_pfx_alloc(uprobe_use(uprobe_main),
-                        UPROBE_LOG_VERBOSE,
-                        decryption ? "decrypt" : "encrypt"));
+        output = upipe_void_chain_output(output, upipe_dvbcsa_mgr,
+                uprobe_pfx_alloc(uprobe_use(uprobe_main),
+                    UPROBE_LOG_VERBOSE, decryption ? "decrypt" : "encrypt"));
     }
+    uref_free(flow_def);
     assert(output);
     upipe_mgr_release(upipe_dvbcsa_mgr);
     ubase_assert(upipe_dvbcsa_set_key(output, key));
-    if (use_batch && !decryption)
-        ubase_assert(
-            upipe_dvbcsa_set_max_latency(output,
-                                         latency * (UCLOCK_FREQ / 1000)));
     uprobe_dvbcsa_split.dvbcsa = output;
 
     struct upipe_mgr *upipe_agg_mgr = upipe_agg_mgr_alloc();
