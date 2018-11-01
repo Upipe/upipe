@@ -23,6 +23,8 @@
  * SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
  */
 
+#include <config.h>
+
 #include <upipe-dvbcsa/upipe_dvbcsa_decrypt.h>
 #include <upipe-dvbcsa/upipe_dvbcsa_common.h>
 
@@ -44,6 +46,10 @@
 #include <bitstream/mpeg/ts.h>
 #include <dvbcsa/dvbcsa.h>
 
+#ifdef HAVE_GCRYPT
+#include <gcrypt.h>
+#endif
+
 #include "common.h"
 
 /** expected input flow format */
@@ -53,6 +59,14 @@
 
 /** @hidden */
 static void upipe_dvbcsa_dec_worker(struct upump *upump);
+
+enum mode {
+    CSA,
+    CSA_BS,
+#ifdef HAVE_GCRYPT
+    AES,
+#endif
+};
 
 /** @This is the private structure of dvbcsa decryption pipe. */
 struct upipe_dvbcsa_dec {
@@ -91,6 +105,10 @@ struct upipe_dvbcsa_dec {
         dvbcsa_bs_key_t *key_bs;
         /** dvbcsa key */
         dvbcsa_key_t *key;
+#ifdef HAVE_GCRYPT
+        /** AES handle */
+        gcry_cipher_hd_t aes;
+#endif
     };
     /** maximum number of packet per batch */
     unsigned int batch_size;
@@ -102,8 +120,7 @@ struct upipe_dvbcsa_dec {
     unsigned current;
 
     /** batch mode */
-    bool bs;
-
+    enum mode mode;
 
     /** common dvbcsa structure */
     struct upipe_dvbcsa_common common;
@@ -129,6 +146,31 @@ UPIPE_HELPER_UPUMP(upipe_dvbcsa_dec, upump, upump_mgr);
 UPIPE_HELPER_INPUT(upipe_dvbcsa_dec, urefs, nb_urefs, max_urefs, blockers,
                    NULL);
 
+/** @internal @This frees a decryption key structure
+ *
+ * @param upipe description structure of the pipe
+ */
+static void upipe_dvbcsa_dec_free_key(struct upipe *upipe)
+{
+    struct upipe_dvbcsa_dec *upipe_dvbcsa_dec =
+        upipe_dvbcsa_dec_from_upipe(upipe);
+
+    switch (upipe_dvbcsa_dec->mode) {
+    case CSA:
+        dvbcsa_key_free(upipe_dvbcsa_dec->key);
+        break;
+    case CSA_BS:
+        dvbcsa_bs_key_free(upipe_dvbcsa_dec->key_bs);
+        break;
+#ifdef HAVE_GCRYPT
+    case AES:
+        if (upipe_dvbcsa_dec->aes)
+            gcry_cipher_close(upipe_dvbcsa_dec->aes);
+        break;
+#endif
+    }
+}
+
 /** @internal @This frees a dvbcsa decription pipe.
  *
  * @param upipe description structure of the pipe
@@ -144,10 +186,8 @@ static void upipe_dvbcsa_dec_free(struct upipe *upipe)
 
     for (unsigned i = 0; i < upipe_dvbcsa_dec->current; i++)
         uref_block_unmap(upipe_dvbcsa_dec->mapped[i], 0);
-    if (upipe_dvbcsa_dec->bs)
-        dvbcsa_bs_key_free(upipe_dvbcsa_dec->key_bs);
-    else
-        dvbcsa_key_free(upipe_dvbcsa_dec->key);
+
+    upipe_dvbcsa_dec_free_key(upipe);
     free(upipe_dvbcsa_dec->mapped);
     free(upipe_dvbcsa_dec->batch);
     upipe_dvbcsa_common_clean(common);
@@ -184,6 +224,15 @@ static struct upipe *upipe_dvbcsa_dec_alloc(struct upipe_mgr *mgr,
     struct upipe_dvbcsa_common *common =
         upipe_dvbcsa_dec_to_common(upipe_dvbcsa_dec);
 
+#ifdef HAVE_GCRYPT
+    if (!gcry_control(GCRYCTL_INITIALIZATION_FINISHED_P)) {
+        uprobe_err(uprobe, upipe, "Application did not initialize libgcrypt, see "
+                "https://www.gnupg.org/documentation/manuals/gcrypt/Initializing-the-library.html");
+        upipe_dvbcsa_dec_free_flow(upipe);
+        return NULL;
+    }
+#endif
+
     upipe_dvbcsa_dec_init_urefcount(upipe);
     upipe_dvbcsa_dec_init_output(upipe);
     upipe_dvbcsa_dec_init_input(upipe);
@@ -204,10 +253,10 @@ static struct upipe *upipe_dvbcsa_dec_alloc(struct upipe_mgr *mgr,
         if (!ubase_check(uref_clock_get_latency(flow_def, &latency)))
             latency = 0;
         uref_free(flow_def);
-        upipe_dvbcsa_dec->bs = true;
+        upipe_dvbcsa_dec->mode = CSA_BS;
         upipe_dvbcsa_common_set_max_latency(&upipe_dvbcsa_dec->common, latency);
     } else {
-        upipe_dvbcsa_dec->bs = false;
+        upipe_dvbcsa_dec->mode = CSA;
     }
 
     upipe_throw_ready(upipe);
@@ -235,7 +284,7 @@ static int upipe_dvbcsa_dec_set_flow_def_real(struct upipe *upipe,
         upipe_dvbcsa_dec_from_upipe(upipe);
     struct upipe_dvbcsa_common *common =
         upipe_dvbcsa_dec_to_common(upipe_dvbcsa_dec);
-    if (upipe_dvbcsa_dec->bs) {
+    if (upipe_dvbcsa_dec->mode == CSA_BS) {
         uint64_t latency = 0;
         uref_clock_get_latency(flow_def, &latency);
         latency += common->latency + DVBCSA_LATENCY;
@@ -390,7 +439,26 @@ static void upipe_dvbcsa_dec_input(struct upipe *upipe,
         return;
     }
 
-    if (!upipe_dvbcsa_dec->bs) {
+#ifdef HAVE_GCRYPT
+    if (upipe_dvbcsa_dec->mode == AES) {
+        /* from biss2 spec */
+        static const uint8_t cissa_iv[16] = {
+            0x44, 0x56, 0x42, 0x54, 0x4d, 0x43, 0x50, 0x54,
+            0x41, 0x45, 0x53, 0x43, 0x49, 0x53, 0x53, 0x41,
+        };
+        gcry_cipher_setiv(upipe_dvbcsa_dec->aes, cissa_iv, 16);
+        ts_set_scrambling(ts, 0);
+        unsigned aes_len = (size - ts_header_size) & ~0xf;
+        gcry_error_t err = gcry_cipher_decrypt(upipe_dvbcsa_dec->aes,
+                ts + ts_header_size, aes_len, NULL, 0);
+        if (err) {
+            upipe_err_va(upipe, "AES decryption failed");
+        }
+        return upipe_dvbcsa_dec_output(upipe, uref, upump_p);
+    }
+#endif
+
+    if (upipe_dvbcsa_dec->mode == CSA) {
         ts_set_scrambling(ts, 0);
         dvbcsa_decrypt(upipe_dvbcsa_dec->key,
                 ts + ts_header_size,
@@ -466,13 +534,8 @@ static int upipe_dvbcsa_dec_set_key(struct upipe *upipe, const char *key)
     struct upipe_dvbcsa_dec *upipe_dvbcsa_dec =
         upipe_dvbcsa_dec_from_upipe(upipe);
 
-    if (upipe_dvbcsa_dec->bs) {
-        dvbcsa_bs_key_free(upipe_dvbcsa_dec->key_bs);
-        upipe_dvbcsa_dec->key_bs = NULL;
-    } else {
-        dvbcsa_key_free(upipe_dvbcsa_dec->key);
-        upipe_dvbcsa_dec->key = NULL;
-    }
+    upipe_dvbcsa_dec_free_key(upipe);
+    upipe_dvbcsa_dec->key = NULL;
 
     if (!key)
         return UBASE_ERR_NONE;
@@ -482,11 +545,28 @@ static int upipe_dvbcsa_dec_set_key(struct upipe *upipe, const char *key)
         return UBASE_ERR_INVALID;
 
     upipe_notice(upipe, "key changed");
-    if (upipe_dvbcsa_dec->bs) {
+    if (upipe_dvbcsa_dec->mode == CSA_BS) {
         upipe_dvbcsa_dec->key_bs = dvbcsa_bs_key_alloc();
         UBASE_ALLOC_RETURN(upipe_dvbcsa_dec->key_bs);
         dvbcsa_bs_key_set(cw.value, upipe_dvbcsa_dec->key_bs);
+#ifdef HAVE_GCRYPT
+    } else if (cw.str.len >= 32) {
+        upipe_dvbcsa_dec->mode = AES;
+        gcry_error_t err = gcry_cipher_open(&upipe_dvbcsa_dec->aes, GCRY_CIPHER_AES,
+                GCRY_CIPHER_MODE_CBC, 0);
+        if (err) {
+            upipe_dvbcsa_dec->aes = NULL;
+            return UBASE_ERR_EXTERNAL;
+        }
+        err = gcry_cipher_setkey(upipe_dvbcsa_dec->aes, cw.aes, 16);
+        if (err) {
+            upipe_dvbcsa_dec_free_key(upipe);
+            upipe_dvbcsa_dec->aes = NULL;
+            return UBASE_ERR_EXTERNAL;
+        }
+#endif
     } else {
+        upipe_dvbcsa_dec->mode = CSA;
         upipe_dvbcsa_dec->key = dvbcsa_key_alloc();
         UBASE_ALLOC_RETURN(upipe_dvbcsa_dec->key);
         dvbcsa_key_set(cw.value, upipe_dvbcsa_dec->key);
