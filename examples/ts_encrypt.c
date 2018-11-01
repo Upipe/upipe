@@ -60,7 +60,6 @@
 
 #include <upipe-dvbcsa/upipe_dvbcsa_bs_encrypt.h>
 #include <upipe-dvbcsa/upipe_dvbcsa_encrypt.h>
-#include <upipe-dvbcsa/upipe_dvbcsa_bs_decrypt.h>
 #include <upipe-dvbcsa/upipe_dvbcsa_decrypt.h>
 #include <upipe-dvbcsa/upipe_dvbcsa_common.h>
 #include <upipe-dvbcsa/upipe_dvbcsa_split.h>
@@ -389,7 +388,7 @@ int main(int argc, char *argv[])
 
     struct upipe_mgr *upipe_dvbcsa_mgr;
     if (decryption) {
-        upipe_dvbcsa_mgr = upipe_dvbcsa_bs_dec_mgr_alloc();
+        upipe_dvbcsa_mgr = upipe_dvbcsa_dec_mgr_alloc();
     }
     else {
         if (use_batch)

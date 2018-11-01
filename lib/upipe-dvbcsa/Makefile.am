@@ -1,7 +1,6 @@
 lib_LTLIBRARIES = libupipe_dvbcsa.la
 
 libupipe_dvbcsa_la_SOURCES = upipe_dvbcsa_decrypt.c \
-			     upipe_dvbcsa_bs_decrypt.c \
 			     upipe_dvbcsa_encrypt.c \
 			     upipe_dvbcsa_bs_encrypt.c \
 			     upipe_dvbcsa_split.c \

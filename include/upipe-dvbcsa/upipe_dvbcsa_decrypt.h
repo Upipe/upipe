@@ -31,6 +31,7 @@ extern "C" {
 
 #include <upipe/upipe.h>
 
+/** @This is the dvbcsa decryption pipe signature. */
 #define UPIPE_DVBCSA_DEC_SIGNATURE  UBASE_FOURCC('d','v','b','d')
 
 /** @This returns the dvbcsa decrypt pipe management structure.
