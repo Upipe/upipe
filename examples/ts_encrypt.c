@@ -23,6 +23,8 @@
  * SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
  */
 
+#include <config.h>
+
 #include <upump-ev/upump_ev.h>
 
 #include <upipe/umem.h>
@@ -68,6 +70,10 @@
 
 #include <assert.h>
 #include <getopt.h>
+
+#ifdef HAVE_GCRYPT
+#include <gcrypt.h>
+#endif
 
 #define UMEM_POOL                       128
 #define UPUMP_POOL                      5
@@ -211,6 +217,11 @@ int main(int argc, char *argv[])
         usage(argv[0]);
         exit(-1);
     }
+
+#ifdef HAVE_GCRYPT
+    gcry_check_version(NULL);
+    gcry_control(GCRYCTL_INITIALIZATION_FINISHED, 0);
+#endif
 
     const char *in = argv[optind];
     const char *out = argv[optind + 1];

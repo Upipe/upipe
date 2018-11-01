@@ -104,6 +104,12 @@ AC_SUBST(PTHREAD_CFLAGS)
 AC_SUBST(PTHREAD_LIBS)
 AM_ICONV
 
+# Check for libgcrypt
+AM_PATH_LIBGCRYPT([],
+        AM_CONDITIONAL(HAVE_GCRYPT, true)
+        AC_DEFINE(HAVE_GCRYPT, 1, Define if libgcrypt is available.),
+        AM_CONDITIONAL(HAVE_GCRYPT, false))
+
 # Check for header, then libev3 (ev_loop), then libev4 (ev_run)
 AC_CHECK_HEADERS([ev.h], [
         AC_CHECK_LIB(ev, ev_loop,
