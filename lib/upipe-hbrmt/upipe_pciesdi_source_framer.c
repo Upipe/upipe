@@ -36,6 +36,7 @@
 
 #include <upipe/uref_block.h>
 #include <upipe/uref_pic_flow.h>
+#include <upipe/uref_flow.h>
 
 #include <upipe-hbrmt/upipe_pciesdi_source_framer.h>
 
@@ -161,6 +162,18 @@ static void upipe_pciesdi_source_framer_input(struct upipe *upipe, struct uref
         *uref, struct upump **upump_p)
 {
     struct upipe_pciesdi_source_framer *ctx = upipe_pciesdi_source_framer_from_upipe(upipe);
+
+    if (ubase_check(uref_flow_get_discontinuity(uref))) {
+        /* There was a discontinuity in the signal.  Restart frame alignment. */
+        ctx->start = false;
+
+        if (ctx->uref)
+            uref_free(ctx->uref);
+        ctx->uref = NULL;
+        ctx->cached_lines = 0;
+        ctx->prev_fvh = 0;
+        ctx->progressive_seen_end_of_picture = false;
+    }
 
     if (ctx->start) {
         size_t src_size_bytes;
