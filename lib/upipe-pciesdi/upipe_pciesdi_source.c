@@ -33,6 +33,7 @@
 #include <upipe/uref_block.h>
 #include <upipe/uref_pic.h>
 #include <upipe/uref_pic_flow.h>
+#include <upipe/uref_flow.h>
 #include <upipe/uref_clock.h>
 #include <upipe/upump.h>
 #include <upipe/ubuf.h>
@@ -101,6 +102,7 @@ struct upipe_pciesdi_src {
     int fd;
 
     int previous_sdi_line_number;
+    bool discontinuity;
 
     /* picture properties, same units as upipe_hbrmt_common.h, pixels */
     const struct sdi_offsets_fmt *sdi_format;
@@ -157,6 +159,7 @@ static struct upipe *upipe_pciesdi_src_alloc(struct upipe_mgr *mgr,
     if (!upipe_pciesdi_src->read_buffer)
         return NULL;
 
+    upipe_pciesdi_src->discontinuity = false;
     upipe_pciesdi_src->fd = -1;
     upipe_pciesdi_src->previous_sdi_line_number = -1;
     upipe_throw_ready(upipe);
@@ -277,6 +280,9 @@ static void upipe_pciesdi_src_worker(struct upump *upump)
         upipe_err_va(upipe, "unknown family");
     }
 
+    if (!locked)
+        upipe_pciesdi_src->discontinuity = true;
+
     if (unlikely(ret == -1)) {
         uref_block_unmap(uref, 0);
         switch (errno) {
@@ -362,6 +368,11 @@ static void upipe_pciesdi_src_worker(struct upump *upump)
         upipe_pciesdi_src->cached_read_bytes = ret - processed_bytes;
     } else {
         upipe_pciesdi_src->cached_read_bytes = 0;
+    }
+
+    if (upipe_pciesdi_src->discontinuity) {
+        uref_flow_set_discontinuity(uref);
+        upipe_pciesdi_src->discontinuity = false;
     }
 
     uref_block_unmap(uref, 0);
