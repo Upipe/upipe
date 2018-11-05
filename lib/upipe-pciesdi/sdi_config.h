@@ -2,7 +2,7 @@
 #define __HW_CONFIG_H
 #include "csr.h"
 
-#define MINIMAL_GATEWARE_REVISION "2018-08-23"
+#define MINIMAL_GATEWARE_REVISION "2018-10-17"
 
 /* targets capabilities */
 #if defined(PCIE_SDI_HW)
@@ -35,9 +35,9 @@
 #define DMA_LAST_DISABLE (1<<17)
 
 #define DMA_CHANNEL_COUNT SDI_CHANNELS
-#define DMA_BUFFER_PER_IRQ 18
+#define DMA_BUFFER_PER_IRQ 32
 #define DMA_BUFFER_COUNT 256
-#define DMA_BUFFER_SIZE (2200*4)
+#define DMA_BUFFER_SIZE 8192
 //#define DMA_BUFFER_ALIGNED
 
 
