@@ -64,8 +64,6 @@ struct upipe_pciesdi_source_framer {
     uint16_t prev_fvh;
     bool start;
     bool progressive;
-    bool progressive_seen_end_of_picture;
-    int progressive_bottom_vbi_lines;
 
     /* uref for output */
     struct uref *uref;
@@ -95,8 +93,6 @@ static struct upipe *upipe_pciesdi_source_framer_alloc(struct upipe_mgr *mgr, st
     ctx->prev_fvh = 0;
     ctx->start = false;
     ctx->progressive = false;
-    ctx->progressive_seen_end_of_picture = false;
-    ctx->progressive_bottom_vbi_lines = 0;
     ctx->uref = NULL;
     ctx->cached_lines = 0;
 
@@ -132,8 +128,6 @@ static int upipe_pciesdi_source_framer_set_flow_def(struct upipe *upipe, struct
         return UBASE_ERR_INVALID;
     }
     ctx->progressive = ubase_check(uref_pic_get_progressive(flow_def));
-    if (ctx->progressive)
-        ctx->progressive_bottom_vbi_lines = ctx->f->pict_fmt->vbi_f1_part2.end - ctx->f->pict_fmt->vbi_f1_part2.start + 1;
 
     upipe_pciesdi_source_framer_store_flow_def(upipe, uref_dup(flow_def));
     return UBASE_ERR_NONE;
@@ -172,7 +166,6 @@ static void upipe_pciesdi_source_framer_input(struct upipe *upipe, struct uref
         ctx->uref = NULL;
         ctx->cached_lines = 0;
         ctx->prev_fvh = 0;
-        ctx->progressive_seen_end_of_picture = false;
     }
 
     if (ctx->start) {
@@ -258,16 +251,11 @@ static void upipe_pciesdi_source_framer_input(struct upipe *upipe, struct uref
             upipe_dbg_va(upipe, "fvh change from %#5x to %#5x", ctx->prev_fvh, fvh);
 
         if (ctx->progressive) {
-            /* Find the bottom of the active picture. */
-            if (ctx->prev_fvh == 0x274 && fvh == 0x2d8)
-                ctx->progressive_seen_end_of_picture = true;
-
-            /* Count off lines until the top of picture. */
-            if (ctx->progressive_seen_end_of_picture)
-                ctx->progressive_bottom_vbi_lines -= 1;
-
-            /* Break when enough lines have passed. */
-            if (ctx->progressive_bottom_vbi_lines < 0) {
+            /* Use line number to find first line because there is no
+             * progressive SD format. */
+            int line = (buf[8] & 0x1ff) >> 2;
+            line |= ((buf[10] & 0x1ff) >> 2) << 7;
+            if (line == 1) {
                 ctx->start = true;
                 break;
             }
