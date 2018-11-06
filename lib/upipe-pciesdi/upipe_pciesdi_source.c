@@ -306,33 +306,34 @@ static void upipe_pciesdi_src_worker(struct upump *upump)
 
     for (int i = 0; i < ret / sdi_line_width; i++) {
         const uint16_t *sdi_line = (uint16_t*)(upipe_pciesdi_src->read_buffer + i * sdi_line_width);
-        const uint16_t *active_start = sdi_line + 2 * upipe_pciesdi_src->sdi_format->active_offset;
+        int active_offset = 2 * upipe_pciesdi_src->sdi_format->active_offset;
+        const uint16_t *active_start = sdi_line + active_offset;
 
         if (upipe_pciesdi_src->sdi_format->pict_fmt->sd) {
             /* Check EAV is present. */
             if (!sd_eav_match(sdi_line)) {
-                upipe_err(upipe, "SD EAV not found");
+                upipe_err_va(upipe, "SD EAV not found at %#x", i * sdi_line_width);
                 dump_and_exit_clean(upipe, upipe_pciesdi_src->read_buffer,
                         DMA_BUFFER_SIZE * DMA_BUFFER_COUNT);
             }
 
             /* Check SAV is present. */
             if (!sd_sav_match(active_start)) {
-                upipe_err(upipe, "SD SAV not found");
+                upipe_err_va(upipe, "SD SAV not found at %#x", i * sdi_line_width + active_offset);
                 dump_and_exit_clean(upipe, upipe_pciesdi_src->read_buffer,
                         DMA_BUFFER_SIZE * DMA_BUFFER_COUNT);
             }
         } else { /* HD */
             /* Check EAV is present. */
             if (!hd_eav_match(sdi_line)) {
-                upipe_err(upipe, "HD EAV not found");
+                upipe_err_va(upipe, "HD EAV not found at %#x", i * sdi_line_width);
                 dump_and_exit_clean(upipe, upipe_pciesdi_src->read_buffer,
                         DMA_BUFFER_SIZE * DMA_BUFFER_COUNT);
             }
 
             /* Check SAV is present. */
             if (!hd_sav_match(active_start)) {
-                upipe_err(upipe, "HD SAV not found");
+                upipe_err_va(upipe, "HD SAV not found at %#x", i * sdi_line_width + active_offset);
                 dump_and_exit_clean(upipe, upipe_pciesdi_src->read_buffer,
                         DMA_BUFFER_SIZE * DMA_BUFFER_COUNT);
             }
