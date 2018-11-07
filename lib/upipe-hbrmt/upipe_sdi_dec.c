@@ -916,18 +916,27 @@ static bool upipe_sdi_dec_handle(struct upipe *upipe, struct uref *uref,
 
     uint8_t vbi[720 * 32];
 
+    const uint8_t *input_buf = NULL;
+    int whole_input_size = 4 * f->width * f->height;
+    int whole_input_offset = 0;
+    int segment_offset = 0;
+    int input_offset, input_size;
+
     /* Parse the whole frame */
     for (int h = 0; h < f->height; h++) {
         /* map input */
-        int read_offset = 4 * h * f->width;
-        int input_size = 4 * f->width;
-        const uint8_t *input_buf = NULL;
-        int ret = uref_block_read(uref, read_offset, &input_size, &input_buf);
-        if (unlikely(!ubase_check(ret))) {
-            upipe_warn_va(upipe, "unable to map input on line %d", h);
-            uref_free(uref);
-            upipe_throw_fatal(upipe, ret);
-            return true;
+        if (!input_buf) {
+            input_size = whole_input_size;
+            int ret = uref_block_read(uref, whole_input_offset, &input_size, &input_buf);
+            if (unlikely(!ubase_check(ret))) {
+                upipe_warn_va(upipe, "unable to map input on line %d", h);
+                uref_free(uref);
+                upipe_throw_fatal(upipe, ret);
+                return true;
+            }
+
+            input_offset = 0;
+            segment_offset = whole_input_offset;
         }
 
         /* HANC starts at end of EAV */
@@ -941,7 +950,7 @@ static bool upipe_sdi_dec_handle(struct upipe *upipe, struct uref *uref,
             line_num = ((line_num + 2) % 525) + 1;
 
         /* Horizontal Blanking */
-        uint16_t *line = (uint16_t *)input_buf + hanc_start;
+        uint16_t *line = (uint16_t *)input_buf + input_offset + hanc_start;
         if (p->sd) {
             for (int v = 0; v < hanc_len; v++) {
                 const uint16_t *packet = line + v;
@@ -995,7 +1004,7 @@ static bool upipe_sdi_dec_handle(struct upipe *upipe, struct uref *uref,
         }
 
         if (upipe_sdi_dec->debug) {
-            const uint16_t *src = (uint16_t*)input_buf;
+            const uint16_t *src = (uint16_t*)input_buf + input_offset;
             const uint16_t *active_start = &src[2*f->active_offset];
             bool vbi = !active;
 
@@ -1062,7 +1071,7 @@ static bool upipe_sdi_dec_handle(struct upipe *upipe, struct uref *uref,
             }
         }
 
-        uint16_t *src_line = (uint16_t*)input_buf + 2*f->active_offset;
+        uint16_t *src_line = (uint16_t*)input_buf + input_offset + 2*f->active_offset;
         if (!active || special_case) {
             // deinterleave for vanc_filter
             if (p->sd) {
@@ -1112,7 +1121,14 @@ static bool upipe_sdi_dec_handle(struct upipe *upipe, struct uref *uref,
         }
         upipe_sdi_dec->eav_clock += f->width;
 
-        uref_block_unmap(uref, read_offset);
+        whole_input_size   -= 4 * f->width;
+        input_size         -= 4 * f->width;
+        whole_input_offset += 4 * f->width;
+        input_offset       += 2 * f->width; /* Used as offset on uint16_t pointer. */
+        if (input_size <= 0) {
+            uref_block_unmap(uref, segment_offset);
+            input_buf = NULL;
+        }
     }
 
     if (uref_audio) {
