@@ -180,9 +180,9 @@ static void upipe_pciesdi_source_framer_input(struct upipe *upipe, struct uref
         int sdi_width_bytes = sizeof(uint16_t) * 2 * ctx->f->width;
         int lines_in_uref = src_size_bytes / sdi_width_bytes;
         if (ctx->cached_lines + lines_in_uref < ctx->f->height) {
+            ctx->cached_lines += lines_in_uref;
             if (ctx->uref) {
                 uref_block_append(ctx->uref, uref_detach_ubuf(uref));
-                ctx->cached_lines += lines_in_uref;
                 uref_free(uref);
                 return;
             } else {
