@@ -313,29 +313,21 @@ static void upipe_pciesdi_src_worker(struct upump *upump)
             /* Check EAV is present. */
             if (!sd_eav_match(sdi_line)) {
                 upipe_err_va(upipe, "SD EAV not found at %#x", i * sdi_line_width);
-                dump_and_exit_clean(upipe, upipe_pciesdi_src->read_buffer,
-                        DMA_BUFFER_SIZE * DMA_BUFFER_COUNT);
             }
 
             /* Check SAV is present. */
             if (!sd_sav_match(active_start)) {
                 upipe_err_va(upipe, "SD SAV not found at %#x", i * sdi_line_width + active_offset);
-                dump_and_exit_clean(upipe, upipe_pciesdi_src->read_buffer,
-                        DMA_BUFFER_SIZE * DMA_BUFFER_COUNT);
             }
         } else { /* HD */
             /* Check EAV is present. */
             if (!hd_eav_match(sdi_line)) {
                 upipe_err_va(upipe, "HD EAV not found at %#x", i * sdi_line_width);
-                dump_and_exit_clean(upipe, upipe_pciesdi_src->read_buffer,
-                        DMA_BUFFER_SIZE * DMA_BUFFER_COUNT);
             }
 
             /* Check SAV is present. */
             if (!hd_sav_match(active_start)) {
                 upipe_err_va(upipe, "HD SAV not found at %#x", i * sdi_line_width + active_offset);
-                dump_and_exit_clean(upipe, upipe_pciesdi_src->read_buffer,
-                        DMA_BUFFER_SIZE * DMA_BUFFER_COUNT);
             }
 
             /* Check line number. */
@@ -344,8 +336,6 @@ static void upipe_pciesdi_src_worker(struct upump *upump)
             if (line > upipe_pciesdi_src->sdi_format->height  || line < 1) {
                 upipe_err_va(upipe, "line %d out of range (1-%d)", line,
                         upipe_pciesdi_src->sdi_format->height);
-                dump_and_exit_clean(upipe, upipe_pciesdi_src->read_buffer,
-                        DMA_BUFFER_SIZE * DMA_BUFFER_COUNT);
             }
 
             /* Check line number is increasing correctly. */
