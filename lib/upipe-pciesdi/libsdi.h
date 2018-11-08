@@ -20,8 +20,6 @@
 #ifndef SDI_LIB_H
 #define SDI_LIB_H
 
-int sdi_device_hw_crc;
-
 int64_t get_time_ms(void);
 
 /* ioctl */
