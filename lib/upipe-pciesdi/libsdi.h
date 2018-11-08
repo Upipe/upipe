@@ -20,7 +20,7 @@
 #ifndef SDI_LIB_H
 #define SDI_LIB_H
 
-#include "genlock.h"
+int sdi_device_hw_crc;
 
 int64_t get_time_ms(void);
 
@@ -76,11 +76,11 @@ uint8_t sdi_request_dma_writer(int fd);
 void sdi_release_dma_reader(int fd);
 void sdi_release_dma_writer(int fd);
 
+#define countof(x) (sizeof(x) / sizeof(x[0]))
+
 /* si5324 */
 
 #ifdef HAS_SI5324
-
-#define countof(x) (sizeof(x) / sizeof(x[0]))
 
 static const uint16_t si5324_148_5_mhz_regs[][2] = {
     {   0, 0x54 },
@@ -235,6 +235,216 @@ uint16_t sdi_spi_read(int fd, uint8_t channel, uint16_t adr);
 /* genlock */
 
 #ifdef HAS_GENLOCK
+
+/* genlock margins (in ns) */
+
+#define GENLOCK_HSYNC_MARGIN 20
+#define GENLOCK_VSYNC_MARGIN 10000
+
+/* genlock hsync/vsync periods (in ns) */
+
+/* SMPTE259M */
+#define SMPTE259M_PAL_HSYNC_PERIOD 64000
+#define SMPTE259M_PAL_VSYNC_PERIOD 40000000
+
+#define SMPTE259M_NTSC_HSYNC_PERIOD 63555
+#define SMPTE259M_NTSC_VSYNC_PERIOD 33366700
+
+/* SMPTE296M */
+#define SMPTE296M_720P60_HSYNC_PERIOD 22222
+#define SMPTE296M_720P60_VSYNC_PERIOD 16666666
+
+#define SMPTE296M_720P50_HSYNC_PERIOD 26666
+#define SMPTE296M_720P50_VSYNC_PERIOD 20000000
+
+#define SMPTE296M_720P30_HSYNC_PERIOD 44444
+#define SMPTE296M_720P30_VSYNC_PERIOD 33333333
+
+#define SMPTE296M_720P25_HSYNC_PERIOD 53333
+#define SMPTE296M_720P25_VSYNC_PERIOD 40000000
+
+#define SMPTE296M_720P24_HSYNC_PERIOD 55555
+#define SMPTE296M_720P24_VSYNC_PERIOD 41666666
+
+#define SMPTE296M_720P59_94_HSYNC_PERIOD 22244
+#define SMPTE296M_720P59_94_VSYNC_PERIOD 16683350
+
+#define SMPTE296M_720P29_97_HSYNC_PERIOD 44488
+#define SMPTE296M_720P29_97_VSYNC_PERIOD 33366700
+
+#define SMPTE296M_720P23_98_HSYNC_PERIOD 55601
+#define SMPTE296M_720P23_98_VSYNC_PERIOD 41701417
+
+/* SMPTE274M */
+#define SMPTE274M_1080P60_HSYNC_PERIOD 14814
+#define SMPTE274M_1080P60_VSYNC_PERIOD 16666666
+
+#define SMPTE274M_1080P50_HSYNC_PERIOD 17777
+#define SMPTE274M_1080P50_VSYNC_PERIOD 20000000
+
+#define SMPTE274M_1080I60_HSYNC_PERIOD 29629
+#define SMPTE274M_1080I60_VSYNC_PERIOD 33333333
+
+#define SMPTE274M_1080I50_HSYNC_PERIOD 35555
+#define SMPTE274M_1080I50_VSYNC_PERIOD 40000000
+
+#define SMPTE274M_1080P30_HSYNC_PERIOD 29629
+#define SMPTE274M_1080P30_VSYNC_PERIOD 33333333
+
+#define SMPTE274M_1080P25_HSYNC_PERIOD 35555
+#define SMPTE274M_1080P25_VSYNC_PERIOD 40000000
+
+#define SMPTE274M_1080P24_HSYNC_PERIOD 37037
+#define SMPTE274M_1080P24_VSYNC_PERIOD 41666666
+
+#define SMPTE274M_1080P59_94_HSYNC_PERIOD 14829
+#define SMPTE274M_1080P59_94_VSYNC_PERIOD 16683350
+
+#define SMPTE274M_1080I59_94_HSYNC_PERIOD 29659
+#define SMPTE274M_1080I59_94_VSYNC_PERIOD 33366700
+
+#define SMPTE274M_1080P29_97_HSYNC_PERIOD 29659
+#define SMPTE274M_1080P29_97_VSYNC_PERIOD 33366700
+
+#define SMPTE274M_1080P23_98_HSYNC_PERIOD 37067
+#define SMPTE274M_1080P23_98_VSYNC_PERIOD 41701417
+
+/* genlock si5324 configurations */
+
+#define SI5324_BASE_CONFIG_N2_OFFSET 25
+
+/* SMPTE259M */
+
+static const uint16_t smpte259m_pal_regs[][2] = {
+    { 40, 0x01 },
+    { 41, 0x4e },
+    { 42, 0x1f },
+};
+
+static const uint16_t smpte259m_ntsc_regs[][2] = {
+    { 40, 0x01 },
+    { 41, 0x4b },
+    { 42, 0xc4 },
+};
+
+/* SMPTE296M */
+
+static const uint16_t smpte296m_720p60_regs[][2] = {
+    { 40, 0x00 },
+    { 41, 0x74 },
+    { 42, 0x03 },
+};
+
+static const uint16_t smpte296m_720p50_regs[][2] = {
+    { 40, 0x00 },
+    { 41, 0x8b },
+    { 42, 0x37 },
+};
+
+static const uint16_t smpte296m_720p30_regs[][2] = {
+    { 40, 0x00 },
+    { 41, 0xe8 },
+    { 42, 0x07 },
+};
+
+static const uint16_t smpte296m_720p25_regs[][2] = {
+    { 40, 0x01 },
+    { 41, 0x16 },
+    { 42, 0x6f },
+};
+
+static const uint16_t smpte296m_720p24_regs[][2] = {
+    { 40, 0x01 },
+    { 41, 0x22 },
+    { 42, 0x09 },
+};
+
+static const uint16_t smpte296m_720p59_94_regs[][2] = {
+    { 40, 0x00 },
+    { 41, 0x74 },
+    { 42, 0x03 },
+};
+
+static const uint16_t smpte296m_720p29_97_regs[][2] = {
+    { 40, 0x00 },
+    { 41, 0xe8 },
+    { 42, 0x07 },
+};
+
+static const uint16_t smpte296m_720p23_98_regs[][2] = {
+    { 40, 0x01 },
+    { 41, 0x22 },
+    { 42, 0x09 },
+};
+
+/* SMPTE274M */
+
+static const uint16_t smpte274m_1080p60_regs[][2] = {
+    { 40, 0x00 },
+    { 41, 0x4d },
+    { 42, 0x57 },
+};
+
+static const uint16_t smpte274m_1080p50_regs[][2] = {
+    { 40, 0x00 },
+    { 41, 0x5c },
+    { 42, 0xcf },
+};
+
+static const uint16_t smpte274m_1080i60_regs[][2] = {
+    { 40, 0x00 },
+    { 41, 0x9a },
+    { 42, 0xaf },
+};
+
+static const uint16_t smpte274m_1080i50_regs[][2] = {
+    { 40, 0x00 },
+    { 41, 0xb9 },
+    { 42, 0x9f },
+};
+
+static const uint16_t smpte274m_1080p30_regs[][2] = {
+    { 40, 0x00 },
+    { 41, 0x9a },
+    { 42, 0xaf },
+};
+
+static const uint16_t smpte274m_1080p25_regs[][2] = {
+    { 40, 0x00 },
+    { 41, 0xb9 },
+    { 42, 0x9f },
+};
+
+static const uint16_t smpte274m_1080p24_regs[][2] = {
+    { 40, 0x00 },
+    { 41, 0xc1 },
+    { 42, 0x5b },
+};
+
+static const uint16_t smpte274m_1080p59_94_regs[][2] = {
+    { 40, 0x00 },
+    { 41, 0x4d },
+    { 42, 0x57 },
+};
+
+static const uint16_t smpte274m_1080i59_94_regs[][2] = {
+    { 40, 0x00 },
+    { 41, 0x9a },
+    { 42, 0xaf },
+};
+
+static const uint16_t smpte274m_1080p29_97_regs[][2] = {
+    { 40, 0x00 },
+    { 41, 0x9a },
+    { 42, 0xaf },
+};
+
+static const uint16_t smpte274m_1080p23_98_regs[][2] = {
+    { 40, 0x00 },
+    { 41, 0xc1 },
+    { 42, 0x52 },
+};
+
 void si5324_genlock(int fd);
 #endif
 

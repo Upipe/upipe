@@ -205,7 +205,7 @@ void sdi_spi(int fd, uint32_t tx_data, uint32_t *rx_data) {
 
 void sdi_rx(int fd, uint8_t *locked, uint8_t *mode, uint8_t *family, uint8_t *scan, uint8_t *rate) {
     struct sdi_ioctl_rx m;
-    m.crc_enable = 1;
+    m.crc_enable = sdi_device_hw_crc;
     ioctl(fd, SDI_IOCTL_RX, &m);
     *locked = m.locked;
     *mode = m.mode;
@@ -216,7 +216,7 @@ void sdi_rx(int fd, uint8_t *locked, uint8_t *mode, uint8_t *family, uint8_t *sc
 
 void sdi_tx(int fd, uint8_t mode, uint8_t *txen, uint8_t *slew) {
     struct sdi_ioctl_tx m;
-    m.crc_enable = 1;
+    m.crc_enable = sdi_device_hw_crc;
     m.mode = mode;
     ioctl(fd, SDI_IOCTL_TX, &m);
     *txen = m.txen;
@@ -309,7 +309,7 @@ static __attribute__((unused)) void flash_write_status(int fd, uint8_t value)
     flash_spi(fd, 16, FLASH_WRSR, value << 24);
 }
 
-static void flash_erase_sector(int fd, uint32_t addr)
+static __attribute__((unused)) void flash_erase_sector(int fd, uint32_t addr)
 {
     flash_spi(fd, 32, FLASH_SE, addr << 8);
 }
@@ -643,6 +643,52 @@ static int vsync_check(uint64_t reference, uint64_t value) {
     return 1;
 }
 
+static uint16_t si5324_base_config_regs[][2] = {
+    {   0, 0x14 },
+    {   1, 0xe4 },
+    {   2, 0x32 },
+    {   3, 0x15 },
+    {   4, 0x92 },
+    {   5, 0xed },
+    {   6, 0x2d },
+    {   7, 0x2a },
+    {   8, 0x00 },
+    {   9, 0xc0 },
+    {  10, 0x00 },
+    {  11, 0x40 },
+    {  19, 0x29 },
+    {  20, 0x3e },
+    {  21, 0xff },
+    {  22, 0xdf },
+    {  23, 0x1f },
+    {  24, 0x3f },
+    {  25, 0x40 },
+    {  31, 0x00 },
+    {  32, 0x00 },
+    {  33, 0x05 },
+    {  34, 0x00 },
+    {  35, 0x00 },
+    {  36, 0x05 },
+    {  40, 0x01 },
+    {  41, 0x4e },
+    {  42, 0x1f },
+    {  43, 0x00 },
+    {  44, 0x00 },
+    {  45, 0x00 },
+    {  46, 0x00 },
+    {  47, 0x00 },
+    {  48, 0x00 },
+    {  55, 0x00 },
+    { 131, 0x1f },
+    { 132, 0x02 },
+    { 137, 0x01 },
+    { 138, 0x0f },
+    { 139, 0xff },
+    { 142, 0x00 },
+    { 143, 0x00 },
+    { 136, 0x40 },
+};
+
 void si5324_genlock(int fd)
 {
     int i;
@@ -671,80 +717,117 @@ void si5324_genlock(int fd)
     if (hsync_check(SMPTE259M_PAL_HSYNC_PERIOD, hsync_period) &
         vsync_check(SMPTE259M_PAL_VSYNC_PERIOD, vsync_period*2)) {
         printf("SMPTE259M_PAL detected, configuring SI5324...\n");
-        for(i = 0; i < countof(si5324_genlock_smpte259m_pal_regs); i++) {
-            si5324_spi_write(fd, si5324_genlock_smpte259m_pal_regs[i][0], si5324_genlock_smpte259m_pal_regs[i][1]);
-        }
+        for(i = 0; i < countof(smpte259m_pal_regs); i++)
+            si5324_base_config_regs[SI5324_BASE_CONFIG_N2_OFFSET + i][1] = smpte259m_pal_regs[i][1];
     } else if (hsync_check(SMPTE259M_NTSC_HSYNC_PERIOD, hsync_period) &
                vsync_check(SMPTE259M_NTSC_VSYNC_PERIOD, vsync_period*2)) {
         printf("SMPTE259M_NTSC detected, configuring SI5324...\n");
-        for(i = 0; i < countof(si5324_genlock_smpte259m_ntsc_regs); i++) {
-            si5324_spi_write(fd, si5324_genlock_smpte259m_ntsc_regs[i][0], si5324_genlock_smpte259m_ntsc_regs[i][1]);
-        }
+        for(i = 0; i < countof(smpte259m_pal_regs); i++)
+            si5324_base_config_regs[SI5324_BASE_CONFIG_N2_OFFSET + i][1] = smpte259m_ntsc_regs[i][1];
     /* SMPTE296M */
     } else if (hsync_check(SMPTE296M_720P60_HSYNC_PERIOD, hsync_period) &
                vsync_check(SMPTE296M_720P60_VSYNC_PERIOD, vsync_period)) {
         printf("SMPTE296M_720P60 detected, configuring SI5324...\n");
-        for(i = 0; i < countof(si5324_genlock_smpte296m_720p60_regs); i++) {
-            si5324_spi_write(fd, si5324_genlock_smpte296m_720p60_regs[i][0], si5324_genlock_smpte296m_720p60_regs[i][1]);
-        }
+        for(i = 0; i < countof(smpte296m_720p60_regs); i++)
+            si5324_base_config_regs[SI5324_BASE_CONFIG_N2_OFFSET + i][1] = smpte296m_720p60_regs[i][1];
     } else if (hsync_check(SMPTE296M_720P50_HSYNC_PERIOD, hsync_period) &
                vsync_check(SMPTE296M_720P50_VSYNC_PERIOD, vsync_period)) {
         printf("SMPTE296M_720P50 detected, configuring SI5324...\n");
-        for(i = 0; i < countof(si5324_genlock_smpte296m_720p50_regs); i++) {
-            si5324_spi_write(fd, si5324_genlock_smpte296m_720p50_regs[i][0], si5324_genlock_smpte296m_720p50_regs[i][1]);
-        }
+        for(i = 0; i < countof(smpte296m_720p50_regs); i++)
+            si5324_base_config_regs[SI5324_BASE_CONFIG_N2_OFFSET + i][1] = smpte296m_720p50_regs[i][1];
     } else if (hsync_check(SMPTE296M_720P30_HSYNC_PERIOD, hsync_period) &
                vsync_check(SMPTE296M_720P30_VSYNC_PERIOD, vsync_period)) {
         printf("SMPTE296M_720P30 detected, configuring SI5324...\n");
-        for(i = 0; i < countof(si5324_genlock_smpte296m_720p30_regs); i++) {
-            si5324_spi_write(fd, si5324_genlock_smpte296m_720p30_regs[i][0], si5324_genlock_smpte296m_720p30_regs[i][1]);
-        }
+        for(i = 0; i < countof(smpte296m_720p30_regs); i++)
+            si5324_base_config_regs[SI5324_BASE_CONFIG_N2_OFFSET + i][1] = smpte296m_720p30_regs[i][1];
     } else if (hsync_check(SMPTE296M_720P25_HSYNC_PERIOD, hsync_period) &
                vsync_check(SMPTE296M_720P25_VSYNC_PERIOD, vsync_period)) {
         printf("SMPTE296M_720P25 detected, configuring SI5324...\n");
-        for(i = 0; i < countof(si5324_genlock_smpte296m_720p25_regs); i++) {
-            si5324_spi_write(fd, si5324_genlock_smpte296m_720p25_regs[i][0], si5324_genlock_smpte296m_720p25_regs[i][1]);
-        }
+        for(i = 0; i < countof(smpte296m_720p25_regs); i++)
+            si5324_base_config_regs[SI5324_BASE_CONFIG_N2_OFFSET + i][1] = smpte296m_720p25_regs[i][1];
     } else if (hsync_check(SMPTE296M_720P24_HSYNC_PERIOD, hsync_period) &
                vsync_check(SMPTE296M_720P24_VSYNC_PERIOD, vsync_period)) {
         printf("SMPTE296M_720P24 detected, configuring SI5324...\n");
-        for(i = 0; i < countof(si5324_genlock_smpte296m_720p24_regs); i++) {
-            si5324_spi_write(fd, si5324_genlock_smpte296m_720p24_regs[i][0], si5324_genlock_smpte296m_720p24_regs[i][1]);
-        }
+        for(i = 0; i < countof(smpte296m_720p24_regs); i++)
+            si5324_base_config_regs[SI5324_BASE_CONFIG_N2_OFFSET + i][1] = smpte296m_720p24_regs[i][1];
+    } else if (hsync_check(SMPTE296M_720P59_94_HSYNC_PERIOD, hsync_period) &
+               vsync_check(SMPTE296M_720P59_94_VSYNC_PERIOD, vsync_period)) {
+        printf("SMPTE296M_720P59_94 detected, configuring SI5324...\n");
+        for(i = 0; i < countof(smpte296m_720p59_94_regs); i++)
+            si5324_base_config_regs[SI5324_BASE_CONFIG_N2_OFFSET + i][1] = smpte296m_720p59_94_regs[i][1];
+    } else if (hsync_check(SMPTE296M_720P29_97_HSYNC_PERIOD, hsync_period) &
+               vsync_check(SMPTE296M_720P29_97_VSYNC_PERIOD, vsync_period)) {
+        printf("SMPTE296M_720P29_97 detected, configuring SI5324...\n");
+        for(i = 0; i < countof(smpte296m_720p29_97_regs); i++)
+            si5324_base_config_regs[SI5324_BASE_CONFIG_N2_OFFSET + i][1] = smpte296m_720p29_97_regs[i][1];
+    } else if (hsync_check(SMPTE296M_720P23_98_HSYNC_PERIOD, hsync_period) &
+               vsync_check(SMPTE296M_720P23_98_VSYNC_PERIOD, vsync_period)) {
+        printf("SMPTE296M_720P23_98 detected, configuring SI5324...\n");
+        for(i = 0; i < countof(smpte296m_720p23_98_regs); i++)
+            si5324_base_config_regs[SI5324_BASE_CONFIG_N2_OFFSET + i][1] = smpte296m_720p23_98_regs[i][1];
     /* SMPTE274M */
+    } else if (hsync_check(SMPTE274M_1080P60_HSYNC_PERIOD, hsync_period) &
+               vsync_check(SMPTE274M_1080P60_VSYNC_PERIOD, vsync_period)) {
+        printf("SMPTE274M_1080P60 detected, configuring SI5324...\n");
+        for(i = 0; i < countof(smpte274m_1080p60_regs); i++)
+            si5324_base_config_regs[SI5324_BASE_CONFIG_N2_OFFSET + i][1] = smpte274m_1080p60_regs[i][1];
+    } else if (hsync_check(SMPTE274M_1080P50_HSYNC_PERIOD, hsync_period) &
+               vsync_check(SMPTE274M_1080P50_VSYNC_PERIOD, vsync_period)) {
+        printf("SMPTE274M_1080P50 detected, configuring SI5324...\n");
+        for(i = 0; i < countof(smpte274m_1080p50_regs); i++)
+            si5324_base_config_regs[SI5324_BASE_CONFIG_N2_OFFSET + i][1] = smpte274m_1080p50_regs[i][1];
     } else if (hsync_check(SMPTE274M_1080I60_HSYNC_PERIOD, hsync_period) &
                vsync_check(SMPTE274M_1080I60_VSYNC_PERIOD, vsync_period*2)) {
         printf("SMPTE274M_1080I60 detected, configuring SI5324...\n");
-        for(i = 0; i < countof(si5324_genlock_smpte274m_1080i60_regs); i++) {
-            si5324_spi_write(fd, si5324_genlock_smpte274m_1080i60_regs[i][0], si5324_genlock_smpte274m_1080i60_regs[i][1]);
-        }
-    } else if (hsync_check(SMPTE274M_1080I40_HSYNC_PERIOD, hsync_period) &
-               vsync_check(SMPTE274M_1080I40_VSYNC_PERIOD, vsync_period*2)) {
-        printf("SMPTE274M_1080I40 detected, configuring SI5324...\n");
-        for(i = 0; i < countof(si5324_genlock_smpte274m_1080i40_regs); i++) {
-            si5324_spi_write(fd, si5324_genlock_smpte274m_1080i40_regs[i][0], si5324_genlock_smpte274m_1080i40_regs[i][1]);
-        }
-    } else if (hsync_check(SMPTE274M_1080I30_HSYNC_PERIOD, hsync_period) &
-               vsync_check(SMPTE274M_1080I30_VSYNC_PERIOD, vsync_period*2)) {
-        printf("SMPTE274M_1080I30 detected, configuring SI5324...\n");
-        for(i = 0; i < countof(si5324_genlock_smpte274m_1080i30_regs); i++) {
-            si5324_spi_write(fd, si5324_genlock_smpte274m_1080i30_regs[i][0], si5324_genlock_smpte274m_1080i30_regs[i][1]);
-        }
-    } else if (hsync_check(SMPTE274M_1080I25_HSYNC_PERIOD, hsync_period) &
-               vsync_check(SMPTE274M_1080I25_VSYNC_PERIOD, vsync_period*2)) {
-        printf("SMPTE274M_1080I25 detected, configuring SI5324...\n");
-        for(i = 0; i < countof(si5324_genlock_smpte274m_1080i25_regs); i++) {
-            si5324_spi_write(fd, si5324_genlock_smpte274m_1080i25_regs[i][0], si5324_genlock_smpte274m_1080i25_regs[i][1]);
-        }
-    } else if (hsync_check(SMPTE274M_1080I24_HSYNC_PERIOD, hsync_period) &
-               vsync_check(SMPTE274M_1080I24_VSYNC_PERIOD, vsync_period*2)) {
-        printf("SMPTE274M_1080I24 detected, configuring SI5324...\n");
-        for(i = 0; i < countof(si5324_genlock_smpte274m_1080i24_regs); i++) {
-            si5324_spi_write(fd, si5324_genlock_smpte274m_1080i24_regs[i][0], si5324_genlock_smpte274m_1080i24_regs[i][1]);
-        }
+        for(i = 0; i < countof(smpte274m_1080i60_regs); i++)
+            si5324_base_config_regs[SI5324_BASE_CONFIG_N2_OFFSET + i][1] = smpte274m_1080i60_regs[i][1];
+    } else if (hsync_check(SMPTE274M_1080I50_HSYNC_PERIOD, hsync_period) &
+               vsync_check(SMPTE274M_1080I50_VSYNC_PERIOD, vsync_period*2)) {
+        printf("SMPTE274M_1080I50 detected, configuring SI5324...\n");
+        for(i = 0; i < countof(smpte274m_1080i50_regs); i++)
+            si5324_base_config_regs[SI5324_BASE_CONFIG_N2_OFFSET + i][1] = smpte274m_1080i50_regs[i][1];
+    } else if (hsync_check(SMPTE274M_1080P30_HSYNC_PERIOD, hsync_period) &
+               vsync_check(SMPTE274M_1080P30_VSYNC_PERIOD, vsync_period*2)) {
+        printf("SMPTE274M_1080P30 detected, configuring SI5324...\n");
+        for(i = 0; i < countof(smpte274m_1080p30_regs); i++)
+            si5324_base_config_regs[SI5324_BASE_CONFIG_N2_OFFSET + i][1] = smpte274m_1080p30_regs[i][1];
+    } else if (hsync_check(SMPTE274M_1080P25_HSYNC_PERIOD, hsync_period) &
+               vsync_check(SMPTE274M_1080P25_VSYNC_PERIOD, vsync_period)) {
+        printf("SMPTE274M_1080P25 detected, configuring SI5324...\n");
+        for(i = 0; i < countof(smpte274m_1080p25_regs); i++)
+            si5324_base_config_regs[SI5324_BASE_CONFIG_N2_OFFSET + i][1] = smpte274m_1080p25_regs[i][1];
+    } else if (hsync_check(SMPTE274M_1080P24_HSYNC_PERIOD, hsync_period) &
+               vsync_check(SMPTE274M_1080P24_VSYNC_PERIOD, vsync_period*2)) {
+        printf("SMPTE274M_1080P24 detected, configuring SI5324...\n");
+        for(i = 0; i < countof(smpte274m_1080p24_regs); i++)
+            si5324_base_config_regs[SI5324_BASE_CONFIG_N2_OFFSET + i][1] = smpte274m_1080p24_regs[i][1];
+    } else if (hsync_check(SMPTE274M_1080P59_94_HSYNC_PERIOD, hsync_period) &
+               vsync_check(SMPTE274M_1080P59_94_VSYNC_PERIOD, vsync_period)) {
+        printf("SMPTE274M_1080P59_94 detected, configuring SI5324...\n");
+        for(i = 0; i < countof(smpte274m_1080p59_94_regs); i++)
+            si5324_base_config_regs[SI5324_BASE_CONFIG_N2_OFFSET + i][1] = smpte274m_1080p59_94_regs[i][1];
+    } else if (hsync_check(SMPTE274M_1080I59_94_HSYNC_PERIOD, hsync_period) &
+               vsync_check(SMPTE274M_1080I59_94_VSYNC_PERIOD, vsync_period*2)) {
+        printf("SMPTE274M_1080I59_94 detected, configuring SI5324...\n");
+        for(i = 0; i < countof(smpte274m_1080i59_94_regs); i++)
+            si5324_base_config_regs[SI5324_BASE_CONFIG_N2_OFFSET + i][1] = smpte274m_1080i59_94_regs[i][1];
+    } else if (hsync_check(SMPTE274M_1080P29_97_HSYNC_PERIOD, hsync_period) &
+               vsync_check(SMPTE274M_1080P29_97_VSYNC_PERIOD, vsync_period)) {
+        printf("SMPTE274M_1080P29_97 detected, configuring SI5324...\n");
+        for(i = 0; i < countof(smpte274m_1080p29_97_regs); i++)
+            si5324_base_config_regs[SI5324_BASE_CONFIG_N2_OFFSET + i][1] = smpte274m_1080p29_97_regs[i][1];
+    } else if (hsync_check(SMPTE274M_1080P23_98_HSYNC_PERIOD, hsync_period) &
+               vsync_check(SMPTE274M_1080P23_98_VSYNC_PERIOD, vsync_period*2)) {
+        printf("SMPTE274M_1080P23_98 detected, configuring SI5324...\n");
+        for(i = 0; i < countof(smpte274m_1080p23_98_regs); i++)
+            si5324_base_config_regs[SI5324_BASE_CONFIG_N2_OFFSET + i][1] = smpte274m_1080p23_98_regs[i][1];
     } else {
         printf("No valid video format detected\n");
+    }
 
+    /* configure si5324 */
+    for(i = 0; i < countof(si5324_base_config_regs); i++) {
+        si5324_spi_write(fd, si5324_base_config_regs[i][0], si5324_base_config_regs[i][1]);
     }
 }
 #endif

@@ -2,7 +2,7 @@
 #define __HW_CONFIG_H
 #include "csr.h"
 
-#define MINIMAL_GATEWARE_REVISION "2018-10-17"
+#define MINIMAL_GATEWARE_REVISION "2018-11-08"
 
 /* targets capabilities */
 #if defined(PCIE_SDI_HW)
