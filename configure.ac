@@ -122,6 +122,7 @@ AC_CHECK_HEADERS([dvbcsa/dvbcsa.h],
                  AM_CONDITIONAL(HAVE_DVBCSA, true),
                  AM_CONDITIONAL(HAVE_DVBCSA, false))
 
+PKG_CHECK_UPIPE(TASN1, libtasn1, [libtasn1.h])
 PKG_CHECK_UPIPE(BITSTREAM, bitstream >= 1.4, [bitstream/common.h])
 PKG_CHECK_UPIPE(AVUTIL, libavutil, [libavutil/avutil.h])
 PKG_CHECK_UPIPE(AVFORMAT, [libavformat >= 53.32.0 libavcodec libavutil], [libavformat/avformat.h libavformat/avio.h libavutil/avutil.h])

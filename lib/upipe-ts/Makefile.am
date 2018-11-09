@@ -35,11 +35,22 @@ libupipe_ts_la_SOURCES = \
 	upipe_rtp_fec.c \
 	$(NULL)
 
-libupipe_ts_la_CPPFLAGS = -I$(top_builddir)/include -I$(top_srcdir)/include
+libupipe_ts_la_CPPFLAGS = -I$(top_builddir) -I$(top_builddir)/include -I$(top_srcdir)/include
 libupipe_ts_la_CFLAGS = $(AM_CFLAGS) $(BITSTREAM_CFLAGS)
 libupipe_ts_la_LIBADD = $(top_builddir)/lib/upipe-modules/libupipe_modules.la \
 			@LTLIBICONV@
 libupipe_ts_la_LDFLAGS = -no-undefined
+
+if HAVE_GCRYPT
+if HAVE_TASN1
+libupipe_ts_la_CFLAGS += $(LIBGCRYPT_CFLAGS) $(TASN1_CFLAGS)
+libupipe_ts_la_LIBADD += $(LIBGCRYPT_LIBS) $(TASN1_LIBS)
+libupipe_ts_la_SOURCES += \
+	rsa_asn1.h \
+	rsa_asn1.c \
+	upipe_ts_emm_decoder.c
+endif
+endif
 
 pkgconfigdir = $(libdir)/pkgconfig
 pkgconfig_DATA = libupipe_ts.pc

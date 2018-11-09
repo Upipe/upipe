@@ -38,3 +38,9 @@ myinclude_HEADERS = \
 	uref_ts_scte104_flow.h \
 	uref_ts_scte35.h \
 	$(NULL)
+
+if HAVE_GCRYPT
+if HAVE_TASN1
+myinclude_HEADERS += upipe_ts_emm_decoder.h
+endif
+endif
