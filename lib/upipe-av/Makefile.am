@@ -32,8 +32,13 @@ pkgconfig_DATA = libupipe_av.pc
 
 @AMDEP_TRUE@include ./$(DEPDIR)/upipe_av_codecs_h.Plo
 
+@AMDEP_TRUE@$(DEPDIR)/upipe_av_codecs_h.Plo:
+@am__fastdepCC_TRUE@	$(AM_V_at)$(MKDIR_P) $(DEPDIR)
+@am__fastdepCC_TRUE@	@echo '# dummy' >$@-t && $(am__mv) $@-t $@
+
 upipe_av_codecs.h: upipe_av_codecs.pl avcodec_include.h
 @am__fastdepCC_TRUE@	$(AM_V_CC) $(CPP) $(CFLAGS) $(CPPFLAGS) @AVFORMAT_CFLAGS@ -M $(srcdir)/avcodec_include.h -MT $@ -o $@.Tpo
+@am__fastdepCC_TRUE@	$(AM_V_at)$(MKDIR_P) $(DEPDIR)
 @am__fastdepCC_TRUE@	$(AM_V_at)$(am__mv) $@.Tpo $(DEPDIR)/upipe_av_codecs_h.Plo
 	$(AM_V_GEN) \
 	  CPP="$(CPP)" \
