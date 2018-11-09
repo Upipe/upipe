@@ -106,6 +106,7 @@ struct upipe_pciesdi_src {
 
     /* picture properties, same units as upipe_hbrmt_common.h, pixels */
     const struct sdi_offsets_fmt *sdi_format;
+    bool sdi3g_levelb;
 
     int cached_read_bytes;
     uint8_t *read_buffer;
@@ -159,6 +160,7 @@ static struct upipe *upipe_pciesdi_src_alloc(struct upipe_mgr *mgr,
     if (!upipe_pciesdi_src->read_buffer)
         return NULL;
 
+    upipe_pciesdi_src->sdi3g_levelb = false;
     upipe_pciesdi_src->discontinuity = false;
     upipe_pciesdi_src->fd = -1;
     upipe_pciesdi_src->previous_sdi_line_number = -1;
@@ -218,6 +220,66 @@ static const char *sdi_decode_rate(uint8_t rate)
     }
 }
 
+static inline bool sdi3g_levelb_eav_match(const uint16_t *src)
+{
+    if (src[0] == 0x3ff
+            && src[1] == 0x3ff
+            && src[2] == 0x3ff
+            && src[3] == 0x3ff
+            && src[4] == 0x000
+            && src[5] == 0x000
+            && src[6] == 0x000
+            && src[7] == 0x000
+            && src[8] == 0x000
+            && src[9] == 0x000
+            && src[10] == 0x000
+            && src[11] == 0x000
+            && src[12] == src[13]
+            && src[12] == src[14]
+            && src[12] == src[15]
+            && (src[12] == 0x274
+                || src[12] == 0x2d8
+                || src[12] == 0x368
+                || src[12] == 0x3c4))
+        return true;
+    return false;
+}
+
+static inline bool sdi3g_levelb_sav_match(const uint16_t *src)
+{
+    if (src[-16] == 0x3ff
+            && src[-15] == 0x3ff
+            && src[-14] == 0x3ff
+            && src[-13] == 0x3ff
+            && src[-12] == 0x000
+            && src[-11] == 0x000
+            && src[-10] == 0x000
+            && src[-9] == 0x000
+            && src[-8] == 0x000
+            && src[-7] == 0x000
+            && src[-6] == 0x000
+            && src[-5] == 0x000
+            && src[-4] == src[-3]
+            && src[-4] == src[-2]
+            && src[-4] == src[-1]
+            && (src[-4] == 0x200
+                || src[-4] == 0x2ac
+                || src[-4] == 0x31c
+                || src[-4] == 0x3b0))
+        return true;
+    return false;
+}
+
+static void levelb_unpack(const uint16_t *src, uint16_t *dst1, uint16_t *dst2, uintptr_t pixels)
+{
+    for (int i = 0; i < pixels; i++) {
+        dst1[2*i + 0] = src[4*i + 0];
+        dst1[2*i + 1] = src[4*i + 1];
+        dst2[2*i + 0] = src[4*i + 2];
+        dst2[2*i + 1] = src[4*i + 3];
+    }
+}
+
 static void dump_and_exit_clean(struct upipe *upipe, uint8_t *buf, size_t size)
 {
     struct upipe_pciesdi_src *upipe_pciesdi_src = upipe_pciesdi_src_from_upipe(upipe);
@@ -260,6 +322,9 @@ static void upipe_pciesdi_src_worker(struct upump *upump)
         sdi_decode_rate(rate));
 
     int sdi_line_width = upipe_pciesdi_src->sdi_format->width * 4;
+    if (upipe_pciesdi_src->sdi3g_levelb)
+        sdi_line_width *= 2;
+
     struct uref *uref = uref_block_alloc(upipe_pciesdi_src->uref_mgr,
             upipe_pciesdi_src->ubuf_mgr, DMA_BUFFER_SIZE * DMA_BUFFER_COUNT);
     UBASE_FATAL_RETURN(upipe, uref ? UBASE_ERR_NONE : UBASE_ERR_ALLOC);
@@ -307,6 +372,8 @@ static void upipe_pciesdi_src_worker(struct upump *upump)
     for (int i = 0; i < ret / sdi_line_width; i++) {
         const uint16_t *sdi_line = (uint16_t*)(upipe_pciesdi_src->read_buffer + i * sdi_line_width);
         int active_offset = 2 * upipe_pciesdi_src->sdi_format->active_offset;
+        if (upipe_pciesdi_src->sdi3g_levelb)
+            active_offset *= 2;
         const uint16_t *active_start = sdi_line + active_offset;
 
         if (upipe_pciesdi_src->sdi_format->pict_fmt->sd) {
@@ -319,6 +386,32 @@ static void upipe_pciesdi_src_worker(struct upump *upump)
             if (!sd_sav_match(active_start)) {
                 upipe_err_va(upipe, "SD SAV not found at %#x", i * sdi_line_width + active_offset);
             }
+        } else if (upipe_pciesdi_src->sdi3g_levelb) {
+            /* Check EAV is present. */
+            if (!sdi3g_levelb_eav_match(sdi_line)) {
+                upipe_err_va(upipe, "SDI-3G level B EAV not found at %#x", i * sdi_line_width);
+            }
+
+            /* Check SAV is present. */
+            if (!sdi3g_levelb_sav_match(active_start)) {
+                upipe_err_va(upipe, "SDI-3G level B SAV not found at %#x", i * sdi_line_width + active_offset);
+            }
+
+            /* Check line number. */
+            int line = (sdi_line[16] & 0x1ff) >> 2;
+            line |= ((sdi_line[20] & 0x1ff) >> 2) << 7;
+            if (line > upipe_pciesdi_src->sdi_format->height  || line < 1) {
+                upipe_err_va(upipe, "line %d out of range (1-%d)", line,
+                        upipe_pciesdi_src->sdi_format->height);
+            }
+
+            /* Check line number is increasing correctly. */
+            if (upipe_pciesdi_src->previous_sdi_line_number != upipe_pciesdi_src->sdi_format->height
+                    && line != upipe_pciesdi_src->previous_sdi_line_number + 1) {
+                upipe_warn_va(upipe, "sdi_line_number not linearly increasing (%d -> %d)",
+                        upipe_pciesdi_src->previous_sdi_line_number, line);
+            }
+            upipe_pciesdi_src->previous_sdi_line_number = line;
         } else { /* HD */
             /* Check EAV is present. */
             if (!hd_eav_match(sdi_line)) {
@@ -348,7 +441,14 @@ static void upipe_pciesdi_src_worker(struct upump *upump)
         } /* end HD */
 
         /* Copy line to output uref. */
-        memcpy(block_buf + i * sdi_line_width, sdi_line, sdi_line_width);
+        if (upipe_pciesdi_src->sdi3g_levelb) {
+            /* Note: line order is swapped. */
+            uint16_t *dst1 = block_buf + (2*i + 1) * sdi_line_width/2;
+            uint16_t *dst2 = block_buf + (2*i + 0) * sdi_line_width/2;
+            levelb_unpack(sdi_line, dst1, dst2, upipe_pciesdi_src->sdi_format->width);
+        } else {
+            memcpy(block_buf + i * sdi_line_width, sdi_line, sdi_line_width);
+        }
     }
 
     int processed_bytes = (ret / sdi_line_width) * sdi_line_width;
@@ -365,6 +465,9 @@ static void upipe_pciesdi_src_worker(struct upump *upump)
         uref_flow_set_discontinuity(uref);
         upipe_pciesdi_src->discontinuity = false;
     }
+
+    if (upipe_pciesdi_src->sdi3g_levelb)
+        uref_block_set_sdi3g_levelb(uref);
 
     uref_block_unmap(uref, 0);
     uref_block_resize(uref, 0, processed_bytes);
@@ -395,7 +498,7 @@ static int get_flow_def(struct upipe *upipe, struct uref **flow_format)
     }
 
     int width, height;
-    bool interlaced;
+    bool interlaced, sdi3g_levelb = false;
     struct urational fps;
 
     /* set width and height */
@@ -437,7 +540,12 @@ static int get_flow_def(struct upipe *upipe, struct uref **flow_format)
         return UBASE_ERR_INVALID;
     }
 
-    if (scan == 0) {
+    /* Check for SDI-3G level B. */
+    if (mode == 2 && scan == 0) {
+        upipe_pciesdi_src->sdi3g_levelb = sdi3g_levelb = true;
+        interlaced = false;
+        fps.num *= 2;
+    } else if (scan == 0) {
         /* interlaced */
         interlaced = true;
     } else if (scan == 1) {
@@ -462,6 +570,8 @@ static int get_flow_def(struct upipe *upipe, struct uref **flow_format)
         UBASE_RETURN(uref_pic_set_progressive(flow_def));
     }
 
+    if (sdi3g_levelb)
+        UBASE_RETURN(uref_block_set_sdi3g_levelb(flow_def));
 
     upipe_pciesdi_src->sdi_format = sdi_get_offsets(flow_def);
     if (!upipe_pciesdi_src->sdi_format) {
