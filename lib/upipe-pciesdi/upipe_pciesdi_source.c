@@ -439,10 +439,6 @@ static int get_flow_def(struct upipe *upipe, struct uref **flow_format)
 
     if (scan == 0) {
         /* interlaced */
-#if 0
-        height /= 2;
-        fps.num *= 2;
-#endif
         interlaced = true;
     } else if (scan == 1) {
         /* progressive */
@@ -462,10 +458,10 @@ static int get_flow_def(struct upipe *upipe, struct uref **flow_format)
     UBASE_RETURN(uref_pic_flow_set_vsize(flow_def, height));
     if (interlaced) {
         UBASE_RETURN(uref_pic_set_tff(flow_def));
-        UBASE_RETURN(uref_attr_set_void(flow_def, NULL, UDICT_TYPE_VOID, "sepfields"));
     } else {
         UBASE_RETURN(uref_pic_set_progressive(flow_def));
     }
+
 
     upipe_pciesdi_src->sdi_format = sdi_get_offsets(flow_def);
     if (!upipe_pciesdi_src->sdi_format) {
