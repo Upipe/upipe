@@ -6,6 +6,7 @@ extern "C" {
 #endif
 
 #include <upipe/uref_pic.h>
+#include <upipe/uref_attr.h>
 
 #include <bitstream/ietf/rtp.h>
 #include <bitstream/ieee/ethernet.h>
@@ -13,6 +14,8 @@ extern "C" {
 #include <bitstream/ietf/udp.h>
 #include <bitstream/smpte/352.h>
 #include <bitstream/smpte/2022_6_hbrmt.h>
+
+UREF_ATTR_VOID(block, sdi3g_levelb, "SDI-3G level-B", flag to indicate that format is level B)
 
 #define RAW_HEADER_SIZE (IP_HEADER_MINSIZE + UDP_HEADER_SIZE)
 #define HBRMT_DATA_OFFSET (RTP_HEADER_SIZE + HBRMT_HEADER_SIZE)
