@@ -64,6 +64,7 @@ struct upipe_pciesdi_source_framer {
     uint16_t prev_fvh;
     bool start;
     bool progressive;
+    bool sdi3g_levelb;
 
     /* uref for output */
     struct uref *uref;
@@ -128,6 +129,10 @@ static int upipe_pciesdi_source_framer_set_flow_def(struct upipe *upipe, struct
         return UBASE_ERR_INVALID;
     }
     ctx->progressive = ubase_check(uref_pic_get_progressive(flow_def));
+    ctx->sdi3g_levelb = ubase_check(uref_block_get_sdi3g_levelb(flow_def));
+    if (ctx->sdi3g_levelb)
+        /* Use interlaced fvh transition to detect start of level B frame. */
+        ctx->progressive = false;
 
     upipe_pciesdi_source_framer_store_flow_def(upipe, uref_dup(flow_def));
     return UBASE_ERR_NONE;
@@ -240,7 +245,6 @@ static void upipe_pciesdi_source_framer_input(struct upipe *upipe, struct uref
     int eav_fvh_offset = 6;
     if (ctx->f->pict_fmt->sd)
         eav_fvh_offset = 3;
-    /* TODO: 12 for SDI3G */
 
     int sdi_width = 2 * ctx->f->width;
     int offset;
