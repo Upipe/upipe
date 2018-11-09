@@ -110,6 +110,24 @@ UREF_ATTR_OPAQUE_VA(ts_flow, cat_descriptor, "t.cat.desc[%" PRIu64"]",
         CAT descriptor, uint64_t nb, nb)
 UREF_TS_ATTR_DESCRIPTOR(ts_flow, cat_descriptor)
 
+/* EMM BISS-CA */
+UREF_ATTR_UNSIGNED(ts_flow, emm_descriptors, "t.emm.descs",
+        number of EMM descriptors)
+UREF_ATTR_OPAQUE_VA(ts_flow, emm_descriptor, "t.emm.desc[%" PRIu64"]",
+        EMM descriptor, uint64_t nb, nb)
+UREF_TS_ATTR_DESCRIPTOR(ts_flow, emm_descriptor)
+UREF_ATTR_VOID(ts_flow, insert_watermark, "t.emm.insert_watermark", Decoded service shall be watermarked)
+UREF_ATTR_VOID(ts_flow, prevent_descrambled_forward, "t.emm.prevent_descrambled_forward,",
+        Descrambled stream shall not be forwarded unscrambled)
+UREF_ATTR_VOID(ts_flow, prevent_decoded_forward, "t.emm.prevent_decoded_forward,",
+        Decoded stream shall not be forwarded unscrambled)
+
+UREF_ATTR_UNSIGNED(ts_flow, ecm_descriptors, "t.ecm.descs",
+        number of ECM descriptors)
+UREF_ATTR_OPAQUE_VA(ts_flow, ecm_descriptor, "t.ecm.desc[%" PRIu64"]",
+        ECM descriptor, uint64_t nb, nb)
+UREF_TS_ATTR_DESCRIPTOR(ts_flow, ecm_descriptor)
+
 /* NIT */
 UREF_ATTR_UNSIGNED(ts_flow, nid, "t.nid", network ID)
 UREF_ATTR_STRING(ts_flow, network_name, "t.netwname", network name)

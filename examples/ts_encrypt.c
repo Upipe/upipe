@@ -59,6 +59,7 @@
 
 #include <upipe-ts/upipe_ts_align.h>
 #include <upipe-ts/upipe_ts_check.h>
+#include <upipe-ts/upipe_ts_emm_decoder.h>
 
 #include <upipe-dvbcsa/upipe_dvbcsa_encrypt.h>
 #include <upipe-dvbcsa/upipe_dvbcsa_decrypt.h>
@@ -95,6 +96,7 @@ enum {
     OPT_KEY     = 'k',
     OPT_UDP     = 'U',
     OPT_LATENCY = 'L',
+    OPT_RSAFILE = 'c',
     OPT_RT_PRIORITY = 'i',
 };
 
@@ -112,6 +114,26 @@ static int uprobe_dvbcsa_split_catch(struct uprobe *uprobe,
     struct uprobe_dvbcsa_split *uprobe_dvbcsa_split =
         uprobe_dvbcsa_split_from_uprobe(uprobe);
 
+    if (event == UPROBE_TS_EMMD_ECM_KEY_UPDATE &&
+            ubase_get_signature(args) == UPIPE_TS_EMMD_ECM_SIGNATURE) {
+        UBASE_SIGNATURE_CHECK(args, UPIPE_TS_EMMD_ECM_SIGNATURE);
+        uint8_t *even_key = va_arg(args, uint8_t *);
+        uint8_t *odd_key  = va_arg(args, uint8_t *);
+
+        char e[33], o[33];
+        snprintf(e, sizeof(e), "%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x",
+            even_key[0], even_key[1], even_key[2], even_key[3],
+            even_key[4], even_key[5], even_key[6], even_key[7],
+            even_key[8], even_key[9], even_key[10], even_key[11],
+            even_key[12], even_key[13], even_key[14], even_key[15]);
+        snprintf(o, sizeof(o), "%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x",
+            odd_key[0], odd_key[1], odd_key[2], odd_key[3],
+            odd_key[4], odd_key[5], odd_key[6], odd_key[7],
+            odd_key[8], odd_key[9], odd_key[10], odd_key[11],
+            odd_key[12], odd_key[13], odd_key[14], odd_key[15]);
+        ubase_assert(upipe_dvbcsa_set_key(uprobe_dvbcsa_split->dvbcsa, e, o));
+        return UBASE_ERR_NONE;
+    }
     if (event < UPROBE_LOCAL ||
         ubase_get_signature(args) != UPIPE_DVBCSA_SPLIT_SIGNATURE)
         return uprobe_throw_next(uprobe, upipe, event, args);
@@ -142,6 +164,7 @@ static void usage(const char *name)
     fprintf(stderr, "%s [options] <input> <output>\n"
             "\t-v   : be more verbose\n"
             "\t-k   : set BISS key (use twice for odd key)\n"
+            "\t-c   : set RSA private key file\n"
             "\t-L   : set the maximum latency in milliseconds\n"
             "\t-i   : RT priority for source and sink\n"
             "\t-D   : decrypt instead of encrypt\n"
@@ -177,9 +200,10 @@ int main(int argc, char *argv[])
     bool udp = false;
     const char *key[2] = { NULL, NULL };
     int latency = -1;
+    const char *private_key = NULL;
     int c;
 
-    while ((c = getopt(argc, argv, "vbk:L:i:DU")) != -1) {
+    while ((c = getopt(argc, argv, "c:vbk:L:i:DU")) != -1) {
         switch (c) {
             case OPT_DEBUG:
                 if (log_level == UPROBE_LOG_DEBUG)
@@ -188,6 +212,11 @@ int main(int argc, char *argv[])
                     log_level = UPROBE_LOG_DEBUG;
                 break;
             case OPT_KEY:
+                if (private_key) {
+                    fprintf(stderr, "key and RSA file are mutually exclusive\n");
+                    usage(argv[0]);
+                    exit(-1);
+                }
                 if (!key[0]) {
                     key[0] = optarg;
                 } else if (!key[1]) {
@@ -197,6 +226,14 @@ int main(int argc, char *argv[])
                     usage(argv[0]);
                     exit(-1);
                 }
+                break;
+            case OPT_RSAFILE:
+                if (key[0]) {
+                    fprintf(stderr, "key and RSA file are mutually exclusive\n");
+                    usage(argv[0]);
+                    exit(-1);
+                }
+                private_key = optarg;
                 break;
             case OPT_LATENCY:
                 latency = atoi(optarg);
@@ -396,6 +433,8 @@ int main(int argc, char *argv[])
             uprobe_pfx_alloc(uprobe_use(&uprobe_dvbcsa_split.uprobe),
                              UPROBE_LOG_VERBOSE, "split"));
     assert(output);
+    if (private_key)
+        upipe_ts_demux_set_private_key(output, private_key);
     upipe_mgr_release(upipe_dvbcsa_split_mgr);
 
     struct upipe_mgr *upipe_dvbcsa_mgr;
@@ -421,7 +460,8 @@ int main(int argc, char *argv[])
     }
     assert(output);
     upipe_mgr_release(upipe_dvbcsa_mgr);
-    ubase_assert(upipe_dvbcsa_set_key(output, key[0], key[1]));
+    if (key[0])
+        ubase_assert(upipe_dvbcsa_set_key(output, key[0], key[1]));
     uprobe_dvbcsa_split.dvbcsa = output;
 
     struct upipe_mgr *upipe_agg_mgr = upipe_agg_mgr_alloc();
