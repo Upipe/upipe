@@ -42,7 +42,7 @@ enum upipe_dvbcsa_command {
     /** sentinel */
     UPIPE_DVBCSA_SENTINEL = UPIPE_CONTROL_LOCAL,
 
-    /** set the dvbcsa key (const char *) */
+    /** set the dvbcsa key (const char *, const char *) */
     UPIPE_DVBCSA_SET_KEY,
     /** set the maximum latency (uint64_t) */
     UPIPE_DVBCSA_SET_MAX_LATENCY,
@@ -62,10 +62,10 @@ enum upipe_dvbcsa_command {
  * @param key dvbcsa key
  * @return an error code
  */
-static inline int upipe_dvbcsa_set_key(struct upipe *upipe, const char *key)
+static inline int upipe_dvbcsa_set_key(struct upipe *upipe, const char *even_key, const char *odd_key)
 {
     return upipe_control(upipe, UPIPE_DVBCSA_SET_KEY,
-                         UPIPE_DVBCSA_COMMON_SIGNATURE, key);
+                         UPIPE_DVBCSA_COMMON_SIGNATURE, even_key, odd_key);
 }
 
 /** @This adds a pid to the encryption/decryption list.
