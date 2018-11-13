@@ -12,6 +12,7 @@ checkasm_LDADD = $(LDADD) $(AVUTIL_LIBS) \
 checkasm_SOURCES = checkasm.c checkasm.h timer.h \
     planar10_input.c \
     planar8_input.c \
+    sdi3g_input.c \
     sdi_input.c \
     uyvy_input.c \
     v210_input.c \
@@ -25,7 +26,9 @@ checkasm_LDADD += \
     $(top_builddir)/lib/upipe-hbrmt/rfc4175_dec.o \
     $(top_builddir)/lib/upipe-hbrmt/rfc4175_enc.o \
     $(top_builddir)/lib/upipe-hbrmt/sdidec.o \
-    $(top_builddir)/lib/upipe-hbrmt/sdienc.o
+    $(top_builddir)/lib/upipe-hbrmt/sdienc.o \
+    $(top_builddir)/lib/upipe-pciesdi/levelb.o \
+    $(NULL)
 
 checkasm_CPPFLAGS += -DHAVE_SDI
 endif

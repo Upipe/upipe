@@ -59,6 +59,9 @@
 
 #include "../upipe-hbrmt/upipe_hbrmt_common.h"
 
+static void levelb_unpack(const uint16_t *src, uint16_t *dst1, uint16_t *dst2, uintptr_t pixels);
+void upipe_sdi3g_levelb_unpack_sse2(const uint16_t *src, uint16_t *dst1, uint16_t *dst2, uintptr_t pixels);
+
 /** @hidden */
 static int upipe_pciesdi_src_check(struct upipe *upipe, struct uref *flow_format);
 
@@ -111,6 +114,8 @@ struct upipe_pciesdi_src {
     int cached_read_bytes;
     uint8_t *read_buffer;
 
+    void (*sdi3g_levelb_unpack)(const uint16_t *src, uint16_t *dst1, uint16_t *dst2, uintptr_t pixels);
+
     /** public upipe structure */
     struct upipe upipe;
 };
@@ -159,6 +164,15 @@ static struct upipe *upipe_pciesdi_src_alloc(struct upipe_mgr *mgr,
     upipe_pciesdi_src->read_buffer = malloc(DMA_BUFFER_SIZE * DMA_BUFFER_COUNT);
     if (!upipe_pciesdi_src->read_buffer)
         return NULL;
+
+    upipe_pciesdi_src->sdi3g_levelb_unpack = levelb_unpack;
+#if defined(HAVE_X86ASM)
+#if defined(__i686__) || defined(__x86_64__)
+    if (__builtin_cpu_supports("sse2")) {
+        upipe_pciesdi_src->sdi3g_levelb_unpack = upipe_sdi3g_levelb_unpack_sse2;
+    }
+#endif
+#endif
 
     upipe_pciesdi_src->sdi3g_levelb = false;
     upipe_pciesdi_src->discontinuity = false;
@@ -445,7 +459,8 @@ static void upipe_pciesdi_src_worker(struct upump *upump)
             /* Note: line order is swapped. */
             uint16_t *dst1 = block_buf + (2*i + 1) * sdi_line_width/2;
             uint16_t *dst2 = block_buf + (2*i + 0) * sdi_line_width/2;
-            levelb_unpack(sdi_line, dst1, dst2, upipe_pciesdi_src->sdi_format->width);
+            upipe_pciesdi_src->sdi3g_levelb_unpack(sdi_line, dst1, dst2,
+                    upipe_pciesdi_src->sdi_format->width);
         } else {
             memcpy(block_buf + i * sdi_line_width, sdi_line, sdi_line_width);
         }
