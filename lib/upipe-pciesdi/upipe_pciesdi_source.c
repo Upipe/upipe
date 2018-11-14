@@ -525,6 +525,10 @@ static int get_flow_def(struct upipe *upipe, struct uref **flow_format)
         /* SMPTE296:720 */
         width = 1280;
         height = 720;
+    } else if (family == 8) {
+        /* NTSC:486 */
+        width = 720;
+        height = 486;
     } else if (family == 9) {
         /* PAL:576 */
         width = 720;
