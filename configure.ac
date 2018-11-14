@@ -186,7 +186,6 @@ AC_CHECK_TYPES([ptrdiff_t])
 AC_C_BIGENDIAN
 
 # Checks for library functions.
-AC_FUNC_STRERROR_R
 AC_CHECK_FUNCS([memmove memset malloc realloc strdup pipe])
 
 # Custom checks
