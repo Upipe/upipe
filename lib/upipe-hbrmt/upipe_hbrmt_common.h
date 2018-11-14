@@ -37,6 +37,7 @@ static const uint16_t eav_fvh_cword[2][2] = {{0x274, 0x2d8}, {0x368, 0x3c4}};
 #define UPIPE_SDI_PSF_IDENT_I   0
 #define UPIPE_SDI_PSF_IDENT_PSF 1
 #define UPIPE_SDI_PSF_IDENT_P   3
+#define UPIPE_SDI_PSF_IDENT_SDI3G_LEVELB 4
 
 #define UPIPE_SDI_CHANNELS_PER_GROUP 4
 
@@ -177,6 +178,7 @@ static inline const struct sdi_offsets_fmt *sdi_get_offsets(struct uref *flow_de
         return NULL;
 
     bool interlaced = !ubase_check(uref_pic_get_progressive(flow_def));
+    bool sdi3g_levelb = ubase_check(uref_block_get_sdi3g_levelb(flow_def));
 
     static const struct sdi_picture_fmt pict_fmts[] = {
         /* 1125 Interlaced (1080 active) lines */
@@ -190,6 +192,9 @@ static inline const struct sdi_offsets_fmt *sdi_get_offsets(struct uref *flow_de
         {1, 720, 576, 313, 6, 9, {1, 22}, {23, 310}, {311, 312}, {313, 335}, {336, 623}, {624, 625}},
         /* NTSC */
         {1, 720, 486, 266, 10, 13, {4, 19}, {20, 263}, {264, 265}, {266, 282}, {283, 525}, {1, 3}},
+
+        /* SDI-3G */
+        {0, 1920, 1080, 0, 0, 0, {1, 40}, {41, 1120}, {1121, 1126}, {1127, 1166}, {1167, 2246}, {2247, 2250}},
     };
 
     static const struct sdi_offsets_fmt fmts_data[] = {
@@ -216,7 +221,17 @@ static inline const struct sdi_offsets_fmt *sdi_get_offsets(struct uref *flow_de
 
         { 864,  625, 144, &pict_fmts[3], 0x0, S352_PICTURE_RATE_25, { 25, 1} },                /* 625-line 25 Hz I */
         { 858,  525, 138, &pict_fmts[4], 0x0, S352_PICTURE_RATE_30000_1001, { 30000, 1001 } }, /* 525-line 30/1.001 Hz I */
+
+        /* SDI-3G */
+        { 2200, 1125, 280, &pict_fmts[5], 0x4, S352_PICTURE_RATE_60, { 60, 1 } },               /* 60 Hz P */
     };
+
+    for (size_t i = 16; i < sizeof(fmts_data) / sizeof(struct sdi_offsets_fmt); i++)
+        if (!urational_cmp(&fps, &fmts_data[i].fps))
+            if (fmts_data[i].pict_fmt->active_width == hsize)
+                if (fmts_data[i].pict_fmt->active_height == vsize)
+                    if (sdi3g_levelb == (fmts_data[i].psf_ident == UPIPE_SDI_PSF_IDENT_SDI3G_LEVELB))
+                        return &fmts_data[i];
 
     for (size_t i = 0; i < sizeof(fmts_data) / sizeof(struct sdi_offsets_fmt); i++)
         if (!urational_cmp(&fps, &fmts_data[i].fps))
