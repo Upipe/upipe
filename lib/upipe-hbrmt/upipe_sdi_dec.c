@@ -201,6 +201,9 @@ struct upipe_sdi_dec {
     /** latency */
     uint64_t latency;
 
+    /* SDI-3G level B frame tracker. */
+    bool sdi3g_levelb_second_frame;
+
     /** public upipe structure */
     struct upipe upipe;
 };
@@ -744,6 +747,8 @@ static bool upipe_sdi_dec_handle(struct upipe *upipe, struct uref *uref,
     if (!upipe_sdi_dec->ubuf_mgr)
         return false;
 
+    upipe_sdi_dec->sdi3g_levelb_second_frame = !upipe_sdi_dec->sdi3g_levelb_second_frame;
+
     const struct sdi_offsets_fmt *f = upipe_sdi_dec->f;
     const struct sdi_picture_fmt *p = upipe_sdi_dec->p;
     const size_t output_hsize = p->active_width, output_vsize = p->active_height;
@@ -922,6 +927,8 @@ static bool upipe_sdi_dec_handle(struct upipe *upipe, struct uref *uref,
     int segment_offset = 0;
     int input_offset, input_size;
 
+    bool sdi3g_levelb = ubase_check(uref_block_get_sdi3g_levelb(uref));
+
     /* Parse the whole frame */
     for (int h = 0; h < f->height; h++) {
         /* map input */
@@ -1016,6 +1023,8 @@ static bool upipe_sdi_dec_handle(struct upipe *upipe, struct uref *uref,
                 if (!sd_sav_match(active_start)
                         || active_start[-1] != sav_fvh_cword[f2][vbi])
                     upipe_err_va(upipe, "SD SAV incorrect, line %d", h);
+            } else if (sdi3g_levelb) {
+                /* TODO: decide on correct checks. */
             } else {
                 if (!hd_eav_match(src)
                         || src[7] != eav_fvh_cword[f2][vbi])
@@ -1540,6 +1549,7 @@ static struct upipe *_upipe_sdi_dec_alloc(struct upipe_mgr *mgr,
 #endif
 #endif
 
+    upipe_sdi_dec->sdi3g_levelb_second_frame = true; /* Will be inverted at start of each frame. */
     upipe_sdi_dec->audio_fix = 0;
 
     upipe_sdi_dec->crc_y = 0;
