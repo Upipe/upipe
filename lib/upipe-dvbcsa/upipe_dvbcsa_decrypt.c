@@ -404,11 +404,19 @@ static void upipe_dvbcsa_dec_input(struct upipe *upipe,
     uint16_t pid = ts_get_pid(ts_header);
     uref_block_peek_unmap(uref, 0, buf, ts_header);
 
-    bool odd = scrambling & (1 << 1);
+    bool odd, valid = false;
+    switch (scrambling) {
+        case TS_SCRAMBLING_EVEN:
+            odd = false;
+            valid = true;
+            break;
+        case TS_SCRAMBLING_ODD:
+            odd = true;
+            valid = upipe_dvbcsa_dec->key[1];
+            break;
+    }
 
-    if (scrambling == 0x0 || !has_payload ||
-        (odd && !upipe_dvbcsa_dec->key[1]) ||
-        !upipe_dvbcsa_common_check_pid(common, pid)) {
+    if (!valid || !has_payload || !upipe_dvbcsa_common_check_pid(common, pid)) {
         if (first)
             upipe_dvbcsa_dec_output(upipe, uref, upump_p);
         else
