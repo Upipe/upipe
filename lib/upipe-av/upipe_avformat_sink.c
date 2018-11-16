@@ -352,7 +352,6 @@ static int upipe_avfsink_sub_set_flow_def(struct upipe *upipe,
     if (likely(ubase_check(uref_flow_get_id(flow_def, &id)))) {
         stream->id = id;
     }
-    stream->disposition = AV_DISPOSITION_DEFAULT;
 
     uint8_t languages;
     const char *lang;
@@ -595,6 +594,30 @@ static void upipe_avfsink_mux(struct upipe *upipe, struct upump **upump_p)
 {
     struct upipe_avfsink *upipe_avfsink = upipe_avfsink_from_upipe(upipe);
     struct upipe_avfsink_sub *input;
+
+    bool first_audio = true;
+    bool first_video = true;
+    if (unlikely(!upipe_avfsink->opened)) {
+        struct uchain *uchain;
+        ulist_foreach (&upipe_avfsink->subs, uchain) {
+            struct upipe_avfsink_sub *input = upipe_avfsink_sub_from_uchain(uchain);
+            if (input->id < 0)
+                continue;
+
+            AVStream *stream = upipe_avfsink->context->streams[input->id];
+            if (stream->codec->codec_id < AV_CODEC_ID_FIRST_AUDIO &&
+                first_video) {
+                stream->disposition = AV_DISPOSITION_DEFAULT;
+                first_video = false;
+            }
+            else if (stream->codec->codec_id < AV_CODEC_ID_FIRST_SUBTITLE &&
+                     first_audio) {
+                stream->disposition = AV_DISPOSITION_DEFAULT;
+                first_audio = false;
+            }
+        }
+    }
+
     while ((input = upipe_avfsink_find_input(upipe)) != NULL) {
         if (unlikely(!upipe_avfsink->opened)) {
             upipe_dbg(upipe, "writing header");
