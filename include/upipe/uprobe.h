@@ -107,6 +107,8 @@ enum uprobe_event {
     /** a pipe signals that a uref contains a UTC clock reference
      * (struct uref *, uint64_t) */
     UPROBE_CLOCK_UTC,
+    /** a pipe signal the end of the preroll (void) */
+    UPROBE_PREROLL_END,
 
     /** non-standard events implemented by a module type can start from
      * there (first arg = signature) */
@@ -143,6 +145,7 @@ static inline const char *uprobe_event_str(int event)
     UBASE_CASE_TO_STR(UPROBE_CLOCK_REF);
     UBASE_CASE_TO_STR(UPROBE_CLOCK_TS);
     UBASE_CASE_TO_STR(UPROBE_CLOCK_UTC);
+    UBASE_CASE_TO_STR(UPROBE_PREROLL_END);
     UBASE_CASE_TO_STR(UPROBE_LOCAL);
     }
     return NULL;

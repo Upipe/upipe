@@ -1021,6 +1021,16 @@ static inline int upipe_throw_clock_utc(struct upipe *upipe, struct uref *uref,
     return upipe_throw(upipe, UPROBE_CLOCK_UTC, uref, clock_utc);
 }
 
+/** @This throws an event telling that the preroll is finished.
+ *
+ * @param upipe description structure of the pipe
+ * @return an error code
+ */
+static inline int upipe_throw_preroll_end(struct upipe *upipe)
+{
+    return upipe_throw(upipe, UPROBE_PREROLL_END);
+}
+
 /** @This catches an event coming from an inner pipe, and rethrows is as if
  * it were sent by the outermost pipe.
  *
