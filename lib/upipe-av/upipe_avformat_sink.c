@@ -174,6 +174,15 @@ static struct upipe *upipe_avfsink_sub_alloc(struct upipe_mgr *mgr,
     upipe_avfsink_sub->next_dts = UINT64_MAX;
 
     upipe_throw_ready(upipe);
+
+    upipe_avfsink_sub->id = upipe_avfsink->context->nb_streams;
+    AVStream *stream = avformat_new_stream(upipe_avfsink->context, NULL);
+    if (unlikely(stream == NULL)) {
+        upipe_err(upipe, "couldn't allocate stream");
+        upipe_throw_fatal(upipe, UBASE_ERR_EXTERNAL);
+        upipe_release(upipe);
+        return NULL;
+    }
     return upipe;
 }
 
@@ -339,14 +348,13 @@ static int upipe_avfsink_sub_set_flow_def(struct upipe *upipe,
     }
 
     /* Open a new avformat stream. */
-    upipe_avfsink_sub->id = upipe_avfsink->context->nb_streams;
     upipe_avfsink_sub_store_flow_def_check(upipe, flow_def_check);
     upipe_avfsink_sub->sar = sar;
 
-    AVStream *stream = avformat_new_stream(upipe_avfsink->context, NULL);
+    AVStream *stream = upipe_avfsink->context->streams[upipe_avfsink_sub->id];
     if (unlikely(stream == NULL)) {
         free(extradata_alloc);
-        upipe_err(upipe, "couldn't allocate stream");
+        upipe_err(upipe, "couldn't get stream");
         upipe_throw_fatal(upipe, UBASE_ERR_EXTERNAL);
         return UBASE_ERR_EXTERNAL;
     }
