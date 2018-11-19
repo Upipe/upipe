@@ -80,7 +80,7 @@
 #define READ_SIZE 4096
 
 static void usage(const char *argv0) {
-    fprintf(stdout, "Usage: %s [-t 96] [-d] <udp source> <udp dest> <latency>\n", argv0);
+    fprintf(stdout, "Usage: %s [-d] <udp source> <udp dest> <latency>\n", argv0);
     fprintf(stdout, "   -d: more verbose\n");
     fprintf(stdout, "   -q: more quiet\n");
     exit(EXIT_FAILURE);
@@ -270,17 +270,13 @@ static void stop(struct upump *upump)
 
 int main(int argc, char *argv[])
 {
-    uint8_t rtx_pt = 96;
     const char *srcpath, *dirpath, *latency;
     int opt;
     enum uprobe_log_level loglevel = UPROBE_LOG_DEBUG;
 
     /* parse options */
-    while ((opt = getopt(argc, argv, "t:qd")) != -1) {
+    while ((opt = getopt(argc, argv, "qd")) != -1) {
         switch (opt) {
-            case 't':
-                rtx_pt = atoi(optarg);
-                break;
             case 'q':
                 loglevel++;
                 break;
@@ -341,7 +337,6 @@ int main(int argc, char *argv[])
     struct upipe_mgr *upipe_rtcpfb_mgr = upipe_rtcpfb_mgr_alloc();
     struct upipe *upipe_rtcpfb = upipe_void_alloc_output(upipe_udpsrc, upipe_rtcpfb_mgr,
             uprobe_pfx_alloc(uprobe_use(logger), loglevel, "rtcp fb"));
-    upipe_rtcpfb_set_rtx_pt(upipe_rtcpfb, rtx_pt);
     upipe_mgr_release(upipe_rtcpfb_mgr);
 
     if (!ubase_check(upipe_set_option(upipe_rtcpfb, "latency", latency)))

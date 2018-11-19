@@ -88,7 +88,7 @@ static struct sockaddr_storage addr;
 static socklen_t addr_len;
 
 static void usage(const char *argv0) {
-    fprintf(stdout, "Usage: %s [-t 96] [-d]  <udp source> <udp dest> <latency>", argv0);
+    fprintf(stdout, "Usage: %s [-d]  <udp source> <udp dest> <latency>", argv0);
     fprintf(stdout, "   -d: more verbose\n");
     fprintf(stdout, "   -q: more quiet\n");
     exit(EXIT_FAILURE);
@@ -202,16 +202,12 @@ static int catch(struct uprobe *uprobe, struct upipe *upipe,
 
 int main(int argc, char *argv[])
 {
-    uint8_t rtx_pt = 96;
     const char *dirpath, *latency;
     int opt;
 
     /* parse options */
-    while ((opt = getopt(argc, argv, "t:qd")) != -1) {
+    while ((opt = getopt(argc, argv, "qd")) != -1) {
         switch (opt) {
-            case 't':
-                rtx_pt = atoi(optarg);
-                break;
             case 'd':
                 loglevel--;
                 break;
@@ -285,7 +281,6 @@ int main(int argc, char *argv[])
     upipe_rtpfb = upipe_void_alloc_output(upipe_probe_uref,
             upipe_rtpfb_mgr,
             uprobe_pfx_alloc(uprobe_use(logger), loglevel, "rtpfb"));
-    ubase_assert(upipe_rtpfb_set_rtx_pt(upipe_rtpfb, rtx_pt));
     upipe_mgr_release(upipe_rtpfb_mgr);
 
     if (!ubase_check(upipe_set_option(upipe_rtpfb, "latency", latency))) {

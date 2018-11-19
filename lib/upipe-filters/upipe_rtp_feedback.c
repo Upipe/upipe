@@ -112,12 +112,6 @@ struct upipe_rtpfb {
     size_t loss;
     size_t dups;
 
-    /** retransmit payload type */
-    uint8_t rtx_pt;
-
-    /* RTP payload type */
-    uint16_t type;
-
     /** output pipe */
     struct upipe *output;
     /** input flow definition packet */
@@ -696,8 +690,6 @@ static struct upipe *upipe_rtpfb_alloc(struct upipe_mgr *mgr,
     upipe_rtpfb->repaired = 0;
     upipe_rtpfb->loss = 0;
     upipe_rtpfb->dups = 0;
-    upipe_rtpfb->type = UINT16_MAX;
-    upipe_rtpfb->rtx_pt = 1; /* Reserved */
     upipe_rtpfb->sr_cr = UINT64_MAX;
     upipe_rtpfb->xr_cr = UINT64_MAX;
     upipe_rtpfb->upump_timer = NULL;
@@ -951,38 +943,6 @@ free:
         }
         uref_free(uref);
         return;
-    } else if (pt == upipe_rtpfb->rtx_pt) {
-        if (upipe_rtpfb->type == UINT16_MAX) {
-            /* We did not receive a non-rtx packet yet? */
-            upipe_err(upipe, "RTX but not normal");
-            uref_free(uref);
-            return;
-        }
-
-        uint8_t *buf;
-        int s = -1;
-        int ret = uref_block_write(uref, 0, &s, &buf);
-        if (!ubase_check(ret)) {
-            upipe_throw_fatal(upipe, ret);
-            uref_free(uref);
-            return;
-        }
-
-        uint16_t osn = (buf[RTP_HEADER_SIZE] << 8) | buf[RTP_HEADER_SIZE+1];
-        rtp_set_seqnum(buf, osn); // XXX: verify seqnum before overwrite?
-        seqnum = osn;
-        upipe_notice_va(upipe, "RTX %hu",osn);
-        rtp_set_type(buf, upipe_rtpfb->type);
-
-        memmove(&buf[RTP_HEADER_SIZE], &buf[RTP_HEADER_SIZE+2],
-                s - RTP_HEADER_SIZE - 2);
-        uref_block_unmap(uref, 0);
-        uref_block_resize(uref, 0, s-2);
-    } else {
-        if (upipe_rtpfb->type != pt) {
-            upipe_dbg_va(upipe, "Payload type now %hhu (rtx %hhu)", pt, upipe_rtpfb->rtx_pt);
-            upipe_rtpfb->type = pt;
-        }
     }
 
     /* store seqnum in uref */
@@ -1086,8 +1046,6 @@ static int upipe_rtpfb_set_option(struct upipe *upipe, const char *k, const char
  */
 static int _upipe_rtpfb_control(struct upipe *upipe, int command, va_list args)
 {
-    struct upipe_rtpfb *upipe_rtpfb = upipe_rtpfb_from_upipe(upipe);
-
     switch (command) {
         case UPIPE_REGISTER_REQUEST: {
             struct urequest *request = va_arg(args, struct urequest *);
@@ -1132,6 +1090,7 @@ static int _upipe_rtpfb_control(struct upipe *upipe, int command, va_list args)
             size_t   *loss               = va_arg(args, size_t*);
             size_t   *dups               = va_arg(args, size_t*);
 
+            struct upipe_rtpfb *upipe_rtpfb = upipe_rtpfb_from_upipe(upipe);
             *buffered = upipe_rtpfb->buffered;
             *expected_seqnum = upipe_rtpfb->expected_seqnum;
             *last_output_seqnum = upipe_rtpfb->last_output_seqnum;
@@ -1143,11 +1102,6 @@ static int _upipe_rtpfb_control(struct upipe *upipe, int command, va_list args)
             upipe_rtpfb->nacks = 0;
             upipe_rtpfb->repaired = 0;
 
-            return UBASE_ERR_NONE;
-
-        case UPIPE_RTPFB_SET_RTX_PT:
-            UBASE_SIGNATURE_CHECK(args, UPIPE_RTPFB_SIGNATURE)
-            upipe_rtpfb->rtx_pt = va_arg(args, unsigned);
             return UBASE_ERR_NONE;
 
         default:
