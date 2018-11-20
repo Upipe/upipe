@@ -951,6 +951,8 @@ static bool upipe_sdi_dec_handle(struct upipe *upipe, struct uref *uref,
         const uint8_t sav_len = p->sd ? UPIPE_SDI_SAV_LENGTH : UPIPE_HD_SDI_SAV_LENGTH;
         const int hanc_len = 2 * f->active_offset - hanc_start - sav_len;
         int line_num = h + 1;
+        if (sdi3g_levelb && upipe_sdi_dec->sdi3g_levelb_second_frame)
+            line_num += f->height;
 
         /* Use wraparound arithmetic to start at line 4 */
         if (ntsc)
@@ -1010,6 +1012,9 @@ static bool upipe_sdi_dec_handle(struct upipe *upipe, struct uref *uref,
                 active = 1;
         }
 
+        if (sdi3g_levelb && line_num >= p->active_f2.start && line_num <= p->active_f2.end)
+            active = true;
+
         if (upipe_sdi_dec->debug) {
             const uint16_t *src = (uint16_t*)input_buf + input_offset;
             const uint16_t *active_start = &src[2*f->active_offset];
@@ -1024,7 +1029,28 @@ static bool upipe_sdi_dec_handle(struct upipe *upipe, struct uref *uref,
                         || active_start[-1] != sav_fvh_cword[f2][vbi])
                     upipe_err_va(upipe, "SD SAV incorrect, line %d", h);
             } else if (sdi3g_levelb) {
-                /* TODO: decide on correct checks. */
+                bool local_f2 = line_num >= p->vbi_f2_part1.start;
+                if (!hd_eav_match(src)
+                        || src[7] != eav_fvh_cword[local_f2][vbi])
+                    upipe_err_va(upipe, "SDI-3G level B EAV incorrect, line %d", h);
+
+                int local_line_num = (line_num + 1) / 2;
+                int line_num_check[2] = {
+                    (local_line_num & 0x7f) << 2,
+                    (1 << 9) | (((local_line_num >> 7) & 0xf) << 2),
+                };
+                line_num_check[0] |= NOT_BIT8(line_num_check[0]);
+
+                if (src[8] != line_num_check[0]
+                        || src[ 9] != line_num_check[0]
+                        || src[10] != line_num_check[1]
+                        || src[11] != line_num_check[1])
+                    upipe_err_va(upipe, "SDI-3G level B line num incorrect, line %d, %#5x %#5x not %#5x %#5x",
+                            h, src[8], src[10], line_num_check[0], line_num_check[1]);
+
+                if (!hd_sav_match(active_start)
+                        || active_start[-1] != sav_fvh_cword[local_f2][vbi])
+                    upipe_err_va(upipe, "SDI-3G level B SAV incorrect, line %d", h);
             } else {
                 if (!hd_eav_match(src)
                         || src[7] != eav_fvh_cword[f2][vbi])
