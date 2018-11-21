@@ -159,6 +159,8 @@ static int catch(struct uprobe *uprobe, struct upipe *upipe,
         } else if (pt == RTCP_PT_RR) {
             if (s < RTCP_RR_SIZE)
                 goto unmap;
+            if (rtcp_get_rc(buf) < 1)
+                goto unmap;
 
             uint32_t delay = rtcp_rr_get_delay_since_last_sr(buf);
             uint32_t last_sr = rtcp_rr_get_last_sr(buf);
