@@ -87,6 +87,7 @@ static void usage(const char *argv0) {
 }
 
 static struct upipe *upipe_udpsink;
+static struct upipe *upipe_udpsink_rtcp;
 static struct upipe *upipe_udpsrc_sub;
 
 static uint64_t last_sr_ntp;
@@ -270,7 +271,7 @@ static void stop(struct upump *upump)
 
 int main(int argc, char *argv[])
 {
-    const char *srcpath, *dirpath, *latency;
+    char *srcpath, *dirpath, *latency;
     int opt;
     enum uprobe_log_level loglevel = UPROBE_LOG_DEBUG;
 
@@ -396,23 +397,58 @@ int main(int argc, char *argv[])
     struct upipe_mgr *upipe_udpsink_mgr = upipe_udpsink_mgr_alloc();
     upipe_udpsink = upipe_void_alloc_output(upipe_rtcpfb, upipe_udpsink_mgr,
             uprobe_pfx_alloc(uprobe_use(logger), loglevel, "udp sink"));
-    upipe_mgr_release(upipe_udpsink_mgr);
+    upipe_release(upipe_udpsink);
 
     if (!ubase_check(upipe_set_uri(upipe_udpsink, dirpath))) {
         return EXIT_FAILURE;
     }
 
+    /* send RTCP to udp */
+    upipe_udpsink_rtcp = upipe_void_chain_output(rtcp, upipe_udpsink_mgr,
+            uprobe_pfx_alloc(uprobe_use(logger), loglevel, "udp sink rtcp"));
+    upipe_mgr_release(upipe_udpsink_mgr);
+    upipe_release(upipe_udpsink_rtcp);
+
+    if (dirpath) {
+        char *host = dirpath;
+        uint16_t port = 0;
+        if (*host == '[') {
+            /* ipv6 */
+            char *next = strchr(host, ']');
+            if (!next)
+                return EXIT_FAILURE;
+            next++;
+            if (*next != ':')
+                return EXIT_FAILURE;
+            *next++ = '\0';
+            port = atoi(next);
+        } else {
+            char *next = strchr(host, ':');
+            if (!next)
+                return EXIT_FAILURE;
+            *next++ = '\0';
+            port = atoi(next);
+        }
+
+        if (port & 1) {
+            fprintf(stderr, "RTP port should be even\n");
+            return EXIT_FAILURE;
+        }
+
+        char uri[128];
+        snprintf(uri, sizeof(uri), "%s:%u", host, port+1);
+        if (!ubase_check(upipe_set_uri(upipe_udpsink_rtcp, uri))) {
+            return EXIT_FAILURE;
+        }
+    }
+
     int udp_fd = -1;
-    ubase_assert(upipe_udpsink_get_fd(upipe_udpsink, &udp_fd));
+    ubase_assert(upipe_udpsink_get_fd(upipe_udpsink_rtcp, &udp_fd));
     int flags = fcntl(udp_fd, F_GETFL);
     flags |= O_NONBLOCK;
     if (fcntl(udp_fd, F_SETFL, flags) < 0)
         upipe_err(upipe_udpsink, "Could not set flags");;
     ubase_assert(upipe_udpsrc_set_fd(upipe_udpsrc_sub, udp_fd));
-
-    upipe_set_output(rtcp, upipe_udpsink);
-    upipe_release(rtcp);
-    upipe_release(upipe_udpsink);
 
     if (0) {
         struct upump *u = upump_alloc_timer(upump_mgr, stop, upipe_udpsrc,
