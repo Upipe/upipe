@@ -64,6 +64,8 @@
 #include <bitstream/ietf/rtp.h>
 #include <bitstream/ietf/rtcp.h>
 #include <bitstream/ietf/rtcp_fb.h>
+#include <bitstream/ietf/rtcp_sr.h>
+#include <bitstream/ietf/rtcp_sdes.h>
 
 #define EXPECTED_FLOW_DEF "block."
 
@@ -161,45 +163,19 @@ struct upipe_rtcpfb_input {
 
 static void upipe_rtcpfb_lost_sub(struct upipe *upipe, uint16_t seq, uint16_t mask);
 
-/** @internal @This handles NACK RTCP messages.
+/** @internal @This handles RTCP NACK messages.
  *
  * @param upipe description structure of the pipe
- * @param uref uref structure
- * @param upump_p reference to pump that generated the buffer
+ * @param rtp RTCP packet data
+ * @param s RTCP packet size in bytes
  */
-
-static inline void upipe_rtcpfb_input_sub(struct upipe *upipe, struct uref *uref,
-                                    struct upump **upump_p)
+static void upipe_rtcpfb_nack(struct upipe *upipe, const uint8_t *rtp, int s)
 {
-    size_t s = 0;
-    uref_block_size(uref, &s);
-    const uint8_t *rtp = uref_block_peek(uref, 0, s, NULL);
-    if (!rtp) {
-        upipe_err(upipe, "Can't peek rtcp message");
-        uref_free(uref);
+    if (s < RTCP_FB_HEADER_SIZE)
         return;
-    }
 
-    if (s < RTP_HEADER_SIZE || !rtp_check_hdr(rtp)) {
-        upipe_warn_va(upipe, "Received invalid RTP packet");
-        goto end;
-    }
-
-    if (rtcp_get_pt(rtp) != RTCP_PT_RTPFB) {
-        upipe_warn_va(upipe, "Received non Transport Layer specific message");
-        goto end;
-    }
-
-    if (rtcp_fb_get_fmt(rtp) != RTCP_PT_RTPFB_GENERIC_NACK) {
-        upipe_warn_va(upipe, "Received non generic NACK message");
-        goto end;
-    }
-
-    uint16_t len = rtpx_get_length(rtp);
-    if ((len + 1) * 4 != s) {
-        upipe_warn_va(upipe, "Invalid RTP length");
-        goto end;
-    }
+    if (rtcp_fb_get_fmt(rtp) != RTCP_PT_RTPFB_GENERIC_NACK)
+        return;
 
     // TODO: ssrc
 
@@ -209,12 +185,51 @@ static inline void upipe_rtcpfb_input_sub(struct upipe *upipe, struct uref *uref
     for (size_t i = 0; i < s; i += RTCP_FB_FCI_GENERIC_NACK_SIZE) {
         uint16_t id = rtcp_fb_nack_get_packet_id(&fci[i]);
         uint16_t mask = rtcp_fb_nack_get_bitmask_lost(&fci[i]);
-        upipe_verbose_va(upipe, "Received NACK: %hu (0x%hx)", id, mask);
         upipe_rtcpfb_lost_sub(upipe, id, mask);
     }
+}
 
-end:
-    uref_block_peek_unmap(uref, 0, NULL, rtp);
+/** @internal @This handles RTCP messages.
+ *
+ * @param upipe description structure of the pipe
+ * @param uref uref structure
+ * @param upump_p reference to pump that generated the buffer
+ */
+static void upipe_rtcpfb_input_sub(struct upipe *upipe, struct uref *uref,
+                                    struct upump **upump_p)
+{
+    int s = -1;
+    const uint8_t *rtp;
+    if (!ubase_check(uref_block_read(uref, 0, &s, &rtp))) {
+        upipe_err(upipe, "Can't read rtcp message");
+        uref_free(uref);
+        return;
+    }
+
+    while (s) {
+        if (s < 4 || !rtp_check_hdr(rtp)) {
+            upipe_warn_va(upipe, "Received invalid RTP packet");
+            break;
+        }
+
+        size_t len = 4 + 4 * rtcp_get_length(rtp);
+        if (len > s) {
+           break;
+        }
+
+        switch (rtcp_get_pt(rtp)) {
+        case RTCP_PT_RTPFB: upipe_rtcpfb_nack(upipe, rtp, len);
+        /* these 2 are mandated by RIST */
+        case RTCP_PT_SR:    break;
+        case RTCP_PT_SDES:  break;
+        default: break;
+        }
+
+        s -= len;
+        rtp += len;
+    }
+
+    uref_block_unmap(uref, 0);
     uref_free(uref);
 }
 
