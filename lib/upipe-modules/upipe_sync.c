@@ -748,10 +748,9 @@ static void cb(struct upump *upump)
     struct uchain *uchain = NULL;
     for (;;) {
         uchain = ulist_peek(&upipe_sync->urefs);
-        if (!uchain) {
-            upipe_err_va(upipe, "no pictures");
+        upipe_throw(upipe, UPROBE_SYNC_PICTURE, UPIPE_SYNC_SIGNATURE, !!uchain);
+        if (!uchain)
             break;
-        }
 
         struct uref *uref = uref_from_uchain(uchain);
         uint64_t pts = 0;

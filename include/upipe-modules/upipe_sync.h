@@ -39,6 +39,14 @@ extern "C" {
 #define UPIPE_SYNC_SIGNATURE UBASE_FOURCC('s', 'y', 'n', 'c')
 #define UPIPE_SYNC_SUB_SIGNATURE UBASE_FOURCC('s', 'y', 'n', 's')
 
+/** @This extends uprobe_event with specific events for sync. */
+enum uprobe_sync_event {
+    UPROBE_SYNC_SENTINEL = UPROBE_LOCAL,
+
+    /** received picture event (unsigned int got_picture) */
+    UPROBE_SYNC_PICTURE
+};
+
 /** @This returns the management structure for sync pipes.
  *
  * @return pointer to manager
