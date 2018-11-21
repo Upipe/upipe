@@ -48,6 +48,11 @@ enum upipe_rtcp_command {
     UPIPE_RTCP_SET_RATE,
     /** get rtcp sr send rate (uint64_t) */
     UPIPE_RTCP_GET_RATE,
+
+    /** set rtcp sdes name (const char *) */
+    UPIPE_RTCP_SET_NAME,
+    /** get rtcp sdes name (const char **) */
+    UPIPE_RTCP_GET_NAME,
 };
 
 static inline int upipe_rtcp_get_clockrate(struct upipe *upipe,
@@ -74,6 +79,18 @@ static inline int upipe_rtcp_set_rate(struct upipe *upipe, uint64_t rate)
 {
     return upipe_control(upipe, UPIPE_RTCP_SET_RATE,
                          UPIPE_RTCP_SIGNATURE, rate);
+}
+
+static inline int upipe_rtcp_get_name(struct upipe *upipe, const char **name_p)
+{
+    return upipe_control(upipe, UPIPE_RTCP_GET_NAME,
+                         UPIPE_RTCP_SIGNATURE, name_p);
+}
+
+static inline int upipe_rtcp_set_name(struct upipe *upipe, const char *name)
+{
+    return upipe_control(upipe, UPIPE_RTCP_SET_NAME,
+                         UPIPE_RTCP_SIGNATURE, name);
 }
 
 #ifdef __cplusplus
