@@ -129,7 +129,7 @@ static int catch(struct uprobe *uprobe, struct upipe *upipe,
             return UBASE_ERR_INVALID;
         uref = va_arg(args, struct uref *);
         va_arg(args, struct upump **);
-        bool *drop = va_arg(args, bool *);
+        va_arg(args, bool *);
 
         const uint8_t *buf;
         int s = -1;
@@ -160,8 +160,6 @@ static int catch(struct uprobe *uprobe, struct upipe *upipe,
             if (s < RTCP_RR_SIZE)
                 goto unmap;
 
-            *drop = true; // do not let RR go to rtcp_fb
-
             uint32_t delay = rtcp_rr_get_delay_since_last_sr(buf);
             uint32_t last_sr = rtcp_rr_get_last_sr(buf);
             if (last_sr != ((last_sr_ntp >> 16) & 0xffffffff)) {
@@ -181,8 +179,6 @@ static int catch(struct uprobe *uprobe, struct upipe *upipe,
             upipe_verbose_va(upipe, "RTCP RR: RTT %f", (float) cr / UCLOCK_FREQ);
             uref_block_unmap(uref, 0);
         } else if (pt == RTCP_PT_XR) {
-            *drop = true; // do not let XR go to rtcp_fb
-
             if (s < RTCP_XR_HEADER_SIZE + RTCP_XR_RRTP_SIZE)
                 goto unmap;
             if ((rtcp_get_length(buf) + 1) * 4 < RTCP_XR_HEADER_SIZE + RTCP_XR_RRTP_SIZE)
