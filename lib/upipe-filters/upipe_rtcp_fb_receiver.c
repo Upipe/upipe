@@ -161,8 +161,37 @@ struct upipe_rtcpfb_input {
     struct uchain blockers;
 };
 
+static void upipe_rtcpfb_lost_sub_n(struct upipe *upipe, uint16_t seq, uint16_t pkts);
 static void upipe_rtcpfb_lost_sub(struct upipe *upipe, uint16_t seq, uint16_t mask);
 
+/** @internal @This handles RTCP App-specific RIST messages.
+ *
+ * @param upipe description structure of the pipe
+ * @param rtp RTCP packet data
+ * @param s RTCP packet size in bytes
+ */
+static void upipe_rtcpfb_app_nack(struct upipe *upipe, const uint8_t *rtp, int s)
+{
+    if (s < 12)
+        return;
+
+    if (rtcp_get_rc(rtp) != 0)
+        return;
+
+    if (memcmp(&rtp[8], "RIST", 4))
+        return;
+
+    // TODO: ssrc
+
+    s -= 12;
+    const uint8_t *range = &rtp[12];
+
+    for (size_t i = 0; i < s; i += 4) {
+        uint16_t start = (range[i+0] << 8) | range[i+1];
+        uint16_t pkts =  (range[i+2] << 8) | range[i+3];
+        upipe_rtcpfb_lost_sub_n(upipe, start, pkts);
+    }
+}
 /** @internal @This handles RTCP NACK messages.
  *
  * @param upipe description structure of the pipe
@@ -219,6 +248,9 @@ static void upipe_rtcpfb_input_sub(struct upipe *upipe, struct uref *uref,
 
         switch (rtcp_get_pt(rtp)) {
         case RTCP_PT_RTPFB: upipe_rtcpfb_nack(upipe, rtp, len);
+                            break;
+        case RTCP_PT_APP: upipe_rtcpfb_app_nack(upipe, rtp, len);
+                          break;
         /* these 2 are mandated by RIST */
         case RTCP_PT_SR:    break;
         case RTCP_PT_SDES:  break;
@@ -249,6 +281,45 @@ static int ctz(unsigned int x)
         tz--;
     return tz;
 #endif
+}
+
+/** @internal @This retransmits a number of packets */
+static void upipe_rtcpfb_lost_sub_n(struct upipe *upipe, uint16_t seq, uint16_t pkts)
+{
+    struct upipe *upipe_super = NULL;
+    upipe_rtcpfb_input_get_super(upipe, &upipe_super);
+    struct upipe_rtcpfb *upipe_rtcpfb = upipe_rtcpfb_from_upipe(upipe_super);
+
+    struct uchain *uchain;
+    ulist_foreach(&upipe_rtcpfb->queue, uchain) {
+        struct uref *uref = uref_from_uchain(uchain);
+        uint64_t uref_seqnum = 0;
+        uref_attr_get_priv(uref, &uref_seqnum);
+
+        uint16_t diff = uref_seqnum - seq;
+        if (diff > pkts) {
+            /* packet not in range */
+            if (diff < 0x8000) {
+                /* packet after range */
+                return;
+            }
+            continue;
+        }
+
+        upipe_warn_va(upipe, "Retransmit %hu", seq);
+
+        uint8_t *buf;
+        int s = 0;
+        if (ubase_check(uref_block_write(uref, 0, &s, &buf))) {
+            uint8_t ssrc[4];
+            rtp_get_ssrc(buf, ssrc);
+            ssrc[3] |= 1; /* RIST retransmitted packet */
+            rtp_set_ssrc(buf, ssrc);
+            uref_block_unmap(uref, 0);
+        }
+
+        upipe_rtcpfb_output(upipe_super, uref_dup(uref), NULL);
+    }
 }
 
 /** @internal @This retransmits a list of packets described by a single FCI.
