@@ -329,6 +329,20 @@ static void upipe_rtpfb_lost(struct upipe *upipe, uint16_t lost_seqnum, uint16_t
     upipe_rtpfb_output_output(upipe_rtpfb->rtpfb_output, pkt, NULL);
 }
 
+static uint64_t upipe_rtpfb_get_rtt(struct upipe *upipe)
+{
+    struct upipe_rtpfb *upipe_rtpfb = upipe_rtpfb_from_upipe(upipe);
+
+    /* VSF TR-06 doesn't give a mean to retrieve RTT, but defaults to 7
+     * retransmissions requests per packet.
+     * XXX: make it configurable ? */
+
+    uint64_t rtt = upipe_rtpfb->rtt;
+    if (!rtt)
+        rtt = upipe_rtpfb->latency / 7;
+    return rtt;
+}
+
 /** @internal @This periodic timer checks for missing seqnums.
  */
 static void upipe_rtpfb_timer_lost(struct upump *upump)
@@ -338,14 +352,12 @@ static void upipe_rtpfb_timer_lost(struct upump *upump)
 
     uint64_t expected_seq = UINT64_MAX;
 
-    /* Wait to know RTT before asking for retransmits */
-    if (upipe_rtpfb->rtt == 0)
-        return;
+    uint64_t rtt = upipe_rtpfb_get_rtt(upipe);
 
     uint64_t now = uclock_now(upipe_rtpfb->uclock);
 
     /* space out NACKs a bit more than RTT. XXX: tune me */
-    uint64_t next_nack = now - upipe_rtpfb->rtt * 12 / 10;
+    uint64_t next_nack = now - rtt * 12 / 10;
 
     /* TODO: do not look at the last pkts/s * rtt
      * It it too late to send a NACK for these
@@ -455,6 +467,23 @@ static void upipe_rtpfb_timer(struct upump *upump)
     }
 }
 
+static void upipe_rtpfb_restart_timer(struct upipe *upipe)
+{
+    struct upipe_rtpfb *upipe_rtpfb = upipe_rtpfb_from_upipe(upipe);
+    uint64_t rtt = upipe_rtpfb_get_rtt(upipe);
+
+    if (upipe_rtpfb->upump_timer_lost) {
+        upump_stop(upipe_rtpfb->upump_timer_lost);
+        upump_free(upipe_rtpfb->upump_timer_lost);
+    }
+    if (upipe_rtpfb->upump_mgr) {
+        upipe_rtpfb->upump_timer_lost = upump_alloc_timer(upipe_rtpfb->upump_mgr,
+                upipe_rtpfb_timer_lost, upipe, upipe->refcount,
+                0, rtt / 10);
+        upump_start(upipe_rtpfb->upump_timer_lost);
+    }
+}
+
 static int upipe_rtpfb_check(struct upipe *upipe, struct uref *flow_format)
 {
     struct upipe_rtpfb *upipe_rtpfb = upipe_rtpfb_from_upipe(upipe);
@@ -496,10 +525,7 @@ static int upipe_rtpfb_check(struct upipe *upipe, struct uref *flow_format)
 
         /* every 10ms, check for lost packets
          * interval is reduced each time we get the current RTT from sender */
-        upipe_rtpfb->upump_timer_lost = upump_alloc_timer(upipe_rtpfb->upump_mgr,
-                upipe_rtpfb_timer_lost, upipe, upipe->refcount,
-                upipe_rtpfb->rtt / 10, upipe_rtpfb->rtt / 10);
-        upump_start(upipe_rtpfb->upump_timer_lost);
+        upipe_rtpfb_restart_timer(upipe);
     }
 
     return UBASE_ERR_NONE;
@@ -897,17 +923,7 @@ static void upipe_rtpfb_input(struct upipe *upipe, struct uref *uref,
 
         upipe_notice_va(upipe, "RTT %f", (float)rtt / UCLOCK_FREQ);
         upipe_rtpfb->rtt = rtt;
-
-        if (upipe_rtpfb->upump_timer_lost) {
-            upump_stop(upipe_rtpfb->upump_timer_lost);
-            upump_free(upipe_rtpfb->upump_timer_lost);
-        }
-        if (upipe_rtpfb->upump_mgr) {
-            upipe_rtpfb->upump_timer_lost = upump_alloc_timer(upipe_rtpfb->upump_mgr,
-                    upipe_rtpfb_timer_lost, upipe, upipe->refcount,
-                    0, rtt / 10);
-            upump_start(upipe_rtpfb->upump_timer_lost);
-        }
+        upipe_rtpfb_restart_timer(upipe);
 unmap:
         uref_block_unmap(uref, 0);
 free:
@@ -924,17 +940,7 @@ free:
                         (buf[14] << 8) | buf[15];
                     upipe_verbose_va(upipe, "RTT %f", (float)rtt / UCLOCK_FREQ);
                     upipe_rtpfb->rtt = rtt;
-
-                    if (upipe_rtpfb->upump_timer_lost) {
-                        upump_stop(upipe_rtpfb->upump_timer_lost);
-                        upump_free(upipe_rtpfb->upump_timer_lost);
-                    }
-                    if (upipe_rtpfb->upump_mgr) {
-                        upipe_rtpfb->upump_timer_lost = upump_alloc_timer(upipe_rtpfb->upump_mgr,
-                                upipe_rtpfb_timer_lost, upipe, upipe->refcount,
-                                0, rtt / 10);
-                        upump_start(upipe_rtpfb->upump_timer_lost);
-                    }
+                    upipe_rtpfb_restart_timer(upipe);
                 }
             } else {
                 upipe_err(upipe, "malformed RTCP APP obe packet");
@@ -961,8 +967,9 @@ free:
         upipe_rtpfb->last_nack[seqnum] = 0;
 
         if (diff != 0) {
+            uint64_t rtt = upipe_rtpfb_get_rtt(upipe);
             /* wait a bit to send a NACK, in case of reordering */
-            uint64_t fake_last_nack = uclock_now(upipe_rtpfb->uclock) - upipe_rtpfb->rtt;
+            uint64_t fake_last_nack = uclock_now(upipe_rtpfb->uclock) - rtt;
             for (uint16_t seq = upipe_rtpfb->expected_seqnum; seq != seqnum; seq++)
                 if (upipe_rtpfb->last_nack[seq] == 0)
                     upipe_rtpfb->last_nack[seq] = fake_last_nack;
