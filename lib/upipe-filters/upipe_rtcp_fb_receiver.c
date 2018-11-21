@@ -255,6 +255,17 @@ static void upipe_rtcpfb_lost_sub(struct upipe *upipe, uint16_t seq, uint16_t ma
             continue;
 
         upipe_warn_va(upipe, "Retransmit %hu", seq);
+
+        uint8_t *buf;
+        int s = 0;
+        if (ubase_check(uref_block_write(uref, 0, &s, &buf))) {
+            uint8_t ssrc[4];
+            rtp_get_ssrc(buf, ssrc);
+            ssrc[3] |= 1; /* RIST retransmitted packet */
+            rtp_set_ssrc(buf, ssrc);
+            uref_block_unmap(uref, 0);
+        }
+
         upipe_rtcpfb_output(upipe_super, uref_dup(uref), NULL);
 
         if (!mask)
