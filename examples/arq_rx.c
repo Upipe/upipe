@@ -156,6 +156,22 @@ static int catch_udp(struct uprobe *uprobe, struct upipe *upipe,
 
         return UBASE_ERR_NONE;
     }
+
+    case UPROBE_NEED_OUTPUT:
+        upipe_rtpfb_sub = upipe_void_alloc_output_sub(upipe, upipe_rtpfb,
+                uprobe_pfx_alloc(uprobe_use(uprobe), loglevel, "rtpfb_sub"));
+        assert(upipe_rtpfb_sub);
+
+        struct upipe_mgr *upipe_udpsink_mgr = upipe_udpsink_mgr_alloc();
+        rtcp_sink = upipe_void_chain_output(upipe_rtpfb_sub,
+                upipe_udpsink_mgr,
+                uprobe_pfx_alloc(uprobe_use(uprobe), loglevel, "udpsink rtpfb"));
+        upipe_mgr_release(upipe_udpsink_mgr);
+        ubase_assert(upipe_udpsink_set_fd(rtcp_sink, udp_fd));
+        ubase_assert(upipe_udpsink_set_peer(rtcp_sink,
+                    (const struct sockaddr*)&addr, addr_len));
+        upipe_release(rtcp_sink);
+        return UBASE_ERR_NONE;
     default:
         return uprobe_throw_next(uprobe, upipe, event, args);
     }
@@ -178,23 +194,6 @@ static int catch(struct uprobe *uprobe, struct upipe *upipe,
             struct uref *uref = va_arg(args, struct uref *);
             va_arg(args, struct upump **);
             gather_stats(upipe, uref);
-
-            if (!upipe_rtpfb_sub && addr_len) {
-                upipe_rtpfb_sub = upipe_void_alloc_sub(upipe_rtpfb,
-                        uprobe_pfx_alloc(uprobe_use(uprobe), loglevel, "rtpfb_sub"));
-                assert(upipe_rtpfb_sub);
-
-                struct upipe_mgr *upipe_udpsink_mgr = upipe_udpsink_mgr_alloc();
-                rtcp_sink = upipe_void_alloc_output(upipe_rtpfb_sub,
-                        upipe_udpsink_mgr,
-                        uprobe_pfx_alloc(uprobe_use(uprobe), loglevel, "udpsink rtpfb"));
-                upipe_mgr_release(upipe_udpsink_mgr);
-                ubase_assert(upipe_udpsink_set_fd(rtcp_sink, udp_fd));
-                ubase_assert(upipe_udpsink_set_peer(rtcp_sink,
-                            (const struct sockaddr*)&addr, addr_len));
-                upipe_release(rtcp_sink);
-            }
-
             break;
         }
     }
@@ -279,16 +278,6 @@ int main(int argc, char *argv[])
                 loglevel, "udp rtcp source"));
     upipe_udpsrc_rtcp = upipe_void_alloc(upipe_udpsrc_mgr, &uprobe_udp);
     upipe_mgr_release(upipe_udpsrc_mgr);
-
-    /* TODO: we don't use RTCP messages from sender
-     * Inject them into rtpfb or split RTCP handling from rtpfb ?*/
-    struct upipe_mgr *upipe_null_mgr = upipe_null_mgr_alloc();
-    struct upipe *upipe_null = upipe_void_alloc_output(upipe_udpsrc_rtcp,
-            upipe_null_mgr, uprobe_pfx_alloc(uprobe_use(logger), loglevel,
-                "null"));
-    assert(upipe_null);
-    upipe_mgr_release(upipe_null_mgr);
-    upipe_release(upipe_null);
 
     struct upipe_mgr *upipe_probe_uref_mgr = upipe_probe_uref_mgr_alloc();
     struct upipe *upipe_probe_uref = upipe_void_alloc_output(upipe_udpsrc,
