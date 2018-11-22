@@ -342,9 +342,9 @@ int main(int argc, char *argv[])
         return EXIT_FAILURE;
 
     struct uprobe uprobe_udp_rtcp;
-    uprobe_init(&uprobe_udp_rtcp, catch_udp, uprobe_pfx_alloc(uprobe_use(logger),
-                             loglevel, "udp source rtcp"));
-    upipe_udpsrc_sub = upipe_void_alloc(upipe_udpsrc_mgr, &uprobe_udp_rtcp);
+    uprobe_init(&uprobe_udp_rtcp, catch_udp, uprobe_use(logger));
+    upipe_udpsrc_sub = upipe_void_alloc(upipe_udpsrc_mgr,
+            uprobe_pfx_alloc(&uprobe_udp_rtcp, loglevel, "udp source rtcp"));
     upipe_attach_uclock(upipe_udpsrc_sub);
 
     upipe_mgr_release(upipe_udpsrc_mgr);
