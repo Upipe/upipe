@@ -25,6 +25,7 @@
 #include <upipe/ubase.h>
 #include <upipe/uprobe.h>
 #include <upipe/uclock.h>
+#include <upipe/ustring.h>
 #include <upipe/uref.h>
 #include <upipe/uref_clock.h>
 #include <upipe/upipe.h>
@@ -64,6 +65,7 @@
 #include <bitstream/ietf/rtp.h>
 #include <bitstream/ietf/rtcp.h>
 #include <bitstream/ietf/rtcp_fb.h>
+#include <bitstream/ietf/rtcp_sdes.h>
 #include <bitstream/ietf/rtcp_rr.h>
 #include <bitstream/ietf/rtcp_sr.h>
 #include <bitstream/ietf/rtcp3611.h>
@@ -171,6 +173,9 @@ struct upipe_rtpfb_output {
     /** timestamp of last XR */
     uint64_t xr_cr;
 
+    /** cname */
+    char *name;
+
     /** public upipe structure */
     struct upipe upipe;
 };
@@ -254,6 +259,7 @@ static struct upipe *upipe_rtpfb_output_alloc(struct upipe_mgr *mgr,
 
     upipe_rtpfb_output->sr_cr = UINT64_MAX;
     upipe_rtpfb_output->xr_cr = UINT64_MAX;
+    upipe_rtpfb_output->name = NULL;
     upipe_rtpfb->rtpfb_output = upipe;
 
     upipe_rtpfb_output_init_urefcount(upipe);
@@ -281,6 +287,7 @@ static void upipe_rtpfb_output_free(struct upipe *upipe)
 
     struct upipe_rtpfb *upipe_rtpfb = upipe_rtpfb_from_sub_mgr(upipe->mgr);
     upipe_rtpfb->rtpfb_output = NULL;
+    free(upipe_rtpfb_output->name);
     upipe_rtpfb_output_clean_output(upipe);
     upipe_rtpfb_output_clean_sub(upipe);
     upipe_rtpfb_output_clean_urefcount(upipe);
@@ -555,6 +562,21 @@ static int upipe_rtpfb_output_set_flow_def(struct upipe *upipe, struct uref *flo
     return UBASE_ERR_NONE;
 }
 
+static int _upipe_rtpfb_output_get_name(struct upipe *upipe, const char **name_p)
+{
+    struct upipe_rtpfb_output *upipe_rtpfb_output = upipe_rtpfb_output_from_upipe(upipe);
+    *name_p = upipe_rtpfb_output->name;
+    return UBASE_ERR_NONE;
+}
+
+static int _upipe_rtpfb_output_set_name(struct upipe *upipe, const char *name)
+{
+    struct upipe_rtpfb_output *upipe_rtpfb_output = upipe_rtpfb_output_from_upipe(upipe);
+    free(upipe_rtpfb_output->name);
+    upipe_rtpfb_output->name = name ? strdup(name) : NULL;
+    return UBASE_ERR_NONE;
+}
+
 /** @internal @This processes control commands on an output subpipe of a dup
  * pipe.
  *
@@ -567,6 +589,20 @@ static int _upipe_rtpfb_output_control(struct upipe *upipe,
                                     int command, va_list args)
 {
     switch (command) {
+        case UPIPE_RTPFB_OUTPUT_GET_NAME: {
+            unsigned int signature = va_arg(args, unsigned int);
+            if (signature != UPIPE_RTPFB_OUTPUT_SIGNATURE)
+                return UBASE_ERR_INVALID;
+            const char **name_p = va_arg(args, const char **);
+            return _upipe_rtpfb_output_get_name(upipe, name_p);
+        }
+        case UPIPE_RTPFB_OUTPUT_SET_NAME: {
+            unsigned int signature = va_arg(args, unsigned int);
+            if (signature != UPIPE_RTPFB_OUTPUT_SIGNATURE)
+                return UBASE_ERR_INVALID;
+            const char *name = va_arg(args, const char *);
+            return _upipe_rtpfb_output_set_name(upipe, name);
+        }
         case UPIPE_REGISTER_REQUEST: {
             struct urequest *request = va_arg(args, struct urequest *);
             return upipe_rtpfb_output_alloc_output_proxy(upipe, request);
@@ -626,53 +662,17 @@ static void upipe_rtpfb_init_sub_mgr(struct upipe *upipe)
     sub_mgr->upipe_mgr_control = NULL;
 }
 
-static void upipe_rtpfb_output_send_xr(struct upipe *upipe)
+static void upipe_rtpfb_output_send_rr_xr(struct upipe *upipe)
 {
     struct upipe_rtpfb_output *upipe_rtpfb_output = upipe_rtpfb_output_from_upipe(upipe);
     struct upipe_rtpfb *upipe_rtpfb = upipe_rtpfb_from_sub_mgr(upipe->mgr);
 
-    int s = RTCP_XR_HEADER_SIZE + RTCP_XR_RRTP_SIZE;
+    struct ustring name = ustring_from_str(upipe_rtpfb_output->name);
 
-    /* Allocate NACK packet */
-    struct uref *pkt = uref_block_alloc(upipe_rtpfb_output->uref_mgr,
-        upipe_rtpfb_output->ubuf_mgr, s);
-    if (unlikely(!pkt)) {
-        upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
-        return;
-    }
+    int sdes_size = RTCP_SDES_SIZE + name.len + 1; /* 0 byte */
+    sdes_size = (sdes_size + 3) & ~3; /* align to 32 bits */
 
-    uint8_t *buf;
-    uref_block_write(pkt, 0, &s, &buf);
-    memset(buf, 0, s);
-
-    /* Header */
-    rtcp_set_rtp_version(buf);
-    rtcp_set_pt(buf, RTCP_PT_XR); // XR
-    rtcp_set_length(buf, s / 4 - 1);
-
-    static const uint8_t ssrc[4] = { 0, 0, 0, 0 };
-    rtcp_xr_set_ssrc_sender(buf, ssrc);
-
-    buf += RTCP_XR_HEADER_SIZE;
-    rtcp_xr_set_bt(buf, RTCP_XR_RRTP_BT);
-    rtcp_xr_rrtp_set_reserved(buf);
-    rtcp_xr_set_length(buf, RTCP_XR_RRTP_SIZE / 4 - 1);
-
-    uint64_t now = uclock_now(upipe_rtpfb->uclock);
-    upipe_rtpfb_output->xr_cr = now;
-    rtcp_xr_rrtp_set_ntp(buf, now);
-
-    uref_block_unmap(pkt, 0);
-
-    upipe_rtpfb_output_output(upipe, pkt, NULL);
-}
-
-static void upipe_rtpfb_output_send_rr(struct upipe *upipe)
-{
-    struct upipe_rtpfb_output *upipe_rtpfb_output = upipe_rtpfb_output_from_upipe(upipe);
-    struct upipe_rtpfb *upipe_rtpfb = upipe_rtpfb_from_sub_mgr(upipe->mgr);
-
-    int s = RTCP_RR_SIZE;
+    int s = RTCP_RR_SIZE + RTCP_XR_HEADER_SIZE + RTCP_XR_RRTP_SIZE + sdes_size;
 
     /* Allocate NACK packet */
     struct uref *pkt = uref_block_alloc(upipe_rtpfb_output->uref_mgr,
@@ -690,7 +690,7 @@ static void upipe_rtpfb_output_send_rr(struct upipe *upipe)
     rtcp_set_rtp_version(buf);
     rtcp_set_rc(buf, 1);
     rtcp_rr_set_pt(buf);
-    rtcp_set_length(buf, s / 4 - 1);
+    rtcp_set_length(buf, RTCP_RR_SIZE / 4 - 1);
 
     // XXX: useless if loss < 1/256
     rtcp_rr_set_fraction_lost(buf, 0);
@@ -715,6 +715,34 @@ static void upipe_rtpfb_output_send_rr(struct upipe *upipe)
 
         rtcp_rr_set_delay_since_last_sr(buf, 0);
     }
+
+    buf = &buf[RTCP_RR_SIZE];
+    /* Header */
+    rtcp_set_rtp_version(buf);
+    rtcp_set_pt(buf, RTCP_PT_XR); // XR
+    rtcp_set_length(buf, (RTCP_XR_HEADER_SIZE + RTCP_XR_RRTP_SIZE) / 4 - 1);
+
+    static const uint8_t ssrc[4] = { 0, 0, 0, 0 };
+    rtcp_xr_set_ssrc_sender(buf, ssrc);
+
+    buf += RTCP_XR_HEADER_SIZE;
+    rtcp_xr_set_bt(buf, RTCP_XR_RRTP_BT);
+    rtcp_xr_rrtp_set_reserved(buf);
+    rtcp_xr_set_length(buf, RTCP_XR_RRTP_SIZE / 4 - 1);
+
+    uint64_t now = uclock_now(upipe_rtpfb->uclock);
+    upipe_rtpfb_output->xr_cr = now;
+    rtcp_xr_rrtp_set_ntp(buf, now);
+
+    buf = &buf[RTCP_XR_RRTP_SIZE];
+    rtcp_set_rtp_version(buf);
+    rtp_set_cc(buf, 1);
+    rtcp_set_length(buf, (sdes_size / 4) - 1);
+    rtcp_sdes_set_pt(buf);
+    rtcp_sdes_set_cname(buf, 1);
+    rtcp_sdes_set_name_length(buf, name.len);
+    if (!ustring_is_null(name))
+        memcpy(&buf[RTCP_SDES_SIZE], name.at, name.len);
 
     uref_block_unmap(pkt, 0);
 
@@ -906,8 +934,7 @@ static void upipe_rtpfb_output_input(struct upipe *upipe, struct uref *uref,
         memcpy(upipe_rtpfb_output->sr, buf, sizeof(upipe_rtpfb_output->sr));
         upipe_rtpfb_output->sr_cr = cr;
 
-        upipe_rtpfb_output_send_rr(upipe);
-        upipe_rtpfb_output_send_xr(upipe);
+        upipe_rtpfb_output_send_rr_xr(upipe);
     } else if (pt == RTCP_PT_XR) {
         upipe_verbose(upipe, "XR RTCP");
         if (s < RTCP_XR_HEADER_SIZE + RTCP_XR_DLRR_SIZE)

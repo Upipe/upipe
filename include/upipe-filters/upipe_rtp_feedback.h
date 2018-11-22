@@ -40,11 +40,32 @@ extern "C" {
 #define UPIPE_RTPFB_OUTPUT_SIGNATURE UBASE_FOURCC('r','t','f','b')
 
 
+enum upipe_rtpfb_output_command {
+    UPIPE_RTPFB_OUTPUT_SENTINEL = UPIPE_CONTROL_LOCAL,
+
+    /** set rtpfb_output sdes name (const char *) */
+    UPIPE_RTPFB_OUTPUT_SET_NAME,
+    /** get rtpfb_output sdes name (const char **) */
+    UPIPE_RTPFB_OUTPUT_GET_NAME,
+};
+
 enum upipe_rtpfb_command {
     UPIPE_RTPFB_SENTINEL = UPIPE_CONTROL_LOCAL,
 
     UPIPE_RTPFB_GET_STATS, /* int sig, unsigned *, unsigned *, size_t *, size_t *, size_t *, size_t *, size_t * */
 };
+
+static inline int upipe_rtpfb_output_get_name(struct upipe *upipe, const char **name_p)
+{
+    return upipe_control(upipe, UPIPE_RTPFB_OUTPUT_GET_NAME,
+                         UPIPE_RTPFB_OUTPUT_SIGNATURE, name_p);
+}
+
+static inline int upipe_rtpfb_output_set_name(struct upipe *upipe, const char *name)
+{
+    return upipe_control(upipe, UPIPE_RTPFB_OUTPUT_SET_NAME,
+                         UPIPE_RTPFB_OUTPUT_SIGNATURE, name);
+}
 
 static inline int upipe_rtpfb_get_stats(struct upipe *upipe,
         unsigned *expected_seqnum, unsigned *last_output_seqnum,

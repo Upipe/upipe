@@ -162,6 +162,7 @@ static int catch_udp(struct uprobe *uprobe, struct upipe *upipe,
                 uprobe_pfx_alloc(uprobe_use(uprobe), loglevel, "rtpfb_sub"));
         assert(upipe_rtpfb_sub);
 
+        upipe_rtpfb_output_set_name(upipe_rtpfb_sub, "Upipe");
         struct upipe_mgr *upipe_udpsink_mgr = upipe_udpsink_mgr_alloc();
         rtcp_sink = upipe_void_chain_output(upipe_rtpfb_sub,
                 upipe_udpsink_mgr,
