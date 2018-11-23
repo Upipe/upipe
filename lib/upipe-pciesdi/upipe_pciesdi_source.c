@@ -339,17 +339,6 @@ static void upipe_pciesdi_src_worker(struct upump *upump)
     if (upipe_pciesdi_src->sdi3g_levelb)
         sdi_line_width *= 2;
 
-    struct uref *uref = uref_block_alloc(upipe_pciesdi_src->uref_mgr,
-            upipe_pciesdi_src->ubuf_mgr, DMA_BUFFER_SIZE * DMA_BUFFER_COUNT);
-    UBASE_FATAL_RETURN(upipe, uref ? UBASE_ERR_NONE : UBASE_ERR_ALLOC);
-
-    uint8_t *block_buf;
-    int block_size = -1;
-    if (!ubase_check(uref_block_write(uref, 0, &block_size, &block_buf))) {
-        upipe_err(upipe, "unable to map block for writing");
-        dump_and_exit_clean(upipe, NULL, 0);
-    }
-
     ssize_t ret = read(upipe_pciesdi_src->fd,
             upipe_pciesdi_src->read_buffer + upipe_pciesdi_src->cached_read_bytes,
             DMA_BUFFER_SIZE * DMA_BUFFER_COUNT/2);
@@ -363,7 +352,6 @@ static void upipe_pciesdi_src_worker(struct upump *upump)
         upipe_pciesdi_src->discontinuity = true;
 
     if (unlikely(ret == -1)) {
-        uref_block_unmap(uref, 0);
         switch (errno) {
             case EINTR:
             case EAGAIN:
@@ -382,6 +370,17 @@ static void upipe_pciesdi_src_worker(struct upump *upump)
     }
 
     ret += upipe_pciesdi_src->cached_read_bytes;
+    int processed_bytes = (ret / sdi_line_width) * sdi_line_width;
+    struct uref *uref = uref_block_alloc(upipe_pciesdi_src->uref_mgr,
+            upipe_pciesdi_src->ubuf_mgr, processed_bytes);
+    UBASE_FATAL_RETURN(upipe, uref ? UBASE_ERR_NONE : UBASE_ERR_ALLOC);
+
+    uint8_t *block_buf;
+    int block_size = -1;
+    if (!ubase_check(uref_block_write(uref, 0, &block_size, &block_buf))) {
+        upipe_err(upipe, "unable to map block for writing");
+        dump_and_exit_clean(upipe, NULL, 0);
+    }
 
     for (int i = 0; i < ret / sdi_line_width; i++) {
         const uint16_t *sdi_line = (uint16_t*)(upipe_pciesdi_src->read_buffer + i * sdi_line_width);
@@ -466,7 +465,6 @@ static void upipe_pciesdi_src_worker(struct upump *upump)
         }
     }
 
-    int processed_bytes = (ret / sdi_line_width) * sdi_line_width;
     if (ret != processed_bytes) {
         memmove(upipe_pciesdi_src->read_buffer,
                 upipe_pciesdi_src->read_buffer + processed_bytes,
@@ -485,7 +483,6 @@ static void upipe_pciesdi_src_worker(struct upump *upump)
         uref_block_set_sdi3g_levelb(uref);
 
     uref_block_unmap(uref, 0);
-    uref_block_resize(uref, 0, processed_bytes);
     upipe_pciesdi_src_output(upipe, uref, &upipe_pciesdi_src->upump);
 }
 
