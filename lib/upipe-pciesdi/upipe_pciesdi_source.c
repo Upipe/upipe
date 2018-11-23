@@ -161,7 +161,7 @@ static struct upipe *upipe_pciesdi_src_alloc(struct upipe_mgr *mgr,
     upipe_pciesdi_src_init_upump(upipe);
     upipe_pciesdi_src_init_uclock(upipe);
 
-    upipe_pciesdi_src->read_buffer = malloc(DMA_BUFFER_SIZE * DMA_BUFFER_COUNT);
+    upipe_pciesdi_src->read_buffer = malloc(2 * DMA_BUFFER_SIZE * DMA_BUFFER_COUNT);
     if (!upipe_pciesdi_src->read_buffer)
         return NULL;
 
@@ -341,7 +341,7 @@ static void upipe_pciesdi_src_worker(struct upump *upump)
 
     ssize_t ret = read(upipe_pciesdi_src->fd,
             upipe_pciesdi_src->read_buffer + upipe_pciesdi_src->cached_read_bytes,
-            DMA_BUFFER_SIZE * DMA_BUFFER_COUNT/2);
+            DMA_BUFFER_SIZE * DMA_BUFFER_COUNT);
 
     if (family == 15 || !locked) {
         ret = -1;
