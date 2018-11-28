@@ -197,7 +197,7 @@ void ubuf_pic_rgb_to_yuv(const uint8_t rgb[3], int fullrange, uint8_t yuv[3])
     int yuv_i[3] = { 0, 0, 0 };
     for (unsigned i = 0; i < 3; i++)
         for (unsigned j = 0; j < 3; j++)
-            yuv_i[i] += mat[i * 3 + j] * rgb[j];
+            yuv_i[i] += m[i * 3 + j] * rgb[j];
     for (unsigned i = 0; i < 3; i++)
         yuv[i] = ((yuv_i[i] + 128) >> 8) + (i ? 128 : 16);
 }
