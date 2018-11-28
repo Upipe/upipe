@@ -1110,8 +1110,7 @@ static void upipe_grid_free(struct upipe *upipe)
  */
 static void upipe_grid_no_ref(struct upipe *upipe)
 {
-    struct upipe_grid *upipe_grid = upipe_grid_from_upipe(upipe);
-    urefcount_release(&upipe_grid->urefcount_real);
+    upipe_grid_release_urefcount_real(upipe);
 }
 
 /** @internal @This allocates a grid pipe.
