@@ -100,20 +100,6 @@ UPIPE_HELPER_UPROBE(upipe_blksrc, urefcount_real, blk_probe, NULL);
 UPIPE_HELPER_INNER(upipe_blksrc, blk);
 UPIPE_HELPER_BIN_OUTPUT(upipe_blksrc, blk, output, blk_requests);
 
-/** @internal @This stores the flow definition.
- *
- * @param upipe description structure of the pipe
- * @param flow_def flow definition to set
- */
-static inline void upipe_blksrc_store_flow_def(struct upipe *upipe,
-                                               struct uref *flow_def)
-{
-    struct upipe_blksrc *upipe_blksrc = upipe_blksrc_from_upipe(upipe);
-    if (upipe_blksrc->flow_def)
-        uref_free(upipe_blksrc->flow_def);
-    upipe_blksrc->flow_def = flow_def;
-}
-
 /** @internal @This processes control commands on a blank source pipe.
  *
  * @param upipe description structure of the pipe

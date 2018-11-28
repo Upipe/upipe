@@ -489,34 +489,6 @@ static int _upipe_x265_reconfigure(struct upipe *upipe)
     return ret != 0 ? UBASE_ERR_EXTERNAL : UBASE_ERR_NONE;
 }
 
-/** @internal @This reset parameters to default
- *
- * @param upipe description structure of the pipe
- * @param bit_depth output bit depth: 0 (auto), 8, 10 or 12
- * @return an error code
- */
-static int _upipe_x265_set_default(struct upipe *upipe, int bit_depth)
-{
-    struct upipe_x265 *upipe_x265 = upipe_x265_from_upipe(upipe);
-
-    upipe_x265->api = x265_api_get(bit_depth);
-    if (unlikely(upipe_x265->api == NULL))
-        return UBASE_ERR_INVALID;
-
-    int ret = upipe_x265->api->param_default_preset(&upipe_x265->params,
-                                                    "slow", NULL);
-    if (unlikely(ret < 0))
-        return UBASE_ERR_EXTERNAL;
-    upipe_x265->bit_depth = bit_depth;
-    free(upipe_x265->preset);
-    upipe_x265->preset = strdup("slow");
-    upipe_x265->sc_preset = 4;
-
-    upipe_notice_va(upipe, "bit depth: %d", upipe_x265->params.internalBitDepth);
-
-    return UBASE_ERR_NONE;
-}
-
 /** @internal @This sets default parameters for specified preset.
  *
  * @param upipe description structure of the pipe
@@ -534,23 +506,6 @@ static int _upipe_x265_set_default_preset(struct upipe *upipe,
         return UBASE_ERR_INVALID;
     int ret = upipe_x265->api->param_default_preset(&upipe_x265->params,
                                                     preset, tune);
-    return unlikely(ret < 0) ? UBASE_ERR_EXTERNAL : UBASE_ERR_NONE;
-}
-
-/** @internal @This enforces profile.
- *
- * @param upipe description structure of the pipe
- * @param profile x265 profile
- * @return an error code
- */
-static int _upipe_x265_set_profile(struct upipe *upipe, const char *profile)
-{
-    struct upipe_x265 *upipe_x265 = upipe_x265_from_upipe(upipe);
-
-    if (unlikely(upipe_x265->api == NULL))
-        return UBASE_ERR_INVALID;
-    int ret = upipe_x265->api->param_apply_profile(&upipe_x265->params,
-                                                   profile);
     return unlikely(ret < 0) ? UBASE_ERR_EXTERNAL : UBASE_ERR_NONE;
 }
 

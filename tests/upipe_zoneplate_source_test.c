@@ -76,28 +76,6 @@ UPIPE_HELPER_UREFCOUNT(sink, urefcount, sink_free);
 
 static struct upipe *upipe_zpsrc = NULL;
 static int counter = 0;
-static int flow_foo_counter = 0;
-static int flow_bar_counter = 0;
-
-/** definition of our uprobe */
-static int catch(struct uprobe *uprobe, struct upipe *upipe,
-                 int event, va_list args)
-{
-    switch (event) {
-        case UPROBE_PROVIDE_REQUEST:
-            return uprobe_throw_next(uprobe, upipe, event, args);
-
-        default:
-            assert(0);
-            break;
-        case UPROBE_READY:
-        case UPROBE_DEAD:
-        case UPROBE_NEW_FLOW_DEF:
-        case UPROBE_SOURCE_END:
-            break;
-    }
-    return UBASE_ERR_NONE;
-}
 
 /** helper phony pipe */
 static struct upipe *sink_alloc(struct upipe_mgr *mgr, struct uprobe *uprobe,

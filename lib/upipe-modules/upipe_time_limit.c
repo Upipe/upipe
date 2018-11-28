@@ -89,10 +89,6 @@ static bool upipe_time_limit_process(struct upipe *upipe,
                                      struct uref *uref,
                                      struct upump **upump_p);
 
-/** @hidden */
-static void upipe_time_limit_wait(struct upipe *upipe);
-
-
 UPIPE_HELPER_UPIPE(upipe_time_limit, upipe, UPIPE_TIME_LIMIT_SIGNATURE);
 UPIPE_HELPER_UREFCOUNT(upipe_time_limit, urefcount, upipe_time_limit_free);
 UPIPE_HELPER_VOID(upipe_time_limit);

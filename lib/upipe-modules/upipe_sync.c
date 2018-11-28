@@ -163,9 +163,6 @@ struct upipe_sync_sub {
     uint64_t samples;
 };
 
-/** @hidden */
-static int upipe_sync_sub_check(struct upipe *upipe, struct uref *flow_format);
-
 UPIPE_HELPER_UPIPE(upipe_sync_sub, upipe, UPIPE_SYNC_SUB_SIGNATURE);
 UPIPE_HELPER_UREFCOUNT(upipe_sync_sub, urefcount, upipe_sync_sub_free)
 UPIPE_HELPER_VOID(upipe_sync_sub);

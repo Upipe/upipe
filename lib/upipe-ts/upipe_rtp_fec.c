@@ -279,7 +279,7 @@ static void upipe_rtp_fec_correct_packets(struct upipe *upipe,
 
     /* Search to see if any packets are lost */
     int processed = 0;
-    struct uchain *uchain, *uchain_tmp;
+    struct uchain *uchain;
     ulist_foreach (&upipe_rtp_fec->main_queue, uchain) {
         struct uref *uref = uref_from_uchain(uchain);
         uint16_t seqnum = uref->priv;

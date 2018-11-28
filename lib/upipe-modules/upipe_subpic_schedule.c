@@ -356,7 +356,6 @@ static void upipe_subpic_schedule_handle_subpics(struct upipe *upipe, uint64_t d
  */
 static void upipe_subpic_schedule_input(struct upipe *upipe, struct uref *uref, struct upump **upump_p)
 {
-    int type;
     uint64_t date;
     if (!ubase_check(uref_clock_get_pts_prog(uref, &date))) {
         upipe_warn(upipe, "undated uref");
