@@ -1083,6 +1083,7 @@ static void upipe_grid_init_out_mgr(struct upipe *upipe)
     mgr->upipe_alloc = upipe_grid_out_alloc;
     mgr->upipe_input = upipe_grid_out_input;
     mgr->upipe_control = upipe_grid_out_control;
+    mgr->upipe_event_str = upipe_grid_out_event_str;
     mgr->upipe_command_str = upipe_grid_out_command_str;
 }
 
