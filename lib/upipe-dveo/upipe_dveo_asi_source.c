@@ -47,7 +47,6 @@
 #include <upipe/upipe_helper_upump_mgr.h>
 #include <upipe/upipe_helper_upump.h>
 #include <upipe/upipe_helper_uclock.h>
-#include <upipe/upipe_helper_output_size.h>
 #include <upipe-dveo/upipe_dveo_asi_source.h>
 
 #include <stdlib.h>
@@ -121,8 +120,6 @@ struct upipe_dveo_asi_src {
     struct upump_mgr *upump_mgr;
     /** read watcher */
     struct upump *upump;
-    /** read size */
-    unsigned int output_size;
 
     /** card index **/
     int card_idx;
@@ -155,7 +152,6 @@ UPIPE_HELPER_UCLOCK(upipe_dveo_asi_src, uclock, uclock_request, upipe_dveo_asi_s
 
 UPIPE_HELPER_UPUMP_MGR(upipe_dveo_asi_src, upump_mgr)
 UPIPE_HELPER_UPUMP(upipe_dveo_asi_src, upump, upump_mgr)
-UPIPE_HELPER_OUTPUT_SIZE(upipe_dveo_asi_src, output_size)
 
 /* From the example code */
 static ssize_t util_read(const char *name, char *buf, size_t count)
@@ -203,7 +199,6 @@ static struct upipe *upipe_dveo_asi_src_alloc(struct upipe_mgr *mgr,
     upipe_dveo_asi_src_init_upump_mgr(upipe);
     upipe_dveo_asi_src_init_upump(upipe);
     upipe_dveo_asi_src_init_uclock(upipe);
-    upipe_dveo_asi_src_init_output_size(upipe, RX_DEFAULT_SIZE);
     upipe_dveo_asi_src->fd = -1;
     upipe_dveo_asi_src->card_idx = 0;
     upipe_dveo_asi_src->last_ts = -1;
@@ -511,7 +506,6 @@ static void upipe_dveo_asi_src_free(struct upipe *upipe)
 
     upipe_throw_dead(upipe);
 
-    upipe_dveo_asi_src_clean_output_size(upipe);
     upipe_dveo_asi_src_clean_uclock(upipe);
     upipe_dveo_asi_src_clean_upump(upipe);
     upipe_dveo_asi_src_clean_upump_mgr(upipe);

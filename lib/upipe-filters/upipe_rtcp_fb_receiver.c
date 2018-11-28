@@ -158,11 +158,6 @@ struct upipe_rtcpfb_input {
 
     /** public upipe structure */
     struct upipe upipe;
-
-    struct uchain urefs;
-    unsigned int nb_urefs;
-    unsigned int max_urefs;
-    struct uchain blockers;
 };
 
 static void upipe_rtcpfb_lost_sub(struct upipe *upipe, uint16_t seq, uint16_t mask);
@@ -226,7 +221,6 @@ end:
 
 UPIPE_HELPER_UPIPE(upipe_rtcpfb_input, upipe, UPIPE_RTCPFB_INPUT_SIGNATURE)
 UPIPE_HELPER_UREFCOUNT(upipe_rtcpfb_input, urefcount, upipe_rtcpfb_input_free)
-UPIPE_HELPER_INPUT(upipe_rtcpfb_input, urefs, nb_urefs, max_urefs, blockers, NULL)
 UPIPE_HELPER_SUBPIPE(upipe_rtcpfb, upipe_rtcpfb_input, output, sub_mgr, inputs,
                      uchain)
 
@@ -354,7 +348,6 @@ static struct upipe *upipe_rtcpfb_input_alloc(struct upipe_mgr *mgr,
     struct upipe *upipe = upipe_rtcpfb_input_to_upipe(upipe_rtcpfb_input);
     upipe_init(upipe, mgr, uprobe);
     upipe_rtcpfb_input_init_urefcount(upipe);
-    upipe_rtcpfb_input_init_input(upipe);
     upipe_rtcpfb_input_init_sub(upipe);
 
     upipe_throw_ready(upipe);
@@ -373,7 +366,6 @@ static void upipe_rtcpfb_input_free(struct upipe *upipe)
 
     uref_free(upipe_rtcpfb_input->flow_def);
 
-    upipe_rtcpfb_input_clean_input(upipe);
     upipe_rtcpfb_input_clean_sub(upipe);
     upipe_rtcpfb_input_clean_urefcount(upipe);
     upipe_clean(upipe);

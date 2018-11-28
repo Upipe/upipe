@@ -60,10 +60,6 @@ struct upipe_speexdsp {
     /** refcount management structure */
     struct urefcount urefcount;
 
-    /** input flow */
-    struct uref *flow_def_input;
-    /** attributes added by the pipe */
-    struct uref *flow_def_attr;
     /** output flow */
     struct uref *flow_def;
     /** output state */
@@ -112,7 +108,6 @@ UPIPE_HELPER_UPIPE(upipe_speexdsp, upipe, UPIPE_SPEEXDSP_SIGNATURE);
 UPIPE_HELPER_UREFCOUNT(upipe_speexdsp, urefcount, upipe_speexdsp_free);
 UPIPE_HELPER_VOID(upipe_speexdsp)
 UPIPE_HELPER_OUTPUT(upipe_speexdsp, output, flow_def, output_state, request_list)
-UPIPE_HELPER_FLOW_DEF(upipe_speexdsp, flow_def_input, flow_def_attr)
 UPIPE_HELPER_UBUF_MGR(upipe_speexdsp, ubuf_mgr, flow_format, ubuf_mgr_request,
                       upipe_speexdsp_check,
                       upipe_speexdsp_register_output_request,
@@ -441,7 +436,6 @@ static struct upipe *upipe_speexdsp_alloc(struct upipe_mgr *mgr,
     upipe_speexdsp_init_urefcount(upipe);
     upipe_speexdsp_init_ubuf_mgr(upipe);
     upipe_speexdsp_init_output(upipe);
-    upipe_speexdsp_init_flow_def(upipe);
     upipe_speexdsp_init_input(upipe);
 
     upipe_throw_ready(upipe);
@@ -461,7 +455,6 @@ static void upipe_speexdsp_free(struct upipe *upipe)
     upipe_throw_dead(upipe);
     upipe_speexdsp_clean_input(upipe);
     upipe_speexdsp_clean_output(upipe);
-    upipe_speexdsp_clean_flow_def(upipe);
     upipe_speexdsp_clean_ubuf_mgr(upipe);
     upipe_speexdsp_clean_urefcount(upipe);
     upipe_speexdsp_free_void(upipe);

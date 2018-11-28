@@ -130,7 +130,6 @@ static void test_input(struct upipe *upipe, struct uref *uref,
 
     const uint8_t *buffer;
     size_t w, h, stride;
-    uint8_t wsub, hsub;
 
     ubase_assert(uref_pic_size(uref, &w, &h, NULL));
     assert(w > 0);

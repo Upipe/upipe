@@ -67,10 +67,6 @@ struct upipe_separate_fields {
     uint64_t field_duration;
 };
 
-/** @hidden */
-static bool upipe_separate_fields_handle(struct upipe *upipe, struct uref *uref,
-                                  struct upump **upump_p);
-
 UPIPE_HELPER_UPIPE(upipe_separate_fields, upipe, UPIPE_SEPARATE_FIELDS_SIGNATURE)
 UPIPE_HELPER_UREFCOUNT(upipe_separate_fields, urefcount, upipe_separate_fields_free)
 UPIPE_HELPER_VOID(upipe_separate_fields)

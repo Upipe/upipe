@@ -681,8 +681,6 @@ static void upipe_avfsink_set_disposition_default(struct upipe *upipe)
 
     ulist_foreach (&upipe_avfsink->subs, uchain) {
         struct upipe_avfsink_sub *input = upipe_avfsink_sub_from_uchain(uchain);
-        struct uref *flow_def = NULL;
-        uint64_t flow_id = 0;
 
         if (input->id < 0)
             continue;

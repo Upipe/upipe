@@ -217,7 +217,6 @@ static void upipe_ts_pesd_decaps(struct upipe *upipe, struct upump **upump_p)
         return;
 
     validate = pes_validate_header(pes_header - PES_HEADER_SIZE);
-    bool alignment = pes_get_dataalignment(pes_header - PES_HEADER_SIZE);
     bool has_pts = pes_has_pts(pes_header - PES_HEADER_SIZE);
     bool has_dts = pes_has_dts(pes_header - PES_HEADER_SIZE);
     uint8_t headerlength = pes_get_headerlength(pes_header - PES_HEADER_SIZE);
