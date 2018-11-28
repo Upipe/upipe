@@ -82,7 +82,7 @@ AM_COND_IF(HAVE_X86ASM, AC_DEFINE(HAVE_X86ASM, 1, Define to 1 if an x86 assemble
 # add -prefer-non-pic so libtool doesn't add -fPIC, which nasm doesn't understand
 NASMFLAGS="${NASMFLAGS} -DPIC -prefer-non-pic -Pconfig.asm -I\$(top_builddir)/x86/ -I\$(top_srcdir)/x86/"
 
-WARN_FLAGS="-Wall -Wextra -Wno-unused -Wno-unused-parameter -Wno-sign-compare -Wmissing-declarations -Wwrite-strings -Wredundant-decls -Wundef -Wmissing-include-dirs"
+WARN_FLAGS="-Wall -Wextra -Wno-unused-parameter -Wno-sign-compare -Wmissing-declarations -Wwrite-strings -Wredundant-decls -Wundef -Wmissing-include-dirs"
 WARN_FLAGS_C="-Wstrict-prototypes -Wmissing-prototypes -Wold-style-definition"
 WARN_FLAGS_OPT="-Wduplicated-cond -Wduplicated-branches -Wrestrict -Wformat=2"
 # TODO: add -Wnull-dereference and -Wlogical-op once all warnings are fixed
