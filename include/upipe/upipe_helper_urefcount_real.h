@@ -87,7 +87,8 @@ static void STRUCTURE##_dead_##UREFCOUNT(struct urefcount *urefcount)       \
  *                                                                          \
  * @param upipe description structure of the pipe                           \
  */                                                                         \
-static struct upipe *STRUCTURE##_use_##UREFCOUNT(struct upipe *upipe)       \
+static UBASE_UNUSED inline struct upipe *                                   \
+STRUCTURE##_use_##UREFCOUNT(struct upipe *upipe)                            \
 {                                                                           \
     struct STRUCTURE *s = STRUCTURE##_from_upipe(upipe);                    \
     s = STRUCTURE##_from_##UREFCOUNT(urefcount_use(&s->UREFCOUNT));         \
