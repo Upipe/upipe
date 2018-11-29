@@ -689,6 +689,7 @@ static void upipe_rtcpfb_free(struct urefcount *urefcount_real)
 
     uref_free(upipe_rtcpfb->flow_def_input);
     upipe_rtcpfb_clean_output(upipe);
+    upipe_rtcpfb_clean_sub_outputs(upipe);
     upipe_rtcpfb_clean_urefcount(upipe);
     upipe_rtcpfb_clean_ubuf_mgr(upipe);
     upipe_rtcpfb_clean_uref_mgr(upipe);
