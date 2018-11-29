@@ -619,6 +619,8 @@ static int _upipe_rtcpfb_set_pt(struct upipe *upipe, uint8_t pt)
 static int _upipe_rtcpfb_control(struct upipe *upipe, int command, va_list args)
 {
     switch (command) {
+        case UPIPE_ATTACH_UPUMP_MGR:
+            return upipe_rtcpfb_attach_upump_mgr(upipe);
         case UPIPE_REGISTER_REQUEST: {
             struct urequest *request = va_arg(args, struct urequest *);
             return upipe_rtcpfb_alloc_output_proxy(upipe, request);
