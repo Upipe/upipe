@@ -223,8 +223,6 @@ UPIPE_HELPER_FLOW(upipe_avfsrc_sub, NULL)
 UPIPE_HELPER_INNER(upipe_avfsrc_sub, last_inner)
 UPIPE_HELPER_UPROBE(upipe_avfsrc_sub, urefcount_real, last_inner_probe,
                     NULL)
-UPIPE_HELPER_BIN_OUTPUT(upipe_avfsrc_sub, last_inner,
-                        output, output_request_list)
 
 UPIPE_HELPER_UBUF_MGR(upipe_avfsrc_sub, ubuf_mgr, flow_format, ubuf_mgr_request,
                       upipe_avfsrc_sub_check,
@@ -262,7 +260,7 @@ static struct upipe *upipe_avfsrc_sub_alloc(struct upipe_mgr *mgr,
     urefcount_init(upipe_avfsrc_sub_to_urefcount_real(upipe_avfsrc_sub),
                    upipe_avfsrc_sub_free);
     upipe_avfsrc_sub_init_last_inner_probe(upipe);
-    upipe_avfsrc_sub_init_bin_output(upipe);
+    upipe_avfsrc_sub_init_last_inner(upipe);
     upipe_avfsrc_sub_init_ubuf_mgr(upipe);
     upipe_avfsrc_sub_init_sub(upipe);
     upipe_avfsrc_sub->id = UINT64_MAX;
@@ -386,16 +384,14 @@ static int upipe_avfsrc_sub_control(struct upipe *upipe,
     UBASE_HANDLED_RETURN(upipe_avfsrc_sub_control_super(upipe, command, args));
 
     switch (command) {
-        case UPIPE_BIN_GET_FIRST_INNER: {
-            struct upipe_avfsrc_sub *upipe_avfsrc_sub =
-                upipe_avfsrc_sub_from_upipe(upipe);
+        case UPIPE_BIN_GET_FIRST_INNER:
+        case UPIPE_BIN_GET_LAST_INNER: {
             struct upipe **p = va_arg(args, struct upipe **);
-            *p = upipe_avfsrc_sub->last_inner;
-            return (*p != NULL) ? UBASE_ERR_NONE : UBASE_ERR_UNHANDLED;
+            return upipe_avfsrc_sub_get_last_inner(upipe, p);
         }
 
         default:
-            return upipe_avfsrc_sub_control_bin_output(upipe, command, args);
+            return upipe_avfsrc_sub_control_last_inner(upipe, command, args);
     }
 }
 
@@ -428,7 +424,7 @@ static void upipe_avfsrc_sub_no_ref(struct upipe *upipe)
 {
     struct upipe_avfsrc_sub *sub = upipe_avfsrc_sub_from_upipe(upipe);
 
-    upipe_avfsrc_sub_clean_bin_output(upipe);
+    upipe_avfsrc_sub_clean_last_inner(upipe);
     upipe_avfsrc_sub_clean_sub(upipe);
     urefcount_release(upipe_avfsrc_sub_to_urefcount_real(sub));
 }
