@@ -259,8 +259,6 @@ static struct upipe *upipe_rtpfb_output_alloc(struct upipe_mgr *mgr,
  */
 static void upipe_rtpfb_output_free(struct upipe *upipe)
 {
-    struct upipe_rtpfb_output *upipe_rtpfb_output =
-        upipe_rtpfb_output_from_upipe(upipe);
     upipe_throw_dead(upipe);
 
     struct upipe_rtpfb *upipe_rtpfb = upipe_rtpfb_from_sub_mgr(upipe->mgr);
@@ -268,8 +266,7 @@ static void upipe_rtpfb_output_free(struct upipe *upipe)
     upipe_rtpfb_output_clean_output(upipe);
     upipe_rtpfb_output_clean_sub(upipe);
     upipe_rtpfb_output_clean_urefcount(upipe);
-    upipe_clean(upipe);
-    free(upipe_rtpfb_output);
+    upipe_rtpfb_output_free_void(upipe);
 }
 
 /** @internal @This sends a retransmission request for a number of seqnums.
@@ -1190,6 +1187,7 @@ static void upipe_rtpfb_free(struct urefcount *urefcount_real)
     }
     upipe_rtpfb_clean_upump_mgr(upipe);
     upipe_rtpfb_clean_uclock(upipe);
+    upipe_rtpfb_clean_sub_outputs(upipe);
     uprobe_release(upipe_rtpfb->uprobe);
 
     struct uchain *uchain, *uchain_tmp;
