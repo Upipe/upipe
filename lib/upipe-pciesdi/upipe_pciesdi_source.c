@@ -58,6 +58,9 @@
 #include "sdi_config.h"
 
 #include "../upipe-hbrmt/upipe_hbrmt_common.h"
+#include "../upipe-hbrmt/sdidec.h"
+
+#define DEVICE_IS_BITPACKED 1
 
 static void levelb_unpack(const uint16_t *src, uint16_t *dst1, uint16_t *dst2, uintptr_t pixels);
 void upipe_sdi3g_levelb_unpack_sse2(const uint16_t *src, uint16_t *dst1, uint16_t *dst2, uintptr_t pixels);
@@ -115,6 +118,7 @@ struct upipe_pciesdi_src {
     uint8_t *read_buffer;
 
     void (*sdi3g_levelb_unpack)(const uint16_t *src, uint16_t *dst1, uint16_t *dst2, uintptr_t pixels);
+    void (*sdi_to_uyvy)(const uint8_t *src, uint16_t *y, uintptr_t pixels);
 
     /** public upipe structure */
     struct upipe upipe;
@@ -166,11 +170,20 @@ static struct upipe *upipe_pciesdi_src_alloc(struct upipe_mgr *mgr,
         return NULL;
 
     upipe_pciesdi_src->sdi3g_levelb_unpack = levelb_unpack;
+    upipe_pciesdi_src->sdi_to_uyvy = upipe_sdi_to_uyvy_c;
 #if defined(HAVE_X86ASM)
 #if defined(__i686__) || defined(__x86_64__)
     if (__builtin_cpu_supports("sse2")) {
         upipe_pciesdi_src->sdi3g_levelb_unpack = upipe_sdi3g_levelb_unpack_sse2;
     }
+
+    if (__builtin_cpu_supports("ssse3")) {
+        upipe_pciesdi_src->sdi_to_uyvy = upipe_sdi_to_uyvy_ssse3;
+    }
+
+   if (__builtin_cpu_supports("avx2")) {
+        upipe_pciesdi_src->sdi_to_uyvy = upipe_sdi_to_uyvy_avx2;
+   }
 #endif
 #endif
 
@@ -284,6 +297,66 @@ static inline bool sdi3g_levelb_sav_match(const uint16_t *src)
     return false;
 }
 
+static inline bool hd_eav_match_bitpacked(const uint8_t *src)
+{
+    if (src[0] == 0xff
+            && src[1] == 0xff
+            && src[2] == 0xf0
+            && src[3] == 0
+            && src[4] == 0
+            && src[5] == 0
+            && src[6] == 0
+            && ((src[7] == 9 && src[8] == 0xd2 && src[9] == 0x74)
+                || (src[7] == 0xb && src[8] == 0x62 && src[9] == 0xd8)
+                || (src[7] == 0xd && src[8] == 0xa3 && src[9] == 0x68)
+                || (src[7] == 0xf && src[8] == 0x13 && src[9] == 0xc4)))
+        return true;
+    return false;
+}
+
+static inline bool hd_sav_match_bitpacked(const uint8_t *src)
+{
+    if (src[-10] == 0xff
+            && src[-9] == 0xff
+            && src[-8] == 0xf0
+            && src[-7] == 0
+            && src[-6] == 0
+            && src[-5] == 0
+            && src[-4] == 0
+            && ((src[-3] == 8 && src[-2] == 2 && src[-1] == 0)
+                || (src[-3] == 0xa && src[-2] == 0xb2 && src[-1] == 0xac)
+                || (src[-3] == 0xc && src[-2] == 0x73 && src[-1] == 0x1c)
+                || (src[-3] == 0xe && src[-2] == 0xc3 && src[-1] == 0xb0)))
+        return true;
+    return false;
+}
+
+static inline bool sd_eav_match_bitpacked(const uint8_t *src)
+{
+    if (src[0] == 0xff
+            && src[1] == 0xc0
+            && src[2] == 0
+            && ((src[3] == 2 && src[4] == 0x74)
+                || (src[3] == 2 && src[4] == 0xd8)
+                || (src[3] == 3 && src[4] == 0x68)
+                || (src[3] == 3 && src[4] == 0xc4)))
+        return true;
+    return false;
+}
+
+static inline bool sd_sav_match_bitpacked(const uint8_t *src)
+{
+    if (src[-5] == 0xff
+            && src[-4] == 0xc0
+            && src[-3] == 0
+            && ((src[-2] == 2 && src[-1] == 0)
+                || (src[-2] == 2 && src[-1] == 0xac)
+                || (src[-2] == 3 && src[-1] == 0x1c)
+                || (src[-2] == 3 && src[-1] == 0xb0)))
+        return true;
+    return false;
+}
+
 static void levelb_unpack(const uint16_t *src, uint16_t *dst1, uint16_t *dst2, uintptr_t pixels)
 {
     for (int i = 0; i < pixels; i++) {
@@ -335,7 +408,11 @@ static void upipe_pciesdi_src_worker(struct upump *upump)
         sdi_decode_scan(scan),
         sdi_decode_rate(rate));
 
+#if DEVICE_IS_BITPACKED
+    int sdi_line_width = upipe_pciesdi_src->sdi_format->width * 2 * 10 / 8;
+#else
     int sdi_line_width = upipe_pciesdi_src->sdi_format->width * 4;
+#endif
     if (upipe_pciesdi_src->sdi3g_levelb)
         sdi_line_width *= 2;
 
@@ -373,7 +450,13 @@ static void upipe_pciesdi_src_worker(struct upump *upump)
     int lines = ret / sdi_line_width;
     int processed_bytes = lines * sdi_line_width;
     struct uref *uref = uref_block_alloc(upipe_pciesdi_src->uref_mgr,
-            upipe_pciesdi_src->ubuf_mgr, processed_bytes);
+            upipe_pciesdi_src->ubuf_mgr,
+#if DEVICE_IS_BITPACKED
+            lines * upipe_pciesdi_src->sdi_format->width * 4
+#else
+            lines * sdi_line_width
+#endif
+            );
     UBASE_FATAL_RETURN(upipe, uref ? UBASE_ERR_NONE : UBASE_ERR_ALLOC);
 
     uint8_t *block_buf;
@@ -385,6 +468,7 @@ static void upipe_pciesdi_src_worker(struct upump *upump)
 
     bool print_error_eav = true, print_error_line = true, print_error_sav = true;
     for (int i = 0; i < lines; i++) {
+#if !DEVICE_IS_BITPACKED /* Note reversed condition. */
         const uint16_t *sdi_line = (uint16_t*)(upipe_pciesdi_src->read_buffer + i * sdi_line_width);
         int active_offset = 2 * upipe_pciesdi_src->sdi_format->active_offset;
         if (upipe_pciesdi_src->sdi3g_levelb)
@@ -477,6 +561,51 @@ static void upipe_pciesdi_src_worker(struct upump *upump)
         } else {
             memcpy(block_buf + i * sdi_line_width, sdi_line, sdi_line_width);
         }
+#else
+        const uint8_t *sdi_line = upipe_pciesdi_src->read_buffer + i * sdi_line_width;
+        int active_offset = upipe_pciesdi_src->sdi_format->active_offset * 2 * 10 / 8;
+        if (upipe_pciesdi_src->sdi3g_levelb)
+            active_offset *= 2;
+        const uint8_t *active_start = sdi_line + active_offset;
+
+        if (upipe_pciesdi_src->sdi_format->pict_fmt->sd) {
+            /* Check EAV is present. */
+            if (print_error_eav && !sd_eav_match_bitpacked(sdi_line)) {
+                upipe_err_va(upipe, "SD EAV not found at %#x", i * sdi_line_width);
+                print_error_eav = false;
+            }
+
+            /* Check SAV is present. */
+            if (print_error_sav && !sd_sav_match_bitpacked(active_start)) {
+                upipe_err_va(upipe, "SD SAV not found at %#x", i * sdi_line_width + active_offset);
+                print_error_sav = false;
+            }
+        } else if (upipe_pciesdi_src->sdi3g_levelb) {
+        } else { /* HD */
+            /* Check EAV is present. */
+            if (print_error_eav && !hd_eav_match_bitpacked(sdi_line)) {
+                upipe_err_va(upipe, "HD EAV not found at %#x", i * sdi_line_width);
+                print_error_eav = false;
+            }
+
+            /* Check SAV is present. */
+            if (print_error_sav && !hd_sav_match_bitpacked(active_start)) {
+                upipe_err_va(upipe, "HD SAV not found at %#x", i * sdi_line_width + active_offset);
+                print_error_sav = false;
+                dump_and_exit_clean(upipe, upipe_pciesdi_src->read_buffer,
+                        2*DMA_BUFFER_COUNT*DMA_BUFFER_SIZE);
+            }
+
+            /* TODO: line number check, maybe on unpacked data. */
+        } /* end HD */
+
+        if (upipe_pciesdi_src->sdi3g_levelb) {
+        } else {
+            uint16_t *dst = (uint16_t*)block_buf + 2*i * upipe_pciesdi_src->sdi_format->width;
+            upipe_pciesdi_src->sdi_to_uyvy(sdi_line, dst,
+                    upipe_pciesdi_src->sdi_format->width);
+        }
+#endif
     }
 
     if (ret != processed_bytes) {
