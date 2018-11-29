@@ -162,7 +162,7 @@ static UBASE_UNUSED bool                                                    \
  * @param flow_def_attr flow def attributes uref                            \
  * @return new flow definition                                              \
  */                                                                         \
-static struct uref *                                                        \
+static UBASE_UNUSED inline struct uref *                                    \
     STRUCTURE##_store_flow_def_attr(struct upipe *upipe,                    \
                                     struct uref *flow_def_attr)             \
 {                                                                           \
