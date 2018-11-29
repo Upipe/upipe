@@ -382,6 +382,7 @@ static void upipe_pciesdi_src_worker(struct upump *upump)
         dump_and_exit_clean(upipe, NULL, 0);
     }
 
+    bool print_error_eav = true, print_error_line = true, print_error_sav = true;
     for (int i = 0; i < ret / sdi_line_width; i++) {
         const uint16_t *sdi_line = (uint16_t*)(upipe_pciesdi_src->read_buffer + i * sdi_line_width);
         int active_offset = 2 * upipe_pciesdi_src->sdi_format->active_offset;
@@ -391,64 +392,76 @@ static void upipe_pciesdi_src_worker(struct upump *upump)
 
         if (upipe_pciesdi_src->sdi_format->pict_fmt->sd) {
             /* Check EAV is present. */
-            if (!sd_eav_match(sdi_line)) {
+            if (print_error_eav && !sd_eav_match(sdi_line)) {
                 upipe_err_va(upipe, "SD EAV not found at %#x", i * sdi_line_width);
+                print_error_eav = false;
             }
 
             /* Check SAV is present. */
-            if (!sd_sav_match(active_start)) {
+            if (print_error_sav && !sd_sav_match(active_start)) {
                 upipe_err_va(upipe, "SD SAV not found at %#x", i * sdi_line_width + active_offset);
+                print_error_sav = false;
             }
         } else if (upipe_pciesdi_src->sdi3g_levelb) {
             /* Check EAV is present. */
-            if (!sdi3g_levelb_eav_match(sdi_line)) {
+            if (print_error_eav && !sdi3g_levelb_eav_match(sdi_line)) {
                 upipe_err_va(upipe, "SDI-3G level B EAV not found at %#x", i * sdi_line_width);
+                print_error_eav = false;
             }
 
             /* Check SAV is present. */
-            if (!sdi3g_levelb_sav_match(active_start)) {
+            if (print_error_sav && !sdi3g_levelb_sav_match(active_start)) {
                 upipe_err_va(upipe, "SDI-3G level B SAV not found at %#x", i * sdi_line_width + active_offset);
+                print_error_sav = false;
             }
 
             /* Check line number. */
             int line = (sdi_line[16] & 0x1ff) >> 2;
             line |= ((sdi_line[20] & 0x1ff) >> 2) << 7;
-            if (line > upipe_pciesdi_src->sdi_format->height  || line < 1) {
+            if (print_error_line && (line > upipe_pciesdi_src->sdi_format->height || line < 1)) {
                 upipe_err_va(upipe, "line %d out of range (1-%d)", line,
                         upipe_pciesdi_src->sdi_format->height);
+                print_error_line = false;
             }
 
             /* Check line number is increasing correctly. */
-            if (upipe_pciesdi_src->previous_sdi_line_number != upipe_pciesdi_src->sdi_format->height
+            if (print_error_line
+                    && upipe_pciesdi_src->previous_sdi_line_number != upipe_pciesdi_src->sdi_format->height
                     && line != upipe_pciesdi_src->previous_sdi_line_number + 1) {
                 upipe_warn_va(upipe, "sdi_line_number not linearly increasing (%d -> %d)",
                         upipe_pciesdi_src->previous_sdi_line_number, line);
+                print_error_line = false;
             }
             upipe_pciesdi_src->previous_sdi_line_number = line;
         } else { /* HD */
             /* Check EAV is present. */
-            if (!hd_eav_match(sdi_line)) {
+            if (print_error_eav && !hd_eav_match(sdi_line)) {
                 upipe_err_va(upipe, "HD EAV not found at %#x", i * sdi_line_width);
+                print_error_eav = false;
             }
 
             /* Check SAV is present. */
-            if (!hd_sav_match(active_start)) {
+            if (print_error_sav && !hd_sav_match(active_start)) {
                 upipe_err_va(upipe, "HD SAV not found at %#x", i * sdi_line_width + active_offset);
+                print_error_sav = false;
             }
 
             /* Check line number. */
             int line = (sdi_line[8] & 0x1ff) >> 2;
             line |= ((sdi_line[10] & 0x1ff) >> 2) << 7;
-            if (line > upipe_pciesdi_src->sdi_format->height  || line < 1) {
+            if (print_error_line && (line > upipe_pciesdi_src->sdi_format->height || line < 1)) {
                 upipe_err_va(upipe, "line %d out of range (1-%d)", line,
                         upipe_pciesdi_src->sdi_format->height);
+                print_error_line = false;
             }
 
             /* Check line number is increasing correctly. */
-            if (upipe_pciesdi_src->previous_sdi_line_number != upipe_pciesdi_src->sdi_format->height
+            if (print_error_line
+                    && upipe_pciesdi_src->previous_sdi_line_number != upipe_pciesdi_src->sdi_format->height
                     && line != upipe_pciesdi_src->previous_sdi_line_number + 1) {
                 upipe_warn_va(upipe, "sdi_line_number not linearly increasing (%d -> %d)",
                         upipe_pciesdi_src->previous_sdi_line_number, line);
+                print_error_line = false;
             }
             upipe_pciesdi_src->previous_sdi_line_number = line;
         } /* end HD */
