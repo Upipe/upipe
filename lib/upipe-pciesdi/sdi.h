@@ -150,6 +150,7 @@ struct sdi_ioctl_lmh0387_spi {
 
 struct sdi_ioctl_rx {
     uint8_t crc_enable;
+    uint8_t packed;
     uint8_t locked;
     uint8_t mode;
     uint8_t family;
@@ -159,6 +160,7 @@ struct sdi_ioctl_rx {
 
 struct sdi_ioctl_tx {
     uint8_t crc_enable;
+    uint8_t packed;
     uint8_t mode;
     uint8_t txen;
     uint8_t slew;
