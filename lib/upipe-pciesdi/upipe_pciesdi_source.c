@@ -370,7 +370,8 @@ static void upipe_pciesdi_src_worker(struct upump *upump)
     }
 
     ret += upipe_pciesdi_src->cached_read_bytes;
-    int processed_bytes = (ret / sdi_line_width) * sdi_line_width;
+    int lines = ret / sdi_line_width;
+    int processed_bytes = lines * sdi_line_width;
     struct uref *uref = uref_block_alloc(upipe_pciesdi_src->uref_mgr,
             upipe_pciesdi_src->ubuf_mgr, processed_bytes);
     UBASE_FATAL_RETURN(upipe, uref ? UBASE_ERR_NONE : UBASE_ERR_ALLOC);
@@ -383,7 +384,7 @@ static void upipe_pciesdi_src_worker(struct upump *upump)
     }
 
     bool print_error_eav = true, print_error_line = true, print_error_sav = true;
-    for (int i = 0; i < ret / sdi_line_width; i++) {
+    for (int i = 0; i < lines; i++) {
         const uint16_t *sdi_line = (uint16_t*)(upipe_pciesdi_src->read_buffer + i * sdi_line_width);
         int active_offset = 2 * upipe_pciesdi_src->sdi_format->active_offset;
         if (upipe_pciesdi_src->sdi3g_levelb)
