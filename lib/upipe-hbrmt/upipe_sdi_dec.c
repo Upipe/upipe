@@ -522,70 +522,73 @@ static void extract_hd_audio(struct upipe *upipe, const uint16_t *packet, int li
         upipe_warn_va(upipe, "Audio packet on invalid line %d", line_num);
     }
 
-    /* FIXME: extract this to a generic HD validation function */
-    uint16_t checksum = 0;
-    int len = data_count + 3 /* DID / DBN / DC */;
-    for (int i = 0; i < len/3; i++) {
-        checksum += packet[6 + 2*3*i+0];
-        checksum += packet[6 + 2*3*i+2];
-        checksum += packet[6 + 2*3*i+4];
-    }
-    checksum &= 0x1ff;
+    if (upipe_sdi_dec->debug) {
+        /* FIXME: extract this to a generic HD validation function */
+        uint16_t checksum = 0;
+        int len = data_count + 3 /* DID / DBN / DC */;
+        for (int i = 0; i < len/3; i++) {
+            checksum += packet[6 + 2*3*i+0];
+            checksum += packet[6 + 2*3*i+2];
+            checksum += packet[6 + 2*3*i+4];
+        }
+        checksum &= 0x1ff;
 
-    uint16_t stream_checksum = packet[6+len*2] & 0x1ff;
-    if (upipe_sdi_dec->debug && checksum != stream_checksum) {
-        upipe_err_va(upipe, "Invalid checksum: 0x%.3x != 0x%.3x",
-                checksum, stream_checksum
-                );
-    }
+        uint16_t stream_checksum = packet[6+len*2] & 0x1ff;
+        if (checksum != stream_checksum) {
+            upipe_err_va(upipe, "Invalid checksum: 0x%.3x != 0x%.3x",
+                    checksum, stream_checksum
+                    );
+        }
 
-    /* read ECC from bitstream */
-    uint8_t stream_ecc[6];
-    for (int i = 0; i < 6; i++)
-        stream_ecc[i] = packet[48 + 2*i] & 0xff;
+        /* read ECC from bitstream */
+        uint8_t stream_ecc[6];
+        for (int i = 0; i < 6; i++)
+            stream_ecc[i] = packet[48 + 2*i] & 0xff;
 
-    /* calculate expected ECC */
-    uint8_t ecc[6] = { 0 };
-    for (int i = 0; i < 48; i += 2) {
-        const uint8_t in = ecc[0] ^ (packet[i] & 0xff);
-        ecc[0] = ecc[1] ^ in;
-        ecc[1] = ecc[2];
-        ecc[2] = ecc[3] ^ in;
-        ecc[3] = ecc[4] ^ in;
-        ecc[4] = ecc[5] ^ in;
-        ecc[5] = in;
-    }
+        /* calculate expected ECC */
+        uint8_t ecc[6] = { 0 };
+        for (int i = 0; i < 48; i += 2) {
+            const uint8_t in = ecc[0] ^ (packet[i] & 0xff);
+            ecc[0] = ecc[1] ^ in;
+            ecc[1] = ecc[2];
+            ecc[2] = ecc[3] ^ in;
+            ecc[3] = ecc[4] ^ in;
+            ecc[4] = ecc[5] ^ in;
+            ecc[5] = in;
+        }
 
-    if (upipe_sdi_dec->debug && memcmp(ecc, stream_ecc, sizeof(ecc))) {
-        upipe_dbg_va(upipe, "Wrong ECC, %.2x%.2x%.2x%.2x%.2x%.2x != %.2x%.2x%.2x%.2x%.2x%.2x",
-                ecc[0], ecc[1], ecc[2], ecc[3], ecc[4], ecc[5],
-                stream_ecc[0], stream_ecc[1], stream_ecc[2], stream_ecc[3], stream_ecc[4], stream_ecc[5]);
-    }
-    uint16_t clock = packet[12] & 0xff;
-    clock |= (packet[14] & 0x0f) << 8;
-    clock |= (packet[14] & 0x20) << 7;
-    bool mpf = packet[14] & 0x10;
+        if (memcmp(ecc, stream_ecc, sizeof(ecc))) {
+            upipe_dbg_va(upipe, "Wrong ECC, %.2x%.2x%.2x%.2x%.2x%.2x != %.2x%.2x%.2x%.2x%.2x%.2x",
+                    ecc[0], ecc[1], ecc[2], ecc[3], ecc[4], ecc[5],
+                    stream_ecc[0], stream_ecc[1], stream_ecc[2], stream_ecc[3], stream_ecc[4], stream_ecc[5]);
+        }
 
-    /* FIXME */
-    if ((line_num >= 9 && line_num <= 9 + 5) || (line_num >= 571 && line_num <= 571 + 5)) {
-    } else
-        mpf = false;
+        uint16_t clock = packet[12] & 0xff;
+        clock |= (packet[14] & 0x0f) << 8;
+        clock |= (packet[14] & 0x20) << 7;
+        bool mpf = packet[14] & 0x10;
 
-    uint64_t audio_clock = upipe_sdi_dec->audio_samples[audio_group] *
-        f->width * f->height * upipe_sdi_dec->f->fps.num /
-        upipe_sdi_dec->f->fps.den / 48000;
+        /* FIXME */
+        if ((line_num >= 9 && line_num <= 9 + 5) || (line_num >= 571 && line_num <= 571 + 5)) {
+        } else
+            mpf = false;
 
-    if (unlikely(upipe_sdi_dec->eav_clock == 0))
-        upipe_sdi_dec->eav_clock -= clock; // initial phase offset
+        uint64_t audio_clock = upipe_sdi_dec->audio_samples[audio_group] *
+            f->width * f->height * upipe_sdi_dec->f->fps.num /
+            upipe_sdi_dec->f->fps.den / 48000;
 
-    int64_t offset = audio_clock -
-        (upipe_sdi_dec->eav_clock - (mpf ? f->width : 0));
+        if (unlikely(upipe_sdi_dec->eav_clock == 0))
+            upipe_sdi_dec->eav_clock -= clock; // initial phase offset
 
-    if (offset + 1 < clock || offset - 1 > clock) {
-        upipe_sdi_dec->eav_clock -= clock - offset;
-        if (0) upipe_notice_va(upipe,
-                "audio group %d on line %d: wrong audio phase (mpf %d) CLK %d != %" PRId64 " => %"PRId64"",
-                audio_group, line_num, mpf, clock, offset, offset - clock);
+        int64_t offset = audio_clock -
+            (upipe_sdi_dec->eav_clock - (mpf ? f->width : 0));
+
+        if (offset + 1 < clock || offset - 1 > clock) {
+            upipe_sdi_dec->eav_clock -= clock - offset;
+            if (0) upipe_notice_va(upipe,
+                    "audio group %d on line %d: wrong audio phase (mpf %d) CLK %d != %" PRId64 " => %"PRId64"",
+                    audio_group, line_num, mpf, clock, offset, offset - clock);
+        }
     }
 
     if (ctx->buf_audio)
@@ -761,7 +764,8 @@ static bool upipe_sdi_dec_handle(struct upipe *upipe, struct uref *uref,
     uref_clock_set_pts_orig(uref, pts);
     uref_clock_set_dts_pts_delay(uref, 0);
     uref_clock_set_cr_dts_delay(uref, 0);
-    upipe_throw_clock_ref(upipe, uref, pts, 0);
+    bool discontinuity = ubase_check(uref_flow_get_discontinuity(uref));
+    upipe_throw_clock_ref(upipe, uref, pts, discontinuity);
     upipe_throw_clock_ts(upipe, uref);
 
     /* allocate dest ubuf */
@@ -1170,11 +1174,9 @@ static bool upipe_sdi_dec_handle(struct upipe *upipe, struct uref *uref,
         // FIXME: ntsc - a/v pts need to be mostly equal, in case we receive
         // frames without audio
         //uint64_t pts = UINT32_MAX + audio_sub->samples * UCLOCK_FREQ / 48000;
-        uref_clock_set_pts_prog(uref_audio, pts);
-        uref_clock_set_pts_orig(uref_audio, pts);
-        uref_clock_set_dts_pts_delay(uref_audio, 0);
-
-        upipe_throw_clock_ts(upipe, uref_audio);
+        //uref_clock_set_pts_prog(uref_audio, pts);
+        //uref_clock_set_pts_orig(uref_audio, pts);
+        //uref_clock_set_dts_pts_delay(uref_audio, 0);
 
         int samples_received = audio_ctx.group_offset[0];
         for (int i = 1; i < UPIPE_SDI_CHANNELS_PER_GROUP; i++) {
@@ -1556,21 +1558,21 @@ static struct upipe *_upipe_sdi_dec_alloc(struct upipe_mgr *mgr,
 #if defined(HAVE_X86ASM)
 #if defined(__i686__) || defined(__x86_64__)
     if (__builtin_cpu_supports("ssse3")) {
-        upipe_sdi_dec->uyvy_to_v210 = upipe_uyvy_to_v210_unaligned_ssse3;
-        upipe_sdi_dec->uyvy_to_planar_8 = upipe_uyvy_to_planar_8_unaligned_ssse3;
-        upipe_sdi_dec->uyvy_to_planar_10 = upipe_uyvy_to_planar_10_unaligned_ssse3;
+        upipe_sdi_dec->uyvy_to_v210 = upipe_uyvy_to_v210_ssse3;
+        upipe_sdi_dec->uyvy_to_planar_8 = upipe_uyvy_to_planar_8_ssse3;
+        upipe_sdi_dec->uyvy_to_planar_10 = upipe_uyvy_to_planar_10_ssse3;
     }
 
     if (__builtin_cpu_supports("avx")) {
-        upipe_sdi_dec->uyvy_to_v210 = upipe_uyvy_to_v210_unaligned_avx;
-        upipe_sdi_dec->uyvy_to_planar_8 = upipe_uyvy_to_planar_8_unaligned_avx;
-        upipe_sdi_dec->uyvy_to_planar_10 = upipe_uyvy_to_planar_10_unaligned_avx;
+        upipe_sdi_dec->uyvy_to_v210 = upipe_uyvy_to_v210_avx;
+        upipe_sdi_dec->uyvy_to_planar_8 = upipe_uyvy_to_planar_8_avx;
+        upipe_sdi_dec->uyvy_to_planar_10 = upipe_uyvy_to_planar_10_avx;
     }
 
     if (__builtin_cpu_supports("avx2")) {
-        upipe_sdi_dec->uyvy_to_v210 = upipe_uyvy_to_v210_unaligned_avx2;
-        upipe_sdi_dec->uyvy_to_planar_8 = upipe_uyvy_to_planar_8_unaligned_avx2;
-        upipe_sdi_dec->uyvy_to_planar_10 = upipe_uyvy_to_planar_10_unaligned_avx2;
+        upipe_sdi_dec->uyvy_to_v210 = upipe_uyvy_to_v210_avx2;
+        upipe_sdi_dec->uyvy_to_planar_8 = upipe_uyvy_to_planar_8_avx2;
+        upipe_sdi_dec->uyvy_to_planar_10 = upipe_uyvy_to_planar_10_avx2;
     }
 #endif
 #endif

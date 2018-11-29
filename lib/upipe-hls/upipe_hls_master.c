@@ -364,10 +364,14 @@ static void upipe_hls_master_input(struct upipe *upipe,
         ulist_add(&upipe_hls_master->renditions, uref_to_uchain(uref));
     }
     else {
-        const char *audio_id;
-        if (ubase_check(uref_m3u_master_get_audio(uref, &audio_id)))
-            upipe_hls_master_set_renditions(upipe, uref, "AUDIO", audio_id);
-        //FIXME: handle video and subtitles
+        /** attach renditions */
+        const char *id;
+        if (ubase_check(uref_m3u_master_get_audio(uref, &id)))
+            upipe_hls_master_set_renditions(upipe, uref, "AUDIO", id);
+        if (ubase_check(uref_m3u_master_get_video(uref, &id)))
+            upipe_hls_master_set_renditions(upipe, uref, "VIDEO", id);
+        if (ubase_check(uref_m3u_master_get_subtitles(uref, &id)))
+            upipe_hls_master_set_renditions(upipe, uref, "SUBTITLES", id);
         uref_flow_set_id(uref, upipe_hls_master->id++);
         ulist_add(&upipe_hls_master->items, uref_to_uchain(uref));
     }

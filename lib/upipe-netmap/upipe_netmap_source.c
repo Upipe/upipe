@@ -278,7 +278,7 @@ static struct upipe *upipe_netmap_source_alloc(struct upipe_mgr *mgr,
 #if defined(HAVE_X86ASM)
 #if defined(__i686__) || defined(__x86_64__)
     if (__builtin_cpu_supports("ssse3")) {
-        upipe_netmap_source->sdi_to_uyvy = upipe_sdi_to_uyvy_unaligned_ssse3;
+        upipe_netmap_source->sdi_to_uyvy = upipe_sdi_to_uyvy_ssse3;
         upipe_netmap_source->bitpacked_to_v210 = upipe_sdi_to_v210_ssse3;
         upipe_netmap_source->bitpacked_to_planar_8 = upipe_sdi_to_planar_8_ssse3;
         upipe_netmap_source->bitpacked_to_planar_10 = upipe_sdi_to_planar_10_ssse3;
@@ -291,7 +291,7 @@ static struct upipe *upipe_netmap_source_alloc(struct upipe_mgr *mgr,
     }
 
    if (__builtin_cpu_supports("avx2")) {
-        upipe_netmap_source->sdi_to_uyvy = upipe_sdi_to_uyvy_unaligned_avx2;
+        upipe_netmap_source->sdi_to_uyvy = upipe_sdi_to_uyvy_avx2;
         upipe_netmap_source->bitpacked_to_v210 = upipe_sdi_to_v210_avx2;
         upipe_netmap_source->bitpacked_to_planar_8 = upipe_sdi_to_planar_8_avx2;
         upipe_netmap_source->bitpacked_to_planar_10 = upipe_sdi_to_planar_10_avx2;

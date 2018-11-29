@@ -473,7 +473,9 @@ static void upipe_bmd_sink_extract_ttx(IDeckLinkVideoFrameAncillary *ancillary,
             uint16_t buf[VANC_WIDTH*2];
 
             upipe_sdi_blank_c(buf, VANC_WIDTH);
-            sdi_encode_ttx(&buf[0], packets[i], &packet[i][0], &ctr_array[i]);
+
+            /* +1 to destination buffer to write to luma plane */
+            sdi_encode_ttx(&buf[1], packets[i], &packet[i][0], &ctr_array[i]);
 
             void *vanc;
             int line = OP47_LINE1 + 563*i;
@@ -718,16 +720,12 @@ static upipe_bmd_sink_frame *get_video_frame(struct upipe *upipe,
             void *vanc;
             ancillary->GetBufferForVerticalBlankingLine(CC_LINE, &vanc);
             uint16_t buf[VANC_WIDTH*2];
-            sdi_write_cdp(pic_data, pic_data_size, buf,
+            /* +1 to write into the Y plane */
+            sdi_write_cdp(pic_data, pic_data_size, &buf[1], upipe_bmd_sink->mode == bmdModeNTSC ? 1 : 2,
                     &upipe_bmd_sink->cdp_hdr_sequence_cntr, fps);
             sdi_calc_parity_checksum(buf);
 
-            if (sd) {
-                for (int i = 0; i < VANC_WIDTH; i++)
-                    buf[i] = buf[2*i];
-                sdi_encode_v210_sd((uint32_t*)vanc, (uint8_t*)buf, w);
-            } else
-                sdi_encode_v210((uint32_t*)vanc, buf, w);
+            sdi_encode_v210((uint32_t*)vanc, buf, w);
         }
     }
 

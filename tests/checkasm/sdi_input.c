@@ -56,7 +56,7 @@ void checkasm_check_sdi_input(void)
     if (cpu_flags & AV_CPU_FLAG_SSSE3) {
         s.planar10 = upipe_sdi_to_planar_10_ssse3;
         s.planar8 = upipe_sdi_to_planar_8_ssse3;
-        s.uyvy = upipe_sdi_to_uyvy_aligned_ssse3;
+        s.uyvy = upipe_sdi_to_uyvy_ssse3;
         s.v210 = upipe_sdi_to_v210_ssse3;
     }
     if (cpu_flags & AV_CPU_FLAG_AVX) {
@@ -67,7 +67,7 @@ void checkasm_check_sdi_input(void)
     if (cpu_flags & AV_CPU_FLAG_AVX2) {
         s.planar10 = upipe_sdi_to_planar_10_avx2;
         s.planar8 = upipe_sdi_to_planar_8_avx2;
-        s.uyvy = upipe_sdi_to_uyvy_aligned_avx2;
+        s.uyvy = upipe_sdi_to_uyvy_avx2;
         s.v210 = upipe_sdi_to_v210_avx2;
     }
 #endif
@@ -123,8 +123,8 @@ void checkasm_check_sdi_input(void)
     if (check_func(s.uyvy, "sdi_to_uyvy")) {
         uint8_t  src0[NUM_SAMPLES * 10 / 8];
         uint8_t  src1[NUM_SAMPLES * 10 / 8];
-        DECLARE_ALIGNED(32, uint16_t, dst0)[NUM_SAMPLES];
-        DECLARE_ALIGNED(32, uint16_t, dst1)[NUM_SAMPLES];
+        uint16_t dst0[NUM_SAMPLES];
+        uint16_t dst1[NUM_SAMPLES];
         declare_func(void, const uint8_t *src, uint16_t *dst, uintptr_t pixels);
 
         randomize_buffers(src0, src1);
@@ -140,8 +140,8 @@ void checkasm_check_sdi_input(void)
     if (check_func(s.v210, "sdi_to_v210")) {
         uint8_t src0[NUM_SAMPLES * 10 / 8];
         uint8_t src1[NUM_SAMPLES * 10 / 8];
-        DECLARE_ALIGNED(32, uint32_t, dst0)[NUM_SAMPLES / 3 + 8];
-        DECLARE_ALIGNED(32, uint32_t, dst1)[NUM_SAMPLES / 3 + 8];
+        uint32_t dst0[NUM_SAMPLES / 3 + 8];
+        uint32_t dst1[NUM_SAMPLES / 3 + 8];
         declare_func(void, const uint8_t *src, uint32_t *dst, uintptr_t pixels);
         const int pixels = NUM_SAMPLES / 2 / 6 * 6;
 

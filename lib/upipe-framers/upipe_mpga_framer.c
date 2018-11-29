@@ -66,6 +66,9 @@
 #define LATM_CONFIG_PERIOD (UCLOCK_FREQ / 2)
 /** 73 bits */
 #define MAX_ASC_SIZE 10
+/** max number of octetrate changes before considering it is free octetrate
+ * (mp3 only) */
+#define MAX_OCTETRATE_CHANGES 10
 
 /** @This returns the octetrate / 1000 of an MPEG-1 or 2 audio stream. */
 static const uint8_t mpeg_octetrate_table[2][3][16] = {
@@ -189,6 +192,8 @@ struct upipe_mpgaf {
     uint8_t frame_length_type;
     /** octet rate */
     uint64_t octetrate;
+    /* number of octetrate changes */
+    unsigned int octetrate_changes;
     /** residue of the duration in 27 MHz units */
     uint64_t duration_residue;
     /** true we have had a discontinuity recently */
@@ -307,6 +312,8 @@ static struct upipe *upipe_mpgaf_alloc(struct upipe_mgr *mgr,
     upipe_mpgaf->samplerate_idx = upipe_mpgaf->base_samplerate_idx = 0;
     upipe_mpgaf->samplerate = upipe_mpgaf->base_samplerate = 0;
     upipe_mpgaf->frame_length_type = 0;
+    upipe_mpgaf->octetrate = 0;
+    upipe_mpgaf->octetrate_changes = 0;
     upipe_mpgaf->duration_residue = 0;
     upipe_mpgaf->got_discontinuity = false;
     upipe_mpgaf->next_frame_size = -1;
@@ -333,6 +340,19 @@ static bool upipe_mpgaf_parse_mpeg(struct upipe *upipe)
                      MPGA_HEADER_SIZE, header)))
         return true; /* not enough data */
 
+    bool mpeg25 = mpga_get_mpeg25(header);
+    uint8_t id = mpga_get_id(header) == MPGA_ID_2 ? 1 : 0;
+    uint8_t layer = 4 - mpga_get_layer(header);
+    uint8_t octetrate = mpeg_octetrate_table[id][layer - 1]
+                            [mpga_get_bitrate_index(header)];
+    uint8_t max_octetrate = mpeg_octetrate_table[id][layer - 1][14];
+    uint8_t padding = mpga_get_padding(header) ? 1 : 0;
+    uint8_t mode = mpga_get_mode(header);
+    bool copyright = mpga_get_copyright(header);
+    bool original = mpga_get_original(header);
+    if (!octetrate)
+        max_octetrate *= 2;
+
     if (likely(mpga_sync_compare_formats(header, upipe_mpgaf->sync_header))) {
         /* identical sync */
         upipe_mpgaf->next_frame_size = mpga_get_padding(header) ?
@@ -346,6 +366,29 @@ static bool upipe_mpgaf_parse_mpeg(struct upipe *upipe)
         mpga_get_emphasis(header) == MPGA_EMPHASIS_INVALID)
         return false;
 
+    if (layer == 3 &&
+        mpga_sync_compare_formats_free(header, upipe_mpgaf->sync_header)) {
+        if (upipe_mpgaf->octetrate_changes > MAX_OCTETRATE_CHANGES) {
+            if (id || mpeg25) {
+                upipe_mpgaf->frame_size =
+                    576000 * octetrate / upipe_mpgaf->samplerate;
+                upipe_mpgaf->frame_size_padding =
+                    576000 * octetrate / upipe_mpgaf->samplerate + 1;
+            } else {
+                upipe_mpgaf->frame_size =
+                    1152000 * octetrate / upipe_mpgaf->samplerate;
+                upipe_mpgaf->frame_size_padding =
+                    1152000 * octetrate / upipe_mpgaf->samplerate + 1;
+            }
+            memcpy(upipe_mpgaf->sync_header, header, MPGA_HEADER_SIZE);
+            upipe_mpgaf->next_frame_size = mpga_get_padding(header) ?
+                                           upipe_mpgaf->frame_size_padding :
+                                           upipe_mpgaf->frame_size;
+            return true;
+        }
+        upipe_mpgaf->octetrate_changes++;
+    }
+
     struct uref *flow_def = upipe_mpgaf_alloc_flow_def_attr(upipe);
     if (unlikely(flow_def == NULL)) {
         upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
@@ -356,23 +399,10 @@ static bool upipe_mpgaf_parse_mpeg(struct upipe *upipe)
                 upipe_mpgaf->encaps_input))
 
     memcpy(upipe_mpgaf->sync_header, header, MPGA_HEADER_SIZE);
-
-    bool mpeg25 = mpga_get_mpeg25(header);
-    uint8_t id = mpga_get_id(header) == MPGA_ID_2 ? 1 : 0;
-    uint8_t layer = 4 - mpga_get_layer(header);
-    uint8_t octetrate = mpeg_octetrate_table[id][layer - 1]
-                            [mpga_get_bitrate_index(header)];
-    uint8_t max_octetrate = mpeg_octetrate_table[id][layer - 1][14];
     upipe_mpgaf->samplerate = mpeg_samplerate_table[id]
                                 [mpga_get_sampling_freq(header)];
-    uint8_t padding = mpga_get_padding(header) ? 1 : 0;
-    uint8_t mode = mpga_get_mode(header);
-    bool copyright = mpga_get_copyright(header);
-    bool original = mpga_get_original(header);
     if (mpeg25)
         upipe_mpgaf->samplerate /= 2;
-    if (!octetrate)
-        max_octetrate *= 2;
 
     switch (layer) {
         case 1:
@@ -406,6 +436,11 @@ static bool upipe_mpgaf_parse_mpeg(struct upipe *upipe)
                 upipe_mpgaf->samples = 1152;
             }
             UBASE_FATAL(upipe, uref_flow_set_def(flow_def, "block.mp3.sound."))
+
+            if (upipe_mpgaf->octetrate_changes > MAX_OCTETRATE_CHANGES) {
+                upipe_notice(upipe, "octetrate changes too often, using max octetrate");
+                octetrate = max_octetrate;
+            }
             break;
     }
 

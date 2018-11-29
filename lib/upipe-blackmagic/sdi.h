@@ -24,7 +24,7 @@ void sdi_clear_vbi(uint8_t *dst, int w);
 void upipe_sdi_blank_c(uint16_t *dst, uintptr_t pixels);
 
 void sdi_write_cdp(const uint8_t *src, size_t src_size,
-        uint16_t *dst, uint16_t *ctr, uint8_t fps);
+        uint16_t *dst, uint8_t gap, uint16_t *ctr, uint8_t fps);
 
 void sdi_encode_v210_sd(uint32_t *dst, uint8_t *src, int width);
 void sdi_encode_v210(uint32_t *dst, uint16_t *src, int width);

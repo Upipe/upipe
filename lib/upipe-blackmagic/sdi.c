@@ -55,12 +55,14 @@ void sdi_calc_parity_checksum(uint16_t *buf)
     buf[2*(ANC_START_LEN+dc)] = checksum;
 }
 
+/* Writes 8-bit black to buffer consisting of y line, then interleaved uv line */
 void sdi_clear_vbi(uint8_t *dst, int w)
 {
     memset(&dst[0], 0x10, w);
     memset(&dst[w], 0x80, w);
 }
 
+/* Writes 10-bit black to interleaved 10-bit uyvy buffer */
 void upipe_sdi_blank_c(uint16_t *dst, uintptr_t pixels)
 {
     for (int w = 0; w < pixels; w++) {
@@ -69,50 +71,50 @@ void upipe_sdi_blank_c(uint16_t *dst, uintptr_t pixels)
     }
 }
 
-static void sdi_start_anc(uint16_t *dst, uint16_t did, uint16_t sdid)
+static void sdi_start_anc(uint16_t *dst, uint8_t gap, uint16_t did, uint16_t sdid)
 {
-    dst[2*0] = S291_ADF1;
-    dst[2*1] = S291_ADF2;
-    dst[2*2] = S291_ADF3;
-    dst[2*3] = did;
-    dst[2*4] = sdid;
+    dst[gap*0] = S291_ADF1;
+    dst[gap*1] = S291_ADF2;
+    dst[gap*2] = S291_ADF3;
+    dst[gap*3] = did;
+    dst[gap*4] = sdid;
     /* DC */
-    dst[2*5] = 0;
+    dst[gap*5] = 0;
 }
 
 void sdi_write_cdp(const uint8_t *src, size_t src_size,
-        uint16_t *dst, uint16_t *ctr, uint8_t fps)
+        uint16_t *dst, uint8_t gap, uint16_t *ctr, uint8_t fps)
 {
     upipe_sdi_blank_c(dst, VANC_WIDTH);
-    sdi_start_anc(dst, S291_CEA708_DID, S291_CEA708_SDID);
+    sdi_start_anc(dst, gap, S291_CEA708_DID, S291_CEA708_SDID);
 
     const uint8_t cnt = 9 + src_size + 4;
     const uint16_t hdr_sequence_cntr = (*ctr)++;
 
-    dst[2*(ANC_START_LEN + 0)] = 0x96;
-    dst[2*(ANC_START_LEN + 1)] = 0x69;
-    dst[2*(ANC_START_LEN + 2)] = cnt;
-    dst[2*(ANC_START_LEN + 3)] = (fps << 4) | 0xf; // cdp_frame_rate | Reserved
-    dst[2*(ANC_START_LEN + 4)] = (1 << 6) | (1 << 1) | 1; // ccdata_present | caption_service_active | Reserved
-    dst[2*(ANC_START_LEN + 5)] = hdr_sequence_cntr >> 8;
-    dst[2*(ANC_START_LEN + 6)] = hdr_sequence_cntr & 0xff;
-    dst[2*(ANC_START_LEN + 7)] = 0x72;
-    dst[2*(ANC_START_LEN + 8)] = (0x7 << 5) | (src_size / 3);
+    dst[gap*(ANC_START_LEN + 0)] = 0x96;
+    dst[gap*(ANC_START_LEN + 1)] = 0x69;
+    dst[gap*(ANC_START_LEN + 2)] = cnt;
+    dst[gap*(ANC_START_LEN + 3)] = (fps << 4) | 0xf; // cdp_frame_rate | Reserved
+    dst[gap*(ANC_START_LEN + 4)] = (1 << 6) | (1 << 1) | 1; // ccdata_present | caption_service_active | Reserved
+    dst[gap*(ANC_START_LEN + 5)] = hdr_sequence_cntr >> 8;
+    dst[gap*(ANC_START_LEN + 6)] = hdr_sequence_cntr & 0xff;
+    dst[gap*(ANC_START_LEN + 7)] = 0x72;
+    dst[gap*(ANC_START_LEN + 8)] = (0x7 << 5) | (src_size / 3);
 
     for (int i = 0; i < src_size; i++)
-        dst[2*(ANC_START_LEN + 9 + i)] = src[i];
+        dst[gap*(ANC_START_LEN + 9 + i)] = src[i];
 
-    dst[2*(ANC_START_LEN + 9 + src_size)] = 0x74;
-    dst[2*(ANC_START_LEN + 9 + src_size + 1)] = dst[2*(ANC_START_LEN + 5)];
-    dst[2*(ANC_START_LEN + 9 + src_size + 2)] = dst[2*(ANC_START_LEN + 6)];
+    dst[gap*(ANC_START_LEN + 9 + src_size)] = 0x74;
+    dst[gap*(ANC_START_LEN + 9 + src_size + 1)] = dst[gap*(ANC_START_LEN + 5)];
+    dst[gap*(ANC_START_LEN + 9 + src_size + 2)] = dst[gap*(ANC_START_LEN + 6)];
 
     uint8_t checksum = 0;
     for (int i = 0; i < cnt-1; i++) // don't include checksum
-        checksum += dst[2*(ANC_START_LEN + i)];
+        checksum += dst[gap*(ANC_START_LEN + i)];
 
-    dst[2*(ANC_START_LEN + 9 + src_size + 3)] = checksum ? 256 - checksum : 0;
+    dst[gap*(ANC_START_LEN + 9 + src_size + 3)] = checksum ? 256 - checksum : 0;
 
-    dst[2*(DC_POS)] = cnt; // DC
+    dst[gap*(DC_POS)] = cnt; // DC
 }
 
 static inline uint32_t to_le32(uint32_t a)
@@ -127,6 +129,7 @@ static inline uint32_t to_le32(uint32_t a)
 #endif
 }
 
+/* Takes 8-bit data (from libzvbi luma), shifts to 10-bit words and writes to v210 */
 void sdi_encode_v210_sd(uint32_t *dst, uint8_t *src, int width)
 {
     uint8_t *y = src;
@@ -151,18 +154,19 @@ void sdi_encode_v210_sd(uint32_t *dst, uint8_t *src, int width)
     }
 }
 
-void sdi_encode_v210(uint32_t *dst, uint16_t *y, int width)
+void sdi_encode_v210(uint32_t *dst, uint16_t *src, int width)
 {
+    /* 1280 isn't mod-6 so long vanc packets will be truncated */
     /* don't clip the v210 anc data */
 #define WRITE_PIXELS(a, b, c)           \
-    *dst++ = to_le32((a) | ((b) << 10) | ((c) << 20))
+    *dst++ = to_le32(*(a) | (*(b) << 10) | (*(c) << 20))
 
-    /* 1280 isn't mod-6 so long vanc packets will be truncated */
-    for (int w = 0; w < width - 11; w += 12) {
-        WRITE_PIXELS(0, y[w+2*0], 0);
-        WRITE_PIXELS(y[w+2*1], 0, y[w+2*2]);
-        WRITE_PIXELS(0, y[w+2*3], 0);
-        WRITE_PIXELS(y[w+2*4], 0, y[w+2*5]);
+    for (int w = 0; w < width; w += 6) {
+        WRITE_PIXELS(src+0, src+1, src+2);
+        WRITE_PIXELS(src+3, src+4, src+5);
+        WRITE_PIXELS(src+6, src+7, src+8);
+        WRITE_PIXELS(src+9, src+10, src+11);
+        src += 12;
     }
 }
 
@@ -189,9 +193,10 @@ int sdi_encode_ttx_sd(uint8_t *buf, const uint8_t *pic_data, vbi_sampling_par *s
     return line;
 }
 
+/* OP-47 only used for HD, so hardcoded to UYVY */
 void sdi_encode_ttx(uint16_t *buf, int packets, const uint8_t **packet, uint16_t *ctr)
 {
-    sdi_start_anc(buf, S291_OP47SDP_DID, S291_OP47SDP_SDID);
+    sdi_start_anc(buf, 2, S291_OP47SDP_DID, S291_OP47SDP_SDID);
 
     /* 2 identifiers */
     buf[2*(ANC_START_LEN)]   = 0x51;
