@@ -51,7 +51,6 @@
 #include <upipe/upipe_helper_upump_mgr.h>
 #include <upipe/upipe_helper_upump.h>
 #include <upipe/upipe_helper_urefcount.h>
-#include <upipe/upipe_helper_void.h>
 #include <upipe-blackmagic/upipe_blackmagic_sink.h>
 
 #include <arpa/inet.h>
@@ -313,7 +312,6 @@ struct upipe_bmd_sink {
 
 UPIPE_HELPER_UPIPE(upipe_bmd_sink, upipe, UPIPE_BMD_SINK_SIGNATURE);
 UPIPE_HELPER_UREFCOUNT(upipe_bmd_sink, urefcount, upipe_bmd_sink_free);
-UPIPE_HELPER_VOID(upipe_bmd_sink);
 
 UPIPE_HELPER_UPIPE(upipe_bmd_sink_sub, upipe, UPIPE_BMD_SINK_INPUT_SIGNATURE)
 UPIPE_HELPER_UPUMP_MGR(upipe_bmd_sink_sub, upump_mgr);
@@ -1822,7 +1820,8 @@ static void upipe_bmd_sink_free(struct upipe *upipe)
         upipe_bmd_sink->cb->Release();
 
     upipe_bmd_sink_clean_urefcount(upipe);
-    upipe_bmd_sink_free_void(upipe);
+    upipe_clean(upipe);
+    free(upipe_bmd_sink);
 }
 
 /** upipe_bmd_sink (/dev/bmd_sink) */
