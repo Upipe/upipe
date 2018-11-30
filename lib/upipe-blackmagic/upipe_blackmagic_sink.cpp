@@ -1819,6 +1819,7 @@ static void upipe_bmd_sink_free(struct upipe *upipe)
     if (upipe_bmd_sink->cb)
         upipe_bmd_sink->cb->Release();
 
+    upipe_bmd_sink_clean_sub_inputs(upipe);
     upipe_bmd_sink_clean_urefcount(upipe);
     upipe_clean(upipe);
     free(upipe_bmd_sink);
