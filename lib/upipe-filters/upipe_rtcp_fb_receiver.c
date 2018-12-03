@@ -618,21 +618,10 @@ static int _upipe_rtcpfb_set_pt(struct upipe *upipe, uint8_t pt)
  */
 static int _upipe_rtcpfb_control(struct upipe *upipe, int command, va_list args)
 {
+    UBASE_HANDLED_RETURN(upipe_rtcpfb_control_output(upipe, command, args));
     switch (command) {
         case UPIPE_ATTACH_UPUMP_MGR:
             return upipe_rtcpfb_attach_upump_mgr(upipe);
-        case UPIPE_REGISTER_REQUEST: {
-            struct urequest *request = va_arg(args, struct urequest *);
-            return upipe_rtcpfb_alloc_output_proxy(upipe, request);
-        }
-        case UPIPE_UNREGISTER_REQUEST: {
-            struct urequest *request = va_arg(args, struct urequest *);
-            return upipe_rtcpfb_free_output_proxy(upipe, request);
-        }
-        case UPIPE_GET_FLOW_DEF: {
-            struct uref **p = va_arg(args, struct uref **);
-            return upipe_rtcpfb_get_flow_def(upipe, p);
-        }
         case UPIPE_SET_FLOW_DEF: {
             struct uref *flow_def = va_arg(args, struct uref *);
             return upipe_rtcpfb_set_flow_def(upipe, flow_def);
@@ -640,14 +629,6 @@ static int _upipe_rtcpfb_control(struct upipe *upipe, int command, va_list args)
         case UPIPE_GET_SUB_MGR: {
             struct upipe_mgr **p = va_arg(args, struct upipe_mgr **);
             return upipe_rtcpfb_get_sub_mgr(upipe, p);
-        }
-        case UPIPE_GET_OUTPUT: {
-            struct upipe **p = va_arg(args, struct upipe **);
-            return upipe_rtcpfb_get_output(upipe, p);
-        }
-        case UPIPE_SET_OUTPUT: {
-            struct upipe *output = va_arg(args, struct upipe *);
-            return upipe_rtcpfb_set_output(upipe, output);
         }
         case UPIPE_SET_OPTION: {
             const char *k = va_arg(args, const char *);
