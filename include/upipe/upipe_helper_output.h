@@ -456,9 +456,9 @@ static int STRUCTURE##_set_output(struct upipe *upipe, struct upipe *output)\
  * @param args optional arguments                                           \
  * @return an error code                                                    \
  */                                                                         \
-static inline int STRUCTURE##_control_output(struct upipe *upipe,           \
-                                             int command,                   \
-                                             va_list args)                  \
+static int STRUCTURE##_control_output(struct upipe *upipe,                  \
+                                      int command,                          \
+                                      va_list args)                         \
 {                                                                           \
     int ret = UBASE_ERR_UNHANDLED;                                          \
     va_list args_copy;                                                      \
