@@ -1,6 +1,6 @@
 sudo: required
 dist: xenial
-osx_image: xcode9
+osx_image: xcode10.1
 language: c
 
 env:
