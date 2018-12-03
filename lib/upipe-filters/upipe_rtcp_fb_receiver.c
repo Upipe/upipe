@@ -429,14 +429,12 @@ static int upipe_rtcpfb_input_set_flow_def(struct upipe *upipe, struct uref *flo
 static int upipe_rtcpfb_input_control(struct upipe *upipe,
                                     int command, va_list args)
 {
+    UBASE_HANDLED_RETURN(
+        upipe_rtcpfb_input_control_super(upipe, command, args));
     switch (command) {
         case UPIPE_SET_FLOW_DEF: {
             struct uref *flow_def = va_arg(args, struct uref *);
             return upipe_rtcpfb_input_set_flow_def(upipe, flow_def);
-        }
-        case UPIPE_SUB_GET_SUPER: {
-            struct upipe **p = va_arg(args, struct upipe **);
-            return upipe_rtcpfb_input_get_super(upipe, p);
         }
         default:
             return UBASE_ERR_UNHANDLED;
@@ -619,16 +617,13 @@ static int _upipe_rtcpfb_set_pt(struct upipe *upipe, uint8_t pt)
 static int _upipe_rtcpfb_control(struct upipe *upipe, int command, va_list args)
 {
     UBASE_HANDLED_RETURN(upipe_rtcpfb_control_output(upipe, command, args));
+    UBASE_HANDLED_RETURN(upipe_rtcpfb_control_outputs(upipe, command, args));
     switch (command) {
         case UPIPE_ATTACH_UPUMP_MGR:
             return upipe_rtcpfb_attach_upump_mgr(upipe);
         case UPIPE_SET_FLOW_DEF: {
             struct uref *flow_def = va_arg(args, struct uref *);
             return upipe_rtcpfb_set_flow_def(upipe, flow_def);
-        }
-        case UPIPE_GET_SUB_MGR: {
-            struct upipe_mgr **p = va_arg(args, struct upipe_mgr **);
-            return upipe_rtcpfb_get_sub_mgr(upipe, p);
         }
         case UPIPE_SET_OPTION: {
             const char *k = va_arg(args, const char *);

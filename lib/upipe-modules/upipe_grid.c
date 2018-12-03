@@ -516,6 +516,7 @@ static int upipe_grid_in_control(struct upipe *upipe,
                                  int command, va_list args)
 {
     UBASE_HANDLED_RETURN(upipe_control_provide_request(upipe, command, args));
+    UBASE_HANDLED_RETURN(upipe_grid_in_control_super(upipe, command, args));
 
     switch (command) {
         case UPIPE_SET_FLOW_DEF: {
@@ -998,6 +999,7 @@ static int upipe_grid_out_control(struct upipe *upipe,
                                   int command, va_list args)
 {
     UBASE_HANDLED_RETURN(upipe_grid_out_control_output(upipe, command, args));
+    UBASE_HANDLED_RETURN(upipe_grid_out_control_super(upipe, command, args));
 
     switch (command) {
         case UPIPE_SET_FLOW_DEF: {
@@ -1187,6 +1189,9 @@ static int upipe_grid_set_max_retention_real(struct upipe *upipe,
 static int upipe_grid_control(struct upipe *upipe,
                               int command, va_list args)
 {
+    UBASE_HANDLED_RETURN(upipe_grid_control_inputs(upipe, command, args));
+    UBASE_HANDLED_RETURN(upipe_grid_control_outputs(upipe, command, args));
+
     switch (command) {
         case UPIPE_ATTACH_UCLOCK:
             upipe_grid_require_uclock(upipe);

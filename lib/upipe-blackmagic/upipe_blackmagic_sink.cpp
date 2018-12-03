@@ -1188,6 +1188,8 @@ static int upipe_bmd_sink_sub_set_flow_def(struct upipe *upipe,
 static int upipe_bmd_sink_sub_control(struct upipe *upipe,
                                      int command, va_list args)
 {
+    UBASE_HANDLED_RETURN(
+        upipe_bmd_sink_sub_control_super(upipe, command, args));
     switch (command) {
         case UPIPE_ATTACH_UPUMP_MGR: {
             upipe_bmd_sink_sub_set_upump(upipe, NULL);
@@ -1203,11 +1205,6 @@ static int upipe_bmd_sink_sub_control(struct upipe *upipe,
         case UPIPE_SET_FLOW_DEF: {
             struct uref *flow_def = va_arg(args, struct uref *);
             return upipe_bmd_sink_sub_set_flow_def(upipe, flow_def);
-        }
-        case UPIPE_SUB_GET_SUPER: {
-            struct upipe **p = va_arg(args, struct upipe **);
-            *p = upipe_bmd_sink_to_upipe(upipe_bmd_sink_from_sub_mgr(upipe->mgr));
-            return UBASE_ERR_NONE;
         }
 
         default:
@@ -1730,17 +1727,13 @@ static int upipe_bmd_sink_control(struct upipe *upipe, int command, va_list args
 {
     struct upipe_bmd_sink *bmd_sink = upipe_bmd_sink_from_upipe(upipe);
 
+    UBASE_HANDLED_RETURN(upipe_bmd_sink_control_inputs(upipe, command, args));
     switch (command) {
         case UPIPE_SET_URI:
             if (!bmd_sink->deckLink) {
                 UBASE_RETURN(upipe_bmd_sink_open_card(upipe));
             }
             return upipe_bmd_open_vid(upipe);
-
-        case UPIPE_GET_SUB_MGR: {
-            struct upipe_mgr **p = va_arg(args, struct upipe_mgr **);
-            return upipe_bmd_sink_get_sub_mgr(upipe, p);
-        }
 
         case UPIPE_BMD_SINK_GET_PIC_SUB: {
             UBASE_SIGNATURE_CHECK(args, UPIPE_BMD_SINK_SIGNATURE)
