@@ -271,8 +271,8 @@ static int STRUCTURE_SUB##_get_super(struct upipe *upipe, struct upipe **p) \
  * @param args optional arguments                                           \
  * @return an error code                                                    \
  */                                                                         \
-static inline int STRUCTURE_SUB##_control_super(struct upipe *upipe,        \
-                                                int command, va_list args)  \
+static int STRUCTURE_SUB##_control_super(struct upipe *upipe,               \
+                                         int command, va_list args)         \
 {                                                                           \
     switch (command) {                                                      \
         case UPIPE_SUB_GET_SUPER: {                                         \
@@ -349,8 +349,8 @@ static int STRUCTURE##_iterate_##SUB(struct upipe *upipe, struct upipe **p) \
  * @param args optional arguments                                           \
  * @return an error code                                                    \
  */                                                                         \
-static inline int STRUCTURE##_control_##SUB##s(struct upipe *upipe,         \
-                                               int command, va_list args)   \
+static int STRUCTURE##_control_##SUB##s(struct upipe *upipe,                \
+                                        int command, va_list args)          \
 {                                                                           \
     int ret = UBASE_ERR_UNHANDLED;                                          \
     va_list args_copy;                                                      \

@@ -380,6 +380,7 @@ static int upipe_sync_sub_set_flow_def(struct upipe *upipe, struct uref *flow_de
  */
 static int upipe_sync_sub_control(struct upipe *upipe, int command, va_list args)
 {
+    UBASE_HANDLED_RETURN(upipe_sync_sub_control_super(upipe, command, args));
     UBASE_HANDLED_RETURN(upipe_sync_sub_control_output(upipe, command, args));
     switch (command) {
         case UPIPE_SET_FLOW_DEF: {
@@ -1010,18 +1011,11 @@ static int upipe_sync_set_flow_def(struct upipe *upipe, struct uref *flow_def)
 static int upipe_sync_control(struct upipe *upipe, int command, va_list args)
 {
     UBASE_HANDLED_RETURN(upipe_sync_control_output(upipe, command, args));
+    UBASE_HANDLED_RETURN(upipe_sync_control_subs(upipe, command, args));
     switch (command) {
         case UPIPE_SET_FLOW_DEF: {
             struct uref *flow = va_arg(args, struct uref *);
             return upipe_sync_set_flow_def(upipe, flow);
-        }
-        case UPIPE_GET_SUB_MGR: {
-            struct upipe_mgr **p = va_arg(args, struct upipe_mgr **);
-            return upipe_sync_get_sub_mgr(upipe, p);
-        }
-        case UPIPE_ITERATE_SUB: {
-            struct upipe **p = va_arg(args, struct upipe **);
-            return upipe_sync_iterate_sub(upipe, p);
         }
         case UPIPE_ATTACH_UCLOCK:
            upipe_sync_set_upump(upipe, NULL);
