@@ -115,6 +115,7 @@ struct upipe_pciesdi_src {
     int cached_read_bytes;
     uint8_t *read_buffer;
 
+    void (*sdi3g_levelb_packed)(const uint8_t *src, uint16_t *dst1, uint16_t *dst2, uintptr_t pixels);
     void (*sdi3g_levelb_unpack)(const uint16_t *src, uint16_t *dst1, uint16_t *dst2, uintptr_t pixels);
     void (*sdi_to_uyvy)(const uint8_t *src, uint16_t *y, uintptr_t pixels);
 
@@ -167,6 +168,7 @@ static struct upipe *upipe_pciesdi_src_alloc(struct upipe_mgr *mgr,
     if (!upipe_pciesdi_src->read_buffer)
         return NULL;
 
+    upipe_pciesdi_src->sdi3g_levelb_packed = upipe_sdi3g_to_uyvy_2_c;
     upipe_pciesdi_src->sdi3g_levelb_unpack = upipe_levelb_unpack_c;
     upipe_pciesdi_src->sdi_to_uyvy = upipe_sdi_to_uyvy_c;
 #if defined(HAVE_X86ASM)
@@ -177,10 +179,12 @@ static struct upipe *upipe_pciesdi_src_alloc(struct upipe_mgr *mgr,
 
     if (__builtin_cpu_supports("ssse3")) {
         upipe_pciesdi_src->sdi_to_uyvy = upipe_sdi_to_uyvy_ssse3;
+        upipe_pciesdi_src->sdi3g_levelb_packed = upipe_sdi3g_to_uyvy_2_ssse3;
     }
 
    if (__builtin_cpu_supports("avx2")) {
         upipe_pciesdi_src->sdi_to_uyvy = upipe_sdi_to_uyvy_avx2;
+        upipe_pciesdi_src->sdi3g_levelb_packed = upipe_sdi3g_to_uyvy_2_avx2;
    }
 #endif
 #endif
@@ -291,6 +295,28 @@ static inline bool sdi3g_levelb_sav_match(const uint16_t *src)
                 || src[-4] == 0x2ac
                 || src[-4] == 0x31c
                 || src[-4] == 0x3b0))
+        return true;
+    return false;
+}
+
+static inline bool sdi3g_levelb_eav_match_bitpacked(const uint8_t *src)
+{
+    static const uint8_t prefix[15] = {
+        0xff, 0xff, 0xff, 0xff, 0xff,
+        0, 0, 0, 0, 0,
+        0, 0, 0, 0, 0
+    };
+    static const uint8_t fvh[4][5] = {
+        { 0x9d, 0x27, 0x49, 0xd2, 0x74}, /* 0x274 */
+        { 0xb6, 0x2d, 0x8b, 0x62, 0xd8}, /* 0x2d8 */
+        { 0xda, 0x36, 0x8d, 0xa3, 0x68}, /* 0x368 */
+        { 0xf1, 0x3c, 0x4f, 0x13, 0xc4}  /* 0x3c4 */
+    };
+    if (!memcmp(src, prefix, 15)
+            && (!memcmp(src, fvh[0], 5)
+                || !memcmp(src, fvh[1], 5)
+                || !memcmp(src, fvh[2], 5)
+                || !memcmp(src, fvh[3], 5)))
         return true;
     return false;
 }
@@ -569,6 +595,11 @@ static void upipe_pciesdi_src_worker(struct upump *upump)
                 print_error_sav = false;
             }
         } else if (upipe_pciesdi_src->sdi3g_levelb) {
+            /* Check EAV is present. */
+            if (print_error_eav && !sdi3g_levelb_eav_match_bitpacked(sdi_line)) {
+                upipe_err_va(upipe, "SDI-3G level B EAV not found at %#x", i * sdi_line_width);
+                print_error_eav = false;
+            }
         } else { /* HD */
             /* Check EAV is present. */
             if (print_error_eav && !hd_eav_match_bitpacked(sdi_line)) {
@@ -588,6 +619,11 @@ static void upipe_pciesdi_src_worker(struct upump *upump)
         } /* end HD */
 
         if (upipe_pciesdi_src->sdi3g_levelb) {
+            /* Note: line order is swapped. */
+            uint16_t *dst1 = (uint16_t*)block_buf + (2*i + 1) * 2*upipe_pciesdi_src->sdi_format->width;
+            uint16_t *dst2 = (uint16_t*)block_buf + (2*i + 0) * 2*upipe_pciesdi_src->sdi_format->width;
+            upipe_pciesdi_src->sdi3g_levelb_packed(sdi_line, dst1, dst2,
+                    upipe_pciesdi_src->sdi_format->width);
         } else {
             uint16_t *dst = (uint16_t*)block_buf + 2*i * upipe_pciesdi_src->sdi_format->width;
             upipe_pciesdi_src->sdi_to_uyvy(sdi_line, dst,
