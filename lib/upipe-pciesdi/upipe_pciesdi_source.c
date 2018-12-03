@@ -109,6 +109,7 @@ struct upipe_pciesdi_src {
 
     int previous_sdi_line_number;
     bool discontinuity;
+    uint64_t dma_start_time;
 
     /* picture properties, same units as upipe_hbrmt_common.h, pixels */
     const struct sdi_offsets_fmt *sdi_format;
@@ -251,6 +252,13 @@ static const char *sdi_decode_rate(uint8_t rate)
     }
 }
 
+static uint64_t time(void)
+{
+    struct timeval tv;
+    gettimeofday(&tv, NULL);
+    return tv.tv_sec * UINT64_C(1000000) + tv.tv_usec;
+}
+
 static void wait_for_lock(struct upump *upump)
 {
     struct upipe *upipe = upump_get_opaque(upump, struct upipe *);
@@ -284,6 +292,10 @@ static void wait_for_lock(struct upump *upump)
     /* Start DMA. */
     int64_t hw, sw;
     sdi_dma_writer(upipe_pciesdi_src->fd, 1, &hw, &sw);
+
+    upipe_notice_va(upipe, "pump and DMA started, hw: %"PRId64", sw: %"PRId64,
+            hw, sw);
+    upipe_pciesdi_src->dma_start_time = time();
 
     return;
 }
@@ -476,6 +488,13 @@ static void upipe_pciesdi_src_worker(struct upump *upump)
         upump_start(upump);
 
         return;
+    }
+
+    if (upipe_pciesdi_src->discontinuity) {
+        int64_t hw, sw;
+        sdi_dma_writer(upipe_pciesdi_src->fd, 1, &hw, &sw);
+        upipe_notice_va(upipe, "%s: hw: %"PRId64", sw: %"PRId64" time: %"PRIu64"us",
+                __func__, hw, sw, time()-upipe_pciesdi_src->dma_start_time);
     }
 
     // TODO : monitor changes
@@ -692,6 +711,16 @@ static void upipe_pciesdi_src_worker(struct upump *upump)
         }
 #endif
     }
+
+#if 1
+    if (!print_error_eav || !print_error_sav) {
+        upipe_dbg_va(upipe, "ret: %zd, cached_read_bytes: %d, discontinuity: %d",
+                ret, upipe_pciesdi_src->cached_read_bytes,
+                upipe_pciesdi_src->discontinuity);
+        dump_and_exit_clean(upipe, upipe_pciesdi_src->read_buffer,
+                2*DMA_BUFFER_SIZE*DMA_BUFFER_COUNT);
+    }
+#endif
 
     if (ret != processed_bytes) {
         memmove(upipe_pciesdi_src->read_buffer,
