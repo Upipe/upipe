@@ -648,8 +648,8 @@ static void upipe_pciesdi_src_worker(struct upump *upump)
         /* Copy line to output uref. */
         if (upipe_pciesdi_src->sdi3g_levelb) {
             /* Note: line order is swapped. */
-            uint16_t *dst1 = block_buf + (2*i + 1) * sdi_line_width/2;
-            uint16_t *dst2 = block_buf + (2*i + 0) * sdi_line_width/2;
+            uint16_t *dst1 = (uint16_t*)block_buf + (2*i + 1) * sdi_line_width/4;
+            uint16_t *dst2 = (uint16_t*)block_buf + (2*i + 0) * sdi_line_width/4;
             upipe_pciesdi_src->sdi3g_levelb_unpack(sdi_line, dst1, dst2,
                     upipe_pciesdi_src->sdi_format->width);
         } else {
