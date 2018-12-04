@@ -190,12 +190,12 @@ static void upipe_pciesdi_sink_worker(struct upump *upump)
         upipe_dbg_va(upipe, "txen %d slew %d", txen, slew);
 
 #if 1
-    if (!hd_eav_match(buf)) {
+    if (!hd_eav_match((uint16_t*)buf)) {
         upipe_err(upipe, "EAV not found");
         abort();
     }
 
-    if (!hd_sav_match(buf + (2200-1920)*4)) {
+    if (!hd_sav_match((uint16_t*)buf + (2200-1920)*2)) {
         upipe_err(upipe, "SAV not found");
         abort();
     }
