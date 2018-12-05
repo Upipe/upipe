@@ -415,9 +415,7 @@ static void upipe_pciesdi_src_worker(struct upump *upump)
     sdi_rx(upipe_pciesdi_src->fd, &locked, &mode, &family, &scan, &rate);
 
     if (!locked) {
-        upipe_dbg(upipe, "discontinuity");
         upipe_pciesdi_src->discontinuity = true;
-        upipe_pciesdi_src->cached_read_bytes = 0;
     }
 
     // TODO : monitor changes
@@ -439,11 +437,6 @@ static void upipe_pciesdi_src_worker(struct upump *upump)
     ssize_t ret = read(upipe_pciesdi_src->fd,
             upipe_pciesdi_src->read_buffer + upipe_pciesdi_src->cached_read_bytes,
             DMA_BUFFER_SIZE * DMA_BUFFER_COUNT);
-
-    if (family == 15 || !locked) {
-        ret = -1;
-        upipe_err_va(upipe, "unknown family");
-    }
 
     if (unlikely(ret == -1)) {
         switch (errno) {
@@ -634,16 +627,6 @@ static void upipe_pciesdi_src_worker(struct upump *upump)
         }
 #endif
     }
-
-#if 1
-    if (!print_error_eav || !print_error_sav) {
-        upipe_dbg_va(upipe, "ret: %zd, cached_read_bytes: %d, discontinuity: %d",
-                ret, upipe_pciesdi_src->cached_read_bytes,
-                upipe_pciesdi_src->discontinuity);
-        dump_and_exit_clean(upipe, upipe_pciesdi_src->read_buffer,
-                2*DMA_BUFFER_SIZE*DMA_BUFFER_COUNT);
-    }
-#endif
 
     if (ret != processed_bytes) {
         memmove(upipe_pciesdi_src->read_buffer,
@@ -848,7 +831,7 @@ static int upipe_pciesdi_set_uri(struct upipe *upipe, const char *path)
     struct upipe_pciesdi_src *upipe_pciesdi_src = upipe_pciesdi_src_from_upipe(upipe);
 
     ubase_clean_fd(&upipe_pciesdi_src->fd);
-    upipe_pciesdi_src->fd = open(path, O_RDWR);
+    upipe_pciesdi_src->fd = open(path, O_RDWR|O_NONBLOCK);
     if (unlikely(upipe_pciesdi_src->fd < 0)) {
         upipe_err_va(upipe, "can't open %s (%m)", path);
         return UBASE_ERR_EXTERNAL;
@@ -859,7 +842,7 @@ static int upipe_pciesdi_set_uri(struct upipe *upipe, const char *path)
     sdi_release_dma_writer(upipe_pciesdi_src->fd); // release old locks
 
     close(upipe_pciesdi_src->fd);
-    upipe_pciesdi_src->fd = open(path, O_RDWR);
+    upipe_pciesdi_src->fd = open(path, O_RDWR|O_NONBLOCK);
     if (unlikely(upipe_pciesdi_src->fd < 0)) {
         upipe_err_va(upipe, "can't open %s (%m)", path);
         return UBASE_ERR_EXTERNAL;
