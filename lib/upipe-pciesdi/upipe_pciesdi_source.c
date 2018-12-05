@@ -65,8 +65,6 @@
 
 /** @hidden */
 static int upipe_pciesdi_src_check(struct upipe *upipe, struct uref *flow_format);
-static void upipe_pciesdi_src_worker(struct upump *upump);
-static void wait_for_lock(struct upump *upump);
 
 /** @internal @This is the private context of a file source pipe. */
 struct upipe_pciesdi_src {
@@ -109,7 +107,6 @@ struct upipe_pciesdi_src {
 
     int previous_sdi_line_number;
     bool discontinuity;
-    uint64_t dma_start_time;
 
     /* picture properties, same units as upipe_hbrmt_common.h, pixels */
     const struct sdi_offsets_fmt *sdi_format;
@@ -250,54 +247,6 @@ static const char *sdi_decode_rate(uint8_t rate)
         case 11: return "60";
         default: return "Reserved";
     }
-}
-
-static uint64_t time(void)
-{
-    struct timeval tv;
-    gettimeofday(&tv, NULL);
-    return tv.tv_sec * UINT64_C(1000000) + tv.tv_usec;
-}
-
-static void wait_for_lock(struct upump *upump)
-{
-    struct upipe *upipe = upump_get_opaque(upump, struct upipe *);
-    struct upipe_pciesdi_src *upipe_pciesdi_src = upipe_pciesdi_src_from_upipe(upipe);
-
-    uint8_t locked, mode, family, scan, rate;
-    sdi_rx(upipe_pciesdi_src->fd, &locked, &mode, &family, &scan, &rate);
-
-    if (!locked)
-        return;
-
-    upipe_notice_va(upipe, "%s | mode %s | family %s | scan %s | rate %s",
-            locked ? "LOCKED" : "UNLOCKED",
-            sdi_decode_mode(mode),
-            sdi_decode_family(family),
-            sdi_decode_scan(scan),
-            sdi_decode_rate(rate));
-
-    /* Stop timer pump and start read pump. */
-    upipe_pciesdi_src_set_upump(upipe, NULL);
-    upump = upump_alloc_fd_read(upipe_pciesdi_src->upump_mgr,
-            upipe_pciesdi_src_worker, upipe, upipe->refcount,
-            upipe_pciesdi_src->fd);
-    if (unlikely(upump == NULL)) {
-        upipe_throw_fatal(upipe, UBASE_ERR_UPUMP);
-        return;
-    }
-    upipe_pciesdi_src_set_upump(upipe, upump);
-    upump_start(upump);
-
-    /* Start DMA. */
-    int64_t hw, sw;
-    sdi_dma_writer(upipe_pciesdi_src->fd, 1, &hw, &sw);
-
-    upipe_notice_va(upipe, "pump and DMA started, hw: %"PRId64", sw: %"PRId64,
-            hw, sw);
-    upipe_pciesdi_src->dma_start_time = time();
-
-    return;
 }
 
 static inline bool sdi3g_levelb_eav_match(const uint16_t *src)
@@ -469,32 +418,6 @@ static void upipe_pciesdi_src_worker(struct upump *upump)
         upipe_dbg(upipe, "discontinuity");
         upipe_pciesdi_src->discontinuity = true;
         upipe_pciesdi_src->cached_read_bytes = 0;
-
-        /* Stop DMA. */
-        int64_t hw, sw;
-        sdi_dma_writer(upipe_pciesdi_src->fd, 0, &hw, &sw);
-
-        /* Stop pump, allocate new pump to wait for lock. */
-        upipe_pciesdi_src_set_upump(upipe, NULL);
-        struct upump *upump = upump_alloc_timer(upipe_pciesdi_src->upump_mgr,
-                                        wait_for_lock, upipe, upipe->refcount,
-                                        100*UCLOCK_FREQ/1000,
-                                        100*UCLOCK_FREQ/1000);
-        if (unlikely(upump == NULL)) {
-            upipe_throw_fatal(upipe, UBASE_ERR_UPUMP);
-            return;
-        }
-        upipe_pciesdi_src_set_upump(upipe, upump);
-        upump_start(upump);
-
-        return;
-    }
-
-    if (upipe_pciesdi_src->discontinuity) {
-        int64_t hw, sw;
-        sdi_dma_writer(upipe_pciesdi_src->fd, 1, &hw, &sw);
-        upipe_notice_va(upipe, "%s: hw: %"PRId64", sw: %"PRId64" time: %"PRIu64"us",
-                __func__, hw, sw, time()-upipe_pciesdi_src->dma_start_time);
     }
 
     // TODO : monitor changes
