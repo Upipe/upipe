@@ -44,3 +44,6 @@ upipe_av_codecs.h: upipe_av_codecs.pl avcodec_include.h
 	  CPP="$(CPP)" \
 	  CFLAGS="$(CFLAGS) $(CPPFLAGS) @AVFORMAT_CFLAGS@" \
 	  $(PERL) $(srcdir)/upipe_av_codecs.pl $(srcdir)/avcodec_include.h > $@
+
+distclean-local:
+@am__fastdepCC_TRUE@	-rm -f ./$(DEPDIR)/upipe_av_codecs_h.Plo
