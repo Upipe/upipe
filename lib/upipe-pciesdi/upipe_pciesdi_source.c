@@ -765,6 +765,10 @@ static int get_flow_def(struct upipe *upipe, struct uref **flow_format)
         upipe_warn(upipe, "SDI signal is interlaced but progressive sdi_offset struct returned");
 
     *flow_format = flow_def;
+
+    int64_t hw, sw;
+    sdi_dma_writer(upipe_pciesdi_src->fd, 1, &hw, &sw); // enable
+
     return UBASE_ERR_NONE;
 }
 
@@ -865,7 +869,6 @@ static int upipe_pciesdi_set_uri(struct upipe *upipe, const char *path)
         sdi_decode_rate(rate));
 
     sdi_dma(upipe_pciesdi_src->fd, 0, 0, 0); // disable loopback
-    sdi_dma_writer(upipe_pciesdi_src->fd, 1, &hw, &sw); // enable
 
     return UBASE_ERR_NONE;
 }
