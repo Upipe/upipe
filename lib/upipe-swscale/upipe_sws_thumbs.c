@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2013-2014 OpenHeadend S.A.R.L.
+ * Copyright (C) 2013-2018 OpenHeadend S.A.R.L.
  *
  * Authors: Benjamin Cohen
  *
@@ -407,7 +407,7 @@ static int _upipe_sws_thumbs_set_size(struct upipe *upipe,
         upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
         return UBASE_ERR_ALLOC;
     }
-    uref_pic_flow_set_hsize(flow, hsize * cols);
+    uref_pic_flow_set_hsize(flow, (uint64_t)hsize * cols);
     uref_pic_flow_set_hsize_visible(flow, (uint64_t)hsize * cols);
     uref_pic_flow_set_vsize(flow, (uint64_t)vsize * rows);
     uref_pic_flow_set_vsize_visible(flow, (uint64_t)vsize * rows);
