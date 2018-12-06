@@ -47,6 +47,8 @@
 #include <upipe/uref_std.h>
 #include <upipe/upump.h>
 #include <upump-ev/upump_ev.h>
+#include <upipe/uuri.h>
+#include <upipe/ustring.h>
 #include <upipe/upipe.h>
 #include <upipe-modules/upipe_null.h>
 #include <upipe-modules/upipe_dup.h>
@@ -297,34 +299,19 @@ int main(int argc, char *argv[])
         return EXIT_FAILURE;
     }
 
-    char *listen_addr = strchr(srcpath, '@');
-    if (!listen_addr)
-        return EXIT_FAILURE;
-
     /* receive RTP */
     if (!ubase_check(upipe_set_uri(upipe_udpsrc, srcpath))) {
         return EXIT_FAILURE;
     }
 
-    char *host = listen_addr + 1;
-    uint16_t port = 0;
-    if (*host == '[') {
-        /* ipv6 */
-        char *next = strchr(host, ']');
-        if (!next)
-            return EXIT_FAILURE;
-        next++;
-        if (*next != ':')
-            return EXIT_FAILURE;
-        *next++ = '\0';
-        port = atoi(next);
-    } else {
-        char *next = strchr(host, ':');
-        if (!next)
-            return EXIT_FAILURE;
-        *next++ = '\0';
-        port = atoi(next);
-    }
+    struct ustring u = ustring_from_str(srcpath);
+    struct uuri_authority authority = uuri_parse_authority(&u);
+    struct ustring settings = uuri_parse_path(&u);
+
+    char port_str[6];
+    snprintf(port_str, sizeof(port_str), "%.*s", (int)authority.port.len,
+            authority.port.at);
+    int port = atoi(port_str);
 
     if (port & 1) {
         fprintf(stderr, "RTP port should be even\n");
@@ -332,7 +319,11 @@ int main(int argc, char *argv[])
     }
 
     char uri[128];
-    snprintf(uri, sizeof(uri), "%s:%u", listen_addr, port + 1);
+    snprintf(uri, sizeof(uri), "%.*s@%.*s:%u%.*s",
+        (int)authority.userinfo.len, authority.userinfo.at,
+        (int)authority.host.len, authority.host.at, port + 1,
+        (int)settings.len, settings.at);
+
     if (!ubase_check(upipe_set_uri(upipe_udpsrc_rtcp, uri))) {
         return EXIT_FAILURE;
     }

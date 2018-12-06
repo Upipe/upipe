@@ -48,6 +48,8 @@
 #include <upipe/uref_std.h>
 #include <upipe/upump.h>
 #include <upump-ev/upump_ev.h>
+#include <upipe/uuri.h>
+#include <upipe/ustring.h>
 #include <upipe/upipe.h>
 #include <upipe-modules/upipe_genaux.h>
 #include <upipe-modules/upipe_dup.h>
@@ -414,37 +416,29 @@ int main(int argc, char *argv[])
     upipe_mgr_release(upipe_udpsink_mgr);
     upipe_release(upipe_udpsink_rtcp);
 
-    if (dirpath) {
-        char *host = dirpath;
-        uint16_t port = 0;
-        if (*host == '[') {
-            /* ipv6 */
-            char *next = strchr(host, ']');
-            if (!next)
-                return EXIT_FAILURE;
-            next++;
-            if (*next != ':')
-                return EXIT_FAILURE;
-            *next++ = '\0';
-            port = atoi(next);
-        } else {
-            char *next = strchr(host, ':');
-            if (!next)
-                return EXIT_FAILURE;
-            *next++ = '\0';
-            port = atoi(next);
-        }
+    struct ustring u = ustring_from_str(dirpath);
+    struct uuri_authority authority = uuri_parse_authority(&u);
+    struct ustring settings = uuri_parse_path(&u);
 
-        if (port & 1) {
-            fprintf(stderr, "RTP port should be even\n");
-            return EXIT_FAILURE;
-        }
+    char port_str[6];
+    snprintf(port_str, sizeof(port_str), "%.*s", (int)authority.port.len,
+            authority.port.at);
+    int port = atoi(port_str);
 
-        char uri[128];
-        snprintf(uri, sizeof(uri), "%s:%u", host, port+1);
-        if (!ubase_check(upipe_set_uri(upipe_udpsink_rtcp, uri))) {
-            return EXIT_FAILURE;
-        }
+    if (port & 1) {
+        fprintf(stderr, "RTP port should be even\n");
+        return EXIT_FAILURE;
+    }
+
+    char uri[128];
+    snprintf(uri, sizeof(uri), "%.*s%s%.*s:%u%.*s",
+        (int)authority.userinfo.len, authority.userinfo.at,
+        ustring_is_empty(authority.userinfo) ? "" : "@",
+        (int)authority.host.len, authority.host.at, port + 1,
+        (int)settings.len, settings.at);
+
+    if (!ubase_check(upipe_set_uri(upipe_udpsink_rtcp, uri))) {
+        return EXIT_FAILURE;
     }
 
     int udp_fd = -1;
