@@ -124,7 +124,7 @@ function BarGraph(ctx) {
     for (var i = 0; i < endArr.length; i += 1) {
       // Change the current bar height toward its target height
       delta = (endArr[i] - startArr[i]) / that.animationSteps;
-      delta_l = (endLoud_max[i] - startLoud_max[i]) / that.animationSteps;
+      var delta_l = (endLoud_max[i] - startLoud_max[i]) / that.animationSteps;
       that.curArr[i] += delta;
       that.curLoud_max[i] += delta_l;
       // If any change is made then flip a switch
@@ -197,7 +197,7 @@ function BarGraph(ctx) {
           graphAreaHeight - barHeight + border,
           barWidth - border * 2,
           barHeight - border * 2);
-        b = maxBarHeight * ((loud_max[i]+100) / largestValue);
+        var b = maxBarHeight * ((loud_max[i]+100) / largestValue);
         var ymax = graphAreaHeight - b + border;
         ctx.fillStyle = "#FF0000";
         ctx.fillRect(that.margin + i * 50 + border, ymax, barWidth - border * 2, 2);

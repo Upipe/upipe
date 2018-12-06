@@ -312,7 +312,7 @@ var common = (function() {
       for (var type in defaultMessageTypes) {
         if (defaultMessageTypes.hasOwnProperty(type)) {
           if (startsWith(message_event.data, type + ':')) {
-            func = defaultMessageTypes[type];
+            var func = defaultMessageTypes[type];
             func(message_event.data.slice(type.length + 1));
             return;
           }
