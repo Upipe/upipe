@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2014 OpenHeadend S.A.R.L.
+ * Copyright (C) 2014-2018 OpenHeadend S.A.R.L.
  *
  * Authors: Sebastien Gougelet
  *
@@ -22,6 +22,10 @@
  * TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE
  * SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
  */
+
+#ifndef _THUMBNAIL_H_
+/** @hidden */
+#define _THUMBNAIL_H_
 
 #define __STDC_LIMIT_MACROS    1
 #define __STDC_FORMAT_MACROS   1
@@ -97,3 +101,5 @@ private:
     int H;
     int V;
 };
+
+#endif
