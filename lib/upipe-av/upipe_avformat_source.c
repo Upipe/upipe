@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2012-2017 OpenHeadend S.A.R.L.
+ * Copyright (C) 2012-2018 OpenHeadend S.A.R.L.
  *
  * Authors: Christophe Massiot
  *
@@ -768,7 +768,7 @@ static struct uref *alloc_video_def(struct upipe *upipe,
     int ticks = codec->ticks_per_frame ? codec->ticks_per_frame : 1;
     if (stream->time_base.num) {
         struct urational fps = { .num = stream->time_base.den,
-                                 .den = stream->time_base.num * ticks };
+                                 .den = (uint64_t)stream->time_base.num * ticks };
         urational_simplify(&fps);
         UBASE_FATAL(upipe, uref_pic_flow_set_fps(flow_def, fps))
     }
