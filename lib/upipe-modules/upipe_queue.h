@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2014-2015 OpenHeadend S.A.R.L.
+ * Copyright (C) 2014-2018 OpenHeadend S.A.R.L.
  *
  * Authors: Christophe Massiot
  *
@@ -26,6 +26,10 @@
 /** @file
  * @short common functions for queues
  */
+
+#ifndef _UPIPE_QUEUE_H_
+/** @hidden */
+#define _UPIPE_QUEUE_H_
 
 #include <upipe/ubase.h>
 #include <upipe/uqueue.h>
@@ -183,3 +187,5 @@ struct upipe_queue_upstream *
  * @param upstream upstream message to free
  */
 void upipe_queue_upstream_free(struct upipe_queue_upstream *upstream);
+
+#endif
