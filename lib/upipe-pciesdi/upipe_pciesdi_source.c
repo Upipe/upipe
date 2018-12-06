@@ -669,7 +669,7 @@ static int get_flow_def(struct upipe *upipe, struct uref **flow_format)
 
     if (!locked) {
         upipe_err(upipe, "SDI signal not locked");
-        return UBASE_ERR_INVALID;
+        return UBASE_ERR_EXTERNAL;
     }
 
     int width, height;
@@ -772,6 +772,28 @@ static int get_flow_def(struct upipe *upipe, struct uref **flow_format)
     return UBASE_ERR_NONE;
 }
 
+static void get_flow_def_on_signal_lock(struct upump *upump)
+{
+    struct upipe *upipe = upump_get_opaque(upump, struct upipe *);
+    struct upipe_pciesdi_src *ctx = upipe_pciesdi_src_from_upipe(upipe);
+    struct uref *flow_def;
+    int ret = get_flow_def(upipe, &flow_def);
+    if (!ubase_check(ret)) {
+        return;
+    }
+    upipe_pciesdi_src_require_ubuf_mgr(upipe, flow_def);
+
+    struct upump *fd_read = upump_alloc_fd_read(ctx->upump_mgr,
+            upipe_pciesdi_src_worker, upipe,
+            upipe->refcount, ctx->fd);
+    if (unlikely(fd_read == NULL)) {
+        upipe_throw_fatal(upipe, UBASE_ERR_UPUMP);
+        return;
+    }
+    upipe_pciesdi_src_set_upump(upipe, fd_read);
+    upump_start(fd_read);
+}
+
 /** @internal @This checks if the pump may be allocated.
  *
  * @param upipe description structure of the pipe
@@ -797,6 +819,18 @@ static int upipe_pciesdi_src_check(struct upipe *upipe, struct uref *flow_format
     if (upipe_pciesdi_src->ubuf_mgr == NULL) {
         struct uref *flow_def;
         int ret = get_flow_def(upipe, &flow_def);
+        if (ret == UBASE_ERR_EXTERNAL) {
+            /* If signal is unlocked start a timer pump to wait for it. */
+            struct upump *upump = upump_alloc_timer(upipe_pciesdi_src->upump_mgr,
+                    get_flow_def_on_signal_lock, upipe, upipe->refcount,
+                    UCLOCK_FREQ, UCLOCK_FREQ);
+            if (unlikely(upump == NULL)) {
+                upipe_throw_fatal(upipe, UBASE_ERR_UPUMP);
+                return UBASE_ERR_UPUMP;
+            }
+            upipe_pciesdi_src_set_upump(upipe, upump);
+            upump_start(upump);
+        }
         if (!ubase_check(ret)) {
             upipe_throw_fatal(upipe, ret);
             return ret;
