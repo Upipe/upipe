@@ -151,11 +151,7 @@ function BarGraph(ctx) {
     var border = 2;
     var ratio;
     var maxBarHeight;
-    var gradient;
     var largestValue;
-    var graphAreaX = 0;
-    var graphAreaY = 0;
-    var graphAreaWidth = that.width;
     var graphAreaHeight = that.height;
     var i;
 
@@ -231,7 +227,6 @@ function BarGraph(ctx) {
 
   this.width = 300;
   this.height = 150;
-  this.maxValue;
   this.margin = 5;
   this.colors = ["green", "blue"];
   this.curArr = [];
