@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2012 OpenHeadend S.A.R.L.
+ * Copyright (C) 2012-2018 OpenHeadend S.A.R.L.
  *
  * Authors: Christophe Massiot
  *
@@ -26,6 +26,10 @@
 /** @file
  * @short internal interface to av managers
  */
+
+#ifndef _UPIPE_AV_INTERNAL_H_
+/** @hidden */
+#define _UPIPE_AV_INTERNAL_H_
 
 #include <upipe/udeal.h>
 #include <upipe/upump.h>
@@ -129,3 +133,5 @@ const char *upipe_av_to_flow_def(enum AVCodecID id);
  * @return avcodec ID, or 0 if not found
  */
 enum AVCodecID upipe_av_from_flow_def(const char *flow_def);
+
+#endif

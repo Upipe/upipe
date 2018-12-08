@@ -281,8 +281,7 @@ static struct upipe *upipe_rtpfb_output_alloc(struct upipe_mgr *mgr,
  */
 static void upipe_rtpfb_output_free(struct upipe *upipe)
 {
-    struct upipe_rtpfb_output *upipe_rtpfb_output =
-        upipe_rtpfb_output_from_upipe(upipe);
+    struct upipe_rtpfb_output *upipe_rtpfb_output = upipe_rtpfb_output_from_upipe(upipe);
     upipe_throw_dead(upipe);
 
     struct upipe_rtpfb *upipe_rtpfb = upipe_rtpfb_from_sub_mgr(upipe->mgr);
@@ -293,8 +292,7 @@ static void upipe_rtpfb_output_free(struct upipe *upipe)
     upipe_rtpfb_output_clean_urefcount(upipe);
     upipe_rtpfb_output_clean_ubuf_mgr(upipe);
     upipe_rtpfb_output_clean_uref_mgr(upipe);
-    upipe_clean(upipe);
-    free(upipe_rtpfb_output);
+    upipe_rtpfb_output_free_void(upipe);
 }
 
 /** @internal @This sends a retransmission request for a number of seqnums.
@@ -1090,9 +1088,11 @@ static int upipe_rtpfb_set_option(struct upipe *upipe, const char *k, const char
  */
 static int _upipe_rtpfb_control(struct upipe *upipe, int command, va_list args)
 {
-    UBASE_HANDLED_RETURN(upipe_rtpfb_control_outputs(upipe, command, args));
     UBASE_HANDLED_RETURN(upipe_rtpfb_control_output(upipe, command, args));
+    UBASE_HANDLED_RETURN(upipe_rtpfb_control_outputs(upipe, command, args));
     switch (command) {
+        case UPIPE_ATTACH_UPUMP_MGR:
+            return upipe_rtpfb_attach_upump_mgr(upipe);
         case UPIPE_SET_FLOW_DEF: {
             struct uref *flow_def = va_arg(args, struct uref *);
             return upipe_rtpfb_set_flow_def(upipe, flow_def);
@@ -1162,6 +1162,7 @@ static void upipe_rtpfb_free(struct urefcount *urefcount_real)
     }
     upipe_rtpfb_clean_upump_mgr(upipe);
     upipe_rtpfb_clean_uclock(upipe);
+    upipe_rtpfb_clean_sub_outputs(upipe);
     uprobe_release(upipe_rtpfb->uprobe);
 
     struct uchain *uchain, *uchain_tmp;

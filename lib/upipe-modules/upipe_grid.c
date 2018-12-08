@@ -85,9 +85,6 @@ struct upipe_grid {
 static int upipe_grid_update_pts(struct upipe *upipe, uint64_t next_pts);
 /** @hidden */
 static int upipe_grid_uclock_now(struct upipe *upipe, uint64_t *now);
-/** @hidden */
-static int upipe_grid_catch_out(struct uprobe *uprobe, struct upipe *upipe,
-                                 int event, va_list args);
 
 UPIPE_HELPER_UPIPE(upipe_grid, upipe, UPIPE_GRID_SIGNATURE);
 UPIPE_HELPER_UREFCOUNT(upipe_grid, urefcount, upipe_grid_no_ref);
@@ -519,6 +516,7 @@ static int upipe_grid_in_control(struct upipe *upipe,
                                  int command, va_list args)
 {
     UBASE_HANDLED_RETURN(upipe_control_provide_request(upipe, command, args));
+    UBASE_HANDLED_RETURN(upipe_grid_in_control_super(upipe, command, args));
 
     switch (command) {
         case UPIPE_SET_FLOW_DEF: {
@@ -747,7 +745,6 @@ static int upipe_grid_out_extract_sound(struct upipe *upipe, struct uref *uref)
         upipe_grid_in_from_upipe(upipe_grid_out->input);
     struct uref *input_flow_def = upipe_grid_in->flow_def;
     uint64_t next_pts;
-    int ret = UBASE_ERR_NONE;
 
     /* checked before */
     assert(input_flow_def);
@@ -1002,6 +999,7 @@ static int upipe_grid_out_control(struct upipe *upipe,
                                   int command, va_list args)
 {
     UBASE_HANDLED_RETURN(upipe_grid_out_control_output(upipe, command, args));
+    UBASE_HANDLED_RETURN(upipe_grid_out_control_super(upipe, command, args));
 
     switch (command) {
         case UPIPE_SET_FLOW_DEF: {
@@ -1087,6 +1085,7 @@ static void upipe_grid_init_out_mgr(struct upipe *upipe)
     mgr->upipe_alloc = upipe_grid_out_alloc;
     mgr->upipe_input = upipe_grid_out_input;
     mgr->upipe_control = upipe_grid_out_control;
+    mgr->upipe_event_str = upipe_grid_out_event_str;
     mgr->upipe_command_str = upipe_grid_out_command_str;
 }
 
@@ -1113,8 +1112,7 @@ static void upipe_grid_free(struct upipe *upipe)
  */
 static void upipe_grid_no_ref(struct upipe *upipe)
 {
-    struct upipe_grid *upipe_grid = upipe_grid_from_upipe(upipe);
-    urefcount_release(&upipe_grid->urefcount_real);
+    upipe_grid_release_urefcount_real(upipe);
 }
 
 /** @internal @This allocates a grid pipe.
@@ -1191,6 +1189,9 @@ static int upipe_grid_set_max_retention_real(struct upipe *upipe,
 static int upipe_grid_control(struct upipe *upipe,
                               int command, va_list args)
 {
+    UBASE_HANDLED_RETURN(upipe_grid_control_inputs(upipe, command, args));
+    UBASE_HANDLED_RETURN(upipe_grid_control_outputs(upipe, command, args));
+
     switch (command) {
         case UPIPE_ATTACH_UCLOCK:
             upipe_grid_require_uclock(upipe);

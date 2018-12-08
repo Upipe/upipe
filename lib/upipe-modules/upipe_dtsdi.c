@@ -227,22 +227,6 @@ static int set_flow_def(struct upipe *upipe, struct uref *flow_format)
     return UBASE_ERR_NONE;
 }
 
-static int upipe_dtsdi_check(struct upipe *upipe, struct uref *flow_format)
-{
-    struct upipe_dtsdi *upipe_dtsdi = upipe_dtsdi_from_upipe(upipe);
-
-    if (flow_format != NULL) {
-        if (upipe_dtsdi->sdi_type != DTSDI_TYPE_SDI_UNKNOWN)
-            if (!ubase_check(set_flow_def(upipe, flow_format))) {
-                upipe_err_va(upipe, "Could not find frame rate");
-                return UBASE_ERR_INVALID;
-            }
-        upipe_dtsdi_store_flow_def(upipe, flow_format);
-    }
-
-    return UBASE_ERR_NONE;
-}
-
 static void upipe_dtsdi_free(struct upipe *upipe)
 {
     struct upipe_dtsdi *upipe_dtsdi = upipe_dtsdi_from_upipe(upipe);

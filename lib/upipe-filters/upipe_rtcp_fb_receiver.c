@@ -154,11 +154,6 @@ struct upipe_rtcpfb_input {
 
     /** public upipe structure */
     struct upipe upipe;
-
-    struct uchain urefs;
-    unsigned int nb_urefs;
-    unsigned int max_urefs;
-    struct uchain blockers;
 };
 
 static void upipe_rtcpfb_lost_sub_n(struct upipe *upipe, uint16_t seq, uint16_t pkts);
@@ -267,7 +262,6 @@ static void upipe_rtcpfb_input_sub(struct upipe *upipe, struct uref *uref,
 
 UPIPE_HELPER_UPIPE(upipe_rtcpfb_input, upipe, UPIPE_RTCPFB_INPUT_SIGNATURE)
 UPIPE_HELPER_UREFCOUNT(upipe_rtcpfb_input, urefcount, upipe_rtcpfb_input_free)
-UPIPE_HELPER_INPUT(upipe_rtcpfb_input, urefs, nb_urefs, max_urefs, blockers, NULL)
 UPIPE_HELPER_SUBPIPE(upipe_rtcpfb, upipe_rtcpfb_input, output, sub_mgr, inputs,
                      uchain)
 
@@ -402,7 +396,6 @@ static struct upipe *upipe_rtcpfb_input_alloc(struct upipe_mgr *mgr,
     struct upipe *upipe = upipe_rtcpfb_input_to_upipe(upipe_rtcpfb_input);
     upipe_init(upipe, mgr, uprobe);
     upipe_rtcpfb_input_init_urefcount(upipe);
-    upipe_rtcpfb_input_init_input(upipe);
     upipe_rtcpfb_input_init_sub(upipe);
 
     upipe_throw_ready(upipe);
@@ -421,7 +414,6 @@ static void upipe_rtcpfb_input_free(struct upipe *upipe)
 
     uref_free(upipe_rtcpfb_input->flow_def);
 
-    upipe_rtcpfb_input_clean_input(upipe);
     upipe_rtcpfb_input_clean_sub(upipe);
     upipe_rtcpfb_input_clean_urefcount(upipe);
     upipe_clean(upipe);
@@ -485,7 +477,8 @@ static int upipe_rtcpfb_input_set_flow_def(struct upipe *upipe, struct uref *flo
 static int upipe_rtcpfb_input_control(struct upipe *upipe,
                                     int command, va_list args)
 {
-    UBASE_HANDLED_RETURN(upipe_rtcpfb_input_control_super(upipe, command, args));
+    UBASE_HANDLED_RETURN(
+        upipe_rtcpfb_input_control_super(upipe, command, args));
     switch (command) {
         case UPIPE_SET_FLOW_DEF: {
             struct uref *flow_def = va_arg(args, struct uref *);
@@ -661,9 +654,11 @@ static int upipe_rtcpfb_set_flow_def(struct upipe *upipe, struct uref *flow_def)
  */
 static int _upipe_rtcpfb_control(struct upipe *upipe, int command, va_list args)
 {
-    UBASE_HANDLED_RETURN(upipe_rtcpfb_control_outputs(upipe, command, args));
     UBASE_HANDLED_RETURN(upipe_rtcpfb_control_output(upipe, command, args));
+    UBASE_HANDLED_RETURN(upipe_rtcpfb_control_outputs(upipe, command, args));
     switch (command) {
+        case UPIPE_ATTACH_UPUMP_MGR:
+            return upipe_rtcpfb_attach_upump_mgr(upipe);
         case UPIPE_SET_FLOW_DEF: {
             struct uref *flow_def = va_arg(args, struct uref *);
             return upipe_rtcpfb_set_flow_def(upipe, flow_def);
@@ -704,6 +699,7 @@ static void upipe_rtcpfb_free(struct urefcount *urefcount_real)
 
     uref_free(upipe_rtcpfb->flow_def_input);
     upipe_rtcpfb_clean_output(upipe);
+    upipe_rtcpfb_clean_sub_outputs(upipe);
     upipe_rtcpfb_clean_urefcount(upipe);
     upipe_rtcpfb_clean_ubuf_mgr(upipe);
     upipe_rtcpfb_clean_uref_mgr(upipe);

@@ -115,7 +115,6 @@ static void test_input(struct upipe *upipe, struct uref *uref,
     assert(uref != NULL);
     upipe_dbg_va(upipe, "frame: %u", nb_packets);
     uref_dump(uref, upipe->uprobe);
-    uint64_t pts_prog = UINT64_MAX, dts_prog = UINT64_MAX;
     uint64_t systime_rap = UINT64_MAX;
     uint64_t pts_orig = UINT64_MAX, dts_orig = UINT64_MAX;
     uref_clock_get_rap_sys(uref, &systime_rap);

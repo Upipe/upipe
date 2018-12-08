@@ -215,8 +215,6 @@ static inline enum AVPixelFormat
         nb_planes >= UPIPE_AV_MAX_PLANES)
         return -1;
 
-    const struct uref_pic_flow_format *fmt = NULL;
-
     while (*pix_fmts != -1) {
         const struct uref_pic_flow_format *fmt =
             upipe_av_pixfmt_to_format(*pix_fmts);

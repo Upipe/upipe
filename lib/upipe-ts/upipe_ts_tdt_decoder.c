@@ -112,7 +112,7 @@ static void upipe_ts_tdtd_input(struct upipe *upipe, struct uref *uref,
     uint64_t utc = tdt_get_utc(tdt);
     uref_block_peek_unmap(uref, 0, buffer, tdt);
 
-    char date[24];
+    char date[76];
     time_t time = dvb_time_format_UTC(utc, NULL, date);
     upipe_dbg_va(upipe, "throw UTC clock (%s)", date);
     upipe_throw_clock_utc(upipe, uref, UCLOCK_FREQ * time);

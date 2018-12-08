@@ -141,6 +141,7 @@ static void upipe_dvbcsa_bs_enc_free(struct upipe *upipe)
     upipe_dvbcsa_bs_enc_clean_upump_mgr(upipe);
     upipe_dvbcsa_bs_enc_clean_output(upipe);
     upipe_dvbcsa_bs_enc_clean_input(upipe);
+    upipe_dvbcsa_bs_enc_clean_uclock(upipe);
     upipe_dvbcsa_bs_enc_clean_urefcount(upipe);
     upipe_dvbcsa_bs_enc_free_void(upipe);
 }
@@ -168,6 +169,7 @@ static struct upipe *upipe_dvbcsa_bs_enc_alloc(struct upipe_mgr *mgr,
         upipe_dvbcsa_bs_enc_to_common(upipe_dvbcsa_bs_enc);
 
     upipe_dvbcsa_bs_enc_init_urefcount(upipe);
+    upipe_dvbcsa_bs_enc_init_uclock(upipe);
     upipe_dvbcsa_bs_enc_init_input(upipe);
     upipe_dvbcsa_bs_enc_init_output(upipe);
     upipe_dvbcsa_bs_enc_init_upump_mgr(upipe);

@@ -57,8 +57,8 @@ UREF_TS_ATTR_SUBDESCRIPTOR(ts_event, descriptor,
  * @param uref2 uref containing events to import
  * @param event_p event number to start with
  */
-static int uref_ts_event_import(struct uref *uref1, struct uref *uref2,
-                                uint64_t *event_p)
+static inline int uref_ts_event_import(struct uref *uref1, struct uref *uref2,
+                                       uint64_t *event_p)
 {
     uint64_t events;
     UBASE_RETURN(uref_event_get_events(uref2, &events))

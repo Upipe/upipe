@@ -112,13 +112,10 @@ static int catch_source(struct uprobe *uprobe, struct upipe *upipe,
 static int catch_probe_uref(struct uprobe *uprobe, struct upipe *upipe,
                             int event, va_list args)
 {
-    static bool firstdts = true;
-
     if (event != UPROBE_PROBE_UREF) {
         return uprobe_throw_next(uprobe, upipe, event, args);
     }
 
-    uint64_t ts = 0;
     va_arg(args, unsigned int); /* skip signature */
     struct uref *uref = va_arg(args, struct uref *);
 

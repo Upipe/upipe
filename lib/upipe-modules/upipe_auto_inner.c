@@ -331,6 +331,7 @@ static void upipe_autoin_mgr_free(struct upipe_autoin_mgr *upipe_autoin_mgr)
         free(item->name);
         free(item);
     }
+    upipe_autoin_mgr_clean_urefcount(upipe_autoin_mgr);
     free(upipe_autoin_mgr);
 }
 

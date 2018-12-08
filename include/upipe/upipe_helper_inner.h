@@ -55,6 +55,11 @@ extern "C" {
  * Called whenever you change the inner pipe of this pipe.
  *
  * @item @code
+ *  int upipe_foo_get_inner(struct upipe *upipe, struct upipe **inner_p)
+ * @end code
+ * Called whenever you need to get the inner pipe of this pipe.
+ *
+ * @item @code
  *  int upipe_foo_control_inner(struct upipe *upipe,
  *                              enum upipe_command command, va_list args)
  * @end code
@@ -93,6 +98,20 @@ static UBASE_UNUSED void STRUCTURE##_store_##INNER(struct upipe *upipe, \
     struct STRUCTURE *s = STRUCTURE##_from_upipe(upipe);                \
     upipe_release(s->INNER);                                            \
     s->INNER = inner;                                                   \
+}                                                                       \
+/** @internal @This gets the inner pipe.                                \
+ *                                                                      \
+ * @param upipe description structure of the pipe                       \
+ * @param inner_p filled with the inner pipe                            \
+ * @return an error code                                                \
+ */                                                                     \
+static UBASE_UNUSED inline int                                          \
+STRUCTURE##_get_##INNER(struct upipe *upipe, struct upipe **inner_p)    \
+{                                                                       \
+    struct STRUCTURE *s = STRUCTURE##_from_upipe(upipe);                \
+    if (inner_p)                                                        \
+        *inner_p = s->INNER;                                            \
+    return UBASE_ERR_NONE;                                              \
 }                                                                       \
 /** @internal @This cleans up the private members for this helper.      \
  *                                                                      \

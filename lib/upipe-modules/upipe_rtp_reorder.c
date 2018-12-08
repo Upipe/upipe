@@ -44,7 +44,6 @@
 #include <upipe/upipe_helper_upump.h>
 #include <upipe/upipe_helper_urefcount.h>
 #include <upipe/upipe_helper_void.h>
-#include <upipe/upipe_helper_input.h>
 #include <upipe/upipe_helper_output.h>
 #include <upipe/upipe_helper_subpipe.h>
 #include <upipe/upipe_helper_uclock.h>
@@ -137,15 +136,6 @@ struct upipe_rtpr_sub {
     /** flow_definition packet */
     struct uref *flow_def;
 
-    /** temporary uref storage */
-    struct uchain urefs;
-    /** nb urefs in storage */
-    unsigned int nb_urefs;
-    /** max urefs in storage */
-    unsigned int max_urefs;
-    /** list of blockers */
-    struct uchain blockers;
-
     /** public upipe structure */
     struct upipe upipe;
 };
@@ -154,7 +144,6 @@ UPIPE_HELPER_UPIPE(upipe_rtpr_sub, upipe,
                    UPIPE_RTPR_INPUT_SIGNATURE)
 UPIPE_HELPER_UREFCOUNT(upipe_rtpr_sub, urefcount,
                        upipe_rtpr_sub_free)
-UPIPE_HELPER_INPUT(upipe_rtpr_sub, urefs, nb_urefs, max_urefs, blockers, upipe_rtpr_sub_output)
 UPIPE_HELPER_VOID(upipe_rtpr_sub);
 UPIPE_HELPER_SUBPIPE(upipe_rtpr, upipe_rtpr_sub, input,
                      sub_mgr, inputs, uchain)
@@ -259,7 +248,6 @@ static struct upipe *upipe_rtpr_sub_alloc(struct upipe_mgr *mgr,
                                                  struct uprobe *uprobe,
                                                  uint32_t signature, va_list args)
 {
-    struct uref *flow_def;
     struct upipe *upipe = upipe_rtpr_sub_alloc_void(mgr, uprobe, signature, args);
     if (unlikely(upipe == NULL)) {
         return NULL;
@@ -271,7 +259,6 @@ static struct upipe *upipe_rtpr_sub_alloc(struct upipe_mgr *mgr,
     upipe_rtpr_sub->flow_def = NULL;
 
     upipe_rtpr_sub_init_urefcount(upipe);
-    upipe_rtpr_sub_init_input(upipe);
     upipe_rtpr_sub_init_sub(upipe);
     upipe_throw_ready(upipe);
     return upipe;
@@ -434,7 +421,6 @@ static void upipe_rtpr_sub_free(struct upipe *upipe)
     if (upipe_rtpr_sub->flow_def)
         uref_free(upipe_rtpr_sub->flow_def);
 
-    upipe_rtpr_sub_clean_input(upipe);
     upipe_rtpr_sub_clean_sub(upipe);
     upipe_rtpr_sub_clean_urefcount(upipe);
     upipe_rtpr_sub_free_void(upipe);
