@@ -1,6 +1,6 @@
 /udpmulticat
-/arq_rx
-/arq_tx
+/rist_rx
+/rist_tx
 /glxplay
 /upipe_duration
 /alsaplay

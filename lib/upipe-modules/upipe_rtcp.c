@@ -31,6 +31,7 @@
 #include <upipe/uref_block_flow.h>
 #include <upipe/urequest.h>
 #include <upipe/upump.h>
+#include <upipe/ustring.h>
 #include <upipe/uref_clock.h>
 #include <upipe/upipe_helper_upipe.h>
 #include <upipe/upipe_helper_urefcount.h>
@@ -42,7 +43,9 @@
 #include <upipe/upipe_helper_upump.h>
 #include <upipe-modules/upipe_rtcp.h>
 
+#include <bitstream/ietf/rtp.h>
 #include <bitstream/ietf/rtcp_sr.h>
+#include <bitstream/ietf/rtcp_sdes.h>
 
 struct upipe_rtcp {
     /** refcount management structure */
@@ -73,6 +76,7 @@ struct upipe_rtcp {
     uint32_t octet_count;
     uint64_t rate;
     uint64_t last_sent;
+    char *name;
 
     /** public upipe structure */
     struct upipe upipe;
@@ -125,7 +129,11 @@ static int upipe_rtcp_check(struct upipe *upipe, struct uref *flow_format)
 
 static void upipe_rtcp_free(struct upipe *upipe)
 {
+    struct upipe_rtcp *upipe_rtcp = upipe_rtcp_from_upipe(upipe);
+
     upipe_throw_dead(upipe);
+
+    free(upipe_rtcp->name);
 
     upipe_rtcp_clean_ubuf_mgr(upipe);
     upipe_rtcp_clean_uref_mgr(upipe);
@@ -154,6 +162,7 @@ static struct upipe *upipe_rtcp_alloc(struct upipe_mgr *mgr,
     upipe_rtcp->clockrate = 0;
     upipe_rtcp->rate = UCLOCK_FREQ;
     upipe_rtcp->last_sent = 0;
+    upipe_rtcp->name = NULL;
     upipe_throw_ready(upipe);
 
     return upipe;
@@ -206,6 +215,21 @@ static int _upipe_rtcp_set_rate(struct upipe *upipe, uint64_t rate)
     return UBASE_ERR_NONE;
 }
 
+static int _upipe_rtcp_get_name(struct upipe *upipe, const char **name_p)
+{
+    struct upipe_rtcp *upipe_rtcp = upipe_rtcp_from_upipe(upipe);
+    *name_p = upipe_rtcp->name;
+    return UBASE_ERR_NONE;
+}
+
+static int _upipe_rtcp_set_name(struct upipe *upipe, const char *name)
+{
+    struct upipe_rtcp *upipe_rtcp = upipe_rtcp_from_upipe(upipe);
+    free(upipe_rtcp->name);
+    upipe_rtcp->name = name ? strdup(name) : NULL;
+    return UBASE_ERR_NONE;
+}
+
 static int upipe_rtcp_control_handle(struct upipe *upipe, int command,
                                      va_list args)
 {
@@ -242,6 +266,19 @@ static int upipe_rtcp_control_handle(struct upipe *upipe, int command,
         return _upipe_rtcp_set_rate(upipe, rate);
     }
 
+    case UPIPE_RTCP_GET_NAME: {
+        unsigned int signature = va_arg(args, unsigned int);
+        assert(signature == UPIPE_RTCP_SIGNATURE);
+        const char **name_p = va_arg(args, const char **);
+        return _upipe_rtcp_get_name(upipe, name_p);
+    }
+    case UPIPE_RTCP_SET_NAME: {
+        unsigned int signature = va_arg(args, unsigned int);
+        assert(signature == UPIPE_RTCP_SIGNATURE);
+        const char *name = va_arg(args, const char *);
+        return _upipe_rtcp_set_name(upipe, name);
+    }
+
     default:
         return UBASE_ERR_UNHANDLED;
     }
@@ -266,7 +303,12 @@ static void upipe_rtcp_send_sr(struct upipe *upipe, struct upump **upump_p,
     uint32_t ts = div.quot * upipe_rtcp->clockrate
          + ((uint64_t)div.rem * upipe_rtcp->clockrate)/UCLOCK_FREQ;
 
-    int size = RTCP_SR_SIZE;
+    struct ustring name = ustring_from_str(upipe_rtcp->name);
+
+    int sdes_size = RTCP_SDES_SIZE + name.len + 1; /* 0 byte */
+    sdes_size = (sdes_size + 3) & ~3; /* align to 32 bits */
+
+    int size = RTCP_SR_SIZE + sdes_size;
     struct uref *pkt = uref_block_alloc(upipe_rtcp->uref_mgr,
                                         upipe_rtcp->ubuf_mgr, size);
     if (unlikely(pkt == NULL)) {
@@ -277,6 +319,7 @@ static void upipe_rtcp_send_sr(struct upipe *upipe, struct upump **upump_p,
     uint8_t *buf;
     uref_block_write(pkt, 0, &size, &buf);
     memset(buf, 0, size);
+
     rtcp_sr_set_rtp_version(buf);
     rtcp_sr_set_pt(buf);
     rtcp_sr_set_length(buf, 6);
@@ -285,6 +328,17 @@ static void upipe_rtcp_send_sr(struct upipe *upipe, struct upump **upump_p,
     rtcp_sr_set_rtp_time(buf, ts);
     rtcp_sr_set_packet_count(buf, upipe_rtcp->packet_count);
     rtcp_sr_set_octet_count(buf, upipe_rtcp->octet_count);
+
+    uint8_t *sdes = &buf[RTCP_SR_SIZE];
+    rtcp_set_rtp_version(sdes);
+    rtp_set_cc(sdes, 1);
+    rtcp_set_length(sdes, (sdes_size / 4) - 1);
+    rtcp_sdes_set_pt(sdes);
+    rtcp_sdes_set_cname(sdes, 1);
+    rtcp_sdes_set_name_length(sdes, name.len);
+    if (!ustring_is_null(name))
+        memcpy(&sdes[RTCP_SDES_SIZE], name.at, name.len);
+
     uref_block_unmap(pkt, 0);
 
     uref_clock_set_date_sys(pkt, cr, UREF_DATE_CR);

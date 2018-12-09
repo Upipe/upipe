@@ -39,28 +39,6 @@ extern "C" {
 #define UPIPE_RTCPFB_SIGNATURE UBASE_FOURCC('r','t','c','f')
 #define UPIPE_RTCPFB_INPUT_SIGNATURE UBASE_FOURCC('r','t','c','i')
 
-/** @This extends upipe_command with specific commands for upipe_rtcpfb pipes.
- */
-enum upipe_rtcpfb_command {
-     UPIPE_RTCPFB_SENTINEL = UPIPE_CONTROL_LOCAL,
-
-     /** sets the payload type of the retransmit stream (unsigned) */
-     UPIPE_RTCPFB_SET_RTX_PT,
-};
-
-/** @This sets the value of the rtx_pt channel.
- *
- * @param upipe description structure of the pipe
- * @param rtx_pt value of the rtx_pt channel
- * @return an error code
- */
-static inline int upipe_rtcpfb_set_rtx_pt(struct upipe *upipe,
-        uint8_t rtx_pt)
-{
-    return upipe_control(upipe, UPIPE_RTCPFB_SET_RTX_PT,
-                         UPIPE_RTCPFB_SIGNATURE, (unsigned)rtx_pt);
-}
-
 /** @This returns the management structure for rtcpfb pipes.
  *
  * @return pointer to manager
