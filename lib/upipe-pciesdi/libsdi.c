@@ -118,6 +118,12 @@ void sdi_genlock_vsync(int fd, uint8_t *active, uint64_t *period, uint64_t *seen
     *period = m.period;
     *seen = m.seen;
 }
+
+void sdi_genlock_field(int fd, uint8_t *field) {
+    struct sdi_ioctl_genlock m;
+    ioctl(fd, SDI_IOCTL_GENLOCK_HSYNC, &m);
+    *field = m.field;
+}
 #endif
 
 void sdi_dma(int fd, uint8_t fill, uint8_t rx_tx_loopback_enable, uint8_t tx_rx_loopback_enable) {

@@ -42,6 +42,7 @@ void sdi_si5324_spi(int fd, uint32_t tx_data, uint32_t *rx_data);
 #ifdef HAS_GENLOCK
 void sdi_genlock_hsync(int fd, uint8_t *active, uint64_t *period, uint64_t *seen);
 void sdi_genlock_vsync(int fd, uint8_t *active, uint64_t *period, uint64_t *seen);
+void sdi_genlock_field(int fd, uint8_t *field);
 #endif
 
 void sdi_dma(int fd, uint8_t fill, uint8_t rx_tx_loopback_enable, uint8_t tx_rx_loopback_enable);

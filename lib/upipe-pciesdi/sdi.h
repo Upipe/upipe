@@ -82,6 +82,7 @@ struct sdi_ioctl_genlock {
     uint8_t active;
     uint64_t period;
     uint64_t seen;
+    uint8_t field;
 };
 #endif
 
