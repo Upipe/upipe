@@ -83,7 +83,6 @@ static struct upipe *sink1_alloc(struct upipe_mgr *mgr,
     struct upipe *upipe = sink1_alloc_void(mgr, uprobe, signature, args);
     if (unlikely(!upipe))
         return NULL;
-    struct sink1 *sink1 = sink1_from_upipe(upipe);
 
     sink1_init_urefcount(upipe);
 
@@ -102,15 +101,12 @@ static void sink1_free(struct upipe *upipe)
 static void sink1_input(struct upipe *upipe, struct uref *uref,
                         struct upump **upump_p)
 {
-    struct sink1 *sink1 = sink1_from_upipe(upipe);
     sink1_count++;
     uref_free(uref);
 }
 
 static int sink1_set_flow_def(struct upipe *upipe, struct uref *flow_def)
 {
-    struct sink1 *sink1 = sink1_from_upipe(upipe);
-
     return uref_flow_match_def(flow_def, "type1.");
 }
 
@@ -149,7 +145,6 @@ static struct upipe *sink2_alloc(struct upipe_mgr *mgr,
                                            &flow_def);
     if (unlikely(!upipe))
         return NULL;
-    struct sink2 *sink2 = sink2_from_upipe(upipe);
 
     sink2_init_urefcount(upipe);
 
@@ -169,15 +164,12 @@ static void sink2_free(struct upipe *upipe)
 static void sink2_input(struct upipe *upipe, struct uref *uref,
                         struct upump **upump_p)
 {
-    struct sink2 *sink2 = sink2_from_upipe(upipe);
     sink2_count++;
     uref_free(uref);
 }
 
 static int sink2_set_flow_def(struct upipe *upipe, struct uref *flow_def)
 {
-    struct sink2 *sink2 = sink2_from_upipe(upipe);
-
     return uref_flow_match_def(flow_def, "type2.");
 }
 

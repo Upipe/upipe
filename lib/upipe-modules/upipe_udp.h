@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2012-2013 OpenHeadend S.A.R.L.
+ * Copyright (C) 2012-2018 OpenHeadend S.A.R.L.
  *
  * Authors: Christophe Massiot
  *          Benjamin Cohen
@@ -27,6 +27,10 @@
 /** @file
  * @short Upipe internal helper functions for udp modules
  */
+
+#ifndef _UPIPE_UDP_H_
+/** @hidden */
+#define _UPIPE_UDP_H_
 
 #include <upipe/upipe.h>
 #include <stdint.h>
@@ -165,3 +169,5 @@ int upipe_udp_open_socket(struct upipe *upipe, const char *_uri, int ttl,
                           bool *use_raw, uint8_t *raw_header);
 
 void udp_raw_set_len(uint8_t *raw_header, uint16_t len);
+
+#endif

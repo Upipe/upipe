@@ -274,7 +274,6 @@ static void upipe_bmd_vanc_copy8(uint16_t *w, const uint8_t *r,
         const struct upipe_bmd_vanc_frame_start_line *frame_start_line,
         size_t hsize)
 {
-    uint16_t *uv;
     if (frame_start_line->sd) {
         for (unsigned int i = 0; i < hsize; i++) {
             *w++ = *r++ << 2;

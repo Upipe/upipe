@@ -206,7 +206,8 @@ static int select_variant(struct uprobe *uprobe)
             break;
         }
 
-        if (bandwidth <= bandwidth_max && bandwidth > bandwidth_variant) {
+        if ((!bandwidth && !uref_variant) ||
+            (bandwidth <= bandwidth_max && bandwidth > bandwidth_variant)) {
             uref_variant = uref;
             bandwidth_variant = bandwidth;
         }

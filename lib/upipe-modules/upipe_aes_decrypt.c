@@ -702,7 +702,7 @@ static int upipe_aes_decrypt_control(struct upipe *upipe,
     case UPIPE_GET_OUTPUT:
     case UPIPE_SET_OUTPUT:
     case UPIPE_GET_FLOW_DEF:
-        return upipe_aes_decrypt_control(upipe, command, args);
+        return upipe_aes_decrypt_control_output(upipe, command, args);
     case UPIPE_SET_FLOW_DEF: {
         struct uref *flow_def = va_arg(args, struct uref *);
         return upipe_aes_decrypt_set_flow_def(upipe, flow_def);

@@ -1,5 +1,6 @@
 /*
  * Copyright (c) 2015 Arnaud de Turckheim <quarium@gmail.com>
+ * Copyright (C) 2018 OpenHeadend S.A.R.L.
  *
  * Permission is hereby granted, free of charge, to any person obtaining
  * a copy of this software and associated documentation files (the
@@ -22,10 +23,11 @@
  */
 
 #include <upipe-hls/upipe_hls_master.h>
+#include <upipe-hls/upipe_hls_variant.h>
 #include <upipe-hls/upipe_hls.h>
-#include <upipe-hls/upipe_hls_playlist.h>
 
 #include <upipe-modules/upipe_m3u_reader.h>
+#include <upipe-modules/upipe_null.h>
 
 #include <upipe/upipe_helper_bin_output.h>
 #include <upipe/upipe_helper_bin_input.h>
@@ -68,6 +70,8 @@ struct upipe_hls {
     struct uprobe probe_reader;
     /** master proxy probe */
     struct uprobe probe_master;
+    /** null proxy probe */
+    struct uprobe probe_null;
 
     /** m3u reader inner pipe */
     struct upipe *first_inner;
@@ -75,7 +79,17 @@ struct upipe_hls {
     struct upipe *last_inner;
     /** output pipe if any */
     struct upipe *output;
+    /** inner flow def */
+    struct uref *flow_def;
+    /** fake item when not a master playlist */
+    struct uref *item;
+    /** sub pipe manager */
+    struct upipe_mgr *sub_pipe_mgr;
 };
+
+/** @hidden */
+static void upipe_hls_store_flow_def(struct upipe *upipe,
+                                     struct uref *flow_def);
 
 /** @hidden */
 static int probe_master(struct uprobe *uprobe, struct upipe *inner,
@@ -91,6 +105,7 @@ UPIPE_HELPER_UREFCOUNT_REAL(upipe_hls, urefcount_real, upipe_hls_free);
 UPIPE_HELPER_VOID(upipe_hls);
 UPIPE_HELPER_UPROBE(upipe_hls, urefcount_real, probe_reader, probe_reader);
 UPIPE_HELPER_UPROBE(upipe_hls, urefcount_real, probe_master, probe_master);
+UPIPE_HELPER_UPROBE(upipe_hls, urefcount_real, probe_null, NULL);
 UPIPE_HELPER_INNER(upipe_hls, first_inner);
 UPIPE_HELPER_INNER(upipe_hls, last_inner);
 UPIPE_HELPER_BIN_INPUT(upipe_hls, first_inner, input_requests);
@@ -141,9 +156,24 @@ static int probe_reader(struct uprobe *uprobe, struct upipe *inner,
         const char *def;
         UBASE_RETURN(uref_flow_get_def(flow_format, &def));
 
+        struct uref *flow_format_dup = uref_dup(flow_format);
+        if (unlikely(!flow_format_dup)) {
+            upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
+            return UBASE_ERR_ALLOC;
+        }
+        upipe_hls_store_flow_def(upipe, flow_format_dup);
+
         if (!strcmp(def, "block.m3u.playlist.")) {
-            upipe_hls_store_bin_output(upipe, upipe_use(inner));
-            return upipe_throw_need_output(upipe, flow_format);
+            struct upipe_mgr *upipe_null_mgr = upipe_null_mgr_alloc();
+            struct upipe *output = upipe_void_alloc_output(
+                inner, upipe_null_mgr,
+                uprobe_pfx_alloc(uprobe_use(&upipe_hls->probe_null),
+                                 UPROBE_LOG_VERBOSE, "null"));
+            upipe_mgr_release(upipe_null_mgr);
+            upipe_release(output);
+
+            upipe_split_throw_update(upipe);
+            return UBASE_ERR_NONE;
         }
         else if (!strcmp(def, "block.m3u.master.")) {
             struct upipe_mgr *upipe_hls_master_mgr =
@@ -184,18 +214,23 @@ static struct upipe *upipe_hls_alloc(struct upipe_mgr *mgr,
     if (unlikely(upipe == NULL))
         return NULL;
 
+    struct upipe_hls *upipe_hls = upipe_hls_from_upipe(upipe);
+
     upipe_hls_init_urefcount(upipe);
     upipe_hls_init_urefcount_real(upipe);
     upipe_hls_init_probe_reader(upipe);
     upipe_hls_init_probe_master(upipe);
+    upipe_hls_init_probe_null(upipe);
     upipe_hls_init_first_inner(upipe);
     upipe_hls_init_last_inner(upipe);
     upipe_hls_init_bin_input(upipe);
     upipe_hls_init_bin_output(upipe);
+    upipe_hls->flow_def = NULL;
+    upipe_hls->item = NULL;
+    upipe_hls->sub_pipe_mgr = NULL;
 
     upipe_throw_ready(upipe);
 
-    struct upipe_hls *upipe_hls = upipe_hls_from_upipe(upipe);
     struct upipe *inner = NULL;
     struct upipe_mgr *upipe_m3u_reader_mgr = upipe_m3u_reader_mgr_alloc();
     if (unlikely(!upipe_m3u_reader_mgr)) {
@@ -225,12 +260,20 @@ static struct upipe *upipe_hls_alloc(struct upipe_mgr *mgr,
  */
 static void upipe_hls_free(struct upipe *upipe)
 {
+    struct upipe_hls *upipe_hls = upipe_hls_from_upipe(upipe);
+
     upipe_throw_dead(upipe);
 
+    if (upipe_hls->sub_pipe_mgr)
+        upipe_mgr_release(upipe_hls->sub_pipe_mgr);
+    if (upipe_hls->item)
+        uref_free(upipe_hls->item);
+    upipe_hls_store_flow_def(upipe, NULL);
     upipe_hls_clean_bin_output(upipe);
     upipe_hls_clean_bin_input(upipe);
     upipe_hls_clean_probe_master(upipe);
     upipe_hls_clean_probe_reader(upipe);
+    upipe_hls_clean_probe_null(upipe);
     upipe_hls_clean_urefcount(upipe);
     upipe_hls_clean_urefcount_real(upipe);
     upipe_hls_free_void(upipe);
@@ -247,6 +290,97 @@ static void upipe_hls_no_ref(struct upipe *upipe)
     upipe_hls_release_urefcount_real(upipe);
 }
 
+/** @internal @This stores the inner flow definition.
+ *
+ * @param upipe description structure of the pipe
+ * @param flow_def inner flow definition to store
+ */
+static void upipe_hls_store_flow_def(struct upipe *upipe,
+                                     struct uref *flow_def)
+{
+    struct upipe_hls *upipe_hls = upipe_hls_from_upipe(upipe);
+    if (upipe_hls->flow_def)
+        uref_free(upipe_hls->flow_def);
+    upipe_hls->flow_def = flow_def;
+}
+
+/** @internal @This iterates the variant.
+ *
+ * @param upipe description structure of the pipe
+ * @param uref_p filled with the next variant or NULL
+ * @return an error code
+ */
+static int upipe_hls_split_iterate(struct upipe *upipe, struct uref **uref_p)
+{
+    struct upipe_hls *upipe_hls = upipe_hls_from_upipe(upipe);
+
+    if (!uref_p)
+        return UBASE_ERR_INVALID;
+
+    if (!upipe_hls->flow_def)
+        return UBASE_ERR_INVALID;
+
+    const char *def = NULL;
+    uref_flow_get_def(upipe_hls->flow_def, &def);
+    if (!def)
+        return UBASE_ERR_INVALID;
+
+    if (!strcmp(def, "block.m3u.master."))
+        return upipe_split_iterate(upipe_hls->last_inner, uref_p);
+
+    if (*uref_p) {
+        *uref_p = NULL;
+    }
+    else {
+        if (!upipe_hls->item) {
+            struct uref *item = uref_sibling_alloc_control(upipe_hls->flow_def);
+            if (unlikely(!item))
+                return UBASE_ERR_ALLOC;
+            uref_flow_set_id(item, 1);
+            char *uri = NULL;
+            uref_uri_get_to_str(upipe_hls->flow_def, &uri);
+            uref_m3u_set_uri(item, uri);
+            free(uri);
+            upipe_hls->item = item;
+        }
+        *uref_p = upipe_hls->item;
+    }
+
+    return UBASE_ERR_NONE;
+}
+
+/** @internal @This returns the sub pipe manager.
+ *
+ * @param upipe description structure of the pipe
+ * @param upipe_mgr_p filled with the sub pipe manager
+ * @return an error code
+ */
+static int upipe_hls_get_sub_mgr(struct upipe *upipe,
+                                 struct upipe_mgr **upipe_mgr_p)
+{
+    struct upipe_hls *upipe_hls = upipe_hls_from_upipe(upipe);
+
+    if (!upipe_mgr_p)
+        return UBASE_ERR_INVALID;
+
+    if (!upipe_hls->flow_def)
+        return UBASE_ERR_INVALID;
+
+    const char *def = NULL;
+    uref_flow_get_def(upipe_hls->flow_def, &def);
+    if (!def)
+        return UBASE_ERR_INVALID;
+
+    if (!strcmp(def, "block.m3u.master."))
+        return upipe_get_sub_mgr(upipe_hls->last_inner, upipe_mgr_p);
+
+    if (!upipe_hls->sub_pipe_mgr)
+        upipe_hls->sub_pipe_mgr = upipe_hls_variant_mgr_alloc();
+
+    *upipe_mgr_p = upipe_hls->sub_pipe_mgr;
+    return UBASE_ERR_NONE;
+}
+
 /** @internal @This dispatches commands to the pipe.
  *
  * @param upipe description structure of the pipe
@@ -256,6 +390,17 @@ static void upipe_hls_no_ref(struct upipe *upipe)
  */
 static int upipe_hls_control(struct upipe *upipe, int command, va_list args)
 {
+    switch (command) {
+        case UPIPE_SPLIT_ITERATE: {
+            struct uref **uref_p = va_arg(args, struct uref **);
+            return upipe_hls_split_iterate(upipe, uref_p);
+        }
+        case UPIPE_GET_SUB_MGR: {
+            struct upipe_mgr **upipe_mgr_p = va_arg(args, struct upipe_mgr **);
+            return upipe_hls_get_sub_mgr(upipe, upipe_mgr_p);
+        }
+    }
+
     if (command > UPIPE_CONTROL_LOCAL) {
         switch (ubase_get_signature(args)) {
         case UPIPE_HLS_MASTER_SIGNATURE:

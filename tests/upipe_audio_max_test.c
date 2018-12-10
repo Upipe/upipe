@@ -173,7 +173,6 @@ static void fill_in(struct ubuf *ubuf)
 int main(int argc, char **argv)
 {
     printf("Compiled %s %s - %s\n", __DATE__, __TIME__, __FILE__);
-    int i, j, k;
 
     /* uref and mem management */
     struct umem_mgr *umem_mgr = umem_alloc_mgr_alloc();

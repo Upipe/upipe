@@ -210,7 +210,8 @@ static void upipe_vblk_input(struct upipe *upipe,
             upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
             return;
         }
-        ubuf_pic_clear(upipe_vblk->ubuf, 0, 0, -1, -1, 1);
+        ubuf_pic_clear(upipe_vblk->ubuf, 0, 0, -1, -1,
+                ubase_check(uref_pic_flow_get_full_range(upipe_vblk->flow_def)));
     }
 
     struct ubuf *ubuf = ubuf_dup(upipe_vblk->ubuf);

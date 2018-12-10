@@ -107,6 +107,8 @@ enum uprobe_event {
     /** a pipe signals that a uref contains a UTC clock reference
      * (struct uref *, uint64_t) */
     UPROBE_CLOCK_UTC,
+    /** a pipe signal the end of the preroll (void) */
+    UPROBE_PREROLL_END,
 
     /** non-standard events implemented by a module type can start from
      * there (first arg = signature) */
@@ -120,29 +122,31 @@ enum uprobe_event {
  */
 static inline const char *uprobe_event_str(int event)
 {
-    switch (event) {
-    case UPROBE_LOG: return "UPROBE_LOG";
-    case UPROBE_FATAL: return "UPROBE_FATAL";
-    case UPROBE_ERROR: return "UPROBE_ERROR";
-    case UPROBE_READY: return "UPROBE_READY";
-    case UPROBE_DEAD: return "UPROBE_DEAD";
-    case UPROBE_STALLED: return "UPROBE_STALLED";
-    case UPROBE_SOURCE_END: return "UPROBE_SOURCE_END";
-    case UPROBE_SINK_END: return "UPROBE_SINK_END";
-    case UPROBE_NEED_OUTPUT: return "UPROBE_NEED_OUTPUT";
-    case UPROBE_PROVIDE_REQUEST: return "UPROBE_PROVIDE_REQUEST";
-    case UPROBE_NEED_UPUMP_MGR: return "UPROBE_NEED_UPUMP_MGR";
-    case UPROBE_FREEZE_UPUMP_MGR: return "UPROBE_FREEZE_UPUMP_MGR";
-    case UPROBE_THAW_UPUMP_MGR: return "UPROBE_THAW_UPUMP_MGR";
-    case UPROBE_NEW_FLOW_DEF: return "UPROBE_NEW_FLOW_DEF";
-    case UPROBE_NEW_RAP: return "UPROBE_NEW_RAP";
-    case UPROBE_SPLIT_UPDATE: return "UPROBE_SPLIT_UPDATE";
-    case UPROBE_SYNC_ACQUIRED: return "UPROBE_SYNC_ACQUIRED";
-    case UPROBE_SYNC_LOST: return "UPROBE_SYNC_LOST";
-    case UPROBE_CLOCK_REF: return "UPROBE_CLOCK_REF";
-    case UPROBE_CLOCK_TS: return "UPROBE_CLOCK_TS";
-    case UPROBE_CLOCK_UTC: return "UPROBE_CLOCK_UTC";
-    case UPROBE_LOCAL: break;
+    switch ((enum uprobe_event)event) {
+    UBASE_CASE_TO_STR(UPROBE_LOG);
+    UBASE_CASE_TO_STR(UPROBE_FATAL);
+    UBASE_CASE_TO_STR(UPROBE_ERROR);
+    UBASE_CASE_TO_STR(UPROBE_READY);
+    UBASE_CASE_TO_STR(UPROBE_DEAD);
+    UBASE_CASE_TO_STR(UPROBE_STALLED);
+    UBASE_CASE_TO_STR(UPROBE_SOURCE_END);
+    UBASE_CASE_TO_STR(UPROBE_SINK_END);
+    UBASE_CASE_TO_STR(UPROBE_NEED_OUTPUT);
+    UBASE_CASE_TO_STR(UPROBE_PROVIDE_REQUEST);
+    UBASE_CASE_TO_STR(UPROBE_NEED_UPUMP_MGR);
+    UBASE_CASE_TO_STR(UPROBE_FREEZE_UPUMP_MGR);
+    UBASE_CASE_TO_STR(UPROBE_THAW_UPUMP_MGR);
+    UBASE_CASE_TO_STR(UPROBE_NEED_SOURCE_MGR);
+    UBASE_CASE_TO_STR(UPROBE_NEW_FLOW_DEF);
+    UBASE_CASE_TO_STR(UPROBE_NEW_RAP);
+    UBASE_CASE_TO_STR(UPROBE_SPLIT_UPDATE);
+    UBASE_CASE_TO_STR(UPROBE_SYNC_ACQUIRED);
+    UBASE_CASE_TO_STR(UPROBE_SYNC_LOST);
+    UBASE_CASE_TO_STR(UPROBE_CLOCK_REF);
+    UBASE_CASE_TO_STR(UPROBE_CLOCK_TS);
+    UBASE_CASE_TO_STR(UPROBE_CLOCK_UTC);
+    UBASE_CASE_TO_STR(UPROBE_PREROLL_END);
+    UBASE_CASE_TO_STR(UPROBE_LOCAL);
     }
     return NULL;
 }

@@ -215,6 +215,7 @@ static void upipe_dvbcsa_split_free(struct upipe *upipe)
     upipe_dvbcsa_split_clean_bin_output(upipe);
     upipe_dvbcsa_split_clean_bin_input(upipe);
     upipe_dvbcsa_split_clean_demux_probe(upipe);
+    upipe_dvbcsa_split_clean_demux(upipe);
     upipe_dvbcsa_split_clean_proxy_probe(upipe);
     upipe_dvbcsa_split_clean_urefcount_real(upipe);
     upipe_dvbcsa_split_clean_urefcount(upipe);

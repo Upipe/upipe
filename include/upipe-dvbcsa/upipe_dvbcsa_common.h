@@ -181,7 +181,6 @@ ustring_to_dvbcsa_cw48(const struct ustring str)
 static inline struct ustring_dvbcsa_cw
 ustring_to_dvbcsa_cw(const struct ustring str)
 {
-    struct ustring_dvbcsa_cw ret;
     if (str.len >= 16)
         return ustring_to_dvbcsa_cw64(str);
     return ustring_to_dvbcsa_cw48(str);
