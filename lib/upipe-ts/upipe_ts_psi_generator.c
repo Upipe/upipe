@@ -650,8 +650,29 @@ static int upipe_ts_psig_flow_set_flow_def(struct upipe *upipe,
     bool pmt_change = flow->flow_def == NULL ||
         uref_flow_cmp_raw_def(flow_def, flow->flow_def) ||
         uref_ts_flow_cmp_pid(flow_def, flow->flow_def) ||
+        uref_block_flow_cmp_octetrate(flow_def, flow->flow_def) ||
+        uref_flow_cmp_languages(flow_def, flow->flow_def) ||
+        uref_mpga_flow_cmp_encaps(flow_def, flow->flow_def) ||
+        uref_sound_flow_cmp_rate(flow_def, flow->flow_def) ||
+        uref_sound_flow_cmp_channels(flow_def, flow->flow_def) ||
         uref_ts_flow_compare_descriptors(flow_def, flow->flow_def) ||
         uref_ts_flow_cmp_component_type(flow_def, flow->flow_def);
+
+    uint8_t languages = 0;
+    uref_flow_get_languages(flow_def, &languages);
+    for (uint8_t l = 0; l < languages; l++) {
+        pmt_change = pmt_change ||
+            uref_flow_cmp_language(flow_def, flow->flow_def, l) ||
+            uref_flow_cmp_hearing_impaired(flow_def, flow->flow_def, l) ||
+            uref_flow_cmp_visual_impaired(flow_def, flow->flow_def, l) ||
+            uref_flow_cmp_audio_clean(flow_def, flow->flow_def, l) ||
+            uref_ts_flow_cmp_telx_type(flow_def, flow->flow_def, l) ||
+            uref_ts_flow_cmp_telx_magazine(flow_def, flow->flow_def, l) ||
+            uref_ts_flow_cmp_telx_page(flow_def, flow->flow_def, l) ||
+            uref_ts_flow_cmp_sub_type(flow_def, flow->flow_def, l) ||
+            uref_ts_flow_cmp_sub_composition(flow_def, flow->flow_def, l) ||
+            uref_ts_flow_cmp_sub_ancillary(flow_def, flow->flow_def, l);
+    }
 
     uref_free(flow->flow_def);
     flow->flow_def = flow_def_dup;
