@@ -201,6 +201,7 @@ libupipe.lua: $(srcdir)/gen-ffi-cdef.pl $(srcdir)/libc.defs upipe.debug_info upi
 	  --write-defs upipe.defs \
 	  --enum ubase_err \
 	  --enum upipe_command \
+	  --enum upipe_mgr_command \
 	  --enum uref_date_type \
 	  --enum uprobe_event \
 	  --enum 'urequest_*' \

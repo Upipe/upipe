@@ -554,6 +554,50 @@ static void upipe_avfsink_sub_free(struct upipe *upipe)
     upipe_avfsink_sub_free_void(upipe);
 }
 
+/** @This checks that a specific flow def is supported by avfsink subpipes.
+ *
+ * @param mgr pointer to manager
+ * @param flow_def flow def to check
+ * @return an error code
+ */
+static int upipe_avfsink_sub_mgr_check_flow_def(struct upipe_mgr *mgr,
+                                                struct uref *flow_def)
+{
+    if (flow_def == NULL)
+        return UBASE_ERR_INVALID;
+
+    const char *def;
+    enum AVCodecID codec_id;
+    UBASE_RETURN(uref_flow_get_def(flow_def, &def))
+    if (ubase_ncmp(def, "block.") ||
+        !(codec_id = upipe_av_from_flow_def(def + strlen("block."))) ||
+        codec_id >= AV_CODEC_ID_FIRST_SUBTITLE)
+        return UBASE_ERR_INVALID;
+
+    return UBASE_ERR_NONE;
+}
+
+/** @This processes control commands on a avfsink sub manager.
+ *
+ * @param mgr pointer to manager
+ * @param command type of command to process
+ * @param args arguments of the command
+ * @return an error code
+ */
+static int upipe_avfsink_sub_mgr_control(struct upipe_mgr *mgr,
+                                         int command, va_list args)
+{
+    switch (command) {
+        case UPIPE_MGR_CHECK_FLOW_DEF: {
+            struct uref *flow_def = va_arg(args, struct uref *);
+            return upipe_avfsink_sub_mgr_check_flow_def(mgr, flow_def);
+        }
+
+        default:
+            return UBASE_ERR_UNHANDLED;
+    }
+}
+
 /** @internal @This initializes the output manager for an avfsink pipe.
  *
  * @param upipe description structure of the pipe
@@ -567,7 +611,7 @@ static void upipe_avfsink_init_sub_mgr(struct upipe *upipe)
     sub_mgr->upipe_alloc = upipe_avfsink_sub_alloc;
     sub_mgr->upipe_input = upipe_avfsink_sub_input;
     sub_mgr->upipe_control = upipe_avfsink_sub_control;
-    sub_mgr->upipe_mgr_control = NULL;
+    sub_mgr->upipe_mgr_control = upipe_avfsink_sub_mgr_control;
 }
 
 /** @internal @This allocates an avfsink pipe.
