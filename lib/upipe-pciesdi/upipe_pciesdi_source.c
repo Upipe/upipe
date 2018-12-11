@@ -313,10 +313,32 @@ static inline bool sdi3g_levelb_eav_match_bitpacked(const uint8_t *src)
         { 0xf1, 0x3c, 0x4f, 0x13, 0xc4}  /* 0x3c4 */
     };
     if (!memcmp(src, prefix, 15)
-            && (!memcmp(src, fvh[0], 5)
-                || !memcmp(src, fvh[1], 5)
-                || !memcmp(src, fvh[2], 5)
-                || !memcmp(src, fvh[3], 5)))
+            && (!memcmp(src + 15, fvh[0], 5)
+                || !memcmp(src + 15, fvh[1], 5)
+                || !memcmp(src + 15, fvh[2], 5)
+                || !memcmp(src + 15, fvh[3], 5)))
+        return true;
+    return false;
+}
+
+static inline bool sdi3g_levelb_sav_match_bitpacked(const uint8_t *src)
+{
+    static const uint8_t prefix[15] = {
+        0xff, 0xff, 0xff, 0xff, 0xff,
+        0, 0, 0, 0, 0,
+        0, 0, 0, 0, 0
+    };
+    static const uint8_t fvh[4][5] = {
+        { 0x80, 0x20, 0x08, 0x02, 0x00}, /* 0x200 */
+        { 0xab, 0x2a, 0xca, 0xb2, 0xac}, /* 0x2ac */
+        { 0xc7, 0x31, 0xcc, 0x73, 0x1c}, /* 0x31c */
+        { 0xec, 0x3b, 0x0e, 0xc3, 0xb0}  /* 0x3b0 */
+    };
+    if (!memcmp(src - 20, prefix, 15)
+            && (!memcmp(src - 5, fvh[0], 5)
+                || !memcmp(src - 5, fvh[1], 5)
+                || !memcmp(src - 5, fvh[2], 5)
+                || !memcmp(src - 5, fvh[3], 5)))
         return true;
     return false;
 }
@@ -595,6 +617,12 @@ static void upipe_pciesdi_src_worker(struct upump *upump)
             if (print_error_eav && !sdi3g_levelb_eav_match_bitpacked(sdi_line)) {
                 upipe_err_va(upipe, "SDI-3G level B EAV not found at %#x", i * sdi_line_width);
                 print_error_eav = false;
+            }
+
+            /* Check SAV is present. */
+            if (print_error_sav && !sdi3g_levelb_sav_match_bitpacked(active_start)) {
+                upipe_err_va(upipe, "SDI-3G level B SAV not found at %#x", i * sdi_line_width + active_offset);
+                print_error_sav = false;
             }
         } else { /* HD */
             /* Check EAV is present. */
