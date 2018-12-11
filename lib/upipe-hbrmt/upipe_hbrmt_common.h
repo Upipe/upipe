@@ -221,17 +221,21 @@ static inline const struct sdi_offsets_fmt *sdi_get_offsets(struct uref *flow_de
 
         { 864,  625, 144, &pict_fmts[3], 0x0, S352_PICTURE_RATE_25, { 25, 1} },                /* 625-line 25 Hz I */
         { 858,  525, 138, &pict_fmts[4], 0x0, S352_PICTURE_RATE_30000_1001, { 30000, 1001 } }, /* 525-line 30/1.001 Hz I */
+    };
 
+    static const struct sdi_offsets_fmt fmts_data_3g_levelb[] = {
         /* SDI-3G */
         { 2200, 1125, 280, &pict_fmts[5], 0x4, S352_PICTURE_RATE_60, { 60, 1 } },               /* 60 Hz P */
     };
 
-    for (size_t i = 16; i < sizeof(fmts_data) / sizeof(struct sdi_offsets_fmt); i++)
-        if (!urational_cmp(&fps, &fmts_data[i].fps))
-            if (fmts_data[i].pict_fmt->active_width == hsize)
-                if (fmts_data[i].pict_fmt->active_height == vsize)
-                    if (sdi3g_levelb == (fmts_data[i].psf_ident == UPIPE_SDI_PSF_IDENT_SDI3G_LEVELB))
-                        return &fmts_data[i];
+    if (sdi3g_levelb) {
+        for (size_t i = 0; i < sizeof(fmts_data_3g_levelb) / sizeof(fmts_data_3g_levelb[0]); i++)
+            if (!urational_cmp(&fps, &fmts_data_3g_levelb[i].fps))
+                if (fmts_data_3g_levelb[i].pict_fmt->active_width == hsize)
+                    if (fmts_data_3g_levelb[i].pict_fmt->active_height == vsize)
+                        return &fmts_data_3g_levelb[i];
+        return NULL;
+    }
 
     for (size_t i = 0; i < sizeof(fmts_data) / sizeof(struct sdi_offsets_fmt); i++)
         if (!urational_cmp(&fps, &fmts_data[i].fps))
