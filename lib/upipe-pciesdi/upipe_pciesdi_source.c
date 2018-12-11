@@ -481,14 +481,15 @@ static void upipe_pciesdi_src_worker(struct upump *upump)
     ret += upipe_pciesdi_src->cached_read_bytes;
     int lines = ret / sdi_line_width;
     int processed_bytes = lines * sdi_line_width;
-    struct uref *uref = uref_block_alloc(upipe_pciesdi_src->uref_mgr,
-            upipe_pciesdi_src->ubuf_mgr,
 #if DEVICE_IS_BITPACKED
-            lines * upipe_pciesdi_src->sdi_format->width * 4
+    int output_size = lines * upipe_pciesdi_src->sdi_format->width * 4;
+    if (upipe_pciesdi_src->sdi3g_levelb)
+        output_size *= 2;
 #else
-            lines * sdi_line_width
+    int output_size = lines * sdi_line_width
 #endif
-            );
+    struct uref *uref = uref_block_alloc(upipe_pciesdi_src->uref_mgr,
+            upipe_pciesdi_src->ubuf_mgr, output_size);
     UBASE_FATAL_RETURN(upipe, uref ? UBASE_ERR_NONE : UBASE_ERR_ALLOC);
 
     uint8_t *block_buf;
