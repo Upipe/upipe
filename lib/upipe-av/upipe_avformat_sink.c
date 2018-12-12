@@ -116,6 +116,8 @@ struct upipe_avfsink_sub {
     struct uchain uchain;
     /** libavformat stream ID */
     int id;
+    /** flow def id */
+    uint64_t flow_id;
     /** relevant flow definition attributes */
     struct uref *flow_def_check;
     /** sample aspect ratio */
@@ -167,10 +169,20 @@ static struct upipe *upipe_avfsink_sub_alloc(struct upipe_mgr *mgr,
     upipe_avfsink_sub_init_flow_def_check(upipe);
     upipe_avfsink_sub_init_sub(upipe);
     upipe_avfsink_sub->id = -1;
+    upipe_avfsink_sub->flow_id = UINT64_MAX;
     ulist_init(&upipe_avfsink_sub->urefs);
     upipe_avfsink_sub->next_dts = UINT64_MAX;
 
     upipe_throw_ready(upipe);
+
+    upipe_avfsink_sub->id = upipe_avfsink->context->nb_streams;
+    AVStream *stream = avformat_new_stream(upipe_avfsink->context, NULL);
+    if (unlikely(stream == NULL)) {
+        upipe_err(upipe, "couldn't allocate stream");
+        upipe_throw_fatal(upipe, UBASE_ERR_EXTERNAL);
+        upipe_release(upipe);
+        return NULL;
+    }
     return upipe;
 }
 
@@ -235,7 +247,7 @@ static int upipe_avfsink_sub_set_flow_def(struct upipe *upipe,
     if (ubase_ncmp(def, "block.") ||
         !(codec_id = upipe_av_from_flow_def(def + strlen("block."))) ||
         codec_id >= AV_CODEC_ID_FIRST_SUBTITLE) {
-        upipe_err(upipe, "bad codec");
+        upipe_err_va(upipe, "bad codec for %s", def);
         return UBASE_ERR_INVALID;
     }
     uint64_t octetrate = 0;
@@ -336,14 +348,13 @@ static int upipe_avfsink_sub_set_flow_def(struct upipe *upipe,
     }
 
     /* Open a new avformat stream. */
-    upipe_avfsink_sub->id = upipe_avfsink->context->nb_streams;
     upipe_avfsink_sub_store_flow_def_check(upipe, flow_def_check);
     upipe_avfsink_sub->sar = sar;
 
-    AVStream *stream = avformat_new_stream(upipe_avfsink->context, NULL);
+    AVStream *stream = upipe_avfsink->context->streams[upipe_avfsink_sub->id];
     if (unlikely(stream == NULL)) {
         free(extradata_alloc);
-        upipe_err(upipe, "couldn't allocate stream");
+        upipe_err(upipe, "couldn't get stream");
         upipe_throw_fatal(upipe, UBASE_ERR_EXTERNAL);
         return UBASE_ERR_EXTERNAL;
     }
@@ -351,8 +362,10 @@ static int upipe_avfsink_sub_set_flow_def(struct upipe *upipe,
     uint64_t id;
     if (likely(ubase_check(uref_flow_get_id(flow_def, &id)))) {
         stream->id = id;
+        upipe_avfsink_sub->flow_id = id;
     }
-    stream->disposition = AV_DISPOSITION_DEFAULT;
+    else
+        upipe_avfsink_sub->flow_id = UINT64_MAX;
 
     uint8_t languages;
     const char *lang;
@@ -429,6 +442,50 @@ static int upipe_avfsink_sub_provide_flow_format(struct upipe *upipe,
     return urequest_provide_flow_format(request, flow_format);
 }
 
+/** @internal @This sets the default disposition of the stream.
+ *
+ * @param upipe description structure of the subpipe
+ * @param value value of the flag to set
+ * @return an error code
+ */
+static int upipe_avfsink_sub_set_default(struct upipe *upipe, int value)
+{
+    struct upipe_avfsink_sub *input = upipe_avfsink_sub_from_upipe(upipe);
+    struct upipe_avfsink *upipe_avfsink =
+        upipe_avfsink_from_sub_mgr(upipe->mgr);
+
+    if (input->id < 0)
+        return UBASE_ERR_INVALID;
+
+    AVStream *stream = upipe_avfsink->context->streams[input->id];
+    if (value)
+        stream->disposition = stream->disposition | AV_DISPOSITION_DEFAULT;
+    else
+        stream->disposition = stream->disposition & ~AV_DISPOSITION_DEFAULT;
+    return UBASE_ERR_NONE;
+}
+
+/** @internal @This gets the default disposition of the stream.
+ *
+ * @param upipe description structure of the subpipe
+ * @param value_p filled with the flag value
+ * @return an error code
+ */
+static int upipe_avfsink_sub_get_default(struct upipe *upipe, int *value_p)
+{
+    struct upipe_avfsink_sub *input = upipe_avfsink_sub_from_upipe(upipe);
+    struct upipe_avfsink *upipe_avfsink =
+        upipe_avfsink_from_sub_mgr(upipe->mgr);
+
+    if (input->id < 0)
+        return UBASE_ERR_INVALID;
+
+    AVStream *stream = upipe_avfsink->context->streams[input->id];
+    if (value_p)
+        *value_p = stream->disposition & AV_DISPOSITION_DEFAULT ? 1 : 0;
+    return UBASE_ERR_NONE;
+}
+
 /** @internal @This processes control commands on an output subpipe of an
  * avfsink pipe.
  *
@@ -456,8 +513,28 @@ static int upipe_avfsink_sub_control(struct upipe *upipe,
             return upipe_avfsink_sub_set_flow_def(upipe, flow_def);
         }
         default:
-            return UBASE_ERR_UNHANDLED;
+            break;
     }
+
+    if (command < UPIPE_CONTROL_LOCAL ||
+        ubase_get_signature(args) != UPIPE_AVFSINK_INPUT_SIGNATURE)
+        return UBASE_ERR_UNHANDLED;
+
+    switch (command) {
+        case UPIPE_AVFSINK_INPUT_SET_DEFAULT: {
+            UBASE_SIGNATURE_CHECK(args, UPIPE_AVFSINK_INPUT_SIGNATURE);
+            int value = va_arg(args, int);
+            return upipe_avfsink_sub_set_default(upipe, value);
+        }
+        case UPIPE_AVFSINK_INPUT_GET_DEFAULT: {
+            UBASE_SIGNATURE_CHECK(args, UPIPE_AVFSINK_INPUT_SIGNATURE);
+            int *value_p = va_arg(args, int *);
+            return upipe_avfsink_sub_get_default(upipe, value_p);
+        }
+        default:
+            break;
+    }
+    return UBASE_ERR_UNHANDLED;
 }
 
 /** @This frees a upipe.
@@ -586,6 +663,51 @@ static int upipe_avfsink_avio_open(struct upipe *upipe, struct upipe_avfsink_sub
     return UBASE_ERR_NONE;
 }
 
+/** @internal @This sets the default disposition of the streams.
+ * This is called when the application doesn't catch preroll end to configure
+ * the default disposition.
+ * The default behavior applied here is to set the default disposition on the
+ * first audio and the first video stream ordered by there flow def id.
+ * If no flow def id is found, use the first sub pipe of each type.
+ *
+ * @param upipe description structure of the pipe
+ */
+static void upipe_avfsink_set_disposition_default(struct upipe *upipe)
+{
+    struct upipe_avfsink *upipe_avfsink = upipe_avfsink_from_upipe(upipe);
+    struct uchain *uchain;
+    uint64_t audio_flow_id = UINT64_MAX, video_flow_id = UINT64_MAX;
+    AVStream *audio_stream = NULL, *video_stream = NULL;
+
+    ulist_foreach (&upipe_avfsink->subs, uchain) {
+        struct upipe_avfsink_sub *input = upipe_avfsink_sub_from_uchain(uchain);
+
+        if (input->id < 0)
+            continue;
+
+        AVStream *stream = upipe_avfsink->context->streams[input->id];
+        if (stream->codec->codec_id < AV_CODEC_ID_FIRST_AUDIO &&
+            (input->flow_id < video_flow_id || !video_stream)) {
+            video_stream = stream;
+            video_flow_id = input->flow_id;
+            upipe_dbg_va(upipe, "use video stream %"PRIu64" as default",
+                         video_flow_id);
+        }
+        else if (stream->codec->codec_id < AV_CODEC_ID_FIRST_SUBTITLE &&
+                 (input->flow_id < audio_flow_id || !audio_stream)) {
+            audio_stream = stream;
+            audio_flow_id = input->flow_id;
+            upipe_dbg_va(upipe, "use audio stream %"PRIu64" as default",
+                         audio_flow_id);
+        }
+    }
+
+    if (audio_stream)
+        audio_stream->disposition = AV_DISPOSITION_DEFAULT;
+    if (video_stream)
+        video_stream->disposition = AV_DISPOSITION_DEFAULT;
+}
+
 /** @internal @This asks avformat to multiplex some data.
  *
  * @param upipe description structure of the pipe
@@ -595,8 +717,24 @@ static void upipe_avfsink_mux(struct upipe *upipe, struct upump **upump_p)
 {
     struct upipe_avfsink *upipe_avfsink = upipe_avfsink_from_upipe(upipe);
     struct upipe_avfsink_sub *input;
+
     while ((input = upipe_avfsink_find_input(upipe)) != NULL) {
         if (unlikely(!upipe_avfsink->opened)) {
+            /* prevent the pipe to be released during event handling */
+            upipe_use(upipe);
+            /* send preroll end event */
+            int err = upipe_throw_preroll_end(upipe);
+            bool single = upipe_single(upipe);
+            upipe_release(upipe);
+            if (single)
+                /* the pipe was released during event handling */
+                return;
+
+            if (err == UBASE_ERR_UNHANDLED)
+                /* the application has not handled the preroll so apply the
+                 * default behavior. */
+                upipe_avfsink_set_disposition_default(upipe);
+
             upipe_dbg(upipe, "writing header");
             /* avformat dts for formats other than mpegts should start at 0 */
             if (strcmp(upipe_avfsink->context->oformat->name, "mpegts") &&

@@ -175,6 +175,8 @@ static int upipe_dejitter_sub_control(struct upipe *upipe,
 {
     UBASE_HANDLED_RETURN(
         upipe_dejitter_sub_control_output(upipe, command, args));
+    UBASE_HANDLED_RETURN(
+        upipe_dejitter_sub_control_super(upipe, command, args));
     switch (command) {
         case UPIPE_SET_FLOW_DEF: {
             struct uref *flow_def = va_arg(args, struct uref *);
@@ -292,6 +294,7 @@ static int upipe_dejitter_set_flow_def(struct upipe *upipe,
 static int upipe_dejitter_control(struct upipe *upipe, int command, va_list args)
 {
     UBASE_HANDLED_RETURN(upipe_dejitter_control_output(upipe, command, args));
+    UBASE_HANDLED_RETURN(upipe_dejitter_control_subs(upipe, command, args));
     switch (command) {
         case UPIPE_SET_FLOW_DEF: {
             struct uref *flow_def = va_arg(args, struct uref *);

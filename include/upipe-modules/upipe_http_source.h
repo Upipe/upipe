@@ -98,6 +98,8 @@ enum upipe_http_src_command {
 
     /** set the http proxy to use (const char *) */
     UPIPE_HTTP_SRC_SET_PROXY,
+    /** set the http read/write timeout (uint64_t) */
+    UPIPE_HTTP_SRC_SET_TIMEOUT,
 };
 
 /** @This converts an enum upipe_http_src_command to a string.
@@ -109,6 +111,7 @@ static inline const char *upipe_http_src_command_str(int cmd)
 {
     switch ((enum upipe_http_src_command)cmd) {
     UBASE_CASE_TO_STR(UPIPE_HTTP_SRC_SET_PROXY);
+    UBASE_CASE_TO_STR(UPIPE_HTTP_SRC_SET_TIMEOUT);
     case UPIPE_HTTP_SRC_SENTINEL: break;
     }
     return NULL;
@@ -125,6 +128,19 @@ static inline int upipe_http_src_set_proxy(struct upipe *upipe,
 {
     return upipe_control(upipe, UPIPE_HTTP_SRC_SET_PROXY,
                          UPIPE_HTTP_SRC_SIGNATURE, proxy);
+}
+
+/** @This sets the read/write timeout.
+ *
+ * @param upipe description structure of the pipe
+ * @param timeout timeout value in 27MHz clock ticks
+ * @return an error code
+ */
+static inline int upipe_http_src_set_timeout(struct upipe *upipe,
+                                             uint64_t timeout)
+{
+    return upipe_control(upipe, UPIPE_HTTP_SRC_SET_TIMEOUT,
+                         UPIPE_HTTP_SRC_SIGNATURE, timeout);
 }
 
 /** @This extends upipe_mgr_command with specific commands for http source. */

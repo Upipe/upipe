@@ -335,11 +335,10 @@ static uint64_t uclock_netmap_sink_now(struct uclock *uclock)
 
 #if 1
 
-    assert(foo.timinc == 0x1cccccc);
-    t *= 1;//period;
+    t *= period;
     t *= 64;
     t /= 10;
-    t /= 0xcccccc;//incval;
+    t /= incval;
 #else
     t >>= 21;
 #endif

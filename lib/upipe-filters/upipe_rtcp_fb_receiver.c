@@ -64,6 +64,8 @@
 #include <bitstream/ietf/rtp.h>
 #include <bitstream/ietf/rtcp.h>
 #include <bitstream/ietf/rtcp_fb.h>
+#include <bitstream/ietf/rtcp_sr.h>
+#include <bitstream/ietf/rtcp_sdes.h>
 
 #define EXPECTED_FLOW_DEF "block."
 
@@ -110,12 +112,6 @@ struct upipe_rtcpfb {
     /** list of output requests */
     struct uchain request_list;
 
-    /** retransmit seqnum */
-    uint16_t retransmit_seq;
-
-    /** retransmit payload type */
-    uint8_t type;
-
     /** buffer latency */
     uint64_t latency;
 
@@ -158,54 +154,52 @@ struct upipe_rtcpfb_input {
 
     /** public upipe structure */
     struct upipe upipe;
-
-    struct uchain urefs;
-    unsigned int nb_urefs;
-    unsigned int max_urefs;
-    struct uchain blockers;
 };
 
+static void upipe_rtcpfb_lost_sub_n(struct upipe *upipe, uint16_t seq, uint16_t pkts);
 static void upipe_rtcpfb_lost_sub(struct upipe *upipe, uint16_t seq, uint16_t mask);
 
-/** @internal @This handles NACK RTCP messages.
+/** @internal @This handles RTCP App-specific RIST messages.
  *
  * @param upipe description structure of the pipe
- * @param uref uref structure
- * @param upump_p reference to pump that generated the buffer
+ * @param rtp RTCP packet data
+ * @param s RTCP packet size in bytes
  */
-
-static inline void upipe_rtcpfb_input_sub(struct upipe *upipe, struct uref *uref,
-                                    struct upump **upump_p)
+static void upipe_rtcpfb_app_nack(struct upipe *upipe, const uint8_t *rtp, int s)
 {
-    size_t s = 0;
-    uref_block_size(uref, &s);
-    const uint8_t *rtp = uref_block_peek(uref, 0, s, NULL);
-    if (!rtp) {
-        upipe_err(upipe, "Can't peek rtcp message");
-        uref_free(uref);
+    if (s < 12)
         return;
-    }
 
-    if (s < RTP_HEADER_SIZE || !rtp_check_hdr(rtp)) {
-        upipe_warn_va(upipe, "Received invalid RTP packet");
-        goto end;
-    }
+    if (rtcp_get_rc(rtp) != 0)
+        return;
 
-    if (rtcp_get_pt(rtp) != RTCP_PT_RTPFB) {
-        upipe_warn_va(upipe, "Received non Transport Layer specific message");
-        goto end;
-    }
+    if (memcmp(&rtp[8], "RIST", 4))
+        return;
 
-    if (rtcp_fb_get_fmt(rtp) != RTCP_PT_RTPFB_GENERIC_NACK) {
-        upipe_warn_va(upipe, "Received non generic NACK message");
-        goto end;
-    }
+    // TODO: ssrc
 
-    uint16_t len = rtpx_get_length(rtp);
-    if ((len + 1) * 4 != s) {
-        upipe_warn_va(upipe, "Invalid RTP length");
-        goto end;
+    s -= 12;
+    const uint8_t *range = &rtp[12];
+
+    for (size_t i = 0; i < s; i += 4) {
+        uint16_t start = (range[i+0] << 8) | range[i+1];
+        uint16_t pkts =  (range[i+2] << 8) | range[i+3];
+        upipe_rtcpfb_lost_sub_n(upipe, start, pkts);
     }
+}
+/** @internal @This handles RTCP NACK messages.
+ *
+ * @param upipe description structure of the pipe
+ * @param rtp RTCP packet data
+ * @param s RTCP packet size in bytes
+ */
+static void upipe_rtcpfb_nack(struct upipe *upipe, const uint8_t *rtp, int s)
+{
+    if (s < RTCP_FB_HEADER_SIZE)
+        return;
+
+    if (rtcp_fb_get_fmt(rtp) != RTCP_PT_RTPFB_GENERIC_NACK)
+        return;
 
     // TODO: ssrc
 
@@ -215,18 +209,59 @@ static inline void upipe_rtcpfb_input_sub(struct upipe *upipe, struct uref *uref
     for (size_t i = 0; i < s; i += RTCP_FB_FCI_GENERIC_NACK_SIZE) {
         uint16_t id = rtcp_fb_nack_get_packet_id(&fci[i]);
         uint16_t mask = rtcp_fb_nack_get_bitmask_lost(&fci[i]);
-        upipe_verbose_va(upipe, "Received NACK: %hu (0x%hx)", id, mask);
         upipe_rtcpfb_lost_sub(upipe, id, mask);
     }
+}
 
-end:
-    uref_block_peek_unmap(uref, 0, NULL, rtp);
+/** @internal @This handles RTCP messages.
+ *
+ * @param upipe description structure of the pipe
+ * @param uref uref structure
+ * @param upump_p reference to pump that generated the buffer
+ */
+static void upipe_rtcpfb_input_sub(struct upipe *upipe, struct uref *uref,
+                                    struct upump **upump_p)
+{
+    int s = -1;
+    const uint8_t *rtp;
+    if (!ubase_check(uref_block_read(uref, 0, &s, &rtp))) {
+        upipe_err(upipe, "Can't read rtcp message");
+        uref_free(uref);
+        return;
+    }
+
+    while (s) {
+        if (s < 4 || !rtp_check_hdr(rtp)) {
+            upipe_warn_va(upipe, "Received invalid RTP packet");
+            break;
+        }
+
+        size_t len = 4 + 4 * rtcp_get_length(rtp);
+        if (len > s) {
+           break;
+        }
+
+        switch (rtcp_get_pt(rtp)) {
+        case RTCP_PT_RTPFB: upipe_rtcpfb_nack(upipe, rtp, len);
+                            break;
+        case RTCP_PT_APP: upipe_rtcpfb_app_nack(upipe, rtp, len);
+                          break;
+        /* these 2 are mandated by RIST */
+        case RTCP_PT_SR:    break;
+        case RTCP_PT_SDES:  break;
+        default: break;
+        }
+
+        s -= len;
+        rtp += len;
+    }
+
+    uref_block_unmap(uref, 0);
     uref_free(uref);
 }
 
 UPIPE_HELPER_UPIPE(upipe_rtcpfb_input, upipe, UPIPE_RTCPFB_INPUT_SIGNATURE)
 UPIPE_HELPER_UREFCOUNT(upipe_rtcpfb_input, urefcount, upipe_rtcpfb_input_free)
-UPIPE_HELPER_INPUT(upipe_rtcpfb_input, urefs, nb_urefs, max_urefs, blockers, NULL)
 UPIPE_HELPER_SUBPIPE(upipe_rtcpfb, upipe_rtcpfb_input, output, sub_mgr, inputs,
                      uchain)
 
@@ -240,6 +275,45 @@ static int ctz(unsigned int x)
         tz--;
     return tz;
 #endif
+}
+
+/** @internal @This retransmits a number of packets */
+static void upipe_rtcpfb_lost_sub_n(struct upipe *upipe, uint16_t seq, uint16_t pkts)
+{
+    struct upipe *upipe_super = NULL;
+    upipe_rtcpfb_input_get_super(upipe, &upipe_super);
+    struct upipe_rtcpfb *upipe_rtcpfb = upipe_rtcpfb_from_upipe(upipe_super);
+
+    struct uchain *uchain;
+    ulist_foreach(&upipe_rtcpfb->queue, uchain) {
+        struct uref *uref = uref_from_uchain(uchain);
+        uint64_t uref_seqnum = 0;
+        uref_attr_get_priv(uref, &uref_seqnum);
+
+        uint16_t diff = uref_seqnum - seq;
+        if (diff > pkts) {
+            /* packet not in range */
+            if (diff < 0x8000) {
+                /* packet after range */
+                return;
+            }
+            continue;
+        }
+
+        upipe_warn_va(upipe, "Retransmit %hu", seq);
+
+        uint8_t *buf;
+        int s = 0;
+        if (ubase_check(uref_block_write(uref, 0, &s, &buf))) {
+            uint8_t ssrc[4];
+            rtp_get_ssrc(buf, ssrc);
+            ssrc[3] |= 1; /* RIST retransmitted packet */
+            rtp_set_ssrc(buf, ssrc);
+            uref_block_unmap(uref, 0);
+        }
+
+        upipe_rtcpfb_output(upipe_super, uref_dup(uref), NULL);
+    }
 }
 
 /** @internal @This retransmits a list of packets described by a single FCI.
@@ -261,50 +335,18 @@ static void upipe_rtcpfb_lost_sub(struct upipe *upipe, uint16_t seq, uint16_t ma
             continue;
 
         upipe_warn_va(upipe, "Retransmit %hu", seq);
-        size_t size;
-        UBASE_FATAL_RETURN(upipe, uref_block_size(uref, &size));
 
-        struct ubuf *retransmit = ubuf_block_alloc(upipe_rtcpfb->ubuf_mgr,
-                size + 2 /* OSN */);
-
-        if (!retransmit) {
-            upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
-            return;
+        uint8_t *buf;
+        int s = 0;
+        if (ubase_check(uref_block_write(uref, 0, &s, &buf))) {
+            uint8_t ssrc[4];
+            rtp_get_ssrc(buf, ssrc);
+            ssrc[3] |= 1; /* RIST retransmitted packet */
+            rtp_set_ssrc(buf, ssrc);
+            uref_block_unmap(uref, 0);
         }
 
-        int s = -1;
-        const uint8_t *buf;
-        uint8_t *buf_retransmit;
-
-        ubuf_block_write(retransmit, 0, &s, &buf_retransmit);
-        uref_block_read(uref, 0, &s, &buf);
-
-        uint32_t ts = rtp_get_timestamp(buf);
-        memcpy(buf_retransmit, buf, RTP_HEADER_SIZE);
-
-        uint8_t ssrc[4];
-        rtp_get_ssrc(buf, ssrc);
-
-        rtp_set_type(buf_retransmit, upipe_rtcpfb->type);
-        rtp_set_seqnum(buf_retransmit,
-                upipe_rtcpfb->retransmit_seq++);
-        rtp_set_timestamp(buf_retransmit, ts);
-        ssrc[3]++; /* XXX */
-        rtp_set_ssrc(buf_retransmit, ssrc);
-
-        uint16_t osn = rtp_get_seqnum(buf);
-
-        buf_retransmit[RTP_HEADER_SIZE] = osn >> 8;
-        buf_retransmit[RTP_HEADER_SIZE + 1] = osn & 0xff;
-
-        memcpy(&buf_retransmit[RTP_HEADER_SIZE+2],
-                &buf[RTP_HEADER_SIZE], s - RTP_HEADER_SIZE);
-
-        ubuf_block_unmap(retransmit, 0);
-        uref_block_unmap(uref, 0);
-
-        upipe_rtcpfb_output(upipe_super,
-                uref_fork(uref, retransmit), NULL);
+        upipe_rtcpfb_output(upipe_super, uref_dup(uref), NULL);
 
         if (!mask)
             return;
@@ -354,7 +396,6 @@ static struct upipe *upipe_rtcpfb_input_alloc(struct upipe_mgr *mgr,
     struct upipe *upipe = upipe_rtcpfb_input_to_upipe(upipe_rtcpfb_input);
     upipe_init(upipe, mgr, uprobe);
     upipe_rtcpfb_input_init_urefcount(upipe);
-    upipe_rtcpfb_input_init_input(upipe);
     upipe_rtcpfb_input_init_sub(upipe);
 
     upipe_throw_ready(upipe);
@@ -373,7 +414,6 @@ static void upipe_rtcpfb_input_free(struct upipe *upipe)
 
     uref_free(upipe_rtcpfb_input->flow_def);
 
-    upipe_rtcpfb_input_clean_input(upipe);
     upipe_rtcpfb_input_clean_sub(upipe);
     upipe_rtcpfb_input_clean_urefcount(upipe);
     upipe_clean(upipe);
@@ -437,14 +477,12 @@ static int upipe_rtcpfb_input_set_flow_def(struct upipe *upipe, struct uref *flo
 static int upipe_rtcpfb_input_control(struct upipe *upipe,
                                     int command, va_list args)
 {
+    UBASE_HANDLED_RETURN(
+        upipe_rtcpfb_input_control_super(upipe, command, args));
     switch (command) {
         case UPIPE_SET_FLOW_DEF: {
             struct uref *flow_def = va_arg(args, struct uref *);
             return upipe_rtcpfb_input_set_flow_def(upipe, flow_def);
-        }
-        case UPIPE_SUB_GET_SUPER: {
-            struct upipe **p = va_arg(args, struct upipe **);
-            return upipe_rtcpfb_input_get_super(upipe, p);
         }
         default:
             return UBASE_ERR_UNHANDLED;
@@ -535,8 +573,6 @@ static struct upipe *upipe_rtcpfb_alloc(struct upipe_mgr *mgr,
     upipe_rtcpfb->last_seq = UINT_MAX;
     upipe_rtcpfb_require_uclock(upipe);
     upipe_rtcpfb->latency = 1000; /* 1 sec */
-    upipe_rtcpfb->retransmit_seq = 0;
-    upipe_rtcpfb->type = 1; /* reserved */
 
     /* This timer does not need to run frequently */
     upipe_rtcpfb->upump_timer = upump_alloc_timer(upipe_rtcpfb->upump_mgr,
@@ -609,14 +645,6 @@ static int upipe_rtcpfb_set_flow_def(struct upipe *upipe, struct uref *flow_def)
     return UBASE_ERR_NONE;
 }
 
-static int _upipe_rtcpfb_set_pt(struct upipe *upipe, uint8_t pt)
-{
-    struct upipe_rtcpfb *upipe_rtcpfb = upipe_rtcpfb_from_upipe(upipe);
-    upipe_rtcpfb->type = pt;
-
-    return UBASE_ERR_NONE;
-}
-
 /** @internal @This processes control commands on a rtcpfb pipe.
  *
  * @param upipe description structure of the pipe
@@ -626,34 +654,14 @@ static int _upipe_rtcpfb_set_pt(struct upipe *upipe, uint8_t pt)
  */
 static int _upipe_rtcpfb_control(struct upipe *upipe, int command, va_list args)
 {
+    UBASE_HANDLED_RETURN(upipe_rtcpfb_control_output(upipe, command, args));
+    UBASE_HANDLED_RETURN(upipe_rtcpfb_control_outputs(upipe, command, args));
     switch (command) {
-        case UPIPE_REGISTER_REQUEST: {
-            struct urequest *request = va_arg(args, struct urequest *);
-            return upipe_rtcpfb_alloc_output_proxy(upipe, request);
-        }
-        case UPIPE_UNREGISTER_REQUEST: {
-            struct urequest *request = va_arg(args, struct urequest *);
-            return upipe_rtcpfb_free_output_proxy(upipe, request);
-        }
-        case UPIPE_GET_FLOW_DEF: {
-            struct uref **p = va_arg(args, struct uref **);
-            return upipe_rtcpfb_get_flow_def(upipe, p);
-        }
+        case UPIPE_ATTACH_UPUMP_MGR:
+            return upipe_rtcpfb_attach_upump_mgr(upipe);
         case UPIPE_SET_FLOW_DEF: {
             struct uref *flow_def = va_arg(args, struct uref *);
             return upipe_rtcpfb_set_flow_def(upipe, flow_def);
-        }
-        case UPIPE_GET_SUB_MGR: {
-            struct upipe_mgr **p = va_arg(args, struct upipe_mgr **);
-            return upipe_rtcpfb_get_sub_mgr(upipe, p);
-        }
-        case UPIPE_GET_OUTPUT: {
-            struct upipe **p = va_arg(args, struct upipe **);
-            return upipe_rtcpfb_get_output(upipe, p);
-        }
-        case UPIPE_SET_OUTPUT: {
-            struct upipe *output = va_arg(args, struct upipe *);
-            return upipe_rtcpfb_set_output(upipe, output);
         }
         case UPIPE_SET_OPTION: {
             const char *k = va_arg(args, const char *);
@@ -667,12 +675,6 @@ static int _upipe_rtcpfb_control(struct upipe *upipe, int command, va_list args)
                     upipe_rtcpfb->latency);
             return UBASE_ERR_NONE;
         }
-        case UPIPE_RTCPFB_SET_RTX_PT: {
-            UBASE_SIGNATURE_CHECK(args, UPIPE_RTCPFB_SIGNATURE);
-            uint8_t pt = va_arg(args, unsigned);
-            return _upipe_rtcpfb_set_pt(upipe, pt);
-        }
-
         default:
             return UBASE_ERR_UNHANDLED;
     }
@@ -697,6 +699,7 @@ static void upipe_rtcpfb_free(struct urefcount *urefcount_real)
 
     uref_free(upipe_rtcpfb->flow_def_input);
     upipe_rtcpfb_clean_output(upipe);
+    upipe_rtcpfb_clean_sub_outputs(upipe);
     upipe_rtcpfb_clean_urefcount(upipe);
     upipe_rtcpfb_clean_ubuf_mgr(upipe);
     upipe_rtcpfb_clean_uref_mgr(upipe);

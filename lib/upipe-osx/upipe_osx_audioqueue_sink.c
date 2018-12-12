@@ -290,7 +290,6 @@ static int upipe_osx_audioqueue_sink_set_flow_def_real(struct upipe *upipe,
     uint8_t channels = 0;
     uint8_t sample_size = 0;
     OSStatus status;
-    int ret;
 
     upipe_osx_audioqueue_sink_destroy(upipe);
 
@@ -416,8 +415,6 @@ static void upipe_osx_audioqueue_sink_input(struct upipe *upipe,
                                             struct uref *uref,
                                             struct upump **upump_p)
 {
-    struct upipe_osx_audioqueue_sink *upipe_osx_audioqueue_sink =
-                upipe_osx_audioqueue_sink_from_upipe(upipe);
     bool checked = upipe_osx_audioqueue_sink_check_input(upipe);
 
     if (!checked || !upipe_osx_audioqueue_sink_handle(upipe, uref, upump_p)) {
@@ -437,14 +434,11 @@ static void upipe_osx_audioqueue_sink_input(struct upipe *upipe,
 static int upipe_osx_audioqueue_sink_set_flow_def(struct upipe *upipe,
                                                   struct uref *flow)
 {
-    struct upipe_osx_audioqueue_sink *osx_audioqueue =
-        upipe_osx_audioqueue_sink_from_upipe(upipe);
     struct uref *flow_dup;
     uint8_t planes = 0;
     uint64_t sample_rate = 0; /* hush gcc */
     uint8_t channels = 0;
     uint8_t sample_size = 0;
-    OSStatus status;
 
     /* check flow format */
     UBASE_RETURN(uref_flow_match_def(flow, EXPECTED_FLOW_DEF));

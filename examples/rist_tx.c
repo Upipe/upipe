@@ -48,6 +48,8 @@
 #include <upipe/uref_std.h>
 #include <upipe/upump.h>
 #include <upump-ev/upump_ev.h>
+#include <upipe/uuri.h>
+#include <upipe/ustring.h>
 #include <upipe/upipe.h>
 #include <upipe-modules/upipe_genaux.h>
 #include <upipe-modules/upipe_dup.h>
@@ -80,17 +82,20 @@
 #define READ_SIZE 4096
 
 static void usage(const char *argv0) {
-    fprintf(stdout, "Usage: %s [-t 96] [-d] <udp source> <udp dest> <latency>\n", argv0);
+    fprintf(stdout, "Usage: %s [-d] <udp source> <udp dest> <latency>\n", argv0);
     fprintf(stdout, "   -d: more verbose\n");
     fprintf(stdout, "   -q: more quiet\n");
     exit(EXIT_FAILURE);
 }
 
 static struct upipe *upipe_udpsink;
+static struct upipe *upipe_udpsink_rtcp;
 static struct upipe *upipe_udpsrc_sub;
 
 static uint64_t last_sr_ntp;
 static uint64_t last_sr_cr;
+
+static struct uref_mgr *uref_mgr;
 
 /** definition of our uprobe */
 static int catch_udp(struct uprobe *uprobe, struct upipe *upipe,
@@ -111,104 +116,76 @@ static int catch_udp(struct uprobe *uprobe, struct upipe *upipe,
     }
 }
 
-/** definition of our uprobe */
-static int catch(struct uprobe *uprobe, struct upipe *upipe,
-                 int event, va_list args)
+static void parse_rtcp(struct upipe *upipe, const uint8_t *rtp, int s,
+        uint64_t cr_sys, struct ubuf_mgr *ubuf_mgr)
 {
-    struct uref *uref = NULL;
+    while (s > 0) {
+        if (s < 4 || !rtp_check_hdr(rtp)) {
+            upipe_warn_va(upipe, "Received invalid RTP packet");
+            break;
+        }
 
-    switch (event) {
-    case UPROBE_SOURCE_END:
-        upipe_release(upipe);
-        break;
+        size_t len = 4 + 4 * rtcp_get_length(rtp);
+        if (len > s) {
+           break;
+        }
 
-    case UPROBE_PROBE_UREF: {
-        int sig = va_arg(args, int);
-        if (sig != UPIPE_PROBE_UREF_SIGNATURE)
-            return UBASE_ERR_INVALID;
-        uref = va_arg(args, struct uref *);
-        va_arg(args, struct upump **);
-        bool *drop = va_arg(args, bool *);
-
-        const uint8_t *buf;
-        int s = -1;
-        if (!ubase_check(uref_block_read(uref, 0, &s, &buf)))
-            return UBASE_ERR_INVALID;
-
-        if (s < 2)
-            goto unmap;
-
-        bool valid = rtp_check_hdr(buf);
-        uint8_t pt = rtcp_get_pt(buf);
-
-        if (unlikely(!valid))
-            goto unmap;
-
-        if (pt == RTCP_PT_SR) {
+        switch (rtcp_get_pt(rtp)) {
+        case RTCP_PT_SR:
             if (s < RTCP_SR_SIZE)
-                goto unmap;
-            uint32_t ntp_msw = rtcp_sr_get_ntp_time_msw(buf);
-            uint32_t ntp_lsw = rtcp_sr_get_ntp_time_lsw(buf);
-            if (!ubase_check(uref_clock_get_cr_sys(uref, &last_sr_cr)))
-                upipe_err(upipe, "no cr for rtcp");
+                break;
+            uint32_t ntp_msw = rtcp_sr_get_ntp_time_msw(rtp);
+            uint32_t ntp_lsw = rtcp_sr_get_ntp_time_lsw(rtp);
+            if (cr_sys != UINT64_MAX)
+                last_sr_cr = cr_sys;
             last_sr_ntp = ((uint64_t)ntp_msw << 32) | ntp_lsw;
             upipe_verbose_va(upipe, "RTCP SR, CR %"PRIu64" NTP %"PRIu64, last_sr_cr,
-                last_sr_ntp);
-            uref_block_unmap(uref, 0);
-        } else if (pt == RTCP_PT_RR) {
+                    last_sr_ntp);
+            break;
+        case RTCP_PT_RR:
             if (s < RTCP_RR_SIZE)
-                goto unmap;
+                break;
+            if (rtcp_get_rc(rtp) < 1)
+                break;
 
-            *drop = true; // do not let RR go to rtcp_fb
+            uint32_t delay = rtcp_rr_get_delay_since_last_sr(rtp);
+            uint32_t last_sr = rtcp_rr_get_last_sr(rtp);
+            if (last_sr != ((last_sr_ntp >> 16) & 0xffffffff))
+                break;
 
-            uint32_t delay = rtcp_rr_get_delay_since_last_sr(buf);
-            uint32_t last_sr = rtcp_rr_get_last_sr(buf);
-            if (last_sr != ((last_sr_ntp >> 16) & 0xffffffff)) {
-                upipe_err(upipe, "RR not for last SR");
-                goto unmap;
+            if (cr_sys != UINT64_MAX) {
+                cr_sys -= last_sr_cr;
+                cr_sys -= delay * UCLOCK_FREQ / 65536;
+                upipe_verbose_va(upipe, "RTCP RR: RTT %f", (float) cr_sys / UCLOCK_FREQ);
             }
-
-            uint64_t cr;
-            if (!ubase_check(uref_clock_get_cr_sys(uref, &cr))) {
-                upipe_err(upipe, "no cr for rtcp");
-                uref_dump(uref, uprobe);
-                goto unmap;
-            }
-
-            cr -= last_sr_cr;
-            cr -= delay * UCLOCK_FREQ / 65536;
-            upipe_verbose_va(upipe, "RTCP RR: RTT %f", (float) cr / UCLOCK_FREQ);
-            uref_block_unmap(uref, 0);
-        } else if (pt == RTCP_PT_XR) {
-            *drop = true; // do not let XR go to rtcp_fb
-
+            break;
+        case RTCP_PT_XR:
             if (s < RTCP_XR_HEADER_SIZE + RTCP_XR_RRTP_SIZE)
-                goto unmap;
-            if ((rtcp_get_length(buf) + 1) * 4 < RTCP_XR_HEADER_SIZE + RTCP_XR_RRTP_SIZE)
-                goto unmap;
+                break;
 
             uint8_t ssrc[4];
-            rtcp_xr_get_ssrc_sender(buf, ssrc);
-            buf += RTCP_XR_HEADER_SIZE;
+            rtcp_xr_get_ssrc_sender(rtp, ssrc);
+            rtp += RTCP_XR_HEADER_SIZE;
 
-            if (rtcp_xr_get_bt(buf) != RTCP_XR_RRTP_BT)
-                goto unmap;
-            if ((rtcp_xr_get_length(buf) + 1) * 4 != RTCP_XR_RRTP_SIZE)
-                goto unmap;
+            if (rtcp_xr_get_bt(rtp) != RTCP_XR_RRTP_BT)
+                break;
+            if ((rtcp_xr_get_length(rtp) + 1) * 4 != RTCP_XR_RRTP_SIZE)
+                break;
 
-            uint64_t ntp = rtcp_xr_rrtp_get_ntp(buf);
+            uint64_t ntp = rtcp_xr_rrtp_get_ntp(rtp);
 
-            uref_block_unmap(uref, 0);
-
-            struct uref *xr = uref_dup_inner(uref);
+            struct uref *xr = uref_alloc(uref_mgr);
             if (!xr)
-                return UBASE_ERR_INVALID;
+                break;
+
+            if (cr_sys != UINT64_MAX)
+                uref_clock_set_cr_sys(xr, cr_sys);
 
             const size_t xr_len = RTCP_XR_HEADER_SIZE + RTCP_XR_DLRR_SIZE;
-            struct ubuf *ubuf = ubuf_block_alloc(uref->ubuf->mgr, xr_len);
+            struct ubuf *ubuf = ubuf_block_alloc(ubuf_mgr, xr_len);
             if (!ubuf) {
                 uref_free(xr);
-                return UBASE_ERR_INVALID;
+                break;
             }
 
             uref_attach_ubuf(xr, ubuf);
@@ -236,15 +213,50 @@ static int catch(struct uprobe *uprobe, struct upipe *upipe,
             rtcp_xr_dlrr_set_dlrr(buf_xr, 0); // delay = 0, we answer immediately
 
             uref_block_unmap(xr, 0);
-            uref_block_resize(xr, 0, xr_len);
 
-            upipe_verbose_va(upipe, "sending XR");
-            upipe_input(upipe_udpsink, xr, NULL);
-        } else {
-            if (pt != 205)
-                upipe_err_va(upipe, "unhandled RTCP PT %u", pt);
-            uref_block_unmap(uref, 0);
+            upipe_notice_va(upipe, "sending XR");
+            upipe_input(upipe_udpsink_rtcp, xr, NULL);
+            break;
+        default:
+            break;
         }
+
+        s -= len;
+        rtp += len;
+    }
+}
+
+/** definition of our uprobe */
+static int catch(struct uprobe *uprobe, struct upipe *upipe,
+                 int event, va_list args)
+{
+    struct uref *uref = NULL;
+
+    switch (event) {
+    case UPROBE_SOURCE_END:
+        upipe_release(upipe);
+        break;
+
+    case UPROBE_PROBE_UREF: {
+        int sig = va_arg(args, int);
+        if (sig != UPIPE_PROBE_UREF_SIGNATURE)
+            return UBASE_ERR_INVALID;
+        uref = va_arg(args, struct uref *);
+        va_arg(args, struct upump **);
+        va_arg(args, bool *);
+
+        const uint8_t *buf;
+        int s = -1;
+        if (!ubase_check(uref_block_read(uref, 0, &s, &buf)))
+            return UBASE_ERR_INVALID;
+
+        uint64_t cr_sys;
+        if (!ubase_check(uref_clock_get_cr_sys(uref, &cr_sys)))
+            cr_sys = UINT64_MAX;
+
+        parse_rtcp(upipe, buf, s, cr_sys, uref->ubuf->mgr);
+
+        uref_block_unmap(uref, 0);
 
         break;
     }
@@ -252,10 +264,6 @@ static int catch(struct uprobe *uprobe, struct upipe *upipe,
         return uprobe_throw_next(uprobe, upipe, event, args);
     }
     return UBASE_ERR_NONE;
-
-unmap:
-    uref_block_unmap(uref, 0);
-    return UBASE_ERR_INVALID;
 }
 
 static void stop(struct upump *upump)
@@ -270,17 +278,13 @@ static void stop(struct upump *upump)
 
 int main(int argc, char *argv[])
 {
-    uint8_t rtx_pt = 96;
-    const char *srcpath, *dirpath, *latency;
+    char *srcpath, *dirpath, *latency;
     int opt;
     enum uprobe_log_level loglevel = UPROBE_LOG_DEBUG;
 
     /* parse options */
-    while ((opt = getopt(argc, argv, "t:qd")) != -1) {
+    while ((opt = getopt(argc, argv, "qd")) != -1) {
         switch (opt) {
-            case 't':
-                rtx_pt = atoi(optarg);
-                break;
             case 'q':
                 loglevel++;
                 break;
@@ -303,7 +307,7 @@ int main(int argc, char *argv[])
     struct umem_mgr *umem_mgr = umem_alloc_mgr_alloc();
     struct udict_mgr *udict_mgr = udict_inline_mgr_alloc(UDICT_POOL_DEPTH,
                                                          umem_mgr, -1, -1);
-    struct uref_mgr *uref_mgr = uref_std_mgr_alloc(UREF_POOL_DEPTH, udict_mgr,
+    uref_mgr = uref_std_mgr_alloc(UREF_POOL_DEPTH, udict_mgr,
                                                    0);
     struct upump_mgr *upump_mgr = upump_ev_mgr_alloc_default(UPUMP_POOL,
                                                      UPUMP_BLOCKER_POOL);
@@ -341,16 +345,15 @@ int main(int argc, char *argv[])
     struct upipe_mgr *upipe_rtcpfb_mgr = upipe_rtcpfb_mgr_alloc();
     struct upipe *upipe_rtcpfb = upipe_void_alloc_output(upipe_udpsrc, upipe_rtcpfb_mgr,
             uprobe_pfx_alloc(uprobe_use(logger), loglevel, "rtcp fb"));
-    upipe_rtcpfb_set_rtx_pt(upipe_rtcpfb, rtx_pt);
     upipe_mgr_release(upipe_rtcpfb_mgr);
 
     if (!ubase_check(upipe_set_option(upipe_rtcpfb, "latency", latency)))
         return EXIT_FAILURE;
 
     struct uprobe uprobe_udp_rtcp;
-    uprobe_init(&uprobe_udp_rtcp, catch_udp, uprobe_pfx_alloc(uprobe_use(logger),
-                             loglevel, "udp source rtcp"));
-    upipe_udpsrc_sub = upipe_void_alloc(upipe_udpsrc_mgr, &uprobe_udp_rtcp);
+    uprobe_init(&uprobe_udp_rtcp, catch_udp, uprobe_use(logger));
+    upipe_udpsrc_sub = upipe_void_alloc(upipe_udpsrc_mgr,
+            uprobe_pfx_alloc(&uprobe_udp_rtcp, loglevel, "udp source rtcp"));
     upipe_attach_uclock(upipe_udpsrc_sub);
 
     upipe_mgr_release(upipe_udpsrc_mgr);
@@ -401,23 +404,50 @@ int main(int argc, char *argv[])
     struct upipe_mgr *upipe_udpsink_mgr = upipe_udpsink_mgr_alloc();
     upipe_udpsink = upipe_void_alloc_output(upipe_rtcpfb, upipe_udpsink_mgr,
             uprobe_pfx_alloc(uprobe_use(logger), loglevel, "udp sink"));
-    upipe_mgr_release(upipe_udpsink_mgr);
+    upipe_release(upipe_udpsink);
 
     if (!ubase_check(upipe_set_uri(upipe_udpsink, dirpath))) {
         return EXIT_FAILURE;
     }
 
+    /* send RTCP to udp */
+    upipe_udpsink_rtcp = upipe_void_chain_output(rtcp, upipe_udpsink_mgr,
+            uprobe_pfx_alloc(uprobe_use(logger), loglevel, "udp sink rtcp"));
+    upipe_mgr_release(upipe_udpsink_mgr);
+    upipe_release(upipe_udpsink_rtcp);
+
+    struct ustring u = ustring_from_str(dirpath);
+    struct uuri_authority authority = uuri_parse_authority(&u);
+    struct ustring settings = uuri_parse_path(&u);
+
+    char port_str[6];
+    snprintf(port_str, sizeof(port_str), "%.*s", (int)authority.port.len,
+            authority.port.at);
+    int port = atoi(port_str);
+
+    if (port & 1) {
+        fprintf(stderr, "RTP port should be even\n");
+        return EXIT_FAILURE;
+    }
+
+    char uri[128];
+    snprintf(uri, sizeof(uri), "%.*s%s%.*s:%u%.*s",
+        (int)authority.userinfo.len, authority.userinfo.at,
+        ustring_is_empty(authority.userinfo) ? "" : "@",
+        (int)authority.host.len, authority.host.at, port + 1,
+        (int)settings.len, settings.at);
+
+    if (!ubase_check(upipe_set_uri(upipe_udpsink_rtcp, uri))) {
+        return EXIT_FAILURE;
+    }
+
     int udp_fd = -1;
-    ubase_assert(upipe_udpsink_get_fd(upipe_udpsink, &udp_fd));
+    ubase_assert(upipe_udpsink_get_fd(upipe_udpsink_rtcp, &udp_fd));
     int flags = fcntl(udp_fd, F_GETFL);
     flags |= O_NONBLOCK;
     if (fcntl(udp_fd, F_SETFL, flags) < 0)
         upipe_err(upipe_udpsink, "Could not set flags");;
     ubase_assert(upipe_udpsrc_set_fd(upipe_udpsrc_sub, udp_fd));
-
-    upipe_set_output(rtcp, upipe_udpsink);
-    upipe_release(rtcp);
-    upipe_release(upipe_udpsink);
 
     if (0) {
         struct upump *u = upump_alloc_timer(upump_mgr, stop, upipe_udpsrc,

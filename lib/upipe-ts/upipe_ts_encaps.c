@@ -549,6 +549,10 @@ static void upipe_ts_encaps_input(struct upipe *upipe, struct uref *uref,
         return;
     }
 
+    if (cr_sys < encaps->last_splice)
+        upipe_dbg_va(upipe, "late packet received (%"PRIu64" ms)",
+                     (encaps->last_splice - cr_sys) * 1000 / UCLOCK_FREQ);
+
     size_t uref_size;
     if (unlikely(!ubase_check(uref_block_size(uref, &uref_size)) ||
                  !uref_size)) {

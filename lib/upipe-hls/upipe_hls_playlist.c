@@ -886,7 +886,7 @@ static void upipe_hls_playlist_store_input_flow_def(struct upipe *upipe,
 static void upipe_hls_playlist_need_reload_cb(struct upump *upump)
 {
         struct upipe *upipe = upump_get_opaque(upump, struct upipe *);
-        upipe_hls_playlist_throw_need_reload(upipe);
+        UBASE_FATAL(upipe, upipe_hls_playlist_throw_need_reload(upipe));
 }
 
 /** @internal @This sets a new flow definition.

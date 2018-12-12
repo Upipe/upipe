@@ -13,21 +13,22 @@ libupipe_filters_la_SOURCES = \
 	zoneplate/videotestsrc.c \
 	zoneplate/videotestsrc.h
 
+libupipe_filters_la_CPPFLAGS = -I$(top_builddir)/include -I$(top_srcdir)/include
+libupipe_filters_la_LIBADD = $(top_builddir)/lib/upipe-modules/libupipe_modules.la $(top_builddir)/lib/upipe-modules/libupipe_modules.la
+libupipe_filters_la_LDFLAGS = -no-undefined
+libupipe_filters_la_CFLAGS = $(AM_CFLAGS) $(BITSTREAM_CFLAGS)
+
 if HAVE_BITSTREAM
 libupipe_filters_la_SOURCES += upipe_filter_vanc.c \
     upipe_rtp_feedback.c \
     upipe_rtcp_fb_receiver.c
-libupipe_filters_la_CFLAGS = $(AM_CFLAGS) $(BITSTREAM_CFLAGS)
-endif
-
-libupipe_filters_la_CPPFLAGS = -I$(top_builddir)/include -I$(top_srcdir)/include
-libupipe_filters_la_LIBADD = $(top_builddir)/lib/upipe-modules/libupipe_modules.la $(top_builddir)/lib/upipe-modules/libupipe_modules.la
-libupipe_filters_la_LDFLAGS = -no-undefined
+libupipe_filters_la_CFLAGS += $(BITSTREAM_CFLAGS)
 
 if HAVE_ZVBI
 libupipe_filters_la_SOURCES += upipe_filter_vbi.c
 libupipe_filters_la_CPPFLAGS += $(ZVBI_CFLAGS)
 libupipe_filters_la_LIBADD += $(ZVBI_LIBS)
+endif
 endif
 
 pkgconfigdir = $(libdir)/pkgconfig

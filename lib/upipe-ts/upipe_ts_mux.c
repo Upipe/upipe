@@ -1088,6 +1088,7 @@ static int upipe_ts_mux_input_set_flow_def(struct upipe *upipe,
     original_au_per_sec.num = original_au_per_sec.den = 0;
     bool au_irregular = true;
     bool pes_alignment = false;
+    bool has_random = false;
     uint64_t coalesce_latency = 0;
 
     if (strstr(def, ".pic.sub.") != NULL) {
@@ -1133,6 +1134,7 @@ static int upipe_ts_mux_input_set_flow_def(struct upipe *upipe,
 
     } else if (strstr(def, ".pic.") != NULL) {
         input_type = UPIPE_TS_MUX_INPUT_VIDEO;
+        has_random = true;
         if (!ubase_ncmp(def, "block.mpeg1video.")) {
             pes_alignment = true;
         } else if (!ubase_ncmp(def, "block.mpeg2video.")) {
@@ -1324,6 +1326,13 @@ static int upipe_ts_mux_input_set_flow_def(struct upipe *upipe,
         if (au_irregular && pes_alignment) {
             /* TS padding overhead */
             pes_overhead += (TS_SIZE - TS_HEADER_SIZE) *
+                (au_per_sec.num + au_per_sec.den - 1) / au_per_sec.den;
+        }
+
+        if (has_random) {
+            /* adaptation field added for each random access point, worst
+             * case for each frame */
+            pes_overhead += (TS_HEADER_SIZE_AF - TS_HEADER_SIZE) *
                 (au_per_sec.num + au_per_sec.den - 1) / au_per_sec.den;
         }
 

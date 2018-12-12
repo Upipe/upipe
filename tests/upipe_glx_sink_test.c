@@ -106,7 +106,7 @@ static int catch(struct uprobe *uprobe, struct upipe *upipe,
         case UPROBE_GLX_SINK_KEYRELEASE: // don't care about release
             break;
         case UPROBE_GLX_SINK_KEYPRESS: {
-            unsigned int signature = va_arg(args, unsigned int);
+            va_arg(args, unsigned int);
             unsigned long key = va_arg(args, unsigned long);
             keyhandler(upipe, key);
             break;

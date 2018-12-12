@@ -114,7 +114,7 @@ static void upipe_zpsrc_free(struct upipe *upipe)
 static void upipe_zpsrc_noref(struct upipe *upipe)
 {
     upipe_zpsrc_store_src(upipe, NULL);
-    upipe_zpsrc_store_zp(upipe, NULL);
+    upipe_zpsrc_store_bin_output(upipe, NULL);
     upipe_zpsrc_release_urefcount_real(upipe);
 }
 
@@ -218,7 +218,7 @@ static struct upipe *upipe_zpsrc_alloc(struct upipe_mgr *mgr,
         upipe_release(upipe);
         return NULL;
     }
-    upipe_zpsrc_store_zp(upipe, zp);
+    upipe_zpsrc_store_bin_output(upipe, zp);
 
     return upipe;
 }

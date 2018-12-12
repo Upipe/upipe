@@ -65,7 +65,6 @@
 static unsigned int nb_packets = 0;
 static uint64_t pts = 0x112121212;
 static uint64_t dts = 0x112121212 - 1080000;
-static int dataalignment = UBASE_ERR_NONE;
 static int end = UBASE_ERR_NONE;
 static size_t payload_size = 12;
 static bool expect_lost = false;
@@ -124,7 +123,6 @@ static void test_input(struct upipe *upipe, struct uref *uref,
     size_t size;
     ubase_assert(uref_block_size(uref, &size));
     assert(size == payload_size);
-    assert(dataalignment == uref_flow_get_random(uref));
     assert(end == uref_block_get_end(uref));
     uref_free(uref);
     nb_packets--;
@@ -228,7 +226,6 @@ int main(int argc, char *argv[])
     pes_set_streamid(buffer, PES_STREAM_ID_VIDEO_MPEG);
     pes_set_length(buffer, PES_HEADER_SIZE_PTS - PES_HEADER_SIZE);
     pes_set_headerlength(buffer, PES_HEADER_SIZE_PTS - PES_HEADER_SIZE_NOPTS);
-    dataalignment = UBASE_ERR_INVALID;
     end = UBASE_ERR_INVALID;
     pes_set_pts(buffer, pts);
     uref_block_unmap(uref, 0);
@@ -252,7 +249,6 @@ int main(int argc, char *argv[])
     uref = uref_block_alloc(uref_mgr, ubuf_mgr, 42);
     assert(uref != NULL);
     payload_size = 42;
-    dataalignment = UBASE_ERR_INVALID;
     end = UBASE_ERR_INVALID;
     pts = dts = 0;
     nb_packets++;
@@ -292,7 +288,6 @@ int main(int argc, char *argv[])
     uref = uref_block_alloc(uref_mgr, ubuf_mgr, 42);
     assert(uref != NULL);
     payload_size = 42;
-    dataalignment = UBASE_ERR_INVALID;
     end = UBASE_ERR_INVALID;
     pts = dts = 0;
     /* do not increment nb_packets */
@@ -308,7 +303,6 @@ int main(int argc, char *argv[])
     pes_set_streamid(buffer, PES_STREAM_ID_VIDEO_MPEG);
     pes_set_length(buffer, PES_HEADER_SIZE_NOPTS + 12 - PES_HEADER_SIZE);
     pes_set_headerlength(buffer, 0);
-    dataalignment = UBASE_ERR_INVALID;
     end = UBASE_ERR_NONE;
     uref_block_unmap(uref, 0);
     uref_block_set_start(uref);
@@ -332,7 +326,6 @@ int main(int argc, char *argv[])
     uref_block_unmap(uref, 0);
     payload_size = 0;
     expect_lost = false;
-    dataalignment = UBASE_ERR_NONE;
     end = UBASE_ERR_INVALID;
     uref_block_set_start(uref);
     nb_packets++;
@@ -343,7 +336,6 @@ int main(int argc, char *argv[])
     uref = uref_block_alloc(uref_mgr, ubuf_mgr, 42 - PES_HEADER_SIZE_NOPTS);
     assert(uref != NULL);
     payload_size = 42 - PES_HEADER_SIZE_NOPTS;
-    dataalignment = UBASE_ERR_INVALID;
     end = UBASE_ERR_NONE;
     nb_packets++;
     upipe_input(upipe_ts_pesd, uref, NULL);

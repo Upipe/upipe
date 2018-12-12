@@ -51,7 +51,6 @@
 #include <upipe/upipe_helper_upump_mgr.h>
 #include <upipe/upipe_helper_upump.h>
 #include <upipe/upipe_helper_urefcount.h>
-#include <upipe/upipe_helper_void.h>
 #include <upipe-blackmagic/upipe_blackmagic_sink.h>
 
 #include <arpa/inet.h>
@@ -313,7 +312,6 @@ struct upipe_bmd_sink {
 
 UPIPE_HELPER_UPIPE(upipe_bmd_sink, upipe, UPIPE_BMD_SINK_SIGNATURE);
 UPIPE_HELPER_UREFCOUNT(upipe_bmd_sink, urefcount, upipe_bmd_sink_free);
-UPIPE_HELPER_VOID(upipe_bmd_sink);
 
 UPIPE_HELPER_UPIPE(upipe_bmd_sink_sub, upipe, UPIPE_BMD_SINK_INPUT_SIGNATURE)
 UPIPE_HELPER_UPUMP_MGR(upipe_bmd_sink_sub, upump_mgr);
@@ -553,15 +551,6 @@ static void upipe_bmd_sink_sub_free(struct upipe *upipe)
     upipe_bmd_sink_sub_free_flow(upipe);
 }
 
-static int upipe_bmd_sink_sub_read_uref_attributes(struct uref *uref,
-    uint64_t *pts, size_t *size)
-{
-    UBASE_RETURN(uref_clock_get_pts_sys(uref, pts));
-    UBASE_RETURN(uref_sound_size(uref, size, NULL /* sample_size */));
-
-    return UBASE_ERR_NONE;
-}
-
 static void copy_samples(upipe_bmd_sink_sub *upipe_bmd_sink_sub,
         struct uref *uref, uint64_t samples)
 {
@@ -589,12 +578,6 @@ static void copy_samples(upipe_bmd_sink_sub *upipe_bmd_sink_sub,
         memcpy(&out[DECKLINK_CHANNELS * (offset + i) + idx], &in[c*i], c * sizeof(int32_t));
 
     uref_sound_unmap(uref, 0, samples, 1);
-}
-
-static inline uint64_t length_to_samples(const uint64_t length)
-{
-    /* rounding down */
-    return (length * 48000) / UCLOCK_FREQ;
 }
 
 /** @internal @This fills the audio samples for one single stereo pair
@@ -1214,6 +1197,8 @@ static int upipe_bmd_sink_sub_set_flow_def(struct upipe *upipe,
 static int upipe_bmd_sink_sub_control(struct upipe *upipe,
                                      int command, va_list args)
 {
+    UBASE_HANDLED_RETURN(
+        upipe_bmd_sink_sub_control_super(upipe, command, args));
     switch (command) {
         case UPIPE_ATTACH_UPUMP_MGR: {
             upipe_bmd_sink_sub_set_upump(upipe, NULL);
@@ -1229,11 +1214,6 @@ static int upipe_bmd_sink_sub_control(struct upipe *upipe,
         case UPIPE_SET_FLOW_DEF: {
             struct uref *flow_def = va_arg(args, struct uref *);
             return upipe_bmd_sink_sub_set_flow_def(upipe, flow_def);
-        }
-        case UPIPE_SUB_GET_SUPER: {
-            struct upipe **p = va_arg(args, struct upipe **);
-            *p = upipe_bmd_sink_to_upipe(upipe_bmd_sink_from_sub_mgr(upipe->mgr));
-            return UBASE_ERR_NONE;
         }
 
         default:
@@ -1750,17 +1730,13 @@ static int upipe_bmd_sink_control(struct upipe *upipe, int command, va_list args
 {
     struct upipe_bmd_sink *bmd_sink = upipe_bmd_sink_from_upipe(upipe);
 
+    UBASE_HANDLED_RETURN(upipe_bmd_sink_control_inputs(upipe, command, args));
     switch (command) {
         case UPIPE_SET_URI:
             if (!bmd_sink->deckLink) {
                 UBASE_RETURN(upipe_bmd_sink_open_card(upipe));
             }
             return upipe_bmd_open_vid(upipe);
-
-        case UPIPE_GET_SUB_MGR: {
-            struct upipe_mgr **p = va_arg(args, struct upipe_mgr **);
-            return upipe_bmd_sink_get_sub_mgr(upipe, p);
-        }
 
         case UPIPE_BMD_SINK_GET_PIC_SUB: {
             UBASE_SIGNATURE_CHECK(args, UPIPE_BMD_SINK_SIGNATURE)
@@ -1839,8 +1815,10 @@ static void upipe_bmd_sink_free(struct upipe *upipe)
     if (upipe_bmd_sink->cb)
         upipe_bmd_sink->cb->Release();
 
+    upipe_bmd_sink_clean_sub_inputs(upipe);
     upipe_bmd_sink_clean_urefcount(upipe);
-    upipe_bmd_sink_free_void(upipe);
+    upipe_clean(upipe);
+    free(upipe_bmd_sink);
 }
 
 /** upipe_bmd_sink (/dev/bmd_sink) */

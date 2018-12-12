@@ -342,7 +342,8 @@ static inline int uref_##group##_set_##attr##_from_hex(struct uref *uref,   \
  * @param uref pointer to the uref                                          \
  * @return an error code                                                    \
  */                                                                         \
-static inline int uref_##group##_delete_##attr(struct uref *uref)           \
+static UBASE_UNUSED inline int                                              \
+uref_##group##_delete_##attr(struct uref *uref)                             \
 {                                                                           \
     return uref_attr_delete(uref, UDICT_TYPE_OPAQUE, name);                 \
 }                                                                           \
@@ -352,8 +353,8 @@ static inline int uref_##group##_delete_##attr(struct uref *uref)           \
  * @param uref_src pointer to the source uref                               \
  * @return an error code                                                    \
  */                                                                         \
-static inline int uref_##group##_copy_##attr(struct uref *uref,             \
-                                             struct uref *uref_src)         \
+static UBASE_UNUSED inline int                                              \
+uref_##group##_copy_##attr(struct uref *uref, struct uref *uref_src)        \
 {                                                                           \
     return uref_attr_copy_opaque(uref, uref_src,                            \
                                  UDICT_TYPE_OPAQUE, name);                  \
@@ -527,7 +528,8 @@ static inline int uref_##group##_set_##attr(struct uref *uref,              \
  * @param uref pointer to the uref                                          \
  * @return an error code                                                    \
  */                                                                         \
-static inline int uref_##group##_delete_##attr(struct uref *uref)           \
+static UBASE_UNUSED inline int                                              \
+uref_##group##_delete_##attr(struct uref *uref)                             \
 {                                                                           \
     return uref_attr_delete(uref, UDICT_TYPE_STRING, name);                 \
 }                                                                           \
@@ -537,8 +539,8 @@ static inline int uref_##group##_delete_##attr(struct uref *uref)           \
  * @param uref_src pointer to the source uref                               \
  * @return an error code                                                    \
  */                                                                         \
-static inline int uref_##group##_copy_##attr(struct uref *uref,             \
-                                             struct uref *uref_src)         \
+static UBASE_UNUSED inline int                                              \
+uref_##group##_copy_##attr(struct uref *uref, struct uref *uref_src)        \
 {                                                                           \
     return uref_attr_copy_string(uref, uref_src, UDICT_TYPE_STRING, name);  \
 }                                                                           \
@@ -548,8 +550,8 @@ static inline int uref_##group##_copy_##attr(struct uref *uref,             \
  * @param prefix prefix to match                                            \
  * @return an error code                                                    \
  */                                                                         \
-static inline int uref_##group##_match_##attr(struct uref *uref,            \
-                                              const char *prefix)           \
+static UBASE_UNUSED inline int                                              \
+uref_##group##_match_##attr(struct uref *uref, const char *prefix)          \
 {                                                                           \
     const char *v;                                                          \
     UBASE_RETURN(uref_##group##_get_##attr(uref, &v));                      \
@@ -561,8 +563,8 @@ static inline int uref_##group##_match_##attr(struct uref *uref,            \
  * @param uref2 pointer to the second uref                                  \
  * @return 0 if both attributes are absent or identical                     \
  */                                                                         \
-static inline int uref_##group##_cmp_##attr(struct uref *uref1,             \
-                                            struct uref *uref2)             \
+static UBASE_UNUSED inline int                                              \
+uref_##group##_cmp_##attr(struct uref *uref1, struct uref *uref2)           \
 {                                                                           \
     const char *v1 = NULL, *v2 = NULL;                                      \
     int err1 = uref_##group##_get_##attr(uref1, &v1);                       \
@@ -1173,7 +1175,8 @@ static inline int uref_##group##_set_##attr(struct uref *uref, uint8_t v)   \
  * @param uref pointer to the uref                                          \
  * @return an error code                                                    \
  */                                                                         \
-static inline int uref_##group##_delete_##attr(struct uref *uref)           \
+static UBASE_UNUSED inline int                                              \
+uref_##group##_delete_##attr(struct uref *uref)                             \
 {                                                                           \
     return uref_attr_delete(uref, UDICT_TYPE_SMALL_UNSIGNED, name);         \
 }                                                                           \
@@ -1183,8 +1186,8 @@ static inline int uref_##group##_delete_##attr(struct uref *uref)           \
  * @param uref_src pointer to the source uref                               \
  * @return an error code                                                    \
  */                                                                         \
-static inline int uref_##group##_copy_##attr(struct uref *uref,             \
-                                             struct uref *uref_src)         \
+static UBASE_UNUSED inline int                                              \
+uref_##group##_copy_##attr(struct uref *uref, struct uref *uref_src)        \
 {                                                                           \
     return uref_attr_copy_small_unsigned(uref, uref_src,                    \
                                          UDICT_TYPE_SMALL_UNSIGNED, name);  \
@@ -1196,8 +1199,8 @@ static inline int uref_##group##_copy_##attr(struct uref *uref,             \
  * @param max maximum value                                                 \
  * @return an error code                                                    \
  */                                                                         \
-static inline int uref_##group##_match_##attr(struct uref *uref,            \
-                                              uint8_t min, uint8_t max)     \
+static UBASE_UNUSED inline int                                              \
+uref_##group##_match_##attr(struct uref *uref, uint8_t min, uint8_t max)    \
 {                                                                           \
     uint8_t v;                                                              \
     UBASE_RETURN(uref_##group##_get_##attr(uref, &v));                      \
@@ -1209,8 +1212,8 @@ static inline int uref_##group##_match_##attr(struct uref *uref,            \
  * @param uref2 pointer to the second uref                                  \
  * @return 0 if both attributes are absent or identical                     \
  */                                                                         \
-static inline int uref_##group##_cmp_##attr(struct uref *uref1,             \
-                                            struct uref *uref2)             \
+static UBASE_UNUSED inline int                                              \
+uref_##group##_cmp_##attr(struct uref *uref1, struct uref *uref2)           \
 {                                                                           \
     uint8_t v1 = 0, v2 = 0;                                                 \
     int err1 = uref_##group##_get_##attr(uref1, &v1);                       \
@@ -1435,7 +1438,8 @@ static inline int uref_##group##_set_##attr(struct uref *uref, uint64_t v)  \
  * @param uref pointer to the uref                                          \
  * @return an error code                                                    \
  */                                                                         \
-static inline int uref_##group##_delete_##attr(struct uref *uref)           \
+static UBASE_UNUSED inline int                                              \
+uref_##group##_delete_##attr(struct uref *uref)                             \
 {                                                                           \
     return uref_attr_delete(uref, UDICT_TYPE_UNSIGNED, name);               \
 }                                                                           \
@@ -1445,8 +1449,8 @@ static inline int uref_##group##_delete_##attr(struct uref *uref)           \
  * @param uref_src pointer to the source uref                               \
  * @return an error code                                                    \
  */                                                                         \
-static inline int uref_##group##_copy_##attr(struct uref *uref,             \
-                                             struct uref *uref_src)         \
+static UBASE_UNUSED inline int                                              \
+uref_##group##_copy_##attr(struct uref *uref, struct uref *uref_src)        \
 {                                                                           \
     return uref_attr_copy_unsigned(uref, uref_src, UDICT_TYPE_UNSIGNED,     \
                                    name);                                   \
@@ -1458,8 +1462,8 @@ static inline int uref_##group##_copy_##attr(struct uref *uref,             \
  * @param max maximum value                                                 \
  * @return an error code                                                    \
  */                                                                         \
-static inline int uref_##group##_match_##attr(struct uref *uref,            \
-                                              uint64_t min, uint64_t max)   \
+static UBASE_UNUSED inline int                                              \
+uref_##group##_match_##attr(struct uref *uref, uint64_t min, uint64_t max)  \
 {                                                                           \
     uint64_t v;                                                             \
     UBASE_RETURN(uref_##group##_get_##attr(uref, &v));                      \
@@ -1471,8 +1475,8 @@ static inline int uref_##group##_match_##attr(struct uref *uref,            \
  * @param uref2 pointer to the second uref                                  \
  * @return 0 if both attributes are absent or identical                     \
  */                                                                         \
-static inline int uref_##group##_cmp_##attr(struct uref *uref1,             \
-                                            struct uref *uref2)             \
+static UBASE_UNUSED inline int                                              \
+uref_##group##_cmp_##attr(struct uref *uref1, struct uref *uref2)           \
 {                                                                           \
     uint64_t v1 = 0, v2 = 0;                                                \
     int err1 = uref_##group##_get_##attr(uref1, &v1);                       \
@@ -1783,7 +1787,8 @@ static inline int uref_##group##_set_##attr(struct uref *uref, int64_t v)   \
  * @param uref pointer to the uref                                          \
  * @return an error code                                                    \
  */                                                                         \
-static inline int uref_##group##_delete_##attr(struct uref *uref)           \
+static UBASE_UNUSED inline int                                              \
+uref_##group##_delete_##attr(struct uref *uref)                             \
 {                                                                           \
     return uref_attr_delete(uref, UDICT_TYPE_INT, name);                    \
 }                                                                           \
@@ -1793,8 +1798,8 @@ static inline int uref_##group##_delete_##attr(struct uref *uref)           \
  * @param uref_src pointer to the source uref                               \
  * @return an error code                                                    \
  */                                                                         \
-static inline int uref_##group##_copy_##attr(struct uref *uref,             \
-                                             struct uref *uref_src)         \
+static UBASE_UNUSED inline int                                              \
+uref_##group##_copy_##attr(struct uref *uref, struct uref *uref_src)        \
 {                                                                           \
     return uref_attr_copy_int(uref, uref_src, UDICT_TYPE_INT, name);        \
 }                                                                           \
@@ -1804,8 +1809,8 @@ static inline int uref_##group##_copy_##attr(struct uref *uref,             \
  * @param uref2 pointer to the second uref                                  \
  * @return 0 if both attributes are absent or identical                     \
  */                                                                         \
-static inline int uref_##group##_cmp_##attr(struct uref *uref1,             \
-                                            struct uref *uref2)             \
+static UBASE_UNUSED inline int                                              \
+uref_##group##_cmp_##attr(struct uref *uref1, struct uref *uref2)           \
 {                                                                           \
     int64_t v1 = 0, v2 = 0;                                                 \
     int err1 = uref_##group##_get_##attr(uref1, &v1);                       \

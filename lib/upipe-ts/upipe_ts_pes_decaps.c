@@ -217,7 +217,6 @@ static void upipe_ts_pesd_decaps(struct upipe *upipe, struct upump **upump_p)
         return;
 
     validate = pes_validate_header(pes_header - PES_HEADER_SIZE);
-    bool alignment = pes_get_dataalignment(pes_header - PES_HEADER_SIZE);
     bool has_pts = pes_has_pts(pes_header - PES_HEADER_SIZE);
     bool has_dts = pes_has_dts(pes_header - PES_HEADER_SIZE);
     uint8_t headerlength = pes_get_headerlength(pes_header - PES_HEADER_SIZE);
@@ -288,9 +287,6 @@ static void upipe_ts_pesd_decaps(struct upipe *upipe, struct upump **upump_p)
         uref_clock_set_dts_pts_delay(upipe_ts_pesd->next_uref, dts_pts_delay);
         upipe_throw_clock_ts(upipe, upipe_ts_pesd->next_uref);
     }
-
-    if (alignment)
-        uref_flow_set_random(upipe_ts_pesd->next_uref);
 
     UBASE_FATAL(upipe, uref_block_resize(upipe_ts_pesd->next_uref,
                             PES_HEADER_SIZE_NOPTS + headerlength, -1))

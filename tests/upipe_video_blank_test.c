@@ -115,8 +115,6 @@ static void sink_input(struct upipe *upipe, struct uref *uref,
 
 static int sink_set_flow_def(struct upipe *upipe, struct uref *flow_def)
 {
-    struct sink *sink = sink_from_upipe(upipe);
-
     uint64_t hsize = 0, vsize = 0;
     ubase_assert(uref_flow_match_def(flow_def, "pic."));
     ubase_assert(uref_pic_flow_get_hsize(flow_def, &hsize));
