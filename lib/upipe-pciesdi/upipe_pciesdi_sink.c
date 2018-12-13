@@ -81,6 +81,9 @@ struct upipe_pciesdi_sink {
     /** read watcher */
     struct upump *upump;
 
+    int scratch_bytes;
+    uint8_t scratch_buffer[DMA_BUFFER_SIZE];
+
     /** public upipe structure */
     struct upipe upipe;
 };
@@ -115,6 +118,7 @@ static struct upipe *upipe_pciesdi_sink_alloc(struct upipe_mgr *mgr,
     upipe_pciesdi_sink_check_upump_mgr(upipe);
     upipe_pciesdi_sink_init_uclock(upipe);
 
+    upipe_pciesdi_sink->scratch_bytes = 0;
     upipe_pciesdi_sink->latency = 0;
     upipe_pciesdi_sink->fd = -1;
     ulist_init(&upipe_pciesdi_sink->urefs);
@@ -156,6 +160,38 @@ static void upipe_pciesdi_sink_worker(struct upump *upump)
     int s = -1;
     if (!ubase_check(uref_block_read(uref, upipe_pciesdi_sink->written, &s, &buf))) {
         upipe_err(upipe, "could not read");
+        return;
+    }
+
+    if (s < DMA_BUFFER_SIZE) {
+        memcpy(upipe_pciesdi_sink->scratch_buffer, buf, s);
+        upipe_pciesdi_sink->scratch_bytes = s;
+        upipe_pciesdi_sink->written += s;
+        if (upipe_pciesdi_sink->written == size) {
+            uref_free(uref);
+            upipe_pciesdi_sink->uref = NULL;
+        }
+        return;
+    }
+
+    if (upipe_pciesdi_sink->scratch_bytes) {
+        int scratch_bytes = upipe_pciesdi_sink->scratch_bytes;
+        memcpy(upipe_pciesdi_sink->scratch_buffer + scratch_bytes,
+                buf, DMA_BUFFER_SIZE - scratch_bytes);
+        ssize_t ret = write(upipe_pciesdi_sink->fd,
+                upipe_pciesdi_sink->scratch_buffer,
+                DMA_BUFFER_SIZE);
+        if (ret < 0) {
+            upipe_err_va(upipe, "%m");
+            return;
+        }
+        uref_block_unmap(uref, upipe_pciesdi_sink->written);
+        upipe_pciesdi_sink->written += DMA_BUFFER_SIZE - scratch_bytes;
+        if (upipe_pciesdi_sink->written == size) {
+            uref_free(uref);
+            upipe_pciesdi_sink->uref = NULL;
+        }
+        upipe_pciesdi_sink->scratch_bytes = 0;
         return;
     }
 
