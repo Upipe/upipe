@@ -125,32 +125,6 @@ static struct upipe *upipe_pciesdi_sink_alloc(struct upipe_mgr *mgr,
     return upipe;
 }
 
-static inline bool hd_eav_match(const uint16_t *src)
-{
-    if (src[0] == 0x3ff
-            && src[1] == 0x3ff
-            && src[2] == 0x000
-            && src[3] == 0x000
-            && src[4] == 0x000
-            && src[5] == 0x000
-            && src[6] == src[7])
-        return true;
-    return false;
-}
-
-static inline bool hd_sav_match(const uint16_t *src)
-{
-    if (src[-8] == 0x3ff
-            && src[-7] == 0x3ff
-            && src[-6] == 0x000
-            && src[-5] == 0x000
-            && src[-4] == 0x000
-            && src[-3] == 0x000
-            && src[-2] == src[-1])
-        return true;
-    return false;
-}
-
 /** @internal
  */
 static void upipe_pciesdi_sink_worker(struct upump *upump)
@@ -189,18 +163,6 @@ static void upipe_pciesdi_sink_worker(struct upump *upump)
     if (txen || slew)
         upipe_dbg_va(upipe, "txen %d slew %d", txen, slew);
 
-#if 1
-    if (!hd_eav_match((uint16_t*)buf)) {
-        upipe_err(upipe, "EAV not found");
-        abort();
-    }
-
-    if (!hd_sav_match((uint16_t*)buf + (2200-1920)*2)) {
-        upipe_err(upipe, "SAV not found");
-        abort();
-    }
-#endif
-
     int64_t hw = 0, sw = 0;
     sdi_dma_reader(upipe_pciesdi_sink->fd, upipe_pciesdi_sink->first == 0, &hw, &sw); // enable
 
@@ -223,26 +185,6 @@ static void upipe_pciesdi_sink_worker(struct upump *upump)
         uref_free(uref);
         upipe_pciesdi_sink->uref = NULL;
     }
-}
-
-/** @internal @This is called when the file descriptor can be written again.
- * Unblock the sink and unqueue all queued buffers.
- *
- * @param upump description structure of the watcher
- */
-static void upipe_pciesdi_sink_watcher(struct upump *upump)
-{
-    struct upipe *upipe = upump_get_opaque(upump, struct upipe *);
-    struct upipe_pciesdi_sink *upipe_pciesdi_sink = upipe_pciesdi_sink_from_upipe(upipe);
-    struct upump *upump2 = upump_alloc_fd_write(upipe_pciesdi_sink->upump_mgr,
-            upipe_pciesdi_sink_worker, upipe,
-            upipe->refcount, upipe_pciesdi_sink->fd);
-    if (unlikely(upump2 == NULL)) {
-        upipe_throw_fatal(upipe, UBASE_ERR_UPUMP);
-        return;
-    }
-    upipe_pciesdi_sink_set_upump(upipe, upump2);
-    upump_start(upump2);
 }
 
 /** @internal
@@ -293,28 +235,6 @@ static void upipe_pciesdi_sink_input(struct upipe *upipe, struct uref *uref, str
     uint64_t ts, now = uclock_now(upipe_pciesdi_sink->uclock);
     upipe_dbg_va(upipe, "%s, now: %" PRIu64 ", buffer %zu", __func__, now, n);
     uref_dump(uref, upipe->uprobe);
-
-    if (unlikely(!ubase_check(uref_clock_get_cr_sys(uref, &ts)))) {
-        upipe_warn(upipe, "received non-dated buffer");
-        goto write_buffer;
-    }
-    ts += upipe_pciesdi_sink->latency;
-
-    //upipe_verbose_va(upipe, "now: %"PRIu64", ts: %"PRIu64", diff: %"PRId64,
-            //now, ts, (int64_t)ts - (int64_t)now);
-    if (now < ts) {
-        upipe_pciesdi_sink_check_upump_mgr(upipe);
-        if (likely(upipe_pciesdi_sink->upump_mgr != NULL)) {
-            upipe_verbose_va(upipe, "sleeping %"PRIu64" (%"PRIu64")",
-                    ts - now, ts);
-            upipe_pciesdi_sink_wait_upump(upipe, ts - now,
-                    upipe_pciesdi_sink_watcher);
-            return;
-        }
-    }
-
-write_buffer:
-    (void)0;
 
     int64_t hw = 0, sw = 0;
     sdi_dma_reader(upipe_pciesdi_sink->fd, upipe_pciesdi_sink->first == 0, &hw, &sw);
