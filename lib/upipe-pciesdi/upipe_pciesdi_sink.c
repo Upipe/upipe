@@ -267,112 +267,6 @@ static int upipe_pciesdi_sink_set_flow_def(struct upipe *upipe, struct uref *flo
     return UBASE_ERR_NONE;
 }
 
-static void init(struct upipe *upipe)
-{
-    struct upipe_pciesdi_sink *upipe_pciesdi_sink = upipe_pciesdi_sink_from_upipe(upipe);
-    int fd = upipe_pciesdi_sink->fd;
-
-    int64_t hw_count, sw_count;
-        /* reset sdi cores */
-    upipe_dbg(upipe, "Reset SDI cores...");
-    sdi_writel(fd, CSR_SDI0_CORE_TX_RESET_ADDR, 1);
-#ifdef CSR_SDI1_CORE_TX_RESET_ADDR
-    sdi_writel(fd, CSR_SDI1_CORE_TX_RESET_ADDR, 1);
-#endif
-#ifdef CSR_SDI2_CORE_TX_RESET_ADDR
-    sdi_writel(fd, CSR_SDI2_CORE_TX_RESET_ADDR, 1);
-#endif
-#ifdef CSR_SDI3_CORE_TX_RESET_ADDR
-    sdi_writel(fd, CSR_SDI3_CORE_TX_RESET_ADDR, 1);
-#endif
-
-    sdi_writel(fd, CSR_SDI0_CORE_RX_RESET_ADDR, 1);
-#ifdef CSR_SDI1_CORE_RX_RESET_ADDR
-    sdi_writel(fd, CSR_SDI1_CORE_RX_RESET_ADDR, 1);
-#endif
-#ifdef CSR_SDI2_CORE_RX_RESET_ADDR
-    sdi_writel(fd, CSR_SDI2_CORE_RX_RESET_ADDR, 1);
-#endif
-#ifdef CSR_SDI3_CORE_RX_RESET_ADDR
-    sdi_writel(fd, CSR_SDI3_CORE_RX_RESET_ADDR, 1);
-#endif
-
-    /* reset driver */
-    upipe_dbg(upipe, "Reset Driver...");
-    /* disable loopback */
-    sdi_dma(fd, 1, 0, 0);
-    /* disable dmas */
-    sdi_dma_reader(fd, 0, &hw_count, &sw_count);
-    sdi_dma_writer(fd, 0, &hw_count, &sw_count);
-
-#ifdef PCIE_SDI_HW
-
-    /* si5324 reset */
-    upipe_dbg(upipe, "Reseting SI5324...");
-    si5324_spi_write(fd, 136, 80);
-
-    /* si5324 configuration */
-    if (1 /* PAL */) { // TODO
-        upipe_dbg(upipe, "Configure SI5324 for PAL (148.5MHz)...");
-        sdi_si5324_vcxo(fd, 512<<10, 1024<<10);
-        for(int i = 0; i < countof(si5324_148_5_mhz_regs); i++) {
-            si5324_spi_write(fd, si5324_148_5_mhz_regs[i][0], si5324_148_5_mhz_regs[i][1]);
-        }
-    } else {
-        upipe_dbg(upipe, "Configure SI5324 for NTSC (148.5MHz/1.001)...");
-        sdi_si5324_vcxo(fd, 512<<10, 1024<<10);
-        for(int i = 0; i < countof(si5324_148_35_mhz_regs); i++) {
-            si5324_spi_write(fd, si5324_148_35_mhz_regs[i][0], si5324_148_35_mhz_regs[i][1]);
-        }
-    }
-    sleep(1);
-
-    /* reference clock selection */
-    upipe_dbg(upipe, "Select SI5324 output as reference clock...");
-    sdi_writel(fd, CSR_SDI_QPLL_PLL0_REFCLK_SEL_ADDR, REFCLK1_SEL);
-
-#endif
-
-#ifdef DUO2_HW
-
-    /* reference clock selection */
-    if (1 /* !strcmp(rate, "pal") */) {
-        upipe_dbg(upipe, "Configure for PAL (148.5MHz)...");
-        sdi_writel(fd, CSR_SDI_QPLL_PLL0_REFCLK_SEL_ADDR, REFCLK0_SEL);
-    } else if (0 /* !strcmp(rate, "ntsc") */) {
-        upipe_dbg(upipe, "Configure for NTSC (148.35MHz)...");
-        sdi_writel(fd, CSR_SDI_QPLL_PLL0_REFCLK_SEL_ADDR, REFCLK1_SEL);
-    }
-
-#endif
-
-    /* un-reset sdi cores */
-    upipe_dbg(upipe, "Un-reset SDI cores...");
-    sdi_writel(fd, CSR_SDI0_CORE_TX_RESET_ADDR, 0);
-#ifdef CSR_SDI1_CORE_TX_RESET_ADDR
-    sdi_writel(fd, CSR_SDI1_CORE_TX_RESET_ADDR, 0);
-#endif
-#ifdef CSR_SDI2_CORE_TX_RESET_ADDR
-    sdi_writel(fd, CSR_SDI2_CORE_TX_RESET_ADDR, 0);
-#endif
-#ifdef CSR_SDI3_CORE_TX_RESET_ADDR
-    sdi_writel(fd, CSR_SDI3_CORE_TX_RESET_ADDR, 0);
-#endif
-
-    sdi_writel(fd, CSR_SDI0_CORE_RX_RESET_ADDR, 0);
-#ifdef CSR_SDI1_CORE_RX_RESET_ADDR
-    sdi_writel(fd, CSR_SDI1_CORE_RX_RESET_ADDR, 0);
-#endif
-#ifdef CSR_SDI2_CORE_RX_RESET_ADDR
-    sdi_writel(fd, CSR_SDI2_CORE_RX_RESET_ADDR, 0);
-#endif
-#ifdef CSR_SDI3_CORE_RX_RESET_ADDR
-    sdi_writel(fd, CSR_SDI3_CORE_RX_RESET_ADDR, 0);
-#endif
-
-    close(fd);
-}
-
 /** @internal @This asks to open the given device.
  *
  * @param upipe description structure of the pipe
@@ -393,7 +287,10 @@ static int upipe_pciesdi_set_uri(struct upipe *upipe, const char *path)
         return UBASE_ERR_EXTERNAL;
     }
 
-    init(upipe);
+    int64_t hw = 0, sw = 0;
+    sdi_dma_reader(upipe_pciesdi_sink->fd, 0, &hw, &sw);
+    sdi_release_dma_reader(upipe_pciesdi_sink->fd);
+    close(upipe_pciesdi_sink->fd);
 
     upipe_pciesdi_sink->fd = open(path, O_RDWR | O_CLOEXEC | O_NONBLOCK);
     if (unlikely(upipe_pciesdi_sink->fd < 0)) {
