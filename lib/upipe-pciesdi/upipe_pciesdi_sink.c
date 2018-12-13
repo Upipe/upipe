@@ -26,6 +26,7 @@
 #include <upipe/uprobe.h>
 #include <upipe/uref.h>
 #include <upipe/uref_block.h>
+#include <upipe/uref_pic_flow.h>
 #include <upipe/upipe.h>
 #include <upipe/ulist.h>
 #include <upipe/udict.h>
@@ -263,6 +264,24 @@ static int upipe_pciesdi_sink_set_flow_def(struct upipe *upipe, struct uref *flo
         return UBASE_ERR_INVALID;
 
     UBASE_RETURN(uref_flow_match_def(flow_def, "block."));
+
+    uint64_t height;
+    struct urational fps;
+    UBASE_RETURN(uref_pic_flow_get_vsize(flow_def, &height));
+    UBASE_RETURN(uref_pic_flow_get_fps(flow_def, &fps));
+
+#ifdef DUO2_HW
+    if (fps.den == 1001) {
+        upipe_err(upipe, "TX of NTSC signals is not supported on the Duo2");
+        return UBASE_ERR_INVALID;
+    }
+#endif
+
+    bool sd = height < 720;
+    bool sdi3g = height == 1080 && (urational_cmp(&fps, &(struct urational){ 50, 1 })) >= 0;
+    upipe_dbg_va(upipe, "sd: %d, 3g: %d", sd, sdi3g);
+
+    /* TODO: init card based on given format. */
 
     return UBASE_ERR_NONE;
 }
