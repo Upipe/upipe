@@ -317,18 +317,18 @@ static int upipe_pciesdi_set_uri(struct upipe *upipe, const char *path)
         return UBASE_ERR_EXTERNAL;
     }
 
-    sdi_set_pattern(upipe_pciesdi_sink->fd, SDI_TX_MODE_HD, 0, 0);
-
-    /* Configure for NTSC (148.35MHz) */
-    sdi_writel(upipe_pciesdi_sink->fd, CSR_SDI_QPLL_PLL0_REFCLK_SEL_ADDR, REFCLK1_SEL);
-
-    sdi_dma(upipe_pciesdi_sink->fd, 0, 0, 0); // disable loopback
-
     /* request dma */
     if (sdi_request_dma_reader(upipe_pciesdi_sink->fd) == 0) {
         upipe_err(upipe, "DMA not available");
         return UBASE_ERR_EXTERNAL;
     }
+
+    sdi_dma(upipe_pciesdi_sink->fd, 0, 0, 0); // disable loopback
+
+    /* disable pattern */
+    sdi_set_pattern(upipe_pciesdi_sink->fd, SDI_TX_MODE_SD, 0, 0);
+    sdi_set_pattern(upipe_pciesdi_sink->fd, SDI_TX_MODE_HD, 0, 0);
+    sdi_set_pattern(upipe_pciesdi_sink->fd, SDI_TX_MODE_3G, 0, 0);
 
     return UBASE_ERR_NONE;
 }
