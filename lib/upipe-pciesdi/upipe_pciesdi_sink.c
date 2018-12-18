@@ -287,8 +287,6 @@ static void upipe_pciesdi_sink_input(struct upipe *upipe, struct uref *uref, str
 
     ulist_add(&upipe_pciesdi_sink->urefs, uref_to_uchain(uref));
     size_t n = ulist_depth(&upipe_pciesdi_sink->urefs);
-    if (n < BUFFER_COUNT_PRINT_THRESHOLD(2,3))
-        upipe_dbg_va(upipe, "buffered %zu urefs", n);
 
     /* check if pump is already running */
     if (upipe_pciesdi_sink->upump)
