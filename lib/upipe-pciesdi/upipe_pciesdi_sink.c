@@ -225,6 +225,21 @@ static void upipe_pciesdi_sink_worker(struct upump *upump)
     }
 }
 
+static void start_fd_write(struct upump *upump)
+{
+    struct upipe *upipe = upump_get_opaque(upump, struct upipe *);
+    struct upipe_pciesdi_sink *upipe_pciesdi_sink = upipe_pciesdi_sink_from_upipe(upipe);
+    upump = upump_alloc_fd_write(upipe_pciesdi_sink->upump_mgr,
+            upipe_pciesdi_sink_worker, upipe,
+            upipe->refcount, upipe_pciesdi_sink->fd);
+    if (unlikely(upump == NULL)) {
+        upipe_throw_fatal(upipe, UBASE_ERR_UPUMP);
+        return;
+    }
+    upipe_pciesdi_sink_set_upump(upipe, upump);
+    upump_start(upump);
+}
+
 /** @internal
  *
  * @param upipe description structure of the pipe
@@ -263,8 +278,21 @@ static void upipe_pciesdi_sink_input(struct upipe *upipe, struct uref *uref, str
     /* check for chunks or whole frames */
     uint64_t vpos;
     int ret = uref_pic_get_vposition(uref, &vpos);
-    if (!ubase_check(ret) && n < 2)
+
+    /* whole frames */
+    if (!ubase_check(ret)) {
+        /* To buffer more frames, check and return here. */
+        struct upump *upump = upump_alloc_timer(upipe_pciesdi_sink->upump_mgr,
+                start_fd_write, upipe, upipe->refcount,
+                10*UCLOCK_FREQ/1000, 0); /* wait 10ms */
+        if (unlikely(upump == NULL)) {
+            upipe_throw_fatal(upipe, UBASE_ERR_UPUMP);
+            return;
+        }
+        upipe_pciesdi_sink_set_upump(upipe, upump);
+        upump_start(upump);
         return;
+    }
 
     /* check for enough chunks to fill DMA buffers assuming DMA_BUFFER_SIZE is a line */
     if (ubase_check(ret) && n < CHUNK_BUFFER_COUNT)
