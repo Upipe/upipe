@@ -14,7 +14,7 @@ if HAVE_X86ASM
 libupipe_pciesdi_la_SOURCES += levelb.asm
 endif
 
-libupipe_pciesdi_la_CPPFLAGS = $(BITSTREAM_CFLAGS) -I$(top_builddir) -I$(top_builddir)/include -I$(top_srcdir)/include
+libupipe_pciesdi_la_CPPFLAGS = -I$(top_builddir) -I$(top_builddir)/include -I$(top_srcdir)/include $(BITSTREAM_CFLAGS)
 libupipe_pciesdi_la_LIBADD = $(top_builddir)/lib/upipe/libupipe.la
 libupipe_pciesdi_la_LDFLAGS = -no-undefined
 
