@@ -282,15 +282,18 @@ static void upipe_pciesdi_sink_input(struct upipe *upipe, struct uref *uref, str
     /* whole frames */
     if (!ubase_check(ret)) {
         /* To buffer more frames, check and return here. */
-        struct upump *upump = upump_alloc_timer(upipe_pciesdi_sink->upump_mgr,
-                start_fd_write, upipe, upipe->refcount,
-                10*UCLOCK_FREQ/1000, 0); /* wait 10ms */
-        if (unlikely(upump == NULL)) {
-            upipe_throw_fatal(upipe, UBASE_ERR_UPUMP);
-            return;
+        upipe_pciesdi_sink_check_upump_mgr(upipe);
+        if (upipe_pciesdi_sink->upump_mgr) {
+            struct upump *upump = upump_alloc_timer(upipe_pciesdi_sink->upump_mgr,
+                    start_fd_write, upipe, upipe->refcount,
+                    10*UCLOCK_FREQ/1000, 0); /* wait 10ms */
+            if (unlikely(upump == NULL)) {
+                upipe_throw_fatal(upipe, UBASE_ERR_UPUMP);
+                return;
+            }
+            upipe_pciesdi_sink_set_upump(upipe, upump);
+            upump_start(upump);
         }
-        upipe_pciesdi_sink_set_upump(upipe, upump);
-        upump_start(upump);
         return;
     }
 
@@ -361,7 +364,6 @@ static int upipe_pciesdi_set_uri(struct upipe *upipe, const char *path)
 {
     struct upipe_pciesdi_sink *upipe_pciesdi_sink = upipe_pciesdi_sink_from_upipe(upipe);
 
-    upipe_pciesdi_sink_check_upump_mgr(upipe);
     ubase_clean_fd(&upipe_pciesdi_sink->fd);
     upipe_pciesdi_sink_set_upump(upipe, NULL);
 
