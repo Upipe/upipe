@@ -37,7 +37,6 @@
 #include <upipe/upipe_helper_upipe.h>
 #include <upipe/upipe_helper_urefcount.h>
 #include <upipe/upipe_helper_void.h>
-#include <upipe/upipe_helper_uclock.h>
 #include <upipe-pciesdi/upipe_pciesdi_sink.h>
 
 #include <upipe/uref_pic.h>
@@ -57,11 +56,6 @@
 struct upipe_pciesdi_sink {
     /** refcount management structure */
     struct urefcount urefcount;
-
-    /** uclock structure, if not NULL we are in live mode */
-    struct uclock *uclock;
-    /** uclock request */
-    struct urequest uclock_request;
 
     /** file descriptor */
     int fd;
@@ -93,7 +87,6 @@ UPIPE_HELPER_UREFCOUNT(upipe_pciesdi_sink, urefcount, upipe_pciesdi_sink_free)
 UPIPE_HELPER_VOID(upipe_pciesdi_sink);
 UPIPE_HELPER_UPUMP_MGR(upipe_pciesdi_sink, upump_mgr)
 UPIPE_HELPER_UPUMP(upipe_pciesdi_sink, upump, upump_mgr)
-UPIPE_HELPER_UCLOCK(upipe_pciesdi_sink, uclock, uclock_request, NULL, upipe_throw_provide_request, NULL)
 
 /** @internal @This allocates a null pipe.
  *
@@ -116,7 +109,6 @@ static struct upipe *upipe_pciesdi_sink_alloc(struct upipe_mgr *mgr,
     upipe_pciesdi_sink_init_upump_mgr(upipe);
     upipe_pciesdi_sink_init_upump(upipe);
     upipe_pciesdi_sink_check_upump_mgr(upipe);
-    upipe_pciesdi_sink_init_uclock(upipe);
 
     upipe_pciesdi_sink->scratch_bytes = 0;
     upipe_pciesdi_sink->latency = 0;
@@ -301,10 +293,6 @@ static void upipe_pciesdi_sink_input(struct upipe *upipe, struct uref *uref, str
     if (ubase_check(ret) && n < CHUNK_BUFFER_COUNT)
         return;
 
-    uint64_t ts, now = uclock_now(upipe_pciesdi_sink->uclock);
-    upipe_dbg_va(upipe, "%s, now: %" PRIu64 ", buffer %zu", __func__, now, n);
-    uref_dump(uref, upipe->uprobe);
-
     int64_t hw = 0, sw = 0;
     sdi_dma_reader(upipe_pciesdi_sink->fd, upipe_pciesdi_sink->first == 0, &hw, &sw);
 
@@ -420,11 +408,6 @@ static int upipe_pciesdi_sink_control(struct upipe *upipe, int command, va_list 
             upipe_pciesdi_sink_set_upump(upipe, NULL);
             return upipe_pciesdi_sink_attach_upump_mgr(upipe);
 
-        case UPIPE_ATTACH_UCLOCK:
-           upipe_pciesdi_sink_set_upump(upipe, NULL);
-           upipe_pciesdi_sink_require_uclock(upipe);
-           return UBASE_ERR_NONE;
-
         case UPIPE_SET_FLOW_DEF: {
             struct uref *flow = va_arg(args, struct uref *);
             return upipe_pciesdi_sink_set_flow_def(upipe, flow);
@@ -457,7 +440,6 @@ static void upipe_pciesdi_sink_free(struct upipe *upipe)
         ulist_delete(uchain);
     }
 
-    upipe_pciesdi_sink_clean_uclock(upipe);
     upipe_pciesdi_sink_clean_upump(upipe);
     upipe_pciesdi_sink_clean_upump_mgr(upipe);
     upipe_pciesdi_sink_clean_urefcount(upipe);
