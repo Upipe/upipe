@@ -23,6 +23,7 @@
  */
 
 #include <upipe/ubase.h>
+#include <upipe/uclock.h>
 #include <upipe/uprobe.h>
 #include <upipe/uref.h>
 #include <upipe/uref_block.h>
@@ -78,6 +79,11 @@ struct upipe_pciesdi_sink {
     int scratch_bytes;
     uint8_t scratch_buffer[DMA_BUFFER_SIZE];
 
+    /** hardware clock */
+    struct uclock uclock;
+    uint32_t previous_tick;
+    uint64_t wraparounds;
+
     /** public upipe structure */
     struct upipe upipe;
 };
@@ -87,6 +93,26 @@ UPIPE_HELPER_UREFCOUNT(upipe_pciesdi_sink, urefcount, upipe_pciesdi_sink_free)
 UPIPE_HELPER_VOID(upipe_pciesdi_sink);
 UPIPE_HELPER_UPUMP_MGR(upipe_pciesdi_sink, upump_mgr)
 UPIPE_HELPER_UPUMP(upipe_pciesdi_sink, upump, upump_mgr)
+UBASE_FROM_TO(upipe_pciesdi_sink, uclock, uclock, uclock)
+
+static uint64_t upipe_pciesdi_sink_now(struct uclock *uclock)
+{
+    struct upipe_pciesdi_sink *upipe_pciesdi_sink = upipe_pciesdi_sink_from_uclock(uclock);
+
+    if (upipe_pciesdi_sink->fd < 0)
+        return 0;
+
+    uint32_t freq, tick;
+    sdi_refclk(upipe_pciesdi_sink->fd, 0, &freq, &tick);
+
+    if (tick < upipe_pciesdi_sink->previous_tick) {
+        /* log this? */
+        upipe_pciesdi_sink->wraparounds += 1;
+    }
+    upipe_pciesdi_sink->previous_tick = tick;
+
+    return UCLOCK_FREQ * ((upipe_pciesdi_sink->wraparounds << 32) + tick) / freq;
+}
 
 /** @internal @This allocates a null pipe.
  *
@@ -116,6 +142,10 @@ static struct upipe *upipe_pciesdi_sink_alloc(struct upipe_mgr *mgr,
     ulist_init(&upipe_pciesdi_sink->urefs);
     upipe_pciesdi_sink->uref = NULL;
     upipe_pciesdi_sink->first = 1;
+    upipe_pciesdi_sink->previous_tick = 0;
+    upipe_pciesdi_sink->wraparounds = 0;
+    upipe_pciesdi_sink->uclock.refcount = &upipe_pciesdi_sink->urefcount;
+    upipe_pciesdi_sink->uclock.uclock_now = upipe_pciesdi_sink_now;
 
     upipe_throw_ready(&upipe_pciesdi_sink->upipe);
 
@@ -416,6 +446,13 @@ static int upipe_pciesdi_sink_control(struct upipe *upipe, int command, va_list 
         case UPIPE_SET_URI: {
             const char *path = va_arg(args, const char *);
             return upipe_pciesdi_set_uri(upipe, path);
+        }
+
+        case UPIPE_PCIESDI_SINK_GET_UCLOCK: {
+            UBASE_SIGNATURE_CHECK(args, UPIPE_PCIESDI_SINK_SIGNATURE)
+            struct uclock **pp_uclock = va_arg(args, struct uclock **);
+            *pp_uclock = &upipe_pciesdi_sink->uclock;
+            return UBASE_ERR_NONE;
         }
 
         default:
