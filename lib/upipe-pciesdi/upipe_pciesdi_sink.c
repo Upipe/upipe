@@ -159,18 +159,20 @@ static void upipe_pciesdi_sink_worker(struct upump *upump)
     const uint8_t *buf;
     int s = -1;
     if (!ubase_check(uref_block_read(uref, upipe_pciesdi_sink->written, &s, &buf))) {
-        upipe_err(upipe, "could not read");
+        upipe_err_va(upipe, "could not read, size: %zu, written: %zu", size, upipe_pciesdi_sink->written);
         return;
     }
 
     if (s < DMA_BUFFER_SIZE) {
         memcpy(upipe_pciesdi_sink->scratch_buffer, buf, s);
+        uref_block_unmap(uref, upipe_pciesdi_sink->written);
         upipe_pciesdi_sink->scratch_bytes = s;
         upipe_pciesdi_sink->written += s;
         if (upipe_pciesdi_sink->written == size) {
             uref_free(uref);
             upipe_pciesdi_sink->uref = NULL;
         }
+        //upipe_dbg_va(upipe, "storing %d bytes in scratch buffer", s);
         return;
     }
 
@@ -178,19 +180,18 @@ static void upipe_pciesdi_sink_worker(struct upump *upump)
         int scratch_bytes = upipe_pciesdi_sink->scratch_bytes;
         memcpy(upipe_pciesdi_sink->scratch_buffer + scratch_bytes,
                 buf, DMA_BUFFER_SIZE - scratch_bytes);
+        uref_block_unmap(uref, upipe_pciesdi_sink->written);
         ssize_t ret = write(upipe_pciesdi_sink->fd,
                 upipe_pciesdi_sink->scratch_buffer,
                 DMA_BUFFER_SIZE);
+        //upipe_dbg_va(upipe, "writing %d+%d bytes from scratch buffer", scratch_bytes, DMA_BUFFER_SIZE - scratch_bytes);
         if (ret < 0) {
             upipe_err_va(upipe, "%m");
             return;
+        } else if (ret != DMA_BUFFER_SIZE) {
+            upipe_dbg_va(upipe, "what the..?  wrote %zd bytes from scratch", ret);
         }
-        uref_block_unmap(uref, upipe_pciesdi_sink->written);
         upipe_pciesdi_sink->written += DMA_BUFFER_SIZE - scratch_bytes;
-        if (upipe_pciesdi_sink->written == size) {
-            uref_free(uref);
-            upipe_pciesdi_sink->uref = NULL;
-        }
         upipe_pciesdi_sink->scratch_bytes = 0;
         return;
     }
@@ -359,12 +360,12 @@ static int upipe_pciesdi_set_uri(struct upipe *upipe, const char *path)
         return UBASE_ERR_EXTERNAL;
     }
 
-    sdi_dma(upipe_pciesdi_sink->fd, 0, 0, 0); // disable loopback
-
     /* disable pattern */
-    sdi_set_pattern(upipe_pciesdi_sink->fd, SDI_TX_MODE_SD, 0, 0);
+    //sdi_set_pattern(upipe_pciesdi_sink->fd, SDI_TX_MODE_SD, 0, 0);
     sdi_set_pattern(upipe_pciesdi_sink->fd, SDI_TX_MODE_HD, 0, 0);
-    sdi_set_pattern(upipe_pciesdi_sink->fd, SDI_TX_MODE_3G, 0, 0);
+    //sdi_set_pattern(upipe_pciesdi_sink->fd, SDI_TX_MODE_3G, 0, 0);
+
+    sdi_dma(upipe_pciesdi_sink->fd, 0, 0, 0); // disable loopback
 
     return UBASE_ERR_NONE;
 }
