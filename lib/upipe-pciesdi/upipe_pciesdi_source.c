@@ -61,8 +61,6 @@
 #include "../upipe-hbrmt/upipe_hbrmt_common.h"
 #include "../upipe-hbrmt/sdidec.h"
 
-#define DEVICE_IS_BITPACKED 1
-
 /** @hidden */
 static int upipe_pciesdi_src_check(struct upipe *upipe, struct uref *flow_format);
 
@@ -448,7 +446,7 @@ static void upipe_pciesdi_src_worker(struct upump *upump)
         sdi_decode_scan(scan),
         sdi_decode_rate(rate));
 
-#if DEVICE_IS_BITPACKED
+#if SDI_DEVICE_IS_BITPACKED
     int sdi_line_width = upipe_pciesdi_src->sdi_format->width * 2 * 10 / 8;
 #else
     int sdi_line_width = upipe_pciesdi_src->sdi_format->width * 4;
@@ -481,12 +479,12 @@ static void upipe_pciesdi_src_worker(struct upump *upump)
     ret += upipe_pciesdi_src->cached_read_bytes;
     int lines = ret / sdi_line_width;
     int processed_bytes = lines * sdi_line_width;
-#if DEVICE_IS_BITPACKED
+#if SDI_DEVICE_IS_BITPACKED
     int output_size = lines * upipe_pciesdi_src->sdi_format->width * 4;
     if (upipe_pciesdi_src->sdi3g_levelb)
         output_size *= 2;
 #else
-    int output_size = lines * sdi_line_width
+    int output_size = lines * sdi_line_width;
 #endif
     struct uref *uref = uref_block_alloc(upipe_pciesdi_src->uref_mgr,
             upipe_pciesdi_src->ubuf_mgr, output_size);
@@ -501,7 +499,7 @@ static void upipe_pciesdi_src_worker(struct upump *upump)
 
     bool print_error_eav = true, print_error_line = true, print_error_sav = true;
     for (int i = 0; i < lines; i++) {
-#if !DEVICE_IS_BITPACKED /* Note reversed condition. */
+#if !SDI_DEVICE_IS_BITPACKED /* Note reversed condition. */
         const uint16_t *sdi_line = (uint16_t*)(upipe_pciesdi_src->read_buffer + i * sdi_line_width);
         int active_offset = 2 * upipe_pciesdi_src->sdi_format->active_offset;
         if (upipe_pciesdi_src->sdi3g_levelb)

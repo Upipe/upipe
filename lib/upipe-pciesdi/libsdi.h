@@ -20,6 +20,8 @@
 #ifndef SDI_LIB_H
 #define SDI_LIB_H
 
+#define SDI_DEVICE_IS_BITPACKED 0
+
 int64_t get_time_ms(void);
 
 /* ioctl */
