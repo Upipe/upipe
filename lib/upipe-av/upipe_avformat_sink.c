@@ -1123,7 +1123,7 @@ static int upipe_avfsink_set_uri(struct upipe *upipe, const char *uri)
     }
     upipe_avfsink->context->oformat = format;
     strncpy(upipe_avfsink->context->filename, uri,
-            sizeof(upipe_avfsink->context->filename));
+            sizeof(upipe_avfsink->context->filename) - 1);
     upipe_avfsink->context->filename[sizeof(upipe_avfsink->context->filename) - 1] = '\0';
 
     upipe_avfsink->uri = strdup(uri);
