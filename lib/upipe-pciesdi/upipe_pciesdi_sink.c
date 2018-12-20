@@ -52,6 +52,8 @@
 #include "libsdi.h"
 #include "csr.h"
 #include "flags.h"
+#include "../upipe-hbrmt/sdienc.h"
+#include "config.h"
 
 /** upipe_pciesdi_sink structure */
 struct upipe_pciesdi_sink {
@@ -83,6 +85,8 @@ struct upipe_pciesdi_sink {
     struct uclock uclock;
     uint32_t previous_tick;
     uint64_t wraparounds;
+
+    void (*uyvy_to_sdi)(uint8_t *dst, const uint8_t *src, uintptr_t pixels);
 
     /** public upipe structure */
     struct upipe upipe;
@@ -146,6 +150,23 @@ static struct upipe *upipe_pciesdi_sink_alloc(struct upipe_mgr *mgr,
     upipe_pciesdi_sink->wraparounds = 0;
     upipe_pciesdi_sink->uclock.refcount = &upipe_pciesdi_sink->urefcount;
     upipe_pciesdi_sink->uclock.uclock_now = upipe_pciesdi_sink_now;
+
+    upipe_pciesdi_sink->uyvy_to_sdi = upipe_uyvy_to_sdi_c;
+#if defined(HAVE_X86ASM)
+#if defined(__i686__) || defined(__x86_64__)
+    if (__builtin_cpu_supports("ssse3")) {
+        upipe_pciesdi_sink->uyvy_to_sdi = upipe_uyvy_to_sdi_ssse3;
+    }
+
+    if (__builtin_cpu_supports("avx")) {
+        upipe_pciesdi_sink->uyvy_to_sdi = upipe_uyvy_to_sdi_avx;
+    }
+
+    if (__builtin_cpu_supports("avx2")) {
+        upipe_pciesdi_sink->uyvy_to_sdi = upipe_uyvy_to_sdi_avx2;
+    }
+#endif
+#endif
 
     upipe_throw_ready(&upipe_pciesdi_sink->upipe);
 
@@ -262,6 +283,59 @@ static void start_fd_write(struct upump *upump)
     upump_start(upump);
 }
 
+static void inplace_pack(uint8_t *buf, uintptr_t len)
+{
+    len /= 2;
+    for (int i = 0; i < len; i += 1) {
+        uint16_t a = *(uint16_t*)(buf + 8*i+0);
+        uint16_t b = *(uint16_t*)(buf + 8*i+2);
+        uint16_t c = *(uint16_t*)(buf + 8*i+4);
+        uint16_t d = *(uint16_t*)(buf + 8*i+6);
+        buf[5*i+0] = a >> 2;
+        buf[5*i+1] = (a << 6) | (b >> 4);
+        buf[5*i+2] = (b << 4) | (c >> 6);
+        buf[5*i+3] = (c << 2) | (d >> 8);
+        buf[5*i+4] = d;
+    }
+}
+
+static int pack_uref(struct upipe *upipe, struct uref *uref)
+{
+    struct upipe_pciesdi_sink *ctx = upipe_pciesdi_sink_from_upipe(upipe);
+
+    size_t size = 0;
+    uref_block_size(uref, &size);
+
+    uint8_t *buf;
+    int s = -1;
+    int ret = uref_block_write(uref, 0, &s, &buf);
+    if (!ubase_check(ret)) {
+        upipe_err(upipe, "could not map for writing");
+        return ret;
+    }
+
+    if (s != size) {
+        uref_block_unmap(uref, 0);
+        upipe_err(upipe, "segmented buffers are not supported");
+        return UBASE_ERR_INVALID;
+    }
+
+#if 0
+    ctx->uyvy_to_sdi(buf, buf, size/4);
+#else
+    inplace_pack(buf, size/4);
+#endif
+    uref_block_unmap(uref, 0);
+
+    ret = uref_block_resize(uref, 0, (size/2)*10/8);
+    if (!ubase_check(ret)) {
+        upipe_err(upipe, "unable to resize");
+        return ret;
+    }
+
+    return UBASE_ERR_NONE;
+}
+
 /** @internal
  *
  * @param upipe description structure of the pipe
@@ -280,6 +354,13 @@ static void upipe_pciesdi_sink_input(struct upipe *upipe, struct uref *uref, str
             upipe_pciesdi_sink->latency = latency;
         uref_free(uref);
         return;
+    }
+
+    if (SDI_DEVICE_IS_BITPACKED) {
+        if (!ubase_check(pack_uref(upipe, uref))) {
+            uref_free(uref);
+            return;
+        }
     }
 
 #define CHUNK_BUFFER_COUNT 32
