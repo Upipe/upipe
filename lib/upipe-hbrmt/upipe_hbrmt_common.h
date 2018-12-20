@@ -285,6 +285,40 @@ static inline bool hd_sav_match(const uint16_t *src)
     return false;
 }
 
+static inline bool hd_eav_match_bitpacked(const uint8_t *src)
+{
+    if (src[0] == 0xff
+            && src[1] == 0xff
+            && src[2] == 0xf0
+            && src[3] == 0
+            && src[4] == 0
+            && src[5] == 0
+            && src[6] == 0
+            && ((src[7] == 9 && src[8] == 0xd2 && src[9] == 0x74)
+                || (src[7] == 0xb && src[8] == 0x62 && src[9] == 0xd8)
+                || (src[7] == 0xd && src[8] == 0xa3 && src[9] == 0x68)
+                || (src[7] == 0xf && src[8] == 0x13 && src[9] == 0xc4)))
+        return true;
+    return false;
+}
+
+static inline bool hd_sav_match_bitpacked(const uint8_t *src)
+{
+    if (src[-10] == 0xff
+            && src[-9] == 0xff
+            && src[-8] == 0xf0
+            && src[-7] == 0
+            && src[-6] == 0
+            && src[-5] == 0
+            && src[-4] == 0
+            && ((src[-3] == 8 && src[-2] == 2 && src[-1] == 0)
+                || (src[-3] == 0xa && src[-2] == 0xb2 && src[-1] == 0xac)
+                || (src[-3] == 0xc && src[-2] == 0x73 && src[-1] == 0x1c)
+                || (src[-3] == 0xe && src[-2] == 0xc3 && src[-1] == 0xb0)))
+        return true;
+    return false;
+}
+
 static inline bool sd_eav_match(const uint16_t *src)
 {
     if (src[0] == 0x3ff
