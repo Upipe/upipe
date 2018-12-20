@@ -53,6 +53,7 @@
 #include "csr.h"
 #include "flags.h"
 #include "../upipe-hbrmt/sdienc.h"
+#include "../upipe-hbrmt/upipe_hbrmt_common.h"
 #include "config.h"
 
 /** upipe_pciesdi_sink structure */
@@ -357,10 +358,50 @@ static void upipe_pciesdi_sink_input(struct upipe *upipe, struct uref *uref, str
     }
 
     if (SDI_DEVICE_IS_BITPACKED) {
+#if 0
+        /* Check first EAV is correct in uref. */
+        const uint8_t *buf;
+        int s = 32;
+        int ret = uref_block_read(uref, 0, &s, &buf);
+        if (!ubase_check(ret)) {
+            upipe_err(upipe, "could not map for reading");
+            uref_free(uref);
+            return;
+        }
+
+        if (!hd_eav_match_bitpacked(buf)) {
+            upipe_err(upipe, "uref does not appear to be bitpacked");
+            uref_block_unmap(uref, 0);
+            uref_free(uref);
+            return;
+        }
+        uref_block_unmap(uref, 0);
+#else
         if (!ubase_check(pack_uref(upipe, uref))) {
             uref_free(uref);
             return;
         }
+#endif
+    }
+
+    else {
+        /* Check first EAV is correct in uref. */
+        const uint8_t *buf;
+        int s = 32;
+        int ret = uref_block_read(uref, 0, &s, &buf);
+        if (!ubase_check(ret)) {
+            upipe_err(upipe, "could not map for reading");
+            uref_free(uref);
+            return;
+        }
+
+        if (!hd_eav_match((const uint16_t*)buf)) {
+            upipe_err(upipe, "uref does not appear to be unpacked");
+            uref_block_unmap(uref, 0);
+            uref_free(uref);
+            return;
+        }
+        uref_block_unmap(uref, 0);
     }
 
 #define CHUNK_BUFFER_COUNT 32
