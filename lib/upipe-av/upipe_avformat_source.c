@@ -592,9 +592,15 @@ static void upipe_avfsrc_worker(struct upump *upump)
     if (pkt.dts != (int64_t)AV_NOPTS_VALUE) {
         dts_orig = pkt.dts * stream->time_base.num * (int64_t)UCLOCK_FREQ /
                    stream->time_base.den - INT64_MIN;
-        if (pkt.pts != (int64_t)AV_NOPTS_VALUE)
-            dts_pts_delay = (pkt.pts - pkt.dts) * stream->time_base.num *
-                            UCLOCK_FREQ / stream->time_base.den;
+        if (pkt.pts != (int64_t)AV_NOPTS_VALUE) {
+            if (pkt.pts < pkt.dts) {
+                upipe_warn_va(upipe, "pts in the past (pts=%"PRIi64", "
+                              "dts=%"PRIi64")", pkt.pts, pkt.dts);
+            } else {
+                dts_pts_delay = (pkt.pts - pkt.dts) * stream->time_base.num *
+                    UCLOCK_FREQ / stream->time_base.den;
+            }
+        }
     } else if (pkt.pts != (int64_t)AV_NOPTS_VALUE) {
         dts_orig = pkt.pts * stream->time_base.num * (int64_t)UCLOCK_FREQ /
                    stream->time_base.den - INT64_MIN;
