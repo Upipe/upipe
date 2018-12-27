@@ -767,10 +767,12 @@ static struct uref *alloc_video_def(struct upipe *upipe,
 
     UBASE_FATAL(upipe, uref_pic_flow_set_hsize(flow_def, codec->width))
     UBASE_FATAL(upipe, uref_pic_flow_set_vsize(flow_def, codec->height))
-    int ticks = codec->ticks_per_frame ? codec->ticks_per_frame : 1;
-    if (stream->time_base.num) {
-        struct urational fps = { .num = stream->time_base.den,
-                                 .den = (uint64_t)stream->time_base.num * ticks };
+    AVRational frame_rate = av_guess_frame_rate(format, stream, NULL);
+    if (frame_rate.num != 0 || frame_rate.den != 1) {
+        struct urational fps = {
+            .num = frame_rate.num,
+            .den = frame_rate.den
+        };
         urational_simplify(&fps);
         UBASE_FATAL(upipe, uref_pic_flow_set_fps(flow_def, fps))
     }
