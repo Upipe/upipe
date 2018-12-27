@@ -2476,9 +2476,11 @@ static void upipe_h264f_prepare_raw(struct upipe *upipe, struct uref *uref)
     uref_clock_get_duration(uref, &duration);
 
     uint64_t date, pts;
-    if (upipe_h264f->dpb_output_delay != UINT64_MAX)
+    if (!ubase_check(uref_clock_get_dts_prog(uref, &date)) &&
+        upipe_h264f->dpb_output_delay != UINT64_MAX) {
         uref_clock_set_dts_pts_delay(uref,
                 upipe_h264f->dpb_output_delay * upipe_h264f->duration * 2);
+    }
     else if (!upipe_h264f->max_dec_frame_buffering)
         uref_clock_set_dts_pts_delay(uref, 0);
     else if (!ubase_check(uref_clock_get_dts_pts_delay(uref, &date)) &&
