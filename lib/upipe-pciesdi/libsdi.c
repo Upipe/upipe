@@ -223,7 +223,7 @@ void sdi_rx(int fd, uint8_t *locked, uint8_t *mode, uint8_t *family, uint8_t *sc
 
 void sdi_tx(int fd, uint8_t mode, uint8_t *txen, uint8_t *slew) {
     struct sdi_ioctl_tx m;
-    m.crc_enable = 0;
+    m.crc_enable = 1;
     m.packed = SDI_DEVICE_IS_BITPACKED;
     m.mode = mode;
     ioctl(fd, SDI_IOCTL_TX, &m);
