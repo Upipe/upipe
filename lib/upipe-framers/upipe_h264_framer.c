@@ -2028,6 +2028,9 @@ static void upipe_h264f_output_au(struct upipe *upipe, struct uref *uref,
             upipe_throw_error(upipe, err);
     }
 
+    if (upipe_h264f->next_uref)
+        uref_h26x_delete_nal_offsets(upipe_h264f->next_uref);
+
     upipe_h264f_output(upipe, uref, upump_p);
 }
 
