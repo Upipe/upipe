@@ -1116,6 +1116,8 @@ static void upipe_avcdec_output_pic(struct upipe *upipe, struct upump **upump_p)
         }
     }
 
+    uref_free(upipe_avcdec->uref);
+    upipe_avcdec->uref = NULL;
     upipe_avcdec_output(upipe, uref, upump_p);
 }
 
@@ -1198,6 +1200,8 @@ static void upipe_avcdec_output_sound(struct upipe *upipe,
         }
     }
 
+    uref_free(upipe_avcdec->uref);
+    upipe_avcdec->uref = NULL;
     upipe_avcdec_output(upipe, uref, upump_p);
 }
 
@@ -1291,7 +1295,6 @@ static void upipe_avcdec_store_uref(struct upipe *upipe, struct uref *uref)
     struct upipe_avcdec *upipe_avcdec = upipe_avcdec_from_upipe(upipe);
     if (upipe_avcdec->uref != NULL && upipe_avcdec->uref->uchain.next != NULL)
         uref_free(uref_from_uchain(upipe_avcdec->uref->uchain.next));
-    uref_free(upipe_avcdec->uref);
     upipe_avcdec->uref = uref;
 }
 
@@ -1348,7 +1351,10 @@ static bool upipe_avcdec_decode(struct upipe *upipe, struct uref *uref,
         upipe_avcdec->input_dts_sys = input_dts_sys;
     }
 
-    upipe_avcdec_store_uref(upipe, uref);
+    if (!upipe_avcdec->uref)
+        upipe_avcdec_store_uref(upipe, uref);
+    else
+        uref_free(uref);
     upipe_avcdec_decode_avpkt(upipe, &avpkt, upump_p);
 
     free(avpkt.data);
