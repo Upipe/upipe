@@ -49,6 +49,8 @@
 #include <upipe/upipe_helper_uclock.h>
 #include <upipe-pciesdi/upipe_pciesdi_source.h>
 
+#include <sys/mman.h>
+#include <sys/ioctl.h>
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <fcntl.h>
@@ -56,6 +58,7 @@
 
 #include "libsdi.h"
 #include "sdi_config.h"
+#include "sdi.h"
 
 #include "levelb.h"
 #include "../upipe-hbrmt/upipe_hbrmt_common.h"
@@ -117,8 +120,16 @@ struct upipe_pciesdi_src {
     void (*sdi3g_levelb_unpack)(const uint16_t *src, uint16_t *dst1, uint16_t *dst2, uintptr_t pixels);
     void (*sdi_to_uyvy)(const uint8_t *src, uint16_t *y, uintptr_t pixels);
 
+    struct sdi_ioctl_mmap_info mmap_info;
+
+    /** bytes in scratch buffer */
+    int scratch_buffer_count;
+
     /** public upipe structure */
     struct upipe upipe;
+
+    /** scratch buffer */
+    uint8_t scratch_buffer[2 * DMA_BUFFER_SIZE];
 };
 
 UPIPE_HELPER_UPIPE(upipe_pciesdi_src, upipe, UPIPE_PCIESDI_SRC_SIGNATURE)
@@ -162,10 +173,6 @@ static struct upipe *upipe_pciesdi_src_alloc(struct upipe_mgr *mgr,
     upipe_pciesdi_src_init_upump(upipe);
     upipe_pciesdi_src_init_uclock(upipe);
 
-    upipe_pciesdi_src->read_buffer = malloc(2 * DMA_BUFFER_SIZE * DMA_BUFFER_COUNT);
-    if (!upipe_pciesdi_src->read_buffer)
-        return NULL;
-
     upipe_pciesdi_src->sdi3g_levelb_packed = upipe_sdi3g_to_uyvy_2_c;
     upipe_pciesdi_src->sdi3g_levelb_unpack = upipe_levelb_unpack_c;
     upipe_pciesdi_src->sdi_to_uyvy = upipe_sdi_to_uyvy_c;
@@ -187,6 +194,7 @@ static struct upipe *upipe_pciesdi_src_alloc(struct upipe_mgr *mgr,
 #endif
 #endif
 
+    upipe_pciesdi_src->read_buffer = NULL;
     upipe_pciesdi_src->sdi3g_levelb = false;
     upipe_pciesdi_src->discontinuity = false;
     upipe_pciesdi_src->fd = -1;
@@ -389,8 +397,22 @@ static void dump_and_exit_clean(struct upipe *upipe, uint8_t *buf, size_t size)
     abort();
 }
 
+static const uint8_t *mmap_wraparound(const uint8_t *mmap_buffer,
+        uint64_t buffer_count, uint64_t offset)
+{
+    return mmap_buffer + (buffer_count * DMA_BUFFER_SIZE + offset)
+        % DMA_BUFFER_TOTAL_SIZE;
+}
+
+static bool mmap_length_does_wrap(uint64_t buffer_count, uint64_t offset,
+        uint64_t length)
+{
+    return (buffer_count * DMA_BUFFER_SIZE + offset) % DMA_BUFFER_TOTAL_SIZE
+        + length > DMA_BUFFER_TOTAL_SIZE;
+}
+
 /** @internal @This reads data from the source and outputs it.
-*   @param upump description structure of the read watcher
+ *  @param upump description structure of the read watcher
  */
 static void upipe_pciesdi_src_worker(struct upump *upump)
 {
@@ -402,232 +424,142 @@ static void upipe_pciesdi_src_worker(struct upump *upump)
 
     if (!locked) {
         upipe_pciesdi_src->discontinuity = true;
+        /* TODO: check unplug with mmap. */
     }
 
-    // TODO : monitor changes
-    if (0) upipe_notice_va(upipe, "%s | mode %s | family %s | scan %s | rate %s",
-        locked ? "LOCK" : "",
-        sdi_decode_mode(mode),
-        sdi_decode_family(family),
-        sdi_decode_scan(scan),
-        sdi_decode_rate(rate));
-
-#if SDI_DEVICE_IS_BITPACKED
     int sdi_line_width = upipe_pciesdi_src->sdi_format->width * 2 * 10 / 8;
-#else
-    int sdi_line_width = upipe_pciesdi_src->sdi_format->width * 4;
-#endif
     if (upipe_pciesdi_src->sdi3g_levelb)
         sdi_line_width *= 2;
 
-    ssize_t ret = read(upipe_pciesdi_src->fd,
-            upipe_pciesdi_src->read_buffer + upipe_pciesdi_src->cached_read_bytes,
-            DMA_BUFFER_SIZE * DMA_BUFFER_COUNT);
+    int64_t hw, sw;
+    sdi_dma_writer(upipe_pciesdi_src->fd, 1, &hw, &sw); // get buffer counts
 
-    if (unlikely(ret == -1)) {
-        switch (errno) {
-            case EINTR:
-            case EAGAIN:
-#if EAGAIN != EWOULDBLOCK
-            case EWOULDBLOCK:
-#endif
-                /* not an issue, try again later */
-                return;
-            default:
-                break;
-        }
-        upipe_err_va(upipe, "couldn't read: %m");
-//        upipe_pciesdi_src_set_upump(upipe, NULL);
-//        upipe_throw_source_end(upipe);
-        return;
+    int64_t num_bufs = hw - sw;
+    if (num_bufs > DMA_BUFFER_COUNT/2) {
+        /* TODO: Can we recover from here?  Need to regain EAV alignment
+         * somehow.  Maybe stop/start DMA.  Maybe searching is needed. */
+        upipe_warn_va(upipe, "reading too late, hw: %"PRId64", sw: %"PRId64, hw, sw);
+        struct sdi_ioctl_mmap_increment_sw_count mmap_inc = { .writer_delta = num_bufs };
+        if (ioctl(upipe_pciesdi_src->fd, SDI_IOCTL_MMAP_INCREMENT_SW_COUNT, &mmap_inc))
+            upipe_err(upipe, "ioctl error incrementing SW buffer count");
+        dump_and_exit_clean(upipe, NULL, 0);
     }
 
-    ret += upipe_pciesdi_src->cached_read_bytes;
-    int lines = ret / sdi_line_width;
+    int bytes_available = num_bufs * DMA_BUFFER_SIZE + upipe_pciesdi_src->scratch_buffer_count;
+    int lines = bytes_available / sdi_line_width;
     int processed_bytes = lines * sdi_line_width;
-#if SDI_DEVICE_IS_BITPACKED
     int output_size = lines * upipe_pciesdi_src->sdi_format->width * 4;
     if (upipe_pciesdi_src->sdi3g_levelb)
         output_size *= 2;
-#else
-    int output_size = lines * sdi_line_width;
-#endif
+
+    if (!lines) {
+        upipe_err(upipe, "0 lines after a mmap read is not supported");
+        dump_and_exit_clean(upipe, NULL, 0);
+    }
+
     struct uref *uref = uref_block_alloc(upipe_pciesdi_src->uref_mgr,
             upipe_pciesdi_src->ubuf_mgr, output_size);
-    UBASE_FATAL_RETURN(upipe, uref ? UBASE_ERR_NONE : UBASE_ERR_ALLOC);
+    if (!uref) {
+        upipe_err(upipe, "error allocating output uref");
+        upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
+        return;
+    }
 
-    uint8_t *block_buf;
+    uint8_t *dst_buf;
     int block_size = -1;
-    if (!ubase_check(uref_block_write(uref, 0, &block_size, &block_buf))) {
+    if (!ubase_check(uref_block_write(uref, 0, &block_size, &dst_buf))) {
         upipe_err(upipe, "unable to map block for writing");
         dump_and_exit_clean(upipe, NULL, 0);
     }
 
-    bool print_error_eav = true, print_error_line = true, print_error_sav = true;
-    for (int i = 0; i < lines; i++) {
-#if !SDI_DEVICE_IS_BITPACKED /* Note reversed condition. */
-        const uint16_t *sdi_line = (uint16_t*)(upipe_pciesdi_src->read_buffer + i * sdi_line_width);
-        int active_offset = 2 * upipe_pciesdi_src->sdi_format->active_offset;
-        if (upipe_pciesdi_src->sdi3g_levelb)
-            active_offset *= 2;
-        const uint16_t *active_start = sdi_line + active_offset;
-
-        if (upipe_pciesdi_src->sdi_format->pict_fmt->sd) {
-            /* Check EAV is present. */
-            if (print_error_eav && !sd_eav_match(sdi_line)) {
-                upipe_err_va(upipe, "SD EAV not found at %#x", i * sdi_line_width);
-                print_error_eav = false;
-            }
-
-            /* Check SAV is present. */
-            if (print_error_sav && !sd_sav_match(active_start)) {
-                upipe_err_va(upipe, "SD SAV not found at %#x", i * sdi_line_width + active_offset);
-                print_error_sav = false;
-            }
-        } else if (upipe_pciesdi_src->sdi3g_levelb) {
-            /* Check EAV is present. */
-            if (print_error_eav && !sdi3g_levelb_eav_match(sdi_line)) {
-                upipe_err_va(upipe, "SDI-3G level B EAV not found at %#x", i * sdi_line_width);
-                print_error_eav = false;
-            }
-
-            /* Check SAV is present. */
-            if (print_error_sav && !sdi3g_levelb_sav_match(active_start)) {
-                upipe_err_va(upipe, "SDI-3G level B SAV not found at %#x", i * sdi_line_width + active_offset);
-                print_error_sav = false;
-            }
-
-            /* Check line number. */
-            int line = (sdi_line[16] & 0x1ff) >> 2;
-            line |= ((sdi_line[20] & 0x1ff) >> 2) << 7;
-            if (print_error_line && (line > upipe_pciesdi_src->sdi_format->height || line < 1)) {
-                upipe_err_va(upipe, "line %d out of range (1-%d)", line,
-                        upipe_pciesdi_src->sdi_format->height);
-                print_error_line = false;
-            }
-
-            /* Check line number is increasing correctly. */
-            if (print_error_line
-                    && upipe_pciesdi_src->previous_sdi_line_number != upipe_pciesdi_src->sdi_format->height
-                    && line != upipe_pciesdi_src->previous_sdi_line_number + 1) {
-                upipe_warn_va(upipe, "sdi_line_number not linearly increasing (%d -> %d)",
-                        upipe_pciesdi_src->previous_sdi_line_number, line);
-                print_error_line = false;
-            }
-            upipe_pciesdi_src->previous_sdi_line_number = line;
-        } else { /* HD */
-            /* Check EAV is present. */
-            if (print_error_eav && !hd_eav_match(sdi_line)) {
-                upipe_err_va(upipe, "HD EAV not found at %#x", i * sdi_line_width);
-                print_error_eav = false;
-            }
-
-            /* Check SAV is present. */
-            if (print_error_sav && !hd_sav_match(active_start)) {
-                upipe_err_va(upipe, "HD SAV not found at %#x", i * sdi_line_width + active_offset);
-                print_error_sav = false;
-            }
-
-            /* Check line number. */
-            int line = (sdi_line[8] & 0x1ff) >> 2;
-            line |= ((sdi_line[10] & 0x1ff) >> 2) << 7;
-            if (print_error_line && (line > upipe_pciesdi_src->sdi_format->height || line < 1)) {
-                upipe_err_va(upipe, "line %d out of range (1-%d)", line,
-                        upipe_pciesdi_src->sdi_format->height);
-                print_error_line = false;
-            }
-
-            /* Check line number is increasing correctly. */
-            if (print_error_line
-                    && upipe_pciesdi_src->previous_sdi_line_number != upipe_pciesdi_src->sdi_format->height
-                    && line != upipe_pciesdi_src->previous_sdi_line_number + 1) {
-                upipe_warn_va(upipe, "sdi_line_number not linearly increasing (%d -> %d)",
-                        upipe_pciesdi_src->previous_sdi_line_number, line);
-                print_error_line = false;
-            }
-            upipe_pciesdi_src->previous_sdi_line_number = line;
-        } /* end HD */
-
-        /* Copy line to output uref. */
-        if (upipe_pciesdi_src->sdi3g_levelb) {
-            /* Note: line order is swapped. */
-            uint16_t *dst1 = (uint16_t*)block_buf + (2*i + 1) * sdi_line_width/4;
-            uint16_t *dst2 = (uint16_t*)block_buf + (2*i + 0) * sdi_line_width/4;
-            upipe_pciesdi_src->sdi3g_levelb_unpack(sdi_line, dst1, dst2,
-                    upipe_pciesdi_src->sdi_format->width);
-        } else {
-            memcpy(block_buf + i * sdi_line_width, sdi_line, sdi_line_width);
-        }
-#else
-        const uint8_t *sdi_line = upipe_pciesdi_src->read_buffer + i * sdi_line_width;
-        int active_offset = upipe_pciesdi_src->sdi_format->active_offset * 2 * 10 / 8;
-        if (upipe_pciesdi_src->sdi3g_levelb)
-            active_offset *= 2;
-        const uint8_t *active_start = sdi_line + active_offset;
-
-        if (upipe_pciesdi_src->sdi_format->pict_fmt->sd) {
-            /* Check EAV is present. */
-            if (print_error_eav && !sd_eav_match_bitpacked(sdi_line)) {
-                upipe_err_va(upipe, "SD EAV not found at %#x", i * sdi_line_width);
-                print_error_eav = false;
-            }
-
-            /* Check SAV is present. */
-            if (print_error_sav && !sd_sav_match_bitpacked(active_start)) {
-                upipe_err_va(upipe, "SD SAV not found at %#x", i * sdi_line_width + active_offset);
-                print_error_sav = false;
-            }
-        } else if (upipe_pciesdi_src->sdi3g_levelb) {
-            /* Check EAV is present. */
-            if (print_error_eav && !sdi3g_levelb_eav_match_bitpacked(sdi_line)) {
-                upipe_err_va(upipe, "SDI-3G level B EAV not found at %#x", i * sdi_line_width);
-                print_error_eav = false;
-            }
-
-            /* Check SAV is present. */
-            if (print_error_sav && !sdi3g_levelb_sav_match_bitpacked(active_start)) {
-                upipe_err_va(upipe, "SDI-3G level B SAV not found at %#x", i * sdi_line_width + active_offset);
-                print_error_sav = false;
-            }
-        } else { /* HD */
-            /* Check EAV is present. */
-            if (print_error_eav && !hd_eav_match_bitpacked(sdi_line)) {
-                upipe_err_va(upipe, "HD EAV not found at %#x", i * sdi_line_width);
-                print_error_eav = false;
-            }
-
-            /* Check SAV is present. */
-            if (print_error_sav && !hd_sav_match_bitpacked(active_start)) {
-                upipe_err_va(upipe, "HD SAV not found at %#x", i * sdi_line_width + active_offset);
-                print_error_sav = false;
-                dump_and_exit_clean(upipe, upipe_pciesdi_src->read_buffer,
-                        2*DMA_BUFFER_COUNT*DMA_BUFFER_SIZE);
-            }
-
-            /* TODO: line number check, maybe on unpacked data. */
-        } /* end HD */
-
-        if (upipe_pciesdi_src->sdi3g_levelb) {
-            /* Note: line order is swapped. */
-            uint16_t *dst1 = (uint16_t*)block_buf + (2*i + 1) * 2*upipe_pciesdi_src->sdi_format->width;
-            uint16_t *dst2 = (uint16_t*)block_buf + (2*i + 0) * 2*upipe_pciesdi_src->sdi_format->width;
-            upipe_pciesdi_src->sdi3g_levelb_packed(sdi_line, dst1, dst2,
-                    upipe_pciesdi_src->sdi_format->width);
-        } else {
-            uint16_t *dst = (uint16_t*)block_buf + 2*i * upipe_pciesdi_src->sdi_format->width;
-            upipe_pciesdi_src->sdi_to_uyvy(sdi_line, dst,
-                    upipe_pciesdi_src->sdi_format->width);
-        }
-#endif
+    int offset = 0;
+    if (upipe_pciesdi_src->scratch_buffer_count) {
+        offset = sdi_line_width - upipe_pciesdi_src->scratch_buffer_count;
+        /* copy to end of scratch buffer */
+        memcpy(upipe_pciesdi_src->scratch_buffer + upipe_pciesdi_src->scratch_buffer_count,
+                mmap_wraparound(upipe_pciesdi_src->read_buffer, sw, 0),
+                offset);
+        /* unpack */
+        upipe_pciesdi_src->sdi_to_uyvy(upipe_pciesdi_src->scratch_buffer,
+                (uint16_t*)dst_buf, upipe_pciesdi_src->sdi_format->width);
+        upipe_pciesdi_src->scratch_buffer_count = 0;
+        lines -= 1;
+        dst_buf += upipe_pciesdi_src->sdi_format->width * 4;
     }
 
-    if (ret != processed_bytes) {
-        memmove(upipe_pciesdi_src->read_buffer,
-                upipe_pciesdi_src->read_buffer + processed_bytes,
-                ret - processed_bytes);
-        upipe_pciesdi_src->cached_read_bytes = ret - processed_bytes;
-    } else {
-        upipe_pciesdi_src->cached_read_bytes = 0;
+    bool print_error_eav = true, print_error_line = true, print_error_sav = true;
+    for (int i = 0; i < lines; i++, offset += sdi_line_width) {
+        /* check whether a line wraps around in the mmap buffer */
+        if (mmap_length_does_wrap(sw, offset, sdi_line_width)) {
+            upipe_warn_va(upipe, "line wraparound, hw: %"PRId64", sw: %"PRId64, hw, sw);
+
+            int bytes_remaining = DMA_BUFFER_TOTAL_SIZE - (sw * DMA_BUFFER_SIZE + offset) % DMA_BUFFER_TOTAL_SIZE;
+            memcpy(upipe_pciesdi_src->scratch_buffer,
+                    mmap_wraparound(upipe_pciesdi_src->read_buffer, sw, offset),
+                    bytes_remaining);
+            memcpy(upipe_pciesdi_src->scratch_buffer + bytes_remaining,
+                    mmap_wraparound(upipe_pciesdi_src->read_buffer, sw, offset+bytes_remaining),
+                    sdi_line_width - bytes_remaining);
+
+            uint16_t *dst = (uint16_t*)dst_buf + 2*i * upipe_pciesdi_src->sdi_format->width;
+            upipe_pciesdi_src->sdi_to_uyvy(upipe_pciesdi_src->scratch_buffer,
+                    dst, upipe_pciesdi_src->sdi_format->width);
+        }
+
+        /* no wraparound */
+        else {
+            const uint8_t *sdi_line = mmap_wraparound(upipe_pciesdi_src->read_buffer, sw, offset);
+            int active_offset = upipe_pciesdi_src->sdi_format->active_offset * 2 * 10 / 8;
+            const uint8_t *active_start = sdi_line + active_offset;
+
+            if (upipe_pciesdi_src->sdi_format->pict_fmt->sd) {
+                /* Check EAV is present. */
+                if (print_error_eav && !sd_eav_match_bitpacked(sdi_line)) {
+                    upipe_err_va(upipe, "SD EAV not found at %#x", offset);
+                    print_error_eav = false;
+                }
+
+                /* Check SAV is present. */
+                if (print_error_sav && !sd_sav_match_bitpacked(active_start)) {
+                    upipe_err_va(upipe, "SD SAV not found at %#x", offset + active_offset);
+                    print_error_sav = false;
+                }
+
+            } else { /* HD */
+                /* Check EAV is present. */
+                if (print_error_eav && !hd_eav_match_bitpacked(sdi_line)) {
+                    upipe_err_va(upipe, "HD EAV not found at %#x", offset);
+                    print_error_eav = false;
+                }
+
+                /* Check SAV is present. */
+                if (print_error_sav && !hd_sav_match_bitpacked(active_start)) {
+                    upipe_err_va(upipe, "HD SAV not found at %#x", offset + active_offset);
+                    print_error_sav = false;
+                }
+            } /* end HD */
+
+            uint16_t *dst = (uint16_t*)dst_buf + 2*i * upipe_pciesdi_src->sdi_format->width;
+            upipe_pciesdi_src->sdi_to_uyvy(mmap_wraparound(upipe_pciesdi_src->read_buffer,
+                        sw, offset),
+                    dst, upipe_pciesdi_src->sdi_format->width);
+        }
+    }
+
+    struct sdi_ioctl_mmap_increment_sw_count mmap_inc = { .writer_delta = num_bufs };
+    if (ioctl(upipe_pciesdi_src->fd, SDI_IOCTL_MMAP_INCREMENT_SW_COUNT, &mmap_inc))
+        upipe_err(upipe, "ioctl error incrementing SW buffer count");
+
+    if (bytes_available != processed_bytes) {
+        int bytes_remaining = bytes_available - processed_bytes;
+        if (mmap_length_does_wrap(sw, offset, bytes_remaining)) {
+            upipe_warn(upipe, "remaining bytes wraparound");
+        } else {
+            memcpy(upipe_pciesdi_src->scratch_buffer,
+                    mmap_wraparound(upipe_pciesdi_src->read_buffer, sw, offset),
+                    bytes_remaining);
+        }
+        upipe_pciesdi_src->scratch_buffer_count = bytes_remaining;
     }
 
     if (upipe_pciesdi_src->discontinuity) {
@@ -777,8 +709,7 @@ static void get_flow_def_on_signal_lock(struct upump *upump)
     upipe_pciesdi_src_require_ubuf_mgr(upipe, flow_def);
 
     struct upump *fd_read = upump_alloc_fd_read(ctx->upump_mgr,
-            upipe_pciesdi_src_worker, upipe,
-            upipe->refcount, ctx->fd);
+            upipe_pciesdi_src_worker, upipe, upipe->refcount, ctx->fd);
     if (unlikely(fd_read == NULL)) {
         upipe_throw_fatal(upipe, UBASE_ERR_UPUMP);
         return;
@@ -839,8 +770,8 @@ static int upipe_pciesdi_src_check(struct upipe *upipe, struct uref *flow_format
 
     if (upipe_pciesdi_src->fd != -1 && upipe_pciesdi_src->upump == NULL) {
         struct upump *upump = upump_alloc_fd_read(upipe_pciesdi_src->upump_mgr,
-                                        upipe_pciesdi_src_worker, upipe,
-                                        upipe->refcount, upipe_pciesdi_src->fd);
+                upipe_pciesdi_src_worker, upipe, upipe->refcount,
+                upipe_pciesdi_src->fd);
         if (unlikely(upump == NULL)) {
             upipe_throw_fatal(upipe, UBASE_ERR_UPUMP);
             return UBASE_ERR_UPUMP;
@@ -897,6 +828,30 @@ static int upipe_pciesdi_set_uri(struct upipe *upipe, const char *path)
 
     sdi_dma(upipe_pciesdi_src->fd, 0, 0, 0); // disable loopback
 
+    struct sdi_ioctl_mmap_info mmap_info;
+    if (ioctl(upipe_pciesdi_src->fd, SDI_IOCTL_MMAP_INFO, &mmap_info) != 0) {
+        upipe_err(upipe, "error getting mmap info");
+        return UBASE_ERR_EXTERNAL;
+    }
+
+    if (mmap_info.dma_rx_buf_size != DMA_BUFFER_SIZE
+            || mmap_info.dma_rx_buf_count != DMA_BUFFER_COUNT) {
+        upipe_err(upipe, "mmap info returned does not match compile-time constants");
+        return UBASE_ERR_EXTERNAL;
+    }
+
+    void *buf = mmap(NULL, DMA_BUFFER_TOTAL_SIZE, PROT_READ, MAP_SHARED,
+            upipe_pciesdi_src->fd, mmap_info.dma_rx_buf_offset);
+    if (buf == MAP_FAILED) {
+        upipe_err(upipe, "mmap failed");
+        return UBASE_ERR_EXTERNAL;
+    }
+
+    /* TODO: check need to release things on failure. */
+
+    upipe_pciesdi_src->mmap_info = mmap_info;
+    upipe_pciesdi_src->read_buffer = buf;
+
     return UBASE_ERR_NONE;
 }
 
@@ -907,6 +862,8 @@ static void upipe_pciesdi_src_close(struct upipe *upipe)
     int64_t hw, sw;
     sdi_dma_writer(upipe_pciesdi_src->fd, 0, &hw, &sw); // disable
     sdi_release_dma_writer(upipe_pciesdi_src->fd); // release old locks
+    munmap(upipe_pciesdi_src->read_buffer, DMA_BUFFER_TOTAL_SIZE);
+    upipe_pciesdi_src->read_buffer = NULL;
 
     ubase_clean_fd(&upipe_pciesdi_src->fd);
     upipe_pciesdi_src_set_upump(upipe, NULL);
