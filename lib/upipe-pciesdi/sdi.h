@@ -180,6 +180,21 @@ struct sdi_ioctl_lock {
     uint8_t dma_writer_status;
 };
 
+struct sdi_ioctl_mmap_info {
+    uint64_t dma_tx_buf_offset;
+    uint64_t dma_tx_buf_size;
+    uint64_t dma_tx_buf_count;
+
+    uint64_t dma_rx_buf_offset;
+    uint64_t dma_rx_buf_size;
+    uint64_t dma_rx_buf_count;
+};
+
+struct sdi_ioctl_mmap_increment_sw_count {
+    uint64_t reader_delta;
+    uint64_t writer_delta;
+};
+
 #define SDI_IOCTL 'S'
 
 #define SDI_IOCTL_REG               _IOWR(SDI_IOCTL,  0, struct sdi_ioctl_reg)
@@ -201,10 +216,12 @@ struct sdi_ioctl_lock {
 #define SDI_IOCTL_GENLOCK_VSYNC     _IOWR(SDI_IOCTL, 31, struct sdi_ioctl_genlock)
 #endif
 
-#define SDI_IOCTL_DMA               _IOW(SDI_IOCTL,  40, struct sdi_ioctl_dma)
-#define SDI_IOCTL_DMA_WRITER        _IOWR(SDI_IOCTL, 41, struct sdi_ioctl_dma_writer)
-#define SDI_IOCTL_DMA_READER        _IOWR(SDI_IOCTL, 42, struct sdi_ioctl_dma_reader)
-#define SDI_IOCTL_PATTERN           _IOW(SDI_IOCTL,  43, struct sdi_ioctl_pattern)
+#define SDI_IOCTL_DMA                       _IOW(SDI_IOCTL,  40, struct sdi_ioctl_dma)
+#define SDI_IOCTL_DMA_WRITER                _IOWR(SDI_IOCTL, 41, struct sdi_ioctl_dma_writer)
+#define SDI_IOCTL_DMA_READER                _IOWR(SDI_IOCTL, 42, struct sdi_ioctl_dma_reader)
+#define SDI_IOCTL_PATTERN                   _IOW(SDI_IOCTL,  43, struct sdi_ioctl_pattern)
+#define SDI_IOCTL_MMAP_INFO                 _IOW(SDI_IOCTL,  44, struct sdi_ioctl_mmap_info)
+#define SDI_IOCTL_MMAP_INCREMENT_SW_COUNT   _IOR(SDI_IOCTL,  45, struct sdi_ioctl_mmap_increment_sw_count)
 
 #ifdef HAS_GS12241
 #define SDI_IOCTL_RX_SPI_CS         _IOW(SDI_IOCTL,  50, struct sdi_ioctl_gs12241_spi_cs)
