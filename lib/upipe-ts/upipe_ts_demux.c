@@ -765,7 +765,7 @@ static int upipe_ts_demux_output_plumber(struct upipe *upipe,
     }
 
     if (!ubase_ncmp(def, "block.mpegtspsi.mpegtsscte35.")) {
-        /* allocate ts_pesd inner */
+        /* allocate ts_psim inner */
         struct upipe *output =
             upipe_void_alloc_output(inner, ts_demux_mgr->ts_psim_mgr,
                 uprobe_pfx_alloc(
@@ -777,6 +777,7 @@ static int upipe_ts_demux_output_plumber(struct upipe *upipe,
             upipe_void_spawn_output(output, ts_demux_mgr->ts_scte35d_mgr,
                    uprobe_pfx_alloc(uprobe_use(&upipe_ts_demux_output->probe),
                                     UPROBE_LOG_VERBOSE, "scte35d"));
+        upipe_release(output);
         if (unlikely(!ubase_check(err)))
             return UBASE_ERR_ALLOC;
         return UBASE_ERR_NONE;
