@@ -44,11 +44,15 @@ struct upipe_dump_ctx {
     uint64_t input_uid;
     /** unique ID for pipe output */
     uint64_t output_uid;
-    /** original uchain */
-    struct uchain original_uchain;
+    /** context chain - for finding already dumped pipes */
+    struct uchain uchain;
+    /** owning pipe */
+    struct upipe *upipe;
     /** original opaque */
     void *original_opaque;
 };
+
+UBASE_FROM_TO(upipe_dump_ctx, uchain, uchain, uchain)
 
 /** @hidden */
 static void upipe_dump_pipe(upipe_dump_pipe_label pipe_label,
@@ -116,7 +120,7 @@ static bool upipe_dump_find(struct upipe *upipe, struct uchain *list)
 {
     struct uchain *uchain;
     ulist_foreach (list, uchain) {
-        if (uchain == upipe_to_uchain(upipe))
+        if (upipe_dump_ctx_from_uchain(uchain)->upipe == upipe)
             return true;
     }
     return false;
@@ -146,10 +150,10 @@ static void upipe_dump_pipe(upipe_dump_pipe_label pipe_label,
     struct upipe_dump_ctx *ctx = malloc(sizeof(struct upipe_dump_ctx));
     assert(ctx != NULL);
     ctx->input_uid = (*uid_p)++;
-    ctx->original_uchain = upipe->uchain;
+    ctx->upipe = upipe;
     ctx->original_opaque = upipe->opaque;
     upipe_set_opaque(upipe, ctx);
-    ulist_add(list, upipe_to_uchain(upipe));
+    ulist_add(list, upipe_dump_ctx_to_uchain(ctx));
     fprintf(file, "#begin pipe%"PRIu64"\n", ctx->input_uid);
 
     /* Iterate over subpipes. */
@@ -281,7 +285,7 @@ void upipe_dump_va(upipe_dump_pipe_label pipe_label,
     do {
         last_uid = uid;
         ulist_foreach (&list, uchain) {
-            struct upipe *upipe = upipe_from_uchain(uchain);
+            struct upipe *upipe = upipe_dump_ctx_from_uchain(uchain)->upipe;
             struct upipe *super = NULL;
             while (ubase_check(upipe_sub_get_super(upipe, &upipe)) &&
                    upipe != NULL)
@@ -296,11 +300,8 @@ void upipe_dump_va(upipe_dump_pipe_label pipe_label,
 
     /* Clean up. */
     ulist_delete_foreach (&list, uchain, uchain_tmp) {
-        struct upipe *upipe = upipe_from_uchain(uchain);
-        struct upipe_dump_ctx *ctx =
-            upipe_get_opaque(upipe, struct upipe_dump_ctx *);
-        upipe->uchain = ctx->original_uchain;
-        upipe->opaque = ctx->original_opaque;
+        struct upipe_dump_ctx *ctx = upipe_dump_ctx_from_uchain(uchain);
+        ctx->upipe->opaque = ctx->original_opaque;
         uid--;
         if (ctx->output_uid != ctx->input_uid)
             uid--;
