@@ -120,7 +120,7 @@ struct upipe_pciesdi_src {
     void (*sdi3g_levelb_unpack)(const uint16_t *src, uint16_t *dst1, uint16_t *dst2, uintptr_t pixels);
     void (*sdi_to_uyvy)(const uint8_t *src, uint16_t *y, uintptr_t pixels);
 
-    struct sdi_ioctl_mmap_info mmap_info;
+    struct sdi_ioctl_mmap_dma_info mmap_info;
 
     /** bytes in scratch buffer */
     int scratch_buffer_count;
@@ -439,8 +439,8 @@ static void upipe_pciesdi_src_worker(struct upump *upump)
         /* TODO: Can we recover from here?  Need to regain EAV alignment
          * somehow.  Maybe stop/start DMA.  Maybe searching is needed. */
         upipe_warn_va(upipe, "reading too late, hw: %"PRId64", sw: %"PRId64, hw, sw);
-        struct sdi_ioctl_mmap_increment_sw_count mmap_inc = { .writer_delta = num_bufs };
-        if (ioctl(upipe_pciesdi_src->fd, SDI_IOCTL_MMAP_INCREMENT_SW_COUNT, &mmap_inc))
+        struct sdi_ioctl_mmap_dma_update mmap_update = { .sw_count = hw };
+        if (ioctl(upipe_pciesdi_src->fd, SDI_IOCTL_MMAP_DMA_WRITER_UPDATE, &mmap_update))
             upipe_err(upipe, "ioctl error incrementing SW buffer count");
         dump_and_exit_clean(upipe, NULL, 0);
     }
@@ -546,8 +546,8 @@ static void upipe_pciesdi_src_worker(struct upump *upump)
         }
     }
 
-    struct sdi_ioctl_mmap_increment_sw_count mmap_inc = { .writer_delta = num_bufs };
-    if (ioctl(upipe_pciesdi_src->fd, SDI_IOCTL_MMAP_INCREMENT_SW_COUNT, &mmap_inc))
+    struct sdi_ioctl_mmap_dma_update mmap_update = { .sw_count = hw };
+    if (ioctl(upipe_pciesdi_src->fd, SDI_IOCTL_MMAP_DMA_WRITER_UPDATE, &mmap_update))
         upipe_err(upipe, "ioctl error incrementing SW buffer count");
 
     if (bytes_available != processed_bytes) {
@@ -828,8 +828,8 @@ static int upipe_pciesdi_set_uri(struct upipe *upipe, const char *path)
 
     sdi_dma(upipe_pciesdi_src->fd, 0, 0, 0); // disable loopback
 
-    struct sdi_ioctl_mmap_info mmap_info;
-    if (ioctl(upipe_pciesdi_src->fd, SDI_IOCTL_MMAP_INFO, &mmap_info) != 0) {
+    struct sdi_ioctl_mmap_dma_info mmap_info;
+    if (ioctl(upipe_pciesdi_src->fd, SDI_IOCTL_MMAP_DMA_INFO, &mmap_info) != 0) {
         upipe_err(upipe, "error getting mmap info");
         return UBASE_ERR_EXTERNAL;
     }
