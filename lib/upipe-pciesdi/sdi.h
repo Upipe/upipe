@@ -180,7 +180,7 @@ struct sdi_ioctl_lock {
     uint8_t dma_writer_status;
 };
 
-struct sdi_ioctl_mmap_info {
+struct sdi_ioctl_mmap_dma_info {
     uint64_t dma_tx_buf_offset;
     uint64_t dma_tx_buf_size;
     uint64_t dma_tx_buf_count;
@@ -190,9 +190,8 @@ struct sdi_ioctl_mmap_info {
     uint64_t dma_rx_buf_count;
 };
 
-struct sdi_ioctl_mmap_increment_sw_count {
-    uint64_t reader_delta;
-    uint64_t writer_delta;
+struct sdi_ioctl_mmap_dma_update {
+    uint64_t sw_count;
 };
 
 #define SDI_IOCTL 'S'
@@ -220,8 +219,9 @@ struct sdi_ioctl_mmap_increment_sw_count {
 #define SDI_IOCTL_DMA_WRITER                _IOWR(SDI_IOCTL, 41, struct sdi_ioctl_dma_writer)
 #define SDI_IOCTL_DMA_READER                _IOWR(SDI_IOCTL, 42, struct sdi_ioctl_dma_reader)
 #define SDI_IOCTL_PATTERN                   _IOW(SDI_IOCTL,  43, struct sdi_ioctl_pattern)
-#define SDI_IOCTL_MMAP_INFO                 _IOW(SDI_IOCTL,  44, struct sdi_ioctl_mmap_info)
-#define SDI_IOCTL_MMAP_INCREMENT_SW_COUNT   _IOR(SDI_IOCTL,  45, struct sdi_ioctl_mmap_increment_sw_count)
+#define SDI_IOCTL_MMAP_DMA_INFO             _IOR(SDI_IOCTL,  44, struct sdi_ioctl_mmap_dma_info)
+#define SDI_IOCTL_MMAP_DMA_WRITER_UPDATE    _IOW(SDI_IOCTL,  45, struct sdi_ioctl_mmap_dma_update)
+#define SDI_IOCTL_MMAP_DMA_READER_UPDATE    _IOW(SDI_IOCTL,  46, struct sdi_ioctl_mmap_dma_update)
 
 #ifdef HAS_GS12241
 #define SDI_IOCTL_RX_SPI_CS         _IOW(SDI_IOCTL,  50, struct sdi_ioctl_gs12241_spi_cs)
