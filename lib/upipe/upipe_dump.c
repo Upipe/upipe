@@ -27,6 +27,8 @@
  * @short Upipe pipeline dumping for debug purposes
  */
 
+#define _GNU_SOURCE
+
 #include <upipe/ubase.h>
 #include <upipe/upipe.h>
 #include <upipe/upipe_dump.h>
@@ -69,9 +71,12 @@ char *upipe_dump_upipe_label_default(struct upipe *upipe)
         uprobe = uprobe->next;
     }
 
-    char *string = malloc((prefix ? strlen(prefix) : 0) + sizeof(" (aaaa)"));
-    sprintf(string, "%s (%4.4s)", prefix ?: "",
-            (const char *)&upipe->mgr->signature);
+    char *string;
+    if (asprintf(&string, "%s (%4.4s) [%u]", prefix ?: "",
+                 (const char *)&upipe->mgr->signature,
+                 upipe->refcount != NULL ?
+                 uatomic_load(&upipe->refcount->refcount) : 0) == -1)
+        return NULL;
     return string;
 }
 
