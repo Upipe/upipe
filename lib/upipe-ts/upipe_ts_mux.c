@@ -1625,9 +1625,9 @@ static void upipe_ts_mux_input_no_input(struct upipe *upipe)
     upipe_ts_mux_input->tstd = NULL;
     upipe_release(upipe_ts_mux_input->psig_flow);
     upipe_ts_mux_input->psig_flow = NULL;
+    upipe_ts_mux_input_clean_bin_input(upipe);
     upipe_ts_mux_psi_pid_release(upipe_ts_mux_input->psi_pid);
     upipe_ts_mux_input->psi_pid = NULL;
-    upipe_ts_mux_input_clean_bin_input(upipe);
     urefcount_release(upipe_ts_mux_input_to_urefcount_real(upipe_ts_mux_input));
 
     upipe_ts_mux_work(upipe_ts_mux_to_upipe(mux), NULL);
