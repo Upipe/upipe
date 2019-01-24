@@ -85,7 +85,7 @@ struct upipe_pciesdi_sink {
 
     /** scratch buffer */
     int scratch_bytes;
-    uint8_t scratch_buffer[DMA_BUFFER_SIZE];
+    uint8_t scratch_buffer[DMA_BUFFER_SIZE + 32];
 
     /** hardware clock */
     struct uclock uclock;
@@ -205,9 +205,21 @@ static inline void pack(uint8_t *dst, const uint16_t *src)
     dst[4] = src[3];
 }
 
-static void exit_clean(struct upipe *upipe)
+static void exit_clean(struct upipe *upipe, uint8_t *buf, size_t size)
 {
     struct upipe_pciesdi_sink *ctx = upipe_pciesdi_sink_from_upipe(upipe);
+
+    if (buf) {
+        FILE *fh = fopen("dump.bin", "wb");
+        if (!fh) {
+            upipe_err(upipe, "could not open dump file");
+            abort();
+        }
+        fwrite(buf, 1, size, fh);
+        fclose(fh);
+        upipe_dbg(upipe, "dumped to dump.bin");
+    }
+
     int64_t hw, sw;
     sdi_dma_reader(ctx->fd, 0, &hw, &sw); // disable
     sdi_release_dma_reader(ctx->fd); // release old locks
@@ -229,12 +241,18 @@ static void upipe_pciesdi_sink_worker(struct upump *upump)
     int64_t num_bufs = sw - hw;
     if (num_bufs < 0) {
         upipe_warn_va(upipe, "reading too late, hw: %"PRId64", sw: %"PRId64, hw, sw);
-    } else if (num_bufs >= 128) {
-        upipe_warn_va(upipe, "sw count at least 128 ahead, hw: %"PRId64", sw: %"PRId64, hw, sw);
+    } else if (num_bufs >= DMA_BUFFER_COUNT/2) {
+        upipe_warn_va(upipe, "sw count at least %d ahead, hw: %"PRId64", sw: %"PRId64, DMA_BUFFER_COUNT/2, hw, sw);
         return;
     }
-    num_bufs = 128 - num_bufs; // number of bufs to write
+    num_bufs = DMA_BUFFER_COUNT/2 - num_bufs; // number of bufs to write
     //upipe_dbg_va(upipe, "hw: %"PRId64", sw: %"PRId64", to write: %"PRId64, hw, sw, num_bufs);
+
+//upipe_dbg_va(upipe, "hw: %"PRId64", sw: %"PRId64", to write: %"PRId64, hw, sw, num_bufs);
+    /* Limit num_bufs to the end of the mmap buffer. */
+    if (sw % DMA_BUFFER_COUNT + num_bufs > DMA_BUFFER_COUNT)
+        num_bufs = DMA_BUFFER_COUNT - sw % DMA_BUFFER_COUNT;
+//upipe_dbg_va(upipe, "hw: %"PRId64", sw: %"PRId64", to write: %"PRId64, hw, sw, num_bufs);
 
     uint8_t txen, slew;
     sdi_tx(upipe_pciesdi_sink->fd, SDI_TX_MODE_HD, &txen, &slew);
@@ -272,16 +290,6 @@ static void upipe_pciesdi_sink_worker(struct upump *upump)
     int bytes_to_write = num_bufs * DMA_BUFFER_SIZE;
     bool enough_samples = true;
 
-//upipe_dbg_va(upipe, "at start, num_bufs: %d, bytes_to_write: %d", (int)num_bufs, bytes_to_write);
-    if (bytes_to_write > samples/4 * 5) {
-        /* not enough samples to fill wanted buffers */
-        /* TODO: need to store or pack tail somewhere. */
-        num_bufs = (samples/4 * 5) / DMA_BUFFER_SIZE;
-        bytes_to_write = num_bufs * DMA_BUFFER_SIZE;
-        enough_samples = false;
-    }
-//upipe_dbg_va(upipe, "after sample check, num_bufs: %d, bytes_to_write: %d", (int)num_bufs, bytes_to_write);
-
     int samples_written = 0;
     int offset = 0;
 
@@ -294,8 +302,17 @@ static void upipe_pciesdi_sink_worker(struct upump *upump)
                 count);
         offset += count;
         bytes_to_write -= count;
-        upipe_pciesdi_sink->scratch_bytes = 0;
     }
+
+//upipe_dbg_va(upipe, "at start, num_bufs: %d, bytes_to_write: %d", (int)num_bufs, bytes_to_write);
+    if (bytes_to_write > samples/4 * 5) {
+        /* not enough samples to fill wanted buffers */
+        /* TODO: need to store or pack tail somewhere. */
+        num_bufs = (samples/4 * 5) / DMA_BUFFER_SIZE;
+        bytes_to_write = num_bufs * DMA_BUFFER_SIZE - upipe_pciesdi_sink->scratch_bytes;
+        enough_samples = false;
+    }
+//upipe_dbg_va(upipe, "after sample check, num_bufs: %d, bytes_to_write: %d", (int)num_bufs, bytes_to_write);
 
 #define SIMD_OVERWRITE 25
     if (!mmap_length_does_wrap(sw, offset, bytes_to_write / 5 * 5 + SIMD_OVERWRITE)) {
@@ -331,6 +348,8 @@ static void upipe_pciesdi_sink_worker(struct upump *upump)
                     array + bytes_to_write, 5 - bytes_to_write);
             upipe_pciesdi_sink->scratch_bytes = 5 - bytes_to_write;
             samples_written += 4;
+        } else {
+            upipe_pciesdi_sink->scratch_bytes = 0;
         }
     }
 
@@ -339,7 +358,7 @@ static void upipe_pciesdi_sink_worker(struct upump *upump)
         int bytes_remaining = DMA_BUFFER_TOTAL_SIZE - (sw * DMA_BUFFER_SIZE + offset) % DMA_BUFFER_TOTAL_SIZE;
         int rounded_bytes_rem = (bytes_remaining - SIMD_OVERWRITE) / 5 * 5;
 
-        //upipe_dbg_va(upipe, "bytes_to_write: %d, bytes_remaining: %d, rounded_bytes_rem: %d", bytes_to_write, bytes_remaining, rounded_bytes_rem);
+//upipe_dbg_va(upipe, "bytes_to_write: %d, bytes_remaining: %d, rounded_bytes_rem: %d", bytes_to_write, bytes_remaining, rounded_bytes_rem);
 
         if (rounded_bytes_rem > 0) {
             //upipe_dbg_va(upipe, "packing into %d bytes remaining", rounded_bytes_rem);
@@ -355,14 +374,18 @@ static void upipe_pciesdi_sink_worker(struct upump *upump)
         //upipe_dbg_va(upipe, "copying %d bytes from scratch to card", bytes_remaining);
 //upipe_dbg_va(upipe, "memcpy at "__FILE__":%d", __LINE__ + 1);
         memcpy(mmap_wraparound(upipe_pciesdi_sink->write_buffer, sw, offset), upipe_pciesdi_sink->scratch_buffer, bytes_remaining);
-//upipe_dbg_va(upipe, "memcpy at "__FILE__":%d", __LINE__ + 1);
-        memmove(upipe_pciesdi_sink->scratch_buffer, upipe_pciesdi_sink->scratch_buffer + bytes_remaining, (bytes_remaining + 4) / 5 * 5 - bytes_remaining);
         bytes_to_write -= bytes_remaining;
         offset += bytes_remaining;
         samples_written += (bytes_remaining + 4) / 5 * 4;
 
+//upipe_dbg_va(upipe, "memcpy at "__FILE__":%d", __LINE__ + 1);
+        bytes_remaining = (bytes_remaining + 4) / 5 * 5 - bytes_remaining;
+        memmove(upipe_pciesdi_sink->scratch_buffer, upipe_pciesdi_sink->scratch_buffer + bytes_remaining, bytes_remaining);
+        upipe_pciesdi_sink->scratch_bytes = bytes_remaining;
+
         if (bytes_to_write) {
-            upipe_err_va(upipe, "wtf?  %d bytes remaining to be written on wraparound", bytes_to_write);
+            upipe_dbg_va(upipe, "hw: %"PRId64", sw: %"PRId64", to write: %"PRId64, hw, sw, num_bufs);
+            upipe_err_va(upipe, "wtf?  %d bytes remaining to be written on wraparound, remaining %d", bytes_to_write, bytes_remaining);
         }
         //upipe_dbg_va(upipe, "samples_written: %d, bytes_to_write: %d", samples_written, bytes_to_write);
     }
@@ -371,7 +394,7 @@ static void upipe_pciesdi_sink_worker(struct upump *upump)
         int samples_remaining = samples - samples_written;
         if (samples_remaining / 4 * 5 > DMA_BUFFER_SIZE) {
             upipe_err_va(upipe, "scratch buffer not big enough for remaining %d samples", samples_remaining);
-            exit_clean(upipe);
+            exit_clean(upipe, NULL, 0);
         } else {
             //upipe_dbg_va(upipe, "packing remaining %d samples into scratch buffer", samples_remaining);
         }
