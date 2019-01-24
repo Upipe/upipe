@@ -1358,7 +1358,7 @@ static int upipe_mpgaf_encaps_frame(struct upipe *upipe, struct uref *uref)
 
     int ubuf_size = size + 2 + (config ? MAX_ASC_SIZE + 4 : 0);
     int i;
-    for (i = 0; i + 255 < size; i += 255)
+    for (i = 0; i + 255 <= size; i += 255)
         ubuf_size++;
     if (upipe_mpgaf->encaps_output == UREF_MPGA_ENCAPS_LOAS)
         ubuf_size += LOAS_HEADER_SIZE;
@@ -1380,7 +1380,7 @@ static int upipe_mpgaf_encaps_frame(struct upipe *upipe, struct uref *uref)
         upipe_mpgaf_build_latm_config(upipe, &bw);
 
     /* PayloadLengthInfo */
-    for (i = 0; i + 255 < size; i += 255)
+    for (i = 0; i + 255 <= size; i += 255)
         ubits_put(&bw, 8, 255);
     ubits_put(&bw, 8, size - i);
 
