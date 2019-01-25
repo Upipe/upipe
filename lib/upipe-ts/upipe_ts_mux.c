@@ -1273,8 +1273,9 @@ static int upipe_ts_mux_input_set_flow_def(struct upipe *upipe,
         input->dts_sys = UINT64_MAX;
         input->pcr_sys = UINT64_MAX;
         input->ready = false;
-        ulist_add(&upipe_ts_mux->psi_inputs,
-                  upipe_ts_mux_input_to_uchain_psi(input));
+        if (!ulist_is_in(upipe_ts_mux_input_to_uchain_psi(input)))
+            ulist_add(&upipe_ts_mux->psi_inputs,
+                      upipe_ts_mux_input_to_uchain_psi(input));
 
         struct upipe_ts_mux_mgr *ts_mux_mgr =
             upipe_ts_mux_mgr_from_upipe_mgr(upipe_ts_mux_to_upipe(upipe_ts_mux)->mgr);
