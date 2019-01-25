@@ -814,7 +814,7 @@ static bool upipe_rtpfb_insert_inner(struct upipe *upipe, struct uref *uref,
 
     uint16_t diff = seqnum - next_seqnum;
     if (!diff) {
-        upipe_dbg_va(upipe, "dropping duplicate %hu", seqnum);
+        upipe_verbose_va(upipe, "dropping duplicate %hu", seqnum);
         upipe_rtpfb->dups++;
         uref_free(uref);
         return true;
