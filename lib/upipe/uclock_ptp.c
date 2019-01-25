@@ -87,7 +87,7 @@ static bool uclock_ptp_intf_up(struct uclock *uclock, int i)
  * @param uclock utility structure passed to the module
  * @return current system time in 27 MHz ticks
  */
-static uint64_t uclock_ptp_now_inner(struct uclock *uclock)
+static uint64_t uclock_ptp_now(struct uclock *uclock)
 {
     struct uclock_ptp *ptp = uclock_ptp_from_uclock(uclock);
 
@@ -103,17 +103,6 @@ static uint64_t uclock_ptp_now_inner(struct uclock *uclock)
     uint64_t now = ts.tv_sec * UCLOCK_FREQ +
                    ts.tv_nsec * UCLOCK_FREQ / UINT64_C(1000000000);
     return now;
-}
-
-/** @This returns the current system time.
- *
- * @param uclock utility structure passed to the module
- * @return current system time in 27 MHz ticks
- */
-static uint64_t uclock_ptp_now(struct uclock *uclock)
-{
-    struct uclock_ptp *ptp = uclock_ptp_from_uclock(uclock);
-    return uclock_ptp_now_inner(uclock);
 }
 
 /** @This frees a uclock.
