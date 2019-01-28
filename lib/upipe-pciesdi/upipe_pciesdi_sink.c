@@ -124,7 +124,11 @@ static uint64_t upipe_pciesdi_sink_now(struct uclock *uclock)
     }
     upipe_pciesdi_sink->previous_tick = tick;
 
-    return UCLOCK_FREQ * ((upipe_pciesdi_sink->wraparounds << 32) + tick) / freq;
+    __uint128_t fullscale = (upipe_pciesdi_sink->wraparounds << 32) + tick;
+    fullscale *= UCLOCK_FREQ;
+    fullscale /= freq;
+
+    return fullscale;
 }
 
 /** @internal @This allocates a null pipe.
