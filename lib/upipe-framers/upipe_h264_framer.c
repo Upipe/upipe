@@ -2775,11 +2775,6 @@ static int upipe_h264f_check_ubuf_mgr(struct upipe *upipe,
     struct upipe_h264f *upipe_h264f = upipe_h264f_from_upipe(upipe);
     if (flow_format == NULL)
         return UBASE_ERR_INVALID;
-    if (upipe_h264f->flow_def_attr == NULL) {
-        /* temporary ubuf manager, will be overwritten later */
-        uref_free(flow_format);
-        return UBASE_ERR_NONE;
-    }
 
     uref_free(upipe_h264f->flow_def_requested);
     upipe_h264f->flow_def_requested = flow_format;
@@ -2794,6 +2789,11 @@ static int upipe_h264f_check_ubuf_mgr(struct upipe *upipe,
     upipe_h264f->annexb_aud =
         ubuf_block_alloc_from_opaque(upipe_h264f->ubuf_mgr, aud_buffer, 5);
     UBASE_ALLOC_RETURN(upipe_h264f->annexb_aud);
+
+    if (upipe_h264f->flow_def_attr == NULL) {
+        /* temporary ubuf manager, will be overwritten later */
+        return UBASE_ERR_NONE;
+    }
 
     upipe_h264f_build_flow_def(upipe);
 
