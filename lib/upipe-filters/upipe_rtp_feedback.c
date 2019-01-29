@@ -302,42 +302,62 @@ static void upipe_rtpfb_output_free(struct upipe *upipe)
  * @param seqnum First sequence number NOT missing
  * @param ssrc TODO
  */
-static void upipe_rtpfb_output_lost(struct upipe *upipe, uint16_t lost_seqnum, uint16_t seqnum, uint8_t *ssrc)
+static void upipe_rtpfb_output_lost(struct upipe *upipe, uint16_t lost_seqnum, uint16_t seqnum, uint8_t *ssrc, struct uref **pkt, size_t *used)
 {
     struct upipe_rtpfb_output *upipe_rtpfb_output = upipe_rtpfb_output_from_upipe(upipe);
     struct upipe_rtpfb *upipe_rtpfb = upipe_rtpfb_from_sub_mgr(upipe->mgr);
 
     uint16_t pkts = seqnum - lost_seqnum;
     uint16_t nacks = (pkts + 16) / 17;
+    upipe_dbg_va(upipe, "%u packets, %u nacks", pkts, nacks);
     if (nacks > 350) // TODO
         nacks = 350;
 
-    int s = RTCP_FB_HEADER_SIZE + nacks * RTCP_FB_FCI_GENERIC_NACK_SIZE;
+    int s = /*RTCP_FB_HEADER_SIZE + */ nacks * RTCP_FB_FCI_GENERIC_NACK_SIZE;
+#define NACK_SIZE 1450 /* ?? */
+    if (s + *used > NACK_SIZE) {
+        assert(*pkt);
+        uref_block_resize(*pkt, 0, *used);
+        upipe_rtpfb_output_output(upipe, *pkt, NULL);
+        *pkt = NULL;
+        *used = 0;
+    }
 
-    /* Allocate NACK packet */
-    struct uref *pkt = uref_block_alloc(upipe_rtpfb_output->uref_mgr,
-        upipe_rtpfb_output->ubuf_mgr, s);
-    if (unlikely(!pkt)) {
-        upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
-        return;
+    if (!*pkt) {
+        /* Allocate NACK packet */
+        *pkt = uref_block_alloc(upipe_rtpfb_output->uref_mgr,
+                upipe_rtpfb_output->ubuf_mgr, NACK_SIZE);
+        if (unlikely(!*pkt)) {
+            upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
+            return;
+        }
+
+        // XXX : date NACK packet?
+        //uref_clock_set_date_sys(pkt, /* cr */ 0, UREF_DATE_CR);
     }
 
     uint8_t *buf;
-    uref_block_write(pkt, 0, &s, &buf);
-    memset(buf, 0, s);
+    s = -1;
+    uref_block_write(*pkt, 0, &s, &buf);
 
-    /* Header */
-    rtcp_set_rtp_version(buf);
-    rtcp_fb_set_fmt(buf, RTCP_PT_RTPFB_GENERIC_NACK);
-    rtcp_set_pt(buf, RTCP_PT_RTPFB);
+    if (*used == 0) {
+        memset(buf, 0, RTCP_FB_HEADER_SIZE);
 
-    // TODO : make receiver SSRC configurable
-    uint8_t ssrc_sender[4] = { 0x1, 0x2, 0x3, 0x4 };
-    rtcp_fb_set_ssrc_pkt_sender(buf, ssrc_sender);
-    rtcp_fb_set_ssrc_media_src(buf, ssrc);
+        /* Header */
+        rtcp_set_rtp_version(buf);
+        rtcp_fb_set_fmt(buf, RTCP_PT_RTPFB_GENERIC_NACK);
+        rtcp_set_pt(buf, RTCP_PT_RTPFB);
+
+        // TODO : make receiver SSRC configurable
+        uint8_t ssrc_sender[4] = { 0x1, 0x2, 0x3, 0x4 };
+        rtcp_fb_set_ssrc_pkt_sender(buf, ssrc_sender);
+        rtcp_fb_set_ssrc_media_src(buf, ssrc);
+        rtcp_set_length(buf, RTCP_FB_HEADER_SIZE / 4 - 1);
+        *used = RTCP_FB_HEADER_SIZE;
+    }
 
     for (int i = 0; i < nacks; i++) {
-        uint8_t *nack = &buf[RTCP_FB_HEADER_SIZE + i * RTCP_FB_FCI_GENERIC_NACK_SIZE];
+        uint8_t *nack = &buf[*used];
         rtcp_fb_nack_set_packet_id(nack, lost_seqnum + 17 * i);
 
         uint16_t bits = 0;
@@ -351,18 +371,14 @@ static void upipe_rtpfb_output_lost(struct upipe *upipe, uint16_t lost_seqnum, u
         rtcp_fb_nack_set_bitmask_lost(nack, bits);
 
         upipe_verbose_va(upipe, "NACKing %hu (+0x%hx)", lost_seqnum + 17 * i, bits);
+        *used += RTCP_FB_FCI_GENERIC_NACK_SIZE;
     }
 
     upipe_rtpfb->nacks += pkts + 1;
 
-    rtcp_set_length(buf, s / 4 - 1);
+    rtcp_set_length(buf, rtcp_get_length(buf) + nacks * RTCP_FB_FCI_GENERIC_NACK_SIZE / 4);
 
-    uref_block_unmap(pkt, 0);
-
-    // XXX : date NACK packet?
-    //uref_clock_set_date_sys(pkt, /* cr */ 0, UREF_DATE_CR);
-
-    upipe_rtpfb_output_output(upipe, pkt, NULL);
+    uref_block_unmap(*pkt, 0);
 }
 
 static uint64_t upipe_rtpfb_get_rtt(struct upipe *upipe)
@@ -404,6 +420,9 @@ static void upipe_rtpfb_timer_lost(struct upump *upump)
 
     struct uchain *uchain;
     int holes = 0;
+
+    struct uref *pkt = NULL;
+    size_t s = 0;
     ulist_foreach(&upipe_rtpfb->queue, uchain) {
         struct uref *uref = uref_from_uchain(uchain);
         uint64_t seqnum = 0;
@@ -442,7 +461,7 @@ static void upipe_rtpfb_timer_lost(struct upump *upump)
                 - send request in a single batch (multiple FCI)
              */
             if (upipe_rtpfb->rtpfb_output)
-                upipe_rtpfb_output_lost(upipe_rtpfb->rtpfb_output, expected_seq, seqnum, ssrc);
+                upipe_rtpfb_output_lost(upipe_rtpfb->rtpfb_output, expected_seq, seqnum, ssrc, &pkt, &s);
             holes++;
         }
 
@@ -451,6 +470,10 @@ next:
     }
 
     if (holes) { /* debug stats */
+        if (pkt) {
+            uref_block_resize(pkt, 0, s);
+            upipe_rtpfb_output_output(upipe_rtpfb->rtpfb_output, pkt, NULL);
+        }
         uint64_t now = uclock_now(upipe_rtpfb->uclock);
         static uint64_t old;
         if (likely(old != 0))
