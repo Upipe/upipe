@@ -265,6 +265,7 @@ static struct upipe *upipe_avfsrc_sub_alloc(struct upipe_mgr *mgr,
     upipe_avfsrc_sub_init_sub(upipe);
     upipe_avfsrc_sub->id = UINT64_MAX;
     upipe_avfsrc_sub->flow_def = flow_def;
+    ulist_init(&upipe_avfsrc_sub->output_request_list);
 
     uint64_t id;
     const char *def;
@@ -354,6 +355,7 @@ static int upipe_avfsrc_sub_register_request(struct upipe *upipe,
                                              struct urequest *request)
 {
     struct upipe_avfsrc_sub *sub = upipe_avfsrc_sub_from_upipe(upipe);
+    ulist_add(&sub->output_request_list, urequest_to_uchain(request));
     return upipe_register_request(sub->last_inner, request);
 }
 
@@ -367,6 +369,7 @@ static int upipe_avfsrc_sub_unregister_request(struct upipe *upipe,
                                                struct urequest *request)
 {
     struct upipe_avfsrc_sub *sub = upipe_avfsrc_sub_from_upipe(upipe);
+    ulist_delete(urequest_to_uchain(request));
     return upipe_unregister_request(sub->last_inner, request);
 }
 
@@ -424,6 +427,14 @@ static void upipe_avfsrc_sub_no_ref(struct upipe *upipe)
 {
     struct upipe_avfsrc_sub *sub = upipe_avfsrc_sub_from_upipe(upipe);
 
+    struct uchain *uchain;
+    while ((uchain = ulist_pop(&sub->output_request_list))) {
+        struct urequest *urequest = urequest_from_uchain(uchain);
+        if (sub->last_inner)
+            upipe_unregister_request(sub->last_inner, urequest);
+        urequest_clean(urequest);
+        urequest_free(urequest);
+    }
     upipe_avfsrc_sub_clean_last_inner(upipe);
     upipe_avfsrc_sub_clean_sub(upipe);
     urefcount_release(upipe_avfsrc_sub_to_urefcount_real(sub));
