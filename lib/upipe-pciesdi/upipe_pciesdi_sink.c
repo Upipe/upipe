@@ -266,10 +266,12 @@ static void upipe_pciesdi_sink_worker(struct upump *upump)
         static bool underrun = false; /* FIXME: static variable */
         if (!uchain) {
             if (!underrun)
-            upipe_err(upipe, "underrun");
+                upipe_err(upipe, "underrun");
             underrun = true;
             return;
         }
+        if (underrun)
+            upipe_warn(upipe, "underrun resolved");
         underrun = false;
         uref = uref_from_uchain(uchain);
         upipe_pciesdi_sink->uref = uref;
