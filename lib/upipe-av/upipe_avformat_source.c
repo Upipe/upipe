@@ -319,7 +319,6 @@ static struct upipe *upipe_avfsrc_sub_alloc(struct upipe_mgr *mgr,
     }
     upipe_avfsrc_sub_store_last_inner(upipe, inner);
 
-    upipe_avfsrc->context->streams[id]->discard = AVDISCARD_DEFAULT;
     upipe_throw_ready(upipe);
 
     upipe_avfsrc_sub_require_ubuf_mgr(upipe, uref_dup(flow_def));
@@ -407,11 +406,10 @@ static void upipe_avfsrc_sub_free(struct urefcount *urefcount_real)
     struct upipe_avfsrc_sub *sub =
         upipe_avfsrc_sub_from_urefcount_real(urefcount_real);
     struct upipe *upipe = upipe_avfsrc_sub_to_upipe(sub);
-    struct upipe_avfsrc *avfsrc = upipe_avfsrc_from_sub_mgr(upipe->mgr);
+
     upipe_throw_dead(upipe);
 
     uref_free(sub->flow_def);
-    avfsrc->context->streams[sub->id]->discard = AVDISCARD_ALL;
     upipe_avfsrc_sub_clean_ubuf_mgr(upipe);
     upipe_avfsrc_sub_clean_last_inner_probe(upipe);
     urefcount_clean(urefcount_real);
@@ -868,9 +866,6 @@ static void upipe_avfsrc_probe(struct upump *upump)
         AVStream *stream = context->streams[i];
         AVCodecContext *codec = stream->codec;
         struct uref *flow_def;
-
-        // discard all packets from this stream
-        stream->discard = AVDISCARD_ALL;
 
         switch (codec->codec_type) {
             case AVMEDIA_TYPE_AUDIO:
