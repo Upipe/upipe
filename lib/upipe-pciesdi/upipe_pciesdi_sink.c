@@ -600,7 +600,7 @@ static int upipe_pciesdi_set_uri(struct upipe *upipe, const char *path)
             mmap_info.dma_tx_buf_offset, mmap_info.dma_tx_buf_size, mmap_info.dma_tx_buf_count);
 
     void *buf = mmap(NULL, DMA_BUFFER_TOTAL_SIZE, PROT_WRITE, MAP_SHARED,
-            upipe_pciesdi_sink->fd, mmap_info.dma_rx_buf_offset);
+            upipe_pciesdi_sink->fd, mmap_info.dma_tx_buf_offset);
     if (buf == MAP_FAILED) {
         upipe_err(upipe, "mmap failed");
         return UBASE_ERR_EXTERNAL;
