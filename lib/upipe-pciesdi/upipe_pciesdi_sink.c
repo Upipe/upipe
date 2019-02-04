@@ -298,9 +298,6 @@ static void upipe_pciesdi_sink_worker(struct upump *upump)
         bytes_to_write = num_bufs * DMA_BUFFER_SIZE;
     }
 
-    upipe_dbg_va(upipe, "hw: %"PRId64", sw: %"PRId64", num_bufs: %"PRId64", src_bytes: %d",
-            hw, sw, num_bufs, src_bytes);
-
     int offset = 0;
     /* Copy packed data from scratch buffer. */
     memcpy(mmap_wraparound(upipe_pciesdi_sink->write_buffer, sw, offset),
