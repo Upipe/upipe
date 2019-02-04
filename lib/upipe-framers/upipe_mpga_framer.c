@@ -1013,8 +1013,18 @@ static bool upipe_mpgaf_handle_latm(struct upipe *upipe, struct ubuf *ubuf,
     upipe_mpgaf->latm_header_size = ubuf_block_stream_position(&s);
     ubuf_block_stream_clean(&s);
 
-    if (same_stream_mux)
+    /* Calculate octetrate. */
+    uint64_t octetrate = frame_length * upipe_mpgaf->samplerate /
+                         upipe_mpgaf->samples;
+    /* Round up to a multiple of 8 kbits/s. */
+    octetrate += 999;
+    octetrate -= octetrate % 1000;
+
+    if (same_stream_mux && octetrate <= upipe_mpgaf->octetrate)
         return true;
+
+    if (octetrate > upipe_mpgaf->octetrate)
+        upipe_mpgaf->octetrate = octetrate;
 
     struct uref *flow_def = upipe_mpgaf_alloc_flow_def_attr(upipe);
     if (unlikely(flow_def == NULL)) {
@@ -1049,13 +1059,6 @@ static bool upipe_mpgaf_handle_latm(struct upipe *upipe, struct ubuf *ubuf,
         }
     }
 
-    /* Calculate octetrate assuming the stream is CBR. */
-    uint64_t octetrate = frame_length * upipe_mpgaf->samplerate /
-                         upipe_mpgaf->samples;
-    /* Round up to a multiple of 8 kbits/s. */
-    octetrate += 999;
-    octetrate -= octetrate % 1000;
-    upipe_mpgaf->octetrate = octetrate;
     UBASE_FATAL(upipe, uref_block_flow_set_octetrate(flow_def, octetrate))
 
     upipe_mpgaf_store_flow_def(upipe, NULL);
