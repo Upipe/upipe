@@ -1085,6 +1085,7 @@ static void upipe_sdi_enc_input(struct upipe *upipe, struct uref *uref,
         upipe_err_va(upipe, "no vid uref");
         return;
     }
+    upipe_verbose_va(upipe, "urefs after pop: %zu", --upipe_sdi_enc->n);
 
     unsigned samples = 0;
 
@@ -1098,6 +1099,7 @@ static void upipe_sdi_enc_input(struct upipe *upipe, struct uref *uref,
 
         struct uref *uref_audio = uref_from_uchain(ulist_pop(&sdi_enc_sub->urefs));
         if (uref_audio) {
+		upipe_verbose_va(upipe, "sub urefs after pop: %zu", --sdi_enc_sub->n);
             const uint8_t channels = sdi_enc_sub->channels;
 
             size_t size = 0;
