@@ -335,14 +335,15 @@ static void upipe_pciesdi_sink_worker(struct upump *upump)
     else {
         /* SIMD overwrite goes beyond the end of the buffer. */
         int rounded_bytes_rem = (bytes_to_write - SIMD_OVERWRITE) / 5 * 5;
-        assert(rounded_bytes_rem > 0);
 
         /* Pack data from uref safely into mmap buffer. */
-        upipe_pciesdi_sink->uyvy_to_sdi(mmap_wraparound(upipe_pciesdi_sink->write_buffer, sw, offset),
-                src_buf, rounded_bytes_rem / 5 * 2);
-        bytes_to_write -= rounded_bytes_rem;
-        offset += rounded_bytes_rem;
-        samples_written += rounded_bytes_rem / 5 * 4;
+        if (rounded_bytes_rem > 0) {
+            upipe_pciesdi_sink->uyvy_to_sdi(mmap_wraparound(upipe_pciesdi_sink->write_buffer, sw, offset),
+                    src_buf, rounded_bytes_rem / 5 * 2);
+            bytes_to_write -= rounded_bytes_rem;
+            offset += rounded_bytes_rem;
+            samples_written += rounded_bytes_rem / 5 * 4;
+        }
 
         /* Pack rest of needed data into scratch buffer. */
         upipe_pciesdi_sink->uyvy_to_sdi(upipe_pciesdi_sink->scratch_buffer,
