@@ -289,11 +289,12 @@ static void upipe_pciesdi_sink_worker(struct upump *upump)
         upipe_err_va(upipe, "could not map for reading, size: %zu, written: %zu", size, upipe_pciesdi_sink->written);
         return;
     }
+    int samples = src_bytes/2;
 
     /* Limit num_bufs to the amount of data left in the uref. */
     int bytes_to_write = num_bufs * DMA_BUFFER_SIZE;
-    if (bytes_to_write > src_bytes + upipe_pciesdi_sink->scratch_bytes) {
-        num_bufs = (src_bytes + upipe_pciesdi_sink->scratch_bytes) / DMA_BUFFER_SIZE;
+    if (bytes_to_write > samples/4*5 + upipe_pciesdi_sink->scratch_bytes) {
+        num_bufs = (samples/4*5 + upipe_pciesdi_sink->scratch_bytes) / DMA_BUFFER_SIZE;
         bytes_to_write = num_bufs * DMA_BUFFER_SIZE;
     }
 
@@ -301,27 +302,72 @@ static void upipe_pciesdi_sink_worker(struct upump *upump)
             hw, sw, num_bufs, src_bytes);
 
     int offset = 0;
-    /* Copy data from scratch buffer. */
+    /* Copy packed data from scratch buffer. */
     memcpy(mmap_wraparound(upipe_pciesdi_sink->write_buffer, sw, offset),
             upipe_pciesdi_sink->scratch_buffer, upipe_pciesdi_sink->scratch_bytes);
     offset += upipe_pciesdi_sink->scratch_bytes;
     bytes_to_write -= upipe_pciesdi_sink->scratch_bytes;
     upipe_pciesdi_sink->scratch_bytes = 0;
 
-    int written = 0;
-    /* Copy data from uref. */
-    memcpy(mmap_wraparound(upipe_pciesdi_sink->write_buffer, sw, offset),
-            src_buf, bytes_to_write);
-    offset += bytes_to_write;
-    src_buf += bytes_to_write;
-    written += bytes_to_write;
-    src_bytes -= bytes_to_write;
+    /* maximum number of bytes the SIMD can write beyond the end of the buffer. */
+#define SIMD_OVERWRITE 25
+
+    int samples_written = 0;
+    /* Pack data from uref. */
+    if (!mmap_length_does_wrap(sw, offset, bytes_to_write / 5 * 5 + SIMD_OVERWRITE)) {
+        /* no wraparound */
+        upipe_pciesdi_sink->uyvy_to_sdi(mmap_wraparound(upipe_pciesdi_sink->write_buffer, sw, offset),
+                src_buf, bytes_to_write / 5 * 2);
+
+        offset += bytes_to_write / 5 * 5;
+        samples_written += bytes_to_write / 5 * 4;
+        bytes_to_write -= bytes_to_write / 5 * 5;
+
+        if (bytes_to_write) {
+            uint8_t array[5];
+            pack(array, (const uint16_t *)src_buf + samples_written);
+            memcpy(mmap_wraparound(upipe_pciesdi_sink->write_buffer, sw, offset),
+                    array, bytes_to_write);
+            memcpy(upipe_pciesdi_sink->scratch_buffer,
+                    array + bytes_to_write, 5 - bytes_to_write);
+            upipe_pciesdi_sink->scratch_bytes = 5 - bytes_to_write;
+            samples_written += 4;
+        }
+    }
+
+    else {
+        /* SIMD overwrite goes beyond the end of the buffer. */
+        int rounded_bytes_rem = (bytes_to_write - SIMD_OVERWRITE) / 5 * 5;
+        assert(rounded_bytes_rem > 0);
+
+        /* Pack data from uref safely into mmap buffer. */
+        upipe_pciesdi_sink->uyvy_to_sdi(mmap_wraparound(upipe_pciesdi_sink->write_buffer, sw, offset),
+                src_buf, rounded_bytes_rem / 5 * 2);
+        bytes_to_write -= rounded_bytes_rem;
+        offset += rounded_bytes_rem;
+        samples_written += rounded_bytes_rem / 5 * 4;
+
+        /* Pack rest of needed data into scratch buffer. */
+        upipe_pciesdi_sink->uyvy_to_sdi(upipe_pciesdi_sink->scratch_buffer,
+                src_buf + samples_written * sizeof(uint16_t), (bytes_to_write + 4) / 5 * 2);
+        samples_written += (bytes_to_write + 4) / 5 * 4;
+
+        /* Copy needed data into mmap buffer. */
+        memcpy(mmap_wraparound(upipe_pciesdi_sink->write_buffer, sw, offset),
+                upipe_pciesdi_sink->scratch_buffer, bytes_to_write);
+        /* Move tail into start of scratch buffer. */
+        int bytes_remaining = (bytes_to_write + 4) / 5 * 5 - bytes_to_write;
+        memmove(upipe_pciesdi_sink->scratch_buffer, upipe_pciesdi_sink->scratch_buffer + bytes_to_write, bytes_remaining);
+        upipe_pciesdi_sink->scratch_bytes = bytes_remaining;
+    }
 
     /* Store tail of uref in scratch buffer. */
-    if (src_bytes < DMA_BUFFER_SIZE) {
-        memcpy(upipe_pciesdi_sink->scratch_buffer, src_buf, src_bytes);
-        written += src_bytes;
-        upipe_pciesdi_sink->scratch_bytes = src_bytes;
+    if ((samples - samples_written)/4*5 < DMA_BUFFER_SIZE) {
+        int samples_to_write = samples - samples_written;
+        upipe_pciesdi_sink->uyvy_to_sdi(upipe_pciesdi_sink->scratch_buffer + upipe_pciesdi_sink->scratch_bytes,
+                src_buf + samples_written * sizeof(uint16_t), samples_to_write / 2);
+        samples_written += samples_to_write;
+        upipe_pciesdi_sink->scratch_bytes += samples_to_write/4*5;
     }
 
     /* unmap */
@@ -338,7 +384,7 @@ static void upipe_pciesdi_sink_worker(struct upump *upump)
     upipe_pciesdi_sink->first = 0;
     sdi_dma_reader(upipe_pciesdi_sink->fd, 1, &hw, &sw);
 
-    upipe_pciesdi_sink->written += written;
+    upipe_pciesdi_sink->written += samples_written * sizeof(uint16_t);
     if (upipe_pciesdi_sink->written == size) {
         uref_free(uref);
         upipe_pciesdi_sink->uref = NULL;
