@@ -1065,11 +1065,6 @@ static void upipe_sdi_enc_input(struct upipe *upipe, struct uref *uref,
         return;
     }
 
-    if (upipe_sdi_enc->flow_def == NULL) {
-        uref_free(uref);
-        return;
-    }
-
     uint64_t pts;
     if (!ubase_check(uref_clock_get_pts_sys(uref, &pts))) {
         uref_dump(uref, upipe->uprobe);
@@ -1080,6 +1075,10 @@ static void upipe_sdi_enc_input(struct upipe *upipe, struct uref *uref,
 
     ulist_add(&upipe_sdi_enc->urefs, uref_to_uchain(uref)); // buffer uref
     upipe_verbose_va(upipe, "urefs: %zu", ++upipe_sdi_enc->n);
+
+    if (upipe_sdi_enc->flow_def == NULL) {
+        return;
+    }
 
     uref = uref_from_uchain(ulist_pop(&upipe_sdi_enc->urefs));
     if (!uref) {
