@@ -397,6 +397,10 @@ static void dump_and_exit_clean(struct upipe *upipe, uint8_t *buf, size_t size)
     abort();
 }
 
+/*
+ * Returns the address within the circular mmap buffer using the buffer count
+ * and offset.
+ */
 static const uint8_t *mmap_wraparound(const uint8_t *mmap_buffer,
         uint64_t buffer_count, uint64_t offset)
 {
@@ -404,6 +408,10 @@ static const uint8_t *mmap_wraparound(const uint8_t *mmap_buffer,
         % DMA_BUFFER_TOTAL_SIZE;
 }
 
+/*
+ * Check whether the given length would wrap around within the buffer starting
+ * at the position given by buffer count and offset.
+ */
 static bool mmap_length_does_wrap(uint64_t buffer_count, uint64_t offset,
         uint64_t length)
 {
@@ -427,6 +435,7 @@ static void upipe_pciesdi_src_worker(struct upump *upump)
         /* TODO: check unplug with mmap. */
     }
 
+    /* Size (in bytes) of a packed line. */
     int sdi_line_width = upipe_pciesdi_src->sdi_format->width * 2 * 10 / 8;
     if (upipe_pciesdi_src->sdi3g_levelb)
         sdi_line_width *= 2;
@@ -445,6 +454,7 @@ static void upipe_pciesdi_src_worker(struct upump *upump)
         dump_and_exit_clean(upipe, NULL, 0);
     }
 
+    /* Calculate how many lines we can output from the available data. */
     int bytes_available = num_bufs * DMA_BUFFER_SIZE + upipe_pciesdi_src->scratch_buffer_count;
     int lines = bytes_available / sdi_line_width;
     int processed_bytes = lines * sdi_line_width;
@@ -473,9 +483,10 @@ static void upipe_pciesdi_src_worker(struct upump *upump)
     }
 
     int offset = 0;
+    /* Use tail of previous read and head of current to unpack a line. */
     if (upipe_pciesdi_src->scratch_buffer_count) {
         offset = sdi_line_width - upipe_pciesdi_src->scratch_buffer_count;
-        /* copy to end of scratch buffer */
+        /* Copy to end of scratch buffer. */
         memcpy(upipe_pciesdi_src->scratch_buffer + upipe_pciesdi_src->scratch_buffer_count,
                 mmap_wraparound(upipe_pciesdi_src->read_buffer, sw, 0),
                 offset);
@@ -493,6 +504,7 @@ static void upipe_pciesdi_src_worker(struct upump *upump)
         if (mmap_length_does_wrap(sw, offset, sdi_line_width)) {
             upipe_warn_va(upipe, "line wraparound, hw: %"PRId64", sw: %"PRId64, hw, sw);
 
+            /* Copy both halves of line to scratch buffer. */
             int bytes_remaining = DMA_BUFFER_TOTAL_SIZE - (sw * DMA_BUFFER_SIZE + offset) % DMA_BUFFER_TOTAL_SIZE;
             memcpy(upipe_pciesdi_src->scratch_buffer,
                     mmap_wraparound(upipe_pciesdi_src->read_buffer, sw, offset),
@@ -501,6 +513,7 @@ static void upipe_pciesdi_src_worker(struct upump *upump)
                     mmap_wraparound(upipe_pciesdi_src->read_buffer, sw, offset+bytes_remaining),
                     sdi_line_width - bytes_remaining);
 
+            /* Unpack data into uref. */
             uint16_t *dst = (uint16_t*)dst_buf + 2*i * upipe_pciesdi_src->sdi_format->width;
             upipe_pciesdi_src->sdi_to_uyvy(upipe_pciesdi_src->scratch_buffer,
                     dst, upipe_pciesdi_src->sdi_format->width);
@@ -550,6 +563,7 @@ static void upipe_pciesdi_src_worker(struct upump *upump)
     if (ioctl(upipe_pciesdi_src->fd, SDI_IOCTL_MMAP_DMA_WRITER_UPDATE, &mmap_update))
         upipe_err(upipe, "ioctl error incrementing SW buffer count");
 
+    /* Copy unused data into the scratch buffer. */
     if (bytes_available != processed_bytes) {
         int bytes_remaining = bytes_available - processed_bytes;
         if (mmap_length_does_wrap(sw, offset, bytes_remaining)) {
@@ -574,6 +588,12 @@ static void upipe_pciesdi_src_worker(struct upump *upump)
     upipe_pciesdi_src_output(upipe, uref, &upipe_pciesdi_src->upump);
 }
 
+/** @internal @This fills the flow_def for the format being received by the HW.
+ *
+ * @param upipe description structure of the pipe
+ * @param flow_format pointer to get the allocated flow_def uref
+ * @returns an error code
+ */
 static int get_flow_def(struct upipe *upipe, struct uref **flow_format)
 {
     struct upipe_pciesdi_src *upipe_pciesdi_src = upipe_pciesdi_src_from_upipe(upipe);
@@ -583,6 +603,7 @@ static int get_flow_def(struct upipe *upipe, struct uref **flow_format)
         return UBASE_ERR_INVALID;
     }
 
+    /* Query the HW for what it thinks the received format is. */
     uint8_t locked, mode, family, scan, rate;
     sdi_rx(upipe_pciesdi_src->fd, &locked, &mode, &family, &scan, &rate);
     upipe_dbg_va(upipe, "locked: %d, mode: %s (%d), family: %s (%d), scan: %s (%d), rate: %s (%d)",
@@ -697,6 +718,10 @@ static int get_flow_def(struct upipe *upipe, struct uref **flow_format)
     return UBASE_ERR_NONE;
 }
 
+/** @internal @This tries to get the flow_def when the SDI signal is locked.
+ *
+ *  @param upump description structure of the timer pump
+ */
 static void get_flow_def_on_signal_lock(struct upump *upump)
 {
     struct upipe *upipe = upump_get_opaque(upump, struct upipe *);
@@ -817,6 +842,7 @@ static int upipe_pciesdi_set_uri(struct upipe *upipe, const char *path)
     }
 
     uint8_t locked, mode, family, scan, rate;
+    /* Set the crc and packed options (in libsdi.c). */
     sdi_rx(upipe_pciesdi_src->fd, &locked, &mode, &family, &scan, &rate);
 
     upipe_notice_va(upipe, "%s | mode %s | family %s | scan %s | rate %s",
