@@ -111,18 +111,15 @@ struct upipe_pciesdi_src {
     /** file descriptor */
     int fd;
 
-    int previous_sdi_line_number;
     bool discontinuity;
 
     /* picture properties, same units as upipe_hbrmt_common.h, pixels */
     const struct sdi_offsets_fmt *sdi_format;
     bool sdi3g_levelb;
 
-    int cached_read_bytes;
     uint8_t *read_buffer;
 
     void (*sdi3g_levelb_packed)(const uint8_t *src, uint16_t *dst1, uint16_t *dst2, uintptr_t pixels);
-    void (*sdi3g_levelb_unpack)(const uint16_t *src, uint16_t *dst1, uint16_t *dst2, uintptr_t pixels);
     void (*sdi_to_uyvy)(const uint8_t *src, uint16_t *y, uintptr_t pixels);
 
     struct sdi_ioctl_mmap_dma_info mmap_info;
@@ -179,14 +176,9 @@ static struct upipe *upipe_pciesdi_src_alloc(struct upipe_mgr *mgr,
     upipe_pciesdi_src_init_uclock(upipe);
 
     upipe_pciesdi_src->sdi3g_levelb_packed = upipe_sdi3g_to_uyvy_2_c;
-    upipe_pciesdi_src->sdi3g_levelb_unpack = upipe_levelb_unpack_c;
     upipe_pciesdi_src->sdi_to_uyvy = upipe_sdi_to_uyvy_c;
 #if defined(HAVE_X86ASM)
 #if defined(__i686__) || defined(__x86_64__)
-    if (__builtin_cpu_supports("sse2")) {
-        upipe_pciesdi_src->sdi3g_levelb_unpack = upipe_sdi3g_levelb_unpack_sse2;
-    }
-
     if (__builtin_cpu_supports("ssse3")) {
         upipe_pciesdi_src->sdi_to_uyvy = upipe_sdi_to_uyvy_ssse3;
         upipe_pciesdi_src->sdi3g_levelb_packed = upipe_sdi3g_to_uyvy_2_ssse3;
@@ -203,7 +195,6 @@ static struct upipe *upipe_pciesdi_src_alloc(struct upipe_mgr *mgr,
     upipe_pciesdi_src->sdi3g_levelb = false;
     upipe_pciesdi_src->discontinuity = false;
     upipe_pciesdi_src->fd = -1;
-    upipe_pciesdi_src->previous_sdi_line_number = -1;
     upipe_throw_ready(upipe);
 
     return upipe;
@@ -258,56 +249,6 @@ static const char *sdi_decode_rate(uint8_t rate)
         case 11: return "60";
         default: return "Reserved";
     }
-}
-
-static inline bool sdi3g_levelb_eav_match(const uint16_t *src)
-{
-    if (src[0] == 0x3ff
-            && src[1] == 0x3ff
-            && src[2] == 0x3ff
-            && src[3] == 0x3ff
-            && src[4] == 0x000
-            && src[5] == 0x000
-            && src[6] == 0x000
-            && src[7] == 0x000
-            && src[8] == 0x000
-            && src[9] == 0x000
-            && src[10] == 0x000
-            && src[11] == 0x000
-            && src[12] == src[13]
-            && src[12] == src[14]
-            && src[12] == src[15]
-            && (src[12] == 0x274
-                || src[12] == 0x2d8
-                || src[12] == 0x368
-                || src[12] == 0x3c4))
-        return true;
-    return false;
-}
-
-static inline bool sdi3g_levelb_sav_match(const uint16_t *src)
-{
-    if (src[-16] == 0x3ff
-            && src[-15] == 0x3ff
-            && src[-14] == 0x3ff
-            && src[-13] == 0x3ff
-            && src[-12] == 0x000
-            && src[-11] == 0x000
-            && src[-10] == 0x000
-            && src[-9] == 0x000
-            && src[-8] == 0x000
-            && src[-7] == 0x000
-            && src[-6] == 0x000
-            && src[-5] == 0x000
-            && src[-4] == src[-3]
-            && src[-4] == src[-2]
-            && src[-4] == src[-1]
-            && (src[-4] == 0x200
-                || src[-4] == 0x2ac
-                || src[-4] == 0x31c
-                || src[-4] == 0x3b0))
-        return true;
-    return false;
 }
 
 static inline bool sdi3g_levelb_eav_match_bitpacked(const uint8_t *src)
@@ -850,14 +791,6 @@ static int upipe_pciesdi_set_uri(struct upipe *upipe, const char *path)
     uint8_t locked, mode, family, scan, rate;
     /* Set the crc and packed options (in libsdi.c). */
     sdi_rx(upipe_pciesdi_src->fd, &locked, &mode, &family, &scan, &rate);
-
-    upipe_notice_va(upipe, "%s | mode %s | family %s | scan %s | rate %s",
-        locked ? "LOCK" : "",
-        sdi_decode_mode(mode),
-        sdi_decode_family(family),
-        sdi_decode_scan(scan),
-        sdi_decode_rate(rate));
-
     sdi_dma(upipe_pciesdi_src->fd, 0, 0, 0); // disable loopback
 
     struct sdi_ioctl_mmap_dma_info mmap_info;
