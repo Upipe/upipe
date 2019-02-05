@@ -64,6 +64,11 @@
 #include "../upipe-hbrmt/upipe_hbrmt_common.h"
 #include "../upipe-hbrmt/sdidec.h"
 
+enum upipe_pciesdi_src_err {
+    /** No RX signal or signal is not locked. */
+    UPIPE_PCIESDI_SRC_ERR_NOSIGNAL = UBASE_ERR_LOCAL,
+};
+
 /** @hidden */
 static int upipe_pciesdi_src_check(struct upipe *upipe, struct uref *flow_format);
 
@@ -615,7 +620,7 @@ static int get_flow_def(struct upipe *upipe, struct uref **flow_format)
 
     if (!locked) {
         upipe_err(upipe, "SDI signal not locked");
-        return UBASE_ERR_EXTERNAL;
+        return UPIPE_PCIESDI_SRC_ERR_NOSIGNAL;
     }
 
     int width, height;
@@ -728,6 +733,7 @@ static void get_flow_def_on_signal_lock(struct upump *upump)
     struct upipe_pciesdi_src *ctx = upipe_pciesdi_src_from_upipe(upipe);
     struct uref *flow_def;
     int ret = get_flow_def(upipe, &flow_def);
+    /* TODO: does this need to check for errors other then NOSIGNAL and stop? */
     if (!ubase_check(ret)) {
         return;
     }
@@ -768,7 +774,7 @@ static int upipe_pciesdi_src_check(struct upipe *upipe, struct uref *flow_format
     if (upipe_pciesdi_src->ubuf_mgr == NULL) {
         struct uref *flow_def;
         int ret = get_flow_def(upipe, &flow_def);
-        if (ret == UBASE_ERR_EXTERNAL) {
+        if (ret == UPIPE_PCIESDI_SRC_ERR_NOSIGNAL) {
             /* If signal is unlocked start a timer pump to wait for it. */
             struct upump *upump = upump_alloc_timer(upipe_pciesdi_src->upump_mgr,
                     get_flow_def_on_signal_lock, upipe, upipe->refcount,
