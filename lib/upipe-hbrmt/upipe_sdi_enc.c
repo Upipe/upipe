@@ -113,10 +113,6 @@ struct upipe_sdi_enc {
     /** list of output requests */
     struct uchain request_list;
 
-    /** buffered urefs */
-    struct uchain urefs;
-    size_t n;
-
     /** input bit depth **/
     int input_bit_depth;
 
@@ -614,6 +610,12 @@ static void upipe_sdi_enc_sub_input(struct upipe *upipe, struct uref *uref,
     struct upipe_sdi_enc_sub *sdi_enc_sub = upipe_sdi_enc_sub_from_upipe(upipe);
     struct upipe_sdi_enc *upipe_sdi_enc = upipe_sdi_enc_from_sub_mgr(upipe->mgr);
 
+    if (upipe_sdi_enc->ubuf_mgr == NULL) {
+        uref_free(uref);
+        return;
+    }
+
+
     if (!upipe_sdi_enc->ttx && !sdi_enc_sub->sound) {
         uref_free(uref);
         return;
@@ -1065,6 +1067,11 @@ static void upipe_sdi_enc_input(struct upipe *upipe, struct uref *uref,
         return;
     }
 
+    if (upipe_sdi_enc->ubuf_mgr == NULL) {
+        uref_free(uref);
+        return;
+    }
+
     uint64_t pts;
     if (!ubase_check(uref_clock_get_pts_sys(uref, &pts))) {
         uref_dump(uref, upipe->uprobe);
@@ -1072,20 +1079,6 @@ static void upipe_sdi_enc_input(struct upipe *upipe, struct uref *uref,
         uref_free(uref);
         return;
     }
-
-    ulist_add(&upipe_sdi_enc->urefs, uref_to_uchain(uref)); // buffer uref
-    upipe_verbose_va(upipe, "urefs: %zu", ++upipe_sdi_enc->n);
-
-    if (upipe_sdi_enc->flow_def == NULL) {
-        return;
-    }
-
-    uref = uref_from_uchain(ulist_pop(&upipe_sdi_enc->urefs));
-    if (!uref) {
-        upipe_err_va(upipe, "no vid uref");
-        return;
-    }
-    upipe_verbose_va(upipe, "urefs after pop: %zu", --upipe_sdi_enc->n);
 
     unsigned samples = 0;
 
@@ -1325,7 +1318,6 @@ static int upipe_sdi_enc_set_flow_def(struct upipe *upipe, struct uref *flow_def
 
     UBASE_RETURN(uref_flow_match_def(flow_def, "pic."))
 
-    upipe_sdi_enc_clean_urefs(&upipe_sdi_enc->urefs);
     upipe_sdi_enc->f = sdi_get_offsets(flow_def);
     if (!upipe_sdi_enc->f) {
         upipe_err(upipe, "Could not figure out SDI offsets");
@@ -1591,8 +1583,6 @@ static struct upipe *_upipe_sdi_enc_alloc(struct upipe_mgr *mgr,
     /* should calculate crc by default */
     upipe_sdi_enc->crc = true;
 
-    ulist_init(&upipe_sdi_enc->urefs);
-    upipe_sdi_enc->n = 0;
     upipe_sdi_enc->dolby_offset = 0;
     upipe_sdi_enc->ttx = false;
     upipe_sdi_enc->cdp_hdr_sequence_cntr = 0;
@@ -1673,7 +1663,6 @@ static void upipe_sdi_enc_free(struct upipe *upipe)
     upipe_clean(&upipe_sdi_enc->subpic_subpipe.upipe);
 
     upipe_throw_dead(upipe);
-    upipe_sdi_enc_clean_urefs(&upipe_sdi_enc->urefs);
     uref_free(upipe_sdi_enc->uref_audio);
     upipe_sdi_enc_clean_output(upipe);
     upipe_sdi_enc_clean_ubuf_mgr(upipe);
