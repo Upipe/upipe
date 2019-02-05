@@ -839,12 +839,16 @@ static void upipe_avfsrc_probe(struct upump *upump)
     if (unlikely(!upipe_av_deal_grab()))
         return;
 
-    AVDictionary *options[context->nb_streams];
-    for (unsigned i = 0; i < context->nb_streams; i++) {
+    unsigned nb_streams = context->nb_streams;
+    AVDictionary *options[nb_streams];
+    for (unsigned i = 0; i < nb_streams; i++) {
         options[i] = NULL;
         av_dict_copy(&options[i], upipe_avfsrc->options, 0);
     }
     int error = avformat_find_stream_info(context, options);
+
+    for (unsigned i = 0; i < nb_streams; i++)
+        av_dict_free(&options[i]);
 
     upipe_av_deal_yield(upump);
     upump_free(upipe_avfsrc->upump_av_deal);
