@@ -50,6 +50,7 @@
 #include <upipe/uref_clock.h>
 #include <upipe/ubuf.h>
 #include <upipe/uclock.h>
+#include <upipe/urefcount_helper.h>
 #include <upipe/upipe.h>
 #include <upipe/upipe_helper_upipe.h>
 #include <upipe/upipe_helper_urefcount.h>
@@ -594,8 +595,10 @@ static void upipe_ts_mux_input_free(struct urefcount *urefcount_real);
 
 /** @internal @This is the context of a PID carrying PSI of a ts_mux pipe. */
 struct upipe_ts_mux_psi_pid {
-    /** reference count */
-    unsigned int refcount;
+    /** external reference count */
+    struct urefcount refcount;
+    /** internal reference count */
+    struct urefcount refcount_real;
     /** structure for double-linked lists */
     struct uchain uchain;
     /** structure for double-linked lists for splice */
@@ -625,6 +628,8 @@ struct upipe_ts_mux_psi_pid {
 
 UBASE_FROM_TO(upipe_ts_mux_psi_pid, uchain, uchain, uchain)
 UBASE_FROM_TO(upipe_ts_mux_psi_pid, uchain, uchain_splice, uchain_splice)
+UREFCOUNT_HELPER(upipe_ts_mux_psi_pid, refcount, upipe_ts_mux_psi_pid_no_ref)
+UREFCOUNT_HELPER(upipe_ts_mux_psi_pid, refcount_real, upipe_ts_mux_psi_pid_free)
 
 /** @internal @This sorts the psi_pids by increasing PID. We do not take into
  * account cr_sys as, in the case of PSIs, packets are prepared for the
@@ -723,6 +728,17 @@ static int upipe_ts_mux_psi_pid_encaps_probe(struct uprobe *uprobe,
     return UBASE_ERR_NONE;
 }
 
+/** @internal @This releases a PID from being used for PSI, optionally
+ * freeing allocated resources.
+ *
+ * @param psi_pid psi_pid structure
+ */
+static void upipe_ts_mux_psi_pid_release(struct upipe_ts_mux_psi_pid *psi_pid)
+{
+    if (psi_pid)
+        upipe_ts_mux_psi_pid_release_refcount(psi_pid);
+}
+
 /** @internal @This allocates and initializes a new PID-specific
  * substructure.
  *
@@ -756,7 +772,8 @@ static struct upipe_ts_mux_psi_pid *
         return NULL;
     }
 
-    psi_pid->refcount = 1;
+    upipe_ts_mux_psi_pid_init_refcount(psi_pid);
+    upipe_ts_mux_psi_pid_init_refcount_real(psi_pid);
     uchain_init(upipe_ts_mux_psi_pid_to_uchain(psi_pid));
     uchain_init(upipe_ts_mux_psi_pid_to_uchain_splice(psi_pid));
 
@@ -764,14 +781,16 @@ static struct upipe_ts_mux_psi_pid *
     /* we do not increase refcount as we will necessarily die before ts_mux */
     psi_pid->upipe = upipe;
     psi_pid->psi_join = psi_pid->encaps = NULL;
-    /* no refcount here because psi_join and encaps will die before us */
     uprobe_init(&psi_pid->join_probe,
                 upipe_ts_mux_psi_pid_join_probe, NULL);
+    psi_pid->join_probe.refcount =
+        upipe_ts_mux_psi_pid_to_refcount_real(psi_pid);
     uprobe_init(&psi_pid->encaps_probe,
                 upipe_ts_mux_psi_pid_encaps_probe, NULL);
+    psi_pid->encaps_probe.refcount =
+        upipe_ts_mux_psi_pid_to_refcount_real(psi_pid);
     psi_pid->cr_sys = psi_pid->dts_sys = UINT64_MAX;
     psi_pid->octetrate = 0;
-
 
     /* prepare psi_join and encaps pipes */
     if (unlikely((psi_pid->psi_join =
@@ -789,9 +808,7 @@ static struct upipe_ts_mux_psi_pid *
                           UPROBE_LOG_VERBOSE,
                           "encaps %"PRIu16, pid))) == NULL)) {
         uref_free(flow_def);
-        upipe_release(psi_pid->psi_join);
-        uprobe_clean(&psi_pid->encaps_probe);
-        free(psi_pid);
+        upipe_ts_mux_psi_pid_release(psi_pid);
         upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
         return NULL;
     }
@@ -841,33 +858,41 @@ static struct upipe_ts_mux_psi_pid *
     if (psi_pid == NULL)
         return upipe_ts_mux_psi_pid_alloc(upipe, pid);
 
-    psi_pid->refcount++;
-    return psi_pid;
+    return upipe_ts_mux_psi_pid_use_refcount(psi_pid);
 }
 
-/** @internal @This releases a PID from being used for PSI, optionally
- * freeing allocated resources.
+/** @internal @This frees a PSI PID structure.
  *
  * @param psi_pid psi_pid structure
  */
-static void upipe_ts_mux_psi_pid_release(struct upipe_ts_mux_psi_pid *psi_pid)
+static void upipe_ts_mux_psi_pid_free(struct upipe_ts_mux_psi_pid *psi_pid)
 {
-    if (psi_pid == NULL)
-        return;
-    psi_pid->refcount--;
-    if (!psi_pid->refcount) {
-        ulist_delete(upipe_ts_mux_psi_pid_to_uchain(psi_pid));
-        struct uchain *uchain_splice =
-            upipe_ts_mux_psi_pid_to_uchain_splice(psi_pid);
-        if (ulist_is_in(uchain_splice))
-            ulist_delete(uchain_splice);
-        upipe_release(psi_pid->psi_join);
-        upipe_release(psi_pid->encaps);
-        uprobe_clean(&psi_pid->encaps_probe);
-        free(psi_pid);
-    }
+    uprobe_clean(&psi_pid->join_probe);
+    uprobe_clean(&psi_pid->encaps_probe);
+    upipe_ts_mux_psi_pid_clean_refcount_real(psi_pid);
+    upipe_ts_mux_psi_pid_clean_refcount(psi_pid);
+    free(psi_pid);
 }
 
+/** @internal @This is called when there is no more external reference on the
+ * PSI PID structure.
+ *
+ * @param psi_pid psi_pid structure
+ */
+static void upipe_ts_mux_psi_pid_no_ref(struct upipe_ts_mux_psi_pid *psi_pid)
+{
+    struct uchain *uchain;
+    uchain = upipe_ts_mux_psi_pid_to_uchain(psi_pid);
+    if (ulist_is_in(uchain))
+        ulist_delete(uchain);
+    uchain = upipe_ts_mux_psi_pid_to_uchain_splice(psi_pid);
+    if (ulist_is_in(uchain))
+        ulist_delete(uchain);
+    upipe_release(psi_pid->psi_join);
+    upipe_release(psi_pid->encaps);
+
+    upipe_ts_mux_psi_pid_release_refcount_real(psi_pid);
+}
 
 /*
  * upipe_ts_mux_input structure handling (derived from upipe structure)
