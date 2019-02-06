@@ -122,8 +122,6 @@ struct upipe_pciesdi_src {
     void (*sdi3g_levelb_packed)(const uint8_t *src, uint16_t *dst1, uint16_t *dst2, uintptr_t pixels);
     void (*sdi_to_uyvy)(const uint8_t *src, uint16_t *y, uintptr_t pixels);
 
-    struct sdi_ioctl_mmap_dma_info mmap_info;
-
     /** bytes in scratch buffer */
     int scratch_buffer_count;
 
@@ -184,13 +182,15 @@ static struct upipe *upipe_pciesdi_src_alloc(struct upipe_mgr *mgr,
         upipe_pciesdi_src->sdi3g_levelb_packed = upipe_sdi3g_to_uyvy_2_ssse3;
     }
 
-   if (__builtin_cpu_supports("avx2")) {
+    if (__builtin_cpu_supports("avx2")) {
         upipe_pciesdi_src->sdi_to_uyvy = upipe_sdi_to_uyvy_avx2;
         upipe_pciesdi_src->sdi3g_levelb_packed = upipe_sdi3g_to_uyvy_2_avx2;
-   }
+    }
 #endif
 #endif
 
+    upipe_pciesdi_src->scratch_buffer_count = 0;
+    upipe_pciesdi_src->sdi_format = NULL;
     upipe_pciesdi_src->read_buffer = NULL;
     upipe_pciesdi_src->sdi3g_levelb = false;
     upipe_pciesdi_src->discontinuity = false;
@@ -816,7 +816,6 @@ static int upipe_pciesdi_set_uri(struct upipe *upipe, const char *path)
 
     /* TODO: check need to release things on failure. */
 
-    upipe_pciesdi_src->mmap_info = mmap_info;
     upipe_pciesdi_src->read_buffer = buf;
 
     return UBASE_ERR_NONE;
