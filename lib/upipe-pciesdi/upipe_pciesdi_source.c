@@ -641,8 +641,10 @@ static int get_flow_def(struct upipe *upipe, struct uref **flow_format)
         UBASE_RETURN(uref_pic_set_progressive(flow_def));
     }
 
-    if (sdi3g_levelb)
-        UBASE_RETURN(uref_block_set_sdi3g_levelb(flow_def));
+    if (sdi3g_levelb) {
+        upipe_err(upipe, "SDI-3G level B is not yet supported with mmap");
+        return UBASE_ERR_INVALID;
+    }
 
     upipe_pciesdi_src->sdi_format = sdi_get_offsets(flow_def);
     if (!upipe_pciesdi_src->sdi_format) {
