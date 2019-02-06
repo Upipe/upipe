@@ -765,7 +765,7 @@ static int upipe_pciesdi_set_uri(struct upipe *upipe, const char *path)
     struct upipe_pciesdi_src *upipe_pciesdi_src = upipe_pciesdi_src_from_upipe(upipe);
 
     ubase_clean_fd(&upipe_pciesdi_src->fd);
-    upipe_pciesdi_src->fd = open(path, O_RDWR|O_NONBLOCK);
+    upipe_pciesdi_src->fd = open(path, O_RDONLY | O_NONBLOCK);
     if (unlikely(upipe_pciesdi_src->fd < 0)) {
         upipe_err_va(upipe, "can't open %s (%m)", path);
         return UBASE_ERR_EXTERNAL;
@@ -776,7 +776,7 @@ static int upipe_pciesdi_set_uri(struct upipe *upipe, const char *path)
     sdi_release_dma_writer(upipe_pciesdi_src->fd); // release old locks
 
     close(upipe_pciesdi_src->fd);
-    upipe_pciesdi_src->fd = open(path, O_RDWR|O_NONBLOCK);
+    upipe_pciesdi_src->fd = open(path, O_RDONLY | O_NONBLOCK);
     if (unlikely(upipe_pciesdi_src->fd < 0)) {
         upipe_err_va(upipe, "can't open %s (%m)", path);
         return UBASE_ERR_EXTERNAL;
