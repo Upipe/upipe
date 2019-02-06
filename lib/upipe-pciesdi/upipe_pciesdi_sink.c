@@ -492,6 +492,16 @@ static int upipe_pciesdi_sink_set_flow_def(struct upipe *upipe, struct uref *flo
 
     /* TODO: init card based on given format. */
 
+    if (sd) {
+        upipe_err(upipe, "SD format is not yet supported");
+        return UBASE_ERR_INVALID;
+    }
+
+    if (sdi3g) {
+        upipe_err(upipe, "SDI-3G format is not yet supported");
+        return UBASE_ERR_INVALID;
+    }
+
     return UBASE_ERR_NONE;
 }
 
