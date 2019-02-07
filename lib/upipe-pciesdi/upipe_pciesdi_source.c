@@ -530,6 +530,9 @@ static void upipe_pciesdi_src_worker(struct upump *upump)
     if (upipe_pciesdi_src->sdi3g_levelb)
         uref_block_set_sdi3g_levelb(uref);
 
+    if (upipe_pciesdi_src->uclock)
+        uref_clock_set_cr_sys(uref, uclock_now(upipe_pciesdi_src->uclock));
+
     uref_block_unmap(uref, 0);
     upipe_pciesdi_src_output(upipe, uref, &upipe_pciesdi_src->upump);
 }
