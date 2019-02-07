@@ -36,6 +36,7 @@
 
 #include <upipe/uclock.h>
 #include <upipe/uref_block.h>
+#include <upipe/uref_clock.h>
 #include <upipe/uref_pic_flow.h>
 #include <upipe/uref_flow.h>
 
