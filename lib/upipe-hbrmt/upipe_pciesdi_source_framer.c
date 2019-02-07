@@ -34,6 +34,7 @@
 #include <upipe/upipe_helper_urefcount.h>
 #include <upipe/upipe_helper_void.h>
 
+#include <upipe/uclock.h>
 #include <upipe/uref_block.h>
 #include <upipe/uref_pic_flow.h>
 #include <upipe/uref_flow.h>
@@ -66,6 +67,9 @@ struct upipe_pciesdi_source_framer {
     bool progressive;
     bool sdi3g_levelb;
 
+    struct urational fps;
+    uint64_t frame_counter;
+
     /* uref for output */
     struct uref *uref;
 
@@ -96,6 +100,7 @@ static struct upipe *upipe_pciesdi_source_framer_alloc(struct upipe_mgr *mgr, st
     ctx->progressive = false;
     ctx->uref = NULL;
     ctx->cached_lines = 0;
+    ctx->frame_counter = 0;
 
     upipe_pciesdi_source_framer_init_output(upipe);
     upipe_pciesdi_source_framer_init_urefcount(upipe);
@@ -134,6 +139,8 @@ static int upipe_pciesdi_source_framer_set_flow_def(struct upipe *upipe, struct
         /* Use interlaced fvh transition to detect start of level B frame. */
         ctx->progressive = false;
 
+    UBASE_RETURN(uref_pic_flow_get_fps(flow_def, &ctx->fps));
+
     upipe_pciesdi_source_framer_store_flow_def(upipe, uref_dup(flow_def));
     return UBASE_ERR_NONE;
 }
@@ -155,6 +162,18 @@ static int upipe_pciesdi_source_framer_control(struct upipe *upipe, int command,
         default:
             return UBASE_ERR_UNHANDLED;
     }
+}
+
+static int timestamp_uref(struct upipe *upipe, struct uref *uref)
+{
+    /* TODO: handle errors. */
+    struct upipe_pciesdi_source_framer *ctx = upipe_pciesdi_source_framer_from_upipe(upipe);
+    uint64_t pts = ctx->frame_counter * ctx->fps.den * UCLOCK_FREQ / ctx->fps.num;
+    uref_clock_set_pts_prog(uref, pts);
+    upipe_throw_clock_ref(upipe, uref, pts, 0);
+    upipe_throw_clock_ts(upipe, uref);
+    ctx->frame_counter += 1;
+    return UBASE_ERR_NONE;
 }
 
 static void upipe_pciesdi_source_framer_input(struct upipe *upipe, struct uref
@@ -198,6 +217,7 @@ static void upipe_pciesdi_source_framer_input(struct upipe *upipe, struct uref
 
         else if (ctx->cached_lines + lines_in_uref == ctx->f->height) {
             uref_block_append(ctx->uref, uref_detach_ubuf(uref));
+            timestamp_uref(upipe, ctx->uref);
             upipe_pciesdi_source_framer_output(upipe, ctx->uref, upump_p);
             ctx->uref = NULL;
             ctx->cached_lines = 0;
@@ -217,6 +237,7 @@ static void upipe_pciesdi_source_framer_input(struct upipe *upipe, struct uref
             int lines_needed = ctx->f->height - ctx->cached_lines;
             ubuf_block_resize(ubuf, 0, sdi_width_bytes * lines_needed);
             uref_block_append(ctx->uref, ubuf);
+            timestamp_uref(upipe, ctx->uref);
             upipe_pciesdi_source_framer_output(upipe, ctx->uref, upump_p);
 
             /* Keep top of next frame. */
