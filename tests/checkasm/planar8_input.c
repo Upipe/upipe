@@ -44,13 +44,16 @@ void checkasm_check_planar8_input(void)
         void (*uyvy)(uint16_t *dst, const uint8_t *y, const uint8_t *u, const uint8_t *v, uintptr_t pixels);
         void (*v210)(const uint8_t *y, const uint8_t *u, const uint8_t *v, uint8_t *dst, ptrdiff_t pixels);
     } s = {
+#ifdef HAVE_NETMAP
         .sdi = upipe_planar_to_sdi_8_c,
+#endif
         .uyvy = upipe_planar_to_uyvy_8_c,
         .v210 = upipe_planar_to_v210_8_c,
     };
 
     int cpu_flags = av_get_cpu_flags();
 
+#ifdef HAVE_X86ASM
     if (cpu_flags & AV_CPU_FLAG_SSE2) {
        s.uyvy =  upipe_planar_to_uyvy_8_sse2;
     }
@@ -67,6 +70,7 @@ void checkasm_check_planar8_input(void)
        s.uyvy =  upipe_planar_to_uyvy_8_avx2;
        s.v210  = upipe_planar_to_v210_8_avx2;
     }
+#endif
 
     if (check_func(s.sdi, "planar_to_sdi_8")) {
         uint8_t y0[NUM_SAMPLES/2];

@@ -6,8 +6,7 @@ checkasm_CPPFLAGS = -I$(top_srcdir) -I$(top_srcdir)/include -I$(top_builddir) -I
 checkasm_LDADD = $(LDADD) $(AVUTIL_LIBS) \
     $(top_builddir)/lib/upipe-v210/libupipe_v210_la-v210dec.o \
     $(top_builddir)/lib/upipe-v210/libupipe_v210_la-v210enc.o \
-    $(top_builddir)/lib/upipe-v210/v210dec.o \
-    $(top_builddir)/lib/upipe-v210/v210enc.o
+    $(NULL)
 
 checkasm_SOURCES = checkasm.c checkasm.h timer.h \
     planar10_input.c \
@@ -23,11 +22,6 @@ checkasm_LDADD += \
     $(top_builddir)/lib/upipe-hbrmt/libupipe_hbrmt_la-rfc4175.o \
     $(top_builddir)/lib/upipe-hbrmt/libupipe_hbrmt_la-sdidec.o \
     $(top_builddir)/lib/upipe-hbrmt/libupipe_hbrmt_la-sdienc.o \
-    $(top_builddir)/lib/upipe-hbrmt/rfc4175_dec.o \
-    $(top_builddir)/lib/upipe-hbrmt/rfc4175_enc.o \
-    $(top_builddir)/lib/upipe-hbrmt/sdidec.o \
-    $(top_builddir)/lib/upipe-hbrmt/sdienc.o \
-    $(top_builddir)/lib/upipe-pciesdi/levelb.o \
     $(top_builddir)/lib/upipe-pciesdi/libupipe_pciesdi_la-levelb.o \
     $(NULL)
 
@@ -37,14 +31,31 @@ endif
 if HAVE_NETMAP
 checkasm_LDADD += \
     $(top_builddir)/lib/upipe-netmap/libupipe_netmap_la-sdi.o \
-    $(top_builddir)/lib/upipe-netmap/sdienc.o \
     $(NULL)
 
 checkasm_CPPFLAGS += -DHAVE_NETMAP
 endif
 
 if HAVE_X86ASM
-checkasm_SOURCES += checkasm_x86.asm timer_x86.h
+checkasm_SOURCES += checkasm_x86.asm timer_x86.h \
+    $(top_builddir)/lib/upipe-v210/v210dec.o \
+    $(top_builddir)/lib/upipe-v210/v210enc.o
+
+if HAVE_BITSTREAM
+checkasm_SOURCES += \
+    $(top_builddir)/lib/upipe-hbrmt/rfc4175_dec.o \
+    $(top_builddir)/lib/upipe-hbrmt/rfc4175_enc.o \
+    $(top_builddir)/lib/upipe-hbrmt/sdidec.o \
+    $(top_builddir)/lib/upipe-hbrmt/sdienc.o \
+    $(top_builddir)/lib/upipe-pciesdi/levelb.o \
+    $(NULL)
+endif
+
+if HAVE_NETMAP
+checkasm_SOURCES += \
+    $(top_builddir)/lib/upipe-netmap/sdienc.o \
+    $(NULL)
+endif
 endif
 
 V_ASM = $(V_ASM_@AM_V@)
