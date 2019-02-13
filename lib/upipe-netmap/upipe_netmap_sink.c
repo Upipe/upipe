@@ -29,7 +29,7 @@
 #include <upipe/ulist.h>
 #include <upipe/uprobe.h>
 #include <upipe/uclock.h>
-#include <upipe/uclock_std.h>
+#include <upipe/uclock_ptp.h>
 #include <upipe/uref.h>
 #include <upipe/uref_block.h>
 #include <upipe/uref_clock.h>
@@ -204,7 +204,10 @@ struct upipe_netmap_sink {
     /** number of cached packed pixels */
     uint8_t packed_bytes;
 
-    struct uclock uclock;
+    /** uclock structure, if not NULL we are in live mode */
+    struct uclock *uclock;
+    /** uclock request */
+    struct urequest uclock_request;
 
     /** rate * fps.num */
     uint64_t rate;
@@ -217,10 +220,9 @@ struct upipe_netmap_sink {
 
 UPIPE_HELPER_UPIPE(upipe_netmap_sink, upipe, UPIPE_NETMAP_SINK_SIGNATURE)
 UPIPE_HELPER_UREFCOUNT(upipe_netmap_sink, urefcount, upipe_netmap_sink_free)
+UPIPE_HELPER_UCLOCK(upipe_netmap_sink, uclock, uclock_request, NULL, upipe_throw_provide_request, NULL)
 UPIPE_HELPER_UPUMP_MGR(upipe_netmap_sink, upump_mgr)
 UPIPE_HELPER_UPUMP(upipe_netmap_sink, upump, upump_mgr)
-UBASE_FROM_TO(upipe_netmap_sink, uclock, uclock, uclock)
-
 
 /* Compute the checksum of the given ip header. */
 static uint16_t ip_checksum(const void *data, uint16_t len)
@@ -276,77 +278,6 @@ static void upipe_udp_raw_fill_headers(uint8_t *header,
     udp_set_dstport(header, portdst);
     udp_set_len(header, len + UDP_HEADER_SIZE);
     udp_set_cksum(header, 0);
-}
-
-static uint64_t uclock_netmap_sink_now(struct uclock *uclock)
-{
-    struct upipe_netmap_sink *upipe_netmap_sink = upipe_netmap_sink_from_uclock(uclock);
-
-    // seems to work even with intf down
-    struct upipe_netmap_intf *intf = &upipe_netmap_sink->intf[0];
-
-    struct ifreq ifr = intf->ifr;
-    struct {
-        unsigned timinc;
-        unsigned h;
-        unsigned l;
-    } foo;
-
-    ifr.ifr_data = (void*)&foo;
-    if (ioctl(intf->fd, SIOCDEVPRIVATE, &ifr) < 0)
-        perror("ioctl");
-
-    // 1 cycle is 6.4ns in 10G, 64ns in 1G, 640ns in 100Mbps
-    unsigned period = foo.timinc >> 24;
-    unsigned incval = foo.timinc & 0xffffff;
-
-    static pthread_spinlock_t lock;
-    static bool x = false;
-    if (!x) {
-        pthread_spin_init(&lock, 0);
-        x = true;
-    }
-
-    pthread_spin_lock(&lock);
-    static uint64_t wraps = 0;
-    static uint64_t oldh = 0;
-
-    //printf("0x%.8x 0x%.8x\n", foo.h, foo.l);
-    if (foo.h < oldh) {
-        if ((oldh - foo.h) > UINT_MAX / 2) {
-            wraps++;
-            printf("WRAP\n");
-            //exit(1);
-        }
-    }
-    oldh = foo.h;
-
-    uint64_t w = wraps;
-    pthread_spin_unlock(&lock);
-
-    uint64_t u = ((uint64_t)foo.h << 32) | foo.l;
-#if 0
-    uint64_t t = u;
-#else
-    __uint128_t t = (uint64_t) w;
-    t <<= 64;
-    t |= u;
-#endif
-
-#if 1
-
-    t *= period;
-    t *= 64;
-    t /= 10;
-    t /= incval;
-#else
-    t >>= 21;
-#endif
-
-    t *= 27; // 27GHz
-    t /= 1000; // 27MHz
-
-    return t;
 }
 
 /* get MAC and/or IP address of specified interface */
@@ -542,6 +473,7 @@ static struct upipe *_upipe_netmap_sink_alloc(struct upipe_mgr *mgr,
     }
 
     upipe_netmap_sink_init_urefcount(upipe);
+    upipe_netmap_sink_init_uclock(upipe);
     upipe_netmap_sink_init_upump_mgr(upipe);
     upipe_netmap_sink_init_upump(upipe);
     ulist_init(&upipe_netmap_sink->sink_queue);
@@ -577,9 +509,6 @@ static struct upipe *_upipe_netmap_sink_alloc(struct upipe_mgr *mgr,
     }
 #endif
 #endif
-
-    upipe_netmap_sink->uclock.refcount = upipe->refcount;
-    upipe_netmap_sink->uclock.uclock_now = uclock_netmap_sink_now;
 
     upipe_throw_ready(upipe);
     return upipe;
@@ -995,7 +924,7 @@ static struct uref *get_uref(struct upipe *upipe)
     struct uref *uref = upipe_netmap_sink->uref;
     struct urational *fps = &upipe_netmap_sink->fps;
 
-    uint64_t now = uclock_now(&upipe_netmap_sink->uclock);
+    uint64_t now = uclock_now(upipe_netmap_sink->uclock);
 
     if (uref) {
         uint64_t pts = 0;
@@ -1053,7 +982,7 @@ static void upipe_netmap_sink_worker(struct upump *upump)
     struct upipe *upipe = upump_get_opaque(upump, struct upipe *);
     struct upipe_netmap_sink *upipe_netmap_sink = upipe_netmap_sink_from_upipe(upipe);
 
-    uint64_t now = uclock_now(&upipe_netmap_sink->uclock);
+    uint64_t now = uclock_now(upipe_netmap_sink->uclock);
     {
         static uint64_t old;
         if (old == 0)
@@ -1115,7 +1044,7 @@ static void upipe_netmap_sink_worker(struct upump *upump)
         }
     }
 
-    now = uclock_now(&upipe_netmap_sink->uclock);
+    now = uclock_now(upipe_netmap_sink->uclock);
 
     uint32_t txavail = UINT32_MAX;
     uint32_t max_slots = UINT32_MAX;
@@ -1430,7 +1359,7 @@ static void upipe_netmap_sink_worker(struct upump *upump)
     upipe_netmap_sink->uref = uref;
 
     if (!upipe_netmap_sink->start && txavail < max_slots - 32)
-        upipe_netmap_sink->start = uclock_now(&upipe_netmap_sink->uclock);
+        upipe_netmap_sink->start = uclock_now(upipe_netmap_sink->uclock);
 
     for (size_t i = 0; i < 2; i++) {
         struct upipe_netmap_intf *intf = &upipe_netmap_sink->intf[i];
@@ -1549,6 +1478,11 @@ static void upipe_netmap_sink_input(struct upipe *upipe, struct uref *uref,
     struct upipe_netmap_intf *intf = &upipe_netmap_sink->intf[0];
 
     upipe_netmap_sink_check_upump_mgr(upipe);
+    if (!upipe_netmap_sink->uclock) {
+        uref_free(uref);
+        return;
+    }
+
     if (upipe_netmap_sink->upump == NULL && upipe_netmap_sink->upump_mgr) {
         if (intf->d && NETMAP_FD(intf->d) != -1) {
             struct upump *upump = upump_alloc_timer(upipe_netmap_sink->upump_mgr,
@@ -1952,6 +1886,9 @@ static int _upipe_netmap_sink_control(struct upipe *upipe,
         upipe_netmap_sink_from_upipe(upipe);
 
     switch (command) {
+        case UPIPE_ATTACH_UCLOCK:
+            upipe_netmap_sink_require_uclock(upipe);
+            return UBASE_ERR_NONE;
         case UPIPE_ATTACH_UPUMP_MGR:
             upipe_netmap_sink_set_upump(upipe, NULL);
             return upipe_netmap_sink_attach_upump_mgr(upipe);
@@ -1964,12 +1901,6 @@ static int _upipe_netmap_sink_control(struct upipe *upipe,
             if (request->type == UREQUEST_FLOW_FORMAT)
                 return upipe_netmap_sink_provide_flow_format(upipe, request);
             return upipe_throw_provide_request(upipe, request);
-        }
-        case UPIPE_NETMAP_SINK_GET_UCLOCK: {
-             UBASE_SIGNATURE_CHECK(args, UPIPE_NETMAP_SINK_SIGNATURE)
-             struct uclock **pp_uclock = va_arg(args, struct uclock **);
-             *pp_uclock = &upipe_netmap_sink->uclock;
-             return UBASE_ERR_NONE;
         }
         case UPIPE_UNREGISTER_REQUEST:
             return UBASE_ERR_NONE;
@@ -2039,6 +1970,7 @@ static void upipe_netmap_sink_free(struct upipe *upipe)
     upipe_netmap_sink_clean_upump(upipe);
     upipe_netmap_sink_clean_upump_mgr(upipe);
     upipe_netmap_sink_clean_urefcount(upipe);
+    upipe_netmap_sink_clean_uclock(upipe);
     upipe_clean(upipe);
     free(upipe_netmap_sink);
 }
