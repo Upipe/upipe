@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2018 Open Broadcast Systems Ltd
+ * Copyright (C) 2018-2019 Open Broadcast Systems Ltd
  *
  * Author: Rafaël Carré
  *
@@ -77,6 +77,9 @@ static bool uclock_ptp_intf_up(struct uclock *uclock, int i)
 #ifdef __linux__
     if (ioctl(ptp->if_fd[i], SIOCGIFFLAGS, &ptp->ifr[i]) >= 0)
         return ptp->ifr[i].ifr_flags & IFF_UP;
+#else
+    (void)ptp;
+    (void)i;
 #endif
 
     return false;
@@ -114,11 +117,9 @@ static void uclock_ptp_free(struct urefcount *urefcount)
     struct uclock_ptp *ptp = uclock_ptp_from_urefcount(urefcount);
     urefcount_clean(urefcount);
     for (int i = 0; i < 2; i++) {
-        if (ptp->fd[i] < 0)
-            break;
-        close(ptp->fd[i]);
+        ubase_clean_fd(&ptp->fd[i]);
 #ifdef __linux__
-        close(ptp->if_fd[i]);
+        ubase_clean_fd(&ptp->if_fd[i]);
 #endif
     }
     free(ptp);
@@ -135,20 +136,12 @@ static int uclock_ptp_nic_clock_idx(struct uclock_ptp *ptp,
     info.cmd = ETHTOOL_GET_TS_INFO;
     strncpy(ptp->ifr[i].ifr_name, interface, IFNAMSIZ - 1);
     ptp->ifr[i].ifr_data = (char *) &info;
-    int fd = socket(AF_INET, SOCK_DGRAM, 0);
 
-    if (fd < 0) {
-        uprobe_err_va(uprobe, NULL, "Couldn't open socket for %s: %m", interface);
-        return -1;
-    }
-
-    if (ioctl(fd, SIOCETHTOOL, &ptp->ifr[i]) < 0) {
+    if (ioctl(ptp->if_fd[i], SIOCETHTOOL, &ptp->ifr[i]) < 0) {
         uprobe_err_va(uprobe, NULL, "Couldn't get ethtool ts information for %s: %m",
             interface);
         info.phc_index = -1;
     }
-
-    close(fd);
 
     return info.phc_index;
 #else
@@ -177,7 +170,7 @@ static int uclock_ptp_open_nic(struct uclock_ptp *ptp, struct uprobe *uprobe,
         return UBASE_ERR_EXTERNAL;
     }
 
-    return UBASE_ERR_NONE;;
+    return UBASE_ERR_NONE;
 }
 
 /** @This allocates a new uclock structure.
@@ -192,8 +185,10 @@ struct uclock *uclock_ptp_alloc(struct uprobe *uprobe, const char *interface[2])
     if (unlikely(ptp == NULL))
         return NULL;
 
-    urefcount_init(uclock_ptp_to_urefcount(ptp), uclock_ptp_free);
-    ptp->uclock.refcount = uclock_ptp_to_urefcount(ptp);
+    struct urefcount *urefcount = uclock_ptp_to_urefcount(ptp);
+
+    urefcount_init(urefcount, uclock_ptp_free);
+    ptp->uclock.refcount = urefcount;
     ptp->uclock.uclock_now = uclock_ptp_now;
     ptp->uclock.uclock_to_real = NULL;
     ptp->uclock.uclock_from_real = NULL;
@@ -202,15 +197,26 @@ struct uclock *uclock_ptp_alloc(struct uprobe *uprobe, const char *interface[2])
         ptp->fd[i] = -1;
 #ifdef __linux__
         ptp->if_fd[i] = -1;
+#endif
+    }
+
+    for (int i = 0; i < 2 && interface[i]; i++) {
+#ifdef __linux__
+        ptp->if_fd[i] = socket(AF_INET, SOCK_DGRAM, 0);
+        if (ptp->if_fd[i] < 0) {
+            uprobe_err_va(uprobe, NULL, "%s: can't open socket (%m)",
+                    interface[i]);
+            goto err;
+        }
         memset(&ptp->ifr[i], 0, sizeof(ptp->ifr[i]));
 #endif
-        if (!interface[i])
-            break;
-        if (!ubase_check(uclock_ptp_open_nic(ptp, uprobe, 0, interface[i]))) {
-            uclock_ptp_free(uclock_ptp_to_urefcount(ptp));
-            return NULL;
-        }
+        if (!ubase_check(uclock_ptp_open_nic(ptp, uprobe, 0, interface[i])))
+            goto err;
     }
 
     return uclock_ptp_to_uclock(ptp);
+
+err:
+    uclock_ptp_free(urefcount);
+    return NULL;
 }
