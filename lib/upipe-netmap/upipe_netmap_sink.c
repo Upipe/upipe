@@ -124,6 +124,9 @@ struct upipe_netmap_sink {
 
     /** frame size */
     uint64_t frame_size;
+    uint64_t packets_per_frame;
+    uint64_t packet_duration;
+    uint64_t frame_duration;
 
     /* Determined by the input flow_def */
     bool rfc4175;
@@ -131,6 +134,8 @@ struct upipe_netmap_sink {
     bool input_is_v210;
 
     unsigned gap_fakes;
+    unsigned phase;
+    uint64_t phase_delay;
 
     /** picture size */
     uint64_t hsize;
@@ -177,6 +182,7 @@ struct upipe_netmap_sink {
     size_t fakes;
     uint64_t bits;
     uint64_t start;
+    int64_t marker_offset;
 
     /** currently used uref */
     struct uref *uref;
@@ -413,6 +419,7 @@ static void upipe_netmap_sink_reset_counters(struct upipe *upipe)
 
     upipe_netmap_sink->n = 0;
     upipe_netmap_sink->fakes = 0;
+    upipe_netmap_sink->marker_offset = -1;
     upipe_netmap_sink->pkt = 0;
     upipe_netmap_sink->bits = 0;
     upipe_netmap_sink->start = 0;
@@ -451,9 +458,14 @@ static struct upipe *_upipe_netmap_sink_alloc(struct upipe_mgr *mgr,
     upipe_netmap_sink->line = 0;
     upipe_netmap_sink->pixel_offset = 0;
     upipe_netmap_sink->frame_size = 0;
+    upipe_netmap_sink->packets_per_frame = 0;
+    upipe_netmap_sink->packet_duration = 0;
+    upipe_netmap_sink->frame_duration = 0;
     upipe_netmap_sink->uref = NULL;
     upipe_netmap_sink_reset_counters(upipe);
     upipe_netmap_sink->gap_fakes = 4 * 22 + 2;
+    upipe_netmap_sink->phase = UINT_MAX;
+    upipe_netmap_sink->phase_delay = 0;
 
     upipe_netmap_sink->uri = NULL;
     for (size_t i = 0; i < 2; i++) {
@@ -532,9 +544,8 @@ static int upipe_netmap_put_rtp_headers(struct upipe *upipe, uint8_t *buf,
             timestamp = (upipe_netmap_sink->frame_count * 90000 +
                     (!!f2 * 45000)) * fps->den / fps->num;
         } else {
-            uint64_t frame_duration = UCLOCK_FREQ * fps->den / fps->num;
-            timestamp = upipe_netmap_sink->frame_count * frame_duration +
-                (frame_duration * upipe_netmap_sink->pkt * HBRMT_DATA_SIZE) /
+            timestamp = upipe_netmap_sink->frame_count * upipe_netmap_sink->frame_duration +
+                (upipe_netmap_sink->frame_duration * upipe_netmap_sink->pkt * HBRMT_DATA_SIZE) /
                 upipe_netmap_sink->frame_size;
         }
         rtp_set_timestamp(buf, timestamp & UINT32_MAX);
@@ -803,10 +814,8 @@ static int worker_hbrmt(struct upipe *upipe, uint8_t **dst, const uint8_t *src,
     // FIXME: what if we exhaust the uref while outputting the penultimate packet?
     // Hi50 is fine, need to test others and eventually come up with a solution
 
-    const struct urational *fps = &upipe_netmap_sink->fps;
-    uint64_t frame_duration = UCLOCK_FREQ * fps->den / fps->num;
-    uint64_t timestamp = upipe_netmap_sink->frame_count * frame_duration +
-        (frame_duration * upipe_netmap_sink->pkt++ * HBRMT_DATA_SIZE) /
+    uint64_t timestamp = upipe_netmap_sink->frame_count * upipe_netmap_sink->frame_duration +
+        (upipe_netmap_sink->frame_duration * upipe_netmap_sink->pkt++ * HBRMT_DATA_SIZE) /
         upipe_netmap_sink->frame_size;
 
     /* we might be trying to read more than available */
@@ -930,6 +939,7 @@ static struct uref *get_uref(struct upipe *upipe)
         uint64_t pts = 0;
         uref_clock_get_pts_sys(uref, &pts);
         pts += upipe_netmap_sink->latency;
+        pts += upipe_netmap_sink->phase_delay;
 
         if (pts + UCLOCK_FREQ * fps->den / fps->num + NETMAP_SINK_LATENCY < now) {
             uref_block_unmap(uref, 0);
@@ -960,6 +970,7 @@ static struct uref *get_uref(struct upipe *upipe)
         uint64_t pts = 0;
         uref_clock_get_pts_sys(uref, &pts);
         pts += upipe_netmap_sink->latency;
+        pts += upipe_netmap_sink->phase_delay;
 
         if (pts + NETMAP_SINK_LATENCY < now) {
             uref_free(uref);
@@ -1166,36 +1177,44 @@ static void upipe_netmap_sink_worker(struct upump *upump)
     if (bps)
         bps -= (num_slots - 1 - txavail) * (rfc4175 ? 1266 : 1442) * 8;
 
+    struct netmap_slot *slot = &txring[0]->slot[cur[0]];
+    uint64_t t = slot->ptr / 1000 * 27;
+    if (!t)
+        t = now;
+
     bps *= UCLOCK_FREQ;
-    bps /= now - upipe_netmap_sink->start;
+    bps /= t - upipe_netmap_sink->start;
 
     int64_t err = bps * upipe_netmap_sink->fps.den - upipe_netmap_sink->rate;
     err /= (int64_t)upipe_netmap_sink->fps.den;
 
-    if (err > 0 && txavail) {
-        // here for 3k (22.5ms) / 20ms latency
-        const unsigned len = rfc4175 ? 1262 : 1438;
-        for (size_t i = 0; i < 2; i++) {
-            struct upipe_netmap_intf *intf = &upipe_netmap_sink->intf[i];
-            if (!intf->d || !intf->up)
-                continue;
-            uint8_t *dst = (uint8_t*)NETMAP_BUF(txring[i], txring[i]->slot[cur[i]].buf_idx);
-            memset(dst, 0, len);
-            memcpy(dst, intf->header, ETHERNET_HEADER_LEN);
-            txring[i]->slot[cur[i]].len = len;
-            cur[i] = nm_ring_next(txring[i], cur[i]);
-        }
-        txavail--;
+    if (err > 0 && txavail > 2) {
+        for (int x = 0; x < 2; x++) { // FIXME: mlx5 needs at least 2 consecutive fakes
+            // here for 3k (22.5ms) / 20ms latency
+            const unsigned len = rfc4175 ? 1262 : 1438;
+            for (size_t i = 0; i < 2; i++) {
+                struct upipe_netmap_intf *intf = &upipe_netmap_sink->intf[i];
+                if (!intf->d || !intf->up)
+                    continue;
+                uint8_t *dst = (uint8_t*)NETMAP_BUF(txring[i], txring[i]->slot[cur[i]].buf_idx);
+                memset(dst, 0, len);
+                memcpy(dst, intf->header, ETHERNET_HEADER_LEN);
+                txring[i]->slot[cur[i]].len = len;
+                cur[i] = nm_ring_next(txring[i], cur[i]);
+            }
+            txavail--;
 
-        upipe_netmap_sink->fakes++;
+            upipe_netmap_sink->fakes++;
+        }
     }
 
     if (ddd) {
         upipe_dbg_va(upipe,
                 "txavail %d at %" PRIu64 " bps -> err %" PRId64 ", %zu urefs, "
-                "%zu fake",
+                "%zu fake, epoch offset %" PRId64 " packets",
                 txavail, (uint64_t)bps, err, upipe_netmap_sink->n,
-                upipe_netmap_sink->fakes
+                upipe_netmap_sink->fakes,
+                upipe_netmap_sink->marker_offset
                 );
     }
 
@@ -1259,6 +1278,66 @@ static void upipe_netmap_sink_worker(struct upump *upump)
             dst[i] = (uint8_t*)NETMAP_BUF(txring[i], slot->buf_idx);
             len[i] = &slot->len;
             cur[i] = nm_ring_next(txring[i], cur[i]);
+
+            /* look for exact TX time of end of frame */
+            if (!slot->ptr) /* no timestamp available */
+                continue;
+
+            const size_t udp_size = ETHERNET_HEADER_LEN + IP_HEADER_MINSIZE + UDP_HEADER_SIZE;
+            if (*len[i] < udp_size + RTP_HEADER_SIZE)
+                continue;
+
+            uint8_t *rtp = &dst[i][udp_size];
+            if (!rtp_check_marker(rtp)) /* marker needs to be set */
+                continue;
+
+            if (rfc4175) {
+                // TODO: progressive
+                if (*len[i] < udp_size + RTP_HEADER_SIZE + RFC_4175_EXT_SEQ_NUM_LEN + RFC_4175_HEADER_LEN)
+                    continue;
+                uint8_t *rfc = &rtp[RTP_HEADER_SIZE+ RFC_4175_EXT_SEQ_NUM_LEN];
+                uint8_t f2 = rfc4175_get_line_field_id(rfc);
+                if (!f2) /* only measure marker on field 2 */
+                    continue;
+            }
+
+            __uint128_t t = slot->ptr;
+            t *= 27;
+            t /= 1000;
+            uint64_t tx_stamp = t;
+            tx_stamp += upipe_netmap_sink->packet_duration; // align marker to first packet of frame
+            tx_stamp %= upipe_netmap_sink->frame_duration;
+            upipe_netmap_sink->marker_offset = tx_stamp / upipe_netmap_sink->packet_duration;
+
+            if (upipe_netmap_sink->phase_delay)
+                continue; /* phasing already done */
+
+            /* wait a bit before applying phase */
+            if (upipe_netmap_sink->frame_count < 100)
+                continue;
+
+            upipe_netmap_sink->phase = upipe_netmap_sink->packets_per_frame - upipe_netmap_sink->marker_offset;
+            upipe_netmap_sink->phase_delay = tx_stamp;
+            upipe_notice_va(upipe, "Adding %u/%" PRIu64 " packets (%" PRIu64 "ns)",
+                    upipe_netmap_sink->phase,
+                    upipe_netmap_sink->packets_per_frame,
+                    upipe_netmap_sink->packet_duration * 1000 / 27);
+        }
+
+        const unsigned pkt_len = rfc4175 ? 1262 : 1438;
+        if (upipe_netmap_sink->phase && upipe_netmap_sink->phase != UINT_MAX) {
+            for (size_t i = 0; i < 2; i++) {
+                struct upipe_netmap_intf *intf = &upipe_netmap_sink->intf[i];
+                if (!intf->d || !intf->up)
+                    continue;
+                memset(dst[i], 0, pkt_len);
+                memcpy(dst[i], intf->header, ETHERNET_HEADER_LEN);
+                *len[i] = pkt_len;
+            }
+            upipe_netmap_sink->bits += (pkt_len + 4 /* CRC */) * 8;
+            upipe_netmap_sink->phase--;
+            txavail--;
+            continue;
         }
 
         if (rfc4175) {
@@ -1274,7 +1353,7 @@ static void upipe_netmap_sink_worker(struct upump *upump)
                     memcpy(dst[i], intf->header, ETHERNET_HEADER_LEN);
                     *len[i] = 1262;
                 }
-                upipe_netmap_sink->bits += 1266 * 8;
+                upipe_netmap_sink->bits += (pkt_len + 4 /* CRC */) * 8;
                 upipe_netmap_sink->gap_fakes--;
             } else {
                 // 22.5 lines, 4 packets between fields
@@ -1396,13 +1475,13 @@ static bool upipe_netmap_sink_output(struct upipe *upipe, struct uref *uref,
         if (!upipe_netmap_sink->rfc4175) {
             uref_block_size(uref, &upipe_netmap_sink->frame_size);
             upipe_netmap_sink->frame_size = upipe_netmap_sink->frame_size * 5 / 8;
-            uint64_t packets_per_frame = (upipe_netmap_sink->frame_size + HBRMT_DATA_SIZE - 1) / HBRMT_DATA_SIZE;
+            upipe_netmap_sink->packets_per_frame = (upipe_netmap_sink->frame_size + HBRMT_DATA_SIZE - 1) / HBRMT_DATA_SIZE;
             static const uint64_t eth_packet_size =
             ETHERNET_HEADER_LEN + IP_HEADER_MINSIZE + UDP_HEADER_SIZE +
                 RTP_HEADER_SIZE + HBRMT_HEADER_SIZE + HBRMT_DATA_SIZE +
                     4 /* ethernet CRC */;
 
-            upipe_netmap_sink->rate = 8 * eth_packet_size * packets_per_frame * upipe_netmap_sink->fps.num;
+            upipe_netmap_sink->rate = 8 * eth_packet_size * upipe_netmap_sink->packets_per_frame * upipe_netmap_sink->fps.num;
         } else {
             uint64_t pixels = upipe_netmap_sink->hsize * upipe_netmap_sink->vsize;
             upipe_netmap_sink->frame_size = pixels * UPIPE_RFC4175_PIXEL_PAIR_BYTES / 2;
@@ -1412,9 +1491,9 @@ static bool upipe_netmap_sink_output(struct upipe *upipe, struct uref *uref,
             upipe_netmap_sink->payload = payload;
 
             uint64_t full_packets_per_frame = upipe_netmap_sink->frame_size / payload;
-            uint64_t packets_per_frame = (upipe_netmap_sink->frame_size + payload - 1) / payload;
+            upipe_netmap_sink->packets_per_frame = (upipe_netmap_sink->frame_size + payload - 1) / payload;
             uint64_t last_packet = 0;
-            if (packets_per_frame != full_packets_per_frame) {
+            if (upipe_netmap_sink->packets_per_frame != full_packets_per_frame) {
                 last_packet = eth_header_len + (upipe_netmap_sink->frame_size % payload) + 4 /* CRC */;
             }
 
@@ -1422,6 +1501,7 @@ static bool upipe_netmap_sink_output(struct upipe *upipe, struct uref *uref,
             // FIXME : hardcoded to 1080i50 with no continuation
             upipe_netmap_sink->rate = 8 * 1266 * (1125*4) * upipe_netmap_sink->fps.num;
         }
+        upipe_netmap_sink->packet_duration = upipe_netmap_sink->frame_duration / upipe_netmap_sink->packets_per_frame;
 
         for (size_t i = 0; i < 2; i++) {
             struct upipe_netmap_intf *intf = &upipe_netmap_sink->intf[i];
@@ -1597,6 +1677,7 @@ static int upipe_netmap_sink_set_flow_def(struct upipe *upipe,
         { { 24000, 1001 }, 0x1b },
     };
     UBASE_RETURN(uref_pic_flow_get_fps(flow_def, &upipe_netmap_sink->fps));
+    upipe_netmap_sink->frame_duration = UCLOCK_FREQ * upipe_netmap_sink->fps.den / upipe_netmap_sink->fps.num;
 
     if (!ubase_check(uref_clock_get_latency(flow_def, &upipe_netmap_sink->latency))) {
         upipe_err(upipe, "no latency");
