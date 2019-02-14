@@ -136,6 +136,7 @@ struct upipe_netmap_sink {
     unsigned gap_fakes;
     unsigned phase;
     uint64_t phase_delay;
+    uint64_t rtp_timestamp;
 
     /** picture size */
     uint64_t hsize;
@@ -466,6 +467,7 @@ static struct upipe *_upipe_netmap_sink_alloc(struct upipe_mgr *mgr,
     upipe_netmap_sink->gap_fakes = 4 * 22 + 2;
     upipe_netmap_sink->phase = UINT_MAX;
     upipe_netmap_sink->phase_delay = 0;
+    upipe_netmap_sink->rtp_timestamp = 0;
 
     upipe_netmap_sink->uri = NULL;
     for (size_t i = 0; i < 2; i++) {
@@ -547,6 +549,7 @@ static int upipe_netmap_put_rtp_headers(struct upipe *upipe, uint8_t *buf,
             timestamp = upipe_netmap_sink->frame_count * upipe_netmap_sink->frame_duration +
                 (upipe_netmap_sink->frame_duration * upipe_netmap_sink->pkt * HBRMT_DATA_SIZE) /
                 upipe_netmap_sink->frame_size;
+            timestamp = upipe_netmap_sink->rtp_timestamp;
         }
         rtp_set_timestamp(buf, timestamp & UINT32_MAX);
     }
@@ -1304,6 +1307,9 @@ static void upipe_netmap_sink_worker(struct upump *upump)
             __uint128_t t = slot->ptr;
             t *= 27;
             t /= 1000;
+            __uint128_t rtp_timestamp = slot->ptr;
+            rtp_timestamp *= 90;
+            rtp_timestamp /= 1000000;
             uint64_t tx_stamp = t;
             tx_stamp += upipe_netmap_sink->packet_duration; // align marker to first packet of frame
             tx_stamp %= upipe_netmap_sink->frame_duration;
@@ -1318,6 +1324,7 @@ static void upipe_netmap_sink_worker(struct upump *upump)
 
             upipe_netmap_sink->phase = upipe_netmap_sink->packets_per_frame - upipe_netmap_sink->marker_offset;
             upipe_netmap_sink->phase_delay = tx_stamp;
+            upipe_netmap_sink->rtp_timestamp = rtp_timestamp;
             upipe_notice_va(upipe, "Adding %u/%" PRIu64 " packets (%" PRIu64 "ns)",
                     upipe_netmap_sink->phase,
                     upipe_netmap_sink->packets_per_frame,
@@ -1393,6 +1400,7 @@ static void upipe_netmap_sink_worker(struct upump *upump)
                 upipe_netmap_sink->pkt = 0;
 
                 upipe_netmap_sink->frame_count++;
+                upipe_netmap_sink->rtp_timestamp += upipe_netmap_sink->frame_duration;
                 for (size_t i = 0; i < 2; i++) {
                     struct upipe_netmap_intf *intf = &upipe_netmap_sink->intf[i];
                     if (!intf->d)
