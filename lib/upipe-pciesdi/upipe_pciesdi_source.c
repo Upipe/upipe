@@ -394,10 +394,12 @@ static void upipe_pciesdi_src_worker(struct upump *upump)
         /* TODO: Can we recover from here?  Need to regain EAV alignment
          * somehow.  Maybe stop/start DMA.  Maybe searching is needed. */
         upipe_warn_va(upipe, "reading too late, hw: %"PRId64", sw: %"PRId64, hw, sw);
+#if 0
         struct sdi_ioctl_mmap_dma_update mmap_update = { .sw_count = hw };
         if (ioctl(upipe_pciesdi_src->fd, SDI_IOCTL_MMAP_DMA_WRITER_UPDATE, &mmap_update))
             upipe_err(upipe, "ioctl error incrementing SW buffer count");
         dump_and_exit_clean(upipe, NULL, 0);
+#endif
     }
 
     /* Calculate how many lines we can output from the available data. */
