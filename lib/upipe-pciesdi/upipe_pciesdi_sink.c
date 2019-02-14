@@ -251,7 +251,7 @@ static void upipe_pciesdi_sink_worker(struct upump *upump)
 
     int64_t num_bufs = sw - hw;
     if (num_bufs < 0) {
-        upipe_warn_va(upipe, "reading too late, hw: %"PRId64", sw: %"PRId64, hw, sw);
+        upipe_warn_va(upipe, "writing too late, hw: %"PRId64", sw: %"PRId64, hw, sw);
     } else if (num_bufs >= DMA_BUFFER_COUNT/2) {
         upipe_warn_va(upipe, "sw count at least %d ahead, hw: %"PRId64", sw: %"PRId64, DMA_BUFFER_COUNT/2, hw, sw);
         return;
