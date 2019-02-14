@@ -428,6 +428,9 @@ static void upipe_netmap_sink_reset_counters(struct upipe *upipe)
     upipe_netmap_sink->packed_bytes = 0;
     upipe_netmap_sink->seqnum = 0;
     upipe_netmap_sink->frame_count = 0;
+    upipe_netmap_sink->phase = UINT_MAX;
+    upipe_netmap_sink->phase_delay = 0;
+    upipe_netmap_sink->rtp_timestamp = 0;
 }
 
 
@@ -465,9 +468,6 @@ static struct upipe *_upipe_netmap_sink_alloc(struct upipe_mgr *mgr,
     upipe_netmap_sink->uref = NULL;
     upipe_netmap_sink_reset_counters(upipe);
     upipe_netmap_sink->gap_fakes = 4 * 22 + 2;
-    upipe_netmap_sink->phase = UINT_MAX;
-    upipe_netmap_sink->phase_delay = 0;
-    upipe_netmap_sink->rtp_timestamp = 0;
 
     upipe_netmap_sink->uri = NULL;
     for (size_t i = 0; i < 2; i++) {
