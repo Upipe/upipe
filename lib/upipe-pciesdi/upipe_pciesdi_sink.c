@@ -628,6 +628,13 @@ static void upipe_pciesdi_sink_free(struct upipe *upipe)
 {
     struct upipe_pciesdi_sink *upipe_pciesdi_sink = upipe_pciesdi_sink_from_upipe(upipe);
     upipe_throw_dead(upipe);
+
+    int64_t hw, sw;
+    sdi_dma_reader(upipe_pciesdi_sink->fd, 0, &hw, &sw);
+    sdi_release_dma_reader(upipe_pciesdi_sink->fd);
+    munmap(upipe_pciesdi_sink->write_buffer, DMA_BUFFER_TOTAL_SIZE);
+    upipe_pciesdi_sink->write_buffer = NULL;
+
     ubase_clean_fd(&upipe_pciesdi_sink->fd);
 
     uref_free(upipe_pciesdi_sink->uref);
