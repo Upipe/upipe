@@ -37,12 +37,14 @@ checkasm_CPPFLAGS += -DHAVE_NETMAP
 endif
 
 if HAVE_X86ASM
-checkasm_SOURCES += checkasm_x86.asm timer_x86.h \
+checkasm_SOURCES += checkasm_x86.asm timer_x86.h
+
+checkasm_LDADD += \
     $(top_builddir)/lib/upipe-v210/v210dec.o \
     $(top_builddir)/lib/upipe-v210/v210enc.o
 
 if HAVE_BITSTREAM
-checkasm_SOURCES += \
+checkasm_LDADD += \
     $(top_builddir)/lib/upipe-hbrmt/rfc4175_dec.o \
     $(top_builddir)/lib/upipe-hbrmt/rfc4175_enc.o \
     $(top_builddir)/lib/upipe-hbrmt/sdidec.o \
@@ -52,7 +54,7 @@ checkasm_SOURCES += \
 endif
 
 if HAVE_NETMAP
-checkasm_SOURCES += \
+checkasm_LDADD += \
     $(top_builddir)/lib/upipe-netmap/sdienc.o \
     $(NULL)
 endif
