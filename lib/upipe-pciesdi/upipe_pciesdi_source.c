@@ -778,17 +778,6 @@ static int upipe_pciesdi_set_uri(struct upipe *upipe, const char *path)
         return UBASE_ERR_EXTERNAL;
     }
 
-    int64_t hw, sw;
-    sdi_dma_writer(upipe_pciesdi_src->fd, 0, &hw, &sw); // disable
-    sdi_release_dma_writer(upipe_pciesdi_src->fd); // release old locks
-
-    close(upipe_pciesdi_src->fd);
-    upipe_pciesdi_src->fd = open(path, O_RDONLY | O_NONBLOCK);
-    if (unlikely(upipe_pciesdi_src->fd < 0)) {
-        upipe_err_va(upipe, "can't open %s (%m)", path);
-        return UBASE_ERR_EXTERNAL;
-    }
-
     /* request dma */
     if (sdi_request_dma_writer(upipe_pciesdi_src->fd) == 0) {
         upipe_err(upipe, "DMA not available");
