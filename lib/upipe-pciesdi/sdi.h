@@ -191,7 +191,7 @@ struct sdi_ioctl_mmap_dma_info {
 };
 
 struct sdi_ioctl_mmap_dma_update {
-    uint64_t sw_count;
+    int64_t sw_count;
 };
 
 #define SDI_IOCTL 'S'
