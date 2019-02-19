@@ -250,18 +250,14 @@ static void upipe_pciesdi_sink_worker(struct upump *upump)
     sdi_dma_reader(upipe_pciesdi_sink->fd, upipe_pciesdi_sink->first == 0, &hw, &sw); // get buffer counts
 
     int64_t num_bufs = sw - hw;
-    if (num_bufs < 0) {
-        upipe_warn_va(upipe, "writing too late, hw: %"PRId64", sw: %"PRId64, hw, sw);
-    } else if (num_bufs >= DMA_BUFFER_COUNT/2) {
+    /* Return early if no more data is yet needed.  poll(2) shouldn't be giving
+     * POLLOUT for this case anyway. */
+    if (num_bufs >= DMA_BUFFER_COUNT/2) {
         upipe_warn_va(upipe, "sw count at least %d ahead, hw: %"PRId64", sw: %"PRId64, DMA_BUFFER_COUNT/2, hw, sw);
         return;
     }
-    num_bufs = DMA_BUFFER_COUNT/2 - num_bufs; // number of bufs to write
 
-    /* Limit num_bufs to the end of the mmap buffer. */
-    if (sw % DMA_BUFFER_COUNT + num_bufs > DMA_BUFFER_COUNT)
-        num_bufs = DMA_BUFFER_COUNT - sw % DMA_BUFFER_COUNT;
-
+    /* Get uref, from struct or list, print 1 message if none available. */
     struct uref *uref = upipe_pciesdi_sink->uref;
     if (!uref) {
         struct uchain *uchain = ulist_pop(&upipe_pciesdi_sink->urefs);
@@ -279,6 +275,17 @@ static void upipe_pciesdi_sink_worker(struct upump *upump)
         upipe_pciesdi_sink->uref = uref;
         upipe_pciesdi_sink->written = 0;
     }
+
+    /* Check for "too late" only when there is something to write.  Prevents log
+     * message spam in the case the input is released. */
+    if (num_bufs < 0) {
+        upipe_warn_va(upipe, "writing too late, hw: %"PRId64", sw: %"PRId64, hw, sw);
+    }
+    num_bufs = DMA_BUFFER_COUNT/2 - num_bufs; // number of bufs to write
+
+    /* Limit num_bufs to the end of the mmap buffer. */
+    if (sw % DMA_BUFFER_COUNT + num_bufs > DMA_BUFFER_COUNT)
+        num_bufs = DMA_BUFFER_COUNT - sw % DMA_BUFFER_COUNT;
 
     size_t size = 0;
     uref_block_size(uref, &size);
