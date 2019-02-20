@@ -683,6 +683,15 @@ static int get_flow_def(struct upipe *upipe, struct uref **flow_format)
         return UBASE_ERR_INVALID;
     }
 
+    /* Size (in bytes) of a packed line. */
+    int sdi_line_width = upipe_pciesdi_src->sdi_format->width * 2 * 10 / 8;
+    if (sdi3g_levelb)
+        sdi_line_width *= 2;
+    if (sdi_line_width > sizeof(upipe_pciesdi_src->scratch_buffer)) {
+        upipe_err(upipe, "SDI line too large for scratch buffer");
+        return UBASE_ERR_INVALID;
+    }
+
     if (upipe_pciesdi_src->sdi_format->pict_fmt->active_f2.start && interlaced == false)
         upipe_warn(upipe, "SDI signal is progressive but interlaced sdi_offset struct returned");
     else if (!upipe_pciesdi_src->sdi_format->pict_fmt->active_f2.start && interlaced == true)
