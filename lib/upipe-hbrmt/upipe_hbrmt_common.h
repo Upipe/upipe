@@ -226,6 +226,7 @@ static inline const struct sdi_offsets_fmt *sdi_get_offsets(struct uref *flow_de
     static const struct sdi_offsets_fmt fmts_data_3g_levelb[] = {
         /* SDI-3G */
         { 2200, 1125, 280, &pict_fmts[5], 0x4, S352_PICTURE_RATE_60, { 60, 1 } }, /* 60 Hz P */
+        { 2200, 1125, 280, &pict_fmts[5], 0x4, S352_PICTURE_RATE_60000_1001, { 60000, 1001 } }, /* 60/1.001 Hz P */
         { 2640, 1125, 720, &pict_fmts[5], 0x4, S352_PICTURE_RATE_50, { 50, 1 } }, /* 50 Hz P */
     };
 
