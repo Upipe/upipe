@@ -378,7 +378,7 @@ static void upipe_pciesdi_src_worker(struct upump *upump)
 
     if (!locked) {
         upipe_pciesdi_src->discontinuity = true;
-        /* TODO: check unplug with mmap. */
+        return;
     }
 
     /* Size (in bytes) of a packed line. */
