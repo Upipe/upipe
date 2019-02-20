@@ -439,11 +439,20 @@ static void upipe_pciesdi_src_worker(struct upump *upump)
                 mmap_wraparound(upipe_pciesdi_src->read_buffer, sw, 0),
                 offset);
         /* unpack */
-        upipe_pciesdi_src->sdi_to_uyvy(upipe_pciesdi_src->scratch_buffer,
-                (uint16_t*)dst_buf, upipe_pciesdi_src->sdi_format->width);
+        if (upipe_pciesdi_src->sdi3g_levelb) {
+            /* Note: line order is swapped. */
+            uint16_t *dst1 = (uint16_t*)dst_buf + 2*upipe_pciesdi_src->sdi_format->width;
+            uint16_t *dst2 = (uint16_t*)dst_buf;
+            upipe_pciesdi_src->sdi3g_levelb_packed(upipe_pciesdi_src->scratch_buffer,
+                    dst1, dst2, upipe_pciesdi_src->sdi_format->width);
+            dst_buf += upipe_pciesdi_src->sdi_format->width * 8;
+        } else {
+            upipe_pciesdi_src->sdi_to_uyvy(upipe_pciesdi_src->scratch_buffer,
+                    (uint16_t*)dst_buf, upipe_pciesdi_src->sdi_format->width);
+            dst_buf += upipe_pciesdi_src->sdi_format->width * 4;
+        }
         upipe_pciesdi_src->scratch_buffer_count = 0;
         lines -= 1;
-        dst_buf += upipe_pciesdi_src->sdi_format->width * 4;
     }
 
     bool print_error_eav = true, print_error_line = true, print_error_sav = true;
@@ -462,15 +471,25 @@ static void upipe_pciesdi_src_worker(struct upump *upump)
                     sdi_line_width - bytes_remaining);
 
             /* Unpack data into uref. */
-            uint16_t *dst = (uint16_t*)dst_buf + 2*i * upipe_pciesdi_src->sdi_format->width;
-            upipe_pciesdi_src->sdi_to_uyvy(upipe_pciesdi_src->scratch_buffer,
-                    dst, upipe_pciesdi_src->sdi_format->width);
+            if (upipe_pciesdi_src->sdi3g_levelb) {
+                /* Note: line order is swapped. */
+                uint16_t *dst1 = (uint16_t*)dst_buf + (2*i + 1) * 2*upipe_pciesdi_src->sdi_format->width;
+                uint16_t *dst2 = (uint16_t*)dst_buf + (2*i + 0) * 2*upipe_pciesdi_src->sdi_format->width;
+                upipe_pciesdi_src->sdi3g_levelb_packed(upipe_pciesdi_src->scratch_buffer,
+                        dst1, dst2, upipe_pciesdi_src->sdi_format->width);
+            } else {
+                uint16_t *dst = (uint16_t*)dst_buf + 2*i * upipe_pciesdi_src->sdi_format->width;
+                upipe_pciesdi_src->sdi_to_uyvy(upipe_pciesdi_src->scratch_buffer,
+                        dst, upipe_pciesdi_src->sdi_format->width);
+            }
         }
 
         /* no wraparound */
         else {
             const uint8_t *sdi_line = mmap_wraparound(upipe_pciesdi_src->read_buffer, sw, offset);
             int active_offset = upipe_pciesdi_src->sdi_format->active_offset * 2 * 10 / 8;
+            if (upipe_pciesdi_src->sdi3g_levelb)
+                active_offset *= 2;
             const uint8_t *active_start = sdi_line + active_offset;
 
             if (upipe_pciesdi_src->sdi_format->pict_fmt->sd) {
@@ -483,6 +502,19 @@ static void upipe_pciesdi_src_worker(struct upump *upump)
                 /* Check SAV is present. */
                 if (print_error_sav && !sd_sav_match_bitpacked(active_start)) {
                     upipe_err_va(upipe, "SD SAV not found at %#x", offset + active_offset);
+                    print_error_sav = false;
+                }
+
+            } else if (upipe_pciesdi_src->sdi3g_levelb) {
+                /* Check EAV is present. */
+                if (print_error_eav && !sdi3g_levelb_eav_match_bitpacked(sdi_line)) {
+                    upipe_err_va(upipe, "SDI-3G level B EAV not found at %#x", offset);
+                    print_error_eav = false;
+                }
+
+                /* Check SAV is present. */
+                if (print_error_sav && !sdi3g_levelb_sav_match_bitpacked(active_start)) {
+                    upipe_err_va(upipe, "SDI-3G level B SAV not found at %#x", offset + active_offset);
                     print_error_sav = false;
                 }
 
@@ -500,10 +532,17 @@ static void upipe_pciesdi_src_worker(struct upump *upump)
                 }
             } /* end HD */
 
-            uint16_t *dst = (uint16_t*)dst_buf + 2*i * upipe_pciesdi_src->sdi_format->width;
-            upipe_pciesdi_src->sdi_to_uyvy(mmap_wraparound(upipe_pciesdi_src->read_buffer,
-                        sw, offset),
-                    dst, upipe_pciesdi_src->sdi_format->width);
+            if (upipe_pciesdi_src->sdi3g_levelb) {
+                /* Note: line order is swapped. */
+                uint16_t *dst1 = (uint16_t*)dst_buf + (2*i + 1) * 2*upipe_pciesdi_src->sdi_format->width;
+                uint16_t *dst2 = (uint16_t*)dst_buf + (2*i + 0) * 2*upipe_pciesdi_src->sdi_format->width;
+                upipe_pciesdi_src->sdi3g_levelb_packed(sdi_line, dst1, dst2,
+                        upipe_pciesdi_src->sdi_format->width);
+            } else {
+                uint16_t *dst = (uint16_t*)dst_buf + 2*i * upipe_pciesdi_src->sdi_format->width;
+                upipe_pciesdi_src->sdi_to_uyvy(sdi_line, dst,
+                        upipe_pciesdi_src->sdi_format->width);
+            }
         }
     }
 
@@ -646,10 +685,8 @@ static int get_flow_def(struct upipe *upipe, struct uref **flow_format)
         UBASE_RETURN(uref_pic_set_progressive(flow_def));
     }
 
-    if (sdi3g_levelb) {
-        upipe_err(upipe, "SDI-3G level B is not yet supported with mmap");
-        return UBASE_ERR_INVALID;
-    }
+    if (sdi3g_levelb)
+        UBASE_RETURN(uref_block_set_sdi3g_levelb(flow_def));
 
     upipe_pciesdi_src->sdi_format = sdi_get_offsets(flow_def);
     if (!upipe_pciesdi_src->sdi_format) {
