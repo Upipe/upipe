@@ -211,29 +211,6 @@ static inline void pack(uint8_t *dst, const uint16_t *src)
     dst[4] = src[3];
 }
 
-static void exit_clean(struct upipe *upipe, uint8_t *buf, size_t size)
-{
-    struct upipe_pciesdi_sink *ctx = upipe_pciesdi_sink_from_upipe(upipe);
-
-    if (buf) {
-        FILE *fh = fopen("dump.bin", "wb");
-        if (!fh) {
-            upipe_err(upipe, "could not open dump file");
-            abort();
-        }
-        fwrite(buf, 1, size, fh);
-        fclose(fh);
-        upipe_dbg(upipe, "dumped to dump.bin");
-    }
-
-    int64_t hw, sw;
-    sdi_dma_reader(ctx->fd, 0, &hw, &sw); // disable
-    sdi_release_dma_reader(ctx->fd); // release old locks
-    close(ctx->fd);
-
-    abort();
-}
-
 /** @internal
  */
 static void upipe_pciesdi_sink_worker(struct upump *upump)
