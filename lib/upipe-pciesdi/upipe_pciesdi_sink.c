@@ -72,6 +72,7 @@ struct upipe_pciesdi_sink {
     struct uchain urefs;
     struct uref *uref;
     size_t written;
+    bool underrun;
 
     int first;
 
@@ -158,6 +159,7 @@ static struct upipe *upipe_pciesdi_sink_alloc(struct upipe_mgr *mgr,
     upipe_pciesdi_sink->fd = -1;
     ulist_init(&upipe_pciesdi_sink->urefs);
     upipe_pciesdi_sink->uref = NULL;
+    upipe_pciesdi_sink->underrun = false;
     upipe_pciesdi_sink->first = 1;
     upipe_pciesdi_sink->previous_tick = 0;
     upipe_pciesdi_sink->wraparounds = 0;
@@ -261,16 +263,15 @@ static void upipe_pciesdi_sink_worker(struct upump *upump)
     struct uref *uref = upipe_pciesdi_sink->uref;
     if (!uref) {
         struct uchain *uchain = ulist_pop(&upipe_pciesdi_sink->urefs);
-        static bool underrun = false; /* FIXME: static variable */
         if (!uchain) {
-            if (!underrun)
+            if (!upipe_pciesdi_sink->underrun)
                 upipe_err(upipe, "underrun");
-            underrun = true;
+            upipe_pciesdi_sink->underrun = true;
             return;
         }
-        if (underrun)
+        if (upipe_pciesdi_sink->underrun)
             upipe_warn(upipe, "underrun resolved");
-        underrun = false;
+        upipe_pciesdi_sink->underrun = false;
         uref = uref_from_uchain(uchain);
         upipe_pciesdi_sink->uref = uref;
         upipe_pciesdi_sink->written = 0;
