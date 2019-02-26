@@ -277,6 +277,17 @@ static void upipe_pciesdi_sink_worker(struct upump *upump)
         }
     }
 
+    /* If too late and there are no more urefs to write the input may have
+     * stopped so stop the output. */
+    if (num_bufs <= 0 && upipe_pciesdi_sink->underrun) {
+        upipe_dbg(upipe, "too late and no input, stopping upump");
+        /* stop and clear pump */
+        upipe_pciesdi_sink_set_upump(upipe, NULL);
+        /* stop dma */
+        sdi_dma_reader(upipe_pciesdi_sink->fd, 0, &hw, &sw);
+        return;
+    }
+
     if (upipe_pciesdi_sink->underrun)
         return;
 
@@ -467,6 +478,12 @@ static void upipe_pciesdi_sink_input(struct upipe *upipe, struct uref *uref, str
             upipe_pciesdi_sink_set_upump(upipe, upump);
             upump_start(upump);
         }
+
+        /* Set or reset some state. */
+        upipe_pciesdi_sink->first = 1;
+        upipe_pciesdi_sink->scratch_bytes = 0;
+        upipe_pciesdi_sink->underrun = false;
+
         return;
     }
 }
