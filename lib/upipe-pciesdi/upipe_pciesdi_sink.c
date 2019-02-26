@@ -267,15 +267,18 @@ static void upipe_pciesdi_sink_worker(struct upump *upump)
             if (!upipe_pciesdi_sink->underrun)
                 upipe_err(upipe, "underrun");
             upipe_pciesdi_sink->underrun = true;
-            return;
+        } else {
+            if (upipe_pciesdi_sink->underrun)
+                upipe_warn(upipe, "underrun resolved");
+            upipe_pciesdi_sink->underrun = false;
+            uref = uref_from_uchain(uchain);
+            upipe_pciesdi_sink->uref = uref;
+            upipe_pciesdi_sink->written = 0;
         }
-        if (upipe_pciesdi_sink->underrun)
-            upipe_warn(upipe, "underrun resolved");
-        upipe_pciesdi_sink->underrun = false;
-        uref = uref_from_uchain(uchain);
-        upipe_pciesdi_sink->uref = uref;
-        upipe_pciesdi_sink->written = 0;
     }
+
+    if (upipe_pciesdi_sink->underrun)
+        return;
 
     /* Check for "too late" only when there is something to write.  Prevents log
      * message spam in the case the input is released. */
