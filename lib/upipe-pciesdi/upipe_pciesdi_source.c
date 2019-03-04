@@ -455,7 +455,7 @@ static void upipe_pciesdi_src_worker(struct upump *upump)
         lines -= 1;
     }
 
-    bool print_error_eav = true, print_error_line = true, print_error_sav = true;
+    int error_count_eav = 0, error_count_sav = 0;
     for (int i = 0; i < lines; i++, offset += sdi_line_width) {
         const uint8_t *sdi_line = mmap_wraparound(upipe_pciesdi_src->read_buffer, sw, offset);
 
@@ -483,38 +483,32 @@ static void upipe_pciesdi_src_worker(struct upump *upump)
 
             if (upipe_pciesdi_src->sdi_format->pict_fmt->sd) {
                 /* Check EAV is present. */
-                if (print_error_eav && !sd_eav_match_bitpacked(sdi_line)) {
-                    upipe_err_va(upipe, "SD EAV not found at %#x", offset);
-                    print_error_eav = false;
+                if (!sd_eav_match_bitpacked(sdi_line)) {
+                    error_count_eav += 1;
                 }
                 /* Check SAV is present. */
-                if (print_error_sav && !sd_sav_match_bitpacked(active_start)) {
-                    upipe_err_va(upipe, "SD SAV not found at %#x", offset + active_offset);
-                    print_error_sav = false;
+                if (!sd_sav_match_bitpacked(active_start)) {
+                    error_count_sav += 1;
                 }
 
             } else if (upipe_pciesdi_src->sdi3g_levelb) {
                 /* Check EAV is present. */
-                if (print_error_eav && !sdi3g_levelb_eav_match_bitpacked(sdi_line)) {
-                    upipe_err_va(upipe, "SDI-3G level B EAV not found at %#x", offset);
-                    print_error_eav = false;
+                if (!sdi3g_levelb_eav_match_bitpacked(sdi_line)) {
+                    error_count_eav += 1;
                 }
                 /* Check SAV is present. */
-                if (print_error_sav && !sdi3g_levelb_sav_match_bitpacked(active_start)) {
-                    upipe_err_va(upipe, "SDI-3G level B SAV not found at %#x", offset + active_offset);
-                    print_error_sav = false;
+                if (!sdi3g_levelb_sav_match_bitpacked(active_start)) {
+                    error_count_sav += 1;
                 }
 
             } else { /* HD */
                 /* Check EAV is present. */
-                if (print_error_eav && !hd_eav_match_bitpacked(sdi_line)) {
-                    upipe_err_va(upipe, "HD EAV not found at %#x", offset);
-                    print_error_eav = false;
+                if (!hd_eav_match_bitpacked(sdi_line)) {
+                    error_count_eav += 1;
                 }
                 /* Check SAV is present. */
-                if (print_error_sav && !hd_sav_match_bitpacked(active_start)) {
-                    upipe_err_va(upipe, "HD SAV not found at %#x", offset + active_offset);
-                    print_error_sav = false;
+                if (!hd_sav_match_bitpacked(active_start)) {
+                    error_count_sav += 1;
                 }
             } /* end HD */
         } /* end debug check */
@@ -532,6 +526,11 @@ static void upipe_pciesdi_src_worker(struct upump *upump)
                     upipe_pciesdi_src->sdi_format->width);
         }
     }
+
+    if (error_count_eav || error_count_sav)
+        upipe_err_va(upipe, "error counts eav: %d, sav: %d (%d lines checked)",
+                error_count_eav, error_count_sav, lines);
+
 
     struct sdi_ioctl_mmap_dma_update mmap_update = { .sw_count = hw };
     if (ioctl(upipe_pciesdi_src->fd, SDI_IOCTL_MMAP_DMA_WRITER_UPDATE, &mmap_update))
