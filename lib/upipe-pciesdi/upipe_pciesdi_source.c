@@ -458,13 +458,29 @@ static void upipe_pciesdi_src_worker(struct upump *upump)
     bool print_error_eav = true, print_error_line = true, print_error_sav = true;
     for (int i = 0; i < lines; i++, offset += sdi_line_width) {
         const uint8_t *sdi_line = mmap_wraparound(upipe_pciesdi_src->read_buffer, sw, offset);
-        int active_offset = upipe_pciesdi_src->sdi_format->active_offset * 2 * 10 / 8;
-        if (upipe_pciesdi_src->sdi3g_levelb)
-            active_offset *= 2;
 
-        /* If the EAV/SAV do not wrap then perform the debug checks. */
-        if (!mmap_length_does_wrap(sw, offset, active_offset)) {
+        /* check whether a line wraps around in the mmap buffer */
+        if (mmap_length_does_wrap(sw, offset, sdi_line_width)) {
+            upipe_warn_va(upipe, "line wraparound, hw: %"PRId64", sw: %"PRId64, hw, sw);
+            /* Copy both halves of line to scratch buffer. */
+            int bytes_remaining = DMA_BUFFER_TOTAL_SIZE - (sw * DMA_BUFFER_SIZE + offset) % DMA_BUFFER_TOTAL_SIZE;
+            memcpy(upipe_pciesdi_src->scratch_buffer,
+                    mmap_wraparound(upipe_pciesdi_src->read_buffer, sw, offset),
+                    bytes_remaining);
+            memcpy(upipe_pciesdi_src->scratch_buffer + bytes_remaining,
+                    mmap_wraparound(upipe_pciesdi_src->read_buffer, sw, offset+bytes_remaining),
+                    sdi_line_width - bytes_remaining);
+            /* Now point to the scratch buffer. */
+            sdi_line = upipe_pciesdi_src->scratch_buffer;
+        }
+
+        /* Perform the debug checks. */
+        if (true /* TODO: add runtime option to enable/disable these. */) {
+            int active_offset = upipe_pciesdi_src->sdi_format->active_offset * 2 * 10 / 8;
+            if (upipe_pciesdi_src->sdi3g_levelb)
+                active_offset *= 2;
             const uint8_t *active_start = sdi_line + active_offset;
+
             if (upipe_pciesdi_src->sdi_format->pict_fmt->sd) {
                 /* Check EAV is present. */
                 if (print_error_eav && !sd_eav_match_bitpacked(sdi_line)) {
@@ -501,24 +517,7 @@ static void upipe_pciesdi_src_worker(struct upump *upump)
                     print_error_sav = false;
                 }
             } /* end HD */
-        } /* end EAV/SAV wraparound */
-
-        /* check whether a line wraps around in the mmap buffer */
-        if (mmap_length_does_wrap(sw, offset, sdi_line_width)) {
-            upipe_warn_va(upipe, "line wraparound, hw: %"PRId64", sw: %"PRId64, hw, sw);
-
-            /* Copy both halves of line to scratch buffer. */
-            int bytes_remaining = DMA_BUFFER_TOTAL_SIZE - (sw * DMA_BUFFER_SIZE + offset) % DMA_BUFFER_TOTAL_SIZE;
-            memcpy(upipe_pciesdi_src->scratch_buffer,
-                    mmap_wraparound(upipe_pciesdi_src->read_buffer, sw, offset),
-                    bytes_remaining);
-            memcpy(upipe_pciesdi_src->scratch_buffer + bytes_remaining,
-                    mmap_wraparound(upipe_pciesdi_src->read_buffer, sw, offset+bytes_remaining),
-                    sdi_line_width - bytes_remaining);
-
-            /* Unpack from scratch buffer. */
-            sdi_line = upipe_pciesdi_src->scratch_buffer;
-        }
+        } /* end debug check */
 
         /* Unpack data into uref. */
         if (upipe_pciesdi_src->sdi3g_levelb) {
