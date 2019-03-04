@@ -933,6 +933,7 @@ static bool upipe_sdi_dec_handle(struct upipe *upipe, struct uref *uref,
 
     bool sdi3g_levelb = ubase_check(uref_block_get_sdi3g_levelb(uref));
 
+    int error_count_eav = 0, error_count_sav = 0, error_count_line = 0, error_count_crc = 0;
     /* Parse the whole frame */
     for (int h = 0; h < f->height; h++) {
         /* map input */
@@ -1027,16 +1028,17 @@ static bool upipe_sdi_dec_handle(struct upipe *upipe, struct uref *uref,
             if (p->sd) {
                 if (!sd_eav_match(src)
                         || src[3] != eav_fvh_cword[f2][vbi])
-                    upipe_err_va(upipe, "SD EAV incorrect, line %d", h);
+                    error_count_eav += 1;
 
                 if (!sd_sav_match(active_start)
                         || active_start[-1] != sav_fvh_cword[f2][vbi])
-                    upipe_err_va(upipe, "SD SAV incorrect, line %d", h);
+                    error_count_sav += 1;
+
             } else if (sdi3g_levelb) {
                 bool local_f2 = line_num >= p->vbi_f2_part1.start;
                 if (!hd_eav_match(src)
                         || src[7] != eav_fvh_cword[local_f2][vbi])
-                    upipe_err_va(upipe, "SDI-3G level B EAV incorrect, line %d", h);
+                    error_count_eav += 1;
 
                 int local_line_num = (line_num + 1) / 2;
                 int line_num_check[2] = {
@@ -1049,16 +1051,16 @@ static bool upipe_sdi_dec_handle(struct upipe *upipe, struct uref *uref,
                         || src[ 9] != line_num_check[0]
                         || src[10] != line_num_check[1]
                         || src[11] != line_num_check[1])
-                    upipe_err_va(upipe, "SDI-3G level B line num incorrect, line %d, %#5x %#5x not %#5x %#5x",
-                            h, src[8], src[10], line_num_check[0], line_num_check[1]);
+                    error_count_line += 1;
 
                 if (!hd_sav_match(active_start)
                         || active_start[-1] != sav_fvh_cword[local_f2][vbi])
-                    upipe_err_va(upipe, "SDI-3G level B SAV incorrect, line %d", h);
+                    error_count_sav += 1;
+
             } else {
                 if (!hd_eav_match(src)
                         || src[7] != eav_fvh_cword[f2][vbi])
-                    upipe_err_va(upipe, "HD EAV incorrect, line %d", h);
+                    error_count_eav += 1;
 
                 int line_num_check[2] = {
                     (line_num & 0x7f) << 2,
@@ -1070,11 +1072,11 @@ static bool upipe_sdi_dec_handle(struct upipe *upipe, struct uref *uref,
                         || src[ 9] != line_num_check[0]
                         || src[10] != line_num_check[1]
                         || src[11] != line_num_check[1])
-                    upipe_err_va(upipe, "HD line num incorrect, line %d", h);
+                    error_count_line += 1;
 
                 if (!hd_sav_match(active_start)
                         || active_start[-1] != sav_fvh_cword[f2][vbi])
-                    upipe_err_va(upipe, "HD SAV incorrect, line %d", h);
+                    error_count_sav += 1;
 
 #if 1
                 uint16_t crc[4];
@@ -1095,10 +1097,7 @@ static bool upipe_sdi_dec_handle(struct upipe *upipe, struct uref *uref,
                     }
 
                     if (memcmp(crc, stream_crc, sizeof(crc))) {
-                        upipe_err_va(upipe, "Line %d CRC does not match: "
-                                "0x%.4x%.4x%.4x%.4x != 0x%.4x%.4x%.4x%.4x", h+1,
-                                crc[0], crc[1], crc[2], crc[3],
-                                stream_crc[0], stream_crc[1], stream_crc[2], stream_crc[3]);
+                        error_count_crc += 1;
                     }
                 }
 
@@ -1169,6 +1168,10 @@ static bool upipe_sdi_dec_handle(struct upipe *upipe, struct uref *uref,
             input_buf = NULL;
         }
     }
+
+    if (error_count_eav || error_count_line || error_count_sav || error_count_crc)
+        upipe_err_va(upipe, "error count eav: %d, line: %d, sav: %d, crc: %d",
+                error_count_eav, error_count_line, error_count_sav, error_count_crc);
 
     if (uref_audio) {
         // FIXME: ntsc - a/v pts need to be mostly equal, in case we receive
