@@ -86,8 +86,6 @@ struct upipe_work {
     struct uchain output_request_list;
     /** proxy probe */
     struct uprobe proxy_probe;
-    /** probe for the last inner pipe */
-    struct uprobe last_inner_probe;
     /** probe for input queue source */
     struct uprobe in_qsrc_probe;
     /** probe for output queue source */
@@ -114,6 +112,10 @@ struct upipe_work {
     struct upipe upipe;
 };
 
+/** @hidden */
+static int upipe_work_out_qsrc_probe(struct uprobe *uprobe, struct upipe *inner,
+                                     int event, va_list args);
+
 UPIPE_HELPER_UPIPE(upipe_work, upipe, UPIPE_WORK_SIGNATURE)
 UPIPE_HELPER_UREFCOUNT(upipe_work, urefcount, upipe_work_no_ref)
 UPIPE_HELPER_UREFCOUNT_REAL(upipe_work, urefcount_real, upipe_work_free)
@@ -121,7 +123,8 @@ UPIPE_HELPER_INNER(upipe_work, in_qsink)
 UPIPE_HELPER_BIN_INPUT(upipe_work, in_qsink, input_request_list)
 UPIPE_HELPER_INNER(upipe_work, out_qsrc)
 UPIPE_HELPER_UPROBE(upipe_work, urefcount_real, proxy_probe, NULL)
-UPIPE_HELPER_UPROBE(upipe_work, urefcount_real, last_inner_probe, NULL)
+UPIPE_HELPER_UPROBE(upipe_work, urefcount_real, out_qsrc_probe,
+                    upipe_work_out_qsrc_probe)
 UPIPE_HELPER_BIN_OUTPUT(upipe_work, out_qsrc, output, output_request_list)
 
 /** @internal @This catches events coming from an input queue source pipe.
@@ -153,7 +156,9 @@ static int upipe_work_out_qsrc_probe(struct uprobe *uprobe, struct upipe *inner,
 {
     if (event == UPROBE_SOURCE_END)
         return UBASE_ERR_NONE;
-    return uprobe_throw_next(uprobe, inner, event, args);
+    return upipe_throw_proxy(
+        upipe_work_to_upipe(upipe_work_from_out_qsrc_probe(uprobe)),
+        inner, event, args);
 }
 
 /** @internal @This allocates a worker pipe.
@@ -214,7 +219,7 @@ static struct upipe *_upipe_work_alloc(struct upipe_mgr *mgr,
     upipe_work_init_urefcount(upipe);
     upipe_work_init_urefcount_real(upipe);
     upipe_work_init_proxy_probe(upipe);
-    upipe_work_init_last_inner_probe(upipe);
+    upipe_work_init_out_qsrc_probe(upipe);
     upipe_work_init_bin_input(upipe);
     upipe_work_init_bin_output(upipe);
     ulist_init(&upipe_work->upump_mgr_pipes);
@@ -222,10 +227,6 @@ static struct upipe *_upipe_work_alloc(struct upipe_mgr *mgr,
     uprobe_init(&upipe_work->in_qsrc_probe, upipe_work_in_qsrc_probe,
                 uprobe_use(uprobe_remote));
     upipe_work->in_qsrc_probe.refcount =
-        upipe_work_to_urefcount_real(upipe_work);
-    uprobe_init(&upipe_work->out_qsrc_probe, upipe_work_out_qsrc_probe,
-                &upipe_work->last_inner_probe);
-    upipe_work->out_qsrc_probe.refcount =
         upipe_work_to_urefcount_real(upipe_work);
     upipe_work->frozen = false;
     upipe_throw_ready(upipe);
@@ -473,7 +474,7 @@ static void upipe_work_free(struct upipe *upipe)
 
     upipe_throw_dead(upipe);
     upipe_work_clean_proxy_probe(upipe);
-    upipe_work_clean_last_inner_probe(upipe);
+    upipe_work_clean_out_qsrc_probe(upipe);
     uprobe_clean(&upipe_work->in_qsrc_probe);
     uprobe_clean(&upipe_work->out_qsrc_probe);
     upipe_work_clean_urefcount_real(upipe);
