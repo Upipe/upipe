@@ -115,6 +115,9 @@ static void upipe_pciesdi_source_framer_free(struct upipe *upipe)
 {
     upipe_throw_dead(upipe);
 
+    struct upipe_pciesdi_source_framer *ctx = upipe_pciesdi_source_framer_from_upipe(upipe);
+    uref_free(ctx->uref);
+
     upipe_pciesdi_source_framer_clean_output(upipe);
     upipe_pciesdi_source_framer_clean_urefcount(upipe);
     upipe_pciesdi_source_framer_free_void(upipe);
