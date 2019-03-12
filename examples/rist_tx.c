@@ -165,14 +165,14 @@ static void parse_rtcp(struct upipe *upipe, const uint8_t *rtp, int s,
 
             uint8_t ssrc[4];
             rtcp_xr_get_ssrc_sender(rtp, ssrc);
-            rtp += RTCP_XR_HEADER_SIZE;
+            const uint8_t *rtp_xr = &rtp[RTCP_XR_HEADER_SIZE];
 
-            if (rtcp_xr_get_bt(rtp) != RTCP_XR_RRTP_BT)
+            if (rtcp_xr_get_bt(rtp_xr) != RTCP_XR_RRTP_BT)
                 break;
-            if ((rtcp_xr_get_length(rtp) + 1) * 4 != RTCP_XR_RRTP_SIZE)
+            if ((rtcp_xr_get_length(rtp_xr) + 1) * 4 != RTCP_XR_RRTP_SIZE)
                 break;
 
-            uint64_t ntp = rtcp_xr_rrtp_get_ntp(rtp);
+            uint64_t ntp = rtcp_xr_rrtp_get_ntp(rtp_xr);
 
             struct uref *xr = uref_alloc(uref_mgr);
             if (!xr)
@@ -191,8 +191,8 @@ static void parse_rtcp(struct upipe *upipe, const uint8_t *rtp, int s,
             uref_attach_ubuf(xr, ubuf);
 
             uint8_t *buf_xr;
-            s = 0;
-            uref_block_write(xr, 0, &s, &buf_xr);
+            int block_size = 0;
+            uref_block_write(xr, 0, &block_size, &buf_xr);
 
             rtcp_set_rtp_version(buf_xr);
             rtcp_set_pt(buf_xr, RTCP_PT_XR);
