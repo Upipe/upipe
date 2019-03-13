@@ -8,6 +8,7 @@ ffi.cdef [[
     // stdlib.h
     typedef long ssize_t;
     void *malloc(size_t);
+    void *calloc(size_t, size_t);
     void free(void *);
 
     // stdio.h
@@ -435,8 +436,7 @@ end
 
 local function upipe_helper_alloc(cb)
     local ct = ffi.typeof("struct upipe_helper_mgr")
-    local h_mgr = ffi.cast(ffi.typeof("$ *", ct), C.malloc(ffi.sizeof(ct)))
-    -- XXX: calloc h_mgr
+    local h_mgr = ffi.cast(ffi.typeof("$ *", ct), C.calloc(1, ffi.sizeof(ct)))
 
     if cb.input_output then
         h_mgr.output = cb.input_output
