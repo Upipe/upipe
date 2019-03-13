@@ -470,6 +470,18 @@ local function upipe_helper_alloc(cb)
             return pipe:use()
         end
 
+    local function wrap_traceback(f)
+        return function (...)
+            local err = function (msg)
+                io.stderr:write(debug.traceback(msg, 2), "\n")
+            end
+            local ret = {xpcall(f, err, ...)}
+            local success = table.remove(ret, 1)
+            if not success then return C.UBASE_ERR_UNKNOWN end
+            return unpack(ret)
+        end
+    end
+
 --     mgr.upipe_input = cb.input
 
     mgr.upipe_input = function (pipe, ref, pump_p)
@@ -480,7 +492,7 @@ local function upipe_helper_alloc(cb)
     end
 
     if type(cb.control) == "function" then
-        mgr.upipe_control = cb.control
+        mgr.upipe_control = wrap_traceback(cb.control)
     else
         local control = { }
 
@@ -505,7 +517,7 @@ local function upipe_helper_alloc(cb)
             control[C["UPIPE_" .. k:upper()]] = v
         end
 
-        mgr.upipe_control = function (pipe, cmd, args)
+        mgr.upipe_control = wrap_traceback(function (pipe, cmd, args)
             local f = control[cmd] or function () return "unhandled" end
             local ret = ubase_err(f(pipe, control_args(cmd, args)))
             if ret == C.UBASE_ERR_UNHANDLED and cb.bin_input then
@@ -515,7 +527,7 @@ local function upipe_helper_alloc(cb)
                 ret = C.upipe_helper_control_bin_output(pipe, cmd, args)
             end
             return ret
-        end
+        end)
     end
 
     h_mgr.refcount_cb = function (refcount)
