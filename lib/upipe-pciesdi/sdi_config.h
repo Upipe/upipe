@@ -2,26 +2,15 @@
 #define __HW_CONFIG_H
 #include "csr.h"
 
-#define MINIMAL_GATEWARE_REVISION "2019-02-17"
+#define MINIMAL_GATEWARE_REVISION "2019-03-11"
 
-/* targets capabilities */
-#if defined(PCIE_SDI_HW)
-#define FPGA_IDENTIFIER "PCIe SDI"
-#define HAS_VCXOS
-#define HAS_GS12241
-#define HAS_GS12281
-#define HAS_SI5324
-#define HAS_GENLOCK
-#elif defined(DUO2_HW)
-#define FPGA_IDENTIFIER "Duo2"
-#define HAS_LMH0387
-#elif defined(MINI_4K_HW)
-#define FPGA_IDENTIFIER "Mini 4k"
-#define HAS_SI596
-#endif
+/* targets identifiers */
+#define FALCON9_FPGA_IDENTIFIER "Falcon9"
+#define DUO2_FPGA_IDENTIFIER "Duo2"
+#define MINI_4K_FPGA_IDENTIFIER "Mini 4k"
 
 /* pci */
-#define PCIE_FPGA_VENDOR_ID 0x10ee
+#define PCIE_FPGA_VENDOR_ID 0x1bb8
 #define PCIE_FPGA_DEVICE_ID_X1 0x7021
 #define PCIE_FPGA_DEVICE_ID_X2 0x7022
 #define PCIE_FPGA_DEVICE_ID_X4 0x7024

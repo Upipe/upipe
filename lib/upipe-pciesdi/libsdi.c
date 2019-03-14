@@ -69,6 +69,18 @@ void sdi_refclk(int fd, uint8_t refclk_sel, uint32_t *refclk_freq, uint32_t *ref
     *refclk_counter = m.refclk_counter;
 }
 
+void sdi_capabilities(int fd) {
+    struct sdi_ioctl_capabilities m;
+    ioctl(fd, SDI_IOCTL_CAPABILITIES, &m);
+    sdi_channels    = m.channels;
+    sdi_has_vcxos   = m.has_vcxos;
+    sdi_has_gs12241 = m.has_gs12241;
+    sdi_has_gs12281 = m.has_gs12281;
+    sdi_has_si5324  = m.has_si5324;
+    sdi_has_genlock = m.has_genlock;
+    sdi_has_lmh0387 = m.has_lmh0387;
+    sdi_has_si596   = m.has_si596;
+}
 
 void sdi_reload(int fd) {
     struct sdi_ioctl_icap m;
@@ -77,7 +89,6 @@ void sdi_reload(int fd) {
     ioctl(fd, SDI_IOCTL_ICAP, &m);
 }
 
-#ifdef HAS_VCXOS
 void sdi_vcxo(int fd, uint32_t width, uint32_t period) {
     struct sdi_ioctl_vcxo m;
     m.pwm_enable = 1;
@@ -100,9 +111,7 @@ void sdi_si5324_spi(int fd, uint32_t tx_data, uint32_t *rx_data) {
     ioctl(fd, SDI_IOCTL_SI5324_SPI, &m);
     *rx_data = m.rx_data;
 }
-#endif
 
-#ifdef HAS_GENLOCK
 void sdi_genlock_hsync(int fd, uint8_t *active, uint64_t *period, uint64_t *seen) {
     struct sdi_ioctl_genlock m;
     ioctl(fd, SDI_IOCTL_GENLOCK_HSYNC, &m);
@@ -124,7 +133,6 @@ void sdi_genlock_field(int fd, uint8_t *field) {
     ioctl(fd, SDI_IOCTL_GENLOCK_HSYNC, &m);
     *field = m.field;
 }
-#endif
 
 void sdi_dma(int fd, uint8_t fill, uint8_t rx_tx_loopback_enable, uint8_t tx_rx_loopback_enable) {
     struct sdi_ioctl_dma m;
@@ -158,7 +166,6 @@ void sdi_set_pattern(int fd, uint8_t mode, uint8_t enable, uint8_t format) {
     ioctl(fd, SDI_IOCTL_PATTERN, &m);
 }
 
-#ifdef HAS_GS12241
 void sdi_gs12241_spi_cs(int fd, uint8_t cs_n) {
     struct sdi_ioctl_gs12241_spi_cs m;
     m.cs_n = cs_n;
@@ -171,9 +178,7 @@ void sdi_gs12241_spi(int fd, uint32_t tx_data, uint32_t *rx_data) {
     ioctl(fd, SDI_IOCTL_RX_SPI, &m);
     *rx_data = m.rx_data;
 }
-#endif
 
-#ifdef HAS_GS12281
 void sdi_gs12281_spi_cs(int fd, uint8_t cs_n) {
     struct sdi_ioctl_gs12281_spi_cs m;
     m.cs_n = cs_n;
@@ -186,9 +191,7 @@ void sdi_gs12281_spi(int fd, uint32_t tx_data, uint32_t *rx_data) {
     ioctl(fd, SDI_IOCTL_TX_SPI, &m);
     *rx_data = m.rx_data;
 }
-#endif
 
-#ifdef HAS_LMH0387
 void sdi_set_direction(int fd, uint8_t tx_enable) {
     struct sdi_ioctl_lmh0387_direction m;
     m.tx_enable = tx_enable;
@@ -207,7 +210,6 @@ void sdi_spi(int fd, uint32_t tx_data, uint32_t *rx_data) {
     ioctl(fd, SDI_IOCTL_SPI, &m);
     *rx_data = m.rx_data;
 }
-#endif
 
 void sdi_rx(int fd, uint8_t *locked, uint8_t *mode, uint8_t *family, uint8_t *scan, uint8_t *rate) {
     struct sdi_ioctl_rx m;
@@ -292,9 +294,9 @@ static uint64_t flash_spi(int fd, int tx_len, uint8_t cmd,
     return m.rx_data;
 }
 
-uint32_t flash_read_id(int fd)
+uint32_t flash_read_id(int fd, int reg)
 {
-    return flash_spi(fd, 32, FLASH_READ_ID, 0) & 0xffffff;
+    return flash_spi(fd, 32, reg, 0) & 0xffffff;
 }
 
 static void flash_write_enable(int fd)
@@ -356,7 +358,7 @@ int sdi_flash_write(int fd,
 
     /* dummy command because in some case the first erase does not
        work. */
-    flash_read_id(fd);
+    flash_read_id(fd, 0);
 
 #if 0
     /* erase */
@@ -432,7 +434,6 @@ int sdi_flash_write(int fd,
 
 /* spi */
 
-#ifdef HAS_SI5324
 void si5324_spi_write(int fd, uint8_t adr, uint8_t data)
 {
     uint32_t tx_data, rx_data;
@@ -455,9 +456,7 @@ uint8_t si5324_spi_read(int fd, uint16_t adr)
     sdi_si5324_spi(fd, tx_data, &rx_data);
     return rx_data & 0xff;
 }
-#endif
 
-#ifdef HAS_GS12241
 void gs12241_spi_write(int fd, uint8_t channel, uint16_t adr, uint16_t data)
 {
     uint32_t cmd;
@@ -537,9 +536,6 @@ void gs12241_config_for_sd(int fd, int n)
     }
 }
 
-#endif
-
-#ifdef HAS_GS12281
 void gs12281_spi_write(int fd, uint8_t channel, uint16_t adr, uint16_t data)
 {
     uint32_t cmd;
@@ -596,9 +592,6 @@ void gs12281_spi_init(int fd)
         gs12281_spi_write(fd, i, 0, 1 << 13); /* gspi_bus_through_enable */
 }
 
-#endif
-
-#ifdef HAS_LMH0387
 void sdi_spi_write(int fd, uint8_t channel, uint16_t adr, uint16_t data)
 {
     uint32_t tx_data, rx_data;
@@ -630,11 +623,9 @@ uint16_t sdi_spi_read(int fd, uint8_t channel, uint16_t adr)
 
     return rx_data & 0xff;
 }
-#endif
 
 /* genlock */
 
-#ifdef HAS_GENLOCK
 static int hsync_check(uint64_t reference, uint64_t value) {
     if (value < (reference - GENLOCK_HSYNC_MARGIN))
         return 0;
@@ -838,4 +829,3 @@ void si5324_genlock(int fd)
         si5324_spi_write(fd, si5324_base_config_regs[i][0], si5324_base_config_regs[i][1]);
     }
 }
-#endif

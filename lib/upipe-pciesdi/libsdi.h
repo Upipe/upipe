@@ -22,6 +22,15 @@
 
 #define SDI_DEVICE_IS_BITPACKED 1
 
+uint8_t sdi_channels;
+uint8_t sdi_has_vcxos;
+uint8_t sdi_has_gs12241;
+uint8_t sdi_has_gs12281;
+uint8_t sdi_has_si5324;
+uint8_t sdi_has_genlock;
+uint8_t sdi_has_lmh0387;
+uint8_t sdi_has_si596;
+
 int64_t get_time_ms(void);
 
 /* ioctl */
@@ -32,41 +41,31 @@ void sdi_reload(int fd);
 
 void sdi_refclk(int fd, uint8_t refclk_sel, uint32_t *refclk_freq, uint32_t *refclk_counter);
 
-#ifdef HAS_VCXOS
-void sdi_vcxo(int fd, uint32_t width, uint32_t period);
-#endif
+void sdi_capabilities(int fd);
 
-#ifdef HAS_SI5324
+void sdi_vcxo(int fd, uint32_t width, uint32_t period);
+
 void sdi_si5324_vcxo(int fd, uint32_t width, uint32_t period);
 void sdi_si5324_spi(int fd, uint32_t tx_data, uint32_t *rx_data);
-#endif
 
-#ifdef HAS_GENLOCK
 void sdi_genlock_hsync(int fd, uint8_t *active, uint64_t *period, uint64_t *seen);
 void sdi_genlock_vsync(int fd, uint8_t *active, uint64_t *period, uint64_t *seen);
 void sdi_genlock_field(int fd, uint8_t *field);
-#endif
 
 void sdi_dma(int fd, uint8_t fill, uint8_t rx_tx_loopback_enable, uint8_t tx_rx_loopback_enable);
 void sdi_dma_reader(int fd, uint8_t enable, int64_t *hw_count, int64_t *sw_count);
 void sdi_dma_writer(int fd, uint8_t enable, int64_t *hw_count, int64_t *sw_count);
 void sdi_set_pattern(int fd, uint8_t mode, uint8_t enable, uint8_t format);
 
-#ifdef HAS_GS12241
 void sdi_gs12241_spi_cs(int fd, uint8_t cs_n);
 void sdi_gs12241_spi(int fd, uint32_t tx_data, uint32_t *rx_data);
-#endif
 
-#ifdef HAS_GS12281
 void sdi_gs12281_spi_cs(int fd, uint8_t cs_n);
 void sdi_gs12281_spi(int fd, uint32_t tx_data, uint32_t *rx_data);
-#endif
 
-#ifdef HAS_LMH0387
 void sdi_set_direction(int fd, uint8_t tx_enable);
 void sdi_spi_cs(int fd, uint8_t cs_n);
 void sdi_spi(int fd, uint32_t tx_data, uint32_t *rx_data);
-#endif
 
 void sdi_rx(int fd, uint8_t *locked, uint8_t *mode, uint8_t *family, uint8_t *scan, uint8_t *rate);
 void sdi_tx(int fd, uint8_t mode, uint8_t *txen, uint8_t *slew);
@@ -80,8 +79,6 @@ void sdi_release_dma_writer(int fd);
 #define countof(x) (sizeof(x) / sizeof(x[0]))
 
 /* si5324 */
-
-#ifdef HAS_SI5324
 
 static const uint16_t si5324_148_5_mhz_regs[][2] = {
     {   0, 0x54 },
@@ -175,17 +172,11 @@ static const uint16_t si5324_148_35_mhz_regs[][2] = {
     {136, 0x40 },
 };
 
-#endif
-
 /* flash */
 
-#if defined(PCIE_SDI_HW)
-#define FLASH_READ_ID 0x9E
-#elif defined(DUO2_HW)
-#define FLASH_READ_ID 0x9F
-#elif defined(MINI_4K_HW)
-#define FLASH_READ_ID 0x9F
-#endif
+#define FALCON9_FLASH_READ_ID_REG 0x9E
+#define MINI_4K_FLASH_READ_ID_REG 0x9F
+#define DUO2_FLASH_READ_ID_REG 0x9F
 
 #define FLASH_READ    0x03
 #define FLASH_WREN    0x06
@@ -209,33 +200,23 @@ int sdi_flash_write(int fd,
 
 /* spi */
 
-#ifdef HAS_SI5324
 void si5324_spi_write(int fd, uint8_t adr, uint8_t data);
 uint8_t si5324_spi_read(int fd, uint16_t adr);
-#endif
 
-#ifdef HAS_GS12241
 void gs12241_spi_write(int fd, uint8_t channel, uint16_t adr, uint16_t data);
 uint16_t gs12241_spi_read(int fd, uint8_t channel, uint16_t adr);
 void gs12241_spi_init(int fd);
 void gs12241_reset(int fd, int n);
 void gs12241_config_for_sd(int fd, int n);
-#endif
 
-#ifdef HAS_GS12281
 void gs12281_spi_write(int fd, uint8_t channel, uint16_t adr, uint16_t data);
 uint16_t gs12281_spi_read(int fd, uint8_t channel, uint16_t adr);
 void gs12281_spi_init(int fd);
-#endif
 
-#ifdef HAS_LMH0387
 void sdi_spi_write(int fd, uint8_t channel, uint16_t adr, uint16_t data);
 uint16_t sdi_spi_read(int fd, uint8_t channel, uint16_t adr);
-#endif
 
 /* genlock */
-
-#ifdef HAS_GENLOCK
 
 /* genlock margins (in ns) */
 
@@ -447,6 +428,5 @@ static const uint16_t smpte274m_1080p23_98_regs[][2] = {
 };
 
 void si5324_genlock(int fd);
-#endif
 
 #endif /* SDI_LIB_H */
