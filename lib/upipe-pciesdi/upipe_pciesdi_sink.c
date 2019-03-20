@@ -257,11 +257,16 @@ static void upipe_pciesdi_sink_worker(struct upump *upump)
     /* If too late and there are no more urefs to write the input may have
      * stopped so stop the output. */
     if (num_bufs <= 0 && upipe_pciesdi_sink->underrun) {
-        upipe_dbg(upipe, "too late and no input, stopping upump");
-        /* stop and clear pump */
-        upipe_pciesdi_sink_set_upump(upipe, NULL);
-        /* stop dma */
-        sdi_dma_reader(upipe_pciesdi_sink->fd, 0, &hw, &sw);
+        /* Stopping the DMA doesn't work yet in the driver do just advance the
+         * SW buffer count based on how much we want to write. */
+        num_bufs = DMA_BUFFER_COUNT/2 - num_bufs; // number of bufs to write
+        upipe_warn_va(upipe, "too late and no input, skipping %"PRId64" buffers, hw: %"PRId64", sw: %"PRId64,
+                num_bufs, hw, sw);
+
+        struct sdi_ioctl_mmap_dma_update mmap_update = { .sw_count = sw + num_bufs };
+        if (ioctl(upipe_pciesdi_sink->fd, SDI_IOCTL_MMAP_DMA_READER_UPDATE, &mmap_update))
+            upipe_err(upipe, "ioctl error incrementing SW buffer count");
+
         return;
     }
 
