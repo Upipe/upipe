@@ -548,7 +548,16 @@ static void upipe_pciesdi_src_worker(struct upump *upump)
     if (bytes_available != processed_bytes) {
         int bytes_remaining = bytes_available - processed_bytes;
         if (mmap_length_does_wrap(sw, offset, bytes_remaining)) {
-            upipe_warn(upipe, "remaining bytes wraparound");
+            int before = DMA_BUFFER_TOTAL_SIZE - (sw * DMA_BUFFER_SIZE + offset) % DMA_BUFFER_TOTAL_SIZE;
+            int after = bytes_remaining - before;
+
+            memcpy(upipe_pciesdi_src->scratch_buffer,
+                    mmap_wraparound(upipe_pciesdi_src->read_buffer, sw, offset),
+                    before);
+            offset += before;
+            memcpy(upipe_pciesdi_src->scratch_buffer + before,
+                    mmap_wraparound(upipe_pciesdi_src->read_buffer, sw, offset),
+                    after);
         } else {
             memcpy(upipe_pciesdi_src->scratch_buffer,
                     mmap_wraparound(upipe_pciesdi_src->read_buffer, sw, offset),
