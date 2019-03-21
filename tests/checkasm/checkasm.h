@@ -69,6 +69,7 @@
 
 void checkasm_check_planar10_input(void);
 void checkasm_check_planar8_input(void);
+void checkasm_check_sdi3g_input(void);
 void checkasm_check_sdi_input(void);
 void checkasm_check_uyvy_input(void);
 void checkasm_check_v210_input(void);

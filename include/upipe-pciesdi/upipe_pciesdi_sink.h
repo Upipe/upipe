@@ -38,6 +38,27 @@ extern "C" {
 
 #define UPIPE_PCIESDI_SINK_SIGNATURE UBASE_FOURCC('o', 'b', 'f', 'h')
 
+/** @This extends upipe_command with specific commands. */
+enum upipe_pciesdi_sink_command {
+    UPIPE_PCIESDI_SINK_SENTINEL = UPIPE_CONTROL_LOCAL,
+
+    /** returns the uclock (struct uclock *) **/
+    UPIPE_PCIESDI_SINK_GET_UCLOCK,
+};
+
+/** @This returns the pciesdi uclock.
+ *
+ * @param upipe description structure of the super pipe
+ * @param uclock_p filled in with a pointer to the uclock
+ * @return an error code
+ */
+static inline int upipe_pciesdi_sink_get_uclock(struct upipe *upipe,
+        struct uclock **uclock_p)
+{
+    return upipe_control(upipe, UPIPE_PCIESDI_SINK_GET_UCLOCK,
+            UPIPE_PCIESDI_SINK_SIGNATURE, uclock_p);
+}
+
 /** @This returns the management structure for pciesdi_sink pipes.
  *
  * @return pointer to manager

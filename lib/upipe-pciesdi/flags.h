@@ -29,4 +29,7 @@
 #define SDI_LOOPBACK_FAR_END_PMA  0b100
 #define SDI_LOOPBACK_FAR_END_PCS  0b110
 
+#define SDI_RX_LOCK_CORE     (1<<0)
+#define SDI_RX_LOCK_DATAPATH (1<<1)
+
 #endif /* __HW_FLAGS_H */

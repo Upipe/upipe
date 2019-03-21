@@ -76,6 +76,7 @@ static const struct {
 } tests[] = {
     { "planar10_input", checkasm_check_planar10_input },
     { "planar8_input", checkasm_check_planar8_input },
+    { "sdi3g_input", checkasm_check_sdi3g_input },
     { "sdi_input", checkasm_check_sdi_input },
     { "uyvy_input", checkasm_check_uyvy_input },
     { "v210_input", checkasm_check_v210_input },

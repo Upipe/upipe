@@ -201,6 +201,9 @@ struct upipe_sdi_dec {
     /** latency */
     uint64_t latency;
 
+    /* SDI-3G level B frame tracker. */
+    bool sdi3g_levelb_second_frame;
+
     /** public upipe structure */
     struct upipe upipe;
 };
@@ -747,19 +750,11 @@ static bool upipe_sdi_dec_handle(struct upipe *upipe, struct uref *uref,
     if (!upipe_sdi_dec->ubuf_mgr)
         return false;
 
+    upipe_sdi_dec->sdi3g_levelb_second_frame = !upipe_sdi_dec->sdi3g_levelb_second_frame;
+
     const struct sdi_offsets_fmt *f = upipe_sdi_dec->f;
     const struct sdi_picture_fmt *p = upipe_sdi_dec->p;
     const size_t output_hsize = p->active_width, output_vsize = p->active_height;
-
-    /* map input */
-    int input_size = -1;
-    const uint8_t *input_buf = NULL;
-    if (unlikely(!ubase_check(uref_block_read(uref, 0, &input_size, &input_buf)))) {
-        upipe_warn(upipe, "unable to map input");
-        uref_free(uref);
-        upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
-        return true;
-    }
 
     const struct urational *fps = &upipe_sdi_dec->f->fps;
     uint64_t pts = UINT32_MAX + upipe_sdi_dec->frame_num++ *
@@ -772,43 +767,6 @@ static bool upipe_sdi_dec_handle(struct upipe *upipe, struct uref *uref,
     bool discontinuity = ubase_check(uref_flow_get_discontinuity(uref));
     upipe_throw_clock_ref(upipe, uref, pts, discontinuity);
     upipe_throw_clock_ts(upipe, uref);
-
-    if (!p->sd && upipe_sdi_dec->debug) {
-        for (int h = 0; h < f->height; h++) {
-            const uint16_t *src = (uint16_t*)&input_buf[h * 2 * sizeof(uint16_t) * f->width];
-            uint16_t crc[4];
-            bool first_line = upipe_sdi_dec->crc_c == 0 &&
-                              upipe_sdi_dec->crc_y == 0;
-
-            if (!first_line ) {
-                for (int i = 0; i < 12; i += 2) {
-                    sdi_crc_update(upipe_sdi_dec->crc_lut[0], &upipe_sdi_dec->crc_c, src[i + 0]);
-                    sdi_crc_update(upipe_sdi_dec->crc_lut[0], &upipe_sdi_dec->crc_y, src[i + 1]);
-                }
-
-                sdi_crc_end(&upipe_sdi_dec->crc_c, &crc[0]);
-                sdi_crc_end(&upipe_sdi_dec->crc_y, &crc[1]);
-
-                uint16_t stream_crc[4];
-                for (int i = 0; i < 4; i++) {
-                    stream_crc[i] = src[12+i];
-                }
-
-                if (memcmp(crc, stream_crc, sizeof(crc))) {
-                    upipe_err_va(upipe, "Line %d CRC does not match: "
-                            "0x%.4x%.4x%.4x%.4x != 0x%.4x%.4x%.4x%.4x", h+1,
-                            crc[0], crc[1], crc[2], crc[3],
-                            stream_crc[0], stream_crc[1], stream_crc[2], stream_crc[3]);
-                }
-
-            }
-
-            for (int i = 0; i < 2*output_hsize; i+=16) {
-                const uint16_t *crc_src = &src[2*f->active_offset + i];
-                sdi_crc_update_blk(upipe_sdi_dec->crc_lut, &upipe_sdi_dec->crc_c, &upipe_sdi_dec->crc_y, crc_src);
-            }
-        }
-    }
 
     /* allocate dest ubuf */
     size_t aligned_output_hsize = ((output_hsize + 5) / 6) * 6;
@@ -967,20 +925,46 @@ static bool upipe_sdi_dec_handle(struct upipe *upipe, struct uref *uref,
 
     uint8_t vbi[720 * 32];
 
+    const uint8_t *input_buf = NULL;
+    int whole_input_size = 4 * f->width * f->height;
+    int whole_input_offset = 0;
+    int segment_offset = 0;
+    int input_offset, input_size;
+
+    bool sdi3g_levelb = ubase_check(uref_block_get_sdi3g_levelb(uref));
+
+    int error_count_eav = 0, error_count_sav = 0, error_count_line = 0, error_count_crc = 0;
     /* Parse the whole frame */
     for (int h = 0; h < f->height; h++) {
+        /* map input */
+        if (!input_buf) {
+            input_size = whole_input_size;
+            int ret = uref_block_read(uref, whole_input_offset, &input_size, &input_buf);
+            if (unlikely(!ubase_check(ret))) {
+                upipe_warn_va(upipe, "unable to map input on line %d", h);
+                uref_free(uref);
+                upipe_throw_fatal(upipe, ret);
+                return true;
+            }
+
+            input_offset = 0;
+            segment_offset = whole_input_offset;
+        }
+
         /* HANC starts at end of EAV */
         const uint8_t hanc_start = p->sd ? UPIPE_SDI_EAV_LENGTH : UPIPE_HD_SDI_EAV_LENGTH;
         const uint8_t sav_len = p->sd ? UPIPE_SDI_SAV_LENGTH : UPIPE_HD_SDI_SAV_LENGTH;
         const int hanc_len = 2 * f->active_offset - hanc_start - sav_len;
         int line_num = h + 1;
+        if (sdi3g_levelb && upipe_sdi_dec->sdi3g_levelb_second_frame)
+            line_num += f->height;
 
         /* Use wraparound arithmetic to start at line 4 */
         if (ntsc)
             line_num = ((line_num + 2) % 525) + 1;
 
         /* Horizontal Blanking */
-        uint16_t *line = (uint16_t *)input_buf + h * f->width * 2 + hanc_start;
+        uint16_t *line = (uint16_t *)input_buf + input_offset + hanc_start;
         if (p->sd) {
             for (int v = 0; v < hanc_len; v++) {
                 const uint16_t *packet = line + v;
@@ -1033,33 +1017,50 @@ static bool upipe_sdi_dec_handle(struct upipe *upipe, struct uref *uref,
                 active = 1;
         }
 
+        if (sdi3g_levelb && line_num >= p->active_f2.start && line_num <= p->active_f2.end)
+            active = true;
+
         if (upipe_sdi_dec->debug) {
-            const uint16_t *src = (uint16_t*)&input_buf[h * 2 * sizeof(uint16_t) * f->width];
+            const uint16_t *src = (uint16_t*)input_buf + input_offset;
             const uint16_t *active_start = &src[2*f->active_offset];
             bool vbi = !active;
 
             if (p->sd) {
-                if (src[0] != 0x3ff
-                        || src[1] != 0x000
-                        || src[2] != 0x000
+                if (!sd_eav_match(src)
                         || src[3] != eav_fvh_cword[f2][vbi])
-                    upipe_err_va(upipe, "SD EAV incorrect, line %d", h);
+                    error_count_eav += 1;
 
-                if (active_start[-4] != 0x3ff
-                        || active_start[-3] != 0x000
-                        || active_start[-2] != 0x000
+                if (!sd_sav_match(active_start)
                         || active_start[-1] != sav_fvh_cword[f2][vbi])
-                    upipe_err_va(upipe, "SD SAV incorrect, line %d", h);
+                    error_count_sav += 1;
+
+            } else if (sdi3g_levelb) {
+                bool local_f2 = line_num >= p->vbi_f2_part1.start;
+                if (!hd_eav_match(src)
+                        || src[7] != eav_fvh_cword[local_f2][vbi])
+                    error_count_eav += 1;
+
+                int local_line_num = (line_num + 1) / 2;
+                int line_num_check[2] = {
+                    (local_line_num & 0x7f) << 2,
+                    (1 << 9) | (((local_line_num >> 7) & 0xf) << 2),
+                };
+                line_num_check[0] |= NOT_BIT8(line_num_check[0]);
+
+                if (src[8] != line_num_check[0]
+                        || src[ 9] != line_num_check[0]
+                        || src[10] != line_num_check[1]
+                        || src[11] != line_num_check[1])
+                    error_count_line += 1;
+
+                if (!hd_sav_match(active_start)
+                        || active_start[-1] != sav_fvh_cword[local_f2][vbi])
+                    error_count_sav += 1;
+
             } else {
-                if (src[0] != 0x3ff
-                        || src[1] != 0x3ff
-                        || src[2] != 0x000
-                        || src[3] != 0x000
-                        || src[4] != 0x000
-                        || src[5] != 0x000
-                        || src[6] != eav_fvh_cword[f2][vbi]
+                if (!hd_eav_match(src)
                         || src[7] != eav_fvh_cword[f2][vbi])
-                    upipe_err_va(upipe, "HD EAV incorrect, line %d", h);
+                    error_count_eav += 1;
 
                 int line_num_check[2] = {
                     (line_num & 0x7f) << 2,
@@ -1071,21 +1072,44 @@ static bool upipe_sdi_dec_handle(struct upipe *upipe, struct uref *uref,
                         || src[ 9] != line_num_check[0]
                         || src[10] != line_num_check[1]
                         || src[11] != line_num_check[1])
-                    upipe_err_va(upipe, "HD line num incorrect, line %d", h);
+                    error_count_line += 1;
 
-                if ( active_start[-8] != 0x3ff
-                        || active_start[-7] != 0x3ff
-                        || active_start[-6] != 0x000
-                        || active_start[-5] != 0x000
-                        || active_start[-4] != 0x000
-                        || active_start[-3] != 0x000
-                        || active_start[-2] != sav_fvh_cword[f2][vbi]
+                if (!hd_sav_match(active_start)
                         || active_start[-1] != sav_fvh_cword[f2][vbi])
-                    upipe_err_va(upipe, "HD SAV incorrect, line %d", h);
+                    error_count_sav += 1;
+
+#if 1
+                uint16_t crc[4];
+                bool first_line = upipe_sdi_dec->crc_c == 0 &&
+                                  upipe_sdi_dec->crc_y == 0;
+
+                if (!first_line) {
+                    for (int i = 0; i < 12; i += 2) {
+                        sdi_crc_update(upipe_sdi_dec->crc_lut[0], &upipe_sdi_dec->crc_c, src[i + 0]);
+                        sdi_crc_update(upipe_sdi_dec->crc_lut[0], &upipe_sdi_dec->crc_y, src[i + 1]);
+                    }
+                    sdi_crc_end(&upipe_sdi_dec->crc_c, &crc[0]);
+                    sdi_crc_end(&upipe_sdi_dec->crc_y, &crc[1]);
+
+                    uint16_t stream_crc[4];
+                    for (int i = 0; i < 4; i++) {
+                        stream_crc[i] = src[12+i];
+                    }
+
+                    if (memcmp(crc, stream_crc, sizeof(crc))) {
+                        error_count_crc += 1;
+                    }
+                }
+
+                for (int i = 0; i < 2*output_hsize; i+=16) {
+                    const uint16_t *crc_src = &src[2*f->active_offset + i];
+                    sdi_crc_update_blk(upipe_sdi_dec->crc_lut, &upipe_sdi_dec->crc_c, &upipe_sdi_dec->crc_y, crc_src);
+                }
+#endif
             }
         }
 
-        uint16_t *src_line = (uint16_t*)input_buf + (h * f->width + f->active_offset) * 2;
+        uint16_t *src_line = (uint16_t*)input_buf + input_offset + 2*f->active_offset;
         if (!active || special_case) {
             // deinterleave for vanc_filter
             if (p->sd) {
@@ -1134,7 +1158,20 @@ static bool upipe_sdi_dec_handle(struct upipe *upipe, struct uref *uref,
             fields[f2][2] += output_stride[2];
         }
         upipe_sdi_dec->eav_clock += f->width;
+
+        whole_input_size   -= 4 * f->width;
+        input_size         -= 4 * f->width;
+        whole_input_offset += 4 * f->width;
+        input_offset       += 2 * f->width; /* Used as offset on uint16_t pointer. */
+        if (input_size <= 0) {
+            uref_block_unmap(uref, segment_offset);
+            input_buf = NULL;
+        }
     }
+
+    if (error_count_eav || error_count_line || error_count_sav || error_count_crc)
+        upipe_err_va(upipe, "error count eav: %d, line: %d, sav: %d, crc: %d",
+                error_count_eav, error_count_line, error_count_sav, error_count_crc);
 
     if (uref_audio) {
         // FIXME: ntsc - a/v pts need to be mostly equal, in case we receive
@@ -1222,9 +1259,6 @@ static bool upipe_sdi_dec_handle(struct upipe *upipe, struct uref *uref,
         uref_pic_plane_unmap(uref_vanc, "x10", 0, 0, -1, -1);
         upipe_sdi_dec_sub_output(&vanc_sub->upipe, uref_vanc, upump_p);
     }
-
-    /* unmap input */
-    uref_block_unmap(uref, 0);
 
     /* unmap output */
     for (int i = 0; i < UPIPE_SDI_DEC_MAX_PLANES; i++) {
@@ -1323,6 +1357,25 @@ static int upipe_sdi_dec_set_flow_def(struct upipe *upipe, struct uref *flow_def
         return UBASE_ERR_INVALID;
     }
     upipe_sdi_dec->p = upipe_sdi_dec->f->pict_fmt;
+
+    {
+        const struct sdi_offsets_fmt *f = upipe_sdi_dec->f;
+        const struct sdi_picture_fmt *p = f->pict_fmt;
+        upipe_dbg_va(upipe, "sdi_offsets_fmt { width: %d, height %d, psf: %d, "
+                "fps: {%d/%d}, pict_fmt: { active_width: %d, active_height: %d, "
+                "vbi_f1_part1: { %d, %d }, active_f1: { %d, %d }, vbi_f1_part2: { %d, %d }, "
+                "vbi_f2_part1: { %d, %d }, active_f2: { %d, %d }, vbi_f2_part2: { %d, %d }",
+                f->width, f->height, f->psf_ident,
+                (int)f->fps.num, (int)f->fps.den,
+                p->active_width, p->active_height,
+                p->vbi_f1_part1.start, p->vbi_f1_part1.end,
+                p->active_f1.start, p->active_f1.end,
+                p->vbi_f1_part2.start, p->vbi_f1_part2.end,
+                p->vbi_f2_part1.start, p->vbi_f2_part1.end,
+                p->active_f2.start, p->active_f2.end,
+                p->vbi_f2_part2.start, p->vbi_f2_part2.end
+        );
+    }
 
     if (!ubase_check(uref_clock_get_latency(flow_def, &upipe_sdi_dec->latency)))
         upipe_sdi_dec->latency = 0;
@@ -1527,6 +1580,7 @@ static struct upipe *_upipe_sdi_dec_alloc(struct upipe_mgr *mgr,
 #endif
 #endif
 
+    upipe_sdi_dec->sdi3g_levelb_second_frame = true; /* Will be inverted at start of each frame. */
     upipe_sdi_dec->audio_fix = 0;
 
     upipe_sdi_dec->crc_y = 0;

@@ -55,6 +55,7 @@ void checkasm_check_uyvy_input(void)
 
     int cpu_flags = av_get_cpu_flags();
 
+#ifdef HAVE_X86ASM
     if (cpu_flags & AV_CPU_FLAG_SSSE3) {
         s.planar10 = upipe_uyvy_to_planar_10_ssse3;
         s.planar8 = upipe_uyvy_to_planar_8_ssse3;
@@ -76,6 +77,7 @@ void checkasm_check_uyvy_input(void)
         s.sdi_2 = upipe_uyvy_to_sdi_2_avx2;
         s.v210 = upipe_uyvy_to_v210_avx2;
     }
+#endif
 
     if (check_func(s.planar10, "uyvy_to_planar10")) {
         uint16_t src0[NUM_SAMPLES];
