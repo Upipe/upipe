@@ -244,6 +244,7 @@ end
 local sig = {
     void = fourcc('v','o','i','d'),
     flow = fourcc('f','l','o','w'),
+    rtp_fec = fourcc('r','f','c',' '),
 }
 
 ffi.metatype("struct upipe_mgr", {
