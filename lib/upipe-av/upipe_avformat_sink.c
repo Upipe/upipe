@@ -303,8 +303,6 @@ static int upipe_avfsink_sub_set_flow_def(struct upipe *upipe,
     }
 
     if (unlikely(!ubase_check(uref_flow_set_def(flow_def_check, def)) ||
-                 (octetrate &&
-                  !ubase_check(uref_block_flow_set_octetrate(flow_def_check, octetrate))) ||
                  (extradata_alloc != NULL &&
                   !ubase_check(uref_flow_set_headers(flow_def_check, extradata,
                                          extradata_size))))) {
