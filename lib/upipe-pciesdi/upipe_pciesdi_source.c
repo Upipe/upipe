@@ -468,9 +468,6 @@ static void upipe_pciesdi_src_worker(struct upump *upump)
             int bytes_remaining = DMA_BUFFER_TOTAL_SIZE - (sw * DMA_BUFFER_SIZE + offset) % DMA_BUFFER_TOTAL_SIZE;
             if (bytes_remaining >= sdi_line_width)
                 bytes_remaining = sdi_line_width; // limit for overread check
-            else
-                upipe_warn_va(upipe, "line wraparound, hw: %"PRId64", sw: %"PRId64", offset: %d",
-                        hw, sw, offset);
 
             memcpy(upipe_pciesdi_src->scratch_buffer,
                     mmap_wraparound(upipe_pciesdi_src->read_buffer, sw, offset),
