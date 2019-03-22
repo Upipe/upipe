@@ -431,7 +431,9 @@ static int upipe_avfsink_sub_provide_flow_format(struct upipe *upipe,
 
     struct upipe_avfsink *upipe_avfsink =
         upipe_avfsink_from_sub_mgr(upipe->mgr);
-    if (!ubase_ncmp(def, "block.aac.") && upipe_avfsink->format != NULL &&
+    if ((!ubase_ncmp(def, "block.aac.") ||
+         !ubase_ncmp(def, "block.aac_latm.")) &&
+        upipe_avfsink->format != NULL &&
         (!strcmp(upipe_avfsink->format, "mp4") ||
          !strcmp(upipe_avfsink->format, "mov") ||
          !strcmp(upipe_avfsink->format, "m4a") ||
