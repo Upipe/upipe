@@ -376,7 +376,7 @@ static void upipe_pciesdi_src_worker(struct upump *upump)
     uint8_t locked, mode, family, scan, rate;
     sdi_rx(upipe_pciesdi_src->fd, &locked, &mode, &family, &scan, &rate);
 
-    if (!locked) {
+    if (locked != 0x3) {
         upipe_pciesdi_src->discontinuity = true;
         return;
     }
