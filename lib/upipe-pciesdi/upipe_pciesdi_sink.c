@@ -116,15 +116,18 @@ static uint64_t upipe_pciesdi_sink_now(struct uclock *uclock)
     if (upipe_pciesdi_sink->fd < 0)
         return 0;
 
+    /* read ticks from card */
     uint32_t freq, tick;
     sdi_refclk(upipe_pciesdi_sink->fd, 0, &freq, &tick);
 
+    /* count overflows/wraparounds */
     if (tick < upipe_pciesdi_sink->previous_tick) {
         /* log this? */
         upipe_pciesdi_sink->wraparounds += 1;
     }
     upipe_pciesdi_sink->previous_tick = tick;
 
+    /* 128 bits needed to prevent overflow after ~2.5 hours */
     __uint128_t fullscale = (upipe_pciesdi_sink->wraparounds << 32) + tick;
     fullscale *= UCLOCK_FREQ;
     fullscale /= freq;
