@@ -61,7 +61,7 @@ void sdi_writel(int fd, uint32_t addr, uint32_t val) {
     ioctl(fd, SDI_IOCTL_REG, &m);
 }
 
-void sdi_refclk(int fd, uint8_t refclk_sel, uint32_t *refclk_freq, uint32_t *refclk_counter) {
+void sdi_refclk(int fd, uint8_t refclk_sel, uint32_t *refclk_freq, uint64_t *refclk_counter) {
     struct sdi_ioctl_refclk m;
     m.refclk_sel = refclk_sel;
     ioctl(fd, SDI_IOCTL_REFCLK, &m);
@@ -134,11 +134,9 @@ void sdi_genlock_field(int fd, uint8_t *field) {
     *field = m.field;
 }
 
-void sdi_dma(int fd, uint8_t fill, uint8_t rx_tx_loopback_enable, uint8_t tx_rx_loopback_enable) {
+void sdi_dma(int fd, uint8_t loopback_enable) {
     struct sdi_ioctl_dma m;
-    m.fill = fill;
-    m.rx_tx_loopback_enable = rx_tx_loopback_enable;
-    m.tx_rx_loopback_enable = tx_rx_loopback_enable;
+    m.loopback_enable = loopback_enable;
     ioctl(fd, SDI_IOCTL_DMA, &m);
 }
 

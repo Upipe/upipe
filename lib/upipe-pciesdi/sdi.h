@@ -53,7 +53,7 @@ struct sdi_ioctl_icap {
 struct sdi_ioctl_refclk {
     uint8_t refclk_sel;
     uint32_t refclk_freq;
-    uint32_t refclk_counter;
+    uint64_t refclk_counter;
 };
 
 struct sdi_ioctl_capabilities {
@@ -92,9 +92,7 @@ struct sdi_ioctl_genlock {
 };
 
 struct sdi_ioctl_dma {
-    uint8_t fill;
-    uint8_t tx_rx_loopback_enable;
-    uint8_t rx_tx_loopback_enable;
+    uint8_t loopback_enable;
 };
 
 struct sdi_ioctl_dma_writer {

@@ -39,7 +39,7 @@ uint32_t sdi_readl(int fd, uint32_t addr);
 void sdi_writel(int fd, uint32_t addr, uint32_t val);
 void sdi_reload(int fd);
 
-void sdi_refclk(int fd, uint8_t refclk_sel, uint32_t *refclk_freq, uint32_t *refclk_counter);
+void sdi_refclk(int fd, uint8_t refclk_sel, uint32_t *refclk_freq, uint64_t *refclk_counter);
 
 void sdi_capabilities(int fd);
 
@@ -52,7 +52,7 @@ void sdi_genlock_hsync(int fd, uint8_t *active, uint64_t *period, uint64_t *seen
 void sdi_genlock_vsync(int fd, uint8_t *active, uint64_t *period, uint64_t *seen);
 void sdi_genlock_field(int fd, uint8_t *field);
 
-void sdi_dma(int fd, uint8_t fill, uint8_t rx_tx_loopback_enable, uint8_t tx_rx_loopback_enable);
+void sdi_dma(int fd, uint8_t loopback_enable);
 void sdi_dma_reader(int fd, uint8_t enable, int64_t *hw_count, int64_t *sw_count);
 void sdi_dma_writer(int fd, uint8_t enable, int64_t *hw_count, int64_t *sw_count);
 void sdi_set_pattern(int fd, uint8_t mode, uint8_t enable, uint8_t format);
