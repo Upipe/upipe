@@ -523,6 +523,20 @@ static inline int uref_##group##_set_##attr(struct uref *uref,              \
 {                                                                           \
     return uref_attr_set_string(uref, v, UDICT_TYPE_STRING, name);          \
 }                                                                           \
+/** @This sets the desc attribute of a uref.                                \
+ *                                                                          \
+ * @param uref pointer to the uref                                          \
+ * @param format printf-style format of the value, followed by a variable   \
+ * list of arguments.                                                       \
+ * @return an error code                                                    \
+ */                                                                         \
+UBASE_FMT_PRINTF(2, 3)                                                      \
+static UBASE_UNUSED inline int                                              \
+uref_##group##_set_##attr##_va(struct uref *uref, const char *format, ...)  \
+{                                                                           \
+    UBASE_VARARG(uref_##group##_set_##attr(uref, string),                   \
+                 UBASE_ERR_INVALID);                                        \
+}                                                                           \
 /** @This deletes the desc attribute of a uref.                             \
  *                                                                          \
  * @param uref pointer to the uref                                          \

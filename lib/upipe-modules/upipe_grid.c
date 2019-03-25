@@ -447,12 +447,10 @@ static void upipe_grid_in_update_pts(struct upipe *upipe, uint64_t next_pts)
     upipe_verbose_va(upipe, "update PTS %"PRIu64, next_pts);
 
     /* get current input latency */
-    if (flow_def) {
-        latency = 0;
+    if (flow_def)
         uref_clock_get_latency(flow_def, &latency);
-    }
 
-    /* iterarte through the input buffers */
+    /* iterate through the input buffers */
     struct uchain *uchain, *uchain_tmp;
     ulist_delete_foreach(&upipe_grid_in->urefs, uchain, uchain_tmp) {
         struct uref *uref = uref_from_uchain(uchain);

@@ -277,6 +277,12 @@ static void upipe_ts_scte35p_input(struct upipe *upipe, struct uref *uref,
     struct upipe_ts_scte35p *upipe_ts_scte35p =
         upipe_ts_scte35p_from_upipe(upipe);
 
+    /* ignore empty uref */
+    if (uref->udict == NULL) {
+        uref_free(uref);
+        return;
+    }
+
     uint64_t event_id;
     if (!ubase_check(uref_ts_scte35_get_event_id(uref, &event_id))) {
         uref_free(uref);

@@ -129,6 +129,9 @@ static int uprobe_dejitter_clock_ref(struct uprobe *uprobe, struct upipe *upipe,
     if (uprobe_dejitter->deviation_count < uprobe_dejitter->deviation_divider)
         uprobe_dejitter->deviation_count++;
 
+    if (uprobe_dejitter->deviation < uprobe_dejitter->minimum_deviation)
+        uprobe_dejitter->deviation = uprobe_dejitter->minimum_deviation;
+
     int64_t wanted_offset = uprobe_dejitter->offset +
                             3 * uprobe_dejitter->deviation;
     if (uprobe_dejitter->offset_count == 1) {
@@ -286,6 +289,24 @@ void uprobe_dejitter_set(struct uprobe *uprobe, bool enabled,
         uprobe_dejitter->deviation = deviation;
     else
         uprobe_dejitter->deviation = DEFAULT_INITIAL_DEVIATION;
+
+    if (uprobe_dejitter->deviation < uprobe_dejitter->minimum_deviation)
+        uprobe_dejitter->deviation = uprobe_dejitter->minimum_deviation;
+}
+
+/** @This sets the minimum deviation of the dejittering probe.
+ *
+ * @param uprobe pointer to probe
+ * @param deviation minimum deviation to set
+ */
+void uprobe_dejitter_set_minimum_deviation(struct uprobe *uprobe,
+                                           double deviation)
+{
+    struct uprobe_dejitter *uprobe_dejitter =
+        uprobe_dejitter_from_uprobe(uprobe);
+    uprobe_dejitter->minimum_deviation = deviation;
+    if (uprobe_dejitter->deviation < deviation)
+        uprobe_dejitter->deviation = deviation;
 }
 
 /** @This initializes an already allocated uprobe_dejitter structure.
@@ -304,6 +325,7 @@ struct uprobe *uprobe_dejitter_init(struct uprobe_dejitter *uprobe_dejitter,
     struct uprobe *uprobe = uprobe_dejitter_to_uprobe(uprobe_dejitter);
     uprobe_dejitter->drift_rate.num = uprobe_dejitter->drift_rate.den = 1;
     uprobe_dejitter->last_print = 0;
+    uprobe_dejitter->minimum_deviation = 0;
     uprobe_dejitter_set(uprobe, enabled, deviation);
     uprobe_init(uprobe, uprobe_dejitter_throw, next);
     return uprobe;

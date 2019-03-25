@@ -104,6 +104,12 @@ AC_SUBST(PTHREAD_CFLAGS)
 AC_SUBST(PTHREAD_LIBS)
 AM_ICONV
 
+# Check for libgcrypt
+AM_PATH_LIBGCRYPT([],
+        AM_CONDITIONAL(HAVE_GCRYPT, true)
+        AC_DEFINE(HAVE_GCRYPT, 1, Define if libgcrypt is available.),
+        AM_CONDITIONAL(HAVE_GCRYPT, false))
+
 # Check for header, then libev3 (ev_loop), then libev4 (ev_run)
 AC_CHECK_HEADERS([ev.h], [
         AC_CHECK_LIB(ev, ev_loop,
@@ -116,6 +122,7 @@ AC_CHECK_HEADERS([dvbcsa/dvbcsa.h],
                  AM_CONDITIONAL(HAVE_DVBCSA, true),
                  AM_CONDITIONAL(HAVE_DVBCSA, false))
 
+PKG_CHECK_UPIPE(TASN1, libtasn1, [libtasn1.h])
 PKG_CHECK_UPIPE(BITSTREAM, bitstream >= 1.4, [bitstream/common.h])
 PKG_CHECK_UPIPE(AVUTIL, libavutil, [libavutil/avutil.h])
 PKG_CHECK_UPIPE(AVFORMAT, [libavformat >= 53.32.0 libavcodec libavutil], [libavformat/avformat.h libavformat/avio.h libavutil/avutil.h])

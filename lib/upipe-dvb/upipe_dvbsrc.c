@@ -226,10 +226,6 @@ static void upipe_dvbsrc_worker(struct upump *upump)
 {
     struct upipe *upipe = upump_get_opaque(upump, struct upipe *);
     struct upipe_dvbsrc *upipe_dvbsrc = upipe_dvbsrc_from_upipe(upipe);
-    uint64_t systime = 0; /* to keep gcc quiet */
-
-    if (upipe_dvbsrc->uclock != NULL)
-        systime = uclock_now(upipe_dvbsrc->uclock);
 
     struct uref *uref = uref_block_alloc(upipe_dvbsrc->uref_mgr,
             upipe_dvbsrc->ubuf_mgr, MTU);

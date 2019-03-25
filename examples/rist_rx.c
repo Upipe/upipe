@@ -152,6 +152,7 @@ static struct rtcp_sink *last_peer;
 static int catch_udp(struct uprobe *uprobe, struct upipe *upipe,
                  int event, va_list args)
 {
+    const char *uri;
     switch (event) {
     case UPROBE_UDPSRC_NEW_PEER: {
         int sig = va_arg(args, int);
@@ -235,6 +236,11 @@ static int catch_udp(struct uprobe *uprobe, struct upipe *upipe,
 
         return UBASE_ERR_NONE;
     }
+
+    case UPROBE_SOURCE_END:
+        /* This control can not fail, and will trigger restart of upump */
+        upipe_get_uri(upipe, &uri);
+        return UBASE_ERR_NONE;
 
     default:
         return uprobe_throw_next(uprobe, upipe, event, args);
