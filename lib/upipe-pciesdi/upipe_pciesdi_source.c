@@ -833,7 +833,7 @@ static int upipe_pciesdi_set_uri(struct upipe *upipe, const char *path)
     uint8_t locked, mode, family, scan, rate;
     /* Set the crc and packed options (in libsdi.c). */
     sdi_rx(upipe_pciesdi_src->fd, &locked, &mode, &family, &scan, &rate);
-    sdi_dma(upipe_pciesdi_src->fd, 0, 0, 0); // disable loopback
+    sdi_dma(upipe_pciesdi_src->fd, 0); // disable loopback
 
     struct sdi_ioctl_mmap_dma_info mmap_info;
     if (ioctl(upipe_pciesdi_src->fd, SDI_IOCTL_MMAP_DMA_INFO, &mmap_info) != 0) {

@@ -90,7 +90,7 @@ struct upipe_pciesdi_sink {
 
     /** hardware clock */
     struct uclock uclock;
-    uint32_t previous_tick;
+    uint64_t previous_tick;
     uint64_t wraparounds;
 
     void (*uyvy_to_sdi)(uint8_t *dst, const uint8_t *src, uintptr_t pixels);
@@ -117,7 +117,8 @@ static uint64_t upipe_pciesdi_sink_now(struct uclock *uclock)
         return 0;
 
     /* read ticks from card */
-    uint32_t freq, tick;
+    uint32_t freq;
+    uint64_t tick;
     sdi_refclk(upipe_pciesdi_sink->fd, 0, &freq, &tick);
 
     /* count overflows/wraparounds */
@@ -556,7 +557,7 @@ static int upipe_pciesdi_set_uri(struct upipe *upipe, const char *path)
     sdi_set_pattern(upipe_pciesdi_sink->fd, SDI_TX_MODE_HD, 0, 0);
     //sdi_set_pattern(upipe_pciesdi_sink->fd, SDI_TX_MODE_3G, 0, 0);
 
-    sdi_dma(upipe_pciesdi_sink->fd, 0, 0, 0); // disable loopback
+    sdi_dma(upipe_pciesdi_sink->fd, 0); // disable loopback
 
     struct sdi_ioctl_mmap_dma_info mmap_info;
     if (ioctl(upipe_pciesdi_sink->fd, SDI_IOCTL_MMAP_DMA_INFO, &mmap_info) != 0) {
