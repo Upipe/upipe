@@ -90,8 +90,6 @@ struct upipe_pciesdi_sink {
 
     /** hardware clock */
     struct uclock uclock;
-    uint64_t previous_tick;
-    uint64_t wraparounds;
 
     void (*uyvy_to_sdi)(uint8_t *dst, const uint8_t *src, uintptr_t pixels);
 
@@ -121,15 +119,8 @@ static uint64_t upipe_pciesdi_sink_now(struct uclock *uclock)
     uint64_t tick;
     sdi_refclk(upipe_pciesdi_sink->fd, 0, &freq, &tick);
 
-    /* count overflows/wraparounds */
-    if (tick < upipe_pciesdi_sink->previous_tick) {
-        /* log this? */
-        upipe_pciesdi_sink->wraparounds += 1;
-    }
-    upipe_pciesdi_sink->previous_tick = tick;
-
     /* 128 bits needed to prevent overflow after ~2.5 hours */
-    __uint128_t fullscale = (upipe_pciesdi_sink->wraparounds << 32) + tick;
+    __uint128_t fullscale = tick;
     fullscale *= UCLOCK_FREQ;
     fullscale /= freq;
 
@@ -165,8 +156,6 @@ static struct upipe *upipe_pciesdi_sink_alloc(struct upipe_mgr *mgr,
     upipe_pciesdi_sink->uref = NULL;
     upipe_pciesdi_sink->underrun = false;
     upipe_pciesdi_sink->first = 1;
-    upipe_pciesdi_sink->previous_tick = 0;
-    upipe_pciesdi_sink->wraparounds = 0;
     upipe_pciesdi_sink->uclock.refcount = &upipe_pciesdi_sink->urefcount;
     upipe_pciesdi_sink->uclock.uclock_now = upipe_pciesdi_sink_now;
 
