@@ -214,12 +214,6 @@ static void upipe_pciesdi_sink_worker(struct upump *upump)
     struct upipe *upipe = upump_get_opaque(upump, struct upipe *);
     struct upipe_pciesdi_sink *upipe_pciesdi_sink = upipe_pciesdi_sink_from_upipe(upipe);
 
-    /* sdi tx control / status */
-    uint8_t txen, slew;
-    sdi_tx(upipe_pciesdi_sink->fd, upipe_pciesdi_sink->tx_mode, &txen, &slew);
-    if (txen || slew)
-        upipe_dbg_va(upipe, "txen %d slew %d", txen, slew);
-
     /* set / get dma */
     int64_t hw = 0, sw = 0;
     sdi_dma_reader(upipe_pciesdi_sink->fd, upipe_pciesdi_sink->first == 0, &hw, &sw); // get buffer counts
