@@ -84,6 +84,8 @@ struct upipe_pciesdi_sink {
     /** read watcher */
     struct upump *upump;
 
+    int tx_mode;
+
     /** scratch buffer */
     int scratch_bytes;
     uint8_t scratch_buffer[DMA_BUFFER_SIZE + 32];
@@ -149,6 +151,7 @@ static struct upipe *upipe_pciesdi_sink_alloc(struct upipe_mgr *mgr,
     upipe_pciesdi_sink_init_upump(upipe);
     upipe_pciesdi_sink_check_upump_mgr(upipe);
 
+    upipe_pciesdi_sink->tx_mode = SDI_TX_MODE_HD;
     upipe_pciesdi_sink->scratch_bytes = 0;
     upipe_pciesdi_sink->latency = 0;
     upipe_pciesdi_sink->fd = -1;
@@ -213,7 +216,7 @@ static void upipe_pciesdi_sink_worker(struct upump *upump)
 
     /* sdi tx control / status */
     uint8_t txen, slew;
-    sdi_tx(upipe_pciesdi_sink->fd, SDI_TX_MODE_HD, &txen, &slew);
+    sdi_tx(upipe_pciesdi_sink->fd, upipe_pciesdi_sink->tx_mode, &txen, &slew);
     if (txen || slew)
         upipe_dbg_va(upipe, "txen %d slew %d", txen, slew);
 
@@ -444,9 +447,6 @@ static void upipe_pciesdi_sink_input(struct upipe *upipe, struct uref *uref, str
     if (upipe_pciesdi_sink->upump)
         return;
 
-    uint8_t txen, slew;
-    sdi_tx(upipe_pciesdi_sink->fd, SDI_TX_MODE_HD, &txen, &slew);
-
     /* check for chunks or whole frames */
     uint64_t vpos;
     int ret = uref_pic_get_vposition(uref, &vpos);
@@ -503,15 +503,18 @@ static int upipe_pciesdi_sink_set_flow_def(struct upipe *upipe, struct uref *flo
 
     /* TODO: init card based on given format. */
 
-    if (sd) {
-        upipe_err(upipe, "SD format is not yet supported");
-        return UBASE_ERR_INVALID;
-    }
+    if (sd)
+        upipe_pciesdi_sink->tx_mode = SDI_TX_MODE_SD;
+    else if (sdi3g)
+        upipe_pciesdi_sink->tx_mode = SDI_TX_MODE_3G;
+    else
+        upipe_pciesdi_sink->tx_mode = SDI_TX_MODE_HD;
 
-    if (sdi3g) {
-        upipe_err(upipe, "SDI-3G format is not yet supported");
-        return UBASE_ERR_INVALID;
-    }
+    /* disable pattern */
+    sdi_set_pattern(upipe_pciesdi_sink->fd, upipe_pciesdi_sink->tx_mode, 0, 0);
+
+    uint8_t txen, slew;
+    sdi_tx(upipe_pciesdi_sink->fd, upipe_pciesdi_sink->tx_mode, &txen, &slew);
 
     return UBASE_ERR_NONE;
 }
@@ -540,11 +543,6 @@ static int upipe_pciesdi_set_uri(struct upipe *upipe, const char *path)
         upipe_err(upipe, "DMA not available");
         return UBASE_ERR_EXTERNAL;
     }
-
-    /* disable pattern */
-    //sdi_set_pattern(upipe_pciesdi_sink->fd, SDI_TX_MODE_SD, 0, 0);
-    sdi_set_pattern(upipe_pciesdi_sink->fd, SDI_TX_MODE_HD, 0, 0);
-    //sdi_set_pattern(upipe_pciesdi_sink->fd, SDI_TX_MODE_3G, 0, 0);
 
     sdi_dma(upipe_pciesdi_sink->fd, 0); // disable loopback
 
