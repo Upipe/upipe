@@ -32,6 +32,11 @@
 #include <stdlib.h>
 #include <stdbool.h>
 #include <assert.h>
+#include <sys/mman.h>
+
+#ifdef MADV_HUGEPAGE
+#include <malloc.h>
+#endif
 
 /** @This defines the private data structures of the umem pool manager. */
 struct umem_pool_mgr {
@@ -93,8 +98,29 @@ static bool umem_pool_alloc(struct umem_mgr *mgr, struct umem *umem,
 
     if (likely(pool < pool_mgr->nb_pools))
         buffer = ulifo_pop(&pool_mgr->pools[pool], uint8_t *);
-    if (unlikely(buffer == NULL))
+
+#if defined(__linux__) && defined(MADV_HUGEPAGE)
+    if (unlikely(buffer == NULL)){
+#define HUGE_PAGE_SIZE 2*1024*1024
+#define HUGE_PAGE_THRESHOLD HUGE_PAGE_SIZE*7/8 /* FIXME: Is this optimal? */
+
+    if (real_size >= HUGE_PAGE_THRESHOLD)
+    {
+        buffer = memalign(HUGE_PAGE_SIZE, size);
+        if (buffer)
+        {
+            /* Round up to the next huge page boundary if we are close enough. */
+            size_t madv_size = (real_size + HUGE_PAGE_SIZE - HUGE_PAGE_THRESHOLD) & ~(HUGE_PAGE_SIZE-1);
+            /* XXX: What should we do with return code? */
+            madvise(buffer, madv_size, MADV_HUGEPAGE);
+        }
+    }
+    else
         buffer = malloc(real_size);
+    }
+#else
+    buffer = malloc(real_size);
+#endif
     if (unlikely(buffer == NULL))
         return false;
 
