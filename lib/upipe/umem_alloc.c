@@ -27,6 +27,11 @@
 #include <upipe/urefcount.h>
 #include <upipe/umem.h>
 #include <upipe/umem_alloc.h>
+#include <sys/mman.h>
+
+#ifdef MADV_HUGEPAGE
+#include <malloc.h>
+#endif
 
 #include <stdlib.h>
 #include <stdbool.h>
@@ -54,7 +59,28 @@ UBASE_FROM_TO(umem_alloc_mgr, urefcount, urefcount, urefcount)
 static bool umem_alloc_alloc(struct umem_mgr *mgr, struct umem *umem,
                              size_t size)
 {
-    uint8_t *buffer = malloc(size);
+    uint8_t *buffer;
+
+#if defined(__linux__) && defined(MADV_HUGEPAGE)
+#define HUGE_PAGE_SIZE 2*1024*1024
+#define HUGE_PAGE_THRESHOLD HUGE_PAGE_SIZE*7/8 /* FIXME: Is this optimal? */
+    if (size >= HUGE_PAGE_THRESHOLD)
+    {
+        buffer = memalign(HUGE_PAGE_SIZE, size);
+        if (buffer)
+        {
+            /* Round up to the next huge page boundary if we are close enough. */
+            size_t madv_size = (size + HUGE_PAGE_SIZE - HUGE_PAGE_THRESHOLD) & ~(HUGE_PAGE_SIZE-1);
+            /* XXX: What should we do with return code? */
+            madvise(buffer, madv_size, MADV_HUGEPAGE);
+        }
+    }
+    else
+        buffer = malloc(size);
+#else
+    buffer = malloc(size);
+#endif
+
     if (unlikely(buffer == NULL))
         return false;
 
