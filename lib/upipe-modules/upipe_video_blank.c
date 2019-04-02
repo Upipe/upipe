@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2017 OpenHeadend S.A.R.L.
+ * Copyright (C) 2017-2019 OpenHeadend S.A.R.L.
  *
  * Authors: Arnaud de Turckheim
  *
@@ -67,6 +67,8 @@ struct upipe_vblk {
     struct uref *flow_format;
     /** ubuf manager request */
     struct urequest ubuf_mgr_request;
+    /** picture attributes */
+    struct uref *pic_attr;
 };
 
 /** @hidden */
@@ -94,6 +96,8 @@ static void upipe_vblk_free(struct upipe *upipe)
 
     if (upipe_vblk->ubuf)
         ubuf_free(upipe_vblk->ubuf);
+    if (upipe_vblk->pic_attr)
+        uref_free(upipe_vblk->pic_attr);
 
     upipe_vblk_clean_ubuf_mgr(upipe);
     upipe_vblk_clean_flow_def(upipe);
@@ -145,6 +149,7 @@ static struct upipe *upipe_vblk_alloc(struct upipe_mgr *mgr,
 
     struct upipe_vblk *upipe_vblk = upipe_vblk_from_upipe(upipe);
     upipe_vblk->ubuf = NULL;
+    upipe_vblk->pic_attr = NULL;
 
     upipe_throw_ready(upipe);
 
@@ -223,6 +228,8 @@ static void upipe_vblk_input(struct upipe *upipe,
     }
 
     uref_attach_ubuf(uref, ubuf);
+    if (upipe_vblk->pic_attr)
+        uref_attr_import(uref, upipe_vblk->pic_attr);
     if (ubase_check(uref_pic_get_progressive(flow_def)))
         uref_pic_set_progressive(uref);
 
@@ -312,6 +319,25 @@ static int upipe_vblk_set_pic_real(struct upipe *upipe, struct uref *uref)
     struct upipe_vblk *upipe_vblk = upipe_vblk_from_upipe(upipe);
     if (upipe_vblk->ubuf)
         ubuf_free(upipe_vblk->ubuf);
+    if (upipe_vblk->pic_attr)
+        uref_free(upipe_vblk->pic_attr);
+    if (!uref)
+        return UBASE_ERR_NONE;
+
+    if (!uref->mgr) {
+        uref_free(uref);
+        return UBASE_ERR_INVALID;
+    }
+    upipe_vblk->pic_attr = uref_alloc_control(uref->mgr);
+    if (!upipe_vblk->pic_attr)
+        return UBASE_ERR_ALLOC;
+    int ret = uref_attr_import(upipe_vblk->pic_attr, uref);
+    if (unlikely(!ubase_check(ret))) {
+        uref_free(upipe_vblk->pic_attr);
+        upipe_vblk->pic_attr = NULL;
+        uref_free(uref);
+        return ret;
+    }
     upipe_vblk->ubuf = uref->ubuf;
     uref->ubuf = NULL;
     uref_free(uref);
