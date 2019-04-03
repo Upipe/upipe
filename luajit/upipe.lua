@@ -64,7 +64,7 @@ local function alloc(ty)
     local cb = ffi.cast("urefcount_cb", function (refcount)
         local data = ffi.cast(ffi.typeof("$ *", st),
         ffi.cast("char *", refcount) + ffi.offsetof(ct, "data"))
-        if ty == "upipe" or ty == "uclock" then
+        if ty == "upipe" or ty == "uclock" or ty == "upump" then
             local k = tostring(data):match(": 0x(.*)")
             if props[k] and props[k].clean then props[k].clean(data) end
             props[k] = nil
@@ -362,7 +362,12 @@ ffi.metatype("struct ubuf", {
 })
 
 ffi.metatype("struct upump", {
-    __index = function (_, key)
+    __index = function (pump, key)
+        if key == 'props' then
+            local k = tostring(pump):match(": 0x(.*)")
+            if not props[k] then props[k] = { } end
+            return props[k]
+        end
         return C[fmt("upump_%s", key)]
     end
 })
