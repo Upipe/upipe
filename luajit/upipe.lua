@@ -391,9 +391,9 @@ ffi.metatype("struct uprobe", {
 })
 
 ffi.metatype("struct uclock", {
-    __index = function (_, key)
+    __index = function (clock, key)
         if key == 'props' then
-            local k = tostring(pipe):match(": 0x(.*)")
+            local k = tostring(clock):match(": 0x(.*)")
             if not props[k] then props[k] = { } end
             return props[k]
         end
