@@ -1,6 +1,6 @@
 /*
  * Copyright (C) 2016 Open Broadcast Systems Ltd
- * Copyright (C) 2018 OpenHeadend S.A.R.L.
+ * Copyright (C) 2018-2019 OpenHeadend S.A.R.L.
  *
  * Authors: Rafaël Carré
  *          Arnaud de Turckheim
@@ -84,6 +84,10 @@ struct upipe_freetype {
     struct uref *flow_format;
     /** ubuf manager request */
     struct urequest ubuf_mgr_request;
+    /** cached ubuf */
+    struct ubuf *ubuf;
+    /** cached text */
+    char *text;
 
     /** request output */
     struct uref *flow_output;
@@ -141,6 +145,19 @@ UPIPE_HELPER_INPUT(upipe_freetype, urefs, nb_urefs, max_urefs, blockers,
                    upipe_freetype_handle);
 UPIPE_HELPER_FLOW(upipe_freetype, UREF_PIC_FLOW_DEF);
 
+/** @internal @This flushes the cached buffer.
+ *
+ * @param upipe description structure of the pipe
+ */
+static void upipe_freetype_flush_cache(struct upipe *upipe)
+{
+    struct upipe_freetype *upipe_freetype = upipe_freetype_from_upipe(upipe);
+    ubuf_free(upipe_freetype->ubuf);
+    upipe_freetype->ubuf = NULL;
+    free(upipe_freetype->text);
+    upipe_freetype->text = NULL;
+}
+
 /** @internal @This checks the compatibility of a flow format.
  *
  * @param upipe description structure of the pipe
@@ -169,6 +186,7 @@ static int upipe_freetype_check(struct upipe *upipe, struct uref *flow_format)
 
     if (flow_format) {
         ubase_assert(upipe_freetype_check_flow_format(upipe, flow_format));
+        upipe_freetype_flush_cache(upipe);
         upipe_freetype_store_flow_def(upipe, flow_format);
     }
 
@@ -198,6 +216,7 @@ static void upipe_freetype_free(struct upipe *upipe)
 
     upipe_throw_dead(upipe);
 
+    upipe_freetype_flush_cache(upipe);
     free(upipe_freetype->font);
     FTC_Manager_Done(upipe_freetype->cache_manager);
     FT_Done_FreeType(upipe_freetype->library);
@@ -255,6 +274,8 @@ static struct upipe *upipe_freetype_alloc(struct upipe_mgr *mgr,
 
     struct upipe_freetype *upipe_freetype = upipe_freetype_from_upipe(upipe);
     upipe_freetype->flow_output = flow_def;
+    upipe_freetype->ubuf = NULL;
+    upipe_freetype->text = NULL;
     upipe_freetype->library = NULL;
     upipe_freetype->cache_manager = NULL;
     upipe_freetype->face = NULL;
@@ -401,6 +422,14 @@ static bool upipe_freetype_handle(struct upipe *upipe, struct uref *uref,
         uref_dump(uref, upipe->uprobe);
         text = "fail";
     }
+
+    if (upipe_freetype->text && !strcmp(upipe_freetype->text, text)) {
+        /* cache hit */
+        uref_attach_ubuf(uref, ubuf_dup(upipe_freetype->ubuf));
+        upipe_freetype_output(upipe, uref, upump_p);
+        return true;
+    }
+
     struct ubuf *ubuf = ubuf_pic_alloc(upipe_freetype->ubuf_mgr, hsize, vsize);
     if (!ubuf) {
         upipe_err(upipe, "Could not allocate pic");
@@ -613,7 +642,10 @@ static bool upipe_freetype_handle(struct upipe *upipe, struct uref *uref,
     if (a.p)
         ubuf_pic_plane_unmap(ubuf, "a8", 0, 0, -1, -1);
 
-    uref_attach_ubuf(uref, ubuf);
+    ubuf_free(upipe_freetype->ubuf);
+    upipe_freetype->ubuf = ubuf;
+    upipe_freetype->text = strdup(text);
+    uref_attach_ubuf(uref, ubuf_dup(upipe_freetype->ubuf));
     upipe_freetype_output(upipe, uref, upump_p);
     return true;
 }
@@ -655,6 +687,7 @@ static int _upipe_freetype_set_background_color(struct upipe *upipe,
     uint8_t rgba[4] = { r, g, b, a };
     ubuf_pic_rgba_to_yuva(rgba, upipe_freetype->fullrange ? 1 : 0,
                           upipe_freetype->background);
+    upipe_freetype_flush_cache(upipe);
     return UBASE_ERR_NONE;
 }
 
@@ -675,6 +708,7 @@ static int _upipe_freetype_set_foreground_color(struct upipe *upipe,
     uint8_t rgba[4] = { r, g, b, a };
     ubuf_pic_rgba_to_yuva(rgba, upipe_freetype->fullrange ? 1 : 0,
                           upipe_freetype->foreground);
+    upipe_freetype_flush_cache(upipe);
     return UBASE_ERR_NONE;
 }
 
@@ -710,6 +744,7 @@ static int upipe_freetype_set_option(struct upipe *upipe,
             upipe_freetype->face = NULL;
             return UBASE_ERR_EXTERNAL;
         }
+        upipe_freetype_flush_cache(upipe);
         return UBASE_ERR_NONE;
     }
     else if (!strcmp(option, "foreground-color")) {
@@ -782,6 +817,7 @@ static int _upipe_freetype_set_pixel_size(struct upipe *upipe,
         upipe_err(upipe, "fail to get size");
         return UBASE_ERR_EXTERNAL;
     }
+    upipe_freetype_flush_cache(upipe);
     return UBASE_ERR_NONE;
 }
 
@@ -879,6 +915,7 @@ static int _upipe_freetype_set_baseline(struct upipe *upipe,
     struct upipe_freetype *upipe_freetype = upipe_freetype_from_upipe(upipe);
     upipe_freetype->xoff = xoff;
     upipe_freetype->yoff = yoff;
+    upipe_freetype_flush_cache(upipe);
     return UBASE_ERR_NONE;
 }
 
