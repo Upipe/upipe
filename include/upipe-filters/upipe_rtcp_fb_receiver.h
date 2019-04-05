@@ -39,6 +39,20 @@ extern "C" {
 #define UPIPE_RTCPFB_SIGNATURE UBASE_FOURCC('r','t','c','f')
 #define UPIPE_RTCPFB_INPUT_SIGNATURE UBASE_FOURCC('r','t','c','i')
 
+enum upipe_rtcpfb_command {
+    UPIPE_RTCPFB_SENTINEL = UPIPE_CONTROL_LOCAL,
+
+    /** get counters (uint64_t *) */
+    UPIPE_RTCPFB_GET_STATS,
+};
+
+static inline int upipe_rtcpfb_get_stats(struct upipe *upipe,
+                                         uint64_t *retrans)
+{
+    return upipe_control(upipe, UPIPE_RTCPFB_GET_STATS,
+                         UPIPE_RTCPFB_SIGNATURE, retrans);
+}
+
 /** @This returns the management structure for rtcpfb pipes.
  *
  * @return pointer to manager

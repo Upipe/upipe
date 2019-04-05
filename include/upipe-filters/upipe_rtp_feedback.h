@@ -52,7 +52,10 @@ enum upipe_rtpfb_output_command {
 enum upipe_rtpfb_command {
     UPIPE_RTPFB_SENTINEL = UPIPE_CONTROL_LOCAL,
 
-    UPIPE_RTPFB_GET_STATS, /* int sig, unsigned *, unsigned *, size_t *, size_t *, size_t *, size_t *, size_t * */
+    /** get counters (unsigned *, unsigned *, size_t *, size_t *, size_t *, size_t *, size_t *) */
+    UPIPE_RTPFB_GET_STATS,
+    /** get round-trip time (uint64_t *) */
+    UPIPE_RTPFB_GET_RTT,
 };
 
 static inline int upipe_rtpfb_output_get_name(struct upipe *upipe, const char **name_p)
@@ -75,6 +78,12 @@ static inline int upipe_rtpfb_get_stats(struct upipe *upipe,
     return upipe_control(upipe, UPIPE_RTPFB_GET_STATS,
             UPIPE_RTPFB_SIGNATURE, expected_seqnum, last_output_seqnum,
             buffered, nacks, repaired, lost, duplicates);
+}
+
+static inline int upipe_rtpfb_get_rtt(struct upipe *upipe, uint64_t *rtt)
+{
+    return upipe_control(upipe, UPIPE_RTPFB_GET_RTT,
+                         UPIPE_RTPFB_SIGNATURE, rtt);
 }
 
 /** @This returns the management structure for rtpfb pipes.

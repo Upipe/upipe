@@ -359,7 +359,7 @@ static void upipe_rtpfb_output_lost(struct upipe *upipe, uint16_t lost_seqnum, u
     upipe_rtpfb_output_output(upipe, pkt, NULL);
 }
 
-static uint64_t upipe_rtpfb_get_rtt(struct upipe *upipe)
+static uint64_t _upipe_rtpfb_get_rtt(struct upipe *upipe)
 {
     struct upipe_rtpfb *upipe_rtpfb = upipe_rtpfb_from_upipe(upipe);
 
@@ -382,7 +382,7 @@ static void upipe_rtpfb_timer_lost(struct upump *upump)
 
     uint64_t expected_seq = UINT64_MAX;
 
-    uint64_t rtt = upipe_rtpfb_get_rtt(upipe);
+    uint64_t rtt = _upipe_rtpfb_get_rtt(upipe);
 
     uint64_t now = uclock_now(upipe_rtpfb->uclock);
 
@@ -500,7 +500,7 @@ static void upipe_rtpfb_timer(struct upump *upump)
 static void upipe_rtpfb_restart_timer(struct upipe *upipe)
 {
     struct upipe_rtpfb *upipe_rtpfb = upipe_rtpfb_from_upipe(upipe);
-    uint64_t rtt = upipe_rtpfb_get_rtt(upipe);
+    uint64_t rtt = _upipe_rtpfb_get_rtt(upipe);
 
     if (upipe_rtpfb->upump_timer_lost) {
         upump_stop(upipe_rtpfb->upump_timer_lost);
@@ -1002,7 +1002,7 @@ static void upipe_rtpfb_input(struct upipe *upipe, struct uref *uref,
         upipe_rtpfb->last_nack[seqnum] = 0;
 
         if (diff != 0) {
-            uint64_t rtt = upipe_rtpfb_get_rtt(upipe);
+            uint64_t rtt = _upipe_rtpfb_get_rtt(upipe);
             /* wait a bit to send a NACK, in case of reordering */
             uint64_t fake_last_nack = uclock_now(upipe_rtpfb->uclock) - rtt;
             for (uint16_t seq = upipe_rtpfb->expected_seqnum; seq != seqnum; seq++)
@@ -1102,7 +1102,7 @@ static int _upipe_rtpfb_control(struct upipe *upipe, int command, va_list args)
             const char *v = va_arg(args, const char *);
             return upipe_rtpfb_set_option(upipe, k, v);
         }
-        case UPIPE_RTPFB_GET_STATS:
+        case UPIPE_RTPFB_GET_STATS: {
             UBASE_SIGNATURE_CHECK(args, UPIPE_RTPFB_SIGNATURE)
             unsigned *expected_seqnum    = va_arg(args, unsigned*);
             unsigned *last_output_seqnum = va_arg(args, unsigned*);
@@ -1123,9 +1123,18 @@ static int _upipe_rtpfb_control(struct upipe *upipe, int command, va_list args)
 
             upipe_rtpfb->nacks = 0;
             upipe_rtpfb->repaired = 0;
+            upipe_rtpfb->loss = 0;
+            upipe_rtpfb->dups = 0;
 
             return UBASE_ERR_NONE;
-
+        }
+        case UPIPE_RTPFB_GET_RTT: {
+            UBASE_SIGNATURE_CHECK(args, UPIPE_RTPFB_SIGNATURE)
+            uint64_t *rtt = va_arg(args, uint64_t *);
+            struct upipe_rtpfb *upipe_rtpfb = upipe_rtpfb_from_upipe(upipe);
+            *rtt = upipe_rtpfb->rtt;
+            return UBASE_ERR_NONE;
+        }
         default:
             return UBASE_ERR_UNHANDLED;
     }
