@@ -565,6 +565,10 @@ static int upipe_udpsink_control(struct upipe *upipe, int command, va_list args)
 static void upipe_udpsink_free(struct upipe *upipe)
 {
     struct upipe_udpsink *upipe_udpsink = upipe_udpsink_from_upipe(upipe);
+
+    if (upipe_udpsink->upump != NULL)
+        upump_stop(upipe_udpsink->upump);
+
     if (likely(upipe_udpsink->fd != -1)) {
         if (likely(upipe_udpsink->uri != NULL))
             upipe_notice_va(upipe, "closing socket %s", upipe_udpsink->uri);

@@ -444,6 +444,9 @@ static void upipe_udpsrc_free(struct upipe *upipe)
 {
     struct upipe_udpsrc *upipe_udpsrc = upipe_udpsrc_from_upipe(upipe);
 
+    if (upipe_udpsrc->upump != NULL)
+        upump_stop(upipe_udpsrc->upump);
+
     if (likely(upipe_udpsrc->fd != -1)) {
         if (likely(upipe_udpsrc->uri != NULL))
             upipe_notice_va(upipe, "closing udp socket %s", upipe_udpsrc->uri);
