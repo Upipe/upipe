@@ -100,6 +100,8 @@ struct upipe_rtcpfb {
 
     /** expected sequence number */
     int expected_seqnum;
+    /** retransmit counter */
+    uint64_t retrans;
 
     /** output pipe */
     struct upipe *output;
@@ -301,6 +303,7 @@ static void upipe_rtcpfb_lost_sub_n(struct upipe *upipe, uint16_t seq, uint16_t 
         }
 
         upipe_warn_va(upipe, "Retransmit %hu", seq);
+        upipe_rtcpfb->retrans++;
 
         uint8_t *buf;
         int s = 0;
@@ -335,6 +338,7 @@ static void upipe_rtcpfb_lost_sub(struct upipe *upipe, uint16_t seq, uint16_t ma
             continue;
 
         upipe_warn_va(upipe, "Retransmit %hu", seq);
+        upipe_rtcpfb->retrans++;
 
         uint8_t *buf;
         int s = 0;
@@ -567,6 +571,7 @@ static struct upipe *upipe_rtcpfb_alloc(struct upipe_mgr *mgr,
     upipe_rtcpfb_init_sub_mgr(upipe);
     upipe_rtcpfb_init_sub_outputs(upipe);
     upipe_rtcpfb->expected_seqnum = -1;
+    upipe_rtcpfb->retrans = 0;
     upipe_rtcpfb->flow_def_input = NULL;
     upipe_rtcpfb_init_ubuf_mgr(upipe);
     upipe_rtcpfb_init_uref_mgr(upipe);
@@ -673,6 +678,14 @@ static int _upipe_rtcpfb_control(struct upipe *upipe, int command, va_list args)
             upipe_rtcpfb->latency = atoi(v);
             upipe_dbg_va(upipe, "Set latency to %"PRIu64" msecs",
                     upipe_rtcpfb->latency);
+            return UBASE_ERR_NONE;
+        }
+        case UPIPE_RTCPFB_GET_STATS: {
+            UBASE_SIGNATURE_CHECK(args, UPIPE_RTCPFB_SIGNATURE)
+            uint64_t *retrans = va_arg(args, uint64_t *);
+            struct upipe_rtcpfb *upipe_rtcpfb = upipe_rtcpfb_from_upipe(upipe);
+            *retrans = upipe_rtcpfb->retrans;
+            upipe_rtcpfb->retrans = 0;
             return UBASE_ERR_NONE;
         }
         default:
