@@ -502,6 +502,12 @@ HRESULT DeckLinkCaptureDelegate::VideoInputFrameArrived(
             else if (upipe_bmd_src->tff)
                 uref_pic_set_tff(uref);
 
+            IDeckLinkTimecode *timecode;
+            if (VideoFrame->GetTimecode(bmdTimecodeRP188Any, &timecode) == S_OK) {
+                uint32_t bcd = timecode->GetBCD();
+                uref_pic_set_s12m(uref, (uint8_t*)&bcd, sizeof(bcd));
+            }
+
             if (!uqueue_push(&upipe_bmd_src->uqueue, uref))
                 uref_free(uref);
         }
