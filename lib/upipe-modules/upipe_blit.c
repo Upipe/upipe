@@ -325,7 +325,8 @@ static int upipe_blit_sub_provide_flow_format(struct upipe *upipe)
         /* Get original sizes */
         uint64_t src_hsize, src_vsize;
         if (ubase_check(uref_pic_flow_get_hsize(urequest->uref, &src_hsize)) &&
-            ubase_check(uref_pic_flow_get_vsize(urequest->uref, &src_vsize))) {
+            ubase_check(uref_pic_flow_get_vsize(urequest->uref, &src_vsize)) &&
+            src_hsize && src_vsize) {
             struct urational src_sar;
             src_sar.num = src_sar.den = 1;
             uref_pic_flow_get_sar(urequest->uref, &src_sar);
