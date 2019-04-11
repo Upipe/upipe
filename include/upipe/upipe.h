@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2012-2018 OpenHeadend S.A.R.L.
+ * Copyright (C) 2012-2019 OpenHeadend S.A.R.L.
  *
  * Authors: Christophe Massiot
  *
@@ -1308,7 +1308,10 @@ static inline int upipe_register_request(struct upipe *upipe,
 {
     assert(!urequest->registered);
     urequest->registered = true;
-    return upipe_control(upipe, UPIPE_REGISTER_REQUEST, urequest);
+    int err = upipe_control(upipe, UPIPE_REGISTER_REQUEST, urequest);
+    if (unlikely(!ubase_check(err)))
+        urequest->registered = false;
+    return err;
 }
 
 /** @This unregisters a request.
