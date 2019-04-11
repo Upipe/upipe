@@ -1323,9 +1323,11 @@ static inline int upipe_register_request(struct upipe *upipe,
 static inline int upipe_unregister_request(struct upipe *upipe,
                                            struct urequest *urequest)
 {
-    assert(urequest->registered);
-    urequest->registered = false;
-    return upipe_control(upipe, UPIPE_UNREGISTER_REQUEST, urequest);
+    if (urequest->registered) {
+        urequest->registered = false;
+        return upipe_control(upipe, UPIPE_UNREGISTER_REQUEST, urequest);
+    }
+    return UBASE_ERR_NONE;
 }
 
 /** @This flushes all currently held buffers, and unblocks the sources.
