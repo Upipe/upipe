@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2012-2017 OpenHeadend S.A.R.L.
+ * Copyright (C) 2012-2019 OpenHeadend S.A.R.L.
  *
  * Authors: Christophe Massiot
  *
@@ -416,13 +416,7 @@ static int STRUCTURE##_get_output(struct upipe *upipe, struct upipe **p)    \
 static int STRUCTURE##_set_output(struct upipe *upipe, struct upipe *output)\
 {                                                                           \
     struct STRUCTURE *s = STRUCTURE##_from_upipe(upipe);                    \
-    if (likely(s->OUTPUT != NULL)) {                                        \
-        struct uchain *uchain;                                              \
-        ulist_foreach (&s->REQUEST_LIST, uchain) {                          \
-            struct urequest *urequest = urequest_from_uchain(uchain);       \
-            upipe_unregister_request(s->OUTPUT, urequest);                  \
-        }                                                                   \
-    }                                                                       \
+    upipe_unregister_request_list(s->OUTPUT, &s->REQUEST_LIST);             \
     upipe_release(s->OUTPUT);                                               \
                                                                             \
     s->OUTPUT = upipe_use(output);                                          \
@@ -430,24 +424,12 @@ static int STRUCTURE##_set_output(struct upipe *upipe, struct upipe *output)\
     if (unlikely(s->OUTPUT == NULL))                                        \
         return UBASE_ERR_NONE;                                              \
                                                                             \
-    /* Retry in a loop because the request list may change at any point. */ \
-    for ( ; ; ) {                                                           \
-        struct urequest *urequest = NULL;                                   \
-        struct uchain *uchain;                                              \
-        ulist_foreach (&s->REQUEST_LIST, uchain) {                          \
-            struct urequest *urequest_chain = urequest_from_uchain(uchain); \
-            if (!urequest_chain->registered) {                              \
-                urequest = urequest_chain;                                  \
-                break;                                                      \
-            }                                                               \
-        }                                                                   \
-        if (urequest != NULL) {                                             \
-            upipe_register_request(s->OUTPUT, urequest);                    \
-            continue;                                                       \
-        }                                                                   \
-        break;                                                              \
+    int err = upipe_register_request_list(s->OUTPUT, &s->REQUEST_LIST);     \
+    if (unlikely(!ubase_check(err))) {                                      \
+        upipe_release(s->OUTPUT);                                           \
+        s->OUTPUT = NULL;                                                   \
     }                                                                       \
-    return UBASE_ERR_NONE;                                                  \
+    return err;                                                             \
 }                                                                           \
 /** @This handles get/set output controls.                                  \
  *                                                                          \

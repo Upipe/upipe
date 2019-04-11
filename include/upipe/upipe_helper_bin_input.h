@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2014-2017 OpenHeadend S.A.R.L.
+ * Copyright (C) 2014-2019 OpenHeadend S.A.R.L.
  *
  * Authors: Christophe Massiot
  *
@@ -159,34 +159,12 @@ static void STRUCTURE##_store_bin_input(struct upipe *upipe,                \
                                         struct upipe *first_inner)          \
 {                                                                           \
     struct STRUCTURE *s = STRUCTURE##_from_upipe(upipe);                    \
-    if (likely(s->FIRST_INNER != NULL)) {                                   \
-        struct uchain *uchain;                                              \
-        ulist_foreach (&s->REQUEST_LIST, uchain) {                          \
-            struct urequest *urequest = urequest_from_uchain(uchain);       \
-            upipe_unregister_request(s->FIRST_INNER, urequest);             \
-        }                                                                   \
-    }                                                                       \
+    upipe_unregister_request_list(s->FIRST_INNER, &s->REQUEST_LIST);        \
     STRUCTURE##_store_##FIRST_INNER(upipe, first_inner);                    \
     if (unlikely(first_inner == NULL))                                      \
         return;                                                             \
                                                                             \
-    /* Retry in a loop because the request list may change at any point. */ \
-    for ( ; ; ) {                                                           \
-        struct urequest *urequest = NULL;                                   \
-        struct uchain *uchain;                                              \
-        ulist_foreach (&s->REQUEST_LIST, uchain) {                          \
-            struct urequest *urequest_chain = urequest_from_uchain(uchain); \
-            if (!urequest_chain->registered) {                              \
-                urequest = urequest_chain;                                  \
-                break;                                                      \
-            }                                                               \
-        }                                                                   \
-        if (urequest != NULL) {                                             \
-            upipe_register_request(s->FIRST_INNER, urequest);               \
-            continue;                                                       \
-        }                                                                   \
-        break;                                                              \
-    }                                                                       \
+    upipe_register_request_list(s->FIRST_INNER, &s->REQUEST_LIST);          \
 }                                                                           \
 /** @internal @This registers a request to be forwarded downstream. The     \
  * request will be replayed if the first inner changes. If there is no first\
