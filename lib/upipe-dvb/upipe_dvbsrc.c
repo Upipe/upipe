@@ -128,7 +128,8 @@ UPIPE_HELPER_UCLOCK(upipe_dvbsrc, uclock, uclock_request, upipe_dvbsrc_check,
 UPIPE_HELPER_UPUMP_MGR(upipe_dvbsrc, upump_mgr)
 UPIPE_HELPER_UPUMP(upipe_dvbsrc, upump, upump_mgr)
 
-static void upipe_dvbsrc_log(void *priv, int level, const char *fmt,...)
+UBASE_FMT_PRINTF(3, 4)
+static void upipe_dvbsrc_log(void *priv, int level, const char *fmt, ...)
 {
     int loglevel;
     switch (level) {
