@@ -42,6 +42,7 @@
 #include <upipe/upipe_helper_uref_mgr.h>
 #include <upipe/upipe_helper_ubuf_mgr.h>
 #include <upipe/upipe_helper_upump_mgr.h>
+#include <upipe/upipe_helper_upump.h>
 #include <upipe-filters/upipe_rtp_feedback.h>
 #include <upipe-modules/upipe_udp_sink.h>
 
@@ -138,6 +139,8 @@ UPIPE_HELPER_VOID(upipe_rtpfb);
 UPIPE_HELPER_OUTPUT(upipe_rtpfb, output, flow_def, output_state, request_list);
 UBASE_FROM_TO(upipe_rtpfb, urefcount, urefcount_real, urefcount_real)
 UPIPE_HELPER_UPUMP_MGR(upipe_rtpfb, upump_mgr)
+UPIPE_HELPER_UPUMP(upipe_rtpfb, upump_timer, upump_mgr)
+UPIPE_HELPER_UPUMP(upipe_rtpfb, upump_timer_lost, upump_mgr)
 UPIPE_HELPER_UCLOCK(upipe_rtpfb, uclock, uclock_request, NULL, upipe_throw_provide_request, NULL)
 
 struct upipe_rtpfb_output {
@@ -502,15 +505,15 @@ static void upipe_rtpfb_restart_timer(struct upipe *upipe)
     struct upipe_rtpfb *upipe_rtpfb = upipe_rtpfb_from_upipe(upipe);
     uint64_t rtt = _upipe_rtpfb_get_rtt(upipe);
 
-    if (upipe_rtpfb->upump_timer_lost) {
-        upump_stop(upipe_rtpfb->upump_timer_lost);
-        upump_free(upipe_rtpfb->upump_timer_lost);
-    }
+    upipe_rtpfb_set_upump_timer_lost(upipe, NULL);
     if (upipe_rtpfb->upump_mgr) {
-        upipe_rtpfb->upump_timer_lost = upump_alloc_timer(upipe_rtpfb->upump_mgr,
-                upipe_rtpfb_timer_lost, upipe, upipe->refcount,
-                0, rtt / 10);
-        upump_start(upipe_rtpfb->upump_timer_lost);
+        struct upump *upump=
+            upump_alloc_timer(upipe_rtpfb->upump_mgr,
+                              upipe_rtpfb_timer_lost,
+                              upipe, upipe->refcount,
+                              0, rtt / 10);
+        upump_start(upump);
+        upipe_rtpfb_set_upump_timer_lost(upipe, upump);
     }
 }
 
@@ -532,10 +535,13 @@ static int upipe_rtpfb_check(struct upipe *upipe, struct uref *flow_format)
         return UBASE_ERR_NONE;
 
     if (upipe_rtpfb->upump_mgr && !upipe_rtpfb->upump_timer) {
-        upipe_rtpfb->upump_timer = upump_alloc_timer(upipe_rtpfb->upump_mgr,
-                upipe_rtpfb_timer, upipe, upipe->refcount,
-                UCLOCK_FREQ/300, UCLOCK_FREQ/300);
-        upump_start(upipe_rtpfb->upump_timer);
+        struct upump *upump =
+            upump_alloc_timer(upipe_rtpfb->upump_mgr,
+                              upipe_rtpfb_timer,
+                              upipe, upipe->refcount,
+                              UCLOCK_FREQ/300, UCLOCK_FREQ/300);
+        upump_start(upump);
+        upipe_rtpfb_set_upump_timer(upipe, upump);
 
         /* every 10ms, check for lost packets
          * interval is reduced each time we get the current RTT from sender */
@@ -751,6 +757,8 @@ static struct upipe *upipe_rtpfb_alloc(struct upipe_mgr *mgr,
     upipe_rtpfb->expected_seqnum = UINT_MAX;
     upipe_rtpfb->flow_def_input = NULL;
     upipe_rtpfb_init_upump_mgr(upipe);
+    upipe_rtpfb_init_upump_timer(upipe);
+    upipe_rtpfb_init_upump_timer_lost(upipe);
     upipe_rtpfb_init_uclock(upipe);
     ulist_init(&upipe_rtpfb->queue);
     memset(upipe_rtpfb->last_nack, 0, sizeof(upipe_rtpfb->last_nack));
@@ -764,8 +772,6 @@ static struct upipe *upipe_rtpfb_alloc(struct upipe_mgr *mgr,
     upipe_rtpfb->repaired = 0;
     upipe_rtpfb->loss = 0;
     upipe_rtpfb->dups = 0;
-    upipe_rtpfb->upump_timer = NULL;
-    upipe_rtpfb->upump_timer_lost = NULL;
 
     upipe_rtpfb->latency = UCLOCK_FREQ;
 
@@ -1092,6 +1098,8 @@ static int _upipe_rtpfb_control(struct upipe *upipe, int command, va_list args)
     UBASE_HANDLED_RETURN(upipe_rtpfb_control_outputs(upipe, command, args));
     switch (command) {
         case UPIPE_ATTACH_UPUMP_MGR:
+            upipe_rtpfb_set_upump_timer(upipe, NULL);
+            upipe_rtpfb_set_upump_timer_lost(upipe, NULL);
             return upipe_rtpfb_attach_upump_mgr(upipe);
         case UPIPE_SET_FLOW_DEF: {
             struct uref *flow_def = va_arg(args, struct uref *);
@@ -1161,14 +1169,8 @@ static void upipe_rtpfb_free(struct urefcount *urefcount_real)
     upipe_rtpfb_clean_output(upipe);
     upipe_rtpfb_clean_urefcount(upipe);
     upipe_release(upipe_rtpfb->rtpfb_output);
-    if (upipe_rtpfb->upump_timer) {
-        upump_stop(upipe_rtpfb->upump_timer);
-        upump_free(upipe_rtpfb->upump_timer);
-    }
-    if (upipe_rtpfb->upump_timer_lost) {
-        upump_stop(upipe_rtpfb->upump_timer_lost);
-        upump_free(upipe_rtpfb->upump_timer_lost);
-    }
+    upipe_rtpfb_clean_upump_timer_lost(upipe);
+    upipe_rtpfb_clean_upump_timer(upipe);
     upipe_rtpfb_clean_upump_mgr(upipe);
     upipe_rtpfb_clean_uclock(upipe);
     upipe_rtpfb_clean_sub_outputs(upipe);
