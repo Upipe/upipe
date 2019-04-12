@@ -593,7 +593,7 @@ static inline void upipe_rtcpfb_input(struct upipe *upipe, struct uref *uref,
     uref_attr_set_priv(uref, seqnum);
 
     /* Output packet immediately */
-    upipe_rtcpfb_output(upipe, uref_dup(uref), NULL); // FIXME : upump?
+    upipe_rtcpfb_output(upipe, uref_dup(uref), upump_p);
 
     upipe_verbose_va(upipe, "Output & buffer %hu", seqnum);
 
