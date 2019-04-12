@@ -458,6 +458,7 @@ static int upipe_rtcpfb_input_control(struct upipe *upipe,
 {
     UBASE_HANDLED_RETURN(
         upipe_rtcpfb_input_control_super(upipe, command, args));
+    UBASE_HANDLED_RETURN(upipe_control_provide_request(upipe, command, args));
     switch (command) {
         case UPIPE_SET_FLOW_DEF: {
             struct uref *flow_def = va_arg(args, struct uref *);
