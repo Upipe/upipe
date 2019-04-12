@@ -131,6 +131,7 @@ static int check_uclock(struct upipe *upipe, struct uref *uref)
     if (mgr->uclock_check != NULL)
         return mgr->uclock_check(upipe, uref);
 
+    uref_free(uref);
     return UBASE_ERR_NONE;
 }
 
@@ -141,6 +142,7 @@ static int check_uref(struct upipe *upipe, struct uref *uref)
     if (mgr->uref_check != NULL)
         return mgr->uref_check(upipe, uref);
 
+    uref_free(uref);
     return UBASE_ERR_NONE;
 }
 
@@ -151,6 +153,7 @@ static int check_ubuf(struct upipe *upipe, struct uref *uref)
     if (mgr->ubuf_check != NULL)
         return mgr->ubuf_check(upipe, uref);
 
+    uref_free(uref);
     return UBASE_ERR_NONE;
 }
 
