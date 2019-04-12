@@ -255,6 +255,7 @@ static void upipe_rtcpfb_input_sub(struct upipe *upipe, struct uref *uref,
 
 UPIPE_HELPER_UPIPE(upipe_rtcpfb_input, upipe, UPIPE_RTCPFB_INPUT_SIGNATURE)
 UPIPE_HELPER_UREFCOUNT(upipe_rtcpfb_input, urefcount, upipe_rtcpfb_input_free)
+UPIPE_HELPER_VOID(upipe_rtcpfb_input);
 UPIPE_HELPER_SUBPIPE(upipe_rtcpfb, upipe_rtcpfb_input, output, sub_mgr, inputs,
                      uchain)
 
@@ -376,17 +377,11 @@ static struct upipe *upipe_rtcpfb_input_alloc(struct upipe_mgr *mgr,
                                             struct uprobe *uprobe,
                                             uint32_t signature, va_list args)
 {
-    if (signature != UPIPE_VOID_SIGNATURE ||
-        mgr->signature != UPIPE_RTCPFB_INPUT_SIGNATURE)
+    struct upipe *upipe =
+        upipe_rtcpfb_input_alloc_void(mgr, uprobe, signature, args);
+    if (unlikely(upipe == NULL))
         return NULL;
 
-    struct upipe_rtcpfb_input *upipe_rtcpfb_input =
-        malloc(sizeof(struct upipe_rtcpfb_input));
-    if (unlikely(upipe_rtcpfb_input == NULL))
-        return NULL;
-
-    struct upipe *upipe = upipe_rtcpfb_input_to_upipe(upipe_rtcpfb_input);
-    upipe_init(upipe, mgr, uprobe);
     upipe_rtcpfb_input_init_urefcount(upipe);
     upipe_rtcpfb_input_init_sub(upipe);
 
@@ -400,14 +395,11 @@ static struct upipe *upipe_rtcpfb_input_alloc(struct upipe_mgr *mgr,
  */
 static void upipe_rtcpfb_input_free(struct upipe *upipe)
 {
-    struct upipe_rtcpfb_input *upipe_rtcpfb_input =
-        upipe_rtcpfb_input_from_upipe(upipe);
     upipe_throw_dead(upipe);
 
     upipe_rtcpfb_input_clean_sub(upipe);
     upipe_rtcpfb_input_clean_urefcount(upipe);
-    upipe_clean(upipe);
-    free(upipe_rtcpfb_input);
+    upipe_rtcpfb_input_free_void(upipe);
 }
 
 /** @internal this timer removes from the queue packets that are too
