@@ -10,9 +10,11 @@ if test "${1%.sh}" != "$1" -o `basename "$1"` = "upipe_qt_html_test"; then
     exec "$1" "$srcdir"
 fi
 
-if ! which valgrind >/dev/null 2>&1; then
-    echo "#### Please install valgrind for unit tests"
-    exit 1
+if test -z "$DISABLE_VALGRIND"; then
+    if ! which valgrind >/dev/null 2>&1; then
+        echo "#### Please install valgrind for unit tests"
+        exit 1
+    fi
 fi
 
 # valgrind suppressions
