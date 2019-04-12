@@ -35,6 +35,7 @@
 #include <upipe/upipe_helper_upipe.h>
 #include <upipe/upipe_helper_subpipe.h>
 #include <upipe/upipe_helper_urefcount.h>
+#include <upipe/upipe_helper_urefcount_real.h>
 #include <upipe/upipe_helper_void.h>
 #include <upipe/upipe_helper_output.h>
 #include <upipe/upipe_helper_input.h>
@@ -124,6 +125,7 @@ static int upipe_rtcpfb_check(struct upipe *upipe, struct uref *flow_format);
 
 UPIPE_HELPER_UPIPE(upipe_rtcpfb, upipe, UPIPE_RTCPFB_SIGNATURE);
 UPIPE_HELPER_UREFCOUNT(upipe_rtcpfb, urefcount, upipe_rtcpfb_no_input);
+UPIPE_HELPER_UREFCOUNT_REAL(upipe_rtcpfb, urefcount_real, upipe_rtcpfb_free);
 UPIPE_HELPER_VOID(upipe_rtcpfb);
 UPIPE_HELPER_OUTPUT(upipe_rtcpfb, output, flow_def, output_state, request_list);
 UPIPE_HELPER_UREF_MGR(upipe_rtcpfb, uref_mgr, uref_mgr_request,
@@ -134,7 +136,6 @@ UPIPE_HELPER_UBUF_MGR(upipe_rtcpfb, ubuf_mgr, flow_format, ubuf_mgr_request,
                       upipe_rtcpfb_check,
                       upipe_rtcpfb_register_output_request,
                       upipe_rtcpfb_unregister_output_request)
-UBASE_FROM_TO(upipe_rtcpfb, urefcount, urefcount_real, urefcount_real)
 UPIPE_HELPER_UPUMP_MGR(upipe_rtcpfb, upump_mgr)
 UPIPE_HELPER_UPUMP(upipe_rtcpfb, upump_timer, upump_mgr)
 UPIPE_HELPER_UCLOCK(upipe_rtcpfb, uclock, uclock_request, NULL, upipe_throw_provide_request, NULL)
@@ -359,9 +360,8 @@ static void upipe_rtcpfb_lost_sub(struct upipe *upipe, uint16_t seq, uint16_t ma
  */
 static void upipe_rtcpfb_no_input(struct upipe *upipe)
 {
-    struct upipe_rtcpfb *upipe_rtcpfb = upipe_rtcpfb_from_upipe(upipe);
     upipe_rtcpfb_throw_sub_outputs(upipe, UPROBE_SOURCE_END);
-    urefcount_release(upipe_rtcpfb_to_urefcount_real(upipe_rtcpfb));
+    upipe_rtcpfb_release_urefcount_real(upipe);
 }
 
 /** @internal @This allocates an output subpipe of a dup pipe.
@@ -537,9 +537,6 @@ static void upipe_rtcpfb_init_sub_mgr(struct upipe *upipe)
     sub_mgr->upipe_mgr_control = NULL;
 }
 
-static void upipe_rtcpfb_free(struct urefcount *urefcount_real);
-
-
 /** @internal @This allocates a rtcpfb pipe.
  *
  * @param mgr common management structure
@@ -558,18 +555,18 @@ static struct upipe *upipe_rtcpfb_alloc(struct upipe_mgr *mgr,
 
     struct upipe_rtcpfb *upipe_rtcpfb = upipe_rtcpfb_from_upipe(upipe);
     upipe_rtcpfb_init_urefcount(upipe);
-    urefcount_init(upipe_rtcpfb_to_urefcount_real(upipe_rtcpfb), upipe_rtcpfb_free);
+    upipe_rtcpfb_init_urefcount_real(upipe);
     upipe_rtcpfb_init_upump_mgr(upipe);
     upipe_rtcpfb_init_upump_timer(upipe);
     upipe_rtcpfb_init_uclock(upipe);
-    ulist_init(&upipe_rtcpfb->queue);
     upipe_rtcpfb_init_output(upipe);
     upipe_rtcpfb_init_sub_mgr(upipe);
     upipe_rtcpfb_init_sub_outputs(upipe);
-    upipe_rtcpfb->expected_seqnum = -1;
-    upipe_rtcpfb->retrans = 0;
     upipe_rtcpfb_init_ubuf_mgr(upipe);
     upipe_rtcpfb_init_uref_mgr(upipe);
+    ulist_init(&upipe_rtcpfb->queue);
+    upipe_rtcpfb->expected_seqnum = -1;
+    upipe_rtcpfb->retrans = 0;
     upipe_rtcpfb->last_seq = UINT_MAX;
     upipe_rtcpfb->latency = 1000; /* 1 sec */
 
@@ -687,17 +684,18 @@ static int upipe_rtcpfb_control(struct upipe *upipe, int command, va_list args)
 
 /** @internal @This frees all resources allocated.
  *
- * @param urefcount_real pointer to urefcount_real structure
+ * @param upipe the public structure of the pipe
  */
-static void upipe_rtcpfb_free(struct urefcount *urefcount_real)
+static void upipe_rtcpfb_free(struct upipe *upipe)
 {
-    struct upipe_rtcpfb *upipe_rtcpfb = upipe_rtcpfb_from_urefcount_real(urefcount_real);
-    struct upipe *upipe = upipe_rtcpfb_to_upipe(upipe_rtcpfb);
+    struct upipe_rtcpfb *upipe_rtcpfb = upipe_rtcpfb_from_upipe(upipe);
+
     upipe_dbg_va(upipe, "releasing pipe %p", upipe);
     upipe_throw_dead(upipe);
 
     upipe_rtcpfb_clean_output(upipe);
     upipe_rtcpfb_clean_sub_outputs(upipe);
+    upipe_rtcpfb_clean_urefcount_real(upipe);
     upipe_rtcpfb_clean_urefcount(upipe);
     upipe_rtcpfb_clean_ubuf_mgr(upipe);
     upipe_rtcpfb_clean_uref_mgr(upipe);
