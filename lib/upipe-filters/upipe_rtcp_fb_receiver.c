@@ -105,8 +105,6 @@ struct upipe_rtcpfb {
 
     /** output pipe */
     struct upipe *output;
-    /** input flow definition packet */
-    struct uref *flow_def_input;
     /** flow definition packet */
     struct uref *flow_def;
     /** output state */
@@ -144,16 +142,6 @@ struct upipe_rtcpfb_input {
     struct urefcount urefcount;
     /** structure for double-linked lists */
     struct uchain uchain;
-
-    /** pipe acting as output */
-    struct upipe *output;
-    /** flow definition packet */
-    struct uref *flow_def;
-    /** output state */
-    enum upipe_helper_output_state output_state;
-    /** list of output requests */
-    struct uchain request_list;
-
     /** public upipe structure */
     struct upipe upipe;
 };
@@ -395,8 +383,6 @@ static struct upipe *upipe_rtcpfb_input_alloc(struct upipe_mgr *mgr,
     if (unlikely(upipe_rtcpfb_input == NULL))
         return NULL;
 
-    upipe_rtcpfb_input->flow_def = NULL;
-
     struct upipe *upipe = upipe_rtcpfb_input_to_upipe(upipe_rtcpfb_input);
     upipe_init(upipe, mgr, uprobe);
     upipe_rtcpfb_input_init_urefcount(upipe);
@@ -415,8 +401,6 @@ static void upipe_rtcpfb_input_free(struct upipe *upipe)
     struct upipe_rtcpfb_input *upipe_rtcpfb_input =
         upipe_rtcpfb_input_from_upipe(upipe);
     upipe_throw_dead(upipe);
-
-    uref_free(upipe_rtcpfb_input->flow_def);
 
     upipe_rtcpfb_input_clean_sub(upipe);
     upipe_rtcpfb_input_clean_urefcount(upipe);
@@ -458,16 +442,7 @@ static int upipe_rtcpfb_input_set_flow_def(struct upipe *upipe, struct uref *flo
 {
     if (flow_def == NULL)
         return UBASE_ERR_INVALID;
-    UBASE_RETURN(uref_flow_match_def(flow_def, EXPECTED_FLOW_DEF))
-
-    struct uref *flow_def_dup = uref_dup(flow_def) ;
-    if (unlikely(flow_def_dup == NULL))
-        return UBASE_ERR_ALLOC;
-
-    struct upipe_rtcpfb_input *upipe_rtcpfb_input = upipe_rtcpfb_input_from_upipe(upipe);
-    uref_free(upipe_rtcpfb_input->flow_def);
-    upipe_rtcpfb_input->flow_def = flow_def_dup;
-    return UBASE_ERR_NONE;
+    return uref_flow_match_def(flow_def, EXPECTED_FLOW_DEF);
 }
 
 /** @internal @This processes control commands on an output subpipe of a dup
@@ -572,7 +547,6 @@ static struct upipe *upipe_rtcpfb_alloc(struct upipe_mgr *mgr,
     upipe_rtcpfb_init_sub_outputs(upipe);
     upipe_rtcpfb->expected_seqnum = -1;
     upipe_rtcpfb->retrans = 0;
-    upipe_rtcpfb->flow_def_input = NULL;
     upipe_rtcpfb_init_ubuf_mgr(upipe);
     upipe_rtcpfb_init_uref_mgr(upipe);
     upipe_rtcpfb->last_seq = UINT_MAX;
@@ -642,10 +616,7 @@ static int upipe_rtcpfb_set_flow_def(struct upipe *upipe, struct uref *flow_def)
     struct uref *flow_def_dup;
     if (unlikely((flow_def_dup = uref_dup(flow_def)) == NULL))
         return UBASE_ERR_ALLOC;
-    struct upipe_rtcpfb *upipe_rtcpfb = upipe_rtcpfb_from_upipe(upipe);
-    uref_free(upipe_rtcpfb->flow_def_input);
-    upipe_rtcpfb->flow_def_input = flow_def_dup;
-    upipe_rtcpfb_store_flow_def(upipe, uref_dup(flow_def));
+    upipe_rtcpfb_store_flow_def(upipe, flow_def_dup);
 
     return UBASE_ERR_NONE;
 }
@@ -710,7 +681,6 @@ static void upipe_rtcpfb_free(struct urefcount *urefcount_real)
     upipe_dbg_va(upipe, "releasing pipe %p", upipe);
     upipe_throw_dead(upipe);
 
-    uref_free(upipe_rtcpfb->flow_def_input);
     upipe_rtcpfb_clean_output(upipe);
     upipe_rtcpfb_clean_sub_outputs(upipe);
     upipe_rtcpfb_clean_urefcount(upipe);
