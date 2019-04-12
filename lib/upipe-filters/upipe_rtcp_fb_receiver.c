@@ -457,6 +457,11 @@ static int upipe_rtcpfb_check(struct upipe *upipe, struct uref *flow_format)
         return UBASE_ERR_NONE;
     }
 
+    if (upipe_rtcpfb->uclock == NULL) {
+        upipe_rtcpfb_require_uclock(upipe);
+        return UBASE_ERR_NONE;
+    }
+
     if (upipe_rtcpfb->ubuf_mgr == NULL) {
         struct uref *flow_format =
             uref_block_flow_alloc_def(upipe_rtcpfb->uref_mgr, NULL);
@@ -566,7 +571,6 @@ static struct upipe *upipe_rtcpfb_alloc(struct upipe_mgr *mgr,
     upipe_rtcpfb_init_ubuf_mgr(upipe);
     upipe_rtcpfb_init_uref_mgr(upipe);
     upipe_rtcpfb->last_seq = UINT_MAX;
-    upipe_rtcpfb_require_uclock(upipe);
     upipe_rtcpfb->latency = 1000; /* 1 sec */
 
     upipe_throw_ready(upipe);
