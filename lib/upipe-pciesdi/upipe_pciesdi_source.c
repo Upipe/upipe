@@ -71,6 +71,7 @@ enum upipe_pciesdi_src_err {
 
 /** @hidden */
 static int upipe_pciesdi_src_check(struct upipe *upipe, struct uref *flow_format);
+static int get_flow_def(struct upipe *upipe, struct uref **flow_format);
 
 /** @internal @This is the private context of a file source pipe. */
 struct upipe_pciesdi_src {
@@ -116,6 +117,7 @@ struct upipe_pciesdi_src {
     /* picture properties, same units as upipe_hbrmt_common.h, pixels */
     const struct sdi_offsets_fmt *sdi_format;
     bool sdi3g_levelb;
+    uint8_t mode, family, scan, rate;
 
     uint8_t *read_buffer;
 
@@ -378,6 +380,30 @@ static void upipe_pciesdi_src_worker(struct upump *upump)
 
     if (locked != 0x3) {
         upipe_pciesdi_src->discontinuity = true;
+        return;
+    }
+
+    if (mode != upipe_pciesdi_src->mode
+            || family != upipe_pciesdi_src->family
+            || scan != upipe_pciesdi_src->scan
+            || rate != upipe_pciesdi_src->rate) {
+        /* Stop DMA to get EAV re-aligned. */
+        int64_t hw, sw;
+        sdi_dma_writer(upipe_pciesdi_src->fd, 0, &hw, &sw);
+
+        /* Get new format details. */
+        struct uref *flow_def;
+        int ret = get_flow_def(upipe, &flow_def);
+        upipe_pciesdi_src_store_flow_def(upipe, flow_def);
+        if (!ubase_check(ubuf_mgr_check(upipe_pciesdi_src->ubuf_mgr, flow_def)))
+            upipe_pciesdi_src_require_ubuf_mgr(upipe, flow_def);
+
+        /* Start DMA and reset state. */
+        sdi_dma_writer(upipe_pciesdi_src->fd, 1, &hw, &sw);
+        upipe_pciesdi_src->scratch_buffer_count = 0;
+        upipe_pciesdi_src->discontinuity = true;
+
+        /* Return because there should be no data to read. */
         return;
     }
 
@@ -713,6 +739,11 @@ static int get_flow_def(struct upipe *upipe, struct uref **flow_format)
 
     int64_t hw, sw;
     sdi_dma_writer(upipe_pciesdi_src->fd, 1, &hw, &sw); // enable
+
+    upipe_pciesdi_src->mode = mode;
+    upipe_pciesdi_src->family = family;
+    upipe_pciesdi_src->scan = scan;
+    upipe_pciesdi_src->rate = rate;
 
     return UBASE_ERR_NONE;
 }
