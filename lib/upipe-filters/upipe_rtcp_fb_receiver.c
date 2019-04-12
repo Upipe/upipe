@@ -41,6 +41,7 @@
 #include <upipe/upipe_helper_uref_mgr.h>
 #include <upipe/upipe_helper_ubuf_mgr.h>
 #include <upipe/upipe_helper_upump_mgr.h>
+#include <upipe/upipe_helper_upump.h>
 #include <upipe/upipe_helper_uclock.h>
 #include <upipe-filters/upipe_rtcp_fb_receiver.h>
 
@@ -135,6 +136,7 @@ UPIPE_HELPER_UBUF_MGR(upipe_rtcpfb, ubuf_mgr, flow_format, ubuf_mgr_request,
                       upipe_rtcpfb_unregister_output_request)
 UBASE_FROM_TO(upipe_rtcpfb, urefcount, urefcount_real, urefcount_real)
 UPIPE_HELPER_UPUMP_MGR(upipe_rtcpfb, upump_mgr)
+UPIPE_HELPER_UPUMP(upipe_rtcpfb, upump_timer, upump_mgr)
 UPIPE_HELPER_UCLOCK(upipe_rtcpfb, uclock, uclock_request, NULL, upipe_throw_provide_request, NULL)
 
 struct upipe_rtcpfb_input {
@@ -408,6 +410,38 @@ static void upipe_rtcpfb_input_free(struct upipe *upipe)
     free(upipe_rtcpfb_input);
 }
 
+/** @internal this timer removes from the queue packets that are too
+ * early to be recovered by receiver.
+ */
+static void upipe_rtcpfb_timer(struct upump *upump)
+{
+    struct upipe *upipe = upump_get_opaque(upump, struct upipe *);
+    struct upipe_rtcpfb *upipe_rtcpfb = upipe_rtcpfb_from_upipe(upipe);
+
+    uint64_t now = uclock_now(upipe_rtcpfb->uclock);
+
+    struct uchain *uchain, *uchain_tmp;
+    ulist_delete_foreach(&upipe_rtcpfb->queue, uchain, uchain_tmp) {
+        struct uref *uref = uref_from_uchain(uchain);
+
+        uint64_t seqnum = 0;
+        uref_attr_get_priv(uref, &seqnum);
+
+        uint64_t cr_sys = 0;
+        if (unlikely(!ubase_check(uref_clock_get_cr_sys(uref, &cr_sys))))
+            upipe_warn(upipe, "Couldn't read cr_sys");
+
+        if (now - cr_sys < upipe_rtcpfb->latency * UCLOCK_FREQ / 1000)
+            return;
+
+        upipe_verbose_va(upipe, "Delete seq %" PRIu64 " after %"PRIu64" clocks",
+                seqnum, now - cr_sys);
+
+        ulist_delete(uchain);
+        uref_free(uref);
+    }
+}
+
 static int upipe_rtcpfb_check(struct upipe *upipe, struct uref *flow_format)
 {
     struct upipe_rtcpfb *upipe_rtcpfb = upipe_rtcpfb_from_upipe(upipe);
@@ -432,6 +466,19 @@ static int upipe_rtcpfb_check(struct upipe *upipe, struct uref *flow_format)
         }
         upipe_rtcpfb_require_ubuf_mgr(upipe, flow_format);
         return UBASE_ERR_NONE;
+    }
+
+    upipe_rtcpfb_check_upump_mgr(upipe);
+    if (upipe_rtcpfb->upump_mgr == NULL)
+        return UBASE_ERR_NONE;
+
+    if (upipe_rtcpfb->upump_timer == NULL) {
+        struct upump *upump =
+            upump_alloc_timer(upipe_rtcpfb->upump_mgr,
+                              upipe_rtcpfb_timer, upipe, upipe->refcount,
+                              UCLOCK_FREQ, UCLOCK_FREQ);
+        upump_start(upump);
+        upipe_rtcpfb_set_upump_timer(upipe, upump);
     }
 
     return UBASE_ERR_NONE;
@@ -487,38 +534,6 @@ static void upipe_rtcpfb_init_sub_mgr(struct upipe *upipe)
 
 static void upipe_rtcpfb_free(struct urefcount *urefcount_real);
 
-/** @internal this timer removes from the queue packets that are too
- * early to be recovered by receiver.
- */
-static void upipe_rtcpfb_timer(struct upump *upump)
-{
-    struct upipe *upipe = upump_get_opaque(upump, struct upipe *);
-    struct upipe_rtcpfb *upipe_rtcpfb = upipe_rtcpfb_from_upipe(upipe);
-
-    uint64_t now = uclock_now(upipe_rtcpfb->uclock);
-
-    struct uchain *uchain, *uchain_tmp;
-    ulist_delete_foreach(&upipe_rtcpfb->queue, uchain, uchain_tmp) {
-        struct uref *uref = uref_from_uchain(uchain);
-
-        uint64_t seqnum = 0;
-        uref_attr_get_priv(uref, &seqnum);
-
-        uint64_t cr_sys = 0;
-        if (unlikely(!ubase_check(uref_clock_get_cr_sys(uref, &cr_sys))))
-            upipe_warn(upipe, "Couldn't read cr_sys");
-
-        if (now - cr_sys < upipe_rtcpfb->latency * UCLOCK_FREQ / 1000)
-            return;
-
-        upipe_verbose_va(upipe, "Delete seq %" PRIu64 " after %"PRIu64" clocks",
-                seqnum, now - cr_sys);
-
-        ulist_delete(uchain);
-        uref_free(uref);
-    }
-}
-
 
 /** @internal @This allocates a rtcpfb pipe.
  *
@@ -540,7 +555,7 @@ static struct upipe *upipe_rtcpfb_alloc(struct upipe_mgr *mgr,
     upipe_rtcpfb_init_urefcount(upipe);
     urefcount_init(upipe_rtcpfb_to_urefcount_real(upipe_rtcpfb), upipe_rtcpfb_free);
     upipe_rtcpfb_init_upump_mgr(upipe);
-    upipe_rtcpfb_check_upump_mgr(upipe);
+    upipe_rtcpfb_init_upump_timer(upipe);
     upipe_rtcpfb_init_uclock(upipe);
     ulist_init(&upipe_rtcpfb->queue);
     upipe_rtcpfb_init_output(upipe);
@@ -553,12 +568,6 @@ static struct upipe *upipe_rtcpfb_alloc(struct upipe_mgr *mgr,
     upipe_rtcpfb->last_seq = UINT_MAX;
     upipe_rtcpfb_require_uclock(upipe);
     upipe_rtcpfb->latency = 1000; /* 1 sec */
-
-    /* This timer does not need to run frequently */
-    upipe_rtcpfb->upump_timer = upump_alloc_timer(upipe_rtcpfb->upump_mgr,
-            upipe_rtcpfb_timer, upipe, upipe->refcount,
-            UCLOCK_FREQ, UCLOCK_FREQ);
-    upump_start(upipe_rtcpfb->upump_timer);
 
     upipe_throw_ready(upipe);
     return upipe;
@@ -635,6 +644,7 @@ static int _upipe_rtcpfb_control(struct upipe *upipe, int command, va_list args)
     UBASE_HANDLED_RETURN(upipe_rtcpfb_control_outputs(upipe, command, args));
     switch (command) {
         case UPIPE_ATTACH_UPUMP_MGR:
+            upipe_rtcpfb_set_upump_timer(upipe, NULL);
             return upipe_rtcpfb_attach_upump_mgr(upipe);
         case UPIPE_SET_FLOW_DEF: {
             struct uref *flow_def = va_arg(args, struct uref *);
@@ -687,8 +697,7 @@ static void upipe_rtcpfb_free(struct urefcount *urefcount_real)
     upipe_rtcpfb_clean_urefcount(upipe);
     upipe_rtcpfb_clean_ubuf_mgr(upipe);
     upipe_rtcpfb_clean_uref_mgr(upipe);
-    upump_stop(upipe_rtcpfb->upump_timer);
-    upump_free(upipe_rtcpfb->upump_timer);
+    upipe_rtcpfb_clean_upump_timer(upipe);
     upipe_rtcpfb_clean_upump_mgr(upipe);
     upipe_rtcpfb_clean_uclock(upipe);
 
