@@ -373,7 +373,8 @@ static int upipe_speexdsp_control(struct upipe *upipe, int command, va_list args
             if (request->type == UREQUEST_FLOW_FORMAT ||
                 request->type == UREQUEST_UBUF_MGR)
                 return UBASE_ERR_NONE;
-            return upipe_speexdsp_free_output_proxy(upipe, request);
+            upipe_speexdsp_free_output_proxy(upipe, request);
+            return UBASE_ERR_NONE;
         }
 
         case UPIPE_GET_OUTPUT:

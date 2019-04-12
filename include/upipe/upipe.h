@@ -1318,19 +1318,14 @@ static inline int upipe_register_request(struct upipe *upipe,
  *
  * @param upipe description structure of the pipe
  * @param urequest description structure of the request
- * @return an error code
  */
-static inline int upipe_unregister_request(struct upipe *upipe,
-                                           struct urequest *urequest)
+static inline void upipe_unregister_request(struct upipe *upipe,
+                                            struct urequest *urequest)
 {
-    if (!urequest->registered)
-        return UBASE_ERR_NONE;
-
+    if (!upipe || !urequest->registered)
+        return;
     urequest->registered = false;
-    int err = upipe_control(upipe, UPIPE_UNREGISTER_REQUEST, urequest);
-    if (unlikely(!ubase_check(err)))
-        urequest->registered = true;
-    return err;
+    ubase_assert(upipe_control(upipe, UPIPE_UNREGISTER_REQUEST, urequest));
 }
 
 /** @This registers a request list.
@@ -1373,24 +1368,17 @@ static inline int upipe_register_request_list(struct upipe *upipe,
  *
  * @param upipe description structure of the pipe
  * @param requests list of request
- * @return an error code
  */
-static inline int upipe_unregister_request_list(struct upipe *upipe,
-                                                struct uchain *requests)
+static inline void upipe_unregister_request_list(struct upipe *upipe,
+                                                 struct uchain *requests)
 {
     if (likely(upipe)) {
         struct uchain *uchain;
         ulist_foreach(requests, uchain) {
             struct urequest *urequest = urequest_from_uchain(uchain);
-            int err = upipe_unregister_request(upipe, urequest);
-            if (unlikely(!ubase_check(err))) {
-                upipe_err(upipe, "fail to unregister request");
-                upipe_throw_fatal(upipe, err);
-                return err;
-            }
+            upipe_unregister_request(upipe, urequest);
         }
     }
-    return UBASE_ERR_NONE;
 }
 
 /** @This flushes all currently held buffers, and unblocks the sources.

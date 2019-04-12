@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2012-2014 OpenHeadend S.A.R.L.
+ * Copyright (C) 2012-2019 OpenHeadend S.A.R.L.
  *
  * Authors: Christophe Massiot
  *
@@ -46,9 +46,12 @@ extern "C" {
  * callee). */
 typedef int (*upipe_helper_ubuf_mgr_check)(struct upipe *, struct uref *);
 
-/** @This defines a function that will be called to register or unregister a
- * request. */
+/** @This defines a function that will be called to register a request. */
 typedef int (*upipe_helper_ubuf_mgr_register)(struct upipe *, struct urequest *);
+
+/** @This defines a function that will be called to unregister a request. */
+typedef void (*upipe_helper_ubuf_mgr_unregister)(struct upipe *,
+                                                 struct urequest *);
 
 /** @This declares functions dealing with the ubuf manager used on the output
  * of a pipe.
@@ -170,7 +173,7 @@ static void STRUCTURE##_require_ubuf_mgr(struct upipe *upipe,               \
 {                                                                           \
     struct STRUCTURE *s = STRUCTURE##_from_upipe(upipe);                    \
     upipe_helper_ubuf_mgr_register reg = REGISTER;                          \
-    upipe_helper_ubuf_mgr_register unreg = UNREGISTER;                      \
+    upipe_helper_ubuf_mgr_unregister unreg = UNREGISTER;                    \
     assert(flow_format != NULL);                                            \
     if (urequest_get_opaque(&s->REQUEST, struct upipe *) != NULL) {         \
         if (unreg != NULL)                                                  \

@@ -809,8 +809,8 @@ static int upipe_ts_sig_service_control(struct upipe *upipe,
         }
         case UPIPE_UNREGISTER_REQUEST: {
             struct urequest *request = va_arg(args, struct urequest *);
-            return upipe_ts_sig_free_output_proxy(upipe_ts_sig_to_upipe(sig),
-                    request);
+            upipe_ts_sig_free_output_proxy(upipe_ts_sig_to_upipe(sig), request);
+            return UBASE_ERR_NONE;
         }
         case UPIPE_SET_FLOW_DEF: {
             struct uref *flow_def = va_arg(args, struct uref *);

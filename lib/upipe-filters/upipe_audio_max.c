@@ -264,7 +264,8 @@ static int upipe_amax_control(struct upipe *upipe, int command, va_list args)
             struct urequest *request = va_arg(args, struct urequest *);
             if (request->type == UREQUEST_FLOW_FORMAT)
                 return UBASE_ERR_NONE;
-            return upipe_amax_free_output_proxy(upipe, request);
+            upipe_amax_free_output_proxy(upipe, request);
+            return UBASE_ERR_NONE;
         }
         case UPIPE_SET_FLOW_DEF: {
             struct uref *flow_def = va_arg(args, struct uref *);

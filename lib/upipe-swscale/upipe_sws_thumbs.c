@@ -571,7 +571,8 @@ static int upipe_sws_thumbs_control(struct upipe *upipe,
             if (request->type == UREQUEST_UBUF_MGR ||
                 request->type == UREQUEST_FLOW_FORMAT)
                 return UBASE_ERR_NONE;
-            return upipe_sws_thumbs_free_output_proxy(upipe, request);
+            upipe_sws_thumbs_free_output_proxy(upipe, request);
+            return UBASE_ERR_NONE;
         }
 
         case UPIPE_GET_OUTPUT:

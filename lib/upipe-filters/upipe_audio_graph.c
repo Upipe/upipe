@@ -512,7 +512,8 @@ static int upipe_agraph_control(struct upipe *upipe, int command, va_list args)
             if (request->type == UREQUEST_UBUF_MGR ||
                 request->type == UREQUEST_FLOW_FORMAT)
                 return UBASE_ERR_NONE;
-            return upipe_agraph_free_output_proxy(upipe, request);
+            upipe_agraph_free_output_proxy(upipe, request);
+            return UBASE_ERR_NONE;
         }
         case UPIPE_SET_FLOW_DEF: {
             struct uref *flow = va_arg(args, struct uref *);

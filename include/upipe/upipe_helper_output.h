@@ -283,19 +283,13 @@ static int STRUCTURE##_register_output_request(struct upipe *upipe,         \
  *                                                                          \
  * @param upipe description structure of the pipe                           \
  * @param urequest request to stop forwarding                               \
- * @return an error code                                                    \
  */                                                                         \
-static int STRUCTURE##_unregister_output_request(struct upipe *upipe,       \
-                                                 struct urequest *urequest) \
+static void STRUCTURE##_unregister_output_request(struct upipe *upipe,      \
+                                                  struct urequest *urequest)\
 {                                                                           \
     struct STRUCTURE *s = STRUCTURE##_from_upipe(upipe);                    \
     ulist_delete(urequest_to_uchain(urequest));                             \
-    int err;                                                                \
-    if (likely(s->OUTPUT != NULL && urequest->registered &&                 \
-               (err = upipe_unregister_request(s->OUTPUT, urequest))        \
-                 != UBASE_ERR_UNHANDLED))                                   \
-        return err;                                                         \
-    return UBASE_ERR_NONE;                                                  \
+    upipe_unregister_request(s->OUTPUT, urequest);                          \
 }                                                                           \
 /** @internal @This handles the result of a proxy request.                  \
  *                                                                          \
@@ -341,8 +335,9 @@ static int UBASE_UNUSED STRUCTURE##_alloc_output_proxy(struct upipe *upipe, \
  * @param urequest upstream request to proxy                                \
  * @return an error code                                                    \
  */                                                                         \
-static int UBASE_UNUSED STRUCTURE##_free_output_proxy(struct upipe *upipe,  \
-                                                struct urequest *urequest)  \
+static void UBASE_UNUSED                                                    \
+ STRUCTURE##_free_output_proxy(struct upipe *upipe,                         \
+                               struct urequest *urequest)                   \
 {                                                                           \
     struct STRUCTURE *s = STRUCTURE##_from_upipe(upipe);                    \
     struct uchain *uchain, *uchain_tmp;                                     \
@@ -352,10 +347,9 @@ static int UBASE_UNUSED STRUCTURE##_free_output_proxy(struct upipe *upipe,  \
             STRUCTURE##_unregister_output_request(upipe, proxy);            \
             urequest_clean(proxy);                                          \
             urequest_free(proxy);                                           \
-            return UBASE_ERR_NONE;                                          \
+            return;                                                         \
         }                                                                   \
     }                                                                       \
-    return UBASE_ERR_INVALID;                                               \
 }                                                                           \
 /** @internal @This stores the flow definition to use on the output.        \
  *                                                                          \
@@ -455,7 +449,8 @@ static int STRUCTURE##_control_output(struct upipe *upipe,                  \
         case UPIPE_UNREGISTER_REQUEST: {                                    \
             struct urequest *urequest =                                     \
                 va_arg(args_copy, struct urequest *);                       \
-            ret = STRUCTURE##_free_output_proxy(upipe, urequest);           \
+            STRUCTURE##_free_output_proxy(upipe, urequest);                 \
+            ret = UBASE_ERR_NONE;                                           \
             break;                                                          \
         }                                                                   \
         case UPIPE_GET_FLOW_DEF: {                                          \

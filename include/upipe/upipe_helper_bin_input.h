@@ -187,16 +187,13 @@ static int STRUCTURE##_register_bin_request(struct upipe *upipe,            \
  *                                                                          \
  * @param upipe description structure of the pipe                           \
  * @param urequest request to stop forwarding                               \
- * @return an error code                                                    \
  */                                                                         \
-static int STRUCTURE##_unregister_bin_request(struct upipe *upipe,          \
-                                              struct urequest *urequest)    \
+static void STRUCTURE##_unregister_bin_request(struct upipe *upipe,         \
+                                               struct urequest *urequest)   \
 {                                                                           \
     struct STRUCTURE *s = STRUCTURE##_from_upipe(upipe);                    \
     ulist_delete(urequest_to_uchain(urequest));                             \
-    if (likely(s->FIRST_INNER != NULL && urequest->registered))             \
-        return upipe_unregister_request(s->FIRST_INNER, urequest);          \
-    return UBASE_ERR_NONE;                                                  \
+    upipe_unregister_request(s->FIRST_INNER, urequest);                     \
 }                                                                           \
 /** @internal @This handles the result of a proxy request.                  \
  *                                                                          \

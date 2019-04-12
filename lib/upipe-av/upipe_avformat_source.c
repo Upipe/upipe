@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2012-2018 OpenHeadend S.A.R.L.
+ * Copyright (C) 2012-2019 OpenHeadend S.A.R.L.
  *
  * Authors: Christophe Massiot
  *
@@ -179,7 +179,7 @@ static int upipe_avfsrc_sub_check(struct upipe *upipe, struct uref *flow_format)
 /** @hidden */
 static int upipe_avfsrc_sub_register_request(struct upipe *upipe, struct urequest *request);
 /** @hidden */
-static int upipe_avfsrc_sub_unregister_request(struct upipe *upipe, struct urequest *request);
+static void upipe_avfsrc_sub_unregister_request(struct upipe *upipe, struct urequest *request);
 /** @hidden */
 static void upipe_avfsrc_free(struct urefcount *urefcount_real);
 
@@ -362,14 +362,13 @@ static int upipe_avfsrc_sub_register_request(struct upipe *upipe,
  *
  * @param upipe description structure of the pipe
  * @param request urequest description structure
- * @return an error code
  */
-static int upipe_avfsrc_sub_unregister_request(struct upipe *upipe,
-                                               struct urequest *request)
+static void upipe_avfsrc_sub_unregister_request(struct upipe *upipe,
+                                                struct urequest *request)
 {
     struct upipe_avfsrc_sub *sub = upipe_avfsrc_sub_from_upipe(upipe);
     ulist_delete(urequest_to_uchain(request));
-    return upipe_unregister_request(sub->last_inner, request);
+    upipe_unregister_request(sub->last_inner, request);
 }
 
 /** @internal @This processes control commands on an output subpipe of an avfsrc

@@ -322,7 +322,8 @@ static int upipe_ts_scte35d_control(struct upipe *upipe, int command, va_list ar
             if (request->type == UREQUEST_UBUF_MGR ||
                 request->type == UREQUEST_FLOW_FORMAT)
                 return UBASE_ERR_NONE;
-            return upipe_ts_scte35d_free_output_proxy(upipe, request);
+            upipe_ts_scte35d_free_output_proxy(upipe, request);
+            return UBASE_ERR_NONE;
         }
         case UPIPE_SET_FLOW_DEF: {
             struct uref *flow_def = va_arg(args, struct uref *);

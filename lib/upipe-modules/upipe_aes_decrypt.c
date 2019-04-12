@@ -697,7 +697,8 @@ static int upipe_aes_decrypt_control(struct upipe *upipe,
         if (urequest->type == UREQUEST_UBUF_MGR ||
             urequest->type == UREQUEST_FLOW_FORMAT)
             return UBASE_ERR_NONE;
-        return upipe_aes_decrypt_free_output_proxy(upipe, urequest);
+        upipe_aes_decrypt_free_output_proxy(upipe, urequest);
+        return UBASE_ERR_NONE;
     }
     case UPIPE_GET_OUTPUT:
     case UPIPE_SET_OUTPUT:

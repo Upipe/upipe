@@ -205,8 +205,9 @@ static int upipe_ts_psi_join_sub_control(struct upipe *upipe,
             struct upipe_ts_psi_join *upipe_ts_psi_join =
                 upipe_ts_psi_join_from_sub_mgr(upipe->mgr);
             struct urequest *request = va_arg(args, struct urequest *);
-            return upipe_ts_psi_join_free_output_proxy(
-                    upipe_ts_psi_join_to_upipe(upipe_ts_psi_join), request);
+            upipe_ts_psi_join_free_output_proxy(
+                upipe_ts_psi_join_to_upipe(upipe_ts_psi_join), request);
+            return UBASE_ERR_NONE;
         }
         case UPIPE_SET_FLOW_DEF: {
             struct uref *flow_def = va_arg(args, struct uref *);

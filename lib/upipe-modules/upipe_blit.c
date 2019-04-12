@@ -663,8 +663,9 @@ static int upipe_blit_sub_control(struct upipe *upipe,
                 return UBASE_ERR_NONE;
             if (request->type == UREQUEST_FLOW_FORMAT)
                 return upipe_blit_sub_free_flow_format_provider(upipe, request);
-            return upipe_blit_free_output_proxy(
-                    upipe_blit_to_upipe(upipe_blit), request);
+            upipe_blit_free_output_proxy(
+                upipe_blit_to_upipe(upipe_blit), request);
+            return UBASE_ERR_NONE;
         }
         case UPIPE_SET_FLOW_DEF: {
             struct uref *flow_def = va_arg(args, struct uref *);

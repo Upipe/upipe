@@ -289,7 +289,8 @@ static int upipe_block_to_sound_control(struct upipe *upipe, int command, va_lis
             if (request->type == UREQUEST_UBUF_MGR ||
                 request->type == UREQUEST_FLOW_FORMAT)
                 return UBASE_ERR_NONE;
-            return upipe_block_to_sound_free_output_proxy(upipe, request);
+            upipe_block_to_sound_free_output_proxy(upipe, request);
+            return UBASE_ERR_NONE;
         }
         case UPIPE_SET_FLOW_DEF: {
             struct uref *flow_def = va_arg(args, struct uref *);

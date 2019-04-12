@@ -1362,7 +1362,8 @@ static int upipe_ts_encaps_control(struct upipe *upipe,
             struct urequest *request = va_arg(args, struct urequest *);
             if (request->type == UREQUEST_UREF_MGR)
                 return UBASE_ERR_NONE;
-            return upipe_ts_encaps_free_output_proxy(upipe, request);
+            upipe_ts_encaps_free_output_proxy(upipe, request);
+            return UBASE_ERR_NONE;
         }
         case UPIPE_SET_FLOW_DEF: {
             struct uref *flow_def = va_arg(args, struct uref *);

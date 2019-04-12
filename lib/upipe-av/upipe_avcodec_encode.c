@@ -1429,7 +1429,8 @@ static int upipe_avcenc_control(struct upipe *upipe,
             if (request->type == UREQUEST_UBUF_MGR ||
                 request->type == UREQUEST_FLOW_FORMAT)
                 return UBASE_ERR_NONE;
-            return upipe_avcenc_free_output_proxy(upipe, request);
+            upipe_avcenc_free_output_proxy(upipe, request);
+            return UBASE_ERR_NONE;
         }
         case UPIPE_ATTACH_UPUMP_MGR:
             upipe_avcenc_set_upump_av_deal(upipe, NULL);

@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2012-2014 OpenHeadend S.A.R.L.
+ * Copyright (C) 2012-2019 OpenHeadend S.A.R.L.
  *
  * Authors: Christophe Massiot
  *
@@ -46,9 +46,12 @@ extern "C" {
  * received. The second argument is an unused uref. */
 typedef int (*upipe_helper_uclock_check)(struct upipe *, struct uref *);
 
-/** @This defines a function that will be called to register or unregister a
- * request. */
+/** @This defines a function that will be called to register a request. */
 typedef int (*upipe_helper_uclock_register)(struct upipe *, struct urequest *);
+
+/** @This defines a function that will be called to unregister a request. */
+typedef void (*upipe_helper_uclock_unregister)(struct upipe *,
+                                               struct urequest *);
 
 /** @This declares four functions dealing with the uclock.
  *
@@ -135,7 +138,7 @@ static void STRUCTURE##_require_uclock(struct upipe *upipe)                 \
 {                                                                           \
     struct STRUCTURE *s = STRUCTURE##_from_upipe(upipe);                    \
     upipe_helper_uclock_register reg = REGISTER;                            \
-    upipe_helper_uclock_register unreg = UNREGISTER;                        \
+    upipe_helper_uclock_unregister unreg = UNREGISTER;                      \
     if (urequest_get_opaque(&s->REQUEST, struct upipe *) != NULL) {         \
         if (unreg != NULL)                                                  \
             unreg(upipe, &s->REQUEST);                                      \

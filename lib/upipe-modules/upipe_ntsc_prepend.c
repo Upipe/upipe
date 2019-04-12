@@ -192,7 +192,8 @@ static int upipe_ntsc_prepend_control(struct upipe *upipe, int command, va_list 
             struct urequest *request = va_arg(args, struct urequest *);
             if (request->type == UREQUEST_UBUF_MGR)
                 return UBASE_ERR_NONE;
-            return upipe_ntsc_prepend_free_output_proxy(upipe, request);
+            upipe_ntsc_prepend_free_output_proxy(upipe, request);
+            return UBASE_ERR_NONE;
         }
         case UPIPE_SET_FLOW_DEF: {
             struct uref *flow_def = va_arg(args, struct uref *);

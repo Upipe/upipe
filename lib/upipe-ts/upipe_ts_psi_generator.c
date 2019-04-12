@@ -716,8 +716,9 @@ static int upipe_ts_psig_flow_control(struct upipe *upipe,
             struct upipe_ts_psig *upipe_ts_psig =
                 upipe_ts_psig_from_program_mgr(upipe_ts_psig_program_to_upipe(upipe_ts_psig_program)->mgr);
             struct urequest *request = va_arg(args, struct urequest *);
-            return upipe_ts_psig_free_output_proxy(
-                    upipe_ts_psig_to_upipe(upipe_ts_psig), request);
+            upipe_ts_psig_free_output_proxy(
+                upipe_ts_psig_to_upipe(upipe_ts_psig), request);
+            return UBASE_ERR_NONE;
         }
         case UPIPE_SET_FLOW_DEF: {
             struct uref *flow_def = va_arg(args, struct uref *);
@@ -1192,8 +1193,9 @@ static int upipe_ts_psig_program_control(struct upipe *upipe,
             struct upipe_ts_psig *upipe_ts_psig =
                 upipe_ts_psig_from_program_mgr(upipe->mgr);
             struct urequest *request = va_arg(args, struct urequest *);
-            return upipe_ts_psig_free_output_proxy(
-                    upipe_ts_psig_to_upipe(upipe_ts_psig), request);
+            upipe_ts_psig_free_output_proxy(
+                upipe_ts_psig_to_upipe(upipe_ts_psig), request);
+            return UBASE_ERR_NONE;
         }
         case UPIPE_SET_FLOW_DEF: {
             struct uref *flow_def = va_arg(args, struct uref *);

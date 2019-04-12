@@ -295,7 +295,8 @@ static int upipe_pack10bit_control(struct upipe *upipe, int command, va_list arg
             if (request->type == UREQUEST_UBUF_MGR ||
                 request->type == UREQUEST_FLOW_FORMAT)
                 return UBASE_ERR_NONE;
-            return upipe_pack10bit_free_output_proxy(upipe, request);
+            upipe_pack10bit_free_output_proxy(upipe, request);
+            return UBASE_ERR_NONE;
         }
 
         case UPIPE_GET_OUTPUT:

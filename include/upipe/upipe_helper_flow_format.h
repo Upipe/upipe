@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2014 OpenHeadend S.A.R.L.
+ * Copyright (C) 2014-2019 OpenHeadend S.A.R.L.
  *
  * Authors: Christophe Massiot
  *
@@ -47,10 +47,13 @@ extern "C" {
  * callee). */
 typedef int (*upipe_helper_flow_format_check)(struct upipe *, struct uref *);
 
-/** @This defines a function that will be called to register or unregister a
- * request. */
+/** @This defines a function that will be called to register a request. */
 typedef int (*upipe_helper_flow_format_register)(struct upipe *,
                                                  struct urequest *);
+
+/** @This defines a function that will be called to unregister a request. */
+typedef void (*upipe_helper_flow_format_unregister)(struct upipe *,
+                                                    struct urequest *);
 
 /** @This declares four functions dealing with the flow format used on the
  * output of a pipe.
@@ -136,7 +139,7 @@ static void STRUCTURE##_require_flow_format(struct upipe *upipe,            \
 {                                                                           \
     struct STRUCTURE *s = STRUCTURE##_from_upipe(upipe);                    \
     upipe_helper_flow_format_register reg = REGISTER;                       \
-    upipe_helper_flow_format_register unreg = UNREGISTER;                   \
+    upipe_helper_flow_format_unregister unreg = UNREGISTER;                 \
     assert(flow_format != NULL);                                            \
     if (urequest_get_opaque(&s->REQUEST, struct upipe *) != NULL) {         \
         if (unreg != NULL)                                                  \

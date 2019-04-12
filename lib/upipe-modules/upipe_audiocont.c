@@ -329,8 +329,9 @@ static int upipe_audiocont_sub_control(struct upipe *upipe,
                 return UBASE_ERR_NONE;
             struct upipe_audiocont *upipe_audiocont =
                                     upipe_audiocont_from_sub_mgr(upipe->mgr);
-            return upipe_audiocont_free_output_proxy(
-                    upipe_audiocont_to_upipe(upipe_audiocont), request);
+            upipe_audiocont_free_output_proxy(
+                upipe_audiocont_to_upipe(upipe_audiocont), request);
+            return UBASE_ERR_NONE;
         }
         case UPIPE_SET_FLOW_DEF: {
             struct uref *flow_def = va_arg(args, struct uref *);
@@ -881,7 +882,8 @@ static int upipe_audiocont_control(struct upipe *upipe,
             if (request->type == UREQUEST_UBUF_MGR ||
                 request->type == UREQUEST_FLOW_FORMAT)
                 return UBASE_ERR_NONE;
-            return upipe_audiocont_free_output_proxy(upipe, request);
+            upipe_audiocont_free_output_proxy(upipe, request);
+            return UBASE_ERR_NONE;
         }
         case UPIPE_SET_FLOW_DEF: {
             struct uref *flow_def = va_arg(args, struct uref *);

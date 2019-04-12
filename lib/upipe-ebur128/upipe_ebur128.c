@@ -312,7 +312,8 @@ static int upipe_ebur128_control(struct upipe *upipe,
         }
         case UPIPE_UNREGISTER_REQUEST: {
             struct urequest *request = va_arg(args, struct urequest *);
-            return upipe_ebur128_free_output_proxy(upipe, request);
+            upipe_ebur128_free_output_proxy(upipe, request);
+            return UBASE_ERR_NONE;
         }
         case UPIPE_SET_FLOW_DEF: {
             struct uref *flow_def = va_arg(args, struct uref *);

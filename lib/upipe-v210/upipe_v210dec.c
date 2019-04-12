@@ -548,7 +548,8 @@ static int upipe_v210dec_control(struct upipe *upipe, int command, va_list args)
             if (request->type == UREQUEST_UBUF_MGR ||
                 request->type == UREQUEST_FLOW_FORMAT)
                 return UBASE_ERR_NONE;
-            return upipe_v210dec_free_output_proxy(upipe, request);
+            upipe_v210dec_free_output_proxy(upipe, request);
+            return UBASE_ERR_NONE;
         }
 
         case UPIPE_GET_OUTPUT:

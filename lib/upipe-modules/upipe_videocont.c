@@ -307,8 +307,9 @@ static int upipe_videocont_sub_control(struct upipe *upipe,
             struct urequest *request = va_arg(args, struct urequest *);
             struct upipe_videocont *upipe_videocont =
                                     upipe_videocont_from_sub_mgr(upipe->mgr);
-            return upipe_videocont_free_output_proxy(
-                    upipe_videocont_to_upipe(upipe_videocont), request);
+            upipe_videocont_free_output_proxy(
+                upipe_videocont_to_upipe(upipe_videocont), request);
+            return UBASE_ERR_NONE;
         }
         case UPIPE_SET_FLOW_DEF: {
             struct uref *flow_def = va_arg(args, struct uref *);

@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2013-2014 OpenHeadend S.A.R.L.
+ * Copyright (C) 2013-2019 OpenHeadend S.A.R.L.
  *
  * Authors: Christophe Massiot
  *
@@ -139,17 +139,14 @@ static UBASE_UNUSED int                                                     \
  *                                                                          \
  * @param upipe description structure of the pipe                           \
  * @param urequest request to stop forwarding                               \
- * @return an error code                                                    \
  */                                                                         \
-static UBASE_UNUSED int                                                     \
+static UBASE_UNUSED void                                                    \
     STRUCTURE##_unregister_bin_output_request(struct upipe *upipe,          \
                                               struct urequest *urequest)    \
 {                                                                           \
     struct STRUCTURE *s = STRUCTURE##_from_upipe(upipe);                    \
     ulist_delete(urequest_to_uchain(urequest));                             \
-    if (likely(s->OUTPUT != NULL))                                          \
-        return upipe_unregister_request(s->OUTPUT, urequest);               \
-    return UBASE_ERR_NONE;                                                  \
+    upipe_unregister_request(s->OUTPUT, urequest);                          \
 }                                                                           \
 /** @internal @This handles the set_output control command.                 \
  *                                                                          \

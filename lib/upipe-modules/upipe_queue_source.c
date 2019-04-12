@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2012-2015 OpenHeadend S.A.R.L.
+ * Copyright (C) 2012-2019 OpenHeadend S.A.R.L.
  *
  * Authors: Christophe Massiot
  *
@@ -248,16 +248,14 @@ static int upipe_qsrc_register_request(struct upipe *upipe,
  *
  * @param upipe description structure of the pipe
  * @param uequest request to unregister
- * @return an error code
  */
-static int upipe_qsrc_unregister_request(struct upipe *upipe,
-                                         struct upipe_queue_request *request)
+static void upipe_qsrc_unregister_request(struct upipe *upipe,
+                                          struct upipe_queue_request *request)
 {
     struct urequest *urequest = upipe_queue_request_to_urequest(request);
     upipe_verbose_va(upipe, "unregistered request %p", request);
-    int err = upipe_qsrc_unregister_output_request(upipe, urequest);
+    upipe_qsrc_unregister_output_request(upipe, urequest);
     upipe_queue_request_release(request);
-    return err;
 }
 
 /** @internal @This flushes the queue and emits source end.
