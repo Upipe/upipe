@@ -376,8 +376,11 @@ static bool upipe_bmd_vanc_handle(struct upipe *upipe, struct uref *uref,
     void *_VideoFrame = NULL;
     if (unlikely(uref->ubuf == NULL ||
                  !ubase_check(uref_pic_size(uref, &hsize, &vsize, NULL)) ||
-                 !ubase_check(uref_pic_plane_size(uref, "u8y8v8y8",
-                         &uref_stride, NULL, NULL, NULL)) ||
+                 (!ubase_check(uref_pic_plane_size(uref, "u8y8v8y8",
+                         &uref_stride, NULL, NULL, NULL)) &&
+                 !ubase_check(uref_pic_plane_size(uref,
+                         "u10y10v10y10u10y10v10y10u10y10v10y10",
+                         &uref_stride, NULL, NULL, NULL))) ||
                  !ubase_check(ubuf_pic_bmd_get_video_frame(uref->ubuf,
                                                            &_VideoFrame)) ||
                  _VideoFrame == NULL)) {
@@ -495,7 +498,6 @@ static bool upipe_bmd_vanc_handle(struct upipe *upipe, struct uref *uref,
     const uint8_t *r;
     if (unlikely(!ubase_check(uref_pic_plane_read(uref, "u8y8v8y8",
                                                   0, 0, -1, -1, &r)))) {
-        upipe_throw_error(upipe, UBASE_ERR_INVALID);
         while (nb_vbi_lines--) {
             upipe_bmd_vanc_blank((uint16_t *)w, frame_start_line, hsize);
             w += stride;
@@ -555,9 +557,14 @@ static int upipe_bmd_vanc_set_flow_def(struct upipe *upipe,
         return UBASE_ERR_INVALID;
     uint64_t hsize;
     UBASE_RETURN(uref_flow_match_def(flow_def, "pic."))
-    UBASE_RETURN(uref_pic_flow_match_macropixel(flow_def, 2, 2))
     UBASE_RETURN(uref_pic_flow_match_planes(flow_def, 1, 1))
-    UBASE_RETURN(uref_pic_flow_check_chroma(flow_def, 1, 1, 4, "u8y8v8y8"))
+    if (ubase_check(uref_pic_flow_match_macropixel(flow_def, 2, 2)))
+        UBASE_RETURN(uref_pic_flow_check_chroma(flow_def, 1, 1, 4, "u8y8v8y8"))
+    else {
+        UBASE_RETURN(uref_pic_flow_match_macropixel(flow_def, 6, 16))
+        UBASE_RETURN(uref_pic_flow_check_chroma(flow_def, 1, 1, 16, "u10y10v10y10u10y10v10y10u10y10v10y10"))
+    }
+
     UBASE_RETURN(uref_pic_flow_get_hsize(flow_def, &hsize))
     struct uref *flow_def_dup;
     if ((flow_def_dup = uref_dup(flow_def)) == NULL)
