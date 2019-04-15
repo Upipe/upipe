@@ -779,7 +779,8 @@ static void upipe_rtp_fec_colrow_input(struct upipe *upipe, struct uref *uref)
             goto invalid;
         }
 
-        if (upipe_rtp_fec->cols != offset) {
+        if (upipe_rtp_fec->cols != offset ||
+            upipe_rtp_fec->rows != na) {
             upipe_rtp_fec->cols = offset;
             upipe_rtp_fec->rows = na;
 
