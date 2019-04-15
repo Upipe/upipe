@@ -138,7 +138,8 @@ UPIPE_HELPER_UBUF_MGR(upipe_rtcpfb, ubuf_mgr, flow_format, ubuf_mgr_request,
                       upipe_rtcpfb_unregister_output_request)
 UPIPE_HELPER_UPUMP_MGR(upipe_rtcpfb, upump_mgr)
 UPIPE_HELPER_UPUMP(upipe_rtcpfb, upump_timer, upump_mgr)
-UPIPE_HELPER_UCLOCK(upipe_rtcpfb, uclock, uclock_request, NULL, upipe_throw_provide_request, NULL)
+UPIPE_HELPER_UCLOCK(upipe_rtcpfb, uclock, uclock_request,
+                    upipe_rtcpfb_check, upipe_throw_provide_request, NULL)
 
 struct upipe_rtcpfb_input {
     /** refcount management structure */
@@ -639,6 +640,10 @@ static int _upipe_rtcpfb_control(struct upipe *upipe, int command, va_list args)
         case UPIPE_ATTACH_UPUMP_MGR:
             upipe_rtcpfb_set_upump_timer(upipe, NULL);
             return upipe_rtcpfb_attach_upump_mgr(upipe);
+        case UPIPE_ATTACH_UCLOCK:
+            upipe_rtcpfb_set_upump_timer(upipe, NULL);
+            upipe_rtcpfb_require_uclock(upipe);
+            return UBASE_ERR_NONE;
         case UPIPE_SET_FLOW_DEF: {
             struct uref *flow_def = va_arg(args, struct uref *);
             return upipe_rtcpfb_set_flow_def(upipe, flow_def);
