@@ -709,6 +709,58 @@ static inline bool validate_anc_len(const uint16_t *packet, int left, bool sd)
     return left >= total_size;
 }
 
+static void upipe_sdi_dec_parse_vanc_line(struct upipe *upipe, struct uref *uref,
+        uint16_t *r, size_t hsize)
+{
+    while (hsize > S291_HEADER_SIZE + S291_FOOTER_SIZE) {
+        if (r[0] != S291_ADF1 || r[1] != S291_ADF2 || r[2] != S291_ADF3) {
+            r++;
+            hsize--;
+            continue;
+        }
+
+        uint8_t did = s291_get_did(r);
+        uint8_t sdid = s291_get_sdid(r);
+        uint8_t dc = s291_get_dc(r);
+        if (S291_HEADER_SIZE + dc + S291_FOOTER_SIZE > hsize) {
+            upipe_warn_va(upipe, "ancillary too large (%"PRIu8" > %zu) for 0x%"PRIx8"/0x%"PRIx8,
+                    dc, hsize, did, sdid);
+            break;
+        }
+
+        if (!s291_check_cs(r)) {
+            upipe_warn_va(upipe, "invalid CRC for 0x%"PRIx8"/0x%"PRIx8,
+                    did, sdid);
+            r += 3;
+            hsize -= 3;
+            continue;
+        }
+        r += S291_HEADER_SIZE;
+        hsize -= S291_HEADER_SIZE;
+
+        if (did == S291_AFD_DID && sdid == S291_AFD_SDID && dc == 8) {
+            uint8_t afd = r[0] & 0xff;
+            uref_pic_set_afd(uref, afd);
+
+            uint8_t bar_data[5];
+            for (unsigned int i = 0; i < 5; i++)
+                bar_data[i] = r[3 + i] & 0xff;
+            uref_pic_set_bar_data(uref, bar_data, 5);
+        } else if (did == S291_CEA708_DID && sdid == S291_CEA708_SDID) {
+            uint8_t cc_count = 3 * (r[8] & 0x1f);
+            uint8_t cea[cc_count];
+            for (int j = 0; j < cc_count; j++)
+                cea[j] = r[9+j] & 0xff;
+            uref_pic_set_cea_708(uref, cea, cc_count);
+        } else
+            upipe_verbose_va(upipe, "unhandled ancillary 0x%"PRIx8"/0x%"PRIx8,
+                    did, sdid);
+
+        r += dc + S291_FOOTER_SIZE;
+        hsize -= dc + S291_FOOTER_SIZE;
+    }
+}
+
 /** @internal @This handles data.
  *
  * @param upipe description structure of the pipe
@@ -1096,6 +1148,7 @@ static bool upipe_sdi_dec_handle(struct upipe *upipe, struct uref *uref,
                     }
                 }
                 }
+                upipe_sdi_dec_parse_vanc_line(upipe, uref, (uint16_t*)vanc_buf, vanc_stride / 2);
                 vanc_buf += vanc_stride;
             }
         } else {
