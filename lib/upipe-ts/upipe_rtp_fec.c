@@ -64,7 +64,7 @@
 
 #define UPIPE_FEC_JITTER UCLOCK_FREQ/25
 #define FEC_MAX 255
-#define LATENCY_MAX (UCLOCK_FREQ*2)
+#define DEFAULT_LATENCY_MAX (UCLOCK_FREQ*2)
 
 /** upipe_rtp_fec structure with rtp-fec parameters */
 struct upipe_rtp_fec {
@@ -108,6 +108,9 @@ struct upipe_rtp_fec {
 
     /** detected payload type */
     uint8_t pt;
+
+    /** maximum latency */
+    uint64_t max_latency;
 
     /** main subpipe **/
     struct upipe main_subpipe;
@@ -708,7 +711,7 @@ static void upipe_rtp_fec_main_input(struct upipe *upipe, struct uref *uref)
          * date_sys or prev_date_sys could be reordered */
         if (date_sys != UINT64_MAX && prev_date_sys != UINT64_MAX && prev_seqnum != UINT64_MAX && seqnum == expected_seqnum) {
             uint64_t latency = date_sys - prev_date_sys;
-            if (latency > LATENCY_MAX) {
+            if (upipe_rtp_fec->max_latency > 0 && latency > upipe_rtp_fec->max_latency) {
                 upipe_warn_va(upipe,"resync. Latency too high. date_sys %"PRIu64" prev_date_sys %"PRIu64", seqnum %u, prev_seqnum %"PRIu64"", date_sys, prev_date_sys, seqnum, prev_seqnum);
                 fec_change = true;
             } else if (upipe_rtp_fec->latency < latency) {
@@ -958,6 +961,7 @@ static struct upipe *_upipe_rtp_fec_alloc(struct upipe_mgr *mgr,
     upipe_rtp_fec->cur_matrix_snbase = UINT32_MAX;
     upipe_rtp_fec->cur_row_fec_snbase = UINT32_MAX;
     upipe_rtp_fec->pt = UINT8_MAX;
+    upipe_rtp_fec->max_latency = DEFAULT_LATENCY_MAX;
 
     upipe_rtp_fec->lost = 0;
     upipe_rtp_fec->prev_date_sys = UINT64_MAX;
@@ -1072,6 +1076,11 @@ static int upipe_rtp_fec_control(struct upipe *upipe, int command, va_list args)
     case UPIPE_RTP_FEC_SET_PT: {
         UBASE_SIGNATURE_CHECK(args, UPIPE_RTP_FEC_SIGNATURE)
         upipe_rtp_fec->pt = va_arg(args, unsigned);
+        return UBASE_ERR_NONE;
+    }
+    case UPIPE_RTP_FEC_SET_MAX_LATENCY: {
+        UBASE_SIGNATURE_CHECK(args, UPIPE_RTP_FEC_SIGNATURE)
+        upipe_rtp_fec->max_latency = va_arg(args, uint64_t);
         return UBASE_ERR_NONE;
     }
     default:
