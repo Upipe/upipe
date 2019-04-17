@@ -256,24 +256,8 @@ static int upipe_sdi_dec_set_option(struct upipe *upipe, const char *option,
 
 static int upipe_sdi_dec_sub_control(struct upipe *upipe, int command, va_list args)
 {
-    switch (command) {
-        case UPIPE_GET_FLOW_DEF: {
-            struct uref **p = va_arg(args, struct uref **);
-            return upipe_sdi_dec_sub_get_flow_def(upipe, p);
-        }
-
-        case UPIPE_GET_OUTPUT: {
-            struct upipe **p = va_arg(args, struct upipe **);
-            return upipe_sdi_dec_sub_get_output(upipe, p);
-        }
-        case UPIPE_SET_OUTPUT: {
-            struct upipe *output = va_arg(args, struct upipe *);
-            return upipe_sdi_dec_sub_set_output(upipe, output);
-        }
-
-        default:
-            return UBASE_ERR_UNHANDLED;
-    }
+    UBASE_HANDLED_RETURN(upipe_sdi_dec_sub_control_output(upipe, command, args));
+    return UBASE_ERR_UNHANDLED;
 }
 
 static struct upipe *upipe_sdi_dec_sub_init(struct upipe *upipe,
@@ -1402,18 +1386,11 @@ static int upipe_sdi_dec_control(struct upipe *upipe, int command, va_list args)
             return upipe_sdi_dec_free_output_proxy(upipe, request);
         }
 
-        case UPIPE_GET_OUTPUT: {
-            struct upipe **p = va_arg(args, struct upipe **);
-            return upipe_sdi_dec_get_output(upipe, p);
-        }
-        case UPIPE_SET_OUTPUT: {
-            struct upipe *output = va_arg(args, struct upipe *);
-            return upipe_sdi_dec_set_output(upipe, output);
-        }
-        case UPIPE_GET_FLOW_DEF: {
-            struct uref **p = va_arg(args, struct uref **);
-            return upipe_sdi_dec_get_flow_def(upipe, p);
-        }
+        case UPIPE_GET_OUTPUT:
+        case UPIPE_SET_OUTPUT:
+        case UPIPE_GET_FLOW_DEF:
+            return upipe_sdi_dec_control_output(upipe, command, args);
+
         case UPIPE_SET_FLOW_DEF: {
             struct uref *flow = va_arg(args, struct uref *);
             return upipe_sdi_dec_set_flow_def(upipe, flow);
