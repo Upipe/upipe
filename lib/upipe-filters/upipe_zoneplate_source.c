@@ -28,16 +28,11 @@
 #include <upipe/upipe_helper_urefcount.h>
 #include <upipe/upipe_helper_urefcount_real.h>
 #include <upipe/upipe_helper_flow.h>
-#include <upipe/upipe_helper_output.h>
-#include <upipe/upipe_helper_uref_mgr.h>
-#include <upipe/upipe_helper_ubuf_mgr.h>
-#include <upipe/upipe_helper_uclock.h>
-#include <upipe/upipe_helper_upump_mgr.h>
-#include <upipe/upipe_helper_upump.h>
 #include <upipe/upipe_helper_uprobe.h>
 #include <upipe/upipe_helper_inner.h>
 #include <upipe/upipe_helper_bin_output.h>
 
+#include <upipe/uclock.h>
 #include <upipe/uprobe_prefix.h>
 #include <upipe/uref_void_flow.h>
 #include <upipe/uref_pic_flow.h>
