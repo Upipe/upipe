@@ -52,7 +52,7 @@ SECTION .text
 
 INIT_XMM ssse3
 
-cglobal sdi_vanc_deinterleave, 4, 6, 3, vanc_buf_, vanc_stride_, src_, src_stride_
+cglobal sdi_vanc_deinterleave, 3, 5, 3, vanc_buf_, vanc_stride_, src_
     mov            r3, vanc_buf_q
     sar vanc_stride_q, 1
     add            r3, vanc_stride_q

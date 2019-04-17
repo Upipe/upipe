@@ -1,4 +1,4 @@
-void upipe_sdi_vanc_deinterleave_ssse3(void *vanc_buf, ptrdiff_t vanc_stride, const void *source, ptrdiff_t src_stride);
+void upipe_sdi_vanc_deinterleave_ssse3(void *vanc_buf, ptrdiff_t vanc_stride, const void *source);
 
 void upipe_sdi_to_uyvy_c(const uint8_t *src, uint16_t *y, uintptr_t pixels);
 /* process mmsize/4 pixels per iteration */
