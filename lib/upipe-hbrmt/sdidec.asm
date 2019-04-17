@@ -52,22 +52,23 @@ SECTION .text
 
 INIT_XMM ssse3
 
-cglobal sdi_vanc_deinterleave, 4, 4, 3, vanc_buf_, vanc_stride_, src_, src_stride_
+cglobal sdi_vanc_deinterleave, 4, 6, 3, vanc_buf_, vanc_stride_, src_, src_stride_
     mov            r3, vanc_buf_q
-    add         src_q, vanc_stride_q
-    add    vanc_buf_q, vanc_stride_q
     sar vanc_stride_q, 1
     add            r3, vanc_stride_q
-    neg vanc_stride_q
+    mov            r4, r3
 
     mova m0, [sdi_vanc_shuf1]
     .loop:
-        movu                               m1, [src_q + 2*vanc_stride_q]
-        pshufb                             m1, m0
-        movq   [vanc_buf_q + 2*vanc_stride_q], m1
-        MOVHL                              m2, m1
-        movq             [r3 + vanc_stride_q], m2
-        add                        vanc_buf_q, mmsize/2
+        movu             m1, [src_q]
+        pshufb           m1, m0
+        movq   [vanc_buf_q], m1
+        MOVHL            m2, m1
+        movq           [r3], m2
+        add           src_q, mmsize
+        add              r3, mmsize/2
+        add      vanc_buf_q, mmsize/2
+        cmp      vanc_buf_q, r4
     jl .loop
 RET
 
