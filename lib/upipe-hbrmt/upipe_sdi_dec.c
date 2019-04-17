@@ -1094,9 +1094,9 @@ static bool upipe_sdi_dec_handle(struct upipe *upipe, struct uref *uref,
                         vanc_dst[                i] = src_line[2*i  ]; // Y
                         vanc_dst[vanc_stride/4 + i] = src_line[2*i+1];  // C
                     }
-                    vanc_buf += vanc_stride;
                 }
                 }
+                vanc_buf += vanc_stride;
             }
         } else {
             uint8_t *y = fields[f2][0];
