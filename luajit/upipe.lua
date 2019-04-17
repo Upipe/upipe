@@ -502,6 +502,11 @@ local function upipe_helper_alloc(cb)
     else
         local control = { }
 
+        if not cb.bin_input and not cb.bin_output then
+            control[C.UPIPE_REGISTER_REQUEST] = C.upipe_throw_provide_request
+            control[C.UPIPE_UNREGISTER_REQUEST] = C.UBASE_ERR_NONE
+        end
+
         if cb.output then
             control[C.UPIPE_SET_OUTPUT] = C.upipe_helper_set_output
             control[C.UPIPE_GET_OUTPUT] = C.upipe_helper_get_output
@@ -524,8 +529,13 @@ local function upipe_helper_alloc(cb)
         end
 
         mgr.upipe_control = wrap_traceback(function (pipe, cmd, args)
-            local f = control[cmd] or function () return "unhandled" end
-            local ret = ubase_err(f(pipe, control_args(cmd, args)))
+            local ret = control[cmd] or C.UBASE_ERR_UNHANDLED
+            if type(ret) ~= "number" then
+                if type(ret) ~= "string" then
+                    ret = ret(pipe, control_args(cmd, args))
+                end
+                ret = ubase_err(ret)
+            end
             if ret == C.UBASE_ERR_UNHANDLED and cb.bin_input then
                 ret = C.upipe_helper_control_bin_input(pipe, cmd, args)
             end
