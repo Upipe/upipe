@@ -45,7 +45,7 @@ local init = {
             function (mgr, probe, signature, args)
                 local pipe = upipe_alloc(mgr, probe)
                 if cb.init then cb.init(pipe) end
-                pipe.props.clean = cb.clean
+                pipe.props._clean = cb.clean
                 return C.upipe_use(pipe)
             end
         mgr.upipe_input = cb.input
@@ -66,7 +66,7 @@ local function alloc(ty)
         ffi.cast("char *", refcount) + ffi.offsetof(ct, "data"))
         if ty == "upipe" or ty == "uclock" or ty == "upump" then
             local k = tostring(data):match(": 0x(.*)")
-            if props[k] and props[k].clean then props[k].clean(data) end
+            if props[k] and props[k]._clean then props[k]._clean(data) end
             props[k] = nil
         end
         if ty ~= "upipe_mgr" and ty ~= "uclock" then
@@ -330,6 +330,9 @@ ffi.metatype("struct upipe", {
                 return iterator(pipe, f, t)
             end
         end
+        if pipe.props._control and pipe.props._control[key] then
+            return pipe.props._control[key]
+        end
         local f =  C[fmt("upipe_%s", key)]
         return getter(upipe_getters, f, key) or f
     end,
@@ -448,6 +451,8 @@ local function upipe_helper_alloc(cb)
         h_mgr.output = cb.input_output
     end
 
+    local _control = {}
+
     local mgr = h_mgr.mgr
     mgr.upipe_alloc = cb.alloc or
         function (mgr, probe, signature, args)
@@ -472,7 +477,8 @@ local function upipe_helper_alloc(cb)
             pipe:throw_ready()
             pipe.props.helper = h_pipe
             if cb.init then cb.init(pipe, args) end
-            pipe.props.clean = cb.clean
+            pipe.props._control = _control
+            pipe.props._clean = cb.clean
             return pipe:use()
         end
 
@@ -495,6 +501,14 @@ local function upipe_helper_alloc(cb)
             io.stderr:write(debug.traceback(msg, 2), "\n")
         end
         xpcall(cb.input, errh, pipe, ref, pump_p)
+    end
+
+    if cb.commands then
+        for i, comm in ipairs(cb.commands) do
+            local v = C.UPIPE_CONTROL_LOCAL + i - 1
+            ffi.cdef(fmt("enum { UPIPE_%s = %d };", comm[1]:upper(), v))
+            ctrl_args[v] = { unpack(comm, 2) }
+        end
     end
 
     if type(cb.control) == "function" then
@@ -526,6 +540,7 @@ local function upipe_helper_alloc(cb)
 
         for k, v in pairs(cb.control) do
             control[C["UPIPE_" .. k:upper()]] = v
+            _control[k] = function (...) return ubase_err(v(...)) end
         end
 
         mgr.upipe_control = wrap_traceback(function (pipe, cmd, args)
