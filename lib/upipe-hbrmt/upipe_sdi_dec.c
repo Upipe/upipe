@@ -221,7 +221,6 @@ static int upipe_sdi_dec_sub_check(struct upipe *upipe, struct uref *flow_format
 
 UPIPE_HELPER_UPIPE(upipe_sdi_dec, upipe, UPIPE_SDI_DEC_SIGNATURE);
 UPIPE_HELPER_UREFCOUNT(upipe_sdi_dec, urefcount, upipe_sdi_dec_free);
-UPIPE_HELPER_VOID(upipe_sdi_dec);
 UPIPE_HELPER_OUTPUT(upipe_sdi_dec, output, flow_def, output_state, request_list)
 UPIPE_HELPER_UBUF_MGR(upipe_sdi_dec, ubuf_mgr, flow_format, ubuf_mgr_request,
                       upipe_sdi_dec_check,
