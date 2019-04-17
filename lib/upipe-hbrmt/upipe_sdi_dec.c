@@ -964,8 +964,6 @@ static bool upipe_sdi_dec_handle(struct upipe *upipe, struct uref *uref,
         }
     }
 
-    uint8_t vbi[720 * 32];
-
     /* Parse the whole frame */
     for (int h = 0; h < f->height; h++) {
         /* HANC starts at end of EAV */
