@@ -13,6 +13,7 @@ ffi.cdef [[
 
     // stdio.h
     typedef struct _IO_FILE FILE;
+    FILE *stderr;
 
     // time.h
     typedef long time_t;
@@ -778,11 +779,33 @@ local function upipe_helper_alloc(cb)
     return ffi.gc(mgr, C.upipe_mgr_release)
 end
 
+local function default_probe(log_level)
+    local clock = uclock.std(0)
+    local umem_mgr = umem.pool_simple(0)
+    local udict_mgr = udict.inline(0, umem_mgr, -1, -1)
+    local uref_mgr = uref.std(0, udict_mgr, 0)
+    local upump_mgr
+
+    local probe =
+        uprobe.uclock(clock) ..
+        uprobe.ubuf_mem(umem_mgr, 0, 0) ..
+        uprobe.uref_mgr(uref_mgr) ..
+        uprobe.stdio(C.stderr, log_level or C.UPROBE_LOG_NOTICE)
+
+    if libupump_ev_static_so then
+        upump_mgr = upump.ev_default(0, 0)
+        probe = probe .. uprobe.upump_mgr(upump_mgr)
+    end
+
+    return probe, upump_mgr
+end
+
 return setmetatable({
     name = "upipe",
     sigs = sigs,
     mgr = alloc("upipe_mgr"),
-    iterator = iterator
+    iterator = iterator,
+    default_probe = default_probe
 }, {
     __index = mgr_mt.__index,
     __call = function (_, cb)

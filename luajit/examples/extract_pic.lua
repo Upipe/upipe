@@ -1,6 +1,5 @@
 #!/usr/bin/env luajit
 
-local ffi = require "ffi"
 local upipe = require "upipe"
 
 require "upump-ev"
@@ -11,32 +10,13 @@ require "upipe-framers"
 require "upipe-filters"
 require "upipe-swscale"
 
-ffi.cdef [[ FILE *stderr; ]]
-
 local UPROBE_LOG_LEVEL = UPROBE_LOG_INFO
-local UMEM_POOL = 512
-local UDICT_POOL_DEPTH = 500
-local UREF_POOL_DEPTH = 500
-local UBUF_POOL_DEPTH = 3000
-local UBUF_SHARED_POOL_DEPTH = 50
-local UPUMP_POOL = 10
-local UPUMP_BLOCKER_POOL = 10
 
 local src_path = assert(arg[1])
 local dst_path = assert(arg[2])
 
--- managers
-local upump_mgr = upump.ev_default(UPUMP_POOL, UPUMP_BLOCKER_POOL)
-local umem_mgr = umem.pool_simple(UMEM_POOL)
-local udict_mgr = udict.inline(UDICT_POOL_DEPTH, umem_mgr, -1, -1)
-local uref_mgr = uref.std(UREF_POOL_DEPTH, udict_mgr, 0)
-
 -- default probe
-local probe =
-    uprobe.ubuf_mem(umem_mgr, UBUF_POOL_DEPTH, UBUF_SHARED_POOL_DEPTH) ..
-    uprobe.upump_mgr(upump_mgr) ..
-    uprobe.uref_mgr(uref_mgr) ..
-    uprobe.stdio(ffi.C.stderr, UPROBE_LOG_LEVEL)
+local probe, upump_mgr = upipe.default_probe(UPROBE_LOG_LEVEL)
 
 local function pfx(tag)
     return uprobe.pfx(UPROBE_LOG_LEVEL, tag)
