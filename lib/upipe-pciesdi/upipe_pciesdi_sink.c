@@ -467,6 +467,146 @@ static void upipe_pciesdi_sink_input(struct upipe *upipe, struct uref *uref, str
     }
 }
 
+static int init_hardware(struct upipe *upipe, bool ntsc, bool genlock, bool sd, bool sdi3g)
+{
+    struct upipe_pciesdi_sink *ctx = upipe_pciesdi_sink_from_upipe(upipe);
+    int fd = ctx->fd;
+    /* TODO: get device number from filename. */
+    const int device_number = 0;
+
+    uint8_t channels, has_vcxos;
+    uint8_t has_gs12241, has_gs12281, has_si5324;
+    uint8_t has_genlock, has_lmh0387, has_si596;
+    sdi_capabilities(fd, &channels, &has_vcxos, &has_gs12241, &has_gs12281,
+            &has_si5324, &has_genlock, &has_lmh0387, &has_si596);
+
+    if (has_vcxos == 0 && ntsc) {
+        upipe_err(upipe, "NTSC not yet supported on boards without VCXOs");
+        return UBASE_ERR_INVALID;
+    }
+
+    if (has_genlock == 0 && genlock) {
+        upipe_err(upipe, "genlock not supported on this board");
+        return UBASE_ERR_INVALID;
+    }
+
+    /* sdi_pre_init */
+
+    if (has_gs12281)
+        gs12281_spi_init(fd);
+    if (has_gs12241) {
+        if (sd) {
+            gs12241_reset(fd, device_number);
+            gs12241_config_for_sd(fd, device_number);
+        }
+        gs12241_spi_init(fd);
+    }
+
+    /* sdi_init */
+
+    /* reset sdi cores */
+    sdi_writel(fd, CSR_SDI_QPLL_REFCLK_STABLE_ADDR, 0);
+    switch (device_number) {
+        case 0:
+            sdi_writel(fd, CSR_SDI0_CORE_TX_RESET_ADDR, 1);
+            break;
+        case 1:
+            sdi_writel(fd, CSR_SDI1_CORE_TX_RESET_ADDR, 1);
+            break;
+        case 2:
+            sdi_writel(fd, CSR_SDI2_CORE_TX_RESET_ADDR, 1);
+            break;
+        case 3:
+            sdi_writel(fd, CSR_SDI3_CORE_TX_RESET_ADDR, 1);
+            break;
+    }
+
+    /* reset driver */
+
+    /* disable loopback */
+    sdi_dma(fd, 0);
+
+    /* disable dmas */
+    int64_t hw_count, sw_count;
+    sdi_dma_reader(fd, 0, &hw_count, &sw_count);
+
+    if (has_si5324) { /* PCIE_SDI_HW */
+        /* si5324 reset */
+        si5324_spi_write(fd, 136, 80);
+
+        /* si5324 configuration */
+        if (ntsc) {
+            sdi_si5324_vcxo(fd, 512<<10, 1024<<10);
+            for (int i = 0; i < countof(si5324_148_35_mhz_regs); i++) {
+                si5324_spi_write(fd, si5324_148_35_mhz_regs[i][0], si5324_148_35_mhz_regs[i][1]);
+            }
+        } else if (genlock) {
+            si5324_genlock(fd);
+        } else { /* pal */
+            sdi_si5324_vcxo(fd, 512<<10, 1024<<10);
+            for (int i = 0; i < countof(si5324_148_5_mhz_regs); i++) {
+                si5324_spi_write(fd, si5324_148_5_mhz_regs[i][0], si5324_148_5_mhz_regs[i][1]);
+            }
+        }
+
+        /* reference clock selection */
+        sdi_writel(fd, CSR_SDI_QPLL_PLL0_REFCLK_SEL_ADDR, REFCLK1_SEL);
+    }
+
+    else if (has_si596) { /* MINI_4K_HW */
+        uint32_t refclk_freq;
+        uint64_t refclk_counter;
+
+        /* disable pwm */
+        sdi_writel(fd, CSR_REFCLK_PWM_ENABLE_ADDR, 0);
+        if (ntsc) {
+            sdi_refclk(fd, 1, &refclk_freq, &refclk_counter);
+        } else { /* pal */
+            sdi_refclk(fd, 0, &refclk_freq, &refclk_counter);
+        }
+        sdi_writel(fd, CSR_SDI_QPLL_PLL0_REFCLK_SEL_ADDR, REFCLK0_SEL);
+    }
+
+    else { /* DUO2_HW */
+        /* reference clock selection */
+        if (ntsc) {
+            sdi_writel(fd, CSR_SDI_QPLL_PLL0_REFCLK_SEL_ADDR, REFCLK1_SEL);
+        } else { /* pal */
+            sdi_writel(fd, CSR_SDI_QPLL_PLL0_REFCLK_SEL_ADDR, REFCLK0_SEL);
+        }
+    }
+
+    uint8_t txen, slew;
+    /* set mode */
+    if (sd)
+        sdi_tx(fd, SDI_TX_MODE_SD, &txen, &slew);
+    else if (sdi3g)
+        sdi_tx(fd, SDI_TX_MODE_3G, &txen, &slew);
+    else /* hd */
+        sdi_tx(fd, SDI_TX_MODE_HD, &txen, &slew);
+
+    /* skip sleeping */
+
+    /* un-reset sdi cores */
+    sdi_writel(fd, CSR_SDI_QPLL_REFCLK_STABLE_ADDR, 1);
+    switch (device_number) {
+        case 0:
+            sdi_writel(fd, CSR_SDI0_CORE_TX_RESET_ADDR, 0);
+            break;
+        case 1:
+            sdi_writel(fd, CSR_SDI1_CORE_TX_RESET_ADDR, 0);
+            break;
+        case 2:
+            sdi_writel(fd, CSR_SDI2_CORE_TX_RESET_ADDR, 0);
+            break;
+        case 3:
+            sdi_writel(fd, CSR_SDI3_CORE_TX_RESET_ADDR, 0);
+            break;
+    }
+
+    return UBASE_ERR_NONE;
+}
+
 /** @internal @This sets the input flow definition.
  *
  * @param upipe description structure of the pipe
@@ -486,13 +626,8 @@ static int upipe_pciesdi_sink_set_flow_def(struct upipe *upipe, struct uref *flo
     UBASE_RETURN(uref_pic_flow_get_vsize(flow_def, &height));
     UBASE_RETURN(uref_pic_flow_get_fps(flow_def, &fps));
 
-#ifdef DUO2_HW
-    if (fps.den == 1001) {
-        upipe_err(upipe, "TX of NTSC signals is not supported on the Duo2");
-        return UBASE_ERR_INVALID;
-    }
-#endif
-
+    bool ntsc = fps.den == 1001;
+    bool genlock = false;
     bool sd = height < 720;
     bool sdi3g = height == 1080 && (urational_cmp(&fps, &(struct urational){ 50, 1 })) >= 0;
     upipe_dbg_va(upipe, "sd: %d, 3g: %d", sd, sdi3g);
@@ -505,6 +640,13 @@ static int upipe_pciesdi_sink_set_flow_def(struct upipe *upipe, struct uref *flo
         upipe_pciesdi_sink->tx_mode = SDI_TX_MODE_3G;
     else
         upipe_pciesdi_sink->tx_mode = SDI_TX_MODE_HD;
+
+    if (upipe_pciesdi_sink->fd == -1) {
+        upipe_warn(upipe, "device has not been opened, unable to init hardware");
+        return UBASE_ERR_INVALID;
+    } else {
+        init_hardware(upipe, ntsc, genlock, sd, sdi3g);
+    }
 
     /* disable pattern */
     sdi_set_pattern(upipe_pciesdi_sink->fd, upipe_pciesdi_sink->tx_mode, 0, 0);
@@ -540,8 +682,6 @@ static int upipe_pciesdi_set_uri(struct upipe *upipe, const char *path)
         return UBASE_ERR_EXTERNAL;
     }
 
-    sdi_dma(upipe_pciesdi_sink->fd, 0); // disable loopback
-
     struct sdi_ioctl_mmap_dma_info mmap_info;
     if (ioctl(upipe_pciesdi_sink->fd, SDI_IOCTL_MMAP_DMA_INFO, &mmap_info) != 0) {
         upipe_err(upipe, "error getting mmap info");
@@ -563,6 +703,9 @@ static int upipe_pciesdi_set_uri(struct upipe *upipe, const char *path)
         upipe_err(upipe, "mmap failed");
         return UBASE_ERR_EXTERNAL;
     }
+
+    sdi_dma(upipe_pciesdi_sink->fd, 0); // disable loopback
+    sdi_set_direction(upipe_pciesdi_sink->fd, 1); /* Set direction for TX. */
 
     /* TODO: check need to release things on failure. */
 
