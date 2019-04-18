@@ -121,6 +121,9 @@ static uint64_t upipe_pciesdi_sink_now(struct uclock *uclock)
     uint64_t tick;
     sdi_refclk(upipe_pciesdi_sink->fd, 0, &freq, &tick);
 
+    if (freq == 0)
+        return UINT64_MAX;
+
     /* 128 bits needed to prevent overflow after ~2.5 hours */
     __uint128_t fullscale = tick;
     fullscale *= UCLOCK_FREQ;
