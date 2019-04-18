@@ -22,14 +22,6 @@
 
 #define SDI_DEVICE_IS_BITPACKED 1
 
-uint8_t sdi_channels;
-uint8_t sdi_has_vcxos;
-uint8_t sdi_has_gs12241;
-uint8_t sdi_has_gs12281;
-uint8_t sdi_has_si5324;
-uint8_t sdi_has_genlock;
-uint8_t sdi_has_lmh0387;
-uint8_t sdi_has_si596;
 
 int64_t get_time_ms(void);
 
@@ -41,7 +33,9 @@ void sdi_reload(int fd);
 
 void sdi_refclk(int fd, uint8_t refclk_sel, uint32_t *refclk_freq, uint64_t *refclk_counter);
 
-void sdi_capabilities(int fd);
+void sdi_capabilities(int fd, uint8_t *channels, uint8_t *has_vcxos,
+        uint8_t *has_gs12241, uint8_t *has_gs12281, uint8_t *has_si5324,
+        uint8_t *has_genlock, uint8_t *has_lmh0387, uint8_t *has_si596);
 
 void sdi_vcxo(int fd, uint32_t width, uint32_t period);
 

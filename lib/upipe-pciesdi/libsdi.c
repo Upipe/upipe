@@ -69,17 +69,19 @@ void sdi_refclk(int fd, uint8_t refclk_sel, uint32_t *refclk_freq, uint64_t *ref
     *refclk_counter = m.refclk_counter;
 }
 
-void sdi_capabilities(int fd) {
+void sdi_capabilities(int fd, uint8_t *channels, uint8_t *has_vcxos,
+        uint8_t *has_gs12241, uint8_t *has_gs12281, uint8_t *has_si5324,
+        uint8_t *has_genlock, uint8_t *has_lmh0387, uint8_t *has_si596) {
     struct sdi_ioctl_capabilities m;
     ioctl(fd, SDI_IOCTL_CAPABILITIES, &m);
-    sdi_channels    = m.channels;
-    sdi_has_vcxos   = m.has_vcxos;
-    sdi_has_gs12241 = m.has_gs12241;
-    sdi_has_gs12281 = m.has_gs12281;
-    sdi_has_si5324  = m.has_si5324;
-    sdi_has_genlock = m.has_genlock;
-    sdi_has_lmh0387 = m.has_lmh0387;
-    sdi_has_si596   = m.has_si596;
+    *channels    = m.channels;
+    *has_vcxos   = m.has_vcxos;
+    *has_gs12241 = m.has_gs12241;
+    *has_gs12281 = m.has_gs12281;
+    *has_si5324  = m.has_si5324;
+    *has_genlock = m.has_genlock;
+    *has_lmh0387 = m.has_lmh0387;
+    *has_si596   = m.has_si596;
 }
 
 void sdi_reload(int fd) {
