@@ -187,11 +187,19 @@ static void upipe_voidsrc_worker(struct upump *upump)
         upipe_voidsrc->pts += upipe_voidsrc->interval;
 
         upipe_voidsrc_output(upipe, uref, &upipe_voidsrc->timer);
+
+        /* If uclock_now is returning an error (UINT64_MAX) break after one
+         * iteration to prevent an infinite loop. */
+        if (now == UINT64_MAX)
+            break;
     }
 
+    uint64_t wait = 0;
+    if (now != UINT64_MAX)
+        wait = upipe_voidsrc->pts - now;
+
     if (!upipe_single(upipe))
-        upipe_voidsrc_wait_timer(upipe, upipe_voidsrc->pts - now,
-                                 upipe_voidsrc_worker);
+        upipe_voidsrc_wait_timer(upipe, wait, upipe_voidsrc_worker);
 }
 
 /** @internal @This checks if the pump may be allocated.
