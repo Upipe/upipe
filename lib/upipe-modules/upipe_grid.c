@@ -73,10 +73,6 @@ struct upipe_grid {
     struct urequest uclock_request;
     /** late buffer tolerance */
     uint64_t tolerance;
-    /** last update pts */
-    uint64_t last_update_pts;
-    /** next update diff */
-    uint64_t next_update;
     /** grid max rentention */
     uint64_t max_retention;
 };
@@ -446,6 +442,11 @@ static void upipe_grid_in_update_pts(struct upipe *upipe, uint64_t next_pts)
 
     upipe_verbose_va(upipe, "update PTS %"PRIu64, next_pts);
 
+    if (upipe_grid_in->last_update &&
+        upipe_grid_in->next_update &&
+        upipe_grid_in->last_update + upipe_grid_in->next_update >= next_pts)
+        return;
+
     /* get current input latency */
     if (flow_def)
         uref_clock_get_latency(flow_def, &latency);
@@ -493,8 +494,6 @@ static void upipe_grid_in_update_pts(struct upipe *upipe, uint64_t next_pts)
         if (pts + latency + upipe_grid->tolerance > next_pts)
             upipe_grid_in->next_update =
                 pts + latency + upipe_grid->tolerance - next_pts;
-        if (upipe_grid_in->next_update < upipe_grid->next_update)
-            upipe_grid->next_update = upipe_grid_in->next_update;
 
         /* remaining buffers are up to date,.. */
         break;
@@ -1139,8 +1138,6 @@ static struct upipe *upipe_grid_alloc(struct upipe_mgr *mgr,
 
     struct upipe_grid *upipe_grid = upipe_grid_from_upipe(upipe);
     upipe_grid->tolerance = DEFAULT_TOLERANCE;
-    upipe_grid->last_update_pts = 0;
-    upipe_grid->next_update = 0;
     upipe_grid->max_retention = MAX_RETENTION;
 
     upipe_throw_ready(upipe);
@@ -1219,13 +1216,6 @@ static int upipe_grid_control(struct upipe *upipe,
  */
 static int upipe_grid_update_pts(struct upipe *upipe, uint64_t next_pts)
 {
-    struct upipe_grid *upipe_grid = upipe_grid_from_upipe(upipe);
-
-    if (upipe_grid->last_update_pts &&
-        upipe_grid->last_update_pts + upipe_grid->next_update >= next_pts)
-        return UBASE_ERR_NONE;
-    upipe_grid->last_update_pts = next_pts;
-
     /* iterate through the input pipes */
     struct upipe *in = NULL;
     while (ubase_check(upipe_grid_iterate_input(upipe, &in)) && in)
