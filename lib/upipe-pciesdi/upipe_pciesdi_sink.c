@@ -85,6 +85,7 @@ struct upipe_pciesdi_sink {
     struct upump *upump;
 
     int tx_mode;
+    int device_number;
 
     /** scratch buffer */
     int scratch_bytes;
@@ -471,14 +472,19 @@ static int init_hardware(struct upipe *upipe, bool ntsc, bool genlock, bool sd, 
 {
     struct upipe_pciesdi_sink *ctx = upipe_pciesdi_sink_from_upipe(upipe);
     int fd = ctx->fd;
-    /* TODO: get device number from filename. */
-    const int device_number = 0;
+    int device_number = ctx->device_number;
 
     uint8_t channels, has_vcxos;
     uint8_t has_gs12241, has_gs12281, has_si5324;
     uint8_t has_genlock, has_lmh0387, has_si596;
     sdi_capabilities(fd, &channels, &has_vcxos, &has_gs12241, &has_gs12281,
             &has_si5324, &has_genlock, &has_lmh0387, &has_si596);
+
+    if (device_number < 0 || device_number >= channels) {
+        upipe_err_va(upipe, "invalid device number (%d) for number of channels (%d)",
+                device_number, channels);
+        return UBASE_ERR_INVALID;
+    }
 
     if (has_vcxos == 0 && ntsc) {
         upipe_err(upipe, "NTSC not yet supported on boards without VCXOs");
@@ -645,7 +651,7 @@ static int upipe_pciesdi_sink_set_flow_def(struct upipe *upipe, struct uref *flo
         upipe_warn(upipe, "device has not been opened, unable to init hardware");
         return UBASE_ERR_INVALID;
     } else {
-        init_hardware(upipe, ntsc, genlock, sd, sdi3g);
+        UBASE_RETURN(init_hardware(upipe, ntsc, genlock, sd, sdi3g));
     }
 
     /* disable pattern */
@@ -711,6 +717,7 @@ static int upipe_pciesdi_set_uri(struct upipe *upipe, const char *path)
 
     upipe_pciesdi_sink->mmap_info = mmap_info;
     upipe_pciesdi_sink->write_buffer = buf;
+    upipe_pciesdi_sink->device_number = path[strlen(path) - 1] - 0x30;
 
     return UBASE_ERR_NONE;
 }
