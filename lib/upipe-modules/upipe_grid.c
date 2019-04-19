@@ -265,7 +265,7 @@ static int upipe_grid_in_catch(struct uprobe *uprobe,
             while (ubase_check(upipe_grid_iterate_output(super, &output)) &&
                    output)
                 upipe_grid_out_handle_input_changed(output, upipe);
-            return UBASE_ERR_NONE;
+            break;
         }
 
         case UPROBE_DEAD: {
