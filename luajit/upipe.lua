@@ -249,6 +249,11 @@ local sig = {
 
 ffi.metatype("struct upipe_mgr", {
     __index = function (mgr, key)
+        if key == 'props' then
+            local k = tostring(mgr):match(": 0x(.*)")
+            if not props[k] then props[k] = { } end
+            return props[k]
+        end
         if key == 'new' then key = 'new_void' end
         local mgr_sig = key:match("^new_(.*)")
         if mgr_sig then
@@ -330,10 +335,12 @@ ffi.metatype("struct upipe", {
                 return iterator(pipe, f, t)
             end
         end
+        local f
         if pipe.props._control and pipe.props._control[key] then
-            return pipe.props._control[key]
+            f = pipe.props._control[key]
+        else
+            f = C[fmt("upipe_%s", key)]
         end
-        local f =  C[fmt("upipe_%s", key)]
         return getter(upipe_getters, f, key) or f
     end,
     __newindex = function (pipe, key, val)
@@ -476,6 +483,15 @@ local function upipe_helper_alloc(cb)
             pipe:helper_init_upump()
             pipe:throw_ready()
             pipe.props.helper = h_pipe
+            if cb.sub_mgr then
+                cb.sub_mgr.props._super = pipe
+                pipe.props._sub_mgr = cb.sub_mgr
+                pipe.props._subpipes = {}
+            end
+            if cb.sub then
+                local super = pipe:sub_get_super()
+                table.insert(super.props._subpipes, h_pipe)
+            end
             if cb.init then cb.init(pipe, args) end
             pipe.props._control = _control
             pipe.props._clean = cb.clean
@@ -538,9 +554,42 @@ local function upipe_helper_alloc(cb)
             control[C.UPIPE_ATTACH_UPUMP_MGR] = C.upipe_helper_attach_upump_mgr
         end
 
-        for k, v in pairs(cb.control) do
-            control[C["UPIPE_" .. k:upper()]] = v
-            _control[k] = function (...) return ubase_err(v(...)) end
+        if cb.sub_mgr then
+            _control.get_sub_mgr = function (pipe, mgr_p)
+                mgr_p[0] = pipe.props._sub_mgr
+                return C.UBASE_ERR_NONE
+            end
+            _control.iterate_sub = function (pipe, sub_p)
+                if sub_p[0] == nil then
+                    sub_p[0] = pipe.props._subpipes[1].upipe
+                else
+                    for i, sub in ipairs(pipe.props._subpipes) do
+                        if sub.upipe == sub_p[0] then
+                            local next_sub = pipe.props._subpipes[i + 1]
+                            sub_p[0] = next_sub and next_sub.upipe or nil
+                            break
+                        end
+                    end
+                end
+                return C.UBASE_ERR_NONE
+            end
+            control[C.UPIPE_GET_SUB_MGR] = _control.get_sub_mgr
+            control[C.UPIPE_ITERATE_SUB] = _control.iterate_sub
+        end
+
+        if cb.sub then
+            _control.sub_get_super = function (pipe, super_p)
+                super_p[0] = pipe.mgr.props._super
+                return C.UBASE_ERR_NONE
+            end
+            control[C.UPIPE_SUB_GET_SUPER] = _control.sub_get_super
+        end
+
+        if cb.control then
+            for k, v in pairs(cb.control) do
+                control[C["UPIPE_" .. k:upper()]] = v
+                _control[k] = function (...) return ubase_err(v(...)) end
+            end
         end
 
         mgr.upipe_control = wrap_traceback(function (pipe, cmd, args)
@@ -565,7 +614,16 @@ local function upipe_helper_alloc(cb)
         local h_pipe = container_of(refcount, "struct upipe_helper", "urefcount")
         local pipe = h_pipe.upipe
         local k = tostring(pipe):match(": 0x(.*)")
-        if props[k] and props[k].clean then props[k].clean(pipe) end
+        if props[k] and props[k]._clean then props[k]._clean(pipe) end
+        if cb.sub then
+            local super = pipe:sub_get_super()
+            for i, sub in ipairs(super.props._subpipes) do
+                if sub.upipe == pipe then
+                    table.remove(super.props._subpipes, i)
+                    break
+                end
+            end
+        end
         pipe:throw_dead()
         props[k] = nil
         pipe:helper_clean_upump()
@@ -579,7 +637,7 @@ local function upipe_helper_alloc(cb)
         pipe:helper_clean_upump_mgr()
         pipe:helper_clean_uclock()
         pipe:helper_clean_input()
-        -- pipe:helper_clean_output_size()
+        pipe:helper_clean_output_size()
         pipe:helper_clean_output()
         pipe:helper_clean_urefcount()
         pipe:clean()
