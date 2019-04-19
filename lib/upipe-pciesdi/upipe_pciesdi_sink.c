@@ -582,14 +582,7 @@ static int init_hardware(struct upipe *upipe, bool ntsc, bool genlock, bool sd, 
         }
     }
 
-    uint8_t txen, slew;
-    /* set mode */
-    if (sd)
-        sdi_tx(fd, SDI_TX_MODE_SD, &txen, &slew);
-    else if (sdi3g)
-        sdi_tx(fd, SDI_TX_MODE_3G, &txen, &slew);
-    else /* hd */
-        sdi_tx(fd, SDI_TX_MODE_HD, &txen, &slew);
+    /* skip sdi_tx settings */
 
     /* skip sleeping */
 
