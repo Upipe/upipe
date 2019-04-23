@@ -85,7 +85,6 @@ static void sdi_start_anc(uint16_t *dst, uint8_t gap, uint16_t did, uint16_t sdi
 void sdi_write_cdp(const uint8_t *src, size_t src_size,
         uint16_t *dst, uint8_t gap, uint16_t *ctr, uint8_t fps)
 {
-    upipe_sdi_blank_c(dst, VANC_WIDTH);
     sdi_start_anc(dst, gap, S291_CEA708_DID, S291_CEA708_SDID);
 
     const uint8_t cnt = 9 + src_size + 4;
