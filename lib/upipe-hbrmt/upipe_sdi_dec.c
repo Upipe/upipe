@@ -747,10 +747,15 @@ static void upipe_sdi_dec_parse_vanc_line(struct upipe *upipe, struct uref *uref
                 bar_data[i] = r[3 + i] & 0xff;
             uref_pic_set_bar_data(uref, bar_data, 5);
         } else if (did == S291_CEA708_DID && sdid == S291_CEA708_SDID) {
-            uint8_t cc_count = 3 * (r[8] & 0x1f);
+            uint8_t flags = r[4] & 0xff;
+            if (!(flags & (1 << 6))) { // ccdata present
+                continue;
+            }
+            bool timecode = flags & (1 << 7);
+            uint8_t cc_count = 3 * (r[8 + (timecode ? 5 : 0)] & 0x1f);
             uint8_t cea[cc_count];
             for (int j = 0; j < cc_count; j++)
-                cea[j] = r[9+j] & 0xff;
+                cea[j] = r[9 + (timecode ? 5 : 0) + j] & 0xff;
             uref_pic_set_cea_708(uref, cea, cc_count);
         } else
             upipe_verbose_va(upipe, "unhandled ancillary 0x%"PRIx8"/0x%"PRIx8,
