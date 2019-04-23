@@ -751,6 +751,18 @@ static void upipe_sdi_dec_parse_vanc_line(struct upipe *upipe, struct uref *uref
             if (!(flags & (1 << 6))) { // ccdata present
                 continue;
             }
+
+            /* Verify Checksum */
+            uint8_t calc_cs = 0;
+            for (int i = 0; i < dc - 1; i++)
+                calc_cs += r[i];
+
+            calc_cs = calc_cs ? 256 - calc_cs : 0;
+            if (calc_cs != (r[dc - 1] & 0xff)) {
+                upipe_err_va(upipe, "Invalid checksum in Caption Distribution Packet");
+                continue;
+            }
+
             bool timecode = flags & (1 << 7);
             uint8_t cc_count = 3 * (r[8 + (timecode ? 5 : 0)] & 0x1f);
             uint8_t cea[cc_count];
