@@ -1008,7 +1008,7 @@ static void upipe_hd_sdi_enc_encode_line(struct upipe *upipe, int line_num, uint
 
         const uint8_t **ttx = NULL;
         int num_ttx = 0;
-        if (line_num == OP47_LINE1 + 563*f2) {
+        if (line_num == OP47_LINE1 + p->field_offset*f2) {
             num_ttx = upipe_sdi_enc->ttx_packets[f2];
             if (num_ttx)
                 ttx = &upipe_sdi_enc->ttx_packet[f2][0];
