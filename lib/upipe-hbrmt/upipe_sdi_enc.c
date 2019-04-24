@@ -798,13 +798,14 @@ static void upipe_sdi_enc_encode_line(struct upipe *upipe, int line_num, uint16_
 
         if (upipe_sdi_enc->ttx_packets[f2] && line_num == upipe_sdi_enc->ttx_line[f2]) {
             const uint8_t *ttx = upipe_sdi_enc->ttx_packet[f2][0];
+
+            /* Set to 8-bit black */
             uint8_t buf[input_hsize];
-            memset(buf, 0, sizeof(buf));
+            memset(buf, 0x10, input_hsize);
 
             sdi_encode_ttx_sd(buf, ttx, &upipe_sdi_enc->sp);
-            // TODO: make sdi_encode_ttx work in place
             for (int i = 0; i < input_hsize; i++)
-                active_start[i] = buf[i];
+                active_start[2*i+1] = buf[i] << 2;
         }
     } else {
         const uint8_t *y = planes[f2][0];
