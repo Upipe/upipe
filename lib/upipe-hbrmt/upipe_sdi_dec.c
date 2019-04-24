@@ -714,9 +714,7 @@ static void upipe_sdi_dec_parse_vanc_line(struct upipe *upipe, struct uref *uref
 {
     while (hsize > S291_HEADER_SIZE + S291_FOOTER_SIZE) {
         if (r[0] != S291_ADF1 || r[1] != S291_ADF2 || r[2] != S291_ADF3) {
-            r++;
-            hsize--;
-            continue;
+            break;
         }
 
         uint8_t did = s291_get_did(r);
