@@ -62,9 +62,9 @@ cglobal sdi_vanc_deinterleave, 3, 5, 3, vanc_buf_, vanc_stride_, src_
     .loop:
         movu             m1, [src_q]
         pshufb           m1, m0
-        movq   [vanc_buf_q], m1
+        movq           [r3], m1
         MOVHL            m2, m1
-        movq           [r3], m2
+        movq   [vanc_buf_q], m2
         add           src_q, mmsize
         add              r3, mmsize/2
         add      vanc_buf_q, mmsize/2

@@ -1158,8 +1158,8 @@ static bool upipe_sdi_dec_handle(struct upipe *upipe, struct uref *uref,
                 uint16_t *vanc_dst = (uint16_t*)vanc_buf;
                 if (uref_vanc) {
                     for (unsigned i = 0; i < vanc_stride / 4; i++) {
-                        vanc_dst[                i] = src_line[2*i  ]; // Y
-                        vanc_dst[vanc_stride/4 + i] = src_line[2*i+1];  // C
+                        vanc_dst[                i] = src_line[2*i+1]; // Y
+                        vanc_dst[vanc_stride/4 + i] = src_line[2*i  ];  // C
                     }
                 }
                 }
