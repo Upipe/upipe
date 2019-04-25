@@ -194,7 +194,7 @@ static void upipe_voidsrc_worker(struct upump *upump)
             break;
     }
 
-    uint64_t wait = 0;
+    uint64_t wait = upipe_voidsrc->interval;
     if (now != UINT64_MAX)
         wait = upipe_voidsrc->pts - now;
 
