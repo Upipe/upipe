@@ -230,18 +230,15 @@ static void upipe_pciesdi_sink_worker(struct upump *upump)
         return;
     }
 
+    bool underrun = false;
     /* Get uref, from struct or list, print 1 message if none available. */
     struct uref *uref = upipe_pciesdi_sink->uref;
     if (!uref) {
         struct uchain *uchain = ulist_pop(&upipe_pciesdi_sink->urefs);
         if (!uchain) {
-            if (!upipe_pciesdi_sink->underrun)
-                upipe_err(upipe, "underrun");
-            upipe_pciesdi_sink->underrun = true;
+            underrun = true;
         } else {
-            if (upipe_pciesdi_sink->underrun)
-                upipe_warn(upipe, "underrun resolved");
-            upipe_pciesdi_sink->underrun = false;
+            underrun = false;
             uref = uref_from_uchain(uchain);
             upipe_pciesdi_sink->uref = uref;
             upipe_pciesdi_sink->written = 0;
@@ -250,7 +247,7 @@ static void upipe_pciesdi_sink_worker(struct upump *upump)
 
     /* If too late and there are no more urefs to write the input may have
      * stopped so stop the output. */
-    if (num_bufs <= 0 && upipe_pciesdi_sink->underrun) {
+    if (num_bufs <= 0 && underrun) {
         upipe_warn(upipe, "too late and no input, stopping DMA and upump");
 
         /* stop DMA */
@@ -266,7 +263,7 @@ static void upipe_pciesdi_sink_worker(struct upump *upump)
         return;
     }
 
-    if (upipe_pciesdi_sink->underrun)
+    if (underrun)
         return;
 
     /* Check for "too late" only when there is something to write.  Prevents log
@@ -389,8 +386,11 @@ static void upipe_pciesdi_sink_worker(struct upump *upump)
     }
 
     /* start dma */
-    upipe_pciesdi_sink->first = 0;
-    sdi_dma_reader(upipe_pciesdi_sink->fd, 1, &hw, &sw);
+    if (upipe_pciesdi_sink->first) {
+        upipe_notice(upipe, "starting DMA");
+        upipe_pciesdi_sink->first = 0;
+        sdi_dma_reader(upipe_pciesdi_sink->fd, 1, &hw, &sw);
+    }
 
     upipe_pciesdi_sink->written += samples_written * sizeof(uint16_t);
     if (upipe_pciesdi_sink->written == size) {
