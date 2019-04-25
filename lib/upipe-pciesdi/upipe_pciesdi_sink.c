@@ -96,6 +96,7 @@ struct upipe_pciesdi_sink {
 
     /** hardware clock */
     struct uclock uclock;
+    uint64_t offset;
     uint32_t clock_is_inited; /* TODO: maybe replace with uatomic variable. */
 
     void (*uyvy_to_sdi)(uint8_t *dst, const uint8_t *src, uintptr_t pixels);
@@ -143,6 +144,7 @@ static uint64_t upipe_pciesdi_sink_now(struct uclock *uclock)
     __uint128_t fullscale = tick;
     fullscale *= UCLOCK_FREQ;
     fullscale /= freq;
+    fullscale += upipe_pciesdi_sink->offset;
 
     pthread_mutex_unlock(&clock_mutex);
 
@@ -173,6 +175,7 @@ static struct upipe *upipe_pciesdi_sink_alloc(struct upipe_mgr *mgr,
     upipe_pciesdi_sink_check_upump_mgr(upipe);
 
     upipe_pciesdi_sink->clock_is_inited = 0;
+    upipe_pciesdi_sink->offset = 0;
     upipe_pciesdi_sink->tx_mode = SDI_TX_MODE_HD;
     upipe_pciesdi_sink->scratch_bytes = 0;
     upipe_pciesdi_sink->latency = 0;
@@ -672,6 +675,10 @@ static int upipe_pciesdi_sink_set_flow_def(struct upipe *upipe, struct uref *flo
         return UBASE_ERR_INVALID;
     }
 
+    /* Record time now so that we can use it as an offset to ensure that the
+     * clock always goes forwards when mode changes. */
+    uint64_t offset = upipe_pciesdi_sink_now(&upipe_pciesdi_sink->uclock);
+
     /* initialize clock, set direction */
     UBASE_RETURN(init_hardware(upipe, ntsc, genlock, sd, sdi3g));
 
@@ -684,7 +691,9 @@ static int upipe_pciesdi_sink_set_flow_def(struct upipe *upipe, struct uref *flo
 
     /* Now that the mode is being set or changed the sink needs to wait about 2
      * seconds before it can correctly report the time again. */
+
     pthread_mutex_lock(&clock_mutex);
+    upipe_pciesdi_sink->offset = offset;
     upipe_pciesdi_sink->clock_is_inited = 0;
     pthread_mutex_unlock(&clock_mutex);
 
