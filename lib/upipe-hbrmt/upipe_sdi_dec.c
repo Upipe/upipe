@@ -221,7 +221,6 @@ static int upipe_sdi_dec_sub_check(struct upipe *upipe, struct uref *flow_format
 
 UPIPE_HELPER_UPIPE(upipe_sdi_dec, upipe, UPIPE_SDI_DEC_SIGNATURE);
 UPIPE_HELPER_UREFCOUNT(upipe_sdi_dec, urefcount, upipe_sdi_dec_free);
-UPIPE_HELPER_VOID(upipe_sdi_dec);
 UPIPE_HELPER_OUTPUT(upipe_sdi_dec, output, flow_def, output_state, request_list)
 UPIPE_HELPER_UBUF_MGR(upipe_sdi_dec, ubuf_mgr, flow_format, ubuf_mgr_request,
                       upipe_sdi_dec_check,
@@ -257,24 +256,8 @@ static int upipe_sdi_dec_set_option(struct upipe *upipe, const char *option,
 
 static int upipe_sdi_dec_sub_control(struct upipe *upipe, int command, va_list args)
 {
-    switch (command) {
-        case UPIPE_GET_FLOW_DEF: {
-            struct uref **p = va_arg(args, struct uref **);
-            return upipe_sdi_dec_sub_get_flow_def(upipe, p);
-        }
-
-        case UPIPE_GET_OUTPUT: {
-            struct upipe **p = va_arg(args, struct upipe **);
-            return upipe_sdi_dec_sub_get_output(upipe, p);
-        }
-        case UPIPE_SET_OUTPUT: {
-            struct upipe *output = va_arg(args, struct upipe *);
-            return upipe_sdi_dec_sub_set_output(upipe, output);
-        }
-
-        default:
-            return UBASE_ERR_UNHANDLED;
-    }
+    UBASE_HANDLED_RETURN(upipe_sdi_dec_sub_control_output(upipe, command, args));
+    return UBASE_ERR_UNHANDLED;
 }
 
 static struct upipe *upipe_sdi_dec_sub_init(struct upipe *upipe,
@@ -726,6 +709,73 @@ static inline bool validate_anc_len(const uint16_t *packet, int left, bool sd)
     return left >= total_size;
 }
 
+static void upipe_sdi_dec_parse_vanc_line(struct upipe *upipe, struct uref *uref,
+        uint16_t *r, size_t hsize)
+{
+    while (hsize > S291_HEADER_SIZE + S291_FOOTER_SIZE) {
+        if (r[0] != S291_ADF1 || r[1] != S291_ADF2 || r[2] != S291_ADF3) {
+            break;
+        }
+
+        uint8_t did = s291_get_did(r);
+        uint8_t sdid = s291_get_sdid(r);
+        uint8_t dc = s291_get_dc(r);
+        if (S291_HEADER_SIZE + dc + S291_FOOTER_SIZE > hsize) {
+            upipe_warn_va(upipe, "ancillary too large (%"PRIu8" > %zu) for 0x%"PRIx8"/0x%"PRIx8,
+                    dc, hsize, did, sdid);
+            break;
+        }
+
+        if (!s291_check_cs(r)) {
+            upipe_warn_va(upipe, "invalid CRC for 0x%"PRIx8"/0x%"PRIx8,
+                    did, sdid);
+            r += 3;
+            hsize -= 3;
+            continue;
+        }
+        r += S291_HEADER_SIZE;
+        hsize -= S291_HEADER_SIZE;
+
+        if (did == S291_AFD_DID && sdid == S291_AFD_SDID && dc == 8) {
+            uint8_t afd = r[0] & 0xff;
+            uref_pic_set_afd(uref, afd);
+
+            uint8_t bar_data[5];
+            for (unsigned int i = 0; i < 5; i++)
+                bar_data[i] = r[3 + i] & 0xff;
+            uref_pic_set_bar_data(uref, bar_data, 5);
+        } else if (did == S291_CEA708_DID && sdid == S291_CEA708_SDID) {
+            uint8_t flags = r[4] & 0xff;
+            if (!(flags & (1 << 6))) { // ccdata present
+                continue;
+            }
+
+            /* Verify Checksum */
+            uint8_t calc_cs = 0;
+            for (int i = 0; i < dc - 1; i++)
+                calc_cs += r[i];
+
+            calc_cs = calc_cs ? 256 - calc_cs : 0;
+            if (calc_cs != (r[dc - 1] & 0xff)) {
+                upipe_err_va(upipe, "Invalid checksum in Caption Distribution Packet");
+                continue;
+            }
+
+            bool timecode = flags & (1 << 7);
+            uint8_t cc_count = 3 * (r[8 + (timecode ? 5 : 0)] & 0x1f);
+            uint8_t cea[cc_count];
+            for (int j = 0; j < cc_count; j++)
+                cea[j] = r[9 + (timecode ? 5 : 0) + j] & 0xff;
+            uref_pic_set_cea_708(uref, cea, cc_count);
+        } else
+            upipe_verbose_va(upipe, "unhandled ancillary 0x%"PRIx8"/0x%"PRIx8,
+                    did, sdid);
+
+        r += dc + S291_FOOTER_SIZE;
+        hsize -= dc + S291_FOOTER_SIZE;
+    }
+}
+
 /** @internal @This handles data.
  *
  * @param upipe description structure of the pipe
@@ -965,8 +1015,6 @@ static bool upipe_sdi_dec_handle(struct upipe *upipe, struct uref *uref,
         }
     }
 
-    uint8_t vbi[720 * 32];
-
     /* Parse the whole frame */
     for (int h = 0; h < f->height; h++) {
         /* HANC starts at end of EAV */
@@ -1113,9 +1161,10 @@ static bool upipe_sdi_dec_handle(struct upipe *upipe, struct uref *uref,
                         vanc_dst[                i] = src_line[2*i  ]; // Y
                         vanc_dst[vanc_stride/4 + i] = src_line[2*i+1];  // C
                     }
-                    vanc_buf += vanc_stride;
                 }
                 }
+                upipe_sdi_dec_parse_vanc_line(upipe, uref, (uint16_t*)vanc_buf, vanc_stride / 2);
+                vanc_buf += vanc_stride;
             }
         } else {
             uint8_t *y = fields[f2][0];
@@ -1405,18 +1454,11 @@ static int upipe_sdi_dec_control(struct upipe *upipe, int command, va_list args)
             return upipe_sdi_dec_free_output_proxy(upipe, request);
         }
 
-        case UPIPE_GET_OUTPUT: {
-            struct upipe **p = va_arg(args, struct upipe **);
-            return upipe_sdi_dec_get_output(upipe, p);
-        }
-        case UPIPE_SET_OUTPUT: {
-            struct upipe *output = va_arg(args, struct upipe *);
-            return upipe_sdi_dec_set_output(upipe, output);
-        }
-        case UPIPE_GET_FLOW_DEF: {
-            struct uref **p = va_arg(args, struct uref **);
-            return upipe_sdi_dec_get_flow_def(upipe, p);
-        }
+        case UPIPE_GET_OUTPUT:
+        case UPIPE_SET_OUTPUT:
+        case UPIPE_GET_FLOW_DEF:
+            return upipe_sdi_dec_control_output(upipe, command, args);
+
         case UPIPE_SET_FLOW_DEF: {
             struct uref *flow = va_arg(args, struct uref *);
             return upipe_sdi_dec_set_flow_def(upipe, flow);
