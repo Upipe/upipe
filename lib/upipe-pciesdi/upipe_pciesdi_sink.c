@@ -49,6 +49,7 @@
 #include <sys/stat.h>
 #include <fcntl.h>
 #include <errno.h>
+#include <pthread.h>
 
 #include "sdi_config.h"
 #include "libsdi.h"
@@ -110,25 +111,35 @@ UPIPE_HELPER_UPUMP_MGR(upipe_pciesdi_sink, upump_mgr)
 UPIPE_HELPER_UPUMP(upipe_pciesdi_sink, upump, upump_mgr)
 UBASE_FROM_TO(upipe_pciesdi_sink, uclock, uclock, uclock)
 
+static pthread_mutex_t clock_mutex = PTHREAD_MUTEX_INITIALIZER;
+
 static uint64_t upipe_pciesdi_sink_now(struct uclock *uclock)
 {
     struct upipe_pciesdi_sink *upipe_pciesdi_sink = upipe_pciesdi_sink_from_uclock(uclock);
 
-    if (upipe_pciesdi_sink->fd < 0)
+    pthread_mutex_lock(&clock_mutex);
+
+    if (upipe_pciesdi_sink->fd < 0) {
+        pthread_mutex_unlock(&clock_mutex);
         return UINT64_MAX;
+    }
 
     /* read ticks from card */
     uint32_t freq;
     uint64_t tick;
     sdi_refclk(upipe_pciesdi_sink->fd, 0, &freq, &tick);
 
-    if (freq == 0)
+    if (freq == 0) {
+        pthread_mutex_unlock(&clock_mutex);
         return UINT64_MAX;
+    }
 
     /* 128 bits needed to prevent overflow after ~2.5 hours */
     __uint128_t fullscale = tick;
     fullscale *= UCLOCK_FREQ;
     fullscale /= freq;
+
+    pthread_mutex_unlock(&clock_mutex);
 
     return fullscale;
 }
