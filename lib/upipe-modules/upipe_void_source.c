@@ -184,7 +184,8 @@ static void upipe_voidsrc_worker(struct upump *upump)
         uref_clock_set_duration(uref, upipe_voidsrc->interval);
         uref_clock_set_pts_sys(uref, upipe_voidsrc->pts);
         uref_clock_set_pts_prog(uref, upipe_voidsrc->pts);
-        upipe_voidsrc->pts += upipe_voidsrc->interval;
+        if (upipe_voidsrc->pts != UINT64_MAX)
+            upipe_voidsrc->pts += upipe_voidsrc->interval;
 
         upipe_voidsrc_output(upipe, uref, &upipe_voidsrc->timer);
 
