@@ -167,12 +167,12 @@ static void upipe_voidsrc_worker(struct upump *upump)
 {
     struct upipe *upipe = upump_get_opaque(upump, struct upipe *);
     struct upipe_voidsrc *upipe_voidsrc = upipe_voidsrc_from_upipe(upipe);
-    uint64_t now;
 
+    uint64_t now = uclock_now(upipe_voidsrc->uclock);
     if (upipe_voidsrc->pts == UINT64_MAX)
-        upipe_voidsrc->pts = uclock_now(upipe_voidsrc->uclock);
+        upipe_voidsrc->pts = now;
 
-    for (now = uclock_now(upipe_voidsrc->uclock);
+    for (/* nothing */;
          !upipe_single(upipe) && upipe_voidsrc->pts <= now;
          now = uclock_now(upipe_voidsrc->uclock)) {
         struct uref *uref = uref_alloc(upipe_voidsrc->uref_mgr);
