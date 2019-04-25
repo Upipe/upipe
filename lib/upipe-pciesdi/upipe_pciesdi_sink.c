@@ -654,13 +654,15 @@ static int upipe_pciesdi_sink_set_flow_def(struct upipe *upipe, struct uref *flo
     if (upipe_pciesdi_sink->fd == -1) {
         upipe_warn(upipe, "device has not been opened, unable to init hardware");
         return UBASE_ERR_INVALID;
-    } else {
-        UBASE_RETURN(init_hardware(upipe, ntsc, genlock, sd, sdi3g));
     }
+
+    /* initialize clock, set direction */
+    UBASE_RETURN(init_hardware(upipe, ntsc, genlock, sd, sdi3g));
 
     /* disable pattern */
     sdi_set_pattern(upipe_pciesdi_sink->fd, upipe_pciesdi_sink->tx_mode, 0, 0);
 
+    /* set TX mode */
     uint8_t txen, slew;
     sdi_tx(upipe_pciesdi_sink->fd, upipe_pciesdi_sink->tx_mode, &txen, &slew);
 
