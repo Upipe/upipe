@@ -115,7 +115,7 @@ static uint64_t upipe_pciesdi_sink_now(struct uclock *uclock)
     struct upipe_pciesdi_sink *upipe_pciesdi_sink = upipe_pciesdi_sink_from_uclock(uclock);
 
     if (upipe_pciesdi_sink->fd < 0)
-        return 0;
+        return UINT64_MAX;
 
     /* read ticks from card */
     uint32_t freq;
