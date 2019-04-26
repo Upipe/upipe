@@ -499,6 +499,7 @@ static bool upipe_mpgaf_parse_adts(struct upipe *upipe)
     uint16_t adts_length = adts_get_length(header);
     uint8_t adts_profile = adts_get_profile(header);
     uint8_t asc_aot = adts_profile +1;
+    uint8_t asc_base_aot = asc_aot;
 
     if (!samplerate) {
         upipe_warn(upipe, "invalid samplerate");
@@ -540,7 +541,8 @@ static bool upipe_mpgaf_parse_adts(struct upipe *upipe)
     UBASE_FATAL(upipe, uref_flow_set_complete(flow_def))
 
     upipe_mpgaf->has_crc = !adts_get_protection_absent(header);
-    upipe_mpgaf->asc_aot = upipe_mpgaf->asc_base_aot = asc_aot;
+    upipe_mpgaf->asc_aot = asc_aot;
+    upipe_mpgaf->asc_base_aot = asc_base_aot;
     upipe_mpgaf->samplerate_idx = upipe_mpgaf->base_samplerate_idx =
         sampling_freq;
     upipe_mpgaf->samplerate = upipe_mpgaf->base_samplerate = samplerate;
