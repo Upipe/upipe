@@ -683,7 +683,7 @@ static int get_flow_def(struct upipe *upipe, struct uref **flow_format)
 
     /* Check for SDI-3G level B. */
     if (mode == 2 && scan == 0) {
-        upipe_pciesdi_src->sdi3g_levelb = sdi3g_levelb = true;
+        sdi3g_levelb = true;
         interlaced = false;
         fps.num *= 2;
     } else if (scan == 0) {
@@ -744,6 +744,7 @@ static int get_flow_def(struct upipe *upipe, struct uref **flow_format)
     upipe_pciesdi_src->family = family;
     upipe_pciesdi_src->scan = scan;
     upipe_pciesdi_src->rate = rate;
+    upipe_pciesdi_src->sdi3g_levelb = sdi3g_levelb;
 
     return UBASE_ERR_NONE;
 }
