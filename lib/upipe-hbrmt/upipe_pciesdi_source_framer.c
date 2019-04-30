@@ -63,6 +63,7 @@ struct upipe_pciesdi_source_framer {
     /* SDI offsets */
     const struct sdi_offsets_fmt *f;
 
+    int prev_line_num;
     uint16_t prev_fvh;
     bool start;
     bool progressive;
@@ -95,6 +96,7 @@ static struct upipe *upipe_pciesdi_source_framer_alloc(struct upipe_mgr *mgr, st
         return NULL;
     struct upipe_pciesdi_source_framer *ctx = upipe_pciesdi_source_framer_from_upipe(upipe);
 
+    ctx->prev_line_num = 0;
     ctx->f = NULL;
     ctx->prev_fvh = 0;
     ctx->start = false;
@@ -194,6 +196,7 @@ static void upipe_pciesdi_source_framer_input(struct upipe *upipe, struct uref
         ctx->uref = NULL;
         ctx->cached_lines = 0;
         ctx->prev_fvh = 0;
+        ctx->prev_line_num = 0;
     }
 
     if (ctx->start) {
@@ -272,30 +275,53 @@ static void upipe_pciesdi_source_framer_input(struct upipe *upipe, struct uref
         eav_fvh_offset = 3;
 
     int sdi_width = 2 * ctx->f->width;
+    int height = ctx->f->height;
     int offset;
     for (offset = 0; offset < size; offset += sdi_width) {
         const uint16_t *buf = (const uint16_t*)src + offset;
         uint16_t fvh = buf[eav_fvh_offset];
-        if (fvh != ctx->prev_fvh)
+
+        int line = 0;
+        if (height >= 720) {
+            line = (buf[8] & 0x1ff) >> 2;
+            line |= ((buf[10] & 0x1ff) >> 2) << 7;
+        }
+
+        if (fvh != ctx->prev_fvh) {
             upipe_dbg_va(upipe, "fvh change from %#5x to %#5x", ctx->prev_fvh, fvh);
+            if (line != ctx->prev_line_num)
+                upipe_dbg_va(upipe, "line number change from %d to %d", ctx->prev_line_num, line);
+        }
 
         if (ctx->progressive) {
-            /* Use line number to find first line because there is no
-             * progressive SD format. */
-            int line = (buf[8] & 0x1ff) >> 2;
-            line |= ((buf[10] & 0x1ff) >> 2) << 7;
-            if (line == 1) {
+            /* Since there is no SD progressive format check that the line num
+             * wraps around correctly and that the fvh word is correct. */
+            if (ctx->prev_line_num == height && line == 1
+                    && ctx->prev_fvh == 0x2d8 && fvh == 0x2d8) {
                 ctx->start = true;
                 break;
             }
         }
-        else { /* interlaced */
+
+        else if (height >= 720) {
+            /* For interlaced HD check that both line num and fvh changes are
+             * right. */
+            if (ctx->prev_line_num == height && line == 1
+                    && ctx->prev_fvh == 0x3c4 && fvh == 0x2d8) {
+                ctx->start = true;
+                break;
+            }
+        }
+
+        /* Fallback to just interlaced fvh change. */
+        else {
             if (ctx->prev_fvh == 0x3c4 && fvh == 0x2d8) {
                 ctx->start = true;
                 break;
             }
         }
         ctx->prev_fvh = fvh;
+        ctx->prev_line_num = line;
     }
     uref_block_unmap(uref, 0);
 
