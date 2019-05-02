@@ -1413,25 +1413,6 @@ static int upipe_sdi_dec_set_flow_def(struct upipe *upipe, struct uref *flow_def
     }
     upipe_sdi_dec->p = upipe_sdi_dec->f->pict_fmt;
 
-    {
-        const struct sdi_offsets_fmt *f = upipe_sdi_dec->f;
-        const struct sdi_picture_fmt *p = f->pict_fmt;
-        upipe_dbg_va(upipe, "sdi_offsets_fmt { width: %d, height %d, psf: %d, "
-                "fps: {%d/%d}, pict_fmt: { active_width: %d, active_height: %d, "
-                "vbi_f1_part1: { %d, %d }, active_f1: { %d, %d }, vbi_f1_part2: { %d, %d }, "
-                "vbi_f2_part1: { %d, %d }, active_f2: { %d, %d }, vbi_f2_part2: { %d, %d }",
-                f->width, f->height, f->psf_ident,
-                (int)f->fps.num, (int)f->fps.den,
-                p->active_width, p->active_height,
-                p->vbi_f1_part1.start, p->vbi_f1_part1.end,
-                p->active_f1.start, p->active_f1.end,
-                p->vbi_f1_part2.start, p->vbi_f1_part2.end,
-                p->vbi_f2_part1.start, p->vbi_f2_part1.end,
-                p->active_f2.start, p->active_f2.end,
-                p->vbi_f2_part2.start, p->vbi_f2_part2.end
-        );
-    }
-
     if (!ubase_check(uref_clock_get_latency(flow_def, &upipe_sdi_dec->latency)))
         upipe_sdi_dec->latency = 0;
 
