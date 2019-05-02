@@ -104,6 +104,8 @@ struct upipe_pciesdi_sink {
     struct sdi_ioctl_mmap_dma_info mmap_info;
     uint8_t *write_buffer;
 
+    pthread_mutex_t clock_mutex;
+
     /** public upipe structure */
     struct upipe upipe;
 };
@@ -116,17 +118,15 @@ UPIPE_HELPER_UPUMP(upipe_pciesdi_sink, upump, upump_mgr)
 UPIPE_HELPER_UPUMP(upipe_pciesdi_sink, clockwait, upump_mgr)
 UBASE_FROM_TO(upipe_pciesdi_sink, uclock, uclock, uclock)
 
-static pthread_mutex_t clock_mutex = PTHREAD_MUTEX_INITIALIZER;
-
 static uint64_t upipe_pciesdi_sink_now(struct uclock *uclock)
 {
     struct upipe_pciesdi_sink *upipe_pciesdi_sink = upipe_pciesdi_sink_from_uclock(uclock);
 
-    pthread_mutex_lock(&clock_mutex);
+    pthread_mutex_lock(&upipe_pciesdi_sink->clock_mutex);
 
     if (upipe_pciesdi_sink->fd < 0
             || upipe_pciesdi_sink->clock_is_inited == 0) {
-        pthread_mutex_unlock(&clock_mutex);
+        pthread_mutex_unlock(&upipe_pciesdi_sink->clock_mutex);
         return UINT64_MAX;
     }
 
@@ -136,7 +136,7 @@ static uint64_t upipe_pciesdi_sink_now(struct uclock *uclock)
     sdi_refclk(upipe_pciesdi_sink->fd, 0, &freq, &tick);
 
     if (freq == 0) {
-        pthread_mutex_unlock(&clock_mutex);
+        pthread_mutex_unlock(&upipe_pciesdi_sink->clock_mutex);
         return UINT64_MAX;
     }
 
@@ -146,7 +146,7 @@ static uint64_t upipe_pciesdi_sink_now(struct uclock *uclock)
     fullscale /= freq;
     fullscale += upipe_pciesdi_sink->offset;
 
-    pthread_mutex_unlock(&clock_mutex);
+    pthread_mutex_unlock(&upipe_pciesdi_sink->clock_mutex);
 
     return fullscale;
 }
@@ -173,6 +173,12 @@ static struct upipe *upipe_pciesdi_sink_alloc(struct upipe_mgr *mgr,
     upipe_pciesdi_sink_init_upump(upipe);
     upipe_pciesdi_sink_init_clockwait(upipe);
     upipe_pciesdi_sink_check_upump_mgr(upipe);
+
+    int ret = pthread_mutex_init(&upipe_pciesdi_sink->clock_mutex, NULL);
+    if (ret) {
+        upipe_err_va(upipe, "pthread_mutex_init() failed with %d (%s)", ret, strerror(ret));
+        return NULL;
+    }
 
     upipe_pciesdi_sink->clock_is_inited = 0;
     upipe_pciesdi_sink->offset = 0;
@@ -631,9 +637,9 @@ static void clock_wait(struct upump *upump)
 {
     struct upipe *upipe = upump_get_opaque(upump, struct upipe *);
     struct upipe_pciesdi_sink *ctx = upipe_pciesdi_sink_from_upipe(upipe);
-    pthread_mutex_lock(&clock_mutex);
+    pthread_mutex_lock(&ctx->clock_mutex);
     ctx->clock_is_inited = 1;
-    pthread_mutex_unlock(&clock_mutex);
+    pthread_mutex_unlock(&ctx->clock_mutex);
 }
 
 /** @internal @This sets the input flow definition.
@@ -692,10 +698,10 @@ static int upipe_pciesdi_sink_set_flow_def(struct upipe *upipe, struct uref *flo
     /* Now that the mode is being set or changed the sink needs to wait about 2
      * seconds before it can correctly report the time again. */
 
-    pthread_mutex_lock(&clock_mutex);
+    pthread_mutex_lock(&upipe_pciesdi_sink->clock_mutex);
     upipe_pciesdi_sink->offset = offset;
     upipe_pciesdi_sink->clock_is_inited = 0;
-    pthread_mutex_unlock(&clock_mutex);
+    pthread_mutex_unlock(&upipe_pciesdi_sink->clock_mutex);
 
     struct upump *upump = upump_alloc_timer(upipe_pciesdi_sink->upump_mgr,
             clock_wait, upipe, upipe->refcount, 2*UCLOCK_FREQ, 0);
