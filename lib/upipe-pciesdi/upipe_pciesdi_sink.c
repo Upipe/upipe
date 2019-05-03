@@ -495,7 +495,7 @@ static void upipe_pciesdi_sink_input(struct upipe *upipe, struct uref *uref, str
     }
 }
 
-static int init_hardware(struct upipe *upipe, bool ntsc, bool genlock, bool sd, bool sdi3g)
+static int init_hardware(struct upipe *upipe, bool ntsc, bool genlock, bool sd)
 {
     struct upipe_pciesdi_sink *ctx = upipe_pciesdi_sink_from_upipe(upipe);
     int fd = ctx->fd;
@@ -685,8 +685,8 @@ static int upipe_pciesdi_sink_set_flow_def(struct upipe *upipe, struct uref *flo
      * clock always goes forwards when mode changes. */
     uint64_t offset = upipe_pciesdi_sink_now(&upipe_pciesdi_sink->uclock);
 
-    /* initialize clock, set direction */
-    UBASE_RETURN(init_hardware(upipe, ntsc, genlock, sd, sdi3g));
+    /* initialize clock */
+    UBASE_RETURN(init_hardware(upipe, ntsc, genlock, sd));
 
     /* disable pattern */
     sdi_set_pattern(upipe_pciesdi_sink->fd, upipe_pciesdi_sink->tx_mode, 0, 0);
