@@ -394,9 +394,13 @@ static void upipe_pciesdi_src_worker(struct upump *upump)
         /* Get new format details. */
         struct uref *flow_def;
         int ret = get_flow_def(upipe, &flow_def);
-        upipe_pciesdi_src_store_flow_def(upipe, flow_def);
-        if (!ubase_check(ubuf_mgr_check(upipe_pciesdi_src->ubuf_mgr, flow_def)))
-            upipe_pciesdi_src_require_ubuf_mgr(upipe, flow_def);
+        if (ubase_check(ret)) {
+            upipe_pciesdi_src_store_flow_def(upipe, flow_def);
+            if (!ubase_check(ubuf_mgr_check(upipe_pciesdi_src->ubuf_mgr, flow_def)))
+                upipe_pciesdi_src_require_ubuf_mgr(upipe, flow_def);
+        } else {
+            /* TODO: What errors do we need to handle here, and how? */
+        }
 
         /* Start DMA and reset state. */
         sdi_dma_writer(upipe_pciesdi_src->fd, 1, &hw, &sw);
