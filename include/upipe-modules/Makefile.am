@@ -88,4 +88,5 @@ myinclude_HEADERS = \
 	upipe_row_join.h \
 	upipe_discard_blocking.h \
 	upipe_audio_merge.h \
+	upipe_vanc_decoder.h \
 	$(NULL)
