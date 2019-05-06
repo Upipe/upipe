@@ -295,28 +295,30 @@ static void upipe_ts_pmtd_parse_descs(struct upipe *upipe,
 
             case 0x5: /* Registration descriptor */
                 if ((valid = desc05_validate(desc))) {
-                    const uint8_t *identifier;
-                    if ((identifier = desc05_get_identifier(desc))) {
-                        if (!memcmp(identifier, "Opus", 4)){
-                            UBASE_FATAL(upipe, uref_flow_set_def(flow_def,
-                                        "block.opus.sound."))
-                            UBASE_FATAL(upipe, uref_flow_set_raw_def(flow_def,
-                                        "block.mpegts.mpegtspes.opus.sound."))
-                            UBASE_FATAL(upipe,
-                                    uref_ts_flow_set_max_delay(flow_def,
-                                                               MAX_DELAY))
-                        }
-                    }
-                    if ((identifier = desc05_get_identifier(desc))) {
-                        if (!memcmp(identifier, "BSSD", 4)){
-                            UBASE_FATAL(upipe, uref_flow_set_def(flow_def,
-                                        "block.s302m.sound."))
-                            UBASE_FATAL(upipe, uref_flow_set_raw_def(flow_def,
-                                        "block.mpegts.mpegtspes.s302m.sound."))
-                            UBASE_FATAL(upipe,
-                                    uref_ts_flow_set_max_delay(flow_def,
-                                                               MAX_DELAY))
-                        }
+                    const uint8_t *identifier = desc05_get_identifier(desc);
+                    if (!identifier)
+                        break;
+                    if (!memcmp(identifier, "Opus", 4)) {
+                        UBASE_FATAL(upipe, uref_flow_set_def(flow_def,
+                                    "block.opus.sound."))
+                        UBASE_FATAL(upipe, uref_flow_set_raw_def(flow_def,
+                                    "block.mpegts.mpegtspes.opus.sound."))
+                        UBASE_FATAL(upipe, uref_ts_flow_set_max_delay(flow_def,
+                                                           MAX_DELAY))
+                    } else if (!memcmp(identifier, "BSSD", 4)) {
+                        UBASE_FATAL(upipe, uref_flow_set_def(flow_def,
+                                    "block.s302m.sound."))
+                        UBASE_FATAL(upipe, uref_flow_set_raw_def(flow_def,
+                                    "block.mpegts.mpegtspes.s302m.sound."))
+                        UBASE_FATAL(upipe, uref_ts_flow_set_max_delay(flow_def,
+                                                           MAX_DELAY))
+                    } else if (!memcmp(identifier, "VANC", 4)) {
+                        UBASE_FATAL(upipe, uref_flow_set_def(flow_def,
+                                    "block.vanc.pic."))
+                        UBASE_FATAL(upipe, uref_flow_set_raw_def(flow_def,
+                                    "block.mpegts.mpegtspes.vanc.pic."))
+                        UBASE_FATAL(upipe, uref_ts_flow_set_max_delay(flow_def,
+                                                           MAX_DELAY))
                     }
                 }
                 break;
