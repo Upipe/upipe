@@ -118,6 +118,9 @@ UPIPE_HELPER_UPUMP(upipe_pciesdi_sink, fd_write_upump, upump_mgr)
 UPIPE_HELPER_UPUMP(upipe_pciesdi_sink, timer_upump, upump_mgr)
 UBASE_FROM_TO(upipe_pciesdi_sink, uclock, uclock, uclock)
 
+/* upump callback functions */
+static void mark_clock_as_inited(struct upump *upump);
+
 static uint64_t upipe_pciesdi_sink_now(struct uclock *uclock)
 {
     struct upipe_pciesdi_sink *upipe_pciesdi_sink = upipe_pciesdi_sink_from_uclock(uclock);
@@ -526,7 +529,7 @@ static int check_capabilities(struct upipe *upipe, bool ntsc, bool genlock)
     return UBASE_ERR_NONE;
 }
 
-static void init_hardware(struct upipe *upipe, bool ntsc, bool genlock, bool sd)
+static void init_hardware_part1(struct upipe *upipe, bool ntsc, bool genlock, bool sd)
 {
     struct upipe_pciesdi_sink *ctx = upipe_pciesdi_sink_from_upipe(upipe);
     int fd = ctx->fd;
@@ -623,10 +626,13 @@ static void init_hardware(struct upipe *upipe, bool ntsc, bool genlock, bool sd)
             sdi_writel(fd, CSR_SDI_QPLL_PLL0_REFCLK_SEL_ADDR, REFCLK0_SEL);
         }
     }
+}
 
-    /* skip sdi_tx settings */
-
-    /* skip sleeping */
+static void init_hardware_part2(struct upipe *upipe)
+{
+    struct upipe_pciesdi_sink *ctx = upipe_pciesdi_sink_from_upipe(upipe);
+    int fd = ctx->fd;
+    int device_number = ctx->device_number;
 
     /* un-reset sdi cores */
     sdi_writel(fd, CSR_SDI_QPLL_REFCLK_STABLE_ADDR, 1);
@@ -646,7 +652,26 @@ static void init_hardware(struct upipe *upipe, bool ntsc, bool genlock, bool sd)
     }
 }
 
-static void clock_wait(struct upump *upump)
+static void run_init_hardware_part2(struct upump *upump)
+{
+    struct upipe *upipe = upump_get_opaque(upump, struct upipe *);
+    struct upipe_pciesdi_sink *ctx = upipe_pciesdi_sink_from_upipe(upipe);
+
+    init_hardware_part2(upipe);
+
+    /* disable pattern */
+    sdi_set_pattern(ctx->fd, ctx->tx_mode, 0, 0);
+
+    /* set TX mode */
+    uint8_t txen, slew;
+    sdi_tx(ctx->fd, ctx->tx_mode, &txen, &slew);
+
+    /* Now that the mode is being set or changed the sink needs to wait about 2
+     * seconds before it can correctly report the time again. */
+    upipe_pciesdi_sink_wait_timer_upump(upipe, 2*UCLOCK_FREQ, mark_clock_as_inited);
+}
+
+static void mark_clock_as_inited(struct upump *upump)
 {
     struct upipe *upipe = upump_get_opaque(upump, struct upipe *);
     struct upipe_pciesdi_sink *ctx = upipe_pciesdi_sink_from_upipe(upipe);
@@ -700,26 +725,20 @@ static int upipe_pciesdi_sink_set_flow_def(struct upipe *upipe, struct uref *flo
 
     UBASE_RETURN(check_capabilities(upipe, ntsc, genlock));
 
-    /* initialize clock */
-    init_hardware(upipe, ntsc, genlock, sd);
-
-    /* disable pattern */
-    sdi_set_pattern(upipe_pciesdi_sink->fd, upipe_pciesdi_sink->tx_mode, 0, 0);
-
-    /* set TX mode */
-    uint8_t txen, slew;
-    sdi_tx(upipe_pciesdi_sink->fd, upipe_pciesdi_sink->tx_mode, &txen, &slew);
-
-    /* Now that the mode is being set or changed the sink needs to wait about 2
-     * seconds before it can correctly report the time again. */
-
+    /* Lock to begin init. */
     pthread_mutex_lock(&upipe_pciesdi_sink->clock_mutex);
+
+    /* initialize clock */
+    init_hardware_part1(upipe, ntsc, genlock, sd);
     upipe_pciesdi_sink->offset = offset;
     upipe_pciesdi_sink->clock_is_inited = 0;
+
+    /* Unlock */
     pthread_mutex_unlock(&upipe_pciesdi_sink->clock_mutex);
 
+    /* Wait 1 second before running part2. */
     struct upump *upump = upump_alloc_timer(upipe_pciesdi_sink->upump_mgr,
-            clock_wait, upipe, upipe->refcount, 2*UCLOCK_FREQ, 0);
+            run_init_hardware_part2, upipe, upipe->refcount, UCLOCK_FREQ, 0);
     if (unlikely(upump == NULL)) {
         upipe_throw_fatal(upipe, UBASE_ERR_UPUMP);
         return UBASE_ERR_UPUMP;
