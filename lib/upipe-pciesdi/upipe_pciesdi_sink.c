@@ -82,10 +82,10 @@ struct upipe_pciesdi_sink {
 
     /** upump manager */
     struct upump_mgr *upump_mgr;
-    /** read watcher */
-    struct upump *upump;
+    /** write watcher */
+    struct upump *fd_write_upump;
     /** timer to wait for clock to init */
-    struct upump *clockwait;
+    struct upump *timer_upump;
 
     int tx_mode;
     int device_number;
@@ -114,8 +114,8 @@ UPIPE_HELPER_UPIPE(upipe_pciesdi_sink, upipe, UPIPE_PCIESDI_SINK_SIGNATURE);
 UPIPE_HELPER_UREFCOUNT(upipe_pciesdi_sink, urefcount, upipe_pciesdi_sink_free)
 UPIPE_HELPER_VOID(upipe_pciesdi_sink);
 UPIPE_HELPER_UPUMP_MGR(upipe_pciesdi_sink, upump_mgr)
-UPIPE_HELPER_UPUMP(upipe_pciesdi_sink, upump, upump_mgr)
-UPIPE_HELPER_UPUMP(upipe_pciesdi_sink, clockwait, upump_mgr)
+UPIPE_HELPER_UPUMP(upipe_pciesdi_sink, fd_write_upump, upump_mgr)
+UPIPE_HELPER_UPUMP(upipe_pciesdi_sink, timer_upump, upump_mgr)
 UBASE_FROM_TO(upipe_pciesdi_sink, uclock, uclock, uclock)
 
 static uint64_t upipe_pciesdi_sink_now(struct uclock *uclock)
@@ -170,8 +170,8 @@ static struct upipe *upipe_pciesdi_sink_alloc(struct upipe_mgr *mgr,
     struct upipe_pciesdi_sink *upipe_pciesdi_sink = upipe_pciesdi_sink_from_upipe(upipe);
     upipe_pciesdi_sink_init_urefcount(upipe);
     upipe_pciesdi_sink_init_upump_mgr(upipe);
-    upipe_pciesdi_sink_init_upump(upipe);
-    upipe_pciesdi_sink_init_clockwait(upipe);
+    upipe_pciesdi_sink_init_fd_write_upump(upipe);
+    upipe_pciesdi_sink_init_timer_upump(upipe);
     upipe_pciesdi_sink_check_upump_mgr(upipe);
 
     int ret = pthread_mutex_init(&upipe_pciesdi_sink->clock_mutex, NULL);
@@ -281,7 +281,7 @@ static void upipe_pciesdi_sink_worker(struct upump *upump)
         sdi_dma_reader(upipe_pciesdi_sink->fd, 0, &hw, &sw);
 
         /* stop and clear pump */
-        upipe_pciesdi_sink_set_upump(upipe, NULL);
+        upipe_pciesdi_sink_set_fd_write_upump(upipe, NULL);
 
         /* reset state */
         upipe_pciesdi_sink->first = 1;
@@ -437,7 +437,7 @@ static void start_fd_write(struct upump *upump)
         upipe_throw_fatal(upipe, UBASE_ERR_UPUMP);
         return;
     }
-    upipe_pciesdi_sink_set_upump(upipe, upump);
+    upipe_pciesdi_sink_set_fd_write_upump(upipe, upump);
     upump_start(upump);
 }
 
@@ -468,7 +468,7 @@ static void upipe_pciesdi_sink_input(struct upipe *upipe, struct uref *uref, str
     size_t n = ulist_depth(&upipe_pciesdi_sink->urefs);
 
     /* check if pump is already running */
-    if (upipe_pciesdi_sink->upump)
+    if (upipe_pciesdi_sink->fd_write_upump)
         return;
 
     /* check for chunks or whole frames */
@@ -487,7 +487,7 @@ static void upipe_pciesdi_sink_input(struct upipe *upipe, struct uref *uref, str
                 upipe_throw_fatal(upipe, UBASE_ERR_UPUMP);
                 return;
             }
-            upipe_pciesdi_sink_set_upump(upipe, upump);
+            upipe_pciesdi_sink_set_fd_write_upump(upipe, upump);
             upump_start(upump);
         }
 
@@ -709,7 +709,7 @@ static int upipe_pciesdi_sink_set_flow_def(struct upipe *upipe, struct uref *flo
         upipe_throw_fatal(upipe, UBASE_ERR_UPUMP);
         return UBASE_ERR_UPUMP;
     }
-    upipe_pciesdi_sink_set_clockwait(upipe, upump);
+    upipe_pciesdi_sink_set_timer_upump(upipe, upump);
     upump_start(upump);
 
     return UBASE_ERR_NONE;
@@ -726,7 +726,8 @@ static int upipe_pciesdi_set_uri(struct upipe *upipe, const char *path)
     struct upipe_pciesdi_sink *upipe_pciesdi_sink = upipe_pciesdi_sink_from_upipe(upipe);
 
     ubase_clean_fd(&upipe_pciesdi_sink->fd);
-    upipe_pciesdi_sink_set_upump(upipe, NULL);
+    upipe_pciesdi_sink_set_fd_write_upump(upipe, NULL);
+    upipe_pciesdi_sink_set_timer_upump(upipe, NULL);
 
     upipe_pciesdi_sink->fd = open(path, O_RDWR | O_CLOEXEC | O_NONBLOCK);
     if (unlikely(upipe_pciesdi_sink->fd < 0)) {
@@ -791,7 +792,8 @@ static int upipe_pciesdi_sink_control(struct upipe *upipe, int command, va_list 
             return upipe_control_provide_request(upipe, command, args);
 
         case UPIPE_ATTACH_UPUMP_MGR:
-            upipe_pciesdi_sink_set_upump(upipe, NULL);
+            upipe_pciesdi_sink_set_fd_write_upump(upipe, NULL);
+            upipe_pciesdi_sink_set_timer_upump(upipe, NULL);
             return upipe_pciesdi_sink_attach_upump_mgr(upipe);
 
         case UPIPE_SET_FLOW_DEF: {
@@ -840,7 +842,8 @@ static void upipe_pciesdi_sink_free(struct upipe *upipe)
         ulist_delete(uchain);
     }
 
-    upipe_pciesdi_sink_clean_upump(upipe);
+    upipe_pciesdi_sink_clean_fd_write_upump(upipe);
+    upipe_pciesdi_sink_clean_timer_upump(upipe);
     upipe_pciesdi_sink_clean_upump_mgr(upipe);
     upipe_pciesdi_sink_clean_urefcount(upipe);
     upipe_pciesdi_sink_free_void(upipe);
