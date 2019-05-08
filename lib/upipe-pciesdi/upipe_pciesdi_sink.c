@@ -495,7 +495,7 @@ static void upipe_pciesdi_sink_input(struct upipe *upipe, struct uref *uref, str
     }
 }
 
-static int init_hardware(struct upipe *upipe, bool ntsc, bool genlock, bool sd)
+static int check_capabilities(struct upipe *upipe, bool ntsc, bool genlock)
 {
     struct upipe_pciesdi_sink *ctx = upipe_pciesdi_sink_from_upipe(upipe);
     int fd = ctx->fd;
@@ -522,6 +522,21 @@ static int init_hardware(struct upipe *upipe, bool ntsc, bool genlock, bool sd)
         upipe_err(upipe, "genlock not supported on this board");
         return UBASE_ERR_INVALID;
     }
+
+    return UBASE_ERR_NONE;
+}
+
+static void init_hardware(struct upipe *upipe, bool ntsc, bool genlock, bool sd)
+{
+    struct upipe_pciesdi_sink *ctx = upipe_pciesdi_sink_from_upipe(upipe);
+    int fd = ctx->fd;
+    int device_number = ctx->device_number;
+
+    uint8_t channels, has_vcxos;
+    uint8_t has_gs12241, has_gs12281, has_si5324;
+    uint8_t has_genlock, has_lmh0387, has_si596;
+    sdi_capabilities(fd, &channels, &has_vcxos, &has_gs12241, &has_gs12281,
+            &has_si5324, &has_genlock, &has_lmh0387, &has_si596);
 
     /* sdi_pre_init */
 
@@ -629,8 +644,6 @@ static int init_hardware(struct upipe *upipe, bool ntsc, bool genlock, bool sd)
             sdi_writel(fd, CSR_SDI3_CORE_TX_RESET_ADDR, 0);
             break;
     }
-
-    return UBASE_ERR_NONE;
 }
 
 static void clock_wait(struct upump *upump)
@@ -685,8 +698,10 @@ static int upipe_pciesdi_sink_set_flow_def(struct upipe *upipe, struct uref *flo
      * clock always goes forwards when mode changes. */
     uint64_t offset = upipe_pciesdi_sink_now(&upipe_pciesdi_sink->uclock);
 
+    UBASE_RETURN(check_capabilities(upipe, ntsc, genlock));
+
     /* initialize clock */
-    UBASE_RETURN(init_hardware(upipe, ntsc, genlock, sd));
+    init_hardware(upipe, ntsc, genlock, sd);
 
     /* disable pattern */
     sdi_set_pattern(upipe_pciesdi_sink->fd, upipe_pciesdi_sink->tx_mode, 0, 0);
