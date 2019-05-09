@@ -98,6 +98,7 @@ struct upipe_pciesdi_sink {
     struct uclock uclock;
     uint64_t offset;
     uint32_t clock_is_inited; /* TODO: maybe replace with uatomic variable. */
+    __uint128_t freq;
 
     void (*uyvy_to_sdi)(uint8_t *dst, const uint8_t *src, uintptr_t pixels);
 
@@ -146,7 +147,7 @@ static uint64_t upipe_pciesdi_sink_now(struct uclock *uclock)
     /* 128 bits needed to prevent overflow after ~2.5 hours */
     __uint128_t fullscale = tick;
     fullscale *= UCLOCK_FREQ;
-    fullscale /= freq;
+    fullscale /= upipe_pciesdi_sink->freq; /* Use exact frequency. */
     fullscale += upipe_pciesdi_sink->offset;
 
     pthread_mutex_unlock(&upipe_pciesdi_sink->clock_mutex);
@@ -725,11 +726,33 @@ static int upipe_pciesdi_sink_set_flow_def(struct upipe *upipe, struct uref *flo
 
     UBASE_RETURN(check_capabilities(upipe, ntsc, genlock));
 
+    /* Frequencies:
+     * - PAL 3G = 148.5  MHz
+     * - PAL HD =  74.25 MHz
+     * - PAL SD = 148.5  MHz ?
+     * - NTSC 3G = 148.5  / 1.001 MHz
+     * - NTSC HD =  74.25 / 1.001 MHz
+     * - NTSC SD = 148.5  / 1.001 MHz ?
+     */
+    uint64_t freq = 0;
+    if (ntsc) {
+        if (sd || sdi3g)
+            freq = UINT64_C(148351648);
+        else
+            freq =  UINT64_C(74175824);
+    } else {
+        if (sd || sdi3g)
+            freq = UINT64_C(148500000);
+        else
+            freq =  UINT64_C(74250000);
+    }
+
     /* Lock to begin init. */
     pthread_mutex_lock(&upipe_pciesdi_sink->clock_mutex);
 
     /* initialize clock */
     init_hardware_part1(upipe, ntsc, genlock, sd);
+    upipe_pciesdi_sink->freq = freq;
     upipe_pciesdi_sink->offset = offset;
     upipe_pciesdi_sink->clock_is_inited = 0;
 
