@@ -660,16 +660,10 @@ static void run_init_hardware_part2(struct upump *upump)
 
     init_hardware_part2(upipe);
 
-    /* disable pattern */
-    sdi_set_pattern(ctx->fd, ctx->tx_mode, 0, 0);
-
-    /* set TX mode */
-    uint8_t txen, slew;
-    sdi_tx(ctx->fd, ctx->tx_mode, &txen, &slew);
-
     /* Now that the mode is being set or changed the sink needs to wait about 2
      * seconds before it can correctly report the time again. */
-    upipe_pciesdi_sink_wait_timer_upump(upipe, 2*UCLOCK_FREQ, mark_clock_as_inited);
+    /* FIXME: possibly out-dated */
+    upipe_pciesdi_sink_wait_timer_upump(upipe, UCLOCK_FREQ/2, mark_clock_as_inited);
 }
 
 static void mark_clock_as_inited(struct upump *upump)
@@ -759,9 +753,16 @@ static int upipe_pciesdi_sink_set_flow_def(struct upipe *upipe, struct uref *flo
     /* Unlock */
     pthread_mutex_unlock(&upipe_pciesdi_sink->clock_mutex);
 
-    /* Wait 1 second before running part2. */
+    /* disable pattern */
+    sdi_set_pattern(upipe_pciesdi_sink->fd, upipe_pciesdi_sink->tx_mode, 0, 0);
+
+    /* set TX mode */
+    uint8_t txen, slew;
+    sdi_tx(upipe_pciesdi_sink->fd, upipe_pciesdi_sink->tx_mode, &txen, &slew);
+
+    /* Wait 100ms second before running part2. */
     struct upump *upump = upump_alloc_timer(upipe_pciesdi_sink->upump_mgr,
-            run_init_hardware_part2, upipe, upipe->refcount, UCLOCK_FREQ, 0);
+            run_init_hardware_part2, upipe, upipe->refcount, UCLOCK_FREQ/10, 0);
     if (unlikely(upump == NULL)) {
         upipe_throw_fatal(upipe, UBASE_ERR_UPUMP);
         return UBASE_ERR_UPUMP;
