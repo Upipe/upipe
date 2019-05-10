@@ -98,7 +98,7 @@ struct upipe_pciesdi_sink {
     struct uclock uclock;
     uint64_t offset;
     uint32_t clock_is_inited; /* TODO: maybe replace with uatomic variable. */
-    __uint128_t freq;
+    struct urational freq;
 
     void (*uyvy_to_sdi)(uint8_t *dst, const uint8_t *src, uintptr_t pixels);
 
@@ -146,8 +146,10 @@ static uint64_t upipe_pciesdi_sink_now(struct uclock *uclock)
 
     /* 128 bits needed to prevent overflow after ~2.5 hours */
     __uint128_t fullscale = tick;
-    fullscale *= UCLOCK_FREQ;
-    fullscale /= upipe_pciesdi_sink->freq; /* Use exact frequency. */
+    /* Use exact frequency.  This multiply was UCLOCK_FREQ so the comment above
+     * is outdated.  The overflow will take longer to occur. */
+    fullscale *= upipe_pciesdi_sink->freq.den;
+    fullscale /= upipe_pciesdi_sink->freq.num;
     fullscale += upipe_pciesdi_sink->offset;
 
     pthread_mutex_unlock(&upipe_pciesdi_sink->clock_mutex);
@@ -728,17 +730,17 @@ static int upipe_pciesdi_sink_set_flow_def(struct upipe *upipe, struct uref *flo
      * - NTSC HD =  74.25 / 1.001 MHz
      * - NTSC SD = 148.5  / 1.001 MHz ?
      */
-    uint64_t freq = 0;
+    struct urational freq;
     if (ntsc) {
         if (sd || sdi3g)
-            freq = UINT64_C(148351648);
+            freq = (struct urational){ 148500, 27027 };
         else
-            freq =  UINT64_C(74175824);
+            freq = (struct urational){ 74250, 27027 };
     } else {
         if (sd || sdi3g)
-            freq = UINT64_C(148500000);
+            freq = (struct urational){ 1485, 270 };
         else
-            freq =  UINT64_C(74250000);
+            freq = (struct urational){ 7425, 2700 };
     }
 
     /* Lock to begin init. */
