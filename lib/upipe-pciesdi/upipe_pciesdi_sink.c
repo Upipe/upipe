@@ -244,6 +244,29 @@ static inline void pack(uint8_t *dst, const uint16_t *src)
     dst[4] = src[3];
 }
 
+static void stop_dma(struct upipe *upipe, bool clear_urefs)
+{
+    struct upipe_pciesdi_sink *ctx = upipe_pciesdi_sink_from_upipe(upipe);
+    int64_t hw, sw;
+
+    /* stop DMA */
+    sdi_dma_reader(ctx->fd, 0, &hw, &sw);
+    /* stop and clear pump */
+    upipe_pciesdi_sink_set_fd_write_upump(upipe, NULL);
+    /* reset state */
+    ctx->first = 1;
+    ctx->scratch_bytes = 0;
+
+    /* Clear cached urefs. */
+    if (clear_urefs) {
+        struct uchain *uchain, *uchain_tmp;
+        ulist_delete_foreach(&ctx->urefs, uchain, uchain_tmp) {
+            uref_free(uref_from_uchain(uchain));
+            ulist_delete(uchain);
+        }
+    }
+}
+
 /** @internal
  */
 static void upipe_pciesdi_sink_worker(struct upump *upump)
@@ -282,17 +305,7 @@ static void upipe_pciesdi_sink_worker(struct upump *upump)
      * stopped so stop the output. */
     if (num_bufs <= 0 && underrun) {
         upipe_warn(upipe, "too late and no input, stopping DMA and upump");
-
-        /* stop DMA */
-        sdi_dma_reader(upipe_pciesdi_sink->fd, 0, &hw, &sw);
-
-        /* stop and clear pump */
-        upipe_pciesdi_sink_set_fd_write_upump(upipe, NULL);
-
-        /* reset state */
-        upipe_pciesdi_sink->first = 1;
-        upipe_pciesdi_sink->scratch_bytes = 0;
-
+        stop_dma(upipe, false);
         return;
     }
 
@@ -721,6 +734,9 @@ static int upipe_pciesdi_sink_set_flow_def(struct upipe *upipe, struct uref *flo
     uint64_t offset = upipe_pciesdi_sink_now(&upipe_pciesdi_sink->uclock);
 
     UBASE_RETURN(check_capabilities(upipe, ntsc, genlock));
+
+    upipe_warn(upipe, "new flow_def, stopping DMA and upump");
+    stop_dma(upipe, true);
 
     /* Frequencies:
      * - PAL 3G = 148.5  MHz
