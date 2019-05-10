@@ -671,7 +671,6 @@ static void init_hardware_part2(struct upipe *upipe)
 static void run_init_hardware_part2(struct upump *upump)
 {
     struct upipe *upipe = upump_get_opaque(upump, struct upipe *);
-    struct upipe_pciesdi_sink *ctx = upipe_pciesdi_sink_from_upipe(upipe);
 
     init_hardware_part2(upipe);
 
