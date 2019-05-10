@@ -827,9 +827,12 @@ static void cb(struct upump *upump)
 
     /* schedule next pic */
     now = uclock_now(upipe_sync->uclock);
-    while (now != UINT64_MAX && now > upipe_sync->pts) {
-        upipe_sync->pts += upipe_sync->ticks_per_frame;
-        upipe_err_va(upipe, "skipping a beat");
+    if (now != UINT64_MAX && now > upipe_sync->pts) {
+        uint64_t diff = now - upipe_sync->pts;
+        diff += upipe_sync->ticks_per_frame - 1;
+        diff /= upipe_sync->ticks_per_frame;
+        upipe_err_va(upipe, "skipping %"PRIu64" beats", diff);
+        upipe_sync->pts += diff * upipe_sync->ticks_per_frame;
     }
 
     uint64_t wait;
