@@ -746,14 +746,16 @@ static int upipe_pciesdi_sink_set_flow_def(struct upipe *upipe, struct uref *flo
      * - NTSC SD = 148.5  / 1.001 MHz ?
      */
     struct urational freq;
-    if (ntsc) {
-        if (sd || sdi3g)
+    if (sd) {
+        freq = (struct urational){ 1485, 270 };
+    } else if (sdi3g) {
+        if (ntsc)
             freq = (struct urational){ 148500, 27027 };
         else
-            freq = (struct urational){ 74250, 27027 };
-    } else {
-        if (sd || sdi3g)
             freq = (struct urational){ 1485, 270 };
+    } else {
+        if (ntsc)
+            freq = (struct urational){ 74250, 27027 };
         else
             freq = (struct urational){ 7425, 2700 };
     }
