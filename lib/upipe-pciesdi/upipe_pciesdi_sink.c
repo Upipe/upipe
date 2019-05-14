@@ -687,6 +687,13 @@ static void mark_clock_as_inited(struct upump *upump)
     pthread_mutex_lock(&ctx->clock_mutex);
     ctx->clock_is_inited = 1;
     pthread_mutex_unlock(&ctx->clock_mutex);
+
+    /* Clear cached urefs. */
+    struct uchain *uchain, *uchain_tmp;
+    ulist_delete_foreach(&ctx->urefs, uchain, uchain_tmp) {
+        uref_free(uref_from_uchain(uchain));
+        ulist_delete(uchain);
+    }
 }
 
 /** @internal @This sets the input flow definition.
