@@ -708,9 +708,9 @@ static int upipe_pciesdi_sink_set_flow_def(struct upipe *upipe, struct uref *flo
     UBASE_RETURN(uref_pic_flow_get_vsize(flow_def, &height));
     UBASE_RETURN(uref_pic_flow_get_fps(flow_def, &fps));
 
-    bool ntsc = fps.den == 1001;
     bool genlock = false;
     bool sd = height < 720;
+    bool ntsc = sd ? 0 : fps.den == 1001;
     bool sdi3g = height == 1080 && (urational_cmp(&fps, &(struct urational){ 50, 1 })) >= 0;
     upipe_dbg_va(upipe, "sd: %d, 3g: %d", sd, sdi3g);
 
