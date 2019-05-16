@@ -31,6 +31,7 @@
 #include <upipe/uref.h>
 #include <upipe/uref_dump.h>
 #include <upipe/uref_block.h>
+#include <upipe/uref_block_flow.h>
 #include <upipe/uref_pic.h>
 #include <upipe/uref_pic_flow.h>
 #include <upipe/uref_flow.h>
@@ -709,6 +710,7 @@ static int get_flow_def(struct upipe *upipe, struct uref **flow_format)
         return UBASE_ERR_ALLOC;
 
     UBASE_RETURN(uref_flow_set_def(flow_def, "block."));
+    UBASE_RETURN(uref_block_flow_set_append(flow_def, 32));
     UBASE_RETURN(uref_pic_flow_set_fps(flow_def, fps));
     UBASE_RETURN(uref_pic_flow_set_hsize(flow_def, width));
     UBASE_RETURN(uref_pic_flow_set_vsize(flow_def, height));
