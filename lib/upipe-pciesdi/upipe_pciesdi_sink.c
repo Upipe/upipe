@@ -265,6 +265,9 @@ static void stop_dma(struct upipe *upipe, bool clear_urefs)
             ulist_delete(uchain);
         }
     }
+    /* Free uref being written. */
+    uref_free(ctx->uref);
+    ctx->uref = NULL;
 }
 
 /** @internal
@@ -694,6 +697,9 @@ static void mark_clock_as_inited(struct upump *upump)
         uref_free(uref_from_uchain(uchain));
         ulist_delete(uchain);
     }
+    /* Free uref being written. */
+    uref_free(ctx->uref);
+    ctx->uref = NULL;
 }
 
 /** @internal @This sets the input flow definition.
