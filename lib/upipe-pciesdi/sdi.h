@@ -221,9 +221,9 @@ struct sdi_ioctl_mmap_dma_update {
 #define SDI_IOCTL_TX_SPI_CS         _IOW(SDI_IOCTL,  60, struct sdi_ioctl_gs12241_spi_cs)
 #define SDI_IOCTL_TX_SPI            _IOWR(SDI_IOCTL, 61, struct sdi_ioctl_gs12281_spi)
 
-#define SDI_IOCTL_DIRECTION         _IOW(SDI_IOCTL,  70, struct sdi_ioctl_lmh0387_direction)
-#define SDI_IOCTL_SPI_CS            _IOW(SDI_IOCTL,  71, struct sdi_ioctl_lmh0387_spi_cs)
-#define SDI_IOCTL_SPI               _IOWR(SDI_IOCTL, 72, struct sdi_ioctl_lmh0387_spi)
+#define SDI_IOCTL_LMH0387_DIRECTION _IOW(SDI_IOCTL,  70, struct sdi_ioctl_lmh0387_direction)
+#define SDI_IOCTL_LMH0387_SPI_CS    _IOW(SDI_IOCTL,  71, struct sdi_ioctl_lmh0387_spi_cs)
+#define SDI_IOCTL_LMH0387_SPI       _IOWR(SDI_IOCTL, 72, struct sdi_ioctl_lmh0387_spi)
 
 #define SDI_IOCTL_RX                _IOWR(SDI_IOCTL, 80, struct sdi_ioctl_rx)
 #define SDI_IOCTL_TX                _IOWR(SDI_IOCTL, 81, struct sdi_ioctl_tx)

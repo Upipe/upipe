@@ -848,7 +848,7 @@ static int upipe_pciesdi_set_uri(struct upipe *upipe, const char *path)
     }
 
     sdi_dma(upipe_pciesdi_sink->fd, 0); // disable loopback
-    sdi_set_direction(upipe_pciesdi_sink->fd, 1); /* Set direction for TX. */
+    sdi_lmh0387_direction(upipe_pciesdi_sink->fd, 1); /* Set direction for TX. */
 
     /* TODO: check need to release things on failure. */
 

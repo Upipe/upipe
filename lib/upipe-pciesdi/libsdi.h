@@ -57,9 +57,9 @@ void sdi_gs12241_spi(int fd, uint32_t tx_data, uint32_t *rx_data);
 void sdi_gs12281_spi_cs(int fd, uint8_t cs_n);
 void sdi_gs12281_spi(int fd, uint32_t tx_data, uint32_t *rx_data);
 
-void sdi_set_direction(int fd, uint8_t tx_enable);
-void sdi_spi_cs(int fd, uint8_t cs_n);
-void sdi_spi(int fd, uint32_t tx_data, uint32_t *rx_data);
+void sdi_lmh0387_direction(int fd, uint8_t tx_enable);
+void sdi_lmh0387_spi_cs(int fd, uint8_t cs_n);
+void sdi_lmh0387_spi(int fd, uint32_t tx_data, uint32_t *rx_data);
 
 void sdi_rx(int fd, uint8_t *locked, uint8_t *mode, uint8_t *family, uint8_t *scan, uint8_t *rate);
 void sdi_tx(int fd, uint8_t mode, uint8_t *txen, uint8_t *slew);
@@ -207,8 +207,8 @@ void gs12281_spi_write(int fd, uint8_t channel, uint16_t adr, uint16_t data);
 uint16_t gs12281_spi_read(int fd, uint8_t channel, uint16_t adr);
 void gs12281_spi_init(int fd);
 
-void sdi_spi_write(int fd, uint8_t channel, uint16_t adr, uint16_t data);
-uint16_t sdi_spi_read(int fd, uint8_t channel, uint16_t adr);
+void sdi_lmh0387_spi_write(int fd, uint8_t channel, uint16_t adr, uint16_t data);
+uint16_t sdi_lmh0387_spi_read(int fd, uint8_t channel, uint16_t adr);
 
 /* genlock */
 

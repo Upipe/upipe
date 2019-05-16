@@ -888,6 +888,13 @@ static int init_hardware(struct upipe *upipe, bool ntsc, bool genlock, bool sd)
         gs12241_spi_init(fd);
     }
 
+    if (has_lmh0387) {
+        /* Set direction for RX. */
+        sdi_lmh0387_direction(fd, 0);
+        /* set launch amplitude to nominal */
+        sdi_lmh0387_spi_write(fd, device_number, 0x02, 0x30);
+    }
+
     /* sdi_init */
 
     /* reset sdi cores */
@@ -1032,14 +1039,13 @@ static int upipe_pciesdi_set_uri(struct upipe *upipe, const char *path)
 
     /* initialize clock */
     UBASE_RETURN(init_hardware(upipe, false, false, false));
-    /* Set direction for RX. */
-    sdi_set_direction(upipe_pciesdi_src->fd, 0);
-    /* Set the crc and packed options (in libsdi.c). */
-    uint8_t locked, mode, family, scan, rate;
-    sdi_rx(upipe_pciesdi_src->fd, &locked, &mode, &family, &scan, &rate);
 
     upipe_pciesdi_src->read_buffer = buf;
     upipe_pciesdi_src->device_number = path[strlen(path) - 1] - 0x30;
+
+    /* Set the crc and packed options (in libsdi.c). */
+    uint8_t locked, mode, family, scan, rate;
+    sdi_rx(upipe_pciesdi_src->fd, &locked, &mode, &family, &scan, &rate);
 
     return UBASE_ERR_NONE;
 }

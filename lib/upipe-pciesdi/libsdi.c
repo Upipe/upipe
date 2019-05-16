@@ -192,22 +192,22 @@ void sdi_gs12281_spi(int fd, uint32_t tx_data, uint32_t *rx_data) {
     *rx_data = m.rx_data;
 }
 
-void sdi_set_direction(int fd, uint8_t tx_enable) {
+void sdi_lmh0387_direction(int fd, uint8_t tx_enable) {
     struct sdi_ioctl_lmh0387_direction m;
     m.tx_enable = tx_enable;
-    ioctl(fd, SDI_IOCTL_DIRECTION, &m);
+    ioctl(fd, SDI_IOCTL_LMH0387_DIRECTION, &m);
 }
 
-void sdi_spi_cs(int fd, uint8_t cs_n) {
+void sdi_lmh0387_spi_cs(int fd, uint8_t cs_n) {
     struct sdi_ioctl_lmh0387_spi_cs m;
     m.cs_n = cs_n;
-    ioctl(fd, SDI_IOCTL_SPI_CS, &m);
+    ioctl(fd, SDI_IOCTL_LMH0387_SPI_CS, &m);
 }
 
-void sdi_spi(int fd, uint32_t tx_data, uint32_t *rx_data) {
+void sdi_lmh0387_spi(int fd, uint32_t tx_data, uint32_t *rx_data) {
     struct sdi_ioctl_lmh0387_spi m;
     m.tx_data = tx_data;
-    ioctl(fd, SDI_IOCTL_SPI, &m);
+    ioctl(fd, SDI_IOCTL_LMH0387_SPI, &m);
     *rx_data = m.rx_data;
 }
 
@@ -592,34 +592,34 @@ void gs12281_spi_init(int fd)
         gs12281_spi_write(fd, i, 0, 1 << 13); /* gspi_bus_through_enable */
 }
 
-void sdi_spi_write(int fd, uint8_t channel, uint16_t adr, uint16_t data)
+void sdi_lmh0387_spi_write(int fd, uint8_t channel, uint16_t adr, uint16_t data)
 {
     uint32_t tx_data, rx_data;
 
     /* set chip_select */
-    sdi_spi_cs(fd, 0b1111 ^ (1 << channel));
+    sdi_lmh0387_spi_cs(fd, 0b1111 ^ (1 << channel));
 
     /* send cmd & data*/
     tx_data = (0 << 15) | ((adr & 0x3f) << 8) | (data & 0xff);
-    sdi_spi(fd, tx_data, &rx_data);
+    sdi_lmh0387_spi(fd, tx_data, &rx_data);
 
     /* release chip_select */
-    sdi_spi_cs(fd, 0b1111);
+    sdi_lmh0387_spi_cs(fd, 0b1111);
 }
 
-uint16_t sdi_spi_read(int fd, uint8_t channel, uint16_t adr)
+uint16_t sdi_lmh0387_spi_read(int fd, uint8_t channel, uint16_t adr)
 {
     uint32_t tx_data, rx_data;
 
     /* set chip_select */
-    sdi_spi_cs(fd, 0b1111 ^ (1 << channel));
+    sdi_lmh0387_spi_cs(fd, 0b1111 ^ (1 << channel));
 
     /* send cmd  & data*/
     tx_data = (1 << 15) | ((adr & 0x3f) << 8);
-    sdi_spi(fd, tx_data, &rx_data);
+    sdi_lmh0387_spi(fd, tx_data, &rx_data);
 
     /* release chip_select */
-    sdi_spi_cs(fd, 0b1111);
+    sdi_lmh0387_spi_cs(fd, 0b1111);
 
     return rx_data & 0xff;
 }
