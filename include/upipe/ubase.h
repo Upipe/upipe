@@ -238,7 +238,7 @@ do {                                                                        \
 } while (0);
 
 /** @This runs the given function and returns if the error code is not
- * UBASE_ERR_UNHANDLER.
+ * UBASE_ERR_UNHANDLED.
  *
  * @param command command whose return code is to be checked
  */
