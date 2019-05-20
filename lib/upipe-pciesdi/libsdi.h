@@ -37,7 +37,11 @@ void sdi_capabilities(int fd, uint8_t *channels, uint8_t *has_vcxos,
         uint8_t *has_gs12241, uint8_t *has_gs12281, uint8_t *has_si5324,
         uint8_t *has_genlock, uint8_t *has_lmh0387, uint8_t *has_si596);
 
+void sdi_set_rate(int fd, uint8_t rate);
+uint8_t sdi_get_rate(int fd);
+
 void sdi_vcxo(int fd, uint32_t width, uint32_t period);
+void sdi_picxo(int fd, uint8_t enable, uint8_t dir, uint8_t step);
 
 void sdi_si5324_vcxo(int fd, uint32_t width, uint32_t period);
 void sdi_si5324_spi(int fd, uint32_t tx_data, uint32_t *rx_data);
@@ -207,6 +211,9 @@ void gs12281_spi_write(int fd, uint8_t channel, uint16_t adr, uint16_t data);
 uint16_t gs12281_spi_read(int fd, uint8_t channel, uint16_t adr);
 void gs12281_spi_init(int fd);
 
+#define LMH0387_RX_ENABLE 0x0
+#define LMH0387_TX_ENABLE 0x1
+
 void sdi_lmh0387_spi_write(int fd, uint8_t channel, uint16_t adr, uint16_t data);
 uint16_t sdi_lmh0387_spi_read(int fd, uint8_t channel, uint16_t adr);
 
@@ -224,7 +231,7 @@ uint16_t sdi_lmh0387_spi_read(int fd, uint8_t channel, uint16_t adr);
 #define SMPTE259M_PAL_VSYNC_PERIOD 40000000
 
 #define SMPTE259M_NTSC_HSYNC_PERIOD 63555
-#define SMPTE259M_NTSC_VSYNC_PERIOD 33366700
+#define SMPTE259M_NTSC_VSYNC_PERIOD 33366666
 
 /* SMPTE296M */
 #define SMPTE296M_720P60_HSYNC_PERIOD 22222

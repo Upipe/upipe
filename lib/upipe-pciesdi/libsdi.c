@@ -84,6 +84,18 @@ void sdi_capabilities(int fd, uint8_t *channels, uint8_t *has_vcxos,
     *has_si596   = m.has_si596;
 }
 
+void sdi_set_rate(int fd, uint8_t rate) {
+    struct sdi_ioctl_rate m;
+    m.rate = rate;
+    ioctl(fd, SDI_IOCTL_SET_RATE, &m);
+}
+
+uint8_t sdi_get_rate(int fd) {
+    struct sdi_ioctl_rate m;
+    ioctl(fd, SDI_IOCTL_GET_RATE, &m);
+    return m.rate;
+}
+
 void sdi_reload(int fd) {
     struct sdi_ioctl_icap m;
 	m.addr = 0x4;
@@ -97,6 +109,14 @@ void sdi_vcxo(int fd, uint32_t width, uint32_t period) {
     m.pwm_width = width;
     m.pwm_period = period;
     ioctl(fd, SDI_IOCTL_VCXO, &m);
+}
+
+void sdi_picxo(int fd, uint8_t enable, uint8_t dir, uint8_t step) {
+    struct sdi_ioctl_picxo m;
+    m.enable = enable;
+    m.dir = dir;
+    m.step = step;
+    ioctl(fd, SDI_IOCTL_PICXO, &m);
 }
 
 void sdi_si5324_vcxo(int fd, uint32_t width, uint32_t period) {

@@ -67,10 +67,20 @@ struct sdi_ioctl_capabilities {
     uint8_t has_si596;
 };
 
+struct sdi_ioctl_rate {
+    uint8_t rate;
+};
+
 struct sdi_ioctl_vcxo {
     uint8_t pwm_enable;
     uint32_t pwm_period;
     uint32_t pwm_width;
+};
+
+struct sdi_ioctl_picxo {
+    uint8_t enable;
+    uint8_t dir;
+    uint8_t step;
 };
 
 struct sdi_ioctl_si5324_vcxo {
@@ -199,8 +209,11 @@ struct sdi_ioctl_mmap_dma_update {
 #define SDI_IOCTL_ICAP              _IOWR(SDI_IOCTL,  3, struct sdi_ioctl_icap)
 #define SDI_IOCTL_REFCLK            _IOWR(SDI_IOCTL,  4, struct sdi_ioctl_refclk)
 #define SDI_IOCTL_CAPABILITIES      _IOWR(SDI_IOCTL,  5, struct sdi_ioctl_capabilities)
+#define SDI_IOCTL_SET_RATE          _IOWR(SDI_IOCTL,  6, struct sdi_ioctl_rate)
+#define SDI_IOCTL_GET_RATE          _IOWR(SDI_IOCTL,  7, struct sdi_ioctl_rate)
 
 #define SDI_IOCTL_VCXO              _IOW(SDI_IOCTL,  10, struct sdi_ioctl_vcxo)
+#define SDI_IOCTL_PICXO             _IOW(SDI_IOCTL,  11, struct sdi_ioctl_vcxo)
 #define SDI_IOCTL_SI5324_VCXO       _IOW(SDI_IOCTL,  20, struct sdi_ioctl_si5324_vcxo)
 #define SDI_IOCTL_SI5324_SPI        _IOWR(SDI_IOCTL, 21, struct sdi_ioctl_si5324_spi)
 
