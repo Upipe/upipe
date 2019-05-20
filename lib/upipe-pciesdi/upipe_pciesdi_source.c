@@ -622,11 +622,6 @@ static int get_flow_def(struct upipe *upipe, struct uref **flow_format)
 {
     struct upipe_pciesdi_src *upipe_pciesdi_src = upipe_pciesdi_src_from_upipe(upipe);
 
-    if (upipe_pciesdi_src->fd == -1) {
-        upipe_err(upipe, "no open file descriptor");
-        return UBASE_ERR_INVALID;
-    }
-
     /* Query the HW for what it thinks the received format is. */
     uint8_t locked, mode, family, scan, rate;
     sdi_rx(upipe_pciesdi_src->fd, &locked, &mode, &family, &scan, &rate);
@@ -806,28 +801,7 @@ static int upipe_pciesdi_src_check(struct upipe *upipe, struct uref *flow_format
         return UBASE_ERR_NONE;
     }
 
-    if (upipe_pciesdi_src->ubuf_mgr == NULL) {
-        struct uref *flow_def;
-        int ret = get_flow_def(upipe, &flow_def);
-        if (ret == UPIPE_PCIESDI_SRC_ERR_NOSIGNAL) {
-            /* If signal is unlocked start a timer pump to wait for it. */
-            struct upump *upump = upump_alloc_timer(upipe_pciesdi_src->upump_mgr,
-                    get_flow_def_on_signal_lock, upipe, upipe->refcount,
-                    UCLOCK_FREQ, UCLOCK_FREQ);
-            if (unlikely(upump == NULL)) {
-                upipe_throw_fatal(upipe, UBASE_ERR_UPUMP);
-                return UBASE_ERR_UPUMP;
-            }
-            upipe_pciesdi_src_set_upump(upipe, upump);
-            upump_start(upump);
-        }
-        if (!ubase_check(ret)) {
-            upipe_throw_fatal(upipe, ret);
-            return ret;
-        }
-        upipe_pciesdi_src_require_ubuf_mgr(upipe, flow_def);
-        return UBASE_ERR_NONE;
-    }
+    /* Get ubuf_mgr later in get_flow_def_on_signal_lock. */
 
     if (upipe_pciesdi_src->uclock == NULL &&
         urequest_get_opaque(&upipe_pciesdi_src->uclock_request, struct upipe *)
@@ -835,9 +809,9 @@ static int upipe_pciesdi_src_check(struct upipe *upipe, struct uref *flow_format
         return UBASE_ERR_NONE;
 
     if (upipe_pciesdi_src->fd != -1 && upipe_pciesdi_src->upump == NULL) {
-        struct upump *upump = upump_alloc_fd_read(upipe_pciesdi_src->upump_mgr,
-                upipe_pciesdi_src_worker, upipe, upipe->refcount,
-                upipe_pciesdi_src->fd);
+        struct upump *upump = upump_alloc_timer(upipe_pciesdi_src->upump_mgr,
+                get_flow_def_on_signal_lock, upipe, upipe->refcount,
+                1, UCLOCK_FREQ);
         if (unlikely(upump == NULL)) {
             upipe_throw_fatal(upipe, UBASE_ERR_UPUMP);
             return UBASE_ERR_UPUMP;
