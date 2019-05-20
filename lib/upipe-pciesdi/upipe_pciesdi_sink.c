@@ -572,6 +572,11 @@ static void init_hardware_part1(struct upipe *upipe, bool ntsc, bool genlock, bo
         gs12241_spi_init(fd);
     }
 
+    if (has_lmh0387) {
+        /* Set direction for TX. */
+        sdi_lmh0387_direction(fd, 1);
+    }
+
     /* sdi_init */
 
     /* reset sdi cores */
@@ -854,7 +859,6 @@ static int upipe_pciesdi_set_uri(struct upipe *upipe, const char *path)
     }
 
     sdi_dma(upipe_pciesdi_sink->fd, 0); // disable loopback
-    sdi_lmh0387_direction(upipe_pciesdi_sink->fd, 1); /* Set direction for TX. */
 
     /* TODO: check need to release things on failure. */
 
