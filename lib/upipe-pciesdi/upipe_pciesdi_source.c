@@ -1011,11 +1011,11 @@ static int upipe_pciesdi_set_uri(struct upipe *upipe, const char *path)
 
     /* TODO: check need to release things on failure. */
 
-    /* initialize clock */
-    UBASE_RETURN(init_hardware(upipe, false, false, false));
-
     upipe_pciesdi_src->read_buffer = buf;
     upipe_pciesdi_src->device_number = path[strlen(path) - 1] - 0x30;
+
+    /* initialize clock */
+    UBASE_RETURN(init_hardware(upipe, false, false, false));
 
     /* Set the crc and packed options (in libsdi.c). */
     uint8_t locked, mode, family, scan, rate;
