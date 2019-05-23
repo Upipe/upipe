@@ -132,14 +132,8 @@ struct upipe_avfsrc {
     struct upump_mgr *upump_mgr;
     /** read watcher */
     struct upump *upump;
-    /** offset between libavformat timestamps and Upipe timestamps */
-    int64_t timestamp_offset;
-    /** highest Upipe timestamp given to a frame */
-    uint64_t timestamp_highest;
     /** last random access point */
     uint64_t systime_rap;
-    /** last dts_prog */
-    uint64_t last_dts_prog;
 
     /** list of subs */
     struct uchain subs;
@@ -220,6 +214,13 @@ struct upipe_avfsrc_sub {
     /** pointer to the output of the last inner pipe */
     struct upipe *output;
 
+    /** last dts_prog */
+    uint64_t last_dts_prog;
+    /** offset between libavformat timestamps and Upipe timestamps */
+    int64_t timestamp_offset;
+    /** highest Upipe timestamp given to a frame */
+    uint64_t timestamp_highest;
+
     /** public upipe structure */
     struct upipe upipe;
 };
@@ -272,6 +273,9 @@ static struct upipe *upipe_avfsrc_sub_alloc(struct upipe_mgr *mgr,
     upipe_avfsrc_sub_init_sub(upipe);
     upipe_avfsrc_sub->id = UINT64_MAX;
     upipe_avfsrc_sub->flow_def = flow_def;
+    upipe_avfsrc_sub->last_dts_prog = UINT64_MAX;
+    upipe_avfsrc_sub->timestamp_offset = 0;
+    upipe_avfsrc_sub->timestamp_highest = AV_CLOCK_MIN;
     ulist_init(&upipe_avfsrc_sub->output_request_list);
 
     uint64_t id;
@@ -491,10 +495,7 @@ static struct upipe *upipe_avfsrc_alloc(struct upipe_mgr *mgr,
     upipe_avfsrc_init_upump_mgr(upipe);
     upipe_avfsrc_init_upump(upipe);
     upipe_avfsrc_init_uclock(upipe);
-    upipe_avfsrc->timestamp_offset = 0;
-    upipe_avfsrc->timestamp_highest = AV_CLOCK_MIN;
     upipe_avfsrc->systime_rap = UINT64_MAX;
-    upipe_avfsrc->last_dts_prog = UINT64_MAX;
 
     upipe_avfsrc->url = NULL;
 
@@ -629,22 +630,22 @@ static void upipe_avfsrc_worker(struct upump *upump)
         uref_clock_set_dts_orig(uref, dts_orig);
         uref_clock_set_dts_pts_delay(uref, dts_pts_delay);
 
-        if (!upipe_avfsrc->timestamp_offset)
-            upipe_avfsrc->timestamp_offset = upipe_avfsrc->timestamp_highest -
+        if (!output->timestamp_offset)
+            output->timestamp_offset = output->timestamp_highest -
                                              dts_orig + PCR_OFFSET;
-        uint64_t dts = dts_orig + upipe_avfsrc->timestamp_offset;
-        if (upipe_avfsrc->last_dts_prog != UINT64_MAX) {
-            if (upipe_avfsrc->last_dts_prog > dts) {
+        uint64_t dts = dts_orig + output->timestamp_offset;
+        if (output->last_dts_prog != UINT64_MAX) {
+            if (output->last_dts_prog > dts) {
                 upipe_warn_va(upipe, "dts %.3f ms in the past, resetting",
-                              (float)(upipe_avfsrc->last_dts_prog - dts) /
+                              (float)(output->last_dts_prog - dts) /
                               (float)(UCLOCK_FREQ / 1000));
-                dts = upipe_avfsrc->last_dts_prog;
+                dts = output->last_dts_prog;
             }
         }
-        upipe_avfsrc->last_dts_prog = dts;
+        output->last_dts_prog = dts;
         uref_clock_set_dts_prog(uref, dts);
-        if (upipe_avfsrc->timestamp_highest < dts + dts_pts_delay)
-            upipe_avfsrc->timestamp_highest = dts + dts_pts_delay;
+        if (output->timestamp_highest < dts + dts_pts_delay)
+            output->timestamp_highest = dts + dts_pts_delay;
         ts = true;
 
         /* this is subtly wrong, but whatever */
@@ -1093,7 +1094,12 @@ static int upipe_avfsrc_set_uri(struct upipe *upipe, const char *url)
 
     /* http://stackoverflow.com/questions/40991412/ffmpeg-producing-strange-nal-suffixes-for-mpeg-ts-with-h264 */
     upipe_avfsrc->context->flags |= AVFMT_FLAG_KEEP_SIDE_DATA;
-    upipe_avfsrc->timestamp_offset = 0;
+    struct uchain *uchain;
+    ulist_foreach (&upipe_avfsrc->subs, uchain) {
+        struct upipe_avfsrc_sub *output =
+            upipe_avfsrc_sub_from_uchain(uchain);
+        output->timestamp_offset = 0;
+    }
     upipe_avfsrc->url = strdup(url);
     upipe_avfsrc->probed = false;
     upipe_notice_va(upipe, "opening URL %s", upipe_avfsrc->url);
