@@ -176,8 +176,6 @@ static int timestamp_uref(struct upipe *upipe, struct uref *uref)
     struct upipe_pciesdi_source_framer *ctx = upipe_pciesdi_source_framer_from_upipe(upipe);
     uint64_t pts = ctx->frame_counter * ctx->fps.den * UCLOCK_FREQ / ctx->fps.num;
     uref_clock_set_pts_prog(uref, pts);
-    upipe_throw_clock_ref(upipe, uref, pts, 0);
-    upipe_throw_clock_ts(upipe, uref);
     ctx->frame_counter += 1;
     return UBASE_ERR_NONE;
 }
