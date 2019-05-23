@@ -138,8 +138,6 @@ struct upipe_avfsrc {
     uint64_t timestamp_highest;
     /** last random access point */
     uint64_t systime_rap;
-    /** last dts_prog */
-    uint64_t last_dts_prog;
 
     /** list of subs */
     struct uchain subs;
@@ -220,6 +218,8 @@ struct upipe_avfsrc_sub {
     /** pointer to the output of the last inner pipe */
     struct upipe *output;
 
+    /** last dts_prog */
+    uint64_t last_dts_prog;
     /** public upipe structure */
     struct upipe upipe;
 };
@@ -272,6 +272,7 @@ static struct upipe *upipe_avfsrc_sub_alloc(struct upipe_mgr *mgr,
     upipe_avfsrc_sub_init_sub(upipe);
     upipe_avfsrc_sub->id = UINT64_MAX;
     upipe_avfsrc_sub->flow_def = flow_def;
+    upipe_avfsrc_sub->last_dts_prog = UINT64_MAX;
     ulist_init(&upipe_avfsrc_sub->output_request_list);
 
     uint64_t id;
@@ -494,7 +495,6 @@ static struct upipe *upipe_avfsrc_alloc(struct upipe_mgr *mgr,
     upipe_avfsrc->timestamp_offset = 0;
     upipe_avfsrc->timestamp_highest = AV_CLOCK_MIN;
     upipe_avfsrc->systime_rap = UINT64_MAX;
-    upipe_avfsrc->last_dts_prog = UINT64_MAX;
 
     upipe_avfsrc->url = NULL;
 
@@ -633,15 +633,15 @@ static void upipe_avfsrc_worker(struct upump *upump)
             upipe_avfsrc->timestamp_offset = upipe_avfsrc->timestamp_highest -
                                              dts_orig + PCR_OFFSET;
         uint64_t dts = dts_orig + upipe_avfsrc->timestamp_offset;
-        if (upipe_avfsrc->last_dts_prog != UINT64_MAX) {
-            if (upipe_avfsrc->last_dts_prog > dts) {
+        if (output->last_dts_prog != UINT64_MAX) {
+            if (output->last_dts_prog > dts) {
                 upipe_warn_va(upipe, "dts %.3f ms in the past, resetting",
-                              (float)(upipe_avfsrc->last_dts_prog - dts) /
+                              (float)(output->last_dts_prog - dts) /
                               (float)(UCLOCK_FREQ / 1000));
-                dts = upipe_avfsrc->last_dts_prog;
+                dts = output->last_dts_prog;
             }
         }
-        upipe_avfsrc->last_dts_prog = dts;
+        output->last_dts_prog = dts;
         uref_clock_set_dts_prog(uref, dts);
         if (upipe_avfsrc->timestamp_highest < dts + dts_pts_delay)
             upipe_avfsrc->timestamp_highest = dts + dts_pts_delay;
