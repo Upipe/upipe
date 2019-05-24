@@ -273,10 +273,15 @@ static int upipe_audio_merge_sub_control(struct upipe *upipe,
  */
 static void upipe_audio_merge_copy_to_output(struct upipe *upipe, float **out_data)
 {
-    int8_t out_channel_count = 0;
+    int8_t cur_plane = 0;
     struct upipe_audio_merge *upipe_audio_merge = upipe_audio_merge_from_upipe(upipe);
     struct uchain *uchain;
-    int i, j;
+
+    uint64_t output_num_samples = 0;
+    UBASE_ERROR(upipe, uref_sound_flow_get_samples(upipe_audio_merge->flow_def, &output_num_samples));
+
+    uint8_t output_channels = 0;
+    UBASE_ERROR(upipe, uref_sound_flow_get_channels(upipe_audio_merge->flow_def, &output_channels));
 
     ulist_foreach (&upipe_audio_merge->inputs, uchain) {
         struct upipe_audio_merge_sub *upipe_audio_merge_sub =
@@ -291,29 +296,21 @@ static void upipe_audio_merge_copy_to_output(struct upipe *upipe, float **out_da
         uint64_t input_num_samples = 0;
         UBASE_ERROR(upipe, uref_sound_flow_get_samples(upipe_audio_merge_sub->uref, &input_num_samples));
 
-        uint64_t output_num_samples = 0;
-        UBASE_ERROR(upipe, uref_sound_flow_get_samples(upipe_audio_merge->flow_def, &output_num_samples));
 
-        uint8_t output_channels = 0;
-        UBASE_ERROR(upipe, uref_sound_flow_get_channels(upipe_audio_merge->flow_def, &output_channels));
-
-        // If the samples of the input uref != our output sample size, throw an error and don't copy
+        /* If the samples of the input uref != our output sample size, throw an error and don't copy */
         if (unlikely(input_num_samples != output_num_samples))
             upipe_err_va(upipe, "input samples (%"PRIu64") != output samples (%"PRIu64")!",
                 input_num_samples, output_num_samples);
-        // Todo: ensure #planes in uref matches the flowdef?
-        else {
-            for ( i = 0; i < planes; i++ ) {
+        else
+            for (int i = 0; i < planes; i++)
                 /* Only copy up to the number of channels in the output flowdef,
                 and thus what we've allocated */
-                if ((out_channel_count + i) < output_channels) {
-                    for ( j = 0; j < input_num_samples; j++) {
-                        out_data[out_channel_count+i][j] = in_data[i][j];
-                    }
-                }
-            }
-        }
-        out_channel_count += planes;
+                if ((cur_plane + i) < output_channels)
+                    for (int j = 0; j < input_num_samples; j++)
+                        out_data[cur_plane+i][j] = in_data[i][j];
+        /* cur_plane is incremented outside of the loop in case we didn't copy, in which case we'd expect
+           the plane(s) to be left blank in the output rather than removed */
+        cur_plane += planes;
 
         uref_sound_unmap(upipe_audio_merge_sub->uref, 0, -1, planes);
         uref_free(upipe_audio_merge_sub->uref);
@@ -386,7 +383,7 @@ static void upipe_audio_merge_produce_output(struct upipe *upipe, struct upump *
         return;
     }
     UBASE_ERROR(upipe, ubuf_sound_write_float(ubuf, 0, -1, out_data, output_channels));
-    for ( i = 0; i < output_channels; i++ )
+    for (i = 0; i < output_channels; i++)
         memset(out_data[i], 0, sizeof(float) * output_num_samples);
 
     /* copy input data to output */
@@ -420,7 +417,7 @@ static void upipe_audio_merge_sub_input(struct upipe *upipe, struct uref *uref,
     }
     upipe_audio_merge_sub->uref = uref;
 
-    // produce output, if we have all urefs
+    /* produce output, if we have all urefs */
     upipe_audio_merge_produce_output(upipe_audio_merge_to_upipe(upipe_audio_merge), upump_p);
 }
 
