@@ -91,7 +91,6 @@ static int catch(struct uprobe *uprobe, struct upipe *upipe,
     switch (event) {
         default:
             printf("event: %d\n", event);
-            //assert(0);
             break;
         case UPROBE_READY:
         case UPROBE_DEAD:

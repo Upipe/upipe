@@ -59,15 +59,6 @@
 #include <string.h>
 #include <assert.h>
 
-#define UBUF_POOL_DEPTH 2
-
-#ifndef MIN
-# define MIN(a,b) ((a) < (b) ? (a) : (b))
-#endif
-#ifndef MAX
-# define MAX(a,b) ((a) > (b) ? (a) : (b))
-#endif
-
 /** @hidden */
 static int upipe_audio_merge_check(struct upipe *upipe, struct uref *flow_format);
 
@@ -227,9 +218,8 @@ static struct upipe *upipe_audio_merge_sub_alloc(struct upipe_mgr *mgr,
 {
     struct upipe *upipe = upipe_audio_merge_sub_alloc_void(mgr,
                             uprobe, signature, args);
-    if (unlikely(upipe == NULL)) {
+    if (unlikely(upipe == NULL))
         return NULL;
-    }
 
     struct upipe_audio_merge_sub *upipe_audio_merge_sub =
                             upipe_audio_merge_sub_from_upipe(upipe);
