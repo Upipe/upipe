@@ -286,18 +286,20 @@ static void upipe_audio_merge_copy_to_output(struct upipe *upipe, float **out_da
         uint64_t input_num_samples = 0;
         UBASE_ERROR(upipe, uref_sound_flow_get_samples(upipe_audio_merge_sub->uref, &input_num_samples));
 
-
         /* If the samples of the input uref != our output sample size, throw an error and don't copy */
         if (unlikely(input_num_samples != output_num_samples))
             upipe_err_va(upipe, "input samples (%"PRIu64") != output samples (%"PRIu64")!",
                 input_num_samples, output_num_samples);
-        else
-            for (int i = 0; i < planes; i++)
+        else {
+            for (int i = 0; i < planes; i++) {
                 /* Only copy up to the number of channels in the output flowdef,
                 and thus what we've allocated */
-                if ((cur_plane + i) < output_channels)
+                if ((cur_plane + i) < output_channels) {
                     for (int j = 0; j < input_num_samples; j++)
                         out_data[cur_plane+i][j] = in_data[i][j];
+                }
+            }
+        }
         /* cur_plane is incremented outside of the loop in case we didn't copy, in which case we'd expect
            the plane(s) to be left blank in the output rather than removed */
         cur_plane += planes;
@@ -320,7 +322,6 @@ static void upipe_audio_merge_produce_output(struct upipe *upipe, struct upump *
     struct upipe_audio_merge *upipe_audio_merge = upipe_audio_merge_from_upipe(upipe);
     struct uchain *uchain;
     struct uref *output_uref = NULL;
-    int i;
     struct ubuf *ubuf;
 
     if (unlikely(upipe_audio_merge->ubuf_mgr == NULL))
@@ -373,7 +374,7 @@ static void upipe_audio_merge_produce_output(struct upipe *upipe, struct upump *
         return;
     }
     UBASE_ERROR(upipe, ubuf_sound_write_float(ubuf, 0, -1, out_data, output_channels));
-    for (i = 0; i < output_channels; i++)
+    for (int i = 0; i < output_channels; i++)
         memset(out_data[i], 0, sizeof(float) * output_num_samples);
 
     /* copy input data to output */
