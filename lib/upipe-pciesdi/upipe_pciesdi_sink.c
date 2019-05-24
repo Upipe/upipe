@@ -29,7 +29,6 @@
 #include <upipe/uref_block.h>
 #include <upipe/uref_pic_flow.h>
 #include <upipe/upipe.h>
-#include <upipe/ulist.h>
 #include <upipe/udict.h>
 #include <upipe/upump.h>
 #include <upipe/uref_clock.h>
@@ -71,8 +70,7 @@ struct upipe_pciesdi_sink {
     /** file descriptor */
     int fd;
 
-    /** urefs */
-    struct uchain urefs;
+    struct uref *uref_next;
     struct uref *uref;
     size_t written;
     bool underrun;
@@ -194,8 +192,8 @@ static struct upipe *upipe_pciesdi_sink_alloc(struct upipe_mgr *mgr,
     upipe_pciesdi_sink->scratch_bytes = 0;
     upipe_pciesdi_sink->latency = 0;
     upipe_pciesdi_sink->fd = -1;
-    ulist_init(&upipe_pciesdi_sink->urefs);
     upipe_pciesdi_sink->uref = NULL;
+    upipe_pciesdi_sink->uref_next = NULL;
     upipe_pciesdi_sink->underrun = false;
     upipe_pciesdi_sink->first = 1;
     upipe_pciesdi_sink->uclock.refcount = &upipe_pciesdi_sink->urefcount;
@@ -246,7 +244,7 @@ static inline void pack(uint8_t *dst, const uint16_t *src)
     dst[4] = src[3];
 }
 
-static void stop_dma(struct upipe *upipe, bool clear_urefs)
+static void stop_dma(struct upipe *upipe)
 {
     struct upipe_pciesdi_sink *ctx = upipe_pciesdi_sink_from_upipe(upipe);
     int64_t hw, sw;
@@ -259,17 +257,13 @@ static void stop_dma(struct upipe *upipe, bool clear_urefs)
     ctx->first = 1;
     ctx->scratch_bytes = 0;
 
-    /* Clear cached urefs. */
-    if (clear_urefs) {
-        struct uchain *uchain, *uchain_tmp;
-        ulist_delete_foreach(&ctx->urefs, uchain, uchain_tmp) {
-            uref_free(uref_from_uchain(uchain));
-            ulist_delete(uchain);
-        }
-    }
+    /* Clear next uref. */
+    uref_free(ctx->uref_next);
+    ctx->uref_next = NULL;
     /* Free uref being written. */
     uref_free(ctx->uref);
     ctx->uref = NULL;
+    ctx->written = 0;
 }
 
 /** @internal
@@ -295,12 +289,12 @@ static void upipe_pciesdi_sink_worker(struct upump *upump)
     /* Get uref, from struct or list, print 1 message if none available. */
     struct uref *uref = upipe_pciesdi_sink->uref;
     if (!uref) {
-        struct uchain *uchain = ulist_pop(&upipe_pciesdi_sink->urefs);
-        if (!uchain) {
+        uref = upipe_pciesdi_sink->uref_next;
+        upipe_pciesdi_sink->uref_next = NULL;
+        if (!uref) {
             underrun = true;
         } else {
             underrun = false;
-            uref = uref_from_uchain(uchain);
             upipe_pciesdi_sink->uref = uref;
             upipe_pciesdi_sink->written = 0;
         }
@@ -310,7 +304,7 @@ static void upipe_pciesdi_sink_worker(struct upump *upump)
      * stopped so stop the output. */
     if (num_bufs <= 0 && underrun) {
         upipe_warn(upipe, "too late and no input, stopping DMA and upump");
-        stop_dma(upipe, false);
+        stop_dma(upipe);
         return;
     }
 
@@ -488,8 +482,9 @@ static void upipe_pciesdi_sink_input(struct upipe *upipe, struct uref *uref, str
 #define CHUNK_BUFFER_COUNT 32
 #define BUFFER_COUNT_PRINT_THRESHOLD(num, den) (num * CHUNK_BUFFER_COUNT / den)
 
-    ulist_add(&upipe_pciesdi_sink->urefs, uref_to_uchain(uref));
-    size_t n = ulist_depth(&upipe_pciesdi_sink->urefs);
+    if (upipe_pciesdi_sink->uref_next)
+        uref_free(upipe_pciesdi_sink->uref_next);
+    upipe_pciesdi_sink->uref_next = uref;
 
     /* check if pump is already running */
     if (upipe_pciesdi_sink->fd_write_upump)
@@ -702,15 +697,13 @@ static void mark_clock_as_inited(struct upump *upump)
     ctx->clock_is_inited = 1;
     pthread_mutex_unlock(&ctx->clock_mutex);
 
-    /* Clear cached urefs. */
-    struct uchain *uchain, *uchain_tmp;
-    ulist_delete_foreach(&ctx->urefs, uchain, uchain_tmp) {
-        uref_free(uref_from_uchain(uchain));
-        ulist_delete(uchain);
-    }
+    /* Clear next uref. */
+    uref_free(ctx->uref_next);
+    ctx->uref_next = NULL;
     /* Free uref being written. */
     uref_free(ctx->uref);
     ctx->uref = NULL;
+    ctx->written = 0;
 }
 
 /** @internal @This sets the input flow definition.
@@ -759,7 +752,7 @@ static int upipe_pciesdi_sink_set_flow_def(struct upipe *upipe, struct uref *flo
     UBASE_RETURN(check_capabilities(upipe, ntsc, genlock));
 
     upipe_warn(upipe, "new flow_def, stopping DMA and upump");
-    stop_dma(upipe, true);
+    stop_dma(upipe);
 
     /* Frequencies:
      * - PAL 3G = 148.5  MHz
@@ -953,11 +946,7 @@ static void upipe_pciesdi_sink_free(struct upipe *upipe)
     ubase_clean_fd(&upipe_pciesdi_sink->fd);
 
     uref_free(upipe_pciesdi_sink->uref);
-    struct uchain *uchain, *uchain_tmp;
-    ulist_delete_foreach(&upipe_pciesdi_sink->urefs, uchain, uchain_tmp) {
-        uref_free(uref_from_uchain(uchain));
-        ulist_delete(uchain);
-    }
+    uref_free(upipe_pciesdi_sink->uref_next);
 
     upipe_pciesdi_sink_clean_fd_write_upump(upipe);
     upipe_pciesdi_sink_clean_timer_upump(upipe);
