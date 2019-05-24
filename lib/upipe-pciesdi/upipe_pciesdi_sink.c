@@ -61,6 +61,8 @@
 #include "../upipe-hbrmt/upipe_hbrmt_common.h"
 #include "config.h"
 
+#define INIT_HARDWARE 0
+
 /** upipe_pciesdi_sink structure */
 struct upipe_pciesdi_sink {
     /** refcount management structure */
@@ -548,6 +550,8 @@ static int check_capabilities(struct upipe *upipe, bool ntsc, bool genlock)
     return UBASE_ERR_NONE;
 }
 
+#if INIT_HARDWARE
+
 static void init_hardware_part1(struct upipe *upipe, bool ntsc, bool genlock, bool sd)
 {
     struct upipe_pciesdi_sink *ctx = upipe_pciesdi_sink_from_upipe(upipe);
@@ -688,6 +692,8 @@ static void run_init_hardware_part2(struct upump *upump)
     upipe_pciesdi_sink_wait_timer_upump(upipe, UCLOCK_FREQ/2, mark_clock_as_inited);
 }
 
+#endif
+
 static void mark_clock_as_inited(struct upump *upump)
 {
     struct upipe *upipe = upump_get_opaque(upump, struct upipe *);
@@ -782,7 +788,9 @@ static int upipe_pciesdi_sink_set_flow_def(struct upipe *upipe, struct uref *flo
     pthread_mutex_lock(&upipe_pciesdi_sink->clock_mutex);
 
     /* initialize clock */
+#if INIT_HARDWARE
     init_hardware_part1(upipe, ntsc, genlock, sd);
+#endif
     upipe_pciesdi_sink->freq = freq;
     upipe_pciesdi_sink->offset = offset;
     upipe_pciesdi_sink->clock_is_inited = 0;
@@ -797,6 +805,8 @@ static int upipe_pciesdi_sink_set_flow_def(struct upipe *upipe, struct uref *flo
     uint8_t txen, slew;
     sdi_tx(upipe_pciesdi_sink->fd, upipe_pciesdi_sink->tx_mode, &txen, &slew);
 
+#if INIT_HARDWARE
+
     /* Wait 100ms second before running part2. */
     struct upump *upump = upump_alloc_timer(upipe_pciesdi_sink->upump_mgr,
             run_init_hardware_part2, upipe, upipe->refcount, UCLOCK_FREQ/10, 0);
@@ -806,6 +816,19 @@ static int upipe_pciesdi_sink_set_flow_def(struct upipe *upipe, struct uref *flo
     }
     upipe_pciesdi_sink_set_timer_upump(upipe, upump);
     upump_start(upump);
+
+#else
+
+    struct upump *upump = upump_alloc_timer(upipe_pciesdi_sink->upump_mgr,
+            mark_clock_as_inited, upipe, upipe->refcount, UCLOCK_FREQ, 0);
+    if (unlikely(upump == NULL)) {
+        upipe_throw_fatal(upipe, UBASE_ERR_UPUMP);
+        return UBASE_ERR_UPUMP;
+    }
+    upipe_pciesdi_sink_set_timer_upump(upipe, upump);
+    upump_start(upump);
+
+#endif
 
     return UBASE_ERR_NONE;
 }
