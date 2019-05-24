@@ -87,7 +87,6 @@ struct upipe_pciesdi_sink {
     /** timer to wait for clock to init */
     struct upump *timer_upump;
 
-    int tx_mode;
     int device_number;
 
     /** scratch buffer */
@@ -188,7 +187,6 @@ static struct upipe *upipe_pciesdi_sink_alloc(struct upipe_mgr *mgr,
 
     upipe_pciesdi_sink->clock_is_inited = 0;
     upipe_pciesdi_sink->offset = 0;
-    upipe_pciesdi_sink->tx_mode = SDI_TX_MODE_HD;
     upipe_pciesdi_sink->scratch_bytes = 0;
     upipe_pciesdi_sink->latency = 0;
     upipe_pciesdi_sink->fd = -1;
@@ -741,12 +739,13 @@ static int upipe_pciesdi_sink_set_flow_def(struct upipe *upipe, struct uref *flo
 
     /* TODO: init card based on given format. */
 
+    int tx_mode;
     if (sd)
-        upipe_pciesdi_sink->tx_mode = SDI_TX_MODE_SD;
+        tx_mode = SDI_TX_MODE_SD;
     else if (sdi3g)
-        upipe_pciesdi_sink->tx_mode = SDI_TX_MODE_3G;
+        tx_mode = SDI_TX_MODE_3G;
     else
-        upipe_pciesdi_sink->tx_mode = SDI_TX_MODE_HD;
+        tx_mode = SDI_TX_MODE_HD;
 
     if (upipe_pciesdi_sink->fd == -1) {
         upipe_warn(upipe, "device has not been opened, unable to init hardware");
@@ -800,11 +799,11 @@ static int upipe_pciesdi_sink_set_flow_def(struct upipe *upipe, struct uref *flo
     pthread_mutex_unlock(&upipe_pciesdi_sink->clock_mutex);
 
     /* disable pattern */
-    sdi_set_pattern(upipe_pciesdi_sink->fd, upipe_pciesdi_sink->tx_mode, 0, 0);
+    sdi_set_pattern(upipe_pciesdi_sink->fd, tx_mode, 0, 0);
 
     /* set TX mode */
     uint8_t txen, slew;
-    sdi_tx(upipe_pciesdi_sink->fd, upipe_pciesdi_sink->tx_mode, &txen, &slew);
+    sdi_tx(upipe_pciesdi_sink->fd, tx_mode, &txen, &slew);
 
 #if INIT_HARDWARE
 
