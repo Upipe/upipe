@@ -28,6 +28,15 @@ enum upipe_sdi_dec_command {
     UPIPE_SDI_DEC_GET_AUDIO_SUB,
 };
 
+/** @This enumarates the privates events for sdi_dec pipes. */
+enum uprobe_sdi_dec_event {
+    /** sentinel */
+    UPROBE_SDI_DEC_SENTINEL = UPROBE_LOCAL,
+
+    /** hanc packet (unsigned, unsigned, const uint16_t *) */
+    UPROBE_SDI_DEC_HANC_PACKET,
+};
+
 /** @This returns the audio subpipe. The refcount is not incremented so you
  * have to use it if you want to keep the pointer.
  *

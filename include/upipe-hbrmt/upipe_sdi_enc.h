@@ -20,6 +20,9 @@ enum upipe_sdi_enc_sink_command {
 
     /** returns the subpic subpipe (struct upipe **) */
     UPIPE_SDI_ENC_GET_SUBPIC_SUB,
+
+    /** returns the vanc subpipe (struct upipe **) */
+    UPIPE_SDI_ENC_GET_VANC_SUB,
 };
 
 /** @This returns the subpic subpipe. The refcount is not incremented so you
@@ -36,20 +39,36 @@ static inline int upipe_sdi_enc_get_subpic_sub(struct upipe *upipe,
             UPIPE_SDI_ENC_SIGNATURE, upipe_p);
 }
 
+/** @This returns the vanc subpipe. The refcount is not incremented so you
+ * have to use it if you want to keep the pointer.
+ *
+ * @param upipe description structure of the super pipe
+ * @param upipe_p filled in with a pointer to the vanc subpipe
+ * @return an error code
+ */
+static inline int upipe_sdi_enc_get_vanc_sub(struct upipe *upipe,
+        struct upipe **upipe_p)
+{
+    return upipe_control(upipe, UPIPE_SDI_ENC_GET_VANC_SUB,
+            UPIPE_SDI_ENC_SIGNATURE, upipe_p);
+}
+
 /** @This allocates and initializes a sdi enc pipe.
  *
  * @param mgr management structure for sdi enc type
  * @param uprobe structure used to raise events for the super pipe
  * @param uprobe_pic structure used to raise events for the pic subpipe
  * @param uprobe_subpic structure used to raise events for the subpic subpipe
+ * @param uprobe_vanc structure used to raise events for the vanc subpipe
  * @return pointer to allocated pipe, or NULL in case of failure
  */
 static inline struct upipe *upipe_sdi_enc_alloc(struct upipe_mgr *mgr,
                                                     struct uprobe *uprobe,
-                                                    struct uprobe *uprobe_subpic)
+                                                    struct uprobe *uprobe_subpic,
+                                                    struct uprobe *uprobe_vanc)
 {
     return upipe_alloc(mgr, uprobe, UPIPE_SDI_ENC_SIGNATURE,
-                        uprobe_subpic);
+                        uprobe_subpic, uprobe_vanc);
 }
 
 /** @This returns the management structure for sdi_enc pipes.

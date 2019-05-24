@@ -616,7 +616,7 @@ static inline void validate_dbn(struct upipe *upipe, uint8_t did, uint8_t dbn, i
     upipe_sdi_dec->dbn[did] = dbn;
 }
 
-static int parse_hd_hanc(struct upipe *upipe, const uint16_t *packet, int line_num,
+static int parse_hd_hanc(struct upipe *upipe, const uint16_t *packet, int offset, int line_num,
                          struct audio_ctx *ctx)
 {
     struct upipe_sdi_dec *upipe_sdi_dec = upipe_sdi_dec_from_upipe(upipe);
@@ -635,6 +635,8 @@ static int parse_hd_hanc(struct upipe *upipe, const uint16_t *packet, int line_n
         break;
 
     default:
+        upipe_throw(upipe, UPROBE_SDI_DEC_HANC_PACKET, UPIPE_SDI_DEC_SIGNATURE,
+                line_num, offset, packet);
         break;
     }
 
@@ -680,8 +682,8 @@ static void extract_sd_audio(struct upipe *upipe, const uint16_t *packet,
     }
 }
 
-static int parse_sd_hanc(struct upipe *upipe, const uint16_t *packet,
-                         struct audio_ctx *ctx)
+static int parse_sd_hanc(struct upipe *upipe, const uint16_t *packet, int offset,
+                         int line_num, struct audio_ctx *ctx)
 {
     switch (packet[3] & 0xff) {
     case S291_SD_AUDIO_GROUP1_DID:
@@ -692,6 +694,8 @@ static int parse_sd_hanc(struct upipe *upipe, const uint16_t *packet,
         break;
 
     default:
+        upipe_throw(upipe, UPROBE_SDI_DEC_HANC_PACKET, UPIPE_SDI_DEC_SIGNATURE,
+                line_num, offset, packet);
         break;
     }
 
@@ -1038,7 +1042,7 @@ static bool upipe_sdi_dec_handle(struct upipe *upipe, struct uref *uref,
                     validate_anc_len(packet, left, true))
                 {
                     /* - 1 to compensate for v++ above */
-                    v += parse_sd_hanc(upipe, packet, &audio_ctx) - 1;
+                    v += parse_sd_hanc(upipe, packet, v, line_num, &audio_ctx) - 1;
                 }
                 else
                 {
@@ -1055,7 +1059,7 @@ static bool upipe_sdi_dec_handle(struct upipe *upipe, struct uref *uref,
                     validate_anc_len(packet, left, false))
                 {
                     /* - 1 to compensate for v++ above */
-                    v += parse_hd_hanc(upipe, packet, line_num, &audio_ctx) - 1;
+                    v += parse_hd_hanc(upipe, packet, v, line_num, &audio_ctx) - 1;
                 }
                 else
                 {
