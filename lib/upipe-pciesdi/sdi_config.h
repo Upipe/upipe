@@ -2,7 +2,7 @@
 #define __HW_CONFIG_H
 #include "csr.h"
 
-#define MINIMAL_GATEWARE_REVISION "2019-05-17"
+#define MINIMAL_GATEWARE_REVISION "2019-05-27"
 
 /* targets identifiers */
 #define FALCON9_FPGA_IDENTIFIER "Falcon9"
