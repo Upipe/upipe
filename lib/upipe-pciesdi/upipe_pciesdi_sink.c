@@ -649,6 +649,14 @@ static void init_hardware_part1(struct upipe *upipe, bool ntsc, bool genlock, bo
             sdi_writel(fd, CSR_SDI_QPLL_PLL0_REFCLK_SEL_ADDR, REFCLK0_SEL);
         }
     }
+
+    /* Store rate in driver. */
+    if (ntsc)
+        sdi_set_rate(fd, SDI_NTSC_RATE);
+    else if (genlock)
+        sdi_set_rate(fd, SDI_GENLOCK_RATE);
+    else
+        sdi_set_rate(fd, SDI_PAL_RATE);
 }
 
 static void init_hardware_part2(struct upipe *upipe)
