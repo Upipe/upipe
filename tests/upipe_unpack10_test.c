@@ -190,7 +190,7 @@ int main(int argc, char *argv[])
     assert(size == WIDTH * 10 / 8);
 
     struct ubits s;
-    ubits_init(&s, buffer, size);
+    ubits_init(&s, buffer, size, UBITS_WRITE);
     for (int i = 0; i < WIDTH; i++)
         ubits_put(&s, 10, i);
     uint8_t *end;
