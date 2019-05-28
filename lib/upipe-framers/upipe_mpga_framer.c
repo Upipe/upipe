@@ -1175,7 +1175,7 @@ static void upipe_mpgaf_build_global(struct upipe *upipe, struct uref *flow_def)
 
     uint8_t headers[MAX_ASC_SIZE];
     struct ubits bw;
-    ubits_init(&bw, headers, sizeof(headers));
+    ubits_init(&bw, headers, sizeof(headers), UBITS_WRITE);
 
     upipe_mpgaf_build_asc(upipe, &bw);
 
@@ -1383,7 +1383,7 @@ static int upipe_mpgaf_encaps_frame(struct upipe *upipe, struct uref *uref)
     }
 
     struct ubits bw;
-    ubits_init(&bw, w, ubuf_size);
+    ubits_init(&bw, w, ubuf_size, UBITS_WRITE);
     if (upipe_mpgaf->encaps_output == UREF_MPGA_ENCAPS_LOAS)
         ubits_put(&bw, 24, 0);
 
