@@ -355,7 +355,7 @@ int main(int argc, char *argv[])
     /* Try again with raw to ADTS conversion */
     uint8_t headers[2];
     struct ubits bw;
-    ubits_init(&bw, headers, 2);
+    ubits_init(&bw, headers, 2, UBITS_WRITE);
     ubits_put(&bw, 5, ASC_TYPE_LC);
     ubits_put(&bw, 4, 0x3); /* 48 kHz */
     ubits_put(&bw, 4, 2); /* stereo */

@@ -24,7 +24,7 @@
  */
 
 /** @file
- * @short Upipe bit-oriented writer
+ * @short Upipe bit-oriented writer and reader
  */
 
 #ifndef _UPIPE_UBITS_H_
@@ -55,20 +55,72 @@ struct ubits {
     bool overflow;
 };
 
+enum ubits_direction {
+    UBITS_WRITE,
+    UBITS_READ
+};
+
 /** @This initializes the helper structure for bit-oriented writer.
  *
  * @param s helper structure
  * @param buffer pointer to buffer
  * @param buffer_size buffer size in octets
+ * @param dir direction (read or write)
  */
 static inline void ubits_init(struct ubits *s,
-                              uint8_t *buffer, size_t buffer_size)
+                              uint8_t *buffer, size_t buffer_size, enum ubits_direction dir)
 {
     s->buffer = buffer;
     s->buffer_end = buffer + buffer_size;
     s->bits = 0;
-    s->available = 32;
+    s->available = (dir == UBITS_READ) ? 0 : 32;
     s->overflow = false;
+}
+
+/** @This returns up to 32 bits read from the bitstream.
+ *
+ * @param s helper structure
+ * @param nb number of bits to read
+ */
+static inline uint32_t ubits_get(struct ubits *s, uint8_t nb)
+{
+    assert(nb && nb <= 32);
+
+    if (s->available == 0) {
+        if (unlikely(s->buffer == s->buffer_end)) {
+            s->overflow = true;
+            return 0;
+        }
+        s->bits = *s->buffer++;
+        s->available = 8;
+    }
+
+    if (nb <= s->available) {
+        s->available -= nb;
+        return (s->bits >> s->available) & ((1 << nb) - 1);
+    }
+
+    nb -= s->available;
+    uint32_t val = s->bits << nb;
+
+    if (unlikely(s->buffer + (nb + 7) / 8 > s->buffer_end)) {
+        s->overflow = true;
+        s->available = 0;
+        return 0;
+    }
+
+    while (nb >= 8) {
+        val |= *s->buffer++ << (nb - 8);
+        nb -= 8;
+    }
+
+    if (nb) {
+        s->available = 8 - nb;
+        s->bits = *s->buffer++ & ((1 << s->available) - 1);
+        val |= s->bits >> s->available;
+    }
+
+    return val;
 }
 
 /** @This puts up to 32 bits into the bitstream.
