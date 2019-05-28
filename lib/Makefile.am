@@ -2,7 +2,6 @@ SUBDIRS = \
 	upipe \
 	upipe-modules \
 	upipe-filters \
-	upipe-pciesdi \
 	upipe-dveo
 
 if HAVE_QTWEBKIT
@@ -48,7 +47,7 @@ endif
 SUBDIRS += upipe-v210
 
 if HAVE_BITSTREAM
-SUBDIRS += upipe-ts upipe-framers upipe-hls upipe-hbrmt
+SUBDIRS += upipe-ts upipe-framers upipe-hls upipe-hbrmt upipe-pciesdi
 if HAVE_X264
 SUBDIRS += upipe-x264
 endif

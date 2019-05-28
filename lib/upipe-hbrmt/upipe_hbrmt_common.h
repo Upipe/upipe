@@ -5,12 +5,17 @@
 extern "C" {
 #endif
 
+#include <upipe/uref_pic.h>
+#include <upipe/uref_attr.h>
+
 #include <bitstream/ietf/rtp.h>
 #include <bitstream/ieee/ethernet.h>
 #include <bitstream/ietf/ip.h>
 #include <bitstream/ietf/udp.h>
 #include <bitstream/smpte/352.h>
 #include <bitstream/smpte/2022_6_hbrmt.h>
+
+UREF_ATTR_VOID(block, sdi3g_levelb, "SDI-3G level-B", flag to indicate that format is level B)
 
 #define RAW_HEADER_SIZE (IP_HEADER_MINSIZE + UDP_HEADER_SIZE)
 #define HBRMT_DATA_OFFSET (RTP_HEADER_SIZE + HBRMT_HEADER_SIZE)
@@ -32,6 +37,7 @@ static const uint16_t eav_fvh_cword[2][2] = {{0x274, 0x2d8}, {0x368, 0x3c4}};
 #define UPIPE_SDI_PSF_IDENT_I   0
 #define UPIPE_SDI_PSF_IDENT_PSF 1
 #define UPIPE_SDI_PSF_IDENT_P   3
+#define UPIPE_SDI_PSF_IDENT_SDI3G_LEVELB 4
 
 #define UPIPE_SDI_CHANNELS_PER_GROUP 4
 
@@ -171,6 +177,9 @@ static inline const struct sdi_offsets_fmt *sdi_get_offsets(struct uref *flow_de
         !ubase_check(uref_pic_flow_get_vsize(flow_def, &vsize)))
         return NULL;
 
+    bool interlaced = !ubase_check(uref_pic_get_progressive(flow_def));
+    bool sdi3g_levelb = ubase_check(uref_block_get_sdi3g_levelb(flow_def));
+
     static const struct sdi_picture_fmt pict_fmts[] = {
         /* 1125 Interlaced (1080 active) lines */
         {0, 1920, 1080, 563, 7, 10, {1, 20}, {21, 560}, {561, 563}, {564, 583}, {584, 1123}, {1124, 1125}},
@@ -183,6 +192,9 @@ static inline const struct sdi_offsets_fmt *sdi_get_offsets(struct uref *flow_de
         {1, 720, 576, 313, 6, 9, {1, 22}, {23, 310}, {311, 312}, {313, 335}, {336, 623}, {624, 625}},
         /* NTSC */
         {1, 720, 486, 266, 10, 13, {4, 19}, {20, 263}, {264, 265}, {266, 282}, {283, 525}, {1, 3}},
+
+        /* SDI-3G */
+        {0, 1920, 1080, 0, 0, 0, {1, 40}, {41, 1120}, {1121, 1126}, {1127, 1166}, {1167, 2246}, {2247, 2250}},
     };
 
     static const struct sdi_offsets_fmt fmts_data[] = {
@@ -197,6 +209,11 @@ static inline const struct sdi_offsets_fmt *sdi_get_offsets(struct uref *flow_de
         { 2750, 1125, 830, &pict_fmts[1], 0x3, S352_PICTURE_RATE_24000_1001, { 24000, 1001 } }, /* 24/1.001 Hz */
         { 2750, 1125, 830, &pict_fmts[1], 0x3, S352_PICTURE_RATE_24, { 24, 1 } },               /* 24 Hz */
 
+        { 2750, 1125, 830, &pict_fmts[0], 0x0, S352_PICTURE_RATE_24, { 24, 1 } }, /* 1080i24 */
+        { 2200, 1125, 280, &pict_fmts[0], 0x0, S352_PICTURE_RATE_30, { 30, 1 } }, /* 1080i30 */
+        { 2200, 1125, 280, &pict_fmts[1], 0x3, S352_PICTURE_RATE_30, { 30, 1 } }, /* 1080p30 */
+        { 2640, 1125, 720, &pict_fmts[1], 0x3, S352_PICTURE_RATE_25, { 25, 1 } }, /* 1080p25 */
+
         /* 750 Lines */
         { 1980, 750, 700, &pict_fmts[2], 0x3, S352_PICTURE_RATE_50, { 50, 1} },                /* 50 Hz P */
         { 1650, 750, 370, &pict_fmts[2], 0x3, S352_PICTURE_RATE_60000_1001, { 60000, 1001 } }, /* 60/1.001 Hz P */
@@ -206,13 +223,127 @@ static inline const struct sdi_offsets_fmt *sdi_get_offsets(struct uref *flow_de
         { 858,  525, 138, &pict_fmts[4], 0x0, S352_PICTURE_RATE_30000_1001, { 30000, 1001 } }, /* 525-line 30/1.001 Hz I */
     };
 
+    static const struct sdi_offsets_fmt fmts_data_3g_levelb[] = {
+        /* SDI-3G */
+        { 2200, 1125, 280, &pict_fmts[5], 0x4, S352_PICTURE_RATE_60, { 60, 1 } }, /* 60 Hz P */
+        { 2200, 1125, 280, &pict_fmts[5], 0x4, S352_PICTURE_RATE_60000_1001, { 60000, 1001 } }, /* 60/1.001 Hz P */
+        { 2640, 1125, 720, &pict_fmts[5], 0x4, S352_PICTURE_RATE_50, { 50, 1 } }, /* 50 Hz P */
+    };
+
+    if (sdi3g_levelb) {
+        for (size_t i = 0; i < sizeof(fmts_data_3g_levelb) / sizeof(fmts_data_3g_levelb[0]); i++)
+            if (!urational_cmp(&fps, &fmts_data_3g_levelb[i].fps))
+                if (fmts_data_3g_levelb[i].pict_fmt->active_width == hsize)
+                    if (fmts_data_3g_levelb[i].pict_fmt->active_height == vsize)
+                        return &fmts_data_3g_levelb[i];
+        return NULL;
+    }
+
     for (size_t i = 0; i < sizeof(fmts_data) / sizeof(struct sdi_offsets_fmt); i++)
         if (!urational_cmp(&fps, &fmts_data[i].fps))
             if (fmts_data[i].pict_fmt->active_width == hsize)
                 if (fmts_data[i].pict_fmt->active_height == vsize)
-                    return &fmts_data[i];
+                    if (interlaced == (fmts_data[i].psf_ident != UPIPE_SDI_PSF_IDENT_P))
+                            return &fmts_data[i];
 
     return NULL;
+}
+
+/* These functions check that the EAV marker and "fvh" word is at the address's
+ * location, or that the SAV and "fvh" preceed the address's location. */
+
+static inline bool hd_eav_match(const uint16_t *src)
+{
+    if (src[0] == 0x3ff
+            && src[1] == 0x3ff
+            && src[2] == 0x000
+            && src[3] == 0x000
+            && src[4] == 0x000
+            && src[5] == 0x000
+            && src[6] == src[7]
+            && (src[6] == 0x274
+                || src[6] == 0x2d8
+                || src[6] == 0x368
+                || src[6] == 0x3c4))
+        return true;
+    return false;
+}
+
+static inline bool hd_sav_match(const uint16_t *src)
+{
+    if (src[-8] == 0x3ff
+            && src[-7] == 0x3ff
+            && src[-6] == 0x000
+            && src[-5] == 0x000
+            && src[-4] == 0x000
+            && src[-3] == 0x000
+            && src[-2] == src[-1]
+            && (src[-2] == 0x200
+                || src[-2] == 0x2ac
+                || src[-2] == 0x31c
+                || src[-2] == 0x3b0))
+        return true;
+    return false;
+}
+
+static inline bool hd_eav_match_bitpacked(const uint8_t *src)
+{
+    if (src[0] == 0xff
+            && src[1] == 0xff
+            && src[2] == 0xf0
+            && src[3] == 0
+            && src[4] == 0
+            && src[5] == 0
+            && src[6] == 0
+            && ((src[7] == 9 && src[8] == 0xd2 && src[9] == 0x74)
+                || (src[7] == 0xb && src[8] == 0x62 && src[9] == 0xd8)
+                || (src[7] == 0xd && src[8] == 0xa3 && src[9] == 0x68)
+                || (src[7] == 0xf && src[8] == 0x13 && src[9] == 0xc4)))
+        return true;
+    return false;
+}
+
+static inline bool hd_sav_match_bitpacked(const uint8_t *src)
+{
+    if (src[-10] == 0xff
+            && src[-9] == 0xff
+            && src[-8] == 0xf0
+            && src[-7] == 0
+            && src[-6] == 0
+            && src[-5] == 0
+            && src[-4] == 0
+            && ((src[-3] == 8 && src[-2] == 2 && src[-1] == 0)
+                || (src[-3] == 0xa && src[-2] == 0xb2 && src[-1] == 0xac)
+                || (src[-3] == 0xc && src[-2] == 0x73 && src[-1] == 0x1c)
+                || (src[-3] == 0xe && src[-2] == 0xc3 && src[-1] == 0xb0)))
+        return true;
+    return false;
+}
+
+static inline bool sd_eav_match(const uint16_t *src)
+{
+    if (src[0] == 0x3ff
+            && src[1] == 0x000
+            && src[2] == 0x000
+            && (src[3] == 0x274
+                || src[3] == 0x2d8
+                || src[3] == 0x368
+                || src[3] == 0x3c4))
+        return true;
+    return false;
+}
+
+static inline bool sd_sav_match(const uint16_t *src)
+{
+    if (src[-4] == 0x3ff
+            && src[-3] == 0x000
+            && src[-2] == 0x000
+            && (src[-1] == 0x200
+                || src[-1] == 0x2ac
+                || src[-1] == 0x31c
+                || src[-1] == 0x3b0))
+        return true;
+    return false;
 }
 
 #ifdef __cplusplus

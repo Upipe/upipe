@@ -53,18 +53,26 @@ struct sdi_ioctl_icap {
 struct sdi_ioctl_refclk {
     uint8_t refclk_sel;
     uint32_t refclk_freq;
-    uint32_t refclk_counter;
+    uint64_t refclk_counter;
 };
 
-#ifdef HAS_VCXOS
+struct sdi_ioctl_capabilities {
+    uint8_t channels;
+    uint8_t has_vcxos;
+    uint8_t has_gs12241;
+    uint8_t has_gs12281;
+    uint8_t has_si5324;
+    uint8_t has_genlock;
+    uint8_t has_lmh0387;
+    uint8_t has_si596;
+};
+
 struct sdi_ioctl_vcxo {
     uint8_t pwm_enable;
     uint32_t pwm_period;
     uint32_t pwm_width;
 };
-#endif
 
-#ifdef HAS_SI5324
 struct sdi_ioctl_si5324_vcxo {
     uint8_t pwm_enable;
     uint32_t pwm_period;
@@ -75,20 +83,16 @@ struct sdi_ioctl_si5324_spi {
     uint32_t tx_data;
     uint32_t rx_data;
 };
-#endif
 
-#ifdef HAS_GENLOCK
 struct sdi_ioctl_genlock {
     uint8_t active;
     uint64_t period;
     uint64_t seen;
+    uint8_t field;
 };
-#endif
 
 struct sdi_ioctl_dma {
-    uint8_t fill;
-    uint8_t tx_rx_loopback_enable;
-    uint8_t rx_tx_loopback_enable;
+    uint8_t loopback_enable;
 };
 
 struct sdi_ioctl_dma_writer {
@@ -109,7 +113,6 @@ struct sdi_ioctl_pattern {
     uint8_t format;
 };
 
-#ifdef HAS_GS12241
 struct sdi_ioctl_gs12241_spi_cs {
     uint8_t cs_n;
 };
@@ -119,9 +122,7 @@ struct sdi_ioctl_gs12241_spi {
     uint32_t tx_data;
     uint32_t rx_data;
 };
-#endif
 
-#ifdef HAS_GS12281
 struct sdi_ioctl_gs12281_spi_cs {
     uint8_t cs_n;
 };
@@ -130,9 +131,7 @@ struct sdi_ioctl_gs12281_spi {
     uint32_t tx_data;
     uint32_t rx_data;
 };
-#endif
 
-#ifdef HAS_LMH0387
 struct sdi_ioctl_lmh0387_direction {
     uint8_t tx_enable;
 };
@@ -146,10 +145,10 @@ struct sdi_ioctl_lmh0387_spi {
     uint32_t tx_data;
     uint32_t rx_data;
 };
-#endif
 
 struct sdi_ioctl_rx {
     uint8_t crc_enable;
+    uint8_t packed;
     uint8_t locked;
     uint8_t mode;
     uint8_t family;
@@ -159,6 +158,7 @@ struct sdi_ioctl_rx {
 
 struct sdi_ioctl_tx {
     uint8_t crc_enable;
+    uint8_t packed;
     uint8_t mode;
     uint8_t txen;
     uint8_t slew;
@@ -177,6 +177,20 @@ struct sdi_ioctl_lock {
     uint8_t dma_writer_status;
 };
 
+struct sdi_ioctl_mmap_dma_info {
+    uint64_t dma_tx_buf_offset;
+    uint64_t dma_tx_buf_size;
+    uint64_t dma_tx_buf_count;
+
+    uint64_t dma_rx_buf_offset;
+    uint64_t dma_rx_buf_size;
+    uint64_t dma_rx_buf_count;
+};
+
+struct sdi_ioctl_mmap_dma_update {
+    int64_t sw_count;
+};
+
 #define SDI_IOCTL 'S'
 
 #define SDI_IOCTL_REG               _IOWR(SDI_IOCTL,  0, struct sdi_ioctl_reg)
@@ -184,40 +198,32 @@ struct sdi_ioctl_lock {
 #define SDI_IOCTL_FLASH             _IOWR(SDI_IOCTL,  2, struct sdi_ioctl_flash)
 #define SDI_IOCTL_ICAP              _IOWR(SDI_IOCTL,  3, struct sdi_ioctl_icap)
 #define SDI_IOCTL_REFCLK            _IOWR(SDI_IOCTL,  4, struct sdi_ioctl_refclk)
+#define SDI_IOCTL_CAPABILITIES      _IOWR(SDI_IOCTL,  5, struct sdi_ioctl_capabilities)
 
-#ifdef HAS_VCXOS
 #define SDI_IOCTL_VCXO              _IOW(SDI_IOCTL,  10, struct sdi_ioctl_vcxo)
-#endif
-#ifdef HAS_SI5324
 #define SDI_IOCTL_SI5324_VCXO       _IOW(SDI_IOCTL,  20, struct sdi_ioctl_si5324_vcxo)
 #define SDI_IOCTL_SI5324_SPI        _IOWR(SDI_IOCTL, 21, struct sdi_ioctl_si5324_spi)
-#endif
 
-#ifdef HAS_GENLOCK
 #define SDI_IOCTL_GENLOCK_HSYNC     _IOWR(SDI_IOCTL, 30, struct sdi_ioctl_genlock)
 #define SDI_IOCTL_GENLOCK_VSYNC     _IOWR(SDI_IOCTL, 31, struct sdi_ioctl_genlock)
-#endif
 
-#define SDI_IOCTL_DMA               _IOW(SDI_IOCTL,  40, struct sdi_ioctl_dma)
-#define SDI_IOCTL_DMA_WRITER        _IOWR(SDI_IOCTL, 41, struct sdi_ioctl_dma_writer)
-#define SDI_IOCTL_DMA_READER        _IOWR(SDI_IOCTL, 42, struct sdi_ioctl_dma_reader)
-#define SDI_IOCTL_PATTERN           _IOW(SDI_IOCTL,  43, struct sdi_ioctl_pattern)
+#define SDI_IOCTL_DMA                       _IOW(SDI_IOCTL,  40, struct sdi_ioctl_dma)
+#define SDI_IOCTL_DMA_WRITER                _IOWR(SDI_IOCTL, 41, struct sdi_ioctl_dma_writer)
+#define SDI_IOCTL_DMA_READER                _IOWR(SDI_IOCTL, 42, struct sdi_ioctl_dma_reader)
+#define SDI_IOCTL_PATTERN                   _IOW(SDI_IOCTL,  43, struct sdi_ioctl_pattern)
+#define SDI_IOCTL_MMAP_DMA_INFO             _IOR(SDI_IOCTL,  44, struct sdi_ioctl_mmap_dma_info)
+#define SDI_IOCTL_MMAP_DMA_WRITER_UPDATE    _IOW(SDI_IOCTL,  45, struct sdi_ioctl_mmap_dma_update)
+#define SDI_IOCTL_MMAP_DMA_READER_UPDATE    _IOW(SDI_IOCTL,  46, struct sdi_ioctl_mmap_dma_update)
 
-#ifdef HAS_GS12241
 #define SDI_IOCTL_RX_SPI_CS         _IOW(SDI_IOCTL,  50, struct sdi_ioctl_gs12241_spi_cs)
 #define SDI_IOCTL_RX_SPI            _IOWR(SDI_IOCTL, 51, struct sdi_ioctl_gs12241_spi)
-#endif
 
-#ifdef HAS_GS12281
 #define SDI_IOCTL_TX_SPI_CS         _IOW(SDI_IOCTL,  60, struct sdi_ioctl_gs12241_spi_cs)
 #define SDI_IOCTL_TX_SPI            _IOWR(SDI_IOCTL, 61, struct sdi_ioctl_gs12281_spi)
-#endif
 
-#ifdef HAS_LMH0387
 #define SDI_IOCTL_DIRECTION         _IOW(SDI_IOCTL,  70, struct sdi_ioctl_lmh0387_direction)
 #define SDI_IOCTL_SPI_CS            _IOW(SDI_IOCTL,  71, struct sdi_ioctl_lmh0387_spi_cs)
 #define SDI_IOCTL_SPI               _IOWR(SDI_IOCTL, 72, struct sdi_ioctl_lmh0387_spi)
-#endif
 
 #define SDI_IOCTL_RX                _IOWR(SDI_IOCTL, 80, struct sdi_ioctl_rx)
 #define SDI_IOCTL_TX                _IOWR(SDI_IOCTL, 81, struct sdi_ioctl_tx)
