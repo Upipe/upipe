@@ -950,6 +950,12 @@ static void upipe_hd_sdi_enc_encode_line(struct upipe *upipe, int line_num, uint
     if (samples_to_put > 2)
         samples_to_put = 2;
 
+    /* Limit to max_audio_packets_per_line.  The removed check in the loop
+     * performed the same limiting but with a very verbose message. */
+    /* FIXME: check that there is enough space for all the audio. */
+    if (samples_to_put > max_audio_packets_per_line/UPIPE_SDI_CHANNELS_PER_GROUP)
+        samples_to_put = max_audio_packets_per_line/UPIPE_SDI_CHANNELS_PER_GROUP;
+
     /* Chroma packets */
     /* Audio can go anywhere but the switching lines+1 */
     if (!(line_num == p->switching_line + 1) &&
@@ -963,11 +969,6 @@ static void upipe_hd_sdi_enc_encode_line(struct upipe *upipe, int line_num, uint
         /* If more than a single audio packet must be put on a line
          * then the following sequence will be sent: 1 2 3 4 1 2 3 4 */
         for (int sample = 0; sample < samples_to_put; sample++) {
-            /* Check if too many packets have been put on the line */
-            if ((packets_put + 1) > max_audio_packets_per_line) {
-                upipe_err(upipe, "too many audio packets per line");
-                break;
-            }
             for (int ch_group = 0; ch_group < UPIPE_SDI_CHANNELS_PER_GROUP; ch_group++) {
                 /* Packet belongs to another line */
                 uint8_t mpf_bit = 0;

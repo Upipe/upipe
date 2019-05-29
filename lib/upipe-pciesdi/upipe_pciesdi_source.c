@@ -22,13 +22,19 @@
  * @short Upipe source module PCIE SDI cards
  */
 
+#include <config.h>
+
 #include <upipe/ubase.h>
 #include <upipe/uprobe.h>
 #include <upipe/urequest.h>
 #include <upipe/uclock.h>
 #include <upipe/uref.h>
+#include <upipe/uref_dump.h>
+#include <upipe/uref_block.h>
+#include <upipe/uref_block_flow.h>
 #include <upipe/uref_pic.h>
 #include <upipe/uref_pic_flow.h>
+#include <upipe/uref_flow.h>
 #include <upipe/uref_clock.h>
 #include <upipe/upump.h>
 #include <upipe/ubuf.h>
@@ -44,18 +50,31 @@
 #include <upipe/upipe_helper_uclock.h>
 #include <upipe-pciesdi/upipe_pciesdi_source.h>
 
+#include <sys/mman.h>
+#include <sys/ioctl.h>
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <fcntl.h>
 #include <errno.h>
 
+#include "csr.h"
+#include "flags.h"
 #include "libsdi.h"
 #include "sdi_config.h"
+#include "sdi.h"
 
+#include "levelb.h"
+#include "../upipe-hbrmt/upipe_hbrmt_common.h"
 #include "../upipe-hbrmt/sdidec.h"
+
+enum upipe_pciesdi_src_err {
+    /** No RX signal or signal is not locked. */
+    UPIPE_PCIESDI_SRC_ERR_NOSIGNAL = UBASE_ERR_LOCAL,
+};
 
 /** @hidden */
 static int upipe_pciesdi_src_check(struct upipe *upipe, struct uref *flow_format);
+static int get_flow_def(struct upipe *upipe, struct uref **flow_format);
 
 /** @internal @This is the private context of a file source pipe. */
 struct upipe_pciesdi_src {
@@ -93,14 +112,30 @@ struct upipe_pciesdi_src {
     /** read watcher */
     struct upump *upump;
 
-    /** lines granularity */
-    unsigned lines;
-
     /** file descriptor */
     int fd;
+    int device_number;
+
+    bool discontinuity;
+
+    /* picture properties, same units as upipe_hbrmt_common.h, pixels */
+    const struct sdi_offsets_fmt *sdi_format;
+    bool sdi3g_levelb;
+    uint8_t mode, family, scan, rate;
+
+    uint8_t *read_buffer;
+
+    void (*sdi3g_levelb_packed)(const uint8_t *src, uint16_t *dst1, uint16_t *dst2, uintptr_t pixels);
+    void (*sdi_to_uyvy)(const uint8_t *src, uint16_t *y, uintptr_t pixels);
+
+    /** bytes in scratch buffer */
+    int scratch_buffer_count;
 
     /** public upipe structure */
     struct upipe upipe;
+
+    /** scratch buffer */
+    uint8_t scratch_buffer[2 * DMA_BUFFER_SIZE];
 };
 
 UPIPE_HELPER_UPIPE(upipe_pciesdi_src, upipe, UPIPE_PCIESDI_SRC_SIGNATURE)
@@ -143,8 +178,29 @@ static struct upipe *upipe_pciesdi_src_alloc(struct upipe_mgr *mgr,
     upipe_pciesdi_src_init_upump_mgr(upipe);
     upipe_pciesdi_src_init_upump(upipe);
     upipe_pciesdi_src_init_uclock(upipe);
+
+    upipe_pciesdi_src->sdi3g_levelb_packed = upipe_sdi3g_to_uyvy_2_c;
+    upipe_pciesdi_src->sdi_to_uyvy = upipe_sdi_to_uyvy_c;
+#if defined(HAVE_X86ASM)
+#if defined(__i686__) || defined(__x86_64__)
+    if (__builtin_cpu_supports("ssse3")) {
+        upipe_pciesdi_src->sdi_to_uyvy = upipe_sdi_to_uyvy_ssse3;
+        upipe_pciesdi_src->sdi3g_levelb_packed = upipe_sdi3g_to_uyvy_2_ssse3;
+    }
+
+    if (__builtin_cpu_supports("avx2")) {
+        upipe_pciesdi_src->sdi_to_uyvy = upipe_sdi_to_uyvy_avx2;
+        upipe_pciesdi_src->sdi3g_levelb_packed = upipe_sdi3g_to_uyvy_2_avx2;
+    }
+#endif
+#endif
+
+    upipe_pciesdi_src->scratch_buffer_count = 0;
+    upipe_pciesdi_src->sdi_format = NULL;
+    upipe_pciesdi_src->read_buffer = NULL;
+    upipe_pciesdi_src->sdi3g_levelb = false;
+    upipe_pciesdi_src->discontinuity = false;
     upipe_pciesdi_src->fd = -1;
-    upipe_pciesdi_src->lines = 0;
     upipe_throw_ready(upipe);
 
     return upipe;
@@ -201,27 +257,122 @@ static const char *sdi_decode_rate(uint8_t rate)
     }
 }
 
-static void upipe_sdi_to_planar_10_c(const uint8_t *src, uint16_t *y, uint16_t *u, uint16_t *v, uintptr_t pixels)
+static inline bool sdi3g_levelb_eav_match_bitpacked(const uint8_t *src)
 {
-    for (int i = 0; i < pixels; i += 2) {
-        uint8_t a = *src++;
-        uint8_t b = *src++;
-        uint8_t c = *src++;
-        uint8_t d = *src++;
-        uint8_t e = *src++;
-        uint8_t f = *src++;
-        uint8_t g = *src++;
-        uint8_t h = *src++;
-        *u++ = (b << 8) | a;
-        *y++ = (d << 8) | c;
-        *v++ = (f << 8) | e;
-        *y++ = (h << 8) | g;
-    }
+    static const uint8_t prefix[15] = {
+        0xff, 0xff, 0xff, 0xff, 0xff,
+        0, 0, 0, 0, 0,
+        0, 0, 0, 0, 0
+    };
+    static const uint8_t fvh[4][5] = {
+        { 0x9d, 0x27, 0x49, 0xd2, 0x74}, /* 0x274 */
+        { 0xb6, 0x2d, 0x8b, 0x62, 0xd8}, /* 0x2d8 */
+        { 0xda, 0x36, 0x8d, 0xa3, 0x68}, /* 0x368 */
+        { 0xf1, 0x3c, 0x4f, 0x13, 0xc4}  /* 0x3c4 */
+    };
+    if (!memcmp(src, prefix, 15)
+            && (!memcmp(src + 15, fvh[0], 5)
+                || !memcmp(src + 15, fvh[1], 5)
+                || !memcmp(src + 15, fvh[2], 5)
+                || !memcmp(src + 15, fvh[3], 5)))
+        return true;
+    return false;
 }
 
+static inline bool sdi3g_levelb_sav_match_bitpacked(const uint8_t *src)
+{
+    static const uint8_t prefix[15] = {
+        0xff, 0xff, 0xff, 0xff, 0xff,
+        0, 0, 0, 0, 0,
+        0, 0, 0, 0, 0
+    };
+    static const uint8_t fvh[4][5] = {
+        { 0x80, 0x20, 0x08, 0x02, 0x00}, /* 0x200 */
+        { 0xab, 0x2a, 0xca, 0xb2, 0xac}, /* 0x2ac */
+        { 0xc7, 0x31, 0xcc, 0x73, 0x1c}, /* 0x31c */
+        { 0xec, 0x3b, 0x0e, 0xc3, 0xb0}  /* 0x3b0 */
+    };
+    if (!memcmp(src - 20, prefix, 15)
+            && (!memcmp(src - 5, fvh[0], 5)
+                || !memcmp(src - 5, fvh[1], 5)
+                || !memcmp(src - 5, fvh[2], 5)
+                || !memcmp(src - 5, fvh[3], 5)))
+        return true;
+    return false;
+}
+
+static inline bool sd_eav_match_bitpacked(const uint8_t *src)
+{
+    if (src[0] == 0xff
+            && src[1] == 0xc0
+            && src[2] == 0
+            && ((src[3] == 2 && src[4] == 0x74)
+                || (src[3] == 2 && src[4] == 0xd8)
+                || (src[3] == 3 && src[4] == 0x68)
+                || (src[3] == 3 && src[4] == 0xc4)))
+        return true;
+    return false;
+}
+
+static inline bool sd_sav_match_bitpacked(const uint8_t *src)
+{
+    if (src[-5] == 0xff
+            && src[-4] == 0xc0
+            && src[-3] == 0
+            && ((src[-2] == 2 && src[-1] == 0)
+                || (src[-2] == 2 && src[-1] == 0xac)
+                || (src[-2] == 3 && src[-1] == 0x1c)
+                || (src[-2] == 3 && src[-1] == 0xb0)))
+        return true;
+    return false;
+}
+
+static void dump_and_exit_clean(struct upipe *upipe, uint8_t *buf, size_t size)
+{
+    struct upipe_pciesdi_src *upipe_pciesdi_src = upipe_pciesdi_src_from_upipe(upipe);
+    int64_t hw, sw;
+    sdi_dma_writer(upipe_pciesdi_src->fd, 0, &hw, &sw); // disable
+    sdi_release_dma_writer(upipe_pciesdi_src->fd); // release old locks
+    close(upipe_pciesdi_src->fd);
+
+    if (buf) {
+        FILE *fh = fopen("dump.bin", "wb");
+        if (!fh) {
+            upipe_err(upipe, "could not open dump file");
+            abort();
+        }
+        fwrite(buf, 1, size, fh);
+        fclose(fh);
+        upipe_dbg(upipe, "dumped to dump.bin");
+    }
+
+    abort();
+}
+
+/*
+ * Returns the address within the circular mmap buffer using the buffer count
+ * and offset.
+ */
+static const uint8_t *mmap_wraparound(const uint8_t *mmap_buffer,
+        uint64_t buffer_count, uint64_t offset)
+{
+    return mmap_buffer + (buffer_count * DMA_BUFFER_SIZE + offset)
+        % DMA_BUFFER_TOTAL_SIZE;
+}
+
+/*
+ * Check whether the given length would wrap around within the buffer starting
+ * at the position given by buffer count and offset.
+ */
+static bool mmap_length_does_wrap(uint64_t buffer_count, uint64_t offset,
+        uint64_t length)
+{
+    return (buffer_count * DMA_BUFFER_SIZE + offset) % DMA_BUFFER_TOTAL_SIZE
+        + length > DMA_BUFFER_TOTAL_SIZE;
+}
 
 /** @internal @This reads data from the source and outputs it.
-*   @param upump description structure of the read watcher
+ *  @param upump description structure of the read watcher
  */
 static void upipe_pciesdi_src_worker(struct upump *upump)
 {
@@ -231,149 +382,401 @@ static void upipe_pciesdi_src_worker(struct upump *upump)
     uint8_t locked, mode, family, scan, rate;
     sdi_rx(upipe_pciesdi_src->fd, &locked, &mode, &family, &scan, &rate);
 
-    // TODO : monitor changes
-    if (0) upipe_notice_va(upipe, "%s | mode %s | family %s | scan %s | rate %s",
-        locked ? "LOCK" : "",
-        sdi_decode_mode(mode),
-        sdi_decode_family(family),
-        sdi_decode_scan(scan),
-        sdi_decode_rate(rate));
-
-    struct uref *uref = uref_pic_alloc(upipe_pciesdi_src->uref_mgr,
-                                         upipe_pciesdi_src->ubuf_mgr,
-                                         1920, upipe_pciesdi_src->lines);
-    UBASE_FATAL_RETURN(upipe, uref ? UBASE_ERR_NONE : UBASE_ERR_ALLOC);
-
-
-    uint8_t *buf[3];
-    size_t stride[3];
-    static const char *chroma[3] = { "y10l", "u10l", "v10l" };
-    for (int i = 0; i < 3; i++) {
-        uref_pic_plane_size(uref, chroma[i], &stride[i], NULL, NULL, NULL);
-        uref_pic_plane_write(uref, chroma[i], 0, 0, -1, -1, &buf[i]);
+    if (locked != 0x3) {
+        upipe_pciesdi_src->discontinuity = true;
+        return;
     }
 
-    /* FIXME */
-    static int lines; // # of buffered lines
-    static uint8_t foo[DMA_BUFFER_SIZE * 18];
-    ssize_t ret = read(upipe_pciesdi_src->fd,
-            &foo[lines * DMA_BUFFER_SIZE],
-            sizeof(foo) - lines * DMA_BUFFER_SIZE);
+    if (mode != upipe_pciesdi_src->mode
+            || family != upipe_pciesdi_src->family
+            || scan != upipe_pciesdi_src->scan
+            || rate != upipe_pciesdi_src->rate) {
+        /* Stop DMA to get EAV re-aligned. */
+        int64_t hw, sw;
+        sdi_dma_writer(upipe_pciesdi_src->fd, 0, &hw, &sw);
 
-    if (family == 15 || !locked) {
-        ret = -1;
-        upipe_err_va(upipe, "unknown family");
+        /* Get new format details. */
+        struct uref *flow_def;
+        int ret = get_flow_def(upipe, &flow_def);
+        if (ubase_check(ret)) {
+            upipe_pciesdi_src_store_flow_def(upipe, flow_def);
+            if (!ubase_check(ubuf_mgr_check(upipe_pciesdi_src->ubuf_mgr, flow_def)))
+                upipe_pciesdi_src_require_ubuf_mgr(upipe, flow_def);
+        } else {
+            /* TODO: What errors do we need to handle here, and how? */
+        }
+
+        /* Start DMA and reset state. */
+        sdi_dma_writer(upipe_pciesdi_src->fd, 1, &hw, &sw);
+        upipe_pciesdi_src->scratch_buffer_count = 0;
+        upipe_pciesdi_src->discontinuity = true;
+
+        /* Return because there should be no data to read. */
+        return;
     }
 
-    if (unlikely(ret == -1)) {
-        for (int i = 0; i < 3; i++)
-            uref_pic_plane_unmap(uref, chroma[i], 0, 0, -1, -1);
-        uref_free(uref);
-        switch (errno) {
-            case EINTR:
-            case EAGAIN:
-#if EAGAIN != EWOULDBLOCK
-            case EWOULDBLOCK:
+    /* Size (in bytes) of a packed line. */
+    int sdi_line_width = upipe_pciesdi_src->sdi_format->width * 2 * 10 / 8;
+    if (upipe_pciesdi_src->sdi3g_levelb)
+        sdi_line_width *= 2;
+
+    int64_t hw, sw;
+    sdi_dma_writer(upipe_pciesdi_src->fd, 1, &hw, &sw); // get buffer counts
+
+    int64_t num_bufs = hw - sw;
+    if (num_bufs > DMA_BUFFER_COUNT/2) {
+        /* TODO: Can we recover from here?  Need to regain EAV alignment
+         * somehow.  Maybe stop/start DMA.  Maybe searching is needed. */
+        upipe_warn_va(upipe, "reading too late, hw: %"PRId64", sw: %"PRId64, hw, sw);
+#if 0
+        struct sdi_ioctl_mmap_dma_update mmap_update = { .sw_count = hw };
+        if (ioctl(upipe_pciesdi_src->fd, SDI_IOCTL_MMAP_DMA_WRITER_UPDATE, &mmap_update))
+            upipe_err(upipe, "ioctl error incrementing SW buffer count");
+        dump_and_exit_clean(upipe, NULL, 0);
 #endif
-                /* not an issue, try again later */
-                return;
-            default:
-                break;
-        }
-        upipe_err_va(upipe, "couldn't read: %m");
-//        upipe_pciesdi_src_set_upump(upipe, NULL);
-//        upipe_throw_source_end(upipe);
+    }
+
+    /* Calculate how many lines we can output from the available data. */
+    int bytes_available = num_bufs * DMA_BUFFER_SIZE + upipe_pciesdi_src->scratch_buffer_count;
+    int lines = bytes_available / sdi_line_width;
+    int processed_bytes = lines * sdi_line_width;
+    int output_size = lines * upipe_pciesdi_src->sdi_format->width * 4;
+    if (upipe_pciesdi_src->sdi3g_levelb)
+        output_size *= 2;
+
+    if (!lines) {
+        upipe_err(upipe, "0 lines after a mmap read is not supported");
+        dump_and_exit_clean(upipe, NULL, 0);
+    }
+
+    struct uref *uref = uref_block_alloc(upipe_pciesdi_src->uref_mgr,
+            upipe_pciesdi_src->ubuf_mgr, output_size);
+    if (!uref) {
+        upipe_err(upipe, "error allocating output uref");
+        upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
         return;
     }
 
-    size_t got_lines = ret / DMA_BUFFER_SIZE;
+    uint8_t *dst_buf;
+    int block_size = -1;
+    if (!ubase_check(uref_block_write(uref, 0, &block_size, &dst_buf))) {
+        upipe_err(upipe, "unable to map block for writing");
+        dump_and_exit_clean(upipe, NULL, 0);
+    }
 
-    static bool start;
+    int offset = 0;
+    /* Use tail of previous read and head of current to unpack a line. */
+    if (upipe_pciesdi_src->scratch_buffer_count) {
+        offset = sdi_line_width - upipe_pciesdi_src->scratch_buffer_count;
+        /* Copy to end of scratch buffer. */
+        memcpy(upipe_pciesdi_src->scratch_buffer + upipe_pciesdi_src->scratch_buffer_count,
+                mmap_wraparound(upipe_pciesdi_src->read_buffer, sw, 0),
+                offset);
+        /* unpack */
+        if (upipe_pciesdi_src->sdi3g_levelb) {
+            /* Note: line order is swapped. */
+            uint16_t *dst1 = (uint16_t*)dst_buf + 2*upipe_pciesdi_src->sdi_format->width;
+            uint16_t *dst2 = (uint16_t*)dst_buf;
+            upipe_pciesdi_src->sdi3g_levelb_packed(upipe_pciesdi_src->scratch_buffer,
+                    dst1, dst2, upipe_pciesdi_src->sdi_format->width);
+            dst_buf += upipe_pciesdi_src->sdi_format->width * 8;
+        } else {
+            upipe_pciesdi_src->sdi_to_uyvy(upipe_pciesdi_src->scratch_buffer,
+                    (uint16_t*)dst_buf, upipe_pciesdi_src->sdi_format->width);
+            dst_buf += upipe_pciesdi_src->sdi_format->width * 4;
+        }
+        upipe_pciesdi_src->scratch_buffer_count = 0;
+        lines -= 1;
+    }
 
-    {
-        bool prev_vbi = false, prev_f2 = false;
-        for (int i = 0; i < (ret / DMA_BUFFER_SIZE); i++) {
-            uint8_t *l = &foo[(lines + i) * DMA_BUFFER_SIZE];
-            uint16_t *f = (uint16_t*)l;
+    int error_count_eav = 0, error_count_sav = 0;
+    for (int i = 0; i < lines; i++, offset += sdi_line_width) {
+        const uint8_t *sdi_line = mmap_wraparound(upipe_pciesdi_src->read_buffer, sw, offset);
 
-            int line = (f[8] & 0x1ff) >> 2;
-            line |= ((f[9] & 0x1ff) >> 2) << 7;
-            uint16_t fvh = f[6];
-            bool vbi, f2;
-            if (fvh == 0x274) {
-                f2 = 0;
-                vbi = 0;
-                if (prev_vbi && !prev_f2) {
-                    start = true;
-//                    upipe_dbg_va(upipe, "Start on line %d", line);
+    /* maximum number of bytes the SIMD can read beyond the end of the buffer. */
+#define SIMD_OVERREAD 25
+
+        /* check whether a line wraps around in the mmap buffer */
+        if (mmap_length_does_wrap(sw, offset, sdi_line_width + SIMD_OVERREAD)) {
+            /* Copy both halves of line to scratch buffer. */
+            int bytes_remaining = DMA_BUFFER_TOTAL_SIZE - (sw * DMA_BUFFER_SIZE + offset) % DMA_BUFFER_TOTAL_SIZE;
+            if (bytes_remaining >= sdi_line_width)
+                bytes_remaining = sdi_line_width; // limit for overread check
+
+            memcpy(upipe_pciesdi_src->scratch_buffer,
+                    mmap_wraparound(upipe_pciesdi_src->read_buffer, sw, offset),
+                    bytes_remaining);
+            memcpy(upipe_pciesdi_src->scratch_buffer + bytes_remaining,
+                    mmap_wraparound(upipe_pciesdi_src->read_buffer, sw, offset+bytes_remaining),
+                    sdi_line_width - bytes_remaining);
+            /* Now point to the scratch buffer. */
+            sdi_line = upipe_pciesdi_src->scratch_buffer;
+        }
+
+        /* Perform the debug checks. */
+        if (true /* TODO: add runtime option to enable/disable these. */) {
+            int active_offset = upipe_pciesdi_src->sdi_format->active_offset * 2 * 10 / 8;
+            if (upipe_pciesdi_src->sdi3g_levelb)
+                active_offset *= 2;
+            const uint8_t *active_start = sdi_line + active_offset;
+
+            if (upipe_pciesdi_src->sdi_format->pict_fmt->sd) {
+                /* Check EAV is present. */
+                if (!sd_eav_match_bitpacked(sdi_line)) {
+                    error_count_eav += 1;
                 }
-            } else if (fvh == 0x2d8) {
-                f2 = 0;
-                vbi = 1;
-            } else if (fvh == 0x368) {
-                vbi = 0;
-                f2 = 1;
-            } else if (fvh == 0x3c4) {
-                f2 = 1;
-                vbi = 1;
-            } else {
-                upipe_err_va(upipe, "Unknown fvh 0x%x", fvh);
-                abort();
-            }
-            //upipe_dbg_va(upipe, "Line %d | f2 %d | vbi %d", line, f2, vbi);
+                /* Check SAV is present. */
+                if (!sd_sav_match_bitpacked(active_start)) {
+                    error_count_sav += 1;
+                }
 
-            if (vbi || !start) {
-                if (lines + i < 17)
-                    memmove(l, &foo[(lines + i + 1) * DMA_BUFFER_SIZE],
-                            (17 - lines - i ) * DMA_BUFFER_SIZE);
-                got_lines--;
-                i--;
-                ret -= DMA_BUFFER_SIZE;
-            }
+            } else if (upipe_pciesdi_src->sdi3g_levelb) {
+                /* Check EAV is present. */
+                if (!sdi3g_levelb_eav_match_bitpacked(sdi_line)) {
+                    error_count_eav += 1;
+                }
+                /* Check SAV is present. */
+                if (!sdi3g_levelb_sav_match_bitpacked(active_start)) {
+                    error_count_sav += 1;
+                }
 
-            prev_vbi = vbi;
-            prev_f2  = f2;
+            } else { /* HD */
+                /* Check EAV is present. */
+                if (!hd_eav_match_bitpacked(sdi_line)) {
+                    error_count_eav += 1;
+                }
+                /* Check SAV is present. */
+                if (!hd_sav_match_bitpacked(active_start)) {
+                    error_count_sav += 1;
+                }
+            } /* end HD */
+        } /* end debug check */
+
+        /* Unpack data into uref. */
+        if (upipe_pciesdi_src->sdi3g_levelb) {
+            /* Note: line order is swapped. */
+            uint16_t *dst1 = (uint16_t*)dst_buf + (2*i + 1) * 2*upipe_pciesdi_src->sdi_format->width;
+            uint16_t *dst2 = (uint16_t*)dst_buf + (2*i + 0) * 2*upipe_pciesdi_src->sdi_format->width;
+            upipe_pciesdi_src->sdi3g_levelb_packed(sdi_line, dst1, dst2,
+                    upipe_pciesdi_src->sdi_format->width);
+        } else {
+            uint16_t *dst = (uint16_t*)dst_buf + 2*i * upipe_pciesdi_src->sdi_format->width;
+            upipe_pciesdi_src->sdi_to_uyvy(sdi_line, dst,
+                    upipe_pciesdi_src->sdi_format->width);
         }
     }
 
-    if (got_lines + lines < 18) {
-        lines += got_lines;
-        for (int i = 0; i < 3; i++)
-            uref_pic_plane_unmap(uref, chroma[i], 0, 0, -1, -1);
-        uref_free(uref);
+    if (error_count_eav || error_count_sav)
+        upipe_err_va(upipe, "error counts eav: %d, sav: %d (%d lines checked)",
+                error_count_eav, error_count_sav, lines);
+
+
+    struct sdi_ioctl_mmap_dma_update mmap_update = { .sw_count = hw };
+    if (ioctl(upipe_pciesdi_src->fd, SDI_IOCTL_MMAP_DMA_WRITER_UPDATE, &mmap_update))
+        upipe_err(upipe, "ioctl error incrementing SW buffer count");
+
+    /* Copy unused data into the scratch buffer. */
+    if (bytes_available != processed_bytes) {
+        int bytes_remaining = bytes_available - processed_bytes;
+        if (mmap_length_does_wrap(sw, offset, bytes_remaining)) {
+            int before = DMA_BUFFER_TOTAL_SIZE - (sw * DMA_BUFFER_SIZE + offset) % DMA_BUFFER_TOTAL_SIZE;
+            int after = bytes_remaining - before;
+
+            memcpy(upipe_pciesdi_src->scratch_buffer,
+                    mmap_wraparound(upipe_pciesdi_src->read_buffer, sw, offset),
+                    before);
+            offset += before;
+            memcpy(upipe_pciesdi_src->scratch_buffer + before,
+                    mmap_wraparound(upipe_pciesdi_src->read_buffer, sw, offset),
+                    after);
+        } else {
+            memcpy(upipe_pciesdi_src->scratch_buffer,
+                    mmap_wraparound(upipe_pciesdi_src->read_buffer, sw, offset),
+                    bytes_remaining);
+        }
+        upipe_pciesdi_src->scratch_buffer_count = bytes_remaining;
+    }
+
+    if (upipe_pciesdi_src->discontinuity) {
+        uref_flow_set_discontinuity(uref);
+        upipe_pciesdi_src->discontinuity = false;
+    }
+
+    if (upipe_pciesdi_src->sdi3g_levelb)
+        uref_block_set_sdi3g_levelb(uref);
+
+    if (upipe_pciesdi_src->uclock)
+        uref_clock_set_cr_sys(uref, uclock_now(upipe_pciesdi_src->uclock));
+
+    uref_block_unmap(uref, 0);
+    upipe_pciesdi_src_output(upipe, uref, &upipe_pciesdi_src->upump);
+}
+
+/** @internal @This fills the flow_def for the format being received by the HW.
+ *
+ * @param upipe description structure of the pipe
+ * @param flow_format pointer to get the allocated flow_def uref
+ * @returns an error code
+ */
+static int get_flow_def(struct upipe *upipe, struct uref **flow_format)
+{
+    struct upipe_pciesdi_src *upipe_pciesdi_src = upipe_pciesdi_src_from_upipe(upipe);
+
+    /* Query the HW for what it thinks the received format is. */
+    uint8_t locked, mode, family, scan, rate;
+    sdi_rx(upipe_pciesdi_src->fd, &locked, &mode, &family, &scan, &rate);
+    upipe_dbg_va(upipe, "locked: %d, mode: %s (%d), family: %s (%d), scan: %s (%d), rate: %s (%d)",
+            locked,
+            sdi_decode_mode(mode), mode,
+            sdi_decode_family(family), family,
+            sdi_decode_scan(scan), scan,
+            sdi_decode_rate(rate), rate);
+
+    if (!locked) {
+        upipe_err(upipe, "SDI signal not locked");
+        return UPIPE_PCIESDI_SRC_ERR_NOSIGNAL;
+    }
+
+    int width, height;
+    bool interlaced, sdi3g_levelb = false;
+    struct urational fps;
+
+    /* set width and height */
+    if (family == 0) {
+        /* SMPTE274:1080 */
+        width = 1920;
+        height = 1080;
+    } else if (family == 1) {
+        /* SMPTE296:720 */
+        width = 1280;
+        height = 720;
+    } else if (family == 8) {
+        /* NTSC:486 */
+        width = 720;
+        height = 486;
+    } else if (family == 9) {
+        /* PAL:576 */
+        width = 720;
+        height = 576;
+    } else {
+        upipe_err_va(upipe, "invalid/unknown family value: %s (%d)", sdi_decode_family(family), family);
+        return UBASE_ERR_INVALID;
+    }
+
+    /* set framerate */
+    static const struct urational framerates[] = {
+        { 24000, 1001 },
+        { 24, 1 },
+        { 48000, 1001 },
+        { 25, 1 },
+        { 30000, 1001 },
+        { 30, 1 },
+        { 48, 1 },
+        { 50, 1 },
+        { 60000, 1001 },
+        { 60, 1 }
+    };
+
+    if (rate >= 2 && rate <= 11)
+        fps = framerates[rate - 2];
+    else {
+        upipe_err_va(upipe, "invalid/unknown rate value: %s (%d)", sdi_decode_rate(rate), rate);
+        return UBASE_ERR_INVALID;
+    }
+
+    /* Check for SDI-3G level B. */
+    if (mode == 2 && scan == 0) {
+        sdi3g_levelb = true;
+        interlaced = false;
+        fps.num *= 2;
+    } else if (scan == 0) {
+        /* interlaced */
+        interlaced = true;
+    } else if (scan == 1) {
+        /* progressive */
+        interlaced = false;
+    } else {
+        upipe_err_va(upipe, "invalid/unknown scan value: %s (%d)", sdi_decode_scan(scan), scan);
+        return UBASE_ERR_INVALID;
+    }
+
+    struct uref *flow_def = uref_alloc(upipe_pciesdi_src->uref_mgr);
+    if (!flow_def)
+        return UBASE_ERR_ALLOC;
+
+    UBASE_RETURN(uref_flow_set_def(flow_def, "block."));
+    UBASE_RETURN(uref_block_flow_set_append(flow_def, 32));
+    UBASE_RETURN(uref_pic_flow_set_fps(flow_def, fps));
+    UBASE_RETURN(uref_pic_flow_set_hsize(flow_def, width));
+    UBASE_RETURN(uref_pic_flow_set_vsize(flow_def, height));
+    if (interlaced) {
+        UBASE_RETURN(uref_pic_set_tff(flow_def));
+    } else {
+        UBASE_RETURN(uref_pic_set_progressive(flow_def));
+    }
+
+    if (sdi3g_levelb)
+        UBASE_RETURN(uref_block_set_sdi3g_levelb(flow_def));
+
+    upipe_pciesdi_src->sdi_format = sdi_get_offsets(flow_def);
+    if (!upipe_pciesdi_src->sdi_format) {
+        upipe_err(upipe, "unable to get SDI offsets/picture format");
+        uref_dump(flow_def, upipe->uprobe);
+        return UBASE_ERR_INVALID;
+    }
+
+    /* Size (in bytes) of a packed line. */
+    int sdi_line_width = upipe_pciesdi_src->sdi_format->width * 2 * 10 / 8;
+    if (sdi3g_levelb)
+        sdi_line_width *= 2;
+    if (sdi_line_width > sizeof(upipe_pciesdi_src->scratch_buffer)) {
+        upipe_err(upipe, "SDI line too large for scratch buffer");
+        return UBASE_ERR_INVALID;
+    }
+
+    if (upipe_pciesdi_src->sdi_format->pict_fmt->active_f2.start && interlaced == false && sdi3g_levelb == false)
+        upipe_warn(upipe, "SDI signal is progressive but interlaced sdi_offset struct returned");
+    else if (!upipe_pciesdi_src->sdi_format->pict_fmt->active_f2.start && interlaced == true)
+        upipe_warn(upipe, "SDI signal is interlaced but progressive sdi_offset struct returned");
+
+    *flow_format = flow_def;
+
+    int64_t hw, sw;
+    sdi_dma_writer(upipe_pciesdi_src->fd, 1, &hw, &sw); // enable
+
+    upipe_pciesdi_src->mode = mode;
+    upipe_pciesdi_src->family = family;
+    upipe_pciesdi_src->scan = scan;
+    upipe_pciesdi_src->rate = rate;
+    upipe_pciesdi_src->sdi3g_levelb = sdi3g_levelb;
+
+    return UBASE_ERR_NONE;
+}
+
+/** @internal @This tries to get the flow_def when the SDI signal is locked.
+ *
+ *  @param upump description structure of the timer pump
+ */
+static void get_flow_def_on_signal_lock(struct upump *upump)
+{
+    struct upipe *upipe = upump_get_opaque(upump, struct upipe *);
+    struct upipe_pciesdi_src *ctx = upipe_pciesdi_src_from_upipe(upipe);
+    struct uref *flow_def;
+    int ret = get_flow_def(upipe, &flow_def);
+    /* TODO: does this need to check for errors other then NOSIGNAL and stop? */
+    if (!ubase_check(ret)) {
         return;
     }
+    upipe_pciesdi_src_require_ubuf_mgr(upipe, flow_def);
 
-    lines = 0;
-
-    for (int i = 0; i < 18; i++) {
-        upipe_sdi_to_planar_10_c(&foo[i*DMA_BUFFER_SIZE + 4 * (2200-1920)],
-                (uint16_t *)(&buf[0][i*stride[0]]),
-                (uint16_t *)(&buf[1][i*stride[1]]),
-                (uint16_t *)(&buf[2][i*stride[2]]),
-                1920);
+    struct upump *fd_read = upump_alloc_fd_read(ctx->upump_mgr,
+            upipe_pciesdi_src_worker, upipe, upipe->refcount, ctx->fd);
+    if (unlikely(fd_read == NULL)) {
+        upipe_throw_fatal(upipe, UBASE_ERR_UPUMP);
+        return;
     }
-
-//    uref_pic_set_tff(uref);
-    static int x;
-    uref_pic_set_vposition(uref, x);
-    x += 18;
-    x %= 540;
-    static uint64_t pts_prog;
-    uref_clock_set_pts_prog(uref, pts_prog);
-    pts_prog += 18 * UCLOCK_FREQ  * 1001 / 30000 / 1080;
-    uref_attr_set_unsigned(uref,
-            1080, UDICT_TYPE_UNSIGNED, "original_height");
-    uref_attr_set_unsigned(uref,
-            (18 * UCLOCK_FREQ * 1001 / 30000) / 1080,
-            UDICT_TYPE_UNSIGNED, "fraction_duration");
-
-    for (int i = 0; i < 3; i++)
-        uref_pic_plane_unmap(uref, chroma[i], 0, 0, -1, -1);
-
-    if (upipe_pciesdi_src->uclock != NULL)
-        uref_clock_set_cr_sys(uref, uclock_now(upipe_pciesdi_src->uclock));
-    upipe_pciesdi_src_output(upipe, uref, &upipe_pciesdi_src->upump);
+    upipe_pciesdi_src_set_upump(upipe, fd_read);
+    upump_start(fd_read);
 }
 
 /** @internal @This checks if the pump may be allocated.
@@ -398,26 +801,7 @@ static int upipe_pciesdi_src_check(struct upipe *upipe, struct uref *flow_format
         return UBASE_ERR_NONE;
     }
 
-    if (upipe_pciesdi_src->ubuf_mgr == NULL) {
-        struct uref *flow_format = uref_alloc(upipe_pciesdi_src->uref_mgr);
-        struct urational fps = { 60000, 1001};
-        uref_flow_set_def(flow_format, "pic.");
-        uref_pic_flow_set_fps(flow_format, fps);
-        uref_pic_flow_set_hsize(flow_format, 1920);
-        uref_pic_flow_set_vsize(flow_format, 540);
-        uref_pic_set_tff(flow_format);
-        uref_pic_flow_set_macropixel(flow_format, 1);
-        uref_pic_flow_add_plane(flow_format, 1, 1, 2, "y10l");
-        uref_pic_flow_add_plane(flow_format, 2, 1, 2, "u10l");
-        uref_pic_flow_add_plane(flow_format, 2, 1, 2, "v10l");
-
-        if (unlikely(flow_format == NULL)) {
-            upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
-            return UBASE_ERR_ALLOC;
-        }
-        upipe_pciesdi_src_require_ubuf_mgr(upipe, flow_format);
-        return UBASE_ERR_NONE;
-    }
+    /* Get ubuf_mgr later in get_flow_def_on_signal_lock. */
 
     if (upipe_pciesdi_src->uclock == NULL &&
         urequest_get_opaque(&upipe_pciesdi_src->uclock_request, struct upipe *)
@@ -425,9 +809,9 @@ static int upipe_pciesdi_src_check(struct upipe *upipe, struct uref *flow_format
         return UBASE_ERR_NONE;
 
     if (upipe_pciesdi_src->fd != -1 && upipe_pciesdi_src->upump == NULL) {
-        struct upump *upump = upump_alloc_fd_read(upipe_pciesdi_src->upump_mgr,
-                                        upipe_pciesdi_src_worker, upipe,
-                                        upipe->refcount, upipe_pciesdi_src->fd);
+        struct upump *upump = upump_alloc_timer(upipe_pciesdi_src->upump_mgr,
+                get_flow_def_on_signal_lock, upipe, upipe->refcount,
+                1, UCLOCK_FREQ);
         if (unlikely(upump == NULL)) {
             upipe_throw_fatal(upipe, UBASE_ERR_UPUMP);
             return UBASE_ERR_UPUMP;
@@ -435,6 +819,65 @@ static int upipe_pciesdi_src_check(struct upipe *upipe, struct uref *flow_format
         upipe_pciesdi_src_set_upump(upipe, upump);
         upump_start(upump);
     }
+    return UBASE_ERR_NONE;
+}
+
+static int init_hardware(struct upipe *upipe, bool ntsc, bool genlock, bool sd)
+{
+    struct upipe_pciesdi_src *ctx = upipe_pciesdi_src_from_upipe(upipe);
+    int fd = ctx->fd;
+    int device_number = ctx->device_number;
+
+    uint8_t channels, has_vcxos;
+    uint8_t has_gs12241, has_gs12281, has_si5324;
+    uint8_t has_genlock, has_lmh0387, has_si596;
+    sdi_capabilities(fd, &channels, &has_vcxos, &has_gs12241, &has_gs12281,
+            &has_si5324, &has_genlock, &has_lmh0387, &has_si596);
+
+    if (device_number < 0 || device_number >= channels) {
+        upipe_err_va(upipe, "invalid device number (%d) for number of channels (%d)",
+                device_number, channels);
+        return UBASE_ERR_INVALID;
+    }
+
+    if (has_vcxos == 0 && ntsc) {
+        upipe_err(upipe, "NTSC not yet supported on boards without VCXOs");
+        return UBASE_ERR_INVALID;
+    }
+
+    if (has_genlock == 0 && genlock) {
+        upipe_err(upipe, "genlock not supported on this board");
+        return UBASE_ERR_INVALID;
+    }
+
+    /* sdi_pre_init */
+
+    if (has_gs12281)
+        gs12281_spi_init(fd);
+    if (has_gs12241) {
+        if (sd) {
+            gs12241_reset(fd, device_number);
+            gs12241_config_for_sd(fd, device_number);
+        }
+        gs12241_spi_init(fd);
+    }
+
+    if (has_lmh0387) {
+        /* Set direction for RX. */
+        sdi_lmh0387_direction(fd, 0);
+        /* set launch amplitude to nominal */
+        sdi_lmh0387_spi_write(fd, device_number, 0x02, 0x30);
+    }
+
+    /* sdi_init */
+
+    /* disable loopback */
+    sdi_dma(fd, 0);
+
+    /* disable dmas */
+    int64_t hw_count, sw_count;
+    sdi_dma_writer(fd, 0, &hw_count, &sw_count);
+
     return UBASE_ERR_NONE;
 }
 
@@ -449,25 +892,48 @@ static int upipe_pciesdi_set_uri(struct upipe *upipe, const char *path)
     struct upipe_pciesdi_src *upipe_pciesdi_src = upipe_pciesdi_src_from_upipe(upipe);
 
     ubase_clean_fd(&upipe_pciesdi_src->fd);
-    upipe_pciesdi_src->fd = open(path, O_RDWR);
+    upipe_pciesdi_src->fd = open(path, O_RDONLY | O_NONBLOCK);
     if (unlikely(upipe_pciesdi_src->fd < 0)) {
         upipe_err_va(upipe, "can't open %s (%m)", path);
         return UBASE_ERR_EXTERNAL;
     }
 
+    /* request dma */
+    if (sdi_request_dma_writer(upipe_pciesdi_src->fd) == 0) {
+        upipe_err(upipe, "DMA not available");
+        return UBASE_ERR_EXTERNAL;
+    }
+
+    struct sdi_ioctl_mmap_dma_info mmap_info;
+    if (ioctl(upipe_pciesdi_src->fd, SDI_IOCTL_MMAP_DMA_INFO, &mmap_info) != 0) {
+        upipe_err(upipe, "error getting mmap info");
+        return UBASE_ERR_EXTERNAL;
+    }
+
+    if (mmap_info.dma_rx_buf_size != DMA_BUFFER_SIZE
+            || mmap_info.dma_rx_buf_count != DMA_BUFFER_COUNT) {
+        upipe_err(upipe, "mmap info returned does not match compile-time constants");
+        return UBASE_ERR_EXTERNAL;
+    }
+
+    void *buf = mmap(NULL, DMA_BUFFER_TOTAL_SIZE, PROT_READ, MAP_SHARED,
+            upipe_pciesdi_src->fd, mmap_info.dma_rx_buf_offset);
+    if (buf == MAP_FAILED) {
+        upipe_err(upipe, "mmap failed");
+        return UBASE_ERR_EXTERNAL;
+    }
+
+    /* TODO: check need to release things on failure. */
+
+    upipe_pciesdi_src->read_buffer = buf;
+    upipe_pciesdi_src->device_number = path[strlen(path) - 1] - 0x30;
+
+    /* initialize hardware except the clock */
+    UBASE_RETURN(init_hardware(upipe, false, false, false));
+
+    /* Set the crc and packed options (in libsdi.c). */
     uint8_t locked, mode, family, scan, rate;
     sdi_rx(upipe_pciesdi_src->fd, &locked, &mode, &family, &scan, &rate);
-
-    upipe_notice_va(upipe, "%s | mode %s | family %s | scan %s | rate %s",
-        locked ? "LOCK" : "",
-        sdi_decode_mode(mode),
-        sdi_decode_family(family),
-        sdi_decode_scan(scan),
-        sdi_decode_rate(rate));
-
-    sdi_dma(upipe_pciesdi_src->fd, 1, 0, 0); // disable loopback
-    int64_t hw, sw;
-    sdi_dma_writer(upipe_pciesdi_src->fd, 1, &hw, &sw); // enable
 
     return UBASE_ERR_NONE;
 }
@@ -475,6 +941,12 @@ static int upipe_pciesdi_set_uri(struct upipe *upipe, const char *path)
 static void upipe_pciesdi_src_close(struct upipe *upipe)
 {
     struct upipe_pciesdi_src *upipe_pciesdi_src = upipe_pciesdi_src_from_upipe(upipe);
+
+    int64_t hw, sw;
+    sdi_dma_writer(upipe_pciesdi_src->fd, 0, &hw, &sw); // disable
+    sdi_release_dma_writer(upipe_pciesdi_src->fd); // release old locks
+    munmap(upipe_pciesdi_src->read_buffer, DMA_BUFFER_TOTAL_SIZE);
+    upipe_pciesdi_src->read_buffer = NULL;
 
     ubase_clean_fd(&upipe_pciesdi_src->fd);
     upipe_pciesdi_src_set_upump(upipe, NULL);
@@ -496,12 +968,7 @@ static int upipe_pciesdi_src_set_option(struct upipe *upipe,
     if (unlikely(upipe_pciesdi_src->fd != -1))
         upipe_pciesdi_src_close(upipe);
 
-    if (!strcmp(k, "slice_height"))
-        upipe_pciesdi_src->lines = atoi(v);
-    else 
-        return UBASE_ERR_INVALID;
-
-    return UBASE_ERR_NONE;
+    return UBASE_ERR_INVALID;
 }
 
 /** @internal @This processes control commands on a file source pipe.

@@ -20,7 +20,8 @@
 #ifndef SDI_LIB_H
 #define SDI_LIB_H
 
-#include "genlock.h"
+#define SDI_DEVICE_IS_BITPACKED 1
+
 
 int64_t get_time_ms(void);
 
@@ -30,42 +31,39 @@ uint32_t sdi_readl(int fd, uint32_t addr);
 void sdi_writel(int fd, uint32_t addr, uint32_t val);
 void sdi_reload(int fd);
 
-void sdi_refclk(int fd, uint8_t refclk_sel, uint32_t *refclk_freq, uint32_t *refclk_counter);
+void sdi_refclk(int fd, uint8_t refclk_sel, uint32_t *refclk_freq, uint64_t *refclk_counter);
 
-#ifdef HAS_VCXOS
+void sdi_capabilities(int fd, uint8_t *channels, uint8_t *has_vcxos,
+        uint8_t *has_gs12241, uint8_t *has_gs12281, uint8_t *has_si5324,
+        uint8_t *has_genlock, uint8_t *has_lmh0387, uint8_t *has_si596);
+
+void sdi_set_rate(int fd, uint8_t rate);
+uint8_t sdi_get_rate(int fd);
+
 void sdi_vcxo(int fd, uint32_t width, uint32_t period);
-#endif
+void sdi_picxo(int fd, uint8_t enable, uint8_t dir, uint8_t step);
 
-#ifdef HAS_SI5324
 void sdi_si5324_vcxo(int fd, uint32_t width, uint32_t period);
 void sdi_si5324_spi(int fd, uint32_t tx_data, uint32_t *rx_data);
-#endif
 
-#ifdef HAS_GENLOCK
 void sdi_genlock_hsync(int fd, uint8_t *active, uint64_t *period, uint64_t *seen);
 void sdi_genlock_vsync(int fd, uint8_t *active, uint64_t *period, uint64_t *seen);
-#endif
+void sdi_genlock_field(int fd, uint8_t *field);
 
-void sdi_dma(int fd, uint8_t fill, uint8_t rx_tx_loopback_enable, uint8_t tx_rx_loopback_enable);
+void sdi_dma(int fd, uint8_t loopback_enable);
 void sdi_dma_reader(int fd, uint8_t enable, int64_t *hw_count, int64_t *sw_count);
 void sdi_dma_writer(int fd, uint8_t enable, int64_t *hw_count, int64_t *sw_count);
 void sdi_set_pattern(int fd, uint8_t mode, uint8_t enable, uint8_t format);
 
-#ifdef HAS_GS12241
 void sdi_gs12241_spi_cs(int fd, uint8_t cs_n);
 void sdi_gs12241_spi(int fd, uint32_t tx_data, uint32_t *rx_data);
-#endif
 
-#ifdef HAS_GS12281
 void sdi_gs12281_spi_cs(int fd, uint8_t cs_n);
 void sdi_gs12281_spi(int fd, uint32_t tx_data, uint32_t *rx_data);
-#endif
 
-#ifdef HAS_LMH0387
-void sdi_set_direction(int fd, uint8_t tx_enable);
-void sdi_spi_cs(int fd, uint8_t cs_n);
-void sdi_spi(int fd, uint32_t tx_data, uint32_t *rx_data);
-#endif
+void sdi_lmh0387_direction(int fd, uint8_t tx_enable);
+void sdi_lmh0387_spi_cs(int fd, uint8_t cs_n);
+void sdi_lmh0387_spi(int fd, uint32_t tx_data, uint32_t *rx_data);
 
 void sdi_rx(int fd, uint8_t *locked, uint8_t *mode, uint8_t *family, uint8_t *scan, uint8_t *rate);
 void sdi_tx(int fd, uint8_t mode, uint8_t *txen, uint8_t *slew);
@@ -76,11 +74,9 @@ uint8_t sdi_request_dma_writer(int fd);
 void sdi_release_dma_reader(int fd);
 void sdi_release_dma_writer(int fd);
 
-/* si5324 */
-
-#ifdef HAS_SI5324
-
 #define countof(x) (sizeof(x) / sizeof(x[0]))
+
+/* si5324 */
 
 static const uint16_t si5324_148_5_mhz_regs[][2] = {
     {   0, 0x54 },
@@ -174,17 +170,11 @@ static const uint16_t si5324_148_35_mhz_regs[][2] = {
     {136, 0x40 },
 };
 
-#endif
-
 /* flash */
 
-#if defined(PCIE_SDI_HW)
-#define FLASH_READ_ID 0x9E
-#elif defined(DUO2_HW)
-#define FLASH_READ_ID 0x9F
-#elif defined(MINI_4K_HW)
-#define FLASH_READ_ID 0x9F
-#endif
+#define FALCON9_FLASH_READ_ID_REG 0x9E
+#define MINI_4K_FLASH_READ_ID_REG 0x9F
+#define DUO2_FLASH_READ_ID_REG 0x9F
 
 #define FLASH_READ    0x03
 #define FLASH_WREN    0x06
@@ -208,30 +198,236 @@ int sdi_flash_write(int fd,
 
 /* spi */
 
-#ifdef HAS_SI5324
 void si5324_spi_write(int fd, uint8_t adr, uint8_t data);
 uint8_t si5324_spi_read(int fd, uint16_t adr);
-#endif
 
-#ifdef HAS_GS12241
-void rx_spi_write(int fd, uint8_t channel, uint16_t adr, uint16_t data);
-uint16_t rx_spi_read(int fd, uint8_t channel, uint16_t adr);
-#endif
+void gs12241_spi_write(int fd, uint8_t channel, uint16_t adr, uint16_t data);
+uint16_t gs12241_spi_read(int fd, uint8_t channel, uint16_t adr);
+void gs12241_spi_init(int fd);
+void gs12241_reset(int fd, int n);
+void gs12241_config_for_sd(int fd, int n);
 
-#ifdef HAS_GS12281
-void tx_spi_write(int fd, uint8_t channel, uint16_t adr, uint16_t data);
-uint16_t tx_spi_read(int fd, uint8_t channel, uint16_t adr);
-#endif
+void gs12281_spi_write(int fd, uint8_t channel, uint16_t adr, uint16_t data);
+uint16_t gs12281_spi_read(int fd, uint8_t channel, uint16_t adr);
+void gs12281_spi_init(int fd);
 
-#ifdef HAS_LMH0387
-void sdi_spi_write(int fd, uint8_t channel, uint16_t adr, uint16_t data);
-uint16_t sdi_spi_read(int fd, uint8_t channel, uint16_t adr);
-#endif
+#define LMH0387_RX_ENABLE 0x0
+#define LMH0387_TX_ENABLE 0x1
+
+void sdi_lmh0387_spi_write(int fd, uint8_t channel, uint16_t adr, uint16_t data);
+uint16_t sdi_lmh0387_spi_read(int fd, uint8_t channel, uint16_t adr);
 
 /* genlock */
 
-#ifdef HAS_GENLOCK
+/* genlock margins (in ns) */
+
+#define GENLOCK_HSYNC_MARGIN 20
+#define GENLOCK_VSYNC_MARGIN 10000
+
+/* genlock hsync/vsync periods (in ns) */
+
+/* SMPTE259M */
+#define SMPTE259M_PAL_HSYNC_PERIOD 64000
+#define SMPTE259M_PAL_VSYNC_PERIOD 40000000
+
+#define SMPTE259M_NTSC_HSYNC_PERIOD 63555
+#define SMPTE259M_NTSC_VSYNC_PERIOD 33366666
+
+/* SMPTE296M */
+#define SMPTE296M_720P60_HSYNC_PERIOD 22222
+#define SMPTE296M_720P60_VSYNC_PERIOD 16666666
+
+#define SMPTE296M_720P50_HSYNC_PERIOD 26666
+#define SMPTE296M_720P50_VSYNC_PERIOD 20000000
+
+#define SMPTE296M_720P30_HSYNC_PERIOD 44444
+#define SMPTE296M_720P30_VSYNC_PERIOD 33333333
+
+#define SMPTE296M_720P25_HSYNC_PERIOD 53333
+#define SMPTE296M_720P25_VSYNC_PERIOD 40000000
+
+#define SMPTE296M_720P24_HSYNC_PERIOD 55555
+#define SMPTE296M_720P24_VSYNC_PERIOD 41666666
+
+#define SMPTE296M_720P59_94_HSYNC_PERIOD 22244
+#define SMPTE296M_720P59_94_VSYNC_PERIOD 16683350
+
+#define SMPTE296M_720P29_97_HSYNC_PERIOD 44488
+#define SMPTE296M_720P29_97_VSYNC_PERIOD 33366700
+
+#define SMPTE296M_720P23_98_HSYNC_PERIOD 55601
+#define SMPTE296M_720P23_98_VSYNC_PERIOD 41701417
+
+/* SMPTE274M */
+#define SMPTE274M_1080P60_HSYNC_PERIOD 14814
+#define SMPTE274M_1080P60_VSYNC_PERIOD 16666666
+
+#define SMPTE274M_1080P50_HSYNC_PERIOD 17777
+#define SMPTE274M_1080P50_VSYNC_PERIOD 20000000
+
+#define SMPTE274M_1080I60_HSYNC_PERIOD 29629
+#define SMPTE274M_1080I60_VSYNC_PERIOD 33333333
+
+#define SMPTE274M_1080I50_HSYNC_PERIOD 35555
+#define SMPTE274M_1080I50_VSYNC_PERIOD 40000000
+
+#define SMPTE274M_1080P30_HSYNC_PERIOD 29629
+#define SMPTE274M_1080P30_VSYNC_PERIOD 33333333
+
+#define SMPTE274M_1080P25_HSYNC_PERIOD 35555
+#define SMPTE274M_1080P25_VSYNC_PERIOD 40000000
+
+#define SMPTE274M_1080P24_HSYNC_PERIOD 37037
+#define SMPTE274M_1080P24_VSYNC_PERIOD 41666666
+
+#define SMPTE274M_1080P59_94_HSYNC_PERIOD 14829
+#define SMPTE274M_1080P59_94_VSYNC_PERIOD 16683350
+
+#define SMPTE274M_1080I59_94_HSYNC_PERIOD 29659
+#define SMPTE274M_1080I59_94_VSYNC_PERIOD 33366700
+
+#define SMPTE274M_1080P29_97_HSYNC_PERIOD 29659
+#define SMPTE274M_1080P29_97_VSYNC_PERIOD 33366700
+
+#define SMPTE274M_1080P23_98_HSYNC_PERIOD 37067
+#define SMPTE274M_1080P23_98_VSYNC_PERIOD 41701417
+
+/* genlock si5324 configurations */
+
+#define SI5324_BASE_CONFIG_N2_OFFSET 25
+
+/* SMPTE259M */
+
+static const uint16_t smpte259m_pal_regs[][2] = {
+    { 40, 0x01 },
+    { 41, 0x4e },
+    { 42, 0x1f },
+};
+
+static const uint16_t smpte259m_ntsc_regs[][2] = {
+    { 40, 0x01 },
+    { 41, 0x4b },
+    { 42, 0xc4 },
+};
+
+/* SMPTE296M */
+
+static const uint16_t smpte296m_720p60_regs[][2] = {
+    { 40, 0x00 },
+    { 41, 0x74 },
+    { 42, 0x03 },
+};
+
+static const uint16_t smpte296m_720p50_regs[][2] = {
+    { 40, 0x00 },
+    { 41, 0x8b },
+    { 42, 0x37 },
+};
+
+static const uint16_t smpte296m_720p30_regs[][2] = {
+    { 40, 0x00 },
+    { 41, 0xe8 },
+    { 42, 0x07 },
+};
+
+static const uint16_t smpte296m_720p25_regs[][2] = {
+    { 40, 0x01 },
+    { 41, 0x16 },
+    { 42, 0x6f },
+};
+
+static const uint16_t smpte296m_720p24_regs[][2] = {
+    { 40, 0x01 },
+    { 41, 0x22 },
+    { 42, 0x09 },
+};
+
+static const uint16_t smpte296m_720p59_94_regs[][2] = {
+    { 40, 0x00 },
+    { 41, 0x74 },
+    { 42, 0x03 },
+};
+
+static const uint16_t smpte296m_720p29_97_regs[][2] = {
+    { 40, 0x00 },
+    { 41, 0xe8 },
+    { 42, 0x07 },
+};
+
+static const uint16_t smpte296m_720p23_98_regs[][2] = {
+    { 40, 0x01 },
+    { 41, 0x22 },
+    { 42, 0x09 },
+};
+
+/* SMPTE274M */
+
+static const uint16_t smpte274m_1080p60_regs[][2] = {
+    { 40, 0x00 },
+    { 41, 0x4d },
+    { 42, 0x57 },
+};
+
+static const uint16_t smpte274m_1080p50_regs[][2] = {
+    { 40, 0x00 },
+    { 41, 0x5c },
+    { 42, 0xcf },
+};
+
+static const uint16_t smpte274m_1080i60_regs[][2] = {
+    { 40, 0x00 },
+    { 41, 0x9a },
+    { 42, 0xaf },
+};
+
+static const uint16_t smpte274m_1080i50_regs[][2] = {
+    { 40, 0x00 },
+    { 41, 0xb9 },
+    { 42, 0x9f },
+};
+
+static const uint16_t smpte274m_1080p30_regs[][2] = {
+    { 40, 0x00 },
+    { 41, 0x9a },
+    { 42, 0xaf },
+};
+
+static const uint16_t smpte274m_1080p25_regs[][2] = {
+    { 40, 0x00 },
+    { 41, 0xb9 },
+    { 42, 0x9f },
+};
+
+static const uint16_t smpte274m_1080p24_regs[][2] = {
+    { 40, 0x00 },
+    { 41, 0xc1 },
+    { 42, 0x5b },
+};
+
+static const uint16_t smpte274m_1080p59_94_regs[][2] = {
+    { 40, 0x00 },
+    { 41, 0x4d },
+    { 42, 0x57 },
+};
+
+static const uint16_t smpte274m_1080i59_94_regs[][2] = {
+    { 40, 0x00 },
+    { 41, 0x9a },
+    { 42, 0xaf },
+};
+
+static const uint16_t smpte274m_1080p29_97_regs[][2] = {
+    { 40, 0x00 },
+    { 41, 0x9a },
+    { 42, 0xaf },
+};
+
+static const uint16_t smpte274m_1080p23_98_regs[][2] = {
+    { 40, 0x00 },
+    { 41, 0xc1 },
+    { 42, 0x52 },
+};
+
 void si5324_genlock(int fd);
-#endif
 
 #endif /* SDI_LIB_H */

@@ -6,4 +6,5 @@ myinclude_HEADERS = \
                     upipe_hbrmt_dec.h \
                     upipe_unpack_rfc4175.h \
                     upipe_sdi_dec.h \
+                    upipe_pciesdi_source_framer.h \
                     $(NULL)
