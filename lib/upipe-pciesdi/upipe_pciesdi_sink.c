@@ -538,6 +538,33 @@ static int check_capabilities(struct upipe *upipe, bool ntsc, bool genlock)
     return UBASE_ERR_NONE;
 }
 
+static int set_picxo(struct upipe *upipe, bool ntsc, bool sd, bool sdi3g)
+{
+    struct upipe_pciesdi_sink *ctx = upipe_pciesdi_sink_from_upipe(upipe);
+    int fd = ctx->fd;
+
+    uint8_t channels, has_vcxos;
+    uint8_t has_gs12241, has_gs12281, has_si5324;
+    uint8_t has_genlock, has_lmh0387, has_si596;
+    sdi_capabilities(fd, &channels, &has_vcxos, &has_gs12241, &has_gs12281,
+            &has_si5324, &has_genlock, &has_lmh0387, &has_si596);
+
+    if (has_vcxos == 0 && has_si596 == 0) {
+        if (ntsc) {
+            /* 3G: use PICXO to slow down 148.5Mhz to 148.5MHz/1.001 clock */
+            if (sdi3g)
+                sdi_picxo(fd, 1, 1, 5);
+            /* HD: use PICXO to slow down 74.25MHz to 74.25MHz/1.001 clock */
+            else
+                sdi_picxo(fd, 1, 1, 10);
+        } else {
+            sdi_picxo(fd, 0, 0, 0);
+        }
+    }
+
+    return UBASE_ERR_NONE;
+}
+
 #if INIT_HARDWARE
 
 static void init_hardware_part1(struct upipe *upipe, bool ntsc, bool genlock, bool sd)
@@ -651,7 +678,6 @@ static void init_hardware_part1(struct upipe *upipe, bool ntsc, bool genlock, bo
         /* reference clock selection */
         if (ntsc) {
             sdi_writel(fd, CSR_SDI_QPLL_PLL0_REFCLK_SEL_ADDR, REFCLK1_SEL);
-            sdi_picxo(fd, 0, 0, 0);
         } else { /* pal */
             sdi_writel(fd, CSR_SDI_QPLL_PLL0_REFCLK_SEL_ADDR, REFCLK0_SEL);
         }
@@ -813,6 +839,9 @@ static int upipe_pciesdi_sink_set_flow_def(struct upipe *upipe, struct uref *flo
     /* set TX mode */
     uint8_t txen, slew;
     sdi_tx(upipe_pciesdi_sink->fd, tx_mode, &txen, &slew);
+
+    /* Set PICXO mode */
+    set_picxo(upipe, ntsc, sd, sdi3g);
 
 #if INIT_HARDWARE
 
