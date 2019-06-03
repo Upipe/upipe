@@ -530,11 +530,6 @@ static int check_capabilities(struct upipe *upipe, bool ntsc, bool genlock)
         return UBASE_ERR_INVALID;
     }
 
-    if (has_vcxos == 0 && ntsc) {
-        upipe_err(upipe, "NTSC not yet supported on boards without VCXOs");
-        return UBASE_ERR_INVALID;
-    }
-
     if (has_genlock == 0 && genlock) {
         upipe_err(upipe, "genlock not supported on this board");
         return UBASE_ERR_INVALID;
@@ -581,15 +576,27 @@ static void init_hardware_part1(struct upipe *upipe, bool ntsc, bool genlock, bo
     switch (device_number) {
         case 0:
             sdi_writel(fd, CSR_SDI0_CORE_TX_RESET_ADDR, 1);
+            sdi_writel(fd, CSR_SDI0_CORE_TX_SYNC_ENABLE_ADDR, 0);
+            sdi_writel(fd, CSR_SDI0_CORE_SD_PATTERN_ENABLE_ADDR, 0);
+            sdi_writel(fd, CSR_SDI0_CORE_HD_3G_PATTERN_ENABLE_ADDR, 0);
             break;
         case 1:
             sdi_writel(fd, CSR_SDI1_CORE_TX_RESET_ADDR, 1);
+            sdi_writel(fd, CSR_SDI1_CORE_TX_SYNC_ENABLE_ADDR, 0);
+            sdi_writel(fd, CSR_SDI1_CORE_SD_PATTERN_ENABLE_ADDR, 0);
+            sdi_writel(fd, CSR_SDI1_CORE_HD_3G_PATTERN_ENABLE_ADDR, 0);
             break;
         case 2:
             sdi_writel(fd, CSR_SDI2_CORE_TX_RESET_ADDR, 1);
+            sdi_writel(fd, CSR_SDI2_CORE_TX_SYNC_ENABLE_ADDR, 0);
+            sdi_writel(fd, CSR_SDI2_CORE_SD_PATTERN_ENABLE_ADDR, 0);
+            sdi_writel(fd, CSR_SDI2_CORE_HD_3G_PATTERN_ENABLE_ADDR, 0);
             break;
         case 3:
             sdi_writel(fd, CSR_SDI3_CORE_TX_RESET_ADDR, 1);
+            sdi_writel(fd, CSR_SDI3_CORE_TX_SYNC_ENABLE_ADDR, 0);
+            sdi_writel(fd, CSR_SDI3_CORE_SD_PATTERN_ENABLE_ADDR, 0);
+            sdi_writel(fd, CSR_SDI3_CORE_HD_3G_PATTERN_ENABLE_ADDR, 0);
             break;
     }
 
@@ -614,6 +621,7 @@ static void init_hardware_part1(struct upipe *upipe, bool ntsc, bool genlock, bo
             }
         } else if (genlock) {
             si5324_genlock(fd);
+            /* sleep(2) FIXME: it seems to take time to stabilize genlock from hsync */
         } else { /* pal */
             sdi_si5324_vcxo(fd, 512<<10, 1024<<10);
             for (int i = 0; i < countof(si5324_148_5_mhz_regs); i++) {
@@ -643,6 +651,7 @@ static void init_hardware_part1(struct upipe *upipe, bool ntsc, bool genlock, bo
         /* reference clock selection */
         if (ntsc) {
             sdi_writel(fd, CSR_SDI_QPLL_PLL0_REFCLK_SEL_ADDR, REFCLK1_SEL);
+            sdi_picxo(fd, 0, 0, 0);
         } else { /* pal */
             sdi_writel(fd, CSR_SDI_QPLL_PLL0_REFCLK_SEL_ADDR, REFCLK0_SEL);
         }
