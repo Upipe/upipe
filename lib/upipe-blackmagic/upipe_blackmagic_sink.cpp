@@ -27,6 +27,7 @@
 #define __STDC_FORMAT_MACROS   1
 #define __STDC_CONSTANT_MACROS 1
 
+#include <upipe/config.h>
 #include <upipe/ubase.h>
 #include <upipe/uatomic.h>
 #include <upipe/ulist.h>
@@ -56,7 +57,9 @@
 #include <arpa/inet.h>
 #include <assert.h>
 
+#ifdef UPIPE_HAVE_LIBZVBI_H
 #include <libzvbi.h>
+#endif
 
 #include <pthread.h>
 
@@ -260,8 +263,10 @@ struct upipe_bmd_sink {
     // XXX: should counter be per-field?
     uint16_t op47_sequence_counter[2];
 
+#ifdef UPIPE_HAVE_LIBZVBI_H
     /** vbi **/
     vbi_sampling_par sp;
+#endif
 
     /** handle to decklink card */
     IDeckLink *deckLink;
@@ -418,6 +423,7 @@ public:
     uint64_t pts;
 };
 
+#ifdef UPIPE_HAVE_LIBZVBI_H
 /* VBI Teletext */
 static void upipe_bmd_sink_extract_ttx(IDeckLinkVideoFrameAncillary *ancillary,
         const uint8_t *pic_data, size_t pic_data_size, int w, int sd,
@@ -480,6 +486,7 @@ static void upipe_bmd_sink_extract_ttx(IDeckLinkVideoFrameAncillary *ancillary,
         }
     }
 }
+#endif
 
 /** @internal @This initializes an subpipe of a bmd sink pipe.
  *
@@ -646,7 +653,9 @@ static upipe_bmd_sink_frame *get_video_frame(struct upipe *upipe,
     int w = upipe_bmd_sink->displayMode->GetWidth();
     int h = upipe_bmd_sink->displayMode->GetHeight();
     int sd = upipe_bmd_sink->mode == bmdModePAL || upipe_bmd_sink->mode == bmdModeNTSC;
+#ifdef UPIPE_HAVE_LIBZVBI_H
     int ttx = upipe_bmd_sink->mode == bmdModePAL || upipe_bmd_sink->mode == bmdModeHD1080i50;
+#endif
 
     if (!uref) {
         if (!upipe_bmd_sink->video_frame)
@@ -730,6 +739,7 @@ static upipe_bmd_sink_frame *get_video_frame(struct upipe *upipe,
                 break;
         }
 
+#ifdef UPIPE_HAVE_LIBZVBI_H
         if (!ttx) {
             uref_free(subpic);
             continue;
@@ -768,6 +778,10 @@ static upipe_bmd_sink_frame *get_video_frame(struct upipe *upipe,
             uref_block_unmap(subpic, 0);
         }
         uref_free(subpic);
+#else
+        uref_free(subpic);
+        continue;
+#endif
     }
 
     video_frame->SetAncillaryData(ancillary);
@@ -1469,6 +1483,7 @@ static int upipe_bmd_open_vid(struct upipe *upipe)
     upipe_bmd_sink->genlock_status = -1;
     upipe_bmd_sink->genlock_transition_time = 0;
 
+#ifdef UPIPE_HAVE_LIBZVBI_H
     if (upipe_bmd_sink->mode == bmdModePAL) {
         upipe_bmd_sink->sp.scanning         = 625; /* PAL */
         upipe_bmd_sink->sp.sampling_format  = VBI_PIXFMT_YUV420;
@@ -1489,6 +1504,7 @@ static int upipe_bmd_open_vid(struct upipe *upipe)
         upipe_bmd_sink->sp.interlaced   = FALSE;
         upipe_bmd_sink->sp.synchronous  = TRUE;
     }
+#endif
 
 end:
     if (displayModeIterator != NULL)
