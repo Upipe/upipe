@@ -490,7 +490,7 @@ static bool upipe_h264f_activate_sps(struct upipe *upipe, uint32_t sps_id)
     UBASE_FATAL(upipe, uref_h264_flow_set_profile_compatibility(flow_def,
                 profile_compatibility))
 
-    uint8_t level = ubuf_block_stream_show_bits(s, 8);
+    uint8_t level = upipe_h264f->level = ubuf_block_stream_show_bits(s, 8);
     ubuf_block_stream_skip_bits(s, 8);
     UBASE_FATAL(upipe, uref_h264_flow_set_level(flow_def, level))
 
