@@ -156,7 +156,7 @@ struct upipe_h265f {
     /** VPS profile index */
     uint8_t profile_idc;
     /** VPS profile compatibility */
-    uint8_t profile_compatibility;
+    uint32_t profile_compatibility;
     /** VPS level index */
     uint8_t level_idc;
     /** VPS constraint indicator */
@@ -391,12 +391,12 @@ static void upipe_h265f_stream_parse_ptl(struct upipe *upipe,
         *profile_idc_p = profile_idc;
 
     upipe_h26xf_stream_fill_bits(s, 16);
-    uint64_t profile_compatibility =
-        (uint64_t)ubuf_block_stream_show_bits(s, 16) << 16;
+    uint32_t profile_compatibility =
+        (uint32_t)ubuf_block_stream_show_bits(s, 16) << 16;
     ubuf_block_stream_skip_bits(s, 16);
     upipe_h26xf_stream_fill_bits(s, 16);
     profile_compatibility |=
-        (uint64_t)ubuf_block_stream_show_bits(s, 16);
+        (uint32_t)ubuf_block_stream_show_bits(s, 16);
     ubuf_block_stream_skip_bits(s, 16);
     if (profile_compatibility_p != NULL)
         *profile_compatibility_p = profile_compatibility;
