@@ -1837,7 +1837,7 @@ static void upipe_h265f_build_global(struct upipe *upipe, struct uref *flow_def)
             size_t ubuf_size = 0;
             ubuf_block_size(upipe_h265f->vps[i], &ubuf_size);
             assert(ubuf_size <= UINT16_MAX);
-            uint8_t *p = h265hvcc_array_get_nalu(headers, n++);
+            uint8_t *p = h265hvcc_array_get_nalu(a, n++);
             h265hvcc_nalu_set_length(p, ubuf_size);
             p = h265hvcc_nalu_get_nalu(p);
             UBASE_FATAL(upipe,
@@ -1854,7 +1854,7 @@ static void upipe_h265f_build_global(struct upipe *upipe, struct uref *flow_def)
             size_t ubuf_size = 0;
             ubuf_block_size(upipe_h265f->sps[i], &ubuf_size);
             assert(ubuf_size <= UINT16_MAX);
-            uint8_t *p = h265hvcc_array_get_nalu(headers, n++);
+            uint8_t *p = h265hvcc_array_get_nalu(a, n++);
             h265hvcc_nalu_set_length(p, ubuf_size);
             p = h265hvcc_nalu_get_nalu(p);
             UBASE_FATAL(upipe,
@@ -1871,7 +1871,7 @@ static void upipe_h265f_build_global(struct upipe *upipe, struct uref *flow_def)
             size_t ubuf_size = 0;
             ubuf_block_size(upipe_h265f->pps[i], &ubuf_size);
             assert(ubuf_size <= UINT16_MAX);
-            uint8_t *p = h265hvcc_array_get_nalu(headers, n++);
+            uint8_t *p = h265hvcc_array_get_nalu(a, n++);
             h265hvcc_nalu_set_length(p, ubuf_size);
             p = h265hvcc_nalu_get_nalu(p);
             UBASE_FATAL(upipe,
