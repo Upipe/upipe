@@ -281,30 +281,32 @@ static void upipe_audio_merge_copy_to_output(struct upipe *upipe, float **out_da
         UBASE_ERROR(upipe, uref_sound_flow_get_planes(upipe_audio_merge_sub->flow_def, &planes));
 
         float *in_data[planes];
-        UBASE_ERROR(upipe, uref_sound_read_float(upipe_audio_merge_sub->uref, 0, -1, (const float**)in_data, planes));
-
-        uint64_t input_num_samples = 0;
-        UBASE_ERROR(upipe, uref_sound_flow_get_samples(upipe_audio_merge_sub->uref, &input_num_samples));
-
-        /* If the samples of the input uref != our output sample size, throw an error and don't copy */
-        if (unlikely(input_num_samples != output_num_samples))
-            upipe_err_va(upipe, "input samples (%"PRIu64") != output samples (%"PRIu64")!",
-                input_num_samples, output_num_samples);
+        if(unlikely(!ubase_check(uref_sound_read_float(upipe_audio_merge_sub->uref, 0, -1, (const float**)in_data, planes))))
+            upipe_err(upipe, "error reading subpipe audio, skipping");
         else {
-            for (int i = 0; i < planes; i++) {
-                /* Only copy up to the number of channels in the output flowdef,
-                and thus what we've allocated */
-                if ((cur_plane + i) < output_channels) {
-                    for (int j = 0; j < input_num_samples; j++)
-                        out_data[cur_plane+i][j] = in_data[i][j];
+            uint64_t input_num_samples = 0;
+            UBASE_ERROR(upipe, uref_sound_flow_get_samples(upipe_audio_merge_sub->uref, &input_num_samples));
+
+            /* If the samples of the input uref != our output sample size, throw an error and don't copy */
+            if (unlikely(input_num_samples != output_num_samples))
+                upipe_err_va(upipe, "input samples (%"PRIu64") != output samples (%"PRIu64")!",
+                    input_num_samples, output_num_samples);
+            else {
+                for (int i = 0; i < planes; i++) {
+                    /* Only copy up to the number of channels in the output flowdef,
+                    and thus what we've allocated */
+                    if ((cur_plane + i) < output_channels) {
+                        for (int j = 0; j < input_num_samples; j++)
+                            out_data[cur_plane+i][j] = in_data[i][j];
+                    }
                 }
             }
+            uref_sound_unmap(upipe_audio_merge_sub->uref, 0, -1, planes);
         }
         /* cur_plane is incremented outside of the loop in case we didn't copy, in which case we'd expect
            the plane(s) to be left blank in the output rather than removed */
         cur_plane += planes;
 
-        uref_sound_unmap(upipe_audio_merge_sub->uref, 0, -1, planes);
         uref_free(upipe_audio_merge_sub->uref);
         upipe_audio_merge_sub->uref = NULL;
     }
@@ -373,9 +375,15 @@ static void upipe_audio_merge_produce_output(struct upipe *upipe, struct upump *
         upipe_throw_error(upipe, UBASE_ERR_ALLOC);
         return;
     }
-    UBASE_ERROR(upipe, ubuf_sound_write_float(ubuf, 0, -1, out_data, output_channels));
-    for (int i = 0; i < output_channels; i++)
-        memset(out_data[i], 0, sizeof(float) * output_num_samples);
+    if (likely(ubase_check(ubuf_sound_write_float(ubuf, 0, -1, out_data, output_channels)))) {
+        for (int i = 0; i < output_channels; i++)
+            memset(out_data[i], 0, sizeof(float) * output_num_samples);
+    } else {
+        upipe_err(upipe, "error writing output audio buffer, skipping");
+        uref_free(output_uref);
+        ubuf_free(ubuf);
+        return;
+    }
 
     /* copy input data to output */
     upipe_audio_merge_copy_to_output(upipe, out_data);
