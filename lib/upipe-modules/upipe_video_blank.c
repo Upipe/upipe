@@ -224,7 +224,8 @@ static void upipe_vblk_input(struct upipe *upipe,
 
         upipe_vblk->ubuf = ubuf_pic_alloc(upipe_vblk->ubuf_mgr, hsize, vsize);
         if (unlikely(!upipe_vblk->ubuf)) {
-            upipe_err(upipe, "fail to allocate picture");
+            upipe_err_va(upipe, "fail to allocate %"PRIu64"x%"PRIu64" picture",
+                         hsize, vsize);
             uref_free(uref);
             upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
             return;
