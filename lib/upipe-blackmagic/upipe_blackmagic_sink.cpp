@@ -315,6 +315,9 @@ struct upipe_bmd_sink {
 
     /** last frame output */
     upipe_bmd_sink_frame *video_frame;
+
+    /** is opened? */
+    bool opened;
 };
 
 UPIPE_HELPER_UPIPE(upipe_bmd_sink, upipe, UPIPE_BMD_SINK_SIGNATURE);
@@ -1374,6 +1377,7 @@ static struct upipe *upipe_bmd_sink_alloc(struct upipe_mgr *mgr,
     upipe_bmd_sink->uclock.uclock_now = uclock_bmd_sink_now;
     upipe_bmd_sink->card_idx = -1;
     upipe_bmd_sink->card_topo = -1;
+    upipe_bmd_sink->opened = false;
 
     upipe_throw_ready(upipe);
     return upipe;
@@ -1393,7 +1397,8 @@ static void upipe_bmd_stop(struct upipe *upipe)
     deckLinkOutput->StopScheduledPlayback(0, NULL, 0);
     deckLinkOutput->DisableAudioOutput();
     /* bump clock upwards before it's made unavailable by DisableVideoOutput */
-    upipe_bmd_sink->offset = uclock_now(&upipe_bmd_sink->uclock);
+    if (upipe_bmd_sink->opened)
+        upipe_bmd_sink->offset = uclock_now(&upipe_bmd_sink->uclock);
     deckLinkOutput->DisableVideoOutput();
 
     struct uchain *uchain = NULL;
@@ -1412,6 +1417,8 @@ static void upipe_bmd_stop(struct upipe *upipe)
         upipe_bmd_sink->video_frame->Release();
         upipe_bmd_sink->video_frame = NULL;
     }
+
+    upipe_bmd_sink->opened = false;
 }
 
 static int upipe_bmd_open_vid(struct upipe *upipe)
@@ -1509,6 +1516,8 @@ static int upipe_bmd_open_vid(struct upipe *upipe)
         upipe_bmd_sink->sp.synchronous  = TRUE;
     }
 #endif
+
+    upipe_bmd_sink->opened = true;
 
 end:
     if (displayModeIterator != NULL)
