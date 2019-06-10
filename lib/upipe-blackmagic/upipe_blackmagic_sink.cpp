@@ -244,6 +244,8 @@ struct upipe_bmd_sink {
 
     /** card index **/
     int card_idx;
+    /** card topology */
+    int64_t card_topo;
 
     /** output mode **/
     BMDDisplayMode mode;
@@ -1370,6 +1372,8 @@ static struct upipe *upipe_bmd_sink_alloc(struct upipe_mgr *mgr,
 
     upipe_bmd_sink->uclock.refcount = upipe->refcount;
     upipe_bmd_sink->uclock.uclock_now = uclock_bmd_sink_now;
+    upipe_bmd_sink->card_idx = -1;
+    upipe_bmd_sink->card_topo = -1;
 
     upipe_throw_ready(upipe);
     return upipe;
@@ -1537,12 +1541,37 @@ static int upipe_bmd_sink_open_card(struct upipe *upipe)
 
     /* get decklink interface handler */
     IDeckLink *deckLink = NULL;
-    for (int i = 0; i <= upipe_bmd_sink->card_idx; i++) {
-        if (deckLink)
-            deckLink->Release();
-        result = deckLinkIterator->Next(&deckLink);
-        if (result != S_OK)
-            break;
+
+    if (upipe_bmd_sink->card_topo >= 0) {
+        for ( ; ; ) {
+            if (deckLink)
+                deckLink->Release();
+            result = deckLinkIterator->Next(&deckLink);
+            if (result != S_OK)
+                break;
+
+            IDeckLinkAttributes *deckLinkAttributes = NULL;
+            if (deckLink->QueryInterface(IID_IDeckLinkAttributes,
+                                         (void**)&deckLinkAttributes) == S_OK) {
+                int64_t deckLinkTopologicalId = 0;
+                HRESULT result =
+                    deckLinkAttributes->GetInt(BMDDeckLinkTopologicalID,
+                            &deckLinkTopologicalId);
+                deckLinkAttributes->Release();
+                if (result == S_OK &&
+                    (uint64_t)deckLinkTopologicalId == upipe_bmd_sink->card_topo)
+                    break;
+            }
+        }
+    }
+    else if (upipe_bmd_sink->card_idx >= 0) {
+        for (int i = 0; i <= upipe_bmd_sink->card_idx; i++) {
+            if (deckLink)
+                deckLink->Release();
+            result = deckLinkIterator->Next(&deckLink);
+            if (result != S_OK)
+                break;
+        }
     }
 
     if (result != S_OK) {
@@ -1594,6 +1623,8 @@ static int upipe_bmd_sink_set_option(struct upipe *upipe,
 
     if (!strcmp(k, "card-index"))
         upipe_bmd_sink->card_idx = atoi(v);
+    else if (!strcmp(k, "card-topology"))
+        upipe_bmd_sink->card_topo = strtoll(v, NULL, 10);
     else if (!strcmp(k, "mode")) {
         union {
             BMDDisplayMode mode_id;
