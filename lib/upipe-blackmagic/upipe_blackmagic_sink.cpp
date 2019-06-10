@@ -247,6 +247,8 @@ struct upipe_bmd_sink {
     /** card topology */
     int64_t card_topo;
 
+    /** selected output mode */
+    BMDDisplayMode selectedMode;
     /** output mode **/
     BMDDisplayMode mode;
 
@@ -345,6 +347,7 @@ static void uqueue_uref_flush(struct uqueue *uqueue)
     }
 }
 
+static int upipe_bmd_open_vid(struct upipe *upipe);
 static void output_cb(struct upipe *upipe, uint64_t pts);
 
 class callback : public IDeckLinkVideoOutputCallback
@@ -1097,6 +1100,7 @@ static int upipe_bmd_sink_sub_set_flow_def(struct upipe *upipe,
 {
     struct upipe_bmd_sink *upipe_bmd_sink =
         upipe_bmd_sink_from_sub_mgr(upipe->mgr);
+    struct upipe *super = upipe_bmd_sink_to_upipe(upipe_bmd_sink);
     struct upipe_bmd_sink_sub *upipe_bmd_sink_sub =
         upipe_bmd_sink_sub_from_upipe(upipe);
 
@@ -1120,18 +1124,29 @@ static int upipe_bmd_sink_sub_set_flow_def(struct upipe *upipe,
             return UBASE_ERR_EXTERNAL;
         }
 
-        BMDDisplayMode bmdMode = upipe_bmd_mode_from_flow_def(&upipe_bmd_sink->upipe, flow_def);
-        if (bmdMode != upipe_bmd_sink->mode) {
-            upipe_err(upipe, "Flow def doesn't correspond to configured mode");
-            return UBASE_ERR_UNHANDLED;
-        }
-
         if (macropixel != 6 || !ubase_check(
                              uref_pic_flow_check_chroma(flow_def, 1, 1, 16,
                                                         "u10y10v10y10u10y10v10y10u10y10v10y10"))) {
             upipe_err(upipe, "incompatible input flow def");
             uref_dump(flow_def, upipe->uprobe);
             return UBASE_ERR_EXTERNAL;
+        }
+
+        BMDDisplayMode bmdMode =
+            upipe_bmd_mode_from_flow_def(&upipe_bmd_sink->upipe, flow_def);
+        if (bmdMode == bmdModeUnknown) {
+            upipe_err(upipe, "input flow def is not supported");
+            return UBASE_ERR_INVALID;
+        }
+        if (upipe_bmd_sink->selectedMode != bmdModeUnknown &&
+            bmdMode != upipe_bmd_sink->selectedMode) {
+            upipe_warn(upipe, "incompatible input flow def for selected mode");
+            return UBASE_ERR_INVALID;
+        }
+        if (bmdMode != upipe_bmd_sink->mode) {
+            upipe_notice(upipe, "Changing output configuration");
+            upipe_bmd_sink->mode = bmdMode;
+            UBASE_RETURN(upipe_bmd_open_vid(super));
         }
 
         struct dolbye_offset {
@@ -1378,6 +1393,8 @@ static struct upipe *upipe_bmd_sink_alloc(struct upipe_mgr *mgr,
     upipe_bmd_sink->card_idx = -1;
     upipe_bmd_sink->card_topo = -1;
     upipe_bmd_sink->opened = false;
+    upipe_bmd_sink->mode = bmdModeUnknown;
+    upipe_bmd_sink->selectedMode = bmdModeUnknown;
 
     upipe_throw_ready(upipe);
     return upipe;
@@ -1640,7 +1657,7 @@ static int upipe_bmd_sink_set_option(struct upipe *upipe,
             char mode_s[4];
         } u;
         strncpy(u.mode_s, v, sizeof(u.mode_s));
-        upipe_bmd_sink->mode = htonl(u.mode_id);
+        upipe_bmd_sink->selectedMode = htonl(u.mode_id);
     } else if (!strcmp(k, "cc")) {
         uatomic_store(&upipe_bmd_sink->cc, strcmp(v, "0"));
     } else if (!strcmp(k, "teletext")) {
@@ -1789,7 +1806,7 @@ static int upipe_bmd_sink_control(struct upipe *upipe, int command, va_list args
             if (!bmd_sink->deckLink) {
                 UBASE_RETURN(upipe_bmd_sink_open_card(upipe));
             }
-            return upipe_bmd_open_vid(upipe);
+            return UBASE_ERR_NONE;
 
         case UPIPE_BMD_SINK_GET_PIC_SUB: {
             UBASE_SIGNATURE_CHECK(args, UPIPE_BMD_SINK_SIGNATURE)
