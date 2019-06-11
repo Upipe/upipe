@@ -1468,7 +1468,7 @@ static int upipe_bmd_open_vid(struct upipe *upipe)
     if (result != S_OK || displayMode == NULL)
     {
         uint32_t mode = htonl(upipe_bmd_sink->mode);
-        fprintf(stderr, "Unable to get display mode %4.4s\n", (char*)&mode);
+        upipe_err_va(upipe, "Unable to get display mode %4.4s\n", (char*)&mode);
         err = UBASE_ERR_EXTERNAL;
         goto end;
     }
