@@ -39,6 +39,7 @@
 #include <upipe/uref_sound_flow.h>
 #include <upipe/upipe_helper_upipe.h>
 #include <upipe/upipe_helper_urefcount.h>
+#include <upipe/upipe_helper_urefcount_real.h>
 #include <upipe/upipe_helper_void.h>
 #include <upipe/upipe_helper_flow.h>
 #include <upipe/upipe_helper_input.h>
@@ -109,6 +110,7 @@ struct upipe_audio_merge {
 
 UPIPE_HELPER_UPIPE(upipe_audio_merge, upipe, UPIPE_AUDIO_MERGE_SIGNATURE)
 UPIPE_HELPER_UREFCOUNT(upipe_audio_merge, urefcount, upipe_audio_merge_no_input)
+UPIPE_HELPER_UREFCOUNT_REAL(upipe_audio_merge, urefcount_real, upipe_audio_merge_free)
 UPIPE_HELPER_OUTPUT(upipe_audio_merge, output, flow_def, output_state, request_list)
 UPIPE_HELPER_FLOW(upipe_audio_merge, "sound.")
 UPIPE_HELPER_UBUF_MGR(upipe_audio_merge, ubuf_mgr, flow_format,
@@ -119,11 +121,6 @@ UPIPE_HELPER_UBUF_MGR(upipe_audio_merge, ubuf_mgr, flow_format,
 
 UPIPE_HELPER_UPUMP_MGR(upipe_audio_merge, upump_mgr);
 UPIPE_HELPER_UPUMP(upipe_audio_merge, upump, upump_mgr);
-
-UBASE_FROM_TO(upipe_audio_merge, urefcount, urefcount_real, urefcount_real)
-
-/** @hidden */
-static void upipe_audio_merge_free(struct urefcount *urefcount_real);
 
 /** @internal @This is the private context of an output of an audio_merge
  * pipe. */
@@ -179,8 +176,8 @@ static int upipe_audio_merge_sub_set_flow_def(struct upipe *upipe,
 
     /* reject interleaved audio */
     uint8_t channels = 0, planes = 0;
-    UBASE_ERROR(upipe, uref_sound_flow_get_planes(flow_def, &planes));
-    UBASE_ERROR(upipe, uref_sound_flow_get_channels(flow_def, &channels));
+    UBASE_RETURN(uref_sound_flow_get_planes(flow_def, &planes));
+    UBASE_RETURN(uref_sound_flow_get_channels(flow_def, &channels));
     if (planes != channels) {
         upipe_err(upipe, "Interleaved audio not supported");
         return UBASE_ERR_INVALID;
@@ -476,9 +473,9 @@ static struct upipe *upipe_audio_merge_alloc(struct upipe_mgr *mgr,
 
     struct upipe_audio_merge *upipe_audio_merge =
                               upipe_audio_merge_from_upipe(upipe);
+
     upipe_audio_merge_init_urefcount(upipe);
-    urefcount_init(upipe_audio_merge_to_urefcount_real(upipe_audio_merge),
-                   upipe_audio_merge_free);
+    upipe_audio_merge_init_urefcount_real(upipe);
 
     upipe_audio_merge_init_upump_mgr(upipe);
     upipe_audio_merge_init_upump(upipe);
@@ -559,13 +556,11 @@ static int upipe_audio_merge_control(struct upipe *upipe, int command, va_list a
 
 /** @This frees a upipe.
  *
- * @param urefcount_real pointer to urefcount_real structure
+ * @param upipe description structure of the pipe
  */
-static void upipe_audio_merge_free(struct urefcount *urefcount_real)
+static void upipe_audio_merge_free(struct upipe *upipe)
 {
-    struct upipe_audio_merge *upipe_audio_merge =
-           upipe_audio_merge_from_urefcount_real(urefcount_real);
-    struct upipe *upipe = upipe_audio_merge_to_upipe(upipe_audio_merge);
+    struct upipe_audio_merge *upipe_audio_merge = upipe_audio_merge_from_upipe(upipe);
 
     upipe_throw_dead(upipe);
 
@@ -574,11 +569,10 @@ static void upipe_audio_merge_free(struct urefcount *urefcount_real)
     upipe_audio_merge_clean_upump_mgr(upipe);
     upipe_audio_merge_clean_output(upipe);
     upipe_audio_merge_clean_sub_inputs(upipe);
-    urefcount_clean(urefcount_real);
     upipe_audio_merge_clean_ubuf_mgr(upipe);
+    upipe_audio_merge_clean_urefcount_real(upipe);
     upipe_audio_merge_clean_urefcount(upipe);
     upipe_audio_merge_free_flow(upipe);
-
 }
 
 /** @This is called when there is no external reference to the pipe anymore.
@@ -587,9 +581,7 @@ static void upipe_audio_merge_free(struct urefcount *urefcount_real)
  */
 static void upipe_audio_merge_no_input(struct upipe *upipe)
 {
-    struct upipe_audio_merge *upipe_audio_merge =
-                              upipe_audio_merge_from_upipe(upipe);
-    urefcount_release(upipe_audio_merge_to_urefcount_real(upipe_audio_merge));
+    upipe_audio_merge_release_urefcount_real(upipe);
 }
 
 /** audio_merge module manager static descriptor */
