@@ -149,7 +149,7 @@ UPIPE_HELPER_VOID(upipe_audio_merge_sub)
 UPIPE_HELPER_SUBPIPE(upipe_audio_merge, upipe_audio_merge_sub, input,
                      sub_mgr, inputs, uchain)
 
-/** @internal @Checks if two flow defs match, except for channel count
+/** @internal @Checks if two flow defs match for our purposes
  *
  * @param one first uref
  * @param two second uref
@@ -256,7 +256,7 @@ static int upipe_audio_merge_sub_control(struct upipe *upipe,
 /** @internal @Copies data from the input urefs to an output buffer.
  *
  * @param upipe description structure of the pipe
- * @param out_data the output buffer
+ * @param out_data reference to the output buffers
  */
 static void upipe_audio_merge_copy_to_output(struct upipe *upipe, float **out_data)
 {
@@ -312,9 +312,7 @@ static void upipe_audio_merge_copy_to_output(struct upipe *upipe, float **out_da
 /** @internal @Output a uref, if possible
  *
  * @param upipe description structure of the pipe
- * @param command type of command to process
- * @param args arguments of the command
- * @return an error code
+ * @param upump reference to upump structure
  */
 static void upipe_audio_merge_produce_output(struct upipe *upipe, struct upump **upump)
 {
