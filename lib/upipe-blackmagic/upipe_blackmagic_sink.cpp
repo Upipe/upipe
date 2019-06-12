@@ -1266,8 +1266,7 @@ static struct upipe *upipe_bmd_sink_sub_alloc(struct upipe_mgr *mgr,
         goto error;
 
     uint8_t channel_idx;
-    if (!ubase_check(uref_attr_get_small_unsigned(flow_def, &channel_idx,
-            UDICT_TYPE_SMALL_UNSIGNED, "channel_idx"))) {
+    if (!ubase_check(uref_bmd_sink_get_channel(flow_def, &channel_idx))) {
         upipe_err(upipe, "Could not read channel_idx");
         uref_dump(flow_def, uprobe);
         goto error;
