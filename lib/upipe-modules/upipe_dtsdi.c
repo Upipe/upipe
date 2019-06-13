@@ -405,6 +405,7 @@ static void upipe_dtsdi_input(struct upipe *upipe, struct uref *uref,
     }
 
     if (size == upipe_dtsdi->frame_size) {
+        uref_free(uref);
         uref = upipe_dtsdi->uref;
         upipe_dtsdi->uref = NULL;
     } else {
