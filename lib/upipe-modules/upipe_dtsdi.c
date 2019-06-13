@@ -276,7 +276,9 @@ static int upipe_dtsdi_set_flow_def(struct upipe *upipe, struct uref *flow_def)
     upipe_dtsdi->uref = NULL;
     upipe_dtsdi->frame_size = 0;
 
-    upipe_dtsdi_store_flow_def(upipe, flow_def);
+    struct uref *flow_def_dup = uref_dup(flow_def);
+    UBASE_ALLOC_RETURN(flow_def_dup);
+    upipe_dtsdi_store_flow_def(upipe, flow_def_dup);
 
     return UBASE_ERR_NONE;
 }
