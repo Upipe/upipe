@@ -17,7 +17,8 @@ dist_check_SCRIPTS = \
 	valgrind_wrapper.sh \
 	uref_uri_test.sh \
 	ustring_test.sh \
-	upipe_m3u_reader_test.sh
+	upipe_m3u_reader_test.sh \
+	upipe_dtsdi_test.sh
 
 dist_check_DATA = \
 	valgrind.supp \
@@ -201,7 +202,8 @@ check_PROGRAMS += \
 	upipe_void_source_test \
 	upipe_zoneplate_source_test \
 	upipe_row_split_test \
-	upipe_separate_fields_test
+	upipe_separate_fields_test \
+	upipe_dtsdi_test
 
 TESTS += \
 	upump_ev_test \
@@ -224,7 +226,8 @@ TESTS += \
 	upipe_void_source_test \
 	upipe_zoneplate_source_test \
 	upipe_row_split_test \
-	upipe_separate_fields_test
+	upipe_separate_fields_test \
+	upipe_dtsdi_test.sh
 
 if HAVE_PTHREAD
 check_PROGRAMS += \
@@ -563,3 +566,4 @@ upipe_video_trim_test_CFLAGS = $(AM_CFLAGS) $(BITSTREAM_CFLAGS)
 upipe_audio_copy_test_LDADD = $(LDADD) $(top_builddir)/lib/upipe-modules/libupipe_modules.la
 upipe_row_join_test_LDADD = $(LDADD) -lev $(top_builddir)/lib/upump-ev/libupump_ev.la $(top_builddir)/lib/upipe-modules/libupipe_modules.la
 upipe_auto_inner_test_LDADD = $(LDADD) $(top_builddir)/lib/upipe-modules/libupipe_modules.la
+upipe_dtsdi_test_LDADD = $(LDADD) $(EV_LIBS) $(top_builddir)/lib/upump-ev/libupump_ev.la $(top_builddir)/lib/upipe-modules/libupipe_modules.la
