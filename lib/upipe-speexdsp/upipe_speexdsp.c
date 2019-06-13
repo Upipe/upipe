@@ -190,8 +190,17 @@ static bool upipe_speexdsp_handle(struct upipe *upipe, struct uref *uref,
     if (err) {
         ubuf_free(ubuf);
     } else {
+        uint64_t pts_prog = UINT64_MAX, pts_sys = UINT64_MAX;
+        int latency = speex_resampler_get_output_latency(upipe_speexdsp->ctx) * UCLOCK_FREQ / upipe_speexdsp->rate;
         ubuf_sound_resize(ubuf, 0, out_len);
         uref_attach_ubuf(uref, ubuf);
+
+        uref_clock_get_pts_prog(uref, &pts_prog);
+        uref_clock_get_pts_sys(uref, &pts_sys);
+        pts_prog -= latency;
+        pts_sys -= latency;
+        uref_clock_set_pts_prog(uref, pts_prog);
+        uref_clock_set_pts_sys(uref, pts_sys);
     }
 
     upipe_speexdsp_output(upipe, uref, upump_p);
