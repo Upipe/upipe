@@ -372,6 +372,7 @@ static void upipe_dtsdi_input(struct upipe *upipe, struct uref *uref,
         struct uref *flow_def = uref_sibling_alloc(upipe_dtsdi->flow_def);
         if (!ubase_check(set_flow_def(upipe, flow_def))) {
             upipe_err_va(upipe, "Could not find frame rate");
+            uref_free(flow_def);
             uref_free(uref);
             upipe_dtsdi->sdi_type = DTSDI_TYPE_SDI_UNKNOWN;
             return;
