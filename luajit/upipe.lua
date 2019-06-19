@@ -358,8 +358,30 @@ ffi.metatype("struct upipe", {
     end,
 })
 
+--[[
+-- A function to iterate over all the planes of a uref.  For each plane it
+-- returns the plane string (chroma for pic, channel for sound).
+--]]
+local function foreach_plane(func)
+    return function(ref)
+        local plane = ffi.new("const uint8_t *[1]")
+        return function()
+            if C.ubase_check(func(ref, plane)) and plane[0] ~= nil then
+                return ffi.string(plane[0])
+            else
+                return nil
+            end
+        end
+    end
+end
+
 ffi.metatype("struct uref", {
     __index = function (_, key)
+        if key == "pic_foreach_plane" then
+            return foreach_plane(C.uref_pic_iterate_plane)
+        elseif key == "sound_foreach_plane" then
+            return foreach_plane(C.uref_sound_iterate_plane)
+        end
         local f = C[fmt("uref_%s", key)]
         return getter(uref_getters, f, key) or f
     end
