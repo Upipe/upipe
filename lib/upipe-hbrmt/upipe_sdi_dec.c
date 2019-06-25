@@ -805,6 +805,14 @@ static int pciesdi_framer_align(struct upipe *upipe, struct uref *uref)
 {
     struct upipe_sdi_dec *ctx = upipe_sdi_dec_from_upipe(upipe);
 
+    /* If the block is a whole frame then assume it is aligned. */
+    size_t block_bytes;
+    UBASE_RETURN(uref_block_size(uref, &block_bytes));
+    if (block_bytes == ctx->f->width * ctx->f->height * 4) {
+        ctx->start = true;
+        return UBASE_ERR_NONE;
+    }
+
     /* Find top of frame. */
     int size = -1;
     const uint8_t *src = NULL;
