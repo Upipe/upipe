@@ -214,6 +214,7 @@ struct upipe_sdi_dec {
     int active_line_offset;
 
     /* pciesdi framer */
+    int prev_line_num;
     uint16_t prev_fvh;
     bool start;
     bool progressive;
@@ -816,9 +817,7 @@ static int pciesdi_framer_align(struct upipe *upipe, struct uref *uref)
     /* Find top of frame. */
     int size = -1;
     const uint8_t *src = NULL;
-    int err = uref_block_read(uref, 0, &size, &src);
-    if (!ubase_check(err))
-        return err;
+    UBASE_RETURN(uref_block_read(uref, 0, &size, &src));
     size /= sizeof(uint16_t);
 
     int eav_fvh_offset = 6;
@@ -826,31 +825,53 @@ static int pciesdi_framer_align(struct upipe *upipe, struct uref *uref)
         eav_fvh_offset = 3;
 
     int sdi_width = 2 * ctx->f->width;
+    int height = ctx->f->height;
     int offset;
     for (offset = 0; offset < size; offset += sdi_width) {
         const uint16_t *buf = (const uint16_t*)src + offset;
         uint16_t fvh = buf[eav_fvh_offset];
-        if (fvh != ctx->prev_fvh)
-            upipe_dbg_va(upipe, "fvh change from %#5x to %#5x",
-                    ctx->prev_fvh, fvh);
+
+        int line = 0;
+        if (height >= 720) {
+            line = (buf[8] & 0x1ff) >> 2;
+            line |= ((buf[10] & 0x1ff) >> 2) << 7;
+        }
+
+        if (fvh != ctx->prev_fvh) {
+            upipe_dbg_va(upipe, "fvh change from %#5x to %#5x", ctx->prev_fvh, fvh);
+            if (line != ctx->prev_line_num)
+                upipe_dbg_va(upipe, "line number change from %d to %d", ctx->prev_line_num, line);
+        }
 
         if (ctx->progressive) {
-            /* Use line number to find first line because there is no
-             * progressive SD format. */
-            int line = (buf[8] & 0x1ff) >> 2;
-            line |= ((buf[10] & 0x1ff) >> 2) << 7;
-            if (line == 1) {
+            /* Since there is no SD progressive format check that the line num
+             * wraps around correctly and that the fvh word is correct. */
+            if (ctx->prev_line_num == height && line == 1
+                    && ctx->prev_fvh == 0x2d8 && fvh == 0x2d8) {
                 ctx->start = true;
                 break;
             }
         }
-        else { /* interlaced */
+
+        else if (height >= 720) {
+            /* For interlaced HD check that both line num and fvh changes are
+             * right. */
+            if (ctx->prev_line_num == height && line == 1
+                    && ctx->prev_fvh == 0x3c4 && fvh == 0x2d8) {
+                ctx->start = true;
+                break;
+            }
+        }
+
+        /* Fallback to just interlaced fvh change. */
+        else {
             if (ctx->prev_fvh == 0x3c4 && fvh == 0x2d8) {
                 ctx->start = true;
                 break;
             }
         }
         ctx->prev_fvh = fvh;
+        ctx->prev_line_num = line;
     }
     uref_block_unmap(uref, 0);
 
@@ -1634,6 +1655,9 @@ static int upipe_sdi_dec_set_flow_def(struct upipe *upipe, struct uref *flow_def
     upipe_sdi_dec->p = upipe_sdi_dec->f->pict_fmt;
 
     upipe_sdi_dec->progressive = ubase_check(uref_pic_get_progressive(flow_def));
+    if (ubase_check(uref_block_get_sdi3g_levelb(flow_def)))
+        /* Use interlaced fvh transition to detect start of level B frame. */
+        upipe_sdi_dec->progressive = false;
 
     if (!ubase_check(uref_clock_get_latency(flow_def, &upipe_sdi_dec->latency)))
         upipe_sdi_dec->latency = 0;
