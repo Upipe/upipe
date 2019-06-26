@@ -391,6 +391,18 @@ error:
     return 0;
 }
 
+/** @internal @This sends a probe with the new text.
+ *
+ * @param upipe description structure of the pipe
+ * @param text new text input
+ * @return an error code
+ */
+static int upipe_freetype_throw_new_text(struct upipe *upipe, const char *text)
+{
+    return upipe_throw(upipe, UPROBE_FREETYPE_NEW_TEXT,
+                       UPIPE_FREETYPE_SIGNATURE, text);
+}
+
 /** @internal @This tries to output input buffers.
  *
  * @param upipe description structure of the pipe
@@ -429,6 +441,9 @@ static bool upipe_freetype_handle(struct upipe *upipe, struct uref *uref,
         upipe_freetype_output(upipe, uref, upump_p);
         return true;
     }
+
+    if (unlikely(!ubase_check(upipe_freetype_throw_new_text(upipe, text))))
+        upipe_warn(upipe, "fail to send probe");
 
     struct ubuf *ubuf = ubuf_pic_alloc(upipe_freetype->ubuf_mgr, hsize, vsize);
     if (!ubuf) {
