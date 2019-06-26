@@ -919,6 +919,20 @@ static int _upipe_freetype_set_baseline(struct upipe *upipe,
     return UBASE_ERR_NONE;
 }
 
+/** @internal @This gets the current text.
+ *
+ * @param upipe description structure of the pipe
+ * @param text_p filled with the current text
+ * @return an error code
+ */
+static int _upipe_freetype_get_text(struct upipe *upipe, const char **text_p)
+{
+    struct upipe_freetype *upipe_freetype = upipe_freetype_from_upipe(upipe);
+    if (text_p)
+        *text_p = upipe_freetype->text;
+    return UBASE_ERR_NONE;
+}
+
 /** @internal @This processes control commands.
  *
  * @param upipe description structure of the pipe
@@ -966,6 +980,11 @@ static int upipe_freetype_control_real(struct upipe *upipe,
                 int64_t xoff = va_arg(args, int64_t);
                 int64_t yoff = va_arg(args, int64_t);
                 return _upipe_freetype_set_baseline(upipe, xoff, yoff);
+            }
+
+            case UPIPE_FREETYPE_GET_TEXT: {
+                const char **text_p = va_arg(args, const char **);
+                return _upipe_freetype_get_text(upipe, text_p);
             }
         }
     }
