@@ -108,6 +108,37 @@ uref_pic_flow_set_format(struct uref *uref,
     return UBASE_ERR_NONE;
 }
 
+
+/** @This allocates a control packet to define a new picture flow
+ * @see uref_pic_flow_alloc_def, and registers the planes according to the
+ * format.
+ *
+ * @param mgr uref management structure
+ * @param format desired format to configure
+ * @return pointer to uref control packet, or NULL in case of error
+ */
+static inline struct uref *
+uref_pic_flow_alloc_format(struct uref_mgr *mgr,
+                           const struct uref_pic_flow_format *format)
+{
+    struct uref *uref = uref_pic_flow_alloc_def(mgr, format->macropixel);
+    if (unlikely(!uref))
+        return NULL;
+
+    for (size_t i = 0; i < format->nb_planes; i++) {
+        if (unlikely(!ubase_check(uref_pic_flow_add_plane(
+                        uref,
+                        format->planes[i].hsub,
+                        format->planes[i].vsub,
+                        format->planes[i].mpixel_size,
+                        format->planes[i].chroma)))) {
+            uref_free(uref);
+            return NULL;
+        }
+    }
+    return uref;
+}
+
 /** @This defines a helper functions to deal with a specified format.
  *
  * @param Format format to check
@@ -129,6 +160,16 @@ static inline int uref_pic_flow_set_##Format(struct uref *flow_def)         \
 {                                                                           \
     return uref_pic_flow_set_format(                                        \
         flow_def, &uref_pic_flow_format_##Format);                          \
+}                                                                           \
+                                                                            \
+/** @This allocates a control packet to define a format.                    \
+ * @param mgr uref management structure                                     \
+ * @return pointer to uref or NULL in case of failure                       \
+ */                                                                         \
+static inline struct uref *                                                 \
+uref_pic_flow_alloc_##Format(struct uref_mgr *mgr)                          \
+{                                                                           \
+    return uref_pic_flow_alloc_format(mgr, &uref_pic_flow_format_##Format); \
 }
 
 /** @This is the description of the yuva420p format. */
