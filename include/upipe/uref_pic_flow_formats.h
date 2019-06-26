@@ -159,6 +159,20 @@ static const struct uref_pic_flow_format uref_pic_flow_format_yuva422p = {
 
 UREF_PIC_FLOW_FORMAT_HELPER(yuva422p);
 
+/** @This is the description of the yuva444p format. */
+static const struct uref_pic_flow_format uref_pic_flow_format_yuva444p = {
+    .macropixel = 1,
+    .nb_planes = 4,
+    .planes = {
+        { 1, 1, 1, "y8", 8 },
+        { 1, 1, 1, "u8", 8 },
+        { 1, 1, 1, "v8", 8 },
+        { 1, 1, 1, "a8", 8 },
+    },
+};
+
+UREF_PIC_FLOW_FORMAT_HELPER(yuva444p);
+
 /** @This is the description of the yuv420p format. */
 static const struct uref_pic_flow_format uref_pic_flow_format_yuv420p = {
     .macropixel = 1,
