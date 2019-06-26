@@ -43,6 +43,7 @@
 #include <upipe/upipe_helper_upipe.h>
 #include <upipe/upipe_helper_output.h>
 #include <upipe/upipe_helper_urefcount.h>
+#include <upipe/upipe_helper_flow_format.h>
 #include <upipe/upipe_helper_ubuf_mgr.h>
 #include <upipe/upipe_helper_flow.h>
 #include <upipe/upipe_helper_input.h>
@@ -77,6 +78,9 @@ struct upipe_freetype {
     unsigned max_urefs;
     /** list of blockers */
     struct uchain blockers;
+
+    /** flow format request */
+    struct urequest flow_format_request;
 
     /** ubuf manager */
     struct ubuf_mgr *ubuf_mgr;
@@ -126,6 +130,10 @@ struct upipe_freetype {
 };
 
 /** @hidden */
+static int upipe_freetype_check_ubuf_mgr(struct upipe *upipe,
+                                         struct uref *flow_format);
+
+/** @hidden */
 static int upipe_freetype_check_flow_format(struct upipe *upipe,
                                             struct uref *flow_format);
 /** @hidden */
@@ -138,8 +146,13 @@ static bool upipe_freetype_handle(struct upipe *upipe, struct uref *uref,
 UPIPE_HELPER_UPIPE(upipe_freetype, upipe, UPIPE_FREETYPE_SIGNATURE);
 UPIPE_HELPER_OUTPUT(upipe_freetype, output, flow_def, output_state, request_list)
 UPIPE_HELPER_UREFCOUNT(upipe_freetype, urefcount, upipe_freetype_free)
+UPIPE_HELPER_FLOW_FORMAT(upipe_freetype, flow_format_request,
+                         upipe_freetype_check_flow_format,
+                         upipe_freetype_register_output_request,
+                         upipe_freetype_unregister_output_request);
 UPIPE_HELPER_UBUF_MGR(upipe_freetype, ubuf_mgr, flow_format, ubuf_mgr_request,
-        upipe_freetype_check, upipe_freetype_register_output_request,
+                      upipe_freetype_check_ubuf_mgr,
+                      upipe_freetype_register_output_request,
                       upipe_freetype_unregister_output_request)
 UPIPE_HELPER_INPUT(upipe_freetype, urefs, nb_urefs, max_urefs, blockers,
                    upipe_freetype_handle);
@@ -164,13 +177,61 @@ static void upipe_freetype_flush_cache(struct upipe *upipe)
  * @param flow_format flow format to test
  * @return an error code
  */
+static int upipe_freetype_check_flow_def(struct upipe *upipe,
+                                         struct uref *flow_def)
+{
+    UBASE_RETURN(uref_flow_match_def(flow_def, UREF_PIC_FLOW_DEF));
+    UBASE_RETURN(uref_pic_flow_find_chroma(flow_def, "y8", NULL));
+    UBASE_RETURN(uref_pic_flow_get_hsize(flow_def, NULL));
+    UBASE_RETURN(uref_pic_flow_get_vsize(flow_def, NULL));
+    return UBASE_ERR_NONE;
+}
+
+/** @internal @This checks the compatibility of the ubuf manager.
+ *
+ * @param upipe description structure of the pipe
+ * @param flow_format ubuf manager flow format
+ * @return an error code
+ */
+static int upipe_freetype_check_ubuf_mgr(struct upipe *upipe,
+                                         struct uref *flow_format)
+{
+    if (flow_format) {
+        int err = upipe_freetype_check_flow_def(upipe, flow_format);
+        if (unlikely(!ubase_check(err))) {
+            uref_free(flow_format);
+            return err;
+        }
+
+        upipe_freetype_flush_cache(upipe);
+        upipe_freetype_store_flow_def(upipe, flow_format);
+    }
+
+    if (upipe_freetype_check_input(upipe))
+        return UBASE_ERR_NONE;
+
+    if (upipe_freetype_output_input(upipe)) {
+        upipe_freetype_unblock_input(upipe);
+        upipe_release(upipe);
+    }
+    return UBASE_ERR_NONE;
+}
+
+/** @internal @This checks the compatibility of a flow format.
+ *
+ * @param upipe description structure of the pipe
+ * @param flow_format flow format to test
+ * @return an error code
+ */
 static int upipe_freetype_check_flow_format(struct upipe *upipe,
                                             struct uref *flow_format)
 {
-    UBASE_RETURN(uref_flow_match_def(flow_format, UREF_PIC_FLOW_DEF));
-    UBASE_RETURN(uref_pic_flow_find_chroma(flow_format, "y8", NULL));
-    UBASE_RETURN(uref_pic_flow_get_hsize(flow_format, NULL));
-    UBASE_RETURN(uref_pic_flow_get_vsize(flow_format, NULL));
+    int err = upipe_freetype_check_flow_def(upipe, flow_format);
+    if (unlikely(!ubase_check(err))) {
+        uref_free(flow_format);
+        return err;
+    }
+    upipe_freetype_require_ubuf_mgr(upipe, flow_format);
     return UBASE_ERR_NONE;
 }
 
@@ -184,25 +245,18 @@ static int upipe_freetype_check(struct upipe *upipe, struct uref *flow_format)
 {
     struct upipe_freetype *upipe_freetype = upipe_freetype_from_upipe(upipe);
 
-    if (flow_format) {
-        ubase_assert(upipe_freetype_check_flow_format(upipe, flow_format));
-        upipe_freetype_flush_cache(upipe);
-        upipe_freetype_store_flow_def(upipe, flow_format);
-    }
+    if (flow_format)
+        uref_free(flow_format);
 
-    if (!upipe_freetype->ubuf_mgr) {
-        upipe_freetype_require_ubuf_mgr(upipe,
-                                        uref_dup(upipe_freetype->flow_output));
+    if (!upipe_freetype->ubuf_mgr &&
+        urequest_get_opaque(&upipe_freetype->flow_format_request,
+                            struct upipe *) != upipe) {
+        struct uref *flow_format = uref_dup(upipe_freetype->flow_output);
+        UBASE_ALLOC_RETURN(flow_format);
+        upipe_freetype_require_flow_format(upipe, flow_format);
         return UBASE_ERR_NONE;
     }
 
-    if (upipe_freetype_check_input(upipe))
-        return UBASE_ERR_NONE;
-
-    upipe_freetype_output_input(upipe);
-    upipe_freetype_unblock_input(upipe);
-    if (upipe_freetype_check_input(upipe))
-        upipe_release(upipe);
     return UBASE_ERR_NONE;
 }
 
@@ -226,6 +280,7 @@ static void upipe_freetype_free(struct upipe *upipe)
     upipe_freetype_clean_urefcount(upipe);
     upipe_freetype_clean_output(upipe);
     upipe_freetype_clean_ubuf_mgr(upipe);
+    upipe_freetype_clean_flow_format(upipe);
     upipe_freetype_free_flow(upipe);
 }
 
@@ -269,6 +324,7 @@ static struct upipe *upipe_freetype_alloc(struct upipe_mgr *mgr,
 
     upipe_freetype_init_urefcount(upipe);
     upipe_freetype_init_output(upipe);
+    upipe_freetype_init_flow_format(upipe);
     upipe_freetype_init_ubuf_mgr(upipe);
     upipe_freetype_init_input(upipe);
 
@@ -323,15 +379,10 @@ static struct upipe *upipe_freetype_alloc(struct upipe_mgr *mgr,
     }
 
     uint64_t vsize;
-    if (unlikely(
-            !ubase_check(upipe_freetype_check_flow_format(upipe, flow_def)) ||
-            !ubase_check(uref_pic_flow_get_vsize(flow_def, &vsize)))) {
-        upipe_err(upipe, "invalid flow format");
-        upipe_release(upipe);
-        return NULL;
+    if (ubase_check(uref_pic_flow_get_vsize(flow_def, &vsize))) {
+        upipe_freetype->pixel_size = vsize > UINT_MAX ? UINT_MAX : vsize;
+        upipe_freetype->yoff = vsize - vsize / 8;
     }
-    upipe_freetype->pixel_size = vsize > UINT_MAX ? UINT_MAX : vsize;
-    upipe_freetype->yoff = vsize - vsize / 8;
 
     return upipe;
 }
@@ -417,7 +468,7 @@ static bool upipe_freetype_handle(struct upipe *upipe, struct uref *uref,
     int ret;
 
     if (!upipe_freetype->ubuf_mgr)
-            return false;
+        return false;
 
     struct uref *flow_format = upipe_freetype->flow_format;
     uint64_t hsize, vsize;
@@ -748,9 +799,6 @@ static int upipe_freetype_set_option(struct upipe *upipe,
 
         free(upipe_freetype->font);
         upipe_freetype->font = value ? strdup(value) : NULL;
-
-        uint64_t v;
-        UBASE_RETURN(uref_pic_flow_get_vsize(upipe_freetype->flow_output, &v));
 
         if (FTC_Manager_LookupFace(upipe_freetype->cache_manager,
                                    upipe_freetype->font,
