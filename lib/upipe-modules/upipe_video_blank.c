@@ -32,6 +32,7 @@
 #include <upipe/upipe_helper_flow.h>
 #include <upipe/upipe_helper_output.h>
 #include <upipe/upipe_helper_flow_def.h>
+#include <upipe/upipe_helper_flow_format.h>
 #include <upipe/upipe_helper_ubuf_mgr.h>
 
 #include <upipe/uref_pic_flow.h>
@@ -59,6 +60,8 @@ struct upipe_vblk {
     enum upipe_helper_output_state output_state;
     /** output request list */
     struct uchain requests;
+    /** flow format request */
+    struct urequest flow_format_request;
     /** ubuf manager */
     struct ubuf_mgr *ubuf_mgr;
     /** blank picture */
@@ -72,6 +75,10 @@ struct upipe_vblk {
 };
 
 /** @hidden */
+static int upipe_vblk_check_flow_format(struct upipe *upipe,
+                                        struct uref *flow_format);
+
+/** @hidden */
 static int upipe_vblk_check(struct upipe *upipe, struct uref *flow_format);
 
 UPIPE_HELPER_UPIPE(upipe_vblk, upipe, UPIPE_VBLK_SIGNATURE);
@@ -79,6 +86,10 @@ UPIPE_HELPER_UREFCOUNT(upipe_vblk, urefcount, upipe_vblk_free);
 UPIPE_HELPER_FLOW(upipe_vblk, UREF_PIC_FLOW_DEF);
 UPIPE_HELPER_OUTPUT(upipe_vblk, output, flow_def, output_state, requests);
 UPIPE_HELPER_FLOW_DEF(upipe_vblk, input_flow_def, flow_attr);
+UPIPE_HELPER_FLOW_FORMAT(upipe_vblk, flow_format_request,
+                         upipe_vblk_check_flow_format,
+                         upipe_vblk_register_output_request,
+                         upipe_vblk_unregister_output_request);
 UPIPE_HELPER_UBUF_MGR(upipe_vblk, ubuf_mgr, flow_format, ubuf_mgr_request,
                       upipe_vblk_check,
                       upipe_vblk_register_output_request,
@@ -100,6 +111,7 @@ static void upipe_vblk_free(struct upipe *upipe)
         uref_free(upipe_vblk->pic_attr);
 
     upipe_vblk_clean_ubuf_mgr(upipe);
+    upipe_vblk_clean_flow_format(upipe);
     upipe_vblk_clean_flow_def(upipe);
     upipe_vblk_clean_output(upipe);
     upipe_vblk_clean_urefcount(upipe);
@@ -145,6 +157,7 @@ static struct upipe *upipe_vblk_alloc(struct upipe_mgr *mgr,
     upipe_vblk_init_urefcount(upipe);
     upipe_vblk_init_output(upipe);
     upipe_vblk_init_flow_def(upipe);
+    upipe_vblk_init_flow_format(upipe);
     upipe_vblk_init_ubuf_mgr(upipe);
 
     struct upipe_vblk *upipe_vblk = upipe_vblk_from_upipe(upipe);
@@ -153,7 +166,8 @@ static struct upipe *upipe_vblk_alloc(struct upipe_mgr *mgr,
 
     upipe_throw_ready(upipe);
 
-    if (unlikely(!ubase_check(upipe_vblk_check_flow_def(upipe, flow_def)))) {
+    if (unlikely(!ubase_check(uref_flow_match_def(flow_def,
+                                                  UREF_PIC_FLOW_DEF)))) {
         uref_free(flow_def);
         upipe_release(upipe);
         return NULL;
@@ -292,7 +306,6 @@ static int upipe_vblk_set_flow_def(struct upipe *upipe,
     } else {
         uref_pic_delete_progressive(flow_def_dup);
     }
-    upipe_vblk_store_flow_def(upipe, flow_def_dup);
 
     if (upipe_vblk->ubuf) {
         ubuf_free(upipe_vblk->ubuf);
@@ -303,7 +316,10 @@ static int upipe_vblk_set_flow_def(struct upipe *upipe,
         !ubase_check(ubuf_mgr_check(upipe_vblk->ubuf_mgr, flow_def_dup))) {
         ubuf_mgr_release(upipe_vblk->ubuf_mgr);
         upipe_vblk->ubuf_mgr = NULL;
+        upipe_vblk_require_flow_format(upipe, flow_def_dup);
     }
+    else
+        upipe_vblk_store_flow_def(upipe, flow_def_dup);
 
     return UBASE_ERR_NONE;
 }
@@ -344,6 +360,19 @@ static int upipe_vblk_set_pic_real(struct upipe *upipe, struct uref *uref)
     return UBASE_ERR_NONE;
 }
 
+/** @internal @This checks the provided flow format.
+ *
+ * @param upipe description structure of the pipe
+ * @param flow_format amended flow format
+ * @return an error code
+ */
+static int upipe_vblk_check_flow_format(struct upipe *upipe,
+                                        struct uref *flow_format)
+{
+    upipe_vblk_require_ubuf_mgr(upipe, flow_format);
+    return UBASE_ERR_NONE;
+}
+
 /** @internal @This checks the ubuf manager.
  *
  * @param upipe description structure of the pipe
@@ -360,8 +389,10 @@ static int upipe_vblk_check(struct upipe *upipe, struct uref *flow_format)
     if (!upipe_vblk->flow_def)
         return UBASE_ERR_NONE;
 
-    if (!upipe_vblk->ubuf_mgr) {
-        upipe_vblk_require_ubuf_mgr(upipe, uref_dup(upipe_vblk->flow_def));
+    if (!upipe_vblk->ubuf_mgr &&
+        urequest_get_opaque(&upipe_vblk->flow_format_request,
+                            struct upipe *) != upipe) {
+        upipe_vblk_require_flow_format(upipe, uref_dup(upipe_vblk->flow_def));
         return UBASE_ERR_NONE;
     }
 
