@@ -20,6 +20,8 @@ enum upipe_freetype_command {
     UPIPE_FREETYPE_SET_PIXEL_SIZE,
     /** set the baseline position in the buffer (int64_t, int64_t) */
     UPIPE_FREETYPE_SET_BASELINE,
+    /** get the current text (const char **) */
+    UPIPE_FREETYPE_GET_TEXT,
 };
 
 /** @This describes a string bounding box. */
@@ -74,6 +76,19 @@ static inline int upipe_freetype_set_baseline(struct upipe *upipe,
 {
     return upipe_control(upipe, UPIPE_FREETYPE_SET_BASELINE,
                          UPIPE_FREETYPE_SIGNATURE, xoff, yoff);
+}
+
+/** @This gets the current text.
+ *
+ * @param upipe description structure of the pipe
+ * @param text_p filled with the current text
+ * @return an error code
+ */
+static inline int upipe_freetype_get_text(struct upipe *upipe,
+                                          const char **text_p)
+{
+    return upipe_control(upipe, UPIPE_FREETYPE_GET_TEXT,
+                         UPIPE_FREETYPE_SIGNATURE, text_p);
 }
 
 /** @This returns the freetype pipes manager.
