@@ -9,6 +9,15 @@ extern "C" {
 
 #define UPIPE_FREETYPE_SIGNATURE UBASE_FOURCC('f','r','t','2')
 
+/** @This enumerates the freetype probe events. */
+enum uprobe_freetype_event {
+    /** sentinel */
+    UPROBE_FREETYPE_SENTINEL = UPROBE_LOCAL,
+
+    /** new input text received (const char *) */
+    UPROBE_FREETYPE_NEW_TEXT,
+};
+
 /** @This enumarates the freetype pipe commands. */
 enum upipe_freetype_command {
     /** sentinel */
