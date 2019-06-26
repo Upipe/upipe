@@ -75,6 +75,10 @@ enum upipe_blit_sub_command {
     /** sets the offsets of the rect onto which the input of this subpipe
      * will be blitted (uint64_t, uint64_t, uint64_t, uint64_t) */
     UPIPE_BLIT_SUB_SET_RECT,
+    /** sets the margins of the rect onto which the input of this subpipe
+     * will be blitted (struct urational, struct urational,
+     * struct urational, struct urational) */
+    UPIPE_BLIT_SUB_SET_MARGIN,
     /** gets the alpha channel multiplier (uint8_t *) */
     UPIPE_BLIT_SUB_GET_ALPHA,
     /** sets the alpha channel multiplier (uint8_t) */
@@ -139,6 +143,27 @@ static inline int upipe_blit_sub_set_rect(struct upipe *upipe,
     return upipe_control(upipe, UPIPE_BLIT_SUB_SET_RECT,
                          UPIPE_BLIT_SUB_SIGNATURE,
                          loffset, roffset, toffset, boffset);
+}
+
+/** @This sets the margins (from the respective borders of the frame) of the
+ * rectangle onto which the input of the subpipe will be blitted.
+ *
+ * @param upipe description structure of the pipe
+ * @param lmargin margin from the left border in ratio of the total width
+ * @param rmargin margin from the right border in ratio of the total width
+ * @param tmargin margin from the top border in ratio of the total height
+ * @param bmargin margin from the bottom border in ratio of the total height
+ * @return an error code
+ */
+static inline int upipe_blit_sub_set_margin(struct upipe *upipe,
+                                            struct urational lmargin,
+                                            struct urational rmargin,
+                                            struct urational tmargin,
+                                            struct urational bmargin)
+{
+    return upipe_control(upipe, UPIPE_BLIT_SUB_SET_MARGIN,
+                         UPIPE_BLIT_SUB_SIGNATURE,
+                         lmargin, rmargin, tmargin, bmargin);
 }
 
 /** @This gets the multiplier of the alpha channel.
