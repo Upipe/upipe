@@ -92,6 +92,7 @@ UREF_ATTR_STRING_SH(pic_flow, transfer_characteristics,
         UDICT_TYPE_PIC_TRANSFER_CHARACTERISTICS, transfer characteristics)
 UREF_ATTR_STRING_SH(pic_flow, matrix_coefficients,
         UDICT_TYPE_PIC_MATRIX_COEFFICIENTS, matrix coefficients)
+UREF_ATTR_VOID(pic_flow, sepfields, "p.separate_fields", whether the flow will send separate fields);
 
 /* SMPTE-2016 (AFD) */
 UREF_ATTR_SMALL_UNSIGNED(pic_flow, afd, "p.afd", Active Format Description)
