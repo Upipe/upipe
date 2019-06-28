@@ -31,6 +31,10 @@ enum upipe_freetype_command {
     UPIPE_FREETYPE_SET_BASELINE,
     /** get the current text (const char **) */
     UPIPE_FREETYPE_GET_TEXT,
+    /** get the font global metrics (struct upipe_freetype_metrics *) */
+    UPIPE_FREETYPE_GET_METRICS,
+    /** get a string advance value (const char *, uint64_t *, uint64_t *) */
+    UPIPE_FREETYPE_GET_ADVANCE,
 };
 
 /** @This describes a string bounding box. */
@@ -58,6 +62,50 @@ static inline int upipe_freetype_get_bbox(struct upipe *upipe,
 {
     return upipe_control(upipe, UPIPE_FREETYPE_GET_BBOX,
                          UPIPE_FREETYPE_SIGNATURE, str, bbox_p);
+}
+
+/** @This describes the global font metrics. */
+struct upipe_freetype_metrics {
+    int units_per_EM;
+    struct {
+        long min;
+        long max;
+    } x;
+    struct {
+        long min;
+        long max;
+    } y;
+};
+
+/** @This gets the global font metrics.
+ *
+ * @param upipe description structure of the pipe
+ * @param metrics filled with the string metrics
+ * @return an error code
+ */
+static inline int
+upipe_freetype_get_metrics(struct upipe *upipe,
+                           struct upipe_freetype_metrics *metrics)
+{
+    return upipe_control(upipe, UPIPE_FREETYPE_GET_METRICS,
+                         UPIPE_FREETYPE_SIGNATURE, metrics);
+}
+
+/** @This gets the advance value for a string.
+ *
+ * @param upipe description structure of the pipe
+ * @param str string to get the advance value
+ * @param advance_p filled with the compute advance value
+ * @param units_per_EM_p filled with the units per EM of the font
+ * @return an error code
+ */
+static inline int
+upipe_freetype_get_advance(struct upipe *upipe, const char *str,
+                           uint64_t *advance_p, uint64_t *units_per_EM_p)
+{
+    return upipe_control(upipe, UPIPE_FREETYPE_GET_ADVANCE,
+                         UPIPE_FREETYPE_SIGNATURE,
+                         str, advance_p, units_per_EM_p);
 }
 
 /** @This sets the freetype pixel size.
