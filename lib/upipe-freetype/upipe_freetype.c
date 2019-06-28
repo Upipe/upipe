@@ -54,6 +54,7 @@
 #include FT_FREETYPE_H
 #include FT_GLYPH_H
 #include FT_CACHE_H
+#include FT_ADVANCES_H
 
 /** upipe_freetype structure */
 struct upipe_freetype {
@@ -965,6 +966,90 @@ static int _upipe_freetype_get_bbox(struct upipe *upipe,
     return UBASE_ERR_NONE;
 }
 
+/** @internal @This gets the unscaled advance value for a string.
+ *
+ * @param upipe description structure of the pipe
+ * @param str string to get the advance value
+ * @param advance_p filled with the compute advance value
+ * @param units_per_EM_p filled with the units per EM of the font
+ * @return an error code
+ */
+static int _upipe_freetype_get_advance(struct upipe *upipe,
+                                       const char *str,
+                                       uint64_t *advance_p,
+                                       uint64_t *units_per_EM_p)
+{
+    struct upipe_freetype *upipe_freetype = upipe_freetype_from_upipe(upipe);
+    if (!upipe_freetype->face ||
+        !FT_IS_SCALABLE(upipe_freetype->face))
+        return UBASE_ERR_INVALID;
+
+    uint64_t total_advance = 0;
+    uint64_t units_per_EM = upipe_freetype->face->units_per_EM;
+
+    FT_Bool use_kerning = FT_HAS_KERNING(upipe_freetype->face);
+    FT_UInt previous = 0;
+
+    for (size_t i = 0; str[i] != '\0';) {
+        size_t char_size = 0;
+        uint32_t c = unicode_character(&str[i], &char_size);
+        if (char_size == 0)
+            break;
+        i += char_size;
+
+        FT_UInt index = FTC_CMapCache_Lookup(upipe_freetype->cmap_cache,
+                                             upipe_freetype->font, -1, c);
+        if (use_kerning && previous) {
+            FT_Vector delta;
+            FT_Get_Kerning(upipe_freetype->face, previous, index,
+                           FT_KERNING_UNSCALED, &delta);
+            total_advance += delta.x;
+        }
+
+        FT_Fixed advance;
+        FT_Get_Advance(upipe_freetype->face, index, FT_LOAD_NO_SCALE,
+                       &advance);
+
+        total_advance += advance;
+
+        previous = index;
+    }
+
+    if (advance_p)
+        *advance_p = total_advance;
+    if (units_per_EM_p)
+        *units_per_EM_p = units_per_EM;
+
+    return UBASE_ERR_NONE;
+}
+
+/** @internal @This gets global unscaled metrics for the fonts.
+ *
+ * @param upipe description structure of the pipe
+ * @param metrics filled with the string metrics
+ * @return an error code
+ */
+static int _upipe_freetype_get_metrics(struct upipe *upipe,
+                                       struct upipe_freetype_metrics *metrics)
+{
+    struct upipe_freetype *upipe_freetype = upipe_freetype_from_upipe(upipe);
+    if (!upipe_freetype->face ||
+        !FT_IS_SCALABLE(upipe_freetype->face))
+        return UBASE_ERR_INVALID;
+
+    struct upipe_freetype_metrics m;
+    m.x.min = upipe_freetype->face->bbox.xMin;
+    m.x.max = upipe_freetype->face->bbox.xMin;
+    m.y.min = upipe_freetype->face->bbox.yMin;
+    m.y.max = upipe_freetype->face->bbox.yMax;
+    m.units_per_EM = upipe_freetype->face->units_per_EM;
+
+    if (metrics)
+        *metrics = m;
+
+    return UBASE_ERR_NONE;
+}
+
 /** @internal @This sets the baseline offsets in the picture buffer.
  *
  * @param upipe description structure of the pipe
@@ -1048,6 +1133,20 @@ static int upipe_freetype_control_real(struct upipe *upipe,
             case UPIPE_FREETYPE_GET_TEXT: {
                 const char **text_p = va_arg(args, const char **);
                 return _upipe_freetype_get_text(upipe, text_p);
+            }
+
+            case UPIPE_FREETYPE_GET_METRICS: {
+                struct upipe_freetype_metrics *metrics =
+                    va_arg(args, struct upipe_freetype_metrics *);
+                return _upipe_freetype_get_metrics(upipe, metrics);
+            }
+
+            case UPIPE_FREETYPE_GET_ADVANCE: {
+                const char *str = va_arg(args, const char *);
+                uint64_t *advance_p = va_arg(args, uint64_t *);
+                uint64_t *units_per_EM_p = va_arg(args, uint64_t *);
+                return _upipe_freetype_get_advance(upipe, str, advance_p,
+                                                   units_per_EM_p);
             }
         }
     }
