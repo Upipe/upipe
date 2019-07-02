@@ -219,8 +219,15 @@ static void upipe_vblk_input(struct upipe *upipe,
         upipe_verbose(upipe, "allocate blank picture");
 
         uint64_t hsize, vsize;
-        ubase_assert(uref_pic_flow_get_hsize(upipe_vblk->flow_def, &hsize));
-        ubase_assert(uref_pic_flow_get_vsize(upipe_vblk->flow_def, &vsize));
+        if (unlikely(
+                !ubase_check(uref_pic_flow_get_hsize(upipe_vblk->flow_def,
+                                                     &hsize)) ||
+                !ubase_check(uref_pic_flow_get_vsize(upipe_vblk->flow_def,
+                                                     &vsize)))) {
+            upipe_warn(upipe, "no output size");
+            uref_free(uref);
+            return;
+        }
 
         upipe_vblk->ubuf = ubuf_pic_alloc(upipe_vblk->ubuf_mgr, hsize, vsize);
         if (unlikely(!upipe_vblk->ubuf)) {
