@@ -642,6 +642,29 @@ int ubuf_pic_plane_clear(struct ubuf *ubuf, const char *chroma,
                          int hoffset, int voffset, int hsize, int vsize,
                          int fullrange);
 
+/** @This sets (part of) the color of the specified plane.
+ *
+ * @param ubuf pointer to ubuf
+ * @param chroma chroma type (see chroma reference)
+ * @param hoffset horizontal offset of the picture area wanted in the whole
+ * picture, negative values start from the end of lines, in pixels (before
+ * dividing by macropixel and hsub)
+ * @param voffset vertical offset of the picture area wanted in the whole
+ * picture, negative values start from the last line, in lines (before dividing
+ * by vsub)
+ * @param hsize number of pixels wanted per line, or -1 for until the end of
+ * the line
+ * @param vsize number of lines wanted in the picture area, or -1 for until the
+ * last line
+ * @param pattern color pattern to set
+ * @param pattern_size size of the color pattern in bytes
+ * @return an error code
+ */
+int ubuf_pic_plane_set_color(struct ubuf *ubuf, const char *chroma,
+                             int hoffset, int voffset, int hsize, int vsize,
+                             const uint8_t *pattern, size_t pattern_size);
+
+
 /** @This clears (part of) the specified picture, depending on plane type
  * and size (set U/V chroma to 0x80 instead of 0 for instance)
  *
