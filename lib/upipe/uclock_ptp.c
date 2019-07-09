@@ -210,7 +210,7 @@ struct uclock *uclock_ptp_alloc(struct uprobe *uprobe, const char *interface[2])
         }
         memset(&ptp->ifr[i], 0, sizeof(ptp->ifr[i]));
 #endif
-        if (!ubase_check(uclock_ptp_open_nic(ptp, uprobe, 0, interface[i])))
+        if (!ubase_check(uclock_ptp_open_nic(ptp, uprobe, i, interface[i])))
             goto err;
     }
 
