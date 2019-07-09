@@ -1081,6 +1081,17 @@ static int _upipe_freetype_get_text(struct upipe *upipe, const char **text_p)
     return UBASE_ERR_NONE;
 }
 
+/** @internal @This flushes the freetype pipe.
+ *
+ * @param upipe description structure of the pipe
+ */
+static void upipe_freetype_flush(struct upipe *upipe)
+{
+    bool flushed = upipe_freetype_flush_input(upipe);
+    if (flushed)
+        upipe_release(upipe);
+}
+
 /** @internal @This processes control commands.
  *
  * @param upipe description structure of the pipe
@@ -1095,6 +1106,10 @@ static int upipe_freetype_control_real(struct upipe *upipe,
     UBASE_HANDLED_RETURN(upipe_freetype_control_output(upipe, command, args));
 
     switch (command) {
+        case UPIPE_FLUSH:
+            upipe_freetype_flush(upipe);
+            return UBASE_ERR_NONE;
+
         case UPIPE_SET_FLOW_DEF: {
             struct uref *uref = va_arg(args, struct uref *);
             return upipe_freetype_set_flow_def(upipe, uref);
