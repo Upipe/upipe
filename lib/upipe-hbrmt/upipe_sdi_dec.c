@@ -1247,6 +1247,19 @@ static bool upipe_sdi_dec_handle(struct upipe *upipe, struct uref *uref,
         }
 
         unsigned expected = 48000 * fps->den / fps->num;
+        if (sdi3g_levelb) {
+            if (fps->den == 1001) {
+                /* TODO: what adjustment is needed here?  Any? */
+                if (samples_received < expected)
+                    upipe_notice_va(upipe, "audio samples received: %u, expected: %u, second_frame: %d",
+                            samples_received, expected, upipe_sdi_dec->sdi3g_levelb_second_frame);
+            } else {
+                if (upipe_sdi_dec->sdi3g_levelb_second_frame)
+                    expected -= 1;
+                else
+                    expected += 1;
+            }
+        }
         if (samples_received < expected) {
             unsigned wrong_samples = samples_received;
             samples_received = expected;
