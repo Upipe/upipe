@@ -1434,14 +1434,21 @@ static bool upipe_sdi_dec_handle(struct upipe *upipe, struct uref *uref,
         //uref_clock_set_pts_orig(uref_audio, pts);
         //uref_clock_set_dts_pts_delay(uref_audio, 0);
 
-        int samples_received = upipe_sdi_dec->audio_ctx.group_offset[0];
-        for (int i = 1; i < UPIPE_SDI_CHANNELS_PER_GROUP; i++) {
-            if (upipe_sdi_dec->audio_ctx.group_offset[i] == samples_received)
-                continue;
-
+        /* Find maximum number of samples in any audio_group. */
+        int samples_received = 0;
+        for (int i = 0; i < UPIPE_SDI_CHANNELS_PER_GROUP; i++)
             if (samples_received < upipe_sdi_dec->audio_ctx.group_offset[i])
                 samples_received = upipe_sdi_dec->audio_ctx.group_offset[i];
-            //upipe_err_va(upipe, "%zu samples on group %d", audio_ctx.group_offset[i], i);
+
+        /* For each audio_group, start at the group_offset and zero all unused
+         * samples. */
+        for (int i = 0; i < UPIPE_SDI_CHANNELS_PER_GROUP; i++) {
+            for (int j = upipe_sdi_dec->audio_ctx.group_offset[i]; j < samples_received; j++) {
+                size_t offset = i * UPIPE_SDI_CHANNELS_PER_GROUP
+                    + sizeof(int32_t) * j * UPIPE_SDI_CHANNELS_PER_GROUP;
+                memset(upipe_sdi_dec->audio_ctx.buf_audio + offset,
+                        0, sizeof(int32_t) * UPIPE_SDI_CHANNELS_PER_GROUP);
+            }
         }
 
         /* TODO: correct number of samples for chunks. */
