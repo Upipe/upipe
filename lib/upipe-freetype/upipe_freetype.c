@@ -848,10 +848,16 @@ static int upipe_freetype_set_option(struct upipe *upipe,
  */
 static int upipe_freetype_set_flow_def(struct upipe *upipe, struct uref *flow_def)
 {
+    struct upipe_freetype *upipe_freetype = upipe_freetype_from_upipe(upipe);
+
     if (!flow_def)
         return UBASE_ERR_INVALID;
 
     UBASE_RETURN(uref_flow_match_def(flow_def, "void.text."));
+
+    upipe_freetype_clean_ubuf_mgr(upipe);
+    upipe_freetype->ubuf_mgr = NULL;
+    upipe_freetype->flow_format = NULL;
 
     // TODO : x/y/offsets
 
