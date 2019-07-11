@@ -1453,7 +1453,11 @@ static bool upipe_sdi_dec_handle(struct upipe *upipe, struct uref *uref,
 
         /* TODO: correct number of samples for chunks. */
         unsigned expected = 48000 * fps->den / fps->num;
-        if (sdi3g_levelb) {
+        /* SDI-3G level-B (PAL) usually has +1 and -1 relative to the expected
+         * sample count due to the way frames are cut.  A 1080p60 stream from an
+         * HDMI to SDI converter would sometimes put exactly 800 in each frame.
+         * Only adjust the expected count when we do not have it. */
+        if (sdi3g_levelb && expected != samples_received) {
             if (fps->den == 1001) {
                 /* TODO: what adjustment is needed here?  Any? */
                 if (samples_received < expected)
