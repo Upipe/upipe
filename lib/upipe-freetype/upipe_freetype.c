@@ -471,6 +471,12 @@ static bool upipe_freetype_handle(struct upipe *upipe, struct uref *uref,
     if (!upipe_freetype->ubuf_mgr)
         return false;
 
+    if (unlikely(!upipe_freetype->face)) {
+        upipe_warn(upipe, "no font set");
+        uref_free(uref);
+        return true;
+    }
+
     struct uref *flow_format = upipe_freetype->flow_format;
     uint64_t hsize, vsize;
     if (!ubase_check(uref_pic_flow_get_hsize(flow_format, &hsize)) ||
