@@ -117,6 +117,10 @@ struct upipe_freetype {
     int64_t xoff;
     /** baseline right offset */
     int64_t yoff;
+    /** output horizontal size */
+    uint64_t hsize;
+    /** output vertical size */
+    uint64_t vsize;
 
     /** full range */
     bool fullrange;
@@ -197,6 +201,8 @@ static int upipe_freetype_check_flow_def(struct upipe *upipe,
 static int upipe_freetype_check_ubuf_mgr(struct upipe *upipe,
                                          struct uref *flow_format)
 {
+    struct upipe_freetype *upipe_freetype = upipe_freetype_from_upipe(upipe);
+
     if (flow_format) {
         int err = upipe_freetype_check_flow_def(upipe, flow_format);
         if (unlikely(!ubase_check(err))) {
@@ -204,6 +210,8 @@ static int upipe_freetype_check_ubuf_mgr(struct upipe *upipe,
             return err;
         }
 
+        uref_pic_flow_get_hsize(flow_format, &upipe_freetype->hsize);
+        uref_pic_flow_get_vsize(flow_format, &upipe_freetype->vsize);
         upipe_freetype_flush_cache(upipe);
         upipe_freetype_store_flow_def(upipe, flow_format);
     }
@@ -477,15 +485,6 @@ static bool upipe_freetype_handle(struct upipe *upipe, struct uref *uref,
         return true;
     }
 
-    struct uref *flow_format = upipe_freetype->flow_format;
-    uint64_t hsize, vsize;
-    if (!ubase_check(uref_pic_flow_get_hsize(flow_format, &hsize)) ||
-        !ubase_check(uref_pic_flow_get_vsize(flow_format, &vsize))) {
-        upipe_err_va(upipe, "Could not read output dimensions");
-        uref_free(uref);
-        return true;
-    }
-
     const char *text;
     int r = uref_void_get_text(uref, &text);
     if (!ubase_check(r) || !text) {
@@ -503,6 +502,8 @@ static bool upipe_freetype_handle(struct upipe *upipe, struct uref *uref,
     if (unlikely(!ubase_check(upipe_freetype_throw_new_text(upipe, text))))
         upipe_warn(upipe, "fail to send probe");
 
+    uint64_t hsize = upipe_freetype->hsize;
+    uint64_t vsize = upipe_freetype->vsize;
     struct ubuf *ubuf = ubuf_pic_alloc(upipe_freetype->ubuf_mgr, hsize, vsize);
     if (!ubuf) {
         upipe_err(upipe, "Could not allocate pic");
