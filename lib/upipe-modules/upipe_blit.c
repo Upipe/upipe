@@ -867,9 +867,9 @@ static int upipe_blit_set_flow_def(struct upipe *upipe, struct uref *flow_def)
         flow_format_change = true;
     else
         flow_format_change =
-            uref_pic_flow_compare_format(upipe_blit->flow_def, flow_def) &&
-            !uref_pic_flow_cmp_hsize(upipe_blit->flow_def, flow_def) &&
-            !uref_pic_flow_cmp_vsize(upipe_blit->flow_def, flow_def);
+            !uref_pic_flow_compare_format(upipe_blit->flow_def, flow_def) ||
+            uref_pic_flow_cmp_hsize(upipe_blit->flow_def, flow_def) ||
+            uref_pic_flow_cmp_vsize(upipe_blit->flow_def, flow_def);
 
     flow_def = uref_dup(flow_def);
     if (unlikely(flow_def == NULL))
