@@ -391,8 +391,11 @@ static int upipe_vblk_check(struct upipe *upipe, struct uref *flow_format)
 {
     struct upipe_vblk *upipe_vblk = upipe_vblk_from_upipe(upipe);
 
-    if (flow_format)
+    if (flow_format) {
+        ubuf_free(upipe_vblk->ubuf);
+        upipe_vblk->ubuf = NULL;
         upipe_vblk_store_flow_def(upipe, flow_format);
+    }
 
     if (!upipe_vblk->flow_def)
         return UBASE_ERR_NONE;
