@@ -149,7 +149,8 @@ static bool upipe_freetype_handle(struct upipe *upipe, struct uref *uref,
                                   struct upump **upump);
 
 UPIPE_HELPER_UPIPE(upipe_freetype, upipe, UPIPE_FREETYPE_SIGNATURE);
-UPIPE_HELPER_OUTPUT(upipe_freetype, output, flow_def, output_state, request_list)
+UPIPE_HELPER_OUTPUT(upipe_freetype, output, flow_def, output_state,
+                    request_list)
 UPIPE_HELPER_UREFCOUNT(upipe_freetype, urefcount, upipe_freetype_free)
 UPIPE_HELPER_FLOW_FORMAT(upipe_freetype, flow_format_request,
                          upipe_freetype_check_flow_format,
