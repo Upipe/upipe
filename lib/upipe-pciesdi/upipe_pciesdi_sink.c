@@ -797,13 +797,13 @@ static int upipe_pciesdi_sink_set_flow_def(struct upipe *upipe, struct uref *flo
     else
         tx_mode = SDI_TX_MODE_HD;
 
-    int clock_mode;
+    int clock_rate;
     if (ntsc)
-        clock_mode = SDI_NTSC_RATE;
+        clock_rate = SDI_NTSC_RATE;
     else if (genlock)
-        clock_mode = SDI_GENLOCK_RATE;
+        clock_rate = SDI_GENLOCK_RATE;
     else
-        clock_mode = SDI_PAL_RATE;
+        clock_rate = SDI_PAL_RATE;
 
     if (upipe_pciesdi_sink->fd == -1) {
         upipe_warn(upipe, "device has not been opened, unable to init hardware");
@@ -842,12 +842,12 @@ static int upipe_pciesdi_sink_set_flow_def(struct upipe *upipe, struct uref *flo
             freq = (struct urational){ 7425, 2700 };
     }
 
-    int current_clock_mode = sdi_get_rate(upipe_pciesdi_sink->fd);
-    bool change_clock_mode = clock_mode != current_clock_mode;
-    if (change_clock_mode && !INIT_HARDWARE) {
+    int current_clock_rate = sdi_get_rate(upipe_pciesdi_sink->fd);
+    bool change_clock_rate = clock_rate != current_clock_rate;
+    if (change_clock_rate && !INIT_HARDWARE) {
         upipe_err_va(upipe, "INIT_HARDWARE is disabled, unable to change clock from %s (%d) to %s (%d)",
-                get_rate_name(current_clock_mode), current_clock_mode,
-                get_rate_name(clock_mode), clock_mode);
+                get_rate_name(current_clock_rate), current_clock_rate,
+                get_rate_name(clock_rate), clock_rate);
         return UBASE_ERR_INVALID;
     }
 
