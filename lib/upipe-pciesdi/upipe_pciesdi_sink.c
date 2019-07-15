@@ -522,7 +522,7 @@ static void upipe_pciesdi_sink_input(struct upipe *upipe, struct uref *uref, str
     }
 }
 
-static int check_capabilities(struct upipe *upipe, bool ntsc, bool genlock)
+static int check_capabilities(struct upipe *upipe, bool genlock)
 {
     struct upipe_pciesdi_sink *ctx = upipe_pciesdi_sink_from_upipe(upipe);
     int fd = ctx->fd;
@@ -814,7 +814,7 @@ static int upipe_pciesdi_sink_set_flow_def(struct upipe *upipe, struct uref *flo
      * clock always goes forwards when mode changes. */
     uint64_t offset = upipe_pciesdi_sink_now(&upipe_pciesdi_sink->uclock);
 
-    UBASE_RETURN(check_capabilities(upipe, ntsc, genlock));
+    UBASE_RETURN(check_capabilities(upipe, genlock));
 
     upipe_warn(upipe, "new flow_def, stopping DMA and upump");
     stop_dma(upipe);
