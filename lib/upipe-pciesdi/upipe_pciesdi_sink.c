@@ -146,7 +146,7 @@ static uint64_t upipe_pciesdi_sink_now(struct uclock *uclock)
     /* read ticks from card */
     uint32_t freq;
     uint64_t tick;
-    sdi_refclk(upipe_pciesdi_sink->fd, 0, &freq, &tick);
+    sdi_channel_get_refclk(upipe_pciesdi_sink->fd, &freq, &tick);
 
     if (freq == 0) {
         pthread_mutex_unlock(&upipe_pciesdi_sink->clock_mutex);
