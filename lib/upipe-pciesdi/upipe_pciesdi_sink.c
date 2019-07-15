@@ -545,6 +545,11 @@ static int check_capabilities(struct upipe *upipe, bool ntsc, bool genlock)
         return UBASE_ERR_INVALID;
     }
 
+    if (!((has_vcxos && has_si5324) || has_si596 || has_lmh0387)) {
+        upipe_err(upipe, "unknown capabilities");
+        return UBASE_ERR_INVALID;
+    }
+
     return UBASE_ERR_NONE;
 }
 
