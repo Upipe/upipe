@@ -313,6 +313,34 @@ void sdi_release_dma_writer(int fd) {
     ioctl(fd, SDI_IOCTL_LOCK, &m);
 }
 
+void sdi_channel_reset_rx(int fd, uint8_t reset)
+{
+    struct sdi_ioctl_channel_reset m;
+    m.reset = reset;
+    ioctl(fd, SDI_IOCTL_CHANNEL_RESET_RX, &m);
+}
+
+void sdi_channel_reset_tx(int fd, uint8_t reset)
+{
+    struct sdi_ioctl_channel_reset m;
+    m.reset = reset;
+    ioctl(fd, SDI_IOCTL_CHANNEL_RESET_TX, &m);
+}
+
+void sdi_channel_set_pll(int fd, uint8_t pll)
+{
+    struct sdi_ioctl_channel_set_pll m;
+    m.pll = pll;
+    ioctl(fd, SDI_IOCTL_CHANNEL_SET_PLL, &m);
+}
+
+void sdi_channel_get_refclk(int fd, uint32_t *refclk_freq, uint64_t *refclk_counter) {
+    struct sdi_ioctl_refclk m;
+    ioctl(fd, SDI_IOCTL_CHANNEL_GET_REFCLK, &m);
+    *refclk_freq = m.refclk_freq;
+    *refclk_counter = m.refclk_counter;
+}
+
 /* flash */
 
 static uint64_t flash_spi(int fd, int tx_len, uint8_t cmd,
@@ -861,5 +889,75 @@ void si5324_genlock(int fd)
     /* configure si5324 */
     for(i = 0; i < countof(si5324_base_config_regs); i++) {
         si5324_spi_write(fd, si5324_base_config_regs[i][0], si5324_base_config_regs[i][1]);
+    }
+}
+
+const char *sdi_decode_mode(uint8_t mode)
+{
+    switch (mode) {
+    case 0: return "HD-SDI";
+    case 1: return "SD-SDI";
+    case 2: return "3G-SDI";
+    default: return "Unknown";
+    }
+}
+
+const char *sdi_decode_family(uint8_t family)
+{
+    switch (family) {
+    case 0: return "SMPTE274:1080";
+    case 1: return "SMPTE296:720";
+    case 2: return "SMPTE2048:1080";
+    case 3: return "SMPTE295:1080";
+    case 8: return "NTSC:486";
+    case 9: return "PAL:576";
+    case 15: return "Unknown";
+    default: return "Reserved";
+    }
+}
+
+const char *sdi_decode_scan(uint8_t scan, uint8_t mode)
+{
+    if (mode == 2) {
+        switch (scan) {
+        case 0: return "PB";
+        case 1: return "PA";
+        default: return "?";
+        }
+    } else {
+        switch (scan) {
+        case 0: return "I";
+        case 1: return "P";
+        default: return "?";
+        }
+    }
+}
+
+const char *sdi_decode_rate(uint8_t rate, uint8_t scan)
+{
+    if (scan == 0) {
+        switch (rate) {
+        case 2: return "47.95";
+        case 3: return "48";
+        case 5: return "50";
+        case 6: return "59.94";
+        case 7: return "60";
+        default: return "Reserved";
+        }
+    } else {
+        switch (rate) {
+        case 0: return "None";
+        case 2: return "23.98";
+        case 3: return "24";
+        case 4: return "47.95";
+        case 5: return "25";
+        case 6: return "29.97";
+        case 7: return "30";
+        case 8: return "48";
+        case 9: return "50";
+        case 10: return "59.94";
+        case 11: return "60";
+        default: return "Reserved";
+        }
     }
 }

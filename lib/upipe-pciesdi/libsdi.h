@@ -76,6 +76,11 @@ uint8_t sdi_request_dma_writer(int fd);
 void sdi_release_dma_reader(int fd);
 void sdi_release_dma_writer(int fd);
 
+void sdi_channel_reset_rx(int fd, uint8_t reset);
+void sdi_channel_reset_tx(int fd, uint8_t reset);
+void sdi_channel_set_pll(int fd, uint8_t pll);
+void sdi_channel_get_refclk(int fd, uint32_t *refclk_freq, uint64_t *refclk_counter);
+
 #define countof(x) (sizeof(x) / sizeof(x[0]))
 
 /* si5324 */
@@ -431,5 +436,10 @@ static const uint16_t smpte274m_1080p23_98_regs[][2] = {
 };
 
 void si5324_genlock(int fd);
+
+const char *sdi_decode_mode(uint8_t mode);
+const char *sdi_decode_family(uint8_t family);
+const char *sdi_decode_scan(uint8_t scan, uint8_t mode);
+const char *sdi_decode_rate(uint8_t rate, uint8_t scan);
 
 #endif /* SDI_LIB_H */

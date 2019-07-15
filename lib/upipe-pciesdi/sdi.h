@@ -208,6 +208,14 @@ struct sdi_ioctl_monitor {
     uint32_t rx_overflows;
 };
 
+struct sdi_ioctl_channel_reset {
+    uint8_t reset;
+};
+
+struct sdi_ioctl_channel_set_pll {
+    uint8_t pll;
+};
+
 #define SDI_IOCTL 'S'
 
 #define SDI_IOCTL_REG               _IOWR(SDI_IOCTL,  0, struct sdi_ioctl_reg)
@@ -250,5 +258,10 @@ struct sdi_ioctl_monitor {
 #define SDI_IOCTL_TX_RX_LOOPBACK    _IOW(SDI_IOCTL,  82, struct sdi_ioctl_tx_rx_loopback)
 #define SDI_IOCTL_LOCK              _IOWR(SDI_IOCTL, 83, struct sdi_ioctl_lock)
 #define SDI_IOCTL_MONITOR           _IOWR(SDI_IOCTL, 84, struct sdi_ioctl_monitor)
+
+#define SDI_IOCTL_CHANNEL_RESET_RX  _IOW(SDI_IOCTL,  90, struct sdi_ioctl_channel_reset)
+#define SDI_IOCTL_CHANNEL_RESET_TX  _IOW(SDI_IOCTL,  91, struct sdi_ioctl_channel_reset)
+#define SDI_IOCTL_CHANNEL_SET_PLL   _IOW(SDI_IOCTL,  92, struct sdi_ioctl_channel_reset)
+#define SDI_IOCTL_CHANNEL_GET_REFCLK _IOR(SDI_IOCTL, 93, struct sdi_ioctl_refclk)
 
 #endif /* _LINUX_SDI_H */
