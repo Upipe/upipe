@@ -206,57 +206,6 @@ static struct upipe *upipe_pciesdi_src_alloc(struct upipe_mgr *mgr,
     return upipe;
 }
 
-static const char *sdi_decode_mode(uint8_t mode)
-{
-    switch (mode) {
-    case 0: return "HD";
-    case 1: return "SD";
-    case 2: return "3G";
-    default: return "??";
-    }
-}
-
-static const char *sdi_decode_family(uint8_t family)
-{
-    switch (family) {
-    case 0: return "SMPTE274:1080P";
-    case 1: return "SMPTE296:720P";
-    case 2: return "SMPTE2048:1080P";
-    case 3: return "SMPTE295:1080P";
-    case 8: return "NTSC:486P";
-    case 9: return "PAL:576P";
-    case 15: return "Unknown";
-    default: return "Reserved";
-    }
-}
-
-static const char *sdi_decode_scan(uint8_t scan)
-{
-    switch (scan) {
-    case 0: return "I";
-    case 1: return "P";
-    default: return "?";
-    }
-}
-
-static const char *sdi_decode_rate(uint8_t rate)
-{
-    switch (rate) {
-        case 0: return "None";
-        case 2: return "23.98";
-        case 3: return "24";
-        case 4: return "47.95";
-        case 5: return "25";
-        case 6: return "29.97";
-        case 7: return "30";
-        case 8: return "48";
-        case 9: return "50";
-        case 10: return "59.94";
-        case 11: return "60";
-        default: return "Reserved";
-    }
-}
-
 static inline bool sdi3g_levelb_eav_match_bitpacked(const uint8_t *src)
 {
     static const uint8_t prefix[15] = {
@@ -629,8 +578,8 @@ static int get_flow_def(struct upipe *upipe, struct uref **flow_format)
             locked,
             sdi_decode_mode(mode), mode,
             sdi_decode_family(family), family,
-            sdi_decode_scan(scan), scan,
-            sdi_decode_rate(rate), rate);
+            sdi_decode_scan(scan, mode), scan,
+            sdi_decode_rate(rate, scan), rate);
 
     if (!locked) {
         upipe_err(upipe, "SDI signal not locked");
@@ -680,7 +629,7 @@ static int get_flow_def(struct upipe *upipe, struct uref **flow_format)
     if (rate >= 2 && rate <= 11)
         fps = framerates[rate - 2];
     else {
-        upipe_err_va(upipe, "invalid/unknown rate value: %s (%d)", sdi_decode_rate(rate), rate);
+        upipe_err_va(upipe, "invalid/unknown rate value: %s (%d)", sdi_decode_rate(rate, scan), rate);
         return UBASE_ERR_INVALID;
     }
 
@@ -696,7 +645,7 @@ static int get_flow_def(struct upipe *upipe, struct uref **flow_format)
         /* progressive */
         interlaced = false;
     } else {
-        upipe_err_va(upipe, "invalid/unknown scan value: %s (%d)", sdi_decode_scan(scan), scan);
+        upipe_err_va(upipe, "invalid/unknown scan value: %s (%d)", sdi_decode_scan(scan, mode), scan);
         return UBASE_ERR_INVALID;
     }
 
