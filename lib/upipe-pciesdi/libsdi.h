@@ -68,6 +68,8 @@ void sdi_lmh0387_spi(int fd, uint32_t tx_data, uint32_t *rx_data);
 void sdi_rx(int fd, uint8_t *locked, uint8_t *mode, uint8_t *family, uint8_t *scan, uint8_t *rate);
 void sdi_tx(int fd, uint8_t mode, uint8_t *txen, uint8_t *slew);
 void sdi_tx_rx_loopback(int fd, uint8_t config);
+void sdi_tx_monitor(int fd, uint32_t *tx_underflows);
+void sdi_rx_monitor(int fd, uint32_t *rx_overflows);
 
 uint8_t sdi_request_dma_reader(int fd);
 uint8_t sdi_request_dma_writer(int fd);

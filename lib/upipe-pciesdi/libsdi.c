@@ -259,6 +259,20 @@ void sdi_tx_rx_loopback(int fd, uint8_t config) {
     ioctl(fd, SDI_IOCTL_TX_RX_LOOPBACK, &m);
 }
 
+void sdi_tx_monitor(int fd, uint32_t *tx_underflows) {
+    struct sdi_ioctl_monitor m;
+    m.tx_reset = 1;
+    ioctl(fd, SDI_IOCTL_MONITOR, &m);
+    *tx_underflows = m.tx_underflows;
+}
+
+void sdi_rx_monitor(int fd, uint32_t *rx_overflows) {
+    struct sdi_ioctl_monitor m;
+    m.rx_reset = 1;
+    ioctl(fd, SDI_IOCTL_MONITOR, &m);
+    *rx_overflows = m.rx_overflows;
+}
+
 /* lock */
 
 uint8_t sdi_request_dma_reader(int fd) {
