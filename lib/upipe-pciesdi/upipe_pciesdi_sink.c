@@ -118,19 +118,6 @@ UPIPE_HELPER_UPUMP(upipe_pciesdi_sink, fd_write_upump, upump_mgr)
 UPIPE_HELPER_UPUMP(upipe_pciesdi_sink, timer_upump, upump_mgr)
 UBASE_FROM_TO(upipe_pciesdi_sink, uclock, uclock, uclock)
 
-/* upump callback functions */
-static void mark_clock_as_inited(struct upump *upump);
-
-static const char* get_rate_name(int rate)
-{
-    switch (rate) {
-        UBASE_CASE_TO_STR(SDI_PAL_RATE);
-        UBASE_CASE_TO_STR(SDI_NTSC_RATE);
-        UBASE_CASE_TO_STR(SDI_GENLOCK_RATE);
-        default: return "SDI_UNDEF_RATE";
-    }
-}
-
 static uint64_t upipe_pciesdi_sink_now(struct uclock *uclock)
 {
     struct upipe_pciesdi_sink *upipe_pciesdi_sink = upipe_pciesdi_sink_from_uclock(uclock);
