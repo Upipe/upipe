@@ -28,7 +28,6 @@
 
 #include <upipe-modules/upipe_vanc_decoder.h>
 #include <upipe/upipe_helper_ubuf_mgr.h>
-#include <upipe/upipe_helper_uref_mgr.h>
 #include <upipe/upipe_helper_output.h>
 #include <upipe/upipe_helper_void.h>
 #include <upipe/upipe_helper_urefcount.h>
@@ -54,10 +53,6 @@ struct upipe_vanc_decoder {
     enum upipe_helper_output_state output_state;
     /** list of output requests */
     struct uchain requests;
-    /** uref manager */
-    struct uref_mgr *uref_mgr;
-    /** uref manager request */
-    struct urequest uref_mgr_request;
     /** ubuf manager */
     struct ubuf_mgr *ubuf_mgr;
     /** ubuf manager request */
@@ -71,10 +66,6 @@ UPIPE_HELPER_UREFCOUNT(upipe_vanc_decoder, urefcount, upipe_vanc_decoder_free);
 UPIPE_HELPER_VOID(upipe_vanc_decoder);
 UPIPE_HELPER_OUTPUT(upipe_vanc_decoder, output, flow_def, output_state,
                     requests);
-UPIPE_HELPER_UREF_MGR(upipe_vanc_decoder, uref_mgr, uref_mgr_request,
-                      NULL,
-                      upipe_vanc_decoder_register_output_request,
-                      upipe_vanc_decoder_unregister_output_request)
 UPIPE_HELPER_UBUF_MGR(upipe_vanc_decoder, ubuf_mgr, flow_format,
                       ubuf_mgr_request,
                       NULL,
@@ -101,7 +92,6 @@ static struct upipe *upipe_vanc_decoder_alloc(struct upipe_mgr *mgr,
 
     upipe_vanc_decoder_init_urefcount(upipe);
     upipe_vanc_decoder_init_output(upipe);
-    upipe_vanc_decoder_init_uref_mgr(upipe);
     upipe_vanc_decoder_init_ubuf_mgr(upipe);
 
     upipe_throw_ready(upipe);
@@ -116,7 +106,6 @@ static struct upipe *upipe_vanc_decoder_alloc(struct upipe_mgr *mgr,
 static void upipe_vanc_decoder_free(struct upipe *upipe)
 {
     upipe_throw_dead(upipe);
-    upipe_vanc_decoder_clean_uref_mgr(upipe);
     upipe_vanc_decoder_clean_ubuf_mgr(upipe);
     upipe_vanc_decoder_clean_output(upipe);
     upipe_vanc_decoder_clean_urefcount(upipe);
@@ -134,7 +123,7 @@ static void upipe_vanc_decoder_input(struct upipe *upipe,
                                     struct upump **upump_p)
 {
     struct upipe_vanc_decoder *vancd = upipe_vanc_decoder_from_upipe(upipe);
-    if (unlikely(!vancd->uref_mgr || !vancd->ubuf_mgr)) {
+    if (unlikely(!vancd->ubuf_mgr)) {
         uref_free(uref);
         return;
     }
@@ -152,25 +141,22 @@ static void upipe_vanc_decoder_input(struct upipe *upipe,
         goto ret;
     }
 
+    struct ubits s;
+    ubits_init(&s, (uint8_t*)r, end, UBITS_READ);
+
     while (end >= 9) {
-        if (r[0] & 0xfc) { /* 000000 */
+        if (ubits_get(&s, 6))
             goto ret;
-        }
 
-        bool c_not_y = r[0] & 0x2;
+        bool c_not_y = ubits_get(&s, 1);
 
-        unsigned line = ((r[0] & 1) << 10) | (r[1] << 2) | (r[2] >> 6);
-        unsigned offset = ((r[2] & 0x3f) << 6) | (r[3] >> 2);
-        uint16_t did = ((r[3] & 0x3) << 8) | r[4];
-        uint16_t sdid = (r[5] << 2) | (r[6] >> 6);
-        uint16_t dc = ((r[6] & 0x3f) << 4) | (r[7] >> 4);
+        unsigned line = ubits_get(&s, 11);
+        unsigned offset = ubits_get(&s, 12);
+        uint16_t did = ubits_get(&s, 10);
+        uint16_t sdid = ubits_get(&s, 10);
+        uint16_t dc = ubits_get(&s, 10);
 
-        uint8_t cache = r[7] & 0xf;
-        unsigned cached_bits = 4;
-        r += 8;
-        end -= 8;
-
-        size_t bits_left = 10 * ((dc & 0xff) + 1 /* checksum */) - cached_bits;
+        size_t bits_left = (6+1+11+12+3*10) + 10 * ((dc & 0xff) + 1 /* checksum */);
         if (((bits_left + 7) / 8) > end) {
             upipe_dbg_va(upipe, "Invalid DC %u, packet size %d", dc & 0xff, end);
             goto ret;
@@ -180,16 +166,24 @@ static void upipe_vanc_decoder_input(struct upipe *upipe,
 
         if (line == 0) {
             upipe_dbg(upipe, "Invalid line number 0");
-            r += (bits_left + 7) / 8;
-            continue;
+            goto ret;
         }
 
-        struct uref *pic = uref_pic_alloc(vancd->uref_mgr, vancd->ubuf_mgr,
-                S291_HEADER_SIZE + (dc & 0xff) + 1, 1);
+        struct uref *pic = uref_dup(uref);
         if (unlikely(!pic)) {
             upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
             goto ret;
         }
+
+        struct ubuf *ubuf_pic = ubuf_pic_alloc(vancd->ubuf_mgr,
+                S291_HEADER_SIZE + (dc & 0xff) + 1, 1);
+        if (unlikely(!ubuf_pic)) {
+            uref_free(pic);
+            upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
+            goto ret;
+        }
+
+        uref_attach_ubuf(pic, ubuf_pic);
 
         uint8_t *vanc_buf;
         if (unlikely(!ubase_check(uref_pic_plane_write(pic, "x10",
@@ -206,29 +200,16 @@ static void upipe_vanc_decoder_input(struct upipe *upipe,
         data[5] = dc;
 
         for (int i = 0; i < (dc & 0xff) + 1; i++) {
-            if (cached_bits == 0) {
-                cache = *r++;
-                cached_bits = 8;
-            }
-
-            unsigned needed_bits = 10 - cached_bits;
-            uint16_t val = cache << needed_bits;
-
-            cache = *r++;
-            cached_bits = 8 - needed_bits;
-
-            val |= cache >> cached_bits;
-
-            cache &= (1 << cached_bits) - 1;
-
-            data[S291_HEADER_SIZE+i] = val;
+            data[S291_HEADER_SIZE+i] = ubits_get(&s, 10);
         }
 
-        if (0 && cached_bits && cache != (1 << cached_bits) - 1) {
-            upipe_dbg(upipe, "Invalid byte align, skipping");
-            uref_pic_plane_unmap(pic, "x10", 0, 0, -1, -1);
-            uref_free(pic);
-            continue;
+        while (s.available) {
+            if (!ubits_get(&s, 1)) {
+                upipe_dbg(upipe, "Invalid byte align, skipping");
+                uref_pic_plane_unmap(pic, "x10", 0, 0, -1, -1);
+                uref_free(pic);
+                continue;
+            }
         }
 
         if (!s291_check_cs(data)) {
@@ -243,7 +224,7 @@ static void upipe_vanc_decoder_input(struct upipe *upipe,
                 s291_get_did(data), s291_get_sdid(data), s291_get_dc(data));
 
         if (c_not_y)
-            offset = 2 * offset + 1;
+            uref_pic_set_c_not_y(pic);
 
         uref_pic_set_hposition(pic, offset);
         uref_pic_set_vposition(pic, line - 1);
@@ -279,7 +260,6 @@ static int upipe_vanc_decoder_set_flow_def(struct upipe *upipe,
     UBASE_RETURN(uref_pic_flow_add_plane(flow_def, 1, 1, 2, "x10"))
     upipe_vanc_decoder_store_flow_def(upipe, uref_dup(flow_def));
     upipe_vanc_decoder_require_ubuf_mgr(upipe, flow_def);
-    upipe_vanc_decoder_require_uref_mgr(upipe);
 
     return UBASE_ERR_NONE;
 }
