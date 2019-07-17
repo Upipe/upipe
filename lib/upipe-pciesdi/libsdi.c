@@ -234,7 +234,7 @@ void sdi_lmh0387_spi(int fd, uint32_t tx_data, uint32_t *rx_data) {
 void sdi_rx(int fd, uint8_t *locked, uint8_t *mode, uint8_t *family, uint8_t *scan, uint8_t *rate) {
     struct sdi_ioctl_rx m;
     m.crc_enable = 0;
-    m.packed = SDI_DEVICE_IS_BITPACKED;
+    m.packed = 1;
     ioctl(fd, SDI_IOCTL_RX, &m);
     *locked = m.locked;
     *mode = m.mode;
@@ -246,7 +246,7 @@ void sdi_rx(int fd, uint8_t *locked, uint8_t *mode, uint8_t *family, uint8_t *sc
 void sdi_tx(int fd, uint8_t mode, uint8_t *txen, uint8_t *slew) {
     struct sdi_ioctl_tx m;
     m.crc_enable = 1;
-    m.packed = SDI_DEVICE_IS_BITPACKED;
+    m.packed = 1;
     m.mode = mode;
     ioctl(fd, SDI_IOCTL_TX, &m);
     *txen = m.txen;
