@@ -18,12 +18,9 @@
  * Inc., 51 Franklin Street, Fifth Floor, Boston MA 02110-1301, USA.
  */
 
+#include <config.h>
 #include <upipe/ubits.h>
-
 #include <arpa/inet.h>
-
-#include <libavutil/bswap.h>
-
 #include "sdienc.h"
 
 #define CLIP8(c) (ubase_clip((*(c)), 1,  254))
@@ -68,6 +65,17 @@ void upipe_uyvy_to_sdi_2_c(uint8_t *dst1, uint8_t *dst2, const uint8_t *y, uintp
     upipe_uyvy_to_sdi_c(dst1, y, pixels);
     memcpy(dst2, dst1, 2*pixels * 10 / 8);
 }
+
+#ifdef HAVE_LIBAVUTIL_AVUTIL_H
+
+#include <libavutil/bswap.h>
+
+#else
+
+/* FIXME: assumes little endian. */
+#define av_le2ne32(x) (x)
+
+#endif
 
 #define READ_PIXELS(a, b, c)         \
     do {                             \

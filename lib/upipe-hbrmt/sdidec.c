@@ -18,10 +18,9 @@
  * Inc., 51 Franklin Street, Fifth Floor, Boston MA 02110-1301, USA.
  */
 
+#include <config.h>
 #include <stddef.h>
 #include <inttypes.h>
-#include <libavutil/common.h>
-#include <libavutil/intreadwrite.h>
 #include "sdidec.h"
 #include "rfc4175_dec.h"
 #include "upipe/ubase.h"
@@ -133,6 +132,23 @@ void upipe_uyvy_to_planar_10_c(uint16_t *y, uint16_t *u, uint16_t *v, const uint
         v += 1;
     }
 }
+
+#ifdef HAVE_LIBAVUTIL_AVUTIL_H
+
+#include <libavutil/common.h>
+#include <libavutil/intreadwrite.h>
+
+#else
+
+static inline void AV_WL32(uint8_t *dst, uint32_t val)
+{
+    dst[0] = val;
+    dst[1] = val >> 8;
+    dst[2] = val >> 16;
+    dst[3] = val >> 24;
+}
+
+#endif
 
 #define WRITE_PIXELS_UYVY(a)            \
     do {                                \
