@@ -1073,6 +1073,20 @@ static bool upipe_sdi_dec_handle(struct upipe *upipe, struct uref *uref,
             fields[1][i] += (active_line_offset - field_height) * output_stride[i];
     }
 
+    /* Set clock properties before duplicating the uref for vbi and vanc and
+     * before outputting the sound. */
+    if (last_line == f->height) {
+        uint64_t pts = UINT32_MAX + upipe_sdi_dec->frame_num++ *
+            UCLOCK_FREQ * fps->den / fps->num;
+        uref_clock_set_pts_prog(uref, pts);
+        uref_clock_set_pts_orig(uref, pts);
+        uref_clock_set_dts_pts_delay(uref, 0);
+        uref_clock_set_cr_dts_delay(uref, 0);
+        upipe_throw_clock_ref(upipe, uref, pts, upipe_sdi_dec->discontinuity);
+        upipe_sdi_dec->discontinuity = false;
+        upipe_throw_clock_ts(upipe, uref);
+    }
+
     struct uref *uref_vbi = NULL;
     int vbi_line = 0;
     uint8_t *vbi_buf = NULL;
@@ -1556,17 +1570,6 @@ static bool upipe_sdi_dec_handle(struct upipe *upipe, struct uref *uref,
         ubuf_sound_plane_unmap(ubuf_sound, "lrcLRS0123456789", 0, -1);
 
     if (last_line == f->height) {
-        uint64_t pts = UINT32_MAX + upipe_sdi_dec->frame_num++ *
-            UCLOCK_FREQ * fps->den / fps->num;
-
-        uref_clock_set_pts_prog(uref, pts);
-        uref_clock_set_pts_orig(uref, pts);
-        uref_clock_set_dts_pts_delay(uref, 0);
-        uref_clock_set_cr_dts_delay(uref, 0);
-        upipe_throw_clock_ref(upipe, uref, pts, upipe_sdi_dec->discontinuity);
-        upipe_sdi_dec->discontinuity = false;
-        upipe_throw_clock_ts(upipe, uref);
-
         upipe_sdi_dec->active_line_offset = upipe_sdi_dec->chunk_line_offset = 0;
         upipe_sdi_dec->sdi3g_levelb_second_frame = !upipe_sdi_dec->sdi3g_levelb_second_frame;
         uref_attach_ubuf(uref, ubuf);
