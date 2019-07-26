@@ -177,6 +177,11 @@ static float pts_to_time(uint64_t pts)
     return dur_to_time(pts - first);
 }
 
+#define BMD_SUBPIPE_TYPE_UNKNOWN 0
+#define BMD_SUBPIPE_TYPE_SOUND   1
+#define BMD_SUBPIPE_TYPE_TTX     2
+#define BMD_SUBPIPE_TYPE_SCTE_35 3
+
 /** @internal @This is the private context of an output of an bmd_sink sink
  * pipe. */
 struct upipe_bmd_sink_sub {
@@ -201,8 +206,8 @@ struct upipe_bmd_sink_sub {
     /** watcher */
     struct upump *upump;
 
-    /** whether this is an audio pipe */
-    bool sound;
+    /** subpipe type **/
+    uint8_t type;
 
     bool dolby_e;
 
@@ -519,7 +524,7 @@ static void upipe_bmd_sink_sub_init(struct upipe *upipe,
     upipe_bmd_sink_sub->latency = 0;
     upipe_bmd_sink_sub_init_upump_mgr(upipe);
     upipe_bmd_sink_sub_init_upump(upipe);
-    upipe_bmd_sink_sub->sound = !static_pipe;
+    upipe_bmd_sink_sub->type = 0;
 
     upipe_throw_ready(upipe);
     pthread_mutex_unlock(&upipe_bmd_sink->lock);
@@ -632,7 +637,7 @@ static unsigned upipe_bmd_sink_sub_sound_get_samples(struct upipe *upipe,
     ulist_foreach(&upipe_bmd_sink->inputs, uchain) {
         struct upipe_bmd_sink_sub *upipe_bmd_sink_sub =
             upipe_bmd_sink_sub_from_uchain(uchain);
-        if (!upipe_bmd_sink_sub->sound)
+        if (upipe_bmd_sink_sub->type != BMD_SUBPIPE_TYPE_SOUND)
             continue;
 
         unsigned s = upipe_bmd_sink_sub_sound_get_samples_channel(upipe, video_pts, upipe_bmd_sink_sub);
@@ -1179,6 +1184,8 @@ static int upipe_bmd_sink_sub_set_flow_def(struct upipe *upipe,
 
         upipe_bmd_sink->frame_idx = 0;
     } else if (upipe_bmd_sink_sub != &upipe_bmd_sink->subpic_subpipe) {
+        upipe_bmd_sink_sub->type = BMD_SUBPIPE_TYPE_SOUND;
+
         if (!ubase_check(uref_sound_flow_get_channels(flow_def, &upipe_bmd_sink_sub->channels))) {
             upipe_err(upipe, "Could not read number of channels");
             return UBASE_ERR_INVALID;
