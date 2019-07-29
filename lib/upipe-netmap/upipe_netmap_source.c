@@ -465,6 +465,7 @@ static int upipe_netmap_source_alloc_output_uref(struct upipe *upipe, uint64_t s
 static inline bool handle_rfc_packet(struct upipe *upipe, const uint8_t *src, uint16_t src_size, bool *eof)
 {
     struct upipe_netmap_source *upipe_netmap_source = upipe_netmap_source_from_upipe(upipe);
+    bool progressive = 0;
 
     const uint8_t *payload = rtp_payload((uint8_t*)src);
     size_t header_size = payload - src;
@@ -495,13 +496,17 @@ static inline bool handle_rfc_packet(struct upipe *upipe, const uint8_t *src, ui
         src_size -= RFC_4175_HEADER_LEN;
     }
 
-    *eof = !!field[0];
+    progressive = ubase_check(uref_pic_get_progressive(upipe_netmap_source->rfc_def));
+    if (progressive)
+        *eof =  !field[0];
+    else
+        *eof = !!field[0];
 
     if (unlikely(!upipe_netmap_source->uref))
         return false;
 
     for (int i = 0; i < 1 + !!continuation; i++) {
-        int interleaved_line = line_number[i] * 2 + !!field[i];
+        int interleaved_line = line_number[i] * (1+!progressive) + !!field[i];
         if (src_size < length[i])
             return false;
 
