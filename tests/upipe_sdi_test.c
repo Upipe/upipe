@@ -203,18 +203,19 @@ int main(int argc, char *argv[])
         uint64_t w;
         uint64_t h;
         struct urational fps;
+        bool progressive;
     } fmts[] = {
-//        { 1920, 1080, { 24, 1 } },
-        { 1920, 1080, { 25, 1 } },
-        { 1920, 1080, { 50, 1 } },
-        { 1920, 1080, { 30000, 1001 } },
-        { 1920, 1080, { 60000, 1001 } },
-//        { 1920, 1080, { 24000, 1001 } },
-        { 1280, 720, { 50, 1 } },
+//        { 1920, 1080, { 24, 1 }, false },
+        { 1920, 1080, { 25, 1 }, false },
+        { 1920, 1080, { 50, 1 }, true },
+        { 1920, 1080, { 30000, 1001 }, false },
+        { 1920, 1080, { 60000, 1001 }, true },
+//        { 1920, 1080, { 24000, 1001 }, false },
+        { 1280, 720, { 50, 1 }, true },
 
-        { 1280, 720, { 60000, 1001 } },
-        { 720, 576, { 25, 1 } },
-        { 720, 486, { 30000, 1001 } },
+        { 1280, 720, { 60000, 1001 }, true },
+        { 720, 576, { 25, 1 }, false },
+        { 720, 486, { 30000, 1001 }, false },
     };
 
     for (int p = 0; p < 3; p++) {
@@ -230,6 +231,8 @@ int main(int argc, char *argv[])
             ubase_assert(uref_pic_flow_set_hsize(uref, w));
             ubase_assert(uref_pic_flow_set_vsize(uref, h));
             uref_pic_flow_set_fps(uref, fps);
+            if (fmts[i].progressive)
+                uref_pic_set_progressive(uref);
             switch (p) {
             case 0:
                 ubase_assert(uref_pic_flow_add_plane(uref, 1, 1, 1, "y8"));
