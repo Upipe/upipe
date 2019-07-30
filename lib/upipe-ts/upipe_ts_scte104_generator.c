@@ -195,7 +195,7 @@ static bool upipe_ts_scte104_generator_handle(struct upipe *upipe, struct uref *
     uref_ts_scte35_get_unique_program_id(uref, &unique_program_id);
     scte104srd_set_unique_program_id(op, unique_program_id);
     uref_clock_get_cr_dts_delay(uref, &cr_dts_delay);
-    scte104srd_set_pre_roll_time(op, cr_dts_delay / (UCLOCK_FREQ/10));
+    scte104srd_set_pre_roll_time(op, cr_dts_delay / (UCLOCK_FREQ/1000));
     uref_clock_get_duration(uref, &duration);
     if (duration != UINT64_MAX)
         scte104srd_set_break_duration(op, duration / (UCLOCK_FREQ/10));
