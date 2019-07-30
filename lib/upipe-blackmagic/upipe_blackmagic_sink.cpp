@@ -812,7 +812,7 @@ static upipe_bmd_sink_frame *get_video_frame(struct upipe *upipe,
                                  &upipe_bmd_sink->op47_sequence_counter[0]);
                     }
                     else if (upipe_bmd_sink_sub->type == BMD_SUBPIPE_TYPE_SCTE104)
-                        upipe_bmd_sink_write_scte104(ancillary, buf, sizeof(size), w, sd);
+                        upipe_bmd_sink_write_scte104(ancillary, buf, size, w, sd);
                     uref_block_unmap(subpic, 0);
                 }
                 uref_free(subpic);
