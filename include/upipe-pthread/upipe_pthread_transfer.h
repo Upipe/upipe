@@ -67,6 +67,13 @@ struct upipe_mgr *upipe_pthread_xfer_mgr_alloc(uint8_t queue_length,
         uint16_t upump_blocker_pool_depth, struct umutex *mutex,
         pthread_t *pthread_id_p, const pthread_attr_t *restrict attr);
 
+struct upipe_mgr *upipe_pthread_xfer_mgr_alloc_named(uint8_t queue_length,
+        uint16_t msg_pool_depth, struct uprobe *uprobe_pthread_upump_mgr,
+        upump_mgr_alloc upump_mgr_alloc, uint16_t upump_pool_depth,
+        uint16_t upump_blocker_pool_depth, struct umutex *mutex,
+        pthread_t *pthread_id_p, const pthread_attr_t *restrict attr,
+        const char *name);
+
 #ifdef __cplusplus
 }
 #endif
