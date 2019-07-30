@@ -153,7 +153,7 @@ static bool upipe_ts_scte104_generator_handle(struct upipe *upipe, struct uref *
 
     uint8_t splice_insert_type;
     uint8_t len = SCTE104M_HEADER_SIZE + SCTE104T_HEADER_SIZE + 1 /* num_opts */ + SCTE104O_HEADER_SIZE + SCTE104SRD_HEADER_SIZE;
-    uint64_t pts_orig = UINT64_MAX, event_id = 0, unique_program_id = 0, cr_dts_delay = 0, duration = UINT64_MAX;
+    uint64_t pts_orig = UINT64_MAX, event_id = 0, unique_program_id = 0, cr_dts_delay = 0, duration = UINT64_MAX, pts_prog = 0, pts_sys = 0;
     uref_clock_get_pts_orig(uref, &pts_orig);
 
     if (uref_ts_scte35_get_cancel(uref))
@@ -195,7 +195,7 @@ static bool upipe_ts_scte104_generator_handle(struct upipe *upipe, struct uref *
     uref_ts_scte35_get_unique_program_id(uref, &unique_program_id);
     scte104srd_set_unique_program_id(op, unique_program_id);
     uref_clock_get_cr_dts_delay(uref, &cr_dts_delay);
-    scte104srd_set_pre_roll_time(op, duration / (UCLOCK_FREQ/10));
+    scte104srd_set_pre_roll_time(op, cr_dts_delay / (UCLOCK_FREQ/10));
     uref_clock_get_duration(uref, &duration);
     if (duration != UINT64_MAX)
         scte104srd_set_break_duration(op, duration / (UCLOCK_FREQ/10));
@@ -205,6 +205,15 @@ static bool upipe_ts_scte104_generator_handle(struct upipe *upipe, struct uref *
 
     ubuf_block_unmap(ubuf, 0);
     uref_attach_ubuf(uref, ubuf);
+
+    /* SCTE-35 "PTS" is actually the splice time. Make SCTE-104 urefs use the real PTS */
+    pts_orig -= cr_dts_delay;
+    uref_clock_set_pts_orig(uref, pts_orig);
+    uref_clock_get_pts_prog(uref, &pts_prog);
+    pts_prog -= cr_dts_delay;
+    uref_clock_set_pts_prog(uref, pts_prog);
+    uref_clock_get_pts_sys(uref, &pts_sys);
+    printf("pts_sys %"PRIu64" cr_dts_delay %"PRIu64" \n", pts_sys, cr_dts_delay);
 
     upipe_ts_scte104_generator_output(upipe, uref, upump_p);
     return true;

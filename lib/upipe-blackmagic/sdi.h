@@ -6,6 +6,7 @@
 #define AFD_LINE 11
 #define OP47_LINE1 12
 #define OP47_LINE2 (OP47_LINE1+563)
+#define SCTE104_LINE 10
 
 #define PAL_FIELD_OFFSET 313
 
@@ -31,3 +32,6 @@ void sdi_encode_v210(uint32_t *dst, uint16_t *src, int width);
 
 int sdi_encode_ttx_sd(uint8_t *buf, const uint8_t *pic_data, vbi_sampling_par *sp);
 void sdi_encode_ttx(uint16_t *buf, int packets, const uint8_t **packet, uint16_t *ctr);
+
+void sdi_encode_scte104_null(uint8_t *buf);
+void sdi_write_scte104(const uint8_t *src, size_t src_size, uint16_t *dst, int sd);

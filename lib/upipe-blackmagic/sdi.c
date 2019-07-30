@@ -3,6 +3,7 @@
 
 #include <bitstream/smpte/291.h>
 #include <bitstream/dvb/vbi.h>
+#include <bitstream/scte/104.h>
 
 #include "sdi.h"
 
@@ -255,4 +256,36 @@ void sdi_encode_ttx(uint16_t *buf, int packets, const uint8_t **packet, uint16_t
     buf[2*DC_POS] = idx - ANC_START_LEN;
 
     sdi_calc_parity_checksum(buf);
+}
+
+void sdi_encode_scte104_null(uint8_t *buf)
+{
+    uint8_t *ts = scte104m_get_timestamp(buf);
+    uint8_t *op;
+
+    scte104_set_opid(buf, SCTE104_OPID_MULTIPLE);
+    scte104_set_size(buf, 16);
+
+    scte104m_set_protocol(buf, 0);
+    scte104m_set_as_index(buf, 0);
+    scte104m_set_message_number(buf, 1); /* arbitrary */
+    scte104m_set_dpi_pid_index(buf, 0);
+    scte104m_set_scte35_protocol(buf, 0);
+
+    scte104t_set_type(ts, SCTE104T_TYPE_NONE);
+    scte104m_set_num_ops(buf, 1);
+
+    op = scte104m_get_op(buf, 0);
+
+    scte104o_set_opid(op, SCTE104_OPID_SPLICE_NULL);
+    scte104o_set_data_length(op, 0);
+}
+
+void sdi_write_scte104(const uint8_t *src, size_t src_size, uint16_t *dst, int gap)
+{
+    sdi_start_anc(dst, gap, S291_SCTE104_DID, S291_SCTE104_SDID);
+    dst[gap*(DC_POS)] = src_size + 1; // DC
+    dst[gap*(ANC_START_LEN + 0)] = 0x08; // Single VANC packet
+    for (int i = 0; i < src_size; i++)
+        dst[gap*(ANC_START_LEN + 1 + i)] = src[i];
 }
