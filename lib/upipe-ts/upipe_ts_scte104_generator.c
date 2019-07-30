@@ -156,9 +156,9 @@ static bool upipe_ts_scte104_generator_handle(struct upipe *upipe, struct uref *
     uint64_t pts_orig = UINT64_MAX, event_id = 0, unique_program_id = 0, cr_dts_delay = 0, duration = UINT64_MAX, pts_prog = 0, pts_sys = 0;
     uref_clock_get_pts_orig(uref, &pts_orig);
 
-    if (uref_ts_scte35_get_cancel(uref))
+    if (ubase_check(uref_ts_scte35_get_cancel(uref)))
         splice_insert_type = SCTE104SRD_CANCEL;
-    else if (uref_ts_scte35_get_out_of_network(uref))
+    else if (ubase_check(uref_ts_scte35_get_out_of_network(uref)))
         splice_insert_type = pts_orig == UINT64_MAX ? SCTE104SRD_START_IMMEDIATE : SCTE104SRD_START_NORMAL;
     else
         splice_insert_type = pts_orig == UINT64_MAX ? SCTE104SRD_END_IMMEDIATE : SCTE104SRD_END_NORMAL;
