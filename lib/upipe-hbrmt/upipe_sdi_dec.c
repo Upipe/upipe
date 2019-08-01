@@ -207,8 +207,8 @@ struct upipe_sdi_dec {
     /** latency */
     uint64_t latency;
 
-    /* SDI-3G level B frame tracker. */
-    bool sdi3g_levelb_second_frame;
+    bool sdi3g_levelb;
+    bool sdi3g_levelb_second_frame; /* SDI-3G level B frame tracker. */
 
     int chunk_line_offset;
     int active_line_offset;
@@ -518,13 +518,16 @@ static void extract_hd_audio(struct upipe *upipe, const uint16_t *packet, int li
         return;
     }
 
-    /* Audio packets are not allowed on the switching line + 1 */
-    if (upipe_sdi_dec->debug && (line_num == p->switching_line + 1 ||
-        (p->field_offset && line_num == p->switching_line + 1 + switching_line_offset))) {
-        upipe_warn_va(upipe, "Audio packet on invalid line %d", line_num);
-    }
-
     if (upipe_sdi_dec->debug) {
+        int local_line_num = line_num;
+        if (upipe_sdi_dec->sdi3g_levelb)
+            local_line_num = (local_line_num + 1) / 2;
+
+        /* Audio packets are not allowed on the switching line + 1 */
+        if (local_line_num == p->switching_line + 1
+                || local_line_num == p->switching_line + 1 + switching_line_offset)
+            upipe_warn_va(upipe, "Audio packet on invalid line %d", line_num);
+
         /* FIXME: extract this to a generic HD validation function */
         uint16_t checksum = 0;
         int len = data_count + 3 /* DID / DBN / DC */;
@@ -1669,7 +1672,8 @@ static int upipe_sdi_dec_set_flow_def(struct upipe *upipe, struct uref *flow_def
     upipe_sdi_dec->p = upipe_sdi_dec->f->pict_fmt;
 
     upipe_sdi_dec->progressive = ubase_check(uref_pic_get_progressive(flow_def));
-    if (ubase_check(uref_block_get_sdi3g_levelb(flow_def)))
+    upipe_sdi_dec->sdi3g_levelb = ubase_check(uref_block_get_sdi3g_levelb(flow_def));
+    if (upipe_sdi_dec->sdi3g_levelb)
         /* Use interlaced fvh transition to detect start of level B frame. */
         upipe_sdi_dec->progressive = false;
 
