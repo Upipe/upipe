@@ -201,7 +201,7 @@ static bool upipe_ts_scte104_generator_handle(struct upipe *upipe, struct uref *
         scte104srd_set_break_duration(op, duration / (UCLOCK_FREQ/10));
     scte104srd_set_avail_num(op, 0);
     scte104srd_set_avails_expected(op, 0);
-    scte104srd_set_auto_return(op, ubase_check(uref_ts_scte35_get_auto_return(uref));
+    scte104srd_set_auto_return(op, ubase_check(uref_ts_scte35_get_auto_return(uref)));
 
     ubuf_block_unmap(ubuf, 0);
     uref_attach_ubuf(uref, ubuf);
