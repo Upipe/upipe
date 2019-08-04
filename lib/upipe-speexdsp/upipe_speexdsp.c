@@ -148,6 +148,9 @@ static bool upipe_speexdsp_handle(struct upipe *upipe, struct uref *uref,
         }
     }
 
+    if (unlikely(ubase_check(uref_flow_get_discontinuity(uref))))
+        speex_resampler_reset_mem(upipe_speexdsp->ctx);
+
     size_t size;
     if (!ubase_check(uref_sound_size(uref, &size, NULL /* sample_size */))) {
         uref_free(uref);
