@@ -40,25 +40,25 @@ static void randomize_buffers_packed(uint8_t *src0, uint8_t *src1)
     }
 }
 
-void checkasm_check_sdi3g_input(void)
+void checkasm_check_levelb_input(void)
 {
     struct {
         void (*packed)(const uint8_t *src, uint16_t *dst1, uint16_t *dst2, uintptr_t pixels);
     } s = {
-        .packed = upipe_sdi3g_to_uyvy_2_c,
+        .packed = upipe_levelb_to_uyvy_c,
     };
 
     int cpu_flags = av_get_cpu_flags();
 
 #ifdef HAVE_X86ASM
     if (cpu_flags & AV_CPU_FLAG_SSSE3) {
-        s.packed = upipe_sdi3g_to_uyvy_2_ssse3;
+        s.packed = upipe_levelb_to_uyvy_ssse3;
     }
     if (cpu_flags & AV_CPU_FLAG_AVX) {
-        s.packed = upipe_sdi3g_to_uyvy_2_avx;
+        s.packed = upipe_levelb_to_uyvy_avx;
     }
     if (cpu_flags & AV_CPU_FLAG_AVX2) {
-        s.packed = upipe_sdi3g_to_uyvy_2_avx2;
+        s.packed = upipe_levelb_to_uyvy_avx2;
     }
 #endif
 

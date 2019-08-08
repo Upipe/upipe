@@ -33,9 +33,9 @@ sdi_luma_mult_10:    times 4 dw 0x0, 0x800, 0x0, 0x7fff
 
 SECTION .text
 
-%macro sdi3g_to_uyvy 0
+%macro levelb_to_uyvy 0
 
-cglobal sdi3g_to_uyvy_2, 4, 4, 15, src, dst1, dst2, pixels
+cglobal levelb_to_uyvy, 4, 4, 15, src, dst1, dst2, pixels
     lea dst1q, [dst1q + 4*pixelsq]
     lea dst2q, [dst2q + 4*pixelsq]
     neg pixelsq
@@ -84,8 +84,8 @@ RET
 %endmacro
 
 INIT_XMM ssse3
-sdi3g_to_uyvy
+levelb_to_uyvy
 INIT_XMM avx
-sdi3g_to_uyvy
+levelb_to_uyvy
 INIT_YMM avx2
-sdi3g_to_uyvy
+levelb_to_uyvy

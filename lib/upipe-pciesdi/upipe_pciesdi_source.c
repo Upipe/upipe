@@ -125,7 +125,7 @@ struct upipe_pciesdi_src {
 
     uint8_t *read_buffer;
 
-    void (*sdi3g_levelb_packed)(const uint8_t *src, uint16_t *dst1, uint16_t *dst2, uintptr_t pixels);
+    void (*levelb_to_uyvy)(const uint8_t *src, uint16_t *dst1, uint16_t *dst2, uintptr_t pixels);
     void (*sdi_to_uyvy)(const uint8_t *src, uint16_t *y, uintptr_t pixels);
 
     /** bytes in scratch buffer */
@@ -179,18 +179,18 @@ static struct upipe *upipe_pciesdi_src_alloc(struct upipe_mgr *mgr,
     upipe_pciesdi_src_init_upump(upipe);
     upipe_pciesdi_src_init_uclock(upipe);
 
-    upipe_pciesdi_src->sdi3g_levelb_packed = upipe_sdi3g_to_uyvy_2_c;
+    upipe_pciesdi_src->levelb_to_uyvy = upipe_levelb_to_uyvy_c;
     upipe_pciesdi_src->sdi_to_uyvy = upipe_sdi_to_uyvy_c;
 #if defined(HAVE_X86ASM)
 #if defined(__i686__) || defined(__x86_64__)
     if (__builtin_cpu_supports("ssse3")) {
         upipe_pciesdi_src->sdi_to_uyvy = upipe_sdi_to_uyvy_ssse3;
-        upipe_pciesdi_src->sdi3g_levelb_packed = upipe_sdi3g_to_uyvy_2_ssse3;
+        upipe_pciesdi_src->levelb_to_uyvy = upipe_levelb_to_uyvy_ssse3;
     }
 
     if (__builtin_cpu_supports("avx2")) {
         upipe_pciesdi_src->sdi_to_uyvy = upipe_sdi_to_uyvy_avx2;
-        upipe_pciesdi_src->sdi3g_levelb_packed = upipe_sdi3g_to_uyvy_2_avx2;
+        upipe_pciesdi_src->levelb_to_uyvy = upipe_levelb_to_uyvy_avx2;
     }
 #endif
 #endif
@@ -426,7 +426,7 @@ static void upipe_pciesdi_src_worker(struct upump *upump)
             /* Note: line order is swapped. */
             uint16_t *dst1 = (uint16_t*)dst_buf + 2*upipe_pciesdi_src->sdi_format->width;
             uint16_t *dst2 = (uint16_t*)dst_buf;
-            upipe_pciesdi_src->sdi3g_levelb_packed(upipe_pciesdi_src->scratch_buffer,
+            upipe_pciesdi_src->levelb_to_uyvy(upipe_pciesdi_src->scratch_buffer,
                     dst1, dst2, upipe_pciesdi_src->sdi_format->width);
             dst_buf += upipe_pciesdi_src->sdi_format->width * 8;
         } else {
@@ -506,7 +506,7 @@ static void upipe_pciesdi_src_worker(struct upump *upump)
             /* Note: line order is swapped. */
             uint16_t *dst1 = (uint16_t*)dst_buf + (2*i + 1) * 2*upipe_pciesdi_src->sdi_format->width;
             uint16_t *dst2 = (uint16_t*)dst_buf + (2*i + 0) * 2*upipe_pciesdi_src->sdi_format->width;
-            upipe_pciesdi_src->sdi3g_levelb_packed(sdi_line, dst1, dst2,
+            upipe_pciesdi_src->levelb_to_uyvy(sdi_line, dst1, dst2,
                     upipe_pciesdi_src->sdi_format->width);
         } else {
             uint16_t *dst = (uint16_t*)dst_buf + 2*i * upipe_pciesdi_src->sdi_format->width;
