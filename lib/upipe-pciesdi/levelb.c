@@ -36,13 +36,3 @@ void upipe_sdi3g_to_uyvy_2_c(const uint8_t *src, uint16_t *dst1, uint16_t *dst2,
         dst2[2*i+1] = ((d & 0x03) << 8) | e;        //4455555555
     }
 }
-
-void upipe_levelb_unpack_c(const uint16_t *src, uint16_t *dst1, uint16_t *dst2, uintptr_t pixels)
-{
-    for (int i = 0; i < pixels; i++) {
-        dst1[2*i + 0] = src[4*i + 0];
-        dst1[2*i + 1] = src[4*i + 1];
-        dst2[2*i + 0] = src[4*i + 2];
-        dst2[2*i + 1] = src[4*i + 3];
-    }
-}

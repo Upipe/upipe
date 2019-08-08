@@ -33,30 +33,6 @@ sdi_luma_mult_10:    times 4 dw 0x0, 0x800, 0x0, 0x7fff
 
 SECTION .text
 
-%macro sdi3g_levelb_unpack 0
-
-cglobal sdi3g_levelb_unpack, 4, 4, 3, src, dst1, dst2, pixels
-    lea srcq,  [srcq  + 8*pixelsq]
-    lea dst1q, [dst1q + 4*pixelsq]
-    lea dst2q, [dst2q + 4*pixelsq]
-    neg pixelsq
-
-    ALIGN 16
-    .loop:
-        movu m0, [srcq + 8*pixelsq]
-        pshufd m1, m0, q0020
-        pshufd m2, m0, q0031
-        movq [dst1q + 4*pixelsq], m1
-        movq [dst2q + 4*pixelsq], m2
-        add pixelsq, mmsize/8
-    jl .loop
-RET
-
-%endmacro
-
-INIT_XMM sse2
-sdi3g_levelb_unpack
-
 %macro sdi3g_to_uyvy 0
 
 cglobal sdi3g_to_uyvy_2, 4, 4, 15, src, dst1, dst2, pixels
