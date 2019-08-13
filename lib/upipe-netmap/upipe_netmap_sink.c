@@ -1589,7 +1589,7 @@ static bool upipe_netmap_sink_output(struct upipe *upipe, struct uref *uref,
                     packets /= 1080;
             }
 
-            upipe_netmap_sink->rate = 8 * (packets * (eth_header_len + payload + 4 /* CRC */)) * upipe_netmap_sink->fps.num / upipe_netmap_sink->fps.den;
+            upipe_netmap_sink->rate = 8 * (packets * (eth_header_len + payload + 4 /* CRC */)) * upipe_netmap_sink->fps.num;
         }
         upipe_netmap_sink->packet_duration = upipe_netmap_sink->frame_duration / upipe_netmap_sink->packets_per_frame;
 
