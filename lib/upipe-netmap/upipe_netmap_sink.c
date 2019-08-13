@@ -442,7 +442,7 @@ static void upipe_netmap_sink_reset_counters(struct upipe *upipe)
     upipe_netmap_sink->packed_bytes = 0;
     upipe_netmap_sink->seqnum = 0;
     upipe_netmap_sink->frame_count = 0;
-    upipe_netmap_sink->phase_delay = 1;
+    upipe_netmap_sink->phase_delay = 0;
     upipe_netmap_sink->rtp_timestamp = 0;
     upipe_netmap_sink->frame_ts = 0;
 }
@@ -1417,9 +1417,6 @@ static void upipe_netmap_sink_worker(struct upump *upump)
 
             uint16_t seq = rtp_get_seqnum(rtp);
             handle_tx_stamp(upipe, slot->ptr, seq);
-
-            if (upipe_netmap_sink->phase_delay)
-                continue; /* phasing already done */
         }
 
         const unsigned pkt_len = rfc4175 ? 1262 : 1438;
