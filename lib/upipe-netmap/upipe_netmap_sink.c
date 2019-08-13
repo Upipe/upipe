@@ -1576,16 +1576,23 @@ static bool upipe_netmap_sink_output(struct upipe *upipe, struct uref *uref,
             const uint64_t payload = (bytes_available / UPIPE_RFC4175_PIXEL_PAIR_BYTES) * UPIPE_RFC4175_PIXEL_PAIR_BYTES;
             upipe_netmap_sink->payload = payload;
 
-            uint64_t full_packets_per_frame = upipe_netmap_sink->frame_size / payload;
             upipe_netmap_sink->packets_per_frame = (upipe_netmap_sink->frame_size + payload - 1) / payload;
-            uint64_t last_packet = 0;
-            if (upipe_netmap_sink->packets_per_frame != full_packets_per_frame) {
-                last_packet = eth_header_len + (upipe_netmap_sink->frame_size % payload) + 4 /* CRC */;
+
+            uint64_t packets = upipe_netmap_sink->packets_per_frame;
+            if (upipe_netmap_sink->hsize == 720) {
+                if (upipe_netmap_sink->vsize == 486) {
+                    packets *= 525;
+                    packets /= 487;
+                } else if (upipe_netmap_sink->vsize == 576) {
+                    packets *= 625;
+                    packets /= 576;
+                }
+            } else {
+                    packets *= 1125;
+                    packets /= 1080;
             }
 
-            upipe_netmap_sink->rate = 8 * (full_packets_per_frame * (eth_header_len + payload + 4 /* CRC */) + last_packet) * upipe_netmap_sink->fps.num;
-            // FIXME : hardcoded to 1080i50 with no continuation
-            upipe_netmap_sink->rate = 8 * 1266 * (1125*4) * upipe_netmap_sink->fps.num;
+            upipe_netmap_sink->rate = 8 * (packets * (eth_header_len + payload + 4 /* CRC */)) * upipe_netmap_sink->fps.num / upipe_netmap_sink->fps.den;
         }
         upipe_netmap_sink->packet_duration = upipe_netmap_sink->frame_duration / upipe_netmap_sink->packets_per_frame;
 
