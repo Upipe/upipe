@@ -416,6 +416,12 @@ static int upipe_speexdsp_control(struct upipe *upipe, int command, va_list args
             upipe_speexdsp->quality = quality;
             return UBASE_ERR_NONE;
         }
+        case UPIPE_SPEEXDSP_RESET_RESAMPLER: {
+            if (upipe_speexdsp->ctx)
+                speex_resampler_reset_mem(upipe_speexdsp->ctx);
+
+            return UBASE_ERR_NONE;
+        }
 
         default:
             return UBASE_ERR_UNHANDLED;
