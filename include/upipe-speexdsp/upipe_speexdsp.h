@@ -38,6 +38,17 @@ extern "C" {
 
 #define UPIPE_SPEEXDSP_SIGNATURE UBASE_FOURCC('s','p','x','d')
 
+enum upipe_speexdsp_command {
+    UPIPE_SPEEXDSP_SENTINAL = UPIPE_CONTROL_LOCAL,
+
+    UPIPE_SPEEXDSP_RESET_RESAMPLER, /* int sig */
+};
+
+static inline int upipe_speexdsp_reset_resampler(struct upipe *upipe)
+{
+    return upipe_control(upipe, UPIPE_SPEEXDSP_RESET_RESAMPLER, UPIPE_SPEEXDSP_SIGNATURE);
+}
+
 /** @This returns the management structure for speexdsp pipes.
  *
  * @return pointer to manager
