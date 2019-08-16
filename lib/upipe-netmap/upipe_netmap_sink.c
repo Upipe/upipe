@@ -627,7 +627,7 @@ static int upipe_put_rfc4175_headers(struct upipe_netmap_sink *upipe_netmap_sink
                                      uint8_t continuation, uint16_t offset)
 {
     if (field_id)
-        line_number -= 540;
+        line_number -= upipe_netmap_sink->vsize / 2;
     memset(buf, 0, RFC_4175_HEADER_LEN);
     rfc4175_set_line_length(buf, len);
     rfc4175_set_line_field_id(buf, field_id);
