@@ -660,9 +660,7 @@ static int worker_rfc4175(struct upipe *upipe, uint8_t **dst, uint16_t *len)
 
     uint16_t eth_frame_len = ETHERNET_HEADER_LEN + UDP_HEADER_SIZE + IP_HEADER_MINSIZE + RTP_HEADER_SIZE + RFC_4175_HEADER_LEN + RFC_4175_EXT_SEQ_NUM_LEN;
     uint16_t bytes_available = (1500 - eth_frame_len);
-    //uint16_t pixels1 = upipe_netmap_sink->payload * 2 / UPIPE_RFC4175_PIXEL_PAIR_BYTES;
-    uint16_t pixels1 = (bytes_available / UPIPE_RFC4175_PIXEL_PAIR_BYTES) * 2;
-    pixels1 = 480;
+    uint16_t pixels1 = upipe_netmap_sink->payload * 2 / UPIPE_RFC4175_PIXEL_PAIR_BYTES;
 
     uint16_t pixels2 = 0;
     uint8_t marker = 0, continuation = 0;
