@@ -867,6 +867,9 @@ static int upipe_freetype_set_flow_def(struct upipe *upipe, struct uref *flow_de
     upipe_freetype->ubuf_mgr = NULL;
     upipe_freetype->flow_format = NULL;
 
+    struct uref *flow_format = uref_dup(upipe_freetype->flow_output);
+    UBASE_ALLOC_RETURN(flow_format);
+    upipe_freetype_require_flow_format(upipe, flow_format);
     // TODO : x/y/offsets
 
     return UBASE_ERR_NONE;
