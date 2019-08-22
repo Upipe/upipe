@@ -863,12 +863,17 @@ static int upipe_freetype_set_flow_def(struct upipe *upipe, struct uref *flow_de
 
     UBASE_RETURN(uref_flow_match_def(flow_def, "void.text."));
 
-    upipe_freetype_clean_ubuf_mgr(upipe);
-    upipe_freetype->ubuf_mgr = NULL;
-    upipe_freetype->flow_format = NULL;
-
     struct uref *flow_format = uref_dup(upipe_freetype->flow_output);
     UBASE_ALLOC_RETURN(flow_format);
+
+    if (urequest_get_opaque(&upipe_freetype->ubuf_mgr_request,
+                            struct upipe *) != NULL) {
+        upipe_freetype_unregister_output_request(
+            upipe, &upipe_freetype->ubuf_mgr_request);
+        urequest_clean(&upipe_freetype->ubuf_mgr_request);
+        upipe_freetype_clean_ubuf_mgr(upipe);
+        upipe_freetype_init_ubuf_mgr(upipe);
+    }
     upipe_freetype_require_flow_format(upipe, flow_format);
     // TODO : x/y/offsets
 
