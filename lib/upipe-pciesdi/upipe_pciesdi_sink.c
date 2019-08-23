@@ -87,7 +87,6 @@ struct upipe_pciesdi_sink {
     /** timer to wait for clock to init */
     struct upump *timer_upump;
 
-    int tx_mode;
     int device_number;
 
     /** scratch buffer */
@@ -119,9 +118,6 @@ UPIPE_HELPER_UPUMP(upipe_pciesdi_sink, fd_write_upump, upump_mgr)
 UPIPE_HELPER_UPUMP(upipe_pciesdi_sink, timer_upump, upump_mgr)
 UBASE_FROM_TO(upipe_pciesdi_sink, uclock, uclock, uclock)
 
-/* upump callback functions */
-static void mark_clock_as_inited(struct upump *upump);
-
 static uint64_t upipe_pciesdi_sink_now(struct uclock *uclock)
 {
     struct upipe_pciesdi_sink *upipe_pciesdi_sink = upipe_pciesdi_sink_from_uclock(uclock);
@@ -137,7 +133,7 @@ static uint64_t upipe_pciesdi_sink_now(struct uclock *uclock)
     /* read ticks from card */
     uint32_t freq;
     uint64_t tick;
-    sdi_refclk(upipe_pciesdi_sink->fd, 0, &freq, &tick);
+    sdi_channel_get_refclk(upipe_pciesdi_sink->fd, &freq, &tick);
 
     if (freq == 0) {
         pthread_mutex_unlock(&upipe_pciesdi_sink->clock_mutex);
@@ -188,7 +184,6 @@ static struct upipe *upipe_pciesdi_sink_alloc(struct upipe_mgr *mgr,
 
     upipe_pciesdi_sink->clock_is_inited = 0;
     upipe_pciesdi_sink->offset = 0;
-    upipe_pciesdi_sink->tx_mode = SDI_TX_MODE_HD;
     upipe_pciesdi_sink->scratch_bytes = 0;
     upipe_pciesdi_sink->latency = 0;
     upipe_pciesdi_sink->fd = -1;
@@ -514,26 +509,20 @@ static void upipe_pciesdi_sink_input(struct upipe *upipe, struct uref *uref, str
     }
 }
 
-static int check_capabilities(struct upipe *upipe, bool ntsc, bool genlock)
+static int check_capabilities(struct upipe *upipe, bool genlock)
 {
     struct upipe_pciesdi_sink *ctx = upipe_pciesdi_sink_from_upipe(upipe);
     int fd = ctx->fd;
     int device_number = ctx->device_number;
 
-    uint8_t channels, has_vcxos;
-    uint8_t has_gs12241, has_gs12281, has_si5324;
-    uint8_t has_genlock, has_lmh0387, has_si596;
+    uint8_t channels, has_vcxos, has_gs12241, has_gs12281, has_si5324,
+               has_genlock, has_lmh0387, has_si596, has_si552;
     sdi_capabilities(fd, &channels, &has_vcxos, &has_gs12241, &has_gs12281,
-            &has_si5324, &has_genlock, &has_lmh0387, &has_si596);
+            &has_si5324, &has_genlock, &has_lmh0387, &has_si596, &has_si552);
 
     if (device_number < 0 || device_number >= channels) {
         upipe_err_va(upipe, "invalid device number (%d) for number of channels (%d)",
                 device_number, channels);
-        return UBASE_ERR_INVALID;
-    }
-
-    if (has_vcxos == 0 && ntsc) {
-        upipe_err(upipe, "NTSC not yet supported on boards without VCXOs");
         return UBASE_ERR_INVALID;
     }
 
@@ -542,29 +531,31 @@ static int check_capabilities(struct upipe *upipe, bool ntsc, bool genlock)
         return UBASE_ERR_INVALID;
     }
 
+    if (!((has_vcxos && has_si5324) || has_si596 || has_lmh0387)) {
+        upipe_err(upipe, "unknown capabilities");
+        return UBASE_ERR_INVALID;
+    }
+
     return UBASE_ERR_NONE;
 }
 
-#if INIT_HARDWARE
-
-static void init_hardware_part1(struct upipe *upipe, bool ntsc, bool genlock, bool sd)
+static void init_hardware_part1(struct upipe *upipe, int rate, int mode)
 {
     struct upipe_pciesdi_sink *ctx = upipe_pciesdi_sink_from_upipe(upipe);
     int fd = ctx->fd;
     int device_number = ctx->device_number;
 
-    uint8_t channels, has_vcxos;
-    uint8_t has_gs12241, has_gs12281, has_si5324;
-    uint8_t has_genlock, has_lmh0387, has_si596;
+    uint8_t channels, has_vcxos, has_gs12241, has_gs12281, has_si5324,
+               has_genlock, has_lmh0387, has_si596, has_si552;
     sdi_capabilities(fd, &channels, &has_vcxos, &has_gs12241, &has_gs12281,
-            &has_si5324, &has_genlock, &has_lmh0387, &has_si596);
+            &has_si5324, &has_genlock, &has_lmh0387, &has_si596, &has_si552);
 
     /* sdi_pre_init */
 
     if (has_gs12281)
         gs12281_spi_init(fd);
     if (has_gs12241) {
-        if (sd) {
+        if (mode == SDI_TX_MODE_SD) {
             gs12241_reset(fd, device_number);
             gs12241_config_for_sd(fd, device_number);
         }
@@ -576,142 +567,63 @@ static void init_hardware_part1(struct upipe *upipe, bool ntsc, bool genlock, bo
         sdi_lmh0387_direction(fd, 1);
     }
 
-    /* sdi_init */
+    /* reset channel */
+    sdi_channel_reset_rx(fd, 1);
+    sdi_channel_reset_tx(fd, 1);
 
-    /* reset sdi cores */
-    sdi_writel(fd, CSR_SDI_QPLL_REFCLK_STABLE_ADDR, 0);
-    switch (device_number) {
-        case 0:
-            sdi_writel(fd, CSR_SDI0_CORE_TX_RESET_ADDR, 1);
-            break;
-        case 1:
-            sdi_writel(fd, CSR_SDI1_CORE_TX_RESET_ADDR, 1);
-            break;
-        case 2:
-            sdi_writel(fd, CSR_SDI2_CORE_TX_RESET_ADDR, 1);
-            break;
-        case 3:
-            sdi_writel(fd, CSR_SDI3_CORE_TX_RESET_ADDR, 1);
-            break;
-    }
-
-    /* reset driver */
-
-    /* disable loopback */
-    sdi_dma(fd, 0);
-
-    /* disable dmas */
-    int64_t hw_count, sw_count;
-    sdi_dma_reader(fd, 0, &hw_count, &sw_count);
-
-    if (has_si5324) { /* PCIE_SDI_HW */
-        /* si5324 reset */
-        si5324_spi_write(fd, 136, 80);
-
-        /* si5324 configuration */
-        if (ntsc) {
-            sdi_si5324_vcxo(fd, 512<<10, 1024<<10);
-            for (int i = 0; i < countof(si5324_148_35_mhz_regs); i++) {
-                si5324_spi_write(fd, si5324_148_35_mhz_regs[i][0], si5324_148_35_mhz_regs[i][1]);
-            }
-        } else if (genlock) {
-            si5324_genlock(fd);
-        } else { /* pal */
-            sdi_si5324_vcxo(fd, 512<<10, 1024<<10);
-            for (int i = 0; i < countof(si5324_148_5_mhz_regs); i++) {
-                si5324_spi_write(fd, si5324_148_5_mhz_regs[i][0], si5324_148_5_mhz_regs[i][1]);
-            }
+    /* PCIe SDI (Falcon 9) */
+    if (has_vcxos && has_si5324) {
+        if (rate == SDI_PAL_RATE) {
+            /* Set channel to refclk0. */
+            sdi_channel_set_pll(fd, 0);
+        } else if (rate == SDI_NTSC_RATE) {
+            /* Set channel 0 to refclk1. */
+            sdi_channel_set_pll(fd, 1);
         }
-
-        /* reference clock selection */
-        sdi_writel(fd, CSR_SDI_QPLL_PLL0_REFCLK_SEL_ADDR, REFCLK1_SEL);
     }
 
-    else if (has_si596) { /* MINI_4K_HW */
+    /* Mini 4K */
+    else if (has_si596) {
+        /* TODO: Need to write to CSR_SDI_QPLL_REFCLK_STABLE_ADDR when changing refclk? */
         uint32_t refclk_freq;
         uint64_t refclk_counter;
-
-        /* disable pwm */
-        sdi_writel(fd, CSR_REFCLK_PWM_ENABLE_ADDR, 0);
-        if (ntsc) {
-            sdi_refclk(fd, 1, &refclk_freq, &refclk_counter);
-        } else { /* pal */
+        if (rate == SDI_PAL_RATE) {
             sdi_refclk(fd, 0, &refclk_freq, &refclk_counter);
+        } else if (rate == SDI_NTSC_RATE) {
+            sdi_refclk(fd, 1, &refclk_freq, &refclk_counter);
         }
-        sdi_writel(fd, CSR_SDI_QPLL_PLL0_REFCLK_SEL_ADDR, REFCLK0_SEL);
     }
 
-    else { /* DUO2_HW */
-        /* reference clock selection */
-        if (ntsc) {
-            sdi_writel(fd, CSR_SDI_QPLL_PLL0_REFCLK_SEL_ADDR, REFCLK1_SEL);
-        } else { /* pal */
-            sdi_writel(fd, CSR_SDI_QPLL_PLL0_REFCLK_SEL_ADDR, REFCLK0_SEL);
+    /* Duo2 */
+    else if (has_lmh0387) {
+        if (rate == SDI_PAL_RATE) {
+            sdi_picxo(fd, 0, 0, 0);
+        } else if (rate == SDI_NTSC_RATE) {
+            /* SD: use a 270Mbps linerate, don't use PICXO */
+            if (mode == SDI_TX_MODE_SD)
+                sdi_picxo(fd, 0, 0, 0);
+            /* HD: use PICXO to slow down 74.25MHz to 74.25MHz/1.001 clock */
+            else if (mode == SDI_TX_MODE_HD)
+                sdi_picxo(fd, 1, 1, 10);
+            /* 3G: use PICXO to slow down 148.5Mhz to 148.5MHz/1.001 clock */
+            else
+                sdi_picxo(fd, 1, 1, 5);
         }
     }
+
+    /* unreset channel */
+    sdi_channel_reset_rx(fd, 0);
+    sdi_channel_reset_tx(fd, 0);
+
+    /* disable pattern */
+    sdi_set_pattern(fd, mode, 0, 0);
+
+    /* set TX mode */
+    uint8_t txen, slew;
+    sdi_tx(fd, mode, &txen, &slew);
 
     /* Store rate in driver. */
-    if (ntsc)
-        sdi_set_rate(fd, SDI_NTSC_RATE);
-    else if (genlock)
-        sdi_set_rate(fd, SDI_GENLOCK_RATE);
-    else
-        sdi_set_rate(fd, SDI_PAL_RATE);
-}
-
-static void init_hardware_part2(struct upipe *upipe)
-{
-    struct upipe_pciesdi_sink *ctx = upipe_pciesdi_sink_from_upipe(upipe);
-    int fd = ctx->fd;
-    int device_number = ctx->device_number;
-
-    /* un-reset sdi cores */
-    sdi_writel(fd, CSR_SDI_QPLL_REFCLK_STABLE_ADDR, 1);
-    switch (device_number) {
-        case 0:
-            sdi_writel(fd, CSR_SDI0_CORE_TX_RESET_ADDR, 0);
-            break;
-        case 1:
-            sdi_writel(fd, CSR_SDI1_CORE_TX_RESET_ADDR, 0);
-            break;
-        case 2:
-            sdi_writel(fd, CSR_SDI2_CORE_TX_RESET_ADDR, 0);
-            break;
-        case 3:
-            sdi_writel(fd, CSR_SDI3_CORE_TX_RESET_ADDR, 0);
-            break;
-    }
-}
-
-static void run_init_hardware_part2(struct upump *upump)
-{
-    struct upipe *upipe = upump_get_opaque(upump, struct upipe *);
-
-    init_hardware_part2(upipe);
-
-    /* Now that the mode is being set or changed the sink needs to wait about 2
-     * seconds before it can correctly report the time again. */
-    /* FIXME: possibly out-dated */
-    upipe_pciesdi_sink_wait_timer_upump(upipe, UCLOCK_FREQ/2, mark_clock_as_inited);
-}
-
-#endif
-
-static void mark_clock_as_inited(struct upump *upump)
-{
-    struct upipe *upipe = upump_get_opaque(upump, struct upipe *);
-    struct upipe_pciesdi_sink *ctx = upipe_pciesdi_sink_from_upipe(upipe);
-    pthread_mutex_lock(&ctx->clock_mutex);
-    ctx->clock_is_inited = 1;
-    pthread_mutex_unlock(&ctx->clock_mutex);
-
-    /* Clear next uref. */
-    uref_free(ctx->uref_next);
-    ctx->uref_next = NULL;
-    /* Free uref being written. */
-    uref_free(ctx->uref);
-    ctx->uref = NULL;
-    ctx->written = 0;
+    sdi_set_rate(fd, rate);
 }
 
 /** @internal @This sets the input flow definition.
@@ -741,12 +653,21 @@ static int upipe_pciesdi_sink_set_flow_def(struct upipe *upipe, struct uref *flo
 
     /* TODO: init card based on given format. */
 
+    int tx_mode;
     if (sd)
-        upipe_pciesdi_sink->tx_mode = SDI_TX_MODE_SD;
+        tx_mode = SDI_TX_MODE_SD;
     else if (sdi3g)
-        upipe_pciesdi_sink->tx_mode = SDI_TX_MODE_3G;
+        tx_mode = SDI_TX_MODE_3G;
     else
-        upipe_pciesdi_sink->tx_mode = SDI_TX_MODE_HD;
+        tx_mode = SDI_TX_MODE_HD;
+
+    int clock_rate;
+    if (ntsc)
+        clock_rate = SDI_NTSC_RATE;
+    else if (genlock)
+        clock_rate = SDI_GENLOCK_RATE;
+    else
+        clock_rate = SDI_PAL_RATE;
 
     if (upipe_pciesdi_sink->fd == -1) {
         upipe_warn(upipe, "device has not been opened, unable to init hardware");
@@ -757,7 +678,7 @@ static int upipe_pciesdi_sink_set_flow_def(struct upipe *upipe, struct uref *flo
      * clock always goes forwards when mode changes. */
     uint64_t offset = upipe_pciesdi_sink_now(&upipe_pciesdi_sink->uclock);
 
-    UBASE_RETURN(check_capabilities(upipe, ntsc, genlock));
+    UBASE_RETURN(check_capabilities(upipe, genlock));
 
     upipe_warn(upipe, "new flow_def, stopping DMA and upump");
     stop_dma(upipe);
@@ -789,47 +710,13 @@ static int upipe_pciesdi_sink_set_flow_def(struct upipe *upipe, struct uref *flo
     pthread_mutex_lock(&upipe_pciesdi_sink->clock_mutex);
 
     /* initialize clock */
-#if INIT_HARDWARE
-    init_hardware_part1(upipe, ntsc, genlock, sd);
-#endif
+    init_hardware_part1(upipe, clock_rate, tx_mode);
     upipe_pciesdi_sink->freq = freq;
     upipe_pciesdi_sink->offset = offset;
-    upipe_pciesdi_sink->clock_is_inited = 0;
+    upipe_pciesdi_sink->clock_is_inited = 1;
 
     /* Unlock */
     pthread_mutex_unlock(&upipe_pciesdi_sink->clock_mutex);
-
-    /* disable pattern */
-    sdi_set_pattern(upipe_pciesdi_sink->fd, upipe_pciesdi_sink->tx_mode, 0, 0);
-
-    /* set TX mode */
-    uint8_t txen, slew;
-    sdi_tx(upipe_pciesdi_sink->fd, upipe_pciesdi_sink->tx_mode, &txen, &slew);
-
-#if INIT_HARDWARE
-
-    /* Wait 100ms second before running part2. */
-    struct upump *upump = upump_alloc_timer(upipe_pciesdi_sink->upump_mgr,
-            run_init_hardware_part2, upipe, upipe->refcount, UCLOCK_FREQ/10, 0);
-    if (unlikely(upump == NULL)) {
-        upipe_throw_fatal(upipe, UBASE_ERR_UPUMP);
-        return UBASE_ERR_UPUMP;
-    }
-    upipe_pciesdi_sink_set_timer_upump(upipe, upump);
-    upump_start(upump);
-
-#else
-
-    struct upump *upump = upump_alloc_timer(upipe_pciesdi_sink->upump_mgr,
-            mark_clock_as_inited, upipe, upipe->refcount, UCLOCK_FREQ, 0);
-    if (unlikely(upump == NULL)) {
-        upipe_throw_fatal(upipe, UBASE_ERR_UPUMP);
-        return UBASE_ERR_UPUMP;
-    }
-    upipe_pciesdi_sink_set_timer_upump(upipe, upump);
-    upump_start(upump);
-
-#endif
 
     return UBASE_ERR_NONE;
 }

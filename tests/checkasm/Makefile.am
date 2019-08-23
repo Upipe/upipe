@@ -11,7 +11,7 @@ checkasm_LDADD = $(LDADD) $(AVUTIL_LIBS) \
 checkasm_SOURCES = checkasm.c checkasm.h timer.h \
     planar10_input.c \
     planar8_input.c \
-    sdi3g_input.c \
+    levelb.c \
     sdi_input.c \
     uyvy_input.c \
     v210_input.c \

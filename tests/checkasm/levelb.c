@@ -40,52 +40,27 @@ static void randomize_buffers_packed(uint8_t *src0, uint8_t *src1)
     }
 }
 
-void checkasm_check_sdi3g_input(void)
+void checkasm_check_levelb_input(void)
 {
     struct {
         void (*packed)(const uint8_t *src, uint16_t *dst1, uint16_t *dst2, uintptr_t pixels);
-        void (*unpacked)(const uint16_t *src, uint16_t *dst1, uint16_t *dst2, uintptr_t pixels);
     } s = {
-        .packed = upipe_sdi3g_to_uyvy_2_c,
-        .unpacked = upipe_levelb_unpack_c,
+        .packed = upipe_levelb_to_uyvy_c,
     };
 
     int cpu_flags = av_get_cpu_flags();
 
 #ifdef HAVE_X86ASM
-    if (cpu_flags & AV_CPU_FLAG_SSE2) {
-        s.unpacked = upipe_sdi3g_levelb_unpack_sse2;
-    }
     if (cpu_flags & AV_CPU_FLAG_SSSE3) {
-        s.packed = upipe_sdi3g_to_uyvy_2_ssse3;
+        s.packed = upipe_levelb_to_uyvy_ssse3;
     }
     if (cpu_flags & AV_CPU_FLAG_AVX) {
-        s.packed = upipe_sdi3g_to_uyvy_2_avx;
+        s.packed = upipe_levelb_to_uyvy_avx;
     }
     if (cpu_flags & AV_CPU_FLAG_AVX2) {
-        s.packed = upipe_sdi3g_to_uyvy_2_avx2;
+        s.packed = upipe_levelb_to_uyvy_avx2;
     }
 #endif
-
-    if (check_func(s.unpacked, "unpacked")) {
-        uint16_t src0[NUM_SAMPLES];
-        uint16_t src1[NUM_SAMPLES];
-        uint16_t dst0[NUM_SAMPLES / 2];
-        uint16_t dst1[NUM_SAMPLES / 2];
-        uint16_t dst2[NUM_SAMPLES / 2];
-        uint16_t dst3[NUM_SAMPLES / 2];
-        declare_func(void, const uint16_t *src, uint16_t *dst1, uint16_t *dst2, uintptr_t pixels);
-
-        randomize_buffers_unpacked(src0, src1);
-        call_ref(src0, dst0, dst2, NUM_SAMPLES / 4);
-        call_new(src1, dst1, dst3, NUM_SAMPLES / 4);
-        if (memcmp(src0, src1, sizeof src0)
-                || memcmp(dst0, dst1, sizeof dst0)
-                || memcmp(dst2, dst3, sizeof dst2))
-            fail();
-        bench_new(src1, dst1, dst3, NUM_SAMPLES / 4);
-    }
-    report("unpacked");
 
     if (check_func(s.packed, "packed")) {
         uint8_t  src0[2 * NUM_SAMPLES * 10 / 8];

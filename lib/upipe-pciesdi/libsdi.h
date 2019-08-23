@@ -20,9 +20,6 @@
 #ifndef SDI_LIB_H
 #define SDI_LIB_H
 
-#define SDI_DEVICE_IS_BITPACKED 1
-
-
 int64_t get_time_ms(void);
 
 /* ioctl */
@@ -35,7 +32,8 @@ void sdi_refclk(int fd, uint8_t refclk_sel, uint32_t *refclk_freq, uint64_t *ref
 
 void sdi_capabilities(int fd, uint8_t *channels, uint8_t *has_vcxos,
         uint8_t *has_gs12241, uint8_t *has_gs12281, uint8_t *has_si5324,
-        uint8_t *has_genlock, uint8_t *has_lmh0387, uint8_t *has_si596);
+        uint8_t *has_genlock, uint8_t *has_lmh0387, uint8_t *has_si596,
+        uint8_t *has_si552);
 
 void sdi_set_rate(int fd, uint8_t rate);
 uint8_t sdi_get_rate(int fd);
@@ -68,11 +66,18 @@ void sdi_lmh0387_spi(int fd, uint32_t tx_data, uint32_t *rx_data);
 void sdi_rx(int fd, uint8_t *locked, uint8_t *mode, uint8_t *family, uint8_t *scan, uint8_t *rate);
 void sdi_tx(int fd, uint8_t mode, uint8_t *txen, uint8_t *slew);
 void sdi_tx_rx_loopback(int fd, uint8_t config);
+void sdi_tx_monitor(int fd, uint32_t *tx_underflows);
+void sdi_rx_monitor(int fd, uint32_t *rx_overflows);
 
 uint8_t sdi_request_dma_reader(int fd);
 uint8_t sdi_request_dma_writer(int fd);
 void sdi_release_dma_reader(int fd);
 void sdi_release_dma_writer(int fd);
+
+void sdi_channel_reset_rx(int fd, uint8_t reset);
+void sdi_channel_reset_tx(int fd, uint8_t reset);
+void sdi_channel_set_pll(int fd, uint8_t pll);
+void sdi_channel_get_refclk(int fd, uint32_t *refclk_freq, uint64_t *refclk_counter);
 
 #define countof(x) (sizeof(x) / sizeof(x[0]))
 
@@ -174,7 +179,8 @@ static const uint16_t si5324_148_35_mhz_regs[][2] = {
 
 #define FALCON9_FLASH_READ_ID_REG 0x9E
 #define MINI_4K_FLASH_READ_ID_REG 0x9F
-#define DUO2_FLASH_READ_ID_REG 0x9F
+#define DUO2_FLASH_READ_ID_REG    0x9F
+#define SDI_4K_FLASH_READ_ID_REG  0x9F
 
 #define FLASH_READ    0x03
 #define FLASH_WREN    0x06
@@ -192,7 +198,7 @@ static const uint16_t si5324_148_35_mhz_regs[][2] = {
 uint8_t sdi_flash_read(int fd, uint32_t addr);
 int sdi_flash_get_erase_block_size(int fd);
 int sdi_flash_write(int fd,
-                     const uint8_t *buf, uint32_t base, uint32_t size,
+                     uint8_t *buf, uint32_t base, uint32_t size,
                      void (*progress_cb)(void *opaque, const char *fmt, ...),
                      void *opaque);
 
@@ -429,5 +435,10 @@ static const uint16_t smpte274m_1080p23_98_regs[][2] = {
 };
 
 void si5324_genlock(int fd);
+
+const char *sdi_decode_mode(uint8_t mode);
+const char *sdi_decode_family(uint8_t family);
+const char *sdi_decode_scan(uint8_t scan, uint8_t mode);
+const char *sdi_decode_rate(uint8_t rate, uint8_t scan);
 
 #endif /* SDI_LIB_H */
