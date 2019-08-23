@@ -365,7 +365,7 @@ static uint64_t flash_spi(int fd, int tx_len, uint8_t cmd,
     return m.rx_data;
 }
 
-uint32_t flash_read_id(int fd, int reg)
+static uint32_t flash_read_id(int fd, int reg)
 {
     return flash_spi(fd, 32, reg, 0) & 0xffffff;
 }

@@ -777,11 +777,10 @@ static int init_hardware(struct upipe *upipe, bool ntsc, bool genlock, bool sd)
     int fd = ctx->fd;
     int device_number = ctx->device_number;
 
-    uint8_t channels, has_vcxos;
-    uint8_t has_gs12241, has_gs12281, has_si5324;
-    uint8_t has_genlock, has_lmh0387, has_si596;
+    uint8_t channels, has_vcxos, has_gs12241, has_gs12281, has_si5324,
+               has_genlock, has_lmh0387, has_si596, has_si552;
     sdi_capabilities(fd, &channels, &has_vcxos, &has_gs12241, &has_gs12281,
-            &has_si5324, &has_genlock, &has_lmh0387, &has_si596);
+            &has_si5324, &has_genlock, &has_lmh0387, &has_si596, &has_si552);
 
     if (device_number < 0 || device_number >= channels) {
         upipe_err_va(upipe, "invalid device number (%d) for number of channels (%d)",
