@@ -2,12 +2,13 @@
 #define __HW_CONFIG_H
 #include "csr.h"
 
-#define MINIMAL_GATEWARE_REVISION "2019-07-15"
+#define MINIMAL_GATEWARE_REVISION "2019-08-15"
 
 /* targets identifiers */
 #define FALCON9_FPGA_IDENTIFIER "Falcon9"
 #define DUO2_FPGA_IDENTIFIER "Duo2"
 #define MINI_4K_FPGA_IDENTIFIER "Mini 4k"
+#define SDI_4K_FPGA_IDENTIFIER "SDI 4k"
 
 /* pci */
 #define PCIE_FPGA_VENDOR_ID 0x1bb8

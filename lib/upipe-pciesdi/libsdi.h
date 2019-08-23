@@ -32,7 +32,8 @@ void sdi_refclk(int fd, uint8_t refclk_sel, uint32_t *refclk_freq, uint64_t *ref
 
 void sdi_capabilities(int fd, uint8_t *channels, uint8_t *has_vcxos,
         uint8_t *has_gs12241, uint8_t *has_gs12281, uint8_t *has_si5324,
-        uint8_t *has_genlock, uint8_t *has_lmh0387, uint8_t *has_si596);
+        uint8_t *has_genlock, uint8_t *has_lmh0387, uint8_t *has_si596,
+        uint8_t *has_si552);
 
 void sdi_set_rate(int fd, uint8_t rate);
 uint8_t sdi_get_rate(int fd);
@@ -178,7 +179,8 @@ static const uint16_t si5324_148_35_mhz_regs[][2] = {
 
 #define FALCON9_FLASH_READ_ID_REG 0x9E
 #define MINI_4K_FLASH_READ_ID_REG 0x9F
-#define DUO2_FLASH_READ_ID_REG 0x9F
+#define DUO2_FLASH_READ_ID_REG    0x9F
+#define SDI_4K_FLASH_READ_ID_REG  0x9F
 
 #define FLASH_READ    0x03
 #define FLASH_WREN    0x06
@@ -196,7 +198,7 @@ static const uint16_t si5324_148_35_mhz_regs[][2] = {
 uint8_t sdi_flash_read(int fd, uint32_t addr);
 int sdi_flash_get_erase_block_size(int fd);
 int sdi_flash_write(int fd,
-                     const uint8_t *buf, uint32_t base, uint32_t size,
+                     uint8_t *buf, uint32_t base, uint32_t size,
                      void (*progress_cb)(void *opaque, const char *fmt, ...),
                      void *opaque);
 

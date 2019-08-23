@@ -71,7 +71,8 @@ void sdi_refclk(int fd, uint8_t refclk_sel, uint32_t *refclk_freq, uint64_t *ref
 
 void sdi_capabilities(int fd, uint8_t *channels, uint8_t *has_vcxos,
         uint8_t *has_gs12241, uint8_t *has_gs12281, uint8_t *has_si5324,
-        uint8_t *has_genlock, uint8_t *has_lmh0387, uint8_t *has_si596) {
+        uint8_t *has_genlock, uint8_t *has_lmh0387, uint8_t *has_si596,
+        uint8_t *has_si552) {
     struct sdi_ioctl_capabilities m;
     ioctl(fd, SDI_IOCTL_CAPABILITIES, &m);
     *channels    = m.channels;
@@ -82,6 +83,7 @@ void sdi_capabilities(int fd, uint8_t *channels, uint8_t *has_vcxos,
     *has_genlock = m.has_genlock;
     *has_lmh0387 = m.has_lmh0387;
     *has_si596   = m.has_si596;
+    *has_si552   = m.has_si552;
 }
 
 void sdi_set_rate(int fd, uint8_t rate) {
@@ -343,16 +345,23 @@ void sdi_channel_get_refclk(int fd, uint32_t *refclk_freq, uint64_t *refclk_coun
 
 /* flash */
 
+//#define FLASH_FULL_ERASE
+#define FLASH_RETRIES 16
+
+static void flash_spi_cs(int fd, uint8_t cs_n)
+{
+    sdi_writel(fd, CSR_FLASH_CS_N_OUT_ADDR, cs_n);
+}
+
 static uint64_t flash_spi(int fd, int tx_len, uint8_t cmd,
                           uint32_t tx_data)
 {
     struct sdi_ioctl_flash m;
+    flash_spi_cs(fd, 0);
     m.tx_len = tx_len;
     m.tx_data = tx_data | ((uint64_t)cmd << 32);
-    if (ioctl(fd, SDI_IOCTL_FLASH, &m) < 0) {
-        perror("SDI_IOCTL_FLASH");
-        exit(1);
-    }
+    ioctl(fd, SDI_IOCTL_FLASH, &m);
+    flash_spi_cs(fd, 1);
     return m.rx_data;
 }
 
@@ -401,9 +410,68 @@ static void flash_write(int fd, uint32_t addr, uint8_t byte)
     flash_spi(fd, 40, FLASH_PP, (addr << 8) | byte);
 }
 
+static void flash_write_buffer(int fd, uint32_t addr, uint8_t *buf, uint16_t size)
+{
+    int i;
+
+    struct sdi_ioctl_flash m;
+
+    if (size == 1) {
+        flash_write(fd, addr, buf[0]);
+    } else {
+        /* set cs_n */
+        flash_spi_cs(fd, 0);
+
+        /* send cmd */
+        m.tx_len = 32;
+        m.tx_data = ((uint64_t)FLASH_PP << 32) | ((uint64_t)addr << 8);
+        ioctl(fd, SDI_IOCTL_FLASH, &m);
+
+        /* send bytes */
+        for (i=0; i<size; i++) {
+            m.tx_len = 8;
+            m.tx_data = ((uint64_t)buf[i] << 32);
+            ioctl(fd, SDI_IOCTL_FLASH, &m);
+        }
+
+        /* release cs_n */
+        flash_spi_cs(fd, 1);
+    }
+}
+
 uint8_t sdi_flash_read(int fd, uint32_t addr)
 {
     return flash_spi(fd, 40, FLASH_READ, addr << 8) & 0xff;
+}
+
+static void sdi_flash_read_buffer(int fd, uint32_t addr, uint8_t *buf, uint16_t size)
+{
+    int i;
+
+    struct sdi_ioctl_flash m;
+
+    if (size == 1) {
+        buf[0] = sdi_flash_read(fd, addr);
+
+    } else {
+        /* set cs_n */
+        flash_spi_cs(fd, 0);
+
+        /* send cmd */
+        m.tx_len = 32;
+        m.tx_data = ((uint64_t)FLASH_READ << 32) | ((uint64_t)addr << 8);
+        ioctl(fd, SDI_IOCTL_FLASH, &m);
+
+        /* read bytes */
+        for (i=0; i<size; i++) {
+            m.tx_len = 8;
+            ioctl(fd, SDI_IOCTL_FLASH, &m);
+            buf[i] = m.rx_data;
+        }
+
+        /* release cs_n */
+        flash_spi_cs(fd, 1);
+    }
 }
 
 int sdi_flash_get_erase_block_size(int fd)
@@ -411,27 +479,51 @@ int sdi_flash_get_erase_block_size(int fd)
     return FLASH_SECTOR_SIZE;
 }
 
+static int sdi_flash_get_flash_program_size(int fd)
+{
+    int software_cs = 1;
+    /* if software cs control, program in blocks to speed up update */
+    sdi_writel(fd, CSR_FLASH_CS_N_OUT_ADDR, 0);
+    software_cs &= ((sdi_readl(fd, CSR_FLASH_CS_N_OUT_ADDR) & 0x1) == 0);
+    sdi_writel(fd, CSR_FLASH_CS_N_OUT_ADDR, 1);
+    software_cs &= ((sdi_readl(fd, CSR_FLASH_CS_N_OUT_ADDR) & 0x1) == 1);
+    if (software_cs)
+        return 256;
+    else
+        return 1;
+}
+
 int sdi_flash_write(int fd,
-                     const uint8_t *buf, uint32_t base, uint32_t size,
+                     uint8_t *buf, uint32_t base, uint32_t size,
                      void (*progress_cb)(void *opaque, const char *fmt, ...),
                      void *opaque)
 {
-    int i, errors, retry;
+    int i;
+    int retries;
+    uint16_t flash_program_size;
+
+    flash_program_size = sdi_flash_get_flash_program_size(fd);
+    printf("flash_program_size: %d\n", flash_program_size);
+
+    uint8_t cmp_buf[256];
 
     /* dummy command because in some case the first erase does not
        work. */
     flash_read_id(fd, 0);
 
-#if 0
+    /* disable write protection */
+     flash_write_enable(fd);
+
+#ifndef FLASH_FULL_ERASE
     /* erase */
     for(i = 0; i < size; i += FLASH_SECTOR_SIZE) {
         if (progress_cb) {
-            progress_cb(opaque, "Erasing %08x\r", base + i);
+            progress_cb(opaque, "Erasing @%08x\r", base + i);
         }
         flash_write_enable(fd);
         flash_erase_sector(fd, base + i);
         while (flash_read_status(fd) & FLASH_WIP) {
-            usleep(10 * 1000);
+            usleep(1000);
         }
     }
     if (progress_cb) {
@@ -443,47 +535,43 @@ int sdi_flash_write(int fd,
     flash_write_enable(fd);
     flash_spi(fd, 8, 0xC7, 0);
     while (flash_read_status(fd) & FLASH_WIP) {
-        usleep(10 * 1000);
+        usleep(1000);
     }
 #endif
     flash_write_disable(fd);
 
-    i = errors = retry = 0;
+    i = 0;
+    retries = 0;
     while (i < size) {
         if (progress_cb && (i % FLASH_SECTOR_SIZE) == 0) {
-            progress_cb(opaque, "Writing %08x\r", base + i);
+            progress_cb(opaque, "Writing @%08x\r", base + i);
         }
 
-        /* program */
-        while (flash_read_status(fd) & FLASH_WIP) {
-            usleep(10 * 1000);
-        }
+        /* wait flash to be ready */
+        while (flash_read_status(fd) & FLASH_WIP)
+            usleep(100);
+
+        /* write flash page */
         flash_write_enable(fd);
-        flash_write(fd, base + i, buf[i]);
+        flash_write_buffer(fd, base + i, buf + i, flash_program_size);
         flash_write_disable(fd);
 
-        /* verify */
+        /* wait flash to be ready*/
         while (flash_read_status(fd) & FLASH_WIP)
-            usleep(10 * 1000);
-        if (sdi_flash_read(fd, base + i) != buf[i]) {
-            retry += 1;
+            usleep(100);
+
+        /* verify flash page */
+        sdi_flash_read_buffer(fd, base + i, cmp_buf, flash_program_size);
+        if (memcmp(buf + i, cmp_buf, flash_program_size) != 0) {
+            retries += 1;
         } else {
-            if (retry && progress_cb) {
-                progress_cb(opaque, "Retried %d times at 0x%08x\n",
-                        retry, base+i);
-            }
-            i += 1;
-            retry = 0;
+            i += flash_program_size;
+            retries = 0;
         }
 
-        if (retry > 10) {
-            if (retry && progress_cb) {
-                progress_cb(opaque, "Max retry reached at 0x%08x, continuing\n",
-                        base+i);
-            }
-            retry = 0;
-            i += 1;
-            errors += 1;
+        if (retries > FLASH_RETRIES) {
+            printf("Not able to write page, exiting\n");
+            return 1;
         }
     }
 
@@ -491,7 +579,7 @@ int sdi_flash_write(int fd,
         progress_cb(opaque, "\n");
     }
 
-    return errors;
+    return 0;
 }
 
 /* spi */

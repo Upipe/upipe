@@ -65,6 +65,7 @@ struct sdi_ioctl_capabilities {
     uint8_t has_genlock;
     uint8_t has_lmh0387;
     uint8_t has_si596;
+    uint8_t has_si552;
 };
 
 struct sdi_ioctl_rate {
