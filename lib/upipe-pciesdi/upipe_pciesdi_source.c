@@ -320,6 +320,30 @@ static bool mmap_length_does_wrap(uint64_t buffer_count, uint64_t offset,
         + length > DMA_BUFFER_TOTAL_SIZE;
 }
 
+/*
+ * Give the position in the mmap buffer.
+ */
+static uint64_t mmap_position(uint64_t buffer_count, uint64_t offset)
+{
+    return (buffer_count * DMA_BUFFER_SIZE + offset) % DMA_BUFFER_TOTAL_SIZE;
+}
+
+/*
+ * Handle a memcpy that might wrap around in the mmap buffer.
+ */
+static void mmap_memcpy(uint8_t *dst, const uint8_t *src, uint64_t length,
+        uint64_t sw, uint64_t offset)
+{
+    if (mmap_length_does_wrap(sw, offset, length)) {
+        int left = DMA_BUFFER_TOTAL_SIZE - mmap_position(sw, offset);
+        int right = length - left;
+        memcpy(dst, mmap_wraparound(src, sw, offset), left);
+        memcpy(dst + left, mmap_wraparound(src, sw, offset + left), right);
+    } else {
+        memcpy(dst, mmap_wraparound(src, sw, offset), length);
+    }
+}
+
 /** @internal @This reads data from the source and outputs it.
  *  @param upump description structure of the read watcher
  */
@@ -418,9 +442,8 @@ static void upipe_pciesdi_src_worker(struct upump *upump)
     if (upipe_pciesdi_src->scratch_buffer_count) {
         offset = sdi_line_width - upipe_pciesdi_src->scratch_buffer_count;
         /* Copy to end of scratch buffer. */
-        memcpy(upipe_pciesdi_src->scratch_buffer + upipe_pciesdi_src->scratch_buffer_count,
-                mmap_wraparound(upipe_pciesdi_src->read_buffer, sw, 0),
-                offset);
+        mmap_memcpy(upipe_pciesdi_src->scratch_buffer + upipe_pciesdi_src->scratch_buffer_count,
+                upipe_pciesdi_src->read_buffer, offset, sw, 0);
         /* unpack */
         if (upipe_pciesdi_src->sdi3g_levelb) {
             /* Note: line order is swapped. */
