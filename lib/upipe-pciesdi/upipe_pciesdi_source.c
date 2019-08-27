@@ -320,6 +320,30 @@ static bool mmap_length_does_wrap(uint64_t buffer_count, uint64_t offset,
         + length > DMA_BUFFER_TOTAL_SIZE;
 }
 
+/*
+ * Give the position in the mmap buffer.
+ */
+static uint64_t mmap_position(uint64_t buffer_count, uint64_t offset)
+{
+    return (buffer_count * DMA_BUFFER_SIZE + offset) % DMA_BUFFER_TOTAL_SIZE;
+}
+
+/*
+ * Handle a memcpy that might wrap around in the mmap buffer.
+ */
+static void mmap_memcpy(uint8_t *dst, const uint8_t *src, uint64_t length,
+        uint64_t sw, uint64_t offset)
+{
+    if (mmap_length_does_wrap(sw, offset, length)) {
+        int left = DMA_BUFFER_TOTAL_SIZE - mmap_position(sw, offset);
+        int right = length - left;
+        memcpy(dst, mmap_wraparound(src, sw, offset), left);
+        memcpy(dst + left, mmap_wraparound(src, sw, offset + left), right);
+    } else {
+        memcpy(dst, mmap_wraparound(src, sw, offset), length);
+    }
+}
+
 /** @internal @This reads data from the source and outputs it.
  *  @param upump description structure of the read watcher
  */
@@ -418,9 +442,8 @@ static void upipe_pciesdi_src_worker(struct upump *upump)
     if (upipe_pciesdi_src->scratch_buffer_count) {
         offset = sdi_line_width - upipe_pciesdi_src->scratch_buffer_count;
         /* Copy to end of scratch buffer. */
-        memcpy(upipe_pciesdi_src->scratch_buffer + upipe_pciesdi_src->scratch_buffer_count,
-                mmap_wraparound(upipe_pciesdi_src->read_buffer, sw, 0),
-                offset);
+        mmap_memcpy(upipe_pciesdi_src->scratch_buffer + upipe_pciesdi_src->scratch_buffer_count,
+                upipe_pciesdi_src->read_buffer, offset, sw, 0);
         /* unpack */
         if (upipe_pciesdi_src->sdi3g_levelb) {
             /* Note: line order is swapped. */
@@ -448,16 +471,8 @@ static void upipe_pciesdi_src_worker(struct upump *upump)
         /* check whether a line wraps around in the mmap buffer */
         if (mmap_length_does_wrap(sw, offset, sdi_line_width + SIMD_OVERREAD)) {
             /* Copy both halves of line to scratch buffer. */
-            int bytes_remaining = DMA_BUFFER_TOTAL_SIZE - (sw * DMA_BUFFER_SIZE + offset) % DMA_BUFFER_TOTAL_SIZE;
-            if (bytes_remaining >= sdi_line_width)
-                bytes_remaining = sdi_line_width; // limit for overread check
-
-            memcpy(upipe_pciesdi_src->scratch_buffer,
-                    mmap_wraparound(upipe_pciesdi_src->read_buffer, sw, offset),
-                    bytes_remaining);
-            memcpy(upipe_pciesdi_src->scratch_buffer + bytes_remaining,
-                    mmap_wraparound(upipe_pciesdi_src->read_buffer, sw, offset+bytes_remaining),
-                    sdi_line_width - bytes_remaining);
+            mmap_memcpy(upipe_pciesdi_src->scratch_buffer,
+                    upipe_pciesdi_src->read_buffer, sdi_line_width, sw, offset);
             /* Now point to the scratch buffer. */
             sdi_line = upipe_pciesdi_src->scratch_buffer;
         }
@@ -527,22 +542,8 @@ static void upipe_pciesdi_src_worker(struct upump *upump)
     /* Copy unused data into the scratch buffer. */
     if (bytes_available != processed_bytes) {
         int bytes_remaining = bytes_available - processed_bytes;
-        if (mmap_length_does_wrap(sw, offset, bytes_remaining)) {
-            int before = DMA_BUFFER_TOTAL_SIZE - (sw * DMA_BUFFER_SIZE + offset) % DMA_BUFFER_TOTAL_SIZE;
-            int after = bytes_remaining - before;
-
-            memcpy(upipe_pciesdi_src->scratch_buffer,
-                    mmap_wraparound(upipe_pciesdi_src->read_buffer, sw, offset),
-                    before);
-            offset += before;
-            memcpy(upipe_pciesdi_src->scratch_buffer + before,
-                    mmap_wraparound(upipe_pciesdi_src->read_buffer, sw, offset),
-                    after);
-        } else {
-            memcpy(upipe_pciesdi_src->scratch_buffer,
-                    mmap_wraparound(upipe_pciesdi_src->read_buffer, sw, offset),
-                    bytes_remaining);
-        }
+        mmap_memcpy(upipe_pciesdi_src->scratch_buffer,
+                upipe_pciesdi_src->read_buffer, bytes_remaining, sw, offset);
         upipe_pciesdi_src->scratch_buffer_count = bytes_remaining;
     }
 
