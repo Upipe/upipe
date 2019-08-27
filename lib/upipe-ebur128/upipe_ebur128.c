@@ -249,7 +249,8 @@ static int upipe_ebur128_set_flow_def(struct upipe *upipe,
                  !ubase_check(uref_sound_flow_get_channels(flow,
                      &upipe_ebur128->channels)) ||
                  !ubase_check(uref_sound_flow_get_planes(flow,
-                     &upipe_ebur128->planes))))
+                     &upipe_ebur128->planes)) ||
+                 !rate))
         return UBASE_ERR_INVALID;
 
     struct uref *flow_dup;
