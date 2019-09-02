@@ -128,6 +128,7 @@ struct upipe_netmap_sink {
     uint64_t packet_duration;
     uint64_t frame_duration;
     unsigned packet_size;
+    bool progressive;
 
     /* Determined by the input flow_def */
     bool rfc4175;
@@ -645,6 +646,8 @@ static inline int get_interleaved_line(struct upipe *upipe)
     struct upipe_netmap_sink *upipe_netmap_sink = upipe_netmap_sink_from_upipe(upipe);
     uint64_t vsize = upipe_netmap_sink->vsize;
     int line = upipe_netmap_sink->line;
+    if (upipe_netmap_sink->progressive)
+        return line;
 
     if (line >= vsize / 2) {
         assert(line < vsize);
@@ -659,6 +662,7 @@ static inline int get_interleaved_line(struct upipe *upipe)
 static int worker_rfc4175(struct upipe *upipe, uint8_t **dst, uint16_t *len)
 {
     struct upipe_netmap_sink *upipe_netmap_sink = upipe_netmap_sink_from_upipe(upipe);
+    bool progressive = upipe_netmap_sink->progressive;
 
     uint16_t eth_frame_len = ETHERNET_HEADER_LEN + UDP_HEADER_SIZE + IP_HEADER_MINSIZE + RTP_HEADER_SIZE + RFC_4175_HEADER_LEN + RFC_4175_EXT_SEQ_NUM_LEN;
     uint16_t bytes_available = (1500 - eth_frame_len);
@@ -668,10 +672,13 @@ static int worker_rfc4175(struct upipe *upipe, uint8_t **dst, uint16_t *len)
     uint8_t marker = 0, continuation = 0;
 
     uint8_t field = upipe_netmap_sink->line >= upipe_netmap_sink->vsize / 2;
+    if (progressive)
+        field = 0;
 
     /* Going to write a second partial line so limit data_len */
     if (upipe_netmap_sink->pixel_offset + pixels1 >= upipe_netmap_sink->hsize) {
-        if (upipe_netmap_sink->line+1 == (upipe_netmap_sink->vsize/2) || upipe_netmap_sink->line+1 == upipe_netmap_sink->vsize)
+        if ((!progressive && upipe_netmap_sink->line+1 == (upipe_netmap_sink->vsize/2)) ||
+                upipe_netmap_sink->line+1 == upipe_netmap_sink->vsize)
             marker = 1;
         else
             continuation = 1;
@@ -798,7 +805,7 @@ static int worker_rfc4175(struct upipe *upipe, uint8_t **dst, uint16_t *len)
     upipe_netmap_sink->bits += (*len + 4 /* CRC */) * 8;
 
     /* Release consumed frame */
-    if (marker && field) {
+    if (marker && (progressive || field)) {
         upipe_netmap_sink->line = 0;
         upipe_netmap_sink->pixel_offset = 0;
         upipe_netmap_sink->frame_count++;
@@ -1309,6 +1316,8 @@ static void upipe_netmap_sink_worker(struct upump *upump)
         //printf("%" PRIu64 " %" PRIu64 "\n", now - upipe_netmap_sink->start, (int64_t)bps);
     }
 
+    bool progressive = upipe_netmap_sink->progressive;
+
     /* fill ring buffer */
     while (txavail) {
         if (upipe_netmap_sink->step && (upipe_netmap_sink->pkts_in_frame % upipe_netmap_sink->step) == 0) {
@@ -1324,7 +1333,7 @@ static void upipe_netmap_sink_worker(struct upump *upump)
                 if (rtp_check_marker(rtp)) /* marker needs to be set */ {
                     uint8_t *rfc = &rtp[RTP_HEADER_SIZE+ RFC_4175_EXT_SEQ_NUM_LEN];
                     uint8_t f2 = rfc4175_get_line_field_id(rfc);
-                    if (f2) /* only measure marker on field 2 */ {
+                    if (progressive || f2) {
                         uint16_t seq = rtp_get_seqnum(rtp);
                         handle_tx_stamp(upipe, txring[i]->slot[cur[i]].ptr, seq);
                     }
@@ -1407,12 +1416,11 @@ static void upipe_netmap_sink_worker(struct upump *upump)
                 continue;
 
             if (rfc4175) {
-                // TODO: progressive
                 if (*len[i] < udp_size + RTP_HEADER_SIZE + RFC_4175_EXT_SEQ_NUM_LEN + RFC_4175_HEADER_LEN)
                     continue;
                 uint8_t *rfc = &rtp[RTP_HEADER_SIZE+ RFC_4175_EXT_SEQ_NUM_LEN];
                 uint8_t f2 = rfc4175_get_line_field_id(rfc);
-                if (!f2) /* only measure marker on field 2 */
+                if (!progressive && !f2)
                     continue;
             }
 
@@ -1739,6 +1747,7 @@ static int upipe_netmap_sink_set_flow_def(struct upipe *upipe,
 
     UBASE_RETURN(uref_pic_flow_get_hsize(flow_def, &upipe_netmap_sink->hsize));
     UBASE_RETURN(uref_pic_flow_get_vsize(flow_def, &upipe_netmap_sink->vsize));
+    upipe_netmap_sink->progressive = ubase_check(uref_pic_get_progressive(flow_def));
 
     if (upipe_netmap_sink->hsize == 720) {
         if (upipe_netmap_sink->rfc4175)
