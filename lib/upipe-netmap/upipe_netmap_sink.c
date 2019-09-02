@@ -1597,6 +1597,13 @@ static bool upipe_netmap_sink_output(struct upipe *upipe, struct uref *uref,
             if (!intf->d)
                 break;
             FILE *f = fopen(intf->maxrate_uri, "w");
+
+            struct ifreq ifr = intf->ifr;
+            uint32_t u = (intf->ring_idx << 16) | (upipe_netmap_sink->packet_size + 4);
+            ifr.ifr_data = (void*)&u;
+            if (ioctl(intf->fd, SIOCDEVPRIVATE, &ifr) < 0)
+                perror("ioctl");
+
             if (!f) {
                 upipe_err_va(upipe, "Could not open maxrate sysctl %s",
                         intf->maxrate_uri);
