@@ -127,6 +127,7 @@ struct upipe_netmap_sink {
     uint64_t packets_per_frame;
     uint64_t packet_duration;
     uint64_t frame_duration;
+    unsigned packet_size;
 
     /* Determined by the input flow_def */
     bool rfc4175;
@@ -479,6 +480,7 @@ static struct upipe *_upipe_netmap_sink_alloc(struct upipe_mgr *mgr,
     upipe_netmap_sink->packets_per_frame = 0;
     upipe_netmap_sink->packet_duration = 0;
     upipe_netmap_sink->frame_duration = 0;
+    upipe_netmap_sink->packet_size = 0;
     upipe_netmap_sink->uref = NULL;
     upipe_netmap_sink_reset_counters(upipe);
     upipe_netmap_sink->gap_fakes = 4 * 22 + 2;
@@ -933,7 +935,7 @@ static void upipe_resync_queues(struct upipe *upipe, uint32_t packets)
 
     struct netmap_ring *txring = NETMAP_TXRING(intf->d->nifp, intf->ring_idx);
 
-    const unsigned len = upipe_netmap_sink->rfc4175 ? 1262 : 1438;
+    const unsigned len = upipe_netmap_sink->packet_size;
 
     uint32_t cur = txring->cur;
     for (uint32_t i = 0; i < packets; i++) {
@@ -1273,13 +1275,14 @@ static void upipe_netmap_sink_worker(struct upump *upump)
     }
 
     const bool rfc4175 = upipe_netmap_sink->rfc4175;
+    const unsigned pkt_len = upipe_netmap_sink->packet_size;
 
     if (txavail > (num_slots / 2) && !upipe_netmap_sink->n)
         ddd = true;
 
     __uint128_t bps = upipe_netmap_sink->bits;
     if (bps)
-        bps -= (num_slots - 1 - txavail) * (rfc4175 ? 1266 : 1442) * 8;
+        bps -= (num_slots - 1 - txavail) * (pkt_len + 4) * 8;
 
     struct netmap_slot *slot = &txring[0]->slot[cur[0]];
     uint64_t t = slot->ptr / 1000 * 27;
@@ -1309,7 +1312,7 @@ static void upipe_netmap_sink_worker(struct upump *upump)
     /* fill ring buffer */
     while (txavail) {
         if (upipe_netmap_sink->step && (upipe_netmap_sink->pkts_in_frame % upipe_netmap_sink->step) == 0) {
-            const unsigned len = rfc4175 ? 1262 : 1438;
+            const unsigned len = upipe_netmap_sink->packet_size;
             for (size_t i = 0; i < 2; i++) {
                 struct upipe_netmap_intf *intf = &upipe_netmap_sink->intf[i];
                 if (!intf->d || !intf->up)
@@ -1417,8 +1420,6 @@ static void upipe_netmap_sink_worker(struct upump *upump)
             handle_tx_stamp(upipe, slot->ptr, seq);
         }
 
-        const unsigned pkt_len = rfc4175 ? 1262 : 1438;
-
         if (rfc4175) {
             // TODO: -7
             if ((upipe_netmap_sink->line == 0 ||
@@ -1428,9 +1429,9 @@ static void upipe_netmap_sink_worker(struct upump *upump)
                     struct upipe_netmap_intf *intf = &upipe_netmap_sink->intf[i];
                     if (!intf->d || !intf->up)
                         continue;
-                    memset(dst[i], 0, 1262);
+                    memset(dst[i], 0, pkt_len);
                     memcpy(dst[i], intf->header, ETHERNET_HEADER_LEN);
-                    *len[i] = 1262;
+                    *len[i] = pkt_len;
                 }
                 upipe_netmap_sink->bits += (pkt_len + 4 /* CRC */) * 8;
                 upipe_netmap_sink->gap_fakes--;
@@ -1567,7 +1568,7 @@ static bool upipe_netmap_sink_output(struct upipe *upipe, struct uref *uref,
             uint64_t pixels = upipe_netmap_sink->hsize * upipe_netmap_sink->vsize;
             upipe_netmap_sink->frame_size = pixels * UPIPE_RFC4175_PIXEL_PAIR_BYTES / 2;
             const uint16_t eth_header_len = ETHERNET_HEADER_LEN + UDP_HEADER_SIZE + IP_HEADER_MINSIZE + RTP_HEADER_SIZE + RFC_4175_HEADER_LEN + RFC_4175_EXT_SEQ_NUM_LEN;
-            const uint16_t bytes_available = 1262 - eth_header_len;
+            const uint16_t bytes_available = upipe_netmap_sink->packet_size - eth_header_len;
             const uint64_t payload = (bytes_available / UPIPE_RFC4175_PIXEL_PAIR_BYTES) * UPIPE_RFC4175_PIXEL_PAIR_BYTES;
             upipe_netmap_sink->payload = payload;
 
@@ -1726,12 +1727,15 @@ static int upipe_netmap_sink_set_flow_def(struct upipe *upipe,
         }
     } else {
         upipe_netmap_sink->rfc4175 = 0;
+        upipe_netmap_sink->packet_size = 1438;
     }
 
     UBASE_RETURN(uref_pic_flow_get_hsize(flow_def, &upipe_netmap_sink->hsize));
     UBASE_RETURN(uref_pic_flow_get_vsize(flow_def, &upipe_netmap_sink->vsize));
 
     if (upipe_netmap_sink->hsize == 720) {
+        if (upipe_netmap_sink->rfc4175)
+            upipe_netmap_sink->packet_size = 962;
         if (upipe_netmap_sink->vsize == 486) {
             upipe_netmap_sink->frame = 0x10;
         } else if (upipe_netmap_sink->vsize == 576) {
@@ -1739,12 +1743,16 @@ static int upipe_netmap_sink_set_flow_def(struct upipe *upipe,
         } else
             return UBASE_ERR_INVALID;
     } else if (upipe_netmap_sink->hsize == 1920 && upipe_netmap_sink->vsize == 1080) {
+        if (upipe_netmap_sink->rfc4175)
+            upipe_netmap_sink->packet_size = 1262;
         upipe_netmap_sink->frame = 0x20; // interlaced
         // FIXME: progressive/interlaced is per-picture
         // XXX: should we do PSF at all?
         // 0x21 progressive
         // 0x22 psf
     } else if (upipe_netmap_sink->hsize == 1280 && upipe_netmap_sink->vsize == 720) {
+        if (upipe_netmap_sink->rfc4175)
+            upipe_netmap_sink->packet_size = 862;
         upipe_netmap_sink->frame = 0x30; // progressive
     } else
         return UBASE_ERR_INVALID;
