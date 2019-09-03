@@ -332,6 +332,7 @@ static void upipe_grid_in_input(struct upipe *upipe,
     if (unlikely(!ubase_check(
             upipe_grid_uclock_now(upipe_grid_to_upipe(upipe_grid), &now)))) {
         upipe_warn(upipe, "no clock set");
+        uref_free(uref);
         return;
     }
 
