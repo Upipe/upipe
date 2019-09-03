@@ -135,6 +135,7 @@ struct upipe_netmap_sink {
     int input_bit_depth;
     bool input_is_v210;
 
+    unsigned gap_fakes_current;
     unsigned gap_fakes;
     uint64_t phase_delay;
     uint64_t rtp_timestamp;
@@ -484,7 +485,8 @@ static struct upipe *_upipe_netmap_sink_alloc(struct upipe_mgr *mgr,
     upipe_netmap_sink->packet_size = 0;
     upipe_netmap_sink->uref = NULL;
     upipe_netmap_sink_reset_counters(upipe);
-    upipe_netmap_sink->gap_fakes = 4 * 22 + 2;
+    upipe_netmap_sink->gap_fakes = 0;
+    upipe_netmap_sink->gap_fakes_current = 0;
 
     upipe_netmap_sink->uri = NULL;
     for (size_t i = 0; i < 2; i++) {
@@ -1086,7 +1088,7 @@ static void handle_tx_stamp(struct upipe *upipe, uint64_t t, uint16_t seq)
         upipe_netmap_sink->needed_fakes = 0;
 
     if (upipe_netmap_sink->needed_fakes) {
-        uint64_t total = upipe_netmap_sink->packets_per_frame + 2 * (4 * 22 + 2);
+        uint64_t total = upipe_netmap_sink->packets_per_frame + upipe_netmap_sink->gap_fakes;
         upipe_netmap_sink->step = (total + upipe_netmap_sink->needed_fakes - 1) / upipe_netmap_sink->needed_fakes;
     } else
         upipe_netmap_sink->step = 0;
@@ -1431,7 +1433,7 @@ static void upipe_netmap_sink_worker(struct upump *upump)
         if (rfc4175) {
             // TODO: -7
             if ((upipe_netmap_sink->line == 0 ||
-                    upipe_netmap_sink->line == upipe_netmap_sink->vsize / 2) && upipe_netmap_sink->pixel_offset == 0 && upipe_netmap_sink->gap_fakes) {
+                (!progressive && upipe_netmap_sink->line == upipe_netmap_sink->vsize / 2)) && upipe_netmap_sink->pixel_offset == 0 && upipe_netmap_sink->gap_fakes_current) {
 
                 for (size_t i = 0; i < 2; i++) {
                     struct upipe_netmap_intf *intf = &upipe_netmap_sink->intf[i];
@@ -1442,10 +1444,11 @@ static void upipe_netmap_sink_worker(struct upump *upump)
                     *len[i] = pkt_len;
                 }
                 upipe_netmap_sink->bits += (pkt_len + 4 /* CRC */) * 8;
-                upipe_netmap_sink->gap_fakes--;
+                upipe_netmap_sink->gap_fakes_current--;
             } else {
-                // 22.5 lines, 4 packets between fields
-                upipe_netmap_sink->gap_fakes = 4 * 22 + 2;
+                upipe_netmap_sink->gap_fakes_current = upipe_netmap_sink->gap_fakes;
+                if (!progressive)
+                    upipe_netmap_sink->gap_fakes_current /= 2;
 
                 if (worker_rfc4175(upipe, &dst[0], len[0])) {
                     for (int i = 0; i < UPIPE_RFC4175_MAX_PLANES; i++) {
@@ -1583,7 +1586,8 @@ static bool upipe_netmap_sink_output(struct upipe *upipe, struct uref *uref,
             upipe_netmap_sink->packets_per_frame = (upipe_netmap_sink->frame_size + payload - 1) / payload;
 
             uint64_t packets = upipe_netmap_sink->packets_per_frame;
-            if (upipe_netmap_sink->hsize == 720) {
+            bool progressive = upipe_netmap_sink->progressive;
+            if (!progressive && upipe_netmap_sink->hsize == 720) {
                 if (upipe_netmap_sink->vsize == 486) {
                     packets *= 525;
                     packets /= 487;
@@ -1754,21 +1758,29 @@ static int upipe_netmap_sink_set_flow_def(struct upipe *upipe,
             upipe_netmap_sink->packet_size = 962;
         if (upipe_netmap_sink->vsize == 486) {
             upipe_netmap_sink->frame = 0x10;
+            if (upipe_netmap_sink->rfc4175)
+                upipe_netmap_sink->gap_fakes = 2 * (525 - 486); // 2 packets per line
         } else if (upipe_netmap_sink->vsize == 576) {
             upipe_netmap_sink->frame = 0x11;
+            if (upipe_netmap_sink->rfc4175)
+                upipe_netmap_sink->gap_fakes = 2 * (625 - 576);
         } else
             return UBASE_ERR_INVALID;
     } else if (upipe_netmap_sink->hsize == 1920 && upipe_netmap_sink->vsize == 1080) {
-        if (upipe_netmap_sink->rfc4175)
+        if (upipe_netmap_sink->rfc4175) {
             upipe_netmap_sink->packet_size = 1262;
+            upipe_netmap_sink->gap_fakes = 4 * (1125 - 1080);
+        }
         upipe_netmap_sink->frame = 0x20; // interlaced
         // FIXME: progressive/interlaced is per-picture
         // XXX: should we do PSF at all?
         // 0x21 progressive
         // 0x22 psf
     } else if (upipe_netmap_sink->hsize == 1280 && upipe_netmap_sink->vsize == 720) {
-        if (upipe_netmap_sink->rfc4175)
+        if (upipe_netmap_sink->rfc4175) {
             upipe_netmap_sink->packet_size = 862;
+            upipe_netmap_sink->gap_fakes = 4 * (750 - 720);
+        }
         upipe_netmap_sink->frame = 0x30; // progressive
     } else
         return UBASE_ERR_INVALID;
