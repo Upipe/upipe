@@ -1095,7 +1095,9 @@ static void handle_tx_stamp(struct upipe *upipe, uint64_t t, uint16_t seq)
         upipe_netmap_sink->needed_fakes = 0;
 
     if (upipe_netmap_sink->needed_fakes) {
-        uint64_t total = upipe_netmap_sink->packets_per_frame + upipe_netmap_sink->gap_fakes;
+        uint64_t total = upipe_netmap_sink->packets_per_frame;
+        if (upipe_netmap_sink->rfc4175)
+            total += upipe_netmap_sink->gap_fakes;
         upipe_netmap_sink->step = (total + upipe_netmap_sink->needed_fakes - 1) / upipe_netmap_sink->needed_fakes;
     } else
         upipe_netmap_sink->step = 0;
@@ -1340,9 +1342,16 @@ static void upipe_netmap_sink_worker(struct upump *upump)
                 const size_t udp_size = ETHERNET_HEADER_LEN + IP_HEADER_MINSIZE + UDP_HEADER_SIZE;
                 uint8_t *rtp = &dst[udp_size];
                 if (rtp_check_marker(rtp)) /* marker needs to be set */ {
-                    uint8_t *rfc = &rtp[RTP_HEADER_SIZE+ RFC_4175_EXT_SEQ_NUM_LEN];
-                    uint8_t f2 = rfc4175_get_line_field_id(rfc);
-                    if (progressive || f2) {
+                    bool stamp;
+                    if (rfc4175) {
+                        uint8_t *rfc = &rtp[RTP_HEADER_SIZE+ RFC_4175_EXT_SEQ_NUM_LEN];
+                        uint8_t f2 = rfc4175_get_line_field_id(rfc);
+                        if (f2 || progressive)
+                            stamp = true;
+                    } else {
+                        stamp = true;
+                    }
+                    if (stamp) {
                         uint16_t seq = rtp_get_seqnum(rtp);
                         handle_tx_stamp(upipe, txring[i]->slot[cur[i]].ptr, seq);
                     }
@@ -1470,7 +1479,6 @@ static void upipe_netmap_sink_worker(struct upump *upump)
                     bytes_left = 0;
                 }
             }
-            upipe_netmap_sink->pkts_in_frame++;
         } else {
             int s = worker_hbrmt(upipe, dst, src_buf, bytes_left, len);
             src_buf += s;
@@ -1506,6 +1514,7 @@ static void upipe_netmap_sink_worker(struct upump *upump)
             }
         }
 
+        upipe_netmap_sink->pkts_in_frame++;
         txavail--;
     }
 
