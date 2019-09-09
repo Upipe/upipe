@@ -29,6 +29,11 @@
 #define CSR_FAN_PERIOD_ADDR 0x6808
 #define CSR_FAN_PERIOD_SIZE 1
 
+/* flash_cs_n */
+#define CSR_FLASH_CS_N_BASE 0x8000
+#define CSR_FLASH_CS_N_OUT_ADDR 0x8000
+#define CSR_FLASH_CS_N_OUT_SIZE 1
+
 /* flash */
 #define CSR_FLASH_BASE 0x7000
 #define CSR_FLASH_SPI_CTRL_ADDR 0x7000

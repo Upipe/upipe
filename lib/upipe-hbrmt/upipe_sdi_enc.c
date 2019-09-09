@@ -23,6 +23,7 @@
 #include <upipe/upipe_helper_input.h>
 
 #include <bitstream/smpte/291.h>
+#include <bitstream/smpte/352.h>
 #include <bitstream/dvb/vbi.h>
 
 #include <upipe-hbrmt/upipe_sdi_enc.h>
@@ -311,7 +312,8 @@ static inline void put_payload_identifier(uint16_t *dst, const struct sdi_offset
 
     /* UDW */
     dst[gap*6] = f->pict_fmt->sd ? S352_PAYLOAD_SD : f->height == 750 ?
-                                   S352_PAYLOAD_720_INTERFACE_1_POINT_5_GBPS : S352_PAYLOAD_1080_INTERFACE_1_POINT_5_GBPS;
+                                   S352_PAYLOAD_720_INTERFACE_1_POINT_5_GBPS : f->frame_rate == S352_PICTURE_RATE_50 || f->frame_rate == S352_PICTURE_RATE_60000_1001 || f->frame_rate == S352_PICTURE_RATE_60 ?
+                                   S352_PAYLOAD_1080_INTERFACE_3_GBPS_LEVEL_A : S352_PAYLOAD_1080_INTERFACE_1_POINT_5_GBPS; //FIXME: level b support
     dst[gap*7] = (f->psf_ident << 6) | f->frame_rate;
     dst[gap*8] = S352_ASPECT_RATIO_16_9 << 7;
     dst[gap*9] = S352_BIT_DEPTH_10;
@@ -959,7 +961,7 @@ static void upipe_hd_sdi_enc_encode_line(struct upipe *upipe, int line_num, uint
     /* Chroma packets */
     /* Audio can go anywhere but the switching lines+1 */
     if (!(line_num == p->switching_line + 1) &&
-        !(p->field_offset && line_num == p->switching_line + p->field_offset + 1)) {
+        !(p->field_offset && line_num == p->switching_line + switching_line_offset + 1)) {
         int packets_put = 0;
 
         /* Start counting the destination from the start of the

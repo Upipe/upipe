@@ -31,35 +31,13 @@ sdi_luma_shuf_10:    times 2 db -1, -1,  2,  1, -1, -1,  4,  3, -1, -1,  7,  6, 
 sdi_chroma_mult_10:  times 4 dw 0x400, 0x0, 0x4000, 0x0
 sdi_luma_mult_10:    times 4 dw 0x0, 0x800, 0x0, 0x7fff
 
+levelb_shuf: times 2 db 0, 1, 4, 5, 8, 9, 12, 13, 2, 3, 6, 7, 10, 11, 14, 15
+
 SECTION .text
 
-%macro sdi3g_levelb_unpack 0
+%macro levelb_to_uyvy 0
 
-cglobal sdi3g_levelb_unpack, 4, 4, 3, src, dst1, dst2, pixels
-    lea srcq,  [srcq  + 8*pixelsq]
-    lea dst1q, [dst1q + 4*pixelsq]
-    lea dst2q, [dst2q + 4*pixelsq]
-    neg pixelsq
-
-    ALIGN 16
-    .loop:
-        movu m0, [srcq + 8*pixelsq]
-        pshufd m1, m0, q0020
-        pshufd m2, m0, q0031
-        movq [dst1q + 4*pixelsq], m1
-        movq [dst2q + 4*pixelsq], m2
-        add pixelsq, mmsize/8
-    jl .loop
-RET
-
-%endmacro
-
-INIT_XMM sse2
-sdi3g_levelb_unpack
-
-%macro sdi3g_to_uyvy 0
-
-cglobal sdi3g_to_uyvy_2, 4, 4, 15, src, dst1, dst2, pixels
+cglobal levelb_to_uyvy, 4, 4, 8, src, dst1, dst2, pixels
     lea dst1q, [dst1q + 4*pixelsq]
     lea dst2q, [dst2q + 4*pixelsq]
     neg pixelsq
@@ -69,6 +47,7 @@ cglobal sdi3g_to_uyvy_2, 4, 4, 15, src, dst1, dst2, pixels
     mova     m4, [sdi_luma_shuf_10]
     mova     m5, [sdi_chroma_mult_10]
     mova     m6, [sdi_luma_mult_10]
+    mova     m7, [levelb_shuf]
 
     .loop:
         movu     xm0, [srcq]
@@ -87,7 +66,7 @@ cglobal sdi3g_to_uyvy_2, 4, 4, 15, src, dst1, dst2, pixels
 
         por      m0, m1
 
-        pshufd m0, m0, q3120
+        pshufb   m0, m7
 
         %if cpuflag(avx2)
             vpermq       m0, m0, q3120
@@ -108,8 +87,8 @@ RET
 %endmacro
 
 INIT_XMM ssse3
-sdi3g_to_uyvy
+levelb_to_uyvy
 INIT_XMM avx
-sdi3g_to_uyvy
+levelb_to_uyvy
 INIT_YMM avx2
-sdi3g_to_uyvy
+levelb_to_uyvy
