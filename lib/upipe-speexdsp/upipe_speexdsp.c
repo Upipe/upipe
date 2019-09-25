@@ -467,8 +467,10 @@ static struct upipe *upipe_speexdsp_alloc(struct upipe_mgr *mgr,
 static void upipe_speexdsp_free(struct upipe *upipe)
 {
     struct upipe_speexdsp *upipe_speexdsp = upipe_speexdsp_from_upipe(upipe);
-    if (likely(upipe_speexdsp->ctx))
+    if (likely(upipe_speexdsp->ctx)) {
         speex_resampler_destroy(upipe_speexdsp->ctx);
+        upipe_speexdsp->ctx = NULL;
+    }
 
     upipe_throw_dead(upipe);
     upipe_speexdsp_clean_input(upipe);
