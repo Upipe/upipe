@@ -213,6 +213,7 @@ struct upipe_netmap_sink {
 
     /** packing */
     void (*pack2)(uint8_t *dst1, uint8_t *dst2, const uint8_t *y, uintptr_t pixels);
+    void (*pack2_10_planar)(const uint16_t *y, const uint16_t *u, const uint16_t *v, uint8_t *dst1, uint8_t *dst2, uintptr_t pixels);
 
     /** cached packed pixels */
     uint8_t packed_pixels[PACK10_LOOP_SIZE * 5 / 2 - 1];
@@ -512,6 +513,7 @@ static struct upipe *_upipe_netmap_sink_alloc(struct upipe_mgr *mgr,
 
     upipe_netmap_sink->pack = upipe_uyvy_to_sdi_c;
     upipe_netmap_sink->pack2 = upipe_uyvy_to_sdi_2_c;
+    upipe_netmap_sink->pack2_10_planar = upipe_planar_to_sdi_10_2_c;
 
 #if defined(HAVE_X86ASM)
 #if defined(__i686__) || defined(__x86_64__)
@@ -521,6 +523,7 @@ static struct upipe *_upipe_netmap_sink_alloc(struct upipe_mgr *mgr,
         upipe_netmap_sink->pack_10_planar = upipe_planar_to_sdi_10_ssse3;
         upipe_netmap_sink->pack_8_planar = upipe_planar_to_sdi_8_ssse3;
         upipe_netmap_sink->unpack_v210 = upipe_v210_to_sdi_ssse3;
+        upipe_netmap_sink->pack2_10_planar = upipe_planar_to_sdi_10_2_ssse3;
     }
 
     if (__builtin_cpu_supports("avx")) {
@@ -529,6 +532,7 @@ static struct upipe *_upipe_netmap_sink_alloc(struct upipe_mgr *mgr,
         upipe_netmap_sink->pack_8_planar = upipe_planar_to_sdi_8_avx;
         upipe_netmap_sink->pack_10_planar = upipe_planar_to_sdi_10_avx;
         upipe_netmap_sink->unpack_v210 = upipe_v210_to_sdi_avx;
+        upipe_netmap_sink->pack2_10_planar = upipe_planar_to_sdi_10_2_avx;
     }
 
     if (__builtin_cpu_supports("avx2")) {
