@@ -1342,7 +1342,7 @@ static void upipe_netmap_sink_worker(struct upump *upump)
                 const size_t udp_size = ETHERNET_HEADER_LEN + IP_HEADER_MINSIZE + UDP_HEADER_SIZE;
                 uint8_t *rtp = &dst[udp_size];
                 if (rtp_check_marker(rtp)) /* marker needs to be set */ {
-                    bool stamp;
+                    bool stamp = false;
                     if (rfc4175) {
                         uint8_t *rfc = &rtp[RTP_HEADER_SIZE+ RFC_4175_EXT_SEQ_NUM_LEN];
                         uint8_t f2 = rfc4175_get_line_field_id(rfc);
