@@ -77,6 +77,43 @@ cglobal planar_to_sdi_8, 5, 5, 3, y, u, v, l, width, size
     jl .loop
 
     RET
+
+cglobal planar_to_sdi_8_2, 5, 5, 3, y, u, v, dst1, dst2, width
+    shr    widthq, 1
+    lea    yq, [yq + 2*widthq]
+    add    uq, widthq
+    add    vq, widthq
+
+    neg    widthq
+
+    .loop:
+        movq   m0, [yq + widthq*2]
+        movd   m1, [uq + widthq*1]
+        movd   m2, [vq + widthq*1]
+
+        pshufb m0, [planar_8_y_shuf]
+        pmullw m0, [planar_8_y_mult]
+        pshufb m0, [planar_8_y_shuf_after]
+
+        pshufb m1, [planar_8_u_shuf]
+
+        por    m0, m1
+
+        pshufb m2, [planar_8_v_shuf]
+        psllw  m2, 4
+        pshufb m2, [planar_8_v_shuf_after]
+
+        por    m0, m2
+
+        movu   [dst1q], m0
+        movu   [dst2q], m0
+
+        add    dst1q, 15
+        add    dst2q, 15
+        add    widthq, 3
+    jl .loop
+RET
+
 %endmacro
 
 INIT_XMM ssse3
