@@ -184,7 +184,6 @@ struct upipe_netmap_sink {
 
     uint64_t bits;
     uint64_t start;
-    int64_t marker_offset;
 
     uint64_t fakes;
     uint64_t step;
@@ -437,7 +436,6 @@ static void upipe_netmap_sink_reset_counters(struct upipe *upipe)
     upipe_netmap_sink->pid_error_sum = 0.;
     upipe_netmap_sink->pid_last_output = 0.;
     upipe_netmap_sink->pkts_in_frame = 0;
-    upipe_netmap_sink->marker_offset = -1;
     upipe_netmap_sink->pkt = 0;
     upipe_netmap_sink->bits = 0;
     upipe_netmap_sink->start = 0;
@@ -1316,10 +1314,7 @@ static void upipe_netmap_sink_worker(struct upump *upump)
     if (ddd) {
         upipe_dbg_va(upipe,
                 "txavail %d at %" PRIu64 " bps -> err %" PRId64 ", %zu urefs, "
-                "epoch offset %" PRId64 " packets",
-                txavail, (uint64_t)bps, err, upipe_netmap_sink->n,
-                upipe_netmap_sink->marker_offset
-                );
+                "epoch offset", txavail, (uint64_t)bps, err, upipe_netmap_sink->n);
     }
 
     if (upipe_netmap_sink->start) {
