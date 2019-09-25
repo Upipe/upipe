@@ -1,4 +1,5 @@
 #include <inttypes.h>
+#include <string.h>
 #include "sdi.h"
 
 void upipe_planar_to_sdi_8_c(const uint8_t *y, const uint8_t *u, const uint8_t *v, uint8_t *l, const int64_t width)
@@ -31,4 +32,16 @@ void upipe_planar_to_sdi_10_c(const uint16_t *y, const uint16_t *u, const uint16
         *l++ = (v1 << 2) | (y2 >> 8); // vvvvvvyy
         *l++ = y2;                    // yyyyyyyy
     }
+}
+
+void upipe_planar_to_sdi_8_2_c(const uint8_t *y, const uint8_t *u, const uint8_t *v, uint8_t *dst1, uint8_t *dst2, uintptr_t pixels)
+{
+    upipe_planar_to_sdi_8_c(y, u, v, dst1, pixels);
+    memcpy(dst2, dst1, 2*pixels * 10 / 8);
+}
+
+void upipe_planar_to_sdi_10_2_c(const uint16_t *y, const uint16_t *u, const uint16_t *v, uint8_t *dst1, uint8_t *dst2, uintptr_t pixels)
+{
+    upipe_planar_to_sdi_10_c(y, u, v, dst1, pixels);
+    memcpy(dst2, dst1, 2*pixels * 10 / 8);
 }
