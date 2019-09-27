@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2013-2016 OpenHeadend S.A.R.L.
+ * Copyright (C) 2013-2019 OpenHeadend S.A.R.L.
  *
  * Authors: Benjamin Cohen
  *
@@ -223,6 +223,8 @@ static int upipe_rtp_prepend_infer_type(struct upipe *upipe, const char *def)
         uint8_t type;
     } values[] = {
         { "mpegts", RTP_TYPE_MP2T },
+        { "mp2.sound", RTP_TYPE_MPA },
+        { "mp3.sound", RTP_TYPE_MPA },
         { "opus", DEFAULT_TYPE },
     };
 
