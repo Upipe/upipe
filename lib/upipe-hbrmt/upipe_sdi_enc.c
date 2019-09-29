@@ -627,11 +627,6 @@ static void upipe_sdi_enc_sub_input(struct upipe *upipe, struct uref *uref,
         return;
     }
 
-    if (!upipe_sdi_enc->ttx && !sdi_enc_sub->sound) {
-        uref_free(uref);
-        return;
-    }
-
     switch (sdi_enc_sub->type) {
     case SDIENC_SOUND:
         break;
