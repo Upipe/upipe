@@ -61,7 +61,7 @@ void sdi_writel(int fd, uint32_t addr, uint32_t val) {
     ioctl(fd, SDI_IOCTL_REG, &m);
 }
 
-void sdi_refclk(int fd, uint8_t refclk_sel, uint32_t *refclk_freq, uint32_t *refclk_counter) {
+void sdi_refclk(int fd, uint8_t refclk_sel, uint32_t *refclk_freq, uint64_t *refclk_counter) {
     struct sdi_ioctl_refclk m;
     m.refclk_sel = refclk_sel;
     ioctl(fd, SDI_IOCTL_REFCLK, &m);
@@ -69,17 +69,33 @@ void sdi_refclk(int fd, uint8_t refclk_sel, uint32_t *refclk_freq, uint32_t *ref
     *refclk_counter = m.refclk_counter;
 }
 
-void sdi_capabilities(int fd) {
+void sdi_capabilities(int fd, uint8_t *channels, uint8_t *has_vcxos,
+        uint8_t *has_gs12241, uint8_t *has_gs12281, uint8_t *has_si5324,
+        uint8_t *has_genlock, uint8_t *has_lmh0387, uint8_t *has_si596,
+        uint8_t *has_si552) {
     struct sdi_ioctl_capabilities m;
     ioctl(fd, SDI_IOCTL_CAPABILITIES, &m);
-    sdi_channels    = m.channels;
-    sdi_has_vcxos   = m.has_vcxos;
-    sdi_has_gs12241 = m.has_gs12241;
-    sdi_has_gs12281 = m.has_gs12281;
-    sdi_has_si5324  = m.has_si5324;
-    sdi_has_genlock = m.has_genlock;
-    sdi_has_lmh0387 = m.has_lmh0387;
-    sdi_has_si596   = m.has_si596;
+    *channels    = m.channels;
+    *has_vcxos   = m.has_vcxos;
+    *has_gs12241 = m.has_gs12241;
+    *has_gs12281 = m.has_gs12281;
+    *has_si5324  = m.has_si5324;
+    *has_genlock = m.has_genlock;
+    *has_lmh0387 = m.has_lmh0387;
+    *has_si596   = m.has_si596;
+    *has_si552   = m.has_si552;
+}
+
+void sdi_set_rate(int fd, uint8_t rate) {
+    struct sdi_ioctl_rate m;
+    m.rate = rate;
+    ioctl(fd, SDI_IOCTL_SET_RATE, &m);
+}
+
+uint8_t sdi_get_rate(int fd) {
+    struct sdi_ioctl_rate m;
+    ioctl(fd, SDI_IOCTL_GET_RATE, &m);
+    return m.rate;
 }
 
 void sdi_reload(int fd) {
@@ -95,6 +111,14 @@ void sdi_vcxo(int fd, uint32_t width, uint32_t period) {
     m.pwm_width = width;
     m.pwm_period = period;
     ioctl(fd, SDI_IOCTL_VCXO, &m);
+}
+
+void sdi_picxo(int fd, uint8_t enable, uint8_t dir, uint8_t step) {
+    struct sdi_ioctl_picxo m;
+    m.enable = enable;
+    m.dir = dir;
+    m.step = step;
+    ioctl(fd, SDI_IOCTL_PICXO, &m);
 }
 
 void sdi_si5324_vcxo(int fd, uint32_t width, uint32_t period) {
@@ -134,11 +158,9 @@ void sdi_genlock_field(int fd, uint8_t *field) {
     *field = m.field;
 }
 
-void sdi_dma(int fd, uint8_t fill, uint8_t rx_tx_loopback_enable, uint8_t tx_rx_loopback_enable) {
+void sdi_dma(int fd, uint8_t loopback_enable) {
     struct sdi_ioctl_dma m;
-    m.fill = fill;
-    m.rx_tx_loopback_enable = rx_tx_loopback_enable;
-    m.tx_rx_loopback_enable = tx_rx_loopback_enable;
+    m.loopback_enable = loopback_enable;
     ioctl(fd, SDI_IOCTL_DMA, &m);
 }
 
@@ -192,29 +214,29 @@ void sdi_gs12281_spi(int fd, uint32_t tx_data, uint32_t *rx_data) {
     *rx_data = m.rx_data;
 }
 
-void sdi_set_direction(int fd, uint8_t tx_enable) {
+void sdi_lmh0387_direction(int fd, uint8_t tx_enable) {
     struct sdi_ioctl_lmh0387_direction m;
     m.tx_enable = tx_enable;
-    ioctl(fd, SDI_IOCTL_DIRECTION, &m);
+    ioctl(fd, SDI_IOCTL_LMH0387_DIRECTION, &m);
 }
 
-void sdi_spi_cs(int fd, uint8_t cs_n) {
+void sdi_lmh0387_spi_cs(int fd, uint8_t cs_n) {
     struct sdi_ioctl_lmh0387_spi_cs m;
     m.cs_n = cs_n;
-    ioctl(fd, SDI_IOCTL_SPI_CS, &m);
+    ioctl(fd, SDI_IOCTL_LMH0387_SPI_CS, &m);
 }
 
-void sdi_spi(int fd, uint32_t tx_data, uint32_t *rx_data) {
+void sdi_lmh0387_spi(int fd, uint32_t tx_data, uint32_t *rx_data) {
     struct sdi_ioctl_lmh0387_spi m;
     m.tx_data = tx_data;
-    ioctl(fd, SDI_IOCTL_SPI, &m);
+    ioctl(fd, SDI_IOCTL_LMH0387_SPI, &m);
     *rx_data = m.rx_data;
 }
 
 void sdi_rx(int fd, uint8_t *locked, uint8_t *mode, uint8_t *family, uint8_t *scan, uint8_t *rate) {
     struct sdi_ioctl_rx m;
     m.crc_enable = 0;
-    m.packed = SDI_DEVICE_IS_BITPACKED;
+    m.packed = 1;
     ioctl(fd, SDI_IOCTL_RX, &m);
     *locked = m.locked;
     *mode = m.mode;
@@ -226,7 +248,7 @@ void sdi_rx(int fd, uint8_t *locked, uint8_t *mode, uint8_t *family, uint8_t *sc
 void sdi_tx(int fd, uint8_t mode, uint8_t *txen, uint8_t *slew) {
     struct sdi_ioctl_tx m;
     m.crc_enable = 1;
-    m.packed = SDI_DEVICE_IS_BITPACKED;
+    m.packed = 1;
     m.mode = mode;
     ioctl(fd, SDI_IOCTL_TX, &m);
     *txen = m.txen;
@@ -237,6 +259,20 @@ void sdi_tx_rx_loopback(int fd, uint8_t config) {
     struct sdi_ioctl_tx_rx_loopback m;
     m.config = config;
     ioctl(fd, SDI_IOCTL_TX_RX_LOOPBACK, &m);
+}
+
+void sdi_tx_monitor(int fd, uint32_t *tx_underflows) {
+    struct sdi_ioctl_monitor m;
+    m.tx_reset = 1;
+    ioctl(fd, SDI_IOCTL_MONITOR, &m);
+    *tx_underflows = m.tx_underflows;
+}
+
+void sdi_rx_monitor(int fd, uint32_t *rx_overflows) {
+    struct sdi_ioctl_monitor m;
+    m.rx_reset = 1;
+    ioctl(fd, SDI_IOCTL_MONITOR, &m);
+    *rx_overflows = m.rx_overflows;
 }
 
 /* lock */
@@ -279,22 +315,57 @@ void sdi_release_dma_writer(int fd) {
     ioctl(fd, SDI_IOCTL_LOCK, &m);
 }
 
+void sdi_channel_reset_rx(int fd, uint8_t reset)
+{
+    struct sdi_ioctl_channel_reset m;
+    m.reset = reset;
+    ioctl(fd, SDI_IOCTL_CHANNEL_RESET_RX, &m);
+}
+
+void sdi_channel_reset_tx(int fd, uint8_t reset)
+{
+    struct sdi_ioctl_channel_reset m;
+    m.reset = reset;
+    ioctl(fd, SDI_IOCTL_CHANNEL_RESET_TX, &m);
+}
+
+void sdi_channel_set_pll(int fd, uint8_t pll)
+{
+    struct sdi_ioctl_channel_set_pll m;
+    m.pll = pll;
+    ioctl(fd, SDI_IOCTL_CHANNEL_SET_PLL, &m);
+}
+
+void sdi_channel_get_refclk(int fd, uint32_t *refclk_freq, uint64_t *refclk_counter) {
+    struct sdi_ioctl_refclk m;
+    ioctl(fd, SDI_IOCTL_CHANNEL_GET_REFCLK, &m);
+    *refclk_freq = m.refclk_freq;
+    *refclk_counter = m.refclk_counter;
+}
+
 /* flash */
+
+//#define FLASH_FULL_ERASE
+#define FLASH_RETRIES 16
+
+static void flash_spi_cs(int fd, uint8_t cs_n)
+{
+    sdi_writel(fd, CSR_FLASH_CS_N_OUT_ADDR, cs_n);
+}
 
 static uint64_t flash_spi(int fd, int tx_len, uint8_t cmd,
                           uint32_t tx_data)
 {
     struct sdi_ioctl_flash m;
+    flash_spi_cs(fd, 0);
     m.tx_len = tx_len;
     m.tx_data = tx_data | ((uint64_t)cmd << 32);
-    if (ioctl(fd, SDI_IOCTL_FLASH, &m) < 0) {
-        perror("SDI_IOCTL_FLASH");
-        exit(1);
-    }
+    ioctl(fd, SDI_IOCTL_FLASH, &m);
+    flash_spi_cs(fd, 1);
     return m.rx_data;
 }
 
-uint32_t flash_read_id(int fd, int reg)
+static uint32_t flash_read_id(int fd, int reg)
 {
     return flash_spi(fd, 32, reg, 0) & 0xffffff;
 }
@@ -339,9 +410,68 @@ static void flash_write(int fd, uint32_t addr, uint8_t byte)
     flash_spi(fd, 40, FLASH_PP, (addr << 8) | byte);
 }
 
+static void flash_write_buffer(int fd, uint32_t addr, uint8_t *buf, uint16_t size)
+{
+    int i;
+
+    struct sdi_ioctl_flash m;
+
+    if (size == 1) {
+        flash_write(fd, addr, buf[0]);
+    } else {
+        /* set cs_n */
+        flash_spi_cs(fd, 0);
+
+        /* send cmd */
+        m.tx_len = 32;
+        m.tx_data = ((uint64_t)FLASH_PP << 32) | ((uint64_t)addr << 8);
+        ioctl(fd, SDI_IOCTL_FLASH, &m);
+
+        /* send bytes */
+        for (i=0; i<size; i++) {
+            m.tx_len = 8;
+            m.tx_data = ((uint64_t)buf[i] << 32);
+            ioctl(fd, SDI_IOCTL_FLASH, &m);
+        }
+
+        /* release cs_n */
+        flash_spi_cs(fd, 1);
+    }
+}
+
 uint8_t sdi_flash_read(int fd, uint32_t addr)
 {
     return flash_spi(fd, 40, FLASH_READ, addr << 8) & 0xff;
+}
+
+static void sdi_flash_read_buffer(int fd, uint32_t addr, uint8_t *buf, uint16_t size)
+{
+    int i;
+
+    struct sdi_ioctl_flash m;
+
+    if (size == 1) {
+        buf[0] = sdi_flash_read(fd, addr);
+
+    } else {
+        /* set cs_n */
+        flash_spi_cs(fd, 0);
+
+        /* send cmd */
+        m.tx_len = 32;
+        m.tx_data = ((uint64_t)FLASH_READ << 32) | ((uint64_t)addr << 8);
+        ioctl(fd, SDI_IOCTL_FLASH, &m);
+
+        /* read bytes */
+        for (i=0; i<size; i++) {
+            m.tx_len = 8;
+            ioctl(fd, SDI_IOCTL_FLASH, &m);
+            buf[i] = m.rx_data;
+        }
+
+        /* release cs_n */
+        flash_spi_cs(fd, 1);
+    }
 }
 
 int sdi_flash_get_erase_block_size(int fd)
@@ -349,27 +479,51 @@ int sdi_flash_get_erase_block_size(int fd)
     return FLASH_SECTOR_SIZE;
 }
 
+static int sdi_flash_get_flash_program_size(int fd)
+{
+    int software_cs = 1;
+    /* if software cs control, program in blocks to speed up update */
+    sdi_writel(fd, CSR_FLASH_CS_N_OUT_ADDR, 0);
+    software_cs &= ((sdi_readl(fd, CSR_FLASH_CS_N_OUT_ADDR) & 0x1) == 0);
+    sdi_writel(fd, CSR_FLASH_CS_N_OUT_ADDR, 1);
+    software_cs &= ((sdi_readl(fd, CSR_FLASH_CS_N_OUT_ADDR) & 0x1) == 1);
+    if (software_cs)
+        return 256;
+    else
+        return 1;
+}
+
 int sdi_flash_write(int fd,
-                     const uint8_t *buf, uint32_t base, uint32_t size,
+                     uint8_t *buf, uint32_t base, uint32_t size,
                      void (*progress_cb)(void *opaque, const char *fmt, ...),
                      void *opaque)
 {
-    int i, errors, retry;
+    int i;
+    int retries;
+    uint16_t flash_program_size;
+
+    flash_program_size = sdi_flash_get_flash_program_size(fd);
+    printf("flash_program_size: %d\n", flash_program_size);
+
+    uint8_t cmp_buf[256];
 
     /* dummy command because in some case the first erase does not
        work. */
     flash_read_id(fd, 0);
 
-#if 0
+    /* disable write protection */
+     flash_write_enable(fd);
+
+#ifndef FLASH_FULL_ERASE
     /* erase */
     for(i = 0; i < size; i += FLASH_SECTOR_SIZE) {
         if (progress_cb) {
-            progress_cb(opaque, "Erasing %08x\r", base + i);
+            progress_cb(opaque, "Erasing @%08x\r", base + i);
         }
         flash_write_enable(fd);
         flash_erase_sector(fd, base + i);
         while (flash_read_status(fd) & FLASH_WIP) {
-            usleep(10 * 1000);
+            usleep(1000);
         }
     }
     if (progress_cb) {
@@ -381,47 +535,43 @@ int sdi_flash_write(int fd,
     flash_write_enable(fd);
     flash_spi(fd, 8, 0xC7, 0);
     while (flash_read_status(fd) & FLASH_WIP) {
-        usleep(10 * 1000);
+        usleep(1000);
     }
 #endif
     flash_write_disable(fd);
 
-    i = errors = retry = 0;
+    i = 0;
+    retries = 0;
     while (i < size) {
         if (progress_cb && (i % FLASH_SECTOR_SIZE) == 0) {
-            progress_cb(opaque, "Writing %08x\r", base + i);
+            progress_cb(opaque, "Writing @%08x\r", base + i);
         }
 
-        /* program */
-        while (flash_read_status(fd) & FLASH_WIP) {
-            usleep(10 * 1000);
-        }
+        /* wait flash to be ready */
+        while (flash_read_status(fd) & FLASH_WIP)
+            usleep(100);
+
+        /* write flash page */
         flash_write_enable(fd);
-        flash_write(fd, base + i, buf[i]);
+        flash_write_buffer(fd, base + i, buf + i, flash_program_size);
         flash_write_disable(fd);
 
-        /* verify */
+        /* wait flash to be ready*/
         while (flash_read_status(fd) & FLASH_WIP)
-            usleep(10 * 1000);
-        if (sdi_flash_read(fd, base + i) != buf[i]) {
-            retry += 1;
+            usleep(100);
+
+        /* verify flash page */
+        sdi_flash_read_buffer(fd, base + i, cmp_buf, flash_program_size);
+        if (memcmp(buf + i, cmp_buf, flash_program_size) != 0) {
+            retries += 1;
         } else {
-            if (retry && progress_cb) {
-                progress_cb(opaque, "Retried %d times at 0x%08x\n",
-                        retry, base+i);
-            }
-            i += 1;
-            retry = 0;
+            i += flash_program_size;
+            retries = 0;
         }
 
-        if (retry > 10) {
-            if (retry && progress_cb) {
-                progress_cb(opaque, "Max retry reached at 0x%08x, continuing\n",
-                        base+i);
-            }
-            retry = 0;
-            i += 1;
-            errors += 1;
+        if (retries > FLASH_RETRIES) {
+            printf("Not able to write page, exiting\n");
+            return 1;
         }
     }
 
@@ -429,7 +579,7 @@ int sdi_flash_write(int fd,
         progress_cb(opaque, "\n");
     }
 
-    return errors;
+    return 0;
 }
 
 /* spi */
@@ -592,34 +742,34 @@ void gs12281_spi_init(int fd)
         gs12281_spi_write(fd, i, 0, 1 << 13); /* gspi_bus_through_enable */
 }
 
-void sdi_spi_write(int fd, uint8_t channel, uint16_t adr, uint16_t data)
+void sdi_lmh0387_spi_write(int fd, uint8_t channel, uint16_t adr, uint16_t data)
 {
     uint32_t tx_data, rx_data;
 
     /* set chip_select */
-    sdi_spi_cs(fd, 0b1111 ^ (1 << channel));
+    sdi_lmh0387_spi_cs(fd, 0b1111 ^ (1 << channel));
 
     /* send cmd & data*/
     tx_data = (0 << 15) | ((adr & 0x3f) << 8) | (data & 0xff);
-    sdi_spi(fd, tx_data, &rx_data);
+    sdi_lmh0387_spi(fd, tx_data, &rx_data);
 
     /* release chip_select */
-    sdi_spi_cs(fd, 0b1111);
+    sdi_lmh0387_spi_cs(fd, 0b1111);
 }
 
-uint16_t sdi_spi_read(int fd, uint8_t channel, uint16_t adr)
+uint16_t sdi_lmh0387_spi_read(int fd, uint8_t channel, uint16_t adr)
 {
     uint32_t tx_data, rx_data;
 
     /* set chip_select */
-    sdi_spi_cs(fd, 0b1111 ^ (1 << channel));
+    sdi_lmh0387_spi_cs(fd, 0b1111 ^ (1 << channel));
 
     /* send cmd  & data*/
     tx_data = (1 << 15) | ((adr & 0x3f) << 8);
-    sdi_spi(fd, tx_data, &rx_data);
+    sdi_lmh0387_spi(fd, tx_data, &rx_data);
 
     /* release chip_select */
-    sdi_spi_cs(fd, 0b1111);
+    sdi_lmh0387_spi_cs(fd, 0b1111);
 
     return rx_data & 0xff;
 }
@@ -827,5 +977,75 @@ void si5324_genlock(int fd)
     /* configure si5324 */
     for(i = 0; i < countof(si5324_base_config_regs); i++) {
         si5324_spi_write(fd, si5324_base_config_regs[i][0], si5324_base_config_regs[i][1]);
+    }
+}
+
+const char *sdi_decode_mode(uint8_t mode)
+{
+    switch (mode) {
+    case 0: return "HD-SDI";
+    case 1: return "SD-SDI";
+    case 2: return "3G-SDI";
+    default: return "Unknown";
+    }
+}
+
+const char *sdi_decode_family(uint8_t family)
+{
+    switch (family) {
+    case 0: return "SMPTE274:1080";
+    case 1: return "SMPTE296:720";
+    case 2: return "SMPTE2048:1080";
+    case 3: return "SMPTE295:1080";
+    case 8: return "NTSC:486";
+    case 9: return "PAL:576";
+    case 15: return "Unknown";
+    default: return "Reserved";
+    }
+}
+
+const char *sdi_decode_scan(uint8_t scan, uint8_t mode)
+{
+    if (mode == 2) {
+        switch (scan) {
+        case 0: return "PB";
+        case 1: return "PA";
+        default: return "?";
+        }
+    } else {
+        switch (scan) {
+        case 0: return "I";
+        case 1: return "P";
+        default: return "?";
+        }
+    }
+}
+
+const char *sdi_decode_rate(uint8_t rate, uint8_t scan)
+{
+    if (scan == 0) {
+        switch (rate) {
+        case 2: return "47.95";
+        case 3: return "48";
+        case 5: return "50";
+        case 6: return "59.94";
+        case 7: return "60";
+        default: return "Reserved";
+        }
+    } else {
+        switch (rate) {
+        case 0: return "None";
+        case 2: return "23.98";
+        case 3: return "24";
+        case 4: return "47.95";
+        case 5: return "25";
+        case 6: return "29.97";
+        case 7: return "30";
+        case 8: return "48";
+        case 9: return "50";
+        case 10: return "59.94";
+        case 11: return "60";
+        default: return "Reserved";
+        }
     }
 }

@@ -85,7 +85,6 @@ static void sdi_start_anc(uint16_t *dst, uint8_t gap, uint16_t did, uint16_t sdi
 void sdi_write_cdp(const uint8_t *src, size_t src_size,
         uint16_t *dst, uint8_t gap, uint16_t *ctr, uint8_t fps)
 {
-    upipe_sdi_blank_c(dst, VANC_WIDTH);
     sdi_start_anc(dst, gap, S291_CEA708_DID, S291_CEA708_SDID);
 
     const uint8_t cnt = 9 + src_size + 4;
@@ -209,7 +208,8 @@ void sdi_encode_ttx(uint16_t *buf, int packets, const uint8_t **packet, uint16_t
     buf[2*(ANC_START_LEN+3)] = 0x2; /* WST Teletext subtitles */
 
     /* Data Adaption header, 5 packets max */
-    memset(&buf[2*(ANC_START_LEN + OP47_INITIAL_WORDS)], 0x00, 5 * sizeof(uint16_t));
+    for (int i = 0; i < 5; i++)
+        buf[2*(ANC_START_LEN + OP47_INITIAL_WORDS + i)] = 0;
 
     for (int j = 0; j < packets; j++) {
         const uint8_t *pic_data = packet[j];

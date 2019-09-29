@@ -19,10 +19,18 @@
 #define DMA_TABLE_LOOP_COUNT (1 << 16)
 
 /* sdi */
+#define SDI_UNDEF_RATE   0
+#define SDI_PAL_RATE     1
+#define SDI_NTSC_RATE    2
+#define SDI_GENLOCK_RATE 3
 
 #define SDI_TX_MODE_HD 0b00
 #define SDI_TX_MODE_SD 0b01
 #define SDI_TX_MODE_3G 0b10
+
+#define SDI_TX_PI_ENABLE  (1 << 0)
+#define SDI_TX_PI_STEP    (1 << 1)
+#define SDI_TX_PI_INC_DEC (1 << 5)
 
 #define SDI_LOOPBACK_NEAR_END_PCS 0b001
 #define SDI_LOOPBACK_NEAR_END_PMA 0b010

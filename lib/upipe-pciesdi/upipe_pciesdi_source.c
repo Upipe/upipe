@@ -31,6 +31,7 @@
 #include <upipe/uref.h>
 #include <upipe/uref_dump.h>
 #include <upipe/uref_block.h>
+#include <upipe/uref_block_flow.h>
 #include <upipe/uref_pic.h>
 #include <upipe/uref_pic_flow.h>
 #include <upipe/uref_flow.h>
@@ -56,6 +57,8 @@
 #include <fcntl.h>
 #include <errno.h>
 
+#include "csr.h"
+#include "flags.h"
 #include "libsdi.h"
 #include "sdi_config.h"
 #include "sdi.h"
@@ -71,6 +74,7 @@ enum upipe_pciesdi_src_err {
 
 /** @hidden */
 static int upipe_pciesdi_src_check(struct upipe *upipe, struct uref *flow_format);
+static int get_flow_def(struct upipe *upipe, struct uref **flow_format);
 
 /** @internal @This is the private context of a file source pipe. */
 struct upipe_pciesdi_src {
@@ -110,16 +114,18 @@ struct upipe_pciesdi_src {
 
     /** file descriptor */
     int fd;
+    int device_number;
 
     bool discontinuity;
 
     /* picture properties, same units as upipe_hbrmt_common.h, pixels */
     const struct sdi_offsets_fmt *sdi_format;
     bool sdi3g_levelb;
+    uint8_t mode, family, scan, rate;
 
     uint8_t *read_buffer;
 
-    void (*sdi3g_levelb_packed)(const uint8_t *src, uint16_t *dst1, uint16_t *dst2, uintptr_t pixels);
+    void (*levelb_to_uyvy)(const uint8_t *src, uint16_t *dst1, uint16_t *dst2, uintptr_t pixels);
     void (*sdi_to_uyvy)(const uint8_t *src, uint16_t *y, uintptr_t pixels);
 
     /** bytes in scratch buffer */
@@ -173,18 +179,18 @@ static struct upipe *upipe_pciesdi_src_alloc(struct upipe_mgr *mgr,
     upipe_pciesdi_src_init_upump(upipe);
     upipe_pciesdi_src_init_uclock(upipe);
 
-    upipe_pciesdi_src->sdi3g_levelb_packed = upipe_sdi3g_to_uyvy_2_c;
+    upipe_pciesdi_src->levelb_to_uyvy = upipe_levelb_to_uyvy_c;
     upipe_pciesdi_src->sdi_to_uyvy = upipe_sdi_to_uyvy_c;
 #if defined(HAVE_X86ASM)
 #if defined(__i686__) || defined(__x86_64__)
     if (__builtin_cpu_supports("ssse3")) {
         upipe_pciesdi_src->sdi_to_uyvy = upipe_sdi_to_uyvy_ssse3;
-        upipe_pciesdi_src->sdi3g_levelb_packed = upipe_sdi3g_to_uyvy_2_ssse3;
+        upipe_pciesdi_src->levelb_to_uyvy = upipe_levelb_to_uyvy_ssse3;
     }
 
     if (__builtin_cpu_supports("avx2")) {
         upipe_pciesdi_src->sdi_to_uyvy = upipe_sdi_to_uyvy_avx2;
-        upipe_pciesdi_src->sdi3g_levelb_packed = upipe_sdi3g_to_uyvy_2_avx2;
+        upipe_pciesdi_src->levelb_to_uyvy = upipe_levelb_to_uyvy_avx2;
     }
 #endif
 #endif
@@ -198,57 +204,6 @@ static struct upipe *upipe_pciesdi_src_alloc(struct upipe_mgr *mgr,
     upipe_throw_ready(upipe);
 
     return upipe;
-}
-
-static const char *sdi_decode_mode(uint8_t mode)
-{
-    switch (mode) {
-    case 0: return "HD";
-    case 1: return "SD";
-    case 2: return "3G";
-    default: return "??";
-    }
-}
-
-static const char *sdi_decode_family(uint8_t family)
-{
-    switch (family) {
-    case 0: return "SMPTE274:1080P";
-    case 1: return "SMPTE296:720P";
-    case 2: return "SMPTE2048:1080P";
-    case 3: return "SMPTE295:1080P";
-    case 8: return "NTSC:486P";
-    case 9: return "PAL:576P";
-    case 15: return "Unknown";
-    default: return "Reserved";
-    }
-}
-
-static const char *sdi_decode_scan(uint8_t scan)
-{
-    switch (scan) {
-    case 0: return "I";
-    case 1: return "P";
-    default: return "?";
-    }
-}
-
-static const char *sdi_decode_rate(uint8_t rate)
-{
-    switch (rate) {
-        case 0: return "None";
-        case 2: return "23.98";
-        case 3: return "24";
-        case 4: return "47.95";
-        case 5: return "25";
-        case 6: return "29.97";
-        case 7: return "30";
-        case 8: return "48";
-        case 9: return "50";
-        case 10: return "59.94";
-        case 11: return "60";
-        default: return "Reserved";
-    }
 }
 
 static inline bool sdi3g_levelb_eav_match_bitpacked(const uint8_t *src)
@@ -365,6 +320,30 @@ static bool mmap_length_does_wrap(uint64_t buffer_count, uint64_t offset,
         + length > DMA_BUFFER_TOTAL_SIZE;
 }
 
+/*
+ * Give the position in the mmap buffer.
+ */
+static uint64_t mmap_position(uint64_t buffer_count, uint64_t offset)
+{
+    return (buffer_count * DMA_BUFFER_SIZE + offset) % DMA_BUFFER_TOTAL_SIZE;
+}
+
+/*
+ * Handle a memcpy that might wrap around in the mmap buffer.
+ */
+static void mmap_memcpy(uint8_t *dst, const uint8_t *src, uint64_t length,
+        uint64_t sw, uint64_t offset)
+{
+    if (mmap_length_does_wrap(sw, offset, length)) {
+        int left = DMA_BUFFER_TOTAL_SIZE - mmap_position(sw, offset);
+        int right = length - left;
+        memcpy(dst, mmap_wraparound(src, sw, offset), left);
+        memcpy(dst + left, mmap_wraparound(src, sw, offset + left), right);
+    } else {
+        memcpy(dst, mmap_wraparound(src, sw, offset), length);
+    }
+}
+
 /** @internal @This reads data from the source and outputs it.
  *  @param upump description structure of the read watcher
  */
@@ -376,8 +355,36 @@ static void upipe_pciesdi_src_worker(struct upump *upump)
     uint8_t locked, mode, family, scan, rate;
     sdi_rx(upipe_pciesdi_src->fd, &locked, &mode, &family, &scan, &rate);
 
-    if (!locked) {
+    if (locked != 0x3) {
         upipe_pciesdi_src->discontinuity = true;
+        return;
+    }
+
+    if (mode != upipe_pciesdi_src->mode
+            || family != upipe_pciesdi_src->family
+            || scan != upipe_pciesdi_src->scan
+            || rate != upipe_pciesdi_src->rate) {
+        /* Stop DMA to get EAV re-aligned. */
+        int64_t hw, sw;
+        sdi_dma_writer(upipe_pciesdi_src->fd, 0, &hw, &sw);
+
+        /* Get new format details. */
+        struct uref *flow_def;
+        int ret = get_flow_def(upipe, &flow_def);
+        if (ubase_check(ret)) {
+            upipe_pciesdi_src_store_flow_def(upipe, flow_def);
+            if (!ubase_check(ubuf_mgr_check(upipe_pciesdi_src->ubuf_mgr, flow_def)))
+                upipe_pciesdi_src_require_ubuf_mgr(upipe, flow_def);
+        } else {
+            /* TODO: What errors do we need to handle here, and how? */
+        }
+
+        /* Start DMA and reset state. */
+        sdi_dma_writer(upipe_pciesdi_src->fd, 1, &hw, &sw);
+        upipe_pciesdi_src->scratch_buffer_count = 0;
+        upipe_pciesdi_src->discontinuity = true;
+
+        /* Return because there should be no data to read. */
         return;
     }
 
@@ -435,15 +442,14 @@ static void upipe_pciesdi_src_worker(struct upump *upump)
     if (upipe_pciesdi_src->scratch_buffer_count) {
         offset = sdi_line_width - upipe_pciesdi_src->scratch_buffer_count;
         /* Copy to end of scratch buffer. */
-        memcpy(upipe_pciesdi_src->scratch_buffer + upipe_pciesdi_src->scratch_buffer_count,
-                mmap_wraparound(upipe_pciesdi_src->read_buffer, sw, 0),
-                offset);
+        mmap_memcpy(upipe_pciesdi_src->scratch_buffer + upipe_pciesdi_src->scratch_buffer_count,
+                upipe_pciesdi_src->read_buffer, offset, sw, 0);
         /* unpack */
         if (upipe_pciesdi_src->sdi3g_levelb) {
             /* Note: line order is swapped. */
             uint16_t *dst1 = (uint16_t*)dst_buf + 2*upipe_pciesdi_src->sdi_format->width;
             uint16_t *dst2 = (uint16_t*)dst_buf;
-            upipe_pciesdi_src->sdi3g_levelb_packed(upipe_pciesdi_src->scratch_buffer,
+            upipe_pciesdi_src->levelb_to_uyvy(upipe_pciesdi_src->scratch_buffer,
                     dst1, dst2, upipe_pciesdi_src->sdi_format->width);
             dst_buf += upipe_pciesdi_src->sdi_format->width * 8;
         } else {
@@ -465,19 +471,8 @@ static void upipe_pciesdi_src_worker(struct upump *upump)
         /* check whether a line wraps around in the mmap buffer */
         if (mmap_length_does_wrap(sw, offset, sdi_line_width + SIMD_OVERREAD)) {
             /* Copy both halves of line to scratch buffer. */
-            int bytes_remaining = DMA_BUFFER_TOTAL_SIZE - (sw * DMA_BUFFER_SIZE + offset) % DMA_BUFFER_TOTAL_SIZE;
-            if (bytes_remaining >= sdi_line_width)
-                bytes_remaining = sdi_line_width; // limit for overread check
-            else
-                upipe_warn_va(upipe, "line wraparound, hw: %"PRId64", sw: %"PRId64", offset: %d",
-                        hw, sw, offset);
-
-            memcpy(upipe_pciesdi_src->scratch_buffer,
-                    mmap_wraparound(upipe_pciesdi_src->read_buffer, sw, offset),
-                    bytes_remaining);
-            memcpy(upipe_pciesdi_src->scratch_buffer + bytes_remaining,
-                    mmap_wraparound(upipe_pciesdi_src->read_buffer, sw, offset+bytes_remaining),
-                    sdi_line_width - bytes_remaining);
+            mmap_memcpy(upipe_pciesdi_src->scratch_buffer,
+                    upipe_pciesdi_src->read_buffer, sdi_line_width, sw, offset);
             /* Now point to the scratch buffer. */
             sdi_line = upipe_pciesdi_src->scratch_buffer;
         }
@@ -526,7 +521,7 @@ static void upipe_pciesdi_src_worker(struct upump *upump)
             /* Note: line order is swapped. */
             uint16_t *dst1 = (uint16_t*)dst_buf + (2*i + 1) * 2*upipe_pciesdi_src->sdi_format->width;
             uint16_t *dst2 = (uint16_t*)dst_buf + (2*i + 0) * 2*upipe_pciesdi_src->sdi_format->width;
-            upipe_pciesdi_src->sdi3g_levelb_packed(sdi_line, dst1, dst2,
+            upipe_pciesdi_src->levelb_to_uyvy(sdi_line, dst1, dst2,
                     upipe_pciesdi_src->sdi_format->width);
         } else {
             uint16_t *dst = (uint16_t*)dst_buf + 2*i * upipe_pciesdi_src->sdi_format->width;
@@ -547,22 +542,8 @@ static void upipe_pciesdi_src_worker(struct upump *upump)
     /* Copy unused data into the scratch buffer. */
     if (bytes_available != processed_bytes) {
         int bytes_remaining = bytes_available - processed_bytes;
-        if (mmap_length_does_wrap(sw, offset, bytes_remaining)) {
-            int before = DMA_BUFFER_TOTAL_SIZE - (sw * DMA_BUFFER_SIZE + offset) % DMA_BUFFER_TOTAL_SIZE;
-            int after = bytes_remaining - before;
-
-            memcpy(upipe_pciesdi_src->scratch_buffer,
-                    mmap_wraparound(upipe_pciesdi_src->read_buffer, sw, offset),
-                    before);
-            offset += before;
-            memcpy(upipe_pciesdi_src->scratch_buffer + before,
-                    mmap_wraparound(upipe_pciesdi_src->read_buffer, sw, offset),
-                    after);
-        } else {
-            memcpy(upipe_pciesdi_src->scratch_buffer,
-                    mmap_wraparound(upipe_pciesdi_src->read_buffer, sw, offset),
-                    bytes_remaining);
-        }
+        mmap_memcpy(upipe_pciesdi_src->scratch_buffer,
+                upipe_pciesdi_src->read_buffer, bytes_remaining, sw, offset);
         upipe_pciesdi_src->scratch_buffer_count = bytes_remaining;
     }
 
@@ -591,11 +572,6 @@ static int get_flow_def(struct upipe *upipe, struct uref **flow_format)
 {
     struct upipe_pciesdi_src *upipe_pciesdi_src = upipe_pciesdi_src_from_upipe(upipe);
 
-    if (upipe_pciesdi_src->fd == -1) {
-        upipe_err(upipe, "no open file descriptor");
-        return UBASE_ERR_INVALID;
-    }
-
     /* Query the HW for what it thinks the received format is. */
     uint8_t locked, mode, family, scan, rate;
     sdi_rx(upipe_pciesdi_src->fd, &locked, &mode, &family, &scan, &rate);
@@ -603,8 +579,8 @@ static int get_flow_def(struct upipe *upipe, struct uref **flow_format)
             locked,
             sdi_decode_mode(mode), mode,
             sdi_decode_family(family), family,
-            sdi_decode_scan(scan), scan,
-            sdi_decode_rate(rate), rate);
+            sdi_decode_scan(scan, mode), scan,
+            sdi_decode_rate(rate, scan), rate);
 
     if (!locked) {
         upipe_err(upipe, "SDI signal not locked");
@@ -654,13 +630,13 @@ static int get_flow_def(struct upipe *upipe, struct uref **flow_format)
     if (rate >= 2 && rate <= 11)
         fps = framerates[rate - 2];
     else {
-        upipe_err_va(upipe, "invalid/unknown rate value: %s (%d)", sdi_decode_rate(rate), rate);
+        upipe_err_va(upipe, "invalid/unknown rate value: %s (%d)", sdi_decode_rate(rate, scan), rate);
         return UBASE_ERR_INVALID;
     }
 
     /* Check for SDI-3G level B. */
     if (mode == 2 && scan == 0) {
-        upipe_pciesdi_src->sdi3g_levelb = sdi3g_levelb = true;
+        sdi3g_levelb = true;
         interlaced = false;
         fps.num *= 2;
     } else if (scan == 0) {
@@ -670,7 +646,7 @@ static int get_flow_def(struct upipe *upipe, struct uref **flow_format)
         /* progressive */
         interlaced = false;
     } else {
-        upipe_err_va(upipe, "invalid/unknown scan value: %s (%d)", sdi_decode_scan(scan), scan);
+        upipe_err_va(upipe, "invalid/unknown scan value: %s (%d)", sdi_decode_scan(scan, mode), scan);
         return UBASE_ERR_INVALID;
     }
 
@@ -679,6 +655,7 @@ static int get_flow_def(struct upipe *upipe, struct uref **flow_format)
         return UBASE_ERR_ALLOC;
 
     UBASE_RETURN(uref_flow_set_def(flow_def, "block."));
+    UBASE_RETURN(uref_block_flow_set_append(flow_def, 32));
     UBASE_RETURN(uref_pic_flow_set_fps(flow_def, fps));
     UBASE_RETURN(uref_pic_flow_set_hsize(flow_def, width));
     UBASE_RETURN(uref_pic_flow_set_vsize(flow_def, height));
@@ -707,7 +684,7 @@ static int get_flow_def(struct upipe *upipe, struct uref **flow_format)
         return UBASE_ERR_INVALID;
     }
 
-    if (upipe_pciesdi_src->sdi_format->pict_fmt->active_f2.start && interlaced == false)
+    if (upipe_pciesdi_src->sdi_format->pict_fmt->active_f2.start && interlaced == false && sdi3g_levelb == false)
         upipe_warn(upipe, "SDI signal is progressive but interlaced sdi_offset struct returned");
     else if (!upipe_pciesdi_src->sdi_format->pict_fmt->active_f2.start && interlaced == true)
         upipe_warn(upipe, "SDI signal is interlaced but progressive sdi_offset struct returned");
@@ -716,6 +693,12 @@ static int get_flow_def(struct upipe *upipe, struct uref **flow_format)
 
     int64_t hw, sw;
     sdi_dma_writer(upipe_pciesdi_src->fd, 1, &hw, &sw); // enable
+
+    upipe_pciesdi_src->mode = mode;
+    upipe_pciesdi_src->family = family;
+    upipe_pciesdi_src->scan = scan;
+    upipe_pciesdi_src->rate = rate;
+    upipe_pciesdi_src->sdi3g_levelb = sdi3g_levelb;
 
     return UBASE_ERR_NONE;
 }
@@ -768,28 +751,7 @@ static int upipe_pciesdi_src_check(struct upipe *upipe, struct uref *flow_format
         return UBASE_ERR_NONE;
     }
 
-    if (upipe_pciesdi_src->ubuf_mgr == NULL) {
-        struct uref *flow_def;
-        int ret = get_flow_def(upipe, &flow_def);
-        if (ret == UPIPE_PCIESDI_SRC_ERR_NOSIGNAL) {
-            /* If signal is unlocked start a timer pump to wait for it. */
-            struct upump *upump = upump_alloc_timer(upipe_pciesdi_src->upump_mgr,
-                    get_flow_def_on_signal_lock, upipe, upipe->refcount,
-                    UCLOCK_FREQ, UCLOCK_FREQ);
-            if (unlikely(upump == NULL)) {
-                upipe_throw_fatal(upipe, UBASE_ERR_UPUMP);
-                return UBASE_ERR_UPUMP;
-            }
-            upipe_pciesdi_src_set_upump(upipe, upump);
-            upump_start(upump);
-        }
-        if (!ubase_check(ret)) {
-            upipe_throw_fatal(upipe, ret);
-            return ret;
-        }
-        upipe_pciesdi_src_require_ubuf_mgr(upipe, flow_def);
-        return UBASE_ERR_NONE;
-    }
+    /* Get ubuf_mgr later in get_flow_def_on_signal_lock. */
 
     if (upipe_pciesdi_src->uclock == NULL &&
         urequest_get_opaque(&upipe_pciesdi_src->uclock_request, struct upipe *)
@@ -797,9 +759,9 @@ static int upipe_pciesdi_src_check(struct upipe *upipe, struct uref *flow_format
         return UBASE_ERR_NONE;
 
     if (upipe_pciesdi_src->fd != -1 && upipe_pciesdi_src->upump == NULL) {
-        struct upump *upump = upump_alloc_fd_read(upipe_pciesdi_src->upump_mgr,
-                upipe_pciesdi_src_worker, upipe, upipe->refcount,
-                upipe_pciesdi_src->fd);
+        struct upump *upump = upump_alloc_timer(upipe_pciesdi_src->upump_mgr,
+                get_flow_def_on_signal_lock, upipe, upipe->refcount,
+                1, UCLOCK_FREQ);
         if (unlikely(upump == NULL)) {
             upipe_throw_fatal(upipe, UBASE_ERR_UPUMP);
             return UBASE_ERR_UPUMP;
@@ -807,6 +769,64 @@ static int upipe_pciesdi_src_check(struct upipe *upipe, struct uref *flow_format
         upipe_pciesdi_src_set_upump(upipe, upump);
         upump_start(upump);
     }
+    return UBASE_ERR_NONE;
+}
+
+static int init_hardware(struct upipe *upipe, bool ntsc, bool genlock, bool sd)
+{
+    struct upipe_pciesdi_src *ctx = upipe_pciesdi_src_from_upipe(upipe);
+    int fd = ctx->fd;
+    int device_number = ctx->device_number;
+
+    uint8_t channels, has_vcxos, has_gs12241, has_gs12281, has_si5324,
+               has_genlock, has_lmh0387, has_si596, has_si552;
+    sdi_capabilities(fd, &channels, &has_vcxos, &has_gs12241, &has_gs12281,
+            &has_si5324, &has_genlock, &has_lmh0387, &has_si596, &has_si552);
+
+    if (device_number < 0 || device_number >= channels) {
+        upipe_err_va(upipe, "invalid device number (%d) for number of channels (%d)",
+                device_number, channels);
+        return UBASE_ERR_INVALID;
+    }
+
+    if (has_vcxos == 0 && ntsc) {
+        upipe_err(upipe, "NTSC not yet supported on boards without VCXOs");
+        return UBASE_ERR_INVALID;
+    }
+
+    if (has_genlock == 0 && genlock) {
+        upipe_err(upipe, "genlock not supported on this board");
+        return UBASE_ERR_INVALID;
+    }
+
+    /* sdi_pre_init */
+
+    if (has_gs12281)
+        gs12281_spi_init(fd);
+    if (has_gs12241) {
+        if (sd) {
+            gs12241_reset(fd, device_number);
+            gs12241_config_for_sd(fd, device_number);
+        }
+        gs12241_spi_init(fd);
+    }
+
+    if (has_lmh0387) {
+        /* Set direction for RX. */
+        sdi_lmh0387_direction(fd, 0);
+        /* set launch amplitude to nominal */
+        sdi_lmh0387_spi_write(fd, device_number, 0x02, 0x30);
+    }
+
+    /* sdi_init */
+
+    /* disable loopback */
+    sdi_dma(fd, 0);
+
+    /* disable dmas */
+    int64_t hw_count, sw_count;
+    sdi_dma_writer(fd, 0, &hw_count, &sw_count);
+
     return UBASE_ERR_NONE;
 }
 
@@ -833,11 +853,6 @@ static int upipe_pciesdi_set_uri(struct upipe *upipe, const char *path)
         return UBASE_ERR_EXTERNAL;
     }
 
-    uint8_t locked, mode, family, scan, rate;
-    /* Set the crc and packed options (in libsdi.c). */
-    sdi_rx(upipe_pciesdi_src->fd, &locked, &mode, &family, &scan, &rate);
-    sdi_dma(upipe_pciesdi_src->fd, 0, 0, 0); // disable loopback
-
     struct sdi_ioctl_mmap_dma_info mmap_info;
     if (ioctl(upipe_pciesdi_src->fd, SDI_IOCTL_MMAP_DMA_INFO, &mmap_info) != 0) {
         upipe_err(upipe, "error getting mmap info");
@@ -860,6 +875,14 @@ static int upipe_pciesdi_set_uri(struct upipe *upipe, const char *path)
     /* TODO: check need to release things on failure. */
 
     upipe_pciesdi_src->read_buffer = buf;
+    upipe_pciesdi_src->device_number = path[strlen(path) - 1] - 0x30;
+
+    /* initialize hardware except the clock */
+    UBASE_RETURN(init_hardware(upipe, false, false, false));
+
+    /* Set the crc and packed options (in libsdi.c). */
+    uint8_t locked, mode, family, scan, rate;
+    sdi_rx(upipe_pciesdi_src->fd, &locked, &mode, &family, &scan, &rate);
 
     return UBASE_ERR_NONE;
 }

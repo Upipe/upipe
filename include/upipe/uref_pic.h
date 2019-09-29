@@ -57,7 +57,9 @@ UREF_ATTR_VOID_SH(pic, bf, UDICT_TYPE_PIC_BF, bottom field present)
 UREF_ATTR_VOID_SH(pic, tff, UDICT_TYPE_PIC_TFF, top field first)
 UREF_ATTR_SMALL_UNSIGNED_SH(pic, afd, UDICT_TYPE_PIC_AFD, active format description)
 UREF_ATTR_OPAQUE_SH(pic, cea_708, UDICT_TYPE_PIC_CEA_708, cea-708 captions)
+UREF_ATTR_OPAQUE_SH(pic, bar_data, UDICT_TYPE_PIC_BAR_DATA, afd bar data)
 UREF_ATTR_UNSIGNED(pic, original_height, "p.original_height", original picture height before chunking)
+UREF_ATTR_VOID(pic, c_not_y, "p.c_not_y", whether ancillary data is found in chroma space)
 
 /** @This returns a new uref pointing to a new ubuf pointing to a picture.
  * This is equivalent to the two operations sequentially, and is a shortcut.

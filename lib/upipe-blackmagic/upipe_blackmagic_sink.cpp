@@ -703,10 +703,11 @@ static upipe_bmd_sink_frame *get_video_frame(struct upipe *upipe,
             void *vanc;
             ancillary->GetBufferForVerticalBlankingLine(CC_LINE, &vanc);
             uint16_t buf[VANC_WIDTH*2];
+            upipe_sdi_blank_c(buf, VANC_WIDTH);
             /* +1 to write into the Y plane */
             sdi_write_cdp(pic_data, pic_data_size, &buf[1], upipe_bmd_sink->mode == bmdModeNTSC ? 1 : 2,
                     &upipe_bmd_sink->cdp_hdr_sequence_cntr, fps);
-            sdi_calc_parity_checksum(buf);
+            sdi_calc_parity_checksum(&buf[1]);
 
             sdi_encode_v210((uint32_t*)vanc, buf, w);
         }

@@ -53,7 +53,7 @@ struct sdi_ioctl_icap {
 struct sdi_ioctl_refclk {
     uint8_t refclk_sel;
     uint32_t refclk_freq;
-    uint32_t refclk_counter;
+    uint64_t refclk_counter;
 };
 
 struct sdi_ioctl_capabilities {
@@ -65,12 +65,23 @@ struct sdi_ioctl_capabilities {
     uint8_t has_genlock;
     uint8_t has_lmh0387;
     uint8_t has_si596;
+    uint8_t has_si552;
+};
+
+struct sdi_ioctl_rate {
+    uint8_t rate;
 };
 
 struct sdi_ioctl_vcxo {
     uint8_t pwm_enable;
     uint32_t pwm_period;
     uint32_t pwm_width;
+};
+
+struct sdi_ioctl_picxo {
+    uint8_t enable;
+    uint8_t dir;
+    uint8_t step;
 };
 
 struct sdi_ioctl_si5324_vcxo {
@@ -92,9 +103,7 @@ struct sdi_ioctl_genlock {
 };
 
 struct sdi_ioctl_dma {
-    uint8_t fill;
-    uint8_t tx_rx_loopback_enable;
-    uint8_t rx_tx_loopback_enable;
+    uint8_t loopback_enable;
 };
 
 struct sdi_ioctl_dma_writer {
@@ -193,6 +202,21 @@ struct sdi_ioctl_mmap_dma_update {
     int64_t sw_count;
 };
 
+struct sdi_ioctl_monitor {
+    uint8_t tx_reset;
+    uint32_t tx_underflows;
+    uint8_t rx_reset;
+    uint32_t rx_overflows;
+};
+
+struct sdi_ioctl_channel_reset {
+    uint8_t reset;
+};
+
+struct sdi_ioctl_channel_set_pll {
+    uint8_t pll;
+};
+
 #define SDI_IOCTL 'S'
 
 #define SDI_IOCTL_REG               _IOWR(SDI_IOCTL,  0, struct sdi_ioctl_reg)
@@ -201,8 +225,11 @@ struct sdi_ioctl_mmap_dma_update {
 #define SDI_IOCTL_ICAP              _IOWR(SDI_IOCTL,  3, struct sdi_ioctl_icap)
 #define SDI_IOCTL_REFCLK            _IOWR(SDI_IOCTL,  4, struct sdi_ioctl_refclk)
 #define SDI_IOCTL_CAPABILITIES      _IOWR(SDI_IOCTL,  5, struct sdi_ioctl_capabilities)
+#define SDI_IOCTL_SET_RATE          _IOWR(SDI_IOCTL,  6, struct sdi_ioctl_rate)
+#define SDI_IOCTL_GET_RATE          _IOWR(SDI_IOCTL,  7, struct sdi_ioctl_rate)
 
 #define SDI_IOCTL_VCXO              _IOW(SDI_IOCTL,  10, struct sdi_ioctl_vcxo)
+#define SDI_IOCTL_PICXO             _IOW(SDI_IOCTL,  11, struct sdi_ioctl_vcxo)
 #define SDI_IOCTL_SI5324_VCXO       _IOW(SDI_IOCTL,  20, struct sdi_ioctl_si5324_vcxo)
 #define SDI_IOCTL_SI5324_SPI        _IOWR(SDI_IOCTL, 21, struct sdi_ioctl_si5324_spi)
 
@@ -223,13 +250,19 @@ struct sdi_ioctl_mmap_dma_update {
 #define SDI_IOCTL_TX_SPI_CS         _IOW(SDI_IOCTL,  60, struct sdi_ioctl_gs12241_spi_cs)
 #define SDI_IOCTL_TX_SPI            _IOWR(SDI_IOCTL, 61, struct sdi_ioctl_gs12281_spi)
 
-#define SDI_IOCTL_DIRECTION         _IOW(SDI_IOCTL,  70, struct sdi_ioctl_lmh0387_direction)
-#define SDI_IOCTL_SPI_CS            _IOW(SDI_IOCTL,  71, struct sdi_ioctl_lmh0387_spi_cs)
-#define SDI_IOCTL_SPI               _IOWR(SDI_IOCTL, 72, struct sdi_ioctl_lmh0387_spi)
+#define SDI_IOCTL_LMH0387_DIRECTION _IOW(SDI_IOCTL,  70, struct sdi_ioctl_lmh0387_direction)
+#define SDI_IOCTL_LMH0387_SPI_CS    _IOW(SDI_IOCTL,  71, struct sdi_ioctl_lmh0387_spi_cs)
+#define SDI_IOCTL_LMH0387_SPI       _IOWR(SDI_IOCTL, 72, struct sdi_ioctl_lmh0387_spi)
 
 #define SDI_IOCTL_RX                _IOWR(SDI_IOCTL, 80, struct sdi_ioctl_rx)
 #define SDI_IOCTL_TX                _IOWR(SDI_IOCTL, 81, struct sdi_ioctl_tx)
 #define SDI_IOCTL_TX_RX_LOOPBACK    _IOW(SDI_IOCTL,  82, struct sdi_ioctl_tx_rx_loopback)
 #define SDI_IOCTL_LOCK              _IOWR(SDI_IOCTL, 83, struct sdi_ioctl_lock)
+#define SDI_IOCTL_MONITOR           _IOWR(SDI_IOCTL, 84, struct sdi_ioctl_monitor)
+
+#define SDI_IOCTL_CHANNEL_RESET_RX  _IOW(SDI_IOCTL,  90, struct sdi_ioctl_channel_reset)
+#define SDI_IOCTL_CHANNEL_RESET_TX  _IOW(SDI_IOCTL,  91, struct sdi_ioctl_channel_reset)
+#define SDI_IOCTL_CHANNEL_SET_PLL   _IOW(SDI_IOCTL,  92, struct sdi_ioctl_channel_reset)
+#define SDI_IOCTL_CHANNEL_GET_REFCLK _IOR(SDI_IOCTL, 93, struct sdi_ioctl_refclk)
 
 #endif /* _LINUX_SDI_H */

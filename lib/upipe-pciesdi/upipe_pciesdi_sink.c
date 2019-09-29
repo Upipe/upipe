@@ -29,7 +29,6 @@
 #include <upipe/uref_block.h>
 #include <upipe/uref_pic_flow.h>
 #include <upipe/upipe.h>
-#include <upipe/ulist.h>
 #include <upipe/udict.h>
 #include <upipe/upump.h>
 #include <upipe/uref_clock.h>
@@ -49,6 +48,7 @@
 #include <sys/stat.h>
 #include <fcntl.h>
 #include <errno.h>
+#include <pthread.h>
 
 #include "sdi_config.h"
 #include "libsdi.h"
@@ -60,6 +60,8 @@
 #include "../upipe-hbrmt/upipe_hbrmt_common.h"
 #include "config.h"
 
+#define INIT_HARDWARE 0
+
 /** upipe_pciesdi_sink structure */
 struct upipe_pciesdi_sink {
     /** refcount management structure */
@@ -68,8 +70,7 @@ struct upipe_pciesdi_sink {
     /** file descriptor */
     int fd;
 
-    /** urefs */
-    struct uchain urefs;
+    struct uref *uref_next;
     struct uref *uref;
     size_t written;
     bool underrun;
@@ -81,8 +82,12 @@ struct upipe_pciesdi_sink {
 
     /** upump manager */
     struct upump_mgr *upump_mgr;
-    /** read watcher */
-    struct upump *upump;
+    /** write watcher */
+    struct upump *fd_write_upump;
+    /** timer to wait for clock to init */
+    struct upump *timer_upump;
+
+    int device_number;
 
     /** scratch buffer */
     int scratch_bytes;
@@ -90,13 +95,16 @@ struct upipe_pciesdi_sink {
 
     /** hardware clock */
     struct uclock uclock;
-    uint32_t previous_tick;
-    uint64_t wraparounds;
+    uint64_t offset;
+    uint32_t clock_is_inited; /* TODO: maybe replace with uatomic variable. */
+    struct urational freq;
 
     void (*uyvy_to_sdi)(uint8_t *dst, const uint8_t *src, uintptr_t pixels);
 
     struct sdi_ioctl_mmap_dma_info mmap_info;
     uint8_t *write_buffer;
+
+    pthread_mutex_t clock_mutex;
 
     /** public upipe structure */
     struct upipe upipe;
@@ -106,28 +114,41 @@ UPIPE_HELPER_UPIPE(upipe_pciesdi_sink, upipe, UPIPE_PCIESDI_SINK_SIGNATURE);
 UPIPE_HELPER_UREFCOUNT(upipe_pciesdi_sink, urefcount, upipe_pciesdi_sink_free)
 UPIPE_HELPER_VOID(upipe_pciesdi_sink);
 UPIPE_HELPER_UPUMP_MGR(upipe_pciesdi_sink, upump_mgr)
-UPIPE_HELPER_UPUMP(upipe_pciesdi_sink, upump, upump_mgr)
+UPIPE_HELPER_UPUMP(upipe_pciesdi_sink, fd_write_upump, upump_mgr)
+UPIPE_HELPER_UPUMP(upipe_pciesdi_sink, timer_upump, upump_mgr)
 UBASE_FROM_TO(upipe_pciesdi_sink, uclock, uclock, uclock)
 
 static uint64_t upipe_pciesdi_sink_now(struct uclock *uclock)
 {
     struct upipe_pciesdi_sink *upipe_pciesdi_sink = upipe_pciesdi_sink_from_uclock(uclock);
 
-    if (upipe_pciesdi_sink->fd < 0)
-        return 0;
+    pthread_mutex_lock(&upipe_pciesdi_sink->clock_mutex);
 
-    uint32_t freq, tick;
-    sdi_refclk(upipe_pciesdi_sink->fd, 0, &freq, &tick);
-
-    if (tick < upipe_pciesdi_sink->previous_tick) {
-        /* log this? */
-        upipe_pciesdi_sink->wraparounds += 1;
+    if (upipe_pciesdi_sink->fd < 0
+            || upipe_pciesdi_sink->clock_is_inited == 0) {
+        pthread_mutex_unlock(&upipe_pciesdi_sink->clock_mutex);
+        return UINT64_MAX;
     }
-    upipe_pciesdi_sink->previous_tick = tick;
 
-    __uint128_t fullscale = (upipe_pciesdi_sink->wraparounds << 32) + tick;
-    fullscale *= UCLOCK_FREQ;
-    fullscale /= freq;
+    /* read ticks from card */
+    uint32_t freq;
+    uint64_t tick;
+    sdi_channel_get_refclk(upipe_pciesdi_sink->fd, &freq, &tick);
+
+    if (freq == 0) {
+        pthread_mutex_unlock(&upipe_pciesdi_sink->clock_mutex);
+        return UINT64_MAX;
+    }
+
+    /* 128 bits needed to prevent overflow after ~2.5 hours */
+    __uint128_t fullscale = tick;
+    /* Use exact frequency.  This multiply was UCLOCK_FREQ so the comment above
+     * is outdated.  The overflow will take longer to occur. */
+    fullscale *= upipe_pciesdi_sink->freq.den;
+    fullscale /= upipe_pciesdi_sink->freq.num;
+    fullscale += upipe_pciesdi_sink->offset;
+
+    pthread_mutex_unlock(&upipe_pciesdi_sink->clock_mutex);
 
     return fullscale;
 }
@@ -151,18 +172,25 @@ static struct upipe *upipe_pciesdi_sink_alloc(struct upipe_mgr *mgr,
     struct upipe_pciesdi_sink *upipe_pciesdi_sink = upipe_pciesdi_sink_from_upipe(upipe);
     upipe_pciesdi_sink_init_urefcount(upipe);
     upipe_pciesdi_sink_init_upump_mgr(upipe);
-    upipe_pciesdi_sink_init_upump(upipe);
+    upipe_pciesdi_sink_init_fd_write_upump(upipe);
+    upipe_pciesdi_sink_init_timer_upump(upipe);
     upipe_pciesdi_sink_check_upump_mgr(upipe);
 
+    int ret = pthread_mutex_init(&upipe_pciesdi_sink->clock_mutex, NULL);
+    if (ret) {
+        upipe_err_va(upipe, "pthread_mutex_init() failed with %d (%s)", ret, strerror(ret));
+        return NULL;
+    }
+
+    upipe_pciesdi_sink->clock_is_inited = 0;
+    upipe_pciesdi_sink->offset = 0;
     upipe_pciesdi_sink->scratch_bytes = 0;
     upipe_pciesdi_sink->latency = 0;
     upipe_pciesdi_sink->fd = -1;
-    ulist_init(&upipe_pciesdi_sink->urefs);
     upipe_pciesdi_sink->uref = NULL;
+    upipe_pciesdi_sink->uref_next = NULL;
     upipe_pciesdi_sink->underrun = false;
     upipe_pciesdi_sink->first = 1;
-    upipe_pciesdi_sink->previous_tick = 0;
-    upipe_pciesdi_sink->wraparounds = 0;
     upipe_pciesdi_sink->uclock.refcount = &upipe_pciesdi_sink->urefcount;
     upipe_pciesdi_sink->uclock.uclock_now = upipe_pciesdi_sink_now;
 
@@ -211,18 +239,34 @@ static inline void pack(uint8_t *dst, const uint16_t *src)
     dst[4] = src[3];
 }
 
+static void stop_dma(struct upipe *upipe)
+{
+    struct upipe_pciesdi_sink *ctx = upipe_pciesdi_sink_from_upipe(upipe);
+    int64_t hw, sw;
+
+    /* stop DMA */
+    sdi_dma_reader(ctx->fd, 0, &hw, &sw);
+    /* stop and clear pump */
+    upipe_pciesdi_sink_set_fd_write_upump(upipe, NULL);
+    /* reset state */
+    ctx->first = 1;
+    ctx->scratch_bytes = 0;
+
+    /* Clear next uref. */
+    uref_free(ctx->uref_next);
+    ctx->uref_next = NULL;
+    /* Free uref being written. */
+    uref_free(ctx->uref);
+    ctx->uref = NULL;
+    ctx->written = 0;
+}
+
 /** @internal
  */
 static void upipe_pciesdi_sink_worker(struct upump *upump)
 {
     struct upipe *upipe = upump_get_opaque(upump, struct upipe *);
     struct upipe_pciesdi_sink *upipe_pciesdi_sink = upipe_pciesdi_sink_from_upipe(upipe);
-
-    /* sdi tx control / status */
-    uint8_t txen, slew;
-    sdi_tx(upipe_pciesdi_sink->fd, SDI_TX_MODE_HD, &txen, &slew);
-    if (txen || slew)
-        upipe_dbg_va(upipe, "txen %d slew %d", txen, slew);
 
     /* set / get dma */
     int64_t hw = 0, sw = 0;
@@ -236,19 +280,16 @@ static void upipe_pciesdi_sink_worker(struct upump *upump)
         return;
     }
 
+    bool underrun = false;
     /* Get uref, from struct or list, print 1 message if none available. */
     struct uref *uref = upipe_pciesdi_sink->uref;
     if (!uref) {
-        struct uchain *uchain = ulist_pop(&upipe_pciesdi_sink->urefs);
-        if (!uchain) {
-            if (!upipe_pciesdi_sink->underrun)
-                upipe_err(upipe, "underrun");
-            upipe_pciesdi_sink->underrun = true;
+        uref = upipe_pciesdi_sink->uref_next;
+        upipe_pciesdi_sink->uref_next = NULL;
+        if (!uref) {
+            underrun = true;
         } else {
-            if (upipe_pciesdi_sink->underrun)
-                upipe_warn(upipe, "underrun resolved");
-            upipe_pciesdi_sink->underrun = false;
-            uref = uref_from_uchain(uchain);
+            underrun = false;
             upipe_pciesdi_sink->uref = uref;
             upipe_pciesdi_sink->written = 0;
         }
@@ -256,24 +297,13 @@ static void upipe_pciesdi_sink_worker(struct upump *upump)
 
     /* If too late and there are no more urefs to write the input may have
      * stopped so stop the output. */
-    if (num_bufs <= 0 && upipe_pciesdi_sink->underrun) {
-        /* Stopping the DMA doesn't work yet in the driver do just advance the
-         * SW buffer count based on how much we want to write. */
-        num_bufs = DMA_BUFFER_COUNT/2 - num_bufs; // number of bufs to write
-        upipe_warn_va(upipe, "too late and no input, stopping upump, skipping %"PRId64" buffers, hw: %"PRId64", sw: %"PRId64,
-                num_bufs, hw, sw);
-
-        struct sdi_ioctl_mmap_dma_update mmap_update = { .sw_count = sw + num_bufs };
-        if (ioctl(upipe_pciesdi_sink->fd, SDI_IOCTL_MMAP_DMA_READER_UPDATE, &mmap_update))
-            upipe_err(upipe, "ioctl error incrementing SW buffer count");
-
-        /* stop and clear pump */
-        upipe_pciesdi_sink_set_upump(upipe, NULL);
-
+    if (num_bufs <= 0 && underrun) {
+        upipe_warn(upipe, "too late and no input, stopping DMA and upump");
+        stop_dma(upipe);
         return;
     }
 
-    if (upipe_pciesdi_sink->underrun)
+    if (underrun)
         return;
 
     /* Check for "too late" only when there is something to write.  Prevents log
@@ -396,8 +426,11 @@ static void upipe_pciesdi_sink_worker(struct upump *upump)
     }
 
     /* start dma */
-    upipe_pciesdi_sink->first = 0;
-    sdi_dma_reader(upipe_pciesdi_sink->fd, 1, &hw, &sw);
+    if (upipe_pciesdi_sink->first) {
+        upipe_notice(upipe, "starting DMA");
+        upipe_pciesdi_sink->first = 0;
+        sdi_dma_reader(upipe_pciesdi_sink->fd, 1, &hw, &sw);
+    }
 
     upipe_pciesdi_sink->written += samples_written * sizeof(uint16_t);
     if (upipe_pciesdi_sink->written == size) {
@@ -417,7 +450,7 @@ static void start_fd_write(struct upump *upump)
         upipe_throw_fatal(upipe, UBASE_ERR_UPUMP);
         return;
     }
-    upipe_pciesdi_sink_set_upump(upipe, upump);
+    upipe_pciesdi_sink_set_fd_write_upump(upipe, upump);
     upump_start(upump);
 }
 
@@ -444,15 +477,13 @@ static void upipe_pciesdi_sink_input(struct upipe *upipe, struct uref *uref, str
 #define CHUNK_BUFFER_COUNT 32
 #define BUFFER_COUNT_PRINT_THRESHOLD(num, den) (num * CHUNK_BUFFER_COUNT / den)
 
-    ulist_add(&upipe_pciesdi_sink->urefs, uref_to_uchain(uref));
-    size_t n = ulist_depth(&upipe_pciesdi_sink->urefs);
+    if (upipe_pciesdi_sink->uref_next)
+        uref_free(upipe_pciesdi_sink->uref_next);
+    upipe_pciesdi_sink->uref_next = uref;
 
     /* check if pump is already running */
-    if (upipe_pciesdi_sink->upump)
+    if (upipe_pciesdi_sink->fd_write_upump)
         return;
-
-    uint8_t txen, slew;
-    sdi_tx(upipe_pciesdi_sink->fd, SDI_TX_MODE_HD, &txen, &slew);
 
     /* check for chunks or whole frames */
     uint64_t vpos;
@@ -470,12 +501,129 @@ static void upipe_pciesdi_sink_input(struct upipe *upipe, struct uref *uref, str
                 upipe_throw_fatal(upipe, UBASE_ERR_UPUMP);
                 return;
             }
-            upipe_pciesdi_sink_set_upump(upipe, upump);
+            upipe_pciesdi_sink_set_fd_write_upump(upipe, upump);
             upump_start(upump);
         }
 
         return;
     }
+}
+
+static int check_capabilities(struct upipe *upipe, bool genlock)
+{
+    struct upipe_pciesdi_sink *ctx = upipe_pciesdi_sink_from_upipe(upipe);
+    int fd = ctx->fd;
+    int device_number = ctx->device_number;
+
+    uint8_t channels, has_vcxos, has_gs12241, has_gs12281, has_si5324,
+               has_genlock, has_lmh0387, has_si596, has_si552;
+    sdi_capabilities(fd, &channels, &has_vcxos, &has_gs12241, &has_gs12281,
+            &has_si5324, &has_genlock, &has_lmh0387, &has_si596, &has_si552);
+
+    if (device_number < 0 || device_number >= channels) {
+        upipe_err_va(upipe, "invalid device number (%d) for number of channels (%d)",
+                device_number, channels);
+        return UBASE_ERR_INVALID;
+    }
+
+    if (has_genlock == 0 && genlock) {
+        upipe_err(upipe, "genlock not supported on this board");
+        return UBASE_ERR_INVALID;
+    }
+
+    if (!((has_vcxos && has_si5324) || has_si596 || has_lmh0387)) {
+        upipe_err(upipe, "unknown capabilities");
+        return UBASE_ERR_INVALID;
+    }
+
+    return UBASE_ERR_NONE;
+}
+
+static void init_hardware_part1(struct upipe *upipe, int rate, int mode)
+{
+    struct upipe_pciesdi_sink *ctx = upipe_pciesdi_sink_from_upipe(upipe);
+    int fd = ctx->fd;
+    int device_number = ctx->device_number;
+
+    uint8_t channels, has_vcxos, has_gs12241, has_gs12281, has_si5324,
+               has_genlock, has_lmh0387, has_si596, has_si552;
+    sdi_capabilities(fd, &channels, &has_vcxos, &has_gs12241, &has_gs12281,
+            &has_si5324, &has_genlock, &has_lmh0387, &has_si596, &has_si552);
+
+    /* sdi_pre_init */
+
+    if (has_gs12281)
+        gs12281_spi_init(fd);
+    if (has_gs12241) {
+        if (mode == SDI_TX_MODE_SD) {
+            gs12241_reset(fd, device_number);
+            gs12241_config_for_sd(fd, device_number);
+        }
+        gs12241_spi_init(fd);
+    }
+
+    if (has_lmh0387) {
+        /* Set direction for TX. */
+        sdi_lmh0387_direction(fd, 1);
+    }
+
+    /* reset channel */
+    sdi_channel_reset_rx(fd, 1);
+    sdi_channel_reset_tx(fd, 1);
+
+    /* PCIe SDI (Falcon 9) */
+    if (has_vcxos && has_si5324) {
+        if (rate == SDI_PAL_RATE) {
+            /* Set channel to refclk0. */
+            sdi_channel_set_pll(fd, 0);
+        } else if (rate == SDI_NTSC_RATE) {
+            /* Set channel 0 to refclk1. */
+            sdi_channel_set_pll(fd, 1);
+        }
+    }
+
+    /* Mini 4K */
+    else if (has_si596) {
+        /* TODO: Need to write to CSR_SDI_QPLL_REFCLK_STABLE_ADDR when changing refclk? */
+        uint32_t refclk_freq;
+        uint64_t refclk_counter;
+        if (rate == SDI_PAL_RATE) {
+            sdi_refclk(fd, 0, &refclk_freq, &refclk_counter);
+        } else if (rate == SDI_NTSC_RATE) {
+            sdi_refclk(fd, 1, &refclk_freq, &refclk_counter);
+        }
+    }
+
+    /* Duo2 */
+    else if (has_lmh0387) {
+        if (rate == SDI_PAL_RATE) {
+            sdi_picxo(fd, 0, 0, 0);
+        } else if (rate == SDI_NTSC_RATE) {
+            /* SD: use a 270Mbps linerate, don't use PICXO */
+            if (mode == SDI_TX_MODE_SD)
+                sdi_picxo(fd, 0, 0, 0);
+            /* HD: use PICXO to slow down 74.25MHz to 74.25MHz/1.001 clock */
+            else if (mode == SDI_TX_MODE_HD)
+                sdi_picxo(fd, 1, 1, 10);
+            /* 3G: use PICXO to slow down 148.5Mhz to 148.5MHz/1.001 clock */
+            else
+                sdi_picxo(fd, 1, 1, 5);
+        }
+    }
+
+    /* unreset channel */
+    sdi_channel_reset_rx(fd, 0);
+    sdi_channel_reset_tx(fd, 0);
+
+    /* disable pattern */
+    sdi_set_pattern(fd, mode, 0, 0);
+
+    /* set TX mode */
+    uint8_t txen, slew;
+    sdi_tx(fd, mode, &txen, &slew);
+
+    /* Store rate in driver. */
+    sdi_set_rate(fd, rate);
 }
 
 /** @internal @This sets the input flow definition.
@@ -497,28 +645,78 @@ static int upipe_pciesdi_sink_set_flow_def(struct upipe *upipe, struct uref *flo
     UBASE_RETURN(uref_pic_flow_get_vsize(flow_def, &height));
     UBASE_RETURN(uref_pic_flow_get_fps(flow_def, &fps));
 
-#ifdef DUO2_HW
-    if (fps.den == 1001) {
-        upipe_err(upipe, "TX of NTSC signals is not supported on the Duo2");
-        return UBASE_ERR_INVALID;
-    }
-#endif
-
+    bool genlock = false;
     bool sd = height < 720;
+    bool ntsc = sd ? 0 : fps.den == 1001;
     bool sdi3g = height == 1080 && (urational_cmp(&fps, &(struct urational){ 50, 1 })) >= 0;
     upipe_dbg_va(upipe, "sd: %d, 3g: %d", sd, sdi3g);
 
     /* TODO: init card based on given format. */
 
-    if (sd) {
-        upipe_err(upipe, "SD format is not yet supported");
+    int tx_mode;
+    if (sd)
+        tx_mode = SDI_TX_MODE_SD;
+    else if (sdi3g)
+        tx_mode = SDI_TX_MODE_3G;
+    else
+        tx_mode = SDI_TX_MODE_HD;
+
+    int clock_rate;
+    if (ntsc)
+        clock_rate = SDI_NTSC_RATE;
+    else if (genlock)
+        clock_rate = SDI_GENLOCK_RATE;
+    else
+        clock_rate = SDI_PAL_RATE;
+
+    if (upipe_pciesdi_sink->fd == -1) {
+        upipe_warn(upipe, "device has not been opened, unable to init hardware");
         return UBASE_ERR_INVALID;
     }
 
-    if (sdi3g) {
-        upipe_err(upipe, "SDI-3G format is not yet supported");
-        return UBASE_ERR_INVALID;
+    /* Record time now so that we can use it as an offset to ensure that the
+     * clock always goes forwards when mode changes. */
+    uint64_t offset = upipe_pciesdi_sink_now(&upipe_pciesdi_sink->uclock);
+
+    UBASE_RETURN(check_capabilities(upipe, genlock));
+
+    upipe_warn(upipe, "new flow_def, stopping DMA and upump");
+    stop_dma(upipe);
+
+    /* Frequencies:
+     * - PAL 3G = 148.5  MHz
+     * - PAL HD =  74.25 MHz
+     * - PAL SD = 148.5  MHz ?
+     * - NTSC 3G = 148.5  / 1.001 MHz
+     * - NTSC HD =  74.25 / 1.001 MHz
+     * - NTSC SD = 148.5  / 1.001 MHz ?
+     */
+    struct urational freq;
+    if (sd) {
+        freq = (struct urational){ 1485, 270 };
+    } else if (sdi3g) {
+        if (ntsc)
+            freq = (struct urational){ 148500, 27027 };
+        else
+            freq = (struct urational){ 1485, 270 };
+    } else {
+        if (ntsc)
+            freq = (struct urational){ 74250, 27027 };
+        else
+            freq = (struct urational){ 7425, 2700 };
     }
+
+    /* Lock to begin init. */
+    pthread_mutex_lock(&upipe_pciesdi_sink->clock_mutex);
+
+    /* initialize clock */
+    init_hardware_part1(upipe, clock_rate, tx_mode);
+    upipe_pciesdi_sink->freq = freq;
+    upipe_pciesdi_sink->offset = offset;
+    upipe_pciesdi_sink->clock_is_inited = 1;
+
+    /* Unlock */
+    pthread_mutex_unlock(&upipe_pciesdi_sink->clock_mutex);
 
     return UBASE_ERR_NONE;
 }
@@ -534,7 +732,8 @@ static int upipe_pciesdi_set_uri(struct upipe *upipe, const char *path)
     struct upipe_pciesdi_sink *upipe_pciesdi_sink = upipe_pciesdi_sink_from_upipe(upipe);
 
     ubase_clean_fd(&upipe_pciesdi_sink->fd);
-    upipe_pciesdi_sink_set_upump(upipe, NULL);
+    upipe_pciesdi_sink_set_fd_write_upump(upipe, NULL);
+    upipe_pciesdi_sink_set_timer_upump(upipe, NULL);
 
     upipe_pciesdi_sink->fd = open(path, O_RDWR | O_CLOEXEC | O_NONBLOCK);
     if (unlikely(upipe_pciesdi_sink->fd < 0)) {
@@ -547,13 +746,6 @@ static int upipe_pciesdi_set_uri(struct upipe *upipe, const char *path)
         upipe_err(upipe, "DMA not available");
         return UBASE_ERR_EXTERNAL;
     }
-
-    /* disable pattern */
-    //sdi_set_pattern(upipe_pciesdi_sink->fd, SDI_TX_MODE_SD, 0, 0);
-    sdi_set_pattern(upipe_pciesdi_sink->fd, SDI_TX_MODE_HD, 0, 0);
-    //sdi_set_pattern(upipe_pciesdi_sink->fd, SDI_TX_MODE_3G, 0, 0);
-
-    sdi_dma(upipe_pciesdi_sink->fd, 0, 0, 0); // disable loopback
 
     struct sdi_ioctl_mmap_dma_info mmap_info;
     if (ioctl(upipe_pciesdi_sink->fd, SDI_IOCTL_MMAP_DMA_INFO, &mmap_info) != 0) {
@@ -577,10 +769,13 @@ static int upipe_pciesdi_set_uri(struct upipe *upipe, const char *path)
         return UBASE_ERR_EXTERNAL;
     }
 
+    sdi_dma(upipe_pciesdi_sink->fd, 0); // disable loopback
+
     /* TODO: check need to release things on failure. */
 
     upipe_pciesdi_sink->mmap_info = mmap_info;
     upipe_pciesdi_sink->write_buffer = buf;
+    upipe_pciesdi_sink->device_number = path[strlen(path) - 1] - 0x30;
 
     return UBASE_ERR_NONE;
 }
@@ -602,7 +797,8 @@ static int upipe_pciesdi_sink_control(struct upipe *upipe, int command, va_list 
             return upipe_control_provide_request(upipe, command, args);
 
         case UPIPE_ATTACH_UPUMP_MGR:
-            upipe_pciesdi_sink_set_upump(upipe, NULL);
+            upipe_pciesdi_sink_set_fd_write_upump(upipe, NULL);
+            upipe_pciesdi_sink_set_timer_upump(upipe, NULL);
             return upipe_pciesdi_sink_attach_upump_mgr(upipe);
 
         case UPIPE_SET_FLOW_DEF: {
@@ -645,13 +841,10 @@ static void upipe_pciesdi_sink_free(struct upipe *upipe)
     ubase_clean_fd(&upipe_pciesdi_sink->fd);
 
     uref_free(upipe_pciesdi_sink->uref);
-    struct uchain *uchain, *uchain_tmp;
-    ulist_delete_foreach(&upipe_pciesdi_sink->urefs, uchain, uchain_tmp) {
-        uref_free(uref_from_uchain(uchain));
-        ulist_delete(uchain);
-    }
+    uref_free(upipe_pciesdi_sink->uref_next);
 
-    upipe_pciesdi_sink_clean_upump(upipe);
+    upipe_pciesdi_sink_clean_fd_write_upump(upipe);
+    upipe_pciesdi_sink_clean_timer_upump(upipe);
     upipe_pciesdi_sink_clean_upump_mgr(upipe);
     upipe_pciesdi_sink_clean_urefcount(upipe);
     upipe_pciesdi_sink_free_void(upipe);

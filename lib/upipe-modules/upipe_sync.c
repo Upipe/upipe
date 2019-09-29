@@ -574,6 +574,7 @@ static void output_sound(struct upipe *upipe, const struct urational *fps,
         struct upipe *upipe_sub = upipe_sync_sub_to_upipe(upipe_sync_sub);
         const uint8_t channels = upipe_sync_sub->channels;
         size_t samples = frame_samples;
+        int wait = 0;
 
         const bool s337 = upipe_sync_sub->s337;
         const bool a52 = upipe_sync_sub->a52;
@@ -648,7 +649,17 @@ static void output_sound(struct upipe *upipe, const struct urational *fps,
         if (pts + upipe_sync->latency > upipe_sync->pts + upipe_sync->ticks_per_frame) {
             upipe_warn_va(upipe_sub, "Waiting to buffer %.0f",
                     pts_to_time(pts + upipe_sync->latency - upipe_sync->pts));
-            continue;
+
+            /* Although waiting to buffer, still output audio with corresponding video frame tick */
+            src = get_silence(upipe_sub, samples);
+            if (src) {
+                uref_clock_set_pts_sys(src, upipe_sync->pts - upipe_sync->latency);
+                size_t dup_samples;
+                ubase_assert(uref_sound_size(src, &dup_samples, NULL));
+                upipe_sync_sub->samples += dup_samples;
+                uref_clock_get_pts_sys(src, &pts);
+                wait = 1;
+            }
         }
 
         /* output */
@@ -689,7 +700,8 @@ static void output_sound(struct upipe *upipe, const struct urational *fps,
             //upipe_notice_va(upipe_sub, "pop, samples %" PRIu64, upipe_sync_sub->samples);
 
             if (src_samples == 0) {
-                ulist_pop(&upipe_sync_sub->urefs);
+                if(!wait)
+                    ulist_pop(&upipe_sync_sub->urefs);
                 uref_free(src);
                 src = uref_from_uchain(ulist_peek(&upipe_sync_sub->urefs));
                 if (!src)
@@ -799,11 +811,21 @@ static void cb(struct upump *upump)
 
     /* schedule next pic */
     now = uclock_now(upipe_sync->uclock);
-    while (now > upipe_sync->pts) {
-        upipe_sync->pts += upipe_sync->ticks_per_frame;
-        upipe_err_va(upipe, "skipping a beat");
+    if (now != UINT64_MAX && now > upipe_sync->pts) {
+        uint64_t diff = now - upipe_sync->pts;
+        diff += upipe_sync->ticks_per_frame - 1;
+        diff /= upipe_sync->ticks_per_frame;
+        upipe_err_va(upipe, "skipping %"PRIu64" beats", diff);
+        upipe_sync->pts += diff * upipe_sync->ticks_per_frame;
     }
-    upipe_sync_wait_upump(upipe, upipe_sync->pts - now, cb);
+
+    uint64_t wait;
+    if (now == UINT64_MAX)
+        wait = upipe_sync->ticks_per_frame;
+    else
+        wait = upipe_sync->pts - now;
+
+    upipe_sync_wait_upump(upipe, wait, cb);
 }
 
 /** @internal @This receives data.
@@ -886,7 +908,7 @@ static void upipe_sync_input(struct upipe *upipe, struct uref *uref,
     uint64_t now = uclock_now(upipe_sync->uclock);
 
     /* reject late pics */
-    if (now > pts) {
+    if (now != UINT64_MAX && now > pts) {
         uint64_t cr = 0;
         uref_clock_get_cr_sys(uref, &cr);
         upipe_err_va(upipe, "%s() picture too late by %" PRIu64 "ms, drop pic, recept %" PRIu64 "",
@@ -910,8 +932,14 @@ static void upipe_sync_input(struct upipe *upipe, struct uref *uref,
         return;
 
     /* start timer */
+    uint64_t wait;
+    if (now == UINT64_MAX)
+        wait = upipe_sync->ticks_per_frame;
+    else
+        wait = pts - now;
+
     upipe_sync->pts = pts;
-    upipe_sync_wait_upump(upipe_sync_to_upipe(upipe_sync), pts - now, cb);
+    upipe_sync_wait_upump(upipe_sync_to_upipe(upipe_sync), wait, cb);
 }
 
 /** @internal @This allocates a sync pipe.

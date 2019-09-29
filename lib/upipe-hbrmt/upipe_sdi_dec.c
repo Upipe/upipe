@@ -104,6 +104,12 @@ struct upipe_sdi_dec_sub {
     struct upipe upipe;
 };
 
+struct audio_ctx {
+    int32_t *buf_audio;
+    size_t group_offset[UPIPE_SDI_CHANNELS_PER_GROUP];
+    int aes[8];
+};
+
 /** upipe_sdi_dec structure with sdi_dec parameters */
 struct upipe_sdi_dec {
     /** refcount management structure */
@@ -201,17 +207,30 @@ struct upipe_sdi_dec {
     /** latency */
     uint64_t latency;
 
-    /* SDI-3G level B frame tracker. */
-    bool sdi3g_levelb_second_frame;
+    bool sdi3g_levelb;
+    bool sdi3g_levelb_second_frame; /* SDI-3G level B frame tracker. */
+
+    int chunk_line_offset;
+    int active_line_offset;
+
+    /* pciesdi framer */
+    int prev_line_num;
+    uint16_t prev_fvh;
+    bool start;
+    bool progressive;
+    struct ubuf *head_next_frame;
+    bool discontinuity;
+
+    /* Output video ubuf */
+    struct ubuf *ubuf;
+
+    /* Output audio ubuf */
+    struct ubuf *ubuf_sound;
+    /* audio context for chunks */
+    struct audio_ctx audio_ctx;
 
     /** public upipe structure */
     struct upipe upipe;
-};
-
-struct audio_ctx {
-    int32_t *buf_audio;
-    size_t group_offset[UPIPE_SDI_CHANNELS_PER_GROUP];
-    int aes[8];
 };
 
 /** @hidden */
@@ -224,7 +243,6 @@ static int upipe_sdi_dec_sub_check(struct upipe *upipe, struct uref *flow_format
 
 UPIPE_HELPER_UPIPE(upipe_sdi_dec, upipe, UPIPE_SDI_DEC_SIGNATURE);
 UPIPE_HELPER_UREFCOUNT(upipe_sdi_dec, urefcount, upipe_sdi_dec_free);
-UPIPE_HELPER_VOID(upipe_sdi_dec);
 UPIPE_HELPER_OUTPUT(upipe_sdi_dec, output, flow_def, output_state, request_list)
 UPIPE_HELPER_UBUF_MGR(upipe_sdi_dec, ubuf_mgr, flow_format, ubuf_mgr_request,
                       upipe_sdi_dec_check,
@@ -260,24 +278,8 @@ static int upipe_sdi_dec_set_option(struct upipe *upipe, const char *option,
 
 static int upipe_sdi_dec_sub_control(struct upipe *upipe, int command, va_list args)
 {
-    switch (command) {
-        case UPIPE_GET_FLOW_DEF: {
-            struct uref **p = va_arg(args, struct uref **);
-            return upipe_sdi_dec_sub_get_flow_def(upipe, p);
-        }
-
-        case UPIPE_GET_OUTPUT: {
-            struct upipe **p = va_arg(args, struct upipe **);
-            return upipe_sdi_dec_sub_get_output(upipe, p);
-        }
-        case UPIPE_SET_OUTPUT: {
-            struct upipe *output = va_arg(args, struct upipe *);
-            return upipe_sdi_dec_sub_set_output(upipe, output);
-        }
-
-        default:
-            return UBASE_ERR_UNHANDLED;
-    }
+    UBASE_HANDLED_RETURN(upipe_sdi_dec_sub_control_output(upipe, command, args));
+    return UBASE_ERR_UNHANDLED;
 }
 
 static struct upipe *upipe_sdi_dec_sub_init(struct upipe *upipe,
@@ -516,13 +518,16 @@ static void extract_hd_audio(struct upipe *upipe, const uint16_t *packet, int li
         return;
     }
 
-    /* Audio packets are not allowed on the switching line + 1 */
-    if (upipe_sdi_dec->debug && (line_num == p->switching_line + 1 ||
-        (p->field_offset && line_num == p->switching_line + 1 + switching_line_offset))) {
-        upipe_warn_va(upipe, "Audio packet on invalid line %d", line_num);
-    }
-
     if (upipe_sdi_dec->debug) {
+        int local_line_num = line_num;
+        if (upipe_sdi_dec->sdi3g_levelb)
+            local_line_num = (local_line_num + 1) / 2;
+
+        /* Audio packets are not allowed on the switching line + 1 */
+        if (local_line_num == p->switching_line + 1
+                || local_line_num == p->switching_line + 1 + switching_line_offset)
+            upipe_warn_va(upipe, "Audio packet on invalid line %d", line_num);
+
         /* FIXME: extract this to a generic HD validation function */
         uint16_t checksum = 0;
         int len = data_count + 3 /* DID / DBN / DC */;
@@ -636,7 +641,7 @@ static inline void validate_dbn(struct upipe *upipe, uint8_t did, uint8_t dbn, i
     upipe_sdi_dec->dbn[did] = dbn;
 }
 
-static int parse_hd_hanc(struct upipe *upipe, const uint16_t *packet, int line_num,
+static int parse_hd_hanc(struct upipe *upipe, const uint16_t *packet, int offset, int line_num,
                          struct audio_ctx *ctx)
 {
     struct upipe_sdi_dec *upipe_sdi_dec = upipe_sdi_dec_from_upipe(upipe);
@@ -655,6 +660,8 @@ static int parse_hd_hanc(struct upipe *upipe, const uint16_t *packet, int line_n
         break;
 
     default:
+        upipe_throw(upipe, UPROBE_SDI_DEC_HANC_PACKET, UPIPE_SDI_DEC_SIGNATURE,
+                line_num, offset, packet);
         break;
     }
 
@@ -700,8 +707,8 @@ static void extract_sd_audio(struct upipe *upipe, const uint16_t *packet,
     }
 }
 
-static int parse_sd_hanc(struct upipe *upipe, const uint16_t *packet,
-                         struct audio_ctx *ctx)
+static int parse_sd_hanc(struct upipe *upipe, const uint16_t *packet, int offset,
+                         int line_num, struct audio_ctx *ctx)
 {
     switch (packet[3] & 0xff) {
     case S291_SD_AUDIO_GROUP1_DID:
@@ -712,6 +719,8 @@ static int parse_sd_hanc(struct upipe *upipe, const uint16_t *packet,
         break;
 
     default:
+        upipe_throw(upipe, UPROBE_SDI_DEC_HANC_PACKET, UPIPE_SDI_DEC_SIGNATURE,
+                line_num, offset, packet);
         break;
     }
 
@@ -727,6 +736,163 @@ static inline bool validate_anc_len(const uint16_t *packet, int left, bool sd)
         total_size *= 2;
 
     return left >= total_size;
+}
+
+static void upipe_sdi_dec_parse_vanc_line(struct upipe *upipe, struct uref *uref,
+        uint16_t *r, size_t hsize)
+{
+    while (hsize > S291_HEADER_SIZE + S291_FOOTER_SIZE) {
+        if (r[0] != S291_ADF1 || r[1] != S291_ADF2 || r[2] != S291_ADF3) {
+            break;
+        }
+
+        uint8_t did = s291_get_did(r);
+        uint8_t sdid = s291_get_sdid(r);
+        uint8_t dc = s291_get_dc(r);
+        if (S291_HEADER_SIZE + dc + S291_FOOTER_SIZE > hsize) {
+            upipe_warn_va(upipe, "ancillary too large (%"PRIu8" > %zu) for 0x%"PRIx8"/0x%"PRIx8,
+                    dc, hsize, did, sdid);
+            break;
+        }
+
+        if (!s291_check_cs(r)) {
+            upipe_warn_va(upipe, "invalid CRC for 0x%"PRIx8"/0x%"PRIx8,
+                    did, sdid);
+            r += 3;
+            hsize -= 3;
+            continue;
+        }
+        r += S291_HEADER_SIZE;
+        hsize -= S291_HEADER_SIZE;
+
+        if (did == S291_AFD_DID && sdid == S291_AFD_SDID && dc == 8) {
+            uint8_t afd = r[0] & 0xff;
+            uref_pic_set_afd(uref, afd);
+
+            uint8_t bar_data[5];
+            for (unsigned int i = 0; i < 5; i++)
+                bar_data[i] = r[3 + i] & 0xff;
+            uref_pic_set_bar_data(uref, bar_data, 5);
+        } else if (did == S291_CEA708_DID && sdid == S291_CEA708_SDID) {
+            uint8_t flags = r[4] & 0xff;
+            if (!(flags & (1 << 6))) { // ccdata present
+                continue;
+            }
+
+            /* Verify Checksum */
+            uint8_t calc_cs = 0;
+            for (int i = 0; i < dc - 1; i++)
+                calc_cs += r[i];
+
+            calc_cs = calc_cs ? 256 - calc_cs : 0;
+            if (calc_cs != (r[dc - 1] & 0xff)) {
+                upipe_err_va(upipe, "Invalid checksum in Caption Distribution Packet");
+                continue;
+            }
+
+            bool timecode = flags & (1 << 7);
+            uint8_t cc_count = 3 * (r[8 + (timecode ? 5 : 0)] & 0x1f);
+            uint8_t cea[cc_count];
+            for (int j = 0; j < cc_count; j++)
+                cea[j] = r[9 + (timecode ? 5 : 0) + j] & 0xff;
+            uref_pic_set_cea_708(uref, cea, cc_count);
+        } else
+            upipe_verbose_va(upipe, "unhandled ancillary 0x%"PRIx8"/0x%"PRIx8,
+                    did, sdid);
+
+        r += dc + S291_FOOTER_SIZE;
+        hsize -= dc + S291_FOOTER_SIZE;
+    }
+}
+
+static int pciesdi_framer_align(struct upipe *upipe, struct uref *uref)
+{
+    struct upipe_sdi_dec *ctx = upipe_sdi_dec_from_upipe(upipe);
+
+    /* If the block is a whole frame then assume it is aligned. */
+    size_t block_bytes;
+    UBASE_RETURN(uref_block_size(uref, &block_bytes));
+    if (block_bytes == ctx->f->width * ctx->f->height * 4) {
+        ctx->start = true;
+        return UBASE_ERR_NONE;
+    }
+
+    /* Find top of frame. */
+    int size = -1;
+    const uint8_t *src = NULL;
+    UBASE_RETURN(uref_block_read(uref, 0, &size, &src));
+    size /= sizeof(uint16_t);
+
+    int eav_fvh_offset = 6;
+    if (ctx->f->pict_fmt->sd)
+        eav_fvh_offset = 3;
+
+    int sdi_width = 2 * ctx->f->width;
+    int height = ctx->f->height;
+    int offset;
+    for (offset = 0; offset < size; offset += sdi_width) {
+        const uint16_t *buf = (const uint16_t*)src + offset;
+        uint16_t fvh = buf[eav_fvh_offset];
+
+        int line = 0;
+        if (height >= 720) {
+            line = (buf[8] & 0x1ff) >> 2;
+            line |= ((buf[10] & 0x1ff) >> 2) << 7;
+        }
+
+        if (fvh != ctx->prev_fvh) {
+            upipe_dbg_va(upipe, "fvh change from %#5x to %#5x", ctx->prev_fvh, fvh);
+            if (line != ctx->prev_line_num)
+                upipe_dbg_va(upipe, "line number change from %d to %d", ctx->prev_line_num, line);
+        }
+
+        if (ctx->progressive) {
+            /* Since there is no SD progressive format check that the line num
+             * wraps around correctly and that the fvh word is correct. */
+            if (ctx->prev_line_num == height && line == 1
+                    && ctx->prev_fvh == 0x2d8 && fvh == 0x2d8) {
+                ctx->start = true;
+                break;
+            }
+        }
+
+        else if (height >= 720) {
+            /* For interlaced HD check that both line num and fvh changes are
+             * right. */
+            if (ctx->prev_line_num == height && line == 1
+                    && ctx->prev_fvh == 0x3c4 && fvh == 0x2d8) {
+                ctx->start = true;
+                break;
+            }
+        }
+
+        /* Fallback to just interlaced fvh change. */
+        else {
+            if (ctx->prev_fvh == 0x3c4 && fvh == 0x2d8) {
+                ctx->start = true;
+                break;
+            }
+        }
+        ctx->prev_fvh = fvh;
+        ctx->prev_line_num = line;
+    }
+    uref_block_unmap(uref, 0);
+
+    /* Keep the top of frame if it was found. */
+    if (ctx->start) {
+        UBASE_RETURN(uref_block_resize(uref, sizeof(uint16_t) * offset, -1));
+    }
+
+    return UBASE_ERR_NONE;
+}
+
+static void clear_audio_ctx(struct audio_ctx *ctx)
+{
+    ctx->buf_audio = NULL;
+    for (int i = 0; i < UPIPE_SDI_CHANNELS_PER_GROUP; i++)
+        ctx->group_offset[i] = 0;
+    for (int i = 0; i < 8; i++)
+        ctx->aes[i] = -1;
 }
 
 /** @internal @This handles data.
@@ -750,28 +916,108 @@ static bool upipe_sdi_dec_handle(struct upipe *upipe, struct uref *uref,
     if (!upipe_sdi_dec->ubuf_mgr)
         return false;
 
-    upipe_sdi_dec->sdi3g_levelb_second_frame = !upipe_sdi_dec->sdi3g_levelb_second_frame;
+    /* If a discontinuity was signalled in the source then cache it and restart
+     * frame alignment. */
+    if (ubase_check(uref_flow_get_discontinuity(uref))) {
+        /* Keep discontinuity for use later. */
+        upipe_sdi_dec->discontinuity = true;
+
+        /* Release stored data. */
+        ubuf_free(upipe_sdi_dec->head_next_frame);
+        ubuf_free(upipe_sdi_dec->ubuf);
+        ubuf_free(upipe_sdi_dec->ubuf_sound);
+
+        /* Reset state. */
+        upipe_sdi_dec->head_next_frame = NULL;
+        upipe_sdi_dec->ubuf = NULL;
+        upipe_sdi_dec->ubuf_sound = NULL;
+        upipe_sdi_dec->prev_fvh = 0;
+        upipe_sdi_dec->start = false;
+        upipe_sdi_dec->chunk_line_offset = 0;
+        upipe_sdi_dec->active_line_offset = 0;
+        upipe_sdi_dec->sdi3g_levelb_second_frame = false;
+        upipe_sdi_dec->audio_fix = 0;
+        clear_audio_ctx(&upipe_sdi_dec->audio_ctx);
+    }
+
+    /* Find start of frame and discard data before it. */
+    if (!upipe_sdi_dec->start) {
+        int ret = pciesdi_framer_align(upipe, uref);
+        if (!ubase_check(ret)) {
+            upipe_throw_fatal(upipe, ret);
+            upipe_sdi_dec->start = false;
+        }
+        if (!upipe_sdi_dec->start) {
+            uref_free(uref);
+            return true;
+        }
+    }
 
     const struct sdi_offsets_fmt *f = upipe_sdi_dec->f;
     const struct sdi_picture_fmt *p = upipe_sdi_dec->p;
     const size_t output_hsize = p->active_width, output_vsize = p->active_height;
 
     const struct urational *fps = &upipe_sdi_dec->f->fps;
-    uint64_t pts = UINT32_MAX + upipe_sdi_dec->frame_num++ *
-        UCLOCK_FREQ * fps->den / fps->num;
 
-    uref_clock_set_pts_prog(uref, pts);
-    uref_clock_set_pts_orig(uref, pts);
-    uref_clock_set_dts_pts_delay(uref, 0);
-    uref_clock_set_cr_dts_delay(uref, 0);
-    bool discontinuity = ubase_check(uref_flow_get_discontinuity(uref));
-    upipe_throw_clock_ref(upipe, uref, pts, discontinuity);
-    upipe_throw_clock_ts(upipe, uref);
+    /* If there is a ubuf remaining prepend it to the current one. */
+    if (upipe_sdi_dec->head_next_frame) {
+        struct ubuf *ubuf = uref_detach_ubuf(uref);
+        uref_attach_ubuf(uref, upipe_sdi_dec->head_next_frame);
+        uref_block_append(uref, ubuf);
+        upipe_sdi_dec->head_next_frame = NULL;
+    }
+
+    /* Get lines in uref. */
+    size_t size = 0;
+    uref_block_size(uref, &size);
+    int input_lines = size / (f->width * 4);
+    int first_line = upipe_sdi_dec->chunk_line_offset,
+        last_line = first_line + input_lines;
+
+    /* Limit to correct number of lines and keep head of next frame. */
+    if (last_line > f->height) {
+        struct ubuf *ubuf = ubuf_dup(uref->ubuf);
+        if (!ubuf) {
+            uref_free(uref);
+            upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
+            return true;
+        }
+
+        int lines_remaining = f->height - first_line;
+        ubuf_block_resize(ubuf, lines_remaining * 4 * f->width, -1);
+        upipe_sdi_dec->head_next_frame = ubuf;
+        last_line = f->height;
+    }
+
+    bool sdi3g_levelb = ubase_check(uref_block_get_sdi3g_levelb(uref));
+
+    int active_lines = 0;
+    /* TODO: Can this be optimised to have no loop and just arithmetic? */
+    for (int i = first_line; i < last_line; i++) {
+        int line_num = i + 1;
+        if (sdi3g_levelb && upipe_sdi_dec->sdi3g_levelb_second_frame)
+            line_num += f->height;
+        if (line_num >= p->active_f1.start && line_num <= p->active_f1.end)
+            active_lines += 1;
+        if (line_num >= p->active_f2.start && line_num <= p->active_f2.end)
+            active_lines += 1;
+    }
+#if 0
+    upipe_dbg_va(upipe, "chunk_line_offset: %d, lines: %d, active_line_offset: %d, active_lines: %d",
+            upipe_sdi_dec->chunk_line_offset, input_lines,
+            upipe_sdi_dec->active_line_offset, active_lines);
+#endif
+
+    /* TODO: How to handle the case of 0 active lines? */
+    //const size_t output_hsize = p->active_width, output_vsize = active_lines;
 
     /* allocate dest ubuf */
     size_t aligned_output_hsize = ((output_hsize + 5) / 6) * 6;
-    struct ubuf *ubuf = ubuf_pic_alloc(upipe_sdi_dec->ubuf_mgr,
-                                       aligned_output_hsize, output_vsize);
+    struct ubuf *ubuf = upipe_sdi_dec->ubuf;
+    if (ubuf == NULL) {
+        upipe_sdi_dec->ubuf = ubuf = ubuf_pic_alloc(upipe_sdi_dec->ubuf_mgr,
+                aligned_output_hsize, output_vsize);
+    }
     if (unlikely(ubuf == NULL)) {
         upipe_warn(upipe, "unable to allocate output");
         uref_block_unmap(uref, 0);
@@ -799,7 +1045,11 @@ static bool upipe_sdi_dec_handle(struct upipe *upipe, struct uref *uref,
     }
 
     bool ntsc = p->active_height == 486;
-    for (int i = 0; i < UPIPE_SDI_DEC_MAX_PLANES; i++)
+    int field_height = output_vsize;
+    if (!f->psf_ident)
+        field_height /= 2;
+
+    for (int i = 0; i < UPIPE_SDI_DEC_MAX_PLANES; i++) {
         if (fields[0][i]) {
             /* NTSC is bottom field first */
             if (ntsc) {
@@ -811,17 +1061,34 @@ static bool upipe_sdi_dec_handle(struct upipe *upipe, struct uref *uref,
             }
         }
 
-    if (!f->psf_ident) {
-        output_stride[0] *= 2;
-        output_stride[1] *= 2;
-        output_stride[2] *= 2;
+        /* if interlaced then double stride */
+        if (!f->psf_ident)
+            output_stride[i] *= 2;
+
+        int active_line_offset = upipe_sdi_dec->active_line_offset;
+        /* If the first active line in this chunk is within the first field
+         * then advance the first field pointer. */
+        if (active_line_offset < field_height)
+            fields[0][i] += active_line_offset * output_stride[i];
+        /* If the first active line in this chunk is within the second field
+         * then advance the second field pointer. */
+        if (active_line_offset >= field_height)
+            fields[1][i] += (active_line_offset - field_height) * output_stride[i];
     }
 
-    struct uref *uref_audio = NULL;
-
-    struct audio_ctx audio_ctx = {0};
-    for (int i = 0; i < 8; i++)
-        audio_ctx.aes[i] = -1;
+    /* Set clock properties before duplicating the uref for vbi and vanc and
+     * before outputting the sound. */
+    if (last_line == f->height) {
+        uint64_t pts = UINT32_MAX + upipe_sdi_dec->frame_num++ *
+            UCLOCK_FREQ * fps->den / fps->num;
+        uref_clock_set_pts_prog(uref, pts);
+        uref_clock_set_pts_orig(uref, pts);
+        uref_clock_set_dts_pts_delay(uref, 0);
+        uref_clock_set_cr_dts_delay(uref, 0);
+        upipe_throw_clock_ref(upipe, uref, pts, upipe_sdi_dec->discontinuity);
+        upipe_sdi_dec->discontinuity = false;
+        upipe_throw_clock_ts(upipe, uref);
+    }
 
     struct uref *uref_vbi = NULL;
     int vbi_line = 0;
@@ -836,6 +1103,8 @@ static bool upipe_sdi_dec_handle(struct upipe *upipe, struct uref *uref,
                 upipe_sdi_dec_sub_require_ubuf_mgr(&vbi_sub->upipe, vbi_flow_def);
         }
 
+        /* TODO: How much VBI will be output with chunks?  Need to track
+         * non-active lines. */
         uref_vbi = uref_dup(uref);
         struct ubuf *ubuf_vbi = ubuf_pic_alloc(vbi_sub->ubuf_mgr, 720,
                 f->height - f->pict_fmt->active_height);
@@ -864,6 +1133,7 @@ static bool upipe_sdi_dec_handle(struct upipe *upipe, struct uref *uref,
         upipe_sdi_dec_sub_require_ubuf_mgr(&vanc_sub->upipe, vanc_flow_def);
     }
 
+    /* TODO: how much vanc in chunks? */
     struct uref *uref_vanc = uref_dup(uref);
     struct ubuf *ubuf_vanc = NULL;
     if (!p->sd) {
@@ -892,8 +1162,10 @@ static bool upipe_sdi_dec_handle(struct upipe *upipe, struct uref *uref,
     }
 
     struct upipe_sdi_dec_sub *audio_sub = &upipe_sdi_dec->audio;
-    uref_audio = uref_dup(uref);
     if (!audio_sub->ubuf_mgr) {
+        /* TODO: does this need to be duplicated?  Can it use a standard
+         * allocation of a uref? */
+        struct uref *uref_audio = uref_dup(uref);
         uref_flow_set_def(uref_audio, "sound.s32.");
         uref_sound_flow_add_plane(uref_audio, "lrcLRS0123456789");
         uref_sound_flow_set_channels(uref_audio, 16);
@@ -902,23 +1174,22 @@ static bool upipe_sdi_dec_handle(struct upipe *upipe, struct uref *uref,
         upipe_sdi_dec_sub_require_ubuf_mgr(&audio_sub->upipe,
                 uref_dup(uref_audio));
         uref_flow_delete_def(uref_audio);
+        uref_free(uref_audio);
     }
 
-    struct ubuf *ubuf_sound = NULL;
-    if (audio_sub->ubuf_mgr) {
-        ubuf_sound = ubuf_sound_alloc(audio_sub->ubuf_mgr, 1125*2);
-        if (!ubuf_sound)
-            upipe_err(upipe, "Unable to allocate a sound buffer");
+    /* TODO: how much audio in chunks */
+    /* Allocate dest buffer for audio/sound. */
+    struct ubuf *ubuf_sound = upipe_sdi_dec->ubuf_sound;
+    if (ubuf_sound == NULL && audio_sub->ubuf_mgr) {
+        upipe_sdi_dec->ubuf_sound = ubuf_sound = ubuf_sound_alloc(audio_sub->ubuf_mgr, 1125*2);
     }
     if (unlikely(!ubuf_sound)) {
-        uref_free(uref_audio);
-        uref_audio = NULL;
+        upipe_err(upipe, "Unable to allocate a sound buffer");
     } else {
-        uref_attach_ubuf(uref_audio, ubuf_sound);
-        if (unlikely(!ubase_check(uref_sound_plane_write_int32_t(uref_audio,
-                            "lrcLRS0123456789", 0, -1, &audio_ctx.buf_audio)))) {
-            uref_free(uref_audio);
-            uref_audio = NULL;
+        if (unlikely(!ubase_check(ubuf_sound_plane_write_int32_t(ubuf_sound,
+                            "lrcLRS0123456789", 0, -1, &upipe_sdi_dec->audio_ctx.buf_audio)))) {
+            ubuf_free(ubuf_sound);
+            upipe_sdi_dec->ubuf_sound = ubuf_sound = NULL;
             upipe_err(upipe, "Could not map audio buffer");
         }
     }
@@ -931,11 +1202,9 @@ static bool upipe_sdi_dec_handle(struct upipe *upipe, struct uref *uref,
     int segment_offset = 0;
     int input_offset, input_size;
 
-    bool sdi3g_levelb = ubase_check(uref_block_get_sdi3g_levelb(uref));
-
     int error_count_eav = 0, error_count_sav = 0, error_count_line = 0, error_count_crc = 0;
     /* Parse the whole frame */
-    for (int h = 0; h < f->height; h++) {
+    for (int h = first_line; h < last_line; h++) {
         /* map input */
         if (!input_buf) {
             input_size = whole_input_size;
@@ -974,7 +1243,7 @@ static bool upipe_sdi_dec_handle(struct upipe *upipe, struct uref *uref,
                     validate_anc_len(packet, left, true))
                 {
                     /* - 1 to compensate for v++ above */
-                    v += parse_sd_hanc(upipe, packet, &audio_ctx) - 1;
+                    v += parse_sd_hanc(upipe, packet, v, line_num, &upipe_sdi_dec->audio_ctx) - 1;
                 }
                 else
                 {
@@ -991,7 +1260,7 @@ static bool upipe_sdi_dec_handle(struct upipe *upipe, struct uref *uref,
                     validate_anc_len(packet, left, false))
                 {
                     /* - 1 to compensate for v++ above */
-                    v += parse_hd_hanc(upipe, packet, line_num, &audio_ctx) - 1;
+                    v += parse_hd_hanc(upipe, packet, v, line_num, &upipe_sdi_dec->audio_ctx) - 1;
                 }
                 else
                 {
@@ -1126,7 +1395,7 @@ static bool upipe_sdi_dec_handle(struct upipe *upipe, struct uref *uref,
 #if defined(HAVE_X86ASM)
 #if defined(__i686__) || defined(__x86_64__)
                 if (__builtin_cpu_supports("ssse3"))
-                    upipe_sdi_vanc_deinterleave_ssse3(vanc_buf, vanc_stride, src_line, 0);
+                    upipe_sdi_vanc_deinterleave_ssse3(vanc_buf, vanc_stride, src_line);
                 else
 #endif
 #endif
@@ -1134,12 +1403,13 @@ static bool upipe_sdi_dec_handle(struct upipe *upipe, struct uref *uref,
                 uint16_t *vanc_dst = (uint16_t*)vanc_buf;
                 if (uref_vanc) {
                     for (unsigned i = 0; i < vanc_stride / 4; i++) {
-                        vanc_dst[                i] = src_line[2*i  ]; // Y
-                        vanc_dst[vanc_stride/4 + i] = src_line[2*i+1];  // C
+                        vanc_dst[                i] = src_line[2*i+1]; // Y
+                        vanc_dst[vanc_stride/4 + i] = src_line[2*i  ];  // C
                     }
-                    vanc_buf += vanc_stride;
                 }
                 }
+                upipe_sdi_dec_parse_vanc_line(upipe, uref, (uint16_t*)vanc_buf, vanc_stride / 2);
+                vanc_buf += vanc_stride;
             }
         } else {
             uint8_t *y = fields[f2][0];
@@ -1173,7 +1443,7 @@ static bool upipe_sdi_dec_handle(struct upipe *upipe, struct uref *uref,
         upipe_err_va(upipe, "error count eav: %d, line: %d, sav: %d, crc: %d",
                 error_count_eav, error_count_line, error_count_sav, error_count_crc);
 
-    if (uref_audio) {
+    if (ubuf_sound && last_line == f->height) {
         // FIXME: ntsc - a/v pts need to be mostly equal, in case we receive
         // frames without audio
         //uint64_t pts = UINT32_MAX + audio_sub->samples * UCLOCK_FREQ / 48000;
@@ -1181,17 +1451,42 @@ static bool upipe_sdi_dec_handle(struct upipe *upipe, struct uref *uref,
         //uref_clock_set_pts_orig(uref_audio, pts);
         //uref_clock_set_dts_pts_delay(uref_audio, 0);
 
-        int samples_received = audio_ctx.group_offset[0];
-        for (int i = 1; i < UPIPE_SDI_CHANNELS_PER_GROUP; i++) {
-            if (audio_ctx.group_offset[i] == samples_received)
-                continue;
+        /* Find maximum number of samples in any audio_group. */
+        int samples_received = 0;
+        for (int i = 0; i < UPIPE_SDI_CHANNELS_PER_GROUP; i++)
+            if (samples_received < upipe_sdi_dec->audio_ctx.group_offset[i])
+                samples_received = upipe_sdi_dec->audio_ctx.group_offset[i];
 
-            if (samples_received < audio_ctx.group_offset[i])
-                samples_received = audio_ctx.group_offset[i];
-            //upipe_err_va(upipe, "%zu samples on group %d", audio_ctx.group_offset[i], i);
+        /* For each audio_group, start at the group_offset and zero all unused
+         * samples. */
+        for (int i = 0; i < UPIPE_SDI_CHANNELS_PER_GROUP; i++) {
+            for (int j = upipe_sdi_dec->audio_ctx.group_offset[i]; j < samples_received; j++) {
+                size_t offset = i * UPIPE_SDI_CHANNELS_PER_GROUP
+                    + sizeof(int32_t) * j * UPIPE_SDI_CHANNELS_PER_GROUP;
+                memset(upipe_sdi_dec->audio_ctx.buf_audio + offset,
+                        0, sizeof(int32_t) * UPIPE_SDI_CHANNELS_PER_GROUP);
+            }
         }
 
+        /* TODO: correct number of samples for chunks. */
         unsigned expected = 48000 * fps->den / fps->num;
+        /* SDI-3G level-B (PAL) usually has +1 and -1 relative to the expected
+         * sample count due to the way frames are cut.  A 1080p60 stream from an
+         * HDMI to SDI converter would sometimes put exactly 800 in each frame.
+         * Only adjust the expected count when we do not have it. */
+        if (sdi3g_levelb && expected != samples_received) {
+            if (fps->den == 1001) {
+                /* TODO: what adjustment is needed here?  Any? */
+                if (samples_received < expected)
+                    upipe_notice_va(upipe, "audio samples received: %u, expected: %u, second_frame: %d",
+                            samples_received, expected, upipe_sdi_dec->sdi3g_levelb_second_frame);
+            } else {
+                if (upipe_sdi_dec->sdi3g_levelb_second_frame)
+                    expected -= 1;
+                else
+                    expected += 1;
+            }
+        }
         if (samples_received < expected) {
             unsigned wrong_samples = samples_received;
             samples_received = expected;
@@ -1221,33 +1516,39 @@ static bool upipe_sdi_dec_handle(struct upipe *upipe, struct uref *uref,
 
         if (upipe_sdi_dec->debug) {
             for (int i = 0; i < 8; i++) {
-                if (audio_ctx.aes[i] != -1) {
-                    int data_type = aes_parse(upipe, audio_ctx.buf_audio, samples_received, i, audio_ctx.aes[i]);
+                if (upipe_sdi_dec->audio_ctx.aes[i] != -1) {
+                    int data_type = aes_parse(upipe, upipe_sdi_dec->audio_ctx.buf_audio, samples_received, i, upipe_sdi_dec->audio_ctx.aes[i]);
                     if (data_type == S337_TYPE_A52 || data_type == S337_TYPE_A52E || data_type == -1)
-                        audio_ctx.aes[i] = data_type;
+                        upipe_sdi_dec->audio_ctx.aes[i] = data_type;
                 }
-                if (audio_ctx.aes[i] != upipe_sdi_dec->aes_detected[i]) {
+                if (upipe_sdi_dec->audio_ctx.aes[i] != upipe_sdi_dec->aes_detected[i]) {
                     if (upipe_sdi_dec->aes_detected[i] > 0) {
                         upipe_err_va(upipe, "[%d] : %s AES 337 stream %d -> %d)",
                                 i,
-                                (audio_ctx.aes[i] != -1) ? "moved" : "lost",
-                                upipe_sdi_dec->aes_detected[i], audio_ctx.aes[i]);
-                        if (audio_ctx.aes[i] == -1)
+                                (upipe_sdi_dec->audio_ctx.aes[i] != -1) ? "moved" : "lost",
+                                upipe_sdi_dec->aes_detected[i], upipe_sdi_dec->audio_ctx.aes[i]);
+                        if (upipe_sdi_dec->audio_ctx.aes[i] == -1)
                             memset(upipe_sdi_dec->aes_preamble[i], 0, sizeof(upipe_sdi_dec->aes_preamble[i]));
                     }
-                    upipe_sdi_dec->aes_detected[i] = audio_ctx.aes[i];
+                    upipe_sdi_dec->aes_detected[i] = upipe_sdi_dec->audio_ctx.aes[i];
                 }
             }
         }
 
         audio_sub->samples += samples_received;;
-        uref_sound_plane_unmap(uref_audio, "lrcLRS0123456789", 0, -1);
-        uref_sound_resize(uref_audio, 0, samples_received);
+        ubuf_sound_plane_unmap(ubuf_sound, "lrcLRS0123456789", 0, -1);
 
-        if (samples_received == 0)
-            uref_free(uref_audio);
-        else
+        if (samples_received == 0) {
+            ubuf_free(ubuf_sound);
+        } else {
+            /* TODO: signal discontinuity in audio? */
+            ubuf_sound_resize(ubuf_sound, 0, samples_received);
+            struct uref *uref_audio = uref_dup(uref);
+            uref_attach_ubuf(uref_audio, ubuf_sound);
+            clear_audio_ctx(&upipe_sdi_dec->audio_ctx);
             upipe_sdi_dec_sub_output(&audio_sub->upipe, uref_audio, upump_p);
+        }
+        upipe_sdi_dec->ubuf_sound = ubuf_sound = NULL;
     }
 
     if (uref_vbi) {
@@ -1268,8 +1569,20 @@ static bool upipe_sdi_dec_handle(struct upipe *upipe, struct uref *uref,
         ubuf_pic_plane_unmap(ubuf, c, 0, 0, -1, -1);
     }
 
-    uref_attach_ubuf(uref, ubuf);
-    upipe_sdi_dec_output(upipe, uref, upump_p);
+    if (ubuf_sound)
+        ubuf_sound_plane_unmap(ubuf_sound, "lrcLRS0123456789", 0, -1);
+
+    if (last_line == f->height) {
+        upipe_sdi_dec->active_line_offset = upipe_sdi_dec->chunk_line_offset = 0;
+        upipe_sdi_dec->sdi3g_levelb_second_frame = !upipe_sdi_dec->sdi3g_levelb_second_frame;
+        uref_attach_ubuf(uref, ubuf);
+        upipe_sdi_dec->ubuf = NULL;
+        upipe_sdi_dec_output(upipe, uref, upump_p);
+    } else {
+        upipe_sdi_dec->chunk_line_offset = last_line;
+        upipe_sdi_dec->active_line_offset += active_lines;
+        uref_free(uref);
+    }
 
     return true;
 }
@@ -1358,24 +1671,11 @@ static int upipe_sdi_dec_set_flow_def(struct upipe *upipe, struct uref *flow_def
     }
     upipe_sdi_dec->p = upipe_sdi_dec->f->pict_fmt;
 
-    {
-        const struct sdi_offsets_fmt *f = upipe_sdi_dec->f;
-        const struct sdi_picture_fmt *p = f->pict_fmt;
-        upipe_dbg_va(upipe, "sdi_offsets_fmt { width: %d, height %d, psf: %d, "
-                "fps: {%d/%d}, pict_fmt: { active_width: %d, active_height: %d, "
-                "vbi_f1_part1: { %d, %d }, active_f1: { %d, %d }, vbi_f1_part2: { %d, %d }, "
-                "vbi_f2_part1: { %d, %d }, active_f2: { %d, %d }, vbi_f2_part2: { %d, %d }",
-                f->width, f->height, f->psf_ident,
-                (int)f->fps.num, (int)f->fps.den,
-                p->active_width, p->active_height,
-                p->vbi_f1_part1.start, p->vbi_f1_part1.end,
-                p->active_f1.start, p->active_f1.end,
-                p->vbi_f1_part2.start, p->vbi_f1_part2.end,
-                p->vbi_f2_part1.start, p->vbi_f2_part1.end,
-                p->active_f2.start, p->active_f2.end,
-                p->vbi_f2_part2.start, p->vbi_f2_part2.end
-        );
-    }
+    upipe_sdi_dec->progressive = ubase_check(uref_pic_get_progressive(flow_def));
+    upipe_sdi_dec->sdi3g_levelb = ubase_check(uref_block_get_sdi3g_levelb(flow_def));
+    if (upipe_sdi_dec->sdi3g_levelb)
+        /* Use interlaced fvh transition to detect start of level B frame. */
+        upipe_sdi_dec->progressive = false;
 
     if (!ubase_check(uref_clock_get_latency(flow_def, &upipe_sdi_dec->latency)))
         upipe_sdi_dec->latency = 0;
@@ -1458,18 +1758,11 @@ static int upipe_sdi_dec_control(struct upipe *upipe, int command, va_list args)
             return upipe_sdi_dec_free_output_proxy(upipe, request);
         }
 
-        case UPIPE_GET_OUTPUT: {
-            struct upipe **p = va_arg(args, struct upipe **);
-            return upipe_sdi_dec_get_output(upipe, p);
-        }
-        case UPIPE_SET_OUTPUT: {
-            struct upipe *output = va_arg(args, struct upipe *);
-            return upipe_sdi_dec_set_output(upipe, output);
-        }
-        case UPIPE_GET_FLOW_DEF: {
-            struct uref **p = va_arg(args, struct uref **);
-            return upipe_sdi_dec_get_flow_def(upipe, p);
-        }
+        case UPIPE_GET_OUTPUT:
+        case UPIPE_SET_OUTPUT:
+        case UPIPE_GET_FLOW_DEF:
+            return upipe_sdi_dec_control_output(upipe, command, args);
+
         case UPIPE_SET_FLOW_DEF: {
             struct uref *flow = va_arg(args, struct uref *);
             return upipe_sdi_dec_set_flow_def(upipe, flow);
@@ -1580,8 +1873,16 @@ static struct upipe *_upipe_sdi_dec_alloc(struct upipe_mgr *mgr,
 #endif
 #endif
 
-    upipe_sdi_dec->sdi3g_levelb_second_frame = true; /* Will be inverted at start of each frame. */
+    upipe_sdi_dec->head_next_frame = upipe_sdi_dec->ubuf = NULL;
+    upipe_sdi_dec->prev_fvh = 0;
+    upipe_sdi_dec->discontinuity = false;
+    upipe_sdi_dec->start = false;
+    upipe_sdi_dec->progressive = false;
+    upipe_sdi_dec->chunk_line_offset = upipe_sdi_dec->active_line_offset = 0;
+    upipe_sdi_dec->sdi3g_levelb_second_frame = false; /* Will be inverted at end of each frame. */
     upipe_sdi_dec->audio_fix = 0;
+    clear_audio_ctx(&upipe_sdi_dec->audio_ctx);
+    upipe_sdi_dec->ubuf_sound = NULL;
 
     upipe_sdi_dec->crc_y = 0;
     upipe_sdi_dec->crc_c = 0;
@@ -1632,6 +1933,10 @@ static void upipe_sdi_dec_free(struct upipe *upipe)
     upipe_sdi_dec_sub_clean(upipe_sdi_dec_sub_to_upipe(&upipe_sdi_dec->vanc));
     upipe_sdi_dec_sub_clean(upipe_sdi_dec_sub_to_upipe(&upipe_sdi_dec->vbi));
     upipe_sdi_dec_sub_clean(upipe_sdi_dec_sub_to_upipe(&upipe_sdi_dec->audio));
+
+    ubuf_free(upipe_sdi_dec->ubuf);
+    ubuf_free(upipe_sdi_dec->ubuf_sound);
+    ubuf_free(upipe_sdi_dec->head_next_frame);
 
     upipe_sdi_dec_clean_input(upipe);
     upipe_sdi_dec_clean_output(upipe);
