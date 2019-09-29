@@ -737,7 +737,7 @@ static int worker_rfc4175(struct upipe *upipe, uint8_t **dst, uint16_t *len)
         /* Guaranteed to be from same field so continuation 0
          * Guaranteed to also start from offset 0
          */
-        *dst += upipe_put_rfc4175_headers(upipe_netmap_sink, *dst, data_len2, field, upipe_netmap_sink->line+1, 0, 0);
+        *dst += upipe_put_rfc4175_headers(upipe_netmap_sink, *dst, data_len2, field, upipe_netmap_sink->line, 0, 0);
     }
 
     int interleaved_line = get_interleaved_line(upipe);
