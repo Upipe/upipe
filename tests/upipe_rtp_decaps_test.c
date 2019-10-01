@@ -87,7 +87,6 @@ static struct upipe *test_alloc(struct upipe_mgr *mgr, struct uprobe *uprobe,
 static void test_input(struct upipe *upipe, struct uref *uref,
                        struct upump **upump_p)
 {
-    const uint8_t *buf;
     size_t uref_size;
     ubase_assert(uref_block_size(uref, &uref_size));
     if (!h264_mode)

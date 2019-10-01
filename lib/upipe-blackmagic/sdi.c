@@ -179,6 +179,7 @@ void sdi_encode_v210(uint32_t *dst, uint16_t *src, int width)
     }
 }
 
+#ifdef UPIPE_HAVE_LIBZVBI_H
 int sdi_encode_ttx_sd(uint8_t *buf, const uint8_t *pic_data, vbi_sampling_par *sp)
 {
     uint8_t line_offset = dvbvbittx_get_line(&pic_data[DVBVBI_UNIT_HEADER_SIZE]);
@@ -201,6 +202,7 @@ int sdi_encode_ttx_sd(uint8_t *buf, const uint8_t *pic_data, vbi_sampling_par *s
     }
     return line;
 }
+#endif
 
 void sdi_encode_ttx(uint16_t *buf, int packets, const uint8_t **packet, uint16_t *ctr)
 {

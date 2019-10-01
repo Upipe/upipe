@@ -187,6 +187,8 @@ UBASE_FROM_TO(upipe, uchain, uchain, uchain)
 enum upipe_mgr_command {
     /** release all buffers kept in pools (void) */
     UPIPE_MGR_VACUUM,
+    /** check that a specific flow def is supported (struct uref *) */
+    UPIPE_MGR_CHECK_FLOW_DEF,
 
     /** non-standard manager commands implemented by a module type can start
      * from there (first arg = signature) */
@@ -292,6 +294,18 @@ static inline int upipe_mgr_control(struct upipe_mgr *mgr, int command, ...)
 static inline int upipe_mgr_vacuum(struct upipe_mgr *mgr)
 {
     return upipe_mgr_control(mgr, UPIPE_MGR_VACUUM);
+}
+
+/** @This checks that a specific flow def is supported.
+ *
+ * @param mgr pointer to upipe manager
+ * @param flow_def flow def to check
+ * @return an error code
+ */
+static inline int upipe_mgr_check_flow_def(struct upipe_mgr *mgr,
+                                           struct uref *flow_def)
+{
+    return upipe_mgr_control(mgr, UPIPE_MGR_CHECK_FLOW_DEF, flow_def);
 }
 
 /** @This return the corresponding error string.
@@ -1019,6 +1033,16 @@ static inline int upipe_throw_clock_utc(struct upipe *upipe, struct uref *uref,
                                         uint64_t clock_utc)
 {
     return upipe_throw(upipe, UPROBE_CLOCK_UTC, uref, clock_utc);
+}
+
+/** @This throws an event telling that the preroll is finished.
+ *
+ * @param upipe description structure of the pipe
+ * @return an error code
+ */
+static inline int upipe_throw_preroll_end(struct upipe *upipe)
+{
+    return upipe_throw(upipe, UPROBE_PREROLL_END);
 }
 
 /** @This catches an event coming from an inner pipe, and rethrows is as if

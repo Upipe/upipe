@@ -28,16 +28,11 @@
 #include <upipe/upipe_helper_urefcount.h>
 #include <upipe/upipe_helper_urefcount_real.h>
 #include <upipe/upipe_helper_flow.h>
-#include <upipe/upipe_helper_output.h>
-#include <upipe/upipe_helper_uref_mgr.h>
-#include <upipe/upipe_helper_ubuf_mgr.h>
-#include <upipe/upipe_helper_uclock.h>
-#include <upipe/upipe_helper_upump_mgr.h>
-#include <upipe/upipe_helper_upump.h>
 #include <upipe/upipe_helper_uprobe.h>
 #include <upipe/upipe_helper_inner.h>
 #include <upipe/upipe_helper_bin_output.h>
 
+#include <upipe/uclock.h>
 #include <upipe/uprobe_prefix.h>
 #include <upipe/uref_void_flow.h>
 #include <upipe/uref_pic_flow.h>
@@ -114,7 +109,7 @@ static void upipe_zpsrc_free(struct upipe *upipe)
 static void upipe_zpsrc_noref(struct upipe *upipe)
 {
     upipe_zpsrc_store_src(upipe, NULL);
-    upipe_zpsrc_store_zp(upipe, NULL);
+    upipe_zpsrc_store_bin_output(upipe, NULL);
     upipe_zpsrc_release_urefcount_real(upipe);
 }
 
@@ -218,7 +213,7 @@ static struct upipe *upipe_zpsrc_alloc(struct upipe_mgr *mgr,
         upipe_release(upipe);
         return NULL;
     }
-    upipe_zpsrc_store_zp(upipe, zp);
+    upipe_zpsrc_store_bin_output(upipe, zp);
 
     return upipe;
 }

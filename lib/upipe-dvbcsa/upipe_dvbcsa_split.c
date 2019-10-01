@@ -67,6 +67,8 @@ struct upipe_dvbcsa_split {
     struct upipe *dup;
     /** inner ts demux pipe */
     struct upipe *demux;
+    /** real ts demux pipe */
+    struct upipe *ts_demux;
     /** generic proxy probe */
     struct uprobe proxy_probe;
     /** inner ts demux probe */
@@ -91,6 +93,7 @@ UPIPE_HELPER_UPROBE(upipe_dvbcsa_split, urefcount_real, demux_probe,
                     upipe_dvbcsa_split_catch_demux);
 UPIPE_HELPER_INNER(upipe_dvbcsa_split, dup);
 UPIPE_HELPER_INNER(upipe_dvbcsa_split, demux);
+UPIPE_HELPER_INNER(upipe_dvbcsa_split, ts_demux);
 UPIPE_HELPER_BIN_INPUT(upipe_dvbcsa_split, dup, input_requests);
 UPIPE_HELPER_BIN_OUTPUT(upipe_dvbcsa_split, dup, output, output_requests);
 
@@ -215,6 +218,8 @@ static void upipe_dvbcsa_split_free(struct upipe *upipe)
     upipe_dvbcsa_split_clean_bin_output(upipe);
     upipe_dvbcsa_split_clean_bin_input(upipe);
     upipe_dvbcsa_split_clean_demux_probe(upipe);
+    upipe_dvbcsa_split_clean_ts_demux(upipe);
+    upipe_dvbcsa_split_clean_demux(upipe);
     upipe_dvbcsa_split_clean_proxy_probe(upipe);
     upipe_dvbcsa_split_clean_urefcount_real(upipe);
     upipe_dvbcsa_split_clean_urefcount(upipe);
@@ -229,6 +234,7 @@ static void upipe_dvbcsa_split_free(struct upipe *upipe)
 static void upipe_dvbcsa_split_no_ref(struct upipe *upipe)
 {
     upipe_dvbcsa_split_store_demux(upipe, NULL);
+    upipe_dvbcsa_split_store_ts_demux(upipe, NULL);
     upipe_dvbcsa_split_store_bin_output(upipe, NULL);
     upipe_dvbcsa_split_store_bin_input(upipe, NULL);
     upipe_dvbcsa_split_release_urefcount_real(upipe);
@@ -258,6 +264,7 @@ static struct upipe *upipe_dvbcsa_split_alloc(struct upipe_mgr *mgr,
     upipe_dvbcsa_split_init_proxy_probe(upipe);
     upipe_dvbcsa_split_init_demux_probe(upipe);
     upipe_dvbcsa_split_init_demux(upipe);
+    upipe_dvbcsa_split_init_ts_demux(upipe);
     upipe_dvbcsa_split_init_bin_input(upipe);
     upipe_dvbcsa_split_init_bin_output(upipe);
     ulist_init(&upipe_dvbcsa_split->pids);
@@ -312,7 +319,7 @@ static struct upipe *upipe_dvbcsa_split_alloc(struct upipe_mgr *mgr,
         upipe_release(upipe);
         return NULL;
     }
-    upipe_release(demux);
+    upipe_dvbcsa_split_store_ts_demux(upipe, demux);
 
     return upipe;
 }
@@ -331,6 +338,8 @@ static int upipe_dvbcsa_split_control(struct upipe *upipe,
         upipe_dvbcsa_split_control_bin_input(upipe, command, args));
     UBASE_HANDLED_RETURN(
         upipe_dvbcsa_split_control_bin_output(upipe, command, args));
+    UBASE_HANDLED_RETURN(
+        upipe_dvbcsa_split_control_ts_demux(upipe, command, args));
 
     return UBASE_ERR_NONE;
 }

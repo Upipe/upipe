@@ -64,7 +64,7 @@
 
 #define UPIPE_FEC_JITTER UCLOCK_FREQ/25
 #define FEC_MAX 255
-#define LATENCY_MAX (UCLOCK_FREQ*2)
+#define DEFAULT_LATENCY_MAX (UCLOCK_FREQ*2)
 
 /** upipe_rtp_fec structure with rtp-fec parameters */
 struct upipe_rtp_fec {
@@ -105,6 +105,12 @@ struct upipe_rtp_fec {
         uint64_t date_sys;
     } recent[2 * FEC_MAX * FEC_MAX];
     uint64_t latency;
+
+    /** detected payload type */
+    uint8_t pt;
+
+    /** maximum latency */
+    uint64_t max_latency;
 
     /** main subpipe **/
     struct upipe main_subpipe;
@@ -276,7 +282,7 @@ static void upipe_rtp_fec_correct_packets(struct upipe *upipe,
 
     /* Search to see if any packets are lost */
     int processed = 0;
-    struct uchain *uchain, *uchain_tmp;
+    struct uchain *uchain;
     ulist_foreach (&upipe_rtp_fec->main_queue, uchain) {
         struct uref *uref = uref_from_uchain(uchain);
         uint16_t seqnum = uref->priv;
@@ -517,7 +523,7 @@ static void upipe_rtp_fec_timer(struct upump *upump)
         if (upipe_rtp_fec->last_send_seqnum != UINT32_MAX) {
             uint16_t expected = upipe_rtp_fec->last_send_seqnum + 1;
             if (expected != seqnum) {
-                upipe_warn_va(upipe, "FEC output LOST, expected seqnum %hu got %" PRIu64,
+                upipe_dbg_va(upipe, "FEC output LOST, expected seqnum %hu got %" PRIu64,
                         expected, seqnum);
                 upipe_rtp_fec->lost +=
                     (seqnum + UINT16_MAX + 1 - expected) & UINT16_MAX;
@@ -623,11 +629,6 @@ static void upipe_rtp_fec_main_input(struct upipe *upipe, struct uref *uref)
     uint64_t date_sys = UINT64_MAX;
     int type;
     uref_clock_get_date_sys(uref, &date_sys, &type);
-    if (date_sys == UINT64_MAX) {
-        upipe_err(upipe, "Undated uref");
-        uref_free(uref);
-        return;
-    }
 
     if (upipe_rtp_fec->prev_date_sys == UINT64_MAX ||
             upipe_rtp_fec->prev_date_sys == date_sys) {
@@ -709,7 +710,7 @@ static void upipe_rtp_fec_main_input(struct upipe *upipe, struct uref *uref)
          * date_sys or prev_date_sys could be reordered */
         if (date_sys != UINT64_MAX && prev_date_sys != UINT64_MAX && prev_seqnum != UINT64_MAX && seqnum == expected_seqnum) {
             uint64_t latency = date_sys - prev_date_sys;
-            if (latency > LATENCY_MAX) {
+            if (upipe_rtp_fec->max_latency > 0 && latency > upipe_rtp_fec->max_latency) {
                 upipe_warn_va(upipe,"resync. Latency too high. date_sys %"PRIu64" prev_date_sys %"PRIu64", seqnum %u, prev_seqnum %"PRIu64"", date_sys, prev_date_sys, seqnum, prev_seqnum);
                 fec_change = true;
             } else if (upipe_rtp_fec->latency < latency) {
@@ -780,7 +781,8 @@ static void upipe_rtp_fec_colrow_input(struct upipe *upipe, struct uref *uref)
             goto invalid;
         }
 
-        if (upipe_rtp_fec->cols != offset) {
+        if (upipe_rtp_fec->cols != offset ||
+            upipe_rtp_fec->rows != na) {
             upipe_rtp_fec->cols = offset;
             upipe_rtp_fec->rows = na;
 
@@ -797,6 +799,12 @@ static void upipe_rtp_fec_colrow_input(struct upipe *upipe, struct uref *uref)
     }
 
     insert_ordered_uref(queue, uref);
+    int max_urefs = 2 * (col ? upipe_rtp_fec->cols : upipe_rtp_fec->rows);
+    if (ulist_depth(queue) >  max_urefs) {
+        struct uchain *uchain = ulist_pop(queue);
+        struct uref *uref = uref_from_uchain(uchain);
+        uref_free(uref);
+    }
     upipe_rtp_fec->pkts_since_last_fec = 0;
     return;
 
@@ -825,20 +833,18 @@ static void upipe_rtp_fec_sub_input(struct upipe *upipe, struct uref *uref,
         return;
     }
 
-    bool marker = rtp_check_marker(rtp_header);
-    uint8_t type = rtp_get_type(rtp_header);
-    if (type >= 72 && type <= 95 && marker) {
-        upipe_warn_va(upipe, "Payload type %d is probably RTCP, forwarding",
-            type + 128);
-        upipe_rtp_fec_output(upipe_rtp_fec_to_upipe(upipe_rtp_fec), uref, NULL);
-        return;
-    }
-
     uref->priv = rtp_get_seqnum(rtp_header);
     uref_block_peek_unmap(uref, 0, rtp_buffer, rtp_header);
 
     if (upipe != upipe_rtp_fec_to_main_subpipe(upipe_rtp_fec)) {
         upipe_rtp_fec_colrow_input(upipe, uref);
+        return;
+    }
+
+    uint8_t pt = rtp_get_type(rtp_header);
+    if (upipe_rtp_fec->pt != pt) {
+        upipe_dbg_va(upipe, "Forwarding payload type %u", pt);
+        upipe_rtp_fec_output(upipe_rtp_fec_to_upipe(upipe_rtp_fec), uref, NULL);
         return;
     }
 
@@ -953,6 +959,8 @@ static struct upipe *_upipe_rtp_fec_alloc(struct upipe_mgr *mgr,
     upipe_rtp_fec->last_send_seqnum = UINT32_MAX;
     upipe_rtp_fec->cur_matrix_snbase = UINT32_MAX;
     upipe_rtp_fec->cur_row_fec_snbase = UINT32_MAX;
+    upipe_rtp_fec->pt = UINT8_MAX;
+    upipe_rtp_fec->max_latency = DEFAULT_LATENCY_MAX;
 
     upipe_rtp_fec->lost = 0;
     upipe_rtp_fec->prev_date_sys = UINT64_MAX;
@@ -1014,18 +1022,10 @@ static int upipe_rtp_fec_control(struct upipe *upipe, int command, va_list args)
     }
     case UPIPE_UNREGISTER_REQUEST:
         return UBASE_ERR_NONE;
-    case UPIPE_GET_FLOW_DEF: {
-        struct uref **p = va_arg(args, struct uref **);
-        return upipe_rtp_fec_get_flow_def(upipe, p);
-    }
-    case UPIPE_GET_OUTPUT: {
-        struct upipe **p = va_arg(args, struct upipe **);
-        return upipe_rtp_fec_get_output(upipe, p);
-    }
-    case UPIPE_SET_OUTPUT: {
-        struct upipe *output = va_arg(args, struct upipe *);
-        return upipe_rtp_fec_set_output(upipe, output);
-    }
+    case UPIPE_GET_FLOW_DEF:
+    case UPIPE_GET_OUTPUT:
+    case UPIPE_SET_OUTPUT:
+        return upipe_rtp_fec_control_output(upipe, command, args);
 
     /* specific commands */
     case UPIPE_RTP_FEC_GET_MAIN_SUB: {
@@ -1070,6 +1070,16 @@ static int upipe_rtp_fec_control(struct upipe *upipe, int command, va_list args)
         UBASE_SIGNATURE_CHECK(args, UPIPE_RTP_FEC_SIGNATURE)
         uint64_t *columns = va_arg(args, uint64_t*);
         *columns = upipe_rtp_fec->cols;
+        return UBASE_ERR_NONE;
+    }
+    case UPIPE_RTP_FEC_SET_PT: {
+        UBASE_SIGNATURE_CHECK(args, UPIPE_RTP_FEC_SIGNATURE)
+        upipe_rtp_fec->pt = va_arg(args, unsigned);
+        return UBASE_ERR_NONE;
+    }
+    case UPIPE_RTP_FEC_SET_MAX_LATENCY: {
+        UBASE_SIGNATURE_CHECK(args, UPIPE_RTP_FEC_SIGNATURE)
+        upipe_rtp_fec->max_latency = va_arg(args, uint64_t);
         return UBASE_ERR_NONE;
     }
     default:

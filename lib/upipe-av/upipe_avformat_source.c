@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2012-2017 OpenHeadend S.A.R.L.
+ * Copyright (C) 2012-2018 OpenHeadend S.A.R.L.
  *
  * Authors: Christophe Massiot
  *
@@ -223,8 +223,6 @@ UPIPE_HELPER_FLOW(upipe_avfsrc_sub, NULL)
 UPIPE_HELPER_INNER(upipe_avfsrc_sub, last_inner)
 UPIPE_HELPER_UPROBE(upipe_avfsrc_sub, urefcount_real, last_inner_probe,
                     NULL)
-UPIPE_HELPER_BIN_OUTPUT(upipe_avfsrc_sub, last_inner,
-                        output, output_request_list)
 
 UPIPE_HELPER_UBUF_MGR(upipe_avfsrc_sub, ubuf_mgr, flow_format, ubuf_mgr_request,
                       upipe_avfsrc_sub_check,
@@ -262,11 +260,12 @@ static struct upipe *upipe_avfsrc_sub_alloc(struct upipe_mgr *mgr,
     urefcount_init(upipe_avfsrc_sub_to_urefcount_real(upipe_avfsrc_sub),
                    upipe_avfsrc_sub_free);
     upipe_avfsrc_sub_init_last_inner_probe(upipe);
-    upipe_avfsrc_sub_init_bin_output(upipe);
+    upipe_avfsrc_sub_init_last_inner(upipe);
     upipe_avfsrc_sub_init_ubuf_mgr(upipe);
     upipe_avfsrc_sub_init_sub(upipe);
     upipe_avfsrc_sub->id = UINT64_MAX;
     upipe_avfsrc_sub->flow_def = flow_def;
+    ulist_init(&upipe_avfsrc_sub->output_request_list);
 
     uint64_t id;
     const char *def;
@@ -320,7 +319,6 @@ static struct upipe *upipe_avfsrc_sub_alloc(struct upipe_mgr *mgr,
     }
     upipe_avfsrc_sub_store_last_inner(upipe, inner);
 
-    upipe_avfsrc->context->streams[id]->discard = AVDISCARD_DEFAULT;
     upipe_throw_ready(upipe);
 
     upipe_avfsrc_sub_require_ubuf_mgr(upipe, uref_dup(flow_def));
@@ -356,6 +354,7 @@ static int upipe_avfsrc_sub_register_request(struct upipe *upipe,
                                              struct urequest *request)
 {
     struct upipe_avfsrc_sub *sub = upipe_avfsrc_sub_from_upipe(upipe);
+    ulist_add(&sub->output_request_list, urequest_to_uchain(request));
     return upipe_register_request(sub->last_inner, request);
 }
 
@@ -369,6 +368,7 @@ static int upipe_avfsrc_sub_unregister_request(struct upipe *upipe,
                                                struct urequest *request)
 {
     struct upipe_avfsrc_sub *sub = upipe_avfsrc_sub_from_upipe(upipe);
+    ulist_delete(urequest_to_uchain(request));
     return upipe_unregister_request(sub->last_inner, request);
 }
 
@@ -386,16 +386,14 @@ static int upipe_avfsrc_sub_control(struct upipe *upipe,
     UBASE_HANDLED_RETURN(upipe_avfsrc_sub_control_super(upipe, command, args));
 
     switch (command) {
-        case UPIPE_BIN_GET_FIRST_INNER: {
-            struct upipe_avfsrc_sub *upipe_avfsrc_sub =
-                upipe_avfsrc_sub_from_upipe(upipe);
+        case UPIPE_BIN_GET_FIRST_INNER:
+        case UPIPE_BIN_GET_LAST_INNER: {
             struct upipe **p = va_arg(args, struct upipe **);
-            *p = upipe_avfsrc_sub->last_inner;
-            return (*p != NULL) ? UBASE_ERR_NONE : UBASE_ERR_UNHANDLED;
+            return upipe_avfsrc_sub_get_last_inner(upipe, p);
         }
 
         default:
-            return upipe_avfsrc_sub_control_bin_output(upipe, command, args);
+            return upipe_avfsrc_sub_control_last_inner(upipe, command, args);
     }
 }
 
@@ -408,11 +406,10 @@ static void upipe_avfsrc_sub_free(struct urefcount *urefcount_real)
     struct upipe_avfsrc_sub *sub =
         upipe_avfsrc_sub_from_urefcount_real(urefcount_real);
     struct upipe *upipe = upipe_avfsrc_sub_to_upipe(sub);
-    struct upipe_avfsrc *avfsrc = upipe_avfsrc_from_sub_mgr(upipe->mgr);
+
     upipe_throw_dead(upipe);
 
     uref_free(sub->flow_def);
-    avfsrc->context->streams[sub->id]->discard = AVDISCARD_ALL;
     upipe_avfsrc_sub_clean_ubuf_mgr(upipe);
     upipe_avfsrc_sub_clean_last_inner_probe(upipe);
     urefcount_clean(urefcount_real);
@@ -428,7 +425,15 @@ static void upipe_avfsrc_sub_no_ref(struct upipe *upipe)
 {
     struct upipe_avfsrc_sub *sub = upipe_avfsrc_sub_from_upipe(upipe);
 
-    upipe_avfsrc_sub_clean_bin_output(upipe);
+    struct uchain *uchain;
+    while ((uchain = ulist_pop(&sub->output_request_list))) {
+        struct urequest *urequest = urequest_from_uchain(uchain);
+        if (sub->last_inner)
+            upipe_unregister_request(sub->last_inner, urequest);
+        urequest_clean(urequest);
+        urequest_free(urequest);
+    }
+    upipe_avfsrc_sub_clean_last_inner(upipe);
     upipe_avfsrc_sub_clean_sub(upipe);
     urefcount_release(upipe_avfsrc_sub_to_urefcount_real(sub));
 }
@@ -596,9 +601,15 @@ static void upipe_avfsrc_worker(struct upump *upump)
     if (pkt.dts != (int64_t)AV_NOPTS_VALUE) {
         dts_orig = pkt.dts * stream->time_base.num * (int64_t)UCLOCK_FREQ /
                    stream->time_base.den - INT64_MIN;
-        if (pkt.pts != (int64_t)AV_NOPTS_VALUE)
-            dts_pts_delay = (pkt.pts - pkt.dts) * stream->time_base.num *
-                            UCLOCK_FREQ / stream->time_base.den;
+        if (pkt.pts != (int64_t)AV_NOPTS_VALUE) {
+            if (pkt.pts < pkt.dts) {
+                upipe_warn_va(upipe, "pts in the past (pts=%"PRIi64", "
+                              "dts=%"PRIi64")", pkt.pts, pkt.dts);
+            } else {
+                dts_pts_delay = (pkt.pts - pkt.dts) * stream->time_base.num *
+                    UCLOCK_FREQ / stream->time_base.den;
+            }
+        }
     } else if (pkt.pts != (int64_t)AV_NOPTS_VALUE) {
         dts_orig = pkt.pts * stream->time_base.num * (int64_t)UCLOCK_FREQ /
                    stream->time_base.den - INT64_MIN;
@@ -765,10 +776,12 @@ static struct uref *alloc_video_def(struct upipe *upipe,
 
     UBASE_FATAL(upipe, uref_pic_flow_set_hsize(flow_def, codec->width))
     UBASE_FATAL(upipe, uref_pic_flow_set_vsize(flow_def, codec->height))
-    int ticks = codec->ticks_per_frame ? codec->ticks_per_frame : 1;
-    if (stream->time_base.num) {
-        struct urational fps = { .num = stream->time_base.den,
-                                 .den = stream->time_base.num * ticks };
+    AVRational frame_rate = av_guess_frame_rate(format, stream, NULL);
+    if (frame_rate.num != 0 || frame_rate.den != 1) {
+        struct urational fps = {
+            .num = frame_rate.num,
+            .den = frame_rate.den
+        };
         urational_simplify(&fps);
         UBASE_FATAL(upipe, uref_pic_flow_set_fps(flow_def, fps))
     }
@@ -826,12 +839,16 @@ static void upipe_avfsrc_probe(struct upump *upump)
     if (unlikely(!upipe_av_deal_grab()))
         return;
 
-    AVDictionary *options[context->nb_streams];
-    for (unsigned i = 0; i < context->nb_streams; i++) {
+    unsigned nb_streams = context->nb_streams;
+    AVDictionary *options[nb_streams];
+    for (unsigned i = 0; i < nb_streams; i++) {
         options[i] = NULL;
         av_dict_copy(&options[i], upipe_avfsrc->options, 0);
     }
     int error = avformat_find_stream_info(context, options);
+
+    for (unsigned i = 0; i < nb_streams; i++)
+        av_dict_free(&options[i]);
 
     upipe_av_deal_yield(upump);
     upump_free(upipe_avfsrc->upump_av_deal);
@@ -853,9 +870,6 @@ static void upipe_avfsrc_probe(struct upump *upump)
         AVStream *stream = context->streams[i];
         AVCodecContext *codec = stream->codec;
         struct uref *flow_def;
-
-        // discard all packets from this stream
-        stream->discard = AVDISCARD_ALL;
 
         switch (codec->codec_type) {
             case AVMEDIA_TYPE_AUDIO:

@@ -128,7 +128,8 @@ UPIPE_HELPER_UCLOCK(upipe_dvbsrc, uclock, uclock_request, upipe_dvbsrc_check,
 UPIPE_HELPER_UPUMP_MGR(upipe_dvbsrc, upump_mgr)
 UPIPE_HELPER_UPUMP(upipe_dvbsrc, upump, upump_mgr)
 
-static void upipe_dvbsrc_log(void *priv, int level, const char *fmt,...)
+UBASE_FMT_PRINTF(3, 4)
+static void upipe_dvbsrc_log(void *priv, int level, const char *fmt, ...)
 {
     int loglevel;
     switch (level) {
@@ -226,10 +227,6 @@ static void upipe_dvbsrc_worker(struct upump *upump)
 {
     struct upipe *upipe = upump_get_opaque(upump, struct upipe *);
     struct upipe_dvbsrc *upipe_dvbsrc = upipe_dvbsrc_from_upipe(upipe);
-    uint64_t systime = 0; /* to keep gcc quiet */
-
-    if (upipe_dvbsrc->uclock != NULL)
-        systime = uclock_now(upipe_dvbsrc->uclock);
 
     struct uref *uref = uref_block_alloc(upipe_dvbsrc->uref_mgr,
             upipe_dvbsrc->ubuf_mgr, MTU);

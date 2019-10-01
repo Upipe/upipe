@@ -28,15 +28,8 @@ void upipe_uyvy_to_sdi_c(uint8_t *dst, const uint8_t *y, int64_t pixels)
 {
     struct ubits s;
     int64_t size = pixels * 2; /* change to number of samples */
-    ubits_init(&s, dst, size * 10 / 8);
+    ubits_init(&s, dst, size * 10 / 8, UBITS_WRITE);
 
     for (int i = 0; i < size; i ++)
         ubits_put(&s, 10, htons((y[2*i+0] << 8) | y[2*i+1]));
-
-    uint8_t *end;
-    if (!ubase_check(ubits_clean(&s, &end))) {
-        // error
-    } else {
-        // check buffer end?
-    }
 }

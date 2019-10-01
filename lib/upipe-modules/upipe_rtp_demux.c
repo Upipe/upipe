@@ -356,7 +356,7 @@ static struct upipe *upipe_rtp_demux_sub_alloc(struct upipe_mgr *mgr,
                         uprobe_pfx_alloc(uprobe_use(&sub->source_probe),
                                          UPROBE_LOG_VERBOSE, "rtpd"))) == NULL))
         upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
-    upipe_rtp_demux_sub_store_first_inner(upipe, source);
+    upipe_rtp_demux_sub_store_bin_input(upipe, source);
 
     upipe_rtp_demux_check_clock_ref(upipe_rtp_demux_to_upipe(demux));
     return upipe;

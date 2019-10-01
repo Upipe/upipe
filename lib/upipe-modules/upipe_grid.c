@@ -73,10 +73,6 @@ struct upipe_grid {
     struct urequest uclock_request;
     /** late buffer tolerance */
     uint64_t tolerance;
-    /** last update pts */
-    uint64_t last_update_pts;
-    /** next update diff */
-    uint64_t next_update;
     /** grid max rentention */
     uint64_t max_retention;
 };
@@ -85,9 +81,6 @@ struct upipe_grid {
 static int upipe_grid_update_pts(struct upipe *upipe, uint64_t next_pts);
 /** @hidden */
 static int upipe_grid_uclock_now(struct upipe *upipe, uint64_t *now);
-/** @hidden */
-static int upipe_grid_catch_out(struct uprobe *uprobe, struct upipe *upipe,
-                                 int event, va_list args);
 
 UPIPE_HELPER_UPIPE(upipe_grid, upipe, UPIPE_GRID_SIGNATURE);
 UPIPE_HELPER_UREFCOUNT(upipe_grid, urefcount, upipe_grid_no_ref);
@@ -268,7 +261,7 @@ static int upipe_grid_in_catch(struct uprobe *uprobe,
             while (ubase_check(upipe_grid_iterate_output(super, &output)) &&
                    output)
                 upipe_grid_out_handle_input_changed(output, upipe);
-            return UBASE_ERR_NONE;
+            break;
         }
 
         case UPROBE_DEAD: {
@@ -359,17 +352,24 @@ static void upipe_grid_in_input(struct upipe *upipe,
         }
 
         ubase_assert(uref_clock_get_pts_sys(uref, &pts));
-        if (pts + latency + upipe_grid->max_retention >= now) {
+        uint64_t pts_max = pts + latency + upipe_grid->tolerance;
+        if (pts_max >= now) {
             ulist_unshift(&upipe_grid_in->urefs, uchain);
             break;
         }
 
-        upipe_warn_va(upipe, "drop late frame %"PRIu64"ms, "
-                      "latency %"PRIu64"ms "
-                      "retention %"PRIu64"ms",
-                      (now - pts) / (UCLOCK_FREQ / 1000),
-                      latency / (UCLOCK_FREQ / 1000),
-                      upipe_grid->max_retention / (UCLOCK_FREQ / 1000));
+        if (ulist_empty(&upipe_grid_in->urefs) &&
+            pts_max + upipe_grid->max_retention >= now) {
+            ulist_unshift(&upipe_grid_in->urefs, uchain);
+            break;
+        }
+
+        upipe_verbose_va(upipe, "drop late frame %"PRIu64"ms, "
+                         "latency %"PRIu64"ms "
+                         "retention %"PRIu64"ms",
+                         (now - pts) / (UCLOCK_FREQ / 1000),
+                         latency / (UCLOCK_FREQ / 1000),
+                         upipe_grid->max_retention / (UCLOCK_FREQ / 1000));
         uref_free(uref);
     }
 
@@ -442,13 +442,16 @@ static void upipe_grid_in_update_pts(struct upipe *upipe, uint64_t next_pts)
 
     upipe_verbose_va(upipe, "update PTS %"PRIu64, next_pts);
 
-    /* get current input latency */
-    if (flow_def) {
-        latency = 0;
-        uref_clock_get_latency(flow_def, &latency);
-    }
+    if (upipe_grid_in->last_update &&
+        upipe_grid_in->next_update &&
+        upipe_grid_in->last_update + upipe_grid_in->next_update >= next_pts)
+        return;
 
-    /* iterarte through the input buffers */
+    /* get current input latency */
+    if (flow_def)
+        uref_clock_get_latency(flow_def, &latency);
+
+    /* iterate through the input buffers */
     struct uchain *uchain, *uchain_tmp;
     ulist_delete_foreach(&upipe_grid_in->urefs, uchain, uchain_tmp) {
         struct uref *uref = uref_from_uchain(uchain);
@@ -491,8 +494,6 @@ static void upipe_grid_in_update_pts(struct upipe *upipe, uint64_t next_pts)
         if (pts + latency + upipe_grid->tolerance > next_pts)
             upipe_grid_in->next_update =
                 pts + latency + upipe_grid->tolerance - next_pts;
-        if (upipe_grid_in->next_update < upipe_grid->next_update)
-            upipe_grid->next_update = upipe_grid_in->next_update;
 
         /* remaining buffers are up to date,.. */
         break;
@@ -512,6 +513,7 @@ static int upipe_grid_in_control(struct upipe *upipe,
                                  int command, va_list args)
 {
     UBASE_HANDLED_RETURN(upipe_control_provide_request(upipe, command, args));
+    UBASE_HANDLED_RETURN(upipe_grid_in_control_super(upipe, command, args));
 
     switch (command) {
         case UPIPE_SET_FLOW_DEF: {
@@ -740,7 +742,6 @@ static int upipe_grid_out_extract_sound(struct upipe *upipe, struct uref *uref)
         upipe_grid_in_from_upipe(upipe_grid_out->input);
     struct uref *input_flow_def = upipe_grid_in->flow_def;
     uint64_t next_pts;
-    int ret = UBASE_ERR_NONE;
 
     /* checked before */
     assert(input_flow_def);
@@ -995,6 +996,7 @@ static int upipe_grid_out_control(struct upipe *upipe,
                                   int command, va_list args)
 {
     UBASE_HANDLED_RETURN(upipe_grid_out_control_output(upipe, command, args));
+    UBASE_HANDLED_RETURN(upipe_grid_out_control_super(upipe, command, args));
 
     switch (command) {
         case UPIPE_SET_FLOW_DEF: {
@@ -1080,6 +1082,7 @@ static void upipe_grid_init_out_mgr(struct upipe *upipe)
     mgr->upipe_alloc = upipe_grid_out_alloc;
     mgr->upipe_input = upipe_grid_out_input;
     mgr->upipe_control = upipe_grid_out_control;
+    mgr->upipe_event_str = upipe_grid_out_event_str;
     mgr->upipe_command_str = upipe_grid_out_command_str;
 }
 
@@ -1106,8 +1109,7 @@ static void upipe_grid_free(struct upipe *upipe)
  */
 static void upipe_grid_no_ref(struct upipe *upipe)
 {
-    struct upipe_grid *upipe_grid = upipe_grid_from_upipe(upipe);
-    urefcount_release(&upipe_grid->urefcount_real);
+    upipe_grid_release_urefcount_real(upipe);
 }
 
 /** @internal @This allocates a grid pipe.
@@ -1136,8 +1138,6 @@ static struct upipe *upipe_grid_alloc(struct upipe_mgr *mgr,
 
     struct upipe_grid *upipe_grid = upipe_grid_from_upipe(upipe);
     upipe_grid->tolerance = DEFAULT_TOLERANCE;
-    upipe_grid->last_update_pts = 0;
-    upipe_grid->next_update = 0;
     upipe_grid->max_retention = MAX_RETENTION;
 
     upipe_throw_ready(upipe);
@@ -1184,6 +1184,9 @@ static int upipe_grid_set_max_retention_real(struct upipe *upipe,
 static int upipe_grid_control(struct upipe *upipe,
                               int command, va_list args)
 {
+    UBASE_HANDLED_RETURN(upipe_grid_control_inputs(upipe, command, args));
+    UBASE_HANDLED_RETURN(upipe_grid_control_outputs(upipe, command, args));
+
     switch (command) {
         case UPIPE_ATTACH_UCLOCK:
             upipe_grid_require_uclock(upipe);
@@ -1213,13 +1216,6 @@ static int upipe_grid_control(struct upipe *upipe,
  */
 static int upipe_grid_update_pts(struct upipe *upipe, uint64_t next_pts)
 {
-    struct upipe_grid *upipe_grid = upipe_grid_from_upipe(upipe);
-
-    if (upipe_grid->last_update_pts &&
-        upipe_grid->last_update_pts + upipe_grid->next_update >= next_pts)
-        return UBASE_ERR_NONE;
-    upipe_grid->last_update_pts = next_pts;
-
     /* iterate through the input pipes */
     struct upipe *in = NULL;
     while (ubase_check(upipe_grid_iterate_input(upipe, &in)) && in)

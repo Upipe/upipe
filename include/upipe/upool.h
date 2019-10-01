@@ -148,10 +148,8 @@ static inline void upool_free(struct upool *upool, void *obj)
 static inline void upool_vacuum(struct upool *upool)
 {
     void *obj;
-    while ((obj = ulifo_pop(&upool->lifo, void *)) != NULL) {
+    while ((obj = ulifo_pop(&upool->lifo, void *)) != NULL)
         upool->free_cb(upool, obj);
-        upool_release(upool);
-    }
 }
 
 /** @This empties and cleans up a upool.

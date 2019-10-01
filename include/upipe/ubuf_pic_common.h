@@ -309,6 +309,18 @@ int ubuf_pic_common_plane_map(struct ubuf *ubuf, const char *chroma,
  */
 int ubuf_pic_common_check_skip(struct ubuf_mgr *mgr, int hskip, int vskip);
 
+/** @This splits an interlaced picture ubuf in its two fields.
+ *
+ * Two extra ubufs are allocated, one per field.
+ *
+ * @param ubuf pointer to ubuf
+ * @param odd pointer to pointer to odd field ubuf
+ * @param even pointer to pointer to even field ubuf
+ * @return an error code
+*/
+int ubuf_pic_common_split_fields(struct ubuf *ubuf, struct ubuf **odd,
+        struct ubuf **even);
+
 /** @This resizes a picture ubuf, if the ubuf has enough space, and it is not
  * shared.
  *

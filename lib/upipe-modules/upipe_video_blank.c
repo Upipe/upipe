@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2017 OpenHeadend S.A.R.L.
+ * Copyright (C) 2017-2019 OpenHeadend S.A.R.L.
  *
  * Authors: Arnaud de Turckheim
  *
@@ -32,6 +32,7 @@
 #include <upipe/upipe_helper_flow.h>
 #include <upipe/upipe_helper_output.h>
 #include <upipe/upipe_helper_flow_def.h>
+#include <upipe/upipe_helper_flow_format.h>
 #include <upipe/upipe_helper_ubuf_mgr.h>
 
 #include <upipe/uref_pic_flow.h>
@@ -59,6 +60,8 @@ struct upipe_vblk {
     enum upipe_helper_output_state output_state;
     /** output request list */
     struct uchain requests;
+    /** flow format request */
+    struct urequest flow_format_request;
     /** ubuf manager */
     struct ubuf_mgr *ubuf_mgr;
     /** blank picture */
@@ -67,7 +70,13 @@ struct upipe_vblk {
     struct uref *flow_format;
     /** ubuf manager request */
     struct urequest ubuf_mgr_request;
+    /** picture attributes */
+    struct uref *pic_attr;
 };
+
+/** @hidden */
+static int upipe_vblk_check_flow_format(struct upipe *upipe,
+                                        struct uref *flow_format);
 
 /** @hidden */
 static int upipe_vblk_check(struct upipe *upipe, struct uref *flow_format);
@@ -77,6 +86,10 @@ UPIPE_HELPER_UREFCOUNT(upipe_vblk, urefcount, upipe_vblk_free);
 UPIPE_HELPER_FLOW(upipe_vblk, UREF_PIC_FLOW_DEF);
 UPIPE_HELPER_OUTPUT(upipe_vblk, output, flow_def, output_state, requests);
 UPIPE_HELPER_FLOW_DEF(upipe_vblk, input_flow_def, flow_attr);
+UPIPE_HELPER_FLOW_FORMAT(upipe_vblk, flow_format_request,
+                         upipe_vblk_check_flow_format,
+                         upipe_vblk_register_output_request,
+                         upipe_vblk_unregister_output_request);
 UPIPE_HELPER_UBUF_MGR(upipe_vblk, ubuf_mgr, flow_format, ubuf_mgr_request,
                       upipe_vblk_check,
                       upipe_vblk_register_output_request,
@@ -94,8 +107,11 @@ static void upipe_vblk_free(struct upipe *upipe)
 
     if (upipe_vblk->ubuf)
         ubuf_free(upipe_vblk->ubuf);
+    if (upipe_vblk->pic_attr)
+        uref_free(upipe_vblk->pic_attr);
 
     upipe_vblk_clean_ubuf_mgr(upipe);
+    upipe_vblk_clean_flow_format(upipe);
     upipe_vblk_clean_flow_def(upipe);
     upipe_vblk_clean_output(upipe);
     upipe_vblk_clean_urefcount(upipe);
@@ -141,14 +157,17 @@ static struct upipe *upipe_vblk_alloc(struct upipe_mgr *mgr,
     upipe_vblk_init_urefcount(upipe);
     upipe_vblk_init_output(upipe);
     upipe_vblk_init_flow_def(upipe);
+    upipe_vblk_init_flow_format(upipe);
     upipe_vblk_init_ubuf_mgr(upipe);
 
     struct upipe_vblk *upipe_vblk = upipe_vblk_from_upipe(upipe);
     upipe_vblk->ubuf = NULL;
+    upipe_vblk->pic_attr = NULL;
 
     upipe_throw_ready(upipe);
 
-    if (unlikely(!ubase_check(upipe_vblk_check_flow_def(upipe, flow_def)))) {
+    if (unlikely(!ubase_check(uref_flow_match_def(flow_def,
+                                                  UREF_PIC_FLOW_DEF)))) {
         uref_free(flow_def);
         upipe_release(upipe);
         return NULL;
@@ -200,17 +219,26 @@ static void upipe_vblk_input(struct upipe *upipe,
         upipe_verbose(upipe, "allocate blank picture");
 
         uint64_t hsize, vsize;
-        ubase_assert(uref_pic_flow_get_hsize(upipe_vblk->flow_def, &hsize));
-        ubase_assert(uref_pic_flow_get_vsize(upipe_vblk->flow_def, &vsize));
+        if (unlikely(
+                !ubase_check(uref_pic_flow_get_hsize(upipe_vblk->flow_def,
+                                                     &hsize)) ||
+                !ubase_check(uref_pic_flow_get_vsize(upipe_vblk->flow_def,
+                                                     &vsize)))) {
+            upipe_warn(upipe, "no output size");
+            uref_free(uref);
+            return;
+        }
 
         upipe_vblk->ubuf = ubuf_pic_alloc(upipe_vblk->ubuf_mgr, hsize, vsize);
         if (unlikely(!upipe_vblk->ubuf)) {
-            upipe_err(upipe, "fail to allocate picture");
+            upipe_err_va(upipe, "fail to allocate %"PRIu64"x%"PRIu64" picture",
+                         hsize, vsize);
             uref_free(uref);
             upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
             return;
         }
-        ubuf_pic_clear(upipe_vblk->ubuf, 0, 0, -1, -1, 1);
+        ubuf_pic_clear(upipe_vblk->ubuf, 0, 0, -1, -1,
+                ubase_check(uref_pic_flow_get_full_range(upipe_vblk->flow_def)));
     }
 
     struct ubuf *ubuf = ubuf_dup(upipe_vblk->ubuf);
@@ -222,6 +250,8 @@ static void upipe_vblk_input(struct upipe *upipe,
     }
 
     uref_attach_ubuf(uref, ubuf);
+    if (upipe_vblk->pic_attr)
+        uref_attr_import(uref, upipe_vblk->pic_attr);
     if (ubase_check(uref_pic_get_progressive(flow_def)))
         uref_pic_set_progressive(uref);
 
@@ -284,7 +314,6 @@ static int upipe_vblk_set_flow_def(struct upipe *upipe,
     } else {
         uref_pic_delete_progressive(flow_def_dup);
     }
-    upipe_vblk_store_flow_def(upipe, flow_def_dup);
 
     if (upipe_vblk->ubuf) {
         ubuf_free(upipe_vblk->ubuf);
@@ -295,7 +324,10 @@ static int upipe_vblk_set_flow_def(struct upipe *upipe,
         !ubase_check(ubuf_mgr_check(upipe_vblk->ubuf_mgr, flow_def_dup))) {
         ubuf_mgr_release(upipe_vblk->ubuf_mgr);
         upipe_vblk->ubuf_mgr = NULL;
+        upipe_vblk_require_flow_format(upipe, flow_def_dup);
     }
+    else
+        upipe_vblk_store_flow_def(upipe, flow_def_dup);
 
     return UBASE_ERR_NONE;
 }
@@ -311,9 +343,41 @@ static int upipe_vblk_set_pic_real(struct upipe *upipe, struct uref *uref)
     struct upipe_vblk *upipe_vblk = upipe_vblk_from_upipe(upipe);
     if (upipe_vblk->ubuf)
         ubuf_free(upipe_vblk->ubuf);
+    if (upipe_vblk->pic_attr)
+        uref_free(upipe_vblk->pic_attr);
+    if (!uref)
+        return UBASE_ERR_NONE;
+
+    if (!uref->mgr) {
+        uref_free(uref);
+        return UBASE_ERR_INVALID;
+    }
+    upipe_vblk->pic_attr = uref_alloc_control(uref->mgr);
+    if (!upipe_vblk->pic_attr)
+        return UBASE_ERR_ALLOC;
+    int ret = uref_attr_import(upipe_vblk->pic_attr, uref);
+    if (unlikely(!ubase_check(ret))) {
+        uref_free(upipe_vblk->pic_attr);
+        upipe_vblk->pic_attr = NULL;
+        uref_free(uref);
+        return ret;
+    }
     upipe_vblk->ubuf = uref->ubuf;
     uref->ubuf = NULL;
     uref_free(uref);
+    return UBASE_ERR_NONE;
+}
+
+/** @internal @This checks the provided flow format.
+ *
+ * @param upipe description structure of the pipe
+ * @param flow_format amended flow format
+ * @return an error code
+ */
+static int upipe_vblk_check_flow_format(struct upipe *upipe,
+                                        struct uref *flow_format)
+{
+    upipe_vblk_require_ubuf_mgr(upipe, flow_format);
     return UBASE_ERR_NONE;
 }
 
@@ -327,14 +391,19 @@ static int upipe_vblk_check(struct upipe *upipe, struct uref *flow_format)
 {
     struct upipe_vblk *upipe_vblk = upipe_vblk_from_upipe(upipe);
 
-    if (flow_format)
+    if (flow_format) {
+        ubuf_free(upipe_vblk->ubuf);
+        upipe_vblk->ubuf = NULL;
         upipe_vblk_store_flow_def(upipe, flow_format);
+    }
 
     if (!upipe_vblk->flow_def)
         return UBASE_ERR_NONE;
 
-    if (!upipe_vblk->ubuf_mgr) {
-        upipe_vblk_require_ubuf_mgr(upipe, uref_dup(upipe_vblk->flow_def));
+    if (!upipe_vblk->ubuf_mgr &&
+        urequest_get_opaque(&upipe_vblk->flow_format_request,
+                            struct upipe *) != upipe) {
+        upipe_vblk_require_flow_format(upipe, uref_dup(upipe_vblk->flow_def));
         return UBASE_ERR_NONE;
     }
 

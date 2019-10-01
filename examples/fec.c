@@ -66,13 +66,16 @@ static int set_uri(struct upipe *upipe, const char *base, uint16_t port)
 
 int main(int argc, char **argv)
 {
-    if (argc != 3) {
-        fprintf(stderr, "Usage: %s <input> <output>\n", argv[0]);
+    if (argc != 3 && argc != 4) {
+        fprintf(stderr, "Usage: %s <input> <output> [payload type]\n", argv[0]);
         return 1;
     }
 
     const char  *input = argv[1];
     const char *output = argv[2];
+    unsigned pt = 33; // MPEG-TS
+    if (argc == 4)
+        pt = atoi(argv[3]);
 
     /* upump manager */
     struct upump_mgr *main_upump_mgr = upump_ev_mgr_alloc_default(UPUMP_POOL,
@@ -142,6 +145,7 @@ int main(int argc, char **argv)
             uprobe_pfx_alloc(uprobe_use(uprobe_main), loglevel, "rtp_col_fec"),
             uprobe_pfx_alloc(uprobe_use(uprobe_main), loglevel, "rtp_row_fec"));
     assert(rtp_fec);
+    upipe_rtp_fec_set_pt(rtp_fec, pt);
     upipe_mgr_release(upipe_rtp_fec_mgr);
 
     upipe_attach_uclock(rtp_fec);

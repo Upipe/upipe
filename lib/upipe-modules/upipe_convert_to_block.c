@@ -168,8 +168,8 @@ static void upipe_tblk_handle_pic(struct upipe *upipe, struct uref *uref,
                                                       uref->ubuf, chroma);
     if (unlikely(ubuf == NULL)) {
         /* We have to memcpy the thing. */
-        size_t hsize, vsize, stride;
-        uint8_t macropixel, hsub, vsub, macropixel_size;
+        size_t vsize, stride;
+        uint8_t vsub;
         if (unlikely(!ubase_check(uref_pic_size(uref, NULL, &vsize,
                                                 NULL)) ||
                      !ubase_check(uref_pic_plane_size(uref, chroma,

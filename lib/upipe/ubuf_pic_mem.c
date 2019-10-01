@@ -362,6 +362,13 @@ static int ubuf_pic_mem_control(struct ubuf *ubuf, int command, va_list args)
             return _ubuf_pic_mem_get_shared(ubuf, chroma, shared_p,
                                             offset_p, size_p);
         }
+
+        case UBUF_PICTURE_SPLIT_FIELDS: {
+            struct ubuf *ubuf = va_arg(args, struct ubuf *);
+            struct ubuf **odd = va_arg(args, struct ubuf **);
+            struct ubuf **even = va_arg(args, struct ubuf **);
+            return ubuf_pic_common_split_fields(ubuf, odd, even);
+        }
         default:
             return UBASE_ERR_UNHANDLED;
     }

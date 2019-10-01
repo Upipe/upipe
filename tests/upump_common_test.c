@@ -50,7 +50,6 @@ static const char *padding = "This is an initialized bit of space used to pad su
 #define MIN_TIMEOUT 3
 
 static int pipefd[2];
-static struct upump_mgr *mgr;
 static struct upump *write_idler;
 static struct upump *read_timer;
 static struct upump *write_watcher;

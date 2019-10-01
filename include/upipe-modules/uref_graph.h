@@ -1,10 +1,10 @@
 /*
- * Copyright (C) 2017 OpenHeadend S.A.R.L.
+ * Copyright (C) 2019 OpenHeadend S.A.R.L.
  *
  * Authors: Arnaud de Turckheim
  *
  * Permission is hereby granted, free of charge, to any person obtaining
- * a copy of this software and associated documentation files (the
+ * a copy of this software and associated documentation https (the
  * "Software"), to deal in the Software without restriction, including
  * without limitation the rights to use, copy, modify, merge, publish,
  * distribute, sublicense, and/or sell copies of the Software, and to
@@ -23,22 +23,17 @@
  * SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
  */
 
-#ifndef _UPIPE_DVBCSA_UPIPE_DVBCSA_BS_DECRYPT_H_
-#define _UPIPE_DVBCSA_UPIPE_DVBCSA_BS_DECRYPT_H_
+/** @file
+ * @short Graph attributes
+ */
+
+#ifndef _UPIPE_MODULES_UREF_GRAPH_H_
+#define _UPIPE_MODULES_UREF_GRAPH_H_
 #ifdef __cplusplus
 extern "C" {
 #endif
 
-#include <upipe/upipe.h>
-
-/** @This is the dvbcsa batch decryption pipe signature. */
-#define UPIPE_DVBCSA_BS_DEC_SIGNATURE  UBASE_FOURCC('d','v','b','D')
-
-/** @This returns the dvbcsa decrypt pipe management structure.
- *
- * @return a pointer to the manager
- */
-struct upipe_mgr *upipe_dvbcsa_bs_dec_mgr_alloc(void);
+UREF_ATTR_INT(graph, value, "graph.value", graph value);
 
 #ifdef __cplusplus
 }

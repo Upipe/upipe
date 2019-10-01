@@ -238,7 +238,7 @@ do {                                                                        \
 } while (0);
 
 /** @This runs the given function and returns if the error code is not
- * UBASE_ERR_UNHANDLER.
+ * UBASE_ERR_UNHANDLED.
  *
  * @param command command whose return code is to be checked
  */
@@ -511,14 +511,16 @@ static inline uint32_t ubase_get_signature(va_list args)
 
 /** @This clips an integer into the given range
  *
- * @param args the va list to copy from
- * @return a signature
+ * @param i integer value
+ * @param min minimum value
+ * @param max maximum value
+ * @return an integer
  */
 static inline int ubase_clip(int i, int min, int max)
 {
     if      (i < min) return min;
     else if (i > max) return max;
-    else               return i;
+    else              return i;
 }
 
 

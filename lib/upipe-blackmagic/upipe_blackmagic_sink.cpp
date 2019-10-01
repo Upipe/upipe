@@ -27,6 +27,7 @@
 #define __STDC_FORMAT_MACROS   1
 #define __STDC_CONSTANT_MACROS 1
 
+#include <upipe/config.h>
 #include <upipe/ubase.h>
 #include <upipe/uatomic.h>
 #include <upipe/ulist.h>
@@ -51,13 +52,14 @@
 #include <upipe/upipe_helper_upump_mgr.h>
 #include <upipe/upipe_helper_upump.h>
 #include <upipe/upipe_helper_urefcount.h>
-#include <upipe/upipe_helper_void.h>
 #include <upipe-blackmagic/upipe_blackmagic_sink.h>
 
 #include <arpa/inet.h>
 #include <assert.h>
 
+#ifdef UPIPE_HAVE_LIBZVBI_H
 #include <libzvbi.h>
+#endif
 
 #include <pthread.h>
 
@@ -242,7 +244,11 @@ struct upipe_bmd_sink {
 
     /** card index **/
     int card_idx;
+    /** card topology */
+    int64_t card_topo;
 
+    /** selected output mode */
+    BMDDisplayMode selectedMode;
     /** output mode **/
     BMDDisplayMode mode;
 
@@ -261,8 +267,10 @@ struct upipe_bmd_sink {
     // XXX: should counter be per-field?
     uint16_t op47_sequence_counter[2];
 
+#ifdef UPIPE_HAVE_LIBZVBI_H
     /** vbi **/
     vbi_sampling_par sp;
+#endif
 
     /** handle to decklink card */
     IDeckLink *deckLink;
@@ -309,11 +317,13 @@ struct upipe_bmd_sink {
 
     /** last frame output */
     upipe_bmd_sink_frame *video_frame;
+
+    /** is opened? */
+    bool opened;
 };
 
 UPIPE_HELPER_UPIPE(upipe_bmd_sink, upipe, UPIPE_BMD_SINK_SIGNATURE);
 UPIPE_HELPER_UREFCOUNT(upipe_bmd_sink, urefcount, upipe_bmd_sink_free);
-UPIPE_HELPER_VOID(upipe_bmd_sink);
 
 UPIPE_HELPER_UPIPE(upipe_bmd_sink_sub, upipe, UPIPE_BMD_SINK_INPUT_SIGNATURE)
 UPIPE_HELPER_UPUMP_MGR(upipe_bmd_sink_sub, upump_mgr);
@@ -337,6 +347,7 @@ static void uqueue_uref_flush(struct uqueue *uqueue)
     }
 }
 
+static int upipe_bmd_open_vid(struct upipe *upipe);
 static void output_cb(struct upipe *upipe, uint64_t pts);
 
 class callback : public IDeckLinkVideoOutputCallback
@@ -420,6 +431,7 @@ public:
     uint64_t pts;
 };
 
+#ifdef UPIPE_HAVE_LIBZVBI_H
 /* VBI Teletext */
 static void upipe_bmd_sink_extract_ttx(IDeckLinkVideoFrameAncillary *ancillary,
         const uint8_t *pic_data, size_t pic_data_size, int w, int sd,
@@ -482,6 +494,7 @@ static void upipe_bmd_sink_extract_ttx(IDeckLinkVideoFrameAncillary *ancillary,
         }
     }
 }
+#endif
 
 /** @internal @This initializes an subpipe of a bmd sink pipe.
  *
@@ -551,15 +564,6 @@ static void upipe_bmd_sink_sub_free(struct upipe *upipe)
     upipe_bmd_sink_sub_free_flow(upipe);
 }
 
-static int upipe_bmd_sink_sub_read_uref_attributes(struct uref *uref,
-    uint64_t *pts, size_t *size)
-{
-    UBASE_RETURN(uref_clock_get_pts_sys(uref, pts));
-    UBASE_RETURN(uref_sound_size(uref, size, NULL /* sample_size */));
-
-    return UBASE_ERR_NONE;
-}
-
 static void copy_samples(upipe_bmd_sink_sub *upipe_bmd_sink_sub,
         struct uref *uref, uint64_t samples)
 {
@@ -587,12 +591,6 @@ static void copy_samples(upipe_bmd_sink_sub *upipe_bmd_sink_sub,
         memcpy(&out[DECKLINK_CHANNELS * (offset + i) + idx], &in[c*i], c * sizeof(int32_t));
 
     uref_sound_unmap(uref, 0, samples, 1);
-}
-
-static inline uint64_t length_to_samples(const uint64_t length)
-{
-    /* rounding down */
-    return (length * 48000) / UCLOCK_FREQ;
 }
 
 /** @internal @This fills the audio samples for one single stereo pair
@@ -663,7 +661,9 @@ static upipe_bmd_sink_frame *get_video_frame(struct upipe *upipe,
     int w = upipe_bmd_sink->displayMode->GetWidth();
     int h = upipe_bmd_sink->displayMode->GetHeight();
     int sd = upipe_bmd_sink->mode == bmdModePAL || upipe_bmd_sink->mode == bmdModeNTSC;
+#ifdef UPIPE_HAVE_LIBZVBI_H
     int ttx = upipe_bmd_sink->mode == bmdModePAL || upipe_bmd_sink->mode == bmdModeHD1080i50;
+#endif
 
     if (!uref) {
         if (!upipe_bmd_sink->video_frame)
@@ -747,6 +747,7 @@ static upipe_bmd_sink_frame *get_video_frame(struct upipe *upipe,
                 break;
         }
 
+#ifdef UPIPE_HAVE_LIBZVBI_H
         if (!ttx) {
             uref_free(subpic);
             continue;
@@ -785,6 +786,10 @@ static upipe_bmd_sink_frame *get_video_frame(struct upipe *upipe,
             uref_block_unmap(subpic, 0);
         }
         uref_free(subpic);
+#else
+        uref_free(subpic);
+        continue;
+#endif
     }
 
     video_frame->SetAncillaryData(ancillary);
@@ -1095,6 +1100,7 @@ static int upipe_bmd_sink_sub_set_flow_def(struct upipe *upipe,
 {
     struct upipe_bmd_sink *upipe_bmd_sink =
         upipe_bmd_sink_from_sub_mgr(upipe->mgr);
+    struct upipe *super = upipe_bmd_sink_to_upipe(upipe_bmd_sink);
     struct upipe_bmd_sink_sub *upipe_bmd_sink_sub =
         upipe_bmd_sink_sub_from_upipe(upipe);
 
@@ -1118,18 +1124,29 @@ static int upipe_bmd_sink_sub_set_flow_def(struct upipe *upipe,
             return UBASE_ERR_EXTERNAL;
         }
 
-        BMDDisplayMode bmdMode = upipe_bmd_mode_from_flow_def(&upipe_bmd_sink->upipe, flow_def);
-        if (bmdMode != upipe_bmd_sink->mode) {
-            upipe_err(upipe, "Flow def doesn't correspond to configured mode");
-            return UBASE_ERR_UNHANDLED;
-        }
-
         if (macropixel != 6 || !ubase_check(
                              uref_pic_flow_check_chroma(flow_def, 1, 1, 16,
                                                         "u10y10v10y10u10y10v10y10u10y10v10y10"))) {
             upipe_err(upipe, "incompatible input flow def");
             uref_dump(flow_def, upipe->uprobe);
             return UBASE_ERR_EXTERNAL;
+        }
+
+        BMDDisplayMode bmdMode =
+            upipe_bmd_mode_from_flow_def(&upipe_bmd_sink->upipe, flow_def);
+        if (bmdMode == bmdModeUnknown) {
+            upipe_err(upipe, "input flow def is not supported");
+            return UBASE_ERR_INVALID;
+        }
+        if (upipe_bmd_sink->selectedMode != bmdModeUnknown &&
+            bmdMode != upipe_bmd_sink->selectedMode) {
+            upipe_warn(upipe, "incompatible input flow def for selected mode");
+            return UBASE_ERR_INVALID;
+        }
+        if (bmdMode != upipe_bmd_sink->mode) {
+            upipe_notice(upipe, "Changing output configuration");
+            upipe_bmd_sink->mode = bmdMode;
+            UBASE_RETURN(upipe_bmd_open_vid(super));
         }
 
         struct dolbye_offset {
@@ -1205,6 +1222,8 @@ static int upipe_bmd_sink_sub_set_flow_def(struct upipe *upipe,
 static int upipe_bmd_sink_sub_control(struct upipe *upipe,
                                      int command, va_list args)
 {
+    UBASE_HANDLED_RETURN(
+        upipe_bmd_sink_sub_control_super(upipe, command, args));
     switch (command) {
         case UPIPE_ATTACH_UPUMP_MGR: {
             upipe_bmd_sink_sub_set_upump(upipe, NULL);
@@ -1220,11 +1239,6 @@ static int upipe_bmd_sink_sub_control(struct upipe *upipe,
         case UPIPE_SET_FLOW_DEF: {
             struct uref *flow_def = va_arg(args, struct uref *);
             return upipe_bmd_sink_sub_set_flow_def(upipe, flow_def);
-        }
-        case UPIPE_SUB_GET_SUPER: {
-            struct upipe **p = va_arg(args, struct upipe **);
-            *p = upipe_bmd_sink_to_upipe(upipe_bmd_sink_from_sub_mgr(upipe->mgr));
-            return UBASE_ERR_NONE;
         }
 
         default:
@@ -1252,8 +1266,7 @@ static struct upipe *upipe_bmd_sink_sub_alloc(struct upipe_mgr *mgr,
         goto error;
 
     uint8_t channel_idx;
-    if (!ubase_check(uref_attr_get_small_unsigned(flow_def, &channel_idx,
-            UDICT_TYPE_SMALL_UNSIGNED, "channel_idx"))) {
+    if (!ubase_check(uref_bmd_sink_get_channel(flow_def, &channel_idx))) {
         upipe_err(upipe, "Could not read channel_idx");
         uref_dump(flow_def, uprobe);
         goto error;
@@ -1376,6 +1389,11 @@ static struct upipe *upipe_bmd_sink_alloc(struct upipe_mgr *mgr,
 
     upipe_bmd_sink->uclock.refcount = upipe->refcount;
     upipe_bmd_sink->uclock.uclock_now = uclock_bmd_sink_now;
+    upipe_bmd_sink->card_idx = -1;
+    upipe_bmd_sink->card_topo = -1;
+    upipe_bmd_sink->opened = false;
+    upipe_bmd_sink->mode = bmdModeUnknown;
+    upipe_bmd_sink->selectedMode = bmdModeUnknown;
 
     upipe_throw_ready(upipe);
     return upipe;
@@ -1395,7 +1413,8 @@ static void upipe_bmd_stop(struct upipe *upipe)
     deckLinkOutput->StopScheduledPlayback(0, NULL, 0);
     deckLinkOutput->DisableAudioOutput();
     /* bump clock upwards before it's made unavailable by DisableVideoOutput */
-    upipe_bmd_sink->offset = uclock_now(&upipe_bmd_sink->uclock);
+    if (upipe_bmd_sink->opened)
+        upipe_bmd_sink->offset = uclock_now(&upipe_bmd_sink->uclock);
     deckLinkOutput->DisableVideoOutput();
 
     struct uchain *uchain = NULL;
@@ -1414,6 +1433,8 @@ static void upipe_bmd_stop(struct upipe *upipe)
         upipe_bmd_sink->video_frame->Release();
         upipe_bmd_sink->video_frame = NULL;
     }
+
+    upipe_bmd_sink->opened = false;
 }
 
 static int upipe_bmd_open_vid(struct upipe *upipe)
@@ -1446,7 +1467,7 @@ static int upipe_bmd_open_vid(struct upipe *upipe)
     if (result != S_OK || displayMode == NULL)
     {
         uint32_t mode = htonl(upipe_bmd_sink->mode);
-        fprintf(stderr, "Unable to get display mode %4.4s\n", (char*)&mode);
+        upipe_err_va(upipe, "Unable to get display mode %4.4s\n", (char*)&mode);
         err = UBASE_ERR_EXTERNAL;
         goto end;
     }
@@ -1489,6 +1510,7 @@ static int upipe_bmd_open_vid(struct upipe *upipe)
     upipe_bmd_sink->genlock_status = -1;
     upipe_bmd_sink->genlock_transition_time = 0;
 
+#ifdef UPIPE_HAVE_LIBZVBI_H
     if (upipe_bmd_sink->mode == bmdModePAL) {
         upipe_bmd_sink->sp.scanning         = 625; /* PAL */
         upipe_bmd_sink->sp.sampling_format  = VBI_PIXFMT_YUV420;
@@ -1509,6 +1531,9 @@ static int upipe_bmd_open_vid(struct upipe *upipe)
         upipe_bmd_sink->sp.interlaced   = FALSE;
         upipe_bmd_sink->sp.synchronous  = TRUE;
     }
+#endif
+
+    upipe_bmd_sink->opened = true;
 
 end:
     if (displayModeIterator != NULL)
@@ -1541,12 +1566,37 @@ static int upipe_bmd_sink_open_card(struct upipe *upipe)
 
     /* get decklink interface handler */
     IDeckLink *deckLink = NULL;
-    for (int i = 0; i <= upipe_bmd_sink->card_idx; i++) {
-        if (deckLink)
-            deckLink->Release();
-        result = deckLinkIterator->Next(&deckLink);
-        if (result != S_OK)
-            break;
+
+    if (upipe_bmd_sink->card_topo >= 0) {
+        for ( ; ; ) {
+            if (deckLink)
+                deckLink->Release();
+            result = deckLinkIterator->Next(&deckLink);
+            if (result != S_OK)
+                break;
+
+            IDeckLinkAttributes *deckLinkAttributes = NULL;
+            if (deckLink->QueryInterface(IID_IDeckLinkAttributes,
+                                         (void**)&deckLinkAttributes) == S_OK) {
+                int64_t deckLinkTopologicalId = 0;
+                HRESULT result =
+                    deckLinkAttributes->GetInt(BMDDeckLinkTopologicalID,
+                            &deckLinkTopologicalId);
+                deckLinkAttributes->Release();
+                if (result == S_OK &&
+                    (uint64_t)deckLinkTopologicalId == upipe_bmd_sink->card_topo)
+                    break;
+            }
+        }
+    }
+    else if (upipe_bmd_sink->card_idx >= 0) {
+        for (int i = 0; i <= upipe_bmd_sink->card_idx; i++) {
+            if (deckLink)
+                deckLink->Release();
+            result = deckLinkIterator->Next(&deckLink);
+            if (result != S_OK)
+                break;
+        }
     }
 
     if (result != S_OK) {
@@ -1598,13 +1648,15 @@ static int upipe_bmd_sink_set_option(struct upipe *upipe,
 
     if (!strcmp(k, "card-index"))
         upipe_bmd_sink->card_idx = atoi(v);
+    else if (!strcmp(k, "card-topology"))
+        upipe_bmd_sink->card_topo = strtoll(v, NULL, 10);
     else if (!strcmp(k, "mode")) {
         union {
             BMDDisplayMode mode_id;
             char mode_s[4];
         } u;
         strncpy(u.mode_s, v, sizeof(u.mode_s));
-        upipe_bmd_sink->mode = htonl(u.mode_id);
+        upipe_bmd_sink->selectedMode = htonl(u.mode_id);
     } else if (!strcmp(k, "cc")) {
         uatomic_store(&upipe_bmd_sink->cc, strcmp(v, "0"));
     } else if (!strcmp(k, "teletext")) {
@@ -1747,17 +1799,13 @@ static int upipe_bmd_sink_control(struct upipe *upipe, int command, va_list args
 {
     struct upipe_bmd_sink *bmd_sink = upipe_bmd_sink_from_upipe(upipe);
 
+    UBASE_HANDLED_RETURN(upipe_bmd_sink_control_inputs(upipe, command, args));
     switch (command) {
         case UPIPE_SET_URI:
             if (!bmd_sink->deckLink) {
                 UBASE_RETURN(upipe_bmd_sink_open_card(upipe));
             }
-            return upipe_bmd_open_vid(upipe);
-
-        case UPIPE_GET_SUB_MGR: {
-            struct upipe_mgr **p = va_arg(args, struct upipe_mgr **);
-            return upipe_bmd_sink_get_sub_mgr(upipe, p);
-        }
+            return UBASE_ERR_NONE;
 
         case UPIPE_BMD_SINK_GET_PIC_SUB: {
             UBASE_SIGNATURE_CHECK(args, UPIPE_BMD_SINK_SIGNATURE)
@@ -1836,8 +1884,10 @@ static void upipe_bmd_sink_free(struct upipe *upipe)
     if (upipe_bmd_sink->cb)
         upipe_bmd_sink->cb->Release();
 
+    upipe_bmd_sink_clean_sub_inputs(upipe);
     upipe_bmd_sink_clean_urefcount(upipe);
-    upipe_bmd_sink_free_void(upipe);
+    upipe_clean(upipe);
+    free(upipe_bmd_sink);
 }
 
 /** upipe_bmd_sink (/dev/bmd_sink) */

@@ -163,9 +163,6 @@ struct upipe_sync_sub {
     uint64_t samples;
 };
 
-/** @hidden */
-static int upipe_sync_sub_check(struct upipe *upipe, struct uref *flow_format);
-
 UPIPE_HELPER_UPIPE(upipe_sync_sub, upipe, UPIPE_SYNC_SUB_SIGNATURE);
 UPIPE_HELPER_UREFCOUNT(upipe_sync_sub, urefcount, upipe_sync_sub_free)
 UPIPE_HELPER_VOID(upipe_sync_sub);
@@ -383,28 +380,9 @@ static int upipe_sync_sub_set_flow_def(struct upipe *upipe, struct uref *flow_de
  */
 static int upipe_sync_sub_control(struct upipe *upipe, int command, va_list args)
 {
+    UBASE_HANDLED_RETURN(upipe_sync_sub_control_super(upipe, command, args));
+    UBASE_HANDLED_RETURN(upipe_sync_sub_control_output(upipe, command, args));
     switch (command) {
-        case UPIPE_REGISTER_REQUEST: {
-            struct urequest *request = va_arg(args, struct urequest *);
-            return upipe_sync_sub_alloc_output_proxy(upipe, request);
-        }
-        case UPIPE_UNREGISTER_REQUEST: {
-            struct urequest *request = va_arg(args, struct urequest *);
-            return upipe_sync_sub_free_output_proxy(upipe, request);
-        }
-
-        case UPIPE_GET_OUTPUT: {
-            struct upipe **p = va_arg(args, struct upipe **);
-            return upipe_sync_sub_get_output(upipe, p);
-        }
-        case UPIPE_SET_OUTPUT: {
-            struct upipe *output = va_arg(args, struct upipe *);
-            return upipe_sync_sub_set_output(upipe, output);
-        }
-        case UPIPE_GET_FLOW_DEF: {
-            struct uref **p = va_arg(args, struct uref **);
-            return upipe_sync_sub_get_flow_def(upipe, p);
-        }
         case UPIPE_SET_FLOW_DEF: {
             struct uref *flow = va_arg(args, struct uref *);
             return upipe_sync_sub_set_flow_def(upipe, flow);
@@ -748,10 +726,9 @@ static void cb(struct upump *upump)
     struct uchain *uchain = NULL;
     for (;;) {
         uchain = ulist_peek(&upipe_sync->urefs);
-        if (!uchain) {
-            upipe_err_va(upipe, "no pictures");
+        upipe_throw(upipe, UPROBE_SYNC_PICTURE, UPIPE_SYNC_SIGNATURE, !!uchain);
+        if (!uchain)
             break;
-        }
 
         struct uref *uref = uref_from_uchain(uchain);
         uint64_t pts = 0;
@@ -822,11 +799,18 @@ static void cb(struct upump *upump)
 
     /* schedule next pic */
     now = uclock_now(upipe_sync->uclock);
-    while (now > upipe_sync->pts) {
+    while (now != UINT64_MAX && now > upipe_sync->pts) {
         upipe_sync->pts += upipe_sync->ticks_per_frame;
         upipe_err_va(upipe, "skipping a beat");
     }
-    upipe_sync_wait_upump(upipe, upipe_sync->pts - now, cb);
+
+    uint64_t wait;
+    if (now == UINT64_MAX)
+        wait = upipe_sync->ticks_per_frame;
+    else
+        wait = upipe_sync->pts - now;
+
+    upipe_sync_wait_upump(upipe, wait, cb);
 }
 
 /** @internal @This receives data.
@@ -909,7 +893,7 @@ static void upipe_sync_input(struct upipe *upipe, struct uref *uref,
     uint64_t now = uclock_now(upipe_sync->uclock);
 
     /* reject late pics */
-    if (now > pts) {
+    if (now != UINT64_MAX && now > pts) {
         uint64_t cr = 0;
         uref_clock_get_cr_sys(uref, &cr);
         upipe_err_va(upipe, "%s() picture too late by %" PRIu64 "ms, drop pic, recept %" PRIu64 "",
@@ -933,8 +917,14 @@ static void upipe_sync_input(struct upipe *upipe, struct uref *uref,
         return;
 
     /* start timer */
+    uint64_t wait;
+    if (now == UINT64_MAX)
+        wait = upipe_sync->ticks_per_frame;
+    else
+        wait = pts - now;
+
     upipe_sync->pts = pts;
-    upipe_sync_wait_upump(upipe_sync_to_upipe(upipe_sync), pts - now, cb);
+    upipe_sync_wait_upump(upipe_sync_to_upipe(upipe_sync), wait, cb);
 }
 
 /** @internal @This allocates a sync pipe.
@@ -1033,38 +1023,12 @@ static int upipe_sync_set_flow_def(struct upipe *upipe, struct uref *flow_def)
  */
 static int upipe_sync_control(struct upipe *upipe, int command, va_list args)
 {
+    UBASE_HANDLED_RETURN(upipe_sync_control_output(upipe, command, args));
+    UBASE_HANDLED_RETURN(upipe_sync_control_subs(upipe, command, args));
     switch (command) {
-        case UPIPE_GET_OUTPUT: {
-            struct upipe **p = va_arg(args, struct upipe **);
-            return upipe_sync_get_output(upipe, p);
-        }
-        case UPIPE_SET_OUTPUT: {
-            struct upipe *output = va_arg(args, struct upipe *);
-            return upipe_sync_set_output(upipe, output);
-        }
-        case UPIPE_GET_FLOW_DEF: {
-            struct uref **p = va_arg(args, struct uref **);
-            return upipe_sync_get_flow_def(upipe, p);
-        }
         case UPIPE_SET_FLOW_DEF: {
             struct uref *flow = va_arg(args, struct uref *);
             return upipe_sync_set_flow_def(upipe, flow);
-        }
-        case UPIPE_REGISTER_REQUEST: {
-            struct urequest *request = va_arg(args, struct urequest *);
-            return upipe_sync_alloc_output_proxy(upipe, request);
-        }
-        case UPIPE_UNREGISTER_REQUEST: {
-            struct urequest *request = va_arg(args, struct urequest *);
-            return upipe_sync_free_output_proxy(upipe, request);
-        }
-        case UPIPE_GET_SUB_MGR: {
-            struct upipe_mgr **p = va_arg(args, struct upipe_mgr **);
-            return upipe_sync_get_sub_mgr(upipe, p);
-        }
-        case UPIPE_ITERATE_SUB: {
-            struct upipe **p = va_arg(args, struct upipe **);
-            return upipe_sync_iterate_sub(upipe, p);
         }
         case UPIPE_ATTACH_UCLOCK:
            upipe_sync_set_upump(upipe, NULL);

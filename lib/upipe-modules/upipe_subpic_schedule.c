@@ -151,6 +151,8 @@ static int upipe_subpic_schedule_sub_control(struct upipe *upipe, int command, v
 
     UBASE_HANDLED_RETURN(
         upipe_subpic_schedule_sub_control_output(upipe, command, args));
+    UBASE_HANDLED_RETURN(
+        upipe_subpic_schedule_sub_control_super(upipe, command, args));
     switch (command) {
         case UPIPE_SET_FLOW_DEF: {
             struct uref *uref = va_arg(args, struct uref *);
@@ -356,7 +358,6 @@ static void upipe_subpic_schedule_handle_subpics(struct upipe *upipe, uint64_t d
  */
 static void upipe_subpic_schedule_input(struct upipe *upipe, struct uref *uref, struct upump **upump_p)
 {
-    int type;
     uint64_t date;
     if (!ubase_check(uref_clock_get_pts_prog(uref, &date))) {
         upipe_warn(upipe, "undated uref");

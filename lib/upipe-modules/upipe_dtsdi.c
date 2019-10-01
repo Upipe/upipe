@@ -138,14 +138,6 @@ static int set_flow_def(struct upipe *upipe, struct uref *flow_format)
     }
 
     switch(std) {
-    case DTSDI_TYPE_SDI_525I59_94:
-        fps.num = 30000;
-        fps.den = 1001;
-        break;
-    case DTSDI_TYPE_SDI_625I50:
-        fps.num = 25;
-        fps.den = 1;
-        break;
     case DTSDI_TYPE_SDI_1080P23_98:
     case DTSDI_TYPE_SDI_1080PSF23_98:
     case DTSDI_TYPE_SDI_720P23_98:
@@ -158,6 +150,7 @@ static int set_flow_def(struct upipe *upipe, struct uref *flow_format)
         fps.num = 24;
         fps.den = 1;
         break;
+    case DTSDI_TYPE_SDI_625I50:
     case DTSDI_TYPE_SDI_1080P25:
     case DTSDI_TYPE_SDI_1080PSF25:
     case DTSDI_TYPE_SDI_1080I50:
@@ -165,6 +158,7 @@ static int set_flow_def(struct upipe *upipe, struct uref *flow_format)
         fps.num = 25;
         fps.den = 1;
         break;
+    case DTSDI_TYPE_SDI_525I59_94:
     case DTSDI_TYPE_SDI_1080P29_97:
     case DTSDI_TYPE_SDI_1080PSF29_97:
     case DTSDI_TYPE_SDI_1080I59_94:
@@ -213,10 +207,10 @@ static int set_flow_def(struct upipe *upipe, struct uref *flow_format)
     } else if (std >= DTSDI_TYPE_SDI_720P23_98 && std <= DTSDI_TYPE_SDI_720P60) {
         if (fps.num == 50) {
             cols = 1980;
-        } else if (fps.num == 60000) {
+        } else if (fps.num == 60 || fps.num == 60000) {
             cols = 1650;
         } else {
-            /* Missing: 23.98, 24, 25, 29.97, 30, 60 */
+            /* Missing: 23.98, 24, 25, 29.97, 30 */
             upipe_err_va(upipe, "Unknown SDI size for 720p %" PRId64 "/%" PRIu64,
                 fps.num, fps.den);
             return UBASE_ERR_INVALID;
@@ -229,22 +223,6 @@ static int set_flow_def(struct upipe *upipe, struct uref *flow_format)
     UBASE_RETURN(uref_pic_flow_set_hsize(flow_format, hsize));
     UBASE_RETURN(uref_pic_flow_set_vsize(flow_format, vsize));
     UBASE_RETURN(uref_pic_flow_set_fps(flow_format, fps));
-
-    return UBASE_ERR_NONE;
-}
-
-static int upipe_dtsdi_check(struct upipe *upipe, struct uref *flow_format)
-{
-    struct upipe_dtsdi *upipe_dtsdi = upipe_dtsdi_from_upipe(upipe);
-
-    if (flow_format != NULL) {
-        if (upipe_dtsdi->sdi_type != DTSDI_TYPE_SDI_UNKNOWN)
-            if (!ubase_check(set_flow_def(upipe, flow_format))) {
-                upipe_err_va(upipe, "Could not find frame rate");
-                return UBASE_ERR_INVALID;
-            }
-        upipe_dtsdi_store_flow_def(upipe, flow_format);
-    }
 
     return UBASE_ERR_NONE;
 }
@@ -298,7 +276,9 @@ static int upipe_dtsdi_set_flow_def(struct upipe *upipe, struct uref *flow_def)
     upipe_dtsdi->uref = NULL;
     upipe_dtsdi->frame_size = 0;
 
-    upipe_dtsdi_store_flow_def(upipe, flow_def);
+    struct uref *flow_def_dup = uref_dup(flow_def);
+    UBASE_ALLOC_RETURN(flow_def_dup);
+    upipe_dtsdi_store_flow_def(upipe, flow_def_dup);
 
     return UBASE_ERR_NONE;
 }
@@ -392,6 +372,7 @@ static void upipe_dtsdi_input(struct upipe *upipe, struct uref *uref,
         struct uref *flow_def = uref_sibling_alloc(upipe_dtsdi->flow_def);
         if (!ubase_check(set_flow_def(upipe, flow_def))) {
             upipe_err_va(upipe, "Could not find frame rate");
+            uref_free(flow_def);
             uref_free(uref);
             upipe_dtsdi->sdi_type = DTSDI_TYPE_SDI_UNKNOWN;
             return;
@@ -425,6 +406,7 @@ static void upipe_dtsdi_input(struct upipe *upipe, struct uref *uref,
     }
 
     if (size == upipe_dtsdi->frame_size) {
+        uref_free(uref);
         uref = upipe_dtsdi->uref;
         upipe_dtsdi->uref = NULL;
     } else {

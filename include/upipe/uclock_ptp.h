@@ -1,7 +1,7 @@
 /*
- * Copyright (C) 2017 OpenHeadend S.A.R.L.
+ * Copyright (C) 2018-2019 Open Broadcast Systems Ltd
  *
- * Authors: Arnaud de Turckheim
+ * Authors: Rafaël Carré
  *
  * Permission is hereby granted, free of charge, to any person obtaining
  * a copy of this software and associated documentation files (the
@@ -23,20 +23,27 @@
  * SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
  */
 
-#ifndef _UPIPE_DVBCSA_UPIPE_DVBCSA_BS_ENCRYPT_H_
-#define _UPIPE_DVBCSA_UPIPE_DVBCSA_BS_ENCRYPT_H_
+/** @file
+ * @short Upipe NIC PTP implementation of uclock
+ */
+
+#ifndef _UPIPE_UCLOCK_PTP_H_
+/** @hidden */
+#define _UPIPE_UCLOCK_PTP_H_
 #ifdef __cplusplus
 extern "C" {
 #endif
 
-/** @This is the dvbcsa batch encryption pipe signature. */
-#define UPIPE_DVBCSA_BS_ENC_SIGNATURE   UBASE_FOURCC('d','v','b','E')
+#include <upipe/uclock.h>
+#include <upipe/uprobe.h>
 
-/** @This returns the dvbcsa encrypt pipe management structure.
+/** @This allocates a new uclock structure.
  *
- * @return a pointer to the manager
+ * @param uprobe probe catching log events for error reporting
+ * @param interface NIC names, or NULL
+ * @return pointer to uclock, or NULL in case of error
  */
-struct upipe_mgr *upipe_dvbcsa_bs_enc_mgr_alloc(void);
+struct uclock *uclock_ptp_alloc(struct uprobe *uprobe, const char *interface[2]);
 
 #ifdef __cplusplus
 }

@@ -30,9 +30,13 @@ extern "C" {
 #endif
 
 #include <upipe/upipe.h>
+#include <upipe/uref_attr.h>
 
 #define UPIPE_BMD_SINK_SIGNATURE UBASE_FOURCC('b','m','d','k')
 #define UPIPE_BMD_SINK_INPUT_SIGNATURE UBASE_FOURCC('b','m','d','i')
+
+UREF_ATTR_SMALL_UNSIGNED(bmd_sink, channel, "bmd_sink.channel",
+                         blackmagic channel index);
 
 enum upipe_bmd_sink_genlock {
     UPIPE_BMD_SINK_GENLOCK_UNLOCKED,

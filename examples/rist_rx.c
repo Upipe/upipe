@@ -47,8 +47,10 @@
 #include <upipe/uref_std.h>
 #include <upipe/upump.h>
 #include <upump-ev/upump_ev.h>
+#include <upipe/uuri.h>
+#include <upipe/ustring.h>
 #include <upipe/upipe.h>
-#include <upipe-modules/upipe_genaux.h>
+#include <upipe-modules/upipe_null.h>
 #include <upipe-modules/upipe_dup.h>
 #include <upipe-modules/upipe_udp_source.h>
 #include <upipe-modules/upipe_file_source.h>
@@ -76,19 +78,28 @@
 
 static enum uprobe_log_level loglevel = UPROBE_LOG_DEBUG;
 
+static struct upipe_mgr *udp_sink_mgr;
+static struct upump_mgr *upump_mgr;
+
 static struct upipe *upipe_rtpfb;
 static struct upipe *upipe_rtpfb_sub;
 static struct upipe *upipe_udpsrc;
-static struct upipe *rtcp_sink;
-static const char *srcpath;
+static struct upipe *upipe_udpsrc_rtcp;
+static struct upipe *upipe_dup;
+
+struct rtcp_sink {
+    struct upipe *dup_sub;
+    struct sockaddr_storage addr;
+    socklen_t addr_len;
+    struct upump *timeout;
+};
+
+static struct rtcp_sink rtcp_sink[2];
 
 static int udp_fd = -1;
 
-static struct sockaddr_storage addr;
-static socklen_t addr_len;
-
 static void usage(const char *argv0) {
-    fprintf(stdout, "Usage: %s [-t 96] [-d]  <udp source> <udp dest> <latency>", argv0);
+    fprintf(stdout, "Usage: %s [-d]  <udp source> <udp dest> <latency>", argv0);
     fprintf(stdout, "   -d: more verbose\n");
     fprintf(stdout, "   -q: more quiet\n");
     exit(EXIT_FAILURE);
@@ -123,10 +134,25 @@ static void gather_stats(struct upipe *upipe, struct uref *uref)
             last_output_seqnum, buffers, expected_seqnum, repairs, nacks, nack_overflow, loss, dups);
 }
 
+static void sink_timeout(struct upump *upump)
+{
+    struct rtcp_sink *sink = upump_get_opaque(upump, struct rtcp_sink *);
+    upump_stop(upump);
+    upump_free(upump);
+
+    upipe_err_va(sink->dup_sub, "timeout");
+    sink->timeout = NULL;
+    upipe_release(sink->dup_sub);
+    sink->dup_sub = NULL;
+}
+
+static struct rtcp_sink *last_peer;
+
 /** definition of our uprobe */
 static int catch_udp(struct uprobe *uprobe, struct upipe *upipe,
                  int event, va_list args)
 {
+    const char *uri;
     switch (event) {
     case UPROBE_UDPSRC_NEW_PEER: {
         int sig = va_arg(args, int);
@@ -134,28 +160,86 @@ static int catch_udp(struct uprobe *uprobe, struct upipe *upipe,
             return uprobe_throw_next(uprobe, upipe, event, args);
 
         const struct sockaddr *s = va_arg(args, struct sockaddr*);
+        const struct sockaddr_in *in = (const struct sockaddr_in*) s;
+        socklen_t addr_len = sizeof(*in);
         const socklen_t *len = va_arg(args, socklen_t *);
+
         if (s->sa_family != AF_INET) {
             upipe_err_va(upipe, "New UDP remote, unknown addr family %d",
                 s->sa_family);
-        } else {
-            const struct sockaddr_in *in = (const struct sockaddr_in*) s;
-            addr_len = sizeof(*in);
-            assert(*len >= addr_len);
-            memcpy(&addr, in, addr_len);
-
-            upipe_dbg_va(upipe, "GOT NEW REMOTE: %s:%hu ",
-                    inet_ntoa(in->sin_addr), ntohs(in->sin_port));
-
-            if (rtcp_sink)
-                ubase_assert(upipe_udpsink_set_peer(rtcp_sink,
-                            (const struct sockaddr*)&addr, addr_len));
-            if (udp_fd == -1)
-                ubase_assert(upipe_udpsrc_get_fd(upipe_udpsrc, &udp_fd));
+            return UBASE_ERR_NONE;
         }
+
+        if (*len < addr_len) {
+            upipe_err_va(upipe, "Too small AF_INET address");
+            return UBASE_ERR_NONE;
+        }
+
+        upipe_dbg_va(upipe, "Got new remote: %s:%hu ",
+                inet_ntoa(in->sin_addr), ntohs(in->sin_port));
+
+        const size_t n = sizeof(rtcp_sink) / sizeof(*rtcp_sink);
+        struct rtcp_sink *sink = NULL;
+        ssize_t avail = -1; /* index of the free remote */
+        for (size_t i = 0; i < n; i++) {
+            if (!rtcp_sink[i].dup_sub) {
+                if (!sink) {
+                    avail = i;
+                    sink = &rtcp_sink[i];
+                }
+                continue;
+            }
+
+            if (memcmp(&rtcp_sink[i].addr, in, addr_len))
+                continue;
+
+            upipe_dbg_va(upipe, "Remote already existing");
+            sink = &rtcp_sink[i];
+            upump_stop(sink->timeout);
+            break;
+        }
+
+        if (!sink) {
+            upipe_err_va(upipe, "Too many RTCP remotes already");
+            return UBASE_ERR_NONE;
+        }
+
+        if (last_peer) /* restart the timeout for the previous peer we got */
+            upump_restart(last_peer->timeout);
+
+        /* keep the timer for this remote stopped for now,
+         * this could be the only one we have */
+        last_peer = sink;
+
+        if (sink->dup_sub)
+            return UBASE_ERR_NONE;
+
+        sink->dup_sub = upipe_void_alloc_sub(upipe_dup,
+                uprobe_pfx_alloc_va(uprobe_use(uprobe), loglevel,
+                    "dup %zu", avail));
+        assert(sink->dup_sub);
+
+        struct upipe *rtcp_sink = upipe_void_alloc_output(sink->dup_sub,
+                udp_sink_mgr, uprobe_pfx_alloc_va(uprobe_use(uprobe), loglevel,
+                    "udpsink rtpfb %zu", avail));
+        ubase_assert(upipe_udpsink_set_fd(rtcp_sink, dup(udp_fd)));
+        upipe_release(rtcp_sink);
+
+        sink->addr_len = addr_len;
+        memcpy(&sink->addr, in, addr_len);
+
+        ubase_assert(upipe_udpsink_set_peer(rtcp_sink,
+                    (const struct sockaddr*)&sink->addr, addr_len));
+
+        sink->timeout = upump_alloc_timer(upump_mgr, sink_timeout,
+                sink, NULL, 3 * UCLOCK_FREQ, 3 * UCLOCK_FREQ);
 
         return UBASE_ERR_NONE;
     }
+    case UPROBE_SOURCE_END:
+        /* This control can not fail, and will trigger restart of upump */
+        upipe_get_uri(upipe, &uri);
+        return UBASE_ERR_NONE;
     default:
         return uprobe_throw_next(uprobe, upipe, event, args);
     }
@@ -169,6 +253,16 @@ static int catch(struct uprobe *uprobe, struct upipe *upipe,
         default:
             break;
         case UPROBE_SOURCE_END:
+            if (upipe->mgr->signature == UPIPE_DUP_OUTPUT_SIGNATURE) {
+                const size_t n = sizeof(rtcp_sink) / sizeof(*rtcp_sink);
+                for (size_t i = 0; i < n; i++) {
+                    struct rtcp_sink *sink = &rtcp_sink[i];
+                    if (sink->dup_sub == upipe) {
+                        upump_stop(sink->timeout);
+                        sink->dup_sub = NULL;
+                    }
+                }
+            }
             upipe_release(upipe);
             break;
         case UPROBE_PROBE_UREF: {
@@ -178,40 +272,29 @@ static int catch(struct uprobe *uprobe, struct upipe *upipe,
             struct uref *uref = va_arg(args, struct uref *);
             va_arg(args, struct upump **);
             gather_stats(upipe, uref);
-
-            if (!upipe_rtpfb_sub) {
-                upipe_rtpfb_sub = upipe_void_alloc_sub(upipe_rtpfb,
-                        uprobe_pfx_alloc(uprobe_use(uprobe), loglevel, "rtpfb_sub"));
-                assert(upipe_rtpfb_sub);
-
-                struct upipe_mgr *upipe_udpsink_mgr = upipe_udpsink_mgr_alloc();
-                rtcp_sink = upipe_void_alloc_output(upipe_rtpfb_sub,
-                        upipe_udpsink_mgr,
-                        uprobe_pfx_alloc(uprobe_use(uprobe), loglevel, "udpsink rtpfb"));
-                upipe_mgr_release(upipe_udpsink_mgr);
-                ubase_assert(upipe_udpsink_set_fd(rtcp_sink, udp_fd));
-                ubase_assert(upipe_udpsink_set_peer(rtcp_sink,
-                            (const struct sockaddr*)&addr, addr_len));
-            }
-
             break;
         }
     }
     return UBASE_ERR_NONE;
 }
 
+static void stop(struct upump *upump)
+{
+    upump_stop(upump);
+    upump_free(upump);
+
+    upipe_release(upipe_udpsrc_rtcp);
+    upipe_release(upipe_udpsrc);
+}
+
 int main(int argc, char *argv[])
 {
-    uint8_t rtx_pt = 96;
-    const char *dirpath, *latency;
+    char *dirpath, *latency, *srcpath;
     int opt;
 
     /* parse options */
-    while ((opt = getopt(argc, argv, "t:qd")) != -1) {
+    while ((opt = getopt(argc, argv, "qd")) != -1) {
         switch (opt) {
-            case 't':
-                rtx_pt = atoi(optarg);
-                break;
             case 'd':
                 loglevel--;
                 break;
@@ -236,7 +319,7 @@ int main(int argc, char *argv[])
                                                          umem_mgr, -1, -1);
     struct uref_mgr *uref_mgr = uref_std_mgr_alloc(UREF_POOL_DEPTH, udict_mgr,
                                                    0);
-    struct upump_mgr *upump_mgr = upump_ev_mgr_alloc_default(UPUMP_POOL,
+    upump_mgr = upump_ev_mgr_alloc_default(UPUMP_POOL,
                                                      UPUMP_BLOCKER_POOL);
     struct uprobe uprobe;
     uprobe_init(&uprobe, catch, NULL);
@@ -255,11 +338,7 @@ int main(int argc, char *argv[])
     assert(logger != NULL);
     struct uclock *uclock = NULL;
 
-    struct upipe_mgr *udp_sink_mgr = upipe_udpsink_mgr_alloc();
-
-    struct upipe *upipe_udp_sink = upipe_void_alloc(udp_sink_mgr,
-            uprobe_pfx_alloc(logger, loglevel, "udpsink"));
-    upipe_set_uri(upipe_udp_sink, dirpath);
+    udp_sink_mgr = upipe_udpsink_mgr_alloc();
 
     uclock = uclock_std_alloc(UCLOCK_FLAG_REALTIME);
 
@@ -267,11 +346,15 @@ int main(int argc, char *argv[])
     assert(logger != NULL);
 
     /* rtp source */
+    struct upipe_mgr *upipe_udpsrc_mgr = upipe_udpsrc_mgr_alloc();
+    upipe_udpsrc = upipe_void_alloc(upipe_udpsrc_mgr, uprobe_pfx_alloc(uprobe_use(logger),
+                loglevel, "udp source"));
+
+    /* rtcp source */
     struct uprobe uprobe_udp;
     uprobe_init(&uprobe_udp, catch_udp, uprobe_pfx_alloc(uprobe_use(logger),
-                loglevel, "udp source"));
-    struct upipe_mgr *upipe_udpsrc_mgr = upipe_udpsrc_mgr_alloc();
-    upipe_udpsrc = upipe_void_alloc(upipe_udpsrc_mgr, &uprobe_udp);
+                loglevel, "udp rtcp source"));
+    upipe_udpsrc_rtcp = upipe_void_alloc(upipe_udpsrc_mgr, &uprobe_udp);
     upipe_mgr_release(upipe_udpsrc_mgr);
 
     struct upipe_mgr *upipe_probe_uref_mgr = upipe_probe_uref_mgr_alloc();
@@ -285,43 +368,95 @@ int main(int argc, char *argv[])
     upipe_rtpfb = upipe_void_alloc_output(upipe_probe_uref,
             upipe_rtpfb_mgr,
             uprobe_pfx_alloc(uprobe_use(logger), loglevel, "rtpfb"));
-    ubase_assert(upipe_rtpfb_set_rtx_pt(upipe_rtpfb, rtx_pt));
     upipe_mgr_release(upipe_rtpfb_mgr);
+
+    upipe_rtpfb_sub = upipe_void_alloc_output_sub(upipe_udpsrc_rtcp, upipe_rtpfb,
+            uprobe_pfx_alloc(uprobe_use(logger), loglevel, "rtpfb_sub"));
+    assert(upipe_rtpfb_sub);
+
+    upipe_rtpfb_output_set_name(upipe_rtpfb_sub, "Upipe");
+
+    struct upipe_mgr *dup_mgr = upipe_dup_mgr_alloc();
+    upipe_dup = upipe_void_chain_output(upipe_rtpfb_sub, dup_mgr,
+            uprobe_pfx_alloc(uprobe_use(logger), loglevel, "dup rtpfb_sub"));
+    assert(upipe_dup);
+    upipe_release(upipe_dup);
+    upipe_mgr_release(dup_mgr);
 
     if (!ubase_check(upipe_set_option(upipe_rtpfb, "latency", latency))) {
         return EXIT_FAILURE;
     }
-
-    char *listen_addr = strchr(srcpath, '@');
-    if (!listen_addr)
-        return EXIT_FAILURE;
 
     /* receive RTP */
     if (!ubase_check(upipe_set_uri(upipe_udpsrc, srcpath))) {
         return EXIT_FAILURE;
     }
 
+    struct ustring u = ustring_from_str(srcpath);
+    struct uuri_authority authority = uuri_parse_authority(&u);
+    struct ustring settings = uuri_parse_path(&u);
+
+    char port_str[6];
+    snprintf(port_str, sizeof(port_str), "%.*s", (int)authority.port.len,
+            authority.port.at);
+    int port = atoi(port_str);
+
+    if (port & 1) {
+        fprintf(stderr, "RTP port should be even\n");
+        return EXIT_FAILURE;
+    }
+
+    char uri[128];
+    snprintf(uri, sizeof(uri), "%.*s@%.*s:%u%.*s",
+        (int)authority.userinfo.len, authority.userinfo.at,
+        (int)authority.host.len, authority.host.at, port + 1,
+        (int)settings.len, settings.at);
+
+    if (!ubase_check(upipe_set_uri(upipe_udpsrc_rtcp, uri))) {
+        return EXIT_FAILURE;
+    }
+
     upipe_attach_uclock(upipe_udpsrc);
+    upipe_attach_uclock(upipe_udpsrc_rtcp);
 
-    /* send to udp */
+    ubase_assert(upipe_udpsrc_get_fd(upipe_udpsrc_rtcp, &udp_fd));
+    assert(udp_fd != -1);
 
-    upipe_set_output(upipe_rtpfb, upipe_udp_sink);
+    struct upipe *upipe_udp_sink = upipe_void_chain_output(upipe_rtpfb,
+            udp_sink_mgr, uprobe_pfx_alloc(uprobe_use(logger), loglevel,
+                "udpsink"));
+    upipe_set_uri(upipe_udp_sink, dirpath);
+
     upipe_release(upipe_udp_sink);
+
+    if (0) {
+        struct upump *u = upump_alloc_timer(upump_mgr, stop, NULL, NULL,
+                UCLOCK_FREQ, 0);
+        upump_start(u);
+    }
 
     /* fire loop ! */
     upump_mgr_run(upump_mgr, NULL);
 
     /* should never be here for the moment. todo: sighandler.
      * release everything */
-    uprobe_release(logger);
     uprobe_clean(&uprobe);
     uprobe_clean(&uprobe_udp);
+    uprobe_release(logger);
+
+    const size_t n = sizeof(rtcp_sink) / sizeof(*rtcp_sink);
+    for (size_t i = 0; i < n; i++) {
+        struct rtcp_sink *sink = &rtcp_sink[i];
+        if (sink->timeout)
+            upump_free(sink->timeout);
+    }
 
     upump_mgr_release(upump_mgr);
     uref_mgr_release(uref_mgr);
     udict_mgr_release(udict_mgr);
     umem_mgr_release(umem_mgr);
     uclock_release(uclock);
+    upipe_mgr_release(udp_sink_mgr);
 
     return 0;
 }

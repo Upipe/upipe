@@ -127,6 +127,14 @@ struct upipe_blit_sub {
     uint64_t toffset;
     /** configured offset from the bottom border */
     uint64_t boffset;
+    /** configured margin from the left border */
+    struct urational lmargin;
+    /** configured margin from the right border */
+    struct urational rmargin;
+    /** configured margin from the top border */
+    struct urational tmargin;
+    /** configured margin from the bottom border */
+    struct urational bmargin;
 
     /** rounded offset from the left border */
     uint64_t loffset_r;
@@ -186,6 +194,8 @@ static struct upipe *upipe_blit_sub_alloc(struct upipe_mgr *mgr,
     sub->alpha_threshold = 0; /* ignore alpha */
     sub->z_index = 0;
     sub->loffset = sub->roffset = sub->toffset = sub->boffset = 0;
+    sub->lmargin = sub->rmargin = sub->tmargin = sub->bmargin =
+        (struct urational){ .num = 0, .den = 1 };
     sub->loffset_r = sub->roffset_r = sub->toffset_r = sub->boffset_r = 0;
     sub->ubuf = NULL;
     sub->hsize = sub->vsize = sub->hposition = sub->vposition = UINT64_MAX;
@@ -268,18 +278,23 @@ static int upipe_blit_sub_provide_flow_format(struct upipe *upipe)
         return UBASE_ERR_NONE;
 
     struct upipe_blit_sub *sub = upipe_blit_sub_from_upipe(upipe);
+
     /* Round parameters */
     uint8_t hround = upipe_blit->hsub * upipe_blit->macropixel;
-    sub->loffset_r = sub->loffset;
-    sub->roffset_r = sub->roffset;
+    sub->loffset_r = sub->loffset + sub->lmargin.num * upipe_blit->hsize /
+        (sub->lmargin.den ?: 1);
+    sub->roffset_r = sub->roffset + sub->rmargin.num * upipe_blit->hsize /
+        (sub->rmargin.den ?: 1);
     if (hround > 1) {
         sub->loffset_r -= sub->loffset_r % hround;
         sub->roffset_r -= sub->roffset_r % hround;
     }
 
     uint8_t vround = upipe_blit->vsub;
-    sub->toffset_r = sub->toffset;
-    sub->boffset_r = sub->boffset;
+    sub->toffset_r = sub->toffset + sub->tmargin.num * upipe_blit->vsize /
+        (sub->tmargin.den ?: 1);
+    sub->boffset_r = sub->boffset + sub->bmargin.num * upipe_blit->vsize /
+        (sub->bmargin.den ?: 1);
     if (vround > 1) {
         sub->toffset_r -= sub->toffset_r % vround;
         sub->boffset_r -= sub->boffset_r % vround;
@@ -325,7 +340,8 @@ static int upipe_blit_sub_provide_flow_format(struct upipe *upipe)
         /* Get original sizes */
         uint64_t src_hsize, src_vsize;
         if (ubase_check(uref_pic_flow_get_hsize(urequest->uref, &src_hsize)) &&
-            ubase_check(uref_pic_flow_get_vsize(urequest->uref, &src_vsize))) {
+            ubase_check(uref_pic_flow_get_vsize(urequest->uref, &src_vsize)) &&
+            src_hsize && src_vsize) {
             struct urational src_sar;
             src_sar.num = src_sar.den = 1;
             uref_pic_flow_get_sar(urequest->uref, &src_sar);
@@ -535,6 +551,32 @@ static int _upipe_blit_sub_set_rect(struct upipe *upipe,
     return UBASE_ERR_NONE;
 }
 
+/** @internal @This sets the offsets (from the respective borders of the frame)
+ * of the rectangle onto which the input of the subpipe will be blitted in
+ * percent.
+ *
+ * @param upipe description structure of the pipe
+ * @param lmargin margin from the left border in ratio of the total width
+ * @param rmargin margin from the right border in ratio of the total width
+ * @param tmargin margin from the top border in ratio of the total height
+ * @param bmargin margin from the bottom border in ratio of the total height
+ * @return an error code
+ */
+static int _upipe_blit_sub_set_margin(struct upipe *upipe,
+                                      struct urational lmargin,
+                                      struct urational rmargin,
+                                      struct urational tmargin,
+                                      struct urational bmargin)
+{
+    struct upipe_blit_sub *sub = upipe_blit_sub_from_upipe(upipe);
+    sub->lmargin = lmargin;
+    sub->rmargin = rmargin;
+    sub->tmargin = tmargin;
+    sub->bmargin = bmargin;
+    upipe_blit_sub_provide_flow_format(upipe);
+    return UBASE_ERR_NONE;
+}
+
 /** @internal @This gets the multiplier of the alpha channel.
  *
  * @param upipe description structure of the pipe
@@ -691,6 +733,15 @@ static int upipe_blit_sub_control(struct upipe *upipe,
             uint64_t boffset = va_arg(args, uint64_t);
             return _upipe_blit_sub_set_rect(upipe,
                     loffset, roffset, toffset, boffset);
+        }
+        case UPIPE_BLIT_SUB_SET_MARGIN: {
+            UBASE_SIGNATURE_CHECK(args, UPIPE_BLIT_SUB_SIGNATURE);
+            struct urational lmargin = va_arg(args, struct urational);
+            struct urational rmargin = va_arg(args, struct urational);
+            struct urational tmargin = va_arg(args, struct urational);
+            struct urational bmargin = va_arg(args, struct urational);
+            return _upipe_blit_sub_set_margin(upipe,
+                    lmargin, rmargin, tmargin, bmargin);
         }
         case UPIPE_BLIT_SUB_GET_ALPHA: {
             UBASE_SIGNATURE_CHECK(args, UPIPE_BLIT_SUB_SIGNATURE);
@@ -867,9 +918,9 @@ static int upipe_blit_set_flow_def(struct upipe *upipe, struct uref *flow_def)
         flow_format_change = true;
     else
         flow_format_change =
-            uref_pic_flow_compare_format(upipe_blit->flow_def, flow_def) &&
-            !uref_pic_flow_cmp_hsize(upipe_blit->flow_def, flow_def) &&
-            !uref_pic_flow_cmp_vsize(upipe_blit->flow_def, flow_def);
+            !uref_pic_flow_compare_format(upipe_blit->flow_def, flow_def) ||
+            uref_pic_flow_cmp_hsize(upipe_blit->flow_def, flow_def) ||
+            uref_pic_flow_cmp_vsize(upipe_blit->flow_def, flow_def);
 
     flow_def = uref_dup(flow_def);
     if (unlikely(flow_def == NULL))

@@ -104,9 +104,9 @@ static struct upipe_helper_mgr *upipe_helper_mgr(struct upipe *upipe)
     return container_of(upipe->mgr, struct upipe_helper_mgr, mgr);
 }
 
-static bool output(struct upipe *upipe,
-                   struct uref *uref,
-                   struct upump **upump_p)
+bool upipe_helper_input_output(struct upipe *upipe,
+                               struct uref *uref,
+                               struct upump **upump_p)
 {
     struct upipe_helper_mgr *mgr = upipe_helper_mgr(upipe);
 
@@ -131,6 +131,7 @@ static int check_uclock(struct upipe *upipe, struct uref *uref)
     if (mgr->uclock_check != NULL)
         return mgr->uclock_check(upipe, uref);
 
+    uref_free(uref);
     return UBASE_ERR_NONE;
 }
 
@@ -141,6 +142,7 @@ static int check_uref(struct upipe *upipe, struct uref *uref)
     if (mgr->uref_check != NULL)
         return mgr->uref_check(upipe, uref);
 
+    uref_free(uref);
     return UBASE_ERR_NONE;
 }
 
@@ -151,6 +153,7 @@ static int check_ubuf(struct upipe *upipe, struct uref *uref)
     if (mgr->ubuf_check != NULL)
         return mgr->ubuf_check(upipe, uref);
 
+    uref_free(uref);
     return UBASE_ERR_NONE;
 }
 
@@ -169,7 +172,7 @@ UPIPE_HELPER_UPIPE(upipe_helper, upipe, upipe->mgr->signature);
 UPIPE_HELPER_UREFCOUNT(upipe_helper, urefcount, upipe_helper_free);
 UPIPE_HELPER_OUTPUT(upipe_helper, output, flow_def, output_state, request_list);
 UPIPE_HELPER_OUTPUT_SIZE(upipe_helper, output_size);
-UPIPE_HELPER_INPUT(upipe_helper, urefs, nb_urefs, max_urefs, blockers, output);
+UPIPE_HELPER_INPUT(upipe_helper, urefs, nb_urefs, max_urefs, blockers, upipe_helper_input_output);
 UPIPE_HELPER_UCLOCK(upipe_helper, uclock, uclock_request,
                     check_uclock,
                     upipe_helper_register_output_request,

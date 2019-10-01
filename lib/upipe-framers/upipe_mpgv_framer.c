@@ -1089,7 +1089,6 @@ static void upipe_mpgvf_build_global(struct upipe *upipe, struct uref *flow_def)
     total_size += seqd_size;
 
     uint8_t buffer[total_size];
-    int err;
     if (seq_size) {
         UBASE_FATAL(upipe, ubuf_block_extract(upipe_mpgvf->sequence_header,
                                               0, seq_size, buffer))

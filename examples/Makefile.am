@@ -1,4 +1,4 @@
-AM_CPPFLAGS = -I$(top_builddir)/include -I$(top_srcdir)/include
+AM_CPPFLAGS = -I$(top_builddir) -I$(top_builddir)/include -I$(top_srcdir)/include
 LDADD = $(top_builddir)/lib/upipe/libupipe.la
 UPIPEMODULES_LIBS = $(top_builddir)/lib/upipe-modules/libupipe_modules.la
 UPIPEPTHREAD_LIBS = $(top_builddir)/lib/upipe-pthread/libupipe_pthread.la
@@ -22,9 +22,9 @@ UPIPEDVB_LIBS = $(top_builddir)/lib/upipe-dvb/libupipe_dvb.la
 noinst_PROGRAMS = 
 
 fec_LDADD = $(LDADD) $(UPUMPEV_LIBS) $(UPIPEMODULES_LIBS) $(UPIPETS_LIBS)
-arq_rx_LDADD = $(LDADD) $(UPUMPEV_LIBS) $(UPIPEMODULES_LIBS) $(UPIPEFILTERS_LIBS)
-arq_tx_CFLAGS = $(AM_CFLAGS) $(BITSTREAM_CFLAGS)
-arq_tx_LDADD = $(LDADD) $(UPUMPEV_LIBS) $(UPIPEMODULES_LIBS) $(UPIPEFILTERS_LIBS)
+rist_rx_LDADD = $(LDADD) $(UPUMPEV_LIBS) $(UPIPEMODULES_LIBS) $(UPIPEFILTERS_LIBS)
+rist_tx_CFLAGS = $(AM_CFLAGS) $(BITSTREAM_CFLAGS)
+rist_tx_LDADD = $(LDADD) $(UPUMPEV_LIBS) $(UPIPEMODULES_LIBS) $(UPIPEFILTERS_LIBS)
 udpmulticat_LDADD = $(LDADD) $(UPUMPEV_LIBS) $(UPIPEMODULES_LIBS)
 multicatudp_LDADD = $(LDADD) $(UPUMPEV_LIBS) $(UPIPEMODULES_LIBS) $(UPIPEPTHREAD_LIBS) -lpthread
 hls2rtp_LDADD= $(LDADD) $(UPUMPEV_LIBS) $(UPIPEMODULES_LIBS) $(UPIPEFRAMERS_LIBS) $(UPIPETS_LIBS) $(UPIPEHLS_LIBS) $(UPIPEPTHREAD_LIBS) -lpthread
@@ -53,13 +53,19 @@ ts2mpthreemulticat_LDADD = $(LDADD) $(UPUMPEV_LIBS) $(UPIPEMODULES_LIBS) $(UPIPE
 grid_LDADD = $(LDADD) $(UPIPEMODULES_LIBS) $(UPUMPEV_LIBS) $(UPIPETS_LIBS) $(UPIPEFRAMERS_LIBS) $(UPIPEFILTERS_LIBS) $(UPIPEAV_LIBS) $(UPIPEX264_LIBS) $(UPIPEPTHREAD_LIBS) $(UPIPESWS_LIBS) $(UPIPESWR_LIBS)
 grid_CFLAGS = $(AM_CFLAGS) $(SWSCALE_CFLAGS) $(UPIPEAV_CFLAGS)
 ts_encrypt_LDADD = $(LDADD) $(UPIPEMODULES_LIBS) $(UPUMPEV_LIBS) $(UPIPETS_LIBS) $(UPIPEDVBCSA_LIBS) $(UPIPEPTHREAD_LIBS) -lpthread
+ts_encrypt_CFLAGS = $(AM_CFLAGS)
+
+if HAVE_GCRYPT
+ts_encrypt_CFLAGS += $(LIBGCRYPT_CFLAGS)
+ts_encrypt_LDADD += $(LIBGCRYPT_LIBS)
+endif
 
 if HAVE_EV
 if HAVE_WRITEV
 noinst_PROGRAMS += udpmulticat multicatudp
 noinst_PROGRAMS += decrypt
 if HAVE_BITSTREAM
-noinst_PROGRAMS += hls2rtp fec arq_rx arq_tx
+noinst_PROGRAMS += hls2rtp fec rist_rx rist_tx
 endif
 endif
 

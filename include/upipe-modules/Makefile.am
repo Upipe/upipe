@@ -83,4 +83,13 @@ myinclude_HEADERS = \
 	upipe_block_to_sound.h \
 	upipe_audio_copy.h \
 	upipe_auto_inner.h \
+	upipe_row_split.h \
+	upipe_separate_fields.h \
+	upipe_row_join.h \
+	upipe_discard_blocking.h \
+	upipe_audio_merge.h \
+	upipe_vanc_decoder.h \
+	uref_graph_flow.h \
+	uref_graph.h \
+	upipe_graph.h \
 	$(NULL)

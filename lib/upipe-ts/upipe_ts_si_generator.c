@@ -1069,7 +1069,6 @@ static void upipe_ts_sig_send(struct upipe *upipe, struct upipe *output_pipe,
         upipe_ts_sig_output_from_upipe(output_pipe);
     struct uchain *section_chain;
     ulist_foreach (sections, section_chain) {
-        bool last = ulist_is_last(sections, section_chain);
         struct ubuf *ubuf = ubuf_dup(ubuf_from_uchain(section_chain));
         struct uref *uref = uref_alloc(sig->uref_mgr);
         size_t ubuf_size;

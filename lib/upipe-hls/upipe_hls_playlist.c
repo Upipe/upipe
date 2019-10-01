@@ -732,12 +732,49 @@ static int _upipe_hls_playlist_play(struct upipe *upipe)
     if (unlikely(input_flow_def == NULL))
         return UBASE_ERR_INVALID;
 
+    uint64_t target_duration = 0;
+    uref_m3u_playlist_flow_get_target_duration(
+        input_flow_def, &target_duration);
     uint64_t media_sequence = 0;
     uref_m3u_playlist_flow_get_media_sequence(
         input_flow_def, &media_sequence);
 
-    if (upipe_hls_playlist->index == (uint64_t)-1)
-        upipe_hls_playlist->index = media_sequence;
+    if (upipe_hls_playlist->index == (uint64_t)-1) {
+        uint64_t count = 0, offset = 0;
+        bool live = true;
+        bool ended =
+            ubase_check(uref_m3u_playlist_flow_get_endlist(input_flow_def));
+        const char *type = NULL;
+        uref_m3u_playlist_flow_get_type(input_flow_def, &type);
+
+        if (type) {
+            if (!strcasecmp(type, "VOD"))
+                live = false;
+            else if (!strcasecmp(type, "EVENT") && ended)
+                live = false;
+        }
+
+        if (live) {
+            /* from https://tools.ietf.org/html/rfc8216#section-6.3.3 */
+            struct uchain *uchain;
+            uint64_t total_duration = 0;
+            ulist_foreach_reverse(&upipe_hls_playlist->items, uchain) {
+                count++;
+
+                if (total_duration < target_duration * 3) {
+                    struct uref *uref = uref_from_uchain(uchain);
+                    uint64_t duration = 0;
+                    uref_m3u_playlist_get_seq_duration(uref, &duration);
+                    total_duration += duration;
+                    offset++;
+                }
+            }
+
+            if (total_duration < target_duration * 3)
+                upipe_warn(upipe, "playlist is too short");
+        }
+        upipe_hls_playlist->index = media_sequence + count - offset;
+    }
     else if (media_sequence > upipe_hls_playlist->index) {
         upipe_warn_va(upipe, "media sequence %"PRIu64" is gone, "
                       "playing sequence %"PRIu64,
@@ -849,7 +886,7 @@ static void upipe_hls_playlist_store_input_flow_def(struct upipe *upipe,
 static void upipe_hls_playlist_need_reload_cb(struct upump *upump)
 {
         struct upipe *upipe = upump_get_opaque(upump, struct upipe *);
-        upipe_hls_playlist_throw_need_reload(upipe);
+        UBASE_FATAL(upipe, upipe_hls_playlist_throw_need_reload(upipe));
 }
 
 /** @internal @This sets a new flow definition.

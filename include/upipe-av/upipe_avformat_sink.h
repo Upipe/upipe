@@ -71,6 +71,16 @@ enum upipe_avfsink_command {
     UPIPE_AVFSINK_SET_TS_OFFSET,
 };
 
+/** @This enumerates the avformat sink sub pipe private commands. */
+enum upipe_avfsink_input_command {
+    UPIPE_AVFSINK_INPUT_SENTINEL = UPIPE_CONTROL_LOCAL,
+
+    /** set the default disposition (int) */
+    UPIPE_AVFSINK_INPUT_SET_DEFAULT,
+    /** get the default disposition (int *) */
+    UPIPE_AVFSINK_INPUT_GET_DEFAULT,
+};
+
 /** @This returns the management structure for all avformat sinks.
  *
  * @return pointer to manager
@@ -193,6 +203,32 @@ static inline int upipe_avfsink_set_ts_offset(struct upipe *upipe,
 {
     return upipe_control(upipe, UPIPE_AVFSINK_SET_TS_OFFSET,
                          UPIPE_AVFSINK_SIGNATURE, ts_offset);
+}
+
+/** @This sets the default disposition flag.
+ *
+ * @param upipe description structure of the subpipe
+ * @param value value of the flag to set
+ * @return an error code
+ */
+static inline int
+upipe_avfsink_input_set_default(struct upipe *upipe, int value)
+{
+    return upipe_control(upipe, UPIPE_AVFSINK_INPUT_SET_DEFAULT,
+                         UPIPE_AVFSINK_INPUT_SIGNATURE, value);
+}
+
+/** @This gets the default disposition flag.
+ *
+ * @param upipe description structure of the subpipe
+ * @param value_p filled with the flag value
+ * @return an error code
+ */
+static inline int
+upipe_avfsink_input_get_default(struct upipe *upipe, int *value_p)
+{
+    return upipe_control(upipe, UPIPE_AVFSINK_INPUT_SET_DEFAULT,
+                         UPIPE_AVFSINK_INPUT_SIGNATURE, &value_p);
 }
 
 #ifdef __cplusplus

@@ -76,6 +76,7 @@
 #define MAX_URL_SIZE            2048
 #define HTTP_VERSION            "HTTP/1.1"
 #define USER_AGENT              "upipe_http_src"
+#define TIMEOUT                 (5 * 27000000) /* 5s */
 
 struct http_range {
     uint64_t offset;
@@ -143,6 +144,8 @@ struct upipe_http_src {
     unsigned int output_size;
     /** write watcher */
     struct upump *upump_write;
+    /** timeout watcher */
+    struct upump *upump_timeout;
 
     /** socket descriptor */
     int fd;
@@ -167,6 +170,9 @@ struct upipe_http_src {
 
     /** http parser settings */
     http_parser_settings parser_settings;
+
+    /** read/write timeout value */
+    uint64_t timeout;
 
     /** public upipe structure */
     struct upipe upipe;
@@ -193,6 +199,7 @@ UPIPE_HELPER_UPUMP_MGR(upipe_http_src, upump_mgr)
 UPIPE_HELPER_UPUMP(upipe_http_src, upump, upump_mgr)
 UPIPE_HELPER_OUTPUT_SIZE(upipe_http_src, output_size)
 UPIPE_HELPER_UPUMP(upipe_http_src, upump_write, upump_mgr)
+UPIPE_HELPER_UPUMP(upipe_http_src, upump_timeout, upump_mgr)
 
 static int upipe_http_src_header_field(http_parser *parser,
                                        const char *at,
@@ -227,6 +234,7 @@ static struct upipe *upipe_http_src_alloc(struct upipe_mgr *mgr,
     upipe_http_src_init_upump_mgr(upipe);
     upipe_http_src_init_upump(upipe);
     upipe_http_src_init_upump_write(upipe);
+    upipe_http_src_init_upump_timeout(upipe);
     upipe_http_src_init_uclock(upipe);
     upipe_http_src_init_output_size(upipe, UBUF_DEFAULT_SIZE);
 
@@ -239,6 +247,7 @@ static struct upipe *upipe_http_src_alloc(struct upipe_mgr *mgr,
     upipe_http_src->location = NULL;
     upipe_http_src->header_field = HEADER(NULL, 0);
     upipe_http_src->proxy = NULL;
+    upipe_http_src->timeout = TIMEOUT;
 
     /* init parser settings */
     http_parser_settings *settings = &upipe_http_src->parser_settings;
@@ -281,6 +290,7 @@ static void upipe_http_src_close(struct upipe *upipe)
     upipe_http_src_set_upump(upipe, NULL);
     upipe_http_src->request_pending = false;
     upipe_http_src_set_upump_write(upipe, NULL);
+    upipe_http_src_set_upump_timeout(upipe, NULL);
     if (flow_def)
         uref_http_delete_content_type(flow_def);
 }
@@ -302,6 +312,7 @@ static void upipe_http_src_free(struct upipe *upipe)
     free(upipe_http_src->location);
     upipe_http_src_clean_output_size(upipe);
     upipe_http_src_clean_uclock(upipe);
+    upipe_http_src_clean_upump_timeout(upipe);
     upipe_http_src_clean_upump_write(upipe);
     upipe_http_src_clean_upump(upipe);
     upipe_http_src_clean_upump_mgr(upipe);
@@ -544,6 +555,9 @@ static void upipe_http_src_worker(struct upump *upump)
     struct upipe *upipe = upump_get_opaque(upump, struct upipe *);
     struct upipe_http_src *upipe_http_src = upipe_http_src_from_upipe(upipe);
 
+    if (likely(upipe_http_src->upump_timeout))
+        upump_restart(upipe_http_src->upump_timeout);
+
     struct uref *uref = uref_block_alloc(upipe_http_src->uref_mgr,
                                          upipe_http_src->ubuf_mgr,
                                          upipe_http_src->output_size);
@@ -566,9 +580,15 @@ static void upipe_http_src_worker(struct upump *upump)
                        upipe_http_src->output_size, 0);
     uref_block_unmap(uref, 0);
 
-    if (unlikely(len == -1)) {
-        uref_free(uref);
+    if (len > 0) {
+        if (unlikely(len != upipe_http_src->output_size))
+            uref_block_resize(uref, 0, len);
+        return upipe_http_src_process(upipe, uref);
+    }
 
+    uref_free(uref);
+
+    if (unlikely(len == -1)) {
         switch (errno) {
             case EINTR:
             case EAGAIN:
@@ -583,22 +603,15 @@ static void upipe_http_src_worker(struct upump *upump)
         }
         upipe_err_va(upipe, "read error from %s (%s)", upipe_http_src->url,
                      strerror(errno));
-        upipe_http_src_output_data(upipe, NULL, 0);
-        upipe_http_src_set_upump(upipe, NULL);
-        upipe_throw_source_end(upipe);
     }
-    else if (unlikely(len == 0)) {
+    else  {
         upipe_dbg(upipe, "connection closed");
-        uref_free(uref);
-        upipe_http_src_output_data(upipe, NULL, 0);
-        upipe_http_src_set_upump(upipe, NULL);
-        upipe_throw_source_end(upipe);
     }
-    else {
-        if (unlikely(len != upipe_http_src->output_size))
-            uref_block_resize(uref, 0, len);
-        upipe_http_src_process(upipe, uref);
-    }
+    upipe_http_src_output_data(upipe, NULL, 0);
+    upipe_http_src_set_upump(upipe, NULL);
+    upipe_http_src_set_upump_write(upipe, NULL);
+    upipe_http_src_set_upump_timeout(upipe, NULL);
+    upipe_throw_source_end(upipe);
 }
 
 UBASE_FMT_PRINTF(3, 4)
@@ -763,6 +776,9 @@ static void upipe_http_src_worker_write(struct upump *upump)
     struct upipe *upipe = upump_get_opaque(upump, struct upipe *);
     struct upipe_http_src *upipe_http_src = upipe_http_src_from_upipe(upipe);
 
+    if (likely(upipe_http_src->upump_timeout))
+        upump_restart(upipe_http_src->upump_timeout);
+
     if (unlikely(!ubase_check(upipe_http_src_send_request(upipe)))) {
         upipe_err(upipe, "fail to send request");
     }
@@ -770,6 +786,19 @@ static void upipe_http_src_worker_write(struct upump *upump)
         upipe_http_src->request_pending = false;
         upipe_http_src_set_upump_write(upipe, NULL);
     }
+}
+
+/** @internal @This is triggered when the connection timeout.
+ *
+ * @param upump description structure of the timeout
+ */
+static void upipe_http_src_worker_timeout(struct upump *upump)
+{
+    struct upipe *upipe = upump_get_opaque(upump, struct upipe *);
+    upipe_warn(upipe, "timeout");
+    upipe_http_src_output_data(upipe, NULL, 0);
+    upipe_http_src_close(upipe);
+    upipe_throw_source_end(upipe);
 }
 
 /** @internal @This checks if the pump may be allocated.
@@ -843,6 +872,20 @@ static int upipe_http_src_check(struct upipe *upipe, struct uref *flow_format)
                 return UBASE_ERR_UPUMP;
             }
             upipe_http_src_set_upump_write(upipe, upump);
+            upump_start(upump);
+        }
+        if (upipe_http_src->upump_timeout == NULL) {
+            struct upump *upump;
+
+            upump = upump_alloc_timer(upipe_http_src->upump_mgr,
+                                      upipe_http_src_worker_timeout, upipe,
+                                      upipe->refcount,
+                                      upipe_http_src->timeout, 0);
+            if (unlikely(upump == NULL)) {
+                upipe_throw_fatal(upipe, UBASE_ERR_UPUMP);
+                return UBASE_ERR_UPUMP;
+            }
+            upipe_http_src_set_upump_timeout(upipe, upump);
             upump_start(upump);
         }
     }
@@ -1040,6 +1083,22 @@ static int _upipe_http_src_set_proxy(struct upipe *upipe, const char *proxy)
     return UBASE_ERR_NONE;
 }
 
+/** @internal @This sets the read/write timeout.
+ *
+ * @param upipe description structure of the pipe
+ * @param timeout timeout value in 27MHz clock ticks
+ * @return an error code
+ */
+static int _upipe_http_src_set_timeout(struct upipe *upipe, uint64_t timeout)
+{
+    struct upipe_http_src *upipe_http_src = upipe_http_src_from_upipe(upipe);
+    if (timeout != upipe_http_src->timeout) {
+        upipe_http_src->timeout = timeout;
+        upipe_http_src_set_upump_timeout(upipe, NULL);
+    }
+    return UBASE_ERR_NONE;
+}
+
 /** @internal @This processes control commands on a http source pipe.
  *
  * @param upipe description structure of the pipe
@@ -1053,9 +1112,13 @@ static int _upipe_http_src_control(struct upipe *upipe,
     switch (command) {
         case UPIPE_ATTACH_UPUMP_MGR:
             upipe_http_src_set_upump(upipe, NULL);
+            upipe_http_src_set_upump_write(upipe, NULL);
+            upipe_http_src_set_upump_timeout(upipe, NULL);
             return upipe_http_src_attach_upump_mgr(upipe);
         case UPIPE_ATTACH_UCLOCK:
             upipe_http_src_set_upump(upipe, NULL);
+            upipe_http_src_set_upump_write(upipe, NULL);
+            upipe_http_src_set_upump_timeout(upipe, NULL);
             upipe_http_src_require_uclock(upipe);
             return UBASE_ERR_NONE;
 
@@ -1096,6 +1159,12 @@ static int _upipe_http_src_control(struct upipe *upipe,
             UBASE_SIGNATURE_CHECK(args, UPIPE_HTTP_SRC_SIGNATURE)
             const char *proxy = va_arg(args, const char *);
             return _upipe_http_src_set_proxy(upipe, proxy);
+        }
+
+        case UPIPE_HTTP_SRC_SET_TIMEOUT: {
+            UBASE_SIGNATURE_CHECK(args, UPIPE_HTTP_SRC_SIGNATURE)
+            uint64_t timeout = va_arg(args, uint64_t);
+            return _upipe_http_src_set_timeout(upipe, timeout);
         }
 
         default:

@@ -152,7 +152,6 @@ static int upipe_ts_align_set_flow_def(struct upipe *upipe,
     UBASE_RETURN(uref_flow_get_def(flow_def, &def))
     if (ubase_ncmp(def, EXPECTED_FLOW_DEF))
         return UBASE_ERR_INVALID;
-    struct uref *flow_def_dup;
 
     struct upipe_mgr *inner_mgr;
     const char *inner_name;

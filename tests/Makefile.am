@@ -17,7 +17,8 @@ dist_check_SCRIPTS = \
 	valgrind_wrapper.sh \
 	uref_uri_test.sh \
 	ustring_test.sh \
-	upipe_m3u_reader_test.sh
+	upipe_m3u_reader_test.sh \
+	upipe_dtsdi_test.sh
 
 dist_check_DATA = \
 	valgrind.supp \
@@ -104,7 +105,9 @@ check_PROGRAMS = \
 	upipe_grid_test \
 	upipe_block_to_sound_test \
 	upipe_audio_copy_test \
-	upipe_auto_inner_test
+	upipe_row_join_test \
+	upipe_auto_inner_test \
+	upipe_audio_merge_test
 
 TESTS = \
 	ulist_test \
@@ -162,7 +165,9 @@ TESTS = \
 	upipe_grid_test \
 	upipe_block_to_sound_test \
 	upipe_audio_copy_test \
-	upipe_auto_inner_test
+	upipe_row_join_test \
+	upipe_auto_inner_test \
+	upipe_audio_merge_test
 
 if HAVE_EBUR128
 check_PROGRAMS += upipe_ebur128_test
@@ -197,7 +202,10 @@ check_PROGRAMS += \
 	upipe_worker_test \
 	upipe_m3u_reader_test \
 	upipe_void_source_test \
-	upipe_zoneplate_source_test
+	upipe_zoneplate_source_test \
+	upipe_row_split_test \
+	upipe_separate_fields_test \
+	upipe_dtsdi_test
 
 TESTS += \
 	upump_ev_test \
@@ -218,7 +226,10 @@ TESTS += \
 	upipe_worker_test \
 	upipe_m3u_reader_test.sh \
 	upipe_void_source_test \
-	upipe_zoneplate_source_test
+	upipe_zoneplate_source_test \
+	upipe_row_split_test \
+	upipe_separate_fields_test \
+	upipe_dtsdi_test.sh
 
 if HAVE_PTHREAD
 check_PROGRAMS += \
@@ -448,6 +459,9 @@ upipe_v210dec_test_LDADD = $(LDADD) $(top_builddir)/lib/upipe-v210/libupipe_v210
 upipe_v210enc_test_LDADD = $(LDADD) $(top_builddir)/lib/upipe-v210/libupipe_v210.la
 upipe_v210enc_test_CFLAGS = $(AM_CFLAGS) $(AVUTIL_CFLAGS)
 upipe_v210dec_test_CFLAGS = $(AM_CFLAGS) $(AVUTIL_CFLAGS)
+upipe_row_split_test_LDADD = $(LDADD) -lev $(top_builddir)/lib/upump-ev/libupump_ev.la $(top_builddir)/lib/upipe-modules/libupipe_modules.la
+upipe_separate_fields_test_LDADD = $(LDADD) -lev $(top_builddir)/lib/upump-ev/libupump_ev.la $(top_builddir)/lib/upipe-modules/libupipe_modules.la
+upipe_audio_merge_test_LDADD = $(LDADD) $(top_builddir)/lib/upipe-modules/libupipe_modules.la
 
 upipe_avformat_test_CFLAGS = $(AM_CFLAGS) $(AVFORMAT_CFLAGS)
 upipe_avformat_test_LDADD = $(LDADD) -lev $(top_builddir)/lib/upump-ev/libupump_ev.la $(top_builddir)/lib/upipe-av/libupipe_av.la $(AVFORMAT_LIBS)
@@ -553,4 +567,6 @@ upipe_ts_sync_test_CFLAGS = $(AM_CFLAGS) $(BITSTREAM_CFLAGS)
 upipe_ts_tdt_decoder_test_CFLAGS = $(AM_CFLAGS) $(BITSTREAM_CFLAGS)
 upipe_video_trim_test_CFLAGS = $(AM_CFLAGS) $(BITSTREAM_CFLAGS)
 upipe_audio_copy_test_LDADD = $(LDADD) $(top_builddir)/lib/upipe-modules/libupipe_modules.la
+upipe_row_join_test_LDADD = $(LDADD) -lev $(top_builddir)/lib/upump-ev/libupump_ev.la $(top_builddir)/lib/upipe-modules/libupipe_modules.la
 upipe_auto_inner_test_LDADD = $(LDADD) $(top_builddir)/lib/upipe-modules/libupipe_modules.la
+upipe_dtsdi_test_LDADD = $(LDADD) $(EV_LIBS) $(top_builddir)/lib/upump-ev/libupump_ev.la $(top_builddir)/lib/upipe-modules/libupipe_modules.la

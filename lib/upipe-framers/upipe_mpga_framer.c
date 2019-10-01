@@ -66,6 +66,9 @@
 #define LATM_CONFIG_PERIOD (UCLOCK_FREQ / 2)
 /** 73 bits */
 #define MAX_ASC_SIZE 10
+/** max number of octetrate changes before considering it is free octetrate
+ * (mp3 only) */
+#define MAX_OCTETRATE_CHANGES 10
 
 /** @This returns the octetrate / 1000 of an MPEG-1 or 2 audio stream. */
 static const uint8_t mpeg_octetrate_table[2][3][16] = {
@@ -189,6 +192,8 @@ struct upipe_mpgaf {
     uint8_t frame_length_type;
     /** octet rate */
     uint64_t octetrate;
+    /* number of octetrate changes */
+    unsigned int octetrate_changes;
     /** residue of the duration in 27 MHz units */
     uint64_t duration_residue;
     /** true we have had a discontinuity recently */
@@ -307,6 +312,8 @@ static struct upipe *upipe_mpgaf_alloc(struct upipe_mgr *mgr,
     upipe_mpgaf->samplerate_idx = upipe_mpgaf->base_samplerate_idx = 0;
     upipe_mpgaf->samplerate = upipe_mpgaf->base_samplerate = 0;
     upipe_mpgaf->frame_length_type = 0;
+    upipe_mpgaf->octetrate = 0;
+    upipe_mpgaf->octetrate_changes = 0;
     upipe_mpgaf->duration_residue = 0;
     upipe_mpgaf->got_discontinuity = false;
     upipe_mpgaf->next_frame_size = -1;
@@ -333,6 +340,19 @@ static bool upipe_mpgaf_parse_mpeg(struct upipe *upipe)
                      MPGA_HEADER_SIZE, header)))
         return true; /* not enough data */
 
+    bool mpeg25 = mpga_get_mpeg25(header);
+    uint8_t id = mpga_get_id(header) == MPGA_ID_2 ? 1 : 0;
+    uint8_t layer = 4 - mpga_get_layer(header);
+    uint8_t octetrate = mpeg_octetrate_table[id][layer - 1]
+                            [mpga_get_bitrate_index(header)];
+    uint8_t max_octetrate = mpeg_octetrate_table[id][layer - 1][14];
+    uint8_t padding = mpga_get_padding(header) ? 1 : 0;
+    uint8_t mode = mpga_get_mode(header);
+    bool copyright = mpga_get_copyright(header);
+    bool original = mpga_get_original(header);
+    if (!octetrate)
+        max_octetrate *= 2;
+
     if (likely(mpga_sync_compare_formats(header, upipe_mpgaf->sync_header))) {
         /* identical sync */
         upipe_mpgaf->next_frame_size = mpga_get_padding(header) ?
@@ -346,6 +366,29 @@ static bool upipe_mpgaf_parse_mpeg(struct upipe *upipe)
         mpga_get_emphasis(header) == MPGA_EMPHASIS_INVALID)
         return false;
 
+    if (layer == 3 &&
+        mpga_sync_compare_formats_free(header, upipe_mpgaf->sync_header)) {
+        if (upipe_mpgaf->octetrate_changes > MAX_OCTETRATE_CHANGES) {
+            if (id || mpeg25) {
+                upipe_mpgaf->frame_size =
+                    576000 * octetrate / upipe_mpgaf->samplerate;
+                upipe_mpgaf->frame_size_padding =
+                    576000 * octetrate / upipe_mpgaf->samplerate + 1;
+            } else {
+                upipe_mpgaf->frame_size =
+                    1152000 * octetrate / upipe_mpgaf->samplerate;
+                upipe_mpgaf->frame_size_padding =
+                    1152000 * octetrate / upipe_mpgaf->samplerate + 1;
+            }
+            memcpy(upipe_mpgaf->sync_header, header, MPGA_HEADER_SIZE);
+            upipe_mpgaf->next_frame_size = mpga_get_padding(header) ?
+                                           upipe_mpgaf->frame_size_padding :
+                                           upipe_mpgaf->frame_size;
+            return true;
+        }
+        upipe_mpgaf->octetrate_changes++;
+    }
+
     struct uref *flow_def = upipe_mpgaf_alloc_flow_def_attr(upipe);
     if (unlikely(flow_def == NULL)) {
         upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
@@ -356,23 +399,10 @@ static bool upipe_mpgaf_parse_mpeg(struct upipe *upipe)
                 upipe_mpgaf->encaps_input))
 
     memcpy(upipe_mpgaf->sync_header, header, MPGA_HEADER_SIZE);
-
-    bool mpeg25 = mpga_get_mpeg25(header);
-    uint8_t id = mpga_get_id(header) == MPGA_ID_2 ? 1 : 0;
-    uint8_t layer = 4 - mpga_get_layer(header);
-    uint8_t octetrate = mpeg_octetrate_table[id][layer - 1]
-                            [mpga_get_bitrate_index(header)];
-    uint8_t max_octetrate = mpeg_octetrate_table[id][layer - 1][14];
     upipe_mpgaf->samplerate = mpeg_samplerate_table[id]
                                 [mpga_get_sampling_freq(header)];
-    uint8_t padding = mpga_get_padding(header) ? 1 : 0;
-    uint8_t mode = mpga_get_mode(header);
-    bool copyright = mpga_get_copyright(header);
-    bool original = mpga_get_original(header);
     if (mpeg25)
         upipe_mpgaf->samplerate /= 2;
-    if (!octetrate)
-        max_octetrate *= 2;
 
     switch (layer) {
         case 1:
@@ -406,6 +436,11 @@ static bool upipe_mpgaf_parse_mpeg(struct upipe *upipe)
                 upipe_mpgaf->samples = 1152;
             }
             UBASE_FATAL(upipe, uref_flow_set_def(flow_def, "block.mp3.sound."))
+
+            if (upipe_mpgaf->octetrate_changes > MAX_OCTETRATE_CHANGES) {
+                upipe_notice(upipe, "octetrate changes too often, using max octetrate");
+                octetrate = max_octetrate;
+            }
             break;
     }
 
@@ -458,19 +493,42 @@ static bool upipe_mpgaf_parse_adts(struct upipe *upipe)
                      ADTS_HEADER_SIZE, header)))
         return true; /* not enough data */
 
-    if (likely(adts_sync_compare_formats(header, upipe_mpgaf->sync_header))) {
-        /* identical sync */
-        goto upipe_mpgaf_parse_adts_shortcut;
-    }
+    uint8_t sampling_freq = adts_get_sampling_freq(header);
+    uint64_t samplerate = aac_samplerate_table[sampling_freq];
+    size_t samples = ADTS_SAMPLES_PER_BLOCK * (1 + adts_get_num_blocks(header));
+    uint16_t adts_length = adts_get_length(header);
+    uint8_t adts_profile = adts_get_profile(header);
+    uint8_t asc_aot = adts_profile +1;
+    uint8_t asc_base_aot = asc_aot;
 
-    if (!aac_samplerate_table[adts_get_sampling_freq(header)]) {
+    if (!samplerate) {
         upipe_warn(upipe, "invalid samplerate");
         return false;
     }
 
-    if (adts_get_length(header) < ADTS_HEADER_SIZE) {
+    if (adts_length < ADTS_HEADER_SIZE) {
         upipe_warn(upipe, "invalid header");
         return false;
+    }
+
+    if (samplerate <= 24000) {
+        /* assume SBR on low frequency streams */
+        samplerate *= 2;
+        samples *= 2;
+        asc_aot = ASC_TYPE_SBR;
+    }
+
+    /* Calculate octetrate assuming the stream is CBR. */
+    uint64_t octetrate = adts_length * samplerate / samples;
+    /* Round up to a multiple of 8 kbits/s. */
+    octetrate += 999;
+    octetrate -= octetrate % 1000;
+
+    if (likely(adts_sync_compare_formats(header, upipe_mpgaf->sync_header) &&
+        samples == upipe_mpgaf->samples &&
+        octetrate <= upipe_mpgaf->octetrate)) {
+        /* identical sync */
+        goto upipe_mpgaf_parse_adts_shortcut;
     }
 
     memcpy(upipe_mpgaf->sync_header, header, ADTS_HEADER_SIZE);
@@ -483,21 +541,13 @@ static bool upipe_mpgaf_parse_adts(struct upipe *upipe)
     UBASE_FATAL(upipe, uref_flow_set_complete(flow_def))
 
     upipe_mpgaf->has_crc = !adts_get_protection_absent(header);
-    uint8_t adts_profile = adts_get_profile(header);
-    upipe_mpgaf->asc_aot = upipe_mpgaf->asc_base_aot = adts_profile + 1;
+    upipe_mpgaf->asc_aot = asc_aot;
+    upipe_mpgaf->asc_base_aot = asc_base_aot;
     upipe_mpgaf->samplerate_idx = upipe_mpgaf->base_samplerate_idx =
-        adts_get_sampling_freq(header);
-    upipe_mpgaf->samplerate = upipe_mpgaf->base_samplerate =
-        aac_samplerate_table[upipe_mpgaf->samplerate_idx];
-    upipe_mpgaf->samples = ADTS_SAMPLES_PER_BLOCK *
-                           (1 + adts_get_num_blocks(header));
+        sampling_freq;
+    upipe_mpgaf->samplerate = upipe_mpgaf->base_samplerate = samplerate;
+    upipe_mpgaf->samples = samples;
     upipe_mpgaf->channels = adts_get_channels(header);
-    if (upipe_mpgaf->samplerate <= 24000) {
-        /* assume SBR on low frequency streams */
-        upipe_mpgaf->samplerate *= 2;
-        upipe_mpgaf->samples *= 2;
-        upipe_mpgaf->asc_aot = ASC_TYPE_SBR;
-    }
     if (upipe_mpgaf->channels == 7)
         upipe_mpgaf->channels = 8;
     upipe_mpgaf->asc_frame_length = false;
@@ -523,12 +573,6 @@ static bool upipe_mpgaf_parse_adts(struct upipe *upipe)
     if (adts_get_home(header))
         UBASE_FATAL(upipe, uref_flow_set_original(flow_def))
 
-    /* Calculate octetrate assuming the stream is CBR. */
-    uint64_t octetrate = adts_get_length(header) *
-                         upipe_mpgaf->samplerate / upipe_mpgaf->samples;
-    /* Round up to a multiple of 8 kbits/s. */
-    octetrate += 999;
-    octetrate -= octetrate % 1000;
     upipe_mpgaf->octetrate = octetrate;
     UBASE_FATAL(upipe, uref_block_flow_set_octetrate(flow_def, octetrate))
 
@@ -540,7 +584,7 @@ static bool upipe_mpgaf_parse_adts(struct upipe *upipe)
         upipe_mpgaf_require_flow_format(upipe, flow_def);
 
 upipe_mpgaf_parse_adts_shortcut:
-    upipe_mpgaf->next_frame_size = adts_get_length(header);
+    upipe_mpgaf->next_frame_size = adts_length;
     return true;
 }
 
@@ -971,8 +1015,18 @@ static bool upipe_mpgaf_handle_latm(struct upipe *upipe, struct ubuf *ubuf,
     upipe_mpgaf->latm_header_size = ubuf_block_stream_position(&s);
     ubuf_block_stream_clean(&s);
 
-    if (same_stream_mux)
+    /* Calculate octetrate. */
+    uint64_t octetrate = frame_length * upipe_mpgaf->samplerate /
+                         upipe_mpgaf->samples;
+    /* Round up to a multiple of 8 kbits/s. */
+    octetrate += 999;
+    octetrate -= octetrate % 1000;
+
+    if (same_stream_mux && octetrate <= upipe_mpgaf->octetrate)
         return true;
+
+    if (octetrate > upipe_mpgaf->octetrate)
+        upipe_mpgaf->octetrate = octetrate;
 
     struct uref *flow_def = upipe_mpgaf_alloc_flow_def_attr(upipe);
     if (unlikely(flow_def == NULL)) {
@@ -1007,13 +1061,6 @@ static bool upipe_mpgaf_handle_latm(struct upipe *upipe, struct ubuf *ubuf,
         }
     }
 
-    /* Calculate octetrate assuming the stream is CBR. */
-    uint64_t octetrate = frame_length * upipe_mpgaf->samplerate /
-                         upipe_mpgaf->samples;
-    /* Round up to a multiple of 8 kbits/s. */
-    octetrate += 999;
-    octetrate -= octetrate % 1000;
-    upipe_mpgaf->octetrate = octetrate;
     UBASE_FATAL(upipe, uref_block_flow_set_octetrate(flow_def, octetrate))
 
     upipe_mpgaf_store_flow_def(upipe, NULL);
@@ -1128,7 +1175,7 @@ static void upipe_mpgaf_build_global(struct upipe *upipe, struct uref *flow_def)
 
     uint8_t headers[MAX_ASC_SIZE];
     struct ubits bw;
-    ubits_init(&bw, headers, sizeof(headers));
+    ubits_init(&bw, headers, sizeof(headers), UBITS_WRITE);
 
     upipe_mpgaf_build_asc(upipe, &bw);
 
@@ -1323,7 +1370,7 @@ static int upipe_mpgaf_encaps_frame(struct upipe *upipe, struct uref *uref)
 
     int ubuf_size = size + 2 + (config ? MAX_ASC_SIZE + 4 : 0);
     int i;
-    for (i = 0; i + 255 < size; i += 255)
+    for (i = 0; i + 255 <= size; i += 255)
         ubuf_size++;
     if (upipe_mpgaf->encaps_output == UREF_MPGA_ENCAPS_LOAS)
         ubuf_size += LOAS_HEADER_SIZE;
@@ -1336,7 +1383,7 @@ static int upipe_mpgaf_encaps_frame(struct upipe *upipe, struct uref *uref)
     }
 
     struct ubits bw;
-    ubits_init(&bw, w, ubuf_size);
+    ubits_init(&bw, w, ubuf_size, UBITS_WRITE);
     if (upipe_mpgaf->encaps_output == UREF_MPGA_ENCAPS_LOAS)
         ubits_put(&bw, 24, 0);
 
@@ -1345,7 +1392,7 @@ static int upipe_mpgaf_encaps_frame(struct upipe *upipe, struct uref *uref)
         upipe_mpgaf_build_latm_config(upipe, &bw);
 
     /* PayloadLengthInfo */
-    for (i = 0; i + 255 < size; i += 255)
+    for (i = 0; i + 255 <= size; i += 255)
         ubits_put(&bw, 8, 255);
     ubits_put(&bw, 8, size - i);
 
@@ -1639,7 +1686,11 @@ static bool upipe_mpgaf_work_raw(struct upipe *upipe, struct uref *uref,
         !upipe_mpgaf_handle_latm(upipe, uref->ubuf, 0, size))
         return true;
 
-    if (unlikely(!upipe_mpgaf->acquired)) {
+    /* Calculate octetrate assuming the stream is CBR. */
+    uint64_t octetrate = size * upipe_mpgaf->samplerate /
+        upipe_mpgaf->samples;
+
+    if (unlikely(!upipe_mpgaf->acquired || octetrate > upipe_mpgaf->octetrate)) {
         upipe_mpgaf_sync_acquired(upipe);
         struct uref *flow_def = upipe_mpgaf_alloc_flow_def_attr(upipe);
         if (unlikely(flow_def == NULL)) {
@@ -1658,9 +1709,6 @@ static bool upipe_mpgaf_work_raw(struct upipe *upipe, struct uref *uref,
         UBASE_FATAL(upipe,
                 uref_sound_flow_set_samples(flow_def, upipe_mpgaf->samples))
 
-        /* Calculate octetrate assuming the stream is CBR. */
-        uint64_t octetrate = size * upipe_mpgaf->samplerate /
-                             upipe_mpgaf->samples;
         /* Round up to a multiple of 8 kbits/s. */
         octetrate += 999;
         octetrate -= octetrate % 1000;

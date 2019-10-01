@@ -103,16 +103,18 @@ static struct uref_mgr *uref_mgr;
 
 static const char *srcpath, *dstpath;
 static const char *dump = NULL;
+static bool skip_nokey = false;
 
 static struct upipe *upipe_source;
 static struct upipe *upipe_split_output = NULL;
 static struct upipe *upipe_null;
 
 static void usage(const char *argv0) {
-    fprintf(stderr, "Usage: %s [-d] [-q] [-D <dot file>] <source> <destination>\n", argv0);
+    fprintf(stderr, "Usage: %s [-d] [-q] [-D <dot file>] [-k] <source> <destination>\n", argv0);
     fprintf(stderr, "   -d: force debug log level\n");
     fprintf(stderr, "   -q: quieter log\n");
     fprintf(stderr, "   -D: dump pipeline in dot format\n");
+    fprintf(stderr, "   -k: skip non key frames\n");
     exit(EXIT_FAILURE);
 }
 
@@ -130,7 +132,15 @@ static int uref_catch(struct uprobe *uprobe, struct upipe *upipe,
     if (signature != UPIPE_PROBE_UREF_SIGNATURE)
         return uprobe_throw_next(uprobe, upipe, event, args);
 
+    signature = va_arg(args, unsigned int);
+    struct uref *uref = va_arg(args, struct uref *);
+    va_arg(args, struct upump **);
+    bool *drop = va_arg(args, bool *);
     if (upipe_source != NULL) {
+        if (skip_nokey && !ubase_check(uref_pic_get_key(uref))) {
+            *drop = true;
+            return UBASE_ERR_NONE;
+        }
         /* dump the pipeline before leaving */
         if (dump != NULL)
             upipe_dump_open(NULL, NULL, dump, NULL, upipe_source, NULL);
@@ -161,9 +171,12 @@ static int avcdec_catch(struct uprobe *uprobe, struct upipe *upipe,
     uint64_t hsize, vsize, wanted_hsize;
     struct urational sar;
     bool progressive;
+    if (unlikely(!ubase_check(uref_pic_flow_get_sar(flow_def, &sar)))) {
+        sar.num = 1;
+        sar.den = 1;
+    }
     if (unlikely(!ubase_check(uref_pic_flow_get_hsize(flow_def, &hsize)) ||
-                 !ubase_check(uref_pic_flow_get_vsize(flow_def, &vsize)) ||
-                 !ubase_check(uref_pic_flow_get_sar(flow_def, &sar)))) {
+                 !ubase_check(uref_pic_flow_get_vsize(flow_def, &vsize)))) {
         upipe_err_va(upipe, "incompatible flow def");
         upipe_release(upipe_source);
         return UBASE_ERR_UNHANDLED;
@@ -254,7 +267,7 @@ int main(int argc, char **argv)
     int opt;
 
     /* parse options */
-    while ((opt = getopt(argc, argv, "dqD:")) != -1) {
+    while ((opt = getopt(argc, argv, "dqD:k")) != -1) {
         switch (opt) {
             case 'd':
                 if (loglevel > 0) loglevel--;
@@ -264,6 +277,9 @@ int main(int argc, char **argv)
                 break;
             case 'D':
                 dump = optarg;
+                break;
+            case 'k':
+                skip_nokey = true;
                 break;
             default:
                 usage(argv[0]);
