@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2013-2016 OpenHeadend S.A.R.L.
+ * Copyright (C) 2013-2019 OpenHeadend S.A.R.L.
  *
  * Authors: Christophe Massiot
  *
@@ -59,6 +59,8 @@
 #include <bitstream/mpeg/ts.h>
 #include <bitstream/mpeg/psi.h>
 #include <bitstream/dvb/si.h>
+#include <bitstream/atsc/si.h>
+#include <bitstream/atsc/a52.h>
 
 /** T-STD TB octet rate for PSI tables */
 #define TB_RATE_PSI 125000
@@ -275,6 +277,9 @@ static int upipe_ts_psig_flow_check(struct upipe *upipe,
         !ubase_check(uref_flow_get_raw_def(flow->flow_def, &raw_def)))
         return UBASE_ERR_UNHANDLED;
 
+    enum upipe_ts_conformance conformance =
+        upipe_ts_conformance_from_flow_def(flow->flow_def);
+
     uint8_t languages = 0;
     uref_flow_get_languages(flow->flow_def, &languages);
 
@@ -294,17 +299,27 @@ static int upipe_ts_psig_flow_check(struct upipe *upipe,
                                    languages * DESC0A_LANGUAGE_SIZE;
 
         if (!ubase_ncmp(raw_def, "block.ac3.")) {
-            *descriptors_size_p += DESC6A_HEADER_SIZE;
-            uint8_t component_type;
-            if (ubase_check(uref_ts_flow_get_component_type(flow->flow_def,
-                                                            &component_type)))
-                *descriptors_size_p += 1;
+            if (conformance == UPIPE_TS_CONFORMANCE_ATSC) {
+                *descriptors_size_p += DESC81_HEADER_SIZE;
+            }
+            else {
+                *descriptors_size_p += DESC6A_HEADER_SIZE;
+                uint8_t component_type;
+                if (ubase_check(uref_ts_flow_get_component_type(
+                            flow->flow_def, &component_type)))
+                    *descriptors_size_p += 1;
+            }
         } else if (!ubase_ncmp(raw_def, "block.eac3.")) {
-            *descriptors_size_p += DESC7A_HEADER_SIZE;
-            uint8_t component_type;
-            if (ubase_check(uref_ts_flow_get_component_type(flow->flow_def,
-                                                            &component_type)))
-                *descriptors_size_p += 1;
+            if (conformance == UPIPE_TS_CONFORMANCE_ATSC) {
+                *descriptors_size_p += DESCCC_HEADER_SIZE;
+            }
+            else {
+                *descriptors_size_p += DESC7A_HEADER_SIZE;
+                uint8_t component_type;
+                if (ubase_check(uref_ts_flow_get_component_type(
+                            flow->flow_def, &component_type)))
+                    *descriptors_size_p += 1;
+            }
         } else if (!ubase_ncmp(raw_def, "block.dts."))
             *descriptors_size_p += DESC7B_HEADER_SIZE;
         else if (!ubase_ncmp(raw_def, "block.opus."))
@@ -346,6 +361,9 @@ static int upipe_ts_psig_flow_build(struct upipe *upipe, uint8_t *es,
         !ubase_check(uref_flow_get_raw_def(flow->flow_def, &raw_def)))
         return UBASE_ERR_UNHANDLED;
 
+    enum upipe_ts_conformance conformance =
+        upipe_ts_conformance_from_flow_def(flow->flow_def);
+
     uint8_t languages = 0;
     uref_flow_get_languages(flow->flow_def, &languages);
 
@@ -377,6 +395,12 @@ static int upipe_ts_psig_flow_build(struct upipe *upipe, uint8_t *es,
             stream_type = PMT_STREAMTYPE_AUDIO_MPEG1;
         else
             stream_type = PMT_STREAMTYPE_AUDIO_MPEG2;
+    } else if (!ubase_ncmp(raw_def, "block.ac3.")) {
+        if (conformance == UPIPE_TS_CONFORMANCE_ATSC)
+            stream_type = PMT_STREAMTYPE_ATSC_A52;
+    } else if (!ubase_ncmp(raw_def, "block.eac3.")) {
+        if (conformance == UPIPE_TS_CONFORMANCE_ATSC)
+            stream_type = PMT_STREAMTYPE_ATSC_A52E;
     }
 
     upipe_notice_va(upipe,
@@ -484,29 +508,138 @@ static int upipe_ts_psig_flow_build(struct upipe *upipe, uint8_t *es,
 
         if (!ubase_ncmp(raw_def, "block.ac3.")) {
             desc = descs_get_desc(descs, k++);
-            desc6a_init(desc);
-            desc6a_clear_flags(desc);
+            switch (conformance) {
+                case UPIPE_TS_CONFORMANCE_ATSC: {
+                    uint8_t sample_rate_code =
+                        DESC81_SAMPLE_RATE_CODE_48_OR_44_1_OR_32;
+                    uint8_t bit_rate_code = 0;
+                    uint8_t num_channels  = 0x0d;
+                    uint64_t rate;
+                    uint64_t octetrate;
+                    uint8_t channels;
 
-            uint8_t component_type;
-            if (ubase_check(uref_ts_flow_get_component_type(flow->flow_def,
-                                                            &component_type))) {
-                desc6a_set_component_type_flag(desc, true);
-                desc6a_set_component_type(desc, component_type);
+                    if (ubase_check(uref_sound_flow_get_rate(flow->flow_def,
+                                                             &rate))) {
+                        upipe_notice_va(upipe, "sample rate %"PRIu64, rate);
+                        switch (rate) {
+                            case 48000:
+                                sample_rate_code =
+                                    DESC81_SAMPLE_RATE_CODE_48;
+                                break;
+                            case 44100:
+                                sample_rate_code =
+                                    DESC81_SAMPLE_RATE_CODE_44_1;
+                                break;
+                            case 32000:
+                                sample_rate_code =
+                                    DESC81_SAMPLE_RATE_CODE_32;
+                                break;
+                        }
+                    }
+                    else {
+                        upipe_warn(upipe, "no sample rate set");
+                    }
+
+                    if (ubase_check(uref_block_flow_get_octetrate(
+                                flow->flow_def, &octetrate))) {
+                        bit_rate_code =
+                            desc81_bit_rate_code_from_octetrate(octetrate);
+                        if (bit_rate_code == 0xff) {
+                            bit_rate_code = 0x00;
+                            upipe_warn(upipe, "invalid octetrate");
+                        }
+                    }
+                    else {
+                        upipe_warn(upipe, "no octetrate set");
+                    }
+
+                    if (ubase_check(uref_sound_flow_get_channels(
+                                flow->flow_def, &channels))) {
+                        switch (channels) {
+                            case 1:
+                                num_channels = 0x8;
+                                break;
+                            case 2:
+                                num_channels = 0x9;
+                                break;
+                            case 3:
+                                num_channels = 0xa;
+                                break;
+                            case 4:
+                                num_channels = 0xb;
+                                break;
+                            case 5:
+                                num_channels = 0xc;
+                                break;
+                            case 6:
+                                num_channels = 0xd;
+                                break;
+                        }
+                    }
+                    else {
+                        upipe_warn(upipe, "no channels found");
+                    }
+
+                    desc81_init(desc);
+                    desc81_set_bsid(desc, A52_BSID);
+                    desc81_set_sample_rate_code(desc, sample_rate_code);
+                    desc81_set_bit_rate_code(desc, bit_rate_code);
+                    desc81_set_surround_mode(desc, 0x00);
+                    desc81_set_bsmod(desc, 0x00);
+                    desc81_set_num_channels(desc, num_channels);
+                    desc81_set_full_svc(desc, 1);
+                    desc_set_length(desc,
+                                    DESC81_HEADER_SIZE - DESC_HEADER_SIZE);
+                    break;
+                }
+
+                default: {
+                    desc6a_init(desc);
+                    desc6a_clear_flags(desc);
+
+                    uint8_t component_type;
+                    if (ubase_check(uref_ts_flow_get_component_type(
+                                flow->flow_def, &component_type))) {
+                        desc6a_set_component_type_flag(desc, true);
+                        desc6a_set_component_type(desc, component_type);
+                    }
+                    desc6a_set_length(desc);
+                }
             }
-            desc6a_set_length(desc);
 
         } else if (!ubase_ncmp(raw_def, "block.eac3.")) {
             desc = descs_get_desc(descs, k++);
-            desc7a_init(desc);
-            desc7a_clear_flags(desc);
+            switch (conformance) {
+                case UPIPE_TS_CONFORMANCE_ATSC: {
+                    desccc_init(desc);
+                    desccc_clear_flags(desc);
 
-            uint8_t component_type;
-            if (ubase_check(uref_ts_flow_get_component_type(flow->flow_def,
-                                                            &component_type))) {
-                desc7a_set_component_type_flag(desc, true);
-                desc7a_set_component_type(desc, component_type);
+                    uint8_t channels = 2;
+                    uref_sound_flow_get_channels(flow->flow_def, &channels);
+                    if (channels == 1)
+                        desccc_set_number_of_channels(desc, 0x00);
+                    else if (channels == 2)
+                        desccc_set_number_of_channels(desc, 0x02);
+                    else if (channels < 5)
+                        desccc_set_number_of_channels(desc, 0x04);
+                    else
+                        desccc_set_number_of_channels(desc, 0x05);
+                    break;
+                }
+
+                default: {
+                    desc7a_init(desc);
+                    desc7a_clear_flags(desc);
+
+                    uint8_t component_type;
+                    if (ubase_check(uref_ts_flow_get_component_type(
+                                flow->flow_def, &component_type))) {
+                        desc7a_set_component_type_flag(desc, true);
+                        desc7a_set_component_type(desc, component_type);
+                    }
+                    desc7a_set_length(desc);
+                }
             }
-            desc7a_set_length(desc);
 
         } else if (!ubase_ncmp(raw_def, "block.dts.")) {
             desc = descs_get_desc(descs, k++);

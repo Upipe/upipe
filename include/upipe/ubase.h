@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2012-2015 OpenHeadend S.A.R.L.
+ * Copyright (C) 2012-2019 OpenHeadend S.A.R.L.
  *
  * Authors: Christophe Massiot
  *
@@ -87,6 +87,14 @@ extern "C" {
 
 /** @This is used to retrieve the number of items of an array. */
 #define UBASE_ARRAY_SIZE(a)        (sizeof (a) / sizeof ((a)[0]))
+
+/** @This iterates the items of a fixed size array.
+ *
+ * @param a the array to iterate
+ * @param item array iterator
+ */
+#define ubase_array_foreach(a, item)                                        \
+    for (item = a; (item - a) < UBASE_ARRAY_SIZE(a); item++)
 
 /** @This declares two functions dealing with substructures included into a
  * larger structure.
