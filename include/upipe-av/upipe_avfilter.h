@@ -1,7 +1,9 @@
 /*
  * Copyright (C) 2018 OpenHeadend S.A.R.L.
+ * Copyright (C) 2019-2020 EasyTools
  *
  * Authors: Clément Vasseur
+ *          Arnaud de Turckheim
  *
  * Permission is hereby granted, free of charge, to any person obtaining
  * a copy of this software and associated documentation files (the
@@ -37,6 +39,16 @@ extern "C" {
 #include <upipe/upipe.h>
 
 #define UPIPE_AVFILT_SIGNATURE UBASE_FOURCC('a', 'v', 'f', 'i')
+#define UPIPE_AVFILT_SUB_SIGNATURE UBASE_FOURCC('a', 'v', 'f', 's')
+
+/** @This enumerates the private events of the AVFilter pipe. */
+enum uprobe_avfilt_event {
+    /** sentinel */
+    UPROBE_AVFILT_SENTINEL = UPROBE_LOCAL,
+
+    /** filter is configured (int) */
+    UPROBE_AVFILT_CONFIGURED,
+};
 
 /** @This extends upipe_command with specific commands for avfilt. */
 enum upipe_avfilt_command {
