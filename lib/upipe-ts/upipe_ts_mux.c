@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2013-2017 OpenHeadend S.A.R.L.
+ * Copyright (C) 2013-2019 OpenHeadend S.A.R.L.
  *
  * Authors: Christophe Massiot
  *
@@ -1078,8 +1078,12 @@ static int upipe_ts_mux_input_set_flow_def(struct upipe *upipe,
                 upipe_ts_mux_program_to_upipe(program)->mgr);
     const char *def;
     uint64_t octetrate;
-    UBASE_RETURN(uref_flow_get_def(flow_def, &def))
 
+    UBASE_RETURN(uref_ts_flow_set_conformance(
+            flow_def,
+            upipe_ts_conformance_to_string(upipe_ts_mux->conformance)));
+
+    UBASE_RETURN(uref_flow_get_def(flow_def, &def))
     if (!ubase_ncmp(def, "void.scte35.")) {
         octetrate = 0;
 
