@@ -3,7 +3,7 @@ LDADD = $(top_builddir)/lib/upipe/libupipe.la
 UPIPEMODULES_LIBS = $(top_builddir)/lib/upipe-modules/libupipe_modules.la
 UPIPEPTHREAD_LIBS = $(top_builddir)/lib/upipe-pthread/libupipe_pthread.la
 UPUMPEV_LIBS = -lev $(top_builddir)/lib/upump-ev/libupump_ev.la
-UPIPEAV_LIBS = $(top_builddir)/lib/upipe-av/libupipe_av.la @AVFORMAT_LIBS@
+UPIPEAV_LIBS = $(top_builddir)/lib/upipe-av/libupipe_av.la @AVFORMAT_LIBS@ @AVFILTER_LIBS@
 UPIPEAV_CFLAGS = $(AVUTIL_CFLAGS)
 UPIPESWS_LIBS = $(SWSCALE_LIBS) $(top_builddir)/lib/upipe-swscale/libupipe_swscale.la
 UPIPESWR_LIBS = $(SWRESAMPLE_LIBS) $(top_builddir)/lib/upipe-swresample/libupipe_swresample.la
@@ -89,7 +89,9 @@ if HAVE_AVFORMAT
 if HAVE_SWSCALE
 if HAVE_SWRESAMPLE
 if HAVE_BITSTREAM
+if HAVE_AVFILTER
 noinst_PROGRAMS += transcode
+endif
 if HAVE_X264
 noinst_PROGRAMS += grid
 endif
