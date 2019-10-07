@@ -477,8 +477,10 @@ static void upipe_pciesdi_sink_input(struct upipe *upipe, struct uref *uref, str
 #define CHUNK_BUFFER_COUNT 32
 #define BUFFER_COUNT_PRINT_THRESHOLD(num, den) (num * CHUNK_BUFFER_COUNT / den)
 
-    if (upipe_pciesdi_sink->uref_next)
+    if (upipe_pciesdi_sink->uref_next) {
+        upipe_dbg(upipe, "uref input before uref_next was used");
         uref_free(upipe_pciesdi_sink->uref_next);
+    }
     upipe_pciesdi_sink->uref_next = uref;
 
     /* check if pump is already running */
