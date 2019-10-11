@@ -1859,7 +1859,7 @@ static int upipe_netmap_sink_set_flow_def(struct upipe *upipe,
             if (!intf->d)
                 break;
             uint8_t *header = &intf->header[0];
-            static const uint16_t udp_payload_size = RTP_HEADER_SIZE +
+            const uint16_t udp_payload_size = RTP_HEADER_SIZE +
                 HBRMT_HEADER_SIZE + HBRMT_DATA_SIZE;
             header += upipe_netmap_put_ip_headers(intf, header, udp_payload_size);
             header += upipe_netmap_put_rtp_headers(upipe, header, 98, false, false);
