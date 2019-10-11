@@ -714,10 +714,11 @@ static int worker_rfc4175(struct upipe *upipe, uint8_t **dst, uint16_t *len)
         }
     }
 
-    uint16_t payload_size = eth_frame_len - ETHERNET_HEADER_LEN - UDP_HEADER_SIZE - IP_HEADER_MINSIZE;
+    const uint16_t header_size = ETHERNET_HEADER_LEN + UDP_HEADER_SIZE + IP_HEADER_MINSIZE;
 
     // TODO: "-7" ?
-    *dst += upipe_netmap_put_ip_headers(&upipe_netmap_sink->intf[0], *dst, payload_size);
+    memcpy(*dst, upipe_netmap_sink->intf[0].header, header_size);
+    *dst += header_size;
 
     /* RTP HEADER */
     int rtp_size = upipe_netmap_put_rtp_headers(upipe, *dst, 96, true, field);
@@ -1867,15 +1868,15 @@ static int upipe_netmap_sink_set_flow_def(struct upipe *upipe,
             assert(header == &intf->header[sizeof(intf->header)]);
         }
     } else {
+        const uint16_t header_size = ETHERNET_HEADER_LEN + IP_HEADER_MINSIZE + UDP_HEADER_SIZE;
         for (size_t i = 0; i < 2; i++) {
             struct upipe_netmap_intf *intf = &upipe_netmap_sink->intf[i];
             if (!intf->d)
                 break;
             uint8_t *header = &intf->header[0];
-            static const uint16_t udp_payload_size = RTP_HEADER_SIZE +
-                RFC_4175_HEADER_LEN + RFC_4175_EXT_SEQ_NUM_LEN;
+            uint16_t udp_payload_size = upipe_netmap_sink->packet_size - header_size;
             header += upipe_netmap_put_ip_headers(intf, header, udp_payload_size);
-            /* header += */ upipe_netmap_put_rtp_headers(upipe, header, 98, false, false);
+            /* RTP Headers done in worker_rfc4175 */
         }
     }
 
