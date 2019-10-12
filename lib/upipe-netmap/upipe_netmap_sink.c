@@ -747,13 +747,13 @@ static int worker_rfc4175(struct upipe *upipe, uint8_t **dst, uint16_t **len)
     }
     else if (upipe_netmap_sink->input_bit_depth == 10) {
         const uint16_t *y10, *u10, *v10;
-        y10 = (uint16_t)upipe_netmap_sink->pixel_buffers[0] +
+        y10 = (uint16_t*)upipe_netmap_sink->pixel_buffers[0] +
              upipe_netmap_sink->strides[0] * interleaved_line +
              upipe_netmap_sink->pixel_offset / 1;
-        u10 = (uint16_t)upipe_netmap_sink->pixel_buffers[1] +
+        u10 = (uint16_t*)upipe_netmap_sink->pixel_buffers[1] +
              upipe_netmap_sink->strides[1] * interleaved_line +
              upipe_netmap_sink->pixel_offset / 2;
-        v10 = (uint16_t)upipe_netmap_sink->pixel_buffers[2] +
+        v10 = (uint16_t*)upipe_netmap_sink->pixel_buffers[2] +
              upipe_netmap_sink->strides[2] * interleaved_line +
              upipe_netmap_sink->pixel_offset / 2;
         upipe_netmap_sink->pack_10_planar(y10, u10, v10, dst[idx], pixels1);
