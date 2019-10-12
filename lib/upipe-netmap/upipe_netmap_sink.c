@@ -1318,7 +1318,8 @@ static void upipe_netmap_sink_worker(struct upump *upump)
                 if (rtp_check_marker(rtp)) /* marker needs to be set */ {
                     bool stamp = false;
                     if (rfc4175) {
-                        uint8_t *rfc = &rtp[RTP_HEADER_SIZE+ RFC_4175_EXT_SEQ_NUM_LEN];
+                        /* Use the end of the frame (for interlace the marker after field 2) */
+                        uint8_t *rfc = &rtp[RTP_HEADER_SIZE + RFC_4175_EXT_SEQ_NUM_LEN];
                         uint8_t f2 = rfc4175_get_line_field_id(rfc);
                         if (f2 || progressive)
                             stamp = true;
