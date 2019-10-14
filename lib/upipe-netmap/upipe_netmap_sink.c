@@ -697,7 +697,6 @@ static int worker_rfc4175(struct upipe *upipe, uint8_t **dst, uint16_t **len)
     uint16_t data_len1 = (pixels1 / 2) * UPIPE_RFC4175_PIXEL_PAIR_BYTES;
     eth_frame_len += data_len1;
 
-    // FIXME -7
     for (size_t i = 0; i < 2; i++) {
         struct upipe_netmap_intf *intf = &upipe_netmap_sink->intf[i];
         if (!intf->d || !intf->up)
@@ -731,6 +730,7 @@ static int worker_rfc4175(struct upipe *upipe, uint8_t **dst, uint16_t **len)
         src += block_offset * upipe_netmap_sink->output_block_size;
 
         upipe_netmap_sink->unpack_v210((uint32_t*)src, dst[idx], pixels1);
+        /* FIXME: support 2022-7 with v210 */
     }
     else if (upipe_netmap_sink->input_bit_depth == 8) {
         const uint8_t *y8, *u8, *v8;
@@ -743,7 +743,11 @@ static int worker_rfc4175(struct upipe *upipe, uint8_t **dst, uint16_t **len)
         v8 = upipe_netmap_sink->pixel_buffers[2] +
             upipe_netmap_sink->strides[2] * interleaved_line +
             upipe_netmap_sink->pixel_offset / 2;
-        upipe_netmap_sink->pack_8_planar(y8, u8, v8, dst[idx], pixels1);
+
+        if (copy)
+            upipe_netmap_sink->pack2_8_planar(y8, u8, v8, dst[0], dst[1], pixels1);
+        else if (dst[idx])
+            upipe_netmap_sink->pack_8_planar(y8, u8, v8, dst[idx], pixels1);
     }
     else if (upipe_netmap_sink->input_bit_depth == 10) {
         const uint16_t *y10, *u10, *v10;
@@ -756,7 +760,11 @@ static int worker_rfc4175(struct upipe *upipe, uint8_t **dst, uint16_t **len)
         v10 = (uint16_t*)upipe_netmap_sink->pixel_buffers[2] +
              upipe_netmap_sink->strides[2] * interleaved_line +
              upipe_netmap_sink->pixel_offset / 2;
-        upipe_netmap_sink->pack_10_planar(y10, u10, v10, dst[idx], pixels1);
+
+        if (copy)
+            upipe_netmap_sink->pack2_10_planar(y10, u10, v10, dst[0], dst[1], pixels1);
+        else if (dst[idx])
+            upipe_netmap_sink->pack_10_planar(y10, u10, v10, dst[idx], pixels1);
     }
 
     upipe_netmap_sink->pixel_offset += pixels1;
@@ -1307,6 +1315,8 @@ static void upipe_netmap_sink_worker(struct upump *upump)
     while (txavail) {
         if (upipe_netmap_sink->step && (upipe_netmap_sink->pkts_in_frame % upipe_netmap_sink->step) == 0) {
             const unsigned len = upipe_netmap_sink->packet_size;
+
+            bool stamped = false;
             for (size_t i = 0; i < 2; i++) {
                 struct upipe_netmap_intf *intf = &upipe_netmap_sink->intf[i];
                 if (!intf->d || !intf->up)
@@ -1326,9 +1336,10 @@ static void upipe_netmap_sink_worker(struct upump *upump)
                     } else {
                         stamp = true;
                     }
-                    if (stamp) {
+                    if (stamp && !stamped) {
                         uint16_t seq = rtp_get_seqnum(rtp);
                         handle_tx_stamp(upipe, txring[i]->slot[cur[i]].ptr, seq);
+                        stamped = true;
                     }
                 }
                 memset(dst, 0, len);
@@ -1385,6 +1396,7 @@ static void upipe_netmap_sink_worker(struct upump *upump)
         uint8_t *dst[2] = { NULL, NULL };
         uint16_t *len[2] = { NULL, NULL };
 
+        bool stamped = false;
         for (size_t i = 0; i < 2; i++) {
             struct upipe_netmap_intf *intf = &upipe_netmap_sink->intf[i];
             if (!intf->d || !intf->up)
@@ -1417,12 +1429,16 @@ static void upipe_netmap_sink_worker(struct upump *upump)
                     continue;
             }
 
-            uint16_t seq = rtp_get_seqnum(rtp);
-            handle_tx_stamp(upipe, slot->ptr, seq);
+            //printf("link %i, timestamp %"PRIu64" \n", i, slot->ptr);
+            if (!stamped) {
+                uint16_t seq = rtp_get_seqnum(rtp);
+                handle_tx_stamp(upipe, slot->ptr, seq);
+                stamped = true;
+            }
         }
 
         if (rfc4175) {
-            // TODO: -7
+            /* At the beginning of a frame or field fill the "gap" with empty packets */
             if ((upipe_netmap_sink->line == 0 ||
                 (!progressive && upipe_netmap_sink->line == upipe_netmap_sink->vsize / 2)) && upipe_netmap_sink->pixel_offset == 0 && upipe_netmap_sink->gap_fakes_current) {
 
