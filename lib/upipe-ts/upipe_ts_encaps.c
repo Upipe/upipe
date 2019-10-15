@@ -1068,7 +1068,7 @@ static int upipe_ts_encaps_promote_au(struct upipe *upipe)
     }
 
     struct ubuf *ubuf = upipe_ts_encaps_build_pes(upipe, au_size,
-            ubase_check(uref_block_get_end(encaps->uref)), pts_prog, dts_prog);
+            false, pts_prog, dts_prog);
     size_t header_size = 0;
     ubuf_block_size(ubuf, &header_size);
     uref_attr_set_priv(encaps->uref, header_size);
