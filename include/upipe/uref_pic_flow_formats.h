@@ -597,7 +597,18 @@ static const struct uref_pic_flow_format uref_pic_flow_format_bgra = {
 
 UREF_PIC_FLOW_FORMAT_HELPER(bgra);
 
-/** @This is the description of the rgba64be. */
+/** @This is the description of the rgba64le format. */
+static const struct uref_pic_flow_format uref_pic_flow_format_rgba64le = {
+    .macropixel = 1,
+    .nb_planes = 1,
+    .planes = {
+        { 1, 1, 8, "r16g16b16a16l", 64 },
+    },
+};
+
+UREF_PIC_FLOW_FORMAT_HELPER(rgba64le);
+
+/** @This is the description of the rgba64be format. */
 static const struct uref_pic_flow_format uref_pic_flow_format_rgba64be = {
     .macropixel = 1,
     .nb_planes = 1,
