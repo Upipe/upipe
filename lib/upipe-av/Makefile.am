@@ -13,6 +13,7 @@ libupipe_av_la_SOURCES = \
 	upipe_avcodec_encode.c \
 	upipe_av_codecs.pl \
 	avcodec_include.h \
+	ubuf_av.c \
 	$(NULL)
 
 libupipe_av_la_CPPFLAGS = -I$(top_builddir)/include -I$(top_srcdir)/include -I$(builddir)

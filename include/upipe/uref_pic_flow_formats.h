@@ -36,6 +36,20 @@ extern "C" {
 
 #include <upipe/uref_pic_flow.h>
 
+/** @This describes a picture plane */
+struct uref_pic_flow_format_plane {
+    /** horizontal subsampling */
+    uint8_t hsub;
+    /** vertical subsampling */
+    uint8_t vsub;
+    /** size in octets of a compound */
+    uint8_t mpixel_size;
+    /** chroma type */
+    const char *chroma;
+    /** size in bits of a compound */
+    uint8_t mpixel_bits;
+};
+
 /** @This describes a picture format. */
 struct uref_pic_flow_format {
     /** macro pixel */
@@ -43,19 +57,54 @@ struct uref_pic_flow_format {
     /** number of planes */
     uint8_t nb_planes;
     /** array of plane descriptions */
-    struct {
-        /** horizontal subsampling */
-        uint8_t hsub;
-        /** vertical subsampling */
-        uint8_t vsub;
-        /** size in octets of a compound */
-        uint8_t mpixel_size;
-        /** chroma type */
-        const char *chroma;
-        /** size in bits of a compound */
-        uint8_t mpixel_bits;
-    } planes[];
+    struct uref_pic_flow_format_plane planes[];
 };
+
+/** @This iterates the planes of an uref_pic_flow_format.
+ *
+ * @param flow_format flow format to iterate
+ * @param plane set with the next plane
+ */
+#define uref_pic_flow_format_foreach_plane(flow_format, plane)  \
+    for (plane = flow_format->planes;                           \
+         plane < flow_format->planes + flow_format->nb_planes;  \
+         plane++)
+
+/** @This returns the corresponding plane of a flow format.
+ *
+ * @param flow_format picture flow format to look into
+ * @param chroma chroma plane to get
+ * @return the flow format plane or NULL
+ */
+static inline const struct uref_pic_flow_format_plane *
+uref_pic_flow_format_get_plane(const struct uref_pic_flow_format *flow_format,
+                               const char *chroma)
+{
+    const struct uref_pic_flow_format_plane *plane;
+    uref_pic_flow_format_foreach_plane(flow_format, plane)
+        if (chroma && !strcmp(chroma, plane->chroma))
+            return plane;
+    return NULL;
+}
+
+/** @This returns the index of a plane in the flow format plane array.
+ *
+ * @param flow_format pointer to the structure containing the array
+ * @param plane plane to get the index from
+ * @return the index or UINT8_MAX if the plane was not found in the array
+ */
+static inline uint8_t
+uref_pic_flow_format_get_plane_id(const struct uref_pic_flow_format *flow_format,
+                                  const struct uref_pic_flow_format_plane *plane)
+{
+    if (plane < flow_format->planes)
+        return UINT8_MAX;
+
+    if (plane - flow_format->planes > UINT8_MAX ||
+        plane - flow_format->planes > flow_format->nb_planes)
+        return UINT8_MAX;
+    return plane - flow_format->planes;
+}
 
 /** @This checks a flow format.
  *
