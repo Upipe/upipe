@@ -1651,11 +1651,13 @@ static int upipe_bmd_sink_set_option(struct upipe *upipe,
     else if (!strcmp(k, "card-topology"))
         upipe_bmd_sink->card_topo = strtoll(v, NULL, 10);
     else if (!strcmp(k, "mode")) {
+        if (!v || strlen(v) != 4)
+            return UBASE_ERR_INVALID;
         union {
             BMDDisplayMode mode_id;
             char mode_s[4];
         } u;
-        strncpy(u.mode_s, v, sizeof(u.mode_s));
+        memcpy(u.mode_s, v, sizeof(u.mode_s));
         upipe_bmd_sink->selectedMode = htonl(u.mode_id);
     } else if (!strcmp(k, "cc")) {
         uatomic_store(&upipe_bmd_sink->cc, strcmp(v, "0"));
