@@ -529,9 +529,6 @@ static int catch_audio(struct uprobe *uprobe,
 {
     switch (event) {
     case UPROBE_NEED_OUTPUT: {
-        struct uref *flow_def = va_arg(args, struct uref *);
-        UBASE_RETURN(uref_flow_match_def(flow_def, "block.aac.sound."));
-
         struct upipe *output = upipe_use(upipe);
         if (rewrite_date) {
             output = upipe_void_chain_output(
@@ -580,10 +577,6 @@ static int catch_video(struct uprobe *uprobe,
 
     switch (event) {
     case UPROBE_NEED_OUTPUT: {
-        struct uref *flow_def = va_arg(args, struct uref *);
-
-        UBASE_RETURN(uref_flow_match_def(flow_def, "block.h264.pic."));
-
         struct upipe *output = upipe_use(upipe);
 
         if (rewrite_date) {
