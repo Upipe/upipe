@@ -431,7 +431,7 @@ static int upipe_sws_amend_ubuf_mgr(struct upipe *upipe,
     struct uref *flow_format = uref_dup(request->uref);
     UBASE_ALLOC_RETURN(flow_format);
 
-    uint64_t align;
+    uint64_t align = 16;
     if (!ubase_check(uref_pic_flow_get_align(flow_format, &align)) || !align)
         uref_pic_flow_set_align(flow_format, 16);
 
