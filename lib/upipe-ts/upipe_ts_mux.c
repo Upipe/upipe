@@ -170,6 +170,8 @@
 #define DEFAULT_EITS_OCTETRATE 0
 /** default AAC encapsulation */
 #define DEFAULT_AAC_ENCAPS UREF_MPGA_ENCAPS_ADTS
+/** default AAC signaling mode */
+#define DEFAULT_AAC_SIGNALING UREF_MPGA_SIGNALING_AUTO
 /** default encoding */
 #define DEFAULT_ENCODING "UTF-8"
 /** default TSID */
@@ -314,6 +316,8 @@ struct upipe_ts_mux {
     uint64_t initial_cr_prog;
     /** AAC encapsulation */
     int aac_encaps;
+    /** AAC signaling mode */
+    int aac_signaling;
     /** encoding */
     const char *encoding;
     /** last attributed automatic SID */
@@ -457,6 +461,8 @@ struct upipe_ts_mux_program {
     uint64_t max_delay;
     /** AAC encapsulation */
     int aac_encaps;
+    /** AAC signaling mode */
+    int aac_signaling;
 
     /** input flow definition */
     struct uref *flow_def_input;
@@ -560,6 +566,8 @@ struct upipe_ts_mux_input {
     uint64_t scte35_interval;
     /** AAC encapsulation */
     int aac_encaps;
+    /** AAC signaling mode */
+    int aac_signaling;
 
     /** maximum retention delay */
     uint64_t max_delay;
@@ -994,6 +1002,7 @@ static struct upipe *upipe_ts_mux_input_alloc(struct upipe_mgr *mgr,
     upipe_ts_mux_input->psi_pid = NULL;
     upipe_ts_mux_input->scte35_interval = program->scte35_interval;
     upipe_ts_mux_input->aac_encaps = program->aac_encaps;
+    upipe_ts_mux_input->aac_signaling = program->aac_signaling;
     upipe_ts_mux_input->max_delay = program->max_delay;
     upipe_ts_mux_input->au_per_sec.num = upipe_ts_mux_input->au_per_sec.den = 0;
     upipe_ts_mux_input->original_au_per_sec.num =
@@ -1438,8 +1447,10 @@ static int upipe_ts_mux_input_provide_flow_format(struct upipe *upipe,
         if (!ubase_ncmp(def, "block.h264.") || !ubase_ncmp(def, "block.hevc."))
             uref_h26x_flow_set_encaps(flow_format, UREF_H26X_ENCAPS_ANNEXB);
         else if (!ubase_ncmp(def, "block.aac.") ||
-                 !ubase_ncmp(def, "block.aac_latm."))
+                 !ubase_ncmp(def, "block.aac_latm.")) {
             uref_mpga_flow_set_encaps(flow_format, input->aac_encaps);
+            uref_mpga_flow_set_signaling(flow_format, input->aac_signaling);
+        }
     }
     return urequest_provide_flow_format(request, flow_format);
 }
@@ -1510,6 +1521,39 @@ static int _upipe_ts_mux_input_set_aac_encaps(struct upipe *upipe, int encaps)
     return UBASE_ERR_NONE;
 }
 
+/** @internal @This returns the current signaling mode for AAC streams.
+ *
+ * @param upipe description structure of the pipe
+ * @param signaling_p filled in with the signaling mode
+ * @return an error code
+ */
+static int _upipe_ts_mux_input_get_aac_signaling(struct upipe *upipe,
+                                                 int *signaling_p)
+{
+    struct upipe_ts_mux_input *upipe_ts_mux_input =
+        upipe_ts_mux_input_from_upipe(upipe);
+    assert(signaling_p != NULL);
+    *signaling_p = upipe_ts_mux_input->aac_signaling;
+    return UBASE_ERR_NONE;
+}
+
+/** @internal @This sets the signaling mode for AAC streams.
+ *
+ * @param upipe description structure of the pipe
+ * @param signaling signaling mode
+ * @return an error code
+ */
+static int _upipe_ts_mux_input_set_aac_signaling(struct upipe *upipe,
+                                                 int signaling)
+{
+    struct upipe_ts_mux_input *upipe_ts_mux_input =
+        upipe_ts_mux_input_from_upipe(upipe);
+    upipe_ts_mux_input->aac_signaling = signaling;
+
+    /* Should we restart negotiation? */
+    return UBASE_ERR_NONE;
+}
+
 /** @internal @This processes control commands on a ts_mux_input
  * pipe.
  *
@@ -1556,6 +1600,16 @@ static int upipe_ts_mux_input_control(struct upipe *upipe,
             UBASE_SIGNATURE_CHECK(args, UPIPE_TS_MUX_SIGNATURE)
             int encaps = va_arg(args, int);
             return _upipe_ts_mux_input_set_aac_encaps(upipe, encaps);
+        }
+        case UPIPE_TS_MUX_GET_AAC_SIGNALING: {
+            UBASE_SIGNATURE_CHECK(args, UPIPE_TS_MUX_SIGNATURE)
+            int *signaling_p = va_arg(args, int *);
+            return _upipe_ts_mux_input_get_aac_signaling(upipe, signaling_p);
+        }
+        case UPIPE_TS_MUX_SET_AAC_SIGNALING: {
+            UBASE_SIGNATURE_CHECK(args, UPIPE_TS_MUX_SIGNATURE)
+            int signaling = va_arg(args, int);
+            return _upipe_ts_mux_input_set_aac_signaling(upipe, signaling);
         }
 
         case UPIPE_GET_MAX_LENGTH:
@@ -1779,6 +1833,7 @@ static struct upipe *upipe_ts_mux_program_alloc(struct upipe_mgr *mgr,
     upipe_ts_mux_program->pcr_interval = upipe_ts_mux->pcr_interval;
     upipe_ts_mux_program->scte35_interval = upipe_ts_mux->scte35_interval;
     upipe_ts_mux_program->aac_encaps = upipe_ts_mux->aac_encaps;
+    upipe_ts_mux_program->aac_signaling = upipe_ts_mux->aac_signaling;
     upipe_ts_mux_program->max_delay = upipe_ts_mux->max_delay;
     upipe_ts_mux_program->required_octetrate = 0;
     upipe_ts_mux_program_init_sub(upipe);
@@ -2211,6 +2266,45 @@ static int _upipe_ts_mux_program_set_aac_encaps(struct upipe *upipe, int encaps)
     return UBASE_ERR_NONE;
 }
 
+/** @internal @This returns the current signaling mode for AAC streams.
+ *
+ * @param upipe description structure of the pipe
+ * @param signaling_p filled in with the signaling mode
+ * @return an error code
+ */
+static int _upipe_ts_mux_program_get_aac_signaling(struct upipe *upipe,
+                                                   int *signaling_p)
+{
+    struct upipe_ts_mux_program *upipe_ts_mux_program =
+        upipe_ts_mux_program_from_upipe(upipe);
+    assert(signaling_p != NULL);
+    *signaling_p = upipe_ts_mux_program->aac_signaling;
+    return UBASE_ERR_NONE;
+}
+
+/** @internal @This sets the signaling mode for AAC streams.
+ *
+ * @param upipe description structure of the pipe
+ * @param signaling signaling mode
+ * @return an error code
+ */
+static int _upipe_ts_mux_program_set_aac_signaling(struct upipe *upipe,
+                                                   int signaling)
+{
+    struct upipe_ts_mux_program *upipe_ts_mux_program =
+        upipe_ts_mux_program_from_upipe(upipe);
+    upipe_ts_mux_program->aac_signaling = signaling;
+
+    struct uchain *uchain;
+    ulist_foreach (&upipe_ts_mux_program->inputs, uchain) {
+        struct upipe_ts_mux_input *input =
+            upipe_ts_mux_input_from_uchain(uchain);
+        upipe_ts_mux_set_aac_signaling(upipe_ts_mux_input_to_upipe(input),
+                                       signaling);
+    }
+    return UBASE_ERR_NONE;
+}
+
 /** @internal @This processes control commands on a ts_mux_program pipe.
  *
  * @param upipe description structure of the pipe
@@ -2291,6 +2385,16 @@ static int upipe_ts_mux_program_control(struct upipe *upipe,
             UBASE_SIGNATURE_CHECK(args, UPIPE_TS_MUX_SIGNATURE)
             int encaps = va_arg(args, int);
             return _upipe_ts_mux_program_set_aac_encaps(upipe, encaps);
+        }
+        case UPIPE_TS_MUX_GET_AAC_SIGNALING: {
+            UBASE_SIGNATURE_CHECK(args, UPIPE_TS_MUX_SIGNATURE)
+            int *signaling_p = va_arg(args, int *);
+            return _upipe_ts_mux_program_get_aac_signaling(upipe, signaling_p);
+        }
+        case UPIPE_TS_MUX_SET_AAC_SIGNALING: {
+            UBASE_SIGNATURE_CHECK(args, UPIPE_TS_MUX_SIGNATURE)
+            int signaling = va_arg(args, int);
+            return _upipe_ts_mux_program_set_aac_signaling(upipe, signaling);
         }
 
         case UPIPE_TS_MUX_GET_VERSION:
@@ -2512,6 +2616,7 @@ static struct upipe *upipe_ts_mux_alloc(struct upipe_mgr *mgr,
     upipe_ts_mux->pcr_interval = DEFAULT_PCR_INTERVAL;
     upipe_ts_mux->scte35_interval = DEFAULT_SCTE35_INTERVAL;
     upipe_ts_mux->aac_encaps = DEFAULT_AAC_ENCAPS;
+    upipe_ts_mux->aac_signaling = DEFAULT_AAC_SIGNALING;
     upipe_ts_mux->encoding = DEFAULT_ENCODING;
     upipe_ts_mux->max_delay = UINT64_MAX;
     upipe_ts_mux->mux_delay = DEFAULT_MUX_DELAY;
@@ -4202,6 +4307,42 @@ static int _upipe_ts_mux_set_aac_encaps(struct upipe *upipe, int encaps)
     return UBASE_ERR_NONE;
 }
 
+/** @internal @This returns the current signaling mode for AAC streams.
+ *
+ * @param upipe description structure of the pipe
+ * @param signaling_p filled in with the signaling mode
+ * @return an error code
+ */
+static int _upipe_ts_mux_get_aac_signaling(struct upipe *upipe,
+                                           int *signaling_p)
+{
+    struct upipe_ts_mux *upipe_ts_mux = upipe_ts_mux_from_upipe(upipe);
+    assert(signaling_p != NULL);
+    *signaling_p = upipe_ts_mux->aac_signaling;
+    return UBASE_ERR_NONE;
+}
+
+/** @internal @This sets the signaling mode for AAC streams.
+ *
+ * @param upipe description structure of the pipe
+ * @param signaling signaling mode
+ * @return an error code
+ */
+static int _upipe_ts_mux_set_aac_signaling(struct upipe *upipe, int signaling)
+{
+    struct upipe_ts_mux *upipe_ts_mux = upipe_ts_mux_from_upipe(upipe);
+    upipe_ts_mux->aac_signaling = signaling;
+
+    struct uchain *uchain;
+    ulist_foreach (&upipe_ts_mux->programs, uchain) {
+        struct upipe_ts_mux_program *program =
+            upipe_ts_mux_program_from_uchain(uchain);
+        upipe_ts_mux_set_aac_signaling(upipe_ts_mux_program_to_upipe(program),
+                                       signaling);
+    }
+    return UBASE_ERR_NONE;
+}
+
 /** @internal @This returns the current encoding.
  *
  * @param upipe description structure of the pipe
@@ -4444,6 +4585,16 @@ static int _upipe_ts_mux_control(struct upipe *upipe, int command, va_list args)
             int encaps = va_arg(args, int);
             return _upipe_ts_mux_set_aac_encaps(upipe, encaps);
         }
+        case UPIPE_TS_MUX_GET_AAC_SIGNALING: {
+            UBASE_SIGNATURE_CHECK(args, UPIPE_TS_MUX_SIGNATURE)
+            int *signaling_p = va_arg(args, int *);
+            return _upipe_ts_mux_get_aac_signaling(upipe, signaling_p);
+        }
+        case UPIPE_TS_MUX_SET_AAC_SIGNALING: {
+            UBASE_SIGNATURE_CHECK(args, UPIPE_TS_MUX_SIGNATURE)
+            int signaling = va_arg(args, int);
+            return _upipe_ts_mux_set_aac_signaling(upipe, signaling);
+        }
         case UPIPE_TS_MUX_GET_ENCODING: {
             UBASE_SIGNATURE_CHECK(args, UPIPE_TS_MUX_SIGNATURE)
             const char **encoding_p = va_arg(args, const char **);
@@ -4663,6 +4814,8 @@ const char *upipe_ts_mux_command_str(int cmd)
         UBASE_CASE_TO_STR(UPIPE_TS_MUX_SET_VERSION);
         UBASE_CASE_TO_STR(UPIPE_TS_MUX_GET_AAC_ENCAPS);
         UBASE_CASE_TO_STR(UPIPE_TS_MUX_SET_AAC_ENCAPS);
+        UBASE_CASE_TO_STR(UPIPE_TS_MUX_GET_AAC_SIGNALING);
+        UBASE_CASE_TO_STR(UPIPE_TS_MUX_SET_AAC_SIGNALING);
         UBASE_CASE_TO_STR(UPIPE_TS_MUX_GET_ENCODING);
         UBASE_CASE_TO_STR(UPIPE_TS_MUX_SET_ENCODING);
         UBASE_CASE_TO_STR(UPIPE_TS_MUX_FREEZE_PSI);
