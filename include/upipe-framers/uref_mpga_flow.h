@@ -50,7 +50,20 @@ enum uref_mpga_encaps {
     UREF_MPGA_ENCAPS_LATM
 };
 
+/** @This defines signaling modes of the extension AOT for AAC. */
+enum uref_mpga_signaling {
+    /** Implicit by default, explicit hierarchical if global header is enabled */
+    UREF_MPGA_SIGNALING_AUTO = 0,
+    /** Implicit backward compatible signaling */
+    UREF_MPGA_SIGNALING_IMPLICIT,
+    /** Explicit backward compatible signaling */
+    UREF_MPGA_SIGNALING_EXPLICIT_COMPATIBLE,
+    /** Explicit hierarchical signaling */
+    UREF_MPGA_SIGNALING_EXPLICIT_HIERARCHICAL
+};
+
 UREF_ATTR_SMALL_UNSIGNED(mpga_flow, encaps, "mpga.encaps", AAC encapsulation type)
+UREF_ATTR_SMALL_UNSIGNED(mpga_flow, signaling, "mpga.signaling", AAC signaling mode)
 UREF_ATTR_SMALL_UNSIGNED(mpga_flow, mode, "mpga.mode", MPEG audio mode)
 
 /** @This infers the encapsulation type from a flow definition packet.

@@ -977,6 +977,27 @@ static int upipe_avcenc_check_flow_format(struct upipe *upipe,
                 upipe_avcenc_set_option(upipe, "latm", "0");
                 break;
         }
+        uint8_t signaling;
+        if (ubase_check(uref_mpga_flow_get_signaling(flow_format, &signaling)))
+            switch (signaling) {
+                default:
+                case UREF_MPGA_SIGNALING_AUTO:
+                    upipe_avcenc_set_option(upipe, "signaling",
+                                            "default");
+                    break;
+                case UREF_MPGA_SIGNALING_IMPLICIT:
+                    upipe_avcenc_set_option(upipe, "signaling",
+                                            "implicit");
+                    break;
+                case UREF_MPGA_SIGNALING_EXPLICIT_COMPATIBLE:
+                    upipe_avcenc_set_option(upipe, "signaling",
+                                            "explicit_sbr");
+                    break;
+                case UREF_MPGA_SIGNALING_EXPLICIT_HIERARCHICAL:
+                    upipe_avcenc_set_option(upipe, "signaling",
+                                            "explicit_hierarchical");
+                    break;
+            }
     }
 
     uref_free(upipe_avcenc->flow_def_requested);
