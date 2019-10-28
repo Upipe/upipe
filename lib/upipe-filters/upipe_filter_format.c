@@ -326,11 +326,13 @@ static int upipe_ffmt_check_flow_format(struct upipe *upipe,
         uref_pic_flow_delete_hsize_visible(flow_def_dup);
         uref_pic_flow_delete_vsize_visible(flow_def_dup);
 
-        bool need_deint = !ubase_check(uref_pic_get_progressive(flow_def)) &&
-                          ubase_check(uref_pic_get_progressive(flow_def_dup));
-        bool need_sws = !uref_pic_flow_compare_format(flow_def, flow_def_dup) ||
-                        uref_pic_flow_cmp_hsize(flow_def, flow_def_dup) ||
-                        uref_pic_flow_cmp_vsize(flow_def, flow_def_dup);
+        bool need_deint = ffmt_mgr->deint_mgr &&
+            !ubase_check(uref_pic_get_progressive(flow_def)) &&
+            ubase_check(uref_pic_get_progressive(flow_def_dup));
+        bool need_sws = ffmt_mgr->sws_mgr &&
+            (!uref_pic_flow_compare_format(flow_def, flow_def_dup) ||
+             uref_pic_flow_cmp_hsize(flow_def, flow_def_dup) ||
+             uref_pic_flow_cmp_vsize(flow_def, flow_def_dup));
 
         if (need_deint) {
             struct upipe *input = upipe_void_alloc(ffmt_mgr->deint_mgr,
