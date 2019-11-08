@@ -630,7 +630,6 @@ static int upipe_grid_out_import_format(struct upipe *upipe,
     if (ubase_check(uref_flow_match_def(in_flow, UREF_PIC_FLOW_DEF))) {
         uref_pic_flow_clear_format(out_flow);
         uref_pic_flow_copy_format(out_flow, in_flow);
-        uref_pic_flow_copy_fps(out_flow, in_flow);
         if (likely(ubase_check(uref_pic_flow_get_hsize(in_flow, &hsize)))) {
             uref_pic_flow_set_hsize(out_flow, hsize);
         } else {
