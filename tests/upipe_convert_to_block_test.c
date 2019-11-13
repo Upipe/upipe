@@ -257,7 +257,7 @@ int main(int argc, char **argv)
     ubase_assert(ubuf_sound_mem_mgr_add_plane(sound_mgr, "lr"));
 
     /* set up flow definition packet */
-    uref = uref_sound_flow_alloc_def(uref_mgr, NULL, 2, 4);
+    uref = uref_sound_flow_alloc_def(uref_mgr, "s16.", 2, 4);
     assert(uref);
     ubase_assert(upipe_set_flow_def(tblk, uref));
     assert(tblk);
