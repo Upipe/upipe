@@ -1,0 +1,233 @@
+name: Test suite
+
+on: [push, pull_request]
+
+jobs:
+  ci:
+    name: ${{ matrix.name }}
+    runs-on: ${{ matrix.os }}
+    env:
+      MAKEFLAGS: -j3
+
+    strategy:
+      fail-fast: false
+      matrix:
+        name: [
+          ubuntu-amd64-gcc-9,
+          ubuntu-amd64-gcc-9-static,
+          ubuntu-amd64-clang-8,
+          ubuntu-i386-gcc-9,
+          ubuntu-armhf-gcc-8,
+          ubuntu-arm64-gcc-8,
+          macos-xcode
+        ]
+
+        include:
+          - name: ubuntu-amd64-gcc-9
+            os: ubuntu-latest
+            arch: amd64
+            compiler: gcc
+            version: "9"
+
+          - name: ubuntu-amd64-gcc-9-static
+            os: ubuntu-latest
+            arch: amd64
+            compiler: gcc
+            version: "9"
+            static: true
+
+          - name: ubuntu-amd64-clang-8
+            os: ubuntu-latest
+            arch: amd64
+            compiler: clang
+            version: "8"
+
+          - name: ubuntu-i386-gcc-9
+            os: ubuntu-latest
+            arch: i386
+            host: i386-linux-gnu
+            compiler: gcc
+            version: "9"
+            multilib: true
+
+          - name: ubuntu-armhf-gcc-8
+            os: ubuntu-latest
+            arch: armhf
+            host: arm-linux-gnueabihf
+            compiler: gcc
+            version: "8"
+            multilib: true
+
+          - name: ubuntu-arm64-gcc-8
+            os: ubuntu-latest
+            arch: arm64
+            host: aarch64-linux-gnu
+            compiler: gcc
+            version: "8"
+
+          - name: macos-xcode
+            os: macos-latest
+            compiler: xcode
+
+    steps:
+    - name: Set up env
+      run: |
+        echo "echo ::set-env name=\$1::\$2" | sudo tee /usr/local/bin/set-env >/dev/null
+        sudo chmod +x /usr/local/bin/set-env
+
+    - name: Checkout
+      uses: actions/checkout@v1
+
+    - name: Install compiler (gcc)
+      if: runner.os == 'Linux' && matrix.compiler == 'gcc'
+      run: |
+        sudo dpkg --add-architecture ${{ matrix.arch }}
+        sudo sed 's/^deb /deb [arch=amd64,i386] /' -i /etc/apt/sources.list
+        sudo apt-add-repository -y "deb [arch=arm64,armhf] http://ports.ubuntu.com $(lsb_release -sc) main universe"
+        sudo apt-add-repository -y "deb [arch=arm64,armhf] http://ports.ubuntu.com $(lsb_release -sc)-updates main universe"
+        sudo apt-add-repository -y "ppa:ubuntu-toolchain-r/test"
+        sudo apt-get update
+        CC=gcc
+        CXX=g++
+        PKG=g++
+        if [ -n "${{ matrix.version }}" ]; then
+            CC=$CC-${{ matrix.version }}
+            CXX=$CXX-${{ matrix.version }}
+            PKG=$PKG-${{ matrix.version }}
+        fi
+        if [ -n "${{ matrix.multilib }}" ]; then
+            PKG=$PKG-multilib
+        fi
+        if [ -n "${{ matrix.host }}" -a "${{ matrix.arch }}" != "i386" ]; then
+            CC=${{ matrix.host }}-$CC
+            CXX=${{ matrix.host }}-$CXX
+            PKG=$PKG-${{ matrix.host }}
+        fi
+        sudo apt-get install -y $PKG
+        set-env HOST_CC "$CC"
+        set-env HOST_CXX "$CXX"
+        if [ "${{ matrix.arch }}" = "i386" ]; then
+          set-env HOST_CC "$CC -m32"
+          set-env HOST_CXX "$CXX -m32"
+          set-env CFLAGS "-msse2 -mfpmath=sse"
+        fi
+        if [ -n "${{ matrix.host }}" ]; then
+          set-env PKG_CONFIG_LIBDIR "/usr/lib/${{ matrix.host }}/pkgconfig:/usr/share/pkgconfig"
+          set-env HOST "--host=${{ matrix.host }}"
+        fi
+        if [ "${{ matrix.sanitizer }}" = "true" ]; then
+          SAN="-fsanitize=undefined -fsanitize=address,pointer-compare,pointer-subtract"
+          set-env CFLAGS "$SAN"
+          set-env CXXFLAGS "$SAN"
+          set-env LDFLAGS "$SAN"
+        fi
+        # workaround gcc-8 bug
+        if [ "${{ matrix.version }}" = "8" ]; then
+          set-env CFLAGS_GCC8 "-Wno-deprecated-declarations"
+        fi
+
+    - name: Install compiler (clang)
+      if: runner.os == 'Linux' && matrix.compiler == 'clang'
+      run: |
+        sudo add-apt-repository -y "deb http://apt.llvm.org/$(lsb_release -sc)/ llvm-toolchain-$(lsb_release -sc)-${{ matrix.version }} main"
+        sudo apt-get update
+        sudo apt-get install -y clang-${{ matrix.version }}
+        set-env HOST_CC "clang-${{ matrix.version }}"
+        set-env HOST_CXX "clang++-${{ matrix.version }}"
+
+    - name: Install dependencies (Linux)
+      if: runner.os == 'Linux'
+      env:
+        LIBS: >
+          ev asound2 x264 x265 speexdsp png freetype6 zvbi gcrypt tasn1 dvbv5
+          udev ebur128 avcodec avformat swresample swscale gl1-mesa glu1-mesa
+          dvbcsa
+      run: |
+        sudo apt-get install -y valgrind nasm qemu-user-binfmt \
+          $(echo libc6-dbg luajit | sed 's/\(\S*\)/\1:${{ matrix.arch }}/g') \
+          $(echo $LIBS | sed 's/\(\S*\)/lib\1-dev:${{ matrix.arch }}/g')
+        if [ -n "${{ matrix.host }}" -a "${{ matrix.arch }}" != "i386" ]; then
+            set-env DISABLE_VALGRIND "1"
+        fi
+        set-env CONFIGURE_FLAGS "--enable-luajit"
+
+    - name: Install dependencies (macOS)
+      if: runner.os == 'macOS'
+      run: |
+        brew install autoconf automake libtool pkg-config nasm luajit \
+          ffmpeg freetype libebur128 libev libgcrypt libtasn1 speex x264 x265
+        set-env HOST_CC "clang"
+        set-env HOST_CXX "clang++"
+        set-env CFLAGS "-Wno-error=unused-command-line-argument -fsanitize=undefined -fsanitize=address -fsanitize-address-use-after-scope -fno-omit-frame-pointer -fno-optimize-sibling-calls"
+        set-env LDFLAGS "-fsanitize=undefined -fsanitize=address"
+        set-env DISABLE_VALGRIND "1"
+
+    - name: Install bitstream
+      run: |
+        git clone --depth 1 https://code.videolan.org/videolan/bitstream.git
+        make -C bitstream install PREFIX="$PWD/usr-bitstream"
+        set-env PKG_CONFIG_PATH "$PKG_CONFIG_PATH:$PWD/usr-bitstream/share/pkgconfig"
+        if [ "${{ matrix.static }}" = "true" ]; then
+          STATIC="--disable-shared"
+        fi
+        set-env CONFIGURE_FLAGS "$CONFIGURE_FLAGS $STATIC --disable-silent-rules $HOST CC=\"$HOST_CC\" CXX=\"$HOST_CXX\" CFLAGS=\"-Werror -Wno-error=deprecated-declarations -O2 -g $CFLAGS $CFLAGS_GCC8\" CXXFLAGS=\"-Werror -O2 -g $CXXFLAGS\" LDFLAGS=\"$LDFLAGS\""
+
+    - name: Build and install libamt
+      if: runner.os == 'Linux' && (matrix.arch == 'amd64' || matrix.arch == 'i386')
+      run: |
+        if [ "${{ matrix.arch }}" = "i386" ]; then
+          LIBAMT_PLATFORM="PLATFORM32=1"
+        fi
+        git clone --depth 1 https://github.com/cisco/SSMAMTtools.git
+        make -C SSMAMTtools/build/linux \
+          CC="$HOST_CC -fPIC" \
+          TARGET=libamt.a \
+          $LIBAMT_PLATFORM
+        sudo install -D SSMAMTtools/include/amt.h /usr/local/include/amt.h
+        sudo install -D SSMAMTtools/lib/linux/libamt.a /usr/local/lib/libamt.a
+
+    - name: Build and install libdvbcsa
+      if: runner.os == 'macOS'
+      run: |
+        git clone --depth 1 https://github.com/glenvt18/libdvbcsa.git
+        cd libdvbcsa
+        ./bootstrap
+        ./configure $HOST CC="$HOST_CC"
+        sudo make install
+
+    - name: Configure
+      run: |
+        autoreconf -i
+        sed -i='' 's/|-stdlib=\*)/|-stdlib=\*|-fsanitize=*)/' autotools/ltmain.sh
+        eval ./configure $CONFIGURE_FLAGS
+
+    - name: Archive config log
+      if: always()
+      uses: actions/upload-artifact@v1
+      with:
+        name: ${{ matrix.name }}_config.log
+        path: config.log
+
+    - name: Build and test
+      run: >
+        make distcheck
+        DISTCHECK_CONFIGURE_FLAGS="$CONFIGURE_FLAGS"
+        AM_COLOR_TESTS="always"
+        VERBOSE=1
+
+  coding-style:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v1
+
+      - name: Install dependencies
+        run: sudo apt-get install libgcrypt-dev
+
+      - name: Configure
+        run: |
+          autoreconf -i
+          ./configure
+
+      - name: Check whitespaces
+        run: make check-whitespace
