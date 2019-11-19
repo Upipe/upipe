@@ -30,10 +30,7 @@ void sdi_reload(int fd);
 
 void sdi_refclk(int fd, uint8_t refclk_sel, uint32_t *refclk_freq, uint64_t *refclk_counter);
 
-void sdi_capabilities(int fd, uint8_t *channels, uint8_t *has_vcxos,
-        uint8_t *has_gs12241, uint8_t *has_gs12281, uint8_t *has_si5324,
-        uint8_t *has_genlock, uint8_t *has_lmh0387, uint8_t *has_si596,
-        uint8_t *has_si552);
+void sdi_capabilities(int fd, uint32_t *flags, uint8_t *channels);
 
 void sdi_set_rate(int fd, uint8_t rate);
 uint8_t sdi_get_rate(int fd);
@@ -59,9 +56,11 @@ void sdi_gs12241_spi(int fd, uint32_t tx_data, uint32_t *rx_data);
 void sdi_gs12281_spi_cs(int fd, uint8_t cs_n);
 void sdi_gs12281_spi(int fd, uint32_t tx_data, uint32_t *rx_data);
 
+#define NO_SECRETS
 void sdi_lmh0387_direction(int fd, uint8_t tx_enable);
 void sdi_lmh0387_spi_cs(int fd, uint8_t cs_n);
 void sdi_lmh0387_spi(int fd, uint32_t tx_data, uint32_t *rx_data);
+#undef NO_SECRETS
 
 void sdi_rx(int fd, uint8_t *locked, uint8_t *mode, uint8_t *family, uint8_t *scan, uint8_t *rate);
 void sdi_tx(int fd, uint8_t mode, uint8_t *txen, uint8_t *slew);
@@ -178,9 +177,11 @@ static const uint16_t si5324_148_35_mhz_regs[][2] = {
 /* flash */
 
 #define FALCON9_FLASH_READ_ID_REG 0x9E
+#define NO_SECRETS
 #define MINI_4K_FLASH_READ_ID_REG 0x9F
 #define DUO2_FLASH_READ_ID_REG    0x9F
 #define SDI_4K_FLASH_READ_ID_REG  0x9F
+#undef NO_SECRETS
 
 #define FLASH_READ    0x03
 #define FLASH_WREN    0x06
@@ -217,11 +218,13 @@ void gs12281_spi_write(int fd, uint8_t channel, uint16_t adr, uint16_t data);
 uint16_t gs12281_spi_read(int fd, uint8_t channel, uint16_t adr);
 void gs12281_spi_init(int fd);
 
+#define NO_SECRETS
 #define LMH0387_RX_ENABLE 0x0
 #define LMH0387_TX_ENABLE 0x1
 
 void sdi_lmh0387_spi_write(int fd, uint8_t channel, uint16_t adr, uint16_t data);
 uint16_t sdi_lmh0387_spi_read(int fd, uint8_t channel, uint16_t adr);
+#undef NO_SECRETS
 
 /* genlock */
 

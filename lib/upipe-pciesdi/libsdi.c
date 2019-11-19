@@ -69,21 +69,11 @@ void sdi_refclk(int fd, uint8_t refclk_sel, uint32_t *refclk_freq, uint64_t *ref
     *refclk_counter = m.refclk_counter;
 }
 
-void sdi_capabilities(int fd, uint8_t *channels, uint8_t *has_vcxos,
-        uint8_t *has_gs12241, uint8_t *has_gs12281, uint8_t *has_si5324,
-        uint8_t *has_genlock, uint8_t *has_lmh0387, uint8_t *has_si596,
-        uint8_t *has_si552) {
+void sdi_capabilities(int fd, uint32_t *flags, uint8_t *channels) {
     struct sdi_ioctl_capabilities m;
     ioctl(fd, SDI_IOCTL_CAPABILITIES, &m);
-    *channels    = m.channels;
-    *has_vcxos   = m.has_vcxos;
-    *has_gs12241 = m.has_gs12241;
-    *has_gs12281 = m.has_gs12281;
-    *has_si5324  = m.has_si5324;
-    *has_genlock = m.has_genlock;
-    *has_lmh0387 = m.has_lmh0387;
-    *has_si596   = m.has_si596;
-    *has_si552   = m.has_si552;
+    *channels = m.channels;
+    *flags    = m.flags;
 }
 
 void sdi_set_rate(int fd, uint8_t rate) {
@@ -214,6 +204,7 @@ void sdi_gs12281_spi(int fd, uint32_t tx_data, uint32_t *rx_data) {
     *rx_data = m.rx_data;
 }
 
+#define NO_SECRETS
 void sdi_lmh0387_direction(int fd, uint8_t tx_enable) {
     struct sdi_ioctl_lmh0387_direction m;
     m.tx_enable = tx_enable;
@@ -232,6 +223,7 @@ void sdi_lmh0387_spi(int fd, uint32_t tx_data, uint32_t *rx_data) {
     ioctl(fd, SDI_IOCTL_LMH0387_SPI, &m);
     *rx_data = m.rx_data;
 }
+#undef NO_SECRETS
 
 void sdi_rx(int fd, uint8_t *locked, uint8_t *mode, uint8_t *family, uint8_t *scan, uint8_t *rate) {
     struct sdi_ioctl_rx m;
@@ -742,6 +734,7 @@ void gs12281_spi_init(int fd)
         gs12281_spi_write(fd, i, 0, 1 << 13); /* gspi_bus_through_enable */
 }
 
+#define NO_SECRETS
 void sdi_lmh0387_spi_write(int fd, uint8_t channel, uint16_t adr, uint16_t data)
 {
     uint32_t tx_data, rx_data;
@@ -773,6 +766,7 @@ uint16_t sdi_lmh0387_spi_read(int fd, uint8_t channel, uint16_t adr)
 
     return rx_data & 0xff;
 }
+#undef NO_SECRETS
 
 /* genlock */
 

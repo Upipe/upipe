@@ -778,10 +778,9 @@ static int init_hardware(struct upipe *upipe, bool ntsc, bool genlock, bool sd)
     int fd = ctx->fd;
     int device_number = ctx->device_number;
 
-    uint8_t channels, has_vcxos, has_gs12241, has_gs12281, has_si5324,
-               has_genlock, has_lmh0387, has_si596, has_si552;
-    sdi_capabilities(fd, &channels, &has_vcxos, &has_gs12241, &has_gs12281,
-            &has_si5324, &has_genlock, &has_lmh0387, &has_si596, &has_si552);
+    uint32_t capability_flags;
+    uint8_t channels;
+    sdi_capabilities(fd, &capability_flags, &channels);
 
     if (device_number < 0 || device_number >= channels) {
         upipe_err_va(upipe, "invalid device number (%d) for number of channels (%d)",
@@ -789,21 +788,21 @@ static int init_hardware(struct upipe *upipe, bool ntsc, bool genlock, bool sd)
         return UBASE_ERR_INVALID;
     }
 
-    if (has_vcxos == 0 && ntsc) {
+    if ((capability_flags & SDI_CAP_HAS_VCXOS) == 0 && ntsc) {
         upipe_err(upipe, "NTSC not yet supported on boards without VCXOs");
         return UBASE_ERR_INVALID;
     }
 
-    if (has_genlock == 0 && genlock) {
+    if ((capability_flags & SDI_CAP_HAS_GENLOCK) == 0 && genlock) {
         upipe_err(upipe, "genlock not supported on this board");
         return UBASE_ERR_INVALID;
     }
 
     /* sdi_pre_init */
 
-    if (has_gs12281)
+    if (capability_flags & SDI_CAP_HAS_GS12281)
         gs12281_spi_init(fd);
-    if (has_gs12241) {
+    if (capability_flags & SDI_CAP_HAS_GS12241) {
         if (sd) {
             gs12241_reset(fd, device_number);
             gs12241_config_for_sd(fd, device_number);
@@ -811,7 +810,7 @@ static int init_hardware(struct upipe *upipe, bool ntsc, bool genlock, bool sd)
         gs12241_spi_init(fd);
     }
 
-    if (has_lmh0387) {
+    if (capability_flags & SDI_CAP_HAS_LMH0387) {
         /* Set direction for RX. */
         sdi_lmh0387_direction(fd, 0);
         /* set launch amplitude to nominal */
