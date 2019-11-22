@@ -84,7 +84,7 @@ NASMFLAGS="${NASMFLAGS} -DPIC -prefer-non-pic -Pconfig.asm -I\$(top_builddir)/x8
 
 WARN_FLAGS="-Wall -Wextra -Wno-unused-parameter -Wno-sign-compare -Wmissing-declarations -Wwrite-strings -Wredundant-decls -Wundef -Wmissing-include-dirs"
 WARN_FLAGS_C="-Wstrict-prototypes -Wmissing-prototypes -Wold-style-definition"
-WARN_FLAGS_OPT="-Wduplicated-cond -Wduplicated-branches -Wrestrict -Wformat=2"
+WARN_FLAGS_OPT="-Wduplicated-cond -Wduplicated-branches -Wrestrict -Wformat=2 -Wno-vla-larger-than"
 # TODO: add -Wnull-dereference and -Wlogical-op once all warnings are fixed
 for flag in $WARN_FLAGS_OPT; do
     AX_CHECK_COMPILE_FLAG([$flag],[WARN_FLAGS="$WARN_FLAGS $flag"],,-Werror)
