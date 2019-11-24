@@ -660,6 +660,10 @@ static void output_sound(struct upipe *upipe, const struct urational *fps,
                 uref_clock_get_pts_sys(src, &pts);
                 wait = 1;
             }
+            else {
+                upipe_dbg_va(upipe_sub, "no urefs");
+                continue;
+            }
         }
 
         /* output */
