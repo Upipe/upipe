@@ -1,7 +1,7 @@
 /*
- * Copyright (C) 2016 Open Broadcast Systems Ltd
+ * Copyright (C) 2018-2019 Open Broadcast Systems Ltd
  *
- * Authors: Rafaël Carré <funman@videolan.org>
+ * Authors: Rafaël Carré
  *
  * Permission is hereby granted, free of charge, to any person obtaining
  * a copy of this software and associated documentation files (the
@@ -24,36 +24,26 @@
  */
 
 /** @file
- * @short Upipe speexdsp resampler module
+ * @short Upipe NIC PTP implementation of uclock
  */
 
-#ifndef _UPIPE_SPEEXDSP_UPIPE_SPEEXDSP_H_
+#ifndef _UPIPE_UCLOCK_PTP_H_
 /** @hidden */
-#define _UPIPE_SPEEXDSP_UPIPE_SPEEXDSP_H_
+#define _UPIPE_UCLOCK_PTP_H_
 #ifdef __cplusplus
 extern "C" {
 #endif
 
-#include <upipe/upipe.h>
+#include <upipe/uclock.h>
+#include <upipe/uprobe.h>
 
-#define UPIPE_SPEEXDSP_SIGNATURE UBASE_FOURCC('s','p','x','d')
-
-enum upipe_speexdsp_command {
-    UPIPE_SPEEXDSP_SENTINAL = UPIPE_CONTROL_LOCAL,
-
-    UPIPE_SPEEXDSP_RESET_RESAMPLER, /* int sig */
-};
-
-static inline int upipe_speexdsp_reset_resampler(struct upipe *upipe)
-{
-    return upipe_control(upipe, UPIPE_SPEEXDSP_RESET_RESAMPLER, UPIPE_SPEEXDSP_SIGNATURE);
-}
-
-/** @This returns the management structure for speexdsp pipes.
+/** @This allocates a new uclock structure.
  *
- * @return pointer to manager
+ * @param uprobe probe catching log events for error reporting
+ * @param interface NIC names, or NULL
+ * @return pointer to uclock, or NULL in case of error
  */
-struct upipe_mgr *upipe_speexdsp_mgr_alloc(void);
+struct uclock *uclock_ptp_alloc(struct uprobe *uprobe, const char *interface[2]);
 
 #ifdef __cplusplus
 }

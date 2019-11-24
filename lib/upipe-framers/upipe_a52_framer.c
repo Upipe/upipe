@@ -180,7 +180,7 @@ static struct upipe *upipe_a52f_alloc(struct upipe_mgr *mgr,
     uref_init(&upipe_a52f->au_uref_s);
     upipe_a52f_flush_dates(upipe);
     upipe_a52f->drift_rate.num = upipe_a52f->drift_rate.den = 0;
-    upipe_a52f->sync_header[0] = 0x0;
+    memset(upipe_a52f->sync_header, 0x0, sizeof (upipe_a52f->sync_header));
     upipe_throw_ready(upipe);
     return upipe;
 }

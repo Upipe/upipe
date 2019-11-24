@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2012-2015 OpenHeadend S.A.R.L.
+ * Copyright (C) 2012-2019 OpenHeadend S.A.R.L.
  *
  * Authors: Christophe Massiot
  *
@@ -87,6 +87,14 @@ extern "C" {
 
 /** @This is used to retrieve the number of items of an array. */
 #define UBASE_ARRAY_SIZE(a)        (sizeof (a) / sizeof ((a)[0]))
+
+/** @This iterates the items of a fixed size array.
+ *
+ * @param a the array to iterate
+ * @param item array iterator
+ */
+#define ubase_array_foreach(a, item)                                        \
+    for (item = a; (item - a) < UBASE_ARRAY_SIZE(a); item++)
 
 /** @This declares two functions dealing with substructures included into a
  * larger structure.
@@ -238,7 +246,7 @@ do {                                                                        \
 } while (0);
 
 /** @This runs the given function and returns if the error code is not
- * UBASE_ERR_UNHANDLER.
+ * UBASE_ERR_UNHANDLED.
  *
  * @param command command whose return code is to be checked
  */
@@ -511,14 +519,16 @@ static inline uint32_t ubase_get_signature(va_list args)
 
 /** @This clips an integer into the given range
  *
- * @param args the va list to copy from
- * @return a signature
+ * @param i integer value
+ * @param min minimum value
+ * @param max maximum value
+ * @return an integer
  */
 static inline int ubase_clip(int i, int min, int max)
 {
     if      (i < min) return min;
     else if (i > max) return max;
-    else               return i;
+    else              return i;
 }
 
 

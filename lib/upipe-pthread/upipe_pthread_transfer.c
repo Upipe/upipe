@@ -28,6 +28,8 @@
  * This is particularly helpful for multithreaded applications.
  */
 
+#define _GNU_SOURCE
+
 #include <upipe/ubase.h>
 #include <upipe/urefcount.h>
 #include <upipe/ueventfd.h>
@@ -72,6 +74,8 @@ struct upipe_pthread_ctx {
     struct ueventfd event;
     /** mutual exclusion primitives for access to the event loop */
     struct umutex *mutex;
+    /** thread name */
+    char *name;
 };
 
 /** @internal @This is the main function of the new thread.
@@ -82,6 +86,15 @@ static void *upipe_pthread_start(void *_pthread_ctx)
 {
     struct upipe_pthread_ctx *pthread_ctx =
         (struct upipe_pthread_ctx *)_pthread_ctx;
+
+    /* set thread name */
+    if (pthread_ctx->name != NULL) {
+#if defined(__APPLE__)
+        pthread_setname_np(pthread_ctx->name);
+#else
+        pthread_setname_np(pthread_self(), pthread_ctx->name);
+#endif
+    }
 
     /* disable signals */
     sigset_t sigs;
@@ -150,6 +163,7 @@ static void upipe_pthread_stop(struct upump *upump)
     pthread_join(pthread_ctx->pthread_id, NULL);
     ueventfd_clean(&pthread_ctx->event);
     umutex_release(pthread_ctx->mutex);
+    free(pthread_ctx->name);
     free(pthread_ctx);
 }
 
@@ -169,11 +183,12 @@ static void upipe_pthread_stop(struct upump *upump)
  * @param attr pthread attributes
  * @return pointer to xfer manager
  */
-struct upipe_mgr *upipe_pthread_xfer_mgr_alloc(uint8_t queue_length,
+struct upipe_mgr *upipe_pthread_xfer_mgr_alloc_named(uint8_t queue_length,
         uint16_t msg_pool_depth, struct uprobe *uprobe_pthread_upump_mgr,
         upump_mgr_alloc upump_mgr_alloc, uint16_t upump_pool_depth,
         uint16_t upump_blocker_pool_depth, struct umutex *mutex,
-        pthread_t *pthread_id_p, const pthread_attr_t *restrict attr)
+        pthread_t *pthread_id_p, const pthread_attr_t *restrict attr,
+        const char *name)
 {
     struct upipe_pthread_ctx *pthread_ctx =
         malloc(sizeof(struct upipe_pthread_ctx));
@@ -207,6 +222,7 @@ struct upipe_mgr *upipe_pthread_xfer_mgr_alloc(uint8_t queue_length,
     pthread_ctx->upump_pool_depth = upump_pool_depth;
     pthread_ctx->upump_blocker_pool_depth = upump_blocker_pool_depth;
     pthread_ctx->mutex = umutex_use(mutex);
+    pthread_ctx->name = name ? strdup(name) : NULL;
 
     if (unlikely(pthread_create(&pthread_ctx->pthread_id, attr,
                                 upipe_pthread_start, pthread_ctx) != 0))
@@ -230,4 +246,22 @@ upipe_pthread_xfer_mgr_alloc_err2:
 upipe_pthread_xfer_mgr_alloc_err1:
     uprobe_release(uprobe_pthread_upump_mgr);
     return NULL;
+}
+
+struct upipe_mgr *upipe_pthread_xfer_mgr_alloc(uint8_t queue_length,
+        uint16_t msg_pool_depth, struct uprobe *uprobe_pthread_upump_mgr,
+        upump_mgr_alloc upump_mgr_alloc, uint16_t upump_pool_depth,
+        uint16_t upump_blocker_pool_depth, struct umutex *mutex,
+        pthread_t *pthread_id_p, const pthread_attr_t *restrict attr)
+{
+    return upipe_pthread_xfer_mgr_alloc_named(queue_length,
+                                              msg_pool_depth,
+                                              uprobe_pthread_upump_mgr,
+                                              upump_mgr_alloc,
+                                              upump_pool_depth,
+                                              upump_blocker_pool_depth,
+                                              mutex,
+                                              pthread_id_p,
+                                              attr,
+                                              NULL);
 }

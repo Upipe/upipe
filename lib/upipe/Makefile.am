@@ -1,6 +1,7 @@
 lib_LTLIBRARIES = libupipe.la
 
 libupipe_la_SOURCES = \
+	uclock_ptp.c \
 	uclock_std.c \
 	umem_alloc.c \
 	umem_pool.c \

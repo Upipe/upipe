@@ -1,10 +1,10 @@
 /*
- * Copyright (C) 2016 Open Broadcast Systems Ltd
+ * Copyright (C) 2019 OpenHeadend S.A.R.L.
  *
- * Authors: Rafaël Carré <funman@videolan.org>
+ * Authors: Arnaud de Turckheim
  *
  * Permission is hereby granted, free of charge, to any person obtaining
- * a copy of this software and associated documentation files (the
+ * a copy of this software and associated documentation https (the
  * "Software"), to deal in the Software without restriction, including
  * without limitation the rights to use, copy, modify, merge, publish,
  * distribute, sublicense, and/or sell copies of the Software, and to
@@ -24,36 +24,16 @@
  */
 
 /** @file
- * @short Upipe speexdsp resampler module
+ * @short Graph attributes
  */
 
-#ifndef _UPIPE_SPEEXDSP_UPIPE_SPEEXDSP_H_
-/** @hidden */
-#define _UPIPE_SPEEXDSP_UPIPE_SPEEXDSP_H_
+#ifndef _UPIPE_MODULES_UREF_GRAPH_H_
+#define _UPIPE_MODULES_UREF_GRAPH_H_
 #ifdef __cplusplus
 extern "C" {
 #endif
 
-#include <upipe/upipe.h>
-
-#define UPIPE_SPEEXDSP_SIGNATURE UBASE_FOURCC('s','p','x','d')
-
-enum upipe_speexdsp_command {
-    UPIPE_SPEEXDSP_SENTINAL = UPIPE_CONTROL_LOCAL,
-
-    UPIPE_SPEEXDSP_RESET_RESAMPLER, /* int sig */
-};
-
-static inline int upipe_speexdsp_reset_resampler(struct upipe *upipe)
-{
-    return upipe_control(upipe, UPIPE_SPEEXDSP_RESET_RESAMPLER, UPIPE_SPEEXDSP_SIGNATURE);
-}
-
-/** @This returns the management structure for speexdsp pipes.
- *
- * @return pointer to manager
- */
-struct upipe_mgr *upipe_speexdsp_mgr_alloc(void);
+UREF_ATTR_INT(graph, value, "graph.value", graph value);
 
 #ifdef __cplusplus
 }

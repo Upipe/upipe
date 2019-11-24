@@ -79,6 +79,9 @@ libupipe_modules_la_SOURCES = \
 	upipe_row_split.c \
 	upipe_separate_fields.c \
 	upipe_row_join.c \
+	upipe_discard_blocking.c \
+	upipe_audio_merge.c \
+	upipe_graph.c \
 	$(NULL)
 
 if HAVE_WRITEV
@@ -96,6 +99,7 @@ libupipe_modules_la_SOURCES += \
 	upipe_rtcp.c \
 	upipe_rtp_reorder.c \
 	upipe_s337_encaps.c \
+	upipe_vanc_decoder.c \
 	$(NULL)
 libupipe_modules_la_CFLAGS = $(AM_CFLAGS) $(BITSTREAM_CFLAGS)
 endif

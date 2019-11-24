@@ -1,7 +1,7 @@
 /*
- * Copyright (C) 2016 Open Broadcast Systems Ltd
+ * Copyright (C) 2019 OpenHeadend S.A.R.L.
  *
- * Authors: Rafaël Carré <funman@videolan.org>
+ * Authors: Arnaud de Turckheim
  *
  * Permission is hereby granted, free of charge, to any person obtaining
  * a copy of this software and associated documentation files (the
@@ -24,36 +24,25 @@
  */
 
 /** @file
- * @short Upipe speexdsp resampler module
+ * @short Upipe module discarding input uref when the output pipe is blocking
  */
 
-#ifndef _UPIPE_SPEEXDSP_UPIPE_SPEEXDSP_H_
+#ifndef _UPIPE_MODULES_UPIPE_DISCARD_BLOCKING_H_
 /** @hidden */
-#define _UPIPE_SPEEXDSP_UPIPE_SPEEXDSP_H_
+#define _UPIPE_MODULES_UPIPE_DISCARD_BLOCKING_H_
 #ifdef __cplusplus
 extern "C" {
 #endif
 
-#include <upipe/upipe.h>
+#include <upipe/ubase.h>
 
-#define UPIPE_SPEEXDSP_SIGNATURE UBASE_FOURCC('s','p','x','d')
+#define UPIPE_DISBLO_SIGNATURE UBASE_FOURCC('d','i','s','b')
 
-enum upipe_speexdsp_command {
-    UPIPE_SPEEXDSP_SENTINAL = UPIPE_CONTROL_LOCAL,
-
-    UPIPE_SPEEXDSP_RESET_RESAMPLER, /* int sig */
-};
-
-static inline int upipe_speexdsp_reset_resampler(struct upipe *upipe)
-{
-    return upipe_control(upipe, UPIPE_SPEEXDSP_RESET_RESAMPLER, UPIPE_SPEEXDSP_SIGNATURE);
-}
-
-/** @This returns the management structure for speexdsp pipes.
+/** @This returns the management structure for discard blocking pipes.
  *
  * @return pointer to manager
  */
-struct upipe_mgr *upipe_speexdsp_mgr_alloc(void);
+struct upipe_mgr *upipe_disblo_mgr_alloc(void);
 
 #ifdef __cplusplus
 }

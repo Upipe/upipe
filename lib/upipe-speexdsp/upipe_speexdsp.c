@@ -148,6 +148,9 @@ static bool upipe_speexdsp_handle(struct upipe *upipe, struct uref *uref,
         }
     }
 
+    if (unlikely(ubase_check(uref_flow_get_discontinuity(uref))))
+        speex_resampler_reset_mem(upipe_speexdsp->ctx);
+
     size_t size;
     if (!ubase_check(uref_sound_size(uref, &size, NULL /* sample_size */))) {
         uref_free(uref);
@@ -187,8 +190,17 @@ static bool upipe_speexdsp_handle(struct upipe *upipe, struct uref *uref,
     if (err) {
         ubuf_free(ubuf);
     } else {
+        uint64_t pts_prog = UINT64_MAX, pts_sys = UINT64_MAX;
+        int latency = speex_resampler_get_output_latency(upipe_speexdsp->ctx) * UCLOCK_FREQ / upipe_speexdsp->rate;
         ubuf_sound_resize(ubuf, 0, out_len);
         uref_attach_ubuf(uref, ubuf);
+
+        uref_clock_get_pts_prog(uref, &pts_prog);
+        uref_clock_get_pts_sys(uref, &pts_sys);
+        pts_prog -= latency;
+        pts_sys -= latency;
+        uref_clock_set_pts_prog(uref, pts_prog);
+        uref_clock_set_pts_sys(uref, pts_sys);
     }
 
     upipe_speexdsp_output(upipe, uref, upump_p);
@@ -402,6 +414,12 @@ static int upipe_speexdsp_control(struct upipe *upipe, int command, va_list args
                         SPEEX_RESAMPLER_QUALITY_MIN);
             }
             upipe_speexdsp->quality = quality;
+            return UBASE_ERR_NONE;
+        }
+        case UPIPE_SPEEXDSP_RESET_RESAMPLER: {
+            if (upipe_speexdsp->ctx)
+                speex_resampler_reset_mem(upipe_speexdsp->ctx);
+
             return UBASE_ERR_NONE;
         }
 

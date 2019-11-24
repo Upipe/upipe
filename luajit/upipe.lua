@@ -358,8 +358,30 @@ ffi.metatype("struct upipe", {
     end,
 })
 
+--[[
+-- A function to iterate over all the planes of a uref.  For each plane it
+-- returns the plane string (chroma for pic, channel for sound).
+--]]
+local function foreach_plane(func)
+    return function(ref)
+        local plane = ffi.new("const uint8_t *[1]")
+        return function()
+            if C.ubase_check(func(ref, plane)) and plane[0] ~= nil then
+                return ffi.string(plane[0])
+            else
+                return nil
+            end
+        end
+    end
+end
+
 ffi.metatype("struct uref", {
     __index = function (_, key)
+        if key == "pic_foreach_plane" then
+            return foreach_plane(C.uref_pic_iterate_plane)
+        elseif key == "sound_foreach_plane" then
+            return foreach_plane(C.uref_sound_iterate_plane)
+        end
         local f = C[fmt("uref_%s", key)]
         return getter(uref_getters, f, key) or f
     end
@@ -435,6 +457,99 @@ ffi.metatype("struct uref_mgr", {
             end
         end
         return C[fmt("uref_mgr_%s", key)]
+    end
+})
+
+local udict_getters = {}
+local function udict_getter(udict_type, ctype, number)
+    local cfunc = C[string.format("udict_get_%s", udict_type)]
+    local lfunc = function(udict, type, name, arg)
+        if arg ~= nil then
+            return cfunc(udict, arg, type, name)
+        end
+
+        local value = ffi.new(ctype .. "[1]")
+        local ret = cfunc(udict, value, type, name)
+        if not C.ubase_check(ret) then
+            return nil, ret
+        end
+
+        if number then
+            return tonumber(value[0])
+        else
+            return ffi.new(ctype, value[0])
+        end
+    end
+
+    udict_getters[C["UDICT_TYPE_"..udict_type:upper()]] = lfunc
+end
+
+udict_getter("opaque",         "struct udict_opaque")
+udict_getter("string",         "const char *")
+udict_getter("bool",           "bool")
+udict_getter("rational",       "struct urational")
+udict_getter("small_unsigned", "uint8_t",  true)
+udict_getter("small_int",      "int8_t",   true)
+udict_getter("unsigned",       "uint64_t")
+udict_getter("int",            "int64_t")
+udict_getter("float",          "double",   true)
+-- void
+udict_getters[C.UDICT_TYPE_VOID] = function(udict, type, name, arg)
+    if arg ~= nil then
+        return C.udict_get_void(udict, arg, type, name)
+    end
+
+    local value = ffi.new("void *[1]")
+    local ret = C.udict_get_void(udict, value, type, name)
+    if not C.ubase_check(ret) then
+        return nil, ret
+    end
+    return nil
+end
+
+--[[
+-- A function to iterate over all the attributes stored in a udict.
+-- For each attribute it returns:
+-- * the name (or shorthand name) of the attribute (type: const char *)
+-- * the value of the attribute (type: depends on the base type)
+-- * the real type value (type: enum udict_type)
+--
+-- The values for the name and type will be invalid on the next iteration so
+-- make a copy if they need to be kept.
+--]]
+local function udict_foreach_attribute(dict)
+    local name_real = ffi.new("const char *[1]")
+    local type_real = ffi.new("enum udict_type [1]", C.UDICT_TYPE_END)
+    local name_shorthand = ffi.new("const char *[1]")
+    local type_base = ffi.new("enum udict_type [1]")
+
+    return function()
+        if C.ubase_check(C.udict_iterate(dict, name_real, type_real)) and type_real[0] ~= C.UDICT_TYPE_END then
+            local name = name_real[0]
+            local type = tonumber(type_real[0])
+            local value, err
+
+            if type >= C.UDICT_TYPE_SHORTHAND then
+                ubase_assert(C.udict_name(dict, type, name_shorthand, type_base))
+                name = name_shorthand[0]
+                value, err = udict_getters[tonumber(type_base[0])](dict, type, nil)
+            else
+                value, err = udict_getters[type](dict, type, name)
+            end
+            -- TODO: check for error
+
+            return ffi.string(name), value, type
+        else
+            return nil
+        end
+    end
+end
+
+ffi.metatype("struct udict", {
+    __index = function (_, key)
+        if key == "foreach_attribute" then
+            return udict_foreach_attribute
+        end
     end
 })
 
