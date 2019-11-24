@@ -57,15 +57,8 @@ struct sdi_ioctl_refclk {
 };
 
 struct sdi_ioctl_capabilities {
+    uint32_t flags;
     uint8_t channels;
-    uint8_t has_vcxos;
-    uint8_t has_gs12241;
-    uint8_t has_gs12281;
-    uint8_t has_si5324;
-    uint8_t has_genlock;
-    uint8_t has_lmh0387;
-    uint8_t has_si596;
-    uint8_t has_si552;
 };
 
 struct sdi_ioctl_rate {
@@ -143,6 +136,7 @@ struct sdi_ioctl_gs12281_spi {
     uint32_t rx_data;
 };
 
+#define NO_SECRETS
 struct sdi_ioctl_lmh0387_direction {
     uint8_t tx_enable;
 };
@@ -156,6 +150,7 @@ struct sdi_ioctl_lmh0387_spi {
     uint32_t tx_data;
     uint32_t rx_data;
 };
+#undef NO_SECRETS
 
 struct sdi_ioctl_rx {
     uint8_t crc_enable;
@@ -250,9 +245,11 @@ struct sdi_ioctl_channel_set_pll {
 #define SDI_IOCTL_TX_SPI_CS         _IOW(SDI_IOCTL,  60, struct sdi_ioctl_gs12241_spi_cs)
 #define SDI_IOCTL_TX_SPI            _IOWR(SDI_IOCTL, 61, struct sdi_ioctl_gs12281_spi)
 
+#define NO_SECRETS
 #define SDI_IOCTL_LMH0387_DIRECTION _IOW(SDI_IOCTL,  70, struct sdi_ioctl_lmh0387_direction)
 #define SDI_IOCTL_LMH0387_SPI_CS    _IOW(SDI_IOCTL,  71, struct sdi_ioctl_lmh0387_spi_cs)
 #define SDI_IOCTL_LMH0387_SPI       _IOWR(SDI_IOCTL, 72, struct sdi_ioctl_lmh0387_spi)
+#undef NO_SECRETS
 
 #define SDI_IOCTL_RX                _IOWR(SDI_IOCTL, 80, struct sdi_ioctl_rx)
 #define SDI_IOCTL_TX                _IOWR(SDI_IOCTL, 81, struct sdi_ioctl_tx)

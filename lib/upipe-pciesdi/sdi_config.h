@@ -6,9 +6,11 @@
 
 /* targets identifiers */
 #define FALCON9_FPGA_IDENTIFIER "Falcon9"
+#define NO_SECRETS
 #define DUO2_FPGA_IDENTIFIER "Duo2"
 #define MINI_4K_FPGA_IDENTIFIER "Mini 4k"
 #define SDI_4K_FPGA_IDENTIFIER "SDI 4k"
+#undef NO_SECRETS
 
 /* pci */
 #define PCIE_FPGA_VENDOR_ID 0x1bb8
