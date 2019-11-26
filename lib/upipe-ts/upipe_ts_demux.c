@@ -923,10 +923,9 @@ static int upipe_ts_demux_output_telx_probe(struct uprobe *uprobe,
     if (output->last_dts_orig != UINT64_MAX) {
         dts_orig = output->last_dts_orig + (UCLOCK_FREQ / TELX_FPS);
         dts_orig %= TS_CLOCK_MAX;
-        while (dts_orig < program->last_pcr) {
+        while (dts_orig < program->last_pcr)
             dts_orig += UCLOCK_FREQ / TELX_FPS;
-            dts_orig %= TS_CLOCK_MAX;
-        }
+        dts_orig %= TS_CLOCK_MAX;
     } else {
         dts_orig = program->last_pcr + (UCLOCK_FREQ / TELX_FPS);
         dts_orig %= TS_CLOCK_MAX;
