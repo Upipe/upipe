@@ -69,6 +69,11 @@ struct upipe_rtp_pcm_pack {
     /** samplerate */
     uint64_t rate;
 
+    /** maximum samples to put in each output uref */
+    int output_samples;
+    /** maximum time (microseconds) to put in each output uref */
+    int output_time;
+
     /** ubuf manager */
     struct ubuf_mgr *ubuf_mgr;
     /** flow format packet */
@@ -150,6 +155,11 @@ static int upipe_rtp_pcm_pack_set_flow_def(struct upipe *upipe,
     UBASE_RETURN(uref_sound_flow_get_rate(flow_def, &upipe_rtp_pcm_pack->rate));
     UBASE_RETURN(uref_sound_flow_get_channels(flow_def, &upipe_rtp_pcm_pack->channels));
 
+    if (upipe_rtp_pcm_pack->output_time) {
+        upipe_rtp_pcm_pack->output_samples = upipe_rtp_pcm_pack->rate *
+            upipe_rtp_pcm_pack->output_time / 1e6;
+    }
+
     struct uref *flow_def_dup = uref_sibling_alloc(flow_def);
     if (unlikely(flow_def_dup == NULL)) {
         upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
@@ -192,6 +202,28 @@ static int upipe_rtp_pcm_pack_provide_flow_format(struct upipe *upipe,
     return urequest_provide_flow_format(request, flow);
 }
 
+static int upipe_rtp_pcm_pack_set_option(struct upipe *upipe, const char *option,
+        const char *value)
+{
+    struct upipe_rtp_pcm_pack *upipe_rtp_pcm_pack = upipe_rtp_pcm_pack_from_upipe(upipe);
+
+    if (!option || !value)
+        return UBASE_ERR_INVALID;
+
+    if (!strcmp(option, "output-samples")) {
+        upipe_rtp_pcm_pack->output_samples = atoi(value);
+        return UBASE_ERR_NONE;
+    }
+
+    if (!strcmp(option, "output-time")) {
+        upipe_rtp_pcm_pack->output_time = atoi(value);
+        return UBASE_ERR_NONE;
+    }
+
+    upipe_err_va(upipe, "Unknown option %s", option);
+    return UBASE_ERR_INVALID;
+}
+
 static int upipe_rtp_pcm_pack_control(struct upipe *upipe, int command,
                                   va_list args)
 {
@@ -210,6 +242,11 @@ static int upipe_rtp_pcm_pack_control(struct upipe *upipe, int command,
                 request->type == UREQUEST_UBUF_MGR)
                 return UBASE_ERR_NONE;
             return upipe_rtp_pcm_pack_free_output_proxy(upipe, request);
+        }
+        case UPIPE_SET_OPTION: {
+            const char *option = va_arg(args, const char *);
+            const char *value  = va_arg(args, const char *);
+            return upipe_rtp_pcm_pack_set_option(upipe, option, value);
         }
         case UPIPE_SET_FLOW_DEF: {
             struct uref *flow_def = va_arg(args, struct uref *);
@@ -304,8 +341,12 @@ static bool upipe_rtp_pcm_pack_handle(struct upipe *upipe, struct uref *uref,
     uref_attach_ubuf(uref, ubuf);
 
 #define MTU 1440
-    const size_t chunk_size = (MTU / 3 / upipe_rtp_pcm_pack->channels)
-        * 3 * upipe_rtp_pcm_pack->channels;
+    size_t chunk_size;
+    if (upipe_rtp_pcm_pack->output_samples)
+        chunk_size = upipe_rtp_pcm_pack->output_samples;
+    else
+        chunk_size = MTU / 3 / upipe_rtp_pcm_pack->channels;
+    chunk_size *= 3 * upipe_rtp_pcm_pack->channels;
 
     upipe_rtp_pcm_pack_append_uref_stream(upipe, uref);
 
