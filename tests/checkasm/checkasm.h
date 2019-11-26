@@ -27,7 +27,6 @@
 #include "config.h"
 
 /* silence warnings caused by unknown config variables from FFmpeg */
-#define ARCH_AARCH64 0
 #define ARCH_ARM 0
 #define ARCH_PPC 0
 #define CONFIG_LINUX_PERF 0
@@ -49,6 +48,13 @@
     #define ARCH_X86_32 0
     #define ARCH_X86_64 0
 #endif
+
+#if defined(__aarch64__)
+    #define ARCH_AARCH64 1
+#else
+    #define ARCH_AARCH64 0
+#endif
+
 
 #if CONFIG_LINUX_PERF
 #include <unistd.h> // read(3)
