@@ -57,7 +57,7 @@
 #endif
 
 #if !defined(AV_READ_TIME)
-#   if HAVE_GETHRTIME
+#   if defined(HAVE_GETHRTIME)
 #       define AV_READ_TIME gethrtime
 #   elif HAVE_MACH_ABSOLUTE_TIME
 #       define AV_READ_TIME mach_absolute_time
