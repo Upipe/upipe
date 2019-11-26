@@ -47,7 +47,7 @@
 #endif
 
 #if   ARCH_AARCH64
-#   include "aarch64/timer.h"
+#   include "timer_aarch64.h"
 #elif ARCH_ARM
 #   include "arm/timer.h"
 #elif ARCH_PPC

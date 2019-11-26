@@ -60,6 +60,10 @@ checkasm_LDADD += \
 endif
 endif
 
+if ARCH_AARCH64
+checkasm_SOURCES += asm_aarch64.S checkasm_aarch64.S timer_aarch64.h
+endif
+
 V_ASM = $(V_ASM_@AM_V@)
 V_ASM_ = $(V_ASM_@AM_DEFAULT_VERBOSITY@)
 V_ASM_0 = @echo "  ASM     " $@;
