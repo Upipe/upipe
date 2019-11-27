@@ -65,45 +65,46 @@ extern "C" {
  * @param STRUCTURE name of your public uprobe super-structure
  * your private uprobe structure
  */
-#define UPROBE_HELPER_ALLOC(STRUCTURE)                                      \
-/** @This is a super-set of the STRUCTURE with additional urefcount. */     \
-struct STRUCTURE##_alloc {                                                  \
-    /** refcount management structure */                                    \
-    struct urefcount urefcount;                                             \
-    /** main structure */                                                   \
-    struct STRUCTURE STRUCTURE;                                             \
-};                                                                          \
-UBASE_FROM_TO(STRUCTURE##_alloc, STRUCTURE, STRUCTURE, STRUCTURE)           \
-UBASE_FROM_TO(STRUCTURE##_alloc, urefcount, urefcount, urefcount)           \
-/** @internal @This frees the allocated probe.                              \
- *                                                                          \
- * @param urefcount pointer to urefcount structure                          \
- */                                                                         \
-static void STRUCTURE##_free(struct urefcount *urefcount)                   \
-{                                                                           \
-    struct STRUCTURE##_alloc *s =                                           \
-        STRUCTURE##_alloc_from_urefcount(urefcount);                        \
-    STRUCTURE##_clean(STRUCTURE##_alloc_to_##STRUCTURE(s));                 \
-    free(s);                                                                \
-}                                                                           \
-/** @This allocates a probe with a dedicated urefcount.                     \
- *                                                                          \
- * @return pointer to probe                                                 \
- */                                                                         \
-struct uprobe *STRUCTURE##_alloc(ARGS_DECL)                                 \
-{                                                                           \
-    struct STRUCTURE##_alloc *s = malloc(sizeof(struct STRUCTURE##_alloc)); \
-    if (unlikely(s == NULL))                                                \
-        return NULL;                                                        \
-    struct uprobe *uprobe =                                                 \
-        STRUCTURE##_init(STRUCTURE##_alloc_to_##STRUCTURE(s), ARGS);        \
-    if (unlikely(uprobe == NULL)) {                                         \
-        free(s);                                                            \
-        return NULL;                                                        \
-    }                                                                       \
-    urefcount_init(STRUCTURE##_alloc_to_urefcount(s), STRUCTURE##_free);    \
-    uprobe->refcount = STRUCTURE##_alloc_to_urefcount(s);                   \
-    return uprobe;                                                          \
+#define UPROBE_HELPER_ALLOC(STRUCTURE)                                        \
+/** @This is a super-set of the STRUCTURE with additional urefcount. */       \
+struct STRUCTURE##_alloc {                                                    \
+    /** refcount management structure */                                      \
+    struct urefcount urefcount;                                               \
+    /** main structure */                                                     \
+    struct STRUCTURE STRUCTURE;                                               \
+};                                                                            \
+UBASE_FROM_TO(STRUCTURE##_alloc, STRUCTURE, STRUCTURE, STRUCTURE)             \
+UBASE_FROM_TO(STRUCTURE##_alloc, urefcount, urefcount, urefcount)             \
+/** @internal @This frees the allocated probe.                                \
+ *                                                                            \
+ * @param urefcount pointer to urefcount structure                            \
+ */                                                                           \
+static void STRUCTURE##_free(struct urefcount *urefcount)                     \
+{                                                                             \
+    struct STRUCTURE##_alloc *s =                                             \
+        STRUCTURE##_alloc_from_urefcount(urefcount);                          \
+    STRUCTURE##_clean(STRUCTURE##_alloc_to_##STRUCTURE(s));                   \
+    free(s);                                                                  \
+}                                                                             \
+/** @This allocates a probe with a dedicated urefcount.                       \
+ *                                                                            \
+ * @return pointer to probe                                                   \
+ */                                                                           \
+struct uprobe *STRUCTURE##_alloc(ARGS_DECL)                                   \
+{                                                                             \
+    struct STRUCTURE##_alloc *s =                                             \
+        (struct STRUCTURE##_alloc *)malloc(sizeof(struct STRUCTURE##_alloc)); \
+    if (unlikely(s == NULL))                                                  \
+        return NULL;                                                          \
+    struct uprobe *uprobe =                                                   \
+        STRUCTURE##_init(STRUCTURE##_alloc_to_##STRUCTURE(s), ARGS);          \
+    if (unlikely(uprobe == NULL)) {                                           \
+        free(s);                                                              \
+        return NULL;                                                          \
+    }                                                                         \
+    urefcount_init(STRUCTURE##_alloc_to_urefcount(s), STRUCTURE##_free);      \
+    uprobe->refcount = STRUCTURE##_alloc_to_urefcount(s);                     \
+    return uprobe;                                                            \
 }
 
 #ifdef __cplusplus

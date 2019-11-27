@@ -103,7 +103,7 @@ static void STRUCTURE##_init_iconv(struct upipe *upipe)                     \
 static char *STRUCTURE##_iconv_append_null(const char *string,              \
                                            size_t length)                   \
 {                                                                           \
-    char *output = malloc(length + 1);                                      \
+    char *output = (char *)malloc(length + 1);                              \
     if (unlikely(output == NULL))                                           \
         return NULL;                                                        \
     memcpy(output, string, length);                                         \
@@ -146,7 +146,7 @@ static char *STRUCTURE##_iconv_wrapper(void *_upipe, const char *encoding,  \
                                                                             \
     /* converted strings can be up to six times larger */                   \
     out_length = length * 6;                                                \
-    p = output = malloc(out_length);                                        \
+    p = output = (char *)malloc(out_length);                                \
     if (unlikely(p == NULL)) {                                              \
         upipe_err(upipe, "couldn't allocate");                              \
         return STRUCTURE##_iconv_append_null(string, length);               \
