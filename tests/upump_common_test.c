@@ -137,6 +137,30 @@ static void timer_cb(struct upump *upump)
     }
 }
 
+static void timer_again_2_cb(struct upump *upump)
+{
+    printf("timer again passed\n");
+
+    if (!timer_done) {
+        assert(timeout_count == 0);
+        upump_restart(upump);
+    }
+    timer_done = true;
+
+    if (++timeout_count <= MIN_TIMEOUT)
+        upump_restart(timer);
+}
+
+static void timer_2_cb(struct upump *upump)
+{
+    static unsigned last_timeout_count = 0;
+    printf("timer passed\n");
+    assert(++last_timeout_count == timeout_count);
+    upump_stop(upump);
+    assert(timer_done);
+    upump_restart(timer_again);
+}
+
 void run(struct upump_mgr *mgr)
 {
     long flags;
@@ -173,6 +197,7 @@ void run(struct upump_mgr *mgr)
     upump_free(read_timer);
     upump_free(read_watcher);
 
+    /* test timer restart */
     timer_again =
         upump_alloc_timer(mgr, timer_again_cb, NULL, NULL,
                           timeout / 2, timeout);
@@ -189,6 +214,24 @@ void run(struct upump_mgr *mgr)
     assert(timeout_count > MIN_TIMEOUT);
     upump_free(timer);
     upump_free(timer_again);
+
+    /* test timer restart without repeat */
+    timer_done = false;
+    timeout_count = 0;
+
+    timer_again =
+        upump_alloc_timer(mgr, timer_again_2_cb, NULL, NULL,
+                          timeout / 2, 0);
+    timer =
+        upump_alloc_timer(mgr, timer_2_cb, NULL, NULL, timeout, timeout / 4);
+
+    upump_start(timer_again);
+    upump_start(timer);
+    upump_mgr_run(mgr, NULL);
+    upump_free(timer);
+    upump_free(timer_again);
+    assert(timer_done);
+    assert(timeout_count > MIN_TIMEOUT);
 
     upump_mgr_release(mgr);
 }
