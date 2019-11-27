@@ -243,7 +243,8 @@ static int STRUCTURE##_provide_bin_proxy(struct urequest *urequest,         \
 static int STRUCTURE##_alloc_bin_proxy(struct upipe *upipe,                 \
                                        struct urequest *urequest)           \
 {                                                                           \
-    struct urequest *proxy = malloc(sizeof(struct urequest));               \
+    struct urequest *proxy =                                                \
+        (struct urequest *)malloc(sizeof(struct urequest));                 \
     UBASE_ALLOC_RETURN(proxy);                                              \
     urequest_set_opaque(proxy, urequest);                                   \
     struct uref *uref = NULL;                                               \
