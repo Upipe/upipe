@@ -477,8 +477,10 @@ static void upipe_pciesdi_sink_input(struct upipe *upipe, struct uref *uref, str
 #define CHUNK_BUFFER_COUNT 32
 #define BUFFER_COUNT_PRINT_THRESHOLD(num, den) (num * CHUNK_BUFFER_COUNT / den)
 
-    if (upipe_pciesdi_sink->uref_next)
+    if (upipe_pciesdi_sink->uref_next) {
+        upipe_dbg(upipe, "uref input before uref_next was used");
         uref_free(upipe_pciesdi_sink->uref_next);
+    }
     upipe_pciesdi_sink->uref_next = uref;
 
     /* check if pump is already running */
@@ -515,10 +517,9 @@ static int check_capabilities(struct upipe *upipe, bool genlock)
     int fd = ctx->fd;
     int device_number = ctx->device_number;
 
-    uint8_t channels, has_vcxos, has_gs12241, has_gs12281, has_si5324,
-               has_genlock, has_lmh0387, has_si596, has_si552;
-    sdi_capabilities(fd, &channels, &has_vcxos, &has_gs12241, &has_gs12281,
-            &has_si5324, &has_genlock, &has_lmh0387, &has_si596, &has_si552);
+    uint32_t capability_flags;
+    uint8_t channels;
+    sdi_capabilities(fd, &capability_flags, &channels);
 
     if (device_number < 0 || device_number >= channels) {
         upipe_err_va(upipe, "invalid device number (%d) for number of channels (%d)",
@@ -526,12 +527,12 @@ static int check_capabilities(struct upipe *upipe, bool genlock)
         return UBASE_ERR_INVALID;
     }
 
-    if (has_genlock == 0 && genlock) {
+    if ((capability_flags & SDI_CAP_HAS_GENLOCK) == 0 && genlock) {
         upipe_err(upipe, "genlock not supported on this board");
         return UBASE_ERR_INVALID;
     }
 
-    if (!((has_vcxos && has_si5324) || has_si596 || has_lmh0387)) {
+    if (!(capability_flags == SDI_CAP_FALCON9 || capability_flags == SDI_CAP_DUO2 || capability_flags == SDI_CAP_MINI_4K)) {
         upipe_err(upipe, "unknown capabilities");
         return UBASE_ERR_INVALID;
     }
@@ -545,16 +546,15 @@ static void init_hardware_part1(struct upipe *upipe, int rate, int mode)
     int fd = ctx->fd;
     int device_number = ctx->device_number;
 
-    uint8_t channels, has_vcxos, has_gs12241, has_gs12281, has_si5324,
-               has_genlock, has_lmh0387, has_si596, has_si552;
-    sdi_capabilities(fd, &channels, &has_vcxos, &has_gs12241, &has_gs12281,
-            &has_si5324, &has_genlock, &has_lmh0387, &has_si596, &has_si552);
+    uint32_t capability_flags;
+    uint8_t channels;
+    sdi_capabilities(fd, &capability_flags, &channels);
 
     /* sdi_pre_init */
 
-    if (has_gs12281)
+    if (capability_flags & SDI_CAP_HAS_GS12281)
         gs12281_spi_init(fd);
-    if (has_gs12241) {
+    if (capability_flags & SDI_CAP_HAS_GS12241) {
         if (mode == SDI_TX_MODE_SD) {
             gs12241_reset(fd, device_number);
             gs12241_config_for_sd(fd, device_number);
@@ -562,7 +562,7 @@ static void init_hardware_part1(struct upipe *upipe, int rate, int mode)
         gs12241_spi_init(fd);
     }
 
-    if (has_lmh0387) {
+    if (capability_flags & SDI_CAP_HAS_LMH0387) {
         /* Set direction for TX. */
         sdi_lmh0387_direction(fd, 1);
     }
@@ -572,7 +572,7 @@ static void init_hardware_part1(struct upipe *upipe, int rate, int mode)
     sdi_channel_reset_tx(fd, 1);
 
     /* PCIe SDI (Falcon 9) */
-    if (has_vcxos && has_si5324) {
+    if (capability_flags == SDI_CAP_FALCON9) {
         if (rate == SDI_PAL_RATE) {
             /* Set channel to refclk0. */
             sdi_channel_set_pll(fd, 0);
@@ -583,7 +583,7 @@ static void init_hardware_part1(struct upipe *upipe, int rate, int mode)
     }
 
     /* Mini 4K */
-    else if (has_si596) {
+    else if (capability_flags == SDI_CAP_MINI_4K) {
         /* TODO: Need to write to CSR_SDI_QPLL_REFCLK_STABLE_ADDR when changing refclk? */
         uint32_t refclk_freq;
         uint64_t refclk_counter;
@@ -595,7 +595,7 @@ static void init_hardware_part1(struct upipe *upipe, int rate, int mode)
     }
 
     /* Duo2 */
-    else if (has_lmh0387) {
+    else if (SDI_CAP_DUO2) {
         if (rate == SDI_PAL_RATE) {
             sdi_picxo(fd, 0, 0, 0);
         } else if (rate == SDI_NTSC_RATE) {
