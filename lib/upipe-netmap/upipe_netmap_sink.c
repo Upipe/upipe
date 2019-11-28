@@ -1287,7 +1287,7 @@ static void upipe_netmap_sink_worker(struct upump *upump)
     if (bps)
         bps -= (num_slots - 1 - txavail) * (pkt_len + 4) * 8;
 
-    struct netmap_slot *slot = &txring[0]->slot[cur[0]];
+    struct netmap_slot *slot = txring[0] ? &txring[0]->slot[cur[0]] : &txring[1]->slot[cur[1]];
     uint64_t t = slot->ptr / 1000 * 27;
     if (!t)
         t = now;
