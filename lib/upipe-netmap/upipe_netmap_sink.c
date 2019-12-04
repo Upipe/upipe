@@ -1183,6 +1183,7 @@ static void upipe_netmap_sink_worker(struct upump *upump)
                 ioctl(NETMAP_FD(intf->d), NIOCTXSYNC, NULL); // update userspace ring
                 if (t < max_slots - 32) {
                     upipe_notice_va(upipe, "waiting, %u", t);
+                    txring[i] = NULL;
                     continue;
                 }
 
