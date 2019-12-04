@@ -104,6 +104,8 @@ struct upipe_audio_merge {
     /** channels **/
     uint8_t channels;
 
+    bool interleaved;
+
     /** public upipe structure */
     struct upipe upipe;
 };
@@ -174,14 +176,6 @@ static int upipe_audio_merge_sub_set_flow_def(struct upipe *upipe,
     if (flow_def == NULL)
         return UBASE_ERR_INVALID;
 
-    /* reject interleaved audio */
-    uint8_t channels = 0, planes = 0;
-    UBASE_RETURN(uref_sound_flow_get_planes(flow_def, &planes));
-    UBASE_RETURN(uref_sound_flow_get_channels(flow_def, &channels));
-    if (planes != channels) {
-        upipe_err(upipe, "Interleaved audio not supported");
-        return UBASE_ERR_INVALID;
-    }
     /* compare against stored flowdef (if we have one) and reject if formats don't match */
     if (upipe_audio_merge->sub_flow_def
             && !upipe_audio_merge_match_flowdefs(flow_def, upipe_audio_merge->sub_flow_def))
@@ -309,6 +303,62 @@ static void upipe_audio_merge_copy_to_output(struct upipe *upipe, float **out_da
     }
 }
 
+static void upipe_audio_merge_copy_to_output_interleaved(struct upipe *upipe, float **out_data)
+{
+    struct upipe_audio_merge *upipe_audio_merge = upipe_audio_merge_from_upipe(upipe);
+    struct uchain *uchain;
+
+    uint64_t output_num_samples = 0;
+    UBASE_ERROR(upipe, uref_sound_flow_get_samples(upipe_audio_merge->flow_def, &output_num_samples));
+
+    uint8_t output_channels = 0;
+    UBASE_ERROR(upipe, uref_sound_flow_get_channels(upipe_audio_merge->flow_def, &output_channels));
+
+    const float *in_data[255] = {0};
+    uint8_t input_channels = 0;
+    int i = 0;
+
+    /* for each input pipe, for each plane, map input plane */
+    ulist_foreach (&upipe_audio_merge->inputs, uchain) {
+        struct upipe_audio_merge_sub *upipe_audio_merge_sub = upipe_audio_merge_sub_from_uchain(uchain);
+
+        uint8_t channels = 0;
+        UBASE_ERROR(upipe, uref_sound_flow_get_channels(upipe_audio_merge_sub->flow_def, &channels));
+        /* TODO: support differing channel counts. */
+        if (input_channels)
+            assert(input_channels == channels);
+        else
+            input_channels = channels;
+
+        if(unlikely(!ubase_check(uref_sound_read_float(upipe_audio_merge_sub->uref, 0, -1, &in_data[i], 1)))) {
+            upipe_err(upipe, "error reading subpipe audio, skipping");
+            in_data[i] = NULL;
+        } else {
+            uint64_t input_num_samples = 0;
+            UBASE_ERROR(upipe, uref_sound_size(upipe_audio_merge_sub->uref, &input_num_samples, NULL));
+            upipe_dbg_va(upipe, "input_num_samples: %"PRIu64, input_num_samples);
+            assert(input_num_samples == output_num_samples);
+        }
+
+        i++;
+    }
+
+    for (int x = 0; x < output_num_samples; x++) {
+        for (int y = 0; y < output_channels; y++) {
+            if (in_data[y / input_channels])
+                out_data[0][x * output_channels + y] = in_data[y / input_channels][x * input_channels + y%input_channels];
+        }
+    }
+
+    ulist_foreach (&upipe_audio_merge->inputs, uchain) {
+        struct upipe_audio_merge_sub *upipe_audio_merge_sub = upipe_audio_merge_sub_from_uchain(uchain);
+
+        uref_sound_unmap(upipe_audio_merge_sub->uref, 0, -1, 1);
+        uref_free(upipe_audio_merge_sub->uref);
+        upipe_audio_merge_sub->uref = NULL;
+    }
+}
+
 /** @internal @Output a uref, if possible
  *
  * @param upipe description structure of the pipe
@@ -359,10 +409,16 @@ static void upipe_audio_merge_produce_output(struct upipe *upipe, struct upump *
         upipe_err_va(upipe, "total input channels (%"PRIu64") != output flow def (%d), some will be skipped or blanked!",
             input_channels, output_channels);
 
+    uint8_t output_planes = 0;
+    UBASE_ERROR(upipe, uref_sound_flow_get_planes(upipe_audio_merge->flow_def, &output_planes));
+
     uint64_t output_num_samples = 0;
     UBASE_ERROR(upipe, uref_sound_flow_get_samples(upipe_audio_merge->flow_def, &output_num_samples));
 
-    float *out_data[output_channels];
+    uint8_t output_sample_size = 0;
+    UBASE_ERROR(upipe, uref_sound_flow_get_sample_size(upipe_audio_merge->flow_def, &output_sample_size));
+
+    float *out_data[255];
 
     /* Alloc and zero the output ubuf */
     ubuf = ubuf_sound_alloc(upipe_audio_merge->ubuf_mgr, output_num_samples);
@@ -370,9 +426,9 @@ static void upipe_audio_merge_produce_output(struct upipe *upipe, struct upump *
         upipe_throw_error(upipe, UBASE_ERR_ALLOC);
         return;
     }
-    if (likely(ubase_check(ubuf_sound_write_float(ubuf, 0, -1, out_data, output_channels)))) {
-        for (int i = 0; i < output_channels; i++)
-            memset(out_data[i], 0, sizeof(float) * output_num_samples);
+    if (likely(ubase_check(ubuf_sound_write_float(ubuf, 0, -1, out_data, output_planes)))) {
+        for (int i = 0; i < output_planes; i++)
+            memset(out_data[i], 0, output_num_samples * output_sample_size);
     } else {
         upipe_err(upipe, "error writing output audio buffer, skipping");
         uref_free(output_uref);
@@ -381,10 +437,13 @@ static void upipe_audio_merge_produce_output(struct upipe *upipe, struct upump *
     }
 
     /* copy input data to output */
-    upipe_audio_merge_copy_to_output(upipe, out_data);
+    if (upipe_audio_merge->interleaved)
+        upipe_audio_merge_copy_to_output_interleaved(upipe, out_data);
+    else
+        upipe_audio_merge_copy_to_output(upipe, out_data);
 
     /* clean up and output */
-    ubuf_sound_unmap(ubuf, 0, -1, output_channels);
+    ubuf_sound_unmap(ubuf, 0, -1, output_planes);
     uref_sound_flow_set_samples(output_uref, output_num_samples);
     uref_attach_ubuf(output_uref, ubuf);
     upipe_audio_merge_output(upipe, output_uref, upump);
@@ -487,6 +546,14 @@ static struct upipe *upipe_audio_merge_alloc(struct upipe_mgr *mgr,
     upipe_throw_ready(upipe);
     upipe_audio_merge_store_flow_def(upipe, flow_def);
     upipe_audio_merge_check_upump_mgr(upipe);
+
+    /* interleaved audio */
+    uint8_t channels = 0, planes = 0;
+    uref_sound_flow_get_planes(flow_def, &planes);
+    uref_sound_flow_get_channels(flow_def, &channels);
+    upipe_audio_merge->interleaved = channels != planes;
+    if (channels != planes && planes > 1)
+        return NULL;
 
     return upipe;
 }
