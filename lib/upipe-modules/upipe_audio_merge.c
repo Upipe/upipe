@@ -329,7 +329,9 @@ static void upipe_audio_merge_produce_output(struct upipe *upipe, struct upump *
             return;
     }
 
+    /* TODO: merge this loop with the above? */
     uint64_t input_channels = 0;
+    uint64_t output_num_samples = 0;
     ulist_foreach (&upipe_audio_merge->inputs, uchain) {
         struct upipe_audio_merge_sub *upipe_audio_merge_sub =
             upipe_audio_merge_sub_from_uchain(uchain);
@@ -340,7 +342,14 @@ static void upipe_audio_merge_produce_output(struct upipe *upipe, struct upump *
         uint8_t channels = 0;
         UBASE_ERROR(upipe, uref_sound_flow_get_channels(upipe_audio_merge_sub->flow_def, &channels));
         input_channels += channels;
+
+        size_t samples = 0;
+        if (ubase_check(uref_sound_size(upipe_audio_merge_sub->uref, &samples, NULL))
+                && samples > output_num_samples)
+            output_num_samples = samples;
     }
+    /* TODO: pass value directly. */
+    uref_sound_flow_set_samples(upipe_audio_merge->flow_def, output_num_samples);
 
     if (unlikely(!output_uref))
         return;
@@ -351,9 +360,6 @@ static void upipe_audio_merge_produce_output(struct upipe *upipe, struct upump *
     if (input_channels != output_channels)
         upipe_err_va(upipe, "total input channels (%"PRIu64") != output flow def (%d), some will be skipped or blanked!",
             input_channels, output_channels);
-
-    uint64_t output_num_samples = 0;
-    UBASE_ERROR(upipe, uref_sound_flow_get_samples(upipe_audio_merge->flow_def, &output_num_samples));
 
     float *out_data[output_channels];
 
