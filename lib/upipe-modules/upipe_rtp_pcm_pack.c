@@ -353,14 +353,18 @@ static bool upipe_rtp_pcm_pack_handle(struct upipe *upipe, struct uref *uref,
     if (upipe_rtp_pcm_pack->next_uref_size + s < chunk_size)
         return true;
 
-    uint64_t pts_prog = 0;
+    uint64_t pts_prog = 0, pts_sys = 0;
     uref_clock_get_pts_prog(upipe_rtp_pcm_pack->next_uref, &pts_prog);
+    uref_clock_get_pts_sys(upipe_rtp_pcm_pack->next_uref, &pts_sys);
 
+    const uint64_t adjustment = (chunk_size / 3 / upipe_rtp_pcm_pack->channels)
+            * UCLOCK_FREQ / upipe_rtp_pcm_pack->rate;
     do {
         uref = upipe_rtp_pcm_pack_extract_uref_stream(upipe, chunk_size);
         uref_clock_set_pts_prog(uref, pts_prog);
-        pts_prog += (chunk_size / 3 / upipe_rtp_pcm_pack->channels)
-            * UCLOCK_FREQ / upipe_rtp_pcm_pack->rate;
+        uref_clock_set_pts_sys(uref, pts_sys);
+        pts_prog += adjustment;
+        pts_sys += adjustment;
         upipe_rtp_pcm_pack_output(upipe, uref, upump_p);
     } while (uref && upipe_rtp_pcm_pack->next_uref_size > chunk_size);
 
