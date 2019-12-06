@@ -414,9 +414,11 @@ static void upipe_audio_merge_produce_output(struct upipe *upipe, struct upump *
     /* If total channels in input subpipes != channels in flow def throw an error */
     uint8_t output_channels = 0;
     UBASE_ERROR(upipe, uref_sound_flow_get_channels(upipe_audio_merge->flow_def, &output_channels));
+#if 0
     if (input_channels != output_channels)
         upipe_err_va(upipe, "total input channels (%"PRIu64") != output flow def (%d), some will be skipped or blanked!",
             input_channels, output_channels);
+#endif
 
     uint8_t output_planes = 0;
     UBASE_ERROR(upipe, uref_sound_flow_get_planes(upipe_audio_merge->flow_def, &output_planes));
