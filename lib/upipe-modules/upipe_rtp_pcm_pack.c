@@ -350,23 +350,30 @@ static bool upipe_rtp_pcm_pack_handle(struct upipe *upipe, struct uref *uref,
 
     upipe_rtp_pcm_pack_append_uref_stream(upipe, uref);
 
-    if (upipe_rtp_pcm_pack->next_uref_size + s < chunk_size)
+    if (upipe_rtp_pcm_pack->next_uref_size + s*3 < chunk_size)
         return true;
-
-    uint64_t pts_prog = 0, pts_sys = 0;
-    uref_clock_get_pts_prog(upipe_rtp_pcm_pack->next_uref, &pts_prog);
-    uref_clock_get_pts_sys(upipe_rtp_pcm_pack->next_uref, &pts_sys);
 
     const uint64_t adjustment = (chunk_size / 3 / upipe_rtp_pcm_pack->channels)
             * UCLOCK_FREQ / upipe_rtp_pcm_pack->rate;
-    do {
-        uref = upipe_rtp_pcm_pack_extract_uref_stream(upipe, chunk_size);
-        uref_clock_set_pts_prog(uref, pts_prog);
-        uref_clock_set_pts_sys(uref, pts_sys);
-        pts_prog += adjustment;
-        pts_sys += adjustment;
-        upipe_rtp_pcm_pack_output(upipe, uref, upump_p);
-    } while (uref && upipe_rtp_pcm_pack->next_uref_size > chunk_size);
+
+    while (upipe_rtp_pcm_pack->next_uref != NULL
+            && upipe_rtp_pcm_pack->next_uref_size + s*3 >= chunk_size) {
+        /* Get uref to output. */
+        struct uref *output = upipe_rtp_pcm_pack_extract_uref_stream(upipe, chunk_size);
+
+        /* Update clocks on next uref. */
+        if (upipe_rtp_pcm_pack->next_uref) {
+            uref_clock_add_date_prog(upipe_rtp_pcm_pack->next_uref, adjustment);
+            uref_clock_add_date_sys(upipe_rtp_pcm_pack->next_uref, adjustment);
+        }
+
+        if (unlikely(output == NULL)) {
+            upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
+            continue;
+        }
+
+        upipe_rtp_pcm_pack_output(upipe, output, upump_p);
+    }
 
     return true;
 }
