@@ -30,6 +30,7 @@
 #include <upipe/uprobe.h>
 #include <upipe/uprobe_stdio.h>
 #include <upipe/uprobe_prefix.h>
+#include <upipe/uprobe_ubuf_mem.h>
 #include <upipe/umem.h>
 #include <upipe/umem_alloc.h>
 #include <upipe/udict.h>
@@ -316,8 +317,10 @@ int main(int argc, char **argv)
 
     /* build phony pipe */
     struct upipe *test = upipe_void_alloc(&test_mgr,
-            uprobe_pfx_alloc(uprobe_use(logger), UPROBE_LOG_LEVEL,
-                             "test"));
+            uprobe_pfx_alloc(
+                uprobe_ubuf_mem_alloc(
+                    uprobe_use(logger), umem_mgr, 0, 0),
+                UPROBE_LOG_LEVEL, "test"));
     assert(test != NULL);
     ubase_assert(upipe_set_output(blit, test));
 
