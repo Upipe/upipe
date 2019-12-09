@@ -353,6 +353,9 @@ static bool upipe_rtp_pcm_pack_handle(struct upipe *upipe, struct uref *uref,
     if (upipe_rtp_pcm_pack->next_uref_size + s < chunk_size)
         return true;
 
+    uref_clock_set_cr_dts_delay(upipe_rtp_pcm_pack->next_uref, 0);
+    uref_clock_set_dts_pts_delay(upipe_rtp_pcm_pack->next_uref, 0);
+
     const uint64_t adjustment = (chunk_size / 3 / upipe_rtp_pcm_pack->channels)
             * UCLOCK_FREQ / upipe_rtp_pcm_pack->rate;
 
