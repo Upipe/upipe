@@ -331,9 +331,12 @@ static bool upipe_rtp_pcm_pack_handle(struct upipe *upipe, struct uref *uref,
 
     uref_sound_read_int32_t(uref, 0, -1, &src, 1);
 
-    for (int i = 0; i < s; i++)
-        for (int j = 0; j < 3; j++)
-            dst[3*i+j] = (src[i] >> (8 * (3-j))) & 0xff;
+    for (int i = 0; i < s; i++) {
+        int32_t sample = src[i];
+        dst[3*i+0] = (sample >> 24) & 0xff;
+        dst[3*i+1] = (sample >> 16) & 0xff;
+        dst[3*i+2] = (sample >>  8) & 0xff;
+    }
 
     ubuf_block_unmap(ubuf, 0);
     uref_sound_unmap(uref, 0, -1, 1);
