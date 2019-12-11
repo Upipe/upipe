@@ -266,6 +266,7 @@ static int upipe_rtp_pcm_pack_control(struct upipe *upipe, int command,
 
 static void upipe_rtp_pcm_pack_free(struct upipe *upipe)
 {
+    upipe_throw_dead(upipe);
     upipe_rtp_pcm_pack_clean_ubuf_mgr(upipe);
     upipe_rtp_pcm_pack_clean_urefcount(upipe);
     upipe_rtp_pcm_pack_clean_uref_stream(upipe);
