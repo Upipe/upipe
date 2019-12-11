@@ -105,7 +105,8 @@ check_PROGRAMS = \
 	upipe_block_to_sound_test \
 	upipe_audio_copy_test \
 	upipe_row_join_test \
-	upipe_auto_inner_test
+	upipe_auto_inner_test \
+	upipe_audio_merge_test
 
 TESTS = \
 	ulist_test \
@@ -164,7 +165,8 @@ TESTS = \
 	upipe_block_to_sound_test \
 	upipe_audio_copy_test \
 	upipe_row_join_test \
-	upipe_auto_inner_test
+	upipe_auto_inner_test \
+	upipe_audio_merge_test
 
 if HAVE_EBUR128
 check_PROGRAMS += upipe_ebur128_test
@@ -459,6 +461,7 @@ upipe_v210enc_test_CFLAGS = $(AM_CFLAGS) $(AVUTIL_CFLAGS)
 upipe_v210dec_test_CFLAGS = $(AM_CFLAGS) $(AVUTIL_CFLAGS)
 upipe_row_split_test_LDADD = $(LDADD) -lev $(top_builddir)/lib/upump-ev/libupump_ev.la $(top_builddir)/lib/upipe-modules/libupipe_modules.la
 upipe_separate_fields_test_LDADD = $(LDADD) -lev $(top_builddir)/lib/upump-ev/libupump_ev.la $(top_builddir)/lib/upipe-modules/libupipe_modules.la
+upipe_audio_merge_test_LDADD = $(LDADD) $(top_builddir)/lib/upipe-modules/libupipe_modules.la
 
 upipe_avformat_test_CFLAGS = $(AM_CFLAGS) $(AVFORMAT_CFLAGS)
 upipe_avformat_test_LDADD = $(LDADD) -lev $(top_builddir)/lib/upump-ev/libupump_ev.la $(top_builddir)/lib/upipe-av/libupipe_av.la $(AVFORMAT_LIBS)
