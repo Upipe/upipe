@@ -336,7 +336,6 @@ static void upipe_audio_merge_copy_to_output_interleaved(struct upipe *upipe, fl
         } else {
             uint64_t input_num_samples = 0;
             UBASE_ERROR(upipe, uref_sound_size(upipe_audio_merge_sub->uref, &input_num_samples, NULL));
-            upipe_dbg_va(upipe, "input_num_samples: %"PRIu64, input_num_samples);
             assert(input_num_samples == output_num_samples);
         }
 
