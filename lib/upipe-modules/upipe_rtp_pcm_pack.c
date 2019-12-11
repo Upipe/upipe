@@ -69,6 +69,8 @@ struct upipe_rtp_pcm_pack {
     /** samplerate */
     uint64_t rate;
 
+    uint64_t latency;
+
     /** maximum samples to put in each output uref */
     int output_samples;
     /** maximum time (microseconds) to put in each output uref */
@@ -154,6 +156,7 @@ static int upipe_rtp_pcm_pack_set_flow_def(struct upipe *upipe,
 
     UBASE_RETURN(uref_sound_flow_get_rate(flow_def, &upipe_rtp_pcm_pack->rate));
     UBASE_RETURN(uref_sound_flow_get_channels(flow_def, &upipe_rtp_pcm_pack->channels));
+    UBASE_RETURN(uref_clock_get_latency(flow_def, &upipe_rtp_pcm_pack->latency));
 
     if (upipe_rtp_pcm_pack->output_time) {
         upipe_rtp_pcm_pack->output_samples = upipe_rtp_pcm_pack->rate *
@@ -358,6 +361,7 @@ static bool upipe_rtp_pcm_pack_handle(struct upipe *upipe, struct uref *uref,
 
     uref_clock_set_cr_dts_delay(upipe_rtp_pcm_pack->next_uref, 0);
     uref_clock_set_dts_pts_delay(upipe_rtp_pcm_pack->next_uref, 0);
+    uref_clock_add_date_sys(upipe_rtp_pcm_pack->next_uref, upipe_rtp_pcm_pack->latency);
 
     const uint64_t adjustment = (chunk_size / 3 / upipe_rtp_pcm_pack->channels)
             * UCLOCK_FREQ / upipe_rtp_pcm_pack->rate;
