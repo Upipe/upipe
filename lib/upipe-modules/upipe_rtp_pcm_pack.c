@@ -266,6 +266,7 @@ static int upipe_rtp_pcm_pack_control(struct upipe *upipe, int command,
 
 static void upipe_rtp_pcm_pack_free(struct upipe *upipe)
 {
+    upipe_throw_dead(upipe);
     upipe_rtp_pcm_pack_clean_ubuf_mgr(upipe);
     upipe_rtp_pcm_pack_clean_urefcount(upipe);
     upipe_rtp_pcm_pack_clean_uref_stream(upipe);
@@ -356,7 +357,7 @@ static bool upipe_rtp_pcm_pack_handle(struct upipe *upipe, struct uref *uref,
 
     upipe_rtp_pcm_pack_append_uref_stream(upipe, uref);
 
-    if (upipe_rtp_pcm_pack->next_uref_size + s < chunk_size)
+    if (upipe_rtp_pcm_pack->next_uref_size + s*3 < chunk_size)
         return true;
 
     uref_clock_set_cr_dts_delay(upipe_rtp_pcm_pack->next_uref, 0);
@@ -367,7 +368,7 @@ static bool upipe_rtp_pcm_pack_handle(struct upipe *upipe, struct uref *uref,
             * UCLOCK_FREQ / upipe_rtp_pcm_pack->rate;
 
     while (upipe_rtp_pcm_pack->next_uref != NULL
-            && upipe_rtp_pcm_pack->next_uref_size >= chunk_size) {
+            && upipe_rtp_pcm_pack->next_uref_size + s*3 >= chunk_size) {
         /* Get uref to output. */
         struct uref *output = upipe_rtp_pcm_pack_extract_uref_stream(upipe, chunk_size);
 

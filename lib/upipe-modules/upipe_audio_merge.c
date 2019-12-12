@@ -138,6 +138,8 @@ struct upipe_audio_merge_sub {
     /** the single uref of incoming audio */
     struct uref *uref;
 
+    bool first_subpipe;
+
     /** public upipe structure */
     struct upipe upipe;
 };
@@ -176,21 +178,35 @@ static int upipe_audio_merge_sub_set_flow_def(struct upipe *upipe,
     if (flow_def == NULL)
         return UBASE_ERR_INVALID;
 
-    /* compare against stored flowdef (if we have one) and reject if formats don't match */
-    if (upipe_audio_merge->sub_flow_def
-            && !upipe_audio_merge_match_flowdefs(flow_def, upipe_audio_merge->sub_flow_def))
-    {
-        upipe_err(upipe, "Subpipe has non-matching audio format!");
-        return UBASE_ERR_INVALID;
+    /* If this is the first subpipe... */
+    if (upipe_audio_merge_sub->first_subpipe) {
+        /* ... allow it it to change the input format. */
+        upipe_warn(upipe, "format change on first subpipe");
+        /* Free the stored flow_defs. */
+        uref_free(upipe_audio_merge->sub_flow_def);
+        uref_free(upipe_audio_merge_sub->flow_def);
+        /* Store the new one. */
+        upipe_audio_merge->sub_flow_def = uref_dup(flow_def);
+        upipe_audio_merge_sub->flow_def = uref_dup(flow_def);
     }
 
-    /* .. and if we don't have one store this one */
-    if (!upipe_audio_merge->sub_flow_def)
-        upipe_audio_merge->sub_flow_def = uref_dup(flow_def);
+    else {
+        /* compare against stored flowdef (if we have one) and reject if formats don't match */
+        if (upipe_audio_merge->sub_flow_def
+                && !upipe_audio_merge_match_flowdefs(flow_def, upipe_audio_merge->sub_flow_def))
+        {
+            upipe_err(upipe, "Subpipe has non-matching audio format!");
+            return UBASE_ERR_INVALID;
+        }
 
-    /* store in the subpipe structure itself for later reference */
-    uref_free(upipe_audio_merge_sub->flow_def);
-    upipe_audio_merge_sub->flow_def = uref_dup(flow_def);
+        /* .. and if we don't have one store this one */
+        if (!upipe_audio_merge->sub_flow_def)
+            upipe_audio_merge->sub_flow_def = uref_dup(flow_def);
+
+        /* store in the subpipe structure itself for later reference */
+        uref_free(upipe_audio_merge_sub->flow_def);
+        upipe_audio_merge_sub->flow_def = uref_dup(flow_def);
+    }
 
     return UBASE_ERR_NONE;
 }
@@ -214,6 +230,11 @@ static struct upipe *upipe_audio_merge_sub_alloc(struct upipe_mgr *mgr,
 
     struct upipe_audio_merge_sub *upipe_audio_merge_sub =
                             upipe_audio_merge_sub_from_upipe(upipe);
+    struct upipe_audio_merge *upipe_audio_merge =
+        upipe_audio_merge_from_sub_mgr(mgr);
+
+    /* Is this the first subpipe to be allocated? */
+    upipe_audio_merge_sub->first_subpipe = ulist_depth(&upipe_audio_merge->inputs) == 0;
 
     upipe_audio_merge_sub_init_urefcount(upipe);
     upipe_audio_merge_sub_init_sub(upipe);
