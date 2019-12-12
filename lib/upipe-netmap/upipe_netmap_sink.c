@@ -918,14 +918,9 @@ static float pts_to_time(uint64_t pts)
     return (float)pts / 27000;
 }
 
-static void upipe_resync_queues(struct upipe *upipe, uint32_t packets)
+static void upipe_resync_queues(struct upipe *upipe, struct upipe_netmap_intf *intf, uint32_t packets)
 {
     struct upipe_netmap_sink *upipe_netmap_sink = upipe_netmap_sink_from_upipe(upipe);
-
-    struct upipe_netmap_intf *intf = &upipe_netmap_sink->intf[0];
-    if (!intf->up) {
-        intf = &upipe_netmap_sink->intf[1];
-    }
 
     struct netmap_ring *txring = NETMAP_TXRING(intf->d->nifp, intf->ring_idx);
 
@@ -937,6 +932,7 @@ static void upipe_resync_queues(struct upipe *upipe, uint32_t packets)
         memset(dst, 0, len);
         memcpy(dst, intf->header, ETHERNET_HEADER_LEN);
         txring->slot[cur].len = len;
+        txring->slot[cur].ptr = 0;
         cur = nm_ring_next(txring, cur);
     }
     txring->head = txring->cur = cur;
@@ -1193,6 +1189,14 @@ static void upipe_netmap_sink_worker(struct upump *upump)
                     break;
                 }
 
+                struct upipe_netmap_intf *intf0 = &upipe_netmap_sink->intf[!i];
+                txavail = nm_ring_space(txring[!i]);
+
+                upipe_resync_queues(upipe, intf, t - txavail);
+                ioctl(NETMAP_FD(intf->d), NIOCTXSYNC, NULL); // start emptying 1
+
+                /* Legacy Intel */
+#if 0
                 // update other NIC
                 struct upipe_netmap_intf *intf0 = &upipe_netmap_sink->intf[!i];
                 ioctl(NETMAP_FD(intf0->d), NIOCTXSYNC, NULL);
@@ -1200,6 +1204,8 @@ static void upipe_netmap_sink_worker(struct upump *upump)
 
                 // synchronize within 1024 packets
                 upipe_resync_queues(upipe, txring[!i]->num_slots - 1 - txavail - 1024);
+                t = nm_ring_space(txring[i]);
+                upipe_notice_va(upipe, "tx1 %u", t);
 
                 // update NIC, should start outputting packets
                 ioctl(NETMAP_FD(intf->d), NIOCTXSYNC, NULL);
@@ -1220,6 +1226,7 @@ static void upipe_netmap_sink_worker(struct upump *upump)
                 // update NIC txavail
                 txavail = nm_ring_space(txring[!i]);
                 t = nm_ring_space(txring[i]);
+#endif
 
                 // we're up
                 intf->up = true;
@@ -1430,7 +1437,7 @@ static void upipe_netmap_sink_worker(struct upump *upump)
                     continue;
             }
 
-            //printf("link %i, timestamp %"PRIu64" \n", i, slot->ptr);
+            printf("link %i, timestamp %"PRIu64" seqn %u\n", i, slot->ptr, rtp_get_seqnum(rtp));
             if (!stamped) {
                 uint16_t seq = rtp_get_seqnum(rtp);
                 handle_tx_stamp(upipe, slot->ptr, seq);
