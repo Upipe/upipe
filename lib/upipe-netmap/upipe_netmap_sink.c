@@ -1437,7 +1437,7 @@ static void upipe_netmap_sink_worker(struct upump *upump)
                     continue;
             }
 
-            printf("link %i, timestamp %"PRIu64" seqn %u\n", i, slot->ptr, rtp_get_seqnum(rtp));
+            //printf("link %i, timestamp %"PRIu64" \n", i, slot->ptr);
             if (!stamped) {
                 uint16_t seq = rtp_get_seqnum(rtp);
                 handle_tx_stamp(upipe, slot->ptr, seq);
