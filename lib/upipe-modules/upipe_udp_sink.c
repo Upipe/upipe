@@ -102,8 +102,16 @@ struct upipe_udpsink {
     int fd;
     /** socket uri */
     char *uri;
+    /** temporary uref storage */
+    struct uchain urefs;
+    /** nb urefs in storage */
+    unsigned int nb_urefs;
+    /** max urefs in storage */
+    unsigned int max_urefs;
+    /** list of blockers */
+    struct uchain blockers;
 
-    /** queue between avcodec threads and pipe thread */
+    /** queue between pipe thread and writing thread */
     struct uqueue uqueue;
     /** extra data for the queue structures */
     uint8_t *uqueue_extra;
@@ -129,6 +137,7 @@ UPIPE_HELPER_UREFCOUNT(upipe_udpsink, urefcount, upipe_udpsink_free)
 UPIPE_HELPER_VOID(upipe_udpsink)
 UPIPE_HELPER_UPUMP_MGR(upipe_udpsink, upump_mgr)
 UPIPE_HELPER_UPUMP(upipe_udpsink, upump, upump_mgr)
+UPIPE_HELPER_INPUT(upipe_udpsink, urefs, nb_urefs, max_urefs, blockers, upipe_udpsink_output)
 UPIPE_HELPER_UCLOCK(upipe_udpsink, uclock, uclock_request, NULL, upipe_throw_provide_request, NULL)
 
 static void *run_thread(void *upipe_pointer)
@@ -200,6 +209,7 @@ static struct upipe *upipe_udpsink_alloc(struct upipe_mgr *mgr,
     upipe_udpsink_init_urefcount(upipe);
     upipe_udpsink_init_upump_mgr(upipe);
     upipe_udpsink_init_upump(upipe);
+    upipe_udpsink_init_input(upipe);
     upipe_udpsink_init_uclock(upipe);
     upipe_udpsink->latency = 0;
     upipe_udpsink->fd = -1;
@@ -352,6 +362,24 @@ write_buffer:
     return true;
 }
 
+/** @internal @This is called when the file descriptor can be written again.
+ * Unblock the sink and unqueue all queued buffers.
+ *
+ * @param upump description structure of the watcher
+ */
+static void upipe_udpsink_watcher(struct upump *upump)
+{
+    struct upipe *upipe = upump_get_opaque(upump, struct upipe *);
+    upipe_udpsink_set_upump(upipe, NULL);
+    upipe_udpsink_output_input(upipe);
+    upipe_udpsink_unblock_input(upipe);
+    if (upipe_udpsink_check_input(upipe)) {
+        /* All packets have been output, release again the pipe that has been
+         * used in @ref upipe_udpsink_input. */
+        upipe_release(upipe);
+    }
+}
+
 /** @internal @This receives data.
  *
  * @param upipe description structure of the pipe
@@ -363,19 +391,16 @@ static void upipe_udpsink_input(struct upipe *upipe, struct uref *uref,
 {
     struct upipe_udpsink *upipe_udpsink = upipe_udpsink_from_upipe(upipe);
 
-    const char *def;
-    if (unlikely(ubase_check(uref_flow_get_def(uref, &def)))) {
-        uint64_t latency = 0;
-        uref_clock_get_latency(uref, &latency);
-        if (latency > upipe_udpsink->latency)
-            upipe_udpsink->latency = latency;
-        uref_free(uref);
-        return;
-    }
-
-    if (unlikely(!uqueue_push(&upipe_udpsink->uqueue, uref))) {
-        upipe_err(upipe, "queue full");
-        uref_free(uref);
+    if (!upipe_udpsink_check_input(upipe)) {
+        upipe_udpsink_hold_input(upipe, uref);
+        upipe_udpsink_block_input(upipe, upump_p);
+    } else if (unlikely(!uqueue_push(&upipe_udpsink->uqueue, uref))) {
+        upipe_udpsink_hold_input(upipe, uref);
+        upipe_udpsink_block_input(upipe, upump_p);
+        /* Increment upipe refcount to avoid disappearing before all packets
+         * have been sent. */
+        upipe_use(upipe);
+        upipe_udpsink_wait_upump(upipe, UCLOCK_FREQ/100, upipe_udpsink_watcher);
     }
 }
 
