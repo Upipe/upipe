@@ -61,7 +61,7 @@ struct ufifo {
  * @param extra mandatory extra space allocated by the caller, with the size
  * returned by @ref #ufifo_sizeof
  */
-static inline void ufifo_init(struct ufifo *ufifo, uint8_t length, void *extra)
+static inline void ufifo_init(struct ufifo *ufifo, uint16_t length, void *extra)
 {
     uring_lifo_init(&ufifo->uring, &ufifo->lifo_empty,
                     uring_init(&ufifo->uring, length, extra));
