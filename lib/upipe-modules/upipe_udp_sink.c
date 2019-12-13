@@ -249,6 +249,7 @@ static bool upipe_udpsink_output(struct upipe *upipe, struct uref *uref,
         usleep(wait);
 #else
         struct timespec wait = { .tv_nsec = (systime - now) * 1000 / 27 };
+        struct timespec left = { 0 };
         /* TODO: check return value and remaining time. */
         if (unlikely(nanosleep(&wait, &left))) {
             if (errno == EINTR)
