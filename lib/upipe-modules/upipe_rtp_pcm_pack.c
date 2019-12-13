@@ -156,7 +156,11 @@ static int upipe_rtp_pcm_pack_set_flow_def(struct upipe *upipe,
 
     UBASE_RETURN(uref_sound_flow_get_rate(flow_def, &upipe_rtp_pcm_pack->rate));
     UBASE_RETURN(uref_sound_flow_get_channels(flow_def, &upipe_rtp_pcm_pack->channels));
-    UBASE_RETURN(uref_clock_get_latency(flow_def, &upipe_rtp_pcm_pack->latency));
+    upipe_dbg(upipe, "running uref_clock_get_latency");
+    if (!ubase_check(uref_clock_get_latency(flow_def, &upipe_rtp_pcm_pack->latency))) {
+        upipe_warn(upipe, "unable to get latency from flow_def, assuming 0");
+        upipe_rtp_pcm_pack->latency = UCLOCK_FREQ*200/1000;
+    }
 
     if (upipe_rtp_pcm_pack->output_time) {
         upipe_rtp_pcm_pack->output_samples = upipe_rtp_pcm_pack->rate *
