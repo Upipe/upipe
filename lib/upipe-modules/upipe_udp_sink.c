@@ -98,14 +98,6 @@ struct upipe_udpsink {
     int fd;
     /** socket uri */
     char *uri;
-    /** temporary uref storage */
-    struct uchain urefs;
-    /** nb urefs in storage */
-    unsigned int nb_urefs;
-    /** max urefs in storage */
-    unsigned int max_urefs;
-    /** list of blockers */
-    struct uchain blockers;
 
     struct uchain ulist;
 
@@ -132,7 +124,6 @@ UPIPE_HELPER_UREFCOUNT(upipe_udpsink, urefcount, upipe_udpsink_free)
 UPIPE_HELPER_VOID(upipe_udpsink)
 UPIPE_HELPER_UPUMP_MGR(upipe_udpsink, upump_mgr)
 UPIPE_HELPER_UPUMP(upipe_udpsink, upump, upump_mgr)
-UPIPE_HELPER_INPUT(upipe_udpsink, urefs, nb_urefs, max_urefs, blockers, upipe_udpsink_output)
 UPIPE_HELPER_UCLOCK(upipe_udpsink, uclock, uclock_request, NULL, upipe_throw_provide_request, NULL)
 
 static void *run_thread(void *upipe_pointer)
@@ -144,7 +135,6 @@ static void *run_thread(void *upipe_pointer)
 
     /* Run until told to stop. */
     while (uatomic_load(&upipe_udpsink->stop) == 0) {
-        //upipe_warn(upipe, "loop start");
         pthread_mutex_lock(&upipe_udpsink->mutex);
         uchain = ulist_pop(&upipe_udpsink->ulist);
         pthread_mutex_unlock(&upipe_udpsink->mutex);
@@ -165,7 +155,6 @@ static void *run_thread(void *upipe_pointer)
             /* TODO: what to do if the output doesn't use the uref? */
             uref_free(uref);
         }
-        //upipe_warn(upipe, "loop end");
     }
 
     upipe_notice(upipe, "exiting run_thread");
@@ -181,8 +170,6 @@ static int create_thread(struct upipe *upipe)
         upipe_err_va(upipe, "pthread_create: %s", strerror(ret));
         return UBASE_ERR_ALLOC;
     }
-
-    //printf("create thread \n");
 
     return UBASE_ERR_NONE;
 }
@@ -208,7 +195,6 @@ static struct upipe *upipe_udpsink_alloc(struct upipe_mgr *mgr,
     upipe_udpsink_init_urefcount(upipe);
     upipe_udpsink_init_upump_mgr(upipe);
     upipe_udpsink_init_upump(upipe);
-    upipe_udpsink_init_input(upipe);
     upipe_udpsink_init_uclock(upipe);
     upipe_udpsink->latency = 0;
     upipe_udpsink->fd = -1;
@@ -253,7 +239,6 @@ static bool upipe_udpsink_output(struct upipe *upipe, struct uref *uref,
         goto write_buffer;
     }
 
-    //upipe_warn_va(upipe, "uref tx systime %"PRIu64"",systime);
     if (now < systime) {
 #if 0
         useconds_t wait = (systime - now) / 27;
@@ -361,8 +346,6 @@ write_buffer:
         uref_free(uref);
         break;
     }
-    now = uclock_now(upipe_udpsink->uclock);
-    //upipe_warn(upipe, "outputted uref");
 
     return true;
 }
@@ -377,12 +360,10 @@ static void upipe_udpsink_input(struct upipe *upipe, struct uref *uref,
                                 struct upump **upump_p)
 {
     struct upipe_udpsink *upipe_udpsink = upipe_udpsink_from_upipe(upipe);
-    uint64_t now = uclock_now(upipe_udpsink->uclock);
     uint64_t systime = 0;
     if (unlikely(!ubase_check(uref_clock_get_cr_sys(uref, &systime)))) {
         upipe_warn(upipe, "received non-dated buffer");
     }
-    //upipe_warn_va(upipe,"uref in systime %"PRIu64" delta %"PRIi64"", systime, (int64_t)systime - now);
 
     pthread_mutex_lock(&upipe_udpsink->mutex);
     ulist_add(&upipe_udpsink->ulist, uref_to_uchain(uref));
@@ -555,6 +536,13 @@ static void upipe_udpsink_free(struct upipe *upipe)
         close(upipe_udpsink->fd);
     }
     upipe_throw_dead(upipe);
+
+    /* Stop thread. */
+    uatomic_store(&upipe_udpsink->stop, 1);
+    /* Wait for thread to exit. */
+    nanosleep(&(struct timespec){ .tv_nsec = 25000 }, NULL);
+    /* Clean up mutex. */
+    pthread_mutex_destroy(&upipe_udpsink->mutex); /* Check return value? */
 
     free(upipe_udpsink->uri);
     upipe_udpsink_clean_uclock(upipe);
