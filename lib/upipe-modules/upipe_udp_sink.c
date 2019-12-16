@@ -47,7 +47,6 @@
 #include <upipe/upipe_helper_uclock.h>
 #include <upipe-modules/upipe_udp_sink.h>
 #include "upipe_udp.h"
-#include <upipe/uqueue.h>
 
 #include <stdlib.h>
 #include <stdbool.h>
@@ -73,9 +72,6 @@
 
 #define UDP_DEFAULT_TTL 0
 #define UDP_DEFAULT_PORT 1234
-
-/** uqueue length */
-#define MAX_QUEUE_LENGTH 255
 
 /** @hidden */
 static bool upipe_udpsink_output(struct upipe *upipe, struct uref *uref,
@@ -111,11 +107,10 @@ struct upipe_udpsink {
     /** list of blockers */
     struct uchain blockers;
 
-    /** queue between pipe thread and writing thread */
-    struct uqueue uqueue;
-    /** extra data for the queue structures */
-    uint8_t *uqueue_extra;
+    struct uchain ulist;
+
     pthread_t pt;
+    pthread_mutex_t mutex;
     uatomic_uint32_t stop;
 
     /** RAW sockets */
@@ -144,13 +139,18 @@ static void *run_thread(void *upipe_pointer)
 {
     struct upipe *upipe = upipe_pointer;
     struct upipe_udpsink *upipe_udpsink = upipe_udpsink_from_upipe(upipe);
+    struct uref *uref = NULL;
+    struct uchain *uchain = NULL;
 
     /* Run until told to stop. */
     while (uatomic_load(&upipe_udpsink->stop) == 0) {
-        struct uref *uref = uqueue_pop(&upipe_udpsink->uqueue, struct uref *);
+        //upipe_warn(upipe, "loop start");
+        pthread_mutex_lock(&upipe_udpsink->mutex);
+        uchain = ulist_pop(&upipe_udpsink->ulist);
+        pthread_mutex_unlock(&upipe_udpsink->mutex);
 
         /* If no uref in queue, sleep 5us and continue. */
-        if (uref == NULL) {
+        if (uchain == NULL) {
 #if 0
             usleep(5);
 #else
@@ -159,11 +159,13 @@ static void *run_thread(void *upipe_pointer)
 #endif
             continue;
         }
+        uref = uref_from_uchain(uchain);
 
         if (!upipe_udpsink_output(upipe, uref, NULL)) {
             /* TODO: what to do if the output doesn't use the uref? */
             uref_free(uref);
         }
+        //upipe_warn(upipe, "loop end");
     }
 
     upipe_notice(upipe, "exiting run_thread");
@@ -179,6 +181,8 @@ static int create_thread(struct upipe *upipe)
         upipe_err_va(upipe, "pthread_create: %s", strerror(ret));
         return UBASE_ERR_ALLOC;
     }
+
+    //printf("create thread \n");
 
     return UBASE_ERR_NONE;
 }
@@ -200,11 +204,6 @@ static struct upipe *upipe_udpsink_alloc(struct upipe_mgr *mgr,
     if (unlikely(upipe == NULL))
         return NULL;
 
-    void *uqueue_extra = malloc(uqueue_sizeof(MAX_QUEUE_LENGTH));
-    if (unlikely(uqueue_extra == NULL)) {
-        return NULL;
-    }
-
     struct upipe_udpsink *upipe_udpsink = upipe_udpsink_from_upipe(upipe);
     upipe_udpsink_init_urefcount(upipe);
     upipe_udpsink_init_upump_mgr(upipe);
@@ -216,9 +215,9 @@ static struct upipe *upipe_udpsink_alloc(struct upipe_mgr *mgr,
     upipe_udpsink->uri = NULL;
     upipe_udpsink->raw = false;
     upipe_udpsink->addrlen = 0;
+    pthread_mutex_init(&upipe_udpsink->mutex, NULL);
 
-    uqueue_init(&upipe_udpsink->uqueue, MAX_QUEUE_LENGTH, uqueue_extra);
-    upipe_udpsink->uqueue_extra = uqueue_extra;
+    ulist_init(&upipe_udpsink->ulist);
     uatomic_init(&upipe_udpsink->stop, 0);
 
     upipe_throw_ready(upipe);
@@ -236,6 +235,7 @@ static bool upipe_udpsink_output(struct upipe *upipe, struct uref *uref,
                                  struct upump **upump_p)
 {
     struct upipe_udpsink *upipe_udpsink = upipe_udpsink_from_upipe(upipe);
+    int slept = 0;
 
     if (unlikely(upipe_udpsink->fd == -1)) {
         uref_free(uref);
@@ -253,6 +253,7 @@ static bool upipe_udpsink_output(struct upipe *upipe, struct uref *uref,
         goto write_buffer;
     }
 
+    //upipe_warn_va(upipe, "uref tx systime %"PRIu64"",systime);
     if (now < systime) {
 #if 0
         useconds_t wait = (systime - now) / 27;
@@ -260,6 +261,7 @@ static bool upipe_udpsink_output(struct upipe *upipe, struct uref *uref,
 #else
         struct timespec wait = { .tv_nsec = (systime - now) * 1000 / 27 };
         struct timespec left = { 0 };
+        slept = wait.tv_nsec / 1000;
         /* TODO: check return value and remaining time. */
         if (unlikely(nanosleep(&wait, &left))) {
             if (errno == EINTR)
@@ -274,9 +276,9 @@ static bool upipe_udpsink_output(struct upipe *upipe, struct uref *uref,
 #endif
     } else if (now > systime + 0)
         upipe_warn_va(upipe,
-                      "outputting late packet %"PRIu64" us, latency %"PRIu64" us",
+                      "outputting late packet %"PRIu64" us, latency %"PRIu64" us slept %u us",
                       (now - systime) / 27,
-                      upipe_udpsink->latency / 27);
+                      upipe_udpsink->latency / 27, slept);
 
 write_buffer:
     for ( ; ; ) {
@@ -359,25 +361,10 @@ write_buffer:
         uref_free(uref);
         break;
     }
-    return true;
-}
+    now = uclock_now(upipe_udpsink->uclock);
+    //upipe_warn(upipe, "outputted uref");
 
-/** @internal @This is called when the file descriptor can be written again.
- * Unblock the sink and unqueue all queued buffers.
- *
- * @param upump description structure of the watcher
- */
-static void upipe_udpsink_watcher(struct upump *upump)
-{
-    struct upipe *upipe = upump_get_opaque(upump, struct upipe *);
-    upipe_udpsink_set_upump(upipe, NULL);
-    upipe_udpsink_output_input(upipe);
-    upipe_udpsink_unblock_input(upipe);
-    if (upipe_udpsink_check_input(upipe)) {
-        /* All packets have been output, release again the pipe that has been
-         * used in @ref upipe_udpsink_input. */
-        upipe_release(upipe);
-    }
+    return true;
 }
 
 /** @internal @This receives data.
@@ -390,18 +377,16 @@ static void upipe_udpsink_input(struct upipe *upipe, struct uref *uref,
                                 struct upump **upump_p)
 {
     struct upipe_udpsink *upipe_udpsink = upipe_udpsink_from_upipe(upipe);
-
-    if (!upipe_udpsink_check_input(upipe)) {
-        upipe_udpsink_hold_input(upipe, uref);
-        upipe_udpsink_block_input(upipe, upump_p);
-    } else if (unlikely(!uqueue_push(&upipe_udpsink->uqueue, uref))) {
-        upipe_udpsink_hold_input(upipe, uref);
-        upipe_udpsink_block_input(upipe, upump_p);
-        /* Increment upipe refcount to avoid disappearing before all packets
-         * have been sent. */
-        upipe_use(upipe);
-        upipe_udpsink_wait_upump(upipe, UCLOCK_FREQ/100, upipe_udpsink_watcher);
+    uint64_t now = uclock_now(upipe_udpsink->uclock);
+    uint64_t systime = 0;
+    if (unlikely(!ubase_check(uref_clock_get_cr_sys(uref, &systime)))) {
+        upipe_warn(upipe, "received non-dated buffer");
     }
+    //upipe_warn_va(upipe,"uref in systime %"PRIu64" delta %"PRIi64"", systime, (int64_t)systime - now);
+
+    pthread_mutex_lock(&upipe_udpsink->mutex);
+    ulist_add(&upipe_udpsink->ulist, uref_to_uchain(uref));
+    pthread_mutex_unlock(&upipe_udpsink->mutex);
 }
 
 /** @internal @This sets the input flow definition.
