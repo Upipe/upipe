@@ -45,7 +45,7 @@
 #include <upipe/upipe_helper_upump.h>
 #include <upipe/upipe_helper_input.h>
 #include <upipe/upipe_helper_uclock.h>
-#include <upipe-modules/upipe_udp_sink.h>
+#include <upipe-modules/upipe_udp_sink_fast.h>
 #include "upipe_udp.h"
 
 #include <stdlib.h>
@@ -119,7 +119,7 @@ struct upipe_udpsink {
     struct upipe upipe;
 };
 
-UPIPE_HELPER_UPIPE(upipe_udpsink, upipe, UPIPE_UDPSINK_SIGNATURE)
+UPIPE_HELPER_UPIPE(upipe_udpsink, upipe, UPIPE_UDPSINK_FAST_SIGNATURE)
 UPIPE_HELPER_UREFCOUNT(upipe_udpsink, urefcount, upipe_udpsink_free)
 UPIPE_HELPER_VOID(upipe_udpsink)
 UPIPE_HELPER_UPUMP_MGR(upipe_udpsink, upump_mgr)
@@ -497,20 +497,20 @@ static int upipe_udpsink_control(struct upipe *upipe,
             return _upipe_udpsink_set_uri(upipe, uri);
         }
 
-        case UPIPE_UDPSINK_GET_FD: {
-            UBASE_SIGNATURE_CHECK(args, UPIPE_UDPSINK_SIGNATURE)
+        case UPIPE_UDPSINK_FAST_GET_FD: {
+            UBASE_SIGNATURE_CHECK(args, UPIPE_UDPSINK_FAST_SIGNATURE)
             int *fd = va_arg(args, int *);
             *fd = upipe_udpsink->fd;
             return UBASE_ERR_NONE;
         }
-        case UPIPE_UDPSINK_SET_FD: {
-            UBASE_SIGNATURE_CHECK(args, UPIPE_UDPSINK_SIGNATURE)
+        case UPIPE_UDPSINK_FAST_SET_FD: {
+            UBASE_SIGNATURE_CHECK(args, UPIPE_UDPSINK_FAST_SIGNATURE)
             upipe_udpsink_set_upump(upipe, NULL);
             upipe_udpsink->fd = va_arg(args, int );
             return UBASE_ERR_NONE;
         }
-        case UPIPE_UDPSINK_SET_PEER: {
-            UBASE_SIGNATURE_CHECK(args, UPIPE_UDPSINK_SIGNATURE)
+        case UPIPE_UDPSINK_FAST_SET_PEER: {
+            UBASE_SIGNATURE_CHECK(args, UPIPE_UDPSINK_FAST_SIGNATURE)
             const struct sockaddr *s = va_arg(args, const struct sockaddr *);
             upipe_udpsink->addrlen = va_arg(args, socklen_t);
             memcpy(&upipe_udpsink->addr, s, upipe_udpsink->addrlen);
@@ -555,7 +555,7 @@ static void upipe_udpsink_free(struct upipe *upipe)
 /** module manager static descriptor */
 static struct upipe_mgr upipe_udpsink_mgr = {
     .refcount = NULL,
-    .signature = UPIPE_UDPSINK_SIGNATURE,
+    .signature = UPIPE_UDPSINK_FAST_SIGNATURE,
 
     .upipe_alloc = upipe_udpsink_alloc,
     .upipe_input = upipe_udpsink_input,
@@ -568,7 +568,7 @@ static struct upipe_mgr upipe_udpsink_mgr = {
  *
  * @return pointer to manager
  */
-struct upipe_mgr *upipe_udpsink_mgr_alloc(void)
+struct upipe_mgr *upipe_udpsink_fast_mgr_alloc(void)
 {
     return &upipe_udpsink_mgr;
 }

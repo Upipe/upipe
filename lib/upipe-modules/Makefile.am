@@ -85,7 +85,8 @@ libupipe_modules_la_SOURCES = \
 if HAVE_WRITEV
 libupipe_modules_la_SOURCES += \
 	upipe_file_sink.c \
-	upipe_udp_sink.c
+	upipe_udp_sink.c \
+	upipe_udp_sink_fast.c
 endif
 
 if HAVE_BITSTREAM
