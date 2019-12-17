@@ -35,14 +35,11 @@
 #include <upipe/uref.h>
 #include <upipe/uref_block.h>
 #include <upipe/uref_clock.h>
-#include <upipe/upump.h>
 #include <upipe/ubuf.h>
 #include <upipe/upipe.h>
 #include <upipe/upipe_helper_upipe.h>
 #include <upipe/upipe_helper_urefcount.h>
 #include <upipe/upipe_helper_void.h>
-#include <upipe/upipe_helper_upump_mgr.h>
-#include <upipe/upipe_helper_upump.h>
 #include <upipe/upipe_helper_input.h>
 #include <upipe/upipe_helper_uclock.h>
 #include <upipe-modules/upipe_udp_sink_fast.h>
@@ -82,11 +79,6 @@ struct upipe_udpsink {
     /** refcount management structure */
     struct urefcount urefcount;
 
-    /** upump manager */
-    struct upump_mgr *upump_mgr;
-    /** write watcher */
-    struct upump *upump;
-
     /** uclock structure, if not NULL we are in live mode */
     struct uclock *uclock;
     /** uclock request */
@@ -122,8 +114,6 @@ struct upipe_udpsink {
 UPIPE_HELPER_UPIPE(upipe_udpsink, upipe, UPIPE_UDPSINK_FAST_SIGNATURE)
 UPIPE_HELPER_UREFCOUNT(upipe_udpsink, urefcount, upipe_udpsink_free)
 UPIPE_HELPER_VOID(upipe_udpsink)
-UPIPE_HELPER_UPUMP_MGR(upipe_udpsink, upump_mgr)
-UPIPE_HELPER_UPUMP(upipe_udpsink, upump, upump_mgr)
 UPIPE_HELPER_UCLOCK(upipe_udpsink, uclock, uclock_request, NULL, upipe_throw_provide_request, NULL)
 
 static void *run_thread(void *upipe_pointer)
@@ -193,8 +183,6 @@ static struct upipe *upipe_udpsink_alloc(struct upipe_mgr *mgr,
 
     struct upipe_udpsink *upipe_udpsink = upipe_udpsink_from_upipe(upipe);
     upipe_udpsink_init_urefcount(upipe);
-    upipe_udpsink_init_upump_mgr(upipe);
-    upipe_udpsink_init_upump(upipe);
     upipe_udpsink_init_uclock(upipe);
     upipe_udpsink->latency = 0;
     upipe_udpsink->fd = -1;
@@ -426,12 +414,9 @@ static int _upipe_udpsink_set_uri(struct upipe *upipe, const char *uri)
         close(upipe_udpsink->fd);
     }
     ubase_clean_str(&upipe_udpsink->uri);
-    upipe_udpsink_set_upump(upipe, NULL);
 
     if (unlikely(uri == NULL))
         return UBASE_ERR_NONE;
-
-    upipe_udpsink_check_upump_mgr(upipe);
 
     upipe_udpsink->fd = upipe_udp_open_socket(upipe, uri,
             UDP_DEFAULT_TTL, UDP_DEFAULT_PORT, 0, NULL, &use_tcp,
@@ -481,11 +466,7 @@ static int upipe_udpsink_control(struct upipe *upipe,
         case UPIPE_UNREGISTER_REQUEST:
             return upipe_control_provide_request(upipe, command, args);
 
-        case UPIPE_ATTACH_UPUMP_MGR:
-            upipe_udpsink_set_upump(upipe, NULL);
-            return upipe_udpsink_attach_upump_mgr(upipe);
         case UPIPE_ATTACH_UCLOCK:
-            upipe_udpsink_set_upump(upipe, NULL);
             upipe_udpsink_require_uclock(upipe);
             return UBASE_ERR_NONE;
         case UPIPE_SET_FLOW_DEF: {
@@ -510,7 +491,6 @@ static int upipe_udpsink_control(struct upipe *upipe,
         }
         case UPIPE_UDPSINK_FAST_SET_FD: {
             UBASE_SIGNATURE_CHECK(args, UPIPE_UDPSINK_FAST_SIGNATURE)
-            upipe_udpsink_set_upump(upipe, NULL);
             upipe_udpsink->fd = va_arg(args, int );
             return UBASE_ERR_NONE;
         }
@@ -551,8 +531,6 @@ static void upipe_udpsink_free(struct upipe *upipe)
 
     free(upipe_udpsink->uri);
     upipe_udpsink_clean_uclock(upipe);
-    upipe_udpsink_clean_upump(upipe);
-    upipe_udpsink_clean_upump_mgr(upipe);
     upipe_udpsink_clean_urefcount(upipe);
     upipe_udpsink_free_void(upipe);
 }
