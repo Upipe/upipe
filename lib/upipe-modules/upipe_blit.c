@@ -818,6 +818,7 @@ static void upipe_blit_init_sub_mgr(struct upipe *upipe)
 {
     struct upipe_blit *upipe_blit = upipe_blit_from_upipe(upipe);
     struct upipe_mgr *sub_mgr = &upipe_blit->sub_mgr;
+    memset(sub_mgr, 0, sizeof (*sub_mgr));
     sub_mgr->refcount = upipe_blit_to_urefcount(upipe_blit);
     sub_mgr->signature = UPIPE_BLIT_SUB_SIGNATURE;
     sub_mgr->upipe_alloc = upipe_blit_sub_alloc;
