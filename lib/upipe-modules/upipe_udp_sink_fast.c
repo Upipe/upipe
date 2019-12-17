@@ -379,12 +379,18 @@ static void upipe_udpsink_input(struct upipe *upipe, struct uref *uref,
 static int upipe_udpsink_set_flow_def(struct upipe *upipe,
                                       struct uref *flow_def)
 {
+    struct upipe_udpsink *upipe_udpsink = upipe_udpsink_from_upipe(upipe);
+
     if (flow_def == NULL)
         return UBASE_ERR_INVALID;
     UBASE_RETURN(uref_flow_match_def(flow_def, EXPECTED_FLOW_DEF))
     flow_def = uref_dup(flow_def);
     UBASE_ALLOC_RETURN(flow_def)
     upipe_input(upipe, flow_def, NULL);
+
+    if (!upipe_udpsink->pt)
+        UBASE_RETURN(create_thread(upipe));
+
     return UBASE_ERR_NONE;
 }
 
@@ -477,7 +483,6 @@ static int upipe_udpsink_control(struct upipe *upipe,
 
         case UPIPE_ATTACH_UPUMP_MGR:
             upipe_udpsink_set_upump(upipe, NULL);
-            UBASE_RETURN(create_thread(upipe));
             return upipe_udpsink_attach_upump_mgr(upipe);
         case UPIPE_ATTACH_UCLOCK:
             upipe_udpsink_set_upump(upipe, NULL);
