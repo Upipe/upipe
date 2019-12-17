@@ -1061,7 +1061,7 @@ static int _upipe_freetype_get_metrics(struct upipe *upipe,
 
     struct upipe_freetype_metrics m;
     m.x.min = upipe_freetype->face->bbox.xMin;
-    m.x.max = upipe_freetype->face->bbox.xMin;
+    m.x.max = upipe_freetype->face->bbox.xMax;
     m.y.min = upipe_freetype->face->bbox.yMin;
     m.y.max = upipe_freetype->face->bbox.yMax;
     m.units_per_EM = upipe_freetype->face->units_per_EM;
