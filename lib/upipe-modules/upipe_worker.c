@@ -409,6 +409,33 @@ static int upipe_work_get_first_inner(struct upipe *upipe, struct upipe **p)
     return upipe_xfer_get_remote(upipe_work->first_remote_xfer, p);
 }
 
+/** @internal @This processes control commands on first inner.
+ *
+ * @param upipe description structure of the pipe
+ * @param command type of command to process
+ * @param args arguments of the command
+ * @return an error code
+ */
+static int upipe_work_control_first_inner(struct upipe *upipe,
+                                          int cmd, va_list args)
+{
+    struct upipe_work *upipe_work = upipe_work_from_upipe(upipe);
+    struct upipe *inner = NULL;
+    bool frozen = upipe_work->frozen;
+    int err = UBASE_ERR_UNHANDLED;
+
+    if (!frozen && !ubase_check(upipe_work_freeze(upipe)))
+        return err;
+
+    if (ubase_check(upipe_work_get_first_inner(upipe, &inner)) && inner)
+        err = upipe_control_va(inner, cmd, args);
+
+    if (!frozen)
+        upipe_bin_thaw(upipe);
+
+    return err;
+}
+
 /** @internal @This gets the last inner pipe of the bin.
  *
  * @param upipe description structure of the pipe
@@ -421,6 +448,33 @@ static int upipe_work_get_last_inner(struct upipe *upipe, struct upipe **p)
         return UBASE_ERR_BUSY;
 
     return upipe_xfer_get_remote(upipe_work->last_remote_xfer, p);
+}
+
+/** @internal @This processes control commands on last inner.
+ *
+ * @param upipe description structure of the pipe
+ * @param command type of command to process
+ * @param args arguments of the command
+ * @return an error code
+ */
+static int upipe_work_control_last_inner(struct upipe *upipe,
+                                          int cmd, va_list args)
+{
+    struct upipe_work *upipe_work = upipe_work_from_upipe(upipe);
+    struct upipe *inner = NULL;
+    bool frozen = upipe_work->frozen;
+    int err = UBASE_ERR_UNHANDLED;
+
+    if (!frozen && !ubase_check(upipe_work_freeze(upipe)))
+        return err;
+
+    if (ubase_check(upipe_work_get_last_inner(upipe, &inner)) && inner)
+        err = upipe_control_va(inner, cmd, args);
+
+    if (!frozen)
+        upipe_bin_thaw(upipe);
+
+    return err;
 }
 
 /** @internal @This processes control commands on a worker pipe.
@@ -458,10 +512,11 @@ static int upipe_work_control(struct upipe *upipe, int command, va_list args)
             break;
     }
 
-    int err = upipe_work_control_bin_input(upipe, command, args);
-    if (err == UBASE_ERR_UNHANDLED)
-        return upipe_work_control_bin_output(upipe, command, args);
-    return err;
+    UBASE_HANDLED_RETURN(upipe_work_control_bin_input(upipe, command, args));
+    UBASE_HANDLED_RETURN(upipe_work_control_bin_output(upipe, command, args));
+    UBASE_HANDLED_RETURN(upipe_work_control_first_inner(upipe, command, args));
+    UBASE_HANDLED_RETURN(upipe_work_control_last_inner(upipe, command, args));
+    return UBASE_ERR_UNHANDLED;
 }
 
 /** @This frees a upipe.
