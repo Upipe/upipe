@@ -179,7 +179,8 @@ static bool upipe_sws_handle(struct upipe *upipe, struct uref *uref,
         upipe_sws_store_flow_def(upipe, NULL);
         uref = upipe_sws_store_flow_def_input(upipe, uref);
         struct urational dar;
-        if (ubase_check(uref_pic_flow_get_dar(uref, &dar)))
+        if (ubase_check(uref_pic_flow_get_dar(uref, &dar)) &&
+            !ubase_check(uref_pic_flow_get_sar(uref, NULL)))
             uref_pic_flow_infer_sar(uref, dar);
         upipe_sws_require_ubuf_mgr(upipe, uref);
         return true;
