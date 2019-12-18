@@ -93,6 +93,7 @@ struct upipe_udpsink {
 
     struct uchain ulist;
 
+    bool thread_created;
     pthread_t pt;
     pthread_mutex_t mutex;
     uatomic_uint32_t stop;
@@ -161,6 +162,7 @@ static int create_thread(struct upipe *upipe)
         return UBASE_ERR_ALLOC;
     }
 
+    upipe_udpsink->thread_created = true;
     return UBASE_ERR_NONE;
 }
 
@@ -189,6 +191,7 @@ static struct upipe *upipe_udpsink_alloc(struct upipe_mgr *mgr,
     upipe_udpsink->uri = NULL;
     upipe_udpsink->raw = false;
     upipe_udpsink->addrlen = 0;
+    upipe_udpsink->thread_created = false;
     pthread_mutex_init(&upipe_udpsink->mutex, NULL);
 
     ulist_init(&upipe_udpsink->ulist);
@@ -376,7 +379,7 @@ static int upipe_udpsink_set_flow_def(struct upipe *upipe,
     UBASE_ALLOC_RETURN(flow_def)
     upipe_input(upipe, flow_def, NULL);
 
-    if (!upipe_udpsink->pt)
+    if (!upipe_udpsink->thread_created)
         UBASE_RETURN(create_thread(upipe));
 
     return UBASE_ERR_NONE;
