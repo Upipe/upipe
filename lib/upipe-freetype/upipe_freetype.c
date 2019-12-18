@@ -717,7 +717,7 @@ static bool upipe_freetype_handle(struct upipe *upipe, struct uref *uref,
     if (a.p)
         ubuf_pic_plane_unmap(ubuf, "a8", 0, 0, -1, -1);
 
-    ubuf_free(upipe_freetype->ubuf);
+    upipe_freetype_flush_cache(upipe);
     upipe_freetype->ubuf = ubuf;
     upipe_freetype->text = strdup(text);
     uref_attach_ubuf(uref, ubuf_dup(upipe_freetype->ubuf));
