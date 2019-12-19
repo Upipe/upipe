@@ -163,7 +163,6 @@ static bool upipe_audio_merge_match_flowdefs(struct uref *one, struct uref *two)
 {
     return uref_sound_flow_cmp_rate(one, two) == 0
                 && uref_sound_flow_cmp_sample_size(one, two) == 0
-                && uref_sound_flow_cmp_samples(one, two) == 0
                 && uref_sound_flow_cmp_align(one, two) == 0;
 }
 
