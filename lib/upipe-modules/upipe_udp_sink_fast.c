@@ -532,6 +532,12 @@ static void upipe_udpsink_free(struct upipe *upipe)
     /* Clean up mutex. */
     pthread_mutex_destroy(&upipe_udpsink->mutex); /* Check return value? */
 
+    struct uchain *uchain, *uchain_tmp;
+    ulist_delete_foreach(&upipe_udpsink->ulist, uchain, uchain_tmp) {
+        uref_free(uref_from_uchain(uchain));
+        ulist_delete(uchain);
+    }
+
     free(upipe_udpsink->uri);
     upipe_udpsink_clean_uclock(upipe);
     upipe_udpsink_clean_urefcount(upipe);
