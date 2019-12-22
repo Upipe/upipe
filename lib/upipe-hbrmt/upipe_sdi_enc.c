@@ -843,7 +843,7 @@ static void upipe_sdi_enc_encode_line(struct upipe *upipe, int line_num, uint16_
 
 static void upipe_hd_sdi_enc_encode_line(struct upipe *upipe, int line_num, uint16_t *dst,
     const uint8_t *planes[2][UPIPE_SDI_MAX_PLANES], int *input_strides, const unsigned int samples,
-    size_t input_hsize, size_t input_vsize, unsigned max_audio_samples_per_line)
+    size_t input_hsize, size_t input_vsize, unsigned max_audio_packets_per_line)
 {
     struct upipe_sdi_enc *upipe_sdi_enc = upipe_sdi_enc_from_upipe(upipe);
     const struct sdi_offsets_fmt *f = upipe_sdi_enc->f;
