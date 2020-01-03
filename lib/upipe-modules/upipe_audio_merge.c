@@ -408,7 +408,6 @@ static void upipe_audio_merge_produce_output(struct upipe *upipe, struct upump *
     /* TODO: merge this loop with the above? */
     uint64_t input_channels = 0;
     uint64_t output_num_samples = 0;
-    uint64_t output_latency = 0;
     ulist_foreach (&upipe_audio_merge->inputs, uchain) {
         struct upipe_audio_merge_sub *upipe_audio_merge_sub =
             upipe_audio_merge_sub_from_uchain(uchain);
@@ -424,15 +423,9 @@ static void upipe_audio_merge_produce_output(struct upipe *upipe, struct upump *
         if (ubase_check(uref_sound_size(upipe_audio_merge_sub->uref, &samples, NULL))
                 && samples > output_num_samples)
             output_num_samples = samples;
-
-        uint64_t latency = 0;
-        if (ubase_check(uref_clock_get_latency(upipe_audio_merge_sub->flow_def, &latency))
-                && latency > output_latency)
-            output_latency = latency;
     }
     /* TODO: pass value directly. */
     uref_sound_flow_set_samples(upipe_audio_merge->flow_def, output_num_samples);
-    uref_clock_set_latency(upipe_audio_merge->flow_def, output_latency);
 
     if (unlikely(!output_uref))
         return;
