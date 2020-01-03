@@ -359,7 +359,7 @@ static void upipe_udpsink_input(struct upipe *upipe, struct uref *uref,
         if (latency > upipe_udpsink->latency)
             upipe_udpsink->latency = latency;
         uref_free(uref);
-        return true;
+        return;
     }
 
     if (unlikely(!ubase_check(uref_clock_get_cr_sys(uref, &systime)))) {
