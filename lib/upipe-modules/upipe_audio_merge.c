@@ -622,8 +622,12 @@ static struct upipe *upipe_audio_merge_alloc(struct upipe_mgr *mgr,
 static int upipe_audio_merge_check(struct upipe *upipe, struct uref *flow_format)
 {
     struct upipe_audio_merge *upipe_audio_merge = upipe_audio_merge_from_upipe(upipe);
-    if (flow_format != NULL)
+    if (flow_format != NULL) {
+        // FIXME: why do we need to do this?!
+        if (!ubase_check(uref_clock_set_latency(flow_format, upipe_audio_merge->latency)))
+            upipe_throw_error(upipe, UBASE_ERR_ALLOC);
         upipe_audio_merge_store_flow_def(upipe, flow_format);
+    }
 
     if (upipe_audio_merge->flow_def == NULL)
         return UBASE_ERR_NONE;
