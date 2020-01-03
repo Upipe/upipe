@@ -352,7 +352,7 @@ static void upipe_udpsink_input(struct upipe *upipe, struct uref *uref,
 {
     struct upipe_udpsink *upipe_udpsink = upipe_udpsink_from_upipe(upipe);
     uint64_t systime = 0;
-
+    const char *def;
     if (unlikely(ubase_check(uref_flow_get_def(uref, &def)))) {
         uint64_t latency = 0;
         uref_clock_get_latency(uref, &latency);
