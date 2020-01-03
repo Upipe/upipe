@@ -90,6 +90,7 @@ struct upipe_audio_merge {
     struct uchain request_list;
 
     uint64_t latency;
+    uint64_t output_num_samples;
 
     /** flow def of the first input subpipe, used to check if the format
      *  of subsequent subpipes match */
@@ -307,8 +308,7 @@ static void upipe_audio_merge_copy_to_output(struct upipe *upipe, float **out_da
     struct upipe_audio_merge *upipe_audio_merge = upipe_audio_merge_from_upipe(upipe);
     struct uchain *uchain;
 
-    uint64_t output_num_samples = 0;
-    UBASE_ERROR(upipe, uref_sound_flow_get_samples(upipe_audio_merge->flow_def, &output_num_samples));
+    uint64_t output_num_samples = upipe_audio_merge->output_num_samples;
 
     uint8_t output_channels = 0;
     UBASE_ERROR(upipe, uref_sound_flow_get_channels(upipe_audio_merge->flow_def, &output_channels));
@@ -357,8 +357,7 @@ static void upipe_audio_merge_copy_to_output_interleaved(struct upipe *upipe, fl
     struct upipe_audio_merge *upipe_audio_merge = upipe_audio_merge_from_upipe(upipe);
     struct uchain *uchain;
 
-    uint64_t output_num_samples = 0;
-    UBASE_ERROR(upipe, uref_sound_flow_get_samples(upipe_audio_merge->flow_def, &output_num_samples));
+    uint64_t output_num_samples = upipe_audio_merge->output_num_samples;
 
     uint8_t output_channels = 0;
     UBASE_ERROR(upipe, uref_sound_flow_get_channels(upipe_audio_merge->flow_def, &output_channels));
@@ -453,8 +452,7 @@ static void upipe_audio_merge_produce_output(struct upipe *upipe, struct upump *
                 && samples > output_num_samples)
             output_num_samples = samples;
     }
-    /* TODO: pass value directly. */
-    uref_sound_flow_set_samples(upipe_audio_merge->flow_def, output_num_samples);
+    upipe_audio_merge->output_num_samples = output_num_samples;
 
     if (unlikely(!output_uref))
         return;
