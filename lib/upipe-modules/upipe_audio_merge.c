@@ -89,6 +89,8 @@ struct upipe_audio_merge {
     /** list of output requests */
     struct uchain request_list;
 
+    uint64_t latency;
+
     /** flow def of the first input subpipe, used to check if the format
      *  of subsequent subpipes match */
     struct uref *sub_flow_def;
@@ -166,6 +168,24 @@ static bool upipe_audio_merge_match_flowdefs(struct uref *one, struct uref *two)
                 && uref_sound_flow_cmp_align(one, two) == 0;
 }
 
+/** @internal @This builds the output flow definition.
+ *
+  * @param upipe description structure of the pipe
+ */
+static void upipe_audio_merge_build_flow_def(struct upipe *upipe)
+{
+    struct upipe_audio_merge *upipe_audio_merge = upipe_audio_merge_from_upipe(upipe);
+    struct uref *flow_def = upipe_audio_merge->flow_def;
+    if (flow_def == NULL)
+        return;
+    upipe_audio_merge->flow_def = NULL;
+
+    if (!ubase_check(uref_clock_set_latency(flow_def, upipe_audio_merge->latency)))
+        upipe_throw_error(upipe, UBASE_ERR_ALLOC);
+
+    upipe_audio_merge_store_flow_def(upipe, flow_def);
+}
+
 static int upipe_audio_merge_sub_set_flow_def(struct upipe *upipe,
                                               struct uref *flow_def)
 {
@@ -173,6 +193,7 @@ static int upipe_audio_merge_sub_set_flow_def(struct upipe *upipe,
         upipe_audio_merge_from_sub_mgr(upipe->mgr);
     struct upipe_audio_merge_sub *upipe_audio_merge_sub =
         upipe_audio_merge_sub_from_upipe(upipe);
+    uint64_t latency;
 
     if (flow_def == NULL)
         return UBASE_ERR_INVALID;
@@ -205,6 +226,14 @@ static int upipe_audio_merge_sub_set_flow_def(struct upipe *upipe,
         /* store in the subpipe structure itself for later reference */
         uref_free(upipe_audio_merge_sub->flow_def);
         upipe_audio_merge_sub->flow_def = uref_dup(flow_def);
+    }
+
+    if (!ubase_check(uref_clock_get_latency(flow_def, &latency)))
+        latency = 0;
+
+    if (latency > upipe_audio_merge->latency) {
+        upipe_audio_merge->latency = latency;
+        upipe_audio_merge_build_flow_def(upipe_audio_merge_to_upipe(upipe_audio_merge));
     }
 
     return UBASE_ERR_NONE;
@@ -569,6 +598,7 @@ static struct upipe *upipe_audio_merge_alloc(struct upipe_mgr *mgr,
     upipe_audio_merge_init_ubuf_mgr(upipe);
 
     upipe_audio_merge->sub_flow_def = NULL;
+    upipe_audio_merge->latency = 0;
 
     upipe_throw_ready(upipe);
     upipe_audio_merge_store_flow_def(upipe, flow_def);
