@@ -46,8 +46,6 @@
 #include <upipe/upipe_helper_output.h>
 #include <upipe/upipe_helper_subpipe.h>
 #include <upipe/upipe_helper_ubuf_mgr.h>
-#include <upipe/upipe_helper_upump_mgr.h>
-#include <upipe/upipe_helper_upump.h>
 #include <upipe/umem.h>
 #include <upipe/ubuf.h>
 #include <upipe/ubuf_sound.h>
@@ -96,11 +94,6 @@ struct upipe_audio_merge {
     /** manager to create input subpipes */
     struct upipe_mgr sub_mgr;
 
-    /** upump manager */
-    struct upump_mgr *upump_mgr;
-    /** watcher */
-    struct upump *upump;
-
     /** channels **/
     uint8_t channels;
 
@@ -118,9 +111,6 @@ UPIPE_HELPER_UBUF_MGR(upipe_audio_merge, ubuf_mgr, flow_format,
                       upipe_audio_merge_check,
                       upipe_audio_merge_register_output_request,
                       upipe_audio_merge_unregister_output_request)
-
-UPIPE_HELPER_UPUMP_MGR(upipe_audio_merge, upump_mgr);
-UPIPE_HELPER_UPUMP(upipe_audio_merge, upump, upump_mgr);
 
 /** @internal @This is the private context of an output of an audio_merge
  * pipe. */
@@ -475,8 +465,6 @@ static struct upipe *upipe_audio_merge_alloc(struct upipe_mgr *mgr,
     upipe_audio_merge_init_urefcount(upipe);
     upipe_audio_merge_init_urefcount_real(upipe);
 
-    upipe_audio_merge_init_upump_mgr(upipe);
-    upipe_audio_merge_init_upump(upipe);
     upipe_audio_merge_init_output(upipe);
     upipe_audio_merge_init_sub_mgr(upipe);
     upipe_audio_merge_init_sub_inputs(upipe);
@@ -486,7 +474,6 @@ static struct upipe *upipe_audio_merge_alloc(struct upipe_mgr *mgr,
 
     upipe_throw_ready(upipe);
     upipe_audio_merge_store_flow_def(upipe, flow_def);
-    upipe_audio_merge_check_upump_mgr(upipe);
 
     return upipe;
 }
@@ -528,10 +515,6 @@ static int _upipe_audio_merge_control(struct upipe *upipe,
     UBASE_HANDLED_RETURN(upipe_audio_merge_control_output(upipe, command, args));
 
     switch (command) {
-        case UPIPE_ATTACH_UPUMP_MGR:
-            upipe_audio_merge_set_upump(upipe, NULL);
-            return upipe_audio_merge_attach_upump_mgr(upipe);
-
         default:
             return UBASE_ERR_UNHANDLED;
     }
@@ -563,8 +546,6 @@ static void upipe_audio_merge_free(struct upipe *upipe)
     upipe_throw_dead(upipe);
 
     uref_free(upipe_audio_merge->sub_flow_def);
-    upipe_audio_merge_clean_upump(upipe);
-    upipe_audio_merge_clean_upump_mgr(upipe);
     upipe_audio_merge_clean_output(upipe);
     upipe_audio_merge_clean_sub_inputs(upipe);
     upipe_audio_merge_clean_ubuf_mgr(upipe);
