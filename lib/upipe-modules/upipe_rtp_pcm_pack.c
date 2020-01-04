@@ -176,6 +176,8 @@ static int upipe_rtp_pcm_pack_set_flow_def(struct upipe *upipe,
     uref_flow_set_def(flow_def_dup, "block.s24be.sound.");
     /* RTP clock rate */
     uref_sound_flow_set_rate(flow_def_dup, upipe_rtp_pcm_pack->rate);
+    if (!ubase_check(uref_clock_set_latency(flow_def_dup, upipe_rtp_pcm_pack->latency)))
+        upipe_throw_error(upipe, UBASE_ERR_ALLOC);
 
     upipe_rtp_pcm_pack_require_ubuf_mgr(upipe, flow_def_dup);
 
