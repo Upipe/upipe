@@ -224,6 +224,7 @@ static int upipe_rtp_prepend_infer_type(struct upipe *upipe, const char *def)
     } values[] = {
         { "mpegts", RTP_TYPE_MP2T },
         { "opus", DEFAULT_TYPE },
+        { "block.s24be.sound.", 97 },
     };
 
     struct upipe_rtp_prepend *upipe_rtp_prepend =
