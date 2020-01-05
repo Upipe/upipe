@@ -918,7 +918,7 @@ static float pts_to_time(uint64_t pts)
     return (float)pts / 27000;
 }
 
-static void upipe_resync_queues(struct upipe *upipe, struct upipe_netmap_intf *intf, uint32_t packets)
+static void upipe_clear_queues(struct upipe *upipe, struct upipe_netmap_intf *intf, uint32_t packets, int increment)
 {
     struct upipe_netmap_sink *upipe_netmap_sink = upipe_netmap_sink_from_upipe(upipe);
 
@@ -935,7 +935,9 @@ static void upipe_resync_queues(struct upipe *upipe, struct upipe_netmap_intf *i
         txring->slot[cur].ptr = 0;
         cur = nm_ring_next(txring, cur);
     }
-    txring->head = txring->cur = cur;
+
+    if (increment)
+        txring->head = txring->cur = cur;
 }
 
 static struct uref *get_uref(struct upipe *upipe)
@@ -1192,7 +1194,7 @@ static void upipe_netmap_sink_worker(struct upump *upump)
                 struct upipe_netmap_intf *intf0 = &upipe_netmap_sink->intf[!i];
                 txavail = nm_ring_space(txring[!i]);
 
-                upipe_resync_queues(upipe, intf, t - txavail);
+                upipe_clear_queues(upipe, intf, t - txavail, 1);
                 ioctl(NETMAP_FD(intf->d), NIOCTXSYNC, NULL); // start emptying 1
 
                 /* Legacy Intel */
@@ -1316,6 +1318,12 @@ static void upipe_netmap_sink_worker(struct upump *upump)
         // for gnuplot
         //printf("%" PRIu64 " %" PRIu64 "\n", now - upipe_netmap_sink->start, (int64_t)bps);
     }
+    else {
+        for (size_t i = 0; i < 2; i++) {
+            struct upipe_netmap_intf *intf = &upipe_netmap_sink->intf[i];
+            upipe_clear_queues(upipe, intf, txavail, 0);
+        }
+   }
 
     bool progressive = upipe_netmap_sink->progressive;
 
