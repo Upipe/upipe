@@ -75,7 +75,7 @@
 #define UDP_DEFAULT_PORT 1234
 
 /** uqueue length */
-#define MAX_QUEUE_LENGTH 255
+#define MAX_QUEUE_LENGTH 1000
 
 /** @hidden */
 static bool upipe_udpsink_output(struct upipe *upipe, struct uref *uref,
