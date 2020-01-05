@@ -538,7 +538,7 @@ static void upipe_udpsink_free(struct upipe *upipe)
     /* Stop thread. */
     uatomic_store(&upipe_udpsink->stop, 1);
     /* Wait for thread to exit. */
-    nanosleep(&(struct timespec){ .tv_nsec = 25000 }, NULL);
+    pthread_join(upipe_udpsink->pt, NULL);
     /* Clean up mutex. */
     pthread_mutex_destroy(&upipe_udpsink->mutex); /* Check return value? */
 
