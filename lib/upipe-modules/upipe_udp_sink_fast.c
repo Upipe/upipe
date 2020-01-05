@@ -544,8 +544,8 @@ static void upipe_udpsink_free(struct upipe *upipe)
 
     struct uchain *uchain, *uchain_tmp;
     ulist_delete_foreach(&upipe_udpsink->ulist, uchain, uchain_tmp) {
-        uref_free(uref_from_uchain(uchain));
         ulist_delete(uchain);
+        uref_free(uref_from_uchain(uchain));
     }
 
     free(upipe_udpsink->uri);
