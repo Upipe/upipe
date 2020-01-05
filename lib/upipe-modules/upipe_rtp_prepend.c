@@ -67,7 +67,7 @@
 
 #define DEFAULT_TYPE            96 /* first dynamic rtp type */
 #define DEFAULT_TS_SYNC         UPIPE_RTP_PREPEND_TS_SYNC_CR
-#define DEFAULT_CLOCKRATE       90000
+#define DEFAULT_CLOCKRATE       48000
 #define RTP_TYPE_INVALID        UINT8_MAX
 
 /** upipe_rtp_prepend structure */
@@ -127,25 +127,7 @@ static void upipe_rtp_prepend_input(struct upipe *upipe, struct uref *uref,
     lldiv_t div;
     int size = -1;
 
-    switch (upipe_rtp_prepend->ts_sync) {
-    case UPIPE_RTP_PREPEND_TS_SYNC_PTS:
-        /* timestamp (synced to program pts, fallback to system pts) */
-        if (unlikely(!ubase_check(uref_clock_get_pts_prog(uref, &cr)))) {
-            uref_clock_get_pts_sys(uref, &cr);
-        }
-        break;
-
-    case UPIPE_RTP_PREPEND_TS_SYNC_CR:
-        /* timestamp (synced to program clock ref,
-         * fallback to system clock ref) */
-        if (unlikely(!ubase_check(uref_clock_get_cr_prog(uref, &cr)))) {
-            uref_clock_get_cr_sys(uref, &cr);
-        }
-        break;
-
-    default:
-        upipe_warn(upipe, "invalid ts sync");
-    }
+    uref_clock_get_cr_sys(uref, &cr);
 
     div = lldiv(cr, UCLOCK_FREQ);
     ts = div.quot * upipe_rtp_prepend->clockrate
