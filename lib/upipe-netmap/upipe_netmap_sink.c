@@ -1046,7 +1046,14 @@ static void handle_tx_stamp(struct upipe *upipe, uint64_t t, uint16_t seq)
     t /= 1000;
     t *= 27;
 
+    /* HACK: start from the second timestamp, sometimes the hardware gives nonsense timestamps
+       Why? Is this our fault for some reason?? */
     if (upipe_netmap_sink->frame_ts == 0) {
+        upipe_netmap_sink->frame_ts = 1;
+        return;
+    }
+
+    if (upipe_netmap_sink->frame_ts == 1) {
         upipe_netmap_sink->prev_marker_seq = seq;
         upipe_netmap_sink->frame_ts = t;
         upipe_netmap_sink->frame_ts /= dur;
