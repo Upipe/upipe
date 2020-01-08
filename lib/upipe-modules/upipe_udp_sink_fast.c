@@ -533,14 +533,14 @@ static void upipe_udpsink_free(struct upipe *upipe)
             upipe_notice_va(upipe, "closing socket %s", upipe_udpsink->uri);
         close(upipe_udpsink->fd);
     }
-    upipe_throw_dead(upipe);
-
     /* Stop thread. */
     uatomic_store(&upipe_udpsink->stop, 1);
     /* Wait for thread to exit. */
     pthread_join(upipe_udpsink->pt, NULL);
     /* Clean up mutex. */
     pthread_mutex_destroy(&upipe_udpsink->mutex); /* Check return value? */
+
+    upipe_throw_dead(upipe);
 
     struct uchain *uchain, *uchain_tmp;
     ulist_delete_foreach(&upipe_udpsink->ulist, uchain, uchain_tmp) {
