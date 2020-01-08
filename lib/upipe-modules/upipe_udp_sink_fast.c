@@ -250,7 +250,7 @@ static bool upipe_udpsink_output(struct upipe *upipe, struct uref *uref,
             //upipe_dbg_va(upipe, "waited %ld ns", wait.tv_nsec);
         }
 #endif
-    } else if (now > systime + 0)
+    } else if (now > systime + (27000/8))
         upipe_warn_va(upipe,
                       "outputting late packet %"PRIu64" us, latency %"PRIu64" us slept %u us",
                       (now - systime) / 27,
