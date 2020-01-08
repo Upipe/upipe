@@ -28,6 +28,10 @@
  * @short Upipe sink module for udp
  */
 
+#define _GNU_SOURCE
+#include <pthread.h>
+#include <sched.h>
+
 #include <upipe/ubase.h>
 #include <upipe/ulist.h>
 #include <upipe/uprobe.h>
@@ -152,11 +156,37 @@ static void *run_thread(void *upipe_pointer)
     return NULL;
 }
 
+#define CHECK_RETURN(cmd) \
+    do { \
+        int ret = cmd; \
+        if (ret) { \
+            perror(#cmd); \
+            return UBASE_ERR_EXTERNAL; \
+        } \
+    } while (0)
+
 static int create_thread(struct upipe *upipe)
 {
     struct upipe_udpsink *upipe_udpsink = upipe_udpsink_from_upipe(upipe);
 
-    int ret = pthread_create(&upipe_udpsink->pt, NULL, run_thread, (void *)upipe);
+    pthread_attr_t attrs;
+    CHECK_RETURN(pthread_attr_init(&attrs));
+    CHECK_RETURN(pthread_attr_setschedpolicy(&attrs, SCHED_FIFO));
+    CHECK_RETURN(pthread_attr_setinheritsched(&attrs, PTHREAD_EXPLICIT_SCHED));
+
+    union { void *p; intptr_t i; } a;
+    a.p = upipe_get_opaque(upipe, void*);
+    cpu_set_t cpu;
+    CPU_ZERO(&cpu);
+    CPU_SET(a.i, &cpu);
+    CHECK_RETURN(pthread_attr_setaffinity_np(&attrs, sizeof cpu, &cpu));
+
+    struct sched_param params = {0};
+    CHECK_RETURN(pthread_attr_getschedparam(&attrs, &params));
+    params.sched_priority = sched_get_priority_max(SCHED_FIFO);
+    CHECK_RETURN(pthread_attr_setschedparam(&attrs, &params));
+
+    int ret = pthread_create(&upipe_udpsink->pt, &attrs, run_thread, (void *)upipe);
     if (ret) {
         upipe_err_va(upipe, "pthread_create: %s", strerror(ret));
         return UBASE_ERR_ALLOC;
@@ -165,6 +195,8 @@ static int create_thread(struct upipe *upipe)
     upipe_udpsink->thread_created = true;
     return UBASE_ERR_NONE;
 }
+
+#undef CHECK_RETURN
 
 /** @internal @This allocates a udp sink pipe.
  *
