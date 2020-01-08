@@ -528,17 +528,18 @@ static int upipe_udpsink_control(struct upipe *upipe,
 static void upipe_udpsink_free(struct upipe *upipe)
 {
     struct upipe_udpsink *upipe_udpsink = upipe_udpsink_from_upipe(upipe);
-    if (likely(upipe_udpsink->fd != -1)) {
-        if (likely(upipe_udpsink->uri != NULL))
-            upipe_notice_va(upipe, "closing socket %s", upipe_udpsink->uri);
-        close(upipe_udpsink->fd);
-    }
     /* Stop thread. */
     uatomic_store(&upipe_udpsink->stop, 1);
     /* Wait for thread to exit. */
     pthread_join(upipe_udpsink->pt, NULL);
     /* Clean up mutex. */
     pthread_mutex_destroy(&upipe_udpsink->mutex); /* Check return value? */
+
+    if (likely(upipe_udpsink->fd != -1)) {
+        if (likely(upipe_udpsink->uri != NULL))
+            upipe_notice_va(upipe, "closing socket %s", upipe_udpsink->uri);
+        close(upipe_udpsink->fd);
+    }
 
     upipe_throw_dead(upipe);
 
