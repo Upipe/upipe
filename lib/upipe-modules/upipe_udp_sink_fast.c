@@ -91,7 +91,7 @@ struct upipe_udpsink {
     /** delay applied to systime attribute when uclock is provided */
     uint64_t latency;
     /** file descriptor */
-    int fd;
+    int fd[2];
     /** socket uri */
     char *uri;
 
@@ -105,7 +105,7 @@ struct upipe_udpsink {
     /** RAW sockets */
     bool raw;
     /** RAW header */
-    uint8_t raw_header[RAW_HEADER_SIZE];
+    uint8_t raw_header[2][RAW_HEADER_SIZE];
 
     /** destination for not-connected socket */
     struct sockaddr_storage addr;
@@ -219,7 +219,7 @@ static struct upipe *upipe_udpsink_alloc(struct upipe_mgr *mgr,
     upipe_udpsink_init_urefcount(upipe);
     upipe_udpsink_init_uclock(upipe);
     upipe_udpsink->latency = 0;
-    upipe_udpsink->fd = -1;
+    upipe_udpsink->fd[0] = upipe_udpsink->fd[1] = -1;
     upipe_udpsink->uri = NULL;
     upipe_udpsink->raw = false;
     upipe_udpsink->addrlen = 0;
@@ -246,7 +246,7 @@ static bool upipe_udpsink_output(struct upipe *upipe, struct uref *uref,
     struct upipe_udpsink *upipe_udpsink = upipe_udpsink_from_upipe(upipe);
     int slept = 0;
 
-    if (unlikely(upipe_udpsink->fd == -1)) {
+    if (unlikely(upipe_udpsink->fd[0] == -1)) {
         uref_free(uref);
         upipe_warn(upipe, "received a buffer before opening a socket");
         return true;
@@ -315,8 +315,8 @@ write_buffer:
         struct iovec *iovecs = iovecs_s;
 
         if (upipe_udpsink->raw) {
-            udp_raw_set_len(upipe_udpsink->raw_header, payload_len);
-            iovecs[0].iov_base = upipe_udpsink->raw_header;
+            udp_raw_set_len(upipe_udpsink->raw_header[0], payload_len);
+            iovecs[0].iov_base = upipe_udpsink->raw_header[0];
             iovecs[0].iov_len = RAW_HEADER_SIZE;
             iovecs++;
         }
@@ -339,7 +339,47 @@ write_buffer:
             .msg_flags = 0,
         };
 
-        ssize_t ret = sendmsg(upipe_udpsink->fd, &msghdr, 0);
+        ssize_t ret = sendmsg(upipe_udpsink->fd[0], &msghdr, 0);
+
+        if (unlikely(ret == -1)) {
+            switch (errno) {
+                case EINTR:
+                    continue;
+                case EAGAIN:
+#if EAGAIN != EWOULDBLOCK
+                case EWOULDBLOCK:
+#endif
+                    uref_block_iovec_unmap(uref, 0, -1, iovecs);
+                    // FIXME
+                    return false;
+                case EBADF:
+                case EFBIG:
+                case EINVAL:
+                case EIO:
+                case ENOSPC:
+                case EPIPE:
+                default:
+                    break;
+            }
+            /* Errors at this point come from ICMP messages such as
+             * "port unreachable", and we do not want to kill the application
+             * with transient errors. */
+        }
+
+        /* If there is no 2nd socket break here. */
+        if (upipe_udpsink->fd[1] == -1) {
+            uref_free(uref);
+            break;
+        }
+
+        /* Swap in 2nd raw header. */
+        if (upipe_udpsink->raw) {
+            udp_raw_set_len(upipe_udpsink->raw_header[1], payload_len);
+            iovecs[0].iov_base = upipe_udpsink->raw_header[1];
+            iovecs[0].iov_len = RAW_HEADER_SIZE;
+        }
+
+        ret = sendmsg(upipe_udpsink->fd[1], &msghdr, 0);
         uref_block_iovec_unmap(uref, 0, -1, iovecs);
 
         if (unlikely(ret == -1)) {
@@ -453,30 +493,46 @@ static int _upipe_udpsink_set_uri(struct upipe *upipe, const char *uri)
     struct upipe_udpsink *upipe_udpsink = upipe_udpsink_from_upipe(upipe);
     bool use_tcp = false;
 
-    if (unlikely(upipe_udpsink->fd != -1)) {
+    if (unlikely(upipe_udpsink->fd[0] != -1)) {
         if (likely(upipe_udpsink->uri != NULL))
             upipe_notice_va(upipe, "closing socket %s", upipe_udpsink->uri);
-        close(upipe_udpsink->fd);
+        close(upipe_udpsink->fd[0]);
+        if (upipe_udpsink->fd[1] != -1)
+            close(upipe_udpsink->fd[1]);
     }
     ubase_clean_str(&upipe_udpsink->uri);
 
     if (unlikely(uri == NULL))
         return UBASE_ERR_NONE;
 
-    upipe_udpsink->fd = upipe_udp_open_socket(upipe, uri,
-            UDP_DEFAULT_TTL, UDP_DEFAULT_PORT, 0, NULL, &use_tcp,
-            &upipe_udpsink->raw, upipe_udpsink->raw_header);
+    char *uri_a, *uri_b;
+    upipe_udpsink->uri = uri_a = strdup(uri);
+    UBASE_ALLOC_RETURN(uri_a);
 
-    if (unlikely(upipe_udpsink->fd == -1)) {
-        upipe_err_va(upipe, "can't open uri %s", uri);
+    uri_b = strchr(uri_a, '+');
+    if (uri_b)
+        *uri_b++ = '\0'; /* Remove + character and start 2nd uri after it. */
+
+    /* Open 1st socket. */
+    upipe_udpsink->fd[0] = upipe_udp_open_socket(upipe, uri_a,
+            UDP_DEFAULT_TTL, UDP_DEFAULT_PORT, 0, NULL, &use_tcp,
+            &upipe_udpsink->raw, upipe_udpsink->raw_header[0]);
+    if (unlikely(upipe_udpsink->fd[0] == -1)) {
+        upipe_err_va(upipe, "can't open uri %s", uri_a);
         return UBASE_ERR_EXTERNAL;
     }
 
-    upipe_udpsink->uri = strdup(uri);
-    if (unlikely(upipe_udpsink->uri == NULL)) {
-        ubase_clean_fd(&upipe_udpsink->fd);
-        upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
-        return UBASE_ERR_ALLOC;
+    /* Open 2nd socket. */
+    if (uri_b) {
+        uri_b[-1] = '+'; /* Restore + character. */
+        upipe_udpsink->fd[1] = upipe_udp_open_socket(upipe, uri_b,
+                UDP_DEFAULT_TTL, UDP_DEFAULT_PORT, 0, NULL, &use_tcp,
+                &upipe_udpsink->raw, upipe_udpsink->raw_header[1]);
+        if (unlikely(upipe_udpsink->fd[1] == -1)) {
+            upipe_err_va(upipe, "can't open uri %s", uri_b);
+            ubase_clean_fd(&upipe_udpsink->fd[0]);
+            return UBASE_ERR_EXTERNAL;
+        }
     }
 
     upipe_notice_va(upipe, "opening uri %s", upipe_udpsink->uri);
@@ -531,12 +587,12 @@ static int upipe_udpsink_control(struct upipe *upipe,
         case UPIPE_UDPSINK_FAST_GET_FD: {
             UBASE_SIGNATURE_CHECK(args, UPIPE_UDPSINK_FAST_SIGNATURE)
             int *fd = va_arg(args, int *);
-            *fd = upipe_udpsink->fd;
+            *fd = upipe_udpsink->fd[0];
             return UBASE_ERR_NONE;
         }
         case UPIPE_UDPSINK_FAST_SET_FD: {
             UBASE_SIGNATURE_CHECK(args, UPIPE_UDPSINK_FAST_SIGNATURE)
-            upipe_udpsink->fd = va_arg(args, int );
+            upipe_udpsink->fd[0] = va_arg(args, int );
             return UBASE_ERR_NONE;
         }
         case UPIPE_UDPSINK_FAST_SET_PEER: {
@@ -560,10 +616,12 @@ static int upipe_udpsink_control(struct upipe *upipe,
 static void upipe_udpsink_free(struct upipe *upipe)
 {
     struct upipe_udpsink *upipe_udpsink = upipe_udpsink_from_upipe(upipe);
-    if (likely(upipe_udpsink->fd != -1)) {
+    if (likely(upipe_udpsink->fd[0] != -1)) {
         if (likely(upipe_udpsink->uri != NULL))
             upipe_notice_va(upipe, "closing socket %s", upipe_udpsink->uri);
-        close(upipe_udpsink->fd);
+        close(upipe_udpsink->fd[0]);
+        if (upipe_udpsink->fd[1] != -1)
+            close(upipe_udpsink->fd[1]);
     }
     upipe_throw_dead(upipe);
 
