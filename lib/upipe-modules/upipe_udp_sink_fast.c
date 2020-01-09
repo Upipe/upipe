@@ -282,7 +282,7 @@ static bool upipe_udpsink_output(struct upipe *upipe, struct uref *uref,
             //upipe_dbg_va(upipe, "waited %ld ns", wait.tv_nsec);
         }
 #endif
-    } else if (now > systime + 0)
+    } else if (now > systime + (27000/8))
         upipe_warn_va(upipe,
                       "outputting late packet %"PRIu64" us, latency %"PRIu64" us slept %u us",
                       (now - systime) / 27,
@@ -616,14 +616,6 @@ static int upipe_udpsink_control(struct upipe *upipe,
 static void upipe_udpsink_free(struct upipe *upipe)
 {
     struct upipe_udpsink *upipe_udpsink = upipe_udpsink_from_upipe(upipe);
-    if (likely(upipe_udpsink->fd[0] != -1)) {
-        if (likely(upipe_udpsink->uri != NULL))
-            upipe_notice_va(upipe, "closing socket %s", upipe_udpsink->uri);
-        close(upipe_udpsink->fd[0]);
-        if (upipe_udpsink->fd[1] != -1)
-            close(upipe_udpsink->fd[1]);
-    }
-    upipe_throw_dead(upipe);
 
     /* Stop thread. */
     uatomic_store(&upipe_udpsink->stop, 1);
@@ -631,6 +623,16 @@ static void upipe_udpsink_free(struct upipe *upipe)
     pthread_join(upipe_udpsink->pt, NULL);
     /* Clean up mutex. */
     pthread_mutex_destroy(&upipe_udpsink->mutex); /* Check return value? */
+
+    if (likely(upipe_udpsink->fd[0] != -1)) {
+        if (likely(upipe_udpsink->uri != NULL))
+            upipe_notice_va(upipe, "closing socket %s", upipe_udpsink->uri);
+        close(upipe_udpsink->fd[0]);
+        if (upipe_udpsink->fd[1] != -1)
+            close(upipe_udpsink->fd[1]);
+    }
+
+    upipe_throw_dead(upipe);
 
     struct uchain *uchain, *uchain_tmp;
     ulist_delete_foreach(&upipe_udpsink->ulist, uchain, uchain_tmp) {
