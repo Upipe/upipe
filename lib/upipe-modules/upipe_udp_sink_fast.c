@@ -31,7 +31,7 @@
 #define _GNU_SOURCE
 #include <pthread.h>
 #include <sched.h>
-#include <linux/if_packet.h>
+#include <netinet/in.h>
 
 #include <upipe/ubase.h>
 #include <upipe/ulist.h>
@@ -330,21 +330,37 @@ write_buffer:
             break;
         }
 
-        struct sockaddr_ll address = {
-            .sll_ifindex = upipe_udpsink->ifindex[0],
-        };
+        /* ancillary data, control message, actual buffer space */
+        union {
+            struct cmsghdr header;
+            unsigned char buffer[CMSG_SPACE(sizeof(struct in_pktinfo))];
+        } control_data;
+        memset(&control_data, 0, sizeof control_data);
 
+        /* message, message header */
         struct msghdr msghdr = {
-            .msg_name = &address,
-            .msg_namelen = sizeof address,
+            .msg_name = upipe_udpsink->addrlen ? &upipe_udpsink->addr : NULL,
+            .msg_namelen = upipe_udpsink->addrlen,
 
             .msg_iov = iovecs_s,
             .msg_iovlen = iovec_count,
 
-            .msg_control = NULL,
-            .msg_controllen = 0,
+            .msg_control = &control_data,
+            .msg_controllen = sizeof control_data,
             .msg_flags = 0,
         };
+
+        /* A pointer to previous for some reason. */
+        struct cmsghdr *control_message_p = CMSG_FIRSTHDR(&msghdr);
+
+        /* Fill in control message header, cmsghdr. */
+        control_message_p->cmsg_level = IPPROTO_IP;
+        control_message_p->cmsg_type = IP_PKTINFO;
+        control_message_p->cmsg_len = CMSG_LEN(sizeof(struct in_pktinfo));
+
+        /* Set ifindex in the control message. */
+        struct in_pktinfo *pktinfo = (struct in_pktinfo*)CMSG_DATA(control_message_p);
+        pktinfo->ipi_ifindex = upipe_udpsink->ifindex[0];
 
         ssize_t ret = sendmsg(upipe_udpsink->fd[0], &msghdr, 0);
 
@@ -385,7 +401,8 @@ write_buffer:
             iovecs[0].iov_base = upipe_udpsink->raw_header[1];
             iovecs[0].iov_len = RAW_HEADER_SIZE;
         }
-        address.sll_ifindex = upipe_udpsink->ifindex[1],
+        pktinfo->ipi_ifindex = upipe_udpsink->ifindex[1];
+        /* TODO: fill in another msghdr and cmsghdr for sendmmsg. */
 
         ret = sendmsg(upipe_udpsink->fd[1], &msghdr, 0);
         uref_block_iovec_unmap(uref, 0, -1, iovecs);
