@@ -534,6 +534,13 @@ int upipe_udp_open_socket(struct upipe *upipe, const char *_uri, int ttl,
                 return -1;
             }
             *ifindex = index;
+
+            const int on = 1;
+            if (setsockopt(fd, IPPROTO_IP, IP_PKTINFO, &on, sizeof on) == -1) {
+                upipe_err_va(upipe, "unable to set socket (%m)");
+                close(fd);
+                return -1;
+            }
         }
 
         i = 1;
