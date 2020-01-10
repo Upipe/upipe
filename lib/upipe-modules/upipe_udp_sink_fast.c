@@ -31,6 +31,7 @@
 #define _GNU_SOURCE
 #include <pthread.h>
 #include <sched.h>
+#include <linux/if_packet.h>
 
 #include <upipe/ubase.h>
 #include <upipe/ulist.h>
@@ -94,6 +95,8 @@ struct upipe_udpsink {
     int fd[2];
     /** socket uri */
     char *uri;
+    /** interface indicies. */
+    int ifindex[2];
 
     struct uchain ulist;
 
@@ -327,9 +330,13 @@ write_buffer:
             break;
         }
 
+        struct sockaddr_ll address = {
+            .sll_ifindex = upipe_udpsink->ifindex[0],
+        };
+
         struct msghdr msghdr = {
-            .msg_name = upipe_udpsink->addrlen ? &upipe_udpsink->addr : NULL,
-            .msg_namelen = upipe_udpsink->addrlen,
+            .msg_name = &address,
+            .msg_namelen = sizeof address,
 
             .msg_iov = iovecs_s,
             .msg_iovlen = iovec_count,
@@ -378,6 +385,7 @@ write_buffer:
             iovecs[0].iov_base = upipe_udpsink->raw_header[1];
             iovecs[0].iov_len = RAW_HEADER_SIZE;
         }
+        address.sll_ifindex = upipe_udpsink->ifindex[1],
 
         ret = sendmsg(upipe_udpsink->fd[1], &msghdr, 0);
         uref_block_iovec_unmap(uref, 0, -1, iovecs);
@@ -516,7 +524,8 @@ static int _upipe_udpsink_set_uri(struct upipe *upipe, const char *uri)
     /* Open 1st socket. */
     upipe_udpsink->fd[0] = upipe_udp_open_socket(upipe, uri_a,
             UDP_DEFAULT_TTL, UDP_DEFAULT_PORT, 0, NULL, &use_tcp,
-            &upipe_udpsink->raw, upipe_udpsink->raw_header[0]);
+            &upipe_udpsink->raw, upipe_udpsink->raw_header[0],
+            &upipe_udpsink->ifindex[0]);
     if (unlikely(upipe_udpsink->fd[0] == -1)) {
         upipe_err_va(upipe, "can't open uri %s", uri_a);
         return UBASE_ERR_EXTERNAL;
@@ -527,7 +536,8 @@ static int _upipe_udpsink_set_uri(struct upipe *upipe, const char *uri)
         uri_b[-1] = '+'; /* Restore + character. */
         upipe_udpsink->fd[1] = upipe_udp_open_socket(upipe, uri_b,
                 UDP_DEFAULT_TTL, UDP_DEFAULT_PORT, 0, NULL, &use_tcp,
-                &upipe_udpsink->raw, upipe_udpsink->raw_header[1]);
+                &upipe_udpsink->raw, upipe_udpsink->raw_header[1],
+                &upipe_udpsink->ifindex[1]);
         if (unlikely(upipe_udpsink->fd[1] == -1)) {
             upipe_err_va(upipe, "can't open uri %s", uri_b);
             ubase_clean_fd(&upipe_udpsink->fd[0]);
