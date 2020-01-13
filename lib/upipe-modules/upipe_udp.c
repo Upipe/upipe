@@ -325,7 +325,7 @@ static char *config_stropt(char *psz_string)
 int upipe_udp_open_socket(struct upipe *upipe, const char *_uri, int ttl,
                           uint16_t bind_port, uint16_t connect_port,
                           unsigned int *weight, bool *use_tcp,
-                          bool *use_raw, uint8_t *raw_header)
+                          bool *use_raw, uint8_t *raw_header, int *ifindex)
 {
     union sockaddru bind_addr, connect_addr;
     int fd = -1, i;
@@ -341,7 +341,7 @@ int upipe_udp_open_socket(struct upipe *upipe, const char *_uri, int ttl,
     bool b_raw;
     int family;
     socklen_t sockaddr_len;
-    in_addr_t miface = 0;
+    char *miface = NULL;
 #if !defined(__APPLE__) && !defined(__native_client__)
     char *ifname = NULL;
 #endif
@@ -452,9 +452,7 @@ int upipe_udp_open_socket(struct upipe *upipe, const char *_uri, int ttl,
             } else if (IS_OPTION("fd=")) {
                 fd = strtol(ARG_OPTION("fd="), NULL, 0);
             } else if (IS_OPTION("miface=")) {
-                char *option = config_stropt(ARG_OPTION("miface="));
-                miface = inet_addr(option);
-                free(option);
+                miface = config_stropt(ARG_OPTION("miface="));
             } else {
                 upipe_warn_va(upipe, "unrecognized option %s", token2);
             }
@@ -528,10 +526,18 @@ int upipe_udp_open_socket(struct upipe *upipe, const char *_uri, int ttl,
         #endif
 
         if (miface) {
-            if (setsockopt(fd, IPPROTO_IP, IP_MULTICAST_IF, &miface, sizeof(miface))) {
-                upipe_err_va(upipe, "couldn't set multicast interface name (%m)");
-                upipe_udp_print_socket(upipe, "socket definition:", &bind_addr,
-                        &connect_addr);
+            int index = if_nametoindex(miface);
+            free(miface);
+            if (index == 0) {
+                upipe_err_va(upipe, "couldn't get interface name (%m)");
+                close(fd);
+                return -1;
+            }
+            *ifindex = index;
+
+            const int on = 1;
+            if (setsockopt(fd, IPPROTO_IP, IP_PKTINFO, &on, sizeof on) == -1) {
+                upipe_err_va(upipe, "unable to set socket (%m)");
                 close(fd);
                 return -1;
             }

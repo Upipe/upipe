@@ -31,6 +31,7 @@
 #define _GNU_SOURCE
 #include <pthread.h>
 #include <sched.h>
+#include <netinet/in.h>
 
 #include <upipe/ubase.h>
 #include <upipe/ulist.h>
@@ -94,6 +95,8 @@ struct upipe_udpsink {
     int fd[2];
     /** socket uri */
     char *uri;
+    /** interface indicies. */
+    int ifindex[2];
 
     struct uchain ulist;
 
@@ -311,8 +314,8 @@ write_buffer:
             iovec_count++;
         }
 
-        struct iovec iovecs_s[iovec_count];
-        struct iovec *iovecs = iovecs_s;
+        struct iovec iovecs_s[2][iovec_count];
+        struct iovec *iovecs = iovecs_s[0];
 
         if (upipe_udpsink->raw) {
             udp_raw_set_len(upipe_udpsink->raw_header[0], payload_len);
@@ -327,19 +330,66 @@ write_buffer:
             break;
         }
 
-        struct msghdr msghdr = {
+        /* Fill in second iovec array. */
+        for (int i = 0; i < iovec_count; i++)
+            iovecs_s[1][i] = iovecs_s[0][i];
+        if (upipe_udpsink->raw) {
+            udp_raw_set_len(upipe_udpsink->raw_header[1], payload_len);
+            iovecs[0].iov_base = upipe_udpsink->raw_header[1];
+            iovecs[0].iov_len = RAW_HEADER_SIZE;
+        }
+
+        /* ancillary data, control message, actual buffer space */
+        union {
+            struct cmsghdr header;
+            unsigned char buffer[CMSG_SPACE(sizeof(struct in_pktinfo))];
+        } control_data[2];
+        memset(&control_data, 0, sizeof control_data);
+
+        /* message, message header */
+        struct mmsghdr mmsghdr[2] = { { .msg_hdr = {
             .msg_name = upipe_udpsink->addrlen ? &upipe_udpsink->addr : NULL,
             .msg_namelen = upipe_udpsink->addrlen,
 
-            .msg_iov = iovecs_s,
+            .msg_iov = iovecs_s[0],
             .msg_iovlen = iovec_count,
 
-            .msg_control = NULL,
-            .msg_controllen = 0,
+            .msg_control = &control_data[0],
+            .msg_controllen = sizeof control_data[0],
             .msg_flags = 0,
-        };
+        } }, { .msg_hdr = {
+            .msg_name = upipe_udpsink->addrlen ? &upipe_udpsink->addr : NULL,
+            .msg_namelen = upipe_udpsink->addrlen,
 
-        ssize_t ret = sendmsg(upipe_udpsink->fd[0], &msghdr, 0);
+            .msg_iov = iovecs_s[1],
+            .msg_iovlen = iovec_count,
+
+            .msg_control = &control_data[1],
+            .msg_controllen = sizeof control_data[1],
+            .msg_flags = 0,
+        } } };
+
+        /* A pointer to previous for some reason. */
+        struct cmsghdr *control_message_p = CMSG_FIRSTHDR(&mmsghdr[0].msg_hdr);
+
+        /* Fill in control message header, cmsghdr. */
+        control_message_p->cmsg_level = IPPROTO_IP;
+        control_message_p->cmsg_type = IP_PKTINFO;
+        control_message_p->cmsg_len = CMSG_LEN(sizeof(struct in_pktinfo));
+
+        /* Set ifindex in the control message. */
+        struct in_pktinfo *pktinfo = (struct in_pktinfo*)CMSG_DATA(control_message_p);
+        pktinfo->ipi_ifindex = upipe_udpsink->ifindex[0];
+
+        /* Fill in second control message. */
+        control_message_p = CMSG_FIRSTHDR(&mmsghdr[1].msg_hdr);
+        control_message_p->cmsg_level = IPPROTO_IP;
+        control_message_p->cmsg_type = IP_PKTINFO;
+        control_message_p->cmsg_len = CMSG_LEN(sizeof(struct in_pktinfo));
+        pktinfo = (struct in_pktinfo*)CMSG_DATA(control_message_p);
+        pktinfo->ipi_ifindex = upipe_udpsink->ifindex[1];
+
+        ssize_t ret = sendmmsg(upipe_udpsink->fd[0], mmsghdr, 2, 0);
 
         if (unlikely(ret == -1)) {
             switch (errno) {
@@ -365,47 +415,6 @@ write_buffer:
              * "port unreachable", and we do not want to kill the application
              * with transient errors. */
         }
-
-        /* If there is no 2nd socket break here. */
-        if (upipe_udpsink->fd[1] == -1) {
-            uref_free(uref);
-            break;
-        }
-
-        /* Swap in 2nd raw header. */
-        if (upipe_udpsink->raw) {
-            udp_raw_set_len(upipe_udpsink->raw_header[1], payload_len);
-            iovecs[0].iov_base = upipe_udpsink->raw_header[1];
-            iovecs[0].iov_len = RAW_HEADER_SIZE;
-        }
-
-        ret = sendmsg(upipe_udpsink->fd[1], &msghdr, 0);
-        uref_block_iovec_unmap(uref, 0, -1, iovecs);
-
-        if (unlikely(ret == -1)) {
-            switch (errno) {
-                case EINTR:
-                    continue;
-                case EAGAIN:
-#if EAGAIN != EWOULDBLOCK
-                case EWOULDBLOCK:
-#endif
-                    // FIXME
-                    return false;
-                case EBADF:
-                case EFBIG:
-                case EINVAL:
-                case EIO:
-                case ENOSPC:
-                case EPIPE:
-                default:
-                    break;
-            }
-            /* Errors at this point come from ICMP messages such as
-             * "port unreachable", and we do not want to kill the application
-             * with transient errors. */
-        }
-
         uref_free(uref);
         break;
     }
@@ -516,7 +525,8 @@ static int _upipe_udpsink_set_uri(struct upipe *upipe, const char *uri)
     /* Open 1st socket. */
     upipe_udpsink->fd[0] = upipe_udp_open_socket(upipe, uri_a,
             UDP_DEFAULT_TTL, UDP_DEFAULT_PORT, 0, NULL, &use_tcp,
-            &upipe_udpsink->raw, upipe_udpsink->raw_header[0]);
+            &upipe_udpsink->raw, upipe_udpsink->raw_header[0],
+            &upipe_udpsink->ifindex[0]);
     if (unlikely(upipe_udpsink->fd[0] == -1)) {
         upipe_err_va(upipe, "can't open uri %s", uri_a);
         return UBASE_ERR_EXTERNAL;
@@ -527,7 +537,8 @@ static int _upipe_udpsink_set_uri(struct upipe *upipe, const char *uri)
         uri_b[-1] = '+'; /* Restore + character. */
         upipe_udpsink->fd[1] = upipe_udp_open_socket(upipe, uri_b,
                 UDP_DEFAULT_TTL, UDP_DEFAULT_PORT, 0, NULL, &use_tcp,
-                &upipe_udpsink->raw, upipe_udpsink->raw_header[1]);
+                &upipe_udpsink->raw, upipe_udpsink->raw_header[1],
+                &upipe_udpsink->ifindex[1]);
         if (unlikely(upipe_udpsink->fd[1] == -1)) {
             upipe_err_va(upipe, "can't open uri %s", uri_b);
             ubase_clean_fd(&upipe_udpsink->fd[0]);

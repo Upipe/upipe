@@ -166,7 +166,7 @@ static inline void udp_set_cksum(uint8_t *p_ip, uint16_t cksum)
 int upipe_udp_open_socket(struct upipe *upipe, const char *_uri, int ttl,
                           uint16_t bind_port, uint16_t connect_port,
                           unsigned int *weight, bool *use_tcp,
-                          bool *use_raw, uint8_t *raw_header);
+                          bool *use_raw, uint8_t *raw_header, int *ifindex);
 
 void udp_raw_set_len(uint8_t *raw_header, uint16_t len);
 
