@@ -335,8 +335,8 @@ write_buffer:
             iovecs_s[1][i] = iovecs_s[0][i];
         if (upipe_udpsink->raw) {
             udp_raw_set_len(upipe_udpsink->raw_header[1], payload_len);
-            iovecs[0].iov_base = upipe_udpsink->raw_header[1];
-            iovecs[0].iov_len = RAW_HEADER_SIZE;
+            iovecs[1].iov_base = upipe_udpsink->raw_header[1];
+            iovecs[1].iov_len = RAW_HEADER_SIZE;
         }
 
         /* ancillary data, control message, actual buffer space */
