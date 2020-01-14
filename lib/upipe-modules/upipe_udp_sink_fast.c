@@ -330,13 +330,14 @@ write_buffer:
             break;
         }
 
-        /* Fill in second iovec array. */
+        /* Fill in second iovec array, copy structs for the mapped uref. */
         for (int i = 0; i < iovec_count; i++)
             iovecs_s[1][i] = iovecs_s[0][i];
+        /* Set second header correctly. */
         if (upipe_udpsink->raw) {
             udp_raw_set_len(upipe_udpsink->raw_header[1], payload_len);
-            iovecs[1].iov_base = upipe_udpsink->raw_header[1];
-            iovecs[1].iov_len = RAW_HEADER_SIZE;
+            iovecs_s[1][0].iov_base = upipe_udpsink->raw_header[1];
+            iovecs_s[1][0].iov_len = RAW_HEADER_SIZE;
         }
 
         /* ancillary data, control message, actual buffer space */
@@ -390,6 +391,7 @@ write_buffer:
         pktinfo->ipi_ifindex = upipe_udpsink->ifindex[1];
 
         ssize_t ret = sendmmsg(upipe_udpsink->fd[0], mmsghdr, 2, 0);
+        uref_block_iovec_unmap(uref, 0, -1, iovecs);
 
         if (unlikely(ret == -1)) {
             switch (errno) {
@@ -399,7 +401,6 @@ write_buffer:
 #if EAGAIN != EWOULDBLOCK
                 case EWOULDBLOCK:
 #endif
-                    uref_block_iovec_unmap(uref, 0, -1, iovecs);
                     // FIXME
                     return false;
                 case EBADF:
