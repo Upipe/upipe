@@ -350,7 +350,7 @@ static void upipe_audio_merge_copy_to_output(struct upipe *upipe, float **out_da
     }
 }
 
-static void upipe_audio_merge_copy_to_output_interleaved(struct upipe *upipe, float **out_data)
+static void upipe_audio_merge_copy_to_output_interleaved(struct upipe *upipe, float **out_data, struct ubuf *ubuf)
 {
     struct upipe_audio_merge *upipe_audio_merge = upipe_audio_merge_from_upipe(upipe);
     struct uchain *uchain;
@@ -492,7 +492,7 @@ static void upipe_audio_merge_produce_output(struct upipe *upipe, struct upump *
 
     /* copy input data to output */
     if (upipe_audio_merge->interleaved)
-        upipe_audio_merge_copy_to_output_interleaved(upipe, out_data);
+        upipe_audio_merge_copy_to_output_interleaved(upipe, out_data, ubuf);
     else
         upipe_audio_merge_copy_to_output(upipe, out_data);
 
