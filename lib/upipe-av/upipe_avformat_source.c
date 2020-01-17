@@ -551,8 +551,11 @@ static void upipe_avfsrc_worker(struct upump *upump)
 
     int error = av_read_frame(upipe_avfsrc->context, &pkt);
     if (unlikely(error < 0)) {
-        upipe_av_strerror(error, buf);
-        upipe_err_va(upipe, "read error from %s (%s)", upipe_avfsrc->url, buf);
+        if (error != AVERROR_EOF) {
+            upipe_av_strerror(error, buf);
+            upipe_err_va(upipe, "read error from %s (%s)",
+                         upipe_avfsrc->url, buf);
+        }
         upipe_avfsrc_set_upump(upipe, NULL);
         upipe_throw_source_end(upipe);
         return;
