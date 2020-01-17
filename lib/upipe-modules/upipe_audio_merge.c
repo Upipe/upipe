@@ -399,10 +399,16 @@ static void upipe_audio_merge_copy_to_output_interleaved(struct upipe *upipe, fl
         input_count++;
     }
 
+    const uint8_t *real_out_data = (const uint8_t *)out_data[0];
+    uint8_t output_sample_size = 0;
+    UBASE_ERROR(upipe, ubuf_sound_size(ubuf, NULL, &output_sample_size));
+
     for (int x = 0; x < output_num_samples; x++) {
-        for (int y = 0; y < output_channels; y++) {
-            if (in_data[y / input_channels])
-                out_data[0][x * output_channels + y] = in_data[y / input_channels][x * input_channels + y%input_channels];
+        for (int i = 0; i < input_count; i++) {
+            uint8_t index = indicies[i] / input_channels;
+            memcpy(real_out_data + x*output_sample_size + index*input_sample_size,
+                    in_data[i] + x*input_sample_size,
+                    input_sample_size);
         }
     }
 
