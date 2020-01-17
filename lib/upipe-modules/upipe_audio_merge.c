@@ -133,6 +133,8 @@ struct upipe_audio_merge_sub {
 
     bool first_subpipe;
 
+    uint8_t index;
+
     /** public upipe structure */
     struct upipe upipe;
 };
@@ -188,6 +190,12 @@ static int upipe_audio_merge_sub_set_flow_def(struct upipe *upipe,
 
     if (flow_def == NULL)
         return UBASE_ERR_INVALID;
+
+    if (!ubase_check(uref_attr_get_small_unsigned(flow, &upipe_audio_merge_sub->index,
+                    UDICT_TYPE_SMALL_UNSIGNED, "channel_idx"))) {
+        upipe_err(upipe, "Could not read channel_idx");
+        return UBASE_ERR_INVALID;
+    }
 
     /* If this is the first subpipe... */
     if (upipe_audio_merge_sub->first_subpipe) {
