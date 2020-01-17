@@ -362,7 +362,8 @@ static void upipe_audio_merge_copy_to_output_interleaved(struct upipe *upipe, fl
 
     const float *in_data[255] = {0};
     uint8_t input_channels = 0;
-    int i = 0;
+    int input_count = 0;
+    uint8_t indicies[255] = {0};
 
     /* for each input pipe, for each plane, map input plane */
     ulist_foreach (&upipe_audio_merge->inputs, uchain) {
@@ -376,16 +377,17 @@ static void upipe_audio_merge_copy_to_output_interleaved(struct upipe *upipe, fl
         else
             input_channels = channels;
 
-        if(unlikely(!ubase_check(uref_sound_read_float(upipe_audio_merge_sub->uref, 0, -1, &in_data[i], 1)))) {
+        if(unlikely(!ubase_check(uref_sound_read_float(upipe_audio_merge_sub->uref, 0, -1, &in_data[input_count], 1)))) {
             upipe_err(upipe, "error reading subpipe audio, skipping");
-            in_data[i] = NULL;
+            in_data[input_count] = NULL;
         } else {
             uint64_t input_num_samples = 0;
             UBASE_ERROR(upipe, uref_sound_size(upipe_audio_merge_sub->uref, &input_num_samples, NULL));
             assert(input_num_samples == output_num_samples);
         }
 
-        i++;
+        indicies[input_count] = upipe_audio_merge_sub->index;
+        input_count++;
     }
 
     for (int x = 0; x < output_num_samples; x++) {
