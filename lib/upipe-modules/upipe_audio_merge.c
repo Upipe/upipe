@@ -407,7 +407,7 @@ static void upipe_audio_merge_copy_to_output_interleaved(struct upipe *upipe, fl
         for (int i = 0; i < input_count; i++) {
             uint8_t index = indicies[i] / input_channels;
             memcpy(real_out_data + x*output_sample_size + index*input_sample_size,
-                    in_data[i] + x*input_sample_size,
+                    (uint8_t*)in_data[i] + x*input_sample_size,
                     input_sample_size);
         }
     }
