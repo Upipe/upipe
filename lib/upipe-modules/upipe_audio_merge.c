@@ -399,7 +399,7 @@ static void upipe_audio_merge_copy_to_output_interleaved(struct upipe *upipe, fl
         input_count++;
     }
 
-    uint8_t *real_out_data = out_data[0];
+    uint8_t *real_out_data = (uint8_t*)out_data[0];
     uint8_t output_sample_size = 0;
     UBASE_ERROR(upipe, ubuf_sound_size(ubuf, NULL, &output_sample_size));
 
