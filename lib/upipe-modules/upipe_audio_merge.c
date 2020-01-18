@@ -389,7 +389,7 @@ static void upipe_audio_merge_copy_to_output_interleaved(struct upipe *upipe, fl
             assert(input_num_samples == output_num_samples);
 
             /* Check all input have same sample size. */
-            if (sample_size)
+            if (input_sample_size)
                 assert(input_sample_size == sample_size);
             else
                 input_sample_size = sample_size;
