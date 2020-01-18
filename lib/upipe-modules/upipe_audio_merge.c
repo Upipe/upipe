@@ -361,7 +361,7 @@ static void upipe_audio_merge_copy_to_output_interleaved(struct upipe *upipe, fl
     UBASE_ERROR(upipe, uref_sound_flow_get_channels(upipe_audio_merge->flow_def, &output_channels));
 
     const float *in_data[255] = {0};
-    uint8_t input_channels = 0 input_sample_size = 0;
+    uint8_t input_channels = 0, input_sample_size = 0;
     int input_count = 0;
     uint8_t indicies[255] = {0};
 
