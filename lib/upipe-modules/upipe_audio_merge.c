@@ -133,7 +133,7 @@ struct upipe_audio_merge_sub {
 
     bool first_subpipe;
 
-    uint8_t index;
+    uint8_t channel_idx;
 
     /** public upipe structure */
     struct upipe upipe;
@@ -191,7 +191,7 @@ static int upipe_audio_merge_sub_set_flow_def(struct upipe *upipe,
     if (flow_def == NULL)
         return UBASE_ERR_INVALID;
 
-    if (!ubase_check(uref_attr_get_small_unsigned(flow, &upipe_audio_merge_sub->index,
+    if (!ubase_check(uref_attr_get_small_unsigned(flow_def, &upipe_audio_merge_sub->channel_idx,
                     UDICT_TYPE_SMALL_UNSIGNED, "channel_idx"))) {
         upipe_err(upipe, "Could not read channel_idx");
         return UBASE_ERR_INVALID;
@@ -395,7 +395,7 @@ static void upipe_audio_merge_copy_to_output_interleaved(struct upipe *upipe, fl
                 input_sample_size = sample_size;
         }
 
-        indicies[input_count] = upipe_audio_merge_sub->index;
+        indicies[input_count] = upipe_audio_merge_sub->channel_idx;
         input_count++;
     }
 
