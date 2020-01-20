@@ -90,7 +90,7 @@ static int upipe_avcenc_check_ubuf_mgr(struct upipe *upipe,
 static int upipe_avcenc_check_flow_format(struct upipe *upipe,
                                           struct uref *flow_format);
 /** @hidden */
-static bool upipe_avcenc_encode_frame(struct upipe *upipe,
+static void upipe_avcenc_encode_frame(struct upipe *upipe,
                                       struct AVFrame *frame,
                                       struct upump **upump_p);
 /** @hidden */
@@ -410,8 +410,8 @@ static void upipe_avcenc_close(struct upipe *upipe)
             upipe_avcenc_encode_audio(upipe, NULL);
 
         if (context->codec->capabilities & AV_CODEC_CAP_DELAY) {
-            /* Feed avcodec with NULL frames to output the remaining packets. */
-            while (upipe_avcenc_encode_frame(upipe, NULL, NULL));
+            /* Feed avcodec with NULL frame to output the remaining packets. */
+            upipe_avcenc_encode_frame(upipe, NULL, NULL);
         }
     }
     upipe_avcenc->close = true;
@@ -454,76 +454,37 @@ static void upipe_avcenc_build_flow_def(struct upipe *upipe)
     upipe_avcenc_store_flow_def(upipe, flow_def);
 }
 
-/** @internal @This encodes av frames.
+/** @internal @This outputs av packet.
  *
  * @param upipe description structure of the pipe
- * @param frame frame
+ * @param avpkt av packet
  * @param upump_p reference to upump structure
- * @return true when a packet has been output
  */
-static bool upipe_avcenc_encode_frame(struct upipe *upipe,
-                                      struct AVFrame *frame,
-                                      struct upump **upump_p)
+static void upipe_avcenc_output_pkt(struct upipe *upipe,
+                                    struct AVPacket *avpkt,
+                                    struct upump **upump_p)
 {
     struct upipe_avcenc *upipe_avcenc = upipe_avcenc_from_upipe(upipe);
     AVCodecContext *context = upipe_avcenc->context;
     const AVCodec *codec = context->codec;
-
-    if (unlikely(frame == NULL))
-        upipe_dbg(upipe, "received null frame");
-
-    /* encode frame */
-    AVPacket avpkt;
-    av_init_packet(&avpkt);
-    avpkt.data = NULL;
-    avpkt.size = 0;
-    int gotframe = 0;
-    int err;
-    switch (codec->type) {
-        case AVMEDIA_TYPE_VIDEO: {
-            err = avcodec_encode_video2(context, &avpkt, frame, &gotframe);
-            break;
-        }
-        case AVMEDIA_TYPE_AUDIO: {
-            err = avcodec_encode_audio2(context, &avpkt, frame, &gotframe);
-            break;
-        }
-        default: /* should never be there */
-            return false;
-    }
-
-    if (err < 0) {
-        upipe_av_strerror(err, buf);
-        upipe_warn_va(upipe, "error while encoding frame (%s)", buf);
-        return false;
-    }
-    /* output encoded frame if available */
-    if (!(gotframe && avpkt.data)) {
-        return false;
-    }
-
-    struct ubuf *ubuf = ubuf_block_alloc(upipe_avcenc->ubuf_mgr, avpkt.size);
+    struct ubuf *ubuf = ubuf_block_alloc(upipe_avcenc->ubuf_mgr, avpkt->size);
     if (unlikely(ubuf == NULL)) {
-        av_packet_unref(&avpkt);
         upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
-        return false;
+        return;
     }
 
     int size = -1;
     uint8_t *buf;
     if (unlikely(!ubase_check(ubuf_block_write(ubuf, 0, &size, &buf)))) {
         ubuf_free(ubuf);
-        av_packet_unref(&avpkt);
         upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
-        return false;
+        return;
     }
-    memcpy(buf, avpkt.data, size);
+    memcpy(buf, avpkt->data, size);
     ubuf_block_unmap(ubuf, 0);
 
-    int64_t pkt_pts = avpkt.pts, pkt_dts = avpkt.dts;
-    bool keyframe = avpkt.flags & AV_PKT_FLAG_KEY;
-
-    av_packet_unref(&avpkt);
+    int64_t pkt_pts = avpkt->pts, pkt_dts = avpkt->dts;
+    bool keyframe = avpkt->flags & AV_PKT_FLAG_KEY;
 
     /* find uref corresponding to avpkt */
     upipe_verbose_va(upipe, "output pts %"PRId64, pkt_pts);
@@ -543,26 +504,16 @@ static bool upipe_avcenc_encode_frame(struct upipe *upipe,
         upipe_warn_va(upipe, "could not find pts %"PRId64" in urefs in use",
                       pkt_pts);
         ubuf_free(ubuf);
-        return false;
+        return;
     }
 
     /* unmap input */
-    switch (codec->type) {
-        case AVMEDIA_TYPE_VIDEO: {
-            int i;
-            for (i = 0; i < UPIPE_AV_MAX_PLANES &&
-                        upipe_avcenc->chroma_map[i] != NULL; i++)
-                uref_pic_plane_unmap(uref, upipe_avcenc->chroma_map[i],
-                                     0, 0, -1, -1);
-            break;
-        }
-        case AVMEDIA_TYPE_AUDIO: {
-            break;
-        }
-        default: /* should never be there */
-            uref_free(uref);
-            return false;
-    }
+    if (codec->type == AVMEDIA_TYPE_VIDEO)
+        for (int i = 0; i < UPIPE_AV_MAX_PLANES &&
+             upipe_avcenc->chroma_map[i] != NULL; i++)
+            uref_pic_plane_unmap(uref, upipe_avcenc->chroma_map[i],
+                                 0, 0, -1, -1);
+
     uref_attach_ubuf(uref, ubuf);
     uref_avcenc_delete_priv(uref);
 
@@ -619,7 +570,47 @@ static bool upipe_avcenc_encode_frame(struct upipe *upipe,
         upipe_avcenc_build_flow_def(upipe);
 
     upipe_avcenc_output(upipe, uref, upump_p);
-    return true;
+}
+
+/** @internal @This encodes av frames.
+ *
+ * @param upipe description structure of the pipe
+ * @param frame frame
+ * @param upump_p reference to upump structure
+ */
+static void upipe_avcenc_encode_frame(struct upipe *upipe,
+                                      struct AVFrame *frame,
+                                      struct upump **upump_p)
+{
+    struct upipe_avcenc *upipe_avcenc = upipe_avcenc_from_upipe(upipe);
+    AVCodecContext *context = upipe_avcenc->context;
+
+    if (unlikely(frame == NULL))
+        upipe_dbg(upipe, "received null frame");
+
+    /* encode frame */
+    int err;
+    if ((err = avcodec_send_frame(context, frame)) < 0) {
+        upipe_err_va(upipe, "avcodec_send_frame: %s", av_err2str(err));
+        return;
+    }
+
+    AVPacket avpkt;
+    av_init_packet(&avpkt);
+    avpkt.data = NULL;
+    avpkt.size = 0;
+    while (1) {
+        err = avcodec_receive_packet(context, &avpkt);
+        if (unlikely(err < 0)) {
+            if (err != AVERROR(EAGAIN) &&
+                err != AVERROR_EOF)
+                upipe_err_va(upipe, "avcodec_receive_packet: %s",
+                             av_err2str(err));
+            break;
+        }
+        upipe_avcenc_output_pkt(upipe, &avpkt, upump_p);
+    }
+    av_packet_unref(&avpkt);
 }
 
 /** @internal @This encodes video frames.
