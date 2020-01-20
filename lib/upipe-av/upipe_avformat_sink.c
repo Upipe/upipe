@@ -857,9 +857,23 @@ static void upipe_avfsink_mux(struct upipe *upipe, struct upump **upump_p)
             uref_clock_get_dts_prog(next_uref, &input->next_dts);
         }
 
+        size_t size = 0;
+        uref_block_size(uref, &size);
+        if (unlikely(!size)) {
+            upipe_warn(upipe, "Received packet with size 0, dropping");
+            uref_free(uref);
+            upipe_release(upipe_avfsink_sub_to_upipe(input));
+            continue;
+        }
+
         AVPacket avpkt;
-        memset(&avpkt, 0, sizeof(AVPacket));
-        av_init_packet(&avpkt);
+        if (unlikely(av_new_packet(&avpkt, size) < 0)) {
+            uref_free(uref);
+            upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
+            upipe_release(upipe_avfsink_sub_to_upipe(input));
+            return;
+        }
+
         avpkt.stream_index = input->id;
         if (ubase_check(uref_flow_get_random(uref)))
             avpkt.flags |= AV_PKT_FLAG_KEY;
@@ -880,24 +894,6 @@ static void upipe_avfsink_mux(struct upipe *upipe, struct upump **upump_p)
             avpkt.duration = (duration * stream->time_base.den + UCLOCK_FREQ / 2) /
                              UCLOCK_FREQ / stream->time_base.num;
 
-        size_t size = 0;
-        uref_block_size(uref, &size);
-        if (unlikely(!size)) {
-            upipe_warn(upipe, "Received packet with size 0, dropping");
-            uref_free(uref);
-            upipe_release(upipe_avfsink_sub_to_upipe(input));
-            continue;
-        }
-        avpkt.size = size;
-
-        /* TODO replace with umem */
-        avpkt.data = malloc(avpkt.size);
-        if (unlikely(avpkt.data == NULL)) {
-            uref_free(uref);
-            upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
-            upipe_release(upipe_avfsink_sub_to_upipe(input));
-            return;
-        }
         uref_block_extract(uref, 0, avpkt.size, avpkt.data);
         uref_free(uref);
 
@@ -908,7 +904,8 @@ static void upipe_avfsink_mux(struct upipe *upipe, struct upump **upump_p)
         upipe_release(upipe_avfsink_sub_to_upipe(input));
 
         int error = av_write_frame(upipe_avfsink->context, &avpkt);
-        free(avpkt.data);
+        av_packet_unref(&avpkt);
+
         if (unlikely(error < 0)) {
             upipe_av_strerror(error, buf);
             upipe_warn_va(upipe, "write error to %s (%s)", upipe_avfsink->uri, buf);
