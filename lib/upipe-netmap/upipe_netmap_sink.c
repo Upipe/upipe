@@ -1359,7 +1359,7 @@ static void upipe_netmap_sink_worker(struct upump *upump)
                     } else {
                         stamp = true;
                     }
-                    if (stamp && !stamped && slot->ptr) {
+                    if (stamp && !stamped && txring[i]->slot[cur[i]].ptr) {
                         uint16_t seq = rtp_get_seqnum(rtp);
                         handle_tx_stamp(upipe, txring[i]->slot[cur[i]].ptr, seq);
                         stamped = true;
