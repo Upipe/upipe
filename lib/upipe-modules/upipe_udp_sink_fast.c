@@ -32,6 +32,9 @@
 #include <pthread.h>
 #include <sched.h>
 #include <netinet/in.h>
+#include <sys/mman.h>
+#include <linux/if_packet.h>
+#include <linux/if_ether.h>
 
 #include <upipe/ubase.h>
 #include <upipe/ulist.h>
@@ -98,6 +101,11 @@ struct upipe_udpsink {
     /** interface indicies. */
     int ifindex[2];
 
+    void *mmap[2];
+    size_t mmap_size[2];
+    int frame_num;
+    struct sockaddr_ll peer_addr;
+
     struct uchain ulist;
 
     bool thread_created;
@@ -117,6 +125,36 @@ struct upipe_udpsink {
 
     /** public upipe structure */
     struct upipe upipe;
+};
+
+/*
+   Frame structure:
+
+   - Start. Frame must be aligned to TPACKET_ALIGNMENT=16
+   - struct tpacket_hdr
+   - pad to TPACKET_ALIGNMENT=16
+   - struct sockaddr_ll
+   - Gap, chosen so that packet data (Start+tp_net) alignes to TPACKET_ALIGNMENT=16
+   - Start+tp_mac: [ Optional MAC header ]
+   - Start+tp_net: Packet data, aligned to TPACKET_ALIGNMENT=16.
+   - Pad to align to TPACKET_ALIGNMENT=16
+*/
+
+#ifndef __aligned_tpacket
+# define __aligned_tpacket	__attribute__((aligned(TPACKET_ALIGNMENT)))
+#endif
+
+#ifndef __align_tpacket
+# define __align_tpacket(x)	__attribute__((aligned(TPACKET_ALIGN(x))))
+#endif
+
+union frame_map {
+    struct v1 {
+        struct tpacket_hdr tph __attribute__((aligned(TPACKET_ALIGNMENT)));
+        //struct sockaddr_ll sll __attribute__((aligned(TPACKET_ALIGNMENT)));
+        uint8_t data[] /*__attribute__((aligned(TPACKET_ALIGNMENT)))*/;
+    } *v1;
+    void *raw;
 };
 
 UPIPE_HELPER_UPIPE(upipe_udpsink, upipe, UPIPE_UDPSINK_FAST_SIGNATURE)
@@ -153,6 +191,7 @@ static void *run_thread(void *upipe_pointer)
             /* TODO: what to do if the output doesn't use the uref? */
             uref_free(uref);
         }
+        upipe_udpsink->frame_num = (upipe_udpsink->frame_num + 1) % MMAP_FRAME_NUM;
     }
 
     upipe_notice(upipe, "exiting run_thread");
@@ -229,6 +268,17 @@ static struct upipe *upipe_udpsink_alloc(struct upipe_mgr *mgr,
     upipe_udpsink->thread_created = false;
     pthread_mutex_init(&upipe_udpsink->mutex, NULL);
 
+    upipe_udpsink->mmap[0] = upipe_udpsink->mmap[1] = MAP_FAILED;
+    upipe_udpsink->mmap_size[0] = upipe_udpsink->mmap_size[1] = 0;
+    upipe_udpsink->frame_num = 0;
+    upipe_udpsink->peer_addr = (struct sockaddr_ll) {
+        .sll_family = AF_PACKET,
+        .sll_protocol = htons(ETH_P_IP),
+        .sll_halen = ETH_ALEN,
+        .sll_addr = {0xff,0xff,0xff,0xff,0xff,0xff}, /* TODO: get right one? */
+    };
+
+
     ulist_init(&upipe_udpsink->ulist);
     uatomic_init(&upipe_udpsink->stop, 0);
 
@@ -299,100 +349,33 @@ write_buffer:
             return false;
         }
 
-        int iovec_count = uref_block_iovec_count(uref, 0, -1);
-        if (unlikely(iovec_count == -1)) {
-            uref_free(uref);
-            upipe_warn(upipe, "cannot read ubuf buffer");
-            break;
-        }
-        if (unlikely(iovec_count == 0)) {
-            uref_free(uref);
-            break;
+        /* Check size is less than what we need. */
+        if (payload_len + RAW_HEADER_SIZE > MMAP_FRAME_SIZE - TPACKET_HDRLEN) {
+            upipe_err(upipe, "uref too big");
+            return false;
         }
 
-        if (upipe_udpsink->raw) {
-            iovec_count++;
+        /* Get next frame to be used. */
+        union frame_map frame = { .raw = upipe_udpsink->mmap[0] + upipe_udpsink->frame_num*MMAP_FRAME_SIZE };
+
+        /* Fill in mmap stuff. */
+        frame.v1->tph.tp_snaplen = frame.v1->tph.tp_len = RAW_HEADER_SIZE + payload_len;
+        frame.v1->tph.tp_net = offsetof(struct v1, data);
+        frame.v1->tph.tp_status = TP_STATUS_SEND_REQUEST;
+        /* TODO: check for errors. */
+
+        /* Fill in IP and UDP headers. */
+        memcpy(frame.v1->data, upipe_udpsink->raw_header[0], RAW_HEADER_SIZE);
+        udp_raw_set_len(frame.v1->data, payload_len);
+
+        int err = uref_block_extract(uref, 0, payload_len,
+                frame.v1->data + RAW_HEADER_SIZE);
+        if (!ubase_check(err)) {
+            upipe_throw_error(upipe, err);
+            return false;
         }
 
-        struct iovec iovecs_s[2][iovec_count];
-        struct iovec *iovecs = iovecs_s[0];
-
-        if (upipe_udpsink->raw) {
-            udp_raw_set_len(upipe_udpsink->raw_header[0], payload_len);
-            iovecs[0].iov_base = upipe_udpsink->raw_header[0];
-            iovecs[0].iov_len = RAW_HEADER_SIZE;
-            iovecs++;
-        }
-
-        if (unlikely(!ubase_check(uref_block_iovec_read(uref, 0, -1, iovecs)))) {
-            uref_free(uref);
-            upipe_warn(upipe, "cannot read ubuf buffer");
-            break;
-        }
-
-        /* Fill in second iovec array, copy structs for the mapped uref. */
-        for (int i = 0; i < iovec_count; i++)
-            iovecs_s[1][i] = iovecs_s[0][i];
-        /* Set second header correctly. */
-        if (upipe_udpsink->raw) {
-            udp_raw_set_len(upipe_udpsink->raw_header[1], payload_len);
-            iovecs_s[1][0].iov_base = upipe_udpsink->raw_header[1];
-            iovecs_s[1][0].iov_len = RAW_HEADER_SIZE;
-        }
-
-        /* ancillary data, control message, actual buffer space */
-        union {
-            struct cmsghdr header;
-            unsigned char buffer[CMSG_SPACE(sizeof(struct in_pktinfo))];
-        } control_data[2];
-        memset(&control_data, 0, sizeof control_data);
-
-        /* message, message header */
-        struct mmsghdr mmsghdr[2] = { { .msg_hdr = {
-            .msg_name = upipe_udpsink->addrlen ? &upipe_udpsink->addr : NULL,
-            .msg_namelen = upipe_udpsink->addrlen,
-
-            .msg_iov = iovecs_s[0],
-            .msg_iovlen = iovec_count,
-
-            .msg_control = &control_data[0],
-            .msg_controllen = sizeof control_data[0],
-            .msg_flags = 0,
-        } }, { .msg_hdr = {
-            .msg_name = upipe_udpsink->addrlen ? &upipe_udpsink->addr : NULL,
-            .msg_namelen = upipe_udpsink->addrlen,
-
-            .msg_iov = iovecs_s[1],
-            .msg_iovlen = iovec_count,
-
-            .msg_control = &control_data[1],
-            .msg_controllen = sizeof control_data[1],
-            .msg_flags = 0,
-        } } };
-
-        /* A pointer to previous for some reason. */
-        struct cmsghdr *control_message_p = CMSG_FIRSTHDR(&mmsghdr[0].msg_hdr);
-
-        /* Fill in control message header, cmsghdr. */
-        control_message_p->cmsg_level = IPPROTO_IP;
-        control_message_p->cmsg_type = IP_PKTINFO;
-        control_message_p->cmsg_len = CMSG_LEN(sizeof(struct in_pktinfo));
-
-        /* Set ifindex in the control message. */
-        struct in_pktinfo *pktinfo = (struct in_pktinfo*)CMSG_DATA(control_message_p);
-        pktinfo->ipi_ifindex = upipe_udpsink->ifindex[0];
-
-        /* Fill in second control message. */
-        control_message_p = CMSG_FIRSTHDR(&mmsghdr[1].msg_hdr);
-        control_message_p->cmsg_level = IPPROTO_IP;
-        control_message_p->cmsg_type = IP_PKTINFO;
-        control_message_p->cmsg_len = CMSG_LEN(sizeof(struct in_pktinfo));
-        pktinfo = (struct in_pktinfo*)CMSG_DATA(control_message_p);
-        pktinfo->ipi_ifindex = upipe_udpsink->ifindex[1];
-
-        ssize_t ret = sendmmsg(upipe_udpsink->fd[0], mmsghdr, 2, 0);
-        uref_block_iovec_unmap(uref, 0, -1, iovecs);
-
+        ssize_t ret = sendto(upipe_udpsink->fd[0], NULL, 0, 0, (struct sockaddr*)&upipe_udpsink->peer_addr, sizeof upipe_udpsink->peer_addr);
         if (unlikely(ret == -1)) {
             switch (errno) {
                 case EINTR:
@@ -533,6 +516,15 @@ static int _upipe_udpsink_set_uri(struct upipe *upipe, const char *uri)
         return UBASE_ERR_EXTERNAL;
     }
 
+    upipe_udpsink->mmap_size[0] = MMAP_BLOCK_SIZE * MMAP_BLOCK_NUM;
+    upipe_udpsink->mmap[0] = mmap(0, upipe_udpsink->mmap_size[0], PROT_READ | PROT_WRITE,
+            MAP_SHARED, upipe_udpsink->fd[0], 0);
+    if (upipe_udpsink->mmap[0] == MAP_FAILED) {
+        upipe_err_va(upipe, "unable to mmap: %m");
+        return UBASE_ERR_EXTERNAL;
+    }
+    upipe_udpsink->peer_addr.sll_ifindex = upipe_udpsink->ifindex[0];
+
     /* Open 2nd socket. */
     if (uri_b) {
         uri_b[-1] = '+'; /* Restore + character. */
@@ -543,6 +535,14 @@ static int _upipe_udpsink_set_uri(struct upipe *upipe, const char *uri)
         if (unlikely(upipe_udpsink->fd[1] == -1)) {
             upipe_err_va(upipe, "can't open uri %s", uri_b);
             ubase_clean_fd(&upipe_udpsink->fd[0]);
+            return UBASE_ERR_EXTERNAL;
+        }
+
+        upipe_udpsink->mmap_size[1] = MMAP_BLOCK_SIZE * MMAP_BLOCK_NUM;
+        upipe_udpsink->mmap[1] = mmap(0, upipe_udpsink->mmap_size[1], PROT_READ | PROT_WRITE,
+                MAP_SHARED, upipe_udpsink->fd[1], 0);
+        if (upipe_udpsink->mmap[1] == MAP_FAILED) {
+            upipe_err_va(upipe, "unable to mmap: %m");
             return UBASE_ERR_EXTERNAL;
         }
     }
