@@ -274,6 +274,7 @@ static struct upipe *upipe_netmap_source_alloc(struct upipe_mgr *mgr,
     upipe_netmap_source->sdi_to_uyvy = upipe_sdi_to_uyvy_c;
     upipe_netmap_source->bitpacked_to_v210 = upipe_sdi_to_v210_c;
     upipe_netmap_source->bitpacked_to_planar_8 = upipe_sdi_to_planar_8_c;
+    upipe_netmap_source->bitpacked_to_planar_10 = upipe_sdi_to_planar_10_c;
 
 #if defined(HAVE_X86ASM)
 #if defined(__i686__) || defined(__x86_64__)
