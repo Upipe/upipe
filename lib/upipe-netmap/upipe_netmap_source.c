@@ -512,7 +512,13 @@ static inline bool handle_rfc_packet(struct upipe *upipe, const uint8_t *src, ui
         if (src_size < length[i])
             return false;
 
+        if (interleaved_line > upipe_netmap_source->vsize)
+            return false;
+
         const size_t pixels = 2 * length[i] / 5;
+
+        if (line_offset[i] + pixels > upipe_netmap_source->hsize)
+            return false;
 
         if (upipe_netmap_source->output_is_v210) {
             /* Start */
