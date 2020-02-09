@@ -243,6 +243,8 @@ static struct upipe *upipe_netmap_source_alloc(struct upipe_mgr *mgr,
         upipe_netmap_source->rfc_def = flow_def;
         uref_pic_flow_set_hsize(upipe_netmap_source->rfc_def,
                 upipe_netmap_source->hsize);
+        uref_pic_flow_set_align(upipe_netmap_source->rfc_def, 32);
+        uref_pic_flow_set_hmappend(upipe_netmap_source->rfc_def, 32);
     } else {
         upipe_netmap_source->hbrmt = true;
         upipe_netmap_source->rfc_def = NULL;
