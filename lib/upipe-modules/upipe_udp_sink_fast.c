@@ -190,8 +190,16 @@ static void *run_thread(void *upipe_pointer)
         upipe_udpsink_output(upipe, uref, NULL, 0);
         upipe_udpsink_output(upipe, uref, NULL, 1);
         /* TODO: what to do if the output doesn't use the uref? */
+
+        size_t num_frames = 0, payload_len = 0;
+        if (likely(ubase_check(uref_block_size(uref, &payload_len)))) {
+            num_frames = payload_len / 288;
+            if (payload_len % 288)
+                upipe_warn(upipe, "not whole uref consumed");
+            num_frames = payload_len / 288;
+        }
+        upipe_udpsink->frame_num = (upipe_udpsink->frame_num + num_frames) % MMAP_FRAME_NUM;
         uref_free(uref);
-        upipe_udpsink->frame_num = (upipe_udpsink->frame_num + 1) % MMAP_FRAME_NUM;
     }
 
     upipe_notice(upipe, "exiting run_thread");
@@ -349,30 +357,36 @@ write_buffer:
             return false;
         }
 
-        /* Check size is less than what we need. */
-        if (payload_len + RAW_HEADER_SIZE > MMAP_FRAME_SIZE - TPACKET_HDRLEN) {
+        int num_frames = payload_len / 288;
+        if (num_frames > MMAP_FRAME_NUM) {
             upipe_err(upipe, "uref too big");
             return false;
         }
 
-        /* Get next frame to be used. */
-        union frame_map frame = { .raw = upipe_udpsink->mmap[which_fd] + upipe_udpsink->frame_num*MMAP_FRAME_SIZE };
+        /* Populate the frames. */
+        for (int i = 0; i < num_frames; i++) {
+            int mmap_frame = (i + upipe_udpsink->frame_num) % MMAP_FRAME_NUM;
+            /* Get next frame to be used. */
+            union frame_map frame = { .raw = upipe_udpsink->mmap[which_fd] + mmap_frame * MMAP_FRAME_SIZE };
 
-        /* Fill in mmap stuff. */
-        frame.v1->tph.tp_snaplen = frame.v1->tph.tp_len = RAW_HEADER_SIZE + payload_len;
-        frame.v1->tph.tp_net = offsetof(struct v1, data);
-        frame.v1->tph.tp_status = TP_STATUS_SEND_REQUEST;
-        /* TODO: check for errors. */
+            /* Fill in mmap stuff. */
+            frame.v1->tph.tp_snaplen = frame.v1->tph.tp_len = RAW_HEADER_SIZE + 288;
+            frame.v1->tph.tp_net = offsetof(struct v1, data);
+            frame.v1->tph.tp_status = TP_STATUS_SEND_REQUEST;
+            /* TODO: check for errors. */
 
-        /* Fill in IP and UDP headers. */
-        memcpy(frame.v1->data, upipe_udpsink->raw_header[which_fd], RAW_HEADER_SIZE);
-        udp_raw_set_len(frame.v1->data, payload_len);
+            /* Fill in IP and UDP headers. */
+            memcpy(frame.v1->data, upipe_udpsink->raw_header[which_fd], RAW_HEADER_SIZE);
+            udp_raw_set_len(frame.v1->data, 288);
 
-        int err = uref_block_extract(uref, 0, payload_len,
-                frame.v1->data + RAW_HEADER_SIZE);
-        if (!ubase_check(err)) {
-            upipe_throw_error(upipe, err);
-            return false;
+            /* TODO: RTP headers. */
+
+            int err = uref_block_extract(uref, 288*i, 288,
+                    frame.v1->data + RAW_HEADER_SIZE);
+            if (!ubase_check(err)) {
+                upipe_throw_error(upipe, err);
+                return false;
+            }
         }
 
         ssize_t ret = sendto(upipe_udpsink->fd[which_fd], NULL, 0, 0,
