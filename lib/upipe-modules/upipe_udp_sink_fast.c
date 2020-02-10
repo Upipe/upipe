@@ -80,7 +80,7 @@
 
 /** @hidden */
 static bool upipe_udpsink_output(struct upipe *upipe, struct uref *uref,
-                                 struct upump **upump_p);
+                                 struct upump **upump_p, int which_fd);
 
 /** @internal @This is the private context of a udp sink pipe. */
 struct upipe_udpsink {
@@ -104,7 +104,7 @@ struct upipe_udpsink {
     void *mmap[2];
     size_t mmap_size[2];
     int frame_num;
-    struct sockaddr_ll peer_addr;
+    struct sockaddr_ll peer_addr[2];
 
     struct uchain ulist;
 
@@ -187,10 +187,10 @@ static void *run_thread(void *upipe_pointer)
         }
         uref = uref_from_uchain(uchain);
 
-        if (!upipe_udpsink_output(upipe, uref, NULL)) {
-            /* TODO: what to do if the output doesn't use the uref? */
-            uref_free(uref);
-        }
+        upipe_udpsink_output(upipe, uref, NULL, 0);
+        upipe_udpsink_output(upipe, uref, NULL, 1);
+        /* TODO: what to do if the output doesn't use the uref? */
+        uref_free(uref);
         upipe_udpsink->frame_num = (upipe_udpsink->frame_num + 1) % MMAP_FRAME_NUM;
     }
 
@@ -271,12 +271,13 @@ static struct upipe *upipe_udpsink_alloc(struct upipe_mgr *mgr,
     upipe_udpsink->mmap[0] = upipe_udpsink->mmap[1] = MAP_FAILED;
     upipe_udpsink->mmap_size[0] = upipe_udpsink->mmap_size[1] = 0;
     upipe_udpsink->frame_num = 0;
-    upipe_udpsink->peer_addr = (struct sockaddr_ll) {
-        .sll_family = AF_PACKET,
-        .sll_protocol = htons(ETH_P_IP),
-        .sll_halen = ETH_ALEN,
-        .sll_addr = {0xff,0xff,0xff,0xff,0xff,0xff}, /* TODO: get right one? */
-    };
+    upipe_udpsink->peer_addr[0] = upipe_udpsink->peer_addr[1] =
+        (struct sockaddr_ll) {
+            .sll_family = AF_PACKET,
+            .sll_protocol = htons(ETH_P_IP),
+            .sll_halen = ETH_ALEN,
+            .sll_addr = {0xff,0xff,0xff,0xff,0xff,0xff}, /* TODO: get right one? */
+        };
 
 
     ulist_init(&upipe_udpsink->ulist);
@@ -294,13 +295,12 @@ static struct upipe *upipe_udpsink_alloc(struct upipe_mgr *mgr,
  * @return true if the uref was processed
  */
 static bool upipe_udpsink_output(struct upipe *upipe, struct uref *uref,
-                                 struct upump **upump_p)
+                                 struct upump **upump_p, int which_fd)
 {
     struct upipe_udpsink *upipe_udpsink = upipe_udpsink_from_upipe(upipe);
     int slept = 0;
 
-    if (unlikely(upipe_udpsink->fd[0] == -1)) {
-        uref_free(uref);
+    if (unlikely(upipe_udpsink->fd[which_fd] == -1)) {
         upipe_warn(upipe, "received a buffer before opening a socket");
         return true;
     }
@@ -356,7 +356,7 @@ write_buffer:
         }
 
         /* Get next frame to be used. */
-        union frame_map frame = { .raw = upipe_udpsink->mmap[0] + upipe_udpsink->frame_num*MMAP_FRAME_SIZE };
+        union frame_map frame = { .raw = upipe_udpsink->mmap[which_fd] + upipe_udpsink->frame_num*MMAP_FRAME_SIZE };
 
         /* Fill in mmap stuff. */
         frame.v1->tph.tp_snaplen = frame.v1->tph.tp_len = RAW_HEADER_SIZE + payload_len;
@@ -365,7 +365,7 @@ write_buffer:
         /* TODO: check for errors. */
 
         /* Fill in IP and UDP headers. */
-        memcpy(frame.v1->data, upipe_udpsink->raw_header[0], RAW_HEADER_SIZE);
+        memcpy(frame.v1->data, upipe_udpsink->raw_header[which_fd], RAW_HEADER_SIZE);
         udp_raw_set_len(frame.v1->data, payload_len);
 
         int err = uref_block_extract(uref, 0, payload_len,
@@ -375,7 +375,8 @@ write_buffer:
             return false;
         }
 
-        ssize_t ret = sendto(upipe_udpsink->fd[0], NULL, 0, 0, (struct sockaddr*)&upipe_udpsink->peer_addr, sizeof upipe_udpsink->peer_addr);
+        ssize_t ret = sendto(upipe_udpsink->fd[which_fd], NULL, 0, 0,
+                (struct sockaddr*)&upipe_udpsink->peer_addr[which_fd], sizeof upipe_udpsink->peer_addr[which_fd]);
         if (unlikely(ret == -1)) {
             switch (errno) {
                 case EINTR:
@@ -399,7 +400,6 @@ write_buffer:
              * "port unreachable", and we do not want to kill the application
              * with transient errors. */
         }
-        uref_free(uref);
         break;
     }
 
@@ -523,7 +523,7 @@ static int _upipe_udpsink_set_uri(struct upipe *upipe, const char *uri)
         upipe_err_va(upipe, "unable to mmap: %m");
         return UBASE_ERR_EXTERNAL;
     }
-    upipe_udpsink->peer_addr.sll_ifindex = upipe_udpsink->ifindex[0];
+    upipe_udpsink->peer_addr[0].sll_ifindex = upipe_udpsink->ifindex[0];
 
     /* Open 2nd socket. */
     if (uri_b) {
@@ -545,6 +545,7 @@ static int _upipe_udpsink_set_uri(struct upipe *upipe, const char *uri)
             upipe_err_va(upipe, "unable to mmap: %m");
             return UBASE_ERR_EXTERNAL;
         }
+        upipe_udpsink->peer_addr[1].sll_ifindex = upipe_udpsink->ifindex[1];
     }
 
     upipe_notice_va(upipe, "opening uri %s", upipe_udpsink->uri);
