@@ -109,7 +109,9 @@ struct upipe_udpsink {
     int frame_num;
     struct sockaddr_ll peer_addr[2];
 
+    uint32_t timestamp;
     uint16_t seqnum;
+    uint8_t audio_data[6 * 16 * 3];
 
     struct uchain ulist;
 
@@ -192,23 +194,92 @@ static void *run_thread(void *upipe_pointer)
         }
         uref = uref_from_uchain(uchain);
 
+        /* TODO: check uclock exists, and fds are open. */
+
+        /* Get output time. */
+        uint64_t now = uclock_now(upipe_udpsink->uclock);
+        uint64_t systime = 0;
+        if (unlikely(!ubase_check(uref_clock_get_cr_sys(uref, &systime)))) {
+            upipe_warn(upipe, "received non-dated buffer");
+        }
+        systime += upipe_udpsink->latency;
+
+        /* Get RTP timestamp. */
+        lldiv_t div = lldiv(systime, UCLOCK_FREQ);
+        upipe_udpsink->timestamp = div.quot * 48000 + ((uint64_t)div.rem * 48000)/UCLOCK_FREQ;
+
+        /* Check size. */
         size_t samples = 0;
-        if (unlikely(!ubase_check(uref_sound_size(uref, &samples, NULL)))) {
+        uint8_t channels = 0;
+        if (unlikely(!ubase_check(uref_sound_size(uref, &samples, &channels)))) {
             upipe_warn(upipe, "cannot read uref size");
             uref_free(uref);
             continue;
         }
+        channels /= 4;
+        int num_frames = samples / 6;
+        /* TODO: Is this check still needed. */
+        if (num_frames > MMAP_FRAME_NUM) {
+            upipe_err(upipe, "uref too big");
+            uref_free(uref);
+            continue;
+        }
 
-        upipe_udpsink_output(upipe, uref, NULL, 0);
-        upipe_udpsink_output(upipe, uref, NULL, 1);
-        /* TODO: what to do if the output doesn't use the uref? */
+        /* Map uref. */
+        const int32_t *src = NULL;
+        if (unlikely(!ubase_check(uref_sound_read_int32_t(uref, 0, -1, &src, 1)))) {
+            upipe_err(upipe, "unable to map uref");
+            uref_free(uref);
+            continue;
+        }
+
+        /* Make output packets. */
+        uint8_t *data = upipe_udpsink->audio_data;
+        for (int i = 0; i < num_frames; i++) {
+            /* Pack audio data. */
+            const int32_t *local_src = src + 6 * channels * i;
+            for (int j = 0; j < 6 * channels; j++) {
+                int32_t sample = local_src[j];
+                data[3*j+0] = (sample >> 24) & 0xff;
+                data[3*j+1] = (sample >> 16) & 0xff;
+                data[3*j+2] = (sample >>  8) & 0xff;
+            }
+
+            /* Sleep until packet is due. */
+            if (now < systime) {
+                struct timespec wait = { .tv_nsec = (systime - now) * 1000 / 27 };
+                struct timespec left = { 0 };
+                /* TODO: check remaining time. */
+                if (unlikely(nanosleep(&wait, &left))) {
+                    if (errno == EINTR)
+                        upipe_warn_va(upipe, "nanosleep interrupted, left: %ld", left.tv_nsec);
+                    else if (errno == EINVAL)
+                        upipe_err(upipe, "invalid nanosleep");
+                    else
+                        upipe_err(upipe, "unknown return");
+                }
+            } else if (now > systime + (27000))
+                upipe_warn_va(upipe,
+                        "outputting late packet %"PRIu64" us, latency %"PRIu64" us",
+                        (now - systime) / 27,
+                        upipe_udpsink->latency / 27);
+
+            /* Write packets. */
+            upipe_udpsink_output(upipe, uref, NULL, 0);
+            upipe_udpsink_output(upipe, uref, NULL, 1);
+
+            /* Adjust per packet values. */
+            upipe_udpsink->frame_num = (upipe_udpsink->frame_num + 1) % MMAP_FRAME_NUM;
+            upipe_udpsink->seqnum += 1;
+            upipe_udpsink->timestamp += 6;
+            systime += 125 * 27;
+        }
+
+        uref_sound_unmap(uref, 0, -1, 1);
+        uref_free(uref);
 
         if (samples % 6)
             upipe_warn(upipe, "not whole uref consumed");
-        size_t num_frames = samples / 6;
-        upipe_udpsink->frame_num = (upipe_udpsink->frame_num + num_frames) % MMAP_FRAME_NUM;
-        upipe_udpsink->seqnum += num_frames;
-        uref_free(uref);
     }
 
     upipe_notice(upipe, "exiting run_thread");
@@ -315,80 +386,12 @@ static bool upipe_udpsink_output(struct upipe *upipe, struct uref *uref,
                                  struct upump **upump_p, int which_fd)
 {
     struct upipe_udpsink *upipe_udpsink = upipe_udpsink_from_upipe(upipe);
-    int slept = 0;
 
-    if (unlikely(upipe_udpsink->fd[which_fd] == -1)) {
-        upipe_warn(upipe, "received a buffer before opening a socket");
-        return true;
-    }
-
-    if (likely(upipe_udpsink->uclock == NULL))
-        goto write_buffer;
-
-    uint64_t now = uclock_now(upipe_udpsink->uclock);
-    uint64_t systime = 0;
-    if (unlikely(!ubase_check(uref_clock_get_cr_sys(uref, &systime)))) {
-        upipe_warn(upipe, "received non-dated buffer");
-        goto write_buffer;
-    }
-
-    if (now < systime) {
-#if 0
-        useconds_t wait = (systime - now) / 27;
-        usleep(wait);
-#else
-        struct timespec wait = { .tv_nsec = (systime - now) * 1000 / 27 };
-        struct timespec left = { 0 };
-        slept = wait.tv_nsec / 1000;
-        /* TODO: check return value and remaining time. */
-        if (unlikely(nanosleep(&wait, &left))) {
-            if (errno == EINTR)
-                upipe_warn_va(upipe, "nanosleep interrupted, left: %ld", left.tv_nsec);
-            else if (errno == EINVAL)
-                upipe_err(upipe, "invalid nanosleep");
-            else
-                upipe_err(upipe, "unknown return");
-        } else {
-            //upipe_dbg_va(upipe, "waited %ld ns", wait.tv_nsec);
-        }
-#endif
-    } else if (now > systime + (27000))
-        upipe_warn_va(upipe,
-                      "outputting late packet %"PRIu64" us, latency %"PRIu64" us slept %u us",
-                      (now - systime) / 27,
-                      upipe_udpsink->latency / 27, slept);
-
-write_buffer:
     for ( ; ; ) {
-        lldiv_t div = lldiv(systime, UCLOCK_FREQ);
-        uint32_t ts = div.quot * 48000 + ((uint64_t)div.rem * 48000)/UCLOCK_FREQ;
+        int payload_len = 288 + RTP_HEADER_SIZE;
 
-        size_t samples = 0;
-        uint8_t channels = 0;
-        if (unlikely(!ubase_check(uref_sound_size(uref, &samples, &channels)))) {
-            upipe_warn(upipe, "cannot read uref size");
-            return false;
-        }
-        channels /= 4;
-
-        int num_frames = samples / 6;
-        if (num_frames > MMAP_FRAME_NUM) {
-            upipe_err(upipe, "uref too big");
-            return false;
-        }
-
-        const int32_t *src = NULL;
-        if (unlikely(!ubase_check(uref_sound_read_int32_t(uref, 0, -1, &src, 1)))) {
-            upipe_err(upipe, "unable to map uref");
-            return false;
-        }
-
-        int payload_len = 3 * channels * 6 + RTP_HEADER_SIZE;
-        /* Populate the frames. */
-        for (int i = 0; i < num_frames; i++) {
-            int mmap_frame = (i + upipe_udpsink->frame_num) % MMAP_FRAME_NUM;
             /* Get next frame to be used. */
-            union frame_map frame = { .raw = upipe_udpsink->mmap[which_fd] + mmap_frame * MMAP_FRAME_SIZE };
+            union frame_map frame = { .raw = upipe_udpsink->mmap[which_fd] + upipe_udpsink->frame_num * MMAP_FRAME_SIZE };
             uint8_t *data = frame.v1->data;
 
             /* Fill in mmap stuff. */
@@ -406,20 +409,11 @@ write_buffer:
             memset(data, 0, RTP_HEADER_SIZE);
             rtp_set_hdr(data);
             rtp_set_type(data, 97);
-            rtp_set_seqnum(data, upipe_udpsink->seqnum + i);
-            rtp_set_timestamp(data, ts + 6*i);
+            rtp_set_seqnum(data, upipe_udpsink->seqnum);
+            rtp_set_timestamp(data, upipe_udpsink->timestamp);
             data += RTP_HEADER_SIZE;
 
-            const int32_t *local_src = src + 6 * channels * i;
-            for (int j = 0; j < 6 * channels; j++) {
-                int32_t sample = local_src[j];
-                data[3*j+0] = (sample >> 24) & 0xff;
-                data[3*j+1] = (sample >> 16) & 0xff;
-                data[3*j+2] = (sample >>  8) & 0xff;
-            }
-        }
-
-        uref_sound_unmap(uref, 0, -1, 1);
+        memcpy(data, upipe_udpsink->audio_data, 288);
 
         ssize_t ret = sendto(upipe_udpsink->fd[which_fd], NULL, 0, 0,
                 (struct sockaddr*)&upipe_udpsink->peer_addr[which_fd], sizeof upipe_udpsink->peer_addr[which_fd]);
