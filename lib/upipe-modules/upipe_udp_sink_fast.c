@@ -35,6 +35,7 @@
 #include <sys/mman.h>
 #include <linux/if_packet.h>
 #include <linux/if_ether.h>
+#include <arpa/inet.h>
 
 #include <upipe/ubase.h>
 #include <upipe/ulist.h>
@@ -515,6 +516,7 @@ static int _upipe_udpsink_set_uri(struct upipe *upipe, const char *uri)
 {
     struct upipe_udpsink *upipe_udpsink = upipe_udpsink_from_upipe(upipe);
     bool use_tcp = false;
+    in_addr_t dst_ip;
 
     if (unlikely(upipe_udpsink->fd[0] != -1)) {
         if (likely(upipe_udpsink->uri != NULL))
@@ -528,7 +530,7 @@ static int _upipe_udpsink_set_uri(struct upipe *upipe, const char *uri)
     if (unlikely(uri == NULL))
         return UBASE_ERR_NONE;
 
-    char *uri_a, *uri_b;
+    char *uri_a, *uri_b, *ip_addr;
     upipe_udpsink->uri = uri_a = strdup(uri);
     UBASE_ALLOC_RETURN(uri_a);
 
@@ -555,6 +557,23 @@ static int _upipe_udpsink_set_uri(struct upipe *upipe, const char *uri)
     }
     upipe_udpsink->peer_addr[0].sll_ifindex = upipe_udpsink->ifindex[0];
 
+    ip_addr = strchr(uri_a, ':');
+    if (ip_addr)
+        *ip_addr++ = '\0'; /*extract the IP address */
+
+    dst_ip = inet_addr(ip_addr);
+    ip_addr[-1] = ':'; /* Restore : character. */
+
+    if (IN_MULTICAST(ntohl(dst_ip))) {
+        uint32_t ip = ntohl(dst_ip);
+        upipe_udpsink->peer_addr[0].sll_addr[0] = 0x01;
+        upipe_udpsink->peer_addr[0].sll_addr[1] = 0x00;
+        upipe_udpsink->peer_addr[0].sll_addr[2] = 0x5e;
+        upipe_udpsink->peer_addr[0].sll_addr[3] = (ip >> 16) & 0x7f;
+        upipe_udpsink->peer_addr[0].sll_addr[4] = (ip >>  8) & 0xff;
+        upipe_udpsink->peer_addr[0].sll_addr[5] = (ip      ) & 0xff;
+    }
+
     /* Open 2nd socket. */
     if (uri_b) {
         uri_b[-1] = '+'; /* Restore + character. */
@@ -576,6 +595,23 @@ static int _upipe_udpsink_set_uri(struct upipe *upipe, const char *uri)
             return UBASE_ERR_EXTERNAL;
         }
         upipe_udpsink->peer_addr[1].sll_ifindex = upipe_udpsink->ifindex[1];
+
+        ip_addr = strchr(uri_b, ':');
+        if (ip_addr)
+            *ip_addr++ = '\0'; /*extract the IP address */
+
+        dst_ip = inet_addr(ip_addr);
+        ip_addr[-1] = ':'; /* Restore : character. */
+
+        if (IN_MULTICAST(ntohl(dst_ip))) {
+            uint32_t ip = ntohl(dst_ip);
+            upipe_udpsink->peer_addr[1].sll_addr[0] = 0x01;
+            upipe_udpsink->peer_addr[1].sll_addr[1] = 0x00;
+            upipe_udpsink->peer_addr[1].sll_addr[2] = 0x5e;
+            upipe_udpsink->peer_addr[1].sll_addr[3] = (ip >> 16) & 0x7f;
+            upipe_udpsink->peer_addr[1].sll_addr[4] = (ip >>  8) & 0xff;
+            upipe_udpsink->peer_addr[1].sll_addr[5] = (ip      ) & 0xff;
+        }
     }
 
     upipe_notice_va(upipe, "opening uri %s", upipe_udpsink->uri);
