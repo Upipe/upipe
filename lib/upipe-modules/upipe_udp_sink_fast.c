@@ -381,6 +381,7 @@ write_buffer:
             int mmap_frame = (i + upipe_udpsink->frame_num) % MMAP_FRAME_NUM;
             /* Get next frame to be used. */
             union frame_map frame = { .raw = upipe_udpsink->mmap[which_fd] + mmap_frame * MMAP_FRAME_SIZE };
+            uint8_t *data = frame.v1->data;
 
             /* Fill in mmap stuff. */
             frame.v1->tph.tp_snaplen = frame.v1->tph.tp_len = RAW_HEADER_SIZE + payload_len;
@@ -389,18 +390,18 @@ write_buffer:
             /* TODO: check for errors. */
 
             /* Fill in IP and UDP headers. */
-            memcpy(frame.v1->data, upipe_udpsink->raw_header[which_fd], RAW_HEADER_SIZE);
-            udp_raw_set_len(frame.v1->data, payload_len);
+            memcpy(data, upipe_udpsink->raw_header[which_fd], RAW_HEADER_SIZE);
+            udp_raw_set_len(data, payload_len);
+            data += RAW_HEADER_SIZE;
 
             /* TODO: RTP headers. */
 
             const int32_t *local_src = src + 6 * channels * i;
-            uint8_t *dst = frame.v1->data + RAW_HEADER_SIZE;
             for (int j = 0; j < 6 * channels; j++) {
                 int32_t sample = local_src[j];
-                dst[3*j+0] = (sample >> 24) & 0xff;
-                dst[3*j+1] = (sample >> 16) & 0xff;
-                dst[3*j+2] = (sample >>  8) & 0xff;
+                data[3*j+0] = (sample >> 24) & 0xff;
+                data[3*j+1] = (sample >> 16) & 0xff;
+                data[3*j+2] = (sample >>  8) & 0xff;
             }
         }
 
