@@ -41,7 +41,7 @@
 #include <upipe/uprobe.h>
 #include <upipe/uclock.h>
 #include <upipe/uref.h>
-#include <upipe/uref_block.h>
+#include <upipe/uref_sound.h>
 #include <upipe/uref_clock.h>
 #include <upipe/ubuf.h>
 #include <upipe/upipe.h>
@@ -73,7 +73,7 @@
 /** print late packets */
 #define SYSTIME_PRINT (UCLOCK_FREQ / 100)
 /** expected flow definition on all flows */
-#define EXPECTED_FLOW_DEF    "block."
+#define EXPECTED_FLOW_DEF    "sound."
 
 #define UDP_DEFAULT_TTL 0
 #define UDP_DEFAULT_PORT 1234
@@ -187,17 +187,20 @@ static void *run_thread(void *upipe_pointer)
         }
         uref = uref_from_uchain(uchain);
 
+        size_t samples = 0;
+        if (unlikely(!ubase_check(uref_sound_size(uref, &samples, NULL)))) {
+            upipe_warn(upipe, "cannot read uref size");
+            uref_free(uref);
+            continue;
+        }
+
         upipe_udpsink_output(upipe, uref, NULL, 0);
         upipe_udpsink_output(upipe, uref, NULL, 1);
         /* TODO: what to do if the output doesn't use the uref? */
 
-        size_t num_frames = 0, payload_len = 0;
-        if (likely(ubase_check(uref_block_size(uref, &payload_len)))) {
-            num_frames = payload_len / 288;
-            if (payload_len % 288)
-                upipe_warn(upipe, "not whole uref consumed");
-            num_frames = payload_len / 288;
-        }
+        if (samples % 6)
+            upipe_warn(upipe, "not whole uref consumed");
+        size_t num_frames = samples / 6;
         upipe_udpsink->frame_num = (upipe_udpsink->frame_num + num_frames) % MMAP_FRAME_NUM;
         uref_free(uref);
     }
@@ -351,18 +354,27 @@ static bool upipe_udpsink_output(struct upipe *upipe, struct uref *uref,
 
 write_buffer:
     for ( ; ; ) {
-        size_t payload_len = 0;
-        if (unlikely(!ubase_check(uref_block_size(uref, &payload_len)))) {
-            upipe_warn(upipe, "cannot read ubuf size");
+        size_t samples = 0;
+        uint8_t channels = 0;
+        if (unlikely(!ubase_check(uref_sound_size(uref, &samples, &channels)))) {
+            upipe_warn(upipe, "cannot read uref size");
             return false;
         }
+        channels /= 4;
 
-        int num_frames = payload_len / 288;
+        int num_frames = samples / 6;
         if (num_frames > MMAP_FRAME_NUM) {
             upipe_err(upipe, "uref too big");
             return false;
         }
 
+        const int32_t *src = NULL;
+        if (unlikely(!ubase_check(uref_sound_read_int32_t(uref, 0, -1, &src, 1)))) {
+            upipe_err(upipe, "unable to map uref");
+            return false;
+        }
+
+        int payload_len = 3 * channels * 6;
         /* Populate the frames. */
         for (int i = 0; i < num_frames; i++) {
             int mmap_frame = (i + upipe_udpsink->frame_num) % MMAP_FRAME_NUM;
@@ -370,24 +382,28 @@ write_buffer:
             union frame_map frame = { .raw = upipe_udpsink->mmap[which_fd] + mmap_frame * MMAP_FRAME_SIZE };
 
             /* Fill in mmap stuff. */
-            frame.v1->tph.tp_snaplen = frame.v1->tph.tp_len = RAW_HEADER_SIZE + 288;
+            frame.v1->tph.tp_snaplen = frame.v1->tph.tp_len = RAW_HEADER_SIZE + payload_len;
             frame.v1->tph.tp_net = offsetof(struct v1, data);
             frame.v1->tph.tp_status = TP_STATUS_SEND_REQUEST;
             /* TODO: check for errors. */
 
             /* Fill in IP and UDP headers. */
             memcpy(frame.v1->data, upipe_udpsink->raw_header[which_fd], RAW_HEADER_SIZE);
-            udp_raw_set_len(frame.v1->data, 288);
+            udp_raw_set_len(frame.v1->data, payload_len);
 
             /* TODO: RTP headers. */
 
-            int err = uref_block_extract(uref, 288*i, 288,
-                    frame.v1->data + RAW_HEADER_SIZE);
-            if (!ubase_check(err)) {
-                upipe_throw_error(upipe, err);
-                return false;
+            const int32_t *local_src = src + 6 * channels * i;
+            uint8_t *dst = frame.v1->data + RAW_HEADER_SIZE;
+            for (int j = 0; j < 6 * channels; j++) {
+                int32_t sample = local_src[j];
+                dst[3*j+0] = (sample >> 24) & 0xff;
+                dst[3*j+1] = (sample >> 16) & 0xff;
+                dst[3*j+2] = (sample >>  8) & 0xff;
             }
         }
+
+        uref_sound_unmap(uref, 0, -1, 1);
 
         ssize_t ret = sendto(upipe_udpsink->fd[which_fd], NULL, 0, 0,
                 (struct sockaddr*)&upipe_udpsink->peer_addr[which_fd], sizeof upipe_udpsink->peer_addr[which_fd]);
