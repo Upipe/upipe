@@ -69,6 +69,8 @@
 #include <assert.h>
 #include <pthread.h>
 
+#include <bitstream/ietf/rtp.h>
+
 /** tolerance for late packets */
 #define SYSTIME_TOLERANCE UCLOCK_FREQ
 /** print late packets */
@@ -106,6 +108,8 @@ struct upipe_udpsink {
     size_t mmap_size[2];
     int frame_num;
     struct sockaddr_ll peer_addr[2];
+
+    uint16_t seqnum;
 
     struct uchain ulist;
 
@@ -203,6 +207,7 @@ static void *run_thread(void *upipe_pointer)
             upipe_warn(upipe, "not whole uref consumed");
         size_t num_frames = samples / 6;
         upipe_udpsink->frame_num = (upipe_udpsink->frame_num + num_frames) % MMAP_FRAME_NUM;
+        upipe_udpsink->seqnum += num_frames;
         uref_free(uref);
     }
 
@@ -290,7 +295,7 @@ static struct upipe *upipe_udpsink_alloc(struct upipe_mgr *mgr,
             .sll_halen = ETH_ALEN,
             .sll_addr = {0xff,0xff,0xff,0xff,0xff,0xff}, /* TODO: get right one? */
         };
-
+    upipe_udpsink->seqnum = 0;
 
     ulist_init(&upipe_udpsink->ulist);
     uatomic_init(&upipe_udpsink->stop, 0);
@@ -355,6 +360,9 @@ static bool upipe_udpsink_output(struct upipe *upipe, struct uref *uref,
 
 write_buffer:
     for ( ; ; ) {
+        lldiv_t div = lldiv(systime, UCLOCK_FREQ);
+        uint32_t ts = div.quot * 48000 + ((uint64_t)div.rem * 48000)/UCLOCK_FREQ;
+
         size_t samples = 0;
         uint8_t channels = 0;
         if (unlikely(!ubase_check(uref_sound_size(uref, &samples, &channels)))) {
@@ -375,7 +383,7 @@ write_buffer:
             return false;
         }
 
-        int payload_len = 3 * channels * 6;
+        int payload_len = 3 * channels * 6 + RTP_HEADER_SIZE;
         /* Populate the frames. */
         for (int i = 0; i < num_frames; i++) {
             int mmap_frame = (i + upipe_udpsink->frame_num) % MMAP_FRAME_NUM;
@@ -394,7 +402,13 @@ write_buffer:
             udp_raw_set_len(data, payload_len);
             data += RAW_HEADER_SIZE;
 
-            /* TODO: RTP headers. */
+            /* FIll in RTP headers. */
+            memset(data, 0, RTP_HEADER_SIZE);
+            rtp_set_hdr(data);
+            rtp_set_type(data, 97);
+            rtp_set_seqnum(data, upipe_udpsink->seqnum + i);
+            rtp_set_timestamp(data, ts + 6*i);
+            data += RTP_HEADER_SIZE;
 
             const int32_t *local_src = src + 6 * channels * i;
             for (int j = 0; j < 6 * channels; j++) {
