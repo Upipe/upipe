@@ -126,6 +126,11 @@ static bool upipe_speexdsp_handle(struct upipe *upipe, struct uref *uref,
 {
     struct upipe_speexdsp *upipe_speexdsp = upipe_speexdsp_from_upipe(upipe);
 
+    if (!upipe_speexdsp->ubuf_mgr) {
+        upipe_warn(upipe, "no ubuf_mgr, holding input uref");
+        return false;
+    }
+
     struct urational drift_rate;
     if (!ubase_check(uref_clock_get_rate(uref, &drift_rate)))
         drift_rate = (struct urational){ 1, 1 };
