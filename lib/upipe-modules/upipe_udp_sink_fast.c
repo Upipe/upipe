@@ -112,6 +112,7 @@ struct upipe_udpsink {
     uint32_t timestamp;
     uint16_t seqnum;
     uint8_t audio_data[6 * 16 * 3];
+    int cached_samples;
 
     struct uchain ulist;
 
@@ -216,7 +217,8 @@ static void *run_thread(void *upipe_pointer)
             continue;
         }
         channels /= 4;
-        int num_frames = samples / 6;
+
+        int num_frames = (samples + upipe_udpsink->cached_samples) / 6;
         /* TODO: Is this check still needed. */
         if (num_frames > MMAP_FRAME_NUM) {
             upipe_err(upipe, "uref too big");
@@ -232,12 +234,28 @@ static void *run_thread(void *upipe_pointer)
             continue;
         }
 
+        /* Add any cached samples. */
+        samples += upipe_udpsink->cached_samples;
+        /* Rewind source pointer for any cached samples. */
+        src -= upipe_udpsink->cached_samples * channels;
+
         /* Make output packets. */
         uint8_t *data = upipe_udpsink->audio_data;
         for (int i = 0; i < num_frames; i++) {
             /* Pack audio data. */
             const int32_t *local_src = src + 6 * channels * i;
-            for (int j = 0; j < 6 * channels; j++) {
+
+            if (upipe_udpsink->cached_samples) {
+                for (int j = upipe_udpsink->cached_samples * channels; j < 6 * channels; j++) {
+                    int32_t sample = local_src[j];
+                    data[3*j+0] = (sample >> 24) & 0xff;
+                    data[3*j+1] = (sample >> 16) & 0xff;
+                    data[3*j+2] = (sample >>  8) & 0xff;
+                }
+                upipe_udpsink->cached_samples = 0;
+            }
+
+            else for (int j = 0; j < 6 * channels; j++) {
                 int32_t sample = local_src[j];
                 data[3*j+0] = (sample >> 24) & 0xff;
                 data[3*j+1] = (sample >> 16) & 0xff;
@@ -275,11 +293,20 @@ static void *run_thread(void *upipe_pointer)
             systime += 125 * 27;
         }
 
+        if (samples % 6) {
+            /* Pack tail of uref into buffer. */
+            const int32_t *local_src = src + 6 * channels * num_frames;
+            for (int j = 0; j < (samples % 6) * 16; j++) {
+                int32_t sample = local_src[j];
+                data[3*j+0] = (sample >> 24) & 0xff;
+                data[3*j+1] = (sample >> 16) & 0xff;
+                data[3*j+2] = (sample >>  8) & 0xff;
+            }
+            upipe_udpsink->cached_samples = samples % 6;
+        }
+
         uref_sound_unmap(uref, 0, -1, 1);
         uref_free(uref);
-
-        if (samples % 6)
-            upipe_warn(upipe, "not whole uref consumed");
     }
 
     upipe_notice(upipe, "exiting run_thread");
@@ -367,6 +394,7 @@ static struct upipe *upipe_udpsink_alloc(struct upipe_mgr *mgr,
             .sll_addr = {0xff,0xff,0xff,0xff,0xff,0xff}, /* TODO: get right one? */
         };
     upipe_udpsink->seqnum = 0;
+    upipe_udpsink->cached_samples = 0;
 
     ulist_init(&upipe_udpsink->ulist);
     uatomic_init(&upipe_udpsink->stop, 0);
