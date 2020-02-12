@@ -573,7 +573,7 @@ static int _upipe_udpsink_set_uri(struct upipe *upipe, const char *uri)
     if (ip_addr)
         *ip_addr++ = '\0'; /*extract the IP address */
 
-    dst_ip = inet_addr(ip_addr);
+    dst_ip = inet_addr(uri_a);
     ip_addr[-1] = ':'; /* Restore : character. */
 
     if (IN_MULTICAST(ntohl(dst_ip))) {
@@ -612,7 +612,7 @@ static int _upipe_udpsink_set_uri(struct upipe *upipe, const char *uri)
         if (ip_addr)
             *ip_addr++ = '\0'; /*extract the IP address */
 
-        dst_ip = inet_addr(ip_addr);
+        dst_ip = inet_addr(uri_b);
         ip_addr[-1] = ':'; /* Restore : character. */
 
         if (IN_MULTICAST(ntohl(dst_ip))) {
