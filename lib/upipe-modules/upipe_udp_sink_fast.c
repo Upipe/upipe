@@ -197,7 +197,6 @@ static void *run_thread(void *upipe_pointer)
         /* TODO: check uclock exists, and fds are open. */
 
         /* Get output time. */
-        uint64_t now = uclock_now(upipe_udpsink->uclock);
         uint64_t systime = 0;
         if (unlikely(!ubase_check(uref_clock_get_cr_sys(uref, &systime)))) {
             upipe_warn(upipe, "received non-dated buffer");
@@ -246,6 +245,7 @@ static void *run_thread(void *upipe_pointer)
             }
 
             /* Sleep until packet is due. */
+            uint64_t now = uclock_now(upipe_udpsink->uclock);
             if (now < systime) {
                 struct timespec wait = { .tv_nsec = (systime - now) * 1000 / 27 };
                 struct timespec left = { 0 };
