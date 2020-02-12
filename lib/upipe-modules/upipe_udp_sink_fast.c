@@ -106,7 +106,7 @@ struct upipe_udpsink {
 
     void *mmap[2];
     size_t mmap_size[2];
-    int frame_num;
+    int mmap_frame_num;
     struct sockaddr_ll peer_addr[2];
 
     uint32_t timestamp;
@@ -269,7 +269,7 @@ static void *run_thread(void *upipe_pointer)
             upipe_udpsink_output(upipe, uref, NULL, 1);
 
             /* Adjust per packet values. */
-            upipe_udpsink->frame_num = (upipe_udpsink->frame_num + 1) % MMAP_FRAME_NUM;
+            upipe_udpsink->mmap_frame_num = (upipe_udpsink->mmap_frame_num + 1) % MMAP_FRAME_NUM;
             upipe_udpsink->seqnum += 1;
             upipe_udpsink->timestamp += 6;
             systime += 125 * 27;
@@ -358,7 +358,7 @@ static struct upipe *upipe_udpsink_alloc(struct upipe_mgr *mgr,
 
     upipe_udpsink->mmap[0] = upipe_udpsink->mmap[1] = MAP_FAILED;
     upipe_udpsink->mmap_size[0] = upipe_udpsink->mmap_size[1] = 0;
-    upipe_udpsink->frame_num = 0;
+    upipe_udpsink->mmap_frame_num = 0;
     upipe_udpsink->peer_addr[0] = upipe_udpsink->peer_addr[1] =
         (struct sockaddr_ll) {
             .sll_family = AF_PACKET,
@@ -391,7 +391,7 @@ static bool upipe_udpsink_output(struct upipe *upipe, struct uref *uref,
         int payload_len = 288 + RTP_HEADER_SIZE;
 
             /* Get next frame to be used. */
-            union frame_map frame = { .raw = upipe_udpsink->mmap[which_fd] + upipe_udpsink->frame_num * MMAP_FRAME_SIZE };
+            union frame_map frame = { .raw = upipe_udpsink->mmap[which_fd] + upipe_udpsink->mmap_frame_num * MMAP_FRAME_SIZE };
             uint8_t *data = frame.v1->data;
 
             /* Fill in mmap stuff. */
