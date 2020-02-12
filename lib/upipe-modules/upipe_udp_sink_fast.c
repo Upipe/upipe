@@ -32,13 +32,17 @@
 #include <pthread.h>
 #include <sched.h>
 #include <netinet/in.h>
+#include <sys/mman.h>
+#include <linux/if_packet.h>
+#include <linux/if_ether.h>
+#include <arpa/inet.h>
 
 #include <upipe/ubase.h>
 #include <upipe/ulist.h>
 #include <upipe/uprobe.h>
 #include <upipe/uclock.h>
 #include <upipe/uref.h>
-#include <upipe/uref_block.h>
+#include <upipe/uref_sound.h>
 #include <upipe/uref_clock.h>
 #include <upipe/ubuf.h>
 #include <upipe/upipe.h>
@@ -65,19 +69,21 @@
 #include <assert.h>
 #include <pthread.h>
 
+#include <bitstream/ietf/rtp.h>
+
 /** tolerance for late packets */
 #define SYSTIME_TOLERANCE UCLOCK_FREQ
 /** print late packets */
 #define SYSTIME_PRINT (UCLOCK_FREQ / 100)
 /** expected flow definition on all flows */
-#define EXPECTED_FLOW_DEF    "block."
+#define EXPECTED_FLOW_DEF    "sound."
 
 #define UDP_DEFAULT_TTL 0
 #define UDP_DEFAULT_PORT 1234
 
 /** @hidden */
 static bool upipe_udpsink_output(struct upipe *upipe, struct uref *uref,
-                                 struct upump **upump_p);
+                                 struct upump **upump_p, int which_fd);
 
 /** @internal @This is the private context of a udp sink pipe. */
 struct upipe_udpsink {
@@ -98,6 +104,16 @@ struct upipe_udpsink {
     /** interface indicies. */
     int ifindex[2];
 
+    void *mmap[2];
+    size_t mmap_size[2];
+    int mmap_frame_num;
+    struct sockaddr_ll peer_addr[2];
+
+    uint32_t timestamp;
+    uint16_t seqnum;
+    uint8_t audio_data[6 * 16 * 3];
+    int cached_samples;
+
     struct uchain ulist;
 
     bool thread_created;
@@ -117,6 +133,36 @@ struct upipe_udpsink {
 
     /** public upipe structure */
     struct upipe upipe;
+};
+
+/*
+   Frame structure:
+
+   - Start. Frame must be aligned to TPACKET_ALIGNMENT=16
+   - struct tpacket_hdr
+   - pad to TPACKET_ALIGNMENT=16
+   - struct sockaddr_ll
+   - Gap, chosen so that packet data (Start+tp_net) alignes to TPACKET_ALIGNMENT=16
+   - Start+tp_mac: [ Optional MAC header ]
+   - Start+tp_net: Packet data, aligned to TPACKET_ALIGNMENT=16.
+   - Pad to align to TPACKET_ALIGNMENT=16
+*/
+
+#ifndef __aligned_tpacket
+# define __aligned_tpacket	__attribute__((aligned(TPACKET_ALIGNMENT)))
+#endif
+
+#ifndef __align_tpacket
+# define __align_tpacket(x)	__attribute__((aligned(TPACKET_ALIGN(x))))
+#endif
+
+union frame_map {
+    struct v1 {
+        struct tpacket_hdr tph __attribute__((aligned(TPACKET_ALIGNMENT)));
+        //struct sockaddr_ll sll __attribute__((aligned(TPACKET_ALIGNMENT)));
+        uint8_t data[] /*__attribute__((aligned(TPACKET_ALIGNMENT)))*/;
+    } *v1;
+    void *raw;
 };
 
 UPIPE_HELPER_UPIPE(upipe_udpsink, upipe, UPIPE_UDPSINK_FAST_SIGNATURE)
@@ -149,10 +195,118 @@ static void *run_thread(void *upipe_pointer)
         }
         uref = uref_from_uchain(uchain);
 
-        if (!upipe_udpsink_output(upipe, uref, NULL)) {
-            /* TODO: what to do if the output doesn't use the uref? */
-            uref_free(uref);
+        /* TODO: check uclock exists, and fds are open. */
+
+        /* Get output time. */
+        uint64_t systime = 0;
+        if (unlikely(!ubase_check(uref_clock_get_cr_sys(uref, &systime)))) {
+            upipe_warn(upipe, "received non-dated buffer");
         }
+        systime += upipe_udpsink->latency;
+
+        /* Get RTP timestamp. */
+        lldiv_t div = lldiv(systime, UCLOCK_FREQ);
+        upipe_udpsink->timestamp = div.quot * 48000 + ((uint64_t)div.rem * 48000)/UCLOCK_FREQ;
+
+        /* Check size. */
+        size_t samples = 0;
+        uint8_t channels = 0;
+        if (unlikely(!ubase_check(uref_sound_size(uref, &samples, &channels)))) {
+            upipe_warn(upipe, "cannot read uref size");
+            uref_free(uref);
+            continue;
+        }
+        channels /= 4;
+
+        int num_frames = (samples + upipe_udpsink->cached_samples) / 6;
+        /* TODO: Is this check still needed. */
+        if (num_frames > MMAP_FRAME_NUM) {
+            upipe_err(upipe, "uref too big");
+            uref_free(uref);
+            continue;
+        }
+
+        /* Map uref. */
+        const int32_t *src = NULL;
+        if (unlikely(!ubase_check(uref_sound_read_int32_t(uref, 0, -1, &src, 1)))) {
+            upipe_err(upipe, "unable to map uref");
+            uref_free(uref);
+            continue;
+        }
+
+        /* Add any cached samples. */
+        samples += upipe_udpsink->cached_samples;
+        /* Rewind source pointer for any cached samples. */
+        src -= upipe_udpsink->cached_samples * channels;
+
+        /* Make output packets. */
+        uint8_t *data = upipe_udpsink->audio_data;
+        for (int i = 0; i < num_frames; i++) {
+            /* Pack audio data. */
+            const int32_t *local_src = src + 6 * channels * i;
+
+            if (upipe_udpsink->cached_samples) {
+                for (int j = upipe_udpsink->cached_samples * channels; j < 6 * channels; j++) {
+                    int32_t sample = local_src[j];
+                    data[3*j+0] = (sample >> 24) & 0xff;
+                    data[3*j+1] = (sample >> 16) & 0xff;
+                    data[3*j+2] = (sample >>  8) & 0xff;
+                }
+                upipe_udpsink->cached_samples = 0;
+            }
+
+            else for (int j = 0; j < 6 * channels; j++) {
+                int32_t sample = local_src[j];
+                data[3*j+0] = (sample >> 24) & 0xff;
+                data[3*j+1] = (sample >> 16) & 0xff;
+                data[3*j+2] = (sample >>  8) & 0xff;
+            }
+
+            /* Sleep until packet is due. */
+            uint64_t now = uclock_now(upipe_udpsink->uclock);
+            if (now < systime) {
+                struct timespec wait = { .tv_nsec = (systime - now) * 1000 / 27 };
+                struct timespec left = { 0 };
+                /* TODO: check remaining time. */
+                if (unlikely(nanosleep(&wait, &left))) {
+                    if (errno == EINTR)
+                        upipe_warn_va(upipe, "nanosleep interrupted, left: %ld", left.tv_nsec);
+                    else if (errno == EINVAL)
+                        upipe_err(upipe, "invalid nanosleep");
+                    else
+                        upipe_err(upipe, "unknown return");
+                }
+            } else if (now > systime + (27000))
+                upipe_warn_va(upipe,
+                        "outputting late packet %"PRIu64" us, latency %"PRIu64" us",
+                        (now - systime) / 27,
+                        upipe_udpsink->latency / 27);
+
+            /* Write packets. */
+            upipe_udpsink_output(upipe, uref, NULL, 0);
+            upipe_udpsink_output(upipe, uref, NULL, 1);
+
+            /* Adjust per packet values. */
+            upipe_udpsink->mmap_frame_num = (upipe_udpsink->mmap_frame_num + 1) % MMAP_FRAME_NUM;
+            upipe_udpsink->seqnum += 1;
+            upipe_udpsink->timestamp += 6;
+            systime += 125 * 27;
+        }
+
+        if (samples % 6) {
+            /* Pack tail of uref into buffer. */
+            const int32_t *local_src = src + 6 * channels * num_frames;
+            for (int j = 0; j < (samples % 6) * 16; j++) {
+                int32_t sample = local_src[j];
+                data[3*j+0] = (sample >> 24) & 0xff;
+                data[3*j+1] = (sample >> 16) & 0xff;
+                data[3*j+2] = (sample >>  8) & 0xff;
+            }
+            upipe_udpsink->cached_samples = samples % 6;
+        }
+
+        uref_sound_unmap(uref, 0, -1, 1);
+        uref_free(uref);
     }
 
     upipe_notice(upipe, "exiting run_thread");
@@ -229,6 +383,19 @@ static struct upipe *upipe_udpsink_alloc(struct upipe_mgr *mgr,
     upipe_udpsink->thread_created = false;
     pthread_mutex_init(&upipe_udpsink->mutex, NULL);
 
+    upipe_udpsink->mmap[0] = upipe_udpsink->mmap[1] = MAP_FAILED;
+    upipe_udpsink->mmap_size[0] = upipe_udpsink->mmap_size[1] = 0;
+    upipe_udpsink->mmap_frame_num = 0;
+    upipe_udpsink->peer_addr[0] = upipe_udpsink->peer_addr[1] =
+        (struct sockaddr_ll) {
+            .sll_family = AF_PACKET,
+            .sll_protocol = htons(ETH_P_IP),
+            .sll_halen = ETH_ALEN,
+            .sll_addr = {0xff,0xff,0xff,0xff,0xff,0xff}, /* TODO: get right one? */
+        };
+    upipe_udpsink->seqnum = 0;
+    upipe_udpsink->cached_samples = 0;
+
     ulist_init(&upipe_udpsink->ulist);
     uatomic_init(&upipe_udpsink->stop, 0);
 
@@ -244,155 +411,40 @@ static struct upipe *upipe_udpsink_alloc(struct upipe_mgr *mgr,
  * @return true if the uref was processed
  */
 static bool upipe_udpsink_output(struct upipe *upipe, struct uref *uref,
-                                 struct upump **upump_p)
+                                 struct upump **upump_p, int which_fd)
 {
     struct upipe_udpsink *upipe_udpsink = upipe_udpsink_from_upipe(upipe);
-    int slept = 0;
 
-    if (unlikely(upipe_udpsink->fd[0] == -1)) {
-        uref_free(uref);
-        upipe_warn(upipe, "received a buffer before opening a socket");
-        return true;
-    }
-
-    if (likely(upipe_udpsink->uclock == NULL))
-        goto write_buffer;
-
-    uint64_t now = uclock_now(upipe_udpsink->uclock);
-    uint64_t systime = 0;
-    if (unlikely(!ubase_check(uref_clock_get_cr_sys(uref, &systime)))) {
-        upipe_warn(upipe, "received non-dated buffer");
-        goto write_buffer;
-    }
-
-    if (now < systime) {
-#if 0
-        useconds_t wait = (systime - now) / 27;
-        usleep(wait);
-#else
-        struct timespec wait = { .tv_nsec = (systime - now) * 1000 / 27 };
-        struct timespec left = { 0 };
-        slept = wait.tv_nsec / 1000;
-        /* TODO: check return value and remaining time. */
-        if (unlikely(nanosleep(&wait, &left))) {
-            if (errno == EINTR)
-                upipe_warn_va(upipe, "nanosleep interrupted, left: %ld", left.tv_nsec);
-            else if (errno == EINVAL)
-                upipe_err(upipe, "invalid nanosleep");
-            else
-                upipe_err(upipe, "unknown return");
-        } else {
-            //upipe_dbg_va(upipe, "waited %ld ns", wait.tv_nsec);
-        }
-#endif
-    } else if (now > systime + (27000))
-        upipe_warn_va(upipe,
-                      "outputting late packet %"PRIu64" us, latency %"PRIu64" us slept %u us",
-                      (now - systime) / 27,
-                      upipe_udpsink->latency / 27, slept);
-
-write_buffer:
     for ( ; ; ) {
-        size_t payload_len = 0;
-        if (unlikely(!ubase_check(uref_block_size(uref, &payload_len)))) {
-            upipe_warn(upipe, "cannot read ubuf size");
-            return false;
-        }
+        int payload_len = 288 + RTP_HEADER_SIZE;
 
-        int iovec_count = uref_block_iovec_count(uref, 0, -1);
-        if (unlikely(iovec_count == -1)) {
-            uref_free(uref);
-            upipe_warn(upipe, "cannot read ubuf buffer");
-            break;
-        }
-        if (unlikely(iovec_count == 0)) {
-            uref_free(uref);
-            break;
-        }
+            /* Get next frame to be used. */
+            union frame_map frame = { .raw = upipe_udpsink->mmap[which_fd] + upipe_udpsink->mmap_frame_num * MMAP_FRAME_SIZE };
+            uint8_t *data = frame.v1->data;
 
-        if (upipe_udpsink->raw) {
-            iovec_count++;
-        }
+            /* Fill in mmap stuff. */
+            frame.v1->tph.tp_snaplen = frame.v1->tph.tp_len = RAW_HEADER_SIZE + payload_len;
+            frame.v1->tph.tp_net = offsetof(struct v1, data);
+            frame.v1->tph.tp_status = TP_STATUS_SEND_REQUEST;
+            /* TODO: check for errors. */
 
-        struct iovec iovecs_s[2][iovec_count];
-        struct iovec *iovecs = iovecs_s[0];
+            /* Fill in IP and UDP headers. */
+            memcpy(data, upipe_udpsink->raw_header[which_fd], RAW_HEADER_SIZE);
+            udp_raw_set_len(data, payload_len);
+            data += RAW_HEADER_SIZE;
 
-        if (upipe_udpsink->raw) {
-            udp_raw_set_len(upipe_udpsink->raw_header[0], payload_len);
-            iovecs[0].iov_base = upipe_udpsink->raw_header[0];
-            iovecs[0].iov_len = RAW_HEADER_SIZE;
-            iovecs++;
-        }
+            /* FIll in RTP headers. */
+            memset(data, 0, RTP_HEADER_SIZE);
+            rtp_set_hdr(data);
+            rtp_set_type(data, 97);
+            rtp_set_seqnum(data, upipe_udpsink->seqnum);
+            rtp_set_timestamp(data, upipe_udpsink->timestamp);
+            data += RTP_HEADER_SIZE;
 
-        if (unlikely(!ubase_check(uref_block_iovec_read(uref, 0, -1, iovecs)))) {
-            uref_free(uref);
-            upipe_warn(upipe, "cannot read ubuf buffer");
-            break;
-        }
+        memcpy(data, upipe_udpsink->audio_data, 288);
 
-        /* Fill in second iovec array, copy structs for the mapped uref. */
-        for (int i = 0; i < iovec_count; i++)
-            iovecs_s[1][i] = iovecs_s[0][i];
-        /* Set second header correctly. */
-        if (upipe_udpsink->raw) {
-            udp_raw_set_len(upipe_udpsink->raw_header[1], payload_len);
-            iovecs_s[1][0].iov_base = upipe_udpsink->raw_header[1];
-            iovecs_s[1][0].iov_len = RAW_HEADER_SIZE;
-        }
-
-        /* ancillary data, control message, actual buffer space */
-        union {
-            struct cmsghdr header;
-            unsigned char buffer[CMSG_SPACE(sizeof(struct in_pktinfo))];
-        } control_data[2];
-        memset(&control_data, 0, sizeof control_data);
-
-        /* message, message header */
-        struct mmsghdr mmsghdr[2] = { { .msg_hdr = {
-            .msg_name = upipe_udpsink->addrlen ? &upipe_udpsink->addr : NULL,
-            .msg_namelen = upipe_udpsink->addrlen,
-
-            .msg_iov = iovecs_s[0],
-            .msg_iovlen = iovec_count,
-
-            .msg_control = &control_data[0],
-            .msg_controllen = sizeof control_data[0],
-            .msg_flags = 0,
-        } }, { .msg_hdr = {
-            .msg_name = upipe_udpsink->addrlen ? &upipe_udpsink->addr : NULL,
-            .msg_namelen = upipe_udpsink->addrlen,
-
-            .msg_iov = iovecs_s[1],
-            .msg_iovlen = iovec_count,
-
-            .msg_control = &control_data[1],
-            .msg_controllen = sizeof control_data[1],
-            .msg_flags = 0,
-        } } };
-
-        /* A pointer to previous for some reason. */
-        struct cmsghdr *control_message_p = CMSG_FIRSTHDR(&mmsghdr[0].msg_hdr);
-
-        /* Fill in control message header, cmsghdr. */
-        control_message_p->cmsg_level = IPPROTO_IP;
-        control_message_p->cmsg_type = IP_PKTINFO;
-        control_message_p->cmsg_len = CMSG_LEN(sizeof(struct in_pktinfo));
-
-        /* Set ifindex in the control message. */
-        struct in_pktinfo *pktinfo = (struct in_pktinfo*)CMSG_DATA(control_message_p);
-        pktinfo->ipi_ifindex = upipe_udpsink->ifindex[0];
-
-        /* Fill in second control message. */
-        control_message_p = CMSG_FIRSTHDR(&mmsghdr[1].msg_hdr);
-        control_message_p->cmsg_level = IPPROTO_IP;
-        control_message_p->cmsg_type = IP_PKTINFO;
-        control_message_p->cmsg_len = CMSG_LEN(sizeof(struct in_pktinfo));
-        pktinfo = (struct in_pktinfo*)CMSG_DATA(control_message_p);
-        pktinfo->ipi_ifindex = upipe_udpsink->ifindex[1];
-
-        ssize_t ret = sendmmsg(upipe_udpsink->fd[0], mmsghdr, 2, 0);
-        uref_block_iovec_unmap(uref, 0, -1, iovecs);
-
+        ssize_t ret = sendto(upipe_udpsink->fd[which_fd], NULL, 0, 0,
+                (struct sockaddr*)&upipe_udpsink->peer_addr[which_fd], sizeof upipe_udpsink->peer_addr[which_fd]);
         if (unlikely(ret == -1)) {
             switch (errno) {
                 case EINTR:
@@ -416,7 +468,6 @@ write_buffer:
              * "port unreachable", and we do not want to kill the application
              * with transient errors. */
         }
-        uref_free(uref);
         break;
     }
 
@@ -447,6 +498,9 @@ static void upipe_udpsink_input(struct upipe *upipe, struct uref *uref,
     if (unlikely(!ubase_check(uref_clock_get_cr_sys(uref, &systime)))) {
         upipe_warn(upipe, "received non-dated buffer");
     }
+
+    uref_clock_set_cr_dts_delay(uref, 0);
+    uref_clock_set_dts_pts_delay(uref, 0);
 
     pthread_mutex_lock(&upipe_udpsink->mutex);
     ulist_add(&upipe_udpsink->ulist, uref_to_uchain(uref));
@@ -502,6 +556,7 @@ static int _upipe_udpsink_set_uri(struct upipe *upipe, const char *uri)
 {
     struct upipe_udpsink *upipe_udpsink = upipe_udpsink_from_upipe(upipe);
     bool use_tcp = false;
+    in_addr_t dst_ip;
 
     if (unlikely(upipe_udpsink->fd[0] != -1)) {
         if (likely(upipe_udpsink->uri != NULL))
@@ -515,7 +570,7 @@ static int _upipe_udpsink_set_uri(struct upipe *upipe, const char *uri)
     if (unlikely(uri == NULL))
         return UBASE_ERR_NONE;
 
-    char *uri_a, *uri_b;
+    char *uri_a, *uri_b, *ip_addr;
     upipe_udpsink->uri = uri_a = strdup(uri);
     UBASE_ALLOC_RETURN(uri_a);
 
@@ -533,6 +588,32 @@ static int _upipe_udpsink_set_uri(struct upipe *upipe, const char *uri)
         return UBASE_ERR_EXTERNAL;
     }
 
+    upipe_udpsink->mmap_size[0] = MMAP_BLOCK_SIZE * MMAP_BLOCK_NUM;
+    upipe_udpsink->mmap[0] = mmap(0, upipe_udpsink->mmap_size[0], PROT_READ | PROT_WRITE,
+            MAP_SHARED, upipe_udpsink->fd[0], 0);
+    if (upipe_udpsink->mmap[0] == MAP_FAILED) {
+        upipe_err_va(upipe, "unable to mmap: %m");
+        return UBASE_ERR_EXTERNAL;
+    }
+    upipe_udpsink->peer_addr[0].sll_ifindex = upipe_udpsink->ifindex[0];
+
+    ip_addr = strchr(uri_a, ':');
+    if (ip_addr)
+        *ip_addr++ = '\0'; /*extract the IP address */
+
+    dst_ip = inet_addr(uri_a);
+    ip_addr[-1] = ':'; /* Restore : character. */
+
+    if (IN_MULTICAST(ntohl(dst_ip))) {
+        uint32_t ip = ntohl(dst_ip);
+        upipe_udpsink->peer_addr[0].sll_addr[0] = 0x01;
+        upipe_udpsink->peer_addr[0].sll_addr[1] = 0x00;
+        upipe_udpsink->peer_addr[0].sll_addr[2] = 0x5e;
+        upipe_udpsink->peer_addr[0].sll_addr[3] = (ip >> 16) & 0x7f;
+        upipe_udpsink->peer_addr[0].sll_addr[4] = (ip >>  8) & 0xff;
+        upipe_udpsink->peer_addr[0].sll_addr[5] = (ip      ) & 0xff;
+    }
+
     /* Open 2nd socket. */
     if (uri_b) {
         uri_b[-1] = '+'; /* Restore + character. */
@@ -544,6 +625,32 @@ static int _upipe_udpsink_set_uri(struct upipe *upipe, const char *uri)
             upipe_err_va(upipe, "can't open uri %s", uri_b);
             ubase_clean_fd(&upipe_udpsink->fd[0]);
             return UBASE_ERR_EXTERNAL;
+        }
+
+        upipe_udpsink->mmap_size[1] = MMAP_BLOCK_SIZE * MMAP_BLOCK_NUM;
+        upipe_udpsink->mmap[1] = mmap(0, upipe_udpsink->mmap_size[1], PROT_READ | PROT_WRITE,
+                MAP_SHARED, upipe_udpsink->fd[1], 0);
+        if (upipe_udpsink->mmap[1] == MAP_FAILED) {
+            upipe_err_va(upipe, "unable to mmap: %m");
+            return UBASE_ERR_EXTERNAL;
+        }
+        upipe_udpsink->peer_addr[1].sll_ifindex = upipe_udpsink->ifindex[1];
+
+        ip_addr = strchr(uri_b, ':');
+        if (ip_addr)
+            *ip_addr++ = '\0'; /*extract the IP address */
+
+        dst_ip = inet_addr(uri_b);
+        ip_addr[-1] = ':'; /* Restore : character. */
+
+        if (IN_MULTICAST(ntohl(dst_ip))) {
+            uint32_t ip = ntohl(dst_ip);
+            upipe_udpsink->peer_addr[1].sll_addr[0] = 0x01;
+            upipe_udpsink->peer_addr[1].sll_addr[1] = 0x00;
+            upipe_udpsink->peer_addr[1].sll_addr[2] = 0x5e;
+            upipe_udpsink->peer_addr[1].sll_addr[3] = (ip >> 16) & 0x7f;
+            upipe_udpsink->peer_addr[1].sll_addr[4] = (ip >>  8) & 0xff;
+            upipe_udpsink->peer_addr[1].sll_addr[5] = (ip      ) & 0xff;
         }
     }
 

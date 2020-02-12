@@ -39,6 +39,11 @@
 #define UDP_HEADER_SIZE 8
 #define RAW_HEADER_SIZE (IP_HEADER_MINSIZE + UDP_HEADER_SIZE)
 
+#define MMAP_BLOCK_SIZE (MMAP_FRAME_SIZE * MMAP_FRAME_NUM / MMAP_BLOCK_NUM)
+#define MMAP_BLOCK_NUM  1
+#define MMAP_FRAME_SIZE 512
+#define MMAP_FRAME_NUM  320
+
 static inline void ip_set_version(uint8_t *p_ip, uint8_t version)
 {
     p_ip[0] &= ~0xf0;
