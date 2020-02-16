@@ -335,6 +335,14 @@ static int catch_demux(struct uprobe *uprobe, struct upipe *upipe,
     return true;
 }
 
+static void sighandler(struct upump *upump)
+{
+    int signal = (int)upump_get_opaque(upump, ptrdiff_t);
+    uprobe_err_va(logger, NULL, "signal %s received, exiting",
+                  strsignal(signal));
+    upipe_release(avfsrc);
+}
+
 int main(int argc, char *argv[])
 {
     int opt;
@@ -413,6 +421,16 @@ int main(int argc, char *argv[])
 
     upipe_av_init(false, uprobe_use(logger));
 
+    /* sighandler */
+    struct upump *sigint_pump = upump_alloc_signal(upump_mgr, sighandler,
+                                                   (void *)SIGINT, NULL, SIGINT);
+    upump_set_status(sigint_pump, false);
+    upump_start(sigint_pump);
+    struct upump *sigterm_pump = upump_alloc_signal(upump_mgr, sighandler,
+                                                    (void *)SIGTERM, NULL, SIGTERM);
+    upump_set_status(sigterm_pump, false);
+    upump_start(sigterm_pump);
+
     /* pipe managers */
     struct upipe_mgr *upipe_avfsink_mgr = upipe_avfsink_mgr_alloc();
     struct upipe_mgr *upipe_avfsrc_mgr = upipe_avfsrc_mgr_alloc();
@@ -450,6 +468,9 @@ int main(int argc, char *argv[])
 
     /* fire */
     upump_mgr_run(upump_mgr, NULL);
+
+    upump_free(sigint_pump);
+    upump_free(sigterm_pump);
 
     upipe_mgr_release(upipe_avfsrc_mgr); /* nop */
 
