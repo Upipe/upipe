@@ -84,6 +84,8 @@
 #define AV_CLOCK_MIN UINT32_MAX
 /** offset between DTS and (artificial) clock references */
 #define PCR_OFFSET (UCLOCK_FREQ * 3)
+/** 1/UCLOCK_FREQ time base */
+#define UCLOCK_TIME_BASE (AVRational){ 1, UCLOCK_FREQ }
 
 /** @internal @This is the private context of an avfsrc manager. */
 struct upipe_avfsrc_mgr {
@@ -597,22 +599,21 @@ static void upipe_avfsrc_worker(struct upump *upump)
         upipe_avfsrc->systime_rap = systime;
     }
 
+    av_packet_rescale_ts(&pkt, stream->time_base, UCLOCK_TIME_BASE);
+
     uint64_t dts_orig = UINT64_MAX, dts_pts_delay = 0;
-    if (pkt.dts != (int64_t)AV_NOPTS_VALUE) {
-        dts_orig = pkt.dts * stream->time_base.num * (int64_t)UCLOCK_FREQ /
-                   stream->time_base.den - INT64_MIN;
-        if (pkt.pts != (int64_t)AV_NOPTS_VALUE) {
+    if (pkt.dts != AV_NOPTS_VALUE) {
+        dts_orig = (uint64_t)pkt.dts - INT64_MIN;
+        if (pkt.pts != AV_NOPTS_VALUE) {
             if (pkt.pts < pkt.dts) {
                 upipe_warn_va(upipe, "pts in the past (pts=%"PRIi64", "
                               "dts=%"PRIi64")", pkt.pts, pkt.dts);
             } else {
-                dts_pts_delay = (pkt.pts - pkt.dts) * stream->time_base.num *
-                    UCLOCK_FREQ / stream->time_base.den;
+                dts_pts_delay = pkt.pts - pkt.dts;
             }
         }
-    } else if (pkt.pts != (int64_t)AV_NOPTS_VALUE) {
-        dts_orig = pkt.pts * stream->time_base.num * (int64_t)UCLOCK_FREQ /
-                   stream->time_base.den - INT64_MIN;
+    } else if (pkt.pts != AV_NOPTS_VALUE) {
+        dts_orig = (uint64_t)pkt.pts - INT64_MIN;
     }
 
     if (dts_orig != UINT64_MAX) {
@@ -631,11 +632,8 @@ static void upipe_avfsrc_worker(struct upump *upump)
         /* this is subtly wrong, but whatever */
         upipe_throw_clock_ref(upipe, uref, dts - PCR_OFFSET, 0);
     }
-    if (pkt.duration > 0) {
-        uint64_t duration = pkt.duration * stream->time_base.num * UCLOCK_FREQ /
-                            stream->time_base.den;
-        UBASE_FATAL(upipe, uref_clock_set_duration(uref, duration))
-    }
+    if (pkt.duration > 0)
+        UBASE_FATAL(upipe, uref_clock_set_duration(uref, pkt.duration))
     if (upipe_avfsrc->systime_rap != UINT64_MAX)
         uref_clock_set_rap_sys(uref, upipe_avfsrc->systime_rap);
 
