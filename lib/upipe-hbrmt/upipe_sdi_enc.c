@@ -741,11 +741,6 @@ static void upipe_sdi_enc_encode_line(struct upipe *upipe, int line_num, uint16_
 
     input_hsize = p->active_width;
 
-    /* Returns the total amount of samples per channel that can be put on
-     * a line, so convert that to packets */
-    unsigned max_audio_packets_per_line = UPIPE_SDI_CHANNELS_PER_GROUP * audio_packets_per_line(f);
-    /* FIXME: max_audio_packets_per_line unused */
-
     // FIXME factor out common code
 
     /* VBI F1 part 1 */
@@ -848,7 +843,7 @@ static void upipe_sdi_enc_encode_line(struct upipe *upipe, int line_num, uint16_
 
 static void upipe_hd_sdi_enc_encode_line(struct upipe *upipe, int line_num, uint16_t *dst,
     const uint8_t *planes[2][UPIPE_SDI_MAX_PLANES], int *input_strides, const unsigned int samples,
-    size_t input_hsize, size_t input_vsize)
+    size_t input_hsize, size_t input_vsize, unsigned max_audio_packets_per_line)
 {
     struct upipe_sdi_enc *upipe_sdi_enc = upipe_sdi_enc_from_upipe(upipe);
     const struct sdi_offsets_fmt *f = upipe_sdi_enc->f;
@@ -860,10 +855,6 @@ static void upipe_hd_sdi_enc_encode_line(struct upipe *upipe, int line_num, uint
     bool vbi = 0, f2 = 0;
 
     input_hsize = p->active_width;
-
-    /* Returns the total amount of samples per channel that can be put on
-     * a line, so convert that to packets */
-    unsigned max_audio_packets_per_line = UPIPE_SDI_CHANNELS_PER_GROUP * audio_packets_per_line(f);
 
     /** Line Number can never be between [0, 0] so this will work for progressive */
     /* VBI F1 part 1 */
@@ -1272,6 +1263,10 @@ static void upipe_sdi_enc_input(struct upipe *upipe, struct uref *uref,
 
     uref_pic_get_cea_708(uref, &upipe_sdi_enc->cea708, &upipe_sdi_enc->cea708_size);
 
+    /* Returns the total amount of samples per channel that can be put on
+     * a line, so convert that to packets */
+    unsigned max_audio_packets_per_line = UPIPE_SDI_CHANNELS_PER_GROUP * audio_packets_per_line(f);
+
     for (int h = 0; h < f->height; h++) {
         /* Note conversion to 1-indexed line-number */
         uint16_t *dst_line = &dst[h * f->width * 2];
@@ -1284,7 +1279,7 @@ static void upipe_sdi_enc_input(struct upipe *upipe, struct uref *uref,
         else {
             upipe_hd_sdi_enc_encode_line(upipe, h+1, dst_line,
                                          planes, input_strides, samples,
-                                         input_hsize, input_vsize);
+                                         input_hsize, input_vsize, max_audio_packets_per_line);
             upipe_sdi_enc->eav_clock += f->width;
         }
     }

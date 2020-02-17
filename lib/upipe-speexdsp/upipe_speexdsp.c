@@ -127,7 +127,7 @@ static bool upipe_speexdsp_handle(struct upipe *upipe, struct uref *uref,
     struct upipe_speexdsp *upipe_speexdsp = upipe_speexdsp_from_upipe(upipe);
 
     if (!upipe_speexdsp->ubuf_mgr) {
-        upipe_warn(upipe, "no ubuf_mgr, dropping input uref");
+        upipe_dbg(upipe, "no ubuf_mgr, dropping input uref");
         uref_free(uref);
         return true;
     }
