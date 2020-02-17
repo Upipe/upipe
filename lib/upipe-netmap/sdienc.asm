@@ -43,18 +43,18 @@ SECTION .text
 %macro planar_to_sdi_8 0
 
 ; planar_to_sdi_8(const uint8_t *y, const uint8_t *u, const uint8_t *v, uint8_t *l, const int64_t width)
-cglobal planar_to_sdi_8, 5, 5, 3, y, u, v, l, width, size
-    shr    widthq, 1
-    lea    yq, [yq + 2*widthq]
-    add    uq, widthq
-    add    vq, widthq
+cglobal planar_to_sdi_8, 5, 5, 3, y, u, v, l, pixels
+    shr    pixelsq, 1
+    lea    yq, [yq + 2*pixelsq]
+    add    uq, pixelsq
+    add    vq, pixelsq
 
-    neg    widthq
+    neg    pixelsq
 
 .loop:
-    movq   m0, [yq + widthq*2]
-    movd   m1, [uq + widthq*1]
-    movd   m2, [vq + widthq*1]
+    movq   m0, [yq + pixelsq*2]
+    movd   m1, [uq + pixelsq*1]
+    movd   m2, [vq + pixelsq*1]
 
     pshufb m0, [planar_8_y_shuf]
     pmullw m0, [planar_8_y_mult]
@@ -73,23 +73,23 @@ cglobal planar_to_sdi_8, 5, 5, 3, y, u, v, l, width, size
     movu   [lq], m0
 
     add    lq, 15
-    add    widthq, 3
+    add    pixelsq, 3
     jl .loop
 
     RET
 
-cglobal planar_to_sdi_8_2, 5, 5, 3, y, u, v, dst1, dst2, width
-    shr    widthq, 1
-    lea    yq, [yq + 2*widthq]
-    add    uq, widthq
-    add    vq, widthq
+cglobal planar_to_sdi_8_2, 5, 5, 3, y, u, v, dst1, dst2, pixels
+    shr    pixelsq, 1
+    lea    yq, [yq + 2*pixelsq]
+    add    uq, pixelsq
+    add    vq, pixelsq
 
-    neg    widthq
+    neg    pixelsq
 
     .loop:
-        movq   m0, [yq + widthq*2]
-        movd   m1, [uq + widthq*1]
-        movd   m2, [vq + widthq*1]
+        movq   m0, [yq + pixelsq*2]
+        movd   m1, [uq + pixelsq*1]
+        movd   m2, [vq + pixelsq*1]
 
         pshufb m0, [planar_8_y_shuf]
         pmullw m0, [planar_8_y_mult]
@@ -110,7 +110,7 @@ cglobal planar_to_sdi_8_2, 5, 5, 3, y, u, v, dst1, dst2, width
 
         add    dst1q, 15
         add    dst2q, 15
-        add    widthq, 3
+        add    pixelsq, 3
     jl .loop
 RET
 
@@ -124,17 +124,17 @@ planar_to_sdi_8
 %macro planar_to_sdi_10 0
 
 ; planar_to_sdi_10(const uint16_t *y, const uint16_t *u, const uint16_t *v, uint8_t *l, const int64_t width)
-cglobal planar_to_sdi_10, 5, 5, 3, y, u, v, l, width, size
-    lea    yq, [yq + 2*widthq]
-    add    uq, widthq
-    add    vq, widthq
+cglobal planar_to_sdi_10, 5, 5, 2, y, u, v, l, pixels
+    lea    yq, [yq + 2*pixelsq]
+    add    uq, pixelsq
+    add    vq, pixelsq
 
-    neg    widthq
+    neg    pixelsq
 
 .loop:
-    movu   m0, [yq + widthq*2]
-    movq   m1, [uq + widthq*1]
-    movhps m1, [vq + widthq*1]
+    movu   m0, [yq + pixelsq*2]
+    movq   m1, [uq + pixelsq*1]
+    movhps m1, [vq + pixelsq*1]
 
     pmullw m0, [planar_10_y_shift]
     pmullw m1, [planar_10_uv_shift]
@@ -147,22 +147,22 @@ cglobal planar_to_sdi_10, 5, 5, 3, y, u, v, l, width, size
     movu   [lq], m0
 
     add    lq, 15
-    add    widthq, 6
+    add    pixelsq, 6
     jl .loop
 
     RET
 
-cglobal planar_to_sdi_10_2, 5, 5, 3, y, u, v, dst1, dst2, width
-    lea    yq, [yq + 2*widthq]
-    add    uq, widthq
-    add    vq, widthq
+cglobal planar_to_sdi_10_2, 5, 5, 2, y, u, v, dst1, dst2, pixels
+    lea    yq, [yq + 2*pixelsq]
+    add    uq, pixelsq
+    add    vq, pixelsq
 
-    neg    widthq
+    neg    pixelsq
 
     .loop:
-        movu   m0, [yq + widthq*2]
-        movq   m1, [uq + widthq*1]
-        movhps m1, [vq + widthq*1]
+        movu   m0, [yq + pixelsq*2]
+        movq   m1, [uq + pixelsq*1]
+        movhps m1, [vq + pixelsq*1]
 
         pmullw m0, [planar_10_y_shift]
         pmullw m1, [planar_10_uv_shift]
@@ -177,7 +177,7 @@ cglobal planar_to_sdi_10_2, 5, 5, 3, y, u, v, dst1, dst2, width
 
         add    dst1q, 15
         add    dst2q, 15
-        add    widthq, 6
+        add    pixelsq, 6
     jl .loop
 RET
 
