@@ -44,7 +44,7 @@ void checkasm_check_planar10_input(void)
         void (*v210)(const uint16_t *y, const uint16_t *u, const uint16_t *v, uint8_t *dst, ptrdiff_t pixels);
     } s = {
 #ifdef HAVE_NETMAP
-        .sdi = upipe_planar_to_sdi_10_c,
+        .sdi   = upipe_planar_to_sdi_10_c,
         .sdi_2 = upipe_planar_to_sdi_10_2_c,
 #endif
         .uyvy = upipe_planar_to_uyvy_10_c,
@@ -55,22 +55,22 @@ void checkasm_check_planar10_input(void)
 
 #ifdef HAVE_X86ASM
     if (cpu_flags & AV_CPU_FLAG_SSE2) {
-       s.uyvy =  upipe_planar_to_uyvy_10_sse2;
+       s.uyvy = upipe_planar_to_uyvy_10_sse2;
     }
     if (cpu_flags & AV_CPU_FLAG_SSSE3) {
-       s.sdi =  upipe_planar_to_sdi_10_ssse3;
-       s.sdi_2 =  upipe_planar_to_sdi_10_2_ssse3;
+       s.sdi   = upipe_planar_to_sdi_10_ssse3;
+       s.sdi_2 = upipe_planar_to_sdi_10_2_ssse3;
        s.v210  = upipe_planar_to_v210_10_ssse3;
     }
     if (cpu_flags & AV_CPU_FLAG_AVX) {
-       s.sdi =  upipe_planar_to_sdi_10_avx;
-       s.sdi_2 =  upipe_planar_to_sdi_10_2_avx;
-       s.uyvy =  upipe_planar_to_uyvy_10_avx;
+       s.sdi   = upipe_planar_to_sdi_10_avx;
+       s.sdi_2 = upipe_planar_to_sdi_10_2_avx;
+       s.uyvy  = upipe_planar_to_uyvy_10_avx;
     }
     if (cpu_flags & AV_CPU_FLAG_AVX2) {
-       s.sdi = upipe_planar_to_sdi_10_avx2;
+       s.sdi   = upipe_planar_to_sdi_10_avx2;
        s.sdi_2 = upipe_planar_to_sdi_10_2_avx2;
-       s.uyvy =  upipe_planar_to_uyvy_10_avx2;
+       s.uyvy  = upipe_planar_to_uyvy_10_avx2;
        s.v210  = upipe_planar_to_v210_10_avx2;
     }
 #endif
