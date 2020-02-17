@@ -46,7 +46,7 @@ void checkasm_check_planar8_input(void)
         void (*v210)(const uint8_t *y, const uint8_t *u, const uint8_t *v, uint8_t *dst, ptrdiff_t pixels);
     } s = {
 #ifdef HAVE_NETMAP
-        .sdi = upipe_planar_to_sdi_8_c,
+        .sdi   = upipe_planar_to_sdi_8_c,
         .sdi_2 = upipe_planar_to_sdi_8_2_c,
 #endif
         .uyvy = upipe_planar_to_uyvy_8_c,
@@ -57,21 +57,23 @@ void checkasm_check_planar8_input(void)
 
 #ifdef HAVE_X86ASM
     if (cpu_flags & AV_CPU_FLAG_SSE2) {
-       s.uyvy =  upipe_planar_to_uyvy_8_sse2;
+       s.uyvy = upipe_planar_to_uyvy_8_sse2;
     }
     if (cpu_flags & AV_CPU_FLAG_SSSE3) {
-       s.sdi =  upipe_planar_to_sdi_8_ssse3;
-       s.sdi_2 =  upipe_planar_to_sdi_8_2_ssse3;
+       s.sdi   = upipe_planar_to_sdi_8_ssse3;
+       s.sdi_2 = upipe_planar_to_sdi_8_2_ssse3;
        s.v210  = upipe_planar_to_v210_8_ssse3;
     }
     if (cpu_flags & AV_CPU_FLAG_AVX) {
-       s.sdi =  upipe_planar_to_sdi_8_avx;
-       s.sdi_2 =  upipe_planar_to_sdi_8_2_avx;
-       s.uyvy =  upipe_planar_to_uyvy_8_avx;
+       s.sdi   = upipe_planar_to_sdi_8_avx;
+       s.sdi_2 = upipe_planar_to_sdi_8_2_avx;
+       s.uyvy  = upipe_planar_to_uyvy_8_avx;
        s.v210  = upipe_planar_to_v210_8_avx;
     }
     if (cpu_flags & AV_CPU_FLAG_AVX2) {
-       s.uyvy =  upipe_planar_to_uyvy_8_avx2;
+       s.sdi   = upipe_planar_to_sdi_8_avx2;
+       s.sdi_2 = upipe_planar_to_sdi_8_2_avx2;
+       s.uyvy  = upipe_planar_to_uyvy_8_avx2;
        s.v210  = upipe_planar_to_v210_8_avx2;
     }
 #endif
@@ -109,10 +111,10 @@ void checkasm_check_planar8_input(void)
         uint8_t u1[NUM_SAMPLES/4];
         uint8_t v0[NUM_SAMPLES/4];
         uint8_t v1[NUM_SAMPLES/4];
-        uint8_t dst0[NUM_SAMPLES * 10 / 8 + 15];
-        uint8_t dst1[NUM_SAMPLES * 10 / 8 + 15];
-        uint8_t dst2[NUM_SAMPLES * 10 / 8 + 15];
-        uint8_t dst3[NUM_SAMPLES * 10 / 8 + 15];
+        uint8_t dst0[NUM_SAMPLES * 10 / 8 + 31];
+        uint8_t dst1[NUM_SAMPLES * 10 / 8 + 31];
+        uint8_t dst2[NUM_SAMPLES * 10 / 8 + 31];
+        uint8_t dst3[NUM_SAMPLES * 10 / 8 + 31];
 
         declare_func(void, const uint8_t *y, const uint8_t *u, const uint8_t *v, uint8_t *dst1, uint8_t *dst2, uintptr_t pixels);
         randomize_buffers(y0, y1, NUM_SAMPLES/2);
