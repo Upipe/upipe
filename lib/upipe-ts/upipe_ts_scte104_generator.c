@@ -213,7 +213,6 @@ static bool upipe_ts_scte104_generator_handle(struct upipe *upipe, struct uref *
     pts_prog -= cr_dts_delay;
     uref_clock_set_pts_prog(uref, pts_prog);
     uref_clock_get_pts_sys(uref, &pts_sys);
-    printf("pts_sys %"PRIu64" cr_dts_delay %"PRIu64" \n", pts_sys, cr_dts_delay);
 
     upipe_ts_scte104_generator_output(upipe, uref, upump_p);
     return true;
