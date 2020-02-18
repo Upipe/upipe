@@ -495,12 +495,12 @@ static void upipe_udpsink_input(struct upipe *upipe, struct uref *uref,
         return;
     }
 
+    uref_clock_set_cr_dts_delay(uref, 0);
+    uref_clock_set_dts_pts_delay(uref, 0);
+
     if (unlikely(!ubase_check(uref_clock_get_cr_sys(uref, &systime)))) {
         upipe_warn(upipe, "received non-dated buffer");
     }
-
-    uref_clock_set_cr_dts_delay(uref, 0);
-    uref_clock_set_dts_pts_delay(uref, 0);
 
     pthread_mutex_lock(&upipe_udpsink->mutex);
     ulist_add(&upipe_udpsink->ulist, uref_to_uchain(uref));
