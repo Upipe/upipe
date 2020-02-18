@@ -849,15 +849,16 @@ static void upipe_sync_sub_input(struct upipe *upipe, struct uref *uref,
         return;
     }
 
-#if 0
     struct upipe_sync *upipe_sync = upipe_sync_from_sub_mgr(upipe->mgr);
     /* get uref date */
     uint64_t pts;
     if (!ubase_check(uref_clock_get_pts_sys(uref, &pts))) {
-        upipe_err(upipe, "undated uref");
+        upipe_warn(upipe, "undated uref");
         uref_free(uref);
         return;
     }
+
+#if 0
     pts += upipe_sync->latency;
 
     uint64_t now = uclock_now(upipe_sync->uclock);
