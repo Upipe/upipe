@@ -80,13 +80,14 @@ libupipe_modules_la_SOURCES = \
 	upipe_separate_fields.c \
 	upipe_row_join.c \
 	upipe_audio_merge.c \
+	upipe_aes67_sink.c \
 	$(NULL)
 
 if HAVE_WRITEV
 libupipe_modules_la_SOURCES += \
 	upipe_file_sink.c \
 	upipe_udp_sink.c \
-	upipe_udp_sink_fast.c
+	$(NULL)
 endif
 
 if HAVE_BITSTREAM

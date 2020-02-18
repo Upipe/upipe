@@ -25,7 +25,7 @@
  */
 
 /** @file
- * @short Upipe sink module for udp
+ * @short Upipe sink module for aes67
  */
 
 #define _GNU_SOURCE
@@ -51,7 +51,7 @@
 #include <upipe/upipe_helper_void.h>
 #include <upipe/upipe_helper_input.h>
 #include <upipe/upipe_helper_uclock.h>
-#include <upipe-modules/upipe_udp_sink_fast.h>
+#include <upipe-modules/upipe_aes67_sink.h>
 #include "upipe_udp.h"
 
 #include <stdlib.h>
@@ -165,7 +165,7 @@ union frame_map {
     void *raw;
 };
 
-UPIPE_HELPER_UPIPE(upipe_udpsink, upipe, UPIPE_UDPSINK_FAST_SIGNATURE)
+UPIPE_HELPER_UPIPE(upipe_udpsink, upipe, UPIPE_AES67_SINK_SIGNATURE)
 UPIPE_HELPER_UREFCOUNT(upipe_udpsink, urefcount, upipe_udpsink_free)
 UPIPE_HELPER_VOID(upipe_udpsink)
 UPIPE_HELPER_UCLOCK(upipe_udpsink, uclock, uclock_request, NULL, upipe_throw_provide_request, NULL)
@@ -719,7 +719,7 @@ static void upipe_udpsink_free(struct upipe *upipe)
 /** module manager static descriptor */
 static struct upipe_mgr upipe_udpsink_mgr = {
     .refcount = NULL,
-    .signature = UPIPE_UDPSINK_FAST_SIGNATURE,
+    .signature = UPIPE_AES67_SINK_SIGNATURE,
 
     .upipe_alloc = upipe_udpsink_alloc,
     .upipe_input = upipe_udpsink_input,
@@ -732,7 +732,7 @@ static struct upipe_mgr upipe_udpsink_mgr = {
  *
  * @return pointer to manager
  */
-struct upipe_mgr *upipe_udpsink_fast_mgr_alloc(void)
+struct upipe_mgr *upipe_aes67_sink_mgr_alloc(void)
 {
     return &upipe_udpsink_mgr;
 }

@@ -25,12 +25,12 @@
  */
 
 /** @file
- * @short Upipe fast sink module for udp
+ * @short Upipe sink module for aes67
  */
 
-#ifndef _UPIPE_MODULES_UPIPE_UDP_SINK_FAST_H_
+#ifndef _UPIPE_MODULES_UPIPE_AES67_SINK_H_
 /** @hidden */
-#define _UPIPE_MODULES_UPIPE_UDP_SINK_FAST_H_
+#define _UPIPE_MODULES_UPIPE_AES67_SINK_H_
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -39,18 +39,18 @@ extern "C" {
 #include <sys/types.h>
 #include <sys/socket.h>
 
-#define UPIPE_UDPSINK_FAST_SIGNATURE UBASE_FOURCC('u','s','k','f')
+#define UPIPE_AES67_SINK_SIGNATURE UBASE_FOURCC('a','6','7','k')
 
-/** @This extends upipe_command with specific commands for udp fast sink. */
-enum upipe_udpsink_fast_command {
-    UPIPE_UDPSINK_FAST_SENTINEL = UPIPE_CONTROL_LOCAL,
+/** @This extends upipe_command with specific commands for aes67 sink. */
+enum upipe_aes67_sink_command {
+    UPIPE_AES67_SINK_SENTINEL = UPIPE_CONTROL_LOCAL,
 };
 
-/** @This returns the management structure for all udp fast sinks.
+/** @This returns the management structure for all aes67 sinks.
  *
  * @return pointer to manager
  */
-struct upipe_mgr *upipe_udpsink_fast_mgr_alloc(void);
+struct upipe_mgr *upipe_aes67_sink_mgr_alloc(void);
 
 #ifdef __cplusplus
 }
