@@ -67,6 +67,7 @@
 #include <upipe-swscale/upipe_sws.h>
 #include <upipe-filters/upipe_filter_format.h>
 #include <upipe-framers/upipe_auto_framer.h>
+#include <upipe-modules/upipe_null.h>
 
 #include <stdbool.h>
 #include <stdlib.h>
@@ -100,6 +101,7 @@ struct uref_mgr *uref_mgr;
 struct upipe_mgr *upipe_avcdec_mgr;
 struct upipe_mgr *upipe_avcenc_mgr;
 struct upipe_mgr *upipe_ffmt_mgr;
+struct upipe_mgr *upipe_null_mgr;
 
 static struct uprobe *logger;
 static struct upipe *avfsrc;
@@ -291,6 +293,15 @@ static int catch_demux(struct uprobe *uprobe, struct upipe *upipe,
             upipe_release(ffmt);
             incoming = ffmt;
 
+            if (!strcmp(conf->codec, "null")) {
+                struct upipe *null = upipe_void_alloc_output(incoming,
+                    upipe_null_mgr,
+                    uprobe_pfx_alloc_va(uprobe_use(logger),
+                                        loglevel, "null %"PRIu64, id));
+                upipe_release(null);
+                return true;
+            }
+
             /* encoder */
             struct uref *flow = uref_block_flow_alloc_def(uref_mgr, "");
             uref_avcenc_set_codec_name(flow, conf->codec);
@@ -441,6 +452,7 @@ int main(int argc, char *argv[])
     upipe_ffmt_mgr = upipe_ffmt_mgr_alloc();
     upipe_ffmt_mgr_set_sws_mgr(upipe_ffmt_mgr, upipe_sws_mgr);
     upipe_ffmt_mgr_set_swr_mgr(upipe_ffmt_mgr, upipe_swr_mgr);
+    upipe_null_mgr = upipe_null_mgr_alloc();
 
     struct upipe_mgr *upipe_autof_mgr = upipe_autof_mgr_alloc();
     if (upipe_autof_mgr != NULL) {
@@ -477,6 +489,7 @@ int main(int argc, char *argv[])
     upipe_release(avfsink);
     upipe_mgr_release(upipe_avfsink_mgr); /* nop */
 
+    upipe_mgr_release(upipe_null_mgr);
     upipe_mgr_release(upipe_ffmt_mgr);
     upipe_mgr_release(upipe_sws_mgr); /* nop */
     upipe_mgr_release(upipe_swr_mgr); /* nop */
