@@ -354,8 +354,7 @@ static int upipe_sync_sub_set_flow_def(struct upipe *upipe, struct uref *flow_de
     if (!flow_def)
         return UBASE_ERR_ALLOC;
 
-    // FIXME : estimated latency added by processing
-    latency += UCLOCK_FREQ / 25;
+    latency += upipe_sync->ticks_per_frame;
     uref_clock_set_latency(flow_def, latency);
 
     if (latency > upipe_sync->latency) {
@@ -1034,6 +1033,9 @@ static int upipe_sync_set_flow_def(struct upipe *upipe, struct uref *flow_def)
 
     UBASE_RETURN(uref_pic_flow_get_fps(flow_def, &upipe_sync->fps));
 
+    upipe_sync->ticks_per_frame = UCLOCK_FREQ *
+        upipe_sync->fps.den / upipe_sync->fps.num;
+
     uint64_t latency;
     if (!ubase_check(uref_clock_get_latency(flow_def, &latency)))
         latency = 0;
@@ -1042,8 +1044,7 @@ static int upipe_sync_set_flow_def(struct upipe *upipe, struct uref *flow_def)
     if (!flow_def)
         return UBASE_ERR_ALLOC;
 
-    // FIXME : estimated latency added by processing
-    latency += UCLOCK_FREQ / 25;
+    latency += upipe_sync->ticks_per_frame;
     uint64_t max_latency = upipe_sync_get_max_latency(upipe);
     if (latency < max_latency)
         latency = max_latency;
@@ -1052,9 +1053,6 @@ static int upipe_sync_set_flow_def(struct upipe *upipe, struct uref *flow_def)
     upipe_notice_va(upipe, "Latency %" PRIu64, latency);
     upipe_sync->latency = latency;
     upipe_sync_set_latency(upipe_sync_to_upipe(upipe_sync));
-
-    upipe_sync->ticks_per_frame = UCLOCK_FREQ *
-        upipe_sync->fps.den / upipe_sync->fps.num;
 
     upipe_sync_store_flow_def(upipe, flow_def);
 
