@@ -924,7 +924,8 @@ static void upipe_aes67_sink_free(struct upipe *upipe)
     /* Stop thread. */
     uatomic_store(&upipe_aes67_sink->stop, 1);
     /* Wait for thread to exit. */
-    pthread_join(upipe_aes67_sink->pt, NULL);
+    if (upipe_aes67_sink->thread_created)
+        pthread_join(upipe_aes67_sink->pt, NULL);
     /* Clean up mutex. */
     pthread_mutex_destroy(&upipe_aes67_sink->mutex); /* Check return value? */
 
