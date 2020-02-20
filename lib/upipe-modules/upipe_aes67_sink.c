@@ -36,6 +36,8 @@
 #include <linux/if_packet.h>
 #include <linux/if_ether.h>
 #include <arpa/inet.h>
+#include <linux/if.h>
+#include <ifaddrs.h>
 
 #include <upipe/ubase.h>
 #include <upipe/ulist.h>
@@ -81,9 +83,21 @@
 #define UDP_DEFAULT_TTL 0
 #define UDP_DEFAULT_PORT 1234
 
+#define AES67_MAX_PATHS 2
+#define AES67_MAX_FLOWS 8
+
 /** @hidden */
 static bool upipe_aes67_sink_output(struct upipe *upipe, struct uref *uref,
                                  struct upump **upump_p, int which_fd);
+
+struct aes67_flow {
+    /* IP details for the destination. */
+    struct sockaddr_in sin;
+    /* Ethernet details for the destination. */
+    struct sockaddr_ll sll;
+    /* Raw IP and UDP header. */
+    uint8_t raw_header[RAW_HEADER_SIZE];
+};
 
 /** @internal @This is the private context of a aes67 sink pipe. */
 struct upipe_aes67_sink {
@@ -125,6 +139,13 @@ struct upipe_aes67_sink {
     bool raw;
     /** RAW header */
     uint8_t raw_header[2][RAW_HEADER_SIZE];
+
+    /* IP details for the source. */
+    struct sockaddr_in sin[2];
+    /* Ethernet details for the source. */
+    struct sockaddr_ll sll[2];
+    /* Details for all destinations. */
+    struct aes67_flow flows[AES67_MAX_FLOWS][AES67_MAX_PATHS];
 
     /** destination for not-connected socket */
     struct sockaddr_storage addr;
@@ -531,6 +552,156 @@ static int upipe_aes67_sink_set_flow_def(struct upipe *upipe,
     return UBASE_ERR_NONE;
 }
 
+static int get_interface_details(struct upipe *upipe, const char *intf,
+        struct sockaddr_in *sin, struct sockaddr_ll *sll)
+{
+    struct ifaddrs *ifa = NULL;
+    if (getifaddrs(&ifa) < 0) {
+        upipe_err_va(upipe, "getifaddrs: %m");
+        return UBASE_ERR_ALLOC;
+    }
+
+    bool have_sin = false, have_sll = false;
+    for (struct ifaddrs *ifap = ifa; ifap; ifap = ifap->ifa_next) {
+        if (!strncmp(ifap->ifa_name, intf, IFNAMSIZ)) {
+            if (ifap->ifa_addr->sa_family == AF_INET) {
+                *sin = *(struct sockaddr_in *)ifap->ifa_addr;
+                have_sin = true;
+            }
+            if (ifap->ifa_addr->sa_family == AF_PACKET) {
+                *sll = *(struct sockaddr_ll *)ifap->ifa_addr;
+                have_sll = true;
+            }
+        }
+    }
+    freeifaddrs(ifa);
+
+    if (!have_sin) {
+        upipe_err_va(upipe, "unable to get IP address for %s", intf);
+        return UBASE_ERR_INVALID;
+    }
+    if (!have_sll) {
+        upipe_err_va(upipe, "unable to get MAC address for %s", intf);
+        return UBASE_ERR_INVALID;
+    }
+
+    return UBASE_ERR_NONE;
+}
+
+static int open_socket(struct upipe *upipe, const char *path_1, const char *path_2)
+{
+    struct upipe_aes67_sink *upipe_aes67_sink = upipe_aes67_sink_from_upipe(upipe);
+
+    if (path_1 == NULL)
+        return UBASE_ERR_INVALID;
+
+    /* Get interface index and IP address. */
+    struct sockaddr_in sin;
+    struct sockaddr_ll sll;
+    UBASE_RETURN(get_interface_details(upipe, path_1, &sin, &sll));
+
+    upipe_dbg_va(upipe, "opening socket for %s %s", path_1, inet_ntoa(sin.sin_addr));
+    /* Open socket in the desired mode. */
+    int fd = socket(AF_PACKET, SOCK_DGRAM, 0);
+    if (fd < 0) {
+        upipe_err_va(upipe, "unable to open socket (%m)");
+        return UBASE_ERR_EXTERNAL;
+    }
+
+    /* Set socket options. */
+    int val;
+
+    /* Drop/discard/ignore malformed packets. */
+    val = 1;
+    if (setsockopt(fd, SOL_PACKET, PACKET_LOSS, &val, sizeof val)) {
+        upipe_err_va(upipe, "unable to set PACKET_LOSS (%m)");
+    }
+
+    /* Default but try anyway. */
+    val = TPACKET_V1;
+    if (setsockopt(fd, SOL_PACKET, PACKET_VERSION, &val, sizeof val)) {
+        upipe_err_va(upipe, "unable to set PACKET_VERSION (%m)");
+    }
+
+    /* Setup TX ring for mmap. */
+    struct tpacket_req req = {
+        .tp_block_size = MMAP_BLOCK_SIZE, // getpagesize()
+        .tp_block_nr   = MMAP_BLOCK_NUM,
+        .tp_frame_size = MMAP_FRAME_SIZE, // TPACKET_ALIGNMENT
+        .tp_frame_nr   = MMAP_FRAME_NUM,
+    };
+    upipe_dbg_va(upipe, "tp_block_size: %u, tp_block_nr %u, tp_frame_size: %u, tp_frame_nr: %u",
+            req.tp_block_size, req.tp_block_nr, req.tp_frame_size, req.tp_frame_nr);
+    if (setsockopt(fd, SOL_PACKET, PACKET_TX_RING, (void *)&req, sizeof req)) {
+        upipe_err_va(upipe, "unable to set PACKET_TX_RING (%m)");
+        close(fd);
+        return UBASE_ERR_EXTERNAL;
+    }
+
+    /* Bind to the given interface. */
+    if (bind(fd, (struct sockaddr *)&sll, sizeof sll) < 0) {
+        upipe_err_va(upipe, "unable to bind: %m");
+        close(fd);
+        return UBASE_ERR_EXTERNAL;
+    }
+
+    upipe_aes67_sink->mmap[0] = mmap(0, MMAP_BLOCK_SIZE * MMAP_BLOCK_NUM,
+            PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0);
+    if (upipe_aes67_sink->mmap[0] == MAP_FAILED) {
+        upipe_err_va(upipe, "unable to mmap (%m)");
+        close(fd);
+        return UBASE_ERR_EXTERNAL;
+    }
+    upipe_aes67_sink->fd[0] = fd;
+    upipe_aes67_sink->sin[0] = sin;
+    upipe_aes67_sink->sll[0] = sll;
+
+    /* Handle second path. */
+    if (path_2) {
+        UBASE_RETURN(get_interface_details(upipe, path_2, &sin, &sll));
+
+        upipe_dbg_va(upipe, "opening socket for %s %s", path_2, inet_ntoa(sin.sin_addr));
+        fd = socket(AF_PACKET, SOCK_DGRAM, 0);
+        if (fd < 0) {
+            upipe_err_va(upipe, "unable to open socket (%m)");
+            return UBASE_ERR_EXTERNAL;
+        }
+
+        val = 1;
+        if (setsockopt(fd, SOL_PACKET, PACKET_LOSS, &val, sizeof val)) {
+            upipe_err_va(upipe, "unable to set PACKET_LOSS (%m)");
+        }
+        val = TPACKET_V1;
+        if (setsockopt(fd, SOL_PACKET, PACKET_VERSION, &val, sizeof val)) {
+            upipe_err_va(upipe, "unable to set PACKET_VERSION (%m)");
+        }
+        if (setsockopt(fd, SOL_PACKET, PACKET_TX_RING, (void *)&req, sizeof req)) {
+            upipe_err_va(upipe, "unable to set PACKET_TX_RING (%m)");
+            close(fd);
+            return UBASE_ERR_EXTERNAL;
+        }
+
+        if (bind(fd, (struct sockaddr *)&sll, sizeof sll) < 0) {
+            upipe_err_va(upipe, "unable to bind: %m");
+            close(fd);
+            return UBASE_ERR_EXTERNAL;
+        }
+
+        upipe_aes67_sink->mmap[1] = mmap(0, MMAP_BLOCK_SIZE * MMAP_BLOCK_NUM,
+                PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0);
+        if (upipe_aes67_sink->mmap[1] == MAP_FAILED) {
+            upipe_err_va(upipe, "unable to mmap (%m)");
+            close(fd);
+            return UBASE_ERR_EXTERNAL;
+        }
+        upipe_aes67_sink->fd[1] = fd;
+        upipe_aes67_sink->sin[1] = sin;
+        upipe_aes67_sink->sll[1] = sll;
+    }
+
+    return UBASE_ERR_NONE;
+}
+
 /** @internal @This asks to open the given socket.
  *
  * @param upipe description structure of the pipe
@@ -644,6 +815,59 @@ static int _upipe_aes67_sink_set_uri(struct upipe *upipe, const char *uri)
     return UBASE_ERR_NONE;
 }
 
+static int set_flow_destination(struct upipe * upipe, int flow,
+        const char *path_1, const char *path_2)
+{
+    struct upipe_aes67_sink *upipe_aes67_sink = upipe_aes67_sink_from_upipe(upipe);
+
+    if (unlikely(path_1 == NULL))
+        return UBASE_ERR_INVALID;
+    if (unlikely(path_2 == NULL && upipe_aes67_sink->fd[1] != -1))
+        return UBASE_ERR_INVALID;
+    if (unlikely(flow < 0 || flow >= AES67_MAX_FLOWS))
+        return UBASE_ERR_INVALID;
+
+    char *path = strdup(path_1);
+    UBASE_ALLOC_RETURN(path);
+
+    struct aes67_flow *aes67_flow = upipe_aes67_sink->flows[flow];
+
+    if (!upipe_udp_parse_node_service(upipe, path, NULL, 0, NULL,
+                (struct sockaddr_storage *)&aes67_flow[0].sin)) {
+        free(path);
+        return UBASE_ERR_INVALID;
+    }
+    free(path);
+    upipe_dbg_va(upipe, "flow %d path %d destination set to %s:%u",
+            flow, 0, inet_ntoa(aes67_flow[0].sin.sin_addr),
+            ntohs(aes67_flow[0].sin.sin_port));
+    upipe_udp_raw_fill_headers(NULL, aes67_flow[0].raw_header,
+            upipe_aes67_sink->sin[0].sin_addr.s_addr, aes67_flow[0].sin.sin_addr.s_addr,
+            upipe_aes67_sink->sin[0].sin_port, aes67_flow[0].sin.sin_port,
+            0, 0, 300);
+
+    if (path_2) {
+        path = strdup(path_2);
+        UBASE_ALLOC_RETURN(path);
+        if (!upipe_udp_parse_node_service(upipe, path, NULL, 0, NULL,
+                    (struct sockaddr_storage *)&aes67_flow[1].sin)) {
+            free(path);
+            return UBASE_ERR_INVALID;
+        }
+        free(path);
+        upipe_dbg_va(upipe, "flow %d path %d destination set to %s:%u",
+                flow, 1, inet_ntoa(aes67_flow[1].sin.sin_addr),
+                ntohs(aes67_flow[1].sin.sin_port));
+        upipe_udp_raw_fill_headers(NULL, aes67_flow[1].raw_header,
+                upipe_aes67_sink->sin[0].sin_addr.s_addr, aes67_flow[1].sin.sin_addr.s_addr,
+                upipe_aes67_sink->sin[0].sin_port, aes67_flow[1].sin.sin_port,
+                0, 0, 300);
+    }
+
+
+    return UBASE_ERR_NONE;
+}
+
 /** @internal @This processes control commands on an aes67 sink pipe.
  *
  * @param upipe description structure of the pipe
@@ -669,9 +893,19 @@ static int upipe_aes67_sink_control(struct upipe *upipe,
             return upipe_aes67_sink_set_flow_def(upipe, flow_def);
         }
 
-        case UPIPE_SET_URI: {
-            const char *uri = va_arg(args, const char *);
-            return _upipe_aes67_sink_set_uri(upipe, uri);
+        case UPIPE_AES67_SINK_OPEN_SOCKET: {
+            UBASE_SIGNATURE_CHECK(args, UPIPE_AES67_SINK_SIGNATURE)
+            const char *path_1 = va_arg(args, const char *);
+            const char *path_2 = va_arg(args, const char *);
+            return open_socket(upipe, path_1, path_2);
+        }
+
+        case UPIPE_AES67_SINK_SET_FLOW_DESTINATION: {
+            UBASE_SIGNATURE_CHECK(args, UPIPE_AES67_SINK_SIGNATURE)
+            int flow = va_arg(args, int);
+            const char *path_1 = va_arg(args, const char *);
+            const char *path_2 = va_arg(args, const char *);
+            return set_flow_destination(upipe, flow, path_1, path_2);
         }
 
         default:
