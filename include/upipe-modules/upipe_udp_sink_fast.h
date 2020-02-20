@@ -44,13 +44,6 @@ extern "C" {
 /** @This extends upipe_command with specific commands for udp fast sink. */
 enum upipe_udpsink_fast_command {
     UPIPE_UDPSINK_FAST_SENTINEL = UPIPE_CONTROL_LOCAL,
-
-    /** get socket fd (int*) **/
-    UPIPE_UDPSINK_FAST_GET_FD,
-    /** set socket fd (int) **/
-    UPIPE_UDPSINK_FAST_SET_FD,
-    /** set remote address (const struct sockaddr *, socklen_t) **/
-    UPIPE_UDPSINK_FAST_SET_PEER,
 };
 
 /** @This returns the management structure for all udp fast sinks.
@@ -59,43 +52,6 @@ enum upipe_udpsink_fast_command {
  */
 struct upipe_mgr *upipe_udpsink_fast_mgr_alloc(void);
 
-/** @This returns currently opened udp fd.
- *
- * @param upipe description structure of the pipe
- * @param fd_p filled in with the fd of the udp
- * @return false in case of error
- */
-static inline int upipe_udpsink_fast_get_fd(struct upipe *upipe, int *fd_p)
-{
-    return upipe_control(upipe, UPIPE_UDPSINK_FAST_GET_FD, UPIPE_UDPSINK_FAST_SIGNATURE,
-                         fd_p);
-}
-
-/** @This sets the udp fd.
- *
- * @param upipe description structure of the pipe
- * @param fd file descriptor
- * @return false in case of error
- */
-static inline int upipe_udpsink_fast_set_fd(struct upipe *upipe, int fd)
-{
-    return upipe_control(upipe, UPIPE_UDPSINK_FAST_SET_FD, UPIPE_UDPSINK_FAST_SIGNATURE,
-                         fd);
-}
-
-/** @This sets the remote address (for unconnected sockets).
- *
- * @param upipe description structure of the pipe
- * @param addr the remote address
- * @param addrlen the size of addr
- * @return false in case of error
- */
-static inline int upipe_udpsink_fast_set_peer(struct upipe *upipe,
-        const struct sockaddr *addr, socklen_t addrlen)
-{
-    return upipe_control(upipe, UPIPE_UDPSINK_FAST_SET_PEER, UPIPE_UDPSINK_FAST_SIGNATURE,
-            addr, addrlen);
-}
 #ifdef __cplusplus
 }
 #endif

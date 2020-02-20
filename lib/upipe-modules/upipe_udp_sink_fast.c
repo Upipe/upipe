@@ -531,20 +531,6 @@ static int upipe_udpsink_set_flow_def(struct upipe *upipe,
     return UBASE_ERR_NONE;
 }
 
-/** @internal @This returns the uri of the currently opened socket.
- *
- * @param upipe description structure of the pipe
- * @param uri_p filled in with the uri of the socket
- * @return an error code
- */
-static int _upipe_udpsink_get_uri(struct upipe *upipe, const char **uri_p)
-{
-    struct upipe_udpsink *upipe_udpsink = upipe_udpsink_from_upipe(upipe);
-    assert(uri_p != NULL);
-    *uri_p = upipe_udpsink->uri;
-    return UBASE_ERR_NONE;
-}
-
 /** @internal @This asks to open the given socket.
  *
  * @param upipe description structure of the pipe
@@ -658,17 +644,6 @@ static int _upipe_udpsink_set_uri(struct upipe *upipe, const char *uri)
     return UBASE_ERR_NONE;
 }
 
-/** @internal @This flushes all currently held buffers, and unblocks the
- * sources.
- *
- * @param upipe description structure of the pipe
- * @return an error code
- */
-static int upipe_udpsink_flush(struct upipe *upipe)
-{
-    return UBASE_ERR_NONE;
-}
-
 /** @internal @This processes control commands on a udp sink pipe.
  *
  * @param upipe description structure of the pipe
@@ -694,35 +669,11 @@ static int upipe_udpsink_control(struct upipe *upipe,
             return upipe_udpsink_set_flow_def(upipe, flow_def);
         }
 
-        case UPIPE_GET_URI: {
-            const char **uri_p = va_arg(args, const char **);
-            return _upipe_udpsink_get_uri(upipe, uri_p);
-        }
         case UPIPE_SET_URI: {
             const char *uri = va_arg(args, const char *);
             return _upipe_udpsink_set_uri(upipe, uri);
         }
 
-        case UPIPE_UDPSINK_FAST_GET_FD: {
-            UBASE_SIGNATURE_CHECK(args, UPIPE_UDPSINK_FAST_SIGNATURE)
-            int *fd = va_arg(args, int *);
-            *fd = upipe_udpsink->fd[0];
-            return UBASE_ERR_NONE;
-        }
-        case UPIPE_UDPSINK_FAST_SET_FD: {
-            UBASE_SIGNATURE_CHECK(args, UPIPE_UDPSINK_FAST_SIGNATURE)
-            upipe_udpsink->fd[0] = va_arg(args, int );
-            return UBASE_ERR_NONE;
-        }
-        case UPIPE_UDPSINK_FAST_SET_PEER: {
-            UBASE_SIGNATURE_CHECK(args, UPIPE_UDPSINK_FAST_SIGNATURE)
-            const struct sockaddr *s = va_arg(args, const struct sockaddr *);
-            upipe_udpsink->addrlen = va_arg(args, socklen_t);
-            memcpy(&upipe_udpsink->addr, s, upipe_udpsink->addrlen);
-            return UBASE_ERR_NONE;
-        }
-        case UPIPE_FLUSH:
-            return upipe_udpsink_flush(upipe);
         default:
             return UBASE_ERR_UNHANDLED;
     }
