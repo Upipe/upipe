@@ -729,6 +729,8 @@ static int set_flow_destination(struct upipe * upipe, int flow,
 
     /* Set MAC address. */
     uint32_t dst_ip = ntohl(aes67_flow[0].sin.sin_addr.s_addr);
+
+    /* If a multicast IP address, fill a multicast MAC address. */
     if (IN_MULTICAST(dst_ip)) {
         aes67_flow[0].sll.sll_addr[0] = 0x01;
         aes67_flow[0].sll.sll_addr[1] = 0x00;
@@ -736,12 +738,23 @@ static int set_flow_destination(struct upipe * upipe, int flow,
         aes67_flow[0].sll.sll_addr[3] = (dst_ip >> 16) & 0x7f;
         aes67_flow[0].sll.sll_addr[4] = (dst_ip >>  8) & 0xff;
         aes67_flow[0].sll.sll_addr[5] = (dst_ip      ) & 0xff;
-    } else {
+    }
+
+    /* Otherwise query ARP for the destination address. */
+    else {
         struct arpreq arp = { .arp_flags = 0 };
+        /* Copy dest IP address to the struct. */
         memcpy(&arp.arp_pa, &aes67_flow[0].sin, sizeof aes67_flow[0].sin);
+        /* Copy interface name to the struct. */
         strncpy(arp.arp_dev, upipe_aes67_sink->ifname[0], sizeof arp.arp_dev);
 
-        if (ioctl(upipe_aes67_sink->fd[0], SIOCGARP, &arp) < 0) {
+        /* Upon success copy the MAC address to the destination struct. */
+        if (ioctl(upipe_aes67_sink->fd[0], SIOCGARP, &arp) != -1) {
+            memcpy(aes67_flow[0].sll.sll_addr, arp.arp_ha.sa_data, ETH_ALEN);
+        }
+
+        /* Otherwise report an error and fill with broadcast. */
+        else {
             upipe_err_va(upipe, "unable to get MAC address for %s: (%d) %m",
                     inet_ntoa(aes67_flow[0].sin.sin_addr), errno);
             aes67_flow[0].sll.sll_addr[0] = 0xff;
@@ -750,8 +763,6 @@ static int set_flow_destination(struct upipe * upipe, int flow,
             aes67_flow[0].sll.sll_addr[3] = 0xff;
             aes67_flow[0].sll.sll_addr[4] = 0xff;
             aes67_flow[0].sll.sll_addr[5] = 0xff;
-        } else {
-            memcpy(aes67_flow[0].sll.sll_addr, arp.arp_ha.sa_data, ETH_ALEN);
         }
     }
 
@@ -793,7 +804,9 @@ static int set_flow_destination(struct upipe * upipe, int flow,
             memcpy(&arp.arp_pa, &aes67_flow[1].sin, sizeof aes67_flow[1].sin);
             strncpy(arp.arp_dev, upipe_aes67_sink->ifname[1], sizeof arp.arp_dev);
 
-            if (ioctl(upipe_aes67_sink->fd[1], SIOCGARP, &arp) < 0) {
+            if (ioctl(upipe_aes67_sink->fd[1], SIOCGARP, &arp) != -1) {
+                memcpy(aes67_flow[1].sll.sll_addr, arp.arp_ha.sa_data, ETH_ALEN);
+            } else {
                 upipe_err_va(upipe, "unable to get MAC address for %s: (%d) %m",
                         inet_ntoa(aes67_flow[1].sin.sin_addr), errno);
                 aes67_flow[1].sll.sll_addr[0] = 0xff;
@@ -802,8 +815,6 @@ static int set_flow_destination(struct upipe * upipe, int flow,
                 aes67_flow[1].sll.sll_addr[3] = 0xff;
                 aes67_flow[1].sll.sll_addr[4] = 0xff;
                 aes67_flow[1].sll.sll_addr[5] = 0xff;
-            } else {
-                memcpy(aes67_flow[1].sll.sll_addr, arp.arp_ha.sa_data, ETH_ALEN);
             }
         }
     }
