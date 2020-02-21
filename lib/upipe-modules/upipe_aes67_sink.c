@@ -416,6 +416,7 @@ static struct upipe *upipe_aes67_sink_alloc(struct upipe_mgr *mgr,
         };
     upipe_aes67_sink->seqnum = 0;
     upipe_aes67_sink->cached_samples = 0;
+    memset(upipe_aes67_sink->flows, 0, sizeof upipe_aes67_sink->flows);
 
     ulist_init(&upipe_aes67_sink->ulist);
     uatomic_init(&upipe_aes67_sink->stop, 0);
@@ -820,31 +821,63 @@ static int set_flow_destination(struct upipe * upipe, int flow,
 {
     struct upipe_aes67_sink *upipe_aes67_sink = upipe_aes67_sink_from_upipe(upipe);
 
+    /* Check arguments are okay. */
     if (unlikely(path_1 == NULL))
         return UBASE_ERR_INVALID;
     if (unlikely(path_2 == NULL && upipe_aes67_sink->fd[1] != -1))
         return UBASE_ERR_INVALID;
-    if (unlikely(flow < 0 || flow >= AES67_MAX_FLOWS))
+    if (unlikely(flow < 0 || flow >= AES67_MAX_FLOWS)) {
+        upipe_err_va(upipe, "flow %d is not in the range 0..%d", flow, AES67_MAX_FLOWS-1);
         return UBASE_ERR_INVALID;
-
-    char *path = strdup(path_1);
-    UBASE_ALLOC_RETURN(path);
+    }
 
     struct aes67_flow *aes67_flow = upipe_aes67_sink->flows[flow];
 
+    /* Parse first path. */
+    char *path = strdup(path_1);
+    UBASE_ALLOC_RETURN(path);
     if (!upipe_udp_parse_node_service(upipe, path, NULL, 0, NULL,
                 (struct sockaddr_storage *)&aes67_flow[0].sin)) {
         free(path);
         return UBASE_ERR_INVALID;
     }
     free(path);
-    upipe_dbg_va(upipe, "flow %d path %d destination set to %s:%u",
-            flow, 0, inet_ntoa(aes67_flow[0].sin.sin_addr),
+    upipe_dbg_va(upipe, "flow %d path 0 destination set to %s:%u", flow,
+            inet_ntoa(aes67_flow[0].sin.sin_addr),
             ntohs(aes67_flow[0].sin.sin_port));
+
+    /* Write IP and UDP headers. */
     upipe_udp_raw_fill_headers(NULL, aes67_flow[0].raw_header,
             upipe_aes67_sink->sin[0].sin_addr.s_addr, aes67_flow[0].sin.sin_addr.s_addr,
-            upipe_aes67_sink->sin[0].sin_port, aes67_flow[0].sin.sin_port,
-            0, 0, 300);
+            ntohs(aes67_flow[0].sin.sin_port), ntohs(aes67_flow[0].sin.sin_port),
+            10, 0, 300);
+
+    /* Set ethernet details and the inferface index. */
+    aes67_flow[0].sll = (struct sockaddr_ll) {
+        .sll_family = AF_PACKET,
+        .sll_protocol = htons(ETH_P_IP),
+        .sll_ifindex = upipe_aes67_sink->sll[0].sll_ifindex,
+        .sll_halen = ETH_ALEN,
+    };
+
+    /* Set MAC address. */
+    uint32_t dst_ip = ntohl(aes67_flow[0].sin.sin_addr.s_addr);
+    if (IN_MULTICAST(dst_ip)) {
+        aes67_flow[0].sll.sll_addr[0] = 0x01;
+        aes67_flow[0].sll.sll_addr[1] = 0x00;
+        aes67_flow[0].sll.sll_addr[2] = 0x5e;
+        aes67_flow[0].sll.sll_addr[3] = (dst_ip >> 16) & 0x7f;
+        aes67_flow[0].sll.sll_addr[4] = (dst_ip >>  8) & 0xff;
+        aes67_flow[0].sll.sll_addr[5] = (dst_ip      ) & 0xff;
+    } else {
+        /* TODO: get correct address. */
+        aes67_flow[0].sll.sll_addr[0] = 0xff;
+        aes67_flow[0].sll.sll_addr[1] = 0xff;
+        aes67_flow[0].sll.sll_addr[2] = 0xff;
+        aes67_flow[0].sll.sll_addr[3] = 0xff;
+        aes67_flow[0].sll.sll_addr[4] = 0xff;
+        aes67_flow[0].sll.sll_addr[5] = 0xff;
+    }
 
     if (path_2) {
         path = strdup(path_2);
@@ -855,15 +888,39 @@ static int set_flow_destination(struct upipe * upipe, int flow,
             return UBASE_ERR_INVALID;
         }
         free(path);
-        upipe_dbg_va(upipe, "flow %d path %d destination set to %s:%u",
-                flow, 1, inet_ntoa(aes67_flow[1].sin.sin_addr),
+        upipe_dbg_va(upipe, "flow %d path 1 destination set to %s:%u", flow,
+                inet_ntoa(aes67_flow[1].sin.sin_addr),
                 ntohs(aes67_flow[1].sin.sin_port));
-        upipe_udp_raw_fill_headers(NULL, aes67_flow[1].raw_header,
-                upipe_aes67_sink->sin[0].sin_addr.s_addr, aes67_flow[1].sin.sin_addr.s_addr,
-                upipe_aes67_sink->sin[0].sin_port, aes67_flow[1].sin.sin_port,
-                0, 0, 300);
-    }
 
+        upipe_udp_raw_fill_headers(NULL, aes67_flow[1].raw_header,
+                upipe_aes67_sink->sin[1].sin_addr.s_addr, aes67_flow[1].sin.sin_addr.s_addr,
+                ntohs(aes67_flow[1].sin.sin_port), ntohs(aes67_flow[1].sin.sin_port),
+                10, 0, 300);
+
+        aes67_flow[1].sll = (struct sockaddr_ll) {
+            .sll_family = AF_PACKET,
+                .sll_protocol = htons(ETH_P_IP),
+                .sll_ifindex = upipe_aes67_sink->sll[1].sll_ifindex,
+                .sll_halen = ETH_ALEN,
+        };
+
+        dst_ip = ntohl(aes67_flow[1].sin.sin_addr.s_addr);
+        if (IN_MULTICAST(dst_ip)) {
+            aes67_flow[1].sll.sll_addr[0] = 0x01;
+            aes67_flow[1].sll.sll_addr[1] = 0x00;
+            aes67_flow[1].sll.sll_addr[2] = 0x5e;
+            aes67_flow[1].sll.sll_addr[3] = (dst_ip >> 16) & 0x7f;
+            aes67_flow[1].sll.sll_addr[4] = (dst_ip >>  8) & 0xff;
+            aes67_flow[1].sll.sll_addr[5] = (dst_ip      ) & 0xff;
+        } else {
+            aes67_flow[1].sll.sll_addr[0] = 0xff;
+            aes67_flow[1].sll.sll_addr[1] = 0xff;
+            aes67_flow[1].sll.sll_addr[2] = 0xff;
+            aes67_flow[1].sll.sll_addr[3] = 0xff;
+            aes67_flow[1].sll.sll_addr[4] = 0xff;
+            aes67_flow[1].sll.sll_addr[5] = 0xff;
+        }
+    }
 
     return UBASE_ERR_NONE;
 }
