@@ -38,6 +38,7 @@
 #include <arpa/inet.h>
 #include <linux/if.h>
 #include <ifaddrs.h>
+#include <net/if_arp.h>
 
 #include <upipe/ubase.h>
 #include <upipe/ulist.h>
@@ -129,6 +130,8 @@ struct upipe_aes67_sink {
     pthread_mutex_t mutex;
     uatomic_uint32_t stop;
 
+    /* Interface names. */
+    char *ifname[2];
     /* IP details for the source. */
     struct sockaddr_in sin[2];
     /* Ethernet details for the source. */
@@ -631,6 +634,7 @@ static int open_socket(struct upipe *upipe, const char *path_1, const char *path
     upipe_aes67_sink->fd[0] = fd;
     upipe_aes67_sink->sin[0] = sin;
     upipe_aes67_sink->sll[0] = sll;
+    upipe_aes67_sink->ifname[0] = strdup(path_1);
 
     /* Handle second path. */
     if (path_2) {
@@ -673,6 +677,7 @@ static int open_socket(struct upipe *upipe, const char *path_1, const char *path
         upipe_aes67_sink->fd[1] = fd;
         upipe_aes67_sink->sin[1] = sin;
         upipe_aes67_sink->sll[1] = sll;
+        upipe_aes67_sink->ifname[1] = strdup(path_2);
     }
 
     return UBASE_ERR_NONE;
@@ -732,13 +737,22 @@ static int set_flow_destination(struct upipe * upipe, int flow,
         aes67_flow[0].sll.sll_addr[4] = (dst_ip >>  8) & 0xff;
         aes67_flow[0].sll.sll_addr[5] = (dst_ip      ) & 0xff;
     } else {
-        /* TODO: get correct address. */
-        aes67_flow[0].sll.sll_addr[0] = 0xff;
-        aes67_flow[0].sll.sll_addr[1] = 0xff;
-        aes67_flow[0].sll.sll_addr[2] = 0xff;
-        aes67_flow[0].sll.sll_addr[3] = 0xff;
-        aes67_flow[0].sll.sll_addr[4] = 0xff;
-        aes67_flow[0].sll.sll_addr[5] = 0xff;
+        struct arpreq arp = { .arp_flags = 0 };
+        memcpy(&arp.arp_pa, &aes67_flow[0].sin, sizeof aes67_flow[0].sin);
+        strncpy(arp.arp_dev, upipe_aes67_sink->ifname[0], sizeof arp.arp_dev);
+
+        if (ioctl(upipe_aes67_sink->fd[0], SIOCGARP, &arp) < 0) {
+            upipe_err_va(upipe, "unable to get MAC address for %s: (%d) %m",
+                    inet_ntoa(aes67_flow[0].sin.sin_addr), errno);
+            aes67_flow[0].sll.sll_addr[0] = 0xff;
+            aes67_flow[0].sll.sll_addr[1] = 0xff;
+            aes67_flow[0].sll.sll_addr[2] = 0xff;
+            aes67_flow[0].sll.sll_addr[3] = 0xff;
+            aes67_flow[0].sll.sll_addr[4] = 0xff;
+            aes67_flow[0].sll.sll_addr[5] = 0xff;
+        } else {
+            memcpy(aes67_flow[0].sll.sll_addr, arp.arp_ha.sa_data, ETH_ALEN);
+        }
     }
 
     if (path_2) {
@@ -775,12 +789,22 @@ static int set_flow_destination(struct upipe * upipe, int flow,
             aes67_flow[1].sll.sll_addr[4] = (dst_ip >>  8) & 0xff;
             aes67_flow[1].sll.sll_addr[5] = (dst_ip      ) & 0xff;
         } else {
-            aes67_flow[1].sll.sll_addr[0] = 0xff;
-            aes67_flow[1].sll.sll_addr[1] = 0xff;
-            aes67_flow[1].sll.sll_addr[2] = 0xff;
-            aes67_flow[1].sll.sll_addr[3] = 0xff;
-            aes67_flow[1].sll.sll_addr[4] = 0xff;
-            aes67_flow[1].sll.sll_addr[5] = 0xff;
+            struct arpreq arp = { .arp_flags = 0 };
+            memcpy(&arp.arp_pa, &aes67_flow[1].sin, sizeof aes67_flow[1].sin);
+            strncpy(arp.arp_dev, upipe_aes67_sink->ifname[1], sizeof arp.arp_dev);
+
+            if (ioctl(upipe_aes67_sink->fd[1], SIOCGARP, &arp) < 0) {
+                upipe_err_va(upipe, "unable to get MAC address for %s: (%d) %m",
+                        inet_ntoa(aes67_flow[1].sin.sin_addr), errno);
+                aes67_flow[1].sll.sll_addr[0] = 0xff;
+                aes67_flow[1].sll.sll_addr[1] = 0xff;
+                aes67_flow[1].sll.sll_addr[2] = 0xff;
+                aes67_flow[1].sll.sll_addr[3] = 0xff;
+                aes67_flow[1].sll.sll_addr[4] = 0xff;
+                aes67_flow[1].sll.sll_addr[5] = 0xff;
+            } else {
+                memcpy(aes67_flow[1].sll.sll_addr, arp.arp_ha.sa_data, ETH_ALEN);
+            }
         }
     }
 
