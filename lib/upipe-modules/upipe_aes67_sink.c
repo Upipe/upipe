@@ -88,7 +88,7 @@
 
 /** @hidden */
 static bool upipe_aes67_sink_output(struct upipe *upipe, struct uref *uref,
-                                 struct upump **upump_p, int which_fd);
+                                 struct upump **upump_p, int flow, int path);
 
 struct aes67_flow {
     /* IP details for the destination. */
@@ -304,8 +304,9 @@ static void *run_thread(void *upipe_pointer)
                         upipe_aes67_sink->latency / 27);
 
             /* Write packets. */
-            upipe_aes67_sink_output(upipe, uref, NULL, 0);
-            upipe_aes67_sink_output(upipe, uref, NULL, 1);
+            upipe_aes67_sink_output(upipe, uref, NULL, 0, 0);
+            if (upipe_aes67_sink->fd[1] != -1)
+                upipe_aes67_sink_output(upipe, uref, NULL, 0, 1);
 
             /* Adjust per packet values. */
             upipe_aes67_sink->mmap_frame_num = (upipe_aes67_sink->mmap_frame_num + 1) % MMAP_FRAME_NUM;
@@ -433,7 +434,7 @@ static struct upipe *upipe_aes67_sink_alloc(struct upipe_mgr *mgr,
  * @return true if the uref was processed
  */
 static bool upipe_aes67_sink_output(struct upipe *upipe, struct uref *uref,
-                                 struct upump **upump_p, int which_fd)
+                                 struct upump **upump_p, int flow, int path)
 {
     struct upipe_aes67_sink *upipe_aes67_sink = upipe_aes67_sink_from_upipe(upipe);
 
@@ -441,7 +442,7 @@ static bool upipe_aes67_sink_output(struct upipe *upipe, struct uref *uref,
         int payload_len = 288 + RTP_HEADER_SIZE;
 
             /* Get next frame to be used. */
-            union frame_map frame = { .raw = upipe_aes67_sink->mmap[which_fd] + upipe_aes67_sink->mmap_frame_num * MMAP_FRAME_SIZE };
+            union frame_map frame = { .raw = upipe_aes67_sink->mmap[path] + upipe_aes67_sink->mmap_frame_num * MMAP_FRAME_SIZE };
             uint8_t *data = frame.v1->data;
 
             /* Fill in mmap stuff. */
@@ -451,7 +452,7 @@ static bool upipe_aes67_sink_output(struct upipe *upipe, struct uref *uref,
             /* TODO: check for errors. */
 
             /* Fill in IP and UDP headers. */
-            memcpy(data, upipe_aes67_sink->raw_header[which_fd], RAW_HEADER_SIZE);
+            memcpy(data, upipe_aes67_sink->flows[flow][path].raw_header, RAW_HEADER_SIZE);
             udp_raw_set_len(data, payload_len);
             data += RAW_HEADER_SIZE;
 
@@ -465,8 +466,9 @@ static bool upipe_aes67_sink_output(struct upipe *upipe, struct uref *uref,
 
         memcpy(data, upipe_aes67_sink->audio_data, 288);
 
-        ssize_t ret = sendto(upipe_aes67_sink->fd[which_fd], NULL, 0, 0,
-                (struct sockaddr*)&upipe_aes67_sink->peer_addr[which_fd], sizeof upipe_aes67_sink->peer_addr[which_fd]);
+        ssize_t ret = sendto(upipe_aes67_sink->fd[path], NULL, 0, 0,
+                (struct sockaddr*)&upipe_aes67_sink->flows[flow][path].sll,
+                sizeof upipe_aes67_sink->flows[flow][path].sll);
         if (unlikely(ret == -1)) {
             switch (errno) {
                 case EINTR:
