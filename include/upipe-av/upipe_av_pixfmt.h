@@ -130,6 +130,8 @@ upipe_av_pixfmt_to_format(enum AVPixelFormat pix_fmt)
             return &uref_pic_flow_format_bgra;
         case AV_PIX_FMT_RGBA64BE:
             return &uref_pic_flow_format_rgba64be;
+        case AV_PIX_FMT_NV12:
+            return &uref_pic_flow_format_nv12;
         default:
             break;
     }
@@ -206,6 +208,7 @@ static inline enum AVPixelFormat
         AV_PIX_FMT_ABGR,
         AV_PIX_FMT_BGRA,
         AV_PIX_FMT_RGBA64BE,
+        AV_PIX_FMT_NV12,
         -1
     };
     if (pix_fmts == NULL)
