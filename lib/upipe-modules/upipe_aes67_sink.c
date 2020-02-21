@@ -113,15 +113,9 @@ struct upipe_aes67_sink {
     uint64_t latency;
     /** file descriptor */
     int fd[2];
-    /** socket uri */
-    char *uri;
-    /** interface indicies. */
-    int ifindex[2];
 
     void *mmap[2];
-    size_t mmap_size[2];
     int mmap_frame_num;
-    struct sockaddr_ll peer_addr[2];
 
     uint32_t timestamp;
     uint16_t seqnum;
@@ -135,22 +129,12 @@ struct upipe_aes67_sink {
     pthread_mutex_t mutex;
     uatomic_uint32_t stop;
 
-    /** RAW sockets */
-    bool raw;
-    /** RAW header */
-    uint8_t raw_header[2][RAW_HEADER_SIZE];
-
     /* IP details for the source. */
     struct sockaddr_in sin[2];
     /* Ethernet details for the source. */
     struct sockaddr_ll sll[2];
     /* Details for all destinations. */
     struct aes67_flow flows[AES67_MAX_FLOWS][AES67_MAX_PATHS];
-
-    /** destination for not-connected socket */
-    struct sockaddr_storage addr;
-    /** destination for not-connected socket (size) */
-    socklen_t addrlen;
 
     /** public upipe structure */
     struct upipe upipe;
@@ -399,22 +383,11 @@ static struct upipe *upipe_aes67_sink_alloc(struct upipe_mgr *mgr,
     upipe_aes67_sink_init_uclock(upipe);
     upipe_aes67_sink->latency = 0;
     upipe_aes67_sink->fd[0] = upipe_aes67_sink->fd[1] = -1;
-    upipe_aes67_sink->uri = NULL;
-    upipe_aes67_sink->raw = false;
-    upipe_aes67_sink->addrlen = 0;
     upipe_aes67_sink->thread_created = false;
     pthread_mutex_init(&upipe_aes67_sink->mutex, NULL);
 
     upipe_aes67_sink->mmap[0] = upipe_aes67_sink->mmap[1] = MAP_FAILED;
-    upipe_aes67_sink->mmap_size[0] = upipe_aes67_sink->mmap_size[1] = 0;
     upipe_aes67_sink->mmap_frame_num = 0;
-    upipe_aes67_sink->peer_addr[0] = upipe_aes67_sink->peer_addr[1] =
-        (struct sockaddr_ll) {
-            .sll_family = AF_PACKET,
-            .sll_protocol = htons(ETH_P_IP),
-            .sll_halen = ETH_ALEN,
-            .sll_addr = {0xff,0xff,0xff,0xff,0xff,0xff}, /* TODO: get right one? */
-        };
     upipe_aes67_sink->seqnum = 0;
     upipe_aes67_sink->cached_samples = 0;
     memset(upipe_aes67_sink->flows, 0, sizeof upipe_aes67_sink->flows);
@@ -705,119 +678,6 @@ static int open_socket(struct upipe *upipe, const char *path_1, const char *path
     return UBASE_ERR_NONE;
 }
 
-/** @internal @This asks to open the given socket.
- *
- * @param upipe description structure of the pipe
- * @param uri relative or absolute uri of the socket
- * @param mode mode of opening the socket
- * @return an error code
- */
-static int _upipe_aes67_sink_set_uri(struct upipe *upipe, const char *uri)
-{
-    struct upipe_aes67_sink *upipe_aes67_sink = upipe_aes67_sink_from_upipe(upipe);
-    bool use_tcp = false;
-    in_addr_t dst_ip;
-
-    if (unlikely(upipe_aes67_sink->fd[0] != -1)) {
-        if (likely(upipe_aes67_sink->uri != NULL))
-            upipe_notice_va(upipe, "closing socket %s", upipe_aes67_sink->uri);
-        close(upipe_aes67_sink->fd[0]);
-        if (upipe_aes67_sink->fd[1] != -1)
-            close(upipe_aes67_sink->fd[1]);
-    }
-    ubase_clean_str(&upipe_aes67_sink->uri);
-
-    if (unlikely(uri == NULL))
-        return UBASE_ERR_NONE;
-
-    char *uri_a, *uri_b, *ip_addr;
-    upipe_aes67_sink->uri = uri_a = strdup(uri);
-    UBASE_ALLOC_RETURN(uri_a);
-
-    uri_b = strchr(uri_a, '+');
-    if (uri_b)
-        *uri_b++ = '\0'; /* Remove + character and start 2nd uri after it. */
-
-    /* Open 1st socket. */
-    upipe_aes67_sink->fd[0] = upipe_udp_open_socket(upipe, uri_a,
-            UDP_DEFAULT_TTL, UDP_DEFAULT_PORT, 0, NULL, &use_tcp,
-            &upipe_aes67_sink->raw, upipe_aes67_sink->raw_header[0],
-            &upipe_aes67_sink->ifindex[0]);
-    if (unlikely(upipe_aes67_sink->fd[0] == -1)) {
-        upipe_err_va(upipe, "can't open uri %s", uri_a);
-        return UBASE_ERR_EXTERNAL;
-    }
-
-    upipe_aes67_sink->mmap_size[0] = MMAP_BLOCK_SIZE * MMAP_BLOCK_NUM;
-    upipe_aes67_sink->mmap[0] = mmap(0, upipe_aes67_sink->mmap_size[0], PROT_READ | PROT_WRITE,
-            MAP_SHARED, upipe_aes67_sink->fd[0], 0);
-    if (upipe_aes67_sink->mmap[0] == MAP_FAILED) {
-        upipe_err_va(upipe, "unable to mmap: %m");
-        return UBASE_ERR_EXTERNAL;
-    }
-    upipe_aes67_sink->peer_addr[0].sll_ifindex = upipe_aes67_sink->ifindex[0];
-
-    ip_addr = strchr(uri_a, ':');
-    if (ip_addr)
-        *ip_addr++ = '\0'; /*extract the IP address */
-
-    dst_ip = inet_addr(uri_a);
-    ip_addr[-1] = ':'; /* Restore : character. */
-
-    if (IN_MULTICAST(ntohl(dst_ip))) {
-        uint32_t ip = ntohl(dst_ip);
-        upipe_aes67_sink->peer_addr[0].sll_addr[0] = 0x01;
-        upipe_aes67_sink->peer_addr[0].sll_addr[1] = 0x00;
-        upipe_aes67_sink->peer_addr[0].sll_addr[2] = 0x5e;
-        upipe_aes67_sink->peer_addr[0].sll_addr[3] = (ip >> 16) & 0x7f;
-        upipe_aes67_sink->peer_addr[0].sll_addr[4] = (ip >>  8) & 0xff;
-        upipe_aes67_sink->peer_addr[0].sll_addr[5] = (ip      ) & 0xff;
-    }
-
-    /* Open 2nd socket. */
-    if (uri_b) {
-        uri_b[-1] = '+'; /* Restore + character. */
-        upipe_aes67_sink->fd[1] = upipe_udp_open_socket(upipe, uri_b,
-                UDP_DEFAULT_TTL, UDP_DEFAULT_PORT, 0, NULL, &use_tcp,
-                &upipe_aes67_sink->raw, upipe_aes67_sink->raw_header[1],
-                &upipe_aes67_sink->ifindex[1]);
-        if (unlikely(upipe_aes67_sink->fd[1] == -1)) {
-            upipe_err_va(upipe, "can't open uri %s", uri_b);
-            ubase_clean_fd(&upipe_aes67_sink->fd[0]);
-            return UBASE_ERR_EXTERNAL;
-        }
-
-        upipe_aes67_sink->mmap_size[1] = MMAP_BLOCK_SIZE * MMAP_BLOCK_NUM;
-        upipe_aes67_sink->mmap[1] = mmap(0, upipe_aes67_sink->mmap_size[1], PROT_READ | PROT_WRITE,
-                MAP_SHARED, upipe_aes67_sink->fd[1], 0);
-        if (upipe_aes67_sink->mmap[1] == MAP_FAILED) {
-            upipe_err_va(upipe, "unable to mmap: %m");
-            return UBASE_ERR_EXTERNAL;
-        }
-        upipe_aes67_sink->peer_addr[1].sll_ifindex = upipe_aes67_sink->ifindex[1];
-
-        ip_addr = strchr(uri_b, ':');
-        if (ip_addr)
-            *ip_addr++ = '\0'; /*extract the IP address */
-
-        dst_ip = inet_addr(uri_b);
-        ip_addr[-1] = ':'; /* Restore : character. */
-
-        if (IN_MULTICAST(ntohl(dst_ip))) {
-            uint32_t ip = ntohl(dst_ip);
-            upipe_aes67_sink->peer_addr[1].sll_addr[0] = 0x01;
-            upipe_aes67_sink->peer_addr[1].sll_addr[1] = 0x00;
-            upipe_aes67_sink->peer_addr[1].sll_addr[2] = 0x5e;
-            upipe_aes67_sink->peer_addr[1].sll_addr[3] = (ip >> 16) & 0x7f;
-            upipe_aes67_sink->peer_addr[1].sll_addr[4] = (ip >>  8) & 0xff;
-            upipe_aes67_sink->peer_addr[1].sll_addr[5] = (ip      ) & 0xff;
-        }
-    }
-
-    upipe_notice_va(upipe, "opening uri %s", upipe_aes67_sink->uri);
-    return UBASE_ERR_NONE;
-}
-
 static int set_flow_destination(struct upipe * upipe, int flow,
         const char *path_1, const char *path_2)
 {
@@ -989,8 +849,6 @@ static void upipe_aes67_sink_free(struct upipe *upipe)
     pthread_mutex_destroy(&upipe_aes67_sink->mutex); /* Check return value? */
 
     if (likely(upipe_aes67_sink->fd[0] != -1)) {
-        if (likely(upipe_aes67_sink->uri != NULL))
-            upipe_notice_va(upipe, "closing socket %s", upipe_aes67_sink->uri);
         close(upipe_aes67_sink->fd[0]);
         if (upipe_aes67_sink->fd[1] != -1)
             close(upipe_aes67_sink->fd[1]);
@@ -1004,7 +862,6 @@ static void upipe_aes67_sink_free(struct upipe *upipe)
         uref_free(uref_from_uchain(uchain));
     }
 
-    free(upipe_aes67_sink->uri);
     upipe_aes67_sink_clean_uclock(upipe);
     upipe_aes67_sink_clean_urefcount(upipe);
     upipe_aes67_sink_free_void(upipe);
