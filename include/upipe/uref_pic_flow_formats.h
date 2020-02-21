@@ -608,6 +608,18 @@ static const struct uref_pic_flow_format uref_pic_flow_format_rgba64be = {
 
 UREF_PIC_FLOW_FORMAT_HELPER(rgba64be);
 
+/** @This is the description of the nv12 format. */
+static const struct uref_pic_flow_format uref_pic_flow_format_nv12 = {
+    .macropixel = 1,
+    .nb_planes = 2,
+    .planes = {
+        { 1, 1, 1, "y8", 8 },
+        { 2, 2, 2, "u8v8", 16 },
+    },
+};
+
+UREF_PIC_FLOW_FORMAT_HELPER(nv12);
+
 #ifdef __cplusplus
 }
 #endif
