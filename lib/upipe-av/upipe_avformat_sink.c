@@ -685,16 +685,20 @@ static int upipe_avfsink_avio_open(struct upipe *upipe, struct upipe_avfsink_sub
     if (upipe_avfsink->context->oformat->flags & AVFMT_NOFILE)
         return UBASE_ERR_NONE;
 
+#if LIBAVFORMAT_VERSION_INT < AV_VERSION_INT(58, 7, 100)
+    char *url = upipe_avfsink->context->filename;
+#else
+    char *url = upipe_avfsink->context->url;
+#endif
+
     AVDictionary *options = NULL;
     av_dict_copy(&options, upipe_avfsink->options, 0);
-    int error = avio_open2(&upipe_avfsink->context->pb,
-                           upipe_avfsink->context->filename,
+    int error = avio_open2(&upipe_avfsink->context->pb, url,
                            AVIO_FLAG_WRITE, NULL, &options);
     av_dict_free(&options);
     if (error < 0) {
         upipe_av_strerror(error, buf);
-        upipe_err_va(upipe, "couldn't open file %s (%s)",
-                     upipe_avfsink->context->filename, buf);
+        upipe_err_va(upipe, "couldn't open file %s (%s)", url, buf);
         upipe_throw_fatal(upipe, UBASE_ERR_EXTERNAL);
         while (!ulist_empty(&input->urefs)) {
             uref_free(uref_from_uchain(ulist_pop(&input->urefs)));
@@ -729,14 +733,14 @@ static void upipe_avfsink_set_disposition_default(struct upipe *upipe)
             continue;
 
         AVStream *stream = upipe_avfsink->context->streams[input->id];
-        if (stream->codec->codec_id < AV_CODEC_ID_FIRST_AUDIO &&
+        if (stream->codecpar->codec_id < AV_CODEC_ID_FIRST_AUDIO &&
             (input->flow_id < video_flow_id || !video_stream)) {
             video_stream = stream;
             video_flow_id = input->flow_id;
             upipe_dbg_va(upipe, "use video stream %"PRIu64" as default",
                          video_flow_id);
         }
-        else if (stream->codec->codec_id < AV_CODEC_ID_FIRST_SUBTITLE &&
+        else if (stream->codecpar->codec_id < AV_CODEC_ID_FIRST_SUBTITLE &&
                  (input->flow_id < audio_flow_id || !audio_stream)) {
             audio_stream = stream;
             audio_flow_id = input->flow_id;
@@ -790,9 +794,15 @@ static void upipe_avfsink_mux(struct upipe *upipe, struct upump **upump_p)
             if (upipe_avfsink->init_uri != NULL) {
                 upipe_notice_va(upipe, "opening init URI %s",
                                 upipe_avfsink->init_uri);
+#if LIBAVFORMAT_VERSION_INT < AV_VERSION_INT(58, 7, 100)
                 snprintf(upipe_avfsink->context->filename,
                          sizeof (upipe_avfsink->context->filename),
                          "%s", upipe_avfsink->init_uri);
+#else
+                av_free(upipe_avfsink->context->url);
+                upipe_avfsink->context->url =
+                    av_strdup(upipe_avfsink->init_uri);
+#endif
             }
             if (!ubase_check(upipe_avfsink_avio_open(upipe, input)))
                 return;
@@ -829,9 +839,14 @@ static void upipe_avfsink_mux(struct upipe *upipe, struct upump **upump_p)
                                 upipe_avfsink->init_uri);
                 if (!(upipe_avfsink->context->oformat->flags & AVFMT_NOFILE))
                     avio_close(upipe_avfsink->context->pb);
+#if LIBAVFORMAT_VERSION_INT < AV_VERSION_INT(58, 7, 100)
                 snprintf(upipe_avfsink->context->filename,
                          sizeof (upipe_avfsink->context->filename),
                          "%s", upipe_avfsink->uri);
+#else
+                av_free(upipe_avfsink->context->url);
+                upipe_avfsink->context->url = av_strdup(upipe_avfsink->uri);
+#endif
                 if (!ubase_check(upipe_avfsink_avio_open(upipe, input)))
                     return;
             }
@@ -1107,8 +1122,10 @@ static int upipe_avfsink_set_uri(struct upipe *upipe, const char *uri)
     if (unlikely(uri == NULL))
         return UBASE_ERR_NONE;
 
+#if LIBAVFORMAT_VERSION_INT < AV_VERSION_INT(58, 7, 100)
     if (unlikely(strlen(uri) >= sizeof(upipe_avfsink->context->filename)))
         return UBASE_ERR_INVALID;
+#endif
 
     AVOutputFormat *format = NULL;
     format = av_guess_format(upipe_avfsink->format, uri, upipe_avfsink->mime);
@@ -1121,7 +1138,11 @@ static int upipe_avfsink_set_uri(struct upipe *upipe, const char *uri)
         return UBASE_ERR_EXTERNAL;
     }
     upipe_avfsink->context->oformat = format;
+#if LIBAVFORMAT_VERSION_INT < AV_VERSION_INT(58, 7, 100)
     strcpy(upipe_avfsink->context->filename, uri);
+#else
+    upipe_avfsink->context->url = av_strdup(uri);
+#endif
 
     upipe_avfsink->uri = strdup(uri);
     upipe_avfsink->opened = false;
