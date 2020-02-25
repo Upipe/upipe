@@ -138,7 +138,9 @@ struct upipe_netmap_sink {
     unsigned gap_fakes_current;
     unsigned gap_fakes;
     uint64_t phase_delay;
-    uint64_t rtp_timestamp;
+
+    /* Cached timestamps for RFC4175 */
+    uint64_t rtp_timestamp[2];
 
     /** picture size */
     uint64_t hsize;
@@ -446,7 +448,7 @@ static void upipe_netmap_sink_reset_counters(struct upipe *upipe)
     upipe_netmap_sink->seqnum = 0;
     upipe_netmap_sink->frame_count = 0;
     upipe_netmap_sink->phase_delay = 0;
-    upipe_netmap_sink->rtp_timestamp = 0;
+    memset(upipe_netmap_sink->rtp_timestamp, 0, sizeof(upipe_netmap_sink->rtp_timestamp));
     upipe_netmap_sink->frame_ts = 0;
 }
 
@@ -558,6 +560,26 @@ static struct upipe *_upipe_netmap_sink_alloc(struct upipe_mgr *mgr,
     return upipe;
 }
 
+/* Cache RFC 4175 timestamps to avoid calculating them per packet */
+static void upipe_netmap_update_timestamp_cache(struct upipe_netmap_sink *upipe_netmap_sink)
+{
+    __uint128_t t = upipe_netmap_sink->frame_count, t2 = upipe_netmap_sink->frame_count;
+    const struct urational *fps = &upipe_netmap_sink->fps;
+
+    t *= 90000;
+    t *= fps->den;
+    t /= fps->num;
+    upipe_netmap_sink->rtp_timestamp[0] = t;
+
+    if (!upipe_netmap_sink->progressive) {
+        t2 *= 90000;
+        t2 += 90000 / 2;
+        t2 *= fps->den;
+        t2 /= fps->num;
+        upipe_netmap_sink->rtp_timestamp[1] = t2;
+    }
+}
+
 static int upipe_netmap_put_rtp_headers(struct upipe *upipe, uint8_t *buf,
         uint8_t pt, bool update, bool f2)
 {
@@ -570,21 +592,14 @@ static int upipe_netmap_put_rtp_headers(struct upipe *upipe, uint8_t *buf,
     if (update) {
         rtp_set_seqnum(buf, upipe_netmap_sink->seqnum & UINT16_MAX);
 
-        const struct urational *fps = &upipe_netmap_sink->fps;
         uint64_t timestamp;
         if (upipe_netmap_sink->rfc4175) {
-            __uint128_t t = upipe_netmap_sink->frame_count;
-            t *= 90000;
-            if (f2)
-                t += 90000 / 2;
-            t *= fps->den;
-            t /= fps->num;
-            timestamp = t;
+            timestamp = upipe_netmap_sink->rtp_timestamp[f2];
         } else {
             timestamp = upipe_netmap_sink->frame_count * upipe_netmap_sink->frame_duration +
                 (upipe_netmap_sink->frame_duration * upipe_netmap_sink->pkt * HBRMT_DATA_SIZE) /
                 upipe_netmap_sink->frame_size;
-            timestamp = upipe_netmap_sink->rtp_timestamp;
+            timestamp = upipe_netmap_sink->rtp_timestamp[0];
         }
         rtp_set_timestamp(buf, timestamp & UINT32_MAX);
     }
@@ -802,6 +817,7 @@ static int worker_rfc4175(struct upipe *upipe, uint8_t **dst, uint16_t **len)
         upipe_netmap_sink->pixel_offset = 0;
         upipe_netmap_sink->frame_count++;
         upipe_netmap_sink->pkt = 0;
+        upipe_netmap_update_timestamp_cache(upipe_netmap_sink);
         return 1;
     }
 
@@ -1065,6 +1081,7 @@ static void handle_tx_stamp(struct upipe *upipe, uint64_t t, uint16_t seq)
         upipe_netmap_sink->frame_count = upipe_netmap_sink->frame_ts + 1;
         upipe_netmap_sink->frame_ts *= dur;
         upipe_netmap_sink->phase_delay = t - upipe_netmap_sink->frame_ts;
+        upipe_netmap_update_timestamp_cache(upipe_netmap_sink);
         return;
     }
 
@@ -1519,7 +1536,7 @@ static void upipe_netmap_sink_worker(struct upump *upump)
                 upipe_netmap_sink->pkt = 0;
 
                 upipe_netmap_sink->frame_count++;
-                upipe_netmap_sink->rtp_timestamp += upipe_netmap_sink->frame_duration;
+                upipe_netmap_sink->rtp_timestamp[0] += upipe_netmap_sink->frame_duration;
                 for (size_t i = 0; i < 2; i++) {
                     struct upipe_netmap_intf *intf = &upipe_netmap_sink->intf[i];
                     if (!intf->d)
@@ -1880,6 +1897,7 @@ static int upipe_netmap_sink_set_flow_def(struct upipe *upipe,
             header += upipe_netmap_put_ip_headers(intf, header, udp_payload_size);
             /* RTP Headers done in worker_rfc4175 */
         }
+        upipe_netmap_update_timestamp_cache(upipe_netmap_sink);
     }
 
     upipe_netmap_sink->frame_size = 0;
