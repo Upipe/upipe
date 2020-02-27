@@ -1489,7 +1489,7 @@ static void upipe_netmap_sink_worker(struct upump *upump)
 
                 for (size_t i = 0; i < 2; i++) {
                     struct upipe_netmap_intf *intf = &upipe_netmap_sink->intf[i];
-                    if (!intf->d || !intf->up)
+                    if (unlikely(!intf->d || !intf->up))
                         continue;
                     memset(dst[i], 0, pkt_len);
                     memcpy(dst[i], intf->header, ETHERNET_HEADER_LEN);
@@ -1587,7 +1587,7 @@ static void upipe_netmap_sink_worker(struct upump *upump)
 
     for (size_t i = 0; i < 2; i++) {
         struct upipe_netmap_intf *intf = &upipe_netmap_sink->intf[i];
-        if (!intf->d || !intf->up)
+        if (unlikely(!intf->d || !intf->up))
             continue;
 
         txring[i]->head = txring[i]->cur = cur[i];
