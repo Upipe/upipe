@@ -68,6 +68,7 @@
 #include <upipe-filters/upipe_filter_format.h>
 #include <upipe-framers/upipe_auto_framer.h>
 #include <upipe-modules/upipe_null.h>
+#include <upipe-modules/upipe_noclock.h>
 
 #include <stdbool.h>
 #include <stdlib.h>
@@ -102,6 +103,9 @@ struct upipe_mgr *upipe_avcdec_mgr;
 struct upipe_mgr *upipe_avcenc_mgr;
 struct upipe_mgr *upipe_ffmt_mgr;
 struct upipe_mgr *upipe_null_mgr;
+struct upipe_mgr *upipe_noclock_mgr;
+
+static bool file_mode;
 
 static struct uprobe *logger;
 static struct upipe *avfsrc;
@@ -109,7 +113,9 @@ static struct upipe *avfsink;
 struct uchain eslist;
 
 static void usage(const char *argv0) {
-    fprintf(stderr, "Usage: %s [-d] [-m <mime>] [-f <format>] [-p <id> -c <codec> [-o <option=value>] ...] ... <source file> <sink file>\n", argv0);
+    fprintf(stderr, "Usage: %s [-d] [-F] [-m <mime>] [-f <format>] [-p <id> -c <codec> [-o <option=value>] ...] ... <source file> <sink file>\n", argv0);
+    fprintf(stderr, "   -d: show more debug logs\n");
+    fprintf(stderr, "   -F: file mode\n");
     fprintf(stderr, "   -f: output format name\n");
     fprintf(stderr, "   -m: output mime type\n");
     fprintf(stderr, "   -p: add stream with id\n");
@@ -262,8 +268,20 @@ static int catch_demux(struct uprobe *uprobe, struct upipe *upipe,
         /* transcode stream if specified by user */
         struct es_conf *conf = es_conf_from_id(&eslist, id);
         if (conf && conf->codec) {
+            incoming = avfsrc_output;
+
+            /* create system timestamps when in file mode */
+            if (file_mode) {
+                struct upipe *noclock = upipe_void_alloc_output(incoming,
+                    upipe_noclock_mgr,
+                    uprobe_pfx_alloc_va(uprobe_use(logger),
+                                        loglevel, "noclock %"PRIu64, id));
+                upipe_release(noclock);
+                incoming = noclock;
+            }
+
             /* decoder */
-            struct upipe *decoder = upipe_void_alloc_output(avfsrc_output,
+            struct upipe *decoder = upipe_void_alloc_output(incoming,
                 upipe_avcdec_mgr,
                 uprobe_pfx_alloc_va(uprobe_use(logger),
                                     loglevel, "dec %"PRIu64, id));
@@ -370,10 +388,13 @@ int main(int argc, char *argv[])
     ulist_init(&eslist);
 
     /* parse options */
-    while ((opt = getopt(argc, argv, "dm:f:p:c:o:")) != -1) {
+    while ((opt = getopt(argc, argv, "dFm:f:p:c:o:")) != -1) {
         switch(opt) {
             case 'd':
                 if (loglevel > 0) loglevel--;
+                break;
+            case 'F':
+                file_mode = true;
                 break;
             case 'm':
                 mime = optarg;
@@ -423,8 +444,10 @@ int main(int argc, char *argv[])
     assert(logger != NULL);
     logger = uprobe_upump_mgr_alloc(logger, upump_mgr);
     assert(logger != NULL);
-    logger = uprobe_uclock_alloc(logger, uclock);
-    assert(logger != NULL);
+    if (!file_mode) {
+        logger = uprobe_uclock_alloc(logger, uclock);
+        assert(logger != NULL);
+    }
     logger = uprobe_ubuf_mem_alloc(logger, umem_mgr, UBUF_POOL_DEPTH,
                                    UBUF_POOL_DEPTH);
     assert(logger != NULL);
@@ -453,6 +476,7 @@ int main(int argc, char *argv[])
     upipe_ffmt_mgr_set_sws_mgr(upipe_ffmt_mgr, upipe_sws_mgr);
     upipe_ffmt_mgr_set_swr_mgr(upipe_ffmt_mgr, upipe_swr_mgr);
     upipe_null_mgr = upipe_null_mgr_alloc();
+    upipe_noclock_mgr = upipe_noclock_mgr_alloc();
 
     struct upipe_mgr *upipe_autof_mgr = upipe_autof_mgr_alloc();
     if (upipe_autof_mgr != NULL) {
@@ -463,7 +487,8 @@ int main(int argc, char *argv[])
     /* avformat sink */
     avfsink = upipe_void_alloc(upipe_avfsink_mgr,
         uprobe_pfx_alloc(uprobe_use(logger), loglevel, "avfsink"));
-    upipe_attach_uclock(avfsink);
+    if (!file_mode)
+        upipe_attach_uclock(avfsink);
 
     upipe_avfsink_set_mime(avfsink, mime);
     upipe_avfsink_set_format(avfsink, format);
@@ -475,7 +500,8 @@ int main(int argc, char *argv[])
     /* avformat source */
     avfsrc = upipe_void_alloc(upipe_avfsrc_mgr,
         uprobe_pfx_alloc(uprobe_use(&uprobe_demux_s), loglevel, "avfsrc"));
-    upipe_attach_uclock(avfsrc);
+    if (!file_mode)
+        upipe_attach_uclock(avfsrc);
     upipe_set_uri(avfsrc, src_url);
 
     /* fire */
@@ -490,6 +516,7 @@ int main(int argc, char *argv[])
     upipe_mgr_release(upipe_avfsink_mgr); /* nop */
 
     upipe_mgr_release(upipe_null_mgr);
+    upipe_mgr_release(upipe_noclock_mgr);
     upipe_mgr_release(upipe_ffmt_mgr);
     upipe_mgr_release(upipe_sws_mgr); /* nop */
     upipe_mgr_release(upipe_swr_mgr); /* nop */
