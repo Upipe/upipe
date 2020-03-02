@@ -668,7 +668,7 @@ static int open_socket(struct upipe *upipe, const char *path_1, const char *path
     upipe_aes67_sink->ifname[0] = strdup(path_1);
 
     /* Handle second path. */
-    if (path_2) {
+    if (path_2 && strlen(path_2)) {
         UBASE_RETURN(get_interface_details(upipe, path_2, &sin, &sll));
 
         upipe_dbg_va(upipe, "opening socket for %s %s", path_2, inet_ntoa(sin.sin_addr));
@@ -722,7 +722,7 @@ static int set_flow_destination(struct upipe * upipe, int flow,
     /* Check arguments are okay. */
     if (unlikely(path_1 == NULL))
         return UBASE_ERR_INVALID;
-    if (unlikely(path_2 == NULL && upipe_aes67_sink->fd[1] != -1))
+    if (unlikely((path_2 == NULL || strlen(path_2) == 0) && upipe_aes67_sink->fd[1] != -1))
         return UBASE_ERR_INVALID;
     if (unlikely(flow < 0 || flow >= AES67_MAX_FLOWS)) {
         upipe_err_va(upipe, "flow %d is not in the range 0..%d", flow, AES67_MAX_FLOWS-1);
@@ -797,7 +797,7 @@ static int set_flow_destination(struct upipe * upipe, int flow,
         }
     }
 
-    if (path_2) {
+    if (path_2 && strlen(path_2)) {
         path = strdup(path_2);
         UBASE_ALLOC_RETURN(path);
         if (!upipe_udp_parse_node_service(upipe, path, NULL, 0, NULL,
