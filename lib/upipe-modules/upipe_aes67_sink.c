@@ -133,7 +133,7 @@ struct upipe_aes67_sink {
     bool thread_created;
     pthread_t pt;
     pthread_mutex_t mutex;
-    uatomic_uint32_t stop;
+    bool stop;
 
     /** maximum samples to put in each packet */
     int output_samples;
@@ -194,8 +194,12 @@ static void *run_thread(void *upipe_pointer)
     struct uchain *uchain = NULL;
 
     /* Run until told to stop. */
-    while (uatomic_load(&upipe_aes67_sink->stop) == 0) {
+    while (true) {
         pthread_mutex_lock(&upipe_aes67_sink->mutex);
+        if (upipe_aes67_sink->stop) {
+            pthread_mutex_unlock(&upipe_aes67_sink->mutex);
+            break;
+        }
         uchain = ulist_pop(&upipe_aes67_sink->ulist);
         pthread_mutex_unlock(&upipe_aes67_sink->mutex);
 
@@ -389,6 +393,7 @@ static struct upipe *upipe_aes67_sink_alloc(struct upipe_mgr *mgr,
     upipe_aes67_sink->latency = 0;
     upipe_aes67_sink->fd[0] = upipe_aes67_sink->fd[1] = -1;
     upipe_aes67_sink->thread_created = false;
+    upipe_aes67_sink->stop = false;
     pthread_mutex_init(&upipe_aes67_sink->mutex, NULL);
 
     upipe_aes67_sink->mmap[0] = upipe_aes67_sink->mmap[1] = MAP_FAILED;
@@ -398,7 +403,6 @@ static struct upipe *upipe_aes67_sink_alloc(struct upipe_mgr *mgr,
     memset(upipe_aes67_sink->flows, 0, sizeof upipe_aes67_sink->flows);
 
     ulist_init(&upipe_aes67_sink->ulist);
-    uatomic_init(&upipe_aes67_sink->stop, 0);
 
     upipe_throw_ready(upipe);
     return upipe;
@@ -923,7 +927,10 @@ static void upipe_aes67_sink_free(struct upipe *upipe)
     struct upipe_aes67_sink *upipe_aes67_sink = upipe_aes67_sink_from_upipe(upipe);
 
     /* Stop thread. */
-    uatomic_store(&upipe_aes67_sink->stop, 1);
+    pthread_mutex_lock(&upipe_aes67_sink->mutex);
+    upipe_aes67_sink->stop = true;
+    pthread_mutex_unlock(&upipe_aes67_sink->mutex);
+
     /* Wait for thread to exit. */
     if (upipe_aes67_sink->thread_created)
         pthread_join(upipe_aes67_sink->pt, NULL);
