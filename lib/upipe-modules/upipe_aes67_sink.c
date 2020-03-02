@@ -137,8 +137,6 @@ struct upipe_aes67_sink {
 
     /** maximum samples to put in each packet */
     int output_samples;
-    /** maximum time (microseconds) to put in each packet */
-    int output_time;
 
     /* Interface names. */
     char *ifname[2];
@@ -532,29 +530,6 @@ static int upipe_aes67_sink_set_flow_def(struct upipe *upipe,
         return UBASE_ERR_INVALID;
     UBASE_RETURN(uref_flow_match_def(flow_def, EXPECTED_FLOW_DEF))
 
-    /* Determine how many samples to put in each packet. */
-    uint64_t rate;
-    UBASE_RETURN(uref_sound_flow_get_rate(flow_def, &rate));
-    if (upipe_aes67_sink->output_time) {
-        upipe_aes67_sink->output_samples = rate * upipe_aes67_sink->output_time / 1e6;
-    }
-
-    if (upipe_aes67_sink->output_samples == 0) {
-        upipe_err(upipe, "output_samples not set");
-        return UBASE_ERR_INVALID;
-    }
-
-#ifndef MTU
-#define MTU 1400
-#endif
-
-    /* A sample packs to 3 bytes.  16 channels.  Frames/packets must be
-     * aligned for the tx queue. */
-    int needed_size = upipe_aes67_sink->output_samples * 16 * 3;
-    if (needed_size > MTU) {
-        upipe_err_va(upipe, "requested frame or packet size (%d bytes, %d samples) is greater than MTU (%d)",
-                needed_size, upipe_aes67_sink->output_samples, MTU);
-    }
 
     flow_def = uref_dup(flow_def);
     UBASE_ALLOC_RETURN(flow_def)
@@ -867,14 +842,21 @@ static int upipe_aes67_sink_set_option(struct upipe *upipe, const char *option,
 
     if (!strcmp(option, "output-samples")) {
         upipe_aes67_sink->output_samples = atoi(value);
+#ifndef MTU
+#define MTU 1400
+#endif
+        /* A sample packs to 3 bytes.  16 channels.  Frames/packets must be
+         * aligned for the tx queue. */
+        int needed_size = upipe_aes67_sink->output_samples * 16 * 3;
+        if (needed_size > MTU) {
+            upipe_err_va(upipe, "requested frame or packet size (%d bytes, %d samples) is greater than MTU (%d)",
+                    needed_size, upipe_aes67_sink->output_samples, MTU);
+            return UBASE_ERR_INVALID;
+        }
         return UBASE_ERR_NONE;
     }
 
-    if (!strcmp(option, "output-time")) {
-        upipe_aes67_sink->output_time = atoi(value);
-        return UBASE_ERR_NONE;
-    }
-
+    upipe_err_va(upipe, "Unknown option %s", option);
     return UBASE_ERR_INVALID;
 }
 
