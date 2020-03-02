@@ -46,6 +46,7 @@
 #include <upipe/uclock.h>
 #include <upipe/uref.h>
 #include <upipe/uref_sound.h>
+#include <upipe/uref_sound_flow.h>
 #include <upipe/uref_clock.h>
 #include <upipe/ubuf.h>
 #include <upipe/upipe.h>
@@ -129,6 +130,11 @@ struct upipe_aes67_sink {
     pthread_t pt;
     pthread_mutex_t mutex;
     uatomic_uint32_t stop;
+
+    /** maximum samples to put in each packet */
+    int output_samples;
+    /** maximum time (microseconds) to put in each packet */
+    int output_time;
 
     /* Interface names. */
     char *ifname[2];
@@ -521,6 +527,31 @@ static int upipe_aes67_sink_set_flow_def(struct upipe *upipe,
     if (flow_def == NULL)
         return UBASE_ERR_INVALID;
     UBASE_RETURN(uref_flow_match_def(flow_def, EXPECTED_FLOW_DEF))
+
+    /* Determine how many samples to put in each packet. */
+    uint64_t rate;
+    UBASE_RETURN(uref_sound_flow_get_rate(flow_def, &rate));
+    if (upipe_aes67_sink->output_time) {
+        upipe_aes67_sink->output_samples = rate * upipe_aes67_sink->output_time / 1e6;
+    }
+
+    if (upipe_aes67_sink->output_samples == 0) {
+        upipe_err(upipe, "output_samples not set");
+        return UBASE_ERR_INVALID;
+    }
+
+#ifndef MTU
+#define MTU 1400
+#endif
+
+    /* A sample packs to 3 bytes.  16 channels.  Frames/packets must be
+     * aligned for the tx queue. */
+    int needed_size = upipe_aes67_sink->output_samples * 16 * 3;
+    if (needed_size > MTU) {
+        upipe_err_va(upipe, "requested frame or packet size (%d bytes, %d samples) is greater than MTU (%d)",
+                needed_size, upipe_aes67_sink->output_samples, MTU);
+    }
+
     flow_def = uref_dup(flow_def);
     UBASE_ALLOC_RETURN(flow_def)
     upipe_input(upipe, flow_def, NULL);
@@ -822,6 +853,28 @@ static int set_flow_destination(struct upipe * upipe, int flow,
     return UBASE_ERR_NONE;
 }
 
+static int upipe_aes67_sink_set_option(struct upipe *upipe, const char *option,
+        const char *value)
+{
+    struct upipe_aes67_sink *upipe_aes67_sink = upipe_aes67_sink_from_upipe(upipe);
+
+    if (!option || !value)
+        return UBASE_ERR_INVALID;
+
+    if (!strcmp(option, "output-samples")) {
+        upipe_aes67_sink->output_samples = atoi(value);
+        return UBASE_ERR_NONE;
+    }
+
+    if (!strcmp(option, "output-time")) {
+        upipe_aes67_sink->output_time = atoi(value);
+        return UBASE_ERR_NONE;
+    }
+
+    return UBASE_ERR_INVALID;
+}
+
+
 /** @internal @This processes control commands on an aes67 sink pipe.
  *
  * @param upipe description structure of the pipe
@@ -860,6 +913,12 @@ static int upipe_aes67_sink_control(struct upipe *upipe,
             const char *path_1 = va_arg(args, const char *);
             const char *path_2 = va_arg(args, const char *);
             return set_flow_destination(upipe, flow, path_1, path_2);
+        }
+
+        case UPIPE_SET_OPTION: {
+            const char *option = va_arg(args, const char *);
+            const char *value  = va_arg(args, const char *);
+            return upipe_aes67_sink_set_option(upipe, option, value);
         }
 
         default:
