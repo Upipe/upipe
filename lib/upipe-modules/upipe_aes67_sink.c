@@ -235,12 +235,6 @@ static void *run_thread(void *upipe_pointer)
         channels /= 4;
 
         int num_frames = (samples + upipe_aes67_sink->cached_samples) / upipe_aes67_sink->output_samples;
-        /* TODO: Is this check still needed. */
-        if (num_frames > MMAP_FRAME_NUM) {
-            upipe_err(upipe, "uref too big");
-            uref_free(uref);
-            continue;
-        }
 
         /* Map uref. */
         const int32_t *src = NULL;
