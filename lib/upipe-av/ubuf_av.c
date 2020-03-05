@@ -38,6 +38,7 @@
 #include <upipe-av/ubuf_av.h>
 
 #include <libavutil/frame.h>
+#include <libavutil/hwcontext.h>
 
 #define UBUF_PIC_AV_SIGNATURE UBASE_FOURCC('b','f','a','v')
 
@@ -55,6 +56,8 @@ struct ubuf_pic_av {
     const struct uref_pic_flow_format *flow_format;
     /** picture buffer for negative linesize */
     uint8_t **buf;
+    /** mapped frame for hardware mapping */
+    AVFrame *mapped_frame;
 };
 
 /** @internal @This is the private structure for sound. */
@@ -133,6 +136,7 @@ static void ubuf_av_free(struct ubuf *ubuf)
         for (uint8_t i = 0; buf && i < ubuf_pic_av->flow_format->nb_planes; i++)
             free(buf[i]);
         free(buf);
+        av_frame_free(&ubuf_pic_av->mapped_frame);
     }
     av_frame_free(&ubuf_av->frame);
     ubuf_mgr_release(ubuf->mgr);
@@ -182,7 +186,14 @@ static struct ubuf *ubuf_av_alloc(struct ubuf_mgr *mgr,
     switch (signature) {
         case UBUF_AV_ALLOC_PICTURE:
             ubuf_av->pic.buf = NULL;
-            ubuf_av->pic.flow_format = upipe_av_pixfmt_to_format(frame->format);
+            ubuf_av->pic.mapped_frame = NULL;
+            enum AVPixelFormat pixfmt = frame->format;
+            if (frame->hw_frames_ctx) {
+                AVHWFramesContext *hw_frames_ctx =
+                    (AVHWFramesContext *) frame->hw_frames_ctx->data;
+                pixfmt = hw_frames_ctx->sw_format;
+            }
+            ubuf_av->pic.flow_format = upipe_av_pixfmt_to_format(pixfmt);
             if (unlikely(!ubuf_av->pic.flow_format)) {
                 ubuf_av_free(ubuf);
                 return NULL;
@@ -232,6 +243,43 @@ static struct ubuf *ubuf_av_alloc(struct ubuf_mgr *mgr,
     }
 
     return ubuf;
+}
+
+/** @internal @This maps a hardware frame.
+ *
+ * @param ubuf pointer to buffer
+ * @param writable true if the plane is mapped for write
+ * @param frame_p filled with the mapped hw frame or original frame
+ * @return an error code
+ */
+static int ubuf_pic_av_get_mapped_avframe(struct ubuf *ubuf,
+                                          bool writable,
+                                          struct AVFrame **frame_p)
+{
+    struct ubuf_av *ubuf_av = ubuf_av_from_ubuf(ubuf);
+    struct ubuf_pic_av *ubuf_pic_av = ubuf_av_to_ubuf_pic_av(ubuf_av);
+    AVFrame *frame = ubuf_av->frame;
+
+    if (!ubuf_pic_av)
+        return UBASE_ERR_INVALID;
+
+    if (frame->hw_frames_ctx) {
+        if (!ubuf_pic_av->mapped_frame) {
+            ubuf_pic_av->mapped_frame = av_frame_alloc();
+            UBASE_ALLOC_RETURN(ubuf_pic_av->mapped_frame);
+            if (av_hwframe_map(ubuf_pic_av->mapped_frame, frame, writable ?
+                               AV_HWFRAME_MAP_WRITE : AV_HWFRAME_MAP_READ)) {
+                av_frame_free(&ubuf_pic_av->mapped_frame);
+                return UBASE_ERR_EXTERNAL;
+            }
+        }
+        frame = ubuf_pic_av->mapped_frame;
+    }
+
+    if (frame_p)
+        *frame_p = frame;
+
+    return UBASE_ERR_NONE;
 }
 
 /** @internal @This asks for the creation of a new reference to the same buffer
@@ -352,10 +400,12 @@ static int ubuf_pic_av_plane_size(struct ubuf *ubuf,
 
     const struct uref_pic_flow_format_plane *plane =
         uref_pic_flow_format_get_plane(ubuf_pic_av->flow_format, chroma);
-    const AVFrame *frame = ubuf_av->frame;
 
     if (!plane)
         return UBASE_ERR_INVALID;
+
+    AVFrame *frame;
+    UBASE_RETURN(ubuf_pic_av_get_mapped_avframe(ubuf, false, &frame));
 
     uint8_t plane_id = uref_pic_flow_format_get_plane_id(
         ubuf_pic_av->flow_format, plane);
@@ -477,10 +527,12 @@ static int ubuf_pic_av_plane_map(struct ubuf *ubuf,
 {
     struct ubuf_av *ubuf_av = ubuf_av_from_ubuf(ubuf);
     struct ubuf_pic_av *ubuf_pic_av = ubuf_av_to_ubuf_pic_av(ubuf_av);
-    AVFrame *frame = ubuf_av->frame;
 
     if (!ubuf_pic_av)
         return UBASE_ERR_INVALID;
+
+    AVFrame *frame;
+    UBASE_RETURN(ubuf_pic_av_get_mapped_avframe(ubuf, writable, &frame));
 
     size_t width;
     size_t height;
@@ -572,12 +624,12 @@ static int ubuf_pic_av_plane_unmap(struct ubuf *ubuf,
                                    int hsize,
                                    int vsize)
 {
-    struct ubuf_av *ubuf_av = ubuf_av_from_ubuf(ubuf);
-
     int plane_id;
     UBASE_RETURN(ubuf_pic_av_get_plane_id(ubuf, chroma, &plane_id));
 
-    AVFrame *frame = ubuf_av->frame;
+    AVFrame *frame;
+    UBASE_RETURN(ubuf_pic_av_get_mapped_avframe(ubuf, false, &frame));
+
     if (frame->buf[plane_id])
         return ubuf_av_unref(ubuf);
     return UBASE_ERR_NONE;
