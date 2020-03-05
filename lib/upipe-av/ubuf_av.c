@@ -172,7 +172,12 @@ static struct ubuf *ubuf_av_alloc(struct ubuf_mgr *mgr,
         free(ubuf_av);
         return NULL;
     }
-    av_frame_ref(ubuf_av->frame, frame);
+    if (unlikely(av_frame_ref(ubuf_av->frame, frame) < 0)) {
+        av_frame_free(&ubuf_av->frame);
+        free(ubuf_av);
+        return NULL;
+    }
+
     ubuf_av->signature = signature;
     switch (signature) {
         case UBUF_AV_ALLOC_PICTURE:
@@ -765,6 +770,20 @@ static int ubuf_sound_av_plane_unmap(struct ubuf *ubuf,
     return UBASE_ERR_NONE;
 }
 
+/** @This returns a new reference to the underlying AVFrame.
+ *
+ * @param ubuf pointer to ubuf
+ * @param frame unreferenced or newly allocated AVFrame
+ * @return an error code
+ */
+static int _ubuf_av_get_avframe(struct ubuf *ubuf, AVFrame *frame)
+{
+    struct ubuf_av *ubuf_av = ubuf_av_from_ubuf(ubuf);
+    if (av_frame_ref(frame, ubuf_av->frame) < 0)
+        return UBASE_ERR_EXTERNAL;
+    return UBASE_ERR_NONE;
+}
+
 /** @internal @This handles buffer control commands.
  *
  * @param ubuf pointer to buffer
@@ -859,6 +878,12 @@ static int ubuf_av_control(struct ubuf *ubuf, int command, va_list args)
             int offset = va_arg(args, int);
             int new_size = va_arg(args, int);
             return ubuf_sound_av_resize(ubuf, offset, new_size);
+        }
+
+        case UBUF_AV_GET_AVFRAME: {
+            UBASE_SIGNATURE_CHECK(args, UBUF_AV_SIGNATURE)
+            AVFrame *frame = va_arg(args, AVFrame *);
+            return _ubuf_av_get_avframe(ubuf, frame);
         }
     }
     return UBASE_ERR_UNHANDLED;
