@@ -127,19 +127,28 @@ struct upipe_aes67_sink {
     /** file descriptor */
     int fd[2];
 
+    /* Mapped space for TX ring of frames/packets. */
     void *mmap[2];
+    /* Counter for which frame is next ot be used. */
     int mmap_frame_num;
 
+    /* RTP timestamp. */
     uint32_t timestamp;
+    /* RTP sequence number. */
     uint16_t seqnum;
+    /* Cached audio data (packed) from tails of input urefs. */
     uint8_t audio_data[MAX_SAMPLES_PER_PACKET * 16 * 3];
+    /* Number of samples in buffer. */
     int cached_samples;
 
+    /* Input urefs. */
     struct uchain ulist;
 
-    bool thread_created;
+    /* Subthread. */
     pthread_t pt;
+    /* Mutex for passing urefs and stopping. */
     pthread_mutex_t mutex;
+    bool thread_created;
     bool stop;
 
     /** maximum samples to put in each packet */
@@ -399,20 +408,29 @@ static struct upipe *upipe_aes67_sink_alloc(struct upipe_mgr *mgr,
     struct upipe_aes67_sink *upipe_aes67_sink = upipe_aes67_sink_from_upipe(upipe);
     upipe_aes67_sink_init_urefcount(upipe);
     upipe_aes67_sink_init_uclock(upipe);
+
     upipe_aes67_sink->latency = 0;
     upipe_aes67_sink->fd[0] = upipe_aes67_sink->fd[1] = -1;
-    upipe_aes67_sink->thread_created = false;
-    upipe_aes67_sink->stop = false;
-    pthread_mutex_init(&upipe_aes67_sink->mutex, NULL);
 
-    upipe_aes67_sink->mtu = MTU;
     upipe_aes67_sink->mmap[0] = upipe_aes67_sink->mmap[1] = MAP_FAILED;
     upipe_aes67_sink->mmap_frame_num = 0;
+
     upipe_aes67_sink->seqnum = 0;
     upipe_aes67_sink->cached_samples = 0;
-    memset(upipe_aes67_sink->flows, 0, sizeof upipe_aes67_sink->flows);
 
     ulist_init(&upipe_aes67_sink->ulist);
+
+    pthread_mutex_init(&upipe_aes67_sink->mutex, NULL);
+    upipe_aes67_sink->thread_created = false;
+    upipe_aes67_sink->stop = false;
+
+    upipe_aes67_sink->output_samples = 6; /* TODO: other default to catch user not setting this? */
+    upipe_aes67_sink->mtu = MTU;
+
+    upipe_aes67_sink->ifname[0] = upipe_aes67_sink->ifname[1] = NULL;
+    memset(upipe_aes67_sink->sin, 0, sizeof upipe_aes67_sink->sin);
+    memset(upipe_aes67_sink->sll, 0, sizeof upipe_aes67_sink->sll);
+    memset(upipe_aes67_sink->flows, 0, sizeof upipe_aes67_sink->flows);
 
     upipe_throw_ready(upipe);
     return upipe;
