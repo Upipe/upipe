@@ -39,6 +39,14 @@ extern "C" {
 
 #include <libavutil/frame.h>
 
+/** @This extends ubuf_command with specific commands for AVFrame buffers. */
+enum ubuf_av_command {
+    UBUF_AV_SENTINEL = UBUF_CONTROL_LOCAL,
+
+    /** returns the underlying AVFrame (AVFrame *) */
+    UBUF_AV_GET_AVFRAME
+};
+
 /** @This allocates an ubuf for a picture AVFrame.
  *
  * @param ubuf_mgr pointer to AVFrame ubuf manager
@@ -61,6 +69,18 @@ static inline struct ubuf *ubuf_sound_av_alloc(struct ubuf_mgr *mgr,
                                                AVFrame *frame)
 {
     return ubuf_alloc(mgr, UBUF_AV_ALLOC_SOUND, frame);
+}
+
+/** @This returns a reference to the underlying AVFrame.
+ * The frame should be freed when it is no longer needed.
+ *
+ * @param ubuf pointer to ubuf
+ * @param frame unreferenced or newly allocated AVFrame
+ * @return an error code
+ */
+static inline int ubuf_av_get_avframe(struct ubuf *ubuf, AVFrame *frame)
+{
+    return ubuf_control(ubuf, UBUF_AV_GET_AVFRAME, UBUF_AV_SIGNATURE, frame);
 }
 
 /** @This allocates and initializes an AVFrame buffer manager.
