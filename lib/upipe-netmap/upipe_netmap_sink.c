@@ -719,7 +719,7 @@ static int worker_rfc4175(struct upipe *upipe, uint8_t **dst, uint16_t **len)
 
     for (size_t i = 0; i < 2; i++) {
         struct upipe_netmap_intf *intf = &upipe_netmap_sink->intf[i];
-        if (!intf->d || !intf->up)
+        if (unlikely(!intf->d || !intf->up))
             continue;
 
         memcpy(dst[i], intf->header, header_size);
@@ -860,7 +860,7 @@ static int worker_hbrmt(struct upipe *upipe, uint8_t **dst, const uint8_t *src,
 
     for (size_t i = 0; i < 2; i++) {
         struct upipe_netmap_intf *intf = &upipe_netmap_sink->intf[i];
-        if (!intf->d || !intf->up)
+        if (unlikely(!intf->d || !intf->up))
             continue;
 
         uint8_t *header = &intf->header[0];
@@ -1364,7 +1364,7 @@ static void upipe_netmap_sink_worker(struct upump *upump)
             bool stamped = false;
             for (size_t i = 0; i < 2; i++) {
                 struct upipe_netmap_intf *intf = &upipe_netmap_sink->intf[i];
-                if (!intf->d || !intf->up)
+                if (unlikely(!intf->d || !intf->up))
                     continue;
                 uint8_t *dst = (uint8_t*)NETMAP_BUF(txring[i], txring[i]->slot[cur[i]].buf_idx);
 
@@ -1405,7 +1405,7 @@ static void upipe_netmap_sink_worker(struct upump *upump)
             input_size = -1;
         }
 
-        if (input_size == -1) {
+        if (unlikely(input_size == -1)) {
             if (!rfc4175) {
                 /* Get the buffer */
                 if (unlikely(uref_block_read(uref, 0, &input_size, &src_buf))) {
@@ -1444,7 +1444,7 @@ static void upipe_netmap_sink_worker(struct upump *upump)
         bool stamped = false;
         for (size_t i = 0; i < 2; i++) {
             struct upipe_netmap_intf *intf = &upipe_netmap_sink->intf[i];
-            if (!intf->d || !intf->up)
+            if (unlikely(!intf->d || !intf->up))
                 continue;
 
             struct netmap_slot *slot = &txring[i]->slot[cur[i]];
