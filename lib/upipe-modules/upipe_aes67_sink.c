@@ -301,7 +301,7 @@ static void *run_thread(void *upipe_pointer)
             upipe_aes67_sink->mmap_frame_num = (upipe_aes67_sink->mmap_frame_num + 1) % MMAP_FRAME_NUM;
             upipe_aes67_sink->seqnum += 1;
             upipe_aes67_sink->timestamp += upipe_aes67_sink->output_samples;
-            systime += 125 * 27;
+            systime += UCLOCK_FREQ * upipe_aes67_sink->output_samples / 48000;
         }
 
         if (samples % upipe_aes67_sink->output_samples) {
