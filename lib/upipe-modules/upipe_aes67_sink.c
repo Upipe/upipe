@@ -99,9 +99,12 @@
 #define MTU 1500
 #endif
 
+#define STEREO_FLOWS 1
+
 /** @hidden */
 static bool upipe_aes67_sink_output(struct upipe *upipe, struct uref *uref,
-                                 struct upump **upump_p, int flow, int path);
+        struct upump **upump_p, int flow, int path, int channel_offset,
+        int output_channels);
 
 struct aes67_flow {
     /* IP details for the destination. */
@@ -153,6 +156,8 @@ struct upipe_aes67_sink {
 
     /** maximum samples to put in each packet */
     int output_samples;
+    /* Number of channels in each flow. */
+    int output_channels;
     /* Maximum transmission unit. */
     int mtu;
 
@@ -327,12 +332,22 @@ static void *run_thread(void *upipe_pointer)
                         upipe_aes67_sink->latency / 27);
 
             /* Write packets. */
-            upipe_aes67_sink_output(upipe, uref, NULL, 0, 0);
-            if (upipe_aes67_sink->fd[1] != -1)
-                upipe_aes67_sink_output(upipe, uref, NULL, 0, 1);
+            int output_channels = upipe_aes67_sink->output_channels;
+            int num_flows = 16 / output_channels;
+            for (int flow = 0; flow < num_flows; flow++) {
+                int channel_offset = flow * output_channels;
+
+                /* TODO: Don't do a send() call for each flow. */
+                upipe_aes67_sink_output(upipe, uref, NULL, flow, 0,
+                        channel_offset, output_channels);
+                if (upipe_aes67_sink->fd[1] != -1)
+                    upipe_aes67_sink_output(upipe, uref, NULL, flow, 1,
+                            channel_offset, output_channels);
+
+                upipe_aes67_sink->mmap_frame_num = (upipe_aes67_sink->mmap_frame_num + 1) % MMAP_FRAME_NUM;
+            }
 
             /* Adjust per packet values. */
-            upipe_aes67_sink->mmap_frame_num = (upipe_aes67_sink->mmap_frame_num + 1) % MMAP_FRAME_NUM;
             upipe_aes67_sink->seqnum += 1;
             upipe_aes67_sink->timestamp += upipe_aes67_sink->output_samples;
             systime += UCLOCK_FREQ * upipe_aes67_sink->output_samples / 48000;
@@ -440,6 +455,7 @@ static struct upipe *upipe_aes67_sink_alloc(struct upipe_mgr *mgr,
     upipe_aes67_sink->stop = false;
 
     upipe_aes67_sink->output_samples = 6; /* TODO: other default to catch user not setting this? */
+    upipe_aes67_sink->output_channels = (STEREO_FLOWS) ? 2 : 16;
     upipe_aes67_sink->mtu = MTU;
 
     upipe_aes67_sink->ifname[0] = upipe_aes67_sink->ifname[1] = NULL;
@@ -459,12 +475,13 @@ static struct upipe *upipe_aes67_sink_alloc(struct upipe_mgr *mgr,
  * @return true if the uref was processed
  */
 static bool upipe_aes67_sink_output(struct upipe *upipe, struct uref *uref,
-                                 struct upump **upump_p, int flow, int path)
+        struct upump **upump_p, int flow, int path, int channel_offset,
+        int output_channels)
 {
     struct upipe_aes67_sink *upipe_aes67_sink = upipe_aes67_sink_from_upipe(upipe);
 
     for ( ; ; ) {
-        int payload_len = upipe_aes67_sink->output_samples * 16 * 3 + RTP_HEADER_SIZE;
+        int payload_len = upipe_aes67_sink->output_samples * output_channels * 3 + RTP_HEADER_SIZE;
 
             /* Get next frame to be used. */
             union frame_map frame = { .raw = upipe_aes67_sink->mmap[path] + upipe_aes67_sink->mmap_frame_num * MMAP_FRAME_SIZE };
@@ -489,7 +506,15 @@ static bool upipe_aes67_sink_output(struct upipe *upipe, struct uref *uref,
             rtp_set_timestamp(data, upipe_aes67_sink->timestamp);
             data += RTP_HEADER_SIZE;
 
+        /* Slight optimization for single flow. */
+        if (output_channels == 16)
         memcpy(data, upipe_aes67_sink->audio_data, upipe_aes67_sink->output_samples * 16 * 3);
+        else for (int i = 0; i < upipe_aes67_sink->output_samples; i++) {
+            int sample_size = 3 * output_channels;
+            memcpy(data + i * sample_size,
+                    upipe_aes67_sink->audio_data + 3*channel_offset + 3*16*i,
+                    sample_size);
+        }
 
         ssize_t ret = sendto(upipe_aes67_sink->fd[path], NULL, 0, 0,
                 (struct sockaddr*)&upipe_aes67_sink->flows[flow][path].sll,
@@ -797,7 +822,7 @@ static int set_flow_destination(struct upipe * upipe, int flow,
     upipe_udp_raw_fill_headers(NULL, aes67_flow[0].raw_header,
             upipe_aes67_sink->sin[0].sin_addr.s_addr, aes67_flow[0].sin.sin_addr.s_addr,
             ntohs(aes67_flow[0].sin.sin_port), ntohs(aes67_flow[0].sin.sin_port),
-            10, 0, upipe_aes67_sink->output_samples * 16 * 3 + RTP_HEADER_SIZE);
+            10, 0, upipe_aes67_sink->output_samples * upipe_aes67_sink->output_channels * 3 + RTP_HEADER_SIZE);
 
     /* Set ethernet details and the inferface index. */
     aes67_flow[0].sll = (struct sockaddr_ll) {
@@ -862,7 +887,7 @@ static int set_flow_destination(struct upipe * upipe, int flow,
         upipe_udp_raw_fill_headers(NULL, aes67_flow[1].raw_header,
                 upipe_aes67_sink->sin[1].sin_addr.s_addr, aes67_flow[1].sin.sin_addr.s_addr,
                 ntohs(aes67_flow[1].sin.sin_port), ntohs(aes67_flow[1].sin.sin_port),
-                10, 0, upipe_aes67_sink->output_samples * 16 * 3 + RTP_HEADER_SIZE);
+                10, 0, upipe_aes67_sink->output_samples * upipe_aes67_sink->output_channels * 3 + RTP_HEADER_SIZE);
 
         aes67_flow[1].sll = (struct sockaddr_ll) {
             .sll_family = AF_PACKET,
@@ -919,7 +944,7 @@ static int upipe_aes67_sink_set_option(struct upipe *upipe, const char *option,
         }
 
         /* A sample packs to 3 bytes.  16 channels. */
-        int needed_size = TRANSMISSION_UNIT_SIZE(upipe_aes67_sink->output_samples * 16 * 3);
+        int needed_size = TRANSMISSION_UNIT_SIZE(upipe_aes67_sink->output_samples * upipe_aes67_sink->output_channels * 3);
         if (needed_size > upipe_aes67_sink->mtu) {
             upipe_err_va(upipe, "requested frame or packet size (%d bytes, %d samples) is greater than MTU (%d)",
                     needed_size, upipe_aes67_sink->output_samples, upipe_aes67_sink->mtu);
