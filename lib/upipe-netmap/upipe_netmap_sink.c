@@ -74,6 +74,9 @@
 /* the maximum ever delay between 2 TX buffers refill */
 #define NETMAP_SINK_LATENCY (UCLOCK_FREQ / 25)
 
+#define UINT64_MSB(value)      ((value) & UINT64_C(0x8000000000000000))
+#define UINT64_LOW_MASK(value) ((value) & UINT64_C(0x7fffffffffffffff))
+
 /** @hidden */
 static bool upipe_netmap_sink_output(struct upipe *upipe, struct uref *uref,
                                  struct upump **upump_p);
@@ -687,12 +690,13 @@ static inline int get_interleaved_line(struct upipe *upipe)
 }
 
 /* returns 1 if uref exhausted */
-static int worker_rfc4175(struct upipe *upipe, uint8_t **dst, uint16_t **len)
+static int worker_rfc4175(struct upipe *upipe, uint8_t **dst, uint16_t **len, uint64_t **ptr)
 {
     struct upipe_netmap_sink *upipe_netmap_sink = upipe_netmap_sink_from_upipe(upipe);
     bool progressive = upipe_netmap_sink->progressive;
     bool copy = dst[1] != NULL && dst[0] != NULL;
     int idx = (dst[0] != NULL) ? 0 : 1;
+    bool eof = false;
 
     const uint16_t header_size = ETHERNET_HEADER_LEN + UDP_HEADER_SIZE + IP_HEADER_MINSIZE;
     uint16_t eth_frame_len = header_size + RTP_HEADER_SIZE + RFC_4175_HEADER_LEN + RFC_4175_EXT_SEQ_NUM_LEN;
@@ -708,8 +712,13 @@ static int worker_rfc4175(struct upipe *upipe, uint8_t **dst, uint16_t **len)
     if (upipe_netmap_sink->pixel_offset + pixels1 >= upipe_netmap_sink->hsize) {
         /* End of the field or frame */
         if ((!progressive && upipe_netmap_sink->line+1 == (upipe_netmap_sink->vsize/2)) ||
-                upipe_netmap_sink->line+1 == upipe_netmap_sink->vsize)
+                upipe_netmap_sink->line+1 == upipe_netmap_sink->vsize) {
+
             marker = 1;
+
+            if (upipe_netmap_sink->line+1 == upipe_netmap_sink->vsize)
+                eof = true;
+        }
 
         pixels1 = upipe_netmap_sink->hsize - upipe_netmap_sink->pixel_offset;
     }
@@ -803,16 +812,20 @@ static int worker_rfc4175(struct upipe *upipe, uint8_t **dst, uint16_t **len)
         }
     }
 
-    /* packet size */
-    if (len[idx])
+    /* packet size and end of frame flag */
+    if (len[idx]) {
         *len[idx] = eth_frame_len;
-    if (copy)
+        *ptr[idx] = (uint64_t)eof << 63;
+    }
+    if (copy) {
         *len[!idx] = *len[idx];
+        *ptr[!idx] = (uint64_t)eof << 63;
+    }
 
     upipe_netmap_sink->bits += (eth_frame_len + 4 /* CRC */) * 8;
 
     /* Release consumed frame */
-    if (marker && (progressive || field)) {
+    if (eof) {
         upipe_netmap_sink->line = 0;
         upipe_netmap_sink->pixel_offset = 0;
         upipe_netmap_sink->frame_count++;
@@ -1327,7 +1340,7 @@ static void upipe_netmap_sink_worker(struct upump *upump)
         bps -= (num_slots - 1 - txavail) * (pkt_len + 4) * 8;
 
     struct netmap_slot *slot = txring[0] ? &txring[0]->slot[cur[0]] : &txring[1]->slot[cur[1]];
-    uint64_t t = slot->ptr / 1000 * 27;
+    uint64_t t = UINT64_LOW_MASK(slot->ptr) / 1000 * 27;
     if (!t)
         t = now;
 
@@ -1370,26 +1383,17 @@ static void upipe_netmap_sink_worker(struct upump *upump)
 
                 const size_t udp_size = ETHERNET_HEADER_LEN + IP_HEADER_MINSIZE + UDP_HEADER_SIZE;
                 uint8_t *rtp = &dst[udp_size];
-                if (rtp_check_marker(rtp)) /* marker needs to be set */ {
-                    bool stamp = false;
-                    if (rfc4175) {
-                        /* Use the end of the frame (for interlace the marker after field 2) */
-                        uint8_t *rfc = &rtp[RTP_HEADER_SIZE + RFC_4175_EXT_SEQ_NUM_LEN];
-                        uint8_t f2 = rfc4175_get_line_field_id(rfc);
-                        if (f2 || progressive)
-                            stamp = true;
-                    } else {
-                        stamp = true;
-                    }
-                    if (stamp && !stamped && txring[i]->slot[cur[i]].ptr) {
+                if (UINT64_MSB(txring[i]->slot[cur[i]].ptr)) /* eof needs to be set */ {
+                    if (!stamped && UINT64_LOW_MASK(txring[i]->slot[cur[i]].ptr)) {
                         uint16_t seq = rtp_get_seqnum(rtp);
-                        handle_tx_stamp(upipe, txring[i]->slot[cur[i]].ptr, seq);
+                        handle_tx_stamp(upipe, UINT64_LOW_MASK(txring[i]->slot[cur[i]].ptr), seq);
                         stamped = true;
                     }
                 }
                 memset(dst, 0, len);
                 memcpy(dst, intf->header, ETHERNET_HEADER_LEN);
                 txring[i]->slot[cur[i]].len = len;
+                txring[i]->slot[cur[i]].ptr = 0;
                 cur[i] = nm_ring_next(txring[i], cur[i]);
             }
             txavail--;
@@ -1440,6 +1444,7 @@ static void upipe_netmap_sink_worker(struct upump *upump)
 
         uint8_t *dst[2] = { NULL, NULL };
         uint16_t *len[2] = { NULL, NULL };
+        uint64_t *ptr[2] = { NULL, NULL };
 
         bool stamped = false;
         for (size_t i = 0; i < 2; i++) {
@@ -1451,10 +1456,11 @@ static void upipe_netmap_sink_worker(struct upump *upump)
 
             dst[i] = (uint8_t*)NETMAP_BUF(txring[i], slot->buf_idx);
             len[i] = &slot->len;
+            ptr[i] = &slot->ptr;
             cur[i] = nm_ring_next(txring[i], cur[i]);
 
             /* look for exact TX time of end of frame */
-            if (!slot->ptr) /* no timestamp available */
+            if (!UINT64_MSB(slot->ptr) || !UINT64_LOW_MASK(slot->ptr)) /* no timestamp available */
                 continue;
 
             const size_t udp_size = ETHERNET_HEADER_LEN + IP_HEADER_MINSIZE + UDP_HEADER_SIZE;
@@ -1462,22 +1468,11 @@ static void upipe_netmap_sink_worker(struct upump *upump)
                 continue;
 
             uint8_t *rtp = &dst[i][udp_size];
-            if (!rtp_check_marker(rtp)) /* marker needs to be set */
-                continue;
-
-            if (rfc4175) {
-                if (*len[i] < udp_size + RTP_HEADER_SIZE + RFC_4175_EXT_SEQ_NUM_LEN + RFC_4175_HEADER_LEN)
-                    continue;
-                uint8_t *rfc = &rtp[RTP_HEADER_SIZE+ RFC_4175_EXT_SEQ_NUM_LEN];
-                uint8_t f2 = rfc4175_get_line_field_id(rfc);
-                if (!progressive && !f2)
-                    continue;
-            }
 
             //printf("link %i, timestamp %"PRIu64" \n", i, slot->ptr);
             if (!stamped) {
                 uint16_t seq = rtp_get_seqnum(rtp);
-                handle_tx_stamp(upipe, slot->ptr, seq);
+                handle_tx_stamp(upipe, UINT64_LOW_MASK(slot->ptr), seq);
                 stamped = true;
             }
         }
@@ -1494,6 +1489,7 @@ static void upipe_netmap_sink_worker(struct upump *upump)
                     memset(dst[i], 0, pkt_len);
                     memcpy(dst[i], intf->header, ETHERNET_HEADER_LEN);
                     *len[i] = pkt_len;
+                    *ptr[i] = 0;
                 }
                 upipe_netmap_sink->bits += (pkt_len + 4 /* CRC */) * 8;
                 upipe_netmap_sink->gap_fakes_current--;
@@ -1502,7 +1498,7 @@ static void upipe_netmap_sink_worker(struct upump *upump)
                 if (!progressive)
                     upipe_netmap_sink->gap_fakes_current /= 2;
 
-                if (worker_rfc4175(upipe, dst, len)) {
+                if (worker_rfc4175(upipe, dst, len, ptr)) {
                     for (int i = 0; i < UPIPE_RFC4175_MAX_PLANES; i++) {
                         const char *chroma = upipe_netmap_sink->input_chroma_map[i];
                         if (!chroma)
@@ -1516,6 +1512,7 @@ static void upipe_netmap_sink_worker(struct upump *upump)
                 }
             }
         } else {
+            // FIXME set the marker flag correctly for 2022-6
             int s = worker_hbrmt(upipe, dst, src_buf, bytes_left, len);
             src_buf += s;
             bytes_left -= s;
