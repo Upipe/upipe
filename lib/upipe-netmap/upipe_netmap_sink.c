@@ -719,7 +719,7 @@ static int worker_rfc4175(struct upipe_netmap_sink *upipe_netmap_sink, uint8_t *
         //pixels1 = upipe_netmap_sink->hsize - upipe_netmap_sink->pixel_offset;
     }
 
-    const uint16_t data_len1 = (pixels1 / 2) * UPIPE_RFC4175_PIXEL_PAIR_BYTES;
+    const uint16_t data_len1 = upipe_netmap_sink->payload;
     eth_frame_len += data_len1;
 
     for (size_t i = 0; i < 2; i++) {
