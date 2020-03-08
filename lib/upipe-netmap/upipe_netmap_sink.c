@@ -704,9 +704,7 @@ static int worker_rfc4175(struct upipe *upipe, uint8_t **dst, uint16_t **len, ui
 
     uint8_t marker = 0, continuation = 0;
 
-    uint8_t field = upipe_netmap_sink->line >= upipe_netmap_sink->vsize / 2;
-    if (progressive)
-        field = 0;
+    uint8_t field = progressive ? 0 : upipe_netmap_sink->line >= upipe_netmap_sink->vsize / 2;
 
     /* End of the line */
     if (upipe_netmap_sink->pixel_offset + pixels1 >= upipe_netmap_sink->hsize) {
