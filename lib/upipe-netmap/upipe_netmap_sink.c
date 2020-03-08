@@ -662,6 +662,8 @@ static int upipe_put_rfc4175_headers(struct upipe_netmap_sink *upipe_netmap_sink
 {
     if (field_id)
         line_number -= upipe_netmap_sink->vsize / 2;
+    rfc4175_set_extended_sequence_number(buf, (upipe_netmap_sink->seqnum >> 16) & UINT16_MAX);
+    buf += RFC_4175_EXT_SEQ_NUM_LEN;
     memset(buf, 0, RFC_4175_HEADER_LEN);
     rfc4175_set_line_length(buf, len);
     rfc4175_set_line_field_id(buf, field_id);
@@ -669,7 +671,7 @@ static int upipe_put_rfc4175_headers(struct upipe_netmap_sink *upipe_netmap_sink
     rfc4175_set_line_continuation(buf, continuation);
     rfc4175_set_line_offset(buf, offset);
 
-    return RFC_4175_HEADER_LEN;
+    return RFC_4175_EXT_SEQ_NUM_LEN + RFC_4175_HEADER_LEN;
 }
 
 static inline int get_interleaved_line(struct upipe *upipe)
@@ -737,9 +739,6 @@ static int worker_rfc4175(struct upipe *upipe, uint8_t **dst, uint16_t **len, ui
         if (marker)
             rtp_set_marker(dst[i]);
         dst[i] += rtp_size;
-
-        rfc4175_set_extended_sequence_number(dst[i], (upipe_netmap_sink->seqnum >> 16) & UINT16_MAX);
-        dst[i] += RFC_4175_EXT_SEQ_NUM_LEN;
         dst[i] += upipe_put_rfc4175_headers(upipe_netmap_sink, dst[i], data_len1, field, upipe_netmap_sink->line, continuation,
                   upipe_netmap_sink->pixel_offset);
     }
