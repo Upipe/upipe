@@ -138,6 +138,9 @@ struct upipe_netmap_sink {
     int input_bit_depth;
     bool input_is_v210;
 
+    /* RTP Header */
+    uint8_t rtp_header[RTP_HEADER_SIZE + RFC_4175_EXT_SEQ_NUM_LEN + RFC_4175_HEADER_LEN];
+
     unsigned gap_fakes_current;
     unsigned gap_fakes;
     uint64_t phase_delay;
@@ -657,7 +660,7 @@ static int upipe_put_hbrmt_headers(struct upipe *upipe, uint8_t *buf)
 }
 
 static int upipe_put_rfc4175_headers(struct upipe_netmap_sink *upipe_netmap_sink, uint8_t *buf,
-                                     const uint16_t len, uint8_t field_id, uint16_t line_number,
+                                     const uint16_t len, const bool field_id, uint16_t line_number,
                                      uint8_t continuation, uint16_t offset)
 {
     if (field_id)
@@ -699,12 +702,13 @@ static int worker_rfc4175(struct upipe_netmap_sink *upipe_netmap_sink, uint8_t *
     bool eof = false; /* End of frame */
 
     const uint16_t header_size = ETHERNET_HEADER_LEN + UDP_HEADER_SIZE + IP_HEADER_MINSIZE;
-    uint16_t eth_frame_len = header_size + RTP_HEADER_SIZE + RFC_4175_HEADER_LEN + RFC_4175_EXT_SEQ_NUM_LEN;
+    const uint16_t rtp_rfc_header_size = RTP_HEADER_SIZE + RFC_4175_EXT_SEQ_NUM_LEN + RFC_4175_HEADER_LEN;
+    uint16_t eth_frame_len = header_size + rtp_rfc_header_size;
     const uint16_t pixels1 = upipe_netmap_sink->payload * 2 / UPIPE_RFC4175_PIXEL_PAIR_BYTES;
 
-    uint8_t marker = 0, continuation = 0;
+    bool marker = 0, continuation = 0;
 
-    uint8_t field = progressive ? 0 : upipe_netmap_sink->line >= upipe_netmap_sink->vsize / 2;
+    const bool field = progressive ? 0 : upipe_netmap_sink->line >= upipe_netmap_sink->vsize / 2;
 
     /* End of the line */
     if (upipe_netmap_sink->pixel_offset + pixels1 >= upipe_netmap_sink->hsize) {
@@ -724,6 +728,10 @@ static int worker_rfc4175(struct upipe_netmap_sink *upipe_netmap_sink, uint8_t *
     const uint16_t data_len1 = upipe_netmap_sink->payload;
     eth_frame_len += data_len1;
 
+    upipe_netmap_put_rtp_headers(upipe_netmap_sink, upipe_netmap_sink->rtp_header, marker, 96, true, field);
+    upipe_put_rfc4175_headers(upipe_netmap_sink, upipe_netmap_sink->rtp_header + RTP_HEADER_SIZE, data_len1,
+                              field, upipe_netmap_sink->line, continuation, upipe_netmap_sink->pixel_offset);
+
     for (size_t i = 0; i < 2; i++) {
         struct upipe_netmap_intf *intf = &upipe_netmap_sink->intf[i];
         if (unlikely(!intf->d || !intf->up))
@@ -733,10 +741,8 @@ static int worker_rfc4175(struct upipe_netmap_sink *upipe_netmap_sink, uint8_t *
         dst[i] += header_size;
 
         /* RTP HEADER */
-        int rtp_size = upipe_netmap_put_rtp_headers(upipe_netmap_sink, dst[i], marker, 96, true, field);
-        dst[i] += rtp_size;
-        dst[i] += upipe_put_rfc4175_headers(upipe_netmap_sink, dst[i], data_len1, field, upipe_netmap_sink->line, continuation,
-                  upipe_netmap_sink->pixel_offset);
+        memcpy(dst[i], upipe_netmap_sink->rtp_header, rtp_rfc_header_size);
+        dst[i] += rtp_rfc_header_size;
     }
 
     upipe_netmap_sink->pkt++;
@@ -868,6 +874,7 @@ static int worker_hbrmt(struct upipe_netmap_sink *upipe_netmap_sink, uint8_t **d
 
         uint8_t *header = &intf->header[0];
 
+        // FIXME make this match rfc4175
         /* update rtp header */
         uint8_t *rtp = &header[ETHERNET_HEADER_LEN + IP_HEADER_MINSIZE + UDP_HEADER_SIZE];
         rtp_set_seqnum(rtp, upipe_netmap_sink->seqnum & UINT16_MAX);
