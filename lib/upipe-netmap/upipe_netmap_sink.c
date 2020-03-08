@@ -809,6 +809,8 @@ static int worker_rfc4175(struct upipe_netmap_sink *upipe_netmap_sink, uint8_t *
         }
     }
 
+    upipe_netmap_sink->bits += (eth_frame_len + 4 /* CRC */) * 8;
+
     /* packet size and end of frame flag */
     if (len[idx]) {
         *len[idx] = eth_frame_len;
@@ -819,7 +821,6 @@ static int worker_rfc4175(struct upipe_netmap_sink *upipe_netmap_sink, uint8_t *
         *ptr[!idx] = (uint64_t)eof << 63;
     }
 
-    upipe_netmap_sink->bits += (eth_frame_len + 4 /* CRC */) * 8;
 
     /* Release consumed frame */
     if (unlikely(eof)) {
