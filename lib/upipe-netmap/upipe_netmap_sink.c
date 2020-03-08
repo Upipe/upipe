@@ -1450,7 +1450,7 @@ static void upipe_netmap_sink_worker(struct upump *upump)
             cur[i] = nm_ring_next(txring[i], cur[i]);
 
             /* look for exact TX time of end of frame */
-            if (!UINT64_MSB(slot->ptr) || !UINT64_LOW_MASK(slot->ptr)) /* no timestamp available */
+            if (likely(!UINT64_MSB(slot->ptr) || !UINT64_LOW_MASK(slot->ptr))) /* no timestamp available */
                 continue;
 
             const size_t udp_size = ETHERNET_HEADER_LEN + IP_HEADER_MINSIZE + UDP_HEADER_SIZE;
