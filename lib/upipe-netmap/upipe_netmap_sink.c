@@ -818,7 +818,7 @@ static int worker_rfc4175(struct upipe *upipe, uint8_t **dst, uint16_t **len, ui
     upipe_netmap_sink->bits += (eth_frame_len + 4 /* CRC */) * 8;
 
     /* Release consumed frame */
-    if (eof) {
+    if (unlikely(eof)) {
         upipe_netmap_sink->line = 0;
         upipe_netmap_sink->pixel_offset = 0;
         upipe_netmap_sink->frame_count++;
