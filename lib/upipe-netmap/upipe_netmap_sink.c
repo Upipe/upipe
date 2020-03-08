@@ -811,7 +811,7 @@ static int worker_rfc4175(struct upipe *upipe, uint8_t **dst, uint16_t **len, ui
         *ptr[idx] = (uint64_t)eof << 63;
     }
     if (copy) {
-        *len[!idx] = *len[idx];
+        *len[!idx] = eth_frame_len;
         *ptr[!idx] = (uint64_t)eof << 63;
     }
 
