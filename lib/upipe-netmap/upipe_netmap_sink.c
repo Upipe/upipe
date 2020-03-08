@@ -689,9 +689,8 @@ static inline int get_interleaved_line(struct upipe_netmap_sink *upipe_netmap_si
 }
 
 /* returns 1 if uref exhausted */
-static int worker_rfc4175(struct upipe *upipe, uint8_t **dst, uint16_t **len, uint64_t **ptr)
+static int worker_rfc4175(struct upipe_netmap_sink *upipe_netmap_sink, uint8_t **dst, uint16_t **len, uint64_t **ptr)
 {
-    struct upipe_netmap_sink *upipe_netmap_sink = upipe_netmap_sink_from_upipe(upipe);
     const bool progressive = upipe_netmap_sink->progressive;
     const bool copy = dst[1] != NULL && dst[0] != NULL;
     const int idx = (dst[0] != NULL) ? 0 : 1;
@@ -829,10 +828,9 @@ static int worker_rfc4175(struct upipe *upipe, uint8_t **dst, uint16_t **len, ui
     return 0;
 }
 
-static int worker_hbrmt(struct upipe *upipe, uint8_t **dst, const uint8_t *src,
+static int worker_hbrmt(struct upipe_netmap_sink *upipe_netmap_sink, uint8_t **dst, const uint8_t *src,
         int bytes_left, uint16_t **len)
 {
-    struct upipe_netmap_sink *upipe_netmap_sink = upipe_netmap_sink_from_upipe(upipe);
     const uint8_t packed_bytes = upipe_netmap_sink->packed_bytes;
     bool copy = dst[1] != NULL && dst[0] != NULL;
     int idx = (dst[0] != NULL) ? 0 : 1;
@@ -1490,7 +1488,7 @@ static void upipe_netmap_sink_worker(struct upump *upump)
                 if (!progressive)
                     upipe_netmap_sink->gap_fakes_current /= 2;
 
-                if (worker_rfc4175(upipe, dst, len, ptr)) {
+                if (worker_rfc4175(upipe_netmap_sink, dst, len, ptr)) {
                     for (int i = 0; i < UPIPE_RFC4175_MAX_PLANES; i++) {
                         const char *chroma = upipe_netmap_sink->input_chroma_map[i];
                         if (!chroma)
@@ -1505,7 +1503,7 @@ static void upipe_netmap_sink_worker(struct upump *upump)
             }
         } else {
             // FIXME set the marker flag correctly for 2022-6
-            int s = worker_hbrmt(upipe, dst, src_buf, bytes_left, len);
+            int s = worker_hbrmt(upipe_netmap_sink, dst, src_buf, bytes_left, len);
             src_buf += s;
             bytes_left -= s;
             assert(bytes_left >= 0);
