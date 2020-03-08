@@ -694,7 +694,7 @@ static int worker_rfc4175(struct upipe_netmap_sink *upipe_netmap_sink, uint8_t *
     const bool progressive = upipe_netmap_sink->progressive;
     const bool copy = dst[1] != NULL && dst[0] != NULL;
     const int idx = (dst[0] != NULL) ? 0 : 1;
-    bool eof = false;
+    bool eof = false; /* End of frame */
 
     const uint16_t header_size = ETHERNET_HEADER_LEN + UDP_HEADER_SIZE + IP_HEADER_MINSIZE;
     uint16_t eth_frame_len = header_size + RTP_HEADER_SIZE + RFC_4175_HEADER_LEN + RFC_4175_EXT_SEQ_NUM_LEN;
