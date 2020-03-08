@@ -672,9 +672,8 @@ static int upipe_put_rfc4175_headers(struct upipe_netmap_sink *upipe_netmap_sink
     return RFC_4175_EXT_SEQ_NUM_LEN + RFC_4175_HEADER_LEN;
 }
 
-static inline int get_interleaved_line(struct upipe *upipe)
+static inline int get_interleaved_line(struct upipe_netmap_sink *upipe_netmap_sink)
 {
-    struct upipe_netmap_sink *upipe_netmap_sink = upipe_netmap_sink_from_upipe(upipe);
     uint64_t vsize = upipe_netmap_sink->vsize;
     int line = upipe_netmap_sink->line;
     if (upipe_netmap_sink->progressive)
@@ -745,7 +744,7 @@ static int worker_rfc4175(struct upipe *upipe, uint8_t **dst, uint16_t **len, ui
     upipe_netmap_sink->seqnum++;
     upipe_netmap_sink->seqnum &= UINT32_MAX;
 
-    int interleaved_line = get_interleaved_line(upipe);
+    int interleaved_line = get_interleaved_line(upipe_netmap_sink);
     if (upipe_netmap_sink->input_is_v210) {
         const uint8_t *src = upipe_netmap_sink->pixel_buffers[0] +
             upipe_netmap_sink->strides[0]*interleaved_line;
