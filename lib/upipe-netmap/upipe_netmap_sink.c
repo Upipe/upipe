@@ -657,7 +657,7 @@ static int upipe_put_hbrmt_headers(struct upipe *upipe, uint8_t *buf)
 }
 
 static int upipe_put_rfc4175_headers(struct upipe_netmap_sink *upipe_netmap_sink, uint8_t *buf,
-                                     uint16_t len, uint8_t field_id, uint16_t line_number,
+                                     const uint16_t len, uint8_t field_id, uint16_t line_number,
                                      uint8_t continuation, uint16_t offset)
 {
     if (field_id)
@@ -693,14 +693,14 @@ static inline int get_interleaved_line(struct upipe *upipe)
 static int worker_rfc4175(struct upipe *upipe, uint8_t **dst, uint16_t **len, uint64_t **ptr)
 {
     struct upipe_netmap_sink *upipe_netmap_sink = upipe_netmap_sink_from_upipe(upipe);
-    bool progressive = upipe_netmap_sink->progressive;
-    bool copy = dst[1] != NULL && dst[0] != NULL;
-    int idx = (dst[0] != NULL) ? 0 : 1;
+    const bool progressive = upipe_netmap_sink->progressive;
+    const bool copy = dst[1] != NULL && dst[0] != NULL;
+    const int idx = (dst[0] != NULL) ? 0 : 1;
     bool eof = false;
 
     const uint16_t header_size = ETHERNET_HEADER_LEN + UDP_HEADER_SIZE + IP_HEADER_MINSIZE;
-    uint16_t eth_frame_len = header_size + RTP_HEADER_SIZE + RFC_4175_HEADER_LEN + RFC_4175_EXT_SEQ_NUM_LEN;
-    uint16_t pixels1 = upipe_netmap_sink->payload * 2 / UPIPE_RFC4175_PIXEL_PAIR_BYTES;
+    const uint16_t eth_frame_len = header_size + RTP_HEADER_SIZE + RFC_4175_HEADER_LEN + RFC_4175_EXT_SEQ_NUM_LEN;
+    const uint16_t pixels1 = upipe_netmap_sink->payload * 2 / UPIPE_RFC4175_PIXEL_PAIR_BYTES;
 
     uint8_t marker = 0, continuation = 0;
 
@@ -721,7 +721,7 @@ static int worker_rfc4175(struct upipe *upipe, uint8_t **dst, uint16_t **len, ui
         pixels1 = upipe_netmap_sink->hsize - upipe_netmap_sink->pixel_offset;
     }
 
-    uint16_t data_len1 = (pixels1 / 2) * UPIPE_RFC4175_PIXEL_PAIR_BYTES;
+    const uint16_t data_len1 = (pixels1 / 2) * UPIPE_RFC4175_PIXEL_PAIR_BYTES;
     eth_frame_len += data_len1;
 
     for (size_t i = 0; i < 2; i++) {
