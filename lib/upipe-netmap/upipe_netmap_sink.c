@@ -584,10 +584,12 @@ static void upipe_netmap_update_timestamp_cache(struct upipe_netmap_sink *upipe_
 }
 
 static int upipe_netmap_put_rtp_headers(struct upipe_netmap_sink *upipe_netmap_sink, uint8_t *buf,
-        uint8_t pt, bool update, bool f2)
+        uint8_t marker, uint8_t pt, bool update, bool f2)
 {
     memset(buf, 0, RTP_HEADER_SIZE);
     rtp_set_hdr(buf);
+    if (marker)
+        rtp_set_marker(buf);
     rtp_set_type(buf, pt);
 
     if (update) {
@@ -731,9 +733,7 @@ static int worker_rfc4175(struct upipe_netmap_sink *upipe_netmap_sink, uint8_t *
         dst[i] += header_size;
 
         /* RTP HEADER */
-        int rtp_size = upipe_netmap_put_rtp_headers(upipe_netmap_sink, dst[i], 96, true, field);
-        if (marker)
-            rtp_set_marker(dst[i]);
+        int rtp_size = upipe_netmap_put_rtp_headers(upipe_netmap_sink, dst[i], marker, 96, true, field);
         dst[i] += rtp_size;
         dst[i] += upipe_put_rfc4175_headers(upipe_netmap_sink, dst[i], data_len1, field, upipe_netmap_sink->line, continuation,
                   upipe_netmap_sink->pixel_offset);
@@ -1869,7 +1869,7 @@ static int upipe_netmap_sink_set_flow_def(struct upipe *upipe,
             const uint16_t udp_payload_size = RTP_HEADER_SIZE +
                 HBRMT_HEADER_SIZE + HBRMT_DATA_SIZE;
             header += upipe_netmap_put_ip_headers(intf, header, udp_payload_size);
-            header += upipe_netmap_put_rtp_headers(upipe_netmap_sink, header, 98, false, false);
+            header += upipe_netmap_put_rtp_headers(upipe_netmap_sink, header, false, 98, false, false);
             header += upipe_put_hbrmt_headers(upipe, header);
             assert(header == &intf->header[sizeof(intf->header)]);
         }
