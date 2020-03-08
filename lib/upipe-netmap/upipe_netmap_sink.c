@@ -733,7 +733,7 @@ static int worker_rfc4175(struct upipe *upipe, uint8_t **dst, uint16_t **len, ui
         dst[i] += header_size;
 
         /* RTP HEADER */
-        int rtp_size = upipe_netmap_put_rtp_headers(upipe, dst[i], 96, true, field);
+        int rtp_size = upipe_netmap_put_rtp_headers(upipe_netmap_sink, dst[i], 96, true, field);
         if (marker)
             rtp_set_marker(dst[i]);
         dst[i] += rtp_size;
@@ -1872,7 +1872,7 @@ static int upipe_netmap_sink_set_flow_def(struct upipe *upipe,
             const uint16_t udp_payload_size = RTP_HEADER_SIZE +
                 HBRMT_HEADER_SIZE + HBRMT_DATA_SIZE;
             header += upipe_netmap_put_ip_headers(intf, header, udp_payload_size);
-            header += upipe_netmap_put_rtp_headers(upipe, header, 98, false, false);
+            header += upipe_netmap_put_rtp_headers(upipe_netmap_sink, header, 98, false, false);
             header += upipe_put_hbrmt_headers(upipe, header);
             assert(header == &intf->header[sizeof(intf->header)]);
         }
