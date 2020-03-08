@@ -1181,7 +1181,7 @@ static void upipe_netmap_sink_worker(struct upump *upump)
 
     for (size_t i = 0; i < 2; i++) {
         struct upipe_netmap_intf *intf = &upipe_netmap_sink->intf[i];
-        if (!intf->d)
+        if (unlikely(!intf->d))
             break;
 
         txring[i] = NETMAP_TXRING(intf->d->nifp, intf->ring_idx);
