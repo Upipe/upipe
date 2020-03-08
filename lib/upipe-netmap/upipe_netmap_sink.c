@@ -795,10 +795,8 @@ static int worker_rfc4175(struct upipe *upipe, uint8_t **dst, uint16_t **len, ui
     }
 
     upipe_netmap_sink->pixel_offset += pixels1;
-    if (upipe_netmap_sink->pixel_offset >= upipe_netmap_sink->hsize) {
-        upipe_netmap_sink->pixel_offset = 0;
+    if (upipe_netmap_sink->pixel_offset >= upipe_netmap_sink->hsize)
         continuation = 1;
-    }
 
     *dst += data_len1;
 
