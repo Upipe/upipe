@@ -191,9 +191,9 @@ struct upipe_netmap_sink {
     uint64_t start;
 
     uint64_t fakes;
-    uint64_t step;
+    uint32_t step;
     int64_t needed_fakes;
-    uint64_t pkts_in_frame;
+    uint32_t pkts_in_frame;
     float pid_last_error;
     float pid_error_sum;
     float pid_last_output;
