@@ -1359,6 +1359,10 @@ static void upipe_netmap_sink_worker(struct upump *upump)
 
     bool progressive = upipe_netmap_sink->progressive;
 
+    uint8_t *dst[2] = { NULL, NULL };
+    uint16_t *len[2] = { NULL, NULL };
+    uint64_t *ptr[2] = { NULL, NULL };
+
     /* fill ring buffer */
     while (txavail) {
         if (upipe_netmap_sink->step && (upipe_netmap_sink->pkts_in_frame % upipe_netmap_sink->step) == 0) {
@@ -1431,10 +1435,6 @@ static void upipe_netmap_sink_worker(struct upump *upump)
 
             bytes_left = input_size;
         }
-
-        uint8_t *dst[2] = { NULL, NULL };
-        uint16_t *len[2] = { NULL, NULL };
-        uint64_t *ptr[2] = { NULL, NULL };
 
         bool stamped = false;
         for (size_t i = 0; i < 2; i++) {
