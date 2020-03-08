@@ -583,11 +583,9 @@ static void upipe_netmap_update_timestamp_cache(struct upipe_netmap_sink *upipe_
     }
 }
 
-static int upipe_netmap_put_rtp_headers(struct upipe *upipe, uint8_t *buf,
+static int upipe_netmap_put_rtp_headers(struct upipe_netmap_sink *upipe_netmap_sink, uint8_t *buf,
         uint8_t pt, bool update, bool f2)
 {
-    struct upipe_netmap_sink *upipe_netmap_sink = upipe_netmap_sink_from_upipe(upipe);
-
     memset(buf, 0, RTP_HEADER_SIZE);
     rtp_set_hdr(buf);
     rtp_set_type(buf, pt);
