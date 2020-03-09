@@ -589,15 +589,20 @@ static void upipe_netmap_update_timestamp_cache(struct upipe_netmap_sink *upipe_
 static int upipe_netmap_put_rtp_headers(struct upipe_netmap_sink *upipe_netmap_sink, uint8_t *buf,
         uint8_t marker, uint8_t pt, bool update, bool f2)
 {
+    uint64_t *buf64 = (uint64_t*)buf;
+    uint32_t *ssrc = (uint32_t*)(buf+8);
+
+#if 0
     memset(buf, 0, RTP_HEADER_SIZE);
     rtp_set_hdr(buf);
     if (marker)
         rtp_set_marker(buf);
     rtp_set_type(buf, pt);
+#endif
+
+#define bswap64 __builtin_bswap64
 
     if (update) {
-        rtp_set_seqnum(buf, upipe_netmap_sink->seqnum & UINT16_MAX);
-
         uint64_t timestamp;
         if (upipe_netmap_sink->rfc4175) {
             timestamp = upipe_netmap_sink->rtp_timestamp[f2];
@@ -607,8 +612,21 @@ static int upipe_netmap_put_rtp_headers(struct upipe_netmap_sink *upipe_netmap_s
                 upipe_netmap_sink->frame_size;
             timestamp = upipe_netmap_sink->rtp_timestamp[0];
         }
+
+#if 0
+        rtp_set_seqnum(buf, upipe_netmap_sink->seqnum & UINT16_MAX);
         rtp_set_timestamp(buf, timestamp & UINT32_MAX);
+#endif
+        *buf64 = bswap64((UINT64_C(0x80) << 56) | ((uint64_t)marker << 55) | ((uint64_t)pt << 48) |
+                         ((uint64_t)(upipe_netmap_sink->seqnum & UINT16_MAX) << 32) | (uint64_t)(timestamp & UINT32_MAX));
     }
+    else {
+        *buf64 = bswap64((UINT64_C(0x80) << 56) | ((uint64_t)marker << 55) | ((uint64_t)pt << 48));
+    }
+
+#undef bswap64
+
+    *ssrc = 0;
 
     return RTP_HEADER_SIZE;
 }
@@ -665,6 +683,8 @@ static int upipe_put_rfc4175_headers(struct upipe_netmap_sink *upipe_netmap_sink
 {
     if (field_id)
         line_number -= upipe_netmap_sink->vsize / 2;
+
+#if 0
     rfc4175_set_extended_sequence_number(buf, (upipe_netmap_sink->seqnum >> 16) & UINT16_MAX);
     buf += RFC_4175_EXT_SEQ_NUM_LEN;
     memset(buf, 0, RFC_4175_HEADER_LEN);
@@ -673,6 +693,16 @@ static int upipe_put_rfc4175_headers(struct upipe_netmap_sink *upipe_netmap_sink
     rfc4175_set_line_number(buf, line_number);
     rfc4175_set_line_continuation(buf, continuation);
     rfc4175_set_line_offset(buf, offset);
+#endif
+
+    uint64_t *buf64 = (uint64_t*)buf;
+
+#define bswap64 __builtin_bswap64
+
+    *buf64 = bswap64((((upipe_netmap_sink->seqnum >> 16) & UINT16_MAX) << 48) | ((uint64_t)len << 32) |
+                     ((uint64_t)field_id << 31) | ((uint64_t)line_number << 16) | (uint64_t)offset);
+
+#undef bswap64
 
     return RFC_4175_EXT_SEQ_NUM_LEN + RFC_4175_HEADER_LEN;
 }
