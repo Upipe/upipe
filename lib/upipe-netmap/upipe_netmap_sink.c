@@ -771,7 +771,7 @@ static int worker_rfc4175(struct upipe_netmap_sink *upipe_netmap_sink, uint8_t *
             upipe_netmap_sink->strides[2] * interleaved_line +
             upipe_netmap_sink->pixel_offset / 2;
 
-        if (copy)
+        if (likely(copy))
             upipe_netmap_sink->pack2_8_planar(y8, u8, v8, dst[0], dst[1], pixels1);
         else if (dst[idx])
             upipe_netmap_sink->pack_8_planar(y8, u8, v8, dst[idx], pixels1);
@@ -788,7 +788,7 @@ static int worker_rfc4175(struct upipe_netmap_sink *upipe_netmap_sink, uint8_t *
              upipe_netmap_sink->strides[2] * interleaved_line +
              upipe_netmap_sink->pixel_offset / 2;
 
-        if (copy)
+        if (likely(copy))
             upipe_netmap_sink->pack2_10_planar(y10, u10, v10, dst[0], dst[1], pixels1);
         else if (dst[idx])
             upipe_netmap_sink->pack_10_planar(y10, u10, v10, dst[idx], pixels1);
@@ -811,15 +811,13 @@ static int worker_rfc4175(struct upipe_netmap_sink *upipe_netmap_sink, uint8_t *
     upipe_netmap_sink->bits += (eth_frame_len + 4 /* CRC */) * 8;
 
     /* packet size and end of frame flag */
-    if (len[idx]) {
+    if (likely(copy)) {
+        *len[0] = *len[1] = eth_frame_len;
+        *ptr[0] = *ptr[1] = (uint64_t)eof << 63;
+    } else if (len[idx]) {
         *len[idx] = eth_frame_len;
         *ptr[idx] = (uint64_t)eof << 63;
     }
-    if (copy) {
-        *len[!idx] = eth_frame_len;
-        *ptr[!idx] = (uint64_t)eof << 63;
-    }
-
 
     /* Release consumed frame */
     if (unlikely(eof)) {
