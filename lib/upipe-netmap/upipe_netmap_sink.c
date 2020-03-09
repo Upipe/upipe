@@ -703,7 +703,7 @@ static int worker_rfc4175(struct upipe_netmap_sink *upipe_netmap_sink, uint8_t *
 
     const uint16_t header_size = ETHERNET_HEADER_LEN + UDP_HEADER_SIZE + IP_HEADER_MINSIZE;
     const uint16_t rtp_rfc_header_size = RTP_HEADER_SIZE + RFC_4175_EXT_SEQ_NUM_LEN + RFC_4175_HEADER_LEN;
-    uint16_t eth_frame_len = header_size + rtp_rfc_header_size;
+    const uint16_t eth_frame_len = header_size + rtp_rfc_header_size + upipe_netmap_sink->payload;
     const uint16_t pixels1 = upipe_netmap_sink->payload * 2 / UPIPE_RFC4175_PIXEL_PAIR_BYTES;
 
     bool marker = 0, continuation = 0;
@@ -726,7 +726,6 @@ static int worker_rfc4175(struct upipe_netmap_sink *upipe_netmap_sink, uint8_t *
     }
 
     const uint16_t data_len1 = upipe_netmap_sink->payload;
-    eth_frame_len += data_len1;
 
     upipe_netmap_put_rtp_headers(upipe_netmap_sink, upipe_netmap_sink->rtp_header, marker, 96, true, field);
     upipe_put_rfc4175_headers(upipe_netmap_sink, upipe_netmap_sink->rtp_header + RTP_HEADER_SIZE, data_len1,
