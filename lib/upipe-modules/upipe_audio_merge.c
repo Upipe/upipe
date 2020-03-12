@@ -283,8 +283,6 @@ static void upipe_audio_merge_copy_to_output(struct upipe *upipe, float **out_da
     struct upipe_audio_merge *upipe_audio_merge = upipe_audio_merge_from_upipe(upipe);
     struct uchain *uchain;
 
-    uint64_t output_num_samples = upipe_audio_merge->output_num_samples;
-
     uint8_t output_channels = 0;
     UBASE_ERROR(upipe, uref_sound_flow_get_channels(upipe_audio_merge->flow_def, &output_channels));
 
@@ -299,22 +297,15 @@ static void upipe_audio_merge_copy_to_output(struct upipe *upipe, float **out_da
         if(unlikely(!ubase_check(uref_sound_read_float(upipe_audio_merge_sub->uref, 0, -1, (const float**)in_data, planes))))
             upipe_err(upipe, "error reading subpipe audio, skipping");
         else {
-            uint64_t input_num_samples = 0;
-            UBASE_ERROR(upipe, uref_sound_flow_get_samples(upipe_audio_merge_sub->uref, &input_num_samples));
+            size_t samples = 0;
+            uint8_t sample_size = 0;
+            UBASE_ERROR(upipe, uref_sound_size(upipe_audio_merge_sub->uref, &samples, &sample_size));
 
-            /* If the samples of the input uref != our output sample size, throw an error and don't copy */
-            if (unlikely(input_num_samples != output_num_samples))
-                upipe_err_va(upipe, "input samples (%"PRIu64") != output samples (%"PRIu64")!",
-                    input_num_samples, output_num_samples);
-            else {
-                for (int i = 0; i < planes; i++) {
-                    /* Only copy up to the number of channels in the output flowdef,
-                    and thus what we've allocated */
-                    if ((cur_plane + i) < output_channels) {
-                        for (int j = 0; j < input_num_samples; j++)
-                            out_data[cur_plane+i][j] = in_data[i][j];
-                    }
-                }
+            for (int i = 0; i < planes; i++) {
+                /* Only copy up to the number of channels in the output flowdef,
+                   and thus what we've allocated */
+                if ((cur_plane + i) < output_channels)
+                    memcpy(out_data[cur_plane + i], in_data[i], sample_size * samples);
             }
             uref_sound_unmap(upipe_audio_merge_sub->uref, 0, -1, planes);
         }
