@@ -277,7 +277,7 @@ static int upipe_audio_merge_sub_control(struct upipe *upipe,
  * @param upipe description structure of the pipe
  * @param out_data reference to the output buffers
  */
-static void upipe_audio_merge_copy_to_output(struct upipe *upipe, float **out_data)
+static void upipe_audio_merge_copy_to_output(struct upipe *upipe, uint8_t **out_data)
 {
     int8_t cur_plane = 0;
     struct upipe_audio_merge *upipe_audio_merge = upipe_audio_merge_from_upipe(upipe);
@@ -293,8 +293,8 @@ static void upipe_audio_merge_copy_to_output(struct upipe *upipe, float **out_da
         uint8_t planes = 0;
         UBASE_ERROR(upipe, uref_sound_flow_get_planes(upipe_audio_merge_sub->flow_def, &planes));
 
-        float *in_data[planes];
-        if(unlikely(!ubase_check(uref_sound_read_float(upipe_audio_merge_sub->uref, 0, -1, (const float**)in_data, planes))))
+        const uint8_t *in_data[planes];
+        if(unlikely(!ubase_check(uref_sound_read_uint8_t(upipe_audio_merge_sub->uref, 0, -1, in_data, planes))))
             upipe_err(upipe, "error reading subpipe audio, skipping");
         else {
             size_t samples = 0;
@@ -379,7 +379,10 @@ static void upipe_audio_merge_produce_output(struct upipe *upipe, struct upump *
         upipe_err_va(upipe, "total input channels (%"PRIu64") != output flow def (%d), some will be skipped or blanked!",
             input_channels, output_channels);
 
-    float *out_data[output_channels];
+    uint8_t output_sample_size = 0;
+    UBASE_ERROR(upipe, uref_sound_flow_get_sample_size(upipe_audio_merge->flow_def, &output_sample_size));
+
+    uint8_t *out_data[output_channels];
 
     /* Alloc and zero the output ubuf */
     ubuf = ubuf_sound_alloc(upipe_audio_merge->ubuf_mgr, output_num_samples);
@@ -387,9 +390,9 @@ static void upipe_audio_merge_produce_output(struct upipe *upipe, struct upump *
         upipe_throw_error(upipe, UBASE_ERR_ALLOC);
         return;
     }
-    if (likely(ubase_check(ubuf_sound_write_float(ubuf, 0, -1, out_data, output_channels)))) {
+    if (likely(ubase_check(ubuf_sound_write_uint8_t(ubuf, 0, -1, out_data, output_channels)))) {
         for (int i = 0; i < output_channels; i++)
-            memset(out_data[i], 0, sizeof(float) * output_num_samples);
+            memset(out_data[i], 0, output_sample_size * output_num_samples);
     } else {
         upipe_err(upipe, "error writing output audio buffer, skipping");
         uref_free(output_uref);
