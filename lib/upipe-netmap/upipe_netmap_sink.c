@@ -863,7 +863,7 @@ static int worker_rfc4175(struct upipe_netmap_sink *upipe_netmap_sink, uint8_t *
 }
 
 static int worker_hbrmt(struct upipe_netmap_sink *upipe_netmap_sink, uint8_t **dst, const uint8_t *src,
-        int bytes_left, uint16_t **len)
+        int bytes_left, uint16_t **len, uint64_t **ptr)
 {
     const uint8_t packed_bytes = upipe_netmap_sink->packed_bytes;
     const uint16_t eth_frame_len = ETHERNET_HEADER_LEN + IP_HEADER_MINSIZE + UDP_HEADER_SIZE +
@@ -963,11 +963,14 @@ static int worker_hbrmt(struct upipe_netmap_sink *upipe_netmap_sink, uint8_t **d
             memset(dst[1] + payload_len, 0, HBRMT_DATA_SIZE - payload_len);
     }
 
-    /* packet size */
-    if (len[idx])
+    /* packet size and end of frame flag */
+    if (likely(copy)) {
+        *len[0] = *len[1] = eth_frame_len;
+        *ptr[0] = *ptr[1] = (uint64_t)end << 63;
+    } else if (len[idx]) {
         *len[idx] = eth_frame_len;
-    if (copy)
-        *len[!idx] = *len[idx];
+        *ptr[idx] = (uint64_t)end << 63;
+    }
 
     if (end) {
         upipe_netmap_sink->packed_bytes = 0;
@@ -1542,8 +1545,7 @@ static void upipe_netmap_sink_worker(struct upump *upump)
                 }
             }
         } else {
-            // FIXME set the marker flag correctly for 2022-6
-            int s = worker_hbrmt(upipe_netmap_sink, dst, src_buf, bytes_left, len);
+            int s = worker_hbrmt(upipe_netmap_sink, dst, src_buf, bytes_left, len, ptr);
             src_buf += s;
             bytes_left -= s;
             assert(bytes_left >= 0);
