@@ -866,6 +866,8 @@ static int worker_hbrmt(struct upipe_netmap_sink *upipe_netmap_sink, uint8_t **d
         int bytes_left, uint16_t **len)
 {
     const uint8_t packed_bytes = upipe_netmap_sink->packed_bytes;
+    const uint16_t eth_frame_len = ETHERNET_HEADER_LEN + IP_HEADER_MINSIZE + UDP_HEADER_SIZE +
+                                   RTP_HEADER_SIZE + HBRMT_HEADER_SIZE + HBRMT_DATA_SIZE;
     const bool copy = dst[1] != NULL && dst[0] != NULL;
     const int idx = (dst[0] != NULL) ? 0 : 1;
 
@@ -959,8 +961,7 @@ static int worker_hbrmt(struct upipe_netmap_sink *upipe_netmap_sink, uint8_t **d
 
     /* packet size */
     if (len[idx])
-        *len[idx] = ETHERNET_HEADER_LEN + IP_HEADER_MINSIZE + UDP_HEADER_SIZE +
-            RTP_HEADER_SIZE + HBRMT_HEADER_SIZE + HBRMT_DATA_SIZE;
+        *len[idx] = eth_frame_len;
     if (copy)
         *len[!idx] = *len[idx];
 
