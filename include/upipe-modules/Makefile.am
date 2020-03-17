@@ -36,7 +36,6 @@ myinclude_HEADERS = \
 	upipe_even.h \
 	upipe_udp_source.h \
 	upipe_udp_sink.h \
-	upipe_udp_sink_fast.h \
 	upipe_http_source.h \
 	uref_http_flow.h \
 	upipe_rtp_decaps.h \
@@ -89,4 +88,5 @@ myinclude_HEADERS = \
 	upipe_row_join.h \
 	upipe_vanc_decoder.h \
 	upipe_audio_merge.h \
+	upipe_aes67_sink.h \
 	$(NULL)

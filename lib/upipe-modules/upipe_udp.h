@@ -34,6 +34,8 @@
 
 #include <upipe/upipe.h>
 #include <stdint.h>
+#include <sys/socket.h>
+#include <arpa/inet.h>
 
 #define IP_HEADER_MINSIZE 20
 #define UDP_HEADER_SIZE 8
@@ -154,6 +156,38 @@ static inline void udp_set_cksum(uint8_t *p_ip, uint16_t cksum)
     p_ip[6] = (cksum & 0xff00) >> 8;
     p_ip[7] = (cksum & 0xff);
 }
+
+/** @internal @This fills ipv4/udp headers for RAW sockets
+ *
+ * @param upipe description structure of the pipe
+ * @param dgram raw datagram
+ * @param ipsrc source ip address
+ * @param ipdst destination ip address
+ * @param portsrc source port address
+ * @param portdst destination port address
+ * @param ttl datagram time-to-live
+ * @param tos type of service
+ * @param payload length
+ */
+void upipe_udp_raw_fill_headers(struct upipe *upipe,
+                                uint8_t *header,
+                                in_addr_t ipsrc, in_addr_t ipdst,
+                                uint16_t portsrc, uint16_t portdst,
+                                uint8_t ttl, uint8_t tos, uint16_t len);
+
+/** @internal @This parses a host:port string
+ *
+ * @param upipe description structure of the pipe
+ * @param _string string to be parsed
+ * @param stringend end of string pointer
+ * @param default_port default port
+ * @param if_index interface index
+ */
+bool upipe_udp_parse_node_service(struct upipe *upipe,
+                                  char *_string, char **stringend,
+                                  uint16_t default_port,
+                                  int *if_index,
+                                  struct sockaddr_storage *ss);
 
 /** @internal @This parses _uri and opens IPv4 & IPv6 sockets
  *

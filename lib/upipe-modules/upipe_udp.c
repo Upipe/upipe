@@ -97,7 +97,7 @@ static uint16_t ip_checksum(const void *data, uint16_t len)
  * @param tos type of service
  * @param payload length
  */
-static void upipe_udp_raw_fill_headers(struct upipe *upipe,
+void upipe_udp_raw_fill_headers(struct upipe *upipe,
                                        uint8_t *header,
                                        in_addr_t ipsrc, in_addr_t ipdst,
                                        uint16_t portsrc, uint16_t portdst,
@@ -221,7 +221,7 @@ static void upipe_udp_print_socket(struct upipe *upipe, const char *text, union 
  * @param default_port default port
  * @param if_index interface index
  */
-static bool upipe_udp_parse_node_service(struct upipe *upipe,
+bool upipe_udp_parse_node_service(struct upipe *upipe,
                                           char *_string, char **stringend,
                                           uint16_t default_port,
                                           int *if_index,
