@@ -36,6 +36,8 @@
 #include <linux/if_packet.h>
 #include <linux/if_ether.h>
 #include <arpa/inet.h>
+#include <linux/if.h>
+#include <ifaddrs.h>
 
 #include <upipe/ubase.h>
 #include <upipe/ulist.h>
@@ -81,9 +83,21 @@
 #define UDP_DEFAULT_TTL 0
 #define UDP_DEFAULT_PORT 1234
 
+#define AES67_MAX_PATHS 2
+#define AES67_MAX_FLOWS 8
+
 /** @hidden */
 static bool upipe_aes67_sink_output(struct upipe *upipe, struct uref *uref,
-                                 struct upump **upump_p, int which_fd);
+                                 struct upump **upump_p, int flow, int path);
+
+struct aes67_flow {
+    /* IP details for the destination. */
+    struct sockaddr_in sin;
+    /* Ethernet details for the destination. */
+    struct sockaddr_ll sll;
+    /* Raw IP and UDP header. */
+    uint8_t raw_header[RAW_HEADER_SIZE];
+};
 
 /** @internal @This is the private context of a aes67 sink pipe. */
 struct upipe_aes67_sink {
@@ -99,15 +113,9 @@ struct upipe_aes67_sink {
     uint64_t latency;
     /** file descriptor */
     int fd[2];
-    /** socket uri */
-    char *uri;
-    /** interface indicies. */
-    int ifindex[2];
 
     void *mmap[2];
-    size_t mmap_size[2];
     int mmap_frame_num;
-    struct sockaddr_ll peer_addr[2];
 
     uint32_t timestamp;
     uint16_t seqnum;
@@ -121,15 +129,12 @@ struct upipe_aes67_sink {
     pthread_mutex_t mutex;
     uatomic_uint32_t stop;
 
-    /** RAW sockets */
-    bool raw;
-    /** RAW header */
-    uint8_t raw_header[2][RAW_HEADER_SIZE];
-
-    /** destination for not-connected socket */
-    struct sockaddr_storage addr;
-    /** destination for not-connected socket (size) */
-    socklen_t addrlen;
+    /* IP details for the source. */
+    struct sockaddr_in sin[2];
+    /* Ethernet details for the source. */
+    struct sockaddr_ll sll[2];
+    /* Details for all destinations. */
+    struct aes67_flow flows[AES67_MAX_FLOWS][AES67_MAX_PATHS];
 
     /** public upipe structure */
     struct upipe upipe;
@@ -283,8 +288,9 @@ static void *run_thread(void *upipe_pointer)
                         upipe_aes67_sink->latency / 27);
 
             /* Write packets. */
-            upipe_aes67_sink_output(upipe, uref, NULL, 0);
-            upipe_aes67_sink_output(upipe, uref, NULL, 1);
+            upipe_aes67_sink_output(upipe, uref, NULL, 0, 0);
+            if (upipe_aes67_sink->fd[1] != -1)
+                upipe_aes67_sink_output(upipe, uref, NULL, 0, 1);
 
             /* Adjust per packet values. */
             upipe_aes67_sink->mmap_frame_num = (upipe_aes67_sink->mmap_frame_num + 1) % MMAP_FRAME_NUM;
@@ -377,24 +383,14 @@ static struct upipe *upipe_aes67_sink_alloc(struct upipe_mgr *mgr,
     upipe_aes67_sink_init_uclock(upipe);
     upipe_aes67_sink->latency = 0;
     upipe_aes67_sink->fd[0] = upipe_aes67_sink->fd[1] = -1;
-    upipe_aes67_sink->uri = NULL;
-    upipe_aes67_sink->raw = false;
-    upipe_aes67_sink->addrlen = 0;
     upipe_aes67_sink->thread_created = false;
     pthread_mutex_init(&upipe_aes67_sink->mutex, NULL);
 
     upipe_aes67_sink->mmap[0] = upipe_aes67_sink->mmap[1] = MAP_FAILED;
-    upipe_aes67_sink->mmap_size[0] = upipe_aes67_sink->mmap_size[1] = 0;
     upipe_aes67_sink->mmap_frame_num = 0;
-    upipe_aes67_sink->peer_addr[0] = upipe_aes67_sink->peer_addr[1] =
-        (struct sockaddr_ll) {
-            .sll_family = AF_PACKET,
-            .sll_protocol = htons(ETH_P_IP),
-            .sll_halen = ETH_ALEN,
-            .sll_addr = {0xff,0xff,0xff,0xff,0xff,0xff}, /* TODO: get right one? */
-        };
     upipe_aes67_sink->seqnum = 0;
     upipe_aes67_sink->cached_samples = 0;
+    memset(upipe_aes67_sink->flows, 0, sizeof upipe_aes67_sink->flows);
 
     ulist_init(&upipe_aes67_sink->ulist);
     uatomic_init(&upipe_aes67_sink->stop, 0);
@@ -411,7 +407,7 @@ static struct upipe *upipe_aes67_sink_alloc(struct upipe_mgr *mgr,
  * @return true if the uref was processed
  */
 static bool upipe_aes67_sink_output(struct upipe *upipe, struct uref *uref,
-                                 struct upump **upump_p, int which_fd)
+                                 struct upump **upump_p, int flow, int path)
 {
     struct upipe_aes67_sink *upipe_aes67_sink = upipe_aes67_sink_from_upipe(upipe);
 
@@ -419,7 +415,7 @@ static bool upipe_aes67_sink_output(struct upipe *upipe, struct uref *uref,
         int payload_len = 288 + RTP_HEADER_SIZE;
 
             /* Get next frame to be used. */
-            union frame_map frame = { .raw = upipe_aes67_sink->mmap[which_fd] + upipe_aes67_sink->mmap_frame_num * MMAP_FRAME_SIZE };
+            union frame_map frame = { .raw = upipe_aes67_sink->mmap[path] + upipe_aes67_sink->mmap_frame_num * MMAP_FRAME_SIZE };
             uint8_t *data = frame.v1->data;
 
             /* Fill in mmap stuff. */
@@ -429,7 +425,7 @@ static bool upipe_aes67_sink_output(struct upipe *upipe, struct uref *uref,
             /* TODO: check for errors. */
 
             /* Fill in IP and UDP headers. */
-            memcpy(data, upipe_aes67_sink->raw_header[which_fd], RAW_HEADER_SIZE);
+            memcpy(data, upipe_aes67_sink->flows[flow][path].raw_header, RAW_HEADER_SIZE);
             udp_raw_set_len(data, payload_len);
             data += RAW_HEADER_SIZE;
 
@@ -443,8 +439,9 @@ static bool upipe_aes67_sink_output(struct upipe *upipe, struct uref *uref,
 
         memcpy(data, upipe_aes67_sink->audio_data, 288);
 
-        ssize_t ret = sendto(upipe_aes67_sink->fd[which_fd], NULL, 0, 0,
-                (struct sockaddr*)&upipe_aes67_sink->peer_addr[which_fd], sizeof upipe_aes67_sink->peer_addr[which_fd]);
+        ssize_t ret = sendto(upipe_aes67_sink->fd[path], NULL, 0, 0,
+                (struct sockaddr*)&upipe_aes67_sink->flows[flow][path].sll,
+                sizeof upipe_aes67_sink->flows[flow][path].sll);
         if (unlikely(ret == -1)) {
             switch (errno) {
                 case EINTR:
@@ -531,116 +528,262 @@ static int upipe_aes67_sink_set_flow_def(struct upipe *upipe,
     return UBASE_ERR_NONE;
 }
 
-/** @internal @This asks to open the given socket.
- *
- * @param upipe description structure of the pipe
- * @param uri relative or absolute uri of the socket
- * @param mode mode of opening the socket
- * @return an error code
- */
-static int _upipe_aes67_sink_set_uri(struct upipe *upipe, const char *uri)
+static int get_interface_details(struct upipe *upipe, const char *intf,
+        struct sockaddr_in *sin, struct sockaddr_ll *sll)
+{
+    struct ifaddrs *ifa = NULL;
+    if (getifaddrs(&ifa) < 0) {
+        upipe_err_va(upipe, "getifaddrs: %m");
+        return UBASE_ERR_ALLOC;
+    }
+
+    bool have_sin = false, have_sll = false;
+    for (struct ifaddrs *ifap = ifa; ifap; ifap = ifap->ifa_next) {
+        if (!strncmp(ifap->ifa_name, intf, IFNAMSIZ)) {
+            if (ifap->ifa_addr->sa_family == AF_INET) {
+                *sin = *(struct sockaddr_in *)ifap->ifa_addr;
+                have_sin = true;
+            }
+            if (ifap->ifa_addr->sa_family == AF_PACKET) {
+                *sll = *(struct sockaddr_ll *)ifap->ifa_addr;
+                have_sll = true;
+            }
+        }
+    }
+    freeifaddrs(ifa);
+
+    if (!have_sin) {
+        upipe_err_va(upipe, "unable to get IP address for %s", intf);
+        return UBASE_ERR_INVALID;
+    }
+    if (!have_sll) {
+        upipe_err_va(upipe, "unable to get MAC address for %s", intf);
+        return UBASE_ERR_INVALID;
+    }
+
+    return UBASE_ERR_NONE;
+}
+
+static int open_socket(struct upipe *upipe, const char *path_1, const char *path_2)
 {
     struct upipe_aes67_sink *upipe_aes67_sink = upipe_aes67_sink_from_upipe(upipe);
-    bool use_tcp = false;
-    in_addr_t dst_ip;
 
-    if (unlikely(upipe_aes67_sink->fd[0] != -1)) {
-        if (likely(upipe_aes67_sink->uri != NULL))
-            upipe_notice_va(upipe, "closing socket %s", upipe_aes67_sink->uri);
-        close(upipe_aes67_sink->fd[0]);
-        if (upipe_aes67_sink->fd[1] != -1)
-            close(upipe_aes67_sink->fd[1]);
-    }
-    ubase_clean_str(&upipe_aes67_sink->uri);
+    if (path_1 == NULL)
+        return UBASE_ERR_INVALID;
 
-    if (unlikely(uri == NULL))
-        return UBASE_ERR_NONE;
+    /* Get interface index and IP address. */
+    struct sockaddr_in sin;
+    struct sockaddr_ll sll;
+    UBASE_RETURN(get_interface_details(upipe, path_1, &sin, &sll));
 
-    char *uri_a, *uri_b, *ip_addr;
-    upipe_aes67_sink->uri = uri_a = strdup(uri);
-    UBASE_ALLOC_RETURN(uri_a);
-
-    uri_b = strchr(uri_a, '+');
-    if (uri_b)
-        *uri_b++ = '\0'; /* Remove + character and start 2nd uri after it. */
-
-    /* Open 1st socket. */
-    upipe_aes67_sink->fd[0] = upipe_udp_open_socket(upipe, uri_a,
-            UDP_DEFAULT_TTL, UDP_DEFAULT_PORT, 0, NULL, &use_tcp,
-            &upipe_aes67_sink->raw, upipe_aes67_sink->raw_header[0],
-            &upipe_aes67_sink->ifindex[0]);
-    if (unlikely(upipe_aes67_sink->fd[0] == -1)) {
-        upipe_err_va(upipe, "can't open uri %s", uri_a);
+    upipe_dbg_va(upipe, "opening socket for %s %s", path_1, inet_ntoa(sin.sin_addr));
+    /* Open socket in the desired mode. */
+    int fd = socket(AF_PACKET, SOCK_DGRAM, 0);
+    if (fd < 0) {
+        upipe_err_va(upipe, "unable to open socket (%m)");
         return UBASE_ERR_EXTERNAL;
     }
 
-    upipe_aes67_sink->mmap_size[0] = MMAP_BLOCK_SIZE * MMAP_BLOCK_NUM;
-    upipe_aes67_sink->mmap[0] = mmap(0, upipe_aes67_sink->mmap_size[0], PROT_READ | PROT_WRITE,
-            MAP_SHARED, upipe_aes67_sink->fd[0], 0);
+    /* Set socket options. */
+    int val;
+
+    /* Drop/discard/ignore malformed packets. */
+    val = 1;
+    if (setsockopt(fd, SOL_PACKET, PACKET_LOSS, &val, sizeof val)) {
+        upipe_err_va(upipe, "unable to set PACKET_LOSS (%m)");
+    }
+
+    /* Default but try anyway. */
+    val = TPACKET_V1;
+    if (setsockopt(fd, SOL_PACKET, PACKET_VERSION, &val, sizeof val)) {
+        upipe_err_va(upipe, "unable to set PACKET_VERSION (%m)");
+    }
+
+    /* Setup TX ring for mmap. */
+    struct tpacket_req req = {
+        .tp_block_size = MMAP_BLOCK_SIZE, // getpagesize()
+        .tp_block_nr   = MMAP_BLOCK_NUM,
+        .tp_frame_size = MMAP_FRAME_SIZE, // TPACKET_ALIGNMENT
+        .tp_frame_nr   = MMAP_FRAME_NUM,
+    };
+    upipe_dbg_va(upipe, "tp_block_size: %u, tp_block_nr %u, tp_frame_size: %u, tp_frame_nr: %u",
+            req.tp_block_size, req.tp_block_nr, req.tp_frame_size, req.tp_frame_nr);
+    if (setsockopt(fd, SOL_PACKET, PACKET_TX_RING, (void *)&req, sizeof req)) {
+        upipe_err_va(upipe, "unable to set PACKET_TX_RING (%m)");
+        close(fd);
+        return UBASE_ERR_EXTERNAL;
+    }
+
+    /* Bind to the given interface. */
+    if (bind(fd, (struct sockaddr *)&sll, sizeof sll) < 0) {
+        upipe_err_va(upipe, "unable to bind: %m");
+        close(fd);
+        return UBASE_ERR_EXTERNAL;
+    }
+
+    upipe_aes67_sink->mmap[0] = mmap(0, MMAP_BLOCK_SIZE * MMAP_BLOCK_NUM,
+            PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0);
     if (upipe_aes67_sink->mmap[0] == MAP_FAILED) {
-        upipe_err_va(upipe, "unable to mmap: %m");
+        upipe_err_va(upipe, "unable to mmap (%m)");
+        close(fd);
         return UBASE_ERR_EXTERNAL;
     }
-    upipe_aes67_sink->peer_addr[0].sll_ifindex = upipe_aes67_sink->ifindex[0];
+    upipe_aes67_sink->fd[0] = fd;
+    upipe_aes67_sink->sin[0] = sin;
+    upipe_aes67_sink->sll[0] = sll;
 
-    ip_addr = strchr(uri_a, ':');
-    if (ip_addr)
-        *ip_addr++ = '\0'; /*extract the IP address */
+    /* Handle second path. */
+    if (path_2) {
+        UBASE_RETURN(get_interface_details(upipe, path_2, &sin, &sll));
 
-    dst_ip = inet_addr(uri_a);
-    ip_addr[-1] = ':'; /* Restore : character. */
-
-    if (IN_MULTICAST(ntohl(dst_ip))) {
-        uint32_t ip = ntohl(dst_ip);
-        upipe_aes67_sink->peer_addr[0].sll_addr[0] = 0x01;
-        upipe_aes67_sink->peer_addr[0].sll_addr[1] = 0x00;
-        upipe_aes67_sink->peer_addr[0].sll_addr[2] = 0x5e;
-        upipe_aes67_sink->peer_addr[0].sll_addr[3] = (ip >> 16) & 0x7f;
-        upipe_aes67_sink->peer_addr[0].sll_addr[4] = (ip >>  8) & 0xff;
-        upipe_aes67_sink->peer_addr[0].sll_addr[5] = (ip      ) & 0xff;
-    }
-
-    /* Open 2nd socket. */
-    if (uri_b) {
-        uri_b[-1] = '+'; /* Restore + character. */
-        upipe_aes67_sink->fd[1] = upipe_udp_open_socket(upipe, uri_b,
-                UDP_DEFAULT_TTL, UDP_DEFAULT_PORT, 0, NULL, &use_tcp,
-                &upipe_aes67_sink->raw, upipe_aes67_sink->raw_header[1],
-                &upipe_aes67_sink->ifindex[1]);
-        if (unlikely(upipe_aes67_sink->fd[1] == -1)) {
-            upipe_err_va(upipe, "can't open uri %s", uri_b);
-            ubase_clean_fd(&upipe_aes67_sink->fd[0]);
+        upipe_dbg_va(upipe, "opening socket for %s %s", path_2, inet_ntoa(sin.sin_addr));
+        fd = socket(AF_PACKET, SOCK_DGRAM, 0);
+        if (fd < 0) {
+            upipe_err_va(upipe, "unable to open socket (%m)");
             return UBASE_ERR_EXTERNAL;
         }
 
-        upipe_aes67_sink->mmap_size[1] = MMAP_BLOCK_SIZE * MMAP_BLOCK_NUM;
-        upipe_aes67_sink->mmap[1] = mmap(0, upipe_aes67_sink->mmap_size[1], PROT_READ | PROT_WRITE,
-                MAP_SHARED, upipe_aes67_sink->fd[1], 0);
+        val = 1;
+        if (setsockopt(fd, SOL_PACKET, PACKET_LOSS, &val, sizeof val)) {
+            upipe_err_va(upipe, "unable to set PACKET_LOSS (%m)");
+        }
+        val = TPACKET_V1;
+        if (setsockopt(fd, SOL_PACKET, PACKET_VERSION, &val, sizeof val)) {
+            upipe_err_va(upipe, "unable to set PACKET_VERSION (%m)");
+        }
+        if (setsockopt(fd, SOL_PACKET, PACKET_TX_RING, (void *)&req, sizeof req)) {
+            upipe_err_va(upipe, "unable to set PACKET_TX_RING (%m)");
+            close(fd);
+            return UBASE_ERR_EXTERNAL;
+        }
+
+        if (bind(fd, (struct sockaddr *)&sll, sizeof sll) < 0) {
+            upipe_err_va(upipe, "unable to bind: %m");
+            close(fd);
+            return UBASE_ERR_EXTERNAL;
+        }
+
+        upipe_aes67_sink->mmap[1] = mmap(0, MMAP_BLOCK_SIZE * MMAP_BLOCK_NUM,
+                PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0);
         if (upipe_aes67_sink->mmap[1] == MAP_FAILED) {
-            upipe_err_va(upipe, "unable to mmap: %m");
+            upipe_err_va(upipe, "unable to mmap (%m)");
+            close(fd);
             return UBASE_ERR_EXTERNAL;
         }
-        upipe_aes67_sink->peer_addr[1].sll_ifindex = upipe_aes67_sink->ifindex[1];
+        upipe_aes67_sink->fd[1] = fd;
+        upipe_aes67_sink->sin[1] = sin;
+        upipe_aes67_sink->sll[1] = sll;
+    }
 
-        ip_addr = strchr(uri_b, ':');
-        if (ip_addr)
-            *ip_addr++ = '\0'; /*extract the IP address */
+    return UBASE_ERR_NONE;
+}
 
-        dst_ip = inet_addr(uri_b);
-        ip_addr[-1] = ':'; /* Restore : character. */
+static int set_flow_destination(struct upipe * upipe, int flow,
+        const char *path_1, const char *path_2)
+{
+    struct upipe_aes67_sink *upipe_aes67_sink = upipe_aes67_sink_from_upipe(upipe);
 
-        if (IN_MULTICAST(ntohl(dst_ip))) {
-            uint32_t ip = ntohl(dst_ip);
-            upipe_aes67_sink->peer_addr[1].sll_addr[0] = 0x01;
-            upipe_aes67_sink->peer_addr[1].sll_addr[1] = 0x00;
-            upipe_aes67_sink->peer_addr[1].sll_addr[2] = 0x5e;
-            upipe_aes67_sink->peer_addr[1].sll_addr[3] = (ip >> 16) & 0x7f;
-            upipe_aes67_sink->peer_addr[1].sll_addr[4] = (ip >>  8) & 0xff;
-            upipe_aes67_sink->peer_addr[1].sll_addr[5] = (ip      ) & 0xff;
+    /* Check arguments are okay. */
+    if (unlikely(path_1 == NULL))
+        return UBASE_ERR_INVALID;
+    if (unlikely(path_2 == NULL && upipe_aes67_sink->fd[1] != -1))
+        return UBASE_ERR_INVALID;
+    if (unlikely(flow < 0 || flow >= AES67_MAX_FLOWS)) {
+        upipe_err_va(upipe, "flow %d is not in the range 0..%d", flow, AES67_MAX_FLOWS-1);
+        return UBASE_ERR_INVALID;
+    }
+
+    struct aes67_flow *aes67_flow = upipe_aes67_sink->flows[flow];
+
+    /* Parse first path. */
+    char *path = strdup(path_1);
+    UBASE_ALLOC_RETURN(path);
+    if (!upipe_udp_parse_node_service(upipe, path, NULL, 0, NULL,
+                (struct sockaddr_storage *)&aes67_flow[0].sin)) {
+        free(path);
+        return UBASE_ERR_INVALID;
+    }
+    free(path);
+    upipe_dbg_va(upipe, "flow %d path 0 destination set to %s:%u", flow,
+            inet_ntoa(aes67_flow[0].sin.sin_addr),
+            ntohs(aes67_flow[0].sin.sin_port));
+
+    /* Write IP and UDP headers. */
+    upipe_udp_raw_fill_headers(NULL, aes67_flow[0].raw_header,
+            upipe_aes67_sink->sin[0].sin_addr.s_addr, aes67_flow[0].sin.sin_addr.s_addr,
+            ntohs(aes67_flow[0].sin.sin_port), ntohs(aes67_flow[0].sin.sin_port),
+            10, 0, 300);
+
+    /* Set ethernet details and the inferface index. */
+    aes67_flow[0].sll = (struct sockaddr_ll) {
+        .sll_family = AF_PACKET,
+        .sll_protocol = htons(ETH_P_IP),
+        .sll_ifindex = upipe_aes67_sink->sll[0].sll_ifindex,
+        .sll_halen = ETH_ALEN,
+    };
+
+    /* Set MAC address. */
+    uint32_t dst_ip = ntohl(aes67_flow[0].sin.sin_addr.s_addr);
+    if (IN_MULTICAST(dst_ip)) {
+        aes67_flow[0].sll.sll_addr[0] = 0x01;
+        aes67_flow[0].sll.sll_addr[1] = 0x00;
+        aes67_flow[0].sll.sll_addr[2] = 0x5e;
+        aes67_flow[0].sll.sll_addr[3] = (dst_ip >> 16) & 0x7f;
+        aes67_flow[0].sll.sll_addr[4] = (dst_ip >>  8) & 0xff;
+        aes67_flow[0].sll.sll_addr[5] = (dst_ip      ) & 0xff;
+    } else {
+        /* TODO: get correct address. */
+        aes67_flow[0].sll.sll_addr[0] = 0xff;
+        aes67_flow[0].sll.sll_addr[1] = 0xff;
+        aes67_flow[0].sll.sll_addr[2] = 0xff;
+        aes67_flow[0].sll.sll_addr[3] = 0xff;
+        aes67_flow[0].sll.sll_addr[4] = 0xff;
+        aes67_flow[0].sll.sll_addr[5] = 0xff;
+    }
+
+    if (path_2) {
+        path = strdup(path_2);
+        UBASE_ALLOC_RETURN(path);
+        if (!upipe_udp_parse_node_service(upipe, path, NULL, 0, NULL,
+                    (struct sockaddr_storage *)&aes67_flow[1].sin)) {
+            free(path);
+            return UBASE_ERR_INVALID;
+        }
+        free(path);
+        upipe_dbg_va(upipe, "flow %d path 1 destination set to %s:%u", flow,
+                inet_ntoa(aes67_flow[1].sin.sin_addr),
+                ntohs(aes67_flow[1].sin.sin_port));
+
+        upipe_udp_raw_fill_headers(NULL, aes67_flow[1].raw_header,
+                upipe_aes67_sink->sin[1].sin_addr.s_addr, aes67_flow[1].sin.sin_addr.s_addr,
+                ntohs(aes67_flow[1].sin.sin_port), ntohs(aes67_flow[1].sin.sin_port),
+                10, 0, 300);
+
+        aes67_flow[1].sll = (struct sockaddr_ll) {
+            .sll_family = AF_PACKET,
+                .sll_protocol = htons(ETH_P_IP),
+                .sll_ifindex = upipe_aes67_sink->sll[1].sll_ifindex,
+                .sll_halen = ETH_ALEN,
+        };
+
+        dst_ip = ntohl(aes67_flow[1].sin.sin_addr.s_addr);
+        if (IN_MULTICAST(dst_ip)) {
+            aes67_flow[1].sll.sll_addr[0] = 0x01;
+            aes67_flow[1].sll.sll_addr[1] = 0x00;
+            aes67_flow[1].sll.sll_addr[2] = 0x5e;
+            aes67_flow[1].sll.sll_addr[3] = (dst_ip >> 16) & 0x7f;
+            aes67_flow[1].sll.sll_addr[4] = (dst_ip >>  8) & 0xff;
+            aes67_flow[1].sll.sll_addr[5] = (dst_ip      ) & 0xff;
+        } else {
+            aes67_flow[1].sll.sll_addr[0] = 0xff;
+            aes67_flow[1].sll.sll_addr[1] = 0xff;
+            aes67_flow[1].sll.sll_addr[2] = 0xff;
+            aes67_flow[1].sll.sll_addr[3] = 0xff;
+            aes67_flow[1].sll.sll_addr[4] = 0xff;
+            aes67_flow[1].sll.sll_addr[5] = 0xff;
         }
     }
 
-    upipe_notice_va(upipe, "opening uri %s", upipe_aes67_sink->uri);
     return UBASE_ERR_NONE;
 }
 
@@ -669,9 +812,19 @@ static int upipe_aes67_sink_control(struct upipe *upipe,
             return upipe_aes67_sink_set_flow_def(upipe, flow_def);
         }
 
-        case UPIPE_SET_URI: {
-            const char *uri = va_arg(args, const char *);
-            return _upipe_aes67_sink_set_uri(upipe, uri);
+        case UPIPE_AES67_SINK_OPEN_SOCKET: {
+            UBASE_SIGNATURE_CHECK(args, UPIPE_AES67_SINK_SIGNATURE)
+            const char *path_1 = va_arg(args, const char *);
+            const char *path_2 = va_arg(args, const char *);
+            return open_socket(upipe, path_1, path_2);
+        }
+
+        case UPIPE_AES67_SINK_SET_FLOW_DESTINATION: {
+            UBASE_SIGNATURE_CHECK(args, UPIPE_AES67_SINK_SIGNATURE)
+            int flow = va_arg(args, int);
+            const char *path_1 = va_arg(args, const char *);
+            const char *path_2 = va_arg(args, const char *);
+            return set_flow_destination(upipe, flow, path_1, path_2);
         }
 
         default:
@@ -690,13 +843,12 @@ static void upipe_aes67_sink_free(struct upipe *upipe)
     /* Stop thread. */
     uatomic_store(&upipe_aes67_sink->stop, 1);
     /* Wait for thread to exit. */
-    pthread_join(upipe_aes67_sink->pt, NULL);
+    if (upipe_aes67_sink->thread_created)
+        pthread_join(upipe_aes67_sink->pt, NULL);
     /* Clean up mutex. */
     pthread_mutex_destroy(&upipe_aes67_sink->mutex); /* Check return value? */
 
     if (likely(upipe_aes67_sink->fd[0] != -1)) {
-        if (likely(upipe_aes67_sink->uri != NULL))
-            upipe_notice_va(upipe, "closing socket %s", upipe_aes67_sink->uri);
         close(upipe_aes67_sink->fd[0]);
         if (upipe_aes67_sink->fd[1] != -1)
             close(upipe_aes67_sink->fd[1]);
@@ -710,7 +862,6 @@ static void upipe_aes67_sink_free(struct upipe *upipe)
         uref_free(uref_from_uchain(uchain));
     }
 
-    free(upipe_aes67_sink->uri);
     upipe_aes67_sink_clean_uclock(upipe);
     upipe_aes67_sink_clean_urefcount(upipe);
     upipe_aes67_sink_free_void(upipe);

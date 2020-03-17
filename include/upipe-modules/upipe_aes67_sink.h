@@ -44,7 +44,41 @@ extern "C" {
 /** @This extends upipe_command with specific commands for aes67 sink. */
 enum upipe_aes67_sink_command {
     UPIPE_AES67_SINK_SENTINEL = UPIPE_CONTROL_LOCAL,
+    /* const char*, const char* */
+    UPIPE_AES67_SINK_OPEN_SOCKET,
+    /* int, const char*, const char* */
+    UPIPE_AES67_SINK_SET_FLOW_DESTINATION,
 };
+
+/** @This opens sockets and binds each to the interface given.
+ *
+ * @param upipe description structure of the pipe
+ * @param path_1 first path interface to open and bind a socket.
+ * @param path_2 second path interface. Can be NULL.
+ * @return an error code
+ */
+static inline int upipe_aes67_sink_open_socket(struct upipe *upipe,
+        const char *path_1, const char *path_2)
+{
+    return upipe_control(upipe, UPIPE_AES67_SINK_OPEN_SOCKET, UPIPE_AES67_SINK_SIGNATURE,
+            path_1, path_2);
+}
+
+/** @This sets the destination details for the given flow.
+ *
+ * @param upipe description structure of the pipe
+ * @param flow which flow this represents
+ * @param path_1 destination IP and port for the first path.
+ * @param path_2 destination IP and port for the second path. Can be NULL if
+ * second path is not used.
+ * @return an error code
+ */
+static inline int upipe_aes67_sink_set_flow_destination(struct upipe *upipe,
+        int flow, const char *path_1, const char *path_2)
+{
+    return upipe_control(upipe, UPIPE_AES67_SINK_SET_FLOW_DESTINATION, UPIPE_AES67_SINK_SIGNATURE,
+            flow, path_1, path_2);
+}
 
 /** @This returns the management structure for all aes67 sinks.
  *
