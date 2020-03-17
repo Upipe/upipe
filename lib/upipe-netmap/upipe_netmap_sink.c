@@ -866,8 +866,8 @@ static int worker_hbrmt(struct upipe_netmap_sink *upipe_netmap_sink, uint8_t **d
         int bytes_left, uint16_t **len)
 {
     const uint8_t packed_bytes = upipe_netmap_sink->packed_bytes;
-    bool copy = dst[1] != NULL && dst[0] != NULL;
-    int idx = (dst[0] != NULL) ? 0 : 1;
+    const bool copy = dst[1] != NULL && dst[0] != NULL;
+    const int idx = (dst[0] != NULL) ? 0 : 1;
 
     /* available payload size */
     int pack_bytes_left = bytes_left * 5 / 8 + packed_bytes;
