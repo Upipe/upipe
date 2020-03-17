@@ -936,6 +936,11 @@ static void upipe_aes67_sink_free(struct upipe *upipe)
             close(upipe_aes67_sink->fd[1]);
     }
 
+    if (upipe_aes67_sink->ifname[0])
+        free(upipe_aes67_sink->ifname[0]);
+    if (upipe_aes67_sink->ifname[1])
+        free(upipe_aes67_sink->ifname[1]);
+
     upipe_throw_dead(upipe);
 
     struct uchain *uchain, *uchain_tmp;
