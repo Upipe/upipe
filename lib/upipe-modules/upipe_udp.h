@@ -44,7 +44,7 @@
 #define MMAP_BLOCK_SIZE (MMAP_FRAME_SIZE * MMAP_FRAME_NUM / MMAP_BLOCK_NUM)
 #define MMAP_BLOCK_NUM  1
 #define MMAP_FRAME_SIZE 512
-#define MMAP_FRAME_NUM  320
+#define MMAP_FRAME_NUM  256
 
 static inline void ip_set_version(uint8_t *p_ip, uint8_t version)
 {
