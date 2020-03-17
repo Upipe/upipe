@@ -61,6 +61,7 @@
 #include <stdlib.h>
 #include <stdbool.h>
 #include <stdint.h>
+#include <limits.h>
 #include <stdarg.h>
 #include <string.h>
 #include <unistd.h>
@@ -88,9 +89,15 @@
 #define AES67_MAX_PATHS 2
 #define AES67_MAX_FLOWS 8
 
+#define TRANSMISSION_UNIT_SIZE(payload) \
+    (ETH_HLEN + RAW_HEADER_SIZE + RTP_HEADER_SIZE + payload)
 #define MAX_SAMPLES_PER_PACKET 48
 #undef MMAP_FRAME_SIZE
 #define MMAP_FRAME_SIZE (TPACKET_ALIGN(sizeof(struct tpacket_hdr) + RAW_HEADER_SIZE + RTP_HEADER_SIZE + MAX_SAMPLES_PER_PACKET * 16 * 3))
+
+#ifndef MTU
+#define MTU 1500
+#endif
 
 /** @hidden */
 static bool upipe_aes67_sink_output(struct upipe *upipe, struct uref *uref,
@@ -137,6 +144,8 @@ struct upipe_aes67_sink {
 
     /** maximum samples to put in each packet */
     int output_samples;
+    /* Maximum transmission unit. */
+    int mtu;
 
     /* Interface names. */
     char *ifname[2];
@@ -396,6 +405,7 @@ static struct upipe *upipe_aes67_sink_alloc(struct upipe_mgr *mgr,
     upipe_aes67_sink->stop = false;
     pthread_mutex_init(&upipe_aes67_sink->mutex, NULL);
 
+    upipe_aes67_sink->mtu = MTU;
     upipe_aes67_sink->mmap[0] = upipe_aes67_sink->mmap[1] = MAP_FAILED;
     upipe_aes67_sink->mmap_frame_num = 0;
     upipe_aes67_sink->seqnum = 0;
@@ -641,10 +651,22 @@ static int open_socket(struct upipe *upipe, const char *path_1, const char *path
         close(fd);
         return UBASE_ERR_EXTERNAL;
     }
+
     upipe_aes67_sink->fd[0] = fd;
     upipe_aes67_sink->sin[0] = sin;
     upipe_aes67_sink->sll[0] = sll;
     upipe_aes67_sink->ifname[0] = strdup(path_1);
+
+    /* Query for mtu. */
+    int mtu[2] = { INT_MAX, INT_MAX };
+    struct ifreq r;
+    strncpy(r.ifr_name, upipe_aes67_sink->ifname[0], sizeof r.ifr_name);
+    if (ioctl(upipe_aes67_sink->fd[0], SIOCGIFMTU, &r) == -1) {
+        upipe_err_va(upipe, "SIOCGIFMTU: %m");
+    } else {
+        upipe_dbg_va(upipe, "%s mtu: %d", upipe_aes67_sink->ifname[0], r.ifr_mtu);
+        mtu[0] = r.ifr_mtu;
+    }
 
     /* Handle second path. */
     if (path_2 && strlen(path_2)) {
@@ -684,11 +706,26 @@ static int open_socket(struct upipe *upipe, const char *path_1, const char *path
             close(fd);
             return UBASE_ERR_EXTERNAL;
         }
+
         upipe_aes67_sink->fd[1] = fd;
         upipe_aes67_sink->sin[1] = sin;
         upipe_aes67_sink->sll[1] = sll;
         upipe_aes67_sink->ifname[1] = strdup(path_2);
+
+        strncpy(r.ifr_name, upipe_aes67_sink->ifname[1], sizeof r.ifr_name);
+        if (ioctl(upipe_aes67_sink->fd[1], SIOCGIFMTU, &r) == -1) {
+            upipe_err_va(upipe, "SIOCGIFMTU: %m");
+        } else {
+            upipe_dbg_va(upipe, "%s mtu: %d", upipe_aes67_sink->ifname[1], r.ifr_mtu);
+            mtu[1] = r.ifr_mtu;
+        }
     }
+
+    /* Copy lowest mtu if they were obtained at all. */
+    if (mtu[0] != INT_MAX && mtu[0] <= mtu[1])
+        upipe_aes67_sink->mtu = mtu[0];
+    if (mtu[1] != INT_MAX && mtu[1] <= mtu[0])
+        upipe_aes67_sink->mtu = mtu[1];
 
     return UBASE_ERR_NONE;
 }
@@ -848,17 +885,14 @@ static int upipe_aes67_sink_set_option(struct upipe *upipe, const char *option,
             return UBASE_ERR_INVALID;
         }
 
-#ifndef MTU
-#define MTU 1400
-#endif
-        /* A sample packs to 3 bytes.  16 channels.  Frames/packets must be
-         * aligned for the tx queue. */
-        int needed_size = upipe_aes67_sink->output_samples * 16 * 3;
-        if (needed_size > MTU) {
+        /* A sample packs to 3 bytes.  16 channels. */
+        int needed_size = TRANSMISSION_UNIT_SIZE(upipe_aes67_sink->output_samples * 16 * 3);
+        if (needed_size > upipe_aes67_sink->mtu) {
             upipe_err_va(upipe, "requested frame or packet size (%d bytes, %d samples) is greater than MTU (%d)",
-                    needed_size, upipe_aes67_sink->output_samples, MTU);
+                    needed_size, upipe_aes67_sink->output_samples, upipe_aes67_sink->mtu);
             return UBASE_ERR_INVALID;
         }
+
         return UBASE_ERR_NONE;
     }
 
