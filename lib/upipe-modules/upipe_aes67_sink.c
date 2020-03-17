@@ -88,9 +88,9 @@
 #define AES67_MAX_PATHS 2
 #define AES67_MAX_FLOWS 8
 
-#define SAMPLES_PER_PACKET 48
+#define MAX_SAMPLES_PER_PACKET 48
 #undef MMAP_FRAME_SIZE
-#define MMAP_FRAME_SIZE (TPACKET_ALIGN(sizeof(struct tpacket_hdr) + RAW_HEADER_SIZE + RTP_HEADER_SIZE + SAMPLES_PER_PACKET * 16 * 3))
+#define MMAP_FRAME_SIZE (TPACKET_ALIGN(sizeof(struct tpacket_hdr) + RAW_HEADER_SIZE + RTP_HEADER_SIZE + MAX_SAMPLES_PER_PACKET * 16 * 3))
 
 /** @hidden */
 static bool upipe_aes67_sink_output(struct upipe *upipe, struct uref *uref,
@@ -125,7 +125,7 @@ struct upipe_aes67_sink {
 
     uint32_t timestamp;
     uint16_t seqnum;
-    uint8_t audio_data[SAMPLES_PER_PACKET * 16 * 3];
+    uint8_t audio_data[MAX_SAMPLES_PER_PACKET * 16 * 3];
     int cached_samples;
 
     struct uchain ulist;
@@ -234,7 +234,7 @@ static void *run_thread(void *upipe_pointer)
         }
         channels /= 4;
 
-        int num_frames = (samples + upipe_aes67_sink->cached_samples) / SAMPLES_PER_PACKET;
+        int num_frames = (samples + upipe_aes67_sink->cached_samples) / upipe_aes67_sink->output_samples;
         /* TODO: Is this check still needed. */
         if (num_frames > MMAP_FRAME_NUM) {
             upipe_err(upipe, "uref too big");
@@ -259,10 +259,10 @@ static void *run_thread(void *upipe_pointer)
         uint8_t *data = upipe_aes67_sink->audio_data;
         for (int i = 0; i < num_frames; i++) {
             /* Pack audio data. */
-            const int32_t *local_src = src + SAMPLES_PER_PACKET * channels * i;
+            const int32_t *local_src = src + upipe_aes67_sink->output_samples * channels * i;
 
             if (upipe_aes67_sink->cached_samples) {
-                for (int j = upipe_aes67_sink->cached_samples * channels; j < SAMPLES_PER_PACKET * channels; j++) {
+                for (int j = upipe_aes67_sink->cached_samples * channels; j < upipe_aes67_sink->output_samples * channels; j++) {
                     int32_t sample = local_src[j];
                     data[3*j+0] = (sample >> 24) & 0xff;
                     data[3*j+1] = (sample >> 16) & 0xff;
@@ -271,7 +271,7 @@ static void *run_thread(void *upipe_pointer)
                 upipe_aes67_sink->cached_samples = 0;
             }
 
-            else for (int j = 0; j < SAMPLES_PER_PACKET * channels; j++) {
+            else for (int j = 0; j < upipe_aes67_sink->output_samples * channels; j++) {
                 int32_t sample = local_src[j];
                 data[3*j+0] = (sample >> 24) & 0xff;
                 data[3*j+1] = (sample >> 16) & 0xff;
@@ -306,20 +306,20 @@ static void *run_thread(void *upipe_pointer)
             /* Adjust per packet values. */
             upipe_aes67_sink->mmap_frame_num = (upipe_aes67_sink->mmap_frame_num + 1) % MMAP_FRAME_NUM;
             upipe_aes67_sink->seqnum += 1;
-            upipe_aes67_sink->timestamp += SAMPLES_PER_PACKET;
+            upipe_aes67_sink->timestamp += upipe_aes67_sink->output_samples;
             systime += 125 * 27;
         }
 
-        if (samples % SAMPLES_PER_PACKET) {
+        if (samples % upipe_aes67_sink->output_samples) {
             /* Pack tail of uref into buffer. */
-            const int32_t *local_src = src + SAMPLES_PER_PACKET * channels * num_frames;
-            for (int j = 0; j < (samples % SAMPLES_PER_PACKET) * 16; j++) {
+            const int32_t *local_src = src + upipe_aes67_sink->output_samples * channels * num_frames;
+            for (int j = 0; j < (samples % upipe_aes67_sink->output_samples) * 16; j++) {
                 int32_t sample = local_src[j];
                 data[3*j+0] = (sample >> 24) & 0xff;
                 data[3*j+1] = (sample >> 16) & 0xff;
                 data[3*j+2] = (sample >>  8) & 0xff;
             }
-            upipe_aes67_sink->cached_samples = samples % SAMPLES_PER_PACKET;
+            upipe_aes67_sink->cached_samples = samples % upipe_aes67_sink->output_samples;
         }
 
         uref_sound_unmap(uref, 0, -1, 1);
@@ -423,7 +423,7 @@ static bool upipe_aes67_sink_output(struct upipe *upipe, struct uref *uref,
     struct upipe_aes67_sink *upipe_aes67_sink = upipe_aes67_sink_from_upipe(upipe);
 
     for ( ; ; ) {
-        int payload_len = SAMPLES_PER_PACKET * 16 * 3 + RTP_HEADER_SIZE;
+        int payload_len = upipe_aes67_sink->output_samples * 16 * 3 + RTP_HEADER_SIZE;
 
             /* Get next frame to be used. */
             union frame_map frame = { .raw = upipe_aes67_sink->mmap[path] + upipe_aes67_sink->mmap_frame_num * MMAP_FRAME_SIZE };
@@ -448,7 +448,7 @@ static bool upipe_aes67_sink_output(struct upipe *upipe, struct uref *uref,
             rtp_set_timestamp(data, upipe_aes67_sink->timestamp);
             data += RTP_HEADER_SIZE;
 
-        memcpy(data, upipe_aes67_sink->audio_data, SAMPLES_PER_PACKET * 16 * 3);
+        memcpy(data, upipe_aes67_sink->audio_data, upipe_aes67_sink->output_samples * 16 * 3);
 
         ssize_t ret = sendto(upipe_aes67_sink->fd[path], NULL, 0, 0,
                 (struct sockaddr*)&upipe_aes67_sink->flows[flow][path].sll,
@@ -727,7 +727,7 @@ static int set_flow_destination(struct upipe * upipe, int flow,
     upipe_udp_raw_fill_headers(NULL, aes67_flow[0].raw_header,
             upipe_aes67_sink->sin[0].sin_addr.s_addr, aes67_flow[0].sin.sin_addr.s_addr,
             ntohs(aes67_flow[0].sin.sin_port), ntohs(aes67_flow[0].sin.sin_port),
-            10, 0, SAMPLES_PER_PACKET * 16 * 3 + RTP_HEADER_SIZE);
+            10, 0, upipe_aes67_sink->output_samples * 16 * 3 + RTP_HEADER_SIZE);
 
     /* Set ethernet details and the inferface index. */
     aes67_flow[0].sll = (struct sockaddr_ll) {
@@ -792,7 +792,7 @@ static int set_flow_destination(struct upipe * upipe, int flow,
         upipe_udp_raw_fill_headers(NULL, aes67_flow[1].raw_header,
                 upipe_aes67_sink->sin[1].sin_addr.s_addr, aes67_flow[1].sin.sin_addr.s_addr,
                 ntohs(aes67_flow[1].sin.sin_port), ntohs(aes67_flow[1].sin.sin_port),
-                10, 0, SAMPLES_PER_PACKET * 16 * 3 + RTP_HEADER_SIZE);
+                10, 0, upipe_aes67_sink->output_samples * 16 * 3 + RTP_HEADER_SIZE);
 
         aes67_flow[1].sll = (struct sockaddr_ll) {
             .sll_family = AF_PACKET,
@@ -842,6 +842,12 @@ static int upipe_aes67_sink_set_option(struct upipe *upipe, const char *option,
 
     if (!strcmp(option, "output-samples")) {
         upipe_aes67_sink->output_samples = atoi(value);
+        if (upipe_aes67_sink->output_samples < 0 || upipe_aes67_sink->output_samples > MAX_SAMPLES_PER_PACKET) {
+            upipe_err_va(upipe, "output-samples (%d) not in range 0..%d",
+                    upipe_aes67_sink->output_samples, MAX_SAMPLES_PER_PACKET);
+            return UBASE_ERR_INVALID;
+        }
+
 #ifndef MTU
 #define MTU 1400
 #endif
