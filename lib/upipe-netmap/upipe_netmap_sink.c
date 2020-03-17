@@ -106,8 +106,7 @@ struct upipe_netmap_intf {
 
     /** packet headers */
     // TODO: rfc
-    uint8_t header[ETHERNET_HEADER_LEN + IP_HEADER_MINSIZE + UDP_HEADER_SIZE +
-        RTP_HEADER_SIZE + HBRMT_HEADER_SIZE];
+    uint8_t header[ETHERNET_HEADER_LEN + IP_HEADER_MINSIZE + UDP_HEADER_SIZE];
 
     /** if interface is up */
     bool up;
@@ -766,6 +765,7 @@ static int worker_rfc4175(struct upipe_netmap_sink *upipe_netmap_sink, uint8_t *
         if (unlikely(!intf->d || !intf->up))
             continue;
 
+        /* Ethernet/IP Header */
         memcpy(dst[i], intf->header, header_size);
         dst[i] += header_size;
 
@@ -868,6 +868,7 @@ static int worker_hbrmt(struct upipe_netmap_sink *upipe_netmap_sink, uint8_t **d
     const uint8_t packed_bytes = upipe_netmap_sink->packed_bytes;
     const uint16_t eth_frame_len = ETHERNET_HEADER_LEN + IP_HEADER_MINSIZE + UDP_HEADER_SIZE +
                                    RTP_HEADER_SIZE + HBRMT_HEADER_SIZE + HBRMT_DATA_SIZE;
+    const uint16_t rtp_hbrmt_header_size = RTP_HEADER_SIZE + HBRMT_HEADER_SIZE;
     const bool copy = dst[1] != NULL && dst[0] != NULL;
     const int idx = (dst[0] != NULL) ? 0 : 1;
 
@@ -897,28 +898,27 @@ static int worker_hbrmt(struct upipe_netmap_sink *upipe_netmap_sink, uint8_t **d
     /* we might be trying to read more than available */
     bool end = bytes_left <= pixels * 4;
 
+    /* update rtp header */
+    uint8_t *rtp = upipe_netmap_sink->rtp_header;
+    rtp_set_seqnum(rtp, upipe_netmap_sink->seqnum & UINT16_MAX);
+    rtp_set_timestamp(rtp, timestamp & UINT32_MAX);
+    if (end)
+        rtp_set_marker(rtp);
+
     for (size_t i = 0; i < 2; i++) {
         struct upipe_netmap_intf *intf = &upipe_netmap_sink->intf[i];
         if (unlikely(!intf->d || !intf->up))
             continue;
 
-        uint8_t *header = &intf->header[0];
+        uint8_t *header = upipe_netmap_sink->rtp_header;
 
-        // FIXME make this match rfc4175
-        /* update rtp header */
-        uint8_t *rtp = &header[ETHERNET_HEADER_LEN + IP_HEADER_MINSIZE + UDP_HEADER_SIZE];
-        rtp_set_seqnum(rtp, upipe_netmap_sink->seqnum & UINT16_MAX);
-        rtp_set_timestamp(rtp, timestamp & UINT32_MAX);
-        if (end)
-            rtp_set_marker(rtp);
-
-        /* copy header */
+        /* Ethernet/IP Header */
         memcpy(dst[i], header, sizeof(upipe_netmap_sink->intf[i].header));
         dst[i] += sizeof(upipe_netmap_sink->intf[i].header);
 
-        /* unset rtp marker if needed */
-        if (end)
-            rtp_clear_marker(rtp);
+        /* RTP HEADER */
+        memcpy(dst[i], upipe_netmap_sink->rtp_header, rtp_hbrmt_header_size);
+        dst[i] += rtp_hbrmt_header_size;
 
         /* use previous scratch buffer */
         if (packed_bytes) {
@@ -926,6 +926,10 @@ static int worker_hbrmt(struct upipe_netmap_sink *upipe_netmap_sink, uint8_t **d
             dst[i] += packed_bytes;
         }
     }
+
+    /* unset rtp marker if needed */
+    if (end)
+        rtp_clear_marker(rtp);
 
     upipe_netmap_sink->seqnum++;
 
@@ -1560,16 +1564,10 @@ static void upipe_netmap_sink_worker(struct upump *upump)
 
                 upipe_netmap_sink->frame_count++;
                 upipe_netmap_sink->rtp_timestamp[0] += upipe_netmap_sink->frame_duration;
-                for (size_t i = 0; i < 2; i++) {
-                    struct upipe_netmap_intf *intf = &upipe_netmap_sink->intf[i];
-                    if (!intf->d)
-                        continue;
 
-                    /* update hbrmt header */
-                    uint8_t *hbrmt = &intf->header[ETHERNET_HEADER_LEN +
-                        IP_HEADER_MINSIZE + UDP_HEADER_SIZE + RTP_HEADER_SIZE];
-                    smpte_hbrmt_set_frame_count(hbrmt, upipe_netmap_sink->frame_count & UINT8_MAX);
-                }
+                /* update hbrmt header */
+                uint8_t *hbrmt = &upipe_netmap_sink->rtp_header[RTP_HEADER_SIZE];
+                smpte_hbrmt_set_frame_count(hbrmt, upipe_netmap_sink->frame_count & UINT8_MAX);
             }
         }
 
@@ -1905,10 +1903,12 @@ static int upipe_netmap_sink_set_flow_def(struct upipe *upipe,
             const uint16_t udp_payload_size = RTP_HEADER_SIZE +
                 HBRMT_HEADER_SIZE + HBRMT_DATA_SIZE;
             header += upipe_netmap_put_ip_headers(intf, header, udp_payload_size);
-            header += upipe_netmap_put_rtp_headers(upipe_netmap_sink, header, false, 98, false, false);
-            header += upipe_put_hbrmt_headers(upipe, header);
             assert(header == &intf->header[sizeof(intf->header)]);
         }
+
+        /* Largely constant headers so don't keep rewriting them */
+        upipe_netmap_put_rtp_headers(upipe_netmap_sink, upipe_netmap_sink->rtp_header, false, 98, false, false);
+        upipe_put_hbrmt_headers(upipe, upipe_netmap_sink->rtp_header + RTP_HEADER_SIZE);
     } else {
         const uint16_t header_size = ETHERNET_HEADER_LEN + IP_HEADER_MINSIZE + UDP_HEADER_SIZE;
         for (size_t i = 0; i < 2; i++) {
