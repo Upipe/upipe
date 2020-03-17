@@ -615,6 +615,8 @@ static int open_socket(struct upipe *upipe, const char *path_1, const char *path
     };
     upipe_dbg_va(upipe, "tp_block_size: %u, tp_block_nr %u, tp_frame_size: %u, tp_frame_nr: %u",
             req.tp_block_size, req.tp_block_nr, req.tp_frame_size, req.tp_frame_nr);
+    upipe_dbg_va(upipe, "tp_block_size %% getpagesize(): %ld, tp_frame_size %% TPACKET_ALIGNMENT: %ld",
+            MMAP_BLOCK_SIZE % getpagesize(), MMAP_FRAME_SIZE % TPACKET_ALIGNMENT);
     if (setsockopt(fd, SOL_PACKET, PACKET_TX_RING, (void *)&req, sizeof req)) {
         upipe_err_va(upipe, "unable to set PACKET_TX_RING (%m)");
         close(fd);
