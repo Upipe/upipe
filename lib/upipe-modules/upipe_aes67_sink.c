@@ -934,21 +934,22 @@ static int upipe_aes67_sink_set_option(struct upipe *upipe, const char *option,
         return UBASE_ERR_INVALID;
 
     if (!strcmp(option, "output-samples")) {
-        upipe_aes67_sink->output_samples = atoi(value);
-        if (upipe_aes67_sink->output_samples < 0 || upipe_aes67_sink->output_samples > MAX_SAMPLES_PER_PACKET) {
+        int output_samples = atoi(value);
+        if (output_samples < 0 || output_samples > MAX_SAMPLES_PER_PACKET) {
             upipe_err_va(upipe, "output-samples (%d) not in range 0..%d",
-                    upipe_aes67_sink->output_samples, MAX_SAMPLES_PER_PACKET);
+                    output_samples, MAX_SAMPLES_PER_PACKET);
             return UBASE_ERR_INVALID;
         }
 
         /* A sample packs to 3 bytes.  16 channels. */
-        int needed_size = TRANSMISSION_UNIT_SIZE(upipe_aes67_sink->output_samples * upipe_aes67_sink->output_channels * 3);
+        int needed_size = TRANSMISSION_UNIT_SIZE(output_samples * upipe_aes67_sink->output_channels * 3);
         if (needed_size > upipe_aes67_sink->mtu) {
             upipe_err_va(upipe, "requested frame or packet size (%d bytes, %d samples) is greater than MTU (%d)",
-                    needed_size, upipe_aes67_sink->output_samples, upipe_aes67_sink->mtu);
+                    needed_size, output_samples, upipe_aes67_sink->mtu);
             return UBASE_ERR_INVALID;
         }
 
+        upipe_aes67_sink->output_samples = output_samples;
         return UBASE_ERR_NONE;
     }
 
