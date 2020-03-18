@@ -110,6 +110,8 @@ struct aes67_flow {
     struct sockaddr_ll sll;
     /* Raw IP and UDP header. */
     uint8_t raw_header[RAW_HEADER_SIZE];
+    /* Flow has been populated and packets should be sent. */
+    bool populated;
 };
 
 /** @internal @This is the private context of a aes67 sink pipe. */
@@ -334,14 +336,16 @@ static void *run_thread(void *upipe_pointer)
             for (int flow = 0; flow < num_flows; flow++) {
                 int channel_offset = flow * output_channels;
 
-                /* TODO: Don't do a send() call for each flow. */
-                upipe_aes67_sink_output(upipe, flow, 0, channel_offset,
-                        output_channels);
-                if (upipe_aes67_sink->fd[1] != -1)
-                    upipe_aes67_sink_output(upipe, flow, 1, channel_offset,
+                /* If the flow has been popilated then output a packet. */
+                if (upipe_aes67_sink->flows[flow][0].populated) {
+                    /* TODO: Don't do a send() call for each flow. */
+                    upipe_aes67_sink_output(upipe, flow, 0, channel_offset,
                             output_channels);
-
-                upipe_aes67_sink->mmap_frame_num = (upipe_aes67_sink->mmap_frame_num + 1) % MMAP_FRAME_NUM;
+                    if (upipe_aes67_sink->fd[1] != -1)
+                        upipe_aes67_sink_output(upipe, flow, 1, channel_offset,
+                                output_channels);
+                    upipe_aes67_sink->mmap_frame_num = (upipe_aes67_sink->mmap_frame_num + 1) % MMAP_FRAME_NUM;
+                }
             }
 
             /* Adjust per packet values. */
@@ -920,6 +924,7 @@ static int set_flow_destination(struct upipe * upipe, int flow,
         }
     }
 
+    aes67_flow[0].populated = true;
     return UBASE_ERR_NONE;
 }
 
