@@ -99,8 +99,6 @@
 #define MTU 1500
 #endif
 
-#define STEREO_FLOWS 1
-
 /** @hidden */
 static bool upipe_aes67_sink_output(struct upipe *upipe, struct uref *uref,
         struct upump **upump_p, int flow, int path, int channel_offset,
@@ -455,7 +453,7 @@ static struct upipe *upipe_aes67_sink_alloc(struct upipe_mgr *mgr,
     upipe_aes67_sink->stop = false;
 
     upipe_aes67_sink->output_samples = 6; /* TODO: other default to catch user not setting this? */
-    upipe_aes67_sink->output_channels = (STEREO_FLOWS) ? 2 : 16;
+    upipe_aes67_sink->output_channels = 16;
     upipe_aes67_sink->mtu = MTU;
 
     upipe_aes67_sink->ifname[0] = upipe_aes67_sink->ifname[1] = NULL;
@@ -951,6 +949,16 @@ static int upipe_aes67_sink_set_option(struct upipe *upipe, const char *option,
             return UBASE_ERR_INVALID;
         }
 
+        return UBASE_ERR_NONE;
+    }
+
+    if (!strcmp(option, "output-channels")) {
+        int output_channels = atoi(value);
+        if (!(output_channels == 2 || output_channels == 4 || output_channels == 8 || output_channels == 16)) {
+            upipe_err_va(upipe, "output-channels (%d) not 2, 4, 8, or 16", output_channels);
+            return UBASE_ERR_INVALID;
+        }
+        upipe_aes67_sink->output_channels = output_channels;
         return UBASE_ERR_NONE;
     }
 
