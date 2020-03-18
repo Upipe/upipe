@@ -100,9 +100,8 @@
 #endif
 
 /** @hidden */
-static bool upipe_aes67_sink_output(struct upipe *upipe, struct uref *uref,
-        struct upump **upump_p, int flow, int path, int channel_offset,
-        int output_channels);
+static bool upipe_aes67_sink_output(struct upipe *upipe, int flow, int path,
+        int channel_offset, int output_channels);
 
 struct aes67_flow {
     /* IP details for the destination. */
@@ -336,11 +335,11 @@ static void *run_thread(void *upipe_pointer)
                 int channel_offset = flow * output_channels;
 
                 /* TODO: Don't do a send() call for each flow. */
-                upipe_aes67_sink_output(upipe, uref, NULL, flow, 0,
-                        channel_offset, output_channels);
+                upipe_aes67_sink_output(upipe, flow, 0, channel_offset,
+                        output_channels);
                 if (upipe_aes67_sink->fd[1] != -1)
-                    upipe_aes67_sink_output(upipe, uref, NULL, flow, 1,
-                            channel_offset, output_channels);
+                    upipe_aes67_sink_output(upipe, flow, 1, channel_offset,
+                            output_channels);
 
                 upipe_aes67_sink->mmap_frame_num = (upipe_aes67_sink->mmap_frame_num + 1) % MMAP_FRAME_NUM;
             }
@@ -472,9 +471,8 @@ static struct upipe *upipe_aes67_sink_alloc(struct upipe_mgr *mgr,
  * @param upump_p reference to pump that generated the buffer
  * @return true if the uref was processed
  */
-static bool upipe_aes67_sink_output(struct upipe *upipe, struct uref *uref,
-        struct upump **upump_p, int flow, int path, int channel_offset,
-        int output_channels)
+static bool upipe_aes67_sink_output(struct upipe *upipe, int flow, int path,
+        int channel_offset, int output_channels)
 {
     struct upipe_aes67_sink *upipe_aes67_sink = upipe_aes67_sink_from_upipe(upipe);
 
