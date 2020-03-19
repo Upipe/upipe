@@ -210,6 +210,8 @@ static void *run_thread(void *upipe_pointer)
     struct upipe_aes67_sink *upipe_aes67_sink = upipe_aes67_sink_from_upipe(upipe);
     struct uref *uref = NULL;
     struct uchain *uchain = NULL;
+    uint64_t expected_systime = 0;
+    uint32_t expected_timestamp = 0;
 
     /* Run until told to stop. */
     while (true) {
@@ -241,10 +243,20 @@ static void *run_thread(void *upipe_pointer)
             upipe_warn(upipe, "received non-dated buffer");
         }
         systime += upipe_aes67_sink->latency;
+        /* Offset the systime to start in the right place. */
+        systime -= UCLOCK_FREQ * upipe_aes67_sink->cached_samples / 48000;
+        /* Handle NTSC PTS jitter. */
+        if (expected_systime > systime) {
+            systime = expected_systime;
+        }
 
         /* Get RTP timestamp. */
         lldiv_t div = lldiv(systime, UCLOCK_FREQ);
         upipe_aes67_sink->timestamp = div.quot * 48000 + ((uint64_t)div.rem * 48000)/UCLOCK_FREQ;
+
+        if (expected_timestamp != upipe_aes67_sink->timestamp)
+            upipe_dbg_va(upipe, "timestamp mismatch expected %"PRIu32" got %"PRIu32,
+                    expected_timestamp, upipe_aes67_sink->timestamp);
 
         /* Check size. */
         size_t samples = 0;
@@ -325,6 +337,9 @@ static void *run_thread(void *upipe_pointer)
             upipe_aes67_sink->timestamp += upipe_aes67_sink->output_samples;
             systime += UCLOCK_FREQ * upipe_aes67_sink->output_samples / 48000;
         }
+        /* Store the expected start of the next frame. */
+        expected_systime = systime;
+        expected_timestamp = upipe_aes67_sink->timestamp;
 
         if (samples % upipe_aes67_sink->output_samples) {
             /* Pack tail of uref into buffer. */
