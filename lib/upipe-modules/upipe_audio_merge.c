@@ -449,7 +449,6 @@ static void upipe_audio_merge_produce_output(struct upipe *upipe, struct upump *
     }
 
     /* TODO: merge this loop with the above? */
-    uint64_t input_channels = 0;
     uint64_t output_num_samples = 0;
     ulist_foreach (&upipe_audio_merge->inputs, uchain) {
         struct upipe_audio_merge_sub *upipe_audio_merge_sub =
@@ -457,10 +456,6 @@ static void upipe_audio_merge_produce_output(struct upipe *upipe, struct upump *
         /* if we haven't got one already, copy the uref to form the basis of our output uref */
         if (output_uref == NULL)
             output_uref = uref_dup(upipe_audio_merge_sub->uref);
-
-        uint8_t channels = 0;
-        UBASE_ERROR(upipe, uref_sound_flow_get_channels(upipe_audio_merge_sub->flow_def, &channels));
-        input_channels += channels;
 
         uint64_t samples = 0;
         if (ubase_check(uref_sound_size(upipe_audio_merge_sub->uref, &samples, NULL))
@@ -471,15 +466,6 @@ static void upipe_audio_merge_produce_output(struct upipe *upipe, struct upump *
 
     if (unlikely(!output_uref))
         return;
-
-    /* If total channels in input subpipes != channels in flow def throw an error */
-    uint8_t output_channels = 0;
-    UBASE_ERROR(upipe, uref_sound_flow_get_channels(upipe_audio_merge->flow_def, &output_channels));
-#if 0
-    if (input_channels != output_channels)
-        upipe_err_va(upipe, "total input channels (%"PRIu64") != output flow def (%d), some will be skipped or blanked!",
-            input_channels, output_channels);
-#endif
 
     uint8_t output_planes = 0;
     UBASE_ERROR(upipe, uref_sound_flow_get_planes(upipe_audio_merge->flow_def, &output_planes));

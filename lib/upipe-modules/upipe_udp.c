@@ -535,7 +535,7 @@ int upipe_udp_open_socket(struct upipe *upipe, const char *_uri, int ttl,
     if (*use_raw && raw_header) {
         upipe_udp_raw_fill_headers(upipe, raw_header,
                 src_addr, connect_addr.sin.sin_addr.s_addr, src_port,
-                ntohs(connect_addr.sin.sin_port), ttl, tos, 300);
+                ntohs(connect_addr.sin.sin_port), ttl, tos, 0);
     }
 
     if (fd == -1) {
