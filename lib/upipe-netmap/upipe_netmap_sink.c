@@ -107,6 +107,7 @@ struct upipe_netmap_intf {
     /** packet headers */
     // TODO: rfc
     uint8_t header[ETHERNET_HEADER_LEN + IP_HEADER_MINSIZE + UDP_HEADER_SIZE];
+    uint8_t fake_header[ETHERNET_HEADER_LEN + IP_HEADER_MINSIZE + UDP_HEADER_SIZE];
 
     /** if interface is up */
     bool up;
@@ -647,6 +648,18 @@ static int upipe_netmap_put_ip_headers(struct upipe_netmap_intf *intf,
     /* 0x1c - Standard, low delay, high throughput, high reliability TOS */
     upipe_udp_raw_fill_headers(buf, intf->src_ip,
                                intf->dst_ip,
+                               intf->src_port,
+                               intf->dst_port,
+                               10, 0x1c, payload_size);
+
+    /* Make header for fake packets. */
+    buf = intf->fake_header;
+    ethernet_set_dstaddr(buf, intf->src_mac);
+    ethernet_set_srcaddr(buf, intf->src_mac);
+    ethernet_set_lentype(buf, ETHERNET_TYPE_IP);
+    buf += ETHERNET_HEADER_LEN;
+    upipe_udp_raw_fill_headers(buf, intf->src_ip,
+                               intf->src_ip,
                                intf->src_port,
                                intf->dst_port,
                                10, 0x1c, payload_size);
@@ -1428,7 +1441,7 @@ static void upipe_netmap_sink_worker(struct upump *upump)
                     }
                 }
                 memset(dst, 0, len);
-                memcpy(dst, intf->header, ETHERNET_HEADER_LEN);
+                memcpy(dst, intf->fake_header, ETHERNET_HEADER_LEN + IP_HEADER_MINSIZE + UDP_HEADER_SIZE);
                 txring[i]->slot[cur[i]].len = len;
                 txring[i]->slot[cur[i]].ptr = 0;
                 cur[i] = nm_ring_next(txring[i], cur[i]);
@@ -1520,7 +1533,7 @@ static void upipe_netmap_sink_worker(struct upump *upump)
                     if (unlikely(!intf->d || !intf->up))
                         continue;
                     memset(dst[i], 0, pkt_len);
-                    memcpy(dst[i], intf->header, ETHERNET_HEADER_LEN);
+                    memcpy(dst[i], intf->fake_header, ETHERNET_HEADER_LEN + IP_HEADER_MINSIZE + UDP_HEADER_SIZE);
                     *len[i] = pkt_len;
                     *ptr[i] = 0;
                 }
