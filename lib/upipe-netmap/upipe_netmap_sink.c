@@ -69,6 +69,8 @@
 #include "../upipe-hbrmt/rfc4175_enc.h"
 #include "../upipe-modules/upipe_udp.h"
 
+#include <math.h>
+
 #define UPIPE_RFC4175_MAX_PLANES 3
 #define UPIPE_RFC4175_PIXEL_PAIR_BYTES 5
 
@@ -144,6 +146,7 @@ struct upipe_netmap_sink {
 
     /* RTP Header */
     uint8_t rtp_header[RTP_HEADER_SIZE + RFC_4175_EXT_SEQ_NUM_LEN + RFC_4175_HEADER_LEN];
+    uint8_t audio_rtp_header[RTP_HEADER_SIZE];
 
     unsigned gap_fakes_current;
     unsigned gap_fakes;
@@ -1441,6 +1444,9 @@ static void upipe_netmap_sink_worker(struct upump *upump)
                 + IP_HEADER_MINSIZE + UDP_HEADER_SIZE + RTP_HEADER_SIZE
                 + 16/*channels*/ * 6/*samples*/ * 3/*bytes per sample*/;
 
+            uint16_t seqnum = rtp_get_seqnum(upipe_netmap_sink->audio_rtp_header);
+            uint32_t timestamp = rtp_get_timestamp(upipe_netmap_sink->audio_rtp_header);
+
             bool stamped = false;
             for (size_t i = 0; i < 2; i++) {
                 /* Check for EOF. */
@@ -1459,14 +1465,31 @@ static void upipe_netmap_sink_worker(struct upump *upump)
                     }
                 }
 
-                /* Clear packet space. */
-                memset(dst, 0, audio_packet_size);
+                /* Copy headers. */
                 memcpy(dst, intf->audio_header, sizeof intf->audio_header);
+                dst += sizeof intf->audio_header;
+                memcpy(dst, upipe_netmap_sink->audio_rtp_header, RTP_HEADER_SIZE);
+                dst += RTP_HEADER_SIZE;
+
+                /* Make sine wave. */
+                for (int s = 0; s < 6; s++) {
+                    int32_t sample = sin(2 * M_PI * (timestamp + s) * 1000 / 48000) * INT32_MAX/4;
+                    for (int c = 0; c < 16; c++) {
+                        dst[16*3*s + 3*c+0] = (sample >> 24) & 0xff;
+                        dst[16*3*s + 3*c+1] = (sample >> 16) & 0xff;
+                        dst[16*3*s + 3*c+2] = (sample >>  8) & 0xff;
+                    }
+                }
 
                 txring[i]->slot[cur[i]].len = audio_packet_size;
                 txring[i]->slot[cur[i]].ptr = 0;
                 cur[i] = nm_ring_next(txring[i], cur[i]);
             }
+
+            /* Advance sequence number and timestamp. */
+            rtp_set_seqnum(upipe_netmap_sink->audio_rtp_header, seqnum + 1);
+            rtp_set_timestamp(upipe_netmap_sink->audio_rtp_header, timestamp + 6);
+
             upipe_netmap_sink->bits += 8 * (audio_packet_size + 4/*CRC*/);
             txavail--;
 
@@ -2004,9 +2027,17 @@ static int upipe_netmap_sink_set_flow_def(struct upipe *upipe,
             header += upipe_netmap_put_ip_headers(intf, header, udp_payload_size);
             /* RTP Headers done in worker_rfc4175 */
 
+            /* Ethernet, IP, UDP headers for audio. */
             make_audio_header(upipe, audio_paths[i], intf);
         }
         upipe_netmap_update_timestamp_cache(upipe_netmap_sink);
+
+        /* RTP header for audio. */
+        memset(upipe_netmap_sink->audio_rtp_header, 0, RTP_HEADER_SIZE);
+        rtp_set_hdr(upipe_netmap_sink->audio_rtp_header);
+        rtp_set_type(upipe_netmap_sink->audio_rtp_header, 97);
+        rtp_set_seqnum(upipe_netmap_sink->audio_rtp_header, 0);
+        rtp_set_timestamp(upipe_netmap_sink->audio_rtp_header, 0);
     }
 
     upipe_netmap_sink->frame_size = 0;
