@@ -97,11 +97,9 @@ static uint16_t ip_checksum(const void *data, uint16_t len)
  * @param tos type of service
  * @param payload length
  */
-void upipe_udp_raw_fill_headers(struct upipe *upipe,
-                                       uint8_t *header,
-                                       in_addr_t ipsrc, in_addr_t ipdst,
-                                       uint16_t portsrc, uint16_t portdst,
-                                       uint8_t ttl, uint8_t tos, uint16_t len)
+void upipe_udp_raw_fill_headers(uint8_t *header,
+        in_addr_t ipsrc, in_addr_t ipdst, uint16_t portsrc, uint16_t portdst,
+        uint8_t ttl, uint8_t tos, uint16_t len)
 {
     ip_set_version(header, 4);
     ip_set_ihl(header, 5);
@@ -533,7 +531,7 @@ int upipe_udp_open_socket(struct upipe *upipe, const char *_uri, int ttl,
 
     /* RAW header */
     if (*use_raw && raw_header) {
-        upipe_udp_raw_fill_headers(upipe, raw_header,
+        upipe_udp_raw_fill_headers(raw_header,
                 src_addr, connect_addr.sin.sin_addr.s_addr, src_port,
                 ntohs(connect_addr.sin.sin_port), ttl, tos, 0);
     }

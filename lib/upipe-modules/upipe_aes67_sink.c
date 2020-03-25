@@ -819,7 +819,7 @@ static int set_flow_destination(struct upipe * upipe, int flow,
             ntohs(aes67_flow[0].sin.sin_port));
 
     /* Write IP and UDP headers. */
-    upipe_udp_raw_fill_headers(NULL, aes67_flow[0].raw_header,
+    upipe_udp_raw_fill_headers(aes67_flow[0].raw_header,
             upipe_aes67_sink->sin[0].sin_addr.s_addr, aes67_flow[0].sin.sin_addr.s_addr,
             ntohs(aes67_flow[0].sin.sin_port), ntohs(aes67_flow[0].sin.sin_port),
             10, 0, upipe_aes67_sink->output_samples * upipe_aes67_sink->output_channels * 3 + RTP_HEADER_SIZE);
@@ -884,7 +884,7 @@ static int set_flow_destination(struct upipe * upipe, int flow,
                 inet_ntoa(aes67_flow[1].sin.sin_addr),
                 ntohs(aes67_flow[1].sin.sin_port));
 
-        upipe_udp_raw_fill_headers(NULL, aes67_flow[1].raw_header,
+        upipe_udp_raw_fill_headers(aes67_flow[1].raw_header,
                 upipe_aes67_sink->sin[1].sin_addr.s_addr, aes67_flow[1].sin.sin_addr.s_addr,
                 ntohs(aes67_flow[1].sin.sin_port), ntohs(aes67_flow[1].sin.sin_port),
                 10, 0, upipe_aes67_sink->output_samples * upipe_aes67_sink->output_channels * 3 + RTP_HEADER_SIZE);

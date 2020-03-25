@@ -169,11 +169,9 @@ static inline void udp_set_cksum(uint8_t *p_ip, uint16_t cksum)
  * @param tos type of service
  * @param payload length
  */
-void upipe_udp_raw_fill_headers(struct upipe *upipe,
-                                uint8_t *header,
-                                in_addr_t ipsrc, in_addr_t ipdst,
-                                uint16_t portsrc, uint16_t portdst,
-                                uint8_t ttl, uint8_t tos, uint16_t len);
+void upipe_udp_raw_fill_headers(uint8_t *header,
+        in_addr_t ipsrc, in_addr_t ipdst, uint16_t portsrc, uint16_t portdst,
+        uint8_t ttl, uint8_t tos, uint16_t len);
 
 /** @internal @This parses a host:port string
  *
