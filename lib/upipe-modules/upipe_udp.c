@@ -46,6 +46,9 @@
 #endif
 #include "upipe_udp.h"
 
+#include <bitstream/ietf/ip.h>
+#include <bitstream/ietf/udp.h>
+
 #include <linux/if_packet.h>
 #include <linux/if_ether.h>
 

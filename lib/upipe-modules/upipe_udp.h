@@ -32,19 +32,22 @@
 /** @hidden */
 #define _UPIPE_UDP_H_
 
+#include <upipe/config.h>
 #include <upipe/upipe.h>
 #include <stdint.h>
 #include <sys/socket.h>
 #include <arpa/inet.h>
 
-#define IP_HEADER_MINSIZE 20
-#define UDP_HEADER_SIZE 8
-#define RAW_HEADER_SIZE (IP_HEADER_MINSIZE + UDP_HEADER_SIZE)
-
 #define MMAP_BLOCK_SIZE (MMAP_FRAME_SIZE * MMAP_FRAME_NUM / MMAP_BLOCK_NUM)
 #define MMAP_BLOCK_NUM  1
 #define MMAP_FRAME_SIZE 512
 #define MMAP_FRAME_NUM  256
+
+#define IP_HEADER_MINSIZE 20
+#define UDP_HEADER_SIZE 8
+#define RAW_HEADER_SIZE (IP_HEADER_MINSIZE + UDP_HEADER_SIZE)
+
+#ifndef UPIPE_HAVE_BITSTREAM_COMMON_H
 
 static inline void ip_set_version(uint8_t *p_ip, uint8_t version)
 {
@@ -156,6 +159,8 @@ static inline void udp_set_cksum(uint8_t *p_ip, uint16_t cksum)
     p_ip[6] = (cksum & 0xff00) >> 8;
     p_ip[7] = (cksum & 0xff);
 }
+
+#endif
 
 /** @internal @This fills ipv4/udp headers for RAW sockets
  *
