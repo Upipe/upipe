@@ -122,6 +122,17 @@ struct upipe_netmap_intf {
     uint64_t wait;
 };
 
+struct audio_packet_state {
+    /* Counter for all video packets. */
+    uint64_t counter;
+    /* Value of counter for previous audio packet. */
+    uint64_t prev_counter;
+    /* Pattern of how many packets between each audio packet. */
+    uint8_t pattern[15];
+    uint8_t length;
+    uint8_t choice;
+};
+
 /** @internal @This is the private context of a netmap sink pipe. */
 struct upipe_netmap_sink {
     /** refcount management structure */
@@ -209,7 +220,7 @@ struct upipe_netmap_sink {
     float pid_last_output;
     uint64_t frame_ts;
     uint32_t prev_marker_seq;
-    uint64_t global_packet_counter;
+    struct audio_packet_state audio_packet_state;
 
     /** currently used uref */
     struct uref *uref;
@@ -411,7 +422,6 @@ static void upipe_netmap_sink_reset_counters(struct upipe *upipe)
     upipe_netmap_sink->phase_delay = 0;
     memset(upipe_netmap_sink->rtp_timestamp, 0, sizeof(upipe_netmap_sink->rtp_timestamp));
     upipe_netmap_sink->frame_ts = 0;
-    upipe_netmap_sink->global_packet_counter = 1; /* So the first packet is not audio. */
 }
 
 
@@ -1194,6 +1204,22 @@ static void handle_tx_stamp(struct upipe *upipe, uint64_t t, uint16_t seq)
     upipe_netmap_sink->pkts_in_frame = 0;
 }
 
+static inline void aps_inc_counter(struct audio_packet_state *aps)
+{
+    aps->counter += 1;
+}
+
+/* TODO: set counter to 0 for each audio output. */
+static inline bool aps_audio_needed(struct audio_packet_state *aps)
+{
+    if (aps->counter - aps->prev_counter == aps->pattern[aps->choice]) {
+        aps->prev_counter = aps->counter;
+        aps->choice = (aps->choice + 1) % aps->length;
+        return true;
+    }
+    return false;
+}
+
 static void upipe_netmap_sink_worker(struct upump *upump)
 {
     struct upipe *upipe = upump_get_opaque(upump, struct upipe *);
@@ -1436,10 +1462,8 @@ static void upipe_netmap_sink_worker(struct upump *upump)
     while (txavail) {
         /* Audio insertion/multiplex. */
         static unsigned local_audio_packet_counter = 0;
-        static unsigned ap_limit = 14;
-        static unsigned prev_lapc = 0;
 
-        if (upipe_netmap_sink->global_packet_counter - prev_lapc == ap_limit) {
+        if (aps_audio_needed(&upipe_netmap_sink->audio_packet_state)) {
             const uint64_t audio_packet_size = ETHERNET_HEADER_LEN
                 + IP_HEADER_MINSIZE + UDP_HEADER_SIZE + RTP_HEADER_SIZE
                 + 16/*channels*/ * 6/*samples*/ * 3/*bytes per sample*/;
@@ -1494,9 +1518,6 @@ static void upipe_netmap_sink_worker(struct upump *upump)
             txavail--;
 
             local_audio_packet_counter++;
-
-            ap_limit = (ap_limit == 14) ? 13 : 14;
-            prev_lapc = upipe_netmap_sink->global_packet_counter;
 
             if (!txavail)
                 break;
@@ -1635,7 +1656,7 @@ static void upipe_netmap_sink_worker(struct upump *upump)
                     upipe_netmap_sink->uref = NULL;
                     bytes_left = 0;
                 }
-                upipe_netmap_sink->global_packet_counter++;
+                aps_inc_counter(&upipe_netmap_sink->audio_packet_state);
             }
         } else {
             int s = worker_hbrmt(upipe_netmap_sink, dst, src_buf, bytes_left, len, ptr);
@@ -1664,7 +1685,6 @@ static void upipe_netmap_sink_worker(struct upump *upump)
                 uint8_t *hbrmt = &upipe_netmap_sink->rtp_header[RTP_HEADER_SIZE];
                 smpte_hbrmt_set_frame_count(hbrmt, upipe_netmap_sink->frame_count & UINT8_MAX);
             }
-            upipe_netmap_sink->global_packet_counter++;
         }
 
         upipe_netmap_sink->pkts_in_frame++;
@@ -2038,6 +2058,11 @@ static int upipe_netmap_sink_set_flow_def(struct upipe *upipe,
         rtp_set_type(upipe_netmap_sink->audio_rtp_header, 97);
         rtp_set_seqnum(upipe_netmap_sink->audio_rtp_header, 0);
         rtp_set_timestamp(upipe_netmap_sink->audio_rtp_header, 0);
+
+        upipe_netmap_sink->audio_packet_state = (struct audio_packet_state) {
+            .pattern = { 13, 14 },
+            .length = 2,
+        };
     }
 
     upipe_netmap_sink->frame_size = 0;
