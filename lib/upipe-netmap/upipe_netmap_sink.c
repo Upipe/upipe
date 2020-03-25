@@ -78,6 +78,8 @@
 #define UINT64_MSB(value)      ((value) & UINT64_C(0x8000000000000000))
 #define UINT64_LOW_MASK(value) ((value) & UINT64_C(0x7fffffffffffffff))
 
+static const char *audio_paths[2] = { "239.160.1.11:1234", "239.161.1.11:1234" };
+
 /** @hidden */
 static bool upipe_netmap_sink_output(struct upipe *upipe, struct uref *uref,
                                  struct upump **upump_p);
@@ -109,6 +111,7 @@ struct upipe_netmap_intf {
     // TODO: rfc
     uint8_t header[ETHERNET_HEADER_LEN + IP_HEADER_MINSIZE + UDP_HEADER_SIZE];
     uint8_t fake_header[ETHERNET_HEADER_LEN + IP_HEADER_MINSIZE + UDP_HEADER_SIZE];
+    uint8_t audio_header[ETHERNET_HEADER_LEN + IP_HEADER_MINSIZE + UDP_HEADER_SIZE];
 
     /** if interface is up */
     bool up;
@@ -615,6 +618,53 @@ static int upipe_netmap_put_ip_headers(struct upipe_netmap_intf *intf,
                                10, 0x1c, payload_size);
 
     return ETHERNET_HEADER_LEN + IP_HEADER_MINSIZE + UDP_HEADER_SIZE;
+}
+
+static int make_audio_header(struct upipe *upipe, const char *path_c, struct upipe_netmap_intf *intf)
+{
+    struct sockaddr_in sin;
+    struct sockaddr_ll sll;
+
+    char *path = strdup(path_c);
+    UBASE_ALLOC_RETURN(path);
+
+    /* Parse path. */
+    if (!upipe_udp_parse_node_service(upipe, path, NULL, 0, NULL,
+                (struct sockaddr_storage *)&sin)) {
+        return UBASE_ERR_INVALID;
+    }
+
+    /* Set MAC address. */
+    uint32_t dst_ip = ntohl(sin.sin_addr.s_addr);
+
+    /* If a multicast IP address, fill a multicast MAC address. */
+    if (IN_MULTICAST(dst_ip)) {
+        sll.sll_addr[0] = 0x01;
+        sll.sll_addr[1] = 0x00;
+        sll.sll_addr[2] = 0x5e;
+        sll.sll_addr[3] = (dst_ip >> 16) & 0x7f;
+        sll.sll_addr[4] = (dst_ip >>  8) & 0xff;
+        sll.sll_addr[5] = (dst_ip      ) & 0xff;
+    }
+
+    /* Otherwise query ARP for the destination address. */
+    else {
+        /* TODO */
+    }
+
+    uint8_t *buf = intf->audio_header;
+    /* Write ethernet header. */
+    ethernet_set_dstaddr(buf, sll.sll_addr);
+    ethernet_set_srcaddr(buf, intf->src_mac);
+    ethernet_set_lentype(buf, ETHERNET_TYPE_IP);
+
+    buf += ETHERNET_HEADER_LEN;
+    /* Write IP and UDP headers. */
+    upipe_udp_raw_fill_headers(buf, intf->src_ip, sin.sin_addr.s_addr,
+            ntohs(sin.sin_port), ntohs(sin.sin_port), 10, 0,
+            6 * 16 * 3 + RTP_HEADER_SIZE);
+
+    return UBASE_ERR_NONE;
 }
 
 static int upipe_put_hbrmt_headers(struct upipe *upipe, uint8_t *buf)
@@ -1411,7 +1461,7 @@ static void upipe_netmap_sink_worker(struct upump *upump)
 
                 /* Clear packet space. */
                 memset(dst, 0, audio_packet_size);
-                memcpy(dst, intf->header, ETHERNET_HEADER_LEN);
+                memcpy(dst, intf->audio_header, sizeof intf->audio_header);
 
                 txring[i]->slot[cur[i]].len = audio_packet_size;
                 txring[i]->slot[cur[i]].ptr = 0;
@@ -1953,6 +2003,8 @@ static int upipe_netmap_sink_set_flow_def(struct upipe *upipe,
             uint16_t udp_payload_size = upipe_netmap_sink->packet_size - header_size;
             header += upipe_netmap_put_ip_headers(intf, header, udp_payload_size);
             /* RTP Headers done in worker_rfc4175 */
+
+            make_audio_header(upipe, audio_paths[i], intf);
         }
         upipe_netmap_update_timestamp_cache(upipe_netmap_sink);
     }
