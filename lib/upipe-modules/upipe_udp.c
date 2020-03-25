@@ -111,7 +111,7 @@ void upipe_udp_raw_fill_headers(uint8_t *header,
     ip_set_id(header, 0);
     ip_set_flag_reserved(header, 0);
     ip_set_flag_mf(header, 0);
-    ip_set_flag_df(header, 0);
+    ip_set_flag_df(header, 1);
     ip_set_frag_offset(header, 0);
     ip_set_ttl(header, ttl);
     ip_set_proto(header, IPPROTO_UDP);
