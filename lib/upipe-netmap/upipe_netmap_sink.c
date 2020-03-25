@@ -1123,9 +1123,12 @@ static void handle_tx_stamp(struct upipe *upipe, uint64_t t, uint16_t seq)
     if (upipe_netmap_sink->frame_ts == 1) {
         upipe_netmap_sink->prev_marker_seq = seq;
         upipe_netmap_sink->frame_ts = t;
+
+        /* Calculate the frame timestamp based on the *next* PTP tick */
         upipe_netmap_sink->frame_ts /= dur;
         upipe_netmap_sink->frame_count = upipe_netmap_sink->frame_ts + 1;
         upipe_netmap_sink->frame_ts *= dur;
+
         upipe_netmap_sink->phase_delay = t - upipe_netmap_sink->frame_ts;
         upipe_netmap_update_timestamp_cache(upipe_netmap_sink);
         return;
