@@ -203,6 +203,7 @@ struct upipe_netmap_sink {
     float pid_last_output;
     uint64_t frame_ts;
     uint32_t prev_marker_seq;
+    uint64_t global_packet_counter;
 
     /** currently used uref */
     struct uref *uref;
@@ -404,6 +405,7 @@ static void upipe_netmap_sink_reset_counters(struct upipe *upipe)
     upipe_netmap_sink->phase_delay = 0;
     memset(upipe_netmap_sink->rtp_timestamp, 0, sizeof(upipe_netmap_sink->rtp_timestamp));
     upipe_netmap_sink->frame_ts = 0;
+    upipe_netmap_sink->global_packet_counter = 1; /* So the first packet is not audio. */
 }
 
 
@@ -1379,6 +1381,54 @@ static void upipe_netmap_sink_worker(struct upump *upump)
 
     /* fill ring buffer */
     while (txavail) {
+        /* Audio insertion/multiplex. */
+        static unsigned local_audio_packet_counter = 0;
+        static unsigned ap_limit = 14;
+        static unsigned prev_lapc = 0;
+
+        if (upipe_netmap_sink->global_packet_counter - prev_lapc == ap_limit) {
+            const uint64_t audio_packet_size = ETHERNET_HEADER_LEN
+                + IP_HEADER_MINSIZE + UDP_HEADER_SIZE + RTP_HEADER_SIZE
+                + 16/*channels*/ * 6/*samples*/ * 3/*bytes per sample*/;
+
+            bool stamped = false;
+            for (size_t i = 0; i < 2; i++) {
+                /* Check for EOF. */
+                struct upipe_netmap_intf *intf = &upipe_netmap_sink->intf[i];
+                if (unlikely(!intf->d || !intf->up))
+                    continue;
+                uint8_t *dst = (uint8_t*)NETMAP_BUF(txring[i], txring[i]->slot[cur[i]].buf_idx);
+
+                const size_t udp_size = ETHERNET_HEADER_LEN + IP_HEADER_MINSIZE + UDP_HEADER_SIZE;
+                uint8_t *rtp = &dst[udp_size];
+                if (UINT64_MSB(txring[i]->slot[cur[i]].ptr)) /* eof needs to be set */ {
+                    if (!stamped && UINT64_LOW_MASK(txring[i]->slot[cur[i]].ptr)) {
+                        uint16_t seq = rtp_get_seqnum(rtp);
+                        handle_tx_stamp(upipe, UINT64_LOW_MASK(txring[i]->slot[cur[i]].ptr), seq);
+                        stamped = true;
+                    }
+                }
+
+                /* Clear packet space. */
+                memset(dst, 0, audio_packet_size);
+                memcpy(dst, intf->header, ETHERNET_HEADER_LEN);
+
+                txring[i]->slot[cur[i]].len = audio_packet_size;
+                txring[i]->slot[cur[i]].ptr = 0;
+                cur[i] = nm_ring_next(txring[i], cur[i]);
+            }
+            upipe_netmap_sink->bits += 8 * (audio_packet_size + 4/*CRC*/);
+            txavail--;
+
+            local_audio_packet_counter++;
+
+            ap_limit = (ap_limit == 14) ? 13 : 14;
+            prev_lapc = upipe_netmap_sink->global_packet_counter;
+
+            if (!txavail)
+                break;
+        }
+
         if (upipe_netmap_sink->step && (upipe_netmap_sink->pkts_in_frame % upipe_netmap_sink->step) == 0) {
             const unsigned len = upipe_netmap_sink->packet_size;
 
@@ -1512,6 +1562,7 @@ static void upipe_netmap_sink_worker(struct upump *upump)
                     upipe_netmap_sink->uref = NULL;
                     bytes_left = 0;
                 }
+                upipe_netmap_sink->global_packet_counter++;
             }
         } else {
             int s = worker_hbrmt(upipe_netmap_sink, dst, src_buf, bytes_left, len, ptr);
@@ -1540,6 +1591,7 @@ static void upipe_netmap_sink_worker(struct upump *upump)
                 uint8_t *hbrmt = &upipe_netmap_sink->rtp_header[RTP_HEADER_SIZE];
                 smpte_hbrmt_set_frame_count(hbrmt, upipe_netmap_sink->frame_count & UINT8_MAX);
             }
+            upipe_netmap_sink->global_packet_counter++;
         }
 
         upipe_netmap_sink->pkts_in_frame++;
@@ -1645,6 +1697,13 @@ static bool upipe_netmap_sink_output(struct upipe *upipe, struct uref *uref,
             }
 
             upipe_netmap_sink->rate = 8 * (packets * (eth_header_len + payload + 4 /* CRC */)) * upipe_netmap_sink->fps.num;
+
+            const uint64_t audio_packet_size = ETHERNET_HEADER_LEN
+                + IP_HEADER_MINSIZE + UDP_HEADER_SIZE + RTP_HEADER_SIZE
+                + 16/*channels*/ * 6/*samples*/ * 3/*bytes per sample*/;
+            const uint64_t audio_bitrate = 8 * (audio_packet_size + 4/*CRC*/) * 48000/6;
+            printf("audio bitrate %"PRIu64" video bitrate %"PRIu64" \n", audio_bitrate, upipe_netmap_sink->rate);
+            upipe_netmap_sink->rate += audio_bitrate * upipe_netmap_sink->fps.den;
         }
         upipe_netmap_sink->packet_duration = upipe_netmap_sink->frame_duration / upipe_netmap_sink->packets_per_frame;
 
