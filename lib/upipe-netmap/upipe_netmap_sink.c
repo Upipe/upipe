@@ -214,6 +214,7 @@ struct upipe_netmap_sink {
     float pid_error_sum;
     float pid_last_output;
     uint64_t frame_ts;
+    uint64_t frame_ts_start;
     uint32_t prev_marker_seq;
     struct audio_packet_state audio_packet_state;
 
@@ -417,6 +418,7 @@ static void upipe_netmap_sink_reset_counters(struct upipe *upipe)
     upipe_netmap_sink->phase_delay = 0;
     memset(upipe_netmap_sink->rtp_timestamp, 0, sizeof(upipe_netmap_sink->rtp_timestamp));
     upipe_netmap_sink->frame_ts = 0;
+    upipe_netmap_sink->frame_ts_start = 0;
 }
 
 
@@ -1148,15 +1150,23 @@ static void handle_tx_stamp(struct upipe *upipe, uint64_t t, uint16_t seq)
 
     if (upipe_netmap_sink->frame_ts == 1) {
         upipe_netmap_sink->prev_marker_seq = seq;
-        upipe_netmap_sink->frame_ts = t;
 
         /* Calculate the frame timestamp based on the *next* PTP tick */
+        upipe_netmap_sink->frame_ts_start = upipe_netmap_sink->frame_ts = t;
         upipe_netmap_sink->frame_ts /= dur;
         upipe_netmap_sink->frame_count = upipe_netmap_sink->frame_ts + 1;
         upipe_netmap_sink->frame_ts *= dur;
 
         upipe_netmap_sink->phase_delay = t - upipe_netmap_sink->frame_ts;
         upipe_netmap_update_timestamp_cache(upipe_netmap_sink);
+
+        /* Set next audio packet time to be frame_ts_start. */
+        __uint128_t ts = upipe_netmap_sink->frame_count;
+        ts *= dur;
+        ts *= 48000;
+        ts /= UCLOCK_FREQ;
+        rtp_set_timestamp(upipe_netmap_sink->audio_rtp_header, ts);
+
         return;
     }
 
@@ -1463,6 +1473,7 @@ static void upipe_netmap_sink_worker(struct upump *upump)
                 + IP_HEADER_MINSIZE + UDP_HEADER_SIZE + RTP_HEADER_SIZE
                 + 16/*channels*/ * 6/*samples*/ * 3/*bytes per sample*/;
 
+            /* Read current sequence number and timestamp. */
             uint16_t seqnum = rtp_get_seqnum(upipe_netmap_sink->audio_rtp_header);
             uint32_t timestamp = rtp_get_timestamp(upipe_netmap_sink->audio_rtp_header);
 
@@ -1505,7 +1516,7 @@ static void upipe_netmap_sink_worker(struct upump *upump)
                 cur[i] = nm_ring_next(txring[i], cur[i]);
             }
 
-            /* Advance sequence number and timestamp. */
+            /* Advance sequence number and timestamp for next packet. */
             rtp_set_seqnum(upipe_netmap_sink->audio_rtp_header, seqnum + 1);
             rtp_set_timestamp(upipe_netmap_sink->audio_rtp_header, timestamp + 6);
 
