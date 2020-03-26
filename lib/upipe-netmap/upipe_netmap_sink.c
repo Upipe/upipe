@@ -123,14 +123,9 @@ struct upipe_netmap_intf {
 };
 
 struct audio_packet_state {
-    /* Counter for all video packets. */
-    uint64_t counter;
-    /* Value of counter for previous audio packet. */
-    uint64_t prev_counter;
-    /* Pattern of how many packets between each audio packet. */
-    uint8_t pattern[15];
-    uint8_t length;
-    uint8_t choice;
+    uint32_t num, den;
+    uint16_t audio_counter;
+    uint8_t video_counter, video_limit;
 };
 
 /** @internal @This is the private context of a netmap sink pipe. */
@@ -1204,17 +1199,17 @@ static void handle_tx_stamp(struct upipe *upipe, uint64_t t, uint16_t seq)
     upipe_netmap_sink->pkts_in_frame = 0;
 }
 
-static inline void aps_inc_counter(struct audio_packet_state *aps)
+static inline void aps_inc_video(struct audio_packet_state *aps)
 {
-    aps->counter += 1;
+    aps->video_counter += 1;
 }
 
-/* TODO: set counter to 0 for each audio output. */
 static inline bool aps_audio_needed(struct audio_packet_state *aps)
 {
-    if (aps->counter - aps->prev_counter == aps->pattern[aps->choice]) {
-        aps->prev_counter = aps->counter;
-        aps->choice = (aps->choice + 1) % aps->length;
+    if (aps->video_counter == aps->video_limit) {
+        aps->video_counter = 0;
+        aps->video_limit = (aps->audio_counter + 1) * aps->num / aps->den - (aps->audio_counter) * aps->num / aps->den;
+        aps->audio_counter = (aps->audio_counter + 1) % aps->den;
         return true;
     }
     return false;
@@ -1656,7 +1651,7 @@ static void upipe_netmap_sink_worker(struct upump *upump)
                     upipe_netmap_sink->uref = NULL;
                     bytes_left = 0;
                 }
-                aps_inc_counter(&upipe_netmap_sink->audio_packet_state);
+                aps_inc_video(&upipe_netmap_sink->audio_packet_state);
             }
         } else {
             int s = worker_hbrmt(upipe_netmap_sink, dst, src_buf, bytes_left, len, ptr);
@@ -1797,6 +1792,20 @@ static bool upipe_netmap_sink_output(struct upipe *upipe, struct uref *uref,
             const uint64_t audio_bitrate = 8 * (audio_packet_size + 4/*CRC*/) * 48000/6;
             printf("audio bitrate %"PRIu64" video bitrate %"PRIu64" \n", audio_bitrate, upipe_netmap_sink->rate);
             upipe_netmap_sink->rate += audio_bitrate * upipe_netmap_sink->fps.den;
+
+            /* Video will have (packets_per_frame * fps) packets per second.
+             * Audio needs to output (48000/6) packets per second.  The ratio
+             * between these two is calculated with the rational below. */
+            struct urational rational = {
+                upipe_netmap_sink->packets_per_frame * upipe_netmap_sink->fps.num,
+                48000/6 * upipe_netmap_sink->fps.den
+            };
+            urational_simplify(&rational);
+            upipe_netmap_sink->audio_packet_state = (struct audio_packet_state) {
+                .num = rational.num, .den = rational.den,
+                .video_limit = rational.num / rational.den,
+            };
+            upipe_dbg_va(upipe, "rational: %"PRId64"/%"PRIu64, rational.num, rational.den);
         }
         upipe_netmap_sink->packet_duration = upipe_netmap_sink->frame_duration / upipe_netmap_sink->packets_per_frame;
 
@@ -2058,11 +2067,6 @@ static int upipe_netmap_sink_set_flow_def(struct upipe *upipe,
         rtp_set_type(upipe_netmap_sink->audio_rtp_header, 97);
         rtp_set_seqnum(upipe_netmap_sink->audio_rtp_header, 0);
         rtp_set_timestamp(upipe_netmap_sink->audio_rtp_header, 0);
-
-        upipe_netmap_sink->audio_packet_state = (struct audio_packet_state) {
-            .pattern = { 13, 14 },
-            .length = 2,
-        };
     }
 
     upipe_netmap_sink->frame_size = 0;
