@@ -1664,8 +1664,8 @@ static void upipe_netmap_sink_worker(struct upump *upump)
                     upipe_netmap_sink->uref = NULL;
                     bytes_left = 0;
                 }
-                aps_inc_video(&upipe_netmap_sink->audio_packet_state);
             }
+            aps_inc_video(&upipe_netmap_sink->audio_packet_state);
         } else {
             int s = worker_hbrmt(upipe_netmap_sink, dst, src_buf, bytes_left, len, ptr);
             src_buf += s;
@@ -1808,9 +1808,10 @@ static bool upipe_netmap_sink_output(struct upipe *upipe, struct uref *uref,
 
             /* Video will have (packets_per_frame * fps) packets per second.
              * Audio needs to output (48000/6) packets per second.  The ratio
-             * between these two is calculated with the rational below. */
+             * between these two is calculated with the rational below.  Need to
+             * account for the gap fakes too. */
             struct urational rational = {
-                upipe_netmap_sink->packets_per_frame * upipe_netmap_sink->fps.num,
+                (upipe_netmap_sink->packets_per_frame + upipe_netmap_sink->gap_fakes) * upipe_netmap_sink->fps.num,
                 48000/6 * upipe_netmap_sink->fps.den
             };
             urational_simplify(&rational);
