@@ -167,6 +167,7 @@ struct upipe_netmap_sink {
 
     /** sequence number **/
     uint64_t seqnum;
+    /* Number of frames since 1970. */
     uint64_t frame_count;
 
     //hbrmt header
@@ -213,6 +214,7 @@ struct upipe_netmap_sink {
     float pid_last_error;
     float pid_error_sum;
     float pid_last_output;
+    /* Timestamp in UCLOCK_FREQ since 1970.  Needs 55 or more bits in 2020. */
     uint64_t frame_ts;
     uint64_t frame_ts_start;
     uint32_t prev_marker_seq;
