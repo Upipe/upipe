@@ -234,8 +234,8 @@ static void upipe_dup_input(struct upipe *upipe, struct uref *uref,
 {
     struct upipe_dup *upipe_dup = upipe_dup_from_upipe(upipe);
     struct upipe *output = upipe_dup->output;
-    struct uchain *uchain;
-    ulist_foreach (&upipe_dup->outputs, uchain) {
+    struct uchain *uchain, *uchain_tmp;
+    ulist_delete_foreach (&upipe_dup->outputs, uchain, uchain_tmp) {
         struct upipe_dup_output *upipe_dup_output =
             upipe_dup_output_from_uchain(uchain);
         struct upipe *output = upipe_dup_output_to_upipe(upipe_dup_output);
