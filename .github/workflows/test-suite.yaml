@@ -76,7 +76,7 @@ jobs:
         sudo chmod +x /usr/local/bin/set-env
 
     - name: Checkout
-      uses: actions/checkout@v1
+      uses: actions/checkout@v2
 
     - name: Install compiler (gcc)
       if: runner.os == 'Linux' && matrix.compiler == 'gcc'
@@ -219,7 +219,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v1
+        uses: actions/checkout@v2
 
       - name: Install dependencies
         run: sudo apt-get install libgcrypt-dev
