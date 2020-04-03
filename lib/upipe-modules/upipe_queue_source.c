@@ -287,7 +287,7 @@ static void upipe_qsrc_ref_end(struct upipe *upipe)
                               struct uref *)) != NULL)
         upipe_qsrc_input(upipe, uref, NULL);
 
-    upipe_notice_va(upipe, "freeing queue %p", upipe);
+    upipe_dbg_va(upipe, "freeing queue %p", upipe);
     upipe_throw_dead(upipe);
 
     struct upipe_queue_downstream *downstream;

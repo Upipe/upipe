@@ -140,7 +140,7 @@ static struct upipe *_upipe_qsink_alloc(struct upipe_mgr *mgr,
     ulist_init(&upipe_qsink->request_list);
 
     upipe_throw_ready(upipe);
-    upipe_notice_va(upipe, "using queue source %p", qsrc);
+    upipe_dbg_va(upipe, "using queue source %p", qsrc);
     return upipe;
 
 upipe_qsink_alloc_err:
@@ -555,7 +555,7 @@ static void upipe_qsink_free(struct upipe *upipe)
     struct upipe_qsink *upipe_qsink = upipe_qsink_from_upipe(upipe);
 
     /* play source end */
-    upipe_notice_va(upipe, "ending queue source %p", upipe_qsink->qsrc);
+    upipe_dbg_va(upipe, "ending queue source %p", upipe_qsink->qsrc);
     upipe_qsink_push_downstream(upipe, UPIPE_QUEUE_DOWNSTREAM_SOURCE_END, NULL);
     upipe_release(upipe_qsink->qsrc);
 
