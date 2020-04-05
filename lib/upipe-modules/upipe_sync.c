@@ -49,6 +49,8 @@
 #include <upipe/upipe_helper_ubuf_mgr.h>
 #include <upipe-modules/upipe_sync.h>
 
+#define MAX_AUDIO_SAMPLES (480000*2) /* 20 seconds */
+
 /** upipe_sync structure */
 struct upipe_sync {
     /** refcount management structure */
@@ -396,6 +398,16 @@ static int upipe_sync_sub_control(struct upipe *upipe, int command, va_list args
 static float pts_to_time(uint64_t pts)
 {
     return (float)pts / 27000;
+}
+
+static void ulist_uref_flush(struct uchain *ulist)
+{
+    for (;;) {
+        struct uchain *uchain = ulist_pop(ulist);
+        if (!uchain)
+            break;
+        uref_free(uref_from_uchain(uchain));
+    }
 }
 
 static bool sync_channel(struct upipe *upipe)
@@ -872,6 +884,11 @@ static void upipe_sync_sub_input(struct upipe *upipe, struct uref *uref,
     //upipe_notice_va(upipe, "push, samples %" PRIu64, upipe_sync_sub->samples);
 
     ulist_add(&upipe_sync_sub->urefs, uref_to_uchain(uref));
+
+    if (unlikely(upipe_sync_sub->samples >= MAX_AUDIO_SAMPLES)) {
+        ulist_uref_flush(&upipe_sync_sub->urefs);
+        upipe_sync_sub->samples = 0;
+    }
 }
 
 /** @internal @This initializes the output manager for a dup set pipe.
@@ -1059,16 +1076,6 @@ static int upipe_sync_control(struct upipe *upipe, int command, va_list args)
 
         default:
             return UBASE_ERR_UNHANDLED;
-    }
-}
-
-static void ulist_uref_flush(struct uchain *ulist)
-{
-    for (;;) {
-        struct uchain *uchain = ulist_pop(ulist);
-        if (!uchain)
-            break;
-        uref_free(uref_from_uchain(uchain));
     }
 }
 
