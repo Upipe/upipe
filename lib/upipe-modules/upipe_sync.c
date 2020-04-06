@@ -50,6 +50,7 @@
 #include <upipe-modules/upipe_sync.h>
 
 #define MAX_AUDIO_SAMPLES (480000*2) /* 20 seconds */
+#define MAX_VIDEO_FRAMES  (300)      /* 5 seconds @ 60fps */
 
 /** upipe_sync structure */
 struct upipe_sync {
@@ -73,6 +74,7 @@ struct upipe_sync {
     // TODO: only one video (master)
     uint64_t latency;
     uint64_t pts;
+    uint64_t buffered_frames;
 
     /** linked list of buffered pics */
     struct uchain urefs;
@@ -781,6 +783,7 @@ static void cb(struct upump *upump)
 
         ulist_pop(&upipe_sync->urefs);
         uref_free(uref);
+        upipe_sync->buffered_frames--;
         int64_t u = pts - now;
         upipe_err_va(upipe, "Drop pic (pts-now == %" PRId64 "ms)", u / 27000);
     }
@@ -798,6 +801,7 @@ static void cb(struct upump *upump)
         ulist_pop(&upipe_sync->urefs);
         /* buffer picture */
         uref_free(upipe_sync->uref);
+        upipe_sync->buffered_frames--;
         upipe_sync->uref = uref_from_uchain(uchain);
     } else {
         upipe_dbg_va(upipe, "no picture, repeating last one");
@@ -943,7 +947,13 @@ static void upipe_sync_input(struct upipe *upipe, struct uref *uref,
 
     /* buffer pic */
     ulist_add(&upipe_sync->urefs, uref_to_uchain(uref));
+    upipe_sync->buffered_frames++;
 
+    /* limit buffered frames */
+    if (unlikely(upipe_sync->buffered_frames >= MAX_VIDEO_FRAMES)) {
+        ulist_uref_flush(&upipe_sync->urefs);
+        upipe_sync->buffered_frames = 0;
+    }
 
     /* timer already active */
     if (upipe_sync->upump)
@@ -986,6 +996,7 @@ static struct upipe *upipe_sync_alloc(struct upipe_mgr *mgr,
     upipe_sync->pts = 0;
     upipe_sync->ticks_per_frame = 0;
     upipe_sync->frame_idx = 0;
+    upipe_sync->buffered_frames = 0;
     upipe_sync->uref = NULL;
     ulist_init(&upipe_sync->urefs);
 
