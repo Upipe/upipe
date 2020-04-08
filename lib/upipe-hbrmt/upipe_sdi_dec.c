@@ -1513,7 +1513,7 @@ static bool upipe_sdi_dec_handle(struct upipe *upipe, struct uref *uref,
 
             /* Zero out any unused samples */
             size_t offset = wrong_samples * sizeof(int32_t) * UPIPE_SDI_CHANNELS_PER_GROUP * UPIPE_SDI_CHANNELS_PER_GROUP;
-            size_t num_zero_samples = samples_received - wrong_samples;
+            size_t num_zero_samples = (samples_received - wrong_samples) * UPIPE_SDI_CHANNELS_PER_GROUP * UPIPE_SDI_CHANNELS_PER_GROUP;
 
             memset(upipe_sdi_dec->audio_ctx.buf_audio + offset, 0, num_zero_samples * sizeof(int32_t) );
 
