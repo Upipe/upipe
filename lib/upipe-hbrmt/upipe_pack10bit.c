@@ -121,16 +121,14 @@ static bool upipe_pack10bit_handle(struct upipe *upipe, struct uref *uref,
     if (upipe_pack10bit->flow_def == NULL)
         return false;
 
-    const uint8_t *src = NULL;
-    int buf_size = -1;
-    if (unlikely(!ubase_check(uref_block_read(uref, 0, &buf_size, &src)))) {
+    size_t input_size;
+    if (unlikely(!ubase_check(uref_block_size(uref, &input_size)))) {
         uref_free(uref);
-        upipe_throw_fatal(upipe, UBASE_ERR_INVALID);
         return true;
     }
 
     struct ubuf *ubuf_dst = ubuf_block_alloc(upipe_pack10bit->ubuf_mgr,
-            buf_size / 2 * 10 / 8);
+            input_size / 2 * 10 / 8);
     if (!ubuf_dst) {
         uref_free(uref);
         upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
@@ -146,11 +144,29 @@ static bool upipe_pack10bit_handle(struct upipe *upipe, struct uref *uref,
         return true;
     }
 
-    int pixels = buf_size / 4;
+    for (int input_offset = 0; input_size > 0; /*do nothing*/) {
+        const uint8_t *src = NULL;
+        int buf_size = -1;
+        /* Map input buffer. */
+        if (unlikely(!ubase_check(uref_block_read(uref, input_offset, &buf_size, &src)))) {
+            uref_free(uref);
+            upipe_throw_fatal(upipe, UBASE_ERR_INVALID);
+            return true;
+        }
 
-    upipe_pack10bit->pack(buffer, src, pixels);
+        /* Pack data into output. */
+        int pixels = buf_size / 4;
+        upipe_pack10bit->pack(buffer, src, pixels);
 
-    uref_block_unmap(uref, 0);
+        /* Unmap input. */
+        uref_block_unmap(uref, input_offset);
+
+        /* Advance. */
+        input_size -= buf_size;
+        input_offset += buf_size;
+        buffer += buf_size / 2 * 10 / 8;
+    }
+
     ubuf_block_unmap(ubuf_dst, 0);
     uref_attach_ubuf(uref, ubuf_dst);
 
