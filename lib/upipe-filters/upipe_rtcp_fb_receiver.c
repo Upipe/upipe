@@ -295,7 +295,7 @@ static void upipe_rtcpfb_lost_sub_n(struct upipe *upipe, uint16_t seq, uint16_t 
             continue;
         }
 
-        upipe_warn_va(upipe, "Retransmit %hu", seq);
+        upipe_verbose_va(upipe, "Retransmit %hu", seq);
         upipe_rtcpfb->retrans++;
 
         uint8_t *buf;
@@ -330,7 +330,7 @@ static void upipe_rtcpfb_lost_sub(struct upipe *upipe, uint16_t seq, uint16_t ma
         if (seq != uref_seqnum)
             continue;
 
-        upipe_warn_va(upipe, "Retransmit %hu", seq);
+        upipe_verbose_va(upipe, "Retransmit %hu", seq);
         upipe_rtcpfb->retrans++;
 
         uint8_t *buf;
