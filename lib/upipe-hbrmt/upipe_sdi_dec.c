@@ -1510,6 +1510,13 @@ static bool upipe_sdi_dec_handle(struct upipe *upipe, struct uref *uref,
                     samples_received += samples_increment[rate5994][upipe_sdi_dec->audio_fix];
                 }
             }
+
+            /* Zero out any unused samples */
+            size_t offset = wrong_samples * sizeof(int32_t) * UPIPE_SDI_CHANNELS_PER_GROUP * UPIPE_SDI_CHANNELS_PER_GROUP;
+            size_t num_zero_samples = samples_received - wrong_samples;
+
+            memset(upipe_sdi_dec->audio_ctx.buf_audio + offset, 0, num_zero_samples * sizeof(int32_t) );
+
             upipe_dbg_va(upipe, "Not enough audio samples correcting %u to %u",
                 wrong_samples, samples_received);
         }
