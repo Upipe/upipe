@@ -422,6 +422,20 @@ static void upipe_pciesdi_src_worker(struct upump *upump)
         dump_and_exit_clean(upipe, NULL, 0);
     }
 
+    if (!upipe_pciesdi_src->ubuf_mgr) {
+        upipe_warn_va(upipe, "no ubuf_mgr, skipping %d lines", lines);
+
+        struct sdi_ioctl_mmap_dma_update mmap_update = { .sw_count = hw };
+        if (ioctl(upipe_pciesdi_src->fd, SDI_IOCTL_MMAP_DMA_WRITER_UPDATE, &mmap_update))
+            upipe_err(upipe, "ioctl error incrementing SW buffer count");
+
+        /* Lie about how much data is in buffer to keep EAV alignment. */
+        int bytes_remaining = bytes_available - processed_bytes;
+        upipe_pciesdi_src->scratch_buffer_count = bytes_remaining;
+
+        return;
+    }
+
     struct uref *uref = uref_block_alloc(upipe_pciesdi_src->uref_mgr,
             upipe_pciesdi_src->ubuf_mgr, output_size);
     if (!uref) {
