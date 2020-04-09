@@ -417,6 +417,7 @@ static void upipe_pciesdi_src_worker(struct upump *upump)
         int bytes_remaining = bytes_available - processed_bytes;
         upipe_pciesdi_src->scratch_buffer_count = bytes_remaining;
 
+        upipe_pciesdi_src->discontinuity = true;
         return;
     }
 
@@ -436,6 +437,7 @@ static void upipe_pciesdi_src_worker(struct upump *upump)
         int bytes_remaining = bytes_available - processed_bytes;
         upipe_pciesdi_src->scratch_buffer_count = bytes_remaining;
 
+        upipe_pciesdi_src->discontinuity = true;
         return;
     }
 
