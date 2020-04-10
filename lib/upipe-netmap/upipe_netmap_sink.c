@@ -1412,6 +1412,8 @@ static void upipe_netmap_sink_worker(struct upump *upump)
     else {
         for (size_t i = 0; i < 2; i++) {
             struct upipe_netmap_intf *intf = &upipe_netmap_sink->intf[i];
+            if (!intf->d)
+                continue;
             upipe_clear_queues(upipe, intf, txavail, 0);
         }
    }
