@@ -397,18 +397,6 @@ static void upipe_pciesdi_src_worker(struct upump *upump)
     sdi_dma_writer(upipe_pciesdi_src->fd, 1, &hw, &sw); // get buffer counts
 
     int64_t num_bufs = hw - sw;
-    if (num_bufs > DMA_BUFFER_COUNT/2) {
-        /* TODO: Can we recover from here?  Need to regain EAV alignment
-         * somehow.  Maybe stop/start DMA.  Maybe searching is needed. */
-        upipe_warn_va(upipe, "reading too late, hw: %"PRId64", sw: %"PRId64, hw, sw);
-#if 0
-        struct sdi_ioctl_mmap_dma_update mmap_update = { .sw_count = hw };
-        if (ioctl(upipe_pciesdi_src->fd, SDI_IOCTL_MMAP_DMA_WRITER_UPDATE, &mmap_update))
-            upipe_err(upipe, "ioctl error incrementing SW buffer count");
-        dump_and_exit_clean(upipe, NULL, 0);
-#endif
-    }
-
     /* Calculate how many lines we can output from the available data. */
     int bytes_available = num_bufs * DMA_BUFFER_SIZE + upipe_pciesdi_src->scratch_buffer_count;
     int lines = bytes_available / sdi_line_width;
@@ -417,9 +405,40 @@ static void upipe_pciesdi_src_worker(struct upump *upump)
     if (upipe_pciesdi_src->sdi3g_levelb)
         output_size *= 2;
 
+    if (num_bufs > DMA_BUFFER_COUNT/2) {
+        upipe_warn_va(upipe, "reading too late, hw: %"PRId64", sw: %"PRId64", skipping %d lines",
+                hw, sw, lines);
+
+        struct sdi_ioctl_mmap_dma_update mmap_update = { .sw_count = hw };
+        if (ioctl(upipe_pciesdi_src->fd, SDI_IOCTL_MMAP_DMA_WRITER_UPDATE, &mmap_update))
+            upipe_err(upipe, "ioctl error incrementing SW buffer count");
+
+        /* Lie about how much data is in buffer to keep EAV alignment. */
+        int bytes_remaining = bytes_available - processed_bytes;
+        upipe_pciesdi_src->scratch_buffer_count = bytes_remaining;
+
+        upipe_pciesdi_src->discontinuity = true;
+        return;
+    }
+
     if (!lines) {
         upipe_err(upipe, "0 lines after a mmap read is not supported");
         dump_and_exit_clean(upipe, NULL, 0);
+    }
+
+    if (!upipe_pciesdi_src->ubuf_mgr) {
+        upipe_warn_va(upipe, "no ubuf_mgr, skipping %d lines", lines);
+
+        struct sdi_ioctl_mmap_dma_update mmap_update = { .sw_count = hw };
+        if (ioctl(upipe_pciesdi_src->fd, SDI_IOCTL_MMAP_DMA_WRITER_UPDATE, &mmap_update))
+            upipe_err(upipe, "ioctl error incrementing SW buffer count");
+
+        /* Lie about how much data is in buffer to keep EAV alignment. */
+        int bytes_remaining = bytes_available - processed_bytes;
+        upipe_pciesdi_src->scratch_buffer_count = bytes_remaining;
+
+        upipe_pciesdi_src->discontinuity = true;
+        return;
     }
 
     struct uref *uref = uref_block_alloc(upipe_pciesdi_src->uref_mgr,
