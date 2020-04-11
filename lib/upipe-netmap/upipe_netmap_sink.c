@@ -735,6 +735,13 @@ static inline int get_interleaved_line(struct upipe_netmap_sink *upipe_netmap_si
     return line * 2;
 }
 
+static inline void setup_gap_fakes(struct upipe_netmap_sink *upipe_netmap_sink, bool progressive)
+{
+    upipe_netmap_sink->gap_fakes_current = upipe_netmap_sink->gap_fakes;
+    if (!progressive)
+        upipe_netmap_sink->gap_fakes_current /= 2;
+}
+
 /* returns 1 if uref exhausted */
 static int worker_rfc4175(struct upipe_netmap_sink *upipe_netmap_sink, uint8_t **dst, uint16_t **len, uint64_t **ptr)
 {
@@ -1418,7 +1425,7 @@ static void upipe_netmap_sink_worker(struct upump *upump)
         }
    }
 
-    bool progressive = upipe_netmap_sink->progressive;
+    const bool progressive = upipe_netmap_sink->progressive;
 
     uint8_t *dst[2] = { NULL, NULL };
     uint16_t *len[2] = { NULL, NULL };
@@ -1545,9 +1552,7 @@ static void upipe_netmap_sink_worker(struct upump *upump)
                 upipe_netmap_sink->bits += (pkt_len + 4 /* CRC */) * 8;
                 upipe_netmap_sink->gap_fakes_current--;
             } else {
-                upipe_netmap_sink->gap_fakes_current = upipe_netmap_sink->gap_fakes;
-                if (!progressive)
-                    upipe_netmap_sink->gap_fakes_current /= 2;
+                setup_gap_fakes(upipe_netmap_sink, progressive);
 
                 if (worker_rfc4175(upipe_netmap_sink, dst, len, ptr)) {
                     for (int i = 0; i < UPIPE_RFC4175_MAX_PLANES; i++) {
@@ -1877,6 +1882,10 @@ static int upipe_netmap_sink_set_flow_def(struct upipe *upipe,
         upipe_netmap_sink->frame = 0x30; // progressive
     } else
         return UBASE_ERR_INVALID;
+
+    /* setup gap_fakes_current for the first frame */
+    if (upipe_netmap_sink->rfc4175)
+        setup_gap_fakes(upipe_netmap_sink, upipe_netmap_sink->progressive);
 
     static const struct  {
         struct urational fps;
