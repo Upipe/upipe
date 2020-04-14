@@ -1475,10 +1475,6 @@ static void upipe_netmap_sink_worker(struct upump *upump)
                 + IP_HEADER_MINSIZE + UDP_HEADER_SIZE + RTP_HEADER_SIZE
                 + 16/*channels*/ * 6/*samples*/ * 3/*bytes per sample*/;
 
-            /* Read current sequence number and timestamp. */
-            uint16_t seqnum = rtp_get_seqnum(upipe_netmap_sink->audio_rtp_header);
-            uint32_t timestamp = rtp_get_timestamp(upipe_netmap_sink->audio_rtp_header);
-
             bool stamped = false;
             for (size_t i = 0; i < 2; i++) {
                 /* Check for EOF. */
@@ -1504,6 +1500,7 @@ static void upipe_netmap_sink_worker(struct upump *upump)
                 dst += RTP_HEADER_SIZE;
 
                 /* Make sine wave. */
+                uint32_t timestamp = rtp_get_timestamp(upipe_netmap_sink->audio_rtp_header);
                 for (int s = 0; s < 6; s++) {
                     int32_t sample = sin(2 * M_PI * (timestamp + s) * 1000 / 48000) * INT32_MAX/4;
                     for (int c = 0; c < 16; c++) {
@@ -1517,6 +1514,10 @@ static void upipe_netmap_sink_worker(struct upump *upump)
                 txring[i]->slot[cur[i]].ptr = 0;
                 cur[i] = nm_ring_next(txring[i], cur[i]);
             }
+
+            /* Read current sequence number and timestamp. */
+            uint16_t seqnum = rtp_get_seqnum(upipe_netmap_sink->audio_rtp_header);
+            uint32_t timestamp = rtp_get_timestamp(upipe_netmap_sink->audio_rtp_header);
 
             /* Advance sequence number and timestamp for next packet. */
             rtp_set_seqnum(upipe_netmap_sink->audio_rtp_header, seqnum + 1);
