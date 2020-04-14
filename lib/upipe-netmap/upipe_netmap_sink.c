@@ -1162,13 +1162,6 @@ static void handle_tx_stamp(struct upipe *upipe, uint64_t t, uint16_t seq)
         upipe_netmap_sink->phase_delay = t - upipe_netmap_sink->frame_ts;
         upipe_netmap_update_timestamp_cache(upipe_netmap_sink);
 
-        /* Set next audio packet time to be frame_ts_start. */
-        __uint128_t ts = upipe_netmap_sink->frame_count;
-        ts *= dur;
-        ts *= 48000;
-        ts /= UCLOCK_FREQ;
-        rtp_set_timestamp(upipe_netmap_sink->audio_rtp_header, ts);
-
         return;
     }
 
@@ -1664,6 +1657,19 @@ static void upipe_netmap_sink_worker(struct upump *upump)
                     uref = NULL;
                     upipe_netmap_sink->uref = NULL;
                     bytes_left = 0;
+
+                    /* If the video timestamps have been set to real values then
+                     * set the audio timestamp to the video for the start of the
+                     * next frame. */
+                    if (upipe_netmap_sink->frame_ts_start != 0) {
+                        /* TODO: check whether this really needs 128 bit. */
+                        __uint128_t ts = upipe_netmap_sink->frame_count;
+                        ts *= upipe_netmap_sink->fps.den;
+                        ts *= 48000;
+                        ts /= upipe_netmap_sink->fps.num;
+                        rtp_set_timestamp(upipe_netmap_sink->audio_rtp_header, ts);
+                        upipe_netmap_sink->frame_ts_start = 0;
+                    }
                 }
             }
             aps_inc_video(&upipe_netmap_sink->audio_packet_state);
