@@ -227,6 +227,9 @@ static int catch(struct uprobe *uprobe, struct upipe *upipe,
         case UPROBE_SOURCE_END:
             upipe_release(upipe);
             return UBASE_ERR_NONE;
+
+        case UPROBE_FATAL:
+            exit(EXIT_FAILURE);
     }
     return uprobe_throw_next(uprobe, upipe, event, args);
 }
