@@ -1142,6 +1142,7 @@ static void handle_tx_stamp(struct upipe *upipe, uint64_t t, uint16_t seq)
 
     t /= 1000;
     t *= 27;
+    /* t is the TX time of the marker packet, now in UCLOCK_FREQ ticks. */
 
     /* HACK: start from the second timestamp, sometimes the hardware gives nonsense timestamps
        Why? Is this our fault for some reason?? */
@@ -1153,12 +1154,19 @@ static void handle_tx_stamp(struct upipe *upipe, uint64_t t, uint16_t seq)
     if (upipe_netmap_sink->frame_ts == 1) {
         upipe_netmap_sink->prev_marker_seq = seq;
 
-        /* Calculate the frame timestamp based on the *next* PTP tick */
+        /* Calculate the frame timestamp based on the *next* PTP frame tick */
         upipe_netmap_sink->frame_ts_start = upipe_netmap_sink->frame_ts = t;
+
+        /* floor(frame_ts) to the nearest PTP frame tick */
         upipe_netmap_sink->frame_ts /= dur;
+
+        /* ceil(frame_ts) to the nearest PTP frame tick (i.e the next frame) */
         upipe_netmap_sink->frame_count = upipe_netmap_sink->frame_ts + 1;
+
+        /* back to 27MHz units (having been floored) */
         upipe_netmap_sink->frame_ts *= dur;
 
+        /* XXX: does this need to be dur - (t - upipe_netmap_sink->frame_ts) */
         upipe_netmap_sink->phase_delay = t - upipe_netmap_sink->frame_ts;
         upipe_netmap_update_timestamp_cache(upipe_netmap_sink);
 
@@ -1658,7 +1666,12 @@ static void upipe_netmap_sink_worker(struct upump *upump)
                     upipe_netmap_sink->uref = NULL;
                     bytes_left = 0;
 
-                    /* If the video timestamps have been set to real values then
+                    /* Set the audio timestamps here, having got correct video
+                     * timestamps in handle_tx_stamp. However, handle_tx_stamp
+                     * occurs somewhere during a frame and therefore audio can't
+                     * use it until a clear reference point such as eof (here).
+                     *
+                     * If the video timestamps have been set to real values then
                      * set the audio timestamp to the video for the start of the
                      * next frame. */
                     if (upipe_netmap_sink->frame_ts_start != 0) {
