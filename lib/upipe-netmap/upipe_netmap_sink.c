@@ -51,6 +51,7 @@
 #include <linux/if_packet.h>
 #include <pthread.h>
 #include <limits.h>
+#include <math.h>
 
 #define NETMAP_WITH_LIBS
 #include <net/netmap.h>
@@ -126,6 +127,12 @@ struct audio_packet_state {
     uint32_t num, den;
     uint16_t audio_counter;
     uint8_t video_counter, video_limit;
+};
+
+struct pid_controller {
+    double last_error;
+    double error_sum;
+    double last_output;
 };
 
 /** @internal @This is the private context of a netmap sink pipe. */
@@ -207,6 +214,7 @@ struct upipe_netmap_sink {
     uint64_t bits;
     uint64_t start;
 
+    struct pid_controller pid_controller;
     uint64_t fakes;
     uint32_t step;
     int64_t needed_fakes;
@@ -421,6 +429,9 @@ static void upipe_netmap_sink_reset_counters(struct upipe *upipe)
     memset(upipe_netmap_sink->rtp_timestamp, 0, sizeof(upipe_netmap_sink->rtp_timestamp));
     upipe_netmap_sink->frame_ts = 0;
     upipe_netmap_sink->frame_ts_start = 0;
+    upipe_netmap_sink->pid_controller.last_error = 0.;
+    upipe_netmap_sink->pid_controller.error_sum = 0.;
+    upipe_netmap_sink->pid_controller.last_output = 0.;
 }
 
 
@@ -1134,6 +1145,33 @@ static int compute_fakes(struct upipe *upipe, int j)
     return (int)upipe_netmap_sink->pid_last_output;
 }
 
+static double compute_fakes_f(struct upipe *upipe, double j)
+{
+    struct upipe_netmap_sink *upipe_netmap_sink = upipe_netmap_sink_from_upipe(upipe);
+    struct pid_controller *pid = &upipe_netmap_sink->pid_controller;
+    const struct urational *fps = &upipe_netmap_sink->fps;
+
+    double error = -j;
+    pid->error_sum += error * fps->den / fps->num;
+
+    double d = (error - pid->last_error) * fps->num / fps->den;
+
+#define Kp 1
+#define Ki 1
+#define Kd 1
+#define div (Kp+Ki+Kd)
+
+    pid->last_error = error;
+    pid->last_output = (Kp*error + Ki*pid->error_sum + Kd*d) / div;
+
+#undef Kp
+#undef Ki
+#undef Kd
+#undef div
+
+    return pid->last_output;
+}
+
 static void handle_tx_stamp(struct upipe *upipe, uint64_t t, uint16_t seq)
 {
     struct upipe_netmap_sink *upipe_netmap_sink = upipe_netmap_sink_from_upipe(upipe);
@@ -1184,12 +1222,10 @@ static void handle_tx_stamp(struct upipe *upipe, uint64_t t, uint16_t seq)
     upipe_netmap_sink->frame_ts += dur;
 
     int64_t x = t - upipe_netmap_sink->frame_ts;
-    int64_t ideal = (dur - x) * (int64_t)upipe_netmap_sink->packets_per_frame / dur;
-
-    int step = compute_fakes(upipe, -ideal);
-    upipe_netmap_sink->needed_fakes *= 9;
-    upipe_netmap_sink->needed_fakes += step;
-    upipe_netmap_sink->needed_fakes /= 10;
+    int64_t err = dur - x;
+    double ideal = (double)err * (double)upipe_netmap_sink->packets_per_frame / (double)dur;
+    double step = compute_fakes_f(upipe, -ideal);
+    upipe_netmap_sink->needed_fakes = llrint((9.0 * upipe_netmap_sink->needed_fakes + step) / 10.0);
 
     if (upipe_netmap_sink->needed_fakes < 0) // if we're too late, just wait till we drift back
         upipe_netmap_sink->needed_fakes = 0;
@@ -1203,12 +1239,11 @@ static void handle_tx_stamp(struct upipe *upipe, uint64_t t, uint16_t seq)
         upipe_netmap_sink->step = 0;
 
     upipe_dbg_va(upipe,
-            "%.2f ms, ideal %" PRId64 ""
-            " step %d, fakes %" PRIu64 " needed fakes %" PRIu64 "",
-            (float)(dur - x) / 27000., ideal, step,
-            upipe_netmap_sink->fakes, upipe_netmap_sink->needed_fakes);
-    upipe_netmap_sink->fakes = 0;
+            "%.2f ms, ideal %.0f, step %.0f, fakes %"PRIu64", needed fakes %"PRId64"",
+            err / 27000., ideal, step, upipe_netmap_sink->fakes,
+            upipe_netmap_sink->needed_fakes);
 
+    upipe_netmap_sink->fakes = 0;
     upipe_netmap_sink->pkts_in_frame = 0;
 }
 
