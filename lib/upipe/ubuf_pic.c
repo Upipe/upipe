@@ -93,7 +93,7 @@ int ubuf_pic_plane_clear(struct ubuf *ubuf, const char *chroma,
             memset(buf, fullrange ? 0 : 16, memset_width);
             buf += stride;
         }
-    } else if (MATCH("u8") || MATCH("v8")) {
+    } else if (MATCH("u8") || MATCH("v8") || MATCH("u8v8")) {
         LINELOOP(j) {
             memset(buf, 0x80, memset_width);
             buf += stride;
