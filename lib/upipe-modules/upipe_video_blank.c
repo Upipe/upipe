@@ -237,8 +237,9 @@ static void upipe_vblk_input(struct upipe *upipe,
             upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
             return;
         }
-        ubuf_pic_clear(upipe_vblk->ubuf, 0, 0, -1, -1,
-                ubase_check(uref_pic_flow_get_full_range(upipe_vblk->flow_def)));
+        if (!ubase_check(ubuf_pic_clear(upipe_vblk->ubuf, 0, 0, -1, -1,
+            ubase_check(uref_pic_flow_get_full_range(upipe_vblk->flow_def)))))
+            upipe_err(upipe, "fail to clear picture");
     }
 
     struct ubuf *ubuf = ubuf_dup(upipe_vblk->ubuf);
