@@ -209,6 +209,9 @@ static int upipe_avcdec_check(struct upipe *upipe, struct uref *flow_format)
 
 static void upipe_av_uref_pic_free(void *opaque, uint8_t *data);
 
+static void draw_horiz_band(AVCodecContext *avctx, const AVFrame *frame,
+        int offset[AV_NUM_DATA_POINTERS], int y, int type, int height);
+
 /* Documentation from libavcodec.h (get_buffer) :
  * The function will set AVFrame.data[], AVFrame.linesize[].
  * AVFrame.extended_data[] must also be set, but it should be the same as
@@ -293,6 +296,9 @@ static int upipe_avcdec_get_buffer_pic(struct AVCodecContext *context,
         upipe_throw_fatal(upipe, UBASE_ERR_INVALID);
         return -1;
     }
+
+    if (frame->interlaced_frame)
+        UBASE_FATAL(upipe, uref_attr_set_void(flow_def_attr, NULL, UDICT_TYPE_VOID, "sepfields"));
 
     UBASE_FATAL(upipe, uref_pic_flow_set_align(flow_def_attr, align))
     UBASE_FATAL(upipe, uref_pic_flow_set_hsize(flow_def_attr, context->width))
@@ -999,6 +1005,116 @@ alloc_error:
     return;
 }
 
+static int set_output_pic_properties(struct upipe *upipe, struct uref **uref_input,
+        AVCodecContext *context, const AVFrame *frame)
+{
+    struct upipe_avcdec *upipe_avcdec = upipe_avcdec_from_upipe(upipe);
+    struct uref *uref = *uref_input;
+    struct uref *flow_def_attr = uref_from_uchain(uref->uchain.next);
+
+    /* Resize the picture (was allocated too big). */
+    if (unlikely(!ubase_check(uref_pic_resize(uref, 0, 0, frame->width, frame->height)))) {
+        upipe_warn_va(upipe, "couldn't resize picture to %dx%d",
+                      frame->width, frame->height);
+        return UBASE_ERR_EXTERNAL;
+    }
+
+    /* Duplicate uref because it is freed in _release, because the ubuf
+     * is still in use by avcodec. */
+    uref = uref_dup(uref);
+    if (unlikely(uref == NULL)) {
+        return UBASE_ERR_ALLOC;
+    }
+
+    if (context->time_base.den)
+        UBASE_RETURN(uref_clock_set_duration(uref,
+                (uint64_t)(2 + frame->repeat_pict) * context->ticks_per_frame *
+                UCLOCK_FREQ * context->time_base.num /
+                (2 * context->time_base.den)))
+
+    if (frame->key_frame)
+        uref_pic_set_key(uref);
+
+#if 0
+    side_data = av_frame_get_side_data(frame, AV_FRAME_DATA_AFD);
+    if (side_data && side_data->size == 1)
+        uref_pic_set_afd(uref, side_data->data[0]);
+
+    side_data = av_frame_get_side_data(frame, AV_FRAME_DATA_A53_CC);
+    if (side_data)
+        uref_pic_set_cea_708(uref, side_data->data, side_data->size);
+#endif
+
+    /* various time-related attributes */
+    upipe_avcdec_set_time_attributes(upipe, uref);
+
+    //uref_h26x_delete_nal_offsets(uref);
+
+    /* Find out if flow def attributes have changed. */
+    if (!upipe_avcdec_check_flow_def_attr(upipe, flow_def_attr)) {
+        /* Make a copy as flow_def_attr is still used by _release. */
+        flow_def_attr = uref_dup(flow_def_attr);
+        if (unlikely(flow_def_attr == NULL)) {
+            uref_free(uref);
+            return UBASE_ERR_ALLOC;
+        }
+        struct uref *flow_def =
+            upipe_avcdec_store_flow_def_attr(upipe, flow_def_attr);
+        if (flow_def != NULL) {
+            uref_block_flow_clear_format(flow_def);
+            uref_flow_delete_headers(flow_def);
+            upipe_avcdec_store_flow_def(upipe, flow_def);
+        }
+    }
+
+    *uref_input = uref;
+    return UBASE_ERR_NONE;
+}
+
+static void draw_horiz_band(AVCodecContext *avctx, const AVFrame *frame,
+        int offset[AV_NUM_DATA_POINTERS], int y, int type, int height)
+{
+    /* TODO: handle errors. */
+
+    struct upipe *upipe = avctx->opaque;
+    struct uref *uref = frame->opaque;
+    if (!ubase_check(set_output_pic_properties(upipe, &uref, avctx, frame))) {
+        upipe_err(upipe, "set_output_pic_properties failed");
+        return;
+    }
+
+    if (!ubase_check(ubuf_pic_resize(uref->ubuf, 0, y, -1, height)))
+        return;
+    uref_pic_set_vposition(uref, y);
+    uint64_t duration;
+    if (ubase_check(uref_clock_get_duration(uref, &duration))) {
+        uref_clock_set_duration(uref, height * duration / frame->height);
+        uref_clock_add_date_sys(uref,  y * duration / frame->height);
+        uref_clock_add_date_prog(uref, y * duration / frame->height);
+        uref_clock_add_date_orig(uref, y * duration / frame->height);
+    }
+
+    if (type == 3) {
+        uref_pic_set_progressive(uref);
+        uref_pic_set_tf(uref);
+        uref_pic_set_bf(uref);
+    }
+    else if (type == 1) {
+        uref_pic_delete_progressive(uref);
+        uref_pic_set_tf(uref);
+        uref_attr_set_void(uref, NULL, UDICT_TYPE_VOID, "sepfields");
+    }
+    else if (type == 2) {
+        uref_pic_delete_progressive(uref);
+        uref_pic_set_bf(uref);
+        uref_attr_set_void(uref, NULL, UDICT_TYPE_VOID, "sepfields");
+    }
+    /* Other values are undocumented/invalid. */
+
+    struct upipe_avcdec *upipe_avcdec = upipe_avcdec_from_upipe(upipe);
+    upipe_avcdec_output(upipe, uref, NULL);
+}
+
 /** @internal @This outputs video frames.
  *
  * @param upipe description structure of the pipe
@@ -1252,7 +1368,7 @@ static bool upipe_avcdec_decode_avpkt(struct upipe *upipe, AVPacket *avpkt,
             }
 
             /* output frame if any has been decoded */
-            if (gotframe) {
+            if (gotframe && !upipe_avcdec->context->draw_horiz_band) {
                 upipe_avcdec_output_pic(upipe, upump_p);
             }
             break;
@@ -1457,6 +1573,7 @@ static int upipe_avcdec_set_flow_def(struct upipe *upipe, struct uref *flow_def)
             return UBASE_ERR_EXTERNAL;
         }
 
+        upipe_avcdec->context->draw_horiz_band = draw_horiz_band;
         upipe_avcdec->context->codec = codec;
         upipe_avcdec->context->opaque = upipe;
         if (extradata_alloc != NULL) {
