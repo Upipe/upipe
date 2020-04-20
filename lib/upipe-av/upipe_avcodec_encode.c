@@ -1150,6 +1150,8 @@ static int upipe_avcenc_set_flow_def(struct upipe *upipe, struct uref *flow_def)
         }
         context->time_base.num = fps.den;
         context->time_base.den = fps.num;
+        context->framerate.num = fps.num;
+        context->framerate.den = fps.den;
 
         struct urational sar;
         if (ubase_check(uref_pic_flow_get_sar(flow_def, &sar))) {
