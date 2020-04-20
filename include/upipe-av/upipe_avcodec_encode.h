@@ -42,6 +42,27 @@ extern "C" {
 
 UREF_ATTR_STRING(avcenc, codec_name, "avcenc.name", avcenc codec name)
 
+/** @This extends upipe_command with specific commands for avcenc. */
+enum upipe_avcenc_command {
+    UPIPE_AVCENC_SENTINEL = UPIPE_CONTROL_LOCAL,
+
+    /** set slice type enforcement mode (int) */
+    UPIPE_AVCENC_SET_SLICE_TYPE_ENFORCE
+};
+
+/** @This sets the slice type enforcement mode (true or false).
+ *
+ * @param upipe description structure of the pipe
+ * @param enforce true if the incoming slice types must be enforced
+ * @return an error code
+ */
+static inline int upipe_avcenc_set_slice_type_enforce(struct upipe *upipe,
+                                                      bool enforce)
+{
+    return upipe_control(upipe, UPIPE_AVCENC_SET_SLICE_TYPE_ENFORCE,
+                         UPIPE_AVCENC_SIGNATURE, enforce ? 1 : 0);
+}
+
 /** @This returns the management structure for avcodec encoders.
  *
  * @return pointer to manager

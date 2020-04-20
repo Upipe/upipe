@@ -57,6 +57,8 @@
 #include <upipe/upipe_helper_input.h>
 #include <upipe-av/upipe_avcodec_encode.h>
 #include <upipe/udict_dump.h>
+#include <upipe-framers/uref_h264.h>
+#include <upipe-framers/uref_mpgv.h>
 #include <upipe-framers/uref_mpga_flow.h>
 
 #include <stdlib.h>
@@ -72,6 +74,9 @@
 #include <libavutil/avutil.h>
 #include <libavutil/pixdesc.h>
 #include <libavutil/opt.h>
+#include <bitstream/mpeg/h264.h>
+#include <bitstream/mpeg/mp2v.h>
+
 #include <upipe-av/upipe_av_pixfmt.h>
 #include <upipe-av/upipe_av_samplefmt.h>
 #include "upipe_av_internal.h"
@@ -172,6 +177,9 @@ struct upipe_avcenc {
     uint64_t counter;
     /** chroma map */
     const char *chroma_map[UPIPE_AV_MAX_PLANES];
+
+    /** true if the existing slice types must be enforced */
+    bool slice_type_enforce;
 
     /** avcodec context */
     AVCodecContext *context;
@@ -655,6 +663,48 @@ static void upipe_avcenc_encode_video(struct upipe *upipe,
     /* set frame dimensions */
     frame->width = hsize;
     frame->height = vsize;
+
+    /* set picture type */
+    frame->pict_type = AV_PICTURE_TYPE_NONE;
+    if (upipe_avcenc->slice_type_enforce) {
+        uint8_t type;
+        if (ubase_check(uref_h264_get_type(uref, &type))) {
+            switch (type) {
+                case H264SLI_TYPE_P:
+                    frame->pict_type = AV_PICTURE_TYPE_P;
+                    break;
+                case H264SLI_TYPE_B:
+                    frame->pict_type = AV_PICTURE_TYPE_B;
+                    break;
+                case H264SLI_TYPE_I:
+                    frame->pict_type = AV_PICTURE_TYPE_I;
+                    break;
+                case H264SLI_TYPE_SP:
+                    frame->pict_type = AV_PICTURE_TYPE_SP;
+                    break;
+                case H264SLI_TYPE_SI:
+                    frame->pict_type = AV_PICTURE_TYPE_SI;
+                    break;
+                default:
+                    break;
+            }
+        } else if (ubase_check(uref_mpgv_get_type(uref, &type))) {
+            switch (type) {
+                case MP2VPIC_TYPE_P:
+                    frame->pict_type = AV_PICTURE_TYPE_P;
+                    break;
+                case MP2VPIC_TYPE_B:
+                    frame->pict_type = AV_PICTURE_TYPE_B;
+                    break;
+                case MP2VPIC_TYPE_I:
+                    frame->pict_type = AV_PICTURE_TYPE_I;
+                    break;
+                case MP2VPIC_TYPE_D:
+                default:
+                    break;
+            }
+        }
+    }
 
     /* set pts (needed for uref/avpkt mapping) */
     upipe_verbose_va(upipe, "input pts %"PRId64, upipe_avcenc->avcpts);
@@ -1416,6 +1466,22 @@ static int upipe_avcenc_set_option(struct upipe *upipe,
     return UBASE_ERR_NONE;
 }
 
+/** @This sets the slice type enforcement mode (true or false).
+ *
+ * @param upipe description structure of the pipe
+ * @param enforce true if the incoming slice types must be enforced
+ * @return an error code
+ */
+static int _upipe_avcenc_set_slice_type_enforce(struct upipe *upipe,
+                                                bool enforce)
+{
+    struct upipe_avcenc *upipe_avcenc = upipe_avcenc_from_upipe(upipe);
+    upipe_avcenc->slice_type_enforce = enforce;
+    upipe_dbg_va(upipe, "%sactivating slice type enforcement",
+                 enforce ? "" : "de");
+    return UBASE_ERR_NONE;
+}
+
 /** @internal @This processes control commands on a file source pipe, and
  * checks the status of the pipe afterwards.
  *
@@ -1461,6 +1527,11 @@ static int upipe_avcenc_control(struct upipe *upipe,
             const char *option = va_arg(args, const char *);
             const char *content = va_arg(args, const char *);
             return upipe_avcenc_set_option(upipe, option, content);
+        }
+        case UPIPE_AVCENC_SET_SLICE_TYPE_ENFORCE: {
+            UBASE_SIGNATURE_CHECK(args, UPIPE_AVCENC_SIGNATURE)
+            bool enforce = va_arg(args, int) != 0;
+            return _upipe_avcenc_set_slice_type_enforce(upipe, enforce);
         }
 
         default:
@@ -1565,6 +1636,7 @@ static struct upipe *upipe_avcenc_alloc(struct upipe_mgr *mgr,
     upipe_avcenc_init_flow_def_check(upipe);
     upipe_avcenc_store_flow_def_attr(upipe, flow_def);
     upipe_avcenc->flow_def_requested = NULL;
+    upipe_avcenc->slice_type_enforce = false;
 
     ulist_init(&upipe_avcenc->sound_urefs);
     upipe_avcenc->nb_samples = 0;

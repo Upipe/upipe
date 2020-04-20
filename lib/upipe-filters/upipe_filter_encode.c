@@ -305,6 +305,8 @@ static int upipe_fenc_set_flow_def(struct upipe *upipe, struct uref *flow_def)
                                           upipe_fenc->slice_type_enforce);
         upipe_x265_set_slice_type_enforce(upipe_fenc->last_inner,
                                           upipe_fenc->slice_type_enforce);
+        upipe_avcenc_set_slice_type_enforce(upipe_fenc->last_inner,
+                                            upipe_fenc->slice_type_enforce);
     }
 
     if (upipe_fenc->options != NULL && upipe_fenc->options->udict != NULL) {
@@ -526,6 +528,9 @@ static int upipe_fenc_set_slice_type_enforce(struct upipe *upipe,
         else if (signature == UPIPE_X265_SIGNATURE)
             UBASE_RETURN(upipe_x265_set_slice_type_enforce(upipe_fenc->last_inner,
                                                            enforce))
+        else if (signature == UPIPE_AVCENC_SIGNATURE)
+            UBASE_RETURN(upipe_avcenc_set_slice_type_enforce(
+                    upipe_fenc->last_inner, enforce))
     }
     return UBASE_ERR_NONE;
 }
@@ -624,6 +629,16 @@ static int upipe_fenc_control(struct upipe *upipe, int command, va_list args)
                         return upipe_fenc_set_slice_type_enforce(upipe,
                                                                  UPIPE_X265_SIGNATURE,
                                                                  enforce);
+                    }
+                }
+                break;
+            case UPIPE_AVCENC_SIGNATURE:
+                UBASE_SIGNATURE_CHECK(args, UPIPE_AVCENC_SIGNATURE);
+                switch (command) {
+                    case UPIPE_AVCENC_SET_SLICE_TYPE_ENFORCE: {
+                        bool enforce = va_arg(args, int);
+                        return upipe_fenc_set_slice_type_enforce(
+                            upipe, UPIPE_AVCENC_SIGNATURE, enforce);
                     }
                 }
                 break;
