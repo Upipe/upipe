@@ -30,6 +30,7 @@ pkginclude_HEADERS = \
 	ufifo.h \
 	ulifo.h \
 	ulist.h \
+	ulist_helper.h \
 	ulog.h \
 	umem.h \
 	umem_alloc.h \
