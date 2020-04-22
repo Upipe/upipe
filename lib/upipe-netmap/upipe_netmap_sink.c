@@ -38,6 +38,7 @@
 #include <upipe/upipe.h>
 #include <upipe/uref_pic.h>
 #include <upipe/uref_pic_flow.h>
+#include <upipe/uref_sound.h>
 #include <upipe/upipe_helper_upipe.h>
 #include <upipe/upipe_helper_urefcount.h>
 #include <upipe/upipe_helper_upump_mgr.h>
@@ -81,6 +82,14 @@
 
 #define UINT64_MSB(value)      ((value) & UINT64_C(0x8000000000000000))
 #define UINT64_LOW_MASK(value) ((value) & UINT64_C(0x7fffffffffffffff))
+
+#define AES67_MAX_PATHS 2
+#define AES67_MAX_FLOWS 8
+#define AES67_MAX_SAMPLES_PER_PACKET 48
+
+#ifndef MTU
+#define MTU 1500
+#endif
 
 static const char *audio_paths[2] = { "239.160.1.11:1234", "239.161.1.11:1234" };
 static struct upipe_mgr upipe_netmap_sink_audio_mgr;
@@ -142,6 +151,28 @@ struct upipe_netmap_sink_audio {
     struct upipe upipe;
     /** buffered urefs */
     struct uchain urefs;
+    uint64_t n;
+
+    /* Current uref. */
+    struct uref *uref;
+    /* Mapped data. */
+    const int32_t *data;
+    /* Size of mapped uref (samples). */
+    size_t uref_samples;
+    /* Number of channels in the uref. */
+    uint8_t channels;
+
+    /* Cached audio data (packed) from tails of input urefs. */
+    uint8_t audio_data[AES67_MAX_SAMPLES_PER_PACKET * 16 * 3];
+    /* Number of samples in buffer. */
+    int cached_samples;
+
+    /** maximum samples to put in each packet */
+    int output_samples;
+    /* Number of channels in each flow. */
+    int output_channels;
+    /* Maximum transmission unit. */
+    int mtu;
 };
 
 /** @internal @This is the private context of a netmap sink pipe. */
@@ -289,6 +320,10 @@ UPIPE_HELPER_UPUMP(upipe_netmap_sink, upump, upump_mgr)
 
 UPIPE_HELPER_UPIPE(upipe_netmap_sink_audio, upipe, UPIPE_NETMAP_SINK_AUDIO_SIGNATURE)
 UBASE_FROM_TO(upipe_netmap_sink, upipe_netmap_sink_audio, audio_subpipe, audio_subpipe)
+
+static int get_audio(struct upipe_netmap_sink_audio *audio_subpipe);
+static void pack_audio(struct upipe_netmap_sink_audio *audio_subpipe);
+static void handle_audio_tail(struct upipe_netmap_sink_audio *audio_subpipe);
 
 /* get MAC and/or IP address of specified interface */
 static bool source_addr(const char *intf, uint8_t *mac, in_addr_t *ip)
@@ -555,10 +590,17 @@ static struct upipe *_upipe_netmap_sink_alloc(struct upipe_mgr *mgr,
     /*
      * Audio subpipe.
      */
-    upipe_init(upipe_netmap_sink_audio_to_upipe(upipe_netmap_sink_to_audio_subpipe(upipe_netmap_sink)),
+    memset(&upipe_netmap_sink->audio_subpipe, 0, sizeof upipe_netmap_sink->audio_subpipe);
+    struct upipe_netmap_sink_audio *audio_subpipe = &upipe_netmap_sink->audio_subpipe;
+
+    upipe_init(upipe_netmap_sink_audio_to_upipe(audio_subpipe),
                 &upipe_netmap_sink_audio_mgr,
                 uprobe_pfx_alloc(uprobe_use(uprobe), UPROBE_LOG_VERBOSE, "audio"));
-    ulist_init(&upipe_netmap_sink->audio_subpipe.urefs);
+    ulist_init(&audio_subpipe->urefs);
+
+    audio_subpipe->output_samples = 6; /* TODO: other default to catch user not setting this? */
+    audio_subpipe->output_channels = 16;
+    audio_subpipe->mtu = MTU;
 
     upipe_throw_ready(upipe);
     return upipe;
@@ -1532,6 +1574,19 @@ static void upipe_netmap_sink_worker(struct upump *upump)
             const uint64_t audio_packet_size = ETHERNET_HEADER_LEN
                 + IP_HEADER_MINSIZE + UDP_HEADER_SIZE + RTP_HEADER_SIZE
                 + 16/*channels*/ * 6/*samples*/ * 3/*bytes per sample*/;
+            struct upipe_netmap_sink_audio *audio_subpipe = &upipe_netmap_sink->audio_subpipe;
+            struct upipe *subpipe = upipe_netmap_sink_audio_to_upipe(audio_subpipe);
+
+            /* Get uref and map data. */
+            bool have_audio = ubase_check(get_audio(audio_subpipe));
+
+            if (have_audio) {
+                pack_audio(audio_subpipe);
+            } else {
+                /* TODO: print exact error? */
+                upipe_warn(subpipe, "No audio available, outputting fake packet");
+                memset(audio_subpipe->audio_data, 0, sizeof audio_subpipe->audio_data);
+            }
 
             bool stamped = false;
             for (size_t i = 0; i < 2; i++) {
@@ -1556,22 +1611,18 @@ static void upipe_netmap_sink_worker(struct upump *upump)
                 dst += sizeof intf->audio_header;
                 memcpy(dst, upipe_netmap_sink->audio_rtp_header, RTP_HEADER_SIZE);
                 dst += RTP_HEADER_SIZE;
-
-                /* Make sine wave. */
-                uint32_t timestamp = rtp_get_timestamp(upipe_netmap_sink->audio_rtp_header);
-                for (int s = 0; s < 6; s++) {
-                    int32_t sample = sin(2 * M_PI * (timestamp + s) * 1000 / 48000) * INT32_MAX/4;
-                    for (int c = 0; c < 16; c++) {
-                        dst[16*3*s + 3*c+0] = (sample >> 24) & 0xff;
-                        dst[16*3*s + 3*c+1] = (sample >> 16) & 0xff;
-                        dst[16*3*s + 3*c+2] = (sample >>  8) & 0xff;
-                    }
-                }
+                /* Copy payload. */
+                memcpy(dst, audio_subpipe->audio_data, audio_subpipe->output_samples * 16 * 3);
 
                 txring[i]->slot[cur[i]].len = audio_packet_size;
                 txring[i]->slot[cur[i]].ptr = 0;
                 cur[i] = nm_ring_next(txring[i], cur[i]);
             }
+
+            /* If there is not enough audio samples left for a whole
+             * frame/packet then cache the rest for use next time. */
+            if (have_audio && audio_subpipe->uref_samples < audio_subpipe->output_samples)
+                handle_audio_tail(audio_subpipe);
 
             /* Read current sequence number and timestamp. */
             uint16_t seqnum = rtp_get_seqnum(upipe_netmap_sink->audio_rtp_header);
@@ -2561,8 +2612,16 @@ static int upipe_netmap_sink_audio_set_flow_def(struct upipe *upipe,
 static void upipe_netmap_sink_audio_input(struct upipe *upipe,
         struct uref *uref, struct upump **upump_p)
 {
-    upipe_dbg_va(upipe, "%s", __func__);
-    uref_free(uref);
+    struct upipe_netmap_sink_audio *audio_subpipe = upipe_netmap_sink_audio_from_upipe(upipe);
+    uint64_t systime = 0;
+
+    /* Check and warn for uref without timestamp. */
+    if (unlikely(!ubase_check(uref_clock_get_cr_sys(uref, &systime))))
+        upipe_warn(upipe, "received non-dated buffer");
+
+    ulist_add(&audio_subpipe->urefs, uref_to_uchain(uref));
+    audio_subpipe->n += 1;
+    upipe_dbg_va(upipe, "%s: %"PRIu64, __func__, audio_subpipe->n);
 }
 
 /** @internal @This processes control commands on a subpipe.
@@ -2595,3 +2654,93 @@ static struct upipe_mgr upipe_netmap_sink_audio_mgr = {
     .upipe_control = upipe_netmap_sink_audio_control,
     .upipe_input = upipe_netmap_sink_audio_input,
 };
+
+static int get_audio(struct upipe_netmap_sink_audio *audio_subpipe)
+{
+    /* If audio data is already mapped then return early. */
+    if (audio_subpipe->uref)
+        return UBASE_ERR_NONE;
+
+    /* Get uref from buffer and return an error if none available. */
+    //struct upipe *upipe = upipe_netmap_sink_audio_to_upipe(audio_subpipe);
+    struct uchain *uchain = ulist_pop(&audio_subpipe->urefs);
+    UBASE_ALLOC_RETURN(uchain);
+    audio_subpipe->n -= 1;
+    struct uref *uref = uref_from_uchain(uchain);
+
+    /* Check size. */
+    size_t samples = 0;
+    uint8_t channels = 0;
+    UBASE_RETURN(uref_sound_size(uref, &samples, &channels));
+    channels /= 4;
+
+    /* Map uref. */
+    const int32_t *src = NULL;
+    UBASE_RETURN(uref_sound_read_int32_t(uref, 0, -1, &src, 1));
+
+    /* Add any cached samples. */
+    samples += audio_subpipe->cached_samples;
+    /* Rewind source pointer for any cached samples. */
+    src -= audio_subpipe->cached_samples * channels;
+
+    audio_subpipe->uref = uref;
+    audio_subpipe->data = src;
+    audio_subpipe->channels = channels;
+    audio_subpipe->uref_samples = samples;
+
+    return UBASE_ERR_NONE;
+}
+
+static void pack_audio(struct upipe_netmap_sink_audio *audio_subpipe)
+{
+    const int32_t *src = audio_subpipe->data;
+    uint8_t *dst = audio_subpipe->audio_data;
+
+    if (audio_subpipe->cached_samples) {
+        for (int j = audio_subpipe->cached_samples * audio_subpipe->channels;
+                j < audio_subpipe->output_samples * audio_subpipe->channels;
+                j++) {
+            int32_t sample = src[j];
+            dst[3*j+0] = (sample >> 24) & 0xff;
+            dst[3*j+1] = (sample >> 16) & 0xff;
+            dst[3*j+2] = (sample >>  8) & 0xff;
+        }
+        audio_subpipe->cached_samples = 0;
+    }
+
+    else {
+        for (int j = 0;
+                j < audio_subpipe->output_samples * audio_subpipe->channels;
+                j++) {
+            int32_t sample = src[j];
+            dst[3*j+0] = (sample >> 24) & 0xff;
+            dst[3*j+1] = (sample >> 16) & 0xff;
+            dst[3*j+2] = (sample >>  8) & 0xff;
+        }
+    }
+
+    audio_subpipe->data += audio_subpipe->output_samples * audio_subpipe->channels;
+    audio_subpipe->uref_samples -= audio_subpipe->output_samples;
+}
+
+static void handle_audio_tail(struct upipe_netmap_sink_audio *audio_subpipe)
+{
+    const int32_t *src = audio_subpipe->data;
+    uint8_t *dst = audio_subpipe->audio_data;
+
+    /* Pack tail of uref into buffer. */
+    for (int j = 0;
+            j < audio_subpipe->uref_samples * audio_subpipe->channels;
+            j++) {
+        int32_t sample = src[j];
+        dst[3*j+0] = (sample >> 24) & 0xff;
+        dst[3*j+1] = (sample >> 16) & 0xff;
+        dst[3*j+2] = (sample >>  8) & 0xff;
+    }
+    audio_subpipe->cached_samples = audio_subpipe->uref_samples;
+
+    uref_sound_unmap(audio_subpipe->uref, 0, -1, 1);
+    uref_free(audio_subpipe->uref);
+    audio_subpipe->uref = NULL;
+    audio_subpipe->uref_samples = 0;
+}
