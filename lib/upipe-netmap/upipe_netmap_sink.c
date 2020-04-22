@@ -44,6 +44,7 @@
 #include <upipe/upipe_helper_upump.h>
 #include <upipe/upipe_helper_uclock.h>
 #include <upipe-netmap/upipe_netmap_sink.h>
+#include <upipe/uprobe_prefix.h>
 
 #include <net/if.h>
 #include <arpa/inet.h>
@@ -82,6 +83,7 @@
 #define UINT64_LOW_MASK(value) ((value) & UINT64_C(0x7fffffffffffffff))
 
 static const char *audio_paths[2] = { "239.160.1.11:1234", "239.161.1.11:1234" };
+static struct upipe_mgr upipe_netmap_sink_audio_mgr;
 
 /** @hidden */
 static bool upipe_netmap_sink_output(struct upipe *upipe, struct uref *uref,
@@ -133,6 +135,13 @@ struct pid_controller {
     double last_error;
     double error_sum;
     double last_output;
+};
+
+struct upipe_netmap_sink_audio {
+    /** public upipe structure */
+    struct upipe upipe;
+    /** buffered urefs */
+    struct uchain urefs;
 };
 
 /** @internal @This is the private context of a netmap sink pipe. */
@@ -266,6 +275,8 @@ struct upipe_netmap_sink {
 
     struct upipe_netmap_intf intf[2];
 
+    struct upipe_netmap_sink_audio audio_subpipe;
+
     /** public upipe structure */
     struct upipe upipe;
 };
@@ -275,6 +286,9 @@ UPIPE_HELPER_UREFCOUNT(upipe_netmap_sink, urefcount, upipe_netmap_sink_free)
 UPIPE_HELPER_UCLOCK(upipe_netmap_sink, uclock, uclock_request, NULL, upipe_throw_provide_request, NULL)
 UPIPE_HELPER_UPUMP_MGR(upipe_netmap_sink, upump_mgr)
 UPIPE_HELPER_UPUMP(upipe_netmap_sink, upump, upump_mgr)
+
+UPIPE_HELPER_UPIPE(upipe_netmap_sink_audio, upipe, UPIPE_NETMAP_SINK_AUDIO_SIGNATURE)
+UBASE_FROM_TO(upipe_netmap_sink, upipe_netmap_sink_audio, audio_subpipe, audio_subpipe)
 
 /* get MAC and/or IP address of specified interface */
 static bool source_addr(const char *intf, uint8_t *mac, in_addr_t *ip)
@@ -537,6 +551,14 @@ static struct upipe *_upipe_netmap_sink_alloc(struct upipe_mgr *mgr,
     }
 #endif
 #endif
+
+    /*
+     * Audio subpipe.
+     */
+    upipe_init(upipe_netmap_sink_audio_to_upipe(upipe_netmap_sink_to_audio_subpipe(upipe_netmap_sink)),
+                &upipe_netmap_sink_audio_mgr,
+                uprobe_pfx_alloc(uprobe_use(uprobe), UPROBE_LOG_VERBOSE, "audio"));
+    ulist_init(&upipe_netmap_sink->audio_subpipe.urefs);
 
     upipe_throw_ready(upipe);
     return upipe;
@@ -2422,6 +2444,17 @@ static int _upipe_netmap_sink_control(struct upipe *upipe,
             upipe_netmap_sink_set_upump(upipe, NULL);
             return upipe_netmap_sink_set_uri(upipe, uri);
         }
+
+        case UPIPE_NETMAP_SINK_GET_AUDIO_SUB: {
+            UBASE_SIGNATURE_CHECK(args, UPIPE_NETMAP_SINK_SIGNATURE)
+            upipe_dbg(upipe, "UPIPE_NETMAP_SINK_GET_AUDIO_SUB");
+            struct upipe **upipe_p = va_arg(args, struct upipe **);
+            *upipe_p =  upipe_netmap_sink_audio_to_upipe(
+                    upipe_netmap_sink_to_audio_subpipe(
+                        upipe_netmap_sink_from_upipe(upipe)));
+            return UBASE_ERR_NONE;
+        }
+
         default:
             return UBASE_ERR_UNHANDLED;
     }
@@ -2491,3 +2524,74 @@ struct upipe_mgr *upipe_netmap_sink_mgr_alloc(void)
 {
     return &upipe_netmap_sink_mgr;
 }
+
+/*
+ * Audio subpipe.
+ */
+
+/** @internal @This sets the input flow definition.
+ *
+ * @param upipe description structure of the pipe
+ * @param flow_def flow definition packet
+ * @return an error code
+ */
+static int upipe_netmap_sink_audio_set_flow_def(struct upipe *upipe,
+        struct uref *flow_def)
+{
+    upipe_dbg_va(upipe, "%s", __func__);
+
+    if (flow_def == NULL)
+        return UBASE_ERR_INVALID;
+    UBASE_RETURN(uref_flow_match_def(flow_def, "sound.s32."))
+
+    flow_def = uref_dup(flow_def);
+    UBASE_ALLOC_RETURN(flow_def)
+    /* TODO: handle latency */
+    //upipe_input(upipe, flow_def, NULL);
+
+    return UBASE_ERR_NONE;
+}
+
+/** @internal @This handles input data.
+ *
+ * @param upipe description structure of the pipe
+ * @param uref uref structure
+ * @param upump_p reference to upump structure
+ */
+static void upipe_netmap_sink_audio_input(struct upipe *upipe,
+        struct uref *uref, struct upump **upump_p)
+{
+    upipe_dbg_va(upipe, "%s", __func__);
+    uref_free(uref);
+}
+
+/** @internal @This processes control commands on a subpipe.
+ *
+ * @param upipe description structure of the pipe
+ * @param command type of command to process
+ * @param args arguments of the command
+ * @return an error code
+ */
+static int upipe_netmap_sink_audio_control(struct upipe *upipe,
+                                         int command, va_list args)
+{
+    upipe_dbg_va(upipe, "%s", __func__);
+    UBASE_HANDLED_RETURN(upipe_control_provide_request(upipe, command, args));
+
+    switch (command) {
+    case UPIPE_SET_FLOW_DEF: {
+        struct uref *flow_def = va_arg(args, struct uref *);
+        return upipe_netmap_sink_audio_set_flow_def(upipe, flow_def);
+    }
+
+    default:
+        return UBASE_ERR_UNHANDLED;
+    }
+}
+
+static struct upipe_mgr upipe_netmap_sink_audio_mgr = {
+    .signature = UPIPE_NETMAP_SINK_AUDIO_SIGNATURE,
+
+    .upipe_control = upipe_netmap_sink_audio_control,
+    .upipe_input = upipe_netmap_sink_audio_input,
+};
