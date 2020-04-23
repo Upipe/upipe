@@ -715,45 +715,6 @@ static void upipe_avcenc_encode_video(struct upipe *upipe,
         return;
     }
 
-    /* set aspect ratio if it was changed in the input */
-    struct urational sar = {1, 1};
-    if (ubase_check(uref_pic_flow_get_sar(upipe_avcenc->flow_def_input, &sar))) {
-        context->sample_aspect_ratio.num = sar.num;
-        context->sample_aspect_ratio.den = sar.den;
-    }
-
-    /* set color options if it was changed in the input */
-    const char *content;
-    int ret;
-    content = ubase_check(uref_pic_flow_get_full_range(
-                    upipe_avcenc->flow_def_input)) ? "jpeg" : "mpeg";
-    if ((ret = av_opt_set(upipe_avcenc->context, "color_range", content,
-                          AV_OPT_SEARCH_CHILDREN)) < 0)
-        upipe_err_va(upipe, "can't set option %s:%s (%d)",
-                     "color_range", content, ret);
-    if (ubase_check(uref_pic_flow_get_colour_primaries(
-                    upipe_avcenc->flow_def_input, &content)) &&
-        (ret = av_opt_set(upipe_avcenc->context, "color_primaries", content,
-                          AV_OPT_SEARCH_CHILDREN)) < 0)
-        upipe_err_va(upipe, "can't set option %s:%s (%d)",
-                     "color_primaries", content, ret);
-    if (ubase_check(uref_pic_flow_get_transfer_characteristics(
-                    upipe_avcenc->flow_def_input, &content)) &&
-        (ret = av_opt_set(upipe_avcenc->context, "color_trc",
-                          upipe_avcenc_convert_color(upipe_avcenc_color_trc,
-                                                     content),
-                          AV_OPT_SEARCH_CHILDREN)) < 0)
-        upipe_err_va(upipe, "can't set option %s:%s (%d)",
-                     "color_trc", content, ret);
-    if (ubase_check(uref_pic_flow_get_matrix_coefficients(
-                    upipe_avcenc->flow_def_input, &content)) &&
-        (ret = av_opt_set(upipe_avcenc->context, "colorspace",
-                          upipe_avcenc_convert_color(upipe_avcenc_color_space,
-                                                     content),
-                          AV_OPT_SEARCH_CHILDREN)) < 0)
-        upipe_err_va(upipe, "can't set option %s:%s (%d)",
-                     "colorspace", content, ret);
-
     /* store uref in mapping list */
     ulist_add(&upipe_avcenc->urefs_in_use, uref_to_uchain(uref));
     upipe_avcenc_encode_frame(upipe, frame, upump_p);
@@ -1124,7 +1085,15 @@ static int upipe_avcenc_set_flow_def(struct upipe *upipe, struct uref *flow_def)
         if (unlikely(!ubase_check(uref_pic_flow_copy_format(flow_def_check, flow_def)) ||
                      !ubase_check(uref_pic_flow_set_hsize(flow_def_check, hsize)) ||
                      !ubase_check(uref_pic_flow_set_vsize(flow_def_check, vsize)) ||
-                     !ubase_check(uref_pic_flow_set_fps(flow_def_check, fps)))) {
+                     !ubase_check(uref_pic_flow_set_fps(flow_def_check, fps)) ||
+                     !ubase_check(uref_pic_flow_copy_full_range(
+                             flow_def_check, flow_def)) ||
+                     !ubase_check(uref_pic_flow_copy_colour_primaries(
+                             flow_def_check, flow_def)) ||
+                     !ubase_check(uref_pic_flow_copy_transfer_characteristics(
+                             flow_def_check, flow_def)) ||
+                     !ubase_check(uref_pic_flow_copy_matrix_coefficients(
+                             flow_def_check, flow_def)))) {
             uref_free(flow_def_check);
             upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
             return UBASE_ERR_ALLOC;
@@ -1199,6 +1168,37 @@ static int upipe_avcenc_set_flow_def(struct upipe *upipe, struct uref *flow_def)
             context->sample_aspect_ratio.num = sar.num;
             context->sample_aspect_ratio.den = sar.den;
         }
+
+        const char *content;
+        int ret;
+        content = ubase_check(uref_pic_flow_get_full_range(
+                flow_def)) ? "jpeg" : "mpeg";
+        if ((ret = av_opt_set(context, "color_range", content,
+                              AV_OPT_SEARCH_CHILDREN)) < 0)
+            upipe_err_va(upipe, "can't set option %s:%s (%d)",
+                         "color_range", content, ret);
+        if (ubase_check(uref_pic_flow_get_colour_primaries(
+                    flow_def, &content)) &&
+            (ret = av_opt_set(context, "color_primaries", content,
+                              AV_OPT_SEARCH_CHILDREN)) < 0)
+            upipe_err_va(upipe, "can't set option %s:%s (%d)",
+                         "color_primaries", content, ret);
+        if (ubase_check(uref_pic_flow_get_transfer_characteristics(
+                    flow_def, &content)) &&
+            (ret = av_opt_set(context, "color_trc",
+                              upipe_avcenc_convert_color(
+                                  upipe_avcenc_color_trc, content),
+                              AV_OPT_SEARCH_CHILDREN)) < 0)
+            upipe_err_va(upipe, "can't set option %s:%s (%d)",
+                         "color_trc", content, ret);
+        if (ubase_check(uref_pic_flow_get_matrix_coefficients(
+                    flow_def, &content)) &&
+            (ret = av_opt_set(context, "colorspace",
+                              upipe_avcenc_convert_color(
+                                  upipe_avcenc_color_space, content),
+                              AV_OPT_SEARCH_CHILDREN)) < 0)
+            upipe_err_va(upipe, "can't set option %s:%s (%d)",
+                         "colorspace", content, ret);
 
         uint64_t hsize = 0, vsize = 0;
         uref_pic_flow_get_hsize(flow_def, &hsize);
