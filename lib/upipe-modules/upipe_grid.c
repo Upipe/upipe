@@ -281,6 +281,98 @@ static int upipe_grid_in_catch(struct uprobe *uprobe,
     return uprobe_throw_next(uprobe, upipe, event, args);
 }
 
+/** @internal @This sets the input flow def for real.
+ * @This applies a flow def pushed by the set flow def control command.
+ * @see upipe_grid_in_set_flow_def.
+ *
+ * @param upipe description structure of the pipe
+ * @param flow_def flow format definition
+ */
+static void upipe_grid_in_set_flow_def_real(struct upipe *upipe,
+                                            struct uref *flow_def)
+{
+    upipe_grid_in_store_flow_def_input(upipe, flow_def);
+    upipe_throw_new_flow_def(upipe, flow_def);
+}
+
+/** @internal @This removes all past urefs from an input pipe.
+ *
+ * @param upipe description structure of the input pipe
+ * @param next_pts new ptr reference
+ */
+static void upipe_grid_in_update_pts(struct upipe *upipe, uint64_t next_pts)
+{
+    struct upipe_grid_in *upipe_grid_in = upipe_grid_in_from_upipe(upipe);
+    struct upipe_grid *upipe_grid = upipe_grid_from_in_mgr(upipe->mgr);
+    struct uref *flow_def = upipe_grid_in->flow_def;
+    uint64_t latency = 0;
+
+    upipe_verbose_va(upipe, "update PTS %"PRIu64, next_pts);
+
+    if (upipe_grid_in->last_update &&
+        upipe_grid_in->next_update &&
+        upipe_grid_in->last_update + upipe_grid_in->next_update >= next_pts)
+        return;
+
+    /* get current input latency */
+    if (flow_def)
+        uref_clock_get_latency(flow_def, &latency);
+
+    /* iterate through the input buffers */
+    struct uchain *uchain, *uchain_tmp;
+    ulist_delete_foreach(&upipe_grid_in->urefs, uchain, uchain_tmp) {
+        struct uref *uref = uref_from_uchain(uchain);
+
+        /* if this is a new flow def, apply it and continue */
+        if (unlikely(ubase_check(uref_flow_get_def(uref, NULL)))) {
+            ulist_delete(uchain);
+            flow_def = uref;
+            /* update current input latency */
+            latency = 0;
+            uref_clock_get_latency(flow_def, &latency);
+            upipe_grid_in_set_flow_def_real(upipe, flow_def);
+            continue;
+        }
+
+        if (unlikely(!flow_def)) {
+            /* no input flow definition set, drop */
+            upipe_warn(upipe, "no input flow def set");
+            ulist_delete(uchain);
+            uref_free(uref);
+            continue;
+        }
+
+        /* if late buffer, free it and continue */
+        uint64_t pts;
+        /* checked in upipe_grid_in_input */
+        ubase_assert(uref_clock_get_pts_sys(uref, &pts));
+
+        /* add latency and tolerance */
+        uint64_t rebase_pts = pts + latency + upipe_grid->tolerance;
+
+        if (rebase_pts < next_pts) {
+            /* keep longuer last input */
+            if (!ulist_is_last(&upipe_grid_in->urefs, uchain) ||
+                rebase_pts + upipe_grid->max_retention < next_pts) {
+                upipe_verbose_va(upipe, "drop uref pts %"PRIu64, pts);
+                ulist_delete(uchain);
+                uref_free(uref);
+                continue;
+            }
+            upipe_warn(upipe, "keeping last input");
+        }
+
+        upipe_grid_in->next_update = 0;
+        if (rebase_pts > next_pts)
+            upipe_grid_in->next_update = rebase_pts - next_pts;
+
+        /* remaining buffers are up to date,.. */
+        break;
+    }
+
+    upipe_grid_in->last_update = next_pts;
+}
+
 /** @internal @This handles input buffer from input pipe.
  *
  * @param upipe input pipe description
@@ -322,15 +414,6 @@ static void upipe_grid_in_input(struct upipe *upipe,
         return;
     }
 
-    uint64_t rebase_pts = pts + upipe_grid_in->latency;
-    if (rebase_pts + upipe_grid->tolerance < upipe_grid_in->last_update) {
-        upipe_warn_va(upipe, "PTS is too far in the past %"PRIu64"ms",
-                     (upipe_grid_in->last_update - rebase_pts) /
-                     (UCLOCK_FREQ / 1000));
-        uref_free(uref);
-        return;
-    }
-
     upipe_grid_in->last_pts = pts;
     ulist_add(&upipe_grid_in->urefs, uref_to_uchain(uref));
 
@@ -341,60 +424,7 @@ static void upipe_grid_in_input(struct upipe *upipe,
         return;
     }
 
-    struct uref *last_flow_def = NULL;
-    struct uchain *uchain;
-    uint64_t latency = 0;
-    if (upipe_grid_in->flow_def)
-        uref_clock_get_latency(upipe_grid_in->flow_def, &latency);
-    while ((uchain = ulist_pop(&upipe_grid_in->urefs))) {
-        struct uref *uref = uref_from_uchain(uchain);
-
-        if (unlikely(ubase_check(uref_flow_get_def(uref, NULL)))) {
-            uref_free(last_flow_def);
-            last_flow_def = uref;
-            latency = 0;
-            uref_clock_get_latency(uref, &latency);
-            continue;
-        }
-
-        ubase_assert(uref_clock_get_pts_sys(uref, &pts));
-        uint64_t pts_max = pts + latency + upipe_grid->tolerance;
-        if (pts_max >= now) {
-            ulist_unshift(&upipe_grid_in->urefs, uchain);
-            break;
-        }
-
-        if (ulist_empty(&upipe_grid_in->urefs) &&
-            pts_max + upipe_grid->max_retention >= now) {
-            ulist_unshift(&upipe_grid_in->urefs, uchain);
-            break;
-        }
-
-        upipe_verbose_va(upipe, "drop late frame %"PRIu64"ms, "
-                         "latency %"PRIu64"ms "
-                         "retention %"PRIu64"ms",
-                         (now - pts) / (UCLOCK_FREQ / 1000),
-                         latency / (UCLOCK_FREQ / 1000),
-                         upipe_grid->max_retention / (UCLOCK_FREQ / 1000));
-        uref_free(uref);
-    }
-
-    if (last_flow_def)
-        ulist_unshift(&upipe_grid_in->urefs, uref_to_uchain(last_flow_def));
-}
-
-/** @internal @This sets the input flow def for real.
- * @This applies a flow def pushed by the set flow def control command.
- * @see upipe_grid_in_set_flow_def.
- *
- * @param upipe description structure of the pipe
- * @param flow_def flow format definition
- */
-static void upipe_grid_in_set_flow_def_real(struct upipe *upipe,
-                                            struct uref *flow_def)
-{
-    upipe_grid_in_store_flow_def_input(upipe, flow_def);
-    upipe_throw_new_flow_def(upipe, flow_def);
+    upipe_grid_in_update_pts(upipe, now);
 }
 
 /** @internal @This sets a new flow def to a grid input pipe.
@@ -432,80 +462,6 @@ static int upipe_grid_in_get_flow_def(struct upipe *upipe,
     if (flow_def_p)
         *flow_def_p = upipe_grid_in->flow_def;
     return UBASE_ERR_NONE;
-}
-
-/** @internal @This removes all past urefs from an input pipe.
- *
- * @param upipe description structure of the input pipe
- * @param next_pts new ptr reference
- */
-static void upipe_grid_in_update_pts(struct upipe *upipe, uint64_t next_pts)
-{
-    struct upipe_grid_in *upipe_grid_in = upipe_grid_in_from_upipe(upipe);
-    struct upipe_grid *upipe_grid = upipe_grid_from_in_mgr(upipe->mgr);
-    struct uref *flow_def = upipe_grid_in->flow_def;
-    uint64_t latency = 0;
-
-    upipe_verbose_va(upipe, "update PTS %"PRIu64, next_pts);
-
-    if (upipe_grid_in->last_update &&
-        upipe_grid_in->next_update &&
-        upipe_grid_in->last_update + upipe_grid_in->next_update >= next_pts)
-        return;
-
-    /* get current input latency */
-    if (flow_def)
-        uref_clock_get_latency(flow_def, &latency);
-
-    /* iterate through the input buffers */
-    struct uchain *uchain, *uchain_tmp;
-    ulist_delete_foreach(&upipe_grid_in->urefs, uchain, uchain_tmp) {
-        struct uref *uref = uref_from_uchain(uchain);
-
-        /* if this is a new flow def, apply it and continue */
-        if (unlikely(ubase_check(uref_flow_get_def(uref, NULL)))) {
-            ulist_delete(uchain);
-            upipe_grid_in_set_flow_def_real(upipe, uref);
-            /* update current input latency */
-            flow_def = upipe_grid_in->flow_def;
-            latency = 0;
-            uref_clock_get_latency(flow_def, &latency);
-            continue;
-        }
-
-        if (unlikely(!flow_def)) {
-            /* no input flow definition set, drop */
-            upipe_warn(upipe, "no input flow def set");
-            ulist_delete(uchain);
-            uref_free(uref);
-            continue;
-        }
-
-        /* if late buffer, free it and continue */
-        uint64_t pts;
-        /* checked in upipe_grid_in_input */
-        ubase_assert(uref_clock_get_pts_sys(uref, &pts));
-
-        uint64_t retention = ulist_is_last(&upipe_grid_in->urefs, uchain) ?
-            upipe_grid->max_retention : 0;
-
-        if (pts + latency + upipe_grid->tolerance + retention < next_pts) {
-            upipe_verbose_va(upipe, "drop uref pts %"PRIu64, pts);
-            ulist_delete(uchain);
-            uref_free(uref);
-            continue;
-        }
-
-        upipe_grid_in->next_update = 0;
-        if (pts + latency + upipe_grid->tolerance > next_pts)
-            upipe_grid_in->next_update =
-                pts + latency + upipe_grid->tolerance - next_pts;
-
-        /* remaining buffers are up to date,.. */
-        break;
-    }
-
-    upipe_grid_in->last_update = next_pts;
 }
 
 /** @internal @This handles grid input controls.
@@ -876,12 +832,12 @@ static void upipe_grid_out_input(struct upipe *upipe,
     upipe_grid_out_throw_update_pts(upipe, pts);
 
     /* extract from current input */
-    struct upipe_grid_in *upipe_grid_in =
-        upipe_grid_in_from_upipe(upipe_grid_out->input);
     int ret = upipe_grid_out_extract_input(upipe, uref);
     if (unlikely(!ubase_check(ret)))
         goto output;
 
+    struct upipe_grid_in *upipe_grid_in =
+        upipe_grid_in_from_upipe(upipe_grid_out->input);
     sub_attached = true;
 
 output:
