@@ -163,6 +163,12 @@ struct upipe_grid_out {
     uint64_t tolerance;
     /** last input pts */
     uint64_t last_input_pts;
+    /** warn no input */
+    bool warn_no_input;
+    /** warn no input flow def */
+    bool warn_no_input_flow_def;
+    /** warn no input buffer */
+    bool warn_no_input_buffer;
 };
 
 static void upipe_grid_out_handle_input_changed(struct upipe *upipe,
@@ -577,6 +583,9 @@ static struct upipe *upipe_grid_out_alloc(struct upipe_mgr *mgr,
     upipe_grid_out->input = NULL;
     upipe_grid_out->tolerance = DEFAULT_TOLERANCE;
     upipe_grid_out->last_input_pts = UINT64_MAX;
+    upipe_grid_out->warn_no_input = true;
+    upipe_grid_out->warn_no_input_flow_def = true;
+    upipe_grid_out->warn_no_input_buffer = true;
 
     upipe_throw_ready(upipe);
 
@@ -793,26 +802,45 @@ static int upipe_grid_out_extract_input(struct upipe *upipe, struct uref *uref)
     struct upipe_grid_out *upipe_grid_out = upipe_grid_out_from_upipe(upipe);
 
     if (!upipe_grid_out->input) {
-        upipe_verbose(upipe, "no input set");
+        if (upipe_grid_out->warn_no_input)
+            upipe_warn(upipe, "no input set");
+        upipe_grid_out->warn_no_input = false;
         return UBASE_ERR_INVALID;
     }
+    upipe_grid_out->warn_no_input = true;
 
     struct upipe_grid_in *upipe_grid_in =
         upipe_grid_in_from_upipe(upipe_grid_out->input);
     struct uref *input_flow_def = upipe_grid_in->flow_def;
-    if (unlikely(!input_flow_def))
+    if (unlikely(!input_flow_def)) {
+        if (upipe_grid_out->warn_no_input_flow_def)
+            upipe_warn(upipe, "no input flow def set");
+        upipe_grid_out->warn_no_input_flow_def = false;
         return UBASE_ERR_INVALID;
+    }
+    upipe_grid_out->warn_no_input_flow_def = true;
 
+    int ret;
     if (ubase_check(uref_flow_match_def(input_flow_def, UREF_PIC_FLOW_DEF)))
-        return upipe_grid_out_extract_pic(upipe, uref);
+        ret = upipe_grid_out_extract_pic(upipe, uref);
     else if (ubase_check(uref_flow_match_def(input_flow_def,
                                              UREF_SOUND_FLOW_DEF)))
-        return upipe_grid_out_extract_sound(upipe, uref);
+        ret = upipe_grid_out_extract_sound(upipe, uref);
+    else {
+        const char *def = "(none)";
+        uref_flow_get_def(input_flow_def, &def);
+        upipe_warn_va(upipe, "invalid input %s", def);
+        return UBASE_ERR_UNHANDLED;
+    }
 
-    const char *def = "(none)";
-    uref_flow_get_def(input_flow_def, &def);
-    upipe_warn_va(upipe, "invalid input %s", def);
-    return UBASE_ERR_UNHANDLED;
+    if (!ubase_check(ret)) {
+        if (upipe_grid_out->warn_no_input_buffer)
+            upipe_warn(upipe, "no input buffer found");
+        upipe_grid_out->warn_no_input_buffer = false;
+        return ret;
+    }
+    upipe_grid_out->warn_no_input_buffer = true;
+    return UBASE_ERR_NONE;
 }
 
 /** @internal @This handles grid output pipe input buffers.
@@ -846,11 +874,6 @@ static void upipe_grid_out_input(struct upipe *upipe,
 
     /* notify new received pts */
     upipe_grid_out_throw_update_pts(upipe, pts);
-
-    if (unlikely(!upipe_grid_out->input)) {
-        upipe_verbose(upipe, "no input set");
-        goto output;
-    }
 
     /* extract from current input */
     struct upipe_grid_in *upipe_grid_in =
@@ -925,6 +948,9 @@ static int upipe_grid_out_set_input_real(struct upipe *upipe,
     upipe_grid_out->input = input;
     upipe_grid_out->flow_def_uptodate = false;
     upipe_grid_out->last_input_pts = UINT64_MAX;
+    upipe_grid_out->warn_no_input = true;
+    upipe_grid_out->warn_no_input_flow_def = true;
+    upipe_grid_out->warn_no_input_buffer = true;
     return UBASE_ERR_NONE;
 }
 
