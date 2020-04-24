@@ -267,6 +267,7 @@ struct upipe_netmap_sink {
     /* Timestamp in UCLOCK_FREQ since 1970.  Needs 55 or more bits in 2020. */
     uint64_t frame_ts;
     uint64_t frame_ts_start;
+    uint64_t frame_ts_start2;
     uint32_t prev_marker_seq;
     struct audio_packet_state audio_packet_state;
 
@@ -1261,7 +1262,7 @@ static void handle_tx_stamp(struct upipe *upipe, uint64_t t, uint16_t seq)
         upipe_netmap_sink->prev_marker_seq = seq;
 
         /* Calculate the frame timestamp based on the *next* PTP frame tick */
-        upipe_netmap_sink->frame_ts_start = upipe_netmap_sink->frame_ts = t;
+        upipe_netmap_sink->frame_ts_start2 = upipe_netmap_sink->frame_ts_start = upipe_netmap_sink->frame_ts = t;
 
         /* floor(frame_ts) to the nearest PTP frame tick */
         upipe_netmap_sink->frame_ts /= dur;
@@ -1584,6 +1585,19 @@ static void upipe_netmap_sink_worker(struct upump *upump)
             /* Get uref and map data. */
             bool have_audio = ubase_check(get_audio(audio_subpipe));
 
+            if (have_audio && local_audio_packet_counter == 0 && upipe_netmap_sink->frame_ts > 1) {
+                uint64_t systime = 0;
+                uref_clock_get_cr_sys(audio_subpipe->uref, &systime);
+                systime += audio_subpipe->latency;
+
+                int64_t timestamp = upipe_netmap_sink->frame_ts_start2;
+
+                int64_t diff = (int64_t)systime - timestamp;
+
+                upipe_dbg_va(subpipe, "uref ts: %"PRIu64", rtp ts: %"PRId64", diff: %"PRId64,
+                        systime, timestamp, diff);
+            }
+
             if (have_audio) {
                 pack_audio(audio_subpipe);
             } else {
@@ -1635,6 +1649,7 @@ static void upipe_netmap_sink_worker(struct upump *upump)
             /* Advance sequence number and timestamp for next packet. */
             rtp_set_seqnum(upipe_netmap_sink->audio_rtp_header, seqnum + 1);
             rtp_set_timestamp(upipe_netmap_sink->audio_rtp_header, timestamp + 6);
+            upipe_netmap_sink->frame_ts_start2 += 6*27000/48;
 
             upipe_netmap_sink->bits += 8 * (audio_packet_size + 4/*CRC*/);
             txavail--;
@@ -1795,6 +1810,7 @@ static void upipe_netmap_sink_worker(struct upump *upump)
                         rtp_set_timestamp(upipe_netmap_sink->audio_rtp_header, ts);
                         upipe_netmap_sink->frame_ts_start = 0;
                     }
+                    local_audio_packet_counter = 0;
                 }
             }
             aps_inc_video(&upipe_netmap_sink->audio_packet_state);
