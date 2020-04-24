@@ -153,6 +153,8 @@ struct upipe_netmap_sink_audio {
     struct uchain urefs;
     uint64_t n;
 
+    /** delay applied to systime attribute of urefs */
+    uint64_t latency;
     /* Current uref. */
     struct uref *uref;
     /* Mapped data. */
@@ -2599,8 +2601,7 @@ static int upipe_netmap_sink_audio_set_flow_def(struct upipe *upipe,
 
     flow_def = uref_dup(flow_def);
     UBASE_ALLOC_RETURN(flow_def)
-    /* TODO: handle latency */
-    //upipe_input(upipe, flow_def, NULL);
+    upipe_input(upipe, flow_def, NULL);
 
     return UBASE_ERR_NONE;
 }
@@ -2669,6 +2670,17 @@ static int get_audio(struct upipe_netmap_sink_audio *audio_subpipe)
     UBASE_ALLOC_RETURN(uchain);
     audio_subpipe->n -= 1;
     struct uref *uref = uref_from_uchain(uchain);
+
+    /* Check for flow_def and get latency attribute. */
+    if (unlikely(ubase_check(uref_flow_get_def(uref, NULL)))) {
+        uint64_t latency = 0;
+        uref_clock_get_latency(uref, &latency);
+        audio_subpipe->latency = latency;
+        uref_free(uref);
+
+        /* Try again for audio data. */
+        return get_audio(audio_subpipe);
+    }
 
     /* Check size. */
     size_t samples = 0;
