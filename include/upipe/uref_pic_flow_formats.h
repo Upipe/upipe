@@ -602,6 +602,36 @@ static const struct uref_pic_flow_format uref_pic_flow_format_monowhite = {
 
 UREF_PIC_FLOW_FORMAT_HELPER(monowhite);
 
+/** @This is the description of the rgb0 format.
+ *
+ * From libavutil/pixfmt.h:
+ * packed RGB 8:8:8, 32bpp, RGBXRGBX...  X=unused/undefined
+ */
+static const struct uref_pic_flow_format uref_pic_flow_format_rgb0 = {
+    .macropixel = 1,
+    .nb_planes = 1,
+    .planes = {
+        { 1, 1, 1, "r8g8b808", 32 },
+    },
+};
+
+UREF_PIC_FLOW_FORMAT_HELPER(rgb0);
+
+/** @This is the description of the 0rgb format.
+ *
+ * from libavutil/pixfmt.h:
+ * packed RGB 8:8:8, 32bpp, XRGBXRGB... X=unused/undefined
+ */
+static const struct uref_pic_flow_format uref_pic_flow_format_0rgb = {
+    .macropixel = 1,
+    .nb_planes = 1,
+    .planes = {
+        { 1, 1, 1, "08r8g8b8", 32 },
+    },
+};
+
+UREF_PIC_FLOW_FORMAT_HELPER(0rgb);
+
 /** This is the description of the rgb565 format. */
 static const struct uref_pic_flow_format uref_pic_flow_format_rgb565 = {
     .macropixel = 1,
