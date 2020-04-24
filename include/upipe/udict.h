@@ -574,6 +574,9 @@ static inline int udict_set_opaque(struct udict *udict,
                                    enum udict_type type, const char *name)
 {
     /* copy the opaque it case in points to us */
+    if (!value.size)
+        return udict_set(udict, name, type, 0, NULL);
+
     uint8_t v[value.size];
     memcpy(v, value.v, value.size);
     uint8_t *attr;
@@ -597,6 +600,9 @@ static inline int udict_set_opaque_from_hex(struct udict *udict,
                                             const char *name)
 {
     size_t size = (strlen(value) + 1) / 2;
+    if (!size)
+        return udict_set(udict, name, type, 0, NULL);
+
     uint8_t v[size];
     size_t i;
     for (i = 0; i < size; i++) {
