@@ -591,12 +591,14 @@ static struct upipe *_upipe_netmap_sink_alloc(struct upipe_mgr *mgr,
      * Audio subpipe.
      */
     memset(&upipe_netmap_sink->audio_subpipe, 0, sizeof upipe_netmap_sink->audio_subpipe);
-    struct upipe_netmap_sink_audio *audio_subpipe = &upipe_netmap_sink->audio_subpipe;
+    struct upipe_netmap_sink_audio *audio_subpipe = upipe_netmap_sink_to_audio_subpipe(upipe_netmap_sink);
+    struct upipe *subpipe = upipe_netmap_sink_audio_to_upipe(audio_subpipe);
 
     upipe_init(upipe_netmap_sink_audio_to_upipe(audio_subpipe),
                 &upipe_netmap_sink_audio_mgr,
                 uprobe_pfx_alloc(uprobe_use(uprobe), UPROBE_LOG_VERBOSE, "audio"));
     ulist_init(&audio_subpipe->urefs);
+    subpipe->refcount = &upipe_netmap_sink->urefcount;
 
     audio_subpipe->output_samples = 6; /* TODO: other default to catch user not setting this? */
     audio_subpipe->output_channels = 16;
