@@ -46,8 +46,6 @@
 
 /** expected flow def for reference input */
 #define REF_EXPECTED_FLOW "void."
-/** default pts tolerance (late packets) */
-#define DEFAULT_TOLERANCE ((UCLOCK_FREQ / 25) - 1)
 /** maximum retention when there is no packet afterwards */
 #define MAX_RETENTION UCLOCK_FREQ
 
@@ -71,8 +69,6 @@ struct upipe_grid {
     struct uclock *uclock;
     /** uclock request */
     struct urequest uclock_request;
-    /** late buffer tolerance */
-    uint64_t tolerance;
     /** grid max rentention */
     uint64_t max_retention;
 };
@@ -295,6 +291,35 @@ static void upipe_grid_in_set_flow_def_real(struct upipe *upipe,
     upipe_throw_new_flow_def(upipe, flow_def);
 }
 
+/** @internal @This gets the input tolerance from a flow definition.
+ *
+ * @param upipe description of the input pipe.
+ * @param flow_def flow format definition
+ * @return the tolerance
+ */
+static uint64_t upipe_grid_in_tolerance(struct upipe *upipe,
+                                        struct uref *flow_def)
+{
+    uint64_t tolerance = 0;
+    struct urational fps;
+    uint64_t samples;
+    uint64_t rate;
+    if (ubase_check(uref_pic_flow_get_fps(flow_def, &fps)) && fps.den) {
+        /* less than one frame */
+        tolerance = (UCLOCK_FREQ * fps.den / fps.num);
+        if (tolerance)
+            tolerance--;
+    }
+    else if (ubase_check(uref_sound_flow_get_samples(flow_def, &samples)) &&
+             ubase_check(uref_sound_flow_get_rate(flow_def, &rate)) &&
+             rate) {
+        tolerance = (UCLOCK_FREQ * samples / rate) - 1;
+        if (tolerance)
+            tolerance--;
+    }
+    return tolerance;
+}
+
 /** @internal @This removes all past urefs from an input pipe.
  *
  * @param upipe description structure of the input pipe
@@ -306,6 +331,7 @@ static void upipe_grid_in_update_pts(struct upipe *upipe, uint64_t next_pts)
     struct upipe_grid *upipe_grid = upipe_grid_from_in_mgr(upipe->mgr);
     struct uref *flow_def = upipe_grid_in->flow_def;
     uint64_t latency = 0;
+    uint64_t tolerance = 0;
 
     upipe_verbose_va(upipe, "update PTS %"PRIu64, next_pts);
 
@@ -315,8 +341,10 @@ static void upipe_grid_in_update_pts(struct upipe *upipe, uint64_t next_pts)
         return;
 
     /* get current input latency */
-    if (flow_def)
+    if (flow_def) {
         uref_clock_get_latency(flow_def, &latency);
+        tolerance = upipe_grid_in_tolerance(upipe, flow_def);
+    }
 
     /* iterate through the input buffers */
     struct uchain *uchain, *uchain_tmp;
@@ -330,6 +358,7 @@ static void upipe_grid_in_update_pts(struct upipe *upipe, uint64_t next_pts)
             /* update current input latency */
             latency = 0;
             uref_clock_get_latency(flow_def, &latency);
+            tolerance = upipe_grid_in_tolerance(upipe, flow_def);
             upipe_grid_in_set_flow_def_real(upipe, flow_def);
             continue;
         }
@@ -348,7 +377,7 @@ static void upipe_grid_in_update_pts(struct upipe *upipe, uint64_t next_pts)
         ubase_assert(uref_clock_get_pts_sys(uref, &pts));
 
         /* add latency and tolerance */
-        uint64_t rebase_pts = pts + latency + upipe_grid->tolerance;
+        uint64_t rebase_pts = pts + latency + tolerance;
 
         if (rebase_pts < next_pts) {
             /* keep longuer last input */
@@ -537,7 +566,7 @@ static struct upipe *upipe_grid_out_alloc(struct upipe_mgr *mgr,
     upipe_grid_out->flow_def_uptodate = false;
     upipe_grid_out->flow_def_input = false;
     upipe_grid_out->input = NULL;
-    upipe_grid_out->tolerance = DEFAULT_TOLERANCE;
+    upipe_grid_out->tolerance = 0;
     upipe_grid_out->last_input_pts = UINT64_MAX;
     upipe_grid_out->warn_no_input = true;
     upipe_grid_out->warn_no_input_flow_def = true;
@@ -882,6 +911,9 @@ static int upipe_grid_out_set_flow_def(struct upipe *upipe,
 
     struct uref *flow_def_dup = uref_dup(flow_def);
     UBASE_ALLOC_RETURN(flow_def_dup);
+    uint64_t tolerance = 0;
+    uref_clock_get_duration(flow_def_dup, &tolerance);
+    upipe_grid_out->tolerance = tolerance ? tolerance - 1 : 0;
     upipe_grid_out_store_flow_def_input(upipe, flow_def_dup);
     upipe_grid_out->flow_def_uptodate = false;
     return UBASE_ERR_NONE;
@@ -1122,7 +1154,6 @@ static struct upipe *upipe_grid_alloc(struct upipe_mgr *mgr,
     upipe_grid_init_uclock(upipe);
 
     struct upipe_grid *upipe_grid = upipe_grid_from_upipe(upipe);
-    upipe_grid->tolerance = DEFAULT_TOLERANCE;
     upipe_grid->max_retention = MAX_RETENTION;
 
     upipe_throw_ready(upipe);
