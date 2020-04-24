@@ -756,7 +756,7 @@ static int upipe_grid_out_extract_sound(struct upipe *upipe, struct uref *uref)
     /* checked before */
     ubase_assert(uref_clock_get_pts_sys(input_uref, &input_pts));
     if (input_pts > next_pts + upipe_grid_out->tolerance) {
-        upipe_dbg(upipe, "next input in the futur");
+        upipe_dbg(upipe, "next input in the future");
         return UBASE_ERR_INVALID;
     }
 
