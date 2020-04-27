@@ -287,6 +287,7 @@ static int upipe_ffmt_check_flow_format(struct upipe *upipe,
 {
     struct upipe_ffmt_mgr *ffmt_mgr = upipe_ffmt_mgr_from_upipe_mgr(upipe->mgr);
     struct upipe_ffmt *upipe_ffmt = upipe_ffmt_from_upipe(upipe);
+    struct uref *flow_def_wanted = upipe_ffmt->flow_def_wanted;
     if (flow_def_dup == NULL)
         return UBASE_ERR_INVALID;
 
@@ -298,11 +299,10 @@ static int upipe_ffmt_check_flow_format(struct upipe *upipe,
     if (!ubase_ncmp(def, "pic.")) {
         /* check aspect ratio */
         struct urational sar, dar;
-        if (ubase_check(uref_pic_flow_get_sar(upipe_ffmt->flow_def_wanted,
-                                              &sar))) {
+        if (ubase_check(uref_pic_flow_get_sar(flow_def_wanted, &sar))) {
             struct urational input_sar;
             uint64_t hsize;
-            if (!ubase_check(uref_pic_flow_get_hsize(upipe_ffmt->flow_def_wanted, &hsize)) &&
+            if (!ubase_check(uref_pic_flow_get_hsize(flow_def_wanted, &hsize)) &&
                 ubase_check(uref_pic_flow_get_hsize(flow_def, &hsize)) &&
                 ubase_check(uref_pic_flow_get_sar(flow_def, &input_sar))) {
                 struct urational sar_factor =
@@ -312,25 +312,29 @@ static int upipe_ffmt_check_flow_format(struct upipe *upipe,
                 uref_pic_flow_set_hsize_visible(flow_def_dup, hsize);
             }
             uref_pic_flow_set_sar(flow_def, sar);
-        } else if (ubase_check(uref_pic_flow_get_dar(
-                        upipe_ffmt->flow_def_wanted, &dar))) {
+        } else if (ubase_check(uref_pic_flow_get_dar(flow_def_wanted, &dar))) {
             bool overscan;
             if (ubase_check(uref_pic_flow_get_overscan(
-                            upipe_ffmt->flow_def_wanted, &overscan)))
+                            flow_def_wanted, &overscan)))
                 uref_pic_flow_set_overscan(flow_def, overscan);
             uref_pic_flow_infer_sar(flow_def, dar);
         }
 
         /* delete sar and visible sizes to let sws set it */
-        uref_pic_flow_delete_sar(flow_def_dup);
+        if (!ubase_check(uref_pic_flow_get_sar(flow_def_wanted, NULL)) ||
+            !ubase_check(uref_pic_flow_get_hsize(flow_def_wanted, NULL)) ||
+            !ubase_check(uref_pic_flow_get_vsize(flow_def_wanted, NULL)))
+            uref_pic_flow_delete_sar(flow_def_dup);
         uref_pic_flow_delete_hsize_visible(flow_def_dup);
         uref_pic_flow_delete_vsize_visible(flow_def_dup);
 
-        bool need_deint = !ubase_check(uref_pic_get_progressive(flow_def)) &&
-                          ubase_check(uref_pic_get_progressive(flow_def_dup));
-        bool need_sws = !uref_pic_flow_compare_format(flow_def, flow_def_dup) ||
-                        uref_pic_flow_cmp_hsize(flow_def, flow_def_dup) ||
-                        uref_pic_flow_cmp_vsize(flow_def, flow_def_dup);
+        bool need_deint = ffmt_mgr->deint_mgr &&
+            !ubase_check(uref_pic_get_progressive(flow_def)) &&
+            ubase_check(uref_pic_get_progressive(flow_def_dup));
+        bool need_sws = ffmt_mgr->sws_mgr &&
+            (!uref_pic_flow_compare_format(flow_def, flow_def_dup) ||
+             uref_pic_flow_cmp_hsize(flow_def, flow_def_dup) ||
+             uref_pic_flow_cmp_vsize(flow_def, flow_def_dup));
 
         if (need_deint) {
             struct upipe *input = upipe_void_alloc(ffmt_mgr->deint_mgr,

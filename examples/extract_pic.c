@@ -43,6 +43,7 @@
 #include <upipe/uref_std.h>
 #include <upipe/uref_pic.h>
 #include <upipe/uref_pic_flow.h>
+#include <upipe/uref_pic_flow_formats.h>
 #include <upipe/uref_block_flow.h>
 #include <upipe/upipe.h>
 #include <upipe/upipe_dump.h>
@@ -57,6 +58,7 @@
 #include <upipe-av/upipe_avcodec_encode.h>
 #include <upipe-swscale/upipe_sws.h>
 #include <upipe-filters/upipe_filter_blend.h>
+#include <upipe-filters/upipe_filter_format.h>
 #include <upipe-ts/upipe_ts_demux.h>
 #include <upipe-framers/upipe_auto_framer.h>
 
@@ -184,28 +186,41 @@ static int avcdec_catch(struct uprobe *uprobe, struct upipe *upipe,
     wanted_hsize = (hsize * sar.num / sar.den / 2) * 2;
     progressive = ubase_check(uref_pic_get_progressive(flow_def));
 
+    /* supported format of the jpeg encoder */
+    const struct uref_pic_flow_format *supported_formats[] = {
+        &uref_pic_flow_format_yuv420p,
+        &uref_pic_flow_format_yuv422p,
+        &uref_pic_flow_format_yuv444p,
+    };
+    bool supported = false;
+    for (unsigned i = 0; i < UBASE_ARRAY_SIZE(supported_formats); i++) {
+        if (ubase_check(uref_pic_flow_check_format(flow_def,
+                                                   supported_formats[i]))) {
+            supported = true;
+            break;
+        }
+    }
+
     struct uref *flow_def2 = uref_dup(flow_def);
     upipe_use(upipe);
 
-    if (!progressive) {
-        uref_pic_set_progressive(flow_def2);
-        struct upipe *deint = upipe_void_alloc_output(upipe,
-                upipe_filter_blend_mgr,
-                uprobe_pfx_alloc(uprobe_use(logger),
-                                 loglevel, "deint"));
-        assert(deint != NULL);
-        upipe_release(upipe);
-        upipe = deint;
-    }
+    uref_pic_set_progressive(flow_def2);
+    uref_pic_flow_set_hsize(flow_def2, wanted_hsize);
+    if (!supported)
+        uref_pic_flow_set_format(flow_def2,
+                                 &uref_pic_flow_format_yuv420p);
 
-    if (wanted_hsize != hsize) {
-        uref_pic_flow_set_hsize(flow_def2, wanted_hsize);
-        struct upipe *sws = upipe_flow_alloc_output(upipe, upipe_sws_mgr,
-                uprobe_pfx_alloc_va(uprobe_use(logger),
-                                    loglevel, "sws"), flow_def2);
-        assert(sws != NULL);
-        upipe_release(upipe);
-        upipe = sws;
+    if (!progressive || wanted_hsize != hsize || !supported) {
+        struct upipe_mgr *ffmt_mgr = upipe_ffmt_mgr_alloc();
+        struct upipe_mgr *sws_mgr = upipe_sws_mgr_alloc();
+        upipe_ffmt_mgr_set_sws_mgr(ffmt_mgr, sws_mgr);
+        upipe_mgr_release(sws_mgr);
+
+        upipe = upipe_flow_chain_output(
+            upipe, ffmt_mgr,
+            uprobe_pfx_alloc_va(uprobe_use(logger), loglevel, "ffmt"),
+            flow_def2);
+        upipe_mgr_release(ffmt_mgr);
     }
 
     uref_pic_flow_clear_format(flow_def2);

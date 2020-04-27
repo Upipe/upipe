@@ -84,6 +84,8 @@
 #define AV_CLOCK_MIN UINT32_MAX
 /** offset between DTS and (artificial) clock references */
 #define PCR_OFFSET (UCLOCK_FREQ * 3)
+/** 1/UCLOCK_FREQ time base */
+#define UCLOCK_TIME_BASE (AVRational){ 1, UCLOCK_FREQ }
 
 /** @internal @This is the private context of an avfsrc manager. */
 struct upipe_avfsrc_mgr {
@@ -154,6 +156,9 @@ struct upipe_avfsrc {
 
     /** manager to create subs */
     struct upipe_mgr sub_mgr;
+
+    /** per-AVStream flow def */
+    struct uref **streams;
 
     /** public upipe structure */
     struct upipe upipe;
@@ -546,8 +551,11 @@ static void upipe_avfsrc_worker(struct upump *upump)
 
     int error = av_read_frame(upipe_avfsrc->context, &pkt);
     if (unlikely(error < 0)) {
-        upipe_av_strerror(error, buf);
-        upipe_err_va(upipe, "read error from %s (%s)", upipe_avfsrc->url, buf);
+        if (error != AVERROR_EOF) {
+            upipe_av_strerror(error, buf);
+            upipe_err_va(upipe, "read error from %s (%s)",
+                         upipe_avfsrc->url, buf);
+        }
         upipe_avfsrc_set_upump(upipe, NULL);
         upipe_throw_source_end(upipe);
         return;
@@ -597,22 +605,21 @@ static void upipe_avfsrc_worker(struct upump *upump)
         upipe_avfsrc->systime_rap = systime;
     }
 
+    av_packet_rescale_ts(&pkt, stream->time_base, UCLOCK_TIME_BASE);
+
     uint64_t dts_orig = UINT64_MAX, dts_pts_delay = 0;
-    if (pkt.dts != (int64_t)AV_NOPTS_VALUE) {
-        dts_orig = pkt.dts * stream->time_base.num * (int64_t)UCLOCK_FREQ /
-                   stream->time_base.den - INT64_MIN;
-        if (pkt.pts != (int64_t)AV_NOPTS_VALUE) {
+    if (pkt.dts != AV_NOPTS_VALUE) {
+        dts_orig = (uint64_t)pkt.dts - INT64_MIN;
+        if (pkt.pts != AV_NOPTS_VALUE) {
             if (pkt.pts < pkt.dts) {
                 upipe_warn_va(upipe, "pts in the past (pts=%"PRIi64", "
                               "dts=%"PRIi64")", pkt.pts, pkt.dts);
             } else {
-                dts_pts_delay = (pkt.pts - pkt.dts) * stream->time_base.num *
-                    UCLOCK_FREQ / stream->time_base.den;
+                dts_pts_delay = pkt.pts - pkt.dts;
             }
         }
-    } else if (pkt.pts != (int64_t)AV_NOPTS_VALUE) {
-        dts_orig = pkt.pts * stream->time_base.num * (int64_t)UCLOCK_FREQ /
-                   stream->time_base.den - INT64_MIN;
+    } else if (pkt.pts != AV_NOPTS_VALUE) {
+        dts_orig = (uint64_t)pkt.pts - INT64_MIN;
     }
 
     if (dts_orig != UINT64_MAX) {
@@ -631,11 +638,8 @@ static void upipe_avfsrc_worker(struct upump *upump)
         /* this is subtly wrong, but whatever */
         upipe_throw_clock_ref(upipe, uref, dts - PCR_OFFSET, 0);
     }
-    if (pkt.duration > 0) {
-        uint64_t duration = pkt.duration * stream->time_base.num * UCLOCK_FREQ /
-                            stream->time_base.den;
-        UBASE_FATAL(upipe, uref_clock_set_duration(uref, duration))
-    }
+    if (pkt.duration > 0)
+        UBASE_FATAL(upipe, uref_clock_set_duration(uref, pkt.duration))
     if (upipe_avfsrc->systime_rap != UINT64_MAX)
         uref_clock_set_rap_sys(uref, upipe_avfsrc->systime_rap);
 
@@ -674,26 +678,26 @@ static bool upipe_avfsrc_start(struct upipe *upipe)
  */
 static struct uref *alloc_raw_audio_def(struct upipe *upipe,
                                         struct uref_mgr *uref_mgr,
-                                        AVCodecContext *codec)
+                                        AVCodecParameters *codecpar)
 {
-    if (unlikely(codec->bits_per_coded_sample % 8))
+    if (unlikely(codecpar->bits_per_coded_sample % 8))
         return NULL;
 
-    const char *def = upipe_av_to_flow_def(codec->codec_id);
+    const char *def = upipe_av_to_flow_def(codecpar->codec_id);
     if (unlikely(def == NULL))
         return NULL;
 
     struct uref *flow_def =
-        uref_sound_flow_alloc_def(uref_mgr, def, codec->channels,
-                                  codec->bits_per_coded_sample / 8);
+        uref_sound_flow_alloc_def(uref_mgr, def, codecpar->channels,
+                                  codecpar->bits_per_coded_sample / 8);
     if (unlikely(flow_def == NULL))
         return NULL;
 
-    UBASE_FATAL(upipe, uref_sound_flow_set_rate(flow_def, codec->sample_rate))
-    if (codec->block_align)
+    UBASE_FATAL(upipe, uref_sound_flow_set_rate(flow_def, codecpar->sample_rate))
+    if (codecpar->block_align)
         UBASE_FATAL(upipe, uref_sound_flow_set_samples(flow_def,
-                    codec->block_align / (codec->bits_per_coded_sample / 8) /
-                    codec->channels))
+                    codecpar->block_align / (codecpar->bits_per_coded_sample / 8) /
+                    codecpar->channels))
     return flow_def;
 }
 
@@ -706,9 +710,9 @@ static struct uref *alloc_raw_audio_def(struct upipe *upipe,
  */
 static struct uref *alloc_audio_def(struct upipe *upipe,
                                     struct uref_mgr *uref_mgr,
-                                    AVCodecContext *codec)
+                                    AVCodecParameters *codecpar)
 {
-    const char *def = upipe_av_to_flow_def(codec->codec_id);
+    const char *def = upipe_av_to_flow_def(codecpar->codec_id);
     if (unlikely(def == NULL))
         return NULL;
 
@@ -717,18 +721,18 @@ static struct uref *alloc_audio_def(struct upipe *upipe,
         return NULL;
     UBASE_FATAL(upipe, uref_flow_set_complete(flow_def))
 
-    if (codec->bit_rate)
+    if (codecpar->bit_rate)
         UBASE_FATAL(upipe, uref_block_flow_set_octetrate(flow_def,
-                    (codec->bit_rate + 7) / 8))
+                    (codecpar->bit_rate + 7) / 8))
 
-    UBASE_FATAL(upipe, uref_sound_flow_set_channels(flow_def, codec->channels))
-    UBASE_FATAL(upipe, uref_sound_flow_set_rate(flow_def, codec->sample_rate))
-    if (codec->frame_size) {
+    UBASE_FATAL(upipe, uref_sound_flow_set_channels(flow_def, codecpar->channels))
+    UBASE_FATAL(upipe, uref_sound_flow_set_rate(flow_def, codecpar->sample_rate))
+    if (codecpar->frame_size) {
         UBASE_FATAL(upipe, uref_sound_flow_set_samples(flow_def,
-                    codec->frame_size))
+                    codecpar->frame_size))
     } else {
         UBASE_FATAL(upipe, uref_sound_flow_set_samples(flow_def,
-                    av_get_audio_frame_duration(codec, 0)))
+                    av_get_audio_frame_duration2(codecpar, 0)))
     }
     return flow_def;
 }
@@ -742,7 +746,7 @@ static struct uref *alloc_audio_def(struct upipe *upipe,
  */
 static struct uref *alloc_raw_video_def(struct upipe *upipe,
                                         struct uref_mgr *uref_mgr,
-                                        AVCodecContext *codec)
+                                        AVCodecParameters *codecpar)
 {
     /* TODO */
     return NULL;
@@ -758,10 +762,10 @@ static struct uref *alloc_raw_video_def(struct upipe *upipe,
 static struct uref *alloc_video_def(struct upipe *upipe,
                                     struct uref_mgr *uref_mgr,
                                     AVFormatContext *format,
-                                    AVCodecContext *codec,
+                                    AVCodecParameters *codecpar,
                                     AVStream *stream)
 {
-    const char *def = upipe_av_to_flow_def(codec->codec_id);
+    const char *def = upipe_av_to_flow_def(codecpar->codec_id);
     if (unlikely(def == NULL))
         return NULL;
 
@@ -770,12 +774,12 @@ static struct uref *alloc_video_def(struct upipe *upipe,
         return NULL;
     UBASE_FATAL(upipe, uref_flow_set_complete(flow_def))
 
-    if (codec->bit_rate)
+    if (codecpar->bit_rate)
         UBASE_FATAL(upipe, uref_block_flow_set_octetrate(flow_def,
-                    (codec->bit_rate + 7) / 8))
+                    (codecpar->bit_rate + 7) / 8))
 
-    UBASE_FATAL(upipe, uref_pic_flow_set_hsize(flow_def, codec->width))
-    UBASE_FATAL(upipe, uref_pic_flow_set_vsize(flow_def, codec->height))
+    UBASE_FATAL(upipe, uref_pic_flow_set_hsize(flow_def, codecpar->width))
+    UBASE_FATAL(upipe, uref_pic_flow_set_vsize(flow_def, codecpar->height))
     AVRational frame_rate = av_guess_frame_rate(format, stream, NULL);
     if (frame_rate.num != 0 || frame_rate.den != 1) {
         struct urational fps = {
@@ -804,7 +808,7 @@ static struct uref *alloc_video_def(struct upipe *upipe,
  */
 static struct uref *alloc_subtitles_def(struct upipe *upipe,
                                         struct uref_mgr *uref_mgr,
-                                        AVCodecContext *codec)
+                                        AVCodecParameters *codecpar)
 {
     /* TODO */
     /* FIXME extradata */
@@ -820,7 +824,7 @@ static struct uref *alloc_subtitles_def(struct upipe *upipe,
  */
 static struct uref *alloc_data_def(struct upipe *upipe,
                                    struct uref_mgr *uref_mgr,
-                                   AVCodecContext *codec)
+                                   AVCodecParameters *codecpar)
 {
     /* TODO */
     return NULL;
@@ -866,42 +870,44 @@ static void upipe_avfsrc_probe(struct upump *upump)
         return;
     }
 
+    upipe_avfsrc->streams = calloc(context->nb_streams, sizeof(struct uref *));
+
     for (int i = 0; i < context->nb_streams; i++) {
         AVStream *stream = context->streams[i];
-        AVCodecContext *codec = stream->codec;
+        AVCodecParameters *codecpar = stream->codecpar;
         struct uref *flow_def;
 
-        switch (codec->codec_type) {
+        switch (codecpar->codec_type) {
             case AVMEDIA_TYPE_AUDIO:
-                if (codec->codec_id >= AV_CODEC_ID_FIRST_AUDIO &&
-                    codec->codec_id < AV_CODEC_ID_ADPCM_IMA_QT)
+                if (codecpar->codec_id >= AV_CODEC_ID_FIRST_AUDIO &&
+                    codecpar->codec_id < AV_CODEC_ID_ADPCM_IMA_QT)
                     flow_def = alloc_raw_audio_def(upipe,
-                            upipe_avfsrc->uref_mgr, codec);
+                            upipe_avfsrc->uref_mgr, codecpar);
                 else
                     flow_def = alloc_audio_def(upipe, upipe_avfsrc->uref_mgr,
-                                               codec);
+                                               codecpar);
                 break;
             case AVMEDIA_TYPE_VIDEO:
-                if (codec->codec_id == AV_CODEC_ID_RAWVIDEO)
+                if (codecpar->codec_id == AV_CODEC_ID_RAWVIDEO)
                     flow_def = alloc_raw_video_def(upipe,
-                            upipe_avfsrc->uref_mgr, codec);
+                            upipe_avfsrc->uref_mgr, codecpar);
                 else
                     flow_def = alloc_video_def(upipe,
                             upipe_avfsrc->uref_mgr, upipe_avfsrc->context,
-                            codec, stream);
+                            codecpar, stream);
                 break;
             case AVMEDIA_TYPE_SUBTITLE:
                 flow_def = alloc_subtitles_def(upipe, upipe_avfsrc->uref_mgr,
-                                               codec);
+                                               codecpar);
                 break;
             default:
-                flow_def = alloc_data_def(upipe, upipe_avfsrc->uref_mgr, codec);
+                flow_def = alloc_data_def(upipe, upipe_avfsrc->uref_mgr, codecpar);
                 break;
         }
 
         if (unlikely(flow_def == NULL)) {
             upipe_warn_va(upipe, "unsupported track type (%u:%u)",
-                          codec->codec_type, codec->codec_id);
+                          codecpar->codec_type, codecpar->codec_id);
             continue;
         }
         UBASE_FATAL(upipe, uref_flow_set_id(flow_def, i))
@@ -912,13 +918,13 @@ static void upipe_avfsrc_probe(struct upump *upump)
             UBASE_FATAL(upipe, uref_flow_set_languages(flow_def, 1))
             UBASE_FATAL(upipe, uref_flow_set_language(flow_def, lang->value, 0))
         }
-        if (codec->extradata_size) {
+        if (codecpar->extradata_size) {
             UBASE_FATAL(upipe, uref_flow_set_global(flow_def))
-            UBASE_FATAL(upipe, uref_flow_set_headers(flow_def, codec->extradata,
-                                                     codec->extradata_size))
+            UBASE_FATAL(upipe, uref_flow_set_headers(flow_def, codecpar->extradata,
+                                                     codecpar->extradata_size))
         }
 
-        codec->opaque = flow_def;
+        upipe_avfsrc->streams[i] = flow_def;
     }
 
     upipe_split_throw_update(upipe);
@@ -951,8 +957,9 @@ static int upipe_avfsrc_iterate(struct upipe *upipe, struct uref **p)
     }
 
     while (id < context->nb_streams) {
-        if (context->streams[id]->codec->opaque != NULL) {
-            *p = (struct uref *)context->streams[id]->codec->opaque;
+        struct uref *flow_def = upipe_avfsrc->streams[id];
+        if (flow_def) {
+            *p = flow_def;
             return UBASE_ERR_NONE;
         }
         id++;
@@ -1038,6 +1045,7 @@ static int upipe_avfsrc_set_uri(struct upipe *upipe, const char *url)
         upipe_avfsrc_set_upump(upipe, NULL);
         upipe_avfsrc_abort_av_deal(upipe);
         upipe_avfsrc_throw_sub_subs(upipe, UPROBE_SOURCE_END);
+        free(upipe_avfsrc->streams);
     }
     ubase_clean_str(&upipe_avfsrc->url);
 
@@ -1224,9 +1232,9 @@ static void upipe_avfsrc_free(struct urefcount *urefcount_real)
             upipe_notice_va(upipe, "closing URL %s", upipe_avfsrc->url);
 
         for (int i = 0; i < upipe_avfsrc->context->nb_streams; i++)
-            if (upipe_avfsrc->context->streams[i]->codec->opaque != NULL)
-                uref_free((struct uref *)upipe_avfsrc->context->streams[i]->codec->opaque);
+            uref_free(upipe_avfsrc->streams[i]);
 
+        free(upipe_avfsrc->streams);
         avformat_close_input(&upipe_avfsrc->context);
     }
     upipe_throw_dead(upipe);

@@ -74,6 +74,13 @@ struct upump_ev {
         struct ev_signal ev_signal;
     };
 
+    /** private structure */
+    union {
+        struct {
+            uint64_t after;
+        } timer;
+    };
+
     /** common structure */
     struct upump_common common;
 };
@@ -163,6 +170,7 @@ static struct upump *upump_ev_alloc(struct upump_mgr *mgr,
         case UPUMP_TYPE_TIMER: {
             uint64_t after = va_arg(args, uint64_t);
             uint64_t repeat = va_arg(args, uint64_t);
+            upump_ev->timer.after = after;
             ev_timer_init(&upump_ev->ev_timer, upump_ev_dispatch_timer,
                           (ev_tstamp)after / UCLOCK_FREQ,
                           (ev_tstamp)repeat / UCLOCK_FREQ);
@@ -270,9 +278,16 @@ static void upump_ev_real_restart(struct upump *upump, bool status)
     switch (upump_ev->event) {
         case UPUMP_TYPE_TIMER: {
             bool active = ev_is_active(&upump_ev->ev_timer);
-            ev_timer_again(ev_mgr->ev_loop, &upump_ev->ev_timer);
-            if (!active && !status)
-                ev_unref(ev_mgr->ev_loop);
+            if (active && upump_ev->ev_timer.repeat) {
+                ev_timer_again(ev_mgr->ev_loop, &upump_ev->ev_timer);
+                return;
+            }
+
+            if (active)
+                ev_timer_stop(ev_mgr->ev_loop, &upump_ev->ev_timer);
+            upump_ev->ev_timer.at =
+                (ev_tstamp)upump_ev->timer.after / UCLOCK_FREQ;
+            ev_timer_start(ev_mgr->ev_loop, &upump_ev->ev_timer);
             break;
         }
         default:

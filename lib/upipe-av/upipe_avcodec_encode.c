@@ -57,6 +57,8 @@
 #include <upipe/upipe_helper_input.h>
 #include <upipe-av/upipe_avcodec_encode.h>
 #include <upipe/udict_dump.h>
+#include <upipe-framers/uref_h264.h>
+#include <upipe-framers/uref_mpgv.h>
 #include <upipe-framers/uref_mpga_flow.h>
 
 #include <stdlib.h>
@@ -72,6 +74,9 @@
 #include <libavutil/avutil.h>
 #include <libavutil/pixdesc.h>
 #include <libavutil/opt.h>
+#include <bitstream/mpeg/h264.h>
+#include <bitstream/mpeg/mp2v.h>
+
 #include <upipe-av/upipe_av_pixfmt.h>
 #include <upipe-av/upipe_av_samplefmt.h>
 #include "upipe_av_internal.h"
@@ -90,7 +95,7 @@ static int upipe_avcenc_check_ubuf_mgr(struct upipe *upipe,
 static int upipe_avcenc_check_flow_format(struct upipe *upipe,
                                           struct uref *flow_format);
 /** @hidden */
-static bool upipe_avcenc_encode_frame(struct upipe *upipe,
+static void upipe_avcenc_encode_frame(struct upipe *upipe,
                                       struct AVFrame *frame,
                                       struct upump **upump_p);
 /** @hidden */
@@ -172,6 +177,9 @@ struct upipe_avcenc {
     uint64_t counter;
     /** chroma map */
     const char *chroma_map[UPIPE_AV_MAX_PLANES];
+
+    /** true if the existing slice types must be enforced */
+    bool slice_type_enforce;
 
     /** avcodec context */
     AVCodecContext *context;
@@ -410,8 +418,8 @@ static void upipe_avcenc_close(struct upipe *upipe)
             upipe_avcenc_encode_audio(upipe, NULL);
 
         if (context->codec->capabilities & AV_CODEC_CAP_DELAY) {
-            /* Feed avcodec with NULL frames to output the remaining packets. */
-            while (upipe_avcenc_encode_frame(upipe, NULL, NULL));
+            /* Feed avcodec with NULL frame to output the remaining packets. */
+            upipe_avcenc_encode_frame(upipe, NULL, NULL);
         }
     }
     upipe_avcenc->close = true;
@@ -454,76 +462,37 @@ static void upipe_avcenc_build_flow_def(struct upipe *upipe)
     upipe_avcenc_store_flow_def(upipe, flow_def);
 }
 
-/** @internal @This encodes av frames.
+/** @internal @This outputs av packet.
  *
  * @param upipe description structure of the pipe
- * @param frame frame
+ * @param avpkt av packet
  * @param upump_p reference to upump structure
- * @return true when a packet has been output
  */
-static bool upipe_avcenc_encode_frame(struct upipe *upipe,
-                                      struct AVFrame *frame,
-                                      struct upump **upump_p)
+static void upipe_avcenc_output_pkt(struct upipe *upipe,
+                                    struct AVPacket *avpkt,
+                                    struct upump **upump_p)
 {
     struct upipe_avcenc *upipe_avcenc = upipe_avcenc_from_upipe(upipe);
     AVCodecContext *context = upipe_avcenc->context;
     const AVCodec *codec = context->codec;
-
-    if (unlikely(frame == NULL))
-        upipe_dbg(upipe, "received null frame");
-
-    /* encode frame */
-    AVPacket avpkt;
-    av_init_packet(&avpkt);
-    avpkt.data = NULL;
-    avpkt.size = 0;
-    int gotframe = 0;
-    int err;
-    switch (codec->type) {
-        case AVMEDIA_TYPE_VIDEO: {
-            err = avcodec_encode_video2(context, &avpkt, frame, &gotframe);
-            break;
-        }
-        case AVMEDIA_TYPE_AUDIO: {
-            err = avcodec_encode_audio2(context, &avpkt, frame, &gotframe);
-            break;
-        }
-        default: /* should never be there */
-            return false;
-    }
-
-    if (err < 0) {
-        upipe_av_strerror(err, buf);
-        upipe_warn_va(upipe, "error while encoding frame (%s)", buf);
-        return false;
-    }
-    /* output encoded frame if available */
-    if (!(gotframe && avpkt.data)) {
-        return false;
-    }
-
-    struct ubuf *ubuf = ubuf_block_alloc(upipe_avcenc->ubuf_mgr, avpkt.size);
+    struct ubuf *ubuf = ubuf_block_alloc(upipe_avcenc->ubuf_mgr, avpkt->size);
     if (unlikely(ubuf == NULL)) {
-        av_packet_unref(&avpkt);
         upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
-        return false;
+        return;
     }
 
     int size = -1;
     uint8_t *buf;
     if (unlikely(!ubase_check(ubuf_block_write(ubuf, 0, &size, &buf)))) {
         ubuf_free(ubuf);
-        av_packet_unref(&avpkt);
         upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
-        return false;
+        return;
     }
-    memcpy(buf, avpkt.data, size);
+    memcpy(buf, avpkt->data, size);
     ubuf_block_unmap(ubuf, 0);
 
-    int64_t pkt_pts = avpkt.pts, pkt_dts = avpkt.dts;
-    bool keyframe = avpkt.flags & AV_PKT_FLAG_KEY;
-
-    av_packet_unref(&avpkt);
+    int64_t pkt_pts = avpkt->pts, pkt_dts = avpkt->dts;
+    bool keyframe = avpkt->flags & AV_PKT_FLAG_KEY;
 
     /* find uref corresponding to avpkt */
     upipe_verbose_va(upipe, "output pts %"PRId64, pkt_pts);
@@ -543,26 +512,16 @@ static bool upipe_avcenc_encode_frame(struct upipe *upipe,
         upipe_warn_va(upipe, "could not find pts %"PRId64" in urefs in use",
                       pkt_pts);
         ubuf_free(ubuf);
-        return false;
+        return;
     }
 
     /* unmap input */
-    switch (codec->type) {
-        case AVMEDIA_TYPE_VIDEO: {
-            int i;
-            for (i = 0; i < UPIPE_AV_MAX_PLANES &&
-                        upipe_avcenc->chroma_map[i] != NULL; i++)
-                uref_pic_plane_unmap(uref, upipe_avcenc->chroma_map[i],
-                                     0, 0, -1, -1);
-            break;
-        }
-        case AVMEDIA_TYPE_AUDIO: {
-            break;
-        }
-        default: /* should never be there */
-            uref_free(uref);
-            return false;
-    }
+    if (codec->type == AVMEDIA_TYPE_VIDEO)
+        for (int i = 0; i < UPIPE_AV_MAX_PLANES &&
+             upipe_avcenc->chroma_map[i] != NULL; i++)
+            uref_pic_plane_unmap(uref, upipe_avcenc->chroma_map[i],
+                                 0, 0, -1, -1);
+
     uref_attach_ubuf(uref, ubuf);
     uref_avcenc_delete_priv(uref);
 
@@ -619,7 +578,47 @@ static bool upipe_avcenc_encode_frame(struct upipe *upipe,
         upipe_avcenc_build_flow_def(upipe);
 
     upipe_avcenc_output(upipe, uref, upump_p);
-    return true;
+}
+
+/** @internal @This encodes av frames.
+ *
+ * @param upipe description structure of the pipe
+ * @param frame frame
+ * @param upump_p reference to upump structure
+ */
+static void upipe_avcenc_encode_frame(struct upipe *upipe,
+                                      struct AVFrame *frame,
+                                      struct upump **upump_p)
+{
+    struct upipe_avcenc *upipe_avcenc = upipe_avcenc_from_upipe(upipe);
+    AVCodecContext *context = upipe_avcenc->context;
+
+    if (unlikely(frame == NULL))
+        upipe_dbg(upipe, "received null frame");
+
+    /* encode frame */
+    int err;
+    if ((err = avcodec_send_frame(context, frame)) < 0) {
+        upipe_err_va(upipe, "avcodec_send_frame: %s", av_err2str(err));
+        return;
+    }
+
+    AVPacket avpkt;
+    av_init_packet(&avpkt);
+    avpkt.data = NULL;
+    avpkt.size = 0;
+    while (1) {
+        err = avcodec_receive_packet(context, &avpkt);
+        if (unlikely(err < 0)) {
+            if (err != AVERROR(EAGAIN) &&
+                err != AVERROR_EOF)
+                upipe_err_va(upipe, "avcodec_receive_packet: %s",
+                             av_err2str(err));
+            break;
+        }
+        upipe_avcenc_output_pkt(upipe, &avpkt, upump_p);
+    }
+    av_packet_unref(&avpkt);
 }
 
 /** @internal @This encodes video frames.
@@ -664,6 +663,48 @@ static void upipe_avcenc_encode_video(struct upipe *upipe,
     /* set frame dimensions */
     frame->width = hsize;
     frame->height = vsize;
+
+    /* set picture type */
+    frame->pict_type = AV_PICTURE_TYPE_NONE;
+    if (upipe_avcenc->slice_type_enforce) {
+        uint8_t type;
+        if (ubase_check(uref_h264_get_type(uref, &type))) {
+            switch (type) {
+                case H264SLI_TYPE_P:
+                    frame->pict_type = AV_PICTURE_TYPE_P;
+                    break;
+                case H264SLI_TYPE_B:
+                    frame->pict_type = AV_PICTURE_TYPE_B;
+                    break;
+                case H264SLI_TYPE_I:
+                    frame->pict_type = AV_PICTURE_TYPE_I;
+                    break;
+                case H264SLI_TYPE_SP:
+                    frame->pict_type = AV_PICTURE_TYPE_SP;
+                    break;
+                case H264SLI_TYPE_SI:
+                    frame->pict_type = AV_PICTURE_TYPE_SI;
+                    break;
+                default:
+                    break;
+            }
+        } else if (ubase_check(uref_mpgv_get_type(uref, &type))) {
+            switch (type) {
+                case MP2VPIC_TYPE_P:
+                    frame->pict_type = AV_PICTURE_TYPE_P;
+                    break;
+                case MP2VPIC_TYPE_B:
+                    frame->pict_type = AV_PICTURE_TYPE_B;
+                    break;
+                case MP2VPIC_TYPE_I:
+                    frame->pict_type = AV_PICTURE_TYPE_I;
+                    break;
+                case MP2VPIC_TYPE_D:
+                default:
+                    break;
+            }
+        }
+    }
 
     /* set pts (needed for uref/avpkt mapping) */
     upipe_verbose_va(upipe, "input pts %"PRId64, upipe_avcenc->avcpts);
@@ -977,6 +1018,27 @@ static int upipe_avcenc_check_flow_format(struct upipe *upipe,
                 upipe_avcenc_set_option(upipe, "latm", "0");
                 break;
         }
+        uint8_t signaling;
+        if (ubase_check(uref_mpga_flow_get_signaling(flow_format, &signaling)))
+            switch (signaling) {
+                default:
+                case UREF_MPGA_SIGNALING_AUTO:
+                    upipe_avcenc_set_option(upipe, "signaling",
+                                            "default");
+                    break;
+                case UREF_MPGA_SIGNALING_IMPLICIT:
+                    upipe_avcenc_set_option(upipe, "signaling",
+                                            "implicit");
+                    break;
+                case UREF_MPGA_SIGNALING_EXPLICIT_COMPATIBLE:
+                    upipe_avcenc_set_option(upipe, "signaling",
+                                            "explicit_sbr");
+                    break;
+                case UREF_MPGA_SIGNALING_EXPLICIT_HIERARCHICAL:
+                    upipe_avcenc_set_option(upipe, "signaling",
+                                            "explicit_hierarchical");
+                    break;
+            }
     }
 
     uref_free(upipe_avcenc->flow_def_requested);
@@ -1129,6 +1191,8 @@ static int upipe_avcenc_set_flow_def(struct upipe *upipe, struct uref *flow_def)
         }
         context->time_base.num = fps.den;
         context->time_base.den = fps.num;
+        context->framerate.num = fps.num;
+        context->framerate.den = fps.den;
 
         struct urational sar;
         if (ubase_check(uref_pic_flow_get_sar(flow_def, &sar))) {
@@ -1404,6 +1468,22 @@ static int upipe_avcenc_set_option(struct upipe *upipe,
     return UBASE_ERR_NONE;
 }
 
+/** @This sets the slice type enforcement mode (true or false).
+ *
+ * @param upipe description structure of the pipe
+ * @param enforce true if the incoming slice types must be enforced
+ * @return an error code
+ */
+static int _upipe_avcenc_set_slice_type_enforce(struct upipe *upipe,
+                                                bool enforce)
+{
+    struct upipe_avcenc *upipe_avcenc = upipe_avcenc_from_upipe(upipe);
+    upipe_avcenc->slice_type_enforce = enforce;
+    upipe_dbg_va(upipe, "%sactivating slice type enforcement",
+                 enforce ? "" : "de");
+    return UBASE_ERR_NONE;
+}
+
 /** @internal @This processes control commands on a file source pipe, and
  * checks the status of the pipe afterwards.
  *
@@ -1449,6 +1529,11 @@ static int upipe_avcenc_control(struct upipe *upipe,
             const char *option = va_arg(args, const char *);
             const char *content = va_arg(args, const char *);
             return upipe_avcenc_set_option(upipe, option, content);
+        }
+        case UPIPE_AVCENC_SET_SLICE_TYPE_ENFORCE: {
+            UBASE_SIGNATURE_CHECK(args, UPIPE_AVCENC_SIGNATURE)
+            bool enforce = va_arg(args, int) != 0;
+            return _upipe_avcenc_set_slice_type_enforce(upipe, enforce);
         }
 
         default:
@@ -1553,6 +1638,7 @@ static struct upipe *upipe_avcenc_alloc(struct upipe_mgr *mgr,
     upipe_avcenc_init_flow_def_check(upipe);
     upipe_avcenc_store_flow_def_attr(upipe, flow_def);
     upipe_avcenc->flow_def_requested = NULL;
+    upipe_avcenc->slice_type_enforce = false;
 
     ulist_init(&upipe_avcenc->sound_urefs);
     upipe_avcenc->nb_samples = 0;

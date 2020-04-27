@@ -143,7 +143,7 @@ static int upipe_null_control(struct upipe *upipe, int command, va_list args)
 static void upipe_null_free(struct upipe *upipe)
 {
     struct upipe_null *upipe_null = upipe_null_from_upipe(upipe);
-    upipe_warn_va(upipe, "freed %"PRIu64" packets", upipe_null->counter);
+    upipe_dbg_va(upipe, "freed %"PRIu64" packets", upipe_null->counter);
     upipe_throw_dead(upipe);
     upipe_null_clean_urefcount(upipe);
     upipe_null_free_void(upipe);

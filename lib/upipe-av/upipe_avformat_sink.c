@@ -373,38 +373,37 @@ static int upipe_avfsink_sub_set_flow_def(struct upipe *upipe,
         av_dict_set(&stream->metadata, "language", lang, 0);
     }
 
-    AVCodecContext *codec = stream->codec;
-    codec->bit_rate = octetrate * 8;
-    codec->codec_tag =
+    AVCodecParameters *codecpar = stream->codecpar;
+    codecpar->bit_rate = octetrate * 8;
+    codecpar->codec_tag =
         av_codec_get_tag(upipe_avfsink->context->oformat->codec_tag, codec_id);
-    codec->codec_id = codec_id;
+    codecpar->codec_id = codec_id;
     if (codec_id < AV_CODEC_ID_FIRST_AUDIO) {
-        codec->codec_type = AVMEDIA_TYPE_VIDEO;
-        codec->width = width;
-        codec->height = height;
+        codecpar->codec_type = AVMEDIA_TYPE_VIDEO;
+        codecpar->width = width;
+        codecpar->height = height;
         stream->sample_aspect_ratio.num =
-            codec->sample_aspect_ratio.num = sar.num;
+            codecpar->sample_aspect_ratio.num = sar.num;
         stream->sample_aspect_ratio.den =
-            codec->sample_aspect_ratio.den = sar.den;
+            codecpar->sample_aspect_ratio.den = sar.den;
         stream->avg_frame_rate.num = 25;
         stream->avg_frame_rate.den = 1;
         stream->time_base.num = fps.den;
         stream->time_base.den = fps.num * 2;
-        codec->ticks_per_frame = 2;
-        codec->framerate.num = fps.num;
-        codec->framerate.den = fps.den;
+        stream->r_frame_rate.num = fps.num;
+        stream->r_frame_rate.den = fps.den;
     } else {
-        codec->codec_type = AVMEDIA_TYPE_AUDIO;
-        codec->channels = channels;
-        codec->sample_rate = rate;
-        stream->time_base = (AVRational){ 1, codec->sample_rate };
-        codec->frame_size = samples;
+        codecpar->codec_type = AVMEDIA_TYPE_AUDIO;
+        codecpar->channels = channels;
+        codecpar->sample_rate = rate;
+        stream->time_base = (AVRational){ 1, codecpar->sample_rate };
+        codecpar->frame_size = samples;
     }
 
     if (extradata_alloc != NULL) {
-        codec->flags |= AV_CODEC_FLAG_GLOBAL_HEADER;
-        codec->extradata_size = extradata_size;
-        codec->extradata = extradata_alloc;
+        // FIXME stream->codec->flags |= AV_CODEC_FLAG_GLOBAL_HEADER;
+        codecpar->extradata_size = extradata_size;
+        codecpar->extradata = extradata_alloc;
     }
 
     return UBASE_ERR_NONE;
@@ -686,16 +685,20 @@ static int upipe_avfsink_avio_open(struct upipe *upipe, struct upipe_avfsink_sub
     if (upipe_avfsink->context->oformat->flags & AVFMT_NOFILE)
         return UBASE_ERR_NONE;
 
+#if LIBAVFORMAT_VERSION_INT < AV_VERSION_INT(58, 7, 100)
+    char *url = upipe_avfsink->context->filename;
+#else
+    char *url = upipe_avfsink->context->url;
+#endif
+
     AVDictionary *options = NULL;
     av_dict_copy(&options, upipe_avfsink->options, 0);
-    int error = avio_open2(&upipe_avfsink->context->pb,
-                           upipe_avfsink->context->filename,
+    int error = avio_open2(&upipe_avfsink->context->pb, url,
                            AVIO_FLAG_WRITE, NULL, &options);
     av_dict_free(&options);
     if (error < 0) {
         upipe_av_strerror(error, buf);
-        upipe_err_va(upipe, "couldn't open file %s (%s)",
-                     upipe_avfsink->context->filename, buf);
+        upipe_err_va(upipe, "couldn't open file %s (%s)", url, buf);
         upipe_throw_fatal(upipe, UBASE_ERR_EXTERNAL);
         while (!ulist_empty(&input->urefs)) {
             uref_free(uref_from_uchain(ulist_pop(&input->urefs)));
@@ -730,14 +733,14 @@ static void upipe_avfsink_set_disposition_default(struct upipe *upipe)
             continue;
 
         AVStream *stream = upipe_avfsink->context->streams[input->id];
-        if (stream->codec->codec_id < AV_CODEC_ID_FIRST_AUDIO &&
+        if (stream->codecpar->codec_id < AV_CODEC_ID_FIRST_AUDIO &&
             (input->flow_id < video_flow_id || !video_stream)) {
             video_stream = stream;
             video_flow_id = input->flow_id;
             upipe_dbg_va(upipe, "use video stream %"PRIu64" as default",
                          video_flow_id);
         }
-        else if (stream->codec->codec_id < AV_CODEC_ID_FIRST_SUBTITLE &&
+        else if (stream->codecpar->codec_id < AV_CODEC_ID_FIRST_SUBTITLE &&
                  (input->flow_id < audio_flow_id || !audio_stream)) {
             audio_stream = stream;
             audio_flow_id = input->flow_id;
@@ -791,9 +794,15 @@ static void upipe_avfsink_mux(struct upipe *upipe, struct upump **upump_p)
             if (upipe_avfsink->init_uri != NULL) {
                 upipe_notice_va(upipe, "opening init URI %s",
                                 upipe_avfsink->init_uri);
+#if LIBAVFORMAT_VERSION_INT < AV_VERSION_INT(58, 7, 100)
                 snprintf(upipe_avfsink->context->filename,
                          sizeof (upipe_avfsink->context->filename),
                          "%s", upipe_avfsink->init_uri);
+#else
+                av_free(upipe_avfsink->context->url);
+                upipe_avfsink->context->url =
+                    av_strdup(upipe_avfsink->init_uri);
+#endif
             }
             if (!ubase_check(upipe_avfsink_avio_open(upipe, input)))
                 return;
@@ -830,9 +839,14 @@ static void upipe_avfsink_mux(struct upipe *upipe, struct upump **upump_p)
                                 upipe_avfsink->init_uri);
                 if (!(upipe_avfsink->context->oformat->flags & AVFMT_NOFILE))
                     avio_close(upipe_avfsink->context->pb);
+#if LIBAVFORMAT_VERSION_INT < AV_VERSION_INT(58, 7, 100)
                 snprintf(upipe_avfsink->context->filename,
                          sizeof (upipe_avfsink->context->filename),
                          "%s", upipe_avfsink->uri);
+#else
+                av_free(upipe_avfsink->context->url);
+                upipe_avfsink->context->url = av_strdup(upipe_avfsink->uri);
+#endif
                 if (!ubase_check(upipe_avfsink_avio_open(upipe, input)))
                     return;
             }
@@ -858,9 +872,23 @@ static void upipe_avfsink_mux(struct upipe *upipe, struct upump **upump_p)
             uref_clock_get_dts_prog(next_uref, &input->next_dts);
         }
 
+        size_t size = 0;
+        uref_block_size(uref, &size);
+        if (unlikely(!size)) {
+            upipe_warn(upipe, "Received packet with size 0, dropping");
+            uref_free(uref);
+            upipe_release(upipe_avfsink_sub_to_upipe(input));
+            continue;
+        }
+
         AVPacket avpkt;
-        memset(&avpkt, 0, sizeof(AVPacket));
-        av_init_packet(&avpkt);
+        if (unlikely(av_new_packet(&avpkt, size) < 0)) {
+            uref_free(uref);
+            upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
+            upipe_release(upipe_avfsink_sub_to_upipe(input));
+            return;
+        }
+
         avpkt.stream_index = input->id;
         if (ubase_check(uref_flow_get_random(uref)))
             avpkt.flags |= AV_PKT_FLAG_KEY;
@@ -881,24 +909,6 @@ static void upipe_avfsink_mux(struct upipe *upipe, struct upump **upump_p)
             avpkt.duration = (duration * stream->time_base.den + UCLOCK_FREQ / 2) /
                              UCLOCK_FREQ / stream->time_base.num;
 
-        size_t size = 0;
-        uref_block_size(uref, &size);
-        if (unlikely(!size)) {
-            upipe_warn(upipe, "Received packet with size 0, dropping");
-            uref_free(uref);
-            upipe_release(upipe_avfsink_sub_to_upipe(input));
-            continue;
-        }
-        avpkt.size = size;
-
-        /* TODO replace with umem */
-        avpkt.data = malloc(avpkt.size);
-        if (unlikely(avpkt.data == NULL)) {
-            uref_free(uref);
-            upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
-            upipe_release(upipe_avfsink_sub_to_upipe(input));
-            return;
-        }
         uref_block_extract(uref, 0, avpkt.size, avpkt.data);
         uref_free(uref);
 
@@ -909,7 +919,8 @@ static void upipe_avfsink_mux(struct upipe *upipe, struct upump **upump_p)
         upipe_release(upipe_avfsink_sub_to_upipe(input));
 
         int error = av_write_frame(upipe_avfsink->context, &avpkt);
-        free(avpkt.data);
+        av_packet_unref(&avpkt);
+
         if (unlikely(error < 0)) {
             upipe_av_strerror(error, buf);
             upipe_warn_va(upipe, "write error to %s (%s)", upipe_avfsink->uri, buf);
@@ -1111,6 +1122,11 @@ static int upipe_avfsink_set_uri(struct upipe *upipe, const char *uri)
     if (unlikely(uri == NULL))
         return UBASE_ERR_NONE;
 
+#if LIBAVFORMAT_VERSION_INT < AV_VERSION_INT(58, 7, 100)
+    if (unlikely(strlen(uri) >= sizeof(upipe_avfsink->context->filename)))
+        return UBASE_ERR_INVALID;
+#endif
+
     AVOutputFormat *format = NULL;
     format = av_guess_format(upipe_avfsink->format, uri, upipe_avfsink->mime);
     if (unlikely(format == NULL))
@@ -1122,9 +1138,11 @@ static int upipe_avfsink_set_uri(struct upipe *upipe, const char *uri)
         return UBASE_ERR_EXTERNAL;
     }
     upipe_avfsink->context->oformat = format;
-    strncpy(upipe_avfsink->context->filename, uri,
-            sizeof(upipe_avfsink->context->filename) - 1);
-    upipe_avfsink->context->filename[sizeof(upipe_avfsink->context->filename) - 1] = '\0';
+#if LIBAVFORMAT_VERSION_INT < AV_VERSION_INT(58, 7, 100)
+    strcpy(upipe_avfsink->context->filename, uri);
+#else
+    upipe_avfsink->context->url = av_strdup(uri);
+#endif
 
     upipe_avfsink->uri = strdup(uri);
     upipe_avfsink->opened = false;

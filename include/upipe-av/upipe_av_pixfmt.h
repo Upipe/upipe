@@ -128,8 +128,18 @@ upipe_av_pixfmt_to_format(enum AVPixelFormat pix_fmt)
             return &uref_pic_flow_format_abgr;
         case AV_PIX_FMT_BGRA:
             return &uref_pic_flow_format_bgra;
+        case AV_PIX_FMT_RGBA64LE:
+            return &uref_pic_flow_format_rgba64le;
         case AV_PIX_FMT_RGBA64BE:
             return &uref_pic_flow_format_rgba64be;
+        case AV_PIX_FMT_NV12:
+            return &uref_pic_flow_format_nv12;
+        case AV_PIX_FMT_NV16:
+            return &uref_pic_flow_format_nv16;
+#if LIBAVUTIL_VERSION_INT >= AV_VERSION_INT(56, 27, 100)
+        case AV_PIX_FMT_NV24:
+            return &uref_pic_flow_format_nv24;
+#endif
         default:
             break;
     }
@@ -205,7 +215,13 @@ static inline enum AVPixelFormat
         AV_PIX_FMT_RGBA,
         AV_PIX_FMT_ABGR,
         AV_PIX_FMT_BGRA,
+        AV_PIX_FMT_RGBA64LE,
         AV_PIX_FMT_RGBA64BE,
+        AV_PIX_FMT_NV12,
+        AV_PIX_FMT_NV16,
+#if LIBAVUTIL_VERSION_INT >= AV_VERSION_INT(56, 27, 100)
+        AV_PIX_FMT_NV24,
+#endif
         -1
     };
     if (pix_fmts == NULL)

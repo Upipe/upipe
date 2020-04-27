@@ -187,6 +187,7 @@ static void upipe_dup_init_sub_mgr(struct upipe *upipe)
 {
     struct upipe_dup *upipe_dup = upipe_dup_from_upipe(upipe);
     struct upipe_mgr *sub_mgr = &upipe_dup->sub_mgr;
+    memset(sub_mgr, 0, sizeof (*sub_mgr));
     sub_mgr->refcount = upipe_dup_to_urefcount_real(upipe_dup);
     sub_mgr->signature = UPIPE_DUP_OUTPUT_SIGNATURE;
     sub_mgr->upipe_alloc = upipe_dup_output_alloc;
@@ -233,8 +234,8 @@ static void upipe_dup_input(struct upipe *upipe, struct uref *uref,
 {
     struct upipe_dup *upipe_dup = upipe_dup_from_upipe(upipe);
     struct upipe *output = upipe_dup->output;
-    struct uchain *uchain;
-    ulist_foreach (&upipe_dup->outputs, uchain) {
+    struct uchain *uchain, *uchain_tmp;
+    ulist_delete_foreach (&upipe_dup->outputs, uchain, uchain_tmp) {
         struct upipe_dup_output *upipe_dup_output =
             upipe_dup_output_from_uchain(uchain);
         struct upipe *output = upipe_dup_output_to_upipe(upipe_dup_output);

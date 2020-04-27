@@ -30,6 +30,7 @@ pkginclude_HEADERS = \
 	ufifo.h \
 	ulifo.h \
 	ulist.h \
+	ulist_helper.h \
 	ulog.h \
 	umem.h \
 	umem_alloc.h \
@@ -101,6 +102,7 @@ pkginclude_HEADERS = \
 	uref_program_flow.h \
 	uref_sound.h \
 	uref_sound_flow.h \
+	uref_sound_flow_formats.h \
 	uref_std.h \
 	uref_m3u.h \
 	uref_m3u_playlist.h \

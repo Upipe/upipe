@@ -23,6 +23,7 @@ AC_PROG_INSTALL
 AC_PROG_LN_S
 AC_PROG_MAKE_SET
 AM_PROG_CC_C_O
+AM_PROG_AS
 LT_INIT([win32-dll])
 
 AC_ARG_ENABLE(
@@ -84,7 +85,7 @@ NASMFLAGS="${NASMFLAGS} -DPIC -prefer-non-pic -Pconfig.asm -I\$(top_builddir)/x8
 
 WARN_FLAGS="-Wall -Wextra -Wno-unused-parameter -Wno-sign-compare -Wmissing-declarations -Wwrite-strings -Wredundant-decls -Wundef -Wmissing-include-dirs"
 WARN_FLAGS_C="-Wstrict-prototypes -Wmissing-prototypes -Wold-style-definition"
-WARN_FLAGS_OPT="-Wduplicated-cond -Wduplicated-branches -Wrestrict -Wformat=2"
+WARN_FLAGS_OPT="-Wduplicated-cond -Wduplicated-branches -Wrestrict -Wformat=2 -Wno-vla-larger-than"
 # TODO: add -Wnull-dereference and -Wlogical-op once all warnings are fixed
 for flag in $WARN_FLAGS_OPT; do
     AX_CHECK_COMPILE_FLAG([$flag],[WARN_FLAGS="$WARN_FLAGS $flag"],,-Werror)
@@ -94,6 +95,7 @@ AC_SUBST([AM_CFLAGS], ["$WARN_FLAGS $WARN_FLAGS_C"])
 AC_SUBST([AM_CXXFLAGS], ["$WARN_FLAGS"])
 AC_SUBST(NASMFLAGS)
 AC_SUBST(ARCH_X86_64)
+AM_CONDITIONAL(ARCH_AARCH64, [test ${host_cpu} = aarch64])
 
 # Checks for libraries.
 AC_CHECK_LIB(rt, clock_gettime, libadd_rt_lib="-lrt", libadd_rt_lib="")

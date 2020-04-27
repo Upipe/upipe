@@ -69,6 +69,13 @@ struct upipe_rtp_pcm_pack {
     /** samplerate */
     uint64_t rate;
 
+    uint64_t latency;
+
+    /** maximum samples to put in each output uref */
+    int output_samples;
+    /** maximum time (microseconds) to put in each output uref */
+    int output_time;
+
     /** ubuf manager */
     struct ubuf_mgr *ubuf_mgr;
     /** flow format packet */
@@ -149,6 +156,16 @@ static int upipe_rtp_pcm_pack_set_flow_def(struct upipe *upipe,
 
     UBASE_RETURN(uref_sound_flow_get_rate(flow_def, &upipe_rtp_pcm_pack->rate));
     UBASE_RETURN(uref_sound_flow_get_channels(flow_def, &upipe_rtp_pcm_pack->channels));
+    upipe_dbg(upipe, "running uref_clock_get_latency");
+    if (!ubase_check(uref_clock_get_latency(flow_def, &upipe_rtp_pcm_pack->latency))) {
+        upipe_warn(upipe, "unable to get latency from flow_def, assuming 0");
+        upipe_rtp_pcm_pack->latency = 0;
+    }
+
+    if (upipe_rtp_pcm_pack->output_time) {
+        upipe_rtp_pcm_pack->output_samples = upipe_rtp_pcm_pack->rate *
+            upipe_rtp_pcm_pack->output_time / 1e6;
+    }
 
     struct uref *flow_def_dup = uref_sibling_alloc(flow_def);
     if (unlikely(flow_def_dup == NULL)) {
@@ -192,6 +209,28 @@ static int upipe_rtp_pcm_pack_provide_flow_format(struct upipe *upipe,
     return urequest_provide_flow_format(request, flow);
 }
 
+static int upipe_rtp_pcm_pack_set_option(struct upipe *upipe, const char *option,
+        const char *value)
+{
+    struct upipe_rtp_pcm_pack *upipe_rtp_pcm_pack = upipe_rtp_pcm_pack_from_upipe(upipe);
+
+    if (!option || !value)
+        return UBASE_ERR_INVALID;
+
+    if (!strcmp(option, "output-samples")) {
+        upipe_rtp_pcm_pack->output_samples = atoi(value);
+        return UBASE_ERR_NONE;
+    }
+
+    if (!strcmp(option, "output-time")) {
+        upipe_rtp_pcm_pack->output_time = atoi(value);
+        return UBASE_ERR_NONE;
+    }
+
+    upipe_err_va(upipe, "Unknown option %s", option);
+    return UBASE_ERR_INVALID;
+}
+
 static int upipe_rtp_pcm_pack_control(struct upipe *upipe, int command,
                                   va_list args)
 {
@@ -211,6 +250,11 @@ static int upipe_rtp_pcm_pack_control(struct upipe *upipe, int command,
                 return UBASE_ERR_NONE;
             return upipe_rtp_pcm_pack_free_output_proxy(upipe, request);
         }
+        case UPIPE_SET_OPTION: {
+            const char *option = va_arg(args, const char *);
+            const char *value  = va_arg(args, const char *);
+            return upipe_rtp_pcm_pack_set_option(upipe, option, value);
+        }
         case UPIPE_SET_FLOW_DEF: {
             struct uref *flow_def = va_arg(args, struct uref *);
             return upipe_rtp_pcm_pack_set_flow_def(upipe, flow_def);
@@ -226,6 +270,7 @@ static int upipe_rtp_pcm_pack_control(struct upipe *upipe, int command,
 
 static void upipe_rtp_pcm_pack_free(struct upipe *upipe)
 {
+    upipe_throw_dead(upipe);
     upipe_rtp_pcm_pack_clean_ubuf_mgr(upipe);
     upipe_rtp_pcm_pack_clean_urefcount(upipe);
     upipe_rtp_pcm_pack_clean_uref_stream(upipe);
@@ -294,9 +339,12 @@ static bool upipe_rtp_pcm_pack_handle(struct upipe *upipe, struct uref *uref,
 
     uref_sound_read_int32_t(uref, 0, -1, &src, 1);
 
-    for (int i = 0; i < s; i++)
-        for (int j = 0; j < 3; j++)
-            dst[3*i+j] = (src[i] >> (8 * (3-j))) & 0xff;
+    for (int i = 0; i < s; i++) {
+        int32_t sample = src[i];
+        dst[3*i+0] = (sample >> 24) & 0xff;
+        dst[3*i+1] = (sample >> 16) & 0xff;
+        dst[3*i+2] = (sample >>  8) & 0xff;
+    }
 
     ubuf_block_unmap(ubuf, 0);
     uref_sound_unmap(uref, 0, -1, 1);
@@ -304,24 +352,43 @@ static bool upipe_rtp_pcm_pack_handle(struct upipe *upipe, struct uref *uref,
     uref_attach_ubuf(uref, ubuf);
 
 #define MTU 1440
-    const size_t chunk_size = (MTU / 3 / upipe_rtp_pcm_pack->channels)
-        * 3 * upipe_rtp_pcm_pack->channels;
+    size_t chunk_size;
+    if (upipe_rtp_pcm_pack->output_samples)
+        chunk_size = upipe_rtp_pcm_pack->output_samples;
+    else
+        chunk_size = MTU / 3 / upipe_rtp_pcm_pack->channels;
+    chunk_size *= 3 * upipe_rtp_pcm_pack->channels;
 
     upipe_rtp_pcm_pack_append_uref_stream(upipe, uref);
 
-    if (upipe_rtp_pcm_pack->next_uref_size + s < chunk_size)
+    if (upipe_rtp_pcm_pack->next_uref_size + s*3 < chunk_size)
         return true;
 
-    uint64_t pts_prog = 0;
-    uref_clock_get_pts_prog(upipe_rtp_pcm_pack->next_uref, &pts_prog);
+    uref_clock_set_cr_dts_delay(upipe_rtp_pcm_pack->next_uref, 0);
+    uref_clock_set_dts_pts_delay(upipe_rtp_pcm_pack->next_uref, 0);
+    uref_clock_add_date_sys(upipe_rtp_pcm_pack->next_uref, upipe_rtp_pcm_pack->latency);
 
-    do {
-        uref = upipe_rtp_pcm_pack_extract_uref_stream(upipe, chunk_size);
-        uref_clock_set_pts_prog(uref, pts_prog);
-        pts_prog += (chunk_size / 3 / upipe_rtp_pcm_pack->channels)
+    const uint64_t adjustment = (chunk_size / 3 / upipe_rtp_pcm_pack->channels)
             * UCLOCK_FREQ / upipe_rtp_pcm_pack->rate;
-        upipe_rtp_pcm_pack_output(upipe, uref, upump_p);
-    } while (uref && upipe_rtp_pcm_pack->next_uref_size > chunk_size);
+
+    while (upipe_rtp_pcm_pack->next_uref != NULL
+            && upipe_rtp_pcm_pack->next_uref_size + s*3 >= chunk_size) {
+        /* Get uref to output. */
+        struct uref *output = upipe_rtp_pcm_pack_extract_uref_stream(upipe, chunk_size);
+
+        /* Update clocks on next uref. */
+        if (upipe_rtp_pcm_pack->next_uref) {
+            uref_clock_add_date_prog(upipe_rtp_pcm_pack->next_uref, adjustment);
+            uref_clock_add_date_sys(upipe_rtp_pcm_pack->next_uref, adjustment);
+        }
+
+        if (unlikely(output == NULL)) {
+            upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
+            continue;
+        }
+
+        upipe_rtp_pcm_pack_output(upipe, output, upump_p);
+    }
 
     return true;
 }

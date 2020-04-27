@@ -48,3 +48,12 @@
    fun:ev_run
    ...
 }
+
+{
+   leak_in_dl_init
+   Memcheck:Leak
+   ...
+   fun:*alloc
+   ...
+   fun:_dl_init
+}

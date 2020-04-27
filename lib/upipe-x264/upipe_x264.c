@@ -432,6 +432,8 @@ static bool upipe_x264_open(struct upipe *upipe, int width, int height)
     struct upipe_x264 *upipe_x264 = upipe_x264_from_upipe(upipe);
     struct urational fps = {0, 0};
     x264_param_t *params = &upipe_x264->params;
+    params->rc.psz_stat_out = NULL;
+    params->rc.psz_stat_in = NULL;
 
     params->pf_log = upipe_x264_log;
     params->p_log_private = upipe;
@@ -660,6 +662,7 @@ static void upipe_x264_close(struct upipe *upipe)
 
         upipe_notice(upipe, "closing encoder");
         x264_encoder_close(upipe_x264->encoder);
+        upipe_x264->encoder = NULL;
     }
 }
 
@@ -1182,13 +1185,15 @@ static int upipe_x264_set_flow_def(struct upipe *upipe,
 
     if (upipe_x264->flow_def_check != NULL) {
         /* Die if the attributes changed. */
-        if (!upipe_x264_check_flow_def_check(upipe, flow_def_check)) {
+        if (!upipe_x264_check_flow_def_check(upipe, flow_def_check))
+            upipe_x264_close(upipe);
+        else {
             uref_free(flow_def_check);
-            return UBASE_ERR_BUSY;
+            flow_def_check = NULL;
         }
-        uref_free(flow_def_check);
+    }
 
-    } else {
+    if (flow_def_check) {
 #ifdef HAVE_X264_OBE
         if (upipe_x264->sc_latency) {
             upipe_x264->params.sc.i_buffer_size =

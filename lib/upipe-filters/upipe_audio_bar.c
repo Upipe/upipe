@@ -219,14 +219,26 @@ static void copy_color(uint8_t **dst, size_t *strides,
                        uint8_t *hsubs, uint8_t *vsubs, const uint8_t *color,
                        unsigned row, unsigned col, unsigned w)
 {
-    memset(&dst[0][(row / vsubs[0]) * strides[0] + col / hsubs[0]],
-           color[0], w / hsubs[0]); // y8
-    memset(&dst[1][(row / vsubs[1]) * strides[1] + col / hsubs[1]],
-           color[1], w / hsubs[1]); // u8
-    memset(&dst[2][(row / vsubs[2]) * strides[2] + col / hsubs[2]],
-           color[2], w / hsubs[2]); // v8
-    memset(&dst[3][(row / vsubs[3]) * strides[3] + col / hsubs[3]],
-           color[3], w / hsubs[3]); // a8
+    if (dst[0] != NULL)
+        memset(&dst[0][(row / vsubs[0]) * strides[0] + col / hsubs[0]],
+               color[0], w / hsubs[0]); // y8
+    if (dst[1] != NULL)
+        memset(&dst[1][(row / vsubs[1]) * strides[1] + col / hsubs[1]],
+               color[1], w / hsubs[1]); // u8
+    if (dst[2] != NULL)
+        memset(&dst[2][(row / vsubs[2]) * strides[2] + col / hsubs[2]],
+               color[2], w / hsubs[2]); // v8
+    if (dst[3] != NULL)
+        memset(&dst[3][(row / vsubs[3]) * strides[3] + col / hsubs[3]],
+               color[3], w / hsubs[3]); // a8
+    if (dst[4] != NULL) { // u8v8
+        uint8_t *p = &dst[4][(row / vsubs[4]) * strides[4] +
+            2 * col / hsubs[4]];
+        for (int i = 0; i < w / hsubs[4]; i++) {
+            p[i * 2] = color[1];
+            p[i * 2 + 1] = color[2];
+        }
+    }
 }
 
 /** @internal @This handles data.
@@ -273,19 +285,18 @@ static bool upipe_audiobar_handle(struct upipe *upipe, struct uref *uref,
                                        upipe_audiobar->vsize);
     uref_attach_ubuf(uref, ubuf);
 
-    uint8_t *dst[4];
-    size_t strides[4];
-    uint8_t hsubs[4];
-    uint8_t vsubs[4];
-    static const char *chroma[4] = { "y8", "u8", "v8", "a8" };
-    for (int i = 0; i < 4; i++) {
+    static const char *chroma[] = { "y8", "u8", "v8", "a8", "u8v8" };
+#define NR_CHROMA UBASE_ARRAY_SIZE(chroma)
+    uint8_t *dst[NR_CHROMA];
+    size_t strides[NR_CHROMA];
+    uint8_t hsubs[NR_CHROMA];
+    uint8_t vsubs[NR_CHROMA];
+    for (int i = 0; i < NR_CHROMA; i++) {
         if (unlikely(!ubase_check(uref_pic_plane_write(uref, chroma[i],
                             0, 0, -1, -1, &dst[i])) ||
                      !ubase_check(uref_pic_plane_size(uref, chroma[i],
                              &strides[i], &hsubs[i], &vsubs[i], NULL)))) {
-             upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
-             uref_free(uref);
-             return true;
+             dst[i] = NULL;
         }
     }
 
@@ -357,7 +368,7 @@ static bool upipe_audiobar_handle(struct upipe *upipe, struct uref *uref,
                    upipe_audiobar->hsize);
     }
 
-    for (int i = 0; i < 4; i++)
+    for (int i = 0; i < NR_CHROMA; i++)
         ubuf_pic_plane_unmap(ubuf, chroma[i], 0, 0, -1, -1);
     upipe_audiobar_output(upipe, uref, upump_p);
     return true;

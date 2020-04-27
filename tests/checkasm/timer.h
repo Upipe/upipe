@@ -47,7 +47,7 @@
 #endif
 
 #if   ARCH_AARCH64
-#   include "aarch64/timer.h"
+#   include "timer_aarch64.h"
 #elif ARCH_ARM
 #   include "arm/timer.h"
 #elif ARCH_PPC
@@ -57,7 +57,7 @@
 #endif
 
 #if !defined(AV_READ_TIME)
-#   if HAVE_GETHRTIME
+#   if defined(HAVE_GETHRTIME)
 #       define AV_READ_TIME gethrtime
 #   elif HAVE_MACH_ABSOLUTE_TIME
 #       define AV_READ_TIME mach_absolute_time

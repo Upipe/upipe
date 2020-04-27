@@ -115,9 +115,13 @@ bool upipe_av_init(bool init_avcodec_only, struct uprobe *uprobe)
     }
 
     if (unlikely(avcodec_only)) {
+#if LIBAVCODEC_VERSION_INT < AV_VERSION_INT(58, 10, 100)
         avcodec_register_all();
+#endif
     } else {
+#if LIBAVFORMAT_VERSION_INT < AV_VERSION_INT(58, 9, 100)
         av_register_all(); /* does avcodec_register_all() behind our back */
+#endif
         avformat_network_init();
     }
 

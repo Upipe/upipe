@@ -942,7 +942,7 @@ static void upipe_rtpfb_output_input(struct upipe *upipe, struct uref *uref,
         uint64_t rtt = uclock_now(upipe_rtpfb->uclock) -
             upipe_rtpfb_output->xr_cr - delay * UCLOCK_FREQ / 65536;
 
-        upipe_notice_va(upipe, "RTT %f", (float)rtt / UCLOCK_FREQ);
+        upipe_verbose_va(upipe, "RTT %f", (float)rtt / UCLOCK_FREQ);
         upipe_rtpfb->rtt = rtt;
         upipe_rtpfb_restart_timer(upipe_rtpfb_to_upipe(upipe_rtpfb));
     }

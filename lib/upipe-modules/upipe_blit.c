@@ -41,6 +41,8 @@
 #include <upipe/upipe_helper_output.h>
 #include <upipe/upipe_helper_upump_mgr.h>
 #include <upipe/upipe_helper_upump.h>
+#include <upipe/upipe_helper_ubuf_mgr.h>
+#include <upipe/upipe_helper_flow_format.h>
 #include <upipe-modules/upipe_blit.h>
 
 #include <stdlib.h>
@@ -77,6 +79,17 @@ struct upipe_blit {
     /** idler */
     struct upump *idler;
 
+    /** ubuf manager */
+    struct ubuf_mgr *ubuf_mgr;
+    /** ubuf manager flow format */
+    struct uref *flow_format;
+    /** ubuf manager request */
+    struct urequest ubuf_mgr_request;
+    /** flow format request */
+    struct urequest flow_format_request;
+    /** flow format provider */
+    struct urequest flow_format_proxy;
+
     /** number of pixels in a macropixel of the output picture */
     uint8_t macropixel;
     /** highest horizontal subsampling of the output picture */
@@ -97,12 +110,33 @@ struct upipe_blit {
     struct upipe upipe;
 };
 
+/** @hidden */
+static int upipe_blit_provide_upstream_flow_format(struct urequest *urequest,
+                                                   va_list args);
+
+/** @hidden */
+static int upipe_blit_check_flow_format(struct upipe *upipe,
+                                        struct uref *flow_format);
+
+/** @hidden */
+static int upipe_blit_check_ubuf_mgr(struct upipe *upipe,
+                                     struct uref *flow_format);
+
 UPIPE_HELPER_UPIPE(upipe_blit, upipe, UPIPE_BLIT_SIGNATURE);
 UPIPE_HELPER_UREFCOUNT(upipe_blit, urefcount, upipe_blit_free)
 UPIPE_HELPER_VOID(upipe_blit)
 UPIPE_HELPER_OUTPUT(upipe_blit, output, flow_def, output_state, request_list)
 UPIPE_HELPER_UPUMP_MGR(upipe_blit, upump_mgr);
 UPIPE_HELPER_UPUMP(upipe_blit, idler, upump_mgr);
+UPIPE_HELPER_FLOW_FORMAT(upipe_blit, flow_format_request,
+                         upipe_blit_check_flow_format,
+                         upipe_blit_register_output_request,
+                         upipe_blit_unregister_output_request);
+UPIPE_HELPER_UBUF_MGR(upipe_blit, ubuf_mgr, flow_format, ubuf_mgr_request,
+                      upipe_blit_check_ubuf_mgr,
+                      upipe_blit_register_output_request,
+                      upipe_blit_unregister_output_request);
+
 
 static void upipe_blit_sort(struct upipe *upipe);
 
@@ -818,6 +852,7 @@ static void upipe_blit_init_sub_mgr(struct upipe *upipe)
 {
     struct upipe_blit *upipe_blit = upipe_blit_from_upipe(upipe);
     struct upipe_mgr *sub_mgr = &upipe_blit->sub_mgr;
+    memset(sub_mgr, 0, sizeof (*sub_mgr));
     sub_mgr->refcount = upipe_blit_to_urefcount(upipe_blit);
     sub_mgr->signature = UPIPE_BLIT_SUB_SIGNATURE;
     sub_mgr->upipe_alloc = upipe_blit_sub_alloc;
@@ -849,8 +884,14 @@ static struct upipe *upipe_blit_alloc(struct upipe_mgr *mgr,
     upipe_blit_init_sub_subs(upipe);
     upipe_blit_init_upump_mgr(upipe);
     upipe_blit_init_idler(upipe);
+    upipe_blit_init_flow_format(upipe);
+    upipe_blit_init_ubuf_mgr(upipe);
     upipe_blit->hsize = upipe_blit->vsize = UINT64_MAX;
     upipe_blit->uref = NULL;
+    urequest_init(&upipe_blit->flow_format_proxy, UREQUEST_FLOW_FORMAT,
+                  NULL, upipe_blit_provide_upstream_flow_format,
+                  (urequest_free_func)free);
+    urequest_set_opaque(&upipe_blit->flow_format_proxy, NULL);
 
     upipe_throw_ready(upipe);
     return upipe;
@@ -888,6 +929,21 @@ static void upipe_blit_input(struct upipe *upipe, struct uref *uref,
     upipe_blit->uref = uref;
     if (upipe_blit->idler)
         upump_start(upipe_blit->idler);
+}
+
+/** @internal @This checks the ubuf manager flow format.
+ *
+ * @param upipe description structure of the pipe
+ * @param flow_format ubuf manager flow format
+ * @return an error code
+ */
+static int upipe_blit_check_ubuf_mgr(struct upipe *upipe,
+                                     struct uref *flow_format)
+{
+    if (flow_format)
+        uref_free(flow_format);
+
+    return UBASE_ERR_NONE;
 }
 
 /** @internal @This sets the input flow definition.
@@ -936,6 +992,8 @@ static int upipe_blit_set_flow_def(struct upipe *upipe, struct uref *flow_def)
     upipe_blit->hsize = hsize;
     upipe_blit->vsize = vsize;
     upipe_blit->sar = sar;
+
+    upipe_blit_require_ubuf_mgr(upipe, uref_dup(flow_def));
 
     struct uchain *uchain;
     ulist_foreach (&upipe_blit->subs, uchain) {
@@ -987,8 +1045,13 @@ static int _upipe_blit_prepare(struct upipe *upipe, struct upump **upump_p)
     }
 
     if (!writable) {
-        struct ubuf *ubuf = ubuf_pic_copy(uref->ubuf->mgr, uref->ubuf,
-                                          0, 0, -1, -1);
+        if (unlikely(!upipe_blit->ubuf_mgr)) {
+            upipe_warn(upipe, "no ubuf manager set, dropping...");
+            uref_free(uref);
+            return UBASE_ERR_BUSY;
+        }
+        struct ubuf *ubuf = ubuf_pic_copy(upipe_blit->ubuf_mgr,
+                                          uref->ubuf, 0, 0, -1, -1);
         if (unlikely(ubuf == NULL)) {
             uref_free(uref);
             return UBASE_ERR_ALLOC;;
@@ -1044,6 +1107,109 @@ static int upipe_blit_check(struct upipe *upipe)
     return UBASE_ERR_NONE;
 }
 
+/** @internal @This provides a flow format for upstream pipes.
+ *
+ * @param upipe description structure of the pipe
+ * @param flow_format proposed flow format
+ * @return an error code
+ */
+static int upipe_blit_provide_upstream_flow_format(struct urequest *urequest,
+                                                   va_list args)
+{
+    struct uref *flow_format = va_arg(args, struct uref *);
+    struct urequest *upstream =
+        urequest_get_opaque(urequest, struct urequest *);
+    if (upstream)
+        return urequest_provide_flow_format(upstream, flow_format);
+    else {
+        uref_free(flow_format);
+        return UBASE_ERR_NONE;
+    }
+}
+
+/** @internal @This checks the requested flow format.
+ *
+ * @param upipe description structure of the pipe
+ * @param flow_format proposed flow format
+ * @return an error code
+ */
+static int upipe_blit_check_flow_format(struct upipe *upipe,
+                                        struct uref *flow_format)
+{
+    struct upipe_blit *upipe_blit = upipe_blit_from_upipe(upipe);
+    struct urequest *proxy = &upipe_blit->flow_format_proxy;
+
+    /* check for changes */
+    if (proxy->uref && !udict_cmp(proxy->uref->udict, flow_format->udict)) {
+        uref_free(flow_format);
+        return UBASE_ERR_NONE;
+    }
+    uref_free(proxy->uref);
+    proxy->uref = flow_format;
+
+    /* check for upstream registration */
+    struct urequest *urequest = urequest_get_opaque(proxy, struct urequest *);
+    if (!urequest)
+        return UBASE_ERR_NONE;
+
+    return upipe_throw_provide_request(upipe, proxy);
+}
+
+/** @internal @This provides upstream pipe with a flow format.
+ *
+ * @param upipe description structure of the pipe
+ * @return an error code
+ */
+static int upipe_blit_provide_proxy_flow_format(struct upipe *upipe)
+{
+    struct upipe_blit *upipe_blit = upipe_blit_from_upipe(upipe);
+    struct urequest *proxy = &upipe_blit->flow_format_proxy;
+    struct urequest *urequest = urequest_get_opaque(proxy, struct urequest *);
+
+    if (!urequest)
+        return UBASE_ERR_NONE;
+
+    struct uref *flow_format = proxy->uref;
+    if (!flow_format) {
+        upipe_blit_require_flow_format(upipe, uref_dup(urequest->uref));
+        return UBASE_ERR_NONE;
+    }
+
+    return upipe_throw_provide_request(upipe, proxy);
+}
+
+/** @internal @This registers a provider for flow format suggestions.
+ *
+ * @param upipe description structure of the pipe
+ * @param request description structure of the request
+ * @return an error code
+ */
+static int upipe_blit_register_flow_format_provider(struct upipe *upipe,
+                                                    struct urequest *request)
+{
+    struct upipe_blit *upipe_blit = upipe_blit_from_upipe(upipe);
+    struct urequest *proxy = &upipe_blit->flow_format_proxy;
+    urequest_set_opaque(proxy, request);
+    return upipe_blit_provide_proxy_flow_format(upipe);
+}
+
+/** @internal @This unregister the provider for flow format suggestions.
+ *
+ * @param upipe description structure of the pipe
+ * @param request description structure of the request
+ * @return an error code
+ */
+static int upipe_blit_unregister_flow_format_provider(struct upipe *upipe,
+                                                      struct urequest *request)
+{
+    struct upipe_blit *upipe_blit = upipe_blit_from_upipe(upipe);
+    struct urequest *urequest =
+        urequest_get_opaque(&upipe_blit->flow_format_proxy, struct urequest *);
+    if (urequest == request)
+        urequest_set_opaque(&upipe_blit->flow_format_proxy, NULL);
+    return UBASE_ERR_NONE;
+}
+
 /** @internal @This processes control commands on a file source pipe, and
  * checks the status of the pipe afterwards.
  *
@@ -1055,6 +1221,33 @@ static int upipe_blit_check(struct upipe *upipe)
 static int upipe_blit_control_real(struct upipe *upipe,
                                    int command, va_list args)
 {
+    switch (command) {
+        case UPIPE_REGISTER_REQUEST: {
+            va_list args_copy;
+            va_copy(args_copy, args);
+            struct urequest *urequest = va_arg(args_copy, struct urequest *);
+            va_end(args_copy);
+
+            if (urequest->type == UREQUEST_FLOW_FORMAT)
+                return upipe_blit_register_flow_format_provider(
+                    upipe, urequest);
+            break;
+        }
+
+        case UPIPE_UNREGISTER_REQUEST: {
+            va_list args_copy;
+            va_copy(args_copy, args);
+            struct urequest *urequest = va_arg(args_copy, struct urequest *);
+            va_end(args_copy);
+
+            if (urequest->type == UREQUEST_FLOW_FORMAT)
+                return upipe_blit_unregister_flow_format_provider(
+                    upipe, urequest);
+            break;
+        }
+    }
+
+    UBASE_HANDLED_RETURN(upipe_blit_control_ubuf_mgr(upipe, command, args));
     UBASE_HANDLED_RETURN(upipe_blit_control_output(upipe, command, args));
     UBASE_HANDLED_RETURN(upipe_blit_control_subs(upipe, command, args));
 
@@ -1101,6 +1294,9 @@ static void upipe_blit_free(struct upipe *upipe)
 
     struct upipe_blit *upipe_blit = upipe_blit_from_upipe(upipe);
     uref_free(upipe_blit->uref);
+    urequest_clean(&upipe_blit->flow_format_proxy);
+    upipe_blit_clean_ubuf_mgr(upipe);
+    upipe_blit_clean_flow_format(upipe);
     upipe_blit_clean_idler(upipe);
     upipe_blit_clean_upump_mgr(upipe);
     upipe_blit_clean_sub_subs(upipe);

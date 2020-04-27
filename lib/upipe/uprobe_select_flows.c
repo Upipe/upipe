@@ -311,11 +311,8 @@ static int uprobe_selflow_sub_throw(struct uprobe *uprobe,
     struct uprobe_selflow_sub *sub =
         uprobe_selflow_sub_from_uprobe(uprobe);
     assert(subpipe == sub->subpipe);
-    ulist_delete(uprobe_selflow_sub_to_uchain(sub));
-    uref_free(sub->flow_def);
     sub->subpipe = NULL;
     upipe_release(subpipe);
-    uprobe_release(uprobe_selflow_sub_to_uprobe(sub));
     return UBASE_ERR_NONE;
 }
 

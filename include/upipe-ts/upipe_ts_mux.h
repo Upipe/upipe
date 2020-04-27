@@ -149,6 +149,10 @@ enum upipe_ts_mux_command {
     UPIPE_TS_MUX_GET_AAC_ENCAPS,
     /** sets the encapsulation for AAC streams (int) */
     UPIPE_TS_MUX_SET_AAC_ENCAPS,
+    /** returns the current signaling mode for AAC streams (int *) */
+    UPIPE_TS_MUX_GET_AAC_SIGNALING,
+    /** sets the signaling mode for AAC streams (int) */
+    UPIPE_TS_MUX_SET_AAC_SIGNALING,
     /** returns the current encoding for strings (const char **) */
     UPIPE_TS_MUX_GET_ENCODING,
     /** sets the encoding for strings (const char *) */
@@ -659,6 +663,33 @@ static inline int upipe_ts_mux_set_aac_encaps(struct upipe *upipe, int encaps)
 {
     return upipe_control(upipe, UPIPE_TS_MUX_SET_AAC_ENCAPS,
                          UPIPE_TS_MUX_SIGNATURE, encaps);
+}
+
+/** @This returns the current signaling mode for AAC streams
+ * (see @ref uref_mpga_signaling).
+ *
+ * @param upipe description structure of the pipe
+ * @param signaling_p filled in with the signaling mode
+ * @return an error code
+ */
+static inline int upipe_ts_mux_get_aac_signaling(struct upipe *upipe,
+                                                 int *signaling_p)
+{
+    return upipe_control(upipe, UPIPE_TS_MUX_GET_AAC_SIGNALING,
+                         UPIPE_TS_MUX_SIGNATURE, signaling_p);
+}
+
+/** @This sets the signaling mode for AAC streams
+ * (see @ref uref_mpga_signaling).
+ *
+ * @param upipe description structure of the pipe
+ * @param signaling signaling mode
+ * @return an error code
+ */
+static inline int upipe_ts_mux_set_aac_signaling(struct upipe *upipe, int signaling)
+{
+    return upipe_control(upipe, UPIPE_TS_MUX_SET_AAC_SIGNALING,
+                         UPIPE_TS_MUX_SIGNATURE, signaling);
 }
 
 /** @This returns the current encoding for strings.

@@ -43,9 +43,9 @@ void checkasm_check_sdidec(void)
         .uyvy = upipe_sdi_to_uyvy_c,
     };
 
+#ifdef HAVE_X86ASM
     int cpu_flags = av_get_cpu_flags();
 
-#ifdef HAVE_X86ASM
     if (cpu_flags & AV_CPU_FLAG_SSSE3) {
         s.uyvy = upipe_sdi_to_uyvy_ssse3;
     }

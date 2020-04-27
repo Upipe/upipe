@@ -36,6 +36,20 @@ extern "C" {
 
 #include <upipe/uref_pic_flow.h>
 
+/** @This describes a picture plane */
+struct uref_pic_flow_format_plane {
+    /** horizontal subsampling */
+    uint8_t hsub;
+    /** vertical subsampling */
+    uint8_t vsub;
+    /** size in octets of a compound */
+    uint8_t mpixel_size;
+    /** chroma type */
+    const char *chroma;
+    /** size in bits of a compound */
+    uint8_t mpixel_bits;
+};
+
 /** @This describes a picture format. */
 struct uref_pic_flow_format {
     /** macro pixel */
@@ -43,19 +57,54 @@ struct uref_pic_flow_format {
     /** number of planes */
     uint8_t nb_planes;
     /** array of plane descriptions */
-    struct {
-        /** horizontal subsampling */
-        uint8_t hsub;
-        /** vertical subsampling */
-        uint8_t vsub;
-        /** size in octets of a compound */
-        uint8_t mpixel_size;
-        /** chroma type */
-        const char *chroma;
-        /** size in bits of a compound */
-        uint8_t mpixel_bits;
-    } planes[];
+    struct uref_pic_flow_format_plane planes[];
 };
+
+/** @This iterates the planes of an uref_pic_flow_format.
+ *
+ * @param flow_format flow format to iterate
+ * @param plane set with the next plane
+ */
+#define uref_pic_flow_format_foreach_plane(flow_format, plane)  \
+    for (plane = flow_format->planes;                           \
+         plane < flow_format->planes + flow_format->nb_planes;  \
+         plane++)
+
+/** @This returns the corresponding plane of a flow format.
+ *
+ * @param flow_format picture flow format to look into
+ * @param chroma chroma plane to get
+ * @return the flow format plane or NULL
+ */
+static inline const struct uref_pic_flow_format_plane *
+uref_pic_flow_format_get_plane(const struct uref_pic_flow_format *flow_format,
+                               const char *chroma)
+{
+    const struct uref_pic_flow_format_plane *plane;
+    uref_pic_flow_format_foreach_plane(flow_format, plane)
+        if (chroma && !strcmp(chroma, plane->chroma))
+            return plane;
+    return NULL;
+}
+
+/** @This returns the index of a plane in the flow format plane array.
+ *
+ * @param flow_format pointer to the structure containing the array
+ * @param plane plane to get the index from
+ * @return the index or UINT8_MAX if the plane was not found in the array
+ */
+static inline uint8_t
+uref_pic_flow_format_get_plane_id(const struct uref_pic_flow_format *flow_format,
+                                  const struct uref_pic_flow_format_plane *plane)
+{
+    if (plane < flow_format->planes)
+        return UINT8_MAX;
+
+    if (plane - flow_format->planes > UINT8_MAX ||
+        plane - flow_format->planes > flow_format->nb_planes)
+        return UINT8_MAX;
+    return plane - flow_format->planes;
+}
 
 /** @This checks a flow format.
  *
@@ -597,7 +646,18 @@ static const struct uref_pic_flow_format uref_pic_flow_format_bgra = {
 
 UREF_PIC_FLOW_FORMAT_HELPER(bgra);
 
-/** @This is the description of the rgba64be. */
+/** @This is the description of the rgba64le format. */
+static const struct uref_pic_flow_format uref_pic_flow_format_rgba64le = {
+    .macropixel = 1,
+    .nb_planes = 1,
+    .planes = {
+        { 1, 1, 8, "r16g16b16a16l", 64 },
+    },
+};
+
+UREF_PIC_FLOW_FORMAT_HELPER(rgba64le);
+
+/** @This is the description of the rgba64be format. */
 static const struct uref_pic_flow_format uref_pic_flow_format_rgba64be = {
     .macropixel = 1,
     .nb_planes = 1,
@@ -607,6 +667,42 @@ static const struct uref_pic_flow_format uref_pic_flow_format_rgba64be = {
 };
 
 UREF_PIC_FLOW_FORMAT_HELPER(rgba64be);
+
+/** @This is the description of the nv12 format. */
+static const struct uref_pic_flow_format uref_pic_flow_format_nv12 = {
+    .macropixel = 1,
+    .nb_planes = 2,
+    .planes = {
+        { 1, 1, 1, "y8", 8 },
+        { 2, 2, 2, "u8v8", 16 },
+    },
+};
+
+UREF_PIC_FLOW_FORMAT_HELPER(nv12);
+
+/** @This is the description of the nv16 format. */
+static const struct uref_pic_flow_format uref_pic_flow_format_nv16 = {
+    .macropixel = 1,
+    .nb_planes = 2,
+    .planes = {
+        { 1, 1, 1, "y8", 8 },
+        { 2, 1, 2, "u8v8", 16 },
+    },
+};
+
+UREF_PIC_FLOW_FORMAT_HELPER(nv16);
+
+/** @This is the description of the nv24 format. */
+static const struct uref_pic_flow_format uref_pic_flow_format_nv24 = {
+    .macropixel = 1,
+    .nb_planes = 2,
+    .planes = {
+        { 1, 1, 1, "y8", 8 },
+        { 1, 1, 2, "u8v8", 16 },
+    },
+};
+
+UREF_PIC_FLOW_FORMAT_HELPER(nv24);
 
 #ifdef __cplusplus
 }

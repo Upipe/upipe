@@ -534,11 +534,13 @@ static bool upipe_freetype_handle(struct upipe *upipe, struct uref *uref,
     struct plane u;
     struct plane v;
     struct plane a;
+    struct plane uv;
 
     memset(&y, 0, sizeof (y));
     memset(&u, 0, sizeof (u));
     memset(&v, 0, sizeof (v));
     memset(&a, 0, sizeof (a));
+    memset(&uv, 0, sizeof (uv));
 
     const char *chroma;
     ubuf_pic_foreach_plane(ubuf, chroma) {
@@ -552,6 +554,8 @@ static bool upipe_freetype_handle(struct upipe *upipe, struct uref *uref,
             plane = &v;
         } else if (!strcmp(chroma, "a8")) {
             plane = &a;
+        } else if (!strcmp(chroma, "u8v8")) {
+            plane = &uv;
         } else {
             upipe_warn_va(upipe, "unsupported plane %s", chroma);
             continue;
@@ -604,6 +608,17 @@ static bool upipe_freetype_handle(struct upipe *upipe, struct uref *uref,
         for (size_t i = 0; i < height / a.vsub; i++) {
             memset(buf, upipe_freetype->background[3], a.memset_width);
             buf += a.stride;
+        }
+    }
+
+    if (uv.p) {
+        uint8_t *buf = uv.p;
+        for (size_t i = 0; i < height / uv.vsub; i++) {
+            for (int j = 0; j < uv.memset_width; j += 2) {
+                buf[j] = upipe_freetype->background[1];
+                buf[j + 1] = upipe_freetype->background[2];
+            }
+            buf += uv.stride;
         }
     }
 
@@ -696,6 +711,16 @@ static bool upipe_freetype_handle(struct upipe *upipe, struct uref *uref,
                 DO_PLANE(u, upipe_freetype->foreground[1]);
                 DO_PLANE(v, upipe_freetype->foreground[2]);
                 DO_PLANE(a, 0xff);
+
+                if (uv.p) {
+                    FT_Int p_y = (ypos + j) / uv.vsub * uv.stride;
+                    FT_Int p_x = (xpos + i) / uv.hsub * uv.macropixel_size;
+                    FT_Int p = p_y + p_x;
+                    int fg_1 = upipe_freetype->foreground[1];
+                    int fg_2 = upipe_freetype->foreground[2];
+                    uv.p[p] = (uv.p[p] * (0xff - px) + fg_1 * px) / 0xff;
+                    uv.p[p + 1] = (uv.p[p + 1] * (0xff - px) + fg_2 * px) / 0xff;
+                }
             }
         }
 
@@ -716,8 +741,10 @@ static bool upipe_freetype_handle(struct upipe *upipe, struct uref *uref,
         ubuf_pic_plane_unmap(ubuf, "v8", 0, 0, -1, -1);
     if (a.p)
         ubuf_pic_plane_unmap(ubuf, "a8", 0, 0, -1, -1);
+    if (uv.p)
+        ubuf_pic_plane_unmap(ubuf, "u8v8", 0, 0, -1, -1);
 
-    ubuf_free(upipe_freetype->ubuf);
+    upipe_freetype_flush_cache(upipe);
     upipe_freetype->ubuf = ubuf;
     upipe_freetype->text = strdup(text);
     uref_attach_ubuf(uref, ubuf_dup(upipe_freetype->ubuf));
@@ -1061,7 +1088,7 @@ static int _upipe_freetype_get_metrics(struct upipe *upipe,
 
     struct upipe_freetype_metrics m;
     m.x.min = upipe_freetype->face->bbox.xMin;
-    m.x.max = upipe_freetype->face->bbox.xMin;
+    m.x.max = upipe_freetype->face->bbox.xMax;
     m.y.min = upipe_freetype->face->bbox.yMin;
     m.y.max = upipe_freetype->face->bbox.yMax;
     m.units_per_EM = upipe_freetype->face->units_per_EM;
