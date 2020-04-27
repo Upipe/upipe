@@ -2609,6 +2609,7 @@ struct upipe_mgr *upipe_netmap_sink_mgr_alloc(void)
 static int upipe_netmap_sink_audio_set_flow_def(struct upipe *upipe,
         struct uref *flow_def)
 {
+    struct upipe_netmap_sink_audio *audio_subpipe = upipe_netmap_sink_audio_from_upipe(upipe);
     upipe_dbg_va(upipe, "%s", __func__);
 
     if (flow_def == NULL)
@@ -2617,6 +2618,13 @@ static int upipe_netmap_sink_audio_set_flow_def(struct upipe *upipe,
 
     flow_def = uref_dup(flow_def);
     UBASE_ALLOC_RETURN(flow_def)
+
+    /* Clear buffered urefs. */
+    struct uchain *uchain, *uchain_tmp;
+    ulist_delete_foreach(&audio_subpipe->urefs, uchain, uchain_tmp) {
+        ulist_delete(uchain);
+        uref_free(uref_from_uchain(uchain));
+    }
     upipe_input(upipe, flow_def, NULL);
 
     return UBASE_ERR_NONE;
