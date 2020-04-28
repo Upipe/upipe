@@ -2699,28 +2699,17 @@ static void pack_audio(struct upipe_netmap_sink_audio *audio_subpipe)
     const int32_t *src = audio_subpipe->data;
     uint8_t *dst = audio_subpipe->audio_data;
 
-    if (audio_subpipe->cached_samples) {
-        for (int j = audio_subpipe->cached_samples * audio_subpipe->channels;
-                j < audio_subpipe->output_samples * audio_subpipe->channels;
-                j++) {
-            int32_t sample = src[j];
-            dst[3*j+0] = (sample >> 24) & 0xff;
-            dst[3*j+1] = (sample >> 16) & 0xff;
-            dst[3*j+2] = (sample >>  8) & 0xff;
-        }
-        audio_subpipe->cached_samples = 0;
+    for (int j = audio_subpipe->cached_samples * audio_subpipe->channels;
+            j < audio_subpipe->output_samples * audio_subpipe->channels;
+            j++) {
+        int32_t sample = src[j];
+        dst[3*j+0] = (sample >> 24) & 0xff;
+        dst[3*j+1] = (sample >> 16) & 0xff;
+        dst[3*j+2] = (sample >>  8) & 0xff;
     }
 
-    else {
-        for (int j = 0;
-                j < audio_subpipe->output_samples * audio_subpipe->channels;
-                j++) {
-            int32_t sample = src[j];
-            dst[3*j+0] = (sample >> 24) & 0xff;
-            dst[3*j+1] = (sample >> 16) & 0xff;
-            dst[3*j+2] = (sample >>  8) & 0xff;
-        }
-    }
+    if (audio_subpipe->cached_samples)
+        audio_subpipe->cached_samples = 0;
 
     audio_subpipe->data += audio_subpipe->output_samples * audio_subpipe->channels;
     audio_subpipe->uref_samples -= audio_subpipe->output_samples;
