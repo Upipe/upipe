@@ -1575,7 +1575,7 @@ static void upipe_netmap_sink_worker(struct upump *upump)
         /* Audio insertion/multiplex. */
         static unsigned local_audio_packet_counter = 0;
 
-        if (aps_audio_needed(&upipe_netmap_sink->audio_packet_state)) {
+        if (rfc4175 && aps_audio_needed(&upipe_netmap_sink->audio_packet_state)) {
             const uint64_t audio_packet_size = ETHERNET_HEADER_LEN
                 + IP_HEADER_MINSIZE + UDP_HEADER_SIZE + RTP_HEADER_SIZE
                 + 16/*channels*/ * 6/*samples*/ * 3/*bytes per sample*/;
