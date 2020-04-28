@@ -276,28 +276,6 @@ static inline bool sd_sav_match_bitpacked(const uint8_t *src)
     return false;
 }
 
-static void dump_and_exit_clean(struct upipe *upipe, uint8_t *buf, size_t size)
-{
-    struct upipe_pciesdi_src *upipe_pciesdi_src = upipe_pciesdi_src_from_upipe(upipe);
-    int64_t hw, sw;
-    sdi_dma_writer(upipe_pciesdi_src->fd, 0, &hw, &sw); // disable
-    sdi_release_dma_writer(upipe_pciesdi_src->fd); // release old locks
-    close(upipe_pciesdi_src->fd);
-
-    if (buf) {
-        FILE *fh = fopen("dump.bin", "wb");
-        if (!fh) {
-            upipe_err(upipe, "could not open dump file");
-            abort();
-        }
-        fwrite(buf, 1, size, fh);
-        fclose(fh);
-        upipe_dbg(upipe, "dumped to dump.bin");
-    }
-
-    abort();
-}
-
 /*
  * Returns the address within the circular mmap buffer using the buffer count
  * and offset.
@@ -400,6 +378,11 @@ static void upipe_pciesdi_src_worker(struct upump *upump)
     /* Calculate how many lines we can output from the available data. */
     int bytes_available = num_bufs * DMA_BUFFER_SIZE + upipe_pciesdi_src->scratch_buffer_count;
     int lines = bytes_available / sdi_line_width;
+
+    /* If there is nothing to do then return early. */
+    if (num_bufs == 0 || lines == 0)
+        return;
+
     int processed_bytes = lines * sdi_line_width;
     int output_size = lines * upipe_pciesdi_src->sdi_format->width * 4;
     if (upipe_pciesdi_src->sdi3g_levelb)
@@ -419,11 +402,6 @@ static void upipe_pciesdi_src_worker(struct upump *upump)
 
         upipe_pciesdi_src->discontinuity = true;
         return;
-    }
-
-    if (!lines) {
-        upipe_err(upipe, "0 lines after a mmap read is not supported");
-        dump_and_exit_clean(upipe, NULL, 0);
     }
 
     if (!upipe_pciesdi_src->ubuf_mgr) {
