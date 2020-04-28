@@ -451,9 +451,12 @@ static void upipe_pciesdi_src_worker(struct upump *upump)
 
     uint8_t *dst_buf;
     int block_size = -1;
-    if (!ubase_check(uref_block_write(uref, 0, &block_size, &dst_buf))) {
+    int ret = uref_block_write(uref, 0, &block_size, &dst_buf);
+    if (unlikely(!ubase_check(ret))) {
         upipe_err(upipe, "unable to map block for writing");
-        dump_and_exit_clean(upipe, NULL, 0);
+        upipe_throw_fatal(upipe, ret);
+        uref_free(uref);
+        return;
     }
 
     int offset = 0;
