@@ -2608,7 +2608,7 @@ static void upipe_netmap_sink_audio_input(struct upipe *upipe,
     uint64_t systime = 0;
 
     /* Check and warn for uref without timestamp. */
-    if (unlikely(!ubase_check(uref_clock_get_cr_sys(uref, &systime))))
+    if (unlikely(!ubase_check(uref_clock_get_pts_sys(uref, &systime))))
         upipe_warn(upipe, "received non-dated buffer");
 
     ulist_add(&audio_subpipe->urefs, uref_to_uchain(uref));
