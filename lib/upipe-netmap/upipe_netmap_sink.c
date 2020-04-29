@@ -2694,26 +2694,29 @@ static int get_audio(struct upipe_netmap_sink_audio *audio_subpipe)
     return UBASE_ERR_NONE;
 }
 
+#define bswap32 __builtin_bswap32
+
 static void pack_audio(struct upipe_netmap_sink_audio *audio_subpipe)
 {
     const int32_t *src = audio_subpipe->data;
     uint8_t *dst = audio_subpipe->audio_data;
+    const int start = audio_subpipe->cached_samples * audio_subpipe->channels;
+    const int end = audio_subpipe->output_samples * audio_subpipe->channels;
 
-    for (int j = audio_subpipe->cached_samples * audio_subpipe->channels;
-            j < audio_subpipe->output_samples * audio_subpipe->channels;
-            j++) {
+    for (int j = start; j < end; j++) {
         int32_t sample = src[j];
-        dst[3*j+0] = (sample >> 24) & 0xff;
-        dst[3*j+1] = (sample >> 16) & 0xff;
-        dst[3*j+2] = (sample >>  8) & 0xff;
+        uint32_t *dst32 = (uint32_t*)&dst[3*j];
+        *dst32 = bswap32(sample);
     }
 
     if (audio_subpipe->cached_samples)
         audio_subpipe->cached_samples = 0;
 
-    audio_subpipe->data += audio_subpipe->output_samples * audio_subpipe->channels;
+    audio_subpipe->data += end;
     audio_subpipe->uref_samples -= audio_subpipe->output_samples;
 }
+
+#undef bswap32
 
 static void handle_audio_tail(struct upipe_netmap_sink_audio *audio_subpipe)
 {
