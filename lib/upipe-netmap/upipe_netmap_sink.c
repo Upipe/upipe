@@ -158,7 +158,7 @@ struct upipe_netmap_sink_audio {
     uint8_t channels;
 
     /* Cached audio data (packed) from tails of input urefs. */
-    uint8_t audio_data[AES67_MAX_SAMPLES_PER_PACKET * 16 * 3];
+    uint8_t audio_data[AES67_MAX_SAMPLES_PER_PACKET * 16 * 3 + 1];
     /* Number of samples in buffer. */
     int cached_samples;
 
