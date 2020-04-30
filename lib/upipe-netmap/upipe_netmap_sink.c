@@ -2581,16 +2581,19 @@ static int upipe_netmap_sink_audio_set_flow_def(struct upipe *upipe,
         return UBASE_ERR_INVALID;
     UBASE_RETURN(uref_flow_match_def(flow_def, "sound.s32."))
 
-    flow_def = uref_dup(flow_def);
-    UBASE_ALLOC_RETURN(flow_def)
-
     /* Clear buffered urefs. */
     struct uchain *uchain, *uchain_tmp;
     ulist_delete_foreach(&audio_subpipe->urefs, uchain, uchain_tmp) {
         ulist_delete(uchain);
         uref_free(uref_from_uchain(uchain));
     }
-    upipe_input(upipe, flow_def, NULL);
+
+    /* Check for flow_def and get latency attribute. */
+    if (unlikely(ubase_check(uref_flow_get_def(flow_def, NULL)))) {
+        uint64_t latency = 0;
+        uref_clock_get_latency(flow_def, &latency);
+        audio_subpipe->latency = latency;
+    }
 
     return UBASE_ERR_NONE;
 }
@@ -2659,17 +2662,6 @@ static int get_audio(struct upipe_netmap_sink_audio *audio_subpipe)
     UBASE_ALLOC_RETURN(uchain);
     audio_subpipe->n -= 1;
     struct uref *uref = uref_from_uchain(uchain);
-
-    /* Check for flow_def and get latency attribute. */
-    if (unlikely(ubase_check(uref_flow_get_def(uref, NULL)))) {
-        uint64_t latency = 0;
-        uref_clock_get_latency(uref, &latency);
-        audio_subpipe->latency = latency;
-        uref_free(uref);
-
-        /* Try again for audio data. */
-        return get_audio(audio_subpipe);
-    }
 
     /* Check size. */
     size_t samples = 0;
