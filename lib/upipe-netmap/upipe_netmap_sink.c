@@ -1181,18 +1181,18 @@ static int compute_fakes(struct upipe *upipe, int j)
     struct upipe_netmap_sink *upipe_netmap_sink = upipe_netmap_sink_from_upipe(upipe);
     const struct urational *fps = &upipe_netmap_sink->fps;
 
-    if (j > 100)
-        j = 100;
-    if (j < -100)
-        j = -100;
+    if (j > 300)
+        j = 300;
+    if (j < -300)
+        j = -300;
     float i = j;
 
     float error = -i;
     upipe_netmap_sink->pid_error_sum += error * fps->den / fps->num;
 
     /* avoid swinging too far when initial error is large */
-    if (upipe_netmap_sink->pid_error_sum > 400)
-        upipe_netmap_sink->pid_error_sum = 400;
+    if (upipe_netmap_sink->pid_error_sum > 500)
+        upipe_netmap_sink->pid_error_sum = 500;
 
     float d = (error - upipe_netmap_sink->pid_last_error) * fps->num / fps->den;
     if (fps->num / fps->den >= 50)
