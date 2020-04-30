@@ -1193,6 +1193,21 @@ static struct uref *get_uref(struct upipe *upipe)
                     pts_to_time(pts - upipe_netmap_sink->latency),
                     (float)upipe_netmap_sink->latency / 27000
                     );
+
+                pts -= upipe_netmap_sink->phase_delay;
+
+                /* Remove any nearby audio urefs */
+                struct uchain *uchain, *uchain_tmp;
+                ulist_delete_foreach(&audio_subpipe->urefs, uchain, uchain_tmp) {
+                    struct uref *uref = uref_from_uchain(uchain);
+                    uint64_t pts_audio = 0;
+                    uref_clock_get_pts_sys(uref, &pts_audio);
+                    pts_audio += audio_subpipe->latency;
+                    if (pts - pts_audio < 27000 || pts_audio - pts < 27000) {
+                        ulist_delete(uchain);
+                        uref_free(uref_from_uchain(uchain));
+                    }
+                }
         }
     }
 
