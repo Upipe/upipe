@@ -1109,6 +1109,7 @@ static void upipe_clear_queues(struct upipe *upipe, struct upipe_netmap_intf *in
 static struct uref *get_uref(struct upipe *upipe)
 {
     struct upipe_netmap_sink *upipe_netmap_sink = upipe_netmap_sink_from_upipe(upipe);
+    struct upipe_netmap_sink_audio *audio_subpipe = &upipe_netmap_sink->audio_subpipe;
 
     struct uref *uref = upipe_netmap_sink->uref;
     struct urational *fps = &upipe_netmap_sink->fps;
@@ -1131,6 +1132,13 @@ static struct uref *get_uref(struct upipe *upipe)
                     pts_to_time(pts - upipe_netmap_sink->latency),
                     (float)upipe_netmap_sink->latency / 27000
                     );
+
+            /* Drop associated sound uref */
+            if (audio_subpipe->uref) {
+                uref_sound_unmap(audio_subpipe->uref, 0, -1, 1);
+                uref_free(audio_subpipe->uref);
+                audio_subpipe->uref = NULL;
+            }
         }
     }
 
@@ -1464,6 +1472,13 @@ static void upipe_netmap_sink_worker(struct upump *upump)
         if (uref) {
             uref_block_unmap(uref, 0);
             uref_free(uref);
+        }
+
+        /* Drop associated sound uref */
+        if (audio_subpipe->uref) {
+            uref_sound_unmap(audio_subpipe->uref, 0, -1, 1);
+            uref_free(audio_subpipe->uref);
+            audio_subpipe->uref = NULL;
         }
 
         for (;;) {
