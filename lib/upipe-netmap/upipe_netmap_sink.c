@@ -1243,8 +1243,7 @@ static void handle_tx_stamp(struct upipe *upipe, uint64_t t, uint16_t seq)
         /* back to 27MHz units (having been floored) */
         upipe_netmap_sink->frame_ts *= dur;
 
-        /* XXX: does this need to be dur - (t - upipe_netmap_sink->frame_ts) */
-        upipe_netmap_sink->phase_delay = t - upipe_netmap_sink->frame_ts;
+        upipe_netmap_sink->phase_delay = dur - (t - upipe_netmap_sink->frame_ts);
         upipe_netmap_update_timestamp_cache(upipe_netmap_sink);
 
         return;
