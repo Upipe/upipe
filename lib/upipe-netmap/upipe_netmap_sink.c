@@ -1919,6 +1919,11 @@ static bool upipe_netmap_sink_output(struct upipe *upipe, struct uref *uref,
         return true;
     }
 
+    uint64_t systime = 0;
+    /* Check and warn for uref without timestamp. */
+    if (unlikely(!ubase_check(uref_clock_get_pts_sys(uref, &systime))))
+        upipe_warn(upipe, "received non-dated buffer");
+
     if (upipe_netmap_sink->frame_size == 0) {
         if (!upipe_netmap_sink->rfc4175) {
             uref_block_size(uref, &upipe_netmap_sink->frame_size);
