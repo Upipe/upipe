@@ -475,6 +475,30 @@ static void upipe_netmap_sink_reset_counters(struct upipe *upipe)
     upipe_netmap_sink->frame_ts_start = 0;
 }
 
+static void upipe_netmap_sink_clear_queues(struct upipe *upipe)
+{
+    struct upipe_netmap_sink *upipe_netmap_sink = upipe_netmap_sink_from_upipe(upipe);
+
+    /* Clear buffered video urefs */
+    for (;;) {
+        struct uchain *uchain = ulist_pop(&upipe_netmap_sink->sink_queue);
+        if (!uchain)
+            break;
+        struct uref *uref = uref_from_uchain(uchain);
+        uref_free(uref);
+    }
+    upipe_netmap_sink->n = 0;
+
+    /* Clear buffered audio urefs */
+    for (;;) {
+        struct uchain *uchain = ulist_pop(&upipe_netmap_sink->audio_subpipe.urefs);
+        if (!uchain)
+            break;
+        struct uref *uref = uref_from_uchain(uchain);
+        uref_free(uref);
+    }
+    upipe_netmap_sink->audio_subpipe.n = 0;
+}
 
 /** @internal @This allocates a netmap sink pipe.
  *
@@ -1308,6 +1332,7 @@ static void upipe_netmap_sink_worker(struct upump *upump)
 {
     struct upipe *upipe = upump_get_opaque(upump, struct upipe *);
     struct upipe_netmap_sink *upipe_netmap_sink = upipe_netmap_sink_from_upipe(upipe);
+    struct upipe_netmap_sink_audio *audio_subpipe = &upipe_netmap_sink->audio_subpipe;
 
     uint64_t now = uclock_now(upipe_netmap_sink->uclock);
     {
@@ -1473,6 +1498,9 @@ static void upipe_netmap_sink_worker(struct upump *upump)
             uref_free(uref);
         }
 
+        /* FIXME: Is this ok? */
+        upipe_netmap_sink->uref = NULL;
+
         /* Drop associated sound uref */
         if (audio_subpipe->uref) {
             uref_sound_unmap(audio_subpipe->uref, 0, -1, 1);
@@ -1480,17 +1508,7 @@ static void upipe_netmap_sink_worker(struct upump *upump)
             audio_subpipe->uref = NULL;
         }
 
-        for (;;) {
-            struct uchain *uchain = ulist_pop(&upipe_netmap_sink->sink_queue);
-            if (!uchain)
-                break;
-            struct uref *uref = uref_from_uchain(uchain);
-            uref_free(uref);
-        }
-
         upipe_netmap_sink_reset_counters(upipe);
-        upipe_netmap_sink->uref = NULL;
-
         return;
     }
 
@@ -1828,14 +1846,12 @@ static void upipe_netmap_sink_worker(struct upump *upump)
 
     if (txavail >= max_slots - 32) {
         upipe_netmap_sink_reset_counters(upipe);
-        for (;;) {
-            struct uchain *uchain = ulist_pop(&upipe_netmap_sink->sink_queue);
-            if (!uchain)
-                break;
-            struct uref *uref = uref_from_uchain(uchain);
-            uref_free(uref);
-        }
+
+        /* FIXME: Is this ok? */
         upipe_netmap_sink->uref = NULL;
+
+        upipe_netmap_sink_clear_queues(upipe);
+
         upipe_netmap_sink_set_upump(upipe, NULL);
     }
 
@@ -2212,14 +2228,9 @@ static int upipe_netmap_sink_set_flow_def(struct upipe *upipe,
 
     upipe_netmap_sink->frame_size = 0;
     upipe_netmap_sink_reset_counters(upipe);
-    for (;;) {
-        struct uchain *uchain = ulist_pop(&upipe_netmap_sink->sink_queue);
-        if (!uchain)
-            break;
-        struct uref *uref = uref_from_uchain(uchain);
-        uref_free(uref);
-    }
     upipe_netmap_sink->uref = NULL;
+
+    upipe_netmap_sink_clear_queues(upipe);
 
     flow_def = uref_dup(flow_def);
     UBASE_ALLOC_RETURN(flow_def)
@@ -2483,14 +2494,10 @@ static int _upipe_netmap_sink_control(struct upipe *upipe,
         case UPIPE_SET_URI: {
             const char *uri = va_arg(args, const char *);
             upipe_netmap_sink_reset_counters(upipe);
-            for (;;) {
-                struct uchain *uchain = ulist_pop(&upipe_netmap_sink->sink_queue);
-                if (!uchain)
-                    break;
-                struct uref *uref = uref_from_uchain(uchain);
-                uref_free(uref);
-            }
             upipe_netmap_sink->uref = NULL;
+
+            upipe_netmap_sink_clear_queues(upipe);
+
             upipe_netmap_sink_set_upump(upipe, NULL);
             return upipe_netmap_sink_set_uri(upipe, uri);
         }
@@ -2601,6 +2608,7 @@ static int upipe_netmap_sink_audio_set_flow_def(struct upipe *upipe,
         ulist_delete(uchain);
         uref_free(uref_from_uchain(uchain));
     }
+    audio_subpipe->n = 0;
 
     /* Check for flow_def and get latency attribute. */
     if (unlikely(ubase_check(uref_flow_get_def(flow_def, NULL)))) {
