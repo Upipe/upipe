@@ -1037,10 +1037,10 @@ static int upipe_sync_set_flow_def(struct upipe *upipe, struct uref *flow_def)
 
     // FIXME : estimated latency added by processing
     latency += UCLOCK_FREQ / 25;
-    uref_clock_set_latency(flow_def, latency);
     uint64_t max_latency = upipe_sync_get_max_latency(upipe);
     if (latency < max_latency)
         latency = max_latency;
+    uref_clock_set_latency(flow_def, latency);
 
     upipe_notice_va(upipe, "Latency %" PRIu64, latency);
     upipe_sync->latency = latency;
