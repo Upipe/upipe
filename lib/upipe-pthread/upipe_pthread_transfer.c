@@ -44,6 +44,8 @@
 #include <upipe-pthread/upipe_pthread_transfer.h>
 #include <upipe-pthread/uprobe_pthread_upump_mgr.h>
 
+#include <sys/resource.h>
+
 #include <stdlib.h>
 #include <stdbool.h>
 #include <stdint.h>
@@ -55,6 +57,7 @@
 #include <errno.h>
 #include <math.h>
 #include <assert.h>
+#include <limits.h>
 
 /** @internal @This is the private context for pthread. */
 struct upipe_pthread_ctx {
@@ -76,6 +79,8 @@ struct upipe_pthread_ctx {
     struct umutex *mutex;
     /** thread name */
     char *name;
+    /** thread priority value */
+    int priority;
 };
 
 /** @internal @This is the main function of the new thread.
@@ -105,6 +110,9 @@ static void *upipe_pthread_start(void *_pthread_ctx)
     pthread_sigmask(SIG_BLOCK, &sigs, NULL);
 
     pthread_setcanceltype(PTHREAD_CANCEL_ASYNCHRONOUS, NULL);
+
+    if (pthread_ctx->priority != INT_MAX)
+        setpriority(PRIO_PROCESS, 0, pthread_ctx->priority);
 
     /* spawn the upump manager */
     struct upump_mgr *upump_mgr =
@@ -181,14 +189,17 @@ static void upipe_pthread_stop(struct upump *upump)
  * @param mutex mutual exclusion pimitives to access the event loop, or NULL
  * @param pthread_id_p reference to created thread ID (may be NULL)
  * @param attr pthread attributes
+ * @param name custom name or NULL
+ * @param priority priority of the thread or INT_MAX to leave it unchanged
  * @return pointer to xfer manager
  */
-struct upipe_mgr *upipe_pthread_xfer_mgr_alloc_named(uint8_t queue_length,
-        uint16_t msg_pool_depth, struct uprobe *uprobe_pthread_upump_mgr,
-        upump_mgr_alloc upump_mgr_alloc, uint16_t upump_pool_depth,
-        uint16_t upump_blocker_pool_depth, struct umutex *mutex,
-        pthread_t *pthread_id_p, const pthread_attr_t *restrict attr,
-        const char *name)
+struct upipe_mgr *upipe_pthread_xfer_mgr_alloc_prio_named(
+    uint8_t queue_length, uint16_t msg_pool_depth,
+    struct uprobe *uprobe_pthread_upump_mgr,
+    upump_mgr_alloc upump_mgr_alloc, uint16_t upump_pool_depth,
+    uint16_t upump_blocker_pool_depth, struct umutex *mutex,
+    pthread_t *pthread_id_p, const pthread_attr_t *restrict attr,
+    int priority, const char *name)
 {
     struct upipe_pthread_ctx *pthread_ctx =
         malloc(sizeof(struct upipe_pthread_ctx));
@@ -223,6 +234,7 @@ struct upipe_mgr *upipe_pthread_xfer_mgr_alloc_named(uint8_t queue_length,
     pthread_ctx->upump_blocker_pool_depth = upump_blocker_pool_depth;
     pthread_ctx->mutex = umutex_use(mutex);
     pthread_ctx->name = name ? strdup(name) : NULL;
+    pthread_ctx->priority = priority;
 
     if (unlikely(pthread_create(&pthread_ctx->pthread_id, attr,
                                 upipe_pthread_start, pthread_ctx) != 0))
@@ -248,6 +260,26 @@ upipe_pthread_xfer_mgr_alloc_err1:
     return NULL;
 }
 
+struct upipe_mgr *upipe_pthread_xfer_mgr_alloc_named(uint8_t queue_length,
+        uint16_t msg_pool_depth, struct uprobe *uprobe_pthread_upump_mgr,
+        upump_mgr_alloc upump_mgr_alloc, uint16_t upump_pool_depth,
+        uint16_t upump_blocker_pool_depth, struct umutex *mutex,
+        pthread_t *pthread_id_p, const pthread_attr_t *restrict attr,
+        const char *name)
+{
+    return upipe_pthread_xfer_mgr_alloc_prio_named(queue_length,
+                                                   msg_pool_depth,
+                                                   uprobe_pthread_upump_mgr,
+                                                   upump_mgr_alloc,
+                                                   upump_pool_depth,
+                                                   upump_blocker_pool_depth,
+                                                   mutex,
+                                                   pthread_id_p,
+                                                   attr,
+                                                   INT_MAX,
+                                                   name);
+}
+
 struct upipe_mgr *upipe_pthread_xfer_mgr_alloc(uint8_t queue_length,
         uint16_t msg_pool_depth, struct uprobe *uprobe_pthread_upump_mgr,
         upump_mgr_alloc upump_mgr_alloc, uint16_t upump_pool_depth,
@@ -264,4 +296,25 @@ struct upipe_mgr *upipe_pthread_xfer_mgr_alloc(uint8_t queue_length,
                                               pthread_id_p,
                                               attr,
                                               NULL);
+}
+
+struct upipe_mgr *upipe_pthread_xfer_mgr_alloc_prio(
+    uint8_t queue_length, uint16_t msg_pool_depth,
+    struct uprobe *uprobe_pthread_upump_mgr,
+    upump_mgr_alloc upump_mgr_alloc, uint16_t upump_pool_depth,
+    uint16_t upump_blocker_pool_depth, struct umutex *mutex,
+    pthread_t *pthread_id_p, const pthread_attr_t *restrict attr,
+    int priority)
+{
+    return upipe_pthread_xfer_mgr_alloc_prio_named(queue_length,
+                                                   msg_pool_depth,
+                                                   uprobe_pthread_upump_mgr,
+                                                   upump_mgr_alloc,
+                                                   upump_pool_depth,
+                                                   upump_blocker_pool_depth,
+                                                   mutex,
+                                                   pthread_id_p,
+                                                   attr,
+                                                   priority,
+                                                   NULL);
 }
