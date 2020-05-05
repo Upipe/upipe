@@ -1614,7 +1614,7 @@ static void upipe_netmap_sink_worker(struct upump *upump)
                 pack_audio(audio_subpipe);
             } else {
                 /* TODO: print exact error? */
-                upipe_warn(subpipe, "No audio available, outputting silence");
+                upipe_dbg(subpipe, "No audio available, outputting silence");
                 memset(audio_subpipe->audio_data, 0, sizeof audio_subpipe->audio_data);
             }
 
