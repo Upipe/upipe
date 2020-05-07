@@ -2659,6 +2659,16 @@ static void upipe_netmap_sink_audio_input(struct upipe *upipe,
     ulist_add(&audio_subpipe->urefs, uref_to_uchain(uref));
     audio_subpipe->n += 1;
     upipe_dbg_va(upipe, "%s: %"PRIu64, __func__, audio_subpipe->n);
+
+    if (audio_subpipe->n > MAX_AUDIO_UREFS) {
+        /* Clear buffered urefs. */
+        struct uchain *uchain, *uchain_tmp;
+        ulist_delete_foreach(&audio_subpipe->urefs, uchain, uchain_tmp) {
+            ulist_delete(uchain);
+            uref_free(uref_from_uchain(uchain));
+        }
+        audio_subpipe->n = 0;
+    }
 }
 
 /** @internal @This processes control commands on a subpipe.
