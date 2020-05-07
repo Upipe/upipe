@@ -90,6 +90,8 @@
 #define MTU 1500
 #endif
 
+#define MAX_AUDIO_UREFS 20
+
 static const char *audio_paths[2] = { "239.160.1.11:1234", "239.161.1.11:1234" };
 static struct upipe_mgr upipe_netmap_sink_audio_mgr;
 
