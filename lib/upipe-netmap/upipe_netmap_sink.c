@@ -92,7 +92,6 @@
 
 #define MAX_AUDIO_UREFS 20
 
-static const char *audio_paths[2] = { "239.160.1.11:1234", "239.161.1.11:1234" };
 static struct upipe_mgr upipe_netmap_sink_audio_mgr;
 
 /** @hidden */
@@ -126,7 +125,6 @@ struct upipe_netmap_intf {
     // TODO: rfc
     uint8_t header[ETHERNET_HEADER_LEN + IP_HEADER_MINSIZE + UDP_HEADER_SIZE];
     uint8_t fake_header[ETHERNET_HEADER_LEN + IP_HEADER_MINSIZE + UDP_HEADER_SIZE];
-    uint8_t audio_header[ETHERNET_HEADER_LEN + IP_HEADER_MINSIZE + UDP_HEADER_SIZE];
 
     /** if interface is up */
     bool up;
@@ -139,6 +137,17 @@ struct audio_packet_state {
     uint32_t num, den;
     uint16_t audio_counter;
     uint8_t video_counter, video_limit;
+};
+
+struct aes67_flow {
+    /* IP details for the destination. */
+    struct sockaddr_in sin;
+    /* Ethernet details for the destination. */
+    struct sockaddr_ll sll;
+    /* Raw Ethernet, IP, and UDP headers. */
+    uint8_t header[ETHERNET_HEADER_LEN + IP_HEADER_MINSIZE + UDP_HEADER_SIZE];
+    /* Flow has been populated and packets should be sent. */
+    bool populated;
 };
 
 struct upipe_netmap_sink_audio {
@@ -170,6 +179,9 @@ struct upipe_netmap_sink_audio {
     int output_channels;
     /* Maximum transmission unit. */
     int mtu;
+
+    /* Details for all destinations. */
+    struct aes67_flow flows[AES67_MAX_FLOWS][AES67_MAX_PATHS];
 };
 
 /** @internal @This is the private context of a netmap sink pipe. */
@@ -725,53 +737,6 @@ static int upipe_netmap_put_ip_headers(struct upipe_netmap_intf *intf,
                                10, 0x1c, payload_size);
 
     return ETHERNET_HEADER_LEN + IP_HEADER_MINSIZE + UDP_HEADER_SIZE;
-}
-
-static int make_audio_header(struct upipe *upipe, const char *path_c, struct upipe_netmap_intf *intf)
-{
-    struct sockaddr_in sin;
-    struct sockaddr_ll sll;
-
-    char *path = strdup(path_c);
-    UBASE_ALLOC_RETURN(path);
-
-    /* Parse path. */
-    if (!upipe_udp_parse_node_service(upipe, path, NULL, 0, NULL,
-                (struct sockaddr_storage *)&sin)) {
-        return UBASE_ERR_INVALID;
-    }
-
-    /* Set MAC address. */
-    uint32_t dst_ip = ntohl(sin.sin_addr.s_addr);
-
-    /* If a multicast IP address, fill a multicast MAC address. */
-    if (IN_MULTICAST(dst_ip)) {
-        sll.sll_addr[0] = 0x01;
-        sll.sll_addr[1] = 0x00;
-        sll.sll_addr[2] = 0x5e;
-        sll.sll_addr[3] = (dst_ip >> 16) & 0x7f;
-        sll.sll_addr[4] = (dst_ip >>  8) & 0xff;
-        sll.sll_addr[5] = (dst_ip      ) & 0xff;
-    }
-
-    /* Otherwise query ARP for the destination address. */
-    else {
-        /* TODO */
-    }
-
-    uint8_t *buf = intf->audio_header;
-    /* Write ethernet header. */
-    ethernet_set_dstaddr(buf, sll.sll_addr);
-    ethernet_set_srcaddr(buf, intf->src_mac);
-    ethernet_set_lentype(buf, ETHERNET_TYPE_IP);
-
-    buf += ETHERNET_HEADER_LEN;
-    /* Write IP and UDP headers. */
-    upipe_udp_raw_fill_headers(buf, intf->src_ip, sin.sin_addr.s_addr,
-            ntohs(sin.sin_port), ntohs(sin.sin_port), 10, 0,
-            6 * 16 * 3 + RTP_HEADER_SIZE);
-
-    return UBASE_ERR_NONE;
 }
 
 static int upipe_put_hbrmt_headers(struct upipe *upipe, uint8_t *buf)
@@ -1638,9 +1603,11 @@ static void upipe_netmap_sink_worker(struct upump *upump)
                     }
                 }
 
+                struct aes67_flow *aes67_flow = &audio_subpipe->flows[0][i];
+
                 /* Copy headers. */
-                memcpy(dst, intf->audio_header, sizeof intf->audio_header);
-                dst += sizeof intf->audio_header;
+                memcpy(dst, aes67_flow->header, sizeof aes67_flow->header);
+                dst += sizeof aes67_flow->header;
                 memcpy(dst, upipe_netmap_sink->audio_rtp_header, RTP_HEADER_SIZE);
                 dst += RTP_HEADER_SIZE;
                 /* Copy payload. */
@@ -2234,9 +2201,6 @@ static int upipe_netmap_sink_set_flow_def(struct upipe *upipe,
             uint16_t udp_payload_size = upipe_netmap_sink->packet_size - header_size;
             header += upipe_netmap_put_ip_headers(intf, header, udp_payload_size);
             /* RTP Headers done in worker_rfc4175 */
-
-            /* Ethernet, IP, UDP headers for audio. */
-            make_audio_header(upipe, audio_paths[i], intf);
         }
         upipe_netmap_update_timestamp_cache(upipe_netmap_sink);
 
@@ -2673,6 +2637,9 @@ static void upipe_netmap_sink_audio_input(struct upipe *upipe,
     }
 }
 
+static int audio_set_flow_destination(struct upipe * upipe, int flow,
+        const char *path_1, const char *path_2);
+
 /** @internal @This processes control commands on a subpipe.
  *
  * @param upipe description structure of the pipe
@@ -2690,6 +2657,14 @@ static int upipe_netmap_sink_audio_control(struct upipe *upipe,
     case UPIPE_SET_FLOW_DEF: {
         struct uref *flow_def = va_arg(args, struct uref *);
         return upipe_netmap_sink_audio_set_flow_def(upipe, flow_def);
+    }
+
+    case UPIPE_NETMAP_SINK_AUDIO_SET_FLOW_DESTINATION: {
+        UBASE_SIGNATURE_CHECK(args, UPIPE_NETMAP_SINK_AUDIO_SIGNATURE)
+        int flow = va_arg(args, int);
+        const char *path_1 = va_arg(args, const char *);
+        const char *path_2 = va_arg(args, const char *);
+        return audio_set_flow_destination(upipe, flow, path_1, path_2);
     }
 
     default:
@@ -2784,4 +2759,126 @@ static void handle_audio_tail(struct upipe_netmap_sink_audio *audio_subpipe)
     uref_free(audio_subpipe->uref);
     audio_subpipe->uref = NULL;
     audio_subpipe->uref_samples = 0;
+}
+
+static int audio_set_flow_destination(struct upipe * upipe, int flow,
+        const char *path_1, const char *path_2)
+{
+    struct upipe_netmap_sink_audio *audio_subpipe = upipe_netmap_sink_audio_from_upipe(upipe);
+    const struct upipe_netmap_sink *upipe_netmap_sink = upipe_netmap_sink_from_audio_subpipe(audio_subpipe);
+
+    /* Check arguments are okay. */
+    if (unlikely(path_1 == NULL || strlen(path_1) == 0))
+        return UBASE_ERR_INVALID;
+    if (unlikely((path_2 == NULL || strlen(path_2) == 0) && upipe_netmap_sink->intf[1].d))
+        return UBASE_ERR_INVALID;
+    if (unlikely(flow < 0 || flow >= AES67_MAX_FLOWS)) {
+        upipe_err_va(upipe, "flow %d is not in the range 0..%d", flow, AES67_MAX_FLOWS-1);
+        return UBASE_ERR_INVALID;
+    }
+
+    struct aes67_flow *aes67_flow = audio_subpipe->flows[flow];
+    const struct upipe_netmap_intf *intf = &upipe_netmap_sink->intf[0];
+
+    /* Parse first path. */
+    char *path = strdup(path_1);
+    UBASE_ALLOC_RETURN(path);
+    if (!upipe_udp_parse_node_service(upipe, path, NULL, 0, NULL,
+                (struct sockaddr_storage *)&aes67_flow[0].sin)) {
+        free(path);
+        return UBASE_ERR_INVALID;
+    }
+    free(path);
+    upipe_dbg_va(upipe, "flow %d path 0 destination set to %s:%u", flow,
+            inet_ntoa(aes67_flow[0].sin.sin_addr),
+            ntohs(aes67_flow[0].sin.sin_port));
+
+    /* Set ethernet details and the inferface index. */
+    aes67_flow[0].sll = (struct sockaddr_ll) {
+        .sll_family = AF_PACKET,
+        .sll_protocol = htons(ETHERNET_TYPE_IP),
+        /* TODO: get ifindex and socket if we want to do ARP. */
+        //.sll_ifindex = upipe_aes67_sink->sll[0].sll_ifindex,
+        .sll_halen = ETHERNET_ADDR_LEN,
+    };
+
+    /* Set MAC address. */
+    uint32_t dst_ip = ntohl(aes67_flow[0].sin.sin_addr.s_addr);
+
+    /* If a multicast IP address, fill a multicast MAC address. */
+    if (IN_MULTICAST(dst_ip)) {
+        aes67_flow[0].sll.sll_addr[0] = 0x01;
+        aes67_flow[0].sll.sll_addr[1] = 0x00;
+        aes67_flow[0].sll.sll_addr[2] = 0x5e;
+        aes67_flow[0].sll.sll_addr[3] = (dst_ip >> 16) & 0x7f;
+        aes67_flow[0].sll.sll_addr[4] = (dst_ip >>  8) & 0xff;
+        aes67_flow[0].sll.sll_addr[5] = (dst_ip      ) & 0xff;
+    }
+
+    /* Otherwise query ARP for the destination address. */
+    else {
+        /* TODO */
+    }
+
+    uint8_t *buf = aes67_flow[0].header;
+    /* Write ethernet header. */
+    ethernet_set_dstaddr(buf, aes67_flow[0].sll.sll_addr);
+    ethernet_set_srcaddr(buf, intf[0].src_mac);
+    ethernet_set_lentype(buf, ETHERNET_TYPE_IP);
+
+    buf += ETHERNET_HEADER_LEN;
+    /* Write IP and UDP headers. */
+    upipe_udp_raw_fill_headers(buf, intf[0].src_ip,
+            aes67_flow[0].sin.sin_addr.s_addr,
+            ntohs(aes67_flow[0].sin.sin_port),
+            ntohs(aes67_flow[0].sin.sin_port),
+            10 /* TTL */, 0 /* TOS */,
+            audio_subpipe->output_samples * audio_subpipe->output_channels * 3 + RTP_HEADER_SIZE);
+
+    if (path_2 && strlen(path_2)) {
+        path = strdup(path_2);
+        UBASE_ALLOC_RETURN(path);
+        if (!upipe_udp_parse_node_service(upipe, path, NULL, 0, NULL,
+                    (struct sockaddr_storage *)&aes67_flow[1].sin)) {
+            free(path);
+            return UBASE_ERR_INVALID;
+        }
+        free(path);
+        upipe_dbg_va(upipe, "flow %d path 1 destination set to %s:%u", flow,
+                inet_ntoa(aes67_flow[1].sin.sin_addr),
+                ntohs(aes67_flow[1].sin.sin_port));
+
+        aes67_flow[1].sll = (struct sockaddr_ll) {
+            .sll_family = AF_PACKET,
+            .sll_protocol = htons(ETHERNET_TYPE_IP),
+            .sll_halen = ETHERNET_ADDR_LEN,
+        };
+
+        dst_ip = ntohl(aes67_flow[1].sin.sin_addr.s_addr);
+        if (IN_MULTICAST(dst_ip)) {
+            aes67_flow[1].sll.sll_addr[0] = 0x01;
+            aes67_flow[1].sll.sll_addr[1] = 0x00;
+            aes67_flow[1].sll.sll_addr[2] = 0x5e;
+            aes67_flow[1].sll.sll_addr[3] = (dst_ip >> 16) & 0x7f;
+            aes67_flow[1].sll.sll_addr[4] = (dst_ip >>  8) & 0xff;
+            aes67_flow[1].sll.sll_addr[5] = (dst_ip      ) & 0xff;
+        }
+
+        buf = aes67_flow[1].header;
+        /* Write ethernet header. */
+        ethernet_set_dstaddr(buf, aes67_flow[1].sll.sll_addr);
+        ethernet_set_srcaddr(buf, intf[1].src_mac);
+        ethernet_set_lentype(buf, ETHERNET_TYPE_IP);
+
+        buf += ETHERNET_HEADER_LEN;
+        /* Write IP and UDP headers. */
+        upipe_udp_raw_fill_headers(buf, intf[1].src_ip,
+                aes67_flow[1].sin.sin_addr.s_addr,
+                ntohs(aes67_flow[1].sin.sin_port),
+                ntohs(aes67_flow[1].sin.sin_port),
+                10, 0, audio_subpipe->output_samples * audio_subpipe->output_channels * 3 + RTP_HEADER_SIZE);
+    }
+
+    aes67_flow[0].populated = true;
+    return UBASE_ERR_NONE;
 }
