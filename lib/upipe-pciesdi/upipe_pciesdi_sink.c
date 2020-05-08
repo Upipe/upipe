@@ -333,7 +333,10 @@ static void upipe_pciesdi_sink_worker(struct upump *upump)
     const uint8_t *src_buf;
     int src_bytes = -1;
     if (!ubase_check(uref_block_read(uref, upipe_pciesdi_sink->written, &src_bytes, &src_buf))) {
-        upipe_err_va(upipe, "could not map for reading, size: %zu, written: %zu", size, upipe_pciesdi_sink->written);
+        upipe_err_va(upipe, "could not map for reading, size: %zu, written: %zu, freeing uref",
+                size, upipe_pciesdi_sink->written);
+        uref_free(uref);
+        upipe_pciesdi_sink->uref = NULL;
         return;
     }
     int samples = src_bytes/2;
