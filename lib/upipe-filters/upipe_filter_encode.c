@@ -224,6 +224,7 @@ static struct upipe *upipe_fenc_alloc(struct upipe_mgr *mgr,
     upipe_fenc_init_bin_output(upipe);
     upipe_fenc->flow_def_input = flow_def_input;
     upipe_fenc->options = NULL;
+    upipe_fenc->bit_depth = 0;
     upipe_fenc->preset = NULL;
     upipe_fenc->tune = NULL;
     upipe_fenc->profile = NULL;
