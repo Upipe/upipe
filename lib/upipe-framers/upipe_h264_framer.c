@@ -2444,6 +2444,7 @@ static void upipe_h264f_work_annexb(struct upipe *upipe, struct upump **upump_p)
 
     upipe_h264f_end_annexb(upipe, upump_p);
     upipe_h264f_output_annexb(upipe, upump_p);
+    upipe_h264f->au_last_nal_offset = -1;
 }
 
 /** @internal @This prepares a raw access unit.
