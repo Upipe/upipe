@@ -2244,9 +2244,8 @@ static void upipe_h264f_end_annexb(struct upipe *upipe, struct upump **upump_p)
  *
  * @param upipe description structure of the pipe
  * @param upump_p reference to pump that generated the buffer
- * @param true if the NAL was completely handled
  */
-static bool upipe_h264f_begin_annexb(struct upipe *upipe,
+static void upipe_h264f_begin_annexb(struct upipe *upipe,
                                      struct upump **upump_p)
 {
     struct upipe_h264f *upipe_h264f = upipe_h264f_from_upipe(upipe);
@@ -2264,15 +2263,15 @@ static bool upipe_h264f_begin_annexb(struct upipe *upipe,
             if (upipe_h264f->au_vcl_offset == -1) {
                 upipe_h264f->au_vcl_offset =
                     upipe_h264f->au_size - upipe_h264f->au_last_nal_start_size;
-                return false;
+                return;
             }
             if (!upipe_h264f->au_slice)
-                return false;
+                return;
             if ((h264nalst_get_type(slice_nal) == H264NAL_TYPE_IDR) ==
                     (nal_type == H264NAL_TYPE_IDR) &&
                 (h264nalst_get_ref(upipe_h264f->au_last_nal) == 0) ==
                     (h264nalst_get_ref(slice_nal) == 0))
-                return false;
+                return;
             /* new access unit */
             break;
         }
@@ -2281,15 +2280,15 @@ static bool upipe_h264f_begin_annexb(struct upipe *upipe,
             if (upipe_h264f->au_vcl_offset == -1) {
                 upipe_h264f->au_vcl_offset =
                     upipe_h264f->au_size - upipe_h264f->au_last_nal_start_size;
-                return false;
+                return;
             }
             if (!upipe_h264f->au_slice)
-                return false;
+                return;
             break;
 
         case H264NAL_TYPE_ENDSEQ:
         case H264NAL_TYPE_ENDSTR:
-            return false;
+            return;
 
         case H264NAL_TYPE_AUD:
         case H264NAL_TYPE_SPS:
@@ -2297,12 +2296,12 @@ static bool upipe_h264f_begin_annexb(struct upipe *upipe,
         case H264NAL_TYPE_SSPS:
         case H264NAL_TYPE_PPS:
             if (!upipe_h264f->au_slice)
-                return false;
+                return;
             break;
 
         default:
             if (nal_type < 14 || nal_type > 18 || !upipe_h264f->au_slice)
-                return false;
+                return;
             break;
     }
 
@@ -2311,15 +2310,14 @@ static bool upipe_h264f_begin_annexb(struct upipe *upipe,
     upipe_h264f->au_size = upipe_h264f->au_last_nal_start_size;
 
     if (uref == NULL)
-        return false;
+        return;
 
     if (unlikely(upipe_h264f->flow_def_requested == NULL)) {
         upipe_h264f->uref_output = uref;
-        return false;
+        return;
     }
 
     upipe_h264f_output_au(upipe, uref, upump_p);
-    return false;
 }
 
 /** @internal @This is called back by @ref upipe_h264f_append_uref_stream
@@ -2438,10 +2436,8 @@ static void upipe_h264f_work_annexb(struct upipe *upipe, struct upump **upump_p)
         upipe_h264f->got_discontinuity = false;
         upipe_h264f->au_last_nal = start;
         upipe_h264f->au_last_nal_start_size = start_size;
-        if (upipe_h264f_begin_annexb(upipe, upump_p))
-            upipe_h264f->au_last_nal_offset = -1;
-        else
-            upipe_h264f->au_last_nal_offset = upipe_h264f->au_size - start_size;
+        upipe_h264f_begin_annexb(upipe, upump_p);
+        upipe_h264f->au_last_nal_offset = upipe_h264f->au_size - start_size;
     }
 
     if (!upipe_h264f->complete_input || !upipe_h264f->au_size)
