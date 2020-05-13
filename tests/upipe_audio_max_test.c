@@ -96,9 +96,9 @@ static void test_input(struct upipe *upipe, struct uref *uref,
     uref_dump(uref, upipe->uprobe);
     double amplitude;
     ubase_assert(uref_amax_get_amplitude(uref, &amplitude, 0));
-    assert(amplitude == (SAMPLES - 1) * 1.0f / INT16_MAX);
+    assert(amplitude == (SAMPLES - 1) * 1. / INT16_MAX);
     ubase_assert(uref_amax_get_amplitude(uref, &amplitude, 1));
-    assert(amplitude == (SAMPLES * 2 - 1) * 1.0f / INT16_MAX);
+    assert(amplitude == (SAMPLES * 2 - 1) * 1. / INT16_MAX);
 
     uref_free(uref);
     got_input = true;
