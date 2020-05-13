@@ -930,11 +930,9 @@ static int worker_hbrmt(struct upipe_netmap_sink *upipe_netmap_sink, uint8_t **d
         if (unlikely(!intf->d || !intf->up))
             continue;
 
-        uint8_t *header = upipe_netmap_sink->rtp_header;
-
         /* Ethernet/IP Header */
-        memcpy(dst[i], header, sizeof(upipe_netmap_sink->intf[i].header));
-        dst[i] += sizeof(upipe_netmap_sink->intf[i].header);
+        memcpy(dst[i], intf->header, sizeof(intf->header));
+        dst[i] += sizeof(intf->header);
 
         /* RTP HEADER */
         memcpy(dst[i], upipe_netmap_sink->rtp_header, rtp_hbrmt_header_size);
