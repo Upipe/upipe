@@ -134,7 +134,6 @@ static void ubuf_av_free(struct ubuf *ubuf)
             free(buf[i]);
         free(buf);
     }
-    av_frame_unref(ubuf_av->frame);
     av_frame_free(&ubuf_av->frame);
     ubuf_mgr_release(ubuf->mgr);
     ubuf_av_clean_refs(ubuf_av);
@@ -167,16 +166,17 @@ static struct ubuf *ubuf_av_alloc(struct ubuf_mgr *mgr,
     struct ubuf *ubuf = ubuf_av_to_ubuf(ubuf_av);
     ubuf->mgr = ubuf_mgr_use(mgr);
 
-    ubuf_av->frame = av_frame_alloc();
-    if (unlikely(!ubuf_av->frame)) {
-        free(ubuf_av);
+    AVFrame *ubuf_av_frame = av_frame_alloc();
+    if (!ubuf_av_frame) {
+        ubuf_av_free(ubuf);
         return NULL;
     }
-    if (unlikely(av_frame_ref(ubuf_av->frame, frame) < 0)) {
-        av_frame_free(&ubuf_av->frame);
-        free(ubuf_av);
+    if (unlikely(av_frame_ref(ubuf_av_frame, frame) < 0)) {
+        av_frame_free(&ubuf_av_frame);
+        ubuf_av_free(ubuf);
         return NULL;
     }
+    ubuf_av->frame = ubuf_av_frame;
 
     ubuf_av->signature = signature;
     switch (signature) {
@@ -184,7 +184,7 @@ static struct ubuf *ubuf_av_alloc(struct ubuf_mgr *mgr,
             ubuf_av->pic.buf = NULL;
             ubuf_av->pic.flow_format = upipe_av_pixfmt_to_format(frame->format);
             if (unlikely(!ubuf_av->pic.flow_format)) {
-                free(ubuf_av);
+                ubuf_av_free(ubuf);
                 return NULL;
             }
             break;
@@ -192,7 +192,7 @@ static struct ubuf *ubuf_av_alloc(struct ubuf_mgr *mgr,
             ubuf_av->sound.flow_format =
                 upipe_av_samplefmt_to_flow_format(frame->format);
             if (unlikely(!ubuf_av->sound.flow_format)) {
-                free(ubuf_av);
+                ubuf_av_free(ubuf);
                 return NULL;
             }
             uint8_t planes = 1;
@@ -200,7 +200,7 @@ static struct ubuf *ubuf_av_alloc(struct ubuf_mgr *mgr,
                 planes = frame->channels;
             ubuf_av->sound.channels = calloc(planes + 1, sizeof (char *));
             if (unlikely(!ubuf_av->sound.channels)) {
-                free(ubuf_av);
+                ubuf_av_free(ubuf);
                 return NULL;
             }
             const char *channels_desc = UPIPE_AV_SAMPLEFMT_CHANNELS;
