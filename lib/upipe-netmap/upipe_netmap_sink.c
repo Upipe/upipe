@@ -1564,17 +1564,19 @@ static void upipe_netmap_sink_worker(struct upump *upump)
             /* Get uref and map data. */
             bool have_audio = ubase_check(get_audio(audio_subpipe));
 
-            if (have_audio && local_audio_packet_counter == 0 && upipe_netmap_sink->frame_ts > 1) {
-                uint64_t systime = 0;
-                uref_clock_get_cr_sys(audio_subpipe->uref, &systime);
-                systime += audio_subpipe->latency;
+            if (have_audio && local_audio_packet_counter == 0) {
+                uint64_t systime_audio = 0;
+                uref_clock_get_pts_sys(audio_subpipe->uref, &systime_audio);
+                systime_audio += audio_subpipe->latency;
 
-                int64_t timestamp = upipe_netmap_sink->frame_ts_start2;
+                uint64_t systime_video = 0;
+                if(uref)
+                    uref_clock_get_pts_sys(uref, &systime_video);
 
-                int64_t diff = (int64_t)systime - timestamp;
+                systime_video += upipe_netmap_sink->latency;
 
-                upipe_dbg_va(subpipe, "uref ts: %"PRIu64", rtp ts: %"PRId64", diff: %"PRId64,
-                        systime, timestamp, diff);
+                upipe_dbg_va(subpipe, "video %"PRIu64" vlatency %"PRIu64" audio %"PRIu64" alatency %"PRIu64" diff %"PRIu64" depth %"PRIi64"",
+                        systime_video, upipe_netmap_sink->latency, systime_audio, audio_subpipe->latency, systime_audio - systime_video, audio_subpipe->n);
             }
 
             if (have_audio) {
