@@ -635,6 +635,7 @@ static struct upipe *_upipe_netmap_sink_alloc(struct upipe_mgr *mgr,
     audio_subpipe->mtu = MTU;
 
     upipe_throw_ready(upipe);
+    upipe_throw_ready(subpipe);
     return upipe;
 }
 
@@ -2535,10 +2536,13 @@ static void upipe_netmap_sink_free(struct upipe *upipe)
         close(intf->fd);
     }
 
+    upipe_netmap_sink_clear_queues(upipe);
+
     upipe_netmap_sink_clean_upump(upipe);
     upipe_netmap_sink_clean_upump_mgr(upipe);
     upipe_netmap_sink_clean_urefcount(upipe);
     upipe_netmap_sink_clean_uclock(upipe);
+    upipe_clean(&upipe_netmap_sink->audio_subpipe.upipe);
     upipe_clean(upipe);
     free(upipe_netmap_sink);
 }
