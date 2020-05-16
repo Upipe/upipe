@@ -436,6 +436,9 @@ static void upipe_audio_merge_produce_output(struct upipe *upipe, struct upump *
     if (unlikely(upipe_audio_merge->ubuf_mgr == NULL))
         return;
 
+    if (unlikely(upipe_audio_merge->flow_def == NULL))
+        return;
+
     /* interate through input subpipes, checking if they all have a uref available
        and counting the number of channels */
     ulist_foreach (&upipe_audio_merge->inputs, uchain) {
