@@ -2120,10 +2120,8 @@ static int upipe_netmap_sink_set_flow_def(struct upipe *upipe,
             upipe_netmap_sink->packet_size = 1262;
             upipe_netmap_sink->gap_fakes = 4 * (1125 - 1080);
         }
-        upipe_netmap_sink->frame = 0x20; // interlaced
-        // FIXME: progressive/interlaced is per-picture
+        upipe_netmap_sink->frame = upipe_netmap_sink->progressive ? 0x21 : 0x20;
         // XXX: should we do PSF at all?
-        // 0x21 progressive
         // 0x22 psf
     } else if (upipe_netmap_sink->hsize == 1280 && upipe_netmap_sink->vsize == 720) {
         if (upipe_netmap_sink->rfc4175) {
