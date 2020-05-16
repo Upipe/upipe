@@ -1937,7 +1937,7 @@ static bool upipe_netmap_sink_output(struct upipe *upipe, struct uref *uref,
                 + IP_HEADER_MINSIZE + UDP_HEADER_SIZE + RTP_HEADER_SIZE
                 + 16/*channels*/ * 6/*samples*/ * 3/*bytes per sample*/;
             const uint64_t audio_bitrate = 8 * (audio_packet_size + 4/*CRC*/) * 48000/6;
-            printf("audio bitrate %"PRIu64" video bitrate %"PRIu64" \n", audio_bitrate, upipe_netmap_sink->rate);
+            upipe_dbg_va(upipe, "audio bitrate %"PRIu64" video bitrate %"PRIu64" \n", audio_bitrate, upipe_netmap_sink->rate);
             upipe_netmap_sink->rate += audio_bitrate * upipe_netmap_sink->fps.den;
 
             /* Video will have (packets_per_frame * fps) packets per second.
