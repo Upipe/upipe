@@ -1803,12 +1803,8 @@ static void upipe_netmap_sink_worker(struct upump *upump)
             bytes_left -= s;
             assert(bytes_left >= 0);
 
-            // FIXME
-            uint16_t l = 1438;//len[0] ? *len[0] : *len[1];
-            assert(l == 1438);
-
             /* 64 bits overflows after 375 years at 1.5G */
-            upipe_netmap_sink->bits += (l + 4 /* CRC */) * 8;
+            upipe_netmap_sink->bits += (upipe_netmap_sink->packet_size + 4 /* CRC */) * 8;
 
             if (!bytes_left) {
                 uref_block_unmap(uref, 0);
