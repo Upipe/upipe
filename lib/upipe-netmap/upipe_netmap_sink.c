@@ -1590,38 +1590,38 @@ static void upipe_netmap_sink_worker(struct upump *upump)
                 memset(audio_subpipe->audio_data, 0, sizeof audio_subpipe->audio_data);
             }
 
-            bool stamped = false;
-            for (size_t i = 0; i < 2; i++) {
-                /* Check for EOF. */
-                struct upipe_netmap_intf *intf = &upipe_netmap_sink->intf[i];
-                if (unlikely(!intf->d || !intf->up))
-                    continue;
-                uint8_t *dst = (uint8_t*)NETMAP_BUF(txring[i], txring[i]->slot[cur[i]].buf_idx);
+                bool stamped = false;
+                for (size_t i = 0; i < 2; i++) {
+                    /* Check for EOF. */
+                    struct upipe_netmap_intf *intf = &upipe_netmap_sink->intf[i];
+                    if (unlikely(!intf->d || !intf->up))
+                        continue;
+                    uint8_t *dst = (uint8_t*)NETMAP_BUF(txring[i], txring[i]->slot[cur[i]].buf_idx);
 
-                const size_t udp_size = ETHERNET_HEADER_LEN + IP_HEADER_MINSIZE + UDP_HEADER_SIZE;
-                uint8_t *rtp = &dst[udp_size];
-                if (UINT64_MSB(txring[i]->slot[cur[i]].ptr)) /* eof needs to be set */ {
-                    if (!stamped && UINT64_LOW_MASK(txring[i]->slot[cur[i]].ptr)) {
-                        uint16_t seq = rtp_get_seqnum(rtp);
-                        handle_tx_stamp(upipe, UINT64_LOW_MASK(txring[i]->slot[cur[i]].ptr), seq);
-                        stamped = true;
+                    const size_t udp_size = ETHERNET_HEADER_LEN + IP_HEADER_MINSIZE + UDP_HEADER_SIZE;
+                    uint8_t *rtp = &dst[udp_size];
+                    if (UINT64_MSB(txring[i]->slot[cur[i]].ptr)) /* eof needs to be set */ {
+                        if (!stamped && UINT64_LOW_MASK(txring[i]->slot[cur[i]].ptr)) {
+                            uint16_t seq = rtp_get_seqnum(rtp);
+                            handle_tx_stamp(upipe, UINT64_LOW_MASK(txring[i]->slot[cur[i]].ptr), seq);
+                            stamped = true;
+                        }
                     }
+
+                    struct aes67_flow *aes67_flow = &audio_subpipe->flows[0][i];
+
+                        /* Copy headers. */
+                        memcpy(dst, aes67_flow->header, sizeof aes67_flow->header);
+                        dst += sizeof aes67_flow->header;
+                        memcpy(dst, upipe_netmap_sink->audio_rtp_header, RTP_HEADER_SIZE);
+                        dst += RTP_HEADER_SIZE;
+                        /* Copy payload. */
+                        memcpy(dst, audio_subpipe->audio_data, audio_subpipe->output_samples * 16 * 3);
+
+                    txring[i]->slot[cur[i]].len = audio_subpipe->packet_size;
+                    txring[i]->slot[cur[i]].ptr = 0;
+                    cur[i] = nm_ring_next(txring[i], cur[i]);
                 }
-
-                struct aes67_flow *aes67_flow = &audio_subpipe->flows[0][i];
-
-                /* Copy headers. */
-                memcpy(dst, aes67_flow->header, sizeof aes67_flow->header);
-                dst += sizeof aes67_flow->header;
-                memcpy(dst, upipe_netmap_sink->audio_rtp_header, RTP_HEADER_SIZE);
-                dst += RTP_HEADER_SIZE;
-                /* Copy payload. */
-                memcpy(dst, audio_subpipe->audio_data, audio_subpipe->output_samples * 16 * 3);
-
-                txring[i]->slot[cur[i]].len = audio_subpipe->packet_size;
-                txring[i]->slot[cur[i]].ptr = 0;
-                cur[i] = nm_ring_next(txring[i], cur[i]);
-            }
 
             /* If there is not enough audio samples left for a whole
              * frame/packet then cache the rest for use next time. */
