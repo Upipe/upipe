@@ -2641,6 +2641,8 @@ static void upipe_netmap_sink_audio_input(struct upipe *upipe,
 
 static int audio_set_flow_destination(struct upipe * upipe, int flow,
         const char *path_1, const char *path_2);
+static int audio_subpipe_set_option(struct upipe *upipe, const char *option,
+        const char *value);
 
 /** @internal @This processes control commands on a subpipe.
  *
@@ -2659,6 +2661,12 @@ static int upipe_netmap_sink_audio_control(struct upipe *upipe,
     case UPIPE_SET_FLOW_DEF: {
         struct uref *flow_def = va_arg(args, struct uref *);
         return upipe_netmap_sink_audio_set_flow_def(upipe, flow_def);
+    }
+
+    case UPIPE_SET_OPTION: {
+        const char *option = va_arg(args, const char *);
+        const char *value  = va_arg(args, const char *);
+        return audio_subpipe_set_option(upipe, option, value);
     }
 
     case UPIPE_NETMAP_SINK_AUDIO_SET_FLOW_DESTINATION: {
@@ -2889,4 +2897,48 @@ static inline uint16_t audio_packet_size(uint16_t channels, uint16_t samples)
 {
     return ETHERNET_HEADER_LEN + IP_HEADER_MINSIZE + UDP_HEADER_SIZE +
         RTP_HEADER_SIZE + channels * samples * 3 /*bytes per sample*/;
+}
+
+static int audio_subpipe_set_option(struct upipe *upipe, const char *option,
+        const char *value)
+{
+    struct upipe_netmap_sink_audio *audio_subpipe = upipe_netmap_sink_audio_from_upipe(upipe);
+
+    if (!option || !value)
+        return UBASE_ERR_INVALID;
+
+    if (!strcmp(option, "output-samples")) {
+        int output_samples = atoi(value);
+        if (output_samples <= 0 || output_samples > AES67_MAX_SAMPLES_PER_PACKET) {
+            upipe_err_va(upipe, "output-samples (%d) not in range 0..%d",
+                    output_samples, AES67_MAX_SAMPLES_PER_PACKET);
+            return UBASE_ERR_INVALID;
+        }
+
+        /* A sample packs to 3 bytes.  16 channels. */
+        int needed_size = audio_packet_size(audio_subpipe->output_channels, output_samples);
+        if (needed_size > audio_subpipe->mtu) {
+            upipe_err_va(upipe, "requested frame or packet size (%d bytes, %d samples) is greater than MTU (%d)",
+                    needed_size, output_samples, audio_subpipe->mtu);
+            return UBASE_ERR_INVALID;
+        }
+
+        audio_subpipe->output_samples = output_samples;
+        audio_subpipe->packet_size = needed_size;
+        return UBASE_ERR_NONE;
+    }
+
+    if (!strcmp(option, "output-channels")) {
+        int output_channels = atoi(value);
+        if (!(output_channels == 2 || output_channels == 4 || output_channels == 8 || output_channels == 16)) {
+            upipe_err_va(upipe, "output-channels (%d) not 2, 4, 8, or 16", output_channels);
+            return UBASE_ERR_INVALID;
+        }
+        audio_subpipe->output_channels = output_channels;
+        audio_subpipe->packet_size = audio_packet_size(output_channels, audio_subpipe->output_samples);
+        return UBASE_ERR_NONE;
+    }
+
+    upipe_err_va(upipe, "Unknown option %s", option);
+    return UBASE_ERR_INVALID;
 }
