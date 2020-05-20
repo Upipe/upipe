@@ -179,6 +179,8 @@ struct upipe_netmap_sink_audio {
     int output_channels;
     /* Maximum transmission unit. */
     int mtu;
+    /* Configured packet size (no CRC). */
+    uint16_t packet_size;
 
     /* Details for all destinations. */
     struct aes67_flow flows[AES67_MAX_FLOWS][AES67_MAX_PATHS];
@@ -333,6 +335,7 @@ UBASE_FROM_TO(upipe_netmap_sink, upipe_netmap_sink_audio, audio_subpipe, audio_s
 static int get_audio(struct upipe_netmap_sink_audio *audio_subpipe);
 static void pack_audio(struct upipe_netmap_sink_audio *audio_subpipe);
 static void handle_audio_tail(struct upipe_netmap_sink_audio *audio_subpipe);
+static inline uint16_t audio_packet_size(uint16_t channels, uint16_t samples);
 
 /* get MAC and/or IP address of specified interface */
 static bool source_addr(const char *intf, uint8_t *mac, in_addr_t *ip)
@@ -633,6 +636,7 @@ static struct upipe *_upipe_netmap_sink_alloc(struct upipe_mgr *mgr,
     audio_subpipe->output_samples = 6; /* TODO: other default to catch user not setting this? */
     audio_subpipe->output_channels = 16;
     audio_subpipe->mtu = MTU;
+    audio_subpipe->packet_size = audio_packet_size(16, 6);
 
     upipe_throw_ready(upipe);
     upipe_throw_ready(subpipe);
@@ -1556,9 +1560,6 @@ static void upipe_netmap_sink_worker(struct upump *upump)
         static unsigned local_audio_packet_counter = 0;
 
         if (rfc4175 && aps_audio_needed(&upipe_netmap_sink->audio_packet_state)) {
-            const uint64_t audio_packet_size = ETHERNET_HEADER_LEN
-                + IP_HEADER_MINSIZE + UDP_HEADER_SIZE + RTP_HEADER_SIZE
-                + 16/*channels*/ * 6/*samples*/ * 3/*bytes per sample*/;
             struct upipe_netmap_sink_audio *audio_subpipe = &upipe_netmap_sink->audio_subpipe;
             struct upipe *subpipe = upipe_netmap_sink_audio_to_upipe(audio_subpipe);
 
@@ -1616,7 +1617,7 @@ static void upipe_netmap_sink_worker(struct upump *upump)
                 /* Copy payload. */
                 memcpy(dst, audio_subpipe->audio_data, audio_subpipe->output_samples * 16 * 3);
 
-                txring[i]->slot[cur[i]].len = audio_packet_size;
+                txring[i]->slot[cur[i]].len = audio_subpipe->packet_size;
                 txring[i]->slot[cur[i]].ptr = 0;
                 cur[i] = nm_ring_next(txring[i], cur[i]);
             }
@@ -1635,7 +1636,7 @@ static void upipe_netmap_sink_worker(struct upump *upump)
             rtp_set_timestamp(upipe_netmap_sink->audio_rtp_header, timestamp + 6);
             upipe_netmap_sink->frame_ts_start2 += 6*27000/48;
 
-            upipe_netmap_sink->bits += 8 * (audio_packet_size + 4/*CRC*/);
+            upipe_netmap_sink->bits += 8 * (audio_subpipe->packet_size + 4/*CRC*/);
             txavail--;
 
             local_audio_packet_counter++;
@@ -1930,10 +1931,8 @@ static bool upipe_netmap_sink_output(struct upipe *upipe, struct uref *uref,
 
             upipe_netmap_sink->rate = 8 * (packets * (eth_header_len + payload + 4 /* CRC */)) * upipe_netmap_sink->fps.num;
 
-            const uint64_t audio_packet_size = ETHERNET_HEADER_LEN
-                + IP_HEADER_MINSIZE + UDP_HEADER_SIZE + RTP_HEADER_SIZE
-                + 16/*channels*/ * 6/*samples*/ * 3/*bytes per sample*/;
-            const uint64_t audio_bitrate = 8 * (audio_packet_size + 4/*CRC*/) * 48000/6;
+            struct upipe_netmap_sink_audio *audio_subpipe = upipe_netmap_sink_to_audio_subpipe(upipe_netmap_sink);
+            const uint64_t audio_bitrate = 8 * (audio_subpipe->packet_size + 4/*CRC*/) * 48000/6;
             upipe_dbg_va(upipe, "audio bitrate %"PRIu64" video bitrate %"PRIu64" \n", audio_bitrate, upipe_netmap_sink->rate);
             upipe_netmap_sink->rate += audio_bitrate * upipe_netmap_sink->fps.den;
 
@@ -2881,4 +2880,10 @@ static int audio_set_flow_destination(struct upipe * upipe, int flow,
 
     aes67_flow[0].populated = true;
     return UBASE_ERR_NONE;
+}
+
+static inline uint16_t audio_packet_size(uint16_t channels, uint16_t samples)
+{
+    return ETHERNET_HEADER_LEN + IP_HEADER_MINSIZE + UDP_HEADER_SIZE +
+        RTP_HEADER_SIZE + channels * samples * 3 /*bytes per sample*/;
 }
