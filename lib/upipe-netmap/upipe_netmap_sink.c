@@ -1634,10 +1634,10 @@ static void upipe_netmap_sink_worker(struct upump *upump)
 
             /* Advance sequence number and timestamp for next packet. */
             rtp_set_seqnum(upipe_netmap_sink->audio_rtp_header, seqnum + 1);
-            rtp_set_timestamp(upipe_netmap_sink->audio_rtp_header, timestamp + 6);
-            upipe_netmap_sink->frame_ts_start2 += 6*27000/48;
+            rtp_set_timestamp(upipe_netmap_sink->audio_rtp_header, timestamp + audio_subpipe->output_samples);
+            upipe_netmap_sink->frame_ts_start2 += audio_subpipe->output_samples * 27000 / 48;
 
-            upipe_netmap_sink->bits += 8 * (audio_subpipe->packet_size + 4/*CRC*/);
+            upipe_netmap_sink->bits += 8 * (audio_subpipe->packet_size + 4/*CRC*/) * 16 / audio_subpipe->output_channels;
             txavail--;
 
             aps_inc_audio(&upipe_netmap_sink->audio_packet_state);
@@ -1934,7 +1934,8 @@ static bool upipe_netmap_sink_output(struct upipe *upipe, struct uref *uref,
             upipe_netmap_sink->rate = 8 * (packets * (eth_header_len + payload + 4 /* CRC */)) * upipe_netmap_sink->fps.num;
 
             struct upipe_netmap_sink_audio *audio_subpipe = upipe_netmap_sink_to_audio_subpipe(upipe_netmap_sink);
-            const uint64_t audio_bitrate = 8 * (audio_subpipe->packet_size + 4/*CRC*/) * 48000/6;
+            const uint64_t audio_pps = 48000 / audio_subpipe->output_samples;
+            const uint64_t audio_bitrate = 8 * (audio_subpipe->packet_size + 4/*CRC*/) * audio_pps;
             upipe_dbg_va(upipe, "audio bitrate %"PRIu64" video bitrate %"PRIu64" \n", audio_bitrate, upipe_netmap_sink->rate);
             upipe_netmap_sink->rate += audio_bitrate * upipe_netmap_sink->fps.den;
 
@@ -1944,7 +1945,7 @@ static bool upipe_netmap_sink_output(struct upipe *upipe, struct uref *uref,
              * account for the gap fakes too. */
             struct urational rational = {
                 (upipe_netmap_sink->packets_per_frame + upipe_netmap_sink->gap_fakes) * upipe_netmap_sink->fps.num,
-                48000/6 * upipe_netmap_sink->fps.den
+                audio_pps * upipe_netmap_sink->fps.den
             };
             urational_simplify(&rational);
             upipe_netmap_sink->audio_packet_state = (struct audio_packet_state) {
