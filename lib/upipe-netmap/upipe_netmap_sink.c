@@ -336,6 +336,8 @@ static int get_audio(struct upipe_netmap_sink_audio *audio_subpipe);
 static void pack_audio(struct upipe_netmap_sink_audio *audio_subpipe);
 static void handle_audio_tail(struct upipe_netmap_sink_audio *audio_subpipe);
 static inline uint16_t audio_packet_size(uint16_t channels, uint16_t samples);
+static inline void audio_copy_samples_to_packet(uint8_t *dst, const uint8_t *src,
+        int output_channels, int output_samples, int channel_offset);
 
 /* get MAC and/or IP address of specified interface */
 static bool source_addr(const char *intf, uint8_t *mac, in_addr_t *ip)
@@ -1594,6 +1596,9 @@ static void upipe_netmap_sink_worker(struct upump *upump)
                 memset(audio_subpipe->audio_data, 0, sizeof audio_subpipe->audio_data);
             }
 
+            for (int flow = 0; flow < num_flows; flow++) {
+                int channel_offset = flow * audio_subpipe->output_channels;
+
                 bool stamped = false;
                 for (size_t i = 0; i < 2; i++) {
                     /* Check for EOF. */
@@ -1612,20 +1617,35 @@ static void upipe_netmap_sink_worker(struct upump *upump)
                         }
                     }
 
-                    struct aes67_flow *aes67_flow = &audio_subpipe->flows[0][i];
+                    struct aes67_flow *aes67_flow = &audio_subpipe->flows[flow][i];
 
+                    /* If populated, copy real headers and audio data. */
+                    if (aes67_flow->populated) {
                         /* Copy headers. */
                         memcpy(dst, aes67_flow->header, sizeof aes67_flow->header);
                         dst += sizeof aes67_flow->header;
                         memcpy(dst, upipe_netmap_sink->audio_rtp_header, RTP_HEADER_SIZE);
                         dst += RTP_HEADER_SIZE;
                         /* Copy payload. */
-                        memcpy(dst, audio_subpipe->audio_data, audio_subpipe->output_samples * 16 * 3);
+                        audio_copy_samples_to_packet(dst, audio_subpipe->audio_data,
+                                audio_subpipe->output_channels,
+                                audio_subpipe->output_samples,
+                                channel_offset);
+                    }
+
+                    /* Copy fake headers and zero payload. */
+                    else {
+                        /* TODO: fake headers */
+                        memcpy(dst, aes67_flow->header, sizeof aes67_flow->header);
+                        dst += sizeof aes67_flow->header;
+                        memset(dst, 0, RTP_HEADER_SIZE + audio_subpipe->output_samples * audio_subpipe->output_channels * 3);
+                    }
 
                     txring[i]->slot[cur[i]].len = audio_subpipe->packet_size;
                     txring[i]->slot[cur[i]].ptr = 0;
                     cur[i] = nm_ring_next(txring[i], cur[i]);
                 }
+            }
 
             /* If there is not enough audio samples left for a whole
              * frame/packet then cache the rest for use next time. */
@@ -1641,8 +1661,8 @@ static void upipe_netmap_sink_worker(struct upump *upump)
             rtp_set_timestamp(upipe_netmap_sink->audio_rtp_header, timestamp + audio_subpipe->output_samples);
             upipe_netmap_sink->frame_ts_start2 += audio_subpipe->output_samples * 27000 / 48;
 
-            upipe_netmap_sink->bits += 8 * (audio_subpipe->packet_size + 4/*CRC*/) * 16 / audio_subpipe->output_channels;
-            txavail--;
+            upipe_netmap_sink->bits += 8 * (audio_subpipe->packet_size + 4/*CRC*/) * num_flows;
+            txavail -= num_flows;
 
             aps_inc_audio(&upipe_netmap_sink->audio_packet_state);
             local_audio_packet_counter++;
@@ -2945,4 +2965,19 @@ static int audio_subpipe_set_option(struct upipe *upipe, const char *option,
 
     upipe_err_va(upipe, "Unknown option %s", option);
     return UBASE_ERR_INVALID;
+}
+
+static inline void audio_copy_samples_to_packet(uint8_t *dst, const uint8_t *src,
+        int output_channels, int output_samples, int channel_offset)
+{
+    /* Slight optimization for single flow. */
+    if (output_channels == 16) {
+        memcpy(dst, src, output_samples * 16 * 3);
+    } else {
+        int sample_size = 3 * output_channels;
+        src += 3*channel_offset;
+        for (int i = 0; i < output_samples; i++) {
+            memcpy(dst + i * sample_size, src + 3*16*i, sample_size);
+        }
+    }
 }
