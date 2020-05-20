@@ -1306,13 +1306,14 @@ static inline void aps_inc_video(struct audio_packet_state *aps)
 
 static inline bool aps_audio_needed(struct audio_packet_state *aps)
 {
-    if (aps->video_counter == aps->video_limit) {
-        aps->video_counter = 0;
-        aps->video_limit = (aps->audio_counter + 1) * aps->num / aps->den - (aps->audio_counter) * aps->num / aps->den;
-        aps->audio_counter = (aps->audio_counter + 1) % aps->den;
-        return true;
-    }
-    return false;
+    return aps->video_counter == aps->video_limit;
+}
+
+static inline void aps_inc_audio(struct audio_packet_state *aps)
+{
+    aps->video_counter = 0;
+    aps->video_limit = (aps->audio_counter + 1) * aps->num / aps->den - (aps->audio_counter) * aps->num / aps->den;
+    aps->audio_counter = (aps->audio_counter + 1) % aps->den;
 }
 
 static void upipe_netmap_sink_worker(struct upump *upump)
@@ -1639,6 +1640,7 @@ static void upipe_netmap_sink_worker(struct upump *upump)
             upipe_netmap_sink->bits += 8 * (audio_subpipe->packet_size + 4/*CRC*/);
             txavail--;
 
+            aps_inc_audio(&upipe_netmap_sink->audio_packet_state);
             local_audio_packet_counter++;
 
             if (!txavail)
