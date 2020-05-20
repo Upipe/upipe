@@ -1564,6 +1564,10 @@ static void upipe_netmap_sink_worker(struct upump *upump)
             struct upipe_netmap_sink_audio *audio_subpipe = &upipe_netmap_sink->audio_subpipe;
             struct upipe *subpipe = upipe_netmap_sink_audio_to_upipe(audio_subpipe);
 
+            int num_flows = 16 / audio_subpipe->output_channels;
+            if (txavail < num_flows)
+                break;
+
             /* Get uref and map data. */
             bool have_audio = ubase_check(get_audio(audio_subpipe));
 
