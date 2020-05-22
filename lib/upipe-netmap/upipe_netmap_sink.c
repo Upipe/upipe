@@ -2936,6 +2936,7 @@ static int audio_set_flow_destination(struct upipe * upipe, int flow,
     }
 
     aes67_flow[0].populated = true;
+    aes67_flow[1].populated = true;
     return UBASE_ERR_NONE;
 }
 
