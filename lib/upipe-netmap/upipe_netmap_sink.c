@@ -146,6 +146,7 @@ struct aes67_flow {
     struct sockaddr_ll sll;
     /* Raw Ethernet, IP, and UDP headers. */
     uint8_t header[ETHERNET_HEADER_LEN + IP_HEADER_MINSIZE + UDP_HEADER_SIZE];
+    uint8_t fake_header[ETHERNET_HEADER_LEN + IP_HEADER_MINSIZE + UDP_HEADER_SIZE];
     /* Flow has been populated and packets should be sent. */
     bool populated;
 };
@@ -1635,9 +1636,8 @@ static void upipe_netmap_sink_worker(struct upump *upump)
 
                     /* Copy fake headers and zero payload. */
                     else {
-                        /* TODO: fake headers */
-                        memcpy(dst, aes67_flow->header, sizeof aes67_flow->header);
-                        dst += sizeof aes67_flow->header;
+                        memcpy(dst, aes67_flow->fake_header, sizeof aes67_flow->fake_header);
+                        dst += sizeof aes67_flow->fake_header;
                         memset(dst, 0, RTP_HEADER_SIZE + audio_subpipe->output_samples * audio_subpipe->output_channels * 3);
                     }
 
@@ -2869,6 +2869,17 @@ static int audio_set_flow_destination(struct upipe * upipe, int flow,
             10 /* TTL */, 0 /* TOS */,
             audio_subpipe->output_samples * audio_subpipe->output_channels * 3 + RTP_HEADER_SIZE);
 
+    buf = aes67_flow[0].fake_header;
+    ethernet_set_dstaddr(buf, intf[0].src_mac);
+    ethernet_set_srcaddr(buf, intf[0].src_mac);
+    ethernet_set_lentype(buf, ETHERNET_TYPE_IP);
+    buf += ETHERNET_HEADER_LEN;
+    upipe_udp_raw_fill_headers(buf, intf[0].src_ip,
+            intf[0].src_ip,
+            ntohs(aes67_flow[0].sin.sin_port),
+            ntohs(aes67_flow[0].sin.sin_port),
+            10, 0x1c, audio_subpipe->output_samples * audio_subpipe->output_channels * 3 + RTP_HEADER_SIZE);
+
     if (path_2 && strlen(path_2)) {
         path = strdup(path_2);
         UBASE_ALLOC_RETURN(path);
@@ -2911,6 +2922,17 @@ static int audio_set_flow_destination(struct upipe * upipe, int flow,
                 ntohs(aes67_flow[1].sin.sin_port),
                 ntohs(aes67_flow[1].sin.sin_port),
                 10, 0, audio_subpipe->output_samples * audio_subpipe->output_channels * 3 + RTP_HEADER_SIZE);
+
+        buf = aes67_flow[1].fake_header;
+        ethernet_set_dstaddr(buf, intf[1].src_mac);
+        ethernet_set_srcaddr(buf, intf[1].src_mac);
+        ethernet_set_lentype(buf, ETHERNET_TYPE_IP);
+        buf += ETHERNET_HEADER_LEN;
+        upipe_udp_raw_fill_headers(buf, intf[1].src_ip,
+                intf[1].src_ip,
+                ntohs(aes67_flow[1].sin.sin_port),
+                ntohs(aes67_flow[1].sin.sin_port),
+                10, 0x1c, audio_subpipe->output_samples * audio_subpipe->output_channels * 3 + RTP_HEADER_SIZE);
     }
 
     aes67_flow[0].populated = true;
