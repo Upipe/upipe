@@ -438,6 +438,9 @@ static void upipe_netmap_sink_reset_counters(struct upipe *upipe)
 {
     struct upipe_netmap_sink *upipe_netmap_sink = upipe_netmap_sink_from_upipe(upipe);
 
+    /* Reset progression of current uref. */
+    upipe_netmap_sink->line = 0;
+
     upipe_netmap_sink->n = 0;
     upipe_netmap_sink->fakes = 0;
     upipe_netmap_sink->step = 0;
