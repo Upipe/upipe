@@ -1109,7 +1109,7 @@ static int compute_fakes(struct upipe *upipe, int j)
         upipe_netmap_sink->pid_error_sum = 200;
 
     float d = (error - upipe_netmap_sink->pid_last_error) * fps->num / fps->den;
-    if (fps->num / fps->den > 59)
+    if (fps->num / fps->den >= 50)
         d /= 2;
     if (d > 300)
         d = 300;
