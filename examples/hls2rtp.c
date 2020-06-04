@@ -31,6 +31,7 @@
 #include <ctype.h>
 #include <syslog.h>
 
+#include <upipe/config.h>
 #include <upipe/ulist.h>
 #include <upipe/uuri.h>
 #include <upipe/upipe.h>
@@ -95,6 +96,9 @@
 #include <upipe-pthread/uprobe_pthread_upump_mgr.h>
 #include <upipe-pthread/upipe_pthread_transfer.h>
 #include <upipe-pthread/umutex_pthread.h>
+#ifdef UPIPE_HAVE_BEARSSL_H
+#include <upipe-bearssl/uprobe_https.h>
+#endif
 
 #include <pthread.h>
 
@@ -1739,6 +1743,9 @@ int main(int argc, char **argv)
     uprobe_init(&probe_src, catch_src, uprobe_use(main_probe));
     uprobe_release(main_probe);
     main_probe = &probe_src;
+#ifdef UPIPE_HAVE_BEARSSL_H
+    main_probe = uprobe_https_alloc(main_probe);
+#endif
     {
         struct upipe_mgr *upipe_auto_src_mgr = upipe_auto_src_mgr_alloc();
         assert(upipe_auto_src_mgr);

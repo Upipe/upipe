@@ -110,7 +110,8 @@ check_PROGRAMS = \
 	upipe_audio_copy_test \
 	upipe_row_join_test \
 	upipe_auto_inner_test \
-	upipe_audio_merge_test
+	upipe_audio_merge_test \
+	upipe_auto_source_test
 
 TESTS = \
 	ulist_test \
@@ -583,3 +584,7 @@ upipe_audio_copy_test_LDADD = $(LDADD) $(top_builddir)/lib/upipe-modules/libupip
 upipe_row_join_test_LDADD = $(LDADD) -lev $(top_builddir)/lib/upump-ev/libupump_ev.la $(top_builddir)/lib/upipe-modules/libupipe_modules.la
 upipe_auto_inner_test_LDADD = $(LDADD) $(top_builddir)/lib/upipe-modules/libupipe_modules.la
 upipe_dtsdi_test_LDADD = $(LDADD) $(EV_LIBS) $(top_builddir)/lib/upump-ev/libupump_ev.la $(top_builddir)/lib/upipe-modules/libupipe_modules.la
+upipe_auto_source_test_LDADD = $(LDADD) -lev $(top_builddir)/lib/upump-ev/libupump_ev.la $(top_builddir)/lib/upipe-modules/libupipe_modules.la
+if HAVE_BEARSSL
+upipe_auto_source_test_LDADD += $(top_builddir)/lib/upipe-bearssl/libupipe_bearssl.la
+endif

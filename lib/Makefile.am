@@ -96,3 +96,7 @@ endif
 if HAVE_DVBV5
 SUBDIRS += upipe-dvb
 endif
+
+if HAVE_BEARSSL
+SUBDIRS += upipe-bearssl
+endif

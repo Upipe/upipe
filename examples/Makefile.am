@@ -18,6 +18,7 @@ UPIPEBMD_LIBS = $(top_builddir)/lib/upipe-blackmagic/libupipe_blackmagic.la -lst
 UPIPEOSX_LIBS = $(top_builddir)/lib/upipe-osx/libupipe_osx.la
 UPIPEDVBCSA_LIBS = $(top_builddir)/lib/upipe-dvbcsa/libupipe_dvbcsa.la
 UPIPEDVB_LIBS = $(top_builddir)/lib/upipe-dvb/libupipe_dvb.la
+UPIPEBEARSSL_LIBS = $(top_builddir)/lib/upipe-bearssl/libupipe_bearssl.la
 
 noinst_PROGRAMS = 
 
@@ -28,6 +29,9 @@ rist_tx_LDADD = $(LDADD) $(UPUMPEV_LIBS) $(UPIPEMODULES_LIBS) $(UPIPEFILTERS_LIB
 udpmulticat_LDADD = $(LDADD) $(UPUMPEV_LIBS) $(UPIPEMODULES_LIBS)
 multicatudp_LDADD = $(LDADD) $(UPUMPEV_LIBS) $(UPIPEMODULES_LIBS) $(UPIPEPTHREAD_LIBS) -lpthread
 hls2rtp_LDADD= $(LDADD) $(UPUMPEV_LIBS) $(UPIPEMODULES_LIBS) $(UPIPEFRAMERS_LIBS) $(UPIPETS_LIBS) $(UPIPEHLS_LIBS) $(UPIPEPTHREAD_LIBS) -lpthread
+if HAVE_BEARSSL
+hls2rtp_LDADD += $(UPIPEBEARSSL_LIBS)
+endif
 hls2rtp_CFLAGS= -fno-strict-aliasing
 glxplay_CFLAGS = $(SWSCALE_CFLAGS)
 glxplay_LDADD = $(LDADD) $(UPUMPEV_LIBS) $(UPIPEMODULES_LIBS) $(UPIPEPTHREAD_LIBS) $(UPIPESWS_LIBS) $(UPIPEAV_LIBS) $(UPIPEGL_LIBS) $(UPIPEFILTERS_LIBS) $(UPIPEFRAMERS_LIBS) $(UPIPETS_LIBS) -lpthread
