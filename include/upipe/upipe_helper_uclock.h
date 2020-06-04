@@ -160,6 +160,16 @@ static void STRUCTURE##_clean_uclock(struct upipe *upipe)                   \
     uclock_release(s->UCLOCK);                                              \
     /* If the request was registered, it should be unregistered             \
      * automatically. Otherwise it has not been initialized. */             \
+}                                                                           \
+/** @internal @This returns the current system time.                        \
+ *                                                                          \
+ * @param upipe description structure of the pipe                           \
+ * @return the current system time or UINT64_MAX on error                   \
+ */                                                                         \
+static inline UBASE_UNUSED uint64_t STRUCTURE##_now(struct upipe *upipe)    \
+{                                                                           \
+    struct STRUCTURE *s = STRUCTURE##_from_upipe(upipe);                    \
+    return s->UCLOCK ? uclock_now(s->UCLOCK) : UINT64_MAX;                  \
 }
 
 #ifdef __cplusplus
