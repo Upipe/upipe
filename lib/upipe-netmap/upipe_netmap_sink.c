@@ -2801,11 +2801,6 @@ static int audio_set_flow_destination(struct upipe * upipe, int flow,
     struct upipe_netmap_sink_audio *audio_subpipe = upipe_netmap_sink_audio_from_upipe(upipe);
     const struct upipe_netmap_sink *upipe_netmap_sink = upipe_netmap_sink_from_audio_subpipe(audio_subpipe);
 
-    /* Check arguments are okay. */
-    if (unlikely(path_1 == NULL || strlen(path_1) == 0))
-        return UBASE_ERR_INVALID;
-    if (unlikely((path_2 == NULL || strlen(path_2) == 0) && upipe_netmap_sink->intf[1].d))
-        return UBASE_ERR_INVALID;
     if (unlikely(flow < 0 || flow >= AES67_MAX_FLOWS)) {
         upipe_err_va(upipe, "flow %d is not in the range 0..%d", flow, AES67_MAX_FLOWS-1);
         return UBASE_ERR_INVALID;
@@ -2813,6 +2808,25 @@ static int audio_set_flow_destination(struct upipe * upipe, int flow,
 
     struct aes67_flow *aes67_flow = audio_subpipe->flows[flow];
     const struct upipe_netmap_intf *intf = &upipe_netmap_sink->intf[0];
+
+    /* If given NULL or 0-length strings on both arguments it indicates a reset
+     * for the destination information. */
+    if ((path_1 == NULL && path_2 == NULL)
+            || (strlen(path_1) == 0 && strlen(path_2) == 0)) {
+        aes67_flow[0].populated = false;
+        aes67_flow[1].populated = false;
+        memset(aes67_flow[0].header,      0, sizeof aes67_flow[0].header);
+        memset(aes67_flow[0].fake_header, 0, sizeof aes67_flow[0].fake_header);
+        memset(aes67_flow[1].header,      0, sizeof aes67_flow[1].header);
+        memset(aes67_flow[1].fake_header, 0, sizeof aes67_flow[1].fake_header);
+        return UBASE_ERR_NONE;
+    }
+
+    /* Otherwise if given a NULL or 0-length string it is an error. */
+    if (unlikely(path_1 == NULL || strlen(path_1) == 0))
+        return UBASE_ERR_INVALID;
+    if (unlikely((path_2 == NULL || strlen(path_2) == 0) && intf[1].d))
+        return UBASE_ERR_INVALID;
 
     /* Parse first path. */
     char *path = strdup(path_1);
