@@ -17,6 +17,8 @@ libupipe_modules_la_SOURCES = \
 	upipe_udp_source.c \
 	upipe_udp.c \
 	upipe_udp.h \
+	http_source_hook.c \
+	http_source_hook.h \
 	upipe_http_source.c \
 	http-parser/http_parser.c \
 	http-parser/http_parser.h \
@@ -106,6 +108,7 @@ endif
 
 libupipe_modules_la_CPPFLAGS = -I$(top_builddir)/include -I$(top_srcdir)/include
 libupipe_modules_la_LIBADD = -lm $(top_builddir)/lib/upipe/libupipe.la
+
 libupipe_modules_la_LDFLAGS = -no-undefined
 
 pkgconfigdir = $(libdir)/pkgconfig
