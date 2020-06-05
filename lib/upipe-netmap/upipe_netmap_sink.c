@@ -185,6 +185,8 @@ struct upipe_netmap_sink_audio {
 
     /* Details for all destinations. */
     struct aes67_flow flows[AES67_MAX_FLOWS][AES67_MAX_PATHS];
+
+    bool need_reconfig;
 };
 
 /** @internal @This is the private context of a netmap sink pipe. */
@@ -640,6 +642,7 @@ static struct upipe *_upipe_netmap_sink_alloc(struct upipe_mgr *mgr,
     audio_subpipe->output_channels = 16;
     audio_subpipe->mtu = MTU;
     audio_subpipe->packet_size = audio_packet_size(16, 6);
+    audio_subpipe->need_reconfig = true;
 
     upipe_throw_ready(upipe);
     upipe_throw_ready(subpipe);
@@ -1919,7 +1922,9 @@ static bool upipe_netmap_sink_output(struct upipe *upipe, struct uref *uref,
     if (unlikely(!ubase_check(uref_clock_get_pts_sys(uref, &systime))))
         upipe_warn(upipe, "received non-dated buffer");
 
-    if (upipe_netmap_sink->frame_size == 0) {
+    if (upipe_netmap_sink->frame_size == 0 || upipe_netmap_sink->audio_subpipe.need_reconfig) {
+        upipe_netmap_sink->audio_subpipe.need_reconfig = false;
+
         if (!upipe_netmap_sink->rfc4175) {
             uref_block_size(uref, &upipe_netmap_sink->frame_size);
             upipe_netmap_sink->frame_size = upipe_netmap_sink->frame_size * 5 / 8;
@@ -2951,6 +2956,7 @@ static int audio_set_flow_destination(struct upipe * upipe, int flow,
 
     aes67_flow[0].populated = true;
     aes67_flow[1].populated = true;
+    audio_subpipe->need_reconfig = true;
     return UBASE_ERR_NONE;
 }
 
@@ -2986,6 +2992,7 @@ static int audio_subpipe_set_option(struct upipe *upipe, const char *option,
 
         audio_subpipe->output_samples = output_samples;
         audio_subpipe->packet_size = needed_size;
+        audio_subpipe->need_reconfig = true;
         return UBASE_ERR_NONE;
     }
 
@@ -2997,6 +3004,7 @@ static int audio_subpipe_set_option(struct upipe *upipe, const char *option,
         }
         audio_subpipe->output_channels = output_channels;
         audio_subpipe->packet_size = audio_packet_size(output_channels, audio_subpipe->output_samples);
+        audio_subpipe->need_reconfig = true;
         return UBASE_ERR_NONE;
     }
 
