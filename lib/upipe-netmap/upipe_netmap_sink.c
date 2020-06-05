@@ -185,6 +185,7 @@ struct upipe_netmap_sink_audio {
 
     /* Details for all destinations. */
     struct aes67_flow flows[AES67_MAX_FLOWS][AES67_MAX_PATHS];
+    int num_flows;
 
     bool need_reconfig;
 };
@@ -1570,8 +1571,7 @@ static void upipe_netmap_sink_worker(struct upump *upump)
             struct upipe_netmap_sink_audio *audio_subpipe = &upipe_netmap_sink->audio_subpipe;
             struct upipe *subpipe = upipe_netmap_sink_audio_to_upipe(audio_subpipe);
 
-            int num_flows = 16 / audio_subpipe->output_channels;
-            if (txavail < num_flows)
+            if (txavail < audio_subpipe->num_flows)
                 break;
 
             /* Get uref and map data. */
@@ -1600,7 +1600,7 @@ static void upipe_netmap_sink_worker(struct upump *upump)
                 memset(audio_subpipe->audio_data, 0, sizeof audio_subpipe->audio_data);
             }
 
-            for (int flow = 0; flow < num_flows; flow++) {
+            for (int flow = 0; flow < audio_subpipe->num_flows; flow++) {
                 int channel_offset = flow * audio_subpipe->output_channels;
 
                 bool stamped = false;
@@ -1664,8 +1664,8 @@ static void upipe_netmap_sink_worker(struct upump *upump)
             rtp_set_timestamp(upipe_netmap_sink->audio_rtp_header, timestamp + audio_subpipe->output_samples);
             upipe_netmap_sink->frame_ts_start2 += audio_subpipe->output_samples * 27000 / 48;
 
-            upipe_netmap_sink->bits += 8 * (audio_subpipe->packet_size + 4/*CRC*/) * num_flows;
-            txavail -= num_flows;
+            upipe_netmap_sink->bits += 8 * (audio_subpipe->packet_size + 4/*CRC*/) * audio_subpipe->num_flows;
+            txavail -= audio_subpipe->num_flows;
 
             aps_inc_audio(&upipe_netmap_sink->audio_packet_state);
             local_audio_packet_counter++;
@@ -1963,7 +1963,7 @@ static bool upipe_netmap_sink_output(struct upipe *upipe, struct uref *uref,
             upipe_netmap_sink->rate = 8 * (packets * (eth_header_len + payload + 4 /* CRC */)) * upipe_netmap_sink->fps.num;
 
             struct upipe_netmap_sink_audio *audio_subpipe = upipe_netmap_sink_to_audio_subpipe(upipe_netmap_sink);
-            const uint64_t audio_pps = (48000 / audio_subpipe->output_samples) * (16 / audio_subpipe->output_channels);
+            const uint64_t audio_pps = (48000 / audio_subpipe->output_samples) * audio_subpipe->num_flows;
             const uint64_t audio_bitrate = 8 * (audio_subpipe->packet_size + 4/*CRC*/) * audio_pps;
             upipe_dbg_va(upipe, "audio bitrate %"PRIu64" video bitrate %"PRIu64" \n", audio_bitrate, upipe_netmap_sink->rate);
             upipe_netmap_sink->rate += audio_bitrate * upipe_netmap_sink->fps.den;
@@ -2800,6 +2800,14 @@ static void handle_audio_tail(struct upipe_netmap_sink_audio *audio_subpipe)
     audio_subpipe->uref_samples = 0;
 }
 
+static inline int audio_count_populated_flows(const struct upipe_netmap_sink_audio *audio_subpipe)
+{
+    int ret = 0;
+    for (int i = 0; i < AES67_MAX_FLOWS; i++)
+        ret += audio_subpipe->flows[i][0].populated;
+    return ret;
+}
+
 static int audio_set_flow_destination(struct upipe * upipe, int flow,
         const char *path_1, const char *path_2)
 {
@@ -2820,6 +2828,7 @@ static int audio_set_flow_destination(struct upipe * upipe, int flow,
             || (strlen(path_1) == 0 && strlen(path_2) == 0)) {
         aes67_flow[0].populated = false;
         aes67_flow[1].populated = false;
+        audio_subpipe->num_flows = audio_count_populated_flows(audio_subpipe);
         memset(aes67_flow[0].header,      0, sizeof aes67_flow[0].header);
         memset(aes67_flow[0].fake_header, 0, sizeof aes67_flow[0].fake_header);
         memset(aes67_flow[1].header,      0, sizeof aes67_flow[1].header);
@@ -2956,6 +2965,7 @@ static int audio_set_flow_destination(struct upipe * upipe, int flow,
 
     aes67_flow[0].populated = true;
     aes67_flow[1].populated = true;
+    audio_subpipe->num_flows = audio_count_populated_flows(audio_subpipe);
     audio_subpipe->need_reconfig = true;
     return UBASE_ERR_NONE;
 }
