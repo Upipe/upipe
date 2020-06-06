@@ -120,7 +120,7 @@ static double upipe_amax_process_##type(struct upipe *upipe,                \
             max = -c;                                                       \
     }                                                                       \
     uref_sound_plane_unmap(uref, channel, 0, -1);                           \
-    return (max * 1.0f) / type_max;                                         \
+    return max * 1. / type_max;                                             \
 }
 UPIPE_AMAX_TEMPLATE(uint8_t, UINT8_MAX)
 UPIPE_AMAX_TEMPLATE(int16_t, INT16_MAX)

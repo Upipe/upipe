@@ -1,5 +1,6 @@
 /*
  * Copyright (C) 2018 OpenHeadend S.A.R.L.
+ * Copyright (C) 2020 EasyTools
  *
  * Authors: Arnaud de Turckheim
  *
@@ -568,6 +569,68 @@ static const struct uref_pic_flow_format uref_pic_flow_format_gray8 = {
 };
 
 UREF_PIC_FLOW_FORMAT_HELPER(gray8);
+
+/** This is the description of the mono black format.
+ *
+ * From libavutil/pixfmt.h:
+ * 1bpp, 0 is black, 1 is white, in each byte pixels are ordered from the msb
+ * to the lsb
+ */
+static const struct uref_pic_flow_format uref_pic_flow_format_monoblack = {
+    .macropixel = 1,
+    .nb_planes = 1,
+    .planes = {
+        { 1, 1, 1, "y1", 1 },
+    },
+};
+
+UREF_PIC_FLOW_FORMAT_HELPER(monoblack);
+
+/** This is the description of the mono white format.
+ *
+ * From libavutil/pixfmt.h:
+ * 1bpp, 0 is white, 1 is black, in each byte pixels are ordered from the msb
+ * to the lsb
+ */
+static const struct uref_pic_flow_format uref_pic_flow_format_monowhite = {
+    .macropixel = 1,
+    .nb_planes = 1,
+    .planes = {
+        { 1, 1, 1, "Y1", 1 },
+    },
+};
+
+UREF_PIC_FLOW_FORMAT_HELPER(monowhite);
+
+/** @This is the description of the rgb0 format.
+ *
+ * From libavutil/pixfmt.h:
+ * packed RGB 8:8:8, 32bpp, RGBXRGBX...  X=unused/undefined
+ */
+static const struct uref_pic_flow_format uref_pic_flow_format_rgb0 = {
+    .macropixel = 1,
+    .nb_planes = 1,
+    .planes = {
+        { 1, 1, 1, "r8g8b808", 32 },
+    },
+};
+
+UREF_PIC_FLOW_FORMAT_HELPER(rgb0);
+
+/** @This is the description of the 0rgb format.
+ *
+ * from libavutil/pixfmt.h:
+ * packed RGB 8:8:8, 32bpp, XRGBXRGB... X=unused/undefined
+ */
+static const struct uref_pic_flow_format uref_pic_flow_format_0rgb = {
+    .macropixel = 1,
+    .nb_planes = 1,
+    .planes = {
+        { 1, 1, 1, "08r8g8b8", 32 },
+    },
+};
+
+UREF_PIC_FLOW_FORMAT_HELPER(0rgb);
 
 /** This is the description of the rgb565 format. */
 static const struct uref_pic_flow_format uref_pic_flow_format_rgb565 = {

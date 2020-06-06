@@ -134,7 +134,6 @@ static void ubuf_av_free(struct ubuf *ubuf)
             free(buf[i]);
         free(buf);
     }
-    av_frame_unref(ubuf_av->frame);
     av_frame_free(&ubuf_av->frame);
     ubuf_mgr_release(ubuf->mgr);
     ubuf_av_clean_refs(ubuf_av);
@@ -167,19 +166,25 @@ static struct ubuf *ubuf_av_alloc(struct ubuf_mgr *mgr,
     struct ubuf *ubuf = ubuf_av_to_ubuf(ubuf_av);
     ubuf->mgr = ubuf_mgr_use(mgr);
 
-    ubuf_av->frame = av_frame_alloc();
-    if (unlikely(!ubuf_av->frame)) {
-        free(ubuf_av);
+    AVFrame *ubuf_av_frame = av_frame_alloc();
+    if (!ubuf_av_frame) {
+        ubuf_av_free(ubuf);
         return NULL;
     }
-    av_frame_ref(ubuf_av->frame, frame);
+    if (unlikely(av_frame_ref(ubuf_av_frame, frame) < 0)) {
+        av_frame_free(&ubuf_av_frame);
+        ubuf_av_free(ubuf);
+        return NULL;
+    }
+    ubuf_av->frame = ubuf_av_frame;
+
     ubuf_av->signature = signature;
     switch (signature) {
         case UBUF_AV_ALLOC_PICTURE:
             ubuf_av->pic.buf = NULL;
             ubuf_av->pic.flow_format = upipe_av_pixfmt_to_format(frame->format);
             if (unlikely(!ubuf_av->pic.flow_format)) {
-                free(ubuf_av);
+                ubuf_av_free(ubuf);
                 return NULL;
             }
             break;
@@ -187,7 +192,7 @@ static struct ubuf *ubuf_av_alloc(struct ubuf_mgr *mgr,
             ubuf_av->sound.flow_format =
                 upipe_av_samplefmt_to_flow_format(frame->format);
             if (unlikely(!ubuf_av->sound.flow_format)) {
-                free(ubuf_av);
+                ubuf_av_free(ubuf);
                 return NULL;
             }
             uint8_t planes = 1;
@@ -195,7 +200,7 @@ static struct ubuf *ubuf_av_alloc(struct ubuf_mgr *mgr,
                 planes = frame->channels;
             ubuf_av->sound.channels = calloc(planes + 1, sizeof (char *));
             if (unlikely(!ubuf_av->sound.channels)) {
-                free(ubuf_av);
+                ubuf_av_free(ubuf);
                 return NULL;
             }
             const char *channels_desc = UPIPE_AV_SAMPLEFMT_CHANNELS;
@@ -765,6 +770,20 @@ static int ubuf_sound_av_plane_unmap(struct ubuf *ubuf,
     return UBASE_ERR_NONE;
 }
 
+/** @This returns a new reference to the underlying AVFrame.
+ *
+ * @param ubuf pointer to ubuf
+ * @param frame unreferenced or newly allocated AVFrame
+ * @return an error code
+ */
+static int _ubuf_av_get_avframe(struct ubuf *ubuf, AVFrame *frame)
+{
+    struct ubuf_av *ubuf_av = ubuf_av_from_ubuf(ubuf);
+    if (av_frame_ref(frame, ubuf_av->frame) < 0)
+        return UBASE_ERR_EXTERNAL;
+    return UBASE_ERR_NONE;
+}
+
 /** @internal @This handles buffer control commands.
  *
  * @param ubuf pointer to buffer
@@ -859,6 +878,12 @@ static int ubuf_av_control(struct ubuf *ubuf, int command, va_list args)
             int offset = va_arg(args, int);
             int new_size = va_arg(args, int);
             return ubuf_sound_av_resize(ubuf, offset, new_size);
+        }
+
+        case UBUF_AV_GET_AVFRAME: {
+            UBASE_SIGNATURE_CHECK(args, UBUF_AV_SIGNATURE)
+            AVFrame *frame = va_arg(args, AVFrame *);
+            return _ubuf_av_get_avframe(ubuf, frame);
         }
     }
     return UBASE_ERR_UNHANDLED;

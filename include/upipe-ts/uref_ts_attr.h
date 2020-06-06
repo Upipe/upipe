@@ -117,6 +117,8 @@ static inline int uref_##group##_compare_##name##s(struct uref *uref1,      \
     size_t size2 = uref_##group##_size_##name##s(uref2);                    \
     if (size1 != size2)                                                     \
         return size2 - size1;                                               \
+    if (size1 == 0)                                                         \
+        return 0;                                                           \
     uint8_t descriptors1[size1];                                            \
     uref_##group##_extract_##name##s(uref1, descriptors1);                  \
     uint8_t descriptors2[size1];                                            \
@@ -258,6 +260,8 @@ static inline int uref_##group##_compare_##name##s(struct uref *uref1,      \
     size_t size2 = uref_##group##_size_##name##s(uref2, sub);               \
     if (size1 != size2)                                                     \
         return size2 - size1;                                               \
+    if (size1 == 0)                                                         \
+        return 0;                                                           \
     uint8_t descriptors1[size1];                                            \
     uref_##group##_extract_##name##s(uref1, descriptors1, sub);             \
     uint8_t descriptors2[size1];                                            \

@@ -1026,6 +1026,8 @@ static void upipe_vanc_free(struct upipe *upipe)
     upipe_vanc_output_clean(upipe_vanc_output_to_upipe(
                 upipe_vanc_to_cea708_subpipe(upipe_vanc)));
 
+    uref_free(upipe_vanc->flow_def);
+
     upipe_throw_dead(upipe);
 
     upipe_vanc_clean_input(upipe);

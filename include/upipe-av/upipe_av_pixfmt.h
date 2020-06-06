@@ -1,5 +1,6 @@
 /*
  * Copyright (C) 2013 OpenHeadend S.A.R.L.
+ * Copyright (C) 2020 EasyTools
  *
  * Authors: Benjamin Cohen
  *          Christophe Massiot
@@ -114,6 +115,14 @@ upipe_av_pixfmt_to_format(enum AVPixelFormat pix_fmt)
             return &uref_pic_flow_format_yuv444p16be;
         case AV_PIX_FMT_GRAY8:
             return &uref_pic_flow_format_gray8;
+        case AV_PIX_FMT_MONOBLACK:
+            return &uref_pic_flow_format_monoblack;
+        case AV_PIX_FMT_MONOWHITE:
+            return &uref_pic_flow_format_monowhite;
+        case AV_PIX_FMT_RGB0:
+            return &uref_pic_flow_format_rgb0;
+        case AV_PIX_FMT_0RGB:
+            return &uref_pic_flow_format_0rgb;
         case AV_PIX_FMT_RGB565:
             return &uref_pic_flow_format_rgb565;
         case AV_PIX_FMT_RGB24:
@@ -208,6 +217,10 @@ static inline enum AVPixelFormat
         AV_PIX_FMT_YUV444P16LE,
         AV_PIX_FMT_YUV444P16BE,
         AV_PIX_FMT_GRAY8,
+        AV_PIX_FMT_MONOBLACK,
+        AV_PIX_FMT_MONOWHITE,
+        AV_PIX_FMT_RGB0,
+        AV_PIX_FMT_0RGB,
         AV_PIX_FMT_RGB565,
         AV_PIX_FMT_RGB24,
         AV_PIX_FMT_BGR24,

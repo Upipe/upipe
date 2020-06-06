@@ -257,7 +257,7 @@ static void fetch_av_packets(struct upump *pump)
             // Send uref to audiodec pipe and free avpkt
             upipe_input(thread->audiodec, uref, NULL);
         }
-        av_free_packet(&avpkt);
+        av_packet_unref(&avpkt);
     } else {
         upipe_release(thread->avcdec);
         if (thread->audiodec) {
@@ -391,7 +391,7 @@ int main (int argc, char **argv)
     videoStream = -1;
     audioStream = -1;
     for (i=0; i < mainthread.avfctx->nb_streams; i++) {
-        switch (mainthread.avfctx->streams[i]->codec->codec_type) {
+        switch (mainthread.avfctx->streams[i]->codecpar->codec_type) {
             case AVMEDIA_TYPE_VIDEO:
                 videoStream = i;
                 break;
@@ -410,7 +410,7 @@ int main (int argc, char **argv)
 
     // set codec def and test _context()/_release()
     mainthread.codec_def = upipe_av_to_flow_def(
-                    mainthread.avfctx->streams[videoStream]->codec->codec_id);
+                    mainthread.avfctx->streams[videoStream]->codecpar->codec_id);
     printf("Codec flow def: %s\n", mainthread.codec_def);
     struct uref *flowdef = uref_block_flow_alloc_def_va(uref_mgr, "%s",
                                                         mainthread.codec_def);
@@ -451,7 +451,7 @@ int main (int argc, char **argv)
     mainthread.audiodec = NULL;
     if (audioStream >= 0) {
         mainthread.audio_def = upipe_av_to_flow_def(
-                        mainthread.avfctx->streams[audioStream]->codec->codec_id);
+                        mainthread.avfctx->streams[audioStream]->codecpar->codec_id);
         flowdef = uref_block_flow_alloc_def_va(uref_mgr, "%s", mainthread.audio_def),
         mainthread.audiodec = upipe_void_alloc(upipe_avcdec_mgr,
                 uprobe_upump_mgr_alloc(
@@ -480,14 +480,14 @@ int main (int argc, char **argv)
             // Find first video stream
             thread[i].videoStream = -1;
             for (j=0; j < thread[i].avfctx->nb_streams; j++) {
-                if (thread[i].avfctx->streams[j]->codec->codec_type == AVMEDIA_TYPE_VIDEO) {
+                if (thread[i].avfctx->streams[j]->codecpar->codec_type == AVMEDIA_TYPE_VIDEO) {
                     thread[i].videoStream = j;
                     break;
                 }
             }
             assert(thread[i].videoStream != -1);
             thread[i].codec_def = upipe_av_to_flow_def(
-                            thread[i].avfctx->streams[videoStream]->codec->codec_id);
+                            thread[i].avfctx->streams[videoStream]->codecpar->codec_id);
             flowdef = uref_block_flow_alloc_def_va(uref_mgr, "%s",
                                                    mainthread.codec_def);
 
