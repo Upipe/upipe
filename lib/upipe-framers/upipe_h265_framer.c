@@ -2311,9 +2311,8 @@ static void upipe_h265f_end_annexb(struct upipe *upipe, struct upump **upump_p)
  *
  * @param upipe description structure of the pipe
  * @param upump_p reference to pump that generated the buffer
- * @param true if the NAL was completely handled
  */
-static bool upipe_h265f_begin_annexb(struct upipe *upipe, struct upump **upump_p)
+static void upipe_h265f_begin_annexb(struct upipe *upipe, struct upump **upump_p)
 {
     struct upipe_h265f *upipe_h265f = upipe_h265f_from_upipe(upipe);
     uint8_t nal_type = h265nalst_get_type(upipe_h265f->au_last_nal);
@@ -2321,9 +2320,9 @@ static bool upipe_h265f_begin_annexb(struct upipe *upipe, struct upump **upump_p
         if (upipe_h265f->au_vcl_offset == -1) {
             upipe_h265f->au_vcl_offset =
                 upipe_h265f->au_size - upipe_h265f->au_last_nal_start_size;
-            return false;
+            return;
         }
-        return false;
+        return;
     }
 
     switch (nal_type) {
@@ -2331,15 +2330,15 @@ static bool upipe_h265f_begin_annexb(struct upipe *upipe, struct upump **upump_p
             if (upipe_h265f->au_vcl_offset == -1) {
                 upipe_h265f->au_vcl_offset =
                     upipe_h265f->au_size - upipe_h265f->au_last_nal_start_size;
-                return false;
+                return;
             }
             if (!upipe_h265f->au_slice)
-                return false;
+                return;
             break;
 
         case H265NAL_TYPE_EOS:
         case H265NAL_TYPE_EOB:
-            return false;
+            return;
 
         case H265NAL_TYPE_AUD:
         case H265NAL_TYPE_VPS:
@@ -2347,7 +2346,7 @@ static bool upipe_h265f_begin_annexb(struct upipe *upipe, struct upump **upump_p
         case H265NAL_TYPE_PPS:
         default:
             if (!upipe_h265f->au_slice)
-                return false;
+                return;
             break;
     }
 
@@ -2356,15 +2355,15 @@ static bool upipe_h265f_begin_annexb(struct upipe *upipe, struct upump **upump_p
     upipe_h265f->au_size = upipe_h265f->au_last_nal_start_size;
 
     if (uref == NULL)
-        return false;
+        return;
 
     if (unlikely(upipe_h265f->flow_def_requested == NULL)) {
         upipe_h265f->uref_output = uref;
-        return false;
+        return;
     }
 
     upipe_h265f_output_au(upipe, uref, upump_p);
-    return false;
+    return;
 }
 
 /** @internal @This is called back by @ref upipe_h265f_append_uref_stream
@@ -2474,10 +2473,8 @@ static void upipe_h265f_work_annexb(struct upipe *upipe, struct upump **upump_p)
         upipe_h265f->got_discontinuity = false;
         upipe_h265f->au_last_nal = start;
         upipe_h265f->au_last_nal_start_size = start_size;
-        if (upipe_h265f_begin_annexb(upipe, upump_p))
-            upipe_h265f->au_last_nal_offset = -1;
-        else
-            upipe_h265f->au_last_nal_offset = upipe_h265f->au_size - start_size;
+        upipe_h265f_begin_annexb(upipe, upump_p);
+        upipe_h265f->au_last_nal_offset = upipe_h265f->au_size - start_size;
     }
 
     if (!upipe_h265f->complete_input || !upipe_h265f->au_size)
