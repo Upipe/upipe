@@ -2794,6 +2794,8 @@ static inline int audio_count_populated_flows(const struct upipe_netmap_sink_aud
     int ret = 0;
     for (int i = 0; i < AES67_MAX_FLOWS; i++)
         ret += audio_subpipe->flows[i][0].populated;
+    if (ret > 16 / audio_subpipe->output_channels)
+        ret = 16 / audio_subpipe->output_channels;
     return ret;
 }
 
@@ -2979,6 +2981,7 @@ static int audio_subpipe_set_option(struct upipe *upipe, const char *option,
         }
         audio_subpipe->output_channels = output_channels;
         audio_subpipe->packet_size = audio_packet_size(output_channels, audio_subpipe->output_samples);
+        audio_subpipe->num_flows = audio_count_populated_flows(audio_subpipe);
         audio_subpipe->need_reconfig = true;
         return UBASE_ERR_NONE;
     }
