@@ -1439,39 +1439,55 @@ static int upipe_h265f_handle_sei_pic_timing(struct upipe *upipe,
 static int upipe_h265f_handle_sei(struct upipe *upipe, struct ubuf *ubuf,
                                   size_t offset, size_t size)
 {
+    struct upipe_h265f *upipe_h265f = upipe_h265f_from_upipe(upipe);
+
     uint8_t type;
     if (unlikely(!ubase_check(ubuf_block_extract(ubuf, offset + 2, 1, &type))))
         return UBASE_ERR_INVALID;
-    if (type != H265SEI_BUFFERING_PERIOD && type != H265SEI_PIC_TIMING)
-        return UBASE_ERR_NONE;
-
-    struct upipe_h26xf_stream f;
-    upipe_h26xf_stream_init(&f);
-    struct ubuf_block_stream *s = &f.s;
-    UBASE_RETURN(ubuf_block_stream_init(s, ubuf, offset + 3))
-
-    /* size field */
-    uint8_t octet;
-    do {
-        upipe_h26xf_stream_fill_bits(s, 8);
-        octet = ubuf_block_stream_show_bits(s, 8);
-        ubuf_block_stream_skip_bits(s, 8);
-    } while (octet == UINT8_MAX);
 
     int err = UBASE_ERR_NONE;
+
     switch (type) {
         case H265SEI_BUFFERING_PERIOD:
-            err = upipe_h265f_handle_sei_buffering_period(upipe, s);
+        case H265SEI_PIC_TIMING: {
+            struct upipe_h26xf_stream f;
+            upipe_h26xf_stream_init(&f);
+            struct ubuf_block_stream *s = &f.s;
+            UBASE_RETURN(ubuf_block_stream_init(s, ubuf, offset + 3))
+
+                /* size field */
+                uint8_t octet;
+            do {
+                upipe_h26xf_stream_fill_bits(s, 8);
+                octet = ubuf_block_stream_show_bits(s, 8);
+                ubuf_block_stream_skip_bits(s, 8);
+            } while (octet == UINT8_MAX);
+
+            switch (type) {
+                case H265SEI_BUFFERING_PERIOD:
+                    err = upipe_h265f_handle_sei_buffering_period(upipe, s);
+                    break;
+                case H265SEI_PIC_TIMING:
+                    err = upipe_h265f_handle_sei_pic_timing(upipe, s);
+                    break;
+                default:
+                    break;
+            }
+
+            ubuf_block_stream_clean(s);
             break;
-        case H265SEI_PIC_TIMING:
-            err = upipe_h265f_handle_sei_pic_timing(upipe, s);
-            break;
+        }
+
         default:
             break;
     }
 
-    ubuf_block_stream_clean(s);
-    return err;
+    if (unlikely(!ubase_check(err)))
+        return err;
+
+    if (upipe_h265f->au_vcl_offset == -1)
+        upipe_h265f->au_vcl_offset = upipe_h265f->au_last_nal_offset;
+    return UBASE_ERR_NONE;
 }
 
 /** @internal @This parses and handles a slice NAL.
@@ -1529,6 +1545,9 @@ static int upipe_h265f_handle_slice(struct upipe *upipe, struct ubuf *ubuf,
                 upipe_h265f->num_extra_slice_header_bits);
         upipe_h265f->slice_type = upipe_h26xf_stream_ue(s);
     }
+
+    if (upipe_h265f->au_vcl_offset == -1)
+        upipe_h265f->au_vcl_offset = upipe_h265f->au_last_nal_offset;
 
     *au_slice_p = true;
     return UBASE_ERR_NONE;
@@ -2326,21 +2345,11 @@ static void upipe_h265f_begin_annexb(struct upipe *upipe, struct upump **upump_p
     struct upipe_h265f *upipe_h265f = upipe_h265f_from_upipe(upipe);
     uint8_t nal_type = h265nalst_get_type(upipe_h265f->au_last_nal);
     if (nal_type < H265NAL_TYPE_VPS) {
-        if (upipe_h265f->au_vcl_offset == -1) {
-            upipe_h265f->au_vcl_offset =
-                upipe_h265f->au_size - upipe_h265f->au_last_nal_start_size;
-            return;
-        }
         return;
     }
 
     switch (nal_type) {
         case H265NAL_TYPE_PREF_SEI:
-            if (upipe_h265f->au_vcl_offset == -1) {
-                upipe_h265f->au_vcl_offset =
-                    upipe_h265f->au_size - upipe_h265f->au_last_nal_start_size;
-                return;
-            }
             if (!upipe_h265f->au_slice)
                 return;
             break;
@@ -2359,9 +2368,7 @@ static void upipe_h265f_begin_annexb(struct upipe *upipe, struct upump **upump_p
             break;
     }
 
-    upipe_h265f->au_size -= upipe_h265f->au_last_nal_start_size;
-    upipe_h265f_output_annexb(upipe, upump_p);
-    upipe_h265f->au_size = upipe_h265f->au_last_nal_start_size;
+    upipe_h265f_output_prev_annexb(upipe, upump_p);
 }
 
 /** @internal @This is called back by @ref upipe_h265f_append_uref_stream
@@ -2471,8 +2478,8 @@ static void upipe_h265f_work_annexb(struct upipe *upipe, struct upump **upump_p)
         upipe_h265f->got_discontinuity = false;
         upipe_h265f->au_last_nal = start;
         upipe_h265f->au_last_nal_start_size = start_size;
-        upipe_h265f_begin_annexb(upipe, upump_p);
         upipe_h265f->au_last_nal_offset = upipe_h265f->au_size - start_size;
+        upipe_h265f_begin_annexb(upipe, upump_p);
     }
 
     if (!upipe_h265f->complete_input || !upipe_h265f->au_size)
