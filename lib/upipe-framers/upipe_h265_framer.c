@@ -2480,6 +2480,7 @@ static void upipe_h265f_work_annexb(struct upipe *upipe, struct upump **upump_p)
 
     upipe_h265f_end_annexb(upipe, upump_p);
     upipe_h265f_output_annexb(upipe, upump_p);
+    upipe_h265f->au_last_nal_offset = -1;
 }
 
 /** @internal @This works on incoming frames in NALU format (supposedly
