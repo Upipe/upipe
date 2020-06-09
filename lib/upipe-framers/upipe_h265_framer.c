@@ -2200,6 +2200,25 @@ static struct uref *upipe_h265f_prepare_annexb(struct upipe *upipe)
     return uref;
 }
 
+/** @internal @This outputs an access unit.
+ *
+ * @param upipe description structure of the pipe
+ * @param upump_p reference to pump that generated the buffer
+ */
+static void upipe_h265f_output_annexb(struct upipe *upipe,
+                                      struct upump **upump_p)
+{
+    struct upipe_h265f *upipe_h265f = upipe_h265f_from_upipe(upipe);
+    struct uref *uref = upipe_h265f_prepare_annexb(upipe);
+    if (uref == NULL)
+        return;
+
+    if (unlikely(upipe_h265f->flow_def_requested == NULL))
+        upipe_h265f->uref_output = uref;
+    else
+        upipe_h265f_output_au(upipe, uref, upump_p);
+}
+
 /** @internal @This outputs the previous access unit, before the current NAL.
  *
  * @param upipe description structure of the pipe
@@ -2212,19 +2231,9 @@ static void upipe_h265f_output_prev_annexb(struct upipe *upipe,
     size_t slice_size = upipe_h265f->au_size -
                         upipe_h265f->au_last_nal_offset;
     upipe_h265f->au_size = upipe_h265f->au_last_nal_offset;
-    struct uref *uref = upipe_h265f_prepare_annexb(upipe);
+    upipe_h265f_output_annexb(upipe, upump_p);
     upipe_h265f->au_size = slice_size;
     upipe_h265f->au_last_nal_offset = 0;
-
-    if (uref == NULL)
-        return;
-
-    if (unlikely(upipe_h265f->flow_def_requested == NULL)) {
-        upipe_h265f->uref_output = uref;
-        return;
-    }
-
-    upipe_h265f_output_au(upipe, uref, upump_p);
 }
 
 /** @internal @This is called when a new NAL starts, to check the previous NAL.
@@ -2351,19 +2360,8 @@ static void upipe_h265f_begin_annexb(struct upipe *upipe, struct upump **upump_p
     }
 
     upipe_h265f->au_size -= upipe_h265f->au_last_nal_start_size;
-    struct uref *uref = upipe_h265f_prepare_annexb(upipe);
+    upipe_h265f_output_annexb(upipe, upump_p);
     upipe_h265f->au_size = upipe_h265f->au_last_nal_start_size;
-
-    if (uref == NULL)
-        return;
-
-    if (unlikely(upipe_h265f->flow_def_requested == NULL)) {
-        upipe_h265f->uref_output = uref;
-        return;
-    }
-
-    upipe_h265f_output_au(upipe, uref, upump_p);
-    return;
 }
 
 /** @internal @This is called back by @ref upipe_h265f_append_uref_stream
@@ -2481,17 +2479,7 @@ static void upipe_h265f_work_annexb(struct upipe *upipe, struct upump **upump_p)
        return;
 
     upipe_h265f_end_annexb(upipe, upump_p);
-    struct uref *uref = upipe_h265f_prepare_annexb(upipe);
-
-    if (uref == NULL)
-        return;
-
-    if (unlikely(upipe_h265f->flow_def_requested == NULL)) {
-        upipe_h265f->uref_output = uref;
-        return;
-    }
-
-    upipe_h265f_output_au(upipe, uref, upump_p);
+    upipe_h265f_output_annexb(upipe, upump_p);
 }
 
 /** @internal @This works on incoming frames in NALU format (supposedly
@@ -2857,9 +2845,7 @@ static void upipe_h265f_free(struct upipe *upipe)
     if (upipe_h265f->encaps_input == UREF_H26X_ENCAPS_ANNEXB &&
         !upipe_h265f->complete_input && upipe_h265f->au_size) {
         upipe_h265f_end_annexb(upipe, NULL);
-        struct uref *uref = upipe_h265f_prepare_annexb(upipe);
-        if (uref != NULL)
-            upipe_h265f_output_au(upipe, uref, NULL);
+        upipe_h265f_output_annexb(upipe, NULL);
     }
 
     upipe_throw_dead(upipe);
