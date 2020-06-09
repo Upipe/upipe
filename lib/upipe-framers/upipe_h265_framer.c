@@ -2356,6 +2356,7 @@ static void upipe_h265f_begin_annexb(struct upipe *upipe, struct upump **upump_p
 
         case H265NAL_TYPE_EOS:
         case H265NAL_TYPE_EOB:
+        case H265NAL_TYPE_FD:
             return;
 
         case H265NAL_TYPE_AUD:
