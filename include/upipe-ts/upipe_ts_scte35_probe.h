@@ -40,7 +40,11 @@ enum uprobe_ts_scte35p_event {
     UPROBE_TS_SCTE35P_SENTINEL = UPROBE_LOCAL,
 
     /** the given uref triggers an event that takes place now (struct uref *) */
-    UPROBE_TS_SCTE35P_EVENT
+    UPROBE_TS_SCTE35P_EVENT,
+    /** the given uref triggers a null event (struct uref *) */
+    UPROBE_TS_SCTE35P_NULL,
+    /** the given uref triggers a signal that takes place now (struct uref *) */
+    UPROBE_TS_SCTE35P_SIGNAL,
 };
 
 /** @This returns the management structure for all ts_scte35p pipes.

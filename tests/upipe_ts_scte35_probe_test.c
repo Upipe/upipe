@@ -46,6 +46,7 @@
 #include <upipe/upipe.h>
 #include <upipe-ts/upipe_ts_scte35_probe.h>
 #include <upipe-ts/uref_ts_scte35.h>
+#include <upipe-ts/uref_ts_scte35_desc.h>
 #include <upipe/upump.h>
 #include <upump-ev/upump_ev.h>
 
@@ -54,6 +55,8 @@
 #include <stdio.h>
 #include <inttypes.h>
 #include <assert.h>
+
+#include <bitstream/scte/35.h>
 
 #define UPUMP_POOL 0
 #define UPUMP_BLOCKER_POOL 0
@@ -105,6 +108,39 @@ static int catch(struct uprobe *uprobe, struct upipe *upipe,
                 }
                 default:
                     assert(0);
+            }
+            round = 0;
+            break;
+        }
+        case UPROBE_TS_SCTE35P_NULL: {
+            assert(va_arg(args, unsigned int) == UPIPE_TS_SCTE35P_SIGNATURE);
+            struct uref *uref = va_arg(args, struct uref *);
+            assert(uref != NULL);
+
+            switch (round) {
+                case 4:
+                    break;
+                default:
+                    abort();
+            }
+            round = 0;
+            break;
+        }
+
+        case UPROBE_TS_SCTE35P_SIGNAL: {
+            assert(va_arg(args, unsigned int) == UPIPE_TS_SCTE35P_SIGNATURE);
+            struct uref *uref = va_arg(args, struct uref *);
+            assert(uref != NULL);
+
+            switch (round) {
+                case 5: {
+                    uint64_t pts_orig;
+                    ubase_assert(uref_clock_get_pts_orig(uref, &pts_orig));
+                    assert(pts_orig == 1);
+                    break;
+                }
+                default:
+                    abort();
             }
             round = 0;
             break;
@@ -165,6 +201,7 @@ int main(int argc, char *argv[])
 
     uref = uref_alloc(uref_mgr);
     assert(uref != NULL);
+    ubase_assert(uref_ts_scte35_set_command_type(uref, SCTE35_INSERT_COMMAND));
     ubase_assert(uref_ts_scte35_set_event_id(uref, 1));
     ubase_assert(uref_ts_scte35_set_out_of_network(uref));
     round = 1;
@@ -174,6 +211,7 @@ int main(int argc, char *argv[])
 
     uref = uref_alloc(uref_mgr);
     assert(uref != NULL);
+    ubase_assert(uref_ts_scte35_set_command_type(uref, SCTE35_INSERT_COMMAND));
     ubase_assert(uref_ts_scte35_set_event_id(uref, 2));
     ubase_assert(uref_ts_scte35_set_out_of_network(uref));
     uref_clock_set_pts_sys(uref, UCLOCK_FREQ);
@@ -183,6 +221,7 @@ int main(int argc, char *argv[])
 
     uref = uref_alloc(uref_mgr);
     assert(uref != NULL);
+    ubase_assert(uref_ts_scte35_set_command_type(uref, SCTE35_INSERT_COMMAND));
     ubase_assert(uref_ts_scte35_set_event_id(uref, 2));
     ubase_assert(uref_ts_scte35_set_out_of_network(uref));
     uref_clock_set_duration(uref, UCLOCK_FREQ);
@@ -194,6 +233,44 @@ int main(int argc, char *argv[])
     round = 3;
     assert(!ev_run(loop, 0));
     assert(round == 0);
+
+    uref = uref_alloc(uref_mgr);
+    assert(uref != NULL);
+    ubase_assert(uref_ts_scte35_set_command_type(uref, SCTE35_NULL_COMMAND));
+    uref_clock_set_pts_sys(uref, UCLOCK_FREQ);
+    round = 4;
+    upipe_input(upipe_ts_scte35p, uref, NULL);
+    assert(round == 0);
+
+    round = 5;
+    uref = uref_alloc(uref_mgr);
+    assert(uref != NULL);
+    ubase_assert(uref_ts_scte35_set_command_type(uref,
+                                                 SCTE35_TIME_SIGNAL_COMMAND));
+    uref_clock_set_pts_sys(uref, UCLOCK_FREQ);
+    uref_clock_set_pts_orig(uref, 1);
+    upipe_input(upipe_ts_scte35p, uref, NULL);
+    assert(!ev_run(loop, 0));
+    assert(round == 0);
+
+    round = 6;
+    uref = uref_alloc(uref_mgr);
+    assert(uref != NULL);
+    ubase_assert(uref_ts_scte35_set_command_type(uref,
+                                                 SCTE35_TIME_SIGNAL_COMMAND));
+    uref_clock_set_pts_sys(uref, UCLOCK_FREQ);
+    uref_clock_set_pts_orig(uref, 1);
+    upipe_input(upipe_ts_scte35p, uref, NULL);
+    uref = uref_alloc(uref_mgr);
+    assert(uref != NULL);
+    ubase_assert(uref_ts_scte35_set_command_type(uref,
+                                                 SCTE35_TIME_SIGNAL_COMMAND));
+    uref_clock_set_pts_sys(uref, UCLOCK_FREQ);
+    uref_clock_set_pts_orig(uref, 1);
+    uref_ts_scte35_desc_seg_set_cancel(uref);
+    upipe_input(upipe_ts_scte35p, uref, NULL);
+    assert(!ev_run(loop, 0));
+    assert(round == 6);
 
     upipe_release(upipe_ts_scte35p);
     upipe_mgr_release(upipe_ts_scte35p_mgr); // nop

@@ -37,6 +37,7 @@ myinclude_HEADERS = \
 	uref_ts_flow.h \
 	uref_ts_scte104_flow.h \
 	uref_ts_scte35.h \
+	uref_ts_scte35_desc.h \
 	$(NULL)
 
 if HAVE_GCRYPT

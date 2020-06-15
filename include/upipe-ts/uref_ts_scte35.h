@@ -41,6 +41,7 @@ extern "C" {
 #include <string.h>
 #include <stdint.h>
 
+UREF_ATTR_SMALL_UNSIGNED(ts_scte35, command_type, "scte35.type", command type)
 UREF_ATTR_UNSIGNED(ts_scte35, event_id, "scte35.id", event ID)
 UREF_ATTR_VOID(ts_scte35, cancel, "scte35.cancel", cancel indicator)
 UREF_ATTR_VOID(ts_scte35, out_of_network, "scte35.oon",
@@ -49,6 +50,10 @@ UREF_ATTR_VOID(ts_scte35, auto_return, "scte35.autoreturn",
         auto return indicator)
 UREF_ATTR_UNSIGNED(ts_scte35, unique_program_id, "scte35.programid",
         unique program ID)
+UREF_ATTR_SMALL_UNSIGNED_VA(ts_scte35, desc_tag, "scte35.desc_tag[%u]",
+                            descriptor tag, unsigned desc, desc)
+UREF_ATTR_UNSIGNED_VA(ts_scte35, desc_identifier, "scte35.desc_id[%u]",
+                      descriptor identifier, unsigned desc, desc)
 
 #ifdef __cplusplus
 }
