@@ -1,5 +1,6 @@
 /*
  * Copyright (C) 2015 OpenHeadend S.A.R.L.
+ * Copyright (C) 2020 EasyTools
  *
  * Authors: Christophe Massiot
  *
@@ -41,6 +42,7 @@
 #include <upipe-ts/upipe_ts_scte35_decoder.h>
 #include <upipe-ts/uref_ts_flow.h>
 #include <upipe-ts/uref_ts_scte35.h>
+#include <upipe-ts/uref_ts_scte35_desc.h>
 
 #include <stdlib.h>
 #include <stdbool.h>
@@ -133,44 +135,28 @@ static void upipe_ts_scte35d_parse_descs(struct upipe *upipe, struct uref *uref,
                                          uint16_t desclength)
 {
     const uint8_t *desc;
-    int j = 0;
+    unsigned j = 0;
 
     /* cast needed because biTStream expects an uint8_t * (but doesn't write
      * to it */
     while ((desc = descl_get_desc((uint8_t *)descl, desclength, j++)) != NULL) {
         UBASE_FATAL(upipe, uref_ts_flow_add_descriptor(uref,
-                    desc, desc_get_length(desc) + DESC_HEADER_SIZE))
+                    desc, desc_get_length(desc) + DESC_HEADER_SIZE));
     }
 }
 
-/** @internal @This parses a new PSI section.
+/** @internal @This parses an insert command.
  *
  * @param upipe description structure of the pipe
  * @param uref uref structure
  * @param upump_p reference to pump that generated the buffer
  */
-static void upipe_ts_scte35d_input(struct upipe *upipe, struct uref *uref,
-                                   struct upump **upump_p)
+static void upipe_ts_scte35d_insert_command(struct upipe *upipe,
+                                            struct uref *uref,
+                                            struct upump **upump_p)
 {
     struct upipe_ts_scte35d *upipe_ts_scte35d =
         upipe_ts_scte35d_from_upipe(upipe);
-    assert(upipe_ts_scte35d->flow_def != NULL);
-
-    uint8_t buffer[SCTE35_HEADER_SIZE];
-    const uint8_t *header = uref_block_peek(uref, 0, SCTE35_HEADER_SIZE,
-                                            buffer);
-    if (unlikely(header == NULL)) {
-        uref_free(uref);
-        return;
-    }
-
-    uint8_t type = scte35_get_command_type(header);
-    uref_block_peek_unmap(uref, 0, buffer, header);
-
-    if (type != SCTE35_INSERT_COMMAND) {
-        uref_free(uref);
-        return;
-    }
 
     const uint8_t *scte35;
     int size = -1;
@@ -234,6 +220,7 @@ static void upipe_ts_scte35d_input(struct upipe *upipe, struct uref *uref,
     uref_block_unmap(uref, 0);
     ubuf_free(uref_detach_ubuf(uref));
 
+    uref_ts_scte35_set_command_type(uref, SCTE35_INSERT_COMMAND);
     uref_ts_scte35_set_event_id(uref, event_id);
     if (cancel)
         uref_ts_scte35_set_cancel(uref);
@@ -255,6 +242,271 @@ static void upipe_ts_scte35d_input(struct upipe *upipe, struct uref *uref,
     }
 
     upipe_ts_scte35d_output(upipe, uref, upump_p);
+}
+
+/** @internal @This parses a time signal command.
+ *
+ * @param upipe description structure of the pipe
+ * @param uref uref structure
+ * @param upump_p reference to pump that generated the buffer
+ */
+static void upipe_ts_scte35d_time_signal_command(struct upipe *upipe,
+                                                 struct uref *uref,
+                                                 struct upump **upump_p)
+{
+    struct upipe_ts_scte35d *upipe_ts_scte35d =
+        upipe_ts_scte35d_from_upipe(upipe);
+
+    const uint8_t *scte35;
+    int size = -1;
+    if (unlikely(!ubase_check(uref_block_merge(uref, upipe_ts_scte35d->ubuf_mgr,
+                                               0, -1)) ||
+                 !ubase_check(uref_block_read(uref, 0, &size, &scte35)))) {
+        upipe_warn(upipe, "invalid SCTE35 section received");
+        uref_free(uref);
+        return;
+    }
+
+    if (!scte35_validate(scte35)) {
+        upipe_warn(upipe, "invalid SCTE35 section received");
+        uref_block_unmap(uref, 0);
+        uref_free(uref);
+        return;
+    }
+
+    const uint8_t *splice_time = scte35_time_signal_get_splice_time(scte35);
+    if (!splice_time) {
+        upipe_warn(upipe, "invalid SCTE35 section received");
+        uref_block_unmap(uref, 0);
+        uref_free(uref);
+        return;
+    }
+    uint64_t pts = UINT64_MAX;
+    bool time_specified = scte35_splice_time_has_time_specified(splice_time);
+    if (time_specified) {
+        pts = scte35_splice_time_get_pts_time(splice_time);
+        pts += scte35_get_pts_adjustment(scte35);
+        pts %= POW2_33;
+    }
+
+    uref_ts_scte35_set_command_type(uref, SCTE35_TIME_SIGNAL_COMMAND);
+    if (pts != UINT64_MAX) {
+        uref_clock_set_pts_orig(uref, pts * UCLOCK_FREQ / 90000);
+        uref_clock_set_dts_pts_delay(uref, 0);
+        upipe_throw_clock_ts(upipe, uref);
+    }
+
+    uint16_t desc_length =
+        scte35_get_command_length(scte35) == 0xfff ? 0 :
+        scte35_get_desclength(scte35);
+    uint8_t *descl = desc_length ? (uint8_t *)scte35_get_descl(scte35) : NULL;
+
+    struct uref *out = uref_dup_inner(uref);
+    if (!out) {
+        upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
+        uref_block_unmap(uref, 0);
+        uref_free(uref);
+        return;
+    }
+    if (descl)
+        upipe_ts_scte35d_parse_descs(upipe, out, descl, desc_length);
+
+    upipe_ts_scte35d_output(upipe, out, upump_p);
+
+    const uint8_t *desc;
+    unsigned i = 0;
+    for (i = 0; descl && (desc = descl_get_desc(descl, desc_length, i)); i++) {
+        out = uref_dup_inner(uref);
+        if (!out) {
+            upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
+            break;
+        }
+        uint8_t tag = scte35_splice_desc_get_tag(desc);
+        uint32_t identifier = scte35_splice_desc_get_identifier(desc);
+
+        uref_ts_scte35_desc_set_tag(out, tag);
+        uref_ts_scte35_desc_set_identifier(out, identifier);
+
+        switch (tag) {
+            case SCTE35_SPLICE_DESC_TAG_SEG: {
+                uint32_t seg_event_id = scte35_seg_desc_get_event_id(desc);
+                bool cancel = scte35_seg_desc_has_cancel(desc);
+                uref_ts_scte35_desc_seg_set_event_id(out, seg_event_id);
+                if (cancel)
+                    uref_ts_scte35_desc_seg_set_cancel(out);
+                else {
+                    bool has_delivery_not_restricted =
+                        scte35_seg_desc_has_delivery_not_restricted(desc);
+                    if (!has_delivery_not_restricted) {
+                        bool has_web_delivery_allowed =
+                            scte35_seg_desc_has_web_delivery_allowed(desc);
+                        bool has_no_regional_blackout =
+                            scte35_seg_desc_has_no_regional_blackout(desc);
+                        bool has_archive_allowed =
+                            scte35_seg_desc_has_archive_allowed(desc);
+                        uint8_t device_restrictions =
+                            scte35_seg_desc_get_device_restrictions(desc);
+                        if (has_web_delivery_allowed)
+                            uref_ts_scte35_desc_seg_set_web(out);
+                        if (has_no_regional_blackout)
+                            uref_ts_scte35_desc_seg_set_no_regional_blackout(
+                                out);
+                        if (has_archive_allowed)
+                            uref_ts_scte35_desc_seg_set_archive(out);
+                        uref_ts_scte35_desc_seg_set_device(
+                            out, device_restrictions);
+                    }
+                    else
+                        uref_ts_scte35_desc_seg_set_delivery_not_restricted(
+                            out);
+
+                    bool has_program_seg =
+                        scte35_seg_desc_has_program_seg(desc);
+                    if (!has_program_seg) {
+                        uint8_t nb_comp =
+                            scte35_seg_desc_get_component_count(desc);
+                        uref_ts_scte35_desc_seg_set_nb_comp(out, nb_comp);
+                        for (uint8_t j = 0; j < nb_comp; j++) {
+                            const uint8_t *comp =
+                                scte35_seg_desc_get_component(desc, j);
+                            uint8_t comp_tag =
+                                scte35_seg_desc_component_get_tag(comp);
+                            uint64_t pts_off =
+                                scte35_seg_desc_component_get_pts_off(comp);
+                            uref_ts_scte35_desc_seg_comp_set_tag(
+                                out, comp_tag, j);
+                            uref_ts_scte35_desc_seg_comp_set_pts_off(
+                                out, pts_off, j);
+                        }
+                    }
+
+                    bool has_duration = scte35_seg_desc_has_duration(desc);
+                    if (has_duration) {
+                        uint64_t duration = scte35_seg_desc_get_duration(desc);
+                        uref_clock_set_duration(out, duration);
+                    }
+
+                    uint8_t upid_type = scte35_seg_desc_get_upid_type(desc);
+                    uint8_t upid_length = scte35_seg_desc_get_upid_length(desc);
+                    const uint8_t *upid = scte35_seg_desc_get_upid(desc);
+                    uint8_t type_id = scte35_seg_desc_get_type_id(desc);
+                    uint8_t num = scte35_seg_desc_get_num(desc);
+                    uint8_t expected = scte35_seg_desc_get_expected(desc);
+                    if (upid_type || upid_length) {
+                        uref_ts_scte35_desc_seg_set_upid_type(out, upid_type);
+                        uref_ts_scte35_desc_seg_set_upid_type_name(
+                            out, scte35_seg_desc_upid_type_to_str(upid_type));
+                        uref_ts_scte35_desc_seg_set_upid_length(
+                            out, upid_length);
+                        uref_ts_scte35_desc_seg_set_upid(
+                            out, upid, upid_length);
+                    }
+                    uref_ts_scte35_desc_seg_set_type_id(out, type_id);
+                    uref_ts_scte35_desc_seg_set_type_id_name(
+                        out, scte35_seg_desc_type_id_to_str(type_id));
+                    uref_ts_scte35_desc_seg_set_num(out, num);
+                    uref_ts_scte35_desc_seg_set_expected(out, expected);
+                    if (scte35_seg_desc_has_sub_num(desc)) {
+                        uint8_t sub_num =
+                            scte35_seg_desc_get_sub_num(desc);
+                        uref_ts_scte35_desc_seg_set_sub_num(out, sub_num);
+                    }
+                    if (scte35_seg_desc_has_sub_expected(desc)) {
+                        uint8_t sub_expected =
+                            scte35_seg_desc_get_sub_expected(desc);
+                        uref_ts_scte35_desc_seg_set_sub_expected(
+                            out, sub_expected);
+                    }
+                }
+                break;
+            }
+        }
+        upipe_ts_scte35d_output(upipe, out, upump_p);
+    }
+
+    uref_block_unmap(uref, 0);
+    uref_free(uref);
+}
+
+/** @internal @This parses a null command.
+ *
+ * @param upipe description structure of the pipe
+ * @param uref uref structure
+ * @param upump_p reference to pump that generated the buffer
+ */
+static void upipe_ts_scte35d_null_command(struct upipe *upipe,
+                                          struct uref *uref,
+                                          struct upump **upump_p)
+{
+    struct upipe_ts_scte35d *upipe_ts_scte35d =
+        upipe_ts_scte35d_from_upipe(upipe);
+
+    const uint8_t *scte35;
+    int size = -1;
+    if (unlikely(!ubase_check(uref_block_merge(uref, upipe_ts_scte35d->ubuf_mgr,
+                                               0, -1)) ||
+                 !ubase_check(uref_block_read(uref, 0, &size, &scte35)))) {
+        upipe_warn(upipe, "invalid SCTE35 section received");
+        uref_free(uref);
+        return;
+    }
+
+    if (!scte35_validate(scte35)) {
+        upipe_warn(upipe, "invalid SCTE35 section received");
+        uref_block_unmap(uref, 0);
+        uref_free(uref);
+        return;
+    }
+
+    if (scte35_get_command_length(scte35) != 0xfff &&
+        scte35_get_desclength(scte35))
+        upipe_ts_scte35d_parse_descs(upipe, uref, scte35_get_descl(scte35),
+                                     scte35_get_desclength(scte35));
+
+    uref_block_unmap(uref, 0);
+    ubuf_free(uref_detach_ubuf(uref));
+
+    uref_ts_scte35_set_command_type(uref, SCTE35_NULL_COMMAND);
+
+    upipe_ts_scte35d_output(upipe, uref, upump_p);
+}
+
+/** @internal @This parses a new PSI section.
+ *
+ * @param upipe description structure of the pipe
+ * @param uref uref structure
+ * @param upump_p reference to pump that generated the buffer
+ */
+static void upipe_ts_scte35d_input(struct upipe *upipe, struct uref *uref,
+                                   struct upump **upump_p)
+{
+    struct upipe_ts_scte35d *upipe_ts_scte35d =
+        upipe_ts_scte35d_from_upipe(upipe);
+    assert(upipe_ts_scte35d->flow_def != NULL);
+
+    uint8_t buffer[SCTE35_HEADER_SIZE];
+    const uint8_t *header = uref_block_peek(uref, 0, SCTE35_HEADER_SIZE,
+                                            buffer);
+    if (unlikely(header == NULL)) {
+        uref_free(uref);
+        return;
+    }
+
+    uint8_t type = scte35_get_command_type(header);
+    uref_block_peek_unmap(uref, 0, buffer, header);
+
+    switch (type) {
+        case SCTE35_NULL_COMMAND:
+            return upipe_ts_scte35d_null_command(upipe, uref, upump_p);
+        case SCTE35_INSERT_COMMAND:
+            return upipe_ts_scte35d_insert_command(upipe, uref, upump_p);
+        case SCTE35_TIME_SIGNAL_COMMAND:
+            return upipe_ts_scte35d_time_signal_command(upipe, uref, upump_p);
+
+        default:
+            uref_free(uref);
+            return;
+    }
 }
 
 /** @internal @This receives an ubuf manager.
