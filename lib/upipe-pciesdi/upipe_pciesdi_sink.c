@@ -702,11 +702,6 @@ static int upipe_pciesdi_sink_set_flow_def(struct upipe *upipe, struct uref *flo
     bool sdi3g = height == 1080 && (urational_cmp(&fps, &(struct urational){ 50, 1 })) >= 0;
     upipe_dbg_va(upipe, "sd: %d, 3g: %d", sd, sdi3g);
 
-    /* TODO: init card based on given format. */
-    int64_t delay = get_genlock_delay(sdi_format);
-    if (delay == 0)
-        upipe_warn(upipe, "unknown genlock delay");
-
     int tx_mode;
     if (sd)
         tx_mode = SDI_TX_MODE_SD;
@@ -726,6 +721,19 @@ static int upipe_pciesdi_sink_set_flow_def(struct upipe *upipe, struct uref *flo
     if (upipe_pciesdi_sink->fd == -1) {
         upipe_warn(upipe, "device has not been opened, unable to init hardware");
         return UBASE_ERR_INVALID;
+    }
+
+    uint8_t active;
+    uint64_t period, seen;
+    sdi_genlock_vsync(upipe_pciesdi_sink->fd, &active, &period, &seen);
+
+    if (active) {
+        int64_t delay = get_genlock_delay(sdi_format);
+        if (delay == 0)
+            upipe_warn(upipe, "unknown genlock delay");
+        sdi_writel(upipe_pciesdi_sink->fd, CSR_SDI_GENLOCK_SYNCHRO_SOURCE_ADDR, SDI_GENLOCK_SYNCHRO_SOURCE_VSYNC_DELAYED | SDI_GENLOCK_SYNCHRO_SOURCE_FIELD);
+        sdi_writel(upipe_pciesdi_sink->fd, CSR_SDI_GENLOCK_SYNCHRO_DELAY_VSYNC_EDGE_ADDR, 0);
+        sdi_writel(upipe_pciesdi_sink->fd, CSR_SDI_GENLOCK_SYNCHRO_DELAY_VSYNC_OFFSET_ADDR, delay);
     }
 
     /* Record time now so that we can use it as an offset to ensure that the
