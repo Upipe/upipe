@@ -609,6 +609,72 @@ static void init_hardware(struct upipe *upipe, int rate, int mode)
     sdi_set_rate(fd, rate);
 }
 
+static int64_t get_genlock_delay(const struct sdi_offsets_fmt *sdi_format)
+{
+    enum sdi_type {
+        SDI_TYPE_UNKNOWN,
+
+        SDI_TYPE_PAL,
+        SDI_TYPE_720p50,
+        SDI_TYPE_720p60,
+        SDI_TYPE_1080p24,
+        SDI_TYPE_1080i25,
+        SDI_TYPE_1080p25,
+        SDI_TYPE_1080p30,
+        SDI_TYPE_1080p50,
+        SDI_TYPE_1080p60,
+
+        SDI_TYPE_NTSC,
+        SDI_TYPE_720p59,
+        SDI_TYPE_1080p23,
+        SDI_TYPE_1080i29,
+        SDI_TYPE_1080p29,
+        SDI_TYPE_1080p59,
+    } sdi_type = SDI_TYPE_UNKNOWN;
+
+    static const struct offset { int lines; int us; } offsets[] = {
+            [SDI_TYPE_PAL]     = { 1, -24 },
+            [SDI_TYPE_720p50]  = { 2, -13 },
+            [SDI_TYPE_1080i25] = { 1, 6 },
+            [SDI_TYPE_1080p25] = { 1, 6 },
+            [SDI_TYPE_1080p50] = { 2, 1 },
+    };
+
+    int height = sdi_format->pict_fmt->active_height;
+    bool interlaced = sdi_format->psf_ident == UPIPE_SDI_PSF_IDENT_I;
+    const struct urational *fps = &sdi_format->fps;
+
+    if (height == 1080) {
+        if (urational_cmp(fps, &(struct urational){ 50, 1 }) == 0)
+            sdi_type = SDI_TYPE_1080p50;
+        if (urational_cmp(fps, &(struct urational){ 25, 1 }) == 0) {
+            if (interlaced)
+                sdi_type = SDI_TYPE_1080i25;
+            else
+                sdi_type = SDI_TYPE_1080p25;
+        }
+    }
+    else if (height == 720) {
+        if (urational_cmp(fps, &(struct urational){ 50, 1 }) == 0)
+            sdi_type = SDI_TYPE_720p50;
+    }
+    else {
+        if (urational_cmp(fps, &(struct urational){ 25, 1 }) == 0)
+            sdi_type = SDI_TYPE_PAL;
+    }
+
+    if (sdi_type == SDI_TYPE_UNKNOWN)
+        return 0;
+
+    struct offset offset = offsets[sdi_type];
+
+    int64_t delay = INT64_C(125000000) * fps->den / fps->num;
+    int64_t line_delay = delay * offset.lines / sdi_format->height;
+    int64_t time_delay = INT64_C(125000000) * offset.us / 1000000;
+
+    return delay - line_delay - time_delay;
+}
+
 /** @internal @This sets the input flow definition.
  *
  * @param upipe description structure of the pipe
@@ -627,6 +693,8 @@ static int upipe_pciesdi_sink_set_flow_def(struct upipe *upipe, struct uref *flo
     struct urational fps;
     UBASE_RETURN(uref_pic_flow_get_vsize(flow_def, &height));
     UBASE_RETURN(uref_pic_flow_get_fps(flow_def, &fps));
+    const struct sdi_offsets_fmt *sdi_format = sdi_get_offsets(flow_def);
+    UBASE_ALLOC_RETURN(sdi_format);
 
     bool genlock = false;
     bool sd = height < 720;
@@ -635,6 +703,9 @@ static int upipe_pciesdi_sink_set_flow_def(struct upipe *upipe, struct uref *flo
     upipe_dbg_va(upipe, "sd: %d, 3g: %d", sd, sdi3g);
 
     /* TODO: init card based on given format. */
+    int64_t delay = get_genlock_delay(sdi_format);
+    if (delay == 0)
+        upipe_warn(upipe, "unknown genlock delay");
 
     int tx_mode;
     if (sd)
