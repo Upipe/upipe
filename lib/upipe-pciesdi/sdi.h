@@ -107,6 +107,7 @@ struct sdi_ioctl_dma_writer {
 
 struct sdi_ioctl_dma_reader {
     uint8_t enable;
+    uint8_t release_on_synchro;
     int64_t hw_count;
     int64_t sw_count;
 };
