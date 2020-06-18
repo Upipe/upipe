@@ -45,12 +45,14 @@ extern "C" {
  *
  * @param udict pointer to the udict
  * @param uprobe pipe module printing the messages
+ * @param level uprobe log level
  */
-static inline void udict_dump(struct udict *udict, struct uprobe *uprobe)
+static inline void udict_dump_lvl(struct udict *udict, struct uprobe *uprobe,
+                                  enum uprobe_log_level level)
 {
     const char *iname = NULL;
     enum udict_type itype = UDICT_TYPE_END;
-    uprobe_dbg_va(uprobe, NULL, "dumping udict %p", udict);
+    uprobe_log_va(uprobe, NULL, level, "dumping udict %p", udict);
 
     while (ubase_check(udict_iterate(udict, &iname, &itype)) &&
            itype != UDICT_TYPE_END) {
@@ -63,18 +65,19 @@ static inline void udict_dump(struct udict *udict, struct uprobe *uprobe)
 
         switch (type) {
             default:
-                uprobe_dbg_va(uprobe, NULL, " - \"%s\" [unknown]", name);
+                uprobe_log_va(uprobe, NULL, level, " - \"%s\" [unknown]", name);
                 break;
 
             case UDICT_TYPE_OPAQUE: {
                 struct udict_opaque val;
                 if (likely(ubase_check(udict_get_opaque(udict, &val,
                                                         itype, iname))))
-                    uprobe_dbg_va(uprobe, NULL, " - \"%s\" [opaque]: %zu octets",
+                    uprobe_log_va(uprobe, NULL, level,
+                                  " - \"%s\" [opaque]: %zu octets",
                                   name, val.size);
                 else
-                    uprobe_dbg_va(uprobe, NULL, " - \"%s\" [opaque]: [invalid]",
-                                  name);
+                    uprobe_log_va(uprobe, NULL, level,
+                                  " - \"%s\" [opaque]: [invalid]", name);
                 break;
             }
 
@@ -82,27 +85,28 @@ static inline void udict_dump(struct udict *udict, struct uprobe *uprobe)
                 const char *val = "";
                 if (likely(ubase_check(udict_get_string(udict, &val,
                                                         itype, iname))))
-                    uprobe_dbg_va(uprobe, NULL, " - \"%s\" [string]: \"%s\"",
-                                  name, val);
+                    uprobe_log_va(uprobe, NULL, level,
+                                  " - \"%s\" [string]: \"%s\"", name, val);
                 else
-                    uprobe_dbg_va(uprobe, NULL, " - \"%s\" [string]: [invalid]",
-                                  name);
+                    uprobe_log_va(uprobe, NULL, level,
+                                  " - \"%s\" [string]: [invalid]", name);
                 break;
             }
 
             case UDICT_TYPE_VOID:
-                uprobe_dbg_va(uprobe, NULL, " - \"%s\" [void]", name);
+                uprobe_log_va(uprobe, NULL, level, " - \"%s\" [void]", name);
                 break;
 
             case UDICT_TYPE_BOOL: {
                 bool val = false; /* to keep gcc happy */
                 if (likely(ubase_check(udict_get_bool(udict, &val,
                                                       itype, iname))))
-                    uprobe_dbg_va(uprobe, NULL, " - \"%s\" [bool]: %s", name,
+                    uprobe_log_va(uprobe, NULL, level,
+                                  " - \"%s\" [bool]: %s", name,
                                   val ? "true" : "false");
                 else
-                    uprobe_dbg_va(uprobe, NULL, " - \"%s\" [bool]: [invalid]",
-                                  name);
+                    uprobe_log_va(uprobe, NULL, level,
+                                  " - \"%s\" [bool]: [invalid]", name);
                 break;
             }
 
@@ -112,11 +116,11 @@ static inline void udict_dump(struct udict *udict, struct uprobe *uprobe)
                 val.num = val.den = 0;
                 if (likely(ubase_check(udict_get_rational(udict, &val,
                                                           itype, iname))))
-                    uprobe_dbg_va(uprobe, NULL,
+                    uprobe_log_va(uprobe, NULL, level,
                                   " - \"%s\" [rational]: %" PRId64"/%" PRIu64,
                                   name, val.num, val.den);
                 else
-                    uprobe_dbg_va(uprobe, NULL,
+                    uprobe_log_va(uprobe, NULL, level,
                                   " - \"%s\" [rational]: [invalid]", name);
                 break;
             }
@@ -126,11 +130,11 @@ static inline void udict_dump(struct udict *udict, struct uprobe *uprobe)
                 ctype val = 0; /* to keep gcc happy */                      \
                 if (likely(ubase_check(udict_get_##utype(udict, &val,       \
                                                          itype, iname))))   \
-                    uprobe_dbg_va(uprobe, NULL,                             \
+                    uprobe_log_va(uprobe, NULL, level,                      \
                                   " - \"%s\" [" #utype "]: " ftype,         \
                                   name, val);                               \
                 else                                                        \
-                    uprobe_dbg_va(uprobe, NULL,                             \
+                    uprobe_log_va(uprobe, NULL, level,                      \
                                   " - \"%s\" [" #utype "]: [invalid]",      \
                                   name);                                    \
                 break;                                                      \
@@ -145,8 +149,29 @@ static inline void udict_dump(struct udict *udict, struct uprobe *uprobe)
 #undef UDICT_DUMP_TEMPLATE
         }
     }
-    uprobe_dbg_va(uprobe, NULL, "end of attributes for udict %p", udict);
+    uprobe_log_va(uprobe, NULL, level, "end of attributes for udict %p", udict);
 }
+
+/** @hidden */
+#define UDICT_DUMP(Name, Level)                                             \
+/** @internal @This dumps the content of a uref for debug purposes.         \
+ *                                                                          \
+ * @param udict pointer to the udict                                        \
+ * @param uprobe pipe module printing the messages                          \
+ */                                                                         \
+static inline void udict_dump##Name(struct udict *udict,                    \
+                                    struct uprobe *uprobe)                  \
+{                                                                           \
+    return udict_dump_lvl(udict, uprobe, UPROBE_LOG_##Level);               \
+}
+UDICT_DUMP(, DEBUG);
+UDICT_DUMP(_verbose, VERBOSE);
+UDICT_DUMP(_dbg, DEBUG);
+UDICT_DUMP(_info, INFO);
+UDICT_DUMP(_notice, NOTICE);
+UDICT_DUMP(_warn, WARNING);
+UDICT_DUMP(_err, ERROR);
+#undef UDICT_DUMP
 
 #ifdef __cplusplus
 }
