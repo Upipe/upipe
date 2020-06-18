@@ -687,14 +687,19 @@ static int upipe_pciesdi_sink_set_flow_def(struct upipe *upipe, struct uref *flo
     if (flow_def == NULL)
         return UBASE_ERR_INVALID;
 
-    UBASE_RETURN(uref_flow_match_def(flow_def, "block."));
+    bool fake = ubase_check(uref_flow_match_def(flow_def, "fake"));
+    if (fake)
+        upipe_dbg(upipe, "got fake flow_def");
+    else
+        UBASE_RETURN(uref_flow_match_def(flow_def, "block."));
 
     uint64_t height;
     struct urational fps;
     UBASE_RETURN(uref_pic_flow_get_vsize(flow_def, &height));
     UBASE_RETURN(uref_pic_flow_get_fps(flow_def, &fps));
     const struct sdi_offsets_fmt *sdi_format = sdi_get_offsets(flow_def);
-    UBASE_ALLOC_RETURN(sdi_format);
+    if (!fake)
+        UBASE_ALLOC_RETURN(sdi_format);
 
     bool genlock = false;
     bool sd = height < 720;
@@ -727,7 +732,7 @@ static int upipe_pciesdi_sink_set_flow_def(struct upipe *upipe, struct uref *flo
     uint64_t period, seen;
     sdi_genlock_vsync(upipe_pciesdi_sink->fd, &active, &period, &seen);
 
-    if (active) {
+    if (!fake && active) {
         int64_t delay = get_genlock_delay(sdi_format);
         if (delay == 0)
             upipe_warn(upipe, "unknown genlock delay");
