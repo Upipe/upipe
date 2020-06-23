@@ -109,6 +109,7 @@ AM_ICONV
 # Check for libgcrypt
 AM_PATH_LIBGCRYPT([],
         AM_CONDITIONAL(HAVE_GCRYPT, true)
+        [LIBUPIPE_TS_PKGCONFIG_REQUIRES=libgcrypt]
         AC_DEFINE(HAVE_GCRYPT, 1, Define if libgcrypt is available.),
         AM_CONDITIONAL(HAVE_GCRYPT, false))
 
@@ -125,6 +126,7 @@ AC_CHECK_HEADERS([dvbcsa/dvbcsa.h],
                  AM_CONDITIONAL(HAVE_DVBCSA, false))
 
 PKG_CHECK_UPIPE(TASN1, libtasn1, [libtasn1.h])
+PKG_CHECK_EXISTS([libtasn1], [LIBUPIPE_TS_PKGCONFIG_REQUIRES="$LIBUPIPE_TS_PKGCONFIG_REQUIRES libtasn1"])
 PKG_CHECK_UPIPE(BITSTREAM, bitstream >= 1.4, [bitstream/common.h])
 PKG_CHECK_UPIPE(AVUTIL, libavutil, [libavutil/avutil.h])
 PKG_CHECK_UPIPE(AVFORMAT, [libavformat >= 53.32.0 libavcodec libavutil], [libavformat/avformat.h libavformat/avio.h libavutil/avutil.h])
@@ -143,6 +145,9 @@ PKG_CHECK_UPIPE(DVBV5, libdvbv5, [libdvbv5/dvb-dev.h])
 AC_LANG_PUSH([C++])
 PKG_CHECK_UPIPE(QTWEBKIT, QtWebKit, [QtWebKit])
 AC_LANG_POP([C++])
+
+# if have gcrypt and tasn then
+AC_SUBST(LIBUPIPE_TS_PKGCONFIG_REQUIRES)
 
 CFLAGS="${CFLAGS} -D_REENTRANT"
 LIBS="${LIBS} -lpthread"
