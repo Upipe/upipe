@@ -1,5 +1,6 @@
 /*
  * Copyright (c) 2015 Arnaud de Turckheim <quarium@gmail.com>
+ * Copyright (C) 2020 EasyTools
  *
  * Authors: Arnaud de Turckheim
  *
@@ -37,6 +38,7 @@ extern "C" {
 #include <upipe/ustring.h>
 
 #include <stddef.h>
+#include <stdbool.h>
 #include <string.h>
 
 /** @This parses an IPv4 and shifts ustring str.
@@ -111,6 +113,17 @@ struct ustring uuri_parse_path(struct ustring *str);
  * @return an ustring with the query portion of str
  */
 struct ustring uuri_parse_query(struct ustring *str);
+
+/** @This returns the first parameter of a query ustring and shift to the next.
+ *
+ * @param str pointer to an ustring containing a query
+ * @param name filled with the parameter name
+ * @param value filled with the parameter value
+ * @return true if a parameter was parsed
+ */
+bool uuri_query_get_param(struct ustring *str,
+                          struct ustring *name,
+                          struct ustring *value);
 
 /** @This parses and shifts a fragment.
  *

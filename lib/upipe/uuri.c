@@ -1,5 +1,6 @@
 /*
  * Copyright (c) 2015 Arnaud de Turckheim <quarium@gmail.com>
+ * Copyright (C) 2020 EasyTools
  *
  * Authors: Arnaud de Turckheim
  *
@@ -401,6 +402,15 @@ struct ustring uuri_parse_query(struct ustring *str)
     struct ustring query = ustring_truncate(*str, str->len - tmp.len);
     *str = tmp;
     return query;
+}
+
+bool uuri_query_get_param(struct ustring *str,
+                          struct ustring *name,
+                          struct ustring *value)
+{
+    *value = ustring_split_sep(str, "&");
+    *name = ustring_split_sep(value, "=");
+    return !ustring_is_null(*name);
 }
 
 struct ustring uuri_parse_fragment(struct ustring *str)

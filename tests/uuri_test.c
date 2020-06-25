@@ -308,6 +308,41 @@ static void test_escape(void)
     }
 }
 
+static void test_query(void)
+{
+    const char *query = "arg1=9&arg2=val&arg3&arg4=";
+    struct ustring q = ustring_from_str(query);
+    struct ustring name;
+    struct ustring value;
+
+    assert(uuri_query_get_param(&q, &name, &value));
+    assert(ustring_match_str(name, "arg1"));
+    assert(ustring_match_str(value, "9"));
+    printf("param %.*s value %.*s\n",
+           (int)name.len, name.at, (int)value.len, value.at);
+
+    assert(uuri_query_get_param(&q, &name, &value));
+    assert(ustring_match_str(name, "arg2"));
+    assert(ustring_match_str(value, "val"));
+    printf("param %.*s value %.*s\n",
+           (int)name.len, name.at, (int)value.len, value.at);
+
+    assert(uuri_query_get_param(&q, &name, &value));
+    assert(ustring_match_str(name, "arg3"));
+    assert(ustring_is_null(value));
+    printf("param %.*s\n", (int)name.len, name.at);
+
+    assert(uuri_query_get_param(&q, &name, &value));
+    assert(ustring_match_str(name, "arg4"));
+    assert(!ustring_is_null(value) && ustring_is_empty(value));
+    printf("param %.*s value %.*s\n",
+           (int)name.len, name.at, (int)value.len, value.at);
+
+    assert(!uuri_query_get_param(&q, &name, &value));
+    assert(ustring_is_null(name));
+    assert(ustring_is_null(value));
+}
+
 int main(int argc, char *argv[])
 {
     test_ipv4();
@@ -317,5 +352,6 @@ int main(int argc, char *argv[])
     test_authority();
     test_uri();
     test_escape();
+    test_query();
     return 0;
 }
