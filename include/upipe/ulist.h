@@ -1,5 +1,6 @@
 /*
  * Copyright (C) 2012-2016 OpenHeadend S.A.R.L.
+ * Copyright (C) 2020 EasyTools
  *
  * Authors: Christophe Massiot
  *
@@ -166,6 +167,19 @@ static inline struct uchain *ulist_peek(struct uchain *ulist)
     if (ulist_empty(ulist))
         return NULL;
     return ulist->next;
+}
+
+/** @This returns a pointer to the last element of the list (without
+ * removing it).
+ *
+ * @param ulist pointer to a ulist
+ * @return pointer to the last element or NULL if the list is empty
+ */
+static inline struct uchain *ulist_peek_last(struct uchain *ulist)
+{
+    if (ulist_empty(ulist))
+        return NULL;
+    return ulist->prev;
 }
 
 /** @This returns a pointer to the first element of the list and removes
