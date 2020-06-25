@@ -457,7 +457,7 @@ struct uuri uuri_parse(struct ustring *str)
 int uuri_authority_len(const struct uuri_authority *authority, size_t *len_p)
 {
     size_t len = 0;
-    if (authority->userinfo.len)
+    if (!ustring_is_null(authority->userinfo))
         len += authority->userinfo.len + 1;
     len += authority->host.len;
     if (authority->port.len)
@@ -500,7 +500,7 @@ int uuri_authority_to_buffer(const struct uuri_authority *authority,
     if (uuri_authority_is_null(*authority))
         return UBASE_ERR_INVALID;
 
-    if (authority->userinfo.len) {
+    if (!ustring_is_null(authority->userinfo)) {
         ret = snprintf(buffer, len, "%.*s@",
                        (int)authority->userinfo.len,
                        authority->userinfo.at);
