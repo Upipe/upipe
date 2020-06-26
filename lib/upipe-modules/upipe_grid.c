@@ -650,6 +650,7 @@ static int upipe_grid_out_import_format(struct upipe *upipe,
         } else {
             uref_pic_delete_progressive(out_flow);
         }
+        uref_pic_flow_copy_surface_type(out_flow, in_flow);
         uref_pic_flow_copy_full_range(out_flow, in_flow);
         uref_pic_flow_copy_colour_primaries(out_flow, in_flow);
         uref_pic_flow_copy_transfer_characteristics(out_flow, in_flow);
