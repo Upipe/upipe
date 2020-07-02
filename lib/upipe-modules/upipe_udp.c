@@ -46,6 +46,9 @@
 #endif
 #include "upipe_udp.h"
 
+#include <bitstream/ietf/ip.h>
+#include <bitstream/ietf/udp.h>
+
 #include <linux/if_packet.h>
 #include <linux/if_ether.h>
 
@@ -97,11 +100,9 @@ static uint16_t ip_checksum(const void *data, uint16_t len)
  * @param tos type of service
  * @param payload length
  */
-void upipe_udp_raw_fill_headers(struct upipe *upipe,
-                                       uint8_t *header,
-                                       in_addr_t ipsrc, in_addr_t ipdst,
-                                       uint16_t portsrc, uint16_t portdst,
-                                       uint8_t ttl, uint8_t tos, uint16_t len)
+void upipe_udp_raw_fill_headers(uint8_t *header,
+        in_addr_t ipsrc, in_addr_t ipdst, uint16_t portsrc, uint16_t portdst,
+        uint8_t ttl, uint8_t tos, uint16_t len)
 {
     ip_set_version(header, 4);
     ip_set_ihl(header, 5);
@@ -110,7 +111,7 @@ void upipe_udp_raw_fill_headers(struct upipe *upipe,
     ip_set_id(header, 0);
     ip_set_flag_reserved(header, 0);
     ip_set_flag_mf(header, 0);
-    ip_set_flag_df(header, 0);
+    ip_set_flag_df(header, 1);
     ip_set_frag_offset(header, 0);
     ip_set_ttl(header, ttl);
     ip_set_proto(header, IPPROTO_UDP);
@@ -533,7 +534,7 @@ int upipe_udp_open_socket(struct upipe *upipe, const char *_uri, int ttl,
 
     /* RAW header */
     if (*use_raw && raw_header) {
-        upipe_udp_raw_fill_headers(upipe, raw_header,
+        upipe_udp_raw_fill_headers(raw_header,
                 src_addr, connect_addr.sin.sin_addr.s_addr, src_port,
                 ntohs(connect_addr.sin.sin_port), ttl, tos, 0);
     }

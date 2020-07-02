@@ -38,12 +38,14 @@
 #include <upipe/upipe.h>
 #include <upipe/uref_pic.h>
 #include <upipe/uref_pic_flow.h>
+#include <upipe/uref_sound.h>
 #include <upipe/upipe_helper_upipe.h>
 #include <upipe/upipe_helper_urefcount.h>
 #include <upipe/upipe_helper_upump_mgr.h>
 #include <upipe/upipe_helper_upump.h>
 #include <upipe/upipe_helper_uclock.h>
 #include <upipe-netmap/upipe_netmap_sink.h>
+#include <upipe/uprobe_prefix.h>
 
 #include <net/if.h>
 #include <arpa/inet.h>
@@ -67,6 +69,9 @@
 
 #include "../upipe-hbrmt/sdienc.h"
 #include "../upipe-hbrmt/rfc4175_enc.h"
+#include "../upipe-modules/upipe_udp.h"
+
+#include <math.h>
 
 #define UPIPE_RFC4175_MAX_PLANES 3
 #define UPIPE_RFC4175_PIXEL_PAIR_BYTES 5
@@ -76,6 +81,18 @@
 
 #define UINT64_MSB(value)      ((value) & UINT64_C(0x8000000000000000))
 #define UINT64_LOW_MASK(value) ((value) & UINT64_C(0x7fffffffffffffff))
+
+#define AES67_MAX_PATHS 2
+#define AES67_MAX_FLOWS 8
+#define AES67_MAX_SAMPLES_PER_PACKET 48
+
+#ifndef MTU
+#define MTU 1500
+#endif
+
+#define MAX_AUDIO_UREFS 20
+
+static struct upipe_mgr upipe_netmap_sink_audio_mgr;
 
 /** @hidden */
 static bool upipe_netmap_sink_output(struct upipe *upipe, struct uref *uref,
@@ -116,6 +133,62 @@ struct upipe_netmap_intf {
     uint64_t wait;
 };
 
+struct audio_packet_state {
+    uint32_t num, den;
+    uint16_t audio_counter;
+    uint8_t video_counter, video_limit;
+};
+
+struct aes67_flow {
+    /* IP details for the destination. */
+    struct sockaddr_in sin;
+    /* Ethernet details for the destination. */
+    struct sockaddr_ll sll;
+    /* Raw Ethernet, IP, and UDP headers. */
+    uint8_t header[ETHERNET_HEADER_LEN + IP_HEADER_MINSIZE + UDP_HEADER_SIZE];
+    /* Flow has been populated and packets should be sent. */
+    bool populated;
+};
+
+struct upipe_netmap_sink_audio {
+    /** public upipe structure */
+    struct upipe upipe;
+    /** buffered urefs */
+    struct uchain urefs;
+    uint64_t n;
+
+    /** delay applied to systime attribute of urefs */
+    uint64_t latency;
+    /* Current uref. */
+    struct uref *uref;
+    /* Mapped data. */
+    const int32_t *data;
+    /* Size of mapped uref (samples). */
+    size_t uref_samples;
+    /* Number of channels in the uref. */
+    uint8_t channels;
+
+    /* Cached audio data (packed) from tails of input urefs. */
+    uint8_t audio_data[AES67_MAX_SAMPLES_PER_PACKET * 16 * 3 + 1];
+    /* Number of samples in buffer. */
+    int cached_samples;
+
+    /** maximum samples to put in each packet */
+    int output_samples;
+    /* Number of channels in each flow. */
+    int output_channels;
+    /* Maximum transmission unit. */
+    int mtu;
+    /* Configured packet size (no CRC). */
+    uint16_t packet_size;
+
+    /* Details for all destinations. */
+    struct aes67_flow flows[AES67_MAX_FLOWS][AES67_MAX_PATHS];
+    int num_flows;
+
+    bool need_reconfig;
+};
+
 /** @internal @This is the private context of a netmap sink pipe. */
 struct upipe_netmap_sink {
     /** refcount management structure */
@@ -140,6 +213,7 @@ struct upipe_netmap_sink {
 
     /* RTP Header */
     uint8_t rtp_header[RTP_HEADER_SIZE + RFC_4175_EXT_SEQ_NUM_LEN + RFC_4175_HEADER_LEN];
+    uint8_t audio_rtp_header[RTP_HEADER_SIZE];
 
     unsigned gap_fakes_current;
     unsigned gap_fakes;
@@ -154,6 +228,7 @@ struct upipe_netmap_sink {
 
     /** sequence number **/
     uint64_t seqnum;
+    /* Number of frames since 1970. */
     uint64_t frame_count;
 
     //hbrmt header
@@ -200,8 +275,12 @@ struct upipe_netmap_sink {
     float pid_last_error;
     float pid_error_sum;
     float pid_last_output;
+    /* Timestamp in UCLOCK_FREQ since 1970.  Needs 55 or more bits in 2020. */
     uint64_t frame_ts;
+    uint64_t frame_ts_start;
+    uint64_t frame_ts_start2;
     uint32_t prev_marker_seq;
+    struct audio_packet_state audio_packet_state;
 
     /** currently used uref */
     struct uref *uref;
@@ -241,6 +320,8 @@ struct upipe_netmap_sink {
 
     struct upipe_netmap_intf intf[2];
 
+    struct upipe_netmap_sink_audio audio_subpipe;
+
     /** public upipe structure */
     struct upipe upipe;
 };
@@ -251,61 +332,15 @@ UPIPE_HELPER_UCLOCK(upipe_netmap_sink, uclock, uclock_request, NULL, upipe_throw
 UPIPE_HELPER_UPUMP_MGR(upipe_netmap_sink, upump_mgr)
 UPIPE_HELPER_UPUMP(upipe_netmap_sink, upump, upump_mgr)
 
-/* Compute the checksum of the given ip header. */
-static uint16_t ip_checksum(const void *data, uint16_t len)
-{
-    const uint8_t *addr = data;
-    uint32_t i;
-    uint32_t sum = 0;
+UPIPE_HELPER_UPIPE(upipe_netmap_sink_audio, upipe, UPIPE_NETMAP_SINK_AUDIO_SIGNATURE)
+UBASE_FROM_TO(upipe_netmap_sink, upipe_netmap_sink_audio, audio_subpipe, audio_subpipe)
 
-    /* Checksum all the pairs of bytes first... */
-    for (i = 0; i < (len & ~1U); i += 2) {
-        sum += (u_int16_t)ntohs(*((u_int16_t *)(addr + i)));
-        if (sum > 0xFFFF)
-            sum -= 0xFFFF;
-    }
-    /*
-     * If there's a single byte left over, checksum it, too.
-     * Network byte order is big-endian, so the remaining byte is
-     * the high byte.
-     */
-    if (i < len) {
-        sum += addr[i] << 8;
-        if (sum > 0xFFFF)
-            sum -= 0xFFFF;
-    }
-    return ~sum & 0xffff;
-}
-
-static void upipe_udp_raw_fill_headers(uint8_t *header,
-                                       in_addr_t ipsrc, in_addr_t ipdst,
-                                       uint16_t portsrc, uint16_t portdst,
-                                       uint8_t ttl, uint8_t tos, uint16_t len)
-{
-    ip_set_version(header, 4);
-    ip_set_ihl(header, 5);
-    ip_set_tos(header, tos);
-    ip_set_len(header, len + UDP_HEADER_SIZE + IP_HEADER_MINSIZE);
-    ip_set_id(header, 0);
-    ip_set_flag_reserved(header, 0);
-    ip_set_flag_mf(header, 0);
-    ip_set_flag_df(header, 1);
-    ip_set_frag_offset(header, 0);
-    ip_set_ttl(header, ttl);
-    ip_set_proto(header, IPPROTO_UDP);
-    ip_set_cksum(header, 0);
-    ip_set_srcaddr(header, ntohl(ipsrc));
-    ip_set_dstaddr(header, ntohl(ipdst));
-
-    /* update ip checksum */
-    ip_set_cksum(header, ip_checksum(header, IP_HEADER_MINSIZE));
-
-    header += IP_HEADER_MINSIZE;
-    udp_set_srcport(header, portsrc);
-    udp_set_dstport(header, portdst);
-    udp_set_len(header, len + UDP_HEADER_SIZE);
-    udp_set_cksum(header, 0);
-}
+static int get_audio(struct upipe_netmap_sink_audio *audio_subpipe);
+static void pack_audio(struct upipe_netmap_sink_audio *audio_subpipe);
+static void handle_audio_tail(struct upipe_netmap_sink_audio *audio_subpipe);
+static inline uint16_t audio_packet_size(uint16_t channels, uint16_t samples);
+static inline void audio_copy_samples_to_packet(uint8_t *dst, const uint8_t *src,
+        int output_channels, int output_samples, int channel_offset);
 
 /* get MAC and/or IP address of specified interface */
 static bool source_addr(const char *intf, uint8_t *mac, in_addr_t *ip)
@@ -459,8 +494,33 @@ static void upipe_netmap_sink_reset_counters(struct upipe *upipe)
     upipe_netmap_sink->phase_delay = 0;
     memset(upipe_netmap_sink->rtp_timestamp, 0, sizeof(upipe_netmap_sink->rtp_timestamp));
     upipe_netmap_sink->frame_ts = 0;
+    upipe_netmap_sink->frame_ts_start = 0;
 }
 
+static void upipe_netmap_sink_clear_queues(struct upipe *upipe)
+{
+    struct upipe_netmap_sink *upipe_netmap_sink = upipe_netmap_sink_from_upipe(upipe);
+
+    /* Clear buffered video urefs */
+    for (;;) {
+        struct uchain *uchain = ulist_pop(&upipe_netmap_sink->sink_queue);
+        if (!uchain)
+            break;
+        struct uref *uref = uref_from_uchain(uchain);
+        uref_free(uref);
+    }
+    upipe_netmap_sink->n = 0;
+
+    /* Clear buffered audio urefs */
+    for (;;) {
+        struct uchain *uchain = ulist_pop(&upipe_netmap_sink->audio_subpipe.urefs);
+        if (!uchain)
+            break;
+        struct uref *uref = uref_from_uchain(uchain);
+        uref_free(uref);
+    }
+    upipe_netmap_sink->audio_subpipe.n = 0;
+}
 
 /** @internal @This allocates a netmap sink pipe.
  *
@@ -565,7 +625,27 @@ static struct upipe *_upipe_netmap_sink_alloc(struct upipe_mgr *mgr,
 #endif
 #endif
 
+    /*
+     * Audio subpipe.
+     */
+    memset(&upipe_netmap_sink->audio_subpipe, 0, sizeof upipe_netmap_sink->audio_subpipe);
+    struct upipe_netmap_sink_audio *audio_subpipe = upipe_netmap_sink_to_audio_subpipe(upipe_netmap_sink);
+    struct upipe *subpipe = upipe_netmap_sink_audio_to_upipe(audio_subpipe);
+
+    upipe_init(upipe_netmap_sink_audio_to_upipe(audio_subpipe),
+                &upipe_netmap_sink_audio_mgr,
+                uprobe_pfx_alloc(uprobe_use(uprobe), UPROBE_LOG_VERBOSE, "audio"));
+    ulist_init(&audio_subpipe->urefs);
+    subpipe->refcount = &upipe_netmap_sink->urefcount;
+
+    audio_subpipe->output_samples = 6; /* TODO: other default to catch user not setting this? */
+    audio_subpipe->output_channels = 16;
+    audio_subpipe->mtu = MTU;
+    audio_subpipe->packet_size = audio_packet_size(16, 6);
+    audio_subpipe->need_reconfig = true;
+
     upipe_throw_ready(upipe);
+    upipe_throw_ready(subpipe);
     return upipe;
 }
 
@@ -1031,6 +1111,7 @@ static void upipe_clear_queues(struct upipe *upipe, struct upipe_netmap_intf *in
 static struct uref *get_uref(struct upipe *upipe)
 {
     struct upipe_netmap_sink *upipe_netmap_sink = upipe_netmap_sink_from_upipe(upipe);
+    struct upipe_netmap_sink_audio *audio_subpipe = &upipe_netmap_sink->audio_subpipe;
 
     struct uref *uref = upipe_netmap_sink->uref;
     struct urational *fps = &upipe_netmap_sink->fps;
@@ -1053,6 +1134,13 @@ static struct uref *get_uref(struct upipe *upipe)
                     pts_to_time(pts - upipe_netmap_sink->latency),
                     (float)upipe_netmap_sink->latency / 27000
                     );
+
+            /* Drop associated sound uref */
+            if (audio_subpipe->uref) {
+                uref_sound_unmap(audio_subpipe->uref, 0, -1, 1);
+                uref_free(audio_subpipe->uref);
+                audio_subpipe->uref = NULL;
+            }
         }
     }
 
@@ -1083,6 +1171,21 @@ static struct uref *get_uref(struct upipe *upipe)
                     pts_to_time(pts - upipe_netmap_sink->latency),
                     (float)upipe_netmap_sink->latency / 27000
                     );
+
+                pts -= upipe_netmap_sink->phase_delay;
+
+                /* Remove any nearby audio urefs */
+                struct uchain *uchain, *uchain_tmp;
+                ulist_delete_foreach(&audio_subpipe->urefs, uchain, uchain_tmp) {
+                    struct uref *uref = uref_from_uchain(uchain);
+                    uint64_t pts_audio = 0;
+                    uref_clock_get_pts_sys(uref, &pts_audio);
+                    pts_audio += audio_subpipe->latency;
+                    if (pts - pts_audio < 27000 || pts_audio - pts < 27000) {
+                        ulist_delete(uchain);
+                        uref_free(uref_from_uchain(uchain));
+                    }
+                }
         }
     }
 
@@ -1095,18 +1198,18 @@ static int compute_fakes(struct upipe *upipe, int j)
     struct upipe_netmap_sink *upipe_netmap_sink = upipe_netmap_sink_from_upipe(upipe);
     const struct urational *fps = &upipe_netmap_sink->fps;
 
-    if (j > 50)
-        j = 50;
-    if (j < -50)
-        j = -50;
+    if (j > 300)
+        j = 300;
+    if (j < -300)
+        j = -300;
     float i = j;
 
     float error = -i;
     upipe_netmap_sink->pid_error_sum += error * fps->den / fps->num;
 
     /* avoid swinging too far when initial error is large */
-    if (upipe_netmap_sink->pid_error_sum > 200)
-        upipe_netmap_sink->pid_error_sum = 200;
+    if (upipe_netmap_sink->pid_error_sum > 500)
+        upipe_netmap_sink->pid_error_sum = 500;
 
     float d = (error - upipe_netmap_sink->pid_last_error) * fps->num / fps->den;
     if (fps->num / fps->den >= 50)
@@ -1133,6 +1236,7 @@ static void handle_tx_stamp(struct upipe *upipe, uint64_t t, uint16_t seq)
 
     t /= 1000;
     t *= 27;
+    /* t is the TX time of the marker packet, now in UCLOCK_FREQ ticks. */
 
     /* HACK: start from the second timestamp, sometimes the hardware gives nonsense timestamps
        Why? Is this our fault for some reason?? */
@@ -1143,15 +1247,22 @@ static void handle_tx_stamp(struct upipe *upipe, uint64_t t, uint16_t seq)
 
     if (upipe_netmap_sink->frame_ts == 1) {
         upipe_netmap_sink->prev_marker_seq = seq;
-        upipe_netmap_sink->frame_ts = t;
 
-        /* Calculate the frame timestamp based on the *next* PTP tick */
+        /* Calculate the frame timestamp based on the *next* PTP frame tick */
+        upipe_netmap_sink->frame_ts_start2 = upipe_netmap_sink->frame_ts_start = upipe_netmap_sink->frame_ts = t;
+
+        /* floor(frame_ts) to the nearest PTP frame tick */
         upipe_netmap_sink->frame_ts /= dur;
+
+        /* ceil(frame_ts) to the nearest PTP frame tick (i.e the next frame) */
         upipe_netmap_sink->frame_count = upipe_netmap_sink->frame_ts + 1;
+
+        /* back to 27MHz units (having been floored) */
         upipe_netmap_sink->frame_ts *= dur;
 
-        upipe_netmap_sink->phase_delay = t - upipe_netmap_sink->frame_ts;
+        upipe_netmap_sink->phase_delay = dur - (t - upipe_netmap_sink->frame_ts);
         upipe_netmap_update_timestamp_cache(upipe_netmap_sink);
+
         return;
     }
 
@@ -1194,10 +1305,28 @@ static void handle_tx_stamp(struct upipe *upipe, uint64_t t, uint16_t seq)
     upipe_netmap_sink->pkts_in_frame = 0;
 }
 
+static inline void aps_inc_video(struct audio_packet_state *aps)
+{
+    aps->video_counter += 1;
+}
+
+static inline bool aps_audio_needed(struct audio_packet_state *aps)
+{
+    return aps->video_counter == aps->video_limit;
+}
+
+static inline void aps_inc_audio(struct audio_packet_state *aps)
+{
+    aps->video_counter = 0;
+    aps->video_limit = (aps->audio_counter + 1) * aps->num / aps->den - (aps->audio_counter) * aps->num / aps->den;
+    aps->audio_counter = (aps->audio_counter + 1) % aps->den;
+}
+
 static void upipe_netmap_sink_worker(struct upump *upump)
 {
     struct upipe *upipe = upump_get_opaque(upump, struct upipe *);
     struct upipe_netmap_sink *upipe_netmap_sink = upipe_netmap_sink_from_upipe(upipe);
+    struct upipe_netmap_sink_audio *audio_subpipe = &upipe_netmap_sink->audio_subpipe;
 
     uint64_t now = uclock_now(upipe_netmap_sink->uclock);
     {
@@ -1363,17 +1492,17 @@ static void upipe_netmap_sink_worker(struct upump *upump)
             uref_free(uref);
         }
 
-        for (;;) {
-            struct uchain *uchain = ulist_pop(&upipe_netmap_sink->sink_queue);
-            if (!uchain)
-                break;
-            struct uref *uref = uref_from_uchain(uchain);
-            uref_free(uref);
+        /* FIXME: Is this ok? */
+        upipe_netmap_sink->uref = NULL;
+
+        /* Drop associated sound uref */
+        if (audio_subpipe->uref) {
+            uref_sound_unmap(audio_subpipe->uref, 0, -1, 1);
+            uref_free(audio_subpipe->uref);
+            audio_subpipe->uref = NULL;
         }
 
         upipe_netmap_sink_reset_counters(upipe);
-        upipe_netmap_sink->uref = NULL;
-
         return;
     }
 
@@ -1434,6 +1563,106 @@ static void upipe_netmap_sink_worker(struct upump *upump)
 
     /* fill ring buffer */
     while (txavail) {
+        /* Audio insertion/multiplex. */
+        static unsigned local_audio_packet_counter = 0;
+
+        if (rfc4175 && aps_audio_needed(&upipe_netmap_sink->audio_packet_state)) {
+            struct upipe_netmap_sink_audio *audio_subpipe = &upipe_netmap_sink->audio_subpipe;
+            struct upipe *subpipe = upipe_netmap_sink_audio_to_upipe(audio_subpipe);
+
+            if (txavail < audio_subpipe->num_flows)
+                break;
+
+            /* Get uref and map data. */
+            bool have_audio = ubase_check(get_audio(audio_subpipe));
+
+            if (have_audio && local_audio_packet_counter == 0) {
+                uint64_t systime_audio = 0;
+                uref_clock_get_pts_sys(audio_subpipe->uref, &systime_audio);
+                systime_audio += audio_subpipe->latency;
+
+                uint64_t systime_video = 0;
+                if(uref)
+                    uref_clock_get_pts_sys(uref, &systime_video);
+
+                systime_video += upipe_netmap_sink->latency;
+
+                upipe_dbg_va(subpipe, "video %"PRIu64" vlatency %"PRIu64" audio %"PRIu64" alatency %"PRIu64" diff %"PRIu64" depth %"PRIi64"",
+                        systime_video, upipe_netmap_sink->latency, systime_audio, audio_subpipe->latency, systime_audio - systime_video, audio_subpipe->n);
+            }
+
+            if (have_audio) {
+                pack_audio(audio_subpipe);
+            } else {
+                /* TODO: print exact error? */
+                upipe_dbg(subpipe, "No audio available, outputting silence");
+                memset(audio_subpipe->audio_data, 0, sizeof audio_subpipe->audio_data);
+            }
+
+            for (int flow = 0; flow < audio_subpipe->num_flows; flow++) {
+                int channel_offset = flow * audio_subpipe->output_channels;
+
+                bool stamped = false;
+                for (size_t i = 0; i < 2; i++) {
+                    /* Check for EOF. */
+                    struct upipe_netmap_intf *intf = &upipe_netmap_sink->intf[i];
+                    if (unlikely(!intf->d || !intf->up))
+                        continue;
+                    uint8_t *dst = (uint8_t*)NETMAP_BUF(txring[i], txring[i]->slot[cur[i]].buf_idx);
+
+                    const size_t udp_size = ETHERNET_HEADER_LEN + IP_HEADER_MINSIZE + UDP_HEADER_SIZE;
+                    uint8_t *rtp = &dst[udp_size];
+                    if (UINT64_MSB(txring[i]->slot[cur[i]].ptr)) /* eof needs to be set */ {
+                        if (!stamped && UINT64_LOW_MASK(txring[i]->slot[cur[i]].ptr)) {
+                            uint16_t seq = rtp_get_seqnum(rtp);
+                            handle_tx_stamp(upipe, UINT64_LOW_MASK(txring[i]->slot[cur[i]].ptr), seq);
+                            stamped = true;
+                        }
+                    }
+
+                    struct aes67_flow *aes67_flow = &audio_subpipe->flows[flow][i];
+
+                        /* Copy headers. */
+                        memcpy(dst, aes67_flow->header, sizeof aes67_flow->header);
+                        dst += sizeof aes67_flow->header;
+                        memcpy(dst, upipe_netmap_sink->audio_rtp_header, RTP_HEADER_SIZE);
+                        dst += RTP_HEADER_SIZE;
+                        /* Copy payload. */
+                        audio_copy_samples_to_packet(dst, audio_subpipe->audio_data,
+                                audio_subpipe->output_channels,
+                                audio_subpipe->output_samples,
+                                channel_offset);
+
+                    txring[i]->slot[cur[i]].len = audio_subpipe->packet_size;
+                    txring[i]->slot[cur[i]].ptr = 0;
+                    cur[i] = nm_ring_next(txring[i], cur[i]);
+                }
+            }
+
+            /* If there is not enough audio samples left for a whole
+             * frame/packet then cache the rest for use next time. */
+            if (have_audio && audio_subpipe->uref_samples < audio_subpipe->output_samples)
+                handle_audio_tail(audio_subpipe);
+
+            /* Read current sequence number and timestamp. */
+            uint16_t seqnum = rtp_get_seqnum(upipe_netmap_sink->audio_rtp_header);
+            uint32_t timestamp = rtp_get_timestamp(upipe_netmap_sink->audio_rtp_header);
+
+            /* Advance sequence number and timestamp for next packet. */
+            rtp_set_seqnum(upipe_netmap_sink->audio_rtp_header, seqnum + 1);
+            rtp_set_timestamp(upipe_netmap_sink->audio_rtp_header, timestamp + audio_subpipe->output_samples);
+            upipe_netmap_sink->frame_ts_start2 += audio_subpipe->output_samples * 27000 / 48;
+
+            upipe_netmap_sink->bits += 8 * (audio_subpipe->packet_size + 4/*CRC*/) * audio_subpipe->num_flows;
+            txavail -= audio_subpipe->num_flows;
+
+            aps_inc_audio(&upipe_netmap_sink->audio_packet_state);
+            local_audio_packet_counter++;
+
+            if (!txavail)
+                break;
+        }
+
         if (upipe_netmap_sink->step && (upipe_netmap_sink->pkts_in_frame % upipe_netmap_sink->step) == 0) {
             const unsigned len = upipe_netmap_sink->packet_size;
 
@@ -1566,20 +1795,36 @@ static void upipe_netmap_sink_worker(struct upump *upump)
                     uref = NULL;
                     upipe_netmap_sink->uref = NULL;
                     bytes_left = 0;
+
+                    /* Set the audio timestamps here, having got correct video
+                     * timestamps in handle_tx_stamp. However, handle_tx_stamp
+                     * occurs somewhere during a frame and therefore audio can't
+                     * use it until a clear reference point such as eof (here).
+                     *
+                     * If the video timestamps have been set to real values then
+                     * set the audio timestamp to the video for the start of the
+                     * next frame. */
+                    if (upipe_netmap_sink->frame_ts_start != 0) {
+                        /* TODO: check whether this really needs 128 bit. */
+                        __uint128_t ts = upipe_netmap_sink->frame_count;
+                        ts *= upipe_netmap_sink->fps.den;
+                        ts *= 48000;
+                        ts /= upipe_netmap_sink->fps.num;
+                        rtp_set_timestamp(upipe_netmap_sink->audio_rtp_header, ts);
+                        upipe_netmap_sink->frame_ts_start = 0;
+                    }
+                    local_audio_packet_counter = 0;
                 }
             }
+            aps_inc_video(&upipe_netmap_sink->audio_packet_state);
         } else {
             int s = worker_hbrmt(upipe_netmap_sink, dst, src_buf, bytes_left, len, ptr);
             src_buf += s;
             bytes_left -= s;
             assert(bytes_left >= 0);
 
-            // FIXME
-            uint16_t l = 1438;//len[0] ? *len[0] : *len[1];
-            assert(l == 1438);
-
             /* 64 bits overflows after 375 years at 1.5G */
-            upipe_netmap_sink->bits += (l + 4 /* CRC */) * 8;
+            upipe_netmap_sink->bits += (upipe_netmap_sink->packet_size + 4 /* CRC */) * 8;
 
             if (!bytes_left) {
                 uref_block_unmap(uref, 0);
@@ -1603,14 +1848,12 @@ static void upipe_netmap_sink_worker(struct upump *upump)
 
     if (txavail >= max_slots - 32) {
         upipe_netmap_sink_reset_counters(upipe);
-        for (;;) {
-            struct uchain *uchain = ulist_pop(&upipe_netmap_sink->sink_queue);
-            if (!uchain)
-                break;
-            struct uref *uref = uref_from_uchain(uchain);
-            uref_free(uref);
-        }
+
+        /* FIXME: Is this ok? */
         upipe_netmap_sink->uref = NULL;
+
+        upipe_netmap_sink_clear_queues(upipe);
+
         upipe_netmap_sink_set_upump(upipe, NULL);
     }
 
@@ -1663,7 +1906,14 @@ static bool upipe_netmap_sink_output(struct upipe *upipe, struct uref *uref,
         return true;
     }
 
-    if (upipe_netmap_sink->frame_size == 0) {
+    uint64_t systime = 0;
+    /* Check and warn for uref without timestamp. */
+    if (unlikely(!ubase_check(uref_clock_get_pts_sys(uref, &systime))))
+        upipe_warn(upipe, "received non-dated buffer");
+
+    if (upipe_netmap_sink->frame_size == 0 || upipe_netmap_sink->audio_subpipe.need_reconfig) {
+        upipe_netmap_sink->audio_subpipe.need_reconfig = false;
+
         if (!upipe_netmap_sink->rfc4175) {
             uref_block_size(uref, &upipe_netmap_sink->frame_size);
             upipe_netmap_sink->frame_size = upipe_netmap_sink->frame_size * 5 / 8;
@@ -1700,6 +1950,27 @@ static bool upipe_netmap_sink_output(struct upipe *upipe, struct uref *uref,
             }
 
             upipe_netmap_sink->rate = 8 * (packets * (eth_header_len + payload + 4 /* CRC */)) * upipe_netmap_sink->fps.num;
+
+            struct upipe_netmap_sink_audio *audio_subpipe = upipe_netmap_sink_to_audio_subpipe(upipe_netmap_sink);
+            const uint64_t audio_pps = (48000 / audio_subpipe->output_samples) * audio_subpipe->num_flows;
+            const uint64_t audio_bitrate = 8 * (audio_subpipe->packet_size + 4/*CRC*/) * audio_pps;
+            upipe_dbg_va(upipe, "audio bitrate %"PRIu64" video bitrate %"PRIu64" \n", audio_bitrate, upipe_netmap_sink->rate);
+            upipe_netmap_sink->rate += audio_bitrate * upipe_netmap_sink->fps.den;
+
+            /* Video will have (packets_per_frame * fps) packets per second.
+             * Audio needs to output (48000/6) packets per second.  The ratio
+             * between these two is calculated with the rational below.  Need to
+             * account for the gap fakes too. */
+            struct urational rational = {
+                (upipe_netmap_sink->packets_per_frame + upipe_netmap_sink->gap_fakes) * upipe_netmap_sink->fps.num,
+                (48000 / audio_subpipe->output_samples) * upipe_netmap_sink->fps.den
+            };
+            urational_simplify(&rational);
+            upipe_netmap_sink->audio_packet_state = (struct audio_packet_state) {
+                .num = rational.num, .den = rational.den,
+                .video_limit = rational.num / rational.den,
+            };
+            upipe_dbg_va(upipe, "rational: %"PRId64"/%"PRIu64, rational.num, rational.den);
         }
         upipe_netmap_sink->packet_duration = upipe_netmap_sink->frame_duration / upipe_netmap_sink->packets_per_frame;
 
@@ -1870,10 +2141,8 @@ static int upipe_netmap_sink_set_flow_def(struct upipe *upipe,
             upipe_netmap_sink->packet_size = 1262;
             upipe_netmap_sink->gap_fakes = 4 * (1125 - 1080);
         }
-        upipe_netmap_sink->frame = 0x20; // interlaced
-        // FIXME: progressive/interlaced is per-picture
+        upipe_netmap_sink->frame = upipe_netmap_sink->progressive ? 0x21 : 0x20;
         // XXX: should we do PSF at all?
-        // 0x21 progressive
         // 0x22 psf
     } else if (upipe_netmap_sink->hsize == 1280 && upipe_netmap_sink->vsize == 720) {
         if (upipe_netmap_sink->rfc4175) {
@@ -1951,18 +2220,20 @@ static int upipe_netmap_sink_set_flow_def(struct upipe *upipe,
             /* RTP Headers done in worker_rfc4175 */
         }
         upipe_netmap_update_timestamp_cache(upipe_netmap_sink);
+
+        /* RTP header for audio. */
+        memset(upipe_netmap_sink->audio_rtp_header, 0, RTP_HEADER_SIZE);
+        rtp_set_hdr(upipe_netmap_sink->audio_rtp_header);
+        rtp_set_type(upipe_netmap_sink->audio_rtp_header, 97);
+        rtp_set_seqnum(upipe_netmap_sink->audio_rtp_header, 0);
+        rtp_set_timestamp(upipe_netmap_sink->audio_rtp_header, 0);
     }
 
     upipe_netmap_sink->frame_size = 0;
     upipe_netmap_sink_reset_counters(upipe);
-    for (;;) {
-        struct uchain *uchain = ulist_pop(&upipe_netmap_sink->sink_queue);
-        if (!uchain)
-            break;
-        struct uref *uref = uref_from_uchain(uchain);
-        uref_free(uref);
-    }
     upipe_netmap_sink->uref = NULL;
+
+    upipe_netmap_sink_clear_queues(upipe);
 
     flow_def = uref_dup(flow_def);
     UBASE_ALLOC_RETURN(flow_def)
@@ -2226,17 +2497,24 @@ static int _upipe_netmap_sink_control(struct upipe *upipe,
         case UPIPE_SET_URI: {
             const char *uri = va_arg(args, const char *);
             upipe_netmap_sink_reset_counters(upipe);
-            for (;;) {
-                struct uchain *uchain = ulist_pop(&upipe_netmap_sink->sink_queue);
-                if (!uchain)
-                    break;
-                struct uref *uref = uref_from_uchain(uchain);
-                uref_free(uref);
-            }
             upipe_netmap_sink->uref = NULL;
+
+            upipe_netmap_sink_clear_queues(upipe);
+
             upipe_netmap_sink_set_upump(upipe, NULL);
             return upipe_netmap_sink_set_uri(upipe, uri);
         }
+
+        case UPIPE_NETMAP_SINK_GET_AUDIO_SUB: {
+            UBASE_SIGNATURE_CHECK(args, UPIPE_NETMAP_SINK_SIGNATURE)
+            upipe_dbg(upipe, "UPIPE_NETMAP_SINK_GET_AUDIO_SUB");
+            struct upipe **upipe_p = va_arg(args, struct upipe **);
+            *upipe_p =  upipe_netmap_sink_audio_to_upipe(
+                    upipe_netmap_sink_to_audio_subpipe(
+                        upipe_netmap_sink_from_upipe(upipe)));
+            return UBASE_ERR_NONE;
+        }
+
         default:
             return UBASE_ERR_UNHANDLED;
     }
@@ -2278,10 +2556,13 @@ static void upipe_netmap_sink_free(struct upipe *upipe)
         close(intf->fd);
     }
 
+    upipe_netmap_sink_clear_queues(upipe);
+
     upipe_netmap_sink_clean_upump(upipe);
     upipe_netmap_sink_clean_upump_mgr(upipe);
     upipe_netmap_sink_clean_urefcount(upipe);
     upipe_netmap_sink_clean_uclock(upipe);
+    upipe_clean(&upipe_netmap_sink->audio_subpipe.upipe);
     upipe_clean(upipe);
     free(upipe_netmap_sink);
 }
@@ -2305,4 +2586,421 @@ static struct upipe_mgr upipe_netmap_sink_mgr = {
 struct upipe_mgr *upipe_netmap_sink_mgr_alloc(void)
 {
     return &upipe_netmap_sink_mgr;
+}
+
+/*
+ * Audio subpipe.
+ */
+
+/** @internal @This sets the input flow definition.
+ *
+ * @param upipe description structure of the pipe
+ * @param flow_def flow definition packet
+ * @return an error code
+ */
+static int upipe_netmap_sink_audio_set_flow_def(struct upipe *upipe,
+        struct uref *flow_def)
+{
+    struct upipe_netmap_sink_audio *audio_subpipe = upipe_netmap_sink_audio_from_upipe(upipe);
+    upipe_dbg_va(upipe, "%s", __func__);
+
+    if (flow_def == NULL)
+        return UBASE_ERR_INVALID;
+    UBASE_RETURN(uref_flow_match_def(flow_def, "sound.s32."))
+
+    /* Clear buffered urefs. */
+    struct uchain *uchain, *uchain_tmp;
+    ulist_delete_foreach(&audio_subpipe->urefs, uchain, uchain_tmp) {
+        ulist_delete(uchain);
+        uref_free(uref_from_uchain(uchain));
+    }
+    audio_subpipe->n = 0;
+
+    /* Check for flow_def and get latency attribute. */
+    if (unlikely(ubase_check(uref_flow_get_def(flow_def, NULL)))) {
+        uint64_t latency = 0;
+        uref_clock_get_latency(flow_def, &latency);
+        audio_subpipe->latency = latency;
+    }
+
+    return UBASE_ERR_NONE;
+}
+
+/** @internal @This handles input data.
+ *
+ * @param upipe description structure of the pipe
+ * @param uref uref structure
+ * @param upump_p reference to upump structure
+ */
+static void upipe_netmap_sink_audio_input(struct upipe *upipe,
+        struct uref *uref, struct upump **upump_p)
+{
+    struct upipe_netmap_sink_audio *audio_subpipe = upipe_netmap_sink_audio_from_upipe(upipe);
+    uint64_t systime = 0;
+
+    /* Check and warn for uref without timestamp. */
+    if (unlikely(!ubase_check(uref_clock_get_pts_sys(uref, &systime))))
+        upipe_warn(upipe, "received non-dated buffer");
+
+    ulist_add(&audio_subpipe->urefs, uref_to_uchain(uref));
+    audio_subpipe->n += 1;
+    upipe_dbg_va(upipe, "%s: %"PRIu64, __func__, audio_subpipe->n);
+
+    if (audio_subpipe->n > MAX_AUDIO_UREFS) {
+        /* Clear buffered urefs. */
+        struct uchain *uchain, *uchain_tmp;
+        ulist_delete_foreach(&audio_subpipe->urefs, uchain, uchain_tmp) {
+            ulist_delete(uchain);
+            uref_free(uref_from_uchain(uchain));
+        }
+        audio_subpipe->n = 0;
+    }
+}
+
+static int audio_set_flow_destination(struct upipe * upipe, int flow,
+        const char *path_1, const char *path_2);
+static int audio_subpipe_set_option(struct upipe *upipe, const char *option,
+        const char *value);
+
+/** @internal @This processes control commands on a subpipe.
+ *
+ * @param upipe description structure of the pipe
+ * @param command type of command to process
+ * @param args arguments of the command
+ * @return an error code
+ */
+static int upipe_netmap_sink_audio_control(struct upipe *upipe,
+                                         int command, va_list args)
+{
+    upipe_dbg_va(upipe, "%s", __func__);
+    UBASE_HANDLED_RETURN(upipe_control_provide_request(upipe, command, args));
+
+    switch (command) {
+    case UPIPE_SET_FLOW_DEF: {
+        struct uref *flow_def = va_arg(args, struct uref *);
+        return upipe_netmap_sink_audio_set_flow_def(upipe, flow_def);
+    }
+
+    case UPIPE_SET_OPTION: {
+        const char *option = va_arg(args, const char *);
+        const char *value  = va_arg(args, const char *);
+        return audio_subpipe_set_option(upipe, option, value);
+    }
+
+    case UPIPE_NETMAP_SINK_AUDIO_SET_FLOW_DESTINATION: {
+        UBASE_SIGNATURE_CHECK(args, UPIPE_NETMAP_SINK_AUDIO_SIGNATURE)
+        int flow = va_arg(args, int);
+        const char *path_1 = va_arg(args, const char *);
+        const char *path_2 = va_arg(args, const char *);
+        return audio_set_flow_destination(upipe, flow, path_1, path_2);
+    }
+
+    default:
+        return UBASE_ERR_UNHANDLED;
+    }
+}
+
+static struct upipe_mgr upipe_netmap_sink_audio_mgr = {
+    .signature = UPIPE_NETMAP_SINK_AUDIO_SIGNATURE,
+
+    .upipe_control = upipe_netmap_sink_audio_control,
+    .upipe_input = upipe_netmap_sink_audio_input,
+};
+
+static int get_audio(struct upipe_netmap_sink_audio *audio_subpipe)
+{
+    /* If audio data is already mapped then return early. */
+    if (audio_subpipe->uref)
+        return UBASE_ERR_NONE;
+
+    /* Get uref from buffer and return an error if none available. */
+    //struct upipe *upipe = upipe_netmap_sink_audio_to_upipe(audio_subpipe);
+    struct uchain *uchain = ulist_pop(&audio_subpipe->urefs);
+    UBASE_ALLOC_RETURN(uchain);
+    audio_subpipe->n -= 1;
+    struct uref *uref = uref_from_uchain(uchain);
+
+    /* Check size. */
+    size_t samples = 0;
+    uint8_t channels = 0;
+    UBASE_RETURN(uref_sound_size(uref, &samples, &channels));
+    channels /= 4;
+
+    /* Map uref. */
+    const int32_t *src = NULL;
+    UBASE_RETURN(uref_sound_read_int32_t(uref, 0, -1, &src, 1));
+
+    /* Add any cached samples. */
+    samples += audio_subpipe->cached_samples;
+    /* Rewind source pointer for any cached samples. */
+    src -= audio_subpipe->cached_samples * channels;
+
+    audio_subpipe->uref = uref;
+    audio_subpipe->data = src;
+    audio_subpipe->channels = channels;
+    audio_subpipe->uref_samples = samples;
+
+    return UBASE_ERR_NONE;
+}
+
+#define bswap32 __builtin_bswap32
+
+static void pack_audio(struct upipe_netmap_sink_audio *audio_subpipe)
+{
+    const int32_t *src = audio_subpipe->data;
+    uint8_t *dst = audio_subpipe->audio_data;
+    const int start = audio_subpipe->cached_samples * audio_subpipe->channels;
+    const int end = audio_subpipe->output_samples * audio_subpipe->channels;
+
+    for (int j = start; j < end; j++) {
+        int32_t sample = src[j];
+        uint32_t *dst32 = (uint32_t*)&dst[3*j];
+        *dst32 = bswap32(sample);
+    }
+
+    if (audio_subpipe->cached_samples)
+        audio_subpipe->cached_samples = 0;
+
+    audio_subpipe->data += end;
+    audio_subpipe->uref_samples -= audio_subpipe->output_samples;
+}
+
+#undef bswap32
+
+static void handle_audio_tail(struct upipe_netmap_sink_audio *audio_subpipe)
+{
+    const int32_t *src = audio_subpipe->data;
+    uint8_t *dst = audio_subpipe->audio_data;
+
+    /* Pack tail of uref into buffer. */
+    for (int j = 0;
+            j < audio_subpipe->uref_samples * audio_subpipe->channels;
+            j++) {
+        int32_t sample = src[j];
+        dst[3*j+0] = (sample >> 24) & 0xff;
+        dst[3*j+1] = (sample >> 16) & 0xff;
+        dst[3*j+2] = (sample >>  8) & 0xff;
+    }
+    audio_subpipe->cached_samples = audio_subpipe->uref_samples;
+
+    uref_sound_unmap(audio_subpipe->uref, 0, -1, 1);
+    uref_free(audio_subpipe->uref);
+    audio_subpipe->uref = NULL;
+    audio_subpipe->uref_samples = 0;
+}
+
+static inline int audio_count_populated_flows(const struct upipe_netmap_sink_audio *audio_subpipe)
+{
+    int ret = 0;
+    for (int i = 0; i < AES67_MAX_FLOWS; i++)
+        ret += audio_subpipe->flows[i][0].populated;
+    if (ret > 16 / audio_subpipe->output_channels)
+        ret = 16 / audio_subpipe->output_channels;
+    return ret;
+}
+
+static int audio_set_flow_destination(struct upipe * upipe, int flow,
+        const char *path_1, const char *path_2)
+{
+    struct upipe_netmap_sink_audio *audio_subpipe = upipe_netmap_sink_audio_from_upipe(upipe);
+    const struct upipe_netmap_sink *upipe_netmap_sink = upipe_netmap_sink_from_audio_subpipe(audio_subpipe);
+
+    if (unlikely(flow < 0 || flow >= AES67_MAX_FLOWS)) {
+        upipe_err_va(upipe, "flow %d is not in the range 0..%d", flow, AES67_MAX_FLOWS-1);
+        return UBASE_ERR_INVALID;
+    }
+
+    struct aes67_flow *aes67_flow = audio_subpipe->flows[flow];
+    const struct upipe_netmap_intf *intf = &upipe_netmap_sink->intf[0];
+
+    /* If given NULL or 0-length strings on both arguments it indicates a reset
+     * for the destination information. */
+    if ((path_1 == NULL && path_2 == NULL)
+            || (strlen(path_1) == 0 && strlen(path_2) == 0)) {
+        aes67_flow[0].populated = false;
+        aes67_flow[1].populated = false;
+        audio_subpipe->num_flows = audio_count_populated_flows(audio_subpipe);
+        memset(aes67_flow[0].header, 0, sizeof aes67_flow[0].header);
+        memset(aes67_flow[1].header, 0, sizeof aes67_flow[1].header);
+        return UBASE_ERR_NONE;
+    }
+
+    /* Otherwise if given a NULL or 0-length string it is an error. */
+    if (unlikely(path_1 == NULL || strlen(path_1) == 0))
+        return UBASE_ERR_INVALID;
+    if (unlikely((path_2 == NULL || strlen(path_2) == 0) && intf[1].d))
+        return UBASE_ERR_INVALID;
+
+    /* Parse first path. */
+    char *path = strdup(path_1);
+    UBASE_ALLOC_RETURN(path);
+    if (!upipe_udp_parse_node_service(upipe, path, NULL, 0, NULL,
+                (struct sockaddr_storage *)&aes67_flow[0].sin)) {
+        free(path);
+        return UBASE_ERR_INVALID;
+    }
+    free(path);
+    upipe_dbg_va(upipe, "flow %d path 0 destination set to %s:%u", flow,
+            inet_ntoa(aes67_flow[0].sin.sin_addr),
+            ntohs(aes67_flow[0].sin.sin_port));
+
+    /* Set ethernet details and the inferface index. */
+    aes67_flow[0].sll = (struct sockaddr_ll) {
+        .sll_family = AF_PACKET,
+        .sll_protocol = htons(ETHERNET_TYPE_IP),
+        /* TODO: get ifindex and socket if we want to do ARP. */
+        //.sll_ifindex = upipe_aes67_sink->sll[0].sll_ifindex,
+        .sll_halen = ETHERNET_ADDR_LEN,
+    };
+
+    /* Set MAC address. */
+    uint32_t dst_ip = ntohl(aes67_flow[0].sin.sin_addr.s_addr);
+
+    /* If a multicast IP address, fill a multicast MAC address. */
+    if (IN_MULTICAST(dst_ip)) {
+        aes67_flow[0].sll.sll_addr[0] = 0x01;
+        aes67_flow[0].sll.sll_addr[1] = 0x00;
+        aes67_flow[0].sll.sll_addr[2] = 0x5e;
+        aes67_flow[0].sll.sll_addr[3] = (dst_ip >> 16) & 0x7f;
+        aes67_flow[0].sll.sll_addr[4] = (dst_ip >>  8) & 0xff;
+        aes67_flow[0].sll.sll_addr[5] = (dst_ip      ) & 0xff;
+    }
+
+    /* Otherwise query ARP for the destination address. */
+    else {
+        /* TODO */
+    }
+
+    uint8_t *buf = aes67_flow[0].header;
+    /* Write ethernet header. */
+    ethernet_set_dstaddr(buf, aes67_flow[0].sll.sll_addr);
+    ethernet_set_srcaddr(buf, intf[0].src_mac);
+    ethernet_set_lentype(buf, ETHERNET_TYPE_IP);
+
+    buf += ETHERNET_HEADER_LEN;
+    /* Write IP and UDP headers. */
+    upipe_udp_raw_fill_headers(buf, intf[0].src_ip,
+            aes67_flow[0].sin.sin_addr.s_addr,
+            ntohs(aes67_flow[0].sin.sin_port),
+            ntohs(aes67_flow[0].sin.sin_port),
+            10 /* TTL */, 0 /* TOS */,
+            audio_subpipe->output_samples * audio_subpipe->output_channels * 3 + RTP_HEADER_SIZE);
+
+    if (path_2 && strlen(path_2)) {
+        path = strdup(path_2);
+        UBASE_ALLOC_RETURN(path);
+        if (!upipe_udp_parse_node_service(upipe, path, NULL, 0, NULL,
+                    (struct sockaddr_storage *)&aes67_flow[1].sin)) {
+            free(path);
+            return UBASE_ERR_INVALID;
+        }
+        free(path);
+        upipe_dbg_va(upipe, "flow %d path 1 destination set to %s:%u", flow,
+                inet_ntoa(aes67_flow[1].sin.sin_addr),
+                ntohs(aes67_flow[1].sin.sin_port));
+
+        aes67_flow[1].sll = (struct sockaddr_ll) {
+            .sll_family = AF_PACKET,
+            .sll_protocol = htons(ETHERNET_TYPE_IP),
+            .sll_halen = ETHERNET_ADDR_LEN,
+        };
+
+        dst_ip = ntohl(aes67_flow[1].sin.sin_addr.s_addr);
+        if (IN_MULTICAST(dst_ip)) {
+            aes67_flow[1].sll.sll_addr[0] = 0x01;
+            aes67_flow[1].sll.sll_addr[1] = 0x00;
+            aes67_flow[1].sll.sll_addr[2] = 0x5e;
+            aes67_flow[1].sll.sll_addr[3] = (dst_ip >> 16) & 0x7f;
+            aes67_flow[1].sll.sll_addr[4] = (dst_ip >>  8) & 0xff;
+            aes67_flow[1].sll.sll_addr[5] = (dst_ip      ) & 0xff;
+        }
+
+        buf = aes67_flow[1].header;
+        /* Write ethernet header. */
+        ethernet_set_dstaddr(buf, aes67_flow[1].sll.sll_addr);
+        ethernet_set_srcaddr(buf, intf[1].src_mac);
+        ethernet_set_lentype(buf, ETHERNET_TYPE_IP);
+
+        buf += ETHERNET_HEADER_LEN;
+        /* Write IP and UDP headers. */
+        upipe_udp_raw_fill_headers(buf, intf[1].src_ip,
+                aes67_flow[1].sin.sin_addr.s_addr,
+                ntohs(aes67_flow[1].sin.sin_port),
+                ntohs(aes67_flow[1].sin.sin_port),
+                10, 0, audio_subpipe->output_samples * audio_subpipe->output_channels * 3 + RTP_HEADER_SIZE);
+    }
+
+    aes67_flow[0].populated = true;
+    aes67_flow[1].populated = true;
+    audio_subpipe->num_flows = audio_count_populated_flows(audio_subpipe);
+    audio_subpipe->need_reconfig = true;
+    return UBASE_ERR_NONE;
+}
+
+static inline uint16_t audio_packet_size(uint16_t channels, uint16_t samples)
+{
+    return ETHERNET_HEADER_LEN + IP_HEADER_MINSIZE + UDP_HEADER_SIZE +
+        RTP_HEADER_SIZE + channels * samples * 3 /*bytes per sample*/;
+}
+
+static int audio_subpipe_set_option(struct upipe *upipe, const char *option,
+        const char *value)
+{
+    struct upipe_netmap_sink_audio *audio_subpipe = upipe_netmap_sink_audio_from_upipe(upipe);
+
+    if (!option || !value)
+        return UBASE_ERR_INVALID;
+
+    if (!strcmp(option, "output-samples")) {
+        int output_samples = atoi(value);
+        if (output_samples <= 0 || output_samples > AES67_MAX_SAMPLES_PER_PACKET) {
+            upipe_err_va(upipe, "output-samples (%d) not in range 0..%d",
+                    output_samples, AES67_MAX_SAMPLES_PER_PACKET);
+            return UBASE_ERR_INVALID;
+        }
+
+        /* A sample packs to 3 bytes.  16 channels. */
+        int needed_size = audio_packet_size(audio_subpipe->output_channels, output_samples);
+        if (needed_size > audio_subpipe->mtu) {
+            upipe_err_va(upipe, "requested frame or packet size (%d bytes, %d samples) is greater than MTU (%d)",
+                    needed_size, output_samples, audio_subpipe->mtu);
+            return UBASE_ERR_INVALID;
+        }
+
+        audio_subpipe->output_samples = output_samples;
+        audio_subpipe->packet_size = needed_size;
+        audio_subpipe->need_reconfig = true;
+        return UBASE_ERR_NONE;
+    }
+
+    if (!strcmp(option, "output-channels")) {
+        int output_channels = atoi(value);
+        if (!(output_channels == 2 || output_channels == 4 || output_channels == 8 || output_channels == 16)) {
+            upipe_err_va(upipe, "output-channels (%d) not 2, 4, 8, or 16", output_channels);
+            return UBASE_ERR_INVALID;
+        }
+        audio_subpipe->output_channels = output_channels;
+        audio_subpipe->packet_size = audio_packet_size(output_channels, audio_subpipe->output_samples);
+        audio_subpipe->num_flows = audio_count_populated_flows(audio_subpipe);
+        audio_subpipe->need_reconfig = true;
+        return UBASE_ERR_NONE;
+    }
+
+    upipe_err_va(upipe, "Unknown option %s", option);
+    return UBASE_ERR_INVALID;
+}
+
+static inline void audio_copy_samples_to_packet(uint8_t *dst, const uint8_t *src,
+        int output_channels, int output_samples, int channel_offset)
+{
+    /* Slight optimization for single flow. */
+    if (output_channels == 16) {
+        memcpy(dst, src, output_samples * 16 * 3);
+    } else {
+        int sample_size = 3 * output_channels;
+        src += 3*channel_offset;
+        for (int i = 0; i < output_samples; i++) {
+            memcpy(dst + i * sample_size, src + 3*16*i, sample_size);
+        }
+    }
 }
