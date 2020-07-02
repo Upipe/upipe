@@ -152,6 +152,8 @@ void upump_common_dispatch(struct upump *upump)
 void upump_common_start(struct upump *upump)
 {
     struct upump_common *common = upump_common_from_upump(upump);
+    if (common->started)
+        return;
     common->started = true;
     if (ulist_empty(&common->blockers)) {
         struct upump_common_mgr *common_mgr =
@@ -182,6 +184,8 @@ void upump_common_restart(struct upump *upump)
 void upump_common_stop(struct upump *upump)
 {
     struct upump_common *common = upump_common_from_upump(upump);
+    if (!common->started)
+        return;
     common->started = false;
     if (ulist_empty(&common->blockers)) {
         struct upump_common_mgr *common_mgr =

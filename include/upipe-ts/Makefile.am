@@ -11,6 +11,7 @@ myinclude_HEADERS = \
 	upipe_ts_mux.h \
 	upipe_ts_eit_decoder.h \
 	upipe_ts_nit_decoder.h \
+	upipe_ts_cat_decoder.h \
 	upipe_ts_pat_decoder.h \
 	upipe_ts_pes_decaps.h \
 	upipe_ts_pes_encaps.h \
@@ -37,3 +38,9 @@ myinclude_HEADERS = \
 	uref_ts_scte104_flow.h \
 	uref_ts_scte35.h \
 	$(NULL)
+
+if HAVE_GCRYPT
+if HAVE_TASN1
+myinclude_HEADERS += upipe_ts_emm_decoder.h
+endif
+endif

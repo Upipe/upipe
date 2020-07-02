@@ -51,7 +51,9 @@ enum upipe_ts_demux_command {
     /** returns the currently detected conformance (int *) */
     UPIPE_TS_DEMUX_GET_CONFORMANCE,
     /** sets the conformance (int) */
-    UPIPE_TS_DEMUX_SET_CONFORMANCE
+    UPIPE_TS_DEMUX_SET_CONFORMANCE,
+    /** sets the BISS-CA private key file (const char *) */
+    UPIPE_TS_DEMUX_SET_PRIVATE_KEY,
 };
 
 /** @This returns the currently detected conformance mode. It cannot return
@@ -81,6 +83,19 @@ static inline int
 {
     return upipe_control(upipe, UPIPE_TS_DEMUX_SET_CONFORMANCE,
                          UPIPE_TS_DEMUX_SIGNATURE, conformance);
+}
+
+/** @This sets the BISS-CA private key.
+ *
+ * @param upipe description structure of the pipe
+ * @param private_key the private_key file
+ * @return an error code
+ */
+static inline int upipe_ts_demux_set_private_key(struct upipe *upipe,
+    const char *private_key)
+{
+    return upipe_control(upipe, UPIPE_TS_DEMUX_SET_PRIVATE_KEY,
+            UPIPE_TS_DEMUX_SIGNATURE, private_key);
 }
 
 /** @This returns the management structure for all ts_demux pipes.

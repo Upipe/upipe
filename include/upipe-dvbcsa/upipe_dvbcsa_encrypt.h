@@ -29,18 +29,16 @@
 extern "C" {
 #endif
 
-#include <upipe/ubase.h>
+/** @This is the dvbcsa encryption pipe signature. */
+#define UPIPE_DVBCSA_ENC_SIGNATURE   UBASE_FOURCC('d','v','b','e')
 
-/** @This is the dvbcsa encryption pipe signature */
-#define UPIPE_DVBCSA_ENC_SIGNATURE  UBASE_FOURCC('d','v','b','e')
-
-/** @This returns the dvbcsa encryption pipe management structure.
+/** @This returns the dvbcsa encrypt pipe management structure.
  *
- * @return a pointer to the management structure
+ * @return a pointer to the manager
  */
 struct upipe_mgr *upipe_dvbcsa_enc_mgr_alloc(void);
 
-#ifdef _cplusplus
+#ifdef __cplusplus
 }
 #endif
 #endif

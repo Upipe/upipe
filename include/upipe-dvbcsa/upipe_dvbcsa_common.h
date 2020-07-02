@@ -42,7 +42,7 @@ enum upipe_dvbcsa_command {
     /** sentinel */
     UPIPE_DVBCSA_SENTINEL = UPIPE_CONTROL_LOCAL,
 
-    /** set the dvbcsa key (const char *) */
+    /** set the dvbcsa key (const char *, const char *) */
     UPIPE_DVBCSA_SET_KEY,
     /** set the maximum latency (uint64_t) */
     UPIPE_DVBCSA_SET_MAX_LATENCY,
@@ -62,23 +62,10 @@ enum upipe_dvbcsa_command {
  * @param key dvbcsa key
  * @return an error code
  */
-static inline int upipe_dvbcsa_set_key(struct upipe *upipe, const char *key)
+static inline int upipe_dvbcsa_set_key(struct upipe *upipe, const char *even_key, const char *odd_key)
 {
     return upipe_control(upipe, UPIPE_DVBCSA_SET_KEY,
-                         UPIPE_DVBCSA_COMMON_SIGNATURE, key);
-}
-
-/** @This sets the maximum latency of the pipe.
- *
- * @param upipe description structure of the pipe
- * @param latency maximum latency
- * @return an error code
- */
-static inline int upipe_dvbcsa_set_max_latency(struct upipe *upipe,
-                                               uint64_t latency)
-{
-    return upipe_control(upipe, UPIPE_DVBCSA_SET_MAX_LATENCY,
-                         UPIPE_DVBCSA_COMMON_SIGNATURE, latency);
+                         UPIPE_DVBCSA_COMMON_SIGNATURE, even_key, odd_key);
 }
 
 /** @This adds a pid to the encryption/decryption list.
@@ -112,8 +99,34 @@ struct ustring_dvbcsa_cw {
     /** matching part of the string */
     struct ustring str;
     /** value of the parsed control word */
-    dvbcsa_cw_t value;
+    union {
+        dvbcsa_cw_t value;
+        uint8_t aes[16];
+    };
 };
+
+/** @This parse a 128 bits dvb-cisssa control word from an ustring.
+ *
+ * @param str string to parse from
+ * @return a parsed control word
+ */
+static inline struct ustring_dvbcsa_cw
+ustring_to_dvbcsa_cw128(const struct ustring str)
+{
+    struct ustring tmp = str;
+    struct ustring_dvbcsa_cw ret;
+    ret.str = ustring_null();
+    for (uint8_t i = 0; i < 16; i++) {
+        struct ustring_byte b = ustring_to_byte(tmp);
+        if (b.str.len != 2)
+            return ret;
+        else
+            ret.aes[i] = b.value;
+        tmp = ustring_shift(tmp, 2);
+    }
+    ret.str = ustring_truncate(str, 32);
+    return ret;
+}
 
 /** @This parse a 64 bits dvbcsa control word from an ustring.
  *
@@ -181,6 +194,8 @@ ustring_to_dvbcsa_cw48(const struct ustring str)
 static inline struct ustring_dvbcsa_cw
 ustring_to_dvbcsa_cw(const struct ustring str)
 {
+    if (str.len >= 32)
+        return ustring_to_dvbcsa_cw128(str);
     if (str.len >= 16)
         return ustring_to_dvbcsa_cw64(str);
     return ustring_to_dvbcsa_cw48(str);

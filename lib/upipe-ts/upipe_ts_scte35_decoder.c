@@ -294,6 +294,9 @@ static int upipe_ts_scte35d_set_flow_def(struct upipe *upipe,
         return UBASE_ERR_ALLOC;
     }
     upipe_ts_scte35d_store_flow_def(upipe, flow_def_dup);
+    /* force sending flow def */
+    struct uref *uref = uref_sibling_alloc(flow_def);
+    upipe_ts_scte35d_output(upipe, uref, NULL);
     return UBASE_ERR_NONE;
 }
 

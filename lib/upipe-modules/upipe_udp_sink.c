@@ -430,7 +430,7 @@ static int _upipe_udpsink_set_uri(struct upipe *upipe, const char *uri)
 
     upipe_udpsink->fd = upipe_udp_open_socket(upipe, uri,
             UDP_DEFAULT_TTL, UDP_DEFAULT_PORT, 0, NULL, &use_tcp,
-            &upipe_udpsink->raw, upipe_udpsink->raw_header);
+            &upipe_udpsink->raw, upipe_udpsink->raw_header, NULL);
 
     if (unlikely(upipe_udpsink->fd == -1)) {
         upipe_err_va(upipe, "can't open uri %s", uri);

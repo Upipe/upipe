@@ -1,4 +1,4 @@
-AM_CPPFLAGS = -I$(top_builddir)/include -I$(top_srcdir)/include
+AM_CPPFLAGS = -I$(top_builddir) -I$(top_builddir)/include -I$(top_srcdir)/include
 LDADD = $(top_builddir)/lib/upipe/libupipe.la
 UPIPEMODULES_LIBS = $(top_builddir)/lib/upipe-modules/libupipe_modules.la
 UPIPEPTHREAD_LIBS = $(top_builddir)/lib/upipe-pthread/libupipe_pthread.la
@@ -53,6 +53,12 @@ ts2mpthreemulticat_LDADD = $(LDADD) $(UPUMPEV_LIBS) $(UPIPEMODULES_LIBS) $(UPIPE
 grid_LDADD = $(LDADD) $(UPIPEMODULES_LIBS) $(UPUMPEV_LIBS) $(UPIPETS_LIBS) $(UPIPEFRAMERS_LIBS) $(UPIPEFILTERS_LIBS) $(UPIPEAV_LIBS) $(UPIPEX264_LIBS) $(UPIPEPTHREAD_LIBS) $(UPIPESWS_LIBS) $(UPIPESWR_LIBS)
 grid_CFLAGS = $(AM_CFLAGS) $(SWSCALE_CFLAGS) $(UPIPEAV_CFLAGS)
 ts_encrypt_LDADD = $(LDADD) $(UPIPEMODULES_LIBS) $(UPUMPEV_LIBS) $(UPIPETS_LIBS) $(UPIPEDVBCSA_LIBS) $(UPIPEPTHREAD_LIBS) -lpthread
+ts_encrypt_CFLAGS = $(AM_CFLAGS)
+
+if HAVE_GCRYPT
+ts_encrypt_CFLAGS += $(LIBGCRYPT_CFLAGS)
+ts_encrypt_LDADD += $(LIBGCRYPT_LIBS)
+endif
 
 if HAVE_EV
 if HAVE_WRITEV

@@ -130,8 +130,10 @@ static void test_input(struct upipe *upipe, struct uref *uref,
     row_split_test->counter++;
     uref_free(uref);
 
-    if (unlikely(++row_split_test->counter > LIMIT))
+    if (unlikely(++row_split_test->counter > LIMIT)) {
         upipe_release(blksrc);
+        blksrc = NULL;
+    }
 }
 
 /** helper phony pipe */

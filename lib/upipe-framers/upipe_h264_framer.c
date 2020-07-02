@@ -2476,9 +2476,11 @@ static void upipe_h264f_prepare_raw(struct upipe *upipe, struct uref *uref)
     uref_clock_get_duration(uref, &duration);
 
     uint64_t date, pts;
-    if (upipe_h264f->dpb_output_delay != UINT64_MAX)
+    if (!ubase_check(uref_clock_get_dts_prog(uref, &date)) &&
+        upipe_h264f->dpb_output_delay != UINT64_MAX) {
         uref_clock_set_dts_pts_delay(uref,
                 upipe_h264f->dpb_output_delay * upipe_h264f->duration * 2);
+    }
     else if (!upipe_h264f->max_dec_frame_buffering)
         uref_clock_set_dts_pts_delay(uref, 0);
     else if (!ubase_check(uref_clock_get_dts_pts_delay(uref, &date)) &&
@@ -2773,11 +2775,6 @@ static int upipe_h264f_check_ubuf_mgr(struct upipe *upipe,
     struct upipe_h264f *upipe_h264f = upipe_h264f_from_upipe(upipe);
     if (flow_format == NULL)
         return UBASE_ERR_INVALID;
-    if (upipe_h264f->flow_def_attr == NULL) {
-        /* temporary ubuf manager, will be overwritten later */
-        uref_free(flow_format);
-        return UBASE_ERR_NONE;
-    }
 
     uref_free(upipe_h264f->flow_def_requested);
     upipe_h264f->flow_def_requested = flow_format;
@@ -2792,6 +2789,11 @@ static int upipe_h264f_check_ubuf_mgr(struct upipe *upipe,
     upipe_h264f->annexb_aud =
         ubuf_block_alloc_from_opaque(upipe_h264f->ubuf_mgr, aud_buffer, 5);
     UBASE_ALLOC_RETURN(upipe_h264f->annexb_aud);
+
+    if (upipe_h264f->flow_def_attr == NULL) {
+        /* temporary ubuf manager, will be overwritten later */
+        return UBASE_ERR_NONE;
+    }
 
     upipe_h264f_build_flow_def(upipe);
 

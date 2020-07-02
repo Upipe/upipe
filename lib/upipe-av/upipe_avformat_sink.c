@@ -253,19 +253,19 @@ static int upipe_avfsink_sub_set_flow_def(struct upipe *upipe,
     uint64_t octetrate = 0;
     uref_block_flow_get_octetrate(flow_def, &octetrate);
 
-    struct urational fps = {}, sar;
+    struct urational fps = {}, sar = {};
     uint64_t width = 0, height = 0;
     uint8_t channels = 0;
     uint64_t rate = 0, samples = 0;
     if (codec_id < AV_CODEC_ID_FIRST_AUDIO) {
         if (unlikely(!ubase_check(uref_pic_flow_get_fps(flow_def, &fps)) ||
                      !fps.den ||
-                     !ubase_check(uref_pic_flow_get_sar(flow_def, &sar)) ||
                      !ubase_check(uref_pic_flow_get_hsize(flow_def, &width)) ||
                      !ubase_check(uref_pic_flow_get_vsize(flow_def, &height)))) {
             upipe_err(upipe, "bad video parameters");
             return UBASE_ERR_INVALID;
         }
+        uref_pic_flow_get_sar(flow_def, &sar);
     } else {
         if (unlikely(!ubase_check(uref_sound_flow_get_channels(flow_def, &channels)) ||
                      !ubase_check(uref_sound_flow_get_rate(flow_def, &rate)) ||
@@ -303,8 +303,6 @@ static int upipe_avfsink_sub_set_flow_def(struct upipe *upipe,
     }
 
     if (unlikely(!ubase_check(uref_flow_set_def(flow_def_check, def)) ||
-                 (octetrate &&
-                  !ubase_check(uref_block_flow_set_octetrate(flow_def_check, octetrate))) ||
                  (extradata_alloc != NULL &&
                   !ubase_check(uref_flow_set_headers(flow_def_check, extradata,
                                          extradata_size))))) {
@@ -431,7 +429,9 @@ static int upipe_avfsink_sub_provide_flow_format(struct upipe *upipe,
 
     struct upipe_avfsink *upipe_avfsink =
         upipe_avfsink_from_sub_mgr(upipe->mgr);
-    if (!ubase_ncmp(def, "block.aac.") && upipe_avfsink->format != NULL &&
+    if ((!ubase_ncmp(def, "block.aac.") ||
+         !ubase_ncmp(def, "block.aac_latm.")) &&
+        upipe_avfsink->format != NULL &&
         (!strcmp(upipe_avfsink->format, "mp4") ||
          !strcmp(upipe_avfsink->format, "mov") ||
          !strcmp(upipe_avfsink->format, "m4a") ||
@@ -554,6 +554,50 @@ static void upipe_avfsink_sub_free(struct upipe *upipe)
     upipe_avfsink_sub_free_void(upipe);
 }
 
+/** @This checks that a specific flow def is supported by avfsink subpipes.
+ *
+ * @param mgr pointer to manager
+ * @param flow_def flow def to check
+ * @return an error code
+ */
+static int upipe_avfsink_sub_mgr_check_flow_def(struct upipe_mgr *mgr,
+                                                struct uref *flow_def)
+{
+    if (flow_def == NULL)
+        return UBASE_ERR_INVALID;
+
+    const char *def;
+    enum AVCodecID codec_id;
+    UBASE_RETURN(uref_flow_get_def(flow_def, &def))
+    if (ubase_ncmp(def, "block.") ||
+        !(codec_id = upipe_av_from_flow_def(def + strlen("block."))) ||
+        codec_id >= AV_CODEC_ID_FIRST_SUBTITLE)
+        return UBASE_ERR_INVALID;
+
+    return UBASE_ERR_NONE;
+}
+
+/** @This processes control commands on a avfsink sub manager.
+ *
+ * @param mgr pointer to manager
+ * @param command type of command to process
+ * @param args arguments of the command
+ * @return an error code
+ */
+static int upipe_avfsink_sub_mgr_control(struct upipe_mgr *mgr,
+                                         int command, va_list args)
+{
+    switch (command) {
+        case UPIPE_MGR_CHECK_FLOW_DEF: {
+            struct uref *flow_def = va_arg(args, struct uref *);
+            return upipe_avfsink_sub_mgr_check_flow_def(mgr, flow_def);
+        }
+
+        default:
+            return UBASE_ERR_UNHANDLED;
+    }
+}
+
 /** @internal @This initializes the output manager for an avfsink pipe.
  *
  * @param upipe description structure of the pipe
@@ -567,7 +611,7 @@ static void upipe_avfsink_init_sub_mgr(struct upipe *upipe)
     sub_mgr->upipe_alloc = upipe_avfsink_sub_alloc;
     sub_mgr->upipe_input = upipe_avfsink_sub_input;
     sub_mgr->upipe_control = upipe_avfsink_sub_control;
-    sub_mgr->upipe_mgr_control = NULL;
+    sub_mgr->upipe_mgr_control = upipe_avfsink_sub_mgr_control;
 }
 
 /** @internal @This allocates an avfsink pipe.

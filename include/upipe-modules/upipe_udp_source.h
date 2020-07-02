@@ -43,17 +43,17 @@ extern "C" {
 enum upipe_udpsrc_command {
     UPIPE_UDPSRC_SENTINEL = UPIPE_CONTROL_LOCAL,
 
-    /** get socket fd (int*) **/
+    /** get socket fd (int *) */
     UPIPE_UDPSRC_GET_FD,
-    /** set socket fd (int) **/
+    /** set socket fd (int) */
     UPIPE_UDPSRC_SET_FD,
 };
 
-/** @This extends uprobe_throw with specific events . */
+/** @This extends uprobe_throw with specific events. */
 enum uprobe_udpsrc_event {
     UPROBE_UDPSRC_SENTINEL = UPROBE_LOCAL,
 
-    /** remote address changed (const struct sockaddr*, socklen_t) **/
+    /** remote address changed (const struct sockaddr *, socklen_t *) */
     UPROBE_UDPSRC_NEW_PEER,
 };
 

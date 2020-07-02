@@ -607,10 +607,11 @@ static void upipe_xfer_mgr_detach(struct urefcount *urefcount)
     struct upipe_xfer_mgr *xfer_mgr =
         upipe_xfer_mgr_from_urefcount(urefcount);
     assert(xfer_mgr->upump_mgr != NULL);
+    urefcount_clean(urefcount);
+
     union upipe_xfer_arg arg = { .pipe = NULL };
     upipe_xfer_mgr_send(upipe_xfer_mgr_to_upipe_mgr(xfer_mgr),
                         UPIPE_XFER_DETACH, NULL, arg);
-    urefcount_clean(urefcount);
 }
 
 /** @This attaches a upipe_xfer_mgr to a given event loop. The xfer manager

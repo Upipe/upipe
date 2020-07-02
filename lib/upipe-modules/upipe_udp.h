@@ -32,12 +32,22 @@
 /** @hidden */
 #define _UPIPE_UDP_H_
 
+#include <upipe/config.h>
 #include <upipe/upipe.h>
 #include <stdint.h>
+#include <sys/socket.h>
+#include <arpa/inet.h>
+
+#define MMAP_BLOCK_SIZE (MMAP_FRAME_SIZE * MMAP_FRAME_NUM / MMAP_BLOCK_NUM)
+#define MMAP_BLOCK_NUM  1
+#define MMAP_FRAME_SIZE 512
+#define MMAP_FRAME_NUM  256
 
 #define IP_HEADER_MINSIZE 20
 #define UDP_HEADER_SIZE 8
 #define RAW_HEADER_SIZE (IP_HEADER_MINSIZE + UDP_HEADER_SIZE)
+
+#ifndef UPIPE_HAVE_BITSTREAM_COMMON_H
 
 static inline void ip_set_version(uint8_t *p_ip, uint8_t version)
 {
@@ -150,6 +160,38 @@ static inline void udp_set_cksum(uint8_t *p_ip, uint16_t cksum)
     p_ip[7] = (cksum & 0xff);
 }
 
+#endif
+
+/** @internal @This fills ipv4/udp headers for RAW sockets
+ *
+ * @param upipe description structure of the pipe
+ * @param dgram raw datagram
+ * @param ipsrc source ip address
+ * @param ipdst destination ip address
+ * @param portsrc source port address
+ * @param portdst destination port address
+ * @param ttl datagram time-to-live
+ * @param tos type of service
+ * @param payload length
+ */
+void upipe_udp_raw_fill_headers(uint8_t *header,
+        in_addr_t ipsrc, in_addr_t ipdst, uint16_t portsrc, uint16_t portdst,
+        uint8_t ttl, uint8_t tos, uint16_t len);
+
+/** @internal @This parses a host:port string
+ *
+ * @param upipe description structure of the pipe
+ * @param _string string to be parsed
+ * @param stringend end of string pointer
+ * @param default_port default port
+ * @param if_index interface index
+ */
+bool upipe_udp_parse_node_service(struct upipe *upipe,
+                                  char *_string, char **stringend,
+                                  uint16_t default_port,
+                                  int *if_index,
+                                  struct sockaddr_storage *ss);
+
 /** @internal @This parses _uri and opens IPv4 & IPv6 sockets
  *
  * @param upipe description structure of the pipe
@@ -166,7 +208,7 @@ static inline void udp_set_cksum(uint8_t *p_ip, uint16_t cksum)
 int upipe_udp_open_socket(struct upipe *upipe, const char *_uri, int ttl,
                           uint16_t bind_port, uint16_t connect_port,
                           unsigned int *weight, bool *use_tcp,
-                          bool *use_raw, uint8_t *raw_header);
+                          bool *use_raw, uint8_t *raw_header, int *ifindex);
 
 void udp_raw_set_len(uint8_t *raw_header, uint16_t len);
 
