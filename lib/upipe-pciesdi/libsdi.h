@@ -47,6 +47,7 @@ void sdi_genlock_field(int fd, uint8_t *field);
 
 void sdi_dma(int fd, uint8_t loopback_enable);
 void sdi_dma_reader(int fd, uint8_t enable, int64_t *hw_count, int64_t *sw_count);
+void sdi_dma_reader_cotimed(int fd, uint8_t enable, int64_t *hw_count, int64_t *sw_count);
 void sdi_dma_writer(int fd, uint8_t enable, int64_t *hw_count, int64_t *sw_count);
 void sdi_set_pattern(int fd, uint8_t mode, uint8_t enable, uint8_t format);
 
@@ -437,7 +438,7 @@ static const uint16_t smpte274m_1080p23_98_regs[][2] = {
     { 42, 0x52 },
 };
 
-void si5324_genlock(int fd);
+int si5324_genlock(int fd);
 
 const char *sdi_decode_mode(uint8_t mode);
 const char *sdi_decode_family(uint8_t family);

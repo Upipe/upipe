@@ -914,6 +914,10 @@ static void upipe_rtpfb_output_input(struct upipe *upipe, struct uref *uref,
     }
 
     if (pt == RTCP_PT_SR) {
+        if (s < RTCP_SR_SIZE) {
+            goto unmap;
+        }
+
         upipe_verbose(upipe, "received sender report");
         uint16_t len = rtcp_get_length(buf);
         uint64_t ntp = ((uint64_t)rtcp_sr_get_ntp_time_msw(buf) << 32) |

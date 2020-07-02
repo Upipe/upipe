@@ -695,8 +695,12 @@ static void upipe_sdi_enc_sub_free(struct upipe *upipe)
     upipe_throw_dead(upipe);
     upipe_sdi_enc_clean_urefs(&sdi_enc_sub->urefs);
     upipe_sdi_enc_sub_clean_sub(upipe);
-    upipe_sdi_enc_sub_clean_urefcount(upipe);
-    upipe_sdi_enc_sub_free_void(upipe);
+    if (sdi_enc_sub->type != SDIENC_SOUND) {
+        upipe_clean(upipe);
+    } else {
+        upipe_sdi_enc_sub_clean_urefcount(upipe);
+        upipe_sdi_enc_sub_free_void(upipe);
+    }
 }
 
 static void upipe_sdi_enc_init_sub_mgr(struct upipe *upipe)
@@ -1744,8 +1748,8 @@ static void upipe_sdi_enc_free(struct upipe *upipe)
 {
     struct upipe_sdi_enc *upipe_sdi_enc = upipe_sdi_enc_from_upipe(upipe);
 
-    upipe_clean(&upipe_sdi_enc->subpic_subpipe.upipe);
-    upipe_clean(&upipe_sdi_enc->vanc_subpipe.upipe);
+    upipe_sdi_enc_sub_free(&upipe_sdi_enc->subpic_subpipe.upipe);
+    upipe_sdi_enc_sub_free(&upipe_sdi_enc->vanc_subpipe.upipe);
 
     upipe_throw_dead(upipe);
     uref_free(upipe_sdi_enc->uref_audio);

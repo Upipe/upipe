@@ -2403,6 +2403,7 @@ static int upipe_netmap_sink_set_uri(struct upipe *upipe, const char *uri)
 static int upipe_netmap_sink_amend_ubuf_mgr(struct upipe *upipe,
                                         struct urequest *request)
 {
+    /* FIXME: this uref is leaked. */
     struct uref *flow_format = uref_dup(request->uref);
     UBASE_ALLOC_RETURN(flow_format);
 

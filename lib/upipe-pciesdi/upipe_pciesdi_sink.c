@@ -311,14 +311,9 @@ static void upipe_pciesdi_sink_worker(struct upump *upump)
      * above there might be many, many buffers to write when it starts again so
      * try skipping them without writing anything. */
     if (num_bufs < 0) {
-        num_bufs = DMA_BUFFER_COUNT/2 - num_bufs; // number of bufs to write
-        upipe_warn_va(upipe, "writing too late, skipping %"PRId64" buffers, hw: %"PRId64", sw: %"PRId64,
-                num_bufs, hw, sw);
-
-        struct sdi_ioctl_mmap_dma_update mmap_update = { .sw_count = sw + num_bufs };
-        if (ioctl(upipe_pciesdi_sink->fd, SDI_IOCTL_MMAP_DMA_READER_UPDATE, &mmap_update))
-            upipe_err(upipe, "ioctl error incrementing SW buffer count");
-
+        upipe_warn_va(upipe, "writing too late, stopping DMA: %"PRId64" buffers, hw: %"PRId64", sw: %"PRId64,
+                -num_bufs, hw, sw);
+        stop_dma(upipe);
         return;
     }
     num_bufs = DMA_BUFFER_COUNT/2 - num_bufs; // number of bufs to write
@@ -333,7 +328,10 @@ static void upipe_pciesdi_sink_worker(struct upump *upump)
     const uint8_t *src_buf;
     int src_bytes = -1;
     if (!ubase_check(uref_block_read(uref, upipe_pciesdi_sink->written, &src_bytes, &src_buf))) {
-        upipe_err_va(upipe, "could not map for reading, size: %zu, written: %zu", size, upipe_pciesdi_sink->written);
+        upipe_err_va(upipe, "could not map for reading, size: %zu, written: %zu, freeing uref",
+                size, upipe_pciesdi_sink->written);
+        uref_free(uref);
+        upipe_pciesdi_sink->uref = NULL;
         return;
     }
     int samples = src_bytes/2;
