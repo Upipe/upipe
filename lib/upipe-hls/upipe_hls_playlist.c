@@ -565,6 +565,15 @@ static int upipe_hls_playlist_update_flow_def(struct upipe *upipe)
                                      upipe_hls_playlist->flow_def);
 }
 
+/** @This throws a need reload event.
+ *
+ * @param upipe description structure of the pipe
+ */
+static void upipe_hls_playlist_need_reload(struct upipe *upipe)
+{
+    UBASE_FATAL(upipe, upipe_hls_playlist_throw_need_reload(upipe));
+}
+
 /** @internal @This plays an URI.
  *
  * @param upipe description structure of the pipe
@@ -625,6 +634,16 @@ static int upipe_hls_playlist_play_uri(struct upipe *upipe,
     UBASE_RETURN(upipe_src_set_range(inner, range_off, range_len));
     upipe_notice(upipe, "playing");
     upipe_hls_playlist->playing = true;
+    struct uchain *uchain;
+    uint64_t last_sequence = 0;
+    uref_m3u_playlist_flow_get_media_sequence(input_flow_def, &last_sequence);
+    ulist_foreach(&upipe_hls_playlist->items, uchain) {
+        last_sequence++;
+    }
+    if (upipe_hls_playlist->index >= last_sequence - 1) {
+        upipe_warn(upipe, "reach the end of the playlist");
+        upipe_hls_playlist_need_reload(upipe);
+    }
     return UBASE_ERR_NONE;
 }
 
@@ -886,7 +905,7 @@ static void upipe_hls_playlist_store_input_flow_def(struct upipe *upipe,
 static void upipe_hls_playlist_need_reload_cb(struct upump *upump)
 {
         struct upipe *upipe = upump_get_opaque(upump, struct upipe *);
-        UBASE_FATAL(upipe, upipe_hls_playlist_throw_need_reload(upipe));
+        upipe_hls_playlist_need_reload(upipe);
 }
 
 /** @internal @This sets a new flow definition.
