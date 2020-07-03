@@ -142,7 +142,7 @@ static void upipe_dejitter_sub_input(struct upipe *upipe, struct uref *uref,
     uint64_t date;
     if (ubase_check(uref_clock_get_dts_prog(uref, &date)))
         upipe_throw_clock_ts(upipe, uref);
-    upipe_dejitter_output(upipe, uref, upump_p);
+    upipe_dejitter_sub_output(upipe, uref, upump_p);
 }
 
 /** @internal @This sets the input flow definition.
