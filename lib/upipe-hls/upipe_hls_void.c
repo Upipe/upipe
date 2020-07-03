@@ -487,6 +487,8 @@ static int probe_src(struct uprobe *uprobe, struct upipe *inner,
                              UPROBE_LOG_VERBOSE, "playlist"));
         upipe_mgr_release(upipe_hls_playlist_mgr);
         UBASE_ALLOC_RETURN(upipe_output);
+        if (upipe_hls_void->attach_uclock)
+            upipe_attach_uclock(upipe_output);
         upipe_hls_void_store_playlist(upipe, upipe_use(upipe_output));
         upipe_release(upipe_output);
 
