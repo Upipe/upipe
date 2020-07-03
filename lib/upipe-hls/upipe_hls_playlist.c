@@ -640,10 +640,9 @@ static int upipe_hls_playlist_play_uri(struct upipe *upipe,
             uprobe_use(&upipe_hls_playlist->probe_src),
             UPROBE_LOG_VERBOSE, "src"));
     UBASE_ALLOC_RETURN(inner);
-    UBASE_RETURN(upipe_hls_playlist_set_src(upipe, inner));
     UBASE_RETURN(upipe_set_output(inner, upipe_hls_playlist->setflowdef));
-
     UBASE_RETURN(upipe_set_uri(inner, uri));
+    UBASE_RETURN(upipe_hls_playlist_set_src(upipe, inner));
 
     uint64_t range_off = 0;
     uref_m3u_playlist_get_byte_range_off(item, &range_off);
