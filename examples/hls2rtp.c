@@ -81,6 +81,7 @@
 #include <upipe-modules/upipe_time_limit.h>
 #include <upipe-modules/upipe_worker_sink.h>
 #include <upipe-modules/upipe_dejitter.h>
+#include <upipe-modules/upipe_delay.h>
 #include <upipe-hls/upipe_hls.h>
 #include <upipe-hls/upipe_hls_master.h>
 #include <upipe-hls/upipe_hls_variant.h>
@@ -152,6 +153,7 @@ static uint64_t last_cr = TS_CLOCK_MAX;
 static uint64_t timestamp_highest = TS_CLOCK_MAX;
 static uint64_t seek = 0;
 static uint64_t sequence = 0;
+static uint64_t delay = 0;
 static uint64_t mux_max_delay = UINT64_MAX;
 static uint64_t min_deviation = UINT64_MAX;
 static struct upipe *src = NULL;
@@ -161,6 +163,7 @@ static struct upipe *ts_mux = NULL;
 static struct upipe *dejitter = NULL;
 static struct upipe_mgr *probe_uref_mgr = NULL;
 static struct upipe_mgr *time_limit_mgr = NULL;
+static struct upipe_mgr *delay_mgr = NULL;
 static struct upipe_mgr *rtp_prepend_mgr = NULL;
 static struct upipe_mgr *udpsink_mgr = NULL;
 static struct upipe_mgr *setflowdef_mgr = NULL;
@@ -1035,15 +1038,22 @@ static struct upipe *hls2rtp_video_sink(struct uprobe *probe,
     }
 
     struct upipe *output = upipe_void_alloc(
-        time_limit_mgr,
+        delay_mgr,
         uprobe_pfx_alloc(uprobe_use(probe),
-                         UPROBE_LOG_VERBOSE, "time_limit"));
+                         UPROBE_LOG_VERBOSE, "delay"));
     assert(output);
-    upipe_time_limit_set_limit(output, time_limit);
+    upipe_delay_set_delay(output, delay);
     if (sink)
         upipe_set_output(sink, output);
     else
         sink = upipe_use(output);
+
+    output = upipe_void_chain_output(
+        output, time_limit_mgr,
+        uprobe_pfx_alloc(uprobe_use(probe),
+                         UPROBE_LOG_VERBOSE, "time_limit"));
+    assert(output);
+    upipe_time_limit_set_limit(output, time_limit);
 
     if (!ts_mux) {
         uint16_t port = video_output.port;
@@ -1135,15 +1145,22 @@ static struct upipe *hls2rtp_audio_sink(struct uprobe *probe,
     }
 
     struct upipe *output = upipe_void_alloc(
-        time_limit_mgr,
+        delay_mgr,
         uprobe_pfx_alloc(uprobe_use(probe),
-                         UPROBE_LOG_VERBOSE, "time_limit"));
+                         UPROBE_LOG_VERBOSE, "delay"));
     assert(output);
-    upipe_time_limit_set_limit(output, time_limit);
+    upipe_delay_set_delay(output, delay);
     if (sink)
         upipe_set_output(sink, output);
     else
         sink = upipe_use(output);
+
+    output = upipe_void_chain_output(
+        output, time_limit_mgr,
+        uprobe_pfx_alloc(uprobe_use(probe),
+                         UPROBE_LOG_VERBOSE, "time_limit"));
+    assert(output);
+    upipe_time_limit_set_limit(output, time_limit);
 
     if (!ts_mux) {
         uint16_t port = audio_output.port;
@@ -1266,6 +1283,7 @@ enum opt {
     OPT_HELP,
     OPT_MUX_MAX_DELAY,
     OPT_MIN_DEVIATION,
+    OPT_DELAY,
 };
 
 static struct option options[] = {
@@ -1293,6 +1311,7 @@ static struct option options[] = {
     { "help", no_argument, NULL, OPT_HELP },
     { "mux-max-delay", required_argument, NULL, OPT_MUX_MAX_DELAY },
     { "min-deviation", required_argument, NULL, OPT_MIN_DEVIATION },
+    { "delay", required_argument, NULL, OPT_DELAY },
     { 0, 0, 0, 0 },
 };
 
@@ -1418,6 +1437,9 @@ int main(int argc, char **argv)
             break;
         case OPT_MIN_DEVIATION:
             min_deviation = strtoull(optarg, NULL, 10);
+            break;
+        case OPT_DELAY:
+            delay = strtoull(optarg, NULL, 10);
             break;
 
         case OPT_HELP:
@@ -1545,6 +1567,8 @@ int main(int argc, char **argv)
     assert(probe_uref_mgr);
     time_limit_mgr = upipe_time_limit_mgr_alloc();
     assert(time_limit_mgr);
+    delay_mgr = upipe_delay_mgr_alloc();
+    assert(delay_mgr);
     rtp_prepend_mgr = upipe_rtp_prepend_mgr_alloc();
     assert(rtp_prepend_mgr);
     udpsink_mgr = upipe_udpsink_mgr_alloc();
@@ -1779,6 +1803,7 @@ int main(int argc, char **argv)
     }
     upipe_mgr_release(probe_uref_mgr);
     upipe_mgr_release(time_limit_mgr);
+    upipe_mgr_release(delay_mgr);
     upipe_mgr_release(rtp_prepend_mgr);
     upipe_mgr_release(udpsink_mgr);
     upipe_mgr_release(setflowdef_mgr);
