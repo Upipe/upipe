@@ -594,8 +594,26 @@ static int upipe_hls_playlist_play_uri(struct upipe *upipe,
     char uri[len + 1];
     UBASE_RETURN(uuri_to_buffer(uuri, uri, sizeof (uri)));
 
-    upipe_notice_va(upipe, "play next item sequence %"PRIu64" %s",
-                    upipe_hls_playlist->index, uri);
+    uint64_t media_sequence = 0;
+    uref_m3u_playlist_flow_get_media_sequence(input_flow_def, &media_sequence);
+    uint64_t last_sequence = media_sequence;
+    struct uchain *uchain;
+    uint64_t total_duration = 0;
+    ulist_foreach(&upipe_hls_playlist->items, uchain) {
+        if (last_sequence >= upipe_hls_playlist->index) {
+            struct uref *uref = uref_from_uchain(uchain);
+            uint64_t duration = 0;
+            uref_m3u_playlist_get_seq_duration(uref, &duration);
+            total_duration += duration;
+        }
+        last_sequence++;
+    }
+    upipe_notice_va(upipe, "play next item sequence "
+                    "%"PRIu64" in %"PRIu64" - %"PRIu64" "
+                    "buffer %.2f s %s",
+                    upipe_hls_playlist->index, media_sequence,
+                    last_sequence - 1,
+                    (float)total_duration / (float)(UCLOCK_FREQ), uri);
 
     struct uref *flow_def = upipe_hls_playlist->flow_def;
     if (ubase_check(uref_flow_match_def(flow_def, "block.aes."))) {
@@ -634,12 +652,6 @@ static int upipe_hls_playlist_play_uri(struct upipe *upipe,
     UBASE_RETURN(upipe_src_set_range(inner, range_off, range_len));
     upipe_dbg(upipe, "playing");
     upipe_hls_playlist->playing = true;
-    struct uchain *uchain;
-    uint64_t last_sequence = 0;
-    uref_m3u_playlist_flow_get_media_sequence(input_flow_def, &last_sequence);
-    ulist_foreach(&upipe_hls_playlist->items, uchain) {
-        last_sequence++;
-    }
     if (upipe_hls_playlist->index >= last_sequence - 1) {
         upipe_warn(upipe, "reach the end of the playlist");
         upipe_hls_playlist_need_reload(upipe);
