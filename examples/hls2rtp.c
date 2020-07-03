@@ -278,7 +278,12 @@ static void cmd_quit(void)
 /** @This handles SIGINT and SIGTERM signal. */
 static void sigint_cb(struct upump *upump)
 {
-    cmd_quit();
+    static bool graceful = true;
+    if (graceful)
+        cmd_quit();
+    else
+        exit(-1);
+    graceful = false;
 }
 
 /** @This handles seek.
