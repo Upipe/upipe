@@ -48,6 +48,7 @@
 #include <upipe/uprobe_ubuf_mem.h>
 #include <upipe/uprobe_uclock.h>
 #include <upipe/uprobe_source_mgr.h>
+#include <upipe/uprobe_dejitter.h>
 #include <upipe/uclock.h>
 #include <upipe/uclock_std.h>
 #include <upipe/umem.h>
@@ -79,6 +80,7 @@
 #include <upipe-modules/upipe_setflowdef.h>
 #include <upipe-modules/upipe_time_limit.h>
 #include <upipe-modules/upipe_worker_sink.h>
+#include <upipe-modules/upipe_dejitter.h>
 #include <upipe-hls/upipe_hls.h>
 #include <upipe-hls/upipe_hls_master.h>
 #include <upipe-hls/upipe_hls_variant.h>
@@ -151,16 +153,19 @@ static uint64_t timestamp_highest = TS_CLOCK_MAX;
 static uint64_t seek = 0;
 static uint64_t sequence = 0;
 static uint64_t mux_max_delay = UINT64_MAX;
+static uint64_t min_deviation = UINT64_MAX;
 static struct upipe *src = NULL;
 static struct upipe *hls = NULL;
 static struct upipe *variant = NULL;
 static struct upipe *ts_mux = NULL;
+static struct upipe *dejitter = NULL;
 static struct upipe_mgr *probe_uref_mgr = NULL;
 static struct upipe_mgr *time_limit_mgr = NULL;
 static struct upipe_mgr *rtp_prepend_mgr = NULL;
 static struct upipe_mgr *udpsink_mgr = NULL;
 static struct upipe_mgr *setflowdef_mgr = NULL;
 static struct uprobe *main_probe = NULL;
+static struct uprobe *dejitter_probe = NULL;
 static struct uref_mgr *uref_mgr;
 static struct ev_signal signal_watcher;
 static struct ev_io stdin_watcher;
@@ -273,6 +278,7 @@ static void cmd_quit(void)
     upipe_cleanup(&src);
     upipe_cleanup(&video_output.sink);
     upipe_cleanup(&audio_output.sink);
+    upipe_cleanup(&dejitter);
 }
 
 /** @This handles SIGINT and SIGTERM signal. */
@@ -544,6 +550,21 @@ static int catch_audio(struct uprobe *uprobe,
             assert(output);
         }
 
+        if (dejitter) {
+            if (!video_output.pipe) {
+                upipe_set_output(output, dejitter);
+                upipe_release(output);
+                output = upipe_use(dejitter);
+            }
+            else {
+                output = upipe_void_chain_output_sub(
+                    output, dejitter,
+                    uprobe_pfx_alloc(
+                        uprobe_use(dejitter_probe),
+                        UPROBE_LOG_VERBOSE, "dejitter sound"));
+                assert(output);
+            }
+        }
         int ret = upipe_set_output(output, audio_output.sink);
         upipe_release(output);
         return ret;
@@ -599,6 +620,12 @@ static int catch_video(struct uprobe *uprobe,
                 uprobe_seek_alloc(uprobe_use(main_probe), probe_video->at),
                 UPROBE_LOG_VERBOSE, "seek"));
         UBASE_ALLOC_RETURN(output);
+
+        if (dejitter) {
+            upipe_set_output(output, dejitter);
+            upipe_release(output);
+            output = upipe_use(dejitter);
+        }
         int ret = upipe_set_output(output, video_output.sink);
         upipe_release(output);
         return ret;
@@ -847,6 +874,7 @@ static int catch_variant(struct uprobe *uprobe,
                 uprobe_pfx_alloc(probe_playlist, UPROBE_LOG_VERBOSE, "mixed"),
                 uref_audio);
             audio_output.pipe = upipe_use(video_output.pipe);
+            upipe_attach_uclock(video_output.pipe);
         }
         else {
             if (uref_audio) {
@@ -996,18 +1024,26 @@ static struct upipe *hls2rtp_video_sink(struct uprobe *probe,
                                         uint64_t time_limit,
                                         struct upipe_mgr *wsink_mgr)
 {
-    struct upipe *sink = upipe_void_alloc_sub(
-        trickp,
-        uprobe_pfx_alloc(uprobe_use(probe),
-                         UPROBE_LOG_VERBOSE, "trickp pic"));
-    assert(sink);
+    struct upipe *sink = NULL;
 
-    struct upipe *output = upipe_use(sink);
-    output = upipe_void_chain_output(output, time_limit_mgr,
+    if (trickp) {
+        sink = upipe_void_alloc_sub(
+            trickp,
+            uprobe_pfx_alloc(uprobe_use(probe),
+                             UPROBE_LOG_VERBOSE, "trickp pic"));
+        assert(sink);
+    }
+
+    struct upipe *output = upipe_void_alloc(
+        time_limit_mgr,
         uprobe_pfx_alloc(uprobe_use(probe),
                          UPROBE_LOG_VERBOSE, "time_limit"));
     assert(output);
     upipe_time_limit_set_limit(output, time_limit);
+    if (sink)
+        upipe_set_output(sink, output);
+    else
+        sink = upipe_use(output);
 
     if (!ts_mux) {
         uint16_t port = video_output.port;
@@ -1088,18 +1124,26 @@ static struct upipe *hls2rtp_audio_sink(struct uprobe *probe,
                                         uint64_t time_limit,
                                         struct upipe_mgr *wsink_mgr)
 {
-    struct upipe *sink = upipe_void_alloc_sub(
-        trickp,
-        uprobe_pfx_alloc(uprobe_use(probe),
-                         UPROBE_LOG_VERBOSE, "trickp sound"));
-    assert(sink);
+    struct upipe *sink = NULL;
 
-    struct upipe *output = upipe_use(sink);
-    output = upipe_void_chain_output(output, time_limit_mgr,
+    if (trickp) {
+        sink = upipe_void_alloc_sub(
+            trickp,
+            uprobe_pfx_alloc(uprobe_use(probe),
+                             UPROBE_LOG_VERBOSE, "trickp sound"));
+        assert(sink);
+    }
+
+    struct upipe *output = upipe_void_alloc(
+        time_limit_mgr,
         uprobe_pfx_alloc(uprobe_use(probe),
                          UPROBE_LOG_VERBOSE, "time_limit"));
     assert(output);
     upipe_time_limit_set_limit(output, time_limit);
+    if (sink)
+        upipe_set_output(sink, output);
+    else
+        sink = upipe_use(output);
 
     if (!ts_mux) {
         uint16_t port = audio_output.port;
@@ -1221,6 +1265,7 @@ enum opt {
     OPT_DUMP,
     OPT_HELP,
     OPT_MUX_MAX_DELAY,
+    OPT_MIN_DEVIATION,
 };
 
 static struct option options[] = {
@@ -1247,6 +1292,7 @@ static struct option options[] = {
     { "dump", required_argument, NULL, OPT_DUMP },
     { "help", no_argument, NULL, OPT_HELP },
     { "mux-max-delay", required_argument, NULL, OPT_MUX_MAX_DELAY },
+    { "min-deviation", required_argument, NULL, OPT_MIN_DEVIATION },
     { 0, 0, 0, 0 },
 };
 
@@ -1370,6 +1416,9 @@ int main(int argc, char **argv)
         case OPT_MUX_MAX_DELAY:
             mux_max_delay = strtoull(optarg, NULL, 10);
             break;
+        case OPT_MIN_DEVIATION:
+            min_deviation = strtoull(optarg, NULL, 10);
+            break;
 
         case OPT_HELP:
             usage(argv[0], NULL);
@@ -1484,6 +1533,14 @@ int main(int argc, char **argv)
         upump_mgr_release(upump_mgr);
     }
 
+    /*
+     * add dejitter probe
+     */
+    if (min_deviation != UINT64_MAX) {
+        dejitter_probe = uprobe_dejitter_alloc(uprobe_use(main_probe), true, 0);
+        uprobe_dejitter_set_minimum_deviation(dejitter_probe, min_deviation);
+    }
+
     probe_uref_mgr = upipe_probe_uref_mgr_alloc();
     assert(probe_uref_mgr);
     time_limit_mgr = upipe_time_limit_mgr_alloc();
@@ -1593,15 +1650,19 @@ int main(int argc, char **argv)
      * create trickp pipe
      */
     {
-        struct upipe_mgr *upipe_trickp_mgr = upipe_trickp_mgr_alloc();
-        assert(upipe_trickp_mgr);
-        struct upipe *trickp = upipe_void_alloc(
-            upipe_trickp_mgr,
-            uprobe_pfx_alloc(uprobe_use(main_probe),
-                             UPROBE_LOG_VERBOSE, "trickp"));
-        upipe_mgr_release(upipe_trickp_mgr);
-        assert(trickp);
-        upipe_end_preroll(trickp);
+        struct upipe *trickp = NULL;
+
+        if (min_deviation == UINT64_MAX) {
+            struct upipe_mgr *upipe_trickp_mgr = upipe_trickp_mgr_alloc();
+            assert(upipe_trickp_mgr);
+            trickp = upipe_void_alloc(
+                upipe_trickp_mgr,
+                uprobe_pfx_alloc(uprobe_use(main_probe),
+                                 UPROBE_LOG_VERBOSE, "trickp"));
+            upipe_mgr_release(upipe_trickp_mgr);
+            assert(trickp);
+            upipe_end_preroll(trickp);
+        }
 
         /* create video sink */
         if (video_output.enabled) {
@@ -1618,6 +1679,17 @@ int main(int argc, char **argv)
         }
 
         upipe_release(trickp);
+    }
+
+    if (dejitter_probe) {
+        struct upipe_mgr *upipe_dejitter_mgr = upipe_dejitter_mgr_alloc();
+        assert(upipe_dejitter_mgr);
+        dejitter = upipe_void_alloc(
+            upipe_dejitter_mgr,
+            uprobe_pfx_alloc(uprobe_use(dejitter_probe),
+                             UPROBE_LOG_VERBOSE, "dejitter"));
+        assert(dejitter);
+        upipe_mgr_release(upipe_dejitter_mgr);
     }
 
     /*
@@ -1713,6 +1785,7 @@ int main(int argc, char **argv)
     uprobe_clean(&probe_hls);
     uprobe_clean(&probe_src);
     uprobe_clean(&probe_error);
+    uprobe_release(dejitter_probe);
     uref_mgr_release(uref_mgr);
 
     return 0;
