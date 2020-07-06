@@ -76,6 +76,8 @@ struct upipe_pciesdi_sink {
     bool underrun;
 
     int first;
+    int tx_mode;
+    int clock_rate;
 
     /** delay applied to systime attribute when uclock is provided */
     uint64_t latency;
@@ -191,6 +193,8 @@ static struct upipe *upipe_pciesdi_sink_alloc(struct upipe_mgr *mgr,
     upipe_pciesdi_sink->uref_next = NULL;
     upipe_pciesdi_sink->underrun = false;
     upipe_pciesdi_sink->first = 1;
+    upipe_pciesdi_sink->tx_mode = -1;
+    upipe_pciesdi_sink->clock_rate = SDI_UNDEF_RATE;
     upipe_pciesdi_sink->uclock.refcount = &upipe_pciesdi_sink->urefcount;
     upipe_pciesdi_sink->uclock.uclock_now = upipe_pciesdi_sink_now;
 
@@ -704,6 +708,11 @@ static int upipe_pciesdi_sink_set_flow_def(struct upipe *upipe, struct uref *flo
             freq = (struct urational){ 7425, 2700 };
     }
 
+    /* If there is no change to the clock frequency or TX mode then there is no
+     * need to reconfigure the HW. */
+    if (clock_rate == upipe_pciesdi_sink->clock_rate && tx_mode == upipe_pciesdi_sink->tx_mode)
+        return UBASE_ERR_NONE;
+
     /* Lock to begin init. */
     pthread_mutex_lock(&upipe_pciesdi_sink->clock_mutex);
 
@@ -712,6 +721,8 @@ static int upipe_pciesdi_sink_set_flow_def(struct upipe *upipe, struct uref *flo
     upipe_pciesdi_sink->freq = freq;
     upipe_pciesdi_sink->offset = offset;
     upipe_pciesdi_sink->clock_is_inited = 1;
+    upipe_pciesdi_sink->tx_mode = tx_mode;
+    upipe_pciesdi_sink->clock_rate = clock_rate;
 
     /* Unlock */
     pthread_mutex_unlock(&upipe_pciesdi_sink->clock_mutex);
