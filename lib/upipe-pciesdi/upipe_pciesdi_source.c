@@ -695,9 +695,6 @@ static int get_flow_def(struct upipe *upipe, struct uref **flow_format)
 
     *flow_format = flow_def;
 
-    int64_t hw, sw;
-    sdi_dma_writer(upipe_pciesdi_src->fd, 1, &hw, &sw); // enable
-
     upipe_pciesdi_src->mode = mode;
     upipe_pciesdi_src->family = family;
     upipe_pciesdi_src->scan = scan;
