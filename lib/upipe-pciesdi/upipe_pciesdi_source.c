@@ -355,7 +355,7 @@ static void upipe_pciesdi_src_worker(struct upump *upump)
     }
 
     if (mode != upipe_pciesdi_src->mode && need_init_hardware(upipe_pciesdi_src->capability_flags)) {
-        upipe_err(upipe, "mode change, reconfiguring HW");
+        upipe_err_va(upipe, "mode change, reconfiguring HW (%s)", __func__);
         init_hardware(upipe_pciesdi_src, mode == SDI_TX_MODE_SD);
         upipe_pciesdi_src->mode = mode;
         return;
@@ -365,7 +365,7 @@ static void upipe_pciesdi_src_worker(struct upump *upump)
             || family != upipe_pciesdi_src->family
             || scan != upipe_pciesdi_src->scan
             || rate != upipe_pciesdi_src->rate) {
-        upipe_err_va(upipe, "format change in %s, changing flow_def", __func__);
+        upipe_err_va(upipe, "format change, changing flow_def (%s)", __func__);
         /* Stop DMA to get EAV re-aligned. */
         int64_t hw, sw;
         sdi_dma_writer(upipe_pciesdi_src->fd, 0, &hw, &sw);
@@ -736,8 +736,6 @@ static void get_flow_def_on_signal_lock(struct upump *upump)
     struct upipe *upipe = upump_get_opaque(upump, struct upipe *);
     struct upipe_pciesdi_src *upipe_pciesdi_src = upipe_pciesdi_src_from_upipe(upipe);
 
-    upipe_dbg_va(upipe, "called %s", __func__);
-
     /* If execution makes it here the main worker has not executed for the
      * repeat time of the upump so it assumes RX signal has been lost.  Or it is
      * the first time after pipe creation. */
@@ -758,7 +756,7 @@ static void get_flow_def_on_signal_lock(struct upump *upump)
     }
 
     if (mode != upipe_pciesdi_src->mode && need_init_hardware(upipe_pciesdi_src->capability_flags)) {
-        upipe_err(upipe, "mode change, reconfiguring HW");
+        upipe_err_va(upipe, "mode change, reconfiguring HW (%s)", __func__);
         init_hardware(upipe_pciesdi_src, mode == SDI_TX_MODE_SD);
         upipe_pciesdi_src->mode = mode;
         return;
@@ -769,7 +767,7 @@ static void get_flow_def_on_signal_lock(struct upump *upump)
             || family != upipe_pciesdi_src->family
             || scan != upipe_pciesdi_src->scan
             || rate != upipe_pciesdi_src->rate) {
-        upipe_err_va(upipe, "format change in %s, changing flow_def", __func__);
+        upipe_err_va(upipe, "format change, changing flow_def (%s)", __func__);
         struct uref *flow_def;
         int ret = get_flow_def(upipe, &flow_def);
         /* TODO: does this need to check for errors other then NOSIGNAL and stop? */
