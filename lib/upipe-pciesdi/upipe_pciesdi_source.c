@@ -118,6 +118,7 @@ struct upipe_pciesdi_src {
     /** file descriptor */
     int fd;
     int device_number;
+    uint32_t capability_flags;
 
     bool discontinuity;
 
@@ -924,6 +925,15 @@ static int upipe_pciesdi_set_uri(struct upipe *upipe, const char *path)
 
     upipe_pciesdi_src->read_buffer = buf;
     upipe_pciesdi_src->device_number = path[strlen(path) - 1] - 0x30;
+
+    /* Get capability_flags. */
+    uint8_t channels;
+    sdi_capabilities(upipe_pciesdi_src->fd, &upipe_pciesdi_src->capability_flags, &channels);
+    if (upipe_pciesdi_src->device_number < 0 || upipe_pciesdi_src->device_number >= channels) {
+        upipe_err_va(upipe, "invalid device number (%d) for number of channels (%d)",
+                upipe_pciesdi_src->device_number, channels);
+        return UBASE_ERR_INVALID;
+    }
 
     /* initialize hardware except the clock */
     UBASE_RETURN(init_hardware(upipe, false, false, false));
