@@ -121,7 +121,7 @@ struct upipe_pciesdi_src {
     /* picture properties, same units as upipe_hbrmt_common.h, pixels */
     const struct sdi_offsets_fmt *sdi_format;
     bool sdi3g_levelb;
-    uint8_t mode, family, scan, rate;
+    int mode, family, scan, rate;
 
     uint8_t *read_buffer;
 
@@ -195,6 +195,10 @@ static struct upipe *upipe_pciesdi_src_alloc(struct upipe_mgr *mgr,
 #endif
 #endif
 
+    upipe_pciesdi_src->mode = -1;
+    upipe_pciesdi_src->family = -1;
+    upipe_pciesdi_src->scan = -1;
+    upipe_pciesdi_src->rate = -1;
     upipe_pciesdi_src->scratch_buffer_count = 0;
     upipe_pciesdi_src->sdi_format = NULL;
     upipe_pciesdi_src->read_buffer = NULL;
