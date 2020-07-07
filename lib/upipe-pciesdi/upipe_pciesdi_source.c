@@ -75,6 +75,7 @@ enum upipe_pciesdi_src_err {
 /** @hidden */
 static int upipe_pciesdi_src_check(struct upipe *upipe, struct uref *flow_format);
 static int get_flow_def(struct upipe *upipe, struct uref **flow_format);
+static int init_hardware(struct upipe *upipe, bool ntsc, bool genlock, bool sd);
 
 /** @internal @This is the private context of a file source pipe. */
 struct upipe_pciesdi_src {
@@ -111,6 +112,8 @@ struct upipe_pciesdi_src {
     struct upump_mgr *upump_mgr;
     /** read watcher */
     struct upump *upump;
+    /** format watcher */
+    struct upump *format_watcher;
 
     /** file descriptor */
     int fd;
@@ -156,6 +159,7 @@ UPIPE_HELPER_UCLOCK(upipe_pciesdi_src, uclock, uclock_request, upipe_pciesdi_src
 
 UPIPE_HELPER_UPUMP_MGR(upipe_pciesdi_src, upump_mgr)
 UPIPE_HELPER_UPUMP(upipe_pciesdi_src, upump, upump_mgr)
+UPIPE_HELPER_UPUMP(upipe_pciesdi_src, format_watcher, upump_mgr)
 
 /** @internal @This allocates a pciesdi source pipe.
  *
@@ -177,6 +181,7 @@ static struct upipe *upipe_pciesdi_src_alloc(struct upipe_mgr *mgr,
     upipe_pciesdi_src_init_output(upipe);
     upipe_pciesdi_src_init_upump_mgr(upipe);
     upipe_pciesdi_src_init_upump(upipe);
+    upipe_pciesdi_src_init_format_watcher(upipe);
     upipe_pciesdi_src_init_uclock(upipe);
 
     upipe_pciesdi_src->levelb_to_uyvy = upipe_levelb_to_uyvy_c;
@@ -346,6 +351,7 @@ static void upipe_pciesdi_src_worker(struct upump *upump)
             || family != upipe_pciesdi_src->family
             || scan != upipe_pciesdi_src->scan
             || rate != upipe_pciesdi_src->rate) {
+        upipe_err_va(upipe, "format change in %s, changing flow_def", __func__);
         /* Stop DMA to get EAV re-aligned. */
         int64_t hw, sw;
         sdi_dma_writer(upipe_pciesdi_src->fd, 0, &hw, &sw);
@@ -369,6 +375,9 @@ static void upipe_pciesdi_src_worker(struct upump *upump)
         /* Return because there should be no data to read. */
         return;
     }
+
+    /* All seems good with the signal so restart the format watcher pump. */
+    upump_restart(upipe_pciesdi_src->format_watcher);
 
     /* Size (in bytes) of a packed line. */
     int sdi_line_width = upipe_pciesdi_src->sdi_format->width * 2 * 10 / 8;
@@ -711,23 +720,60 @@ static int get_flow_def(struct upipe *upipe, struct uref **flow_format)
 static void get_flow_def_on_signal_lock(struct upump *upump)
 {
     struct upipe *upipe = upump_get_opaque(upump, struct upipe *);
-    struct upipe_pciesdi_src *ctx = upipe_pciesdi_src_from_upipe(upipe);
-    struct uref *flow_def;
-    int ret = get_flow_def(upipe, &flow_def);
-    /* TODO: does this need to check for errors other then NOSIGNAL and stop? */
-    if (!ubase_check(ret)) {
-        return;
-    }
-    upipe_pciesdi_src_require_ubuf_mgr(upipe, flow_def);
+    struct upipe_pciesdi_src *upipe_pciesdi_src = upipe_pciesdi_src_from_upipe(upipe);
 
-    struct upump *fd_read = upump_alloc_fd_read(ctx->upump_mgr,
-            upipe_pciesdi_src_worker, upipe, upipe->refcount, ctx->fd);
-    if (unlikely(fd_read == NULL)) {
-        upipe_throw_fatal(upipe, UBASE_ERR_UPUMP);
+    upipe_dbg_va(upipe, "called %s", __func__);
+
+    /* If execution makes it here the main worker has not executed for the
+     * repeat time of the upump so it assumes RX signal has been lost.  Or it is
+     * the first time after pipe creation. */
+
+    /* Query the HW for what it thinks the received format is. */
+    uint8_t locked, mode, family, scan, rate;
+    sdi_rx(upipe_pciesdi_src->fd, &locked, &mode, &family, &scan, &rate);
+
+    /* Stop DMA to get EAV re-aligned. */
+    int64_t hw, sw;
+    sdi_dma_writer(upipe_pciesdi_src->fd, 0, &hw, &sw);
+    upump_stop(upipe_pciesdi_src->upump);
+
+    if (!locked) {
+        /* TODO: throw some probe event? */
+        upipe_err(upipe, "SDI signal not locked");
         return;
     }
-    upipe_pciesdi_src_set_upump(upipe, fd_read);
-    upump_start(fd_read);
+
+    if (mode != upipe_pciesdi_src->mode) {
+        upipe_err(upipe, "mode change, reconfiguring HW");
+        init_hardware(upipe, false, false, mode == SDI_TX_MODE_SD);
+        upipe_pciesdi_src->mode = mode;
+        return;
+    }
+
+    /* Check for format change. */
+    if (mode != upipe_pciesdi_src->mode
+            || family != upipe_pciesdi_src->family
+            || scan != upipe_pciesdi_src->scan
+            || rate != upipe_pciesdi_src->rate) {
+        upipe_err_va(upipe, "format change in %s, changing flow_def", __func__);
+        struct uref *flow_def;
+        int ret = get_flow_def(upipe, &flow_def);
+        /* TODO: does this need to check for errors other then NOSIGNAL and stop? */
+        if (!ubase_check(ret)) {
+            return;
+        }
+        upipe_pciesdi_src_require_ubuf_mgr(upipe, flow_def);
+    }
+
+    /* Start DMA and reset state. */
+    sdi_dma_writer(upipe_pciesdi_src->fd, 1, &hw, &sw);
+    upipe_pciesdi_src->scratch_buffer_count = 0;
+    //upipe_pciesdi_src->discontinuity = true;
+
+    /* Start main pump. */
+    upump_start(upipe_pciesdi_src->upump);
+
+    return;
 }
 
 /** @internal @This checks if the pump may be allocated.
@@ -760,16 +806,28 @@ static int upipe_pciesdi_src_check(struct upipe *upipe, struct uref *flow_format
         return UBASE_ERR_NONE;
 
     if (upipe_pciesdi_src->fd != -1 && upipe_pciesdi_src->upump == NULL) {
-        struct upump *upump = upump_alloc_timer(upipe_pciesdi_src->upump_mgr,
-                get_flow_def_on_signal_lock, upipe, upipe->refcount,
-                1, UCLOCK_FREQ);
+        /* Create the main fd_read pump but don't start it. */
+        struct upump *upump = upump_alloc_fd_read(upipe_pciesdi_src->upump_mgr,
+                upipe_pciesdi_src_worker, upipe, upipe->refcount, upipe_pciesdi_src->fd);
         if (unlikely(upump == NULL)) {
             upipe_throw_fatal(upipe, UBASE_ERR_UPUMP);
             return UBASE_ERR_UPUMP;
         }
         upipe_pciesdi_src_set_upump(upipe, upump);
+
+        /* Create and start format watcher pump. */
+        upump = upump_alloc_timer(upipe_pciesdi_src->upump_mgr,
+                get_flow_def_on_signal_lock, upipe, upipe->refcount,
+                UCLOCK_FREQ, UCLOCK_FREQ);
+        if (unlikely(upump == NULL)) {
+            upipe_throw_fatal(upipe, UBASE_ERR_UPUMP);
+            return UBASE_ERR_UPUMP;
+        }
+        upipe_pciesdi_src_set_format_watcher(upipe, upump);
         upump_start(upump);
+        /* TODO: shorten inital delay. */
     }
+
     return UBASE_ERR_NONE;
 }
 
@@ -984,6 +1042,7 @@ static void upipe_pciesdi_src_free(struct upipe *upipe)
     upipe_throw_dead(upipe);
 
     upipe_pciesdi_src_clean_uclock(upipe);
+    upipe_pciesdi_src_clean_format_watcher(upipe);
     upipe_pciesdi_src_clean_upump(upipe);
     upipe_pciesdi_src_clean_upump_mgr(upipe);
     upipe_pciesdi_src_clean_output(upipe);
