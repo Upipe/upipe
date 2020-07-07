@@ -1030,6 +1030,9 @@ static bool upipe_h265f_activate_sps(struct upipe *upipe, uint32_t sps_id)
 
         if (field_seq_flag)
             frame_rate.den *= 2;
+        else
+            uref_pic_set_progressive(flow_def);
+
         urational_simplify(&frame_rate);
         UBASE_FATAL(upipe, uref_pic_flow_set_fps(flow_def, frame_rate))
     }
