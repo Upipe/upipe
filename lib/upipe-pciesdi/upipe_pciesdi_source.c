@@ -847,16 +847,6 @@ static int init_hardware(struct upipe *upipe, bool ntsc, bool genlock, bool sd)
         return UBASE_ERR_INVALID;
     }
 
-    if ((capability_flags & SDI_CAP_HAS_VCXOS) == 0 && ntsc) {
-        upipe_err(upipe, "NTSC not yet supported on boards without VCXOs");
-        return UBASE_ERR_INVALID;
-    }
-
-    if ((capability_flags & SDI_CAP_HAS_GENLOCK) == 0 && genlock) {
-        upipe_err(upipe, "genlock not supported on this board");
-        return UBASE_ERR_INVALID;
-    }
-
     /* sdi_pre_init */
 
     if (capability_flags & SDI_CAP_HAS_GS12281)
