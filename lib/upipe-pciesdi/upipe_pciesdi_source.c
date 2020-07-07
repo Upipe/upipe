@@ -75,7 +75,6 @@ enum upipe_pciesdi_src_err {
 /** @hidden */
 static int upipe_pciesdi_src_check(struct upipe *upipe, struct uref *flow_format);
 static int get_flow_def(struct upipe *upipe, struct uref **flow_format);
-static int init_hardware(struct upipe *upipe, bool ntsc, bool genlock, bool sd);
 
 /** @internal @This is the private context of a file source pipe. */
 struct upipe_pciesdi_src {
@@ -141,6 +140,8 @@ struct upipe_pciesdi_src {
     /** scratch buffer */
     uint8_t scratch_buffer[2 * DMA_BUFFER_SIZE];
 };
+
+static int init_hardware(struct upipe_pciesdi_src *upipe_pciesdi_src, bool sd);
 
 UPIPE_HELPER_UPIPE(upipe_pciesdi_src, upipe, UPIPE_PCIESDI_SRC_SIGNATURE)
 UPIPE_HELPER_UREFCOUNT(upipe_pciesdi_src, urefcount, upipe_pciesdi_src_free)
@@ -746,7 +747,7 @@ static void get_flow_def_on_signal_lock(struct upump *upump)
 
     if (mode != upipe_pciesdi_src->mode) {
         upipe_err(upipe, "mode change, reconfiguring HW");
-        init_hardware(upipe, false, false, mode == SDI_TX_MODE_SD);
+        init_hardware(upipe_pciesdi_src, mode == SDI_TX_MODE_SD);
         upipe_pciesdi_src->mode = mode;
         return;
     }
@@ -832,27 +833,16 @@ static int upipe_pciesdi_src_check(struct upipe *upipe, struct uref *flow_format
     return UBASE_ERR_NONE;
 }
 
-static int init_hardware(struct upipe *upipe, bool ntsc, bool genlock, bool sd)
+static int init_hardware(struct upipe_pciesdi_src *upipe_pciesdi_src, bool sd)
 {
-    struct upipe_pciesdi_src *ctx = upipe_pciesdi_src_from_upipe(upipe);
-    int fd = ctx->fd;
-    int device_number = ctx->device_number;
-
-    uint32_t capability_flags;
-    uint8_t channels;
-    sdi_capabilities(fd, &capability_flags, &channels);
-
-    if (device_number < 0 || device_number >= channels) {
-        upipe_err_va(upipe, "invalid device number (%d) for number of channels (%d)",
-                device_number, channels);
-        return UBASE_ERR_INVALID;
-    }
+    int fd = upipe_pciesdi_src->fd;
+    int device_number = upipe_pciesdi_src->device_number;
 
     /* sdi_pre_init */
 
-    if (capability_flags & SDI_CAP_HAS_GS12281)
+    if (upipe_pciesdi_src->capability_flags & SDI_CAP_HAS_GS12281)
         gs12281_spi_init(fd);
-    if (capability_flags & SDI_CAP_HAS_GS12241) {
+    if (upipe_pciesdi_src->capability_flags & SDI_CAP_HAS_GS12241) {
         if (sd) {
             gs12241_reset(fd, device_number);
             gs12241_config_for_sd(fd, device_number);
@@ -860,7 +850,7 @@ static int init_hardware(struct upipe *upipe, bool ntsc, bool genlock, bool sd)
         gs12241_spi_init(fd);
     }
 
-    if (capability_flags & SDI_CAP_HAS_LMH0387) {
+    if (upipe_pciesdi_src->capability_flags & SDI_CAP_HAS_LMH0387) {
         /* Set direction for RX. */
         sdi_lmh0387_direction(fd, 0);
         /* set launch amplitude to nominal */
@@ -936,7 +926,7 @@ static int upipe_pciesdi_set_uri(struct upipe *upipe, const char *path)
     }
 
     /* initialize hardware except the clock */
-    UBASE_RETURN(init_hardware(upipe, false, false, false));
+    UBASE_RETURN(init_hardware(upipe_pciesdi_src, false));
 
     /* Set the crc and packed options (in libsdi.c). */
     uint8_t locked, mode, family, scan, rate;
