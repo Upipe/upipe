@@ -76,6 +76,11 @@ enum upipe_pciesdi_src_err {
 static int upipe_pciesdi_src_check(struct upipe *upipe, struct uref *flow_format);
 static int get_flow_def(struct upipe *upipe, struct uref **flow_format);
 
+static inline bool need_init_hardware(uint32_t capability_flags)
+{
+    return !!(capability_flags & (SDI_CAP_HAS_GS12281 | SDI_CAP_HAS_GS12241));
+}
+
 /** @internal @This is the private context of a file source pipe. */
 struct upipe_pciesdi_src {
     /** refcount management structure */
@@ -346,6 +351,13 @@ static void upipe_pciesdi_src_worker(struct upump *upump)
 
     if (locked != 0x3) {
         upipe_pciesdi_src->discontinuity = true;
+        return;
+    }
+
+    if (mode != upipe_pciesdi_src->mode && need_init_hardware(upipe_pciesdi_src->capability_flags)) {
+        upipe_err(upipe, "mode change, reconfiguring HW");
+        init_hardware(upipe_pciesdi_src, mode == SDI_TX_MODE_SD);
+        upipe_pciesdi_src->mode = mode;
         return;
     }
 
@@ -745,7 +757,7 @@ static void get_flow_def_on_signal_lock(struct upump *upump)
         return;
     }
 
-    if (mode != upipe_pciesdi_src->mode) {
+    if (mode != upipe_pciesdi_src->mode && need_init_hardware(upipe_pciesdi_src->capability_flags)) {
         upipe_err(upipe, "mode change, reconfiguring HW");
         init_hardware(upipe_pciesdi_src, mode == SDI_TX_MODE_SD);
         upipe_pciesdi_src->mode = mode;
