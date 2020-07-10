@@ -966,6 +966,10 @@ static void upipe_hd_sdi_enc_encode_line(struct upipe *upipe, int line_num, uint
         /* If more than a single audio packet must be put on a line
          * then the following sequence will be sent: 1 2 3 4 1 2 3 4 */
         for (int sample = 0; sample < samples_to_put; sample++) {
+            /* Clock is the samples times the pixel clock divided by the audio
+             * clockrate */
+            uint16_t aud_clock = upipe_sdi_enc->total_audio_samples_put * f->width * f->height * f->fps.num / f->fps.den / 48000;
+
             for (int ch_group = 0; ch_group < UPIPE_SDI_CHANNELS_PER_GROUP; ch_group++) {
                 /* Packet belongs to another line */
                 uint8_t mpf_bit = 0;
@@ -982,10 +986,6 @@ static void upipe_hd_sdi_enc_encode_line(struct upipe *upipe, int line_num, uint
                  * the previous line which happened to be a switching point */
                 uint64_t eav_clock = upipe_sdi_enc->eav_clock - mpf_bit*f->width;
                 // FIXME: eav_clock unused
-
-                /* Clock is the samples times the pixel clock divided by the audio
-                 * clockrate */
-                uint16_t aud_clock = upipe_sdi_enc->total_audio_samples_put * f->width * f->height * f->fps.num / f->fps.den / 48000;
 
                 /* Phase offset is the difference between the audio clock and the
                  * EAV pixel clock */
