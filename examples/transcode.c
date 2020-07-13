@@ -96,8 +96,8 @@ struct es_conf {
     uint64_t id;
     const char *codec;
     const char *filters;
+    const char *filters_hw_type;
     struct udict *options;
-    struct upipe *filter_out;
 };
 
 enum uprobe_log_level loglevel = UPROBE_LOG_LEVEL;
@@ -120,7 +120,7 @@ static struct upipe *avfsink;
 struct uchain eslist;
 
 static void usage(const char *argv0) {
-    fprintf(stderr, "Usage: %s [-d] [-F] [-m <mime>] [-f <format>] [-p <id> -c <codec> [-x <hwaccel>] [-g <filters>] [-o <option=value>] ...] ... <source file> <sink file>\n", argv0);
+    fprintf(stderr, "Usage: %s [-d] [-F] [-m <mime>] [-f <format>] [-p <id> -c <codec> [-x <hwaccel>] [-g <filters> [-t <hw>]] [-o <option=value>] ...] ... <source file> <sink file>\n", argv0);
     fprintf(stderr, "   -d: show more debug logs\n");
     fprintf(stderr, "   -F: file mode\n");
     fprintf(stderr, "   -f: output format name\n");
@@ -129,6 +129,7 @@ static void usage(const char *argv0) {
     fprintf(stderr, "   -c: stream encoder\n");
     fprintf(stderr, "   -x: decoder hw accel\n");
     fprintf(stderr, "   -g: filter graph\n");
+    fprintf(stderr, "   -t: hardware device type for filters\n");
     fprintf(stderr, "   -o: encoder option (key=value)\n");
     exit(EXIT_FAILURE);
 }
@@ -220,7 +221,6 @@ static void es_conf_clean(struct uchain *list)
     ulist_delete_foreach (list, uchain, uchain_tmp) {
         ulist_delete(uchain);
         struct es_conf *conf = es_conf_from_uchain(uchain);
-        upipe_release(conf->filter_out);
         udict_free(conf->options);
         free(conf);
     }
@@ -322,54 +322,30 @@ static int catch_demux(struct uprobe *uprobe, struct upipe *upipe,
             }
             /* filtering */
             if (conf->filters != NULL) {
-                /* avfilter */
-                struct upipe *avfilt = upipe_void_alloc(
+                struct upipe *avfilt = upipe_void_alloc_output(
+                    incoming,
                     upipe_avfilt_mgr,
-                    uprobe_pfx_alloc(uprobe_use(logger), loglevel, "avfilt"));
+                    uprobe_pfx_alloc_va(uprobe_use(logger),
+                                        loglevel, "avfilt %"PRIu64, id));
                 assert(avfilt);
 
-                struct uref *avfilt_input_flow = uref_alloc_control(uref_mgr);
-                ubase_assert(uref_avfilt_flow_set_name(avfilt_input_flow,
-                                                       "in"));
-
-                struct upipe *avfilt_input =
-                    upipe_flow_alloc_output_sub(
-                        incoming,
-                        avfilt,
-                        uprobe_pfx_alloc_va(uprobe_use(logger),
-                                            loglevel, "filtin %"PRIu64, id),
-                        avfilt_input_flow);
-                assert(avfilt_input != NULL);
-                uref_free(avfilt_input_flow);
-                upipe_release(avfilt_input);
-
-                struct uref *avfilt_output_flow = uref_alloc_control(uref_mgr);
-                ubase_assert(uref_avfilt_flow_set_name(avfilt_output_flow,
-                                                       "out"));
-                struct upipe *avfilt_output =
-                    upipe_flow_alloc_sub(
-                        avfilt,
-                        uprobe_pfx_alloc_va(uprobe_use(logger),
-                                            loglevel, "filtout %"PRIu64, id),
-                        avfilt_output_flow);
-                assert(avfilt_output != NULL);
-                uref_free(avfilt_output_flow);
-                if (!file_mode)
-                    upipe_attach_uclock(avfilt_output);
-                if (conf->filter_out)
-                    upipe_release(conf->filter_out);
-                conf->filter_out = avfilt_output;
-                upipe_release(avfilt);
-
-                incoming = avfilt_output;
-
-                if (unlikely(!ubase_check(
-                            upipe_avfilt_set_filters_desc(avfilt,
-                                                          conf->filters)))) {
+                if (!ubase_check(upipe_avfilt_set_filters_desc(
+                            avfilt, conf->filters))) {
                     upipe_err_va(upipe, "cannot set filters for %"PRIu64" (%s)",
                                  id, def);
                     exit(EXIT_FAILURE);
                 }
+
+                if (conf->filters_hw_type != NULL &&
+                    !ubase_check(upipe_avfilt_set_hw_config(
+                            avfilt, conf->filters_hw_type, NULL))) {
+                    upipe_err_va(upipe, "cannot set filters hw config "
+                                 "for %"PRIu64" (%s)", id, def);
+                    exit(EXIT_FAILURE);
+                }
+
+                upipe_release(avfilt);
+                incoming = avfilt;
 
                 /* create system timestamps when in file mode */
                 if (file_mode) {
@@ -477,7 +453,7 @@ int main(int argc, char *argv[])
     ulist_init(&eslist);
 
     /* parse options */
-    while ((opt = getopt(argc, argv, "dFm:f:p:c:g:o:x:")) != -1) {
+    while ((opt = getopt(argc, argv, "dFm:f:p:c:g:t:o:x:")) != -1) {
         switch(opt) {
             case 'd':
                 if (loglevel > 0) loglevel--;
@@ -508,6 +484,11 @@ int main(int argc, char *argv[])
             case 'g': {
                 check_exit(es_cur, "no stream id specified\n");
                 es_cur->filters = optarg;
+                break;
+            }
+            case 't': {
+                check_exit(es_cur, "no stream id specified\n");
+                es_cur->filters_hw_type = optarg;
                 break;
             }
             case 'o': {

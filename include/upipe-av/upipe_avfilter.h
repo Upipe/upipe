@@ -56,6 +56,8 @@ enum upipe_avfilt_command {
 
     /** set the filter graph description (const char *) */
     UPIPE_AVFILT_SET_FILTERS_DESC,
+    /** set the hardware config (const char *, const char *) */
+    UPIPE_AVFILT_SET_HW_CONFIG,
 };
 
 /** @This converts @ref upipe_avfilt_command to a string.
@@ -67,6 +69,7 @@ static inline const char *upipe_avfilt_command_str(int command)
 {
     switch ((enum upipe_avfilt_command)command) {
         UBASE_CASE_TO_STR(UPIPE_AVFILT_SET_FILTERS_DESC);
+        UBASE_CASE_TO_STR(UPIPE_AVFILT_SET_HW_CONFIG);
         case UPIPE_AVFILT_SENTINEL: break;
     }
     return NULL;
@@ -83,6 +86,22 @@ static inline int upipe_avfilt_set_filters_desc(struct upipe *upipe,
 {
     return upipe_control(upipe, UPIPE_AVFILT_SET_FILTERS_DESC,
                          UPIPE_AVFILT_SIGNATURE, filters_desc);
+}
+
+/** @This sets the hardware configuration.
+ *
+ * @param upipe description structure of the pipe
+ * @param hw_type hardware type
+ * @param hw_device hardware device (use NULL for default)
+ * @return an error code
+ */
+static inline int upipe_avfilt_set_hw_config(struct upipe *upipe,
+                                             const char *hw_type,
+                                             const char *hw_device)
+{
+    return upipe_control(upipe, UPIPE_AVFILT_SET_HW_CONFIG,
+                         UPIPE_AVFILT_SIGNATURE,
+                         hw_type, hw_device);
 }
 
 /** @This returns the management structure for all avfilter pipes.
