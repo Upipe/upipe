@@ -153,6 +153,18 @@ static int upipe_pciesdi_source_framer_set_flow_def(struct upipe *upipe, struct
         ctx->progressive = false;
 
     UBASE_RETURN(uref_pic_flow_get_fps(flow_def, &ctx->fps));
+    uint64_t height;
+    UBASE_RETURN(uref_pic_flow_get_vsize(flow_def, &height));
+
+    /* Flag separate fields. */
+    if (ctx->mode == FIELDS) {
+        height /= 2;
+        ctx->fps.num *= 2;
+        UBASE_RETURN(uref_pic_flow_set_sepfields(flow_def));
+        UBASE_RETURN(uref_pic_flow_set_fps(flow_def, ctx->fps));
+        UBASE_RETURN(uref_pic_flow_set_vsize(flow_def, height));
+    }
+
 
     upipe_pciesdi_source_framer_store_flow_def(upipe, uref_dup(flow_def));
     return UBASE_ERR_NONE;
