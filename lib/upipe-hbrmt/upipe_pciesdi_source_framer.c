@@ -44,6 +44,10 @@
 
 #include "upipe_hbrmt_common.h"
 
+enum operating_mode {
+    FRAMES,
+};
+
 struct upipe_pciesdi_source_framer {
     /** refcount management structure */
     struct urefcount urefcount;
@@ -68,6 +72,7 @@ struct upipe_pciesdi_source_framer {
     bool start;
     bool progressive;
     bool sdi3g_levelb;
+    enum operating_mode mode;
 
     struct urational fps;
     uint64_t frame_counter;
@@ -104,6 +109,7 @@ static struct upipe *upipe_pciesdi_source_framer_alloc(struct upipe_mgr *mgr, st
     ctx->uref = NULL;
     ctx->cached_lines = 0;
     ctx->frame_counter = 0;
+    ctx->mode = FRAMES;
 
     upipe_pciesdi_source_framer_init_output(upipe);
     upipe_pciesdi_source_framer_init_urefcount(upipe);
@@ -254,6 +260,65 @@ static int find_top_of_frame(struct upipe *upipe, struct uref *uref)
     return UBASE_ERR_NONE;
 }
 
+static int handle_frames(struct upipe *upipe, struct uref *uref, struct upump **upump_p,
+        int width, int lines_in_uref)
+{
+    struct upipe_pciesdi_source_framer *ctx = upipe_pciesdi_source_framer_from_upipe(upipe);
+
+    /* If there are not enough lines yet store the block. */
+    if (ctx->cached_lines + lines_in_uref < ctx->f->height) {
+        ctx->cached_lines += lines_in_uref;
+
+        /* If there is a uref, append the new ubuf to the old otherwise just
+         * store the uref. */
+        if (ctx->uref) {
+            uref_block_append(ctx->uref, uref_detach_ubuf(uref));
+            uref_free(uref);
+            return UBASE_ERR_NONE;
+        } else {
+            ctx->uref = uref;
+            return UBASE_ERR_NONE;
+        }
+    }
+
+    /* If there is exactly enough lines then output the uref and clear the
+     * stored values. */
+    else if (ctx->cached_lines + lines_in_uref == ctx->f->height) {
+        uref_block_append(ctx->uref, uref_detach_ubuf(uref));
+        timestamp_uref(upipe, ctx->uref);
+        upipe_pciesdi_source_framer_output(upipe, ctx->uref, upump_p);
+
+        ctx->uref = NULL;
+        ctx->cached_lines = 0;
+        uref_free(uref);
+
+        return UBASE_ERR_NONE;
+    }
+
+    /* If there is more than enough lines then output and store the excess. */
+    else if (ctx->cached_lines + lines_in_uref > ctx->f->height) {
+        /* Duplicate and resize block to be the end of the frame. */
+        struct ubuf *ubuf = ubuf_dup(uref->ubuf);
+        UBASE_ALLOC_RETURN(ubuf);
+
+        int lines_needed = ctx->f->height - ctx->cached_lines;
+        ubuf_block_resize(ubuf, 0, width * lines_needed);
+        uref_block_append(ctx->uref, ubuf);
+        timestamp_uref(upipe, ctx->uref);
+        upipe_pciesdi_source_framer_output(upipe, ctx->uref, upump_p);
+
+        /* Keep top of next frame. */
+        uref_block_resize(uref, width * lines_needed, -1);
+        ctx->uref = uref;
+        ctx->cached_lines = lines_in_uref - lines_needed;
+
+        return UBASE_ERR_NONE;
+    }
+
+    /* Execution should never reach here. */
+    return UBASE_ERR_UNHANDLED;
+}
+
 static void upipe_pciesdi_source_framer_input(struct upipe *upipe, struct uref
         *uref, struct upump **upump_p)
 {
@@ -298,52 +363,15 @@ static void upipe_pciesdi_source_framer_input(struct upipe *upipe, struct uref
 
         int sdi_width_bytes = sizeof(uint16_t) * 2 * ctx->f->width;
         int lines_in_uref = src_size_bytes / sdi_width_bytes;
-        if (ctx->cached_lines + lines_in_uref < ctx->f->height) {
-            ctx->cached_lines += lines_in_uref;
-            if (ctx->uref) {
-                uref_block_append(ctx->uref, uref_detach_ubuf(uref));
-                uref_free(uref);
-                return;
-            } else {
-                ctx->uref = uref;
-                return;
-            }
-        }
 
-        else if (ctx->cached_lines + lines_in_uref == ctx->f->height) {
-            uref_block_append(ctx->uref, uref_detach_ubuf(uref));
-            timestamp_uref(upipe, ctx->uref);
-            upipe_pciesdi_source_framer_output(upipe, ctx->uref, upump_p);
-            ctx->uref = NULL;
-            ctx->cached_lines = 0;
-            uref_free(uref);
-            return;
-        }
-
-        else if (ctx->cached_lines + lines_in_uref > ctx->f->height) {
-            /* Duplicate and resize block to be the end of the frame. */
-            struct ubuf *ubuf = ubuf_dup(uref->ubuf);
-            if (!ubuf) {
-                upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
+        if (ctx->mode == FRAMES) {
+            err = handle_frames(upipe, uref, upump_p, sdi_width_bytes, lines_in_uref);
+            if (!ubase_check(err)) {
+                upipe_throw_error(upipe, err);
                 uref_free(uref);
                 return;
             }
-
-            int lines_needed = ctx->f->height - ctx->cached_lines;
-            ubuf_block_resize(ubuf, 0, sdi_width_bytes * lines_needed);
-            uref_block_append(ctx->uref, ubuf);
-            timestamp_uref(upipe, ctx->uref);
-            upipe_pciesdi_source_framer_output(upipe, ctx->uref, upump_p);
-
-            /* Keep top of next frame. */
-            uref_block_resize(uref, sdi_width_bytes * lines_needed, -1);
-            ctx->uref = uref;
-            ctx->cached_lines = lines_in_uref - lines_needed;
-            return;
         }
-
-        /* Execution should never reach here. */
-        abort();
     }
 
     return;
