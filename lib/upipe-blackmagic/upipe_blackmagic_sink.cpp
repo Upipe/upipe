@@ -709,7 +709,8 @@ static upipe_bmd_sink_frame *get_video_frame(struct upipe *upipe,
                     &upipe_bmd_sink->cdp_hdr_sequence_cntr, fps);
             sdi_calc_parity_checksum(&buf[1]);
 
-            sdi_encode_v210((uint32_t*)vanc, buf, w);
+            if (!sd)
+                sdi_encode_v210((uint32_t*)vanc, buf, w);
         }
     }
 
