@@ -707,10 +707,8 @@ static int upipe_grid_out_extract_pic(struct upipe *upipe, struct uref *uref)
 
     /* get first picture */
     struct uchain *uchain = ulist_peek(&upipe_grid_in->urefs);
-    if (unlikely(!uchain)) {
-        upipe_warn(upipe, "no input buffer available");
+    if (unlikely(!uchain))
         return UBASE_ERR_INVALID;
-    }
     struct uref *input_uref = uref_from_uchain(uchain);
 
     /* duplicate picture buffer */
@@ -747,10 +745,8 @@ static int upipe_grid_out_extract_sound(struct upipe *upipe, struct uref *uref)
     ubase_assert(uref_clock_get_pts_sys(uref, &next_pts));
 
     struct uchain *uchain = ulist_peek(&upipe_grid_in->urefs);
-    if (unlikely(!uchain)) {
-        upipe_warn(upipe, "no input buffer available");
+    if (unlikely(!uchain))
         return UBASE_ERR_INVALID;
-    }
     struct uref *input_uref = uref_from_uchain(uchain);
 
     uint64_t input_pts;
