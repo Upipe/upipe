@@ -49,7 +49,6 @@
 #include <upipe/upipe_helper_uclock.h>
 #include <upipe/upipe_helper_upump_mgr.h>
 #include <upipe/upipe_helper_upump.h>
-#include <upipe/ueventfd.h>
 #include <upipe-av/upipe_avfilter.h>
 #include <upipe-av/upipe_av_pixfmt.h>
 #include <upipe-av/upipe_av_samplefmt.h>
@@ -164,6 +163,8 @@ struct upipe_avfilt_sub {
 };
 
 /** @hidden */
+static void upipe_avfilt_reset(struct upipe *upipe);
+/** @hidden */
 static inline void upipe_avfilt_sub_flush_cb(struct upump *upump);
 /** @hidden */
 static void upipe_avfilt_sub_pop(struct upipe *upipe);
@@ -188,13 +189,6 @@ struct upipe_avfilt {
     struct upipe_mgr sub_mgr;
     /** sub pipe list */
     struct uchain subs;
-
-    /** need reconfiguration event fd */
-    struct ueventfd ueventfd;
-    /** upump manager */
-    struct upump_mgr *upump_mgr;
-    /** ueventfd pump */
-    struct upump *upump;
 
     /** filter graph description */
     char *filters_desc;
@@ -222,8 +216,6 @@ UPIPE_HELPER_VOID(upipe_avfilt)
 UPIPE_HELPER_UREFCOUNT(upipe_avfilt, urefcount, upipe_avfilt_free)
 UPIPE_HELPER_SUBPIPE(upipe_avfilt, upipe_avfilt_sub, sub,
                      sub_mgr, subs, uchain);
-UPIPE_HELPER_UPUMP_MGR(upipe_avfilt, upump_mgr);
-UPIPE_HELPER_UPUMP(upipe_avfilt, upump, upump_mgr);
 
 /** @internal @This is the avbuffer free callback.
  *
@@ -866,7 +858,7 @@ static struct upipe *upipe_avfilt_sub_alloc(struct upipe_mgr *mgr,
         return NULL;
     }
 
-    ueventfd_write(&upipe_avfilt->ueventfd);
+    upipe_avfilt_reset(upipe_avfilt_to_upipe(upipe_avfilt));
 
     return upipe;
 }
@@ -1592,6 +1584,16 @@ end:
     return ret;
 }
 
+/** @internal @This reinitialises the filter.
+ *
+ * @param upipe description structure of the pipe
+ */
+static void upipe_avfilt_reset(struct upipe *upipe)
+{
+    upipe_avfilt_clean_filters(upipe);
+    upipe_avfilt_init_filters(upipe);
+}
+
 /** @internal @This sets the filter graph description.
  *
  * @param upipe description structure of the pipe
@@ -1606,7 +1608,7 @@ static int _upipe_avfilt_set_filters_desc(struct upipe *upipe,
     UBASE_ALLOC_RETURN(filters_desc_dup);
     free(upipe_avfilt->filters_desc);
     upipe_avfilt->filters_desc = filters_desc_dup;
-    ueventfd_write(&upipe_avfilt->ueventfd);
+    upipe_avfilt_reset(upipe);
     return UBASE_ERR_NONE;
 }
 
@@ -1617,17 +1619,12 @@ static int _upipe_avfilt_set_filters_desc(struct upipe *upipe,
  * @param args arguments of the command
  * @return an error code
  */
-static int upipe_avfilt_control_real(struct upipe *upipe,
-                                     int command, va_list args)
+static int upipe_avfilt_control(struct upipe *upipe,
+                                int command, va_list args)
 {
     UBASE_HANDLED_RETURN(upipe_avfilt_control_subs(upipe, command, args))
 
     switch (command) {
-        case UPIPE_ATTACH_UPUMP_MGR:
-            upipe_avfilt_set_upump(upipe, NULL);
-            upipe_avfilt_attach_upump_mgr(upipe);
-            return UBASE_ERR_NONE;
-
         case UPIPE_AVFILT_SET_FILTERS_DESC: {
             UBASE_SIGNATURE_CHECK(args, UPIPE_AVFILT_SIGNATURE)
             const char *filters_desc = va_arg(args, const char *);
@@ -1636,58 +1633,6 @@ static int upipe_avfilt_control_real(struct upipe *upipe,
         default:
             return UBASE_ERR_UNHANDLED;
     }
-}
-
-/** @internal @This is the ueventfd callback.
- *
- * @param upump ueventfd watcher pump
- */
-static void upipe_avfilt_upump_cb(struct upump *upump)
-{
-    struct upipe *upipe = upump_get_opaque(upump, struct upipe *);
-    struct upipe_avfilt *upipe_avfilt = upipe_avfilt_from_upipe(upipe);
-    ueventfd_read(&upipe_avfilt->ueventfd);
-    upipe_avfilt_clean_filters(upipe);
-    upipe_avfilt_init_filters(upipe);
-}
-
-/** @internal @This allocates the idler pump if needed.
- *
- * @param upipe description structure of the pipe
- * @return an error code
- */
-static int upipe_avfilt_check(struct upipe *upipe)
-{
-    struct upipe_avfilt *upipe_avfilt = upipe_avfilt_from_upipe(upipe);
-    upipe_avfilt_check_upump_mgr(upipe);
-    if (upipe_avfilt->upump_mgr) {
-        if (!upipe_avfilt->upump) {
-            struct upump *idler = ueventfd_upump_alloc(
-                &upipe_avfilt->ueventfd,
-                upipe_avfilt->upump_mgr,
-                upipe_avfilt_upump_cb, upipe,
-                upipe->refcount);
-            if (unlikely(!idler))
-                return UBASE_ERR_UPUMP;
-            upipe_avfilt_set_upump(upipe, idler);
-            upump_start(idler);
-        }
-    }
-    return UBASE_ERR_NONE;
-}
-
-/** @internal @This processes control commands and allocates the idler pump if
- * needed.
- *
- * @param upipe description structure of the pipe
- * @param command type of command to process
- * @param args arguments of the command
- * @return an error code
- */
-static int upipe_avfilt_control(struct upipe *upipe, int command, va_list args)
-{
-    UBASE_RETURN(upipe_avfilt_control_real(upipe, command, args));
-    return upipe_avfilt_check(upipe);
 }
 
 /** @internal @This initializes the sub pipes manager.
@@ -1724,15 +1669,12 @@ static struct upipe *upipe_avfilt_alloc(struct upipe_mgr *mgr,
     upipe_avfilt_init_urefcount(upipe);
     upipe_avfilt_init_sub_mgr(upipe);
     upipe_avfilt_init_sub_subs(upipe);
-    upipe_avfilt_init_upump_mgr(upipe);
-    upipe_avfilt_init_upump(upipe);
 
     struct upipe_avfilt *upipe_avfilt = upipe_avfilt_from_upipe(upipe);
     upipe_avfilt->filters_desc = NULL;
     upipe_avfilt->filter_graph = NULL;
     upipe_avfilt->configured = false;
     upipe_avfilt->ubuf_mgr = ubuf_av_mgr_alloc();
-    ueventfd_init(&upipe_avfilt->ueventfd, false);
 
     upipe_throw_ready(upipe);
 
@@ -1757,8 +1699,6 @@ static void upipe_avfilt_free(struct upipe *upipe)
     free(upipe_avfilt->filters_desc);
     avfilter_graph_free(&upipe_avfilt->filter_graph);
     ubuf_mgr_release(upipe_avfilt->ubuf_mgr);
-    upipe_avfilt_clean_upump(upipe);
-    upipe_avfilt_clean_upump_mgr(upipe);
     upipe_avfilt_clean_sub_subs(upipe);
     upipe_avfilt_clean_urefcount(upipe);
     upipe_avfilt_free_void(upipe);
