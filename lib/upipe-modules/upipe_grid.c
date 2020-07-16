@@ -387,7 +387,8 @@ static void upipe_grid_in_update_pts(struct upipe *upipe, uint64_t next_pts)
                 uref_free(uref);
                 continue;
             }
-            upipe_warn(upipe, "keeping last input");
+            upipe_warn_va(upipe, "keeping last input %.3f ms",
+                          1000. * (next_pts - rebase_pts) / UCLOCK_FREQ);
         }
 
         upipe_grid_in->next_update = 0;
