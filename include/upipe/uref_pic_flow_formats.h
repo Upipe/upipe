@@ -767,6 +767,19 @@ static const struct uref_pic_flow_format uref_pic_flow_format_nv24 = {
 
 UREF_PIC_FLOW_FORMAT_HELPER(nv24);
 
+/** @This is the description of the gbrp format. */
+static const struct uref_pic_flow_format uref_pic_flow_format_gbrp = {
+    .macropixel = 1,
+    .nb_planes = 3,
+    .planes = {
+        { 1, 1, 1, "g8", 8 },
+        { 1, 1, 1, "b8", 8 },
+        { 1, 1, 1, "r8", 8 },
+    },
+};
+
+UREF_PIC_FLOW_FORMAT_HELPER(gbrp);
+
 #ifdef __cplusplus
 }
 #endif
