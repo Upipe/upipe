@@ -336,7 +336,6 @@ static void upipe_grid_in_update_pts(struct upipe *upipe, uint64_t next_pts)
     upipe_verbose_va(upipe, "update PTS %"PRIu64, next_pts);
 
     if (upipe_grid_in->last_update &&
-        upipe_grid_in->next_update &&
         upipe_grid_in->last_update + upipe_grid_in->next_update >= next_pts)
         return;
 
