@@ -38,83 +38,82 @@ static const bool parity_tab[256] =
 void sdi_calc_parity_checksum(uint16_t *buf)
 {
     uint16_t checksum = 0;
-    uint16_t dc = buf[DC_POS];
+    uint16_t dc = buf[2*DC_POS];
 
     /* +3 = did + sdid + dc itself */
     for (uint16_t i = 0; i < dc+3; i++) {
-        uint8_t parity = parity_tab[buf[3+i] & 0xff];
-        buf[3+i] |= (!parity << 9) | (parity << 8);
+        uint16_t *b = &buf[2*(3+i)];
+        uint8_t parity = parity_tab[*b & 0xff];
+        *b |= (!parity << 9) | (parity << 8);
 
-        checksum += buf[3+i] & 0x1ff;
+        checksum += *b & 0x1ff;
     }
 
     checksum &= 0x1ff;
     checksum |= (!(checksum >> 8)) << 9;
 
-    buf[ANC_START_LEN+dc] = checksum;
+    buf[2*(ANC_START_LEN+dc)] = checksum;
 }
 
+/* Writes 8-bit black to buffer consisting of y line, then interleaved uv line */
 void sdi_clear_vbi(uint8_t *dst, int w)
 {
     memset(&dst[0], 0x10, w);
     memset(&dst[w], 0x80, w);
 }
 
-void sdi_clear_vanc(uint16_t *dst)
+/* Writes 10-bit black to interleaved 10-bit uyvy buffer */
+void upipe_sdi_blank_c(uint16_t *dst, uintptr_t pixels)
 {
-    for (int i = 0; i < VANC_WIDTH; i++)
-        dst[i] = 0x40;
-
-    dst += VANC_WIDTH;
-
-    for (int i = 0; i < VANC_WIDTH; i++)
-        dst[i] = 0x200;
+    for (int w = 0; w < pixels; w++) {
+        dst[2*w+0] = 0x200;
+        dst[2*w+1] = 0x40;
+    }
 }
 
-static void sdi_start_anc(uint16_t *dst, uint16_t did, uint16_t sdid)
+static void sdi_start_anc(uint16_t *dst, uint8_t gap, uint16_t did, uint16_t sdid)
 {
-    dst[0] = S291_ADF1;
-    dst[1] = S291_ADF2;
-    dst[2] = S291_ADF3;
-    dst[3] = did;
-    dst[4] = sdid;
+    dst[gap*0] = S291_ADF1;
+    dst[gap*1] = S291_ADF2;
+    dst[gap*2] = S291_ADF3;
+    dst[gap*3] = did;
+    dst[gap*4] = sdid;
     /* DC */
-    dst[5] = 0;
+    dst[gap*5] = 0;
 }
 
 void sdi_write_cdp(const uint8_t *src, size_t src_size,
-        uint16_t *dst, uint16_t *ctr, uint8_t fps)
+        uint16_t *dst, uint8_t gap, uint16_t *ctr, uint8_t fps)
 {
-    sdi_clear_vanc(dst);
-    sdi_start_anc(dst, S291_CEA708_DID, S291_CEA708_SDID);
+    sdi_start_anc(dst, gap, S291_CEA708_DID, S291_CEA708_SDID);
 
     const uint8_t cnt = 9 + src_size + 4;
     const uint16_t hdr_sequence_cntr = (*ctr)++;
 
-    dst[ANC_START_LEN + 0] = 0x96;
-    dst[ANC_START_LEN + 1] = 0x69;
-    dst[ANC_START_LEN + 2] = cnt;
-    dst[ANC_START_LEN + 3] = (fps << 4) | 0xf; // cdp_frame_rate | Reserved
-    dst[ANC_START_LEN + 4] = (1 << 6) | (1 << 1) | 1; // ccdata_present | caption_service_active | Reserved
-    dst[ANC_START_LEN + 5] = hdr_sequence_cntr >> 8;
-    dst[ANC_START_LEN + 6] = hdr_sequence_cntr & 0xff;
-    dst[ANC_START_LEN + 7] = 0x72;
-    dst[ANC_START_LEN + 8] = (0x7 << 5) | (src_size / 3);
+    dst[gap*(ANC_START_LEN + 0)] = 0x96;
+    dst[gap*(ANC_START_LEN + 1)] = 0x69;
+    dst[gap*(ANC_START_LEN + 2)] = cnt;
+    dst[gap*(ANC_START_LEN + 3)] = (fps << 4) | 0xf; // cdp_frame_rate | Reserved
+    dst[gap*(ANC_START_LEN + 4)] = (1 << 6) | (1 << 1) | 1; // ccdata_present | caption_service_active | Reserved
+    dst[gap*(ANC_START_LEN + 5)] = hdr_sequence_cntr >> 8;
+    dst[gap*(ANC_START_LEN + 6)] = hdr_sequence_cntr & 0xff;
+    dst[gap*(ANC_START_LEN + 7)] = 0x72;
+    dst[gap*(ANC_START_LEN + 8)] = (0x7 << 5) | (src_size / 3);
 
     for (int i = 0; i < src_size; i++)
-        dst[ANC_START_LEN + 9 + i] = src[i];
+        dst[gap*(ANC_START_LEN + 9 + i)] = src[i];
 
-    dst[ANC_START_LEN + 9 + src_size] = 0x74;
-    dst[ANC_START_LEN + 9 + src_size + 1] = dst[ANC_START_LEN + 5];
-    dst[ANC_START_LEN + 9 + src_size + 2] = dst[ANC_START_LEN + 6];
+    dst[gap*(ANC_START_LEN + 9 + src_size)] = 0x74;
+    dst[gap*(ANC_START_LEN + 9 + src_size + 1)] = dst[gap*(ANC_START_LEN + 5)];
+    dst[gap*(ANC_START_LEN + 9 + src_size + 2)] = dst[gap*(ANC_START_LEN + 6)];
 
     uint8_t checksum = 0;
     for (int i = 0; i < cnt-1; i++) // don't include checksum
-        checksum += dst[ANC_START_LEN + i];
+        checksum += dst[gap*(ANC_START_LEN + i)];
 
-    dst[ANC_START_LEN + 9 + src_size + 3] = checksum ? 256 - checksum : 0;
+    dst[gap*(ANC_START_LEN + 9 + src_size + 3)] = checksum ? 256 - checksum : 0;
 
-    dst[DC_POS] = cnt; // DC
+    dst[gap*(DC_POS)] = cnt; // DC
 }
 
 static inline uint32_t to_le32(uint32_t a)
@@ -129,6 +128,7 @@ static inline uint32_t to_le32(uint32_t a)
 #endif
 }
 
+/* Takes 8-bit data (from libzvbi luma), shifts to 10-bit words and writes to v210 */
 void sdi_encode_v210_sd(uint32_t *dst, uint8_t *src, int width)
 {
     uint8_t *y = src;
@@ -137,7 +137,7 @@ void sdi_encode_v210_sd(uint32_t *dst, uint8_t *src, int width)
 #define WRITE_PIXELS8(a, b, c) \
     *dst++ = to_le32((*(a) << 2) | (*(b) << 12) | (*(c) << 22))
 
-    for (int w = 0; w < width; w += 6) {
+    for (int w = 0; w < width - 5; w += 6) {
         WRITE_PIXELS8(u, y, u+1);
         y += 1;
         u += 2;
@@ -156,26 +156,16 @@ void sdi_encode_v210_sd(uint32_t *dst, uint8_t *src, int width)
 void sdi_encode_v210(uint32_t *dst, uint16_t *src, int width)
 {
     /* 1280 isn't mod-6 so long vanc packets will be truncated */
-    uint16_t *y = src;
-    uint16_t *u = &y[width];
-
     /* don't clip the v210 anc data */
 #define WRITE_PIXELS(a, b, c)           \
     *dst++ = to_le32(*(a) | (*(b) << 10) | (*(c) << 20))
 
     for (int w = 0; w < width; w += 6) {
-        WRITE_PIXELS(u, y, u+1);
-        y += 1;
-        u += 2;
-        WRITE_PIXELS(y, u, y+1);
-        y += 2;
-        u += 1;
-        WRITE_PIXELS(u, y, u+1);
-        y += 1;
-        u += 2;
-        WRITE_PIXELS(y, u, y+1);
-        y += 2;
-        u += 1;
+        WRITE_PIXELS(src+0, src+1, src+2);
+        WRITE_PIXELS(src+3, src+4, src+5);
+        WRITE_PIXELS(src+6, src+7, src+8);
+        WRITE_PIXELS(src+9, src+10, src+11);
+        src += 12;
     }
 }
 
@@ -204,22 +194,24 @@ int sdi_encode_ttx_sd(uint8_t *buf, const uint8_t *pic_data, vbi_sampling_par *s
 }
 #endif
 
+/* OP-47 only used for HD, so hardcoded to UYVY */
 void sdi_encode_ttx(uint16_t *buf, int packets, const uint8_t **packet, uint16_t *ctr)
 {
-    sdi_start_anc(buf, S291_OP47SDP_DID, S291_OP47SDP_SDID);
+    sdi_start_anc(buf, 2, S291_OP47SDP_DID, S291_OP47SDP_SDID);
 
     /* 2 identifiers */
-    buf[ANC_START_LEN]   = 0x51;
-    buf[ANC_START_LEN+1] = 0x15;
+    buf[2*(ANC_START_LEN)]   = 0x51;
+    buf[2*(ANC_START_LEN+1)] = 0x15;
 
     /* Length, populate this last */
-    buf[ANC_START_LEN+2] = 0x0;
+    buf[2*(ANC_START_LEN+2)] = 0x0;
 
     /* Format code */
-    buf[ANC_START_LEN+3] = 0x2; /* WST Teletext subtitles */
+    buf[2*(ANC_START_LEN+3)] = 0x2; /* WST Teletext subtitles */
 
     /* Data Adaption header, 5 packets max */
-    memset(&buf[ANC_START_LEN + OP47_INITIAL_WORDS], 0x00, 5 * sizeof(uint16_t));
+    for (int i = 0; i < 5; i++)
+        buf[2*(ANC_START_LEN + OP47_INITIAL_WORDS + i)] = 0;
 
     for (int j = 0; j < packets; j++) {
         const uint8_t *pic_data = packet[j];
@@ -228,7 +220,7 @@ void sdi_encode_ttx(uint16_t *buf, int packets, const uint8_t **packet, uint16_t
         uint8_t f2 = !dvbvbittx_get_field(&pic_data[DVBVBI_UNIT_HEADER_SIZE]);
 
         /* Write structure A */
-        buf[ANC_START_LEN + OP47_INITIAL_WORDS + j]  = ((!f2) << 7) |
+        buf[2*(ANC_START_LEN + OP47_INITIAL_WORDS + j)]  = ((!f2) << 7) |
             (0x3 << 5) |
             line_offset;
 
@@ -236,33 +228,33 @@ void sdi_encode_ttx(uint16_t *buf, int packets, const uint8_t **packet, uint16_t
         int idx = OP47_STRUCT_B_OFFSET + 45 * j;
 
         /* 2x Run in codes */
-        buf[idx] = 0x55;
-        buf[idx+1] = 0x55;
+        buf[2*idx] = 0x55;
+        buf[2*(idx+1)] = 0x55;
 
         /* Framing code, MRAG and the data */
         for (int i = 0; i < 43; i++)
-            buf[idx + 2 + i] = REVERSE(pic_data[DVBVBI_UNIT_HEADER_SIZE + 1 /* line/field */ + i]);
+            buf[2*(idx + 2 + i)] = REVERSE(pic_data[DVBVBI_UNIT_HEADER_SIZE + 1 /* line/field */ + i]);
     }
 
     int idx = OP47_STRUCT_B_OFFSET + 45 * packets;
     /* Footer ID */
-    buf[idx++] = 0x74;
+    buf[2*idx++] = 0x74;
 
     /* Sequence counter, MSB and LSB */
     const uint16_t sequence_counter = (*ctr)++;
-    buf[idx++] = (sequence_counter >> 8) & 0xff;
-    buf[idx++] = (sequence_counter     ) & 0xff;
+    buf[2*idx++] = (sequence_counter >> 8) & 0xff;
+    buf[2*idx++] = (sequence_counter     ) & 0xff;
 
     /* Write UDW length (includes checksum so do it before) */
-    buf[ANC_START_LEN+2] = idx + 1 - ANC_START_LEN;
+    buf[2*(ANC_START_LEN+2)] = idx + 1 - ANC_START_LEN;
 
     /* SDP Checksum */
     uint8_t checksum = 0;
     for (int j = ANC_START_LEN; j < idx; j++)
-        checksum += buf[j];
-    buf[idx++] = checksum ? 256 - checksum : 0;
+        checksum += buf[2*j];
+    buf[2*idx++] = checksum ? 256 - checksum : 0;
 
-    buf[DC_POS] = idx - ANC_START_LEN;
+    buf[2*DC_POS] = idx - ANC_START_LEN;
 
     sdi_calc_parity_checksum(buf);
 }
