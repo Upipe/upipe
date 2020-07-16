@@ -55,6 +55,7 @@ UREF_ATTR_SMALL_UNSIGNED(sound_flow, raw_sample_size, "s.sample_bits",
 UREF_ATTR_UNSIGNED(sound_flow, rate, "s.rate", samples per second)
 UREF_ATTR_UNSIGNED(sound_flow, samples, "s.samples", number of samples)
 UREF_ATTR_UNSIGNED(sound_flow, align, "s.align", alignment in octets)
+UREF_ATTR_SMALL_UNSIGNED(sound_flow, channel_idx, "s.channel_index", index of first channel)
 
 /** @This allocates a control packet to define a new sound flow.
  *
