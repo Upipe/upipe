@@ -47,6 +47,7 @@
 enum operating_mode {
     FRAMES,
     FIELDS,
+    CHUNKS,
 };
 
 struct upipe_pciesdi_source_framer {
@@ -185,6 +186,10 @@ static int upipe_pciesdi_source_framer_set_option(struct upipe *upipe, const cha
         }
         if (!strcmp(value, "fields")) {
             ctx->mode = FIELDS;
+            return UBASE_ERR_NONE;
+        }
+        if (!strcmp(value, "chunks")) {
+            ctx->mode = CHUNKS;
             return UBASE_ERR_NONE;
         }
         upipe_err_va(upipe, "Unknown %s: %s", option, value);
@@ -445,6 +450,86 @@ static int handle_fields(struct upipe *upipe, struct uref *uref, struct upump **
     return UBASE_ERR_UNHANDLED;
 }
 
+static int handle_chunks(struct upipe *upipe, struct uref *uref, struct upump **upump_p,
+        int width, int lines_in_uref)
+{
+    struct upipe_pciesdi_source_framer *ctx = upipe_pciesdi_source_framer_from_upipe(upipe);
+
+    /* If the number of cached lines is less then the end of the first field
+     * then the pipe is working to output the first field otherwise it is the
+     * second field. */
+    int field_height;
+    if (ctx->cached_lines < ctx->f->pict_fmt->vbi_f1_part2.end) {
+        field_height = ctx->f->pict_fmt->vbi_f1_part2.end;
+    } else {
+        field_height = ctx->f->height;
+    }
+
+    /* If there are not enough lines to cross a field boundary then output
+     * everything. */
+    if (ctx->cached_lines + lines_in_uref <= field_height) {
+        /* If there is a uref, append the new ubuf. */
+        if (ctx->uref) {
+            uref_block_append(ctx->uref, uref_detach_ubuf(uref));
+            uref_free(uref);
+            uref = ctx->uref;
+            ctx->uref = NULL;
+        }
+
+        timestamp_uref(upipe, uref);
+        upipe_pciesdi_source_framer_output(upipe, uref, upump_p);
+
+        ctx->cached_lines = (ctx->cached_lines + lines_in_uref) % ctx->f->height;
+
+        return UBASE_ERR_NONE;
+    }
+
+    /* If there is more than enough lines then output and store the excess. */
+    else if (ctx->cached_lines + lines_in_uref > field_height) {
+        int lines_needed = field_height - ctx->cached_lines;
+
+        /* If there is a uref, append the new ubuf. */
+        if (ctx->uref) {
+            struct uref *temp = ctx->uref;
+
+            /* Duplicate and resize block to be the end of the frame. */
+            struct ubuf *ubuf = ubuf_dup(uref->ubuf);
+            UBASE_ALLOC_RETURN(ubuf);
+            ubuf_block_resize(ubuf, 0, width * lines_needed);
+            uref_block_append(temp, ubuf);
+
+            /* Keep top of next frame. */
+            uref_block_resize(uref, width * lines_needed, -1);
+            ctx->uref = uref;
+
+            uref = temp;
+        }
+
+        else {
+            /* Duplicate and resize block to be the end of the frame. */
+            struct uref *temp = uref_dup(uref);
+            UBASE_ALLOC_RETURN(temp);
+            uref_block_resize(temp, 0, width * lines_needed);
+
+            /* Keep top of next frame. */
+            uref_block_resize(uref, width * lines_needed, -1);
+            ctx->uref = uref;
+
+            uref = temp;
+        }
+
+        timestamp_uref(upipe, uref);
+        upipe_pciesdi_source_framer_output(upipe, uref, upump_p);
+
+        ctx->cached_lines = (ctx->cached_lines + lines_in_uref) % ctx->f->height;
+
+        return UBASE_ERR_NONE;
+    }
+
+    /* Execution should never reach here. */
+    return UBASE_ERR_UNHANDLED;
+}
+
 static void upipe_pciesdi_source_framer_input(struct upipe *upipe, struct uref
         *uref, struct upump **upump_p)
 {
@@ -501,6 +586,14 @@ static void upipe_pciesdi_source_framer_input(struct upipe *upipe, struct uref
 
         else if (ctx->mode == FIELDS) {
             err = handle_fields(upipe, uref, upump_p, sdi_width_bytes, lines_in_uref);
+            if (!ubase_check(err)) {
+                upipe_throw_error(upipe, err);
+                uref_free(uref);
+            }
+        }
+
+        else if (ctx->mode == CHUNKS) {
+            err = handle_chunks(upipe, uref, upump_p, sdi_width_bytes, lines_in_uref);
             if (!ubase_check(err)) {
                 upipe_throw_error(upipe, err);
                 uref_free(uref);
