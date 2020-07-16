@@ -110,7 +110,7 @@ static struct upipe *upipe_pciesdi_source_framer_alloc(struct upipe_mgr *mgr, st
     ctx->uref = NULL;
     ctx->cached_lines = 0;
     ctx->frame_counter = 0;
-    ctx->mode = FIELDS;
+    ctx->mode = FRAMES;
 
     upipe_pciesdi_source_framer_init_output(upipe);
     upipe_pciesdi_source_framer_init_urefcount(upipe);
@@ -170,6 +170,31 @@ static int upipe_pciesdi_source_framer_set_flow_def(struct upipe *upipe, struct
     return UBASE_ERR_NONE;
 }
 
+static int upipe_pciesdi_source_framer_set_option(struct upipe *upipe, const char *option,
+        const char *value)
+{
+    struct upipe_pciesdi_source_framer *ctx = upipe_pciesdi_source_framer_from_upipe(upipe);
+
+    if (!option || !value)
+        return UBASE_ERR_INVALID;
+
+    if (!strcmp(option, "mode")) {
+        if (!strcmp(value, "frames")) {
+            ctx->mode = FRAMES;
+            return UBASE_ERR_NONE;
+        }
+        if (!strcmp(value, "fields")) {
+            ctx->mode = FIELDS;
+            return UBASE_ERR_NONE;
+        }
+        upipe_err_va(upipe, "Unknown %s: %s", option, value);
+        return UBASE_ERR_INVALID;
+    }
+
+    upipe_err_va(upipe, "Unknown option %s", option);
+    return UBASE_ERR_INVALID;
+}
+
 static int upipe_pciesdi_source_framer_control(struct upipe *upipe, int command,
         va_list args)
 {
@@ -178,6 +203,13 @@ static int upipe_pciesdi_source_framer_control(struct upipe *upipe, int command,
             struct uref *flow_def = va_arg(args, struct uref *);
             return upipe_pciesdi_source_framer_set_flow_def(upipe, flow_def);
         }
+
+        case UPIPE_SET_OPTION: {
+            const char *option = va_arg(args, const char *);
+            const char *value  = va_arg(args, const char *);
+            return upipe_pciesdi_source_framer_set_option(upipe, option, value);
+        }
+
         case UPIPE_REGISTER_REQUEST:
         case UPIPE_UNREGISTER_REQUEST:
         case UPIPE_GET_FLOW_DEF:
