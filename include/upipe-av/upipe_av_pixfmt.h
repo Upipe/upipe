@@ -149,6 +149,8 @@ upipe_av_pixfmt_to_format(enum AVPixelFormat pix_fmt)
         case AV_PIX_FMT_NV24:
             return &uref_pic_flow_format_nv24;
 #endif
+        case AV_PIX_FMT_GBRP:
+            return &uref_pic_flow_format_gbrp;
         default:
             break;
     }
@@ -235,6 +237,7 @@ static inline enum AVPixelFormat
 #if LIBAVUTIL_VERSION_INT >= AV_VERSION_INT(56, 27, 100)
         AV_PIX_FMT_NV24,
 #endif
+        AV_PIX_FMT_GBRP,
         -1
     };
     if (pix_fmts == NULL)
