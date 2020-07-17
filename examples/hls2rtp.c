@@ -148,9 +148,6 @@ static struct output audio_output = {
     .sink = NULL,
 };
 static bool rewrite_date = false;
-static int64_t timestamp_offset = 0;
-static uint64_t last_cr = TS_CLOCK_MAX;
-static uint64_t timestamp_highest = TS_CLOCK_MAX;
 static uint64_t seek = 0;
 static uint64_t sequence = 0;
 static uint64_t delay = 0;
@@ -396,6 +393,9 @@ UPROBE_HELPER_UPROBE(uprobe_variant, probe);
 struct uprobe_rewrite_date {
     struct uprobe probe;
     bool video;
+    uint64_t last_cr;
+    int64_t timestamp_offset;
+    uint64_t timestamp_highest;
 };
 
 UPROBE_HELPER_UPROBE(uprobe_rewrite_date, probe);
@@ -419,33 +419,29 @@ static int catch_rewrite_date(struct uprobe *uprobe, struct upipe *upipe,
     if (type == UREF_DATE_NONE)
         return UBASE_ERR_NONE;
 
-    if (probe_rewrite_date->video || !video_output.pipe) {
-        uint64_t delta = (TS_CLOCK_MAX + date -
-                          (last_cr % TS_CLOCK_MAX)) % TS_CLOCK_MAX;
-        if (delta < MAX_GAP)
-            last_cr += delta;
-        else {
-            upipe_dbg_va(upipe, "clock ref discontinuity %"PRIu64, delta);
-            last_cr = date;
-            timestamp_offset = timestamp_highest - date;
-        }
+    uint64_t delta = (TS_CLOCK_MAX + date -
+                      (probe_rewrite_date->last_cr % TS_CLOCK_MAX)) %
+        TS_CLOCK_MAX;
+    if (delta < MAX_GAP)
+        probe_rewrite_date->last_cr += delta;
+    else {
+        upipe_warn_va(upipe, "clock ref discontinuity %"PRIu64, delta);
+        probe_rewrite_date->last_cr = date;
+        probe_rewrite_date->timestamp_offset =
+            probe_rewrite_date->timestamp_highest - date;
     }
 
-    uint64_t delta = (TS_CLOCK_MAX + date -
-                      (last_cr % TS_CLOCK_MAX)) % TS_CLOCK_MAX;
-    if (delta > MAX_GAP) {
-        /* This should not happen */
-        upipe_warn_va(upipe, "timestamp discontinuity %"PRIu64, delta);
-        uref_clock_delete_date_prog(uref);
-        return UBASE_ERR_NONE;
-    }
+    delta = (TS_CLOCK_MAX + date -
+             (probe_rewrite_date->last_cr % TS_CLOCK_MAX)) % TS_CLOCK_MAX;
 
     upipe_verbose_va(upipe, "rewrite %"PRIu64" -> %"PRIu64, date,
-                     timestamp_offset + last_cr + delta);
-    date = timestamp_offset + last_cr + delta;
+                     probe_rewrite_date->timestamp_offset +
+                     probe_rewrite_date->last_cr + delta);
+    date = probe_rewrite_date->timestamp_offset +
+        probe_rewrite_date->last_cr + delta;
     uref_clock_set_date_prog(uref, date, type);
-    if (date > timestamp_highest)
-        timestamp_highest = date;
+    if (date > probe_rewrite_date->timestamp_highest)
+        probe_rewrite_date->timestamp_highest = date;
 
     return UBASE_ERR_NONE;
 }
@@ -458,6 +454,9 @@ uprobe_rewrite_date_init(struct uprobe_rewrite_date *probe_rewrite_date,
     struct uprobe *probe = uprobe_rewrite_date_to_uprobe(probe_rewrite_date);
     uprobe_init(probe, catch_rewrite_date, next);
     probe_rewrite_date->video = video;
+    probe_rewrite_date->last_cr = TS_CLOCK_MAX;
+    probe_rewrite_date->timestamp_offset = 0;
+    probe_rewrite_date->timestamp_highest = TS_CLOCK_MAX;
     return probe;
 }
 
