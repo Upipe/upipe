@@ -47,6 +47,7 @@ static bool avcodec_only = false;
 static struct uprobe *logprobe = NULL;
 
 /** @internal @This replaces av_log_default_callback
+ *
  * @param avcl A pointer to an arbitrary struct of which the first field is a
  * pointer to an AVClass struct.
  * @param level The importance level of the message, lower values signifying
@@ -56,45 +57,21 @@ static struct uprobe *logprobe = NULL;
  * @param args optional arguments
  */
 UBASE_FMT_PRINTF(3, 0)
-static void upipe_av_vlog(void *avcl, int level,
-                          const char *fmt, va_list args)
+static void upipe_av_vlog(void *avcl, int level, const char *fmt, va_list args)
 {
-    enum uprobe_log_level loglevel = UPROBE_LOG_ERROR;
+    enum uprobe_log_level loglevel = UPROBE_LOG_VERBOSE;
 
-    switch(level) {
-        case AV_LOG_PANIC:
-        case AV_LOG_ERROR:
-            loglevel = UPROBE_LOG_ERROR;
-            break;
-        case AV_LOG_WARNING:
-            loglevel = UPROBE_LOG_WARNING;
-            break;
-        case AV_LOG_INFO:
-            loglevel = UPROBE_LOG_NOTICE;
-            break;
-        case AV_LOG_VERBOSE:
-            loglevel = UPROBE_LOG_DEBUG;
-            break;
-        case AV_LOG_DEBUG:
-        default:
-            loglevel = UPROBE_LOG_VERBOSE;
-            break;
-    }
+    if (level <= AV_LOG_ERROR)
+        loglevel = UPROBE_LOG_ERROR;
+    else if (level <= AV_LOG_WARNING)
+        loglevel = UPROBE_LOG_WARNING;
+    else if (level <= AV_LOG_INFO)
+        loglevel = UPROBE_LOG_INFO;
+    else if (level <= AV_LOG_VERBOSE)
+        loglevel = UPROBE_LOG_DEBUG;
 
     assert(logprobe);
-    va_list args_copy;
-    va_copy(args_copy, args);
-    size_t len = vsnprintf(NULL, 0, fmt, args_copy);
-    va_end(args_copy);
-    if (len > 0) {
-        char string[len + 1];
-        vsnprintf(string, len + 1, fmt, args);
-        char *end = string + len - 1;
-        if (isspace(*end)) {
-            *end = '\0';
-        }
-        uprobe_log(logprobe, NULL, loglevel, string);
-    }
+    uprobe_vlog(logprobe, NULL, loglevel, fmt, args);
 }
 
 /** @This initializes non-reentrant parts of avcodec and avformat. Call it

@@ -64,7 +64,7 @@
 #include <stdio.h>
 #include <unistd.h>
 
-#define UPROBE_LOG_LEVEL UPROBE_LOG_NOTICE
+#define UPROBE_LOG_LEVEL UPROBE_LOG_INFO
 #define QUEUE_LENGTH 50
 #define UDICT_POOL_DEPTH 10
 #define UREF_POOL_DEPTH 10

@@ -195,7 +195,7 @@ static inline int catch_src(struct uprobe *uprobe,
 int main(int argc, char *argv[])
 {
     unsigned int rt_priority = 0;
-    int log_level = UPROBE_LOG_NOTICE;
+    int log_level = UPROBE_LOG_INFO;
     bool decryption = false;
     bool udp = false;
     const char *key[2] = { NULL, NULL };

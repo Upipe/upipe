@@ -89,7 +89,7 @@
 #define UPUMP_POOL          5
 #define UPUMP_BLOCKER_POOL  5
 #define READ_SIZE           4096
-#define UPROBE_LOG_LEVEL UPROBE_LOG_NOTICE
+#define UPROBE_LOG_LEVEL    UPROBE_LOG_INFO
 
 struct es_conf {
     struct uchain uchain;

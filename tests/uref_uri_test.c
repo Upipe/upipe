@@ -25,8 +25,8 @@ static int catch(struct uprobe *uprobe,
         return uprobe_throw_next(uprobe, upipe, event, args);
 
     struct ulog *ulog = va_arg(args, struct ulog *);
-    if (!strncmp(ulog->msg, "dumping ", strlen("dumping ")) ||
-        !strncmp(ulog->msg, "end of attributes for udict ",
+    if (!strncmp(ulog->format, "dumping ", strlen("dumping ")) ||
+        !strncmp(ulog->format, "end of attributes for udict ",
                  strlen("end of attributes for udict ")))
         return UBASE_ERR_NONE;
 

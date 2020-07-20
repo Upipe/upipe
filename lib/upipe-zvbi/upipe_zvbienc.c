@@ -163,15 +163,19 @@ static int upipe_zvbienc_control(struct upipe *upipe, int command, va_list args)
 }
 
 static void upipe_zvbi_log(vbi_log_mask level, const char *context,
-        const char *message, void *user_data)
+                           const char *message, void *user_data)
 {
     struct upipe *upipe = user_data;
 
-    enum uprobe_log_level l = UPROBE_LOG_NOTICE;
+    enum uprobe_log_level l = UPROBE_LOG_INFO;
     if (level & VBI_LOG_ERROR)
         l = UPROBE_LOG_ERROR;
     else if (level & VBI_LOG_WARNING)
         l = UPROBE_LOG_WARNING;
+    else if (level & VBI_LOG_NOTICE)
+        l = UPROBE_LOG_NOTICE;
+    else if (level & VBI_LOG_INFO)
+        l = UPROBE_LOG_INFO;
     else if (level & VBI_LOG_DEBUG)
         l = UPROBE_LOG_DEBUG;
 

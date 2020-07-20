@@ -85,6 +85,13 @@ extern "C" {
         (type *)( (char *)_mptr - offsetof(type,member) );})
 #endif
 
+#define UBASE_PRAGMA(x) _Pragma(#x)
+#ifdef __clang__
+#define UBASE_PRAGMA_CLANG(x) UBASE_PRAGMA(clang x)
+#else
+#define UBASE_PRAGMA_CLANG(x)
+#endif
+
 /** @This is used to retrieve the number of items of an array. */
 #define UBASE_ARRAY_SIZE(a)        (sizeof (a) / sizeof ((a)[0]))
 

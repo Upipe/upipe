@@ -95,7 +95,7 @@
 #include <assert.h>
 #include <ctype.h>
 
-#define UPROBE_LOG_LEVEL                UPROBE_LOG_NOTICE
+#define UPROBE_LOG_LEVEL                UPROBE_LOG_INFO
 #define UPUMP_POOL                      5
 #define UPUMP_BLOCKER_POOL              5
 #define UDICT_POOL_DEPTH                500

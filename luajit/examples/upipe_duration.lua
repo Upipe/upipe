@@ -10,7 +10,7 @@ require "upipe-framers"
 
 ffi.cdef [[ FILE *stderr; ]]
 
-local UPROBE_LOG_LEVEL = UPROBE_LOG_NOTICE
+local UPROBE_LOG_LEVEL = UPROBE_LOG_INFO
 local UMEM_POOL = 512
 local UDICT_POOL_DEPTH = 500
 local UREF_POOL_DEPTH = 500

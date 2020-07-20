@@ -203,30 +203,16 @@ static const enum uprobe_log_level loglevel_map[] = {
 
 /** @internal @This sends x264 logs to uprobe_log
  * @param upipe description structure of the pipe
- * @param loglevel x264 loglevel
+ * @param level x264 log level
  * @param format string format
  * @param args arguments
  */
 UBASE_FMT_PRINTF(3, 0)
-static void upipe_x264_log(void *_upipe, int loglevel,
+static void upipe_x264_log(void *upipe, int level,
                            const char *format, va_list args)
 {
-    struct upipe *upipe = _upipe;
-    char *string = NULL, *end = NULL;
-    if (unlikely(loglevel < 0 || loglevel > X264_LOG_DEBUG)) {
-        return;
-    }
-
-    int ret = vasprintf(&string, format, args);
-    if (unlikely(ret < 0) || unlikely(!string)) {
-        return;
-    }
-    end = string + strlen(string) - 1;
-    if (isspace(*end)) {
-        *end = '\0';
-    }
-    upipe_log(upipe, loglevel_map[loglevel], string);
-    free(string);
+    level = ubase_clip(level, X264_LOG_ERROR, X264_LOG_DEBUG);
+    upipe_vlog(upipe, loglevel_map[level], format, args);
 }
 
 /** @internal @This checks whether mpeg2 encoding is enabled

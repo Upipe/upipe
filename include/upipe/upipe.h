@@ -598,8 +598,27 @@ static inline int upipe_throw(struct upipe *upipe, int event, ...)
  * @param level level of importance of the message
  * @param msg textual message
  */
-#define upipe_log(upipe, level, msg)                                        \
-    uprobe_log((upipe)->uprobe, upipe, level, msg)
+static inline void upipe_log(struct upipe *upipe,
+                             enum uprobe_log_level level,
+                             const char *msg)
+{
+    uprobe_log(upipe->uprobe, upipe, level, msg);
+}
+
+/** @internal @This throws a log event, with vprintf-style message generation.
+ *
+ * @param upipe description structure of the pipe
+ * @param level level of importance of the message
+ * @param format format of the textual message
+ * @param args arguments for the format string
+ */
+static inline void upipe_vlog(struct upipe *upipe,
+                             enum uprobe_log_level level,
+                             const char *format,
+                             va_list args)
+{
+    uprobe_vlog(upipe->uprobe, upipe, level, format, args);
+}
 
 /** @internal @This throws a log event, with printf-style message generation.
  *
@@ -612,105 +631,47 @@ static inline void upipe_log_va(struct upipe *upipe,
                                 enum uprobe_log_level level,
                                 const char *format, ...)
 {
-    UBASE_VARARG(upipe_log(upipe, level, string))
+    va_list ap;
+    va_start(ap, format);
+    upipe_vlog(upipe, level, format, ap);
+    va_end(ap);
 }
 
-/** @This throws an error event. This event is thrown whenever a pipe wants
- * to send a textual message.
- *
- * @param upipe description structure of the pipe
- * @param msg textual message
- */
-#define upipe_err(upipe, msg) upipe_log(upipe, UPROBE_LOG_ERROR, msg)
-
-/** @This throws an error event, with printf-style message generation.
- *
- * @param upipe description structure of the pipe
- * @param format format of the textual message, followed by optional arguments
- */
-UBASE_FMT_PRINTF(2, 3)
-static inline void upipe_err_va(struct upipe *upipe, const char *format, ...)
-{
-    UBASE_VARARG(upipe_err(upipe, string))
+#define UPIPE_DEFINE_LOG(Level, Name)                                       \
+/** @This throws a log event. This event is thrown whenever a pipe wants    \
+ * to send a textual message.                                               \
+ *                                                                          \
+ * @param upipe description structure of the pipe                           \
+ * @param msg textual message                                               \
+ */                                                                         \
+static inline void upipe_##Name(struct upipe *upipe, const char *msg)       \
+{                                                                           \
+    upipe_log(upipe, UPROBE_LOG_##Level, msg);                              \
+}                                                                           \
+/** @This throws a log event, with printf-style message generation.         \
+ *                                                                          \
+ * @param upipe description structure of the pipe                           \
+ * @param format format of the textual message, followed by optional        \
+ * arguments                                                                \
+ */                                                                         \
+UBASE_FMT_PRINTF(2, 3)                                                      \
+static inline void upipe_##Name##_va(struct upipe *upipe,                   \
+                                     const char *format, ...)               \
+{                                                                           \
+    va_list ap;                                                             \
+    va_start(ap, format);                                                   \
+    upipe_vlog(upipe, UPROBE_LOG_##Level, format, ap);                      \
+    va_end(ap);                                                             \
 }
 
-/** @This throws a warning event. This event is thrown whenever a pipe wants
- * to send a textual message.
- *
- * @param upipe description structure of the pipe
- * @param msg textual message
- */
-#define upipe_warn(upipe, msg) upipe_log(upipe, UPROBE_LOG_WARNING, msg)
+UPIPE_DEFINE_LOG(ERROR, err)
+UPIPE_DEFINE_LOG(WARNING, warn)
+UPIPE_DEFINE_LOG(NOTICE, notice)
+UPIPE_DEFINE_LOG(INFO, info)
+UPIPE_DEFINE_LOG(DEBUG, dbg)
+UPIPE_DEFINE_LOG(VERBOSE, verbose)
 
-/** @This throws a warning event, with printf-style message generation.
- *
- * @param upipe description structure of the pipe
- * @param format format of the textual message, followed by optional arguments
- */
-UBASE_FMT_PRINTF(2, 3)
-static inline void upipe_warn_va(struct upipe *upipe, const char *format, ...)
-{
-    UBASE_VARARG(upipe_warn(upipe, string))
-}
-
-/** @This throws a notice statement event. This event is thrown whenever a pipe
- * wants to send a textual message.
- *
- * @param upipe description structure of the pipe
- * @param msg textual message
- */
-#define upipe_notice(upipe, msg) upipe_log(upipe, UPROBE_LOG_NOTICE, msg)
-
-/** @This throws a notice statement event, with printf-style message generation.
- *
- * @param upipe description structure of the pipe
- * @param format format of the textual message, followed by optional arguments
- */
-UBASE_FMT_PRINTF(2, 3)
-static inline void upipe_notice_va(struct upipe *upipe, const char *format, ...)
-{
-    UBASE_VARARG(upipe_notice(upipe, string))
-}
-
-/** @This throws a debug statement event. This event is thrown whenever a pipe
- * wants to send a textual message.
- *
- * @param upipe description structure of the pipe
- * @param msg textual message
- */
-#define upipe_dbg(upipe, msg) upipe_log(upipe, UPROBE_LOG_DEBUG, msg)
-
-/** @This throws a debug statement event, with printf-style message generation.
- *
- * @param upipe description structure of the pipe
- * @param format format of the textual message, followed by optional arguments
- */
-UBASE_FMT_PRINTF(2, 3)
-static inline void upipe_dbg_va(struct upipe *upipe, const char *format, ...)
-{
-    UBASE_VARARG(upipe_dbg(upipe, string))
-}
-
-/** @This throws a verbose statement event. This event is thrown whenever a pipe
- * wants to send a textual message.
- *
- * @param upipe description structure of the pipe
- * @param msg textual message
- */
-#define upipe_verbose(upipe, msg) upipe_log(upipe, UPROBE_LOG_VERBOSE, msg)
-
-/** @This throws a verbose statement event, with printf-style message
- * generation.
- *
- * @param upipe description structure of the pipe
- * @param format format of the textual message, followed by optional arguments
- */
-UBASE_FMT_PRINTF(2, 3)
-static inline void upipe_verbose_va(struct upipe *upipe,
-                                    const char *format, ...)
-{
-    UBASE_VARARG(upipe_verbose(upipe, string))
-}
+#undef UPIPE_DEFINE_LOG
 
 /** @This throws a fatal error event. After this event, the behaviour
  * of a pipe is undefined, except for calls to @ref upipe_release.
