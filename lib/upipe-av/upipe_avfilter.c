@@ -169,8 +169,6 @@ struct upipe_avfilt_sub {
 static void upipe_avfilt_reset(struct upipe *upipe);
 /** @hidden */
 static inline void upipe_avfilt_sub_flush_cb(struct upump *upump);
-/** @hidden */
-static void upipe_avfilt_sub_pop(struct upipe *upipe);
 
 UPIPE_HELPER_UPIPE(upipe_avfilt_sub, upipe, UPIPE_AVFILT_SUB_SIGNATURE)
 UPIPE_HELPER_FLOW(upipe_avfilt_sub, NULL)
@@ -511,68 +509,19 @@ static void upipe_avfilt_sub_wait(struct upipe *upipe, uint64_t timeout)
         upipe_avfilt_sub_from_upipe(upipe);
     if (!upipe_avfilt_sub->upump_mgr)
         return;
+    if (upipe_avfilt_sub->upump)
+        return;
     return upipe_avfilt_sub_wait_upump(upipe, timeout, upipe_avfilt_sub_flush_cb);
-}
-
-/** @internal @This outputs the retained urefs.
- *
- * @param upipe description structure of the pipe
- */
-static void upipe_avfilt_sub_flush(struct upipe *upipe)
-{
-    struct upipe_avfilt_sub *upipe_avfilt_sub =
-        upipe_avfilt_sub_from_upipe(upipe);
-
-    uint64_t now = upipe_avfilt_sub_now(upipe);
-
-    struct uchain *uchain, *uchain_tmp;
-    ulist_delete_foreach(&upipe_avfilt_sub->urefs, uchain, uchain_tmp) {
-        struct uref *uref = uref_from_uchain(uchain);
-        uint64_t pts_sys = UINT64_MAX;
-        uref_clock_get_pts_sys(uref, &pts_sys);
-        if (now == UINT64_MAX || pts_sys == UINT64_MAX || pts_sys <= now) {
-            ulist_delete(uchain);
-            upipe_avfilt_sub_output(upipe, uref, &upipe_avfilt_sub->upump);
-        }
-        else {
-            upipe_avfilt_sub_wait(upipe, pts_sys - now);
-            return;
-        }
-    }
-
-    upipe_avfilt_sub_pop(upipe);
-}
-
-/** @internal @This pushes an uref to the output queue.
- *
- * @param upipe description structure of the pipe
- * @param uref uref to output
- */
-static void upipe_avfilt_sub_push(struct upipe *upipe, struct uref *uref)
-{
-    struct upipe_avfilt_sub *upipe_avfilt_sub =
-        upipe_avfilt_sub_from_upipe(upipe);
-    ulist_add(&upipe_avfilt_sub->urefs, uref_to_uchain(uref));
-    upipe_avfilt_sub_wait(upipe, 0);
-}
-
-/** @internal @This is the callback to output retained urefs.
- *
- * @param upump description structure of the pump
- */
-static void upipe_avfilt_sub_flush_cb(struct upump *upump)
-{
-    struct upipe *upipe = upump_get_opaque(upump, struct upipe *);
-    return upipe_avfilt_sub_flush(upipe);
 }
 
 /** @internal @This outputs a frame.
  *
  * @param upipe description structure of the pipe
  * @param frame AVFrame to output
- * @param return true if a packet was outputted
+ * @return an uref or NULL
  */
-static bool upipe_avfilt_sub_output_frame(struct upipe *upipe, AVFrame *frame)
+static struct uref *
+upipe_avfilt_sub_frame_to_uref(struct upipe *upipe, AVFrame *frame)
 {
     struct upipe_avfilt_sub *upipe_avfilt_sub =
         upipe_avfilt_sub_from_upipe(upipe);
@@ -584,14 +533,14 @@ static bool upipe_avfilt_sub_output_frame(struct upipe *upipe, AVFrame *frame)
         struct uref *flow_def_dup = uref_dup(upipe_avfilt_sub->flow_def_alloc);
         if (unlikely(!flow_def_dup)) {
             upipe_throw_error(upipe, UBASE_ERR_ALLOC);
-            return false;
+            return NULL;
         }
 
         int ret = upipe_avfilt_sub_build_flow_def(upipe, frame, flow_def_dup);
         if (unlikely(!ubase_check(ret))) {
             uref_free(flow_def_dup);
             upipe_throw_error(upipe, ret);
-            return false;
+            return NULL;
         }
         uref_sound_flow_set_rate(flow_def_dup, frame->sample_rate);
         upipe_avfilt_sub_store_flow_def(upipe, flow_def_dup);
@@ -599,7 +548,7 @@ static bool upipe_avfilt_sub_output_frame(struct upipe *upipe, AVFrame *frame)
 
     if (unlikely(!upipe_avfilt_sub->ubuf_mgr)) {
         upipe_warn(upipe, "no ubuf manager for now");
-        return false;
+        return NULL;
     }
 
     enum upipe_avfilt_sub_media_type type;
@@ -617,12 +566,12 @@ static bool upipe_avfilt_sub_output_frame(struct upipe *upipe, AVFrame *frame)
     }
     else {
         upipe_warn(upipe, "unsupported flow format");
-        return false;
+        return NULL;
     }
 
     if (unlikely(ubuf == NULL)) {
         upipe_throw_error(upipe, UBASE_ERR_ALLOC);
-        return false;
+        return NULL;
     }
 
     struct uref *uref = uref_sibling_alloc_control(
@@ -630,7 +579,7 @@ static bool upipe_avfilt_sub_output_frame(struct upipe *upipe, AVFrame *frame)
     if (unlikely(!uref)) {
         ubuf_free(ubuf);
         upipe_throw_error(upipe, UBASE_ERR_ALLOC);
-        return false;
+        return NULL;
     }
     uref_attach_ubuf(uref, ubuf);
 
@@ -638,10 +587,13 @@ static bool upipe_avfilt_sub_output_frame(struct upipe *upipe, AVFrame *frame)
     uint64_t now = upipe_avfilt_sub_now(upipe);
 
     /* set pts orig */
-    struct urational to = { .num = UCLOCK_FREQ, .den = 1 };
-    AVRational av_fps = av_buffersink_get_time_base(
+    AVRational av_time_base = av_buffersink_get_time_base(
         upipe_avfilt_sub->buffer_ctx);
-    struct urational from = { .num = av_fps.num, .den = av_fps.den };
+    struct urational to = { .num = UCLOCK_FREQ, .den = 1 };
+    struct urational from = {
+        .num = av_time_base.num,
+        .den = av_time_base.den
+    };
     struct urational mult = urational_multiply(&to, &from);
     uint64_t pts_orig = frame->pts * mult.num / mult.den;
     uint64_t pts_prog = pts_orig + upipe_avfilt_sub->pts_prog_offset;
@@ -707,31 +659,31 @@ static bool upipe_avfilt_sub_output_frame(struct upipe *upipe, AVFrame *frame)
                      (double) pts_sys / UCLOCK_FREQ,
                      (double) duration / UCLOCK_FREQ);
 
-    upipe_avfilt_sub_push(upipe, uref);
-    return ulist_empty(&upipe_avfilt_sub->urefs);
+    return uref;
 }
 
 /** @internal @This checks for frame to output.
  *
  * @param upipe description structure of the pipe
+ * @return an uref or NULL
  */
-static void upipe_avfilt_sub_pop(struct upipe *upipe)
+static struct uref *upipe_avfilt_sub_pop(struct upipe *upipe)
 {
     struct upipe_avfilt_sub *upipe_avfilt_sub =
         upipe_avfilt_sub_from_upipe(upipe);
     struct upipe_avfilt *upipe_avfilt = upipe_avfilt_from_sub_mgr(upipe->mgr);
 
     if (upipe_avfilt_sub->input)
-        return;
+        return NULL;
 
     if (unlikely(!upipe_avfilt->configured))
-        return;
+        return NULL;
 
     AVFrame *filt_frame = av_frame_alloc();
     if (unlikely(!filt_frame)) {
         upipe_err_va(upipe, "cannot allocate av frame");
         upipe_throw_error(upipe, UBASE_ERR_ALLOC);
-        return;
+        return NULL;
     }
 
     /* pull filtered frames from the filtergraph */
@@ -739,18 +691,71 @@ static void upipe_avfilt_sub_pop(struct upipe *upipe)
                                       filt_frame);
     if (err == AVERROR(EAGAIN) || err == AVERROR_EOF) {
         av_frame_free(&filt_frame);
-        return;
+        return NULL;
     }
     if (err < 0) {
         upipe_err_va(upipe, "cannot get frame from filter graph: %s",
                      av_err2str(err));
         upipe_throw_error(upipe, UBASE_ERR_EXTERNAL);
         av_frame_free(&filt_frame);
-        return;
+        return NULL;
     }
-    upipe_avfilt_sub_output_frame(upipe, filt_frame);
+    struct uref *uref = upipe_avfilt_sub_frame_to_uref(upipe, filt_frame);
     av_frame_unref(filt_frame);
     av_frame_free(&filt_frame);
+    return uref;
+}
+
+/** @internal @This outputs the retained urefs.
+ *
+ * @param upipe description structure of the pipe
+ */
+static void upipe_avfilt_sub_flush(struct upipe *upipe)
+{
+    struct upipe_avfilt_sub *upipe_avfilt_sub =
+        upipe_avfilt_sub_from_upipe(upipe);
+    struct uref *uref;
+
+    upipe_avfilt_sub_set_upump(upipe, NULL);
+
+    uint64_t now = upipe_avfilt_sub_now(upipe);
+    struct uchain *uchain, *uchain_tmp;
+    ulist_delete_foreach(&upipe_avfilt_sub->urefs, uchain, uchain_tmp) {
+        uref = uref_from_uchain(uchain);
+        uint64_t pts_sys = UINT64_MAX;
+        uref_clock_get_pts_sys(uref, &pts_sys);
+        if (now == UINT64_MAX || pts_sys == UINT64_MAX || pts_sys <= now) {
+            ulist_delete(uchain);
+            upipe_avfilt_sub_output(upipe, uref, &upipe_avfilt_sub->upump);
+        }
+        else {
+            upipe_avfilt_sub_wait(upipe, pts_sys - now);
+            return;
+        }
+    }
+
+    while ((uref = upipe_avfilt_sub_pop(upipe))) {
+        uint64_t pts_sys = UINT64_MAX;
+        uref_clock_get_pts_sys(uref, &pts_sys);
+        if (now == UINT64_MAX || pts_sys == UINT64_MAX || pts_sys <= now) {
+            upipe_avfilt_sub_output(upipe, uref, &upipe_avfilt_sub->upump);
+        }
+        else {
+            ulist_add(&upipe_avfilt_sub->urefs, uref_to_uchain(uref));
+            upipe_avfilt_sub_wait(upipe, pts_sys - now);
+            return;
+        }
+    }
+}
+
+/** @internal @This is the callback to output retained urefs.
+ *
+ * @param upump description structure of the pump
+ */
+static void upipe_avfilt_sub_flush_cb(struct upump *upump)
+{
+    struct upipe *upipe = upump_get_opaque(upump, struct upipe *);
+    return upipe_avfilt_sub_flush(upipe);
 }
 
 /** @internal @This catches the internal events of the avfilter sub pipes.
