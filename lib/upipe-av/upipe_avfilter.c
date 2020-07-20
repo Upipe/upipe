@@ -129,6 +129,8 @@ struct upipe_avfilt_sub {
     struct uchain urefs;
     /** warn once on unconfigured filter graph */
     bool warn_not_configured;
+    /** latency */
+    uint64_t latency;
 
     /** media type configured at allocation */
     enum upipe_avfilt_sub_media_type media_type;
@@ -618,6 +620,15 @@ upipe_avfilt_sub_frame_to_uref(struct upipe *upipe, AVFrame *frame)
             pts_prog - upipe_avfilt_sub->first_pts_prog;
     }
 
+    if (pts_sys < now && now - pts_sys > upipe_avfilt_sub->latency) {
+        upipe_avfilt_sub->latency = now - pts_sys;
+        uref_clock_set_latency(upipe_avfilt_sub->flow_def,
+                               upipe_avfilt_sub->latency);
+        struct uref *flow_def = upipe_avfilt_sub->flow_def;
+        upipe_avfilt_sub->flow_def = NULL;
+        upipe_avfilt_sub_store_flow_def(upipe, flow_def);
+    }
+
     uref_clock_set_pts_orig(uref, pts_orig);
     uref_clock_set_pts_prog(uref, pts_prog);
     if (pts_sys != UINT64_MAX)
@@ -916,6 +927,7 @@ static struct upipe *upipe_avfilt_sub_alloc(struct upipe_mgr *mgr,
     upipe_avfilt_sub->buffer_ctx = NULL;
     upipe_avfilt_sub->warn_not_configured = true;
     upipe_avfilt_sub->media_type = UPIPE_AVFILT_SUB_MEDIA_TYPE_UNKNOWN;
+    upipe_avfilt_sub->latency = 0;
     ulist_init(&upipe_avfilt_sub->urefs);
 
     upipe_throw_ready(upipe);
