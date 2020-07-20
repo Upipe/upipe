@@ -55,7 +55,7 @@
 #include <upipe-ts/upipe_ts_demux.h>
 #include <upipe-framers/upipe_auto_framer.h>
 
-#define UPROBE_LOG_LEVEL UPROBE_LOG_NOTICE
+#define UPROBE_LOG_LEVEL UPROBE_LOG_INFO
 #define UMEM_POOL 512
 #define UDICT_POOL_DEPTH 500
 #define UREF_POOL_DEPTH 500

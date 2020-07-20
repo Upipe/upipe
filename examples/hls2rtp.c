@@ -127,7 +127,7 @@ struct output {
 /** max resolution of PCR, PTS and DTS */
 #define TS_CLOCK_MAX (POW2_33 * UCLOCK_FREQ / 90000)
 
-static int log_level = UPROBE_LOG_NOTICE;
+static int log_level = UPROBE_LOG_INFO;
 static uint64_t variant_id = UINT64_MAX;
 static uint64_t bandwidth_max = UINT64_MAX;
 static const char *url = NULL;
@@ -1362,7 +1362,7 @@ int main(int argc, char **argv)
             case UPROBE_LOG_DEBUG:
                 log_level = UPROBE_LOG_VERBOSE;
                 break;
-            case UPROBE_LOG_NOTICE:
+            case UPROBE_LOG_INFO:
                 log_level = UPROBE_LOG_DEBUG;
                 break;
             }

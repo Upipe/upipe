@@ -128,7 +128,7 @@ graph {flow: east}
 #include <pthread.h>
 
 #define ALIVE() { printf("ALIVE %s %d\n", __func__, __LINE__); fflush(stdout);}
-#define UPROBE_LOG_LEVEL UPROBE_LOG_NOTICE
+#define UPROBE_LOG_LEVEL UPROBE_LOG_INFO
 #define GLX_QUEUE_LENGTH 2
 #define DEC_QUEUE_LENGTH 50
 #define UMEM_POOL 512

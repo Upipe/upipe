@@ -102,6 +102,11 @@ static const struct level levels[] = {
         .color = ANSI_FG_GREEN,
     },
     {
+        .log_level = UPROBE_LOG_INFO,
+        .name = "info",
+        .color = ANSI_FG_BLUE,
+    },
+    {
         .log_level = UPROBE_LOG_NOTICE,
         .name = "notice",
         .color = ANSI_FG_BLUE,
@@ -156,37 +161,36 @@ static int uprobe_stdio_throw(struct uprobe *uprobe, struct upipe *upipe,
     if (uprobe_stdio->min_level > ulog->level)
         return UBASE_ERR_NONE;
 
+    char buffer[ulog_msg_len(ulog) + 1];
+    ulog_msg_print(ulog, buffer, sizeof (buffer));
+
+    char *msg = buffer;
+    FILE *s = uprobe_stdio->stream;
     bool colored = uprobe_stdio->colored;
-    size_t len = 0;
-    struct uchain *uchain;
-    ulist_foreach_reverse(&ulog->prefixes, uchain) {
-        struct ulog_pfx *ulog_pfx = ulog_pfx_from_uchain(uchain);
-
-        len += colored ? strlen(TAG_COLOR() " ") : strlen(TAG_NOCOLOR() " ");
-        len += strlen(ulog_pfx->tag);
-    }
-
-    char buffer[len + 1];
-    buffer[0] = '\0';
-    char *tmp = buffer;
-    ulist_foreach_reverse(&ulog->prefixes, uchain) {
-        struct ulog_pfx *ulog_pfx = ulog_pfx_from_uchain(uchain);
-        if (colored)
-            tmp += sprintf(tmp, TAG_COLOR("%s") " ", ulog_pfx->tag);
-        else
-            tmp += sprintf(tmp, TAG_NOCOLOR("%s") " ", ulog_pfx->tag);
-    }
-
     const struct level *level = uprobe_stdio_get_level(ulog);
 
-    if (colored)
-        fprintf(uprobe_stdio->stream,
-                LEVEL_COLOR("%s", "%*s") ": %s%s\n",
-                level->color, LEVEL_NAME_LEN, level->name, buffer, ulog->msg);
-    else
-        fprintf(uprobe_stdio->stream,
-                LEVEL_NOCOLOR("%s") ": %s%s\n",
-                level->name, buffer, ulog->msg);
+    flockfile(s);
+    while (msg != NULL && *msg != '\0') {
+        if (colored)
+            fprintf(s, LEVEL_COLOR("%s", "%*s") ": ",
+                    level->color, LEVEL_NAME_LEN, level->name);
+        else
+            fprintf(s, LEVEL_NOCOLOR("%s") ": ", level->name);
+
+        struct uchain *uchain;
+        ulist_foreach_reverse(&ulog->prefixes, uchain) {
+            struct ulog_pfx *ulog_pfx = ulog_pfx_from_uchain(uchain);
+            fprintf(s, colored ? TAG_COLOR("%s") " " : TAG_NOCOLOR("%s") " ",
+                    ulog_pfx->tag);
+        }
+
+        char *p = strchr(msg, '\n');
+        if (p != NULL)
+            *p++ = '\0';
+        fprintf(s, "%s\n", msg);
+        msg = p;
+    }
+    funlockfile(s);
 
     return UBASE_ERR_NONE;
 }

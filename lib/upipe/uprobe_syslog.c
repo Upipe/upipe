@@ -63,6 +63,7 @@ static int uprobe_syslog_throw(struct uprobe *uprobe, struct upipe *upipe,
     switch (ulog->level) {
         case UPROBE_LOG_VERBOSE: priority = LOG_DEBUG; break;
         case UPROBE_LOG_DEBUG: priority = LOG_DEBUG; break;
+        case UPROBE_LOG_INFO: priority = LOG_INFO; break;
         case UPROBE_LOG_NOTICE: priority = LOG_NOTICE; break;
         case UPROBE_LOG_WARNING: priority = LOG_WARNING; break;
         case UPROBE_LOG_ERROR: priority = LOG_ERR; break;
@@ -83,7 +84,7 @@ static int uprobe_syslog_throw(struct uprobe *uprobe, struct upipe *upipe,
     }
 
     char buffer[len + 1];
-    memset(buffer, 0, sizeof (buffer));
+    buffer[0] = '\0';
     char *tmp = buffer;
     if (!uprobe_syslog->inited && uprobe_syslog->ident != NULL)
         tmp += sprintf(tmp, "%s: ", uprobe_syslog->ident);
@@ -93,7 +94,18 @@ static int uprobe_syslog_throw(struct uprobe *uprobe, struct upipe *upipe,
         tmp += sprintf(tmp, "[%s] ", ulog_pfx->tag);
     }
 
-    syslog(priority, "%s%s", buffer, ulog->msg);
+    char buffer_msg[ulog_msg_len(ulog) + 1];
+    ulog_msg_print(ulog, buffer_msg, sizeof (buffer_msg));
+
+    char *msg = buffer_msg;
+    while (msg != NULL && *msg != '\0') {
+        char *p = strchr(msg, '\n');
+        if (p != NULL)
+            *p++ = '\0';
+        syslog(priority, "%s%s", buffer, msg);
+        msg = p;
+    }
+
     return UBASE_ERR_NONE;
 }
 

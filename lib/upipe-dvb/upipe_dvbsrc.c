@@ -133,39 +133,20 @@ static void upipe_dvbsrc_log(void *priv, int level, const char *fmt, ...)
 {
     int loglevel;
     switch (level) {
-    case LOG_WARNING:
-    case LOG_ERR:
-    default:
-        loglevel = UPROBE_LOG_WARNING;
-        break;
-    case LOG_NOTICE:
-        loglevel = UPROBE_LOG_NOTICE;
-        break;
-    case LOG_DEBUG:
-    case LOG_INFO:
-        loglevel = UPROBE_LOG_DEBUG;
-        break;
-        break;
+        case LOG_ERR: loglevel = UPROBE_LOG_ERROR; break;
+        case LOG_WARNING: loglevel = UPROBE_LOG_WARNING; break;
+        case LOG_NOTICE: loglevel = UPROBE_LOG_NOTICE; break;
+        case LOG_INFO: loglevel = UPROBE_LOG_INFO; break;
+        case LOG_DEBUG: loglevel = UPROBE_LOG_DEBUG; break;
+        default: loglevel = UPROBE_LOG_WARNING; break;
     }
 
-    struct uprobe *uprobe = priv;
+    struct upipe *upipe = priv;
 
-    va_list args;
-    va_start(args, fmt);
-
-    size_t len = vsnprintf(NULL, 0, fmt, args);
-    va_end(args);
-    if (len > 0) {
-        char str[len + 1];
-        va_start(args, fmt);
-        vsnprintf(str, len + 1, fmt, args);
-        va_end(args);
-        char *end = str + len - 1;
-        if (isspace(*end)) {
-            *end = '\0';
-        }
-        uprobe_log(uprobe, NULL, loglevel, str);
-    }
+    va_list ap;
+    va_start(ap, fmt);
+    upipe_vlog(upipe, loglevel, fmt, ap);
+    va_end(ap);
 }
 
 /** @internal @This allocates a DVB receiver source pipe.
@@ -211,7 +192,7 @@ static struct upipe *upipe_dvbsrc_alloc(struct upipe_mgr *mgr,
     upipe_dvbsrc->demux = NULL;
     upipe_dvbsrc->frontend = NULL;
 
-    dvb_dev_set_logpriv(upipe_dvbsrc->dvb, 2, upipe_dvbsrc_log, uprobe);
+    dvb_dev_set_logpriv(upipe_dvbsrc->dvb, 2, upipe_dvbsrc_log, upipe);
 
     upipe_throw_ready(upipe);
     return upipe;

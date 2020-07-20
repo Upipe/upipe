@@ -87,7 +87,7 @@
 #define INPUT_QUEUE_LENGTH  255
 #define INPUT_BUFFERING     20480
 
-#define UPROBE_LOG_LEVEL UPROBE_LOG_NOTICE
+#define UPROBE_LOG_LEVEL UPROBE_LOG_INFO
 
 static enum uprobe_log_level loglevel = UPROBE_LOG_LEVEL;
 

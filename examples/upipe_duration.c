@@ -59,7 +59,7 @@
 #include <upipe-ts/upipe_ts_demux.h>
 #include <upipe-framers/upipe_auto_framer.h>
 
-#define UPROBE_LOG_LEVEL UPROBE_LOG_NOTICE
+#define UPROBE_LOG_LEVEL UPROBE_LOG_INFO
 #define UMEM_POOL 512
 #define UDICT_POOL_DEPTH 500
 #define UREF_POOL_DEPTH 500
@@ -159,7 +159,7 @@ int main(int argc, char **argv)
 
     /* probes */
     struct uprobe *uprobe;
-    uprobe = uprobe_stdio_alloc(NULL, stderr, UPROBE_LOG_DEBUG);
+    uprobe = uprobe_stdio_alloc(NULL, stderr, UPROBE_LOG_LEVEL);
     assert(uprobe != NULL);
     uprobe = uprobe_uref_mgr_alloc(uprobe, uref_mgr);
     assert(uprobe != NULL);

@@ -53,7 +53,7 @@ struct upipe;
 /** common types of events */
 enum uprobe_event {
     /** something occurred, and the pipe send a textual message
-     * (enum uprobe_log_level, const char *) */
+     * (struct ulog *) */
     UPROBE_LOG,
     /** a fatal error occurred, data may be lost (int);
      * from now on the behaviour of the pipe is undefined, except
@@ -300,20 +300,26 @@ static inline int uprobe_throw_next(struct uprobe *uprobe, struct upipe *upipe,
     return uprobe_throw_va(uprobe->next, upipe, event, args);
 }
 
-/** @internal @This throws a log event. This event is thrown whenever a pipe
- * wants to send a textual message.
+/** @internal @This throws a log event, with vprintf-style message generation.
  *
  * @param uprobe pointer to probe hierarchy
  * @param upipe description structure of the pipe
  * @param level level of importance of the message
- * @param msg textual message
+ * @param format format string of the textual message
+ * @param args arguments for the format string
  */
-static inline void uprobe_log(struct uprobe *uprobe, struct upipe *upipe,
-                              enum uprobe_log_level level, const char *msg)
+static inline void uprobe_vlog(struct uprobe *uprobe, struct upipe *upipe,
+                               enum uprobe_log_level level,
+                               const char *format,
+                               va_list args)
 {
     struct ulog ulog;
-    ulog_init(&ulog, level, msg);
+    va_list ap;
+
+    va_copy(ap, args);
+    ulog_init(&ulog, level, format, &ap);
     uprobe_throw(uprobe, upipe, UPROBE_LOG, &ulog);
+    va_end(ap);
 }
 
 /** @internal @This throws a log event, with printf-style message generation.
@@ -325,127 +331,69 @@ static inline void uprobe_log(struct uprobe *uprobe, struct upipe *upipe,
  */
 UBASE_FMT_PRINTF(4, 5)
 static inline void uprobe_log_va(struct uprobe *uprobe, struct upipe *upipe,
-                                enum uprobe_log_level level,
-                                const char *format, ...)
-{
-    UBASE_VARARG(uprobe_log(uprobe, upipe, level, string))
-}
-
-/** @This throws an error event. This event is thrown whenever a pipe wants
- * to send a textual message.
- *
- * @param uprobe pointer to probe hierarchy
- * @param upipe description structure of the pipe
- * @param msg textual message
- */
-#define uprobe_err(uprobe, upipe, msg)                                      \
-    uprobe_log(uprobe, upipe, UPROBE_LOG_ERROR, msg)
-
-/** @This throws an error event, with printf-style message generation.
- *
- * @param uprobe pointer to probe hierarchy
- * @param upipe description structure of the pipe
- * @param format format of the textual message, followed by optional arguments
- */
-UBASE_FMT_PRINTF(3, 4)
-static inline void uprobe_err_va(struct uprobe *uprobe, struct upipe *upipe,
+                                 enum uprobe_log_level level,
                                  const char *format, ...)
 {
-    UBASE_VARARG(uprobe_err(uprobe, upipe, string))
+    va_list ap;
+    va_start(ap, format);
+    uprobe_vlog(uprobe, upipe, level, format, ap);
+    va_end(ap);
 }
 
-/** @This throws a warning event. This event is thrown whenever a pipe wants
- * to send a textual message.
- *
- * @param uprobe description structure of the pipe
- * @param upipe description structure of the pipe
- * @param msg textual message
- */
-#define uprobe_warn(uprobe, upipe, msg)                                     \
-    uprobe_log(uprobe, upipe, UPROBE_LOG_WARNING, msg)
-
-/** @This throws a warning event, with printf-style message generation.
- *
- * @param uprobe pointer to probe hierarchy
- * @param upipe description structure of the pipe
- * @param format format of the textual message, followed by optional arguments
- */
-UBASE_FMT_PRINTF(3, 4)
-static inline void uprobe_warn_va(struct uprobe *uprobe, struct upipe *upipe,
-                                  const char *format, ...)
-{
-    UBASE_VARARG(uprobe_warn(uprobe, upipe, string))
-}
-
-/** @This throws a notice statement event. This event is thrown whenever a pipe
+/** @internal @This throws a log event. This event is thrown whenever a pipe
  * wants to send a textual message.
  *
  * @param uprobe pointer to probe hierarchy
  * @param upipe description structure of the pipe
+ * @param level level of importance of the message
  * @param msg textual message
  */
-#define uprobe_notice(uprobe, upipe, msg)                                   \
-    uprobe_log(uprobe, upipe, UPROBE_LOG_NOTICE, msg)
-
-/** @This throws a notice statement event, with printf-style message generation.
- *
- * @param uprobe pointer to probe hierarchy
- * @param upipe description structure of the pipe
- * @param format format of the textual message, followed by optional arguments
- */
-UBASE_FMT_PRINTF(3, 4)
-static inline void uprobe_notice_va(struct uprobe *uprobe, struct upipe *upipe,
-                                    const char *format, ...)
+static inline void uprobe_log(struct uprobe *uprobe, struct upipe *upipe,
+                              enum uprobe_log_level level, const char *msg)
 {
-    UBASE_VARARG(uprobe_notice(uprobe, upipe, string))
+    uprobe_log_va(uprobe, upipe, level, "%s", msg);
 }
 
-/** @This throws a debug statement event. This event is thrown whenever a pipe
- * wants to send a textual message.
- *
- * @param uprobe pointer to probe hierarchy
- * @param upipe description structure of the pipe
- * @param msg textual message
- */
-#define uprobe_dbg(uprobe, upipe, msg)                                      \
-    uprobe_log(uprobe, upipe, UPROBE_LOG_DEBUG, msg)
-
-/** @This throws a debug statement event, with printf-style message generation.
- *
- * @param uprobe pointer to probe hierarchy
- * @param upipe description structure of the pipe
- * @param format format of the textual message, followed by optional arguments
- */
-UBASE_FMT_PRINTF(3, 4)
-static inline void uprobe_dbg_va(struct uprobe *uprobe, struct upipe *upipe,
-                                 const char *format, ...)
-{
-    UBASE_VARARG(uprobe_dbg(uprobe, upipe, string))
+#define UPIPE_UPROBE_DEFINE_LOG(Level, Name)                                \
+/** @This throws a log event. This event is thrown whenever a pipe wants    \
+ * to send a textual message.                                               \
+ *                                                                          \
+ * @param uprobe pointer to probe hierarchy                                 \
+ * @param upipe description structure of the pipe                           \
+ * @param msg textual message                                               \
+ */                                                                         \
+static inline void uprobe_##Name(struct uprobe *uprobe,                     \
+                                 struct upipe *upipe,                       \
+                                 const char *msg)                           \
+{                                                                           \
+    uprobe_log(uprobe, upipe, UPROBE_LOG_##Level, msg);                     \
+}                                                                           \
+/** @This throws a log event, with printf-style message generation.         \
+ *                                                                          \
+ * @param uprobe pointer to probe hierarchy                                 \
+ * @param upipe description structure of the pipe                           \
+ * @param format format of the textual message, followed by optional        \
+ * arguments                                                                \
+ */                                                                         \
+UBASE_FMT_PRINTF(3, 4)                                                      \
+static inline void uprobe_##Name##_va(struct uprobe *uprobe,                \
+                                      struct upipe *upipe,                  \
+                                      const char *format, ...)              \
+{                                                                           \
+    va_list ap;                                                             \
+    va_start(ap, format);                                                   \
+    uprobe_vlog(uprobe, upipe, UPROBE_LOG_##Level, format, ap);             \
+    va_end(ap);                                                             \
 }
 
-/** @This throws a verbose statement event. This event is thrown whenever a
- * pipe wants to send a textual message.
- *
- * @param uprobe pointer to probe hierarchy
- * @param upipe description structure of the pipe
- * @param msg textual message
- */
-#define uprobe_verbose(uprobe, upipe, msg)                                  \
-    uprobe_log(uprobe, upipe, UPROBE_LOG_VERBOSE, msg)
+UPIPE_UPROBE_DEFINE_LOG(ERROR, err)
+UPIPE_UPROBE_DEFINE_LOG(WARNING, warn)
+UPIPE_UPROBE_DEFINE_LOG(NOTICE, notice)
+UPIPE_UPROBE_DEFINE_LOG(INFO, info)
+UPIPE_UPROBE_DEFINE_LOG(DEBUG, dbg)
+UPIPE_UPROBE_DEFINE_LOG(VERBOSE, verbose)
 
-/** @This throws a verbose statement event, with printf-style message
- * generation.
- *
- * @param uprobe pointer to probe hierarchy
- * @param upipe description structure of the pipe
- * @param format format of the textual message, followed by optional arguments
- */
-UBASE_FMT_PRINTF(3, 4)
-static inline void uprobe_verbose_va(struct uprobe *uprobe, struct upipe *upipe,
-                                 const char *format, ...)
-{
-    UBASE_VARARG(uprobe_verbose(uprobe, upipe, string))
-}
+#undef UPIPE_UPROBE_DEFINE_LOG
 
 /** @This throws a fatal error event. After this event, the behaviour
  * of a pipe is undefined, except for calls to @ref upipe_release.
