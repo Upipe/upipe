@@ -991,26 +991,6 @@ static bool upipe_sdi_dec_handle(struct upipe *upipe, struct uref *uref,
 
     bool sdi3g_levelb = ubase_check(uref_block_get_sdi3g_levelb(uref));
 
-    int active_lines = 0;
-    /* TODO: Can this be optimised to have no loop and just arithmetic? */
-    for (int i = first_line; i < last_line; i++) {
-        int line_num = i + 1;
-        if (sdi3g_levelb && upipe_sdi_dec->sdi3g_levelb_second_frame)
-            line_num += f->height;
-        if (line_num >= p->active_f1.start && line_num <= p->active_f1.end)
-            active_lines += 1;
-        if (line_num >= p->active_f2.start && line_num <= p->active_f2.end)
-            active_lines += 1;
-    }
-#if 0
-    upipe_dbg_va(upipe, "chunk_line_offset: %d, lines: %d, active_line_offset: %d, active_lines: %d",
-            upipe_sdi_dec->chunk_line_offset, input_lines,
-            upipe_sdi_dec->active_line_offset, active_lines);
-#endif
-
-    /* TODO: How to handle the case of 0 active lines? */
-    //const size_t output_hsize = p->active_width, output_vsize = active_lines;
-
     /* allocate dest ubuf */
     size_t aligned_output_hsize = ((output_hsize + 5) / 6) * 6;
     struct ubuf *ubuf = upipe_sdi_dec->ubuf;
@@ -1202,6 +1182,7 @@ static bool upipe_sdi_dec_handle(struct upipe *upipe, struct uref *uref,
     int segment_offset = 0;
     int input_offset, input_size;
 
+    int active_lines = 0;
     int error_count_eav = 0, error_count_sav = 0, error_count_line = 0, error_count_crc = 0;
     /* Parse the whole frame */
     for (int h = first_line; h < last_line; h++) {
@@ -1426,6 +1407,7 @@ static bool upipe_sdi_dec_handle(struct upipe *upipe, struct uref *uref,
             fields[f2][0] += output_stride[0];
             fields[f2][1] += output_stride[1];
             fields[f2][2] += output_stride[2];
+            active_lines += 1;
         }
         upipe_sdi_dec->eav_clock += f->width;
 
