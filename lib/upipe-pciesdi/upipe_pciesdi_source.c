@@ -378,7 +378,12 @@ static void upipe_pciesdi_src_worker(struct upump *upump)
             if (!ubase_check(ubuf_mgr_check(upipe_pciesdi_src->ubuf_mgr, flow_def)))
                 upipe_pciesdi_src_require_ubuf_mgr(upipe, flow_def);
         } else {
-            /* TODO: What errors do we need to handle here, and how? */
+            /* If there was an error getting the new flow_def then the main pump
+             * calling upipe_pciesdi_src_worker() should be stopped so that it
+             * isn't called again with possibly invalid state. */
+            upump_stop(upipe_pciesdi_src->upump);
+            /* Return without starting the DMA. */
+            return;
         }
 
         /* Start DMA and reset state. */
