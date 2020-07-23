@@ -704,6 +704,7 @@ static int get_flow_def(struct upipe *upipe, struct uref **flow_format)
     if (!upipe_pciesdi_src->sdi_format) {
         upipe_err(upipe, "unable to get SDI offsets/picture format");
         uref_dump(flow_def, upipe->uprobe);
+        uref_free(flow_def);
         return UBASE_ERR_INVALID;
     }
 
@@ -713,6 +714,7 @@ static int get_flow_def(struct upipe *upipe, struct uref **flow_format)
         sdi_line_width *= 2;
     if (sdi_line_width > sizeof(upipe_pciesdi_src->scratch_buffer)) {
         upipe_err(upipe, "SDI line too large for scratch buffer");
+        uref_free(flow_def);
         return UBASE_ERR_INVALID;
     }
 
