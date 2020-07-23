@@ -787,7 +787,7 @@ static void get_flow_def_on_signal_lock(struct upump *upump)
     /* Start DMA and reset state. */
     sdi_dma_writer(upipe_pciesdi_src->fd, 1, &hw, &sw);
     upipe_pciesdi_src->scratch_buffer_count = 0;
-    //upipe_pciesdi_src->discontinuity = true;
+    upipe_pciesdi_src->discontinuity = true;
 
     /* Start main pump. */
     upump_start(upipe_pciesdi_src->upump);
