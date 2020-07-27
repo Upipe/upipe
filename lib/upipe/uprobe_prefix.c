@@ -11,7 +11,6 @@
  */
 
 #include "upipe/ubase.h"
-#include "upipe/ulist.h"
 #include "upipe/uprobe.h"
 #include "upipe/uprobe_prefix.h"
 #include "upipe/uprobe_helper_alloc.h"
@@ -43,7 +42,7 @@ static int uprobe_pfx_throw(struct uprobe *uprobe, struct upipe *upipe,
     struct ulog_pfx ulog_pfx;
     ulog_pfx.tag = likely(uprobe_pfx->name != NULL) ?
         uprobe_pfx->name : "unknown";
-    ulist_add(&ulog->prefixes, ulog_pfx_to_uchain(&ulog_pfx));
+    ulog_add_prefix(ulog, &ulog_pfx);
 
     return uprobe_throw(uprobe->next, upipe, event, ulog);
 }

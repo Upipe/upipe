@@ -21,6 +21,7 @@ extern "C" {
 #include "upipe/ulist.h"
 #include "upipe/uref_flow.h"
 #include "upipe/ulog.h"
+#include "upipe/utrace.h"
 
 #include <stdbool.h>
 #include <stdarg.h>
@@ -212,6 +213,7 @@ static inline void uprobe_init(struct uprobe *uprobe,
     uprobe->refcount = NULL;
     uprobe->uprobe_throw = uprobe_throw;
     uprobe->next = next;
+    utrace_uprobe_init(uprobe);
 }
 
 /** @This cleans up a uprobe structure. It is typically called by the
@@ -225,6 +227,7 @@ static inline void uprobe_init(struct uprobe *uprobe,
 static inline void uprobe_clean(struct uprobe *uprobe)
 {
     assert(uprobe != NULL);
+    utrace_uprobe_clean(uprobe);
     uprobe_release(uprobe->next);
 }
 
@@ -249,7 +252,10 @@ static inline int uprobe_throw_va(struct uprobe *uprobe, struct upipe *upipe,
 {
     if (unlikely(uprobe == NULL))
         return UBASE_ERR_UNHANDLED;
-    return uprobe->uprobe_throw(uprobe, upipe, event, args);
+    utrace_uprobe_throw_enter(uprobe, upipe, event, args);
+    int err = uprobe->uprobe_throw(uprobe, upipe, event, args);
+    utrace_uprobe_throw_leave(err);
+    return err;
 }
 
 /** @internal @This throws generic events with optional arguments.

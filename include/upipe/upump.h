@@ -20,6 +20,7 @@ extern "C" {
 #include "upipe/ubase.h"
 #include "upipe/urefcount.h"
 #include "upipe/ulist.h"
+#include "upipe/utrace.h"
 
 #include <stdint.h>
 #include <stdbool.h>
@@ -162,15 +163,18 @@ static inline struct upump *upump_alloc(struct upump_mgr *mgr,
     struct upump *upump;
     va_list args;
     va_start(args, event);
+    utrace_upump_alloc_enter(mgr, event, args);
     upump = mgr->upump_alloc(mgr, event, args);
     va_end(args);
     if (unlikely(upump == NULL))
-        return NULL;
+        goto out;
 
     uchain_init(&upump->uchain);
     upump->cb = cb;
     upump->opaque = opaque;
     upump->refcount = refcount;
+out:
+    utrace_upump_alloc_leave(upump);
     return upump;
 }
 
@@ -279,11 +283,17 @@ static inline struct upump *upump_alloc_signal(struct upump_mgr *mgr,
 static inline int upump_control_va(struct upump *upump,
                                    int command, va_list args)
 {
-    assert(upump != NULL);
-    if (upump->mgr->upump_control == NULL)
-        return UBASE_ERR_UNHANDLED;
+    int err = UBASE_ERR_UNHANDLED;
 
-    return upump->mgr->upump_control(upump, command, args);
+    assert(upump != NULL);
+    utrace_upump_control_enter(upump, command, args);
+    if (likely(upump->mgr->upump_control != NULL)) {
+        utrace_va_copy(args);
+        err = upump->mgr->upump_control(upump, command, args);
+        utrace_va_end(args);
+    }
+    utrace_upump_control_leave(err, command, args);
+    return err;
 }
 
 /** @internal @This sends a control command to the pump. Note that all control
