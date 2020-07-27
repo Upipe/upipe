@@ -1022,7 +1022,7 @@ static int worker_hbrmt(struct upipe_netmap_sink *upipe_netmap_sink, uint8_t **d
         dst[i] += rtp_hbrmt_header_size;
 
         /* use previous scratch buffer */
-        if (packed_bytes) {
+        if (likely(packed_bytes)) {
             memcpy(dst[i], upipe_netmap_sink->packed_pixels, packed_bytes);
             dst[i] += packed_bytes;
         }
@@ -1035,7 +1035,7 @@ static int worker_hbrmt(struct upipe_netmap_sink *upipe_netmap_sink, uint8_t **d
     upipe_netmap_sink->seqnum++;
 
     /* convert pixels */
-    if (copy)
+    if (likely(copy))
         upipe_netmap_sink->pack2(dst[0], dst[1], src, pixels);
     else if (dst[idx])
         upipe_netmap_sink->pack(dst[idx], src, pixels);
@@ -1046,7 +1046,7 @@ static int worker_hbrmt(struct upipe_netmap_sink *upipe_netmap_sink, uint8_t **d
     /* overlap */
     int pkt_rem = bytes - (payload_len - packed_bytes);
     assert(pkt_rem <= sizeof(upipe_netmap_sink->packed_pixels));
-    if (pkt_rem > 0) {
+    if (likely(pkt_rem > 0)) {
         if (dst[idx])
             memcpy(upipe_netmap_sink->packed_pixels, dst[idx] + bytes - pkt_rem, pkt_rem);
         if (copy)
@@ -1057,7 +1057,7 @@ static int worker_hbrmt(struct upipe_netmap_sink *upipe_netmap_sink, uint8_t **d
     upipe_netmap_sink->packed_bytes = pkt_rem;
 
     /* padding */
-    if (payload_len != HBRMT_DATA_SIZE) {
+    if (unlikely(payload_len != HBRMT_DATA_SIZE)) {
         if (dst[idx])
             memset(dst[idx] + payload_len, 0, HBRMT_DATA_SIZE - payload_len);
         if (copy)
