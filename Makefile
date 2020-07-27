@@ -126,6 +126,10 @@ _inst-targets := $(_bin-targets) $(_lib-targets) $(_data-targets) $(_dist-target
 _bin-targets  += $(_noinst-targets) $(_test-targets)
 _targets      := $(_inst-targets) $(_noinst-targets) $(_test-targets)
 
+ifdef build-hook
+  $(call build-hook,$(_targets))
+endif
+
 builddir = $(patsubst %/,%,$(dir $(_target)))
 name ?= $(firstword $(_targets))
 version ?= 1.0

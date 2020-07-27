@@ -20,6 +20,7 @@ extern "C" {
 #include "upipe/ubase.h"
 #include "upipe/ulist.h"
 #include "upipe/uref.h"
+#include "upipe/utrace.h"
 
 #include <stdbool.h>
 #include <stdarg.h>
@@ -114,6 +115,7 @@ static inline void urequest_init(struct urequest *urequest, int type,
     urequest->uref = uref;
     urequest->urequest_provide = urequest_provide;
     urequest->urequest_free = urequest_free;
+    utrace_urequest_init(urequest);
 }
 
 /** @This initializes a urequest structure asking for a uref manager.
@@ -202,6 +204,7 @@ static inline void urequest_clean(struct urequest *urequest)
 {
     assert(urequest != NULL);
     assert(!urequest->registered);
+    utrace_urequest_clean(urequest);
     uref_free(urequest->uref);
 }
 
@@ -213,6 +216,7 @@ static inline void urequest_clean(struct urequest *urequest)
 static inline void urequest_free(struct urequest *urequest)
 {
     assert(urequest != NULL);
+    utrace_urequest_free(urequest);
     if (urequest->urequest_free != NULL)
         urequest->urequest_free(urequest);
 }
@@ -245,7 +249,10 @@ static inline void urequest_set_opaque(struct urequest *urequest, void *opaque)
 static inline int urequest_provide_va(struct urequest *urequest, va_list args)
 {
     assert(urequest != NULL);
-    return urequest->urequest_provide(urequest, args);
+    utrace_urequest_provide_enter(urequest, args);
+    int err = urequest->urequest_provide(urequest, args);
+    utrace_urequest_provide_leave(err);
+    return err;
 }
 
 /** @internal @This provides a urequest with optional arguments. All arguments

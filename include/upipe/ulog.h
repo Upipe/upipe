@@ -17,6 +17,7 @@ extern "C" {
 
 #include "upipe/ubase.h"
 #include "upipe/ulist.h"
+#include "upipe/utrace.h"
 
 /** @This defines the levels of log messages. */
 enum uprobe_log_level {
@@ -73,6 +74,18 @@ static inline void ulog_init(struct ulog *ulog,
     ulog->format = format;
     ulog->args = args;
     ulist_init(&ulog->prefixes);
+    utrace_ulog_init(ulog);
+}
+
+/** @This adds a prefix tag to an ulog structure.
+ *
+ * @param ulog pointer to the ulog structure
+ * @param prefix prefix structure to add
+ */
+static inline void ulog_add_prefix(struct ulog *ulog, struct ulog_pfx *prefix)
+{
+    ulist_add(&ulog->prefixes, ulog_pfx_to_uchain(prefix));
+    utrace_ulog_add_prefix(ulog, prefix);
 }
 
 /* ignore clang format-nonliteral warning on vsnprintf */

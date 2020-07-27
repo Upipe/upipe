@@ -95,6 +95,17 @@ genfiles = config.h include/upipe/config.h
 config.h:
 	$(call cmd,config.h)
 
+# --- utrace -------------------------------------------------------------------
+
+configs += utrace
+utrace-disabled = y
+
+define build-hook
+$(foreach target,$(filter-out %/libupipe,$1),\
+  $(if $(filter %.c %.cpp,$($(target)-src)),\
+    $(eval $(target)-libs += $(if $(have_utrace),libupipe))))
+endef
+
 # --- coding-style checks ------------------------------------------------------
 
 check-whitespace:

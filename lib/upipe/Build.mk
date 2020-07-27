@@ -121,6 +121,7 @@ libupipe-includes = \
     urequest.h \
     uring.h \
     ustring.h \
+    utrace.h \
     uuri.h
 
 libupipe-src = \
@@ -159,6 +160,7 @@ libupipe-src = \
     uref_std.c \
     uref_uri.c \
     ustring.c \
+    utrace.c \
     uuri.c
 
 libupipe-ldlibs = -lm

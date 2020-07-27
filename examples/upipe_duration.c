@@ -33,6 +33,7 @@
 #include "upipe/uclock.h"
 #include "upipe/upipe.h"
 #include "upipe/upump.h"
+#include "upipe/utrace.h"
 #include "upump-ev/upump_ev.h"
 #include "upipe-modules/upipe_file_source.h"
 #include "upipe-ts/upipe_ts_demux.h"
@@ -189,6 +190,8 @@ int main(int argc, char **argv)
 
     /* main loop */
     upump_mgr_run(upump_mgr, NULL);
+
+    utrace_dump_graph("upipe-duration");
 
     upipe_release(upipe_src);
     count_free(sink);

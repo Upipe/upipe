@@ -22,6 +22,7 @@ extern "C" {
 #include "upipe/uprobe.h"
 #include "upipe/urequest.h"
 #include "upipe/udict_dump.h"
+#include "upipe/utrace.h"
 
 #include <stdint.h>
 #include <stdarg.h>
@@ -411,7 +412,10 @@ static inline struct upipe *upipe_alloc_va(struct upipe_mgr *mgr,
                                            struct uprobe *uprobe,
                                            uint32_t signature, va_list args)
 {
-    return mgr->upipe_alloc(mgr, uprobe, signature, args);
+    utrace_upipe_alloc_enter(mgr, uprobe, signature);
+    struct upipe *upipe = mgr->upipe_alloc(mgr, uprobe, signature, args);
+    utrace_upipe_alloc_leave(upipe);
+    return upipe;
 }
 
 /** @internal @This allocates and initializes a pipe with a variable list of
@@ -457,6 +461,7 @@ static inline void upipe_init(struct upipe *upipe, struct upipe_mgr *mgr,
     upipe->refcount = NULL;
     upipe->mgr = mgr;
     upipe_mgr_use(mgr);
+    utrace_upipe_init(upipe);
 }
 
 /** @This increments the reference count of a upipe.
@@ -562,6 +567,7 @@ static inline struct uprobe *upipe_pop_probe(struct upipe *upipe)
 static inline void upipe_clean(struct upipe *upipe)
 {
     assert(upipe != NULL);
+    utrace_upipe_clean(upipe);
     uprobe_release(upipe->uprobe);
     upipe_mgr_release(upipe->mgr);
 }
@@ -575,7 +581,16 @@ static inline void upipe_clean(struct upipe *upipe)
  */
 static inline int upipe_throw_va(struct upipe *upipe, int event, va_list args)
 {
-    return uprobe_throw_va(upipe->uprobe, upipe, event, args);
+    int err;
+
+    utrace_upipe_throw_enter(upipe, event, args);
+    {
+        utrace_va_copy(args);
+        err = uprobe_throw_va(upipe->uprobe, upipe, event, args);
+        utrace_va_end(args);
+    }
+    utrace_upipe_throw_leave(err, event, args);
+    return err;
 }
 
 /** @internal @This throws generic events with optional arguments.
@@ -1044,7 +1059,9 @@ static inline void upipe_input(struct upipe *upipe, struct uref *uref,
         return;
     }
     upipe_use(upipe);
+    utrace_upipe_input_enter(upipe, uref);
     upipe->mgr->upipe_input(upipe, uref, upump_p);
+    utrace_upipe_input_leave();
     upipe_release(upipe);
 }
 
@@ -1063,14 +1080,18 @@ static inline void upipe_input(struct upipe *upipe, struct uref *uref,
 static inline int upipe_control_nodbg_va(struct upipe *upipe,
                                          int command, va_list args)
 {
-    assert(upipe != NULL);
-    if (upipe->mgr->upipe_control == NULL)
-        return UBASE_ERR_UNHANDLED;
+    int err = UBASE_ERR_UNHANDLED;
 
-    int err;
-    upipe_use(upipe);
-    err = upipe->mgr->upipe_control(upipe, command, args);
-    upipe_release(upipe);
+    assert(upipe != NULL);
+    utrace_upipe_control_enter(upipe, command, args);
+    if (likely(upipe->mgr->upipe_control != NULL)) {
+        upipe_use(upipe);
+        utrace_va_copy(args);
+        err = upipe->mgr->upipe_control(upipe, command, args);
+        utrace_va_end(args);
+        upipe_release(upipe);
+    }
+    utrace_upipe_control_leave(err, command, args);
     return err;
 }
 

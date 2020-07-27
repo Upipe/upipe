@@ -31,6 +31,7 @@
 #include "upipe/uref_block_flow.h"
 #include "upipe/uref_dump.h"
 #include "upipe/upump.h"
+#include "upipe/utrace.h"
 #include "upump-ev/upump_ev.h"
 #include "upipe/upipe.h"
 #include "upipe-av/upipe_av.h"
@@ -206,6 +207,7 @@ static int catch(struct uprobe *uprobe, struct upipe *upipe,
             break;
 
         case UPROBE_SOURCE_END:
+            utrace_dump_graph("transcode");
             upipe_release(upipe);
             return UBASE_ERR_NONE;
 
