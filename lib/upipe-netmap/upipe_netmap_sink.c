@@ -1046,12 +1046,8 @@ static int worker_hbrmt(struct upipe_netmap_sink *upipe_netmap_sink, uint8_t **d
     /* overlap */
     int pkt_rem = bytes - (payload_len - packed_bytes);
     assert(pkt_rem <= sizeof(upipe_netmap_sink->packed_pixels));
-    if (likely(pkt_rem > 0)) {
-        if (likely(dst[idx]))
-            memcpy(upipe_netmap_sink->packed_pixels, dst[idx] + bytes - pkt_rem, pkt_rem);
-        if (likely(copy))
-            memcpy(upipe_netmap_sink->packed_pixels, dst[1] + bytes - pkt_rem, pkt_rem);
-    }
+    if (likely(pkt_rem > 0 && dst[idx]))
+        memcpy(upipe_netmap_sink->packed_pixels, dst[idx] + bytes - pkt_rem, pkt_rem);
 
     /* update overlap count */
     upipe_netmap_sink->packed_bytes = pkt_rem;
