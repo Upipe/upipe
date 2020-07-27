@@ -980,7 +980,7 @@ static int worker_hbrmt(struct upipe_netmap_sink *upipe_netmap_sink, uint8_t **d
 
     /* desired payload size */
     int payload_len = HBRMT_DATA_SIZE;
-    if (payload_len > pack_bytes_left)
+    if (unlikely(payload_len > pack_bytes_left))
         payload_len = pack_bytes_left;
 
     /* pixels we need to read, 4 bytes per pixel */
@@ -1005,7 +1005,7 @@ static int worker_hbrmt(struct upipe_netmap_sink *upipe_netmap_sink, uint8_t **d
     uint8_t *rtp = upipe_netmap_sink->rtp_header;
     rtp_set_seqnum(rtp, upipe_netmap_sink->seqnum & UINT16_MAX);
     rtp_set_timestamp(rtp, timestamp & UINT32_MAX);
-    if (end)
+    if (unlikely(end))
         rtp_set_marker(rtp);
 
     for (size_t i = 0; i < 2; i++) {
@@ -1029,7 +1029,7 @@ static int worker_hbrmt(struct upipe_netmap_sink *upipe_netmap_sink, uint8_t **d
     }
 
     /* unset rtp marker if needed */
-    if (end)
+    if (unlikely(end))
         rtp_clear_marker(rtp);
 
     upipe_netmap_sink->seqnum++;
@@ -1047,9 +1047,9 @@ static int worker_hbrmt(struct upipe_netmap_sink *upipe_netmap_sink, uint8_t **d
     int pkt_rem = bytes - (payload_len - packed_bytes);
     assert(pkt_rem <= sizeof(upipe_netmap_sink->packed_pixels));
     if (likely(pkt_rem > 0)) {
-        if (dst[idx])
+        if (likely(dst[idx]))
             memcpy(upipe_netmap_sink->packed_pixels, dst[idx] + bytes - pkt_rem, pkt_rem);
-        if (copy)
+        if (likely(copy))
             memcpy(upipe_netmap_sink->packed_pixels, dst[1] + bytes - pkt_rem, pkt_rem);
     }
 
@@ -1073,7 +1073,7 @@ static int worker_hbrmt(struct upipe_netmap_sink *upipe_netmap_sink, uint8_t **d
         *ptr[idx] = (uint64_t)end << 63;
     }
 
-    if (end) {
+    if (unlikely(end)) {
         upipe_netmap_sink->packed_bytes = 0;
         return bytes_left;
     }
