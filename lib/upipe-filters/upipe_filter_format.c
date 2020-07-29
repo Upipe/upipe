@@ -49,6 +49,7 @@
 #include <upipe-filters/upipe_filter_format.h>
 #include <upipe-filters/upipe_filter_blend.h>
 #include <upipe-swscale/upipe_sws.h>
+#include <upipe-av/upipe_avfilter.h>
 
 #include <stdlib.h>
 #include <stdbool.h>
@@ -67,6 +68,8 @@ struct upipe_ffmt_mgr {
     struct upipe_mgr *swr_mgr;
     /** pointer to deinterlace manager */
     struct upipe_mgr *deint_mgr;
+    /** pointer to avfilter manager */
+    struct upipe_mgr *avfilter_mgr;
 
     /** public upipe_mgr structure */
     struct upipe_mgr mgr;
@@ -123,6 +126,11 @@ struct upipe_ffmt {
 
     /** swscale flags */
     int sws_flags;
+
+    /** avfilter hw config type */
+    char *hw_type;
+    /** avfilter hw config device */
+    char *hw_device;
 
     /** public upipe structure */
     struct upipe upipe;
@@ -198,6 +206,8 @@ static struct upipe *upipe_ffmt_alloc(struct upipe_mgr *mgr,
     upipe_ffmt->flow_def_input = NULL;
     upipe_ffmt->flow_def_wanted = flow_def;
     upipe_ffmt->sws_flags = 0;
+    upipe_ffmt->hw_type = NULL;
+    upipe_ffmt->hw_device = NULL;
     upipe_throw_ready(upipe);
 
     return upipe;
@@ -328,15 +338,111 @@ static int upipe_ffmt_check_flow_format(struct upipe *upipe,
         uref_pic_flow_delete_hsize_visible(flow_def_dup);
         uref_pic_flow_delete_vsize_visible(flow_def_dup);
 
+        const char *surface_type;
+
         bool need_deint = ffmt_mgr->deint_mgr &&
             !ubase_check(uref_pic_get_progressive(flow_def)) &&
             ubase_check(uref_pic_get_progressive(flow_def_dup));
-        bool need_sws = ffmt_mgr->sws_mgr &&
-            (!uref_pic_flow_compare_format(flow_def, flow_def_dup) ||
-             uref_pic_flow_cmp_hsize(flow_def, flow_def_dup) ||
-             uref_pic_flow_cmp_vsize(flow_def, flow_def_dup));
+        bool need_scale =
+            uref_pic_flow_cmp_hsize(flow_def, flow_def_dup) ||
+            uref_pic_flow_cmp_vsize(flow_def, flow_def_dup);
+        bool need_format =
+            !uref_pic_flow_compare_format(flow_def, flow_def_dup);
+        bool need_sws = ffmt_mgr->sws_mgr && (need_scale || need_format);
+        bool pic_vaapi_in = ubase_check(uref_pic_flow_get_surface_type(
+                flow_def, &surface_type)) && !strcmp(surface_type, "av.vaapi");
+        bool pic_vaapi_out = ubase_check(uref_pic_flow_get_surface_type(
+                flow_def_dup, &surface_type)) && !strcmp(surface_type, "av.vaapi");
+        bool hw_in = pic_vaapi_in;
+        bool hw_out = pic_vaapi_out;
+        bool hw = hw_in || hw_out;
+        bool need_hw_transfer = (hw_in && !hw_out) || (!hw_in && hw_out);
+        bool need_avfilter = ffmt_mgr->avfilter_mgr && hw &&
+            (need_scale || need_format || need_hw_transfer);
+
+        if (need_avfilter) {
+            if (need_format) {
+                const char *pix_fmt_in = "unknown";
+                const char *pix_fmt_out = "unknown";
+                upipe_avfilt_mgr_get_pixfmt_name(ffmt_mgr->avfilter_mgr,
+                                                 flow_def, &pix_fmt_in);
+                upipe_avfilt_mgr_get_pixfmt_name(ffmt_mgr->avfilter_mgr,
+                                                 flow_def_dup, &pix_fmt_out);
+                upipe_notice_va(upipe, "need format conversion %s → %s",
+                                pix_fmt_in, pix_fmt_out);
+            }
+            if (need_hw_transfer) {
+                upipe_notice_va(upipe, "need transfer %s → %s",
+                                hw_in ? "hw" : "sw",
+                                hw_out ? "hw" : "sw");
+            }
+            if (need_scale) {
+                uint64_t hsize_in = 0, vsize_in = 0;
+                uint64_t hsize_out = 0, vsize_out = 0;
+                uref_pic_flow_get_hsize(flow_def, &hsize_in);
+                uref_pic_flow_get_vsize(flow_def, &vsize_in);
+                uref_pic_flow_get_hsize(flow_def_dup, &hsize_out);
+                uref_pic_flow_get_vsize(flow_def_dup, &vsize_out);
+                upipe_notice_va(upipe, "need scale %" PRIu64 "x%" PRIu64
+                                " → %" PRIu64 "x%" PRIu64,
+                                hsize_in, vsize_in, hsize_out, vsize_out);
+            }
+            uint64_t hsize = 0, vsize = 0;
+            uref_pic_flow_get_hsize(flow_def_dup, &hsize);
+            uref_pic_flow_get_vsize(flow_def_dup, &vsize);
+
+            const char *pix_fmt = NULL;
+            upipe_avfilt_mgr_get_pixfmt_name(ffmt_mgr->avfilter_mgr,
+                                             flow_def_dup, &pix_fmt);
+
+            char filters[512];
+            int pos = 0;
+
+#define str_cat(fmt, ...) pos += sprintf(filters + pos, fmt, ##__VA_ARGS__)
+
+            if (!pic_vaapi_in)
+                str_cat("scale,format=nv12,hwupload,");
+            if (need_deint)
+                str_cat("deinterlace_vaapi=auto=1,");
+            if (need_scale)
+                str_cat("scale_vaapi=w=%"PRIu64":h=%"PRIu64",", hsize, vsize);
+            if (!pic_vaapi_out) {
+                str_cat("hwmap=mode=read+direct,format=nv12,");
+                if (pix_fmt != NULL && strcmp(pix_fmt, "nv12"))
+                    str_cat("scale,format=%s,", pix_fmt);
+            }
+
+#undef str_cat
+
+            if (filters[pos - 1] == ',')
+                filters[pos - 1] = '\0';
+
+            struct upipe *avfilt = upipe_void_alloc(
+                ffmt_mgr->avfilter_mgr,
+                uprobe_pfx_alloc(uprobe_use(&upipe_ffmt->last_inner_probe),
+                                 UPROBE_LOG_VERBOSE, "avfilt"));
+            if (avfilt == NULL)
+                upipe_warn_va(upipe, "couldn't allocate deinterlace");
+            else {
+                if (upipe_ffmt->hw_type != NULL &&
+                    !ubase_check(upipe_avfilt_set_hw_config(
+                            avfilt, upipe_ffmt->hw_type,
+                            upipe_ffmt->hw_device)))
+                    upipe_err(upipe, "cannot set filters hw config");
+                if (!ubase_check(upipe_avfilt_set_filters_desc(
+                            avfilt, filters)))
+                    upipe_err(upipe, "cannot set filters desc");
+
+                upipe_ffmt_store_bin_output(upipe, avfilt);
+                upipe_ffmt_store_bin_input(upipe, upipe_use(avfilt));
+            }
+
+            need_deint = false;
+            need_sws = false;
+        }
 
         if (need_deint) {
+            upipe_notice(upipe, "need deinterlace");
             struct upipe *input = upipe_void_alloc(ffmt_mgr->deint_mgr,
                     uprobe_pfx_alloc(
                         need_sws ? uprobe_use(&upipe_ffmt->proxy_probe) :
@@ -350,6 +456,19 @@ static int upipe_ffmt_check_flow_format(struct upipe *upipe,
         }
 
         if (need_sws) {
+            if (need_format)
+                upipe_notice(upipe, "need format conversion");
+            if (need_scale) {
+                uint64_t hsize_in = 0, vsize_in = 0;
+                uint64_t hsize_out = 0, vsize_out = 0;
+                uref_pic_flow_get_hsize(flow_def, &hsize_in);
+                uref_pic_flow_get_vsize(flow_def, &vsize_in);
+                uref_pic_flow_get_hsize(flow_def_dup, &hsize_out);
+                uref_pic_flow_get_vsize(flow_def_dup, &vsize_out);
+                upipe_notice_va(upipe, "need scale %" PRIu64 "x%" PRIu64
+                                " → %" PRIu64 "x%" PRIu64,
+                                hsize_in, vsize_in, hsize_out, vsize_out);
+            }
             struct upipe *sws = upipe_flow_alloc(ffmt_mgr->sws_mgr,
                     uprobe_pfx_alloc(uprobe_use(&upipe_ffmt->last_inner_probe),
                                      UPROBE_LOG_VERBOSE, "sws"),
@@ -372,10 +491,10 @@ static int upipe_ffmt_check_flow_format(struct upipe *upipe,
             upipe_mgr_release(setflowdef_mgr);
             if (unlikely(setflowdef == NULL)) {
                 upipe_warn_va(upipe, "couldn't allocate setflowdef");
-            } else if (need_deint)
+            } else if (need_deint || need_avfilter)
                 upipe_set_output(upipe_ffmt->first_inner, setflowdef);
             upipe_ffmt_store_bin_output(upipe, setflowdef);
-            if (!need_deint)
+            if (!need_deint && !need_avfilter)
                 upipe_ffmt_store_bin_input(upipe, upipe_use(setflowdef));
             upipe_setflowdef_set_dict(setflowdef, flow_def_dup);
         }
@@ -474,6 +593,46 @@ static int upipe_ffmt_set_sws_flags(struct upipe *upipe, int flags)
     return UBASE_ERR_NONE;
 }
 
+/** @internal @This sets the avfilter hw config.
+ *
+ * @param upipe description structure of the pipe
+ * @param hw_type hardware device type
+ * @param hw_device hardware device (use NULL for default)
+ * @return an error code
+ */
+static int upipe_ffmt_set_hw_config(struct upipe *upipe,
+                                    const char *hw_type,
+                                    const char *hw_device)
+{
+    struct upipe_ffmt *upipe_ffmt = upipe_ffmt_from_upipe(upipe);
+
+    if (hw_type == NULL)
+        return UBASE_ERR_INVALID;
+
+    char *hw_type_tmp = strdup(hw_type);
+    if (hw_type_tmp == NULL)
+        return UBASE_ERR_ALLOC;
+    char *hw_device_tmp = NULL;
+    if (hw_device != NULL) {
+        hw_device_tmp = strdup(hw_device);
+        if (hw_device_tmp == NULL) {
+            free(hw_type_tmp);
+            return UBASE_ERR_ALLOC;
+        }
+    }
+
+    free(upipe_ffmt->hw_type);
+    upipe_ffmt->hw_type = hw_type_tmp;
+    free(upipe_ffmt->hw_device);
+    upipe_ffmt->hw_device = hw_device_tmp;
+
+    if (upipe_ffmt->last_inner != NULL)
+        return upipe_avfilt_set_hw_config(upipe_ffmt->last_inner,
+                                          hw_type, hw_device);
+
+    return UBASE_ERR_NONE;
+}
+
 /** @internal @This processes control commands on a ffmt pipe.
  *
  * @param upipe description structure of the pipe
@@ -516,6 +675,12 @@ static int upipe_ffmt_control(struct upipe *upipe, int command, va_list args)
             int flags = va_arg(args, int);
             return upipe_ffmt_set_sws_flags(upipe, flags);
         }
+        case UPIPE_AVFILT_SET_HW_CONFIG: {
+            UBASE_SIGNATURE_CHECK(args, UPIPE_AVFILT_SIGNATURE)
+            const char *hw_type = va_arg(args, const char *);
+            const char *hw_device = va_arg(args, const char *);
+            return upipe_ffmt_set_hw_config(upipe, hw_type, hw_device);
+        }
     }
 
     int err = upipe_ffmt_control_bin_input(upipe, command, args);
@@ -534,6 +699,8 @@ static void upipe_ffmt_free(struct urefcount *urefcount_real)
         upipe_ffmt_from_urefcount_real(urefcount_real);
     struct upipe *upipe = upipe_ffmt_to_upipe(upipe_ffmt);
     upipe_throw_dead(upipe);
+    free(upipe_ffmt->hw_type);
+    free(upipe_ffmt->hw_device);
     upipe_ffmt_clean_input(upipe);
     upipe_ffmt_clean_flow_format(upipe);
     uref_free(upipe_ffmt->flow_def_input);
@@ -567,6 +734,7 @@ static void upipe_ffmt_mgr_free(struct urefcount *urefcount)
     upipe_mgr_release(ffmt_mgr->swr_mgr);
     upipe_mgr_release(ffmt_mgr->sws_mgr);
     upipe_mgr_release(ffmt_mgr->deint_mgr);
+    upipe_mgr_release(ffmt_mgr->avfilter_mgr);
 
     urefcount_clean(urefcount);
     free(ffmt_mgr);
@@ -605,6 +773,7 @@ static int upipe_ffmt_mgr_control(struct upipe_mgr *mgr,
         GET_SET_MGR(sws, SWS)
         GET_SET_MGR(swr, SWR)
         GET_SET_MGR(deint, DEINT)
+        GET_SET_MGR(avfilter, AVFILTER)
 #undef GET_SET_MGR
 
         default:
@@ -626,6 +795,7 @@ struct upipe_mgr *upipe_ffmt_mgr_alloc(void)
     ffmt_mgr->sws_mgr = NULL;
     ffmt_mgr->swr_mgr = NULL;
     ffmt_mgr->deint_mgr = upipe_filter_blend_mgr_alloc();
+    ffmt_mgr->avfilter_mgr = NULL;
 
     urefcount_init(upipe_ffmt_mgr_to_urefcount(ffmt_mgr),
                    upipe_ffmt_mgr_free);

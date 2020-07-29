@@ -555,6 +555,7 @@ int main(int argc, char *argv[])
     upipe_ffmt_mgr = upipe_ffmt_mgr_alloc();
     upipe_ffmt_mgr_set_sws_mgr(upipe_ffmt_mgr, upipe_sws_mgr);
     upipe_ffmt_mgr_set_swr_mgr(upipe_ffmt_mgr, upipe_swr_mgr);
+    upipe_ffmt_mgr_set_avfilter_mgr(upipe_ffmt_mgr, upipe_avfilt_mgr);
     upipe_null_mgr = upipe_null_mgr_alloc();
     upipe_noclock_mgr = upipe_noclock_mgr_alloc();
 
