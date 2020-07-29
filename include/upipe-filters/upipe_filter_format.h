@@ -60,6 +60,7 @@ enum upipe_ffmt_mgr_command {
     UPIPE_FFMT_MGR_GET_SET_MGR(sws, SWS)
     UPIPE_FFMT_MGR_GET_SET_MGR(swr, SWR)
     UPIPE_FFMT_MGR_GET_SET_MGR(deint, DEINT)
+    UPIPE_FFMT_MGR_GET_SET_MGR(avfilter, AVFILTER)
 #undef UPIPE_FFMT_MGR_GET_SET_MGR
 };
 
@@ -96,6 +97,7 @@ static inline int                                                           \
 UPIPE_FFMT_MGR_GET_SET_MGR2(sws, SWS)
 UPIPE_FFMT_MGR_GET_SET_MGR2(swr, SWR)
 UPIPE_FFMT_MGR_GET_SET_MGR2(deint, DEINT)
+UPIPE_FFMT_MGR_GET_SET_MGR2(avfilter, AVFILTER)
 #undef UPIPE_FFMT_MGR_GET_SET_MGR2
 
 #ifdef __cplusplus
