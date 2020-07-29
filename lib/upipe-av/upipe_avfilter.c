@@ -2724,6 +2724,50 @@ static void upipe_avfilt_free(struct upipe *upipe)
     upipe_avfilt_free_void(upipe);
 }
 
+/** @This returns the pixel format name for the given flow definition.
+ *
+ * @param flow_def flow definition packet
+ * @param name pixel format name
+ * @return an error code
+ */
+static int _upipe_avfilt_mgr_get_pixfmt_name(struct uref *flow_def,
+                                             const char **name_p)
+{
+    const char *chroma_map[UPIPE_AV_MAX_PLANES];
+    enum AVPixelFormat pix_fmt =
+        upipe_av_pixfmt_from_flow_def(flow_def, NULL, chroma_map);
+
+    const char *name = av_get_pix_fmt_name(pix_fmt);
+    if (name == NULL)
+        return UBASE_ERR_EXTERNAL;
+
+    if (name_p != NULL)
+        *name_p = name;
+
+    return UBASE_ERR_NONE;
+}
+
+/** @This processes control commands on a avfilt manager.
+ *
+ * @param mgr pointer to manager
+ * @param command type of command to process
+ * @param args arguments of the command
+ * @return an error code
+ */
+static int upipe_avfilt_mgr_control(struct upipe_mgr *mgr,
+                                    int command, va_list args)
+{
+    switch (command) {
+        case UPIPE_AVFILT_MGR_GET_PIXFMT_NAME:
+            UBASE_SIGNATURE_CHECK(args, UPIPE_AVFILT_SIGNATURE)
+            struct uref *flow_def = va_arg(args, struct uref *);
+            const char **name_p = va_arg(args, const char **);
+            return _upipe_avfilt_mgr_get_pixfmt_name(flow_def, name_p);
+        default:
+            return UBASE_ERR_UNHANDLED;
+    }
+}
+
 /** module manager static descriptor */
 static struct upipe_mgr upipe_avfilt_mgr = {
     .refcount = NULL,
@@ -2733,7 +2777,7 @@ static struct upipe_mgr upipe_avfilt_mgr = {
     .upipe_input = upipe_avfilt_input,
     .upipe_control = upipe_avfilt_control,
 
-    .upipe_mgr_control = NULL
+    .upipe_mgr_control = upipe_avfilt_mgr_control
 };
 
 /** @This returns the management structure for avfilter pipes.
