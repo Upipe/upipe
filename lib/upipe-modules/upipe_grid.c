@@ -48,6 +48,8 @@
 #define REF_EXPECTED_FLOW "void."
 /** maximum retention when there is no packet afterwards */
 #define MAX_RETENTION UCLOCK_FREQ
+/** debug print periodicity */
+#define PRINT_PERIODICITY   (UCLOCK_FREQ * 600)
 
 /** @internal @This is the private structure of a grid pipe. */
 struct upipe_grid {
@@ -109,6 +111,12 @@ struct upipe_grid_in {
     uint64_t latency;
     /** next update diff */
     uint64_t next_update;
+    /** last update print */
+    uint64_t last_update_print;
+    /** maximum buffer since last print */
+    int64_t max_buffer;
+    /** minimum buffer since last print */
+    int64_t min_buffer;
 };
 
 UPIPE_HELPER_UPIPE(upipe_grid_in, upipe, UPIPE_GRID_IN_SIGNATURE);
@@ -233,6 +241,9 @@ static struct upipe *upipe_grid_in_alloc(struct upipe_mgr *mgr,
     upipe_grid_in->last_update = 0;
     upipe_grid_in->latency = 0;
     upipe_grid_in->next_update = 0;
+    upipe_grid_in->last_update_print = 0;
+    upipe_grid_in->max_buffer = INT64_MIN;
+    upipe_grid_in->min_buffer = INT64_MAX;
 
     upipe_throw_ready(upipe);
 
@@ -345,6 +356,8 @@ static void upipe_grid_in_update_pts(struct upipe *upipe, uint64_t next_pts)
         tolerance = upipe_grid_in_tolerance(upipe, flow_def);
     }
 
+    uint64_t rebase_pts = UINT64_MAX;
+
     /* iterate through the input buffers */
     struct uchain *uchain, *uchain_tmp;
     ulist_delete_foreach(&upipe_grid_in->urefs, uchain, uchain_tmp) {
@@ -376,7 +389,7 @@ static void upipe_grid_in_update_pts(struct upipe *upipe, uint64_t next_pts)
         ubase_assert(uref_clock_get_pts_sys(uref, &pts));
 
         /* add latency and tolerance */
-        uint64_t rebase_pts = pts + latency + tolerance;
+        rebase_pts = pts + latency + tolerance;
 
         if (rebase_pts < next_pts) {
             /* keep longuer last input */
@@ -387,7 +400,6 @@ static void upipe_grid_in_update_pts(struct upipe *upipe, uint64_t next_pts)
                 uref_free(uref);
                 continue;
             }
-            upipe_warn(upipe, "keeping last input");
         }
 
         upipe_grid_in->next_update = 0;
@@ -396,6 +408,49 @@ static void upipe_grid_in_update_pts(struct upipe *upipe, uint64_t next_pts)
 
         /* remaining buffers are up to date,.. */
         break;
+    }
+
+    /* print input statistics */
+    int64_t diff = INT64_MIN;
+    if (rebase_pts != UINT64_MAX)
+        diff = (int64_t)rebase_pts - (int64_t)next_pts;
+
+    if (diff < upipe_grid_in->min_buffer)
+        upipe_grid_in->min_buffer = diff;
+    if (diff > upipe_grid_in->max_buffer)
+        upipe_grid_in->max_buffer = diff;
+
+    if (next_pts > upipe_grid_in->last_update_print + PRINT_PERIODICITY) {
+        if (upipe_grid_in->min_buffer == INT64_MIN) {
+            if (diff != INT64_MIN)
+                upipe_warn_va(upipe, "input buffer %.3f ms, "
+                              "min none, max %.3f ms",
+                              uclock_diff_to_ms(diff),
+                              uclock_diff_to_ms(upipe_grid_in->max_buffer));
+            else if (upipe_grid_in->max_buffer != INT64_MIN)
+                upipe_warn_va(upipe, "input buffer none, "
+                              "min none, max %.3f ms",
+                              uclock_diff_to_ms(upipe_grid_in->max_buffer));
+            else
+                upipe_warn_va(upipe, "input buffer none, min none, max none");
+        }
+        else {
+            if (upipe_grid_in->min_buffer < 0)
+                upipe_warn_va(upipe, "input buffer %.3f ms, "
+                              "min %.3f ms, max %.3f ms",
+                              uclock_diff_to_ms(diff),
+                              uclock_diff_to_ms(upipe_grid_in->min_buffer),
+                              uclock_diff_to_ms(upipe_grid_in->max_buffer));
+            else
+                upipe_dbg_va(upipe, "input buffer %.3f ms, "
+                             "min %.3f ms, max %.3f ms",
+                             uclock_diff_to_ms(diff),
+                             uclock_diff_to_ms(upipe_grid_in->min_buffer),
+                             uclock_diff_to_ms(upipe_grid_in->max_buffer));
+        }
+        upipe_grid_in->last_update_print = next_pts;
+        upipe_grid_in->min_buffer = INT64_MAX;
+        upipe_grid_in->max_buffer = INT64_MIN;
     }
 
     upipe_grid_in->last_update = next_pts;
