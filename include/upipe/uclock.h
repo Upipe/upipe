@@ -44,6 +44,16 @@ extern "C" {
 /* @This represents the Upipe clock frequency. */
 #define UCLOCK_FREQ UINT64_C(27000000)
 
+/** @This converts an uclock difference to millisecond.
+ *
+ * @param diff difference in 27MHz ticks
+ * @return the difference in millisecond
+ */
+static inline double uclock_diff_to_ms(int64_t diff)
+{
+    return diff * 1000. / UCLOCK_FREQ;
+}
+
 /** @This is a structure allowing to retrieve system time. */
 struct uclock {
     /** pointer to refcount management structure */
