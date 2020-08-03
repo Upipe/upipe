@@ -60,8 +60,6 @@
 #include "../upipe-hbrmt/upipe_hbrmt_common.h"
 #include "config.h"
 
-#define INIT_HARDWARE 0
-
 /** upipe_pciesdi_sink structure */
 struct upipe_pciesdi_sink {
     /** refcount management structure */
@@ -542,7 +540,7 @@ static int check_capabilities(struct upipe *upipe, bool genlock)
     return UBASE_ERR_NONE;
 }
 
-static void init_hardware_part1(struct upipe *upipe, int rate, int mode)
+static void init_hardware(struct upipe *upipe, int rate, int mode)
 {
     struct upipe_pciesdi_sink *ctx = upipe_pciesdi_sink_from_upipe(upipe);
     int fd = ctx->fd;
@@ -717,7 +715,7 @@ static int upipe_pciesdi_sink_set_flow_def(struct upipe *upipe, struct uref *flo
     pthread_mutex_lock(&upipe_pciesdi_sink->clock_mutex);
 
     /* initialize clock */
-    init_hardware_part1(upipe, clock_rate, tx_mode);
+    init_hardware(upipe, clock_rate, tx_mode);
     upipe_pciesdi_sink->freq = freq;
     upipe_pciesdi_sink->offset = offset;
     upipe_pciesdi_sink->clock_is_inited = 1;
