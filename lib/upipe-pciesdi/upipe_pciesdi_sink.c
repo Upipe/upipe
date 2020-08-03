@@ -544,7 +544,6 @@ static void init_hardware(struct upipe *upipe, int rate, int mode)
 {
     struct upipe_pciesdi_sink *ctx = upipe_pciesdi_sink_from_upipe(upipe);
     int fd = ctx->fd;
-    int device_number = ctx->device_number;
 
     uint32_t capability_flags;
     uint8_t channels;
@@ -552,23 +551,12 @@ static void init_hardware(struct upipe *upipe, int rate, int mode)
 
     /* sdi_pre_init */
 
-    if (capability_flags & SDI_CAP_HAS_GS12281)
-        gs12281_spi_init(fd);
-    if (capability_flags & SDI_CAP_HAS_GS12241) {
-        if (mode == SDI_TX_MODE_SD) {
-            gs12241_reset(fd, device_number);
-            gs12241_config_for_sd(fd, device_number);
-        }
-        gs12241_spi_init(fd);
-    }
-
     if (capability_flags & SDI_CAP_HAS_LMH0387) {
         /* Set direction for TX. */
         sdi_lmh0387_direction(fd, 1);
     }
 
     /* reset channel */
-    sdi_channel_reset_rx(fd, 1);
     sdi_channel_reset_tx(fd, 1);
 
     /* PCIe SDI (Falcon 9) */
@@ -612,7 +600,6 @@ static void init_hardware(struct upipe *upipe, int rate, int mode)
     }
 
     /* unreset channel */
-    sdi_channel_reset_rx(fd, 0);
     sdi_channel_reset_tx(fd, 0);
 
     /* disable pattern */
