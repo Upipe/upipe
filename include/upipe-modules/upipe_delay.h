@@ -43,9 +43,9 @@ extern "C" {
 enum upipe_delay_command {
     UPIPE_DELAY_SENTINEL = UPIPE_CONTROL_LOCAL,
 
-    /** returns the current delay being set into urefs (int64_t **) */
+    /** returns the current delay being set into urefs (int64_t *) */
     UPIPE_DELAY_GET_DELAY,
-    /** sets the delay to set into urefs (int64_t *) */
+    /** sets the delay to set into urefs (int64_t) */
     UPIPE_DELAY_SET_DELAY
 };
 
