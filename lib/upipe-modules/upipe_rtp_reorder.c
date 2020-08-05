@@ -491,9 +491,9 @@ static struct upipe *upipe_rtpr_alloc(struct upipe_mgr *mgr,
     upipe_rtpr->num_consecutive_late = 0;
     upipe_rtpr->delay = UCLOCK_FREQ/10;
 
+    upipe_throw_ready(upipe);
     upipe_rtpr_check_upump_mgr(upipe);
 
-    upipe_throw_ready(upipe);
     return upipe;
 }
 
