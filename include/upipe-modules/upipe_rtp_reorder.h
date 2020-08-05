@@ -40,13 +40,13 @@ extern "C" {
 #define UPIPE_RTPR_INPUT_SIGNATURE UBASE_FOURCC('r','t','p','i')
 
 
-/** @This extends upipe_command with specific commands for delay pipes. */
+/** @This extends upipe_command with specific commands for rtpr pipes. */
 enum upipe_rtpr_command {
     UPIPE_RTPR_SENTINEL = UPIPE_CONTROL_LOCAL,
 
-    /** returns the current reorder delay being set into urefs (uint64_t **) */
+    /** returns the current reorder delay being set into urefs (uint64_t *) */
     UPIPE_RTPR_GET_DELAY,
-    /** sets the reorder delay to set into urefs (uint64_t *) */
+    /** sets the reorder delay to set into urefs (uint64_t) */
     UPIPE_RTPR_SET_DELAY
 };
 
