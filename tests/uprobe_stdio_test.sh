@@ -8,5 +8,5 @@ TMP="`mktemp -d tmp.XXXXXXXXXX`"
 cleanup() { rm -rf "$TMP"; }
 trap cleanup EXIT
 
-"$srcdir"/valgrind_wrapper.sh "$srcdir" ./uprobe_stdio_test > "$TMP"/logs
+"$srcdir"/valgrind_wrapper.sh "$srcdir" ./uprobe_stdio_test | grep -v "^[[:digit:]:]\+" > "$TMP"/logs
 diff -u "$srcdir"/uprobe_stdio_test.txt "$TMP"/logs

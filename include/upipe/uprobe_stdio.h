@@ -1,5 +1,6 @@
 /*
  * Copyright (C) 2013-2017 OpenHeadend S.A.R.L.
+ * Copyright (C) 2020 EasyTools
  *
  * Authors: Christophe Massiot
  *          Arnaud de Turckheim
@@ -47,6 +48,8 @@ struct uprobe_stdio {
     enum uprobe_log_level min_level;
     /** colored output enabled? */
     bool colored;
+    /** timing output format or NULL */
+    char *time_format;
 
     /** structure exported to modules */
     struct uprobe uprobe;
@@ -88,6 +91,14 @@ struct uprobe *uprobe_stdio_alloc(struct uprobe *next, FILE *stream,
  * @param enabled enable (or disable) colored output
  */
 void uprobe_stdio_set_color(struct uprobe *uprobe, bool enabled);
+
+/** @This sets the output time format or disables it.
+ *
+ * @param uprobe pointer to probe
+ * @param format strftime format or NULL to disable
+ * @return an error code
+ */
+int uprobe_stdio_set_time_format(struct uprobe *uprobe, const char *format);
 
 #ifdef __cplusplus
 }

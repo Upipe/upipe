@@ -46,6 +46,14 @@ int main(int argc, char **argv)
                    0x42);
     uprobe_notice(uprobe1, NULL, "This is a notice");
     uprobe_dbg(uprobe1, NULL, "This is a debug");
+
+    uprobe_stdio_set_time_format(uprobe1, "%H:%M:%S");
+    uprobe_dbg(uprobe1, NULL, "This is a debug with a time prefix");
+    uprobe_stdio_set_time_format(uprobe1, "%Y");
+    uprobe_dbg(uprobe1, NULL, "This is a debug with a time prefix");
+    uprobe_dbg(uprobe1, NULL, "This is another debug with a time prefix");
+    uprobe_stdio_set_time_format(uprobe1, NULL);
+    uprobe_dbg(uprobe1, NULL, "This is a debug");
     uprobe_release(uprobe1);
 
     struct uprobe *uprobe2 = uprobe_stdio_alloc(NULL, stdout, UPROBE_LOG_ERROR);

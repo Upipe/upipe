@@ -1,5 +1,6 @@
 /*
  * Copyright (C) 2012-2017 OpenHeadend S.A.R.L.
+ * Copyright (C) 2020 EasyTools
  *
  * Authors: Christophe Massiot
  *          Arnaud de Turckheim
@@ -38,6 +39,7 @@
 #include <stdio.h>
 #include <string.h>
 #include <stdarg.h>
+#include <time.h>
 
 /** maximum level name length */
 #define LEVEL_NAME_LEN  7
@@ -83,6 +85,8 @@
     ANSI_ESC(ANSI_BOLD ANSI_FG_BLACK) "]" ANSI_RESET
 #define TAG_NOCOLOR(Tag) \
     "[" Tag "]"
+
+#define TIME_FORMAT_MAX_SIZE    256
 
 struct level {
     enum uprobe_log_level log_level;
@@ -142,6 +146,10 @@ static const struct level *uprobe_stdio_get_level(struct ulog *ulog)
     return &level_unknown;
 }
 
+/* ignore gcc format-nonliteral warning on strftime */
+UBASE_PRAGMA_GCC(diagnostic push)
+UBASE_PRAGMA_GCC(diagnostic ignored "-Wformat-nonliteral")
+
 /** @internal @This catches events thrown by pipes.
  *
  * @param uprobe pointer to probe
@@ -169,8 +177,20 @@ static int uprobe_stdio_throw(struct uprobe *uprobe, struct upipe *upipe,
     bool colored = uprobe_stdio->colored;
     const struct level *level = uprobe_stdio_get_level(ulog);
 
+    char time_str[TIME_FORMAT_MAX_SIZE];
+    if (uprobe_stdio->time_format) {
+        time_t t = time(NULL);
+        struct tm tm;
+        struct tm *tm_p = localtime_r(&t, &tm);
+        if (!strftime(time_str, sizeof (time_str),
+                      uprobe_stdio->time_format, tm_p))
+            time_str[0] = '\0';
+    }
+
     flockfile(s);
     while (msg != NULL && *msg != '\0') {
+        if (uprobe_stdio->time_format)
+            fprintf(s, "%s%s", time_str, strlen(time_str) ? " " : "");
         if (colored)
             fprintf(s, LEVEL_COLOR("%s", "%*s") ": ",
                     level->color, LEVEL_NAME_LEN, level->name);
@@ -195,6 +215,8 @@ static int uprobe_stdio_throw(struct uprobe *uprobe, struct upipe *upipe,
     return UBASE_ERR_NONE;
 }
 
+UBASE_PRAGMA_GCC(diagnostic pop)
+
 /** @This initializes an already allocated uprobe_stdio structure.
  *
  * @param uprobe_stdio pointer to the already allocated structure
@@ -212,6 +234,7 @@ struct uprobe *uprobe_stdio_init(struct uprobe_stdio *uprobe_stdio,
     uprobe_stdio->stream = stream;
     uprobe_stdio->min_level = min_level;
     uprobe_stdio->colored = isatty(fileno(stream));
+    uprobe_stdio->time_format = NULL;
     uprobe_init(uprobe, uprobe_stdio_throw, next);
     return uprobe;
 }
@@ -223,6 +246,7 @@ struct uprobe *uprobe_stdio_init(struct uprobe_stdio *uprobe_stdio,
 void uprobe_stdio_clean(struct uprobe_stdio *uprobe_stdio)
 {
     assert(uprobe_stdio != NULL);
+    free(uprobe_stdio->time_format);
     struct uprobe *uprobe = uprobe_stdio_to_uprobe(uprobe_stdio);
     uprobe_clean(uprobe);
 }
@@ -236,6 +260,21 @@ void uprobe_stdio_set_color(struct uprobe *uprobe, bool enabled)
 {
     struct uprobe_stdio *uprobe_stdio = uprobe_stdio_from_uprobe(uprobe);
     uprobe_stdio->colored = enabled;
+}
+
+/** @This sets the output time format or disables it.
+ *
+ * @param uprobe pointer to probe
+ * @param format strftime format or NULL to disable
+ * @return an error code
+ */
+int uprobe_stdio_set_time_format(struct uprobe *uprobe, const char *format)
+{
+    struct uprobe_stdio *uprobe_stdio = uprobe_stdio_from_uprobe(uprobe);
+    free(uprobe_stdio->time_format);
+    uprobe_stdio->time_format = format ? strdup(format) : NULL;
+    return format && !uprobe_stdio->time_format ?
+        UBASE_ERR_ALLOC : UBASE_ERR_NONE;
 }
 
 #define ARGS_DECL struct uprobe *next, FILE *stream, enum uprobe_log_level min_level
