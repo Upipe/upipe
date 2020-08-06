@@ -1,5 +1,6 @@
 /*
  * Copyright (C) 2014-2015 OpenHeadend S.A.R.L.
+ * Copyright (C) 2020 EasyTools
  *
  * Authors: Christophe Massiot
  *
@@ -42,6 +43,7 @@
 #include <upipe/upipe_helper_output.h>
 #include <upipe/upipe_helper_flow_def.h>
 #include <upipe-framers/upipe_dvbsub_framer.h>
+#include <upipe-framers/uref_dvbsub_flow.h>
 
 #include <stdlib.h>
 #include <stdbool.h>
@@ -80,9 +82,6 @@ struct upipe_dvbsubf {
     struct uref *flow_def_input;
     /** attributes in the sequence header */
     struct uref *flow_def_attr;
-
-    /** presence of a display definition segment */
-    bool display_def;
 
     /** next uref to be processed */
     struct uref *next_uref;
@@ -124,7 +123,6 @@ static struct upipe *upipe_dvbsubf_alloc(struct upipe_mgr *mgr,
     upipe_dvbsubf_init_sync(upipe);
     upipe_dvbsubf_init_output(upipe);
     upipe_dvbsubf_init_flow_def(upipe);
-    upipe_dvbsubf->display_def = false;
     upipe_dvbsubf->next_uref = NULL;
     upipe_throw_ready(upipe);
     return upipe;
@@ -149,6 +147,14 @@ static void upipe_dvbsubf_work(struct upipe *upipe, struct upump **upump_p)
         goto upipe_dvbsubf_work_err;
     }
 
+    struct uref *flow_def = upipe_dvbsubf_alloc_flow_def_attr(upipe);
+    if (unlikely(flow_def == NULL)) {
+        upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
+        uref_free(upipe_dvbsubf->next_uref);
+        goto upipe_dvbsubf_work_err;
+    }
+
+    unsigned i = 0;
     size_t offset = DVBSUB_HEADER_SIZE;
     while (ubase_check(uref_block_extract(upipe_dvbsubf->next_uref,
                                           offset, 1, &buffer)) &&
@@ -161,44 +167,35 @@ static void upipe_dvbsubf_work(struct upipe *upipe, struct upump **upump_p)
             break;
         uint8_t type = dvbsubs_get_type(dvbsubs);
         uint16_t length = dvbsubs_get_length(dvbsubs);
+        uint16_t page = dvbsubs_get_page(dvbsubs);
+        uref_dvbsub_flow_set_page(flow_def, page, i++);
         UBASE_FATAL(upipe, uref_block_peek_unmap(upipe_dvbsubf->next_uref,
                                                  offset, dvbsubs_buffer,
                                                  dvbsubs))
 
+
         if (type == DVBSUBS_DISPLAY_DEFINITION) {
             display_def = true;
-            break;
         }
         offset += length + DVBSUBS_HEADER_SIZE;
     }
+    uref_dvbsub_flow_set_pages(flow_def, i);
 
-    if (display_def != upipe_dvbsubf->display_def ||
-        upipe_dvbsubf->flow_def == NULL) {
-        upipe_dvbsubf->display_def = display_def;
+    UBASE_FATAL(upipe, uref_flow_set_complete(flow_def))
+    UBASE_FATAL(upipe, uref_block_flow_set_octetrate(flow_def,
+                            display_def ? TB_RATE_DVBSUB_DISP :
+                                          TB_RATE_DVBSUB))
+    UBASE_FATAL(upipe, uref_block_flow_set_buffer_size(flow_def,
+                            display_def ? BS_DVBSUB_DISP :
+                                          BS_DVBSUB))
 
-        struct uref *flow_def = upipe_dvbsubf_alloc_flow_def_attr(upipe);
-        if (unlikely(flow_def == NULL)) {
-            upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
-            uref_free(upipe_dvbsubf->next_uref);
-            goto upipe_dvbsubf_work_err;
-        }
-
-        UBASE_FATAL(upipe, uref_flow_set_complete(flow_def))
-        UBASE_FATAL(upipe, uref_block_flow_set_octetrate(flow_def,
-                                display_def ? TB_RATE_DVBSUB_DISP :
-                                              TB_RATE_DVBSUB))
-        UBASE_FATAL(upipe, uref_block_flow_set_buffer_size(flow_def,
-                                display_def ? BS_DVBSUB_DISP :
-                                              BS_DVBSUB))
-
-        flow_def = upipe_dvbsubf_store_flow_def_attr(upipe, flow_def);
-        if (unlikely(flow_def == NULL)) {
-            upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
-            uref_free(upipe_dvbsubf->next_uref);
-            goto upipe_dvbsubf_work_err;
-        }
-        upipe_dvbsubf_store_flow_def(upipe, flow_def);
+    flow_def = upipe_dvbsubf_store_flow_def_attr(upipe, flow_def);
+    if (unlikely(flow_def == NULL)) {
+        upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
+        uref_free(upipe_dvbsubf->next_uref);
+        goto upipe_dvbsubf_work_err;
     }
+    upipe_dvbsubf_store_flow_def(upipe, flow_def);
 
     upipe_dvbsubf_sync_acquired(upipe);
 
