@@ -60,8 +60,6 @@
 #include "../upipe-hbrmt/upipe_hbrmt_common.h"
 #include "config.h"
 
-#define INIT_HARDWARE 0
-
 /** upipe_pciesdi_sink structure */
 struct upipe_pciesdi_sink {
     /** refcount management structure */
@@ -542,11 +540,10 @@ static int check_capabilities(struct upipe *upipe, bool genlock)
     return UBASE_ERR_NONE;
 }
 
-static void init_hardware_part1(struct upipe *upipe, int rate, int mode)
+static void init_hardware(struct upipe *upipe, int rate, int mode)
 {
     struct upipe_pciesdi_sink *ctx = upipe_pciesdi_sink_from_upipe(upipe);
     int fd = ctx->fd;
-    int device_number = ctx->device_number;
 
     uint32_t capability_flags;
     uint8_t channels;
@@ -554,23 +551,12 @@ static void init_hardware_part1(struct upipe *upipe, int rate, int mode)
 
     /* sdi_pre_init */
 
-    if (capability_flags & SDI_CAP_HAS_GS12281)
-        gs12281_spi_init(fd);
-    if (capability_flags & SDI_CAP_HAS_GS12241) {
-        if (mode == SDI_TX_MODE_SD) {
-            gs12241_reset(fd, device_number);
-            gs12241_config_for_sd(fd, device_number);
-        }
-        gs12241_spi_init(fd);
-    }
-
     if (capability_flags & SDI_CAP_HAS_LMH0387) {
         /* Set direction for TX. */
         sdi_lmh0387_direction(fd, 1);
     }
 
     /* reset channel */
-    sdi_channel_reset_rx(fd, 1);
     sdi_channel_reset_tx(fd, 1);
 
     /* PCIe SDI (Falcon 9) */
@@ -614,7 +600,6 @@ static void init_hardware_part1(struct upipe *upipe, int rate, int mode)
     }
 
     /* unreset channel */
-    sdi_channel_reset_rx(fd, 0);
     sdi_channel_reset_tx(fd, 0);
 
     /* disable pattern */
@@ -717,7 +702,7 @@ static int upipe_pciesdi_sink_set_flow_def(struct upipe *upipe, struct uref *flo
     pthread_mutex_lock(&upipe_pciesdi_sink->clock_mutex);
 
     /* initialize clock */
-    init_hardware_part1(upipe, clock_rate, tx_mode);
+    init_hardware(upipe, clock_rate, tx_mode);
     upipe_pciesdi_sink->freq = freq;
     upipe_pciesdi_sink->offset = offset;
     upipe_pciesdi_sink->clock_is_inited = 1;
