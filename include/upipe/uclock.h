@@ -44,6 +44,15 @@ extern "C" {
 /** @This represents the Upipe clock frequency. */
 #define UCLOCK_FREQ UINT64_C(27000000)
 
+/** @This is the number of clock ticks in a millisecond */
+#define UCLOCK_MILLISECOND  (UCLOCK_FREQ / 1000)
+/** @This is the number of clock ticks in a second */
+#define UCLOCK_SECOND       UCLOCK_FREQ
+/** @This is the number of clock ticks in a minute */
+#define UCLOCK_MINUTE       (UCLOCK_FREQ * 60)
+/** @This is the number of clock ticks in a hour */
+#define UCLOCK_HOUR         (UCLOCK_MINUTE * 60)
+
 /** @This converts an uclock difference to millisecond.
  *
  * @param diff difference in 27MHz ticks
@@ -128,6 +137,40 @@ static inline void uclock_release(struct uclock *uclock)
 {
     if (uclock != NULL)
         urefcount_release(uclock->refcount);
+}
+
+/** @This stores a broken-down uclock date. */
+struct uclock_brokendown {
+    /** hours */
+    uint32_t hours;
+    /** minutes */
+    uint8_t minutes;
+    /** seconds */
+    uint8_t seconds;
+    /** milliseconds */
+    uint16_t milliseconds;
+    /** 27MHz ticks */
+    uint16_t ticks;
+};
+
+/** @This breaks down an uclock date.
+ *
+ * @param date date in 27MHz ticks
+ * @return a broken-down representation
+ */
+static inline struct uclock_brokendown uclock_breakdown(uint64_t date)
+{
+    struct uclock_brokendown bd;
+    bd.hours = date / UCLOCK_HOUR;
+    date -= bd.hours * UCLOCK_HOUR;
+    bd.minutes = date / UCLOCK_MINUTE;
+    date -= bd.minutes * UCLOCK_MINUTE;
+    bd.seconds = date / UCLOCK_SECOND;
+    date -= bd.seconds * UCLOCK_SECOND;
+    bd.milliseconds = date / UCLOCK_MILLISECOND;
+    date -= bd.milliseconds * UCLOCK_MILLISECOND;
+    bd.ticks = date;
+    return bd;
 }
 
 #ifdef __cplusplus
