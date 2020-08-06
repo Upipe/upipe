@@ -1,5 +1,6 @@
 /*
  * Copyright (C) 2012-2019 OpenHeadend S.A.R.L.
+ * Copyright (C) 2020 EasyTools
  *
  * Authors: Christophe Massiot
  *
@@ -90,6 +91,11 @@ extern "C" {
 #define UBASE_PRAGMA_CLANG(x) UBASE_PRAGMA(clang x)
 #else
 #define UBASE_PRAGMA_CLANG(x)
+#endif
+#ifdef __GNUC__
+#define UBASE_PRAGMA_GCC(x) UBASE_PRAGMA(GCC x)
+#else
+#define UBASE_PRAGMA_GCC(x)
 #endif
 
 /** @This is used to retrieve the number of items of an array. */
@@ -537,7 +543,6 @@ static inline int ubase_clip(int i, int min, int max)
     else if (i > max) return max;
     else              return i;
 }
-
 
 #ifdef __cplusplus
 }
