@@ -25,4 +25,5 @@ myinclude_HEADERS = \
 	uref_h26x_flow.h \
 	uref_mpga_flow.h \
 	uref_mpgv_flow.h \
+	uref_dvbsub_flow.h \
 	$(NULL)
