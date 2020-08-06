@@ -711,7 +711,8 @@ static upipe_bmd_sink_frame *get_video_frame(struct upipe *upipe,
         size_t pic_data_size = 0;
         uref_pic_get_cea_708(uref, &pic_data, &pic_data_size);
         int ntsc = upipe_bmd_sink->mode == bmdModeNTSC ||
-            upipe_bmd_sink->mode == bmdModeHD1080i5994;
+            upipe_bmd_sink->mode == bmdModeHD1080i5994 ||
+            upipe_bmd_sink->mode == bmdModeHD720p5994;
 
         if (ntsc && pic_data_size > 0) {
             /** XXX: Support crazy 25fps captions? **/
