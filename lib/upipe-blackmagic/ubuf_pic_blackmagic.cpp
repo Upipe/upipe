@@ -110,7 +110,7 @@ static struct ubuf *ubuf_pic_bmd_alloc(struct ubuf_mgr *mgr,
         return NULL;
 
     struct ubuf *ubuf = ubuf_pic_bmd_to_ubuf(pic_bmd);
-
+    ubuf->mgr = ubuf_mgr_use(mgr);
     pic_bmd->shared = VideoFrame;
     VideoFrame->AddRef();
     ubuf_pic_common_init(ubuf,
@@ -143,6 +143,7 @@ static int ubuf_pic_bmd_dup(struct ubuf *ubuf, struct ubuf **new_ubuf_p)
         return UBASE_ERR_ALLOC;
 
     struct ubuf *new_ubuf = ubuf_pic_bmd_to_ubuf(new_pic);
+    new_ubuf->mgr = ubuf_mgr_use(ubuf->mgr);
     if (unlikely(!ubase_check(ubuf_pic_common_dup(ubuf, new_ubuf)))) {
         ubuf_free(new_ubuf);
         return UBASE_ERR_INVALID;
@@ -265,6 +266,7 @@ static void ubuf_pic_bmd_free(struct ubuf *ubuf)
         ubuf_pic_common_plane_clean(ubuf, plane);
 
     pic_bmd->shared->Release();
+    ubuf_mgr_release(ubuf->mgr);
     upool_free(&pic_mgr->ubuf_pool, pic_bmd);
 }
 
@@ -281,10 +283,6 @@ static void *ubuf_pic_bmd_alloc_inner(struct upool *upool)
     struct ubuf_pic_bmd *pic_bmd =
         (struct ubuf_pic_bmd *)malloc(sizeof(struct ubuf_pic_bmd) +
                                       ubuf_pic_common_sizeof(mgr));
-    if (unlikely(pic_bmd == NULL))
-        return NULL;
-    struct ubuf *ubuf = ubuf_pic_bmd_to_ubuf(pic_bmd);
-    ubuf->mgr = mgr;
     return pic_bmd;
 }
 
