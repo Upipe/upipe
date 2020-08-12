@@ -84,8 +84,6 @@ struct upipe_pciesdi_sink {
     struct upump_mgr *upump_mgr;
     /** write watcher */
     struct upump *fd_write_upump;
-    /** timer to wait for clock to init */
-    struct upump *timer_upump;
 
     int device_number;
 
@@ -115,7 +113,6 @@ UPIPE_HELPER_UREFCOUNT(upipe_pciesdi_sink, urefcount, upipe_pciesdi_sink_free)
 UPIPE_HELPER_VOID(upipe_pciesdi_sink);
 UPIPE_HELPER_UPUMP_MGR(upipe_pciesdi_sink, upump_mgr)
 UPIPE_HELPER_UPUMP(upipe_pciesdi_sink, fd_write_upump, upump_mgr)
-UPIPE_HELPER_UPUMP(upipe_pciesdi_sink, timer_upump, upump_mgr)
 UBASE_FROM_TO(upipe_pciesdi_sink, uclock, uclock, uclock)
 
 static uint64_t upipe_pciesdi_sink_now(struct uclock *uclock)
@@ -173,7 +170,6 @@ static struct upipe *upipe_pciesdi_sink_alloc(struct upipe_mgr *mgr,
     upipe_pciesdi_sink_init_urefcount(upipe);
     upipe_pciesdi_sink_init_upump_mgr(upipe);
     upipe_pciesdi_sink_init_fd_write_upump(upipe);
-    upipe_pciesdi_sink_init_timer_upump(upipe);
     upipe_pciesdi_sink_check_upump_mgr(upipe);
 
     int ret = pthread_mutex_init(&upipe_pciesdi_sink->clock_mutex, NULL);
@@ -727,7 +723,6 @@ static int upipe_pciesdi_set_uri(struct upipe *upipe, const char *path)
 
     ubase_clean_fd(&upipe_pciesdi_sink->fd);
     upipe_pciesdi_sink_set_fd_write_upump(upipe, NULL);
-    upipe_pciesdi_sink_set_timer_upump(upipe, NULL);
 
     upipe_pciesdi_sink->fd = open(path, O_RDWR | O_CLOEXEC | O_NONBLOCK);
     if (unlikely(upipe_pciesdi_sink->fd < 0)) {
@@ -792,7 +787,6 @@ static int upipe_pciesdi_sink_control(struct upipe *upipe, int command, va_list 
 
         case UPIPE_ATTACH_UPUMP_MGR:
             upipe_pciesdi_sink_set_fd_write_upump(upipe, NULL);
-            upipe_pciesdi_sink_set_timer_upump(upipe, NULL);
             return upipe_pciesdi_sink_attach_upump_mgr(upipe);
 
         case UPIPE_SET_FLOW_DEF: {
@@ -838,7 +832,6 @@ static void upipe_pciesdi_sink_free(struct upipe *upipe)
     uref_free(upipe_pciesdi_sink->uref_next);
 
     upipe_pciesdi_sink_clean_fd_write_upump(upipe);
-    upipe_pciesdi_sink_clean_timer_upump(upipe);
     upipe_pciesdi_sink_clean_upump_mgr(upipe);
     upipe_pciesdi_sink_clean_urefcount(upipe);
     upipe_pciesdi_sink_free_void(upipe);
