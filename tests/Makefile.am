@@ -70,6 +70,7 @@ check_PROGRAMS = \
 	ubuf_block_mem_test \
 	ubuf_pic_mem_test \
 	ubuf_sound_mem_test \
+	ubuf_pic_clear_test \
 	uref_std_test \
 	uref_uri_test \
 	uclock_std_test \
@@ -121,6 +122,7 @@ TESTS = \
 	ubuf_block_mem_test \
 	ubuf_pic_mem_test \
 	ubuf_sound_mem_test \
+	ubuf_pic_clear_test \
 	uprobe_stdio_test.sh \
 	uprobe_syslog_test.sh \
 	uprobe_prefix_test.sh \
