@@ -783,7 +783,7 @@ uint16_t sdi_lmh0387_spi_read(int fd, uint8_t channel, uint16_t adr)
 static int hsync_check(uint64_t reference, uint64_t value) {
     if (value < (reference - GENLOCK_HSYNC_MARGIN))
         return 0;
-    if (value > reference + GENLOCK_HSYNC_MARGIN)
+    if (value > (reference + GENLOCK_HSYNC_MARGIN))
         return 0;
     return 1;
 }
@@ -791,7 +791,7 @@ static int hsync_check(uint64_t reference, uint64_t value) {
 static int vsync_check(uint64_t reference, uint64_t value) {
     if (value < (reference - GENLOCK_VSYNC_MARGIN))
         return 0;
-    if (value > reference + GENLOCK_VSYNC_MARGIN)
+    if (value > (reference + GENLOCK_VSYNC_MARGIN))
         return 0;
     return 1;
 }
@@ -954,7 +954,7 @@ int si5324_genlock(int fd)
         for(i = 0; i < countof(smpte274m_1080i50_regs); i++)
             si5324_base_config_regs[SI5324_BASE_CONFIG_N2_OFFSET + i][1] = smpte274m_1080i50_regs[i][1];
     } else if (hsync_check(SMPTE274M_1080P30_HSYNC_PERIOD, hsync_period) &
-               vsync_check(SMPTE274M_1080P30_VSYNC_PERIOD, vsync_period*2)) {
+               vsync_check(SMPTE274M_1080P30_VSYNC_PERIOD, vsync_period)) {
         printf("SMPTE274M_1080P30 detected, configuring SI5324...\n");
         ret = SDI_PAL_RATE;
         for(i = 0; i < countof(smpte274m_1080p30_regs); i++)
@@ -966,7 +966,7 @@ int si5324_genlock(int fd)
         for(i = 0; i < countof(smpte274m_1080p25_regs); i++)
             si5324_base_config_regs[SI5324_BASE_CONFIG_N2_OFFSET + i][1] = smpte274m_1080p25_regs[i][1];
     } else if (hsync_check(SMPTE274M_1080P24_HSYNC_PERIOD, hsync_period) &
-               vsync_check(SMPTE274M_1080P24_VSYNC_PERIOD, vsync_period*2)) {
+               vsync_check(SMPTE274M_1080P24_VSYNC_PERIOD, vsync_period)) {
         printf("SMPTE274M_1080P24 detected, configuring SI5324...\n");
         ret = SDI_PAL_RATE;
         for(i = 0; i < countof(smpte274m_1080p24_regs); i++)
@@ -990,7 +990,7 @@ int si5324_genlock(int fd)
         for(i = 0; i < countof(smpte274m_1080p29_97_regs); i++)
             si5324_base_config_regs[SI5324_BASE_CONFIG_N2_OFFSET + i][1] = smpte274m_1080p29_97_regs[i][1];
     } else if (hsync_check(SMPTE274M_1080P23_98_HSYNC_PERIOD, hsync_period) &
-               vsync_check(SMPTE274M_1080P23_98_VSYNC_PERIOD, vsync_period*2)) {
+               vsync_check(SMPTE274M_1080P23_98_VSYNC_PERIOD, vsync_period)) {
         printf("SMPTE274M_1080P23_98 detected, configuring SI5324...\n");
         ret = SDI_NTSC_RATE;
         for(i = 0; i < countof(smpte274m_1080p23_98_regs); i++)
