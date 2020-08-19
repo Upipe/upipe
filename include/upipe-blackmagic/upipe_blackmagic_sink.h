@@ -62,6 +62,10 @@ enum upipe_bmd_sink_command {
     UPIPE_BMD_SINK_GET_GENLOCK_OFFSET,
     /** sets the genlock offset (int) **/
     UPIPE_BMD_SINK_SET_GENLOCK_OFFSET,
+    /** set timing adjustment value (int64_t) */
+    UPIPE_BMD_SINK_SET_TIMING_ADJUSTMENT,
+    /** adjust timing (int64_t) */
+    UPIPE_BMD_SINK_ADJUST_TIMING,
 };
 
 /** @This returns the management structure for all bmd sinks.
@@ -148,6 +152,31 @@ static inline int upipe_bmd_sink_set_genlock_offset(struct upipe *upipe,
 {
     return upipe_control(upipe, UPIPE_BMD_SINK_SET_GENLOCK_OFFSET,
                           UPIPE_BMD_SINK_SIGNATURE, offset);
+}
+
+/** @This sets the bmd_sink timing adjustment.
+ *
+ * @param upipe description structure of the pipe
+ * @param int64_t requested timing adjustment
+ * @return an error code
+ */
+static inline int upipe_bmd_sink_set_timing_adjustment(struct upipe *upipe,
+                                                       int64_t timing_adj)
+{
+    return upipe_control(upipe, UPIPE_BMD_SINK_SET_TIMING_ADJUSTMENT,
+                         UPIPE_BMD_SINK_SIGNATURE, timing_adj);
+}
+
+/** @This adjusts the bmd_sink timing.
+ *
+ * @param upipe description structure of the pipe
+ * @param int64_t requested timing adjustment
+ * @return an error code
+ */
+static inline int upipe_bmd_sink_adjust_timing(struct upipe *upipe, int64_t adj)
+{
+    return upipe_control(upipe, UPIPE_BMD_SINK_ADJUST_TIMING,
+                         UPIPE_BMD_SINK_SIGNATURE, adj);
 }
 
 /** @This allocates and initializes a bmd sink pipe.
