@@ -1,5 +1,6 @@
 /*
  * Copyright (C) 2018 OpenHeadend S.A.R.L.
+ * Copyright (C) 2020 EasyTools
  *
  * Authors: Arnaud de Turckheim
  *
@@ -37,6 +38,7 @@
 #include <upipe/upipe.h>
 #include <upipe/uref_sound.h>
 #include <upipe/uref_sound_flow.h>
+#include <upipe/uref_pic_flow.h>
 
 #include <upipe-modules/upipe_audio_copy.h>
 
@@ -65,12 +67,18 @@ struct upipe_audio_copy {
     struct uchain urefs;
     /** output size */
     uint64_t samples;
+    /** output frame rate */
+    struct urational fps;
     /** current retained size */
     uint64_t size;
     /** input sample rate */
     uint64_t samplerate;
+    /** sample size */
+    uint8_t sample_size;
     /** input planes */
     uint8_t planes;
+    /** remain from previous output */
+    int64_t remain;
 };
 
 UPIPE_HELPER_UPIPE(upipe_audio_copy, upipe, UPIPE_AUDIO_COPY_SIGNATURE);
@@ -108,12 +116,18 @@ static struct upipe *upipe_audio_copy_alloc(struct upipe_mgr *mgr,
     ulist_init(&upipe_audio_copy->urefs);
     upipe_audio_copy->planes = 0;
     upipe_audio_copy->samplerate = UINT64_MAX;
+    upipe_audio_copy->remain = 0;
 
     upipe_throw_ready(upipe);
 
-    if (unlikely(!ubase_check(
-                uref_sound_flow_get_samples(
-                    flow_def, &upipe_audio_copy->samples)))) {
+    upipe_audio_copy->samples = 0;
+    uref_sound_flow_get_samples(flow_def, &upipe_audio_copy->samples);
+    upipe_audio_copy->fps.num = 0;
+    upipe_audio_copy->fps.den = 1;
+    uref_pic_flow_get_fps(flow_def, &upipe_audio_copy->fps);
+
+    if (unlikely(!upipe_audio_copy->samples && !upipe_audio_copy->fps.num)) {
+        upipe_err(upipe, "invalid flow def parameters");
         uref_free(flow_def);
         upipe_release(upipe);
         return NULL;
@@ -126,13 +140,15 @@ static struct upipe *upipe_audio_copy_alloc(struct upipe_mgr *mgr,
         upipe_release(upipe);
         return NULL;
     }
-    if (unlikely(!ubase_check(
-                uref_sound_flow_set_samples(flow_def_attr,
-                                            upipe_audio_copy->samples)))) {
-        upipe_err(upipe, "fail to set samples");
-        uref_free(flow_def_attr);
-        upipe_release(upipe);
-        return NULL;
+    if (upipe_audio_copy->samples) {
+        int ret = uref_sound_flow_set_samples(
+            flow_def_attr, upipe_audio_copy->samples);
+        if (unlikely(!ubase_check(ret))) {
+            upipe_err(upipe, "fail to set samples");
+            uref_free(flow_def_attr);
+            upipe_release(upipe);
+            return NULL;
+        }
     }
     upipe_audio_copy_store_flow_def_attr(upipe, flow_def_attr);
 
@@ -160,6 +176,136 @@ static void upipe_audio_copy_free(struct upipe *upipe)
     upipe_audio_copy_clean_output(upipe);
     upipe_audio_copy_clean_urefcount(upipe);
     upipe_audio_copy_free_flow(upipe);
+}
+
+static void upipe_audio_copy_extract(struct upipe *upipe,
+                                     size_t size,
+                                     uint8_t **dst,
+                                     uint8_t planes)
+{
+    struct upipe_audio_copy *upipe_audio_copy =
+        upipe_audio_copy_from_upipe(upipe);
+
+    /* copy input to output buffer */
+    size_t offset = 0;
+    while (offset < size) {
+        struct uchain *uchain = ulist_peek(&upipe_audio_copy->urefs);
+        struct uref *in = uref_from_uchain(uchain);
+
+        size_t in_size;
+        ubase_assert(uref_sound_size(in, &in_size, NULL));
+        size_t extract = size - offset > in_size ?  in_size : size - offset;
+
+        upipe_verbose_va(upipe, "extract %zu/%zu", extract, in_size);
+
+        const uint8_t *src[planes];
+        int ret = uref_sound_read_uint8_t(in, 0, extract, src, planes);
+        if (unlikely(!ubase_check(ret))) {
+            upipe_warn(upipe, "fail to read from sound buffer");
+            continue;
+        }
+
+        for (uint8_t plane = 0; plane < planes; plane++)
+            if (dst[plane] && src[plane])
+                memcpy(dst[plane] + offset * upipe_audio_copy->sample_size,
+                       src[plane],
+                       extract * upipe_audio_copy->sample_size);
+        uref_sound_unmap(in, 0, -1, planes);
+
+        /* delete extracted */
+        if (extract == in_size) {
+            ulist_delete(uchain);
+            uref_free(in);
+        }
+        else {
+            uref_sound_consume(in, extract, upipe_audio_copy->samplerate);
+        }
+
+        offset += extract;
+    }
+}
+
+/** @internal @This outputs a buffer if possible
+ *
+ * @param upipe description structure of the pipe
+ * @param upump_p reference to pump that generated the buffer
+ * @return true if a buffer was outputted, false otherwise
+ */
+static bool upipe_audio_copy_output_buffer(struct upipe *upipe,
+                                           struct upump **upump_p)
+{
+    struct upipe_audio_copy *upipe_audio_copy =
+        upipe_audio_copy_from_upipe(upipe);
+
+    uint64_t samples = upipe_audio_copy->samples;
+    if (!samples) {
+        samples = (upipe_audio_copy->samplerate * upipe_audio_copy->fps.den +
+                   upipe_audio_copy->remain) / upipe_audio_copy->fps.num;
+        if (samples % 2)
+            samples--;
+        upipe_audio_copy->remain +=
+            upipe_audio_copy->samplerate * upipe_audio_copy->fps.den -
+            samples * upipe_audio_copy->fps.num;
+    }
+
+    if (samples > upipe_audio_copy->size)
+        return false;
+
+    /* get first buffer */
+    struct uchain *uchain = ulist_peek(&upipe_audio_copy->urefs);
+    assert(uchain);
+    struct uref *in = uref_from_uchain(uchain);
+
+    /* allocate output sound buffer from first buffer */
+    struct uref *out = uref_sound_alloc(in->mgr, in->ubuf->mgr, samples);
+    if (unlikely(!out)) {
+        upipe_err(upipe, "fail to allocate sound buffer");
+        upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
+        return false;
+    }
+    uint64_t date;
+    int type;
+    uref_attr_import(out, in);
+    uref_clock_get_date_prog(in, &date, &type);
+    if (type != UREF_DATE_NONE)
+        uref_clock_set_date_prog(out, date, type);
+    uref_clock_get_date_sys(in, &date, &type);
+    if (type != UREF_DATE_NONE)
+        uref_clock_set_date_sys(out, date, type);
+    uref_clock_get_date_orig(in, &date, &type);
+    if (type != UREF_DATE_NONE)
+        uref_clock_set_date_orig(out, date, type);
+    uref_attr_import(out, in);
+    uint64_t duration = UCLOCK_FREQ * samples / upipe_audio_copy->samplerate;
+    uref_clock_set_duration(out, duration);
+
+    uint8_t planes = upipe_audio_copy->planes;
+    uint8_t *dst[planes];
+    int ret = uref_sound_write_uint8_t(out, 0, -1, dst, planes);
+    if (unlikely(!ubase_check(ret))) {
+        upipe_warn(upipe, "fail to write to sound buffer");
+        uref_free(out);
+        return false;
+    }
+    upipe_audio_copy_extract(upipe, samples, dst, planes);
+    upipe_audio_copy->size -= samples;
+    /* unmap */
+    uref_sound_unmap(out, 0, -1, planes);
+
+    upipe_audio_copy_output(upipe, out, upump_p);
+    return true;
+}
+
+/** @internal @This outputs the buffers
+ *
+ * @param upipe description structure of the pipe
+ * @param upump_p reference to pump that generated the buffer
+ */
+static void upipe_audio_copy_work(struct upipe *upipe, struct upump **upump_p)
+{
+    upipe_use(upipe);
+    while (upipe_audio_copy_output_buffer(upipe, upump_p));
+    upipe_release(upipe);
 }
 
 /** @internal @This handles input buffers.
@@ -192,100 +338,7 @@ static void upipe_audio_copy_input(struct upipe *upipe,
     upipe_audio_copy->size += size;
     ulist_add(&upipe_audio_copy->urefs, uref_to_uchain(uref));
 
-    uint64_t duration = UCLOCK_FREQ * upipe_audio_copy->samples /
-        upipe_audio_copy->samplerate;
-
-    while (upipe_audio_copy->size >= upipe_audio_copy->samples) {
-        /* get next input sound buffer */
-        struct uchain *uchain = ulist_peek(&upipe_audio_copy->urefs);
-        assert(uchain);
-        struct uref *in = uref_from_uchain(uchain);
-
-        /* allocate output sound buffer */
-        struct uref *out = uref_sound_alloc(in->mgr, in->ubuf->mgr,
-                                            upipe_audio_copy->samples);
-        if (unlikely(!out)) {
-            upipe_err(upipe, "fail to allocate sound buffer");
-            upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
-            return;
-        }
-
-        /* copy attributes */
-        uint64_t date;
-        int type;
-        uref_attr_import(out, in);
-        uref_clock_get_date_prog(in, &date, &type);
-        if (type != UREF_DATE_NONE)
-            uref_clock_set_date_prog(out, date, type);
-        uref_clock_get_date_sys(in, &date, &type);
-        if (type != UREF_DATE_NONE)
-            uref_clock_set_date_sys(out, date, type);
-        uref_clock_get_date_orig(in, &date, &type);
-        if (type != UREF_DATE_NONE)
-            uref_clock_set_date_orig(out, date, type);
-        uref_clock_set_duration(out, duration);
-
-        /* map output buffer */
-        uint8_t planes = upipe_audio_copy->planes;
-        uint8_t *dst[planes];
-        if (unlikely(!ubase_check(uref_sound_write_uint8_t(out, 0, -1,
-                                                           dst, planes)))) {
-            upipe_warn(upipe, "fail to write to sound buffer");
-            uref_free(out);
-            return;
-        }
-
-        /* copy input to output buffer */
-        size_t offset = 0;
-        while (offset < upipe_audio_copy->samples) {
-            uchain = ulist_peek(&upipe_audio_copy->urefs);
-            in = uref_from_uchain(uchain);
-
-            size_t in_size, extract;
-
-            ubase_assert(uref_sound_size(in, &in_size, NULL));
-            extract = upipe_audio_copy->samples - offset > in_size ?
-                in_size : upipe_audio_copy->samples - offset;
-
-            upipe_verbose_va(upipe, "extract %zu/%zu", extract, in_size);
-
-            const uint8_t *src[planes];
-            if (unlikely(!ubase_check(uref_sound_read_uint8_t(in, 0, extract,
-                                                              src, planes)))) {
-                upipe_warn(upipe, "fail to read from sound buffer");
-                continue;
-            }
-
-            for (uint8_t plane = 0; plane < planes; plane++)
-                if (dst[plane] && src[plane])
-                    memcpy(dst[plane] + offset * sample_size, src[plane],
-                           extract * sample_size);
-            uref_sound_unmap(in, 0, -1, planes);
-
-            /* delete extracted */
-            if (extract == in_size) {
-                ulist_delete(uchain);
-                uref_free(in);
-            }
-            else
-                uref_sound_consume(in, extract, upipe_audio_copy->samplerate);
-
-            offset += extract;
-            upipe_audio_copy->size -= extract;
-        }
-
-        /* unmap */
-        uref_sound_unmap(out, 0, -1, planes);
-
-        /* output */
-        upipe_use(upipe);
-        upipe_audio_copy_output(upipe, out, upump_p);
-        bool single = upipe_single(upipe);
-        upipe_release(upipe);
-        /* quit if needed */
-        if (single)
-            break;
-    }
+    upipe_audio_copy_work(upipe, upump_p);
 }
 
 /** @internal @This forwards a new input flow format inband.
@@ -305,6 +358,8 @@ static int upipe_audio_copy_set_flow_def(struct upipe *upipe,
                                           &upipe_audio_copy->samplerate));
     UBASE_RETURN(uref_sound_flow_get_planes(flow_def,
                                             &upipe_audio_copy->planes));
+    UBASE_RETURN(uref_sound_flow_get_sample_size(
+            flow_def, &upipe_audio_copy->sample_size));
     if (unlikely(!upipe_audio_copy->samplerate))
         return UBASE_ERR_INVALID;
 
@@ -330,6 +385,7 @@ static int upipe_audio_copy_set_flow_def(struct upipe *upipe,
         uref_free(uref_from_uchain(uchain));
     }
     upipe_audio_copy->size = 0;
+    upipe_audio_copy->remain = 0;
 
     return UBASE_ERR_NONE;
 }
