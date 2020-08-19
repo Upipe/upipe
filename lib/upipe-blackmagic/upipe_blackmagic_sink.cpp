@@ -318,6 +318,9 @@ struct upipe_bmd_sink {
     /** last frame output */
     upipe_bmd_sink_frame *video_frame;
 
+    /** current timing adjustement */
+    int64_t timing_adjustment;
+
     /** is opened? */
     bool opened;
 };
@@ -593,6 +596,97 @@ static void copy_samples(upipe_bmd_sink_sub *upipe_bmd_sink_sub,
         memcpy(&out[DECKLINK_CHANNELS * (offset + i) + idx], &in[c*i], c * sizeof(int32_t));
 
     uref_sound_unmap(uref, 0, samples, 1);
+}
+
+/** @internal @This sets the bmd_sink timing adjustment.
+ *
+ * @param upipe description structure of the pipe
+ * @param int64_t requested timing adjustment
+ * @return an error code
+ */
+static int _upipe_bmd_sink_set_timing_adjustment(struct upipe *upipe, int64_t adj)
+{
+    struct upipe_bmd_sink *upipe_bmd_sink = upipe_bmd_sink_from_upipe(upipe);
+    IDeckLinkConfiguration *decklink_configuration;
+    HRESULT result;
+
+    result = upipe_bmd_sink->deckLink->QueryInterface(
+        IID_IDeckLinkConfiguration, (void**)&decklink_configuration);
+    if (result != S_OK)
+        return UBASE_ERR_EXTERNAL;
+
+    if (adj > 127)
+        adj = 127;
+    else if (adj < -127)
+        adj = -127;
+
+    result = decklink_configuration->SetInt(
+        bmdDeckLinkConfigClockTimingAdjustment, adj);
+    if (result != S_OK) {
+        decklink_configuration->Release();
+        return UBASE_ERR_EXTERNAL;
+    }
+
+    decklink_configuration->WriteConfigurationToPreferences();
+    decklink_configuration->Release();
+
+    return UBASE_ERR_NONE;
+}
+
+/** @internal @This adjusts the bmd_sink timing.
+ *
+ * @param upipe description structure of the pipe
+ * @param int64_t requested timing adjustment
+ * @return an error code
+ */
+static int _upipe_bmd_sink_adjust_timing(struct upipe *upipe, int64_t adj)
+{
+    struct upipe_bmd_sink *upipe_bmd_sink = upipe_bmd_sink_from_upipe(upipe);
+    IDeckLinkConfiguration *decklink_configuration;
+    HRESULT result;
+
+    result = upipe_bmd_sink->deckLink->QueryInterface(
+        IID_IDeckLinkConfiguration, (void**)&decklink_configuration);
+    if (result != S_OK)
+        return UBASE_ERR_EXTERNAL;
+
+    if (upipe_bmd_sink->timing_adjustment == INT64_MAX) {
+        result = decklink_configuration->GetInt(
+            bmdDeckLinkConfigClockTimingAdjustment,
+            &upipe_bmd_sink->timing_adjustment);
+        if (result != S_OK) {
+            decklink_configuration->Release();
+            return UBASE_ERR_EXTERNAL;
+        }
+        upipe_dbg_va(upipe, "current timing adjustment %" PRIi64,
+                     upipe_bmd_sink->timing_adjustment);
+    }
+
+    adj += upipe_bmd_sink->timing_adjustment;
+    if (adj > 127)
+        adj = 127;
+    else if (adj < -127)
+        adj = -127;
+
+    if (upipe_bmd_sink->timing_adjustment == adj)
+        return UBASE_ERR_NONE;
+
+    upipe_bmd_sink->timing_adjustment = adj;
+
+    result = decklink_configuration->SetInt(
+        bmdDeckLinkConfigClockTimingAdjustment,
+        upipe_bmd_sink->timing_adjustment);
+    if (result != S_OK) {
+        decklink_configuration->Release();
+        return UBASE_ERR_EXTERNAL;
+    }
+
+    decklink_configuration->WriteConfigurationToPreferences();
+    decklink_configuration->Release();
+
+    upipe_dbg_va(upipe, "adjust timing to %" PRIi64" ppm", adj);
+
+    return UBASE_ERR_NONE;
 }
 
 /** @internal @This fills the audio samples for one single stereo pair
@@ -1397,6 +1491,7 @@ static struct upipe *upipe_bmd_sink_alloc(struct upipe_mgr *mgr,
     upipe_bmd_sink->opened = false;
     upipe_bmd_sink->mode = bmdModeUnknown;
     upipe_bmd_sink->selectedMode = bmdModeUnknown;
+    upipe_bmd_sink->timing_adjustment = INT64_MAX;
 
     upipe_throw_ready(upipe);
     return upipe;
@@ -1848,6 +1943,16 @@ static int upipe_bmd_sink_control(struct upipe *upipe, int command, va_list args
             UBASE_SIGNATURE_CHECK(args, UPIPE_BMD_SINK_SIGNATURE)
             int64_t offset = va_arg(args, int64_t);
             return _upipe_bmd_sink_set_genlock_offset(upipe, offset);
+        }
+        case UPIPE_BMD_SINK_SET_TIMING_ADJUSTMENT: {
+            UBASE_SIGNATURE_CHECK(args, UPIPE_BMD_SINK_SIGNATURE)
+            int64_t timing_adj = va_arg(args, int64_t);
+            return _upipe_bmd_sink_set_timing_adjustment(upipe, timing_adj);
+        }
+        case UPIPE_BMD_SINK_ADJUST_TIMING: {
+            UBASE_SIGNATURE_CHECK(args, UPIPE_BMD_SINK_SIGNATURE)
+            int64_t adj = va_arg(args, int64_t);
+            return _upipe_bmd_sink_adjust_timing(upipe, adj);
         }
         case UPIPE_SET_OPTION: {
             const char *k = va_arg(args, const char *);
