@@ -52,6 +52,7 @@
 #include <upipe/upipe_helper_upump_mgr.h>
 #include <upipe/upipe_helper_upump.h>
 #include <upipe/upipe_helper_urefcount.h>
+#include <upipe/upipe_helper_uclock.h>
 #include <upipe-blackmagic/upipe_blackmagic_sink.h>
 
 #include <arpa/inet.h>
@@ -285,6 +286,11 @@ struct upipe_bmd_sink {
     /** hardware uclock */
     struct uclock uclock;
 
+    /** external clock */
+    struct uclock *uclock_external;
+    /** external clock request */
+    struct urequest uclock_external_request;
+
     /** genlock status */
     int genlock_status;
 
@@ -325,8 +331,13 @@ struct upipe_bmd_sink {
     bool opened;
 };
 
+static int upipe_bmd_sink_check(struct upipe *upipe, struct uref *flow_format);
+
 UPIPE_HELPER_UPIPE(upipe_bmd_sink, upipe, UPIPE_BMD_SINK_SIGNATURE);
 UPIPE_HELPER_UREFCOUNT(upipe_bmd_sink, urefcount, upipe_bmd_sink_free);
+UPIPE_HELPER_UCLOCK(upipe_bmd_sink, uclock_external, uclock_external_request,
+                    upipe_bmd_sink_check,
+                    upipe_throw_provide_request, NULL);
 
 UPIPE_HELPER_UPIPE(upipe_bmd_sink_sub, upipe, UPIPE_BMD_SINK_INPUT_SIGNATURE)
 UPIPE_HELPER_UPUMP_MGR(upipe_bmd_sink_sub, upump_mgr);
@@ -689,13 +700,69 @@ static int _upipe_bmd_sink_adjust_timing(struct upipe *upipe, int64_t adj)
     return UBASE_ERR_NONE;
 }
 
+static struct uref *upipe_bmd_sink_sub_pop(struct upipe *upipe, uint64_t date)
+{
+    struct upipe_bmd_sink_sub *upipe_bmd_sink_sub =
+        upipe_bmd_sink_sub_from_upipe(upipe);
+    struct upipe_bmd_sink *upipe_bmd_sink =
+        upipe_bmd_sink_from_sub_mgr(upipe->mgr);
+    struct uref *uref = NULL;
+
+    if (upipe_bmd_sink->uclock_external) {
+        if (date == UINT64_MAX)
+            return NULL;
+
+        uint64_t tolerance = upipe_bmd_sink->ticks_per_frame;
+
+        while (true) {
+                if (upipe_bmd_sink_sub->uref) {
+                    uref = upipe_bmd_sink_sub->uref;
+                    upipe_bmd_sink_sub->uref = NULL;
+                }
+                else
+                    uref = uqueue_pop(
+                        &upipe_bmd_sink_sub->uqueue, struct uref *);
+                if (!uref)
+                    break;
+
+            uint64_t pts_sys = UINT64_MAX;
+            uref_clock_get_pts_sys(uref, &pts_sys);
+            if (unlikely(pts_sys == UINT64_MAX)) {
+                upipe_warn(upipe, "drop undated buffer");
+                uref_free(uref);
+                continue;
+            }
+            pts_sys += upipe_bmd_sink_sub->latency;
+            if (pts_sys + tolerance < date) {
+                upipe_warn_va(upipe, "drop late buffer %.3f ms",
+                              (date - pts_sys) * 1000. / UCLOCK_FREQ);
+                uref_free(uref);
+                continue;
+            }
+            else if (pts_sys > date + tolerance) {
+                upipe_warn_va(upipe, "skip early  buffer %.3f ms",
+                              (pts_sys - date) * 1000. / UCLOCK_FREQ);
+                upipe_bmd_sink_sub->uref = uref;
+                uref = NULL;
+            }
+            break;
+        }
+    }
+    else {
+        uref = uqueue_pop(&upipe_bmd_sink_sub->uqueue, struct uref *);
+    }
+
+    return uref;
+}
+
 /** @internal @This fills the audio samples for one single stereo pair
  */
 static unsigned upipe_bmd_sink_sub_sound_get_samples_channel(struct upipe *upipe,
         const uint64_t video_pts, struct upipe_bmd_sink_sub *upipe_bmd_sink_sub)
 {
     size_t samples;
-    struct uref *uref = uqueue_pop(&upipe_bmd_sink_sub->uqueue, struct uref *);
+    struct uref *uref = upipe_bmd_sink_sub_pop(
+        upipe_bmd_sink_sub_to_upipe(upipe_bmd_sink_sub), video_pts);
     if (!uref) {
         upipe_err(&upipe_bmd_sink_sub->upipe, "no audio");
         return 0;
@@ -913,7 +980,10 @@ static void schedule_frame(struct upipe *upipe, struct uref *uref, uint64_t pts)
         upipe_err_va(upipe, "DROPPED FRAME %x", result);
 
     /* audio */
-    unsigned samples = upipe_bmd_sink_sub_sound_get_samples(&upipe_bmd_sink->upipe, pts);
+    uint64_t pts_sys = UINT64_MAX;
+    if (uref)
+        uref_clock_get_pts_sys(uref, &pts_sys);
+    unsigned samples = upipe_bmd_sink_sub_sound_get_samples(&upipe_bmd_sink->upipe, pts_sys);
 
     uint32_t written;
     result = upipe_bmd_sink->deckLinkOutput->ScheduleAudioSamples(
@@ -951,16 +1021,18 @@ static void output_cb(struct upipe *upipe, uint64_t pts)
     struct upipe_bmd_sink *upipe_bmd_sink =
         upipe_bmd_sink_from_sub_mgr(upipe->mgr);
 
-    uint64_t now = uclock_now(&upipe_bmd_sink->uclock);
+    uint64_t now;
+    if (upipe_bmd_sink->uclock_external)
+        now = uclock_now(upipe_bmd_sink->uclock_external);
+    else
+        now = uclock_now(&upipe_bmd_sink->uclock);
     if (0) upipe_notice_va(upipe, "PTS %.2f - %.2f - %u pics",
             pts_to_time(pts),
             dur_to_time(now - pts),
             uqueue_length(&upipe_bmd_sink_sub->uqueue));
 
     /* Find a picture */
-    struct uref *uref = uqueue_pop(&upipe_bmd_sink_sub->uqueue, struct uref *);
-
-    schedule_frame(upipe, uref, pts);
+    schedule_frame(upipe, upipe_bmd_sink_sub_pop(upipe, now), pts);
 
     /* Restart playback 4s after genlock transition */
     if (upipe_bmd_sink->genlock_transition_time) {
@@ -1029,21 +1101,24 @@ static bool upipe_bmd_sink_sub_output(struct upipe *upipe, struct uref *uref)
         }
         pts += upipe_bmd_sink_sub->latency;
         upipe_bmd_sink->start_pts = pts;
-
-        return false;
     }
 
-    uint64_t now = uclock_now(&upipe_bmd_sink->uclock);
+    uint64_t now;
+    /* use external clock if set, hardware clock otherwise */
+    if (upipe_bmd_sink->uclock_external)
+        now = uclock_now(upipe_bmd_sink->uclock_external);
+    else
+        now = uclock_now(&upipe_bmd_sink->uclock);
+
+    /* next PTS */
+    pts += (PREROLL_FRAMES - uatomic_load(&upipe_bmd_sink->preroll)) *
+        upipe_bmd_sink->ticks_per_frame;
 
     if (now < upipe_bmd_sink->start_pts) {
         upipe_notice_va(upipe, "%.2f < %.2f, buffering",
             pts_to_time(now), pts_to_time(upipe_bmd_sink->start_pts));
         return false;
     }
-
-    /* next PTS */
-    pts += (PREROLL_FRAMES - uatomic_load(&upipe_bmd_sink->preroll)) *
-        upipe_bmd_sink->ticks_per_frame;
 
     /* We're done buffering and now prerolling,
      * push the uref we just got into the fifo and
@@ -1473,6 +1548,7 @@ static struct upipe *upipe_bmd_sink_alloc(struct upipe_mgr *mgr,
     upipe_bmd_sink_init_sub_inputs(upipe);
     upipe_bmd_sink_init_sub_mgr(upipe);
     upipe_bmd_sink_init_urefcount(upipe);
+    upipe_bmd_sink_init_uclock(upipe);
 
     pthread_mutex_init(&upipe_bmd_sink->lock, NULL);
 
@@ -1888,6 +1964,17 @@ static int _upipe_bmd_sink_set_genlock_offset(struct upipe *upipe, int64_t offse
     return UBASE_ERR_NONE;
 }
 
+/** @internal @This checks the internal pipe state.
+ *
+ * @param upipe description structure of the pipe
+ * @param flow_format amended flow format
+ * @return an error code
+ */
+static int upipe_bmd_sink_check(struct upipe *upipe, struct uref *flow_format)
+{
+    return UBASE_ERR_NONE;
+}
+
 /** @internal @This processes control commands on an bmd_sink source pipe.
  *
  * @param upipe description structure of the pipe
@@ -1901,6 +1988,10 @@ static int upipe_bmd_sink_control(struct upipe *upipe, int command, va_list args
 
     UBASE_HANDLED_RETURN(upipe_bmd_sink_control_inputs(upipe, command, args));
     switch (command) {
+        case UPIPE_ATTACH_UCLOCK:
+            upipe_bmd_sink_require_uclock(upipe);
+            return UBASE_ERR_NONE;
+
         case UPIPE_SET_URI:
             if (!bmd_sink->deckLink) {
                 UBASE_RETURN(upipe_bmd_sink_open_card(upipe));
@@ -1995,6 +2086,7 @@ static void upipe_bmd_sink_free(struct upipe *upipe)
         upipe_bmd_sink->cb->Release();
 
     upipe_bmd_sink_clean_sub_inputs(upipe);
+    upipe_bmd_sink_clean_uclock(upipe);
     upipe_bmd_sink_clean_urefcount(upipe);
     upipe_clean(upipe);
     free(upipe_bmd_sink);
