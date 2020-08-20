@@ -53,6 +53,7 @@
 #include <upipe/upipe_helper_upump.h>
 #include <upipe/upipe_helper_urefcount.h>
 #include <upipe/upipe_helper_uclock.h>
+#include <upipe/upipe_helper_sync.h>
 #include <upipe-blackmagic/upipe_blackmagic_sink.h>
 
 #include <arpa/inet.h>
@@ -327,6 +328,9 @@ struct upipe_bmd_sink {
     /** current timing adjustement */
     int64_t timing_adjustment;
 
+    /** is output acquired */
+    bool acquired;
+
     /** is opened? */
     bool opened;
 };
@@ -338,6 +342,7 @@ UPIPE_HELPER_UREFCOUNT(upipe_bmd_sink, urefcount, upipe_bmd_sink_free);
 UPIPE_HELPER_UCLOCK(upipe_bmd_sink, uclock_external, uclock_external_request,
                     upipe_bmd_sink_check,
                     upipe_throw_provide_request, NULL);
+UPIPE_HELPER_SYNC(upipe_bmd_sink, acquired);
 
 UPIPE_HELPER_UPIPE(upipe_bmd_sink_sub, upipe, UPIPE_BMD_SINK_INPUT_SIGNATURE)
 UPIPE_HELPER_UPUMP_MGR(upipe_bmd_sink_sub, upump_mgr);
@@ -1308,6 +1313,8 @@ static int upipe_bmd_sink_sub_set_flow_def(struct upipe *upipe,
     }
 
     if (upipe_bmd_sink_sub == &upipe_bmd_sink->pic_subpipe) {
+        upipe_bmd_sink_sync_lost(super);
+
         uint8_t macropixel;
         if (!ubase_check(uref_pic_flow_get_macropixel(flow_def, &macropixel))) {
             upipe_err(upipe, "macropixel size not set");
@@ -1384,6 +1391,7 @@ static int upipe_bmd_sink_sub_set_flow_def(struct upipe *upipe,
         }
 
         upipe_bmd_sink->frame_idx = 0;
+        upipe_bmd_sink_sync_acquired(super);
     } else if (upipe_bmd_sink_sub != &upipe_bmd_sink->subpic_subpipe) {
         if (!ubase_check(uref_sound_flow_get_channels(flow_def, &upipe_bmd_sink_sub->channels))) {
             upipe_err(upipe, "Could not read number of channels");
@@ -1568,6 +1576,7 @@ static struct upipe *upipe_bmd_sink_alloc(struct upipe_mgr *mgr,
     upipe_bmd_sink_init_sub_mgr(upipe);
     upipe_bmd_sink_init_urefcount(upipe);
     upipe_bmd_sink_init_uclock(upipe);
+    upipe_bmd_sink_init_sync(upipe);
 
     pthread_mutex_init(&upipe_bmd_sink->lock, NULL);
 
@@ -1628,6 +1637,7 @@ static void upipe_bmd_stop(struct upipe *upipe)
     }
 
     upipe_bmd_sink->opened = false;
+    upipe_bmd_sink_sync_lost(upipe);
 }
 
 static int upipe_bmd_open_vid(struct upipe *upipe)
@@ -2105,6 +2115,7 @@ static void upipe_bmd_sink_free(struct upipe *upipe)
         upipe_bmd_sink->cb->Release();
 
     upipe_bmd_sink_clean_sub_inputs(upipe);
+    upipe_bmd_sink_clean_sync(upipe);
     upipe_bmd_sink_clean_uclock(upipe);
     upipe_bmd_sink_clean_urefcount(upipe);
     upipe_clean(upipe);
