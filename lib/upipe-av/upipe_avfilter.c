@@ -50,6 +50,7 @@
 #include <upipe/upipe_helper_uclock.h>
 #include <upipe/upipe_helper_upump_mgr.h>
 #include <upipe/upipe_helper_upump.h>
+#include <upipe/upipe_helper_sync.h>
 #include <upipe-av/upipe_avfilter.h>
 #include <upipe-av/upipe_av_pixfmt.h>
 #include <upipe-av/upipe_av_samplefmt.h>
@@ -280,6 +281,7 @@ UPIPE_HELPER_OUTPUT(upipe_avfilt, output, flow_def, output_state, requests)
 UPIPE_HELPER_FLOW_DEF(upipe_avfilt, flow_def_input, flow_def_attr)
 UPIPE_HELPER_SUBPIPE(upipe_avfilt, upipe_avfilt_sub, sub,
                      sub_mgr, subs, uchain);
+UPIPE_HELPER_SYNC(upipe_avfilt, configured);
 
 /** @internal @This is the avbuffer free callback.
  *
@@ -1445,9 +1447,9 @@ static int upipe_avfilt_set_configured(struct upipe *upipe, bool configured)
                     upipe_avfilt->filters_desc ?: "(none)",
                     configured ? "configured" :
                     "not configured");
-    upipe_avfilt->configured = configured;
-    return upipe_throw(upipe, UPROBE_AVFILT_CONFIGURED, UPIPE_AVFILT_SIGNATURE,
-                       configured ? 1 : 0);
+    if (configured)
+        return upipe_avfilt_sync_acquired(upipe);
+    return upipe_avfilt_sync_lost(upipe);
 }
 
 /** @internal @This updates the outputs if needed.
@@ -2756,11 +2758,11 @@ static struct upipe *upipe_avfilt_alloc(struct upipe_mgr *mgr,
     upipe_avfilt_init_flow_def(upipe);
     upipe_avfilt_init_sub_mgr(upipe);
     upipe_avfilt_init_sub_subs(upipe);
+    upipe_avfilt_init_sync(upipe);
 
     struct upipe_avfilt *upipe_avfilt = upipe_avfilt_from_upipe(upipe);
     upipe_avfilt->filters_desc = NULL;
     upipe_avfilt->filter_graph = NULL;
-    upipe_avfilt->configured = false;
     upipe_avfilt->hw_device_ctx = NULL;
     upipe_avfilt->ubuf_mgr = ubuf_av_mgr_alloc();
     upipe_avfilt->buffer_ctx = NULL;
@@ -2793,6 +2795,7 @@ static void upipe_avfilt_free(struct upipe *upipe)
     av_buffer_unref(&upipe_avfilt->hw_device_ctx);
     av_dict_free(&upipe_avfilt->options);
     ubuf_mgr_release(upipe_avfilt->ubuf_mgr);
+    upipe_avfilt_clean_sync(upipe);
     upipe_avfilt_clean_sub_subs(upipe);
     upipe_avfilt_clean_urefcount(upipe);
     upipe_avfilt_clean_output(upipe);
