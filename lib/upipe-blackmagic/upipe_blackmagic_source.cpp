@@ -1232,11 +1232,24 @@ static int upipe_bmd_src_set_uri(struct upipe *upipe, const char *uri)
     }
 
     /* configure input */
-    if (deckLinkInput->EnableVideoInput(displayMode->GetDisplayMode(),
+    HRESULT err =
+        deckLinkInput->EnableVideoInput(
+            displayMode->GetDisplayMode(),
             upipe_bmd_src->pixel_format,
             (detectFormat ? bmdVideoInputEnableFormatDetection :
-                            bmdVideoInputFlagDefault)) != S_OK) {
-        upipe_err(upipe, "pixel format not supported");
+             bmdVideoInputFlagDefault));
+    if (err != S_OK) {
+        switch (err) {
+            case E_INVALIDARG:
+                upipe_err(upipe, "pixel format not supported");
+                break;
+            case E_ACCESSDENIED:
+                upipe_err(upipe, "unable to access the hardware");
+                break;
+            default:
+                upipe_err(upipe, "internal error");
+                break;
+        }
         deckLinkInput->Release();
         deckLink->Release();
         return UBASE_ERR_EXTERNAL;
