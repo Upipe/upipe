@@ -57,3 +57,14 @@
    ...
    fun:_dl_init
 }
+
+{
+   x265-alloc
+   Memcheck:Leak
+   match-leak-kinds: definite
+   ...
+   fun:posix_memalign
+   fun:_ZN4x26511x265_mallocEm
+   ...
+   fun:x265_encoder_open_*
+}
