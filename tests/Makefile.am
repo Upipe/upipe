@@ -18,7 +18,8 @@ dist_check_SCRIPTS = \
 	uref_uri_test.sh \
 	ustring_test.sh \
 	upipe_m3u_reader_test.sh \
-	upipe_dtsdi_test.sh
+	upipe_dtsdi_test.sh \
+	uref_dump_test.sh
 
 dist_check_DATA = \
 	valgrind.supp \
@@ -30,6 +31,7 @@ dist_check_DATA = \
 	upipe_h264_framer_test.h \
 	uref_uri_test.txt \
 	ustring_test.txt \
+	uref_dump_test.txt \
 	upipe_m3u_reader_test_files/1.m3u \
 	upipe_m3u_reader_test_files/1.m3u.logs \
 	upipe_m3u_reader_test_files/2.m3u \
@@ -73,6 +75,7 @@ check_PROGRAMS = \
 	ubuf_pic_clear_test \
 	uref_std_test \
 	uref_uri_test \
+	uref_dump_test \
 	uclock_std_test \
 	upipe_play_test \
 	upipe_trickplay_test \
@@ -134,6 +137,7 @@ TESTS = \
 	uprobe_uref_mgr_test \
 	uref_std_test \
 	uref_uri_test.sh \
+	uref_dump_test.sh \
 	uclock_std_test \
 	upipe_null_test \
 	upipe_play_test \
