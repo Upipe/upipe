@@ -33,11 +33,12 @@
 extern "C" {
 #endif
 
+#include <upipe/ubuf.h>
+#include <libavutil/frame.h>
+
 #define UBUF_AV_SIGNATURE UBASE_FOURCC('A','V','F','b')
 #define UBUF_AV_ALLOC_PICTURE UBASE_FOURCC('A','V','F','p')
 #define UBUF_AV_ALLOC_SOUND UBASE_FOURCC('A','V','F','s')
-
-#include <libavutil/frame.h>
 
 /** @This extends ubuf_command with specific commands for AVFrame buffers. */
 enum ubuf_av_command {
