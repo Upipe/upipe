@@ -27,12 +27,15 @@
  * @short Upipe sound flow format definitions and helpers.
  */
 
-#ifndef _UPIPE_UREF_SOUND_FLOW_FORMAT_H_
+#ifndef _UPIPE_UREF_SOUND_FLOW_FORMATS_H_
 /** @hidden */
-#define _UPIPE_UREF_SOUND_FLOW_FORMAT_H_
+#define _UPIPE_UREF_SOUND_FLOW_FORMATS_H_
 #ifdef __cplusplus
 extern "C" {
 #endif
+
+#include <stdint.h>
+#include <stdbool.h>
 
 /** @This describes a sound format. */
 struct uref_sound_flow_format {
