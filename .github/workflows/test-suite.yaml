@@ -218,7 +218,7 @@ jobs:
         uses: actions/checkout@v2
 
       - name: Install dependencies
-        run: sudo apt-get install libgcrypt-dev
+        run: sudo apt-get install libgcrypt-dev libev-dev libavutil-dev libdvbcsa-dev
 
       - name: Configure
         run: |
@@ -227,3 +227,8 @@ jobs:
 
       - name: Check whitespaces
         run: make check-whitespace
+
+      - name: Check headers
+        env:
+          AM_COLOR_TESTS: always
+        run: make check-headers

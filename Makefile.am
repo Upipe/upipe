@@ -52,8 +52,10 @@ check-untracked:
 	@if git ls-files $(srcdir) --others --exclude-standard | grep .; then exit 1; fi
 
 check-headers:
-	@if test -t 1; then \
-	  red='[0;31m'; grn='[0;32m'; std='[m'; \
+	@if [ "$(AM_COLOR_TESTS)" != "no" ]; then \
+	  if [ "$(AM_COLOR_TESTS)" = "always" -o -t 1 ]; then \
+	    red='[0;31m'; grn='[0;32m'; std='[m'; \
+	  fi; \
 	fi; \
 	for header in $(srcdir)/include/*/*.h; do \
 	  h=$${header#$(srcdir)/include/}; \
