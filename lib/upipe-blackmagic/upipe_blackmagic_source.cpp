@@ -338,6 +338,13 @@ static int upipe_bmd_src_build_video(struct upipe *upipe,
         flow_def = uref_pic_flow_alloc_def(upipe_bmd_src->uref_mgr, 6);
         uref_pic_flow_add_plane(flow_def, 1, 1, 16,
                 "u10y10v10y10u10y10v10y10u10y10v10y10");
+        /* From Blackmagic DeckLink SDK documentation
+         * 2.7.4 Pixel Formats
+         *  bmdFormat10BitYUV:
+         *      In this format, each line of video must be aligned on a 128 byte
+         *      boundary.
+         */
+        uref_pic_flow_set_align(flow_def, 128);
     } else {
         flow_def = uref_pic_flow_alloc_def(upipe_bmd_src->uref_mgr, 1);
         uref_pic_flow_add_plane(flow_def, 1, 1, 4, "a8r8g8b8");
