@@ -52,6 +52,8 @@
 
 #include <bitstream/scte/35.h>
 
+#include "upipe_ts_scte_common.h"
+
 /** we only accept TS packets */
 #define EXPECTED_FLOW_DEF "block.mpegtspsi.mpegtsscte35."
 /** we output SCTE35 metadata */
@@ -316,112 +318,9 @@ static void upipe_ts_scte35d_time_signal_command(struct upipe *upipe,
     const uint8_t *desc;
     unsigned i = 0;
     for (i = 0; descl && (desc = descl_get_desc(descl, desc_length, i)); i++) {
-        out = uref_dup_inner(uref);
-        if (!out) {
-            upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
-            break;
-        }
-        uint8_t tag = scte35_splice_desc_get_tag(desc);
-        uint32_t identifier = scte35_splice_desc_get_identifier(desc);
-
-        uref_ts_scte35_desc_set_tag(out, tag);
-        uref_ts_scte35_desc_set_identifier(out, identifier);
-
-        switch (tag) {
-            case SCTE35_SPLICE_DESC_TAG_SEG: {
-                uint32_t seg_event_id = scte35_seg_desc_get_event_id(desc);
-                bool cancel = scte35_seg_desc_has_cancel(desc);
-                uref_ts_scte35_desc_seg_set_event_id(out, seg_event_id);
-                if (cancel)
-                    uref_ts_scte35_desc_seg_set_cancel(out);
-                else {
-                    bool has_delivery_not_restricted =
-                        scte35_seg_desc_has_delivery_not_restricted(desc);
-                    if (!has_delivery_not_restricted) {
-                        bool has_web_delivery_allowed =
-                            scte35_seg_desc_has_web_delivery_allowed(desc);
-                        bool has_no_regional_blackout =
-                            scte35_seg_desc_has_no_regional_blackout(desc);
-                        bool has_archive_allowed =
-                            scte35_seg_desc_has_archive_allowed(desc);
-                        uint8_t device_restrictions =
-                            scte35_seg_desc_get_device_restrictions(desc);
-                        if (has_web_delivery_allowed)
-                            uref_ts_scte35_desc_seg_set_web(out);
-                        if (has_no_regional_blackout)
-                            uref_ts_scte35_desc_seg_set_no_regional_blackout(
-                                out);
-                        if (has_archive_allowed)
-                            uref_ts_scte35_desc_seg_set_archive(out);
-                        uref_ts_scte35_desc_seg_set_device(
-                            out, device_restrictions);
-                    }
-                    else
-                        uref_ts_scte35_desc_seg_set_delivery_not_restricted(
-                            out);
-
-                    bool has_program_seg =
-                        scte35_seg_desc_has_program_seg(desc);
-                    if (!has_program_seg) {
-                        uint8_t nb_comp =
-                            scte35_seg_desc_get_component_count(desc);
-                        uref_ts_scte35_desc_seg_set_nb_comp(out, nb_comp);
-                        for (uint8_t j = 0; j < nb_comp; j++) {
-                            const uint8_t *comp =
-                                scte35_seg_desc_get_component(desc, j);
-                            uint8_t comp_tag =
-                                scte35_seg_desc_component_get_tag(comp);
-                            uint64_t pts_off =
-                                scte35_seg_desc_component_get_pts_off(comp);
-                            uref_ts_scte35_desc_seg_comp_set_tag(
-                                out, comp_tag, j);
-                            uref_ts_scte35_desc_seg_comp_set_pts_off(
-                                out, pts_off, j);
-                        }
-                    }
-
-                    bool has_duration = scte35_seg_desc_has_duration(desc);
-                    if (has_duration) {
-                        uint64_t duration = scte35_seg_desc_get_duration(desc);
-                        uref_clock_set_duration(out, duration);
-                    }
-
-                    uint8_t upid_type = scte35_seg_desc_get_upid_type(desc);
-                    uint8_t upid_length = scte35_seg_desc_get_upid_length(desc);
-                    const uint8_t *upid = scte35_seg_desc_get_upid(desc);
-                    uint8_t type_id = scte35_seg_desc_get_type_id(desc);
-                    uint8_t num = scte35_seg_desc_get_num(desc);
-                    uint8_t expected = scte35_seg_desc_get_expected(desc);
-                    if (upid_type || upid_length) {
-                        uref_ts_scte35_desc_seg_set_upid_type(out, upid_type);
-                        uref_ts_scte35_desc_seg_set_upid_type_name(
-                            out, scte35_seg_desc_upid_type_to_str(upid_type));
-                        uref_ts_scte35_desc_seg_set_upid_length(
-                            out, upid_length);
-                        uref_ts_scte35_desc_seg_set_upid(
-                            out, upid, upid_length);
-                    }
-                    uref_ts_scte35_desc_seg_set_type_id(out, type_id);
-                    uref_ts_scte35_desc_seg_set_type_id_name(
-                        out, scte35_seg_desc_type_id_to_str(type_id));
-                    uref_ts_scte35_desc_seg_set_num(out, num);
-                    uref_ts_scte35_desc_seg_set_expected(out, expected);
-                    if (scte35_seg_desc_has_sub_num(desc)) {
-                        uint8_t sub_num =
-                            scte35_seg_desc_get_sub_num(desc);
-                        uref_ts_scte35_desc_seg_set_sub_num(out, sub_num);
-                    }
-                    if (scte35_seg_desc_has_sub_expected(desc)) {
-                        uint8_t sub_expected =
-                            scte35_seg_desc_get_sub_expected(desc);
-                        uref_ts_scte35_desc_seg_set_sub_expected(
-                            out, sub_expected);
-                    }
-                }
-                break;
-            }
-        }
-        upipe_ts_scte35d_output(upipe, out, upump_p);
+        out = upipe_ts_scte_extract_desc(upipe, uref, desc);
+        if (out)
+            upipe_ts_scte35d_output(upipe, out, upump_p);
     }
 
     uref_block_unmap(uref, 0);

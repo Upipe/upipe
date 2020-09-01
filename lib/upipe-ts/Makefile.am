@@ -15,6 +15,8 @@ libupipe_ts_la_SOURCES = \
 	upipe_ts_psi_join.c \
 	upipe_ts_psi_merge.c \
 	upipe_ts_psi_split.c \
+	upipe_ts_scte_common.c \
+	upipe_ts_scte_common.h \
 	upipe_ts_scte104_decoder.c \
 	upipe_ts_scte35_decoder.c \
 	upipe_ts_scte35_generator.c \
