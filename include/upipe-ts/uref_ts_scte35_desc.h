@@ -92,6 +92,9 @@ UREF_ATTR_SMALL_UNSIGNED(ts_scte35_desc_seg, sub_num, "scte35.desc.seg.sub_num",
 UREF_ATTR_SMALL_UNSIGNED(ts_scte35_desc_seg, sub_expected,
                          "scte35.desc.seg.sub_expected",
                          sub segment expected);
+UREF_ATTR_SMALL_UNSIGNED(ts_scte35_desc_seg, duration_extension_frames,
+                         "scte35.desc.seg.duration_extension_framers",
+                         duration extension frames);
 
 #ifdef __cplusplus
 }
