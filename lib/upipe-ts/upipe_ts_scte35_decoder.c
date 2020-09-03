@@ -313,15 +313,18 @@ static void upipe_ts_scte35d_time_signal_command(struct upipe *upipe,
     if (descl)
         upipe_ts_scte35d_parse_descs(upipe, out, descl, desc_length);
 
-    upipe_ts_scte35d_output(upipe, out, upump_p);
-
+    uref_block_set_start(out);
     const uint8_t *desc;
     unsigned i = 0;
     for (i = 0; descl && (desc = descl_get_desc(descl, desc_length, i)); i++) {
-        out = upipe_ts_scte_extract_desc(upipe, uref, desc);
-        if (out)
-            upipe_ts_scte35d_output(upipe, out, upump_p);
+        struct uref *next = upipe_ts_scte_extract_desc(upipe, uref, desc);
+        if (!next)
+            continue;
+        upipe_ts_scte35d_output(upipe, out, upump_p);
+        out = next;
     }
+    uref_block_set_end(out);
+    upipe_ts_scte35d_output(upipe, out, upump_p);
 
     uref_block_unmap(uref, 0);
     uref_free(uref);

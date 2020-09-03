@@ -639,18 +639,26 @@ upipe_ts_scte104d_get_handler(struct upipe *upipe, uint16_t opid)
  *
  * @param upipe description structure of the pipe
  * @param event uref structure describing the event
- * @param descs list of uref structure describing the event descriptors
+ * @param urefs list of uref structure describing an event
  * @param upump_p reference to pump that generated the buffer
  */
 static void upipe_ts_scte104d_output(struct upipe *output,
-                                     struct uchain *descs,
+                                     struct uchain *urefs,
                                      struct upump **upump_p)
 {
-    struct uchain *uchain;
-    while ((uchain = ulist_pop(descs))) {
-        struct uref *desc = uref_from_uchain(uchain);
-        upipe_ts_scte104d_sub_output(output, desc, upump_p);
+    struct uchain *uchain = ulist_pop(urefs);
+    if (!uchain)
+        return;
+
+    struct uref *out = uref_from_uchain(uchain);
+    uref_block_set_start(out);
+    while ((uchain = ulist_pop(urefs))) {
+        struct uref *next = uref_from_uchain(uchain);
+        upipe_ts_scte104d_sub_output(output, out, upump_p);
+        out = next;
     }
+    uref_block_set_end(out);
+    upipe_ts_scte104d_sub_output(output, out, upump_p);
 }
 
 /** @internal @This parses a multiple operation message.
