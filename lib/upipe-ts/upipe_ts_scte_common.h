@@ -52,4 +52,15 @@ struct uref *upipe_ts_scte_extract_desc(struct upipe *upipe,
                                         struct uref *uref,
                                         const uint8_t *desc);
 
+/** @This export an uref describing a SCTE35 descriptor.
+ *
+ * @param upipe description structure of the caller
+ * @param uref uref to export
+ * @param desc pointer to the SCTE35 descriptor destination
+ * @return an error code
+ */
+int upipe_ts_scte_export_desc(struct upipe *upipe,
+                              struct uref *uref,
+                              uint8_t *desc);
+
 #endif

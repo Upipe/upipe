@@ -55,6 +55,8 @@
 
 #include <bitstream/scte/35.h>
 
+#include "upipe_ts_scte_common.h"
+
 /** T-STD TB octet rate for PSI tables */
 #define TB_RATE_PSI 125000
 /** 2^33 (max resolution of PCR, PTS and DTS) */
@@ -90,6 +92,8 @@ struct upipe_ts_scte35g {
     /** list of output requests */
     struct uchain request_list;
 
+    /** buffered input urefs */
+    struct uchain urefs;
     /** SCTE-35 interval */
     uint64_t scte35_interval;
     /** SCTE-35 last cr_sys */
@@ -100,6 +104,8 @@ struct upipe_ts_scte35g {
     struct ubuf *scte35_insert_section;
     /** SCTE-35 immediate insert command section */
     struct ubuf *scte35_immediate_section;
+    /** SCTE-35 time signal command section */
+    struct ubuf *scte35_time_signal_section;
     /** SCTE-35 insert cr_sys */
     uint64_t scte35_insert_cr_sys;
 
@@ -144,11 +150,13 @@ static struct upipe *upipe_ts_scte35g_alloc(struct upipe_mgr *mgr,
     upipe_ts_scte35g_init_output(upipe);
     upipe_ts_scte35g->flow_def = NULL;
 
+    ulist_init(&upipe_ts_scte35g->urefs);
     upipe_ts_scte35g->scte35_interval = 0;
     upipe_ts_scte35g->scte35_cr_sys = 0;
     upipe_ts_scte35g->scte35_null_section = NULL;
     upipe_ts_scte35g->scte35_insert_section = NULL;
     upipe_ts_scte35g->scte35_immediate_section = NULL;
+    upipe_ts_scte35g->scte35_time_signal_section = NULL;
     upipe_ts_scte35g->scte35_insert_cr_sys = 0;
 
     upipe_throw_ready(upipe);
@@ -161,25 +169,14 @@ static struct upipe *upipe_ts_scte35g_alloc(struct upipe_mgr *mgr,
     return upipe;
 }
 
-/** @internal @This creates a new PSI section.
+/** @internal @This creates a new PSI section for splice insert.
  *
  * @param upipe description structure of the pipe
- * @param uref uref structure
- * @param upump_p reference to pump that generated the buffer
  */
-static void upipe_ts_scte35g_input(struct upipe *upipe, struct uref *uref,
-                                   struct upump **upump_p)
+static void upipe_ts_scte35g_input_insert(struct upipe *upipe)
 {
     struct upipe_ts_scte35g *scte35g = upipe_ts_scte35g_from_upipe(upipe);
-
-    if (uref == NULL || uref->udict == NULL) {
-        upipe_notice(upipe, "now using splice_null command due to empty event");
-        uref_free(uref);
-        ubuf_free(scte35g->scte35_insert_section);
-        scte35g->scte35_insert_section = NULL;
-        return;
-    }
-
+    struct uref *uref = uref_from_uchain(ulist_pop(&scte35g->urefs));
     uint64_t pts_prog = UINT64_MAX;
     uref_clock_get_pts_prog(uref, &pts_prog);
     uint64_t duration = UINT64_MAX;
@@ -281,6 +278,100 @@ static void upipe_ts_scte35g_input(struct upipe *upipe, struct uref *uref,
                     event_id);
 }
 
+/** @internal @This creates a new PSI section for time signal.
+ *
+ * @param upipe description structure of the pipe
+ * @param uref uref structure
+ */
+static void upipe_ts_scte35g_time_signal(struct upipe *upipe)
+{
+    struct upipe_ts_scte35g *scte35g = upipe_ts_scte35g_from_upipe(upipe);
+    struct uref *uref = uref_from_uchain(ulist_pop(&scte35g->urefs));
+    uint64_t pts_prog = UINT64_MAX;
+    uref_clock_get_pts_prog(uref, &pts_prog);
+    uint64_t duration = UINT64_MAX;
+    uref_clock_get_duration(uref, &duration);
+    scte35g->scte35_insert_cr_sys = 0;
+    uref_clock_get_pts_sys(uref, &scte35g->scte35_insert_cr_sys);
+    uint64_t pts_orig = UINT64_MAX;
+    if (ubase_check(uref_clock_get_pts_orig(uref, &pts_orig)))
+        pts_orig = (pts_orig / CLOCK_SCALE) % POW2_33;
+    uref_free(uref);
+
+    for ( ; ; ) {
+        struct ubuf *ubuf = ubuf_block_alloc(scte35g->ubuf_mgr,
+                                             PSI_MAX_SIZE + PSI_HEADER_SIZE);
+        if (unlikely(ubuf == NULL)) {
+            upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
+            return;
+        }
+
+        uint8_t *scte35;
+        int size = -1;
+        if (!ubase_check(ubuf_block_write(ubuf, 0, &size, &scte35))) {
+            ubuf_free(ubuf);
+            upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
+            return;
+        }
+
+        scte35_init(scte35);
+        /* set length later */
+        psi_set_length(scte35, PSI_MAX_SIZE);
+        scte35_set_pts_adjustment(scte35, 0);
+
+        uint16_t i_size = 0;
+        if (pts_orig != UINT64_MAX)
+            i_size = SCTE35_SPLICE_TIME_TIME_SIZE;
+
+        scte35_time_signal_init(scte35, i_size);
+        uint8_t *t = scte35_time_signal_get_splice_time(scte35);
+        scte35_splice_time_init(t);
+        scte35_splice_time_set_time_specified(t, pts_orig != UINT64_MAX);
+        if (pts_orig != UINT64_MAX)
+            scte35_splice_time_set_pts_time(t, pts_orig);
+
+        uint16_t descl_length = 0;
+        uint8_t *descl = scte35_get_descl(scte35);
+
+        unsigned i = 0;
+        struct uchain *uchain;
+        ulist_foreach(&scte35g->urefs, uchain) {
+            uref = uref_from_uchain(uchain);
+            uint8_t *desc = descl_get_desc(
+                descl, descl_length + DESC_HEADER_SIZE, i);
+            if(!ubase_check(upipe_ts_scte_export_desc(upipe, uref, desc)))
+                continue;
+            descl_length += DESC_HEADER_SIZE +
+                scte35_splice_desc_get_length(desc);
+            i++;
+        }
+        scte35_set_desclength(scte35, descl_length);
+
+        psi_set_length(scte35,
+                scte35_get_descl(scte35) + PSI_CRC_SIZE - scte35 - PSI_HEADER_SIZE +
+                descl_length);
+        psi_set_crc(scte35);
+
+        uint16_t scte35_size = psi_get_length(scte35) + PSI_HEADER_SIZE;
+        ubuf_block_unmap(ubuf, 0);
+        ubuf_block_resize(ubuf, 0, scte35_size);
+
+        if (pts_prog == UINT64_MAX) {
+            ubuf_free(scte35g->scte35_immediate_section);
+            scte35g->scte35_immediate_section = ubuf;
+            break;
+        }
+
+        ubuf_free(scte35g->scte35_time_signal_section);
+        scte35g->scte35_time_signal_section = ubuf;
+        pts_prog = UINT64_MAX;
+    }
+
+    /* Force sending the table immediately */
+    scte35g->scte35_cr_sys = 0;
+    upipe_notice(upipe, "now using time signal command");
+}
+
 /** @internal @This builds a null command SCTE-35 section.
  *
  * @param upipe description structure of the pipe
@@ -322,6 +413,93 @@ static void upipe_ts_scte35g_build_null(struct upipe *upipe)
 
     ubuf_free(scte35g->scte35_null_section);
     scte35g->scte35_null_section = ubuf;
+}
+
+/** @internal @This creates a new PSI section.
+ *
+ * @param upipe description structure of the pipe
+ * @param uref uref structure
+ * @param upump_p reference to pump that generated the buffer
+ */
+static void upipe_ts_scte35g_flush(struct upipe *upipe)
+{
+    struct upipe_ts_scte35g *scte35g = upipe_ts_scte35g_from_upipe(upipe);
+    struct uchain *uchain = ulist_peek(&scte35g->urefs);
+    if (!uchain)
+        return;
+
+    struct uref *uref = uref_from_uchain(uchain);
+    uint8_t command_type;
+    int ret = uref_ts_scte35_get_command_type(uref, &command_type);
+    if (unlikely(!ubase_check(ret))) {
+        upipe_warn(upipe, "no command type found");
+    }
+    else {
+        switch (command_type) {
+            case SCTE35_INSERT_COMMAND:
+                upipe_ts_scte35g_input_insert(upipe);
+                break;
+            case SCTE35_NULL_COMMAND:
+                upipe_ts_scte35g_build_null(upipe);
+                break;
+            case SCTE35_TIME_SIGNAL_COMMAND:
+                upipe_ts_scte35g_time_signal(upipe);
+                break;
+            default:
+                upipe_warn_va(upipe, "unimplemented command type %u", command_type);
+                return;
+        }
+    }
+
+    while ((uchain = ulist_pop(&scte35g->urefs)))
+        uref_free(uref_from_uchain(uchain));
+}
+
+/** @internal @This creates a new PSI section.
+ *
+ * @param upipe description structure of the pipe
+ * @param uref uref structure
+ * @param upump_p reference to pump that generated the buffer
+ */
+static void upipe_ts_scte35g_input(struct upipe *upipe, struct uref *uref,
+                                   struct upump **upump_p)
+{
+    struct upipe_ts_scte35g *scte35g = upipe_ts_scte35g_from_upipe(upipe);
+
+    if (uref == NULL || uref->udict == NULL) {
+        upipe_notice(upipe, "now using splice_null command due to empty event");
+        uref_free(uref);
+        ubuf_free(scte35g->scte35_insert_section);
+        scte35g->scte35_insert_section = NULL;
+        return;
+    }
+
+    uint8_t command_type;
+    if (!ubase_check(uref_ts_scte35_get_command_type(uref, &command_type))) {
+        upipe_warn(upipe, "no command type in packet");
+        uref_free(uref);
+        ubuf_free(scte35g->scte35_insert_section);
+        scte35g->scte35_insert_section = NULL;
+        return;
+    }
+
+    bool start = ubase_check(uref_block_get_start(uref));
+    bool end = ubase_check(uref_block_get_end(uref));
+    bool was_empty = ulist_empty(&scte35g->urefs);
+    if (start && !was_empty) {
+        upipe_warn(upipe, "force last event flush");
+        upipe_ts_scte35g_flush(upipe);
+        was_empty = true;
+    }
+
+    ulist_add(&scte35g->urefs, uref_to_uchain(uref));
+    if ((!was_empty || start) && !end) {
+        upipe_verbose(upipe, "wait for next descriptor");
+        /* wait for the next descriptor */
+        return;
+    }
+
+    upipe_ts_scte35g_flush(upipe);
 }
 
 /** @internal @This builds a new output flow definition.
@@ -458,6 +636,23 @@ static int upipe_ts_scte35g_prepare(struct upipe *upipe, uint64_t cr_sys,
                  scte35g->scte35_cr_sys + scte35g->scte35_interval > cr_sys))
         return UBASE_ERR_NONE;
 
+    if (scte35g->scte35_time_signal_section != NULL) {
+        if (scte35g->scte35_insert_cr_sys < cr_sys) {
+            upipe_notice(upipe, "event expired");
+            ubuf_free(scte35g->scte35_time_signal_section);
+            scte35g->scte35_time_signal_section = NULL;
+
+        } else {
+            upipe_dbg(upipe, "sending a time signal event");
+            upipe_ts_scte35g_send(upipe, scte35g->scte35_time_signal_section,
+                                  cr_sys);
+            /* From now on we no longer need a splice immediate section */
+            ubuf_free(scte35g->scte35_immediate_section);
+            scte35g->scte35_immediate_section = NULL;
+            return UBASE_ERR_NONE;
+        }
+    }
+
     if (scte35g->scte35_insert_section != NULL) {
         if (scte35g->scte35_insert_cr_sys < cr_sys) {
             upipe_notice(upipe, "event expired");
@@ -534,10 +729,14 @@ static void upipe_ts_scte35g_free(struct upipe *upipe)
     struct upipe_ts_scte35g *scte35g = upipe_ts_scte35g_from_upipe(upipe);
     upipe_throw_dead(upipe);
 
+    struct uchain *uchain;
+    while ((uchain = ulist_pop(&scte35g->urefs)))
+        uref_free(uref_from_uchain(uchain));
     uref_free(scte35g->flow_def);
     ubuf_free(scte35g->scte35_null_section);
     ubuf_free(scte35g->scte35_insert_section);
     ubuf_free(scte35g->scte35_immediate_section);
+    ubuf_free(scte35g->scte35_time_signal_section);
     upipe_ts_scte35g_clean_output(upipe);
     upipe_ts_scte35g_clean_ubuf_mgr(upipe);
     upipe_ts_scte35g_clean_uref_mgr(upipe);

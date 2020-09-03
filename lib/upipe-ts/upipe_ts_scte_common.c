@@ -34,6 +34,8 @@
 
 #include "upipe_ts_scte_common.h"
 
+/** 2^33 (max resolution of PCR, PTS and DTS) */
+#define POW2_33 UINT64_C(8589934592)
 /** ratio between Upipe freq and MPEG freq */
 #define CLOCK_SCALE (UCLOCK_FREQ / 90000)
 
@@ -160,4 +162,139 @@ struct uref *upipe_ts_scte_extract_desc(struct upipe *upipe,
         }
     }
     return out;
+}
+
+/** @This export an uref describing a SCTE35 descriptor.
+ *
+ * @param upipe description structure of the caller
+ * @param uref uref to export
+ * @param desc pointer to the SCTE35 descriptor destination
+ * @return an error code
+ */
+int upipe_ts_scte_export_desc(struct upipe *upipe,
+                              struct uref *uref,
+                              uint8_t *desc)
+{
+    uint8_t tag;
+    UBASE_RETURN(uref_ts_scte35_desc_get_tag(uref, &tag));
+    uint64_t identifier;
+    UBASE_RETURN(uref_ts_scte35_desc_get_identifier(uref, &identifier));
+
+    switch (tag) {
+        case SCTE35_SPLICE_DESC_TAG_SEG: {
+            uint32_t length = 0;
+            uint64_t event_id;
+            UBASE_RETURN(uref_ts_scte35_desc_seg_get_event_id(uref, &event_id));
+            bool cancel = ubase_check(uref_ts_scte35_desc_seg_get_cancel(uref));
+            bool has_delivery_not_restricted =
+                ubase_check(
+                    uref_ts_scte35_desc_seg_get_delivery_not_restricted(uref));
+            bool has_web_delivery_allowed =
+                ubase_check(uref_ts_scte35_desc_seg_get_web(uref));
+            bool has_no_regional_blackout =
+                ubase_check(
+                    uref_ts_scte35_desc_seg_get_no_regional_blackout(
+                        uref));
+            bool has_archive_allowed =
+                ubase_check(uref_ts_scte35_desc_seg_get_archive(uref));
+            uint8_t device_restrictions = 0;
+            if (!cancel && !has_delivery_not_restricted)
+                UBASE_RETURN(uref_ts_scte35_desc_seg_get_device(
+                        uref, &device_restrictions));
+            uint8_t nb_comp = 0;
+            bool has_program_seg =
+                !ubase_check(uref_ts_scte35_desc_seg_get_nb_comp(uref, &nb_comp));
+            uint64_t duration = UINT64_MAX;
+            bool has_duration =
+                ubase_check(uref_clock_get_duration(uref, &duration));
+
+            uint8_t upid_type = 0;
+            uref_ts_scte35_desc_seg_get_upid_type(uref, &upid_type);
+            const uint8_t *upid = NULL;
+            size_t upid_length = 0;
+            uref_ts_scte35_desc_seg_get_upid(uref, &upid, &upid_length);
+
+            uint8_t type_id = 0;
+            uint8_t num = 0;
+            uint8_t expected = 0;
+            if (!cancel) {
+                UBASE_RETURN(
+                    uref_ts_scte35_desc_seg_get_type_id(uref, &type_id));
+                UBASE_RETURN(uref_ts_scte35_desc_seg_get_num(uref, &num));
+                UBASE_RETURN(
+                    uref_ts_scte35_desc_seg_get_expected(uref, &expected));
+            }
+            uint8_t sub_num = 0;
+            bool has_sub_num =
+                ubase_check(
+                    uref_ts_scte35_desc_seg_get_sub_num(uref, &sub_num));
+            uint8_t sub_expected = 0;
+            bool has_sub_expected =
+                ubase_check(uref_ts_scte35_desc_seg_get_sub_expected(
+                        uref, &sub_expected));
+
+            if (!cancel) {
+                length += SCTE35_SEG_DESC_NO_CANCEL_SIZE;
+
+                if (!has_program_seg) {
+                    length += SCTE35_SEG_DESC_NO_PROG_SEG_SIZE +
+                        6 * nb_comp;
+                }
+
+                if (has_duration)
+                    length += SCTE35_SEG_DESC_DURATION_SIZE;
+
+                length += upid_length;
+
+                if (has_sub_num && has_sub_expected)
+                    length += SCTE35_SEG_DESC_SUB_SEG_SIZE;
+            }
+
+            scte35_seg_desc_init(desc, length);
+            scte35_seg_desc_set_event_id(desc, event_id);
+            scte35_seg_desc_set_cancel(desc, cancel);
+            scte35_seg_desc_set_program_seg(desc, has_program_seg);
+            scte35_seg_desc_set_has_duration(desc, has_duration);
+            scte35_seg_desc_set_delivery_not_restricted(
+                desc, has_delivery_not_restricted);
+            scte35_seg_desc_set_web_delivery_allowed(
+                desc, has_web_delivery_allowed);
+            scte35_seg_desc_set_no_regional_blackout(
+                desc, has_no_regional_blackout);
+            scte35_seg_desc_set_archive_allowed(
+                desc, has_archive_allowed);
+            scte35_seg_desc_set_device_restrictions(desc, device_restrictions);
+            scte35_seg_desc_set_component_count(desc, nb_comp);
+            for (uint8_t i = 0; i < nb_comp; i++) {
+                uint8_t *comp = scte35_seg_desc_get_component(desc, i);
+                if (!comp)
+                    continue;
+                uint8_t comp_tag;
+                uint64_t pts_off;
+                UBASE_RETURN(uref_ts_scte35_desc_seg_comp_get_tag(
+                        uref, &comp_tag, i));
+                UBASE_RETURN(uref_ts_scte35_desc_seg_comp_get_pts_off(
+                        uref, &pts_off, i));
+                scte35_seg_desc_component_init(comp);
+                scte35_seg_desc_component_set_tag(comp, comp_tag);
+                scte35_seg_desc_component_set_pts_off(comp, pts_off);
+            }
+            scte35_seg_desc_set_duration(desc,
+                                         (duration / CLOCK_SCALE) % POW2_33);
+            scte35_seg_desc_set_upid_type(desc, upid_type);
+            scte35_seg_desc_set_upid_length(desc, upid_length);
+            uint8_t *upid_ptr = scte35_seg_desc_get_upid(desc);
+            if (upid_ptr)
+                memcpy(upid_ptr, upid, upid_length);
+            scte35_seg_desc_set_type_id(desc, type_id);
+            scte35_seg_desc_set_num(desc, num);
+            scte35_seg_desc_set_expected(desc, expected);
+            scte35_seg_desc_set_sub_num(desc, sub_num);
+            scte35_seg_desc_set_sub_expected(desc, sub_expected);
+            break;
+        }
+        default:
+            return UBASE_ERR_UNHANDLED;
+    }
+    return UBASE_ERR_NONE;
 }
