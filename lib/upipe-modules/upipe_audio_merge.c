@@ -393,7 +393,10 @@ static void upipe_audio_merge_produce_output(struct upipe *upipe, struct upump *
     uint8_t output_sample_size = 0;
     UBASE_ERROR(upipe, uref_sound_flow_get_sample_size(upipe_audio_merge->flow_def, &output_sample_size));
 
-    uint8_t *out_data[output_channels];
+    uint8_t output_planes = 0;
+    UBASE_ERROR(upipe, uref_sound_flow_get_planes(upipe_audio_merge->flow_def, &output_planes));
+
+    uint8_t *out_data[output_planes];
 
     /* Alloc and zero the output ubuf */
     ubuf = ubuf_sound_alloc(upipe_audio_merge->ubuf_mgr, output_num_samples);
@@ -401,8 +404,8 @@ static void upipe_audio_merge_produce_output(struct upipe *upipe, struct upump *
         upipe_throw_error(upipe, UBASE_ERR_ALLOC);
         return;
     }
-    if (likely(ubase_check(ubuf_sound_write_uint8_t(ubuf, 0, -1, out_data, output_channels)))) {
-        for (int i = 0; i < output_channels; i++)
+    if (likely(ubase_check(ubuf_sound_write_uint8_t(ubuf, 0, -1, out_data, output_planes)))) {
+        for (int i = 0; i < output_planes; i++)
             memset(out_data[i], 0, output_sample_size * output_num_samples);
     } else {
         upipe_err(upipe, "error writing output audio buffer, skipping");
@@ -415,7 +418,7 @@ static void upipe_audio_merge_produce_output(struct upipe *upipe, struct upump *
     upipe_audio_merge_copy_to_output(upipe, out_data);
 
     /* clean up and output */
-    ubuf_sound_unmap(ubuf, 0, -1, output_channels);
+    ubuf_sound_unmap(ubuf, 0, -1, output_planes);
     uref_sound_flow_set_samples(output_uref, output_num_samples);
     uref_attach_ubuf(output_uref, ubuf);
     upipe_audio_merge_output(upipe, output_uref, upump);
