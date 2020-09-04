@@ -126,6 +126,8 @@ struct upipe_audio_merge_sub {
     /** the single uref of incoming audio */
     struct uref *uref;
 
+    uint8_t channel_idx;
+
     /** public upipe structure */
     struct upipe upipe;
 };
@@ -190,6 +192,11 @@ static int upipe_audio_merge_sub_set_flow_def(struct upipe *upipe,
         upipe_err(upipe, "Interleaved audio not supported");
         return UBASE_ERR_INVALID;
     }
+
+    /* Get the channel_idx attribute or set it back to the default. */
+    if (!ubase_check(uref_sound_flow_get_channel_idx(flow_def, &upipe_audio_merge_sub->channel_idx)))
+        upipe_audio_merge_sub->channel_idx = 255;
+
     /* compare against stored flowdef (if we have one) and reject if formats don't match */
     if (upipe_audio_merge->sub_flow_def
             && !upipe_audio_merge_match_flowdefs(flow_def, upipe_audio_merge->sub_flow_def))
@@ -241,6 +248,7 @@ static struct upipe *upipe_audio_merge_sub_alloc(struct upipe_mgr *mgr,
     upipe_audio_merge_sub_init_sub(upipe);
     upipe_audio_merge_sub->uref = NULL;
     upipe_audio_merge_sub->flow_def = NULL;
+    upipe_audio_merge_sub->channel_idx = 255;
     upipe_throw_ready(upipe);
     return upipe;
 }
@@ -298,11 +306,17 @@ static void upipe_audio_merge_copy_to_output(struct upipe *upipe, uint8_t **out_
             uint8_t sample_size = 0;
             UBASE_ERROR(upipe, uref_sound_size(upipe_audio_merge_sub->uref, &samples, &sample_size));
 
+            int index;
+            if (upipe_audio_merge_sub->channel_idx == 255)
+                index = cur_plane;
+            else
+                index = upipe_audio_merge_sub->channel_idx;
+
             for (int i = 0; i < planes; i++) {
                 /* Only copy up to the number of channels in the output flowdef,
                    and thus what we've allocated */
-                if ((cur_plane + i) < output_channels)
-                    memcpy(out_data[cur_plane + i], in_data[i], sample_size * samples);
+                if ((index + i) < output_channels)
+                    memcpy(out_data[index + i], in_data[i], sample_size * samples);
             }
             uref_sound_unmap(upipe_audio_merge_sub->uref, 0, -1, planes);
         }
