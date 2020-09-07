@@ -88,6 +88,18 @@ uint8_t sdi_get_rate(int fd) {
     return m.rate;
 }
 
+uint8_t sdi_get_genlock(int fd) {
+    struct sdi_ioctl_rate m;
+    ioctl(fd, SDI_IOCTL_GET_GENLOCK, &m);
+    return m.rate;
+}
+
+void sdi_set_genlock(int fd, uint8_t genlock) {
+    struct sdi_ioctl_rate m;
+    m.rate = genlock;
+    ioctl(fd, SDI_IOCTL_SET_GENLOCK, &m);
+}
+
 void sdi_reload(int fd) {
     struct sdi_ioctl_icap m;
 	m.addr = 0x4;
