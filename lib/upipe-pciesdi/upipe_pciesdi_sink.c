@@ -559,10 +559,10 @@ static void init_hardware(struct upipe *upipe, int rate, int mode)
 
     /* PCIe SDI (Falcon 9) */
     if (capability_flags == SDI_CAP_FALCON9) {
-        if (rate == SDI_PAL_RATE) {
+        if (rate & SDI_PAL_RATE) {
             /* Set channel to refclk0. */
             sdi_channel_set_pll(fd, 0);
-        } else if (rate == SDI_NTSC_RATE) {
+        } else if (rate & SDI_NTSC_RATE) {
             /* Set channel 0 to refclk1. */
             sdi_channel_set_pll(fd, 1);
         }
@@ -573,18 +573,18 @@ static void init_hardware(struct upipe *upipe, int rate, int mode)
         /* TODO: Need to write to CSR_SDI_QPLL_REFCLK_STABLE_ADDR when changing refclk? */
         uint32_t refclk_freq;
         uint64_t refclk_counter;
-        if (rate == SDI_PAL_RATE) {
+        if (rate & SDI_PAL_RATE) {
             sdi_refclk(fd, 0, &refclk_freq, &refclk_counter);
-        } else if (rate == SDI_NTSC_RATE) {
+        } else if (rate & SDI_NTSC_RATE) {
             sdi_refclk(fd, 1, &refclk_freq, &refclk_counter);
         }
     }
 
     /* Duo2 */
     else if (SDI_CAP_DUO2) {
-        if (rate == SDI_PAL_RATE) {
+        if (rate & SDI_PAL_RATE) {
             sdi_picxo(fd, 0, 0, 0);
-        } else if (rate == SDI_NTSC_RATE) {
+        } else if (rate & SDI_NTSC_RATE) {
             /* SD: use a 270Mbps linerate, don't use PICXO */
             if (mode == SDI_TX_MODE_SD)
                 sdi_picxo(fd, 0, 0, 0);
@@ -703,7 +703,7 @@ static int upipe_pciesdi_sink_set_flow_def(struct upipe *upipe, struct uref *flo
     if (!fake)
         UBASE_ALLOC_RETURN(sdi_format);
 
-    bool genlock = false;
+    bool genlock = upipe_pciesdi_sink->genlock & SDI_GENLOCK_IS_CONFIGURED;
     bool sd = height < 720;
     bool ntsc = sd ? 0 : fps.den == 1001;
     bool sdi3g = height == 1080 && (urational_cmp(&fps, &(struct urational){ 50, 1 })) >= 0;
@@ -720,10 +720,17 @@ static int upipe_pciesdi_sink_set_flow_def(struct upipe *upipe, struct uref *flo
     int clock_rate;
     if (ntsc)
         clock_rate = SDI_NTSC_RATE;
-    else if (genlock)
-        clock_rate = SDI_GENLOCK_RATE;
     else
         clock_rate = SDI_PAL_RATE;
+
+    /* If the clock for this format is provided by genlock then we want to
+     * signal that genlock should be used to release and synchronize the TX. */
+    if (upipe_pciesdi_sink->genlock & SDI_GENLOCK_IS_NTSC && ntsc)
+        clock_rate |= SDI_GENLOCK_RATE;
+    else if (upipe_pciesdi_sink->genlock & SDI_GENLOCK_IS_PAL && !ntsc)
+        clock_rate |= SDI_GENLOCK_RATE;
+    else
+        genlock = false;
 
     if (upipe_pciesdi_sink->fd == -1) {
         upipe_warn(upipe, "device has not been opened, unable to init hardware");
