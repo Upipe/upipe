@@ -738,28 +738,28 @@ static int upipe_pciesdi_sink_set_flow_def(struct upipe *upipe, struct uref *flo
     }
 
     if (genlock) {
-    uint8_t active;
-    uint64_t period, seen;
-    sdi_genlock_vsync(upipe_pciesdi_sink->fd, &active, &period, &seen);
+        uint8_t active;
+        uint64_t period, seen;
+        sdi_genlock_vsync(upipe_pciesdi_sink->fd, &active, &period, &seen);
 
-    if (!fake && active) {
-        int64_t delay = get_genlock_delay(sdi_format);
-        if (delay == 0)
-            upipe_warn(upipe, "unknown genlock delay");
+        if (!fake && active) {
+            int64_t delay = get_genlock_delay(sdi_format);
+            if (delay == 0)
+                upipe_warn(upipe, "unknown genlock delay");
+            else
+                upipe_dbg_va(upipe, "setting genlock delay to %"PRId64, delay);
+
+            unsigned bitfield = SDI_GENLOCK_SYNCHRO_SOURCE_VSYNC_DELAYED;
+            if (sdi_format->psf_ident == UPIPE_SDI_PSF_IDENT_I)
+                bitfield |= SDI_GENLOCK_SYNCHRO_SOURCE_FIELD;
+
+            sdi_writel(upipe_pciesdi_sink->fd, CSR_SDI_GENLOCK_SYNCHRO_SOURCE_ADDR, bitfield);
+            sdi_writel(upipe_pciesdi_sink->fd, CSR_SDI_GENLOCK_SYNCHRO_DELAY_VSYNC_EDGE_ADDR, 0);
+            sdi_writel(upipe_pciesdi_sink->fd, CSR_SDI_GENLOCK_SYNCHRO_DELAY_VSYNC_OFFSET_ADDR, delay);
+        }
+
         else
-            upipe_dbg_va(upipe, "setting genlock delay to %"PRId64, delay);
-
-        unsigned bitfield = SDI_GENLOCK_SYNCHRO_SOURCE_VSYNC_DELAYED;
-        if (sdi_format->psf_ident == UPIPE_SDI_PSF_IDENT_I)
-            bitfield |= SDI_GENLOCK_SYNCHRO_SOURCE_FIELD;
-
-        sdi_writel(upipe_pciesdi_sink->fd, CSR_SDI_GENLOCK_SYNCHRO_SOURCE_ADDR, bitfield);
-        sdi_writel(upipe_pciesdi_sink->fd, CSR_SDI_GENLOCK_SYNCHRO_DELAY_VSYNC_EDGE_ADDR, 0);
-        sdi_writel(upipe_pciesdi_sink->fd, CSR_SDI_GENLOCK_SYNCHRO_DELAY_VSYNC_OFFSET_ADDR, delay);
-    }
-
-    else
-        upipe_warn(upipe, "genlock not active");
+            upipe_warn(upipe, "genlock not active");
     }
 
     /* Record time now so that we can use it as an offset to ensure that the
