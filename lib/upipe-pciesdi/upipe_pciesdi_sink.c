@@ -737,6 +737,7 @@ static int upipe_pciesdi_sink_set_flow_def(struct upipe *upipe, struct uref *flo
         return UBASE_ERR_INVALID;
     }
 
+    if (genlock) {
     uint8_t active;
     uint64_t period, seen;
     sdi_genlock_vsync(upipe_pciesdi_sink->fd, &active, &period, &seen);
@@ -759,6 +760,7 @@ static int upipe_pciesdi_sink_set_flow_def(struct upipe *upipe, struct uref *flo
 
     else
         upipe_warn(upipe, "genlock not active");
+    }
 
     /* Record time now so that we can use it as an offset to ensure that the
      * clock always goes forwards when mode changes. */
