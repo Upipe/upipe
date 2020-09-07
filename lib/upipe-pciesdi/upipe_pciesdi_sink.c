@@ -76,6 +76,7 @@ struct upipe_pciesdi_sink {
     int first;
     int tx_mode;
     int clock_rate;
+    int genlock;
 
     /** delay applied to systime attribute when uclock is provided */
     uint64_t latency;
@@ -189,6 +190,7 @@ static struct upipe *upipe_pciesdi_sink_alloc(struct upipe_mgr *mgr,
     upipe_pciesdi_sink->first = 1;
     upipe_pciesdi_sink->tx_mode = -1;
     upipe_pciesdi_sink->clock_rate = SDI_UNDEF_RATE;
+    upipe_pciesdi_sink->genlock = SDI_GENLOCK_IS_NOT_CONFIGURED;
     upipe_pciesdi_sink->uclock.refcount = &upipe_pciesdi_sink->urefcount;
     upipe_pciesdi_sink->uclock.uclock_now = upipe_pciesdi_sink_now;
 
@@ -755,8 +757,6 @@ static int upipe_pciesdi_sink_set_flow_def(struct upipe *upipe, struct uref *flo
      * clock always goes forwards when mode changes. */
     uint64_t offset = upipe_pciesdi_sink_now(&upipe_pciesdi_sink->uclock);
 
-    UBASE_RETURN(check_capabilities(upipe, genlock));
-
     upipe_warn(upipe, "new flow_def, stopping DMA and upump");
     stop_dma(upipe);
 
@@ -859,6 +859,10 @@ static int upipe_pciesdi_set_uri(struct upipe *upipe, const char *path)
     upipe_pciesdi_sink->mmap_info = mmap_info;
     upipe_pciesdi_sink->write_buffer = buf;
     upipe_pciesdi_sink->device_number = path[strlen(path) - 1] - 0x30;
+
+    int genlock;
+    upipe_pciesdi_sink->genlock = genlock = sdi_get_genlock(upipe_pciesdi_sink->fd);
+    UBASE_RETURN(check_capabilities(upipe, genlock & SDI_GENLOCK_IS_CONFIGURED));
 
     return UBASE_ERR_NONE;
 }
