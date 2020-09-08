@@ -84,6 +84,8 @@ struct upipe_autof_mgr {
 
     /** public upipe_mgr structure */
     struct upipe_mgr mgr;
+
+    bool lowlatency;
 };
 
 UBASE_FROM_TO(upipe_autof_mgr, upipe_mgr, upipe_mgr, mgr)
@@ -287,6 +289,12 @@ static int upipe_autof_set_flow_def(struct upipe *upipe, struct uref *flow_def)
         return UBASE_ERR_UNHANDLED;
     }
 
+    struct upipe_autof_mgr *autof_mgr = upipe_autof_mgr_from_upipe_mgr(upipe->mgr);
+
+    if (autof_mgr->lowlatency)
+        if (unlikely(!ubase_check(upipe_set_option(inner, "lowlatency", "1"))))
+            upipe_warn(upipe, "couldn't set lowlatency option on inner pipe");
+
     upipe_autof_store_bin_input(upipe, upipe_use(inner));
     upipe_autof_store_bin_output(upipe, inner);
     return UBASE_ERR_NONE;
@@ -369,6 +377,21 @@ static void upipe_autof_mgr_free(struct urefcount *urefcount)
     free(autof_mgr);
 }
 
+static int set_option(struct upipe_autof_mgr *autof_mgr,
+        const char *option, const char *value)
+{
+    if (!option || !value)
+        return UBASE_ERR_INVALID;
+
+    if (!strcmp(option, "lowlatency")) {
+        autof_mgr->lowlatency = !!atoi(value);
+        return UBASE_ERR_NONE;
+    }
+
+    /* TODO: print error somehow. */
+    return UBASE_ERR_INVALID;
+}
+
 /** @This processes control commands on an autof manager.
  *
  * @param mgr pointer to manager
@@ -411,6 +434,13 @@ static int upipe_autof_mgr_control(struct upipe_mgr *mgr,
         GET_SET_MGR(s302f, S302F)
 #undef GET_SET_MGR
 
+        case UPIPE_AUTOF_MGR_SET_OPTION: {
+            UBASE_SIGNATURE_CHECK(args, UPIPE_AUTOF_SIGNATURE);
+            const char *option = va_arg(args, const char *);
+            const char *value  = va_arg(args, const char *);
+            return set_option(autof_mgr, option, value);
+        }
+
         default:
             return UBASE_ERR_UNHANDLED;
     }
@@ -446,5 +476,6 @@ struct upipe_mgr *upipe_autof_mgr_alloc(void)
     autof_mgr->mgr.upipe_input = upipe_autof_bin_input;
     autof_mgr->mgr.upipe_control = upipe_autof_control;
     autof_mgr->mgr.upipe_mgr_control = upipe_autof_mgr_control;
+    autof_mgr->lowlatency = false;
     return upipe_autof_mgr_to_upipe_mgr(autof_mgr);
 }

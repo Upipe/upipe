@@ -40,6 +40,7 @@
 #include <upipe/upipe_helper_sync.h>
 #include <upipe/upipe_helper_output.h>
 #include <upipe/upipe_helper_flow_def.h>
+#include <upipe/upipe_helper_ubuf_mgr.h>
 #include <upipe-framers/upipe_s302_framer.h>
 
 #include <stdlib.h>
@@ -57,6 +58,9 @@
 
 /* Length in bytes of two audio samples */
 static const uint8_t pair_lengths[] = {5, 6, 7, 0};
+
+#define S302_MAX_PAIR_LENGTH 7
+#define S302_MAX_CHANNELS 8
 
 /** @internal @This is the private context of an s302f pipe. */
 struct upipe_s302f {
@@ -77,6 +81,13 @@ struct upipe_s302f {
     /** attributes in the sequence header */
     struct uref *flow_def_attr;
 
+    /** ubuf manager */
+    struct ubuf_mgr *ubuf_mgr;
+    /** flow format packet */
+    struct uref *flow_format;
+    /** ubuf manager request */
+    struct urequest ubuf_mgr_request;
+
     /** currently detected frame rate */
     struct urational fps;
     /** currently detected octet rate */
@@ -93,6 +104,15 @@ struct upipe_s302f {
      * sequence header) */
     bool acquired;
 
+    uint8_t scratch_buffer[S302_MAX_PAIR_LENGTH * S302_MAX_CHANNELS/2];
+    uint8_t scratch_buffer_count;
+
+    bool have_valid_header;
+    uint8_t pair_length, num_channels;
+    uint8_t header[S302_HEADER_SIZE];
+
+    bool lowlatency;
+
     /** public upipe structure */
     struct upipe upipe;
 };
@@ -104,6 +124,18 @@ UPIPE_HELPER_SYNC(upipe_s302f, acquired)
 
 UPIPE_HELPER_OUTPUT(upipe_s302f, output, flow_def, output_state, request_list)
 UPIPE_HELPER_FLOW_DEF(upipe_s302f, flow_def_input, flow_def_attr)
+
+static int upipe_s302f_check(struct upipe *upipe, struct uref *flow_format)
+{
+    if (flow_format != NULL)
+        upipe_s302f_store_flow_def(upipe, flow_format);
+    return UBASE_ERR_NONE;
+}
+
+UPIPE_HELPER_UBUF_MGR(upipe_s302f, ubuf_mgr, flow_format, ubuf_mgr_request,
+                      upipe_s302f_check,
+                      upipe_s302f_register_output_request,
+                      upipe_s302f_unregister_output_request)
 
 /** @internal @This allocates an s302f pipe.
  *
@@ -126,12 +158,43 @@ static struct upipe *upipe_s302f_alloc(struct upipe_mgr *mgr,
     upipe_s302f_init_sync(upipe);
     upipe_s302f_init_output(upipe);
     upipe_s302f_init_flow_def(upipe);
+    upipe_s302f_init_ubuf_mgr(upipe);
     upipe_s302f->octetrate = 0;
     upipe_s302f->next_uref = NULL;
     upipe_s302f->next_uref_size = 0;
+    upipe_s302f->scratch_buffer_count = 0;
+    upipe_s302f->have_valid_header = false;
+    upipe_s302f->pair_length = upipe_s302f->num_channels = 0;
+    upipe_s302f->lowlatency = false;
     uref_init(&upipe_s302f->au_uref_s);
     upipe_throw_ready(upipe);
     return upipe;
+}
+
+static void set_dates(struct uref *uref, struct uref *au_uref_s, int num_samples)
+{
+    uint64_t duration = num_samples * UCLOCK_FREQ / S302_FREQUENCY;
+
+    /* We work on encoded data so in the DTS domain. Rebase on DTS */
+    uint64_t date;
+    struct urational drift_rate;
+    drift_rate.den = 0;
+    uref_clock_get_rate(uref, &drift_rate);
+#define SET_DATE(dv)                                              \
+    if (ubase_check(uref_clock_get_dts_##dv(uref, &date)))        \
+        uref_clock_set_dts_##dv(au_uref_s, date);                 \
+    if (ubase_check(uref_clock_get_dts_##dv(au_uref_s, &date))) { \
+        uref_clock_set_dts_##dv(uref, date);                      \
+        uref_clock_set_dts_##dv(au_uref_s, date + duration);      \
+    }
+    SET_DATE(sys)
+    SET_DATE(prog)
+    SET_DATE(orig)
+#undef SET_DATE
+
+    uref_clock_set_dts_pts_delay(uref, 0);
+    if (drift_rate.den)
+        uref_clock_set_rate(uref, drift_rate);
 }
 
 /** @internal @This works on a s302 frame and outputs it.
@@ -207,34 +270,73 @@ static void upipe_s302f_work(struct upipe *upipe, struct upump **upump_p)
     upipe_s302f_store_flow_def(upipe, flow_def);
     upipe_s302f_sync_acquired(upipe);
 
-    uint64_t duration = num_samples * UCLOCK_FREQ / S302_FREQUENCY;
-
-    /* We work on encoded data so in the DTS domain. Rebase on DTS */
-    uint64_t date;
-    struct urational drift_rate;
-    drift_rate.den = 0;
-    uref_clock_get_rate(upipe_s302f->next_uref, &drift_rate);
-#define SET_DATE(dv)                                                        \
-    if (ubase_check(uref_clock_get_dts_##dv(upipe_s302f->next_uref, &date)))\
-        uref_clock_set_dts_##dv(&upipe_s302f->au_uref_s, date);             \
-    if (ubase_check(uref_clock_get_dts_##dv(&upipe_s302f->au_uref_s,        \
-                                            &date))) {                      \
-        uref_clock_set_dts_##dv(upipe_s302f->next_uref, date);              \
-        uref_clock_set_dts_##dv(&upipe_s302f->au_uref_s, date + duration);  \
-    }
-    SET_DATE(sys)
-    SET_DATE(prog)
-    SET_DATE(orig)
-#undef SET_DATE
-
-    uref_clock_set_dts_pts_delay(upipe_s302f->next_uref, 0);
-    if (drift_rate.den)
-        uref_clock_set_rate(upipe_s302f->next_uref, drift_rate);
+    set_dates(upipe_s302f->next_uref, &upipe_s302f->au_uref_s, num_samples);
 
     upipe_s302f_output(upipe, upipe_s302f->next_uref, upump_p);
 upipe_s302f_work_err:
     upipe_s302f->next_uref = NULL;
     upipe_s302f->next_uref_size = 0;
+}
+
+static int reframe(struct upipe_s302f *upipe_s302f, struct uref *uref, int num_samples, int uref_size, int uref_offset)
+{
+    struct upipe *upipe = upipe_s302f_to_upipe(upipe_s302f);
+
+    int audio_packet_size = num_samples * (upipe_s302f->pair_length * (upipe_s302f->num_channels / 2));
+    upipe_s302f->header[0] = audio_packet_size >> 8;
+    upipe_s302f->header[1] = audio_packet_size;
+
+    /* Create new block. */
+    struct ubuf *ubuf = ubuf_block_alloc(upipe_s302f->ubuf_mgr,
+            S302_HEADER_SIZE + audio_packet_size);
+    if (unlikely(ubuf == NULL)) {
+        upipe_throw_error(upipe, UBASE_ERR_ALLOC);
+        return UBASE_ERR_ALLOC;
+    }
+
+    int size = -1;
+    uint8_t *data;
+    int ret = ubuf_block_write(ubuf, 0, &size, &data);
+    if (!ubase_check(ret)) {
+        upipe_throw_error(upipe, ret);
+        ubuf_free(ubuf);
+        return ret;
+    }
+
+    /* Copy header. */
+    memcpy(data, upipe_s302f->header, S302_HEADER_SIZE);
+    data += S302_HEADER_SIZE;
+
+    /* Copy tail of previous packet. */
+    memcpy(data, upipe_s302f->scratch_buffer, upipe_s302f->scratch_buffer_count);
+    data += upipe_s302f->scratch_buffer_count;
+
+    /* Copy audio data. */
+    ret = uref_block_extract(uref, uref_offset, audio_packet_size - upipe_s302f->scratch_buffer_count, data);
+    if (!ubase_check(ret)) {
+        upipe_throw_error(upipe, ret);
+        ubuf_block_unmap(ubuf, 0);
+        ubuf_free(ubuf);
+        return ret;
+    }
+    uref_offset += audio_packet_size - upipe_s302f->scratch_buffer_count;
+
+    /* Store tail of data that must be output next time. */
+    ret = uref_block_extract(uref, uref_offset, -1, upipe_s302f->scratch_buffer);
+    if (!ubase_check(ret)) {
+        upipe_throw_error(upipe, ret);
+        ubuf_block_unmap(ubuf, 0);
+        ubuf_free(ubuf);
+        return ret;
+    }
+    upipe_s302f->scratch_buffer_count = uref_size - uref_offset;
+
+    ubuf_block_unmap(ubuf, 0);
+    uref_attach_ubuf(uref, ubuf);
+
+    set_dates(uref, &upipe_s302f->au_uref_s, num_samples);
+
+    return UBASE_ERR_NONE;
 }
 
 /** @internal @This receives data.
@@ -253,6 +355,95 @@ static void upipe_s302f_input(struct upipe *upipe, struct uref *uref,
         return;
     }
     bool end = ubase_check(uref_block_get_end(uref));
+
+    if (upipe_s302f->lowlatency) {
+        if (ubase_check(uref_block_get_start(uref))) {
+            uint8_t num_channels;
+            uint8_t bits_per_sample;
+            uint8_t pair_length;
+            int num_samples;
+
+            /* This should be 0 when a start attribute is set.  Packet loss
+             * might cause it to be otherwise.  Reset to ensure that the rest of
+             * the stream isn't garbage. */
+            upipe_s302f->scratch_buffer_count = 0;
+
+            /* Get header properties. */
+            if (!ubase_check(uref_block_extract(uref, 0, S302_HEADER_SIZE, upipe_s302f->header))) {
+                uref_free(uref);
+                upipe_s302f->have_valid_header = false;
+                return;
+            }
+            upipe_s302f->num_channels = num_channels = ((upipe_s302f->header[2] >> 6) + 1) * 2;
+            bits_per_sample = (upipe_s302f->header[3] >> 4) & 0x3;
+
+            upipe_s302f->pair_length = pair_length = pair_lengths[bits_per_sample];
+            if (!pair_length) {
+                uref_free(uref);
+                upipe_s302f->have_valid_header = false;
+                return;
+            }
+            upipe_s302f->have_valid_header = true;
+
+            /* Make/update output flow_def. */
+            struct uref *flow_def = upipe_s302f_alloc_flow_def_attr(upipe);
+            if (unlikely(flow_def == NULL)) {
+                upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
+                uref_free(uref);
+                return;
+            }
+
+            UBASE_FATAL(upipe, uref_flow_set_def(flow_def, "block.s302m.sound."))
+            UBASE_FATAL(upipe, uref_sound_flow_set_rate(flow_def, S302_FREQUENCY))
+            UBASE_FATAL(upipe, uref_sound_flow_set_channels(flow_def, num_channels))
+
+            flow_def = upipe_s302f_store_flow_def_attr(upipe, flow_def);
+            if (unlikely(flow_def == NULL)) {
+                upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
+                uref_free(uref);
+                return;
+            }
+            upipe_s302f_sync_acquired(upipe);
+
+            /* Get a ubuf_mgr to alloc new blocks. */
+            if (!upipe_s302f->ubuf_mgr
+                    || !ubase_check(ubuf_mgr_check(upipe_s302f->ubuf_mgr, flow_def)))
+                upipe_s302f_require_ubuf_mgr(upipe, flow_def);
+            else
+                uref_free(flow_def);
+
+            if (!upipe_s302f->ubuf_mgr) {
+                upipe_verbose(upipe, "no ubuf_mgr, dropping uref");
+                uref_free(uref);
+                return;
+            }
+
+            /* Set header size to the max data that is in the uref. */
+            num_samples = (uref_size - S302_HEADER_SIZE) / (pair_length * (num_channels / 2));
+
+            if (ubase_check(reframe(upipe_s302f, uref, num_samples, uref_size, S302_HEADER_SIZE)))
+                upipe_s302f_output(upipe, uref, upump_p);
+            else
+                uref_free(uref);
+        }
+
+        else if (upipe_s302f->have_valid_header) {
+            /* Number of whole samples in uref and scratch buffer. */
+            int num_samples = (upipe_s302f->scratch_buffer_count + uref_size) / (upipe_s302f->pair_length * (upipe_s302f->num_channels / 2));
+
+            if (ubase_check(reframe(upipe_s302f, uref, num_samples, uref_size, 0)))
+                upipe_s302f_output(upipe, uref, upump_p);
+            else
+                uref_free(uref);
+        }
+
+        else {
+            upipe_verbose(upipe, "no valid header, dropping uref");
+            uref_free(uref);
+        }
+
+        return;
+    }
 
     if (ubase_check(uref_block_get_start(uref))) {
         if (upipe_s302f->next_uref != NULL)
@@ -305,6 +496,23 @@ static int upipe_s302f_set_flow_def(struct upipe *upipe, struct uref *flow_def)
     return UBASE_ERR_NONE;
 }
 
+static int set_option(struct upipe *upipe,
+        const char *option, const char *value)
+{
+    struct upipe_s302f *upipe_s302f = upipe_s302f_from_upipe(upipe);
+
+    if (!option || !value)
+        return UBASE_ERR_INVALID;
+
+    if (!strcmp(option, "lowlatency")) {
+        upipe_s302f->lowlatency = !!atoi(value);
+        return UBASE_ERR_NONE;
+    }
+
+    upipe_err_va(upipe, "unknown option %s", option);
+    return UBASE_ERR_INVALID;
+}
+
 /** @internal @This processes control commands on a s302f pipe.
  *
  * @param upipe description structure of the pipe
@@ -316,10 +524,33 @@ static int upipe_s302f_control(struct upipe *upipe, int command, va_list args)
 {
     UBASE_HANDLED_RETURN(upipe_s302f_control_output(upipe, command, args));
     switch (command) {
+        case UPIPE_REGISTER_REQUEST: {
+            struct urequest *request = va_arg(args, struct urequest *);
+            if (request->type == UREQUEST_UBUF_MGR ||
+                request->type == UREQUEST_FLOW_FORMAT)
+                return upipe_throw_provide_request(upipe, request);
+            return upipe_s302f_alloc_output_proxy(upipe, request);
+        }
+
+        case UPIPE_UNREGISTER_REQUEST: {
+            struct urequest *request = va_arg(args, struct urequest *);
+            if (request->type == UREQUEST_UBUF_MGR ||
+                request->type == UREQUEST_FLOW_FORMAT)
+                return UBASE_ERR_NONE;
+            return upipe_s302f_free_output_proxy(upipe, request);
+        }
+
         case UPIPE_SET_FLOW_DEF: {
             struct uref *flow_def = va_arg(args, struct uref *);
             return upipe_s302f_set_flow_def(upipe, flow_def);
         }
+
+        case UPIPE_SET_OPTION: {
+            const char *option = va_arg(args, const char *);
+            const char *value  = va_arg(args, const char *);
+            return set_option(upipe, option, value);
+        }
+
         default:
             return UBASE_ERR_UNHANDLED;
     }
@@ -339,6 +570,7 @@ static void upipe_s302f_free(struct upipe *upipe)
     upipe_s302f_clean_flow_def(upipe);
     upipe_s302f_clean_sync(upipe);
 
+    upipe_s302f_clean_ubuf_mgr(upipe);
     upipe_s302f_clean_urefcount(upipe);
     upipe_s302f_free_void(upipe);
 }
