@@ -62,6 +62,12 @@ enum upipe_autof_mgr_command {
     UPIPE_AUTOF_MGR_GET_SET_MGR(opusf, OPUSF)
     UPIPE_AUTOF_MGR_GET_SET_MGR(s302f, S302F)
 #undef UPIPE_AUTOF_MGR_GET_SET_MGR
+
+    /** gets a string option (const char *, const char **) */
+    //UPIPE_AUTOF_MGR_GET_OPTION,
+    /** sets a string option (const char *, const char *) */
+    UPIPE_AUTOF_MGR_SET_OPTION,
+
 };
 
 /** @hidden */
@@ -105,6 +111,13 @@ UPIPE_AUTOF_MGR_GET_SET_MGR2(dvbsubf, DVBSUBF)
 UPIPE_AUTOF_MGR_GET_SET_MGR2(opusf, OPUSF)
 UPIPE_AUTOF_MGR_GET_SET_MGR2(s302f, S302F)
 #undef UPIPE_AUTOF_MGR_GET_SET_MGR2
+
+static inline int upipe_autof_mgr_set_option(struct upipe_mgr *mgr,
+        const char *option, const char *value)
+{
+    return upipe_mgr_control(mgr, UPIPE_AUTOF_MGR_SET_OPTION,
+            UPIPE_AUTOF_SIGNATURE, option, value);
+}
 
 #ifdef __cplusplus
 }

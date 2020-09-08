@@ -369,6 +369,16 @@ static void upipe_autof_mgr_free(struct urefcount *urefcount)
     free(autof_mgr);
 }
 
+static int set_option(struct upipe_autof_mgr *autof_mgr,
+        const char *option, const char *value)
+{
+    if (!option || !value)
+        return UBASE_ERR_INVALID;
+
+    /* TODO: print error somehow. */
+    return UBASE_ERR_INVALID;
+}
+
 /** @This processes control commands on an autof manager.
  *
  * @param mgr pointer to manager
@@ -410,6 +420,13 @@ static int upipe_autof_mgr_control(struct upipe_mgr *mgr,
         GET_SET_MGR(opusf, OPUSF)
         GET_SET_MGR(s302f, S302F)
 #undef GET_SET_MGR
+
+        case UPIPE_AUTOF_MGR_SET_OPTION: {
+            UBASE_SIGNATURE_CHECK(args, UPIPE_AUTOF_SIGNATURE);
+            const char *option = va_arg(args, const char *);
+            const char *value  = va_arg(args, const char *);
+            return set_option(autof_mgr, option, value);
+        }
 
         default:
             return UBASE_ERR_UNHANDLED;
