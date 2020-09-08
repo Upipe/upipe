@@ -476,7 +476,9 @@ static void upipe_pciesdi_sink_input(struct upipe *upipe, struct uref *uref, str
 #define BUFFER_COUNT_PRINT_THRESHOLD(num, den) (num * CHUNK_BUFFER_COUNT / den)
 
     if (upipe_pciesdi_sink->uref_next) {
-        upipe_dbg(upipe, "uref input before uref_next was used");
+        int64_t hw = 0, sw = 0;
+        sdi_dma_reader(upipe_pciesdi_sink->fd, upipe_pciesdi_sink->first == 0, &hw, &sw); // get buffer counts
+        upipe_dbg_va(upipe, "uref input before uref_next was used, buffer count hw: %"PRId64", sw: %"PRId64, hw, sw);
         uref_free(upipe_pciesdi_sink->uref_next);
     }
     upipe_pciesdi_sink->uref_next = uref;
