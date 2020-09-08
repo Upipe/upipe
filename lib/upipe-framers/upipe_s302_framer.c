@@ -111,6 +111,8 @@ struct upipe_s302f {
     uint8_t pair_length, num_channels;
     uint8_t header[S302_HEADER_SIZE];
 
+    bool lowlatency;
+
     /** public upipe structure */
     struct upipe upipe;
 };
@@ -163,6 +165,7 @@ static struct upipe *upipe_s302f_alloc(struct upipe_mgr *mgr,
     upipe_s302f->scratch_buffer_count = 0;
     upipe_s302f->have_valid_header = false;
     upipe_s302f->pair_length = upipe_s302f->num_channels = 0;
+    upipe_s302f->lowlatency = false;
     uref_init(&upipe_s302f->au_uref_s);
     upipe_throw_ready(upipe);
     return upipe;
@@ -353,8 +356,7 @@ static void upipe_s302f_input(struct upipe *upipe, struct uref *uref,
     }
     bool end = ubase_check(uref_block_get_end(uref));
 
-#define LOW_LATENCY 1
-    if (LOW_LATENCY) {
+    if (upipe_s302f->lowlatency) {
         if (ubase_check(uref_block_get_start(uref))) {
             uint8_t num_channels;
             uint8_t bits_per_sample;
@@ -442,7 +444,6 @@ static void upipe_s302f_input(struct upipe *upipe, struct uref *uref,
 
         return;
     }
-#undef LOW_LATENCY
 
     if (ubase_check(uref_block_get_start(uref))) {
         if (upipe_s302f->next_uref != NULL)
@@ -495,6 +496,23 @@ static int upipe_s302f_set_flow_def(struct upipe *upipe, struct uref *flow_def)
     return UBASE_ERR_NONE;
 }
 
+static int set_option(struct upipe *upipe,
+        const char *option, const char *value)
+{
+    struct upipe_s302f *upipe_s302f = upipe_s302f_from_upipe(upipe);
+
+    if (!option || !value)
+        return UBASE_ERR_INVALID;
+
+    if (!strcmp(option, "lowlatency")) {
+        upipe_s302f->lowlatency = !!atoi(value);
+        return UBASE_ERR_NONE;
+    }
+
+    upipe_err_va(upipe, "unknown option %s", option);
+    return UBASE_ERR_INVALID;
+}
+
 /** @internal @This processes control commands on a s302f pipe.
  *
  * @param upipe description structure of the pipe
@@ -526,6 +544,13 @@ static int upipe_s302f_control(struct upipe *upipe, int command, va_list args)
             struct uref *flow_def = va_arg(args, struct uref *);
             return upipe_s302f_set_flow_def(upipe, flow_def);
         }
+
+        case UPIPE_SET_OPTION: {
+            const char *option = va_arg(args, const char *);
+            const char *value  = va_arg(args, const char *);
+            return set_option(upipe, option, value);
+        }
+
         default:
             return UBASE_ERR_UNHANDLED;
     }
