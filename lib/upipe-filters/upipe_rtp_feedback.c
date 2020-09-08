@@ -125,6 +125,8 @@ struct upipe_rtpfb {
 
     uint64_t rtt;
 
+    uint8_t last_ssrc[4];
+
     /** public upipe structure */
     struct upipe upipe;
 };
@@ -430,7 +432,6 @@ static void upipe_rtpfb_timer_lost(struct upump *upump)
 
         if (likely(expected_seq != UINT64_MAX) && seqnum != expected_seq) {
             /* hole found */
-            uint8_t ssrc[4] = {0,}; // TODO
             upipe_dbg_va(upipe, "Found hole from %"PRIu64" (incl) to %"PRIu64" (excl)",
                 expected_seq, seqnum);
 
@@ -461,7 +462,7 @@ static void upipe_rtpfb_timer_lost(struct upump *upump)
                 - send request in a single batch (multiple FCI)
              */
             if (upipe_rtpfb->rtpfb_output)
-                upipe_rtpfb_output_lost(upipe_rtpfb->rtpfb_output, expected_seq, seqnum, ssrc, &pkt, &s);
+                upipe_rtpfb_output_lost(upipe_rtpfb->rtpfb_output, expected_seq, seqnum, upipe_rtpfb->last_ssrc, &pkt, &s);
             holes++;
         }
 
@@ -797,6 +798,7 @@ static struct upipe *upipe_rtpfb_alloc(struct upipe_mgr *mgr,
     upipe_rtpfb->dups = 0;
     upipe_rtpfb->upump_timer = NULL;
     upipe_rtpfb->upump_timer_lost = NULL;
+    memset(upipe_rtpfb->last_ssrc, 0, sizeof(upipe_rtpfb->last_ssrc));
 
     upipe_rtpfb->latency = UCLOCK_FREQ;
 
@@ -1012,8 +1014,7 @@ static void upipe_rtpfb_input(struct upipe *upipe, struct uref *uref,
     bool valid = rtp_check_hdr(rtp_header);
     uint16_t seqnum = rtp_get_seqnum(rtp_header);
 
-    uint8_t ssrc[4]; // TODO: use me
-    rtp_get_ssrc(rtp_header, ssrc);
+    rtp_get_ssrc(rtp_header, upipe_rtpfb->last_ssrc);
 
     uref_block_peek_unmap(uref, 0, rtp_buffer, rtp_header);
     if (unlikely(!valid)) {
