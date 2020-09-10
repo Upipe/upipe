@@ -394,7 +394,8 @@ static void upipe_audio_merge_produce_output(struct upipe *upipe, struct upump *
         return;
 
     /* interate through input subpipes, checking if they all have a uref available
-       and counting the number of channels */
+       and counting the number of samples */
+    uint64_t output_num_samples = 0;
     ulist_foreach (&upipe_audio_merge->inputs, uchain) {
         struct upipe_audio_merge_sub *upipe_audio_merge_sub =
             upipe_audio_merge_sub_from_uchain(uchain);
@@ -403,16 +404,10 @@ static void upipe_audio_merge_produce_output(struct upipe *upipe, struct upump *
            we're not ready to output */
         if (upipe_audio_merge_sub->uref == NULL || upipe_audio_merge_sub->flow_def == NULL)
             return;
-    }
 
-    /* TODO: merge this loop with the above? */
-    uint64_t output_num_samples = 0;
-    ulist_foreach (&upipe_audio_merge->inputs, uchain) {
-        struct upipe_audio_merge_sub *upipe_audio_merge_sub =
-            upipe_audio_merge_sub_from_uchain(uchain);
-        /* if we haven't got one already, copy the uref to form the basis of our output uref */
+        /* if we haven't got one already, get a uref to form the basis of our output uref */
         if (output_uref == NULL)
-            output_uref = uref_dup(upipe_audio_merge_sub->uref);
+            output_uref = upipe_audio_merge_sub->uref;
 
         size_t samples = 0;
         if (ubase_check(uref_sound_size(upipe_audio_merge_sub->uref, &samples, NULL))
@@ -421,9 +416,12 @@ static void upipe_audio_merge_produce_output(struct upipe *upipe, struct upump *
     }
     upipe_audio_merge->output_num_samples = output_num_samples;
 
-    if (unlikely(!output_uref))
+    /* Duplicate uref for output. */
+    output_uref = uref_dup(output_uref);
+    if (unlikely(!output_uref)) {
+        upipe_throw_error(upipe, UBASE_ERR_ALLOC);
         return;
-
+    }
 
     uint8_t output_sample_size = 0;
     UBASE_ERROR(upipe, uref_sound_flow_get_sample_size(upipe_audio_merge->flow_def, &output_sample_size));
