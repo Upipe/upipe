@@ -59,6 +59,21 @@ static inline int upipe_pciesdi_sink_get_uclock(struct upipe *upipe,
             UPIPE_PCIESDI_SINK_SIGNATURE, uclock_p);
 }
 
+/** @This enumarates the private events for upipe_pciesdi_sink pipes. */
+enum uprobe_pciesdi_sink_event {
+    /** sentinel */
+    UPROBE_PCIESDI_SINK_SENTINEL = UPROBE_LOCAL,
+
+    /** genlock type (uint32_t) */
+    UPROBE_PCIESDI_SINK_GENLOCK_TYPE,
+};
+
+enum uprobe_pciesdi_sink_genlock {
+    UPROBE_PCIESDI_SINK_GENLOCK_NOT_CONFIGURED,
+    UPROBE_PCIESDI_SINK_GENLOCK_CONFIGURED,
+    UPROBE_PCIESDI_SINK_GENLOCK_IN_USE,
+};
+
 /** @This returns the management structure for pciesdi_sink pipes.
  *
  * @return pointer to manager
