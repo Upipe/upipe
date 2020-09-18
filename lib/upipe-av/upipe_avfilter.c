@@ -207,6 +207,9 @@ struct upipe_avfilt {
     /** sub pipe list */
     struct uchain subs;
 
+    /** dictionary for options */
+    AVDictionary *options;
+
     /** filter graph description */
     char *filters_desc;
     /** avfilter filter graph */
@@ -1486,6 +1489,20 @@ static int upipe_avfilt_init_filters(struct upipe *upipe)
         return UBASE_ERR_NONE;
 
     upipe_avfilt->filter_graph = avfilter_graph_alloc();
+
+    AVDictionaryEntry *option = NULL;
+    while ((option = av_dict_get(upipe_avfilt->options,
+                                 "", option, AV_DICT_IGNORE_SUFFIX))) {
+        err = av_opt_set(upipe_avfilt->filter_graph,
+                         option->key, option->value,
+                         AV_OPT_SEARCH_CHILDREN);
+        if (unlikely(err < 0)) {
+            upipe_err_va(upipe, "can't set option %s:%s (%s)",
+                         option->key, option->value, av_err2str(err));
+            goto end;
+        }
+    }
+
     ulist_foreach(&upipe_avfilt->subs, uchain) {
         struct upipe_avfilt_sub *sub = upipe_avfilt_sub_from_uchain(uchain);
         if (!sub->input)
@@ -2612,6 +2629,41 @@ end:
     av_frame_free(&frame);
 }
 
+/** @internal @This sets the content of an avfilter option.
+ *
+ * @param upipe description structure of the pipe
+ * @param option name of the option
+ * @param content content of the option, or NULL to delete it
+ * @return an error code
+ */
+static int upipe_avfilt_set_option(struct upipe *upipe,
+                                   const char *option, const char *content)
+{
+    struct upipe_avfilt *upipe_avfilt = upipe_avfilt_from_upipe(upipe);
+    int err;
+
+    if (option == NULL)
+        return UBASE_ERR_INVALID;
+
+    if (upipe_avfilt->filter_graph != NULL) {
+        err = av_opt_set(upipe_avfilt->filter_graph, option, content,
+                         AV_OPT_SEARCH_CHILDREN);
+        if (err < 0) {
+            upipe_err_va(upipe, "can't set option %s:%s (%s)", option, content,
+                         av_err2str(err));
+            return UBASE_ERR_EXTERNAL;
+        }
+    }
+
+    err = av_dict_set(&upipe_avfilt->options, option, content, 0);
+    if (err < 0) {
+        upipe_err_va(upipe, "av_dict_set: %s", av_err2str(err));
+        return UBASE_ERR_EXTERNAL;
+    }
+
+    return UBASE_ERR_NONE;
+}
+
 /** @internal @This processes control commands on an avfilter pipe.
  *
  * @param upipe description structure of the pipe
@@ -2629,6 +2681,11 @@ static int upipe_avfilt_control(struct upipe *upipe,
         case UPIPE_SET_FLOW_DEF: {
             struct uref *flow_def = va_arg(args, struct uref *);
             return upipe_avfilt_set_flow_def(upipe, flow_def);
+        }
+        case UPIPE_SET_OPTION: {
+            const char *option = va_arg(args, const char *);
+            const char *content = va_arg(args, const char *);
+            return upipe_avfilt_set_option(upipe, option, content);
         }
         case UPIPE_AVFILT_SET_FILTERS_DESC: {
             UBASE_SIGNATURE_CHECK(args, UPIPE_AVFILT_SIGNATURE)
@@ -2692,6 +2749,7 @@ static struct upipe *upipe_avfilt_alloc(struct upipe_mgr *mgr,
     upipe_avfilt->buffer_ctx = NULL;
     upipe_avfilt->buffersink_ctx = NULL;
     upipe_avfilt->uref = NULL;
+    upipe_avfilt->options = NULL;
 
     upipe_throw_ready(upipe);
 
@@ -2716,6 +2774,7 @@ static void upipe_avfilt_free(struct upipe *upipe)
     free(upipe_avfilt->filters_desc);
     avfilter_graph_free(&upipe_avfilt->filter_graph);
     av_buffer_unref(&upipe_avfilt->hw_device_ctx);
+    av_dict_free(&upipe_avfilt->options);
     ubuf_mgr_release(upipe_avfilt->ubuf_mgr);
     upipe_avfilt_clean_sub_subs(upipe);
     upipe_avfilt_clean_urefcount(upipe);
