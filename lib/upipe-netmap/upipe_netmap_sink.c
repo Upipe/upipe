@@ -911,14 +911,14 @@ static int worker_rfc4175(struct upipe_netmap_sink *upipe_netmap_sink, uint8_t *
     }
     else if (upipe_netmap_sink->input_bit_depth == 10) {
         const uint16_t *y10, *u10, *v10;
-        y10 = (uint16_t*)upipe_netmap_sink->pixel_buffers[0] +
-             upipe_netmap_sink->strides[0] * interleaved_line +
+        y10 = (uint16_t*)(upipe_netmap_sink->pixel_buffers[0] +
+             upipe_netmap_sink->strides[0] * interleaved_line) +
              upipe_netmap_sink->pixel_offset / 1;
-        u10 = (uint16_t*)upipe_netmap_sink->pixel_buffers[1] +
-             upipe_netmap_sink->strides[1] * interleaved_line +
+        u10 = (uint16_t*)(upipe_netmap_sink->pixel_buffers[1] +
+             upipe_netmap_sink->strides[1] * interleaved_line) +
              upipe_netmap_sink->pixel_offset / 2;
-        v10 = (uint16_t*)upipe_netmap_sink->pixel_buffers[2] +
-             upipe_netmap_sink->strides[2] * interleaved_line +
+        v10 = (uint16_t*)(upipe_netmap_sink->pixel_buffers[2] +
+             upipe_netmap_sink->strides[2] * interleaved_line) +
              upipe_netmap_sink->pixel_offset / 2;
 
         if (likely(copy))
