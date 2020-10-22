@@ -619,29 +619,29 @@ static int64_t get_genlock_delay(const struct sdi_offsets_fmt *sdi_format)
         SDI_TYPE_UNKNOWN,
 
         SDI_TYPE_PAL,
-        SDI_TYPE_720p50,
-        SDI_TYPE_720p60,
-        SDI_TYPE_1080p24,
-        SDI_TYPE_1080i25,
-        SDI_TYPE_1080p25,
-        SDI_TYPE_1080p30,
-        SDI_TYPE_1080p50,
-        SDI_TYPE_1080p60,
+        SDI_TYPE_720P50,
+        SDI_TYPE_720P60,
+        SDI_TYPE_1080P24,
+        SDI_TYPE_1080I25,
+        SDI_TYPE_1080P25,
+        SDI_TYPE_1080P30,
+        SDI_TYPE_1080P50,
+        SDI_TYPE_1080P60,
 
         SDI_TYPE_NTSC,
-        SDI_TYPE_720p59,
-        SDI_TYPE_1080p23,
-        SDI_TYPE_1080i29,
-        SDI_TYPE_1080p29,
-        SDI_TYPE_1080p59,
+        SDI_TYPE_720P59,
+        SDI_TYPE_1080P23,
+        SDI_TYPE_1080I29,
+        SDI_TYPE_1080P29,
+        SDI_TYPE_1080P59,
     } sdi_type = SDI_TYPE_UNKNOWN;
 
     static const struct offset { int lines; int us; } offsets[] = {
             [SDI_TYPE_PAL]     = { 1, -24 },
-            [SDI_TYPE_720p50]  = { 2, -13 },
-            [SDI_TYPE_1080i25] = { 1, 6 },
-            [SDI_TYPE_1080p25] = { 1, 6 },
-            [SDI_TYPE_1080p50] = { 2, 1 },
+            [SDI_TYPE_720P50]  = { 2, -13 },
+            [SDI_TYPE_1080I25] = { 1, 6 },
+            [SDI_TYPE_1080P25] = { 1, 6 },
+            [SDI_TYPE_1080P50] = { 2, 1 },
     };
 
     int height = sdi_format->pict_fmt->active_height;
@@ -650,17 +650,17 @@ static int64_t get_genlock_delay(const struct sdi_offsets_fmt *sdi_format)
 
     if (height == 1080) {
         if (urational_cmp(fps, &(struct urational){ 50, 1 }) == 0)
-            sdi_type = SDI_TYPE_1080p50;
+            sdi_type = SDI_TYPE_1080P50;
         if (urational_cmp(fps, &(struct urational){ 25, 1 }) == 0) {
             if (interlaced)
-                sdi_type = SDI_TYPE_1080i25;
+                sdi_type = SDI_TYPE_1080I25;
             else
-                sdi_type = SDI_TYPE_1080p25;
+                sdi_type = SDI_TYPE_1080P25;
         }
     }
     else if (height == 720) {
         if (urational_cmp(fps, &(struct urational){ 50, 1 }) == 0)
-            sdi_type = SDI_TYPE_720p50;
+            sdi_type = SDI_TYPE_720P50;
     }
     else {
         if (urational_cmp(fps, &(struct urational){ 25, 1 }) == 0)
