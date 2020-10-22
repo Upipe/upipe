@@ -636,8 +636,9 @@ static int64_t get_genlock_delay(const struct sdi_offsets_fmt *sdi_format)
         SDI_TYPE_1080P59,
     } sdi_type = SDI_TYPE_UNKNOWN;
 
+    /* "advanced" means the video is too early.  "delayed" means the video is too late. */
     static const struct offset { int lines; int us; } offsets[] = {
-            [SDI_TYPE_PAL]     = { 1, -24 },
+            [SDI_TYPE_PAL]     = { -1, -24 },
             [SDI_TYPE_720P50]  = { 2, -13 },
             [SDI_TYPE_1080I25] = { 1, 6 },
             [SDI_TYPE_1080P25] = { 1, 6 },
