@@ -653,21 +653,43 @@ static int64_t get_genlock_delay(const struct sdi_offsets_fmt *sdi_format)
     const struct urational *fps = &sdi_format->fps;
 
     if (height == 1080) {
-        if (urational_cmp(fps, &(struct urational){ 50, 1 }) == 0)
+        if (urational_cmp(fps, &(struct urational){ 60, 1 }) == 0)
+            sdi_type = SDI_TYPE_1080P60;
+        else if (urational_cmp(fps, &(struct urational){ 60000, 1001 }) == 0)
+            sdi_type = SDI_TYPE_1080P59;
+        else if (urational_cmp(fps, &(struct urational){ 50, 1 }) == 0)
             sdi_type = SDI_TYPE_1080P50;
-        if (urational_cmp(fps, &(struct urational){ 25, 1 }) == 0) {
+        else if (urational_cmp(fps, &(struct urational){ 30, 1 }) == 0)
+            sdi_type = SDI_TYPE_1080P30;
+        else if (urational_cmp(fps, &(struct urational){ 30000, 1001 }) == 0) {
+            if (interlaced)
+                sdi_type = SDI_TYPE_1080I29;
+            else
+                sdi_type = SDI_TYPE_1080P29;
+        }
+        else if (urational_cmp(fps, &(struct urational){ 25, 1 }) == 0) {
             if (interlaced)
                 sdi_type = SDI_TYPE_1080I25;
             else
                 sdi_type = SDI_TYPE_1080P25;
         }
+        else if (urational_cmp(fps, &(struct urational){ 24, 1 }) == 0)
+            sdi_type = SDI_TYPE_1080P24;
+        else if (urational_cmp(fps, &(struct urational){ 24000, 1001 }) == 0)
+            sdi_type = SDI_TYPE_1080P23;
     }
     else if (height == 720) {
-        if (urational_cmp(fps, &(struct urational){ 50, 1 }) == 0)
+        if (urational_cmp(fps, &(struct urational){ 60, 1 }) == 0)
+            sdi_type = SDI_TYPE_720P60;
+        else if (urational_cmp(fps, &(struct urational){ 60000, 1001 }) == 0)
+            sdi_type = SDI_TYPE_720P59;
+        else if (urational_cmp(fps, &(struct urational){ 50, 1 }) == 0)
             sdi_type = SDI_TYPE_720P50;
     }
     else {
-        if (urational_cmp(fps, &(struct urational){ 25, 1 }) == 0)
+        if (urational_cmp(fps, &(struct urational){ 30000, 1001 }) == 0)
+            sdi_type = SDI_TYPE_NTSC;
+        else if (urational_cmp(fps, &(struct urational){ 25, 1 }) == 0)
             sdi_type = SDI_TYPE_PAL;
     }
 
