@@ -643,6 +643,9 @@ static int64_t get_genlock_delay(const struct sdi_offsets_fmt *sdi_format)
             [SDI_TYPE_1080I25] = { 1, 6 },
             [SDI_TYPE_1080P25] = { 1, 6 },
             [SDI_TYPE_1080P50] = { 2, 1 },
+            [SDI_TYPE_720P59]  = { 1, 3 },
+            [SDI_TYPE_1080I29] = { 1, -11 },
+            [SDI_TYPE_1080P59] = { 2, -6 },
     };
 
     int height = sdi_format->pict_fmt->active_height;
