@@ -1,5 +1,6 @@
 /*
  * Copyright (C) 2013-2017 OpenHeadend S.A.R.L.
+ * Copyright (C) 2020 EasyTools S.A.S.
  *
  * Authors: Christophe Massiot
  *
@@ -562,6 +563,8 @@ static bool upipe_mpgaf_parse_adts(struct upipe *upipe)
     UBASE_FATAL(upipe,
             uref_sound_flow_set_rate(flow_def, upipe_mpgaf->samplerate))
     UBASE_FATAL(upipe,
+            uref_mpga_flow_set_aot(flow_def, upipe_mpgaf->asc_aot))
+    UBASE_FATAL(upipe,
             uref_sound_flow_set_samples(flow_def, upipe_mpgaf->samples))
     if (!upipe_mpgaf->complete_input)
         UBASE_FATAL(upipe, uref_clock_set_latency(flow_def,
@@ -766,7 +769,8 @@ static bool upipe_mpgaf_handle_asc_ga(struct upipe *upipe,
     return true;
 }
 
-/** @internal @This handles an AudioSpecificConfig bitstream.  *
+/** @internal @This handles an AudioSpecificConfig bitstream.
+ *
  * @param upipe description structure of the pipe
  * @param s ubuf block stream
  * @return false if the stream is invalid or unsupported
@@ -1042,6 +1046,8 @@ static bool upipe_mpgaf_handle_latm(struct upipe *upipe, struct ubuf *ubuf,
             uref_mpga_flow_set_encaps(flow_def, UREF_MPGA_ENCAPS_LOAS))
     UBASE_FATAL(upipe,
             uref_sound_flow_set_rate(flow_def, upipe_mpgaf->samplerate))
+    UBASE_FATAL(upipe,
+            uref_mpga_flow_set_aot(flow_def, upipe_mpgaf->asc_aot))
     UBASE_FATAL(upipe,
             uref_sound_flow_set_samples(flow_def, upipe_mpgaf->samples))
     if (!upipe_mpgaf->complete_input)

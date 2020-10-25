@@ -1,5 +1,6 @@
 /*
  * Copyright (C) 2015-2017 OpenHeadend S.A.R.L.
+ * Copyright (C) 2020 EasyTools S.A.S.
  *
  * Authors: Christophe Massiot
  *
@@ -64,6 +65,7 @@ enum uref_mpga_signaling {
 
 UREF_ATTR_SMALL_UNSIGNED(mpga_flow, encaps, "mpga.encaps", AAC encapsulation type)
 UREF_ATTR_SMALL_UNSIGNED(mpga_flow, signaling, "mpga.signaling", AAC signaling mode)
+UREF_ATTR_SMALL_UNSIGNED(mpga_flow, aot, "mpga.aot", AAC audio object type)
 UREF_ATTR_SMALL_UNSIGNED(mpga_flow, mode, "mpga.mode", MPEG audio mode)
 
 /** @This infers the encapsulation type from a flow definition packet.

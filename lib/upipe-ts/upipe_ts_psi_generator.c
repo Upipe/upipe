@@ -58,6 +58,7 @@
 
 #include <bitstream/mpeg/ts.h>
 #include <bitstream/mpeg/psi.h>
+#include <bitstream/mpeg/aac.h>
 #include <bitstream/dvb/si.h>
 #include <bitstream/atsc/si.h>
 #include <bitstream/atsc/a52.h>
@@ -324,6 +325,17 @@ static int upipe_ts_psig_flow_check(struct upipe *upipe,
             *descriptors_size_p += DESC7B_HEADER_SIZE;
         else if (!ubase_ncmp(raw_def, "block.opus."))
             *descriptors_size_p += DESC05_HEADER_SIZE;
+        else if (!ubase_ncmp(raw_def, "block.aac.") ||
+                 !ubase_ncmp(raw_def, "block.aac_latm."))
+            switch (conformance) {
+                case UPIPE_TS_CONFORMANCE_DVB:
+                case UPIPE_TS_CONFORMANCE_DVB_NO_TABLES:
+                case UPIPE_TS_CONFORMANCE_ISDB:
+                    *descriptors_size_p += DESC7C_HEADER_SIZE;
+                    break;
+                default:
+                    break;
+            }
         else if (ubase_ncmp(raw_def, "block.mp2.") &&
                    ubase_ncmp(raw_def, "block.mp3.") &&
                    ubase_ncmp(raw_def, "block.aac.") &&
@@ -726,6 +738,30 @@ static int upipe_ts_psig_flow_build(struct upipe *upipe, uint8_t *es,
             desc = descs_get_desc(descs, k++);
             desc05_init(desc);
             desc05_set_identifier(desc, (const uint8_t *)"opus");
+
+        } else if (!ubase_ncmp(raw_def, "block.aac.") ||
+                   !ubase_ncmp(raw_def, "block.aac_latm.")) {
+            switch (conformance) {
+                case UPIPE_TS_CONFORMANCE_DVB:
+                case UPIPE_TS_CONFORMANCE_DVB_NO_TABLES:
+                case UPIPE_TS_CONFORMANCE_ISDB: {
+                    desc = descs_get_desc(descs, k++);
+                    desc7c_init(desc);
+
+                    uint8_t aot = 0;
+                    uref_mpga_flow_get_aot(flow->flow_def, &aot);
+                    uint8_t channels = 0;
+                    uref_sound_flow_get_channels(flow->flow_def, &channels);
+                    uint64_t rate = 48000;
+                    uref_sound_flow_get_rate(flow->flow_def, &rate);
+                    desc7c_set_profile_and_level(desc,
+                            asc_get_profilelevel(aot, channels, rate));
+                    break;
+                }
+
+                default:
+                    break;
+            }
         }
     }
 

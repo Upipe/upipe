@@ -1,5 +1,6 @@
 /*
  * Copyright (C) 2012-2017 OpenHeadend S.A.R.L.
+ * Copyright (C) 2020 EasyTools S.A.S.
  *
  * Authors: Benjamin Cohen
  *          Christophe Massiot
@@ -78,6 +79,7 @@
 #include <libavutil/opt.h>
 #include <bitstream/mpeg/h264.h>
 #include <bitstream/mpeg/mp2v.h>
+#include <bitstream/mpeg/aac.h>
 
 #include <upipe-av/upipe_av_pixfmt.h>
 #include <upipe-av/upipe_av_samplefmt.h>
@@ -547,6 +549,12 @@ static void upipe_avcenc_build_flow_def(struct upipe *upipe)
 
     if (context->codec->type == AVMEDIA_TYPE_AUDIO && context->frame_size > 0)
         uref_sound_flow_set_samples(flow_def, context->frame_size);
+
+    if (!strcmp(context->codec->name, "libfdk_aac")) {
+        /* That's actually how it's defined. */
+        UBASE_FATAL(upipe,
+                    uref_mpga_flow_set_aot(flow_def, context->profile + 1))
+    }
 
     /* global headers (extradata) */
     if (context->extradata_size) {
