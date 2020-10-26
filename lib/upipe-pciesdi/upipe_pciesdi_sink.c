@@ -403,7 +403,7 @@ static void upipe_pciesdi_sink_worker(struct upump *upump)
     }
 
     /* Store tail of uref in scratch buffer. */
-    if ((samples - samples_written)/4*5 < DMA_BUFFER_SIZE) {
+    if ((samples - samples_written)/4*5 + upipe_pciesdi_sink->scratch_bytes < DMA_BUFFER_SIZE) {
         int samples_to_write = samples - samples_written;
         upipe_pciesdi_sink->uyvy_to_sdi(upipe_pciesdi_sink->scratch_buffer + upipe_pciesdi_sink->scratch_bytes,
                 src_buf + samples_written * sizeof(uint16_t), samples_to_write / 2);
