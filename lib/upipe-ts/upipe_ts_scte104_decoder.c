@@ -581,6 +581,8 @@ upipe_ts_scte104d_insert_segmentation_descriptor(struct upipe *upipe,
     uint8_t sub_num = scte104isdrd_get_sub_num(data);
     uint8_t sub_expected = scte104isdrd_get_sub_expected(data);
 
+    uref_ts_scte35_desc_set_tag(desc, SCTE35_SPLICE_DESC_TAG_SEG);
+    uref_ts_scte35_desc_set_identifier(desc, SCTE35_SPLICE_DESC_IDENTIFIER);
     uref_ts_scte35_desc_seg_set_event_id(desc, event_id);
     if (cancel_indicator)
         uref_ts_scte35_desc_seg_set_cancel(desc);
