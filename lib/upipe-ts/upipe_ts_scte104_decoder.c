@@ -387,8 +387,10 @@ static void upipe_ts_scte104d_handle_single(struct upipe *upipe,
     }
 
     /* not implemented */
-    switch (scte104_get_opid(msg)) {
+    uint16_t opid = scte104_get_opid(msg);
+    switch (opid) {
         default:
+            upipe_dbg_va(upipe, "%u not implemented", opid);
             break;
     }
 
@@ -780,6 +782,7 @@ static void upipe_ts_scte104d_input(struct upipe *upipe, struct uref *uref,
     const uint8_t *header = uref_block_peek(uref, 0, SCTE104_HEADER_SIZE,
                                             header_buffer);
     if (unlikely(header == NULL)) {
+        upipe_warn(upipe, "fail to get header");
         uref_free(uref);
         return;
     }
@@ -790,6 +793,7 @@ static void upipe_ts_scte104d_input(struct upipe *upipe, struct uref *uref,
 
     size_t uref_size;
     if (unlikely(!ubase_check(uref_block_size(uref, &uref_size)))) {
+        upipe_warn_va(upipe, "fail to get size");
         uref_free(uref);
         upipe_throw_error(upipe, UBASE_ERR_INVALID);
         return;
