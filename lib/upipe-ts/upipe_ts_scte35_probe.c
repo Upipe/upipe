@@ -438,7 +438,7 @@ static void upipe_ts_scte35p_signal_wait(struct upipe *upipe,
 {
     struct upipe_ts_scte35p *upipe_ts_scte35p =
         upipe_ts_scte35p_from_upipe(upipe);
-    upipe_dbg_va(upipe, "splice waiting %"PRIu64" ms",
+    upipe_dbg_va(upipe, "signal waiting %"PRIu64" ms",
                  timeout * 1000 / UCLOCK_FREQ);
 
     if (signal->upump) {
@@ -541,7 +541,7 @@ static void upipe_ts_scte35p_input_time_signal(struct upipe *upipe,
     uint64_t now = uclock_now(upipe_ts_scte35p->uclock);
     uint64_t timeout = 0;
     if (signal->pts <= now)
-        upipe_warn_va(upipe, "splice in the past (%"PRIu64")",
+        upipe_warn_va(upipe, "signal in the past (%"PRIu64")",
                       now - signal->pts);
     else
         timeout = signal->pts - now;
