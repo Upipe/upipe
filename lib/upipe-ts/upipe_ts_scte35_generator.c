@@ -339,8 +339,10 @@ static void upipe_ts_scte35g_time_signal(struct upipe *upipe)
             uref = uref_from_uchain(uchain);
             uint8_t *desc = descl_get_desc(
                 descl, descl_length + DESC_HEADER_SIZE, i);
-            if(!ubase_check(upipe_ts_scte_export_desc(upipe, uref, desc)))
+            if(!ubase_check(upipe_ts_scte_export_desc(upipe, uref, desc))) {
+                upipe_warn(upipe, "fail to export descriptor");
                 continue;
+            }
             descl_length += DESC_HEADER_SIZE +
                 scte35_splice_desc_get_length(desc);
             i++;
