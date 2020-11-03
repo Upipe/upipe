@@ -294,8 +294,8 @@ static void upipe_ts_scte35g_time_signal(struct upipe *upipe)
     scte35g->scte35_insert_cr_sys = 0;
     uref_clock_get_pts_sys(uref, &scte35g->scte35_insert_cr_sys);
     uint64_t pts_orig = UINT64_MAX;
-    if (ubase_check(uref_clock_get_pts_orig(uref, &pts_orig)))
-        pts_orig = (pts_orig / CLOCK_SCALE) % POW2_33;
+    if (pts_prog != UINT64_MAX)
+        pts_orig = (pts_prog / CLOCK_SCALE) % POW2_33;
     uref_free(uref);
 
     for ( ; ; ) {
