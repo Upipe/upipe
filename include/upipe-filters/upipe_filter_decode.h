@@ -39,6 +39,42 @@ extern "C" {
 
 #define UPIPE_FDEC_SIGNATURE UBASE_FOURCC('f','d','e','c')
 
+/** @This enumerates the filter decode private control commands. */
+enum upipe_fdec_command {
+    /** sentinel */
+    UPIPE_FDEC_SENTINEL = UPIPE_CONTROL_LOCAL,
+
+    /** set watchdog timeout (uint64_t) */
+    UPIPE_FDEC_SET_TIMEOUT,
+    /** get watchdog timeout (uint64_t *) */
+    UPIPE_FDEC_GET_TIMEOUT,
+};
+
+/** @This sets the watchdog timeout.
+ *
+ * @param upipe description structure of the pipe
+ * @param timeout watchdog timeout in 27MHz ticks, UINT64_MAX to disable
+ * @return an error code
+ */
+static inline int upipe_fdec_set_timeout(struct upipe *upipe, uint64_t timeout)
+{
+    return upipe_control(upipe, UPIPE_FDEC_SET_TIMEOUT, UPIPE_FDEC_SIGNATURE,
+                         timeout);
+}
+
+/** @This gets the configured watchdog timeout.
+ *
+ * @param upipe description structure of the pipe
+ * @param timeout filled with the configured timeout value in 27MHz ticks,
+ * UINT64_MAX means disabled
+ * @return an error code
+ */
+static inline int upipe_fdec_get_timeout(struct upipe *upipe, uint64_t *timeout)
+{
+    return upipe_control(upipe, UPIPE_FDEC_GET_TIMEOUT, UPIPE_FDEC_SIGNATURE,
+                         timeout);
+}
+
 /** @This returns the management structure for all fdec pipes.
  *
  * @return pointer to manager

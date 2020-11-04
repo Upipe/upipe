@@ -38,12 +38,17 @@
 #include <upipe/upipe_helper_upipe.h>
 #include <upipe/upipe_helper_void.h>
 #include <upipe/upipe_helper_urefcount.h>
+#include <upipe/upipe_helper_urefcount_real.h>
 #include <upipe/upipe_helper_uref_mgr.h>
 #include <upipe/upipe_helper_inner.h>
 #include <upipe/upipe_helper_uprobe.h>
 #include <upipe/upipe_helper_bin_input.h>
 #include <upipe/upipe_helper_bin_output.h>
+#include <upipe/upipe_helper_upump_mgr.h>
+#include <upipe/upipe_helper_upump.h>
+#include <upipe/upipe_helper_flow_def.h>
 #include <upipe-modules/upipe_idem.h>
+#include <upipe-modules/upipe_probe_uref.h>
 #include <upipe-filters/upipe_filter_decode.h>
 #include <upipe-av/upipe_avcodec_decode.h>
 
@@ -89,6 +94,8 @@ struct upipe_fdec {
     /** hardware device, or NULL for default device */
     char *hw_device;
 
+    /** probe for the first inner pipe */
+    struct uprobe first_inner_probe;
     /** probe for the last inner pipe */
     struct uprobe last_inner_probe;
 
@@ -98,30 +105,48 @@ struct upipe_fdec {
     struct uchain output_request_list;
     /** first inner pipe of the bin (avcdec) */
     struct upipe *first_inner;
-    /** last inner pipe of the bin (avcdec) */
+    /** last inner pipe of the bin (probe_uref) */
     struct upipe *last_inner;
     /** output */
     struct upipe *output;
+
+    /** upump manager for watchdog timer */
+    struct upump_mgr *upump_mgr;
+    /** watchdog timer */
+    struct upump *timer;
+    /** watchdog timer timeout */
+    uint64_t timeout;
+
+    /** flow def attributes */
+    struct uref *flow_def_attr;
+    /** input flow definition */
+    struct uref *flow_def_input;
 
     /** public upipe structure */
     struct upipe upipe;
 };
 
+/** @hidden */
+static int upipe_fdec_catch_last_inner(struct uprobe *uprobe,
+                                       struct upipe *upipe,
+                                       int event, va_list args);
+
 UPIPE_HELPER_UPIPE(upipe_fdec, upipe, UPIPE_FDEC_SIGNATURE)
 UPIPE_HELPER_VOID(upipe_fdec)
 UPIPE_HELPER_UREFCOUNT(upipe_fdec, urefcount, upipe_fdec_no_ref)
+UPIPE_HELPER_UREFCOUNT_REAL(upipe_fdec, urefcount_real, upipe_fdec_free);
 UPIPE_HELPER_UREF_MGR(upipe_fdec, uref_mgr, uref_mgr_request,
                       upipe_fdec_provide, upipe_throw_provide_request, NULL)
 UPIPE_HELPER_INNER(upipe_fdec, first_inner)
 UPIPE_HELPER_BIN_INPUT(upipe_fdec, first_inner, input_request_list)
 UPIPE_HELPER_INNER(upipe_fdec, last_inner)
-UPIPE_HELPER_UPROBE(upipe_fdec, urefcount_real, last_inner_probe, NULL)
+UPIPE_HELPER_UPROBE(upipe_fdec, urefcount_real, last_inner_probe,
+                    upipe_fdec_catch_last_inner)
+UPIPE_HELPER_UPROBE(upipe_fdec, urefcount_real, first_inner_probe, NULL)
 UPIPE_HELPER_BIN_OUTPUT(upipe_fdec, last_inner, output, output_request_list)
-
-UBASE_FROM_TO(upipe_fdec, urefcount, urefcount_real, urefcount_real)
-
-/** @hidden */
-static void upipe_fdec_free(struct urefcount *urefcount_real);
+UPIPE_HELPER_UPUMP_MGR(upipe_fdec, upump_mgr);
+UPIPE_HELPER_UPUMP(upipe_fdec, timer, upump_mgr);
+UPIPE_HELPER_FLOW_DEF(upipe_fdec, flow_def_input, flow_def_attr);
 
 /** @internal @This allocates a fdec pipe.
  *
@@ -140,17 +165,44 @@ static struct upipe *upipe_fdec_alloc(struct upipe_mgr *mgr,
         return NULL;
     struct upipe_fdec *upipe_fdec = upipe_fdec_from_upipe(upipe);
     upipe_fdec_init_urefcount(upipe);
-    urefcount_init(upipe_fdec_to_urefcount_real(upipe_fdec),
-                   upipe_fdec_free);
+    upipe_fdec_init_urefcount_real(upipe);
     upipe_fdec_init_uref_mgr(upipe);
     upipe_fdec_init_last_inner_probe(upipe);
+    upipe_fdec_init_first_inner_probe(upipe);
     upipe_fdec_init_bin_input(upipe);
     upipe_fdec_init_bin_output(upipe);
+    upipe_fdec_init_upump_mgr(upipe);
+    upipe_fdec_init_timer(upipe);
+    upipe_fdec_init_flow_def(upipe);
     upipe_fdec->options = NULL;
     upipe_fdec->hw_type = NULL;
     upipe_fdec->hw_device = NULL;
+    upipe_fdec->timeout = UINT64_MAX;
+
     upipe_throw_ready(upipe);
     upipe_fdec_demand_uref_mgr(upipe);
+
+    /* allocate last inner pipe for probing */
+    struct upipe_mgr *upipe_probe_uref_mgr = upipe_probe_uref_mgr_alloc();
+    if (unlikely(!upipe_probe_uref_mgr)) {
+        upipe_err(upipe, "couldn't allocate probe uref manager");
+        upipe_release(upipe);
+        return NULL;
+    }
+    struct upipe *probe_uref = upipe_void_alloc(
+        upipe_probe_uref_mgr,
+        uprobe_pfx_alloc(
+            uprobe_use(&upipe_fdec->last_inner_probe),
+            UPROBE_LOG_VERBOSE, "probe"));
+    upipe_mgr_release(upipe_probe_uref_mgr);
+    if (unlikely(!probe_uref)) {
+        upipe_err(upipe, "couldn't allocate probe uref pipe");
+        upipe_release(upipe);
+        return NULL;
+    }
+
+    upipe_fdec_store_bin_output(upipe, probe_uref);
+
     return upipe;
 }
 
@@ -181,17 +233,22 @@ static int upipe_fdec_set_flow_def(struct upipe *upipe, struct uref *flow_def)
     if (flow_def == NULL)
         return UBASE_ERR_INVALID;
 
-    /* check if last inner is set, see comment below */
-    if (upipe_fdec->last_inner != NULL) {
-        if (ubase_check(upipe_set_flow_def(upipe_fdec->last_inner, flow_def)))
+    struct uref *flow_def_input = uref_dup(flow_def);
+    if (unlikely(!flow_def_input))
+        return UBASE_ERR_ALLOC;
+    upipe_fdec_store_flow_def_input(upipe, flow_def_input);
+
+    /* try with current decoder if it exists */
+    if (upipe_fdec->first_inner != NULL) {
+        if (ubase_check(upipe_set_flow_def(upipe_fdec->first_inner, flow_def)))
             return UBASE_ERR_NONE;
     }
+
     upipe_fdec_store_bin_input(upipe, NULL);
-    upipe_fdec_store_bin_output(upipe, NULL);
 
     struct upipe *avcdec = upipe_void_alloc(fdec_mgr->avcdec_mgr,
             uprobe_pfx_alloc(
-                uprobe_use(&upipe_fdec->last_inner_probe),
+                uprobe_use(&upipe_fdec->first_inner_probe),
                 UPROBE_LOG_VERBOSE, "avcdec"));
 
     if (unlikely(avcdec == NULL)) {
@@ -227,12 +284,14 @@ static int upipe_fdec_set_flow_def(struct upipe *upipe, struct uref *flow_def)
         }
     }
 
-    /* store last inner first to prevent infinite urequest loop.
-     * If bin input is stored before bin output, urequest may be forward and
-     * cause upipe_fdec_set_flow_def to be called before we store last inner.
-     * starting an infinite loop. see comment above */
-    upipe_fdec_store_bin_output(upipe, avcdec);
-    upipe_fdec_store_bin_input(upipe, upipe_use(avcdec));
+    int ret = upipe_set_output(avcdec, upipe_fdec->last_inner);
+    if (unlikely(!ubase_check(ret))) {
+        upipe_err(upipe, "fail to link inner pipes");
+        upipe_release(avcdec);
+        return UBASE_ERR_UNHANDLED;
+    }
+
+    upipe_fdec_store_bin_input(upipe, avcdec);
     return UBASE_ERR_NONE;
 }
 
@@ -309,6 +368,37 @@ static int upipe_fdec_set_hw_config(struct upipe *upipe,
     return UBASE_ERR_NONE;
 }
 
+/** @internal @This sets the watchdog timeout.
+ *
+ * @param upipe description structure of the pipe
+ * @param timeout watchdog timeout in 27MHz ticks, UINT64_MAX to disable
+ * @return an error code
+ */
+static int upipe_fdec_set_timeout_real(struct upipe *upipe, uint64_t timeout)
+{
+    struct upipe_fdec *upipe_fdec = upipe_fdec_from_upipe(upipe);
+    if (timeout == upipe_fdec->timeout)
+        return UBASE_ERR_NONE;
+    upipe_fdec->timeout = timeout;
+    upipe_fdec_set_timer(upipe, NULL);
+    return UBASE_ERR_NONE;
+}
+
+/** @internal @This gets the configured watchdog timeout.
+ *
+ * @param upipe description structure of the pipe
+ * @param timeout filled with the configured timeout value in 27MHz ticks,
+ * UINT64_MAX means disabled
+ * @return an error code
+ */
+static int upipe_fdec_get_timeout_real(struct upipe *upipe, uint64_t *timeout)
+{
+    struct upipe_fdec *upipe_fdec = upipe_fdec_from_upipe(upipe);
+    if (timeout)
+        *timeout = upipe_fdec->timeout;
+    return UBASE_ERR_NONE;
+}
+
 /** @internal @This processes control commands on a fdec pipe.
  *
  * @param upipe description structure of the pipe
@@ -316,9 +406,14 @@ static int upipe_fdec_set_hw_config(struct upipe *upipe,
  * @param args arguments of the command
  * @return an error code
  */
-static int upipe_fdec_control(struct upipe *upipe, int command, va_list args)
+static int upipe_fdec_control_real(struct upipe *upipe,
+                                   int command, va_list args)
 {
     switch (command) {
+        case UPIPE_ATTACH_UPUMP_MGR:
+            upipe_fdec_set_timer(upipe, NULL);
+            return upipe_fdec_attach_upump_mgr(upipe);
+
         case UPIPE_GET_OPTION: {
             const char *key = va_arg(args, const char *);
             const char **value_p = va_arg(args, const char **);
@@ -350,6 +445,22 @@ static int upipe_fdec_control(struct upipe *upipe, int command, va_list args)
                     }
                 }
                 break;
+
+            case UPIPE_FDEC_SIGNATURE: {
+                switch (command) {
+                    case UPIPE_FDEC_SET_TIMEOUT: {
+                        UBASE_SIGNATURE_CHECK(args, UPIPE_FDEC_SIGNATURE);
+                        uint64_t timeout = va_arg(args, uint64_t);
+                        return upipe_fdec_set_timeout_real(upipe, timeout);
+                    }
+                    case UPIPE_FDEC_GET_TIMEOUT: {
+                        UBASE_SIGNATURE_CHECK(args, UPIPE_FDEC_SIGNATURE);
+                        uint64_t *timeout = va_arg(args, uint64_t *);
+                        return upipe_fdec_get_timeout_real(upipe, timeout);
+                    }
+                }
+                break;
+            }
         }
     }
 
@@ -359,23 +470,118 @@ static int upipe_fdec_control(struct upipe *upipe, int command, va_list args)
     return err;
 }
 
+/** @internal @This catches the events of the last inner pipe.
+ *
+ * @param uprobe structure used to raise events
+ * @param inner description structure of the last inner pipe
+ * @param event event triggered by the inner pipe
+ * @param args arguments of the event
+ * @return an error code
+ */
+static int upipe_fdec_catch_last_inner(struct uprobe *uprobe,
+                                       struct upipe *inner,
+                                       int event, va_list args)
+{
+    struct upipe_fdec *upipe_fdec = upipe_fdec_from_last_inner_probe(uprobe);
+    struct upipe *upipe = upipe_fdec_to_upipe(upipe_fdec);
+
+    if (event == UPROBE_PROBE_UREF &&
+        ubase_get_signature(args) == UPIPE_PROBE_UREF_SIGNATURE) {
+        if (upipe_fdec->timer)
+            upump_restart(upipe_fdec->timer);
+        return UBASE_ERR_NONE;
+    }
+    return upipe_throw_proxy(upipe, inner, event, args);
+}
+
+/** @internal @This is called when the watchdog timer timeout.
+ *
+ * @param timer watchdog timer
+ */
+static void upipe_fdec_timeout(struct upump *timer)
+{
+    struct upipe *upipe = upump_get_opaque(timer, struct upipe *);
+    struct upipe_fdec *upipe_fdec = upipe_fdec_from_upipe(upipe);
+
+    upipe_warn(upipe, "watchdog timer timeout");
+
+    upipe_fdec_store_bin_input(upipe, NULL);
+    struct uref *flow_def_input = upipe_fdec->flow_def_input;
+    upipe_fdec->flow_def_input = NULL;
+    upipe_fdec_set_flow_def(upipe, flow_def_input);
+    uref_free(flow_def_input);
+    upump_restart(timer);
+}
+
+/** @internal @This checks the internal pipe state.
+ *
+ * @param upipe description structure of the pipe
+ * @return an error code
+ */
+static int upipe_fdec_check(struct upipe *upipe)
+{
+    struct upipe_fdec *upipe_fdec = upipe_fdec_from_upipe(upipe);
+
+    /* enable timeout? */
+    if (upipe_fdec->timeout == UINT64_MAX) {
+        upipe_fdec_set_timer(upipe, NULL);
+        return UBASE_ERR_NONE;
+    }
+
+    upipe_fdec_check_upump_mgr(upipe);
+    if (!upipe_fdec->upump_mgr)
+        return UBASE_ERR_NONE;
+
+    if (!upipe_fdec->timer) {
+        struct upump *timer = upump_alloc_timer(upipe_fdec->upump_mgr,
+                                                upipe_fdec_timeout,
+                                                upipe, upipe->refcount,
+                                                upipe_fdec->timeout, 0);
+        if (!timer)
+            return UBASE_ERR_UPUMP;
+
+        upipe_fdec_set_timer(upipe, timer);
+        upump_start(timer);
+    }
+
+    return UBASE_ERR_NONE;
+}
+
+/** @internal @This processes control commands on a fdec pipe and checks the
+ * internal pipe state.
+ *
+ * @param upipe description structure of the pipe
+ * @param cmd type of command to process
+ * @param args arguments of the command
+ * @return an error code
+ */
+static int upipe_fdec_control(struct upipe *upipe, int cmd, va_list args)
+{
+    UBASE_RETURN(upipe_fdec_control_real(upipe, cmd, args));
+    return upipe_fdec_check(upipe);
+}
+
 /** @This frees a upipe.
  *
  * @param urefcount_real pointer to urefcount_real structure
  */
-static void upipe_fdec_free(struct urefcount *urefcount_real)
+static void upipe_fdec_free(struct upipe *upipe)
 {
-    struct upipe_fdec *upipe_fdec =
-        upipe_fdec_from_urefcount_real(urefcount_real);
-    struct upipe *upipe = upipe_fdec_to_upipe(upipe_fdec);
+    struct upipe_fdec *upipe_fdec = upipe_fdec_from_upipe(upipe);
+
     upipe_throw_dead(upipe);
+
     uref_free(upipe_fdec->options);
     free(upipe_fdec->hw_type);
     free(upipe_fdec->hw_device);
+    upipe_fdec_clean_flow_def(upipe);
+    upipe_fdec_clean_timer(upipe);
+    upipe_fdec_clean_upump_mgr(upipe);
+    upipe_fdec_clean_first_inner_probe(upipe);
     upipe_fdec_clean_last_inner_probe(upipe);
     upipe_fdec_clean_uref_mgr(upipe);
-    urefcount_clean(urefcount_real);
     upipe_fdec_clean_urefcount(upipe);
+    upipe_fdec_clean_urefcount_real(upipe);
     upipe_fdec_free_void(upipe);
 }
 
@@ -385,10 +591,10 @@ static void upipe_fdec_free(struct urefcount *urefcount_real)
  */
 static void upipe_fdec_no_ref(struct upipe *upipe)
 {
-    struct upipe_fdec *upipe_fdec = upipe_fdec_from_upipe(upipe);
+    upipe_fdec_set_timer(upipe, NULL);
     upipe_fdec_clean_bin_input(upipe);
     upipe_fdec_clean_bin_output(upipe);
-    urefcount_release(upipe_fdec_to_urefcount_real(upipe_fdec));
+    upipe_fdec_release_urefcount_real(upipe);
 }
 
 /** @This frees a upipe manager.
