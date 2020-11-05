@@ -27,9 +27,9 @@
  * @short Upipe dvbsub attributes for uref
  */
 
-#ifndef _UPIPE_FRAMERS_UREF_DVBSUB_H_
+#ifndef _UPIPE_FRAMERS_UREF_DVBSUB_FLOW_H_
 /** @hidden */
-#define _UPIPE_FRAMERS_UREF_DVBSUB_H_
+#define _UPIPE_FRAMERS_UREF_DVBSUB_FLOW_H_
 #ifdef __cplusplus
 extern "C" {
 #endif
