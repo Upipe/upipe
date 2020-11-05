@@ -44,7 +44,6 @@ myinclude_HEADERS = \
 	upipe_rtp_demux.h \
 	upipe_rtp_h264.h \
 	upipe_rtp_mpeg4.h \
-	upipe_rtp_opus.h \
 	upipe_rtcp.h \
 	upipe_blit.h \
 	uprobe_blit_prepare.h \
