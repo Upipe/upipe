@@ -223,16 +223,12 @@ static void upipe_xfer_free(struct urefcount *urefcount_real);
 static int upipe_xfer_probe(struct uprobe *uprobe, struct upipe *remote,
                             int xfer_event, va_list args)
 {
-    if (xfer_event < UPROBE_LOCAL)
+    if (xfer_event < UPROBE_LOCAL ||
+        ubase_get_signature(args) != UPROBE_XFER_SIGNATURE)
         return uprobe_throw_next(uprobe, remote, xfer_event, args);
 
-    va_list args_copy;
-    va_copy(args_copy, args);
-    uint32_t signature = va_arg(args_copy, uint32_t);
-    va_end(args_copy);
-    if (signature != UPROBE_XFER_SIGNATURE)
-        return uprobe_throw_next(uprobe, remote, xfer_event, args);
     va_arg(args, uint32_t);
+    uint32_t signature;
 
     int event = va_arg(args, int);
     union upipe_xfer_event_arg event_arg;
