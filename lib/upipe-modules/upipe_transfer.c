@@ -38,6 +38,7 @@
 #include <upipe/upipe.h>
 #include <upipe/upipe_helper_upipe.h>
 #include <upipe/upipe_helper_urefcount.h>
+#include <upipe/upipe_helper_urefcount_real.h>
 #include <upipe/upipe_helper_upump_mgr.h>
 #include <upipe/upipe_helper_upump.h>
 #include <upipe/uprobe_transfer.h>
@@ -201,14 +202,11 @@ struct upipe_xfer {
 
 UPIPE_HELPER_UPIPE(upipe_xfer, upipe, UPIPE_XFER_SIGNATURE)
 UPIPE_HELPER_UREFCOUNT(upipe_xfer, urefcount, upipe_xfer_no_ref)
+UPIPE_HELPER_UREFCOUNT_REAL(upipe_xfer, urefcount_real, upipe_xfer_free);
 UPIPE_HELPER_UPUMP_MGR(upipe_xfer, upump_mgr)
 UPIPE_HELPER_UPUMP(upipe_xfer, upump, upump_mgr)
 
-UBASE_FROM_TO(upipe_xfer, urefcount, urefcount_real, urefcount_real)
 UBASE_FROM_TO(upipe_xfer, urefcount, urefcount_probe, urefcount_probe)
-
-/** @hidden */
-static void upipe_xfer_free(struct urefcount *urefcount_real);
 
 /** @internal @This catches events coming from an xfer probe attached to
  * a remote pipe, and attaches them to the bin pipe.
@@ -264,9 +262,9 @@ static int upipe_xfer_probe(struct uprobe *uprobe, struct upipe *remote,
     msg->event_signature = signature;
     msg->event_arg = event_arg;
 
-    urefcount_use(upipe_xfer_to_urefcount_real(upipe_xfer));
+    upipe_xfer_use_urefcount_real(upipe);
     if (unlikely(!uqueue_push(&upipe_xfer->uqueue, msg))) {
-        urefcount_release(upipe_xfer_to_urefcount_real(upipe_xfer));
+        upipe_xfer_release_urefcount_real(upipe);
         upipe_xfer_msg_free(upipe->mgr, msg);
         return UBASE_ERR_EXTERNAL;
     }
@@ -293,9 +291,9 @@ static void upipe_xfer_probe_free(struct urefcount *urefcount_probe)
 
     msg->type = UPROBE_DEAD;
 
-    urefcount_use(upipe_xfer_to_urefcount_real(upipe_xfer));
+    upipe_xfer_use_urefcount_real(upipe);
     if (unlikely(!uqueue_push(&upipe_xfer->uqueue, msg))) {
-        urefcount_release(upipe_xfer_to_urefcount_real(upipe_xfer));
+        upipe_xfer_release_urefcount_real(upipe);
         upipe_xfer_msg_free(upipe->mgr, msg);
     }
 }
@@ -340,7 +338,7 @@ static struct upipe *_upipe_xfer_alloc(struct upipe_mgr *mgr,
     struct upipe *upipe = upipe_xfer_to_upipe(upipe_xfer);
     upipe_init(upipe, mgr, uprobe);
     upipe_xfer_init_urefcount(upipe);
-    urefcount_init(upipe_xfer_to_urefcount_real(upipe_xfer), upipe_xfer_free);
+    upipe_xfer_init_urefcount_real(upipe);
     upipe_xfer_init_upump_mgr(upipe);
     upipe_xfer_init_upump(upipe);
     urefcount_init(upipe_xfer_to_urefcount_probe(upipe_xfer),
@@ -373,7 +371,7 @@ static void upipe_xfer_worker(struct upump *upump)
                              struct upipe_xfer_msg *)) != NULL) {
         switch (msg->type) {
             case UPROBE_DEAD:
-                urefcount_release(upipe_xfer_to_urefcount_real(upipe_xfer));
+                upipe_xfer_release_urefcount_real(upipe);
                 break;
             case UPROBE_XFER_VOID:
                 if (upipe_xfer->upipe_remote == msg->upipe_remote)
@@ -394,7 +392,7 @@ static void upipe_xfer_worker(struct upump *upump)
         }
 
         upipe_xfer_msg_free(upipe->mgr, msg);
-        urefcount_release(upipe_xfer_to_urefcount_real(upipe_xfer));
+        upipe_xfer_release_urefcount_real(upipe);
     }
 }
 
@@ -463,18 +461,16 @@ static int upipe_xfer_control(struct upipe *upipe, int command, va_list args)
  *
  * @param urefcount_real pointer to urefcount_real structure
  */
-static void upipe_xfer_free(struct urefcount *urefcount_real)
+static void upipe_xfer_free(struct upipe *upipe)
 {
-    struct upipe_xfer *upipe_xfer =
-        upipe_xfer_from_urefcount_real(urefcount_real);
-    struct upipe *upipe = upipe_xfer_to_upipe(upipe_xfer);
+    struct upipe_xfer *upipe_xfer = upipe_xfer_from_upipe(upipe);
     upipe_throw_dead(upipe);
     uqueue_clean(&upipe_xfer->uqueue);
     upipe_xfer_clean_upump(upipe);
     upipe_xfer_clean_upump_mgr(upipe);
     uprobe_clean(&upipe_xfer->uprobe_remote);
-    urefcount_clean(urefcount_real);
     urefcount_clean(&upipe_xfer->urefcount_probe);
+    upipe_xfer_clean_urefcount_real(upipe);
     upipe_xfer_clean_urefcount(upipe);
     upipe_clean(upipe);
     free(upipe_xfer);
