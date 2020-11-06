@@ -449,7 +449,11 @@ static int upipe_xfer_control(struct upipe *upipe, int command, va_list args)
             UBASE_SIGNATURE_CHECK(args, UPIPE_XFER_SIGNATURE)
             struct upipe_xfer *upipe_xfer = upipe_xfer_from_upipe(upipe);
             struct upipe **remote_p = va_arg(args, struct upipe **);
-            *remote_p = upipe_xfer->upipe_remote;
+            if (urefcount_dead(&upipe_xfer->urefcount))
+                /* this remote pipe may be freed */
+                *remote_p = NULL;
+            else
+                *remote_p = upipe_xfer->upipe_remote;
             return UBASE_ERR_NONE;
         }
         default:
