@@ -69,6 +69,7 @@
 
 static unsigned int nb_packets = 0;
 static bool need_global = false;
+static uint64_t octetrate = 0;
 static enum uref_mpga_encaps need_encaps = UREF_MPGA_ENCAPS_ADTS;
 static struct uref *last_output = NULL;
 
@@ -117,19 +118,23 @@ static void test_input(struct upipe *upipe, struct uref *uref,
                        struct upump **upump_p)
 {
     assert(uref != NULL);
+    assert(octetrate != 0);
     upipe_dbg_va(upipe, "frame: %u", nb_packets);
     uref_dump(uref, upipe->uprobe);
     uint64_t systime_rap = UINT64_MAX;
     uint64_t pts_orig = UINT64_MAX, dts_orig = UINT64_MAX;
+    uint64_t duration = UINT64_MAX;
     uref_clock_get_rap_sys(uref, &systime_rap);
     uref_clock_get_pts_orig(uref, &pts_orig);
     uref_clock_get_dts_orig(uref, &dts_orig);
+    ubase_assert(uref_clock_get_duration(uref, &duration));
     assert(systime_rap == 42);
     assert(pts_orig == 27000000);
     assert(dts_orig == 27000000);
     size_t size;
     ubase_assert(uref_block_size(uref, &size));
     upipe_dbg_va(upipe, "size: %zu", size);
+    assert(size * UCLOCK_FREQ <= duration * octetrate);
     switch (nb_packets) {
         case 0:
             assert(size == 768);
@@ -184,6 +189,8 @@ static int test_control(struct upipe *upipe, int command, va_list args)
                 assert(!ubase_check(err1));
                 assert(!ubase_check(err2));
             }
+            if (!ubase_check(uref_block_flow_get_octetrate(flow_def, &octetrate)))
+                octetrate = 0;
             return UBASE_ERR_NONE;
         }
         case UPIPE_REGISTER_REQUEST: {

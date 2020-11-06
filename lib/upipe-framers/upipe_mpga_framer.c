@@ -519,15 +519,8 @@ static bool upipe_mpgaf_parse_adts(struct upipe *upipe)
         asc_aot = ASC_TYPE_SBR;
     }
 
-    /* Calculate octetrate assuming the stream is CBR. */
-    uint64_t octetrate = adts_length * samplerate / samples;
-    /* Round up to a multiple of 8 kbits/s. */
-    octetrate += 999;
-    octetrate -= octetrate % 1000;
-
     if (likely(adts_sync_compare_formats(header, upipe_mpgaf->sync_header) &&
-        samples == upipe_mpgaf->samples &&
-        octetrate <= upipe_mpgaf->octetrate)) {
+        samples == upipe_mpgaf->samples)) {
         /* identical sync */
         goto upipe_mpgaf_parse_adts_shortcut;
     }
@@ -575,9 +568,6 @@ static bool upipe_mpgaf_parse_adts(struct upipe *upipe)
         UBASE_FATAL(upipe, uref_flow_set_copyright(flow_def))
     if (adts_get_home(header))
         UBASE_FATAL(upipe, uref_flow_set_original(flow_def))
-
-    upipe_mpgaf->octetrate = octetrate;
-    UBASE_FATAL(upipe, uref_block_flow_set_octetrate(flow_def, octetrate))
 
     upipe_mpgaf_store_flow_def(upipe, NULL);
     uref_free(upipe_mpgaf->flow_def_requested);
@@ -1019,18 +1009,8 @@ static bool upipe_mpgaf_handle_latm(struct upipe *upipe, struct ubuf *ubuf,
     upipe_mpgaf->latm_header_size = ubuf_block_stream_position(&s);
     ubuf_block_stream_clean(&s);
 
-    /* Calculate octetrate. */
-    uint64_t octetrate = frame_length * upipe_mpgaf->samplerate /
-                         upipe_mpgaf->samples;
-    /* Round up to a multiple of 8 kbits/s. */
-    octetrate += 999;
-    octetrate -= octetrate % 1000;
-
-    if (same_stream_mux && octetrate <= upipe_mpgaf->octetrate)
+    if (same_stream_mux)
         return true;
-
-    if (octetrate > upipe_mpgaf->octetrate)
-        upipe_mpgaf->octetrate = octetrate;
 
     struct uref *flow_def = upipe_mpgaf_alloc_flow_def_attr(upipe);
     if (unlikely(flow_def == NULL)) {
@@ -1057,17 +1037,12 @@ static bool upipe_mpgaf_handle_latm(struct upipe *upipe, struct ubuf *ubuf,
                     upipe_mpgaf->samplerate))
 
     if (likely(upipe_mpgaf->flow_def_attr != NULL)) {
-        UBASE_FATAL(upipe,
-                uref_block_flow_set_octetrate(flow_def, upipe_mpgaf->octetrate))
-
         if (likely(!udict_cmp(upipe_mpgaf->flow_def_attr->udict,
                               flow_def->udict))) {
             uref_free(flow_def);
             return true;
         }
     }
-
-    UBASE_FATAL(upipe, uref_block_flow_set_octetrate(flow_def, octetrate))
 
     upipe_mpgaf_store_flow_def(upipe, NULL);
     uref_free(upipe_mpgaf->flow_def_requested);
@@ -1502,7 +1477,11 @@ static int upipe_mpgaf_decaps_frame(struct upipe *upipe, struct uref *uref)
     return UBASE_ERR_NONE;
 }
 
-/** @internal @This outputs a frame.
+/** @internal @This changes encapsulation and computes octetrate if needed and
+ * outputs a frame.
+ * @This changes encapsulation and compute octetrate only for AAC, octetrate is
+ * already set for MPEG layer 1, 2, or 3 when parsing and as we don't
+ * decaps/encaps there is no need to recalculate it.
  *
  * @param upipe description structure of the pipe
  * @param uref pointer to uref
@@ -1512,20 +1491,57 @@ static void upipe_mpgaf_output_frame(struct upipe *upipe, struct uref *uref,
                                      struct upump **upump_p)
 {
     struct upipe_mpgaf *upipe_mpgaf = upipe_mpgaf_from_upipe(upipe);
-    if (upipe_mpgaf->type != UPIPE_MPGAF_AAC ||
-        upipe_mpgaf->encaps_input == upipe_mpgaf->encaps_output) {
-        upipe_mpgaf_output(upipe, uref, upump_p);
-        return;
-    }
+    if (upipe_mpgaf->type == UPIPE_MPGAF_AAC) {
+        /* Change encapsulation is needed. */
+        if (upipe_mpgaf->encaps_input != upipe_mpgaf->encaps_output) {
+            if (!ubase_check(upipe_mpgaf_decaps_frame(upipe, uref))) {
+                uref_free(uref);
+                return;
+            }
 
-    if (!ubase_check(upipe_mpgaf_decaps_frame(upipe, uref))) {
-        uref_free(uref);
-        return;
-    }
+            if (!ubase_check(upipe_mpgaf_encaps_frame(upipe, uref))) {
+                uref_free(uref);
+                return;
+            }
+        }
 
-    if (!ubase_check(upipe_mpgaf_encaps_frame(upipe, uref))) {
-        uref_free(uref);
-        return;
+        /* Compute octetrate of the output frame. */
+        size_t size = 0;
+        uint64_t duration = 0;
+        uref_block_size(uref, &size);
+        uref_clock_get_duration(uref, &duration);
+        if (unlikely(duration == 0)) {
+            upipe_warn(upipe, "packet without duration");
+            uref_free(uref);
+            return;
+        }
+        /* Approximate octetrate. */
+        uint64_t octetrate = size * UCLOCK_FREQ / duration;
+        /* ceiling value */
+        if (octetrate * duration < size * UCLOCK_FREQ)
+            octetrate++;
+        /* Round up to a multiple of 8 kbits/s. */
+        octetrate += 999;
+        octetrate -= octetrate % 1000;
+
+        /* Set the maximum value to the output flow def. */
+        if (octetrate > upipe_mpgaf->octetrate) {
+            if (upipe_mpgaf->octetrate == 0)
+                upipe_info_va(upipe, "set octetrate to %"PRIu64, octetrate);
+            else
+                upipe_info_va(upipe, "raise octetrate "
+                              "from %"PRIu64" to %"PRIu64,
+                              upipe_mpgaf->octetrate, octetrate);
+            upipe_mpgaf->octetrate = octetrate;
+            struct uref *flow_def = uref_dup(upipe_mpgaf->flow_def);
+            if (unlikely(flow_def == NULL)) {
+                uref_free(uref);
+                upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
+                return;
+            }
+            uref_block_flow_set_octetrate(flow_def, octetrate);
+            upipe_mpgaf_store_flow_def(upipe, flow_def);
+        }
     }
 
     upipe_mpgaf_output(upipe, uref, upump_p);
@@ -1692,11 +1708,7 @@ static bool upipe_mpgaf_work_raw(struct upipe *upipe, struct uref *uref,
         !upipe_mpgaf_handle_latm(upipe, uref->ubuf, 0, size))
         return true;
 
-    /* Calculate octetrate assuming the stream is CBR. */
-    uint64_t octetrate = size * upipe_mpgaf->samplerate /
-        upipe_mpgaf->samples;
-
-    if (unlikely(!upipe_mpgaf->acquired || octetrate > upipe_mpgaf->octetrate)) {
+    if (unlikely(!upipe_mpgaf->acquired)) {
         upipe_mpgaf_sync_acquired(upipe);
         struct uref *flow_def = upipe_mpgaf_alloc_flow_def_attr(upipe);
         if (unlikely(flow_def == NULL)) {
@@ -1714,12 +1726,6 @@ static bool upipe_mpgaf_work_raw(struct upipe *upipe, struct uref *uref,
                 uref_sound_flow_set_rate(flow_def, upipe_mpgaf->samplerate))
         UBASE_FATAL(upipe,
                 uref_sound_flow_set_samples(flow_def, upipe_mpgaf->samples))
-
-        /* Round up to a multiple of 8 kbits/s. */
-        octetrate += 999;
-        octetrate -= octetrate % 1000;
-        upipe_mpgaf->octetrate = octetrate;
-        UBASE_FATAL(upipe, uref_block_flow_set_octetrate(flow_def, octetrate))
 
         upipe_mpgaf_store_flow_def(upipe, NULL);
         uref_free(upipe_mpgaf->flow_def_requested);
@@ -1762,6 +1768,45 @@ static bool upipe_mpgaf_work_raw(struct upipe *upipe, struct uref *uref,
     return true;
 }
 
+/** @internal @This applies the input flow definition.
+ *
+ * @param upipe description structure of the pipe
+ * @param flow_def flow definition packet
+ * @return an error code
+ */
+static int upipe_mpgaf_apply_flow_def(struct upipe *upipe,
+                                      struct uref *flow_def)
+{
+    struct upipe_mpgaf *upipe_mpgaf = upipe_mpgaf_from_upipe(upipe);
+    const char *def = NULL;
+
+    UBASE_RETURN(uref_flow_get_def(flow_def, &def));
+    upipe_mpgaf->input_latency = 0;
+    uref_clock_get_latency(flow_def, &upipe_mpgaf->input_latency);
+    upipe_mpgaf->encaps_input = uref_mpga_flow_infer_encaps(flow_def);
+    upipe_mpgaf->type = UPIPE_MPGAF_UNKNOWN;
+    if (!ubase_ncmp(def, "block.aac_latm.") ||
+        upipe_mpgaf->encaps_input == UREF_MPGA_ENCAPS_LOAS)
+        upipe_mpgaf->type = UPIPE_MPGAF_AAC;
+    else if (!ubase_ncmp(def, "block.mp2.") ||
+             !ubase_ncmp(def, "block.mp3."))
+        upipe_mpgaf->type = UPIPE_MPGAF_MP2;
+    else if (!ubase_ncmp(def, "block.aac."))
+        upipe_mpgaf->type = UPIPE_MPGAF_AAC;
+    upipe_mpgaf->complete_input = ubase_check(uref_flow_get_complete(flow_def));
+    upipe_mpgaf_store_flow_def(upipe, NULL);
+    uref_free(upipe_mpgaf->flow_def_requested);
+    upipe_mpgaf->flow_def_requested = NULL;
+    flow_def = upipe_mpgaf_store_flow_def_input(upipe, flow_def);
+    if (flow_def != NULL)
+        upipe_mpgaf_require_flow_format(upipe, flow_def);
+    if (upipe_mpgaf->type == UPIPE_MPGAF_AAC &&
+        (upipe_mpgaf->encaps_input == UREF_MPGA_ENCAPS_RAW ||
+         upipe_mpgaf->encaps_input == UREF_MPGA_ENCAPS_LATM))
+        upipe_mpgaf_handle_global(upipe);
+    return UBASE_ERR_NONE;
+}
+
 /** @internal @This receives data.
  *
  * @param upipe description structure of the pipe
@@ -1773,33 +1818,9 @@ static bool upipe_mpgaf_handle(struct upipe *upipe, struct uref *uref,
                                struct upump **upump_p)
 {
     struct upipe_mpgaf *upipe_mpgaf = upipe_mpgaf_from_upipe(upipe);
-    const char *def;
-    if (unlikely(ubase_check(uref_flow_get_def(uref, &def)))) {
-        upipe_mpgaf->input_latency = 0;
-        uref_clock_get_latency(uref, &upipe_mpgaf->input_latency);
-        upipe_mpgaf->encaps_input = uref_mpga_flow_infer_encaps(uref);
-        upipe_mpgaf->type = UPIPE_MPGAF_UNKNOWN;
-        if (!ubase_ncmp(def, "block.aac_latm.") ||
-            upipe_mpgaf->encaps_input == UREF_MPGA_ENCAPS_LOAS)
-            upipe_mpgaf->type = UPIPE_MPGAF_AAC;
-        else if (!ubase_ncmp(def, "block.mp2.") ||
-                 !ubase_ncmp(def, "block.mp3."))
-            upipe_mpgaf->type = UPIPE_MPGAF_MP2;
-        else if (!ubase_ncmp(def, "block.aac."))
-            upipe_mpgaf->type = UPIPE_MPGAF_AAC;
-        upipe_mpgaf->complete_input = ubase_check(uref_flow_get_complete(uref));
-        upipe_mpgaf_store_flow_def(upipe, NULL);
-        uref_free(upipe_mpgaf->flow_def_requested);
-        upipe_mpgaf->flow_def_requested = NULL;
-        uref = upipe_mpgaf_store_flow_def_input(upipe, uref);
-        if (uref != NULL)
-            upipe_mpgaf_require_flow_format(upipe, uref);
-        if (upipe_mpgaf->type == UPIPE_MPGAF_AAC &&
-            (upipe_mpgaf->encaps_input == UREF_MPGA_ENCAPS_RAW ||
-             upipe_mpgaf->encaps_input == UREF_MPGA_ENCAPS_LATM))
-            upipe_mpgaf_handle_global(upipe);
+
+    if (unlikely(ubase_check(upipe_mpgaf_apply_flow_def(upipe, uref))))
         return true;
-    }
 
     if (upipe_mpgaf->flow_def_requested == NULL &&
         upipe_mpgaf->flow_def_attr != NULL)
