@@ -358,7 +358,8 @@ static int upipe_swr_set_flow_def(struct upipe *upipe, struct uref *flow_def)
     enum AVSampleFormat in_fmt =
         upipe_av_samplefmt_from_flow_def(flow_def, &in_chan);
     if (in_fmt == AV_SAMPLE_FMT_NONE
-        || !ubase_check(uref_sound_flow_get_rate(flow_def, &in_rate))) {
+        || !ubase_check(uref_sound_flow_get_rate(flow_def, &in_rate))
+        || !in_rate) {
         upipe_err(upipe, "incompatible flow def");
         uref_dump(flow_def, upipe->uprobe);
         return UBASE_ERR_INVALID;
