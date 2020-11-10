@@ -717,18 +717,26 @@ static bool upipe_h264f_activate_sps(struct upipe *upipe, uint32_t sps_id)
         uint32_t crop_top = upipe_h26xf_stream_ue(s);
         uint32_t crop_bottom = upipe_h26xf_stream_ue(s);
         uint8_t chroma_array_type = 0;
+        uint64_t crop_h = crop_left + crop_right;
+        uint64_t crop_v = crop_top + crop_bottom;
+
         if (!upipe_h264f->separate_colour_plane)
             chroma_array_type = chroma_idc;
         if (!chroma_array_type) {
-            hsize -= crop_left + crop_right;
-            vsize -= (crop_top + crop_bottom) *
-                (upipe_h264f->frame_mbs_only ? 1 : 2);
+            crop_v *= upipe_h264f->frame_mbs_only ? 1 : 2;
         } else {
-            hsize -= (crop_left + crop_right) *
-                ((chroma_idc == 1 || chroma_idc == 2) ? 2 : 1);
-            vsize -= (crop_top + crop_bottom) * (chroma_idc == 1 ? 2 : 1) *
+            crop_h *= (chroma_idc == 1 || chroma_idc == 2) ? 2 : 1;
+            crop_v *= (chroma_idc == 1 ? 2 : 1) *
                 (upipe_h264f->frame_mbs_only ? 1 : 2);
         }
+        if (crop_h > hsize || crop_v > vsize) {
+            upipe_warn_va(upipe, "crop is invalid");
+            ubuf_block_stream_clean(s);
+            uref_free(flow_def);
+            return false;
+        }
+        hsize -= crop_h;
+        vsize -= crop_v;
     }
     UBASE_FATAL(upipe, uref_pic_flow_set_hsize(flow_def, hsize))
     UBASE_FATAL(upipe, uref_pic_flow_set_vsize(flow_def, vsize))
