@@ -681,6 +681,12 @@ static bool upipe_h264f_activate_sps(struct upipe *upipe, uint32_t sps_id)
             cycle--;
         }
     }
+    else if (upipe_h264f->poc_type > 2) {
+        upipe_warn(upipe, "invalid pic_order_cnt_type");
+        ubuf_block_stream_clean(s);
+        uref_free(flow_def);
+        return false;
+    }
 
     upipe_h26xf_stream_ue(s); /* max_num_ref_frames */
     upipe_h26xf_stream_fill_bits(s, 1);
