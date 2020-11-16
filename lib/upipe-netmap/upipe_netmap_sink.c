@@ -278,7 +278,6 @@ struct upipe_netmap_sink {
     /* Timestamp in UCLOCK_FREQ since 1970.  Needs 55 or more bits in 2020. */
     uint64_t frame_ts;
     uint64_t frame_ts_start;
-    uint64_t frame_ts_start2;
     uint32_t prev_marker_seq;
     struct audio_packet_state audio_packet_state;
 
@@ -1245,7 +1244,7 @@ static void handle_tx_stamp(struct upipe *upipe, uint64_t t, uint16_t seq)
         upipe_netmap_sink->prev_marker_seq = seq;
 
         /* Calculate the frame timestamp based on the *next* PTP frame tick */
-        upipe_netmap_sink->frame_ts_start2 = upipe_netmap_sink->frame_ts_start = upipe_netmap_sink->frame_ts = t;
+        upipe_netmap_sink->frame_ts_start = upipe_netmap_sink->frame_ts = t;
 
         /* floor(frame_ts) to the nearest PTP frame tick */
         upipe_netmap_sink->frame_ts /= dur;
@@ -1415,7 +1414,6 @@ static void upipe_netmap_sink_worker(struct upump *upump)
                     break;
                 }
 
-                struct upipe_netmap_intf *intf0 = &upipe_netmap_sink->intf[!i];
                 txavail = nm_ring_space(txring[!i]);
 
                 upipe_clear_queues(upipe, intf, t - txavail, 1);
@@ -1647,7 +1645,6 @@ static void upipe_netmap_sink_worker(struct upump *upump)
             /* Advance sequence number and timestamp for next packet. */
             rtp_set_seqnum(upipe_netmap_sink->audio_rtp_header, seqnum + 1);
             rtp_set_timestamp(upipe_netmap_sink->audio_rtp_header, timestamp + audio_subpipe->output_samples);
-            upipe_netmap_sink->frame_ts_start2 += audio_subpipe->output_samples * 27000 / 48;
 
             upipe_netmap_sink->bits += 8 * (audio_subpipe->packet_size + 4/*CRC*/) * audio_subpipe->num_flows;
             txavail -= audio_subpipe->num_flows;
