@@ -83,6 +83,10 @@ enum upipe_avfsink_input_command {
     UPIPE_AVFSINK_INPUT_SET_TIME_BASE,
     /** get the container time base, in ticks per second (uint64_t *) */
     UPIPE_AVFSINK_INPUT_GET_TIME_BASE,
+    /** set the timestamps upper limit (uint64_t) */
+    UPIPE_AVFSINK_INPUT_SET_TS_MAX,
+    /** get the timestamps upper limit (uint64_t *) */
+    UPIPE_AVFSINK_INPUT_GET_TS_MAX,
 };
 
 /** @This returns the management structure for all avformat sinks.
@@ -259,6 +263,32 @@ static inline int upipe_avfsink_input_get_time_base(struct upipe *upipe,
 {
     return upipe_control(upipe, UPIPE_AVFSINK_INPUT_GET_TIME_BASE,
                          UPIPE_AVFSINK_INPUT_SIGNATURE, time_base_p);
+}
+
+/** @This sets the timestamps upper limit
+ *
+ * @param upipe description structure of the pipe
+ * @param ts_max upper limit, in container time base
+ * @return an error code
+ */
+static inline int upipe_avfsink_input_set_ts_max(struct upipe *upipe,
+                                                 uint64_t ts_max)
+{
+    return upipe_control(upipe, UPIPE_AVFSINK_INPUT_SET_TS_MAX,
+                         UPIPE_AVFSINK_INPUT_SIGNATURE, ts_max);
+}
+
+/** @This gets the timestamps upper limit
+ *
+ * @param upipe description structure of the pipe
+ * @param ts_max_p filled with the upper limit, in container time base
+ * @return an error code
+ */
+static inline int upipe_avfsink_input_get_ts_max(struct upipe *upipe,
+                                                 uint64_t *ts_max_p)
+{
+    return upipe_control(upipe, UPIPE_AVFSINK_INPUT_GET_TS_MAX,
+                         UPIPE_AVFSINK_INPUT_SIGNATURE, ts_max_p);
 }
 
 #ifdef __cplusplus
