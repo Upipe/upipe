@@ -325,6 +325,17 @@ struct upipe_netmap_sink {
     struct upipe upipe;
 };
 
+struct ring_state {
+    /* netmap ring struct */
+    struct netmap_ring *txring;
+    /* pointer to slot */
+    struct netmap_slot *slot;
+    /* pointer for slot data (headers and payload) */
+    uint8_t *dst;
+    /* slot number to use (or be used) XXX: redundant?  in struct netmap_ring */
+    uint32_t cur;
+};
+
 UPIPE_HELPER_UPIPE(upipe_netmap_sink, upipe, UPIPE_NETMAP_SINK_SIGNATURE)
 UPIPE_HELPER_UREFCOUNT(upipe_netmap_sink, urefcount, upipe_netmap_sink_free)
 UPIPE_HELPER_UCLOCK(upipe_netmap_sink, uclock, uclock_request, NULL, upipe_throw_provide_request, NULL)
@@ -1298,6 +1309,42 @@ static void handle_tx_stamp(struct upipe *upipe, uint64_t t, uint16_t seq)
     upipe_netmap_sink->pkts_in_frame = 0;
 }
 
+static inline void check_marker_packet(struct upipe_netmap_sink *upipe_netmap_sink,
+        struct ring_state ring_state[2])
+{
+    struct upipe *upipe = upipe_netmap_sink_to_upipe(upipe_netmap_sink);
+
+    uint64_t tx_stamp[2] = { 0, 0 };
+    bool stamped = false;
+    for (size_t i = 0; i < 2; i++) {
+        struct upipe_netmap_intf *intf = &upipe_netmap_sink->intf[i];
+        if (unlikely(!intf->d || !intf->up)) {
+            /* clear the pointers if the interface is down. */
+            ring_state[i].dst = NULL;
+            ring_state[i].slot = NULL;
+            continue;
+        }
+
+        struct netmap_ring *txring = ring_state[i].txring;
+        uint32_t cur = ring_state[i].cur;
+        struct netmap_slot *slot = ring_state[i].slot = &txring->slot[cur];
+
+        uint8_t *dst = ring_state[i].dst = (uint8_t *)NETMAP_BUF(txring, txring->slot[cur].buf_idx);
+        uint8_t *rtp = dst + ETHERNET_HEADER_LEN + IP_HEADER_MINSIZE + UDP_HEADER_SIZE;
+
+        /* Check for marker bit indicating end of frame/field and get exact TX
+         * time of that packet. */
+        if (UINT64_MSB(slot->ptr)) {
+            tx_stamp[i] = UINT64_LOW_MASK(slot->ptr);
+            if (!stamped && tx_stamp[i]) {
+                uint16_t seq = rtp_get_seqnum(rtp);
+                handle_tx_stamp(upipe, tx_stamp[i], seq);
+                stamped = true;
+            }
+        }
+    }
+}
+
 static inline void aps_inc_video(struct audio_packet_state *aps)
 {
     aps->video_counter += 1;
@@ -1354,8 +1401,7 @@ static void upipe_netmap_sink_worker(struct upump *upump)
         upipe_netmap_sink->preroll = false;
     }
 
-    struct netmap_ring *txring[2] = { NULL, NULL };
-    uint32_t cur[2];
+    struct ring_state ring_state[2] = {{ 0 }};
     bool up[2] = {false, false};
 
     for (size_t i = 0; i < 2; i++) {
@@ -1363,7 +1409,7 @@ static void upipe_netmap_sink_worker(struct upump *upump)
         if (unlikely(!intf->d))
             break;
 
-        txring[i] = NETMAP_TXRING(intf->d->nifp, intf->ring_idx);
+        ring_state[i].txring = NETMAP_TXRING(intf->d->nifp, intf->ring_idx);
 
         struct ifreq ifr = intf->ifr;
         if (ioctl(intf->fd, SIOCGIFFLAGS, &ifr) < 0)
@@ -1390,29 +1436,29 @@ static void upipe_netmap_sink_worker(struct upump *upump)
     for (size_t i = 0; i < 2; i++) {
         struct upipe_netmap_intf *intf = &upipe_netmap_sink->intf[i];
         if (!intf->d || !up[i]) {
-            txring[i] = NULL;
+            ring_state[i].txring = NULL;
             continue;
         }
 
-        uint32_t t = nm_ring_space(txring[i]);
-        max_slots = txring[i]->num_slots - 1;
+        uint32_t t = nm_ring_space(ring_state[i].txring);
+        max_slots = ring_state[i].txring->num_slots - 1;
 
         if (intf->wait) {
             if ((now - intf->wait) > UCLOCK_FREQ) {
                 ioctl(NETMAP_FD(intf->d), NIOCTXSYNC, NULL); // update userspace ring
                 if (t < max_slots - 32) {
                     upipe_notice_va(upipe, "waiting, %u", t);
-                    txring[i] = NULL;
+                    ring_state[i].txring = NULL;
                     continue;
                 }
 
-                if (!txring[!i]) { // 2nd interface down
+                if (!ring_state[!i].txring) { // 2nd interface down
                     intf->up = true;
                     intf->wait = 0;
                     break;
                 }
 
-                txavail = nm_ring_space(txring[!i]);
+                txavail = nm_ring_space(ring_state[!i].txring);
 
                 upipe_clear_queues(upipe, intf, t - txavail, 1);
                 ioctl(NETMAP_FD(intf->d), NIOCTXSYNC, NULL); // start emptying 1
@@ -1456,12 +1502,12 @@ static void upipe_netmap_sink_worker(struct upump *upump)
 
                 upipe_notice_va(upipe, "RESYNCED (#2), tx0 %u tx1 %u", txavail, t);
             } else {
-                txring[i] = NULL;
+                ring_state[i].txring = NULL;
                 continue;
             }
         }
 
-        cur[i] = txring[i]->cur;
+        ring_state[i].cur = ring_state[i].txring->cur;
 
         if (txavail > t)
             txavail = t;
@@ -1469,8 +1515,8 @@ static void upipe_netmap_sink_worker(struct upump *upump)
 
     uint32_t num_slots = 0;
     for (size_t i = 0; i < 2; i++) {
-        if (txring[i]) {
-            num_slots = txring[i]->num_slots;
+        if (ring_state[i].txring) {
+            num_slots = ring_state[i].txring->num_slots;
             break;
         }
 
@@ -1517,8 +1563,12 @@ static void upipe_netmap_sink_worker(struct upump *upump)
     if (bps)
         bps -= (num_slots - 1 - txavail) * (pkt_len + 4) * 8;
 
-    struct netmap_slot *slot = txring[0] ? &txring[0]->slot[cur[0]] : &txring[1]->slot[cur[1]];
-    uint64_t t = UINT64_LOW_MASK(slot->ptr) / 1000 * 27;
+    uint64_t t;
+    if (ring_state[0].txring)
+        t = UINT64_LOW_MASK(ring_state[0].txring->slot[ring_state[0].cur].ptr) / 1000 * 27;
+    else
+        t = UINT64_LOW_MASK(ring_state[1].txring->slot[ring_state[1].cur].ptr) / 1000 * 27;
+
     if (!t)
         t = now;
 
@@ -1549,10 +1599,6 @@ static void upipe_netmap_sink_worker(struct upump *upump)
 
     const bool progressive = upipe_netmap_sink->progressive;
 
-    uint8_t *dst[2] = { NULL, NULL };
-    uint16_t *len[2] = { NULL, NULL };
-    uint64_t *ptr[2] = { NULL, NULL };
-
     /* fill ring buffer */
     while (txavail) {
         /* Audio insertion/multiplex. */
@@ -1577,23 +1623,12 @@ static void upipe_netmap_sink_worker(struct upump *upump)
             for (int flow = 0; flow < audio_subpipe->num_flows; flow++) {
                 int channel_offset = flow * audio_subpipe->output_channels;
 
-                bool stamped = false;
-                for (size_t i = 0; i < 2; i++) {
-                    /* Check for EOF. */
-                    struct upipe_netmap_intf *intf = &upipe_netmap_sink->intf[i];
-                    if (unlikely(!intf->d || !intf->up))
-                        continue;
-                    uint8_t *dst = (uint8_t*)NETMAP_BUF(txring[i], txring[i]->slot[cur[i]].buf_idx);
+                check_marker_packet(upipe_netmap_sink, ring_state);
 
-                    const size_t udp_size = ETHERNET_HEADER_LEN + IP_HEADER_MINSIZE + UDP_HEADER_SIZE;
-                    uint8_t *rtp = &dst[udp_size];
-                    if (UINT64_MSB(txring[i]->slot[cur[i]].ptr)) /* eof needs to be set */ {
-                        if (!stamped && UINT64_LOW_MASK(txring[i]->slot[cur[i]].ptr)) {
-                            uint16_t seq = rtp_get_seqnum(rtp);
-                            handle_tx_stamp(upipe, UINT64_LOW_MASK(txring[i]->slot[cur[i]].ptr), seq);
-                            stamped = true;
-                        }
-                    }
+                for (size_t i = 0; i < 2; i++) {
+                    uint8_t *dst = ring_state[i].dst;
+                    if (!dst)
+                        continue;
 
                     struct aes67_flow *aes67_flow = &audio_subpipe->flows[flow][i];
 
@@ -1608,9 +1643,9 @@ static void upipe_netmap_sink_worker(struct upump *upump)
                                 audio_subpipe->output_samples,
                                 channel_offset);
 
-                    txring[i]->slot[cur[i]].len = audio_subpipe->packet_size;
-                    txring[i]->slot[cur[i]].ptr = 0;
-                    cur[i] = nm_ring_next(txring[i], cur[i]);
+                    ring_state[i].slot->len = audio_subpipe->packet_size;
+                    ring_state[i].slot->ptr = 0;
+                    ring_state[i].cur = nm_ring_next(ring_state[i].txring, ring_state[i].cur);
                 }
             }
 
@@ -1636,30 +1671,24 @@ static void upipe_netmap_sink_worker(struct upump *upump)
                 break;
         }
 
+        /* Insert fake packets to adjust transmission rate differences. */
         if (upipe_netmap_sink->step && (upipe_netmap_sink->pkts_in_frame % upipe_netmap_sink->step) == 0) {
             const unsigned len = upipe_netmap_sink->packet_size;
 
-            bool stamped = false;
+            check_marker_packet(upipe_netmap_sink, ring_state);
+
             for (size_t i = 0; i < 2; i++) {
                 struct upipe_netmap_intf *intf = &upipe_netmap_sink->intf[i];
                 if (unlikely(!intf->d || !intf->up))
                     continue;
-                uint8_t *dst = (uint8_t*)NETMAP_BUF(txring[i], txring[i]->slot[cur[i]].buf_idx);
 
-                const size_t udp_size = ETHERNET_HEADER_LEN + IP_HEADER_MINSIZE + UDP_HEADER_SIZE;
-                uint8_t *rtp = &dst[udp_size];
-                if (UINT64_MSB(txring[i]->slot[cur[i]].ptr)) /* eof needs to be set */ {
-                    if (!stamped && UINT64_LOW_MASK(txring[i]->slot[cur[i]].ptr)) {
-                        uint16_t seq = rtp_get_seqnum(rtp);
-                        handle_tx_stamp(upipe, UINT64_LOW_MASK(txring[i]->slot[cur[i]].ptr), seq);
-                        stamped = true;
-                    }
-                }
+                uint8_t *dst = ring_state[i].dst;
                 memset(dst, 0, len);
                 memcpy(dst, intf->fake_header, ETHERNET_HEADER_LEN + IP_HEADER_MINSIZE + UDP_HEADER_SIZE);
-                txring[i]->slot[cur[i]].len = len;
-                txring[i]->slot[cur[i]].ptr = 0;
-                cur[i] = nm_ring_next(txring[i], cur[i]);
+
+                ring_state[i].slot->len = len;
+                ring_state[i].slot->ptr = 0;
+                ring_state[i].cur = nm_ring_next(ring_state[i].txring, ring_state[i].cur);
             }
             txavail--;
             upipe_netmap_sink->fakes++;
@@ -1667,6 +1696,7 @@ static void upipe_netmap_sink_worker(struct upump *upump)
             if (!txavail)
                 break;
         }
+
         if (!uref) {
             uref = get_uref(upipe);
             if (!uref)
@@ -1707,35 +1737,22 @@ static void upipe_netmap_sink_worker(struct upump *upump)
             bytes_left = input_size;
         }
 
-        bool stamped = false;
+        check_marker_packet(upipe_netmap_sink, ring_state);
+
+        /* TODO: clean this. */
+        uint8_t *dst[2] = { NULL, NULL };
+        uint16_t *len[2] = { NULL, NULL };
+        uint64_t *ptr[2] = { NULL, NULL };
+
         for (size_t i = 0; i < 2; i++) {
             struct upipe_netmap_intf *intf = &upipe_netmap_sink->intf[i];
             if (unlikely(!intf->d || !intf->up))
                 continue;
 
-            struct netmap_slot *slot = &txring[i]->slot[cur[i]];
-
-            dst[i] = (uint8_t*)NETMAP_BUF(txring[i], slot->buf_idx);
-            len[i] = &slot->len;
-            ptr[i] = &slot->ptr;
-            cur[i] = nm_ring_next(txring[i], cur[i]);
-
-            /* look for exact TX time of end of frame */
-            if (likely(!UINT64_MSB(slot->ptr) || !UINT64_LOW_MASK(slot->ptr))) /* no timestamp available */
-                continue;
-
-            const size_t udp_size = ETHERNET_HEADER_LEN + IP_HEADER_MINSIZE + UDP_HEADER_SIZE;
-            if (*len[i] < udp_size + RTP_HEADER_SIZE)
-                continue;
-
-            uint8_t *rtp = &dst[i][udp_size];
-
-            //printf("link %i, timestamp %"PRIu64" \n", i, slot->ptr);
-            if (!stamped) {
-                uint16_t seq = rtp_get_seqnum(rtp);
-                handle_tx_stamp(upipe, UINT64_LOW_MASK(slot->ptr), seq);
-                stamped = true;
-            }
+            dst[i] = ring_state[i].dst;
+            len[i] = &ring_state[i].slot->len;
+            ptr[i] = &ring_state[i].slot->ptr;
+            ring_state[i].cur = nm_ring_next(ring_state[i].txring, ring_state[i].cur);
         }
 
         if (rfc4175) {
@@ -1852,7 +1869,7 @@ static void upipe_netmap_sink_worker(struct upump *upump)
         if (unlikely(!intf->d || !intf->up))
             continue;
 
-        txring[i]->head = txring[i]->cur = cur[i];
+        ring_state[i].txring->head = ring_state[i].txring->cur = ring_state[i].cur;
         ioctl(NETMAP_FD(intf->d), NIOCTXSYNC, NULL);
     }
 }
