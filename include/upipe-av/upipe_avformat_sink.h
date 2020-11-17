@@ -79,6 +79,10 @@ enum upipe_avfsink_input_command {
     UPIPE_AVFSINK_INPUT_SET_DEFAULT,
     /** get the default disposition (int *) */
     UPIPE_AVFSINK_INPUT_GET_DEFAULT,
+    /** set the container time base, in ticks per second (uint64_t) */
+    UPIPE_AVFSINK_INPUT_SET_TIME_BASE,
+    /** get the container time base, in ticks per second (uint64_t *) */
+    UPIPE_AVFSINK_INPUT_GET_TIME_BASE,
 };
 
 /** @This returns the management structure for all avformat sinks.
@@ -229,6 +233,32 @@ upipe_avfsink_input_get_default(struct upipe *upipe, int *value_p)
 {
     return upipe_control(upipe, UPIPE_AVFSINK_INPUT_SET_DEFAULT,
                          UPIPE_AVFSINK_INPUT_SIGNATURE, &value_p);
+}
+
+/** @This sets the container time base
+ *
+ * @param upipe description structure of the pipe
+ * @param time_base time base in ticks per second
+ * @return an error code
+ */
+static inline int upipe_avfsink_input_set_time_base(struct upipe *upipe,
+                                                    uint64_t time_base)
+{
+    return upipe_control(upipe, UPIPE_AVFSINK_INPUT_SET_TIME_BASE,
+                         UPIPE_AVFSINK_INPUT_SIGNATURE, time_base);
+}
+
+/** @This gets the current container time base
+ *
+ * @param upipe description structure of the pipe
+ * @param time_base_p filled with the time base in ticks per second
+ * @return an error code
+ */
+static inline int upipe_avfsink_input_get_time_base(struct upipe *upipe,
+                                                    uint64_t *time_base_p)
+{
+    return upipe_control(upipe, UPIPE_AVFSINK_INPUT_GET_TIME_BASE,
+                         UPIPE_AVFSINK_INPUT_SIGNATURE, time_base_p);
 }
 
 #ifdef __cplusplus
