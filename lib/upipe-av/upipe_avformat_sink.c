@@ -124,6 +124,8 @@ struct upipe_avfsink_sub {
     struct urational sar;
     /** time base for container timestamps, in ticks per second */
     uint64_t time_base;
+    /** timestamps upper limit, in container time base */
+    uint64_t ts_max;
 
     /** buffered urefs */
     struct uchain urefs;
@@ -173,6 +175,7 @@ static struct upipe *upipe_avfsink_sub_alloc(struct upipe_mgr *mgr,
     upipe_avfsink_sub->id = -1;
     upipe_avfsink_sub->flow_id = UINT64_MAX;
     upipe_avfsink_sub->time_base = UINT64_MAX;
+    upipe_avfsink_sub->ts_max = UINT64_MAX;
     ulist_init(&upipe_avfsink_sub->urefs);
     upipe_avfsink_sub->next_dts = UINT64_MAX;
 
@@ -522,6 +525,37 @@ static int upipe_avfsink_sub_get_time_base(struct upipe *upipe,
     return UBASE_ERR_NONE;
 }
 
+/** @internal @This sets the timestamps upper limit
+ *
+ * @param upipe description structure of the pipe
+ * @param ts_max upper limit, in container time base
+ * @return an error code
+ */
+static int upipe_avfsink_sub_set_ts_max(struct upipe *upipe,
+                                           uint64_t ts_max)
+{
+    struct upipe_avfsink_sub *input = upipe_avfsink_sub_from_upipe(upipe);
+    input->ts_max = ts_max;
+    return UBASE_ERR_NONE;
+}
+
+/** @internal @This gets the timestamps upper limit
+ *
+ * @param upipe description structure of the pipe
+ * @param ts_max_p illed with the upper limit, in container time base
+ * @return an error code
+ */
+static int upipe_avfsink_sub_get_ts_max(struct upipe *upipe,
+                                        uint64_t *ts_max_p)
+{
+    struct upipe_avfsink_sub *input = upipe_avfsink_sub_from_upipe(upipe);
+    if (input->ts_max == UINT64_MAX)
+        return UBASE_ERR_INVALID;
+    if (ts_max_p != NULL)
+        *ts_max_p = input->ts_max;
+    return UBASE_ERR_NONE;
+}
+
 /** @internal @This processes control commands on an output subpipe of an
  * avfsink pipe.
  *
@@ -576,6 +610,16 @@ static int upipe_avfsink_sub_control(struct upipe *upipe,
             UBASE_SIGNATURE_CHECK(args, UPIPE_AVFSINK_INPUT_SIGNATURE)
             uint64_t *time_base_p = va_arg(args, uint64_t *);
             return upipe_avfsink_sub_get_time_base(upipe, time_base_p);
+        }
+        case UPIPE_AVFSINK_INPUT_SET_TS_MAX: {
+            UBASE_SIGNATURE_CHECK(args, UPIPE_AVFSINK_INPUT_SIGNATURE)
+            uint64_t ts_max = va_arg(args, uint64_t);
+            return upipe_avfsink_sub_set_ts_max(upipe, ts_max);
+        }
+        case UPIPE_AVFSINK_INPUT_GET_TS_MAX: {
+            UBASE_SIGNATURE_CHECK(args, UPIPE_AVFSINK_INPUT_SIGNATURE)
+            uint64_t *ts_max_p = va_arg(args, uint64_t *);
+            return upipe_avfsink_sub_get_ts_max(upipe, ts_max_p);
         }
         default:
             break;
@@ -950,6 +994,13 @@ static void upipe_avfsink_mux(struct upipe *upipe, struct upump **upump_p)
             avpkt.pts = ((pts - upipe_avfsink->ts_offset) *
                          stream->time_base.den + UCLOCK_FREQ / 2) /
                         UCLOCK_FREQ / stream->time_base.num;
+
+        if (input->ts_max != UINT64_MAX) {
+            if (avpkt.dts != AV_NOPTS_VALUE)
+                avpkt.dts %= input->ts_max + 1;
+            if (avpkt.pts != AV_NOPTS_VALUE)
+                avpkt.pts %= input->ts_max + 1;
+        }
 
         uint64_t duration;
         if (ubase_check(uref_clock_get_duration(uref, &duration)))
