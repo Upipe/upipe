@@ -122,6 +122,8 @@ struct upipe_avfsink_sub {
     struct uref *flow_def_check;
     /** sample aspect ratio */
     struct urational sar;
+    /** time base for container timestamps, in ticks per second */
+    uint64_t time_base;
 
     /** buffered urefs */
     struct uchain urefs;
@@ -170,6 +172,7 @@ static struct upipe *upipe_avfsink_sub_alloc(struct upipe_mgr *mgr,
     upipe_avfsink_sub_init_sub(upipe);
     upipe_avfsink_sub->id = -1;
     upipe_avfsink_sub->flow_id = UINT64_MAX;
+    upipe_avfsink_sub->time_base = UINT64_MAX;
     ulist_init(&upipe_avfsink_sub->urefs);
     upipe_avfsink_sub->next_dts = UINT64_MAX;
 
@@ -400,6 +403,9 @@ static int upipe_avfsink_sub_set_flow_def(struct upipe *upipe,
         codecpar->frame_size = samples;
     }
 
+    if (upipe_avfsink_sub->time_base != UINT64_MAX)
+        stream->time_base = (AVRational){ 1, upipe_avfsink_sub->time_base };
+
     if (extradata_alloc != NULL) {
         // FIXME stream->codec->flags |= AV_CODEC_FLAG_GLOBAL_HEADER;
         codecpar->extradata_size = extradata_size;
@@ -485,6 +491,37 @@ static int upipe_avfsink_sub_get_default(struct upipe *upipe, int *value_p)
     return UBASE_ERR_NONE;
 }
 
+/** @internal @This sets the container time base
+ *
+ * @param upipe description structure of the pipe
+ * @param time_base time base in ticks per second
+ * @return an error code
+ */
+static int upipe_avfsink_sub_set_time_base(struct upipe *upipe,
+                                           uint64_t time_base)
+{
+    struct upipe_avfsink_sub *input = upipe_avfsink_sub_from_upipe(upipe);
+    input->time_base = time_base;
+    return UBASE_ERR_NONE;
+}
+
+/** @internal @This gets the container time base
+ *
+ * @param upipe description structure of the pipe
+ * @param time_base_p filled with the time base, in ticks per second
+ * @return an error code
+ */
+static int upipe_avfsink_sub_get_time_base(struct upipe *upipe,
+                                           uint64_t *time_base_p)
+{
+    struct upipe_avfsink_sub *input = upipe_avfsink_sub_from_upipe(upipe);
+    if (input->time_base == UINT64_MAX)
+        return UBASE_ERR_INVALID;
+    if (time_base_p != NULL)
+        *time_base_p = input->time_base;
+    return UBASE_ERR_NONE;
+}
+
 /** @internal @This processes control commands on an output subpipe of an
  * avfsink pipe.
  *
@@ -529,6 +566,16 @@ static int upipe_avfsink_sub_control(struct upipe *upipe,
             UBASE_SIGNATURE_CHECK(args, UPIPE_AVFSINK_INPUT_SIGNATURE);
             int *value_p = va_arg(args, int *);
             return upipe_avfsink_sub_get_default(upipe, value_p);
+        }
+        case UPIPE_AVFSINK_INPUT_SET_TIME_BASE: {
+            UBASE_SIGNATURE_CHECK(args, UPIPE_AVFSINK_INPUT_SIGNATURE)
+            uint64_t time_base = va_arg(args, uint64_t);
+            return upipe_avfsink_sub_set_time_base(upipe, time_base);
+        }
+        case UPIPE_AVFSINK_INPUT_GET_TIME_BASE: {
+            UBASE_SIGNATURE_CHECK(args, UPIPE_AVFSINK_INPUT_SIGNATURE)
+            uint64_t *time_base_p = va_arg(args, uint64_t *);
+            return upipe_avfsink_sub_get_time_base(upipe, time_base_p);
         }
         default:
             break;
