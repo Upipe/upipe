@@ -332,6 +332,8 @@ struct ring_state {
     struct netmap_slot *slot;
     /* pointer for slot data (headers and payload) */
     uint8_t *dst;
+    /* skew relative to first path */
+    uint64_t skew;
     /* slot number to use (or be used) XXX: redundant?  in struct netmap_ring */
     uint32_t cur;
 };
@@ -1340,6 +1342,12 @@ static inline void check_marker_packet(struct upipe_netmap_sink *upipe_netmap_si
                 uint16_t seq = rtp_get_seqnum(rtp);
                 handle_tx_stamp(upipe, tx_stamp[i], seq);
                 stamped = true;
+            }
+
+            /* record skew */
+            if (i && tx_stamp[0] > 0) {
+                ring_state[i].skew = tx_stamp[i] - tx_stamp[0];
+                upipe_dbg_va(upipe, "skew: %"PRIu64"ns", ring_state[i].skew);
             }
         }
     }
