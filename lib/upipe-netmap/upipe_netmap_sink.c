@@ -1558,8 +1558,6 @@ static void upipe_netmap_sink_worker(struct upump *upump)
     /* fill ring buffer */
     while (txavail) {
         /* Audio insertion/multiplex. */
-        static unsigned local_audio_packet_counter = 0;
-
         if (rfc4175 && aps_audio_needed(&upipe_netmap_sink->audio_packet_state)) {
             struct upipe_netmap_sink_audio *audio_subpipe = &upipe_netmap_sink->audio_subpipe;
             struct upipe *subpipe = upipe_netmap_sink_audio_to_upipe(audio_subpipe);
@@ -1569,21 +1567,6 @@ static void upipe_netmap_sink_worker(struct upump *upump)
 
             /* Get uref and map data. */
             bool have_audio = ubase_check(get_audio(audio_subpipe));
-
-            if (have_audio && local_audio_packet_counter == 0) {
-                uint64_t systime_audio = 0;
-                uref_clock_get_pts_sys(audio_subpipe->uref, &systime_audio);
-                systime_audio += audio_subpipe->latency;
-
-                uint64_t systime_video = 0;
-                if(uref)
-                    uref_clock_get_pts_sys(uref, &systime_video);
-
-                systime_video += upipe_netmap_sink->latency;
-
-                upipe_dbg_va(subpipe, "video %"PRIu64" vlatency %"PRIu64" audio %"PRIu64" alatency %"PRIu64" diff %"PRIu64" depth %"PRIi64"",
-                        systime_video, upipe_netmap_sink->latency, systime_audio, audio_subpipe->latency, systime_audio - systime_video, audio_subpipe->n);
-            }
 
             if (have_audio) {
                 pack_audio(audio_subpipe);
@@ -1650,7 +1633,6 @@ static void upipe_netmap_sink_worker(struct upump *upump)
             txavail -= audio_subpipe->num_flows;
 
             aps_inc_audio(&upipe_netmap_sink->audio_packet_state);
-            local_audio_packet_counter++;
 
             if (!txavail)
                 break;
@@ -1806,7 +1788,6 @@ static void upipe_netmap_sink_worker(struct upump *upump)
                         rtp_set_timestamp(upipe_netmap_sink->audio_rtp_header, ts);
                         upipe_netmap_sink->frame_ts_start = 0;
                     }
-                    local_audio_packet_counter = 0;
                 }
             }
             aps_inc_video(&upipe_netmap_sink->audio_packet_state);
