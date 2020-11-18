@@ -17,8 +17,8 @@ jobs:
           - ubuntu-amd64-gcc-10-static
           - ubuntu-amd64-clang-11
           - ubuntu-i386-gcc-9
-          - ubuntu-armhf-gcc-8
-          - ubuntu-arm64-gcc-8
+          - ubuntu-armhf-gcc-10
+          - ubuntu-arm64-gcc-10
           - macos-xcode
 
         include:
@@ -49,20 +49,20 @@ jobs:
             version: 9
             multilib: true
 
-          - name: ubuntu-armhf-gcc-8
-            os: ubuntu-18.04
+          - name: ubuntu-armhf-gcc-10
+            os: ubuntu-20.04
             arch: armhf
             host: arm-linux-gnueabihf
             compiler: gcc
-            version: 8
+            version: 10
             multilib: true
 
-          - name: ubuntu-arm64-gcc-8
-            os: ubuntu-18.04
+          - name: ubuntu-arm64-gcc-10
+            os: ubuntu-20.04
             arch: arm64
             host: aarch64-linux-gnu
             compiler: gcc
-            version: 8
+            version: 10
 
           - name: macos-xcode
             os: macos-10.15
