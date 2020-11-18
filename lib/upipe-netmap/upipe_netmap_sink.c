@@ -1345,6 +1345,14 @@ static inline void check_marker_packet(struct upipe_netmap_sink *upipe_netmap_si
     }
 }
 
+static inline void advance_ring_state(struct ring_state *ring_state)
+{
+    struct netmap_ring *txring = ring_state->txring;
+    uint32_t cur = ring_state->cur = nm_ring_next(txring, ring_state->cur);
+    ring_state->slot = &txring->slot[cur];
+    ring_state->dst = (uint8_t *)NETMAP_BUF(txring, txring->slot[cur].buf_idx);
+}
+
 static inline void aps_inc_video(struct audio_packet_state *aps)
 {
     aps->video_counter += 1;
@@ -1507,7 +1515,9 @@ static void upipe_netmap_sink_worker(struct upump *upump)
             }
         }
 
-        ring_state[i].cur = ring_state[i].txring->cur;
+        uint32_t cur = ring_state[i].cur = ring_state[i].txring->cur;
+        ring_state[i].slot = &ring_state[i].txring->slot[cur];
+        ring_state[i].dst = (uint8_t *)NETMAP_BUF(ring_state[i].txring, ring_state[i].slot->buf_idx);
 
         if (txavail > t)
             txavail = t;
@@ -1645,7 +1655,7 @@ static void upipe_netmap_sink_worker(struct upump *upump)
 
                     ring_state[i].slot->len = audio_subpipe->packet_size;
                     ring_state[i].slot->ptr = 0;
-                    ring_state[i].cur = nm_ring_next(ring_state[i].txring, ring_state[i].cur);
+                    advance_ring_state(&ring_state[i]);
                 }
             }
 
@@ -1688,7 +1698,7 @@ static void upipe_netmap_sink_worker(struct upump *upump)
 
                 ring_state[i].slot->len = len;
                 ring_state[i].slot->ptr = 0;
-                ring_state[i].cur = nm_ring_next(ring_state[i].txring, ring_state[i].cur);
+                advance_ring_state(&ring_state[i]);
             }
             txavail--;
             upipe_netmap_sink->fakes++;
@@ -1752,7 +1762,7 @@ static void upipe_netmap_sink_worker(struct upump *upump)
             dst[i] = ring_state[i].dst;
             len[i] = &ring_state[i].slot->len;
             ptr[i] = &ring_state[i].slot->ptr;
-            ring_state[i].cur = nm_ring_next(ring_state[i].txring, ring_state[i].cur);
+            advance_ring_state(&ring_state[i]);
         }
 
         if (rfc4175) {
