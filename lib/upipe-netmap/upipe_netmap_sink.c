@@ -333,7 +333,7 @@ struct ring_state {
     /* pointer for slot data (headers and payload) */
     uint8_t *dst;
     /* skew relative to first path */
-    uint64_t skew;
+    int32_t skew;
     /* slot number to use (or be used) XXX: redundant?  in struct netmap_ring */
     uint32_t cur;
 };
@@ -1345,9 +1345,8 @@ static inline void check_marker_packet(struct upipe_netmap_sink *upipe_netmap_si
             }
 
             /* record skew */
-            if (i && tx_stamp[0] > 0) {
-                ring_state[i].skew = tx_stamp[i] - tx_stamp[0];
-                upipe_dbg_va(upipe, "skew: %"PRIu64"ns", ring_state[i].skew);
+            if (tx_stamp[0] > 0) {
+                ring_state[i].skew = (int64_t)tx_stamp[i] - (int64_t)tx_stamp[0];
             }
         }
     }
@@ -1625,6 +1624,11 @@ static void upipe_netmap_sink_worker(struct upump *upump)
 
     const bool progressive = upipe_netmap_sink->progressive;
 
+    /* Time of 1 packet in nanoseconds. */
+    const int32_t packet_time = UINT64_C(1000000000) * upipe_netmap_sink->fps.den
+        / (upipe_netmap_sink->fps.num * (upipe_netmap_sink->packets_per_frame + upipe_netmap_sink->gap_fakes));
+
+    bool adjust_skew_done = false;
     /* fill ring buffer */
     while (txavail) {
         /* Audio insertion/multiplex. */
@@ -1714,6 +1718,17 @@ static void upipe_netmap_sink_worker(struct upump *upump)
             upipe_netmap_sink->pkts_in_frame++;
             if (!txavail)
                 break;
+        }
+
+        /* To adjust skew insert 1 fake packet on 1 ring each time this worker
+         * function is called so that the TX rate isn't thrown way off.  Only
+         * start doing this after real timestamps have been used. */
+        if (unlikely(!adjust_skew_done) && likely(upipe_netmap_sink->frame_ts > 1)) {
+            /* If ring 1 is behind ring 0 then delay ring 0 by adding fakes. */
+            if (ring_state[1].skew > 2*packet_time) {
+                ring_state[1].skew = 0;
+                adjust_skew_done = true;
+            }
         }
 
         if (!uref) {
