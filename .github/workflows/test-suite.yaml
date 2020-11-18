@@ -71,7 +71,7 @@ jobs:
     steps:
       - name: Set up env
         run: |
-          echo "echo ::set-env name=\$1::\$2" | sudo tee /usr/local/bin/set-env >/dev/null
+          echo "echo \"\$1=\$2\" >> \$GITHUB_ENV" | sudo tee /usr/local/bin/set-env >/dev/null
           sudo chmod +x /usr/local/bin/set-env
 
       - name: Checkout
