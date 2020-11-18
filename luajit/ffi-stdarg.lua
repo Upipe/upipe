@@ -15,7 +15,7 @@ local is_number = {
 
 return {
     va_args = function (va_list, ...)
-        if ffi.arch ~= "x64" then
+        if ffi.arch ~= "x64" and ffi.arch ~= "arm64" then
             va_list = ffi.new("void *[1]", va_list)
         end
 
