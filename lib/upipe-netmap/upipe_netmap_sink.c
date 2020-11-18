@@ -2127,6 +2127,9 @@ static int upipe_netmap_sink_set_flow_def(struct upipe *upipe,
     /* setup gap_fakes_current for the first frame */
     if (upipe_netmap_sink->rfc4175)
         setup_gap_fakes(upipe_netmap_sink, upipe_netmap_sink->progressive);
+    /* otherwise ensure both gap fakes are set to 0 */
+    else
+        upipe_netmap_sink->gap_fakes = upipe_netmap_sink->gap_fakes_current = 0;
 
     static const struct  {
         struct urational fps;
