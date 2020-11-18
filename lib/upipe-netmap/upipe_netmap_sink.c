@@ -1574,10 +1574,10 @@ static void upipe_netmap_sink_worker(struct upump *upump)
         bps -= (num_slots - 1 - txavail) * (pkt_len + 4) * 8;
 
     uint64_t t;
-    if (ring_state[0].txring)
-        t = UINT64_LOW_MASK(ring_state[0].txring->slot[ring_state[0].cur].ptr) / 1000 * 27;
+    if (ring_state[0].slot)
+        t = UINT64_LOW_MASK(ring_state[0].slot->ptr) / 1000 * 27;
     else
-        t = UINT64_LOW_MASK(ring_state[1].txring->slot[ring_state[1].cur].ptr) / 1000 * 27;
+        t = UINT64_LOW_MASK(ring_state[1].slot->ptr) / 1000 * 27;
 
     if (!t)
         t = now;
