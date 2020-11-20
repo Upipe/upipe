@@ -1272,6 +1272,14 @@ static void handle_tx_stamp(struct upipe *upipe, uint64_t t, uint16_t seq)
     }
 
     uint16_t s = seq - upipe_netmap_sink->prev_marker_seq;
+
+    /* If the seqnum is the same this is probably the same marker packet being
+     * read on the rings at different times due to the skew adjustment.  If s is
+     * 0 then it will cause an underflow in the next block and a number of
+     * frames appearing to be missed. */
+    if (s == 0)
+        return;
+
     if (s != upipe_netmap_sink->packets_per_frame) { /* we missed a marker */
         uint64_t frames = (s - 1) / upipe_netmap_sink->packets_per_frame;
         upipe_warn_va(upipe, "Missed %" PRIu64 " marker frames, prev_marker_seq: %u, seq: %u",
