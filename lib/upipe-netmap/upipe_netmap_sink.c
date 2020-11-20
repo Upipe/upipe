@@ -1261,7 +1261,8 @@ static void handle_tx_stamp(struct upipe *upipe, uint64_t t, uint16_t seq)
     uint16_t s = seq - upipe_netmap_sink->prev_marker_seq;
     if (s != upipe_netmap_sink->packets_per_frame) { /* we missed a marker */
         uint64_t frames = (s - 1) / upipe_netmap_sink->packets_per_frame;
-        upipe_warn_va(upipe, "Missed %" PRIu64 " marker frames", frames);
+        upipe_warn_va(upipe, "Missed %" PRIu64 " marker frames, prev_marker_seq: %u, seq: %u",
+                         frames, upipe_netmap_sink->prev_marker_seq, seq);
         upipe_netmap_sink->frame_ts += frames * dur;
     }
     upipe_netmap_sink->prev_marker_seq = seq;
