@@ -1324,7 +1324,7 @@ static inline void check_marker_packet(struct upipe_netmap_sink *upipe_netmap_si
 {
     struct upipe *upipe = upipe_netmap_sink_to_upipe(upipe_netmap_sink);
 
-    uint64_t tx_stamp[2] = { 0, 0 };
+    int64_t tx_stamp[2] = { 0, 0 };
     bool stamped = false;
     for (size_t i = 0; i < 2; i++) {
         struct upipe_netmap_intf *intf = &upipe_netmap_sink->intf[i];
@@ -1354,7 +1354,7 @@ static inline void check_marker_packet(struct upipe_netmap_sink *upipe_netmap_si
 
             /* record skew */
             if (tx_stamp[0] > 0) {
-                ring_state[i].skew = (int64_t)tx_stamp[i] - (int64_t)tx_stamp[0];
+                ring_state[i].skew = tx_stamp[i] - tx_stamp[0];
             }
         }
     }
