@@ -689,9 +689,6 @@ static int upipe_netmap_put_rtp_headers(struct upipe_netmap_sink *upipe_netmap_s
         if (upipe_netmap_sink->rfc4175) {
             timestamp = upipe_netmap_sink->rtp_timestamp[f2];
         } else {
-            timestamp = upipe_netmap_sink->frame_count * upipe_netmap_sink->frame_duration +
-                (upipe_netmap_sink->frame_duration * upipe_netmap_sink->pkt * HBRMT_DATA_SIZE) /
-                upipe_netmap_sink->frame_size;
             timestamp = upipe_netmap_sink->rtp_timestamp[0];
         }
 
@@ -2190,7 +2187,7 @@ static int upipe_netmap_sink_set_flow_def(struct upipe *upipe,
                 break;
             uint8_t *header = &intf->header[0];
             uint16_t udp_payload_size = upipe_netmap_sink->packet_size - header_size;
-            header += upipe_netmap_put_ip_headers(intf, header, udp_payload_size);
+            upipe_netmap_put_ip_headers(intf, header, udp_payload_size);
             /* RTP Headers done in worker_rfc4175 */
         }
         upipe_netmap_update_timestamp_cache(upipe_netmap_sink);
