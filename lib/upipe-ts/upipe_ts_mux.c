@@ -1,5 +1,6 @@
 /*
  * Copyright (C) 2013-2019 OpenHeadend S.A.R.L.
+ * Copyright (C) 2020 EasyTools S.A.S.
  *
  * Authors: Christophe Massiot
  *
@@ -329,6 +330,8 @@ struct upipe_ts_mux {
     uint64_t eits_octetrate;
     /** octetrate assigned by the application, or 0 */
     uint64_t fixed_octetrate;
+    /** maximum octetrate assigned by the application, or 0 */
+    uint64_t max_octetrate;
     /** octetrate reserved for padding (and emergency situation) */
     uint64_t padding_octetrate;
     /** total operating octetrate including overheads, PMTs and PAT */
@@ -2625,6 +2628,7 @@ static struct upipe *upipe_ts_mux_alloc(struct upipe_mgr *mgr,
     upipe_ts_mux->pid_auto = DEFAULT_PID_AUTO;
     upipe_ts_mux->eits_octetrate = DEFAULT_EITS_OCTETRATE;
     upipe_ts_mux->fixed_octetrate = 0;
+    upipe_ts_mux->max_octetrate = 0;
     upipe_ts_mux->padding_octetrate = 0;
     upipe_ts_mux->total_octetrate = 0;
     upipe_ts_mux->required_octetrate = 0;
@@ -3319,8 +3323,13 @@ static void upipe_ts_mux_update(struct upipe *upipe)
         required_octetrate = mux->mtu * UCLOCK_FREQ / mux->mux_delay;
 
     uint64_t total_octetrate = mux->fixed_octetrate;
-    if (!total_octetrate)
+    if (!total_octetrate) {
         total_octetrate = required_octetrate;
+        if (mux->max_octetrate && total_octetrate > mux->max_octetrate) {
+            upipe_warn(upipe, "reach maximum configured octetrate");
+            total_octetrate = mux->max_octetrate;
+        }
+    }
 
     if (total_octetrate != mux->total_octetrate) {
         mux->total_octetrate = total_octetrate;
@@ -4210,6 +4219,21 @@ static int _upipe_ts_mux_set_octetrate(struct upipe *upipe, uint64_t octetrate)
     return UBASE_ERR_NONE;
 }
 
+/** @internal @This sets the maximum mux octetrate.
+ *
+ * @param upipe description structure of the pipe
+ * @param max_octetrate new maximum octetrate
+ * @return an error code
+ */
+static int _upipe_ts_mux_set_max_octetrate(struct upipe *upipe,
+                                           uint64_t max_octetrate)
+{
+    struct upipe_ts_mux *upipe_ts_mux = upipe_ts_mux_from_upipe(upipe);
+    upipe_ts_mux->max_octetrate = max_octetrate;
+    upipe_ts_mux_update(upipe);
+    return UBASE_ERR_NONE;
+}
+
 /** @internal @This returns the current EITs octetrate.
  *
  * @param upipe description structure of the pipe
@@ -4604,6 +4628,11 @@ static int _upipe_ts_mux_control(struct upipe *upipe, int command, va_list args)
             UBASE_SIGNATURE_CHECK(args, UPIPE_TS_MUX_SIGNATURE)
             const char *encoding = va_arg(args, const char *);
             return _upipe_ts_mux_set_encoding(upipe, encoding);
+        }
+        case UPIPE_TS_MUX_SET_MAX_OCTETRATE: {
+            UBASE_SIGNATURE_CHECK(args, UPIPE_TS_MUX_SIGNATURE)
+            uint64_t max_octetrate = va_arg(args, uint64_t);
+            return _upipe_ts_mux_set_max_octetrate(upipe, max_octetrate);
         }
 
         case UPIPE_TS_MUX_GET_VERSION:
