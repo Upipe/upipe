@@ -1,5 +1,6 @@
 /*
  * Copyright (C) 2013-2017 OpenHeadend S.A.R.L.
+ * Copyright (C) 2020 EasyTools S.A.S.
  *
  * Authors: Christophe Massiot
  *
@@ -162,6 +163,8 @@ enum upipe_ts_mux_command {
     /** prepares the next access unit/section for the given date
      * (uint64_t, uint64_t) */
     UPIPE_TS_MUX_PREPARE,
+    /** sets the mux maximum octetrate (uint64_t) */
+    UPIPE_TS_MUX_SET_MAX_OCTETRATE,
 
     /** ts_encaps commands begin here */
     UPIPE_TS_MUX_ENCAPS = UPIPE_CONTROL_LOCAL + 0x1000,
@@ -741,6 +744,19 @@ static inline int upipe_ts_mux_prepare(struct upipe *upipe, uint64_t cr_sys,
 {
     return upipe_control_nodbg(upipe, UPIPE_TS_MUX_PREPARE,
                                UPIPE_TS_MUX_SIGNATURE, cr_sys, latency);
+}
+
+/** @This sets the maximum mux octetrate.
+ *
+ * @param upipe description structure of the pipe
+ * @param max_octetrate new maximum octetrate
+ * @return an error code
+ */
+static inline int upipe_ts_mux_set_max_octetrate(struct upipe *upipe,
+                                                 uint64_t max_octetrate)
+{
+    return upipe_control(upipe, UPIPE_TS_MUX_SET_MAX_OCTETRATE,
+                         UPIPE_TS_MUX_SIGNATURE, max_octetrate);
 }
 
 /** @This returns a description string for local commands.
