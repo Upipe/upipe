@@ -1370,6 +1370,14 @@ static inline void aps_inc_audio(struct audio_packet_state *aps)
     aps->audio_counter = (aps->audio_counter + 1) % aps->den;
 }
 
+static void make_fake_packet(struct ring_state *ring_state, const void *header, uint16_t length)
+{
+    memset(ring_state->dst, 0, length);
+    memcpy(ring_state->dst, header, ETHERNET_HEADER_LEN + IP_HEADER_MINSIZE + UDP_HEADER_SIZE);
+    ring_state->slot->len = length;
+    ring_state->slot->ptr = 0;
+}
+
 static void upipe_netmap_sink_worker(struct upump *upump)
 {
     struct upipe *upipe = upump_get_opaque(upump, struct upipe *);
@@ -1683,8 +1691,6 @@ static void upipe_netmap_sink_worker(struct upump *upump)
 
         /* Insert fake packets to adjust transmission rate differences. */
         if (upipe_netmap_sink->step && (upipe_netmap_sink->pkts_in_frame % upipe_netmap_sink->step) == 0) {
-            const unsigned len = upipe_netmap_sink->packet_size;
-
             check_marker_packet(upipe_netmap_sink, ring_state);
 
             for (size_t i = 0; i < 2; i++) {
@@ -1692,12 +1698,7 @@ static void upipe_netmap_sink_worker(struct upump *upump)
                 if (unlikely(!intf->d || !intf->up))
                     continue;
 
-                uint8_t *dst = ring_state[i].dst;
-                memset(dst, 0, len);
-                memcpy(dst, intf->fake_header, ETHERNET_HEADER_LEN + IP_HEADER_MINSIZE + UDP_HEADER_SIZE);
-
-                ring_state[i].slot->len = len;
-                ring_state[i].slot->ptr = 0;
+                make_fake_packet(&ring_state[i], intf->fake_header, upipe_netmap_sink->packet_size);
                 advance_ring_state(&ring_state[i]);
             }
             txavail--;
