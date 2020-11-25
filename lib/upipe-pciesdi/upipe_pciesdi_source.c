@@ -121,28 +121,35 @@ struct upipe_pciesdi_src {
 
     /** file descriptor */
     int fd;
+    /* device number, read from URI */
     int device_number;
+    /* bitfield of card features from driver */
     uint32_t capability_flags;
-
-    bool discontinuity;
 
     /* picture properties, same units as upipe_hbrmt_common.h, pixels */
     const struct sdi_offsets_fmt *sdi_format;
-    bool sdi3g_levelb;
+    /* picture properties as read from card */
     int mode, family, scan, rate;
+    /* input is level B */
+    bool sdi3g_levelb;
+    /* discontinuity needs to be flagged on next output */
+    bool discontinuity;
 
+    /* the mmap pointer */
     uint8_t *read_buffer;
 
+    /* level B unpack function */
     void (*levelb_to_uyvy)(const uint8_t *src, uint16_t *dst1, uint16_t *dst2, uintptr_t pixels);
+    /* normal sdi unpack function */
     void (*sdi_to_uyvy)(const uint8_t *src, uint16_t *y, uintptr_t pixels);
-
-    /** bytes in scratch buffer */
-    int scratch_buffer_count;
 
     /** public upipe structure */
     struct upipe upipe;
 
-    /** scratch buffer */
+    /** bytes in scratch buffer */
+    int scratch_buffer_count;
+
+    /** scratch buffer to store some packed data between calls */
     uint8_t scratch_buffer[2 * DMA_BUFFER_SIZE];
 };
 
