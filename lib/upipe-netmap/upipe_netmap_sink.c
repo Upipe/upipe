@@ -1898,6 +1898,9 @@ static void upipe_netmap_sink_worker(struct upump *upump)
         txavail--;
     }
 
+    /* Catch future bugs that come from undeflowing txavail. */
+    assert(txavail <= max_slots);
+
     if (txavail >= max_slots - 32) {
         upipe_netmap_sink_reset_counters(upipe);
 
