@@ -1736,6 +1736,18 @@ static void upipe_netmap_sink_worker(struct upump *upump)
                 adjust_skew_done = true;
             }
 
+            /* If ring 0 is behind ring 1 then delay ring 1 by adding fakes. */
+            else if (ring_state[1].skew < -2*packet_time) {
+                struct upipe_netmap_intf *intf = &upipe_netmap_sink->intf[1];
+                if (intf->d && intf->up) {
+                    make_fake_packet(&ring_state[1], intf->fake_header, upipe_netmap_sink->packet_size);
+                    advance_ring_state(&ring_state[1]);
+                    txavail--;
+                }
+                ring_state[1].skew = 0;
+                adjust_skew_done = true;
+            }
+
             if (!txavail)
                 break;
         }
