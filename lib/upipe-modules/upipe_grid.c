@@ -315,7 +315,7 @@ static uint64_t upipe_grid_in_tolerance(struct upipe *upipe,
     struct urational fps;
     uint64_t samples;
     uint64_t rate;
-    if (ubase_check(uref_pic_flow_get_fps(flow_def, &fps)) && fps.den) {
+    if (ubase_check(uref_pic_flow_get_fps(flow_def, &fps)) && fps.num) {
         /* less than one frame */
         tolerance = (UCLOCK_FREQ * fps.den / fps.num);
         if (tolerance)
