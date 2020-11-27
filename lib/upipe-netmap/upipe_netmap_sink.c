@@ -1394,6 +1394,16 @@ static void make_fake_packet(struct ring_state *ring_state, const void *header, 
     ring_state->slot->ptr = 0;
 }
 
+static void adjust_skew(struct ring_state *ring_state, struct upipe_netmap_intf *intf,
+        uint32_t *txavail, uint16_t packet_size)
+{
+    if (intf->d && intf->up) {
+        make_fake_packet(ring_state, intf->fake_header, packet_size);
+        advance_ring_state(ring_state);
+        *txavail -= 1;
+    }
+}
+
 static void upipe_netmap_sink_worker(struct upump *upump)
 {
     struct upipe *upipe = upump_get_opaque(upump, struct upipe *);
@@ -1731,24 +1741,14 @@ static void upipe_netmap_sink_worker(struct upump *upump)
         if (unlikely(!adjust_skew_done) && likely(upipe_netmap_sink->frame_ts > 1)) {
             /* If ring 1 is behind ring 0 then delay ring 0 by adding fakes. */
             if (ring_state[1].skew > 2*upipe_netmap_sink->packet_duration) {
-                struct upipe_netmap_intf *intf = &upipe_netmap_sink->intf[0];
-                if (intf->d && intf->up) {
-                    make_fake_packet(&ring_state[0], intf->fake_header, upipe_netmap_sink->packet_size);
-                    advance_ring_state(&ring_state[0]);
-                    txavail--;
-                }
+                adjust_skew(&ring_state[0], &upipe_netmap_sink->intf[0], &txavail, upipe_netmap_sink->packet_size);
                 ring_state[1].skew = 0;
                 adjust_skew_done = true;
             }
 
             /* If ring 0 is behind ring 1 then delay ring 1 by adding fakes. */
             else if (ring_state[1].skew < -2*upipe_netmap_sink->packet_duration) {
-                struct upipe_netmap_intf *intf = &upipe_netmap_sink->intf[1];
-                if (intf->d && intf->up) {
-                    make_fake_packet(&ring_state[1], intf->fake_header, upipe_netmap_sink->packet_size);
-                    advance_ring_state(&ring_state[1]);
-                    txavail--;
-                }
+                adjust_skew(&ring_state[1], &upipe_netmap_sink->intf[1], &txavail, upipe_netmap_sink->packet_size);
                 ring_state[1].skew = 0;
                 adjust_skew_done = true;
             }
