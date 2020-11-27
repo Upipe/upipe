@@ -812,11 +812,14 @@ static bool upipe_mpgaf_handle_asc(struct upipe *upipe,
             return false;
     }
 
+    if (unlikely(!upipe_mpgaf_handle_asc_ga(upipe, s)))
+        return false;
+
     if (upipe_mpgaf->asc_aot == ASC_TYPE_SBR ||
         upipe_mpgaf->asc_aot == ASC_TYPE_PS)
         upipe_mpgaf->samples *= 2;
 
-    return upipe_mpgaf_handle_asc_ga(upipe, s);
+    return true;
 }
 
 /** @internal @This parses an LATM mux configuration.
