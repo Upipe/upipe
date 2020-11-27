@@ -313,7 +313,7 @@ static struct upipe *upipe_mpgaf_alloc(struct upipe_mgr *mgr,
     upipe_mpgaf->samplerate_idx = upipe_mpgaf->base_samplerate_idx = 0;
     upipe_mpgaf->samplerate = upipe_mpgaf->base_samplerate = 0;
     upipe_mpgaf->frame_length_type = 0;
-    upipe_mpgaf->octetrate = 0;
+    upipe_mpgaf->octetrate = 1000; /* at least 8kb/s for AAC streams */
     upipe_mpgaf->octetrate_changes = 0;
     upipe_mpgaf->duration_residue = 0;
     upipe_mpgaf->got_discontinuity = false;
@@ -568,6 +568,8 @@ static bool upipe_mpgaf_parse_adts(struct upipe *upipe)
         UBASE_FATAL(upipe, uref_flow_set_copyright(flow_def))
     if (adts_get_home(header))
         UBASE_FATAL(upipe, uref_flow_set_original(flow_def))
+    UBASE_FATAL(upipe, uref_block_flow_set_octetrate(flow_def,
+                                                     upipe_mpgaf->octetrate));
 
     upipe_mpgaf_store_flow_def(upipe, NULL);
     uref_free(upipe_mpgaf->flow_def_requested);
@@ -1033,6 +1035,9 @@ static bool upipe_mpgaf_handle_latm(struct upipe *upipe, struct ubuf *ubuf,
             uref_mpga_flow_set_aot(flow_def, upipe_mpgaf->asc_aot))
     UBASE_FATAL(upipe,
             uref_sound_flow_set_samples(flow_def, upipe_mpgaf->samples))
+    UBASE_FATAL(upipe,
+                uref_block_flow_set_octetrate(flow_def,
+                                              upipe_mpgaf->octetrate));
     if (!upipe_mpgaf->complete_input)
         UBASE_FATAL(upipe, uref_clock_set_latency(flow_def,
                     upipe_mpgaf->input_latency +
@@ -1729,6 +1734,9 @@ static bool upipe_mpgaf_work_raw(struct upipe *upipe, struct uref *uref,
                 uref_sound_flow_set_rate(flow_def, upipe_mpgaf->samplerate))
         UBASE_FATAL(upipe,
                 uref_sound_flow_set_samples(flow_def, upipe_mpgaf->samples))
+        UBASE_FATAL(upipe,
+                    uref_block_flow_set_octetrate(flow_def,
+                                                  upipe_mpgaf->octetrate));
 
         upipe_mpgaf_store_flow_def(upipe, NULL);
         uref_free(upipe_mpgaf->flow_def_requested);
