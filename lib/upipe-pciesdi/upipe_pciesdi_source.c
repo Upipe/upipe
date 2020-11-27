@@ -349,17 +349,22 @@ static void upipe_pciesdi_src_worker(struct upump *upump)
     uint8_t locked, mode, family, scan, rate;
     sdi_rx(upipe_pciesdi_src->fd, &locked, &mode, &family, &scan, &rate);
 
+    /* If either the core or datapath bits are unset or the "was unlocked"
+     * bit is set then a discontinuity needs flaggiing on the next output. */
     if (locked != 0x3) {
         upipe_pciesdi_src->discontinuity = true;
         return;
     }
 
+    /* Format change needs to change output. */
     if (mode != upipe_pciesdi_src->mode
             || family != upipe_pciesdi_src->family
             || scan != upipe_pciesdi_src->scan
             || rate != upipe_pciesdi_src->rate) {
         upipe_err_va(upipe, "format change, changing flow_def (%s)", __func__);
 
+        /* On a mode change some HW needs reconfiguring/reinitializing.  Store
+         * the new mode so that it isn't done again. */
         if (mode != upipe_pciesdi_src->mode
                 && need_init_hardware(upipe_pciesdi_src->capability_flags)) {
             upipe_err_va(upipe, "mode change, reconfiguring HW (%s)", __func__);
@@ -683,6 +688,7 @@ static int get_flow_def(struct upipe *upipe, struct uref **flow_format)
         return UBASE_ERR_INVALID;
     }
 
+    /* Create flow_def and fill in attributes. */
     struct uref *flow_def = uref_alloc(upipe_pciesdi_src->uref_mgr);
     if (!flow_def)
         return UBASE_ERR_ALLOC;
@@ -745,8 +751,8 @@ static void get_flow_def_on_signal_lock(struct upump *upump)
     struct upipe_pciesdi_src *upipe_pciesdi_src = upipe_pciesdi_src_from_upipe(upipe);
 
     /* If execution makes it here the main worker has not executed for the
-     * repeat time of the upump so it assumes RX signal has been lost.  Or it is
-     * the first time after pipe creation. */
+     * repeat time of the upump so it assumes RX signal has been lost.  Or this
+     * is the first time after pipe creation. */
 
     /* Query the HW for what it thinks the received format is. */
     uint8_t locked, mode, family, scan, rate;
