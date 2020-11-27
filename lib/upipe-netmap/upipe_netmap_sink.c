@@ -201,9 +201,10 @@ struct upipe_netmap_sink {
     /** frame size */
     uint64_t frame_size;
     uint64_t packets_per_frame;
-    uint64_t packet_duration;
     uint64_t frame_duration;
     unsigned packet_size;
+    /* Time of 1 packet in nanoseconds. */
+    int32_t packet_duration;
     bool progressive;
 
     /* Determined by the input flow_def */
@@ -1632,10 +1633,6 @@ static void upipe_netmap_sink_worker(struct upump *upump)
 
     const bool progressive = upipe_netmap_sink->progressive;
 
-    /* Time of 1 packet in nanoseconds. */
-    const int32_t packet_time = UINT64_C(1000000000) * upipe_netmap_sink->fps.den
-        / (upipe_netmap_sink->fps.num * (upipe_netmap_sink->packets_per_frame + upipe_netmap_sink->gap_fakes));
-
     bool adjust_skew_done = false;
     /* fill ring buffer */
     while (txavail) {
@@ -1733,7 +1730,7 @@ static void upipe_netmap_sink_worker(struct upump *upump)
          * start doing this after real timestamps have been used. */
         if (unlikely(!adjust_skew_done) && likely(upipe_netmap_sink->frame_ts > 1)) {
             /* If ring 1 is behind ring 0 then delay ring 0 by adding fakes. */
-            if (ring_state[1].skew > 2*packet_time) {
+            if (ring_state[1].skew > 2*upipe_netmap_sink->packet_duration) {
                 struct upipe_netmap_intf *intf = &upipe_netmap_sink->intf[0];
                 if (intf->d && intf->up) {
                     make_fake_packet(&ring_state[0], intf->fake_header, upipe_netmap_sink->packet_size);
@@ -1745,7 +1742,7 @@ static void upipe_netmap_sink_worker(struct upump *upump)
             }
 
             /* If ring 0 is behind ring 1 then delay ring 1 by adding fakes. */
-            else if (ring_state[1].skew < -2*packet_time) {
+            else if (ring_state[1].skew < -2*upipe_netmap_sink->packet_duration) {
                 struct upipe_netmap_intf *intf = &upipe_netmap_sink->intf[1];
                 if (intf->d && intf->up) {
                     make_fake_packet(&ring_state[1], intf->fake_header, upipe_netmap_sink->packet_size);
@@ -2027,7 +2024,9 @@ static bool upipe_netmap_sink_output(struct upipe *upipe, struct uref *uref,
             };
             upipe_dbg_va(upipe, "rational: %"PRId64"/%"PRIu64, rational.num, rational.den);
         }
-        upipe_netmap_sink->packet_duration = upipe_netmap_sink->frame_duration / upipe_netmap_sink->packets_per_frame;
+        /* Time of 1 packet in nanoseconds. */
+        upipe_netmap_sink->packet_duration = UINT64_C(1000000000) * upipe_netmap_sink->fps.den
+            / (upipe_netmap_sink->fps.num * (upipe_netmap_sink->packets_per_frame + upipe_netmap_sink->gap_fakes));
 
         for (size_t i = 0; i < 2; i++) {
             struct upipe_netmap_intf *intf = &upipe_netmap_sink->intf[i];
