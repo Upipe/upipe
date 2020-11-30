@@ -201,9 +201,10 @@ struct upipe_netmap_sink {
     /** frame size */
     uint64_t frame_size;
     uint64_t packets_per_frame;
-    uint64_t packet_duration;
     uint64_t frame_duration;
     unsigned packet_size;
+    /* Time of 1 packet in nanoseconds. */
+    int32_t packet_duration;
     bool progressive;
 
     /* Determined by the input flow_def */
@@ -332,6 +333,8 @@ struct ring_state {
     struct netmap_slot *slot;
     /* pointer for slot data (headers and payload) */
     uint8_t *dst;
+    /* skew relative to first path */
+    int32_t skew;
     /* slot number to use (or be used) XXX: redundant?  in struct netmap_ring */
     uint32_t cur;
 };
@@ -1270,6 +1273,14 @@ static void handle_tx_stamp(struct upipe *upipe, uint64_t t, uint16_t seq)
     }
 
     uint16_t s = seq - upipe_netmap_sink->prev_marker_seq;
+
+    /* If the seqnum is the same this is probably the same marker packet being
+     * read on the rings at different times due to the skew adjustment.  If s is
+     * 0 then it will cause an underflow in the next block and a number of
+     * frames appearing to be missed. */
+    if (s == 0)
+        return;
+
     if (s != upipe_netmap_sink->packets_per_frame) { /* we missed a marker */
         uint64_t frames = (s - 1) / upipe_netmap_sink->packets_per_frame;
         upipe_warn_va(upipe, "Missed %" PRIu64 " marker frames, prev_marker_seq: %u, seq: %u",
@@ -1314,7 +1325,7 @@ static inline void check_marker_packet(struct upipe_netmap_sink *upipe_netmap_si
 {
     struct upipe *upipe = upipe_netmap_sink_to_upipe(upipe_netmap_sink);
 
-    uint64_t tx_stamp[2] = { 0, 0 };
+    int64_t tx_stamp[2] = { 0, 0 };
     bool stamped = false;
     for (size_t i = 0; i < 2; i++) {
         struct upipe_netmap_intf *intf = &upipe_netmap_sink->intf[i];
@@ -1340,6 +1351,11 @@ static inline void check_marker_packet(struct upipe_netmap_sink *upipe_netmap_si
                 uint16_t seq = rtp_get_seqnum(rtp);
                 handle_tx_stamp(upipe, tx_stamp[i], seq);
                 stamped = true;
+            }
+
+            /* record skew */
+            if (tx_stamp[0] > 0) {
+                ring_state[i].skew = tx_stamp[i] - tx_stamp[0];
             }
         }
     }
@@ -1376,6 +1392,16 @@ static void make_fake_packet(struct ring_state *ring_state, const void *header, 
     memcpy(ring_state->dst, header, ETHERNET_HEADER_LEN + IP_HEADER_MINSIZE + UDP_HEADER_SIZE);
     ring_state->slot->len = length;
     ring_state->slot->ptr = 0;
+}
+
+static void adjust_skew(struct ring_state *ring_state, struct upipe_netmap_intf *intf,
+        uint32_t *txavail, uint16_t packet_size)
+{
+    if (intf->d && intf->up) {
+        make_fake_packet(ring_state, intf->fake_header, packet_size);
+        advance_ring_state(ring_state);
+        *txavail -= 1;
+    }
 }
 
 static void upipe_netmap_sink_worker(struct upump *upump)
@@ -1617,6 +1643,7 @@ static void upipe_netmap_sink_worker(struct upump *upump)
 
     const bool progressive = upipe_netmap_sink->progressive;
 
+    bool adjust_skew_done = false;
     /* fill ring buffer */
     while (txavail) {
         /* Audio insertion/multiplex. */
@@ -1704,6 +1731,28 @@ static void upipe_netmap_sink_worker(struct upump *upump)
             txavail--;
             upipe_netmap_sink->fakes++;
             upipe_netmap_sink->pkts_in_frame++;
+            if (!txavail)
+                break;
+        }
+
+        /* To adjust skew insert 1 fake packet on 1 ring each time this worker
+         * function is called so that the TX rate isn't thrown way off.  Only
+         * start doing this after real timestamps have been used. */
+        if (unlikely(!adjust_skew_done) && likely(upipe_netmap_sink->frame_ts > 1)) {
+            /* If ring 1 is behind ring 0 then delay ring 0 by adding fakes. */
+            if (ring_state[1].skew > 2*upipe_netmap_sink->packet_duration) {
+                adjust_skew(&ring_state[0], &upipe_netmap_sink->intf[0], &txavail, upipe_netmap_sink->packet_size);
+                ring_state[1].skew = 0;
+                adjust_skew_done = true;
+            }
+
+            /* If ring 0 is behind ring 1 then delay ring 1 by adding fakes. */
+            else if (ring_state[1].skew < -2*upipe_netmap_sink->packet_duration) {
+                adjust_skew(&ring_state[1], &upipe_netmap_sink->intf[1], &txavail, upipe_netmap_sink->packet_size);
+                ring_state[1].skew = 0;
+                adjust_skew_done = true;
+            }
+
             if (!txavail)
                 break;
         }
@@ -1846,6 +1895,9 @@ static void upipe_netmap_sink_worker(struct upump *upump)
         txavail--;
     }
 
+    /* Catch future bugs that come from undeflowing txavail. */
+    assert(txavail <= max_slots);
+
     if (txavail >= max_slots - 32) {
         upipe_netmap_sink_reset_counters(upipe);
 
@@ -1972,7 +2024,9 @@ static bool upipe_netmap_sink_output(struct upipe *upipe, struct uref *uref,
             };
             upipe_dbg_va(upipe, "rational: %"PRId64"/%"PRIu64, rational.num, rational.den);
         }
-        upipe_netmap_sink->packet_duration = upipe_netmap_sink->frame_duration / upipe_netmap_sink->packets_per_frame;
+        /* Time of 1 packet in nanoseconds. */
+        upipe_netmap_sink->packet_duration = UINT64_C(1000000000) * upipe_netmap_sink->fps.den
+            / (upipe_netmap_sink->fps.num * (upipe_netmap_sink->packets_per_frame + upipe_netmap_sink->gap_fakes));
 
         for (size_t i = 0; i < 2; i++) {
             struct upipe_netmap_intf *intf = &upipe_netmap_sink->intf[i];
