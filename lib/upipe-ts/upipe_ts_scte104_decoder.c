@@ -492,6 +492,11 @@ static int upipe_ts_scte104d_time_signal(struct upipe *upipe,
                                          struct uchain *urefs)
 {
     const uint8_t *data = scte104o_get_data(op);
+    uint16_t data_length = scte104o_get_data_length(op);
+    if (data_length < SCTE104TSRD_HEADER_SIZE) {
+        upipe_warn(upipe, "drop invalid tsrd");
+        return UBASE_ERR_INVALID;
+    }
     uint16_t pre_roll_time = scte104tsrd_get_pre_roll_time(data);
 
     struct uref *event = uref_fork(uref, NULL);
@@ -524,10 +529,26 @@ static int upipe_ts_scte104d_insert_descriptor(struct upipe *upipe,
                                                struct uchain *urefs)
 {
     const uint8_t *data = scte104o_get_data(op);
+    uint16_t data_length = scte104o_get_data_length(op);
+    if (data_length < SCTE104IDRD_HEADER_SIZE) {
+        upipe_warn(upipe, "drop invalid idrd");
+        return UBASE_ERR_INVALID;
+    }
+    data_length -= SCTE104IDRD_HEADER_SIZE;
+
     uint8_t count = scte104idrd_get_count(data);
     const uint8_t *image = scte104idrd_get_image(data);
     for (uint8_t i = 0; i < count; i++) {
+        if (data_length < DESC_HEADER_SIZE) {
+            upipe_warn(upipe, "drop invalid idrd descriptor(s)");
+            return UBASE_ERR_INVALID;
+        }
         uint16_t size = desc_get_length(image) + DESC_HEADER_SIZE;
+        if (data_length < size) {
+            upipe_warn(upipe, "drop invalid idrd descriptor(s)");
+            return UBASE_ERR_INVALID;
+        }
+        data_length -= size;
 
         UBASE_FATAL(upipe, uref_ts_flow_add_descriptor(event, image, size));
         image += size;
@@ -559,12 +580,21 @@ upipe_ts_scte104d_insert_segmentation_descriptor(struct upipe *upipe,
         return UBASE_ERR_ALLOC;
     }
 
+    uint16_t data_length = scte104o_get_data_length(op);
+    if (data_length < SCTE104ISDRD_HEADER_SIZE) {
+        upipe_warn(upipe, "drop invalid isdrd");
+        return UBASE_ERR_INVALID;
+    }
     const uint8_t *data = scte104o_get_data(op);
     uint32_t event_id = scte104isdrd_get_event_id(data);
     uint8_t cancel_indicator = scte104isdrd_get_cancel_indicator(data);
     uint16_t duration = scte104isdrd_get_duration(data);
     uint8_t upid_type = scte104isdrd_get_upid_type(data);
     uint8_t upid_length = scte104isdrd_get_upid_length(data);
+    if (data_length < SCTE104ISDRD_HEADER_SIZE + upid_length) {
+        upipe_warn(upipe, "drop invalid isdrd");
+        return UBASE_ERR_INVALID;
+    }
     uint8_t *upid = scte104isdrd_get_upid(data);
     uint8_t type_id = scte104isdrd_get_type_id(data);
     uint8_t num = scte104isdrd_get_num(data);
@@ -577,9 +607,14 @@ upipe_ts_scte104d_insert_segmentation_descriptor(struct upipe *upipe,
     uint8_t no_regional_blackout = scte104isdrd_get_no_regional_blackout(data);
     uint8_t archive_allowed = scte104isdrd_get_archive_allowed(data);
     uint8_t device_restrictions = scte104isdrd_get_device_restrictions(data);
-    uint8_t insert_sub_info = scte104isdrd_get_insert_sub_info(data);
-    uint8_t sub_num = scte104isdrd_get_sub_num(data);
-    uint8_t sub_expected = scte104isdrd_get_sub_expected(data);
+    uint8_t insert_sub_info = 0;
+    uint8_t sub_num = 0;
+    uint8_t sub_expected = 0;
+    if (data_length >= SCTE104ISDRD_HEADER_SIZE + upid_length + 3) {
+        insert_sub_info = scte104isdrd_get_insert_sub_info(data);
+        sub_num = scte104isdrd_get_sub_num(data);
+        sub_expected = scte104isdrd_get_sub_expected(data);
+    }
 
     uref_ts_scte35_desc_set_tag(desc, SCTE35_SPLICE_DESC_TAG_SEG);
     uref_ts_scte35_desc_set_identifier(desc, SCTE35_SPLICE_DESC_IDENTIFIER);
