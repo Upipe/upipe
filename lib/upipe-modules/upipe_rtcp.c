@@ -160,7 +160,7 @@ static struct upipe *upipe_rtcp_alloc(struct upipe_mgr *mgr,
     upipe_rtcp->packet_count = 0;
     upipe_rtcp->octet_count = 0;
     upipe_rtcp->clockrate = 0;
-    upipe_rtcp->rate = UCLOCK_FREQ;
+    upipe_rtcp->rate = UCLOCK_FREQ / 10; /* RIST specification says mininum rate of 100ms for RTCP */
     upipe_rtcp->last_sent = 0;
     upipe_rtcp->name = NULL;
     upipe_throw_ready(upipe);
