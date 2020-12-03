@@ -56,25 +56,37 @@ struct uref *upipe_ts_scte_extract_desc(struct upipe *upipe,
         return NULL;
     }
     uint8_t tag = scte35_splice_desc_get_tag(desc);
-    uint8_t length = scte35_splice_desc_get_length(desc);
+    uint8_t length = scte35_splice_desc_get_length(desc) + DESC_HEADER_SIZE;
 
     if (length < SCTE35_SPLICE_DESC_HEADER_SIZE) {
         uref_free(out);
         return NULL;
     }
+    length -= SCTE35_SPLICE_DESC_HEADER_SIZE;
     uint32_t identifier = scte35_splice_desc_get_identifier(desc);
-
     uref_ts_scte35_desc_set_tag(out, tag);
     uref_ts_scte35_desc_set_identifier(out, identifier);
 
     switch (tag) {
         case SCTE35_SPLICE_DESC_TAG_SEG: {
+            if (length < SCTE35_SEG_DESC_HEADER_SIZE) {
+                uref_free(out);
+                return NULL;
+            }
+            length -= SCTE35_SEG_DESC_HEADER_SIZE;
+
             uint32_t seg_event_id = scte35_seg_desc_get_event_id(desc);
             bool cancel = scte35_seg_desc_has_cancel(desc);
             uref_ts_scte35_desc_seg_set_event_id(out, seg_event_id);
             if (cancel)
                 uref_ts_scte35_desc_seg_set_cancel(out);
             else {
+                if (length < SCTE35_SEG_DESC_NO_CANCEL_SIZE) {
+                    uref_free(out);
+                    return NULL;
+                }
+                length -= SCTE35_SEG_DESC_NO_CANCEL_SIZE;
+
                 bool has_delivery_not_restricted =
                     scte35_seg_desc_has_delivery_not_restricted(desc);
                 if (!has_delivery_not_restricted) {
@@ -103,8 +115,19 @@ struct uref *upipe_ts_scte_extract_desc(struct upipe *upipe,
                 bool has_program_seg =
                     scte35_seg_desc_has_program_seg(desc);
                 if (!has_program_seg) {
+                    if (length < SCTE35_SEG_DESC_NO_PROG_SEG_SIZE) {
+                        uref_free(out);
+                        return NULL;
+                    }
+                    length -= SCTE35_SEG_DESC_NO_PROG_SEG_SIZE;
+
                     uint8_t nb_comp =
                         scte35_seg_desc_get_component_count(desc);
+                    if (length < nb_comp * SCTE35_SEG_DESC_COMPONENT_SIZE) {
+                        uref_free(out);
+                        return NULL;
+                    }
+                    length -= nb_comp * SCTE35_SEG_DESC_COMPONENT_SIZE;
                     uref_ts_scte35_desc_seg_set_nb_comp(out, nb_comp);
                     for (uint8_t j = 0; j < nb_comp; j++) {
                         const uint8_t *comp =
@@ -122,12 +145,23 @@ struct uref *upipe_ts_scte_extract_desc(struct upipe *upipe,
 
                 bool has_duration = scte35_seg_desc_has_duration(desc);
                 if (has_duration) {
+                    if (length < SCTE35_SEG_DESC_DURATION_SIZE) {
+                        uref_free(out);
+                        return NULL;
+                    }
+                    length -= SCTE35_SEG_DESC_DURATION_SIZE;
+
                     uint64_t duration = scte35_seg_desc_get_duration(desc);
                     uref_clock_set_duration(out, duration * CLOCK_SCALE);
                 }
 
                 uint8_t upid_type = scte35_seg_desc_get_upid_type(desc);
                 uint8_t upid_length = scte35_seg_desc_get_upid_length(desc);
+                if (length < upid_length) {
+                    uref_free(out);
+                    return NULL;
+                }
+                length -= upid_length;
                 const uint8_t *upid = scte35_seg_desc_get_upid(desc);
                 uint8_t type_id = scte35_seg_desc_get_type_id(desc);
                 uint8_t num = scte35_seg_desc_get_num(desc);
@@ -146,16 +180,19 @@ struct uref *upipe_ts_scte_extract_desc(struct upipe *upipe,
                     out, scte35_seg_desc_type_id_to_str(type_id));
                 uref_ts_scte35_desc_seg_set_num(out, num);
                 uref_ts_scte35_desc_seg_set_expected(out, expected);
-                if (scte35_seg_desc_has_sub_num(desc)) {
-                    uint8_t sub_num =
-                        scte35_seg_desc_get_sub_num(desc);
-                    uref_ts_scte35_desc_seg_set_sub_num(out, sub_num);
-                }
-                if (scte35_seg_desc_has_sub_expected(desc)) {
-                    uint8_t sub_expected =
-                        scte35_seg_desc_get_sub_expected(desc);
-                    uref_ts_scte35_desc_seg_set_sub_expected(
-                        out, sub_expected);
+                if (length >= SCTE35_SEG_DESC_SUB_SEG_SIZE) {
+                    length -= SCTE35_SEG_DESC_SUB_SEG_SIZE;
+                    if (scte35_seg_desc_has_sub_num(desc)) {
+                        uint8_t sub_num =
+                            scte35_seg_desc_get_sub_num(desc);
+                        uref_ts_scte35_desc_seg_set_sub_num(out, sub_num);
+                    }
+                    if (scte35_seg_desc_has_sub_expected(desc)) {
+                        uint8_t sub_expected =
+                            scte35_seg_desc_get_sub_expected(desc);
+                        uref_ts_scte35_desc_seg_set_sub_expected(
+                            out, sub_expected);
+                    }
                 }
             }
             break;
@@ -238,7 +275,7 @@ int upipe_ts_scte_export_desc(struct upipe *upipe,
 
                 if (!has_program_seg) {
                     length += SCTE35_SEG_DESC_NO_PROG_SEG_SIZE +
-                        6 * nb_comp;
+                        SCTE35_SEG_DESC_COMPONENT_SIZE * nb_comp;
                 }
 
                 if (has_duration)

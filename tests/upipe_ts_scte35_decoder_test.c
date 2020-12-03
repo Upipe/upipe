@@ -47,10 +47,12 @@
 #include <upipe/uref_block.h>
 #include <upipe/uref_clock.h>
 #include <upipe/uref_std.h>
+#include <upipe/uref_dump.h>
 #include <upipe/upipe.h>
 #include <upipe-ts/upipe_ts_scte35_decoder.h>
 #include <upipe-ts/uref_ts_flow.h>
 #include <upipe-ts/uref_ts_scte35.h>
+#include <upipe-ts/uref_ts_scte35_desc.h>
 
 #include <stdbool.h>
 #include <stdlib.h>
@@ -61,12 +63,16 @@
 
 #include <bitstream/scte/35.h>
 
+#include "../lib/upipe-ts/upipe_ts_scte_common.h"
+
 #define UDICT_POOL_DEPTH 0
 #define UREF_POOL_DEPTH 0
 #define UBUF_POOL_DEPTH 0
 #define UPROBE_LOG_LEVEL UPROBE_LOG_DEBUG
 
 static int round;
+static int sub_round = 0;
+static struct uprobe *uprobe_stdio = NULL;
 
 /** definition of our uprobe */
 static int catch(struct uprobe *uprobe, struct upipe *upipe,
@@ -92,7 +98,7 @@ static int catch(struct uprobe *uprobe, struct upipe *upipe,
             struct uref *uref = va_arg(args, struct uref *);
             assert(uref != NULL);
             uint64_t decaps_pts;
-            uref_clock_get_pts_orig(uref, &decaps_pts);
+            ubase_assert(uref_clock_get_pts_orig(uref, &decaps_pts));
             assert(decaps_pts == 27000000);
             break;
         }
@@ -116,9 +122,13 @@ static void test_input(struct upipe *upipe, struct uref *uref,
 {
     assert(uref != NULL);
     assert(uref->ubuf == NULL);
+    uref_dump(uref, uprobe_stdio);
 
+    uint8_t command_type;
+    ubase_assert(uref_ts_scte35_get_command_type(uref, &command_type));
     switch (round) {
         case 1: {
+            assert(command_type == SCTE35_INSERT_COMMAND);
             uint64_t event_id;
             ubase_assert(uref_ts_scte35_get_event_id(uref, &event_id));
             assert(event_id == 4242);
@@ -137,6 +147,7 @@ static void test_input(struct upipe *upipe, struct uref *uref,
             break;
         }
         case 2: {
+            assert(command_type == SCTE35_INSERT_COMMAND);
             uint64_t event_id;
             ubase_assert(uref_ts_scte35_get_event_id(uref, &event_id));
             assert(event_id == 4242);
@@ -144,6 +155,7 @@ static void test_input(struct upipe *upipe, struct uref *uref,
             break;
         }
         case 3: {
+            assert(command_type == SCTE35_INSERT_COMMAND);
             uint64_t event_id;
             ubase_assert(uref_ts_scte35_get_event_id(uref, &event_id));
             assert(event_id == 4243);
@@ -159,10 +171,227 @@ static void test_input(struct upipe *upipe, struct uref *uref,
             ubase_nassert(uref_clock_get_duration(uref, &duration));
             break;
         }
+        case 4: {
+            assert(command_type == SCTE35_NULL_COMMAND);
+            break;
+        }
+
+        case 5: {
+            assert(command_type == SCTE35_TIME_SIGNAL_COMMAND);
+            ubase_nassert(uref_clock_get_pts_orig(uref, NULL));
+            break;
+        }
+
+        case 6: {
+            assert(command_type == SCTE35_TIME_SIGNAL_COMMAND);
+            ubase_assert(uref_clock_get_pts_orig(uref, NULL));
+            break;
+        }
+
+        case 7: {
+            assert(command_type == SCTE35_TIME_SIGNAL_COMMAND);
+            uint64_t event_id = 4242;
+            if (sub_round != 0)
+                ubase_assert(uref_ts_scte35_desc_seg_get_event_id(
+                        uref, &event_id));
+            else
+                ubase_nassert(uref_ts_scte35_desc_seg_get_event_id(
+                        uref, NULL));
+            assert(event_id == 4242 + sub_round);
+
+            switch (sub_round) {
+                case 0:
+                    sub_round = 1;
+                    break;
+
+                case 1: {
+                    ubase_assert(uref_ts_scte35_desc_seg_get_cancel(uref));
+                    sub_round = 2;
+                    break;
+                }
+
+                case 2: {
+                    ubase_nassert(uref_ts_scte35_desc_seg_get_cancel(uref));
+                    ubase_nassert(uref_ts_scte35_desc_seg_get_nb_comp(uref, NULL));
+                    ubase_nassert(uref_clock_get_duration(uref, NULL));
+                    ubase_nassert(uref_ts_scte35_desc_seg_get_delivery_not_restricted(uref));
+                    ubase_nassert(uref_ts_scte35_desc_seg_get_web(uref));
+                    ubase_nassert(uref_ts_scte35_desc_seg_get_no_regional_blackout(uref));
+                    ubase_nassert(uref_ts_scte35_desc_seg_get_archive(uref));
+                    uint8_t device;
+                    ubase_assert(uref_ts_scte35_desc_seg_get_device(uref, &device));
+                    assert(device == 0);
+                    uint8_t upid_type;
+                    ubase_assert(uref_ts_scte35_desc_seg_get_upid_type(uref, &upid_type));
+                    assert(upid_type == 42);
+                    const uint8_t *upid;
+                    size_t upid_len;
+                    ubase_assert(uref_ts_scte35_desc_seg_get_upid(uref, &upid, &upid_len));
+                    assert(upid_len == 16);
+                    for (unsigned i = 0; i < upid_len; i++)
+                        assert(upid[i] == 23);
+                    uint8_t type;
+                    ubase_assert(uref_ts_scte35_desc_seg_get_type_id(
+                            uref, &type));
+                    assert(type == 1);
+                    uint8_t num;
+                    ubase_assert(uref_ts_scte35_desc_seg_get_num(
+                            uref, &num));
+                    assert(num == 1);
+                    uint8_t expected;
+                    ubase_assert(uref_ts_scte35_desc_seg_get_expected(
+                            uref, &expected));
+                    assert(expected == 10);
+                    ubase_nassert(uref_ts_scte35_desc_seg_get_sub_num(
+                            uref, NULL));
+                    ubase_nassert(uref_ts_scte35_desc_seg_get_sub_expected(
+                            uref, NULL));
+                    sub_round = 3;
+                    break;
+                }
+
+                case 3: {
+                    ubase_nassert(uref_ts_scte35_desc_seg_get_cancel(uref));
+                    uint8_t nb_comp;
+                    ubase_assert(uref_ts_scte35_desc_seg_get_nb_comp(
+                            uref, &nb_comp));
+                    assert(nb_comp == 4);
+                    ubase_nassert(uref_clock_get_duration(uref, NULL));
+                    ubase_nassert(uref_ts_scte35_desc_seg_get_delivery_not_restricted(uref));
+                    ubase_nassert(uref_ts_scte35_desc_seg_get_web(uref));
+                    ubase_nassert(uref_ts_scte35_desc_seg_get_no_regional_blackout(uref));
+                    ubase_nassert(uref_ts_scte35_desc_seg_get_archive(uref));
+                    uint8_t device;
+                    ubase_assert(uref_ts_scte35_desc_seg_get_device(uref, &device));
+                    assert(device == 0);
+                    uint8_t upid_type;
+                    ubase_assert(uref_ts_scte35_desc_seg_get_upid_type(uref, &upid_type));
+                    assert(upid_type == 42);
+                    const uint8_t *upid;
+                    size_t upid_len;
+                    ubase_assert(uref_ts_scte35_desc_seg_get_upid(uref, &upid, &upid_len));
+                    assert(upid_len == 16);
+                    for (unsigned i = 0; i < upid_len; i++)
+                        assert(upid[i] == 23);
+                    uint8_t type;
+                    ubase_assert(uref_ts_scte35_desc_seg_get_type_id(
+                            uref, &type));
+                    assert(type == 2);
+                    uint8_t num;
+                    ubase_assert(uref_ts_scte35_desc_seg_get_num(
+                            uref, &num));
+                    assert(num == 1);
+                    uint8_t expected;
+                    ubase_assert(uref_ts_scte35_desc_seg_get_expected(
+                            uref, &expected));
+                    assert(expected == 10);
+                    ubase_nassert(uref_ts_scte35_desc_seg_get_sub_num(
+                            uref, NULL));
+                    ubase_nassert(uref_ts_scte35_desc_seg_get_sub_expected(
+                            uref, NULL));
+                    sub_round = 4;
+                    break;
+                }
+
+                case 4: {
+                    ubase_nassert(uref_ts_scte35_desc_seg_get_cancel(uref));
+                    uint8_t nb_comp;
+                    ubase_assert(uref_ts_scte35_desc_seg_get_nb_comp(
+                            uref, &nb_comp));
+                    assert(nb_comp == 4);
+                    uint64_t duration;
+                    ubase_assert(uref_clock_get_duration(uref, &duration));
+                    assert(duration == UCLOCK_FREQ);
+                    ubase_nassert(uref_ts_scte35_desc_seg_get_delivery_not_restricted(uref));
+                    ubase_nassert(uref_ts_scte35_desc_seg_get_web(uref));
+                    ubase_nassert(uref_ts_scte35_desc_seg_get_no_regional_blackout(uref));
+                    ubase_nassert(uref_ts_scte35_desc_seg_get_archive(uref));
+                    uint8_t device;
+                    ubase_assert(uref_ts_scte35_desc_seg_get_device(uref, &device));
+                    assert(device == 0);
+                    uint8_t upid_type;
+                    ubase_assert(uref_ts_scte35_desc_seg_get_upid_type(uref, &upid_type));
+                    assert(upid_type == 42);
+                    const uint8_t *upid;
+                    size_t upid_len;
+                    ubase_assert(uref_ts_scte35_desc_seg_get_upid(uref, &upid, &upid_len));
+                    assert(upid_len == 16);
+                    for (unsigned i = 0; i < upid_len; i++)
+                        assert(upid[i] == 23);
+                    uint8_t type;
+                    ubase_assert(uref_ts_scte35_desc_seg_get_type_id(
+                            uref, &type));
+                    assert(type == 0x34);
+                    uint8_t num;
+                    ubase_assert(uref_ts_scte35_desc_seg_get_num(
+                            uref, &num));
+                    assert(num == 1);
+                    uint8_t expected;
+                    ubase_assert(uref_ts_scte35_desc_seg_get_expected(
+                            uref, &expected));
+                    assert(expected == 10);
+                    ubase_nassert(uref_ts_scte35_desc_seg_get_sub_num(
+                            uref, NULL));
+                    ubase_nassert(uref_ts_scte35_desc_seg_get_sub_expected(
+                            uref, NULL));
+                    sub_round = 5;
+                    break;
+                }
+
+                case 5: {
+                    ubase_nassert(uref_ts_scte35_desc_seg_get_cancel(uref));
+                    uint8_t nb_comp;
+                    ubase_assert(uref_ts_scte35_desc_seg_get_nb_comp(
+                            uref, &nb_comp));
+                    assert(nb_comp == 4);
+                    uint64_t duration;
+                    ubase_assert(uref_clock_get_duration(uref, &duration));
+                    assert(duration == UCLOCK_FREQ);
+                    ubase_nassert(uref_ts_scte35_desc_seg_get_delivery_not_restricted(uref));
+                    ubase_nassert(uref_ts_scte35_desc_seg_get_web(uref));
+                    ubase_nassert(uref_ts_scte35_desc_seg_get_no_regional_blackout(uref));
+                    ubase_nassert(uref_ts_scte35_desc_seg_get_archive(uref));
+                    uint8_t device;
+                    ubase_assert(uref_ts_scte35_desc_seg_get_device(uref, &device));
+                    assert(device == 0);
+                    uint8_t upid_type;
+                    ubase_assert(uref_ts_scte35_desc_seg_get_upid_type(uref, &upid_type));
+                    assert(upid_type == 42);
+                    const uint8_t *upid;
+                    size_t upid_len;
+                    ubase_assert(uref_ts_scte35_desc_seg_get_upid(uref, &upid, &upid_len));
+                    assert(upid_len == 16);
+                    for (unsigned i = 0; i < upid_len; i++)
+                        assert(upid[i] == 23);
+                    uint8_t type;
+                    ubase_assert(uref_ts_scte35_desc_seg_get_type_id(
+                            uref, &type));
+                    assert(type == 0x34);
+                    uint8_t num;
+                    ubase_assert(uref_ts_scte35_desc_seg_get_num(
+                            uref, &num));
+                    assert(num == 1);
+                    uint8_t expected;
+                    ubase_assert(uref_ts_scte35_desc_seg_get_expected(
+                            uref, &expected));
+                    assert(expected == 10);
+                    uint8_t sub_num;
+                    ubase_assert(uref_ts_scte35_desc_seg_get_sub_num(
+                            uref, &sub_num));
+                    uint8_t sub_expected;
+                    ubase_assert(uref_ts_scte35_desc_seg_get_sub_expected(
+                            uref, &sub_expected));
+                    sub_round = 0;
+                }
+            }
+            break;
+        }
+
         default:
             assert(0);
     }
-    round = 0;
+    if (sub_round == 0)
+        round = 0;
     uref_free(uref);
 }
 
@@ -215,7 +444,7 @@ int main(int argc, char *argv[])
     assert(ubuf_mgr != NULL);
     struct uprobe uprobe;
     uprobe_init(&uprobe, catch, NULL);
-    struct uprobe *uprobe_stdio = uprobe_stdio_alloc(&uprobe, stdout,
+    uprobe_stdio = uprobe_stdio_alloc(&uprobe, stdout,
                                                      UPROBE_LOG_LEVEL);
     assert(uprobe_stdio != NULL);
     uprobe_stdio = uprobe_ubuf_mem_alloc(uprobe_stdio, umem_mgr,
@@ -242,6 +471,9 @@ int main(int argc, char *argv[])
     uint8_t *scte35;
     int size;
 
+    /*
+     * insert - out of network
+     */
     uref = uref_block_alloc(uref_mgr, ubuf_mgr, PSI_HEADER_SIZE + PSI_MAX_SIZE);
     assert(uref != NULL);
     size = -1;
@@ -287,6 +519,9 @@ int main(int argc, char *argv[])
     upipe_input(upipe_ts_scte35d, uref, NULL);
     assert(round == 0);
 
+    /*
+     * insert - cancel
+     */
     uref = uref_block_alloc(uref_mgr, ubuf_mgr,
             SCTE35_HEADER_SIZE + SCTE35_INSERT_HEADER_SIZE +
             SCTE35_HEADER2_SIZE + PSI_CRC_SIZE);
@@ -311,6 +546,9 @@ int main(int argc, char *argv[])
     upipe_input(upipe_ts_scte35d, uref, NULL);
     assert(round == 0);
 
+    /*
+     * insert - return to network
+     */
     uref = uref_block_alloc(uref_mgr, ubuf_mgr,
             SCTE35_HEADER_SIZE + SCTE35_INSERT_HEADER_SIZE +
             SCTE35_INSERT_HEADER2_SIZE + SCTE35_INSERT_FOOTER_SIZE +
@@ -344,6 +582,249 @@ int main(int argc, char *argv[])
 
     uref_block_unmap(uref, 0);
     round = 3;
+    upipe_input(upipe_ts_scte35d, uref, NULL);
+    assert(round == 0);
+
+    /*
+     * null
+     */
+
+    uref = uref_block_alloc(uref_mgr, ubuf_mgr, SCTE35_HEADER_SIZE +
+                            SCTE35_NULL_HEADER_SIZE +
+                            SCTE35_HEADER2_SIZE +
+                            PSI_CRC_SIZE);
+    assert(uref);
+    size = -1;
+    ubase_assert(uref_block_write(uref, 0, &size, &scte35));
+    assert(size == SCTE35_HEADER_SIZE + SCTE35_NULL_HEADER_SIZE +
+           SCTE35_HEADER2_SIZE + PSI_CRC_SIZE);
+    scte35_init(scte35);
+    scte35_set_pts_adjustment(scte35, 0);
+    psi_set_length(scte35, SCTE35_HEADER_SIZE + SCTE35_NULL_HEADER_SIZE +
+                   SCTE35_HEADER2_SIZE + PSI_CRC_SIZE - PSI_HEADER_SIZE);
+    scte35_null_init(scte35);
+    psi_set_crc(scte35);
+
+    uref_block_unmap(uref, 0);
+    round = 4;
+    upipe_input(upipe_ts_scte35d, uref, NULL);
+    assert(round == 0);
+
+    /*
+     * time signal
+     */
+    uref = uref_block_alloc(uref_mgr, ubuf_mgr, PSI_MAX_SIZE + PSI_HEADER_SIZE);
+    assert(uref != NULL);
+    size = -1;
+    ubase_assert(uref_block_write(uref, 0, &size, &scte35));
+    assert(size == PSI_MAX_SIZE + PSI_HEADER_SIZE);
+    scte35_init(scte35);
+    /* set length later */
+    psi_set_length(scte35, PSI_MAX_SIZE);
+    scte35_set_pts_adjustment(scte35, 0);
+    scte35_time_signal_init(scte35, 0);
+    {
+        uint8_t *t = scte35_time_signal_get_splice_time(scte35);
+        scte35_splice_time_init(t);
+    }
+    psi_set_length(scte35, scte35_get_descl(scte35) - scte35 +
+                   PSI_CRC_SIZE - PSI_HEADER_SIZE);
+    psi_set_crc(scte35);
+
+    uref_block_unmap(uref, 0);
+    round = 5;
+    upipe_input(upipe_ts_scte35d, uref, NULL);
+    assert(round == 0);
+
+    /*
+     * time signal with time specified
+     */
+    uref = uref_block_alloc(uref_mgr, ubuf_mgr, PSI_MAX_SIZE + PSI_HEADER_SIZE);
+    assert(uref != NULL);
+    size = -1;
+    ubase_assert(uref_block_write(uref, 0, &size, &scte35));
+    assert(size == PSI_MAX_SIZE + PSI_HEADER_SIZE);
+    scte35_init(scte35);
+    /* set length later */
+    psi_set_length(scte35, PSI_MAX_SIZE);
+    scte35_set_pts_adjustment(scte35, 0);
+    scte35_time_signal_init(scte35, SCTE35_SPLICE_TIME_TIME_SIZE);
+
+    splice_time = scte35_time_signal_get_splice_time(scte35);
+    scte35_splice_time_init(splice_time);
+    scte35_splice_time_set_time_specified(splice_time, true);
+    scte35_splice_time_set_pts_time(splice_time, 90000);
+
+    psi_set_length(scte35,
+                   scte35_get_descl(scte35) - scte35 +
+                   PSI_CRC_SIZE - PSI_HEADER_SIZE);
+    psi_set_crc(scte35);
+
+    uref_block_unmap(uref, 0);
+    round = 6;
+    upipe_input(upipe_ts_scte35d, uref, NULL);
+    assert(round == 0);
+
+    /*
+     * time signal with segmentation descriptors
+     */
+    uref = uref_block_alloc(uref_mgr, ubuf_mgr, PSI_MAX_SIZE + PSI_HEADER_SIZE);
+    assert(uref != NULL);
+    size = -1;
+    ubase_assert(uref_block_write(uref, 0, &size, &scte35));
+    assert(size == PSI_MAX_SIZE + PSI_HEADER_SIZE);
+    scte35_init(scte35);
+    /* set length later */
+    psi_set_length(scte35, PSI_MAX_SIZE);
+    scte35_set_pts_adjustment(scte35, 0);
+    scte35_time_signal_init(scte35, SCTE35_SPLICE_TIME_TIME_SIZE);
+
+    splice_time = scte35_time_signal_get_splice_time(scte35);
+    scte35_splice_time_init(splice_time);
+    scte35_splice_time_set_time_specified(splice_time, true);
+    scte35_splice_time_set_pts_time(splice_time, 90000);
+
+    uint16_t descl_length = 0;
+    {
+        uint8_t *upid_ptr;
+        uint8_t *descl = scte35_get_descl(scte35);
+        uint8_t *desc =
+            descl_get_desc(descl, descl_length + DESC_HEADER_SIZE, 0);
+        scte35_seg_desc_init(desc, 0);
+        scte35_seg_desc_set_event_id(desc, 4242 + 1);
+        scte35_seg_desc_set_cancel(desc, true);
+        descl_length += DESC_HEADER_SIZE + scte35_splice_desc_get_length(desc);
+
+        desc = descl_get_desc(descl, descl_length + DESC_HEADER_SIZE, 1);
+        scte35_seg_desc_init(desc, SCTE35_SEG_DESC_NO_CANCEL_SIZE + 16);
+        scte35_seg_desc_set_event_id(desc, 4242 + 2);
+        scte35_seg_desc_set_cancel(desc, false);
+        scte35_seg_desc_set_program_seg(desc, true);
+        scte35_seg_desc_set_has_duration(desc, false);
+        scte35_seg_desc_set_delivery_not_restricted(desc, false);
+        scte35_seg_desc_set_web_delivery_allowed(desc, false);
+        scte35_seg_desc_set_no_regional_blackout(desc, false);
+        scte35_seg_desc_set_archive_allowed(desc, false);
+        scte35_seg_desc_set_device_restrictions(desc, 0);
+        scte35_seg_desc_set_upid_type(desc, 42);
+        scte35_seg_desc_set_upid_length(desc, 16);
+        upid_ptr = scte35_seg_desc_get_upid(desc);
+        assert(upid_ptr);
+        memset(upid_ptr, 23, 16);
+        scte35_seg_desc_set_type_id(desc, 1);
+        scte35_seg_desc_set_num(desc, 1);
+        scte35_seg_desc_set_expected(desc, 10);
+        descl_length += DESC_HEADER_SIZE + scte35_splice_desc_get_length(desc);
+
+        desc = descl_get_desc(descl, descl_length + DESC_HEADER_SIZE, 2);
+        scte35_seg_desc_init(desc, SCTE35_SEG_DESC_NO_CANCEL_SIZE +
+                             SCTE35_SEG_DESC_NO_PROG_SEG_SIZE +
+                             4 * SCTE35_SEG_DESC_COMPONENT_SIZE + 16);
+        scte35_seg_desc_set_event_id(desc, 4242 + 3);
+        scte35_seg_desc_set_cancel(desc, false);
+        scte35_seg_desc_set_program_seg(desc, false);
+        scte35_seg_desc_set_has_duration(desc, false);
+        scte35_seg_desc_set_delivery_not_restricted(desc, false);
+        scte35_seg_desc_set_web_delivery_allowed(desc, false);
+        scte35_seg_desc_set_no_regional_blackout(desc, false);
+        scte35_seg_desc_set_archive_allowed(desc, false);
+        scte35_seg_desc_set_device_restrictions(desc, 0);
+        scte35_seg_desc_set_component_count(desc, 4);
+        for (uint8_t i = 0; i < 4; i++) {
+            uint8_t *comp = scte35_seg_desc_get_component(desc, i);
+            assert(comp);
+            scte35_seg_desc_component_init(comp);
+            scte35_seg_desc_component_set_tag(comp, 0x37 + i);
+            scte35_seg_desc_component_set_pts_off(comp, 27000 + i);
+        }
+        scte35_seg_desc_set_upid_type(desc, 42);
+        scte35_seg_desc_set_upid_length(desc, 16);
+        upid_ptr = scte35_seg_desc_get_upid(desc);
+        assert(upid_ptr);
+        memset(upid_ptr, 23, 16);
+        scte35_seg_desc_set_type_id(desc, 2);
+        scte35_seg_desc_set_num(desc, 1);
+        scte35_seg_desc_set_expected(desc, 10);
+        descl_length += DESC_HEADER_SIZE + scte35_splice_desc_get_length(desc);
+
+        desc = descl_get_desc(descl, descl_length + DESC_HEADER_SIZE, 3);
+        scte35_seg_desc_init(desc, SCTE35_SEG_DESC_NO_CANCEL_SIZE +
+                             SCTE35_SEG_DESC_NO_PROG_SEG_SIZE +
+                             4 * SCTE35_SEG_DESC_COMPONENT_SIZE + 16 +
+                             SCTE35_SEG_DESC_DURATION_SIZE);
+        scte35_seg_desc_set_event_id(desc, 4242 + 4);
+        scte35_seg_desc_set_cancel(desc, false);
+        scte35_seg_desc_set_program_seg(desc, false);
+        scte35_seg_desc_set_has_duration(desc, true);
+        scte35_seg_desc_set_delivery_not_restricted(desc, false);
+        scte35_seg_desc_set_web_delivery_allowed(desc, false);
+        scte35_seg_desc_set_no_regional_blackout(desc, false);
+        scte35_seg_desc_set_archive_allowed(desc, false);
+        scte35_seg_desc_set_device_restrictions(desc, 0);
+        scte35_seg_desc_set_component_count(desc, 4);
+        for (uint8_t i = 0; i < 4; i++) {
+            uint8_t *comp = scte35_seg_desc_get_component(desc, i);
+            assert(comp);
+            scte35_seg_desc_component_init(comp);
+            scte35_seg_desc_component_set_tag(comp, 0x37 + i);
+            scte35_seg_desc_component_set_pts_off(comp, 27000 + i);
+        }
+        scte35_seg_desc_set_duration(desc, 90000);
+        scte35_seg_desc_set_upid_type(desc, 42);
+        scte35_seg_desc_set_upid_length(desc, 16);
+        upid_ptr = scte35_seg_desc_get_upid(desc);
+        assert(upid_ptr);
+        memset(upid_ptr, 23, 16);
+        scte35_seg_desc_set_type_id(desc, 0x34);
+        scte35_seg_desc_set_num(desc, 1);
+        scte35_seg_desc_set_expected(desc, 10);
+        descl_length += DESC_HEADER_SIZE + scte35_splice_desc_get_length(desc);
+
+        desc = descl_get_desc(descl, descl_length + DESC_HEADER_SIZE, 4);
+        scte35_seg_desc_init(desc, SCTE35_SEG_DESC_NO_CANCEL_SIZE +
+                             SCTE35_SEG_DESC_NO_PROG_SEG_SIZE +
+                             4 * SCTE35_SEG_DESC_COMPONENT_SIZE + 16 +
+                             SCTE35_SEG_DESC_DURATION_SIZE +
+                             SCTE35_SEG_DESC_SUB_SEG_SIZE);
+        scte35_seg_desc_set_event_id(desc, 4242 + 5);
+        scte35_seg_desc_set_cancel(desc, false);
+        scte35_seg_desc_set_program_seg(desc, false);
+        scte35_seg_desc_set_has_duration(desc, true);
+        scte35_seg_desc_set_delivery_not_restricted(desc, false);
+        scte35_seg_desc_set_web_delivery_allowed(desc, false);
+        scte35_seg_desc_set_no_regional_blackout(desc, false);
+        scte35_seg_desc_set_archive_allowed(desc, false);
+        scte35_seg_desc_set_device_restrictions(desc, 0);
+        scte35_seg_desc_set_component_count(desc, 4);
+        for (uint8_t i = 0; i < 4; i++) {
+            uint8_t *comp = scte35_seg_desc_get_component(desc, i);
+            assert(comp);
+            scte35_seg_desc_component_init(comp);
+            scte35_seg_desc_component_set_tag(comp, 0x37 + i);
+            scte35_seg_desc_component_set_pts_off(comp, 27000 + i);
+        }
+        scte35_seg_desc_set_duration(desc, 90000);
+        scte35_seg_desc_set_upid_type(desc, 42);
+        scte35_seg_desc_set_upid_length(desc, 16);
+        upid_ptr = scte35_seg_desc_get_upid(desc);
+        assert(upid_ptr);
+        memset(upid_ptr, 23, 16);
+        scte35_seg_desc_set_type_id(desc, 0x34);
+        scte35_seg_desc_set_num(desc, 1);
+        scte35_seg_desc_set_expected(desc, 10);
+        scte35_seg_desc_set_sub_num(desc, 2);
+        scte35_seg_desc_set_sub_expected(desc, 20);
+        descl_length += DESC_HEADER_SIZE + scte35_splice_desc_get_length(desc);
+    }
+    scte35_set_desclength(scte35, descl_length);
+
+    psi_set_length(scte35,
+                   scte35_get_descl(scte35) - scte35 +
+                   PSI_CRC_SIZE - PSI_HEADER_SIZE + descl_length);
+    psi_set_crc(scte35);
+
+    uref_block_unmap(uref, 0);
+    round = 7;
     upipe_input(upipe_ts_scte35d, uref, NULL);
     assert(round == 0);
 
