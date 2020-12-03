@@ -638,7 +638,7 @@ static unsigned upipe_bmd_sink_sub_sound_get_samples(struct upipe *upipe,
 
     unsigned samples = 0;
 
-    /* interate through input subpipes */
+    /* iterate through input subpipes */
     pthread_mutex_lock(&upipe_bmd_sink->lock);
     struct uchain *uchain = NULL;
     ulist_foreach(&upipe_bmd_sink->inputs, uchain) {
@@ -1382,7 +1382,7 @@ static struct upipe *upipe_bmd_sink_alloc(struct upipe_mgr *mgr,
 
     pthread_mutex_init(&upipe_bmd_sink->lock, NULL);
 
-    /* Initalise subpipes */
+    /* Initialise subpipes */
     upipe_bmd_sink_sub_init(upipe_bmd_sink_sub_to_upipe(upipe_bmd_sink_to_pic_subpipe(upipe_bmd_sink)),
                             &upipe_bmd_sink->sub_mgr, uprobe_pic, true);
     upipe_bmd_sink_sub_init(upipe_bmd_sink_sub_to_upipe(upipe_bmd_sink_to_subpic_subpipe(upipe_bmd_sink)),
@@ -1560,7 +1560,7 @@ static int upipe_bmd_sink_open_card(struct upipe *upipe)
 
     assert(!upipe_bmd_sink->deckLink);
 
-    /* decklink interface interator */
+    /* decklink interface iterator */
     IDeckLinkIterator *deckLinkIterator = CreateDeckLinkIteratorInstance();
     if (!deckLinkIterator) {
         upipe_err_va(upipe, "decklink drivers not found");

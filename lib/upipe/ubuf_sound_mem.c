@@ -56,7 +56,7 @@ struct ubuf_sound_mem {
     /** pointer to shared structure */
     struct ubuf_mem_shared *shared;
 #ifndef NDEBUG
-    /** atomic counter of the number of readers, to check for unsufficient
+    /** atomic counter of the number of readers, to check for insufficient
      * use of unmap() */
     uatomic_uint32_t readers;
 #endif

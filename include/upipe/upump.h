@@ -348,7 +348,7 @@ static inline void upump_stop(struct upump *upump)
 
 /** @This asks the event loop to restart a timer pump.
  * The timer will be restart to its initial value, as if it was stop, set to
- * its inital value and start. This could be useful to implement IO timeout
+ * its initial value and start. This could be useful to implement IO timeout
  * without freeing and allocating a pump each time data is received.
  *
  * @param pump description structure of the pump
@@ -508,7 +508,7 @@ static inline int upump_mgr_run(struct upump_mgr *mgr, struct umutex *mutex)
 }
 
 /** @This instructs an existing upump manager to release all structures
- * currently kept in pools. It is inteded as a debug tool only.
+ * currently kept in pools. It is intended as a debug tool only.
  *
  * @param mgr pointer to upump manager
  * @return an error code

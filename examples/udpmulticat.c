@@ -153,7 +153,7 @@ int main(int argc, char *argv[])
         udp = true;
     }
 
-    /* setup environnement */
+    /* setup environment */
     struct umem_mgr *umem_mgr = umem_alloc_mgr_alloc();
     struct udict_mgr *udict_mgr = udict_inline_mgr_alloc(UDICT_POOL_DEPTH,
                                                          umem_mgr, -1, -1);

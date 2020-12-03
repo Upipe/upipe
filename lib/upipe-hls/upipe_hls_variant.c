@@ -381,7 +381,7 @@ static void upipe_hls_variant_free(struct upipe *upipe)
  * ac-3 AC-3 audio
  * avc1 H.264 (Advanced Video Coding)
  * dvh1 Dolby Vision (based on hvc1)
- * ec-3 Enchanced AC-3 audio
+ * ec-3 Enhanced AC-3 audio
  * hvc1 HEVC (High Efficiency Video Coding)
  * mp4a MPEG-4 audio
  * stpp Subtitles (Timed Text)

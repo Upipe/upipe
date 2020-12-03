@@ -2303,7 +2303,7 @@ static void upipe_h265f_end_annexb(struct upipe *upipe, struct upump **upump_p)
         }
 
         if (!ubase_check(err)) {
-            upipe_warn(upipe, "skiping invalid slice data");
+            upipe_warn(upipe, "skipping invalid slice data");
             return;
         }
         if (last_nal_type == H265NAL_TYPE_BLA_W_LP ||

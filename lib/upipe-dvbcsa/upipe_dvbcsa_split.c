@@ -113,7 +113,7 @@ static int upipe_dvbcsa_split_throw_del_pid(struct upipe *upipe,
                        UPIPE_DVBCSA_SPLIT_SIGNATURE, pid);
 }
 
-/** @inernal @This catches event from the inner ts pipe.
+/** @internal @This catches event from the inner ts pipe.
  *
  * @param uprobe structure used to raise events
  * @param inner inner ts demux pipe

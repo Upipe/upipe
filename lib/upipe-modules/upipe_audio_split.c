@@ -217,7 +217,7 @@ static void upipe_audio_split_sub_process(struct upipe *upipe,
         goto upipe_audio_split_sub_process_err;
     }
 
-    /* interate through output channels */
+    /* iterate through output channels */
     uint8_t in_idx = 0;
     const char *channel;
     ubuf_sound_foreach_plane(ubuf, channel) {
@@ -428,7 +428,7 @@ static void upipe_audio_split_input(struct upipe *upipe, struct uref *uref,
 {
     struct upipe_audio_split *split = upipe_audio_split_from_upipe(upipe);
 
-    /* interate through output subpipes */
+    /* iterate through output subpipes */
     struct uchain *uchain;
     ulist_foreach (&split->outputs, uchain) {
         struct upipe_audio_split_sub *sub =

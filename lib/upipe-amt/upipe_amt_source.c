@@ -24,7 +24,7 @@
  */
 
 /** @file
- * @short Upipe source module for automatic multicat tunneling
+ * @short Upipe source module for automatic multicast tunneling
  */
 
 #include <upipe/ubase.h>

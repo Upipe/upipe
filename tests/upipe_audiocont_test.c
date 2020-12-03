@@ -167,7 +167,7 @@ int main(int argc, char **argv)
 
     uref_free(ref_flow);
 
-    /* test input commutation controles */
+    /* test input commutation controls */
     input_name = NULL;
     ubase_assert(upipe_audiocont_get_current_input(audiocont, &input_name));
     assert(input_name != NULL);

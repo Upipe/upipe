@@ -339,7 +339,7 @@ static void upipe_subpic_schedule_handle_subpics(struct upipe *upipe, uint64_t d
 {
     struct upipe_subpic_schedule *upipe_subpic_schedule = upipe_subpic_schedule_from_upipe(upipe);
 
-    /* interate through input subpipes */
+    /* iterate through input subpipes */
     struct uchain *uchain;
     ulist_foreach(&upipe_subpic_schedule->subs, uchain) {
         struct upipe_subpic_schedule_sub *upipe_subpic_schedule_sub =

@@ -35,7 +35,7 @@ extern "C" {
 
 #define UPIPE_DVBCSA_SPLIT_SIGNATURE    UBASE_FOURCC('c','s','a','s')
 
-/** @This enumarates the privates events for dvbcsa pipes. */
+/** @This enumerates the privates events for dvbcsa pipes. */
 enum uprobe_dvbcsa_split_event {
     /** sentinel */
     UPROBE_DVBCSA_SPLIT_SENTINEL = UPROBE_LOCAL,

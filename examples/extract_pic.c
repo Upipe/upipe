@@ -309,7 +309,7 @@ int main(int argc, char **argv)
     /* choose log fd */
     logstream = stderr;
 
-    /* setup environnement */
+    /* setup environment */
     struct umem_mgr *umem_mgr = umem_alloc_mgr_alloc();
     struct udict_mgr *udict_mgr = udict_inline_mgr_alloc(UDICT_POOL_DEPTH,
                                                          umem_mgr, -1, -1);
@@ -387,7 +387,7 @@ int main(int argc, char **argv)
     /* fire loop ! */
     upump_mgr_run(upump_mgr, NULL);
 
-    /* release everyhing */
+    /* release everything */
     upipe_release(upipe_source);
     upipe_release(upipe_split_output);
     upipe_release(upipe_null);

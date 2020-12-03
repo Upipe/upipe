@@ -30,7 +30,7 @@
 
 #include "v210dec.h"
 
-// TODO: handle endianess
+// TODO: handle endianness
 
 static inline uint32_t rl32(const void *src)
 {

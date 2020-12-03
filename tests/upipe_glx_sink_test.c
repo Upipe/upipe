@@ -58,7 +58,7 @@
 #define UBUF_POOL_DEPTH     5
 #define UBUF_PREPEND        0
 #define UBUF_APPEND         0
-#define UBUF_ALIGN          0 // glx_sink needs contigous data (for glTexImage2D)
+#define UBUF_ALIGN          0 // glx_sink needs contiguous data (for glTexImage2D)
 #define UBUF_ALIGN_HOFFSET  0
 #define UPROBE_LOG_LEVEL UPROBE_LOG_DEBUG
 

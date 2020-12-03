@@ -188,7 +188,7 @@ static inline int ubuf_pic_plane_check_offset(struct ubuf *ubuf,
  * @param hsize number of pixels wanted per line, or -1 for until the end of
  * the line (before dividing by macropixel and hsub)
  * @param vsize number of lines wanted in the picture area, or -1 for until the
- * last line (before deviding by vsub)
+ * last line (before dividing by vsub)
  * @param buffer_p reference written with a pointer to buffer space if not NULL
  * @return an error code
  */

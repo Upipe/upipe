@@ -169,7 +169,7 @@ static inline int upipe_blit_sub_set_margin(struct upipe *upipe,
 /** @This gets the multiplier of the alpha channel.
  *
  * @param upipe description structure of the pipe
- * @param alpha_p filled in with the mulitplier of the alpha channel
+ * @param alpha_p filled in with the multiplier of the alpha channel
  * @return an error code
  */
 static inline int upipe_blit_sub_get_alpha(struct upipe *upipe,

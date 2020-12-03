@@ -1010,7 +1010,7 @@ static inline int udict_mgr_control(struct udict_mgr *mgr, int command, ...)
 }
 
 /** @This instructs an existing udict manager to release all structures
- * currently kept in pools. It is inteded as a debug tool only.
+ * currently kept in pools. It is intended as a debug tool only.
  *
  * @param mgr pointer to udict manager
  * @return an error code

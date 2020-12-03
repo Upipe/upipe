@@ -25,7 +25,7 @@
 
 /** @file
  * @short Upipe thread-safe atomic operations
- * This API mimicks a partial C11 stdatomic implementation. Atomic variables
+ * This API mimics a partial C11 stdatomic implementation. Atomic variables
  * must be initialized with @ref uatomic_init before use, and released with
  * @ref uatomic_clean before deallocation.
  */

@@ -101,7 +101,7 @@ static inline const char *uref_date_type_str(int dt)
 /** @internal @This is the number of bits to shift to get orig date type. */
 #define UREF_FLAG_DATE_ORIG_SHIFT 62
 
-/** @This stores references to a ubuf wth attributes. */
+/** @This stores references to a ubuf with attributes. */
 struct uref {
     /** structure for double-linked lists */
     struct uchain uchain;
@@ -411,7 +411,7 @@ static inline int uref_mgr_control(struct uref_mgr *mgr, int command, ...)
 }
 
 /** @This instructs an existing uref manager to release all structures
- * currently kept in pools. It is inteded as a debug tool only.
+ * currently kept in pools. It is intended as a debug tool only.
  *
  * @param mgr pointer to uref manager
  * @return an error code

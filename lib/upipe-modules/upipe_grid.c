@@ -392,7 +392,7 @@ static void upipe_grid_in_update_pts(struct upipe *upipe, uint64_t next_pts)
         rebase_pts = pts + latency + tolerance;
 
         if (rebase_pts < next_pts) {
-            /* keep longuer last input */
+            /* keep longer last input */
             if (!ulist_is_last(&upipe_grid_in->urefs, uchain) ||
                 rebase_pts + upipe_grid->max_retention < next_pts) {
                 upipe_verbose_va(upipe, "drop uref pts %"PRIu64, pts);
@@ -512,7 +512,7 @@ static void upipe_grid_in_input(struct upipe *upipe,
 
 /** @internal @This sets a new flow def to a grid input pipe.
  * @This pushes the new flow def into the pipe input to be handled later,
- * i.e. when the flow def will be poped by an output pipe.
+ * i.e. when the flow def will be popped by an output pipe.
  * @See upipe_grid_in_set_flow_def_real, upipe_grid_update_pts
  *
  * @param upipe input pipe description

@@ -323,7 +323,7 @@ static int pixel_format_to_color_space(enum pixel_format pixel_format)
     return X265_CSP_I420;
 }
 
-/** @interal @This returns the pixel format corresponding to the given bit
+/** @internal @This returns the pixel format corresponding to the given bit
  * depth and color space.
  *
  * @param bit_depth bit depth

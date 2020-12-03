@@ -76,3 +76,17 @@ check-headers:
 	  fi; \
 	done; \
 	test -z "$$ret"
+
+check-spelling:
+	@codespell \
+	  --skip=$(srcdir)/lib/upipe-blackmagic/include \
+	  --skip=$(srcdir)/lib/upipe-modules/http-parser \
+	  --ignore-words-list multicat,happend,inout,parms,hist \
+	  --ignore-regex '"te\.' \
+	  $(srcdir)/doc \
+	  $(srcdir)/examples \
+	  $(srcdir)/include \
+	  $(srcdir)/lib \
+	  $(srcdir)/luajit \
+	  $(srcdir)/tests \
+	  $(srcdir)/x86

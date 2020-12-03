@@ -939,7 +939,7 @@ static int _upipe_freetype_set_pixel_size(struct upipe *upipe,
  *
  * @param upipe description structure of the pipe
  * @param str a string with the rendered characters
- * @param bbox_p filled with x and y mininum and maximum value
+ * @param bbox_p filled with x and y minimum and maximum value
  * @return an error code
  */
 static int _upipe_freetype_get_bbox(struct upipe *upipe,

@@ -944,7 +944,7 @@ static int upipe_bmd_src_set_uri(struct upipe *upipe, const char *uri)
     IDeckLinkIterator *deckLinkIterator;
     IDeckLink *deckLink = NULL;
 
-    /* decklink interface interator */
+    /* decklink interface iterator */
     deckLinkIterator = CreateDeckLinkIteratorInstance();
     if (!deckLinkIterator) {
         upipe_err(upipe, "decklink drivers not found");

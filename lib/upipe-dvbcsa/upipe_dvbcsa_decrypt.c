@@ -180,7 +180,7 @@ static void upipe_dvbcsa_dec_free_key(struct upipe *upipe)
         upipe_dvbcsa_dec->key[i] = NULL;
 }
 
-/** @internal @This frees a dvbcsa decription pipe.
+/** @internal @This frees a dvbcsa decryption pipe.
  *
  * @param upipe description structure of the pipe
  */
@@ -209,7 +209,7 @@ static void upipe_dvbcsa_dec_free(struct upipe *upipe)
     upipe_dvbcsa_dec_free_flow(upipe);
 }
 
-/** @internal @This allocates and initializes a dvbcsa decription pipe.
+/** @internal @This allocates and initializes a dvbcsa decryption pipe.
  *
  * @param mgr pointer to pipe manager
  * @param uprobe structure used to raise events
@@ -549,10 +549,10 @@ static int upipe_dvbcsa_dec_set_flow_def(struct upipe *upipe,
     return UBASE_ERR_NONE;
 }
 
-/** @internal @This sets the decription key.
+/** @internal @This sets the decryption key.
  *
  * @param upipe description structure of the pipe
- * @param key decription key
+ * @param key decryption key
  * @return an error code
  */
 static int upipe_dvbcsa_dec_set_key(struct upipe *upipe, const char *even_key, const char *odd_key)
@@ -688,7 +688,7 @@ static int upipe_dvbcsa_dec_control(struct upipe *upipe,
     return upipe_dvbcsa_dec_check(upipe, NULL);
 }
 
-/** @internal @This is the management structure for dvbcsa decription pipes. */
+/** @internal @This is the management structure for dvbcsa decryption pipes. */
 static struct upipe_mgr upipe_dvbcsa_dec_mgr = {
     /** pipe signature */
     .signature = UPIPE_DVBCSA_DEC_SIGNATURE,

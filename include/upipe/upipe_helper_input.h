@@ -137,7 +137,7 @@ extern "C" {
  *  bool upipe_foo_flush_input(struct upipe *upipe)
  * @end code
  * Free all urefs that have been held, unblocks all pumps, and reinitializes
- * the input. Returns true if the input was previsouly blocked.
+ * the input. Returns true if the input was previously blocked.
  * @end list
  *
  * @param STRUCTURE name of your private upipe structure
