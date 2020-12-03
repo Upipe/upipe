@@ -182,10 +182,9 @@ int main(int argc, char *argv[])
     struct upipe_mgr *upipe_sdi_enc_mgr = upipe_sdi_enc_mgr_alloc();
     assert(upipe_sdi_enc_mgr != NULL);
     struct upipe *upipe_sdienc = upipe_sdi_enc_alloc(upipe_sdi_enc_mgr,
-            uprobe_pfx_alloc(uprobe_use(uprobe_stdio), UPROBE_LOG_LEVEL,
-                             "sdienc"),
-            uprobe_pfx_alloc(uprobe_use(uprobe_stdio), UPROBE_LOG_LEVEL,
-                             "sdienc_ttx"));
+            uprobe_pfx_alloc(uprobe_use(uprobe_stdio), UPROBE_LOG_LEVEL, "sdienc"),
+            uprobe_pfx_alloc(uprobe_use(uprobe_stdio), UPROBE_LOG_LEVEL, "sdienc_ttx"),
+            uprobe_pfx_alloc(uprobe_use(uprobe_stdio), UPROBE_LOG_LEVEL, "sdienc_vanc"));
     assert(upipe_sdienc != NULL);
 
     /* TODO: actually send audio */

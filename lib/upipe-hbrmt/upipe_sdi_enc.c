@@ -919,6 +919,9 @@ static void upipe_hd_sdi_enc_encode_line(struct upipe *upipe, int line_num, uint
         sdi_crc_end(&upipe_sdi_enc->crc_y, &dst[13]);
     }
 
+    else
+        dst[12] = dst[13] = dst[14] = dst[15] = 0x000;
+
     /* HBI */
     upipe_sdi_enc->blank(&dst[hanc_start], f->active_offset - UPIPE_HD_SDI_EAV_LENGTH/2 - UPIPE_HD_SDI_SAV_LENGTH/2);
 
