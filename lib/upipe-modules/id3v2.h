@@ -50,7 +50,7 @@
  * +-----------------------------+---------+
  * | File identifier "ID3"       | 3 bytes |
  * +-----------------------------+---------+
- * | Verion                      | 2 bytes |
+ * | Version                     | 2 bytes |
  * |+----------------------------+--------+|
  * || First byte: version        | 1 byte ||
  * || Second byte: revision      | 1 byte ||
@@ -171,7 +171,7 @@ static inline uint8_t id3v2_get_version_rev(const uint8_t *p_id3v2)
 
 /** @This is the unsynchronisation flag. */
 #define ID3V2_UNSYNCHRONISATION   (1 << 7)
-/** @This is the extented header flag. */
+/** @This is the extended header flag. */
 #define ID3V2_EXTENTED_HEADER     (1 << 6)
 /** @This is the experimental flag. */
 #define ID3V2_EXPERIMENTAL        (1 << 5)
@@ -201,7 +201,7 @@ static inline bool id3v2_check_unsynchronisation(const uint8_t *p_id3v2)
     return id3v2_check_flag(p_id3v2, ID3V2_UNSYNCHRONISATION);
 }
 
-/** @This checks the presence of the extented header flag.
+/** @This checks the presence of the extended header flag.
  * @This is equivalent to:
  * @code id3v2_check_flag(p_id3v2, ID3V2_EXTENTED_HEADER); @end code
  *

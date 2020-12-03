@@ -55,7 +55,7 @@ make check
 
 @section T {Execution}
 
-Upipe is a set of developement headers for pipes and librares for
+Upipe is a set of development headers for pipes and libraries for
 applications, and thus runs inside an application. Simple examples
 are however provided in the tests/ and examples/ directories.
 

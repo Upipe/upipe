@@ -49,7 +49,7 @@ enum uprobe_freetype_event {
     UPROBE_FREETYPE_NEW_TEXT,
 };
 
-/** @This enumarates the freetype pipe commands. */
+/** @This enumerates the freetype pipe commands. */
 enum upipe_freetype_command {
     /** sentinel */
     UPIPE_FREETYPE_SENTINEL = UPIPE_CONTROL_LOCAL,

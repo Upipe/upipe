@@ -74,7 +74,7 @@ struct upipe_rate_limit {
     struct uclock *uclock;
     /** uclock request */
     struct urequest uclock_request;
-    /** the rate limit in octect per second */
+    /** the rate limit in octet per second */
     uint64_t rate_limit;
     /** current window size */
     uint64_t size;

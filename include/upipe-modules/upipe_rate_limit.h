@@ -43,7 +43,7 @@ enum upipe_rate_limit_command {
 
     /** set the rate limit (uint64_t) in octet per second */
     UPIPE_RATE_LIMIT_SET_LIMIT,
-    /** get the rate limit (uint64_t *) in octect per second */
+    /** get the rate limit (uint64_t *) in octet per second */
     UPIPE_RATE_LIMIT_GET_LIMIT,
     /** set the window (uint64_t) in clock tick */
     UPIPE_RATE_LIMIT_SET_DURATION,
@@ -71,7 +71,7 @@ static inline const char *upipe_rate_limit_command_str(int command)
 /** @This sets the rate limit.
  *
  * @param upipe description structure of the pipe
- * @param rate_limit the rate limit in octect per second
+ * @param rate_limit the rate limit in octet per second
  * @return an error code
  */
 static inline int upipe_rate_limit_set_limit(struct upipe *upipe,
@@ -84,7 +84,7 @@ static inline int upipe_rate_limit_set_limit(struct upipe *upipe,
 /** @This gets the rate limit.
  *
  * @param upipe description structure of the pipe
- * @param rate_limit_p a pointer to the rate limit to get in octect per second
+ * @param rate_limit_p a pointer to the rate limit to get in octet per second
  * @return an error code
  */
 static inline int upipe_rate_limit_get_limit(struct upipe *upipe,

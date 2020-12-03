@@ -133,7 +133,7 @@ enum ubuf_command {
     UBUF_CONTROL_LOCAL = 0x8000
 };
 
-/** @This defines standard manger commands which ubuf managers may implement. */
+/** @This defines standard manager commands which ubuf managers may implement. */
 enum ubuf_mgr_command {
     /** check if the given flow format can be allocated with the manager
      * (struct uref *) */

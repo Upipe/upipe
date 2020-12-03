@@ -36,7 +36,7 @@
 
         @item The UPIPE_HELPER_SINK was renamed @ref #UPIPE_HELPER_INPUT. All function names containing _sink have been renamed _input. Pipes that require a ubuf manager may need to buffer input urefs until the ubuf manager has been asynchronously received. See upipe_genaux.c for an example.
 
-        @item The helpers @ref #UPIPE_HELPER_UREF_MGR, @ref #UPIPE_HELPER_UBUF_MGR and @ref #UPIPE_HELPER_UCLOCK now take additional arguemnts, and upipe_throw_need_uref_mgr, upipe_throw_need_ubuf_mgr and upipe_throw_need_uclock do no longer exist. The helpers now provide a way to require those structures using a @ref urequest. See upipe_genaux.c for an example.
+        @item The helpers @ref #UPIPE_HELPER_UREF_MGR, @ref #UPIPE_HELPER_UBUF_MGR and @ref #UPIPE_HELPER_UCLOCK now take additional arguments, and upipe_throw_need_uref_mgr, upipe_throw_need_ubuf_mgr and upipe_throw_need_uclock do no longer exist. The helpers now provide a way to require those structures using a @ref urequest. See upipe_genaux.c for an example.
 
         @item The current helper for bin pipes has been renamed @ref #UPIPE_HELPER_BIN_OUTPUT, and there is a new helper for input requests @ref #UPIPE_HELPER_BIN_INPUT.
 

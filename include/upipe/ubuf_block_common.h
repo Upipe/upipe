@@ -171,7 +171,7 @@ static inline int ubuf_block_common_splice(struct ubuf *ubuf,
     return UBASE_ERR_NONE;
 }
 
-/** @internal @This frees the ubuf containg the next segments of the current
+/** @internal @This frees the ubuf containing the next segments of the current
  * ubuf.
  *
  * @param ubuf pointer to ubuf

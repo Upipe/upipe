@@ -960,7 +960,7 @@ static void upipe_avfilt_sub_free(struct upipe *upipe)
  *
  * @param upipe description structure of the pipe
  * @param uref input uref to convert
- * @param frame filled with the convertion
+ * @param frame filled with the conversion
  * @return an error code
  */
 static int upipe_avfilt_sub_avframe_from_uref_pic(struct upipe *upipe,
@@ -1046,7 +1046,7 @@ inval:
  *
  * @param upipe description structure of the pipe
  * @param uref input uref to convert
- * @param frame filled with the convertion
+ * @param frame filled with the conversion
  * @return an error code
  */
 static int upipe_avfilt_sub_avframe_from_uref_sound(struct upipe *upipe,
@@ -1108,7 +1108,7 @@ static int upipe_avfilt_sub_avframe_from_uref_sound(struct upipe *upipe,
  *
  * @param upipe description structure of the pipe
  * @param uref input uref to convert
- * @param frame filled with the convertion
+ * @param frame filled with the conversion
  * @return an error code
  */
 static int upipe_avfilt_sub_avframe_from_uref(struct upipe *upipe,
@@ -1203,7 +1203,7 @@ static void upipe_avfilt_sub_input(struct upipe *upipe,
 /** @internal @This sets the input sub pipe flow definition for video.
  *
  * @param upipe description structure of the sub pipe
- * @param flow_def new input flow defintion
+ * @param flow_def new input flow definition
  * @return an error code
  */
 static int upipe_avfilt_sub_set_flow_def_pic(struct upipe *upipe,
@@ -1253,7 +1253,7 @@ static int upipe_avfilt_sub_set_flow_def_pic(struct upipe *upipe,
 /** @internal @This sets the input sub pipe flow definition for audio.
  *
  * @param upipe description structure of the sub pipe
- * @param flow_def new input flow defintion
+ * @param flow_def new input flow definition
  * @return an error code
  */
 static int upipe_avfilt_sub_set_flow_def_sound(struct upipe *upipe,
@@ -1308,7 +1308,7 @@ static int upipe_avfilt_sub_set_flow_def_sound(struct upipe *upipe,
 /** @internal @This sets the input sub pipe flow definition.
  *
  * @param upipe description structure of the pipe
- * @param flow_def new input flow defintion
+ * @param flow_def new input flow definition
  * @return an error code
  */
 static int upipe_avfilt_sub_set_flow_def(struct upipe *upipe,
@@ -1727,7 +1727,7 @@ static int _upipe_avfilt_set_hw_config(struct upipe *upipe,
 /** @internal @This sets the input pipe flow definition for video.
  *
  * @param upipe description structure of the pipe
- * @param flow_def new input flow defintion
+ * @param flow_def new input flow definition
  * @return an error code
  */
 static int upipe_avfilt_set_flow_def_pic(struct upipe *upipe,
@@ -1808,7 +1808,7 @@ static int upipe_avfilt_set_flow_def_pic(struct upipe *upipe,
 /** @internal @This sets the input pipe flow definition for audio.
  *
  * @param upipe description structure of the pipe
- * @param flow_def new input flow defintion
+ * @param flow_def new input flow definition
  * @return an error code
  */
 static int upipe_avfilt_set_flow_def_sound(struct upipe *upipe,
@@ -1887,7 +1887,7 @@ static int upipe_avfilt_set_flow_def_sound(struct upipe *upipe,
 /** @internal @This sets the input pipe flow definition.
  *
  * @param upipe description structure of the pipe
- * @param flow_def new input flow defintion
+ * @param flow_def new input flow definition
  * @return an error code
  */
 static int upipe_avfilt_set_flow_def(struct upipe *upipe,
@@ -2358,7 +2358,7 @@ static const char *upipe_av_convert_color(
  *
  * @param upipe description structure of the pipe
  * @param uref input uref to convert
- * @param frame filled with the convertion
+ * @param frame filled with the conversion
  * @return an error code
  */
 static int upipe_avfilt_avframe_from_uref_pic(struct upipe *upipe,
@@ -2471,7 +2471,7 @@ inval:
  *
  * @param upipe description structure of the pipe
  * @param uref input uref to convert
- * @param frame filled with the convertion
+ * @param frame filled with the conversion
  * @return an error code
  */
 static int upipe_avfilt_avframe_from_uref_sound(struct upipe *upipe,
@@ -2531,7 +2531,7 @@ static int upipe_avfilt_avframe_from_uref_sound(struct upipe *upipe,
  *
  * @param upipe description structure of the pipe
  * @param uref input uref to convert
- * @param frame filled with the convertion
+ * @param frame filled with the conversion
  * @return an error code
  */
 static int upipe_avfilt_avframe_from_uref(struct upipe *upipe,

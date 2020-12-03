@@ -133,7 +133,7 @@ STRUCTURE##_iterator_##ULIST(struct STRUCTURE *s,                           \
 
 /** @This is an helper to iterate the element of an embedded list.
  * The macro ULIST_HELPER must be define.
- * It may be usefull to define:
+ * It may be useful to define:
  * @code
  *  #define STRUCTURE##_foreach_##ULIST(s, i) \
  *      ulist_helper_foreach(STRUCTURE, ULIST, s, i)

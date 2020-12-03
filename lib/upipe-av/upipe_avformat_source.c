@@ -635,7 +635,7 @@ static void upipe_avfsrc_worker(struct upump *upump)
         uint64_t dts = dts_orig + upipe_avfsrc->timestamp_offset;
         if (upipe_avfsrc->last_dts_prog != UINT64_MAX) {
             if (upipe_avfsrc->last_dts_prog > dts) {
-                upipe_warn_va(upipe, "dts %.3f ms in the past, reseting",
+                upipe_warn_va(upipe, "dts %.3f ms in the past, resetting",
                               (float)(upipe_avfsrc->last_dts_prog - dts) /
                               (float)(UCLOCK_FREQ / 1000));
                 dts = upipe_avfsrc->last_dts_prog;

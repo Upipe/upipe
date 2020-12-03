@@ -790,7 +790,7 @@ static inline int ubuf_block_iovec_read(struct ubuf *ubuf,
     return UBASE_ERR_NONE;
 }
 
-/** @This unmaps the parts of a ubuf previsouly mapped by @ref
+/** @This unmaps the parts of a ubuf previously mapped by @ref
  * ubuf_block_iovec_read.
  *
  * @param ubuf pointer to ubuf

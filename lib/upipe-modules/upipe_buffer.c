@@ -392,7 +392,7 @@ static int _upipe_buffer_get_max_size(struct upipe *upipe,
     return UBASE_ERR_NONE;
 }
 
-/** @internal @This sets the maximun retain size of the buffer pipe.
+/** @internal @This sets the maximum retain size of the buffer pipe.
  * The buffer pipe will retain at most @tt {max_size} bytes before blocking
  * the input upump.
  *

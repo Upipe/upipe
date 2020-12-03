@@ -51,7 +51,7 @@ UREF_ATTR_UNSIGNED_VA(h26x, nal_offset, "h26x.n[%" PRIu64"]", nal offset,
  * @param size_p filled in with the size in octets of the NAL in the uref,
  * possibly including the next start code
  * @param correction correction to apply to the offsets is the uref has been
- * modfied in the meantime
+ * modified in the meantime
  * @return an error code
  */
 static inline int uref_h26x_iterate_nal(struct uref *uref, uint64_t *counter_p,

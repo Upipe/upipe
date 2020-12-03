@@ -414,7 +414,7 @@ static void upipe_genaux_free(struct upipe *upipe)
 
       upipe_genaux_alloc_void is declared by @ref #UPIPE_HELPER_VOID, allocates the big structure, and checks and uses the arguments (such as the probe hierarchy) passed to upipe_genaux_alloc. The other helpers are initialized, along with the only specific member (getattr). When the pipe is ready to accept control commands, it must throw the @ref UPROBE_READY event.
 
-      On the contrary, when the pipe does not wish to receive control commands, it shall throw the @ref UPROBE_DEAD event. After that point it is not allowed to throw other events (including log messages), so that is why our call to @ref upipe_dbg_va is beforehands.
+      On the contrary, when the pipe does not wish to receive control commands, it shall throw the @ref UPROBE_DEAD event. After that point it is not allowed to throw other events (including log messages), so that is why our call to @ref upipe_dbg_va is beforehand.
 
       In Upipe, message logging is handled by functions @ref #upipe_err, @ref #upipe_warn, @ref #upipe_notice, @ref #upipe_dbg, and @ref #upipe_verbose, in the order of importance. Applications may elect to print messages that match a certain importance criterion. These functions only accept a plain string, but all have a _va counterpart (like many other functions in Upipe) which replaces the string with a printf-style string and additional arguments. Internally, message logging works by throwing a special @ref UPROBE_LOG event, that is caught by the application or the standard @ref uprobe_stdio probe.
 
