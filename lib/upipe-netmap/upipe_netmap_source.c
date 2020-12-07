@@ -464,7 +464,7 @@ static int upipe_netmap_source_alloc_output_uref(struct upipe *upipe, uint64_t s
     return UBASE_ERR_NONE;
 }
 
-static inline bool handle_rfc_packet(struct upipe *upipe, const uint8_t *src, uint16_t src_size, bool *eof)
+static inline bool handle_rfc_packet(struct upipe *upipe, const uint8_t *src, uint16_t src_size, bool *eof, uint32_t timestamp)
 {
     struct upipe_netmap_source *upipe_netmap_source = upipe_netmap_source_from_upipe(upipe);
     bool progressive = 0;
@@ -476,6 +476,23 @@ static inline bool handle_rfc_packet(struct upipe *upipe, const uint8_t *src, ui
 
     src = payload;
     src_size -= header_size;
+
+    if (upipe_netmap_source->uref && !upipe_netmap_source->packets){
+        uint64_t delta =
+            (UINT32_MAX + timestamp -
+            (upipe_netmap_source->last_timestamp % UINT32_MAX)) % UINT32_MAX;
+        upipe_netmap_source->last_timestamp += delta;
+
+        uint64_t pts = upipe_netmap_source->last_timestamp;
+        pts = pts * UCLOCK_FREQ / 90000;
+
+        uref_clock_set_pts_prog(upipe_netmap_source->uref, pts);
+        uref_clock_set_pts_orig(upipe_netmap_source->uref, timestamp * UCLOCK_FREQ / 90000);
+        uref_clock_set_dts_pts_delay(upipe_netmap_source->uref, 0);
+
+        upipe_throw_clock_ref(upipe, upipe_netmap_source->uref, pts, 0);
+        upipe_throw_clock_ts(upipe, upipe_netmap_source->uref);
+    }
 
     if (src_size < RFC_4175_EXT_SEQ_NUM_LEN)
         return false;
@@ -732,10 +749,9 @@ static const uint8_t *get_rtp(struct upipe *upipe, struct netmap_ring *rxring,
 }
 
 /** @internal */
-static void upipe_netmap_source_prepare_frame(struct upipe *upipe, uint32_t timestamp)
+static void upipe_netmap_source_prepare_frame(struct upipe *upipe)
 {
     struct upipe_netmap_source *upipe_netmap_source = upipe_netmap_source_from_upipe(upipe);
-    struct uref *uref = upipe_netmap_source->uref;
 
     /* unmap output */
     for (int i = 0; i < UPIPE_UNPACK_RFC4175_MAX_PLANES; i++) {
@@ -745,21 +761,6 @@ static void upipe_netmap_source_prepare_frame(struct upipe *upipe, uint32_t time
         uref_pic_plane_unmap(upipe_netmap_source->uref,
                 chroma, 0, 0, -1, -1);
     }
-
-    uint64_t delta =
-        (UINT32_MAX + timestamp -
-         (upipe_netmap_source->last_timestamp % UINT32_MAX)) % UINT32_MAX;
-    upipe_netmap_source->last_timestamp += delta;
-
-    uint64_t pts = upipe_netmap_source->last_timestamp;
-    pts = pts * UCLOCK_FREQ / 90000;
-
-    uref_clock_set_pts_prog(uref, pts);
-    uref_clock_set_pts_orig(uref, timestamp * UCLOCK_FREQ / 90000);
-    uref_clock_set_dts_pts_delay(uref, 0);
-
-    upipe_throw_clock_ref(upipe, uref, pts, 0);
-    upipe_throw_clock_ts(upipe, uref);
 }
 
 #define GOT_SEQNUM (1LLU<<49)
@@ -826,7 +827,7 @@ static uint64_t do_packet(struct upipe *upipe, struct netmap_ring *rxring,
                 return ret;
         } else {
             bool eof = false;
-            if (handle_rfc_packet(upipe, rtp, pkt_size, &eof))
+            if (handle_rfc_packet(upipe, rtp, pkt_size, &eof, timestamp))
                 /* error handling packet, drop */
                 return ret;
 
@@ -843,7 +844,8 @@ static uint64_t do_packet(struct upipe *upipe, struct netmap_ring *rxring,
             if (upipe_netmap_source->packets != upipe_netmap_source->pkts_per_frame)
                 upipe_netmap_source->discontinuity = true;
         } else {
-            upipe_netmap_source_prepare_frame(upipe, timestamp);
+            upipe_netmap_source_prepare_frame(upipe);
+            upipe_netmap_source->packets = 0;
         }
 
         if (upipe_netmap_source->discontinuity)
