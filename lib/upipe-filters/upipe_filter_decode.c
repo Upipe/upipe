@@ -331,8 +331,8 @@ static int upipe_fdec_set_option(struct upipe *upipe,
     if (upipe_fdec->options == NULL)
         return UBASE_ERR_ALLOC;
 
-    if (upipe_fdec->last_inner != NULL) {
-        UBASE_RETURN(upipe_set_option(upipe_fdec->last_inner, key, value))
+    if (upipe_fdec->first_inner != NULL) {
+        UBASE_RETURN(upipe_set_option(upipe_fdec->first_inner, key, value))
     }
     if (value != NULL)
         return udict_set_string(upipe_fdec->options->udict, value,
@@ -361,8 +361,8 @@ static int upipe_fdec_set_hw_config(struct upipe *upipe,
     upipe_fdec->hw_type = type ? strdup(type) : NULL;
     upipe_fdec->hw_device = device ? strdup(device) : NULL;
 
-    if (upipe_fdec->last_inner != NULL) {
-            UBASE_RETURN(upipe_avcdec_set_hw_config(upipe_fdec->last_inner,
+    if (upipe_fdec->first_inner != NULL) {
+            UBASE_RETURN(upipe_avcdec_set_hw_config(upipe_fdec->first_inner,
                                                     type, device))
     }
     return UBASE_ERR_NONE;
