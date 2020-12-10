@@ -32,4 +32,6 @@ void upipe_uyvy_to_sdi_c(uint8_t *dst, const uint8_t *y, uintptr_t pixels)
 
     for (int i = 0; i < size; i ++)
         ubits_put(&s, 10, htons((y[2*i+0] << 8) | y[2*i+1]));
+    uint8_t *temp;
+    ubits_clean(&s, &temp);
 }
