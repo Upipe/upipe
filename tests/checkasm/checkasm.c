@@ -36,6 +36,7 @@
 #include "checkasm.h"
 #include <libavutil/common.h>
 #include <libavutil/cpu.h>
+#include <libavutil/intfloat.h>
 #include <libavutil/random_seed.h>
 
 #include "upipe/ubase.h"
@@ -44,7 +45,7 @@
 #include <io.h>
 #endif
 
-#if HAVE_SETCONSOLETEXTATTRIBUTE
+#if HAVE_SETCONSOLETEXTATTRIBUTE && HAVE_GETSTDHANDLE
 #include <windows.h>
 #define COLOR_RED    FOREGROUND_RED
 #define COLOR_GREEN  FOREGROUND_GREEN
@@ -164,6 +165,7 @@ static struct {
     int cpu_flag;
     const char *cpu_flag_name;
     const char *test_name;
+    int verbose;
 } state;
 
 /* PRNG state */
@@ -208,8 +210,12 @@ int float_near_ulp_array(const float *a, const float *b, unsigned max_ulp,
 int float_near_abs_eps(float a, float b, float eps)
 {
     float abs_diff = fabsf(a - b);
+    if (abs_diff < eps)
+        return 1;
 
-    return abs_diff < eps;
+    fprintf(stderr, "test failed comparing %g with %g (abs diff=%g with EPS=%g)\n", a, b, abs_diff, eps);
+
+    return 0;
 }
 
 int float_near_abs_eps_array(const float *a, const float *b, float eps,
@@ -267,7 +273,7 @@ static void color_printf(int color, const char *fmt, ...)
     static int use_color = -1;
     va_list arg;
 
-#if HAVE_SETCONSOLETEXTATTRIBUTE
+#if HAVE_SETCONSOLETEXTATTRIBUTE && HAVE_GETSTDHANDLE
     static HANDLE con;
     static WORD org_attributes;
 
@@ -296,7 +302,7 @@ static void color_printf(int color, const char *fmt, ...)
     va_end(arg);
 
     if (use_color) {
-#if HAVE_SETCONSOLETEXTATTRIBUTE
+#if HAVE_SETCONSOLETEXTATTRIBUTE && HAVE_GETSTDHANDLE
         SetConsoleTextAttribute(con, org_attributes);
 #else
         fprintf(stderr, "\x1b[0m");
@@ -517,6 +523,7 @@ static int bench_init_linux(void)
 }
 #endif
 
+#if !CONFIG_LINUX_PERF
 static int bench_init_ffmpeg(void)
 {
 #ifdef AV_READ_TIME
@@ -527,6 +534,7 @@ static int bench_init_ffmpeg(void)
     return -1;
 #endif
 }
+#endif
 
 static int bench_init(void)
 {
@@ -577,6 +585,8 @@ int main(int argc, char *argv[])
                 state.bench_pattern = "";
         } else if (!strncmp(argv[1], "--test=", 7)) {
             state.test_name = argv[1] + 7;
+        } else if (!strcmp(argv[1], "--verbose") || !strcmp(argv[1], "-v")) {
+            state.verbose = 1;
         } else {
             seed = strtoul(argv[1], NULL, 10);
         }
@@ -727,3 +737,42 @@ void checkasm_report(const char *name, ...)
             max_length = length;
     }
 }
+
+#define DEF_CHECKASM_CHECK_FUNC(type, fmt) \
+int checkasm_check_##type(const char *const file, const int line, \
+                          const type *buf1, ptrdiff_t stride1, \
+                          const type *buf2, ptrdiff_t stride2, \
+                          const int w, int h, const char *const name) \
+{ \
+    int y = 0; \
+    stride1 /= sizeof(*buf1); \
+    stride2 /= sizeof(*buf2); \
+    for (y = 0; y < h; y++) \
+        if (memcmp(&buf1[y*stride1], &buf2[y*stride2], w*sizeof(*buf1))) \
+            break; \
+    if (y == h) \
+        return 0; \
+    checkasm_fail_func("%s:%d", file, line); \
+    if (!state.verbose) \
+        return 1; \
+    fprintf(stderr, "%s:\n", name); \
+    while (h--) { \
+        for (int x = 0; x < w; x++) \
+            fprintf(stderr, " " fmt, buf1[x]); \
+        fprintf(stderr, "    "); \
+        for (int x = 0; x < w; x++) \
+            fprintf(stderr, " " fmt, buf2[x]); \
+        fprintf(stderr, "    "); \
+        for (int x = 0; x < w; x++) \
+            fprintf(stderr, "%c", buf1[x] != buf2[x] ? 'x' : '.'); \
+        buf1 += stride1; \
+        buf2 += stride2; \
+        fprintf(stderr, "\n"); \
+    } \
+    return 1; \
+}
+
+DEF_CHECKASM_CHECK_FUNC(uint8_t,  "%02x")
+DEF_CHECKASM_CHECK_FUNC(uint16_t, "%04x")
+DEF_CHECKASM_CHECK_FUNC(int16_t,  "%6d")
+DEF_CHECKASM_CHECK_FUNC(int32_t,  "%9d")
