@@ -18,11 +18,11 @@
  * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
  */
 
-#include "config.h"
-
-#ifndef EXTERN_ASM
-    #define EXTERN_ASM
-#endif
+/* FIXME: Copied from a single instance of configuring FFmpeg on aarch64 */
+#define CONFIG_PIC 1
+#define EXTERN_ASM
+#define HAVE_AS_FUNC 1
+#define HAVE_SECTION_DATA_REL_RO 1
 
 #ifdef __ELF__
 #   define ELF
@@ -116,3 +116,6 @@ ELF     .size   \name, . - \name
 #define GLUE(a, b) a ## b
 #define JOIN(a, b) GLUE(a, b)
 #define X(s) JOIN(EXTERN_ASM, s)
+
+#define x18 do_not_use_x18
+#define w18 do_not_use_w18
