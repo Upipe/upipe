@@ -569,8 +569,13 @@ int main(int argc, char *argv[])
         checkasm_checked_call = checkasm_checked_call_vfp;
 #endif
 
-    if (!tests[0].func || !cpus[0].flag) {
+    if (!tests[0].func) {
         fprintf(stderr, "checkasm: no tests to perform\n");
+        return 0;
+    }
+
+    if (!cpus[0].flag) {
+        fprintf(stderr, "checkasm: no cpuflags to check\n");
         return 0;
     }
 
