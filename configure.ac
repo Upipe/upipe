@@ -204,14 +204,14 @@ AC_C_BIGENDIAN
 AC_CHECK_FUNCS([memmove memset malloc realloc strdup pipe])
 
 # Custom checks
-AC_MSG_CHECKING([for GCC atomic builtins])
+AC_MSG_CHECKING([for C compiler atomic builtins])
 AC_COMPILE_IFELSE([AC_LANG_PROGRAM([[]],[[
                 int i, x = 0;
-                i = __sync_add_and_fetch(&x, 1);
+                i = __atomic_fetch_add(&x, 1, __ATOMIC_SEQ_CST);
         ]])
 ],[
         AC_MSG_RESULT([yes])
-        AC_DEFINE(HAVE_ATOMIC_OPS, 1, Define if gcc supports atomic operations.)
+        AC_DEFINE(HAVE_ATOMIC_OPS, 1, Define if compiler supports atomic operations.)
 ],[
         AC_MSG_RESULT([no])
 ])

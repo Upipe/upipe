@@ -88,8 +88,7 @@ typedef void * uatomic_ptr_t;
  */                                                                         \
 static inline void type##_init(atomictype *obj, ctype value)                \
 {                                                                           \
-    *obj = value;                                                           \
-    __sync_synchronize();                                                   \
+    __atomic_store(obj, &value, __ATOMIC_SEQ_CST);                          \
 }                                                                           \
 /** @This sets the value of the uatomic variable.                           \
  *                                                                          \
@@ -98,8 +97,7 @@ static inline void type##_init(atomictype *obj, ctype value)                \
  */                                                                         \
 static inline void type##_store(atomictype *obj, ctype value)               \
 {                                                                           \
-    *obj = value;                                                           \
-    __sync_synchronize();                                                   \
+    __atomic_store(obj, &value, __ATOMIC_SEQ_CST);                          \
 }                                                                           \
 /** @This returns the value of the uatomic variable.                        \
  *                                                                          \
@@ -108,8 +106,9 @@ static inline void type##_store(atomictype *obj, ctype value)               \
  */                                                                         \
 static inline ctype type##_load(atomictype *obj)                            \
 {                                                                           \
-    __sync_synchronize();                                                   \
-    return *obj;                                                            \
+    ctype ret;                                                              \
+    __atomic_load(obj, &ret, __ATOMIC_SEQ_CST);                             \
+    return ret;                                                             \
 }                                                                           \
 /** @This atomically replaces the uatomic variable, if it contains an       \
  * expected value, with a desired value.                                    \
@@ -123,11 +122,8 @@ static inline ctype type##_load(atomictype *obj)                            \
 static inline bool type##_compare_exchange(atomictype *obj,                 \
                                            ctype *expected, ctype desired)  \
 {                                                                           \
-    bool ret;                                                               \
-    ret = __sync_bool_compare_and_swap(obj, *expected, desired);            \
-    if (unlikely(!ret))                                                     \
-        *expected = *obj;                                                   \
-    return ret;                                                             \
+    return __atomic_compare_exchange(obj, expected, &desired, false,        \
+                                     __ATOMIC_SEQ_CST, __ATOMIC_SEQ_CST);   \
 }                                                                           \
 /** @This cleans up the uatomic variable.                                   \
  *                                                                          \
@@ -149,7 +145,7 @@ UATOMIC_TEMPLATE(uatomic_ptr, void *, uatomic_ptr_t)
 static inline uint32_t uatomic_fetch_add(uatomic_uint32_t *obj,
                                          uint32_t operand)
 {
-    return __sync_fetch_and_add(obj, operand);
+    return __atomic_fetch_add(obj, operand, __ATOMIC_SEQ_CST);
 }
 
 /** @This decrements a uatomic variable.
@@ -161,7 +157,7 @@ static inline uint32_t uatomic_fetch_add(uatomic_uint32_t *obj,
 static inline uint32_t uatomic_fetch_sub(uatomic_uint32_t *obj,
                                          uint32_t operand)
 {
-    return __sync_fetch_and_sub(obj, operand);
+    return __atomic_fetch_sub(obj, operand, __ATOMIC_SEQ_CST);
 }
 
 
