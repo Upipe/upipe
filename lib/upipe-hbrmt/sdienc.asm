@@ -40,7 +40,12 @@ cglobal uyvy_to_sdi, 3, 4, 5, dst, y, pixels
     mova    m4, [sdi_luma_shuf_10]
 
 .loop:
+%if notcpuflag(avx)
+    movu    m0, [yq+4*pixelsq]
+    pmullw  m0, m2
+%else
     pmullw  m0, m2, [yq+4*pixelsq]
+%endif
     pshufb  m1, m0, m3
     pshufb  m0, m4
     por     m0, m1

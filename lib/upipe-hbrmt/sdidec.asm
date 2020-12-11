@@ -63,7 +63,7 @@ cglobal sdi_to_uyvy, 3, 3, 7, src, y, pixels
 
     por      m0, m1
 
-    mova     [yq + 4*pixelsq], m0
+    movu     [yq + 4*pixelsq], m0
 
     add    srcq, (mmsize*5)/8
     add pixelsq, mmsize/4
