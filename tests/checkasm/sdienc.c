@@ -38,7 +38,7 @@ static void randomize_buffers(uint16_t *src0, uint16_t *src1)
 void checkasm_check_sdienc(void)
 {
     struct {
-        void (*uyvy)(uint8_t *dst, const uint8_t *src, int64_t pixels);
+        void (*uyvy)(uint8_t *dst, const uint8_t *src, uintptr_t pixels);
     } s = {
         .uyvy = upipe_uyvy_to_sdi_c,
     };
@@ -62,7 +62,7 @@ void checkasm_check_sdienc(void)
         DECLARE_ALIGNED(16, uint16_t, src1)[NUM_SAMPLES];
         uint8_t dst0[NUM_SAMPLES * 10 / 8 + 32];
         uint8_t dst1[NUM_SAMPLES * 10 / 8 + 32];
-        declare_func(void, uint8_t *dst, const uint8_t *src, int64_t pixels);
+        declare_func(void, uint8_t *dst, const uint8_t *src, uintptr_t pixels);
 
         randomize_buffers(src0, src1);
         call_ref(dst0, (const uint8_t*)src0, NUM_SAMPLES / 2);

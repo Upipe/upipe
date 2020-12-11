@@ -66,7 +66,7 @@ static void randomize_buffers(void *src0, void *src1)
         type v1[BUF_SIZE / 2]; \
         DECLARE_ALIGNED(32, uint32_t, src0)[BUF_SIZE * 8 / 3 / 4]; \
         DECLARE_ALIGNED(32, uint32_t, src1)[BUF_SIZE * 8 / 3 / 4]; \
-        declare_func(void, const void *src, type *y, type *u, type *v, ptrdiff_t width); \
+        declare_func(void, const void *src, type *y, type *u, type *v, uintptr_t width); \
         ptrdiff_t width, step = 12 / sizeof(type)
 
 void checkasm_check_v210dec(void)
