@@ -106,7 +106,6 @@ check_PROGRAMS = \
 	upipe_filter_blend_test	\
 	upipe_video_blank_test \
 	upipe_audio_blank_test \
-	upipe_grid_test \
 	upipe_block_to_sound_test \
 	upipe_audio_copy_test \
 	upipe_row_join_test \
@@ -168,7 +167,6 @@ TESTS = \
 	upipe_filter_blend_test \
 	upipe_video_blank_test \
 	upipe_audio_blank_test \
-	upipe_grid_test \
 	upipe_block_to_sound_test \
 	upipe_audio_copy_test \
 	upipe_row_join_test \
@@ -211,7 +209,8 @@ check_PROGRAMS += \
 	upipe_zoneplate_source_test \
 	upipe_row_split_test \
 	upipe_separate_fields_test \
-	upipe_dtsdi_test
+	upipe_dtsdi_test \
+	upipe_grid_test
 
 TESTS += \
 	upump_ev_test \
@@ -235,7 +234,8 @@ TESTS += \
 	upipe_zoneplate_source_test \
 	upipe_row_split_test \
 	upipe_separate_fields_test \
-	upipe_dtsdi_test.sh
+	upipe_dtsdi_test.sh \
+	upipe_grid_test
 
 if HAVE_PTHREAD
 check_PROGRAMS += \
@@ -542,7 +542,7 @@ upipe_seq_src_test_LDADD = $(LDADD) -lev $(top_builddir)/lib/upump-ev/libupump_e
 upipe_void_source_test_LDADD = $(LDADD) -lev $(top_builddir)/lib/upump-ev/libupump_ev.la $(top_builddir)/lib/upipe-modules/libupipe_modules.la
 upipe_video_blank_test_LDADD = $(LDADD) $(top_builddir)/lib/upipe-modules/libupipe_modules.la
 upipe_audio_blank_test_LDADD = $(LDADD) $(top_builddir)/lib/upipe-modules/libupipe_modules.la
-upipe_grid_test_LDADD = $(LDADD) $(top_builddir)/lib/upipe-modules/libupipe_modules.la
+upipe_grid_test_LDADD = $(LDADD) -lev $(top_builddir)/lib/upump-ev/libupump_ev.la $(top_builddir)/lib/upipe-modules/libupipe_modules.la
 upipe_block_to_sound_test_LDADD = $(LDADD) $(top_builddir)/lib/upipe-modules/libupipe_modules.la
 upipe_dvbcsa_test_LDADD = $(LDADD) $(top_builddir)/lib/upipe-dvbcsa/libupipe_dvbcsa.la
 upipe_zoneplate_source_test_LDADD = $(LDADD) $(top_builddir)/lib/upipe-filters/libupipe_filters.la $(top_builddir)/lib/upipe-modules/libupipe_modules.la $(top_builddir)/lib/upump-ev/libupump_ev.la
