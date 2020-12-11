@@ -34,14 +34,14 @@
 #define HAVE_ISATTY 0
 #define HAVE_SETCONSOLETEXTATTRIBUTE 0
 
-#if defined(__i686__) || defined(__x86_64__)
+#if defined(__i386__) || defined(__i686__) || defined(__x86_64__)
     #define ARCH_X86 1
-    #if defined(__i686__)
-        #define ARCH_X86_32 1
-        #define ARCH_X86_64 0
-    #elif defined(__x86_64__)
+    #if defined(__x86_64__)
         #define ARCH_X86_32 0
         #define ARCH_X86_64 1
+    #else
+        #define ARCH_X86_32 1
+        #define ARCH_X86_64 0
     #endif
 #else
     #define ARCH_X86 0
