@@ -19,9 +19,9 @@
  */
 
 #include <string.h>
-#include <libavutil/mem.h>
 
 #include "checkasm.h"
+#include "lib/upipe-hbrmt/sdidec.h"
 #include "lib/upipe-hbrmt/sdienc.h"
 
 #define NUM_SAMPLES 512
@@ -35,39 +35,39 @@ static void randomize_buffers(uint16_t *src0, uint16_t *src1)
     }
 }
 
-void checkasm_check_sdienc(void)
+void checkasm_check_uyvy_input(void)
 {
     struct {
-        void (*uyvy)(uint8_t *dst, const uint8_t *src, uintptr_t pixels);
+        void (*sdi)(uint8_t *dst, const uint8_t *src, uintptr_t pixels);
     } s = {
-        .uyvy = upipe_uyvy_to_sdi_c,
+        .sdi = upipe_uyvy_to_sdi_c,
     };
 
 #ifdef HAVE_X86ASM
     int cpu_flags = av_get_cpu_flags();
 
     if (cpu_flags & AV_CPU_FLAG_SSSE3) {
-        s.uyvy = upipe_uyvy_to_sdi_ssse3;
+        s.sdi = upipe_uyvy_to_sdi_ssse3;
     }
     if (cpu_flags & AV_CPU_FLAG_AVX) {
-        s.uyvy = upipe_uyvy_to_sdi_avx;
+        s.sdi = upipe_uyvy_to_sdi_avx;
     }
     if (cpu_flags & AV_CPU_FLAG_AVX2) {
-        s.uyvy = upipe_uyvy_to_sdi_avx2;
+        s.sdi = upipe_uyvy_to_sdi_avx2;
     }
 #endif
 
-    if (check_func(s.uyvy, "uyvy_to_sdi")) {
-        DECLARE_ALIGNED(16, uint16_t, src0)[NUM_SAMPLES];
-        DECLARE_ALIGNED(16, uint16_t, src1)[NUM_SAMPLES];
-        uint8_t dst0[NUM_SAMPLES * 10 / 8 + 32];
-        uint8_t dst1[NUM_SAMPLES * 10 / 8 + 32];
-        declare_func(void, uint8_t *dst, const uint8_t *src, uintptr_t pixels);
+    if (check_func(s.sdi, "uyvy_to_sdi")) {
+        uint16_t src0[NUM_SAMPLES];
+        uint16_t src1[NUM_SAMPLES];
+        uint8_t dst0[NUM_SAMPLES * 10 / 8 + 31];
+        uint8_t dst1[NUM_SAMPLES * 10 / 8 + 31];
+        declare_func(void, uint8_t *dst, const uint8_t *src, uintptr_t samples);
 
         randomize_buffers(src0, src1);
         call_ref(dst0, (const uint8_t*)src0, NUM_SAMPLES / 2);
         call_new(dst1, (const uint8_t*)src1, NUM_SAMPLES / 2);
-        if (memcmp(src0, src1, NUM_SAMPLES)
+        if (memcmp(src0, src1, sizeof src0)
                 || memcmp(dst0, dst1, NUM_SAMPLES * 10 / 8))
             fail();
         bench_new(dst1, (const uint8_t*)src1, NUM_SAMPLES / 2);
