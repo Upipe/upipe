@@ -19,7 +19,6 @@
  */
 
 #include <string.h>
-#include <libavutil/mem.h>
 
 #include "checkasm.h"
 #include "lib/upipe-hbrmt/sdidec.h"
@@ -35,7 +34,7 @@ static void randomize_buffers(uint8_t *src0, uint8_t *src1)
     }
 }
 
-void checkasm_check_sdidec(void)
+void checkasm_check_sdi_input(void)
 {
     struct {
         void (*uyvy)(const uint8_t *src, uint16_t *dst, uintptr_t pixels);
@@ -57,15 +56,15 @@ void checkasm_check_sdidec(void)
     if (check_func(s.uyvy, "sdi_to_uyvy")) {
         uint8_t  src0[NUM_SAMPLES * 10 / 8];
         uint8_t  src1[NUM_SAMPLES * 10 / 8];
-        DECLARE_ALIGNED(32, uint16_t, dst0)[NUM_SAMPLES];
-        DECLARE_ALIGNED(32, uint16_t, dst1)[NUM_SAMPLES];
+        uint16_t dst0[NUM_SAMPLES + 16];
+        uint16_t dst1[NUM_SAMPLES + 16];
         declare_func(void, const uint8_t *src, uint16_t *dst, uintptr_t pixels);
 
         randomize_buffers(src0, src1);
         call_ref(src0, dst0, NUM_SAMPLES / 2);
         call_new(src1, dst1, NUM_SAMPLES / 2);
-        if (memcmp(src0, src1, NUM_SAMPLES * 10 / 8)
-                || memcmp(dst0, dst1, NUM_SAMPLES))
+        if (memcmp(src0, src1, sizeof src0)
+                || memcmp(dst0, dst1, NUM_SAMPLES * sizeof dst0[0]))
             fail();
         bench_new(src1, dst1, NUM_SAMPLES / 2);
     }

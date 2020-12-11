@@ -9,8 +9,12 @@ checkasm_LDADD = $(LDADD) $(AVUTIL_LIBS) \
     $(NULL)
 
 checkasm_SOURCES = checkasm.c checkasm.h timer.h \
-    v210dec.c \
-    v210enc.c
+    planar10_input.c \
+    planar8_input.c \
+    sdi_input.c \
+    uyvy_input.c \
+    v210_input.c \
+    $(NULL)
 
 if HAVE_BITSTREAM
 checkasm_LDADD += \
@@ -18,18 +22,20 @@ checkasm_LDADD += \
     $(top_builddir)/lib/upipe-hbrmt/libupipe_hbrmt_la-sdienc.o \
     $(NULL)
 
-checkasm_SOURCES += sdidec.c sdienc.c
 checkasm_CPPFLAGS += -DHAVE_SDI
 endif
 
 if HAVE_X86ASM
 checkasm_SOURCES += checkasm_x86.asm timer_x86.h
-checkasm_LDADD += $(top_builddir)/lib/upipe-v210/v210dec.o \
+checkasm_LDADD += \
+    $(top_builddir)/lib/upipe-v210/v210dec.o \
     $(top_builddir)/lib/upipe-v210/v210enc.o
 
 if HAVE_BITSTREAM
-checkasm_LDADD += $(top_builddir)/lib/upipe-hbrmt/sdidec.o \
-    $(top_builddir)/lib/upipe-hbrmt/sdienc.o
+checkasm_LDADD += \
+    $(top_builddir)/lib/upipe-hbrmt/sdidec.o \
+    $(top_builddir)/lib/upipe-hbrmt/sdienc.o \
+    $(NULL)
 endif
 endif
 
