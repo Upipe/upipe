@@ -23,6 +23,8 @@
  * SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
  */
 
+#include <upump-ev/upump_ev.h>
+
 #include <upipe/uclock_std.h>
 #include <upipe/umem.h>
 #include <upipe/umem_alloc.h>
@@ -35,6 +37,8 @@
 #include <upipe/uprobe.h>
 #include <upipe/uprobe_stdio.h>
 #include <upipe/uprobe_prefix.h>
+#include <upipe/uprobe_uclock.h>
+#include <upipe/uprobe_upump_mgr.h>
 
 #include <upipe/uref_void_flow.h>
 #include <upipe/uref_pic_flow.h>
@@ -53,22 +57,39 @@
 
 #include <assert.h>
 
-#define UPROBE_LOG_LEVEL    UPROBE_LOG_DEBUG
-#define UDICT_POOL_DEPTH    5
-#define UREF_POOL_DEPTH     5
-#define UBUF_POOL_DEPTH     5
-#define UBUF_PREPEND        0
-#define UBUF_APPEND         0
-#define UBUF_ALIGN          16
-#define UBUF_ALIGN_OFFSET   0
-#define WIDTH               96
-#define HEIGHT              64
-#define SAMPLES             16
-#define N_UREF              5
-#define N_INPUT             2
-#define N_OUTPUT            2
+#define UPROBE_LOG_LEVEL        UPROBE_LOG_DEBUG
+#define UDICT_POOL_DEPTH        0
+#define UREF_POOL_DEPTH         0
+#define UBUF_POOL_DEPTH         0
+#define UBUF_PREPEND            0
+#define UBUF_APPEND             0
+#define UBUF_ALIGN              16
+#define UBUF_ALIGN_OFFSET       0
+#define UPUMP_POOL_DEPTH        0
+#define UPUMP_BLOCK_POOL_DEPTH  0
+#define WIDTH                   96
+#define HEIGHT                  64
+#define SAMPLES                 16
+#define N_UREF                  10
+#define N_OUTPUT                1
+#define N_INPUT                 (N_OUTPUT * 2)
+#define DURATION                (UCLOCK_FREQ / 25)
 
 UREF_ATTR_SMALL_UNSIGNED(test, input_id, "input_id", input id);
+UREF_ATTR_UNSIGNED(test, sequence, "seq", sequence);
+
+static struct uprobe *logger = NULL;
+static struct uclock *uclock = NULL;
+static struct uref_mgr *uref_mgr = NULL;
+static struct ubuf_mgr *ubuf_pic_mgr = NULL;
+static struct ubuf_mgr *ubuf_sound_mgr = NULL;
+static struct upipe *outputs[N_OUTPUT * 2] = { 0 };
+static struct upipe *inputs[N_INPUT * 2] = { 0 };
+static uint64_t start_time = UINT64_MAX;
+static struct upump_mgr *upump_mgr = NULL;
+static struct upump *timer = NULL;
+static struct uref *pic_flow_def = NULL;
+static struct uref *sound_flow_def = NULL;
 
 struct sink {
     struct upipe upipe;
@@ -77,6 +98,7 @@ struct sink {
     struct uref *flow_attr;
     uint64_t input_id;
     uint64_t count;
+    uint64_t last_seq;
 };
 
 UPIPE_HELPER_UPIPE(sink, upipe, 0);
@@ -109,6 +131,7 @@ static struct upipe *sink_alloc(struct upipe_mgr *mgr,
     struct sink *sink = sink_from_upipe(upipe);
     sink->input_id = UINT64_MAX;
     sink->count = 0;
+    sink->last_seq = 0;
 
     upipe_throw_ready(upipe);
 
@@ -133,12 +156,20 @@ static void sink_input(struct upipe *upipe, struct uref *uref,
     if (uref->ubuf) {
         uint8_t id;
         ubase_assert(uref_test_get_input_id(uref, &id));
-        if (sink->input_id != UINT64_MAX)
-            assert(id == (sink->input_id + 2) % N_INPUT);
+        uint64_t seq;
+        ubase_assert(uref_test_get_sequence(uref, &seq));
+        assert(id / (N_OUTPUT * 2) == seq % 2);
+        if (sink->input_id != UINT64_MAX) {
+            assert(sink->input_id != id);
+            assert(id == ((sink->input_id + N_OUTPUT * 2) % (N_INPUT * 2)));
+        }
         sink->input_id = id;
+        assert(seq == sink->last_seq + 1);
+        sink->last_seq = seq;
     }
-    else
+    else {
         assert(!sink->count);
+    }
     sink->count++;
     uref_free(uref);
 }
@@ -179,9 +210,67 @@ static int catch(struct uprobe *uprobe, struct upipe *upipe,
     return UBASE_ERR_NONE;
 }
 
+static void timer_cb(struct upump *upump)
+{
+    static unsigned int count = 0;
+
+    uprobe_info(logger, NULL, "timer");
+
+    uint64_t now = uclock_now(uclock);
+    uint64_t pts = start_time + count * DURATION;
+
+    for (unsigned i = 0; count && i < N_OUTPUT * 2; i++) {
+        upipe_grid_out_set_input(outputs[i],
+                                 inputs[i + ((count % 2) * N_OUTPUT * 2)]);
+    }
+
+    for (unsigned i = 0; i < N_INPUT * 2; i++) {
+        struct uref *uref = NULL;
+
+        if (i % 2) {
+            ubase_assert(upipe_set_flow_def(inputs[i], sound_flow_def));
+            uref = uref_sound_alloc(uref_mgr, ubuf_sound_mgr, SAMPLES);
+        }
+        else {
+            ubase_assert(upipe_set_flow_def(inputs[i], pic_flow_def));
+            uref = uref_pic_alloc(uref_mgr, ubuf_pic_mgr, WIDTH, HEIGHT);
+        }
+        assert(uref);
+        uint64_t in_pts = pts - (DURATION / 10) + ((count % 3) * DURATION / 10);
+        uref_clock_set_pts_sys(uref, in_pts);
+        ubase_assert(uref_clock_set_duration(uref, DURATION));
+        ubase_assert(uref_test_set_input_id(uref, i));
+        ubase_assert(uref_test_set_sequence(uref, count));
+        upipe_input(inputs[i], uref, NULL);
+    }
+
+    struct uref *uref = uref_alloc_control(uref_mgr);
+    assert(uref);
+    uref_clock_set_pts_sys(uref, pts);
+    ubase_assert(uref_clock_set_duration(uref, DURATION));
+    for (unsigned j = 0; j < N_OUTPUT * 2; j++) {
+        struct uref *copy = uref_dup(uref);
+        assert(copy);
+        upipe_input(outputs[j], copy, NULL);
+    }
+    uref_free(uref);
+
+    if (++count < N_UREF) {
+        uint64_t next = start_time + count * DURATION;
+        uint64_t timeout = next < now ? 0 : next - now;
+        upump_free(timer);
+        timer = upump_alloc_timer(upump_mgr, timer_cb, NULL, NULL, timeout, 0);
+        assert(timer);
+        upump_start(timer);
+    }
+}
+
 int main(int argc, char *argv[])
 {
-    struct uclock *uclock = uclock_std_alloc(0);
+    upump_mgr = upump_ev_mgr_alloc_default(
+        UPUMP_POOL_DEPTH, UPUMP_BLOCK_POOL_DEPTH);
+
+    uclock = uclock_std_alloc(0);
     assert(uclock);
 
     struct umem_mgr *umem_mgr = umem_alloc_mgr_alloc();
@@ -191,18 +280,17 @@ int main(int argc, char *argv[])
         udict_inline_mgr_alloc(UDICT_POOL_DEPTH, umem_mgr, -1, -1);
     assert(udict_mgr);
 
-    struct uref_mgr *uref_mgr =
-        uref_std_mgr_alloc(UREF_POOL_DEPTH, udict_mgr, 0);
+    uref_mgr = uref_std_mgr_alloc(UREF_POOL_DEPTH, udict_mgr, 0);
     assert(uref_mgr);
 
-    struct ubuf_mgr *ubuf_pic_mgr =
+    ubuf_pic_mgr =
         ubuf_pic_mem_mgr_alloc(UBUF_POOL_DEPTH, UBUF_POOL_DEPTH,
                                umem_mgr, 1, UBUF_PREPEND, UBUF_APPEND,
                                UBUF_PREPEND, UBUF_APPEND,
                                UBUF_ALIGN, UBUF_ALIGN_OFFSET);
     assert(ubuf_pic_mgr);
 
-    struct ubuf_mgr *ubuf_sound_mgr =
+    ubuf_sound_mgr =
         ubuf_sound_mem_mgr_alloc(UBUF_POOL_DEPTH, UBUF_POOL_DEPTH,
                                  umem_mgr, 4 * 2, 4 * 2);
     assert(ubuf_sound_mgr);
@@ -210,8 +298,12 @@ int main(int argc, char *argv[])
     struct uprobe uprobe;
     uprobe_init(&uprobe, catch, NULL);
 
-    struct uprobe *logger =
-        uprobe_stdio_alloc(&uprobe, stderr, UPROBE_LOG_LEVEL);
+    logger =
+        uprobe_stdio_alloc(
+            uprobe_upump_mgr_alloc(
+                uprobe_uclock_alloc(&uprobe, uclock),
+                upump_mgr),
+            stderr, UPROBE_LOG_LEVEL);
     assert(logger);
 
     struct upipe_mgr *upipe_grid_mgr = upipe_grid_mgr_alloc();
@@ -223,15 +315,14 @@ int main(int argc, char *argv[])
                                           UPROBE_LOG_LEVEL,
                                           "grid"));
     assert(upipe_grid);
+    ubase_assert(upipe_attach_uclock(upipe_grid));
 
-    struct uref *pic_flow_def = uref_pic_flow_alloc_def(uref_mgr, 0);
+    pic_flow_def = uref_pic_flow_alloc_def(uref_mgr, 0);
     assert(pic_flow_def);
 
-    struct uref *sound_flow_def = uref_sound_flow_alloc_def(uref_mgr, "f32.",
-                                                            2, 4 * 2);
+    sound_flow_def = uref_sound_flow_alloc_def(uref_mgr, "f32.", 2, 4 * 2);
     assert(sound_flow_def);
 
-    struct upipe *inputs[N_INPUT * 2];
     for (unsigned i = 0; i < N_INPUT * 2; i++) {
         inputs[i] =
             upipe_grid_alloc_input(upipe_grid,
@@ -242,17 +333,10 @@ int main(int argc, char *argv[])
                                         i % 2 ? "sound" : "pic", i));
         assert(inputs[i]);
 
-        if (i % 2)
-            ubase_assert(upipe_set_flow_def(inputs[i], sound_flow_def));
-        else
-            ubase_assert(upipe_set_flow_def(inputs[i], pic_flow_def));
     }
-    uref_free(pic_flow_def);
-    uref_free(sound_flow_def);
 
     struct uref *flow_def = uref_void_flow_alloc_def(uref_mgr);
     assert(flow_def);
-    struct upipe *outputs[N_OUTPUT * 2];
     for (unsigned i = 0; i < N_OUTPUT * 2; i++) {
         outputs[i] =
             upipe_grid_alloc_output(upipe_grid,
@@ -275,52 +359,15 @@ int main(int argc, char *argv[])
     }
     uref_free(flow_def);
 
-    struct uref *urefs[N_INPUT * 2][N_UREF];
-    for (unsigned i = 0; i < N_INPUT * 2; i++) {
-        for (unsigned j = 0; j < N_UREF; j++) {
-            if (i % 2)
-                urefs[i][j] =
-                    uref_sound_alloc(uref_mgr, ubuf_sound_mgr, SAMPLES);
-            else
-                urefs[i][j] =
-                    uref_pic_alloc(uref_mgr, ubuf_pic_mgr, WIDTH, HEIGHT);
-            assert(urefs[i][j]);
-            ubase_assert(uref_test_set_input_id(urefs[i][j], i));
-        }
-    }
+    start_time = uclock_now(uclock);
+    timer = upump_alloc_timer(upump_mgr, timer_cb, NULL, NULL, 0, 0);
+    assert(timer);
+    upump_start(timer);
+    upump_mgr_run(upump_mgr, NULL);
+    upump_free(timer);
 
-    uint64_t now = 4242;
-    static const uint64_t duration = 42;
-    for (unsigned i = 0; i < N_UREF; i++) {
-        if (i) {
-            for (unsigned j = 0; j < N_OUTPUT * 2; j++) {
-                ubase_assert(upipe_grid_out_set_input(
-                    outputs[j], inputs[(j + i * 2 - 2) % N_INPUT]));
-            }
-        }
-
-        for (unsigned j = 0; j < N_INPUT * 2; j++) {
-            uref_clock_set_pts_sys(urefs[j][i], now);
-            uref_clock_set_duration(urefs[j][i], duration);
-            upipe_input(inputs[j], urefs[j][i], NULL);
-        }
-
-        struct uref *uref = uref_alloc_control(uref_mgr);
-        assert(uref);
-        uref_clock_set_pts_sys(uref, now);
-        ubase_assert(uref_clock_set_duration(uref, duration));
-
-        for (unsigned j = 0; j < N_OUTPUT * 2; j++) {
-            struct uref *copy = uref_dup(uref);
-            assert(copy);
-            upipe_input(outputs[j], copy, NULL);
-        }
-
-        uref_free(uref);
-
-        now += duration;
-    }
-
+    uref_free(pic_flow_def);
+    uref_free(sound_flow_def);
     for (unsigned i = 0; i < N_OUTPUT * 2; i++)
         upipe_release(outputs[i]);
     for (unsigned i = 0; i < N_INPUT * 2; i++)
@@ -336,6 +383,7 @@ int main(int argc, char *argv[])
     udict_mgr_release(udict_mgr);
     umem_mgr_release(umem_mgr);
     uclock_release(uclock);
+    upump_mgr_release(upump_mgr);
 
     return 0;
 }
