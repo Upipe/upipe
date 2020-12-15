@@ -24,8 +24,6 @@ checkasm_LDADD += \
     $(top_builddir)/lib/upipe-hbrmt/libupipe_hbrmt_la-sdienc.o \
     $(top_builddir)/lib/upipe-pciesdi/libupipe_pciesdi_la-levelb.o \
     $(NULL)
-
-checkasm_CPPFLAGS += -DHAVE_SDI
 endif
 
 if HAVE_NETMAP
