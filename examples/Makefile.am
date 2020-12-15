@@ -97,8 +97,10 @@ noinst_PROGRAMS += grid
 endif
 endif
 
+if HAVE_BITSTREAM
 if HAVE_DLFCN_H
 noinst_PROGRAMS += blackmagic
+endif
 endif
 endif # swresample
 
