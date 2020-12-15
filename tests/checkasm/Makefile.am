@@ -21,8 +21,6 @@ checkasm_LDADD += \
     $(top_builddir)/lib/upipe-hbrmt/libupipe_hbrmt_la-sdidec.o \
     $(top_builddir)/lib/upipe-hbrmt/libupipe_hbrmt_la-sdienc.o \
     $(NULL)
-
-checkasm_CPPFLAGS += -DHAVE_SDI
 endif
 
 if HAVE_X86ASM

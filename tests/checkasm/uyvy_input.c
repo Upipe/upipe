@@ -40,10 +40,13 @@ void checkasm_check_uyvy_input(void)
     struct {
         void (*sdi)(uint8_t *dst, const uint8_t *src, uintptr_t pixels);
     } s = {
+#ifdef HAVE_BITSTREAM_COMMON_H
         .sdi = upipe_uyvy_to_sdi_c,
+#endif
     };
 
 #ifdef HAVE_X86ASM
+#ifdef HAVE_BITSTREAM_COMMON_H
     int cpu_flags = av_get_cpu_flags();
 
     if (cpu_flags & AV_CPU_FLAG_SSSE3) {
@@ -55,6 +58,7 @@ void checkasm_check_uyvy_input(void)
     if (cpu_flags & AV_CPU_FLAG_AVX2) {
         s.sdi = upipe_uyvy_to_sdi_avx2;
     }
+#endif
 #endif
 
     if (check_func(s.sdi, "uyvy_to_sdi")) {
