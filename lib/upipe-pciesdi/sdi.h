@@ -223,6 +223,8 @@ struct sdi_ioctl_channel_set_pll {
 #define SDI_IOCTL_CAPABILITIES      _IOWR(SDI_IOCTL,  5, struct sdi_ioctl_capabilities)
 #define SDI_IOCTL_SET_RATE          _IOWR(SDI_IOCTL,  6, struct sdi_ioctl_rate)
 #define SDI_IOCTL_GET_RATE          _IOWR(SDI_IOCTL,  7, struct sdi_ioctl_rate)
+#define SDI_IOCTL_SET_GENLOCK       _IOW(SDI_IOCTL,   8, struct sdi_ioctl_rate)
+#define SDI_IOCTL_GET_GENLOCK       _IOR(SDI_IOCTL,   9, struct sdi_ioctl_rate)
 
 #define SDI_IOCTL_VCXO              _IOW(SDI_IOCTL,  10, struct sdi_ioctl_vcxo)
 #define SDI_IOCTL_PICXO             _IOW(SDI_IOCTL,  11, struct sdi_ioctl_vcxo)

@@ -22,7 +22,12 @@
 #define SDI_UNDEF_RATE   0
 #define SDI_PAL_RATE     1
 #define SDI_NTSC_RATE    2
-#define SDI_GENLOCK_RATE 3
+#define SDI_GENLOCK_RATE 4
+
+#define SDI_GENLOCK_IS_NOT_CONFIGURED 0
+#define SDI_GENLOCK_IS_CONFIGURED     1
+#define SDI_GENLOCK_IS_PAL            2
+#define SDI_GENLOCK_IS_NTSC           4
 
 #define SDI_TX_MODE_HD 0b00
 #define SDI_TX_MODE_SD 0b01
