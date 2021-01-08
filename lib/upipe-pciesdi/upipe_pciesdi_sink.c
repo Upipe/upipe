@@ -76,6 +76,7 @@ struct upipe_pciesdi_sink {
     int first;
     int tx_mode;
     int clock_rate;
+    int genlock;
 
     /** delay applied to systime attribute when uclock is provided */
     uint64_t latency;
@@ -189,6 +190,7 @@ static struct upipe *upipe_pciesdi_sink_alloc(struct upipe_mgr *mgr,
     upipe_pciesdi_sink->first = 1;
     upipe_pciesdi_sink->tx_mode = -1;
     upipe_pciesdi_sink->clock_rate = SDI_UNDEF_RATE;
+    upipe_pciesdi_sink->genlock = SDI_GENLOCK_IS_NOT_CONFIGURED;
     upipe_pciesdi_sink->uclock.refcount = &upipe_pciesdi_sink->urefcount;
     upipe_pciesdi_sink->uclock.uclock_now = upipe_pciesdi_sink_now;
 
@@ -474,7 +476,9 @@ static void upipe_pciesdi_sink_input(struct upipe *upipe, struct uref *uref, str
 #define BUFFER_COUNT_PRINT_THRESHOLD(num, den) (num * CHUNK_BUFFER_COUNT / den)
 
     if (upipe_pciesdi_sink->uref_next) {
-        upipe_dbg(upipe, "uref input before uref_next was used");
+        int64_t hw = 0, sw = 0;
+        sdi_dma_reader(upipe_pciesdi_sink->fd, upipe_pciesdi_sink->first == 0, &hw, &sw); // get buffer counts
+        upipe_dbg_va(upipe, "uref input before uref_next was used, buffer count hw: %"PRId64", sw: %"PRId64, hw, sw);
         uref_free(upipe_pciesdi_sink->uref_next);
     }
     upipe_pciesdi_sink->uref_next = uref;
@@ -557,10 +561,10 @@ static void init_hardware(struct upipe *upipe, int rate, int mode)
 
     /* PCIe SDI (Falcon 9) */
     if (capability_flags == SDI_CAP_FALCON9) {
-        if (rate == SDI_PAL_RATE) {
+        if (rate & SDI_PAL_RATE) {
             /* Set channel to refclk0. */
             sdi_channel_set_pll(fd, 0);
-        } else if (rate == SDI_NTSC_RATE) {
+        } else if (rate & SDI_NTSC_RATE) {
             /* Set channel 0 to refclk1. */
             sdi_channel_set_pll(fd, 1);
         }
@@ -571,18 +575,18 @@ static void init_hardware(struct upipe *upipe, int rate, int mode)
         /* TODO: Need to write to CSR_SDI_QPLL_REFCLK_STABLE_ADDR when changing refclk? */
         uint32_t refclk_freq;
         uint64_t refclk_counter;
-        if (rate == SDI_PAL_RATE) {
+        if (rate & SDI_PAL_RATE) {
             sdi_refclk(fd, 0, &refclk_freq, &refclk_counter);
-        } else if (rate == SDI_NTSC_RATE) {
+        } else if (rate & SDI_NTSC_RATE) {
             sdi_refclk(fd, 1, &refclk_freq, &refclk_counter);
         }
     }
 
     /* Duo2 */
     else if (SDI_CAP_DUO2) {
-        if (rate == SDI_PAL_RATE) {
+        if (rate & SDI_PAL_RATE) {
             sdi_picxo(fd, 0, 0, 0);
-        } else if (rate == SDI_NTSC_RATE) {
+        } else if (rate & SDI_NTSC_RATE) {
             /* SD: use a 270Mbps linerate, don't use PICXO */
             if (mode == SDI_TX_MODE_SD)
                 sdi_picxo(fd, 0, 0, 0);
@@ -609,6 +613,98 @@ static void init_hardware(struct upipe *upipe, int rate, int mode)
     sdi_set_rate(fd, rate);
 }
 
+static int64_t get_genlock_delay(const struct sdi_offsets_fmt *sdi_format)
+{
+    enum sdi_type {
+        SDI_TYPE_UNKNOWN,
+
+        SDI_TYPE_PAL,
+        SDI_TYPE_720P50,
+        SDI_TYPE_720P60,
+        SDI_TYPE_1080P24,
+        SDI_TYPE_1080I25,
+        SDI_TYPE_1080P25,
+        SDI_TYPE_1080P30,
+        SDI_TYPE_1080P50,
+        SDI_TYPE_1080P60,
+
+        SDI_TYPE_NTSC,
+        SDI_TYPE_720P59,
+        SDI_TYPE_1080P23,
+        SDI_TYPE_1080I29,
+        SDI_TYPE_1080P29,
+        SDI_TYPE_1080P59,
+    } sdi_type = SDI_TYPE_UNKNOWN;
+
+    /* "advanced" means the video is too early.  "delayed" means the video is too late. */
+    static const struct offset { int lines; int us; } offsets[] = {
+            [SDI_TYPE_PAL]     = { -1, -24 },
+            [SDI_TYPE_720P50]  = { 2, -13 },
+            [SDI_TYPE_1080I25] = { 1, 6 },
+            [SDI_TYPE_1080P25] = { 1, 6 },
+            [SDI_TYPE_1080P50] = { 2, 1 },
+            [SDI_TYPE_720P59]  = { 1, 3 },
+            [SDI_TYPE_1080I29] = { 1, -11 },
+            [SDI_TYPE_1080P59] = { 2, -6 },
+    };
+
+    int height = sdi_format->pict_fmt->active_height;
+    bool interlaced = sdi_format->psf_ident == UPIPE_SDI_PSF_IDENT_I;
+    const struct urational *fps = &sdi_format->fps;
+
+    if (height == 1080) {
+        if (urational_cmp(fps, &(struct urational){ 60, 1 }) == 0)
+            sdi_type = SDI_TYPE_1080P60;
+        else if (urational_cmp(fps, &(struct urational){ 60000, 1001 }) == 0)
+            sdi_type = SDI_TYPE_1080P59;
+        else if (urational_cmp(fps, &(struct urational){ 50, 1 }) == 0)
+            sdi_type = SDI_TYPE_1080P50;
+        else if (urational_cmp(fps, &(struct urational){ 30, 1 }) == 0)
+            sdi_type = SDI_TYPE_1080P30;
+        else if (urational_cmp(fps, &(struct urational){ 30000, 1001 }) == 0) {
+            if (interlaced)
+                sdi_type = SDI_TYPE_1080I29;
+            else
+                sdi_type = SDI_TYPE_1080P29;
+        }
+        else if (urational_cmp(fps, &(struct urational){ 25, 1 }) == 0) {
+            if (interlaced)
+                sdi_type = SDI_TYPE_1080I25;
+            else
+                sdi_type = SDI_TYPE_1080P25;
+        }
+        else if (urational_cmp(fps, &(struct urational){ 24, 1 }) == 0)
+            sdi_type = SDI_TYPE_1080P24;
+        else if (urational_cmp(fps, &(struct urational){ 24000, 1001 }) == 0)
+            sdi_type = SDI_TYPE_1080P23;
+    }
+    else if (height == 720) {
+        if (urational_cmp(fps, &(struct urational){ 60, 1 }) == 0)
+            sdi_type = SDI_TYPE_720P60;
+        else if (urational_cmp(fps, &(struct urational){ 60000, 1001 }) == 0)
+            sdi_type = SDI_TYPE_720P59;
+        else if (urational_cmp(fps, &(struct urational){ 50, 1 }) == 0)
+            sdi_type = SDI_TYPE_720P50;
+    }
+    else {
+        if (urational_cmp(fps, &(struct urational){ 30000, 1001 }) == 0)
+            sdi_type = SDI_TYPE_NTSC;
+        else if (urational_cmp(fps, &(struct urational){ 25, 1 }) == 0)
+            sdi_type = SDI_TYPE_PAL;
+    }
+
+    if (sdi_type == SDI_TYPE_UNKNOWN)
+        return 0;
+
+    struct offset offset = offsets[sdi_type];
+
+    int64_t delay = INT64_C(125000000) * fps->den / fps->num;
+    int64_t line_delay = delay * offset.lines / sdi_format->height;
+    int64_t time_delay = INT64_C(125000000) * offset.us / 1000000;
+
+    return delay - line_delay - time_delay;
+}
+
 /** @internal @This sets the input flow definition.
  *
  * @param upipe description structure of the pipe
@@ -627,14 +723,14 @@ static int upipe_pciesdi_sink_set_flow_def(struct upipe *upipe, struct uref *flo
     struct urational fps;
     UBASE_RETURN(uref_pic_flow_get_vsize(flow_def, &height));
     UBASE_RETURN(uref_pic_flow_get_fps(flow_def, &fps));
+    const struct sdi_offsets_fmt *sdi_format = sdi_get_offsets(flow_def);
+    UBASE_ALLOC_RETURN(sdi_format);
 
-    bool genlock = false;
+    bool genlock = upipe_pciesdi_sink->genlock & SDI_GENLOCK_IS_CONFIGURED;
     bool sd = height < 720;
     bool ntsc = sd ? 0 : fps.den == 1001;
     bool sdi3g = height == 1080 && (urational_cmp(&fps, &(struct urational){ 50, 1 })) >= 0;
     upipe_dbg_va(upipe, "sd: %d, 3g: %d", sd, sdi3g);
-
-    /* TODO: init card based on given format. */
 
     int tx_mode;
     if (sd)
@@ -647,21 +743,51 @@ static int upipe_pciesdi_sink_set_flow_def(struct upipe *upipe, struct uref *flo
     int clock_rate;
     if (ntsc)
         clock_rate = SDI_NTSC_RATE;
-    else if (genlock)
-        clock_rate = SDI_GENLOCK_RATE;
     else
         clock_rate = SDI_PAL_RATE;
+
+    /* If the clock for this format is provided by genlock then we want to
+     * signal that genlock should be used to release and synchronize the TX. */
+    if (upipe_pciesdi_sink->genlock & SDI_GENLOCK_IS_NTSC && ntsc)
+        clock_rate |= SDI_GENLOCK_RATE;
+    else if (upipe_pciesdi_sink->genlock & SDI_GENLOCK_IS_PAL && !ntsc)
+        clock_rate |= SDI_GENLOCK_RATE;
+    else
+        genlock = false;
 
     if (upipe_pciesdi_sink->fd == -1) {
         upipe_warn(upipe, "device has not been opened, unable to init hardware");
         return UBASE_ERR_INVALID;
     }
 
+    if (genlock) {
+        uint8_t active;
+        uint64_t period, seen;
+        sdi_genlock_vsync(upipe_pciesdi_sink->fd, &active, &period, &seen);
+
+        if (active) {
+            int64_t delay = get_genlock_delay(sdi_format);
+            if (delay == 0)
+                upipe_warn(upipe, "unknown genlock delay");
+            else
+                upipe_dbg_va(upipe, "setting genlock delay to %"PRId64, delay);
+
+            unsigned bitfield = SDI_GENLOCK_SYNCHRO_SOURCE_VSYNC_DELAYED;
+            if (sdi_format->psf_ident == UPIPE_SDI_PSF_IDENT_I)
+                bitfield |= SDI_GENLOCK_SYNCHRO_SOURCE_FIELD;
+
+            sdi_writel(upipe_pciesdi_sink->fd, CSR_SDI_GENLOCK_SYNCHRO_SOURCE_ADDR, bitfield);
+            sdi_writel(upipe_pciesdi_sink->fd, CSR_SDI_GENLOCK_SYNCHRO_DELAY_VSYNC_EDGE_ADDR, 0);
+            sdi_writel(upipe_pciesdi_sink->fd, CSR_SDI_GENLOCK_SYNCHRO_DELAY_VSYNC_OFFSET_ADDR, delay);
+        }
+
+        else
+            upipe_warn(upipe, "genlock not active");
+    }
+
     /* Record time now so that we can use it as an offset to ensure that the
      * clock always goes forwards when mode changes. */
     uint64_t offset = upipe_pciesdi_sink_now(&upipe_pciesdi_sink->uclock);
-
-    UBASE_RETURN(check_capabilities(upipe, genlock));
 
     upipe_warn(upipe, "new flow_def, stopping DMA and upump");
     stop_dma(upipe);
@@ -696,6 +822,17 @@ static int upipe_pciesdi_sink_set_flow_def(struct upipe *upipe, struct uref *flo
 
     /* Lock to begin init. */
     pthread_mutex_lock(&upipe_pciesdi_sink->clock_mutex);
+
+    /* Throw a probe event to signal the genlock status. */
+    if (clock_rate & SDI_GENLOCK_RATE)
+        upipe_throw(upipe, UPROBE_PCIESDI_SINK_GENLOCK_TYPE, UPIPE_PCIESDI_SINK_SIGNATURE,
+                (uint32_t)UPROBE_PCIESDI_SINK_GENLOCK_IN_USE);
+    else if (upipe_pciesdi_sink->genlock & SDI_GENLOCK_IS_CONFIGURED)
+        upipe_throw(upipe, UPROBE_PCIESDI_SINK_GENLOCK_TYPE, UPIPE_PCIESDI_SINK_SIGNATURE,
+                (uint32_t)UPROBE_PCIESDI_SINK_GENLOCK_CONFIGURED);
+    else
+        upipe_throw(upipe, UPROBE_PCIESDI_SINK_GENLOCK_TYPE, UPIPE_PCIESDI_SINK_SIGNATURE,
+                (uint32_t)UPROBE_PCIESDI_SINK_GENLOCK_NOT_CONFIGURED);
 
     /* initialize clock */
     init_hardware(upipe, clock_rate, tx_mode);
@@ -765,6 +902,10 @@ static int upipe_pciesdi_set_uri(struct upipe *upipe, const char *path)
     upipe_pciesdi_sink->mmap_info = mmap_info;
     upipe_pciesdi_sink->write_buffer = buf;
     upipe_pciesdi_sink->device_number = path[strlen(path) - 1] - 0x30;
+
+    int genlock;
+    upipe_pciesdi_sink->genlock = genlock = sdi_get_genlock(upipe_pciesdi_sink->fd);
+    UBASE_RETURN(check_capabilities(upipe, genlock & SDI_GENLOCK_IS_CONFIGURED));
 
     return UBASE_ERR_NONE;
 }

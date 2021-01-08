@@ -35,6 +35,9 @@ void sdi_capabilities(int fd, uint32_t *flags, uint8_t *channels);
 void sdi_set_rate(int fd, uint8_t rate);
 uint8_t sdi_get_rate(int fd);
 
+uint8_t sdi_get_genlock(int fd);
+void sdi_set_genlock(int fd, uint8_t genlock);
+
 void sdi_vcxo(int fd, uint32_t width, uint32_t period);
 void sdi_picxo(int fd, uint8_t enable, uint8_t dir, uint8_t step);
 
