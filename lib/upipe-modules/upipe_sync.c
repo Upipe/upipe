@@ -866,19 +866,6 @@ static void cb(struct upump *upump)
             wait = upipe_sync->pts - now;
 
         upipe_sync_wait_upump(upipe, wait, cb);
-    } else {
-        uchain = ulist_peek(&upipe_sync->urefs);
-        if (uchain) {
-            uref = uref_from_uchain(uchain);
-            if (uref) {
-                uint64_t pts = 0;
-                uref_clock_get_pts_sys(uref, &pts);
-                upipe_sync->pts = pts + upipe_sync->latency;
-
-                uint64_t wait = pts - now;
-                upipe_sync_wait_upump(upipe, wait, cb);
-            }
-        }
     }
 }
 
