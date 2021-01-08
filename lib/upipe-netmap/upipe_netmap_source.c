@@ -245,6 +245,14 @@ static struct upipe *upipe_netmap_source_alloc(struct upipe_mgr *mgr,
                 upipe_netmap_source->hsize);
         uref_pic_flow_set_align(upipe_netmap_source->rfc_def, 32);
         uref_pic_flow_set_hmappend(upipe_netmap_source->rfc_def, 32);
+
+        /* In RFC4175 there is an inherent latency relative to PTP.
+           The completed frame is delivered one frame period after its timestamp */
+        uint64_t latency;
+        if (!ubase_check(uref_clock_get_latency(upipe_netmap_source->rfc_def, &latency)))
+            latency = 0;
+        latency += UCLOCK_FREQ * upipe_netmap_source->fps.den / upipe_netmap_source->fps.num;
+        uref_clock_set_latency(upipe_netmap_source->rfc_def, latency);
     } else {
         upipe_netmap_source->hbrmt = true;
         upipe_netmap_source->rfc_def = NULL;
