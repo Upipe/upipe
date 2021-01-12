@@ -310,7 +310,7 @@ int main(int argc, char *argv[])
     if (start < 0)
         start += now;
 
-    if (!ubase_check(upipe_delay_set_delay(delay, now + readahead - start)) ||
+    if (!ubase_check(upipe_delay_set_delay(delay, now - start)) ||
         !ubase_check(upipe_time_limit_set_limit(time_limit, readahead)) ||
         !ubase_check(upipe_set_flow_def(msrc, flow)) ||
         !ubase_check(upipe_set_output_size(msrc, mtu)) ||
