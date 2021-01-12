@@ -1247,7 +1247,7 @@ static int catch_error(struct uprobe *uprobe,
     }
 
     case UPROBE_ERROR:
-        cmd_quit();
+        exit(EXIT_FAILURE);
         return UBASE_ERR_NONE;
     }
 
