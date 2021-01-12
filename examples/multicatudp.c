@@ -1,5 +1,6 @@
 /*
  * Copyright (C) 2016-2017 OpenHeadend S.A.R.L.
+ * Copyright (C) 2021 EasyTools
  *
  * Authors: Christophe Massiot
  *
@@ -88,12 +89,12 @@
 #define UPUMP_BLOCKER_POOL 10
 #define XFER_QUEUE 255
 #define XFER_POOL 20
-#define SINK_QUEUE_LENGTH 2000
 #define UPROBE_LOG_LEVEL UPROBE_LOG_INFO
 #define DEFAULT_ROTATE (UCLOCK_FREQ * 3600)
 #define DEFAULT_ROTATE_OFFSET 0
 #define DEFAULT_READAHEAD (UCLOCK_FREQ / 5)
 #define DEFAULT_MTU 1316
+#define MAX_SINK_BUFFER 2000000000 /* 2GB */
 
 static void usage(const char *argv0) {
     fprintf(stdout, "Usage: %s [-d] [-r <rotate>] [-O <rotate offset>] [-R <read-ahead>] [-k <start>] (-m <MTU>] [-l <syslog ident>] <source dir/prefix> <data suffix> <aux suffix> <destination>\n", argv0);
@@ -175,6 +176,9 @@ int main(int argc, char *argv[])
     aux = argv[optind++];
     dstpath = argv[optind++];
 
+    assert(mtu);
+    unsigned int sink_queue_length = MAX_SINK_BUFFER / mtu;
+
     /* setup environment */
     struct umem_mgr *umem_mgr = umem_alloc_mgr_alloc();
     struct udict_mgr *udict_mgr = udict_inline_mgr_alloc(UDICT_POOL_DEPTH,
@@ -239,7 +243,7 @@ int main(int argc, char *argv[])
         }
     }
     upipe_attach_uclock(sink);
-    upipe_set_max_length(sink, SINK_QUEUE_LENGTH);
+    upipe_set_max_length(sink, sink_queue_length);
     uprobe_throw(logger, NULL, UPROBE_THAW_UPUMP_MGR);
 
     pthread_attr_t attr;
@@ -267,7 +271,7 @@ int main(int argc, char *argv[])
             sink,
             uprobe_pfx_alloc(uprobe_use(logger),
                              UPROBE_LOG_VERBOSE, "wsink_x"),
-            SINK_QUEUE_LENGTH);
+            sink_queue_length);
     upipe_mgr_release(wsink_mgr);
     assert(sink != NULL);
 
