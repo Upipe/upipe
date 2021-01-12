@@ -233,6 +233,8 @@ static int upipe_msrc_setup(struct upipe *upipe)
                    sizeof("18446744073709551615")];
     sprintf(data_file, "%s%"PRIu64"%s", path, upipe_msrc->fileidx, data);
 
+    upipe_dbg_va(upipe, "opening %s", data_file);
+
     upipe_msrc->fd = open(data_file, O_RDONLY);
     if (unlikely(upipe_msrc->fd == -1)) {
         upipe_warn_va(upipe, "segment %"PRIu64" not found (data)",
