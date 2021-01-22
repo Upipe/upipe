@@ -495,11 +495,13 @@ static bool upipe_mpgaf_parse_adts(struct upipe *upipe)
         return true; /* not enough data */
 
     uint8_t sampling_freq = adts_get_sampling_freq(header);
+    uint8_t base_sampling_freq = sampling_freq;
     uint64_t samplerate = aac_samplerate_table[sampling_freq];
+    uint64_t base_samplerate = samplerate;
     size_t samples = ADTS_SAMPLES_PER_BLOCK * (1 + adts_get_num_blocks(header));
     uint16_t adts_length = adts_get_length(header);
     uint8_t adts_profile = adts_get_profile(header);
-    uint8_t asc_aot = adts_profile +1;
+    uint8_t asc_aot = adts_profile + 1;
     uint8_t asc_base_aot = asc_aot;
 
     if (!samplerate) {
@@ -514,6 +516,19 @@ static bool upipe_mpgaf_parse_adts(struct upipe *upipe)
 
     if (samplerate <= 24000) {
         /* assume SBR on low frequency streams */
+        switch (samplerate) {
+            case 8000:
+            case 11025:
+            case 12000:
+            case 16000:
+            case 22050:
+            case 24000:
+                sampling_freq -= 3;
+                break;
+            default:
+                sampling_freq = 0xf;
+                break;
+        }
         samplerate *= 2;
         samples *= 2;
         asc_aot = ASC_TYPE_SBR;
@@ -537,9 +552,10 @@ static bool upipe_mpgaf_parse_adts(struct upipe *upipe)
     upipe_mpgaf->has_crc = !adts_get_protection_absent(header);
     upipe_mpgaf->asc_aot = asc_aot;
     upipe_mpgaf->asc_base_aot = asc_base_aot;
-    upipe_mpgaf->samplerate_idx = upipe_mpgaf->base_samplerate_idx =
-        sampling_freq;
-    upipe_mpgaf->samplerate = upipe_mpgaf->base_samplerate = samplerate;
+    upipe_mpgaf->base_samplerate_idx = base_sampling_freq;
+    upipe_mpgaf->samplerate_idx = sampling_freq;
+    upipe_mpgaf->base_samplerate = base_samplerate;
+    upipe_mpgaf->samplerate = samplerate;
     upipe_mpgaf->samples = samples;
     upipe_mpgaf->channels = adts_get_channels(header);
     if (upipe_mpgaf->channels == 7)
