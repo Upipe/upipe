@@ -690,6 +690,17 @@ static int upipe_hls_playlist_play_item(struct upipe *upipe,
     UBASE_RETURN(uref_uri_get(input_flow_def, &uuri));
     uuri.query = ustring_null();
     uuri.fragment = ustring_null();
+    if (strlen(m3u_uri) >= 2 && !strncmp(m3u_uri, "//", 2)) {
+        /* use the item absolute path with the input protocol */
+        char uri[uuri.scheme.len + 1 + strlen(m3u_uri) + 1];
+        sprintf(uri, "%.*s:%s", (int)uuri.scheme.len, uuri.scheme.at, m3u_uri);
+        if (ubase_check(uuri_from_str(&uuri, uri)))
+            return upipe_hls_playlist_play_uri(upipe, item, &uuri);
+        else {
+            upipe_err(upipe, "invalid uri");
+            return UBASE_ERR_INVALID;
+        }
+    }
     if (strlen(m3u_uri) && *m3u_uri == '/') {
         /* use the item absolute path with the input scheme */
         uuri.path = ustring_from_str(m3u_uri);
