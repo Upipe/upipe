@@ -1843,7 +1843,7 @@ static void upipe_ts_demux_program_handle_pcr(struct upipe *upipe,
     uint64_t delta =
         (TS_CLOCK_MAX + pcr_orig -
          (upipe_ts_demux_program->last_pcr % TS_CLOCK_MAX)) % TS_CLOCK_MAX;
-    if (delta <= MAX_PCR_INTERVAL && !discontinuity)
+    if (delta <= MAX_PCR_INTERVAL)
         upipe_ts_demux_program->last_pcr += delta;
     else {
         upipe_warn_va(upipe, "PCR discontinuity %"PRIu64, delta);
