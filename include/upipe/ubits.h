@@ -101,7 +101,8 @@ static inline uint32_t ubits_get(struct ubits *s, uint8_t nb)
     }
 
     nb -= s->available;
-    uint32_t val = s->bits << nb;
+    /* Mask out bits which are not available */
+    uint32_t val = (s->bits & ((1 << s->available) - 1)) << nb;
 
     if (unlikely(s->buffer + (nb + 7) / 8 > s->buffer_end)) {
         s->overflow = true;
@@ -115,8 +116,9 @@ static inline uint32_t ubits_get(struct ubits *s, uint8_t nb)
     }
 
     if (nb) {
+        /* Reload buffer and use the bits we want */
         s->available = 8 - nb;
-        s->bits = *s->buffer++ & ((1 << s->available) - 1);
+        s->bits = *s->buffer++;
         val |= s->bits >> s->available;
     }
 
