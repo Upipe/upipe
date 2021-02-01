@@ -108,5 +108,19 @@ int main(int argc, char **argv)
     assert(ubits_get(&bw, 1) == 0);
     assert(bw.overflow);
 
+    buffer[0] = 0x02;
+    buffer[1] = 0x8f;
+    buffer[2] = 0x80;
+    buffer[3] = 0x0e;
+    buffer[4] = 0x55;
+
+    buffer_size = 5;
+    ubits_init(&bw, buffer, buffer_size, UBITS_READ);
+    assert(ubits_get(&bw, 6)  ==  0);
+    assert(ubits_get(&bw, 1)  ==  1);
+    assert(ubits_get(&bw, 11) ==  574);
+    assert(ubits_get(&bw, 12) ==  3);
+    assert(ubits_get(&bw, 10) ==  597);
+
     return 0;
 }
