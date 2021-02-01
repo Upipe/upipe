@@ -139,7 +139,8 @@ jobs:
             udev ebur128 avcodec avformat swresample swscale gl1-mesa glu1-mesa
             dvbcsa
         run: |
-          sudo apt-get install -y valgrind nasm qemu-user-binfmt \
+          sudo apt-get install -y -o APT::Immediate-Configure=false \
+            valgrind nasm qemu-user-binfmt \
             $(echo libc6-dbg luajit | sed 's/\(\S*\)/\1:${{ matrix.arch }}/g') \
             $(echo $LIBS | sed 's/\(\S*\)/lib\1-dev:${{ matrix.arch }}/g')
           if [ -n "${{ matrix.host }}" -a "${{ matrix.arch }}" != "i386" ]; then
