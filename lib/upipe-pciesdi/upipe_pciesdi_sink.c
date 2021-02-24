@@ -615,27 +615,6 @@ static void init_hardware(struct upipe *upipe, int rate, int mode)
 
 static int64_t get_genlock_delay(const struct sdi_offsets_fmt *sdi_format)
 {
-    enum sdi_type {
-        SDI_TYPE_UNKNOWN,
-
-        SDI_TYPE_PAL,
-        SDI_TYPE_720P50,
-        SDI_TYPE_720P60,
-        SDI_TYPE_1080P24,
-        SDI_TYPE_1080I25,
-        SDI_TYPE_1080P25,
-        SDI_TYPE_1080P30,
-        SDI_TYPE_1080P50,
-        SDI_TYPE_1080P60,
-
-        SDI_TYPE_NTSC,
-        SDI_TYPE_720P59,
-        SDI_TYPE_1080P23,
-        SDI_TYPE_1080I29,
-        SDI_TYPE_1080P29,
-        SDI_TYPE_1080P59,
-    } sdi_type = SDI_TYPE_UNKNOWN;
-
     /* "advanced" means the video is too early.  "delayed" means the video is too late. */
     static const struct offset { int lines; int us; } offsets[] = {
             [SDI_TYPE_PAL]     = { -1, -24 },
@@ -648,6 +627,7 @@ static int64_t get_genlock_delay(const struct sdi_offsets_fmt *sdi_format)
             [SDI_TYPE_1080P59] = { 2, -6 },
     };
 
+    enum sdi_type sdi_type = SDI_TYPE_UNKNOWN;
     int height = sdi_format->pict_fmt->active_height;
     bool interlaced = sdi_format->psf_ident == UPIPE_SDI_PSF_IDENT_I;
     const struct urational *fps = &sdi_format->fps;
