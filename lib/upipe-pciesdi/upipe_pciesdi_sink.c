@@ -613,20 +613,8 @@ static void init_hardware(struct upipe *upipe, int rate, int mode)
     sdi_set_rate(fd, rate);
 }
 
-static int64_t get_genlock_delay(const struct sdi_offsets_fmt *sdi_format)
+static enum sdi_type get_sdi_type_from_offsets(const struct sdi_offsets_fmt *sdi_format)
 {
-    /* "advanced" means the video is too early.  "delayed" means the video is too late. */
-    static const struct offset { int lines; int us; } offsets[] = {
-            [SDI_TYPE_PAL]     = { -1, -24 },
-            [SDI_TYPE_720P50]  = { 2, -13 },
-            [SDI_TYPE_1080I25] = { 1, 6 },
-            [SDI_TYPE_1080P25] = { 1, 6 },
-            [SDI_TYPE_1080P50] = { 2, 1 },
-            [SDI_TYPE_720P59]  = { 1, 3 },
-            [SDI_TYPE_1080I29] = { 1, -11 },
-            [SDI_TYPE_1080P59] = { 2, -6 },
-    };
-
     enum sdi_type sdi_type = SDI_TYPE_UNKNOWN;
     int height = sdi_format->pict_fmt->active_height;
     bool interlaced = sdi_format->psf_ident == UPIPE_SDI_PSF_IDENT_I;
@@ -673,10 +661,44 @@ static int64_t get_genlock_delay(const struct sdi_offsets_fmt *sdi_format)
             sdi_type = SDI_TYPE_PAL;
     }
 
-    if (sdi_type == SDI_TYPE_UNKNOWN)
+    return sdi_type;
+}
+
+static int64_t get_genlock_delay(enum sdi_type pic, enum sdi_type ref,
+        const struct sdi_offsets_fmt *sdi_format)
+{
+    const struct urational *fps = &sdi_format->fps;
+
+    /* "advanced" means the video is too early.  "delayed" means the video is too late. */
+    static const struct offset {
+        int8_t lines;
+        int8_t us;
+    } offsets[/*ref*/SDI_TYPE_UNKNOWN][/*pic*/SDI_TYPE_UNKNOWN] = {
+        [SDI_TYPE_PAL] = {
+            [SDI_TYPE_PAL]     = { -1, -24 },
+            [SDI_TYPE_720P50]  = { 2, -13 },
+            [SDI_TYPE_1080I25] = { 1, 6 },
+            [SDI_TYPE_1080P25] = { 1, 6 },
+            [SDI_TYPE_1080P50] = { 2, 1 },
+        },
+        [SDI_TYPE_1080I25] = {
+            [SDI_TYPE_1080I25] = { 1, -7 },
+        },
+        [SDI_TYPE_720P59] = {
+            [SDI_TYPE_720P59]  = { 1, 3 },
+        },
+        [SDI_TYPE_1080I29] = {
+            [SDI_TYPE_1080I29] = { 1, -11 },
+        },
+        [SDI_TYPE_1080P59] = {
+            [SDI_TYPE_1080P59] = { 2, -6 },
+        },
+    };
+
+    if (pic == SDI_TYPE_UNKNOWN || ref == SDI_TYPE_UNKNOWN)
         return 0;
 
-    struct offset offset = offsets[sdi_type];
+    struct offset offset = offsets[ref][pic];
 
     int64_t delay = INT64_C(125000000) * fps->den / fps->num;
     int64_t line_delay = delay * offset.lines / sdi_format->height;
@@ -746,10 +768,11 @@ static int upipe_pciesdi_sink_set_flow_def(struct upipe *upipe, struct uref *flo
         sdi_genlock_vsync(upipe_pciesdi_sink->fd, &active, &period, &seen);
 
         if (active) {
+            enum sdi_type pic = get_sdi_type_from_offsets(sdi_format);
             enum sdi_type ref = si5324_genlock_probe(upipe_pciesdi_sink->fd);
 
             if (ref != SDI_TYPE_UNKNOWN) {
-                int64_t delay = get_genlock_delay(sdi_format);
+                int64_t delay = get_genlock_delay(pic, ref, sdi_format);
                 if (delay == 0)
                     upipe_warn(upipe, "unknown genlock delay");
                 else
