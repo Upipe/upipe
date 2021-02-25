@@ -463,7 +463,7 @@ static const uint16_t smpte274m_1080p23_98_regs[][2] = {
     { 42, 0x52 },
 };
 
-int si5324_genlock(int fd);
+enum sdi_type si5324_genlock_probe(int fd);
 
 const char *sdi_decode_mode(uint8_t mode);
 const char *sdi_decode_family(uint8_t family);

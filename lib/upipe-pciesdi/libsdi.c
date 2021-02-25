@@ -854,10 +854,8 @@ static uint16_t si5324_base_config_regs[][2] = {
     { 136, 0x40 },
 };
 
-int si5324_genlock(int fd)
+enum sdi_type si5324_genlock_probe(int fd)
 {
-    int i, ret = SDI_UNDEF_RATE;
-
     uint8_t hsync_active;
     uint64_t hsync_period;
     uint64_t hsync_seen;
@@ -868,155 +866,62 @@ int si5324_genlock(int fd)
 
     /* get hsync */
     sdi_genlock_hsync(fd, &hsync_active, &hsync_period, &hsync_seen);
-    printf("HSYNC_ACTIVE: %d, HSYNC_PERIOD: %" PRIu64 " ns\n", hsync_active, hsync_period);
 
     /* get vsync */
     sdi_genlock_vsync(fd, &vsync_active, &vsync_period, &vsync_seen);
-    printf("VSYNC_ACTIVE: %d, VSYNC_PERIOD: %" PRIu64 " ns\n", vsync_active, vsync_period);
-
-    /* configure vcxo to 50% */
-    sdi_si5324_vcxo(fd, 512<<10, 1024<<10);
 
     /* detect video format */
     /* SMPTE259M */
     if (hsync_check(SMPTE259M_PAL_HSYNC_PERIOD, hsync_period) &
         vsync_check(SMPTE259M_PAL_VSYNC_PERIOD, vsync_period*2)) {
-        printf("SMPTE259M_PAL detected, configuring SI5324...\n");
-        ret = SDI_PAL_RATE;
-        for(i = 0; i < countof(smpte259m_pal_regs); i++)
-            si5324_base_config_regs[SI5324_BASE_CONFIG_N2_OFFSET + i][1] = smpte259m_pal_regs[i][1];
+        return SDI_TYPE_PAL;
     } else if (hsync_check(SMPTE259M_NTSC_HSYNC_PERIOD, hsync_period) &
                vsync_check(SMPTE259M_NTSC_VSYNC_PERIOD, vsync_period*2)) {
-        printf("SMPTE259M_NTSC detected, configuring SI5324...\n");
-        ret = SDI_PAL_RATE;
-        for(i = 0; i < countof(smpte259m_pal_regs); i++)
-            si5324_base_config_regs[SI5324_BASE_CONFIG_N2_OFFSET + i][1] = smpte259m_ntsc_regs[i][1];
+        return SDI_TYPE_NTSC;
     /* SMPTE296M */
     } else if (hsync_check(SMPTE296M_720P60_HSYNC_PERIOD, hsync_period) &
                vsync_check(SMPTE296M_720P60_VSYNC_PERIOD, vsync_period)) {
-        printf("SMPTE296M_720P60 detected, configuring SI5324...\n");
-        ret = SDI_PAL_RATE;
-        for(i = 0; i < countof(smpte296m_720p60_regs); i++)
-            si5324_base_config_regs[SI5324_BASE_CONFIG_N2_OFFSET + i][1] = smpte296m_720p60_regs[i][1];
+        return SDI_TYPE_720P60;
     } else if (hsync_check(SMPTE296M_720P50_HSYNC_PERIOD, hsync_period) &
                vsync_check(SMPTE296M_720P50_VSYNC_PERIOD, vsync_period)) {
-        printf("SMPTE296M_720P50 detected, configuring SI5324...\n");
-        ret = SDI_PAL_RATE;
-        for(i = 0; i < countof(smpte296m_720p50_regs); i++)
-            si5324_base_config_regs[SI5324_BASE_CONFIG_N2_OFFSET + i][1] = smpte296m_720p50_regs[i][1];
-    } else if (hsync_check(SMPTE296M_720P30_HSYNC_PERIOD, hsync_period) &
-               vsync_check(SMPTE296M_720P30_VSYNC_PERIOD, vsync_period)) {
-        printf("SMPTE296M_720P30 detected, configuring SI5324...\n");
-        ret = SDI_PAL_RATE;
-        for(i = 0; i < countof(smpte296m_720p30_regs); i++)
-            si5324_base_config_regs[SI5324_BASE_CONFIG_N2_OFFSET + i][1] = smpte296m_720p30_regs[i][1];
-    } else if (hsync_check(SMPTE296M_720P25_HSYNC_PERIOD, hsync_period) &
-               vsync_check(SMPTE296M_720P25_VSYNC_PERIOD, vsync_period)) {
-        printf("SMPTE296M_720P25 detected, configuring SI5324...\n");
-        ret = SDI_PAL_RATE;
-        for(i = 0; i < countof(smpte296m_720p25_regs); i++)
-            si5324_base_config_regs[SI5324_BASE_CONFIG_N2_OFFSET + i][1] = smpte296m_720p25_regs[i][1];
-    } else if (hsync_check(SMPTE296M_720P24_HSYNC_PERIOD, hsync_period) &
-               vsync_check(SMPTE296M_720P24_VSYNC_PERIOD, vsync_period)) {
-        printf("SMPTE296M_720P24 detected, configuring SI5324...\n");
-        ret = SDI_PAL_RATE;
-        for(i = 0; i < countof(smpte296m_720p24_regs); i++)
-            si5324_base_config_regs[SI5324_BASE_CONFIG_N2_OFFSET + i][1] = smpte296m_720p24_regs[i][1];
+        return SDI_TYPE_720P50;
     } else if (hsync_check(SMPTE296M_720P59_94_HSYNC_PERIOD, hsync_period) &
                vsync_check(SMPTE296M_720P59_94_VSYNC_PERIOD, vsync_period)) {
-        printf("SMPTE296M_720P59_94 detected, configuring SI5324...\n");
-        ret = SDI_NTSC_RATE;
-        for(i = 0; i < countof(smpte296m_720p59_94_regs); i++)
-            si5324_base_config_regs[SI5324_BASE_CONFIG_N2_OFFSET + i][1] = smpte296m_720p59_94_regs[i][1];
-    } else if (hsync_check(SMPTE296M_720P29_97_HSYNC_PERIOD, hsync_period) &
-               vsync_check(SMPTE296M_720P29_97_VSYNC_PERIOD, vsync_period)) {
-        printf("SMPTE296M_720P29_97 detected, configuring SI5324...\n");
-        ret = SDI_NTSC_RATE;
-        for(i = 0; i < countof(smpte296m_720p29_97_regs); i++)
-            si5324_base_config_regs[SI5324_BASE_CONFIG_N2_OFFSET + i][1] = smpte296m_720p29_97_regs[i][1];
-    } else if (hsync_check(SMPTE296M_720P23_98_HSYNC_PERIOD, hsync_period) &
-               vsync_check(SMPTE296M_720P23_98_VSYNC_PERIOD, vsync_period)) {
-        printf("SMPTE296M_720P23_98 detected, configuring SI5324...\n");
-        ret = SDI_NTSC_RATE;
-        for(i = 0; i < countof(smpte296m_720p23_98_regs); i++)
-            si5324_base_config_regs[SI5324_BASE_CONFIG_N2_OFFSET + i][1] = smpte296m_720p23_98_regs[i][1];
+        return SDI_TYPE_720P59;
     /* SMPTE274M */
     } else if (hsync_check(SMPTE274M_1080P60_HSYNC_PERIOD, hsync_period) &
                vsync_check(SMPTE274M_1080P60_VSYNC_PERIOD, vsync_period)) {
-        printf("SMPTE274M_1080P60 detected, configuring SI5324...\n");
-        ret = SDI_PAL_RATE;
-        for(i = 0; i < countof(smpte274m_1080p60_regs); i++)
-            si5324_base_config_regs[SI5324_BASE_CONFIG_N2_OFFSET + i][1] = smpte274m_1080p60_regs[i][1];
+        return SDI_TYPE_1080P60;
     } else if (hsync_check(SMPTE274M_1080P50_HSYNC_PERIOD, hsync_period) &
                vsync_check(SMPTE274M_1080P50_VSYNC_PERIOD, vsync_period)) {
-        printf("SMPTE274M_1080P50 detected, configuring SI5324...\n");
-        ret = SDI_PAL_RATE;
-        for(i = 0; i < countof(smpte274m_1080p50_regs); i++)
-            si5324_base_config_regs[SI5324_BASE_CONFIG_N2_OFFSET + i][1] = smpte274m_1080p50_regs[i][1];
-    } else if (hsync_check(SMPTE274M_1080I60_HSYNC_PERIOD, hsync_period) &
-               vsync_check(SMPTE274M_1080I60_VSYNC_PERIOD, vsync_period*2)) {
-        printf("SMPTE274M_1080I60 detected, configuring SI5324...\n");
-        ret = SDI_PAL_RATE;
-        for(i = 0; i < countof(smpte274m_1080i60_regs); i++)
-            si5324_base_config_regs[SI5324_BASE_CONFIG_N2_OFFSET + i][1] = smpte274m_1080i60_regs[i][1];
+        return SDI_TYPE_1080P50;
     } else if (hsync_check(SMPTE274M_1080I50_HSYNC_PERIOD, hsync_period) &
                vsync_check(SMPTE274M_1080I50_VSYNC_PERIOD, vsync_period*2)) {
-        printf("SMPTE274M_1080I50 detected, configuring SI5324...\n");
-        ret = SDI_PAL_RATE;
-        for(i = 0; i < countof(smpte274m_1080i50_regs); i++)
-            si5324_base_config_regs[SI5324_BASE_CONFIG_N2_OFFSET + i][1] = smpte274m_1080i50_regs[i][1];
+        return SDI_TYPE_1080I25;
     } else if (hsync_check(SMPTE274M_1080P30_HSYNC_PERIOD, hsync_period) &
                vsync_check(SMPTE274M_1080P30_VSYNC_PERIOD, vsync_period)) {
-        printf("SMPTE274M_1080P30 detected, configuring SI5324...\n");
-        ret = SDI_PAL_RATE;
-        for(i = 0; i < countof(smpte274m_1080p30_regs); i++)
-            si5324_base_config_regs[SI5324_BASE_CONFIG_N2_OFFSET + i][1] = smpte274m_1080p30_regs[i][1];
+        return SDI_TYPE_1080P30;
     } else if (hsync_check(SMPTE274M_1080P25_HSYNC_PERIOD, hsync_period) &
                vsync_check(SMPTE274M_1080P25_VSYNC_PERIOD, vsync_period)) {
-        printf("SMPTE274M_1080P25 detected, configuring SI5324...\n");
-        ret = SDI_PAL_RATE;
-        for(i = 0; i < countof(smpte274m_1080p25_regs); i++)
-            si5324_base_config_regs[SI5324_BASE_CONFIG_N2_OFFSET + i][1] = smpte274m_1080p25_regs[i][1];
+        return SDI_TYPE_1080P25;
     } else if (hsync_check(SMPTE274M_1080P24_HSYNC_PERIOD, hsync_period) &
                vsync_check(SMPTE274M_1080P24_VSYNC_PERIOD, vsync_period)) {
-        printf("SMPTE274M_1080P24 detected, configuring SI5324...\n");
-        ret = SDI_PAL_RATE;
-        for(i = 0; i < countof(smpte274m_1080p24_regs); i++)
-            si5324_base_config_regs[SI5324_BASE_CONFIG_N2_OFFSET + i][1] = smpte274m_1080p24_regs[i][1];
+        return SDI_TYPE_1080P24;
     } else if (hsync_check(SMPTE274M_1080P59_94_HSYNC_PERIOD, hsync_period) &
                vsync_check(SMPTE274M_1080P59_94_VSYNC_PERIOD, vsync_period)) {
-        printf("SMPTE274M_1080P59_94 detected, configuring SI5324...\n");
-        ret = SDI_NTSC_RATE;
-        for(i = 0; i < countof(smpte274m_1080p59_94_regs); i++)
-            si5324_base_config_regs[SI5324_BASE_CONFIG_N2_OFFSET + i][1] = smpte274m_1080p59_94_regs[i][1];
+        return SDI_TYPE_1080P59;
     } else if (hsync_check(SMPTE274M_1080I59_94_HSYNC_PERIOD, hsync_period) &
                vsync_check(SMPTE274M_1080I59_94_VSYNC_PERIOD, vsync_period*2)) {
-        printf("SMPTE274M_1080I59_94 detected, configuring SI5324...\n");
-        ret = SDI_NTSC_RATE;
-        for(i = 0; i < countof(smpte274m_1080i59_94_regs); i++)
-            si5324_base_config_regs[SI5324_BASE_CONFIG_N2_OFFSET + i][1] = smpte274m_1080i59_94_regs[i][1];
+        return SDI_TYPE_1080I29;
     } else if (hsync_check(SMPTE274M_1080P29_97_HSYNC_PERIOD, hsync_period) &
                vsync_check(SMPTE274M_1080P29_97_VSYNC_PERIOD, vsync_period)) {
-        printf("SMPTE274M_1080P29_97 detected, configuring SI5324...\n");
-        ret = SDI_NTSC_RATE;
-        for(i = 0; i < countof(smpte274m_1080p29_97_regs); i++)
-            si5324_base_config_regs[SI5324_BASE_CONFIG_N2_OFFSET + i][1] = smpte274m_1080p29_97_regs[i][1];
+        return SDI_TYPE_1080P29;
     } else if (hsync_check(SMPTE274M_1080P23_98_HSYNC_PERIOD, hsync_period) &
                vsync_check(SMPTE274M_1080P23_98_VSYNC_PERIOD, vsync_period)) {
-        printf("SMPTE274M_1080P23_98 detected, configuring SI5324...\n");
-        ret = SDI_NTSC_RATE;
-        for(i = 0; i < countof(smpte274m_1080p23_98_regs); i++)
-            si5324_base_config_regs[SI5324_BASE_CONFIG_N2_OFFSET + i][1] = smpte274m_1080p23_98_regs[i][1];
-    } else {
-        printf("No valid video format detected\n");
+        return SDI_TYPE_1080P23;
     }
 
-    /* configure si5324 */
-    for(i = 0; i < countof(si5324_base_config_regs); i++) {
-        si5324_spi_write(fd, si5324_base_config_regs[i][0], si5324_base_config_regs[i][1]);
-    }
-
-    return ret;
+    return SDI_TYPE_UNKNOWN;
 }
 
 const char *sdi_decode_mode(uint8_t mode)
