@@ -681,17 +681,34 @@ static int64_t get_genlock_delay(enum sdi_type pic, enum sdi_type ref,
             [SDI_TYPE_1080P25] = { 1, 6 },
             [SDI_TYPE_1080P50] = { 2, 1 },
         },
+        [SDI_TYPE_720P50] = {
+            [SDI_TYPE_720P50] = { 1, 7 },
+        },
+        [SDI_TYPE_720P60] = {
+            [SDI_TYPE_720P60] = { 1, 3 },
+        },
+        [SDI_TYPE_1080P24] = {
+            [SDI_TYPE_1080P24] = { 1, 10 },
+        },
         [SDI_TYPE_1080I25] = {
             [SDI_TYPE_1080I25] = { 1, -7 },
         },
+        [SDI_TYPE_1080P25] = {
+            [SDI_TYPE_1080P25] = { 1, 9 },
+        },
         [SDI_TYPE_720P59] = {
             [SDI_TYPE_720P59]  = { 1, 3 },
+            [SDI_TYPE_1080P59] = { 2, -6 },
         },
         [SDI_TYPE_1080I29] = {
             [SDI_TYPE_1080I29] = { 1, -11 },
+            [SDI_TYPE_1080P59] = { 1, 0 },
+        },
+        [SDI_TYPE_1080P29] = {
+            [SDI_TYPE_1080P29] = { 1, 3 },
         },
         [SDI_TYPE_1080P59] = {
-            [SDI_TYPE_1080P59] = { 2, -6 },
+            /* FIXME: unable to measure due to lack of reference. */
         },
     };
 
