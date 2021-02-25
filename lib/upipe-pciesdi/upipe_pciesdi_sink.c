@@ -700,6 +700,9 @@ static int64_t get_genlock_delay(enum sdi_type pic, enum sdi_type ref,
 
     struct offset offset = offsets[ref][pic];
 
+    if (offset.lines == 0 && offset.us == 0)
+        return 0;
+
     int64_t delay = INT64_C(125000000) * fps->den / fps->num;
     int64_t line_delay = delay * offset.lines / sdi_format->height;
     int64_t time_delay = INT64_C(125000000) * offset.us / 1000000;
