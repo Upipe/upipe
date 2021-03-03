@@ -42,6 +42,9 @@
 /** typical size of the buffer for av_strerror() */
 #define UPIPE_AV_STRERROR_SIZE 64
 
+/** extra hardware frames for decode and filter */
+#define UPIPE_AV_EXTRA_HW_FRAMES 32
+
 /** @hidden */
 enum AVCodecID;
 #if LIBAVCODEC_VERSION_INT < AV_VERSION_INT(54, 51, 100)
