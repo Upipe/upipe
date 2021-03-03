@@ -702,7 +702,7 @@ static bool upipe_avcdec_do_av_deal(struct upipe *upipe)
             return false;
         }
 #if LIBAVCODEC_VERSION_INT >= AV_VERSION_INT(58, 11, 100)
-        context->extra_hw_frames = 16;
+        context->extra_hw_frames = UPIPE_AV_EXTRA_HW_FRAMES;
 #endif
         upipe_notice_va(upipe, "created %s hw device context",
                         av_hwdevice_get_type_name(upipe_avcdec->hw_device_type));

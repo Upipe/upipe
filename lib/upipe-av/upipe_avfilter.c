@@ -63,6 +63,7 @@
 #include <libavutil/opt.h>
 #include <libavutil/channel_layout.h>
 #include <libavutil/hwcontext.h>
+#include "upipe_av_internal.h"
 
 /** @internal @This enumerates the avfilter sub pipe private events. */
 enum uprobe_avfilt_sub_event  {
@@ -2050,6 +2051,9 @@ static int upipe_avfilt_init_buffer_from_first_frame(struct upipe *upipe,
     if (device_ctx != NULL) {
         AVFilterGraph *graph = upipe_avfilt->filter_graph;
         for (int i = 0; i < graph->nb_filters; i++) {
+#if LIBAVFILTER_VERSION_INT >= AV_VERSION_INT(7, 12, 100)
+            graph->filters[i]->extra_hw_frames = UPIPE_AV_EXTRA_HW_FRAMES;
+#endif
             graph->filters[i]->hw_device_ctx = av_buffer_ref(device_ctx);
             if (graph->filters[i]->hw_device_ctx == NULL) {
                 upipe_err(upipe, "cannot alloc hw device context");
