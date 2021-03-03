@@ -365,9 +365,10 @@ static void upipe_grid_in_update(struct upipe *upipe)
 
         /* checked in upipe_grid_in_input */
         ubase_assert(uref_clock_get_pts_sys(uref, &pts));
-        uint64_t duration = MAX_RETENTION;
-        if (uref != last)
-            uref_clock_get_duration(uref, &duration);
+        uint64_t duration = upipe_grid->max_retention;
+        uref_clock_get_duration(uref, &duration);
+        if (uref == last && duration < upipe_grid->max_retention)
+            duration = upipe_grid->max_retention;
         if (pts + duration < now) {
             upipe_verbose_va(upipe, "drop uref pts %"PRIu64, pts);
             ulist_delete(uchain);
@@ -470,9 +471,10 @@ static void upipe_grid_in_schedule_update(struct upipe *upipe)
         return;
     }
 
-    uint64_t duration = MAX_RETENTION;
-    if (uref != last)
-        uref_clock_get_duration(uref, &duration);
+    uint64_t duration = upipe_grid->max_retention;
+    uref_clock_get_duration(uref, &duration);
+    if (uref == last && duration < upipe_grid->max_retention)
+        duration = upipe_grid->max_retention;
     if (pts + duration < now)
         upipe_grid_in_update(upipe);
     else
