@@ -38,7 +38,6 @@ function ubase_assert(command)
 end
 
 local props = { }
-local cbref = { }
 
 local init = {
     upipe_mgr = function (mgr, cb)
@@ -62,23 +61,6 @@ local init = {
 local function alloc(ty)
     local st = ffi.typeof("struct " .. ty)
     local ct = ffi.typeof("struct { struct urefcount refcount; $ data; }", st)
-    local cb = ffi.cast("urefcount_cb", function (refcount)
-        local data = ffi.cast(ffi.typeof("$ *", st),
-        ffi.cast("char *", refcount) + ffi.offsetof(ct, "data"))
-        if ty == "upipe" or ty == "uclock" or ty == "upump" then
-            local k = tostring(data):match(": 0x(.*)")
-            if props[k] and props[k]._clean then props[k]._clean(data) end
-            props[k] = nil
-        end
-        if ty ~= "upipe_mgr" and ty ~= "uclock" then
-            C[ty .. "_clean"](data)
-        end
-        if cbref[tostring(refcount)] then
-            cbref[tostring(refcount)]:free()
-            cbref[tostring(refcount)] = nil
-        end
-        C.free(ffi.cast("void *", refcount))
-    end)
     return function (...)
         local cd = ffi.cast(ffi.typeof("$ *", ct), C.malloc(ffi.sizeof(ct)))
         local args = { ... }
@@ -87,13 +69,28 @@ local function alloc(ty)
                 args[i] = C.uprobe_use(arg)
             end
         end
-        (init[ty] or C[ty .. "_init"])(cd.data, unpack(args))
-        C.urefcount_init(cd.refcount, cb)
+        local cb
+        cb = ffi.cast("urefcount_cb", function (refcount)
+            local data = ffi.cast(ffi.typeof("$ *", st),
+                ffi.cast("char *", refcount) + ffi.offsetof(ct, "data"))
+            local k = tostring(data):match(": 0x(.*)")
+            if ty == "upipe" or ty == "uclock" or ty == "upump" then
+                if props[k] and props[k]._clean then props[k]._clean(data) end
+                props[k] = nil
+            end
+            if ty ~= "upipe_mgr" and ty ~= "uclock" then
+                C[ty .. "_clean"](data)
+            end
+            if ty == "uprobe" then
+                data.uprobe_throw:free()
+            end
+            C.free(ffi.cast("void *", refcount))
+            cb:free()
+        end)
+        local f = init[ty] or C[ty .. "_init"]
+        f(cd.data, unpack(args))
+        cd.refcount:init(cb)
         cd.data.refcount = cd.refcount
-        if ty == 'uprobe' then
-            args[1] = ffi.cast("uprobe_throw_func", args[1])
-            cbref[tostring(cd.data.refcount)] = args[1]
-        end
         return ffi.gc(cd.data, C[ty .. "_release"])
     end
 end
