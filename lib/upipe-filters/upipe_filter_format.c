@@ -358,7 +358,7 @@ static int upipe_ffmt_check_flow_format(struct upipe *upipe,
         bool hw = hw_in || hw_out;
         bool need_hw_transfer = (hw_in && !hw_out) || (!hw_in && hw_out);
         bool need_avfilter = ffmt_mgr->avfilter_mgr && hw &&
-            (need_scale || need_format || need_hw_transfer);
+            (need_deint || need_scale || need_format || need_hw_transfer);
 
         if (need_avfilter) {
             if (need_format) {
