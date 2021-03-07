@@ -1,6 +1,6 @@
 /*
  * Copyright (C) 2014-2015 OpenHeadend S.A.R.L.
- * Copyright (C) 2020 EasyTools
+ * Copyright (C) 2020-2021 EasyTools
  *
  * Authors: Christophe Massiot
  *
@@ -147,6 +147,20 @@ static void upipe_dvbsubf_work(struct upipe *upipe, struct upump **upump_p)
         goto upipe_dvbsubf_work_err;
     }
 
+    size_t offset = DVBSUB_HEADER_SIZE;
+    if (!ubase_check(uref_block_extract(upipe_dvbsubf->next_uref,
+                                        offset, 1, &buffer)) ||
+        buffer != DVBSUBS_SYNC) {
+        /* empty packet, probably just to keep alive */
+        if (upipe_dvbsubf->flow_def != NULL)
+            goto upipe_dvbsubf_work_output;
+
+        upipe_dbg(upipe,
+                  "empty packet received before full frame, dropping");
+        uref_free(upipe_dvbsubf->next_uref);
+        goto upipe_dvbsubf_work_err;
+    }
+
     struct uref *flow_def = upipe_dvbsubf_alloc_flow_def_attr(upipe);
     if (unlikely(flow_def == NULL)) {
         upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
@@ -154,8 +168,6 @@ static void upipe_dvbsubf_work(struct upipe *upipe, struct upump **upump_p)
         goto upipe_dvbsubf_work_err;
     }
 
-    unsigned i = 0;
-    size_t offset = DVBSUB_HEADER_SIZE;
     while (ubase_check(uref_block_extract(upipe_dvbsubf->next_uref,
                                           offset, 1, &buffer)) &&
            buffer == DVBSUBS_SYNC) {
@@ -167,8 +179,7 @@ static void upipe_dvbsubf_work(struct upipe *upipe, struct upump **upump_p)
             break;
         uint8_t type = dvbsubs_get_type(dvbsubs);
         uint16_t length = dvbsubs_get_length(dvbsubs);
-        uint16_t page = dvbsubs_get_page(dvbsubs);
-        uref_dvbsub_flow_set_page(flow_def, page, i++);
+        /* uint16_t page = dvbsubs_get_page(dvbsubs); */
         UBASE_FATAL(upipe, uref_block_peek_unmap(upipe_dvbsubf->next_uref,
                                                  offset, dvbsubs_buffer,
                                                  dvbsubs))
@@ -179,7 +190,6 @@ static void upipe_dvbsubf_work(struct upipe *upipe, struct upump **upump_p)
         }
         offset += length + DVBSUBS_HEADER_SIZE;
     }
-    uref_dvbsub_flow_set_pages(flow_def, i);
 
     UBASE_FATAL(upipe, uref_flow_set_complete(flow_def))
     UBASE_FATAL(upipe, uref_block_flow_set_octetrate(flow_def,
@@ -199,6 +209,7 @@ static void upipe_dvbsubf_work(struct upipe *upipe, struct upump **upump_p)
 
     upipe_dvbsubf_sync_acquired(upipe);
 
+upipe_dvbsubf_work_output:
     uref_clock_set_dts_pts_delay(upipe_dvbsubf->next_uref, 0);
 
     upipe_dvbsubf_output(upipe, upipe_dvbsubf->next_uref, upump_p);
