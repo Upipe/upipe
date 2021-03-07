@@ -1,5 +1,6 @@
 /*
  * Copyright (C) 2013-2019 OpenHeadend S.A.R.L.
+ * Copyright (C) 2021 EasyTools S.A.S.
  *
  * Authors: Christophe Massiot
  *
@@ -261,14 +262,39 @@ static struct upipe *upipe_ts_psig_flow_alloc(struct upipe_mgr *mgr,
 }
 
 /** @internal @This checks if the flow is ready, and calculates the size
- * of the descriptors.
+ * of the outer loop descriptors.
  *
  * @param upipe description structure of the pipe
- * @param descriptors_size_p filled in with the descriptors size
+ * @param descriptors_size_p filled in with the outer loop descriptors size
  * @return an error code
  */
-static int upipe_ts_psig_flow_check(struct upipe *upipe,
-                                    size_t *descriptors_size_p)
+static int upipe_ts_psig_flow_check_outer(struct upipe *upipe,
+                                          size_t *descriptors_size_p)
+{
+    struct upipe_ts_psig_flow *flow = upipe_ts_psig_flow_from_upipe(upipe);
+    const char *raw_def;
+    uint64_t pid;
+    if (flow->flow_def == NULL ||
+        !ubase_check(uref_ts_flow_get_pid(flow->flow_def, &pid)) ||
+        !ubase_check(uref_flow_get_raw_def(flow->flow_def, &raw_def)))
+        return UBASE_ERR_UNHANDLED;
+
+    *descriptors_size_p = 0;
+    if (!ubase_ncmp(raw_def, "void.scte35."))
+        *descriptors_size_p += DESC05_HEADER_SIZE;
+
+    return UBASE_ERR_NONE;
+}
+
+/** @internal @This checks if the flow is ready, and calculates the size
+ * of the inner loop descriptors.
+ *
+ * @param upipe description structure of the pipe
+ * @param descriptors_size_p filled in with the inner loop descriptors size
+ * @return an error code
+ */
+static int upipe_ts_psig_flow_check_inner(struct upipe *upipe,
+                                          size_t *descriptors_size_p)
 {
     struct upipe_ts_psig_flow *flow = upipe_ts_psig_flow_from_upipe(upipe);
     const char *raw_def;
@@ -285,9 +311,7 @@ static int upipe_ts_psig_flow_check(struct upipe *upipe,
     uref_flow_get_languages(flow->flow_def, &languages);
 
     *descriptors_size_p = uref_ts_flow_size_descriptors(flow->flow_def);
-    if (!ubase_ncmp(raw_def, "void.scte35."))
-        *descriptors_size_p += DESC05_HEADER_SIZE;
-    else if (!ubase_ncmp(raw_def, "block.dvb_teletext."))
+    if (!ubase_ncmp(raw_def, "block.dvb_teletext."))
         *descriptors_size_p += DESC56_HEADER_SIZE +
                                languages * DESC56_LANGUAGE_SIZE;
     else if (!ubase_ncmp(raw_def, "block.dvb_subtitle."))
@@ -337,13 +361,12 @@ static int upipe_ts_psig_flow_check(struct upipe *upipe,
                     break;
             }
         else if (ubase_ncmp(raw_def, "block.mp2.") &&
-                   ubase_ncmp(raw_def, "block.mp3.") &&
-                   ubase_ncmp(raw_def, "block.aac.") &&
-                   ubase_ncmp(raw_def, "block.aac_latm.")) {
+                 ubase_ncmp(raw_def, "block.mp3.")) {
             upipe_warn_va(upipe, "unknown flow definition \"%s\"", raw_def);
             return UBASE_ERR_UNHANDLED;
         }
-    } else if (ubase_ncmp(raw_def, "block.mpeg1video.") &&
+    } else if (ubase_ncmp(raw_def, "void.scte35.") &&
+               ubase_ncmp(raw_def, "block.mpeg1video.") &&
                ubase_ncmp(raw_def, "block.mpeg2video.") &&
                ubase_ncmp(raw_def, "block.mpeg4.") &&
                ubase_ncmp(raw_def, "block.h264.") &&
@@ -355,15 +378,44 @@ static int upipe_ts_psig_flow_check(struct upipe *upipe,
     return UBASE_ERR_NONE;
 }
 
+/** @internal @This prepares the outer descriptors part of a PMT.
+ *
+ * @param upipe description structure of the pipe
+ * @param desc pointer to outer loop descriptors in PMT
+ * @param descriptors_size returned size of the outer loop descriptors
+ * @return an error code
+ */
+static int upipe_ts_psig_flow_build_outer(struct upipe *upipe, uint8_t *desc,
+                                          size_t *descriptors_size_p)
+{
+    struct upipe_ts_psig_flow *flow = upipe_ts_psig_flow_from_upipe(upipe);
+    const char *raw_def;
+    uint64_t pid;
+    if (flow->flow_def == NULL ||
+        !ubase_check(uref_ts_flow_get_pid(flow->flow_def, &pid)) ||
+        !ubase_check(uref_flow_get_raw_def(flow->flow_def, &raw_def)))
+        return UBASE_ERR_UNHANDLED;
+
+    *descriptors_size_p = 0;
+    if (!ubase_ncmp(raw_def, "void.scte35.")) {
+        desc05_init(desc);
+        const uint8_t id[4] = { 'C', 'U', 'E', 'I' };
+        desc05_set_identifier(desc, id);
+        *descriptors_size_p += DESC05_HEADER_SIZE;
+    }
+
+    return UBASE_ERR_NONE;
+}
+
 /** @internal @This prepares the ES part of a PMT.
  *
  * @param upipe description structure of the pipe
  * @param es pointer to ES in PMT
- * @param descriptors_size size of the descriptors
+ * @param descriptors_size size of the inner loop descriptors
  * @return an error code
  */
-static int upipe_ts_psig_flow_build(struct upipe *upipe, uint8_t *es,
-                                    size_t descriptors_size)
+static int upipe_ts_psig_flow_build_inner(struct upipe *upipe, uint8_t *es,
+                                          size_t descriptors_size)
 {
     struct upipe_ts_psig_flow *flow = upipe_ts_psig_flow_from_upipe(upipe);
     const char *raw_def;
@@ -427,14 +479,7 @@ static int upipe_ts_psig_flow_build(struct upipe *upipe, uint8_t *es,
 
     uint64_t k = 0;
     uint8_t *desc;
-    if (!ubase_ncmp(raw_def, "void.scte35.")) {
-        desc = descs_get_desc(descs, k++);
-        assert(desc != NULL);
-        desc05_init(desc);
-        const uint8_t id[4] = { 'C', 'U', 'E', 'I' };
-        desc05_set_identifier(desc, id);
-
-    } else if (!ubase_ncmp(raw_def, "block.dvb_teletext.")) {
+    if (!ubase_ncmp(raw_def, "block.dvb_teletext.")) {
         desc = descs_get_desc(descs, k++);
         assert(desc != NULL);
         desc56_init(desc);
@@ -1043,7 +1088,19 @@ static void upipe_ts_psig_program_build(struct upipe *upipe)
         return;
     }
 
-    size_t descriptors_size = uref_ts_flow_size_descriptors(program->flow_def);
+    size_t outer_descs_size = uref_ts_flow_size_descriptors(program->flow_def);
+    size_t outer_descs_size_es = 0;
+    struct uchain *uchain;
+    ulist_foreach (&program->flows, uchain) {
+        struct upipe_ts_psig_flow *flow =
+            upipe_ts_psig_flow_from_uchain(uchain);
+        size_t descriptors_size;
+        if (!ubase_check(upipe_ts_psig_flow_check_outer(
+                        upipe_ts_psig_flow_to_upipe(flow), &descriptors_size)))
+            continue;
+        outer_descs_size_es += descriptors_size;
+    }
+
 
     upipe_notice_va(upipe,
                     "new PMT program=%"PRIu64" version=%"PRIu8" pcrpid=%"PRIu16,
@@ -1072,18 +1129,32 @@ static void upipe_ts_psig_program_build(struct upipe *upipe)
     psi_set_current(buffer);
     pmt_set_pcrpid(buffer, program->pcr_pid);
     uint8_t *descs = pmt_get_descs(buffer);
-    descs_set_length(descs, descriptors_size);
-    if (descriptors_size)
-        uref_ts_flow_extract_descriptors(program->flow_def,
-                descs_get_desc(descs, 0));
+    descs_set_length(descs, outer_descs_size + outer_descs_size_es);
+    if (outer_descs_size || outer_descs_size_es) {
+        uint8_t *desc = descs_get_desc(descs, 0);
+        if (outer_descs_size) {
+            uref_ts_flow_extract_descriptors(program->flow_def, desc);
+            desc += outer_descs_size;
+        }
+        if (outer_descs_size_es) {
+            ulist_foreach (&program->flows, uchain) {
+                struct upipe_ts_psig_flow *flow =
+                    upipe_ts_psig_flow_from_uchain(uchain);
+                size_t descriptors_size;
+                if (ubase_check(upipe_ts_psig_flow_build_outer(
+                                upipe_ts_psig_flow_to_upipe(flow), desc,
+                                &descriptors_size)))
+                    desc += descriptors_size;
+            }
+        }
+    }
 
     uint16_t j = 0;
-    struct uchain *uchain;
     ulist_foreach (&program->flows, uchain) {
         struct upipe_ts_psig_flow *flow =
             upipe_ts_psig_flow_from_uchain(uchain);
         size_t descriptors_size;
-        if (!ubase_check(upipe_ts_psig_flow_check(
+        if (!ubase_check(upipe_ts_psig_flow_check_inner(
                         upipe_ts_psig_flow_to_upipe(flow), &descriptors_size)))
             continue;
 
@@ -1095,7 +1166,7 @@ static void upipe_ts_psig_program_build(struct upipe *upipe)
             break;
         }
 
-        upipe_ts_psig_flow_build(
+        upipe_ts_psig_flow_build_inner(
                         upipe_ts_psig_flow_to_upipe(flow), es,
                         descriptors_size);
         j++;
