@@ -35,6 +35,7 @@ libupipe_ts_la_SOURCES = \
 	upipe_ts_si_generator.c \
 	upipe_ts_mux.c \
 	upipe_rtp_fec.c \
+	upipe_ts_scte104_generator.c \
 	$(NULL)
 
 libupipe_ts_la_CPPFLAGS = -I$(top_builddir) -I$(top_builddir)/include -I$(top_srcdir)/include

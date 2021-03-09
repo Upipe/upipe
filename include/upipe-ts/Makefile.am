@@ -38,6 +38,7 @@ myinclude_HEADERS = \
 	uref_ts_scte104_flow.h \
 	uref_ts_scte35.h \
 	uref_ts_scte35_desc.h \
+	upipe_ts_scte104_generator.h \
 	$(NULL)
 
 if HAVE_GCRYPT
