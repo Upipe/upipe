@@ -236,9 +236,16 @@ static bool upipe_rtp_pcm_unpack_handle(struct upipe *upipe, struct uref *uref,
     size_t s = 0;
     uref_block_size(uref, &s);
 
-    s /= 3 /* 24 bits */;
+    int samples = s / 3 /* 24 bits */;
+    if ((samples % upipe_rtp_pcm_unpack->channels) != 0) {
+        upipe_dbg(upipe, "input too short");
+        //upipe_throw_error(upipe, UBASE_ERR_INVALID);
+        uref_free(uref);
+        return true;
+    }
+    samples /= upipe_rtp_pcm_unpack->channels;
 
-    struct ubuf *ubuf = ubuf_sound_alloc(upipe_rtp_pcm_unpack->ubuf_mgr, s / upipe_rtp_pcm_unpack->channels);
+    struct ubuf *ubuf = ubuf_sound_alloc(upipe_rtp_pcm_unpack->ubuf_mgr, samples);
     if (!ubuf) {
         uref_free(uref);
         upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
@@ -251,7 +258,8 @@ static bool upipe_rtp_pcm_unpack_handle(struct upipe *upipe, struct uref *uref,
     uref_block_read(uref, 0, &size, &src);
     ubuf_sound_write_int32_t(ubuf, 0, -1, &dst, 1);
 
-    for (int i = 0; i < s; i++)
+    samples *= upipe_rtp_pcm_unpack->channels;
+    for (int i = 0; i < samples; i++)
         dst[i] = (src[3*i] << 24) | (src[3*i+1] << 16) | (src[3*i+2] << 8);
 
     ubuf_sound_unmap(ubuf, 0, -1, 1);
