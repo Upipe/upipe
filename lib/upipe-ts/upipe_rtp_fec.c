@@ -699,12 +699,12 @@ static void upipe_rtp_fec_main_input(struct upipe *upipe, struct uref *uref)
         /* Owing to clock drift the latency of 2x the FEC matrix may increase
          * Build a continually updating duration and correct the latency if necessary.
          * Also helps with undershoot of latency calculation from initial packets */
-        uint8_t idx = seqnum % two_matrix_size;
+        unsigned int idx = seqnum % two_matrix_size;
         uint64_t prev_date_sys = upipe_rtp_fec->recent[idx].date_sys;
         uint64_t prev_seqnum = upipe_rtp_fec->recent[idx].seqnum;
         uint16_t expected_seqnum = prev_seqnum + two_matrix_size;
         uint16_t later_seqnum = seqnum + two_matrix_size;
-        uint8_t new_idx = later_seqnum % two_matrix_size;
+        unsigned int new_idx = later_seqnum % two_matrix_size;
 
         /* Make sure the sequence number is exactly two matrices behind and not more,
          * otherwise the latency calculation will be too large.
