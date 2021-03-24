@@ -56,6 +56,8 @@ enum rtp_fec_command {
     UPIPE_RTP_FEC_SET_PT,
     /** sets max latency (uint64_t) */
     UPIPE_RTP_FEC_SET_MAX_LATENCY,
+    /** returns the current latency (uint64_t *) */
+    UPIPE_RTP_FEC_GET_LATENCY,
 };
 
 static inline int upipe_rtp_fec_get_rows(struct upipe *upipe,
@@ -151,6 +153,19 @@ static inline int upipe_rtp_fec_set_max_latency(struct upipe *upipe,
 {
     return upipe_control(upipe, UPIPE_RTP_FEC_SET_MAX_LATENCY,
                          UPIPE_RTP_FEC_SIGNATURE, max_latency);
+}
+
+/** @This returns the current latency
+ *
+ * @param upipe description structure of the pipe
+ * @param latency filled with the current latency
+ * @return an error code
+ */
+static inline int upipe_rtp_fec_get_latency(struct upipe *upipe,
+                                            uint64_t *latency)
+{
+    return upipe_control(upipe, UPIPE_RTP_FEC_GET_LATENCY,
+                         UPIPE_RTP_FEC_SIGNATURE, latency);
 }
 
 /** @This returns the management structure for rtp_fec pipes.
