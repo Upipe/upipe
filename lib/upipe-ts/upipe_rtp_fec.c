@@ -1083,6 +1083,12 @@ static int upipe_rtp_fec_control(struct upipe *upipe, int command, va_list args)
         upipe_rtp_fec->max_latency = va_arg(args, uint64_t);
         return UBASE_ERR_NONE;
     }
+    case UPIPE_RTP_FEC_GET_LATENCY: {
+        UBASE_SIGNATURE_CHECK(args, UPIPE_RTP_FEC_SIGNATURE)
+        uint64_t *latency = va_arg(args, uint64_t *);
+        *latency = upipe_rtp_fec->latency;
+        return UBASE_ERR_NONE;
+    }
     default:
         return UBASE_ERR_UNHANDLED;
     }
