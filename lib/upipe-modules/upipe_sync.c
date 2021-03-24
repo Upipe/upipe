@@ -906,7 +906,7 @@ static void upipe_sync_sub_input(struct upipe *upipe, struct uref *uref,
     size_t samples = 0;
     uref_sound_size(uref, &samples, NULL);
     upipe_sync_sub->samples += samples;
-    upipe_notice_va(upipe, "push in samples %zu, queued samples %" PRIu64, samples, upipe_sync_sub->samples);
+    //upipe_notice_va(upipe, "push in samples %zu, queued samples %" PRIu64, samples, upipe_sync_sub->samples);
 
     ulist_add(&upipe_sync_sub->urefs, uref_to_uchain(uref));
 
