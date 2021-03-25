@@ -50,8 +50,6 @@ enum upipe_bmd_sink_command {
 
     /** returns the pic subpipe (struct upipe **) */
     UPIPE_BMD_SINK_GET_PIC_SUB,
-    /** returns the subpic subpipe (struct upipe **) */
-    UPIPE_BMD_SINK_GET_SUBPIC_SUB,
 
     /** returns the uclock (struct uclock *) **/
     UPIPE_BMD_SINK_GET_UCLOCK,
@@ -85,20 +83,6 @@ static inline int upipe_bmd_sink_get_pic_sub(struct upipe *upipe,
                                                struct upipe **upipe_p)
 {
     return upipe_control(upipe, UPIPE_BMD_SINK_GET_PIC_SUB,
-                          UPIPE_BMD_SINK_SIGNATURE, upipe_p);
-}
-
-/** @This returns the subpic subpipe. The refcount is not incremented so you
- * have to use it if you want to keep the pointer.
- *
- * @param upipe description structure of the super pipe
- * @param upipe_p filled in with a pointer to the subpic subpipe
- * @return an error code
- */
-static inline int upipe_bmd_sink_get_subpic_sub(struct upipe *upipe,
-                                                  struct upipe **upipe_p)
-{
-    return upipe_control(upipe, UPIPE_BMD_SINK_GET_SUBPIC_SUB,
                           UPIPE_BMD_SINK_SIGNATURE, upipe_p);
 }
 
@@ -189,11 +173,9 @@ static inline int upipe_bmd_sink_adjust_timing(struct upipe *upipe, int64_t adj)
  */
 static inline struct upipe *upipe_bmd_sink_alloc(struct upipe_mgr *mgr,
                                                     struct uprobe *uprobe,
-                                                    struct uprobe *uprobe_pic,
-                                                    struct uprobe *uprobe_subpic)
+                                                    struct uprobe *uprobe_pic)
 {
-    return upipe_alloc(mgr, uprobe, UPIPE_BMD_SINK_SIGNATURE,
-                        uprobe_pic, uprobe_subpic);
+    return upipe_alloc(mgr, uprobe, UPIPE_BMD_SINK_SIGNATURE, uprobe_pic);
 }
 
 uint32_t upipe_bmd_mode_from_flow_def(struct upipe *upipe, struct uref *flow_def);
