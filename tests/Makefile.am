@@ -204,6 +204,7 @@ check_PROGRAMS += \
 	upipe_worker_sink_test \
 	upipe_worker_source_test \
 	upipe_worker_test \
+	upipe_worker_stress_test \
 	upipe_m3u_reader_test \
 	upipe_void_source_test \
 	upipe_zoneplate_source_test \
@@ -424,6 +425,7 @@ upipe_worker_linear_test_LDADD = $(LDADD) -lev $(top_builddir)/lib/upump-ev/libu
 upipe_worker_sink_test_LDADD = $(LDADD) -lev $(top_builddir)/lib/upump-ev/libupump_ev.la $(top_builddir)/lib/upipe-modules/libupipe_modules.la $(top_builddir)/lib/upipe-pthread/libupipe_pthread.la -lpthread
 upipe_worker_source_test_LDADD = $(LDADD) -lev $(top_builddir)/lib/upump-ev/libupump_ev.la $(top_builddir)/lib/upipe-modules/libupipe_modules.la $(top_builddir)/lib/upipe-pthread/libupipe_pthread.la -lpthread
 upipe_worker_test_LDADD = $(LDADD) -lev $(top_builddir)/lib/upump-ev/libupump_ev.la $(top_builddir)/lib/upipe-modules/libupipe_modules.la $(top_builddir)/lib/upipe-pthread/libupipe_pthread.la -lpthread
+upipe_worker_stress_test_LDADD = $(LDADD) -lev $(top_builddir)/lib/upump-ev/libupump_ev.la $(top_builddir)/lib/upipe-modules/libupipe_modules.la $(top_builddir)/lib/upipe-pthread/libupipe_pthread.la -lpthread
 upipe_multicat_test_LDADD = $(LDADD) -lev $(top_builddir)/lib/upump-ev/libupump_ev.la $(top_builddir)/lib/upipe-modules/libupipe_modules.la
 upipe_http_src_test_LDADD = $(LDADD) -lev $(top_builddir)/lib/upump-ev/libupump_ev.la $(top_builddir)/lib/upipe-modules/libupipe_modules.la
 upipe_blank_source_test_LDADD = $(LDADD) -lev $(top_builddir)/lib/upump-ev/libupump_ev.la $(top_builddir)/lib/upipe-modules/libupipe_modules.la
