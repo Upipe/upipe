@@ -201,7 +201,7 @@ bool upipe_udp_parse_node_service(struct upipe *upipe,
 int upipe_udp_open_socket(struct upipe *upipe, const char *_uri, int ttl,
                           uint16_t bind_port, uint16_t connect_port,
                           unsigned int *weight, bool *use_tcp,
-                          bool *use_raw, uint8_t *raw_header, int *ifindex);
+                          bool *use_raw, uint8_t *raw_header);
 
 void udp_raw_set_len(uint8_t *raw_header, uint16_t len);
 
