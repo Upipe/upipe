@@ -105,13 +105,6 @@ AC_SUBST(PTHREAD_CFLAGS)
 AC_SUBST(PTHREAD_LIBS)
 AM_ICONV
 
-# Check for libgcrypt
-AM_PATH_LIBGCRYPT([],
-        AM_CONDITIONAL(HAVE_GCRYPT, true)
-        [LIBUPIPE_TS_PKGCONFIG_REQUIRES=libgcrypt]
-        AC_DEFINE(HAVE_GCRYPT, 1, Define if libgcrypt is available.),
-        AM_CONDITIONAL(HAVE_GCRYPT, false))
-
 # Check for header, then libev3 (ev_loop), then libev4 (ev_run)
 AC_CHECK_HEADERS([ev.h], [
         AC_CHECK_LIB(ev, ev_loop,
@@ -124,6 +117,8 @@ AC_CHECK_HEADERS([dvbcsa/dvbcsa.h],
                  AM_CONDITIONAL(HAVE_DVBCSA, true),
                  AM_CONDITIONAL(HAVE_DVBCSA, false))
 
+PKG_CHECK_UPIPE(GCRYPT, libgcrypt, [gcrypt.h])
+PKG_CHECK_EXISTS([libgcrypt], [LIBUPIPE_TS_PKGCONFIG_REQUIRES="$LIBUPIPE_TS_PKGCONFIG_REQUIRES libgcrypt"])
 PKG_CHECK_UPIPE(TASN1, libtasn1, [libtasn1.h])
 PKG_CHECK_EXISTS([libtasn1], [LIBUPIPE_TS_PKGCONFIG_REQUIRES="$LIBUPIPE_TS_PKGCONFIG_REQUIRES libtasn1"])
 PKG_CHECK_UPIPE(BITSTREAM, bitstream >= 1.4, [bitstream/common.h])
