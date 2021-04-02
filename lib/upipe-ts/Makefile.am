@@ -46,8 +46,8 @@ libupipe_ts_la_LDFLAGS = -no-undefined
 
 if HAVE_GCRYPT
 if HAVE_TASN1
-libupipe_ts_la_CFLAGS += $(LIBGCRYPT_CFLAGS) $(TASN1_CFLAGS)
-libupipe_ts_la_LIBADD += $(LIBGCRYPT_LIBS) $(TASN1_LIBS)
+libupipe_ts_la_CFLAGS += $(GCRYPT_CFLAGS) $(TASN1_CFLAGS)
+libupipe_ts_la_LIBADD += $(GCRYPT_LIBS) $(TASN1_LIBS)
 libupipe_ts_la_SOURCES += \
 	rsa_asn1.h \
 	rsa_asn1.c \

@@ -56,8 +56,8 @@ ts_encrypt_LDADD = $(LDADD) $(UPIPEMODULES_LIBS) $(UPUMPEV_LIBS) $(UPIPETS_LIBS)
 ts_encrypt_CFLAGS = $(AM_CFLAGS)
 
 if HAVE_GCRYPT
-ts_encrypt_CFLAGS += $(LIBGCRYPT_CFLAGS)
-ts_encrypt_LDADD += $(LIBGCRYPT_LIBS)
+ts_encrypt_CFLAGS += $(GCRYPT_CFLAGS)
+ts_encrypt_LDADD += $(GCRYPT_LIBS)
 endif
 
 if HAVE_EV
