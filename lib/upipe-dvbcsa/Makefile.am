@@ -11,8 +11,8 @@ libupipe_dvbcsa_la_LIBADD = $(top_builddir)/lib/upipe/libupipe.la $(top_builddir
 libupipe_dvbcsa_la_LDFLAGS = -no-undefined -ldvbcsa
 
 if HAVE_GCRYPT
-libupipe_dvbcsa_la_CPPFLAGS += $(LIBGCRYPT_CFLAGS)
-libupipe_dvbcsa_la_LIBADD += $(LIBGCRYPT_LIBS)
+libupipe_dvbcsa_la_CPPFLAGS += $(GCRYPT_CFLAGS)
+libupipe_dvbcsa_la_LIBADD += $(GCRYPT_LIBS)
 endif
 
 pkgconfigdir = $(libdir)/pkgconfig
