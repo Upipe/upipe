@@ -2,11 +2,12 @@
 # Process this file with autoconf to produce a configure script.
 
 AC_PREREQ([2.61])
-AC_INIT([upipe], [0.5], [cmassiot@upipe.org])
+AC_INIT([upipe],[0.5],[cmassiot@upipe.org])
 AC_CONFIG_SRCDIR([lib/upipe/uprobe_stdio.c])
 AC_CONFIG_HEADERS([config.h])
 AC_CONFIG_AUX_DIR([autotools])
 AC_CONFIG_MACRO_DIR([m4])
+AC_CANONICAL_TARGET
 AM_INIT_AUTOMAKE([foreign nostdinc parallel-tests color-tests subdir-objects])
 m4_ifdef([AM_SILENT_RULES], [AM_SILENT_RULES([yes])])
 PKG_PROG_PKG_CONFIG
@@ -16,7 +17,7 @@ AC_CHECK_PROGS(PERL, perl)
 AC_PATH_PROG(MOC, [moc-qt4 moc], moc)
 AC_PROG_CXX
 AC_PROG_AWK
-AC_PROG_CC_C99
+AC_PROG_CC
 AC_USE_SYSTEM_EXTENSIONS
 AC_PROG_CPP
 AC_PROG_INSTALL
@@ -26,16 +27,14 @@ AM_PROG_CC_C_O
 AM_PROG_AS
 LT_INIT([win32-dll])
 
-AC_ARG_ENABLE(
-    [luajit],
-    AS_HELP_STRING(
-        [--enable-luajit],
-        [Enable build of luajit bindings]))
-AM_CONDITIONAL(BUILD_LUAJIT, test "$enable_luajit" = yes -a "$OBJDUMP" != false -a "$enable_shared" != no)
-AM_COND_IF(BUILD_LUAJIT,
+AC_ARG_ENABLE([luajit],
+              AS_HELP_STRING([--enable-luajit], [Enable build of luajit bindings]))
+AM_CONDITIONAL(BUILD_LUAJIT,
+               test "$enable_luajit" = yes -a "$OBJDUMP" != false -a "$enable_shared" != no)
+AM_COND_IF(BUILD_LUAJIT,[
            AC_CHECK_PROGS(LUAJIT, luajit)
            AC_CHECK_PROGS(EU_READELF, eu-readelf)
-           AC_CHECK_PROGS(LLVM_DWARFDUMP, [llvm-dwarfdump "xcrun llvm-dwarfdump"]))
+           AC_CHECK_PROGS(LLVM_DWARFDUMP, [llvm-dwarfdump "xcrun llvm-dwarfdump"])])
 
 AC_PATH_PROGS(NASM, [nasm yasm])
 
@@ -185,7 +184,6 @@ AC_CHECK_HEADERS([net/netmap.h], AM_CONDITIONAL(HAVE_NETMAP, true), AM_CONDITION
 #include <net/if.h>])
 
 # Checks for header files.
-AC_HEADER_STDC
 AC_CHECK_HEADERS([fcntl.h stddef.h stdint.h stdlib.h string.h unistd.h sys/ioctl.h semaphore.h features.h net/if.h])
 
 # Checks for typedefs, structures, and compiler characteristics.
