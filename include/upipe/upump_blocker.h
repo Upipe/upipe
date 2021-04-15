@@ -53,8 +53,6 @@ struct upump_blocker {
     upump_blocker_cb cb;
     /** opaque pointer for the callback */
     void *opaque;
-    /** pointer to urefcount structure to increment during callback */
-    struct urefcount *refcount;
 };
 
 UBASE_FROM_TO(upump_blocker, uchain, uchain, uchain)
@@ -81,7 +79,6 @@ static inline struct upump_blocker *upump_blocker_alloc(struct upump *upump,
     upump_blocker->upump = upump;
     upump_blocker->cb = cb;
     upump_blocker->opaque = opaque;
-    upump_blocker->refcount = refcount;
     return upump_blocker;
 }
 

@@ -112,11 +112,6 @@ struct upump {
     /** pointer to the event loop manager */
     struct upump_mgr *mgr;
 
-    /** true if upump_start() was called on the pump */
-    bool started;
-    /** blockers registered on this pump */
-    struct uchain blockers;
-
     /** function to call back when triggered */
     upump_cb cb;
     /** opaque pointer for the callback */
