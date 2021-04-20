@@ -2630,13 +2630,35 @@ static bool upipe_h264f_work_length(struct upipe *upipe, struct uref *uref,
             return true;
         }
 
+        bool separated_fields = false;
+        bool field_pic = upipe_h264f->field_pic;
+        bool bf = upipe_h264f->bf;
+        uint32_t idr_pic_id = upipe_h264f->idr_pic_id;
+        uint32_t frame_num = upipe_h264f->frame_num;
         uint8_t nal;
         int err = upipe_h264f_handle_nal(upipe, uref->ubuf,
                                          nal_offset + length_size,
                                          nal_size, &au_slice, &nal);
+        if (err == UBASE_ERR_BUSY) {
+            /* retry assuming separated fields */
+            separated_fields = true;
+            au_slice = false;
+            err = upipe_h264f_handle_nal(upipe, uref->ubuf,
+                                         nal_offset + length_size,
+                                         nal_size, &au_slice, &nal);
+        }
         if (!ubase_check(err)) {
             upipe_warn(upipe, "invalid NAL received");
             upipe_throw_error(upipe, err);
+        }
+        else if (separated_fields) {
+            if (upipe_h264f->frame_num != frame_num ||
+                upipe_h264f->field_pic != field_pic ||
+                upipe_h264f->bf == bf ||
+                upipe_h264f->idr_pic_id != idr_pic_id) {
+                upipe_warn(upipe, "invalid NAL received");
+                upipe_throw_error(upipe, UBASE_ERR_INVALID);
+            }
         }
         uint8_t nal_type = h264nalst_get_type(nal);
         if (nal_type == H264NAL_TYPE_IDR)
