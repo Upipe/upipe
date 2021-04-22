@@ -41,12 +41,18 @@ enum upipe_dump_command {
     UPIPE_DUMP_SENTINEL = UPIPE_CONTROL_LOCAL,
 
     UPIPE_DUMP_SET_MAX_LEN,
+    UPIPE_DUMP_SET_TEXT_MODE,
 };
 
 static inline int upipe_dump_set_max_len(struct upipe *upipe, size_t len)
 {
     return upipe_control(upipe, UPIPE_DUMP_SET_MAX_LEN, UPIPE_DUMP_SIGNATURE,
                          len);
+}
+
+static inline int upipe_dump_set_text_mode(struct upipe *upipe)
+{
+    return upipe_control(upipe, UPIPE_DUMP_SET_TEXT_MODE, UPIPE_DUMP_SIGNATURE);
 }
 
 struct upipe_mgr *upipe_dump_mgr_alloc(void);

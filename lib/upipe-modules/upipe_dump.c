@@ -48,7 +48,11 @@ struct upipe_dump {
     enum upipe_helper_output_state output_state;
     struct uref *flow_def;
     struct uchain request_list;
+    /** true if text mode is set */
+    bool text_mode;
 
+    /** line length */
+    size_t len;
     /** max dump len */
     size_t max_len;
 };
@@ -69,7 +73,9 @@ static struct upipe *upipe_dump_alloc(struct upipe_mgr *mgr,
     upipe_dump_init_output(upipe);
 
     struct upipe_dump *upipe_dump = upipe_dump_from_upipe(upipe);
+    upipe_dump->len = 16;
     upipe_dump->max_len = (size_t)-1;
+    upipe_dump->text_mode = false;
 
     upipe_throw_ready(upipe);
 
@@ -88,31 +94,38 @@ static void upipe_dump_free(struct upipe *upipe)
 static void upipe_dump_line(struct upipe *upipe, unsigned int at,
                             uint8_t *line, int size)
 {
-    char hex[16 * 2 + 16 + 1];
-    char *tmp = hex;
+    struct upipe_dump *upipe_dump = upipe_dump_from_upipe(upipe);
 
-    if (!size)
-        return;
-
-    for (unsigned i = 0; i < 16; i++) {
-        const char *sep = i ? (i == 8 ? "  " : " "): "";
-        if (i < size)
-            tmp += snprintf(tmp, hex + sizeof (hex) - tmp,
-                            "%s%02x", sep, line[i]);
-        else
-            tmp += snprintf(tmp, hex + sizeof (hex) - tmp, "%s  ", sep);
-        assert(tmp < hex + sizeof (hex));
+    if (upipe_dump->text_mode) {
+        upipe_notice_va(upipe, "hexdump: %.*s", size, line);
     }
+    else {
+        char hex[upipe_dump->len * 3 + 1];
+        char *tmp = hex;
 
-    char ascii[16 + 1];
-    tmp = ascii;
-    for (unsigned i = 0; i < size; i++) {
-        tmp += snprintf(tmp, ascii + sizeof (ascii) - tmp,
-                        "%c", isprint(line[i]) ? line[i] : '.');
-        assert(tmp < ascii + sizeof (ascii));
+        if (!size)
+            return;
+
+        for (unsigned i = 0; i < upipe_dump->len; i++) {
+            const char *sep = i ? (i == upipe_dump->len / 2 ? "  " : " "): "";
+            if (i < size)
+                tmp += snprintf(tmp, hex + sizeof (hex) - tmp,
+                                "%s%02x", sep, line[i]);
+            else
+                tmp += snprintf(tmp, hex + sizeof (hex) - tmp, "%s  ", sep);
+            assert(tmp < hex + sizeof (hex));
+        }
+
+        char ascii[upipe_dump->len + 1];
+        tmp = ascii;
+        for (unsigned i = 0; i < size; i++) {
+            tmp += snprintf(tmp, ascii + sizeof (ascii) - tmp,
+                            "%c", isprint(line[i]) ? line[i] : '.');
+            assert(tmp < ascii + sizeof (ascii));
+        }
+
+        upipe_notice_va(upipe, "hexdump: %08x  %s  |%s|", at, hex, ascii);
     }
-
-    upipe_notice_va(upipe, "hexdump: %08x  %s  |%s|", at, hex, ascii);
 }
 
 static void upipe_dump_input(struct upipe *upipe, struct uref *uref,
@@ -132,9 +145,19 @@ static void upipe_dump_input(struct upipe *upipe, struct uref *uref,
         total_size > upipe_dump->max_len)
         total_size = upipe_dump->max_len;
 
-    unsigned int count = 0;
-    uint8_t line[16];
+    char sep[upipe_dump->len * 3 + 1];
+    for (unsigned i = 0; i < upipe_dump->len * 3 + 1; i++)
+        sep[i] = '-';
+    sep[upipe_dump->len * 3] = '\0';
 
+    if (upipe_dump->text_mode)
+        upipe_notice_va(upipe, "hexdump: %.*s", (int)upipe_dump->len, sep);
+    else
+        upipe_notice_va(upipe, "hexdump: ********  %s  |%.*s|",
+                        sep, (int)upipe_dump->len, sep);
+
+    unsigned int count = 0;
+    uint8_t line[upipe_dump->len];
     int offset = 0;
     while (total_size) {
         const uint8_t *buf;
@@ -146,20 +169,23 @@ static void upipe_dump_input(struct upipe *upipe, struct uref *uref,
         total_size -= size;
 
         for (unsigned i = 0; i < size; i++, count++) {
-            line[count % 16] = buf[i];
+            line[count % upipe_dump->len] = buf[i];
 
-            if (!((count + 1) % 16) || (!total_size && (i + 1 == size)))
-                upipe_dump_line(upipe, count - (count % 16),
-                                line, (count % 16) + 1);
+            if (!((count + 1) % upipe_dump->len) || (!total_size && (i + 1 == size)))
+                upipe_dump_line(upipe, count - (count % upipe_dump->len),
+                                line, (count % upipe_dump->len) + 1);
         }
 
         ubase_assert(uref_block_unmap(uref, offset));
         offset += size;
     }
-#define UPIPE_DUMP_SEP \
-    "--------------------------------------------" \
-    "-------------------------------------------"
-    upipe_notice(upipe, UPIPE_DUMP_SEP);
+
+    if (upipe_dump->text_mode)
+        upipe_notice_va(upipe, "hexdump: %.*s", (int)upipe_dump->len, sep);
+    else
+        upipe_notice_va(upipe, "hexdump: ********  %s  |%.*s|",
+                        sep, (int)upipe_dump->len, sep);
+
     upipe_dump_output(upipe, uref, upump_p);
 }
 
@@ -167,6 +193,14 @@ static int _upipe_dump_set_max_len(struct upipe *upipe, size_t max_len)
 {
     struct upipe_dump *upipe_dump = upipe_dump_from_upipe(upipe);
     upipe_dump->max_len = max_len;
+    return UBASE_ERR_NONE;
+}
+
+static int _upipe_dump_set_text_mode(struct upipe *upipe)
+{
+    struct upipe_dump *upipe_dump = upipe_dump_from_upipe(upipe);
+    upipe_dump->len = 256;
+    upipe_dump->text_mode = true;
     return UBASE_ERR_NONE;
 }
 
@@ -197,6 +231,11 @@ static int upipe_dump_control(struct upipe *upipe, int command, va_list args)
         UBASE_SIGNATURE_CHECK(args, UPIPE_DUMP_SIGNATURE)
         size_t max_len = va_arg(args, size_t);
         return _upipe_dump_set_max_len(upipe, max_len);
+    }
+
+    case UPIPE_DUMP_SET_TEXT_MODE: {
+        UBASE_SIGNATURE_CHECK(args, UPIPE_DUMP_SIGNATURE)
+        return _upipe_dump_set_text_mode(upipe);
     }
 
     default:
