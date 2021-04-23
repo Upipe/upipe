@@ -376,7 +376,7 @@ static int upipe_http_src_header_value(http_parser *parser,
     }
     else if (!strncasecmp("Content-Type", field.value, field.len)) {
         char content_type[len + 1];
-        snprintf(content_type, len + 1, "%s", at);
+        snprintf(content_type, len + 1, "%.*s", (int)len, at);
         uref_http_set_content_type(flow_def, content_type);
     }
     return 0;
