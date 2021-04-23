@@ -508,7 +508,6 @@ static int probe_src(struct uprobe *uprobe, struct upipe *inner,
 static void upipe_hls_void_init_sub_mgr(struct upipe *upipe)
 {
     struct upipe_hls_void *upipe_hls_void = upipe_hls_void_from_upipe(upipe);
-    memset(&upipe_hls_void->sub_mgr, 0, sizeof (struct upipe_mgr));
     upipe_hls_void->sub_mgr.refcount = &upipe_hls_void->urefcount_real;
     upipe_hls_void->sub_mgr.signature = UPIPE_HLS_VOID_SUB_SIGNATURE;
     upipe_hls_void->sub_mgr.upipe_alloc = upipe_hls_void_sub_alloc;
@@ -541,8 +540,8 @@ static struct upipe *upipe_hls_void_alloc(struct upipe_mgr *mgr,
     upipe_hls_void_init_probe_aes_decrypt(upipe);
     upipe_hls_void_init_probe_demux_in(upipe);
     upipe_hls_void_init_probe_demux_out(upipe);
-    upipe_hls_void_init_sub_mgr(upipe);
     upipe_hls_void_init_sub_pipes(upipe);
+    upipe_hls_void_init_sub_mgr(upipe);
     upipe_hls_void_init_src(upipe);
     upipe_hls_void_init_playlist(upipe);
     upipe_hls_void_init_pmt(upipe);

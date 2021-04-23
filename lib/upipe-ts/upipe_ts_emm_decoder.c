@@ -1307,5 +1307,4 @@ static void upipe_ts_emmd_init_sub_mgr(struct upipe *upipe)
     sub_mgr->upipe_alloc = upipe_ts_emmd_ecm_alloc;
     sub_mgr->upipe_input = upipe_ts_emmd_ecm_input;
     sub_mgr->upipe_control = upipe_ts_emmd_ecm_control;
-    sub_mgr->upipe_mgr_control = NULL;
 }

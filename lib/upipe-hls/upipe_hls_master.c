@@ -212,7 +212,6 @@ static void upipe_hls_master_init_sub_mgr(struct upipe *upipe)
 {
     struct upipe_hls_master *upipe_hls_master =
         upipe_hls_master_from_upipe(upipe);
-    memset(&upipe_hls_master->sub_mgr, 0, sizeof (upipe_hls_master->sub_mgr));
     upipe_hls_master->sub_mgr.refcount = &upipe_hls_master->urefcount;
     upipe_hls_master->sub_mgr.signature = UPIPE_HLS_MASTER_SUB_SIGNATURE;
     upipe_hls_master->sub_mgr.upipe_alloc = upipe_hls_master_sub_alloc;

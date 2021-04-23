@@ -227,9 +227,7 @@ static void upipe_ts_split_init_sub_mgr(struct upipe *upipe)
     sub_mgr->refcount = upipe_ts_split_to_urefcount_real(upipe_ts_split);
     sub_mgr->signature = UPIPE_TS_SPLIT_OUTPUT_SIGNATURE;
     sub_mgr->upipe_alloc = upipe_ts_split_sub_alloc;
-    sub_mgr->upipe_input = NULL;
     sub_mgr->upipe_control = upipe_ts_split_sub_control;
-    sub_mgr->upipe_mgr_control = NULL;
 }
 
 /** @internal @This allocates a ts_split pipe.
@@ -253,8 +251,8 @@ static struct upipe *upipe_ts_split_alloc(struct upipe_mgr *mgr,
     upipe_ts_split_init_urefcount(upipe);
     urefcount_init(upipe_ts_split_to_urefcount_real(upipe_ts_split),
                    upipe_ts_split_free);
-    upipe_ts_split_init_sub_mgr(upipe);
     upipe_ts_split_init_sub_subs(upipe);
+    upipe_ts_split_init_sub_mgr(upipe);
 
     int i;
     for (i = 0; i < MAX_PIDS; i++) {

@@ -379,7 +379,6 @@ static void upipe_even_init_sub_mgr(struct upipe *upipe)
     sub_mgr->upipe_alloc = upipe_even_sub_alloc;
     sub_mgr->upipe_input = upipe_even_sub_input;
     sub_mgr->upipe_control = upipe_even_sub_control;
-    sub_mgr->upipe_mgr_control = NULL;
 }
 
 /** @internal @This allocates a even pipe.
@@ -398,8 +397,8 @@ static struct upipe *upipe_even_alloc(struct upipe_mgr *mgr,
     if (unlikely(upipe == NULL))
         return NULL;
     upipe_even_init_urefcount(upipe);
-    upipe_even_init_sub_mgr(upipe);
     upipe_even_init_sub_subs(upipe);
+    upipe_even_init_sub_mgr(upipe);
     struct upipe_even *upipe_even = upipe_even_from_upipe(upipe);
     upipe_even->first_date = UINT64_MAX;
     upipe_even->preroll = true;

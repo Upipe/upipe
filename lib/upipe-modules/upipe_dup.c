@@ -187,13 +187,10 @@ static void upipe_dup_init_sub_mgr(struct upipe *upipe)
 {
     struct upipe_dup *upipe_dup = upipe_dup_from_upipe(upipe);
     struct upipe_mgr *sub_mgr = &upipe_dup->sub_mgr;
-    memset(sub_mgr, 0, sizeof (*sub_mgr));
     sub_mgr->refcount = upipe_dup_to_urefcount_real(upipe_dup);
     sub_mgr->signature = UPIPE_DUP_OUTPUT_SIGNATURE;
     sub_mgr->upipe_alloc = upipe_dup_output_alloc;
-    sub_mgr->upipe_input = NULL;
     sub_mgr->upipe_control = upipe_dup_output_control;
-    sub_mgr->upipe_mgr_control = NULL;
 }
 
 /** @internal @This allocates a dup pipe.
@@ -215,8 +212,8 @@ static struct upipe *upipe_dup_alloc(struct upipe_mgr *mgr,
     struct upipe_dup *upipe_dup = upipe_dup_from_upipe(upipe);
     upipe_dup_init_urefcount(upipe);
     upipe_dup_init_urefcount_real(upipe);
-    upipe_dup_init_sub_mgr(upipe);
     upipe_dup_init_sub_outputs(upipe);
+    upipe_dup_init_sub_mgr(upipe);
     upipe_dup_init_output(upipe);
     upipe_dup->flow_def = NULL;
     upipe_throw_ready(upipe);

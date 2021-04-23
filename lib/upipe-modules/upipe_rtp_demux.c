@@ -424,13 +424,9 @@ static void upipe_rtp_demux_init_sub_mgr(struct upipe *upipe)
     struct upipe_mgr *sub_mgr = &demux->sub_mgr;
     sub_mgr->refcount = upipe->refcount;
     sub_mgr->signature = UPIPE_RTP_DEMUX_SUB_SIGNATURE;
-    sub_mgr->upipe_err_str = NULL;
-    sub_mgr->upipe_command_str = NULL;
-    sub_mgr->upipe_event_str = NULL;
     sub_mgr->upipe_alloc = upipe_rtp_demux_sub_alloc;
     sub_mgr->upipe_input = upipe_rtp_demux_sub_bin_input;
     sub_mgr->upipe_control = upipe_rtp_demux_sub_control;
-    sub_mgr->upipe_mgr_control = NULL;
 }
 
 /** @internal @This handles clock references coming from clock_ref events.
@@ -514,8 +510,8 @@ static struct upipe *upipe_rtp_demux_alloc(struct upipe_mgr *mgr,
         return NULL;
     struct upipe_rtp_demux *demux = upipe_rtp_demux_from_upipe(upipe);
     upipe_rtp_demux_init_urefcount(upipe);
-    upipe_rtp_demux_init_sub_mgr(upipe);
     upipe_rtp_demux_init_sub_subs(upipe);
+    upipe_rtp_demux_init_sub_mgr(upipe);
     demux->orig_prog_offset = 0;
     demux->highest_date_prog = UINT32_MAX;
     demux->last_cr = UINT32_MAX;

@@ -224,6 +224,25 @@ struct upipe_mgr {
     int (*upipe_mgr_control)(struct upipe_mgr *, int, va_list);
 };
 
+/** @This initializes a upipe manager structure with default values.
+ *
+ * @param mgr pointer to upipe manager
+ */
+static inline void upipe_mgr_init(struct upipe_mgr *mgr)
+{
+    if (mgr) {
+        mgr->refcount = NULL;
+        mgr->signature = 0;
+        mgr->upipe_err_str = NULL;
+        mgr->upipe_command_str = NULL;
+        mgr->upipe_event_str = NULL;
+        mgr->upipe_alloc = NULL;
+        mgr->upipe_input = NULL;
+        mgr->upipe_control = NULL;
+        mgr->upipe_mgr_control = NULL;
+    }
+}
+
 /** @This increments the reference count of a upipe manager.
  *
  * @param mgr pointer to upipe manager

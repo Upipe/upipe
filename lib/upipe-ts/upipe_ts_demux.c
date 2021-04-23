@@ -1176,13 +1176,8 @@ static void upipe_ts_demux_program_init_output_mgr(struct upipe *upipe)
     struct upipe_mgr *output_mgr = &program->output_mgr;
     output_mgr->refcount = upipe_ts_demux_program_to_urefcount_real(program);
     output_mgr->signature = UPIPE_TS_DEMUX_OUTPUT_SIGNATURE;
-    output_mgr->upipe_err_str = NULL;
-    output_mgr->upipe_command_str = NULL;
-    output_mgr->upipe_event_str = NULL;
     output_mgr->upipe_alloc = upipe_ts_demux_output_alloc;
-    output_mgr->upipe_input = NULL;
     output_mgr->upipe_control = upipe_ts_demux_output_control;
-    output_mgr->upipe_mgr_control = NULL;
 }
 
 
@@ -2004,8 +1999,8 @@ static struct upipe *upipe_ts_demux_program_alloc(struct upipe_mgr *mgr,
     upipe_ts_demux_program_init_urefcount(upipe);
     urefcount_init(upipe_ts_demux_program_to_urefcount_real(upipe_ts_demux_program), upipe_ts_demux_program_free);
     upipe_ts_demux_program_init_output(upipe);
-    upipe_ts_demux_program_init_output_mgr(upipe);
     upipe_ts_demux_program_init_sub_outputs(upipe);
+    upipe_ts_demux_program_init_output_mgr(upipe);
     upipe_ts_demux_program->flow_def_input = flow_def;
     upipe_ts_demux_program->program = 0;
     upipe_ts_demux_program->pmt_rap = 0;
@@ -2275,13 +2270,8 @@ static void upipe_ts_demux_init_program_mgr(struct upipe *upipe)
     struct upipe_mgr *program_mgr = &upipe_ts_demux->program_mgr;
     program_mgr->refcount = upipe_ts_demux_to_urefcount_real(upipe_ts_demux);
     program_mgr->signature = UPIPE_TS_DEMUX_PROGRAM_SIGNATURE;
-    program_mgr->upipe_err_str = NULL;
-    program_mgr->upipe_command_str = NULL;
-    program_mgr->upipe_event_str = NULL;
     program_mgr->upipe_alloc = upipe_ts_demux_program_alloc;
-    program_mgr->upipe_input = NULL;
     program_mgr->upipe_control = upipe_ts_demux_program_control;
-    program_mgr->upipe_mgr_control = NULL;
 }
 
 
@@ -3177,8 +3167,8 @@ static struct upipe *upipe_ts_demux_alloc(struct upipe_mgr *mgr,
     upipe_ts_demux_init_bin_input(upipe);
     upipe_ts_demux_init_output(upipe);
     upipe_ts_demux_init_uref_mgr(upipe);
-    upipe_ts_demux_init_program_mgr(upipe);
     upipe_ts_demux_init_sub_programs(upipe);
+    upipe_ts_demux_init_program_mgr(upipe);
 
     upipe_ts_demux_init_sync(upipe);
     upipe_ts_demux->input = upipe_ts_demux->split = upipe_ts_demux->setrap =

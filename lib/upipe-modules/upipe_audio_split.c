@@ -383,9 +383,7 @@ static void upipe_audio_split_init_sub_mgr(struct upipe *upipe)
     sub_mgr->refcount = upipe_audio_split_to_urefcount_real(upipe_audio_split);
     sub_mgr->signature = UPIPE_AUDIO_SPLIT_OUTPUT_SIGNATURE;
     sub_mgr->upipe_alloc = upipe_audio_split_sub_alloc;
-    sub_mgr->upipe_input = NULL;
     sub_mgr->upipe_control = upipe_audio_split_sub_control;
-    sub_mgr->upipe_mgr_control = NULL;
 }
 
 /** @internal @This allocates an audio_split pipe.
@@ -410,8 +408,8 @@ static struct upipe *upipe_audio_split_alloc(struct upipe_mgr *mgr,
     upipe_audio_split_init_urefcount(upipe);
     urefcount_init(upipe_audio_split_to_urefcount_real(upipe_audio_split),
                    upipe_audio_split_free);
-    upipe_audio_split_init_sub_mgr(upipe);
     upipe_audio_split_init_sub_outputs(upipe);
+    upipe_audio_split_init_sub_mgr(upipe);
     upipe_audio_split->flow_def = NULL;
     upipe_throw_ready(upipe);
     return upipe;

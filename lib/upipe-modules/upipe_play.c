@@ -258,7 +258,6 @@ static void upipe_play_init_sub_mgr(struct upipe *upipe)
     sub_mgr->upipe_alloc = upipe_play_sub_alloc;
     sub_mgr->upipe_input = upipe_play_sub_output;
     sub_mgr->upipe_control = upipe_play_sub_control;
-    sub_mgr->upipe_mgr_control = NULL;
 }
 
 /** @internal @This allocates a play pipe.
@@ -277,8 +276,8 @@ static struct upipe *upipe_play_alloc(struct upipe_mgr *mgr,
     if (unlikely(upipe == NULL))
         return NULL;
     upipe_play_init_urefcount(upipe);
-    upipe_play_init_sub_mgr(upipe);
     upipe_play_init_sub_subs(upipe);
+    upipe_play_init_sub_mgr(upipe);
     struct upipe_play *upipe_play = upipe_play_from_upipe(upipe);
     upipe_play->input_latency = 0;
     upipe_play->sink_latency = upipe_play->latency = DEFAULT_OUTPUT_LATENCY;

@@ -298,9 +298,7 @@ static void upipe_ts_scte104d_init_sub_mgr(struct upipe *upipe)
         upipe_ts_scte104d_to_urefcount_real(upipe_ts_scte104d);
     sub_mgr->signature = UPIPE_TS_SCTE104D_OUTPUT_SIGNATURE;
     sub_mgr->upipe_alloc = upipe_ts_scte104d_sub_alloc;
-    sub_mgr->upipe_input = NULL;
     sub_mgr->upipe_control = upipe_ts_scte104d_sub_control;
-    sub_mgr->upipe_mgr_control = NULL;
 }
 
 /** @internal @This allocates a ts_scte104d pipe.
@@ -326,8 +324,8 @@ static struct upipe *upipe_ts_scte104d_alloc(struct upipe_mgr *mgr,
     urefcount_init(upipe_ts_scte104d_to_urefcount_real(upipe_ts_scte104d),
                    upipe_ts_scte104d_free);
     upipe_ts_scte104d_init_ubuf_mgr(upipe);
-    upipe_ts_scte104d_init_sub_mgr(upipe);
     upipe_ts_scte104d_init_sub_subs(upipe);
+    upipe_ts_scte104d_init_sub_mgr(upipe);
     upipe_ts_scte104d->flow_def = NULL;
 
     for (int i = 0; i <= UINT8_MAX; i++)

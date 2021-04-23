@@ -565,7 +565,6 @@ static void upipe_audiocont_init_sub_mgr(struct upipe *upipe)
     sub_mgr->upipe_alloc = upipe_audiocont_sub_alloc;
     sub_mgr->upipe_input = upipe_audiocont_sub_input;
     sub_mgr->upipe_control = upipe_audiocont_sub_control;
-    sub_mgr->upipe_mgr_control = NULL;
 }
 
 /** @internal @This allocates a audiocont pipe.
@@ -602,8 +601,8 @@ static struct upipe *upipe_audiocont_alloc(struct upipe_mgr *mgr,
     upipe_audiocont_init_ubuf_mgr(upipe);
     upipe_audiocont_init_output(upipe);
     upipe_audiocont_init_flow_def_check(upipe);
-    upipe_audiocont_init_sub_mgr(upipe);
     upipe_audiocont_init_sub_subs(upipe);
+    upipe_audiocont_init_sub_mgr(upipe);
 
     upipe_audiocont->input_cur = NULL;
     upipe_audiocont->input_prev = NULL;

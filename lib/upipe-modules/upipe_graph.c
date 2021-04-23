@@ -339,8 +339,6 @@ static void upipe_graph_init_mgr(struct upipe *upipe)
     struct upipe_mgr *mgr = upipe_graph_to_mgr(upipe_graph);
     mgr->refcount = upipe_graph_to_urefcount_real(upipe_graph);
     mgr->signature = UPIPE_GRAPH_SUB_SIGNATURE;
-    mgr->upipe_err_str = NULL;
-    mgr->upipe_command_str = NULL;
     mgr->upipe_alloc = upipe_graph_input_alloc;
     mgr->upipe_input = upipe_graph_input_input;
     mgr->upipe_control = upipe_graph_input_control;

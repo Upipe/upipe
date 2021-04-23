@@ -1736,7 +1736,6 @@ static void upipe_ts_mux_program_init_input_mgr(struct upipe *upipe)
     input_mgr->upipe_alloc = upipe_ts_mux_input_alloc;
     input_mgr->upipe_input = upipe_ts_mux_input_input;
     input_mgr->upipe_control = upipe_ts_mux_input_control;
-    input_mgr->upipe_mgr_control = NULL;
 }
 
 
@@ -1824,8 +1823,8 @@ static struct upipe *upipe_ts_mux_program_alloc(struct upipe_mgr *mgr,
     urefcount_init(upipe_ts_mux_program_to_urefcount_real(upipe_ts_mux_program),
                    upipe_ts_mux_program_free);
     upipe_ts_mux_program_init_bin_input(upipe);
-    upipe_ts_mux_program_init_input_mgr(upipe);
     upipe_ts_mux_program_init_sub_inputs(upipe);
+    upipe_ts_mux_program_init_input_mgr(upipe);
     upipe_ts_mux_program->flow_def_input = NULL;
     upipe_ts_mux_program->psi_pid_pmt = NULL;
     upipe_ts_mux_program->sig_service = NULL;
@@ -2474,9 +2473,7 @@ static void upipe_ts_mux_init_program_mgr(struct upipe *upipe)
     program_mgr->refcount = upipe_ts_mux_to_urefcount(upipe_ts_mux);
     program_mgr->signature = UPIPE_TS_MUX_PROGRAM_SIGNATURE;
     program_mgr->upipe_alloc = upipe_ts_mux_program_alloc;
-    program_mgr->upipe_input = NULL;
     program_mgr->upipe_control = upipe_ts_mux_program_control;
-    program_mgr->upipe_mgr_control = NULL;
 }
 
 
@@ -2594,8 +2591,8 @@ static struct upipe *upipe_ts_mux_alloc(struct upipe_mgr *mgr,
     upipe_ts_mux_init_uclock(upipe);
     upipe_ts_mux_init_bin_input(upipe);
     upipe_ts_mux_init_inner_sink(upipe);
-    upipe_ts_mux_init_program_mgr(upipe);
     upipe_ts_mux_init_sub_programs(upipe);
+    upipe_ts_mux_init_program_mgr(upipe);
 
     upipe_ts_mux->live = false;
     upipe_ts_mux->psi_pid_pat = NULL;
