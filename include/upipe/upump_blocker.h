@@ -62,12 +62,11 @@ UBASE_FROM_TO(upump_blocker, uchain, uchain, uchain)
  * @param upump blocked pump
  * @param cb function to call when the pump is released
  * @param opaque pointer to the module's internal structure
- * @param refcount pointer to urefcount structure to increment during callback,
  * or NULL
  * @return pointer to allocated blocker, or NULL in case of failure
  */
 static inline struct upump_blocker *upump_blocker_alloc(struct upump *upump,
-        upump_blocker_cb cb, void *opaque, struct urefcount *refcount)
+        upump_blocker_cb cb, void *opaque)
 {
     struct upump_blocker *upump_blocker = NULL;
     if (unlikely(!ubase_check(upump_control(upump, UPUMP_ALLOC_BLOCKER,

@@ -98,7 +98,7 @@ static void push(struct upump *upump)
     if (unlikely(!uqueue_push(&uqueue, uchain))) {
         ulifo_push(&ulifo, uchain);
         thread->loop--;
-        thread->blocker = upump_blocker_alloc(upump, NULL, NULL, NULL);
+        thread->blocker = upump_blocker_alloc(upump, NULL, NULL);
         upump_start(thread->upump);
     } else if (unlikely(thread->loop >= nb_loops)) {
         /* make it stop */

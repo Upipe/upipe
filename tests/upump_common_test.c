@@ -77,7 +77,7 @@ static void write_idler_cb(struct upump *upump)
     ssize_t ret = write(pipefd[1], padding, strlen(padding) + 1);
     if (ret == -1 && (errno == EWOULDBLOCK || errno == EAGAIN)) {
         printf("write idler blocked\n");
-        blocker = upump_blocker_alloc(write_idler, blocker_cb, NULL, NULL);
+        blocker = upump_blocker_alloc(write_idler, blocker_cb, NULL);
         assert(blocker != NULL);
         upump_start(write_watcher);
         upump_start(read_timer);
