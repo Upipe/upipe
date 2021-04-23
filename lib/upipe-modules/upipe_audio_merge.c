@@ -473,7 +473,6 @@ static void upipe_audio_merge_init_sub_mgr(struct upipe *upipe)
     sub_mgr->upipe_alloc = upipe_audio_merge_sub_alloc;
     sub_mgr->upipe_input = upipe_audio_merge_sub_input;
     sub_mgr->upipe_control = upipe_audio_merge_sub_control;
-    sub_mgr->upipe_mgr_control = NULL;
 }
 
 /** @internal @This allocates an audio_merge pipe.
@@ -501,8 +500,8 @@ static struct upipe *upipe_audio_merge_alloc(struct upipe_mgr *mgr,
     upipe_audio_merge_init_urefcount_real(upipe);
 
     upipe_audio_merge_init_output(upipe);
-    upipe_audio_merge_init_sub_mgr(upipe);
     upipe_audio_merge_init_sub_inputs(upipe);
+    upipe_audio_merge_init_sub_mgr(upipe);
     upipe_audio_merge_init_ubuf_mgr(upipe);
 
     upipe_audio_merge->sub_flow_def = NULL;

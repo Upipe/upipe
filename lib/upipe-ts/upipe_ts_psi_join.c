@@ -244,7 +244,6 @@ static void upipe_ts_psi_join_init_sub_mgr(struct upipe *upipe)
     sub_mgr->upipe_alloc = upipe_ts_psi_join_sub_alloc;
     sub_mgr->upipe_input = upipe_ts_psi_join_sub_input;
     sub_mgr->upipe_control = upipe_ts_psi_join_sub_control;
-    sub_mgr->upipe_mgr_control = NULL;
 }
 
 /** @internal @This allocates a ts_psi_join pipe.
@@ -267,8 +266,8 @@ static struct upipe *upipe_ts_psi_join_alloc(struct upipe_mgr *mgr,
 
     upipe_ts_psi_join_init_urefcount(upipe);
     upipe_ts_psi_join_init_output(upipe);
-    upipe_ts_psi_join_init_sub_mgr(upipe);
     upipe_ts_psi_join_init_sub_subs(upipe);
+    upipe_ts_psi_join_init_sub_mgr(upipe);
 
     upipe_throw_ready(upipe);
     upipe_ts_psi_join_store_flow_def(upipe, flow_def);

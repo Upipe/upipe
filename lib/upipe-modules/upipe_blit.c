@@ -852,13 +852,11 @@ static void upipe_blit_init_sub_mgr(struct upipe *upipe)
 {
     struct upipe_blit *upipe_blit = upipe_blit_from_upipe(upipe);
     struct upipe_mgr *sub_mgr = &upipe_blit->sub_mgr;
-    memset(sub_mgr, 0, sizeof (*sub_mgr));
     sub_mgr->refcount = upipe_blit_to_urefcount(upipe_blit);
     sub_mgr->signature = UPIPE_BLIT_SUB_SIGNATURE;
     sub_mgr->upipe_alloc = upipe_blit_sub_alloc;
     sub_mgr->upipe_input = upipe_blit_sub_input;
     sub_mgr->upipe_control = upipe_blit_sub_control;
-    sub_mgr->upipe_mgr_control = NULL;
 }
 
 /** @internal @This allocates a blit pipe.
@@ -880,8 +878,8 @@ static struct upipe *upipe_blit_alloc(struct upipe_mgr *mgr,
     struct upipe_blit *upipe_blit = upipe_blit_from_upipe(upipe);
     upipe_blit_init_urefcount(upipe);
     upipe_blit_init_output(upipe);
-    upipe_blit_init_sub_mgr(upipe);
     upipe_blit_init_sub_subs(upipe);
+    upipe_blit_init_sub_mgr(upipe);
     upipe_blit_init_upump_mgr(upipe);
     upipe_blit_init_idler(upipe);
     upipe_blit_init_flow_format(upipe);

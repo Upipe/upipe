@@ -2760,8 +2760,8 @@ static struct upipe *upipe_avfilt_alloc(struct upipe_mgr *mgr,
     upipe_avfilt_init_urefcount(upipe);
     upipe_avfilt_init_output(upipe);
     upipe_avfilt_init_flow_def(upipe);
-    upipe_avfilt_init_sub_mgr(upipe);
     upipe_avfilt_init_sub_subs(upipe);
+    upipe_avfilt_init_sub_mgr(upipe);
     upipe_avfilt_init_sync(upipe);
 
     struct upipe_avfilt *upipe_avfilt = upipe_avfilt_from_upipe(upipe);

@@ -980,9 +980,7 @@ static void upipe_ts_psig_program_init_flow_mgr(struct upipe *upipe)
         upipe_ts_psig_program_to_urefcount(upipe_ts_psig_program);
     flow_mgr->signature = UPIPE_TS_PSIG_FLOW_SIGNATURE;
     flow_mgr->upipe_alloc = upipe_ts_psig_flow_alloc;
-    flow_mgr->upipe_input = NULL;
     flow_mgr->upipe_control = upipe_ts_psig_flow_control;
-    flow_mgr->upipe_mgr_control = NULL;
 }
 
 /** @internal @This allocates a program of a ts_psig pipe.
@@ -1007,8 +1005,8 @@ static struct upipe *upipe_ts_psig_program_alloc(struct upipe_mgr *mgr,
         upipe_ts_psig_program_from_upipe(upipe);
     upipe_ts_psig_program_init_urefcount(upipe);
     upipe_ts_psig_program_init_output(upipe);
-    upipe_ts_psig_program_init_flow_mgr(upipe);
     upipe_ts_psig_program_init_sub_flows(upipe);
+    upipe_ts_psig_program_init_flow_mgr(upipe);
     upipe_ts_psig_program_init_sub(upipe);
     upipe_ts_psig_program->flow_def = NULL;
     upipe_ts_psig_program->frozen = false;
@@ -1524,7 +1522,6 @@ static void upipe_ts_psig_init_program_mgr(struct upipe *upipe)
     program_mgr->refcount = upipe_ts_psig_to_urefcount(upipe_ts_psig);
     program_mgr->signature = UPIPE_TS_PSIG_PROGRAM_SIGNATURE;
     program_mgr->upipe_alloc = upipe_ts_psig_program_alloc;
-    program_mgr->upipe_input = NULL;
     program_mgr->upipe_control = upipe_ts_psig_program_control;
 }
 
@@ -1550,8 +1547,8 @@ static struct upipe *upipe_ts_psig_alloc(struct upipe_mgr *mgr,
     upipe_ts_psig_init_uref_mgr(upipe);
     upipe_ts_psig_init_ubuf_mgr(upipe);
     upipe_ts_psig_init_output(upipe);
-    upipe_ts_psig_init_program_mgr(upipe);
     upipe_ts_psig_init_sub_programs(upipe);
+    upipe_ts_psig_init_program_mgr(upipe);
     upipe_ts_psig->flow_def = NULL;
     upipe_ts_psig->frozen = false;
     upipe_ts_psig->cr_sys_status = UINT64_MAX;

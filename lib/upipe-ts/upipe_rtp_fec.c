@@ -920,12 +920,11 @@ static void upipe_rtp_fec_init_sub_mgr(struct upipe *upipe)
     struct upipe_rtp_fec *upipe_rtp_fec = upipe_rtp_fec_from_upipe(upipe);
     struct upipe_mgr *sub_mgr = &upipe_rtp_fec->sub_mgr;
 
+    upipe_mgr_init(sub_mgr);
     sub_mgr->refcount = upipe_rtp_fec_to_urefcount(upipe_rtp_fec);
     sub_mgr->signature = UPIPE_RTP_FEC_INPUT_SIGNATURE;
-    sub_mgr->upipe_alloc = NULL;
     sub_mgr->upipe_input = upipe_rtp_fec_sub_input;
     sub_mgr->upipe_control = upipe_rtp_fec_sub_control;
-    sub_mgr->upipe_mgr_control = NULL;
 }
 
 /** @internal @This allocates a rtp-fec pipe.

@@ -302,6 +302,7 @@ static void STRUCTURE_SUB##_clean_sub(struct upipe *upipe)                  \
 static void STRUCTURE##_init_sub_##SUB##s(struct upipe *upipe)              \
 {                                                                           \
     struct STRUCTURE *s = STRUCTURE##_from_upipe(upipe);                    \
+    upipe_mgr_init(&s->MGR);                                                \
     ulist_init(&s->ULIST);                                                  \
 }                                                                           \
 /** @This returns the subpipe manager of a super-pipe.                      \

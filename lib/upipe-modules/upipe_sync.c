@@ -901,7 +901,6 @@ static void upipe_sync_init_sub_mgr(struct upipe *upipe)
 {
     struct upipe_sync *upipe_sync = upipe_sync_from_upipe(upipe);
     struct upipe_mgr *sub_mgr = &upipe_sync->sub_mgr;
-    memset(sub_mgr, 0, sizeof(*sub_mgr));
     sub_mgr->refcount = upipe->refcount;
     sub_mgr->signature = UPIPE_SYNC_SUB_SIGNATURE;
     sub_mgr->upipe_alloc = upipe_sync_sub_alloc;

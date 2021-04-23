@@ -527,7 +527,6 @@ static void upipe_rtcpfb_init_sub_mgr(struct upipe *upipe)
     sub_mgr->upipe_alloc = upipe_rtcpfb_input_alloc;
     sub_mgr->upipe_input = upipe_rtcpfb_input_sub;
     sub_mgr->upipe_control = upipe_rtcpfb_input_control;
-    sub_mgr->upipe_mgr_control = NULL;
 }
 
 /** @internal @This allocates a rtcpfb pipe.
@@ -553,8 +552,8 @@ static struct upipe *upipe_rtcpfb_alloc(struct upipe_mgr *mgr,
     upipe_rtcpfb_init_upump_timer(upipe);
     upipe_rtcpfb_init_uclock(upipe);
     upipe_rtcpfb_init_output(upipe);
-    upipe_rtcpfb_init_sub_mgr(upipe);
     upipe_rtcpfb_init_sub_outputs(upipe);
+    upipe_rtcpfb_init_sub_mgr(upipe);
     upipe_rtcpfb_init_ubuf_mgr(upipe);
     upipe_rtcpfb_init_uref_mgr(upipe);
     ulist_init(&upipe_rtcpfb->queue);

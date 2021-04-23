@@ -307,8 +307,6 @@ static void upipe_hls_variant_init_sub_mgr(struct upipe *upipe)
 {
     struct upipe_hls_variant *upipe_hls_variant =
         upipe_hls_variant_from_upipe(upipe);
-
-    memset(&upipe_hls_variant->sub_mgr, 0, sizeof (upipe_hls_variant->sub_mgr));
     upipe_hls_variant->sub_mgr.signature = UPIPE_HLS_VARIANT_SUB_SIGNATURE;
     upipe_hls_variant->sub_mgr.refcount = upipe->refcount;
     upipe_hls_variant->sub_mgr.upipe_alloc = upipe_hls_variant_sub_alloc;
@@ -335,8 +333,8 @@ static struct upipe *upipe_hls_variant_alloc(struct upipe_mgr *mgr,
         return NULL;
 
     upipe_hls_variant_init_urefcount(upipe);
-    upipe_hls_variant_init_sub_mgr(upipe);
     upipe_hls_variant_init_sub_pipes(upipe);
+    upipe_hls_variant_init_sub_mgr(upipe);
     upipe_hls_variant_init_upump_mgr(upipe);
     upipe_hls_variant_init_upump(upipe);
 

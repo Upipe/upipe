@@ -652,12 +652,9 @@ static void upipe_bmd_src_init_sub_mgr(struct upipe *upipe)
 {
     struct upipe_bmd_src *upipe_bmd_src = upipe_bmd_src_from_upipe(upipe);
     struct upipe_mgr *sub_mgr = &upipe_bmd_src->sub_mgr;
-    sub_mgr->refcount = NULL;
+    upipe_mgr_init(sub_mgr);
     sub_mgr->signature = UPIPE_BMD_SRC_OUTPUT_SIGNATURE;
-    sub_mgr->upipe_alloc = NULL;
-    sub_mgr->upipe_input = NULL;
     sub_mgr->upipe_control = upipe_bmd_src_output_control;
-    sub_mgr->upipe_mgr_control = NULL;
 }
 
 /** @internal @This allocates a bmd source pipe.

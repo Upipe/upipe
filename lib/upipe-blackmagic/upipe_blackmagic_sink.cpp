@@ -1508,7 +1508,6 @@ static void upipe_bmd_sink_init_sub_mgr(struct upipe *upipe)
     sub_mgr->upipe_alloc = upipe_bmd_sink_sub_alloc;
     sub_mgr->upipe_input = upipe_bmd_sink_sub_input;
     sub_mgr->upipe_control = upipe_bmd_sink_sub_control;
-    sub_mgr->upipe_mgr_control = NULL;
 }
 
 /** @This returns the Blackmagic hardware output time.

@@ -228,7 +228,6 @@ static void upipe_subpic_schedule_init_sub_mgr(struct upipe *upipe)
     sub_mgr->upipe_alloc = upipe_subpic_schedule_sub_alloc;
     sub_mgr->upipe_input = upipe_subpic_schedule_sub_input;
     sub_mgr->upipe_control = upipe_subpic_schedule_sub_control;
-    sub_mgr->upipe_mgr_control = NULL;
 }
 
 /** @internal @This frees all resources allocated.

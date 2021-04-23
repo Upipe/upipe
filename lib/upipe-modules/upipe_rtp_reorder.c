@@ -429,7 +429,6 @@ static void upipe_rtpr_init_sub_mgr(struct upipe *upipe)
     sub_mgr->upipe_alloc = upipe_rtpr_sub_alloc;
     sub_mgr->upipe_input = upipe_rtpr_sub_input;
     sub_mgr->upipe_control = upipe_rtpr_sub_control;
-    sub_mgr->upipe_mgr_control = NULL;
 }
 
 static void upipe_rtpr_clean_queue(struct upipe *upipe)
@@ -470,8 +469,8 @@ static struct upipe *upipe_rtpr_alloc(struct upipe_mgr *mgr,
     upipe_rtpr_init_upump(upipe);
     upipe_rtpr_init_uclock(upipe);
     upipe_rtpr_init_output(upipe);
-    upipe_rtpr_init_sub_mgr(upipe);
     upipe_rtpr_init_sub_inputs(upipe);
+    upipe_rtpr_init_sub_mgr(upipe);
 
     ulist_init(&upipe_rtpr->queue);
 

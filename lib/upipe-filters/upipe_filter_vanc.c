@@ -339,12 +339,9 @@ static void upipe_vanc_init_sub_mgr(struct upipe *upipe)
 {
     struct upipe_vanc *upipe_vanc = upipe_vanc_from_upipe(upipe);
     struct upipe_mgr *sub_mgr = &upipe_vanc->sub_mgr;
-    sub_mgr->refcount = NULL;
+    upipe_mgr_init(sub_mgr);
     sub_mgr->signature = UPIPE_VANC_OUTPUT_SIGNATURE;
-    sub_mgr->upipe_alloc = NULL;
-    sub_mgr->upipe_input = NULL;
     sub_mgr->upipe_control = upipe_vanc_output_control;
-    sub_mgr->upipe_mgr_control = NULL;
 }
 
 /** @internal @This allocates a vanc pipe.

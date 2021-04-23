@@ -370,7 +370,6 @@ static void upipe_videocont_init_sub_mgr(struct upipe *upipe)
     sub_mgr->upipe_alloc = upipe_videocont_sub_alloc;
     sub_mgr->upipe_input = upipe_videocont_sub_input;
     sub_mgr->upipe_control = upipe_videocont_sub_control;
-    sub_mgr->upipe_mgr_control = NULL;
 }
 
 /** @internal @This allocates a videocont pipe.
@@ -392,8 +391,8 @@ static struct upipe *upipe_videocont_alloc(struct upipe_mgr *mgr,
 
     upipe_videocont_init_urefcount(upipe);
     upipe_videocont_init_output(upipe);
-    upipe_videocont_init_sub_mgr(upipe);
     upipe_videocont_init_sub_subs(upipe);
+    upipe_videocont_init_sub_mgr(upipe);
 
     struct upipe_videocont *upipe_videocont = upipe_videocont_from_upipe(upipe);
     upipe_videocont->input_cur = NULL;

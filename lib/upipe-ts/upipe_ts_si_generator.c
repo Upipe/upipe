@@ -879,7 +879,6 @@ static void upipe_ts_sig_init_service_mgr(struct upipe *upipe)
     service_mgr->refcount = upipe_ts_sig_to_urefcount(upipe_ts_sig);
     service_mgr->signature = UPIPE_TS_SIG_SERVICE_SIGNATURE;
     service_mgr->upipe_alloc = upipe_ts_sig_service_alloc;
-    service_mgr->upipe_input = NULL;
     service_mgr->upipe_control = upipe_ts_sig_service_control;
 }
 
@@ -998,8 +997,8 @@ static struct upipe *_upipe_ts_sig_alloc(struct upipe_mgr *mgr,
     upipe_ts_sig_init_ubuf_mgr(upipe);
     upipe_ts_sig_init_uclock(upipe);
     upipe_ts_sig_init_output(upipe);
-    upipe_ts_sig_init_service_mgr(upipe);
     upipe_ts_sig_init_sub_services(upipe);
+    upipe_ts_sig_init_service_mgr(upipe);
     upipe_ts_sig_init_output_mgr(upipe);
     upipe_ts_sig_init_dvb_string(upipe);
     upipe_ts_sig_store_flow_def(upipe, NULL);

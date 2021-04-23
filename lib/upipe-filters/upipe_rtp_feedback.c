@@ -641,7 +641,6 @@ static void upipe_rtpfb_init_sub_mgr(struct upipe *upipe)
     sub_mgr->upipe_alloc = upipe_rtpfb_output_alloc;
     sub_mgr->upipe_input = upipe_rtpfb_output_input;
     sub_mgr->upipe_control = upipe_rtpfb_output_control;
-    sub_mgr->upipe_mgr_control = NULL;
 }
 
 static void upipe_rtpfb_output_send_rr_xr(struct upipe *upipe)
@@ -751,8 +750,8 @@ static struct upipe *upipe_rtpfb_alloc(struct upipe_mgr *mgr,
     upipe_rtpfb_init_urefcount(upipe);
     upipe_rtpfb_init_urefcount_real(upipe);
     upipe_rtpfb_init_output(upipe);
-    upipe_rtpfb_init_sub_mgr(upipe);
     upipe_rtpfb_init_sub_outputs(upipe);
+    upipe_rtpfb_init_sub_mgr(upipe);
     upipe_rtpfb->expected_seqnum = UINT_MAX;
     upipe_rtpfb->flow_def_input = NULL;
     upipe_rtpfb_init_upump_mgr(upipe);

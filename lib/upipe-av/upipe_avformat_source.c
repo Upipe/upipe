@@ -455,13 +455,8 @@ static void upipe_avfsrc_init_sub_mgr(struct upipe *upipe)
     struct upipe_mgr *sub_mgr = &upipe_avfsrc->sub_mgr;
     sub_mgr->refcount = upipe_avfsrc_to_urefcount_real(upipe_avfsrc);
     sub_mgr->signature = UPIPE_AVFSRC_OUTPUT_SIGNATURE;
-    sub_mgr->upipe_err_str = NULL;
-    sub_mgr->upipe_command_str = NULL;
-    sub_mgr->upipe_event_str = NULL;
     sub_mgr->upipe_alloc = upipe_avfsrc_sub_alloc;
-    sub_mgr->upipe_input = NULL;
     sub_mgr->upipe_control = upipe_avfsrc_sub_control;
-    sub_mgr->upipe_mgr_control = NULL;
 }
 
 /** @internal @This allocates an avfsrc pipe.
@@ -485,8 +480,8 @@ static struct upipe *upipe_avfsrc_alloc(struct upipe_mgr *mgr,
     urefcount_init(upipe_avfsrc_to_urefcount_real(upipe_avfsrc),
                    upipe_avfsrc_free);
     upipe_avfsrc_init_output(upipe);
-    upipe_avfsrc_init_sub_mgr(upipe);
     upipe_avfsrc_init_sub_subs(upipe);
+    upipe_avfsrc_init_sub_mgr(upipe);
     upipe_avfsrc_init_uref_mgr(upipe);
     upipe_avfsrc_init_upump_mgr(upipe);
     upipe_avfsrc_init_upump(upipe);

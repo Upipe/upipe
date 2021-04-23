@@ -723,8 +723,8 @@ static struct upipe *upipe_avfsink_alloc(struct upipe_mgr *mgr,
 
     struct upipe_avfsink *upipe_avfsink = upipe_avfsink_from_upipe(upipe);
     upipe_avfsink_init_urefcount(upipe);
-    upipe_avfsink_init_sub_mgr(upipe);
     upipe_avfsink_init_sub_subs(upipe);
+    upipe_avfsink_init_sub_mgr(upipe);
 
     upipe_avfsink->uri = NULL;
     upipe_avfsink->init_uri = NULL;

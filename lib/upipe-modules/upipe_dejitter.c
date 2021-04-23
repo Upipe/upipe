@@ -216,7 +216,6 @@ static void upipe_dejitter_init_sub_mgr(struct upipe *upipe)
     sub_mgr->upipe_alloc = upipe_dejitter_sub_alloc;
     sub_mgr->upipe_input = upipe_dejitter_sub_input;
     sub_mgr->upipe_control = upipe_dejitter_sub_control;
-    sub_mgr->upipe_mgr_control = NULL;
 }
 
 /** @internal @This allocates a dejitter pipe.
@@ -238,8 +237,8 @@ static struct upipe *upipe_dejitter_alloc(struct upipe_mgr *mgr,
 
     struct upipe_dejitter *upipe_dejitter = upipe_dejitter_from_upipe(upipe);
     upipe_dejitter_init_urefcount(upipe);
-    upipe_dejitter_init_sub_mgr(upipe);
     upipe_dejitter_init_sub_subs(upipe);
+    upipe_dejitter_init_sub_mgr(upipe);
     upipe_dejitter_init_output(upipe);
     upipe_dejitter->inited = false;
     upipe_throw_ready(upipe);
