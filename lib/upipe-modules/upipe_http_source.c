@@ -1234,6 +1234,7 @@ static int _upipe_http_src_mgr_set_cookie(struct upipe_mgr *upipe_mgr,
 
         if (!ustring_cmp(item->ucookie.name, cookie->ucookie.name)) {
             ulist_delete(uchain);
+            free(item->value);
             free(item);
         }
     }
