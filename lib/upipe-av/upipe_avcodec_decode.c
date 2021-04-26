@@ -177,6 +177,8 @@ struct upipe_avcdec {
     AVCodecContext *context;
     /** avcodec frame */
     AVFrame *frame;
+    /** avcodec packet */
+    AVPacket *avpkt;
     /** true if the context will be closed */
     bool close;
 
@@ -823,11 +825,7 @@ static void upipe_avcdec_close(struct upipe *upipe)
 
     if (upipe_avcdec->context->codec->capabilities & AV_CODEC_CAP_DELAY) {
         /* Feed avcodec with NULL packet to output the remaining frames */
-        AVPacket avpkt;
-        av_init_packet(&avpkt);
-        avpkt.size = 0;
-        avpkt.data = NULL;
-        upipe_avcdec_decode_avpkt(upipe, &avpkt, NULL);
+        upipe_avcdec_decode_avpkt(upipe, NULL, NULL);
     }
     upipe_avcdec->close = true;
     upipe_avcdec_start_av_deal(upipe);
@@ -1277,6 +1275,8 @@ static bool upipe_avcdec_decode_avpkt(struct upipe *upipe, AVPacket *avpkt,
     switch (context->codec->type) {
         case AVMEDIA_TYPE_SUBTITLE: {
             AVSubtitle subtitle;
+            if (avpkt == NULL)
+                avpkt = upipe_avcdec->avpkt;
             /* store original pointer */
             void *data = avpkt->data;
 
@@ -1376,8 +1376,8 @@ static bool upipe_avcdec_decode(struct upipe *upipe, struct uref *uref,
         return true;
     }
 
-    AVPacket avpkt;
-    if (unlikely(av_new_packet(&avpkt, size) < 0)) {
+    AVPacket *avpkt = upipe_avcdec->avpkt;
+    if (unlikely(av_new_packet(avpkt, size) < 0)) {
         uref_free(uref);
         upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
         return true;
@@ -1387,15 +1387,15 @@ static bool upipe_avcdec_decode(struct upipe *upipe, struct uref *uref,
     uint64_t dts;
     uint64_t duration;
     if (ubase_check(uref_clock_get_pts_prog(uref, &pts)))
-        avpkt.pts = pts;
+        avpkt->pts = pts;
     if (ubase_check(uref_clock_get_dts_prog(uref, &dts)))
-        avpkt.dts = dts;
+        avpkt->dts = dts;
     if (ubase_check(uref_clock_get_duration(uref, &duration)))
-        avpkt.duration = duration;
+        avpkt->duration = duration;
 
     upipe_verbose_va(upipe, "Received packet %"PRIu64" - size : %d",
-                     upipe_avcdec->counter, avpkt.size);
-    uref_block_extract(uref, 0, avpkt.size, avpkt.data);
+                     upipe_avcdec->counter, avpkt->size);
+    uref_block_extract(uref, 0, avpkt->size, avpkt->data);
     ubuf_free(uref_detach_ubuf(uref));
 
     uref_pic_set_number(uref, upipe_avcdec->counter++);
@@ -1408,8 +1408,8 @@ static bool upipe_avcdec_decode(struct upipe *upipe, struct uref *uref,
     }
 
     upipe_avcdec_store_uref(upipe, uref);
-    upipe_avcdec_decode_avpkt(upipe, &avpkt, upump_p);
-    av_packet_unref(&avpkt);
+    upipe_avcdec_decode_avpkt(upipe, avpkt, upump_p);
+    av_packet_unref(avpkt);
 
     return true;
 }
@@ -1697,6 +1697,7 @@ static void upipe_avcdec_free(struct upipe *upipe)
         av_free(upipe_avcdec->context);
     }
     av_frame_free(&upipe_avcdec->frame);
+    av_packet_free(&upipe_avcdec->avpkt);
     av_buffer_unref(&upipe_avcdec->hw_device_ctx);
     free(upipe_avcdec->hw_device);
 
@@ -1732,9 +1733,16 @@ static struct upipe *upipe_avcdec_alloc(struct upipe_mgr *mgr,
     if (unlikely(frame == NULL))
         return NULL;
 
+    AVPacket *avpkt = av_packet_alloc();
+    if (unlikely(avpkt == NULL)) {
+        av_frame_free(&frame);
+        return NULL;
+    }
+
     struct upipe *upipe = upipe_avcdec_alloc_void(mgr, uprobe, signature, args);
     if (unlikely(upipe == NULL)) {
         av_frame_free(&frame);
+        av_packet_free(&avpkt);
         return NULL;
     }
     upipe_avcdec_init_urefcount(upipe);
@@ -1753,6 +1761,7 @@ static struct upipe *upipe_avcdec_alloc(struct upipe_mgr *mgr,
     upipe_avcdec->hw_pix_fmt = AV_PIX_FMT_NONE;
     upipe_avcdec->context = NULL;
     upipe_avcdec->frame = frame;
+    upipe_avcdec->avpkt = avpkt;
     upipe_avcdec->counter = 0;
     upipe_avcdec->close = false;
     upipe_avcdec->pix_fmt = AV_PIX_FMT_NONE;
