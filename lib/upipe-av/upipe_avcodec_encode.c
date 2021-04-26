@@ -191,6 +191,8 @@ struct upipe_avcenc {
     AVCodecContext *context;
     /** avcodec frame */
     AVFrame *frame;
+    /** avcodec packet */
+    AVPacket *avpkt;
     /** true if the context will be closed */
     bool close;
     /** true if the context will be reinitialized */
@@ -707,12 +709,8 @@ static void upipe_avcenc_encode_frame(struct upipe *upipe,
         return;
     }
 
-    AVPacket avpkt;
-    av_init_packet(&avpkt);
-    avpkt.data = NULL;
-    avpkt.size = 0;
     while (1) {
-        err = avcodec_receive_packet(context, &avpkt);
+        err = avcodec_receive_packet(context, upipe_avcenc->avpkt);
         if (unlikely(err < 0)) {
             if (err != AVERROR(EAGAIN) &&
                 err != AVERROR_EOF)
@@ -720,9 +718,9 @@ static void upipe_avcenc_encode_frame(struct upipe *upipe,
                              av_err2str(err));
             break;
         }
-        upipe_avcenc_output_pkt(upipe, &avpkt, upump_p);
+        upipe_avcenc_output_pkt(upipe, upipe_avcenc->avpkt, upump_p);
     }
-    av_packet_unref(&avpkt);
+    av_packet_unref(upipe_avcenc->avpkt);
 }
 
 /** @internal @This encodes video frames.
@@ -1734,6 +1732,7 @@ static void upipe_avcenc_free(struct upipe *upipe)
     if (upipe_avcenc->context != NULL)
         av_free(upipe_avcenc->context);
     av_frame_free(&upipe_avcenc->frame);
+    av_packet_free(&upipe_avcenc->avpkt);
 
     /* free remaining urefs (should not be any) */
     struct uchain *uchain;
@@ -1777,17 +1776,25 @@ static struct upipe *upipe_avcenc_alloc(struct upipe_mgr *mgr,
     if (unlikely(frame == NULL))
         return NULL;
 
+    AVPacket *avpkt = av_packet_alloc();
+    if (unlikely(avpkt == NULL)) {
+        av_frame_free(&frame);
+        return NULL;
+    }
+
     struct uref *flow_def;
     struct upipe *upipe = upipe_avcenc_alloc_flow(mgr, uprobe, signature, args,
                                                   &flow_def);
     if (unlikely(upipe == NULL)) {
         av_frame_free(&frame);
+        av_packet_free(&avpkt);
         return NULL;
     }
 
     struct uref *options = uref_alloc_control(flow_def->mgr);
     if (options == NULL) {
         av_frame_free(&frame);
+        av_packet_free(&avpkt);
         upipe_avcenc_free_flow(upipe);
         return NULL;
     }
@@ -1809,12 +1816,14 @@ static struct upipe *upipe_avcenc_alloc(struct upipe_mgr *mgr,
             (upipe_avcenc->context = avcodec_alloc_context3(codec)) == NULL) {
         uref_free(flow_def);
         av_frame_free(&frame);
+        av_packet_free(&avpkt);
         uref_free(options);
         upipe_avcenc_free_flow(upipe);
         return NULL;
     }
 
     upipe_avcenc->frame = frame;
+    upipe_avcenc->avpkt = avpkt;
     upipe_avcenc->context->codec = codec;
     upipe_avcenc->context->opaque = upipe;
 
