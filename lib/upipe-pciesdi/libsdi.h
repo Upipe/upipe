@@ -20,6 +20,28 @@
 #ifndef SDI_LIB_H
 #define SDI_LIB_H
 
+enum sdi_type {
+    SDI_TYPE_PAL,
+    SDI_TYPE_720P50,
+    SDI_TYPE_720P60,
+    SDI_TYPE_1080P24,
+    SDI_TYPE_1080I25,
+    SDI_TYPE_1080P25,
+    SDI_TYPE_1080P30,
+    SDI_TYPE_1080P50,
+    SDI_TYPE_1080P60,
+
+    SDI_TYPE_NTSC,
+    SDI_TYPE_720P59,
+    SDI_TYPE_1080P23,
+    SDI_TYPE_1080I29,
+    SDI_TYPE_1080P29,
+    SDI_TYPE_1080P59,
+
+    /* Also the number of types. */
+    SDI_TYPE_UNKNOWN,
+};
+
 int64_t get_time_ms(void);
 
 /* ioctl */
@@ -441,7 +463,7 @@ static const uint16_t smpte274m_1080p23_98_regs[][2] = {
     { 42, 0x52 },
 };
 
-int si5324_genlock(int fd);
+enum sdi_type si5324_genlock_probe(int fd);
 
 const char *sdi_decode_mode(uint8_t mode);
 const char *sdi_decode_family(uint8_t family);
