@@ -851,9 +851,6 @@ static int upipe_pciesdi_sink_set_flow_def(struct upipe *upipe, struct uref *flo
     if (clock_rate == upipe_pciesdi_sink->clock_rate && tx_mode == upipe_pciesdi_sink->tx_mode)
         return UBASE_ERR_NONE;
 
-    /* Lock to begin init. */
-    pthread_mutex_lock(&upipe_pciesdi_sink->clock_mutex);
-
     /* Throw a probe event to signal the genlock status. */
     if (clock_rate & SDI_GENLOCK_RATE)
         upipe_throw(upipe, UPROBE_PCIESDI_SINK_GENLOCK_TYPE, UPIPE_PCIESDI_SINK_SIGNATURE,
@@ -864,6 +861,9 @@ static int upipe_pciesdi_sink_set_flow_def(struct upipe *upipe, struct uref *flo
     else
         upipe_throw(upipe, UPROBE_PCIESDI_SINK_GENLOCK_TYPE, UPIPE_PCIESDI_SINK_SIGNATURE,
                 (uint32_t)UPROBE_PCIESDI_SINK_GENLOCK_NOT_CONFIGURED);
+
+    /* Lock to begin init. */
+    pthread_mutex_lock(&upipe_pciesdi_sink->clock_mutex);
 
     /* initialize clock */
     init_hardware(upipe, clock_rate, tx_mode);
