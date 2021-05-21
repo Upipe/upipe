@@ -224,6 +224,8 @@ struct upipe_sdi_dec {
 
     /* Output video ubuf */
     struct ubuf *ubuf;
+    /* Output video attributes */
+    struct udict *video_output_attr;
 
     /* Output audio ubuf */
     struct ubuf *ubuf_sound;
@@ -953,8 +955,10 @@ static bool upipe_sdi_dec_handle(struct upipe *upipe, struct uref *uref,
         ubuf_free(upipe_sdi_dec->head_next_frame);
         ubuf_free(upipe_sdi_dec->ubuf);
         ubuf_free(upipe_sdi_dec->ubuf_sound);
+        udict_free(upipe_sdi_dec->video_output_attr);
 
         /* Reset state. */
+        upipe_sdi_dec->video_output_attr = NULL;
         upipe_sdi_dec->head_next_frame = NULL;
         upipe_sdi_dec->ubuf = NULL;
         upipe_sdi_dec->ubuf_sound = NULL;
@@ -1096,6 +1100,11 @@ static bool upipe_sdi_dec_handle(struct upipe *upipe, struct uref *uref,
         upipe_sdi_dec->discontinuity = false;
         upipe_throw_clock_ts(upipe, uref);
     }
+
+    /* Import previous video attributes. */
+    udict_import(uref->udict, upipe_sdi_dec->video_output_attr);
+    udict_free(upipe_sdi_dec->video_output_attr);
+    upipe_sdi_dec->video_output_attr = NULL;
 
     struct uref *uref_vbi = NULL;
     int vbi_line = 0;
@@ -1593,10 +1602,22 @@ static bool upipe_sdi_dec_handle(struct upipe *upipe, struct uref *uref,
         upipe_sdi_dec->sdi3g_levelb_second_frame = !upipe_sdi_dec->sdi3g_levelb_second_frame;
         uref_attach_ubuf(uref, ubuf);
         upipe_sdi_dec->ubuf = NULL;
+
+        /* Copy stored attributes into output uref. */
+        udict_import(uref->udict, upipe_sdi_dec->video_output_attr);
+        udict_free(upipe_sdi_dec->video_output_attr);
+        upipe_sdi_dec->video_output_attr = NULL;
+
         upipe_sdi_dec_output(upipe, uref, upump_p);
     } else {
         upipe_sdi_dec->chunk_line_offset = last_line;
         upipe_sdi_dec->active_line_offset += active_lines;
+
+        /* Copy attributes on video uref. */
+        upipe_sdi_dec->video_output_attr = udict_dup(uref->udict);
+        if (!upipe_sdi_dec->video_output_attr)
+            upipe_throw_error(upipe, UBASE_ERR_ALLOC);
+
         uref_free(uref);
     }
 
@@ -1889,6 +1910,7 @@ static struct upipe *_upipe_sdi_dec_alloc(struct upipe_mgr *mgr,
 #endif
 #endif
 
+    upipe_sdi_dec->video_output_attr = NULL;
     upipe_sdi_dec->head_next_frame = upipe_sdi_dec->ubuf = NULL;
     upipe_sdi_dec->prev_fvh = 0;
     upipe_sdi_dec->discontinuity = false;
