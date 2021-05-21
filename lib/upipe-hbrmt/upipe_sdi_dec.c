@@ -56,6 +56,7 @@
 
 #include <bitstream/smpte/291.h>
 #include <bitstream/smpte/337.h>
+#include <bitstream/smpte/334.h>
 
 #include <upipe-hbrmt/upipe_sdi_dec.h>
 
@@ -774,6 +775,16 @@ static void upipe_sdi_dec_parse_vanc_line(struct upipe *upipe, struct uref *uref
                 bar_data[i] = r[3 + i] & 0xff;
             uref_pic_set_bar_data(uref, bar_data, 5);
         } else if (did == S291_CEA708_DID && sdid == S291_CEA708_SDID) {
+            if (dc < S334_CDP_HEADER_LEN + S334_CDP_FOOTER_LEN) {
+                upipe_err_va(upipe, "Caption Distribution Packet is too small");
+                continue;
+            }
+            uint16_t cdp_identifier = (r[0] << 8) | r[1];
+            if (cdp_identifier != S334_CDP_IDENTIFIER) {
+                upipe_err_va(upipe, "Invalid Caption Distribution Packet identifier");
+                continue;
+            }
+
             uint8_t flags = r[4] & 0xff;
             if (!(flags & (1 << 6))) { // ccdata present
                 continue;
@@ -791,10 +802,26 @@ static void upipe_sdi_dec_parse_vanc_line(struct upipe *upipe, struct uref *uref
             }
 
             bool timecode = flags & (1 << 7);
-            uint8_t cc_count = 3 * (r[8 + (timecode ? 5 : 0)] & 0x1f);
+            if (timecode && dc < S334_CDP_HEADER_LEN + S334_CDP_TIMECODE_LEN + S334_CDP_CCDATA_HEADER_LEN + S334_CDP_FOOTER_LEN) {
+                upipe_err_va(upipe, "Caption Distribution Packet is too small for timecode and ccdata");
+                continue;
+            }
+
+            uint8_t *ccdata_section = &r[S334_CDP_HEADER_LEN + (timecode ? S334_CDP_TIMECODE_LEN : 0)];
+            if (ccdata_section[0] == S334_CDP_CCDATA_ID) {
+                upipe_err_va(upipe, "Invalid ccdata_id");
+                continue;
+            }
+
+            uint8_t cc_count = 3 * (ccdata_section[1] & 0x1f);
+            if (dc < S334_CDP_HEADER_LEN + (timecode ? S334_CDP_TIMECODE_LEN : 0) + S334_CDP_CCDATA_HEADER_LEN + cc_count + S334_CDP_FOOTER_LEN) {
+                upipe_err_va(upipe, "Invalid cc_count value. Packet not large enough");
+                continue;
+            }
+
             uint8_t cea[cc_count];
             for (int j = 0; j < cc_count; j++)
-                cea[j] = r[9 + (timecode ? 5 : 0) + j] & 0xff;
+                cea[j] = ccdata_section[S334_CDP_CCDATA_HEADER_LEN + j] & 0xff;
             uref_pic_set_cea_708(uref, cea, cc_count);
         } else
             upipe_verbose_va(upipe, "unhandled ancillary 0x%"PRIx8"/0x%"PRIx8,
