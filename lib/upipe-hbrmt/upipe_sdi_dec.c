@@ -808,7 +808,7 @@ static void upipe_sdi_dec_parse_vanc_line(struct upipe *upipe, struct uref *uref
             }
 
             uint16_t *ccdata_section = &r[S334_CDP_HEADER_LEN + (timecode ? S334_CDP_TIMECODE_LEN : 0) + 1];
-            if (ccdata_section[0] & 0xff) == S334_CDP_CCDATA_ID) {
+            if ((ccdata_section[0] & 0xff) == S334_CDP_CCDATA_ID) {
                 upipe_err_va(upipe, "Invalid ccdata_id");
                 continue;
             }
