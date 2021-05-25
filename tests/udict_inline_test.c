@@ -118,6 +118,21 @@ int main(int argc, char **argv)
     ubase_assert(udict_get_rational(udict1, &r, UDICT_TYPE_RATIONAL, "x.ar"));
     assert(r.num == 64 && r.den == 45);
 
+    /* TODO: Test all shorthand attributes. */
+
+    o.v = opaque;
+    o.size = sizeof(opaque);
+
+    ubase_assert(udict_set_opaque(udict1, o, UDICT_TYPE_PIC_BAR_DATA, NULL));
+    ubase_assert(udict_set_opaque(udict1, o, UDICT_TYPE_PIC_CEA_708, NULL));
+
+    ubase_assert(udict_get_opaque(udict1, &o, UDICT_TYPE_PIC_CEA_708, NULL));
+    assert(o.size == sizeof(opaque));
+    assert(!memcmp(opaque, o.v, sizeof(opaque)));
+    ubase_assert(udict_get_opaque(udict1, &o, UDICT_TYPE_PIC_BAR_DATA, NULL));
+    assert(o.size == sizeof(opaque));
+    assert(!memcmp(opaque, o.v, sizeof(opaque)));
+
     udict_dump(udict1, uprobe);
 
     struct udict *udict2 = udict_dup(udict1);

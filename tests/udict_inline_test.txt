@@ -7,4 +7,6 @@ debug:  - "x.date" [int]: 9223372036854775807
 debug:  - "x.version" [float]: 1.000000
 debug:  - "x.salutation" [string]: "Hello everyone, this is just some padding to make the structure bigger, if you don't mind."
 debug:  - "x.ar" [rational]: 64/45
+debug:  - "p.bar_data" [opaque]: 27 octets
+debug:  - "p.cea_708" [opaque]: 27 octets
 debug: end of attributes for udict
