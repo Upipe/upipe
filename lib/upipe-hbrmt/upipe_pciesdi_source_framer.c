@@ -48,6 +48,7 @@ enum operating_mode {
     FRAMES,
     FIELDS,
     CHUNKS,
+    VSYNC_ONLY,
 };
 
 struct upipe_pciesdi_source_framer {
@@ -75,6 +76,10 @@ struct upipe_pciesdi_source_framer {
     bool progressive;
     bool sdi3g_levelb;
     enum operating_mode mode;
+
+    /* vsync handling */
+    int expected_line_num;
+    bool discontinuity;
 
     struct urational fps;
     uint64_t frame_counter;
@@ -112,6 +117,8 @@ static struct upipe *upipe_pciesdi_source_framer_alloc(struct upipe_mgr *mgr, st
     ctx->cached_lines = 0;
     ctx->frame_counter = 0;
     ctx->mode = FRAMES;
+    ctx->expected_line_num = 0;
+    ctx->discontinuity = false;
 
     upipe_pciesdi_source_framer_init_output(upipe);
     upipe_pciesdi_source_framer_init_urefcount(upipe);
@@ -190,6 +197,10 @@ static int upipe_pciesdi_source_framer_set_option(struct upipe *upipe, const cha
         }
         if (!strcmp(value, "chunks")) {
             ctx->mode = CHUNKS;
+            return UBASE_ERR_NONE;
+        }
+        if (!strcmp(value, "vsync-only")) {
+            ctx->mode = VSYNC_ONLY;
             return UBASE_ERR_NONE;
         }
         upipe_err_va(upipe, "Unknown %s: %s", option, value);
@@ -529,6 +540,94 @@ static int handle_chunks(struct upipe_pciesdi_source_framer *ctx, struct uref *u
     return UBASE_ERR_UNHANDLED;
 }
 
+static int handle_vsync_only(struct upipe_pciesdi_source_framer *ctx, struct uref *uref,
+        struct upump **upump_p, int width, int lines_in_uref)
+{
+    struct upipe *upipe = upipe_pciesdi_source_framer_to_upipe(ctx);
+
+    /* Add cached lines from find_top_of_frame(). */
+    if (ctx->uref) {
+        uref_block_append(ctx->uref, uref_detach_ubuf(uref));
+        uref_free(uref);
+        uref = ctx->uref;
+        ctx->uref = NULL;
+        lines_in_uref += ctx->cached_lines;
+    }
+
+    size_t input_size;
+    UBASE_RETURN(uref_block_size(uref, &input_size));
+
+    const bool sd = ctx->f->pict_fmt->sd;
+    const int height = ctx->f->height;
+
+    int num_consecutive_line_errors = 0;
+    int expected_line_num = ctx->expected_line_num;
+
+    /* For each segment in the uref. */
+    for (int offset = 0; input_size > 0; /*do nothing*/) {
+        const uint8_t *src = NULL;
+        int buf_size = -1;
+        /* Map input buffer. */
+        UBASE_RETURN(uref_block_read(uref, offset, &buf_size, &src));
+
+        /* TODO: full checks like the debug mode of upipe_sdi_dec? */
+
+        /* For each line in the segment. */
+        for (int h = buf_size / width; h > 0; h--) {
+            const uint16_t *buf = (const uint16_t*)src;
+
+            int line = 0;
+            if (height >= 720) {
+                line = (buf[8] & 0x1ff) >> 2;
+                line |= ((buf[10] & 0x1ff) >> 2) << 7;
+            }
+
+            if (sd) {
+                /* TODO */
+            }
+
+            else {
+                if (line != expected_line_num + 1)
+                    num_consecutive_line_errors += 1;
+                else
+                    num_consecutive_line_errors = 0;
+
+                expected_line_num = (expected_line_num + 1) % height;
+            }
+
+            src += width;
+        }
+
+        /* Unmap segment at offset. */
+        uref_block_unmap(uref, offset);
+        /* Advance to next segment. */
+        offset += buf_size;
+        input_size -= buf_size;
+    }
+
+    /* If every line had a wrong number assume vsync is lost and restart as
+     * though the discontinuity was seen. */
+    if (num_consecutive_line_errors == lines_in_uref) {
+        upipe_warn_va(upipe, "vsync assumed lost between lines %d and %d, please report this",
+                ctx->expected_line_num+1, expected_line_num+1);
+        ctx->start = false;
+        ctx->cached_lines = 0;
+        ctx->prev_fvh = 0;
+        ctx->prev_line_num = 0;
+        ctx->discontinuity = true;
+        return UBASE_ERR_EXTERNAL;
+    }
+
+    /* If no problem is found with the vsync then just pass through the uref. */
+    ctx->expected_line_num = expected_line_num;
+    if (ctx->discontinuity) {
+        uref_flow_set_discontinuity(uref);
+        ctx->discontinuity = false;
+    }
+    upipe_pciesdi_source_framer_output(upipe, uref, upump_p);
+    return UBASE_ERR_NONE;
+}
+
 static void upipe_pciesdi_source_framer_input(struct upipe *upipe, struct uref
         *uref, struct upump **upump_p)
 {
@@ -593,6 +692,14 @@ static void upipe_pciesdi_source_framer_input(struct upipe *upipe, struct uref
 
         else if (ctx->mode == CHUNKS) {
             err = handle_chunks(ctx, uref, upump_p, sdi_width_bytes, lines_in_uref);
+            if (!ubase_check(err)) {
+                upipe_throw_error(upipe, err);
+                uref_free(uref);
+            }
+        }
+
+        else if (ctx->mode == VSYNC_ONLY) {
+            err = handle_vsync_only(ctx, uref, upump_p, sdi_width_bytes, lines_in_uref);
             if (!ubase_check(err)) {
                 upipe_throw_error(upipe, err);
                 uref_free(uref);
