@@ -226,19 +226,18 @@ static int upipe_pciesdi_source_framer_control(struct upipe *upipe, int command,
     }
 }
 
-static int timestamp_uref(struct upipe *upipe, struct uref *uref)
+static int timestamp_uref(struct upipe_pciesdi_source_framer *ctx, struct uref *uref)
 {
     /* TODO: handle errors. */
-    struct upipe_pciesdi_source_framer *ctx = upipe_pciesdi_source_framer_from_upipe(upipe);
     uint64_t pts = ctx->frame_counter * ctx->fps.den * UCLOCK_FREQ / ctx->fps.num;
     uref_clock_set_pts_prog(uref, pts);
     ctx->frame_counter += 1;
     return UBASE_ERR_NONE;
 }
 
-static int find_top_of_frame(struct upipe *upipe, struct uref *uref)
+static int find_top_of_frame(struct upipe_pciesdi_source_framer *ctx, struct uref *uref)
 {
-    struct upipe_pciesdi_source_framer *ctx = upipe_pciesdi_source_framer_from_upipe(upipe);
+    struct upipe *upipe = upipe_pciesdi_source_framer_to_upipe(ctx);
 
     int size = -1;
     const uint8_t *src = NULL;
@@ -310,10 +309,10 @@ static int find_top_of_frame(struct upipe *upipe, struct uref *uref)
     return UBASE_ERR_NONE;
 }
 
-static int handle_frames(struct upipe *upipe, struct uref *uref, struct upump **upump_p,
+static int handle_frames(struct upipe_pciesdi_source_framer *ctx, struct uref *uref, struct upump **upump_p,
         int width, int lines_in_uref)
 {
-    struct upipe_pciesdi_source_framer *ctx = upipe_pciesdi_source_framer_from_upipe(upipe);
+    struct upipe *upipe = upipe_pciesdi_source_framer_to_upipe(ctx);
 
     /* If there are not enough lines yet store the block. */
     if (ctx->cached_lines + lines_in_uref < ctx->f->height) {
@@ -335,7 +334,7 @@ static int handle_frames(struct upipe *upipe, struct uref *uref, struct upump **
      * stored values. */
     else if (ctx->cached_lines + lines_in_uref == ctx->f->height) {
         uref_block_append(ctx->uref, uref_detach_ubuf(uref));
-        timestamp_uref(upipe, ctx->uref);
+        timestamp_uref(ctx, ctx->uref);
         upipe_pciesdi_source_framer_output(upipe, ctx->uref, upump_p);
 
         ctx->uref = NULL;
@@ -354,7 +353,7 @@ static int handle_frames(struct upipe *upipe, struct uref *uref, struct upump **
         int lines_needed = ctx->f->height - ctx->cached_lines;
         ubuf_block_resize(ubuf, 0, width * lines_needed);
         uref_block_append(ctx->uref, ubuf);
-        timestamp_uref(upipe, ctx->uref);
+        timestamp_uref(ctx, ctx->uref);
         upipe_pciesdi_source_framer_output(upipe, ctx->uref, upump_p);
 
         /* Keep top of next frame. */
@@ -369,10 +368,10 @@ static int handle_frames(struct upipe *upipe, struct uref *uref, struct upump **
     return UBASE_ERR_UNHANDLED;
 }
 
-static int handle_fields(struct upipe *upipe, struct uref *uref, struct upump **upump_p,
+static int handle_fields(struct upipe_pciesdi_source_framer *ctx, struct uref *uref, struct upump **upump_p,
         int width, int lines_in_uref)
 {
-    struct upipe_pciesdi_source_framer *ctx = upipe_pciesdi_source_framer_from_upipe(upipe);
+    struct upipe *upipe = upipe_pciesdi_source_framer_to_upipe(ctx);
 
     /* If the number of cached lines is less then the end of the first field
      * then the pipe is working to output the first field otherwise it is the
@@ -407,7 +406,7 @@ static int handle_fields(struct upipe *upipe, struct uref *uref, struct upump **
      * stored values. */
     else if (ctx->cached_lines + lines_in_uref == field_height) {
         uref_block_append(ctx->uref, uref_detach_ubuf(uref));
-        timestamp_uref(upipe, ctx->uref);
+        timestamp_uref(ctx, ctx->uref);
         upipe_pciesdi_source_framer_output(upipe, ctx->uref, upump_p);
 
         ctx->uref = NULL;
@@ -431,7 +430,7 @@ static int handle_fields(struct upipe *upipe, struct uref *uref, struct upump **
 
         ubuf_block_resize(ubuf, 0, width * lines_needed);
         uref_block_append(ctx->uref, ubuf);
-        timestamp_uref(upipe, ctx->uref);
+        timestamp_uref(ctx, ctx->uref);
         upipe_pciesdi_source_framer_output(upipe, ctx->uref, upump_p);
 
         /* Keep top of next frame. */
@@ -450,10 +449,10 @@ static int handle_fields(struct upipe *upipe, struct uref *uref, struct upump **
     return UBASE_ERR_UNHANDLED;
 }
 
-static int handle_chunks(struct upipe *upipe, struct uref *uref, struct upump **upump_p,
+static int handle_chunks(struct upipe_pciesdi_source_framer *ctx, struct uref *uref, struct upump **upump_p,
         int width, int lines_in_uref)
 {
-    struct upipe_pciesdi_source_framer *ctx = upipe_pciesdi_source_framer_from_upipe(upipe);
+    struct upipe *upipe = upipe_pciesdi_source_framer_to_upipe(ctx);
 
     /* If the number of cached lines is less then the end of the first field
      * then the pipe is working to output the first field otherwise it is the
@@ -476,7 +475,7 @@ static int handle_chunks(struct upipe *upipe, struct uref *uref, struct upump **
             ctx->uref = NULL;
         }
 
-        timestamp_uref(upipe, uref);
+        timestamp_uref(ctx, uref);
         upipe_pciesdi_source_framer_output(upipe, uref, upump_p);
 
         ctx->cached_lines = (ctx->cached_lines + lines_in_uref) % ctx->f->height;
@@ -518,7 +517,7 @@ static int handle_chunks(struct upipe *upipe, struct uref *uref, struct upump **
             uref = temp;
         }
 
-        timestamp_uref(upipe, uref);
+        timestamp_uref(ctx, uref);
         upipe_pciesdi_source_framer_output(upipe, uref, upump_p);
 
         ctx->cached_lines = (ctx->cached_lines + lines_in_uref) % ctx->f->height;
@@ -549,7 +548,7 @@ static void upipe_pciesdi_source_framer_input(struct upipe *upipe, struct uref
 
     /* Find top of frame if not started. */
     if (!ctx->start) {
-        int err = find_top_of_frame(upipe, uref);
+        int err = find_top_of_frame(ctx, uref);
         if (!ubase_check(err)) {
             upipe_throw_error(upipe, err);
             uref_free(uref);
@@ -576,7 +575,7 @@ static void upipe_pciesdi_source_framer_input(struct upipe *upipe, struct uref
         int lines_in_uref = src_size_bytes / sdi_width_bytes;
 
         if (ctx->mode == FRAMES) {
-            err = handle_frames(upipe, uref, upump_p, sdi_width_bytes, lines_in_uref);
+            err = handle_frames(ctx, uref, upump_p, sdi_width_bytes, lines_in_uref);
             if (!ubase_check(err)) {
                 upipe_throw_error(upipe, err);
                 uref_free(uref);
@@ -585,7 +584,7 @@ static void upipe_pciesdi_source_framer_input(struct upipe *upipe, struct uref
         }
 
         else if (ctx->mode == FIELDS) {
-            err = handle_fields(upipe, uref, upump_p, sdi_width_bytes, lines_in_uref);
+            err = handle_fields(ctx, uref, upump_p, sdi_width_bytes, lines_in_uref);
             if (!ubase_check(err)) {
                 upipe_throw_error(upipe, err);
                 uref_free(uref);
@@ -593,7 +592,7 @@ static void upipe_pciesdi_source_framer_input(struct upipe *upipe, struct uref
         }
 
         else if (ctx->mode == CHUNKS) {
-            err = handle_chunks(upipe, uref, upump_p, sdi_width_bytes, lines_in_uref);
+            err = handle_chunks(ctx, uref, upump_p, sdi_width_bytes, lines_in_uref);
             if (!ubase_check(err)) {
                 upipe_throw_error(upipe, err);
                 uref_free(uref);
