@@ -99,6 +99,21 @@ UPIPE_HELPER_VOID(upipe_pciesdi_source_framer)
 UPIPE_HELPER_OUTPUT(upipe_pciesdi_source_framer, output, flow_def, output_state,
         request_list)
 
+static void reset_state(struct upipe_pciesdi_source_framer *ctx)
+{
+    /* Restart frame alignment. */
+    ctx->start = false;
+    /* Release any cached data. */
+    uref_free(ctx->uref);
+    ctx->uref = NULL;
+    ctx->cached_lines = 0;
+    /* Clear state for finding top of frame. */
+    ctx->prev_fvh = 0;
+    ctx->prev_line_num = 0;
+    /* Clear state for vsync tracking. */
+    ctx->expected_line_num = 0;
+}
+
 static struct upipe *upipe_pciesdi_source_framer_alloc(struct upipe_mgr *mgr, struct uprobe
         *uprobe, uint32_t signature, va_list args)
 {
@@ -610,11 +625,7 @@ static int handle_vsync_only(struct upipe_pciesdi_source_framer *ctx, struct ure
     if (num_consecutive_line_errors == lines_in_uref) {
         upipe_warn_va(upipe, "vsync assumed lost between lines %d and %d, please report this",
                 ctx->expected_line_num+1, expected_line_num+1);
-        ctx->start = false;
-        ctx->cached_lines = 0;
-        ctx->prev_fvh = 0;
-        ctx->prev_line_num = 0;
-        ctx->discontinuity = true;
+        reset_state(ctx);
         return UBASE_ERR_EXTERNAL;
     }
 
@@ -633,16 +644,10 @@ static void upipe_pciesdi_source_framer_input(struct upipe *upipe, struct uref
 {
     struct upipe_pciesdi_source_framer *ctx = upipe_pciesdi_source_framer_from_upipe(upipe);
 
+    /* There was a discontinuity in the signal.  Restart frame alignment. */
     if (ubase_check(uref_flow_get_discontinuity(uref))) {
-        /* There was a discontinuity in the signal.  Restart frame alignment. */
-        ctx->start = false;
-
-        if (ctx->uref)
-            uref_free(ctx->uref);
-        ctx->uref = NULL;
-        ctx->cached_lines = 0;
-        ctx->prev_fvh = 0;
-        ctx->prev_line_num = 0;
+        reset_state(ctx);
+        ctx->discontinuity = true;
     }
 
     /* Find top of frame if not started. */
