@@ -79,6 +79,9 @@ struct upipe_pciesdi_source_framer {
 
     /* vsync handling */
     int expected_line_num;
+    uint16_t prev_eav, prev_sav;
+    /* whether there was a vsync error at the given transition */
+    bool vbi_f1_part1, active_f1, vbi_f1_part2, vbi_f2_part1, active_f2, vbi_f2_part2;
     bool discontinuity;
 
     struct urational fps;
@@ -112,6 +115,9 @@ static void reset_state(struct upipe_pciesdi_source_framer *ctx)
     ctx->prev_line_num = 0;
     /* Clear state for vsync tracking. */
     ctx->expected_line_num = 0;
+    ctx->prev_eav = ctx->prev_sav = 0;
+    ctx->vbi_f1_part1 = ctx->active_f1 = ctx->vbi_f1_part2
+        = ctx->vbi_f2_part1 = ctx->active_f2 = ctx->vbi_f2_part2 = true;
 }
 
 static struct upipe *upipe_pciesdi_source_framer_alloc(struct upipe_mgr *mgr, struct uprobe
@@ -134,6 +140,9 @@ static struct upipe *upipe_pciesdi_source_framer_alloc(struct upipe_mgr *mgr, st
     ctx->mode = FRAMES;
     ctx->expected_line_num = 0;
     ctx->discontinuity = false;
+    ctx->prev_eav = ctx->prev_sav = 0;
+    ctx->vbi_f1_part1 = ctx->active_f1 = ctx->vbi_f1_part2
+        = ctx->vbi_f2_part1 = ctx->active_f2 = ctx->vbi_f2_part2 = true;
 
     upipe_pciesdi_source_framer_init_output(upipe);
     upipe_pciesdi_source_framer_init_urefcount(upipe);
@@ -572,12 +581,17 @@ static int handle_vsync_only(struct upipe_pciesdi_source_framer *ctx, struct ure
     size_t input_size;
     UBASE_RETURN(uref_block_size(uref, &input_size));
 
+    const struct sdi_picture_fmt *p = ctx->f->pict_fmt;
     const bool sdi3g_levelb = ctx->sdi3g_levelb;
-    const bool sd = ctx->f->pict_fmt->sd;
+    const bool sd = p->sd;
     const int height = ctx->f->height;
+    const int eav_fvh_offset = (sd) ? 3 : 6;
+    const int sav_fvh_offset = ctx->f->active_offset - 1;
 
     int num_consecutive_line_errors = 0;
     int expected_line_num = ctx->expected_line_num;
+    uint16_t prev_eav = ctx->prev_eav;
+    uint16_t prev_sav = ctx->prev_sav;
 
     /* For each segment in the uref. */
     for (int offset = 0; input_size > 0; /*do nothing*/) {
@@ -592,14 +606,53 @@ static int handle_vsync_only(struct upipe_pciesdi_source_framer *ctx, struct ure
         for (int h = buf_size / width; h > 0; h--) {
             const uint16_t *buf = (const uint16_t*)src;
 
+            uint16_t eav = buf[eav_fvh_offset];
+            uint16_t sav = buf[sav_fvh_offset];
             int line = 0;
-            if (height >= 720) {
+            if (!sd) {
                 line = (buf[8] & 0x1ff) >> 2;
                 line |= ((buf[10] & 0x1ff) >> 2) << 7;
             }
 
             if (sd) {
-                /* TODO */
+                if (expected_line_num + 1 == p->vbi_f1_part1.start)
+                    ctx->vbi_f1_part1 = eav != eav_fvh_cword[0][true]
+                        && sav != sav_fvh_cword[0][true]
+                        && prev_eav != eav_fvh_cword[1][true]
+                        && prev_sav != sav_fvh_cword[1][true];
+
+                if (expected_line_num + 1 == p->active_f1.start)
+                    ctx->active_f1 = eav != eav_fvh_cword[0][false]
+                        && sav != sav_fvh_cword[0][false]
+                        && prev_eav != eav_fvh_cword[0][true]
+                        && prev_sav != sav_fvh_cword[0][true];
+
+                if (expected_line_num + 1 == p->vbi_f1_part2.start)
+                    ctx->vbi_f1_part2 = eav != eav_fvh_cword[0][true]
+                        && sav != sav_fvh_cword[0][true]
+                        && prev_eav != eav_fvh_cword[0][false]
+                        && prev_sav != sav_fvh_cword[0][false];
+
+                if (expected_line_num + 1 == p->vbi_f2_part1.start)
+                    ctx->vbi_f2_part1 = eav != eav_fvh_cword[1][true]
+                        && sav != sav_fvh_cword[1][true]
+                        && prev_eav != eav_fvh_cword[0][true]
+                        && prev_sav != sav_fvh_cword[0][true];
+
+                if (expected_line_num + 1 == p->active_f2.start)
+                    ctx->active_f2 = eav != eav_fvh_cword[1][false]
+                        && sav != sav_fvh_cword[1][false]
+                        && prev_eav != eav_fvh_cword[1][true]
+                        && prev_sav != sav_fvh_cword[1][true];
+
+                if (expected_line_num + 1 == p->vbi_f2_part2.start)
+                    ctx->vbi_f2_part2 = eav != eav_fvh_cword[1][true]
+                        && sav != sav_fvh_cword[1][true]
+                        && prev_eav != eav_fvh_cword[1][false]
+                        && prev_sav != sav_fvh_cword[1][false];
+
+
+                expected_line_num = (expected_line_num + 1) % height;
             }
 
             else if (sdi3g_levelb) {
@@ -633,6 +686,15 @@ static int handle_vsync_only(struct upipe_pciesdi_source_framer *ctx, struct ure
     /* If every line had a wrong number assume vsync is lost and restart as
      * though the discontinuity was seen. */
     if (num_consecutive_line_errors == lines_in_uref) {
+        upipe_warn_va(upipe, "vsync assumed lost between lines %d and %d, please report this",
+                ctx->expected_line_num+1, expected_line_num+1);
+        reset_state(ctx);
+        return UBASE_ERR_EXTERNAL;
+    }
+
+    /* If every transition had an error then assume vsync is lost. */
+    if (sd && ctx->vbi_f1_part1 && ctx->active_f1 && ctx->vbi_f1_part2
+            && ctx->vbi_f2_part1 && ctx->active_f2 && ctx->vbi_f2_part2) {
         upipe_warn_va(upipe, "vsync assumed lost between lines %d and %d, please report this",
                 ctx->expected_line_num+1, expected_line_num+1);
         reset_state(ctx);
