@@ -584,6 +584,7 @@ static int handle_vsync_only(struct upipe_pciesdi_source_framer *ctx, struct ure
     const struct sdi_picture_fmt *p = ctx->f->pict_fmt;
     const bool sdi3g_levelb = ctx->sdi3g_levelb;
     const bool sd = p->sd;
+    const bool ntsc = p->active_height == 486;
     const int height = ctx->f->height;
     const int eav_fvh_offset = (sd) ? 3 : 6;
     const int sav_fvh_offset = ctx->f->active_offset - 1;
@@ -615,37 +616,41 @@ static int handle_vsync_only(struct upipe_pciesdi_source_framer *ctx, struct ure
             }
 
             if (sd) {
-                if (expected_line_num + 1 == p->vbi_f1_part1.start)
+                int line_num = expected_line_num + 1;
+                if (ntsc)
+                    line_num = ((line_num + 2) % 525) + 1;
+
+                if (line_num == p->vbi_f1_part1.start)
                     ctx->vbi_f1_part1 = eav != eav_fvh_cword[0][true]
                         && sav != sav_fvh_cword[0][true]
                         && prev_eav != eav_fvh_cword[1][true]
                         && prev_sav != sav_fvh_cword[1][true];
 
-                if (expected_line_num + 1 == p->active_f1.start)
+                if (line_num == p->active_f1.start)
                     ctx->active_f1 = eav != eav_fvh_cword[0][false]
                         && sav != sav_fvh_cword[0][false]
                         && prev_eav != eav_fvh_cword[0][true]
                         && prev_sav != sav_fvh_cword[0][true];
 
-                if (expected_line_num + 1 == p->vbi_f1_part2.start)
+                if (line_num == p->vbi_f1_part2.start)
                     ctx->vbi_f1_part2 = eav != eav_fvh_cword[0][true]
                         && sav != sav_fvh_cword[0][true]
                         && prev_eav != eav_fvh_cword[0][false]
                         && prev_sav != sav_fvh_cword[0][false];
 
-                if (expected_line_num + 1 == p->vbi_f2_part1.start)
+                if (line_num == p->vbi_f2_part1.start)
                     ctx->vbi_f2_part1 = eav != eav_fvh_cword[1][true]
                         && sav != sav_fvh_cword[1][true]
                         && prev_eav != eav_fvh_cword[0][true]
                         && prev_sav != sav_fvh_cword[0][true];
 
-                if (expected_line_num + 1 == p->active_f2.start)
+                if (line_num == p->active_f2.start)
                     ctx->active_f2 = eav != eav_fvh_cword[1][false]
                         && sav != sav_fvh_cword[1][false]
                         && prev_eav != eav_fvh_cword[1][true]
                         && prev_sav != sav_fvh_cword[1][true];
 
-                if (expected_line_num + 1 == p->vbi_f2_part2.start)
+                if (line_num == p->vbi_f2_part2.start)
                     ctx->vbi_f2_part2 = eav != eav_fvh_cword[1][true]
                         && sav != sav_fvh_cword[1][true]
                         && prev_eav != eav_fvh_cword[1][false]
