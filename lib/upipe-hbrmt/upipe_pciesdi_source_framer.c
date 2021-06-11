@@ -572,6 +572,7 @@ static int handle_vsync_only(struct upipe_pciesdi_source_framer *ctx, struct ure
     size_t input_size;
     UBASE_RETURN(uref_block_size(uref, &input_size));
 
+    const bool sdi3g_levelb = ctx->sdi3g_levelb;
     const bool sd = ctx->f->pict_fmt->sd;
     const int height = ctx->f->height;
 
@@ -599,6 +600,15 @@ static int handle_vsync_only(struct upipe_pciesdi_source_framer *ctx, struct ure
 
             if (sd) {
                 /* TODO */
+            }
+
+            else if (sdi3g_levelb) {
+                if (line != expected_line_num/2 + 1)
+                    num_consecutive_line_errors += 1;
+                else
+                    num_consecutive_line_errors = 0;
+
+                expected_line_num = (expected_line_num + 1) % (2*height);
             }
 
             else {
