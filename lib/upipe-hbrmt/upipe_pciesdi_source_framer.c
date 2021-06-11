@@ -117,7 +117,7 @@ static void reset_state(struct upipe_pciesdi_source_framer *ctx)
     ctx->expected_line_num = 0;
     ctx->prev_eav = ctx->prev_sav = 0;
     ctx->vbi_f1_part1 = ctx->active_f1 = ctx->vbi_f1_part2
-        = ctx->vbi_f2_part1 = ctx->active_f2 = ctx->vbi_f2_part2 = true;
+        = ctx->vbi_f2_part1 = ctx->active_f2 = ctx->vbi_f2_part2 = false;
 }
 
 static struct upipe *upipe_pciesdi_source_framer_alloc(struct upipe_mgr *mgr, struct uprobe
@@ -142,7 +142,7 @@ static struct upipe *upipe_pciesdi_source_framer_alloc(struct upipe_mgr *mgr, st
     ctx->discontinuity = false;
     ctx->prev_eav = ctx->prev_sav = 0;
     ctx->vbi_f1_part1 = ctx->active_f1 = ctx->vbi_f1_part2
-        = ctx->vbi_f2_part1 = ctx->active_f2 = ctx->vbi_f2_part2 = true;
+        = ctx->vbi_f2_part1 = ctx->active_f2 = ctx->vbi_f2_part2 = false;
 
     upipe_pciesdi_source_framer_init_output(upipe);
     upipe_pciesdi_source_framer_init_urefcount(upipe);
