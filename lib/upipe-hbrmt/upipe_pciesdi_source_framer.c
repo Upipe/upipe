@@ -587,7 +587,7 @@ static int handle_vsync_only(struct upipe_pciesdi_source_framer *ctx, struct ure
     const bool ntsc = p->active_height == 486;
     const int height = ctx->f->height;
     const int eav_fvh_offset = (sd) ? 3 : 6;
-    const int sav_fvh_offset = ctx->f->active_offset - 1;
+    const int sav_fvh_offset = 2*ctx->f->active_offset - 1;
 
     int num_consecutive_line_errors = 0;
     int expected_line_num = ctx->expected_line_num;
@@ -658,6 +658,8 @@ static int handle_vsync_only(struct upipe_pciesdi_source_framer *ctx, struct ure
 
 
                 expected_line_num = (expected_line_num + 1) % height;
+                prev_eav = eav;
+                prev_sav = sav;
             }
 
             else if (sdi3g_levelb) {
@@ -708,6 +710,8 @@ static int handle_vsync_only(struct upipe_pciesdi_source_framer *ctx, struct ure
 
     /* If no problem is found with the vsync then just pass through the uref. */
     ctx->expected_line_num = expected_line_num;
+    ctx->prev_eav = prev_eav;
+    ctx->prev_sav = prev_sav;
     if (ctx->discontinuity) {
         uref_flow_set_discontinuity(uref);
         ctx->discontinuity = false;
