@@ -46,8 +46,6 @@
 
 enum operating_mode {
     FRAMES,
-    FIELDS,
-    CHUNKS,
     VSYNC_ONLY,
 };
 
@@ -185,18 +183,6 @@ static int upipe_pciesdi_source_framer_set_flow_def(struct upipe *upipe, struct
         ctx->progressive = false;
 
     UBASE_RETURN(uref_pic_flow_get_fps(flow_def, &ctx->fps));
-    uint64_t height;
-    UBASE_RETURN(uref_pic_flow_get_vsize(flow_def, &height));
-
-    /* Flag separate fields. */
-    if (ctx->mode == FIELDS) {
-        height /= 2;
-        ctx->fps.num *= 2;
-        UBASE_RETURN(uref_pic_flow_set_sepfields(flow_def));
-        UBASE_RETURN(uref_pic_flow_set_fps(flow_def, ctx->fps));
-        UBASE_RETURN(uref_pic_flow_set_vsize(flow_def, height));
-    }
-
 
     upipe_pciesdi_source_framer_store_flow_def(upipe, uref_dup(flow_def));
     return UBASE_ERR_NONE;
@@ -213,14 +199,6 @@ static int upipe_pciesdi_source_framer_set_option(struct upipe *upipe, const cha
     if (!strcmp(option, "mode")) {
         if (!strcmp(value, "frames")) {
             ctx->mode = FRAMES;
-            return UBASE_ERR_NONE;
-        }
-        if (!strcmp(value, "fields")) {
-            ctx->mode = FIELDS;
-            return UBASE_ERR_NONE;
-        }
-        if (!strcmp(value, "chunks")) {
-            ctx->mode = CHUNKS;
             return UBASE_ERR_NONE;
         }
         if (!strcmp(value, "vsync-only")) {
@@ -395,167 +373,6 @@ static int handle_frames(struct upipe_pciesdi_source_framer *ctx, struct uref *u
         uref_block_resize(uref, width * lines_needed, -1);
         ctx->uref = uref;
         ctx->cached_lines = lines_in_uref - lines_needed;
-
-        return UBASE_ERR_NONE;
-    }
-
-    /* Execution should never reach here. */
-    return UBASE_ERR_UNHANDLED;
-}
-
-static int handle_fields(struct upipe_pciesdi_source_framer *ctx, struct uref *uref, struct upump **upump_p,
-        int width, int lines_in_uref)
-{
-    struct upipe *upipe = upipe_pciesdi_source_framer_to_upipe(ctx);
-
-    /* If the number of cached lines is less then the end of the first field
-     * then the pipe is working to output the first field otherwise it is the
-     * second field. */
-    int field_height;
-    bool second_field;
-    if (ctx->cached_lines < ctx->f->pict_fmt->vbi_f1_part2.end) {
-        field_height = ctx->f->pict_fmt->vbi_f1_part2.end;
-        second_field = false;
-    } else {
-        field_height = ctx->f->height;
-        second_field = true;
-    }
-
-    /* If there are not enough lines yet store the block. */
-    if (ctx->cached_lines + lines_in_uref < field_height) {
-        ctx->cached_lines += lines_in_uref;
-
-        /* If there is a uref, append the new ubuf to the old otherwise just
-         * store the uref. */
-        if (ctx->uref) {
-            uref_block_append(ctx->uref, uref_detach_ubuf(uref));
-            uref_free(uref);
-            return UBASE_ERR_NONE;
-        } else {
-            ctx->uref = uref;
-            return UBASE_ERR_NONE;
-        }
-    }
-
-    /* If there is exactly enough lines then output the uref and clear the
-     * stored values. */
-    else if (ctx->cached_lines + lines_in_uref == field_height) {
-        uref_block_append(ctx->uref, uref_detach_ubuf(uref));
-        timestamp_uref(ctx, ctx->uref);
-        upipe_pciesdi_source_framer_output(upipe, ctx->uref, upump_p);
-
-        ctx->uref = NULL;
-        uref_free(uref);
-
-        if (second_field)
-            ctx->cached_lines = 0;
-        else
-            ctx->cached_lines = field_height;
-
-        return UBASE_ERR_NONE;
-    }
-
-    /* If there is more than enough lines then output and store the excess. */
-    else if (ctx->cached_lines + lines_in_uref > field_height) {
-        /* Duplicate and resize block to be the end of the frame. */
-        struct ubuf *ubuf = ubuf_dup(uref->ubuf);
-        UBASE_ALLOC_RETURN(ubuf);
-
-        int lines_needed = field_height - ctx->cached_lines;
-
-        ubuf_block_resize(ubuf, 0, width * lines_needed);
-        uref_block_append(ctx->uref, ubuf);
-        timestamp_uref(ctx, ctx->uref);
-        upipe_pciesdi_source_framer_output(upipe, ctx->uref, upump_p);
-
-        /* Keep top of next frame. */
-        uref_block_resize(uref, width * lines_needed, -1);
-        ctx->uref = uref;
-
-        if (second_field)
-            ctx->cached_lines = lines_in_uref - lines_needed;
-        else
-            ctx->cached_lines += lines_in_uref;
-
-        return UBASE_ERR_NONE;
-    }
-
-    /* Execution should never reach here. */
-    return UBASE_ERR_UNHANDLED;
-}
-
-static int handle_chunks(struct upipe_pciesdi_source_framer *ctx, struct uref *uref, struct upump **upump_p,
-        int width, int lines_in_uref)
-{
-    struct upipe *upipe = upipe_pciesdi_source_framer_to_upipe(ctx);
-
-    /* If the number of cached lines is less then the end of the first field
-     * then the pipe is working to output the first field otherwise it is the
-     * second field. */
-    int field_height;
-    if (ctx->cached_lines < ctx->f->pict_fmt->vbi_f1_part2.end) {
-        field_height = ctx->f->pict_fmt->vbi_f1_part2.end;
-    } else {
-        field_height = ctx->f->height;
-    }
-
-    /* If there are not enough lines to cross a field boundary then output
-     * everything. */
-    if (ctx->cached_lines + lines_in_uref <= field_height) {
-        /* If there is a uref, append the new ubuf. */
-        if (ctx->uref) {
-            uref_block_append(ctx->uref, uref_detach_ubuf(uref));
-            uref_free(uref);
-            uref = ctx->uref;
-            ctx->uref = NULL;
-        }
-
-        timestamp_uref(ctx, uref);
-        upipe_pciesdi_source_framer_output(upipe, uref, upump_p);
-
-        ctx->cached_lines = (ctx->cached_lines + lines_in_uref) % ctx->f->height;
-
-        return UBASE_ERR_NONE;
-    }
-
-    /* If there is more than enough lines then output and store the excess. */
-    else if (ctx->cached_lines + lines_in_uref > field_height) {
-        int lines_needed = field_height - ctx->cached_lines;
-
-        /* If there is a uref, append the new ubuf. */
-        if (ctx->uref) {
-            struct uref *temp = ctx->uref;
-
-            /* Duplicate and resize block to be the end of the frame. */
-            struct ubuf *ubuf = ubuf_dup(uref->ubuf);
-            UBASE_ALLOC_RETURN(ubuf);
-            ubuf_block_resize(ubuf, 0, width * lines_needed);
-            uref_block_append(temp, ubuf);
-
-            /* Keep top of next frame. */
-            uref_block_resize(uref, width * lines_needed, -1);
-            ctx->uref = uref;
-
-            uref = temp;
-        }
-
-        else {
-            /* Duplicate and resize block to be the end of the frame. */
-            struct uref *temp = uref_dup(uref);
-            UBASE_ALLOC_RETURN(temp);
-            uref_block_resize(temp, 0, width * lines_needed);
-
-            /* Keep top of next frame. */
-            uref_block_resize(uref, width * lines_needed, -1);
-            ctx->uref = uref;
-
-            uref = temp;
-        }
-
-        timestamp_uref(ctx, uref);
-        upipe_pciesdi_source_framer_output(upipe, uref, upump_p);
-
-        ctx->cached_lines = (ctx->cached_lines + lines_in_uref) % ctx->f->height;
 
         return UBASE_ERR_NONE;
     }
@@ -765,22 +582,6 @@ static void upipe_pciesdi_source_framer_input(struct upipe *upipe, struct uref
                 upipe_throw_error(upipe, err);
                 uref_free(uref);
                 return;
-            }
-        }
-
-        else if (ctx->mode == FIELDS) {
-            err = handle_fields(ctx, uref, upump_p, sdi_width_bytes, lines_in_uref);
-            if (!ubase_check(err)) {
-                upipe_throw_error(upipe, err);
-                uref_free(uref);
-            }
-        }
-
-        else if (ctx->mode == CHUNKS) {
-            err = handle_chunks(ctx, uref, upump_p, sdi_width_bytes, lines_in_uref);
-            if (!ubase_check(err)) {
-                upipe_throw_error(upipe, err);
-                uref_free(uref);
             }
         }
 
