@@ -768,6 +768,8 @@ static upipe_bmd_sink_frame *get_video_frame(struct upipe *upipe,
         uint8_t *buf = upipe_bmd_sink->op47_ttx_buf;
         size_t size = -1;
         uref_block_size(subpic, &size);
+        if (size > DVBVBI_LENGTH * 10)
+            size = DVBVBI_LENGTH * 10;
 
         if (ubase_check(uref_block_extract(subpic, 0, size, buf))) {
             upipe_bmd_sink_extract_ttx(ancillary, buf, size, w, sd,
