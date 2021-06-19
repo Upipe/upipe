@@ -260,6 +260,9 @@ struct upipe_bmd_sink {
     // XXX: should counter be per-field?
     uint16_t op47_sequence_counter[2];
 
+    /** OP47 teletext buffer. 10 is the max number of units */
+    uint8_t op47_ttx_buf[DVBVBI_LENGTH * 10];
+
     /** vbi **/
     vbi_sampling_par sp;
 
@@ -762,9 +765,11 @@ static upipe_bmd_sink_frame *get_video_frame(struct upipe *upipe,
 
         /* Choose the closest subpic in the past */
         //printf("\n CHOSEN SUBPIC %" PRIu64" \n", subpic_pts);
-        const uint8_t *buf;
-        int size = -1;
-        if (ubase_check(uref_block_read(subpic, 0, &size, &buf))) {
+        uint8_t *buf = upipe_bmd_sink->op47_ttx_buf;
+        size_t size = -1;
+        uref_block_size(subpic, &size);
+
+        if (ubase_check(uref_block_extract(subpic, 0, size, buf))) {
             upipe_bmd_sink_extract_ttx(ancillary, buf, size, w, sd,
                     &upipe_bmd_sink->sp,
                     &upipe_bmd_sink->op47_sequence_counter[0]);
