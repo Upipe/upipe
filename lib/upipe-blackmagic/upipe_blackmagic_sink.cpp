@@ -78,6 +78,8 @@ extern "C" {
 
 #define DECKLINK_CHANNELS 16
 
+#define OP47_PACKETS_PER_FIELD 5
+
 static const unsigned max_samples = (uint64_t)48000 * 1001 / 24000;
 static const size_t audio_buf_size = max_samples * DECKLINK_CHANNELS * sizeof(int32_t);
 
@@ -268,6 +270,9 @@ struct upipe_bmd_sink {
     /** OP47 teletext sequence counter **/
     // XXX: should counter be per-field?
     uint16_t op47_sequence_counter[2];
+
+    /** OP47 teletext buffer. 5, packets per field */
+    uint8_t op47_ttx_buf[DVBVBI_LENGTH * OP47_PACKETS_PER_FIELD * 2];
 
 #ifdef UPIPE_HAVE_LIBZVBI_H
     /** vbi **/
@@ -475,7 +480,7 @@ static void upipe_bmd_sink_extract_ttx(IDeckLinkVideoFrameAncillary *ancillary,
         const uint8_t *pic_data, size_t pic_data_size, int w, int sd,
         vbi_sampling_par *sp, uint16_t *ctr_array)
 {
-    const uint8_t *packet[2][5];
+    const uint8_t *packet[2][OP47_PACKETS_PER_FIELD];
     int packets[2] = {0, 0};
     memset(packet, 0, sizeof(packet));
 
@@ -502,7 +507,7 @@ static void upipe_bmd_sink_extract_ttx(IDeckLinkVideoFrameAncillary *ancillary,
         if (f2 == 0 && line_offset == 0) // line == 0
             continue;
 
-        if (packets[f2] < (sd ? 1 : 5))
+        if (packets[f2] < (sd ? 1 : OP47_PACKETS_PER_FIELD))
             packet[f2][packets[f2]++] = pic_data;
     }
 
@@ -965,9 +970,13 @@ static upipe_bmd_sink_frame *get_video_frame(struct upipe *upipe,
 
         /* Choose the closest subpic in the past */
         //printf("\n CHOSEN SUBPIC %" PRIu64" \n", subpic_pts);
-        const uint8_t *buf;
-        int size = -1;
-        if (ubase_check(uref_block_read(subpic, 0, &size, &buf))) {
+        uint8_t *buf = upipe_bmd_sink->op47_ttx_buf;
+        size_t size = -1;
+        uref_block_size(subpic, &size);
+        if (size > DVBVBI_LENGTH * OP47_PACKETS_PER_FIELD * 2)
+            size = DVBVBI_LENGTH * OP47_PACKETS_PER_FIELD * 2;
+
+        if (ubase_check(uref_block_extract(subpic, 0, size, buf))) {
             upipe_bmd_sink_extract_ttx(ancillary, buf, size, w, sd,
                     &upipe_bmd_sink->sp,
                     &upipe_bmd_sink->op47_sequence_counter[0]);
