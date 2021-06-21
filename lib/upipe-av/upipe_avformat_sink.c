@@ -285,7 +285,7 @@ static int upipe_avfsink_sub_set_flow_def(struct upipe *upipe,
     const uint8_t *extradata;
     size_t extradata_size = 0;
     if (ubase_check(uref_flow_get_headers(flow_def, &extradata, &extradata_size))) {
-        extradata_alloc = malloc(extradata_size + AV_INPUT_BUFFER_PADDING_SIZE);
+        extradata_alloc = av_malloc(extradata_size + AV_INPUT_BUFFER_PADDING_SIZE);
         if (unlikely(extradata_alloc == NULL)) {
             upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
             return UBASE_ERR_ALLOC;
@@ -303,7 +303,7 @@ static int upipe_avfsink_sub_set_flow_def(struct upipe *upipe,
     struct uref *flow_def_check =
         upipe_avfsink_sub_alloc_flow_def_check(upipe, flow_def);
     if (unlikely(flow_def_check == NULL)) {
-        free(extradata_alloc);
+        av_free(extradata_alloc);
         upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
         return UBASE_ERR_ALLOC;
     }
@@ -312,7 +312,7 @@ static int upipe_avfsink_sub_set_flow_def(struct upipe *upipe,
                  (extradata_alloc != NULL &&
                   !ubase_check(uref_flow_set_headers(flow_def_check, extradata,
                                          extradata_size))))) {
-        free(extradata_alloc);
+        av_free(extradata_alloc);
         uref_free(flow_def_check);
         upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
         return UBASE_ERR_ALLOC;
@@ -321,7 +321,7 @@ static int upipe_avfsink_sub_set_flow_def(struct upipe *upipe,
         if (unlikely(!ubase_check(uref_pic_flow_set_fps(flow_def_check, fps)) ||
                      !ubase_check(uref_pic_flow_set_hsize(flow_def_check, width)) ||
                      !ubase_check(uref_pic_flow_set_vsize(flow_def_check, height)))) {
-            free(extradata_alloc);
+            av_free(extradata_alloc);
             uref_free(flow_def_check);
             upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
             return UBASE_ERR_ALLOC;
@@ -330,7 +330,7 @@ static int upipe_avfsink_sub_set_flow_def(struct upipe *upipe,
         if (unlikely(!ubase_check(uref_sound_flow_set_channels(flow_def_check, channels)) ||
                      !ubase_check(uref_sound_flow_set_rate(flow_def_check, rate)) ||
                      !ubase_check(uref_sound_flow_set_samples(flow_def_check, samples)))) {
-            free(extradata_alloc);
+            av_free(extradata_alloc);
             uref_free(flow_def_check);
             upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
             return UBASE_ERR_ALLOC;
@@ -341,7 +341,7 @@ static int upipe_avfsink_sub_set_flow_def(struct upipe *upipe,
         /* Die if the attributes changed. */
         bool ret = upipe_avfsink_sub_check_flow_def_check(upipe,
                                                           flow_def_check);
-        free(extradata_alloc);
+        av_free(extradata_alloc);
         uref_free(flow_def_check);
 
         if (ret && codec_id < AV_CODEC_ID_FIRST_AUDIO &&
@@ -357,7 +357,7 @@ static int upipe_avfsink_sub_set_flow_def(struct upipe *upipe,
 
     AVStream *stream = upipe_avfsink->context->streams[upipe_avfsink_sub->id];
     if (unlikely(stream == NULL)) {
-        free(extradata_alloc);
+        av_free(extradata_alloc);
         upipe_err(upipe, "couldn't get stream");
         upipe_throw_fatal(upipe, UBASE_ERR_EXTERNAL);
         return UBASE_ERR_EXTERNAL;
@@ -411,6 +411,7 @@ static int upipe_avfsink_sub_set_flow_def(struct upipe *upipe,
 
     if (extradata_alloc != NULL) {
         // FIXME stream->codec->flags |= AV_CODEC_FLAG_GLOBAL_HEADER;
+        av_free(codecpar->extradata);
         codecpar->extradata_size = extradata_size;
         codecpar->extradata = extradata_alloc;
     }
