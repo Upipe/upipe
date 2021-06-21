@@ -45,6 +45,7 @@
 #include <upipe/upipe_helper_void.h>
 #include <upipe/upipe_helper_flow_def_check.h>
 #include <upipe/upipe_helper_subpipe.h>
+#include <upipe/upipe_helper_sync.h>
 #include <upipe-framers/uref_mpga_flow.h>
 #include <upipe-av/upipe_avformat_sink.h>
 
@@ -95,6 +96,8 @@ struct upipe_avfsink {
     uint64_t first_dts;
     /** highest DTS */
     uint64_t highest_next_dts;
+    /** sync helper */
+    bool acquired;
 
     /** manager to create subs */
     struct upipe_mgr sub_mgr;
@@ -106,6 +109,7 @@ struct upipe_avfsink {
 UPIPE_HELPER_UPIPE(upipe_avfsink, upipe, UPIPE_AVFSINK_SIGNATURE)
 UPIPE_HELPER_UREFCOUNT(upipe_avfsink, urefcount, upipe_avfsink_free)
 UPIPE_HELPER_VOID(upipe_avfsink)
+UPIPE_HELPER_SYNC(upipe_avfsink, acquired)
 
 /** @internal @This is the private context of an output of an avformat source
  * pipe. */
@@ -726,6 +730,7 @@ static struct upipe *upipe_avfsink_alloc(struct upipe_mgr *mgr,
     upipe_avfsink_init_urefcount(upipe);
     upipe_avfsink_init_sub_subs(upipe);
     upipe_avfsink_init_sub_mgr(upipe);
+    upipe_avfsink_init_sync(upipe);
 
     upipe_avfsink->uri = NULL;
     upipe_avfsink->init_uri = NULL;
@@ -944,6 +949,7 @@ static void upipe_avfsink_mux(struct upipe *upipe, struct upump **upump_p)
             }
 
             upipe_avfsink->opened = true;
+            upipe_avfsink_sync_acquired(upipe);
         }
 
         AVStream *stream = upipe_avfsink->context->streams[input->id];
@@ -1245,6 +1251,7 @@ static int upipe_avfsink_set_uri(struct upipe *upipe, const char *uri)
 
     upipe_avfsink->uri = strdup(uri);
     upipe_avfsink->opened = false;
+    upipe_avfsink_sync_lost(upipe);
     upipe_notice_va(upipe, "opening URI %s", upipe_avfsink->uri);
     return UBASE_ERR_NONE;
 }
@@ -1411,6 +1418,7 @@ static void upipe_avfsink_free(struct upipe *upipe)
 
     av_dict_free(&upipe_avfsink->options);
 
+    upipe_avfsink_clean_sync(upipe);
     upipe_avfsink_clean_urefcount(upipe);
     upipe_avfsink_free_void(upipe);
 }
