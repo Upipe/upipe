@@ -149,7 +149,6 @@ static struct upipe *upipe_pciesdi_source_framer_alloc(struct upipe_mgr *mgr, st
     return upipe;
 }
 
-
 static void upipe_pciesdi_source_framer_free(struct upipe *upipe)
 {
     upipe_throw_dead(upipe);
@@ -437,6 +436,12 @@ static int handle_vsync_only(struct upipe_pciesdi_source_framer *ctx, struct ure
                 if (ntsc)
                     line_num = ((line_num + 2) % 525) + 1;
 
+                /* Check that each expected transition between fields and vbi
+                 * and active picture has the right EAV/SAV values on the
+                 * previous and current lines.
+                 * All 4 values must be incorrect to set the error for the
+                 * transition in order to prevent the appearance that vsync is
+                 * lost from a single value error. */
                 if (line_num == p->vbi_f1_part1.start)
                     ctx->vbi_f1_part1 = eav != eav_fvh_cword[0][true]
                         && sav != sav_fvh_cword[0][true]
@@ -472,7 +477,6 @@ static int handle_vsync_only(struct upipe_pciesdi_source_framer *ctx, struct ure
                         && sav != sav_fvh_cword[1][true]
                         && prev_eav != eav_fvh_cword[1][false]
                         && prev_sav != sav_fvh_cword[1][false];
-
 
                 expected_line_num = (expected_line_num + 1) % height;
                 prev_eav = eav;
