@@ -513,7 +513,8 @@ static int handle_vsync_only(struct upipe_pciesdi_source_framer *ctx, struct ure
         upipe_warn_va(upipe, "vsync assumed lost between lines %d and %d, please report this",
                 ctx->expected_line_num+1, expected_line_num+1);
         reset_state(ctx);
-        return UBASE_ERR_EXTERNAL;
+        uref_free(uref);
+        return UBASE_ERR_NONE;
     }
 
     /* If every transition had an error then assume vsync is lost. */
@@ -522,7 +523,8 @@ static int handle_vsync_only(struct upipe_pciesdi_source_framer *ctx, struct ure
         upipe_warn_va(upipe, "vsync assumed lost between lines %d and %d, please report this",
                 ctx->expected_line_num+1, expected_line_num+1);
         reset_state(ctx);
-        return UBASE_ERR_EXTERNAL;
+        uref_free(uref);
+        return UBASE_ERR_NONE;
     }
 
     /* If no problem is found with the vsync then just pass through the uref. */
