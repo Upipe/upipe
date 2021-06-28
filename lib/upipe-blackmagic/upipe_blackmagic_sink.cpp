@@ -980,7 +980,6 @@ static upipe_bmd_sink_frame *get_video_frame(struct upipe *upipe,
             upipe_bmd_sink_extract_ttx(ancillary, buf, size, w, sd,
                     &upipe_bmd_sink->sp,
                     &upipe_bmd_sink->op47_sequence_counter[0]);
-            uref_block_unmap(subpic, 0);
         }
         uref_free(subpic);
 #else
