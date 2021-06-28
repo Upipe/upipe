@@ -860,8 +860,6 @@ static upipe_bmd_sink_frame *get_video_frame(struct upipe *upipe,
                         }
                         else if (upipe_bmd_sink_sub->type == BMD_SUBPIPE_TYPE_SCTE104)
                             upipe_bmd_sink_write_scte104(ancillary, buf, size, w, sd);
-
-                        uref_block_unmap(subpic, 0);
                     }
                 }
 
