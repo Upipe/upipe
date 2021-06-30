@@ -354,18 +354,19 @@ static void upipe_pciesdi_src_worker(struct upump *upump)
         return;
     }
 
-    if (mode != upipe_pciesdi_src->mode && need_init_hardware(upipe_pciesdi_src->capability_flags)) {
-        upipe_err_va(upipe, "mode change, reconfiguring HW (%s)", __func__);
-        init_hardware(upipe_pciesdi_src, mode == SDI_TX_MODE_SD);
-        upipe_pciesdi_src->mode = mode;
-        return;
-    }
-
     if (mode != upipe_pciesdi_src->mode
             || family != upipe_pciesdi_src->family
             || scan != upipe_pciesdi_src->scan
             || rate != upipe_pciesdi_src->rate) {
         upipe_err_va(upipe, "format change, changing flow_def (%s)", __func__);
+
+        if (mode != upipe_pciesdi_src->mode
+                && need_init_hardware(upipe_pciesdi_src->capability_flags)) {
+            upipe_err_va(upipe, "mode change, reconfiguring HW (%s)", __func__);
+            init_hardware(upipe_pciesdi_src, mode == SDI_TX_MODE_SD);
+            upipe_pciesdi_src->mode = mode;
+        }
+
         /* Stop DMA to get EAV re-aligned. */
         int64_t hw, sw;
         sdi_dma_writer(upipe_pciesdi_src->fd, 0, &hw, &sw);
@@ -762,19 +763,20 @@ static void get_flow_def_on_signal_lock(struct upump *upump)
         return;
     }
 
-    if (mode != upipe_pciesdi_src->mode && need_init_hardware(upipe_pciesdi_src->capability_flags)) {
-        upipe_err_va(upipe, "mode change, reconfiguring HW (%s)", __func__);
-        init_hardware(upipe_pciesdi_src, mode == SDI_TX_MODE_SD);
-        upipe_pciesdi_src->mode = mode;
-        return;
-    }
-
     /* Check for format change. */
     if (mode != upipe_pciesdi_src->mode
             || family != upipe_pciesdi_src->family
             || scan != upipe_pciesdi_src->scan
             || rate != upipe_pciesdi_src->rate) {
         upipe_err_va(upipe, "format change, changing flow_def (%s)", __func__);
+
+        if (mode != upipe_pciesdi_src->mode
+                && need_init_hardware(upipe_pciesdi_src->capability_flags)) {
+            upipe_err_va(upipe, "mode change, reconfiguring HW (%s)", __func__);
+            init_hardware(upipe_pciesdi_src, mode == SDI_TX_MODE_SD);
+            upipe_pciesdi_src->mode = mode;
+        }
+
         struct uref *flow_def;
         int ret = get_flow_def(upipe, &flow_def);
         /* TODO: does this need to check for errors other then NOSIGNAL and stop? */
