@@ -464,8 +464,7 @@ static bool upipe_mpgvf_parse_sequence(struct upipe *upipe)
         }
         if (lowdelay)
             UBASE_FATAL(upipe, uref_flow_set_lowdelay(flow_def))
-    } else
-        upipe_mpgvf->progressive_sequence = true;
+    }
 
     UBASE_FATAL(upipe, uref_pic_flow_set_fps(flow_def, frame_rate))
     UBASE_FATAL(upipe, uref_clock_set_latency(flow_def,
@@ -473,6 +472,8 @@ static bool upipe_mpgvf_parse_sequence(struct upipe *upipe)
                         UCLOCK_FREQ * frame_rate.den / frame_rate.num))
     UBASE_FATAL(upipe, uref_block_flow_set_max_octetrate(flow_def, max_octetrate))
     upipe_mpgvf->progressive_sequence = progressive;
+    if (progressive)
+        UBASE_FATAL(upipe, uref_pic_set_progressive(flow_def))
     UBASE_FATAL(upipe, uref_pic_flow_set_macropixel(flow_def, 1))
     UBASE_FATAL(upipe, uref_pic_flow_set_planes(flow_def, 0))
     UBASE_FATAL(upipe, uref_pic_flow_add_plane(flow_def, 1, 1, 1, "y8"))
