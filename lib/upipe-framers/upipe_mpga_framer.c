@@ -1230,6 +1230,9 @@ static void upipe_mpgaf_build_flow_def(struct upipe *upipe)
                     uref_flow_set_def(flow_def, "block.aac.sound."))
     }
 
+    if (upipe_mpgaf->octetrate)
+        uref_block_flow_set_octetrate(flow_def, upipe_mpgaf->octetrate);
+
     upipe_mpgaf_store_flow_def(upipe, flow_def);
     /* force sending flow definition immediately */
     upipe_mpgaf_output(upipe, NULL, NULL);
