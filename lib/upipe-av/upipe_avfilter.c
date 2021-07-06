@@ -2607,6 +2607,15 @@ static void upipe_avfilt_input(struct upipe *upipe,
             goto end;
         }
     }
+    else {
+        uint64_t pts = UINT64_MAX;
+        if (ubase_check(uref_clock_get_pts_prog(uref, &pts)))
+            frame->pts = pts;
+
+        uint64_t duration = UINT64_MAX;
+        if (ubase_check(uref_clock_get_duration(uref, &duration)))
+            frame->pkt_duration = duration;
+    }
 
     if (!upipe_avfilt->configured) {
         ret = upipe_avfilt_init_buffer_from_first_frame(upipe, frame);
