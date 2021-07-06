@@ -864,33 +864,33 @@ static int upipe_grid_out_extract_input(struct upipe *upipe, struct uref *uref,
     upipe_grid_in_extract(upipe_grid_out->input, pts, &extracts);
 
     uint64_t max_diff = duration;
-    struct extract e = extracts.current;
+    const struct extract *e = &extracts.current;
     if (upipe_grid_out->last_input_pts != UINT64_MAX) {
         if (extracts.prev.uref &&
             extracts.prev.pts > upipe_grid_out->last_input_pts &&
             extracts.prev.diff < duration)
-            e = extracts.prev;
+            e = &extracts.prev;
         else if (extracts.current.uref &&
                  extracts.current.pts > upipe_grid_out->last_input_pts &&
                  extracts.current.diff < duration)
-            e = extracts.current;
+            e = &extracts.current;
         else if (extracts.next.uref &&
                  extracts.next.pts > upipe_grid_out->last_input_pts &&
                  extracts.next.diff < duration)
-            e = extracts.next;
+            e = &extracts.next;
         else if (extracts.prev.uref &&
                  extracts.prev.pts == upipe_grid_out->last_input_pts) {
-            e = extracts.prev;
+            e = &extracts.prev;
             max_diff = upipe_grid->max_retention;
         }
         else if (extracts.current.uref &&
                  extracts.current.pts == upipe_grid_out->last_input_pts) {
-            e = extracts.current;
+            e = &extracts.current;
             max_diff = upipe_grid->max_retention;
         }
     }
 
-    if (!e.uref || e.diff > max_diff) {
+    if (!e->uref || e->diff > max_diff) {
         if (upipe_grid_out->warn_no_input_buffer)
             upipe_warn(upipe, "no input buffer found");
         upipe_grid_out->warn_no_input_buffer = false;
@@ -903,9 +903,9 @@ static int upipe_grid_out_extract_input(struct upipe *upipe, struct uref *uref,
     upipe_grid_out->warn_no_input_buffer = true;
 
     if (upipe_grid_out->last_input_pts != UINT64_MAX &&
-        e.pts <= upipe_grid_out->last_input_pts) {
-        if (ubase_check(uref_flow_match_def(e.flow_def, UREF_PIC_FLOW_DEF))) {
-            if (ubase_check(uref_clock_get_duration(e.uref, NULL)))
+        e->pts <= upipe_grid_out->last_input_pts) {
+        if (ubase_check(uref_flow_match_def(e->flow_def, UREF_PIC_FLOW_DEF))) {
+            if (ubase_check(uref_clock_get_duration(e->uref, NULL)))
                 upipe_warn(upipe, "duplicate output");
             else  {
                 uref_attach_ubuf(uref, NULL);
@@ -920,22 +920,22 @@ static int upipe_grid_out_extract_input(struct upipe *upipe, struct uref *uref,
     }
 
     uint64_t input_duration = 0;
-    uref_clock_get_duration(e.uref, &input_duration);
+    uref_clock_get_duration(e->uref, &input_duration);
     if (input_duration && upipe_grid_out->last_input_pts != UINT64_MAX) {
-        if (e.pts > upipe_grid_out->last_input_pts + input_duration * 3 / 2)
+        if (e->pts > upipe_grid_out->last_input_pts + input_duration * 3 / 2)
             upipe_warn_va(upipe, "potentially lost frames");
     }
-    upipe_grid_out->last_input_pts = e.pts;
+    upipe_grid_out->last_input_pts = e->pts;
 
-    struct ubuf *ubuf = ubuf_dup(e.uref->ubuf);
+    struct ubuf *ubuf = ubuf_dup(e->uref->ubuf);
     if (unlikely(!ubuf)) {
         upipe_err(upipe, "fail to duplicate buffer");
         return UBASE_ERR_ALLOC;
     }
     uref_attach_ubuf(uref, ubuf);
-    uref_attr_import(uref, e.uref);
+    uref_attr_import(uref, e->uref);
     if (flow_def_p)
-        *flow_def_p = e.flow_def;
+        *flow_def_p = e->flow_def;
     return UBASE_ERR_NONE;
 }
 
