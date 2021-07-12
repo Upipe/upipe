@@ -249,6 +249,29 @@ static inline enum AVPixelFormat
         AV_PIX_FMT_GBRP,
         -1
     };
+
+    const char *surface_type;
+    if (ubase_check(uref_pic_flow_get_surface_type(flow_def, &surface_type))) {
+        if (ubase_ncmp(surface_type, "av."))
+            return AV_PIX_FMT_NONE;
+
+        enum AVPixelFormat pix_fmt = av_get_pix_fmt(surface_type + 3);
+        if (pix_fmts == NULL) {
+            chroma_p[0] = NULL;
+            return pix_fmt;
+        }
+
+        while (*pix_fmts != -1) {
+            if (*pix_fmts == pix_fmt) {
+                chroma_p[0] = NULL;
+                return pix_fmt;
+            }
+            pix_fmts++;
+        }
+
+        return AV_PIX_FMT_NONE;
+    }
+
     if (pix_fmts == NULL)
         pix_fmts = supported_fmts;
 
