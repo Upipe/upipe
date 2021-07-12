@@ -337,7 +337,15 @@ static int upipe_ffmt_check_flow_format(struct upipe *upipe,
         uref_pic_flow_delete_hsize_visible(flow_def_dup);
         uref_pic_flow_delete_vsize_visible(flow_def_dup);
 
-        const char *surface_type;
+        const char *surface_type_in;
+        if (!ubase_check(uref_pic_flow_get_surface_type(flow_def,
+                                                        &surface_type_in)))
+            surface_type_in = "";
+
+        const char *surface_type_out;
+        if (!ubase_check(uref_pic_flow_get_surface_type(flow_def_dup,
+                                                        &surface_type_out)))
+            surface_type_out = "";
 
         bool need_deint = ffmt_mgr->deint_mgr &&
             !ubase_check(uref_pic_get_progressive(flow_def)) &&
@@ -350,16 +358,18 @@ static int upipe_ffmt_check_flow_format(struct upipe *upipe,
             !uref_pic_flow_compare_format(flow_def, flow_def_dup);
         bool need_sws = ffmt_mgr->sws_mgr &&
             (need_scale || need_format || need_range);
-        bool pic_vaapi_in = ubase_check(uref_pic_flow_get_surface_type(
-                flow_def, &surface_type)) && !strcmp(surface_type, "av.vaapi");
-        bool pic_vaapi_out = ubase_check(uref_pic_flow_get_surface_type(
-                flow_def_dup, &surface_type)) && !strcmp(surface_type, "av.vaapi");
-        bool hw_in = pic_vaapi_in;
-        bool hw_out = pic_vaapi_out;
+        bool pic_vaapi_in = !strcmp(surface_type_in, "av.vaapi");
+        bool pic_vaapi_out = !strcmp(surface_type_out, "av.vaapi");
+        bool pic_qsv_in = !strcmp(surface_type_in, "av.qsv");
+        bool pic_qsv_out = !strcmp(surface_type_out, "av.qsv");
+        bool hw_in = pic_vaapi_in || pic_qsv_in;
+        bool hw_out = pic_vaapi_out || pic_qsv_out;
         bool hw = hw_in || hw_out;
         bool need_hw_transfer = (hw_in && !hw_out) || (!hw_in && hw_out);
+        bool need_derive = pic_vaapi_in && pic_qsv_out;
         bool need_avfilter = ffmt_mgr->avfilter_mgr && hw &&
-            (need_deint || need_scale || need_format || need_hw_transfer);
+            (need_deint || need_scale || need_format || need_hw_transfer ||
+             need_derive);
 
         if (need_avfilter) {
             if (need_format) {
@@ -388,6 +398,9 @@ static int upipe_ffmt_check_flow_format(struct upipe *upipe,
                                 " → %" PRIu64 "x%" PRIu64,
                                 hsize_in, vsize_in, hsize_out, vsize_out);
             }
+            if (need_derive)
+                upipe_notice(upipe, "need hw surface mapping vaapi → qsv");
+
             uint64_t hsize = 0, vsize = 0;
             uref_pic_flow_get_hsize(flow_def_dup, &hsize);
             uref_pic_flow_get_vsize(flow_def_dup, &vsize);
@@ -407,11 +420,12 @@ static int upipe_ffmt_check_flow_format(struct upipe *upipe,
                 str_cat("deinterlace_vaapi=auto=1,");
             if (need_scale)
                 str_cat("scale_vaapi=w=%"PRIu64":h=%"PRIu64",", hsize, vsize);
-            if (!pic_vaapi_out) {
+            if (!hw_out) {
                 str_cat("hwmap=mode=read+direct,format=nv12,");
                 if (pix_fmt != NULL && strcmp(pix_fmt, "nv12"))
                     str_cat("scale,format=%s,", pix_fmt);
-            }
+            } else if (pic_qsv_out && (need_deint || need_scale || pic_vaapi_in))
+                str_cat("hwmap=derive_device=qsv,format=qsv");
 
 #undef str_cat
 
