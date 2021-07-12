@@ -560,7 +560,8 @@ static void upipe_avcenc_build_flow_def(struct upipe *upipe)
     }
 
     /* global headers (extradata) */
-    if (context->extradata_size) {
+    if (context->extradata_size > 0 &&
+        (context->flags & AV_CODEC_FLAG_GLOBAL_HEADER)) {
         UBASE_FATAL(upipe,
                 uref_flow_set_headers(flow_def, context->extradata,
                                       context->extradata_size))
@@ -591,7 +592,14 @@ static void upipe_avcenc_output_pkt(struct upipe *upipe,
     struct upipe_avcenc *upipe_avcenc = upipe_avcenc_from_upipe(upipe);
     AVCodecContext *context = upipe_avcenc->context;
     const AVCodec *codec = context->codec;
-    struct ubuf *ubuf = ubuf_block_alloc(upipe_avcenc->ubuf_mgr, avpkt->size);
+
+    int extra_size = 0;
+    if (!strcmp(codec->name, "mpeg2_qsv") &&
+        (avpkt->flags & AV_PKT_FLAG_KEY))
+        extra_size = context->extradata_size;
+
+    struct ubuf *ubuf = ubuf_block_alloc(upipe_avcenc->ubuf_mgr,
+                                         avpkt->size + extra_size);
     if (unlikely(ubuf == NULL)) {
         upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
         return;
@@ -604,7 +612,9 @@ static void upipe_avcenc_output_pkt(struct upipe *upipe,
         upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
         return;
     }
-    memcpy(buf, avpkt->data, size);
+    if (extra_size > 0)
+        memcpy(buf, context->extradata, context->extradata_size);
+    memcpy(buf + extra_size, avpkt->data, avpkt->size);
     ubuf_block_unmap(ubuf, 0);
 
     int64_t pkt_pts = avpkt->pts, pkt_dts = avpkt->dts;
@@ -1113,7 +1123,8 @@ static bool upipe_avcenc_handle(struct upipe *upipe, struct uref *uref,
     if (upipe_avcenc->flow_def_requested == NULL)
         return false;
 
-    if (context->pix_fmt == AV_PIX_FMT_VAAPI) {
+    const AVPixFmtDescriptor *desc = av_pix_fmt_desc_get(context->pix_fmt);
+    if (desc != NULL && (desc->flags & AV_PIX_FMT_FLAG_HWACCEL)) {
         AVFrame *frame = av_frame_alloc();
         if (frame == NULL) {
             upipe_err(upipe, "cannot allocate avframe");
@@ -1485,18 +1496,8 @@ static int upipe_avcenc_set_flow_def(struct upipe *upipe, struct uref *flow_def)
         uref_pic_flow_get_vsize(flow_def, &vsize);
         context->width = hsize;
         context->height = vsize;
-
-        const char *surface_type;
-        if ((ubase_check(uref_pic_flow_get_surface_type(flow_def,
-                                                        &surface_type))) &&
-            !strcmp(surface_type, "av.vaapi") &&
-            codec->pix_fmts[0] == AV_PIX_FMT_VAAPI) {
-            context->pix_fmt = AV_PIX_FMT_VAAPI;
-            upipe_avcenc->chroma_map[0] = NULL;
-        } else {
-            context->pix_fmt = upipe_av_pixfmt_from_flow_def(
-                flow_def, codec->pix_fmts, upipe_avcenc->chroma_map);
-        }
+        context->pix_fmt = upipe_av_pixfmt_from_flow_def(
+            flow_def, codec->pix_fmts, upipe_avcenc->chroma_map);
 
         if (context->pix_fmt == AV_PIX_FMT_NONE) {
             upipe_err_va(upipe, "unsupported pixel format");
@@ -1652,6 +1653,24 @@ static int upipe_avcenc_set_flow_def(struct upipe *upipe, struct uref *flow_def)
     return UBASE_ERR_NONE;
 }
 
+/** @internal @This returns the hardware pixel format for the hw_frames
+ * context.
+ *
+ * @param codec the codec description
+ * @return the hardware pixel format
+ */
+static enum AVPixelFormat upipe_avcenc_get_hw_pix_fmt(const AVCodec *codec)
+{
+    const AVCodecHWConfig *config;
+    int i = 0;
+
+    while ((config = avcodec_get_hw_config(codec, i++)) != NULL)
+        if (config->methods & AV_CODEC_HW_CONFIG_METHOD_HW_FRAMES_CTX)
+            return config->pix_fmt;
+
+    return AV_PIX_FMT_NONE;
+}
+
 /** @internal @This provides a flow format suggestion.
  *
  * @param upipe description structure of the pipe
@@ -1685,12 +1704,14 @@ static int _upipe_avcenc_provide_flow_format(struct upipe *upipe,
         if (unlikely(codec->pix_fmts == NULL || codec->pix_fmts[0] == -1))
             goto upipe_avcenc_provide_flow_format_err;
 
-        if (codec->pix_fmts[0] == AV_PIX_FMT_VAAPI) {
+        enum AVPixelFormat hw_pix_fmt = upipe_avcenc_get_hw_pix_fmt(codec);
+        if (hw_pix_fmt != AV_PIX_FMT_NONE) {
             uref_pic_flow_clear_format(flow_format);
             if (unlikely(!ubase_check(upipe_av_pixfmt_to_flow_def(
                             AV_PIX_FMT_NV12, flow_format))))
                 goto upipe_avcenc_provide_flow_format_err;
-            uref_pic_flow_set_surface_type(flow_format, "av.vaapi");
+            uref_pic_flow_set_surface_type_va(flow_format, "av.%s",
+                                              av_get_pix_fmt_name(hw_pix_fmt));
         } else {
             const char *chroma_map[UPIPE_AV_MAX_PLANES];
             enum AVPixelFormat pix_fmt = upipe_av_pixfmt_from_flow_def(flow_format,

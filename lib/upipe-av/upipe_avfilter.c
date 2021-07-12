@@ -2086,16 +2086,13 @@ static int upipe_avfilt_build_flow_def(struct upipe *upipe,
             if (width < 0 || height < 0)
                 return UBASE_ERR_INVALID;
 
-            if (pix_fmt == AV_PIX_FMT_VAAPI) {
-                AVBufferRef *hw_frames_ctx =
-                    av_buffersink_get_hw_frames_ctx(ctx);
-                if (hw_frames_ctx == NULL)
-                    return UBASE_ERR_INVALID;
+            AVBufferRef *hw_frames_ctx = av_buffersink_get_hw_frames_ctx(ctx);
+            if (hw_frames_ctx != NULL) {
                 AVHWFramesContext *hw_frames =
                     (AVHWFramesContext *) hw_frames_ctx->data;
+                UBASE_RETURN(uref_pic_flow_set_surface_type_va(flow_def,
+                    "av.%s", av_get_pix_fmt_name(pix_fmt)))
                 pix_fmt = hw_frames->sw_format;
-                UBASE_RETURN(uref_pic_flow_set_surface_type(flow_def,
-                                                            "av.vaapi"))
             }
 
             UBASE_RETURN(upipe_av_pixfmt_to_flow_def(pix_fmt, flow_def))
