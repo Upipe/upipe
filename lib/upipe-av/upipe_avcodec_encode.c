@@ -765,12 +765,12 @@ static void upipe_avcenc_encode_video(struct upipe *upipe,
             frame->linesize[i] = stride;
         }
 
-        /* set frame pixel format */
+        /* set frame properties */
         frame->format = context->pix_fmt;
-
-        /* set frame dimensions */
         frame->width = hsize;
         frame->height = vsize;
+        frame->interlaced_frame = !ubase_check(uref_pic_get_progressive(uref));
+        frame->top_field_first = ubase_check(uref_pic_get_tff(uref));
     }
 
     /* set picture type */
