@@ -99,9 +99,9 @@ static int upipe_avcenc_check_ubuf_mgr(struct upipe *upipe,
 static int upipe_avcenc_check_flow_format(struct upipe *upipe,
                                           struct uref *flow_format);
 /** @hidden */
-static void upipe_avcenc_encode_frame(struct upipe *upipe,
-                                      struct AVFrame *frame,
-                                      struct upump **upump_p);
+static int upipe_avcenc_encode_frame(struct upipe *upipe,
+                                     struct AVFrame *frame,
+                                     struct upump **upump_p);
 /** @hidden */
 static void upipe_avcenc_encode_audio(struct upipe *upipe,
                                       struct upump **upump_p);
@@ -691,10 +691,11 @@ static void upipe_avcenc_output_pkt(struct upipe *upipe,
  * @param upipe description structure of the pipe
  * @param frame frame
  * @param upump_p reference to upump structure
+ * @return an error code
  */
-static void upipe_avcenc_encode_frame(struct upipe *upipe,
-                                      struct AVFrame *frame,
-                                      struct upump **upump_p)
+static int upipe_avcenc_encode_frame(struct upipe *upipe,
+                                     struct AVFrame *frame,
+                                     struct upump **upump_p)
 {
     struct upipe_avcenc *upipe_avcenc = upipe_avcenc_from_upipe(upipe);
     AVCodecContext *context = upipe_avcenc->context;
@@ -706,7 +707,7 @@ static void upipe_avcenc_encode_frame(struct upipe *upipe,
     int err;
     if ((err = avcodec_send_frame(context, frame)) < 0) {
         upipe_err_va(upipe, "avcodec_send_frame: %s", av_err2str(err));
-        return;
+        return UBASE_ERR_EXTERNAL;
     }
 
     while (1) {
@@ -721,6 +722,8 @@ static void upipe_avcenc_encode_frame(struct upipe *upipe,
         upipe_avcenc_output_pkt(upipe, upipe_avcenc->avpkt, upump_p);
     }
     av_packet_unref(upipe_avcenc->avpkt);
+
+    return UBASE_ERR_NONE;
 }
 
 /** @internal @This encodes video frames.
@@ -826,7 +829,13 @@ static void upipe_avcenc_encode_video(struct upipe *upipe,
 
     /* store uref in mapping list */
     ulist_add(&upipe_avcenc->urefs_in_use, uref_to_uchain(uref));
-    upipe_avcenc_encode_frame(upipe, frame, upump_p);
+
+    if (unlikely(!ubase_check(upipe_avcenc_encode_frame(upipe, frame,
+                                                        upump_p)))) {
+        ulist_delete(uref_to_uchain(uref));
+        uref_free(uref);
+        upipe_throw_error(upipe, UBASE_ERR_EXTERNAL);
+    }
 }
 
 /** @internal @This encodes audio frames.
@@ -929,7 +938,14 @@ static void upipe_avcenc_encode_audio(struct upipe *upipe,
 
     /* store uref in mapping list */
     ulist_add(&upipe_avcenc->urefs_in_use, uref_to_uchain(main_uref));
-    upipe_avcenc_encode_frame(upipe, frame, upump_p);
+
+    if (unlikely(!ubase_check(upipe_avcenc_encode_frame(upipe, frame,
+                                                        upump_p)))) {
+        ulist_delete(uref_to_uchain(main_uref));
+        uref_free(main_uref);
+        upipe_throw_error(upipe, UBASE_ERR_EXTERNAL);
+    }
+
     free(buf);
 }
 
