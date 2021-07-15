@@ -839,6 +839,7 @@ static void cb(struct upump *upump)
     else {
         uchain = ulist_pop(&upipe_sync->urefs);
         uref = uref_from_uchain(uchain);
+        upipe_sync->buffered_frames--;
     }
 
     if (uref)
@@ -1002,6 +1003,13 @@ static void upipe_sync_input(struct upipe *upipe, struct uref *uref,
 
         /* buffer pic */
         ulist_add(&upipe_sync->urefs, uref_to_uchain(uref));
+        upipe_sync->buffered_frames++;
+
+        /* limit buffered frames */
+        if (unlikely(upipe_sync->buffered_frames >= MAX_VIDEO_FRAMES)) {
+            ulist_uref_flush(&upipe_sync->urefs);
+            upipe_sync->buffered_frames = 0;
+        }
 
         /* need upump mgr */
         if (!ubase_check(upipe_sync_check_upump_mgr(upipe_sync_to_upipe(upipe_sync))))
