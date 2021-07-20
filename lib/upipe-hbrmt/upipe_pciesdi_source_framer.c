@@ -44,6 +44,11 @@
 
 #include "upipe_hbrmt_common.h"
 
+enum operating_mode {
+    FRAMES,
+    VSYNC_ONLY,
+};
+
 struct upipe_pciesdi_source_framer {
     /** refcount management structure */
     struct urefcount urefcount;
@@ -68,6 +73,14 @@ struct upipe_pciesdi_source_framer {
     bool start;
     bool progressive;
     bool sdi3g_levelb;
+    enum operating_mode mode;
+
+    /* vsync handling */
+    int expected_line_num;
+    uint16_t prev_eav, prev_sav;
+    /* whether there was a vsync error at the given transition */
+    bool vbi_f1_part1, active_f1, vbi_f1_part2, vbi_f2_part1, active_f2, vbi_f2_part2;
+    bool discontinuity;
 
     struct urational fps;
     uint64_t frame_counter;
@@ -87,6 +100,24 @@ UPIPE_HELPER_VOID(upipe_pciesdi_source_framer)
 UPIPE_HELPER_OUTPUT(upipe_pciesdi_source_framer, output, flow_def, output_state,
         request_list)
 
+static void reset_state(struct upipe_pciesdi_source_framer *ctx)
+{
+    /* Restart frame alignment. */
+    ctx->start = false;
+    /* Release any cached data. */
+    uref_free(ctx->uref);
+    ctx->uref = NULL;
+    ctx->cached_lines = 0;
+    /* Clear state for finding top of frame. */
+    ctx->prev_fvh = 0;
+    ctx->prev_line_num = 0;
+    /* Clear state for vsync tracking. */
+    ctx->expected_line_num = 0;
+    ctx->prev_eav = ctx->prev_sav = 0;
+    ctx->vbi_f1_part1 = ctx->active_f1 = ctx->vbi_f1_part2
+        = ctx->vbi_f2_part1 = ctx->active_f2 = ctx->vbi_f2_part2 = false;
+}
+
 static struct upipe *upipe_pciesdi_source_framer_alloc(struct upipe_mgr *mgr, struct uprobe
         *uprobe, uint32_t signature, va_list args)
 {
@@ -104,6 +135,12 @@ static struct upipe *upipe_pciesdi_source_framer_alloc(struct upipe_mgr *mgr, st
     ctx->uref = NULL;
     ctx->cached_lines = 0;
     ctx->frame_counter = 0;
+    ctx->mode = FRAMES;
+    ctx->expected_line_num = 0;
+    ctx->discontinuity = false;
+    ctx->prev_eav = ctx->prev_sav = 0;
+    ctx->vbi_f1_part1 = ctx->active_f1 = ctx->vbi_f1_part2
+        = ctx->vbi_f2_part1 = ctx->active_f2 = ctx->vbi_f2_part2 = false;
 
     upipe_pciesdi_source_framer_init_output(upipe);
     upipe_pciesdi_source_framer_init_urefcount(upipe);
@@ -111,7 +148,6 @@ static struct upipe *upipe_pciesdi_source_framer_alloc(struct upipe_mgr *mgr, st
     upipe_throw_ready(upipe);
     return upipe;
 }
-
 
 static void upipe_pciesdi_source_framer_free(struct upipe *upipe)
 {
@@ -151,6 +187,31 @@ static int upipe_pciesdi_source_framer_set_flow_def(struct upipe *upipe, struct
     return UBASE_ERR_NONE;
 }
 
+static int upipe_pciesdi_source_framer_set_option(struct upipe *upipe, const char *option,
+        const char *value)
+{
+    struct upipe_pciesdi_source_framer *ctx = upipe_pciesdi_source_framer_from_upipe(upipe);
+
+    if (!option || !value)
+        return UBASE_ERR_INVALID;
+
+    if (!strcmp(option, "mode")) {
+        if (!strcmp(value, "frames")) {
+            ctx->mode = FRAMES;
+            return UBASE_ERR_NONE;
+        }
+        if (!strcmp(value, "vsync-only")) {
+            ctx->mode = VSYNC_ONLY;
+            return UBASE_ERR_NONE;
+        }
+        upipe_err_va(upipe, "Unknown %s: %s", option, value);
+        return UBASE_ERR_INVALID;
+    }
+
+    upipe_err_va(upipe, "Unknown option %s", option);
+    return UBASE_ERR_INVALID;
+}
+
 static int upipe_pciesdi_source_framer_control(struct upipe *upipe, int command,
         va_list args)
 {
@@ -159,6 +220,13 @@ static int upipe_pciesdi_source_framer_control(struct upipe *upipe, int command,
             struct uref *flow_def = va_arg(args, struct uref *);
             return upipe_pciesdi_source_framer_set_flow_def(upipe, flow_def);
         }
+
+        case UPIPE_SET_OPTION: {
+            const char *option = va_arg(args, const char *);
+            const char *value  = va_arg(args, const char *);
+            return upipe_pciesdi_source_framer_set_option(upipe, option, value);
+        }
+
         case UPIPE_REGISTER_REQUEST:
         case UPIPE_UNREGISTER_REQUEST:
         case UPIPE_GET_FLOW_DEF:
@@ -170,102 +238,22 @@ static int upipe_pciesdi_source_framer_control(struct upipe *upipe, int command,
     }
 }
 
-static int timestamp_uref(struct upipe *upipe, struct uref *uref)
+static int timestamp_uref(struct upipe_pciesdi_source_framer *ctx, struct uref *uref)
 {
     /* TODO: handle errors. */
-    struct upipe_pciesdi_source_framer *ctx = upipe_pciesdi_source_framer_from_upipe(upipe);
     uint64_t pts = ctx->frame_counter * ctx->fps.den * UCLOCK_FREQ / ctx->fps.num;
     uref_clock_set_pts_prog(uref, pts);
     ctx->frame_counter += 1;
     return UBASE_ERR_NONE;
 }
 
-static void upipe_pciesdi_source_framer_input(struct upipe *upipe, struct uref
-        *uref, struct upump **upump_p)
+static int find_top_of_frame(struct upipe_pciesdi_source_framer *ctx, struct uref *uref)
 {
-    struct upipe_pciesdi_source_framer *ctx = upipe_pciesdi_source_framer_from_upipe(upipe);
-
-    if (ubase_check(uref_flow_get_discontinuity(uref))) {
-        /* There was a discontinuity in the signal.  Restart frame alignment. */
-        ctx->start = false;
-
-        if (ctx->uref)
-            uref_free(ctx->uref);
-        ctx->uref = NULL;
-        ctx->cached_lines = 0;
-        ctx->prev_fvh = 0;
-        ctx->prev_line_num = 0;
-    }
-
-    if (ctx->start) {
-        size_t src_size_bytes;
-        int err = uref_block_size(uref, &src_size_bytes);
-        if (!ubase_check(err)) {
-            upipe_throw_fatal(upipe, err);
-            uref_free(uref);
-            return;
-        }
-
-        int sdi_width_bytes = sizeof(uint16_t) * 2 * ctx->f->width;
-        int lines_in_uref = src_size_bytes / sdi_width_bytes;
-        if (ctx->cached_lines + lines_in_uref < ctx->f->height) {
-            ctx->cached_lines += lines_in_uref;
-            if (ctx->uref) {
-                uref_block_append(ctx->uref, uref_detach_ubuf(uref));
-                uref_free(uref);
-                return;
-            } else {
-                ctx->uref = uref;
-                return;
-            }
-        }
-
-        else if (ctx->cached_lines + lines_in_uref == ctx->f->height) {
-            uref_block_append(ctx->uref, uref_detach_ubuf(uref));
-            timestamp_uref(upipe, ctx->uref);
-            upipe_pciesdi_source_framer_output(upipe, ctx->uref, upump_p);
-            ctx->uref = NULL;
-            ctx->cached_lines = 0;
-            uref_free(uref);
-            return;
-        }
-
-        else if (ctx->cached_lines + lines_in_uref > ctx->f->height) {
-            /* Duplicate and resize block to be the end of the frame. */
-            struct ubuf *ubuf = ubuf_dup(uref->ubuf);
-            if (!ubuf) {
-                upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
-                uref_free(uref);
-                return;
-            }
-
-            int lines_needed = ctx->f->height - ctx->cached_lines;
-            ubuf_block_resize(ubuf, 0, sdi_width_bytes * lines_needed);
-            uref_block_append(ctx->uref, ubuf);
-            timestamp_uref(upipe, ctx->uref);
-            upipe_pciesdi_source_framer_output(upipe, ctx->uref, upump_p);
-
-            /* Keep top of next frame. */
-            uref_block_resize(uref, sdi_width_bytes * lines_needed, -1);
-            ctx->uref = uref;
-            ctx->cached_lines = lines_in_uref - lines_needed;
-            return;
-        }
-
-        /* Execution should never reach here. */
-        abort();
-    }
-
-    /* Find top of frame. */
+    struct upipe *upipe = upipe_pciesdi_source_framer_to_upipe(ctx);
 
     int size = -1;
     const uint8_t *src = NULL;
-    int err = uref_block_read(uref, 0, &size, &src);
-    if (!ubase_check(err)) {
-        upipe_throw_fatal(upipe, err);
-        uref_free(uref);
-        return;
-    }
+    UBASE_RETURN(uref_block_read(uref, 0, &size, &src));
     size /= sizeof(uint16_t);
 
     int eav_fvh_offset = 6;
@@ -328,8 +316,288 @@ static void upipe_pciesdi_source_framer_input(struct upipe *upipe, struct uref
         uref_block_resize(uref, sizeof(uint16_t) * offset, -1);
         ctx->uref = uref;
         ctx->cached_lines = (size - offset) / sdi_width;
-    } else {
+    }
+
+    return UBASE_ERR_NONE;
+}
+
+static int handle_frames(struct upipe_pciesdi_source_framer *ctx, struct uref *uref, struct upump **upump_p,
+        int width, int lines_in_uref)
+{
+    struct upipe *upipe = upipe_pciesdi_source_framer_to_upipe(ctx);
+
+    /* If there are not enough lines yet store the block. */
+    if (ctx->cached_lines + lines_in_uref < ctx->f->height) {
+        ctx->cached_lines += lines_in_uref;
+
+        /* If there is a uref, append the new ubuf to the old otherwise just
+         * store the uref. */
+        if (ctx->uref) {
+            uref_block_append(ctx->uref, uref_detach_ubuf(uref));
+            uref_free(uref);
+            return UBASE_ERR_NONE;
+        } else {
+            ctx->uref = uref;
+            return UBASE_ERR_NONE;
+        }
+    }
+
+    /* If there is exactly enough lines then output the uref and clear the
+     * stored values. */
+    else if (ctx->cached_lines + lines_in_uref == ctx->f->height) {
+        uref_block_append(ctx->uref, uref_detach_ubuf(uref));
+        timestamp_uref(ctx, ctx->uref);
+        upipe_pciesdi_source_framer_output(upipe, ctx->uref, upump_p);
+
+        ctx->uref = NULL;
+        ctx->cached_lines = 0;
         uref_free(uref);
+
+        return UBASE_ERR_NONE;
+    }
+
+    /* If there is more than enough lines then output and store the excess. */
+    else if (ctx->cached_lines + lines_in_uref > ctx->f->height) {
+        /* Duplicate and resize block to be the end of the frame. */
+        struct ubuf *ubuf = ubuf_dup(uref->ubuf);
+        UBASE_ALLOC_RETURN(ubuf);
+
+        int lines_needed = ctx->f->height - ctx->cached_lines;
+        ubuf_block_resize(ubuf, 0, width * lines_needed);
+        uref_block_append(ctx->uref, ubuf);
+        timestamp_uref(ctx, ctx->uref);
+        upipe_pciesdi_source_framer_output(upipe, ctx->uref, upump_p);
+
+        /* Keep top of next frame. */
+        uref_block_resize(uref, width * lines_needed, -1);
+        ctx->uref = uref;
+        ctx->cached_lines = lines_in_uref - lines_needed;
+
+        return UBASE_ERR_NONE;
+    }
+
+    /* Execution should never reach here. */
+    return UBASE_ERR_UNHANDLED;
+}
+
+static int handle_vsync_only(struct upipe_pciesdi_source_framer *ctx, struct uref *uref,
+        struct upump **upump_p, int width, int lines_in_uref)
+{
+    struct upipe *upipe = upipe_pciesdi_source_framer_to_upipe(ctx);
+
+    /* Add cached lines from find_top_of_frame(). */
+    if (ctx->uref) {
+        uref_block_append(ctx->uref, uref_detach_ubuf(uref));
+        uref_free(uref);
+        uref = ctx->uref;
+        ctx->uref = NULL;
+        lines_in_uref += ctx->cached_lines;
+    }
+
+    size_t input_size;
+    UBASE_RETURN(uref_block_size(uref, &input_size));
+
+    const struct sdi_picture_fmt *p = ctx->f->pict_fmt;
+    const bool sdi3g_levelb = ctx->sdi3g_levelb;
+    const bool sd = p->sd;
+    const bool ntsc = p->active_height == 486;
+    const int height = ctx->f->height;
+    const int eav_fvh_offset = (sd) ? 3 : 6;
+    const int sav_fvh_offset = 2*ctx->f->active_offset - 1;
+
+    int num_consecutive_line_errors = 0;
+    int expected_line_num = ctx->expected_line_num;
+    uint16_t prev_eav = ctx->prev_eav;
+    uint16_t prev_sav = ctx->prev_sav;
+
+    /* For each segment in the uref. */
+    for (int offset = 0; input_size > 0; /*do nothing*/) {
+        const uint8_t *src = NULL;
+        int buf_size = -1;
+        /* Map input buffer. */
+        UBASE_RETURN(uref_block_read(uref, offset, &buf_size, &src));
+
+        /* TODO: full checks like the debug mode of upipe_sdi_dec? */
+
+        /* For each line in the segment. */
+        for (int h = buf_size / width; h > 0; h--) {
+            const uint16_t *buf = (const uint16_t*)src;
+
+            uint16_t eav = buf[eav_fvh_offset];
+            uint16_t sav = buf[sav_fvh_offset];
+            int line = 0;
+            if (!sd) {
+                line = (buf[8] & 0x1ff) >> 2;
+                line |= ((buf[10] & 0x1ff) >> 2) << 7;
+            }
+
+            if (sd) {
+                int line_num = expected_line_num + 1;
+                if (ntsc)
+                    line_num = ((line_num + 2) % 525) + 1;
+
+                /* Check that each expected transition between fields and vbi
+                 * and active picture has the right EAV/SAV values on the
+                 * previous and current lines.
+                 * All 4 values must be incorrect to set the error for the
+                 * transition in order to prevent the appearance that vsync is
+                 * lost from a single value error. */
+                if (line_num == p->vbi_f1_part1.start)
+                    ctx->vbi_f1_part1 = eav != eav_fvh_cword[0][true]
+                        && sav != sav_fvh_cword[0][true]
+                        && prev_eav != eav_fvh_cword[1][true]
+                        && prev_sav != sav_fvh_cword[1][true];
+
+                if (line_num == p->active_f1.start)
+                    ctx->active_f1 = eav != eav_fvh_cword[0][false]
+                        && sav != sav_fvh_cword[0][false]
+                        && prev_eav != eav_fvh_cword[0][true]
+                        && prev_sav != sav_fvh_cword[0][true];
+
+                if (line_num == p->vbi_f1_part2.start)
+                    ctx->vbi_f1_part2 = eav != eav_fvh_cword[0][true]
+                        && sav != sav_fvh_cword[0][true]
+                        && prev_eav != eav_fvh_cword[0][false]
+                        && prev_sav != sav_fvh_cword[0][false];
+
+                if (line_num == p->vbi_f2_part1.start)
+                    ctx->vbi_f2_part1 = eav != eav_fvh_cword[1][true]
+                        && sav != sav_fvh_cword[1][true]
+                        && prev_eav != eav_fvh_cword[0][true]
+                        && prev_sav != sav_fvh_cword[0][true];
+
+                if (line_num == p->active_f2.start)
+                    ctx->active_f2 = eav != eav_fvh_cword[1][false]
+                        && sav != sav_fvh_cword[1][false]
+                        && prev_eav != eav_fvh_cword[1][true]
+                        && prev_sav != sav_fvh_cword[1][true];
+
+                if (line_num == p->vbi_f2_part2.start)
+                    ctx->vbi_f2_part2 = eav != eav_fvh_cword[1][true]
+                        && sav != sav_fvh_cword[1][true]
+                        && prev_eav != eav_fvh_cword[1][false]
+                        && prev_sav != sav_fvh_cword[1][false];
+
+                expected_line_num = (expected_line_num + 1) % height;
+                prev_eav = eav;
+                prev_sav = sav;
+            }
+
+            else if (sdi3g_levelb) {
+                if (line != expected_line_num/2 + 1)
+                    num_consecutive_line_errors += 1;
+                else
+                    num_consecutive_line_errors = 0;
+
+                expected_line_num = (expected_line_num + 1) % (2*height);
+            }
+
+            else {
+                if (line != expected_line_num + 1)
+                    num_consecutive_line_errors += 1;
+                else
+                    num_consecutive_line_errors = 0;
+
+                expected_line_num = (expected_line_num + 1) % height;
+            }
+
+            src += width;
+        }
+
+        /* Unmap segment at offset. */
+        uref_block_unmap(uref, offset);
+        /* Advance to next segment. */
+        offset += buf_size;
+        input_size -= buf_size;
+    }
+
+    /* If every line had a wrong number assume vsync is lost and restart as
+     * though the discontinuity was seen. */
+    if (num_consecutive_line_errors == lines_in_uref) {
+        upipe_warn_va(upipe, "vsync assumed lost between lines %d and %d, please report this",
+                ctx->expected_line_num+1, expected_line_num+1);
+        reset_state(ctx);
+        uref_free(uref);
+        return UBASE_ERR_NONE;
+    }
+
+    /* If every transition had an error then assume vsync is lost. */
+    if (sd && ctx->vbi_f1_part1 && ctx->active_f1 && ctx->vbi_f1_part2
+            && ctx->vbi_f2_part1 && ctx->active_f2 && ctx->vbi_f2_part2) {
+        upipe_warn_va(upipe, "vsync assumed lost between lines %d and %d, please report this",
+                ctx->expected_line_num+1, expected_line_num+1);
+        reset_state(ctx);
+        uref_free(uref);
+        return UBASE_ERR_NONE;
+    }
+
+    /* If no problem is found with the vsync then just pass through the uref. */
+    ctx->expected_line_num = expected_line_num;
+    ctx->prev_eav = prev_eav;
+    ctx->prev_sav = prev_sav;
+    if (ctx->discontinuity) {
+        uref_flow_set_discontinuity(uref);
+        ctx->discontinuity = false;
+    }
+    upipe_pciesdi_source_framer_output(upipe, uref, upump_p);
+    return UBASE_ERR_NONE;
+}
+
+static void upipe_pciesdi_source_framer_input(struct upipe *upipe, struct uref
+        *uref, struct upump **upump_p)
+{
+    struct upipe_pciesdi_source_framer *ctx = upipe_pciesdi_source_framer_from_upipe(upipe);
+
+    /* There was a discontinuity in the signal.  Restart frame alignment. */
+    if (ubase_check(uref_flow_get_discontinuity(uref))) {
+        reset_state(ctx);
+        ctx->discontinuity = true;
+    }
+
+    /* Find top of frame if not started. */
+    if (!ctx->start) {
+        int err = find_top_of_frame(ctx, uref);
+        if (!ubase_check(err)) {
+            upipe_throw_error(upipe, err);
+            uref_free(uref);
+            return;
+        }
+
+        /* If the top was not found release the uref. */
+        if (!ctx->start)
+            uref_free(uref);
+
+        return;
+    }
+
+    if (ctx->start) {
+        size_t src_size_bytes;
+        int err = uref_block_size(uref, &src_size_bytes);
+        if (!ubase_check(err)) {
+            upipe_throw_fatal(upipe, err);
+            uref_free(uref);
+            return;
+        }
+
+        int sdi_width_bytes = sizeof(uint16_t) * 2 * ctx->f->width;
+        int lines_in_uref = src_size_bytes / sdi_width_bytes;
+
+        if (ctx->mode == FRAMES) {
+            err = handle_frames(ctx, uref, upump_p, sdi_width_bytes, lines_in_uref);
+            if (!ubase_check(err)) {
+                upipe_throw_error(upipe, err);
+                uref_free(uref);
+                return;
+            }
+        }
+
+        else if (ctx->mode == VSYNC_ONLY) {
+            err = handle_vsync_only(ctx, uref, upump_p, sdi_width_bytes, lines_in_uref);
+            if (!ubase_check(err)) {
+                upipe_throw_error(upipe, err);
+                uref_free(uref);
+            }
+        }
     }
 
     return;
