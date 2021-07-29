@@ -1149,6 +1149,7 @@ static int upipe_http_src_open_url(struct upipe *upipe)
 
     if (fd < 0) {
         upipe_err(upipe, "could not connect to any resource");
+        upipe_throw_error(upipe, UBASE_ERR_EXTERNAL);
         return UBASE_ERR_EXTERNAL;
     }
 
