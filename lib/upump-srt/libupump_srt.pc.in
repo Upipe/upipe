@@ -1,0 +1,10 @@
+prefix=@prefix@
+exec_prefix=@exec_prefix@
+libdir=@libdir@
+includedir=@includedir@
+Name: libupump_srt
+Description: Upipe multimedia framework, libsrt event loop wrapper
+Version: @VERSION@
+Libs: -L${libdir} -lupump_srt
+Cflags: -I${includedir}
+Requires.private: libupipe

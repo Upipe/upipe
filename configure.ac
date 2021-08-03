@@ -139,6 +139,7 @@ PKG_CHECK_UPIPE(ZVBI, zvbi-0.2, [libzvbi.h])
 PKG_CHECK_UPIPE(FREETYPE, freetype2, [ft2build.h])
 PKG_CHECK_UPIPE(EBUR128, libebur128, [ebur128.h])
 PKG_CHECK_UPIPE(DVBV5, libdvbv5, [libdvbv5/dvb-dev.h])
+PKG_CHECK_UPIPE(SRT, srt, [srt/srt.h])
 AC_LANG_PUSH([C++])
 PKG_CHECK_UPIPE(QTWEBKIT, QtWebKit, [QtWebKit])
 AC_LANG_POP([C++])
@@ -237,6 +238,7 @@ AC_CONFIG_FILES([Makefile
                  include/upipe/Makefile
                  include/upump-ev/Makefile
                  include/upump-ecore/Makefile
+                 include/upump-srt/Makefile
                  include/upipe-modules/Makefile
                  include/upipe-freetype/Makefile
                  include/upipe-pthread/Makefile
@@ -273,6 +275,8 @@ AC_CONFIG_FILES([Makefile
                  lib/upump-ev/libupump_ev.pc
                  lib/upump-ecore/Makefile
                  lib/upump-ecore/libupump_ecore.pc
+                 lib/upump-srt/Makefile
+                 lib/upump-srt/libupump_srt.pc
                  lib/upipe-freetype/Makefile
                  lib/upipe-freetype/libupipe_freetype.pc
                  lib/upipe-modules/Makefile
