@@ -407,6 +407,11 @@ TESTS += \
 	upipe_v210dec_test upipe_v210enc_test
 endif
 
+if HAVE_SRT
+check_PROGRAMS += upump_srt_test
+TESTS += upump_srt_test
+endif
+
 AM_CPPFLAGS = -I$(top_builddir)/include -I$(top_srcdir)/include
 LDADD = $(top_builddir)/lib/upipe/libupipe.la
 
@@ -414,6 +419,11 @@ upump_ev_test_SOURCES = upump_common_test.h \
 			upump_common_test.c \
 			upump_ev_test.c
 upump_ev_test_LDADD = $(LDADD) -lev $(top_builddir)/lib/upump-ev/libupump_ev.la
+upump_srt_test_SOURCES = upump_common_test.h \
+			 upump_common_test.c \
+			 upump_srt_test.c
+upump_srt_test_CFLAGS = $(AM_CFLAGS) $(SRT_CFLAGS)
+upump_srt_test_LDADD = $(LDADD) $(SRT_LIBS) $(top_builddir)/lib/upump-srt/libupump_srt.la
 ulifo_uqueue_test_CFLAGS = $(AM_CFLAGS) -pthread
 ulifo_uqueue_test_LDADD = $(LDADD) -lev $(top_builddir)/lib/upump-ev/libupump_ev.la
 udeal_test_CFLAGS = $(AM_CFLAGS) -pthread

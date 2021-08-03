@@ -103,3 +103,7 @@ endif
 if HAVE_BEARSSL
 SUBDIRS += upipe-bearssl
 endif
+
+if HAVE_SRT
+SUBDIRS += upump-srt
+endif
