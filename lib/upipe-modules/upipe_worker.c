@@ -223,6 +223,8 @@ static struct upipe *_upipe_work_alloc(struct upipe_mgr *mgr,
     upipe_work_init_bin_input(upipe);
     upipe_work_init_bin_output(upipe);
     ulist_init(&upipe_work->upump_mgr_pipes);
+    upipe_work->first_remote_xfer = NULL;
+    upipe_work->last_remote_xfer = NULL;
 
     uprobe_init(&upipe_work->in_qsrc_probe, upipe_work_in_qsrc_probe,
                 uprobe_use(uprobe_remote));
