@@ -211,6 +211,8 @@ static int upipe_rtpsrc_control(struct upipe *upipe, int command, va_list args)
         case UPIPE_SET_OUTPUT_SIZE:
         case UPIPE_GET_URI:
         case UPIPE_SET_URI:
+        case UPIPE_UDPSRC_GET_FD:
+        case UPIPE_UDPSRC_SET_FD:
             return upipe_control_va(upipe_rtpsrc->source, command, args);
         case UPIPE_BIN_GET_FIRST_INNER: {
             struct upipe **p = va_arg(args, struct upipe **);
