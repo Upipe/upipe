@@ -226,7 +226,7 @@ void ubuf_pic_rgb_to_yuv(const uint8_t rgb[3], int fullrange, uint8_t yuv[3])
  */
 int ubuf_pic_parse_rgb(const char *value, uint8_t rgb[3])
 {
-    memset(rgb, 0, 4);
+    memset(rgb, 0, 3);
 
     if (!value)
         return UBASE_ERR_INVALID;
