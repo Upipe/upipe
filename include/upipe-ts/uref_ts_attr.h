@@ -122,7 +122,7 @@ static inline int uref_##group##_compare_##name##s(struct uref *uref1,      \
     uint8_t descriptors1[size1];                                            \
     uref_##group##_extract_##name##s(uref1, descriptors1);                  \
     uint8_t descriptors2[size1];                                            \
-    uref_##group##_extract_##name##s(uref2, descriptors1);                  \
+    uref_##group##_extract_##name##s(uref2, descriptors2);                  \
     return memcmp(descriptors1, descriptors2, size1);                       \
 }
 
