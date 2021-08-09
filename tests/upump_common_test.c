@@ -187,7 +187,7 @@ void run(struct upump_mgr *mgr)
 
     /* Start tests */
     upump_start(write_idler);
-    upump_mgr_run(mgr, NULL);
+    ubase_assert(upump_mgr_run(mgr, NULL));
     assert(bytes_read);
     assert(bytes_read == bytes_written);
 
@@ -209,7 +209,7 @@ void run(struct upump_mgr *mgr)
     upump_start(timer);
     upump_start(timer_again);
     upump_set_status(timer_again, 0);
-    upump_mgr_run(mgr, NULL);
+    ubase_assert(upump_mgr_run(mgr, NULL));
     assert(timer_done);
     assert(timeout_count > MIN_TIMEOUT);
     upump_free(timer);
@@ -227,7 +227,7 @@ void run(struct upump_mgr *mgr)
 
     upump_start(timer_again);
     upump_start(timer);
-    upump_mgr_run(mgr, NULL);
+    ubase_assert(upump_mgr_run(mgr, NULL));
     upump_free(timer);
     upump_free(timer_again);
     assert(timer_done);
