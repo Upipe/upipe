@@ -234,4 +234,7 @@ void run(struct upump_mgr *mgr)
     assert(timeout_count > MIN_TIMEOUT);
 
     upump_mgr_release(mgr);
+
+    close(pipefd[0]);
+    close(pipefd[1]);
 }
