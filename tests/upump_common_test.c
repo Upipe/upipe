@@ -203,7 +203,7 @@ void run(struct upump_mgr *mgr)
                           timeout / 2, timeout);
     assert(timer_again != NULL);
     timer =
-        upump_alloc_timer(mgr, timer_cb, NULL, NULL, timeout, timeout);
+        upump_alloc_timer(mgr, timer_cb, NULL, NULL, timeout, timeout / 2);
     assert(timer != NULL);
 
     upump_start(timer);
