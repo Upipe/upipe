@@ -32,8 +32,8 @@ setmetatable(_G, { __index = C })
 
 function ubase_assert(command)
     if not ubase_check(command) then
-	local msg = ubase_err_str(command)
-	error(msg ~= nil and ffi.string(msg) or "UBASE_ERR_" .. command, 2)
+        local msg = ubase_err_str(command)
+        error(msg ~= nil and ffi.string(msg) or "UBASE_ERR_" .. command, 2)
     end
 end
 
@@ -101,7 +101,7 @@ uclock_alloc = alloc "uclock"
 
 local mgr_alias = {
     upump = {
-	ev_default = { "ev", "default" }
+        ev_default = { "ev", "default" }
     },
     umem = {
         pool_simple = { "pool", "simple" }
