@@ -2,7 +2,8 @@ local ffi = require "ffi"
 local stdarg = require "ffi-stdarg"
 local va_args, va_copy = stdarg.va_args, stdarg.va_copy
 local fmt = string.format
-local C = ffi.C
+local C, cast = ffi.C, ffi.cast
+local tohex = bit.tohex
 
 ffi.cdef [[
     // stdlib.h
@@ -37,7 +38,21 @@ function ubase_assert(command)
     end
 end
 
+local void_ptr = ffi.typeof("void *")
+local intptr_t = ffi.typeof("intptr_t")
+local void_cb = ffi.typeof("void (*)(void *)")
+
 local props = { }
+
+local function props_key(ptr)
+    return tohex(cast(intptr_t, cast(void_ptr, ptr)))
+end
+
+local function props_dict(ptr)
+    local k = props_key(ptr)
+    if not props[k] then props[k] = { } end
+    return props[k]
+end
 
 local init = {
     upipe_mgr = function (mgr, cb)
@@ -73,7 +88,7 @@ local function alloc(ty)
         cb = ffi.cast("urefcount_cb", function (refcount)
             local data = ffi.cast(ffi.typeof("$ *", st),
                 ffi.cast("char *", refcount) + ffi.offsetof(ct, "data"))
-            local k = tostring(data):match(": 0x(.*)")
+            local k = props_key(data)
             if ty == "upipe" or ty == "uclock" or ty == "upump" then
                 if props[k] and props[k]._clean then props[k]._clean(data) end
                 props[k] = nil
@@ -132,8 +147,6 @@ local function ubase_err(ret)
     return type(ret) == "string" and C["UBASE_ERR_" .. ret:upper()] or ret or C.UBASE_ERR_NONE
 end
 
-local void_cb = ffi.typeof("void (*)(void *)")
-
 uprobe = setmetatable({ }, {
     __call = function (_, uprobe_throw)
         if type(uprobe_throw) ~= 'function' then
@@ -143,7 +156,7 @@ uprobe = setmetatable({ }, {
                 if k == "PROVIDE_REQUEST" and type(v) ~= 'function' then
                     local events = { }
                     for k, v in pairs(v) do
-                        events[C[fmt("UREQUEST_%s", k:upper())]] = { func = v }
+                        events[C["UREQUEST_" .. k:upper()]] = { func = v }
                     end
                     v = function (probe, pipe, request, args)
                         local e = events[request.type]
@@ -153,7 +166,7 @@ uprobe = setmetatable({ }, {
                         return probe:throw_next(pipe, C.UPROBE_PROVIDE_REQUEST, args)
                     end
                 end
-                events[C[fmt("UPROBE_%s", k)]] = { func = v, args = probe_args[k] }
+                events[C["UPROBE_" .. k]] = { func = v, args = probe_args[k] }
             end
             uprobe_throw = function (probe, pipe, event, args)
                 local e = events[event]
@@ -212,18 +225,21 @@ uclock = setmetatable({ }, {
 local upipe_getters = require "upipe-getters"
 local uref_getters = require "uref-getters"
 
-local function getter(getters, f, key)
-    if getters[key] then
-        return function (self, arg)
-            if arg ~= nil then return f(self, arg) end
-            local arg_p = ffi.new(getters[key] .. "[1]")
-            local ret = f(self, arg_p)
-            if not C.ubase_check(ret) then
-                return nil, ret
-            end
-            return arg_p[0]
+local function create_getter(f, t)
+    return function (self, arg)
+        if arg ~= nil then return f(self, arg) end
+        local arg_p = ffi.new(t .. "[1]")
+        local ret = f(self, arg_p)
+        if not C.ubase_check(ret) then
+            return nil, ret
         end
+        return arg_p[0]
     end
+end
+
+local function getter(getters, f, key)
+    if not getters[key] then return f end
+    return create_getter(f, getters[key])
 end
 
 local function fourcc(n1, n2, n3, n4)
@@ -248,9 +264,7 @@ local sig = {
 ffi.metatype("struct upipe_mgr", {
     __index = function (mgr, key)
         if key == 'props' then
-            local k = tostring(mgr):match(": 0x(.*)")
-            if not props[k] then props[k] = { } end
-            return props[k]
+            return props_dict(mgr)
         end
         if key == 'new' then key = 'new_void' end
         local mgr_sig = key:match("^new_(.*)")
@@ -280,7 +294,7 @@ ffi.metatype("struct upump_mgr", {
                 return pump
             end
         end
-        return C[fmt("upump_mgr_%s", key)]
+        return C["upump_mgr_" .. key]
     end
 })
 
@@ -292,57 +306,54 @@ local function iterator(pipe, f, t)
     end
 end
 
+local upipe_methods = {
+    new = function (pipe, probe)
+        local pipe = C.upipe_void_alloc_sub(pipe, C.uprobe_use(probe))
+        assert(pipe ~= nil, "upipe_void_alloc_sub failed")
+        return ffi.gc(pipe, C.upipe_release)
+    end,
+    new_flow = function (pipe, probe, flow)
+        local pipe = C.upipe_flow_alloc_sub(pipe, C.uprobe_use(probe), flow)
+        assert(pipe ~= nil, "upipe_flow_alloc_sub failed")
+        return ffi.gc(pipe, C.upipe_release)
+    end,
+    release = function (pipe)
+        C.upipe_release(ffi.gc(pipe, nil))
+    end,
+    iterate_sub = function (pipe, p)
+        local f = C.upipe_iterate_sub
+        return p and f(pipe, p) or iterator(pipe, f, "struct upipe *")
+    end,
+    split_iterate = function (pipe, p)
+        local f = C.upipe_split_iterate
+        return p and f(pipe, p) or iterator(pipe, f, "struct uref *")
+    end,
+    iterate = function (pipe, f, t)
+        if type(f) == 'string' then f = pipe[f] end
+        return iterator(pipe, f, t)
+    end,
+}
+
 ffi.metatype("struct upipe", {
     __index = function (pipe, key)
-        if key == 'new' then
-            return function (pipe, probe)
-                local pipe = C.upipe_void_alloc_sub(pipe, C.uprobe_use(probe))
-                assert(pipe ~= nil, "upipe_void_alloc_sub failed")
-                return ffi.gc(pipe, C.upipe_release)
-            end
-        elseif key == 'new_flow' then
-            return function (pipe, probe, flow)
-                local pipe = C.upipe_flow_alloc_sub(pipe, C.uprobe_use(probe), flow)
-                assert(pipe ~= nil, "upipe_flow_alloc_sub failed")
-                return ffi.gc(pipe, C.upipe_release)
-            end
-        elseif key == 'props' then
-            local k = tostring(pipe):match(": 0x(.*)")
-            if not props[k] then props[k] = { } end
-            return props[k]
+        if key == 'props' then
+            return props_dict(pipe)
         elseif key == 'helper' then
-            return pipe.props.helper
-        elseif key == 'release' then
-            return function (pipe)
-                ffi.gc(pipe, nil)
-                C.upipe_release(pipe)
-            end
-        elseif key == 'iterate_sub' then
-            return function (pipe, p)
-                local f = C.upipe_iterate_sub
-                return p and f(pipe, p) or iterator(pipe, f, "struct upipe *")
-            end
-        elseif key == 'split_iterate' then
-            return function (pipe, p)
-                local f = C.upipe_split_iterate
-                return p and f(pipe, p) or iterator(pipe, f, "struct uref *")
-            end
-        elseif key == 'iterate' then
-            return function (pipe, f, t)
-                if type(f) == 'string' then f = pipe[f] end
-                return iterator(pipe, f, t)
-            end
+            return props_dict(pipe).helper
         end
+        local m = upipe_methods[key]
+        if m then return m end
         local f
-        if pipe.props._control and pipe.props._control[key] then
-            f = pipe.props._control[key]
+        local props = props_dict(pipe)
+        if props._control and props._control[key] then
+            f = props._control[key]
         else
-            f = C[fmt("upipe_%s", key)]
+            f = C["upipe_" .. key]
         end
-        return getter(upipe_getters, f, key) or f
+        return getter(upipe_getters, f, key)
     end,
     __newindex = function (pipe, key, val)
-        local sym = fmt("upipe_set_%s", key)
+        local sym = "upipe_set_" .. key
         assert(C.ubase_check(C[sym](pipe, val)), sym)
     end,
     __concat = function (pipe, next_pipe)
@@ -380,37 +391,35 @@ ffi.metatype("struct uref", {
         elseif key == "sound_foreach_plane" then
             return foreach_plane(C.uref_sound_iterate_plane)
         end
-        local f = C[fmt("uref_%s", key)]
-        return getter(uref_getters, f, key) or f
+        local f = C["uref_" .. key]
+        return getter(uref_getters, f, key)
     end
 })
 
 ffi.metatype("struct ubuf", {
     __index = function (_, key)
-        return C[fmt("ubuf_%s", key)]
+        return C["ubuf_" .. key]
     end
 })
 
 ffi.metatype("struct upump", {
     __index = function (pump, key)
         if key == 'props' then
-            local k = tostring(pump):match(": 0x(.*)")
-            if not props[k] then props[k] = { } end
-            return props[k]
+            return props_dict(pump)
         end
-        return C[fmt("upump_%s", key)]
+        return C["upump_" .. key]
     end
 })
 
 ffi.metatype("struct urefcount", {
     __index = function (_, key)
-        return C[fmt("urefcount_%s", key)]
+        return C["urefcount_" .. key]
     end
 })
 
 ffi.metatype("struct uprobe", {
     __index = function (_, key)
-        return C[fmt("uprobe_%s", key)]
+        return C["uprobe_" .. key]
     end,
     __concat = function (probe, next_probe)
         local last = probe
@@ -423,23 +432,21 @@ ffi.metatype("struct uprobe", {
 ffi.metatype("struct uclock", {
     __index = function (clock, key)
         if key == 'props' then
-            local k = tostring(clock):match(": 0x(.*)")
-            if not props[k] then props[k] = { } end
-            return props[k]
+            return props_dict(clock)
         end
-        return C[fmt("uclock_%s", key)]
+        return C["uclock_" .. key]
     end
 })
 
 ffi.metatype("struct urequest", {
     __index = function (_, key)
-        return C[fmt("urequest_%s", key)]
+        return C["urequest_" .. key]
     end
 })
 
 ffi.metatype("struct umem_mgr", {
     __index = function (_, key)
-        return C[fmt("umem_mgr_%s", key)]
+        return C["umem_mgr_" .. key]
     end
 })
 
@@ -454,7 +461,7 @@ ffi.metatype("struct uref_mgr", {
                 return ref
             end
         end
-        return C[fmt("uref_mgr_%s", key)]
+        return C["uref_mgr_" .. key]
     end
 })
 
@@ -739,7 +746,7 @@ local function upipe_helper_alloc(cb)
     h_mgr.refcount_cb = function (refcount)
         local h_pipe = container_of(refcount, "struct upipe_helper", "urefcount")
         local pipe = h_pipe.upipe
-        local k = tostring(pipe):match(": 0x(.*)")
+        local k = props_key(pipe)
         if props[k] and props[k]._clean then props[k]._clean(pipe) end
         if cb.sub then
             local super = pipe:sub_get_super()
