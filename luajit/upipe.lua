@@ -563,6 +563,10 @@ local function control_args(cmd, args)
     return va_args(args, unpack(ctrl_args[cmd]))
 end
 
+local function dump_traceback(msg)
+    io.stderr:write(debug.traceback(msg, 2), "\n")
+end
+
 local function upipe_helper_alloc(cb)
     local ct = ffi.typeof("struct upipe_helper_mgr")
     local h_mgr = ffi.cast(ffi.typeof("$ *", ct), C.calloc(1, ffi.sizeof(ct)))
@@ -613,23 +617,32 @@ local function upipe_helper_alloc(cb)
 
     local function wrap_traceback(f)
         return function (...)
-            local err = function (msg)
-                io.stderr:write(debug.traceback(msg, 2), "\n")
-            end
-            local ret = {xpcall(f, err, ...)}
+            local ret = {xpcall(f, dump_traceback, ...)}
             local success = table.remove(ret, 1)
             if not success then return C.UBASE_ERR_UNKNOWN end
             return unpack(ret)
         end
     end
 
---     mgr.upipe_input = cb.input
-
-    mgr.upipe_input = function (pipe, ref, pump_p)
-        local errh = function (msg)
-            io.stderr:write(debug.traceback(msg, 2), "\n")
+    if cb.input_output then
+        mgr.upipe_input = function (pipe, ref, pump_p)
+            if not C.upipe_helper_check_input(pipe) then
+                C.upipe_helper_hold_input(pipe, ref)
+                C.upipe_helper_block_input(pipe, pump_p)
+                return
+            end
+            local success, ret = xpcall(cb.input_output,
+                dump_traceback, pipe, ref, pump_p)
+            if success and not ret then
+                C.upipe_helper_hold_input(pipe, ref)
+                C.upipe_helper_block_input(pipe, pump_p)
+                C.upipe_use(pipe)
+            end
         end
-        xpcall(cb.input, errh, pipe, ref, pump_p)
+    else
+        mgr.upipe_input = function (pipe, ref, pump_p)
+            xpcall(cb.input, dump_traceback, pipe, ref, pump_p)
+        end
     end
 
     if cb.commands then
