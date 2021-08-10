@@ -809,7 +809,7 @@ local function default_probe(log_level)
         uprobe.uref_mgr(uref_mgr) ..
         uprobe.stdio(C.stderr, log_level or C.UPROBE_LOG_NOTICE)
 
-    if libupump_ev_static_so then
+    if rawget(_G, "libupump_ev_static_so") then
         upump_mgr = upump.ev_default(0, 0)
         probe = probe .. uprobe.upump_mgr(upump_mgr)
     end
