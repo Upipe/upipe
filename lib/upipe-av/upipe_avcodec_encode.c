@@ -848,6 +848,7 @@ static void upipe_avcenc_encode_audio(struct upipe *upipe,
     frame->nb_samples = context->frame_size;
     frame->format = context->sample_fmt;
     frame->channel_layout = context->channel_layout;
+    frame->channels = context->channels;
 
     /* TODO replace with umem */
     uint8_t *buf = malloc(size + AV_INPUT_BUFFER_PADDING_SIZE);
