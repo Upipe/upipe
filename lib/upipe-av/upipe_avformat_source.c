@@ -1075,8 +1075,10 @@ static int upipe_avfsrc_set_uri(struct upipe *upipe, const char *url)
         return UBASE_ERR_EXTERNAL;
     }
 
-    /* http://stackoverflow.com/questions/40991412/ffmpeg-producing-strange-nal-suffixes-for-mpeg-ts-with-h264 */
+#if LIBAVFORMAT_VERSION_INT < AV_VERSION_INT(59, 16, 100)
+    /* Don't merge side data into avpacket data */
     upipe_avfsrc->context->flags |= AVFMT_FLAG_KEEP_SIDE_DATA;
+#endif
     upipe_avfsrc->timestamp_offset = 0;
     upipe_avfsrc->url = strdup(url);
     upipe_avfsrc->probed = false;

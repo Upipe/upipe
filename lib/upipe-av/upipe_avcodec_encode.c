@@ -71,6 +71,7 @@
 #include <libavcodec/avcodec.h>
 #include <libavutil/avutil.h>
 #include <libavutil/opt.h>
+#include <libavutil/channel_layout.h>
 #include <bitstream/mpeg/h264.h>
 #include <bitstream/mpeg/mp2v.h>
 
@@ -1812,7 +1813,7 @@ static struct upipe *upipe_avcenc_alloc(struct upipe_mgr *mgr,
     struct upipe_avcenc *upipe_avcenc = upipe_avcenc_from_upipe(upipe);
     const char *def, *name;
     enum AVCodecID codec_id;
-    AVCodec *codec = NULL;
+    const AVCodec *codec = NULL;
 
     if (!ubase_check(uref_avcenc_get_codec_name(flow_def, &name))
             || !(codec = avcodec_find_encoder_by_name(name))) {
@@ -1880,7 +1881,7 @@ static int _upipe_avcenc_mgr_set_flow_def_from_name(struct uref *flow_def,
 {
     if (name == NULL)
         return UBASE_ERR_INVALID;
-    AVCodec *codec = avcodec_find_encoder_by_name(name);
+    const AVCodec *codec = avcodec_find_encoder_by_name(name);
     if (codec == NULL)
         return UBASE_ERR_INVALID;
     const char *def = upipe_av_to_flow_def(codec->id);

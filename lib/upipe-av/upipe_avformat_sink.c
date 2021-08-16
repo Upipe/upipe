@@ -1223,7 +1223,11 @@ static int upipe_avfsink_set_uri(struct upipe *upipe, const char *uri)
         return UBASE_ERR_INVALID;
 #endif
 
+#if LIBAVFORMAT_VERSION_INT < AV_VERSION_INT(59, 16, 100)
     AVOutputFormat *format = NULL;
+#else
+    const AVOutputFormat *format = NULL;
+#endif
     format = av_guess_format(upipe_avfsink->format, uri, upipe_avfsink->mime);
     if (unlikely(format == NULL))
         return UBASE_ERR_INVALID;
