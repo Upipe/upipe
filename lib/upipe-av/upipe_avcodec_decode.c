@@ -1446,7 +1446,7 @@ static int upipe_avcdec_set_flow_def(struct upipe *upipe, struct uref *flow_def)
 
     const char *def;
     enum AVCodecID codec_id;
-    AVCodec *codec;
+    const AVCodec *codec;
     UBASE_RETURN(uref_flow_get_def(flow_def, &def))
     if (unlikely(ubase_ncmp(def, EXPECTED_FLOW_DEF) ||
                  !(codec_id =
