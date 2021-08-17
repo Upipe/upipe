@@ -2807,6 +2807,7 @@ static void upipe_avfilt_free(struct upipe *upipe)
     avfilter_graph_free(&upipe_avfilt->filter_graph);
     av_buffer_unref(&upipe_avfilt->hw_device_ctx);
     av_dict_free(&upipe_avfilt->options);
+    uref_free(upipe_avfilt->uref);
     ubuf_mgr_release(upipe_avfilt->ubuf_mgr);
     upipe_avfilt_clean_sync(upipe);
     upipe_avfilt_clean_sub_subs(upipe);
