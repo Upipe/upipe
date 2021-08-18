@@ -15,7 +15,7 @@ jobs:
         name:
           - ubuntu-amd64-gcc-10
           - ubuntu-amd64-gcc-10-static
-          - ubuntu-amd64-clang-11
+          - ubuntu-amd64-clang-12
           - ubuntu-i386-gcc-9
           - ubuntu-armhf-gcc-10
           - ubuntu-arm64-gcc-10
@@ -35,11 +35,11 @@ jobs:
             version: 10
             static: true
 
-          - name: ubuntu-amd64-clang-11
+          - name: ubuntu-amd64-clang-12
             os: ubuntu-20.04
             arch: amd64
             compiler: clang
-            version: 11
+            version: 12
 
           - name: ubuntu-i386-gcc-9
             os: ubuntu-18.04
