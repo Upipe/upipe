@@ -13,8 +13,8 @@ jobs:
       fail-fast: false
       matrix:
         name:
-          - ubuntu-amd64-gcc-10
-          - ubuntu-amd64-gcc-10-static
+          - ubuntu-amd64-gcc-11
+          - ubuntu-amd64-gcc-11-static
           - ubuntu-amd64-clang-12
           - ubuntu-i386-gcc-9
           - ubuntu-armhf-gcc-10
@@ -22,17 +22,17 @@ jobs:
           - macos-xcode
 
         include:
-          - name: ubuntu-amd64-gcc-10
+          - name: ubuntu-amd64-gcc-11
             os: ubuntu-20.04
             arch: amd64
             compiler: gcc
-            version: 10
+            version: 11
 
-          - name: ubuntu-amd64-gcc-10-static
+          - name: ubuntu-amd64-gcc-11-static
             os: ubuntu-20.04
             arch: amd64
             compiler: gcc
-            version: 10
+            version: 11
             static: true
 
           - name: ubuntu-amd64-clang-12
