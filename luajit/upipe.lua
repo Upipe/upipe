@@ -54,6 +54,10 @@ local function props_dict(ptr)
     return props[k]
 end
 
+local function dump_traceback(msg)
+    io.stderr:write(debug.traceback(msg, 2), "\n")
+end
+
 local init = {
     upipe_mgr = function (mgr, cb)
         mgr.upipe_alloc = cb.alloc or
@@ -90,7 +94,9 @@ local function alloc(ty)
                 ffi.cast("char *", refcount) + ffi.offsetof(ct, "data"))
             local k = props_key(data)
             if ty == "upipe" or ty == "uclock" or ty == "upump" then
-                if props[k] and props[k]._clean then props[k]._clean(data) end
+                if props[k] and props[k]._clean then
+                    xpcall(props[k]._clean, dump_traceback, data)
+                end
                 props[k] = nil
             end
             if ty ~= "upipe_mgr" and ty ~= "uclock" then
@@ -570,10 +576,6 @@ local function control_args(cmd, args)
     return va_args(args, unpack(ctrl_args[cmd]))
 end
 
-local function dump_traceback(msg)
-    io.stderr:write(debug.traceback(msg, 2), "\n")
-end
-
 local function upipe_helper_alloc(cb)
     local ct = ffi.typeof("struct upipe_helper_mgr")
     local h_mgr = ffi.cast(ffi.typeof("$ *", ct), C.calloc(1, ffi.sizeof(ct)))
@@ -747,7 +749,9 @@ local function upipe_helper_alloc(cb)
         local h_pipe = container_of(refcount, "struct upipe_helper", "urefcount")
         local pipe = h_pipe.upipe
         local k = props_key(pipe)
-        if props[k] and props[k]._clean then props[k]._clean(pipe) end
+        if props[k] and props[k]._clean then
+            xpcall(props[k]._clean, dump_traceback, pipe)
+        end
         if cb.sub then
             local super = pipe:sub_get_super()
             for i, sub in ipairs(super.props._subpipes) do
