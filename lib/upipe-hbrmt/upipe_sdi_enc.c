@@ -64,8 +64,8 @@ struct upipe_sdi_enc_sub {
     /** channels */
     uint8_t channels;
 
-    /** AES */
-    bool s337;
+    /** Dolby E */
+    bool dolbye;
 
     /** stereo pair position */
     uint8_t channel_idx;
@@ -583,7 +583,7 @@ static int upipe_sdi_enc_sub_control(struct upipe *upipe, int command, va_list a
 
             uint8_t planes;
             UBASE_RETURN(uref_flow_match_def(flow, "sound.s32."))
-            sdi_enc_sub->s337 = ubase_check(uref_flow_match_def(flow, "sound.s32.s337."));
+            sdi_enc_sub->dolbye = ubase_check(uref_flow_match_def(flow, "sound.s32.s337.dolbye."));
             UBASE_RETURN(uref_sound_flow_get_channels(flow, &sdi_enc_sub->channels))
             UBASE_RETURN(uref_sound_flow_get_planes(flow, &planes))
             if (planes != 1)
@@ -671,7 +671,7 @@ static void upipe_sdi_enc_sub_init(struct upipe *upipe,
 
     ulist_init(&sdi_enc_sub->urefs);
     sdi_enc_sub->n = 0;
-    sdi_enc_sub->s337 = false;
+    sdi_enc_sub->dolbye = false;
 
     upipe_throw_ready(upipe);
 }
@@ -1125,7 +1125,7 @@ static void upipe_sdi_enc_input(struct upipe *upipe, struct uref *uref,
             uref_sound_read_int32_t(uref_audio, 0, -1, &buf, 1);
 
             int32_t *dst = &upipe_sdi_enc->audio_buf[sdi_enc_sub->channel_idx];
-            if (sdi_enc_sub->s337) {
+            if (sdi_enc_sub->dolbye) {
                 size_t offset = upipe_sdi_enc->dolby_offset;
                 if (offset > size)
                     offset = size;
