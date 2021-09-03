@@ -50,7 +50,6 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <inttypes.h>
 #include <assert.h>
 
 #define UDICT_POOL_DEPTH 0

@@ -32,7 +32,6 @@
 /** @hidden */
 #define _UPIPE_UDP_H_
 
-#include <upipe/upipe.h>
 #include <stdint.h>
 
 #define IP_HEADER_MINSIZE 20

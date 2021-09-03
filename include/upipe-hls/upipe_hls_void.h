@@ -27,10 +27,6 @@
 extern "C" {
 #endif
 
-#include <upipe-hls/upipe_hls_variant.h>
-#include <upipe-hls/upipe_hls_playlist.h>
-#include <upipe/upipe.h>
-
 #define UPIPE_HLS_VOID_SIGNATURE UBASE_FOURCC('h','l','s','O')
 #define UPIPE_HLS_VOID_SUB_SIGNATURE UBASE_FOURCC('h','l','s','o')
 

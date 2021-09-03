@@ -22,7 +22,6 @@
  */
 
 #include <stdlib.h>
-#include <stdint.h>
 #include <stdio.h>
 
 #include <upipe/uprobe.h>
@@ -36,15 +35,8 @@
 #include <upipe/umem_pool.h>
 #include <upipe/udict.h>
 #include <upipe/udict_inline.h>
-#include <upipe/udict_dump.h>
 #include <upipe/uref.h>
 #include <upipe/uref_std.h>
-#include <upipe/uref_flow.h>
-#include <upipe/uref_clock.h>
-#include <upipe/uref_dump.h>
-#include <upipe/ubuf.h>
-#include <upipe/ubuf_block_mem.h>
-#include <upipe/uclock.h>
 #include <upipe/upipe.h>
 #include <upipe/upump.h>
 #include <upump-ev/upump_ev.h>

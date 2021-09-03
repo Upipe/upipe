@@ -22,7 +22,6 @@
  */
 
 #include <upipe-modules/upipe_sequential_source.h>
-#include <upipe-modules/upipe_probe_uref.h>
 #include <upipe/upipe_helper_uclock.h>
 #include <upipe/upipe_helper_bin_output.h>
 #include <upipe/upipe_helper_inner.h>

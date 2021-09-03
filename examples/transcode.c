@@ -44,27 +44,18 @@
 #include <upipe/udict_inline.h>
 #include <upipe/uref.h>
 #include <upipe/uref_std.h>
-#include <upipe/uref_block.h>
 #include <upipe/uref_flow.h>
-#include <upipe/uref_sound_flow.h>
 #include <upipe/uref_block_flow.h>
-#include <upipe/ubuf.h>
-#include <upipe/ubuf_block.h>
-#include <upipe/ubuf_block_mem.h>
-#include <upipe/ubuf_pic.h>
-#include <upipe/ubuf_pic_mem.h>
 #include <upipe/uref_dump.h>
 #include <upipe/upump.h>
 #include <upump-ev/upump_ev.h>
 #include <upipe/upipe.h>
-#include <upipe-av/uref_av_flow.h>
 #include <upipe-av/upipe_av.h>
 #include <upipe-av/upipe_avformat_source.h>
 #include <upipe-av/upipe_avformat_sink.h>
 #include <upipe-av/upipe_avcodec_decode.h>
 #include <upipe-av/upipe_avcodec_encode.h>
 #include <upipe-av/upipe_avfilter.h>
-#include <upipe-av/uref_avfilter_flow.h>
 #include <upipe-swresample/upipe_swr.h>
 #include <upipe-swscale/upipe_sws.h>
 #include <upipe-filters/upipe_filter_format.h>
@@ -75,7 +66,6 @@
 #include <stdbool.h>
 #include <stdlib.h>
 #include <stdio.h>
-#include <unistd.h>
 #include <inttypes.h>
 #include <assert.h>
 

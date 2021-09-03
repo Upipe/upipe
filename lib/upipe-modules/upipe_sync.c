@@ -28,7 +28,6 @@
  */
 
 #include <upipe/ubase.h>
-#include <upipe/uprobe.h>
 #include <upipe/uref.h>
 #include <upipe/uref_clock.h>
 #include <upipe/uref_sound_flow.h>

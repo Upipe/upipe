@@ -42,16 +42,11 @@
 #include <upipe/uprobe_prefix.h>
 
 #include <upipe/uref_m3u.h>
-#include <upipe/uref_m3u_master.h>
 #include <upipe/uref_uri.h>
-#include <upipe/uref_block_flow.h>
-#include <upipe/uref_block.h>
 
-#include <upipe/uclock.h>
 
 #include <stdlib.h>
 #include <stdarg.h>
-#include <libgen.h>
 
 /** @internal @This is the private context of a hls pipe. */
 struct upipe_hls {

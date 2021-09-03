@@ -28,7 +28,6 @@
 #include <upipe/ubase.h>
 #include <upipe/ulist.h>
 #include <upipe/uclock.h>
-#include <upipe/uprobe.h>
 #include <upipe/uref.h>
 #include <upipe/uref_clock.h>
 #include <upipe/uref_flow.h>
@@ -39,15 +38,12 @@
 #include <upipe/upipe_helper_upump_mgr.h>
 #include <upipe/upipe_helper_uclock.h>
 #include <upipe-ts/upipe_ts_scte35_probe.h>
-#include <upipe-ts/uref_ts_flow.h>
 #include <upipe-ts/uref_ts_scte35.h>
 #include <upipe-ts/uref_ts_scte35_desc.h>
 
 #include <stdlib.h>
 #include <stdbool.h>
 #include <stdarg.h>
-#include <string.h>
-#include <assert.h>
 
 #include <bitstream/scte/35.h>
 

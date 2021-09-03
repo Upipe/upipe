@@ -21,14 +21,9 @@
  */
 
 #include <upipe/upipe.h>
-#include <upipe/ubase.h>
-#include <upipe/ulist.h>
-#include <upipe/uprobe.h>
 #include <upipe/uref.h>
 #include <upipe/uref_dump.h>
-#include <upipe/ubuf.h>
 #include <upipe/uref_sound_flow.h>
-#include <upipe/uref_sound.h>
 #include <upipe/uref_pic_flow.h>
 #include <upipe/uref_pic.h>
 #include <upipe/uref_flow.h>
@@ -47,7 +42,6 @@
 #include <stdint.h>
 #include <stdarg.h>
 #include <string.h>
-#include <assert.h>
 #include <math.h>
 
 /** we only accept sound */

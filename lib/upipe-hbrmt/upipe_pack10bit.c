@@ -22,16 +22,13 @@
  * @short Upipe pack10bit module
  */
 
-#include <config.h>
-
+#include <upipe/config.h>
 #include <upipe/ubase.h>
-#include <upipe/uprobe.h>
 #include <upipe/uref.h>
 #include <upipe/ubuf.h>
 #include <upipe/uref_block_flow.h>
 #include <upipe/upipe.h>
 #include <upipe/uref_flow.h>
-#include <upipe/uref_dump.h>
 #include <upipe/ubuf_block.h>
 #include <upipe/uref_block.h>
 #include <upipe/upipe_helper_upipe.h>
@@ -347,7 +344,7 @@ static struct upipe *upipe_pack10bit_alloc(struct upipe_mgr *mgr,
 
     upipe_pack10bit->pack = upipe_uyvy_to_sdi_c;
 
-#if defined(HAVE_X86ASM)
+#if defined(UPIPE_HAVE_X86ASM)
 #if defined(__i686__) || defined(__x86_64__)
     if (__builtin_cpu_supports("ssse3"))
         upipe_pack10bit->pack = upipe_uyvy_to_sdi_ssse3;

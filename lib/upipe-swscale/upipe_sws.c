@@ -28,8 +28,6 @@
  * @short Upipe swscale (ffmpeg) module
  */
 
-#include <upipe/ubase.h>
-#include <upipe/uprobe.h>
 #include <upipe/uref.h>
 #include <upipe/ubuf.h>
 #include <upipe/uref_pic_flow.h>
@@ -52,9 +50,6 @@
 #include <stdint.h>
 #include <stdarg.h>
 #include <string.h>
-#include <unistd.h>
-#include <errno.h>
-#include <assert.h>
 
 #include <libavutil/opt.h>
 #include <libswscale/swscale.h>

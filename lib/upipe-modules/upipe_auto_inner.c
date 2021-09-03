@@ -36,7 +36,6 @@
 #include <upipe/upipe_helper_inner.h>
 #include <upipe/upipe_helper_bin_input.h>
 #include <upipe/upipe_helper_bin_output.h>
-#include <upipe/upipe_helper_output.h>
 #include <upipe/upipe.h>
 #include <upipe/uprobe_prefix.h>
 

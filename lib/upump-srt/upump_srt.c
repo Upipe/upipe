@@ -30,7 +30,6 @@
 #include <upipe/ubase.h>
 #include <upipe/urefcount.h>
 #include <upipe/uclock.h>
-#include <upipe/umutex.h>
 #include <upipe/upump.h>
 #include <upipe/upump_common.h>
 #include <upump-srt/upump_srt.h>

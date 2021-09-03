@@ -41,12 +41,10 @@
 #include <upipe/udict.h>
 #include <upipe/udict_inline.h>
 #include <upipe/ubuf.h>
-#include <upipe/ubuf_block.h>
 #include <upipe/ubuf_block_mem.h>
 #include <upipe/uref.h>
 #include <upipe/uref_std.h>
 #include <upipe/uref_clock.h>
-#include <upipe/uref_flow.h>
 #include <upipe/uref_block_flow.h>
 #include <upipe/uref_dump.h>
 #include <upipe/upump.h>
@@ -58,7 +56,6 @@
 #include <upipe-modules/upipe_genaux.h>
 
 #include <string.h>
-#include <stdbool.h>
 #include <stdlib.h>
 #include <stdio.h>
 #include <unistd.h>

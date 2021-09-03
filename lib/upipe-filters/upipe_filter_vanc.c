@@ -32,13 +32,8 @@
  *  - ETSI EN 300 743 V1.3.1 (2003-01) (teletext in DVB)
  */
 
-#include <upipe/ulist.h>
 #include <upipe/uprobe.h>
-#include <upipe/udict.h>
-#include <upipe/umem.h>
-#include <upipe/ubuf.h>
 #include <upipe/ubuf_block.h>
-#include <upipe/ubuf_pic_mem.h>
 #include <upipe/uref.h>
 #include <upipe/uref_flow.h>
 #include <upipe/uref_block.h>
@@ -54,7 +49,6 @@
 #include <upipe-filters/upipe_filter_vanc.h>
 
 #include <stdlib.h>
-#include <strings.h>
 #include <stdint.h>
 #include <stdio.h>
 

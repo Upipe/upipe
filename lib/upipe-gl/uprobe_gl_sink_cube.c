@@ -33,21 +33,12 @@
 #include <upipe-gl/uprobe_gl_sink_cube.h>
 #include <upipe/uprobe_helper_uprobe.h>
 #include <upipe/uprobe_helper_alloc.h>
-#include <upipe/upipe.h>
-#include <upipe/uref_pic.h>
-#include <upipe/uref_pic_flow.h>
 
 #include <stdlib.h>
-#include <stdbool.h>
-#include <stdint.h>
 #include <stdarg.h>
-#include <string.h>
-#include <unistd.h>
-#include <errno.h>
 #include <assert.h>
 
 #include <GL/gl.h>
-#include <GL/glu.h>
 
 /** @This is a super-set of the uprobe structure with additional
  * local members.

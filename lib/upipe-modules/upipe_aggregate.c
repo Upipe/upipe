@@ -28,9 +28,7 @@
  */
 
 #include <upipe/ubase.h>
-#include <upipe/ulist.h>
 #include <upipe/uclock.h>
-#include <upipe/uprobe.h>
 #include <upipe/uref.h>
 #include <upipe/uref_block.h>
 #include <upipe/uref_block_flow.h>
@@ -45,11 +43,7 @@
 #include <upipe-modules/upipe_aggregate.h>
 
 #include <stdlib.h>
-#include <stdbool.h>
 #include <stdarg.h>
-#include <string.h>
-#include <inttypes.h>
-#include <assert.h>
 
 /** we only accept blocks */
 #define EXPECTED_FLOW_DEF "block."

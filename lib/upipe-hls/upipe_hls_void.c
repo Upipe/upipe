@@ -22,7 +22,6 @@
  */
 
 #include <upipe-hls/upipe_hls_void.h>
-#include <upipe-hls/upipe_hls_variant.h>
 #include <upipe-hls/upipe_hls_playlist.h>
 
 #include <upipe-ts/upipe_ts_demux.h>
@@ -40,7 +39,6 @@
 #include <upipe/upipe_helper_void.h>
 #include <upipe/upipe_helper_urefcount_real.h>
 #include <upipe/upipe_helper_urefcount.h>
-#include <upipe/upipe_helper_inner.h>
 #include <upipe/upipe_helper_upipe.h>
 #include <upipe/upipe.h>
 

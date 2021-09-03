@@ -26,8 +26,6 @@
 #include <upipe/uuri.h>
 #include <upipe/uref_uri.h>
 
-#include <stdlib.h>
-
 int uref_uri_set(struct uref *uref, const struct uuri *uuri)
 {
     if (!uref || !uuri)

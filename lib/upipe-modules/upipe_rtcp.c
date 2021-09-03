@@ -30,7 +30,6 @@
 #include <upipe/uref_block.h>
 #include <upipe/uref_block_flow.h>
 #include <upipe/urequest.h>
-#include <upipe/upump.h>
 #include <upipe/ustring.h>
 #include <upipe/uref_clock.h>
 #include <upipe/upipe_helper_upipe.h>
@@ -39,8 +38,6 @@
 #include <upipe/upipe_helper_output.h>
 #include <upipe/upipe_helper_uref_mgr.h>
 #include <upipe/upipe_helper_ubuf_mgr.h>
-#include <upipe/upipe_helper_upump_mgr.h>
-#include <upipe/upipe_helper_upump.h>
 #include <upipe-modules/upipe_rtcp.h>
 
 #include <bitstream/ietf/rtp.h>

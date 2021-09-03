@@ -34,7 +34,6 @@
 #include <upipe/uprobe_prefix.h>
 
 #include <stdio.h>
-#include <string.h>
 #include <assert.h>
 
 int main(int argc, char **argv)

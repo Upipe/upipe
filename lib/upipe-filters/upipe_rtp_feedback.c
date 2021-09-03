@@ -32,7 +32,6 @@
 #include <upipe/uref_block.h>
 #include <upipe/uref_block_flow.h>
 #include <upipe/uref_flow.h>
-#include <upipe/upipe.h>
 #include <upipe/upipe_helper_upipe.h>
 #include <upipe/upipe_helper_subpipe.h>
 #include <upipe/upipe_helper_urefcount.h>
@@ -45,7 +44,6 @@
 #include <upipe/upipe_helper_upump_mgr.h>
 #include <upipe/upipe_helper_upump.h>
 #include <upipe-filters/upipe_rtp_feedback.h>
-#include <upipe-modules/upipe_udp_sink.h>
 
 #include <stdlib.h>
 #include <stdbool.h>
@@ -53,16 +51,9 @@
 #include <inttypes.h>
 #include <stdarg.h>
 #include <string.h>
-#include <unistd.h>
-#include <errno.h>
-#include <math.h>
-#include <assert.h>
 #include <limits.h>
 
-#include <sys/types.h>
-#include <sys/socket.h>
 
-#include <netinet/in.h>
 
 #include <bitstream/ietf/rtp.h>
 #include <bitstream/ietf/rtcp.h>

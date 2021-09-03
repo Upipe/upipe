@@ -31,7 +31,6 @@
 #include <upipe/upipe_helper_upipe.h>
 #include <upipe/upipe.h>
 #include <upipe-modules/uref_aes_flow.h>
-#include <upipe/uref_block_flow.h>
 #include <upipe/uref_block.h>
 #include <upipe/urefcount.h>
 

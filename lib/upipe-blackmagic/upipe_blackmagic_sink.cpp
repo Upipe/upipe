@@ -28,16 +28,13 @@
 #define __STDC_CONSTANT_MACROS 1
 
 #include <upipe/config.h>
-#include <upipe/ubase.h>
 #include <upipe/uatomic.h>
 #include <upipe/ulist.h>
 #include <upipe/uqueue.h>
 #include <upipe/uprobe.h>
 #include <upipe/uclock.h>
 #include <upipe/uref.h>
-#include <upipe/uref_attr.h>
 #include <upipe/uref_block.h>
-#include <upipe/uref_block_flow.h>
 #include <upipe/uref_pic.h>
 #include <upipe/uref_pic_flow.h>
 #include <upipe/uref_sound.h>
@@ -45,7 +42,6 @@
 #include <upipe/uref_clock.h>
 #include <upipe/uref_dump.h>
 #include <upipe/upipe.h>
-#include <upipe/upipe_helper_input.h>
 #include <upipe/upipe_helper_flow.h>
 #include <upipe/upipe_helper_upipe.h>
 #include <upipe/upipe_helper_subpipe.h>
@@ -65,7 +61,6 @@
 
 #include <pthread.h>
 
-#include <bitstream/smpte/337.h>
 #include <bitstream/dvb/vbi.h>
 
 #include "include/DeckLinkAPI.h"

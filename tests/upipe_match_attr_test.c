@@ -42,10 +42,8 @@
 #include <upipe/upipe.h>
 #include <upipe-modules/upipe_match_attr.h>
 
-#include <stdbool.h>
 #include <stdlib.h>
 #include <stdio.h>
-#include <inttypes.h>
 #include <assert.h>
 
 #define MIN 12

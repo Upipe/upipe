@@ -40,9 +40,7 @@
 #include <upipe-modules/upipe_dup.h>
 
 #include <stdlib.h>
-#include <stdbool.h>
 #include <stdarg.h>
-#include <string.h>
 
 /** @internal @This is the private context of a dup pipe. */
 struct upipe_dup {

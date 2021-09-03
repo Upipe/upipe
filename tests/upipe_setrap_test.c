@@ -43,10 +43,8 @@
 #include <upipe/upipe.h>
 #include <upipe-modules/upipe_setrap.h>
 
-#include <stdbool.h>
 #include <stdlib.h>
 #include <stdio.h>
-#include <inttypes.h>
 #include <assert.h>
 
 #define UDICT_POOL_DEPTH 0

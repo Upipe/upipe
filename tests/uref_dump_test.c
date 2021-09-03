@@ -31,7 +31,6 @@
 #include <upipe/udict_inline.h>
 #include <upipe/uref.h>
 #include <upipe/uref_std.h>
-#include <upipe/uref_uri.h>
 #include <upipe/uref_dump.h>
 #include <upipe/uprobe_stdio.h>
 

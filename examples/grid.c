@@ -27,10 +27,8 @@
 #include <upipe-modules/upipe_dup.h>
 #include <upipe-modules/upipe_rtp_source.h>
 #include <upipe-modules/upipe_grid.h>
-#include <upipe-modules/upipe_null.h>
 #include <upipe-modules/upipe_video_blank.h>
 #include <upipe-modules/upipe_audio_blank.h>
-#include <upipe-modules/upipe_rtp_h264.h>
 #include <upipe-modules/upipe_rtp_prepend.h>
 #include <upipe-modules/upipe_udp_sink.h>
 #include <upipe-modules/upipe_setflowdef.h>
@@ -54,9 +52,6 @@
 #include <upipe-pthread/upipe_pthread_transfer.h>
 
 #include <upipe-av/upipe_av.h>
-#include <upipe-av/upipe_av_pixfmt.h>
-#include <upipe-av/upipe_av_samplefmt.h>
-#include <upipe-av/upipe_avformat_source.h>
 #include <upipe-av/upipe_avcodec_decode.h>
 #include <upipe-av/upipe_avcodec_encode.h>
 
@@ -75,6 +70,8 @@
 #include <upipe/uref_clock.h>
 #include <upipe/uref_void_flow.h>
 #include <upipe/uref_block_flow.h>
+#include <upipe/uref_pic_flow.h>
+#include <upipe/uref_sound_flow.h>
 
 #include <upipe/umem.h>
 #include <upipe/umem_alloc.h>
@@ -83,7 +80,6 @@
 #include <upipe/uclock_std.h>
 #include <upipe/uclock.h>
 #include <upipe/ustring.h>
-#include <upipe/upipe.h>
 
 #include <upump-ev/upump_ev.h>
 

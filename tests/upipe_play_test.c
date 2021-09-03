@@ -29,7 +29,6 @@
 
 #undef NDEBUG
 
-#include <upipe/urefcount.h>
 #include <upipe/uclock.h>
 #include <upipe/urequest.h>
 #include <upipe/uprobe.h>
@@ -47,7 +46,6 @@
 #include <upipe-modules/upipe_play.h>
 
 #include <stdlib.h>
-#include <stdbool.h>
 #include <assert.h>
 
 #define UDICT_POOL_DEPTH 0

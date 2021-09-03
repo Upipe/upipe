@@ -23,12 +23,11 @@
  * SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
  */
 
-#include <config.h>
+#include <upipe/config.h>
 
 #include <upump-ev/upump_ev.h>
 
 #include <upipe/umem.h>
-#include <upipe/umem_alloc.h>
 #include <upipe/umem_pool.h>
 
 #include <upipe/udict.h>
@@ -70,9 +69,9 @@
 #include <upipe-pthread/upipe_pthread_transfer.h>
 
 #include <assert.h>
-#include <getopt.h>
+#include <unistd.h>
 
-#ifdef HAVE_GCRYPT
+#ifdef UPIPE_HAVE_GCRYPT
 #include <gcrypt.h>
 #endif
 
@@ -263,7 +262,7 @@ int main(int argc, char *argv[])
         exit(-1);
     }
 
-#ifdef HAVE_GCRYPT
+#ifdef UPIPE_HAVE_GCRYPT
     gcry_check_version(NULL);
     gcry_control(GCRYCTL_INITIALIZATION_FINISHED, 0);
 #endif

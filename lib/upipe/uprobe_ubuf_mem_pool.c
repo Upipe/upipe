@@ -34,10 +34,8 @@
 #include <upipe/uprobe.h>
 #include <upipe/uprobe_ubuf_mem_pool.h>
 #include <upipe/uprobe_helper_alloc.h>
-#include <upipe/upipe.h>
 
 #include <stdlib.h>
-#include <string.h>
 #include <stdarg.h>
 
 /** @This is a manager registered into the probe as a thread-safe linked list.

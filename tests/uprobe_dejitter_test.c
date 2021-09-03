@@ -29,7 +29,6 @@
 
 #undef NDEBUG
 
-#include <upipe/urefcount.h>
 #include <upipe/uprobe.h>
 #include <upipe/uprobe_stdio.h>
 #include <upipe/uprobe_dejitter.h>
@@ -43,9 +42,6 @@
 #include <upipe/uref_std.h>
 
 #include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
-#include <inttypes.h>
 #include <assert.h>
 
 #define UDICT_POOL_DEPTH 0

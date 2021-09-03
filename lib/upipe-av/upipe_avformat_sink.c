@@ -29,13 +29,10 @@
 
 #include <upipe/ubase.h>
 #include <upipe/ulist.h>
-#include <upipe/uprobe.h>
 #include <upipe/uclock.h>
 #include <upipe/uref.h>
-#include <upipe/uref_attr.h>
 #include <upipe/uref_block.h>
 #include <upipe/uref_block_flow.h>
-#include <upipe/uref_pic.h>
 #include <upipe/uref_pic_flow.h>
 #include <upipe/uref_sound_flow.h>
 #include <upipe/uref_clock.h>
@@ -56,12 +53,6 @@
 #include <stdint.h>
 #include <stdarg.h>
 #include <string.h>
-#include <unistd.h>
-#include <sys/types.h>
-#include <sys/stat.h>
-#include <fcntl.h>
-#include <sys/ioctl.h>
-#include <errno.h>
 #include <assert.h>
 
 #include <libavutil/dict.h>
