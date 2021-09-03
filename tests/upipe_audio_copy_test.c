@@ -40,7 +40,6 @@
 #include <upipe/uref.h>
 #include <upipe/uref_sound_flow.h>
 #include <upipe/uref_pic_flow.h>
-#include <upipe/uref_void_flow.h>
 #include <upipe/uref_dump.h>
 #include <upipe/uref_sound.h>
 

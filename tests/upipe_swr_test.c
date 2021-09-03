@@ -38,14 +38,11 @@
 #include <upipe/udict.h>
 #include <upipe/udict_inline.h>
 #include <upipe/ubuf.h>
-#include <upipe/ubuf_sound.h>
 #include <upipe/ubuf_sound_mem.h>
 #include <upipe/uref.h>
-#include <upipe/uref_attr.h>
 #include <upipe/uref_std.h>
 #include <upipe/uref_sound.h>
 #include <upipe/uref_sound_flow.h>
-#include <upipe/uref_dump.h>
 #include <upipe/uref_clock.h>
 #include <upipe-swresample/upipe_swr.h>
 #include <upipe-modules/upipe_null.h>

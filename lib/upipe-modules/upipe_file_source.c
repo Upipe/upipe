@@ -29,7 +29,6 @@
 
 #include <upipe/ubase.h>
 #include <upipe/uuri.h>
-#include <upipe/uprobe.h>
 #include <upipe/urequest.h>
 #include <upipe/uclock.h>
 #include <upipe/uref.h>
@@ -38,7 +37,6 @@
 #include <upipe/uref_block_flow.h>
 #include <upipe/uref_clock.h>
 #include <upipe/upump.h>
-#include <upipe/ubuf.h>
 #include <upipe/upipe.h>
 #include <upipe/upipe_helper_upipe.h>
 #include <upipe/upipe_helper_urefcount.h>
@@ -56,12 +54,9 @@
 #include <stdbool.h>
 #include <stdint.h>
 #include <stdarg.h>
-#include <string.h>
 #include <unistd.h>
-#include <sys/types.h>
 #include <sys/stat.h>
 #include <fcntl.h>
-#include <sys/ioctl.h>
 #include <errno.h>
 #include <assert.h>
 

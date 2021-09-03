@@ -27,9 +27,6 @@
  * @short Upipe ebur128
  */
 
-#include <upipe/ulist.h>
-#include <upipe/uprobe.h>
-#include <upipe/udict.h>
 #include <upipe/uref.h>
 #include <upipe/uref_flow.h>
 #include <upipe/uref_sound_flow.h>
@@ -42,7 +39,6 @@
 #include <upipe-ebur128/upipe_ebur128.h>
 
 #include <stdlib.h>
-#include <strings.h>
 #include <stdint.h>
 #include <stdio.h>
 

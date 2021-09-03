@@ -34,15 +34,11 @@
 #include <upipe/upipe_helper_urefcount_real.h>
 #include <upipe/upipe_helper_subpipe.h>
 #include <upipe/upipe_helper_output.h>
-#include <upipe/upipe_helper_uref_mgr.h>
-#include <upipe/upipe_helper_input.h>
 #include <upipe/upipe.h>
 #include <upipe/uref_pic_flow.h>
 #include <upipe/uref_pic_flow_formats.h>
 #include <upipe/uref_pic.h>
 #include <upipe/ubuf_pic.h>
-#include <upipe/uclock.h>
-#include <upipe/upump.h>
 
 #include <upipe-modules/uref_graph_flow.h>
 #include <upipe-modules/uref_graph.h>

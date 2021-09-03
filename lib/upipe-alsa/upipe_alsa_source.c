@@ -28,18 +28,12 @@
  */
 
 #include <upipe/ubase.h>
-#include <upipe/ulist.h>
-#include <upipe/uprobe.h>
 #include <upipe/uclock.h>
 #include <upipe/uref.h>
 #include <upipe/uref_clock.h>
 #include <upipe/uref_sound.h>
 #include <upipe/uref_sound_flow.h>
 #include <upipe/upump.h>
-#include <upipe/upump_blocker.h>
-#include <upipe/ubuf.h>
-#include <upipe/umem.h>
-#include <upipe/umem_alloc.h>
 #include <upipe/upipe.h>
 #include <upipe/upipe_helper_upipe.h>
 #include <upipe/upipe_helper_uref_mgr.h>
@@ -50,8 +44,6 @@
 #include <upipe/upipe_helper_upump.h>
 #include <upipe/upipe_helper_output.h>
 #include <upipe/upipe_helper_uclock.h>
-#include <upipe/ubuf_sound.h>
-#include <upipe/ubuf_sound_mem.h>
 #include <upipe-alsa/upipe_alsa_source.h>
 
 #include <stdlib.h>
@@ -59,11 +51,6 @@
 #include <stdint.h>
 #include <stdarg.h>
 #include <string.h>
-#include <unistd.h>
-#include <sys/types.h>
-#include <sys/stat.h>
-#include <fcntl.h>
-#include <sys/ioctl.h>
 #include <errno.h>
 #include <assert.h>
 #include <alsa/asoundlib.h>

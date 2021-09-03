@@ -29,8 +29,6 @@
 
 #include <upipe/ubase.h>
 #include <upipe/ulist.h>
-#include <upipe/uprobe.h>
-#include <upipe/uclock.h>
 #include <upipe/uref.h>
 #include <upipe/uref_clock.h>
 #include <upipe/upipe.h>

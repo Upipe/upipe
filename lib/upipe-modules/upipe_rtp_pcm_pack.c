@@ -28,7 +28,6 @@
  */
 
 #include <stdlib.h>
-#include <limits.h>
 
 #include <upipe/upipe.h>
 #include <upipe/uclock.h>
@@ -38,10 +37,7 @@
 #include <upipe/upipe_helper_void.h>
 #include <upipe/upipe_helper_uref_stream.h>
 #include <upipe/upipe_helper_output.h>
-#include <upipe/upipe_helper_flow.h>
-#include <upipe/upipe_helper_flow_def.h>
 #include <upipe/upipe_helper_ubuf_mgr.h>
-#include <upipe/upipe_helper_uref_stream.h>
 #include <upipe/upipe_helper_input.h>
 
 #include <upipe/uref_sound.h>

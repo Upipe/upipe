@@ -29,16 +29,9 @@
 
 #include <upipe/ubase.h>
 #include <upipe/uatomic.h>
-#include <upipe/urefcount.h>
-#include <upipe/upool.h>
-#include <upipe/umem.h>
-#include <upipe/ubuf.h>
 #include <upipe/ubuf_mem_common.h>
 
 #include <stdlib.h>
-#include <stdbool.h>
-#include <string.h>
-#include <assert.h>
 
 /** @internal @This allocates the shared data structure.
  *

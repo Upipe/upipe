@@ -34,7 +34,6 @@
 #include <upipe/uref_pic_flow.h>
 #include <upipe/uclock.h>
 #include <upipe/upipe.h>
-#include <upipe/udict.h>
 #include <upipe/upipe_helper_upipe.h>
 #include <upipe/upipe_helper_output.h>
 #include <upipe/upipe_helper_urefcount.h>

@@ -30,14 +30,9 @@
 #define _GNU_SOURCE
 
 #include <upipe/uclock.h>
-#include <upipe/ulist.h>
-#include <upipe/uprobe.h>
-#include <upipe/udict.h>
 #include <upipe/uref.h>
 #include <upipe/uref_flow.h>
 #include <upipe/uref_clock.h>
-#include <upipe/uref_dump.h>
-#include <upipe/umem.h>
 #include <upipe/ubuf.h>
 #include <upipe/uref_pic.h>
 #include <upipe/uref_pic_flow.h>
@@ -63,11 +58,8 @@
 #include <upipe-framers/uref_mpgv.h>
 #include <upipe-framers/upipe_h26x_common.h>
 
-#include <stdlib.h>
-#include <strings.h>
 #include <stdint.h>
 #include <stdio.h>
-#include <ctype.h>
 
 #include <x264.h>
 #include <bitstream/mpeg/h264.h>

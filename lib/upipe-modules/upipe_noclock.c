@@ -35,8 +35,6 @@
  */
 
 #include <upipe/ubase.h>
-#include <upipe/uprobe.h>
-#include <upipe/uref.h>
 #include <upipe/uref.h>
 #include <upipe/uref_clock.h>
 #include <upipe/upipe.h>
@@ -47,9 +45,7 @@
 #include <upipe-modules/upipe_noclock.h>
 
 #include <stdlib.h>
-#include <stdbool.h>
 #include <stdarg.h>
-#include <assert.h>
 
 /** @internal @This is the private context of a noclock pipe. */
 struct upipe_noclock {

@@ -44,16 +44,12 @@
 #include <upipe/uref_std.h>
 #include <upipe/upump.h>
 #include <upump-ev/upump_ev.h>
-#include <upipe/upipe.h>
 #include <upipe-modules/upipe_worker_sink.h>
 #include <upipe-modules/upipe_transfer.h>
-#include <upipe-modules/upipe_null.h>
 #include <upipe-modules/upipe_idem.h>
 
 #include <stdio.h>
 #include <stdlib.h>
-#include <string.h>
-#include <unistd.h>
 #include <pthread.h>
 #include <assert.h>
 

@@ -22,9 +22,6 @@
  * @short Upipe module building frames from chunks of an ITU-T H.265 stream
  */
 
-#include <upipe/ubase.h>
-#include <upipe/ulist.h>
-#include <upipe/uprobe.h>
 #include <upipe/uref.h>
 #include <upipe/uref_flow.h>
 #include <upipe/uref_block.h>

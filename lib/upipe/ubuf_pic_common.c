@@ -30,7 +30,6 @@
 #include <upipe/ubuf_pic_common.h>
 
 #include <stdlib.h>
-#include <stdbool.h>
 #include <stdint.h>
 #include <assert.h>
 

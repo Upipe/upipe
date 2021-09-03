@@ -33,11 +33,8 @@
  * Input audio must have the same format, save for the number of channels/planes.
  */
 
-#include <upipe/ubase.h>
 #include <upipe/ulist.h>
-#include <upipe/uprobe.h>
 #include <upipe/uref.h>
-#include <upipe/uref_dump.h>
 #include <upipe/ubuf.h>
 #include <upipe/upipe.h>
 #include <upipe/uref_sound.h>
@@ -47,21 +44,16 @@
 #include <upipe/upipe_helper_urefcount_real.h>
 #include <upipe/upipe_helper_void.h>
 #include <upipe/upipe_helper_flow.h>
-#include <upipe/upipe_helper_input.h>
 #include <upipe/upipe_helper_output.h>
 #include <upipe/upipe_helper_subpipe.h>
 #include <upipe/upipe_helper_ubuf_mgr.h>
-#include <upipe/umem.h>
-#include <upipe/ubuf.h>
 #include <upipe/ubuf_sound.h>
-#include <upipe/ubuf_sound_mem.h>
 #include <upipe-modules/upipe_audio_merge.h>
 
 #include <stdlib.h>
 #include <stdbool.h>
 #include <stdarg.h>
 #include <string.h>
-#include <assert.h>
 
 /** @hidden */
 static int upipe_audio_merge_check(struct upipe *upipe, struct uref *flow_format);

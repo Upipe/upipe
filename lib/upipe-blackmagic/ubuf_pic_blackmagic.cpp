@@ -32,18 +32,14 @@
 #define __STDC_CONSTANT_MACROS 1
 
 #include <upipe/ubase.h>
-#include <upipe/uatomic.h>
 #include <upipe/urefcount.h>
 #include <upipe/upool.h>
 #include <upipe/ubuf.h>
-#include <upipe/ubuf_pic.h>
 #include <upipe/ubuf_pic_common.h>
 #include <upipe-blackmagic/ubuf_pic_blackmagic.h>
 
 #include <stdlib.h>
-#include <stdbool.h>
 #include <stdarg.h>
-#include <string.h>
 #include <assert.h>
 
 #include "include/DeckLinkAPI.h"

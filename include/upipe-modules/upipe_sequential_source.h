@@ -27,8 +27,6 @@
 extern "C" {
 #endif
 
-#include <upipe/upipe.h>
-
 #define UPIPE_SEQ_SRC_SIGNATURE UBASE_FOURCC('s','e','q','s')
 
 struct upipe_mgr *upipe_seq_src_mgr_alloc(void);

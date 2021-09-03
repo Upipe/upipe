@@ -22,14 +22,10 @@
  * @short Upipe module building frames from chunks of a DVB teletext stream
  */
 
-#include <upipe/ubase.h>
-#include <upipe/ulist.h>
-#include <upipe/uprobe.h>
 #include <upipe/uref.h>
 #include <upipe/uref_flow.h>
 #include <upipe/uref_block.h>
 #include <upipe/uref_block_flow.h>
-#include <upipe/uref_pic.h>
 #include <upipe/uref_pic_flow.h>
 #include <upipe/uref_clock.h>
 #include <upipe/uclock.h>
@@ -47,8 +43,6 @@
 #include <stdbool.h>
 #include <stdarg.h>
 #include <string.h>
-#include <inttypes.h>
-#include <assert.h>
 
 /** maximum retention time */
 #define MAX_DELAY_TELX (UCLOCK_FREQ / 25)

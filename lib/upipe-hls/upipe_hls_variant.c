@@ -21,7 +21,6 @@
  * SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
  */
 
-#include <upipe-ts/upipe_ts_demux.h>
 #include <upipe-hls/uref_hls.h>
 #include <upipe-hls/upipe_hls_void.h>
 #include <upipe-hls/upipe_hls_video.h>

@@ -25,14 +25,12 @@
  *  - SCTE 35 2013 (Digital Program Insertion Cueing Message for Cable)
  */
 
-#include <upipe/ubase.h>
 #include <upipe/uclock.h>
 #include <upipe/uprobe.h>
 #include <upipe/uref.h>
 #include <upipe/uref_clock.h>
 #include <upipe/uref_flow.h>
 #include <upipe/uref_block.h>
-#include <upipe/ubuf.h>
 #include <upipe/upipe.h>
 #include <upipe/upipe_helper_upipe.h>
 #include <upipe/upipe_helper_urefcount.h>
@@ -50,8 +48,6 @@
 #include <stdlib.h>
 #include <stdbool.h>
 #include <stdarg.h>
-#include <string.h>
-#include <assert.h>
 
 #include <bitstream/scte/35.h>
 #include <bitstream/scte/104.h>

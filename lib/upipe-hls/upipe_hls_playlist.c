@@ -43,8 +43,6 @@
 #include <upipe/upipe.h>
 
 #include <upipe/uprobe_prefix.h>
-#include <upipe/uprobe_helper_alloc.h>
-#include <upipe/uprobe_helper_uprobe.h>
 #include <upipe/uprobe.h>
 
 #include <upipe/uref_m3u_master.h>
@@ -58,7 +56,6 @@
 #include <upipe/uclock.h>
 
 #include <stdlib.h>
-#include <limits.h>
 #include <libgen.h>
 
 /** @showvalue */

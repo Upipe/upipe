@@ -30,16 +30,12 @@
  */
 
 #include <upipe/ubase.h>
-#include <upipe/uprobe.h>
+#include <upipe/ubuf_pic.h>
 #include <upipe/uref.h>
-#include <upipe/uref_clock.h>
 #include <upipe/uref_pic_flow.h>
-#include <upipe/uref_pic.h>
 #include <upipe/uref_dump.h>
 #include <upipe/uref_void.h>
-#include <upipe/uclock.h>
 #include <upipe/upipe.h>
-#include <upipe/udict.h>
 #include <upipe/upipe_helper_upipe.h>
 #include <upipe/upipe_helper_output.h>
 #include <upipe/upipe_helper_urefcount.h>

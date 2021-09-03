@@ -24,14 +24,10 @@
  *   EBU TECH 3292-s1
  */
 
-#include <upipe/ubase.h>
-#include <upipe/ulist.h>
-#include <upipe/uclock.h>
 #include <upipe/uprobe.h>
 #include <upipe/uref.h>
 #include <upipe/uref_flow.h>
 #include <upipe/uref_block.h>
-#include <upipe/ubuf.h>
 #include <upipe/upipe.h>
 #include <upipe/upipe_helper_upipe.h>
 #include <upipe/upipe_helper_urefcount.h>
@@ -44,17 +40,12 @@
 #include <upipe-ts/uref_ts_flow.h>
 #include "upipe_ts_psi_decoder.h"
 
-#include <bitstream/mpeg/psi.h>
-#include <bitstream/mpeg/psi/desc_09.h>
-#include <bitstream/dvb/si.h>
 #include <bitstream/ebu/biss.h>
 
 #include <gcrypt.h>
 #include <libtasn1.h>
 
-#include <sys/types.h>
 #include <sys/stat.h>
-#include <unistd.h>
 
 #include "rsa_asn1.h"
 

@@ -24,7 +24,6 @@
  * @short Upipe filter computing the maximum amplitude per uref
  */
 
-#include <upipe/uprobe.h>
 #include <upipe/uref.h>
 #include <upipe/uref_flow.h>
 #include <upipe/uref_sound_flow.h>
@@ -36,8 +35,6 @@
 #include <upipe/upipe_helper_output.h>
 #include <upipe-filters/upipe_audio_max.h>
 
-#include <stdlib.h>
-#include <strings.h>
 #include <stdint.h>
 #include <stdio.h>
 

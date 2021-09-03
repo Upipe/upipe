@@ -28,7 +28,6 @@
  * @short Upipe module splitting packed audio to several planar outputs
  */
 
-#include <upipe/ubase.h>
 #include <upipe/ulist.h>
 #include <upipe/uprobe.h>
 #include <upipe/uref.h>
@@ -46,10 +45,7 @@
 #include <upipe-modules/upipe_audio_split.h>
 
 #include <stdlib.h>
-#include <stdbool.h>
 #include <stdarg.h>
-#include <string.h>
-#include <assert.h>
 
 /** @internal @This is the private context of an audio_split pipe. */
 struct upipe_audio_split {

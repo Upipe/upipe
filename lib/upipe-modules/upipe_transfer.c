@@ -35,7 +35,6 @@
 #include <upipe/uqueue.h>
 #include <upipe/uprobe.h>
 #include <upipe/upump.h>
-#include <upipe/upipe.h>
 #include <upipe/upipe_helper_upipe.h>
 #include <upipe/upipe_helper_urefcount.h>
 #include <upipe/upipe_helper_urefcount_real.h>
@@ -45,14 +44,9 @@
 #include <upipe-modules/upipe_transfer.h>
 
 #include <stdlib.h>
-#include <stdbool.h>
 #include <stdint.h>
-#include <inttypes.h>
 #include <stdarg.h>
 #include <string.h>
-#include <unistd.h>
-#include <errno.h>
-#include <math.h>
 #include <assert.h>
 
 /** @internal @This is the private context of a xfer pipe manager. */

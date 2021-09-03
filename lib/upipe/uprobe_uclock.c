@@ -27,15 +27,12 @@
  * @short probe catching provide_request events asking for a uclock
  */
 
-#include <upipe/ubase.h>
 #include <upipe/uclock.h>
 #include <upipe/uprobe.h>
 #include <upipe/uprobe_uclock.h>
 #include <upipe/uprobe_helper_alloc.h>
-#include <upipe/upipe.h>
 
 #include <stdlib.h>
-#include <string.h>
 #include <stdarg.h>
 
 /** @internal @This catches events thrown by pipes.

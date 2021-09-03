@@ -32,10 +32,8 @@
 #include <upipe/uprobe.h>
 #include <upipe/uprobe_upump_mgr.h>
 #include <upipe/uprobe_helper_alloc.h>
-#include <upipe/upipe.h>
 
 #include <stdlib.h>
-#include <string.h>
 #include <stdarg.h>
 
 /** @internal @This catches events thrown by pipes.

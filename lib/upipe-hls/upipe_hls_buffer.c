@@ -23,8 +23,6 @@
 
 #include <upipe-hls/upipe_hls_buffer.h>
 
-#include <upipe-modules/upipe_buffer.h>
-#include <upipe-modules/upipe_probe_uref.h>
 
 #include <upipe/upipe_helper_upump.h>
 #include <upipe/upipe_helper_upump_mgr.h>
@@ -34,10 +32,8 @@
 #include <upipe/upipe_helper_urefcount.h>
 #include <upipe/upipe_helper_upipe.h>
 
-#include <upipe/uprobe_prefix.h>
 
 #include <upipe/uref_clock.h>
-#include <upipe/uref_block.h>
 
 #include <upipe/ueventfd.h>
 

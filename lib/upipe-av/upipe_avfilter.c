@@ -43,9 +43,7 @@
 #include <upipe/upipe_helper_flow.h>
 #include <upipe/upipe_helper_flow_def.h>
 #include <upipe/upipe_helper_urefcount.h>
-#include <upipe/upipe_helper_ubuf_mgr.h>
 #include <upipe/upipe_helper_output.h>
-#include <upipe/upipe_helper_input.h>
 #include <upipe/upipe_helper_subpipe.h>
 #include <upipe/upipe_helper_uclock.h>
 #include <upipe/upipe_helper_upump_mgr.h>
@@ -55,7 +53,6 @@
 #include <upipe-av/upipe_av_pixfmt.h>
 #include <upipe-av/upipe_av_samplefmt.h>
 #include <upipe-av/uref_avfilter_flow.h>
-#include <upipe-av/uref_av_flow.h>
 #include <upipe-av/ubuf_av.h>
 
 #include <libavfilter/buffersink.h>

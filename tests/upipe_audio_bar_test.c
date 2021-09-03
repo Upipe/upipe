@@ -33,23 +33,16 @@
 #include <upipe/umem_alloc.h>
 #include <upipe/udict.h>
 #include <upipe/udict_inline.h>
-#include <upipe/ubuf.h>
-#include <upipe/ubuf_block.h>
-#include <upipe/ubuf_block_mem.h>
 #include <upipe/uref.h>
 #include <upipe/uref_pic_flow.h>
 #include <upipe/uref_sound_flow.h>
-#include <upipe/uref_flow.h>
 #include <upipe/uref_std.h>
 #include <upipe/uref_dump.h>
-#include <upipe/uref_clock.h>
 #include <upipe-filters/upipe_audio_bar.h>
 #include <upipe-filters/upipe_audio_max.h>
 
-#include <upipe/upipe_helper_upipe.h>
 
 #include <stdio.h>
-#include <string.h>
 #include <stdlib.h>
 #include <stdbool.h>
 #include <assert.h>

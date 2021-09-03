@@ -54,9 +54,6 @@
 #include <upipe/umem_pool.h>
 #include <upipe/udict.h>
 #include <upipe/udict_inline.h>
-#include <upipe/ubuf.h>
-#include <upipe/ubuf_block.h>
-#include <upipe/ubuf_block_mem.h>
 #include <upipe/uref.h>
 #include <upipe/uref_std.h>
 #include <upipe/uref_sound_flow.h>

@@ -29,7 +29,6 @@
 
 #include <ctype.h>
 #include <stdlib.h>
-#include <ctype.h>
 
 #define UURI_GEN_DELIMS ':', '/', '?', '#', '[', ']', '@'
 #define UURI_SUB_DELIMS '!', '$', '&', '\'', '(', ')', '*', '+', ',', ';', '='

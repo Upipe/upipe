@@ -36,7 +36,6 @@ extern "C" {
 
 #include <upipe/ubase.h>
 
-#include <assert.h>
 #include <stddef.h>
 #include <string.h>
 

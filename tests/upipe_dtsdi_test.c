@@ -25,7 +25,6 @@
 
 #undef NDEBUG
 
-#include <stdlib.h>
 #include <stdio.h>
 
 #include <upipe/ubase.h>

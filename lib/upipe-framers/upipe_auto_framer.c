@@ -23,7 +23,6 @@
  */
 
 #include <upipe/ubase.h>
-#include <upipe/ulist.h>
 #include <upipe/uprobe.h>
 #include <upipe/uprobe_prefix.h>
 #include <upipe/uref.h>
@@ -49,10 +48,8 @@
 #include <upipe-framers/upipe_s302_framer.h>
 
 #include <stdlib.h>
-#include <stdbool.h>
 #include <stdarg.h>
 #include <string.h>
-#include <assert.h>
 
 /** @internal @This is the private context of an autof manager. */
 struct upipe_autof_mgr {

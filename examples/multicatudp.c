@@ -56,14 +56,10 @@
 #include <upipe/umem_alloc.h>
 #include <upipe/udict.h>
 #include <upipe/udict_inline.h>
-#include <upipe/ubuf.h>
-#include <upipe/ubuf_block.h>
-#include <upipe/ubuf_block_mem.h>
 #include <upipe/uref.h>
 #include <upipe/uref_std.h>
 #include <upipe/upump.h>
 #include <upump-ev/upump_ev.h>
-#include <upipe/upipe.h>
 #include <upipe-modules/upipe_multicat_source.h>
 #include <upipe-modules/upipe_delay.h>
 #include <upipe-modules/upipe_time_limit.h>
@@ -73,12 +69,8 @@
 #include <upipe-pthread/uprobe_pthread_upump_mgr.h>
 #include <upipe-pthread/upipe_pthread_transfer.h>
 
-#include <stdbool.h>
 #include <stdlib.h>
 #include <stdio.h>
-#include <unistd.h>
-#include <inttypes.h>
-#include <signal.h>
 #include <syslog.h>
 #include <pthread.h>
 

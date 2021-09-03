@@ -42,9 +42,6 @@
 #include <upipe/uref_flow.h>
 #include <upipe/uref_sound_flow.h>
 #include <upipe/uref_dump.h>
-#include <upipe/ubuf.h>
-#include <upipe/ubuf_block.h>
-#include <upipe/ubuf_block_mem.h>
 #include <upipe/upipe.h>
 #include <upipe/upump.h>
 #include <upump-ev/upump_ev.h>
@@ -59,9 +56,7 @@
 #include <upipe-filters/upipe_filter_format.h>
 
 #include <stdlib.h>
-#include <stdint.h>
 #include <stdio.h>
-#include <unistd.h>
 
 #define UPROBE_LOG_LEVEL UPROBE_LOG_DEBUG
 #define UDICT_POOL_DEPTH 10

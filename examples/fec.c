@@ -7,19 +7,14 @@
 #include <stdlib.h>
 #include <stdint.h>
 #include <stdio.h>
-#include <unistd.h>
 
 #include <upipe/uprobe.h>
 #include <upipe/ubase.h>
-#include <upipe/uprobe.h>
-#include <upipe/uprobe_helper_alloc.h>
 #include <upipe/uprobe_stdio.h>
 #include <upipe/uprobe_prefix.h>
-#include <upipe/uprobe_select_flows.h>
 #include <upipe/uprobe_uref_mgr.h>
 #include <upipe/uprobe_upump_mgr.h>
 #include <upipe/uprobe_ubuf_mem.h>
-#include <upipe/uref_block.h>
 #include <upipe/uprobe_uclock.h>
 #include <upipe/umem.h>
 #include <upipe/umem_pool.h>
@@ -27,12 +22,6 @@
 #include <upipe/udict_inline.h>
 #include <upipe/uref.h>
 #include <upipe/uref_std.h>
-#include <upipe/uref_pic_flow.h>
-#include <upipe/uref_pic.h>
-#include <upipe/uref_block_flow.h>
-#include <upipe/uref_block.h>
-#include <upipe/ubuf_block_mem.h>
-#include <upipe/ubuf.h>
 #include <upipe/uclock.h>
 #include <upipe/uclock_std.h>
 #include <upipe/upipe.h>
@@ -40,9 +29,7 @@
 #include <upump-ev/upump_ev.h>
 #include <upipe-modules/upipe_udp_sink.h>
 #include <upipe-modules/upipe_udp_source.h>
-#include <upipe-modules/upipe_rtp_source.h>
 #include <upipe-ts/upipe_rtp_fec.h>
-#include <upipe/uref_dump.h>
 
 #define UMEM_POOL               512
 #define UDICT_POOL_DEPTH        500

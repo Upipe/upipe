@@ -28,10 +28,8 @@
  * @short Upipe source module for http GET requests
  */
 
-#include <upipe/config.h>
 #include <upipe/ubase.h>
 #include <upipe/ucookie.h>
-#include <upipe/uprobe.h>
 #include <upipe/uclock.h>
 #include <upipe/uref.h>
 #include <upipe/uref_block.h>
@@ -39,7 +37,6 @@
 #include <upipe/uref_clock.h>
 #include <upipe/uref_uri.h>
 #include <upipe/upump.h>
-#include <upipe/ubuf.h>
 #include <upipe/ueventfd.h>
 #include <upipe/upipe.h>
 #include <upipe/upipe_helper_upipe.h>
@@ -61,11 +58,7 @@
 #include <stdint.h>
 #include <stdarg.h>
 #include <string.h>
-#include <unistd.h>
 #include <sys/types.h>
-#include <sys/stat.h>
-#include <fcntl.h>
-#include <sys/ioctl.h>
 #include <sys/socket.h>
 #include <netdb.h>
 #include <errno.h>

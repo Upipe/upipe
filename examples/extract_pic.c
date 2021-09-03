@@ -34,17 +34,11 @@
 #include <upipe/umem_alloc.h>
 #include <upipe/udict.h>
 #include <upipe/udict_inline.h>
-#include <upipe/ubuf.h>
-#include <upipe/ubuf_block.h>
-#include <upipe/ubuf_block_mem.h>
-#include <upipe/ubuf_pic.h>
-#include <upipe/ubuf_pic_mem.h>
 #include <upipe/uref.h>
 #include <upipe/uref_std.h>
 #include <upipe/uref_pic.h>
 #include <upipe/uref_pic_flow.h>
 #include <upipe/uref_pic_flow_formats.h>
-#include <upipe/uref_block_flow.h>
 #include <upipe/upipe.h>
 #include <upipe/upipe_dump.h>
 #include <upipe/upump.h>
@@ -65,15 +59,7 @@
 #include <stdbool.h>
 #include <stdlib.h>
 #include <stdio.h>
-#include <unistd.h>
-#include <inttypes.h>
 #include <stdint.h>
-#include <sys/param.h>
-#include <signal.h>
-#include <pthread.h>
-#include <errno.h>
-
-#include <pthread.h>
 
 #define UDICT_POOL_DEPTH    50
 #define UREF_POOL_DEPTH     50

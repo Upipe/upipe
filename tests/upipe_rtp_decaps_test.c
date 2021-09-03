@@ -40,7 +40,6 @@
 #include <upipe/uref_block_flow.h>
 #include <upipe/ubuf_block_mem.h>
 #include <upipe/upipe.h>
-#include <upipe/upipe_helper_upipe.h>
 #include <upipe-modules/upipe_rtp_decaps.h>
 
 #include <stdio.h>

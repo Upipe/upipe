@@ -30,7 +30,6 @@
 #define __STDC_CONSTANT_MACROS 1
 
 #include <upipe/ubase.h>
-#include <upipe/uprobe.h>
 #include <upipe/uref.h>
 #include <upipe/uref_pic.h>
 #include <upipe/uref_pic_flow.h>
@@ -46,14 +45,8 @@
 #include <upipe-blackmagic/ubuf_pic_blackmagic.h>
 
 #include <stdlib.h>
-#include <stdbool.h>
 #include <stdint.h>
 #include <stdarg.h>
-#include <string.h>
-#include <unistd.h>
-#include <errno.h>
-#include <assert.h>
-#include <pthread.h>
 
 #include "include/DeckLinkAPI.h"
 

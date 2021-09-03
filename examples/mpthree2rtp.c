@@ -56,19 +56,10 @@
 #include <upipe-modules/upipe_nodemux.h>
 #include <upipe-framers/upipe_mpga_framer.h>
 
-#include <unistd.h>
 #include <stdlib.h>
 #include <string.h>
-#include <stdint.h>
 #include <stdio.h>
-#include <sys/time.h>
-#include <sys/types.h>
-#include <sys/param.h>
 #include <stdarg.h>
-#include <dirent.h>
-#include <errno.h>
-
-#include <ev.h>
 
 #define UPROBE_LOG_LEVEL UPROBE_LOG_INFO
 #define UMEM_POOL 512

@@ -29,7 +29,6 @@
  */
 
 #include <stdlib.h>
-#include <limits.h>
 
 #include <upipe/upipe.h>
 #include <upipe/uclock.h>
@@ -38,8 +37,6 @@
 #include <upipe/upipe_helper_urefcount.h>
 #include <upipe/upipe_helper_void.h>
 #include <upipe/upipe_helper_output.h>
-#include <upipe/upipe_helper_flow.h>
-#include <upipe/upipe_helper_flow_def.h>
 
 #include <upipe/uref_pic.h>
 #include <upipe/uref_pic_flow.h>

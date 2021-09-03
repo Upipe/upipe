@@ -24,14 +24,9 @@
  */
 
 #include <upipe/upipe.h>
-#include <upipe/ubase.h>
-#include <upipe/ulist.h>
-#include <upipe/uprobe.h>
 #include <upipe/uref.h>
-#include <upipe/ubuf.h>
 #include <upipe/uref_pic_flow.h>
 #include <upipe/uref_pic.h>
-#include <upipe/ubuf_pic.h>
 #include <upipe/uref_flow.h>
 #include <upipe/upipe_helper_upipe.h>
 #include <upipe/upipe_helper_urefcount.h>
@@ -40,11 +35,8 @@
 #include <upipe-modules/upipe_crop.h>
 
 #include <stdlib.h>
-#include <stdbool.h>
 #include <stdint.h>
 #include <stdarg.h>
-#include <string.h>
-#include <assert.h>
 
 /** we only accept pictures */
 #define EXPECTED_FLOW_DEF "pic."

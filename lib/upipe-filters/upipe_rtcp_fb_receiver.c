@@ -31,14 +31,12 @@
 #include <upipe/uref_block.h>
 #include <upipe/uref_block_flow.h>
 #include <upipe/uref_flow.h>
-#include <upipe/upipe.h>
 #include <upipe/upipe_helper_upipe.h>
 #include <upipe/upipe_helper_subpipe.h>
 #include <upipe/upipe_helper_urefcount.h>
 #include <upipe/upipe_helper_urefcount_real.h>
 #include <upipe/upipe_helper_void.h>
 #include <upipe/upipe_helper_output.h>
-#include <upipe/upipe_helper_input.h>
 #include <upipe/upipe_helper_uref_mgr.h>
 #include <upipe/upipe_helper_ubuf_mgr.h>
 #include <upipe/upipe_helper_upump_mgr.h>
@@ -47,21 +45,13 @@
 #include <upipe-filters/upipe_rtcp_fb_receiver.h>
 
 #include <stdlib.h>
-#include <stdbool.h>
 #include <stdint.h>
 #include <inttypes.h>
 #include <stdarg.h>
 #include <string.h>
-#include <unistd.h>
-#include <errno.h>
-#include <math.h>
-#include <assert.h>
 #include <limits.h>
 
-#include <sys/types.h>
-#include <sys/socket.h>
 
-#include <netinet/in.h>
 
 #include <bitstream/ietf/rtp.h>
 #include <bitstream/ietf/rtcp.h>

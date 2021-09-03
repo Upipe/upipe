@@ -28,14 +28,11 @@
  */
 
 #include <upipe/ubase.h>
-#include <upipe/upump.h>
 #include <upipe/uprobe.h>
 #include <upipe-pthread/uprobe_pthread_assert.h>
 #include <upipe/uprobe_helper_alloc.h>
-#include <upipe/upipe.h>
 
 #include <stdlib.h>
-#include <string.h>
 #include <stdarg.h>
 #include <stdbool.h>
 

@@ -31,9 +31,6 @@
 #include <upipe/uprobe.h>
 #include <upipe/uprobe_prefix.h>
 #include <upipe/uref.h>
-#include <upipe/uref_pic.h>
-#include <upipe/uref_pic_flow.h>
-#include <upipe/uref_sound_flow.h>
 #include <upipe/upipe.h>
 #include <upipe/upipe_helper_upipe.h>
 #include <upipe/upipe_helper_flow.h>
@@ -43,7 +40,6 @@
 #include <upipe/upipe_helper_uprobe.h>
 #include <upipe/upipe_helper_bin_input.h>
 #include <upipe/upipe_helper_bin_output.h>
-#include <upipe-modules/upipe_idem.h>
 #include <upipe-filters/upipe_filter_encode.h>
 #include <upipe-x264/upipe_x264.h>
 #include <upipe-x265/upipe_x265.h>
