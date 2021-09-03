@@ -53,7 +53,6 @@
 #include <upipe-modules/upipe_audio_blank.h>
 
 #include <stdlib.h>
-#include <stdbool.h>
 #include <stdint.h>
 #include <stdarg.h>
 

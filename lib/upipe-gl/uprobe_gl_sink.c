@@ -37,12 +37,7 @@
 #include <upipe/uref_pic_flow.h>
 
 #include <stdlib.h>
-#include <stdbool.h>
-#include <stdint.h>
 #include <stdarg.h>
-#include <string.h>
-#include <unistd.h>
-#include <errno.h>
 #include <assert.h>
 
 #include <GL/gl.h>

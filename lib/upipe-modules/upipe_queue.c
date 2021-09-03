@@ -32,7 +32,6 @@
 #include <upipe/uref.h>
 #include <upipe/ubuf.h>
 #include <upipe/uclock.h>
-#include <upipe-modules/upipe_queue_source.h>
 
 #include "upipe_queue.h"
 

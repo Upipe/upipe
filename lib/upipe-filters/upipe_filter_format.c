@@ -39,7 +39,6 @@
 #include <upipe/upipe_helper_flow.h>
 #include <upipe/upipe_helper_urefcount.h>
 #include <upipe/upipe_helper_flow_format.h>
-#include <upipe/upipe_helper_output.h>
 #include <upipe/upipe_helper_inner.h>
 #include <upipe/upipe_helper_uprobe.h>
 #include <upipe/upipe_helper_bin_input.h>
@@ -54,7 +53,6 @@
 #include <stdbool.h>
 #include <stdarg.h>
 #include <string.h>
-#include <assert.h>
 
 /** @internal @This is the private context of a ffmt manager. */
 struct upipe_ffmt_mgr {

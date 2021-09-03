@@ -37,10 +37,7 @@
 #include <upipe/umem.h>
 #include <upipe/umem_alloc.h>
 #include <upipe/ubuf.h>
-#include <upipe/ubuf_pic.h>
 #include <upipe/ubuf_pic_mem.h>
-#include <upipe/ubuf_block.h>
-#include <upipe/ubuf_block_mem.h>
 #include <upipe/udict.h>
 #include <upipe/udict_inline.h>
 #include <upipe/udict_dump.h>
@@ -49,16 +46,13 @@
 #include <upipe/uref_clock.h>
 #include <upipe/uref_pic.h>
 #include <upipe/uref_pic_flow.h>
-#include <upipe/uref_block.h>
 #include <upipe/upipe.h>
 #include <upipe/upipe_helper_upipe.h>
 
 #include <upipe-x264/upipe_x264.h>
 
 #include <stdio.h>
-#include <string.h>
 #include <stdlib.h>
-#include <stdbool.h>
 #include <assert.h>
 
 #define UDICT_POOL_DEPTH    0

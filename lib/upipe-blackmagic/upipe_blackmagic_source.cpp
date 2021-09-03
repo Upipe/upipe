@@ -34,18 +34,13 @@
 #include <upipe/uref.h>
 #include <upipe/uref_pic.h>
 #include <upipe/uref_pic_flow.h>
-#include <upipe/uref_sound.h>
 #include <upipe/uref_sound_flow.h>
 #include <upipe/uref_clock.h>
 #include <upipe/upump.h>
 #include <upipe/ubuf.h>
-#include <upipe/ufifo.h>
 #include <upipe/uqueue.h>
-#include <upipe/upipe.h>
 #include <upipe/upipe_helper_upipe.h>
 #include <upipe/upipe_helper_urefcount.h>
-#include <upipe/upipe_helper_void.h>
-#include <upipe/upipe_helper_flow.h>
 #include <upipe/upipe_helper_sync.h>
 #include <upipe/upipe_helper_uref_mgr.h>
 #include <upipe/upipe_helper_output.h>
@@ -57,14 +52,10 @@
 #include <upipe-blackmagic/ubuf_sound_blackmagic.h>
 
 #include <stdlib.h>
-#include <stdbool.h>
 #include <stdint.h>
 #include <stdarg.h>
 #include <string.h>
-#include <unistd.h>
-#include <errno.h>
 #include <assert.h>
-#include <pthread.h>
 
 #include "include/DeckLinkAPI.h"
 

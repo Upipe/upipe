@@ -44,10 +44,8 @@
 #include <upipe-modules/upipe_setflowdef.h>
 
 #include <stdlib.h>
-#include <stdbool.h>
 #include <stdarg.h>
 #include <string.h>
-#include <assert.h>
 
 /** @internal @This is the private context of a rtpsrc manager. */
 struct upipe_rtpsrc_mgr {

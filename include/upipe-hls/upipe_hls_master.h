@@ -27,9 +27,6 @@
 extern "C" {
 #endif
 
-#include <upipe/uprobe.h>
-#include <upipe/upipe.h>
-
 #define UPIPE_HLS_MASTER_SIGNATURE      UBASE_FOURCC('h','l','s','M')
 #define UPIPE_HLS_MASTER_SUB_SIGNATURE  UBASE_FOURCC('h','l','s','m')
 

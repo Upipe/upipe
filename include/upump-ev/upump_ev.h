@@ -31,13 +31,15 @@
 /** @hidden */
 #define _UPUMP_EV_UPUMP_EV_H_
 
-#include <upipe/upump.h>
-
-#include <ev.h>
-
 #ifdef __cplusplus
 extern "C" {
 #endif
+
+#include <stdint.h>
+
+#include <ev.h>
+
+#include <upipe/upump.h>
 
 #define UPUMP_EV_SIGNATURE UBASE_FOURCC('e','v',' ',' ')
 

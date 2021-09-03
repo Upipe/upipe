@@ -28,10 +28,7 @@
  */
 
 #include <upipe/ubase.h>
-#include <upipe/uprobe.h>
 #include <upipe/uref.h>
-#include <upipe/uref.h>
-#include <upipe/uref_flow.h>
 #include <upipe/upipe.h>
 #include <upipe/upipe_helper_upipe.h>
 #include <upipe/upipe_helper_urefcount.h>
@@ -40,9 +37,7 @@
 #include <upipe-modules/upipe_match_attr.h>
 
 #include <stdlib.h>
-#include <stdbool.h>
 #include <stdarg.h>
-#include <assert.h>
 
 enum upipe_match_attr_type {
     UPIPE_MATCH_ATTR_NONE,

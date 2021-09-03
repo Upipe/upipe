@@ -38,7 +38,6 @@
 #include <upipe/umem_alloc.h>
 #include <upipe/udict.h>
 #include <upipe/udict_inline.h>
-#include <upipe/uclock_std.h>
 
 #include <upipe/uprobe_stdio.h>
 #include <upipe/uprobe_prefix.h>

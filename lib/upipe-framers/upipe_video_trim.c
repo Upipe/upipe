@@ -23,8 +23,6 @@
  */
 
 #include <upipe/ubase.h>
-#include <upipe/ulist.h>
-#include <upipe/uprobe.h>
 #include <upipe/uref.h>
 #include <upipe/uref_flow.h>
 #include <upipe/upipe.h>
@@ -40,9 +38,6 @@
 #include <stdlib.h>
 #include <stdbool.h>
 #include <stdarg.h>
-#include <string.h>
-#include <inttypes.h>
-#include <assert.h>
 
 #include <bitstream/mpeg/mp2v.h>
 

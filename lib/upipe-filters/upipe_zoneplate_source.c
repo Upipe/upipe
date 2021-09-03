@@ -41,7 +41,6 @@
 #include <upipe/uprobe_prefix.h>
 #include <upipe/uref_void_flow.h>
 #include <upipe/uref_pic_flow.h>
-#include <upipe/uref_pic.h>
 #include <upipe/uref_clock.h>
 
 #include <upipe-modules/upipe_void_source.h>

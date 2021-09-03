@@ -27,8 +27,6 @@
 extern "C" {
 #endif
 
-#include <upipe/upipe.h>
-
 #define UPIPE_HLS_VIDEO_SIGNATURE UBASE_FOURCC('h','l','s','p')
 
 struct upipe_mgr *upipe_hls_video_mgr_alloc(void);

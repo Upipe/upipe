@@ -36,7 +36,6 @@
 #include <upipe/uref_std.h>
 #include <upipe/uref_void_flow.h>
 #include <upipe/uref_pic_flow.h>
-#include <upipe/uref_clock.h>
 #include <upipe/uref_dump.h>
 #include <upipe/umem.h>
 #include <upipe/umem_alloc.h>

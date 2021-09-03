@@ -24,14 +24,11 @@
  *  - ISO/IEC 13818-1:2007(E) (MPEG-2 Systems)
  */
 
-#include <upipe/ubase.h>
 #include <upipe/ulist.h>
 #include <upipe/uclock.h>
-#include <upipe/uprobe.h>
 #include <upipe/uref.h>
 #include <upipe/uref_flow.h>
 #include <upipe/uref_block.h>
-#include <upipe/ubuf.h>
 #include <upipe/upipe.h>
 #include <upipe/upipe_helper_upipe.h>
 #include <upipe/upipe_helper_urefcount.h>
@@ -39,7 +36,6 @@
 #include <upipe/upipe_helper_output.h>
 #include <upipe/upipe_helper_ubuf_mgr.h>
 #include <upipe/upipe_helper_flow_def.h>
-#include <upipe-framers/uref_h265_flow.h>
 #include <upipe-framers/uref_h26x_flow.h>
 #include <upipe-framers/uref_mpga_flow.h>
 #include <upipe-ts/upipe_ts_pmt_decoder.h>

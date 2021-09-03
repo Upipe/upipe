@@ -32,7 +32,6 @@
 
 #include <stdio.h>
 #include <inttypes.h>
-#include <string.h>
 #include <assert.h>
 
 #define UREF_POOL_DEPTH 1

@@ -48,7 +48,6 @@
 #include <upipe/uref.h>
 #include <upipe/uref_std.h>
 #include <upipe/uref_flow.h>
-#include <upipe/uref_block_flow.h>
 #include <upipe/uref_dump.h>
 #include <upipe/upipe.h>
 #include <upipe/uref_pic_flow.h>
@@ -58,7 +57,6 @@
 #include <upump-ev/upump_ev.h>
 
 #include <stdlib.h>
-#include <stdbool.h>
 #include <assert.h>
 
 #define UDICT_POOL_DEPTH 0

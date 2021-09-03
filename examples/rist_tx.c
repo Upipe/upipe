@@ -41,22 +41,18 @@
 #include <upipe/udict_inline.h>
 #include <upipe/ubuf.h>
 #include <upipe/ubuf_block.h>
-#include <upipe/ubuf_block_mem.h>
 #include <upipe/uref.h>
-#include <upipe/uref_dump.h>
 #include <upipe/uref_block.h>
+#include <upipe/uref_clock.h>
 #include <upipe/uref_std.h>
 #include <upipe/upump.h>
 #include <upump-ev/upump_ev.h>
 #include <upipe/uuri.h>
 #include <upipe/ustring.h>
 #include <upipe/upipe.h>
-#include <upipe-modules/upipe_genaux.h>
 #include <upipe-modules/upipe_dup.h>
 #include <upipe-modules/upipe_rtcp.h>
 #include <upipe-modules/upipe_udp_source.h>
-#include <upipe-modules/upipe_file_sink.h>
-#include <upipe-modules/upipe_multicat_sink.h>
 #include <upipe-modules/upipe_udp_sink.h>
 #include <upipe-modules/upipe_probe_uref.h>
 #include <upipe-filters/upipe_rtcp_fb_receiver.h>
@@ -64,10 +60,8 @@
 #include <stdbool.h>
 #include <stdlib.h>
 #include <stdio.h>
-#include <unistd.h>
 #include <fcntl.h>
 #include <inttypes.h>
-#include <signal.h>
 
 #include <bitstream/ietf/rtcp_sr.h>
 #include <bitstream/ietf/rtcp3611.h>

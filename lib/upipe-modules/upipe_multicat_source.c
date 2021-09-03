@@ -29,7 +29,6 @@
  */
 
 #include <upipe/ubase.h>
-#include <upipe/uprobe.h>
 #include <upipe/uref_clock.h>
 #include <upipe/uref.h>
 #include <upipe/ubuf.h>
@@ -49,13 +48,11 @@
 #include <upipe-modules/upipe_multicat_source.h>
 
 #include <stdlib.h>
-#include <stdbool.h>
 #include <stdint.h>
 #include <inttypes.h>
 #include <stdarg.h>
 #include <string.h>
 #include <unistd.h>
-#include <sys/types.h>
 #include <sys/stat.h>
 #include <fcntl.h>
 #include <sys/mman.h>

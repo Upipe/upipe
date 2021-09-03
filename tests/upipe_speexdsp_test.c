@@ -29,7 +29,6 @@
 #include <upipe/uprobe_stdio.h>
 #include <upipe/uprobe_prefix.h>
 #include <upipe/uprobe_ubuf_mem.h>
-#include <upipe/uclock.h>
 #include <upipe/umem.h>
 #include <upipe/umem_alloc.h>
 #include <upipe/udict.h>
@@ -46,10 +45,8 @@
 #include <upipe-speexdsp/upipe_speexdsp.h>
 
 #include <stdio.h>
-#include <string.h>
 #include <stdlib.h>
 #include <stdbool.h>
-#include <math.h>
 #include <assert.h>
 
 #define UDICT_POOL_DEPTH    5

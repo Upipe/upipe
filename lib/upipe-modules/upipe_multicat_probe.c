@@ -28,11 +28,8 @@
  */
 
 #include <upipe/ubase.h>
-#include <upipe/uprobe.h>
 #include <upipe/uref_clock.h>
 #include <upipe/uref.h>
-#include <upipe/upipe.h>
-#include <upipe/uref_flow.h>
 #include <upipe/upipe.h>
 #include <upipe/upipe_helper_upipe.h>
 #include <upipe/upipe_helper_urefcount.h>
@@ -41,16 +38,10 @@
 #include <upipe-modules/upipe_multicat_probe.h>
 
 #include <stdlib.h>
-#include <stdbool.h>
 #include <stdint.h>
 #include <inttypes.h>
 #include <stdarg.h>
-#include <string.h>
-#include <unistd.h>
-#include <errno.h>
-#include <math.h>
 #include <assert.h>
-#include <sys/param.h>
 
 /** upipe_multicat_probe structure */
 struct upipe_multicat_probe {

@@ -48,17 +48,13 @@
 #include <upipe/uref_block.h>
 #include <upipe/uref_clock.h>
 #include <upipe/uref_std.h>
-#include <upipe/uref_dump.h>
 #include <upipe/upipe.h>
 #include <upipe-ts/upipe_ts_encaps.h>
 #include <upipe-ts/upipe_ts_mux.h>
 #include <upipe-ts/uref_ts_flow.h>
 
 #include <stdbool.h>
-#include <stdlib.h>
 #include <stdio.h>
-#include <unistd.h>
-#include <inttypes.h>
 #include <assert.h>
 
 #include <bitstream/mpeg/ts.h>

@@ -49,10 +49,8 @@
 #include <upipe/upump.h>
 #include <upump-ev/upump_ev.h>
 
-#include <stdbool.h>
 #include <stdlib.h>
 #include <stdio.h>
-#include <inttypes.h>
 #include <assert.h>
 
 #define UPUMP_POOL 0

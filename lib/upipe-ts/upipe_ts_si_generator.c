@@ -38,7 +38,6 @@
 #include <upipe/uref_event.h>
 #include <upipe/ubuf.h>
 #include <upipe/ubuf_block.h>
-#include <upipe/upipe.h>
 #include <upipe/upipe_helper_upipe.h>
 #include <upipe/upipe_helper_urefcount.h>
 #include <upipe/upipe_helper_void.h>

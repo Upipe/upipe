@@ -22,7 +22,6 @@
  */
 
 #include <upipe-hls/upipe_hls_audio.h>
-#include <upipe-hls/upipe_hls_variant.h>
 #include <upipe-hls/upipe_hls_playlist.h>
 
 #include <upipe-ts/upipe_ts_demux.h>

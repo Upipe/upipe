@@ -40,7 +40,6 @@
 #include <upipe/udict_inline.h>
 #include <upipe/uref.h>
 #include <upipe/uref_std.h>
-#include <upipe/uref_flow.h>
 #include <upipe/uref_sound.h>
 #include <upipe/uref_sound_flow.h>
 #include <upipe/ubuf_mem.h>
@@ -48,7 +47,6 @@
 #include <upipe-modules/upipe_audio_split.h>
 
 #include <stdlib.h>
-#include <stdbool.h>
 #include <assert.h>
 
 #define UDICT_POOL_DEPTH    0

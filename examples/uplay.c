@@ -29,9 +29,7 @@
  */
 
 #include <stdlib.h>
-#include <stdint.h>
 #include <stdio.h>
-#include <unistd.h>
 
 #include <upipe/uprobe.h>
 #include <upipe/uprobe_stdio.h>
@@ -48,12 +46,10 @@
 #include <upipe/udict_inline.h>
 #include <upipe/uref.h>
 #include <upipe/uref_std.h>
-#include <upipe/uref_pic.h>
 #include <upipe/uref_pic_flow.h>
-#include <upipe/ubuf.h>
+#include <upipe/uref_sound_flow.h>
 #include <upipe/uclock.h>
 #include <upipe/uclock_std.h>
-#include <upipe/upipe.h>
 #include <upipe/upipe_dump.h>
 #include <upipe/upump.h>
 #include <upipe-pthread/upipe_pthread_transfer.h>
@@ -78,9 +74,7 @@
 #include <upipe-filters/upipe_filter_decode.h>
 #include <upipe-filters/upipe_filter_format.h>
 #include <upipe-av/upipe_av.h>
-#include <upipe-av/upipe_av_pixfmt.h>
 #include <upipe-av/upipe_av_samplefmt.h>
-#include <upipe-av/upipe_avformat_source.h>
 #include <upipe-av/upipe_avcodec_decode.h>
 #include <upipe-swscale/upipe_sws.h>
 #include <upipe-swresample/upipe_swr.h>
@@ -92,8 +86,6 @@
 #elif defined(UPIPE_HAVE_AUDIOTOOLBOX_AUDIOTOOLBOX_H)
 #include <upipe-osx/upipe_osx_audioqueue_sink.h>
 #endif
-
-#include <pthread.h>
 
 #define UPROBE_LOG_LEVEL UPROBE_LOG_DEBUG
 #define UMEM_POOL               512

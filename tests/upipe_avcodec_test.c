@@ -40,19 +40,15 @@
 #include <upipe/ubuf.h>
 #include <upipe/ubuf_pic.h>
 #include <upipe/ubuf_pic_mem.h>
-#include <upipe/ubuf_sound.h>
 #include <upipe/ubuf_sound_mem.h>
 #include <upipe/uref.h>
 #include <upipe/uref_attr.h>
 #include <upipe/uref_std.h>
-#include <upipe/uref_block.h>
 #include <upipe/uref_pic.h>
 #include <upipe/uref_sound.h>
 #include <upipe/uref_flow.h>
 #include <upipe/uref_pic_flow.h>
-#include <upipe/uref_block_flow.h>
 #include <upipe/uref_sound_flow.h>
-#include <upipe/uref_dump.h>
 #include <upipe/upump.h>
 #include <upump-ev/upump_ev.h>
 #include <upipe-av/upipe_av.h>
@@ -65,7 +61,6 @@
 UREF_ATTR_INT(xflow, num, "x.f.num", flow num)
 
 #include <stdio.h>
-#include <unistd.h>
 #include <string.h>
 #include <stdlib.h>
 #include <stdbool.h>

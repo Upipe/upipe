@@ -32,10 +32,8 @@
 #include <upipe/ubase.h>
 #include <upipe/ulist.h>
 #include <upipe/uclock.h>
-#include <upipe/uprobe.h>
 #include <upipe/uref.h>
 #include <upipe/uref_clock.h>
-#include <upipe/ubuf.h>
 #include <upipe/uref_sound.h>
 #include <upipe/uref_sound_flow.h>
 #include <upipe/upipe.h>

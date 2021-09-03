@@ -2,7 +2,8 @@
 /** @hidden */
 #define _V210ENC_H_
 
-#include <inttypes.h>
+#include <stddef.h>
+#include <stdint.h>
 
 void upipe_planar_to_v210_8_c(const uint8_t *y, const uint8_t *u, const uint8_t *v, uint8_t *dst, uintptr_t pixels);
 void upipe_planar_to_v210_8_ssse3(const uint8_t *y, const uint8_t *u, const uint8_t *v, uint8_t *dst, uintptr_t pixels);

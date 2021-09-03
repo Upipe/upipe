@@ -38,7 +38,6 @@
 #include <upipe/udict_inline.h>
 #include <upipe/uref.h>
 #include <upipe/uref_flow.h>
-#include <upipe/uref_clock.h>
 #include <upipe/uref_std.h>
 #include <upipe/upipe.h>
 #include <upipe-framers/upipe_video_trim.h>
@@ -47,7 +46,6 @@
 #include <stdbool.h>
 #include <stdlib.h>
 #include <stdio.h>
-#include <inttypes.h>
 #include <assert.h>
 
 #include <bitstream/mpeg/mp2v.h>

@@ -29,13 +29,10 @@
 
 #undef NDEBUG
 
-#include <upipe/urefcount.h>
-#include <upipe/uclock.h>
 #include <upipe/uprobe.h>
 #include <upipe/uprobe_stdio.h>
 #include <upipe/uprobe_prefix.h>
 #include <upipe/uprobe_uref_mgr.h>
-#include <upipe/uprobe_uclock.h>
 #include <upipe/umem.h>
 #include <upipe/umem_alloc.h>
 #include <upipe/udict.h>
@@ -48,7 +45,6 @@
 #include <upipe-modules/upipe_even.h>
 
 #include <stdlib.h>
-#include <stdbool.h>
 #include <assert.h>
 
 #define UDICT_POOL_DEPTH 0

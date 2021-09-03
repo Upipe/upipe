@@ -30,9 +30,7 @@
 #include <stdlib.h>
 #include <stdbool.h>
 #include <assert.h>
-#include <ev.h>
 #include <pthread.h>
-#include <unistd.h>
 
 #include <upipe/uprobe.h>
 #include <upipe/uprobe_stdio.h>
@@ -44,15 +42,12 @@
 #include <upipe/udict.h>
 #include <upipe/udict_inline.h>
 #include <upipe/ubuf.h>
-#include <upipe/ubuf_block.h>
 #include <upipe/ubuf_block_mem.h>
-#include <upipe/ubuf_pic.h>
 #include <upipe/ubuf_pic_mem.h>
 #include <upipe/uref.h>
 #include <upipe/uref_std.h>
 #include <upipe/uref_block.h>
 #include <upipe/uref_pic.h>
-#include <upipe/uref_flow.h>
 #include <upipe/uref_block_flow.h>
 #include <upipe/uref_dump.h>
 #include <upipe/upump.h>
@@ -64,7 +59,6 @@
 #include <upipe-modules/upipe_null.h>
 
 #include <libavformat/avformat.h>
-#include <libavcodec/avcodec.h>
 
 #include "../lib/upipe-av/upipe_av_internal.h"
 

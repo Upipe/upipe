@@ -42,18 +42,12 @@
 #include <upipe/uref.h>
 #include <upipe/uref_std.h>
 #include <upipe/uref_flow.h>
-#include <upipe/uref_clock.h>
 #include <upipe/uref_block.h>
-#include <upipe/uref_block_flow.h>
 #include <upipe/uref_pic.h>
 #include <upipe/uref_pic_flow.h>
-#include <upipe/uref_dump.h>
 #include <upipe/ubuf.h>
 #include <upipe/ubuf_pic_mem.h>
-#include <upipe/uclock.h>
 #include <upipe/upipe.h>
-#include <upipe/upump.h>
-#include <upipe-framers/uref_h26x_flow.h>
 #include <upipe-x264/upipe_x264.h>
 
 #include <stdlib.h>

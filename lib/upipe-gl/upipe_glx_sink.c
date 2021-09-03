@@ -28,12 +28,8 @@
  */
 
 #include <upipe/ubase.h>
-#include <upipe/ulist.h>
 #include <upipe/uclock.h>
-#include <upipe/uprobe.h>
-#include <upipe/ubuf.h>
 #include <upipe/uref.h>
-#include <upipe/uref_attr.h>
 #include <upipe/uref_clock.h>
 #include <upipe/uref_pic.h>
 #include <upipe/uref_flow.h>
@@ -54,13 +50,8 @@
 #include <stdbool.h>
 #include <stdint.h>
 #include <stdarg.h>
-#include <string.h>
-#include <unistd.h>
-#include <errno.h>
-#include <assert.h>
 
 #include <GL/gl.h>
-#include <GL/glu.h>
 #include <GL/glx.h>
 
 /** max number of urefs to buffer */

@@ -45,7 +45,6 @@
 #include <upipe-modules/upipe_dup.h>
 
 #include <stdlib.h>
-#include <stdbool.h>
 #include <assert.h>
 
 #define UDICT_POOL_DEPTH 0

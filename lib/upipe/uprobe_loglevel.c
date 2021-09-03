@@ -28,7 +28,6 @@
 #include <upipe/uprobe_helper_alloc.h>
 #include <upipe/uprobe_loglevel.h>
 
-#include <sys/types.h>
 #include <regex.h>
 
 struct pattern {

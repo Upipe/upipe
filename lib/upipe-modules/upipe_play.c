@@ -29,7 +29,6 @@
 
 #include <upipe/ubase.h>
 #include <upipe/ulist.h>
-#include <upipe/uprobe.h>
 #include <upipe/uclock.h>
 #include <upipe/uref.h>
 #include <upipe/uref_clock.h>
@@ -42,9 +41,7 @@
 #include <upipe-modules/upipe_play.h>
 
 #include <stdlib.h>
-#include <stdbool.h>
 #include <stdarg.h>
-#include <assert.h>
 
 /* default output latency */
 #define DEFAULT_OUTPUT_LATENCY (UCLOCK_FREQ / 50)

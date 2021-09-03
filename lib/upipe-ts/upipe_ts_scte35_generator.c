@@ -28,11 +28,9 @@
 #include <upipe/ubase.h>
 #include <upipe/ulist.h>
 #include <upipe/uclock.h>
-#include <upipe/uprobe.h>
 #include <upipe/uref.h>
 #include <upipe/uref_block.h>
 #include <upipe/uref_block_flow.h>
-#include <upipe/uref_sound_flow.h>
 #include <upipe/uref_clock.h>
 #include <upipe/ubuf.h>
 #include <upipe/ubuf_block.h>
@@ -50,7 +48,6 @@
 #include <stdlib.h>
 #include <stdbool.h>
 #include <stdarg.h>
-#include <string.h>
 #include <assert.h>
 
 #include <bitstream/scte/35.h>

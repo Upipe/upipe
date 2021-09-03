@@ -25,7 +25,6 @@
 
 #undef NDEBUG
 
-#include <upipe/uclock.h>
 #include <upipe/uprobe.h>
 #include <upipe/uprobe_stdio.h>
 #include <upipe/uprobe_prefix.h>
@@ -41,10 +40,8 @@
 #include <upipe/uref_block_flow.h>
 #include <upipe/uref_sound.h>
 #include <upipe/uref_sound_flow.h>
-#include <upipe/uref_flow.h>
 #include <upipe/uref_std.h>
 #include <upipe/uref_dump.h>
-#include <upipe/uref_clock.h>
 #include <upipe-modules/upipe_s337_encaps.h>
 
 #include <upipe/upipe_helper_upipe.h>
@@ -53,7 +50,6 @@
 #include <bitstream/atsc/a52.h>
 
 #include <stdio.h>
-#include <string.h>
 #include <stdlib.h>
 #include <stdbool.h>
 #include <assert.h>

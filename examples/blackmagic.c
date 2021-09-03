@@ -31,22 +31,13 @@
 #include <upipe/uprobe_ubuf_mem.h>
 #include <upipe/uprobe_upump_mgr.h>
 #include <upipe/uprobe_uclock.h>
-#include <upipe/uclock.h>
 #include <upipe/uclock_std.h>
-#include <upipe/umem.h>
 #include <upipe/umem_alloc.h>
-#include <upipe/udict.h>
 #include <upipe/udict_inline.h>
 #include <upipe/uref.h>
 #include <upipe/uref_std.h>
 #include <upipe/uref_flow.h>
-#include <upipe/uref_pic_flow.h>
 #include <upipe/uref_block_flow.h>
-#include <upipe/ubuf.h>
-#include <upipe/ubuf_block.h>
-#include <upipe/ubuf_block_mem.h>
-#include <upipe/ubuf_pic_mem.h>
-#include <upipe/upipe.h>
 #include <upipe/upump.h>
 #include <upump-ev/upump_ev.h>
 #include <upipe-modules/upipe_file_sink.h>
@@ -60,9 +51,7 @@
 #include <upipe-filters/upipe_filter_format.h>
 
 #include <stdlib.h>
-#include <stdint.h>
 #include <stdio.h>
-#include <unistd.h>
 
 #define UPROBE_LOG_LEVEL UPROBE_LOG_NOTICE
 #define QUEUE_LENGTH 50

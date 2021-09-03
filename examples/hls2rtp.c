@@ -27,13 +27,9 @@
 #include <stdlib.h>
 #include <getopt.h>
 #include <unistd.h>
-#include <libgen.h>
 #include <ctype.h>
 #include <syslog.h>
 
-#include <upipe/ulist.h>
-#include <upipe/uuri.h>
-#include <upipe/upipe.h>
 #include <upipe/upipe_dump.h>
 #include <upipe/uprobe.h>
 #include <upipe/uprobe_helper_uprobe.h>
@@ -41,7 +37,6 @@
 #include <upipe/uprobe_helper_alloc.h>
 #include <upipe/uprobe_stdio.h>
 #include <upipe/uprobe_syslog.h>
-#include <upipe/uprobe_loglevel.h>
 #include <upipe/uprobe_prefix.h>
 #include <upipe/uprobe_select_flows.h>
 #include <upipe/uprobe_uref_mgr.h>
@@ -56,15 +51,12 @@
 #include <upipe/udict_inline.h>
 #include <upipe/uref.h>
 #include <upipe/uref_std.h>
-#include <upipe/uref_uri.h>
 #include <upipe/uref_m3u.h>
 #include <upipe/uref_m3u_master.h>
 #include <upipe/uref_dump.h>
 #include <upipe/uref_pic.h>
 #include <upipe/upump.h>
 #include <upump-ev/upump_ev.h>
-#include <upipe-modules/uprobe_http_redirect.h>
-#include <upipe-modules/upipe_null.h>
 #include <upipe-modules/upipe_auto_source.h>
 #include <upipe-modules/upipe_file_source.h>
 #include <upipe-modules/upipe_http_source.h>
@@ -72,7 +64,6 @@
 #include <upipe-modules/upipe_rtp_prepend.h>
 #include <upipe-modules/upipe_file_sink.h>
 #include <upipe-modules/upipe_udp_sink.h>
-#include <upipe-modules/upipe_dump.h>
 #include <upipe-modules/upipe_rtp_h264.h>
 #include <upipe-modules/upipe_rtp_mpeg4.h>
 #include <upipe-modules/upipe_probe_uref.h>
@@ -80,14 +71,8 @@
 #include <upipe-modules/upipe_time_limit.h>
 #include <upipe-modules/upipe_worker_sink.h>
 #include <upipe-hls/upipe_hls.h>
-#include <upipe-hls/upipe_hls_master.h>
-#include <upipe-hls/upipe_hls_variant.h>
 #include <upipe-hls/upipe_hls_playlist.h>
 #include <upipe-hls/uref_hls.h>
-#include <upipe-framers/upipe_h264_framer.h>
-#include <upipe-framers/upipe_mpga_framer.h>
-#include <upipe-framers/upipe_mpgv_framer.h>
-#include <upipe-framers/upipe_a52_framer.h>
 #include <upipe-ts/upipe_ts_mux.h>
 #include <upipe-pthread/uprobe_pthread_upump_mgr.h>
 #include <upipe-pthread/upipe_pthread_transfer.h>

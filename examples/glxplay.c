@@ -64,17 +64,11 @@ graph {flow: east}
  */
 
 #include <stdlib.h>
-#include <strings.h>
-#include <stdint.h>
 #include <stdio.h>
-#include <sys/time.h>
 #include <stdarg.h>
 
 #undef NDEBUG
 
-#include <libswscale/swscale.h>
-
-#include <upipe/ulist.h>
 #include <upipe/uprobe.h>
 #include <upipe/uprobe_stdio.h>
 #include <upipe/uprobe_prefix.h>
@@ -89,18 +83,10 @@ graph {flow: east}
 #include <upipe/umem_pool.h>
 #include <upipe/udict.h>
 #include <upipe/udict_inline.h>
-#include <upipe/udict_dump.h>
 #include <upipe/uref.h>
 #include <upipe/uref_std.h>
-#include <upipe/uref_block.h>
 #include <upipe/uref_flow.h>
 #include <upipe/uref_pic_flow.h>
-#include <upipe/ubuf.h>
-#include <upipe/ubuf_block.h>
-#include <upipe/ubuf_block_mem.h>
-#include <upipe/uref_pic.h>
-#include <upipe/ubuf_pic_mem.h>
-#include <upipe/upipe.h>
 #include <upipe/upump.h>
 #include <upump-ev/upump_ev.h>
 #include <upipe-modules/upipe_transfer.h>
@@ -115,7 +101,6 @@ graph {flow: east}
 #include <upipe-ts/upipe_ts_demux.h>
 #include <upipe-framers/upipe_auto_framer.h>
 #include <upipe-av/upipe_av.h>
-#include <upipe-av/uref_av_flow.h>
 #include <upipe-av/upipe_avformat_source.h>
 #include <upipe-av/upipe_avcodec_decode.h>
 #include <upipe-swscale/upipe_sws.h>

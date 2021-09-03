@@ -24,12 +24,10 @@
 
 #include <upipe/ubase.h>
 #include <upipe/ulist.h>
-#include <upipe/uprobe.h>
 #include <upipe/uref.h>
 #include <upipe/uref_flow.h>
 #include <upipe/uref_block.h>
 #include <upipe/uref_block_flow.h>
-#include <upipe/uref_pic.h>
 #include <upipe/uref_clock.h>
 #include <upipe/ubuf.h>
 #include <upipe/uclock.h>

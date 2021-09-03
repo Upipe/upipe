@@ -35,7 +35,6 @@
 #include <upipe/upipe.h>
 
 #include <stdlib.h>
-#include <string.h>
 #include <stdarg.h>
 
 /** @This represents an event type that has to be transferred. */

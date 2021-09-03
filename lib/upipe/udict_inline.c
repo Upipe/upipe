@@ -38,7 +38,6 @@
 #include <upipe/udict_inline.h>
 
 #include <stdlib.h>
-#include <inttypes.h>
 #include <assert.h>
 
 /** define to activate statistics */

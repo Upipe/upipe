@@ -22,9 +22,6 @@
  * @short Upipe module building frames from an Opus stream
  */
 
-#include <upipe/ubase.h>
-#include <upipe/ulist.h>
-#include <upipe/uprobe.h>
 #include <upipe/uref.h>
 #include <upipe/uref_flow.h>
 #include <upipe/uref_block.h>
@@ -32,7 +29,6 @@
 #include <upipe/uref_sound_flow.h>
 #include <upipe/uref_clock.h>
 #include <upipe/uclock.h>
-#include <upipe/ubuf.h>
 #include <upipe/upipe.h>
 #include <upipe/upipe_helper_upipe.h>
 #include <upipe/upipe_helper_urefcount.h>
@@ -47,8 +43,6 @@
 #include <stdbool.h>
 #include <stdarg.h>
 #include <string.h>
-#include <inttypes.h>
-#include <assert.h>
 
 #define OPUS_TS_HEADER     0x7FE0        // 0x3ff (11 bits)
 #define OPUS_TS_MASK       0xFFE0        // top 11 bits

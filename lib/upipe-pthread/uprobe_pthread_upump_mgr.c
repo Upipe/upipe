@@ -32,12 +32,9 @@
 #include <upipe/uprobe.h>
 #include <upipe-pthread/uprobe_pthread_upump_mgr.h>
 #include <upipe/uprobe_helper_alloc.h>
-#include <upipe/upipe.h>
 
 #include <stdlib.h>
-#include <string.h>
 #include <stdarg.h>
-#include <stdbool.h>
 
 /** @This is a thread-local structure used by the probe. */
 struct uprobe_pthread_upump_mgr_local {

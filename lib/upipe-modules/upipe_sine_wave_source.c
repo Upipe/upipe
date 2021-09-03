@@ -29,14 +29,12 @@
  */
 
 #include <upipe/ubase.h>
-#include <upipe/uprobe.h>
 #include <upipe/uclock.h>
 #include <upipe/uref.h>
 #include <upipe/uref_sound.h>
 #include <upipe/uref_sound_flow.h>
 #include <upipe/uref_clock.h>
 #include <upipe/upump.h>
-#include <upipe/ubuf.h>
 #include <upipe/upipe.h>
 #include <upipe/upipe_helper_upipe.h>
 #include <upipe/upipe_helper_urefcount.h>
@@ -50,12 +48,9 @@
 #include <upipe-modules/upipe_sine_wave_source.h>
 
 #include <stdlib.h>
-#include <stdbool.h>
 #include <stdint.h>
 #include <stdarg.h>
-#include <string.h>
 #include <math.h>
-#include <assert.h>
 
 /** @internal @This is the duration of an output buffer. */
 #define UPIPE_SINESRC_DURATION (UCLOCK_FREQ / 10)

@@ -28,12 +28,9 @@
  * @short Upipe avcodec decode module
  */
 
-#include <upipe/ubase.h>
-#include <upipe/uprobe.h>
 #include <upipe/uclock.h>
 #include <upipe/ubuf.h>
 #include <upipe/uref.h>
-#include <upipe/uref_attr.h>
 #include <upipe/uref_pic.h>
 #include <upipe/uref_flow.h>
 #include <upipe/uref_pic_flow.h>
@@ -61,7 +58,6 @@
 #include <stdint.h>
 #include <stdarg.h>
 #include <string.h>
-#include <unistd.h>
 #include <errno.h>
 #include <assert.h>
 

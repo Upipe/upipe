@@ -28,9 +28,7 @@
  */
 
 #include <upipe/ubase.h>
-#include <upipe/uprobe.h>
 #include <upipe/uref.h>
-#include <upipe/upipe.h>
 #include <upipe/upipe.h>
 #include <upipe/upipe_helper_upipe.h>
 #include <upipe/upipe_helper_urefcount.h>
@@ -39,10 +37,8 @@
 #include <upipe-modules/upipe_idem.h>
 
 #include <stdlib.h>
-#include <stdbool.h>
 #include <stdint.h>
 #include <stdarg.h>
-#include <assert.h>
 
 /** upipe_idem structure */
 struct upipe_idem {

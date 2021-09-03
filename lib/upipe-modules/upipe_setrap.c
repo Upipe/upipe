@@ -28,10 +28,7 @@
  */
 
 #include <upipe/ubase.h>
-#include <upipe/uprobe.h>
 #include <upipe/uref.h>
-#include <upipe/uref.h>
-#include <upipe/uref_flow.h>
 #include <upipe/uref_clock.h>
 #include <upipe/upipe.h>
 #include <upipe/upipe_helper_upipe.h>
@@ -41,9 +38,7 @@
 #include <upipe-modules/upipe_setrap.h>
 
 #include <stdlib.h>
-#include <stdbool.h>
 #include <stdarg.h>
-#include <assert.h>
 
 /** @internal @This is the private context of a setrap pipe. */
 struct upipe_setrap {

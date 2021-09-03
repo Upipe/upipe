@@ -32,8 +32,6 @@
 /** @hidden */
 #define _UPIPE_UDP_H_
 
-#include <upipe/config.h>
-#include <upipe/upipe.h>
 #include <stdint.h>
 #include <sys/socket.h>
 #include <arpa/inet.h>

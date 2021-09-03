@@ -29,7 +29,6 @@
 
 #include <upipe/ubase.h>
 #include <upipe/ulist.h>
-#include <upipe/uprobe.h>
 #include <upipe/uclock.h>
 #include <upipe/uref.h>
 #include <upipe/uref_clock.h>
@@ -47,7 +46,6 @@
 #include <stdbool.h>
 #include <limits.h>
 #include <stdarg.h>
-#include <assert.h>
 
 /** @hidden */
 static uint64_t upipe_trickp_get_date_sys(struct upipe *upipe, uint64_t ts);
