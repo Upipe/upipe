@@ -241,3 +241,8 @@ jobs:
         env:
           AM_COLOR_TESTS: always
         run: make check-headers
+
+      - name: Check tests
+        env:
+          AM_COLOR_TESTS: always
+        run: make check-tests

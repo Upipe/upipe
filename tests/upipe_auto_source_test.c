@@ -1,3 +1,5 @@
+#undef NDEBUG
+
 #include <upipe/config.h>
 #include <upump-ev/upump_ev.h>
 #include <upipe/uprobe_stdio.h>
