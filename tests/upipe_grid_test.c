@@ -23,6 +23,8 @@
  * SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
  */
 
+#undef NDEBUG
+
 #include <upipe/uclock_std.h>
 #include <upipe/umem.h>
 #include <upipe/umem_alloc.h>

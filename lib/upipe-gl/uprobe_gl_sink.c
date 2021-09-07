@@ -197,22 +197,19 @@ static int uprobe_gl_sink_throw(struct uprobe *uprobe,
             return UBASE_ERR_NONE;
         }
         case UPROBE_GL_SINK_INIT: {
-            unsigned int signature = va_arg(args, unsigned int);
-            assert(signature == UPIPE_GL_SINK_SIGNATURE);
+            UBASE_SIGNATURE_CHECK(args, UPIPE_GL_SINK_SIGNATURE)
             int w = va_arg(args, int);
             int h = va_arg(args, int);
             uprobe_gl_sink_init2(uprobe, upipe, w, h);
             return UBASE_ERR_NONE;
         }
         case UPROBE_GL_SINK_RENDER: {
-            unsigned int signature = va_arg(args, unsigned int);
-            assert(signature == UPIPE_GL_SINK_SIGNATURE);
+            UBASE_SIGNATURE_CHECK(args, UPIPE_GL_SINK_SIGNATURE)
             struct uref *uref = va_arg(args, struct uref *);
             return uprobe_gl_sink_render(uprobe, upipe, uref);
         }
         case UPROBE_GL_SINK_RESHAPE: {
-            unsigned int signature = va_arg(args, unsigned int);
-            assert(signature == UPIPE_GL_SINK_SIGNATURE);
+            UBASE_SIGNATURE_CHECK(args, UPIPE_GL_SINK_SIGNATURE)
             int w = va_arg(args, int);
             int h = va_arg(args, int);
             uprobe_gl_sink_reshape(uprobe, upipe, w, h);

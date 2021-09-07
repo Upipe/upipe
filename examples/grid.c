@@ -463,6 +463,7 @@ static void cmd_list(char *arg)
 static struct input *input_new(const char *uri)
 {
     struct input *input = malloc(sizeof (*input));
+    assert(input);
 
     input->id = input_id++;
     input->uri = uri;
@@ -901,7 +902,7 @@ static void cmd_input(char *arg)
         ustring_shift_truncate_while(ustring_from_str(arg), " \t\n");
     str.at[str.len] = 0;
     arg = str.at;
-    assert(input_new(arg));
+    input_new(arg);
 }
 
 static void cmd_output(char *arg)
@@ -911,7 +912,7 @@ static void cmd_output(char *arg)
     str.at[str.len] = '\0';
     arg = str.at;
 
-    assert(output_new(arg));
+    output_new(arg);
 }
 
 static void stdin_cb(struct upump *upump)
@@ -1083,9 +1084,9 @@ int main(int argc, char *argv[])
     ulist_delete_foreach(&grid_entries, uchain, uchain_tmp) {
         struct grid_entry *e = grid_entry_from_uchain(uchain);
         if (e->type == INPUT)
-            assert(input_new(e->uri));
+            input_new(e->uri);
         else if (e->type == OUTPUT)
-            assert(output_new(e->uri));
+            output_new(e->uri);
         else
             abort();
 

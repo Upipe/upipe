@@ -134,8 +134,7 @@ static int uprobe_gl_sink_cube_throw(struct uprobe *uprobe,
 {
     switch (event) {
         case UPROBE_GL_SINK_RENDER: {
-            unsigned int signature = va_arg(args, unsigned int);
-            assert(signature == UPIPE_GL_SINK_SIGNATURE);
+            UBASE_SIGNATURE_CHECK(args, UPIPE_GL_SINK_SIGNATURE)
             struct uref *uref = va_arg(args, struct uref *);
             uprobe_gl_sink_cube_render(uprobe, upipe, uref);
             return UBASE_ERR_NONE;

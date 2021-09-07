@@ -1,3 +1,5 @@
+#undef NDEBUG
+
 #include <upipe/upump.h>
 #include <upump-ev/upump_ev.h>
 #include <upipe/umem_alloc.h>
