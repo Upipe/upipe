@@ -1,3 +1,5 @@
+#undef NDEBUG
+
 #include <upipe/ubase.h>
 #include <upipe/uref_m3u_flow.h>
 #include <upipe/uref_m3u_playlist_flow.h>

@@ -90,3 +90,18 @@ check-spelling:
 	  $(srcdir)/luajit \
 	  $(srcdir)/tests \
 	  $(srcdir)/x86
+
+check-tests:
+	@if [ "$(AM_COLOR_TESTS)" != "no" ]; then \
+	  if [ "$(AM_COLOR_TESTS)" = "always" -o -t 1 ]; then \
+	    red='[0;31m'; grn='[0;32m'; std='[m'; \
+	  fi; \
+	fi; \
+	cd $(srcdir)/tests; \
+	for src in *.c; do \
+	  if grep -q '^#undef NDEBUG' $$src; \
+	  then echo "$${grn}PASS$${std}: $$src"; \
+	  else echo "$${red}FAIL$${std}: $$src"; ret=1; \
+	  fi; \
+	done; \
+	test -z "$$ret"

@@ -51,9 +51,9 @@ static int uprobe_pthread_assert_throw(struct uprobe *uprobe,
                                        struct upipe *upipe,
                                        int event, va_list args)
 {
+#ifndef NDEBUG
     struct uprobe_pthread_assert *uprobe_pthread_assert =
         uprobe_pthread_assert_from_uprobe(uprobe);
-#ifndef NDEBUG
     switch (event) {
         case UPROBE_NEED_UPUMP_MGR: {
             struct upump_mgr **upump_mgr_p = va_arg(args, struct upump_mgr **);
