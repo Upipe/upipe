@@ -934,6 +934,10 @@ static int upipe_grid_out_extract_input(struct upipe *upipe, struct uref *uref,
     }
     uref_attach_ubuf(uref, ubuf);
     uref_attr_import(uref, e->uref);
+    uref_clock_delete_rate(uref);
+    uref_clock_delete_duration(uref);
+    if (duration)
+        uref_clock_set_duration(uref, duration);
     if (flow_def_p)
         *flow_def_p = e->flow_def;
     return UBASE_ERR_NONE;
