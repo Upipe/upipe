@@ -323,8 +323,6 @@ static int upipe_ts_sync_control(struct upipe *upipe,
 
         case UPIPE_TS_SYNC_GET_SYNC: {
             UBASE_SIGNATURE_CHECK(args, UPIPE_TS_SYNC_SIGNATURE)
-            unsigned int signature = va_arg(args, unsigned int);
-            assert(signature == UPIPE_TS_SYNC_SIGNATURE);
             int *sync_p = va_arg(args, int *);
             return _upipe_ts_sync_get_sync(upipe, sync_p);
         }

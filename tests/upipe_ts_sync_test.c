@@ -180,6 +180,10 @@ int main(int argc, char *argv[])
 
     uint8_t *buffer;
     int size;
+    int sync;
+
+    ubase_assert(upipe_ts_sync_get_sync(upipe_ts_sync, &sync));
+    assert(sync == 2);
 
     uref = uref_block_alloc(uref_mgr, ubuf_mgr, 2 * TS_SIZE);
     assert(uref != NULL);
@@ -229,6 +233,10 @@ int main(int argc, char *argv[])
     uref_block_unmap(uref, 0);
     upipe_input(upipe_ts_sync, uref, NULL);
     assert(!nb_packets);
+
+    ubase_assert(upipe_ts_sync_set_sync(upipe_ts_sync, 4));
+    ubase_assert(upipe_ts_sync_get_sync(upipe_ts_sync, &sync));
+    assert(sync == 4);
 
     nb_packets++;
     upipe_release(upipe_ts_sync);
