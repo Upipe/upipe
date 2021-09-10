@@ -148,9 +148,9 @@ struct upipe_blit_sub {
     struct uchain uchain;
 
     /** alpha multiplier */
-    uint8_t alpha;
+    int alpha;
     /** alpha blending method */
-    uint8_t alpha_threshold;
+    int alpha_threshold;
     /** z-index */
     int z_index;
     /** configured offset from the left border */
@@ -642,7 +642,7 @@ static int _upipe_blit_sub_set_margin(struct upipe *upipe,
  * @param alpha_p filled in with multiplier of the alpha channel
  * @return an error code
  */
-static int _upipe_blit_sub_get_alpha(struct upipe *upipe, uint8_t *alpha_p)
+static int _upipe_blit_sub_get_alpha(struct upipe *upipe, int *alpha_p)
 {
     struct upipe_blit_sub *sub = upipe_blit_sub_from_upipe(upipe);
     *alpha_p = sub->alpha;
@@ -655,7 +655,7 @@ static int _upipe_blit_sub_get_alpha(struct upipe *upipe, uint8_t *alpha_p)
  * @param alpha multiplier of the alpha channel
  * @return an error code
  */
-static int _upipe_blit_sub_set_alpha(struct upipe *upipe, uint8_t alpha)
+static int _upipe_blit_sub_set_alpha(struct upipe *upipe, int alpha)
 {
     struct upipe_blit_sub *sub = upipe_blit_sub_from_upipe(upipe);
     sub->alpha = alpha;
@@ -670,7 +670,7 @@ static int _upipe_blit_sub_set_alpha(struct upipe *upipe, uint8_t alpha)
  * @return an error code
  */
 static int _upipe_blit_sub_get_alpha_threshold(struct upipe *upipe,
-        uint8_t *threshold_p)
+        int *threshold_p)
 {
     struct upipe_blit_sub *sub = upipe_blit_sub_from_upipe(upipe);
     *threshold_p = sub->alpha_threshold;
@@ -684,7 +684,7 @@ static int _upipe_blit_sub_get_alpha_threshold(struct upipe *upipe,
  * @return an error code
  */
 static int _upipe_blit_sub_set_alpha_threshold(struct upipe *upipe,
-        uint8_t threshold)
+        int threshold)
 {
     struct upipe_blit_sub *sub = upipe_blit_sub_from_upipe(upipe);
     sub->alpha_threshold = threshold;
@@ -804,22 +804,22 @@ static int upipe_blit_sub_control(struct upipe *upipe,
         }
         case UPIPE_BLIT_SUB_GET_ALPHA: {
             UBASE_SIGNATURE_CHECK(args, UPIPE_BLIT_SUB_SIGNATURE);
-            uint8_t *alpha_p = va_arg(args, uint8_t *);
+            int *alpha_p = va_arg(args, int *);
             return _upipe_blit_sub_get_alpha(upipe, alpha_p);
         }
         case UPIPE_BLIT_SUB_SET_ALPHA: {
             UBASE_SIGNATURE_CHECK(args, UPIPE_BLIT_SUB_SIGNATURE);
-            unsigned alpha = va_arg(args, unsigned);
+            int alpha = va_arg(args, int);
             return _upipe_blit_sub_set_alpha(upipe, alpha);
         }
         case UPIPE_BLIT_SUB_GET_ALPHA_THRESHOLD: {
             UBASE_SIGNATURE_CHECK(args, UPIPE_BLIT_SUB_SIGNATURE);
-            uint8_t *threshold_p = va_arg(args, uint8_t *);
+            int *threshold_p = va_arg(args, int *);
             return _upipe_blit_sub_get_alpha_threshold(upipe, threshold_p);
         }
         case UPIPE_BLIT_SUB_SET_ALPHA_THRESHOLD: {
             UBASE_SIGNATURE_CHECK(args, UPIPE_BLIT_SUB_SIGNATURE);
-            unsigned threshold = va_arg(args, unsigned);
+            int threshold = va_arg(args, int);
             return _upipe_blit_sub_set_alpha_threshold(upipe, threshold);
         }
         case UPIPE_BLIT_SUB_GET_Z_INDEX: {

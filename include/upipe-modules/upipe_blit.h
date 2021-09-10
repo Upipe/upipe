@@ -79,14 +79,14 @@ enum upipe_blit_sub_command {
      * will be blitted (struct urational, struct urational,
      * struct urational, struct urational) */
     UPIPE_BLIT_SUB_SET_MARGIN,
-    /** gets the alpha channel multiplier (uint8_t *) */
+    /** gets the alpha channel multiplier (int *) */
     UPIPE_BLIT_SUB_GET_ALPHA,
-    /** sets the alpha channel multiplier (uint8_t) */
+    /** sets the alpha channel multiplier (int) */
     UPIPE_BLIT_SUB_SET_ALPHA,
-    /** gets the method for alpha blending (uint8_t *)
+    /** gets the method for alpha blending (int *)
      * @see ubuf_pic_blit */
     UPIPE_BLIT_SUB_GET_ALPHA_THRESHOLD,
-    /** sets the method for alpha blending (uint8_t)
+    /** sets the method for alpha blending (int)
      * @see ubuf_pic_blit */
     UPIPE_BLIT_SUB_SET_ALPHA_THRESHOLD,
     /** gets the z-index (int *) */
@@ -173,7 +173,7 @@ static inline int upipe_blit_sub_set_margin(struct upipe *upipe,
  * @return an error code
  */
 static inline int upipe_blit_sub_get_alpha(struct upipe *upipe,
-        uint8_t *alpha_p)
+        int *alpha_p)
 {
     return upipe_control(upipe, UPIPE_BLIT_SUB_GET_ALPHA,
                          UPIPE_BLIT_SUB_SIGNATURE, alpha_p);
@@ -186,10 +186,10 @@ static inline int upipe_blit_sub_get_alpha(struct upipe *upipe,
  * @return an error code
  */
 static inline int upipe_blit_sub_set_alpha(struct upipe *upipe,
-        uint8_t alpha)
+        int alpha)
 {
     return upipe_control(upipe, UPIPE_BLIT_SUB_SET_ALPHA,
-                         UPIPE_BLIT_SUB_SIGNATURE, (unsigned)alpha);
+                         UPIPE_BLIT_SUB_SIGNATURE, alpha);
 }
 
 /** @This gets the method for alpha blending for this subpipe.
@@ -200,7 +200,7 @@ static inline int upipe_blit_sub_set_alpha(struct upipe *upipe,
  * @return an error code
  */
 static inline int upipe_blit_sub_get_alpha_threshold(struct upipe *upipe,
-        uint8_t *threshold_p)
+        int *threshold_p)
 {
     return upipe_control(upipe, UPIPE_BLIT_SUB_GET_ALPHA_THRESHOLD,
                          UPIPE_BLIT_SUB_SIGNATURE, threshold_p);
@@ -213,10 +213,10 @@ static inline int upipe_blit_sub_get_alpha_threshold(struct upipe *upipe,
  * @return an error code
  */
 static inline int upipe_blit_sub_set_alpha_threshold(struct upipe *upipe,
-        uint8_t threshold)
+        int threshold)
 {
     return upipe_control(upipe, UPIPE_BLIT_SUB_SET_ALPHA_THRESHOLD,
-                         UPIPE_BLIT_SUB_SIGNATURE, (unsigned)threshold);
+                         UPIPE_BLIT_SUB_SIGNATURE, threshold);
 }
 
 /** @This gets the z-index for this subpipe.
