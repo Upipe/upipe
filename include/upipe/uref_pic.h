@@ -218,7 +218,7 @@ static inline int uref_pic_blit(struct uref *uref, struct ubuf *ubuf,
                                 int dest_hoffset, int dest_voffset,
                                 int src_hoffset, int src_voffset,
                                 int extract_hsize, int extract_vsize,
-                                const uint8_t alpha, const uint8_t threshold)
+                                const int alpha, const int threshold)
 {
     if (uref->ubuf == NULL)
         return UBASE_ERR_INVALID;
