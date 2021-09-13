@@ -198,6 +198,48 @@ static const struct uref_pic_flow_format uref_pic_flow_format_yuv444p = {
 
 UREF_PIC_FLOW_FORMAT_HELPER(yuv444p);
 
+/** @This is the description of the yuva420p10le format */
+static const struct uref_pic_flow_format uref_pic_flow_format_yuva420p10le = {
+    .macropixel = 1,
+    .nb_planes = 4,
+    .planes = {
+        { 1, 1, 2, "y10l", 10 },
+        { 2, 2, 2, "u10l", 10 },
+        { 2, 2, 2, "v10l", 10 },
+        { 1, 1, 2, "a10l", 10 },
+    },
+};
+
+UREF_PIC_FLOW_FORMAT_HELPER(yuva420p10le);
+
+/** @This is the description of the yuva422p10le format */
+static const struct uref_pic_flow_format uref_pic_flow_format_yuva422p10le = {
+    .macropixel = 1,
+    .nb_planes = 4,
+    .planes = {
+        { 1, 1, 2, "y10l", 10 },
+        { 2, 1, 2, "u10l", 10 },
+        { 2, 1, 2, "v10l", 10 },
+        { 1, 1, 2, "a10l", 10 },
+    },
+};
+
+UREF_PIC_FLOW_FORMAT_HELPER(yuva422p10le);
+
+/** @This is the description of the yuva444p10le format */
+static const struct uref_pic_flow_format uref_pic_flow_format_yuva444p10le = {
+    .macropixel = 1,
+    .nb_planes = 4,
+    .planes = {
+        { 1, 1, 2, "y10l", 10 },
+        { 1, 1, 2, "u10l", 10 },
+        { 1, 1, 2, "v10l", 10 },
+        { 1, 1, 2, "a10l", 10 },
+    },
+};
+
+UREF_PIC_FLOW_FORMAT_HELPER(yuva444p10le);
+
 /** @This is the description of the yuv420p10le format */
 static const struct uref_pic_flow_format uref_pic_flow_format_yuv420p10le = {
     .macropixel = 1,
