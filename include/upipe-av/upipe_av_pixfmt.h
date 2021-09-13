@@ -77,6 +77,12 @@ upipe_av_pixfmt_to_format(enum AVPixelFormat pix_fmt)
             return &uref_pic_flow_format_yuyv422;
         case AV_PIX_FMT_UYVY422:
             return &uref_pic_flow_format_uyvy422;
+        case AV_PIX_FMT_YUVA420P10LE:
+            return &uref_pic_flow_format_yuva420p10le;
+        case AV_PIX_FMT_YUVA422P10LE:
+            return &uref_pic_flow_format_yuva422p10le;
+        case AV_PIX_FMT_YUVA444P10LE:
+            return &uref_pic_flow_format_yuva444p10le;
         case AV_PIX_FMT_YUV420P10LE:
             return &uref_pic_flow_format_yuv420p10le;
         case AV_PIX_FMT_YUV420P10BE:
@@ -200,6 +206,9 @@ static inline enum AVPixelFormat
         AV_PIX_FMT_YUVJ444P,
         AV_PIX_FMT_YUYV422,
         AV_PIX_FMT_UYVY422,
+        AV_PIX_FMT_YUVA420P10LE,
+        AV_PIX_FMT_YUVA422P10LE,
+        AV_PIX_FMT_YUVA444P10LE,
         AV_PIX_FMT_YUV420P10LE,
         AV_PIX_FMT_YUV420P10BE,
         AV_PIX_FMT_YUV420P12LE,
