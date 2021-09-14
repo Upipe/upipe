@@ -431,19 +431,44 @@ static int upipe_blit_sub_provide_flow_format(struct upipe *upipe)
         uref_pic_set_hposition(uref, hposition);
         uref_pic_set_vposition(uref, vposition);
 
-        bool alpha =
-            ubase_check(uref_pic_flow_check_chroma(uref, 1, 1, 1, "a8")) ||
-            ubase_check(uref_pic_flow_check_chroma(uref, 1, 1, 1, "a16"));
+        /* Check for a dedicated alpha plane. */
+        uint8_t plane;
+        bool alpha = ubase_check(uref_pic_flow_find_chroma(uref, "a8", &plane))
+            || ubase_check(uref_pic_flow_find_chroma(uref, "a10l", &plane))
+            || ubase_check(uref_pic_flow_find_chroma(uref, "a16", &plane));
+
+        /* If there was a dedicated alpha plane then get its chroma string and
+         * macropixel size attributes. */
         const char *chroma;
-        if (!alpha && ubase_check(uref_pic_flow_get_chroma(uref, &chroma, 0)) &&
-            (strstr(chroma, "a8") != NULL || strstr(chroma, "a16") != NULL))
+        uint8_t macropixel_size;
+        if (alpha) {
+            UBASE_RETURN(uref_pic_flow_get_chroma(uref, &chroma, plane));
+            UBASE_RETURN(uref_pic_flow_get_macropixel_size(uref, &macropixel_size, plane));
+        }
+
+        /* Otherwise check for alpha in a packed first plane. */
+        else if (ubase_check(uref_pic_flow_get_chroma(uref, &chroma, 0)) &&
+                (strstr(chroma, "a8") || strstr(chroma, "a16"))) {
             alpha = true;
+            macropixel_size = 1;
+            chroma = "a8";
+        }
+
+        /* Duplicate the string because it might point to a udict internal
+         * address that is about to be overwritten. */
+        if (alpha) {
+            chroma = strdup(chroma);
+            UBASE_ALLOC_RETURN(chroma);
+        }
 
         uref_pic_flow_clear_format(uref);
         uref_pic_flow_copy_format(uref, upipe_blit->flow_def);
 
-        if (alpha)
-            uref_pic_flow_add_plane(uref, 1, 1, 1, "a8");
+        /* If the alpha was found add the alpha back into the flow format. */
+        if (alpha) {
+            uref_pic_flow_add_plane(uref, 1, 1, macropixel_size, chroma);
+            free((void*)chroma);
+        }
 
         uref_pic_flow_delete_sar(uref);
         uref_pic_flow_delete_overscan(uref);
