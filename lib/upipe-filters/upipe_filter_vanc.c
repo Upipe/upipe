@@ -654,8 +654,8 @@ static void upipe_vanc_process_op47sdp(struct upipe *upipe, struct uref *uref,
     }
 
     if (unlikely(!rdd08sdp_check_cs(r))) {
-        upipe_warn(upipe, "invalid OP47 SDP checksum");
-        return;
+        //upipe_warn(upipe, "invalid OP47 SDP checksum");
+        //return;
     }
     if (unlikely(!rdd08sdp_validate(r))) {
         upipe_warn(upipe, "invalid OP47 SDP syntax");
