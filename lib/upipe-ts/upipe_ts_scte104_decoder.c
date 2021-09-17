@@ -640,7 +640,7 @@ upipe_ts_scte104d_insert_segmentation_descriptor(struct upipe *upipe,
         uref_ts_scte35_desc_seg_set_no_regional_blackout(desc);
     if (archive_allowed)
         uref_ts_scte35_desc_seg_set_archive(desc);
-    if (device_restrictions)
+    if (!delivery_not_restricted)
         uref_ts_scte35_desc_seg_set_device(desc, device_restrictions);
     if (insert_sub_info) {
         uref_ts_scte35_desc_seg_set_sub_num(desc, sub_num);
