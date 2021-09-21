@@ -1,6 +1,6 @@
 #undef NDEBUG
 
-#include <upipe-dvbcsa/upipe_dvbcsa_common.h>
+#include "upipe-dvbcsa/upipe_dvbcsa_common.h"
 
 int main(int argc, char *argv[])
 {

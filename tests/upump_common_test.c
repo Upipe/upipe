@@ -29,8 +29,8 @@
 
 #undef NDEBUG
 
-#include <upipe/upump.h>
-#include <upipe/upump_blocker.h>
+#include "upipe/upump.h"
+#include "upipe/upump_blocker.h"
 
 #include <stdio.h>
 #include <string.h>

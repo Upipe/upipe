@@ -30,7 +30,7 @@ extern "C" {
 #endif
 
 #include <stdint.h>
-#include <upipe/upipe.h>
+#include "upipe/upipe.h"
 
 #define UPIPE_STREAM_SWITCHER_SIGNATURE UBASE_FOURCC('s','t','s','w')
 #define UPIPE_STREAM_SWITCHER_SUB_SIGNATURE UBASE_FOURCC('s','t','s','s')

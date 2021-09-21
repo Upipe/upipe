@@ -34,9 +34,9 @@
 extern "C" {
 #endif
 
-#include <upipe/ubase.h>
-#include <upipe/udict.h>
-#include <upipe/uprobe.h>
+#include "upipe/ubase.h"
+#include "upipe/udict.h"
+#include "upipe/uprobe.h"
 
 #include <stdint.h>
 #include <inttypes.h>

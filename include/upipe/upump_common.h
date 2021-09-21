@@ -34,10 +34,10 @@
 extern "C" {
 #endif
 
-#include <upipe/ubase.h>
-#include <upipe/ulist.h>
-#include <upipe/upool.h>
-#include <upipe/upump.h>
+#include "upipe/ubase.h"
+#include "upipe/ulist.h"
+#include "upipe/upool.h"
+#include "upipe/upump.h"
 
 #include <stdbool.h>
 #include <stdarg.h>

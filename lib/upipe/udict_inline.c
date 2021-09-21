@@ -30,12 +30,12 @@
  * to transmit dictionaries over streams.
  */
 
-#include <upipe/ubase.h>
-#include <upipe/urefcount.h>
-#include <upipe/upool.h>
-#include <upipe/umem.h>
-#include <upipe/udict.h>
-#include <upipe/udict_inline.h>
+#include "upipe/ubase.h"
+#include "upipe/urefcount.h"
+#include "upipe/upool.h"
+#include "upipe/umem.h"
+#include "upipe/udict.h"
+#include "upipe/udict_inline.h"
 
 #include <stdlib.h>
 #include <assert.h>

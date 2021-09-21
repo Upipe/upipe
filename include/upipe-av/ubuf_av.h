@@ -33,7 +33,7 @@
 extern "C" {
 #endif
 
-#include <upipe/ubuf.h>
+#include "upipe/ubuf.h"
 #include <libavutil/frame.h>
 
 #define UBUF_AV_SIGNATURE UBASE_FOURCC('A','V','F','b')

@@ -34,7 +34,7 @@
 extern "C" {
 #endif
 
-#include <upipe/uref_attr.h>
+#include "upipe/uref_attr.h"
 
 UREF_ATTR_STRING(avfilt_flow, name, "avfilt.name", avfilter name)
 

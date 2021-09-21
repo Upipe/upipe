@@ -37,7 +37,7 @@
 extern "C" {
 #endif
 
-#include <upipe/udict.h>
+#include "upipe/udict.h"
 
 struct umem_mgr;
 

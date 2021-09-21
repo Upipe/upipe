@@ -29,7 +29,7 @@
 extern "C" {
 #endif
 
-#include <upipe/upipe.h>
+#include "upipe/upipe.h"
 
 #define UPIPE_TS_PSI_JOIN_SIGNATURE UBASE_FOURCC('t','s','p','A')
 #define UPIPE_TS_PSI_JOIN_INPUT_SIGNATURE UBASE_FOURCC('t','s','p','B')

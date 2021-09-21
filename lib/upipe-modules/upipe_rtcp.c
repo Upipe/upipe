@@ -25,20 +25,20 @@
 
 #include <stdlib.h>
 
-#include <upipe/uclock.h>
-#include <upipe/upipe.h>
-#include <upipe/uref_block.h>
-#include <upipe/uref_block_flow.h>
-#include <upipe/urequest.h>
-#include <upipe/ustring.h>
-#include <upipe/uref_clock.h>
-#include <upipe/upipe_helper_upipe.h>
-#include <upipe/upipe_helper_urefcount.h>
-#include <upipe/upipe_helper_void.h>
-#include <upipe/upipe_helper_output.h>
-#include <upipe/upipe_helper_uref_mgr.h>
-#include <upipe/upipe_helper_ubuf_mgr.h>
-#include <upipe-modules/upipe_rtcp.h>
+#include "upipe/uclock.h"
+#include "upipe/upipe.h"
+#include "upipe/uref_block.h"
+#include "upipe/uref_block_flow.h"
+#include "upipe/urequest.h"
+#include "upipe/ustring.h"
+#include "upipe/uref_clock.h"
+#include "upipe/upipe_helper_upipe.h"
+#include "upipe/upipe_helper_urefcount.h"
+#include "upipe/upipe_helper_void.h"
+#include "upipe/upipe_helper_output.h"
+#include "upipe/upipe_helper_uref_mgr.h"
+#include "upipe/upipe_helper_ubuf_mgr.h"
+#include "upipe-modules/upipe_rtcp.h"
 
 #include <bitstream/ietf/rtp.h>
 #include <bitstream/ietf/rtcp_sr.h>

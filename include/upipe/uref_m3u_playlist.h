@@ -29,7 +29,7 @@
 extern "C" {
 #endif
 
-#include <upipe/uref_attr.h>
+#include "upipe/uref_attr.h"
 
 UREF_ATTR_UNSIGNED(m3u_playlist, seq_duration, "m3u.playlist.seq_duration",
                    sequence duration)

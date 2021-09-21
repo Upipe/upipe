@@ -41,19 +41,19 @@
 #include <QWebPage>
 #include <QtWebKit>
 #include <QUrl>
-#include <upipe/ubase.h>
-#include <upipe/uatomic.h>
-#include <upipe/uprobe.h>
-#include <upipe/uclock.h>
-#include <upipe/uref.h>
-#include <upipe/uref_pic.h>
-#include <upipe/uref_pic_flow.h>
-#include <upipe/uref_sound.h>
-#include <upipe/uref_sound_flow.h>
-#include <upipe/upump.h>
-#include <upipe/ubuf.h>
-#include <upipe/ufifo.h>
-#include <upipe/uqueue.h>
+#include "upipe/ubase.h"
+#include "upipe/uatomic.h"
+#include "upipe/uprobe.h"
+#include "upipe/uclock.h"
+#include "upipe/uref.h"
+#include "upipe/uref_pic.h"
+#include "upipe/uref_pic_flow.h"
+#include "upipe/uref_sound.h"
+#include "upipe/uref_sound_flow.h"
+#include "upipe/upump.h"
+#include "upipe/ubuf.h"
+#include "upipe/ufifo.h"
+#include "upipe/uqueue.h"
 
 #include <stdlib.h>
 #include <stdio.h>
@@ -66,7 +66,7 @@
 #include <assert.h>
 #include <time.h>
 #include <pthread.h>
-#include <upipe-qt/upipe_qt_html.h>
+#include "upipe-qt/upipe_qt_html.h"
 
 /** @This @internal is the Thumbnail class description
  *

@@ -25,35 +25,35 @@
  * @short Upipe module to play output of a m3u reader pipe
  */
 
-#include <upipe-hls/upipe_hls_playlist.h>
+#include "upipe-hls/upipe_hls_playlist.h"
 
-#include <upipe-modules/uref_aes_flow.h>
-#include <upipe-modules/upipe_probe_uref.h>
-#include <upipe-modules/upipe_setflowdef.h>
+#include "upipe-modules/uref_aes_flow.h"
+#include "upipe-modules/upipe_probe_uref.h"
+#include "upipe-modules/upipe_setflowdef.h"
 
-#include <upipe/upipe_helper_inner.h>
-#include <upipe/upipe_helper_uprobe.h>
-#include <upipe/upipe_helper_bin_output.h>
-#include <upipe/upipe_helper_void.h>
-#include <upipe/upipe_helper_urefcount_real.h>
-#include <upipe/upipe_helper_urefcount.h>
-#include <upipe/upipe_helper_upipe.h>
-#include <upipe/upipe_helper_upump_mgr.h>
-#include <upipe/upipe_helper_upump.h>
-#include <upipe/upipe.h>
+#include "upipe/upipe_helper_inner.h"
+#include "upipe/upipe_helper_uprobe.h"
+#include "upipe/upipe_helper_bin_output.h"
+#include "upipe/upipe_helper_void.h"
+#include "upipe/upipe_helper_urefcount_real.h"
+#include "upipe/upipe_helper_urefcount.h"
+#include "upipe/upipe_helper_upipe.h"
+#include "upipe/upipe_helper_upump_mgr.h"
+#include "upipe/upipe_helper_upump.h"
+#include "upipe/upipe.h"
 
-#include <upipe/uprobe_prefix.h>
-#include <upipe/uprobe.h>
+#include "upipe/uprobe_prefix.h"
+#include "upipe/uprobe.h"
 
-#include <upipe/uref_m3u_master.h>
-#include <upipe/uref_m3u_playlist_flow.h>
-#include <upipe/uref_m3u_playlist.h>
-#include <upipe/uref_m3u.h>
-#include <upipe/uref_dump.h>
-#include <upipe/uref_block.h>
-#include <upipe/uref_uri.h>
+#include "upipe/uref_m3u_master.h"
+#include "upipe/uref_m3u_playlist_flow.h"
+#include "upipe/uref_m3u_playlist.h"
+#include "upipe/uref_m3u.h"
+#include "upipe/uref_dump.h"
+#include "upipe/uref_block.h"
+#include "upipe/uref_uri.h"
 
-#include <upipe/uclock.h>
+#include "upipe/uclock.h"
 
 #include <stdlib.h>
 #include <libgen.h>

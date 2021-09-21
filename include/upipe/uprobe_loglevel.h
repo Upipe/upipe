@@ -30,9 +30,9 @@
 extern "C" {
 #endif
 
-#include <upipe/ulist.h>
-#include <upipe/uprobe.h>
-#include <upipe/uprobe_helper_uprobe.h>
+#include "upipe/ulist.h"
+#include "upipe/uprobe.h"
+#include "upipe/uprobe_helper_uprobe.h"
 
 struct uprobe_loglevel {
     /** minimum level of printed messages */

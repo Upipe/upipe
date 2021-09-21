@@ -24,20 +24,20 @@
  *  - ISO/IEC 13818-1:2007(E) (MPEG-2 Systems)
  */
 
-#include <upipe/ulist.h>
-#include <upipe/uref.h>
-#include <upipe/uref_flow.h>
-#include <upipe/uref_block.h>
-#include <upipe/uref_clock.h>
-#include <upipe/upipe.h>
-#include <upipe/upipe_helper_upipe.h>
-#include <upipe/upipe_helper_urefcount.h>
-#include <upipe/upipe_helper_void.h>
-#include <upipe/upipe_helper_output.h>
-#include <upipe/upipe_helper_ubuf_mgr.h>
-#include <upipe/upipe_helper_flow_def.h>
-#include <upipe-ts/upipe_ts_pat_decoder.h>
-#include <upipe-ts/uref_ts_flow.h>
+#include "upipe/ulist.h"
+#include "upipe/uref.h"
+#include "upipe/uref_flow.h"
+#include "upipe/uref_block.h"
+#include "upipe/uref_clock.h"
+#include "upipe/upipe.h"
+#include "upipe/upipe_helper_upipe.h"
+#include "upipe/upipe_helper_urefcount.h"
+#include "upipe/upipe_helper_void.h"
+#include "upipe/upipe_helper_output.h"
+#include "upipe/upipe_helper_ubuf_mgr.h"
+#include "upipe/upipe_helper_flow_def.h"
+#include "upipe-ts/upipe_ts_pat_decoder.h"
+#include "upipe-ts/uref_ts_flow.h"
 #include "upipe_ts_psi_decoder.h"
 
 #include <stdlib.h>

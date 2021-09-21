@@ -23,50 +23,50 @@
  * SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
  */
 
-#include <upipe/config.h>
+#include "upipe/config.h"
 
-#include <upump-ev/upump_ev.h>
+#include "upump-ev/upump_ev.h"
 
-#include <upipe/umem.h>
-#include <upipe/umem_pool.h>
+#include "upipe/umem.h"
+#include "upipe/umem_pool.h"
 
-#include <upipe/udict.h>
-#include <upipe/udict_inline.h>
+#include "upipe/udict.h"
+#include "upipe/udict_inline.h"
 
-#include <upipe/uref_std.h>
-#include <upipe/uref_clock.h>
+#include "upipe/uref_std.h"
+#include "upipe/uref_clock.h"
 
-#include <upipe/uclock_std.h>
+#include "upipe/uclock_std.h"
 
-#include <upipe/uprobe_stdio.h>
-#include <upipe/uprobe_prefix.h>
-#include <upipe/uprobe_uref_mgr.h>
-#include <upipe/uprobe_upump_mgr.h>
-#include <upipe/uprobe_ubuf_mem_pool.h>
-#include <upipe/uprobe_transfer.h>
-#include <upipe/uprobe_uclock.h>
+#include "upipe/uprobe_stdio.h"
+#include "upipe/uprobe_prefix.h"
+#include "upipe/uprobe_uref_mgr.h"
+#include "upipe/uprobe_upump_mgr.h"
+#include "upipe/uprobe_ubuf_mem_pool.h"
+#include "upipe/uprobe_transfer.h"
+#include "upipe/uprobe_uclock.h"
 
-#include <upipe-modules/upipe_file_source.h>
-#include <upipe-modules/upipe_file_sink.h>
-#include <upipe-modules/upipe_udp_source.h>
-#include <upipe-modules/upipe_rtp_source.h>
-#include <upipe-modules/upipe_rtp_prepend.h>
-#include <upipe-modules/upipe_udp_sink.h>
-#include <upipe-modules/upipe_aggregate.h>
-#include <upipe-modules/upipe_worker_source.h>
-#include <upipe-modules/upipe_worker_sink.h>
+#include "upipe-modules/upipe_file_source.h"
+#include "upipe-modules/upipe_file_sink.h"
+#include "upipe-modules/upipe_udp_source.h"
+#include "upipe-modules/upipe_rtp_source.h"
+#include "upipe-modules/upipe_rtp_prepend.h"
+#include "upipe-modules/upipe_udp_sink.h"
+#include "upipe-modules/upipe_aggregate.h"
+#include "upipe-modules/upipe_worker_source.h"
+#include "upipe-modules/upipe_worker_sink.h"
 
-#include <upipe-ts/upipe_ts_align.h>
-#include <upipe-ts/upipe_ts_check.h>
-#include <upipe-ts/upipe_ts_emm_decoder.h>
+#include "upipe-ts/upipe_ts_align.h"
+#include "upipe-ts/upipe_ts_check.h"
+#include "upipe-ts/upipe_ts_emm_decoder.h"
 
-#include <upipe-dvbcsa/upipe_dvbcsa_encrypt.h>
-#include <upipe-dvbcsa/upipe_dvbcsa_decrypt.h>
-#include <upipe-dvbcsa/upipe_dvbcsa_common.h>
-#include <upipe-dvbcsa/upipe_dvbcsa_split.h>
+#include "upipe-dvbcsa/upipe_dvbcsa_encrypt.h"
+#include "upipe-dvbcsa/upipe_dvbcsa_decrypt.h"
+#include "upipe-dvbcsa/upipe_dvbcsa_common.h"
+#include "upipe-dvbcsa/upipe_dvbcsa_split.h"
 
-#include <upipe-pthread/uprobe_pthread_upump_mgr.h>
-#include <upipe-pthread/upipe_pthread_transfer.h>
+#include "upipe-pthread/uprobe_pthread_upump_mgr.h"
+#include "upipe-pthread/upipe_pthread_transfer.h"
 
 #include <assert.h>
 #include <unistd.h>

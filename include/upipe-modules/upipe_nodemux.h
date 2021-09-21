@@ -39,7 +39,7 @@
 extern "C" {
 #endif
 
-#include <upipe/upipe.h>
+#include "upipe/upipe.h"
 
 #define UPIPE_NODEMUX_SIGNATURE UBASE_FOURCC('n','d','m','x')
 

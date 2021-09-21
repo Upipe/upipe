@@ -1,29 +1,29 @@
 #undef NDEBUG
 
-#include <upipe/upump.h>
-#include <upump-ev/upump_ev.h>
-#include <upipe/umem_alloc.h>
-#include <upipe/udict_inline.h>
-#include <upipe/uref_std.h>
-#include <upipe/uref_void_flow.h>
+#include "upipe/upump.h"
+#include "upump-ev/upump_ev.h"
+#include "upipe/umem_alloc.h"
+#include "upipe/udict_inline.h"
+#include "upipe/uref_std.h"
+#include "upipe/uref_void_flow.h"
 
-#include <upipe/upipe_helper_upipe.h>
-#include <upipe/upipe_helper_urefcount.h>
-#include <upipe/upipe_helper_void.h>
-#include <upipe/upipe_helper_output.h>
-#include <upipe/upipe_helper_upump_mgr.h>
-#include <upipe/upipe_helper_upump.h>
-#include <upipe/upipe_helper_uref_mgr.h>
+#include "upipe/upipe_helper_upipe.h"
+#include "upipe/upipe_helper_urefcount.h"
+#include "upipe/upipe_helper_void.h"
+#include "upipe/upipe_helper_output.h"
+#include "upipe/upipe_helper_upump_mgr.h"
+#include "upipe/upipe_helper_upump.h"
+#include "upipe/upipe_helper_uref_mgr.h"
 
-#include <upipe/uprobe_stdio.h>
-#include <upipe/uprobe_prefix.h>
-#include <upipe/uprobe_uref_mgr.h>
+#include "upipe/uprobe_stdio.h"
+#include "upipe/uprobe_prefix.h"
+#include "upipe/uprobe_uref_mgr.h"
 
-#include <upipe-pthread/uprobe_pthread_upump_mgr.h>
-#include <upipe-pthread/uprobe_pthread_assert.h>
+#include "upipe-pthread/uprobe_pthread_upump_mgr.h"
+#include "upipe-pthread/uprobe_pthread_assert.h"
 
-#include <upipe-modules/upipe_transfer.h>
-#include <upipe-modules/upipe_worker.h>
+#include "upipe-modules/upipe_transfer.h"
+#include "upipe-modules/upipe_worker.h"
 
 #include <assert.h>
 

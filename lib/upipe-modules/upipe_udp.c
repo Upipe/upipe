@@ -28,7 +28,7 @@
  * @short Upipe internal helper functions for udp modules
  */
 
-#include <upipe/upipe.h>
+#include "upipe/upipe.h"
 
 #include <stdlib.h>
 #include <unistd.h>

@@ -23,22 +23,22 @@
  * This framer supports A/52:2012 and A/52:2012 Annex E streams.
  */
 
-#include <upipe/uref.h>
-#include <upipe/uref_flow.h>
-#include <upipe/uref_block.h>
-#include <upipe/uref_block_flow.h>
-#include <upipe/uref_sound_flow.h>
-#include <upipe/uref_clock.h>
-#include <upipe/uclock.h>
-#include <upipe/upipe.h>
-#include <upipe/upipe_helper_upipe.h>
-#include <upipe/upipe_helper_urefcount.h>
-#include <upipe/upipe_helper_void.h>
-#include <upipe/upipe_helper_sync.h>
-#include <upipe/upipe_helper_uref_stream.h>
-#include <upipe/upipe_helper_output.h>
-#include <upipe/upipe_helper_flow_def.h>
-#include <upipe-framers/upipe_a52_framer.h>
+#include "upipe/uref.h"
+#include "upipe/uref_flow.h"
+#include "upipe/uref_block.h"
+#include "upipe/uref_block_flow.h"
+#include "upipe/uref_sound_flow.h"
+#include "upipe/uref_clock.h"
+#include "upipe/uclock.h"
+#include "upipe/upipe.h"
+#include "upipe/upipe_helper_upipe.h"
+#include "upipe/upipe_helper_urefcount.h"
+#include "upipe/upipe_helper_void.h"
+#include "upipe/upipe_helper_sync.h"
+#include "upipe/upipe_helper_uref_stream.h"
+#include "upipe/upipe_helper_output.h"
+#include "upipe/upipe_helper_flow_def.h"
+#include "upipe-framers/upipe_a52_framer.h"
 
 #include <stdlib.h>
 #include <stdbool.h>

@@ -35,7 +35,7 @@ extern "C" {
 #endif
 
 #include <stdint.h>
-#include <upipe/upipe.h>
+#include "upipe/upipe.h"
 
 #define UPIPE_CHUNK_STREAM_SIGNATURE UBASE_FOURCC('c','h','u','n')
 

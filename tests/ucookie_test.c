@@ -1,6 +1,6 @@
 #undef NDEBUG
 
-#include <upipe/ucookie.h>
+#include "upipe/ucookie.h"
 
 #include <assert.h>
 

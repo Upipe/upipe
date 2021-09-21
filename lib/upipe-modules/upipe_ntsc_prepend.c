@@ -28,16 +28,16 @@
  *        to baseband ntsc (first line=283 bff)
  */
 
-#include <upipe/uref.h>
-#include <upipe/uref_pic.h>
-#include <upipe/uref_flow.h>
-#include <upipe/upipe.h>
-#include <upipe/upipe_helper_upipe.h>
-#include <upipe/upipe_helper_urefcount.h>
-#include <upipe/upipe_helper_void.h>
-#include <upipe/upipe_helper_output.h>
-#include <upipe-modules/upipe_ntsc_prepend.h>
-#include <upipe/uref_pic_flow.h>
+#include "upipe/uref.h"
+#include "upipe/uref_pic.h"
+#include "upipe/uref_flow.h"
+#include "upipe/upipe.h"
+#include "upipe/upipe_helper_upipe.h"
+#include "upipe/upipe_helper_urefcount.h"
+#include "upipe/upipe_helper_void.h"
+#include "upipe/upipe_helper_output.h"
+#include "upipe-modules/upipe_ntsc_prepend.h"
+#include "upipe/uref_pic_flow.h"
 
 #define UPIPE_NTSC_PREPEND_LINES 5
 #define UPIPE_NTSC_APPEND_LINES 1

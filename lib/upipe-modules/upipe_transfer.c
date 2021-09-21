@@ -28,20 +28,20 @@
  * This is particularly helpful for multithreaded applications.
  */
 
-#include <upipe/ubase.h>
-#include <upipe/urefcount.h>
-#include <upipe/umutex.h>
-#include <upipe/ulifo.h>
-#include <upipe/uqueue.h>
-#include <upipe/uprobe.h>
-#include <upipe/upump.h>
-#include <upipe/upipe_helper_upipe.h>
-#include <upipe/upipe_helper_urefcount.h>
-#include <upipe/upipe_helper_urefcount_real.h>
-#include <upipe/upipe_helper_upump_mgr.h>
-#include <upipe/upipe_helper_upump.h>
-#include <upipe/uprobe_transfer.h>
-#include <upipe-modules/upipe_transfer.h>
+#include "upipe/ubase.h"
+#include "upipe/urefcount.h"
+#include "upipe/umutex.h"
+#include "upipe/ulifo.h"
+#include "upipe/uqueue.h"
+#include "upipe/uprobe.h"
+#include "upipe/upump.h"
+#include "upipe/upipe_helper_upipe.h"
+#include "upipe/upipe_helper_urefcount.h"
+#include "upipe/upipe_helper_urefcount_real.h"
+#include "upipe/upipe_helper_upump_mgr.h"
+#include "upipe/upipe_helper_upump.h"
+#include "upipe/uprobe_transfer.h"
+#include "upipe-modules/upipe_transfer.h"
 
 #include <stdlib.h>
 #include <stdint.h>

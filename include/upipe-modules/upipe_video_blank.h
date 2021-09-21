@@ -26,7 +26,7 @@
 #ifndef _UPIPE_MODULES_UPIPE_VIDEO_BLANK_H_
 #define _UPIPE_MODULES_UPIPE_VIDEO_BLANK_H_
 
-#include <upipe/upipe.h>
+#include "upipe/upipe.h"
 
 /** @This is the signature of a video blank pipe. */
 #define UPIPE_VBLK_SIGNATURE    UBASE_FOURCC('v','b','l','k')

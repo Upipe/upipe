@@ -31,7 +31,7 @@
 extern "C" {
 #endif
 
-#include <upipe/upipe.h>
+#include "upipe/upipe.h"
 
 #define UPIPE_AUDIO_GRAPH_SIGNATURE UBASE_FOURCC('a','g','p','h')
 

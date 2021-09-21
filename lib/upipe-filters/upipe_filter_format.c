@@ -27,28 +27,28 @@
  * @short Bin pipe transforming the input to the given format
  */
 
-#include <upipe/ubase.h>
-#include <upipe/uprobe.h>
-#include <upipe/uprobe_prefix.h>
-#include <upipe/uref.h>
-#include <upipe/uref_pic.h>
-#include <upipe/uref_pic_flow.h>
-#include <upipe/uref_sound_flow.h>
-#include <upipe/upipe.h>
-#include <upipe/upipe_helper_upipe.h>
-#include <upipe/upipe_helper_flow.h>
-#include <upipe/upipe_helper_urefcount.h>
-#include <upipe/upipe_helper_flow_format.h>
-#include <upipe/upipe_helper_inner.h>
-#include <upipe/upipe_helper_uprobe.h>
-#include <upipe/upipe_helper_bin_input.h>
-#include <upipe/upipe_helper_bin_output.h>
-#include <upipe/upipe_helper_input.h>
-#include <upipe-modules/upipe_setflowdef.h>
-#include <upipe-filters/upipe_filter_format.h>
-#include <upipe-filters/upipe_filter_blend.h>
-#include <upipe-swscale/upipe_sws.h>
-#include <upipe-av/upipe_avfilter.h>
+#include "upipe/ubase.h"
+#include "upipe/uprobe.h"
+#include "upipe/uprobe_prefix.h"
+#include "upipe/uref.h"
+#include "upipe/uref_pic.h"
+#include "upipe/uref_pic_flow.h"
+#include "upipe/uref_sound_flow.h"
+#include "upipe/upipe.h"
+#include "upipe/upipe_helper_upipe.h"
+#include "upipe/upipe_helper_flow.h"
+#include "upipe/upipe_helper_urefcount.h"
+#include "upipe/upipe_helper_flow_format.h"
+#include "upipe/upipe_helper_inner.h"
+#include "upipe/upipe_helper_uprobe.h"
+#include "upipe/upipe_helper_bin_input.h"
+#include "upipe/upipe_helper_bin_output.h"
+#include "upipe/upipe_helper_input.h"
+#include "upipe-modules/upipe_setflowdef.h"
+#include "upipe-filters/upipe_filter_format.h"
+#include "upipe-filters/upipe_filter_blend.h"
+#include "upipe-swscale/upipe_sws.h"
+#include "upipe-av/upipe_avfilter.h"
 
 #include <stdlib.h>
 #include <stdbool.h>

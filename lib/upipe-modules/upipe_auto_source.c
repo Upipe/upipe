@@ -25,17 +25,17 @@
 
 #include <stdlib.h>
 
-#include <upipe/ulist.h>
-#include <upipe/uuri.h>
-#include <upipe/uprobe_prefix.h>
-#include <upipe/upipe_helper_urefcount.h>
-#include <upipe/upipe_helper_urefcount_real.h>
-#include <upipe/upipe_helper_upipe.h>
-#include <upipe/upipe_helper_void.h>
-#include <upipe/upipe_helper_uprobe.h>
-#include <upipe/upipe_helper_inner.h>
-#include <upipe/upipe_helper_bin_output.h>
-#include <upipe-modules/upipe_auto_source.h>
+#include "upipe/ulist.h"
+#include "upipe/uuri.h"
+#include "upipe/uprobe_prefix.h"
+#include "upipe/upipe_helper_urefcount.h"
+#include "upipe/upipe_helper_urefcount_real.h"
+#include "upipe/upipe_helper_upipe.h"
+#include "upipe/upipe_helper_void.h"
+#include "upipe/upipe_helper_uprobe.h"
+#include "upipe/upipe_helper_inner.h"
+#include "upipe/upipe_helper_bin_output.h"
+#include "upipe-modules/upipe_auto_source.h"
 
 /** @hidden */
 static struct upipe *upipe_auto_src_alloc(struct upipe_mgr *mgr,

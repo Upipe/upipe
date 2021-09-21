@@ -29,7 +29,7 @@
 extern "C" {
 #endif
 
-#include <upipe/upipe.h>
+#include "upipe/upipe.h"
 
 #define UPIPE_RTP_FEC_SIGNATURE UBASE_FOURCC('r','f','c',' ')
 #define UPIPE_RTP_FEC_INPUT_SIGNATURE UBASE_FOURCC('r','f','c','i')

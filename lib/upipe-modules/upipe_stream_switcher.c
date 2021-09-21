@@ -25,18 +25,18 @@
 
 #include <stdlib.h>
 
-#include <upipe/uclock.h>
-#include <upipe/uref.h>
-#include <upipe/uref_pic.h>
-#include <upipe/uref_clock.h>
-#include <upipe/upipe.h>
-#include <upipe/upipe_helper_upipe.h>
-#include <upipe/upipe_helper_urefcount.h>
-#include <upipe/upipe_helper_void.h>
-#include <upipe/upipe_helper_subpipe.h>
-#include <upipe/upipe_helper_output.h>
-#include <upipe/upipe_helper_input.h>
-#include <upipe-modules/upipe_stream_switcher.h>
+#include "upipe/uclock.h"
+#include "upipe/uref.h"
+#include "upipe/uref_pic.h"
+#include "upipe/uref_clock.h"
+#include "upipe/upipe.h"
+#include "upipe/upipe_helper_upipe.h"
+#include "upipe/upipe_helper_urefcount.h"
+#include "upipe/upipe_helper_void.h"
+#include "upipe/upipe_helper_subpipe.h"
+#include "upipe/upipe_helper_output.h"
+#include "upipe/upipe_helper_input.h"
+#include "upipe-modules/upipe_stream_switcher.h"
 
 #define DELTA_WARN       (UCLOCK_FREQ / 1000)
 

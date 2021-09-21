@@ -36,8 +36,8 @@
 extern "C" {
 #endif
 
-#include <upipe/ubase.h>
-#include <upipe/urefcount.h>
+#include "upipe/ubase.h"
+#include "upipe/urefcount.h"
 
 /** @This is the implementation of a structure that protects access to a
  * non-reentrant resource. */

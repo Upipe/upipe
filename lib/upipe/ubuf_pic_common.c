@@ -23,11 +23,11 @@
  * SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
  */
 
-#include <upipe/ubase.h>
-#include <upipe/urefcount.h>
-#include <upipe/ubuf.h>
-#include <upipe/ubuf_pic.h>
-#include <upipe/ubuf_pic_common.h>
+#include "upipe/ubase.h"
+#include "upipe/urefcount.h"
+#include "upipe/ubuf.h"
+#include "upipe/ubuf_pic.h"
+#include "upipe/ubuf_pic_common.h"
 
 #include <stdlib.h>
 #include <stdint.h>

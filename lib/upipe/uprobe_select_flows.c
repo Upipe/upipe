@@ -33,16 +33,16 @@
  * the selections are reconsidered.
  */
 
-#include <upipe/ubase.h>
-#include <upipe/ulist.h>
-#include <upipe/uref.h>
-#include <upipe/uref_flow.h>
-#include <upipe/uref_program_flow.h>
-#include <upipe/uprobe.h>
-#include <upipe/uprobe_helper_uprobe.h>
-#include <upipe/uprobe_select_flows.h>
-#include <upipe/uprobe_prefix.h>
-#include <upipe/upipe.h>
+#include "upipe/ubase.h"
+#include "upipe/ulist.h"
+#include "upipe/uref.h"
+#include "upipe/uref_flow.h"
+#include "upipe/uref_program_flow.h"
+#include "upipe/uprobe.h"
+#include "upipe/uprobe_helper_uprobe.h"
+#include "upipe/uprobe_select_flows.h"
+#include "upipe/uprobe_prefix.h"
+#include "upipe/upipe.h"
 
 #include <stdlib.h>
 #include <stdio.h>

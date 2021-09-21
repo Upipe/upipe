@@ -29,10 +29,10 @@
 
 #define _GNU_SOURCE
 
-#include <upipe/ubase.h>
-#include <upipe/upipe.h>
-#include <upipe/upipe_dump.h>
-#include <upipe/uprobe_prefix.h>
+#include "upipe/ubase.h"
+#include "upipe/upipe.h"
+#include "upipe/upipe_dump.h"
+#include "upipe/uprobe_prefix.h"
 
 #include <stdio.h>
 #include <assert.h>

@@ -34,8 +34,8 @@
 extern "C" {
 #endif
 
-#include <upipe/ubase.h>
-#include <upipe/uprobe.h>
+#include "upipe/ubase.h"
+#include "upipe/uprobe.h"
 
 /** @This declares two functions dealing with public and private parts
  * of the allocated probe structure.

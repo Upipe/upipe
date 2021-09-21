@@ -30,7 +30,7 @@
 extern "C" {
 #endif
 
-#include <upipe/upipe.h>
+#include "upipe/upipe.h"
 
 #define UPIPE_NETMAP_SOURCE_SIGNATURE UBASE_FOURCC('n','t','m','s')
 /** @This returns the management structure for netmap_source pipes.

@@ -29,7 +29,7 @@
 extern "C" {
 #endif
 
-#include <upipe/upipe.h>
+#include "upipe/upipe.h"
 #include <linux/dvb/frontend.h>
 
 #define UPIPE_DVBSRC_SIGNATURE UBASE_FOURCC('d','v','b',' ')

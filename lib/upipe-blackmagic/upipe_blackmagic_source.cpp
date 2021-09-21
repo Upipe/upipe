@@ -27,29 +27,29 @@
 #define __STDC_FORMAT_MACROS   1
 #define __STDC_CONSTANT_MACROS 1
 
-#include <upipe/ubase.h>
-#include <upipe/uatomic.h>
-#include <upipe/uprobe.h>
-#include <upipe/uclock.h>
-#include <upipe/uref.h>
-#include <upipe/uref_pic.h>
-#include <upipe/uref_pic_flow.h>
-#include <upipe/uref_sound_flow.h>
-#include <upipe/uref_clock.h>
-#include <upipe/upump.h>
-#include <upipe/ubuf.h>
-#include <upipe/uqueue.h>
-#include <upipe/upipe_helper_upipe.h>
-#include <upipe/upipe_helper_urefcount.h>
-#include <upipe/upipe_helper_sync.h>
-#include <upipe/upipe_helper_uref_mgr.h>
-#include <upipe/upipe_helper_output.h>
-#include <upipe/upipe_helper_upump_mgr.h>
-#include <upipe/upipe_helper_upump.h>
-#include <upipe/upipe_helper_uclock.h>
-#include <upipe-blackmagic/upipe_blackmagic_source.h>
-#include <upipe-blackmagic/ubuf_pic_blackmagic.h>
-#include <upipe-blackmagic/ubuf_sound_blackmagic.h>
+#include "upipe/ubase.h"
+#include "upipe/uatomic.h"
+#include "upipe/uprobe.h"
+#include "upipe/uclock.h"
+#include "upipe/uref.h"
+#include "upipe/uref_pic.h"
+#include "upipe/uref_pic_flow.h"
+#include "upipe/uref_sound_flow.h"
+#include "upipe/uref_clock.h"
+#include "upipe/upump.h"
+#include "upipe/ubuf.h"
+#include "upipe/uqueue.h"
+#include "upipe/upipe_helper_upipe.h"
+#include "upipe/upipe_helper_urefcount.h"
+#include "upipe/upipe_helper_sync.h"
+#include "upipe/upipe_helper_uref_mgr.h"
+#include "upipe/upipe_helper_output.h"
+#include "upipe/upipe_helper_upump_mgr.h"
+#include "upipe/upipe_helper_upump.h"
+#include "upipe/upipe_helper_uclock.h"
+#include "upipe-blackmagic/upipe_blackmagic_source.h"
+#include "upipe-blackmagic/ubuf_pic_blackmagic.h"
+#include "upipe-blackmagic/ubuf_sound_blackmagic.h"
 
 #include <stdlib.h>
 #include <stdint.h>

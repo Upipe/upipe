@@ -27,11 +27,11 @@
  * @short common functions for event loop handlers
  */
 
-#include <upipe/ubase.h>
-#include <upipe/ulist.h>
-#include <upipe/upool.h>
-#include <upipe/upump_common.h>
-#include <upipe/upump_blocker.h>
+#include "upipe/ubase.h"
+#include "upipe/ulist.h"
+#include "upipe/upool.h"
+#include "upipe/upump_common.h"
+#include "upipe/upump_blocker.h"
 
 #include <stdlib.h>
 

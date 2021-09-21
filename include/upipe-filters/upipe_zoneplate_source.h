@@ -25,7 +25,7 @@
 #ifndef _UPIPE_FILTERS_UPIPE_ZONEPLATE_SOURCE_H_
 #define _UPIPE_FILTERS_UPIPE_ZONEPLATE_SOURCE_H_
 
-#include <upipe/ubase.h>
+#include "upipe/ubase.h"
 
 #ifdef __cplusplus
 extern "C" {

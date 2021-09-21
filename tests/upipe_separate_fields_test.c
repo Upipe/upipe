@@ -29,32 +29,32 @@
 
 #undef NDEBUG
 
-#include <upipe/uprobe.h>
-#include <upipe/uprobe_prefix.h>
-#include <upipe/uprobe_stdio.h>
-#include <upipe/uprobe_ubuf_mem.h>
-#include <upipe/uprobe_uref_mgr.h>
-#include <upipe/uprobe_upump_mgr.h>
-#include <upipe/uprobe_uclock.h>
-#include <upipe/umem.h>
-#include <upipe/umem_alloc.h>
-#include <upipe/uclock_std.h>
-#include <upipe/ubuf.h>
-#include <upipe/ubuf_mem.h>
-#include <upipe/udict.h>
-#include <upipe/udict_inline.h>
-#include <upipe/uref_dump.h>
-#include <upipe/uref.h>
-#include <upipe/uref_std.h>
-#include <upipe/uref_clock.h>
-#include <upipe/uref_pic.h>
-#include <upipe/uref_pic_flow.h>
-#include <upipe/upipe.h>
-#include <upipe/upipe_helper_upipe.h>
-#include <upump-ev/upump_ev.h>
+#include "upipe/uprobe.h"
+#include "upipe/uprobe_prefix.h"
+#include "upipe/uprobe_stdio.h"
+#include "upipe/uprobe_ubuf_mem.h"
+#include "upipe/uprobe_uref_mgr.h"
+#include "upipe/uprobe_upump_mgr.h"
+#include "upipe/uprobe_uclock.h"
+#include "upipe/umem.h"
+#include "upipe/umem_alloc.h"
+#include "upipe/uclock_std.h"
+#include "upipe/ubuf.h"
+#include "upipe/ubuf_mem.h"
+#include "upipe/udict.h"
+#include "upipe/udict_inline.h"
+#include "upipe/uref_dump.h"
+#include "upipe/uref.h"
+#include "upipe/uref_std.h"
+#include "upipe/uref_clock.h"
+#include "upipe/uref_pic.h"
+#include "upipe/uref_pic_flow.h"
+#include "upipe/upipe.h"
+#include "upipe/upipe_helper_upipe.h"
+#include "upump-ev/upump_ev.h"
 
-#include <upipe-modules/upipe_blank_source.h>
-#include <upipe-modules/upipe_separate_fields.h>
+#include "upipe-modules/upipe_blank_source.h"
+#include "upipe-modules/upipe_separate_fields.h"
 
 #include <stdio.h>
 #include <string.h>

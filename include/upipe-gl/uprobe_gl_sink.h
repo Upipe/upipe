@@ -34,8 +34,8 @@
 extern "C" {
 #endif
 
-#include <upipe/upipe.h>
-#include <upipe-gl/upipe_gl_sink_common.h>
+#include "upipe/upipe.h"
+#include "upipe-gl/upipe_gl_sink_common.h"
 
 /** @This allocates a gl_sink uprobe to take care of the
  * GL animation.

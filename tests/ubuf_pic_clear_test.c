@@ -29,11 +29,11 @@
 
 #undef NDEBUG
 
-#include <upipe/umem.h>
-#include <upipe/umem_alloc.h>
-#include <upipe/ubuf.h>
-#include <upipe/ubuf_pic.h>
-#include <upipe/ubuf_pic_mem.h>
+#include "upipe/umem.h"
+#include "upipe/umem_alloc.h"
+#include "upipe/ubuf.h"
+#include "upipe/ubuf_pic.h"
+#include "upipe/ubuf_pic_mem.h"
 
 #include <stdio.h>
 #include <string.h>

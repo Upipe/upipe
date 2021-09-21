@@ -28,10 +28,10 @@
  * @short Upipe standard implementation of uclock
  */
 
-#include <upipe/ubase.h>
-#include <upipe/urefcount.h>
-#include <upipe/uclock.h>
-#include <upipe/uclock_std.h>
+#include "upipe/ubase.h"
+#include "upipe/urefcount.h"
+#include "upipe/uclock.h"
+#include "upipe/uclock_std.h"
 
 #include <stdlib.h>
 #include <time.h>

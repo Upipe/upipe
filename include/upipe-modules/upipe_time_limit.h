@@ -34,7 +34,7 @@
 extern "C" {
 #endif
 
-#include <upipe/upipe.h>
+#include "upipe/upipe.h"
 
 #define UPIPE_TIME_LIMIT_SIGNATURE UBASE_FOURCC('t','m','l','t')
 

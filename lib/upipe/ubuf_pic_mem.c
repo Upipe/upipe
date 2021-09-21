@@ -27,18 +27,18 @@
  * @short Upipe ubuf manager for picture formats with umem storage
  */
 
-#include <upipe/ubase.h>
-#include <upipe/uatomic.h>
-#include <upipe/urefcount.h>
-#include <upipe/upool.h>
-#include <upipe/umem.h>
-#include <upipe/ubuf.h>
-#include <upipe/ubuf_pic.h>
-#include <upipe/ubuf_pic_common.h>
-#include <upipe/ubuf_pic_mem.h>
-#include <upipe/ubuf_mem_common.h>
-#include <upipe/uref_flow.h>
-#include <upipe/uref_pic_flow.h>
+#include "upipe/ubase.h"
+#include "upipe/uatomic.h"
+#include "upipe/urefcount.h"
+#include "upipe/upool.h"
+#include "upipe/umem.h"
+#include "upipe/ubuf.h"
+#include "upipe/ubuf_pic.h"
+#include "upipe/ubuf_pic_common.h"
+#include "upipe/ubuf_pic_mem.h"
+#include "upipe/ubuf_mem_common.h"
+#include "upipe/uref_flow.h"
+#include "upipe/uref_pic_flow.h"
 
 #include <stdlib.h>
 #include <stdarg.h>

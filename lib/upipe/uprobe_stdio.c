@@ -29,10 +29,10 @@
  * @short probe outputting all log events to stdio
  */
 
-#include <upipe/ubase.h>
-#include <upipe/uprobe.h>
-#include <upipe/uprobe_stdio.h>
-#include <upipe/uprobe_helper_alloc.h>
+#include "upipe/ubase.h"
+#include "upipe/uprobe.h"
+#include "upipe/uprobe_stdio.h"
+#include "upipe/uprobe_helper_alloc.h"
 
 #include <stdlib.h>
 #include <stdio.h>

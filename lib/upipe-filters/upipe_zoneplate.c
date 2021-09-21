@@ -24,19 +24,19 @@
  * @short Upipe module drawing zoneplate video pictures
  */
 
-#include <upipe/upipe.h>
-#include <upipe/upipe_helper_upipe.h>
-#include <upipe/upipe_helper_urefcount.h>
-#include <upipe/upipe_helper_flow.h>
-#include <upipe/upipe_helper_output.h>
-#include <upipe/upipe_helper_ubuf_mgr.h>
-#include <upipe/uref_void_flow.h>
-#include <upipe/uref_pic.h>
-#include <upipe/uref_pic_flow.h>
-#include <upipe/uref_clock.h>
-#include <upipe/uclock.h>
+#include "upipe/upipe.h"
+#include "upipe/upipe_helper_upipe.h"
+#include "upipe/upipe_helper_urefcount.h"
+#include "upipe/upipe_helper_flow.h"
+#include "upipe/upipe_helper_output.h"
+#include "upipe/upipe_helper_ubuf_mgr.h"
+#include "upipe/uref_void_flow.h"
+#include "upipe/uref_pic.h"
+#include "upipe/uref_pic_flow.h"
+#include "upipe/uref_clock.h"
+#include "upipe/uclock.h"
 
-#include <upipe-filters/upipe_zoneplate.h>
+#include "upipe-filters/upipe_zoneplate.h"
 
 #include "zoneplate/videotestsrc.h"
 

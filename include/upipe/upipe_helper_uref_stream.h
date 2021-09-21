@@ -34,14 +34,14 @@
 extern "C" {
 #endif
 
-#include <upipe/ubase.h>
-#include <upipe/ulist.h>
-#include <upipe/ubuf.h>
-#include <upipe/uref.h>
-#include <upipe/uref_attr.h>
-#include <upipe/uref_block.h>
-#include <upipe/uref_clock.h>
-#include <upipe/upipe.h>
+#include "upipe/ubase.h"
+#include "upipe/ulist.h"
+#include "upipe/ubuf.h"
+#include "upipe/uref.h"
+#include "upipe/uref_attr.h"
+#include "upipe/uref_block.h"
+#include "upipe/uref_clock.h"
+#include "upipe/upipe.h"
 
 #include <assert.h>
 

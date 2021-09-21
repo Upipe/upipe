@@ -29,8 +29,8 @@
 extern "C" {
 #endif
 
-#include <upipe/uref_attr.h>
-#include <upipe/uuri.h>
+#include "upipe/uref_attr.h"
+#include "upipe/uuri.h"
 
 UREF_ATTR_STRING(uri, scheme, "uri.scheme", uri scheme)
 UREF_ATTR_STRING(uri, userinfo, "uri.userinfo", uri user info)

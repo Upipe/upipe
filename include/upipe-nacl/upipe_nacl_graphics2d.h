@@ -35,7 +35,7 @@
 extern "C" {
 #endif
 
-#include <upipe/upipe.h>
+#include "upipe/upipe.h"
 
 #define UPIPE_NACL_G2D_SIGNATURE UBASE_FOURCC('S','g','2','d')
 

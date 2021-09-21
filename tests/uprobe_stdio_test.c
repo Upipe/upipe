@@ -29,8 +29,8 @@
 
 #undef NDEBUG
 
-#include <upipe/uprobe.h>
-#include <upipe/uprobe_stdio.h>
+#include "upipe/uprobe.h"
+#include "upipe/uprobe_stdio.h"
 
 #include <stdio.h>
 #include <assert.h>

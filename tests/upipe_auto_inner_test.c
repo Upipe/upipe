@@ -25,26 +25,26 @@
 
 #undef NDEBUG
 
-#include <upipe/upipe_helper_upipe.h>
-#include <upipe/upipe_helper_urefcount.h>
-#include <upipe/upipe_helper_void.h>
-#include <upipe/upipe_helper_flow.h>
+#include "upipe/upipe_helper_upipe.h"
+#include "upipe/upipe_helper_urefcount.h"
+#include "upipe/upipe_helper_void.h"
+#include "upipe/upipe_helper_flow.h"
 
-#include <upipe/upipe.h>
-#include <upipe/uprobe.h>
-#include <upipe/uref.h>
-#include <upipe/uref_std.h>
-#include <upipe/umem.h>
-#include <upipe/umem_alloc.h>
-#include <upipe/udict.h>
-#include <upipe/udict_inline.h>
+#include "upipe/upipe.h"
+#include "upipe/uprobe.h"
+#include "upipe/uref.h"
+#include "upipe/uref_std.h"
+#include "upipe/umem.h"
+#include "upipe/umem_alloc.h"
+#include "upipe/udict.h"
+#include "upipe/udict_inline.h"
 
-#include <upipe/uprobe_stdio.h>
-#include <upipe/uprobe_prefix.h>
-#include <upipe/uprobe_uref_mgr.h>
+#include "upipe/uprobe_stdio.h"
+#include "upipe/uprobe_prefix.h"
+#include "upipe/uprobe_uref_mgr.h"
 
-#include <upipe-modules/upipe_idem.h>
-#include <upipe-modules/upipe_auto_inner.h>
+#include "upipe-modules/upipe_idem.h"
+#include "upipe-modules/upipe_auto_inner.h"
 
 #include <assert.h>
 

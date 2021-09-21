@@ -27,11 +27,11 @@
  * @short probe catching need_upump_mgr events and providing a upump manager base on thread local storage
  */
 
-#include <upipe/ubase.h>
-#include <upipe/upump.h>
-#include <upipe/uprobe.h>
-#include <upipe-pthread/uprobe_pthread_upump_mgr.h>
-#include <upipe/uprobe_helper_alloc.h>
+#include "upipe/ubase.h"
+#include "upipe/upump.h"
+#include "upipe/uprobe.h"
+#include "upipe-pthread/uprobe_pthread_upump_mgr.h"
+#include "upipe/uprobe_helper_alloc.h"
 
 #include <stdlib.h>
 #include <stdarg.h>

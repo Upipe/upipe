@@ -35,14 +35,14 @@
  * in desperate situations.
  */
 
-#include <upipe/ubase.h>
-#include <upipe/uclock.h>
-#include <upipe/uref.h>
-#include <upipe/uref_clock.h>
-#include <upipe/uprobe.h>
-#include <upipe/uprobe_dejitter.h>
-#include <upipe/uprobe_helper_alloc.h>
-#include <upipe/upipe.h>
+#include "upipe/ubase.h"
+#include "upipe/uclock.h"
+#include "upipe/uref.h"
+#include "upipe/uref_clock.h"
+#include "upipe/uprobe.h"
+#include "upipe/uprobe_dejitter.h"
+#include "upipe/uprobe_helper_alloc.h"
+#include "upipe/upipe.h"
 
 #include <stdlib.h>
 #include <stdarg.h>

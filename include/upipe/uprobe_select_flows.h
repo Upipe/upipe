@@ -40,8 +40,8 @@
 extern "C" {
 #endif
 
-#include <upipe/ubase.h>
-#include <upipe/uprobe.h>
+#include "upipe/ubase.h"
+#include "upipe/uprobe.h"
 
 /** @This defines types of flows to select from. */
 enum uprobe_selflow_type {

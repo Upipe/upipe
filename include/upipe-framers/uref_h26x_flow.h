@@ -34,9 +34,9 @@
 extern "C" {
 #endif
 
-#include <upipe/uref.h>
-#include <upipe/uref_attr.h>
-#include <upipe/uref_flow.h>
+#include "upipe/uref.h"
+#include "upipe/uref_attr.h"
+#include "upipe/uref_flow.h"
 
 /** @This defines encapsulation types for H26x */
 enum uref_h26x_encaps {

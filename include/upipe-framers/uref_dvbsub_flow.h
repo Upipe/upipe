@@ -34,8 +34,8 @@
 extern "C" {
 #endif
 
-#include <upipe/uref.h>
-#include <upipe/uref_attr.h>
+#include "upipe/uref.h"
+#include "upipe/uref_attr.h"
 
 UREF_ATTR_SMALL_UNSIGNED(dvbsub_flow, pages, "dvbsub.pages", number of page);
 UREF_ATTR_UNSIGNED_VA(dvbsub_flow, page, "dvbsub.page[%" PRIu8 "]", page id,

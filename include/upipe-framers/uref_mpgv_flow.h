@@ -34,8 +34,8 @@
 extern "C" {
 #endif
 
-#include <upipe/uref.h>
-#include <upipe/uref_attr.h>
+#include "upipe/uref.h"
+#include "upipe/uref_attr.h"
 
 UREF_ATTR_SMALL_UNSIGNED(mpgv_flow, profilelevel, "mpgv.profilelevel",
         profile and level)

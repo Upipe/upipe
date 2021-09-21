@@ -29,7 +29,7 @@
 
 #include <errno.h>
 
-#include <upipe/ubase.h>
+#include "upipe/ubase.h"
 
 #include "http_source_hook.h"
 

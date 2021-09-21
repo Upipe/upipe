@@ -27,7 +27,7 @@
 extern "C" {
 #endif
 
-#include <upipe/upipe.h>
+#include "upipe/upipe.h"
 
 #define UPIPE_HLS_BUFFER_SIGNATURE UBASE_FOURCC('h','l','s','b')
 

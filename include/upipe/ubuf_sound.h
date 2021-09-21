@@ -35,7 +35,7 @@
 extern "C" {
 #endif
 
-#include <upipe/ubuf.h>
+#include "upipe/ubuf.h"
 
 #include <stdint.h>
 #include <stdbool.h>

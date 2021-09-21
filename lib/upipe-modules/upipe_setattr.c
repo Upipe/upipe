@@ -27,14 +27,14 @@
  * @short Upipe module setting arbitrary attributes to urefs
  */
 
-#include <upipe/ubase.h>
-#include <upipe/uref.h>
-#include <upipe/upipe.h>
-#include <upipe/upipe_helper_upipe.h>
-#include <upipe/upipe_helper_urefcount.h>
-#include <upipe/upipe_helper_void.h>
-#include <upipe/upipe_helper_output.h>
-#include <upipe-modules/upipe_setattr.h>
+#include "upipe/ubase.h"
+#include "upipe/uref.h"
+#include "upipe/upipe.h"
+#include "upipe/upipe_helper_upipe.h"
+#include "upipe/upipe_helper_urefcount.h"
+#include "upipe/upipe_helper_void.h"
+#include "upipe/upipe_helper_output.h"
+#include "upipe-modules/upipe_setattr.h"
 
 #include <stdlib.h>
 #include <stdarg.h>

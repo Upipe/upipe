@@ -28,19 +28,19 @@
  *
  */
 
-#include <upipe/ubase.h>
-#include <upipe/uref.h>
-#include <upipe/upipe.h>
-#include <upipe/uref_block.h>
-#include <upipe/ubuf_block.h>
-#include <upipe/ubuf_sound.h>
-#include <upipe/uref_sound_flow.h>
-#include <upipe/upipe_helper_upipe.h>
-#include <upipe/upipe_helper_urefcount.h>
-#include <upipe/upipe_helper_flow.h>
-#include <upipe/upipe_helper_output.h>
-#include <upipe/upipe_helper_ubuf_mgr.h>
-#include <upipe-modules/upipe_block_to_sound.h>
+#include "upipe/ubase.h"
+#include "upipe/uref.h"
+#include "upipe/upipe.h"
+#include "upipe/uref_block.h"
+#include "upipe/ubuf_block.h"
+#include "upipe/ubuf_sound.h"
+#include "upipe/uref_sound_flow.h"
+#include "upipe/upipe_helper_upipe.h"
+#include "upipe/upipe_helper_urefcount.h"
+#include "upipe/upipe_helper_flow.h"
+#include "upipe/upipe_helper_output.h"
+#include "upipe/upipe_helper_ubuf_mgr.h"
+#include "upipe-modules/upipe_block_to_sound.h"
 
 #include <stdlib.h>
 #include <stdint.h>

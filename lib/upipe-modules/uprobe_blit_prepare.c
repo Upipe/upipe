@@ -23,11 +23,11 @@
  * SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
  */
 
-#include <upipe/uprobe.h>
-#include <upipe/uprobe_helper_alloc.h>
-#include <upipe/uprobe_helper_uprobe.h>
-#include <upipe-modules/upipe_blit.h>
-#include <upipe-modules/uprobe_blit_prepare.h>
+#include "upipe/uprobe.h"
+#include "upipe/uprobe_helper_alloc.h"
+#include "upipe/uprobe_helper_uprobe.h"
+#include "upipe-modules/upipe_blit.h"
+#include "upipe-modules/uprobe_blit_prepare.h"
 
 struct uprobe_blit_prepare {
     struct uprobe uprobe;

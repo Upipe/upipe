@@ -27,7 +27,7 @@
 extern "C" {
 #endif
 
-#include <upipe/uref_attr.h>
+#include "upipe/uref_attr.h"
 
 UREF_ATTR_STRING(http, content_type, "http.content_type", http content type);
 

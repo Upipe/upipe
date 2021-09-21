@@ -29,7 +29,7 @@
 
 #undef NDEBUG
 
-#include <upump-ecore/upump_ecore.h>
+#include "upump-ecore/upump_ecore.h"
 
 #include <Ecore.h>
 

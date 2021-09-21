@@ -27,10 +27,10 @@
  * @short probe asserting that all events come from the same thread
  */
 
-#include <upipe/ubase.h>
-#include <upipe/uprobe.h>
-#include <upipe-pthread/uprobe_pthread_assert.h>
-#include <upipe/uprobe_helper_alloc.h>
+#include "upipe/ubase.h"
+#include "upipe/uprobe.h"
+#include "upipe-pthread/uprobe_pthread_assert.h"
+#include "upipe/uprobe_helper_alloc.h"
 
 #include <stdlib.h>
 #include <stdarg.h>

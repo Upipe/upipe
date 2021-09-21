@@ -33,22 +33,22 @@
  * Input audio must have the same format, save for the number of channels/planes.
  */
 
-#include <upipe/ulist.h>
-#include <upipe/uref.h>
-#include <upipe/ubuf.h>
-#include <upipe/upipe.h>
-#include <upipe/uref_sound.h>
-#include <upipe/uref_sound_flow.h>
-#include <upipe/upipe_helper_upipe.h>
-#include <upipe/upipe_helper_urefcount.h>
-#include <upipe/upipe_helper_urefcount_real.h>
-#include <upipe/upipe_helper_void.h>
-#include <upipe/upipe_helper_flow.h>
-#include <upipe/upipe_helper_output.h>
-#include <upipe/upipe_helper_subpipe.h>
-#include <upipe/upipe_helper_ubuf_mgr.h>
-#include <upipe/ubuf_sound.h>
-#include <upipe-modules/upipe_audio_merge.h>
+#include "upipe/ulist.h"
+#include "upipe/uref.h"
+#include "upipe/ubuf.h"
+#include "upipe/upipe.h"
+#include "upipe/uref_sound.h"
+#include "upipe/uref_sound_flow.h"
+#include "upipe/upipe_helper_upipe.h"
+#include "upipe/upipe_helper_urefcount.h"
+#include "upipe/upipe_helper_urefcount_real.h"
+#include "upipe/upipe_helper_void.h"
+#include "upipe/upipe_helper_flow.h"
+#include "upipe/upipe_helper_output.h"
+#include "upipe/upipe_helper_subpipe.h"
+#include "upipe/upipe_helper_ubuf_mgr.h"
+#include "upipe/ubuf_sound.h"
+#include "upipe-modules/upipe_audio_merge.h"
 
 #include <stdlib.h>
 #include <stdbool.h>

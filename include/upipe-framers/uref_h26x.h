@@ -34,9 +34,9 @@
 extern "C" {
 #endif
 
-#include <upipe/uref.h>
-#include <upipe/uref_attr.h>
-#include <upipe/uref_block.h>
+#include "upipe/uref.h"
+#include "upipe/uref_attr.h"
+#include "upipe/uref_block.h"
 
 UREF_ATTR_UNSIGNED_VA(h26x, nal_offset, "h26x.n[%" PRIu64"]", nal offset,
         uint64_t nal, nal)

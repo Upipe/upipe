@@ -34,9 +34,9 @@
 extern "C" {
 #endif
 
-#include <upipe/config.h>
-#include <upipe/ubase.h>
-#include <upipe/upump.h>
+#include "upipe/config.h"
+#include "upipe/ubase.h"
+#include "upipe/upump.h"
 
 #include <assert.h>
 #include <errno.h>

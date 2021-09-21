@@ -34,8 +34,8 @@
 extern "C" {
 #endif
 
-#include <upipe/ubase.h>
-#include <upipe/upipe.h>
+#include "upipe/ubase.h"
+#include "upipe/upipe.h"
 
 /** @This represents a dumping function for pipe labels. */
 typedef char *(upipe_dump_pipe_label)(struct upipe *);

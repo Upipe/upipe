@@ -34,8 +34,8 @@
 extern "C" {
 #endif
 
-#include <upipe/uclock.h>
-#include <upipe/uprobe.h>
+#include "upipe/uclock.h"
+#include "upipe/uprobe.h"
 
 /** @This allocates a new uclock structure.
  *

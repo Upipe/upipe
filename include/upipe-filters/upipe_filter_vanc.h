@@ -32,7 +32,7 @@
 extern "C" {
 #endif
 
-#include <upipe/upipe.h>
+#include "upipe/upipe.h"
 
 #define UPIPE_VANC_SIGNATURE UBASE_FOURCC('v', 'a', 'n', 'c')
 #define UPIPE_VANC_OUTPUT_SIGNATURE UBASE_FOURCC('v', 'n', 'c', 'o')

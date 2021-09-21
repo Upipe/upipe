@@ -35,7 +35,7 @@
 extern "C" {
 #endif
 
-#include <upipe/upipe.h>
+#include "upipe/upipe.h"
 
 #define UPIPE_UDPSRC_SIGNATURE UBASE_FOURCC('u','s','r','c')
 

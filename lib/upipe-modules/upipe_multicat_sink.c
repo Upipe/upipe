@@ -27,18 +27,18 @@
  * @short Upipe module - multicat file sink
  */
 
-#include <upipe/ubase.h>
-#include <upipe/uprobe.h>
-#include <upipe/uprobe_prefix.h>
-#include <upipe/uref_clock.h>
-#include <upipe/uref.h>
-#include <upipe/uref_flow.h>
-#include <upipe/upipe.h>
-#include <upipe/upipe_helper_urefcount.h>
-#include <upipe/upipe_helper_upipe.h>
-#include <upipe/upipe_helper_void.h>
-#include <upipe-modules/upipe_multicat_sink.h>
-#include <upipe-modules/upipe_file_sink.h>
+#include "upipe/ubase.h"
+#include "upipe/uprobe.h"
+#include "upipe/uprobe_prefix.h"
+#include "upipe/uref_clock.h"
+#include "upipe/uref.h"
+#include "upipe/uref_flow.h"
+#include "upipe/upipe.h"
+#include "upipe/upipe_helper_urefcount.h"
+#include "upipe/upipe_helper_upipe.h"
+#include "upipe/upipe_helper_void.h"
+#include "upipe-modules/upipe_multicat_sink.h"
+#include "upipe-modules/upipe_file_sink.h"
 
 #include <stdlib.h>
 #include <stdbool.h>

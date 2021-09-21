@@ -26,19 +26,19 @@
 #include <stdlib.h>
 #include <ctype.h>
 
-#include <upipe/ustring.h>
-#include <upipe/uclock.h>
-#include <upipe/uref_m3u.h>
-#include <upipe/uref_m3u_master.h>
-#include <upipe/uref_m3u_playlist.h>
-#include <upipe/uref_m3u_flow.h>
-#include <upipe/uref_m3u_playlist_flow.h>
-#include <upipe/upipe_helper_upipe.h>
-#include <upipe/upipe_helper_urefcount.h>
-#include <upipe/upipe_helper_void.h>
-#include <upipe/upipe_helper_output.h>
-#include <upipe/upipe_helper_uref_stream.h>
-#include <upipe-modules/upipe_m3u_reader.h>
+#include "upipe/ustring.h"
+#include "upipe/uclock.h"
+#include "upipe/uref_m3u.h"
+#include "upipe/uref_m3u_master.h"
+#include "upipe/uref_m3u_playlist.h"
+#include "upipe/uref_m3u_flow.h"
+#include "upipe/uref_m3u_playlist_flow.h"
+#include "upipe/upipe_helper_upipe.h"
+#include "upipe/upipe_helper_urefcount.h"
+#include "upipe/upipe_helper_void.h"
+#include "upipe/upipe_helper_output.h"
+#include "upipe/upipe_helper_uref_stream.h"
+#include "upipe-modules/upipe_m3u_reader.h"
 
 /** @hidden */
 static int duration_to_uclock(const char *str,

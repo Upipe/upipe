@@ -34,8 +34,8 @@
 extern "C" {
 #endif
 
-#include <upipe/uref.h>
-#include <upipe/uref_attr.h>
+#include "upipe/uref.h"
+#include "upipe/uref_attr.h"
 
 UREF_ATTR_SMALL_UNSIGNED(h264_flow, profile, "h264.profile", profile)
 UREF_ATTR_SMALL_UNSIGNED(h264_flow, profile_compatibility, "h264.profilecomp",

@@ -29,7 +29,7 @@
 extern "C" {
 #endif
 
-#include <upipe/upipe.h>
+#include "upipe/upipe.h"
 
 #define UPIPE_ZVBIENC_SIGNATURE UBASE_FOURCC('z','v','b','e')
 

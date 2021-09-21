@@ -1,6 +1,6 @@
 #ifndef SDI_H_
 #define SDI_H_
-#include <upipe/config.h>
+#include "upipe/config.h"
 
 #ifdef UPIPE_HAVE_LIBZVBI_H
 #include <libzvbi.h>

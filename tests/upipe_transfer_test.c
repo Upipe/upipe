@@ -29,16 +29,16 @@
 
 #undef NDEBUG
 
-#include <upipe/uprobe.h>
-#include <upipe/uprobe_stdio.h>
-#include <upipe/uprobe_prefix.h>
-#include <upipe/uprobe_upump_mgr.h>
-#include <upipe/uprobe_transfer.h>
-#include <upipe/ubase.h>
-#include <upipe/urefcount.h>
-#include <upipe/upump.h>
-#include <upump-ev/upump_ev.h>
-#include <upipe-modules/upipe_transfer.h>
+#include "upipe/uprobe.h"
+#include "upipe/uprobe_stdio.h"
+#include "upipe/uprobe_prefix.h"
+#include "upipe/uprobe_upump_mgr.h"
+#include "upipe/uprobe_transfer.h"
+#include "upipe/ubase.h"
+#include "upipe/urefcount.h"
+#include "upipe/upump.h"
+#include "upump-ev/upump_ev.h"
+#include "upipe-modules/upipe_transfer.h"
 
 #include <stdio.h>
 #include <stdlib.h>

@@ -29,7 +29,7 @@
 extern "C" {
 #endif
 
-#include <upipe/upipe.h>
+#include "upipe/upipe.h"
 
 #define UPIPE_DVBSUBF_SIGNATURE UBASE_FOURCC('d','s','b','f')
 /** We only accept the EN 300 743 elementary stream. */

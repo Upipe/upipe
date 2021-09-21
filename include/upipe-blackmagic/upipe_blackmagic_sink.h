@@ -29,8 +29,8 @@
 extern "C" {
 #endif
 
-#include <upipe/upipe.h>
-#include <upipe/uref_attr.h>
+#include "upipe/upipe.h"
+#include "upipe/uref_attr.h"
 
 #define UPIPE_BMD_SINK_SIGNATURE UBASE_FOURCC('b','m','d','k')
 #define UPIPE_BMD_SINK_INPUT_SIGNATURE UBASE_FOURCC('b','m','d','i')

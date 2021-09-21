@@ -30,8 +30,8 @@
 #ifndef _UPIPE_MODULES_HTTPS_SOURCE_HOOK_H_
 #define _UPIPE_MODULES_HTTPS_SOURCE_HOOK_H_
 
-#include <upipe/uref.h>
-#include <upipe-modules/upipe_http_source.h>
+#include "upipe/uref.h"
+#include "upipe-modules/upipe_http_source.h"
 
 /** @This allocates and initializes a ssl context.
  *

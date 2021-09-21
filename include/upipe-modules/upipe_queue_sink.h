@@ -51,7 +51,7 @@
 extern "C" {
 #endif
 
-#include <upipe/upipe.h>
+#include "upipe/upipe.h"
 
 #define UPIPE_QSINK_SIGNATURE UBASE_FOURCC('q','s','n','k')
 

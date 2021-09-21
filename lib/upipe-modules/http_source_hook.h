@@ -30,7 +30,7 @@
 #ifndef _UPIPE_MODULES_HTTP_SOURCE_HOOK_H_
 #define _UPIPE_MODULES_HTTP_SOURCE_HOOK_H_
 
-#include <upipe-modules/upipe_http_source.h>
+#include "upipe-modules/upipe_http_source.h"
 
 #define UPIPE_HTTP_SRC_HOOK_BUFFER  4096
 

@@ -26,16 +26,16 @@
  * SMPTE 2038-2008 Carriage of Ancillary Data Packets in an MPEG-2 Transport Stream
  */
 
-#include <upipe-modules/upipe_vanc_decoder.h>
-#include <upipe/upipe_helper_ubuf_mgr.h>
-#include <upipe/upipe_helper_output.h>
-#include <upipe/upipe_helper_void.h>
-#include <upipe/upipe_helper_urefcount.h>
-#include <upipe/upipe_helper_upipe.h>
-#include <upipe/upipe.h>
-#include <upipe/uref_block.h>
-#include <upipe/uref_pic_flow.h>
-#include <upipe/uref_pic.h>
+#include "upipe-modules/upipe_vanc_decoder.h"
+#include "upipe/upipe_helper_ubuf_mgr.h"
+#include "upipe/upipe_helper_output.h"
+#include "upipe/upipe_helper_void.h"
+#include "upipe/upipe_helper_urefcount.h"
+#include "upipe/upipe_helper_upipe.h"
+#include "upipe/upipe.h"
+#include "upipe/uref_block.h"
+#include "upipe/uref_pic_flow.h"
+#include "upipe/uref_pic.h"
 
 #include <bitstream/smpte/291.h>
 

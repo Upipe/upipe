@@ -34,8 +34,8 @@
 extern "C" {
 #endif
 
-#include <upipe/uref.h>
-#include <upipe/uref_attr.h>
+#include "upipe/uref.h"
+#include "upipe/uref_attr.h"
 
 UREF_ATTR_SMALL_UNSIGNED(h265, type, "h265.type", slice coding type)
 

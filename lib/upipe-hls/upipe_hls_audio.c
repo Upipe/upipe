@@ -21,30 +21,30 @@
  * SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
  */
 
-#include <upipe-hls/upipe_hls_audio.h>
-#include <upipe-hls/upipe_hls_playlist.h>
+#include "upipe-hls/upipe_hls_audio.h"
+#include "upipe-hls/upipe_hls_playlist.h"
 
-#include <upipe-ts/upipe_ts_demux.h>
+#include "upipe-ts/upipe_ts_demux.h"
 
-#include <upipe-modules/upipe_aes_decrypt.h>
-#include <upipe-modules/upipe_id3v2.h>
-#include <upipe-modules/upipe_m3u_reader.h>
-#include <upipe-modules/upipe_probe_uref.h>
+#include "upipe-modules/upipe_aes_decrypt.h"
+#include "upipe-modules/upipe_id3v2.h"
+#include "upipe-modules/upipe_m3u_reader.h"
+#include "upipe-modules/upipe_probe_uref.h"
 
-#include <upipe-framers/upipe_mpga_framer.h>
-#include <upipe-framers/upipe_auto_framer.h>
+#include "upipe-framers/upipe_mpga_framer.h"
+#include "upipe-framers/upipe_auto_framer.h"
 
-#include <upipe/upipe_helper_uprobe.h>
-#include <upipe/upipe_helper_bin_output.h>
-#include <upipe/upipe_helper_inner.h>
-#include <upipe/upipe_helper_void.h>
-#include <upipe/upipe_helper_urefcount_real.h>
-#include <upipe/upipe_helper_urefcount.h>
-#include <upipe/upipe_helper_upipe.h>
+#include "upipe/upipe_helper_uprobe.h"
+#include "upipe/upipe_helper_bin_output.h"
+#include "upipe/upipe_helper_inner.h"
+#include "upipe/upipe_helper_void.h"
+#include "upipe/upipe_helper_urefcount_real.h"
+#include "upipe/upipe_helper_urefcount.h"
+#include "upipe/upipe_helper_upipe.h"
 
-#include <upipe/uprobe_select_flows.h>
-#include <upipe/uprobe_prefix.h>
-#include <upipe/uref_block.h>
+#include "upipe/uprobe_select_flows.h"
+#include "upipe/uprobe_prefix.h"
+#include "upipe/uref_block.h"
 
 /** @internal @This enumatates the possible guess for playlist type. */
 enum upipe_hls_audio_guess {

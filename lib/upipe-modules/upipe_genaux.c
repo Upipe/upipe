@@ -27,18 +27,18 @@
  * @short Upipe module - generates auxiliary blocks from k.systime
  */
 
-#include <upipe/ubase.h>
-#include <upipe/uref_clock.h>
-#include <upipe/uref.h>
-#include <upipe/upipe.h>
-#include <upipe/uref_flow.h>
-#include <upipe/upipe_helper_upipe.h>
-#include <upipe/upipe_helper_urefcount.h>
-#include <upipe/upipe_helper_void.h>
-#include <upipe/upipe_helper_ubuf_mgr.h>
-#include <upipe/upipe_helper_output.h>
-#include <upipe/upipe_helper_input.h>
-#include <upipe-modules/upipe_genaux.h>
+#include "upipe/ubase.h"
+#include "upipe/uref_clock.h"
+#include "upipe/uref.h"
+#include "upipe/upipe.h"
+#include "upipe/uref_flow.h"
+#include "upipe/upipe_helper_upipe.h"
+#include "upipe/upipe_helper_urefcount.h"
+#include "upipe/upipe_helper_void.h"
+#include "upipe/upipe_helper_ubuf_mgr.h"
+#include "upipe/upipe_helper_output.h"
+#include "upipe/upipe_helper_input.h"
+#include "upipe-modules/upipe_genaux.h"
 
 #include <stdlib.h>
 #include <stdbool.h>

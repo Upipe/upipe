@@ -29,22 +29,22 @@
 
 #undef NDEBUG
 
-#include <upipe/uclock.h>
-#include <upipe/uprobe.h>
-#include <upipe/uprobe_stdio.h>
-#include <upipe/uprobe_prefix.h>
-#include <upipe/uprobe_uref_mgr.h>
-#include <upipe/uprobe_uclock.h>
-#include <upipe/umem.h>
-#include <upipe/umem_alloc.h>
-#include <upipe/udict.h>
-#include <upipe/udict_inline.h>
-#include <upipe/uref.h>
-#include <upipe/uref_std.h>
-#include <upipe/uref_flow.h>
-#include <upipe/uref_clock.h>
-#include <upipe/upipe.h>
-#include <upipe-modules/upipe_trickplay.h>
+#include "upipe/uclock.h"
+#include "upipe/uprobe.h"
+#include "upipe/uprobe_stdio.h"
+#include "upipe/uprobe_prefix.h"
+#include "upipe/uprobe_uref_mgr.h"
+#include "upipe/uprobe_uclock.h"
+#include "upipe/umem.h"
+#include "upipe/umem_alloc.h"
+#include "upipe/udict.h"
+#include "upipe/udict_inline.h"
+#include "upipe/uref.h"
+#include "upipe/uref_std.h"
+#include "upipe/uref_flow.h"
+#include "upipe/uref_clock.h"
+#include "upipe/upipe.h"
+#include "upipe-modules/upipe_trickplay.h"
 
 #include <stdlib.h>
 #include <assert.h>

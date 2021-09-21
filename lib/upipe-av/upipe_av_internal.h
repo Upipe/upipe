@@ -31,8 +31,8 @@
 /** @hidden */
 #define _UPIPE_AV_INTERNAL_H_
 
-#include <upipe/udeal.h>
-#include <upipe/upump.h>
+#include "upipe/udeal.h"
+#include "upipe/upump.h"
 
 #include <stdbool.h>
 

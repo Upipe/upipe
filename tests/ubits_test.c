@@ -29,7 +29,7 @@
 
 #undef NDEBUG
 
-#include <upipe/ubits.h>
+#include "upipe/ubits.h"
 
 #include <stdio.h>
 #include <assert.h>

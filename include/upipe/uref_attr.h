@@ -34,8 +34,8 @@
 extern "C" {
 #endif
 
-#include <upipe/uref.h>
-#include <upipe/udict.h>
+#include "upipe/uref.h"
+#include "upipe/udict.h"
 
 /** @This imports all attributes from a uref into another uref (see also
  * @ref udict_import).

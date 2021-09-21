@@ -34,8 +34,8 @@
 extern "C" {
 #endif
 
-#include <upipe/upipe.h>
-#include <upipe/uref.h>
+#include "upipe/upipe.h"
+#include "upipe/uref.h"
 
 #define UPIPE_DELAY_SIGNATURE UBASE_FOURCC('d','l','a','y')
 

@@ -23,65 +23,65 @@
  * SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
  */
 
-#include <upipe-modules/upipe_void_source.h>
-#include <upipe-modules/upipe_dup.h>
-#include <upipe-modules/upipe_rtp_source.h>
-#include <upipe-modules/upipe_grid.h>
-#include <upipe-modules/upipe_video_blank.h>
-#include <upipe-modules/upipe_audio_blank.h>
-#include <upipe-modules/upipe_rtp_prepend.h>
-#include <upipe-modules/upipe_udp_sink.h>
-#include <upipe-modules/upipe_setflowdef.h>
-#include <upipe-modules/upipe_worker_sink.h>
-#include <upipe-modules/upipe_worker_linear.h>
-#include <upipe-modules/upipe_audio_copy.h>
+#include "upipe-modules/upipe_void_source.h"
+#include "upipe-modules/upipe_dup.h"
+#include "upipe-modules/upipe_rtp_source.h"
+#include "upipe-modules/upipe_grid.h"
+#include "upipe-modules/upipe_video_blank.h"
+#include "upipe-modules/upipe_audio_blank.h"
+#include "upipe-modules/upipe_rtp_prepend.h"
+#include "upipe-modules/upipe_udp_sink.h"
+#include "upipe-modules/upipe_setflowdef.h"
+#include "upipe-modules/upipe_worker_sink.h"
+#include "upipe-modules/upipe_worker_linear.h"
+#include "upipe-modules/upipe_audio_copy.h"
 
-#include <upipe-swresample/upipe_swr.h>
-#include <upipe-swscale/upipe_sws.h>
+#include "upipe-swresample/upipe_swr.h"
+#include "upipe-swscale/upipe_sws.h"
 
-#include <upipe-ts/upipe_ts_demux.h>
-#include <upipe-ts/upipe_ts_mux.h>
+#include "upipe-ts/upipe_ts_demux.h"
+#include "upipe-ts/upipe_ts_mux.h"
 
-#include <upipe-framers/upipe_auto_framer.h>
+#include "upipe-framers/upipe_auto_framer.h"
 
-#include <upipe-filters/upipe_filter_decode.h>
-#include <upipe-filters/upipe_filter_encode.h>
-#include <upipe-filters/upipe_filter_format.h>
+#include "upipe-filters/upipe_filter_decode.h"
+#include "upipe-filters/upipe_filter_encode.h"
+#include "upipe-filters/upipe_filter_format.h"
 
-#include <upipe-pthread/uprobe_pthread_upump_mgr.h>
-#include <upipe-pthread/upipe_pthread_transfer.h>
+#include "upipe-pthread/uprobe_pthread_upump_mgr.h"
+#include "upipe-pthread/upipe_pthread_transfer.h"
 
-#include <upipe-av/upipe_av.h>
-#include <upipe-av/upipe_avcodec_decode.h>
-#include <upipe-av/upipe_avcodec_encode.h>
+#include "upipe-av/upipe_av.h"
+#include "upipe-av/upipe_avcodec_decode.h"
+#include "upipe-av/upipe_avcodec_encode.h"
 
-#include <upipe-x264/upipe_x264.h>
+#include "upipe-x264/upipe_x264.h"
 
-#include <upipe/uprobe_stdio.h>
-#include <upipe/uprobe_prefix.h>
-#include <upipe/uprobe_uref_mgr.h>
-#include <upipe/uprobe_uclock.h>
-#include <upipe/uprobe_upump_mgr.h>
-#include <upipe/uprobe_ubuf_mem_pool.h>
-#include <upipe/uprobe_select_flows.h>
-#include <upipe/uprobe_dejitter.h>
+#include "upipe/uprobe_stdio.h"
+#include "upipe/uprobe_prefix.h"
+#include "upipe/uprobe_uref_mgr.h"
+#include "upipe/uprobe_uclock.h"
+#include "upipe/uprobe_upump_mgr.h"
+#include "upipe/uprobe_ubuf_mem_pool.h"
+#include "upipe/uprobe_select_flows.h"
+#include "upipe/uprobe_dejitter.h"
 
-#include <upipe/uref_std.h>
-#include <upipe/uref_clock.h>
-#include <upipe/uref_void_flow.h>
-#include <upipe/uref_block_flow.h>
-#include <upipe/uref_pic_flow.h>
-#include <upipe/uref_sound_flow.h>
+#include "upipe/uref_std.h"
+#include "upipe/uref_clock.h"
+#include "upipe/uref_void_flow.h"
+#include "upipe/uref_block_flow.h"
+#include "upipe/uref_pic_flow.h"
+#include "upipe/uref_sound_flow.h"
 
-#include <upipe/umem.h>
-#include <upipe/umem_alloc.h>
-#include <upipe/udict.h>
-#include <upipe/udict_inline.h>
-#include <upipe/uclock_std.h>
-#include <upipe/uclock.h>
-#include <upipe/ustring.h>
+#include "upipe/umem.h"
+#include "upipe/umem_alloc.h"
+#include "upipe/udict.h"
+#include "upipe/udict_inline.h"
+#include "upipe/uclock_std.h"
+#include "upipe/uclock.h"
+#include "upipe/ustring.h"
 
-#include <upump-ev/upump_ev.h>
+#include "upump-ev/upump_ev.h"
 
 #include <libswscale/swscale.h>
 

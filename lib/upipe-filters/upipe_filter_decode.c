@@ -27,26 +27,26 @@
  * @short Bin pipe decoding a flow
  */
 
-#include <upipe/ubase.h>
-#include <upipe/uprobe.h>
-#include <upipe/uprobe_prefix.h>
-#include <upipe/uref.h>
-#include <upipe/upipe.h>
-#include <upipe/upipe_helper_upipe.h>
-#include <upipe/upipe_helper_void.h>
-#include <upipe/upipe_helper_urefcount.h>
-#include <upipe/upipe_helper_urefcount_real.h>
-#include <upipe/upipe_helper_uref_mgr.h>
-#include <upipe/upipe_helper_inner.h>
-#include <upipe/upipe_helper_uprobe.h>
-#include <upipe/upipe_helper_bin_input.h>
-#include <upipe/upipe_helper_bin_output.h>
-#include <upipe/upipe_helper_upump_mgr.h>
-#include <upipe/upipe_helper_upump.h>
-#include <upipe/upipe_helper_flow_def.h>
-#include <upipe-modules/upipe_probe_uref.h>
-#include <upipe-filters/upipe_filter_decode.h>
-#include <upipe-av/upipe_avcodec_decode.h>
+#include "upipe/ubase.h"
+#include "upipe/uprobe.h"
+#include "upipe/uprobe_prefix.h"
+#include "upipe/uref.h"
+#include "upipe/upipe.h"
+#include "upipe/upipe_helper_upipe.h"
+#include "upipe/upipe_helper_void.h"
+#include "upipe/upipe_helper_urefcount.h"
+#include "upipe/upipe_helper_urefcount_real.h"
+#include "upipe/upipe_helper_uref_mgr.h"
+#include "upipe/upipe_helper_inner.h"
+#include "upipe/upipe_helper_uprobe.h"
+#include "upipe/upipe_helper_bin_input.h"
+#include "upipe/upipe_helper_bin_output.h"
+#include "upipe/upipe_helper_upump_mgr.h"
+#include "upipe/upipe_helper_upump.h"
+#include "upipe/upipe_helper_flow_def.h"
+#include "upipe-modules/upipe_probe_uref.h"
+#include "upipe-filters/upipe_filter_decode.h"
+#include "upipe-av/upipe_avcodec_decode.h"
 
 #include <stdlib.h>
 #include <stdarg.h>

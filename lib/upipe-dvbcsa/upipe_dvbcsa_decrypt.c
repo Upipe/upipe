@@ -24,24 +24,24 @@
  * SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
  */
 
-#include <upipe/config.h>
-#include <upipe/upipe.h>
-#include <upipe/upump.h>
-#include <upipe/uclock.h>
-#include <upipe/uref_block.h>
-#include <upipe/uref_clock.h>
+#include "upipe/config.h"
+#include "upipe/upipe.h"
+#include "upipe/upump.h"
+#include "upipe/uclock.h"
+#include "upipe/uref_block.h"
+#include "upipe/uref_clock.h"
 
-#include <upipe/upipe_helper_upipe.h>
-#include <upipe/upipe_helper_urefcount.h>
-#include <upipe/upipe_helper_flow.h>
-#include <upipe/upipe_helper_output.h>
-#include <upipe/upipe_helper_uclock.h>
-#include <upipe/upipe_helper_upump_mgr.h>
-#include <upipe/upipe_helper_upump.h>
-#include <upipe/upipe_helper_input.h>
+#include "upipe/upipe_helper_upipe.h"
+#include "upipe/upipe_helper_urefcount.h"
+#include "upipe/upipe_helper_flow.h"
+#include "upipe/upipe_helper_output.h"
+#include "upipe/upipe_helper_uclock.h"
+#include "upipe/upipe_helper_upump_mgr.h"
+#include "upipe/upipe_helper_upump.h"
+#include "upipe/upipe_helper_input.h"
 
-#include <upipe-dvbcsa/upipe_dvbcsa_decrypt.h>
-#include <upipe-dvbcsa/upipe_dvbcsa_common.h>
+#include "upipe-dvbcsa/upipe_dvbcsa_decrypt.h"
+#include "upipe-dvbcsa/upipe_dvbcsa_common.h"
 
 #include <bitstream/mpeg/ts.h>
 #include <dvbcsa/dvbcsa.h>

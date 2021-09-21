@@ -29,7 +29,7 @@
 extern "C" {
 #endif
 
-#include <upipe/upipe.h>
+#include "upipe/upipe.h"
 
 #define UPIPE_H264F_SIGNATURE UBASE_FOURCC('2','6','4','f')
 /** We only accept the ISO 14496-10 annex B elementary stream. */

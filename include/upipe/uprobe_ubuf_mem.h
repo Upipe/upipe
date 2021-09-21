@@ -31,8 +31,8 @@
 /** @hidden */
 #define _UPIPE_UPROBE_UBUF_MEM_H_
 
-#include <upipe/uprobe.h>
-#include <upipe/uprobe_helper_uprobe.h>
+#include "upipe/uprobe.h"
+#include "upipe/uprobe_helper_uprobe.h"
 
 #ifdef __cplusplus
 extern "C" {

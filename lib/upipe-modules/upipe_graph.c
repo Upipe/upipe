@@ -27,22 +27,22 @@
  * @short Upipe module to graph
  */
 
-#include <upipe/upipe_helper_upipe.h>
-#include <upipe/upipe_helper_void.h>
-#include <upipe/upipe_helper_flow.h>
-#include <upipe/upipe_helper_urefcount.h>
-#include <upipe/upipe_helper_urefcount_real.h>
-#include <upipe/upipe_helper_subpipe.h>
-#include <upipe/upipe_helper_output.h>
-#include <upipe/upipe.h>
-#include <upipe/uref_pic_flow.h>
-#include <upipe/uref_pic_flow_formats.h>
-#include <upipe/uref_pic.h>
-#include <upipe/ubuf_pic.h>
+#include "upipe/upipe_helper_upipe.h"
+#include "upipe/upipe_helper_void.h"
+#include "upipe/upipe_helper_flow.h"
+#include "upipe/upipe_helper_urefcount.h"
+#include "upipe/upipe_helper_urefcount_real.h"
+#include "upipe/upipe_helper_subpipe.h"
+#include "upipe/upipe_helper_output.h"
+#include "upipe/upipe.h"
+#include "upipe/uref_pic_flow.h"
+#include "upipe/uref_pic_flow_formats.h"
+#include "upipe/uref_pic.h"
+#include "upipe/ubuf_pic.h"
 
-#include <upipe-modules/uref_graph_flow.h>
-#include <upipe-modules/uref_graph.h>
-#include <upipe-modules/upipe_graph.h>
+#include "upipe-modules/uref_graph_flow.h"
+#include "upipe-modules/uref_graph.h"
+#include "upipe-modules/upipe_graph.h"
 
 #include <math.h>
 

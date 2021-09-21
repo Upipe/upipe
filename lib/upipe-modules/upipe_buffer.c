@@ -32,17 +32,17 @@
  */
 
 
-#include <upipe/uclock.h>
-#include <upipe/uref_clock.h>
-#include <upipe/uref_block.h>
-#include <upipe/upipe_helper_upipe.h>
-#include <upipe/upipe_helper_urefcount.h>
-#include <upipe/upipe_helper_void.h>
-#include <upipe/upipe_helper_upump.h>
-#include <upipe/upipe_helper_upump_mgr.h>
-#include <upipe/upipe_helper_input.h>
-#include <upipe/upipe_helper_output.h>
-#include <upipe-modules/upipe_buffer.h>
+#include "upipe/uclock.h"
+#include "upipe/uref_clock.h"
+#include "upipe/uref_block.h"
+#include "upipe/upipe_helper_upipe.h"
+#include "upipe/upipe_helper_urefcount.h"
+#include "upipe/upipe_helper_void.h"
+#include "upipe/upipe_helper_upump.h"
+#include "upipe/upipe_helper_upump_mgr.h"
+#include "upipe/upipe_helper_input.h"
+#include "upipe/upipe_helper_output.h"
+#include "upipe-modules/upipe_buffer.h"
 
 /** @internal @This throws an update event.
  *

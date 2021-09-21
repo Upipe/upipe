@@ -29,7 +29,7 @@
 extern "C" {
 #endif
 
-#include <upipe-ts/uref_ts_flow.h>
+#include "upipe-ts/uref_ts_flow.h"
 
 /** @This is the conformance mode of a transport stream. */
 enum upipe_ts_conformance {

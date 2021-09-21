@@ -27,14 +27,14 @@
  * @short Upipe GL sink animation
  */
 
-#include <upipe/ubase.h>
-#include <upipe/uprobe.h>
-#include <upipe-gl/uprobe_gl_sink.h>
-#include <upipe/uprobe_helper_uprobe.h>
-#include <upipe/uprobe_helper_alloc.h>
-#include <upipe/upipe.h>
-#include <upipe/uref_pic.h>
-#include <upipe/uref_pic_flow.h>
+#include "upipe/ubase.h"
+#include "upipe/uprobe.h"
+#include "upipe-gl/uprobe_gl_sink.h"
+#include "upipe/uprobe_helper_uprobe.h"
+#include "upipe/uprobe_helper_alloc.h"
+#include "upipe/upipe.h"
+#include "upipe/uref_pic.h"
+#include "upipe/uref_pic_flow.h"
 
 #include <stdlib.h>
 #include <stdarg.h>

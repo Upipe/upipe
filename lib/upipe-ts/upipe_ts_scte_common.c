@@ -25,10 +25,10 @@
  *  - SCTE 35 2013 (Digital Program Insertion Cueing Message for Cable)
  */
 
-#include <upipe/upipe.h>
-#include <upipe/uclock.h>
-#include <upipe/uref_clock.h>
-#include <upipe-ts/uref_ts_scte35_desc.h>
+#include "upipe/upipe.h"
+#include "upipe/uclock.h"
+#include "upipe/uref_clock.h"
+#include "upipe-ts/uref_ts_scte35_desc.h"
 
 #include <bitstream/scte/35.h>
 

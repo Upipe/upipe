@@ -27,10 +27,10 @@
  * @short probe catching provide_request events asking for a uclock
  */
 
-#include <upipe/uclock.h>
-#include <upipe/uprobe.h>
-#include <upipe/uprobe_uclock.h>
-#include <upipe/uprobe_helper_alloc.h>
+#include "upipe/uclock.h"
+#include "upipe/uprobe.h"
+#include "upipe/uprobe_uclock.h"
+#include "upipe/uprobe_helper_alloc.h"
 
 #include <stdlib.h>
 #include <stdarg.h>

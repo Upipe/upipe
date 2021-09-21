@@ -34,7 +34,7 @@
 extern "C" {
 #endif
 
-#include <upipe/upipe.h>
+#include "upipe/upipe.h"
 
 #define UPIPE_RTPFB_SIGNATURE UBASE_FOURCC('r','t','p','f')
 #define UPIPE_RTPFB_OUTPUT_SIGNATURE UBASE_FOURCC('r','t','f','b')

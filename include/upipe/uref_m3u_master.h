@@ -29,8 +29,8 @@
 extern "C" {
 #endif
 
-#include <upipe/ustring.h>
-#include <upipe/uref_attr.h>
+#include "upipe/ustring.h"
+#include "upipe/uref_attr.h"
 
 UREF_ATTR_UNSIGNED(m3u_master, bandwidth, "m3u.master.bandwidth",
                    bits per second)

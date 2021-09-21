@@ -27,7 +27,7 @@
 extern "C" {
 #endif
 
-#include <upipe/uref_attr.h>
+#include "upipe/uref_attr.h"
 
 UREF_ATTR_SMALL_UNSIGNED(hls, renditions, "hls.renditions", number of rendition);
 UREF_ATTR_STRING_VA(hls_rendition, type, "hls.rendition[%" PRIu8"].type",

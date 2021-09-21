@@ -34,12 +34,12 @@
 extern "C" {
 #endif
 
-#include <upipe/uclock.h>
-#include <upipe/uref.h>
-#include <upipe/uref_attr.h>
-#include <upipe/uref_clock.h>
-#include <upipe/ubuf.h>
-#include <upipe/ubuf_sound.h>
+#include "upipe/uclock.h"
+#include "upipe/uref.h"
+#include "upipe/uref_attr.h"
+#include "upipe/uref_clock.h"
+#include "upipe/ubuf.h"
+#include "upipe/ubuf_sound.h"
 
 #include <stdint.h>
 

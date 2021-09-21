@@ -36,12 +36,12 @@
 extern "C" {
 #endif
 
-#include <upipe/ubase.h>
-#include <upipe/uclock.h>
-#include <upipe/uref.h>
-#include <upipe/uref_clock.h>
-#include <upipe/udict_dump.h>
-#include <upipe/uprobe.h>
+#include "upipe/ubase.h"
+#include "upipe/uclock.h"
+#include "upipe/uref.h"
+#include "upipe/uref_clock.h"
+#include "upipe/udict_dump.h"
+#include "upipe/uprobe.h"
 
 #include <stdint.h>
 #include <inttypes.h>

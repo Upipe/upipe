@@ -36,7 +36,7 @@ extern "C" {
 #endif
 
 #include <stdint.h>
-#include <upipe/upipe.h>
+#include "upipe/upipe.h"
 
 #define UPIPE_NTSC_PREPEND_SIGNATURE UBASE_FOURCC('n','t','s','p')
 

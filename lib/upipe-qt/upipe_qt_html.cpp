@@ -25,32 +25,32 @@
 #define __STDC_FORMAT_MACROS   1
 #define __STDC_CONSTANT_MACROS 1
 
-#include <upipe/upipe.h>
-#include <upipe/ubase.h>
-#include <upipe/ulist.h>
-#include <upipe/uqueue.h>
-#include <upipe/uprobe.h>
-#include <upipe/uref.h>
-#include <upipe/ubuf.h>
-#include <upipe/upump.h>
-#include <upipe/uref_pic_flow.h>
-#include <upipe/uref_pic.h>
-#include <upipe/uref_clock.h>
-#include <upipe/ubuf_pic.h>
-#include <upipe/uref_flow.h>
-#include <upipe/uref_attr.h>
-#include <upipe/upipe_helper_upipe.h>
-#include <upipe/upipe_helper_urefcount.h>
-#include <upipe/upipe_helper_void.h>
-#include <upipe/upipe_helper_flow_def.h>
-#include <upipe/upipe_helper_ubuf_mgr.h>
-#include <upipe/upipe_helper_uref_mgr.h>
-#include <upipe/upipe_helper_upump_mgr.h>
-#include <upipe/upipe_helper_upump.h>
-#include <upipe/upump_blocker.h>
-#include <upipe/upump_common.h>
+#include "upipe/upipe.h"
+#include "upipe/ubase.h"
+#include "upipe/ulist.h"
+#include "upipe/uqueue.h"
+#include "upipe/uprobe.h"
+#include "upipe/uref.h"
+#include "upipe/ubuf.h"
+#include "upipe/upump.h"
+#include "upipe/uref_pic_flow.h"
+#include "upipe/uref_pic.h"
+#include "upipe/uref_clock.h"
+#include "upipe/ubuf_pic.h"
+#include "upipe/uref_flow.h"
+#include "upipe/uref_attr.h"
+#include "upipe/upipe_helper_upipe.h"
+#include "upipe/upipe_helper_urefcount.h"
+#include "upipe/upipe_helper_void.h"
+#include "upipe/upipe_helper_flow_def.h"
+#include "upipe/upipe_helper_ubuf_mgr.h"
+#include "upipe/upipe_helper_uref_mgr.h"
+#include "upipe/upipe_helper_upump_mgr.h"
+#include "upipe/upipe_helper_upump.h"
+#include "upipe/upump_blocker.h"
+#include "upipe/upump_common.h"
 
-#include <upipe/upipe_helper_output.h>
+#include "upipe/upipe_helper_output.h"
 
 #include <QImage>
 #include <QPaintDevice>
@@ -77,7 +77,7 @@
 #include <time.h>
 #include <pthread.h>
 
-#include <upipe-qt/upipe_qt_html.h>
+#include "upipe-qt/upipe_qt_html.h"
 #include "thumbnail.h"
 
 /** only accept pics */

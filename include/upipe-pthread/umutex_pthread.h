@@ -34,7 +34,7 @@
 extern "C" {
 #endif
 
-#include <upipe/umutex.h>
+#include "upipe/umutex.h"
 
 #include <pthread.h>
 

@@ -27,14 +27,14 @@
  * @short Upipe null module - free incoming urefs
  */
 
-#include <upipe/ubase.h>
-#include <upipe/uref.h>
-#include <upipe/uref_dump.h>
-#include <upipe/upipe.h>
-#include <upipe/upipe_helper_upipe.h>
-#include <upipe/upipe_helper_urefcount.h>
-#include <upipe/upipe_helper_void.h>
-#include <upipe-modules/upipe_null.h>
+#include "upipe/ubase.h"
+#include "upipe/uref.h"
+#include "upipe/uref_dump.h"
+#include "upipe/upipe.h"
+#include "upipe/upipe_helper_upipe.h"
+#include "upipe/upipe_helper_urefcount.h"
+#include "upipe/upipe_helper_void.h"
+#include "upipe-modules/upipe_null.h"
 
 #include <stdlib.h>
 #include <stdbool.h>

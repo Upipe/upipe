@@ -37,7 +37,7 @@ extern "C" {
 #endif
 
 #include <stdint.h>
-#include <upipe/upipe.h>
+#include "upipe/upipe.h"
 
 #define UPIPE_PROBE_UREF_SIGNATURE UBASE_FOURCC('p','r','b','u')
 

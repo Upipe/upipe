@@ -29,8 +29,8 @@
 
 #undef NDEBUG
 
-#include <upipe/umem.h>
-#include <upipe/umem_pool.h>
+#include "upipe/umem.h"
+#include "upipe/umem_pool.h"
 
 #include <stdint.h>
 #include <stdio.h>

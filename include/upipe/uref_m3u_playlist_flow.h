@@ -29,7 +29,7 @@
 extern "C" {
 #endif
 
-#include <upipe/uref_attr.h>
+#include "upipe/uref_attr.h"
 
 UREF_ATTR_STRING(m3u_playlist_flow, type, "m3u.playlist.type", type)
 UREF_ATTR_UNSIGNED(m3u_playlist_flow, target_duration,

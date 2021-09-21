@@ -23,10 +23,10 @@
  * SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
  */
 
-#include <upipe/ubase.h>
-#include <upipe/uprobe.h>
-#include <upipe/uprobe_helper_alloc.h>
-#include <upipe/uprobe_loglevel.h>
+#include "upipe/ubase.h"
+#include "upipe/uprobe.h"
+#include "upipe/uprobe_helper_alloc.h"
+#include "upipe/uprobe_loglevel.h"
 
 #include <regex.h>
 

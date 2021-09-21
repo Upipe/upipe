@@ -34,7 +34,7 @@
 extern "C" {
 #endif
 
-#include <upipe/upipe.h>
+#include "upipe/upipe.h"
 
 #define UPIPE_HTTP_SRC_SIGNATURE UBASE_FOURCC('h','t','t','p')
 

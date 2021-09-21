@@ -29,36 +29,36 @@
  * @short Upipe avcodec encode module
  */
 
-#include <upipe/uclock.h>
-#include <upipe/ubuf.h>
-#include <upipe/ubuf_block.h>
-#include <upipe/uref.h>
-#include <upipe/uref_attr.h>
-#include <upipe/uref_clock.h>
-#include <upipe/uref_pic.h>
-#include <upipe/uref_flow.h>
-#include <upipe/uref_pic_flow.h>
-#include <upipe/uref_block_flow.h>
-#include <upipe/uref_sound.h>
-#include <upipe/uref_sound_flow.h>
-#include <upipe/uref_dump.h>
-#include <upipe/upipe.h>
-#include <upipe/upipe_helper_upipe.h>
-#include <upipe/upipe_helper_urefcount.h>
-#include <upipe/upipe_helper_flow.h>
-#include <upipe/upipe_helper_ubuf_mgr.h>
-#include <upipe/upipe_helper_output.h>
-#include <upipe/upipe_helper_flow_format.h>
-#include <upipe/upipe_helper_flow_def.h>
-#include <upipe/upipe_helper_flow_def_check.h>
-#include <upipe/upipe_helper_upump_mgr.h>
-#include <upipe/upipe_helper_upump.h>
-#include <upipe/upipe_helper_input.h>
-#include <upipe-av/upipe_avcodec_encode.h>
-#include <upipe-av/ubuf_av.h>
-#include <upipe-framers/uref_h264.h>
-#include <upipe-framers/uref_mpgv.h>
-#include <upipe-framers/uref_mpga_flow.h>
+#include "upipe/uclock.h"
+#include "upipe/ubuf.h"
+#include "upipe/ubuf_block.h"
+#include "upipe/uref.h"
+#include "upipe/uref_attr.h"
+#include "upipe/uref_clock.h"
+#include "upipe/uref_pic.h"
+#include "upipe/uref_flow.h"
+#include "upipe/uref_pic_flow.h"
+#include "upipe/uref_block_flow.h"
+#include "upipe/uref_sound.h"
+#include "upipe/uref_sound_flow.h"
+#include "upipe/uref_dump.h"
+#include "upipe/upipe.h"
+#include "upipe/upipe_helper_upipe.h"
+#include "upipe/upipe_helper_urefcount.h"
+#include "upipe/upipe_helper_flow.h"
+#include "upipe/upipe_helper_ubuf_mgr.h"
+#include "upipe/upipe_helper_output.h"
+#include "upipe/upipe_helper_flow_format.h"
+#include "upipe/upipe_helper_flow_def.h"
+#include "upipe/upipe_helper_flow_def_check.h"
+#include "upipe/upipe_helper_upump_mgr.h"
+#include "upipe/upipe_helper_upump.h"
+#include "upipe/upipe_helper_input.h"
+#include "upipe-av/upipe_avcodec_encode.h"
+#include "upipe-av/ubuf_av.h"
+#include "upipe-framers/uref_h264.h"
+#include "upipe-framers/uref_mpgv.h"
+#include "upipe-framers/uref_mpga_flow.h"
 
 #include <stdlib.h>
 #include <stdbool.h>
@@ -74,8 +74,8 @@
 #include <bitstream/mpeg/h264.h>
 #include <bitstream/mpeg/mp2v.h>
 
-#include <upipe-av/upipe_av_pixfmt.h>
-#include <upipe-av/upipe_av_samplefmt.h>
+#include "upipe-av/upipe_av_pixfmt.h"
+#include "upipe-av/upipe_av_samplefmt.h"
 #include "upipe_av_internal.h"
 
 #define PREFIX_FLOW "block."

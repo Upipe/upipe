@@ -34,7 +34,7 @@
 extern "C" {
 #endif
 
-#include <upipe/upipe.h>
+#include "upipe/upipe.h"
 
 #define UPIPE_BLKSRC_SIGNATURE UBASE_FOURCC('b','l','k','s')
 

@@ -23,7 +23,7 @@
  * SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
  */
 
-#include <upipe/ucookie.h>
+#include "upipe/ucookie.h"
 
 #define UCOOKIE_ALPHA_LOWER \
     'a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j', \

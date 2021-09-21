@@ -34,8 +34,8 @@
 extern "C" {
 #endif
 
-#include <upipe/ubase.h>
-#include <upipe/upipe.h>
+#include "upipe/ubase.h"
+#include "upipe/upipe.h"
 
 /** @This declares two functions dealing with a pipe that has no argument.
  *

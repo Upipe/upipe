@@ -25,22 +25,22 @@
  *  - ETSI TR 101 211 V1.9.1 (2009-06) (Guidelines of SI in DVB systems)
  */
 
-#include <upipe/uclock.h>
-#include <upipe/uref.h>
-#include <upipe/uref_event.h>
-#include <upipe/uref_flow.h>
-#include <upipe/uref_block.h>
-#include <upipe/upipe.h>
-#include <upipe/upipe_helper_upipe.h>
-#include <upipe/upipe_helper_urefcount.h>
-#include <upipe/upipe_helper_void.h>
-#include <upipe/upipe_helper_output.h>
-#include <upipe/upipe_helper_ubuf_mgr.h>
-#include <upipe/upipe_helper_flow_def.h>
-#include <upipe/upipe_helper_iconv.h>
-#include <upipe-ts/upipe_ts_eit_decoder.h>
-#include <upipe-ts/uref_ts_event.h>
-#include <upipe-ts/uref_ts_flow.h>
+#include "upipe/uclock.h"
+#include "upipe/uref.h"
+#include "upipe/uref_event.h"
+#include "upipe/uref_flow.h"
+#include "upipe/uref_block.h"
+#include "upipe/upipe.h"
+#include "upipe/upipe_helper_upipe.h"
+#include "upipe/upipe_helper_urefcount.h"
+#include "upipe/upipe_helper_void.h"
+#include "upipe/upipe_helper_output.h"
+#include "upipe/upipe_helper_ubuf_mgr.h"
+#include "upipe/upipe_helper_flow_def.h"
+#include "upipe/upipe_helper_iconv.h"
+#include "upipe-ts/upipe_ts_eit_decoder.h"
+#include "upipe-ts/uref_ts_event.h"
+#include "upipe-ts/uref_ts_flow.h"
 #include "upipe_ts_psi_decoder.h"
 
 #include <stdlib.h>

@@ -35,9 +35,9 @@
 extern "C" {
 #endif
 
-#include <upipe/upipe.h>
-#include <upipe/uprobe.h>
-#include <upipe/upump.h>
+#include "upipe/upipe.h"
+#include "upipe/uprobe.h"
+#include "upipe/upump.h"
 
 #include <stdint.h>
 #include <pthread.h>

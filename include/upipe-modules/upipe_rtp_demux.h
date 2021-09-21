@@ -34,7 +34,7 @@
 extern "C" {
 #endif
 
-#include <upipe/upipe.h>
+#include "upipe/upipe.h"
 
 #define UPIPE_RTP_DEMUX_SIGNATURE UBASE_FOURCC('r','t','p','x')
 #define UPIPE_RTP_DEMUX_SUB_SIGNATURE UBASE_FOURCC('r','t','p','X')

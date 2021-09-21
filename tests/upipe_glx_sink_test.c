@@ -25,24 +25,24 @@
 
 #undef NDEBUG
 
-#include <upipe/uprobe.h>
-#include <upipe/uprobe_prefix.h>
-#include <upipe/uprobe_stdio.h>
-#include <upipe/umem.h>
-#include <upipe/umem_alloc.h>
-#include <upipe/udict.h>
-#include <upipe/udict_inline.h>
-#include <upipe/ubuf.h>
-#include <upipe/ubuf_pic_mem.h>
-#include <upipe/uref.h>
-#include <upipe/uref_pic_flow.h>
-#include <upipe/uref_pic.h>
-#include <upipe/uref_std.h>
-#include <upipe/upipe.h>
-#include <upipe/upump.h>
-#include <upump-ev/upump_ev.h>
-#include <upipe-gl/upipe_glx_sink.h>
-#include <upipe-gl/uprobe_gl_sink_cube.h>
+#include "upipe/uprobe.h"
+#include "upipe/uprobe_prefix.h"
+#include "upipe/uprobe_stdio.h"
+#include "upipe/umem.h"
+#include "upipe/umem_alloc.h"
+#include "upipe/udict.h"
+#include "upipe/udict_inline.h"
+#include "upipe/ubuf.h"
+#include "upipe/ubuf_pic_mem.h"
+#include "upipe/uref.h"
+#include "upipe/uref_pic_flow.h"
+#include "upipe/uref_pic.h"
+#include "upipe/uref_std.h"
+#include "upipe/upipe.h"
+#include "upipe/upump.h"
+#include "upump-ev/upump_ev.h"
+#include "upipe-gl/upipe_glx_sink.h"
+#include "upipe-gl/uprobe_gl_sink_cube.h"
 
 #include <stdio.h>
 #include <stdlib.h>

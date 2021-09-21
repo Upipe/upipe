@@ -29,19 +29,19 @@
 
 #undef NDEBUG
 
-#include <upipe/uprobe.h>
-#include <upipe/uprobe_stdio.h>
-#include <upipe/uprobe_prefix.h>
-#include <upipe/umem.h>
-#include <upipe/umem_alloc.h>
-#include <upipe/udict.h>
-#include <upipe/udict_inline.h>
-#include <upipe/uref.h>
-#include <upipe/uref_flow.h>
-#include <upipe/uref_std.h>
-#include <upipe/upipe.h>
-#include <upipe-framers/upipe_video_trim.h>
-#include <upipe-framers/uref_mpgv.h>
+#include "upipe/uprobe.h"
+#include "upipe/uprobe_stdio.h"
+#include "upipe/uprobe_prefix.h"
+#include "upipe/umem.h"
+#include "upipe/umem_alloc.h"
+#include "upipe/udict.h"
+#include "upipe/udict_inline.h"
+#include "upipe/uref.h"
+#include "upipe/uref_flow.h"
+#include "upipe/uref_std.h"
+#include "upipe/upipe.h"
+#include "upipe-framers/upipe_video_trim.h"
+#include "upipe-framers/uref_mpgv.h"
 
 #include <stdbool.h>
 #include <stdlib.h>

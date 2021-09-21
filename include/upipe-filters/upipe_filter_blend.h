@@ -29,7 +29,7 @@
 extern "C" {
 #endif
 
-#include <upipe/upipe.h>
+#include "upipe/upipe.h"
 
 #define UPIPE_FILTER_BLEND_SIGNATURE UBASE_FOURCC('b', 'l', 'e', 'n')
 

@@ -27,25 +27,25 @@
  * @short unit tests for upipe_swr pipe
  */
 
-#include <upipe/uprobe.h>
-#include <upipe/uprobe_stdio.h>
-#include <upipe/uprobe_prefix.h>
-#include <upipe/uprobe_ubuf_mem.h>
-#include <upipe/upipe.h>
-#include <upipe/uclock.h>
-#include <upipe/umem.h>
-#include <upipe/umem_alloc.h>
-#include <upipe/udict.h>
-#include <upipe/udict_inline.h>
-#include <upipe/ubuf.h>
-#include <upipe/ubuf_sound_mem.h>
-#include <upipe/uref.h>
-#include <upipe/uref_std.h>
-#include <upipe/uref_sound.h>
-#include <upipe/uref_sound_flow.h>
-#include <upipe/uref_clock.h>
-#include <upipe-swresample/upipe_swr.h>
-#include <upipe-modules/upipe_null.h>
+#include "upipe/uprobe.h"
+#include "upipe/uprobe_stdio.h"
+#include "upipe/uprobe_prefix.h"
+#include "upipe/uprobe_ubuf_mem.h"
+#include "upipe/upipe.h"
+#include "upipe/uclock.h"
+#include "upipe/umem.h"
+#include "upipe/umem_alloc.h"
+#include "upipe/udict.h"
+#include "upipe/udict_inline.h"
+#include "upipe/ubuf.h"
+#include "upipe/ubuf_sound_mem.h"
+#include "upipe/uref.h"
+#include "upipe/uref_std.h"
+#include "upipe/uref_sound.h"
+#include "upipe/uref_sound_flow.h"
+#include "upipe/uref_clock.h"
+#include "upipe-swresample/upipe_swr.h"
+#include "upipe-modules/upipe_null.h"
 
 #undef NDEBUG
 

@@ -29,11 +29,11 @@
 
 #undef NDEBUG
 
-#include <upipe/uprobe_uclock.h>
-#include <upipe/upipe.h>
-#include <upipe/uclock.h>
-#include <upipe/uclock_std.h>
-#include <upipe/urequest.h>
+#include "upipe/uprobe_uclock.h"
+#include "upipe/upipe.h"
+#include "upipe/uclock.h"
+#include "upipe/uclock_std.h"
+#include "upipe/urequest.h"
 
 #include <stdio.h>
 #include <stdlib.h>

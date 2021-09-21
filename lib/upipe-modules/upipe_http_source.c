@@ -28,29 +28,29 @@
  * @short Upipe source module for http GET requests
  */
 
-#include <upipe/ubase.h>
-#include <upipe/ucookie.h>
-#include <upipe/uclock.h>
-#include <upipe/uref.h>
-#include <upipe/uref_block.h>
-#include <upipe/uref_block_flow.h>
-#include <upipe/uref_clock.h>
-#include <upipe/uref_uri.h>
-#include <upipe/upump.h>
-#include <upipe/ueventfd.h>
-#include <upipe/upipe.h>
-#include <upipe/upipe_helper_upipe.h>
-#include <upipe/upipe_helper_urefcount.h>
-#include <upipe/upipe_helper_void.h>
-#include <upipe/upipe_helper_uref_mgr.h>
-#include <upipe/upipe_helper_ubuf_mgr.h>
-#include <upipe/upipe_helper_output.h>
-#include <upipe/upipe_helper_upump_mgr.h>
-#include <upipe/upipe_helper_upump.h>
-#include <upipe/upipe_helper_uclock.h>
-#include <upipe/upipe_helper_output_size.h>
-#include <upipe-modules/upipe_http_source.h>
-#include <upipe-modules/uref_http_flow.h>
+#include "upipe/ubase.h"
+#include "upipe/ucookie.h"
+#include "upipe/uclock.h"
+#include "upipe/uref.h"
+#include "upipe/uref_block.h"
+#include "upipe/uref_block_flow.h"
+#include "upipe/uref_clock.h"
+#include "upipe/uref_uri.h"
+#include "upipe/upump.h"
+#include "upipe/ueventfd.h"
+#include "upipe/upipe.h"
+#include "upipe/upipe_helper_upipe.h"
+#include "upipe/upipe_helper_urefcount.h"
+#include "upipe/upipe_helper_void.h"
+#include "upipe/upipe_helper_uref_mgr.h"
+#include "upipe/upipe_helper_ubuf_mgr.h"
+#include "upipe/upipe_helper_output.h"
+#include "upipe/upipe_helper_upump_mgr.h"
+#include "upipe/upipe_helper_upump.h"
+#include "upipe/upipe_helper_uclock.h"
+#include "upipe/upipe_helper_output_size.h"
+#include "upipe-modules/upipe_http_source.h"
+#include "upipe-modules/uref_http_flow.h"
 
 #include <stdio.h>
 #include <stdlib.h>

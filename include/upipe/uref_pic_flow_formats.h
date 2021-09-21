@@ -35,7 +35,7 @@
 extern "C" {
 #endif
 
-#include <upipe/uref_pic_flow.h>
+#include "upipe/uref_pic_flow.h"
 
 /** @This describes a picture plane */
 struct uref_pic_flow_format_plane {

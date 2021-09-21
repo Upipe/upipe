@@ -29,8 +29,8 @@
 extern "C" {
 #endif
 
-#include <upipe/upipe.h>
-#include <upipe-ts/upipe_ts_demux.h>
+#include "upipe/upipe.h"
+#include "upipe-ts/upipe_ts_demux.h"
 
 #define UPIPE_TS_EITD_SIGNATURE UBASE_FOURCC('t','s',0x4e,'d')
 

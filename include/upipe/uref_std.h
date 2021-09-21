@@ -34,7 +34,7 @@
 extern "C" {
 #endif
 
-#include <upipe/uref.h>
+#include "upipe/uref.h"
 
 /** @This allocates a new instance of the standard uref manager
  *

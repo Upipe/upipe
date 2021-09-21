@@ -29,17 +29,17 @@
 
 #undef NDEBUG
 
-#include <upipe/uprobe.h>
-#include <upipe/uprobe_stdio.h>
-#include <upipe/uprobe_dejitter.h>
-#include <upipe/upipe.h>
-#include <upipe/umem.h>
-#include <upipe/umem_alloc.h>
-#include <upipe/udict.h>
-#include <upipe/udict_inline.h>
-#include <upipe/uref.h>
-#include <upipe/uref_clock.h>
-#include <upipe/uref_std.h>
+#include "upipe/uprobe.h"
+#include "upipe/uprobe_stdio.h"
+#include "upipe/uprobe_dejitter.h"
+#include "upipe/upipe.h"
+#include "upipe/umem.h"
+#include "upipe/umem_alloc.h"
+#include "upipe/udict.h"
+#include "upipe/udict_inline.h"
+#include "upipe/uref.h"
+#include "upipe/uref_clock.h"
+#include "upipe/uref_std.h"
 
 #include <stdio.h>
 #include <assert.h>

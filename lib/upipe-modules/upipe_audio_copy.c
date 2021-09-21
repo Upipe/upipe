@@ -29,18 +29,18 @@
  * @short Upipe module to output fixed size sound buffers.
  */
 
-#include <upipe/upipe_helper_upipe.h>
-#include <upipe/upipe_helper_urefcount.h>
-#include <upipe/upipe_helper_flow.h>
-#include <upipe/upipe_helper_flow_def.h>
-#include <upipe/upipe_helper_output.h>
+#include "upipe/upipe_helper_upipe.h"
+#include "upipe/upipe_helper_urefcount.h"
+#include "upipe/upipe_helper_flow.h"
+#include "upipe/upipe_helper_flow_def.h"
+#include "upipe/upipe_helper_output.h"
 
-#include <upipe/upipe.h>
-#include <upipe/uref_sound.h>
-#include <upipe/uref_sound_flow.h>
-#include <upipe/uref_pic_flow.h>
+#include "upipe/upipe.h"
+#include "upipe/uref_sound.h"
+#include "upipe/uref_sound_flow.h"
+#include "upipe/uref_pic_flow.h"
 
-#include <upipe-modules/upipe_audio_copy.h>
+#include "upipe-modules/upipe_audio_copy.h"
 
 /** @internal @This is the expected input flow definition. */
 #define EXPECTED_FLOW_DEF   UREF_SOUND_FLOW_DEF

@@ -27,20 +27,20 @@
  * @short Upipe module generating regular void uref
  */
 
-#include <upipe/upipe_helper_upipe.h>
-#include <upipe/upipe_helper_urefcount.h>
-#include <upipe/upipe_helper_flow.h>
-#include <upipe/upipe_helper_output.h>
-#include <upipe/upipe_helper_uref_mgr.h>
-#include <upipe/upipe_helper_uclock.h>
-#include <upipe/upipe_helper_upump_mgr.h>
-#include <upipe/upipe_helper_upump.h>
+#include "upipe/upipe_helper_upipe.h"
+#include "upipe/upipe_helper_urefcount.h"
+#include "upipe/upipe_helper_flow.h"
+#include "upipe/upipe_helper_output.h"
+#include "upipe/upipe_helper_uref_mgr.h"
+#include "upipe/upipe_helper_uclock.h"
+#include "upipe/upipe_helper_upump_mgr.h"
+#include "upipe/upipe_helper_upump.h"
 
-#include <upipe/upipe.h>
-#include <upipe/upump.h>
-#include <upipe/uref_clock.h>
+#include "upipe/upipe.h"
+#include "upipe/upump.h"
+#include "upipe/uref_clock.h"
 
-#include <upipe-modules/upipe_void_source.h>
+#include "upipe-modules/upipe_void_source.h"
 
 #define EXPECTED_FLOW_DEF   "void."
 

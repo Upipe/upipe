@@ -27,12 +27,12 @@
  * @short Upipe uref standard manager
  */
 
-#include <upipe/ubase.h>
-#include <upipe/urefcount.h>
-#include <upipe/upool.h>
-#include <upipe/udict.h>
-#include <upipe/uref.h>
-#include <upipe/uref_std.h>
+#include "upipe/ubase.h"
+#include "upipe/urefcount.h"
+#include "upipe/upool.h"
+#include "upipe/udict.h"
+#include "upipe/uref.h"
+#include "upipe/uref_std.h"
 
 #include <stdlib.h>
 #include <assert.h>

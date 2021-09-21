@@ -29,7 +29,7 @@
 extern "C" {
 #endif
 
-#include <upipe/upipe.h>
+#include "upipe/upipe.h"
 
 #define UPIPE_TS_PSI_SPLIT_SIGNATURE UBASE_FOURCC('t','s','p','Y')
 #define UPIPE_TS_PSI_SPLIT_OUTPUT_SIGNATURE UBASE_FOURCC('t','s','p','Z')

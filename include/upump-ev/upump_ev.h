@@ -39,7 +39,7 @@ extern "C" {
 
 #include <ev.h>
 
-#include <upipe/upump.h>
+#include "upipe/upump.h"
 
 #define UPUMP_EV_SIGNATURE UBASE_FOURCC('e','v',' ',' ')
 

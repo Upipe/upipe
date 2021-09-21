@@ -27,7 +27,7 @@
 extern "C" {
 #endif
 
-#include <upipe/uref_attr.h>
+#include "upipe/uref_attr.h"
 
 UREF_ATTR_STRING(aes, method, "aes.method", aes method);
 UREF_ATTR_OPAQUE(aes, key, "aes.key", aes key);

@@ -29,9 +29,9 @@
 extern "C" {
 #endif
 
-#include <upipe/ustring.h>
-#include <upipe/ubase.h>
-#include <upipe/upipe.h>
+#include "upipe/ustring.h"
+#include "upipe/ubase.h"
+#include "upipe/upipe.h"
 #include <dvbcsa/dvbcsa.h>
 
 /** @This is the signature for common dvbcsa pipe operations. */

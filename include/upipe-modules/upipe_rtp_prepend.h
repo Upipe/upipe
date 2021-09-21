@@ -35,8 +35,8 @@ extern "C" {
 #endif
 
 #include <stdint.h>
-#include <upipe/upipe.h>
-#include <upipe/uref_block.h>
+#include "upipe/upipe.h"
+#include "upipe/uref_block.h"
 
 #define UPIPE_RTP_PREPEND_SIGNATURE UBASE_FOURCC('r','t','p','p')
 

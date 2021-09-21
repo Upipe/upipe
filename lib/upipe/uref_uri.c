@@ -23,8 +23,8 @@
  * SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
  */
 
-#include <upipe/uuri.h>
-#include <upipe/uref_uri.h>
+#include "upipe/uuri.h"
+#include "upipe/uref_uri.h"
 
 int uref_uri_set(struct uref *uref, const struct uuri *uuri)
 {

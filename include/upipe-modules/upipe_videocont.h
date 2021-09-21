@@ -35,7 +35,7 @@
 extern "C" {
 #endif
 
-#include <upipe/upipe.h>
+#include "upipe/upipe.h"
 
 #define UPIPE_VIDEOCONT_SIGNATURE UBASE_FOURCC('v','i','d','c')
 #define UPIPE_VIDEOCONT_SUB_SIGNATURE UBASE_FOURCC('v','i','d','i')

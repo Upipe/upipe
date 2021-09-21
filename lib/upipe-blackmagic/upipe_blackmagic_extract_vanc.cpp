@@ -29,20 +29,20 @@
 #define __STDC_FORMAT_MACROS   1
 #define __STDC_CONSTANT_MACROS 1
 
-#include <upipe/ubase.h>
-#include <upipe/uref.h>
-#include <upipe/uref_pic.h>
-#include <upipe/uref_pic_flow.h>
-#include <upipe/ubuf.h>
-#include <upipe/upipe.h>
-#include <upipe/upipe_helper_upipe.h>
-#include <upipe/upipe_helper_urefcount.h>
-#include <upipe/upipe_helper_void.h>
-#include <upipe/upipe_helper_ubuf_mgr.h>
-#include <upipe/upipe_helper_output.h>
-#include <upipe/upipe_helper_input.h>
-#include <upipe-blackmagic/upipe_blackmagic_extract_vanc.h>
-#include <upipe-blackmagic/ubuf_pic_blackmagic.h>
+#include "upipe/ubase.h"
+#include "upipe/uref.h"
+#include "upipe/uref_pic.h"
+#include "upipe/uref_pic_flow.h"
+#include "upipe/ubuf.h"
+#include "upipe/upipe.h"
+#include "upipe/upipe_helper_upipe.h"
+#include "upipe/upipe_helper_urefcount.h"
+#include "upipe/upipe_helper_void.h"
+#include "upipe/upipe_helper_ubuf_mgr.h"
+#include "upipe/upipe_helper_output.h"
+#include "upipe/upipe_helper_input.h"
+#include "upipe-blackmagic/upipe_blackmagic_extract_vanc.h"
+#include "upipe-blackmagic/ubuf_pic_blackmagic.h"
 
 #include <stdlib.h>
 #include <stdint.h>

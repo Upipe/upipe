@@ -27,19 +27,19 @@
  * @short Upipe module to join chunks into one picture
  */
 
-#include <upipe/upipe_helper_upipe.h>
-#include <upipe/upipe_helper_urefcount.h>
-#include <upipe/upipe_helper_void.h>
-#include <upipe/upipe_helper_output.h>
-#include <upipe/upipe_helper_ubuf_mgr.h>
-#include <upipe/upipe_helper_input.h>
+#include "upipe/upipe_helper_upipe.h"
+#include "upipe/upipe_helper_urefcount.h"
+#include "upipe/upipe_helper_void.h"
+#include "upipe/upipe_helper_output.h"
+#include "upipe/upipe_helper_ubuf_mgr.h"
+#include "upipe/upipe_helper_input.h"
 
-#include <upipe/uref_pic.h>
-#include <upipe/uref_pic_flow.h>
-#include <upipe/uclock.h>
-#include <upipe/uref_clock.h>
+#include "upipe/uref_pic.h"
+#include "upipe/uref_pic_flow.h"
+#include "upipe/uclock.h"
+#include "upipe/uref_clock.h"
 
-#include <upipe-modules/upipe_row_join.h>
+#include "upipe-modules/upipe_row_join.h"
 
 struct upipe_row_join {
     /** refcount management structure */

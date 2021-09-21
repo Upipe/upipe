@@ -29,13 +29,13 @@
 
 #undef NDEBUG
 
-#include <upipe/umem.h>
-#include <upipe/umem_alloc.h>
-#include <upipe/udict.h>
-#include <upipe/udict_inline.h>
-#include <upipe/udict_dump.h>
-#include <upipe/uprobe.h>
-#include <upipe/uprobe_stdio.h>
+#include "upipe/umem.h"
+#include "upipe/umem_alloc.h"
+#include "upipe/udict.h"
+#include "upipe/udict_inline.h"
+#include "upipe/udict_dump.h"
+#include "upipe/uprobe.h"
+#include "upipe/uprobe_stdio.h"
 
 #include <stdio.h>
 #include <string.h>

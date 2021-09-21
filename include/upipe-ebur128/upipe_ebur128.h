@@ -34,8 +34,8 @@
 extern "C" {
 #endif
 
-#include <upipe/upipe.h>
-#include <upipe/uref_attr.h>
+#include "upipe/upipe.h"
+#include "upipe/uref_attr.h"
 #include <stdint.h>
 
 UREF_ATTR_FLOAT(ebur128, momentary, "ebur128.momentary", momentary loudness)

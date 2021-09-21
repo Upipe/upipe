@@ -34,10 +34,10 @@
 extern "C" {
 #endif
 
-#include <upipe/ubase.h>
-#include <upipe/uref.h>
-#include <upipe/udict.h>
-#include <upipe/upipe.h>
+#include "upipe/ubase.h"
+#include "upipe/uref.h"
+#include "upipe/udict.h"
+#include "upipe/upipe.h"
 
 /** @This declares five functions dealing with the checking of input
  * flow definitions in pipes.

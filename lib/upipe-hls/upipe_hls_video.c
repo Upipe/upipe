@@ -21,11 +21,11 @@
  * SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
  */
 
-#include <upipe-hls/upipe_hls_video.h>
+#include "upipe-hls/upipe_hls_video.h"
 
-#include <upipe/upipe_helper_flow.h>
-#include <upipe/upipe_helper_urefcount.h>
-#include <upipe/upipe_helper_upipe.h>
+#include "upipe/upipe_helper_flow.h"
+#include "upipe/upipe_helper_urefcount.h"
+#include "upipe/upipe_helper_upipe.h"
 
 struct upipe_hls_video {
     struct upipe upipe;

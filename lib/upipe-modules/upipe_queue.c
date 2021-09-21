@@ -27,11 +27,11 @@
  * @short common functions for queues
  */
 
-#include <upipe/ubase.h>
-#include <upipe/urefcount.h>
-#include <upipe/uref.h>
-#include <upipe/ubuf.h>
-#include <upipe/uclock.h>
+#include "upipe/ubase.h"
+#include "upipe/urefcount.h"
+#include "upipe/uref.h"
+#include "upipe/ubuf.h"
+#include "upipe/uclock.h"
 
 #include "upipe_queue.h"
 

@@ -37,7 +37,7 @@
 extern "C" {
 #endif
 
-#include <upipe/umem.h>
+#include "upipe/umem.h"
 
 /** @This allocates a new instance of the umem pool manager allocating buffers
  * from application memory, using pools in power of 2's.

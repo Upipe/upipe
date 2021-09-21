@@ -34,7 +34,7 @@
 extern "C" {
 #endif
 
-#include <upipe/upipe.h>
+#include "upipe/upipe.h"
 
 /** @This is the signature of the block to sound pipe. */
 #define UPIPE_BLOCK_TO_SOUND_SIGNATURE UBASE_FOURCC('b', 't', 'o', 's')

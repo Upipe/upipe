@@ -26,24 +26,24 @@
 
 #undef NDEBUG
 
-#include <upipe/uprobe.h>
-#include <upipe/uprobe_stdio.h>
-#include <upipe/uprobe_prefix.h>
-#include <upipe/uprobe_ubuf_mem.h>
-#include <upipe/uclock.h>
-#include <upipe/umem.h>
-#include <upipe/umem_alloc.h>
-#include <upipe/udict.h>
-#include <upipe/udict_inline.h>
-#include <upipe/uref.h>
-#include <upipe/uref_std.h>
-#include <upipe/upipe.h>
-#include <upipe/uref_sound.h>
-#include <upipe/uref_sound_flow.h>
-#include <upipe/uref_clock.h>
-#include <upipe/ubuf_mem.h>
-#include <upipe-modules/upipe_audiocont.h>
-#include <upipe-modules/upipe_null.h>
+#include "upipe/uprobe.h"
+#include "upipe/uprobe_stdio.h"
+#include "upipe/uprobe_prefix.h"
+#include "upipe/uprobe_ubuf_mem.h"
+#include "upipe/uclock.h"
+#include "upipe/umem.h"
+#include "upipe/umem_alloc.h"
+#include "upipe/udict.h"
+#include "upipe/udict_inline.h"
+#include "upipe/uref.h"
+#include "upipe/uref_std.h"
+#include "upipe/upipe.h"
+#include "upipe/uref_sound.h"
+#include "upipe/uref_sound_flow.h"
+#include "upipe/uref_clock.h"
+#include "upipe/ubuf_mem.h"
+#include "upipe-modules/upipe_audiocont.h"
+#include "upipe-modules/upipe_null.h"
 
 #include <stdio.h>
 #include <stdbool.h>

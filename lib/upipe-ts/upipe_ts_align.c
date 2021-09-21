@@ -22,20 +22,20 @@
  * @short Upipe module outputting one aligned TS packet per uref
  */
 
-#include <upipe/ubase.h>
-#include <upipe/uprobe.h>
-#include <upipe/uprobe_prefix.h>
-#include <upipe/upipe.h>
-#include <upipe/upipe_helper_upipe.h>
-#include <upipe/upipe_helper_urefcount.h>
-#include <upipe/upipe_helper_void.h>
-#include <upipe/upipe_helper_inner.h>
-#include <upipe/upipe_helper_bin_input.h>
-#include <upipe/upipe_helper_bin_output.h>
-#include <upipe-ts/upipe_ts_align.h>
-#include <upipe-ts/upipe_ts_sync.h>
-#include <upipe-ts/upipe_ts_check.h>
-#include <upipe-modules/upipe_idem.h>
+#include "upipe/ubase.h"
+#include "upipe/uprobe.h"
+#include "upipe/uprobe_prefix.h"
+#include "upipe/upipe.h"
+#include "upipe/upipe_helper_upipe.h"
+#include "upipe/upipe_helper_urefcount.h"
+#include "upipe/upipe_helper_void.h"
+#include "upipe/upipe_helper_inner.h"
+#include "upipe/upipe_helper_bin_input.h"
+#include "upipe/upipe_helper_bin_output.h"
+#include "upipe-ts/upipe_ts_align.h"
+#include "upipe-ts/upipe_ts_sync.h"
+#include "upipe-ts/upipe_ts_check.h"
+#include "upipe-modules/upipe_idem.h"
 
 #include <stdlib.h>
 #include <stdarg.h>

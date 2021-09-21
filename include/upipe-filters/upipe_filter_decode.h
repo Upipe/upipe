@@ -34,8 +34,8 @@
 extern "C" {
 #endif
 
-#include <upipe/upipe.h>
-#include <upipe/uref_attr.h>
+#include "upipe/upipe.h"
+#include "upipe/uref_attr.h"
 
 #define UPIPE_FDEC_SIGNATURE UBASE_FOURCC('f','d','e','c')
 

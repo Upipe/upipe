@@ -31,7 +31,7 @@
 extern "C" {
 #endif
 
-#include <upipe/upipe.h>
+#include "upipe/upipe.h"
 
 #define UPIPE_TS_SCTE35P_SIGNATURE UBASE_FOURCC('s','c','t','e')
 

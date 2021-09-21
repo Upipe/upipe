@@ -29,22 +29,22 @@
 
 #undef NDEBUG
 
-#include <upipe/uprobe.h>
-#include <upipe/uprobe_stdio.h>
-#include <upipe/uprobe_prefix.h>
-#include <upipe/umem.h>
-#include <upipe/umem_alloc.h>
-#include <upipe/udict.h>
-#include <upipe/udict_inline.h>
-#include <upipe/ubuf.h>
-#include <upipe/ubuf_block_mem.h>
-#include <upipe/uref.h>
-#include <upipe/uref_flow.h>
-#include <upipe/uref_block_flow.h>
-#include <upipe/uref_block.h>
-#include <upipe/uref_std.h>
-#include <upipe/upipe.h>
-#include <upipe-ts/upipe_ts_psi_merge.h>
+#include "upipe/uprobe.h"
+#include "upipe/uprobe_stdio.h"
+#include "upipe/uprobe_prefix.h"
+#include "upipe/umem.h"
+#include "upipe/umem_alloc.h"
+#include "upipe/udict.h"
+#include "upipe/udict_inline.h"
+#include "upipe/ubuf.h"
+#include "upipe/ubuf_block_mem.h"
+#include "upipe/uref.h"
+#include "upipe/uref_flow.h"
+#include "upipe/uref_block_flow.h"
+#include "upipe/uref_block.h"
+#include "upipe/uref_std.h"
+#include "upipe/upipe.h"
+#include "upipe-ts/upipe_ts_psi_merge.h"
 
 #include <stdbool.h>
 #include <stdlib.h>
