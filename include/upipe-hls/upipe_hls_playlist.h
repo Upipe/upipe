@@ -32,7 +32,7 @@
 extern "C" {
 #endif
 
-#include <upipe/upipe.h>
+#include "upipe/upipe.h"
 
 #define UPIPE_HLS_PLAYLIST_SIGNATURE UBASE_FOURCC('m','3','u','p')
 

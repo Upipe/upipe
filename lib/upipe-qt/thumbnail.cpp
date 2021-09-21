@@ -27,13 +27,13 @@
 #define __STDC_FORMAT_MACROS   1
 #define __STDC_CONSTANT_MACROS 1
 
-#include <upipe/ubase.h>
-#include <upipe/uqueue.h>
-#include <upipe/uref.h>
-#include <upipe/ubuf.h>
-#include <upipe/uref_pic.h>
-#include <upipe/ubuf_pic.h>
-#include <upipe/uref_flow.h>
+#include "upipe/ubase.h"
+#include "upipe/uqueue.h"
+#include "upipe/uref.h"
+#include "upipe/ubuf.h"
+#include "upipe/uref_pic.h"
+#include "upipe/ubuf_pic.h"
+#include "upipe/uref_flow.h"
 
 #include <QtCore>
 #include <QImage>
@@ -59,7 +59,7 @@
 #include <time.h>
 #include <pthread.h>
 
-#include <upipe-qt/upipe_qt_html.h>
+#include "upipe-qt/upipe_qt_html.h"
 #include "thumbnail.h"
 
 /** @This is the main constructor of the Thumbnail

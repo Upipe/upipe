@@ -37,9 +37,9 @@
 extern "C" {
 #endif
 
-#include <upipe/ubuf_pic.h>
-#include <upipe/uref_pic_flow.h>
-#include <upipe/uref_pic_flow_formats.h>
+#include "upipe/ubuf_pic.h"
+#include "upipe/uref_pic_flow.h"
+#include "upipe/uref_pic_flow_formats.h"
 
 #include <libavutil/avutil.h>
 #include <libavutil/pixdesc.h>

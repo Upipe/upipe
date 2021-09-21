@@ -1,7 +1,7 @@
 #undef NDEBUG
 
-#include <upipe/ubase.h>
-#include <upipe/ustring.h>
+#include "upipe/ubase.h"
+#include "upipe/ustring.h"
 
 #include <assert.h>
 #include <stdlib.h>

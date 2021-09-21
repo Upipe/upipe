@@ -29,7 +29,7 @@
  */
 
 #include "upipe_av_internal.h"
-#include <upipe_av_codecs.h> // auto-generated header
+#include "upipe_av_codecs.h" // auto-generated header
 
 /** @This allows to convert from avcodec ID to flow definition.
  *

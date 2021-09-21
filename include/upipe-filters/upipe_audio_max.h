@@ -31,8 +31,8 @@
 extern "C" {
 #endif
 
-#include <upipe/upipe.h>
-#include <upipe/uref_attr.h>
+#include "upipe/upipe.h"
+#include "upipe/uref_attr.h"
 #include <stdint.h>
 
 UREF_ATTR_FLOAT_VA(amax, amplitude, "amax.amp[%" PRIu8"]", max amplitude,

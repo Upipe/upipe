@@ -32,10 +32,10 @@
 extern "C" {
 #endif
 
-#include <upipe/ubase.h>
-#include <upipe/upipe.h>
-#include <upipe/uref.h>
-#include <upipe/uref_block_flow.h>
+#include "upipe/ubase.h"
+#include "upipe/upipe.h"
+#include "upipe/uref.h"
+#include "upipe/uref_block_flow.h"
 
 #include <stdbool.h>
 

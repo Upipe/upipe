@@ -34,8 +34,8 @@
 extern "C" {
 #endif
 
-#include <upipe/uref.h>
-#include <upipe/uref_attr.h>
+#include "upipe/uref.h"
+#include "upipe/uref_attr.h"
 
 #include <stdint.h>
 #include <stdbool.h>

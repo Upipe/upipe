@@ -27,10 +27,10 @@
  * @short Upipe NIC PTP implementation of uclock
  */
 
-#include <upipe/ubase.h>
-#include <upipe/urefcount.h>
-#include <upipe/uclock.h>
-#include <upipe/uclock_ptp.h>
+#include "upipe/ubase.h"
+#include "upipe/urefcount.h"
+#include "upipe/uclock.h"
+#include "upipe/uclock_ptp.h"
 
 #include <stdbool.h>
 #include <sys/ioctl.h>

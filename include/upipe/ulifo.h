@@ -34,8 +34,8 @@
 extern "C" {
 #endif
 
-#include <upipe/ubase.h>
-#include <upipe/uring.h>
+#include "upipe/ubase.h"
+#include "upipe/uring.h"
 
 /** @This is the implementation of last-in first-out data structure. */
 struct ulifo {

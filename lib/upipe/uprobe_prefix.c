@@ -27,11 +27,11 @@
  * @short probe prefixing all log events with a given name
  */
 
-#include <upipe/ubase.h>
-#include <upipe/ulist.h>
-#include <upipe/uprobe.h>
-#include <upipe/uprobe_prefix.h>
-#include <upipe/uprobe_helper_alloc.h>
+#include "upipe/ubase.h"
+#include "upipe/ulist.h"
+#include "upipe/uprobe.h"
+#include "upipe/uprobe_prefix.h"
+#include "upipe/uprobe_helper_alloc.h"
 
 #include <stdlib.h>
 #include <stdarg.h>

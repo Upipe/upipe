@@ -33,8 +33,8 @@
 extern "C" {
 #endif
 
-#include <upipe/uref_attr.h>
-#include <upipe/uref_flow.h>
+#include "upipe/uref_attr.h"
+#include "upipe/uref_flow.h"
 
 /** @internal flow definition prefix for graph flow. */
 #define UREF_GRAPH_FLOW_DEF "graph."

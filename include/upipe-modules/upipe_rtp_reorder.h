@@ -34,7 +34,7 @@
 extern "C" {
 #endif
 
-#include <upipe/upipe.h>
+#include "upipe/upipe.h"
 
 #define UPIPE_RTPR_SIGNATURE UBASE_FOURCC('r','t','p','r')
 #define UPIPE_RTPR_INPUT_SIGNATURE UBASE_FOURCC('r','t','p','i')

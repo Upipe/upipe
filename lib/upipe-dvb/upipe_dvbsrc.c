@@ -22,24 +22,24 @@
  * @short Upipe source module for DVB receivers
  */
 
-#include <upipe/ubase.h>
-#include <upipe/uref.h>
-#include <upipe/uref_block.h>
-#include <upipe/uref_block_flow.h>
-#include <upipe/upump.h>
-#include <upipe/upipe.h>
+#include "upipe/ubase.h"
+#include "upipe/uref.h"
+#include "upipe/uref_block.h"
+#include "upipe/uref_block_flow.h"
+#include "upipe/upump.h"
+#include "upipe/upipe.h"
 
-#include <upipe/upipe_helper_upipe.h>
-#include <upipe/upipe_helper_urefcount.h>
-#include <upipe/upipe_helper_void.h>
-#include <upipe/upipe_helper_uref_mgr.h>
-#include <upipe/upipe_helper_ubuf_mgr.h>
-#include <upipe/upipe_helper_output.h>
-#include <upipe/upipe_helper_upump_mgr.h>
-#include <upipe/upipe_helper_upump.h>
-#include <upipe/upipe_helper_uclock.h>
+#include "upipe/upipe_helper_upipe.h"
+#include "upipe/upipe_helper_urefcount.h"
+#include "upipe/upipe_helper_void.h"
+#include "upipe/upipe_helper_uref_mgr.h"
+#include "upipe/upipe_helper_ubuf_mgr.h"
+#include "upipe/upipe_helper_output.h"
+#include "upipe/upipe_helper_upump_mgr.h"
+#include "upipe/upipe_helper_upump.h"
+#include "upipe/upipe_helper_uclock.h"
 
-#include <upipe-dvb/upipe_dvbsrc.h>
+#include "upipe-dvb/upipe_dvbsrc.h"
 
 #include <libdvbv5/dvb-dev.h>
 #include <libdvbv5/dvb-fe.h>

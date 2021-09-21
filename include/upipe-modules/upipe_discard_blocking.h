@@ -34,7 +34,7 @@
 extern "C" {
 #endif
 
-#include <upipe/ubase.h>
+#include "upipe/ubase.h"
 
 #define UPIPE_DISBLO_SIGNATURE UBASE_FOURCC('d','i','s','b')
 

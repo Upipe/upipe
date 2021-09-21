@@ -34,10 +34,10 @@
 extern "C" {
 #endif
 
-#include <upipe/ubuf.h>
-#include <upipe/ubuf_block.h>
-#include <upipe/uref.h>
-#include <upipe/uref_attr.h>
+#include "upipe/ubuf.h"
+#include "upipe/ubuf_block.h"
+#include "upipe/uref.h"
+#include "upipe/uref_attr.h"
 
 #include <stdint.h>
 #include <stdbool.h>

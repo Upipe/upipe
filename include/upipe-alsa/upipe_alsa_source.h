@@ -34,7 +34,7 @@
 extern "C" {
 #endif
 
-#include <upipe/upipe.h>
+#include "upipe/upipe.h"
 
 #define UPIPE_ALSOURCE_SIGNATURE UBASE_FOURCC('a', 'l', 's', 'o')
 

@@ -31,7 +31,7 @@
 /** @hidden */
 #define _UPUMP_SRT_UPUMP_SRT_H_
 
-#include <upipe/upump.h>
+#include "upipe/upump.h"
 
 #include <srt/srt.h>
 

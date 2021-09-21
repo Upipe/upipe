@@ -23,12 +23,12 @@
  * SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
  */
 
-#include <upipe/uprobe.h>
-#include <upipe/uprobe_helper_alloc.h>
-#include <upipe/uprobe_helper_uprobe.h>
-#include <upipe/uref_pic_flow.h>
-#include <upipe-freetype/upipe_freetype.h>
-#include <upipe-freetype/uprobe_freetype.h>
+#include "upipe/uprobe.h"
+#include "upipe/uprobe_helper_alloc.h"
+#include "upipe/uprobe_helper_uprobe.h"
+#include "upipe/uref_pic_flow.h"
+#include "upipe-freetype/upipe_freetype.h"
+#include "upipe-freetype/uprobe_freetype.h"
 
 
 struct uprobe_freetype {

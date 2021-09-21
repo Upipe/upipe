@@ -27,26 +27,26 @@
  * @short Upipe module converting sound and pic ubuf to block
  */
 
-#include <upipe/ubase.h>
-#include <upipe/uref.h>
-#include <upipe/ubuf.h>
-#include <upipe/ubuf_block.h>
-#include <upipe/ubuf_block_mem.h>
-#include <upipe/ubuf_pic.h>
-#include <upipe/ubuf_sound.h>
-#include <upipe/upipe.h>
-#include <upipe/uref_pic.h>
-#include <upipe/uref_pic_flow.h>
-#include <upipe/uref_sound.h>
-#include <upipe/uref_sound_flow.h>
-#include <upipe/uref_flow.h>
-#include <upipe/upipe_helper_upipe.h>
-#include <upipe/upipe_helper_urefcount.h>
-#include <upipe/upipe_helper_void.h>
-#include <upipe/upipe_helper_ubuf_mgr.h>
-#include <upipe/upipe_helper_output.h>
-#include <upipe/upipe_helper_input.h>
-#include <upipe-modules/upipe_convert_to_block.h>
+#include "upipe/ubase.h"
+#include "upipe/uref.h"
+#include "upipe/ubuf.h"
+#include "upipe/ubuf_block.h"
+#include "upipe/ubuf_block_mem.h"
+#include "upipe/ubuf_pic.h"
+#include "upipe/ubuf_sound.h"
+#include "upipe/upipe.h"
+#include "upipe/uref_pic.h"
+#include "upipe/uref_pic_flow.h"
+#include "upipe/uref_sound.h"
+#include "upipe/uref_sound_flow.h"
+#include "upipe/uref_flow.h"
+#include "upipe/upipe_helper_upipe.h"
+#include "upipe/upipe_helper_urefcount.h"
+#include "upipe/upipe_helper_void.h"
+#include "upipe/upipe_helper_ubuf_mgr.h"
+#include "upipe/upipe_helper_output.h"
+#include "upipe/upipe_helper_input.h"
+#include "upipe-modules/upipe_convert_to_block.h"
 
 #include <stdlib.h>
 #include <stdbool.h>

@@ -36,7 +36,7 @@ extern "C" {
 #endif
 
 #include <stdint.h>
-#include <upipe/upipe.h>
+#include "upipe/upipe.h"
 
 #define UPIPE_MULTICAT_PROBE_SIGNATURE UBASE_FOURCC('m','p','r','b')
 #define UPIPE_MULTICAT_PROBE_DEF_ROTATE UINT64_C(97200000000)

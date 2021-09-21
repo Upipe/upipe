@@ -35,7 +35,7 @@
 extern "C" {
 #endif
 
-#include <upipe/config.h>
+#include "upipe/config.h"
 
 #ifdef UPIPE_HAVE_FEATURES_H
 #include <features.h>

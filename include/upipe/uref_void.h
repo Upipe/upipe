@@ -29,7 +29,7 @@
 extern "C" {
 #endif
 
-#include <upipe/uref_attr.h>
+#include "upipe/uref_attr.h"
 
 UREF_ATTR_STRING(void, text, "v.text", generic text);
 

@@ -29,8 +29,8 @@
 
 #undef NDEBUG
 
-#include <upipe/uprobe.h>
-#include <upipe/uprobe_syslog.h>
+#include "upipe/uprobe.h"
+#include "upipe/uprobe_syslog.h"
 
 #include <stdio.h>
 #include <syslog.h>

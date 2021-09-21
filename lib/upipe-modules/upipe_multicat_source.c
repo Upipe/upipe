@@ -28,24 +28,24 @@
  * @short Upipe module - multicat file source
  */
 
-#include <upipe/ubase.h>
-#include <upipe/uref_clock.h>
-#include <upipe/uref.h>
-#include <upipe/ubuf.h>
-#include <upipe/uref_block.h>
-#include <upipe/uref_block_flow.h>
-#include <upipe/uref_flow.h>
-#include <upipe/upipe.h>
-#include <upipe/upipe_helper_urefcount.h>
-#include <upipe/upipe_helper_upipe.h>
-#include <upipe/upipe_helper_void.h>
-#include <upipe/upipe_helper_uref_mgr.h>
-#include <upipe/upipe_helper_ubuf_mgr.h>
-#include <upipe/upipe_helper_output.h>
-#include <upipe/upipe_helper_upump_mgr.h>
-#include <upipe/upipe_helper_upump.h>
-#include <upipe/upipe_helper_output_size.h>
-#include <upipe-modules/upipe_multicat_source.h>
+#include "upipe/ubase.h"
+#include "upipe/uref_clock.h"
+#include "upipe/uref.h"
+#include "upipe/ubuf.h"
+#include "upipe/uref_block.h"
+#include "upipe/uref_block_flow.h"
+#include "upipe/uref_flow.h"
+#include "upipe/upipe.h"
+#include "upipe/upipe_helper_urefcount.h"
+#include "upipe/upipe_helper_upipe.h"
+#include "upipe/upipe_helper_void.h"
+#include "upipe/upipe_helper_uref_mgr.h"
+#include "upipe/upipe_helper_ubuf_mgr.h"
+#include "upipe/upipe_helper_output.h"
+#include "upipe/upipe_helper_upump_mgr.h"
+#include "upipe/upipe_helper_upump.h"
+#include "upipe/upipe_helper_output_size.h"
+#include "upipe-modules/upipe_multicat_source.h"
 
 #include <stdlib.h>
 #include <stdint.h>

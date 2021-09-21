@@ -28,22 +28,22 @@
  * @short Upipe NaCl module to play audio samples
  */
 
-#include <upipe/ubase.h>
-#include <upipe/uclock.h>
-#include <upipe/uqueue.h>
-#include <upipe/uprobe.h>
-#include <upipe/uref.h>
-#include <upipe/uref_clock.h>
-#include <upipe/uref_sound.h>
-#include <upipe/uref_flow.h>
-#include <upipe/uref_sound_flow.h>
-#include <upipe/upipe_helper_upipe.h>
-#include <upipe/upipe_helper_urefcount.h>
-#include <upipe/upipe_helper_upump_mgr.h>
-#include <upipe/upipe_helper_upump.h>
-#include <upipe/upipe_helper_input.h>
-#include <upipe/upipe_helper_uclock.h>
-#include <upipe-nacl/upipe_nacl_audio.h>
+#include "upipe/ubase.h"
+#include "upipe/uclock.h"
+#include "upipe/uqueue.h"
+#include "upipe/uprobe.h"
+#include "upipe/uref.h"
+#include "upipe/uref_clock.h"
+#include "upipe/uref_sound.h"
+#include "upipe/uref_flow.h"
+#include "upipe/uref_sound_flow.h"
+#include "upipe/upipe_helper_upipe.h"
+#include "upipe/upipe_helper_urefcount.h"
+#include "upipe/upipe_helper_upump_mgr.h"
+#include "upipe/upipe_helper_upump.h"
+#include "upipe/upipe_helper_input.h"
+#include "upipe/upipe_helper_uclock.h"
+#include "upipe-nacl/upipe_nacl_audio.h"
 
 #include <stdlib.h>
 #include <stdbool.h>

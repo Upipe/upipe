@@ -24,8 +24,8 @@
  * SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
  */
 
-#include <upipe/ubase.h>
-#include <upipe/uuri.h>
+#include "upipe/ubase.h"
+#include "upipe/uuri.h"
 
 #include <ctype.h>
 #include <stdlib.h>

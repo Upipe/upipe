@@ -29,7 +29,7 @@
 
 #undef NDEBUG
 
-#include <upump-srt/upump_srt.h>
+#include "upump-srt/upump_srt.h"
 #include <srt/srt.h>
 #include "upump_common_test.h"
 

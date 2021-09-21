@@ -29,23 +29,23 @@
  * @short Upipe module audio continuity
  */
 
-#include <upipe/ubase.h>
-#include <upipe/ulist.h>
-#include <upipe/uclock.h>
-#include <upipe/uref.h>
-#include <upipe/uref_clock.h>
-#include <upipe/uref_sound.h>
-#include <upipe/uref_sound_flow.h>
-#include <upipe/upipe.h>
-#include <upipe/upipe_helper_upipe.h>
-#include <upipe/upipe_helper_urefcount.h>
-#include <upipe/upipe_helper_void.h>
-#include <upipe/upipe_helper_flow.h>
-#include <upipe/upipe_helper_output.h>
-#include <upipe/upipe_helper_flow_def_check.h>
-#include <upipe/upipe_helper_subpipe.h>
-#include <upipe/upipe_helper_ubuf_mgr.h>
-#include <upipe-modules/upipe_audiocont.h>
+#include "upipe/ubase.h"
+#include "upipe/ulist.h"
+#include "upipe/uclock.h"
+#include "upipe/uref.h"
+#include "upipe/uref_clock.h"
+#include "upipe/uref_sound.h"
+#include "upipe/uref_sound_flow.h"
+#include "upipe/upipe.h"
+#include "upipe/upipe_helper_upipe.h"
+#include "upipe/upipe_helper_urefcount.h"
+#include "upipe/upipe_helper_void.h"
+#include "upipe/upipe_helper_flow.h"
+#include "upipe/upipe_helper_output.h"
+#include "upipe/upipe_helper_flow_def_check.h"
+#include "upipe/upipe_helper_subpipe.h"
+#include "upipe/upipe_helper_ubuf_mgr.h"
+#include "upipe-modules/upipe_audiocont.h"
 
 #include <stdlib.h>
 #include <stdbool.h>

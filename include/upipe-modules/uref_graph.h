@@ -33,7 +33,7 @@
 extern "C" {
 #endif
 
-#include <upipe/uref_attr.h>
+#include "upipe/uref_attr.h"
 
 UREF_ATTR_INT(graph, value, "graph.value", graph value);
 

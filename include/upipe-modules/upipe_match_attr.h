@@ -35,8 +35,8 @@
 extern "C" {
 #endif
 
-#include <upipe/upipe.h>
-#include <upipe/uref.h>
+#include "upipe/upipe.h"
+#include "upipe/uref.h"
 
 #define UPIPE_MATCH_ATTR_SIGNATURE UBASE_FOURCC('m','a','t','t')
 

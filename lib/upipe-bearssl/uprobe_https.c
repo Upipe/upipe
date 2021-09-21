@@ -27,13 +27,13 @@
  * @short probe catching http scheme hook for SSL connection
  */
 
-#include <upipe/uprobe_helper_uprobe.h>
-#include <upipe/uprobe_helper_alloc.h>
-#include <upipe/uref_uri.h>
+#include "upipe/uprobe_helper_uprobe.h"
+#include "upipe/uprobe_helper_alloc.h"
+#include "upipe/uref_uri.h"
 
-#include <upipe-modules/upipe_http_source.h>
+#include "upipe-modules/upipe_http_source.h"
 
-#include <upipe-bearssl/uprobe_https.h>
+#include "upipe-bearssl/uprobe_https.h"
 
 #include "https_source_hook.h"
 

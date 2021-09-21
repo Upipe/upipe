@@ -35,7 +35,7 @@
 extern "C" {
 #endif
 
-#include <upipe/upipe.h>
+#include "upipe/upipe.h"
 
 #define UPIPE_S337D_SIGNATURE UBASE_FOURCC('3','3','7','d')
 

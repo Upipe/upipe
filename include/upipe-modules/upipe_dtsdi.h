@@ -30,7 +30,7 @@
 extern "C" {
 #endif
 
-#include <upipe/upipe.h>
+#include "upipe/upipe.h"
 
 #define UPIPE_DTSDI_SIGNATURE UBASE_FOURCC('d', 't', 's', 'd')
 

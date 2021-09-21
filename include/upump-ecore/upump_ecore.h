@@ -32,7 +32,7 @@
 /** @hidden */
 #define _UPUMP_ECORE_UPUMP_ECORE_H_
 
-#include <upipe/upump.h>
+#include "upipe/upump.h"
 
 #ifdef __cplusplus
 extern "C" {

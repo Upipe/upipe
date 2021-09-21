@@ -34,8 +34,8 @@
 extern "C" {
 #endif
 
-#include <upipe/upipe.h>
-#include <upipe/urefcount.h>
+#include "upipe/upipe.h"
+#include "upipe/urefcount.h"
 
 /** @This declares two functions to allocate probes.
  *

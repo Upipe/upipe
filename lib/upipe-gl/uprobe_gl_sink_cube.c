@@ -28,11 +28,11 @@
  * @short Upipe GL sink cube animation
  */
 
-#include <upipe/ubase.h>
-#include <upipe/uprobe.h>
-#include <upipe-gl/uprobe_gl_sink_cube.h>
-#include <upipe/uprobe_helper_uprobe.h>
-#include <upipe/uprobe_helper_alloc.h>
+#include "upipe/ubase.h"
+#include "upipe/uprobe.h"
+#include "upipe-gl/uprobe_gl_sink_cube.h"
+#include "upipe/uprobe_helper_uprobe.h"
+#include "upipe/uprobe_helper_alloc.h"
 
 #include <stdlib.h>
 #include <stdarg.h>

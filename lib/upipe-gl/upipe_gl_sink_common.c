@@ -27,8 +27,8 @@
  * @short Upipe GL - common definitions
  */
 
-#include <upipe/uref_pic.h>
-#include <upipe-gl/upipe_gl_sink_common.h>
+#include "upipe/uref_pic.h"
+#include "upipe-gl/upipe_gl_sink_common.h"
 #include <GL/gl.h>
 
 /** @This loads a uref picture into the specified texture

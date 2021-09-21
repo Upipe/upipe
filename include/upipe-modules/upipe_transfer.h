@@ -41,7 +41,7 @@
 extern "C" {
 #endif
 
-#include <upipe/upipe.h>
+#include "upipe/upipe.h"
 
 /** @hidden */
 struct umutex;

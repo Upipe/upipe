@@ -26,8 +26,8 @@
  * manager events
  */
 
-#include <upipe/uprobe_source_mgr.h>
-#include <upipe/uprobe_helper_alloc.h>
+#include "upipe/uprobe_source_mgr.h"
+#include "upipe/uprobe_helper_alloc.h"
 
 /** @internal @This catches the UPROBE_NEED_SOURCE_MGR event and provides
  * the source manager.

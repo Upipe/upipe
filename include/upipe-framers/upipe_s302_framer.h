@@ -29,7 +29,7 @@
 extern "C" {
 #endif
 
-#include <upipe/upipe.h>
+#include "upipe/upipe.h"
 
 #define UPIPE_S302F_SIGNATURE UBASE_FOURCC('s','3','2','f')
 /** We only accept the EN 300 706 elementary stream. */

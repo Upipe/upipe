@@ -22,19 +22,19 @@
  * @short Upipe module calculating the T-STD buffering latency
  */
 
-#include <upipe/ubase.h>
-#include <upipe/uclock.h>
-#include <upipe/uref.h>
-#include <upipe/uref_block.h>
-#include <upipe/uref_clock.h>
-#include <upipe/uref_block_flow.h>
-#include <upipe/upipe.h>
-#include <upipe/upipe_helper_upipe.h>
-#include <upipe/upipe_helper_urefcount.h>
-#include <upipe/upipe_helper_void.h>
-#include <upipe/upipe_helper_output.h>
-#include <upipe-ts/upipe_ts_tstd.h>
-#include <upipe-ts/upipe_ts_mux.h>
+#include "upipe/ubase.h"
+#include "upipe/uclock.h"
+#include "upipe/uref.h"
+#include "upipe/uref_block.h"
+#include "upipe/uref_clock.h"
+#include "upipe/uref_block_flow.h"
+#include "upipe/upipe.h"
+#include "upipe/upipe_helper_upipe.h"
+#include "upipe/upipe_helper_urefcount.h"
+#include "upipe/upipe_helper_void.h"
+#include "upipe/upipe_helper_output.h"
+#include "upipe-ts/upipe_ts_tstd.h"
+#include "upipe-ts/upipe_ts_mux.h"
 
 #include <stdlib.h>
 #include <stdint.h>

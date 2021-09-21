@@ -35,9 +35,9 @@ extern "C" {
 #endif
 
 #include <stdint.h>
-#include <upipe/ubase.h>
-#include <upipe/upipe.h>
-#include <upipe/uref_attr.h>
+#include "upipe/ubase.h"
+#include "upipe/upipe.h"
+#include "upipe/uref_attr.h"
 
 UREF_ATTR_STRING(msrc_flow, path, "msrc.path", directory path)
 UREF_ATTR_STRING(msrc_flow, data, "msrc.data", data suffix)

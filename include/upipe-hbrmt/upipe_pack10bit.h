@@ -31,7 +31,7 @@ extern "C" {
 
 #define UPIPE_PACK10BIT_SIGNATURE UBASE_FOURCC('p','1','0','b')
 
-#include <upipe/upipe.h>
+#include "upipe/upipe.h"
 
 /** @This returns the management structure for pack10bit pipes.
  *

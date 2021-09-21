@@ -30,8 +30,8 @@
 extern "C" {
 #endif
 
-#include <upipe/upipe.h>
-#include <upipe-ts/upipe_ts.h>
+#include "upipe/upipe.h"
+#include "upipe-ts/upipe_ts.h"
 
 #define UPIPE_TS_MUX_SIGNATURE UBASE_FOURCC('t','s','m','x')
 #define UPIPE_TS_MUX_INNER_SINK_SIGNATURE UBASE_FOURCC('t','s','m','S')

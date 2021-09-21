@@ -29,7 +29,7 @@
 extern "C" {
 #endif
 
-#include <upipe/upipe.h>
+#include "upipe/upipe.h"
 
 /** @This is the dvbcsa decryption pipe signature. */
 #define UPIPE_DVBCSA_DEC_SIGNATURE  UBASE_FOURCC('d','v','b','d')

@@ -29,8 +29,8 @@
 extern "C" {
 #endif
 
-#include <upipe/uref.h>
-#include <upipe/uref_flow.h>
+#include "upipe/uref.h"
+#include "upipe/uref_flow.h"
 
 /** @This define the void flow def prefix. */
 #define UREF_VOID_FLOW_DEF  "void."

@@ -28,21 +28,21 @@
  * @short Upipe sink module for udp
  */
 
-#include <upipe/ubase.h>
-#include <upipe/uclock.h>
-#include <upipe/uref.h>
-#include <upipe/uref_block.h>
-#include <upipe/uref_clock.h>
-#include <upipe/upump.h>
-#include <upipe/upipe.h>
-#include <upipe/upipe_helper_upipe.h>
-#include <upipe/upipe_helper_urefcount.h>
-#include <upipe/upipe_helper_void.h>
-#include <upipe/upipe_helper_upump_mgr.h>
-#include <upipe/upipe_helper_upump.h>
-#include <upipe/upipe_helper_input.h>
-#include <upipe/upipe_helper_uclock.h>
-#include <upipe-modules/upipe_udp_sink.h>
+#include "upipe/ubase.h"
+#include "upipe/uclock.h"
+#include "upipe/uref.h"
+#include "upipe/uref_block.h"
+#include "upipe/uref_clock.h"
+#include "upipe/upump.h"
+#include "upipe/upipe.h"
+#include "upipe/upipe_helper_upipe.h"
+#include "upipe/upipe_helper_urefcount.h"
+#include "upipe/upipe_helper_void.h"
+#include "upipe/upipe_helper_upump_mgr.h"
+#include "upipe/upipe_helper_upump.h"
+#include "upipe/upipe_helper_input.h"
+#include "upipe/upipe_helper_uclock.h"
+#include "upipe-modules/upipe_udp_sink.h"
 #include "upipe_udp.h"
 
 #include <stdlib.h>

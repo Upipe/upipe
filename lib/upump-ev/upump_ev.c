@@ -27,13 +27,13 @@
  * @short implementation of a Upipe event loop using libev
  */
 
-#include <upipe/ubase.h>
-#include <upipe/urefcount.h>
-#include <upipe/uclock.h>
-#include <upipe/umutex.h>
-#include <upipe/upump.h>
-#include <upipe/upump_common.h>
-#include <upump-ev/upump_ev.h>
+#include "upipe/ubase.h"
+#include "upipe/urefcount.h"
+#include "upipe/uclock.h"
+#include "upipe/umutex.h"
+#include "upipe/upump.h"
+#include "upipe/upump_common.h"
+#include "upump-ev/upump_ev.h"
 
 #include <stdlib.h>
 

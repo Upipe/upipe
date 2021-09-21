@@ -25,26 +25,26 @@
 
 #undef NDEBUG
 
-#include <upipe/uclock.h>
-#include <upipe/uclock_std.h>
-#include <upipe/uprobe.h>
-#include <upipe/uprobe_stdio.h>
-#include <upipe/uprobe_prefix.h>
-#include <upipe/uprobe_uclock.h>
-#include <upipe/uprobe_upump_mgr.h>
-#include <upipe/umem.h>
-#include <upipe/umem_alloc.h>
-#include <upipe/udict.h>
-#include <upipe/udict_inline.h>
-#include <upipe/uref.h>
-#include <upipe/uref_flow.h>
-#include <upipe/uref_std.h>
-#include <upipe/uref_dump.h>
-#include <upipe/uref_clock.h>
-#include <upipe/upump.h>
-#include <upump-ev/upump_ev.h>
-#include <upipe/upipe.h>
-#include <upipe-modules/upipe_time_limit.h>
+#include "upipe/uclock.h"
+#include "upipe/uclock_std.h"
+#include "upipe/uprobe.h"
+#include "upipe/uprobe_stdio.h"
+#include "upipe/uprobe_prefix.h"
+#include "upipe/uprobe_uclock.h"
+#include "upipe/uprobe_upump_mgr.h"
+#include "upipe/umem.h"
+#include "upipe/umem_alloc.h"
+#include "upipe/udict.h"
+#include "upipe/udict_inline.h"
+#include "upipe/uref.h"
+#include "upipe/uref_flow.h"
+#include "upipe/uref_std.h"
+#include "upipe/uref_dump.h"
+#include "upipe/uref_clock.h"
+#include "upipe/upump.h"
+#include "upump-ev/upump_ev.h"
+#include "upipe/upipe.h"
+#include "upipe-modules/upipe_time_limit.h"
 
 #include <stdio.h>
 #include <stdlib.h>

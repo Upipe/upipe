@@ -22,22 +22,22 @@
  * @short Upipe module performing SCTE-35 to SCTE-104 conversion
  */
 
-#include <upipe/ubase.h>
-#include <upipe/uref.h>
-#include <upipe/ubuf_block.h>
-#include <upipe/upipe.h>
-#include <upipe/uref_flow.h>
-#include <upipe/uref_clock.h>
-#include <upipe/upipe_helper_upipe.h>
-#include <upipe/upipe_helper_urefcount.h>
-#include <upipe/upipe_helper_void.h>
-#include <upipe/upipe_helper_output.h>
-#include <upipe/upipe_helper_ubuf_mgr.h>
-#include <upipe/upipe_helper_input.h>
-#include <upipe/uclock.h>
-#include <upipe-ts/uref_ts_scte35.h>
+#include "upipe/ubase.h"
+#include "upipe/uref.h"
+#include "upipe/ubuf_block.h"
+#include "upipe/upipe.h"
+#include "upipe/uref_flow.h"
+#include "upipe/uref_clock.h"
+#include "upipe/upipe_helper_upipe.h"
+#include "upipe/upipe_helper_urefcount.h"
+#include "upipe/upipe_helper_void.h"
+#include "upipe/upipe_helper_output.h"
+#include "upipe/upipe_helper_ubuf_mgr.h"
+#include "upipe/upipe_helper_input.h"
+#include "upipe/uclock.h"
+#include "upipe-ts/uref_ts_scte35.h"
 
-#include <upipe-ts/upipe_ts_scte104_generator.h>
+#include "upipe-ts/upipe_ts_scte104_generator.h"
 #include <bitstream/scte/104.h>
 
 #define EXPECTED_FLOW_DEF "void.scte35."

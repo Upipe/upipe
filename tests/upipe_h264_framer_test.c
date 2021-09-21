@@ -33,27 +33,27 @@
 
 #undef NDEBUG
 
-#include <upipe/uprobe.h>
-#include <upipe/uprobe_stdio.h>
-#include <upipe/uprobe_prefix.h>
-#include <upipe/uprobe_uref_mgr.h>
-#include <upipe/uprobe_ubuf_mem.h>
-#include <upipe/umem.h>
-#include <upipe/umem_alloc.h>
-#include <upipe/udict.h>
-#include <upipe/udict_inline.h>
-#include <upipe/uref.h>
-#include <upipe/uref_std.h>
-#include <upipe/uref_flow.h>
-#include <upipe/uref_clock.h>
-#include <upipe/uref_block.h>
-#include <upipe/uref_block_flow.h>
-#include <upipe/uref_dump.h>
-#include <upipe/ubuf.h>
-#include <upipe/ubuf_block_mem.h>
-#include <upipe/upipe.h>
-#include <upipe-framers/upipe_h264_framer.h>
-#include <upipe-framers/uref_h26x_flow.h>
+#include "upipe/uprobe.h"
+#include "upipe/uprobe_stdio.h"
+#include "upipe/uprobe_prefix.h"
+#include "upipe/uprobe_uref_mgr.h"
+#include "upipe/uprobe_ubuf_mem.h"
+#include "upipe/umem.h"
+#include "upipe/umem_alloc.h"
+#include "upipe/udict.h"
+#include "upipe/udict_inline.h"
+#include "upipe/uref.h"
+#include "upipe/uref_std.h"
+#include "upipe/uref_flow.h"
+#include "upipe/uref_clock.h"
+#include "upipe/uref_block.h"
+#include "upipe/uref_block_flow.h"
+#include "upipe/uref_dump.h"
+#include "upipe/ubuf.h"
+#include "upipe/ubuf_block_mem.h"
+#include "upipe/upipe.h"
+#include "upipe-framers/upipe_h264_framer.h"
+#include "upipe-framers/uref_h26x_flow.h"
 
 #include "upipe_h264_framer_test.h"
 

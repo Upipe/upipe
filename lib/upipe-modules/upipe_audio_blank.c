@@ -27,19 +27,19 @@
  * @short Upipe module generating blank audio for void urefs
  */
 
-#include <upipe/upipe_helper_upipe.h>
-#include <upipe/upipe_helper_urefcount.h>
-#include <upipe/upipe_helper_flow.h>
-#include <upipe/upipe_helper_output.h>
-#include <upipe/upipe_helper_ubuf_mgr.h>
-#include <upipe/upipe_helper_flow_def.h>
+#include "upipe/upipe_helper_upipe.h"
+#include "upipe/upipe_helper_urefcount.h"
+#include "upipe/upipe_helper_flow.h"
+#include "upipe/upipe_helper_output.h"
+#include "upipe/upipe_helper_ubuf_mgr.h"
+#include "upipe/upipe_helper_flow_def.h"
 
-#include <upipe/uref_sound_flow.h>
-#include <upipe/uref_void_flow.h>
+#include "upipe/uref_sound_flow.h"
+#include "upipe/uref_void_flow.h"
 
-#include <upipe/ubuf_sound.h>
+#include "upipe/ubuf_sound.h"
 
-#include <upipe-modules/upipe_audio_blank.h>
+#include "upipe-modules/upipe_audio_blank.h"
 
 /** @internal @This is the private structure of audio blank pipe. */
 struct upipe_ablk {

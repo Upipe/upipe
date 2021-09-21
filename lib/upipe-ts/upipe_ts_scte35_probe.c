@@ -25,21 +25,21 @@
  *  - SCTE 35 2013 (Digital Program Insertion Cueing Message for Cable)
  */
 
-#include <upipe/ubase.h>
-#include <upipe/ulist.h>
-#include <upipe/uclock.h>
-#include <upipe/uref.h>
-#include <upipe/uref_clock.h>
-#include <upipe/uref_flow.h>
-#include <upipe/upipe.h>
-#include <upipe/upipe_helper_upipe.h>
-#include <upipe/upipe_helper_urefcount.h>
-#include <upipe/upipe_helper_void.h>
-#include <upipe/upipe_helper_upump_mgr.h>
-#include <upipe/upipe_helper_uclock.h>
-#include <upipe-ts/upipe_ts_scte35_probe.h>
-#include <upipe-ts/uref_ts_scte35.h>
-#include <upipe-ts/uref_ts_scte35_desc.h>
+#include "upipe/ubase.h"
+#include "upipe/ulist.h"
+#include "upipe/uclock.h"
+#include "upipe/uref.h"
+#include "upipe/uref_clock.h"
+#include "upipe/uref_flow.h"
+#include "upipe/upipe.h"
+#include "upipe/upipe_helper_upipe.h"
+#include "upipe/upipe_helper_urefcount.h"
+#include "upipe/upipe_helper_void.h"
+#include "upipe/upipe_helper_upump_mgr.h"
+#include "upipe/upipe_helper_uclock.h"
+#include "upipe-ts/upipe_ts_scte35_probe.h"
+#include "upipe-ts/uref_ts_scte35.h"
+#include "upipe-ts/uref_ts_scte35_desc.h"
 
 #include <stdlib.h>
 #include <stdbool.h>

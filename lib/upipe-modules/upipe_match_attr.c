@@ -27,14 +27,14 @@
  * @short Upipe module dropping urefs not matching certain values for int attributes
  */
 
-#include <upipe/ubase.h>
-#include <upipe/uref.h>
-#include <upipe/upipe.h>
-#include <upipe/upipe_helper_upipe.h>
-#include <upipe/upipe_helper_urefcount.h>
-#include <upipe/upipe_helper_void.h>
-#include <upipe/upipe_helper_output.h>
-#include <upipe-modules/upipe_match_attr.h>
+#include "upipe/ubase.h"
+#include "upipe/uref.h"
+#include "upipe/upipe.h"
+#include "upipe/upipe_helper_upipe.h"
+#include "upipe/upipe_helper_urefcount.h"
+#include "upipe/upipe_helper_void.h"
+#include "upipe/upipe_helper_output.h"
+#include "upipe-modules/upipe_match_attr.h"
 
 #include <stdlib.h>
 #include <stdarg.h>

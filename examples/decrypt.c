@@ -1,27 +1,27 @@
 #include <stdio.h>
 #include <stdlib.h>
 
-#include <upipe/uprobe.h>
-#include <upipe/uprobe_prefix.h>
-#include <upipe/uprobe_stdio.h>
-#include <upipe/uprobe_uref_mgr.h>
-#include <upipe/uprobe_upump_mgr.h>
-#include <upipe/uprobe_ubuf_mem.h>
-#include <upipe/upump.h>
-#include <upipe/umem.h>
-#include <upipe/umem_pool.h>
-#include <upipe/udict.h>
-#include <upipe/udict_inline.h>
-#include <upipe/uref.h>
-#include <upipe/uref_std.h>
-#include <upump-ev/upump_ev.h>
-#include <upipe-modules/upipe_auto_source.h>
-#include <upipe-modules/upipe_file_source.h>
-#include <upipe-modules/upipe_http_source.h>
-#include <upipe-modules/upipe_setflowdef.h>
-#include <upipe-modules/uref_aes_flow.h>
-#include <upipe-modules/upipe_aes_decrypt.h>
-#include <upipe-modules/upipe_file_sink.h>
+#include "upipe/uprobe.h"
+#include "upipe/uprobe_prefix.h"
+#include "upipe/uprobe_stdio.h"
+#include "upipe/uprobe_uref_mgr.h"
+#include "upipe/uprobe_upump_mgr.h"
+#include "upipe/uprobe_ubuf_mem.h"
+#include "upipe/upump.h"
+#include "upipe/umem.h"
+#include "upipe/umem_pool.h"
+#include "upipe/udict.h"
+#include "upipe/udict_inline.h"
+#include "upipe/uref.h"
+#include "upipe/uref_std.h"
+#include "upump-ev/upump_ev.h"
+#include "upipe-modules/upipe_auto_source.h"
+#include "upipe-modules/upipe_file_source.h"
+#include "upipe-modules/upipe_http_source.h"
+#include "upipe-modules/upipe_setflowdef.h"
+#include "upipe-modules/uref_aes_flow.h"
+#include "upipe-modules/upipe_aes_decrypt.h"
+#include "upipe-modules/upipe_file_sink.h"
 
 #define UPROBE_LOG_LEVEL UPROBE_LOG_DEBUG
 #define UMEM_POOL 512

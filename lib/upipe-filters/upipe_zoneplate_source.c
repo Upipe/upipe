@@ -24,23 +24,23 @@
  * @short Upipe module generating zoneplate video pictures
  */
 
-#include <upipe/upipe_helper_upipe.h>
-#include <upipe/upipe_helper_urefcount.h>
-#include <upipe/upipe_helper_urefcount_real.h>
-#include <upipe/upipe_helper_flow.h>
-#include <upipe/upipe_helper_uprobe.h>
-#include <upipe/upipe_helper_inner.h>
-#include <upipe/upipe_helper_bin_output.h>
+#include "upipe/upipe_helper_upipe.h"
+#include "upipe/upipe_helper_urefcount.h"
+#include "upipe/upipe_helper_urefcount_real.h"
+#include "upipe/upipe_helper_flow.h"
+#include "upipe/upipe_helper_uprobe.h"
+#include "upipe/upipe_helper_inner.h"
+#include "upipe/upipe_helper_bin_output.h"
 
-#include <upipe/uclock.h>
-#include <upipe/uprobe_prefix.h>
-#include <upipe/uref_void_flow.h>
-#include <upipe/uref_pic_flow.h>
-#include <upipe/uref_clock.h>
+#include "upipe/uclock.h"
+#include "upipe/uprobe_prefix.h"
+#include "upipe/uref_void_flow.h"
+#include "upipe/uref_pic_flow.h"
+#include "upipe/uref_clock.h"
 
-#include <upipe-modules/upipe_void_source.h>
-#include <upipe-filters/upipe_zoneplate.h>
-#include <upipe-filters/upipe_zoneplate_source.h>
+#include "upipe-modules/upipe_void_source.h"
+#include "upipe-filters/upipe_zoneplate.h"
+#include "upipe-filters/upipe_zoneplate_source.h"
 
 /** @internal @This is the private structure of a zoneplate source pipe. */
 struct upipe_zpsrc {

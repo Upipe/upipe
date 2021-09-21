@@ -29,15 +29,15 @@
 
 #undef NDEBUG
 
-#include <upipe/uprobe_uref_mgr.h>
-#include <upipe/upipe.h>
-#include <upipe/umem.h>
-#include <upipe/umem_alloc.h>
-#include <upipe/udict.h>
-#include <upipe/udict_inline.h>
-#include <upipe/uref.h>
-#include <upipe/uref_std.h>
-#include <upipe/urequest.h>
+#include "upipe/uprobe_uref_mgr.h"
+#include "upipe/upipe.h"
+#include "upipe/umem.h"
+#include "upipe/umem_alloc.h"
+#include "upipe/udict.h"
+#include "upipe/udict_inline.h"
+#include "upipe/uref.h"
+#include "upipe/uref_std.h"
+#include "upipe/urequest.h"
 
 #include <stdio.h>
 #include <stdlib.h>

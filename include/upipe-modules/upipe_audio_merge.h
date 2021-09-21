@@ -40,9 +40,9 @@
 extern "C" {
 #endif
 
-#include <upipe/upipe.h>
-#include <upipe/upump.h>
-#include <upipe/uref_attr.h>
+#include "upipe/upipe.h"
+#include "upipe/upump.h"
+#include "upipe/uref_attr.h"
 
 #define UPIPE_AUDIO_MERGE_SIGNATURE UBASE_FOURCC('a','m','g','l')
 #define UPIPE_AUDIO_MERGE_INPUT_SIGNATURE UBASE_FOURCC('a','m','g','i')

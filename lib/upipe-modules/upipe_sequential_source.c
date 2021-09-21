@@ -21,16 +21,16 @@
  * SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
  */
 
-#include <upipe-modules/upipe_sequential_source.h>
-#include <upipe/upipe_helper_uclock.h>
-#include <upipe/upipe_helper_bin_output.h>
-#include <upipe/upipe_helper_inner.h>
-#include <upipe/upipe_helper_uprobe.h>
-#include <upipe/upipe_helper_void.h>
-#include <upipe/upipe_helper_urefcount.h>
-#include <upipe/upipe_helper_upipe.h>
-#include <upipe/upipe.h>
-#include <upipe/uprobe_prefix.h>
+#include "upipe-modules/upipe_sequential_source.h"
+#include "upipe/upipe_helper_uclock.h"
+#include "upipe/upipe_helper_bin_output.h"
+#include "upipe/upipe_helper_inner.h"
+#include "upipe/upipe_helper_uprobe.h"
+#include "upipe/upipe_helper_void.h"
+#include "upipe/upipe_helper_urefcount.h"
+#include "upipe/upipe_helper_upipe.h"
+#include "upipe/upipe.h"
+#include "upipe/uprobe_prefix.h"
 
 struct upipe_seq_src {
     struct upipe upipe;

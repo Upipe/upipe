@@ -29,7 +29,7 @@
 extern "C" {
 #endif
 
-#include <upipe/uref_attr.h>
+#include "upipe/uref_attr.h"
 
 UREF_ATTR_SMALL_UNSIGNED(m3u_flow, version, "m3u.version", m3u version)
 

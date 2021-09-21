@@ -36,7 +36,7 @@
 extern "C" {
 #endif
 
-#include <upipe/upipe.h>
+#include "upipe/upipe.h"
 
 #define UPIPE_X264_SIGNATURE UBASE_FOURCC('x','2','6','4')
 

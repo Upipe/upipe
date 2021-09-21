@@ -27,9 +27,9 @@
  * @short common functions for libav wrappers
  */
 
-#include <upipe/udeal.h>
-#include <upipe/uprobe.h>
-#include <upipe-av/upipe_av.h>
+#include "upipe/udeal.h"
+#include "upipe/uprobe.h"
+#include "upipe-av/upipe_av.h"
 
 #include <libavformat/avformat.h>
 #include <libavcodec/avcodec.h>

@@ -30,9 +30,9 @@
 #include <errno.h>
 #include <bearssl.h>
 
-#include <upipe/ubase.h>
-#include <upipe/uref_uri.h>
-#include <upipe/urefcount_helper.h>
+#include "upipe/ubase.h"
+#include "upipe/uref_uri.h"
+#include "upipe/urefcount_helper.h"
 
 #include "https_source_hook.h"
 

@@ -34,7 +34,7 @@
 extern "C" {
 #endif
 
-#include <upipe/ulist.h>
+#include "upipe/ulist.h"
 
 /** @This declares functions dealing with embedded ulist of a structure.
  *

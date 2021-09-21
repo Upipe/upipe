@@ -27,11 +27,11 @@
  * @short probe catching need_upump_mgr events and providing a given upump manager
  */
 
-#include <upipe/ubase.h>
-#include <upipe/upump.h>
-#include <upipe/uprobe.h>
-#include <upipe/uprobe_upump_mgr.h>
-#include <upipe/uprobe_helper_alloc.h>
+#include "upipe/ubase.h"
+#include "upipe/upump.h"
+#include "upipe/uprobe.h"
+#include "upipe/uprobe_upump_mgr.h"
+#include "upipe/uprobe_helper_alloc.h"
 
 #include <stdlib.h>
 #include <stdarg.h>

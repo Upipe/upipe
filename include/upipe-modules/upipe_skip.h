@@ -36,7 +36,7 @@ extern "C" {
 #endif
 
 #include <stdint.h>
-#include <upipe/upipe.h>
+#include "upipe/upipe.h"
 
 #define UPIPE_SKIP_SIGNATURE UBASE_FOURCC('s','k','i','p')
 

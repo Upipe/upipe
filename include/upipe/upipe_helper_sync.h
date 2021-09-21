@@ -34,8 +34,8 @@
 extern "C" {
 #endif
 
-#include <upipe/ubase.h>
-#include <upipe/upipe.h>
+#include "upipe/ubase.h"
+#include "upipe/upipe.h"
 
 /** @This declares four functions throwing the @ref UPROBE_SYNC_ACQUIRED and
  * @ref UPROBE_SYNC_LOST events in a consistent manner.

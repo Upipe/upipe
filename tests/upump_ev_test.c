@@ -29,7 +29,7 @@
 
 #undef NDEBUG
 
-#include <upump-ev/upump_ev.h>
+#include "upump-ev/upump_ev.h"
 
 #include "upump_common_test.h"
 

@@ -36,7 +36,7 @@
 extern "C" {
 #endif
 
-#include <upipe/upipe.h>
+#include "upipe/upipe.h"
 
 #define UPIPE_SWS_THUMBS_SIGNATURE UBASE_FOURCC('s','w','s','t')
 

@@ -29,7 +29,7 @@
 extern "C" {
 #endif
 
-#include <upipe/upipe.h>
+#include "upipe/upipe.h"
 
 #define UPIPE_MPGVF_SIGNATURE UBASE_FOURCC('m','p','v','f')
 /** We only accept the ISO 13818-2 elementary stream. */

@@ -31,8 +31,8 @@
 extern "C" {
 #endif
 
-#include <upipe/ubase.h>
-#include <upipe/uprobe.h>
+#include "upipe/ubase.h"
+#include "upipe/uprobe.h"
 
 /** @This declares functions dealing with inner pipe probes,
  * which internally catch and forward inner pipeline events.

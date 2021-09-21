@@ -34,11 +34,11 @@
 extern "C" {
 #endif
 
-#include <upipe/ubase.h>
-#include <upipe/ulist.h>
-#include <upipe/uref.h>
-#include <upipe/uref_flow.h>
-#include <upipe/upipe.h>
+#include "upipe/ubase.h"
+#include "upipe/ulist.h"
+#include "upipe/uref.h"
+#include "upipe/uref_flow.h"
+#include "upipe/upipe.h"
 
 #include <stdbool.h>
 

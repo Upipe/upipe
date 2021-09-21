@@ -27,8 +27,8 @@
 extern "C" {
 #endif
 
-#include <upipe/uprobe.h>
-#include <upipe/upipe.h>
+#include "upipe/uprobe.h"
+#include "upipe/upipe.h"
 
 #define UPIPE_HLS_VARIANT_SIGNATURE     UBASE_FOURCC('h','l','s','V')
 #define UPIPE_HLS_VARIANT_SUB_SIGNATURE UBASE_FOURCC('h','l','s','v')

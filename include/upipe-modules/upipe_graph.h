@@ -33,8 +33,8 @@
 extern "C" {
 #endif
 
-#include <upipe/ubase.h>
-#include <upipe/upipe.h>
+#include "upipe/ubase.h"
+#include "upipe/upipe.h"
 
 struct upipe_mgr;
 

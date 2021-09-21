@@ -34,9 +34,9 @@
 extern "C" {
 #endif
 
-#include <upipe/ubase.h>
-#include <upipe/ulist.h>
-#include <upipe/upump.h>
+#include "upipe/ubase.h"
+#include "upipe/ulist.h"
+#include "upipe/upump.h"
 
 /** function called when a pump is triggered */
 typedef void (*upump_blocker_cb)(struct upump_blocker *);

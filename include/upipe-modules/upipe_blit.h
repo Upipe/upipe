@@ -35,7 +35,7 @@
 extern "C" {
 #endif
 
-#include <upipe/upipe.h>
+#include "upipe/upipe.h"
 
 #define UPIPE_BLIT_SIGNATURE UBASE_FOURCC('b','l','i','t')
 #define UPIPE_BLIT_SUB_SIGNATURE UBASE_FOURCC('b','l','i','s')

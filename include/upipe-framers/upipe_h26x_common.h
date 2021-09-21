@@ -29,9 +29,9 @@
 extern "C" {
 #endif
 
-#include <upipe/ubase.h>
-#include <upipe/ubuf.h>
-#include <upipe/ubuf_block_stream.h>
+#include "upipe/ubase.h"
+#include "upipe/ubuf.h"
+#include "upipe/ubuf_block_stream.h"
 
 #include <stdlib.h>
 #include <stdint.h>

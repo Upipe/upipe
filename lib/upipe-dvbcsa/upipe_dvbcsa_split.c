@@ -23,23 +23,23 @@
  * SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
  */
 
-#include <upipe/upipe_helper_upipe.h>
-#include <upipe/upipe_helper_urefcount.h>
-#include <upipe/upipe_helper_urefcount_real.h>
-#include <upipe/upipe_helper_void.h>
-#include <upipe/upipe_helper_uprobe.h>
-#include <upipe/upipe_helper_inner.h>
-#include <upipe/upipe_helper_bin_input.h>
-#include <upipe/upipe_helper_bin_output.h>
+#include "upipe/upipe_helper_upipe.h"
+#include "upipe/upipe_helper_urefcount.h"
+#include "upipe/upipe_helper_urefcount_real.h"
+#include "upipe/upipe_helper_void.h"
+#include "upipe/upipe_helper_uprobe.h"
+#include "upipe/upipe_helper_inner.h"
+#include "upipe/upipe_helper_bin_input.h"
+#include "upipe/upipe_helper_bin_output.h"
 
-#include <upipe-dvbcsa/upipe_dvbcsa_split.h>
+#include "upipe-dvbcsa/upipe_dvbcsa_split.h"
 
-#include <upipe-modules/upipe_dup.h>
+#include "upipe-modules/upipe_dup.h"
 
-#include <upipe-ts/upipe_ts_demux.h>
+#include "upipe-ts/upipe_ts_demux.h"
 
-#include <upipe/uprobe_select_flows.h>
-#include <upipe/uprobe_prefix.h>
+#include "upipe/uprobe_select_flows.h"
+#include "upipe/uprobe_prefix.h"
 
 struct pid {
     uint64_t value;

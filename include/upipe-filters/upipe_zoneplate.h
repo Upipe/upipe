@@ -28,7 +28,7 @@
 extern "C" {
 #endif
 
-#include <upipe/ubase.h>
+#include "upipe/ubase.h"
 
 #define UPIPE_ZP_SIGNATURE   UBASE_FOURCC('z','p','l','t')
 

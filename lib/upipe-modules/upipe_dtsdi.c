@@ -24,19 +24,19 @@
  * SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
  */
 
-#include <upipe/ubase.h>
-#include <upipe/uref.h>
-#include <upipe/uref_block.h>
-#include <upipe/ubuf.h>
-#include <upipe/upipe.h>
-#include <upipe/uref_pic_flow.h>
-#include <upipe/upipe_helper_upipe.h>
-#include <upipe/upipe_helper_urefcount.h>
-#include <upipe/upipe_helper_void.h>
-#include <upipe/upipe_helper_output.h>
-#include <upipe/upipe_helper_output_size.h>
+#include "upipe/ubase.h"
+#include "upipe/uref.h"
+#include "upipe/uref_block.h"
+#include "upipe/ubuf.h"
+#include "upipe/upipe.h"
+#include "upipe/uref_pic_flow.h"
+#include "upipe/upipe_helper_upipe.h"
+#include "upipe/upipe_helper_urefcount.h"
+#include "upipe/upipe_helper_void.h"
+#include "upipe/upipe_helper_output.h"
+#include "upipe/upipe_helper_output_size.h"
 
-#include <upipe-modules/upipe_dtsdi.h>
+#include "upipe-modules/upipe_dtsdi.h"
 
 #define DTSDI_SDI_FULL          0x0001      // Full SDI frame
 #define DTSDI_SDI_ACTVID        0x0002      // Active video only

@@ -25,23 +25,23 @@
 
 #undef NDEBUG
 
-#include <upipe/uprobe.h>
-#include <upipe/uprobe_stdio.h>
-#include <upipe/uprobe_prefix.h>
-#include <upipe/uprobe_ubuf_mem.h>
-#include <upipe/umem.h>
-#include <upipe/umem_alloc.h>
-#include <upipe/udict.h>
-#include <upipe/udict_inline.h>
-#include <upipe/uref.h>
-#include <upipe/uref_block_flow.h>
-#include <upipe/uref_flow.h>
-#include <upipe/uref_std.h>
-#include <upipe/uref_dump.h>
-#include <upipe/uref_clock.h>
-#include <upipe-modules/upipe_genaux.h>
+#include "upipe/uprobe.h"
+#include "upipe/uprobe_stdio.h"
+#include "upipe/uprobe_prefix.h"
+#include "upipe/uprobe_ubuf_mem.h"
+#include "upipe/umem.h"
+#include "upipe/umem_alloc.h"
+#include "upipe/udict.h"
+#include "upipe/udict_inline.h"
+#include "upipe/uref.h"
+#include "upipe/uref_block_flow.h"
+#include "upipe/uref_flow.h"
+#include "upipe/uref_std.h"
+#include "upipe/uref_dump.h"
+#include "upipe/uref_clock.h"
+#include "upipe-modules/upipe_genaux.h"
 
-#include <upipe/upipe_helper_upipe.h>
+#include "upipe/upipe_helper_upipe.h"
 
 #include <stdio.h>
 #include <string.h>

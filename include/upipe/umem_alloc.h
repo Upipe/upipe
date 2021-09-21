@@ -36,7 +36,7 @@
 extern "C" {
 #endif
 
-#include <upipe/umem.h>
+#include "upipe/umem.h"
 
 /** @This allocates a new instance of the umem alloc manager allocating buffers
  * from application memory directly with malloc()/free(), without any pool.

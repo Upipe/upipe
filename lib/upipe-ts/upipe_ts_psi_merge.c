@@ -22,17 +22,17 @@
  * @short Upipe module merging PSI sections from TS input
  */
 
-#include <upipe/uref.h>
-#include <upipe/uref_flow.h>
-#include <upipe/uref_block.h>
-#include <upipe/ubuf.h>
-#include <upipe/upipe.h>
-#include <upipe/upipe_helper_upipe.h>
-#include <upipe/upipe_helper_urefcount.h>
-#include <upipe/upipe_helper_void.h>
-#include <upipe/upipe_helper_sync.h>
-#include <upipe/upipe_helper_output.h>
-#include <upipe-ts/upipe_ts_psi_merge.h>
+#include "upipe/uref.h"
+#include "upipe/uref_flow.h"
+#include "upipe/uref_block.h"
+#include "upipe/ubuf.h"
+#include "upipe/upipe.h"
+#include "upipe/upipe_helper_upipe.h"
+#include "upipe/upipe_helper_urefcount.h"
+#include "upipe/upipe_helper_void.h"
+#include "upipe/upipe_helper_sync.h"
+#include "upipe/upipe_helper_output.h"
+#include "upipe-ts/upipe_ts_psi_merge.h"
 
 #include <stdlib.h>
 #include <stdbool.h>

@@ -26,7 +26,7 @@
 #ifndef _UPIPE_MODULES_UPIPE_AUDIO_BLANK_H_
 # define _UPIPE_MODULES_UPIPE_AUDIO_BLANK_H_
 
-#include <upipe/upipe.h>
+#include "upipe/upipe.h"
 
 #ifdef __cplusplus
 extern "C" {

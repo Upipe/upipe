@@ -29,7 +29,7 @@
 extern "C" {
 #endif
 
-#include <upipe/upipe.h>
+#include "upipe/upipe.h"
 
 #define UPIPE_AUTO_SRC_SIGNATURE UBASE_FOURCC('a','s','r','c')
 

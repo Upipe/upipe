@@ -35,8 +35,8 @@
 extern "C" {
 #endif
 
-#include <upipe/upipe.h>
-#include <upipe/uref_attr.h>
+#include "upipe/upipe.h"
+#include "upipe/uref_attr.h"
 
 #define UPIPE_AUDIO_SPLIT_SIGNATURE UBASE_FOURCC('a','s','p','l')
 #define UPIPE_AUDIO_SPLIT_OUTPUT_SIGNATURE UBASE_FOURCC('a','s','p','o')

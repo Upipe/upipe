@@ -29,8 +29,8 @@
 extern "C" {
 #endif
 
-#include <upipe/upipe.h>
-#include <upipe-ts/upipe_ts_demux.h>
+#include "upipe/upipe.h"
+#include "upipe-ts/upipe_ts_demux.h"
 
 #define UPIPE_TS_CATD_SIGNATURE UBASE_FOURCC('t','s',0x01,'d')
 

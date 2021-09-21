@@ -36,8 +36,8 @@
 extern "C" {
 #endif
 
-#include <upipe/uprobe.h>
-#include <upipe/uprobe_helper_uprobe.h>
+#include "upipe/uprobe.h"
+#include "upipe/uprobe_helper_uprobe.h"
 
 /** @This is a super-set of the uprobe structure with additional local
  * members. */

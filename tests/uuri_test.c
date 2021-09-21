@@ -1,6 +1,6 @@
 #undef NDEBUG
 
-#include <upipe/uuri.h>
+#include "upipe/uuri.h"
 
 #include <assert.h>
 

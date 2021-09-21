@@ -35,9 +35,9 @@
 extern "C" {
 #endif
 
-#include <upipe/uref.h>
-#include <upipe/uref_attr.h>
-#include <upipe/uref_flow.h>
+#include "upipe/uref.h"
+#include "upipe/uref_attr.h"
+#include "upipe/uref_flow.h"
 
 /** @This defines encapsulation types for AAC. */
 enum uref_mpga_encaps {

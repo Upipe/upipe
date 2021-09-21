@@ -27,24 +27,24 @@
  * @short Upipe sink module libavformat wrapper
  */
 
-#include <upipe/ubase.h>
-#include <upipe/ulist.h>
-#include <upipe/uclock.h>
-#include <upipe/uref.h>
-#include <upipe/uref_block.h>
-#include <upipe/uref_block_flow.h>
-#include <upipe/uref_pic_flow.h>
-#include <upipe/uref_sound_flow.h>
-#include <upipe/uref_clock.h>
-#include <upipe/upipe.h>
-#include <upipe/upipe_helper_upipe.h>
-#include <upipe/upipe_helper_urefcount.h>
-#include <upipe/upipe_helper_void.h>
-#include <upipe/upipe_helper_flow_def_check.h>
-#include <upipe/upipe_helper_subpipe.h>
-#include <upipe/upipe_helper_sync.h>
-#include <upipe-framers/uref_mpga_flow.h>
-#include <upipe-av/upipe_avformat_sink.h>
+#include "upipe/ubase.h"
+#include "upipe/ulist.h"
+#include "upipe/uclock.h"
+#include "upipe/uref.h"
+#include "upipe/uref_block.h"
+#include "upipe/uref_block_flow.h"
+#include "upipe/uref_pic_flow.h"
+#include "upipe/uref_sound_flow.h"
+#include "upipe/uref_clock.h"
+#include "upipe/upipe.h"
+#include "upipe/upipe_helper_upipe.h"
+#include "upipe/upipe_helper_urefcount.h"
+#include "upipe/upipe_helper_void.h"
+#include "upipe/upipe_helper_flow_def_check.h"
+#include "upipe/upipe_helper_subpipe.h"
+#include "upipe/upipe_helper_sync.h"
+#include "upipe-framers/uref_mpga_flow.h"
+#include "upipe-av/upipe_avformat_sink.h"
 
 #include "upipe_av_internal.h"
 

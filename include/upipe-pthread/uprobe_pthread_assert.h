@@ -34,8 +34,8 @@
 extern "C" {
 #endif
 
-#include <upipe/uprobe.h>
-#include <upipe/uprobe_helper_uprobe.h>
+#include "upipe/uprobe.h"
+#include "upipe/uprobe_helper_uprobe.h"
 
 #include <pthread.h>
 

@@ -21,23 +21,23 @@
  * SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
  */
 
-#include <upipe-hls/upipe_hls_buffer.h>
+#include "upipe-hls/upipe_hls_buffer.h"
 
 
-#include <upipe/upipe_helper_upump.h>
-#include <upipe/upipe_helper_upump_mgr.h>
-#include <upipe/upipe_helper_input.h>
-#include <upipe/upipe_helper_output.h>
-#include <upipe/upipe_helper_void.h>
-#include <upipe/upipe_helper_urefcount.h>
-#include <upipe/upipe_helper_upipe.h>
+#include "upipe/upipe_helper_upump.h"
+#include "upipe/upipe_helper_upump_mgr.h"
+#include "upipe/upipe_helper_input.h"
+#include "upipe/upipe_helper_output.h"
+#include "upipe/upipe_helper_void.h"
+#include "upipe/upipe_helper_urefcount.h"
+#include "upipe/upipe_helper_upipe.h"
 
 
-#include <upipe/uref_clock.h>
+#include "upipe/uref_clock.h"
 
-#include <upipe/ueventfd.h>
+#include "upipe/ueventfd.h"
 
-#include <upipe/uclock.h>
+#include "upipe/uclock.h"
 
 #define DEFAULT_MAX_DURATION        (10 * UCLOCK_FREQ)
 

@@ -34,7 +34,7 @@
 extern "C" {
 #endif
 
-#include <upipe/upipe.h>
+#include "upipe/upipe.h"
 
 #define UPIPE_TRICKP_SIGNATURE UBASE_FOURCC('t','r','c','k')
 #define UPIPE_TRICKP_SUB_SIGNATURE UBASE_FOURCC('t','r','c','s')

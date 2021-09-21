@@ -31,12 +31,12 @@
 #define __STDC_FORMAT_MACROS   1
 #define __STDC_CONSTANT_MACROS 1
 
-#include <upipe/ubase.h>
-#include <upipe/urefcount.h>
-#include <upipe/upool.h>
-#include <upipe/ubuf.h>
-#include <upipe/ubuf_sound_common.h>
-#include <upipe-blackmagic/ubuf_sound_blackmagic.h>
+#include "upipe/ubase.h"
+#include "upipe/urefcount.h"
+#include "upipe/upool.h"
+#include "upipe/ubuf.h"
+#include "upipe/ubuf_sound_common.h"
+#include "upipe-blackmagic/ubuf_sound_blackmagic.h"
 
 #include <stdlib.h>
 #include <stdarg.h>

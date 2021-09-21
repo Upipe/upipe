@@ -28,14 +28,14 @@
  * @short implementation of a Upipe event loop using Ecore
  */
 
-#include <upipe/urefcount_helper.h>
-#include <upipe/ubase.h>
-#include <upipe/urefcount.h>
-#include <upipe/uclock.h>
-#include <upipe/umutex.h>
-#include <upipe/upump.h>
-#include <upipe/upump_common.h>
-#include <upump-ecore/upump_ecore.h>
+#include "upipe/urefcount_helper.h"
+#include "upipe/ubase.h"
+#include "upipe/urefcount.h"
+#include "upipe/uclock.h"
+#include "upipe/umutex.h"
+#include "upipe/upump.h"
+#include "upipe/upump_common.h"
+#include "upump-ecore/upump_ecore.h"
 
 #include <stdlib.h>
 

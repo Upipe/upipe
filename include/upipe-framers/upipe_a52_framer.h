@@ -30,7 +30,7 @@
 extern "C" {
 #endif
 
-#include <upipe/upipe.h>
+#include "upipe/upipe.h"
 
 #define UPIPE_A52F_SIGNATURE UBASE_FOURCC('a','5','2','f')
 

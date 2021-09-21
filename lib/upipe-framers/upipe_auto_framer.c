@@ -22,30 +22,30 @@
  * @short Upipe framers automatic detection
  */
 
-#include <upipe/ubase.h>
-#include <upipe/uprobe.h>
-#include <upipe/uprobe_prefix.h>
-#include <upipe/uref.h>
-#include <upipe/uref_flow.h>
-#include <upipe/upipe.h>
-#include <upipe/upipe_helper_upipe.h>
-#include <upipe/upipe_helper_void.h>
-#include <upipe/upipe_helper_urefcount.h>
-#include <upipe/upipe_helper_inner.h>
-#include <upipe/upipe_helper_uprobe.h>
-#include <upipe/upipe_helper_bin_input.h>
-#include <upipe/upipe_helper_bin_output.h>
-#include <upipe-modules/upipe_idem.h>
-#include <upipe-framers/upipe_auto_framer.h>
-#include <upipe-framers/upipe_mpga_framer.h>
-#include <upipe-framers/upipe_a52_framer.h>
-#include <upipe-framers/upipe_mpgv_framer.h>
-#include <upipe-framers/upipe_h264_framer.h>
-#include <upipe-framers/upipe_h265_framer.h>
-#include <upipe-framers/upipe_telx_framer.h>
-#include <upipe-framers/upipe_dvbsub_framer.h>
-#include <upipe-framers/upipe_opus_framer.h>
-#include <upipe-framers/upipe_s302_framer.h>
+#include "upipe/ubase.h"
+#include "upipe/uprobe.h"
+#include "upipe/uprobe_prefix.h"
+#include "upipe/uref.h"
+#include "upipe/uref_flow.h"
+#include "upipe/upipe.h"
+#include "upipe/upipe_helper_upipe.h"
+#include "upipe/upipe_helper_void.h"
+#include "upipe/upipe_helper_urefcount.h"
+#include "upipe/upipe_helper_inner.h"
+#include "upipe/upipe_helper_uprobe.h"
+#include "upipe/upipe_helper_bin_input.h"
+#include "upipe/upipe_helper_bin_output.h"
+#include "upipe-modules/upipe_idem.h"
+#include "upipe-framers/upipe_auto_framer.h"
+#include "upipe-framers/upipe_mpga_framer.h"
+#include "upipe-framers/upipe_a52_framer.h"
+#include "upipe-framers/upipe_mpgv_framer.h"
+#include "upipe-framers/upipe_h264_framer.h"
+#include "upipe-framers/upipe_h265_framer.h"
+#include "upipe-framers/upipe_telx_framer.h"
+#include "upipe-framers/upipe_dvbsub_framer.h"
+#include "upipe-framers/upipe_opus_framer.h"
+#include "upipe-framers/upipe_s302_framer.h"
 
 #include <stdlib.h>
 #include <stdarg.h>

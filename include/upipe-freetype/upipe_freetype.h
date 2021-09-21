@@ -35,8 +35,8 @@
 extern "C" {
 #endif
 
-#include <upipe/ubase.h>
-#include <upipe/upipe.h>
+#include "upipe/ubase.h"
+#include "upipe/upipe.h"
 
 #define UPIPE_FREETYPE_SIGNATURE UBASE_FOURCC('f','r','t','2')
 

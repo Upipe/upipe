@@ -55,7 +55,7 @@
 extern "C" {
 #endif
 
-#include <upipe/upipe.h>
+#include "upipe/upipe.h"
 
 #define UPIPE_WORK_SIGNATURE UBASE_FOURCC('w','o','r','k')
 

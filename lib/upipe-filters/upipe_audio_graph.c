@@ -20,22 +20,22 @@
  * Inc., 51 Franklin Street, Fifth Floor, Boston MA 02110-1301, USA.
  */
 
-#include <upipe/upipe.h>
-#include <upipe/uref.h>
-#include <upipe/uref_dump.h>
-#include <upipe/uref_sound_flow.h>
-#include <upipe/uref_pic_flow.h>
-#include <upipe/uref_pic.h>
-#include <upipe/uref_flow.h>
-#include <upipe/upipe_helper_upipe.h>
-#include <upipe/upipe_helper_urefcount.h>
-#include <upipe/upipe_helper_flow.h>
-#include <upipe/upipe_helper_input.h>
-#include <upipe/upipe_helper_output.h>
-#include <upipe/upipe_helper_ubuf_mgr.h>
-#include <upipe/upipe_helper_flow_format.h>
-#include <upipe-filters/upipe_audio_graph.h>
-#include <upipe-filters/upipe_audio_max.h>
+#include "upipe/upipe.h"
+#include "upipe/uref.h"
+#include "upipe/uref_dump.h"
+#include "upipe/uref_sound_flow.h"
+#include "upipe/uref_pic_flow.h"
+#include "upipe/uref_pic.h"
+#include "upipe/uref_flow.h"
+#include "upipe/upipe_helper_upipe.h"
+#include "upipe/upipe_helper_urefcount.h"
+#include "upipe/upipe_helper_flow.h"
+#include "upipe/upipe_helper_input.h"
+#include "upipe/upipe_helper_output.h"
+#include "upipe/upipe_helper_ubuf_mgr.h"
+#include "upipe/upipe_helper_flow_format.h"
+#include "upipe-filters/upipe_audio_graph.h"
+#include "upipe-filters/upipe_audio_max.h"
 
 #include <stdlib.h>
 #include <stdbool.h>

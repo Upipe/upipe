@@ -34,7 +34,7 @@
 extern "C" {
 #endif
 
-#include <upipe/ustring.h>
+#include "upipe/ustring.h"
 
 /** @This stores a parsed cookie.  */
 struct ucookie {

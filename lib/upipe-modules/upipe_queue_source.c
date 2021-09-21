@@ -35,16 +35,16 @@
  * called from another thread. The release function is thread-safe.
  */
 
-#include <upipe/ubase.h>
-#include <upipe/uprobe.h>
-#include <upipe/uref.h>
-#include <upipe/upump.h>
-#include <upipe/upipe_helper_upipe.h>
-#include <upipe/upipe_helper_urefcount.h>
-#include <upipe/upipe_helper_output.h>
-#include <upipe/upipe_helper_upump_mgr.h>
-#include <upipe/upipe_helper_upump.h>
-#include <upipe-modules/upipe_queue_source.h>
+#include "upipe/ubase.h"
+#include "upipe/uprobe.h"
+#include "upipe/uref.h"
+#include "upipe/upump.h"
+#include "upipe/upipe_helper_upipe.h"
+#include "upipe/upipe_helper_urefcount.h"
+#include "upipe/upipe_helper_output.h"
+#include "upipe/upipe_helper_upump_mgr.h"
+#include "upipe/upipe_helper_upump.h"
+#include "upipe-modules/upipe_queue_source.h"
 
 #include "upipe_queue.h"
 

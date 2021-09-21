@@ -8,28 +8,28 @@
 #include <stdint.h>
 #include <stdio.h>
 
-#include <upipe/uprobe.h>
-#include <upipe/ubase.h>
-#include <upipe/uprobe_stdio.h>
-#include <upipe/uprobe_prefix.h>
-#include <upipe/uprobe_uref_mgr.h>
-#include <upipe/uprobe_upump_mgr.h>
-#include <upipe/uprobe_ubuf_mem.h>
-#include <upipe/uprobe_uclock.h>
-#include <upipe/umem.h>
-#include <upipe/umem_pool.h>
-#include <upipe/udict.h>
-#include <upipe/udict_inline.h>
-#include <upipe/uref.h>
-#include <upipe/uref_std.h>
-#include <upipe/uclock.h>
-#include <upipe/uclock_std.h>
-#include <upipe/upipe.h>
-#include <upipe/upump.h>
-#include <upump-ev/upump_ev.h>
-#include <upipe-modules/upipe_udp_sink.h>
-#include <upipe-modules/upipe_udp_source.h>
-#include <upipe-ts/upipe_rtp_fec.h>
+#include "upipe/uprobe.h"
+#include "upipe/ubase.h"
+#include "upipe/uprobe_stdio.h"
+#include "upipe/uprobe_prefix.h"
+#include "upipe/uprobe_uref_mgr.h"
+#include "upipe/uprobe_upump_mgr.h"
+#include "upipe/uprobe_ubuf_mem.h"
+#include "upipe/uprobe_uclock.h"
+#include "upipe/umem.h"
+#include "upipe/umem_pool.h"
+#include "upipe/udict.h"
+#include "upipe/udict_inline.h"
+#include "upipe/uref.h"
+#include "upipe/uref_std.h"
+#include "upipe/uclock.h"
+#include "upipe/uclock_std.h"
+#include "upipe/upipe.h"
+#include "upipe/upump.h"
+#include "upump-ev/upump_ev.h"
+#include "upipe-modules/upipe_udp_sink.h"
+#include "upipe-modules/upipe_udp_source.h"
+#include "upipe-ts/upipe_rtp_fec.h"
 
 #define UMEM_POOL               512
 #define UDICT_POOL_DEPTH        500

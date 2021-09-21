@@ -27,12 +27,12 @@
  * @short probe transferring events from one thread to another
  */
 
-#include <upipe/ubase.h>
-#include <upipe/ulist.h>
-#include <upipe/uprobe.h>
-#include <upipe/uprobe_transfer.h>
-#include <upipe/uprobe_helper_alloc.h>
-#include <upipe/upipe.h>
+#include "upipe/ubase.h"
+#include "upipe/ulist.h"
+#include "upipe/uprobe.h"
+#include "upipe/uprobe_transfer.h"
+#include "upipe/uprobe_helper_alloc.h"
+#include "upipe/upipe.h"
 
 #include <stdlib.h>
 #include <stdarg.h>

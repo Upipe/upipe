@@ -27,10 +27,10 @@
  * @short probe catching provide_request events asking for a uref manager
  */
 
-#include <upipe/uref.h>
-#include <upipe/uprobe.h>
-#include <upipe/uprobe_uref_mgr.h>
-#include <upipe/uprobe_helper_alloc.h>
+#include "upipe/uref.h"
+#include "upipe/uprobe.h"
+#include "upipe/uprobe_uref_mgr.h"
+#include "upipe/uprobe_helper_alloc.h"
 
 #include <stdlib.h>
 #include <stdarg.h>

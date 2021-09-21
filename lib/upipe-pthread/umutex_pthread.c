@@ -27,10 +27,10 @@
  * @short Upipe umutex implementation using pthread
  */
 
-#include <upipe/ubase.h>
-#include <upipe/urefcount.h>
-#include <upipe/umutex.h>
-#include <upipe-pthread/umutex_pthread.h>
+#include "upipe/ubase.h"
+#include "upipe/urefcount.h"
+#include "upipe/umutex.h"
+#include "upipe-pthread/umutex_pthread.h"
 
 #include <pthread.h>
 #include <errno.h>

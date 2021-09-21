@@ -25,30 +25,30 @@
  * and ISO/IEC 13818-7 (ADTS AAC) and ISO/IEC 14496-3 (raw AAC) streams
  */
 
-#include <upipe/ubits.h>
-#include <upipe/uref.h>
-#include <upipe/uref_flow.h>
-#include <upipe/uref_block.h>
-#include <upipe/uref_block_flow.h>
-#include <upipe/uref_sound_flow.h>
-#include <upipe/uref_clock.h>
-#include <upipe/uclock.h>
-#include <upipe/ubuf.h>
-#include <upipe/ubuf_block.h>
-#include <upipe/ubuf_block_stream.h>
-#include <upipe/upipe.h>
-#include <upipe/upipe_helper_upipe.h>
-#include <upipe/upipe_helper_urefcount.h>
-#include <upipe/upipe_helper_void.h>
-#include <upipe/upipe_helper_sync.h>
-#include <upipe/upipe_helper_ubuf_mgr.h>
-#include <upipe/upipe_helper_uref_stream.h>
-#include <upipe/upipe_helper_output.h>
-#include <upipe/upipe_helper_input.h>
-#include <upipe/upipe_helper_flow_format.h>
-#include <upipe/upipe_helper_flow_def.h>
-#include <upipe-framers/upipe_mpga_framer.h>
-#include <upipe-framers/uref_mpga_flow.h>
+#include "upipe/ubits.h"
+#include "upipe/uref.h"
+#include "upipe/uref_flow.h"
+#include "upipe/uref_block.h"
+#include "upipe/uref_block_flow.h"
+#include "upipe/uref_sound_flow.h"
+#include "upipe/uref_clock.h"
+#include "upipe/uclock.h"
+#include "upipe/ubuf.h"
+#include "upipe/ubuf_block.h"
+#include "upipe/ubuf_block_stream.h"
+#include "upipe/upipe.h"
+#include "upipe/upipe_helper_upipe.h"
+#include "upipe/upipe_helper_urefcount.h"
+#include "upipe/upipe_helper_void.h"
+#include "upipe/upipe_helper_sync.h"
+#include "upipe/upipe_helper_ubuf_mgr.h"
+#include "upipe/upipe_helper_uref_stream.h"
+#include "upipe/upipe_helper_output.h"
+#include "upipe/upipe_helper_input.h"
+#include "upipe/upipe_helper_flow_format.h"
+#include "upipe/upipe_helper_flow_def.h"
+#include "upipe-framers/upipe_mpga_framer.h"
+#include "upipe-framers/uref_mpga_flow.h"
 
 #include <stdlib.h>
 #include <stdbool.h>

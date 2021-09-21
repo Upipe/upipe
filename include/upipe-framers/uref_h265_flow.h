@@ -34,8 +34,8 @@
 extern "C" {
 #endif
 
-#include <upipe/uref.h>
-#include <upipe/uref_attr.h>
+#include "upipe/uref.h"
+#include "upipe/uref_attr.h"
 
 UREF_ATTR_VOID(h265_flow, tier, "h265.tier", tier)
 UREF_ATTR_SMALL_UNSIGNED(h265_flow, profile, "h265.profile", profile)

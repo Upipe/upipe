@@ -34,7 +34,7 @@
 extern "C" {
 #endif
 
-#include <upipe/ubase.h>
+#include "upipe/ubase.h"
 
 #include <stddef.h>
 #include <string.h>

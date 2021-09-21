@@ -29,21 +29,21 @@
  * @short freetype2 based text renderer
  */
 
-#include <upipe/ubase.h>
-#include <upipe/ubuf_pic.h>
-#include <upipe/uref.h>
-#include <upipe/uref_pic_flow.h>
-#include <upipe/uref_dump.h>
-#include <upipe/uref_void.h>
-#include <upipe/upipe.h>
-#include <upipe/upipe_helper_upipe.h>
-#include <upipe/upipe_helper_output.h>
-#include <upipe/upipe_helper_urefcount.h>
-#include <upipe/upipe_helper_flow_format.h>
-#include <upipe/upipe_helper_ubuf_mgr.h>
-#include <upipe/upipe_helper_flow.h>
-#include <upipe/upipe_helper_input.h>
-#include <upipe-freetype/upipe_freetype.h>
+#include "upipe/ubase.h"
+#include "upipe/ubuf_pic.h"
+#include "upipe/uref.h"
+#include "upipe/uref_pic_flow.h"
+#include "upipe/uref_dump.h"
+#include "upipe/uref_void.h"
+#include "upipe/upipe.h"
+#include "upipe/upipe_helper_upipe.h"
+#include "upipe/upipe_helper_output.h"
+#include "upipe/upipe_helper_urefcount.h"
+#include "upipe/upipe_helper_flow_format.h"
+#include "upipe/upipe_helper_ubuf_mgr.h"
+#include "upipe/upipe_helper_flow.h"
+#include "upipe/upipe_helper_input.h"
+#include "upipe-freetype/upipe_freetype.h"
 
 #include <ft2build.h>
 

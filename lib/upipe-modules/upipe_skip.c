@@ -28,16 +28,16 @@
  * Skip arbitrary length of data in blocks.
  */
 
-#include <upipe/ubase.h>
-#include <upipe/uref.h>
-#include <upipe/upipe.h>
-#include <upipe/uref_block.h>
-#include <upipe/uref_flow.h>
-#include <upipe/upipe_helper_upipe.h>
-#include <upipe/upipe_helper_urefcount.h>
-#include <upipe/upipe_helper_void.h>
-#include <upipe/upipe_helper_output.h>
-#include <upipe-modules/upipe_skip.h>
+#include "upipe/ubase.h"
+#include "upipe/uref.h"
+#include "upipe/upipe.h"
+#include "upipe/uref_block.h"
+#include "upipe/uref_flow.h"
+#include "upipe/upipe_helper_upipe.h"
+#include "upipe/upipe_helper_urefcount.h"
+#include "upipe/upipe_helper_void.h"
+#include "upipe/upipe_helper_output.h"
+#include "upipe-modules/upipe_skip.h"
 
 #include <stdlib.h>
 #include <stdint.h>

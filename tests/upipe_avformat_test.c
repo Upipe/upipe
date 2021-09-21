@@ -29,25 +29,25 @@
 
 #undef NDEBUG
 
-#include <upipe/uprobe.h>
-#include <upipe/uprobe_stdio.h>
-#include <upipe/uprobe_prefix.h>
-#include <upipe/uprobe_uref_mgr.h>
-#include <upipe/uprobe_upump_mgr.h>
-#include <upipe/uprobe_ubuf_mem.h>
-#include <upipe/umem.h>
-#include <upipe/umem_alloc.h>
-#include <upipe/udict.h>
-#include <upipe/udict_inline.h>
-#include <upipe/uref.h>
-#include <upipe/uref_std.h>
-#include <upipe/uref_flow.h>
-#include <upipe/upump.h>
-#include <upump-ev/upump_ev.h>
-#include <upipe/upipe.h>
-#include <upipe-av/upipe_av.h>
-#include <upipe-av/upipe_avformat_source.h>
-#include <upipe-av/upipe_avformat_sink.h>
+#include "upipe/uprobe.h"
+#include "upipe/uprobe_stdio.h"
+#include "upipe/uprobe_prefix.h"
+#include "upipe/uprobe_uref_mgr.h"
+#include "upipe/uprobe_upump_mgr.h"
+#include "upipe/uprobe_ubuf_mem.h"
+#include "upipe/umem.h"
+#include "upipe/umem_alloc.h"
+#include "upipe/udict.h"
+#include "upipe/udict_inline.h"
+#include "upipe/uref.h"
+#include "upipe/uref_std.h"
+#include "upipe/uref_flow.h"
+#include "upipe/upump.h"
+#include "upump-ev/upump_ev.h"
+#include "upipe/upipe.h"
+#include "upipe-av/upipe_av.h"
+#include "upipe-av/upipe_avformat_source.h"
+#include "upipe-av/upipe_avformat_sink.h"
 
 #include <stdbool.h>
 #include <stdlib.h>

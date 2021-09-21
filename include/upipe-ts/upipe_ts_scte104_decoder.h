@@ -29,7 +29,7 @@
 extern "C" {
 #endif
 
-#include <upipe/upipe.h>
+#include "upipe/upipe.h"
 
 #define UPIPE_TS_SCTE104D_SIGNATURE UBASE_FOURCC('s','1','0','4')
 #define UPIPE_TS_SCTE104D_OUTPUT_SIGNATURE UBASE_FOURCC('S','1','0','4')

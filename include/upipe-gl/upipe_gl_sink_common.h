@@ -34,7 +34,7 @@
 extern "C" {
 #endif
 
-#include <upipe/upipe.h>
+#include "upipe/upipe.h"
 
 #define UPIPE_GL_SINK_SIGNATURE UBASE_FOURCC('g', 'l', 's', 'k')
 

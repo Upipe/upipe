@@ -27,18 +27,18 @@
  * @short Upipe ubuf manager for sound formats with umem storage
  */
 
-#include <upipe/ubase.h>
-#include <upipe/uatomic.h>
-#include <upipe/urefcount.h>
-#include <upipe/upool.h>
-#include <upipe/umem.h>
-#include <upipe/ubuf.h>
-#include <upipe/ubuf_sound.h>
-#include <upipe/ubuf_sound_common.h>
-#include <upipe/ubuf_sound_mem.h>
-#include <upipe/ubuf_mem_common.h>
-#include <upipe/uref_flow.h>
-#include <upipe/uref_sound_flow.h>
+#include "upipe/ubase.h"
+#include "upipe/uatomic.h"
+#include "upipe/urefcount.h"
+#include "upipe/upool.h"
+#include "upipe/umem.h"
+#include "upipe/ubuf.h"
+#include "upipe/ubuf_sound.h"
+#include "upipe/ubuf_sound_common.h"
+#include "upipe/ubuf_sound_mem.h"
+#include "upipe/ubuf_mem_common.h"
+#include "upipe/uref_flow.h"
+#include "upipe/uref_sound_flow.h"
 
 #include <stdlib.h>
 #include <stdarg.h>

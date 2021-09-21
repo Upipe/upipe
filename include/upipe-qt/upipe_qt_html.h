@@ -30,7 +30,7 @@
 extern "C" {
 #endif
 
-#include <upipe/upipe.h>
+#include "upipe/upipe.h"
 
 #define UPIPE_QT_HTML_SIGNATURE UBASE_FOURCC('h','t','m','l')
 

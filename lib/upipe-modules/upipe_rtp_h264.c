@@ -25,14 +25,14 @@
 
 #include <stdlib.h>
 
-#include <upipe/upipe.h>
-#include <upipe/uref_clock.h>
-#include <upipe/uref_block.h>
-#include <upipe/upipe_helper_upipe.h>
-#include <upipe/upipe_helper_urefcount.h>
-#include <upipe/upipe_helper_void.h>
-#include <upipe/upipe_helper_output.h>
-#include <upipe-modules/upipe_rtp_h264.h>
+#include "upipe/upipe.h"
+#include "upipe/uref_clock.h"
+#include "upipe/uref_block.h"
+#include "upipe/upipe_helper_upipe.h"
+#include "upipe/upipe_helper_urefcount.h"
+#include "upipe/upipe_helper_void.h"
+#include "upipe/upipe_helper_output.h"
+#include "upipe-modules/upipe_rtp_h264.h"
 
 static const uint8_t *upipe_mpeg_scan(const uint8_t *p, const uint8_t *end,
                                       uint8_t *len)

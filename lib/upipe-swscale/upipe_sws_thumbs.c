@@ -27,21 +27,21 @@
  * @short Upipe swscale thumbnail gallery module
  */
 
-#include <upipe/uref.h>
-#include <upipe/uref_pic_flow.h>
-#include <upipe/uref_pic.h>
-#include <upipe/uref_dump.h>
-#include <upipe/upipe.h>
-#include <upipe/uref_flow.h>
-#include <upipe/upipe_helper_upipe.h>
-#include <upipe/upipe_helper_urefcount.h>
-#include <upipe/upipe_helper_flow.h>
-#include <upipe/upipe_helper_flow_def.h>
-#include <upipe/upipe_helper_ubuf_mgr.h>
-#include <upipe/upipe_helper_output.h>
-#include <upipe/upipe_helper_input.h>
-#include <upipe-swscale/upipe_sws_thumbs.h>
-#include <upipe-av/upipe_av_pixfmt.h>
+#include "upipe/uref.h"
+#include "upipe/uref_pic_flow.h"
+#include "upipe/uref_pic.h"
+#include "upipe/uref_dump.h"
+#include "upipe/upipe.h"
+#include "upipe/uref_flow.h"
+#include "upipe/upipe_helper_upipe.h"
+#include "upipe/upipe_helper_urefcount.h"
+#include "upipe/upipe_helper_flow.h"
+#include "upipe/upipe_helper_flow_def.h"
+#include "upipe/upipe_helper_ubuf_mgr.h"
+#include "upipe/upipe_helper_output.h"
+#include "upipe/upipe_helper_input.h"
+#include "upipe-swscale/upipe_sws_thumbs.h"
+#include "upipe-av/upipe_av_pixfmt.h"
 
 #include <stdlib.h>
 #include <stdbool.h>

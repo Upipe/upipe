@@ -27,16 +27,16 @@
  * @short Upipe ebur128
  */
 
-#include <upipe/uref.h>
-#include <upipe/uref_flow.h>
-#include <upipe/uref_sound_flow.h>
-#include <upipe/uref_sound.h>
-#include <upipe/upipe.h>
-#include <upipe/upipe_helper_upipe.h>
-#include <upipe/upipe_helper_urefcount.h>
-#include <upipe/upipe_helper_void.h>
-#include <upipe/upipe_helper_output.h>
-#include <upipe-ebur128/upipe_ebur128.h>
+#include "upipe/uref.h"
+#include "upipe/uref_flow.h"
+#include "upipe/uref_sound_flow.h"
+#include "upipe/uref_sound.h"
+#include "upipe/upipe.h"
+#include "upipe/upipe_helper_upipe.h"
+#include "upipe/upipe_helper_urefcount.h"
+#include "upipe/upipe_helper_void.h"
+#include "upipe/upipe_helper_output.h"
+#include "upipe-ebur128/upipe_ebur128.h"
 
 #include <stdlib.h>
 #include <stdint.h>

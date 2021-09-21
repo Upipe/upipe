@@ -30,14 +30,14 @@
 
 #define _GNU_SOURCE
 
-#include <upipe/ubase.h>
-#include <upipe/ueventfd.h>
-#include <upipe/umutex.h>
-#include <upipe/uprobe.h>
-#include <upipe/upump.h>
-#include <upipe-modules/upipe_transfer.h>
-#include <upipe-pthread/upipe_pthread_transfer.h>
-#include <upipe-pthread/uprobe_pthread_upump_mgr.h>
+#include "upipe/ubase.h"
+#include "upipe/ueventfd.h"
+#include "upipe/umutex.h"
+#include "upipe/uprobe.h"
+#include "upipe/upump.h"
+#include "upipe-modules/upipe_transfer.h"
+#include "upipe-pthread/upipe_pthread_transfer.h"
+#include "upipe-pthread/uprobe_pthread_upump_mgr.h"
 
 #include <sys/resource.h>
 

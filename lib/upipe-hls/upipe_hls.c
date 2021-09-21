@@ -22,27 +22,27 @@
  * SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
  */
 
-#include <upipe-hls/upipe_hls_master.h>
-#include <upipe-hls/upipe_hls_variant.h>
-#include <upipe-hls/upipe_hls.h>
+#include "upipe-hls/upipe_hls_master.h"
+#include "upipe-hls/upipe_hls_variant.h"
+#include "upipe-hls/upipe_hls.h"
 
-#include <upipe-modules/upipe_m3u_reader.h>
-#include <upipe-modules/upipe_null.h>
+#include "upipe-modules/upipe_m3u_reader.h"
+#include "upipe-modules/upipe_null.h"
 
-#include <upipe/upipe_helper_bin_output.h>
-#include <upipe/upipe_helper_bin_input.h>
-#include <upipe/upipe_helper_uprobe.h>
-#include <upipe/upipe_helper_inner.h>
-#include <upipe/upipe_helper_void.h>
-#include <upipe/upipe_helper_urefcount_real.h>
-#include <upipe/upipe_helper_urefcount.h>
-#include <upipe/upipe_helper_upipe.h>
-#include <upipe/upipe.h>
+#include "upipe/upipe_helper_bin_output.h"
+#include "upipe/upipe_helper_bin_input.h"
+#include "upipe/upipe_helper_uprobe.h"
+#include "upipe/upipe_helper_inner.h"
+#include "upipe/upipe_helper_void.h"
+#include "upipe/upipe_helper_urefcount_real.h"
+#include "upipe/upipe_helper_urefcount.h"
+#include "upipe/upipe_helper_upipe.h"
+#include "upipe/upipe.h"
 
-#include <upipe/uprobe_prefix.h>
+#include "upipe/uprobe_prefix.h"
 
-#include <upipe/uref_m3u.h>
-#include <upipe/uref_uri.h>
+#include "upipe/uref_m3u.h"
+#include "upipe/uref_uri.h"
 
 
 #include <stdlib.h>

@@ -27,14 +27,14 @@
  * @short Upipe module discarding input uref when the output pipe is blocking
  */
 
-#include <upipe/upipe.h>
-#include <upipe/upipe_helper_upipe.h>
-#include <upipe/upipe_helper_void.h>
-#include <upipe/upipe_helper_urefcount.h>
-#include <upipe/upipe_helper_upump_mgr.h>
-#include <upipe/upipe_helper_upump.h>
-#include <upipe/upipe_helper_output.h>
-#include <upipe-modules/upipe_discard_blocking.h>
+#include "upipe/upipe.h"
+#include "upipe/upipe_helper_upipe.h"
+#include "upipe/upipe_helper_void.h"
+#include "upipe/upipe_helper_urefcount.h"
+#include "upipe/upipe_helper_upump_mgr.h"
+#include "upipe/upipe_helper_upump.h"
+#include "upipe/upipe_helper_output.h"
+#include "upipe-modules/upipe_discard_blocking.h"
 
 /** @internal @This is the private structure of a discard blocking pipe. */
 struct upipe_disblo {

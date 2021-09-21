@@ -34,10 +34,10 @@
 extern "C" {
 #endif
 
-#include <upipe/ubase.h>
-#include <upipe/uref.h>
-#include <upipe/uref_flow.h>
-#include <upipe/upipe.h>
+#include "upipe/ubase.h"
+#include "upipe/uref.h"
+#include "upipe/uref_flow.h"
+#include "upipe/upipe.h"
 
 /** @This declares two functions dealing with the allocation of a pipe
  * requiring an output flow definition.

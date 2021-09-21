@@ -27,17 +27,17 @@
  * @short Upipe module allowing to duplicate to several outputs
  */
 
-#include <upipe/ubase.h>
-#include <upipe/uprobe.h>
-#include <upipe/uref.h>
-#include <upipe/upipe.h>
-#include <upipe/upipe_helper_upipe.h>
-#include <upipe/upipe_helper_urefcount.h>
-#include <upipe/upipe_helper_urefcount_real.h>
-#include <upipe/upipe_helper_void.h>
-#include <upipe/upipe_helper_output.h>
-#include <upipe/upipe_helper_subpipe.h>
-#include <upipe-modules/upipe_dup.h>
+#include "upipe/ubase.h"
+#include "upipe/uprobe.h"
+#include "upipe/uref.h"
+#include "upipe/upipe.h"
+#include "upipe/upipe_helper_upipe.h"
+#include "upipe/upipe_helper_urefcount.h"
+#include "upipe/upipe_helper_urefcount_real.h"
+#include "upipe/upipe_helper_void.h"
+#include "upipe/upipe_helper_output.h"
+#include "upipe/upipe_helper_subpipe.h"
+#include "upipe-modules/upipe_dup.h"
 
 #include <stdlib.h>
 #include <stdarg.h>

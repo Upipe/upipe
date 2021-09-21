@@ -34,7 +34,7 @@
 extern "C" {
 #endif
 
-#include <upipe/uprobe.h>
+#include "upipe/uprobe.h"
 
 /** @This allocates and initializes a new uprobe_https structure.
  *

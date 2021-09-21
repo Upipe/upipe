@@ -28,7 +28,7 @@
  * This file defines the picture-specific API to access buffers.
  */
 
-#include <upipe/ubuf_pic.h>
+#include "upipe/ubuf_pic.h"
 
 #include <stdint.h>
 #include <string.h>

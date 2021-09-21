@@ -34,7 +34,7 @@
 extern "C" {
 #endif
 
-#include <upipe/upipe.h>
+#include "upipe/upipe.h"
 
 #define UPIPE_EVEN_SIGNATURE UBASE_FOURCC('e','v','e','n')
 #define UPIPE_EVEN_SUB_SIGNATURE UBASE_FOURCC('e','v','e','s')

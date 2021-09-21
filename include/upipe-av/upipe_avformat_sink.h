@@ -34,7 +34,7 @@
 extern "C" {
 #endif
 
-#include <upipe/upipe.h>
+#include "upipe/upipe.h"
 
 #define UPIPE_AVFSINK_SIGNATURE UBASE_FOURCC('a','v','f','k')
 #define UPIPE_AVFSINK_INPUT_SIGNATURE UBASE_FOURCC('a','v','f','i')

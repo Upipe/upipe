@@ -28,31 +28,31 @@
  * @short Upipe avcodec decode module
  */
 
-#include <upipe/uclock.h>
-#include <upipe/ubuf.h>
-#include <upipe/uref.h>
-#include <upipe/uref_pic.h>
-#include <upipe/uref_flow.h>
-#include <upipe/uref_pic_flow.h>
-#include <upipe/uref_sound.h>
-#include <upipe/uref_sound_flow.h>
-#include <upipe/uref_block_flow.h>
-#include <upipe/uref_block.h>
-#include <upipe/uref_clock.h>
-#include <upipe/upipe.h>
-#include <upipe/upipe_helper_upipe.h>
-#include <upipe/upipe_helper_urefcount.h>
-#include <upipe/upipe_helper_void.h>
-#include <upipe/upipe_helper_ubuf_mgr.h>
-#include <upipe/upipe_helper_output.h>
-#include <upipe/upipe_helper_flow_def.h>
-#include <upipe/upipe_helper_flow_def_check.h>
-#include <upipe/upipe_helper_upump_mgr.h>
-#include <upipe/upipe_helper_upump.h>
-#include <upipe/upipe_helper_input.h>
-#include <upipe-av/upipe_avcodec_decode.h>
-#include <upipe-av/ubuf_av.h>
-#include <upipe-framers/uref_h26x.h>
+#include "upipe/uclock.h"
+#include "upipe/ubuf.h"
+#include "upipe/uref.h"
+#include "upipe/uref_pic.h"
+#include "upipe/uref_flow.h"
+#include "upipe/uref_pic_flow.h"
+#include "upipe/uref_sound.h"
+#include "upipe/uref_sound_flow.h"
+#include "upipe/uref_block_flow.h"
+#include "upipe/uref_block.h"
+#include "upipe/uref_clock.h"
+#include "upipe/upipe.h"
+#include "upipe/upipe_helper_upipe.h"
+#include "upipe/upipe_helper_urefcount.h"
+#include "upipe/upipe_helper_void.h"
+#include "upipe/upipe_helper_ubuf_mgr.h"
+#include "upipe/upipe_helper_output.h"
+#include "upipe/upipe_helper_flow_def.h"
+#include "upipe/upipe_helper_flow_def_check.h"
+#include "upipe/upipe_helper_upump_mgr.h"
+#include "upipe/upipe_helper_upump.h"
+#include "upipe/upipe_helper_input.h"
+#include "upipe-av/upipe_avcodec_decode.h"
+#include "upipe-av/ubuf_av.h"
+#include "upipe-framers/uref_h26x.h"
 
 #include <stdlib.h>
 #include <stdbool.h>
@@ -67,8 +67,8 @@
 #include <libavutil/pixdesc.h>
 #include <libavutil/opt.h>
 #include <libavutil/hwcontext.h>
-#include <upipe-av/upipe_av_pixfmt.h>
-#include <upipe-av/upipe_av_samplefmt.h>
+#include "upipe-av/upipe_av_pixfmt.h"
+#include "upipe-av/upipe_av_samplefmt.h"
 #include "upipe_av_internal.h"
 
 #include <bitstream/dvb/sub.h>

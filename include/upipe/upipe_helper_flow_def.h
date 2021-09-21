@@ -34,10 +34,10 @@
 extern "C" {
 #endif
 
-#include <upipe/ubase.h>
-#include <upipe/uref.h>
-#include <upipe/uref_attr.h>
-#include <upipe/upipe.h>
+#include "upipe/ubase.h"
+#include "upipe/uref.h"
+#include "upipe/uref_attr.h"
+#include "upipe/upipe.h"
 
 /** @This declares six functions dealing with the management of flow definitions
  * in linear pipes.

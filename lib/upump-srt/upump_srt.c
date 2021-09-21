@@ -27,12 +27,12 @@
  * @short implementation of a Upipe event loop using libsrt
  */
 
-#include <upipe/ubase.h>
-#include <upipe/urefcount.h>
-#include <upipe/uclock.h>
-#include <upipe/upump.h>
-#include <upipe/upump_common.h>
-#include <upump-srt/upump_srt.h>
+#include "upipe/ubase.h"
+#include "upipe/urefcount.h"
+#include "upipe/uclock.h"
+#include "upipe/upump.h"
+#include "upipe/upump_common.h"
+#include "upump-srt/upump_srt.h"
 
 #include <stdlib.h>
 #include <signal.h>

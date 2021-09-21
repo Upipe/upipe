@@ -1,7 +1,7 @@
-#include <upipe/uprobe.h>
-#include <upipe/uprobe_helper_alloc.h>
-#include <upipe-modules/upipe_http_source.h>
-#include <upipe-modules/uprobe_http_redirect.h>
+#include "upipe/uprobe.h"
+#include "upipe/uprobe_helper_alloc.h"
+#include "upipe-modules/upipe_http_source.h"
+#include "upipe-modules/uprobe_http_redirect.h"
 
 static int uprobe_http_redir_throw(struct uprobe *uprobe,
                                    struct upipe *upipe,

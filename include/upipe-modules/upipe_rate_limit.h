@@ -31,7 +31,7 @@
 extern "C" {
 #endif
 
-#include <upipe/upipe.h>
+#include "upipe/upipe.h"
 
 #define UPIPE_RATE_LIMIT_SIGNATURE UBASE_FOURCC('r','t','l','t')
 

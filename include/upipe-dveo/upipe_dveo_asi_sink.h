@@ -35,7 +35,7 @@ extern "C" {
 #endif
 
 #include <stdint.h>
-#include <upipe/upipe.h>
+#include "upipe/upipe.h"
 
 #define UPIPE_DVEO_ASI_SINK_SIGNATURE UBASE_FOURCC('d','v','a','k')
 

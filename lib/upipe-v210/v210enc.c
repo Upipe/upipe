@@ -28,7 +28,7 @@
 
 #include <stdint.h>
 
-#include <upipe/ubase.h>
+#include "upipe/ubase.h"
 
 #include "v210enc.h"
 

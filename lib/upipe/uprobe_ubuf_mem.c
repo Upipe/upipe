@@ -27,12 +27,12 @@
  * @short probe catching provide_request events asking for a ubuf manager
  */
 
-#include <upipe/ubase.h>
-#include <upipe/umem.h>
-#include <upipe/ubuf_mem.h>
-#include <upipe/uprobe.h>
-#include <upipe/uprobe_ubuf_mem.h>
-#include <upipe/uprobe_helper_alloc.h>
+#include "upipe/ubase.h"
+#include "upipe/umem.h"
+#include "upipe/ubuf_mem.h"
+#include "upipe/uprobe.h"
+#include "upipe/uprobe_ubuf_mem.h"
+#include "upipe/uprobe_helper_alloc.h"
 
 #include <stdlib.h>
 #include <stdarg.h>

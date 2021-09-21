@@ -37,7 +37,7 @@
 extern "C" {
 #endif
 
-#include <upipe/upipe.h>
+#include "upipe/upipe.h"
 
 #define UPIPE_DEJITTER_SIGNATURE UBASE_FOURCC('d','j','t','r')
 #define UPIPE_DEJITTER_SUB_SIGNATURE UBASE_FOURCC('d','j','t','s')

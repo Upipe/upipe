@@ -28,21 +28,21 @@
  * @short Upipe sink module for DVEO ASI cards
  */
 
-#include <upipe/ubase.h>
-#include <upipe/uclock.h>
-#include <upipe/uref.h>
-#include <upipe/uref_block.h>
-#include <upipe/uref_clock.h>
-#include <upipe/upump.h>
-#include <upipe/ubuf.h>
-#include <upipe/upipe.h>
-#include <upipe/upipe_helper_upipe.h>
-#include <upipe/upipe_helper_urefcount.h>
-#include <upipe/upipe_helper_void.h>
-#include <upipe/upipe_helper_upump_mgr.h>
-#include <upipe/upipe_helper_upump.h>
-#include <upipe/upipe_helper_input.h>
-#include <upipe-dveo/upipe_dveo_asi_sink.h>
+#include "upipe/ubase.h"
+#include "upipe/uclock.h"
+#include "upipe/uref.h"
+#include "upipe/uref_block.h"
+#include "upipe/uref_clock.h"
+#include "upipe/upump.h"
+#include "upipe/ubuf.h"
+#include "upipe/upipe.h"
+#include "upipe/upipe_helper_upipe.h"
+#include "upipe/upipe_helper_urefcount.h"
+#include "upipe/upipe_helper_void.h"
+#include "upipe/upipe_helper_upump_mgr.h"
+#include "upipe/upipe_helper_upump.h"
+#include "upipe/upipe_helper_input.h"
+#include "upipe-dveo/upipe_dveo_asi_sink.h"
 
 #include <sys/ioctl.h>
 #include "asi_ioctl.h"

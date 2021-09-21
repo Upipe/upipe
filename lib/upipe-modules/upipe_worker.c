@@ -27,24 +27,24 @@
  * @short Bin pipe wrapping a queue, a linear pipe and a queue
  */
 
-#include <upipe/ubase.h>
-#include <upipe/ulist.h>
-#include <upipe/uprobe.h>
-#include <upipe/uprobe_prefix.h>
-#include <upipe/upipe_helper_upipe.h>
-#include <upipe/upipe_helper_urefcount.h>
-#include <upipe/upipe_helper_urefcount_real.h>
-#include <upipe/upipe_helper_bin_input.h>
-#include <upipe/upipe_helper_inner.h>
-#include <upipe/upipe_helper_uprobe.h>
-#include <upipe/upipe_helper_bin_output.h>
-#include <upipe-modules/upipe_queue_sink.h>
-#include <upipe-modules/upipe_queue_source.h>
-#include <upipe-modules/upipe_transfer.h>
-#include <upipe-modules/upipe_worker_linear.h>
-#include <upipe-modules/upipe_worker_source.h>
-#include <upipe-modules/upipe_worker_sink.h>
-#include <upipe-modules/upipe_worker.h>
+#include "upipe/ubase.h"
+#include "upipe/ulist.h"
+#include "upipe/uprobe.h"
+#include "upipe/uprobe_prefix.h"
+#include "upipe/upipe_helper_upipe.h"
+#include "upipe/upipe_helper_urefcount.h"
+#include "upipe/upipe_helper_urefcount_real.h"
+#include "upipe/upipe_helper_bin_input.h"
+#include "upipe/upipe_helper_inner.h"
+#include "upipe/upipe_helper_uprobe.h"
+#include "upipe/upipe_helper_bin_output.h"
+#include "upipe-modules/upipe_queue_sink.h"
+#include "upipe-modules/upipe_queue_source.h"
+#include "upipe-modules/upipe_transfer.h"
+#include "upipe-modules/upipe_worker_linear.h"
+#include "upipe-modules/upipe_worker_source.h"
+#include "upipe-modules/upipe_worker_sink.h"
+#include "upipe-modules/upipe_worker.h"
 
 #include <stdlib.h>
 #include <stdbool.h>

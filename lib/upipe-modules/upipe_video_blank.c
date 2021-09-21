@@ -27,20 +27,20 @@
  * @short Upipe module generating blank pictures for void urefs
  */
 
-#include <upipe/upipe_helper_upipe.h>
-#include <upipe/upipe_helper_urefcount.h>
-#include <upipe/upipe_helper_flow.h>
-#include <upipe/upipe_helper_output.h>
-#include <upipe/upipe_helper_flow_def.h>
-#include <upipe/upipe_helper_flow_format.h>
-#include <upipe/upipe_helper_ubuf_mgr.h>
+#include "upipe/upipe_helper_upipe.h"
+#include "upipe/upipe_helper_urefcount.h"
+#include "upipe/upipe_helper_flow.h"
+#include "upipe/upipe_helper_output.h"
+#include "upipe/upipe_helper_flow_def.h"
+#include "upipe/upipe_helper_flow_format.h"
+#include "upipe/upipe_helper_ubuf_mgr.h"
 
-#include <upipe/uref_pic_flow.h>
-#include <upipe/uref_pic.h>
-#include <upipe/ubuf_pic.h>
-#include <upipe/uref_void_flow.h>
+#include "upipe/uref_pic_flow.h"
+#include "upipe/uref_pic.h"
+#include "upipe/ubuf_pic.h"
+#include "upipe/uref_void_flow.h"
 
-#include <upipe-modules/upipe_video_blank.h>
+#include "upipe-modules/upipe_video_blank.h"
 
 /** @internal @This is the private structure of a video blank pipe. */
 struct upipe_vblk {

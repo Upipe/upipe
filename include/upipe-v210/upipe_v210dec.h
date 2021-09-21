@@ -33,7 +33,7 @@
 extern "C" {
 #endif
 
-#include <upipe/upipe.h>
+#include "upipe/upipe.h"
 
 #define UPIPE_V210DEC_SIGNATURE UBASE_FOURCC('v','2','1','d')
 

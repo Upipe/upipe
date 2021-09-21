@@ -22,18 +22,18 @@
  * @short Upipe module trimming dead frames off a video stream
  */
 
-#include <upipe/ubase.h>
-#include <upipe/uref.h>
-#include <upipe/uref_flow.h>
-#include <upipe/upipe.h>
-#include <upipe/upipe_helper_upipe.h>
-#include <upipe/upipe_helper_urefcount.h>
-#include <upipe/upipe_helper_void.h>
-#include <upipe/upipe_helper_sync.h>
-#include <upipe/upipe_helper_output.h>
-#include <upipe/upipe_helper_input.h>
-#include <upipe-framers/upipe_video_trim.h>
-#include <upipe-framers/uref_mpgv.h>
+#include "upipe/ubase.h"
+#include "upipe/uref.h"
+#include "upipe/uref_flow.h"
+#include "upipe/upipe.h"
+#include "upipe/upipe_helper_upipe.h"
+#include "upipe/upipe_helper_urefcount.h"
+#include "upipe/upipe_helper_void.h"
+#include "upipe/upipe_helper_sync.h"
+#include "upipe/upipe_helper_output.h"
+#include "upipe/upipe_helper_input.h"
+#include "upipe-framers/upipe_video_trim.h"
+#include "upipe-framers/uref_mpgv.h"
 
 #include <stdlib.h>
 #include <stdbool.h>

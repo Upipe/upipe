@@ -34,9 +34,9 @@
 extern "C" {
 #endif
 
-#include <upipe/ubase.h>
-#include <upipe/urefcount.h>
-#include <upipe/ulifo.h>
+#include "upipe/ubase.h"
+#include "upipe/urefcount.h"
+#include "upipe/ulifo.h"
 
 /** @hidden */
 struct upool;

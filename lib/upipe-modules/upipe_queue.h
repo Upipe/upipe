@@ -31,10 +31,10 @@
 /** @hidden */
 #define _UPIPE_QUEUE_H_
 
-#include <upipe/ubase.h>
-#include <upipe/uqueue.h>
-#include <upipe/upipe.h>
-#include <upipe-modules/upipe_queue_source.h>
+#include "upipe/ubase.h"
+#include "upipe/uqueue.h"
+#include "upipe/upipe.h"
+#include "upipe-modules/upipe_queue_source.h"
 
 #include <assert.h>
 

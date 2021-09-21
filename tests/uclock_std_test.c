@@ -27,8 +27,8 @@
 
 #undef NDEBUG
 
-#include <upipe/uclock.h>
-#include <upipe/uclock_std.h>
+#include "upipe/uclock.h"
+#include "upipe/uclock_std.h"
 
 #include <stdio.h>
 #include <inttypes.h>

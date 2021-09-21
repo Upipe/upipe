@@ -29,10 +29,10 @@
 
 #undef NDEBUG
 
-#include <upipe/ubase.h>
-#include <upipe/udeal.h>
-#include <upipe/upump.h>
-#include <upump-ev/upump_ev.h>
+#include "upipe/ubase.h"
+#include "upipe/udeal.h"
+#include "upipe/upump.h"
+#include "upump-ev/upump_ev.h"
 
 #include <stdio.h>
 #include <stdlib.h>

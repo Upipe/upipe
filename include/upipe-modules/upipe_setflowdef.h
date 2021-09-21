@@ -34,8 +34,8 @@
 extern "C" {
 #endif
 
-#include <upipe/upipe.h>
-#include <upipe/uref.h>
+#include "upipe/upipe.h"
+#include "upipe/uref.h"
 
 #define UPIPE_SETFLOWDEF_SIGNATURE UBASE_FOURCC('s','f','l','w')
 

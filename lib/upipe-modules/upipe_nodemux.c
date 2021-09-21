@@ -32,15 +32,15 @@
  * the stream can be played.
  */
 
-#include <upipe/ubase.h>
-#include <upipe/uref.h>
-#include <upipe/uref_clock.h>
-#include <upipe/upipe.h>
-#include <upipe/upipe_helper_upipe.h>
-#include <upipe/upipe_helper_urefcount.h>
-#include <upipe/upipe_helper_void.h>
-#include <upipe/upipe_helper_output.h>
-#include <upipe-modules/upipe_nodemux.h>
+#include "upipe/ubase.h"
+#include "upipe/uref.h"
+#include "upipe/uref_clock.h"
+#include "upipe/upipe.h"
+#include "upipe/upipe_helper_upipe.h"
+#include "upipe/upipe_helper_urefcount.h"
+#include "upipe/upipe_helper_void.h"
+#include "upipe/upipe_helper_output.h"
+#include "upipe-modules/upipe_nodemux.h"
 
 #include <stdlib.h>
 #include <stdbool.h>

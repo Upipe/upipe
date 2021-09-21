@@ -26,8 +26,8 @@
 #ifndef _UPIPE_DVBCSA_COMMON_H_
 #define _UPIPE_DVBCSA_COMMON_H_
 
-#include <upipe/ubase.h>
-#include <upipe/uclock.h>
+#include "upipe/ubase.h"
+#include "upipe/uclock.h"
 
 /** default maximum latency */
 #define UPIPE_DVBCSA_MAX_LATENCY UCLOCK_FREQ

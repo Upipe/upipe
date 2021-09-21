@@ -30,17 +30,17 @@
 /** @showvalue default time limit */
 #define DURATION_DEFAULT (UCLOCK_FREQ)
 
-#include <upipe/uclock.h>
-#include <upipe/uref_clock.h>
-#include <upipe/upipe_helper_upipe.h>
-#include <upipe/upipe_helper_urefcount.h>
-#include <upipe/upipe_helper_void.h>
-#include <upipe/upipe_helper_input.h>
-#include <upipe/upipe_helper_output.h>
-#include <upipe/upipe_helper_upump_mgr.h>
-#include <upipe/upipe_helper_upump.h>
-#include <upipe/upipe_helper_uclock.h>
-#include <upipe-modules/upipe_time_limit.h>
+#include "upipe/uclock.h"
+#include "upipe/uref_clock.h"
+#include "upipe/upipe_helper_upipe.h"
+#include "upipe/upipe_helper_urefcount.h"
+#include "upipe/upipe_helper_void.h"
+#include "upipe/upipe_helper_input.h"
+#include "upipe/upipe_helper_output.h"
+#include "upipe/upipe_helper_upump_mgr.h"
+#include "upipe/upipe_helper_upump.h"
+#include "upipe/upipe_helper_uclock.h"
+#include "upipe-modules/upipe_time_limit.h"
 
 /** @internal @This is the private context of a time limit pipe. */
 struct upipe_time_limit {

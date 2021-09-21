@@ -23,9 +23,9 @@
  * SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
  */
 
-#include <upipe/urefcount_helper.h>
+#include "upipe/urefcount_helper.h"
 
-#include <upipe/uprobe.h>
+#include "upipe/uprobe.h"
 
 /** @internal @This is the private structure for a simple allocated probe. */
 struct uprobe_alloc {

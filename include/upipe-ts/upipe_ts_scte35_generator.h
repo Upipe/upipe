@@ -29,8 +29,8 @@
 extern "C" {
 #endif
 
-#include <upipe/upipe.h>
-#include <upipe-ts/upipe_ts_mux.h>
+#include "upipe/upipe.h"
+#include "upipe-ts/upipe_ts_mux.h"
 
 #define UPIPE_TS_SCTE35G_SIGNATURE UBASE_FOURCC('t','s',0xfc,'g')
 

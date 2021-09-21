@@ -34,7 +34,7 @@
 extern "C" {
 #endif
 
-#include <upipe/upipe.h>
+#include "upipe/upipe.h"
 
 #define UPIPE_OSX_AUDIOQUEUE_SINK_SIGNATURE UBASE_FOURCC('o', 's', 'x', 'a')
 

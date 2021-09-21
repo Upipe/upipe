@@ -34,7 +34,7 @@
 extern "C" {
 #endif
 
-#include <upipe/uclock.h>
+#include "upipe/uclock.h"
 
 /** flags for the creation of a uclock structure */
 enum uclock_std_flags {

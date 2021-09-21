@@ -27,9 +27,9 @@
  * @short Upipe common functions for ubuf managers with umem storage
  */
 
-#include <upipe/ubase.h>
-#include <upipe/uatomic.h>
-#include <upipe/ubuf_mem_common.h>
+#include "upipe/ubase.h"
+#include "upipe/uatomic.h"
+#include "upipe/ubuf_mem_common.h"
 
 #include <stdlib.h>
 
