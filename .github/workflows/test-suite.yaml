@@ -149,19 +149,19 @@ jobs:
           if [ -n "${{ matrix.host }}" ]; then
               set-env DISABLE_VALGRIND "1"
           fi
-          set-env CONFIGURE_FLAGS "--enable-luajit"
 
       - name: Install dependencies (macOS)
         if: runner.os == 'macOS'
         run: |
-          brew install autoconf automake libtool pkg-config nasm luajit \
-            ffmpeg freetype libebur128 libev libgcrypt libtasn1 speex x264 \
-            x265
+          brew install autoconf automake libtool pkg-config nasm ffmpeg \
+            freetype libebur128 libev libgcrypt libtasn1 speex x264 x265
+          brew install luajit --HEAD
           set-env HOST_CC "clang"
           set-env HOST_CXX "clang++"
           set-env CFLAGS "-Wno-error=unused-command-line-argument -fsanitize=undefined -fsanitize=address -fsanitize-address-use-after-scope -fno-omit-frame-pointer -fno-optimize-sibling-calls"
           set-env LDFLAGS "-fsanitize=undefined -fsanitize=address"
           set-env DISABLE_VALGRIND "1"
+          set-env INSERT_LIBRARIES "$(clang -print-search-dirs | sed -n 's/^libraries: =//p')/lib/darwin/libclang_rt.asan_osx_dynamic.dylib"
 
       - name: Install bitstream
         run: |
@@ -171,7 +171,7 @@ jobs:
           if [ "${{ matrix.static }}" = "true" ]; then
             STATIC="--disable-shared"
           fi
-          set-env CONFIGURE_FLAGS "$CONFIGURE_FLAGS $STATIC --disable-silent-rules $HOST CC=\"$HOST_CC\" CXX=\"$HOST_CXX\" CFLAGS=\"-Werror -O2 -g $CFLAGS\" CXXFLAGS=\"-Werror -O2 -g $CXXFLAGS\" LDFLAGS=\"$LDFLAGS\""
+          set-env CONFIGURE_FLAGS "--enable-luajit $STATIC --disable-silent-rules $HOST CC=\"$HOST_CC\" CXX=\"$HOST_CXX\" CFLAGS=\"-Werror -O2 -g $CFLAGS\" CXXFLAGS=\"-Werror -O2 -g $CXXFLAGS\" LDFLAGS=\"$LDFLAGS\""
 
       - name: Build and install libamt
         if: runner.os == 'Linux' && (matrix.arch == 'amd64' || matrix.arch == 'i386')

@@ -42,8 +42,8 @@ extern "C" {
 #include <errno.h>
 
 #ifdef UPIPE_HAVE_EVENTFD
-#include <unistd.h>
-#include <sys/eventfd.h>
+# include <unistd.h>
+# include <sys/eventfd.h>
 #endif
 
 #include <unistd.h>

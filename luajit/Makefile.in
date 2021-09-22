@@ -19,6 +19,11 @@ CC             = @CC@
 CFLAGS         = @CFLAGS@
 CPPFLAGS       = @CPPFLAGS@
 LDFLAGS        = @LDFLAGS@
+SHREXT         = @SHREXT@
+
+so      = $(subst .,,$(SHREXT))
+try-run = $(shell $1 >/dev/null 2>&1 && echo "$2")
+cc-opt  = $(call try-run,$(CC) $1 -o /dev/null -xc -shared /dev/null,$1)
 
 LIST_C = upipe-modules upipe-filters upipe-dveo
 @HAVE_QTWEBKIT_TRUE@LIST_C += upipe-qt
@@ -48,7 +53,7 @@ LIST_C = upipe-modules upipe-filters upipe-dveo
 
 INCLUDEDIR   = $(top_srcdir)/include
 LIST         = upipe $(LIST_C)
-STATIC_SO    = $(LIST:%=lib%.static.so)
+STATIC_SO    = $(LIST:%=lib%.static.$(so))
 STATIC_SRC   = $(LIST:%=%.static.c)
 STATIC_DEP   = $(STATIC_SRC:.c=.d)
 LIST_CDEF    = $(LIST_C:%=%.lua) libupipe.lua upipe-helper.lua
@@ -56,7 +61,7 @@ SIG_LUA      = $(LIST:%=%-sigs.lua)
 CDEF_LUA     = $(LIST_CDEF)
 GETTERS_LUA  = upipe-getters.lua uref-getters.lua
 ARGS_LUA     = uprobe-event-args.lua upipe-command-args.lua
-SO           = libffi-stdarg.so libupipe-helper.so
+HELPER_SO    = libffi-stdarg.$(so) libupipe-helper.$(so)
 SRC_LUA      = $(srcdir)/upipe.lua $(srcdir)/ffi-stdarg.lua \
 	       $(CDEF_LUA) $(SIG_LUA) $(GETTERS_LUA) $(ARGS_LUA)
 
@@ -89,16 +94,16 @@ V_GEN_0 = @echo "  GEN     " $@;
 # main rules
 #-------------------------------------------------------------------------------
 
-all: $(SO) $(STATIC_SO) $(SRC_LUA)
+all: $(HELPER_SO) $(STATIC_SO) $(SRC_LUA)
 
 install: all
 	$(MKDIR_P) $(DESTDIR)$(libdir)
-	$(INSTALL_DATA) $(SO) $(STATIC_SO) $(DESTDIR)$(libdir)
+	$(INSTALL_DATA) $(HELPER_SO) $(STATIC_SO) $(DESTDIR)$(libdir)
 	$(MKDIR_P) $(DESTDIR)$(LUAJIT_INSTALL_LMOD)
 	$(INSTALL_DATA) $(SRC_LUA) $(DESTDIR)$(LUAJIT_INSTALL_LMOD)
 
 uninstall:
-	$(RM) $(addprefix $(DESTDIR)$(libdir)/,$(SO) $(STATIC_SO))
+	$(RM) $(addprefix $(DESTDIR)$(libdir)/,$(HELPER_SO) $(STATIC_SO))
 	$(RM) $(addprefix $(DESTDIR)$(LUAJIT_INSTALL_LMOD)/,$(notdir $(SRC_LUA)))
 
 clean: $(LIST:%=clean-static-so-%) clean-upipe-helper
@@ -106,19 +111,24 @@ clean: $(LIST:%=clean-static-so-%) clean-upipe-helper
 	$(RM) $(GETTERS_LUA)
 	$(RM) $(ARGS_LUA)
 	$(RM) $(LIST_CDEF)
-	$(RM) $(SO)
+	$(RM) $(HELPER_SO)
+ifeq ($(so),dylib)
+	$(RM) -r $(HELPER_SO:%=%.dSYM)
+endif
 	$(RM) upipe.defs
 
 distclean: clean
 	$(RM) Makefile
 
 space := $(null) $(null)
-LIBRARY_PATH = $(LIST:%=$(top_builddir)/lib/%/.libs)
+LIBRARY_PATH = .:$(subst $(space),:,$(LIST:%=$(top_builddir)/lib/%/.libs))
 
 check: all
 ifneq ($(LUAJIT),)
-	export LUA_PATH="?.lua;$(srcdir)/?.lua"; \
-	export LD_LIBRARY_PATH=.:$(subst $(space),:,$(LIBRARY_PATH)):$$LD_LIBRARY_PATH; \
+	$(V_at)export LUA_PATH="?.lua;$(srcdir)/?.lua"; \
+	export LD_LIBRARY_PATH="$(LIBRARY_PATH):$$LD_LIBRARY_PATH"; \
+	export DYLD_LIBRARY_PATH="$(LIBRARY_PATH):$$DYLD_LIBRARY_PATH"; \
+	export DYLD_INSERT_LIBRARIES="$(INSERT_LIBRARIES)"; \
 	$(LUAJIT) $(srcdir)/check.lua $(LIST) && \
 	$(LUAJIT) $(srcdir)/examples/upipe_duration.lua \
 	  $(top_srcdir)/tests/upipe_ts_test.ts
@@ -153,31 +163,39 @@ CPPFLAGS_INC = $$($(SED) -n 's/^\#include <\(.*\)>/-include \1/p' $(INCLUDEDIR)/
 	$(V_GEN){ \
 	  echo "#define static"; \
 	  echo "#define inline"; \
-	  cd $(INCLUDEDIR) && ls $*/*.h | \
-	    $(SED) 's/\(.*\)/#include <\1>/'; \
+	  cd $(INCLUDEDIR); \
+	  ls $*/*.h | $(SED) 's/\(.*\)/#include "\1"/'; \
+	  echo "void _("; \
+	  $(SED) -n 's/^enum  *\([^ ]*\) .*/enum \1 _\1,/p' $*/*.h; \
+	  echo "int _){}"; \
 	} > $@
 
-libupipe-av.static.so: CFLAGS += @AVFORMAT_CFLAGS@
+libupipe-av.static.$(so): CFLAGS += @AVFORMAT_CFLAGS@
 
-lib%.static.so: %.static.c
+c := ,
+lib%.static.$(so): LDFLAGS += $(call cc-opt,-Wl$c-undefined$cdynamic_lookup)
+lib%.static.$(so): %.static.c
 	$(V_CCLD)$(CC) \
 	  $(CPPFLAGS) $(CPPFLAGS_INC) \
 	  $(CFLAGS) -MD -MP -MF $(<:.c=.d) \
 	  $(LDFLAGS) -shared -fPIC \
 	  -o $@ $<
 
-%-sigs.lua: lib%.static.so
-	$(V_GEN)$(SED) -n \
-	  's/^#define UPIPE_\(.*\)_SIGNATURE UBASE_FOURCC(\(.*\))/upipe_sig("\L\1\E", \2)/p' \
+%-sigs.lua: lib%.static.$(so)
+	$(V_GEN)$(PERL) -ne \
+	  'print if s/^#define UPIPE_(.*)_SIGNATURE UBASE_FOURCC\((.*)\)/upipe_sig("\L\1\E", \2)/' \
 	  $(INCLUDEDIR)/$*/*.h > $@
 
 clean-static-so-%:
-	$(RM) $*.static.c $*.static.d lib$*.static.so
+	$(RM) $*.static.c $*.static.d lib$*.static.$(so)
 	$(RM) $*.debug_info $*.static.debug_info
+ifeq ($(so),dylib)
+	$(RM) -r lib$*.static.$(so).dSYM
+endif
 
 -include $(STATIC_DEP)
 
-.SECONDARY: $(STATIC_SRC)
+.SECONDARY: $(STATIC_SRC) $(STATIC_SRC:.c=.debug_info)
 
 #-------------------------------------------------------------------------------
 # cdef
@@ -210,7 +228,7 @@ libupipe.lua: $(srcdir)/gen-ffi-cdef.pl $(srcdir)/libc.defs upipe.debug_info upi
 	  --enum 'upump_*' \
 	  $(addprefix --prefix ,$(prefix_base)) \
 	  --load $(upipe_dlname) \
-	  --load libupipe.static.so \
+	  --load libupipe.static.$(so) \
 	  upipe.debug_info \
 	  upipe.static.debug_info
 
@@ -228,7 +246,7 @@ $(srcdir)/upipe.lua $(srcdir)/ffi-stdarg.lua:
 	  --enum '$(or $(enum_$*),uprobe_)*' \
 	  $(addprefix --prefix ,$(prefix_modules)) \
 	  --load $($*_dlname) \
-	  --load lib$*.static.so \
+	  --load lib$*.static.$(so) \
 	  --require $*-sigs \
 	  $*.debug_info \
 	  $*.static.debug_info
@@ -237,29 +255,36 @@ $(srcdir)/upipe.lua $(srcdir)/ffi-stdarg.lua:
 # debug info
 #-------------------------------------------------------------------------------
 
-ifneq ($(OBJDUMP),false)
-  FMT_DEBUG_INFO = objdump
-  GEN_DEBUG_INFO = $(OBJDUMP) --dwarf=info $< > $@
-else ifneq ($(EU_READELF),)
+ifneq ($(EU_READELF),)
   FMT_DEBUG_INFO = eu-readelf
-  GEN_DEBUG_INFO = $(EU_READELF) -winfo -N $< > $@
+  GEN_DEBUG_INFO = $(EU_READELF) -winfo -N
 else ifneq ($(LLVM_DWARFDUMP),)
   FMT_DEBUG_INFO = llvm-dwarfdump
-  GEN_DEBUG_INFO = $(DSYMUTIL) $<; $(LLVM_DWARFDUMP) -debug-dump=info $<.dSYM > $@
+  GEN_DEBUG_INFO = $(LLVM_DWARFDUMP) -debug-info --show-form
+else ifneq ($(OBJDUMP),false)
+  FMT_DEBUG_INFO = objdump
+  GEN_DEBUG_INFO = $(OBJDUMP) --dwarf=info
+endif
+
+ifeq ($(so),dylib)
+  dsym = .dSYM
 endif
 
 define gen-debug-info
   ifneq ($(wildcard $(top_builddir)/lib/$1/lib$(subst -,_,$1).la),)
-$1_dlname := $$(shell . $(top_builddir)/lib/$1/lib$(subst -,_,$1).la && echo $$$$dlname)
+    $1_dlname := $$(shell . $(top_builddir)/lib/$1/lib$(subst -,_,$1).la && echo $$$$dlname)
 $1.debug_info: $(top_builddir)/lib/$1/.libs/$$($1_dlname)
-	$$(V_GEN)$$(GEN_DEBUG_INFO)
+    ifeq ($(so),dylib)
+	$$(V_at)$$(DSYMUTIL) $$<
+    endif
+	$$(V_GEN)$$(GEN_DEBUG_INFO) $$<$(dsym) > $$@
   endif
 endef
 
 $(foreach c,$(LIST),$(eval $(call gen-debug-info,$c)))
 
-%.debug_info: lib%.so
-	$(V_GEN)$(GEN_DEBUG_INFO)
+%.debug_info: lib%.$(so)
+	$(V_GEN)$(GEN_DEBUG_INFO) $<$(dsym) > $@
 
 #-------------------------------------------------------------------------------
 # upipe-helper
@@ -273,7 +298,7 @@ upipe-helper.lua: $(srcdir)/gen-ffi-cdef.pl $(srcdir)/libc.defs upipe.defs upipe
 	  --read-defs upipe.defs \
 	  --prefix upipe_helper_ \
 	  --struct upipe_helper_mgr \
-	  --load libupipe-helper.so \
+	  --load libupipe-helper.$(so) \
 	  upipe-helper.debug_info
 
 clean-upipe-helper:
@@ -286,7 +311,7 @@ clean-upipe-helper:
 %-getters.lua: $(LIST_CDEF)
 	$(V_GEN){ \
 	  echo "return {"; \
-	  $(SED) -n -e 's/^int $*_\(\(.*_\)\?get_.*\)(struct $* \*, \([^,]*[^ ]\) *\*);$$/    \1 = "\3",/p' $^; \
+	  $(SED) -n 's/^int $*_\(\(.*_\)\{0,1\}get_.*\)(struct $* \*, \([^,]*[^ ]\) *\*);$$/    \1 = "\3",/p' $^; \
 	  echo "}"; \
 	} > $@
 
@@ -301,7 +326,7 @@ clean-upipe-helper:
 # generic rules
 #-------------------------------------------------------------------------------
 
-lib%.so: $(srcdir)/%.c
+lib%.$(so): $(srcdir)/%.c
 	$(V_CCLD)$(CC) $(CFLAGS) $(CPPFLAGS) $(LDFLAGS) -shared -fPIC -o $@ $<
 
 .DELETE_ON_ERROR:
