@@ -233,6 +233,8 @@ AC_COMPILE_IFELSE([AC_LANG_PROGRAM(
         AC_MSG_RESULT([no])
 ]) 
 
+AC_SUBST(SHREXT, "$shrext")
+
 AC_CONFIG_FILES([Makefile
                  include/Makefile
                  include/upipe/Makefile

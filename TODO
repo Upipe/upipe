@@ -9,7 +9,6 @@ Bugs documentation:
  - "TM" unicode char
 
 luajit bindings:
- - finish macOS support
  - add syntax shortcut for setting controls during pipe creation
  - write documentation
  - fix global namespace pollution

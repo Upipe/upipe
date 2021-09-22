@@ -38,7 +38,7 @@ extern "C" {
 #include "upipe/config.h"
 
 #ifdef UPIPE_HAVE_FEATURES_H
-#include <features.h>
+# include <features.h>
 #endif
 #include <stdio.h>
 #include <stdint.h>

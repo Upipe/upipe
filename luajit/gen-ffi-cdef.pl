@@ -73,7 +73,7 @@ sub parse_input_eu_readelf {
   my @path;
 
   while (<>) {
-    if (m/^ \[\s*([[:xdigit:]]+)\](\s*)(\S+)$/) {
+    if (m/^ \[\s*([[:xdigit:]]+)\](\s*)(\S+)/) {
       my $id = "$ARGV/$1";
       $info{$id}{id} = $id;
       $info{$id}{type} = $3;
@@ -86,9 +86,10 @@ sub parse_input_eu_readelf {
       if ($val =~ m/^\(string\) "(.*)"$/ or
           $val =~ m/^\(strp\) "(.*)"$/ or
           $val =~ m/^\(data[124]\) (.*)$/ or
-          $val =~ m/^\(sdata\) (.*)$/ or
+          $val =~ m/^\(sdata\) (\S+)( \((\S+)\))?$/ or
+          $val =~ m/^\(implicit_const\) (\S+)( \((\S+)\))?$/ or
           $val =~ m/^\(flag_present\) (.*)$/) {
-        $path[-1]->{attr}{$name} = $1;
+        $path[-1]->{attr}{$name} = $3 // $1;
       } elsif ($val =~ m/^\(ref4\) \[\s*([[:xdigit:]]+)\]$/) {
         my $id = "$ARGV/$1";
         $info{$id}{id} = $id;
@@ -115,12 +116,14 @@ sub parse_input_llvm_dwarfdump {
 
     } elsif (m/^\s*DW_AT_(\S+) \[DW_FORM_(\S+)\]\s*\((.+)\)$/) {
       my ($name, $form, $val) = ($1, $2, $3);
-      if ($form eq 'strp' and $val =~ m/"(.*)"$/ or
-          $form =~ m/^data[124]$/ and $val =~ m/^(\d+)$/ or
-          $form eq 'sdata' and $val =~ m/^(\d+)$/ or
-          $form eq 'flag' and $val =~ m/^0x0(1)$/) {
-        $path[-1]->{attr}{$name} = $1;
-      } elsif ($form eq 'ref4' and $val =~ m/{0x0*([[:xdigit:]]+)}$/) {
+      if ($form eq 'string' and $val =~ m/^"(.*)"$/ or
+          $form eq 'strp' and $val =~ m/^"(.*)"$/ or
+          $form =~ m/^data[124]$/ and $val =~ m/^(.+)$/ or
+          $form =~ m/^[su]data$/ and $val =~ m/^(.+)$/ or
+          $form eq 'flag_present' and $val =~ m/^(true)$/) {
+        $path[-1]->{attr}{$name} = rindex($1, "0x", 0) == 0 ? hex($1) : $1;
+      } elsif ($form eq 'ref4' and $val =~ m/^0x0*([[:xdigit:]]+)/ or
+               $form eq 'ref_addr' and $val =~ m/^0x0*([[:xdigit:]]+)/) {
         my $id = "$ARGV/$1";
         $info{$id}{id} = $id;
         $path[-1]->{attr}{$name} = $info{$id};
