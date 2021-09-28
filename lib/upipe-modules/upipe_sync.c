@@ -796,18 +796,63 @@ static void output_sound(struct upipe *upipe, const struct urational *fps,
 
 static void output_picture(struct upipe_sync *upipe_sync, struct upump **upump_p)
 {
-    struct uchain *uchain = NULL;
-    ulist_foreach(&upipe_sync->subs, uchain) {
-        struct upipe_sync_sub *upipe_sync_sub = upipe_sync_sub_from_uchain(uchain);
+    const uint64_t now = upipe_sync->pts; // the upump was scheduled for now
+
+    struct uchain *subpipe_uchain = NULL;
+    ulist_foreach(&upipe_sync->subs, subpipe_uchain) {
+        struct upipe_sync_sub *upipe_sync_sub = upipe_sync_sub_from_uchain(subpipe_uchain);
         if (upipe_sync_sub->sound)
             continue;
         struct upipe *upipe_sub = upipe_sync_sub_to_upipe(upipe_sync_sub);
 
-        struct uchain *uchain = ulist_pop(&upipe_sync_sub->urefs);
-        if (!uchain)
-            upipe_dbg(upipe_sub, "no uref available");
-        else
-            uref_free(uref_from_uchain(uchain));
+        struct uchain *uchain = NULL;
+        /* Duplicted from the main picture pipe. */
+        while (true) {
+            uchain = ulist_peek(&upipe_sync_sub->urefs);
+            if (!uchain) {
+                upipe_dbg(upipe_sub, "no uref available");
+                break;
+            }
+
+            struct uref *uref = uref_from_uchain(uchain);
+            uint64_t pts = 0;
+            uref_clock_get_pts_sys(uref, &pts);
+            pts += upipe_sync->latency;
+
+            /* frame duration */
+            const uint64_t ticks = upipe_sync->ticks_per_frame;
+
+            if (pts < now - ticks / 2) {
+                /* frame pts too much in the past */
+                upipe_warn_va(upipe_sub, "too late");
+            } else if (pts > now + ticks / 2) {
+                upipe_warn_va(upipe_sub, "subpic too early: %.2f > %.2f",
+                    pts_to_time(pts), pts_to_time(now + ticks / 2));
+                uchain = NULL; /* do not drop */
+                break;
+            } else {
+                break; // ok
+            }
+
+            ulist_pop(&upipe_sync->urefs);
+            uref_free(uref);
+            upipe_sync->buffered_frames--;
+            int64_t u = pts - now;
+            upipe_err_va(upipe_sub, "Drop subpic (pts-now == %" PRId64 "ms)",
+                    u / 27000);
+        }
+
+        struct uref *uref = NULL;
+        if (uchain) {
+            ulist_pop(&upipe_sync_sub->urefs);
+            upipe_sync_sub->buffered_frames--;
+            uref = uref_from_uchain(uchain);
+        } else {
+            /* TODO: what to do when there is no uref available? */
+        }
+
+        if (uref)
+            upipe_sync_sub_output(upipe_sub, uref, upump_p);
     }
 }
 
@@ -872,6 +917,8 @@ static void cb(struct upump *upump)
 
     /* output audio */
     output_sound(upipe_sync_to_upipe(upipe_sync), &upipe_sync->fps, NULL);
+    /* output pictures */
+    output_picture(upipe_sync, NULL);
 
     struct uref *uref = NULL;
     if (upipe_sync->frame_sync) {
