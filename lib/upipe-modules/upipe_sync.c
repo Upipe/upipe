@@ -169,6 +169,7 @@ struct upipe_sync_sub {
 
     /** buffered duration */
     uint64_t samples;
+    uint64_t buffered_frames; /* Maybe reuse samples. */
 };
 
 UPIPE_HELPER_UPIPE(upipe_sync_sub, upipe, UPIPE_SYNC_SUB_SIGNATURE);
@@ -309,21 +310,11 @@ static uint64_t upipe_sync_get_max_latency(struct upipe *upipe)
  * @param flow_def flow definition packet
  * @return an error code
  */
-static int upipe_sync_sub_set_flow_def(struct upipe *upipe, struct uref *flow_def)
+static int upipe_sync_sub_set_flow_def_sound(struct upipe *upipe,
+        struct uref *flow_def, const char *def)
 {
     struct upipe_sync_sub *upipe_sync_sub = upipe_sync_sub_from_upipe(upipe);
     struct upipe_sync *upipe_sync = upipe_sync_from_sub_mgr(upipe->mgr);
-
-    if (flow_def == NULL)
-        return UBASE_ERR_INVALID;
-
-    const char *def;
-    UBASE_RETURN(uref_flow_get_def(flow_def, &def))
-
-    if (ubase_ncmp(def, "sound.")) {
-        upipe_err_va(upipe, "Unknown def %s", def);
-        return UBASE_ERR_INVALID;
-    }
 
     if (ubase_ncmp(def, "sound.s32."))
         return UBASE_ERR_INVALID;
@@ -376,6 +367,63 @@ static int upipe_sync_sub_set_flow_def(struct upipe *upipe, struct uref *flow_de
     upipe_sync_sub_store_flow_def(upipe, flow_def);
 
     return UBASE_ERR_NONE;
+}
+
+static int upipe_sync_sub_set_flow_def_picture(struct upipe *upipe,
+        struct uref *flow_def, const char *def)
+{
+    struct upipe_sync_sub *upipe_sync_sub = upipe_sync_sub_from_upipe(upipe);
+    struct upipe_sync *upipe_sync = upipe_sync_from_sub_mgr(upipe->mgr);
+
+    upipe_sync_sub->sound = false;
+
+    struct urational fps;
+    UBASE_RETURN(uref_pic_flow_get_fps(flow_def, &fps));
+    if (urational_cmp(&fps, &upipe_sync->fps))
+        return UBASE_ERR_INVALID;
+
+    uint64_t latency;
+    if (!ubase_check(uref_clock_get_latency(flow_def, &latency)))
+        latency = 0;
+
+    flow_def = uref_dup(flow_def);
+    if (!flow_def)
+        return UBASE_ERR_ALLOC;
+
+    latency += upipe_sync->ticks_per_frame;
+    uref_clock_set_latency(flow_def, latency);
+
+    if (latency > upipe_sync->latency) {
+        upipe_notice_va(upipe, "Latency %" PRIu64, latency);
+        upipe_sync->latency = latency;
+        upipe_sync_set_latency(upipe_sync_to_upipe(upipe_sync));
+    } else {
+        latency = upipe_sync->latency;
+        uref_clock_set_latency(flow_def, latency);
+        upipe_sync_sub_build_flow_def(upipe);
+    }
+
+    upipe_sync_sub_store_flow_def(upipe, flow_def);
+    return UBASE_ERR_NONE;
+}
+
+static int upipe_sync_sub_set_flow_def(struct upipe *upipe, struct uref *flow_def)
+{
+    struct upipe_sync_sub *upipe_sync_sub = upipe_sync_sub_from_upipe(upipe);
+
+    if (flow_def == NULL)
+        return UBASE_ERR_INVALID;
+
+    const char *def;
+    UBASE_RETURN(uref_flow_get_def(flow_def, &def))
+
+    if (!ubase_ncmp(def, "sound."))
+        return upipe_sync_sub_set_flow_def_sound(upipe, flow_def, def);
+    if (!ubase_ncmp(def, "pic."))
+        return upipe_sync_sub_set_flow_def_picture(upipe, flow_def, def);
+
+    upipe_err_va(upipe, "Unknown def %s", def);
+    return UBASE_ERR_INVALID;
 }
 
 /** @internal @This processes control commands.
@@ -746,6 +794,23 @@ static void output_sound(struct upipe *upipe, const struct urational *fps,
     }
 }
 
+static void output_picture(struct upipe_sync *upipe_sync, struct upump **upump_p)
+{
+    struct uchain *uchain = NULL;
+    ulist_foreach(&upipe_sync->subs, uchain) {
+        struct upipe_sync_sub *upipe_sync_sub = upipe_sync_sub_from_uchain(uchain);
+        if (upipe_sync_sub->sound)
+            continue;
+        struct upipe *upipe_sub = upipe_sync_sub_to_upipe(upipe_sync_sub);
+
+        struct uchain *uchain = ulist_pop(&upipe_sync_sub->urefs);
+        if (!uchain)
+            upipe_dbg(upipe_sub, "no uref available");
+        else
+            uref_free(uref_from_uchain(uchain));
+    }
+}
+
 static void cb(struct upump *upump)
 {
     struct upipe *upipe = upump_get_opaque(upump, struct upipe *);
@@ -903,17 +968,22 @@ static void upipe_sync_sub_input(struct upipe *upipe, struct uref *uref,
     upipe_dbg_va(upipe, "push PTS in %" PRIu64 " ms", (pts - now) / 27000);
 #endif
 
-    /* buffer audio */
-    size_t samples = 0;
-    uref_sound_size(uref, &samples, NULL);
-    upipe_sync_sub->samples += samples;
-    //upipe_notice_va(upipe, "push in samples %zu, queued samples %" PRIu64, samples, upipe_sync_sub->samples);
+    /* buffer uref */
+    if (upipe_sync_sub->sound) {
+        size_t samples = 0;
+        uref_sound_size(uref, &samples, NULL);
+        upipe_sync_sub->samples += samples;
+    } else {
+        upipe_sync_sub->buffered_frames++;
+    }
 
     ulist_add(&upipe_sync_sub->urefs, uref_to_uchain(uref));
 
-    if (unlikely(upipe_sync_sub->samples >= MAX_AUDIO_SAMPLES)) {
+    if (unlikely(upipe_sync_sub->samples >= MAX_AUDIO_SAMPLES)
+            || unlikely(upipe_sync_sub->buffered_frames >= MAX_VIDEO_FRAMES)) {
         ulist_uref_flush(&upipe_sync_sub->urefs);
         upipe_sync_sub->samples = 0;
+        upipe_sync_sub->buffered_frames = 0;
     }
 }
 
