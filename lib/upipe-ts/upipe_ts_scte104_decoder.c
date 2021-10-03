@@ -370,7 +370,7 @@ static void upipe_ts_scte104d_handle_single(struct upipe *upipe,
         return;
     }
 
-    if (!scte104s_validate(msg)) {
+    if (!scte104s_validate(msg, size)) {
         upipe_warn(upipe, "invalid single operation message");
         goto upipe_ts_scte104d_handle_single_err;
     }
@@ -718,7 +718,7 @@ static void upipe_ts_scte104d_handle_multiple(struct upipe *upipe,
         return;
     }
 
-    if (!scte104m_validate(msg)) {
+    if (!scte104m_validate(msg, size)) {
         upipe_warn(upipe, "invalid multiple operation message");
         goto upipe_ts_scte104d_handle_multiple_err;
     }
