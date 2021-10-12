@@ -824,35 +824,26 @@ static void output_picture(struct upipe_sync *upipe_sync, struct upump **upump_p
 
             if (pts < now - ticks / 2) {
                 /* frame pts too much in the past */
-                upipe_warn_va(upipe_sub, "too late");
-            } else if (pts > now + ticks / 2) {
-                upipe_warn_va(upipe_sub, "subpic too early: %.2f > %.2f",
-                    pts_to_time(pts), pts_to_time(now + ticks / 2));
-                uchain = NULL; /* do not drop */
-                break;
-            } else {
-                break; // ok
+                upipe_err_va(upipe_sub, "Drop subpic (pts-now == %.2fms)",
+                        pts_to_time(pts-now));
+                ulist_pop(&upipe_sync->urefs);
+                uref_free(uref);
+                upipe_sync->buffered_frames--;
+                continue;
             }
 
-            ulist_pop(&upipe_sync->urefs);
-            uref_free(uref);
-            upipe_sync->buffered_frames--;
-            int64_t u = pts - now;
-            upipe_err_va(upipe_sub, "Drop subpic (pts-now == %" PRId64 "ms)",
-                    u / 27000);
-        }
+            else if (pts > now + ticks / 2) {
+                /* pts is too far in the future */
+                upipe_warn_va(upipe_sub, "subpic too early: %.2f > %.2f",
+                    pts_to_time(pts), pts_to_time(now + ticks / 2));
+                break; /* TODO: should this break out of the loop? */
+            }
 
-        struct uref *uref = NULL;
-        if (uchain) {
+            /* subpic uref is within the window so sent to output. */
             ulist_pop(&upipe_sync_sub->urefs);
             upipe_sync_sub->buffered_frames--;
-            uref = uref_from_uchain(uchain);
-        } else {
-            /* TODO: what to do when there is no uref available? */
-        }
-
-        if (uref)
             upipe_sync_sub_output(upipe_sub, uref, upump_p);
+        }
     }
 }
 
