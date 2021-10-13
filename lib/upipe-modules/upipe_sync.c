@@ -979,12 +979,6 @@ static void upipe_sync_sub_input(struct upipe *upipe, struct uref *uref,
 {
     struct upipe_sync_sub *upipe_sync_sub = upipe_sync_sub_from_upipe(upipe);
 
-    if (!upipe_sync_sub->sound) {
-        // TODO subpics
-        uref_free(uref);
-        return;
-    }
-
     struct upipe_sync *upipe_sync = upipe_sync_from_sub_mgr(upipe->mgr);
     /* get uref date */
     uint64_t pts;
