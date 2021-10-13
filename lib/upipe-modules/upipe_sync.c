@@ -377,11 +377,6 @@ static int upipe_sync_sub_set_flow_def_picture(struct upipe *upipe,
 
     upipe_sync_sub->sound = false;
 
-    struct urational fps;
-    UBASE_RETURN(uref_pic_flow_get_fps(flow_def, &fps));
-    if (urational_cmp(&fps, &upipe_sync->fps))
-        return UBASE_ERR_INVALID;
-
     uint64_t latency;
     if (!ubase_check(uref_clock_get_latency(flow_def, &latency)))
         latency = 0;
