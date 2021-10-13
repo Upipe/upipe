@@ -414,7 +414,7 @@ static int upipe_sync_sub_set_flow_def(struct upipe *upipe, struct uref *flow_de
 
     if (!ubase_ncmp(def, "sound."))
         return upipe_sync_sub_set_flow_def_sound(upipe, flow_def, def);
-    if (!ubase_ncmp(def, "pic."))
+    if (!ubase_ncmp(def, "pic.") || !ubase_ncmp(def, "block."))
         return upipe_sync_sub_set_flow_def_picture(upipe, flow_def, def);
 
     upipe_err_va(upipe, "Unknown def %s", def);
