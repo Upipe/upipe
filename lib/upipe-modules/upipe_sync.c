@@ -821,9 +821,9 @@ static void output_picture(struct upipe_sync *upipe_sync, struct upump **upump_p
                 /* frame pts too much in the past */
                 upipe_err_va(upipe_sub, "Drop subpic (pts-now == %.2fms)",
                         pts_to_time(pts-now));
-                ulist_pop(&upipe_sync->urefs);
+                ulist_pop(&upipe_sync_sub->urefs);
                 uref_free(uref);
-                upipe_sync->buffered_frames--;
+                upipe_sync_sub->buffered_frames--;
                 continue;
             }
 
