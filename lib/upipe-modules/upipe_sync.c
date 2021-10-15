@@ -205,11 +205,11 @@ static struct upipe *upipe_sync_sub_alloc(struct upipe_mgr *mgr,
 
     struct upipe_sync_sub *upipe_sync_sub = upipe_sync_sub_from_upipe(upipe);
     ulist_init(&upipe_sync_sub->urefs);
-    upipe_sync_sub->samples = 0;
+    upipe_sync_sub->samples = upipe_sync_sub->buffered_frames = 0;
     upipe_sync_sub->sound = false;
     upipe_sync_sub->s337 = false;
     upipe_sync_sub->a52 = false;
-    upipe_sync_sub->missed_compressed_audio_e = 0;
+    upipe_sync_sub->missed_compressed_audio_e = upipe_sync_sub->channels = 0;
     upipe_sync_sub->uref = NULL;
 
     upipe_sync_sub_init_urefcount(upipe);
