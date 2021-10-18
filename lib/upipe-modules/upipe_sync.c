@@ -800,12 +800,15 @@ static void output_picture(struct upipe_sync *upipe_sync, struct upump **upump_p
             continue;
         struct upipe *upipe_sub = upipe_sync_sub_to_upipe(upipe_sync_sub);
 
+        int counter_urefs_per_subpipe = 0;
+        const uint64_t buffered_frames = upipe_sync_sub->buffered_frames;
+
         struct uchain *uchain = NULL;
         /* Duplicted from the main picture pipe. */
         while (true) {
             uchain = ulist_peek(&upipe_sync_sub->urefs);
             if (!uchain) {
-                upipe_dbg(upipe_sub, "no uref available");
+                //upipe_dbg(upipe_sub, "no uref available");
                 break;
             }
 
@@ -838,7 +841,10 @@ static void output_picture(struct upipe_sync *upipe_sync, struct upump **upump_p
             ulist_pop(&upipe_sync_sub->urefs);
             upipe_sync_sub->buffered_frames--;
             upipe_sync_sub_output(upipe_sub, uref, upump_p);
+            counter_urefs_per_subpipe += 1;
         }
+        upipe_dbg_va(upipe_sub, "output %d of %"PRIu64" urefs",
+                counter_urefs_per_subpipe, buffered_frames);
     }
 }
 
