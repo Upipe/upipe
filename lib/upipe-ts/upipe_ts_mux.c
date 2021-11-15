@@ -638,9 +638,8 @@ UBASE_FROM_TO(upipe_ts_mux_psi_pid, uchain, uchain_splice, uchain_splice)
 UREFCOUNT_HELPER(upipe_ts_mux_psi_pid, refcount, upipe_ts_mux_psi_pid_no_ref)
 UREFCOUNT_HELPER(upipe_ts_mux_psi_pid, refcount_real, upipe_ts_mux_psi_pid_free)
 
-/** @internal @This sorts the psi_pids by increasing PID. We do not take into
- * account cr_sys as, in the case of PSIs, packets are prepared for the
- * current muxing date when calling @ref upipe_ts_mux_prepare.
+/** @internal @This sorts the psi_pids by increasing PID and cr_sys if the
+ * difference is outside the mux interval range.
  *
  * @param uchain1 pointer to first psi_pid
  * @param uchain2 pointer to second psi_pid
@@ -653,6 +652,14 @@ static int upipe_ts_mux_psi_pid_compare(struct uchain *uchain1,
         upipe_ts_mux_psi_pid_from_uchain_splice(uchain1);
     struct upipe_ts_mux_psi_pid *psi_pid2 =
         upipe_ts_mux_psi_pid_from_uchain_splice(uchain2);
+    struct upipe_ts_mux *upipe_ts_mux =
+        upipe_ts_mux_from_upipe(psi_pid1->upipe);
+    uint64_t interval = upipe_ts_mux->interval;
+
+    if (psi_pid1->cr_sys > psi_pid2->cr_sys + interval)
+        return 1;
+    if (psi_pid2->cr_sys > psi_pid1->cr_sys + interval)
+        return -1;
     return psi_pid1->pid - psi_pid2->pid;
 }
 
