@@ -108,10 +108,8 @@ check_PROGRAMS = \
 	upipe_audio_blank_test \
 	upipe_block_to_sound_test \
 	upipe_audio_copy_test \
-	upipe_row_join_test \
 	upipe_auto_inner_test \
-	upipe_audio_merge_test \
-	upipe_auto_source_test
+	upipe_audio_merge_test
 
 TESTS = \
 	ulist_test \
@@ -170,7 +168,6 @@ TESTS = \
 	upipe_audio_blank_test \
 	upipe_block_to_sound_test \
 	upipe_audio_copy_test \
-	upipe_row_join_test \
 	upipe_auto_inner_test \
 	upipe_audio_merge_test
 
@@ -209,10 +206,12 @@ check_PROGRAMS += \
 	upipe_m3u_reader_test \
 	upipe_void_source_test \
 	upipe_zoneplate_source_test \
+	upipe_row_join_test \
 	upipe_row_split_test \
 	upipe_separate_fields_test \
 	upipe_dtsdi_test \
-	upipe_grid_test
+	upipe_grid_test \
+	upipe_auto_source_test
 
 TESTS += \
 	upump_ev_test \
@@ -234,6 +233,7 @@ TESTS += \
 	upipe_m3u_reader_test.sh \
 	upipe_void_source_test \
 	upipe_zoneplate_source_test \
+	upipe_row_join_test \
 	upipe_row_split_test \
 	upipe_separate_fields_test \
 	upipe_dtsdi_test.sh \
