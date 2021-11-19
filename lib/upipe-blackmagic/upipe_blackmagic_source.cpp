@@ -153,7 +153,7 @@ class DeckLinkCaptureDelegate : public IDeckLinkInputCallback
 {
 public:
     DeckLinkCaptureDelegate(struct upipe *_upipe) : upipe(_upipe) {
-        uatomic_store(&refcount, 1);
+        uatomic_init(&refcount, 1);
     }
 
     ~DeckLinkCaptureDelegate(void) {

@@ -83,7 +83,7 @@ class upipe_bmd_sink_frame : public IDeckLinkVideoFrame
 public:
     upipe_bmd_sink_frame(struct uref *_uref, void *_buffer, long _width, long _height, size_t _stride, uint64_t _pts) :
                          uref(_uref), data(_buffer), width(_width), height(_height), stride(_stride), pts(_pts) {
-        uatomic_store(&refcount, 1);
+        uatomic_init(&refcount, 1);
     }
 
     ~upipe_bmd_sink_frame(void) {
@@ -437,7 +437,7 @@ public:
 
     callback(struct upipe_bmd_sink *upipe_bmd_sink_) {
         upipe_bmd_sink = upipe_bmd_sink_;
-        uatomic_store(&refcount, 1);
+        uatomic_init(&refcount, 1);
         prev = 0;
     }
 
@@ -1598,6 +1598,9 @@ static struct upipe *upipe_bmd_sink_alloc(struct upipe_mgr *mgr,
     upipe_bmd_sink->mode = bmdModeUnknown;
     upipe_bmd_sink->selectedMode = bmdModeUnknown;
     upipe_bmd_sink->timing_adjustment = INT64_MAX;
+    uatomic_init(&upipe_bmd_sink->preroll, PREROLL_FRAMES);
+    uatomic_init(&upipe_bmd_sink->cc, 0);
+    uatomic_init(&upipe_bmd_sink->ttx, 0);
 
     upipe_throw_ready(upipe);
     return upipe;
