@@ -207,11 +207,6 @@ static void upipe_dveo_asi_sink_stats(struct upipe *upipe)
 {
     struct upipe_dveo_asi_sink *upipe_dveo_asi_sink = upipe_dveo_asi_sink_from_upipe(upipe);
     int fd = upipe_dveo_asi_sink->fd;
-
-    static uint64_t sum;
-    sum += 188;
-    //upipe_notice_va(upipe, "Wrote %"PRIu64" bytes into the card", sum);
-
     int val;
 
     if (ioctl(fd, ASI_IOC_TXGETEVENTS, &val) < 0)
