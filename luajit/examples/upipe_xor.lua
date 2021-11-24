@@ -70,7 +70,7 @@ local xor = upipe_xor_mgr:new(pfx "xor")
 local sink = upipe.fsink():new(pfx "sink")
 
 src.uri = input
-ubase_assert(sink:fsink_set_path(output, "UPIPE_FSINK_CREATE"))
+ubase_assert(sink:fsink_set_path(output, "UPIPE_FSINK_OVERWRITE"))
 src.output = xor .. sink
 
 -- main loop

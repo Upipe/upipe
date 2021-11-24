@@ -123,15 +123,27 @@ distclean: clean
 space := $(null) $(null)
 LIBRARY_PATH = .:$(subst $(space),:,$(LIST:%=$(top_builddir)/lib/%/.libs))
 
+TESTS = $(LUAJIT) $(srcdir)/check.lua $(LIST) &&
+
+@HAVE_EV_TRUE@@HAVE_BITSTREAM_TRUE@TESTS += \
+	$(LUAJIT) $(srcdir)/examples/upipe_duration.lua \
+	  $(top_srcdir)/tests/upipe_ts_test.ts &&
+
+@HAVE_EV_TRUE@@HAVE_BITSTREAM_TRUE@@HAVE_AVFORMAT_TRUE@@HAVE_SWSCALE_TRUE@TESTS += \
+	$(LUAJIT) $(srcdir)/examples/extract_pic.lua \
+	  $(top_srcdir)/tests/upipe_ts_test.ts /dev/null &&
+
+@HAVE_EV_TRUE@TESTS += \
+	$(LUAJIT) $(srcdir)/examples/upipe_xor.lua \
+	  $(top_srcdir)/tests/upipe_ts_test.ts /dev/null &&
+
 check: all
 ifneq ($(LUAJIT),)
 	$(V_at)export LUA_PATH="?.lua;$(srcdir)/?.lua"; \
 	export LD_LIBRARY_PATH="$(LIBRARY_PATH):$$LD_LIBRARY_PATH"; \
 	export DYLD_LIBRARY_PATH="$(LIBRARY_PATH):$$DYLD_LIBRARY_PATH"; \
 	export DYLD_INSERT_LIBRARIES="$(INSERT_LIBRARIES)"; \
-	$(LUAJIT) $(srcdir)/check.lua $(LIST) && \
-	$(LUAJIT) $(srcdir)/examples/upipe_duration.lua \
-	  $(top_srcdir)/tests/upipe_ts_test.ts
+	$(TESTS) true
 endif
 
 installcheck:

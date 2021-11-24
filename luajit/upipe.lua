@@ -1,5 +1,7 @@
 local ffi = require "ffi"
 local stdarg = require "ffi-stdarg"
+
+local va_start = stdarg.va_start
 local va_args, va_copy = stdarg.va_args, stdarg.va_copy
 local fmt = string.format
 local C, cast = ffi.C, ffi.cast
@@ -42,7 +44,6 @@ end
 
 local void_ptr = ffi.typeof("void *")
 local intptr_t = ffi.typeof("intptr_t")
-local void_cb = ffi.typeof("void (*)(void *)")
 
 local props = { }
 
@@ -176,30 +177,27 @@ uprobe = setmetatable({ }, {
                 end
                 events[C["UPROBE_" .. k]] = { func = v, args = probe_args[k] }
             end
-            uprobe_throw = function (probe, pipe, event, args)
+            uprobe_throw = function (probe, pipe, event, va_list)
                 local e = events[event]
-                if e then
+                if not e then return probe:throw_next(pipe, event, va_list) end
+
+                local ret = C.UBASE_ERR_UNHANDLED
+                va_copy(va_list, function (args)
                     if event >= C.UPROBE_LOCAL then
                         local signature = va_args(args, "uint32_t")
                         if signature ~= pipe.mgr.signature then
-                            return C.UBASE_ERR_UNHANDLED
+                            return
                         end
                     end
-                    local ret
-                    local cb = void_cb(function (args_copy)
-                        local function get_probe_args(args, args_list)
-                            if not args_list then return args end
-                            local args_list = {va_args(args, unpack(args_list))}
-                            table.insert(args_list, args_copy)
-                            return unpack(args_list)
-                        end
-                        ret = ubase_err(e.func(probe, pipe, get_probe_args(args, e.args)))
-                    end)
-                    va_copy(args, cb)
-                    cb:free()
-                    return ret
-                end
-                return probe:throw_next(pipe, event, args)
+                    local function get_probe_args(args_list)
+                        if not args_list then return args end
+                        local vals = {va_args(args, unpack(args_list))}
+                        table.insert(vals, va_list)
+                        return unpack(vals)
+                    end
+                    ret = ubase_err(e.func(probe, pipe, get_probe_args(e.args)))
+                end)
+                return ret
             end
         end
         return uprobe_alloc(uprobe_throw, ffi.cast("struct uprobe *", nil))
@@ -733,7 +731,7 @@ local function upipe_helper_alloc(cb)
             local ret = control[cmd] or C.UBASE_ERR_UNHANDLED
             if type(ret) ~= "number" then
                 if type(ret) ~= "string" then
-                    ret = ret(pipe, control_args(cmd, args))
+                    ret = ret(pipe, control_args(cmd, va_start(args)))
                 end
                 ret = ubase_err(ret)
             end
