@@ -15,11 +15,11 @@ jobs:
         name:
           - ubuntu-amd64-gcc-11
           - ubuntu-amd64-gcc-11-static
-          - ubuntu-amd64-clang-12
+          - ubuntu-amd64-clang-13
           - ubuntu-i386-gcc-10
           - ubuntu-armhf-gcc-10
           - ubuntu-arm64-gcc-10
-          - macos-xcode
+          - macos-11-xcode
 
         include:
           - name: ubuntu-amd64-gcc-11
@@ -35,11 +35,11 @@ jobs:
             version: 11
             static: true
 
-          - name: ubuntu-amd64-clang-12
+          - name: ubuntu-amd64-clang-13
             os: ubuntu-20.04
             arch: amd64
             compiler: clang
-            version: 12
+            version: 13
 
           - name: ubuntu-i386-gcc-10
             os: ubuntu-20.04
@@ -62,7 +62,7 @@ jobs:
             compiler: gcc
             version: 10
 
-          - name: macos-xcode
+          - name: macos-11-xcode
             os: macos-11
             compiler: xcode
 
