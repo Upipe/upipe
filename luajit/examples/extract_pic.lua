@@ -35,7 +35,7 @@ local split_pipe
 
 -- other probes
 local uref_probe = uprobe {
-    probe_uref = function (probe, pipe, ref, drop)
+    probe_uref = function (probe, pipe, ref, pump_p, drop)
         if source then
             -- release the source to exit
             source:release()

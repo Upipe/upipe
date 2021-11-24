@@ -6,6 +6,9 @@ ffi.cdef [[
     void ffi_va_copy(va_list *args, void (*cb)(va_list *args));
 ]]
 
+local void_cb = ffi.typeof("void (*)(void *)")
+local va_list_p = ffi.typeof("va_list[1]")
+
 local is_number = {
     int = true,
     ["unsigned int"] = true,
@@ -13,17 +16,22 @@ local is_number = {
     uint32_t = true,
 }
 
-return {
-    va_args = function (va_list, ...)
-        if ffi.arch ~= "x64" and ffi.arch ~= "arm64" then
-            va_list = ffi.new("void *[1]", va_list)
-        end
+local function va_start(va_list)
+    if ffi.arch == "x64" or ffi.arch == "arm64" then
+        return va_list
+    end
+    return va_list_p(va_list)
+end
 
+return {
+    va_start = va_start,
+
+    va_args = function (args, ...)
         local ret = { }
         local n = select("#", ...)
         for i = 1, n do
             local ty = select(i, ...)
-            local val = stdarg.ffi_va_arg(va_list, ty)
+            local val = stdarg.ffi_va_arg(args, ty)
             if is_number[ty] then
                 ret[i] = tonumber(val)
             elseif ty == "const char *" then
@@ -35,5 +43,9 @@ return {
         return unpack(ret)
     end,
 
-    va_copy = stdarg.ffi_va_copy
+    va_copy = function (va_list, func)
+        local cb = void_cb(func)
+        stdarg.ffi_va_copy(va_start(va_list), cb)
+        cb:free()
+    end
 }
