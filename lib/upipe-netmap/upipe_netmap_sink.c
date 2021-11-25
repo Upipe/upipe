@@ -2122,6 +2122,8 @@ static int upipe_netmap_sink_set_flow_def(struct upipe *upipe,
     struct upipe_netmap_sink *upipe_netmap_sink =
         upipe_netmap_sink_from_upipe(upipe);
 
+    uint16_t udp_payload_size;
+
     /* Input is V210/Planar */
     if (ubase_check(uref_flow_match_def(flow_def, "pic."))) {
         upipe_netmap_sink->rfc4175 = 1;
@@ -2166,9 +2168,12 @@ static int upipe_netmap_sink_set_flow_def(struct upipe *upipe,
             upipe_netmap_sink->input_chroma_map[1] = "u10l";
             upipe_netmap_sink->input_chroma_map[2] = "v10l";
         }
+
+        /* Just the headers, packed data added below. */
+        udp_payload_size = RTP_HEADER_SIZE + RFC_4175_HEADER_LEN + RFC_4175_EXT_SEQ_NUM_LEN;
     } else {
         upipe_netmap_sink->rfc4175 = 0;
-        upipe_netmap_sink->packet_size = 1438;
+        udp_payload_size = RTP_HEADER_SIZE + HBRMT_HEADER_SIZE + HBRMT_DATA_SIZE;
     }
 
     UBASE_RETURN(uref_pic_flow_get_hsize(flow_def, &upipe_netmap_sink->hsize));
@@ -2177,7 +2182,7 @@ static int upipe_netmap_sink_set_flow_def(struct upipe *upipe,
 
     if (upipe_netmap_sink->hsize == 720) {
         if (upipe_netmap_sink->rfc4175)
-            upipe_netmap_sink->packet_size = 962;
+            udp_payload_size += 720/2*5 / 2;
         if (upipe_netmap_sink->vsize == 486) {
             upipe_netmap_sink->frame = 0x10;
             if (upipe_netmap_sink->rfc4175)
@@ -2190,7 +2195,7 @@ static int upipe_netmap_sink_set_flow_def(struct upipe *upipe,
             return UBASE_ERR_INVALID;
     } else if (upipe_netmap_sink->hsize == 1920 && upipe_netmap_sink->vsize == 1080) {
         if (upipe_netmap_sink->rfc4175) {
-            upipe_netmap_sink->packet_size = 1262;
+            udp_payload_size += 1920/2*5 / 4;
             upipe_netmap_sink->gap_fakes = 4 * (1125 - 1080);
         }
         upipe_netmap_sink->frame = upipe_netmap_sink->progressive ? 0x21 : 0x20;
@@ -2198,7 +2203,7 @@ static int upipe_netmap_sink_set_flow_def(struct upipe *upipe,
         // 0x22 psf
     } else if (upipe_netmap_sink->hsize == 1280 && upipe_netmap_sink->vsize == 720) {
         if (upipe_netmap_sink->rfc4175) {
-            upipe_netmap_sink->packet_size = 862;
+            udp_payload_size += 1280/2*5 / 4;
             upipe_netmap_sink->gap_fakes = 4 * (750 - 720);
         }
         upipe_netmap_sink->frame = 0x30; // progressive
@@ -2253,25 +2258,20 @@ static int upipe_netmap_sink_set_flow_def(struct upipe *upipe,
             struct upipe_netmap_intf *intf = &upipe_netmap_sink->intf[i];
             if (!intf->d)
                 break;
-            uint8_t *header = &intf->header[0];
-            const uint16_t udp_payload_size = RTP_HEADER_SIZE +
-                HBRMT_HEADER_SIZE + HBRMT_DATA_SIZE;
-            header += upipe_netmap_put_ip_headers(intf, header, udp_payload_size);
-            assert(header == &intf->header[sizeof(intf->header)]);
+            upipe_netmap_sink->packet_size = upipe_netmap_put_ip_headers(intf, intf->header, udp_payload_size)
+                + udp_payload_size;
         }
 
         /* Largely constant headers so don't keep rewriting them */
         upipe_netmap_put_rtp_headers(upipe_netmap_sink, upipe_netmap_sink->rtp_header, false, 98, false, false);
         upipe_put_hbrmt_headers(upipe, upipe_netmap_sink->rtp_header + RTP_HEADER_SIZE);
     } else {
-        const uint16_t header_size = ETHERNET_HEADER_LEN + IP_HEADER_MINSIZE + UDP_HEADER_SIZE;
         for (size_t i = 0; i < 2; i++) {
             struct upipe_netmap_intf *intf = &upipe_netmap_sink->intf[i];
             if (!intf->d)
                 break;
-            uint8_t *header = &intf->header[0];
-            uint16_t udp_payload_size = upipe_netmap_sink->packet_size - header_size;
-            upipe_netmap_put_ip_headers(intf, header, udp_payload_size);
+            upipe_netmap_sink->packet_size = upipe_netmap_put_ip_headers(intf, intf->header, udp_payload_size)
+                + udp_payload_size;
             /* RTP Headers done in worker_rfc4175 */
         }
         upipe_netmap_update_timestamp_cache(upipe_netmap_sink);
