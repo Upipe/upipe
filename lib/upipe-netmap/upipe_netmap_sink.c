@@ -2253,27 +2253,21 @@ static int upipe_netmap_sink_set_flow_def(struct upipe *upipe,
     if (!upipe_netmap_sink->frate)
         return UBASE_ERR_INVALID;
 
-    if (!upipe_netmap_sink->rfc4175) {
-        for (size_t i = 0; i < 2; i++) {
-            struct upipe_netmap_intf *intf = &upipe_netmap_sink->intf[i];
-            if (!intf->d)
-                break;
-            upipe_netmap_sink->packet_size = upipe_netmap_put_ip_headers(intf, intf->header, udp_payload_size)
-                + udp_payload_size;
-        }
+    /* Create ethernet, IP, and UDP headers and set the packet size. */
+    for (size_t i = 0; i < 2; i++) {
+        struct upipe_netmap_intf *intf = &upipe_netmap_sink->intf[i];
+        if (!intf->d)
+            break;
+        upipe_netmap_sink->packet_size = udp_payload_size
+            + upipe_netmap_put_ip_headers(intf, intf->header, udp_payload_size);
+    }
 
+    if (!upipe_netmap_sink->rfc4175) {
         /* Largely constant headers so don't keep rewriting them */
         upipe_netmap_put_rtp_headers(upipe_netmap_sink, upipe_netmap_sink->rtp_header, false, 98, false, false);
         upipe_put_hbrmt_headers(upipe, upipe_netmap_sink->rtp_header + RTP_HEADER_SIZE);
     } else {
-        for (size_t i = 0; i < 2; i++) {
-            struct upipe_netmap_intf *intf = &upipe_netmap_sink->intf[i];
-            if (!intf->d)
-                break;
-            upipe_netmap_sink->packet_size = upipe_netmap_put_ip_headers(intf, intf->header, udp_payload_size)
-                + udp_payload_size;
             /* RTP Headers done in worker_rfc4175 */
-        }
         upipe_netmap_update_timestamp_cache(upipe_netmap_sink);
 
         /* RTP header for audio. */
