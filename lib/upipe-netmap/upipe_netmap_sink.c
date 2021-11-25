@@ -127,6 +127,7 @@ struct upipe_netmap_intf {
     // TODO: rfc
     uint8_t header[ETHERNET_HEADER_LEN + ETHERNET_VLAN_LEN + IP_HEADER_MINSIZE + UDP_HEADER_SIZE];
     uint8_t fake_header[ETHERNET_HEADER_LEN + ETHERNET_VLAN_LEN + IP_HEADER_MINSIZE + UDP_HEADER_SIZE];
+    int header_len;
 
     /** if interface is up */
     bool up;
@@ -864,7 +865,7 @@ static int worker_rfc4175(struct upipe_netmap_sink *upipe_netmap_sink, uint8_t *
     const int idx = (dst[0] != NULL) ? 0 : 1;
     bool eof = false; /* End of frame */
 
-    const uint16_t header_size = ETHERNET_HEADER_LEN + UDP_HEADER_SIZE + IP_HEADER_MINSIZE;
+    const uint16_t header_size = upipe_netmap_sink->intf[0].header_len;
     const uint16_t rtp_rfc_header_size = RTP_HEADER_SIZE + RFC_4175_EXT_SEQ_NUM_LEN + RFC_4175_HEADER_LEN;
     const uint16_t eth_frame_len = header_size + rtp_rfc_header_size + upipe_netmap_sink->payload;
     const uint16_t pixels1 = upipe_netmap_sink->payload * 2 / UPIPE_RFC4175_PIXEL_PAIR_BYTES;
@@ -1000,9 +1001,9 @@ static int worker_hbrmt(struct upipe_netmap_sink *upipe_netmap_sink, uint8_t **d
         int bytes_left, uint16_t **len, uint64_t **ptr)
 {
     const uint8_t packed_bytes = upipe_netmap_sink->packed_bytes;
-    const uint16_t eth_frame_len = ETHERNET_HEADER_LEN + IP_HEADER_MINSIZE + UDP_HEADER_SIZE +
-                                   RTP_HEADER_SIZE + HBRMT_HEADER_SIZE + HBRMT_DATA_SIZE;
+    const uint16_t header_size = upipe_netmap_sink->intf[0].header_len;
     const uint16_t rtp_hbrmt_header_size = RTP_HEADER_SIZE + HBRMT_HEADER_SIZE;
+    const uint16_t eth_frame_len = header_size + rtp_hbrmt_header_size + HBRMT_DATA_SIZE;
     const bool copy = dst[1] != NULL && dst[0] != NULL;
     const int idx = (dst[0] != NULL) ? 0 : 1;
 
@@ -1045,8 +1046,8 @@ static int worker_hbrmt(struct upipe_netmap_sink *upipe_netmap_sink, uint8_t **d
             continue;
 
         /* Ethernet/IP Header */
-        memcpy(dst[i], intf->header, sizeof(intf->header));
-        dst[i] += sizeof(intf->header);
+        memcpy(dst[i], intf->header, header_size);
+        dst[i] += header_size;
 
         /* RTP HEADER */
         memcpy(dst[i], upipe_netmap_sink->rtp_header, rtp_hbrmt_header_size);
@@ -1362,7 +1363,7 @@ static inline void check_marker_packet(struct upipe_netmap_sink *upipe_netmap_si
         struct netmap_slot *slot = ring_state[i].slot = &txring->slot[cur];
 
         uint8_t *dst = ring_state[i].dst = (uint8_t *)NETMAP_BUF(txring, txring->slot[cur].buf_idx);
-        uint8_t *rtp = dst + ETHERNET_HEADER_LEN + IP_HEADER_MINSIZE + UDP_HEADER_SIZE;
+        uint8_t *rtp = dst + intf->header_len;
 
         /* Check for marker bit indicating end of frame/field and get exact TX
          * time of that packet. */
@@ -1407,10 +1408,11 @@ static inline void aps_inc_audio(struct audio_packet_state *aps)
     aps->audio_counter = (aps->audio_counter + 1) % aps->den;
 }
 
-static void make_fake_packet(struct ring_state *ring_state, const void *header, uint16_t length)
+static void make_fake_packet(struct ring_state *ring_state, const void *header,
+        uint16_t length, uint16_t header_len)
 {
     memset(ring_state->dst, 0, length);
-    memcpy(ring_state->dst, header, ETHERNET_HEADER_LEN + IP_HEADER_MINSIZE + UDP_HEADER_SIZE);
+    memcpy(ring_state->dst, header, header_len);
     ring_state->slot->len = length;
     ring_state->slot->ptr = 0;
 }
@@ -1419,7 +1421,7 @@ static void adjust_skew(struct ring_state *ring_state, struct upipe_netmap_intf 
         uint32_t *txavail, uint16_t packet_size)
 {
     if (intf->d && intf->up) {
-        make_fake_packet(ring_state, intf->fake_header, packet_size);
+        make_fake_packet(ring_state, intf->fake_header, packet_size, intf->header_len);
         advance_ring_state(ring_state);
         *txavail -= 1;
     }
@@ -1746,7 +1748,7 @@ static void upipe_netmap_sink_worker(struct upump *upump)
                 if (unlikely(!intf->d || !intf->up))
                     continue;
 
-                make_fake_packet(&ring_state[i], intf->fake_header, upipe_netmap_sink->packet_size);
+                make_fake_packet(&ring_state[i], intf->fake_header, upipe_netmap_sink->packet_size, intf->header_len);
                 advance_ring_state(&ring_state[i]);
             }
             txavail--;
@@ -1845,7 +1847,7 @@ static void upipe_netmap_sink_worker(struct upump *upump)
                     struct upipe_netmap_intf *intf = &upipe_netmap_sink->intf[i];
                     if (unlikely(!intf->d || !intf->up))
                         continue;
-                    make_fake_packet(&ring_state[i], intf->fake_header, upipe_netmap_sink->packet_size);
+                    make_fake_packet(&ring_state[i], intf->fake_header, upipe_netmap_sink->packet_size, intf->header_len);
                 }
                 upipe_netmap_sink->bits += (pkt_len + 4 /* CRC */) * 8;
                 upipe_netmap_sink->gap_fakes_current--;
@@ -1988,17 +1990,17 @@ static bool upipe_netmap_sink_output(struct upipe *upipe, struct uref *uref,
             uref_block_size(uref, &upipe_netmap_sink->frame_size);
             upipe_netmap_sink->frame_size = upipe_netmap_sink->frame_size * 5 / 8;
             upipe_netmap_sink->packets_per_frame = (upipe_netmap_sink->frame_size + HBRMT_DATA_SIZE - 1) / HBRMT_DATA_SIZE;
-            static const uint64_t eth_packet_size =
-            ETHERNET_HEADER_LEN + IP_HEADER_MINSIZE + UDP_HEADER_SIZE +
-                RTP_HEADER_SIZE + HBRMT_HEADER_SIZE + HBRMT_DATA_SIZE +
-                    4 /* ethernet CRC */;
+            const uint64_t eth_packet_size = upipe_netmap_sink->intf[0].header_len
+                + RTP_HEADER_SIZE + HBRMT_HEADER_SIZE + HBRMT_DATA_SIZE
+                + 4 /* ethernet CRC */;
 
             upipe_netmap_sink->rate = 8 * eth_packet_size * upipe_netmap_sink->packets_per_frame * upipe_netmap_sink->fps.num;
         } else {
             uint64_t pixels = upipe_netmap_sink->hsize * upipe_netmap_sink->vsize;
             upipe_netmap_sink->frame_size = pixels * UPIPE_RFC4175_PIXEL_PAIR_BYTES / 2;
             /* Length of all network headers apart from payload */
-            const uint16_t network_header_len = ETHERNET_HEADER_LEN + UDP_HEADER_SIZE + IP_HEADER_MINSIZE + RTP_HEADER_SIZE + RFC_4175_HEADER_LEN + RFC_4175_EXT_SEQ_NUM_LEN;
+            const uint16_t network_header_len = upipe_netmap_sink->intf[0].header_len
+                + RTP_HEADER_SIZE + RFC_4175_HEADER_LEN + RFC_4175_EXT_SEQ_NUM_LEN;
             const uint16_t bytes_available = upipe_netmap_sink->packet_size - network_header_len;
             const uint64_t payload = (bytes_available / UPIPE_RFC4175_PIXEL_PAIR_BYTES) * UPIPE_RFC4175_PIXEL_PAIR_BYTES;
             upipe_netmap_sink->payload = payload;
