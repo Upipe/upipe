@@ -1824,10 +1824,7 @@ static void upipe_netmap_sink_worker(struct upump *upump)
                     struct upipe_netmap_intf *intf = &upipe_netmap_sink->intf[i];
                     if (unlikely(!intf->d || !intf->up))
                         continue;
-                    memset(dst[i], 0, pkt_len);
-                    memcpy(dst[i], intf->fake_header, ETHERNET_HEADER_LEN + IP_HEADER_MINSIZE + UDP_HEADER_SIZE);
-                    *len[i] = pkt_len;
-                    *ptr[i] = 0;
+                    make_fake_packet(&ring_state[i], intf->fake_header, upipe_netmap_sink->packet_size);
                 }
                 upipe_netmap_sink->bits += (pkt_len + 4 /* CRC */) * 8;
                 upipe_netmap_sink->gap_fakes_current--;
