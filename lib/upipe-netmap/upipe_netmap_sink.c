@@ -109,6 +109,8 @@ struct upipe_netmap_intf {
     in_addr_t dst_ip;
     uint8_t dst_mac[6];
 
+    int vlan_id;
+
     /** Ring */
     unsigned int ring_idx;
 
@@ -123,8 +125,8 @@ struct upipe_netmap_intf {
 
     /** packet headers */
     // TODO: rfc
-    uint8_t header[ETHERNET_HEADER_LEN + IP_HEADER_MINSIZE + UDP_HEADER_SIZE];
-    uint8_t fake_header[ETHERNET_HEADER_LEN + IP_HEADER_MINSIZE + UDP_HEADER_SIZE];
+    uint8_t header[ETHERNET_HEADER_LEN + ETHERNET_VLAN_LEN + IP_HEADER_MINSIZE + UDP_HEADER_SIZE];
+    uint8_t fake_header[ETHERNET_HEADER_LEN + ETHERNET_VLAN_LEN + IP_HEADER_MINSIZE + UDP_HEADER_SIZE];
 
     /** if interface is up */
     bool up;
@@ -145,7 +147,7 @@ struct aes67_flow {
     /* Ethernet details for the destination. */
     struct sockaddr_ll sll;
     /* Raw Ethernet, IP, and UDP headers. */
-    uint8_t header[ETHERNET_HEADER_LEN + IP_HEADER_MINSIZE + UDP_HEADER_SIZE];
+    uint8_t header[ETHERNET_HEADER_LEN + ETHERNET_VLAN_LEN + IP_HEADER_MINSIZE + UDP_HEADER_SIZE];
     /* Flow has been populated and packets should be sent. */
     bool populated;
 };
@@ -574,13 +576,11 @@ static struct upipe *_upipe_netmap_sink_alloc(struct upipe_mgr *mgr,
 
     upipe_netmap_sink->uri = NULL;
     for (size_t i = 0; i < 2; i++) {
+        memset(&upipe_netmap_sink->intf[i], 0, sizeof upipe_netmap_sink->intf[i]);
         struct upipe_netmap_intf *intf = &upipe_netmap_sink->intf[i];
-        intf->maxrate_uri = NULL;
-        intf->d = NULL;
+        intf->vlan_id = -1;
         intf->up = true;
-        intf->wait = 0;
         intf->fd = socket(AF_INET, SOCK_DGRAM, 0);
-        memset(&intf->ifr, 0, sizeof(intf->ifr));
     }
 
     if (!ubase_check(upipe_netmap_sink_open_dev(upipe, device))) {
@@ -727,6 +727,7 @@ static int upipe_netmap_put_rtp_headers(struct upipe_netmap_sink *upipe_netmap_s
 static int upipe_netmap_put_ip_headers(struct upipe_netmap_intf *intf,
         uint8_t *buf, uint16_t payload_size)
 {
+    int ret = ETHERNET_HEADER_LEN + IP_HEADER_MINSIZE + UDP_HEADER_SIZE;
     /* Destination MAC */
     ethernet_set_dstaddr(buf, intf->dst_mac);
 
@@ -734,9 +735,21 @@ static int upipe_netmap_put_ip_headers(struct upipe_netmap_intf *intf,
     ethernet_set_srcaddr(buf, intf->src_mac);
 
     /* Ethertype */
-    ethernet_set_lentype(buf, ETHERNET_TYPE_IP);
+    if (intf->vlan_id < 0) {
+        ethernet_set_lentype(buf, ETHERNET_TYPE_IP);
+    }
 
-    buf += ETHERNET_HEADER_LEN;
+    /* VLANs */
+    else {
+        ethernet_set_lentype(buf, ETHERNET_TYPE_VLAN);
+        ethernet_vlan_set_priority(buf, 0);
+        ethernet_vlan_set_cfi(buf, 0);
+        ethernet_vlan_set_id(buf, intf->vlan_id);
+        ethernet_vlan_set_lentype(buf, ETHERNET_TYPE_IP);
+        ret += ETHERNET_VLAN_LEN;
+    }
+
+    buf = ethernet_payload(buf);
 
     /* 0x1c - Standard, low delay, high throughput, high reliability TOS */
     upipe_udp_raw_fill_headers(buf, intf->src_ip,
@@ -749,15 +762,23 @@ static int upipe_netmap_put_ip_headers(struct upipe_netmap_intf *intf,
     buf = intf->fake_header;
     ethernet_set_dstaddr(buf, intf->src_mac);
     ethernet_set_srcaddr(buf, intf->src_mac);
-    ethernet_set_lentype(buf, ETHERNET_TYPE_IP);
-    buf += ETHERNET_HEADER_LEN;
+    if (intf->vlan_id < 0) {
+        ethernet_set_lentype(buf, ETHERNET_TYPE_IP);
+    } else {
+        ethernet_set_lentype(buf, ETHERNET_TYPE_VLAN);
+        ethernet_vlan_set_priority(buf, 0);
+        ethernet_vlan_set_cfi(buf, 0);
+        ethernet_vlan_set_id(buf, intf->vlan_id);
+        ethernet_vlan_set_lentype(buf, ETHERNET_TYPE_IP);
+    }
+    buf = ethernet_payload(buf);
     upipe_udp_raw_fill_headers(buf, intf->src_ip,
                                intf->src_ip,
                                intf->src_port,
                                intf->dst_port,
                                10, 0x1c, payload_size);
 
-    return ETHERNET_HEADER_LEN + IP_HEADER_MINSIZE + UDP_HEADER_SIZE;
+    return ret;
 }
 
 static int upipe_put_hbrmt_headers(struct upipe *upipe, uint8_t *buf)
