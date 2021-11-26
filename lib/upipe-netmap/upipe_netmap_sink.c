@@ -1979,8 +1979,9 @@ static bool upipe_netmap_sink_output(struct upipe *upipe, struct uref *uref,
         } else {
             uint64_t pixels = upipe_netmap_sink->hsize * upipe_netmap_sink->vsize;
             upipe_netmap_sink->frame_size = pixels * UPIPE_RFC4175_PIXEL_PAIR_BYTES / 2;
-            const uint16_t eth_header_len = ETHERNET_HEADER_LEN + UDP_HEADER_SIZE + IP_HEADER_MINSIZE + RTP_HEADER_SIZE + RFC_4175_HEADER_LEN + RFC_4175_EXT_SEQ_NUM_LEN;
-            const uint16_t bytes_available = upipe_netmap_sink->packet_size - eth_header_len;
+            /* Length of all network headers apart from payload */
+            const uint16_t network_header_len = ETHERNET_HEADER_LEN + UDP_HEADER_SIZE + IP_HEADER_MINSIZE + RTP_HEADER_SIZE + RFC_4175_HEADER_LEN + RFC_4175_EXT_SEQ_NUM_LEN;
+            const uint16_t bytes_available = upipe_netmap_sink->packet_size - network_header_len;
             const uint64_t payload = (bytes_available / UPIPE_RFC4175_PIXEL_PAIR_BYTES) * UPIPE_RFC4175_PIXEL_PAIR_BYTES;
             upipe_netmap_sink->payload = payload;
 
@@ -2001,7 +2002,7 @@ static bool upipe_netmap_sink_output(struct upipe *upipe, struct uref *uref,
                     packets /= 1080;
             }
 
-            upipe_netmap_sink->rate = 8 * (packets * (eth_header_len + payload + 4 /* CRC */)) * upipe_netmap_sink->fps.num;
+            upipe_netmap_sink->rate = 8 * (packets * (network_header_len + payload + 4 /* CRC */)) * upipe_netmap_sink->fps.num;
 
             struct upipe_netmap_sink_audio *audio_subpipe = upipe_netmap_sink_to_audio_subpipe(upipe_netmap_sink);
             const uint64_t audio_pps = (48000 / audio_subpipe->output_samples) * audio_subpipe->num_flows;
