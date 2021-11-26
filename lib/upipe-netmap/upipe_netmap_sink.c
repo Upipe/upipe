@@ -149,6 +149,7 @@ struct aes67_flow {
     struct sockaddr_ll sll;
     /* Raw Ethernet, IP, and UDP headers. */
     uint8_t header[ETHERNET_HEADER_LEN + ETHERNET_VLAN_LEN + IP_HEADER_MINSIZE + UDP_HEADER_SIZE];
+    int header_len;
     /* Flow has been populated and packets should be sent. */
     bool populated;
 };
@@ -354,7 +355,7 @@ UBASE_FROM_TO(upipe_netmap_sink, upipe_netmap_sink_audio, audio_subpipe, audio_s
 static int get_audio(struct upipe_netmap_sink_audio *audio_subpipe);
 static void pack_audio(struct upipe_netmap_sink_audio *audio_subpipe);
 static void handle_audio_tail(struct upipe_netmap_sink_audio *audio_subpipe);
-static inline uint16_t audio_packet_size(uint16_t channels, uint16_t samples);
+static inline uint16_t audio_packet_size(uint16_t channels, uint16_t samples, uint16_t header_len);
 static inline void audio_copy_samples_to_packet(uint8_t *dst, const uint8_t *src,
         int output_channels, int output_samples, int channel_offset);
 
@@ -655,7 +656,8 @@ static struct upipe *_upipe_netmap_sink_alloc(struct upipe_mgr *mgr,
     audio_subpipe->output_samples = 6; /* TODO: other default to catch user not setting this? */
     audio_subpipe->output_channels = 16;
     audio_subpipe->mtu = MTU;
-    audio_subpipe->packet_size = audio_packet_size(16, 6);
+    audio_subpipe->packet_size = audio_packet_size(16, 6,
+            ETHERNET_HEADER_LEN + IP_HEADER_MINSIZE + UDP_HEADER_SIZE);
     audio_subpipe->need_reconfig = true;
 
     upipe_throw_ready(upipe);
@@ -1701,8 +1703,8 @@ static void upipe_netmap_sink_worker(struct upump *upump)
                     struct aes67_flow *aes67_flow = &audio_subpipe->flows[flow][i];
 
                         /* Copy headers. */
-                        memcpy(dst, aes67_flow->header, sizeof aes67_flow->header);
-                        dst += sizeof aes67_flow->header;
+                        memcpy(dst, aes67_flow->header, aes67_flow->header_len);
+                        dst += aes67_flow->header_len;
                         memcpy(dst, upipe_netmap_sink->audio_rtp_header, RTP_HEADER_SIZE);
                         dst += RTP_HEADER_SIZE;
                         /* Copy payload. */
@@ -2944,13 +2946,25 @@ static int audio_set_flow_destination(struct upipe * upipe, int flow,
         /* TODO */
     }
 
+    aes67_flow[0].header_len = ETHERNET_HEADER_LEN + IP_HEADER_MINSIZE + UDP_HEADER_SIZE;
     uint8_t *buf = aes67_flow[0].header;
     /* Write ethernet header. */
     ethernet_set_dstaddr(buf, aes67_flow[0].sll.sll_addr);
     ethernet_set_srcaddr(buf, intf[0].src_mac);
-    ethernet_set_lentype(buf, ETHERNET_TYPE_IP);
+    if (intf[0].vlan_id < 0) {
+        ethernet_set_lentype(buf, ETHERNET_TYPE_IP);
+    }
+    /* VLANs */
+    else {
+        ethernet_set_lentype(buf, ETHERNET_TYPE_VLAN);
+        ethernet_vlan_set_priority(buf, 0);
+        ethernet_vlan_set_cfi(buf, 0);
+        ethernet_vlan_set_id(buf, intf[0].vlan_id);
+        ethernet_vlan_set_lentype(buf, ETHERNET_TYPE_IP);
+        aes67_flow[0].header_len += ETHERNET_VLAN_LEN;
+    }
 
-    buf += ETHERNET_HEADER_LEN;
+    buf = ethernet_payload(buf);
     /* Write IP and UDP headers. */
     upipe_udp_raw_fill_headers(buf, intf[0].src_ip,
             aes67_flow[0].sin.sin_addr.s_addr,
@@ -2988,13 +3002,23 @@ static int audio_set_flow_destination(struct upipe * upipe, int flow,
             aes67_flow[1].sll.sll_addr[5] = (dst_ip      ) & 0xff;
         }
 
+        aes67_flow[1].header_len = ETHERNET_HEADER_LEN + IP_HEADER_MINSIZE + UDP_HEADER_SIZE;
         buf = aes67_flow[1].header;
         /* Write ethernet header. */
         ethernet_set_dstaddr(buf, aes67_flow[1].sll.sll_addr);
         ethernet_set_srcaddr(buf, intf[1].src_mac);
-        ethernet_set_lentype(buf, ETHERNET_TYPE_IP);
+        if (intf[1].vlan_id < 0) {
+            ethernet_set_lentype(buf, ETHERNET_TYPE_IP);
+        } else {
+            ethernet_set_lentype(buf, ETHERNET_TYPE_VLAN);
+            ethernet_vlan_set_priority(buf, 0);
+            ethernet_vlan_set_cfi(buf, 0);
+            ethernet_vlan_set_id(buf, intf[1].vlan_id);
+            ethernet_vlan_set_lentype(buf, ETHERNET_TYPE_IP);
+            aes67_flow[1].header_len += ETHERNET_VLAN_LEN;
+        }
 
-        buf += ETHERNET_HEADER_LEN;
+        buf = ethernet_payload(buf);
         /* Write IP and UDP headers. */
         upipe_udp_raw_fill_headers(buf, intf[1].src_ip,
                 aes67_flow[1].sin.sin_addr.s_addr,
@@ -3010,10 +3034,9 @@ static int audio_set_flow_destination(struct upipe * upipe, int flow,
     return UBASE_ERR_NONE;
 }
 
-static inline uint16_t audio_packet_size(uint16_t channels, uint16_t samples)
+static inline uint16_t audio_packet_size(uint16_t channels, uint16_t samples, uint16_t header_len)
 {
-    return ETHERNET_HEADER_LEN + IP_HEADER_MINSIZE + UDP_HEADER_SIZE +
-        RTP_HEADER_SIZE + channels * samples * 3 /*bytes per sample*/;
+    return header_len + RTP_HEADER_SIZE + channels * samples * 3 /*bytes per sample*/;
 }
 
 static int audio_subpipe_set_option(struct upipe *upipe, const char *option,
@@ -3033,7 +3056,8 @@ static int audio_subpipe_set_option(struct upipe *upipe, const char *option,
         }
 
         /* A sample packs to 3 bytes.  16 channels. */
-        int needed_size = audio_packet_size(audio_subpipe->output_channels, output_samples);
+        int needed_size = audio_packet_size(audio_subpipe->output_channels, output_samples,
+                audio_subpipe->flows[0][0].header_len);
         if (needed_size > audio_subpipe->mtu) {
             upipe_err_va(upipe, "requested frame or packet size (%d bytes, %d samples) is greater than MTU (%d)",
                     needed_size, output_samples, audio_subpipe->mtu);
@@ -3053,7 +3077,8 @@ static int audio_subpipe_set_option(struct upipe *upipe, const char *option,
             return UBASE_ERR_INVALID;
         }
         audio_subpipe->output_channels = output_channels;
-        audio_subpipe->packet_size = audio_packet_size(output_channels, audio_subpipe->output_samples);
+        audio_subpipe->packet_size = audio_packet_size(output_channels, audio_subpipe->output_samples,
+                audio_subpipe->flows[0][0].header_len);
         audio_subpipe->num_flows = audio_count_populated_flows(audio_subpipe);
         audio_subpipe->need_reconfig = true;
         return UBASE_ERR_NONE;
