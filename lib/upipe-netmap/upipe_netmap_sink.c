@@ -1849,7 +1849,13 @@ static void upipe_netmap_sink_worker(struct upump *upump)
                     struct upipe_netmap_intf *intf = &upipe_netmap_sink->intf[i];
                     if (unlikely(!intf->d || !intf->up))
                         continue;
-                    make_fake_packet(&ring_state[i], intf->fake_header, upipe_netmap_sink->packet_size, intf->header_len);
+                    /* Do not use make_fake_packet() here because
+                     * advance_ring_state() is called above at the start of the
+                     * video handling section. */
+                    memset(dst[i], 0, pkt_len);
+                    memcpy(dst[i], intf->fake_header, intf->header_len);
+                    *len[i] = pkt_len;
+                    *ptr[i] = 0;
                 }
                 upipe_netmap_sink->bits += (pkt_len + 4 /* CRC */) * 8;
                 upipe_netmap_sink->gap_fakes_current--;
