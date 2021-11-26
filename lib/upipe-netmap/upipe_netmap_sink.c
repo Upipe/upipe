@@ -2283,9 +2283,11 @@ static int upipe_netmap_sink_set_flow_def(struct upipe *upipe,
         struct upipe_netmap_intf *intf = &upipe_netmap_sink->intf[i];
         if (!intf->d)
             break;
-        upipe_netmap_sink->packet_size = udp_payload_size
-            + upipe_netmap_put_ip_headers(intf, intf->header, udp_payload_size);
+        intf->header_len = upipe_netmap_put_ip_headers(intf, intf->header, udp_payload_size);
     }
+    if (upipe_netmap_sink->intf[0].header_len && upipe_netmap_sink->intf[1].header_len)
+        assert(upipe_netmap_sink->intf[0].header_len == upipe_netmap_sink->intf[1].header_len);
+    upipe_netmap_sink->packet_size = upipe_netmap_sink->intf[0].header_len + udp_payload_size;
 
     if (!upipe_netmap_sink->rfc4175) {
         /* Largely constant headers so don't keep rewriting them */
