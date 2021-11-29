@@ -401,49 +401,79 @@ static bool source_addr(const char *intf, uint8_t *mac, in_addr_t *ip)
 static int upipe_netmap_sink_open_intf(struct upipe *upipe,
         struct upipe_netmap_intf *intf, const char *uri)
 {
+    const size_t netmap_prefix_len = strlen("netmap:");
+    int ret = UBASE_ERR_NONE;
+
     if (sscanf(uri, "netmap:%*[^-]-%u/T", &intf->ring_idx) != 1) {
         intf->ring_idx = 0;
     }
 
-    char *intf_addr = strdup(&uri[strlen("netmap:")]);
-    *strchr(intf_addr, '-') = '\0'; /* we already matched the - in sscanf */
-    strncpy(intf->ifr.ifr_name, intf_addr, IFNAMSIZ);
-
-    if (!source_addr(intf_addr, &intf->src_mac[0],
-                &intf->src_ip)) {
-        upipe_err(upipe, "Could not read interface address");
+    char *netmap_device = strdup(uri);
+    char *intf_addr = strdup(uri + netmap_prefix_len);
+    if (!netmap_device || !intf_addr) {
+        ret = UBASE_ERR_ALLOC;
         goto error;
     }
 
-    intf->d = nm_open(uri, NULL, 0, 0);
+    /* Terminate at the '-' because that is not part of the interface name. */
+    char *netmap_suffix = strchr(intf_addr, '-');
+    *netmap_suffix = '\0';
+    /* Copy interface name into the struct ifreq. */
+    strncpy(intf->ifr.ifr_name, intf_addr, IFNAMSIZ);
+
+    /* Get the IP and MAC addressed for the (vlan) interface. */
+    if (!source_addr(intf_addr, &intf->src_mac[0],
+                &intf->src_ip)) {
+        upipe_err(upipe, "Could not read interface address");
+        ret = UBASE_ERR_INVALID;
+        goto error;
+    }
+
+    /* Find the first '.' for the base interface name. */
+    char *dot = strchr(netmap_device, '.');
+    if (dot) {
+        /* Read the vlan id from the next character. */
+        int vlan_id = atoi(dot+1);
+        if (vlan_id <= 0 || vlan_id >= 1<<12) {
+            upipe_err_va(upipe, "invalid vlan id: %d", vlan_id);
+            ret = UBASE_ERR_INVALID;
+            goto error;
+        }
+        intf->vlan_id = vlan_id;
+
+        /* Copy the netmap device suffix over the vlan id. */
+        *dot = '-';
+        strcpy(dot+1, netmap_suffix+1);
+        *strchr(intf_addr, '.') = '\0';
+    }
+
+    intf->d = nm_open(netmap_device, NULL, 0, 0);
     if (unlikely(!intf->d)) {
-        upipe_err_va(upipe, "can't open netmap socket %s", uri);
-        free(intf_addr);
-        return UBASE_ERR_EXTERNAL;
+        upipe_err_va(upipe, "can't open netmap socket %s", netmap_device);
+        ret = UBASE_ERR_EXTERNAL;
+        goto error;
     }
     if (intf->d->req.nr_tx_slots < 4096) {
         upipe_err_va(upipe, "Card is not giving enough slots (%u)",
                 intf->d->req.nr_tx_slots);
         nm_close(intf->d);
-        free(intf_addr);
-        return UBASE_ERR_EXTERNAL;
+        ret = UBASE_ERR_EXTERNAL;
+        goto error;
     }
 
     if (asprintf(&intf->maxrate_uri,
                 "/sys/class/net/%s/queues/tx-%d/tx_maxrate",
                 intf_addr, intf->ring_idx) < 0) {
-        free(intf_addr);
-        upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
-        return UBASE_ERR_ALLOC;
+        nm_close(intf->d);
+        ret = UBASE_ERR_ALLOC;
+        goto error;
     }
-    free(intf_addr);
-
-    return UBASE_ERR_NONE;
 
 error:
+    free(netmap_device);
     free(intf_addr);
 
-    return UBASE_ERR_INVALID;
+    return ret;
 }
 
 /** @internal @This asks to open the given socket.
