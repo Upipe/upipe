@@ -418,8 +418,6 @@ static int upipe_netmap_sink_open_intf(struct upipe *upipe,
     /* Terminate at the '-' because that is not part of the interface name. */
     char *netmap_suffix = strchr(intf_addr, '-');
     *netmap_suffix = '\0';
-    /* Copy interface name into the struct ifreq. */
-    strncpy(intf->ifr.ifr_name, intf_addr, IFNAMSIZ);
 
     /* Get the IP and MAC addressed for the (vlan) interface. */
     if (!source_addr(intf_addr, &intf->src_mac[0],
@@ -444,8 +442,13 @@ static int upipe_netmap_sink_open_intf(struct upipe *upipe,
         /* Copy the netmap device suffix over the vlan id. */
         *dot = '-';
         strcpy(dot+1, netmap_suffix+1);
+
+        /* Truncate at the '.' for the base interface. */
         *strchr(intf_addr, '.') = '\0';
     }
+
+    /* Copy (base) interface name into the struct ifreq. */
+    strncpy(intf->ifr.ifr_name, intf_addr, IFNAMSIZ);
 
     intf->d = nm_open(netmap_device, NULL, 0, 0);
     if (unlikely(!intf->d)) {
