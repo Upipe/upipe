@@ -2448,6 +2448,18 @@ static int upipe_netmap_sink_set_uri(struct upipe *upipe, const char *uri)
         UBASE_RETURN(upipe_netmap_sink_ip_params(upipe, intf+1, p));
     }
 
+    /* Create ethernet, IP, and UDP headers. */
+    uint16_t udp_payload_size = upipe_netmap_sink->packet_size - upipe_netmap_sink->intf[0].header_len;
+    for (size_t i = 0; i < 2; i++) {
+        struct upipe_netmap_intf *intf = &upipe_netmap_sink->intf[i];
+        if (!intf->d)
+            break;
+        intf->header_len = upipe_netmap_put_ip_headers(intf, intf->header, udp_payload_size);
+    }
+    if (upipe_netmap_sink->intf[0].header_len && upipe_netmap_sink->intf[1].header_len)
+        assert(upipe_netmap_sink->intf[0].header_len == upipe_netmap_sink->intf[1].header_len);
+    upipe_netmap_sink->packet_size = upipe_netmap_sink->intf[0].header_len + udp_payload_size;
+
     return UBASE_ERR_NONE;
 }
 
