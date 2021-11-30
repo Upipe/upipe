@@ -16,7 +16,7 @@ jobs:
           - ubuntu-amd64-gcc-11
           - ubuntu-amd64-gcc-11-static
           - ubuntu-amd64-clang-12
-          - ubuntu-i386-gcc-9
+          - ubuntu-i386-gcc-10
           - ubuntu-armhf-gcc-10
           - ubuntu-arm64-gcc-10
           - macos-xcode
@@ -41,13 +41,12 @@ jobs:
             compiler: clang
             version: 12
 
-          - name: ubuntu-i386-gcc-9
-            os: ubuntu-18.04
+          - name: ubuntu-i386-gcc-10
+            os: ubuntu-20.04
             arch: i386
-            host: i386-linux-gnu
+            host: i686-linux-gnu
             compiler: gcc
-            version: 9
-            multilib: true
+            version: 10
 
           - name: ubuntu-armhf-gcc-10
             os: ubuntu-20.04
@@ -55,7 +54,6 @@ jobs:
             host: arm-linux-gnueabihf
             compiler: gcc
             version: 10
-            multilib: true
 
           - name: ubuntu-arm64-gcc-10
             os: ubuntu-20.04
@@ -84,6 +82,7 @@ jobs:
           sudo sed 's/^deb /deb [arch=amd64,i386] /' -i /etc/apt/sources.list
           sudo apt-add-repository -n -y "deb [arch=arm64,armhf] http://ports.ubuntu.com $(lsb_release -sc) main universe"
           sudo apt-add-repository -n -y "deb [arch=arm64,armhf] http://ports.ubuntu.com $(lsb_release -sc)-updates main universe"
+          sudo apt-add-repository -n -y "deb [arch=arm64,armhf] http://ports.ubuntu.com $(lsb_release -sc)-security main universe"
           sudo apt-add-repository -n -y "ppa:ubuntu-toolchain-r/test"
           sudo apt-get update
 
@@ -101,10 +100,7 @@ jobs:
               CXX=$CXX-${{ matrix.version }}
               PKG=$PKG-${{ matrix.version }}
           fi
-          if [ -n "${{ matrix.multilib }}" ]; then
-              PKG=$PKG-multilib
-          fi
-          if [ -n "${{ matrix.host }}" -a "${{ matrix.arch }}" != "i386" ]; then
+          if [ -n "${{ matrix.host }}" ]; then
               CC=${{ matrix.host }}-$CC
               CXX=${{ matrix.host }}-$CXX
               PKG=$PKG-${{ matrix.host }}
@@ -113,12 +109,9 @@ jobs:
           set-env HOST_CC "$CC"
           set-env HOST_CXX "$CXX"
           if [ "${{ matrix.arch }}" = "i386" ]; then
-            set-env HOST_CC "$CC -m32"
-            set-env HOST_CXX "$CXX -m32"
             set-env CFLAGS "-msse2 -mfpmath=sse"
           fi
           if [ -n "${{ matrix.host }}" ]; then
-            set-env PKG_CONFIG_LIBDIR "/usr/lib/${{ matrix.host }}/pkgconfig:/usr/share/pkgconfig"
             set-env HOST "--host=${{ matrix.host }}"
           fi
           if [ "${{ matrix.sanitizer }}" = "true" ]; then
@@ -143,18 +136,17 @@ jobs:
         env:
           LIBS: >
             ev asound2 x264 x265 speexdsp png freetype6 zvbi gcrypt tasn1 dvbv5
-            udev ebur128 avcodec avformat swresample swscale gl1-mesa glu1-mesa
-            dvbcsa
-          LIBS_LATEST: srt ssl
+            udev avcodec avformat swresample swscale gl1-mesa glu1-mesa srt ssl
+          LIBS_FULL: ebur128 dvbcsa
         run: |
-          if [ "${{ matrix.os }}" = "ubuntu-20.04" ]; then
-            LIBS="$LIBS $LIBS_LATEST"
+          if [ "${{ matrix.arch }}" != "i386" ]; then
+            LIBS="$LIBS $LIBS_FULL"
           fi
           sudo apt-get install -y -o APT::Immediate-Configure=false \
             valgrind nasm qemu-user-binfmt \
             $(echo libc6-dbg luajit | sed 's/\(\S*\)/\1:${{ matrix.arch }}/g') \
             $(echo $LIBS | sed 's/\(\S*\)/lib\1-dev:${{ matrix.arch }}/g')
-          if [ -n "${{ matrix.host }}" -a "${{ matrix.arch }}" != "i386" ]; then
+          if [ -n "${{ matrix.host }}" ]; then
               set-env DISABLE_VALGRIND "1"
           fi
           set-env CONFIGURE_FLAGS "--enable-luajit"
@@ -179,7 +171,7 @@ jobs:
           if [ "${{ matrix.static }}" = "true" ]; then
             STATIC="--disable-shared"
           fi
-          set-env CONFIGURE_FLAGS "$CONFIGURE_FLAGS $STATIC --disable-silent-rules $HOST CC=\"$HOST_CC\" CXX=\"$HOST_CXX\" CFLAGS=\"-Werror -O2 -g $CFLAGS $CFLAGS_GCC8\" CXXFLAGS=\"-Werror -O2 -g $CXXFLAGS\" LDFLAGS=\"$LDFLAGS\""
+          set-env CONFIGURE_FLAGS "$CONFIGURE_FLAGS $STATIC --disable-silent-rules $HOST CC=\"$HOST_CC\" CXX=\"$HOST_CXX\" CFLAGS=\"-Werror -O2 -g $CFLAGS\" CXXFLAGS=\"-Werror -O2 -g $CXXFLAGS\" LDFLAGS=\"$LDFLAGS\""
 
       - name: Build and install libamt
         if: runner.os == 'Linux' && (matrix.arch == 'amd64' || matrix.arch == 'i386')
@@ -196,7 +188,7 @@ jobs:
           sudo install -D SSMAMTtools/lib/linux/libamt.a /usr/local/lib/libamt.a
 
       - name: Build and install libdvbcsa
-        if: runner.os == 'macOS'
+        if: runner.os == 'macOS' || matrix.arch == 'i386'
         run: |
           git clone --depth 1 https://github.com/glenvt18/libdvbcsa.git
           cd libdvbcsa
