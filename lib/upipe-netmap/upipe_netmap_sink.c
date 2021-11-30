@@ -422,7 +422,7 @@ static int upipe_netmap_sink_open_intf(struct upipe *upipe,
     /* Get the IP and MAC addressed for the (vlan) interface. */
     if (!source_addr(intf_addr, &intf->src_mac[0],
                 &intf->src_ip)) {
-        upipe_err(upipe, "Could not read interface address");
+        upipe_err_va(upipe, "Could not read interface address for '%s'", intf_addr);
         ret = UBASE_ERR_INVALID;
         goto error;
     }
