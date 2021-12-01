@@ -109,6 +109,8 @@ struct upipe_netmap_intf {
     in_addr_t dst_ip;
     uint8_t dst_mac[6];
 
+    int vlan_id;
+
     /** Ring */
     unsigned int ring_idx;
 
@@ -123,8 +125,9 @@ struct upipe_netmap_intf {
 
     /** packet headers */
     // TODO: rfc
-    uint8_t header[ETHERNET_HEADER_LEN + IP_HEADER_MINSIZE + UDP_HEADER_SIZE];
-    uint8_t fake_header[ETHERNET_HEADER_LEN + IP_HEADER_MINSIZE + UDP_HEADER_SIZE];
+    uint8_t header[ETHERNET_HEADER_LEN + ETHERNET_VLAN_LEN + IP_HEADER_MINSIZE + UDP_HEADER_SIZE];
+    uint8_t fake_header[ETHERNET_HEADER_LEN + ETHERNET_VLAN_LEN + IP_HEADER_MINSIZE + UDP_HEADER_SIZE];
+    int header_len;
 
     /** if interface is up */
     bool up;
@@ -145,7 +148,8 @@ struct aes67_flow {
     /* Ethernet details for the destination. */
     struct sockaddr_ll sll;
     /* Raw Ethernet, IP, and UDP headers. */
-    uint8_t header[ETHERNET_HEADER_LEN + IP_HEADER_MINSIZE + UDP_HEADER_SIZE];
+    uint8_t header[ETHERNET_HEADER_LEN + ETHERNET_VLAN_LEN + IP_HEADER_MINSIZE + UDP_HEADER_SIZE];
+    int header_len;
     /* Flow has been populated and packets should be sent. */
     bool populated;
 };
@@ -351,7 +355,7 @@ UBASE_FROM_TO(upipe_netmap_sink, upipe_netmap_sink_audio, audio_subpipe, audio_s
 static int get_audio(struct upipe_netmap_sink_audio *audio_subpipe);
 static void pack_audio(struct upipe_netmap_sink_audio *audio_subpipe);
 static void handle_audio_tail(struct upipe_netmap_sink_audio *audio_subpipe);
-static inline uint16_t audio_packet_size(uint16_t channels, uint16_t samples);
+static inline uint16_t audio_packet_size(uint16_t channels, uint16_t samples, uint16_t header_len);
 static inline void audio_copy_samples_to_packet(uint8_t *dst, const uint8_t *src,
         int output_channels, int output_samples, int channel_offset);
 
@@ -397,49 +401,82 @@ static bool source_addr(const char *intf, uint8_t *mac, in_addr_t *ip)
 static int upipe_netmap_sink_open_intf(struct upipe *upipe,
         struct upipe_netmap_intf *intf, const char *uri)
 {
+    const size_t netmap_prefix_len = strlen("netmap:");
+    int ret = UBASE_ERR_NONE;
+
     if (sscanf(uri, "netmap:%*[^-]-%u/T", &intf->ring_idx) != 1) {
         intf->ring_idx = 0;
     }
 
-    char *intf_addr = strdup(&uri[strlen("netmap:")]);
-    *strchr(intf_addr, '-') = '\0'; /* we already matched the - in sscanf */
-    strncpy(intf->ifr.ifr_name, intf_addr, IFNAMSIZ);
-
-    if (!source_addr(intf_addr, &intf->src_mac[0],
-                &intf->src_ip)) {
-        upipe_err(upipe, "Could not read interface address");
+    char *netmap_device = strdup(uri);
+    char *intf_addr = strdup(uri + netmap_prefix_len);
+    if (!netmap_device || !intf_addr) {
+        ret = UBASE_ERR_ALLOC;
         goto error;
     }
 
-    intf->d = nm_open(uri, NULL, 0, 0);
+    /* Terminate at the '-' because that is not part of the interface name. */
+    char *netmap_suffix = strchr(intf_addr, '-');
+    *netmap_suffix = '\0';
+
+    /* Get the IP and MAC addressed for the (vlan) interface. */
+    if (!source_addr(intf_addr, &intf->src_mac[0],
+                &intf->src_ip)) {
+        upipe_err_va(upipe, "Could not read interface address for '%s'", intf_addr);
+        ret = UBASE_ERR_INVALID;
+        goto error;
+    }
+
+    /* Find the first '.' for the base interface name. */
+    char *dot = strchr(netmap_device, '.');
+    if (dot) {
+        /* Read the vlan id from the next character. */
+        int vlan_id = atoi(dot+1);
+        if (vlan_id <= 0 || vlan_id >= 1<<12) {
+            upipe_err_va(upipe, "invalid vlan id: %d", vlan_id);
+            ret = UBASE_ERR_INVALID;
+            goto error;
+        }
+        intf->vlan_id = vlan_id;
+
+        /* Copy the netmap device suffix over the vlan id. */
+        *dot = '-';
+        strcpy(dot+1, netmap_suffix+1);
+
+        /* Truncate at the '.' for the base interface. */
+        *strchr(intf_addr, '.') = '\0';
+    }
+
+    /* Copy (base) interface name into the struct ifreq. */
+    strncpy(intf->ifr.ifr_name, intf_addr, IFNAMSIZ);
+
+    intf->d = nm_open(netmap_device, NULL, 0, 0);
     if (unlikely(!intf->d)) {
-        upipe_err_va(upipe, "can't open netmap socket %s", uri);
-        free(intf_addr);
-        return UBASE_ERR_EXTERNAL;
+        upipe_err_va(upipe, "can't open netmap socket %s", netmap_device);
+        ret = UBASE_ERR_EXTERNAL;
+        goto error;
     }
     if (intf->d->req.nr_tx_slots < 4096) {
         upipe_err_va(upipe, "Card is not giving enough slots (%u)",
                 intf->d->req.nr_tx_slots);
         nm_close(intf->d);
-        free(intf_addr);
-        return UBASE_ERR_EXTERNAL;
+        ret = UBASE_ERR_EXTERNAL;
+        goto error;
     }
 
     if (asprintf(&intf->maxrate_uri,
                 "/sys/class/net/%s/queues/tx-%d/tx_maxrate",
                 intf_addr, intf->ring_idx) < 0) {
-        free(intf_addr);
-        upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
-        return UBASE_ERR_ALLOC;
+        nm_close(intf->d);
+        ret = UBASE_ERR_ALLOC;
+        goto error;
     }
-    free(intf_addr);
-
-    return UBASE_ERR_NONE;
 
 error:
+    free(netmap_device);
     free(intf_addr);
 
-    return UBASE_ERR_INVALID;
+    return ret;
 }
 
 /** @internal @This asks to open the given socket.
@@ -574,13 +611,11 @@ static struct upipe *_upipe_netmap_sink_alloc(struct upipe_mgr *mgr,
 
     upipe_netmap_sink->uri = NULL;
     for (size_t i = 0; i < 2; i++) {
+        memset(&upipe_netmap_sink->intf[i], 0, sizeof upipe_netmap_sink->intf[i]);
         struct upipe_netmap_intf *intf = &upipe_netmap_sink->intf[i];
-        intf->maxrate_uri = NULL;
-        intf->d = NULL;
+        intf->vlan_id = -1;
         intf->up = true;
-        intf->wait = 0;
         intf->fd = socket(AF_INET, SOCK_DGRAM, 0);
-        memset(&intf->ifr, 0, sizeof(intf->ifr));
     }
 
     if (!ubase_check(upipe_netmap_sink_open_dev(upipe, device))) {
@@ -654,7 +689,8 @@ static struct upipe *_upipe_netmap_sink_alloc(struct upipe_mgr *mgr,
     audio_subpipe->output_samples = 6; /* TODO: other default to catch user not setting this? */
     audio_subpipe->output_channels = 16;
     audio_subpipe->mtu = MTU;
-    audio_subpipe->packet_size = audio_packet_size(16, 6);
+    audio_subpipe->packet_size = audio_packet_size(16, 6,
+            ETHERNET_HEADER_LEN + IP_HEADER_MINSIZE + UDP_HEADER_SIZE);
     audio_subpipe->need_reconfig = true;
 
     upipe_throw_ready(upipe);
@@ -727,6 +763,7 @@ static int upipe_netmap_put_rtp_headers(struct upipe_netmap_sink *upipe_netmap_s
 static int upipe_netmap_put_ip_headers(struct upipe_netmap_intf *intf,
         uint8_t *buf, uint16_t payload_size)
 {
+    int ret = ETHERNET_HEADER_LEN + IP_HEADER_MINSIZE + UDP_HEADER_SIZE;
     /* Destination MAC */
     ethernet_set_dstaddr(buf, intf->dst_mac);
 
@@ -734,9 +771,21 @@ static int upipe_netmap_put_ip_headers(struct upipe_netmap_intf *intf,
     ethernet_set_srcaddr(buf, intf->src_mac);
 
     /* Ethertype */
-    ethernet_set_lentype(buf, ETHERNET_TYPE_IP);
+    if (intf->vlan_id < 0) {
+        ethernet_set_lentype(buf, ETHERNET_TYPE_IP);
+    }
 
-    buf += ETHERNET_HEADER_LEN;
+    /* VLANs */
+    else {
+        ethernet_set_lentype(buf, ETHERNET_TYPE_VLAN);
+        ethernet_vlan_set_priority(buf, 0);
+        ethernet_vlan_set_cfi(buf, 0);
+        ethernet_vlan_set_id(buf, intf->vlan_id);
+        ethernet_vlan_set_lentype(buf, ETHERNET_TYPE_IP);
+        ret += ETHERNET_VLAN_LEN;
+    }
+
+    buf = ethernet_payload(buf);
 
     /* 0x1c - Standard, low delay, high throughput, high reliability TOS */
     upipe_udp_raw_fill_headers(buf, intf->src_ip,
@@ -749,15 +798,23 @@ static int upipe_netmap_put_ip_headers(struct upipe_netmap_intf *intf,
     buf = intf->fake_header;
     ethernet_set_dstaddr(buf, intf->src_mac);
     ethernet_set_srcaddr(buf, intf->src_mac);
-    ethernet_set_lentype(buf, ETHERNET_TYPE_IP);
-    buf += ETHERNET_HEADER_LEN;
+    if (intf->vlan_id < 0) {
+        ethernet_set_lentype(buf, ETHERNET_TYPE_IP);
+    } else {
+        ethernet_set_lentype(buf, ETHERNET_TYPE_VLAN);
+        ethernet_vlan_set_priority(buf, 0);
+        ethernet_vlan_set_cfi(buf, 0);
+        ethernet_vlan_set_id(buf, intf->vlan_id);
+        ethernet_vlan_set_lentype(buf, ETHERNET_TYPE_IP);
+    }
+    buf = ethernet_payload(buf);
     upipe_udp_raw_fill_headers(buf, intf->src_ip,
                                intf->src_ip,
                                intf->src_port,
                                intf->dst_port,
                                10, 0x1c, payload_size);
 
-    return ETHERNET_HEADER_LEN + IP_HEADER_MINSIZE + UDP_HEADER_SIZE;
+    return ret;
 }
 
 static int upipe_put_hbrmt_headers(struct upipe *upipe, uint8_t *buf)
@@ -843,7 +900,7 @@ static int worker_rfc4175(struct upipe_netmap_sink *upipe_netmap_sink, uint8_t *
     const int idx = (dst[0] != NULL) ? 0 : 1;
     bool eof = false; /* End of frame */
 
-    const uint16_t header_size = ETHERNET_HEADER_LEN + UDP_HEADER_SIZE + IP_HEADER_MINSIZE;
+    const uint16_t header_size = upipe_netmap_sink->intf[0].header_len;
     const uint16_t rtp_rfc_header_size = RTP_HEADER_SIZE + RFC_4175_EXT_SEQ_NUM_LEN + RFC_4175_HEADER_LEN;
     const uint16_t eth_frame_len = header_size + rtp_rfc_header_size + upipe_netmap_sink->payload;
     const uint16_t pixels1 = upipe_netmap_sink->payload * 2 / UPIPE_RFC4175_PIXEL_PAIR_BYTES;
@@ -979,9 +1036,9 @@ static int worker_hbrmt(struct upipe_netmap_sink *upipe_netmap_sink, uint8_t **d
         int bytes_left, uint16_t **len, uint64_t **ptr)
 {
     const uint8_t packed_bytes = upipe_netmap_sink->packed_bytes;
-    const uint16_t eth_frame_len = ETHERNET_HEADER_LEN + IP_HEADER_MINSIZE + UDP_HEADER_SIZE +
-                                   RTP_HEADER_SIZE + HBRMT_HEADER_SIZE + HBRMT_DATA_SIZE;
+    const uint16_t header_size = upipe_netmap_sink->intf[0].header_len;
     const uint16_t rtp_hbrmt_header_size = RTP_HEADER_SIZE + HBRMT_HEADER_SIZE;
+    const uint16_t eth_frame_len = header_size + rtp_hbrmt_header_size + HBRMT_DATA_SIZE;
     const bool copy = dst[1] != NULL && dst[0] != NULL;
     const int idx = (dst[0] != NULL) ? 0 : 1;
 
@@ -1024,8 +1081,8 @@ static int worker_hbrmt(struct upipe_netmap_sink *upipe_netmap_sink, uint8_t **d
             continue;
 
         /* Ethernet/IP Header */
-        memcpy(dst[i], intf->header, sizeof(intf->header));
-        dst[i] += sizeof(intf->header);
+        memcpy(dst[i], intf->header, header_size);
+        dst[i] += header_size;
 
         /* RTP HEADER */
         memcpy(dst[i], upipe_netmap_sink->rtp_header, rtp_hbrmt_header_size);
@@ -1341,7 +1398,7 @@ static inline void check_marker_packet(struct upipe_netmap_sink *upipe_netmap_si
         struct netmap_slot *slot = ring_state[i].slot = &txring->slot[cur];
 
         uint8_t *dst = ring_state[i].dst = (uint8_t *)NETMAP_BUF(txring, txring->slot[cur].buf_idx);
-        uint8_t *rtp = dst + ETHERNET_HEADER_LEN + IP_HEADER_MINSIZE + UDP_HEADER_SIZE;
+        uint8_t *rtp = dst + intf->header_len;
 
         /* Check for marker bit indicating end of frame/field and get exact TX
          * time of that packet. */
@@ -1386,10 +1443,11 @@ static inline void aps_inc_audio(struct audio_packet_state *aps)
     aps->audio_counter = (aps->audio_counter + 1) % aps->den;
 }
 
-static void make_fake_packet(struct ring_state *ring_state, const void *header, uint16_t length)
+static void make_fake_packet(struct ring_state *ring_state, const void *header,
+        uint16_t length, uint16_t header_len)
 {
     memset(ring_state->dst, 0, length);
-    memcpy(ring_state->dst, header, ETHERNET_HEADER_LEN + IP_HEADER_MINSIZE + UDP_HEADER_SIZE);
+    memcpy(ring_state->dst, header, header_len);
     ring_state->slot->len = length;
     ring_state->slot->ptr = 0;
 }
@@ -1398,7 +1456,7 @@ static void adjust_skew(struct ring_state *ring_state, struct upipe_netmap_intf 
         uint32_t *txavail, uint16_t packet_size)
 {
     if (intf->d && intf->up) {
-        make_fake_packet(ring_state, intf->fake_header, packet_size);
+        make_fake_packet(ring_state, intf->fake_header, packet_size, intf->header_len);
         advance_ring_state(ring_state);
         *txavail -= 1;
     }
@@ -1678,8 +1736,8 @@ static void upipe_netmap_sink_worker(struct upump *upump)
                     struct aes67_flow *aes67_flow = &audio_subpipe->flows[flow][i];
 
                         /* Copy headers. */
-                        memcpy(dst, aes67_flow->header, sizeof aes67_flow->header);
-                        dst += sizeof aes67_flow->header;
+                        memcpy(dst, aes67_flow->header, aes67_flow->header_len);
+                        dst += aes67_flow->header_len;
                         memcpy(dst, upipe_netmap_sink->audio_rtp_header, RTP_HEADER_SIZE);
                         dst += RTP_HEADER_SIZE;
                         /* Copy payload. */
@@ -1725,7 +1783,7 @@ static void upipe_netmap_sink_worker(struct upump *upump)
                 if (unlikely(!intf->d || !intf->up))
                     continue;
 
-                make_fake_packet(&ring_state[i], intf->fake_header, upipe_netmap_sink->packet_size);
+                make_fake_packet(&ring_state[i], intf->fake_header, upipe_netmap_sink->packet_size, intf->header_len);
                 advance_ring_state(&ring_state[i]);
             }
             txavail--;
@@ -1824,8 +1882,11 @@ static void upipe_netmap_sink_worker(struct upump *upump)
                     struct upipe_netmap_intf *intf = &upipe_netmap_sink->intf[i];
                     if (unlikely(!intf->d || !intf->up))
                         continue;
+                    /* Do not use make_fake_packet() here because
+                     * advance_ring_state() is called above at the start of the
+                     * video handling section. */
                     memset(dst[i], 0, pkt_len);
-                    memcpy(dst[i], intf->fake_header, ETHERNET_HEADER_LEN + IP_HEADER_MINSIZE + UDP_HEADER_SIZE);
+                    memcpy(dst[i], intf->fake_header, intf->header_len);
                     *len[i] = pkt_len;
                     *ptr[i] = 0;
                 }
@@ -1970,17 +2031,17 @@ static bool upipe_netmap_sink_output(struct upipe *upipe, struct uref *uref,
             uref_block_size(uref, &upipe_netmap_sink->frame_size);
             upipe_netmap_sink->frame_size = upipe_netmap_sink->frame_size * 5 / 8;
             upipe_netmap_sink->packets_per_frame = (upipe_netmap_sink->frame_size + HBRMT_DATA_SIZE - 1) / HBRMT_DATA_SIZE;
-            static const uint64_t eth_packet_size =
-            ETHERNET_HEADER_LEN + IP_HEADER_MINSIZE + UDP_HEADER_SIZE +
-                RTP_HEADER_SIZE + HBRMT_HEADER_SIZE + HBRMT_DATA_SIZE +
-                    4 /* ethernet CRC */;
+            const uint64_t eth_packet_size = upipe_netmap_sink->intf[0].header_len
+                + RTP_HEADER_SIZE + HBRMT_HEADER_SIZE + HBRMT_DATA_SIZE
+                + 4 /* ethernet CRC */;
 
             upipe_netmap_sink->rate = 8 * eth_packet_size * upipe_netmap_sink->packets_per_frame * upipe_netmap_sink->fps.num;
         } else {
             uint64_t pixels = upipe_netmap_sink->hsize * upipe_netmap_sink->vsize;
             upipe_netmap_sink->frame_size = pixels * UPIPE_RFC4175_PIXEL_PAIR_BYTES / 2;
             /* Length of all network headers apart from payload */
-            const uint16_t network_header_len = ETHERNET_HEADER_LEN + UDP_HEADER_SIZE + IP_HEADER_MINSIZE + RTP_HEADER_SIZE + RFC_4175_HEADER_LEN + RFC_4175_EXT_SEQ_NUM_LEN;
+            const uint16_t network_header_len = upipe_netmap_sink->intf[0].header_len
+                + RTP_HEADER_SIZE + RFC_4175_HEADER_LEN + RFC_4175_EXT_SEQ_NUM_LEN;
             const uint16_t bytes_available = upipe_netmap_sink->packet_size - network_header_len;
             const uint64_t payload = (bytes_available / UPIPE_RFC4175_PIXEL_PAIR_BYTES) * UPIPE_RFC4175_PIXEL_PAIR_BYTES;
             upipe_netmap_sink->payload = payload;
@@ -2125,6 +2186,8 @@ static int upipe_netmap_sink_set_flow_def(struct upipe *upipe,
     struct upipe_netmap_sink *upipe_netmap_sink =
         upipe_netmap_sink_from_upipe(upipe);
 
+    uint16_t udp_payload_size;
+
     /* Input is V210/Planar */
     if (ubase_check(uref_flow_match_def(flow_def, "pic."))) {
         upipe_netmap_sink->rfc4175 = 1;
@@ -2169,9 +2232,12 @@ static int upipe_netmap_sink_set_flow_def(struct upipe *upipe,
             upipe_netmap_sink->input_chroma_map[1] = "u10l";
             upipe_netmap_sink->input_chroma_map[2] = "v10l";
         }
+
+        /* Just the headers, packed data added below. */
+        udp_payload_size = RTP_HEADER_SIZE + RFC_4175_HEADER_LEN + RFC_4175_EXT_SEQ_NUM_LEN;
     } else {
         upipe_netmap_sink->rfc4175 = 0;
-        upipe_netmap_sink->packet_size = 1438;
+        udp_payload_size = RTP_HEADER_SIZE + HBRMT_HEADER_SIZE + HBRMT_DATA_SIZE;
     }
 
     UBASE_RETURN(uref_pic_flow_get_hsize(flow_def, &upipe_netmap_sink->hsize));
@@ -2180,7 +2246,7 @@ static int upipe_netmap_sink_set_flow_def(struct upipe *upipe,
 
     if (upipe_netmap_sink->hsize == 720) {
         if (upipe_netmap_sink->rfc4175)
-            upipe_netmap_sink->packet_size = 962;
+            udp_payload_size += 720/2*5 / 2;
         if (upipe_netmap_sink->vsize == 486) {
             upipe_netmap_sink->frame = 0x10;
             if (upipe_netmap_sink->rfc4175)
@@ -2193,7 +2259,7 @@ static int upipe_netmap_sink_set_flow_def(struct upipe *upipe,
             return UBASE_ERR_INVALID;
     } else if (upipe_netmap_sink->hsize == 1920 && upipe_netmap_sink->vsize == 1080) {
         if (upipe_netmap_sink->rfc4175) {
-            upipe_netmap_sink->packet_size = 1262;
+            udp_payload_size += 1920/2*5 / 4;
             upipe_netmap_sink->gap_fakes = 4 * (1125 - 1080);
         }
         upipe_netmap_sink->frame = upipe_netmap_sink->progressive ? 0x21 : 0x20;
@@ -2201,7 +2267,7 @@ static int upipe_netmap_sink_set_flow_def(struct upipe *upipe,
         // 0x22 psf
     } else if (upipe_netmap_sink->hsize == 1280 && upipe_netmap_sink->vsize == 720) {
         if (upipe_netmap_sink->rfc4175) {
-            upipe_netmap_sink->packet_size = 862;
+            udp_payload_size += 1280/2*5 / 4;
             upipe_netmap_sink->gap_fakes = 4 * (750 - 720);
         }
         upipe_netmap_sink->frame = 0x30; // progressive
@@ -2251,32 +2317,23 @@ static int upipe_netmap_sink_set_flow_def(struct upipe *upipe,
     if (!upipe_netmap_sink->frate)
         return UBASE_ERR_INVALID;
 
-    if (!upipe_netmap_sink->rfc4175) {
-        for (size_t i = 0; i < 2; i++) {
-            struct upipe_netmap_intf *intf = &upipe_netmap_sink->intf[i];
-            if (!intf->d)
-                break;
-            uint8_t *header = &intf->header[0];
-            const uint16_t udp_payload_size = RTP_HEADER_SIZE +
-                HBRMT_HEADER_SIZE + HBRMT_DATA_SIZE;
-            header += upipe_netmap_put_ip_headers(intf, header, udp_payload_size);
-            assert(header == &intf->header[sizeof(intf->header)]);
-        }
+    /* Create ethernet, IP, and UDP headers and set the packet size. */
+    for (size_t i = 0; i < 2; i++) {
+        struct upipe_netmap_intf *intf = &upipe_netmap_sink->intf[i];
+        if (!intf->d)
+            break;
+        intf->header_len = upipe_netmap_put_ip_headers(intf, intf->header, udp_payload_size);
+    }
+    if (upipe_netmap_sink->intf[0].header_len && upipe_netmap_sink->intf[1].header_len)
+        assert(upipe_netmap_sink->intf[0].header_len == upipe_netmap_sink->intf[1].header_len);
+    upipe_netmap_sink->packet_size = upipe_netmap_sink->intf[0].header_len + udp_payload_size;
 
+    if (!upipe_netmap_sink->rfc4175) {
         /* Largely constant headers so don't keep rewriting them */
         upipe_netmap_put_rtp_headers(upipe_netmap_sink, upipe_netmap_sink->rtp_header, false, 98, false, false);
         upipe_put_hbrmt_headers(upipe, upipe_netmap_sink->rtp_header + RTP_HEADER_SIZE);
     } else {
-        const uint16_t header_size = ETHERNET_HEADER_LEN + IP_HEADER_MINSIZE + UDP_HEADER_SIZE;
-        for (size_t i = 0; i < 2; i++) {
-            struct upipe_netmap_intf *intf = &upipe_netmap_sink->intf[i];
-            if (!intf->d)
-                break;
-            uint8_t *header = &intf->header[0];
-            uint16_t udp_payload_size = upipe_netmap_sink->packet_size - header_size;
-            upipe_netmap_put_ip_headers(intf, header, udp_payload_size);
             /* RTP Headers done in worker_rfc4175 */
-        }
         upipe_netmap_update_timestamp_cache(upipe_netmap_sink);
 
         /* RTP header for audio. */
@@ -2930,13 +2987,25 @@ static int audio_set_flow_destination(struct upipe * upipe, int flow,
         /* TODO */
     }
 
+    aes67_flow[0].header_len = ETHERNET_HEADER_LEN + IP_HEADER_MINSIZE + UDP_HEADER_SIZE;
     uint8_t *buf = aes67_flow[0].header;
     /* Write ethernet header. */
     ethernet_set_dstaddr(buf, aes67_flow[0].sll.sll_addr);
     ethernet_set_srcaddr(buf, intf[0].src_mac);
-    ethernet_set_lentype(buf, ETHERNET_TYPE_IP);
+    if (intf[0].vlan_id < 0) {
+        ethernet_set_lentype(buf, ETHERNET_TYPE_IP);
+    }
+    /* VLANs */
+    else {
+        ethernet_set_lentype(buf, ETHERNET_TYPE_VLAN);
+        ethernet_vlan_set_priority(buf, 0);
+        ethernet_vlan_set_cfi(buf, 0);
+        ethernet_vlan_set_id(buf, intf[0].vlan_id);
+        ethernet_vlan_set_lentype(buf, ETHERNET_TYPE_IP);
+        aes67_flow[0].header_len += ETHERNET_VLAN_LEN;
+    }
 
-    buf += ETHERNET_HEADER_LEN;
+    buf = ethernet_payload(buf);
     /* Write IP and UDP headers. */
     upipe_udp_raw_fill_headers(buf, intf[0].src_ip,
             aes67_flow[0].sin.sin_addr.s_addr,
@@ -2974,13 +3043,23 @@ static int audio_set_flow_destination(struct upipe * upipe, int flow,
             aes67_flow[1].sll.sll_addr[5] = (dst_ip      ) & 0xff;
         }
 
+        aes67_flow[1].header_len = ETHERNET_HEADER_LEN + IP_HEADER_MINSIZE + UDP_HEADER_SIZE;
         buf = aes67_flow[1].header;
         /* Write ethernet header. */
         ethernet_set_dstaddr(buf, aes67_flow[1].sll.sll_addr);
         ethernet_set_srcaddr(buf, intf[1].src_mac);
-        ethernet_set_lentype(buf, ETHERNET_TYPE_IP);
+        if (intf[1].vlan_id < 0) {
+            ethernet_set_lentype(buf, ETHERNET_TYPE_IP);
+        } else {
+            ethernet_set_lentype(buf, ETHERNET_TYPE_VLAN);
+            ethernet_vlan_set_priority(buf, 0);
+            ethernet_vlan_set_cfi(buf, 0);
+            ethernet_vlan_set_id(buf, intf[1].vlan_id);
+            ethernet_vlan_set_lentype(buf, ETHERNET_TYPE_IP);
+            aes67_flow[1].header_len += ETHERNET_VLAN_LEN;
+        }
 
-        buf += ETHERNET_HEADER_LEN;
+        buf = ethernet_payload(buf);
         /* Write IP and UDP headers. */
         upipe_udp_raw_fill_headers(buf, intf[1].src_ip,
                 aes67_flow[1].sin.sin_addr.s_addr,
@@ -2996,10 +3075,9 @@ static int audio_set_flow_destination(struct upipe * upipe, int flow,
     return UBASE_ERR_NONE;
 }
 
-static inline uint16_t audio_packet_size(uint16_t channels, uint16_t samples)
+static inline uint16_t audio_packet_size(uint16_t channels, uint16_t samples, uint16_t header_len)
 {
-    return ETHERNET_HEADER_LEN + IP_HEADER_MINSIZE + UDP_HEADER_SIZE +
-        RTP_HEADER_SIZE + channels * samples * 3 /*bytes per sample*/;
+    return header_len + RTP_HEADER_SIZE + channels * samples * 3 /*bytes per sample*/;
 }
 
 static int audio_subpipe_set_option(struct upipe *upipe, const char *option,
@@ -3019,7 +3097,8 @@ static int audio_subpipe_set_option(struct upipe *upipe, const char *option,
         }
 
         /* A sample packs to 3 bytes.  16 channels. */
-        int needed_size = audio_packet_size(audio_subpipe->output_channels, output_samples);
+        int needed_size = audio_packet_size(audio_subpipe->output_channels, output_samples,
+                audio_subpipe->flows[0][0].header_len);
         if (needed_size > audio_subpipe->mtu) {
             upipe_err_va(upipe, "requested frame or packet size (%d bytes, %d samples) is greater than MTU (%d)",
                     needed_size, output_samples, audio_subpipe->mtu);
@@ -3039,7 +3118,8 @@ static int audio_subpipe_set_option(struct upipe *upipe, const char *option,
             return UBASE_ERR_INVALID;
         }
         audio_subpipe->output_channels = output_channels;
-        audio_subpipe->packet_size = audio_packet_size(output_channels, audio_subpipe->output_samples);
+        audio_subpipe->packet_size = audio_packet_size(output_channels, audio_subpipe->output_samples,
+                audio_subpipe->flows[0][0].header_len);
         audio_subpipe->num_flows = audio_count_populated_flows(audio_subpipe);
         audio_subpipe->need_reconfig = true;
         return UBASE_ERR_NONE;
