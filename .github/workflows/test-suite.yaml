@@ -86,6 +86,13 @@ jobs:
           sudo apt-add-repository -n -y "deb [arch=arm64,armhf] http://ports.ubuntu.com $(lsb_release -sc)-updates main universe"
           sudo apt-add-repository -n -y "ppa:ubuntu-toolchain-r/test"
           sudo apt-get update
+
+          # The GitHub's Ubuntu images since 20211122.1 are broken
+          # https://github.com/actions/virtual-environments/issues/4589
+          if [ -n "${{ matrix.host }}" ]; then
+              sudo apt-get install -y --allow-downgrades libpcre2-8-0=10.34-7
+          fi
+
           CC=gcc
           CXX=g++
           PKG=g++
