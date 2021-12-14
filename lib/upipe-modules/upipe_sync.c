@@ -996,11 +996,16 @@ static void upipe_sync_input(struct upipe *upipe, struct uref *uref,
         wait = pts - now;
 
         /* too old frames */
-        if (now > pts + upipe_sync->ticks_per_frame) {
+        if (now > pts) {
             uref_free(uref);
             return;
         }
 
+        /* too new frames */
+        if (wait > upipe_sync->ticks_per_frame) {
+            uref_free(uref);
+            return;
+        }
         /* buffer pic */
         ulist_add(&upipe_sync->urefs, uref_to_uchain(uref));
         upipe_sync->buffered_frames++;
