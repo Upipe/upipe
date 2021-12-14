@@ -797,7 +797,7 @@ static void cb(struct upump *upump)
         }
     }
     else {
-        upipe_dbg_va(upipe, "queued %"PRIu64"", ulist_depth(&upipe_sync->urefs));
+        upipe_dbg_va(upipe, "queued video frames %"PRIu64"", ulist_depth(&upipe_sync->urefs));
     }
 
     /* sync audio */
