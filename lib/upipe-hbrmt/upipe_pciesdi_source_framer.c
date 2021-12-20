@@ -518,6 +518,7 @@ static int handle_vsync_only(struct upipe_pciesdi_source_framer *ctx, struct ure
                 ctx->expected_line_num+1, expected_line_num+1);
         reset_state(ctx);
         uref_free(uref);
+        ctx->discontinuity = true;
         return UBASE_ERR_NONE;
     }
 
@@ -528,6 +529,7 @@ static int handle_vsync_only(struct upipe_pciesdi_source_framer *ctx, struct ure
                 ctx->expected_line_num+1, expected_line_num+1);
         reset_state(ctx);
         uref_free(uref);
+        ctx->discontinuity = true;
         return UBASE_ERR_NONE;
     }
 
