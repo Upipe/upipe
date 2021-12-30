@@ -1,0 +1,66 @@
+#!/bin/sh
+
+set -e
+
+help() {
+    echo "Usage: $0 [OPTION]... [VAR=VALUE]..."
+    echo
+    echo 'Configuration:'
+    echo '  --help                  display this help and exit'
+    echo '  --host=HOST             cross-compile to build programs to run on HOST'
+    echo
+    echo 'Installation directories:'
+    echo '  --prefix=PREFIX         install architecture-independent files in PREFIX'
+    echo '  --exec-prefix=EPREFIX   install architecture-dependent files in EPREFIX'
+    echo
+    echo 'Fine tuning of the installation directories:'
+    echo '  --bindir=DIR            user executables [EPREFIX/bin]'
+    echo '  --sbindir=DIR           system admin executables [EPREFIX/sbin]'
+    echo '  --libexecdir=DIR        program executables [EPREFIX/libexec]'
+    echo '  --libdir=DIR            object code libraries [EPREFIX/lib]'
+    echo '  --includedir=DIR        C header files [PREFIX/include]'
+    echo '  --datarootdir=DIR       read-only arch.-independent data root [PREFIX/share]'
+    echo '  --datadir=DIR           read-only architecture-independent data [DATAROOTDIR]'
+    echo '  --docdir=DIR            documentation root [DATAROOTDIR/doc/<name>]'
+    echo '  --htmldir=DIR           html documentation [DOCDIR]'
+    echo
+    echo 'Optional Features:'
+    echo '  --enable-silent-rules   less verbose build output (undo: "make V=1")'
+    echo '  --disable-silent-rules  verbose build output (undo: "make V=0")'
+    $make -f $(dirname "$0")/Makefile help-config-list | while read c
+    do
+        case $c in
+            -*) echo "  --enable-${c#?}" ;;
+            +*) echo "  --disable-${c#?}" ;;
+        esac
+    done
+    exit 0
+}
+
+make=make
+if command -v gmake >/dev/null; then
+    make=gmake
+fi
+
+for param; do
+    case "$param" in
+        --host=*) param="CROSS=${param#--host=}-" ;;
+        --exec-prefix=*) param="exec_${param#--exec-}" ;;
+        --disable-silent-rules) param="VERBOSE=1" ;;
+        --enable-silent-rules) param="VERBOSE=" ;;
+        --disable-*) param="have_${param#--disable-}=" ;;
+        --enable-*) param="have_${param#--enable-}=y" ;;
+        --help) help ;;
+    esac
+    set -- "$@" "${param#--}"
+    shift
+done
+
+for env in CC CXX CPP AR PKG_CONFIG CFLAGS CXXFLAGS CPPFLAGS LDFLAGS; do
+    eval val=\"\$$env\"
+    if [ -n "$val" ]; then
+        set -- $env="$val" "$@"
+    fi
+done
+
+$make -f $(dirname "$0")/Makefile "$@" configure

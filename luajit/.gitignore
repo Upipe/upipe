@@ -1,5 +1,3 @@
-!/Makefile.in
-/build-*
 /*.static.c
 /*.debug_info
 /*.so
@@ -7,6 +5,7 @@
 /upipe.defs
 /uref-getters.lua
 /upipe-getters.lua
+/uprobe-event-args.lua
 /libupipe.lua
 /upipe-*.lua
 /upump-*.lua

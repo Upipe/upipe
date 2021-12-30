@@ -21,6 +21,7 @@ fi
 SUPPRESSIONS="--suppressions=$srcdir/valgrind.supp"
 if [ "$UNAME" = "Darwin" ]; then
     SUPPRESSIONS="$SUPPRESSIONS --suppressions=$srcdir/valgrind_osx.supp"
+    export DYLD_LIBRARY_PATH="$_DYLD_LIBRARY_PATH"
 fi
 
 VALGRIND_FLAGS="-q --leak-check=full --track-origins=yes --error-exitcode=1 $SUPPRESSIONS"
@@ -30,5 +31,5 @@ if test -z "$DISABLE_VALGRIND"; then
 fi
 
 # Run in valgrind, with leak checking enabled
-../libtool --mode=execute $VALGRIND "$@"
+$VALGRIND "$@"
 exit $?
