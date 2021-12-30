@@ -95,6 +95,7 @@ jobs:
           set-env HOST_CXX "$CXX"
           if [ -n "${{ matrix.host }}" ]; then
             set-env HOST "--host=${{ matrix.host }}"
+            set-env PKG_CONFIG_LIBDIR "/usr/lib/${{ matrix.host }}/pkgconfig"
           fi
           if [ "${{ matrix.sanitizer }}" = "true" ]; then
             SAN="-fsanitize=undefined -fsanitize=address,pointer-compare,pointer-subtract"
@@ -113,15 +114,14 @@ jobs:
           sudo apt-get install clang-${{ matrix.version }}
           set-env HOST_CC "clang-${{ matrix.version }}"
           set-env HOST_CXX "clang++-${{ matrix.version }}"
-          set-env CXXFLAGS "-Wno-vla-cxx-extension"
 
       - name: Install dependencies (Linux)
         if: runner.os == 'Linux'
         env:
           LIBS: >
             ev asound2 x264 x265 speexdsp png freetype6 zvbi gcrypt tasn1 dvbv5
-            udev avcodec avformat swresample swscale gl1-mesa glu1-mesa
-            srt-gnutls gnutls28 ssl ebur128 dvbcsa
+            udev avcodec avformat avfilter swresample swscale gl1-mesa glu1-mesa
+            srt-gnutls gnutls28 ssl bearssl ebur128 dvbcsa
         run: |
           if [ "${{ matrix.arch }}" != "amd64" ]; then
             sudo apt-get install qemu-user-binfmt
@@ -147,13 +147,11 @@ jobs:
           set-env HOST_CC "clang"
           set-env HOST_CXX "clang++"
           set-env CFLAGS "-Wno-error=deprecated-declarations -fsanitize=undefined -fsanitize=address -fsanitize-address-use-after-scope -fsanitize-recover=all -fno-omit-frame-pointer -fno-optimize-sibling-calls -I$BREW_PREFIX/include"
-          if clang++ -Werror -Wno-vla-cxx-extension -xc++ -c /dev/null -o /dev/null 2>/dev/null; then
-            set-env CXXFLAGS "-Wno-vla-cxx-extension"
-          fi
           set-env LDFLAGS "-fsanitize=undefined -fsanitize=address -L$BREW_PREFIX/lib"
           set-env DISABLE_VALGRIND "1"
-          set-env INSERT_LIBRARIES "$(clang -print-search-dirs | sed -n 's/^libraries: =//p')/lib/darwin/libclang_rt.asan_osx_dynamic.dylib"
+          set-env LD_INSERT_LIBRARIES "$(clang -print-search-dirs | sed -n 's/^libraries: =//p')/lib/darwin/libclang_rt.asan_osx_dynamic.dylib"
           set-env UBSAN_OPTIONS "print_stacktrace=1"
+          set-env LLVM_DWARFDUMP "dwarfdump"
 
       - name: Install bitstream
         run: |
@@ -183,31 +181,27 @@ jobs:
           sudo make install
 
       - name: Configure
+        env:
+          BUILD_COLORS: always
         run: |
-          autoreconf -i
           if [ "${{ matrix.static }}" = "true" ]; then
             STATIC="--disable-shared"
           fi
           if [ "${{ matrix.luajit }}" != "false" ]; then
             LUAJIT="--enable-luajit"
           fi
-          CONFIGURE_FLAGS="$LUAJIT $STATIC --disable-silent-rules $HOST CC=\"$HOST_CC\" CXX=\"$HOST_CXX\" CFLAGS=\"-Werror -Wno-error=deprecated-declarations -O2 -g -gdwarf-4 -fdiagnostics-color=always $CFLAGS\" CXXFLAGS=\"-Werror -O2 -g -fdiagnostics-color=always $CXXFLAGS\" LDFLAGS=\"$LDFLAGS\""
+          CONFIGURE_FLAGS="$LUAJIT $STATIC --disable-silent-rules $HOST CC=\"$HOST_CC\" CXX=\"$HOST_CXX\" CFLAGS=\"-Werror -Wno-deprecated-declarations -O2 -g -fdiagnostics-color=always $CFLAGS\" CXXFLAGS=\"-Werror -O2 -g -fdiagnostics-color=always $CXXFLAGS\" LDFLAGS=\"$LDFLAGS\""
           set-env CONFIGURE_FLAGS "$CONFIGURE_FLAGS"
           eval ./configure $CONFIGURE_FLAGS
-
-      - name: Archive config log
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: ${{ matrix.name }}_config.log
-          path: config.log
+          echo
+          cat config.log
 
       - name: Build and test
         run: >
           make distcheck
           DISTCHECK_CONFIGURE_FLAGS="$CONFIGURE_FLAGS"
-          AM_COLOR_TESTS="always"
-          VERBOSE=1
+          BUILD_COLORS="always"
+          VERBOSE_TESTS=1
 
   coding-style:
     runs-on: ubuntu-24.04
@@ -223,19 +217,19 @@ jobs:
           sudo apt-get install $(printf 'lib%s-dev ' $LIBS)
 
       - name: Configure
-        run: |
-          autoreconf -i
-          ./configure
+        env:
+          BUILD_COLORS: always
+        run: ./configure
 
       - name: Check whitespaces
         run: make check-whitespace
 
       - name: Check headers
         env:
-          AM_COLOR_TESTS: always
+          BUILD_COLORS: always
         run: make check-headers
 
       - name: Check tests
         env:
-          AM_COLOR_TESTS: always
+          BUILD_COLORS: always
         run: make check-tests
