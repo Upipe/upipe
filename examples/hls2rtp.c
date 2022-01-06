@@ -156,8 +156,6 @@ static struct upipe_mgr *setflowdef_mgr = NULL;
 static struct uprobe *main_probe = NULL;
 static struct uprobe *dejitter_probe = NULL;
 static struct uref_mgr *uref_mgr;
-static struct ev_signal signal_watcher;
-static struct ev_io stdin_watcher;
 
 static struct uprobe *uprobe_rewrite_date_alloc(struct uprobe *next,
                                                 bool video);
@@ -1303,7 +1301,8 @@ static struct option options[] = {
     { 0, 0, 0, 0 },
 };
 
-static void usage(const char *name, const char *err, ...)
+UBASE_FMT_PRINTF(2, 3)
+static int usage(const char *name, const char *err, ...)
 {
     if (err) {
         va_list ap;
@@ -1321,9 +1320,8 @@ static void usage(const char *name, const char *err, ...)
                 options[i].has_arg != no_argument ? "arg" : "",
                 options[i].has_arg == optional_argument ? "]" :
                 options[i].has_arg == required_argument ? ">" : "");
-    if (err)
-        exit(1);
-    exit(0);
+
+    return err ? EXIT_FAILURE : EXIT_SUCCESS;
 }
 
 int main(int argc, char **argv)
@@ -1431,23 +1429,22 @@ int main(int argc, char **argv)
             break;
 
         case OPT_HELP:
-            usage(argv[0], NULL);
+            return usage(argv[0], NULL);
 
         case OPT_INVALID:
-            usage(argv[0], "invalid option");
+            return usage(argv[0], "invalid option");
 
         case OPT_MISSING_ARG:
-            usage(argv[0], "missing argument");
+            return usage(argv[0], "missing argument");
         }
     }
 
     /*
      * parse arguments
      */
-    if (optind >= argc) {
-        usage(argv[0], NULL);
-        return -1;
-    }
+    if (optind >= argc)
+        return usage(argv[0], NULL);
+
     url = argv[optind];
 
     /*
