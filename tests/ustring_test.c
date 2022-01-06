@@ -63,7 +63,7 @@ int main(int argc, char *argv[])
     for (size_t i = 0; i < UBASE_ARRAY_SIZE(strings); i++) {
         struct ustring ustring = ustring_from_str(strings[i]);
 
-        printf("strings[%zu]: \"%s\"\n", i, strings[i]);
+        printf("strings[%zu]: \"%s\"\n", i, strings[i] ?: "(null)");
 
         char *str;
         ubase_assert(ustring_to_str(ustring, &str));
