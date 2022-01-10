@@ -2993,6 +2993,10 @@ static int audio_set_flow_destination(struct upipe * upipe, int flow,
         char *path = strdup((i==0) ? path_1 : path_2);
         UBASE_ALLOC_RETURN(path);
 
+        const uint8_t *src_mac, *dst_mac;
+        uint32_t src_ip, dst_ip;
+        uint16_t src_port, dst_port;
+
         /* Parse the path. */
         if (!upipe_udp_parse_node_service(upipe, path, NULL, 0, NULL,
                     (struct sockaddr_storage *)&aes67_flow[i].sin)) {
@@ -3014,7 +3018,7 @@ static int audio_set_flow_destination(struct upipe * upipe, int flow,
         };
 
         /* Set MAC address. */
-        uint32_t dst_ip = ntohl(aes67_flow[i].sin.sin_addr.s_addr);
+        dst_ip = ntohl(aes67_flow[i].sin.sin_addr.s_addr);
 
         /* If a multicast IP address, fill a multicast MAC address. */
         if (IN_MULTICAST(dst_ip)) {
@@ -3031,11 +3035,18 @@ static int audio_set_flow_destination(struct upipe * upipe, int flow,
             /* TODO */
         }
 
+        src_mac = intf[i].src_mac;
+        dst_mac = aes67_flow[i].sll.sll_addr;
+        src_ip = intf[i].src_ip;
+        dst_ip = aes67_flow[i].sin.sin_addr.s_addr;
+        src_port = ntohs(aes67_flow[i].sin.sin_port);
+        dst_port = ntohs(aes67_flow[i].sin.sin_port);
+
         aes67_flow[i].header_len = ETHERNET_HEADER_LEN + IP_HEADER_MINSIZE + UDP_HEADER_SIZE;
         uint8_t *buf = aes67_flow[i].header;
         /* Write ethernet header. */
-        ethernet_set_dstaddr(buf, aes67_flow[i].sll.sll_addr);
-        ethernet_set_srcaddr(buf, intf[i].src_mac);
+        ethernet_set_dstaddr(buf, dst_mac);
+        ethernet_set_srcaddr(buf, src_mac);
         if (intf[i].vlan_id < 0) {
             ethernet_set_lentype(buf, ETHERNET_TYPE_IP);
         }
@@ -3051,10 +3062,7 @@ static int audio_set_flow_destination(struct upipe * upipe, int flow,
 
         buf = ethernet_payload(buf);
         /* Write IP and UDP headers. */
-        upipe_udp_raw_fill_headers(buf, intf[i].src_ip,
-                aes67_flow[i].sin.sin_addr.s_addr,
-                ntohs(aes67_flow[i].sin.sin_port),
-                ntohs(aes67_flow[i].sin.sin_port),
+        upipe_udp_raw_fill_headers(buf, src_ip, dst_ip, src_port, dst_port,
                 10 /* TTL */, 0 /* TOS */,
                 audio_subpipe->output_samples * audio_subpipe->output_channels * 3 + RTP_HEADER_SIZE);
     }
