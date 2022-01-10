@@ -3003,8 +3003,7 @@ static int audio_set_flow_destination(struct upipe * upipe, int flow,
         }
 
         /* Parse the path. */
-        if (strlen(path) == 0
-                || !upipe_udp_parse_node_service(upipe, path, NULL, 0, NULL,
+        if (!upipe_udp_parse_node_service(upipe, path, NULL, 0, NULL,
                     (struct sockaddr_storage *)&aes67_flow[i].sin)) {
             free(path);
             ret = UBASE_ERR_INVALID;
@@ -3013,6 +3012,18 @@ static int audio_set_flow_destination(struct upipe * upipe, int flow,
             goto make_header;
         }
         free(path);
+
+        /* A zero-length IP address (path string starting with a colon) will
+         * parse as 0.0.0.0 so re-use the source addresses but keep the parsed
+         * port number. */
+        if (aes67_flow[i].sin.sin_addr.s_addr == 0) {
+            ret = UBASE_ERR_INVALID;
+            dst_mac = src_mac;
+            dst_ip = src_ip;
+            src_port = dst_port = ntohs(aes67_flow[i].sin.sin_port);
+            goto make_header;
+        }
+
         upipe_dbg_va(upipe, "flow %d path %d destination set to %s:%u", flow, i,
                 inet_ntoa(aes67_flow[i].sin.sin_addr),
                 ntohs(aes67_flow[i].sin.sin_port));
