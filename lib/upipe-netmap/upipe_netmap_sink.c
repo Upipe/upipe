@@ -2423,7 +2423,7 @@ static int upipe_netmap_sink_ip_params(struct upipe *upipe,
         free(paramsdup);
     }
 
-    if (!ip) {
+    if (!ip || strlen(ip) == 0) {
         upipe_err(upipe, "ip address unspecified, use ?ip=dst:p");
         goto error;
     }
@@ -2437,6 +2437,8 @@ static int upipe_netmap_sink_ip_params(struct upipe *upipe,
         intf->dst_port = atoi(port);
     }
 
+    /* TODO: consider replacing this with one of inet_aton(), inet_pton(), or
+     * getaddrinfo() because an error will result in -1 being returned. */
     intf->dst_ip = inet_addr(ip);
 
     if (dstmac) {
@@ -2481,16 +2483,20 @@ static int upipe_netmap_sink_set_uri(struct upipe *upipe, const char *uri)
 {
     struct upipe_netmap_sink *upipe_netmap_sink =
         upipe_netmap_sink_from_upipe(upipe);
+    int ret;
+    /* Needs to be declared before the goto. */
+    uint16_t udp_payload_size = upipe_netmap_sink->packet_size - upipe_netmap_sink->intf[0].header_len;
 
     upipe_netmap_sink_set_upump(upipe, NULL);
     upipe_netmap_sink_check_upump_mgr(upipe);
     if (unlikely(uri == NULL))
-        return UBASE_ERR_NONE;
+        return UBASE_ERR_NONE; /* FIXME: does this need some headers? */
 
     upipe_netmap_sink->uri = strdup(uri);
     if (unlikely(upipe_netmap_sink->uri == NULL)) {
         upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
-        return UBASE_ERR_ALLOC;
+        ret = UBASE_ERR_ALLOC;
+        goto error_headers_needed;
     }
 
     char *p = strchr(upipe_netmap_sink->uri, '+');
@@ -2498,15 +2504,18 @@ static int upipe_netmap_sink_set_uri(struct upipe *upipe, const char *uri)
         *p++ = '\0';
 
     struct upipe_netmap_intf *intf = &upipe_netmap_sink->intf[0];
-    UBASE_RETURN(upipe_netmap_sink_ip_params(upipe, intf, upipe_netmap_sink->uri));
+    ret = upipe_netmap_sink_ip_params(upipe, intf, upipe_netmap_sink->uri);
+    if (!ubase_check(ret))
+        goto error_headers_needed;
 
     if (p) {
         p[-1] = '+';
-        UBASE_RETURN(upipe_netmap_sink_ip_params(upipe, intf+1, p));
+        ret = upipe_netmap_sink_ip_params(upipe, intf+1, p);
+        if (!ubase_check(ret))
+            goto error_headers_needed;
     }
 
     /* Create ethernet, IP, and UDP headers. */
-    uint16_t udp_payload_size = upipe_netmap_sink->packet_size - upipe_netmap_sink->intf[0].header_len;
     for (size_t i = 0; i < 2; i++) {
         struct upipe_netmap_intf *intf = &upipe_netmap_sink->intf[i];
         if (!intf->d)
@@ -2518,6 +2527,27 @@ static int upipe_netmap_sink_set_uri(struct upipe *upipe, const char *uri)
     upipe_netmap_sink->packet_size = upipe_netmap_sink->intf[0].header_len + udp_payload_size;
 
     return UBASE_ERR_NONE;
+
+error_headers_needed:
+
+    /* An error has happened so to ensure this pipe doesn't send packets with an
+     * old or invalid header copy the source details over the destination
+     * details. */
+
+    for (size_t i = 0; i < 2; i++) {
+        struct upipe_netmap_intf *intf = &upipe_netmap_sink->intf[i];
+        if (!intf->d)
+            break;
+        memcpy(intf->dst_mac, intf->src_mac, ETHERNET_ADDR_LEN);
+        intf->dst_ip   = intf->src_ip;
+        intf->dst_port = intf->src_port = (intf->ring_idx+1) * 1000;
+        intf->header_len = upipe_netmap_put_ip_headers(intf, intf->header, udp_payload_size);
+    }
+    if (upipe_netmap_sink->intf[0].header_len && upipe_netmap_sink->intf[1].header_len)
+        assert(upipe_netmap_sink->intf[0].header_len == upipe_netmap_sink->intf[1].header_len);
+    upipe_netmap_sink->packet_size = upipe_netmap_sink->intf[0].header_len + udp_payload_size;
+
+    return ret;
 }
 
 /** @internal @This requires a ubuf manager by proxy, and amends the flow
