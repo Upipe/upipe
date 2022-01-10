@@ -2989,72 +2989,72 @@ static int audio_set_flow_destination(struct upipe * upipe, int flow,
     if (unlikely((path_2 == NULL || strlen(path_2) == 0) && intf[1].d))
         return UBASE_ERR_INVALID;
 
-    /* Parse first path. */
-    char *path = strdup(path_1);
-    UBASE_ALLOC_RETURN(path);
-    if (!upipe_udp_parse_node_service(upipe, path, NULL, 0, NULL,
-                (struct sockaddr_storage *)&aes67_flow[0].sin)) {
+        /* Parse first path. */
+        char *path = strdup(path_1);
+        UBASE_ALLOC_RETURN(path);
+        if (!upipe_udp_parse_node_service(upipe, path, NULL, 0, NULL,
+                    (struct sockaddr_storage *)&aes67_flow[0].sin)) {
+            free(path);
+            return UBASE_ERR_INVALID;
+        }
         free(path);
-        return UBASE_ERR_INVALID;
-    }
-    free(path);
-    upipe_dbg_va(upipe, "flow %d path 0 destination set to %s:%u", flow,
-            inet_ntoa(aes67_flow[0].sin.sin_addr),
-            ntohs(aes67_flow[0].sin.sin_port));
+        upipe_dbg_va(upipe, "flow %d path 0 destination set to %s:%u", flow,
+                inet_ntoa(aes67_flow[0].sin.sin_addr),
+                ntohs(aes67_flow[0].sin.sin_port));
 
-    /* Set ethernet details and the inferface index. */
-    aes67_flow[0].sll = (struct sockaddr_ll) {
-        .sll_family = AF_PACKET,
-        .sll_protocol = htons(ETHERNET_TYPE_IP),
-        /* TODO: get ifindex and socket if we want to do ARP. */
-        //.sll_ifindex = upipe_aes67_sink->sll[0].sll_ifindex,
-        .sll_halen = ETHERNET_ADDR_LEN,
-    };
+        /* Set ethernet details and the inferface index. */
+        aes67_flow[0].sll = (struct sockaddr_ll) {
+            .sll_family = AF_PACKET,
+            .sll_protocol = htons(ETHERNET_TYPE_IP),
+            /* TODO: get ifindex and socket if we want to do ARP. */
+            //.sll_ifindex = upipe_aes67_sink->sll[0].sll_ifindex,
+            .sll_halen = ETHERNET_ADDR_LEN,
+        };
 
-    /* Set MAC address. */
-    uint32_t dst_ip = ntohl(aes67_flow[0].sin.sin_addr.s_addr);
+        /* Set MAC address. */
+        uint32_t dst_ip = ntohl(aes67_flow[0].sin.sin_addr.s_addr);
 
-    /* If a multicast IP address, fill a multicast MAC address. */
-    if (IN_MULTICAST(dst_ip)) {
-        aes67_flow[0].sll.sll_addr[0] = 0x01;
-        aes67_flow[0].sll.sll_addr[1] = 0x00;
-        aes67_flow[0].sll.sll_addr[2] = 0x5e;
-        aes67_flow[0].sll.sll_addr[3] = (dst_ip >> 16) & 0x7f;
-        aes67_flow[0].sll.sll_addr[4] = (dst_ip >>  8) & 0xff;
-        aes67_flow[0].sll.sll_addr[5] = (dst_ip      ) & 0xff;
-    }
+        /* If a multicast IP address, fill a multicast MAC address. */
+        if (IN_MULTICAST(dst_ip)) {
+            aes67_flow[0].sll.sll_addr[0] = 0x01;
+            aes67_flow[0].sll.sll_addr[1] = 0x00;
+            aes67_flow[0].sll.sll_addr[2] = 0x5e;
+            aes67_flow[0].sll.sll_addr[3] = (dst_ip >> 16) & 0x7f;
+            aes67_flow[0].sll.sll_addr[4] = (dst_ip >>  8) & 0xff;
+            aes67_flow[0].sll.sll_addr[5] = (dst_ip      ) & 0xff;
+        }
 
-    /* Otherwise query ARP for the destination address. */
-    else {
-        /* TODO */
-    }
+        /* Otherwise query ARP for the destination address. */
+        else {
+            /* TODO */
+        }
 
-    aes67_flow[0].header_len = ETHERNET_HEADER_LEN + IP_HEADER_MINSIZE + UDP_HEADER_SIZE;
-    uint8_t *buf = aes67_flow[0].header;
-    /* Write ethernet header. */
-    ethernet_set_dstaddr(buf, aes67_flow[0].sll.sll_addr);
-    ethernet_set_srcaddr(buf, intf[0].src_mac);
-    if (intf[0].vlan_id < 0) {
-        ethernet_set_lentype(buf, ETHERNET_TYPE_IP);
-    }
-    /* VLANs */
-    else {
-        ethernet_set_lentype(buf, ETHERNET_TYPE_VLAN);
-        ethernet_vlan_set_priority(buf, 0);
-        ethernet_vlan_set_cfi(buf, 0);
-        ethernet_vlan_set_id(buf, intf[0].vlan_id);
-        ethernet_vlan_set_lentype(buf, ETHERNET_TYPE_IP);
-        aes67_flow[0].header_len += ETHERNET_VLAN_LEN;
-    }
+        aes67_flow[0].header_len = ETHERNET_HEADER_LEN + IP_HEADER_MINSIZE + UDP_HEADER_SIZE;
+        uint8_t *buf = aes67_flow[0].header;
+        /* Write ethernet header. */
+        ethernet_set_dstaddr(buf, aes67_flow[0].sll.sll_addr);
+        ethernet_set_srcaddr(buf, intf[0].src_mac);
+        if (intf[0].vlan_id < 0) {
+            ethernet_set_lentype(buf, ETHERNET_TYPE_IP);
+        }
+        /* VLANs */
+        else {
+            ethernet_set_lentype(buf, ETHERNET_TYPE_VLAN);
+            ethernet_vlan_set_priority(buf, 0);
+            ethernet_vlan_set_cfi(buf, 0);
+            ethernet_vlan_set_id(buf, intf[0].vlan_id);
+            ethernet_vlan_set_lentype(buf, ETHERNET_TYPE_IP);
+            aes67_flow[0].header_len += ETHERNET_VLAN_LEN;
+        }
 
-    buf = ethernet_payload(buf);
-    /* Write IP and UDP headers. */
-    upipe_udp_raw_fill_headers(buf, intf[0].src_ip,
-            aes67_flow[0].sin.sin_addr.s_addr,
-            ntohs(aes67_flow[0].sin.sin_port),
-            ntohs(aes67_flow[0].sin.sin_port),
-            10 /* TTL */, 0 /* TOS */,
-            audio_subpipe->output_samples * audio_subpipe->output_channels * 3 + RTP_HEADER_SIZE);
+        buf = ethernet_payload(buf);
+        /* Write IP and UDP headers. */
+        upipe_udp_raw_fill_headers(buf, intf[0].src_ip,
+                aes67_flow[0].sin.sin_addr.s_addr,
+                ntohs(aes67_flow[0].sin.sin_port),
+                ntohs(aes67_flow[0].sin.sin_port),
+                10 /* TTL */, 0 /* TOS */,
+                audio_subpipe->output_samples * audio_subpipe->output_channels * 3 + RTP_HEADER_SIZE);
 
     if (path_2 && strlen(path_2)) {
         path = strdup(path_2);
