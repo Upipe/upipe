@@ -2983,25 +2983,34 @@ static int audio_set_flow_destination(struct upipe * upipe, int flow,
         return UBASE_ERR_NONE;
     }
 
-    /* Otherwise if given a NULL or 0-length string it is an error. */
-    if (unlikely(path_1 == NULL || strlen(path_1) == 0))
-        return UBASE_ERR_INVALID;
-    if (unlikely((path_2 == NULL || strlen(path_2) == 0) && intf[1].d))
-        return UBASE_ERR_INVALID;
+    int ret = UBASE_ERR_NONE;
 
     for (int i = 0; i < 2; i++) {
-        char *path = strdup((i==0) ? path_1 : path_2);
-        UBASE_ALLOC_RETURN(path);
-
         const uint8_t *src_mac, *dst_mac;
         uint32_t src_ip, dst_ip;
         uint16_t src_port, dst_port;
 
+        src_mac = intf[i].src_mac;
+        src_ip = intf[i].src_ip;
+        src_port = dst_port = 0;
+
+        char *path = strdup((i==0) ? path_1 : path_2);
+        if (!path) {
+            ret = UBASE_ERR_ALLOC;
+            dst_mac = src_mac;
+            dst_ip = src_ip;
+            goto make_header;
+        }
+
         /* Parse the path. */
-        if (!upipe_udp_parse_node_service(upipe, path, NULL, 0, NULL,
+        if (strlen(path) == 0
+                || !upipe_udp_parse_node_service(upipe, path, NULL, 0, NULL,
                     (struct sockaddr_storage *)&aes67_flow[i].sin)) {
             free(path);
-            return UBASE_ERR_INVALID;
+            ret = UBASE_ERR_INVALID;
+            dst_mac = src_mac;
+            dst_ip = src_ip;
+            goto make_header;
         }
         free(path);
         upipe_dbg_va(upipe, "flow %d path %d destination set to %s:%u", flow, i,
@@ -3035,12 +3044,11 @@ static int audio_set_flow_destination(struct upipe * upipe, int flow,
             /* TODO */
         }
 
-        src_mac = intf[i].src_mac;
         dst_mac = aes67_flow[i].sll.sll_addr;
-        src_ip = intf[i].src_ip;
         dst_ip = aes67_flow[i].sin.sin_addr.s_addr;
-        src_port = ntohs(aes67_flow[i].sin.sin_port);
-        dst_port = ntohs(aes67_flow[i].sin.sin_port);
+        src_port = dst_port = ntohs(aes67_flow[i].sin.sin_port);
+
+make_header:
 
         aes67_flow[i].header_len = ETHERNET_HEADER_LEN + IP_HEADER_MINSIZE + UDP_HEADER_SIZE;
         uint8_t *buf = aes67_flow[i].header;
@@ -3071,7 +3079,7 @@ static int audio_set_flow_destination(struct upipe * upipe, int flow,
     aes67_flow[1].populated = true;
     audio_subpipe->num_flows = audio_count_populated_flows(audio_subpipe);
     audio_subpipe->need_reconfig = true;
-    return UBASE_ERR_NONE;
+    return ret;
 }
 
 static inline uint16_t audio_packet_size(uint16_t channels, uint16_t samples, uint16_t header_len)
