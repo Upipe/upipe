@@ -2028,6 +2028,11 @@ static bool upipe_netmap_sink_output(struct upipe *upipe, struct uref *uref,
         upipe_netmap_sink->audio_subpipe.need_reconfig = false;
 
         if (!upipe_netmap_sink->rfc4175) {
+/* XXX
+ * circular variable store
+ * https://app.asana.com/0/1141488647259340/1201586998881878
+ * https://app.asana.com/0/1141488647259340/1201642161098561
+ */
             uref_block_size(uref, &upipe_netmap_sink->frame_size);
             upipe_netmap_sink->frame_size = upipe_netmap_sink->frame_size * 5 / 8;
             upipe_netmap_sink->packets_per_frame = (upipe_netmap_sink->frame_size + HBRMT_DATA_SIZE - 1) / HBRMT_DATA_SIZE;
@@ -2037,6 +2042,12 @@ static bool upipe_netmap_sink_output(struct upipe *upipe, struct uref *uref,
 
             upipe_netmap_sink->rate = 8 * eth_packet_size * upipe_netmap_sink->packets_per_frame * upipe_netmap_sink->fps.num;
         } else {
+/* XXX
+ * circular variable store
+ * https://app.asana.com/0/1141488647259340/1201642161098561
+ * 2110 (rf4175) packet size decisions
+ * https://app.asana.com/0/1141488647259340/1201586998881877
+ */
             uint64_t pixels = upipe_netmap_sink->hsize * upipe_netmap_sink->vsize;
             upipe_netmap_sink->frame_size = pixels * UPIPE_RFC4175_PIXEL_PAIR_BYTES / 2;
             /* Length of all network headers apart from payload */
@@ -2177,6 +2188,14 @@ static void upipe_netmap_sink_input(struct upipe *upipe, struct uref *uref,
  * @param flow_def flow definition packet
  * @return false if the flow definition is not handled
  */
+/* XXX
+ * circular variable store
+ * https://app.asana.com/0/1141488647259340/1201586998881877
+ * https://app.asana.com/0/1141488647259340/1201586998881878
+ * https://app.asana.com/0/1141488647259340/1201642161098561
+ * sharpen responsibilities of public functions
+ * https://app.asana.com/0/1141488647259340/1201639915090001
+ */
 static int upipe_netmap_sink_set_flow_def(struct upipe *upipe,
                                       struct uref *flow_def)
 {
@@ -2244,6 +2263,10 @@ static int upipe_netmap_sink_set_flow_def(struct upipe *upipe,
     UBASE_RETURN(uref_pic_flow_get_vsize(flow_def, &upipe_netmap_sink->vsize));
     upipe_netmap_sink->progressive = ubase_check(uref_pic_get_progressive(flow_def));
 
+/* XXX
+ * 2110 (rf4175) packet size decisions
+ * https://app.asana.com/0/1141488647259340/1201586998881877
+ */
     if (upipe_netmap_sink->hsize == 720) {
         if (upipe_netmap_sink->rfc4175)
             udp_payload_size += 720/2*5 / 2;
@@ -2317,6 +2340,12 @@ static int upipe_netmap_sink_set_flow_def(struct upipe *upipe,
     if (!upipe_netmap_sink->frate)
         return UBASE_ERR_INVALID;
 
+/* XXX
+ * ip header creation duplicate
+ * https://app.asana.com/0/1141488647259340/1201642161098564
+ * circular variable store
+ * https://app.asana.com/0/1141488647259340/1201642161098561
+ */
     /* Create ethernet, IP, and UDP headers and set the packet size. */
     for (size_t i = 0; i < 2; i++) {
         struct upipe_netmap_intf *intf = &upipe_netmap_sink->intf[i];
@@ -2396,6 +2425,10 @@ static char *config_stropt(char *string)
     return ret;
 }
 
+/* XXX
+ * make audio and video use same parser
+ * https://app.asana.com/0/1141488647259340/1201639915089998
+ */
 static int upipe_netmap_sink_ip_params(struct upipe *upipe,
         struct upipe_netmap_intf *intf, const char *params)
 {
@@ -2423,7 +2456,7 @@ static int upipe_netmap_sink_ip_params(struct upipe *upipe,
         free(paramsdup);
     }
 
-    if (!ip) {
+    if (!ip || strlen(ip) == 0) {
         upipe_err(upipe, "ip address unspecified, use ?ip=dst:p");
         goto error;
     }
@@ -2437,6 +2470,8 @@ static int upipe_netmap_sink_ip_params(struct upipe *upipe,
         intf->dst_port = atoi(port);
     }
 
+    /* TODO: consider replacing this with one of inet_aton(), inet_pton(), or
+     * getaddrinfo() because an error will result in -1 being returned. */
     intf->dst_ip = inet_addr(ip);
 
     if (dstmac) {
@@ -2477,36 +2512,57 @@ error:
     return UBASE_ERR_INVALID;
 }
 
+/* XXX
+ * circular variable store
+ * https://app.asana.com/0/1141488647259340/1201586998881877
+ * https://app.asana.com/0/1141488647259340/1201586998881878
+ * https://app.asana.com/0/1141488647259340/1201642161098561
+ * sharpen responsibilities of public functions
+ * https://app.asana.com/0/1141488647259340/1201639915090001
+ * ip header creation duplicate
+ * https://app.asana.com/0/1141488647259340/1201642161098564
+ */
 static int upipe_netmap_sink_set_uri(struct upipe *upipe, const char *uri)
 {
     struct upipe_netmap_sink *upipe_netmap_sink =
         upipe_netmap_sink_from_upipe(upipe);
+    int ret;
+    /* Needs to be declared before the goto. */
+    uint16_t udp_payload_size = upipe_netmap_sink->packet_size - upipe_netmap_sink->intf[0].header_len;
 
     upipe_netmap_sink_set_upump(upipe, NULL);
     upipe_netmap_sink_check_upump_mgr(upipe);
     if (unlikely(uri == NULL))
-        return UBASE_ERR_NONE;
+        return UBASE_ERR_NONE; /* FIXME: does this need some headers? */
 
     upipe_netmap_sink->uri = strdup(uri);
     if (unlikely(upipe_netmap_sink->uri == NULL)) {
         upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
-        return UBASE_ERR_ALLOC;
+        ret = UBASE_ERR_ALLOC;
+        goto error_headers_needed;
     }
 
     char *p = strchr(upipe_netmap_sink->uri, '+');
     if (p)
         *p++ = '\0';
 
+/* XXX
+ * make audio and video use same parser
+ * https://app.asana.com/0/1141488647259340/1201639915089998
+ */
     struct upipe_netmap_intf *intf = &upipe_netmap_sink->intf[0];
-    UBASE_RETURN(upipe_netmap_sink_ip_params(upipe, intf, upipe_netmap_sink->uri));
+    ret = upipe_netmap_sink_ip_params(upipe, intf, upipe_netmap_sink->uri);
+    if (!ubase_check(ret))
+        goto error_headers_needed;
 
     if (p) {
         p[-1] = '+';
-        UBASE_RETURN(upipe_netmap_sink_ip_params(upipe, intf+1, p));
+        ret = upipe_netmap_sink_ip_params(upipe, intf+1, p);
+        if (!ubase_check(ret))
+            goto error_headers_needed;
     }
 
     /* Create ethernet, IP, and UDP headers. */
-    uint16_t udp_payload_size = upipe_netmap_sink->packet_size - upipe_netmap_sink->intf[0].header_len;
     for (size_t i = 0; i < 2; i++) {
         struct upipe_netmap_intf *intf = &upipe_netmap_sink->intf[i];
         if (!intf->d)
@@ -2518,6 +2574,27 @@ static int upipe_netmap_sink_set_uri(struct upipe *upipe, const char *uri)
     upipe_netmap_sink->packet_size = upipe_netmap_sink->intf[0].header_len + udp_payload_size;
 
     return UBASE_ERR_NONE;
+
+error_headers_needed:
+
+    /* An error has happened so to ensure this pipe doesn't send packets with an
+     * old or invalid header copy the source details over the destination
+     * details. */
+
+    for (size_t i = 0; i < 2; i++) {
+        struct upipe_netmap_intf *intf = &upipe_netmap_sink->intf[i];
+        if (!intf->d)
+            break;
+        memcpy(intf->dst_mac, intf->src_mac, ETHERNET_ADDR_LEN);
+        intf->dst_ip   = intf->src_ip;
+        intf->dst_port = intf->src_port = (intf->ring_idx+1) * 1000;
+        intf->header_len = upipe_netmap_put_ip_headers(intf, intf->header, udp_payload_size);
+    }
+    if (upipe_netmap_sink->intf[0].header_len && upipe_netmap_sink->intf[1].header_len)
+        assert(upipe_netmap_sink->intf[0].header_len == upipe_netmap_sink->intf[1].header_len);
+    upipe_netmap_sink->packet_size = upipe_netmap_sink->intf[0].header_len + udp_payload_size;
+
+    return ret;
 }
 
 /** @internal @This requires a ubuf manager by proxy, and amends the flow
@@ -2953,138 +3030,118 @@ static int audio_set_flow_destination(struct upipe * upipe, int flow,
         return UBASE_ERR_NONE;
     }
 
-    /* Otherwise if given a NULL or 0-length string it is an error. */
-    if (unlikely(path_1 == NULL || strlen(path_1) == 0))
-        return UBASE_ERR_INVALID;
-    if (unlikely((path_2 == NULL || strlen(path_2) == 0) && intf[1].d))
-        return UBASE_ERR_INVALID;
+    int ret = UBASE_ERR_NONE;
 
-    /* Parse first path. */
-    char *path = strdup(path_1);
-    UBASE_ALLOC_RETURN(path);
-    if (!upipe_udp_parse_node_service(upipe, path, NULL, 0, NULL,
-                (struct sockaddr_storage *)&aes67_flow[0].sin)) {
-        free(path);
-        return UBASE_ERR_INVALID;
-    }
-    free(path);
-    upipe_dbg_va(upipe, "flow %d path 0 destination set to %s:%u", flow,
-            inet_ntoa(aes67_flow[0].sin.sin_addr),
-            ntohs(aes67_flow[0].sin.sin_port));
+    for (int i = 0; i < 2; i++) {
+        const uint8_t *src_mac, *dst_mac;
+        uint32_t src_ip, dst_ip;
+        uint16_t src_port, dst_port;
 
-    /* Set ethernet details and the inferface index. */
-    aes67_flow[0].sll = (struct sockaddr_ll) {
-        .sll_family = AF_PACKET,
-        .sll_protocol = htons(ETHERNET_TYPE_IP),
-        /* TODO: get ifindex and socket if we want to do ARP. */
-        //.sll_ifindex = upipe_aes67_sink->sll[0].sll_ifindex,
-        .sll_halen = ETHERNET_ADDR_LEN,
-    };
+        src_mac = intf[i].src_mac;
+        src_ip = intf[i].src_ip;
+        src_port = dst_port = 0;
 
-    /* Set MAC address. */
-    uint32_t dst_ip = ntohl(aes67_flow[0].sin.sin_addr.s_addr);
+        char *path = strdup((i==0) ? path_1 : path_2);
+        if (!path) {
+            ret = UBASE_ERR_ALLOC;
+            dst_mac = src_mac;
+            dst_ip = src_ip;
+            goto make_header;
+        }
 
-    /* If a multicast IP address, fill a multicast MAC address. */
-    if (IN_MULTICAST(dst_ip)) {
-        aes67_flow[0].sll.sll_addr[0] = 0x01;
-        aes67_flow[0].sll.sll_addr[1] = 0x00;
-        aes67_flow[0].sll.sll_addr[2] = 0x5e;
-        aes67_flow[0].sll.sll_addr[3] = (dst_ip >> 16) & 0x7f;
-        aes67_flow[0].sll.sll_addr[4] = (dst_ip >>  8) & 0xff;
-        aes67_flow[0].sll.sll_addr[5] = (dst_ip      ) & 0xff;
-    }
-
-    /* Otherwise query ARP for the destination address. */
-    else {
-        /* TODO */
-    }
-
-    aes67_flow[0].header_len = ETHERNET_HEADER_LEN + IP_HEADER_MINSIZE + UDP_HEADER_SIZE;
-    uint8_t *buf = aes67_flow[0].header;
-    /* Write ethernet header. */
-    ethernet_set_dstaddr(buf, aes67_flow[0].sll.sll_addr);
-    ethernet_set_srcaddr(buf, intf[0].src_mac);
-    if (intf[0].vlan_id < 0) {
-        ethernet_set_lentype(buf, ETHERNET_TYPE_IP);
-    }
-    /* VLANs */
-    else {
-        ethernet_set_lentype(buf, ETHERNET_TYPE_VLAN);
-        ethernet_vlan_set_priority(buf, 0);
-        ethernet_vlan_set_cfi(buf, 0);
-        ethernet_vlan_set_id(buf, intf[0].vlan_id);
-        ethernet_vlan_set_lentype(buf, ETHERNET_TYPE_IP);
-        aes67_flow[0].header_len += ETHERNET_VLAN_LEN;
-    }
-
-    buf = ethernet_payload(buf);
-    /* Write IP and UDP headers. */
-    upipe_udp_raw_fill_headers(buf, intf[0].src_ip,
-            aes67_flow[0].sin.sin_addr.s_addr,
-            ntohs(aes67_flow[0].sin.sin_port),
-            ntohs(aes67_flow[0].sin.sin_port),
-            10 /* TTL */, 0 /* TOS */,
-            audio_subpipe->output_samples * audio_subpipe->output_channels * 3 + RTP_HEADER_SIZE);
-
-    if (path_2 && strlen(path_2)) {
-        path = strdup(path_2);
-        UBASE_ALLOC_RETURN(path);
+/* XXX
+ * make audio and video use same parser
+ * https://app.asana.com/0/1141488647259340/1201639915089998
+ */
+        /* Parse the path. */
         if (!upipe_udp_parse_node_service(upipe, path, NULL, 0, NULL,
-                    (struct sockaddr_storage *)&aes67_flow[1].sin)) {
+                    (struct sockaddr_storage *)&aes67_flow[i].sin)) {
             free(path);
-            return UBASE_ERR_INVALID;
+            ret = UBASE_ERR_INVALID;
+            dst_mac = src_mac;
+            dst_ip = src_ip;
+            goto make_header;
         }
         free(path);
-        upipe_dbg_va(upipe, "flow %d path 1 destination set to %s:%u", flow,
-                inet_ntoa(aes67_flow[1].sin.sin_addr),
-                ntohs(aes67_flow[1].sin.sin_port));
 
-        aes67_flow[1].sll = (struct sockaddr_ll) {
+        /* A zero-length IP address (path string starting with a colon) will
+         * parse as 0.0.0.0 so re-use the source addresses but keep the parsed
+         * port number. */
+        if (aes67_flow[i].sin.sin_addr.s_addr == 0) {
+            ret = UBASE_ERR_INVALID;
+            dst_mac = src_mac;
+            dst_ip = src_ip;
+            src_port = dst_port = ntohs(aes67_flow[i].sin.sin_port);
+            goto make_header;
+        }
+
+        upipe_dbg_va(upipe, "flow %d path %d destination set to %s:%u", flow, i,
+                inet_ntoa(aes67_flow[i].sin.sin_addr),
+                ntohs(aes67_flow[i].sin.sin_port));
+
+        /* Set ethernet details and the inferface index. */
+        aes67_flow[i].sll = (struct sockaddr_ll) {
             .sll_family = AF_PACKET,
             .sll_protocol = htons(ETHERNET_TYPE_IP),
+            /* TODO: get ifindex and socket if we want to do ARP. */
+            //.sll_ifindex = upipe_aes67_sink->sll[0].sll_ifindex,
             .sll_halen = ETHERNET_ADDR_LEN,
         };
 
-        dst_ip = ntohl(aes67_flow[1].sin.sin_addr.s_addr);
+        /* Set MAC address. */
+        dst_ip = ntohl(aes67_flow[i].sin.sin_addr.s_addr);
+
+        /* If a multicast IP address, fill a multicast MAC address. */
         if (IN_MULTICAST(dst_ip)) {
-            aes67_flow[1].sll.sll_addr[0] = 0x01;
-            aes67_flow[1].sll.sll_addr[1] = 0x00;
-            aes67_flow[1].sll.sll_addr[2] = 0x5e;
-            aes67_flow[1].sll.sll_addr[3] = (dst_ip >> 16) & 0x7f;
-            aes67_flow[1].sll.sll_addr[4] = (dst_ip >>  8) & 0xff;
-            aes67_flow[1].sll.sll_addr[5] = (dst_ip      ) & 0xff;
+            aes67_flow[i].sll.sll_addr[0] = 0x01;
+            aes67_flow[i].sll.sll_addr[1] = 0x00;
+            aes67_flow[i].sll.sll_addr[2] = 0x5e;
+            aes67_flow[i].sll.sll_addr[3] = (dst_ip >> 16) & 0x7f;
+            aes67_flow[i].sll.sll_addr[4] = (dst_ip >>  8) & 0xff;
+            aes67_flow[i].sll.sll_addr[5] = (dst_ip      ) & 0xff;
         }
 
-        aes67_flow[1].header_len = ETHERNET_HEADER_LEN + IP_HEADER_MINSIZE + UDP_HEADER_SIZE;
-        buf = aes67_flow[1].header;
+        /* Otherwise query ARP for the destination address. */
+        else {
+            /* TODO */
+        }
+
+        dst_mac = aes67_flow[i].sll.sll_addr;
+        dst_ip = aes67_flow[i].sin.sin_addr.s_addr;
+        src_port = dst_port = ntohs(aes67_flow[i].sin.sin_port);
+
+make_header:
+
+        aes67_flow[i].header_len = ETHERNET_HEADER_LEN + IP_HEADER_MINSIZE + UDP_HEADER_SIZE;
+        uint8_t *buf = aes67_flow[i].header;
         /* Write ethernet header. */
-        ethernet_set_dstaddr(buf, aes67_flow[1].sll.sll_addr);
-        ethernet_set_srcaddr(buf, intf[1].src_mac);
-        if (intf[1].vlan_id < 0) {
+        ethernet_set_dstaddr(buf, dst_mac);
+        ethernet_set_srcaddr(buf, src_mac);
+        if (intf[i].vlan_id < 0) {
             ethernet_set_lentype(buf, ETHERNET_TYPE_IP);
-        } else {
+        }
+        /* VLANs */
+        else {
             ethernet_set_lentype(buf, ETHERNET_TYPE_VLAN);
             ethernet_vlan_set_priority(buf, 0);
             ethernet_vlan_set_cfi(buf, 0);
-            ethernet_vlan_set_id(buf, intf[1].vlan_id);
+            ethernet_vlan_set_id(buf, intf[i].vlan_id);
             ethernet_vlan_set_lentype(buf, ETHERNET_TYPE_IP);
-            aes67_flow[1].header_len += ETHERNET_VLAN_LEN;
+            aes67_flow[i].header_len += ETHERNET_VLAN_LEN;
         }
 
         buf = ethernet_payload(buf);
         /* Write IP and UDP headers. */
-        upipe_udp_raw_fill_headers(buf, intf[1].src_ip,
-                aes67_flow[1].sin.sin_addr.s_addr,
-                ntohs(aes67_flow[1].sin.sin_port),
-                ntohs(aes67_flow[1].sin.sin_port),
-                10, 0, audio_subpipe->output_samples * audio_subpipe->output_channels * 3 + RTP_HEADER_SIZE);
+        upipe_udp_raw_fill_headers(buf, src_ip, dst_ip, src_port, dst_port,
+                10 /* TTL */, 0 /* TOS */,
+                audio_subpipe->output_samples * audio_subpipe->output_channels * 3 + RTP_HEADER_SIZE);
     }
 
     aes67_flow[0].populated = true;
     aes67_flow[1].populated = true;
     audio_subpipe->num_flows = audio_count_populated_flows(audio_subpipe);
     audio_subpipe->need_reconfig = true;
-    return UBASE_ERR_NONE;
+    return ret;
 }
 
 static inline uint16_t audio_packet_size(uint16_t channels, uint16_t samples, uint16_t header_len)
