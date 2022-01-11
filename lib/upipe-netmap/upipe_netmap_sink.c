@@ -2028,6 +2028,11 @@ static bool upipe_netmap_sink_output(struct upipe *upipe, struct uref *uref,
         upipe_netmap_sink->audio_subpipe.need_reconfig = false;
 
         if (!upipe_netmap_sink->rfc4175) {
+/* XXX
+ * circular variable store
+ * https://app.asana.com/0/1141488647259340/1201586998881878
+ * https://app.asana.com/0/1141488647259340/1201642161098561
+ */
             uref_block_size(uref, &upipe_netmap_sink->frame_size);
             upipe_netmap_sink->frame_size = upipe_netmap_sink->frame_size * 5 / 8;
             upipe_netmap_sink->packets_per_frame = (upipe_netmap_sink->frame_size + HBRMT_DATA_SIZE - 1) / HBRMT_DATA_SIZE;
@@ -2037,6 +2042,12 @@ static bool upipe_netmap_sink_output(struct upipe *upipe, struct uref *uref,
 
             upipe_netmap_sink->rate = 8 * eth_packet_size * upipe_netmap_sink->packets_per_frame * upipe_netmap_sink->fps.num;
         } else {
+/* XXX
+ * circular variable store
+ * https://app.asana.com/0/1141488647259340/1201642161098561
+ * 2110 (rf4175) packet size decisions
+ * https://app.asana.com/0/1141488647259340/1201586998881877
+ */
             uint64_t pixels = upipe_netmap_sink->hsize * upipe_netmap_sink->vsize;
             upipe_netmap_sink->frame_size = pixels * UPIPE_RFC4175_PIXEL_PAIR_BYTES / 2;
             /* Length of all network headers apart from payload */
@@ -2177,6 +2188,14 @@ static void upipe_netmap_sink_input(struct upipe *upipe, struct uref *uref,
  * @param flow_def flow definition packet
  * @return false if the flow definition is not handled
  */
+/* XXX
+ * circular variable store
+ * https://app.asana.com/0/1141488647259340/1201586998881877
+ * https://app.asana.com/0/1141488647259340/1201586998881878
+ * https://app.asana.com/0/1141488647259340/1201642161098561
+ * sharpen responsibilities of public functions
+ * https://app.asana.com/0/1141488647259340/1201639915090001
+ */
 static int upipe_netmap_sink_set_flow_def(struct upipe *upipe,
                                       struct uref *flow_def)
 {
@@ -2244,6 +2263,10 @@ static int upipe_netmap_sink_set_flow_def(struct upipe *upipe,
     UBASE_RETURN(uref_pic_flow_get_vsize(flow_def, &upipe_netmap_sink->vsize));
     upipe_netmap_sink->progressive = ubase_check(uref_pic_get_progressive(flow_def));
 
+/* XXX
+ * 2110 (rf4175) packet size decisions
+ * https://app.asana.com/0/1141488647259340/1201586998881877
+ */
     if (upipe_netmap_sink->hsize == 720) {
         if (upipe_netmap_sink->rfc4175)
             udp_payload_size += 720/2*5 / 2;
@@ -2317,6 +2340,12 @@ static int upipe_netmap_sink_set_flow_def(struct upipe *upipe,
     if (!upipe_netmap_sink->frate)
         return UBASE_ERR_INVALID;
 
+/* XXX
+ * ip header creation duplicate
+ * https://app.asana.com/0/1141488647259340/1201642161098564
+ * circular variable store
+ * https://app.asana.com/0/1141488647259340/1201642161098561
+ */
     /* Create ethernet, IP, and UDP headers and set the packet size. */
     for (size_t i = 0; i < 2; i++) {
         struct upipe_netmap_intf *intf = &upipe_netmap_sink->intf[i];
@@ -2396,6 +2425,10 @@ static char *config_stropt(char *string)
     return ret;
 }
 
+/* XXX
+ * make audio and video use same parser
+ * https://app.asana.com/0/1141488647259340/1201639915089998
+ */
 static int upipe_netmap_sink_ip_params(struct upipe *upipe,
         struct upipe_netmap_intf *intf, const char *params)
 {
@@ -2479,6 +2512,16 @@ error:
     return UBASE_ERR_INVALID;
 }
 
+/* XXX
+ * circular variable store
+ * https://app.asana.com/0/1141488647259340/1201586998881877
+ * https://app.asana.com/0/1141488647259340/1201586998881878
+ * https://app.asana.com/0/1141488647259340/1201642161098561
+ * sharpen responsibilities of public functions
+ * https://app.asana.com/0/1141488647259340/1201639915090001
+ * ip header creation duplicate
+ * https://app.asana.com/0/1141488647259340/1201642161098564
+ */
 static int upipe_netmap_sink_set_uri(struct upipe *upipe, const char *uri)
 {
     struct upipe_netmap_sink *upipe_netmap_sink =
@@ -2503,6 +2546,10 @@ static int upipe_netmap_sink_set_uri(struct upipe *upipe, const char *uri)
     if (p)
         *p++ = '\0';
 
+/* XXX
+ * make audio and video use same parser
+ * https://app.asana.com/0/1141488647259340/1201639915089998
+ */
     struct upipe_netmap_intf *intf = &upipe_netmap_sink->intf[0];
     ret = upipe_netmap_sink_ip_params(upipe, intf, upipe_netmap_sink->uri);
     if (!ubase_check(ret))
@@ -3002,6 +3049,10 @@ static int audio_set_flow_destination(struct upipe * upipe, int flow,
             goto make_header;
         }
 
+/* XXX
+ * make audio and video use same parser
+ * https://app.asana.com/0/1141488647259340/1201639915089998
+ */
         /* Parse the path. */
         if (!upipe_udp_parse_node_service(upipe, path, NULL, 0, NULL,
                     (struct sockaddr_storage *)&aes67_flow[i].sin)) {
