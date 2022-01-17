@@ -249,6 +249,9 @@ struct upipe_bmd_sink {
     /** output mode **/
     BMDDisplayMode mode;
 
+    /** 3G-SDI Level */
+    int sdi_3g_level;
+
     /** video frame index (modulo 5) */
     uint8_t frame_idx;
 
@@ -274,6 +277,8 @@ struct upipe_bmd_sink {
     IDeckLink *deckLink;
     /** handle to decklink card output */
     IDeckLinkOutput *deckLinkOutput;
+    /** handle to decklink card attributes */
+    IDeckLinkAttributes *deckLinkAttributes;
     /** handle to decklink card configuration */
     IDeckLinkConfiguration *deckLinkConfiguration;
 
@@ -1532,6 +1537,7 @@ static int upipe_bmd_open_vid(struct upipe *upipe)
     IDeckLinkDisplayMode* displayMode = NULL;
     int err = UBASE_ERR_NONE;
     HRESULT result = E_NOINTERFACE;
+    bool supports_level_a = false;
 
     upipe_bmd_stop(upipe);
 
@@ -1571,6 +1577,20 @@ static int upipe_bmd_open_vid(struct upipe *upipe)
     BMDTimeScale timeScale;
     displayMode->GetFrameRate(&timeValue, &timeScale);
     upipe_bmd_sink->ticks_per_frame = UCLOCK_FREQ * timeValue / timeScale;
+
+    if (upipe_bmd_sink->deckLinkAttributes->GetFlag(BMDDeckLinkSupportsSMPTELevelAOutput, &supports_level_a) != S_OK)
+        supports_level_a = false;
+
+    if (supports_level_a)
+    {
+        result = upipe_bmd_sink->deckLinkConfiguration->SetFlag(bmdDeckLinkConfigSMPTELevelAOutput, !upipe_bmd_sink->sdi_3g_level);
+        if (result != S_OK)
+        {
+            fprintf(stderr, "Could not set SDI Level\n");
+            err = UBASE_ERR_EXTERNAL;
+            goto end;
+        }
+    }
 
     result = deckLinkOutput->EnableVideoOutput(displayMode->GetDisplayMode(),
                                                bmdVideoOutputVANC);
@@ -1668,6 +1688,22 @@ static int upipe_bmd_sink_open_card(struct upipe *upipe)
         upipe_err(upipe, "Could not read card model name");
     }
 
+    if (deckLink->QueryInterface(IID_IDeckLinkAttributes,
+                                 (void**)&upipe_bmd_sink->deckLinkAttributes) != S_OK) {
+        upipe_err_va(upipe, "decklink card has no attributes");
+        err = UBASE_ERR_EXTERNAL;
+        deckLink->Release();
+        goto end;
+    }
+
+    if (deckLink->QueryInterface(IID_IDeckLinkConfiguration,
+                                 (void**)&upipe_bmd_sink->deckLinkConfiguration) != S_OK) {
+        upipe_err_va(upipe, "decklink card has no configuration");
+        err = UBASE_ERR_EXTERNAL;
+        deckLink->Release();
+        goto end;
+    }
+
     if (deckLink->QueryInterface(IID_IDeckLinkOutput,
                                  (void**)&upipe_bmd_sink->deckLinkOutput) != S_OK) {
         upipe_err_va(upipe, "decklink card has no output");
@@ -1716,6 +1752,8 @@ static int upipe_bmd_sink_set_option(struct upipe *upipe,
         uatomic_store(&upipe_bmd_sink->cc, strcmp(v, "0"));
     } else if (!strcmp(k, "teletext")) {
         uatomic_store(&upipe_bmd_sink->ttx, strcmp(v, "0"));
+    } else if (!strcmp(k, "sdi-3g-level")) {
+        upipe_bmd_sink->sdi_3g_level = atoi(v);
     } else
         return UBASE_ERR_INVALID;
 
@@ -1904,6 +1942,7 @@ static void upipe_bmd_sink_free(struct upipe *upipe)
 
     if (upipe_bmd_sink->deckLink) {
         free((void*)upipe_bmd_sink->modelName);
+        upipe_bmd_sink->deckLinkAttributes->Release();
         upipe_bmd_sink->deckLinkConfiguration->Release();
         upipe_bmd_sink->deckLinkOutput->Release();
         upipe_bmd_sink->deckLink->Release();
