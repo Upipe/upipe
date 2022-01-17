@@ -55,11 +55,66 @@ int ubuf_pic_plane_clear(struct ubuf *ubuf, const char *chroma,
                          int hoffset, int voffset, int hsize, int vsize,
                          int fullrange)
 {
+#define MATCH(a) (strcmp(chroma, a) == 0)
+#define SET_COLOR(...) \
+        uint8_t pattern[] = { __VA_ARGS__ }; \
+        return ubuf_pic_plane_set_color(ubuf, chroma, \
+                                        hoffset, voffset, hsize, vsize, \
+                                        pattern, sizeof pattern)
+
+    if (MATCH("y8") || MATCH("y16l") || MATCH("y16b") || MATCH("a8") ||
+        MATCH("r8g8b8") || MATCH("r8g8b8a8") || MATCH("a8r8g8b8") ||
+        MATCH("b8g8r8") || MATCH("b8g8r8a8") || MATCH("a8b8g8r8")) {
+        SET_COLOR(fullrange ? 0 : 16);
+
+    } else if (MATCH("u8") || MATCH("v8") || MATCH("u8v8")) {
+        SET_COLOR(0x80);
+
+    } else if (MATCH("y10l")) {
+        SET_COLOR(fullrange ? 0 : 0x40, 0x00);
+
+    } else if (MATCH("u10l") || MATCH("v10l")) {
+        SET_COLOR(0x00, 0x02);
+
+    } else if (MATCH("u10y10v10y10u10y10v10y10u10y10v10y10")) {
+        if (fullrange) {
+            SET_COLOR(0x00, 0x02, 0x00, 0x20, 0x00, 0x00, 0x08, 0x00);
+        } else {
+            SET_COLOR(0x00, 0x42, 0x00, 0x20, 0x10, 0x00, 0x08, 0x01);
+        }
+    }
+
+#undef MATCH
+#undef SET_COLOR
+
+    return UBASE_ERR_INVALID;
+}
+
+/** @This sets (part of) the color of the specified plane.
+ *
+ * @param ubuf pointer to ubuf
+ * @param chroma chroma type (see chroma reference)
+ * @param hoffset horizontal offset of the picture area wanted in the whole
+ * picture, negative values start from the end of lines, in pixels (before
+ * dividing by macropixel and hsub)
+ * @param voffset vertical offset of the picture area wanted in the whole
+ * picture, negative values start from the last line, in lines (before dividing
+ * by vsub)
+ * @param hsize number of pixels wanted per line, or -1 for until the end of
+ * the line
+ * @param vsize number of lines wanted in the picture area, or -1 for until the
+ * last line
+ * @param pattern color pattern to set
+ * @param pattern_size size of the color pattern in bytes
+ * @return an error code
+ */
+int ubuf_pic_plane_set_color(struct ubuf *ubuf, const char *chroma,
+                             int hoffset, int voffset, int hsize, int vsize,
+                             const uint8_t *pattern, size_t pattern_size)
+{
     size_t stride, width, height;
     uint8_t hsub, vsub, macropixel_size, macropixel;
     uint8_t *buf = NULL;
-    bool known = true;
-    int j;
 
     if (!ubuf)
         return UBASE_ERR_INVALID;
@@ -81,65 +136,26 @@ int ubuf_pic_plane_clear(struct ubuf *ubuf, const char *chroma,
         height = vsize;
     }
 
-    const size_t memset_width = width*macropixel_size/hsub/macropixel;
+    const size_t mem_width = width * macropixel_size / hsub / macropixel;
 
-#define MATCH(a) (strcmp(chroma, a) == 0)
-#define LINELOOP(a) for (a=0; a < height/vsub; a++)
-
-    if (MATCH("y8") || MATCH("y16l") || MATCH("y16b") || MATCH("a8")
-     || MATCH("r8g8b8") || MATCH("r8g8b8a8") || MATCH("a8r8g8b8")
-     || MATCH("b8g8r8") || MATCH("b8g8r8a8") || MATCH("a8b8g8r8")) {
-        LINELOOP(j) {
-            memset(buf, fullrange ? 0 : 16, memset_width);
-            buf += stride;
-        }
-    } else if (MATCH("u8") || MATCH("v8")) {
-        LINELOOP(j) {
-            memset(buf, 0x80, memset_width);
-            buf += stride;
-        }
-    } else if (MATCH("u10l") || MATCH("v10l")) {
-        size_t new_width = width/hsub;
-        LINELOOP(j) {
-            uint16_t *new_buf = (uint16_t*)buf;
-            for (int x = 0; x < new_width; x++)
-                new_buf[x] = 0x200;
-            buf += stride;
-        }
-    } else if (MATCH("y10l") && macropixel_size == 2) {
-        LINELOOP(j) {
-            if (fullrange)
-                memset(buf, 0, memset_width);
-            else for (int i = 0; i < memset_width; i += macropixel_size) {
-                buf[i]   = 16 << 2;
-                buf[i+1] = 0;
-            }
-            buf += stride;
-        }
-    } else if (MATCH("u10y10v10y10u10y10v10y10u10y10v10y10") && fullrange &&
-        macropixel_size == 16) {
-        /* this pattern repeated 2 times form a full macropixel */
-        static const uint8_t pattern[8] = {
-            // u y v + 2 bits, le
-            0x00, 0x02, 0x00, 0x20,
-            // y u y + 2 bits, le
-            0x00, 0x00, 0x08, 0x00,
-        };
-        LINELOOP(j) {
-            for (int i = 0; i < memset_width; i += macropixel_size / 2) {
-                memcpy(&buf[i], pattern, sizeof(pattern));
-            }
+    if (pattern_size == 1) {
+        for (size_t i = 0; i < height / vsub; i++) {
+            memset(buf, pattern[0], mem_width);
             buf += stride;
         }
     } else {
-        known = false;
+        for (size_t i = 0; i < mem_width; i += pattern_size)
+            memcpy(buf + i, pattern, pattern_size);
+
+        for (int i = 1; i < height / vsub; i++) {
+            memcpy(buf + stride, buf, mem_width);
+            buf += stride;
+        }
     }
 
-#undef LINELOOP
-#undef MATCH
     UBASE_RETURN(ubuf_pic_plane_unmap(ubuf, chroma, hoffset, voffset,
                                       hsize, vsize))
-    return known ? UBASE_ERR_NONE : UBASE_ERR_INVALID;
+    return UBASE_ERR_NONE;
 }
 
 /** @This clears (part of) the specified picture, depending on plane type
