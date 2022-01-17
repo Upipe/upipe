@@ -1256,7 +1256,7 @@ static struct uref *get_uref(struct upipe *upipe)
     return uref;
 }
 
-static int compute_fakes(struct upipe *upipe, int j)
+static float compute_fakes(struct upipe *upipe, float j)
 {
     struct upipe_netmap_sink *upipe_netmap_sink = upipe_netmap_sink_from_upipe(upipe);
     const struct urational *fps = &upipe_netmap_sink->fps;
@@ -1288,7 +1288,7 @@ static int compute_fakes(struct upipe *upipe, int j)
     if (0)
     upipe_dbg_va(upipe, " <= %.1f" "\tP = %.1f" "\tI = %.1f" "\tD = %.1f" "\t=> %.1f",
             i, error, upipe_netmap_sink->pid_error_sum, d, upipe_netmap_sink->pid_last_output);
-    return (int)upipe_netmap_sink->pid_last_output;
+    return upipe_netmap_sink->pid_last_output;
 }
 
 static void handle_tx_stamp(struct upipe *upipe, uint64_t t, uint16_t seq)
@@ -1349,15 +1349,15 @@ static void handle_tx_stamp(struct upipe *upipe, uint64_t t, uint16_t seq)
     upipe_netmap_sink->frame_ts += dur;
 
     int64_t x = t - upipe_netmap_sink->frame_ts;
-    int64_t ideal = (dur - x) * (int64_t)upipe_netmap_sink->packets_per_frame / dur;
+    float ideal = (dur - x) * (float)upipe_netmap_sink->packets_per_frame / dur;
 
-    int step = compute_fakes(upipe, -ideal);
-    upipe_netmap_sink->needed_fakes *= 9;
-    upipe_netmap_sink->needed_fakes += step;
-    upipe_netmap_sink->needed_fakes /= 10;
+    float step = compute_fakes(upipe, -ideal);
+    float needed_fakes = (upipe_netmap_sink->needed_fakes * 9.f + step) / 10.f;
 
-    if (upipe_netmap_sink->needed_fakes < 0) // if we're too late, just wait till we drift back
-        upipe_netmap_sink->needed_fakes = 0;
+    if (needed_fakes < 0.f) // if we're too late, just wait till we drift back
+        needed_fakes = 0.f;
+
+    upipe_netmap_sink->needed_fakes = needed_fakes + 0.5f; /* use a math library function */
 
     if (upipe_netmap_sink->needed_fakes) {
         uint64_t total = upipe_netmap_sink->packets_per_frame;
@@ -1368,10 +1368,10 @@ static void handle_tx_stamp(struct upipe *upipe, uint64_t t, uint16_t seq)
         upipe_netmap_sink->step = 0;
 
     upipe_dbg_va(upipe,
-            "%.2f ms, ideal %" PRId64 ""
-            " step %d, fakes %" PRIu64 " needed fakes %" PRIu64 "",
+            "%.2f ms, ideal %.2f"
+            " step %.2f, fakes %" PRIu64 " needed fakes %.2f",
             (float)(dur - x) / 27000., ideal, step,
-            upipe_netmap_sink->fakes, upipe_netmap_sink->needed_fakes);
+            upipe_netmap_sink->fakes, needed_fakes);
     upipe_netmap_sink->fakes = 0;
 
     upipe_netmap_sink->pkts_in_frame = 0;
