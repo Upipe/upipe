@@ -274,6 +274,8 @@ struct upipe_bmd_sink {
     IDeckLink *deckLink;
     /** handle to decklink card output */
     IDeckLinkOutput *deckLinkOutput;
+    /** handle to decklink card configuration */
+    IDeckLinkConfiguration *deckLinkConfiguration;
 
     IDeckLinkDisplayMode *displayMode;
 
@@ -1764,7 +1766,6 @@ static int _upipe_bmd_sink_get_genlock_offset(struct upipe *upipe, int64_t *offs
 {
     struct upipe_bmd_sink *upipe_bmd_sink = upipe_bmd_sink_from_upipe(upipe);
     BMDReferenceStatus reference_status;
-    IDeckLinkConfiguration *decklink_configuration;
     HRESULT result;
 
     if (!upipe_bmd_sink->deckLinkOutput) {
@@ -1781,19 +1782,11 @@ static int _upipe_bmd_sink_get_genlock_offset(struct upipe *upipe, int64_t *offs
         return UBASE_ERR_EXTERNAL;
     }
 
-    result = upipe_bmd_sink->deckLink->QueryInterface(IID_IDeckLinkConfiguration, (void**)&decklink_configuration);
+    result = upipe_bmd_sink->deckLinkConfiguration->GetInt(bmdDeckLinkConfigReferenceInputTimingOffset, offset);
     if (result != S_OK) {
         *offset = 0;
         return UBASE_ERR_EXTERNAL;
     }
-
-    result = decklink_configuration->GetInt(bmdDeckLinkConfigReferenceInputTimingOffset, offset);
-    if (result != S_OK) {
-        *offset = 0;
-        decklink_configuration->Release();
-        return UBASE_ERR_EXTERNAL;
-    }
-    decklink_configuration->Release();
 
     return UBASE_ERR_NONE;
 }
@@ -1824,19 +1817,11 @@ static int _upipe_bmd_sink_set_genlock_offset(struct upipe *upipe, int64_t offse
         return UBASE_ERR_EXTERNAL;
     }
 
-    result = upipe_bmd_sink->deckLink->QueryInterface(IID_IDeckLinkConfiguration, (void**)&decklink_configuration);
-    if (result != S_OK) {
+    result = upipe_bmd_sink->deckLinkConfiguration->SetInt(bmdDeckLinkConfigReferenceInputTimingOffset, offset);
+    if (result != S_OK)
         return UBASE_ERR_EXTERNAL;
-    }
 
-    result = decklink_configuration->SetInt(bmdDeckLinkConfigReferenceInputTimingOffset, offset);
-    if (result != S_OK) {
-        decklink_configuration->Release();
-        return UBASE_ERR_EXTERNAL;
-    }
-
-    decklink_configuration->WriteConfigurationToPreferences();
-    decklink_configuration->Release();
+    upipe_bmd_sink->deckLinkConfiguration->WriteConfigurationToPreferences();
 
     return UBASE_ERR_NONE;
 }
@@ -1919,6 +1904,7 @@ static void upipe_bmd_sink_free(struct upipe *upipe)
 
     if (upipe_bmd_sink->deckLink) {
         free((void*)upipe_bmd_sink->modelName);
+        upipe_bmd_sink->deckLinkConfiguration->Release();
         upipe_bmd_sink->deckLinkOutput->Release();
         upipe_bmd_sink->deckLink->Release();
     }
