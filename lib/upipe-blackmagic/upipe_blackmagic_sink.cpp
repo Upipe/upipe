@@ -1839,7 +1839,6 @@ static int _upipe_bmd_sink_set_genlock_offset(struct upipe *upipe, int64_t offse
 {
     struct upipe_bmd_sink *upipe_bmd_sink = upipe_bmd_sink_from_upipe(upipe);
     BMDReferenceStatus reference_status;
-    IDeckLinkConfiguration *decklink_configuration;
     HRESULT result;
 
     if (!upipe_bmd_sink->deckLinkOutput) {
