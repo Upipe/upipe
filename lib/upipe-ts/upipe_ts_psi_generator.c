@@ -261,31 +261,6 @@ static struct upipe *upipe_ts_psig_flow_alloc(struct upipe_mgr *mgr,
 }
 
 /** @internal @This checks if the flow is ready, and calculates the size
- * of the outer loop descriptors.
- *
- * @param upipe description structure of the pipe
- * @param descriptors_size_p filled in with the outer loop descriptors size
- * @return an error code
- */
-static int upipe_ts_psig_flow_check_outer(struct upipe *upipe,
-                                          size_t *descriptors_size_p)
-{
-    struct upipe_ts_psig_flow *flow = upipe_ts_psig_flow_from_upipe(upipe);
-    const char *raw_def;
-    uint64_t pid;
-    if (flow->flow_def == NULL ||
-        !ubase_check(uref_ts_flow_get_pid(flow->flow_def, &pid)) ||
-        !ubase_check(uref_flow_get_raw_def(flow->flow_def, &raw_def)))
-        return UBASE_ERR_UNHANDLED;
-
-    *descriptors_size_p = 0;
-    if (!ubase_ncmp(raw_def, "void.scte35."))
-        *descriptors_size_p += DESC05_HEADER_SIZE;
-
-    return UBASE_ERR_NONE;
-}
-
-/** @internal @This checks if the flow is ready, and calculates the size
  * of the inner loop descriptors.
  *
  * @param upipe description structure of the pipe
@@ -380,12 +355,10 @@ static int upipe_ts_psig_flow_check_inner(struct upipe *upipe,
 /** @internal @This prepares the outer descriptors part of a PMT.
  *
  * @param upipe description structure of the pipe
- * @param desc pointer to outer loop descriptors in PMT
- * @param descriptors_size returned size of the outer loop descriptors
+ * @param descs pointer to outer loop descriptors in PMT
  * @return an error code
  */
-static int upipe_ts_psig_flow_build_outer(struct upipe *upipe, uint8_t *desc,
-                                          size_t *descriptors_size_p)
+static int upipe_ts_psig_flow_build_outer(struct upipe *upipe, uint8_t *descs)
 {
     struct upipe_ts_psig_flow *flow = upipe_ts_psig_flow_from_upipe(upipe);
     const char *raw_def;
@@ -395,12 +368,22 @@ static int upipe_ts_psig_flow_build_outer(struct upipe *upipe, uint8_t *desc,
         !ubase_check(uref_flow_get_raw_def(flow->flow_def, &raw_def)))
         return UBASE_ERR_UNHANDLED;
 
-    *descriptors_size_p = 0;
     if (!ubase_ncmp(raw_def, "void.scte35.")) {
-        desc05_init(desc);
-        const uint8_t id[4] = { 'C', 'U', 'E', 'I' };
-        desc05_set_identifier(desc, id);
-        *descriptors_size_p += DESC05_HEADER_SIZE;
+        uint8_t *desc;
+        bool found = false;
+        /* check if the descriptor already exists */
+        for (uint16_t i = 0; (desc = descs_get_desc(descs, i)); i++)
+            if (desc_get_tag(desc) == 0x05)
+                found = true;
+
+        if (!found) {
+            desc = descs_add_desc(descs, DESC05_HEADER_SIZE);
+            if (desc) {
+                desc05_init(desc);
+                const uint8_t id[4] = { 'C', 'U', 'E', 'I' };
+                desc05_set_identifier(desc, id);
+            }
+        }
     }
 
     return UBASE_ERR_NONE;
@@ -1085,20 +1068,6 @@ static void upipe_ts_psig_program_build(struct upipe *upipe)
         return;
     }
 
-    size_t outer_descs_size = uref_ts_flow_size_descriptors(program->flow_def);
-    size_t outer_descs_size_es = 0;
-    struct uchain *uchain;
-    ulist_foreach (&program->flows, uchain) {
-        struct upipe_ts_psig_flow *flow =
-            upipe_ts_psig_flow_from_uchain(uchain);
-        size_t descriptors_size;
-        if (!ubase_check(upipe_ts_psig_flow_check_outer(
-                        upipe_ts_psig_flow_to_upipe(flow), &descriptors_size)))
-            continue;
-        outer_descs_size_es += descriptors_size;
-    }
-
-
     upipe_notice_va(upipe,
                     "new PMT program=%"PRIu64" version=%"PRIu8" pcrpid=%"PRIu16,
                     program_number, program->pmt_version, program->pcr_pid);
@@ -1126,24 +1095,20 @@ static void upipe_ts_psig_program_build(struct upipe *upipe)
     psi_set_current(buffer);
     pmt_set_pcrpid(buffer, program->pcr_pid);
     uint8_t *descs = pmt_get_descs(buffer);
-    descs_set_length(descs, outer_descs_size + outer_descs_size_es);
-    if (outer_descs_size || outer_descs_size_es) {
-        uint8_t *desc = descs_get_desc(descs, 0);
-        if (outer_descs_size) {
-            uref_ts_flow_extract_descriptors(program->flow_def, desc);
-            desc += outer_descs_size;
-        }
-        if (outer_descs_size_es) {
-            ulist_foreach (&program->flows, uchain) {
-                struct upipe_ts_psig_flow *flow =
-                    upipe_ts_psig_flow_from_uchain(uchain);
-                size_t descriptors_size;
-                if (ubase_check(upipe_ts_psig_flow_build_outer(
-                                upipe_ts_psig_flow_to_upipe(flow), desc,
-                                &descriptors_size)))
-                    desc += descriptors_size;
-            }
-        }
+    descs_set_length(descs, 0);
+
+    size_t outer_descs_size = uref_ts_flow_size_descriptors(program->flow_def);
+    if (outer_descs_size) {
+        uint8_t *desc = descs_add_desc(descs, outer_descs_size);
+        uref_ts_flow_extract_descriptors(program->flow_def, desc);
+    }
+
+    struct uchain *uchain;
+    ulist_foreach (&program->flows, uchain) {
+        struct upipe_ts_psig_flow *flow =
+            upipe_ts_psig_flow_from_uchain(uchain);
+        upipe_ts_psig_flow_build_outer(
+            upipe_ts_psig_flow_to_upipe(flow), descs);
     }
 
     uint16_t j = 0;
