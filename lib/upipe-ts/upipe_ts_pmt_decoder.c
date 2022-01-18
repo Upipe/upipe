@@ -262,7 +262,7 @@ static void upipe_ts_pmtd_parse_streamtype(struct upipe *upipe,
     }
 }
 
-/** @internal @This is a helper function to parse descriptors and import
+/** @internal @This is a helper function to parse ES descriptors and import
  * the relevant ones into flow definition.
  *
  * @param upipe description structure of the pipe
@@ -271,9 +271,10 @@ static void upipe_ts_pmtd_parse_streamtype(struct upipe *upipe,
  * @param desclength length of the descriptor list
  * @return an error code
  */
-static void upipe_ts_pmtd_parse_descs(struct upipe *upipe,
-                                      struct uref *flow_def,
-                                      const uint8_t *descl, uint16_t desclength)
+static void upipe_ts_pmtd_parse_es_descs(struct upipe *upipe,
+                                         struct uref *flow_def,
+                                         const uint8_t *descl,
+                                         uint16_t desclength)
 {
     const uint8_t *desc;
     int j = 0;
@@ -562,7 +563,7 @@ static void upipe_ts_pmtd_build_es(struct upipe *upipe, const uint8_t *es)
 
     uref_flow_delete_def(flow_def);
     upipe_ts_pmtd_parse_streamtype(upipe, flow_def, streamtype);
-    upipe_ts_pmtd_parse_descs(upipe, flow_def,
+    upipe_ts_pmtd_parse_es_descs(upipe, flow_def,
             descs_get_desc(pmtn_get_descs((uint8_t *)es), 0),
             pmtn_get_desclength(es));
     const char *def;
@@ -576,6 +577,58 @@ static void upipe_ts_pmtd_build_es(struct upipe *upipe, const uint8_t *es)
                       streamtype, pid);
         uref_free(flow_def);
     }
+}
+
+/** @internal @This is a helper function to parse descriptors and import
+ * the relevant ones into flow definition.
+ *
+ * @param upipe description structure of the pipe
+ * @param flow_def flow definition packet to fill in
+ * @param descl pointer to descriptor list
+ * @param desclength length of the descriptor list
+ * @return an error code
+ */
+static int upipe_ts_pmtd_parse_descs(struct upipe *upipe,
+                                     struct uref *flow_def,
+                                     const uint8_t *descl,
+                                     uint16_t desclength)
+{
+    const uint8_t *desc;
+    int j = 0;
+
+    uint8_t descl_copy[desclength];
+    uint16_t copy_len = 0;
+
+    /* cast needed because biTStream expects an uint8_t * (but doesn't write
+     * to it */
+    while ((desc = descl_get_desc((uint8_t *)descl, desclength, j++)) != NULL) {
+        bool valid = true;
+        bool copy = true;
+        uint8_t desc_len = desc_get_length(desc);
+
+        switch (desc_get_tag(desc)) {
+            case 0x5: /* Registration descriptor */
+                if ((valid = desc05_validate(desc))) {
+                    const uint8_t *identifier = desc05_get_identifier(desc);
+                    if (!identifier)
+                        break;
+                    if (!memcmp(identifier, "CUEI", 4))
+                        copy = false;
+                }
+                break;
+
+            default:
+                break;
+        }
+
+        if (!valid)
+            upipe_warn_va(upipe, "invalid descriptor 0x%x", desc_get_tag(desc));
+        if (copy) {
+            memcpy(descl_copy + copy_len, desc, DESC_HEADER_SIZE + desc_len);
+            copy_len += DESC_HEADER_SIZE + desc_len;
+        }
+    }
+    return uref_ts_flow_add_descriptor(flow_def, descl_copy, copy_len);
 }
 
 /** @internal @This parses a new PSI section.
@@ -624,9 +677,10 @@ static void upipe_ts_pmtd_input(struct upipe *upipe, struct uref *uref,
     }
     UBASE_FATAL(upipe, uref_flow_set_def(flow_def, "void."))
     UBASE_FATAL(upipe, uref_ts_flow_set_pcr_pid(flow_def, pmt_get_pcrpid(pmt)))
-    UBASE_FATAL(upipe, uref_ts_flow_add_descriptor(flow_def,
-                descs_get_desc(pmt_get_descs((uint8_t *)pmt), 0),
-                pmt_get_desclength(pmt)))
+    UBASE_FATAL(upipe, upipe_ts_pmtd_parse_descs(
+            upipe, flow_def,
+            descs_get_desc(pmt_get_descs((uint8_t *)pmt), 0),
+            pmt_get_desclength(pmt)))
     flow_def = upipe_ts_pmtd_store_flow_def_attr(upipe, flow_def);
     if (unlikely(flow_def == NULL)) {
         upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
