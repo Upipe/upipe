@@ -226,22 +226,31 @@ int main(int argc, char *argv[])
     assert(!systime);
 
     uref = uref_block_alloc(uref_mgr, ubuf_mgr,
-                            PMT_HEADER_SIZE + PMT_ES_SIZE + PSI_CRC_SIZE + 10);
+                            PMT_HEADER_SIZE + PMT_ES_SIZE + PSI_CRC_SIZE +
+                            5 + 5 + 6);
     assert(uref != NULL);
     size = -1;
     ubase_assert(uref_block_write(uref, 0, &size, &buffer));
-    assert(size == PMT_HEADER_SIZE + PMT_ES_SIZE + PSI_CRC_SIZE + 10);
+    assert(size == PMT_HEADER_SIZE + PMT_ES_SIZE + PSI_CRC_SIZE + 5 + 5 + 6);
     pmt_init(buffer);
-    pmt_set_length(buffer, PMT_ES_SIZE + 10);
+    pmt_set_length(buffer, PMT_ES_SIZE + 16);
     pmt_set_program(buffer, program);
     psi_set_version(buffer, 2);
     psi_set_current(buffer);
     pmt_set_pcrpid(buffer, pcrpid);
-    pmt_set_desclength(buffer, 5);
+    pmt_set_desclength(buffer, 5 + 6);
     desc = descs_get_desc(pmt_get_descs(buffer), 0);
     desc_set_tag(desc, 0x42);
     desc_set_length(desc, 3);
     desc[2] = desc[3] = desc[4] = 0xff;
+    /* will be dropped */
+    desc = descs_get_desc(pmt_get_descs(buffer), 1);
+    desc_set_tag(desc, 0x05);
+    desc_set_length(desc, 4);
+    desc[2] = 'C';
+    desc[3] = 'U';
+    desc[4] = 'E';
+    desc[5] = 'I';
     pmt_es = pmt_get_es(buffer, 0);
     pmtn_init(pmt_es);
     pmtn_set_pid(pmt_es, 13);
