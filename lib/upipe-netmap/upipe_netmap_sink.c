@@ -184,7 +184,7 @@ struct upipe_netmap_sink_audio {
     /* Maximum transmission unit. */
     int mtu;
     /* Configured packet size (no CRC). */
-    uint16_t packet_size;
+    uint16_t payload_size;
 
     /* Details for all destinations. */
     struct aes67_flow flows[AES67_MAX_FLOWS][AES67_MAX_PATHS];
@@ -355,7 +355,7 @@ UBASE_FROM_TO(upipe_netmap_sink, upipe_netmap_sink_audio, audio_subpipe, audio_s
 static int get_audio(struct upipe_netmap_sink_audio *audio_subpipe);
 static void pack_audio(struct upipe_netmap_sink_audio *audio_subpipe);
 static void handle_audio_tail(struct upipe_netmap_sink_audio *audio_subpipe);
-static inline uint16_t audio_packet_size(uint16_t channels, uint16_t samples, uint16_t header_len);
+static inline uint16_t audio_payload_size(uint16_t channels, uint16_t samples);
 static inline void audio_copy_samples_to_packet(uint8_t *dst, const uint8_t *src,
         int output_channels, int output_samples, int channel_offset);
 
@@ -689,8 +689,7 @@ static struct upipe *_upipe_netmap_sink_alloc(struct upipe_mgr *mgr,
     audio_subpipe->output_samples = 6; /* TODO: other default to catch user not setting this? */
     audio_subpipe->output_channels = 16;
     audio_subpipe->mtu = MTU;
-    audio_subpipe->packet_size = audio_packet_size(16, 6,
-            ETHERNET_HEADER_LEN + IP_HEADER_MINSIZE + UDP_HEADER_SIZE);
+    audio_subpipe->payload_size = audio_payload_size(audio_subpipe->output_channels, audio_subpipe->output_samples);
     audio_subpipe->need_reconfig = true;
 
     upipe_throw_ready(upipe);
@@ -1723,6 +1722,7 @@ static void upipe_netmap_sink_worker(struct upump *upump)
                 memset(audio_subpipe->audio_data, 0, sizeof audio_subpipe->audio_data);
             }
 
+            uint16_t packet_size = audio_subpipe->flows[0][0].header_len + audio_subpipe->payload_size;
             for (int flow = 0; flow < audio_subpipe->num_flows; flow++) {
                 int channel_offset = flow * audio_subpipe->output_channels;
 
@@ -1746,7 +1746,7 @@ static void upipe_netmap_sink_worker(struct upump *upump)
                                 audio_subpipe->output_samples,
                                 channel_offset);
 
-                    ring_state[i].slot->len = audio_subpipe->packet_size;
+                    ring_state[i].slot->len = packet_size;
                     ring_state[i].slot->ptr = 0;
                     advance_ring_state(&ring_state[i]);
                 }
@@ -1765,7 +1765,7 @@ static void upipe_netmap_sink_worker(struct upump *upump)
             rtp_set_seqnum(upipe_netmap_sink->audio_rtp_header, seqnum + 1);
             rtp_set_timestamp(upipe_netmap_sink->audio_rtp_header, timestamp + audio_subpipe->output_samples);
 
-            upipe_netmap_sink->bits += 8 * (audio_subpipe->packet_size + 4/*CRC*/) * audio_subpipe->num_flows;
+            upipe_netmap_sink->bits += 8 * (packet_size + 4/*CRC*/) * audio_subpipe->num_flows;
             txavail -= audio_subpipe->num_flows;
 
             aps_inc_audio(&upipe_netmap_sink->audio_packet_state);
@@ -2078,7 +2078,7 @@ static bool upipe_netmap_sink_output(struct upipe *upipe, struct uref *uref,
 
             struct upipe_netmap_sink_audio *audio_subpipe = upipe_netmap_sink_to_audio_subpipe(upipe_netmap_sink);
             const uint64_t audio_pps = (48000 / audio_subpipe->output_samples) * audio_subpipe->num_flows;
-            const uint64_t audio_bitrate = 8 * (audio_subpipe->packet_size + 4/*CRC*/) * audio_pps;
+            const uint64_t audio_bitrate = 8 * (audio_subpipe->flows[0][0].header_len + audio_subpipe->payload_size + 4/*CRC*/) * audio_pps;
             upipe_dbg_va(upipe, "audio bitrate %"PRIu64" video bitrate %"PRIu64" \n", audio_bitrate, upipe_netmap_sink->rate);
             upipe_netmap_sink->rate += audio_bitrate * upipe_netmap_sink->fps.den;
 
@@ -3134,7 +3134,7 @@ make_header:
         /* Write IP and UDP headers. */
         upipe_udp_raw_fill_headers(buf, src_ip, dst_ip, src_port, dst_port,
                 10 /* TTL */, 0 /* TOS */,
-                audio_subpipe->output_samples * audio_subpipe->output_channels * 3 + RTP_HEADER_SIZE);
+                audio_subpipe->payload_size);
     }
 
     aes67_flow[0].populated = true;
@@ -3144,9 +3144,9 @@ make_header:
     return ret;
 }
 
-static inline uint16_t audio_packet_size(uint16_t channels, uint16_t samples, uint16_t header_len)
+static inline uint16_t audio_payload_size(uint16_t channels, uint16_t samples)
 {
-    return header_len + RTP_HEADER_SIZE + channels * samples * 3 /*bytes per sample*/;
+    return RTP_HEADER_SIZE + channels * samples * 3 /*bytes per sample*/;
 }
 
 static int audio_subpipe_set_option(struct upipe *upipe, const char *option,
@@ -3166,8 +3166,7 @@ static int audio_subpipe_set_option(struct upipe *upipe, const char *option,
         }
 
         /* A sample packs to 3 bytes.  16 channels. */
-        int needed_size = audio_packet_size(audio_subpipe->output_channels, output_samples,
-                audio_subpipe->flows[0][0].header_len);
+        int needed_size = audio_payload_size(audio_subpipe->output_channels, output_samples);
         if (needed_size > audio_subpipe->mtu) {
             upipe_err_va(upipe, "requested frame or packet size (%d bytes, %d samples) is greater than MTU (%d)",
                     needed_size, output_samples, audio_subpipe->mtu);
@@ -3175,7 +3174,7 @@ static int audio_subpipe_set_option(struct upipe *upipe, const char *option,
         }
 
         audio_subpipe->output_samples = output_samples;
-        audio_subpipe->packet_size = needed_size;
+        audio_subpipe->payload_size = needed_size;
         audio_subpipe->need_reconfig = true;
         return UBASE_ERR_NONE;
     }
@@ -3187,8 +3186,7 @@ static int audio_subpipe_set_option(struct upipe *upipe, const char *option,
             return UBASE_ERR_INVALID;
         }
         audio_subpipe->output_channels = output_channels;
-        audio_subpipe->packet_size = audio_packet_size(output_channels, audio_subpipe->output_samples,
-                audio_subpipe->flows[0][0].header_len);
+        audio_subpipe->payload_size = audio_payload_size(output_channels, audio_subpipe->output_samples);
         audio_subpipe->num_flows = audio_count_populated_flows(audio_subpipe);
         audio_subpipe->need_reconfig = true;
         return UBASE_ERR_NONE;
