@@ -964,7 +964,7 @@ static void upipe_rtpfb_output_input(struct upipe *upipe, struct uref *uref,
         uint32_t last_rr = rtcp_xr_dlrr_get_lrr(buf);
 
         if (last_rr != ((upipe_rtpfb_output->xr_cr >> 16) & 0xffffffff)) {
-            upipe_warn_va(upipe,
+            upipe_dbg_va(upipe,
                     "DLRR not for last RRT : %" PRIx64 " , %x",
                     (upipe_rtpfb_output->xr_cr >> 16) & 0xffffffff, last_rr);
             goto unmap;
