@@ -90,7 +90,7 @@ struct upipe_sdi_enc {
 
     /** Converts planar 10 bit to UYVY */
     void (*planar_to_uyvy_10)(uint16_t *dst, const uint16_t *y, const uint16_t *u,
-                              const uint16_t *v, uintptr_t width);
+                              const uint16_t *v, uintptr_t width, uint32_t mask);
 
     /** Converts v210 to UYVY */
     void (*v210_to_uyvy)(const uint32_t *src, uint16_t *uyvy, uintptr_t width);
@@ -864,7 +864,8 @@ static void upipe_sdi_enc_encode_line(struct upipe *upipe, int line_num, uint16_
         if (upipe_sdi_enc->input_is_v210)
             upipe_sdi_enc->v210_to_uyvy((uint32_t *)y, active_start, input_hsize);
         else if (upipe_sdi_enc->input_bit_depth == 10)
-            upipe_sdi_enc->planar_to_uyvy_10(active_start, (uint16_t *)y, (uint16_t *)u, (uint16_t *)v, input_hsize);
+            upipe_sdi_enc->planar_to_uyvy_10(active_start, (uint16_t *)y,
+                    (uint16_t *)u, (uint16_t *)v, input_hsize, 0x3ff);
         else
             upipe_sdi_enc->planar_to_uyvy_8 (active_start, y, u, v, input_hsize);
     }
@@ -1109,7 +1110,8 @@ static void upipe_hd_sdi_enc_encode_line(struct upipe *upipe, int line_num, uint
         if (upipe_sdi_enc->input_is_v210)
             upipe_sdi_enc->v210_to_uyvy((uint32_t *)y, active_start, input_hsize);
         else if (upipe_sdi_enc->input_bit_depth == 10)
-            upipe_sdi_enc->planar_to_uyvy_10(active_start, (uint16_t *)y, (uint16_t *)u, (uint16_t *)v, input_hsize);
+            upipe_sdi_enc->planar_to_uyvy_10(active_start, (uint16_t *)y,
+                    (uint16_t *)u, (uint16_t *)v, input_hsize, 0x3ff);
         else
             upipe_sdi_enc->planar_to_uyvy_8 (active_start, y, u, v, input_hsize);
     }

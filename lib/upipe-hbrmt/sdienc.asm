@@ -270,7 +270,7 @@ planar_to_uyvy_8
 %macro planar_to_uyvy_10 0
 
 ; planar_to_uyvy_10(uint16_t *dst, const uint16_t *y, const uint16_t *u, const uint16_t *v, const int64_t width)
-cglobal planar_to_uyvy_10, 5, 5, 8+2*ARCH_X86_64, dst, y, u, v, pixels
+cglobal planar_to_uyvy_10, 6, 6, 8+3*ARCH_X86_64, dst, y, u, v, pixels, mask
     lea       yq, [yq+2*pixelsq]
     lea       dstq, [dstq+4*pixelsq]
     add       uq, pixelsq
@@ -280,9 +280,12 @@ cglobal planar_to_uyvy_10, 5, 5, 8+2*ARCH_X86_64, dst, y, u, v, pixels
 %if ARCH_X86_64
     mova      m8, [uyvy_enc_min_10]
     mova      m9, [uyvy_enc_max_10]
+    movd xm10, maskd
+    SPLATW m10, xm10
 %else
     %define m8  [uyvy_enc_min_10]
     %define m9  [uyvy_enc_max_10]
+    %error
 %endif ; ARCH_X86_64
 
 .loop:
@@ -301,6 +304,11 @@ cglobal planar_to_uyvy_10, 5, 5, 8+2*ARCH_X86_64, dst, y, u, v, pixels
     vinserti128  m2, m2, [uq +   pixelsq + 16], 1
     vinserti128  m3, m3, [vq +   pixelsq + 16], 1
 %endif
+
+    pand m0, m10
+    pand m1, m10
+    pand m2, m10
+    pand m3, m10
 
     CLIPW     m0, m8, m9
     CLIPW     m1, m8, m9
