@@ -62,12 +62,12 @@
 /** @This defines an 8-bit packing function. */
 typedef void (*upipe_v210enc_pack_line_8)(
         const uint8_t *y, const uint8_t *u, const uint8_t *v,
-        uint8_t *dst, ptrdiff_t width);
+        uint8_t *dst, uintptr_t width);
 
 /** @This defines a 10-bit packing function. */
 typedef void (*upipe_v210enc_pack_line_10)(
         const uint16_t *y, const uint16_t *u, const uint16_t *v,
-        uint8_t *dst, ptrdiff_t width);
+        uint8_t *dst, uintptr_t width);
 
 /** upipe_v210enc structure with v210enc parameters */
 struct upipe_v210enc {

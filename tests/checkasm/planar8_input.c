@@ -43,7 +43,7 @@ void checkasm_check_planar8_input(void)
         void (*sdi)(const uint8_t *y, const uint8_t *u, const uint8_t *v, uint8_t *l, const int64_t width);
         void (*sdi_2)(const uint8_t *y, const uint8_t *u, const uint8_t *v, uint8_t *dst1, uint8_t *dst2, uintptr_t pixels);
         void (*uyvy)(uint16_t *dst, const uint8_t *y, const uint8_t *u, const uint8_t *v, uintptr_t pixels);
-        void (*v210)(const uint8_t *y, const uint8_t *u, const uint8_t *v, uint8_t *dst, ptrdiff_t pixels);
+        void (*v210)(const uint8_t *y, const uint8_t *u, const uint8_t *v, uint8_t *dst, uintptr_t pixels);
     } s = {
 #ifdef HAVE_NETMAP
         .sdi   = upipe_planar_to_sdi_8_c,
@@ -171,7 +171,7 @@ void checkasm_check_planar8_input(void)
         uint8_t dst1[NUM_SAMPLES * 4 / 3 + 32];
         const int pixels = NUM_SAMPLES / 2 / 6 * 6;
 
-        declare_func(void, const uint8_t *y, const uint8_t *u, const uint8_t *v, uint8_t *dst, ptrdiff_t pixels);
+        declare_func(void, const uint8_t *y, const uint8_t *u, const uint8_t *v, uint8_t *dst, uintptr_t pixels);
 
         randomize_buffers(y0, y1, NUM_SAMPLES/2);
         randomize_buffers(u0, u1, NUM_SAMPLES/4);
