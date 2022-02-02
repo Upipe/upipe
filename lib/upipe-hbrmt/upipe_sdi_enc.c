@@ -130,6 +130,7 @@ struct upipe_sdi_enc {
 
     /* whether to compute crc */
     bool crc;
+    bool policy;
 
     /* CRC LUT */
     uint32_t crc_lut[8][1024];
@@ -865,7 +866,8 @@ static void upipe_sdi_enc_encode_line(struct upipe *upipe, int line_num, uint16_
             upipe_sdi_enc->v210_to_uyvy((uint32_t *)y, active_start, input_hsize);
         else if (upipe_sdi_enc->input_bit_depth == 10)
             upipe_sdi_enc->planar_to_uyvy_10(active_start, (uint16_t *)y,
-                    (uint16_t *)u, (uint16_t *)v, input_hsize, 0x3ff);
+                    (uint16_t *)u, (uint16_t *)v, input_hsize,
+                    (upipe_sdi_enc->policy) ? 0x3ff : 0x3fc);
         else
             upipe_sdi_enc->planar_to_uyvy_8 (active_start, y, u, v, input_hsize);
     }
@@ -1111,7 +1113,8 @@ static void upipe_hd_sdi_enc_encode_line(struct upipe *upipe, int line_num, uint
             upipe_sdi_enc->v210_to_uyvy((uint32_t *)y, active_start, input_hsize);
         else if (upipe_sdi_enc->input_bit_depth == 10)
             upipe_sdi_enc->planar_to_uyvy_10(active_start, (uint16_t *)y,
-                    (uint16_t *)u, (uint16_t *)v, input_hsize, 0x3ff);
+                    (uint16_t *)u, (uint16_t *)v, input_hsize,
+                    (upipe_sdi_enc->policy) ? 0x3ff : 0x3fc);
         else
             upipe_sdi_enc->planar_to_uyvy_8 (active_start, y, u, v, input_hsize);
     }
@@ -1722,6 +1725,8 @@ static int upipe_sdi_enc_control(struct upipe *upipe, int command, va_list args)
                 upipe_sdi_enc->ttx = strcmp(v, "0");
             } else if (!strcmp(k, "crc")) {
                 upipe_sdi_enc->crc = strcmp(v, "0");
+            } else if (!strcmp(k, "policy")) {
+                upipe_sdi_enc->policy = strcmp(v, "0");
             } else
                 return UBASE_ERR_INVALID;
 
@@ -1758,6 +1763,7 @@ static struct upipe *_upipe_sdi_enc_alloc(struct upipe_mgr *mgr,
 
     /* should calculate crc by default */
     upipe_sdi_enc->crc = true;
+    upipe_sdi_enc->policy = true;
 
     upipe_sdi_enc->dolby_offset = 0;
     upipe_sdi_enc->ttx = false;
