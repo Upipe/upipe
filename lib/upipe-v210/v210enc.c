@@ -41,13 +41,13 @@ static inline void wl32(uint8_t *dst, uint32_t u)
     *dst++ = (u >> 24) & 0xff;
 }
 
-#define WRITE_PIXELS(a, b, c)           \
-    do {                                \
-        val =   CLIP(*a++);             \
-        val |= (CLIP(*b++) << 10) |     \
-               (CLIP(*c++) << 20);      \
-        wl32(dst, val);                 \
-        dst += 4;                       \
+#define WRITE_PIXELS(a, b, c)              \
+    do {                                   \
+        val =   CLIP(*a++ & mask);         \
+        val |= (CLIP(*b++ & mask) << 10) | \
+               (CLIP(*c++ & mask) << 20);  \
+        wl32(dst, val);                    \
+        dst += 4;                          \
     } while (0)
 
 #define WRITE_PIXELS8(a, b, c)          \
@@ -79,7 +79,7 @@ void upipe_planar_to_v210_8_c(const uint8_t *y, const uint8_t *u,
 }
 
 void upipe_planar_to_v210_10_c(const uint16_t *y, const uint16_t *u,
-        const uint16_t *v, uint8_t *dst, uintptr_t pixels)
+        const uint16_t *v, uint8_t *dst, uintptr_t pixels, uint32_t mask)
 {
     uint32_t val;
     int i;

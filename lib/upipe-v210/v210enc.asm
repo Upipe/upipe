@@ -48,7 +48,7 @@ SECTION .text
 %macro planar_to_v210_10 0
 
 ; planar_to_v210_10(const uint16_t *y, const uint16_t *u, const uint16_t *v, uint8_t *dst, ptrdiff_t width)
-cglobal planar_to_v210_10, 5, 5, 4+cpuflag(avx2), y, u, v, dst, width
+cglobal planar_to_v210_10, 6, 6, 5+cpuflag(avx2), y, u, v, dst, width, mask
     lea     r0, [yq+2*widthq]
     add     uq, widthq
     add     vq, widthq
@@ -56,22 +56,27 @@ cglobal planar_to_v210_10, 5, 5, 4+cpuflag(avx2), y, u, v, dst, width
 
     mova    m2, [v210_enc_min_10]
     mova    m3, [v210_enc_max_10]
+    movd   xm4, maskd
+    SPLATW  m4, xm4
 
 .loop:
     movu        xm0, [yq+2*widthq]
 %if cpuflag(avx2)
     vinserti128 m0,   m0, [yq+widthq*2+12], 1
 %endif
+    pand    m0, m4
     CLIPW   m0, m2, m3
 
     movq         xm1, [uq+widthq]
     movhps       xm1, [vq+widthq]
 %if cpuflag(avx2)
-    movq         xm4, [uq+widthq+6]
-    movhps       xm4, [vq+widthq+6]
-    vinserti128  m1,   m1, xm4, 1
+    movq         xm5, [uq+widthq+6]
+    movhps       xm5, [vq+widthq+6]
+    vinserti128  m1,   m1, xm5, 1
 %endif
+    pand    m1, m4
     CLIPW   m1, m2, m3
+
 
     pmullw  m0, [v210_enc_luma_mult_10]
     pshufb  m0, [v210_enc_luma_shuf_10]

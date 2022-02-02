@@ -67,7 +67,7 @@ typedef void (*upipe_v210enc_pack_line_8)(
 /** @This defines a 10-bit packing function. */
 typedef void (*upipe_v210enc_pack_line_10)(
         const uint16_t *y, const uint16_t *u, const uint16_t *v,
-        uint8_t *dst, uintptr_t width);
+        uint8_t *dst, uintptr_t width, uint32_t mask);
 
 /** upipe_v210enc structure with v210enc parameters */
 struct upipe_v210enc {
@@ -266,7 +266,7 @@ static bool upipe_v210enc_handle(struct upipe *upipe, struct uref *uref,
         for (h = 0; h < input_vsize; h++) {
             uint32_t val = 0;
             w = (input_hsize / 6) * 6;
-            upipe_v210enc->pack_line_10(y, u, v, dst, w);
+            upipe_v210enc->pack_line_10(y, u, v, dst, w, 0x3ff);
 
             y += w;
             u += w >> 1;
