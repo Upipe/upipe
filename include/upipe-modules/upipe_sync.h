@@ -43,7 +43,7 @@ extern "C" {
 enum uprobe_sync_event {
     UPROBE_SYNC_SENTINEL = UPROBE_LOCAL,
 
-    /** received picture event (unsigned int got_picture) */
+    /** received picture event (unsigned int got_picture, bool *stop) */
     UPROBE_SYNC_PICTURE
 };
 
