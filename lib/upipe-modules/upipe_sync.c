@@ -871,6 +871,7 @@ static void cb(struct upump *upump)
 
         if (stop) {
             upipe_warn(upipe, "not restarting the upump");
+            upipe_sync_set_upump(upipe, NULL);
         } else {
             upipe_sync_wait_upump(upipe, wait, cb);
         }
