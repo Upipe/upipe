@@ -137,6 +137,7 @@ static struct output audio_output = {
     .sink = NULL,
 };
 static bool rewrite_date = false;
+static uint64_t quit_timeout = 0;
 static uint64_t seek = 0;
 static uint64_t sequence = 0;
 static uint64_t delay = 0;
@@ -156,6 +157,7 @@ static struct upipe_mgr *setflowdef_mgr = NULL;
 static struct uprobe *main_probe = NULL;
 static struct uprobe *dejitter_probe = NULL;
 static struct uref_mgr *uref_mgr;
+static struct upump *quit_timeout_pump = NULL;
 
 static struct uprobe *uprobe_rewrite_date_alloc(struct uprobe *next,
                                                 bool video);
@@ -245,6 +247,8 @@ static void cmd_stop(void)
  */
 static void cmd_quit(void)
 {
+    if (quit_timeout)
+        upump_start(quit_timeout_pump);
 #if 0
     /* FIXME this requires being in the sink thread */
     if (ts_mux) {
@@ -277,6 +281,13 @@ static void sigint_cb(struct upump *upump)
     else
         exit(-1);
     graceful = false;
+}
+
+/** @This handles SIGINT and SIGTERM signal. */
+static void quit_timeout_cb(struct upump *upump)
+{
+    uprobe_warn(main_probe, NULL, "quit timeout");
+    exit(-1);
 }
 
 /** @This handles seek.
@@ -1270,6 +1281,7 @@ enum opt {
     OPT_MUX_MAX_DELAY,
     OPT_MIN_DEVIATION,
     OPT_DELAY,
+    OPT_QUIT_TIMEOUT,
 };
 
 static struct option options[] = {
@@ -1298,6 +1310,7 @@ static struct option options[] = {
     { "mux-max-delay", required_argument, NULL, OPT_MUX_MAX_DELAY },
     { "min-deviation", required_argument, NULL, OPT_MIN_DEVIATION },
     { "delay", required_argument, NULL, OPT_DELAY },
+    { "quit-timeout", required_argument, NULL, OPT_QUIT_TIMEOUT },
     { 0, 0, 0, 0 },
 };
 
@@ -1427,6 +1440,9 @@ int main(int argc, char **argv)
         case OPT_DELAY:
             delay = strtoull(optarg, NULL, 10);
             break;
+        case OPT_QUIT_TIMEOUT:
+            quit_timeout = strtoull(optarg, NULL, 10);
+            break;
 
         case OPT_HELP:
             return usage(argv[0], NULL);
@@ -1461,6 +1477,10 @@ int main(int argc, char **argv)
             (void *)SIGTERM, NULL, SIGTERM);
     upump_set_status(sigterm_pump, false);
     upump_start(sigterm_pump);
+    quit_timeout_pump =
+        upump_alloc_timer(upump_mgr, quit_timeout_cb, NULL, NULL,
+                          quit_timeout * 27000000, 0);
+    upump_set_status(quit_timeout_pump, false);
 
     struct upump *stdin_pump = NULL;
     if (!no_stdin) {
@@ -1781,6 +1801,8 @@ int main(int argc, char **argv)
     /*
      * release resources
      */
+    upump_stop(quit_timeout_pump);
+    upump_free(quit_timeout_pump);
     upump_stop(sigint_pump);
     upump_free(sigint_pump);
     upump_stop(sigterm_pump);
