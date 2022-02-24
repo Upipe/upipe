@@ -69,6 +69,8 @@ enum upipe_avfsink_command {
     UPIPE_AVFSINK_GET_TS_OFFSET,
     /** sets the timestamp offset (uint64_t) */
     UPIPE_AVFSINK_SET_TS_OFFSET,
+    /** returns the current position of the sink, in octets (uint64_t *) */
+    UPIPE_AVFSINK_GET_POSITION,
 };
 
 /** @This enumerates the avformat sink sub pipe private commands. */
@@ -211,6 +213,19 @@ static inline int upipe_avfsink_set_ts_offset(struct upipe *upipe,
 {
     return upipe_control(upipe, UPIPE_AVFSINK_SET_TS_OFFSET,
                          UPIPE_AVFSINK_SIGNATURE, ts_offset);
+}
+
+/** @This gets the current file position
+ *
+ * @param upipe description structure of the pipe
+ * @param position_p filled with current position, in octets
+ * @return an error code
+ */
+static inline int upipe_avfsink_get_position(struct upipe *upipe,
+                                             uint64_t *position_p)
+{
+    return upipe_control(upipe, UPIPE_AVFSINK_GET_POSITION,
+                         UPIPE_AVFSINK_SIGNATURE, position_p);
 }
 
 /** @This sets the default disposition flag.
