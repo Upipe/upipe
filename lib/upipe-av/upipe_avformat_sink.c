@@ -1306,6 +1306,27 @@ static int _upipe_avfsink_set_ts_offset(struct upipe *upipe, uint64_t ts_offset)
     return UBASE_ERR_NONE;
 }
 
+/** @internal @This gets the current file position
+ *
+ * @param upipe description structure of the pipe
+ * @param position_p filled with current position, in octets
+ * @return an error code
+ */
+static int _upipe_avfsink_get_position(struct upipe *upipe,
+                                       uint64_t *position_p)
+{
+    struct upipe_avfsink *upipe_avfsink = upipe_avfsink_from_upipe(upipe);
+    if (!upipe_avfsink->opened ||
+        upipe_avfsink->context->oformat->flags & AVFMT_NOFILE)
+        return UBASE_ERR_INVALID;
+    int64_t ret = avio_tell(upipe_avfsink->context->pb);
+    if (ret < 0)
+        return UBASE_ERR_EXTERNAL;
+    if (position_p != NULL)
+        *position_p = ret;
+    return UBASE_ERR_NONE;
+}
+
 /** @internal @This processes control commands on an avformat source pipe.
  *
  * @param upipe description structure of the pipe
@@ -1380,6 +1401,11 @@ static int upipe_avfsink_control(struct upipe *upipe, int command, va_list args)
             UBASE_SIGNATURE_CHECK(args, UPIPE_AVFSINK_SIGNATURE)
             uint64_t ts_offset = va_arg(args, uint64_t);
             return _upipe_avfsink_set_ts_offset(upipe, ts_offset);
+        }
+        case UPIPE_AVFSINK_GET_POSITION: {
+            UBASE_SIGNATURE_CHECK(args, UPIPE_AVFSINK_SIGNATURE)
+            uint64_t *position_p = va_arg(args, uint64_t *);
+            return _upipe_avfsink_get_position(upipe, position_p);
         }
 
         case UPIPE_GET_URI: {
