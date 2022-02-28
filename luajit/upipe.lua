@@ -696,7 +696,9 @@ local function upipe_helper_alloc(cb)
             end
             _control.iterate_sub = function (pipe, sub_p)
                 if sub_p[0] == nil then
-                    sub_p[0] = pipe.props._subpipes[1].upipe
+                    if pipe.props._subpipes[1] then
+                        sub_p[0] = pipe.props._subpipes[1].upipe
+                    end
                 else
                     for i, sub in ipairs(pipe.props._subpipes) do
                         if sub.upipe == sub_p[0] then
