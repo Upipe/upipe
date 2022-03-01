@@ -1005,6 +1005,27 @@ static void upipe_avfsink_mux(struct upipe *upipe, struct upump **upump_p)
             avpkt.duration = av_rescale_q(duration, uclock_time_base,
                                           stream->time_base);
 
+        uint64_t wallclock;
+        if (ubase_check(uref_avfsink_get_wallclock(uref, &wallclock))) {
+#if LIBAVCODEC_VERSION_INT < AV_VERSION_INT(58, 66, 100)
+            upipe_err(upipe, "AV_PKT_DATA_PRFT not available");
+            upipe_throw_error(upipe, UBASE_ERR_EXTERNAL);
+#else
+            void *side_data =
+                av_packet_new_side_data(&avpkt, AV_PKT_DATA_PRFT,
+                                        sizeof(AVProducerReferenceTime));
+            if (likely(side_data != NULL)) {
+                AVProducerReferenceTime *prft = side_data;
+                prft->wallclock = wallclock / UCLOCK_MICROSECOND;
+                prft->flags = 0;
+            } else {
+                upipe_av_strerror(AVERROR(ENOMEM), buf);
+                upipe_err_va(upipe, "cannot allocate side data (%s)", buf);
+                upipe_throw_error(upipe, UBASE_ERR_EXTERNAL);
+            }
+#endif
+        }
+
         uref_block_extract(uref, 0, avpkt.size, avpkt.data);
         uref_free(uref);
 
