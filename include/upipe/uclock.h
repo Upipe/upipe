@@ -44,6 +44,8 @@ extern "C" {
 /** @This represents the Upipe clock frequency. */
 #define UCLOCK_FREQ UINT64_C(27000000)
 
+/** @This is the number of clock ticks in a microsecond */
+#define UCLOCK_MICROSECOND  (UCLOCK_FREQ / 1000000)
 /** @This is the number of clock ticks in a millisecond */
 #define UCLOCK_MILLISECOND  (UCLOCK_FREQ / 1000)
 /** @This is the number of clock ticks in a second */

@@ -35,9 +35,13 @@ extern "C" {
 #endif
 
 #include "upipe/upipe.h"
+#include "upipe/uref_attr.h"
 
 #define UPIPE_AVFSINK_SIGNATURE UBASE_FOURCC('a','v','f','k')
 #define UPIPE_AVFSINK_INPUT_SIGNATURE UBASE_FOURCC('a','v','f','i')
+
+/* UTC timestamp, in 27 Mhz ticks, since Unix epoch */
+UREF_ATTR_UNSIGNED(avfsink, wallclock, "avfsink.wallclock", avfsink utc wall clock)
 
 /** @This extends uprobe_event with specific events for avformat sink. */
 enum uprobe_avfsink_event {
