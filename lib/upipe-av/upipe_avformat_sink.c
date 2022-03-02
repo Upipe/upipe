@@ -982,16 +982,16 @@ static void upipe_avfsink_mux(struct upipe *upipe, struct upump **upump_p)
         if (ubase_check(uref_flow_get_random(uref)))
             avpkt.flags |= AV_PKT_FLAG_KEY;
 
+        AVRational uclock_time_base = av_make_q(1, UCLOCK_FREQ);
+
         uint64_t dts;
         if (ubase_check(uref_clock_get_dts_prog(uref, &dts)))
-            avpkt.dts = ((dts - upipe_avfsink->ts_offset) *
-                         stream->time_base.den + UCLOCK_FREQ / 2) /
-                        UCLOCK_FREQ / stream->time_base.num;
+            avpkt.dts = av_rescale_q(dts - upipe_avfsink->ts_offset,
+                                     uclock_time_base, stream->time_base);
         uint64_t pts;
         if (ubase_check(uref_clock_get_pts_prog(uref, &pts)))
-            avpkt.pts = ((pts - upipe_avfsink->ts_offset) *
-                         stream->time_base.den + UCLOCK_FREQ / 2) /
-                        UCLOCK_FREQ / stream->time_base.num;
+            avpkt.pts = av_rescale_q(pts - upipe_avfsink->ts_offset,
+                                     uclock_time_base, stream->time_base);
 
         if (input->ts_max != UINT64_MAX) {
             if (avpkt.dts != AV_NOPTS_VALUE)
@@ -1002,8 +1002,8 @@ static void upipe_avfsink_mux(struct upipe *upipe, struct upump **upump_p)
 
         uint64_t duration;
         if (ubase_check(uref_clock_get_duration(uref, &duration)))
-            avpkt.duration = (duration * stream->time_base.den + UCLOCK_FREQ / 2) /
-                             UCLOCK_FREQ / stream->time_base.num;
+            avpkt.duration = av_rescale_q(duration, uclock_time_base,
+                                          stream->time_base);
 
         uref_block_extract(uref, 0, avpkt.size, avpkt.data);
         uref_free(uref);
