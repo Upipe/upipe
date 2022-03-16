@@ -753,6 +753,8 @@ static void cb(struct upump *upump)
 
     uint64_t now = uclock_now(upipe_sync->uclock);
 
+    bool stop = false;
+
     if (upipe_sync->frame_sync) {
         if (now - upipe_sync->ticks_per_frame > upipe_sync->pts)
             upipe_dbg_va(upipe, "cb after %" PRId64 "ms",
@@ -764,7 +766,8 @@ static void cb(struct upump *upump)
     if (upipe_sync->frame_sync) {
         for (;;) {
             uchain = ulist_peek(&upipe_sync->urefs);
-            upipe_throw(upipe, UPROBE_SYNC_PICTURE, UPIPE_SYNC_SIGNATURE, !!uchain);
+            upipe_throw(upipe, UPROBE_SYNC_PICTURE, UPIPE_SYNC_SIGNATURE,
+                    (unsigned)!!uchain, &stop);
             if (!uchain)
                 break;
 
@@ -866,7 +869,12 @@ static void cb(struct upump *upump)
         else
             wait = upipe_sync->pts - now;
 
-        upipe_sync_wait_upump(upipe, wait, cb);
+        if (stop) {
+            upipe_warn(upipe, "not restarting the upump");
+            upipe_sync_set_upump(upipe, NULL);
+        } else {
+            upipe_sync_wait_upump(upipe, wait, cb);
+        }
     }
 }
 
