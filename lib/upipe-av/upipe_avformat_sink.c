@@ -374,6 +374,10 @@ static int upipe_avfsink_sub_set_flow_def(struct upipe *upipe,
         av_dict_set(&stream->metadata, "language", lang, 0);
     }
 
+    const char *role;
+    if (ubase_check(uref_flow_get_role(flow_def, &role)))
+        av_dict_set(&stream->metadata, "role", role, 0);
+
     AVCodecParameters *codecpar = stream->codecpar;
     codecpar->bit_rate = octetrate * 8;
     codecpar->codec_tag =

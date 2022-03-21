@@ -70,6 +70,7 @@ UREF_ATTR_VOID(flow, original, "f.original", original or copy)
 UREF_ATTR_VOID(flow, global, "f.global", global headers present or required)
 UREF_ATTR_OPAQUE(flow, headers, "f.headers", global headers)
 UREF_ATTR_STRING(flow, name, "f.name", flow name)
+UREF_ATTR_STRING(flow, role, "f.role", flow role)
 
 /** @This sets the flow definition attribute of a uref, with printf-style
  * generation.
