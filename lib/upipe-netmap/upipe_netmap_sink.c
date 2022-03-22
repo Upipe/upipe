@@ -139,7 +139,7 @@ struct upipe_netmap_intf {
 struct audio_packet_state {
     uint32_t num, den;
     uint16_t audio_counter;
-    uint8_t video_counter, video_limit;
+    uint16_t video_counter, video_limit;
 };
 
 struct aes67_flow {
