@@ -1095,20 +1095,31 @@ static int upipe_ts_mux_input_set_flow_def(struct upipe *upipe,
     uint64_t octetrate;
 
     UBASE_RETURN(uref_flow_get_def(flow_def, &def))
-    if (!ubase_ncmp(def, "void.scte35.")) {
+
+    /* check virtual/block and octetrate */
+    const char *sub_def = def;
+    if (!ubase_ncmp(sub_def, "void.")) {
+        sub_def += strlen("void");
+
         octetrate = 0;
+    }
+    else if (!ubase_ncmp(sub_def, "block.")) {
+        sub_def += strlen("block");
 
-    } else if (ubase_ncmp(def, "block.")) {
+        if (!ubase_check(
+                uref_block_flow_get_octetrate(flow_def, &octetrate)) ||
+            !octetrate) {
+            UBASE_RETURN(uref_block_flow_get_max_octetrate(
+                    flow_def, &octetrate));
+            if (!octetrate)
+                return UBASE_ERR_INVALID;
+            upipe_warn_va(upipe, "using max octetrate %"PRIu64" bits/s",
+                          octetrate * 8);
+        }
+    }
+    else {
+        upipe_warn_va(upipe, "unsupported input %s", def);
         return UBASE_ERR_INVALID;
-
-    } else if (!ubase_check(uref_block_flow_get_octetrate(flow_def,
-                                                          &octetrate)) ||
-               !octetrate) {
-        UBASE_RETURN(uref_block_flow_get_max_octetrate(flow_def, &octetrate));
-        if (!octetrate)
-            return UBASE_ERR_INVALID;
-        upipe_warn_va(upipe, "using max octetrate %"PRIu64" bits/s",
-                      octetrate * 8);
     }
 
     struct uref *flow_def_dup;
@@ -1122,8 +1133,40 @@ static int upipe_ts_mux_input_set_flow_def(struct upipe *upipe,
             upipe_ts_conformance_to_string(upipe_ts_mux->conformance)));
     UBASE_FATAL(upipe, uref_block_flow_set_octetrate(flow_def_dup, octetrate));
 
-    uint64_t pes_overhead = 0;
+    /* get input_type and set pes_id */
     enum upipe_ts_mux_input_type input_type = UPIPE_TS_MUX_INPUT_OTHER;
+    if (strstr(def, ".pic.sub.")) {
+        input_type = UPIPE_TS_MUX_INPUT_OTHER;
+        if (!ubase_ncmp(sub_def, ".dvb_teletext.") ||
+            !ubase_ncmp(sub_def, ".dvb_teletext."))
+            UBASE_FATAL(upipe, uref_ts_flow_set_pes_id(
+                    flow_def_dup, PES_STREAM_ID_PRIVATE_1));
+    } else if (strstr(def, ".pic.")) {
+        input_type = UPIPE_TS_MUX_INPUT_VIDEO;
+        UBASE_FATAL(upipe, uref_ts_flow_set_pes_id(
+                flow_def_dup, PES_STREAM_ID_VIDEO_MPEG));
+    } else if (strstr(def, ".sound.")) {
+        input_type = UPIPE_TS_MUX_INPUT_AUDIO;
+        if (!ubase_ncmp(sub_def, ".mp2.") ||
+            !ubase_ncmp(sub_def, ".mp3.")) {
+            UBASE_FATAL(upipe, uref_ts_flow_set_pes_id(
+                    flow_def_dup, PES_STREAM_ID_AUDIO_MPEG));
+        } else if (!ubase_ncmp(sub_def, ".aac.") ||
+                   !ubase_ncmp(sub_def, ".aac_latm.")) {
+            UBASE_FATAL(upipe, uref_ts_flow_set_pes_id(
+                    flow_def_dup, PES_STREAM_ID_AUDIO_MPEG));
+        } else if (!ubase_ncmp(sub_def, ".ac3.") ||
+                   !ubase_ncmp(sub_def, ".eac3.") ||
+                   !ubase_ncmp(sub_def, ".dts.") ||
+                   !ubase_ncmp(sub_def, ".opus.")) {
+            UBASE_FATAL(upipe, uref_ts_flow_set_pes_id(
+                    flow_def_dup, PES_STREAM_ID_PRIVATE_1));
+        }
+    } else if (!ubase_ncmp(def, "void.scte35.")) {
+        input_type = UPIPE_TS_MUX_INPUT_SCTE35;
+    }
+
+    uint64_t pes_overhead = 0;
     uint64_t buffer_size = 0;
     uint64_t max_delay = MAX_DELAY;
     struct urational au_per_sec, original_au_per_sec;
@@ -1134,15 +1177,14 @@ static int upipe_ts_mux_input_set_flow_def(struct upipe *upipe,
     bool has_random = false;
     uint64_t coalesce_latency = 0;
 
-    if (strstr(def, ".pic.sub.") != NULL) {
-        input_type = UPIPE_TS_MUX_INPUT_OTHER;
+    if (!ubase_ncmp(def, "void.")) {
+        /* nothing to do */
+    } else if (strstr(def, ".pic.sub.") != NULL) {
         if (!ubase_ncmp(def, "block.dvb_teletext.")) {
             buffer_size = BS_TELX;
             max_delay = MAX_DELAY_TELX;
             au_irregular = false;
             pes_alignment = true;
-            UBASE_FATAL(upipe, uref_ts_flow_set_pes_id(flow_def_dup,
-                                                PES_STREAM_ID_PRIVATE_1));
             UBASE_FATAL(upipe, uref_ts_flow_set_pes_header(flow_def_dup,
                                                 PES_HEADER_SIZE_TELX));
             UBASE_FATAL(upipe, uref_ts_flow_set_tb_rate(flow_def_dup,
@@ -1162,8 +1204,6 @@ static int upipe_ts_mux_input_set_flow_def(struct upipe *upipe,
             buffer_size = BS_DVBSUB;
             max_delay = MAX_DELAY_DVBSUB;
             uref_block_flow_get_buffer_size(flow_def, &buffer_size);
-            UBASE_FATAL(upipe, uref_ts_flow_set_pes_id(flow_def_dup,
-                                                PES_STREAM_ID_PRIVATE_1));
             UBASE_FATAL(upipe, uref_ts_flow_set_tb_rate(flow_def_dup,
                                                 octetrate));
 
@@ -1176,7 +1216,6 @@ static int upipe_ts_mux_input_set_flow_def(struct upipe *upipe,
         }
 
     } else if (strstr(def, ".pic.") != NULL) {
-        input_type = UPIPE_TS_MUX_INPUT_VIDEO;
         has_random = true;
         if (!ubase_ncmp(def, "block.mpeg1video.")) {
             pes_alignment = true;
@@ -1189,8 +1228,6 @@ static int upipe_ts_mux_input_set_flow_def(struct upipe *upipe,
         } else if (!ubase_ncmp(def, "block.hevc.")) {
             max_delay = MAX_DELAY_HEVC;
         }
-        UBASE_FATAL(upipe, uref_ts_flow_set_pes_id(flow_def_dup,
-                                                PES_STREAM_ID_VIDEO_MPEG));
 
         uint64_t max_octetrate = octetrate;
         uref_block_flow_get_max_octetrate(flow_def, &max_octetrate);
@@ -1215,14 +1252,11 @@ static int upipe_ts_mux_input_set_flow_def(struct upipe *upipe,
             (au_per_sec.num + au_per_sec.den - 1) / au_per_sec.den;
 
     } else if (strstr(def, ".sound.") != NULL) {
-        input_type = UPIPE_TS_MUX_INPUT_AUDIO;
         uint64_t pes_min_duration = DEFAULT_AUDIO_PES_MIN_DURATION;
         buffer_size = BS_ADTS_2;
 
         if (!ubase_ncmp(def, "block.mp2.") || !ubase_ncmp(def, "block.mp3.")) {
             pes_alignment = true;
-            UBASE_FATAL(upipe, uref_ts_flow_set_pes_id(flow_def_dup,
-                                                 PES_STREAM_ID_AUDIO_MPEG));
         } else if (!ubase_ncmp(def, "block.aac.") ||
                    !ubase_ncmp(def, "block.aac_latm.")) {
             uint8_t channels = 2;
@@ -1237,26 +1271,14 @@ static int upipe_ts_mux_input_set_flow_def(struct upipe *upipe,
             if (upipe_ts_mux->conformance == UPIPE_TS_CONFORMANCE_ATSC ||
                 upipe_ts_mux->conformance == UPIPE_TS_CONFORMANCE_ISDB)
                 pes_alignment = true;
-
-            UBASE_FATAL(upipe, uref_ts_flow_set_pes_id(flow_def_dup,
-                                                PES_STREAM_ID_AUDIO_MPEG));
         } else if (!ubase_ncmp(def, "block.ac3.")) {
             buffer_size = BS_A52;
-            UBASE_FATAL(upipe, uref_ts_flow_set_pes_id(flow_def_dup,
-                                                 PES_STREAM_ID_PRIVATE_1));
             pes_min_duration = 0;
         } else if (!ubase_ncmp(def, "block.eac3.")) {
             buffer_size = BS_A52;
-            UBASE_FATAL(upipe, uref_ts_flow_set_pes_id(flow_def_dup,
-                                                PES_STREAM_ID_PRIVATE_1));
             pes_min_duration = 0;
         } else if (!ubase_ncmp(def, "block.dts.")) {
-            UBASE_FATAL(upipe, uref_ts_flow_set_pes_id(flow_def_dup,
-                                                PES_STREAM_ID_PRIVATE_1));
             pes_min_duration = 0;
-        } else if (!ubase_ncmp(def, "block.opus.")) {
-            UBASE_FATAL(upipe, uref_ts_flow_set_pes_id(flow_def_dup,
-                                                 PES_STREAM_ID_PRIVATE_1));
         }
 
         UBASE_FATAL(upipe, uref_ts_flow_set_tb_rate(flow_def_dup, TB_RATE_AUDIO));
@@ -1310,8 +1332,7 @@ static int upipe_ts_mux_input_set_flow_def(struct upipe *upipe,
     }
     UBASE_FATAL(upipe, uref_ts_flow_set_pid(flow_def_dup, pid));
 
-    if (!ubase_ncmp(def, "void.scte35.")) {
-        input_type = UPIPE_TS_MUX_INPUT_SCTE35;
+    if (!ubase_ncmp(def, "void.scte35.")) { /* SCTE-35 */
         input->cr_sys = UINT64_MAX;
         input->dts_sys = UINT64_MAX;
         input->pcr_sys = UINT64_MAX;
@@ -1358,6 +1379,8 @@ static int upipe_ts_mux_input_set_flow_def(struct upipe *upipe,
             return UBASE_ERR_ALLOC;
         }
 
+    } else if (!ubase_ncmp(def, "void.")) { /* virtual PES */
+        upipe_ts_mux_input_store_bin_input(upipe, upipe_use(input->psig_flow));
     } else { /* standard PES */
         upipe_ts_mux_input_store_bin_input(upipe, upipe_use(input->tstd));
         upipe_ts_mux_set_max_delay(input->tstd, input->max_delay);

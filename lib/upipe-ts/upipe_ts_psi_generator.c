@@ -303,6 +303,12 @@ static int upipe_ts_psig_flow_check_inner(struct upipe *upipe,
         !ubase_check(uref_flow_get_raw_def(flow->flow_def, &raw_def)))
         return UBASE_ERR_UNHANDLED;
 
+    const char *sub_def = raw_def;
+    if (!ubase_ncmp(sub_def, "block."))
+        sub_def += strlen("block");
+    else if (!ubase_ncmp(sub_def, "void."))
+        sub_def += strlen("void");
+
     enum upipe_ts_conformance conformance =
         upipe_ts_conformance_from_flow_def(flow->flow_def);
 
@@ -310,10 +316,10 @@ static int upipe_ts_psig_flow_check_inner(struct upipe *upipe,
     uref_flow_get_languages(flow->flow_def, &languages);
 
     *descriptors_size_p = uref_ts_flow_size_descriptors(flow->flow_def);
-    if (!ubase_ncmp(raw_def, "block.dvb_teletext."))
+    if (!ubase_ncmp(sub_def, ".dvb_teletext."))
         *descriptors_size_p += DESC56_HEADER_SIZE +
                                languages * DESC56_LANGUAGE_SIZE;
-    else if (!ubase_ncmp(raw_def, "block.dvb_subtitle."))
+    else if (!ubase_ncmp(sub_def, ".dvb_subtitle."))
         *descriptors_size_p += DESC59_HEADER_SIZE +
                                languages * DESC59_LANGUAGE_SIZE;
 
@@ -322,7 +328,7 @@ static int upipe_ts_psig_flow_check_inner(struct upipe *upipe,
             *descriptors_size_p += DESC0A_HEADER_SIZE +
                                    languages * DESC0A_LANGUAGE_SIZE;
 
-        if (!ubase_ncmp(raw_def, "block.ac3.")) {
+        if (!ubase_ncmp(sub_def, ".ac3.")) {
             if (conformance == UPIPE_TS_CONFORMANCE_ATSC) {
                 *descriptors_size_p += DESC81_HEADER_SIZE;
             }
@@ -333,7 +339,7 @@ static int upipe_ts_psig_flow_check_inner(struct upipe *upipe,
                             flow->flow_def, &component_type)))
                     *descriptors_size_p += 1;
             }
-        } else if (!ubase_ncmp(raw_def, "block.eac3.")) {
+        } else if (!ubase_ncmp(sub_def, ".eac3.")) {
             if (conformance == UPIPE_TS_CONFORMANCE_ATSC) {
                 *descriptors_size_p += DESCCC_HEADER_SIZE;
             }
@@ -344,12 +350,12 @@ static int upipe_ts_psig_flow_check_inner(struct upipe *upipe,
                             flow->flow_def, &component_type)))
                     *descriptors_size_p += 1;
             }
-        } else if (!ubase_ncmp(raw_def, "block.dts."))
+        } else if (!ubase_ncmp(sub_def, ".dts."))
             *descriptors_size_p += DESC7B_HEADER_SIZE;
-        else if (!ubase_ncmp(raw_def, "block.opus."))
+        else if (!ubase_ncmp(sub_def, ".opus."))
             *descriptors_size_p += DESC05_HEADER_SIZE;
-        else if (!ubase_ncmp(raw_def, "block.aac.") ||
-                 !ubase_ncmp(raw_def, "block.aac_latm."))
+        else if (!ubase_ncmp(sub_def, ".aac.") ||
+                 !ubase_ncmp(sub_def, ".aac_latm."))
             switch (conformance) {
                 case UPIPE_TS_CONFORMANCE_DVB:
                 case UPIPE_TS_CONFORMANCE_DVB_NO_TABLES:
@@ -359,17 +365,17 @@ static int upipe_ts_psig_flow_check_inner(struct upipe *upipe,
                 default:
                     break;
             }
-        else if (ubase_ncmp(raw_def, "block.mp2.") &&
-                 ubase_ncmp(raw_def, "block.mp3.")) {
+        else if (ubase_ncmp(sub_def, ".mp2.") &&
+                 ubase_ncmp(sub_def, ".mp3.")) {
             upipe_warn_va(upipe, "unknown flow definition \"%s\"", raw_def);
             return UBASE_ERR_UNHANDLED;
         }
     } else if (ubase_ncmp(raw_def, "void.scte35.") &&
-               ubase_ncmp(raw_def, "block.mpeg1video.") &&
-               ubase_ncmp(raw_def, "block.mpeg2video.") &&
-               ubase_ncmp(raw_def, "block.mpeg4.") &&
-               ubase_ncmp(raw_def, "block.h264.") &&
-               ubase_ncmp(raw_def, "block.hevc.")) {
+               ubase_ncmp(sub_def, ".mpeg1video.") &&
+               ubase_ncmp(sub_def, ".mpeg2video.") &&
+               ubase_ncmp(sub_def, ".mpeg4.") &&
+               ubase_ncmp(sub_def, ".h264.") &&
+               ubase_ncmp(sub_def, ".hevc.")) {
         upipe_warn_va(upipe, "unknown flow definition \"%s\"", raw_def);
         return UBASE_ERR_UNHANDLED;
     }
@@ -430,38 +436,44 @@ static int upipe_ts_psig_flow_build_inner(struct upipe *upipe, uint8_t *es,
     uint8_t languages = 0;
     uref_flow_get_languages(flow->flow_def, &languages);
 
+    const char *sub_def = raw_def;
+    if (!ubase_ncmp(sub_def, "block.")) {
+        sub_def += strlen("block");
+    } else if (!ubase_ncmp(sub_def, "void."))
+        sub_def += strlen("void");
+
     uint8_t stream_type = PMT_STREAMTYPE_PRIVATE_PES;
     if (!ubase_ncmp(raw_def, "void.scte35."))
         stream_type = PMT_STREAMTYPE_SCTE_35;
-    else if (!ubase_ncmp(raw_def, "block.mpeg1video."))
+    else if (!ubase_ncmp(sub_def, ".mpeg1video."))
         stream_type = PMT_STREAMTYPE_VIDEO_MPEG1;
-    else if (!ubase_ncmp(raw_def, "block.mpeg2video."))
+    else if (!ubase_ncmp(sub_def, ".mpeg2video."))
         stream_type = PMT_STREAMTYPE_VIDEO_MPEG2;
-    else if (!ubase_ncmp(raw_def, "block.mpeg4."))
+    else if (!ubase_ncmp(sub_def, ".mpeg4."))
         stream_type = PMT_STREAMTYPE_VIDEO_MPEG4;
-    else if (!ubase_ncmp(raw_def, "block.h264."))
+    else if (!ubase_ncmp(sub_def, ".h264."))
         stream_type = PMT_STREAMTYPE_VIDEO_AVC;
-    else if (!ubase_ncmp(raw_def, "block.hevc."))
+    else if (!ubase_ncmp(sub_def, ".hevc."))
         stream_type = PMT_STREAMTYPE_VIDEO_HEVC;
-    else if (!ubase_ncmp(raw_def, "block.aac.") ||
-             !ubase_ncmp(raw_def, "block.aac_latm.")) {
+    else if (!ubase_ncmp(sub_def, ".aac.") ||
+             !ubase_ncmp(sub_def, ".aac_latm.")) {
         uint8_t encaps = UREF_MPGA_ENCAPS_ADTS;
         uref_mpga_flow_get_encaps(flow->flow_def, &encaps);
         stream_type = encaps == UREF_MPGA_ENCAPS_LOAS ?
                      PMT_STREAMTYPE_AUDIO_LATM :
                      PMT_STREAMTYPE_AUDIO_ADTS;
-    } else if (!ubase_ncmp(raw_def, "block.mp2.") ||
-               !ubase_ncmp(raw_def, "block.mp3.")) {
+    } else if (!ubase_ncmp(sub_def, ".mp2.") ||
+               !ubase_ncmp(sub_def, ".mp3.")) {
         uint64_t rate;
         if (ubase_check(uref_sound_flow_get_rate(flow->flow_def, &rate)) &&
             rate >= 32000)
             stream_type = PMT_STREAMTYPE_AUDIO_MPEG1;
         else
             stream_type = PMT_STREAMTYPE_AUDIO_MPEG2;
-    } else if (!ubase_ncmp(raw_def, "block.ac3.")) {
+    } else if (!ubase_ncmp(sub_def, ".ac3.")) {
         if (conformance == UPIPE_TS_CONFORMANCE_ATSC)
             stream_type = PMT_STREAMTYPE_ATSC_A52;
-    } else if (!ubase_ncmp(raw_def, "block.eac3.")) {
+    } else if (!ubase_ncmp(sub_def, ".eac3.")) {
         if (conformance == UPIPE_TS_CONFORMANCE_ATSC)
             stream_type = PMT_STREAMTYPE_ATSC_A52E;
     }
@@ -478,7 +490,7 @@ static int upipe_ts_psig_flow_build_inner(struct upipe *upipe, uint8_t *es,
 
     uint64_t k = 0;
     uint8_t *desc;
-    if (!ubase_ncmp(raw_def, "block.dvb_teletext.")) {
+    if (!ubase_ncmp(sub_def, ".dvb_teletext.")) {
         desc = descs_get_desc(descs, k++);
         assert(desc != NULL);
         desc56_init(desc);
@@ -504,7 +516,7 @@ static int upipe_ts_psig_flow_build_inner(struct upipe *upipe, uint8_t *es,
             desc56n_set_teletextpage(language, page);
         }
 
-    } else if (!ubase_ncmp(raw_def, "block.dvb_subtitle.")) {
+    } else if (!ubase_ncmp(sub_def, ".dvb_subtitle.")) {
         desc = descs_get_desc(descs, k++);
         assert(desc != NULL);
         desc59_init(desc);
@@ -562,7 +574,7 @@ static int upipe_ts_psig_flow_build_inner(struct upipe *upipe, uint8_t *es,
             }
         }
 
-        if (!ubase_ncmp(raw_def, "block.ac3.")) {
+        if (!ubase_ncmp(sub_def, ".ac3.")) {
             desc = descs_get_desc(descs, k++);
             switch (conformance) {
                 case UPIPE_TS_CONFORMANCE_ATSC: {
@@ -663,7 +675,7 @@ static int upipe_ts_psig_flow_build_inner(struct upipe *upipe, uint8_t *es,
                 }
             }
 
-        } else if (!ubase_ncmp(raw_def, "block.eac3.")) {
+        } else if (!ubase_ncmp(sub_def, ".eac3.")) {
             desc = descs_get_desc(descs, k++);
             switch (conformance) {
                 case UPIPE_TS_CONFORMANCE_ATSC: {
@@ -697,7 +709,7 @@ static int upipe_ts_psig_flow_build_inner(struct upipe *upipe, uint8_t *es,
                 }
             }
 
-        } else if (!ubase_ncmp(raw_def, "block.dts.")) {
+        } else if (!ubase_ncmp(sub_def, ".dts.")) {
             desc = descs_get_desc(descs, k++);
             desc7b_init(desc);
 
@@ -778,13 +790,13 @@ static int upipe_ts_psig_flow_build_inner(struct upipe *upipe, uint8_t *es,
             /* FIXME */
             desc7b_set_extended_surround_flag(desc, 0);
 
-        } else if (!ubase_ncmp(raw_def, "block.opus.")) {
+        } else if (!ubase_ncmp(sub_def, ".opus.")) {
             desc = descs_get_desc(descs, k++);
             desc05_init(desc);
             desc05_set_identifier(desc, (const uint8_t *)"opus");
 
-        } else if (!ubase_ncmp(raw_def, "block.aac.") ||
-                   !ubase_ncmp(raw_def, "block.aac_latm.")) {
+        } else if (!ubase_ncmp(sub_def, ".aac.") ||
+                   !ubase_ncmp(sub_def, ".aac_latm.")) {
             switch (conformance) {
                 case UPIPE_TS_CONFORMANCE_DVB:
                 case UPIPE_TS_CONFORMANCE_DVB_NO_TABLES:
