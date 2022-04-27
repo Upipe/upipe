@@ -2074,6 +2074,11 @@ static int upipe_ts_mux_program_set_flow_def(struct upipe *upipe,
     program->sid = sid;
     program->pmt_pid = pid;
 
+    if (pid == 8192) {
+        upipe_release(program->sig_service);
+        program->sig_service = NULL;
+    }
+
     if (changed)
         upipe_notice_va(upipe, "adding program %"PRIu64" on PID %"PRIu64,
                         sid, pid);
