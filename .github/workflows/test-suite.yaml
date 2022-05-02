@@ -19,7 +19,7 @@ jobs:
           - ubuntu-i386-gcc-10
           - ubuntu-armhf-gcc-10
           - ubuntu-arm64-gcc-10
-          - macos-11-xcode
+          - macos-12-xcode
 
         include:
           - name: ubuntu-amd64-gcc-11
@@ -62,8 +62,8 @@ jobs:
             compiler: gcc
             version: 10
 
-          - name: macos-11-xcode
-            os: macos-11
+          - name: macos-12-xcode
+            os: macos-12
             compiler: xcode
 
     steps:
