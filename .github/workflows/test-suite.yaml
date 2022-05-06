@@ -23,40 +23,40 @@ jobs:
 
         include:
           - name: ubuntu-amd64-gcc-11
-            os: ubuntu-20.04
+            os: ubuntu-22.04
             arch: amd64
             compiler: gcc
             version: 11
 
           - name: ubuntu-amd64-gcc-11-static
-            os: ubuntu-20.04
+            os: ubuntu-22.04
             arch: amd64
             compiler: gcc
             version: 11
             static: true
 
           - name: ubuntu-amd64-clang-14
-            os: ubuntu-20.04
+            os: ubuntu-22.04
             arch: amd64
             compiler: clang
             version: 14
 
           - name: ubuntu-i386-gcc-10
-            os: ubuntu-20.04
+            os: ubuntu-22.04
             arch: i386
             host: i686-linux-gnu
             compiler: gcc
             version: 10
 
           - name: ubuntu-armhf-gcc-10
-            os: ubuntu-20.04
+            os: ubuntu-22.04
             arch: armhf
             host: arm-linux-gnueabihf
             compiler: gcc
             version: 10
 
           - name: ubuntu-arm64-gcc-10
-            os: ubuntu-20.04
+            os: ubuntu-22.04
             arch: arm64
             host: aarch64-linux-gnu
             compiler: gcc
@@ -83,14 +83,7 @@ jobs:
           sudo apt-add-repository -n -y "deb [arch=arm64,armhf] http://ports.ubuntu.com $(lsb_release -sc) main universe"
           sudo apt-add-repository -n -y "deb [arch=arm64,armhf] http://ports.ubuntu.com $(lsb_release -sc)-updates main universe"
           sudo apt-add-repository -n -y "deb [arch=arm64,armhf] http://ports.ubuntu.com $(lsb_release -sc)-security main universe"
-          sudo apt-add-repository -n -y "ppa:ubuntu-toolchain-r/test"
           sudo apt-get update
-
-          # The GitHub's Ubuntu images since 20211122.1 are broken
-          # https://github.com/actions/virtual-environments/issues/4589
-          if [ -n "${{ matrix.host }}" ]; then
-              sudo apt-get install -y --allow-downgrades libpcre2-8-0=10.34-7
-          fi
 
           CC=gcc
           CXX=g++
@@ -105,7 +98,7 @@ jobs:
               CXX=${{ matrix.host }}-$CXX
               PKG=$PKG-${{ matrix.host }}
           fi
-          sudo apt-get install -y $PKG
+          sudo apt-get install $PKG
           set-env HOST_CC "$CC"
           set-env HOST_CXX "$CXX"
           if [ "${{ matrix.arch }}" = "i386" ]; then
@@ -124,10 +117,7 @@ jobs:
       - name: Install compiler (clang)
         if: runner.os == 'Linux' && matrix.compiler == 'clang'
         run: |
-          wget -O - https://apt.llvm.org/llvm-snapshot.gpg.key | sudo apt-key add -
-          sudo add-apt-repository -y "deb http://apt.llvm.org/$(lsb_release -sc)/ llvm-toolchain-$(lsb_release -sc)-${{ matrix.version }} main"
-          sudo apt-get update
-          sudo apt-get install -y clang-${{ matrix.version }}
+          sudo apt-get install clang-${{ matrix.version }}
           set-env HOST_CC "clang-${{ matrix.version }}"
           set-env HOST_CXX "clang++-${{ matrix.version }}"
 
@@ -136,16 +126,17 @@ jobs:
         env:
           LIBS: >
             ev asound2 x264 x265 speexdsp png freetype6 zvbi gcrypt tasn1 dvbv5
-            udev avcodec avformat swresample swscale gl1-mesa glu1-mesa srt ssl
+            udev avcodec avformat swresample swscale gl1-mesa glu1-mesa
+            srt-gnutls gnutls28 ssl
           LIBS_FULL: ebur128 dvbcsa
         run: |
           if [ "${{ matrix.arch }}" != "i386" ]; then
             LIBS="$LIBS $LIBS_FULL"
           fi
-          sudo apt-get install -y -o APT::Immediate-Configure=false \
+          sudo apt-get install \
             valgrind nasm qemu-user-binfmt elfutils \
-            $(echo libc6-dbg luajit | sed 's/\(\S*\)/\1:${{ matrix.arch }}/g') \
-            $(echo $LIBS | sed 's/\(\S*\)/lib\1-dev:${{ matrix.arch }}/g')
+            $(printf '%s:${{ matrix.arch }} ' libc6-dbg luajit) \
+            $(printf 'lib%s-dev:${{ matrix.arch }} ' $LIBS)
           if [ -n "${{ matrix.host }}" ]; then
               set-env DISABLE_VALGRIND "1"
           fi
@@ -171,7 +162,7 @@ jobs:
           if [ "${{ matrix.static }}" = "true" ]; then
             STATIC="--disable-shared"
           fi
-          set-env CONFIGURE_FLAGS "--enable-luajit $STATIC --disable-silent-rules $HOST CC=\"$HOST_CC\" CXX=\"$HOST_CXX\" CFLAGS=\"-Werror -O2 -g $CFLAGS\" CXXFLAGS=\"-Werror -O2 -g $CXXFLAGS\" LDFLAGS=\"$LDFLAGS\""
+          set-env CONFIGURE_FLAGS "--enable-luajit $STATIC --disable-silent-rules $HOST CC=\"$HOST_CC\" CXX=\"$HOST_CXX\" CFLAGS=\"-Werror -O2 -g -gdwarf-4 $CFLAGS\" CXXFLAGS=\"-Werror -O2 -g $CXXFLAGS\" LDFLAGS=\"$LDFLAGS\""
 
       - name: Build and install libamt
         if: runner.os == 'Linux' && (matrix.arch == 'amd64' || matrix.arch == 'i386')
@@ -199,7 +190,6 @@ jobs:
       - name: Configure
         run: |
           autoreconf -i
-          sed -i='' 's/|-stdlib=\*)/|-stdlib=\*|-fsanitize=*)/' autotools/ltmain.sh
           eval ./configure $CONFIGURE_FLAGS
 
       - name: Archive config log
@@ -217,16 +207,18 @@ jobs:
           VERBOSE=1
 
   coding-style:
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-22.04
     steps:
       - name: Checkout
         uses: actions/checkout@v2
 
       - name: Install dependencies
+        env:
+          LIBS: ev avutil dvbcsa srt-gnutls gnutls28
         run: |
           sudo rm /etc/apt/sources.list.d/*
           sudo apt-get update
-          sudo apt-get install libev-dev libavutil-dev libdvbcsa-dev libsrt-dev
+          sudo apt-get install $(printf 'lib%s-dev ' $LIBS)
 
       - name: Configure
         run: |
