@@ -172,6 +172,8 @@ struct upipe_ts_psig_program {
     uint16_t pcr_pid;
     /** PMT version */
     uint8_t pmt_version;
+    /** PMT PID */
+    uint64_t pmt_pid;
     /** PMT section */
     struct ubuf *pmt_section;
     /** size of PMT */
@@ -1024,6 +1026,7 @@ static struct upipe *upipe_ts_psig_program_alloc(struct upipe_mgr *mgr,
 
     upipe_ts_psig_program->pcr_pid = 8191;
     upipe_ts_psig_program->pmt_version = 0;
+    upipe_ts_psig_program->pmt_pid = 8192;
     upipe_ts_psig_program->pmt_section = NULL;
     upipe_ts_psig_program->pmt_size = 0;
     upipe_ts_psig_program->pmt_interval = 0;
@@ -1209,6 +1212,7 @@ static void upipe_ts_psig_program_send(struct upipe *upipe, uint64_t cr_sys)
     struct upipe_ts_psig *psig =
         upipe_ts_psig_from_program_mgr(upipe->mgr);
     if (unlikely(program->pmt_section == NULL || !program->pmt_interval ||
+                 program->pmt_pid == 8192 ||
                  program->pmt_cr_sys + program->pmt_interval > cr_sys))
         return;
 
@@ -1294,6 +1298,7 @@ static int upipe_ts_psig_program_set_flow_def(struct upipe *upipe,
 
     uref_free(program->flow_def);
     program->flow_def = flow_def_dup;
+    program->pmt_pid = pid;
 
     struct upipe_ts_psig *psig = upipe_ts_psig_from_program_mgr(upipe->mgr);
     ulist_sort(&psig->programs, upipe_ts_psig_program_compare);
