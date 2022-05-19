@@ -83,10 +83,9 @@ sub parse_input_eu_readelf {
 
     } elsif (m/^ {8}\s*(\S+)\s*(.+)$/) {
       my ($name, $val) = ($1, $2);
-      if ($val =~ m/^\(string\) "(.*)"$/ or
-          $val =~ m/^\(strp\) "(.*)"$/ or
+      if ($val =~ m/^\(str\S+\) "(.*)"$/ or
           $val =~ m/^\(data[124]\) (.*)$/ or
-          $val =~ m/^\(sdata\) (\S+)( \((\S+)\))?$/ or
+          $val =~ m/^\([su]data\) (\S+)( \((\S+)\))?$/ or
           $val =~ m/^\(implicit_const\) (\S+)( \((\S+)\))?$/ or
           $val =~ m/^\(flag_present\) (.*)$/) {
         $path[-1]->{attr}{$name} = $3 // $1;
@@ -116,8 +115,7 @@ sub parse_input_llvm_dwarfdump {
 
     } elsif (m/^\s*DW_AT_(\S+) \[DW_FORM_(\S+)\]\s*\((.+)\)$/) {
       my ($name, $form, $val) = ($1, $2, $3);
-      if ($form eq 'string' and $val =~ m/^"(.*)"$/ or
-          $form eq 'strp' and $val =~ m/^"(.*)"$/ or
+      if ($form =~ m/^str/ and $val =~ m/^"(.*)"$/ or
           $form =~ m/^data[124]$/ and $val =~ m/^(.+)$/ or
           $form =~ m/^[su]data$/ and $val =~ m/^(.+)$/ or
           $form eq 'flag_present' and $val =~ m/^(true)$/) {
