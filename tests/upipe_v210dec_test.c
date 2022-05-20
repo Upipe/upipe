@@ -209,7 +209,8 @@ static struct upipe_mgr test_mgr = {
 static int catch(struct uprobe *uprobe, struct upipe *upipe,
                  int event, va_list args)
 {
-    upipe_dbg_va(upipe, "caught event %d: %s", event, uprobe_event_str(event));
+    upipe_dbg_va(upipe, "caught event %d: %s", event,
+                 uprobe_event_str(event) ?: "(null)");
     switch (event) {
         default:
             assert(0);
