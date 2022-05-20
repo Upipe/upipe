@@ -13,26 +13,26 @@ jobs:
       fail-fast: false
       matrix:
         name:
-          - ubuntu-amd64-gcc-11
-          - ubuntu-amd64-gcc-11-static
+          - ubuntu-amd64-gcc-12
+          - ubuntu-amd64-gcc-12-static
           - ubuntu-amd64-clang-14
-          - ubuntu-i386-gcc-10
-          - ubuntu-armhf-gcc-10
-          - ubuntu-arm64-gcc-10
+          - ubuntu-i386-gcc-12
+          - ubuntu-armhf-gcc-12
+          - ubuntu-arm64-gcc-12
           - macos-12-xcode
 
         include:
-          - name: ubuntu-amd64-gcc-11
+          - name: ubuntu-amd64-gcc-12
             os: ubuntu-22.04
             arch: amd64
             compiler: gcc
-            version: 11
+            version: 12
 
-          - name: ubuntu-amd64-gcc-11-static
+          - name: ubuntu-amd64-gcc-12-static
             os: ubuntu-22.04
             arch: amd64
             compiler: gcc
-            version: 11
+            version: 12
             static: true
 
           - name: ubuntu-amd64-clang-14
@@ -41,26 +41,26 @@ jobs:
             compiler: clang
             version: 14
 
-          - name: ubuntu-i386-gcc-10
+          - name: ubuntu-i386-gcc-12
             os: ubuntu-22.04
             arch: i386
             host: i686-linux-gnu
             compiler: gcc
-            version: 10
+            version: 12
 
-          - name: ubuntu-armhf-gcc-10
+          - name: ubuntu-armhf-gcc-12
             os: ubuntu-22.04
             arch: armhf
             host: arm-linux-gnueabihf
             compiler: gcc
-            version: 10
+            version: 12
 
-          - name: ubuntu-arm64-gcc-10
+          - name: ubuntu-arm64-gcc-12
             os: ubuntu-22.04
             arch: arm64
             host: aarch64-linux-gnu
             compiler: gcc
-            version: 10
+            version: 12
 
           - name: macos-12-xcode
             os: macos-12
