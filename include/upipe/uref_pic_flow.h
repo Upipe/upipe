@@ -186,7 +186,7 @@ static inline int uref_pic_flow_check_chroma(struct uref *uref,
           uint8_t hsub, uint8_t vsub, uint8_t mpixel_size,
           const char *chroma)
 {
-    uint8_t plane, hsub2, vsub2, mpixel_size2;
+    uint8_t plane = 0, hsub2, vsub2, mpixel_size2;
     UBASE_RETURN(uref_pic_flow_find_chroma(uref, chroma, &plane))
     UBASE_RETURN(uref_pic_flow_get_hsubsampling(uref, &hsub2, plane))
     UBASE_RETURN(uref_pic_flow_get_vsubsampling(uref, &vsub2, plane))
