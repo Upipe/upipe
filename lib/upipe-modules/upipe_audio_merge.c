@@ -373,7 +373,7 @@ static void upipe_audio_merge_produce_output(struct upipe *upipe, struct upump *
     uint8_t output_channels = 0;
     UBASE_ERROR(upipe, uref_sound_flow_get_channels(upipe_audio_merge->flow_def, &output_channels));
     if (input_channels != output_channels)
-        upipe_err_va(upipe, "total input channels (%"PRIu64") != output flow def (%d), some will be skipped or blanked!",
+        upipe_verbose_va(upipe, "total input channels (%"PRIu64") != output flow def (%d), some will be skipped or blanked!",
             input_channels, output_channels);
 
     uint8_t output_sample_size = 0;
