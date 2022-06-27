@@ -52,8 +52,6 @@
 #include <bitstream/scte/35.h>
 #include <bitstream/scte/104.h>
 
-#include "upipe_ts_scte_common.h"
-
 /** we only accept TS packets */
 #define EXPECTED_FLOW_DEF "block.scte104."
 /** we output SCTE104 metadata */
@@ -65,9 +63,8 @@ static int upipe_ts_scte104d_check(struct upipe *upipe,
 
 /** @internal @This is an op handler function type. */
 typedef int (*scte104_handler_func)(struct upipe *upipe,
-                                    struct uref *input,
-                                    const uint8_t *op,
-                                    struct uchain *urefs);
+                                    struct uref *uref,
+                                    const uint8_t *op);
 
 /** @internal @This enumerates the operation usage. */
 enum scte104_op_usage {
@@ -398,13 +395,11 @@ upipe_ts_scte104d_handle_single_err:
  * @param upipe description structure of the pipe
  * @param uref input buffer
  * @param op SCTE104 operation
- * @param urefs filled with the event
  * @return an error code
  */
 static int upipe_ts_scte104d_splice(struct upipe *upipe,
-                                    struct uref *uref,
-                                    const uint8_t *op,
-                                    struct uchain *urefs)
+                                    struct uref *event,
+                                    const uint8_t *op)
 {
     const uint8_t *data = scte104o_get_data(op);
     uint8_t type = scte104srd_get_insert_type(data);
@@ -414,13 +409,12 @@ static int upipe_ts_scte104d_splice(struct upipe *upipe,
     uint16_t break_duration = scte104srd_get_break_duration(data);
     bool auto_return = scte104srd_get_auto_return(data);
 
-    struct uref *event = uref_fork(uref, NULL);
     if (unlikely(event == NULL)) {
         upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
         return UBASE_ERR_ALLOC;
     }
 
-    uref_ts_scte35_set_command_type(uref, SCTE35_INSERT_COMMAND);
+    uref_ts_scte35_set_command_type(event, SCTE35_INSERT_COMMAND);
     uref_ts_scte35_set_event_id(event, event_id);
     if (type == SCTE104SRD_CANCEL)
         uref_ts_scte35_set_cancel(event);
@@ -444,7 +438,6 @@ static int upipe_ts_scte104d_splice(struct upipe *upipe,
                 uref_ts_scte35_set_auto_return(event);
         }
     }
-    ulist_add(urefs, uref_to_uchain(event));
     return UBASE_ERR_NONE;
 }
 
@@ -453,22 +446,18 @@ static int upipe_ts_scte104d_splice(struct upipe *upipe,
  * @param upipe description structure of the pipe
  * @param uref input buffer
  * @param op SCTE104 operation
- * @param urefs filled with the event
  * @return an error code
  */
 static int upipe_ts_scte104d_splice_null(struct upipe *upipe,
-                                         struct uref *uref,
-                                         const uint8_t *op,
-                                         struct uchain *urefs)
+                                         struct uref *event,
+                                         const uint8_t *op)
 {
-    struct uref *event = uref_fork(uref, NULL);
     if (unlikely(event == NULL)) {
         upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
         return UBASE_ERR_ALLOC;
     }
 
     uref_ts_scte35_set_command_type(event, SCTE35_NULL_COMMAND);
-    ulist_add(urefs, uref_to_uchain(event));
     return UBASE_ERR_NONE;
 }
 
@@ -477,13 +466,11 @@ static int upipe_ts_scte104d_splice_null(struct upipe *upipe,
  * @param upipe description structure of the pipe
  * @param uref input buffer
  * @param op SCTE104 operation
- * @param urefs filled with the event
  * @return an error code
  */
 static int upipe_ts_scte104d_time_signal(struct upipe *upipe,
-                                         struct uref *uref,
-                                         const uint8_t *op,
-                                         struct uchain *urefs)
+                                         struct uref *event,
+                                         const uint8_t *op)
 {
     const uint8_t *data = scte104o_get_data(op);
     uint16_t data_length = scte104o_get_data_length(op);
@@ -493,7 +480,6 @@ static int upipe_ts_scte104d_time_signal(struct upipe *upipe,
     }
     uint16_t pre_roll_time = scte104tsrd_get_pre_roll_time(data);
 
-    struct uref *event = uref_fork(uref, NULL);
     if (unlikely(event == NULL)) {
         upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
         return UBASE_ERR_ALLOC;
@@ -505,7 +491,6 @@ static int upipe_ts_scte104d_time_signal(struct upipe *upipe,
     uref_clock_add_date_prog(event, delay);
     uref_clock_add_date_sys(event, delay);
 
-    ulist_add(urefs, uref_to_uchain(event));
     return UBASE_ERR_NONE;
 }
 
@@ -514,13 +499,11 @@ static int upipe_ts_scte104d_time_signal(struct upipe *upipe,
  * @param upipe description structure of the pipe
  * @param uref event which own this descriptor
  * @param op SCTE104 operation
- * @param urefs filled with the descriptors
  * @return an error code
  */
 static int upipe_ts_scte104d_insert_descriptor(struct upipe *upipe,
                                                struct uref *event,
-                                               const uint8_t *op,
-                                               struct uchain *urefs)
+                                               const uint8_t *op)
 {
     const uint8_t *data = scte104o_get_data(op);
     uint16_t data_length = scte104o_get_data_length(op);
@@ -546,10 +529,6 @@ static int upipe_ts_scte104d_insert_descriptor(struct upipe *upipe,
 
         UBASE_FATAL(upipe, uref_ts_flow_add_descriptor(event, image, size));
         image += size;
-
-        struct uref *desc = upipe_ts_scte_extract_desc(upipe, event, image);
-        if (desc)
-            ulist_add(urefs, uref_to_uchain(desc));
     }
     return UBASE_ERR_NONE;
 }
@@ -559,14 +538,12 @@ static int upipe_ts_scte104d_insert_descriptor(struct upipe *upipe,
  * @param upipe description structure of the pipe
  * @param uref event which own this descriptor
  * @param op SCTE104 operation
- * @param urefs filled with the descriptors
  * @return an error code
  */
 static int
 upipe_ts_scte104d_insert_segmentation_descriptor(struct upipe *upipe,
                                                  struct uref *event,
-                                                 const uint8_t *op,
-                                                 struct uchain *urefs)
+                                                 const uint8_t *op)
 {
     struct uref *desc = uref_dup_inner(event);
     if (unlikely(desc == NULL)) {
@@ -646,8 +623,9 @@ upipe_ts_scte104d_insert_segmentation_descriptor(struct upipe *upipe,
         uref_ts_scte35_desc_seg_set_duration_extension_frames(
             desc, duration_extension_frames);
 
-    ulist_add(urefs, uref_to_uchain(desc));
-    return UBASE_ERR_NONE;
+    int ret = uref_ts_scte35_add_desc(event, desc);
+    uref_free(desc);
+    return ret;
 }
 
 /** @internal @This is the list of the implemented handlers. */
@@ -672,26 +650,14 @@ upipe_ts_scte104d_get_handler(struct upipe *upipe, uint16_t opid)
  *
  * @param upipe description structure of the pipe
  * @param event uref structure describing the event
- * @param urefs list of uref structure describing an event
  * @param upump_p reference to pump that generated the buffer
  */
 static void upipe_ts_scte104d_output(struct upipe *output,
-                                     struct uchain *urefs,
+                                     struct uref *uref,
                                      struct upump **upump_p)
 {
-    struct uchain *uchain = ulist_pop(urefs);
-    if (!uchain)
-        return;
-
-    struct uref *out = uref_from_uchain(uchain);
-    uref_block_set_start(out);
-    while ((uchain = ulist_pop(urefs))) {
-        struct uref *next = uref_from_uchain(uchain);
-        upipe_ts_scte104d_sub_output(output, out, upump_p);
-        out = next;
-    }
-    uref_block_set_end(out);
-    upipe_ts_scte104d_sub_output(output, out, upump_p);
+    if (uref)
+        upipe_ts_scte104d_sub_output(output, uref, upump_p);
 }
 
 /** @internal @This parses a multiple operation message.
@@ -706,9 +672,7 @@ static void upipe_ts_scte104d_handle_multiple(struct upipe *upipe,
 {
     struct upipe_ts_scte104d *upipe_ts_scte104d =
         upipe_ts_scte104d_from_upipe(upipe);
-    struct uchain *uchain;
-    struct uchain urefs;
-    ulist_init(&urefs);
+    struct uref *event = NULL;
 
     int size = -1;
     const uint8_t *msg;
@@ -750,7 +714,6 @@ static void upipe_ts_scte104d_handle_multiple(struct upipe *upipe,
                       scte104t_get_type(timestamp));
 
     uint8_t num_ops = scte104m_get_num_ops(msg);
-    struct uref *event = NULL;
     for (uint8_t j = 0; j < num_ops; j++) {
         const uint8_t *op = scte104m_get_op(msg, j);
         uint16_t opid = scte104o_get_opid(op);
@@ -758,31 +721,25 @@ static void upipe_ts_scte104d_handle_multiple(struct upipe *upipe,
             upipe_ts_scte104d_get_handler(upipe, opid);
         if (!handler) {
             upipe_warn_va(upipe, "unimplemented opid %u", opid);
-            upipe_ts_scte104d_output(output, &urefs, upump_p);
+            upipe_ts_scte104d_output(output, event, upump_p);
             event = NULL;
             continue;
         }
 
         if (handler->usage != SCTE104_OP_USAGE_SUPPLEMENTAL) {
-            upipe_ts_scte104d_output(output, &urefs, upump_p);
-            event = NULL;
+            upipe_ts_scte104d_output(output, event, upump_p);
+            event = uref_fork(uref, NULL);
         }
         else if (!event) {
             upipe_warn_va(upipe, "orphan supplemental opid %u", opid);
             continue;
         }
 
-        int ret = handler->handle(upipe, event ?: uref, op, &urefs);
+        int ret = handler->handle(upipe, event, op);
         if (unlikely(!ubase_check(ret)))
             goto upipe_ts_scte104d_handle_multiple_err;
-
-        if (handler->usage != SCTE104_OP_USAGE_SUPPLEMENTAL) {
-            uchain = ulist_peek(&urefs);
-            if (uchain)
-                event = uref_from_uchain(uchain);
-        }
     }
-    upipe_ts_scte104d_output(output, &urefs, upump_p);
+    upipe_ts_scte104d_output(output, event, upump_p);
 
 upipe_ts_scte104d_handle_multiple_ok:
     uref_block_unmap(uref, 0);
@@ -791,8 +748,8 @@ upipe_ts_scte104d_handle_multiple_ok:
     return;
 
 upipe_ts_scte104d_handle_multiple_err:
-    while ((uchain = ulist_pop(&urefs)))
-        uref_free(uref_from_uchain(uchain));
+    if (event)
+        uref_free(event);
     uref_block_unmap(uref, 0);
     uref_free(uref);
 }

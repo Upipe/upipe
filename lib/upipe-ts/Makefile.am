@@ -15,8 +15,6 @@ libupipe_ts_la_SOURCES = \
 	upipe_ts_psi_join.c \
 	upipe_ts_psi_merge.c \
 	upipe_ts_psi_split.c \
-	upipe_ts_scte_common.c \
-	upipe_ts_scte_common.h \
 	upipe_ts_scte104_decoder.c \
 	upipe_ts_scte35_decoder.c \
 	upipe_ts_scte35_generator.c \
@@ -36,6 +34,7 @@ libupipe_ts_la_SOURCES = \
 	upipe_ts_mux.c \
 	upipe_rtp_fec.c \
 	upipe_ts_scte104_generator.c \
+	uref_ts_scte35.c \
 	$(NULL)
 
 libupipe_ts_la_CPPFLAGS = -I$(top_builddir) -I$(top_builddir)/include -I$(top_srcdir)/include

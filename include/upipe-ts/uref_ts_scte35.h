@@ -50,10 +50,15 @@ UREF_ATTR_VOID(ts_scte35, auto_return, "scte35.autoreturn",
         auto return indicator)
 UREF_ATTR_UNSIGNED(ts_scte35, unique_program_id, "scte35.programid",
         unique program ID)
-UREF_ATTR_SMALL_UNSIGNED_VA(ts_scte35, desc_tag, "scte35.desc_tag[%u]",
-                            descriptor tag, unsigned desc, desc)
-UREF_ATTR_UNSIGNED_VA(ts_scte35, desc_identifier, "scte35.desc_id[%u]",
-                      descriptor identifier, unsigned desc, desc)
+
+int uref_ts_scte35_desc_get_seg(struct uref *uref,
+                                const uint8_t **desc_p,
+                                size_t *desc_len_p,
+                                uint64_t at);
+
+struct uref *uref_ts_scte35_extract_desc(struct uref *uref,
+                                         uint64_t descriptor);
+int uref_ts_scte35_add_desc(struct uref *uref, struct uref *desc);
 
 #ifdef __cplusplus
 }
