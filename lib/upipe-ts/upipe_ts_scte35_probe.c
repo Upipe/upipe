@@ -38,6 +38,7 @@
 #include "upipe/upipe_helper_upump_mgr.h"
 #include "upipe/upipe_helper_uclock.h"
 #include "upipe-ts/upipe_ts_scte35_probe.h"
+#include "upipe-ts/uref_ts_flow.h"
 #include "upipe-ts/uref_ts_scte35.h"
 #include "upipe-ts/uref_ts_scte35_desc.h"
 
@@ -108,8 +109,8 @@ struct upipe_ts_scte35p_signal {
     uint64_t pts_orig;
     /** pts of the signal */
     uint64_t pts;
-    /** urefs describing the events */
-    struct uchain urefs;
+    /** uref describing the events */
+    struct uref *uref;
     /** upump which will trigger the event */
     struct upump *upump;
 
@@ -320,20 +321,37 @@ upipe_ts_scte35p_signal_find(struct upipe *upipe, struct uref *uref)
         /* update signal pts with last pts */
         signal->pts = pts;
 
-        struct uchain *uchain_sub, *tmp;
-        ulist_delete_foreach(&signal->urefs, uchain_sub, tmp) {
-            struct uref *current = uref_from_uchain(uchain_sub);
+        uint64_t old_nb = 0;
+        uref_ts_flow_get_descriptors(signal->uref, &old_nb);
+        for (uint64_t i = 0; i < old_nb; i++) {
+            const uint8_t *desc = NULL;
+            size_t len = 0;
+            bool found = false;
 
-            if (uref_ts_scte35_desc_cmp_tag(current, uref) ||
-                uref_ts_scte35_desc_cmp_identifier(current, uref) ||
-                uref_ts_scte35_desc_seg_cmp_event_id(current, uref) ||
-                uref_ts_scte35_desc_seg_cmp_type_id(current, uref))
+            uref_ts_scte35_desc_get_seg(signal->uref, &desc, &len, i);
+            if (!desc)
                 continue;
 
-            ulist_delete(uchain_sub);
-            uref_free(current);
+            uint32_t event_id = scte35_seg_desc_get_event_id(desc);
+
+            uint64_t nb = 0;
+            uref_ts_flow_get_descriptors(uref, &nb);
+            for (uint64_t j = 0; !found && j < nb; j++) {
+                const uint8_t *d = NULL;
+                size_t l = 0;
+                uref_ts_scte35_desc_get_seg(uref, &d, &l, j);
+                if (!d || scte35_seg_desc_get_event_id(d) != event_id)
+                    continue;
+                found = true;
+            }
+
+            if (!found)
+                uref_ts_flow_add_descriptor(uref, desc, len);
         }
-        ulist_add(&signal->urefs, uref_to_uchain(uref));
+
+        uref_free(signal->uref);
+        signal->uref = uref;
+
         return signal;
     }
 
@@ -345,8 +363,7 @@ upipe_ts_scte35p_signal_find(struct upipe *upipe, struct uref *uref)
     signal->pts = pts;
     signal->upipe = upipe;
     signal->upump = NULL;
-    ulist_init(&signal->urefs);
-    ulist_add(&signal->urefs, uref_to_uchain(uref));
+    signal->uref = uref;
     ulist_add(&upipe_ts_scte35p->signals, &signal->uchain);
     return signal;
 }
@@ -357,54 +374,13 @@ upipe_ts_scte35p_signal_find(struct upipe *upipe, struct uref *uref)
  */
 static void upipe_ts_scte35p_signal_free(struct upipe_ts_scte35p_signal *signal)
 {
-    struct uchain *uchain;
-    while ((uchain = ulist_pop(&signal->urefs)))
-        uref_free(uref_from_uchain(uchain));
+    uref_free(signal->uref);
     if (signal->upump != NULL) {
         upump_stop(signal->upump);
         upump_free(signal->upump);
     }
     ulist_delete(upipe_ts_scte35p_signal_to_uchain(signal));
     free(signal);
-}
-
-/** @internal @This cancels an SCTE35 signal.
- *
- * @param upipe description structure of the pipe
- * @param uref signal description to cancel
- * @return true if the input uref is a cancel event
- */
-static bool upipe_ts_scte35p_signal_cancel(struct upipe *upipe,
-                                           struct uref *uref)
-{
-    struct upipe_ts_scte35p *upipe_ts_scte35p =
-        upipe_ts_scte35p_from_upipe(upipe);
-
-    if (!ubase_check(uref_ts_scte35_desc_seg_get_cancel(uref)))
-        return false;
-
-    struct uchain *uchain, *tmp;
-    ulist_delete_foreach(&upipe_ts_scte35p->signals, uchain, tmp) {
-        struct upipe_ts_scte35p_signal *signal =
-            upipe_ts_scte35p_signal_from_uchain(uchain);
-
-        struct uchain *uchain_sub, *tmp_sub;
-        ulist_delete_foreach(&signal->urefs, uchain_sub, tmp_sub) {
-            struct uref *current = uref_from_uchain(uchain_sub);
-
-            if (uref_ts_scte35_desc_cmp_tag(current, uref) ||
-                uref_ts_scte35_desc_cmp_identifier(current, uref) ||
-                uref_ts_scte35_desc_seg_cmp_event_id(current, uref))
-                continue;
-
-            ulist_delete(uchain_sub);
-            uref_free(current);
-        }
-
-        if (ulist_empty(&signal->urefs))
-            upipe_ts_scte35p_signal_free(signal);
-    }
-    return true;
 }
 
 /** @internal @This is called when an SCTE35 signal triggers.
@@ -467,12 +443,8 @@ static void upipe_ts_scte35p_signal_trigger(struct upipe *upipe,
         struct upipe_ts_scte35p_signal *signal, uint64_t skew)
 {
     upipe_dbg_va(upipe, "throw ts_scte35p_signal");
-    struct uchain *uchain;
-    ulist_foreach(&signal->urefs, uchain) {
-        struct uref *uref = uref_from_uchain(uchain);
-        upipe_throw(upipe, UPROBE_TS_SCTE35P_SIGNAL,
-                    UPIPE_TS_SCTE35P_SIGNATURE, uref);
-    }
+    upipe_throw(upipe, UPROBE_TS_SCTE35P_SIGNAL,
+                UPIPE_TS_SCTE35P_SIGNATURE, signal->uref);
     upipe_ts_scte35p_signal_free(signal);
 }
 
@@ -504,11 +476,6 @@ static void upipe_ts_scte35p_input_time_signal(struct upipe *upipe,
 {
     struct upipe_ts_scte35p *upipe_ts_scte35p =
         upipe_ts_scte35p_from_upipe(upipe);
-
-    if (upipe_ts_scte35p_signal_cancel(upipe, uref)) {
-        uref_free(uref);
-        return;
-    }
 
     struct upipe_ts_scte35p_signal *signal =
         upipe_ts_scte35p_signal_find(upipe, uref);
@@ -709,7 +676,7 @@ static void upipe_ts_scte35p_free(struct upipe *upipe)
             upipe_ts_scte35p_event_from_uchain(uchain);
         upipe_ts_scte35p_event_free(upipe, event);
     }
-    while ((uchain = ulist_pop(&upipe_ts_scte35p->signals))) {
+    ulist_delete_foreach (&upipe_ts_scte35p->signals, uchain, uchain_tmp) {
         struct upipe_ts_scte35p_signal *signal =
             upipe_ts_scte35p_signal_from_uchain(uchain);
         upipe_ts_scte35p_signal_free(signal);

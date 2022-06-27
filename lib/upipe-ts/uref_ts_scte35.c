@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2020 EasyTools
+ * Copyright (C) 2022 EasyTools
  *
  * Authors: Arnaud de Turckheim
  *
@@ -25,47 +25,85 @@
  *  - SCTE 35 2013 (Digital Program Insertion Cueing Message for Cable)
  */
 
-#include "upipe/upipe.h"
 #include "upipe/uclock.h"
 #include "upipe/uref_clock.h"
+#include "upipe-ts/uref_ts_flow.h"
+#include "upipe-ts/uref_ts_scte35.h"
 #include "upipe-ts/uref_ts_scte35_desc.h"
 
 #include <bitstream/scte/35.h>
-
-#include "upipe_ts_scte_common.h"
 
 /** 2^33 (max resolution of PCR, PTS and DTS) */
 #define POW2_33 UINT64_C(8589934592)
 /** ratio between Upipe freq and MPEG freq */
 #define CLOCK_SCALE (UCLOCK_FREQ / 90000)
 
+/** @This extracts a segmentation descriptor and checks its validity.
+ *
+ * @param uref uref describing time signal event
+ * @param desc_p pointer filled with descriptor
+ * @param desc_len_p pointer filled with descriptor length
+ * @param at index of the descriptor to extract
+ * @return an error code
+ */
+int uref_ts_scte35_desc_get_seg(struct uref *uref,
+                                const uint8_t **desc_p,
+                                size_t *desc_len_p,
+                                uint64_t at)
+{
+    uint64_t nb = 0;
+    UBASE_RETURN(uref_ts_flow_get_descriptors(uref, &nb));
+    if (at >= nb)
+        return UBASE_ERR_INVALID;
+
+    const uint8_t *desc = NULL;
+    size_t desc_len = 0;
+    UBASE_RETURN(uref_ts_flow_get_descriptor(uref, &desc, &desc_len, at));
+    if (!desc)
+        return UBASE_ERR_INVALID;
+
+    if (desc_len < SCTE35_SPLICE_DESC_HEADER_SIZE + SCTE35_SEG_DESC_HEADER_SIZE)
+        return UBASE_ERR_INVALID;
+
+    uint8_t length = scte35_splice_desc_get_length(desc) + DESC_HEADER_SIZE;
+    if (length != desc_len)
+        return UBASE_ERR_INVALID;
+
+    uint32_t identifier = scte35_splice_desc_get_identifier(desc);
+    if (identifier != SCTE35_SPLICE_DESC_IDENTIFIER)
+        return UBASE_ERR_INVALID;
+
+    if (desc_p)
+        *desc_p = desc;
+    if (desc_len_p)
+        *desc_len_p = desc_len;
+    return UBASE_ERR_NONE;
+}
+
 /** @This allocates an uref describing a SCTE35 descriptor.
  *
- * @param upipe description structure of the caller
  * @param uref input buffer
- * @param desc pointer to the SCTE35 descriptor
+ * @param at index of the descriptor to extract
  * @return an allocated uref of NULL
  */
-struct uref *upipe_ts_scte_extract_desc(struct upipe *upipe,
-                                        struct uref *uref,
-                                        const uint8_t *desc)
+struct uref *uref_ts_scte35_extract_desc(struct uref *uref, uint64_t at)
 {
-    struct uref *out = uref_dup_inner(uref);
-    if (!out) {
-        upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
+    const uint8_t *desc;
+    size_t length;
+    int ret = uref_ts_scte35_desc_get_seg(uref, &desc, &length, at);
+    if (unlikely(!ubase_check(ret)))
         return NULL;
-    }
-    uint8_t tag = scte35_splice_desc_get_tag(desc);
-    uint8_t length = scte35_splice_desc_get_length(desc) + DESC_HEADER_SIZE;
 
-    if (length < SCTE35_SPLICE_DESC_HEADER_SIZE) {
-        uref_free(out);
+    uint8_t tag = scte35_splice_desc_get_tag(desc);
+
+    struct uref *out = uref_sibling_alloc_control(uref);
+    if (!out)
         return NULL;
-    }
-    length -= SCTE35_SPLICE_DESC_HEADER_SIZE;
-    uint32_t identifier = scte35_splice_desc_get_identifier(desc);
+
     uref_ts_scte35_desc_set_tag(out, tag);
-    uref_ts_scte35_desc_set_identifier(out, identifier);
+    uref_ts_scte35_desc_set_identifier(out, SCTE35_SPLICE_DESC_IDENTIFIER);
+
+    length -= SCTE35_SPLICE_DESC_HEADER_SIZE;
 
     switch (tag) {
         case SCTE35_SPLICE_DESC_TAG_SEG: {
@@ -203,15 +241,18 @@ struct uref *upipe_ts_scte_extract_desc(struct upipe *upipe,
 
 /** @This export an uref describing a SCTE35 descriptor.
  *
- * @param upipe description structure of the caller
- * @param uref uref to export
- * @param desc pointer to the SCTE35 descriptor destination
+ * @param dst destination uref
+ * @param uref uref to export as a descriptor
  * @return an error code
  */
-int upipe_ts_scte_export_desc(struct upipe *upipe,
-                              struct uref *uref,
-                              uint8_t *desc)
+int uref_ts_scte35_add_desc(struct uref *dst, struct uref *uref)
 {
+    if (!dst || !uref)
+        return UBASE_ERR_INVALID;
+
+    uint8_t desc[PSI_MAX_SIZE + PSI_HEADER_SIZE];
+    uint32_t desc_len = PSI_MAX_SIZE;
+
     uint8_t tag;
     UBASE_RETURN(uref_ts_scte35_desc_get_tag(uref, &tag));
     uint64_t identifier;
@@ -287,6 +328,8 @@ int upipe_ts_scte_export_desc(struct upipe *upipe,
                     length += SCTE35_SEG_DESC_SUB_SEG_SIZE;
             }
 
+            if (length > desc_len)
+                return UBASE_ERR_NOSPC;
             scte35_seg_desc_init(desc, length);
             scte35_seg_desc_set_event_id(desc, event_id);
             scte35_seg_desc_set_cancel(desc, cancel);
@@ -328,6 +371,8 @@ int upipe_ts_scte_export_desc(struct upipe *upipe,
             scte35_seg_desc_set_expected(desc, expected);
             scte35_seg_desc_set_sub_num(desc, sub_num);
             scte35_seg_desc_set_sub_expected(desc, sub_expected);
+            uref_ts_flow_add_descriptor(
+                dst, desc, desc_get_length(desc) + DESC_HEADER_SIZE);
             break;
         }
         default:

@@ -48,8 +48,6 @@
 
 #include <bitstream/scte/35.h>
 
-#include "upipe_ts_scte_common.h"
-
 /** we only accept TS packets */
 #define EXPECTED_FLOW_DEF "block.mpegtspsi.mpegtsscte35."
 /** we output SCTE35 metadata */
@@ -299,31 +297,13 @@ static void upipe_ts_scte35d_time_signal_command(struct upipe *upipe,
         scte35_get_desclength(scte35);
     uint8_t *descl = desc_length ? (uint8_t *)scte35_get_descl(scte35) : NULL;
 
-    struct uref *out = uref_dup_inner(uref);
-    if (!out) {
-        upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
-        uref_block_unmap(uref, 0);
-        uref_free(uref);
-        return;
-    }
     if (descl)
-        upipe_ts_scte35d_parse_descs(upipe, out, descl, desc_length);
-
-    uref_block_set_start(out);
-    const uint8_t *desc;
-    unsigned i = 0;
-    for (i = 0; descl && (desc = descl_get_desc(descl, desc_length, i)); i++) {
-        struct uref *next = upipe_ts_scte_extract_desc(upipe, uref, desc);
-        if (!next)
-            continue;
-        upipe_ts_scte35d_output(upipe, out, upump_p);
-        out = next;
-    }
-    uref_block_set_end(out);
-    upipe_ts_scte35d_output(upipe, out, upump_p);
+        upipe_ts_scte35d_parse_descs(upipe, uref, descl, desc_length);
 
     uref_block_unmap(uref, 0);
-    uref_free(uref);
+    ubuf_free(uref_detach_ubuf(uref));
+
+    upipe_ts_scte35d_output(upipe, uref, upump_p);
 }
 
 /** @internal @This parses a null command.

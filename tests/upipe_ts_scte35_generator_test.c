@@ -337,54 +337,51 @@ int main(int argc, char *argv[])
     uref_clock_set_pts_sys(uref, UCLOCK_FREQ * 8);
     uref_clock_set_pts_prog(uref, UCLOCK_FREQ * 8);
     uref_clock_set_pts_orig(uref, UCLOCK_FREQ * 8);
-    uref_block_set_start(uref);
-    upipe_input(upipe_ts_scte35g, uref, NULL);
 
-    uref = uref_alloc_control(uref_mgr);
-    assert(uref != NULL);
-    ubase_assert(uref_ts_scte35_set_command_type(
-            uref, SCTE35_TIME_SIGNAL_COMMAND));
-    uref_clock_set_pts_sys(uref, UCLOCK_FREQ * 8);
-    uref_clock_set_pts_prog(uref, UCLOCK_FREQ * 8);
-    ubase_assert(uref_clock_set_duration(uref, UCLOCK_FREQ * 2));
-    uref_ts_scte35_desc_set_tag(uref, SCTE35_SPLICE_DESC_TAG_SEG);
-    uref_ts_scte35_desc_set_identifier(uref, 0x43554549);
-    uref_ts_scte35_desc_seg_set_event_id(uref, 4242);
-    uref_ts_scte35_desc_seg_set_web(uref);
-    uref_ts_scte35_desc_seg_set_no_regional_blackout(uref);
-    uref_ts_scte35_desc_seg_set_device(uref,
-                                       SCTE35_SEG_DESC_DEVICE_RESTRICTION_NONE);
-    uref_ts_scte35_desc_seg_set_upid_type(uref, SCTE35_SEG_DESC_UPID_TYPE_MPU);
-    uref_ts_scte35_desc_seg_set_upid(uref,
-                                     (uint8_t *)upid_str, strlen(upid_str) + 1);
-    uref_ts_scte35_desc_seg_set_type_id(uref,
-                                        SCTE35_SEG_DESC_TYPE_ID_BREAK_START);
-    uref_ts_scte35_desc_seg_set_num(uref, 42);
-    uref_ts_scte35_desc_seg_set_expected(uref, 242);
-    upipe_input(upipe_ts_scte35g, uref, NULL);
+    {
+        struct uref *desc = uref_alloc_control(uref_mgr);
+        assert(desc != NULL);
+        ubase_assert(uref_clock_set_duration(desc, UCLOCK_FREQ * 2));
+        uref_ts_scte35_desc_set_tag(desc, SCTE35_SPLICE_DESC_TAG_SEG);
+        uref_ts_scte35_desc_set_identifier(desc, 0x43554549);
+        uref_ts_scte35_desc_seg_set_event_id(desc, 4242);
+        uref_ts_scte35_desc_seg_set_web(desc);
+        uref_ts_scte35_desc_seg_set_no_regional_blackout(desc);
+        uref_ts_scte35_desc_seg_set_device(desc,
+                                           SCTE35_SEG_DESC_DEVICE_RESTRICTION_NONE);
+        uref_ts_scte35_desc_seg_set_upid_type(desc, SCTE35_SEG_DESC_UPID_TYPE_MPU);
+        uref_ts_scte35_desc_seg_set_upid(desc,
+                                         (uint8_t *)upid_str, strlen(upid_str) + 1);
+        uref_ts_scte35_desc_seg_set_type_id(desc,
+                                            SCTE35_SEG_DESC_TYPE_ID_BREAK_START);
+        uref_ts_scte35_desc_seg_set_num(desc, 42);
+        uref_ts_scte35_desc_seg_set_expected(desc, 242);
+        ubase_assert(uref_ts_scte35_add_desc(uref, desc));
+        uref_free(desc);
+    }
 
-    uref = uref_alloc_control(uref_mgr);
-    assert(uref != NULL);
-    ubase_assert(uref_ts_scte35_set_command_type(
-            uref, SCTE35_TIME_SIGNAL_COMMAND));
-    uref_clock_set_pts_sys(uref, UCLOCK_FREQ * 8);
-    uref_clock_set_pts_prog(uref, UCLOCK_FREQ * 8);
-    ubase_assert(uref_clock_set_duration(uref, UCLOCK_FREQ * 2));
-    uref_ts_scte35_desc_set_tag(uref, SCTE35_SPLICE_DESC_TAG_SEG);
-    uref_ts_scte35_desc_set_identifier(uref, 0x43554549);
-    uref_ts_scte35_desc_seg_set_event_id(uref, 4242 + 1);
-    uref_ts_scte35_desc_seg_set_web(uref);
-    uref_ts_scte35_desc_seg_set_no_regional_blackout(uref);
-    uref_ts_scte35_desc_seg_set_device(uref,
-                                       SCTE35_SEG_DESC_DEVICE_RESTRICTION_NONE);
-    uref_ts_scte35_desc_seg_set_upid_type(uref, SCTE35_SEG_DESC_UPID_TYPE_MPU);
-    uref_ts_scte35_desc_seg_set_upid(uref,
-                                     (uint8_t *)upid_str, strlen(upid_str) + 1);
-    uref_ts_scte35_desc_seg_set_type_id(
-        uref, SCTE35_SEG_DESC_TYPE_ID_PROVIDER_PO_START);
-    uref_ts_scte35_desc_seg_set_num(uref, 42 + 1);
-    uref_ts_scte35_desc_seg_set_expected(uref, 242);
-    uref_block_set_end(uref);
+    {
+        struct uref *desc = uref_alloc_control(uref_mgr);
+        assert(desc != NULL);
+        ubase_assert(uref_clock_set_duration(desc, UCLOCK_FREQ * 2));
+        uref_ts_scte35_desc_set_tag(desc, SCTE35_SPLICE_DESC_TAG_SEG);
+        uref_ts_scte35_desc_set_identifier(desc, 0x43554549);
+        uref_ts_scte35_desc_seg_set_event_id(desc, 4242 + 1);
+        uref_ts_scte35_desc_seg_set_web(desc);
+        uref_ts_scte35_desc_seg_set_no_regional_blackout(desc);
+        uref_ts_scte35_desc_seg_set_device(desc,
+                                           SCTE35_SEG_DESC_DEVICE_RESTRICTION_NONE);
+        uref_ts_scte35_desc_seg_set_upid_type(desc, SCTE35_SEG_DESC_UPID_TYPE_MPU);
+        uref_ts_scte35_desc_seg_set_upid(desc,
+                                         (uint8_t *)upid_str, strlen(upid_str) + 1);
+        uref_ts_scte35_desc_seg_set_type_id(
+            desc, SCTE35_SEG_DESC_TYPE_ID_PROVIDER_PO_START);
+        uref_ts_scte35_desc_seg_set_num(desc, 42 + 1);
+        uref_ts_scte35_desc_seg_set_expected(desc, 242);
+        ubase_assert(uref_ts_scte35_add_desc(uref, desc));
+        uref_free(desc);
+    }
+
     upipe_input(upipe_ts_scte35g, uref, NULL);
 
     round = 3;
@@ -410,51 +407,48 @@ int main(int argc, char *argv[])
     uref_clock_set_pts_sys(uref, UCLOCK_FREQ * 12);
     uref_clock_set_pts_prog(uref, UCLOCK_FREQ * 12);
     uref_clock_set_pts_orig(uref, UCLOCK_FREQ * 12);
-    uref_block_set_start(uref);
-    upipe_input(upipe_ts_scte35g, uref, NULL);
 
-    uref = uref_alloc_control(uref_mgr);
-    assert(uref != NULL);
-    ubase_assert(uref_ts_scte35_set_command_type(
-            uref, SCTE35_TIME_SIGNAL_COMMAND));
-    uref_clock_set_pts_sys(uref, UCLOCK_FREQ * 12);
-    uref_clock_set_pts_prog(uref, UCLOCK_FREQ * 12);
-    uref_ts_scte35_desc_set_tag(uref, SCTE35_SPLICE_DESC_TAG_SEG);
-    uref_ts_scte35_desc_set_identifier(uref, 0x43554549);
-    uref_ts_scte35_desc_seg_set_event_id(uref, 4242);
-    uref_ts_scte35_desc_seg_set_delivery_not_restricted(uref);
-    uref_ts_scte35_desc_seg_set_upid_type(uref, SCTE35_SEG_DESC_UPID_TYPE_MPU);
-    uref_ts_scte35_desc_seg_set_upid(uref,
-                                     (uint8_t *)upid_str, strlen(upid_str) + 1);
-    uref_ts_scte35_desc_seg_set_type_id(uref,
-                                        SCTE35_SEG_DESC_TYPE_ID_BREAK_START);
-    uref_ts_scte35_desc_seg_set_num(uref, 42);
-    uref_ts_scte35_desc_seg_set_expected(uref, 242);
-    upipe_input(upipe_ts_scte35g, uref, NULL);
+    {
+        struct uref *desc = uref_alloc_control(uref_mgr);
+        assert(desc != NULL);
+        uref_ts_scte35_desc_set_tag(desc, SCTE35_SPLICE_DESC_TAG_SEG);
+        uref_ts_scte35_desc_set_identifier(desc, 0x43554549);
+        uref_ts_scte35_desc_seg_set_event_id(desc, 4242);
+        uref_ts_scte35_desc_seg_set_delivery_not_restricted(desc);
+        uref_ts_scte35_desc_seg_set_upid_type(desc, SCTE35_SEG_DESC_UPID_TYPE_MPU);
+        uref_ts_scte35_desc_seg_set_upid(desc,
+                                         (uint8_t *)upid_str, strlen(upid_str) + 1);
+        uref_ts_scte35_desc_seg_set_type_id(desc,
+                                            SCTE35_SEG_DESC_TYPE_ID_BREAK_START);
+        uref_ts_scte35_desc_seg_set_num(desc, 42);
+        uref_ts_scte35_desc_seg_set_expected(desc, 242);
+        ubase_assert(uref_ts_scte35_add_desc(uref, desc));
+        uref_free(desc);
+    }
 
-    uref = uref_alloc_control(uref_mgr);
-    assert(uref != NULL);
-    ubase_assert(uref_ts_scte35_set_command_type(
-            uref, SCTE35_TIME_SIGNAL_COMMAND));
-    uref_clock_set_pts_sys(uref, UCLOCK_FREQ * 12);
-    uref_clock_set_pts_prog(uref, UCLOCK_FREQ * 12);
-    uref_ts_scte35_desc_set_tag(uref, SCTE35_SPLICE_DESC_TAG_SEG);
-    uref_ts_scte35_desc_set_identifier(uref, 0x43554549);
-    uref_ts_scte35_desc_seg_set_event_id(uref, 4242 + 1);
-    uref_ts_scte35_desc_seg_set_delivery_not_restricted(uref);
-    uref_ts_scte35_desc_seg_set_upid_type(uref, SCTE35_SEG_DESC_UPID_TYPE_MPU);
-    uref_ts_scte35_desc_seg_set_upid(uref,
-                                     (uint8_t *)upid_str, strlen(upid_str) + 1);
-    uref_ts_scte35_desc_seg_set_type_id(
-        uref, SCTE35_SEG_DESC_TYPE_ID_PROVIDER_PO_START);
-    uref_ts_scte35_desc_seg_set_num(uref, 42 + 1);
-    uref_ts_scte35_desc_seg_set_expected(uref, 242);
-    uref_ts_scte35_desc_seg_set_nb_comp(uref, 2);
-    uref_ts_scte35_desc_seg_comp_set_tag(uref, 42, 0);
-    uref_ts_scte35_desc_seg_comp_set_pts_off(uref, 1, 0);
-    uref_ts_scte35_desc_seg_comp_set_tag(uref, 24, 1);
-    uref_ts_scte35_desc_seg_comp_set_pts_off(uref, 2, 1);
-    uref_block_set_end(uref);
+    {
+        struct uref *desc = uref_alloc_control(uref_mgr);
+        assert(desc != NULL);
+        uref_ts_scte35_desc_set_tag(desc, SCTE35_SPLICE_DESC_TAG_SEG);
+        uref_ts_scte35_desc_set_identifier(desc, 0x43554549);
+        uref_ts_scte35_desc_seg_set_event_id(desc, 4242 + 1);
+        uref_ts_scte35_desc_seg_set_delivery_not_restricted(desc);
+        uref_ts_scte35_desc_seg_set_upid_type(desc, SCTE35_SEG_DESC_UPID_TYPE_MPU);
+        uref_ts_scte35_desc_seg_set_upid(desc,
+                                         (uint8_t *)upid_str, strlen(upid_str) + 1);
+        uref_ts_scte35_desc_seg_set_type_id(
+            desc, SCTE35_SEG_DESC_TYPE_ID_PROVIDER_PO_START);
+        uref_ts_scte35_desc_seg_set_num(desc, 42 + 1);
+        uref_ts_scte35_desc_seg_set_expected(desc, 242);
+        uref_ts_scte35_desc_seg_set_nb_comp(desc, 2);
+        uref_ts_scte35_desc_seg_comp_set_tag(desc, 42, 0);
+        uref_ts_scte35_desc_seg_comp_set_pts_off(desc, 1, 0);
+        uref_ts_scte35_desc_seg_comp_set_tag(desc, 24, 1);
+        uref_ts_scte35_desc_seg_comp_set_pts_off(desc, 2, 1);
+        ubase_assert(uref_ts_scte35_add_desc(uref, desc));
+        uref_free(desc);
+    }
+
     upipe_input(upipe_ts_scte35g, uref, NULL);
 
     round = 4;
