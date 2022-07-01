@@ -359,6 +359,8 @@ static void upipe_pciesdi_src_worker(struct upump *upump)
     /* If either the core or datapath bits are unset or the "was unlocked"
      * bit is set then a discontinuity needs flaggiing on the next output. */
     if (locked != 0x3) {
+        upipe_dbg_va(upipe, "unlocked (%d), setting discontinuity (%s)",
+                locked, __func__);
         upipe_pciesdi_src->discontinuity = true;
         return;
     }
@@ -403,6 +405,9 @@ static void upipe_pciesdi_src_worker(struct upump *upump)
         sdi_dma_writer(upipe_pciesdi_src->fd, 1, &hw, &sw);
         upipe_pciesdi_src->scratch_buffer_count = 0;
         upipe_pciesdi_src->discontinuity = true;
+
+        upipe_dbg_va(upipe, "mode or format change, setting discontinuity (%s)",
+                __func__);
 
         /* Return because there should be no data to read. */
         return;
@@ -593,6 +598,7 @@ static void upipe_pciesdi_src_worker(struct upump *upump)
     }
 
     if (upipe_pciesdi_src->discontinuity) {
+        upipe_dbg(upipe, "setting discontinuity attribute on output uref");
         uref_flow_set_discontinuity(uref);
         upipe_pciesdi_src->discontinuity = false;
     }
@@ -803,6 +809,7 @@ static void get_flow_def_on_signal_lock(struct upump *upump)
     sdi_dma_writer(upipe_pciesdi_src->fd, 1, &hw, &sw);
     upipe_pciesdi_src->scratch_buffer_count = 0;
     upipe_pciesdi_src->discontinuity = true;
+    upipe_dbg_va(upipe, "setting discontinuity (%s)", __func__);
 
     /* Start main pump. */
     upump_start(upipe_pciesdi_src->upump);
