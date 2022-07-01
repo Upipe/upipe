@@ -552,6 +552,7 @@ static void upipe_pciesdi_source_framer_input(struct upipe *upipe, struct uref
 
     /* There was a discontinuity in the signal.  Restart frame alignment. */
     if (ubase_check(uref_flow_get_discontinuity(uref))) {
+        upipe_dbg(upipe, "got discontinuity attribute on input uref, resetting state");
         reset_state(ctx);
         ctx->discontinuity = true;
     }
