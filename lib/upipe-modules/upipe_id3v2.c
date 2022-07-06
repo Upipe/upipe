@@ -161,16 +161,15 @@ static bool upipe_id3v2_parse(struct upipe *upipe)
         id3v2_footer_get_size(header);
     if (size < tag_size)
         return false;
-    const uint8_t *tag;
     struct uref *uref = upipe_id3v2_extract_uref_stream(upipe, tag_size);
     if (!uref) {
         upipe_err(upipe, "fail to extract tag from stream");
         upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
         return true;
     }
-    int block_size = -1;
-    ret = uref_block_read(uref, 0, &block_size, &tag);
-    if (unlikely(!ubase_check(ret) || block_size != tag_size)) {
+    uint8_t tag[tag_size];
+    ret = uref_block_extract(uref, 0, tag_size, tag);
+    if (unlikely(!ubase_check(ret))) {
         upipe_err(upipe, "fail to read from block");
         upipe_throw_fatal(upipe, ret);
         uref_free(uref);
