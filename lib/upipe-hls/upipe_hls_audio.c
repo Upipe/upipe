@@ -32,12 +32,13 @@
 #include "upipe-modules/upipe_probe_uref.h"
 
 #include "upipe-framers/upipe_mpga_framer.h"
+#include "upipe-framers/upipe_a52_framer.h"
 #include "upipe-framers/upipe_auto_framer.h"
 
 #include "upipe/upipe_helper_uprobe.h"
 #include "upipe/upipe_helper_bin_output.h"
 #include "upipe/upipe_helper_inner.h"
-#include "upipe/upipe_helper_void.h"
+#include "upipe/upipe_helper_flow.h"
 #include "upipe/upipe_helper_urefcount_real.h"
 #include "upipe/upipe_helper_urefcount.h"
 #include "upipe/upipe_helper_upipe.h"
@@ -45,6 +46,7 @@
 #include "upipe/uprobe_select_flows.h"
 #include "upipe/uprobe_prefix.h"
 #include "upipe/uref_block.h"
+#include "upipe/uref_m3u_master.h"
 
 /** @internal @This enumatates the possible guess for playlist type. */
 enum upipe_hls_audio_guess {
@@ -52,6 +54,8 @@ enum upipe_hls_audio_guess {
     UPIPE_HLS_AUDIO_GUESS_NONE,
     /** maybe AAC */
     UPIPE_HLS_AUDIO_GUESS_AAC,
+    /** maybe AC3 */
+    UPIPE_HLS_AUDIO_GUESS_AC3,
     /** maybe TS */
     UPIPE_HLS_AUDIO_GUESS_TS,
     /** impossible to guess */
@@ -138,7 +142,7 @@ UPIPE_HELPER_UPIPE(upipe_hls_audio, upipe, UPIPE_HLS_AUDIO_SIGNATURE);
 UPIPE_HELPER_UREFCOUNT(upipe_hls_audio, urefcount, upipe_hls_audio_no_ref);
 UPIPE_HELPER_UREFCOUNT_REAL(upipe_hls_audio, urefcount_real,
                             upipe_hls_audio_free);
-UPIPE_HELPER_VOID(upipe_hls_audio);
+UPIPE_HELPER_FLOW(upipe_hls_audio, "sound.");
 UPIPE_HELPER_INNER(upipe_hls_audio, src);
 UPIPE_HELPER_INNER(upipe_hls_audio, playlist);
 UPIPE_HELPER_INNER(upipe_hls_audio, last_inner);
@@ -345,6 +349,37 @@ static int probe_uref(struct uprobe *uprobe, struct upipe *inner,
                 break;
             }
 
+            case UPIPE_HLS_AUDIO_GUESS_AC3: {
+                /* id3v2 pipe
+                */
+                struct upipe_mgr *upipe_id3v2_mgr = upipe_id3v2_mgr_alloc();
+                UBASE_ALLOC_RETURN(upipe_id3v2_mgr);
+                struct upipe *output = upipe_void_alloc_output(
+                    inner, upipe_id3v2_mgr,
+                    uprobe_pfx_alloc(
+                        uprobe_use(&upipe_hls_audio->probe_id3v2),
+                        UPROBE_LOG_VERBOSE, "id3v2"));
+                upipe_mgr_release(upipe_id3v2_mgr);
+                UBASE_ALLOC_RETURN(output);
+
+                /* a52 framer
+                */
+                struct upipe_mgr *upipe_a52f_mgr = upipe_a52f_mgr_alloc();
+                if (unlikely(upipe_a52f_mgr == NULL)) {
+                    upipe_release(output);
+                    return UBASE_ERR_ALLOC;
+                }
+                output = upipe_void_chain_output(
+                    output, upipe_a52f_mgr,
+                    uprobe_pfx_alloc(
+                        uprobe_use(&upipe_hls_audio->probe_last_inner),
+                        UPROBE_LOG_VERBOSE, "a52f"));
+                upipe_mgr_release(upipe_a52f_mgr);
+                UBASE_ALLOC_RETURN(output);
+                upipe_hls_audio_store_bin_output(upipe, output);
+                break;
+            }
+
             case UPIPE_HLS_AUDIO_GUESS_TS: {
                 /* ts demux
                  */
@@ -398,7 +433,8 @@ static int probe_uref(struct uprobe *uprobe, struct upipe *inner,
         if (tag[0] == 'I' && tag[1] == 'D' && tag[2] == '3') {
             /* probably AAC */
             upipe_dbg(upipe, "playlist is probably AAC");
-            upipe_hls_audio->guess = UPIPE_HLS_AUDIO_GUESS_AAC;
+            if (upipe_hls_audio->guess == UPIPE_HLS_AUDIO_GUESS_NONE)
+                upipe_hls_audio->guess = UPIPE_HLS_AUDIO_GUESS_AAC;
         }
         else if (tag[0] == 0x47) {
             /* probably TS */
@@ -553,8 +589,9 @@ static struct upipe *upipe_hls_audio_alloc(struct upipe_mgr *mgr,
                                            uint32_t signature,
                                            va_list args)
 {
+    struct uref *flow_def;
     struct upipe *upipe =
-        upipe_hls_audio_alloc_void(mgr, uprobe, signature, args);
+        upipe_hls_audio_alloc_flow(mgr, uprobe, signature, args, &flow_def);
     if (unlikely(upipe == NULL))
         return NULL;
 
@@ -580,6 +617,17 @@ static struct upipe *upipe_hls_audio_alloc(struct upipe_mgr *mgr,
     upipe_hls_audio->source_mgr = NULL;
     upipe_hls_audio->uri = NULL;
     upipe_hls_audio->guess = UPIPE_HLS_AUDIO_GUESS_NONE;
+
+    const char *codecs = NULL;
+    uref_m3u_master_get_codecs(flow_def, &codecs);
+    if (codecs && !strchr(codecs, ',')) {
+        if (!strncmp(codecs, "ac-3", 3) ||
+            !strncmp(codecs, "ec-3", 3))
+            upipe_hls_audio->guess = UPIPE_HLS_AUDIO_GUESS_AC3;
+        else if (!strncmp(codecs, "mp4a", 4))
+            upipe_hls_audio->guess = UPIPE_HLS_AUDIO_GUESS_AAC;
+    }
+    uref_free(flow_def);
 
     upipe_throw_ready(upipe);
 
@@ -611,7 +659,7 @@ static void upipe_hls_audio_free(struct upipe *upipe)
     upipe_hls_audio_clean_probe_aes_decrypt(upipe);
     upipe_hls_audio_clean_urefcount(upipe);
     upipe_hls_audio_clean_urefcount_real(upipe);
-    upipe_hls_audio_free_void(upipe);
+    upipe_hls_audio_free_flow(upipe);
 }
 
 /** @internal @This is called when there is no external reference to the pipe.
