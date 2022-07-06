@@ -746,23 +746,36 @@ static int upipe_m3u_reader_key(struct upipe *upipe,
                 upipe_err_va(upipe, "fail to set uri to %s", value_str);
         }
         else if (!ustring_cmp_str(name, "IV")) {
-            size_t len = strlen(value_str);
-            if (unlikely(len > 32)) {
+            if (value_str[0] != '0' || value_str[1] != 'x') {
                 upipe_warn_va(upipe, "invalid initialization vector %s",
                               value_str);
                 continue;
             }
-            for (unsigned i = 0; i < len; i += 2) {
-                if (unlikely(!isxdigit(value_str[i])) ||
-                    unlikely(!isxdigit(value_str[i + 1]))) {
-                    upipe_warn_va(upipe, "invalid initialization vector %s",
-                                  value_str);
-                    continue;
-                }
-                //FIXME
-                //iv[] = value_str[i]
+
+            const char *v = value_str + 2;
+
+            size_t len = strlen(v);
+            if (unlikely(len > 32 || len % 2)) {
+                upipe_warn_va(upipe, "invalid initialization vector %s", v);
+                continue;
             }
 
+            bool valid = true;
+            for (unsigned i = 0; i < len; i += 2) {
+                if (unlikely(!isxdigit(v[i])) ||
+                    unlikely(!isxdigit(v[i + 1]))) {
+                    valid = false;
+                    break;
+                }
+            }
+            if (!valid) {
+                upipe_warn_va(upipe, "invalid initialization vector %s", v);
+                continue;
+            }
+
+            err = uref_m3u_playlist_key_set_iv(key, v);
+            if (unlikely(!ubase_check(err)))
+                upipe_err_va(upipe, "fail to set IV to %s", v);
         }
         else {
             upipe_warn_va(upipe, "ignoring attribute %.*s (%.*s)",

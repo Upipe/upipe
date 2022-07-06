@@ -56,6 +56,7 @@
 #include "upipe/uclock.h"
 
 #include <stdlib.h>
+#include <ctype.h>
 #include <libgen.h>
 
 /** @showvalue */
@@ -221,11 +222,6 @@ static int probe_key(struct uprobe *uprobe, struct upipe *inner,
             unlikely(size != 16) ||
             unlikely(!ubase_check(uref_block_extract(uref, 0, 16, key))))
             return UBASE_ERR_INVALID;
-
-        char key_str[sizeof (key) * 2 + 1];
-        for (unsigned i = 0; i < sizeof (key); i++)
-            snprintf(key_str + i * 2, sizeof (key_str) - i * 2, "%x", key[i]);
-        upipe_notice_va(upipe, "key: %s", key_str);
 
         UBASE_RETURN(uref_aes_set_key(flow_def, key, sizeof (key)));
         return UBASE_ERR_NONE;
@@ -614,18 +610,39 @@ static int upipe_hls_playlist_play_uri(struct upipe *upipe,
 
     struct uref *flow_def = upipe_hls_playlist->flow_def;
     if (ubase_check(uref_flow_match_def(flow_def, "block.aes."))) {
-        const uint8_t *iv;
-        size_t iv_size;
-        if (ubase_check(uref_aes_get_iv(input_flow_def, &iv, &iv_size))) {
-            UBASE_RETURN(uref_aes_set_iv(flow_def, iv, iv_size));
-        }
-        else {
+        const char *key_iv = NULL;
+
+        if (!ubase_check(uref_m3u_playlist_key_get_iv(item, &key_iv)) ||
+            !key_iv) {
             uint8_t iv_buf[16];
 
             memset(&iv_buf, 0, sizeof(iv_buf));
             for (unsigned i = 0; i < 8; i++)
                 iv_buf[15 - i] = upipe_hls_playlist->index >> (i * 8);
+
             UBASE_RETURN(uref_aes_set_iv(flow_def, iv_buf, sizeof(iv_buf)));
+        } else {
+            size_t iv_len = strlen(key_iv);
+            if (iv_len && !(iv_len % 2)) {
+                uint8_t buf[iv_len / 2];
+                for (size_t i = 0; i < iv_len; i += 2) {
+                    uint8_t h = 0, l = 0;
+
+                    if (isdigit(key_iv[i]))
+                        h = key_iv[i] - '0';
+                    else if (isxdigit(key_iv[i]))
+                        h = key_iv[i] - (islower(key_iv[i]) ? 'a' : 'A') + 0xA;
+
+                    if (isdigit(key_iv[i + 1]))
+                        l = key_iv[i + 1] - '0';
+                    else if (isxdigit(key_iv[i + 1]))
+                        l = key_iv[i + 1] -
+                            (islower(key_iv[i + 1]) ? 'a' : 'A') + 0xA;
+
+                    buf[i / 2] = h << 4 | l;
+                }
+                UBASE_RETURN(uref_aes_set_iv(flow_def, buf, iv_len / 2));
+            }
         }
     }
     UBASE_RETURN(upipe_hls_playlist_update_flow_def(upipe));
@@ -833,7 +850,6 @@ static int _upipe_hls_playlist_play(struct upipe *upipe)
 
         const char *key_uri;
         UBASE_RETURN(uref_m3u_playlist_key_get_uri(item, &key_uri));
-
         if (upipe_hls_playlist->key.uri == NULL ||
             upipe_hls_playlist->key.method == NULL ||
             strcmp(method, upipe_hls_playlist->key.method) ||
