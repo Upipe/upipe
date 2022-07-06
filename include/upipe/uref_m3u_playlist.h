@@ -42,12 +42,15 @@ UREF_ATTR_STRING(m3u_playlist_key, method, "m3u.playlist.key.method",
                  key method);
 UREF_ATTR_STRING(m3u_playlist_key, uri, "m3u.playlist.key.uri",
                  key uri);
+UREF_ATTR_STRING(m3u_playlist_key, iv, "m3u.playlist.key.iv",
+                 key initialization vector);
 
 static inline int uref_m3u_playlist_key_delete(struct uref *uref)
 {
     int (*list[])(struct uref *) = {
         uref_m3u_playlist_key_delete_method,
         uref_m3u_playlist_key_delete_uri,
+        uref_m3u_playlist_key_delete_iv,
     };
     return uref_attr_delete_list(uref, list, UBASE_ARRAY_SIZE(list));
 }
@@ -69,6 +72,7 @@ static inline int uref_m3u_playlist_key_copy(struct uref *uref,
     int (*list[])(struct uref *, struct uref *) = {
         uref_m3u_playlist_key_copy_method,
         uref_m3u_playlist_key_copy_uri,
+        uref_m3u_playlist_key_copy_iv,
     };
     return uref_attr_copy_list(uref, uref_src, list, UBASE_ARRAY_SIZE(list));
 }
