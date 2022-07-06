@@ -203,11 +203,12 @@ static struct upipe *upipe_hls_variant_sub_alloc(struct upipe_mgr *mgr,
         return NULL;
     }
 
-    last_inner = upipe_void_alloc(
+    last_inner = upipe_flow_alloc(
         upipe_mgr,
         uprobe_pfx_alloc(
             uprobe_use(&upipe_hls_variant_sub->probe_last_inner),
-            UPROBE_LOG_VERBOSE, name));
+            UPROBE_LOG_VERBOSE, name),
+        flow_def);
     upipe_mgr_release(upipe_mgr);
     if (last_inner == NULL) {
         upipe_err(upipe, "fail to allocate sub pipe");
@@ -447,6 +448,7 @@ static int upipe_hls_variant_split(struct upipe *upipe)
             first = false;
         }
 
+        uref_m3u_master_set_codecs(main_rend, codecs);
         if (audio_only)
             uref_flow_set_def(main_rend, "sound.");
         else if (video_only)

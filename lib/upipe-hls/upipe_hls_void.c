@@ -36,7 +36,7 @@
 #include "upipe/upipe_helper_uprobe.h"
 #include "upipe/upipe_helper_subpipe.h"
 #include "upipe/upipe_helper_flow.h"
-#include "upipe/upipe_helper_void.h"
+#include "upipe/upipe_helper_flow.h"
 #include "upipe/upipe_helper_urefcount_real.h"
 #include "upipe/upipe_helper_urefcount.h"
 #include "upipe/upipe_helper_upipe.h"
@@ -136,7 +136,7 @@ UPIPE_HELPER_INNER(upipe_hls_void, pmt);
 UPIPE_HELPER_UREFCOUNT(upipe_hls_void, urefcount, upipe_hls_void_no_ref);
 UPIPE_HELPER_UREFCOUNT_REAL(upipe_hls_void, urefcount_real,
                             upipe_hls_void_free);
-UPIPE_HELPER_VOID(upipe_hls_void);
+UPIPE_HELPER_FLOW(upipe_hls_void, NULL);
 UPIPE_HELPER_SUBPIPE(upipe_hls_void, upipe_hls_void_sub, pipe, sub_mgr,
                      subs, uchain);
 UPIPE_HELPER_UPROBE(upipe_hls_void, urefcount_real, probe_src, probe_src);
@@ -525,10 +525,13 @@ static struct upipe *upipe_hls_void_alloc(struct upipe_mgr *mgr,
                                           uint32_t signature,
                                           va_list args)
 {
+    struct uref *flow_def;
     struct upipe *upipe =
-        upipe_hls_void_alloc_void(mgr, uprobe, signature, args);
+        upipe_hls_void_alloc_flow(mgr, uprobe, signature, args, &flow_def);
     if (unlikely(upipe == NULL))
         return NULL;
+
+    uref_free(flow_def);
 
     upipe_hls_void_init_urefcount(upipe);
     upipe_hls_void_init_urefcount_real(upipe);
@@ -573,7 +576,7 @@ static void upipe_hls_void_free(struct upipe *upipe)
     upipe_hls_void_clean_probe_demux_out(upipe);
     upipe_hls_void_clean_urefcount(upipe);
     upipe_hls_void_clean_urefcount_real(upipe);
-    upipe_hls_void_free_void(upipe);
+    upipe_hls_void_free_flow(upipe);
 }
 
 /** @internal @This is called when there is no external reference to the pipe.
