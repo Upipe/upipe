@@ -236,6 +236,7 @@ static void upipe_id3v2_input(struct upipe *upipe,
         if (upipe_id3v2->timestamp_set == false) {
             upipe_dbg_va(upipe, "set timestamp %"PRIu64, upipe_id3v2->timestamp);
             uref_clock_set_date_orig(uref, upipe_id3v2->timestamp, UREF_DATE_DTS);
+            uref_clock_set_date_prog(uref, upipe_id3v2->timestamp, UREF_DATE_DTS);
             uref_clock_set_dts_pts_delay(uref, 0);
         }
         upipe_id3v2->timestamp_set = true;
