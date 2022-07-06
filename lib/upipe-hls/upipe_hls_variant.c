@@ -189,7 +189,7 @@ static struct upipe *upipe_hls_variant_sub_alloc(struct upipe_mgr *mgr,
         name = "audio";
     }
     else if (ubase_check(uref_flow_match_def(flow_def, "pic."))) {
-        upipe_mgr = upipe_hls_video_mgr_alloc();
+        upipe_mgr = upipe_hls_void_mgr_alloc();
         name = "video";
     }
     else {
