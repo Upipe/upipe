@@ -415,14 +415,23 @@ static int upipe_hls_variant_split(struct upipe *upipe)
         bool first = true;
 
         uref_m3u_master_foreach_codec(flow_def, codec) {
-            if (ustring_match_str(codec, "ac-3.") ||
+            if (!ustring_cmp_str(codec, "ac-3") ||
+                !ustring_cmp_str(codec, "ec-3") ||
+                !ustring_cmp_str(codec, "mp4a") ||
+                ustring_match_str(codec, "ac-3.") ||
                 ustring_match_str(codec, "ec-3.") ||
                 ustring_match_str(codec, "mp4a.")) {
                 if (first)
                     audio_only = true;
                 video_only = false;
             }
-            else if (ustring_match_str(codec, "avc1.") ||
+            else if (!ustring_cmp_str(codec, "avc1") ||
+                     !ustring_cmp_str(codec, "avc3") ||
+                     !ustring_cmp_str(codec, "hvc1") ||
+                     !ustring_cmp_str(codec, "dvh1") ||
+                     !ustring_cmp_str(codec, "dvhe") ||
+                     !ustring_cmp_str(codec, "hev1") ||
+                     ustring_match_str(codec, "avc1.") ||
                      ustring_match_str(codec, "avc3.") ||
                      ustring_match_str(codec, "hvc1.") ||
                      ustring_match_str(codec, "dvh1.") ||
@@ -432,6 +441,9 @@ static int upipe_hls_variant_split(struct upipe *upipe)
                     video_only = true;
                 audio_only = false;
             }
+            else
+                upipe_warn_va(upipe, "unhandled codec %.*s",
+                              (int)codec.len, codec.at);
             first = false;
         }
 
