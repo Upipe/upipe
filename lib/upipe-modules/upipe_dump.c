@@ -50,6 +50,12 @@ struct upipe_dump {
     struct uchain request_list;
     /** true if text mode is set */
     bool text_mode;
+    /** filename to dump or NULL */
+    char *filename;
+    /** is filename opened? */
+    bool opened;
+    /** file handle */
+    FILE *file;
 
     /** line length */
     size_t len;
@@ -76,6 +82,9 @@ static struct upipe *upipe_dump_alloc(struct upipe_mgr *mgr,
     upipe_dump->len = 16;
     upipe_dump->max_len = (size_t)-1;
     upipe_dump->text_mode = false;
+    upipe_dump->filename = NULL;
+    upipe_dump->opened = false;
+    upipe_dump->file = NULL;
 
     upipe_throw_ready(upipe);
 
@@ -84,8 +93,13 @@ static struct upipe *upipe_dump_alloc(struct upipe_mgr *mgr,
 
 static void upipe_dump_free(struct upipe *upipe)
 {
+    struct upipe_dump *upipe_dump = upipe_dump_from_upipe(upipe);
+
     upipe_throw_dead(upipe);
 
+    if (upipe_dump->file)
+        fclose(upipe_dump->file);
+    free(upipe_dump->filename);
     upipe_dump_clean_output(upipe);
     upipe_dump_clean_urefcount(upipe);
     upipe_dump_free_void(upipe);
@@ -128,6 +142,25 @@ static void upipe_dump_line(struct upipe *upipe, unsigned int at,
     }
 }
 
+static void upipe_dump_to_file(struct upipe *upipe,
+                               const uint8_t *buf, int size)
+{
+    struct upipe_dump *upipe_dump = upipe_dump_from_upipe(upipe);
+    if (!upipe_dump->opened) {
+        if (!upipe_dump->filename)
+            return;
+
+        if (upipe_dump->file)
+            fclose(upipe_dump->file);
+        upipe_dump->file = fopen(upipe_dump->filename, "w");
+        if (!upipe_dump->file)
+            return;
+        upipe_dump->opened = true;
+    }
+
+    fwrite(buf, size, 1, upipe_dump->file);
+}
+
 static void upipe_dump_input(struct upipe *upipe, struct uref *uref,
                              struct upump **upump_p)
 {
@@ -165,6 +198,8 @@ static void upipe_dump_input(struct upipe *upipe, struct uref *uref,
 
         ubase_assert(uref_block_read(uref, offset, &size, &buf));
         assert(size != 0);
+
+        upipe_dump_to_file(upipe, buf, size);
 
         total_size -= size;
 
@@ -204,6 +239,18 @@ static int _upipe_dump_set_text_mode(struct upipe *upipe)
     return UBASE_ERR_NONE;
 }
 
+static int _upipe_dump_set_filename(struct upipe *upipe, const char *path)
+{
+    struct upipe_dump *upipe_dump = upipe_dump_from_upipe(upipe);
+    free(upipe_dump->filename);
+    if (upipe_dump->file)
+        fclose(upipe_dump->file);
+    upipe_dump->opened = false;
+    upipe_dump->file = NULL;
+    upipe_dump->filename = path ? strdup(path) : NULL;
+    return UBASE_ERR_NONE;
+}
+
 static int upipe_dump_set_flow_def(struct upipe *upipe, struct uref *flow_def)
 {
     int ret = uref_flow_match_def(flow_def, "block.");
@@ -236,6 +283,12 @@ static int upipe_dump_control(struct upipe *upipe, int command, va_list args)
     case UPIPE_DUMP_SET_TEXT_MODE: {
         UBASE_SIGNATURE_CHECK(args, UPIPE_DUMP_SIGNATURE)
         return _upipe_dump_set_text_mode(upipe);
+    }
+
+    case UPIPE_DUMP_SET_FILENAME: {
+        UBASE_SIGNATURE_CHECK(args, UPIPE_DUMP_SIGNATURE)
+        const char *path = va_arg(args, const char *);
+        return _upipe_dump_set_filename(upipe, path);
     }
 
     default:

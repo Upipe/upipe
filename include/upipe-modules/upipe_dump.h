@@ -42,6 +42,7 @@ enum upipe_dump_command {
 
     UPIPE_DUMP_SET_MAX_LEN,
     UPIPE_DUMP_SET_TEXT_MODE,
+    UPIPE_DUMP_SET_FILENAME,
 };
 
 static inline int upipe_dump_set_max_len(struct upipe *upipe, size_t len)
@@ -53,6 +54,12 @@ static inline int upipe_dump_set_max_len(struct upipe *upipe, size_t len)
 static inline int upipe_dump_set_text_mode(struct upipe *upipe)
 {
     return upipe_control(upipe, UPIPE_DUMP_SET_TEXT_MODE, UPIPE_DUMP_SIGNATURE);
+}
+
+static inline int upipe_dump_set_filename(struct upipe *upipe, const char *path)
+{
+    return upipe_control(upipe, UPIPE_DUMP_SET_FILENAME, UPIPE_DUMP_SIGNATURE,
+                         path);
 }
 
 struct upipe_mgr *upipe_dump_mgr_alloc(void);
