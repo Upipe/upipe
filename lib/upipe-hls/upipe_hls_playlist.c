@@ -106,6 +106,8 @@ struct upipe_hls_playlist {
     struct upipe *src;
     /** key pipe */
     struct upipe *upipe_key;
+    /** map pipe */
+    struct upipe *upipe_map;
     /** last inner pipe */
     struct upipe *setflowdef;
     /** output pipe */
@@ -119,6 +121,10 @@ struct upipe_hls_playlist {
     struct uprobe probe_key_src;
     /** key probe */
     struct uprobe probe_key;
+    /** probe for map source */
+    struct uprobe probe_map_src;
+    /** map probe */
+    struct uprobe probe_map;
 
     /** upump manager */
     struct upump_mgr *upump_mgr;
@@ -138,6 +144,11 @@ struct upipe_hls_playlist {
         char *uri;
         char *method;
     } key;
+    struct {
+        char *uri;
+        struct uref *uref;
+        struct uref *flow_def;
+    } map;
     /** attach uclock was called */
     bool attach_uclock;
     /** is currently playing */
@@ -147,6 +158,10 @@ struct upipe_hls_playlist {
 static int probe_key_src(struct uprobe *uprobe, struct upipe *inner,
                          int event, va_list args);
 static int probe_key(struct uprobe *uprobe, struct upipe *inner,
+                     int event, va_list args);
+static int probe_map_src(struct uprobe *uprobe, struct upipe *inner,
+                         int event, va_list args);
+static int probe_map(struct uprobe *uprobe, struct upipe *inner,
                      int event, va_list args);
 static int probe_src(struct uprobe *uprobe, struct upipe *inner,
                      int event, va_list args);
@@ -158,10 +173,14 @@ UPIPE_HELPER_UREFCOUNT_REAL(upipe_hls_playlist, urefcount_real,
 UPIPE_HELPER_VOID(upipe_hls_playlist);
 UPIPE_HELPER_INNER(upipe_hls_playlist, src);
 UPIPE_HELPER_INNER(upipe_hls_playlist, upipe_key);
+UPIPE_HELPER_INNER(upipe_hls_playlist, upipe_map);
 UPIPE_HELPER_INNER(upipe_hls_playlist, setflowdef);
 UPIPE_HELPER_UPROBE(upipe_hls_playlist, urefcount_real,
                     probe_key_src, probe_key_src);
 UPIPE_HELPER_UPROBE(upipe_hls_playlist, urefcount_real, probe_key, probe_key);
+UPIPE_HELPER_UPROBE(upipe_hls_playlist, urefcount_real,
+                    probe_map_src, probe_map_src);
+UPIPE_HELPER_UPROBE(upipe_hls_playlist, urefcount_real, probe_map, probe_map);
 UPIPE_HELPER_UPROBE(upipe_hls_playlist, urefcount_real, probe_src, probe_src);
 UPIPE_HELPER_UPROBE(upipe_hls_playlist, urefcount_real, probe_setflowdef, NULL);
 UPIPE_HELPER_BIN_OUTPUT(upipe_hls_playlist, setflowdef, output, requests);
@@ -234,6 +253,72 @@ static int probe_key(struct uprobe *uprobe, struct upipe *inner,
     return upipe_throw_proxy(upipe, inner, event, args);
 }
 
+/** @internal @This catches the inner map source pipe event.
+ *
+ * @param uprobe structure used to raise events
+ * @param inner the inner pipe
+ * @param event event thrown
+ * @param args optional arguments
+ * @return an error code
+ */
+static int probe_map_src(struct uprobe *uprobe, struct upipe *inner,
+                         int event, va_list args)
+{
+    struct upipe_hls_playlist *upipe_hls_playlist =
+        upipe_hls_playlist_from_probe_map_src(uprobe);
+    struct upipe *upipe = upipe_hls_playlist_to_upipe(upipe_hls_playlist);
+
+    switch (event) {
+    case UPROBE_SOURCE_END:
+        upipe_hls_playlist_clean_upipe_map(upipe);
+        upipe_hls_playlist_play(upipe);
+        return UBASE_ERR_NONE;
+    }
+    return upipe_throw_proxy(upipe, inner, event, args);
+}
+
+/** @internal @This catches the inner probe uref pipe events.
+ *
+ * @param uprobe structure used to raise events
+ * @param inner the inner pipe
+ * @param event event thrown
+ * @param args optional arguments
+ * @return an error code
+ */
+static int probe_map(struct uprobe *uprobe, struct upipe *inner,
+                     int event, va_list args)
+{
+    struct upipe_hls_playlist *upipe_hls_playlist =
+        upipe_hls_playlist_from_probe_map(uprobe);
+    struct upipe *upipe = upipe_hls_playlist_to_upipe(upipe_hls_playlist);
+
+    switch (event) {
+    case UPROBE_PROBE_UREF: {
+        UBASE_SIGNATURE_CHECK(args, UPIPE_PROBE_UREF_SIGNATURE);
+        struct uref *uref = va_arg(args, struct uref *);
+        va_arg(args, struct upump **);
+        bool *drop = va_arg(args, bool *);
+        *drop = true;
+        if (upipe_hls_playlist->map.uref)
+            uref_block_append(upipe_hls_playlist->map.uref,
+                              uref_detach_ubuf(uref));
+        else
+            upipe_hls_playlist->map.uref = uref_dup(uref);
+        return UBASE_ERR_NONE;
+    }
+    case UPROBE_NEW_FLOW_DEF: {
+        struct uref *flow_def = va_arg(args, struct uref *);
+        if (upipe_hls_playlist->map.flow_def)
+            uref_free(upipe_hls_playlist->map.flow_def);
+        upipe_hls_playlist->map.flow_def = uref_dup(flow_def);
+        return UBASE_ERR_NONE;
+    }
+    case UPROBE_NEED_OUTPUT:
+        return UBASE_ERR_INVALID;
+    }
+    return upipe_throw_proxy(upipe, inner, event, args);
+}
+
 /** @internal @This catches the inner source pipe events.
  *
  * @param uprobe structure used to raise events
@@ -281,9 +366,12 @@ static struct upipe *upipe_hls_playlist_alloc(struct upipe_mgr *mgr,
     upipe_hls_playlist_init_probe_src(upipe);
     upipe_hls_playlist_init_probe_key_src(upipe);
     upipe_hls_playlist_init_probe_key(upipe);
+    upipe_hls_playlist_init_probe_map_src(upipe);
+    upipe_hls_playlist_init_probe_map(upipe);
     upipe_hls_playlist_init_probe_setflowdef(upipe);
     upipe_hls_playlist_init_src(upipe);
     upipe_hls_playlist_init_upipe_key(upipe);
+    upipe_hls_playlist_init_upipe_map(upipe);
     upipe_hls_playlist_init_bin_output(upipe);
     upipe_hls_playlist_init_upump_mgr(upipe);
     upipe_hls_playlist_init_upump(upipe);
@@ -300,6 +388,9 @@ static struct upipe *upipe_hls_playlist_alloc(struct upipe_mgr *mgr,
     upipe_hls_playlist->item = NULL;
     upipe_hls_playlist->key.uri = NULL;
     upipe_hls_playlist->key.method = NULL;
+    upipe_hls_playlist->map.uri = NULL;
+    upipe_hls_playlist->map.uref = NULL;
+    upipe_hls_playlist->map.flow_def = NULL;
     upipe_hls_playlist->attach_uclock = false;
     upipe_hls_playlist->playing = false;
 
@@ -338,6 +429,15 @@ static void upipe_hls_playlist_flush(struct upipe *upipe)
     upipe_hls_playlist->key.uri = NULL;
     free(upipe_hls_playlist->key.method);
     upipe_hls_playlist->key.method = NULL;
+    free(upipe_hls_playlist->map.uri);
+    upipe_hls_playlist->map.uri = NULL;
+    if (upipe_hls_playlist->map.uref)
+        uref_free(upipe_hls_playlist->map.uref);
+    upipe_hls_playlist->map.uref = NULL;
+    if (upipe_hls_playlist->map.flow_def)
+        uref_free(upipe_hls_playlist->map.flow_def);
+    upipe_hls_playlist->map.flow_def = NULL;
+
     struct uchain *uchain;
     while ((uchain = ulist_pop(&upipe_hls_playlist->items)) != NULL)
         uref_free(uref_from_uchain(uchain));
@@ -356,6 +456,11 @@ static void upipe_hls_playlist_free(struct upipe *upipe)
 
     free(upipe_hls_playlist->key.uri);
     free(upipe_hls_playlist->key.method);
+    free(upipe_hls_playlist->map.uri);
+    if (upipe_hls_playlist->map.uref)
+        uref_free(upipe_hls_playlist->map.uref);
+    if (upipe_hls_playlist->map.flow_def)
+        uref_free(upipe_hls_playlist->map.flow_def);
     uref_free(upipe_hls_playlist->flow_def);
     uref_free(upipe_hls_playlist->input_flow_def);
     upipe_hls_playlist_clean_upump(upipe);
@@ -363,6 +468,8 @@ static void upipe_hls_playlist_free(struct upipe *upipe)
     upipe_hls_playlist_clean_bin_output(upipe);
     upipe_hls_playlist_flush(upipe);
     upipe_hls_playlist_clean_probe_src(upipe);
+    upipe_hls_playlist_clean_probe_map(upipe);
+    upipe_hls_playlist_clean_probe_map_src(upipe);
     upipe_hls_playlist_clean_probe_key(upipe);
     upipe_hls_playlist_clean_probe_key_src(upipe);
     upipe_hls_playlist_clean_probe_setflowdef(upipe);
@@ -380,6 +487,7 @@ static void upipe_hls_playlist_no_ref(struct upipe *upipe)
     struct upipe_hls_playlist *upipe_hls_playlist =
         upipe_hls_playlist_from_upipe(upipe);
 
+    upipe_hls_playlist_clean_upipe_map(upipe);
     upipe_hls_playlist_clean_upipe_key(upipe);
     upipe_hls_playlist_clean_setflowdef(upipe);
     upipe_hls_playlist_clean_src(upipe);
@@ -540,6 +648,110 @@ static int upipe_hls_playlist_get_key(struct upipe *upipe,
     return upipe_hls_playlist_get_key_uri(upipe, &uuri);
 }
 
+/** @internal @This creates the inner pipeline to get a map.
+ *
+ * @param upipe description structure of the pipe
+ * @param map map information
+ * @param uuri the uri of the map to retrieve
+ * @return an error code
+ */
+static int upipe_hls_playlist_get_map_uri(struct upipe *upipe,
+                                          struct uuri *uuri)
+{
+    struct upipe_hls_playlist *upipe_hls_playlist =
+        upipe_hls_playlist_from_upipe(upipe);
+    int ret;
+
+    size_t uri_len;
+    UBASE_RETURN(uuri_len(uuri, &uri_len));
+    char uri[uri_len + 1];
+    UBASE_RETURN(uuri_to_buffer(uuri, uri, sizeof (uri)));
+
+    UBASE_RETURN(upipe_hls_playlist_check_source_mgr(upipe));
+    struct upipe *upipe_map = upipe_void_alloc(
+        upipe_hls_playlist->source_mgr,
+        uprobe_pfx_alloc(
+            uprobe_use(&upipe_hls_playlist->probe_map_src),
+            UPROBE_LOG_VERBOSE, "map src"));
+    if (unlikely(upipe_map == NULL))
+        return UBASE_ERR_ALLOC;
+
+    struct upipe_mgr *upipe_probe_uref_mgr = upipe_probe_uref_mgr_alloc();
+    if (unlikely(upipe_probe_uref_mgr == NULL)) {
+        upipe_release(upipe_map);
+        return UBASE_ERR_ALLOC;
+    }
+    struct upipe *output = upipe_void_alloc_output(
+        upipe_map, upipe_probe_uref_mgr,
+        uprobe_pfx_alloc(
+            uprobe_use(&upipe_hls_playlist->probe_map),
+            UPROBE_LOG_VERBOSE, "map"));
+    upipe_mgr_release(upipe_probe_uref_mgr);
+    if (unlikely(output == NULL)) {
+        upipe_release(upipe_map);
+        return UBASE_ERR_ALLOC;
+    }
+    upipe_release(output);
+
+    ret = upipe_set_uri(upipe_map, uri);
+    if (unlikely(!ubase_check(ret))) {
+        upipe_release(upipe_map);
+        return ret;
+    }
+
+    upipe_hls_playlist_store_upipe_map(upipe, upipe_map);
+    return UBASE_ERR_NONE;
+}
+
+/** @internal @This makes the uuri of a map from it uri and
+ * creates the inner pipeline to retrieve it.
+ *
+ * @param upipe description structure of the pipe
+ * @param uri the uri of the map to retrieve
+ * @return an error code
+ */
+static int upipe_hls_playlist_get_map(struct upipe *upipe, const char *uri)
+{
+    struct upipe_hls_playlist *upipe_hls_playlist =
+        upipe_hls_playlist_from_upipe(upipe);
+    struct uref *input_flow_def = upipe_hls_playlist->input_flow_def;
+
+    struct uref *flow_def = upipe_hls_playlist->flow_def;
+    uref_aes_delete(flow_def);
+
+    upipe_hls_playlist_clean_upipe_map(upipe);
+    free(upipe_hls_playlist->map.uri);
+    upipe_hls_playlist->map.uri = strdup(uri);
+    if (upipe_hls_playlist->map.uref)
+        uref_free(upipe_hls_playlist->map.uref);
+    upipe_hls_playlist->map.uref = NULL;
+    if (upipe_hls_playlist->map.flow_def)
+        uref_free(upipe_hls_playlist->map.flow_def);
+    upipe_hls_playlist->map.flow_def = NULL;
+
+    struct uuri uuri;
+    if (ubase_check(uuri_from_str(&uuri, uri)))
+        return upipe_hls_playlist_get_map_uri(upipe, &uuri);
+
+    UBASE_RETURN(uref_uri_get(input_flow_def, &uuri));
+    uuri.query = ustring_null();
+    uuri.fragment = ustring_null();
+    if (*uri == '/') {
+        uuri.path = ustring_from_str(uri);
+        return upipe_hls_playlist_get_map_uri(upipe, &uuri);
+    }
+
+    char tmp[uuri.path.len + 1];
+    UBASE_RETURN(ustring_cpy(uuri.path, tmp, sizeof (tmp)));
+    const char *root = dirname(tmp);
+    char new_path[strlen(root) + 1 + strlen(uri) + 1];
+    int ret = snprintf(new_path, sizeof (new_path), "%s/%s", root, uri);
+    if (ret < 0 || (unsigned)ret >= sizeof (new_path))
+        return UBASE_ERR_INVALID;
+    uuri.path = ustring_from_str(new_path);
+    return upipe_hls_playlist_get_map_uri(upipe, &uuri);
+}
+
 /** @internal @This update the inner setflowdef dict.
  *
  * @param upipe description structure of the pipe
@@ -646,6 +858,29 @@ static int upipe_hls_playlist_play_uri(struct upipe *upipe,
         }
     }
     UBASE_RETURN(upipe_hls_playlist_update_flow_def(upipe));
+
+    if (upipe_hls_playlist->map.uref) {
+        upipe_notice(upipe, "send init map");
+        struct uref *uref = upipe_hls_playlist->map.uref;
+        struct uref *flow_def = upipe_hls_playlist->map.flow_def;
+        upipe_hls_playlist->map.uref = NULL;
+        upipe_hls_playlist->map.flow_def = NULL;
+        int ret = UBASE_ERR_INVALID;
+
+        if (flow_def) {
+            ret = upipe_set_flow_def(upipe_hls_playlist->setflowdef, flow_def);
+            uref_free(flow_def);
+        }
+        else
+            upipe_warn(upipe, "no init map flow def");
+
+        if (ubase_check(ret))
+            upipe_input(upipe_hls_playlist->setflowdef, uref, NULL);
+        else {
+            upipe_warn(upipe, "invalid init map flow def, dropping...");
+            uref_free(uref);
+        }
+    }
 
     UBASE_RETURN(upipe_hls_playlist_check_source_mgr(upipe));
     struct upipe *inner = upipe_void_alloc(
@@ -855,6 +1090,13 @@ static int _upipe_hls_playlist_play(struct upipe *upipe)
             strcmp(method, upipe_hls_playlist->key.method) ||
             strcmp(key_uri, upipe_hls_playlist->key.uri))
             return upipe_hls_playlist_get_key(upipe, method, key_uri);
+    }
+
+    const char *map_uri;
+    if (ubase_check(uref_m3u_playlist_map_get_uri(item, &map_uri))) {
+        if (upipe_hls_playlist->map.uri == NULL ||
+            strcmp(map_uri, upipe_hls_playlist->map.uri))
+            return upipe_hls_playlist_get_map(upipe, map_uri);
     }
 
     return upipe_hls_playlist_play_item(upipe, item);

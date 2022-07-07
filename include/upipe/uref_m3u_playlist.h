@@ -44,6 +44,7 @@ UREF_ATTR_STRING(m3u_playlist_key, uri, "m3u.playlist.key.uri",
                  key uri);
 UREF_ATTR_STRING(m3u_playlist_key, iv, "m3u.playlist.key.iv",
                  key initialization vector);
+UREF_ATTR_STRING(m3u_playlist_map, uri, "m3u.playlist.map.uri", map uri);
 
 static inline int uref_m3u_playlist_key_delete(struct uref *uref)
 {
@@ -55,6 +56,14 @@ static inline int uref_m3u_playlist_key_delete(struct uref *uref)
     return uref_attr_delete_list(uref, list, UBASE_ARRAY_SIZE(list));
 }
 
+static inline int uref_m3u_playlist_map_delete(struct uref *uref)
+{
+    int (*list[])(struct uref *) = {
+        uref_m3u_playlist_map_delete_uri,
+    };
+    return uref_attr_delete_list(uref, list, UBASE_ARRAY_SIZE(list));
+}
+
 static inline int uref_m3u_playlist_delete(struct uref *uref)
 {
     int (*list[])(struct uref *) = {
@@ -62,6 +71,7 @@ static inline int uref_m3u_playlist_delete(struct uref *uref)
         uref_m3u_playlist_delete_byte_range_len,
         uref_m3u_playlist_delete_byte_range_off,
         uref_m3u_playlist_key_delete,
+        uref_m3u_playlist_map_delete,
     };
     return uref_attr_delete_list(uref, list, UBASE_ARRAY_SIZE(list));
 }
@@ -77,6 +87,15 @@ static inline int uref_m3u_playlist_key_copy(struct uref *uref,
     return uref_attr_copy_list(uref, uref_src, list, UBASE_ARRAY_SIZE(list));
 }
 
+static inline int uref_m3u_playlist_map_copy(struct uref *uref,
+                                             struct uref *uref_src)
+{
+    int (*list[])(struct uref *, struct uref *) = {
+        uref_m3u_playlist_map_copy_uri,
+    };
+    return uref_attr_copy_list(uref, uref_src, list, UBASE_ARRAY_SIZE(list));
+}
+
 static inline int uref_m3u_playlist_copy(struct uref *uref,
                                          struct uref *uref_src)
 {
@@ -85,6 +104,7 @@ static inline int uref_m3u_playlist_copy(struct uref *uref,
         uref_m3u_playlist_copy_byte_range_len,
         uref_m3u_playlist_copy_byte_range_off,
         uref_m3u_playlist_key_copy,
+        uref_m3u_playlist_map_copy,
     };
     return uref_attr_copy_list(uref, uref_src, list, UBASE_ARRAY_SIZE(list));
 }
