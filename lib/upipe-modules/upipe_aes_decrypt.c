@@ -75,6 +75,8 @@ struct upipe_aes_decrypt {
 
     /** reset aes state */
     bool restart;
+    /** bypass decryption */
+    bool decrypt;
     /** store round keys */
     uint8_t round_keys[11][4][4];
     /** store initialization vector */
@@ -410,6 +412,7 @@ static struct upipe *upipe_aes_decrypt_alloc(struct upipe_mgr *mgr,
     upipe_aes_decrypt_init_uref_stream(upipe);
     upipe_aes_decrypt->input_flow_def = NULL;
     upipe_aes_decrypt->restart = true;
+    upipe_aes_decrypt->decrypt = false;
 
     upipe_throw_ready(upipe);
 
@@ -445,6 +448,9 @@ static int upipe_aes_decrypt_restart(struct upipe *upipe)
     struct upipe_aes_decrypt *upipe_aes_decrypt =
         upipe_aes_decrypt_from_upipe(upipe);
     struct uref *input_flow_def = upipe_aes_decrypt->input_flow_def;
+
+    if (!ubase_check(uref_flow_match_def(input_flow_def, EXPECTED_FLOW_DEF)))
+        return UBASE_ERR_NONE;
 
     const uint8_t *key;
     size_t key_size;
@@ -565,6 +571,10 @@ static bool upipe_aes_decrypt_handle(struct upipe *upipe,
     if (unlikely(ubase_check(uref_flow_get_def(uref, &def)))) {
         upipe_aes_decrypt_flush(upipe);
         upipe_aes_decrypt_store_flow_def(upipe, NULL);
+        upipe_aes_decrypt->decrypt =
+            ubase_check(uref_flow_match_def(uref, EXPECTED_FLOW_DEF));
+        uref_flow_set_def(uref, "block.");
+        uref_aes_delete(uref);
         upipe_aes_decrypt_require_ubuf_mgr(upipe, uref);
         return true;
     }
@@ -572,8 +582,12 @@ static bool upipe_aes_decrypt_handle(struct upipe *upipe,
     if (upipe_aes_decrypt->flow_def == NULL)
         return false;
 
-    upipe_aes_decrypt_append_uref_stream(upipe, uref);
-    upipe_aes_decrypt_worker(upipe, upump_p);
+    if (!ubase_check(uref_flow_match_def(upipe_aes_decrypt->input_flow_def, EXPECTED_FLOW_DEF))) {
+        upipe_aes_decrypt_output(upipe, uref, upump_p);
+    } else {
+        upipe_aes_decrypt_append_uref_stream(upipe, uref);
+        upipe_aes_decrypt_worker(upipe, upump_p);
+    }
     return true;
 }
 
@@ -653,8 +667,10 @@ static void upipe_aes_decrypt_store_input_flow_def(struct upipe *upipe,
 static int upipe_aes_decrypt_set_flow_def(struct upipe *upipe,
                                           struct uref *flow_def)
 {
-    UBASE_RETURN(uref_flow_match_def(flow_def, EXPECTED_FLOW_DEF));
-    UBASE_RETURN(uref_aes_match_method(flow_def, "AES-128"));
+    if (ubase_check(uref_flow_match_def(flow_def, EXPECTED_FLOW_DEF))) {
+        UBASE_RETURN(uref_aes_match_method(flow_def, "AES-128"));
+    } else if (!ubase_check(uref_flow_match_def(flow_def, "block.")))
+        return UBASE_ERR_INVALID;
 
     struct uref *flow_def_dup = uref_dup(flow_def);
     UBASE_ALLOC_RETURN(flow_def_dup);
@@ -662,12 +678,6 @@ static int upipe_aes_decrypt_set_flow_def(struct upipe *upipe,
 
     flow_def_dup = uref_dup(flow_def);
     UBASE_ALLOC_RETURN(flow_def_dup);
-    int ret = uref_flow_set_def(flow_def_dup, "block.");
-    if (unlikely(!ubase_check(ret))) {
-        uref_free(flow_def_dup);
-        return ret;
-    }
-    uref_aes_delete(flow_def_dup);
     upipe_input(upipe, flow_def_dup, NULL);
     return UBASE_ERR_NONE;
 }
