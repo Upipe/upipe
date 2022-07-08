@@ -716,9 +716,6 @@ static int upipe_hls_playlist_get_map(struct upipe *upipe, const char *uri)
         upipe_hls_playlist_from_upipe(upipe);
     struct uref *input_flow_def = upipe_hls_playlist->input_flow_def;
 
-    struct uref *flow_def = upipe_hls_playlist->flow_def;
-    uref_aes_delete(flow_def);
-
     upipe_hls_playlist_clean_upipe_map(upipe);
     free(upipe_hls_playlist->map.uri);
     upipe_hls_playlist->map.uri = strdup(uri);
@@ -820,6 +817,36 @@ static int upipe_hls_playlist_play_uri(struct upipe *upipe,
                     last_sequence - 1,
                     (float)total_duration / (float)(UCLOCK_FREQ), uri);
 
+    if (upipe_hls_playlist->map.uref) {
+        upipe_notice(upipe, "send init map");
+        struct uref *uref = upipe_hls_playlist->map.uref;
+        struct uref *flow_def = upipe_hls_playlist->map.flow_def;
+        struct upipe *output = upipe_hls_playlist->setflowdef;
+
+        upipe_hls_playlist->map.uref = NULL;
+        upipe_hls_playlist->map.flow_def = NULL;
+        int ret = UBASE_ERR_INVALID;
+
+        if (flow_def) {
+            if (output) {
+                upipe_setflowdef_set_dict(output, NULL);
+                ret = upipe_set_flow_def(output, flow_def);
+                if (!ubase_check(ret))
+                    upipe_warn(upipe, "invalid init map flow def, dropping...");
+            }
+            else
+                upipe_warn(upipe, "no output set, dropping...");
+            uref_free(flow_def);
+        }
+        else
+            upipe_warn(upipe, "no init map flow def");
+
+        if (ubase_check(ret))
+            upipe_input(output, uref, NULL);
+        else
+            uref_free(uref);
+    }
+
     struct uref *flow_def = upipe_hls_playlist->flow_def;
     if (ubase_check(uref_flow_match_def(flow_def, "block.aes."))) {
         const char *key_iv = NULL;
@@ -858,29 +885,6 @@ static int upipe_hls_playlist_play_uri(struct upipe *upipe,
         }
     }
     UBASE_RETURN(upipe_hls_playlist_update_flow_def(upipe));
-
-    if (upipe_hls_playlist->map.uref) {
-        upipe_notice(upipe, "send init map");
-        struct uref *uref = upipe_hls_playlist->map.uref;
-        struct uref *flow_def = upipe_hls_playlist->map.flow_def;
-        upipe_hls_playlist->map.uref = NULL;
-        upipe_hls_playlist->map.flow_def = NULL;
-        int ret = UBASE_ERR_INVALID;
-
-        if (flow_def) {
-            ret = upipe_set_flow_def(upipe_hls_playlist->setflowdef, flow_def);
-            uref_free(flow_def);
-        }
-        else
-            upipe_warn(upipe, "no init map flow def");
-
-        if (ubase_check(ret))
-            upipe_input(upipe_hls_playlist->setflowdef, uref, NULL);
-        else {
-            upipe_warn(upipe, "invalid init map flow def, dropping...");
-            uref_free(uref);
-        }
-    }
 
     UBASE_RETURN(upipe_hls_playlist_check_source_mgr(upipe));
     struct upipe *inner = upipe_void_alloc(

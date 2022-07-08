@@ -469,26 +469,23 @@ static int probe_playlist(struct uprobe *uprobe, struct upipe *inner,
 
     switch (event) {
     case UPROBE_NEED_OUTPUT: {
-        struct uref *flow_def = va_arg(args, struct uref *);
         struct upipe *output = upipe_use(inner);
 
         /* AES decrypt?
          */
-        if (ubase_check(uref_flow_match_def(flow_def, "block.aes."))) {
-            struct upipe_mgr *upipe_aes_decrypt_mgr =
-                upipe_aes_decrypt_mgr_alloc();
-            if (unlikely(upipe_aes_decrypt_mgr == NULL)) {
-                upipe_release(output);
-                return UBASE_ERR_ALLOC;
-            }
-            output = upipe_void_chain_output(
-                output, upipe_aes_decrypt_mgr,
-                uprobe_pfx_alloc(
-                    uprobe_use(&upipe_hls_audio->probe_aes_decrypt),
-                    UPROBE_LOG_VERBOSE, "aes decrypt"));
-            upipe_mgr_release(upipe_aes_decrypt_mgr);
-            UBASE_ALLOC_RETURN(output);
+        struct upipe_mgr *upipe_aes_decrypt_mgr =
+            upipe_aes_decrypt_mgr_alloc();
+        if (unlikely(upipe_aes_decrypt_mgr == NULL)) {
+            upipe_release(output);
+            return UBASE_ERR_ALLOC;
         }
+        output = upipe_void_chain_output(
+            output, upipe_aes_decrypt_mgr,
+            uprobe_pfx_alloc(
+                uprobe_use(&upipe_hls_audio->probe_aes_decrypt),
+                UPROBE_LOG_VERBOSE, "aes decrypt"));
+        upipe_mgr_release(upipe_aes_decrypt_mgr);
+        UBASE_ALLOC_RETURN(output);
 
         /** guess playlist type (AAC or TS) */
         struct upipe_mgr *upipe_probe_uref_mgr = upipe_probe_uref_mgr_alloc();
