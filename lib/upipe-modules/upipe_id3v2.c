@@ -221,6 +221,12 @@ static void upipe_id3v2_input(struct upipe *upipe,
 {
     struct upipe_id3v2 *upipe_id3v2 = upipe_id3v2_from_upipe(upipe);
 
+    if (unlikely(ubase_check(uref_flow_get_def(uref, NULL)))) {
+        upipe_id3v2_store_flow_def(upipe, uref);
+        upipe_id3v2->parsed = false;
+        return;
+    }
+
     if (!upipe_id3v2->parsed) {
         upipe_id3v2_append_uref_stream(upipe, uref);
         upipe_id3v2->parsed = upipe_id3v2_parse(upipe);
@@ -262,7 +268,7 @@ static int upipe_id3v2_set_flow_def(struct upipe *upipe,
     UBASE_RETURN(uref_flow_match_def(flow_def, EXPECTED_FLOW_DEF));
     struct uref *flow_def_dup = uref_dup(flow_def);
     UBASE_ALLOC_RETURN(flow_def_dup);
-    upipe_id3v2_store_flow_def(upipe, flow_def_dup);
+    upipe_input(upipe, flow_def_dup, NULL);
     return UBASE_ERR_NONE;
 }
 
