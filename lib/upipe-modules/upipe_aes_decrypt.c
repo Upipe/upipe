@@ -46,8 +46,6 @@ struct upipe_aes_decrypt {
     struct upipe *output;
     /** reference to the output flow format */
     struct uref *flow_def;
-    /** reference to the input flow format */
-    struct uref *input_flow_def;
     /** output state */
     enum upipe_helper_output_state output_state;
     /** list of output requests */
@@ -58,23 +56,7 @@ struct upipe_aes_decrypt {
     size_t next_uref_size;
     /** list of uref */
     struct uchain urefs;
-    /** ubuf manager */
-    struct ubuf_mgr *ubuf_mgr;
-    /** ubuf manager request */
-    struct urequest ubuf_mgr_request;
-    /** ubuf flow format */
-    struct uref *flow_format;
-    /** list of holded urefs */
-    struct uchain input_urefs;
-    /** number of holded urefs */
-    unsigned input_nb_urefs;
-    /** maximum number of holded urefs before blocking */
-    unsigned input_max_urefs;
-    /** blockers */
-    struct uchain blockers;
 
-    /** reset aes state */
-    bool restart;
     /** bypass decryption */
     bool decrypt;
     /** store round keys */
@@ -83,23 +65,11 @@ struct upipe_aes_decrypt {
     uint8_t iv[16];
 };
 
-static int upipe_aes_decrypt_check(struct upipe *upipe, struct uref *uref);
-static bool upipe_aes_decrypt_handle(struct upipe *upipe,
-                                     struct uref *uref,
-                                     struct upump **upump_p);
-
 UPIPE_HELPER_UPIPE(upipe_aes_decrypt, upipe, UPIPE_AES_DECRYPT_SIGNATURE);
 UPIPE_HELPER_UREFCOUNT(upipe_aes_decrypt, urefcount, upipe_aes_decrypt_no_ref);
 UPIPE_HELPER_VOID(upipe_aes_decrypt);
 UPIPE_HELPER_OUTPUT(upipe_aes_decrypt, output, flow_def, output_state,
                     requests);
-UPIPE_HELPER_UBUF_MGR(upipe_aes_decrypt, ubuf_mgr, flow_format,
-                      ubuf_mgr_request,
-                      upipe_aes_decrypt_check,
-                      upipe_aes_decrypt_register_output_request,
-                      upipe_aes_decrypt_unregister_output_request);
-UPIPE_HELPER_INPUT(upipe_aes_decrypt, input_urefs, input_nb_urefs,
-                   input_max_urefs, blockers, upipe_aes_decrypt_handle);
 UPIPE_HELPER_UREF_STREAM(upipe_aes_decrypt, next_uref, next_uref_size, urefs,
                          NULL);
 
@@ -407,11 +377,7 @@ static struct upipe *upipe_aes_decrypt_alloc(struct upipe_mgr *mgr,
 
     upipe_aes_decrypt_init_urefcount(upipe);
     upipe_aes_decrypt_init_output(upipe);
-    upipe_aes_decrypt_init_ubuf_mgr(upipe);
-    upipe_aes_decrypt_init_input(upipe);
     upipe_aes_decrypt_init_uref_stream(upipe);
-    upipe_aes_decrypt->input_flow_def = NULL;
-    upipe_aes_decrypt->restart = true;
     upipe_aes_decrypt->decrypt = false;
 
     upipe_throw_ready(upipe);
@@ -425,14 +391,8 @@ static struct upipe *upipe_aes_decrypt_alloc(struct upipe_mgr *mgr,
  */
 static void upipe_aes_decrypt_no_ref(struct upipe *upipe)
 {
-    struct upipe_aes_decrypt *upipe_aes_decrypt =
-        upipe_aes_decrypt_from_upipe(upipe);
-
     upipe_throw_dead(upipe);
-    uref_free(upipe_aes_decrypt->input_flow_def);
     upipe_aes_decrypt_clean_uref_stream(upipe);
-    upipe_aes_decrypt_clean_input(upipe);
-    upipe_aes_decrypt_clean_ubuf_mgr(upipe);
     upipe_aes_decrypt_clean_output(upipe);
     upipe_aes_decrypt_clean_urefcount(upipe);
     upipe_aes_decrypt_free_void(upipe);
@@ -443,41 +403,34 @@ static void upipe_aes_decrypt_no_ref(struct upipe *upipe)
  * @param upipe description structure of the pipe
  * @return an error code
  */
-static int upipe_aes_decrypt_restart(struct upipe *upipe)
+static void upipe_aes_decrypt_set_flow_def_real(struct upipe *upipe,
+                                                struct uref *flow_def)
 {
     struct upipe_aes_decrypt *upipe_aes_decrypt =
         upipe_aes_decrypt_from_upipe(upipe);
-    struct uref *input_flow_def = upipe_aes_decrypt->input_flow_def;
 
-    if (!ubase_check(uref_flow_match_def(input_flow_def, EXPECTED_FLOW_DEF)))
-        return UBASE_ERR_NONE;
+    if (ubase_check(uref_flow_match_def(flow_def, EXPECTED_FLOW_DEF))) {
+        const uint8_t *key;
+        size_t key_size;
+        ubase_assert(uref_aes_get_key(flow_def, &key, &key_size));
+        assert(key_size == 16);
 
-    const uint8_t *key;
-    size_t key_size;
-    int ret = uref_aes_get_key(input_flow_def, &key, &key_size);
-    if (unlikely(!ubase_check(ret))) {
-        upipe_warn(upipe, "no aes key");
-        return ret;
-    }
-    if (unlikely(key_size != 16)) {
-        upipe_warn(upipe, "invalid aes key");
-        return ret;
-    }
+        const uint8_t *iv;
+        size_t iv_size;
+        ubase_assert(uref_aes_get_iv(flow_def, &iv, &iv_size));
+        assert(iv_size == 16);
 
-    const uint8_t *iv;
-    size_t iv_size;
-    ret = uref_aes_get_iv(input_flow_def, &iv, &iv_size);
-    if (unlikely(!ubase_check(ret))) {
-        upipe_warn(upipe, "no aes initialization vector");
-        return ret;
+        memcpy(upipe_aes_decrypt->iv, iv, 16);
+        aes_key_expansion(key, upipe_aes_decrypt->round_keys);
+        upipe_aes_decrypt->decrypt = true;
+        uref_flow_set_def(flow_def, "block.");
+        uref_aes_delete(flow_def);
     }
-    if (unlikely(iv_size != 16)) {
-        upipe_warn(upipe, "invalid aes initialization vector");
-        return ret;
+    else {
+        upipe_aes_decrypt->decrypt = false;
     }
 
-    aes_key_expansion(key, upipe_aes_decrypt->round_keys);
-    return UBASE_ERR_NONE;
+    upipe_aes_decrypt_store_flow_def(upipe, flow_def);
 }
 
 /** @internal @This outputs the decrypted blocks.
@@ -491,104 +444,65 @@ static void upipe_aes_decrypt_worker(struct upipe *upipe,
     struct upipe_aes_decrypt *upipe_aes_decrypt =
         upipe_aes_decrypt_from_upipe(upipe);
 
-    if (upipe_aes_decrypt->restart) {
-        if (unlikely(!ubase_check(upipe_aes_decrypt_restart(upipe)))) {
-            upipe_throw_fatal(upipe, UBASE_ERR_INVALID);
-            return;
-        }
-        upipe_aes_decrypt->restart = false;
+    size_t block_size = 0;
+    if (upipe_aes_decrypt->next_uref)
+        uref_block_size(upipe_aes_decrypt->next_uref, &block_size);
+
+    size_t blocks = block_size / 16;
+    if (!blocks)
+        return;
+
+    struct uref *uref =
+        upipe_aes_decrypt_extract_uref_stream(upipe, blocks * 16);
+    if (unlikely(!uref)) {
+        upipe_throw_fatal(upipe, UBASE_ERR_INVALID);
+        return;
     }
 
-    size_t block_size;
-    ubase_assert(uref_block_size(upipe_aes_decrypt->next_uref, &block_size));
-    for (size_t size = block_size; size >= 16; size -= 16) {
-        int ret;
+    size_t linear_size = 0;
+    uref_block_size_linear(uref, 0, &linear_size);
 
-        struct uref *uref = upipe_aes_decrypt_extract_uref_stream(upipe, 16);
-        if (unlikely(!uref)) {
-            upipe_throw_fatal(upipe, UBASE_ERR_INVALID);
-            return;
-        }
+    if (linear_size < blocks * 16 &&
+        !ubase_check(uref_block_merge(uref, uref->ubuf->mgr, 0, -1))) {
+        upipe_err(upipe, "fail to merge block");
+        uref_free(uref);
+        return;
+    }
 
+    int wsize = blocks * 16;
+    uint8_t *wbuf;
+    int ret = uref_block_write(uref, 0, &wsize, &wbuf);
+    if (!ubase_check(ret)) {
+        ret = uref_block_merge(uref, uref->ubuf->mgr, 0, -1);
+        if (ubase_check(ret))
+            ret = uref_block_write(uref, 0, &wsize, &wbuf);
+    }
+    if (unlikely(!ubase_check(ret))) {
+        upipe_err(upipe, "write failed");
+        uref_free(uref);
+        return;
+    }
+
+    if (wsize != blocks * 16) {
+        upipe_err_va(upipe, "invalid write size %i, expected %zu",
+                  wsize, blocks * 16);
+        uref_block_unmap(uref, 0);
+        uref_free(uref);
+        return;
+    }
+
+    for (size_t i = 0; i < blocks; i++) {
         uint8_t iv[16];
-        ret = uref_block_extract(uref, 0, 16, iv);
-        if (unlikely(!ubase_check(ret))) {
-            uref_free(uref);
-            upipe_throw_fatal(upipe, UBASE_ERR_INVALID);
-            return;
-        }
-
-        struct ubuf *ubuf =
-            ubuf_block_alloc(upipe_aes_decrypt->ubuf_mgr, 16);
-        if (unlikely(!ubuf)) {
-            uref_free(uref);
-            upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
-            return;
-        }
-        uref_attach_ubuf(uref, ubuf);
-
-        int wsize = 16;
-        uint8_t *wbuf;
-        ret = uref_block_write(uref, 0, &wsize, &wbuf);
-        if (unlikely(!ubase_check(ret)) || wsize != 16) {
-            uref_free(uref);
-            upipe_throw_fatal(upipe, UBASE_ERR_INVALID);
-            return;
-        }
-        memcpy(wbuf, iv, wsize);
-        aes_cbc_decrypt(wbuf,
+        memcpy(iv, wbuf + i * 16, 16);
+        aes_cbc_decrypt(wbuf + i * 16,
                         upipe_aes_decrypt->round_keys,
                         upipe_aes_decrypt->iv);
-        ubase_assert(uref_block_unmap(uref, 0));
         memcpy(upipe_aes_decrypt->iv, iv, sizeof (upipe_aes_decrypt->iv));
-        upipe_aes_decrypt_output(upipe, uref, upump_p);
-    }
-}
-
-/** @internal @This outputs the last block.
- *
- * @param upipe description structure of the pipe
- * @param upump_p reference to the pump that generated the buffer
- */
-static void upipe_aes_decrypt_flush(struct upipe *upipe)
-{
-    struct upipe_aes_decrypt *upipe_aes_decrypt =
-        upipe_aes_decrypt_from_upipe(upipe);
-
-    upipe_aes_decrypt_clean_uref_stream(upipe);
-    upipe_aes_decrypt_init_uref_stream(upipe);
-    upipe_aes_decrypt->restart = true;
-}
-
-static bool upipe_aes_decrypt_handle(struct upipe *upipe,
-                                     struct uref *uref,
-                                     struct upump **upump_p)
-{
-    struct upipe_aes_decrypt *upipe_aes_decrypt =
-        upipe_aes_decrypt_from_upipe(upipe);
-
-    const char *def;
-    if (unlikely(ubase_check(uref_flow_get_def(uref, &def)))) {
-        upipe_aes_decrypt_flush(upipe);
-        upipe_aes_decrypt_store_flow_def(upipe, NULL);
-        upipe_aes_decrypt->decrypt =
-            ubase_check(uref_flow_match_def(uref, EXPECTED_FLOW_DEF));
-        uref_flow_set_def(uref, "block.");
-        uref_aes_delete(uref);
-        upipe_aes_decrypt_require_ubuf_mgr(upipe, uref);
-        return true;
     }
 
-    if (upipe_aes_decrypt->flow_def == NULL)
-        return false;
+    uref_block_unmap(uref, 0);
 
-    if (!ubase_check(uref_flow_match_def(upipe_aes_decrypt->input_flow_def, EXPECTED_FLOW_DEF))) {
-        upipe_aes_decrypt_output(upipe, uref, upump_p);
-    } else {
-        upipe_aes_decrypt_append_uref_stream(upipe, uref);
-        upipe_aes_decrypt_worker(upipe, upump_p);
-    }
-    return true;
+    upipe_aes_decrypt_output(upipe, uref, upump_p);
 }
 
 /** @internal @This is called when there is new data.
@@ -601,61 +515,22 @@ static void upipe_aes_decrypt_input(struct upipe *upipe,
                                     struct uref *uref,
                                     struct upump **upump_p)
 {
-    if (!upipe_aes_decrypt_check_input(upipe)) {
-        upipe_aes_decrypt_hold_input(upipe, uref);
-    }
-    else if (!upipe_aes_decrypt_handle(upipe, uref, upump_p)) {
-        upipe_aes_decrypt_hold_input(upipe, uref);
-        upipe_aes_decrypt_block_input(upipe, upump_p);
-        /* Increment upipe refcount to avoid disappearing before all packets
-         * have been sent. */
-        upipe_use(upipe);
-    }
-}
-
-/** @internal @This checks if uref and ubuf manager need to be required.
- *
- * @param upipe description structure of the pipe
- * @param flow_format requested flow format
- * @return an error code
- */
-static int upipe_aes_decrypt_check(struct upipe *upipe,
-                                   struct uref *flow_format)
-{
     struct upipe_aes_decrypt *upipe_aes_decrypt =
         upipe_aes_decrypt_from_upipe(upipe);
 
-    if (flow_format != NULL)
-        upipe_aes_decrypt_store_flow_def(upipe, flow_format);
-
-    if (upipe_aes_decrypt->flow_def == NULL)
-        return UBASE_ERR_NONE;
-
-    bool was_buffered = !upipe_aes_decrypt_check_input(upipe);
-    upipe_aes_decrypt_output_input(upipe);
-    upipe_aes_decrypt_unblock_input(upipe);
-    if (was_buffered && upipe_aes_decrypt_check_input(upipe)) {
-        /* All packets have been output, release again the pipe that has been
-         * used in @ref upipe_aes_decrypt_input. */
-        upipe_release(upipe);
+    const char *def;
+    if (unlikely(ubase_check(uref_flow_get_def(uref, &def)))) {
+        upipe_aes_decrypt_worker(upipe, upump_p);
+        upipe_aes_decrypt_set_flow_def_real(upipe, uref);
+        return;
     }
-    return UBASE_ERR_NONE;
-}
 
-/** @internal @This stores the input flow definition.
- *
- * @param upipe description structure of the pipe
- * @param flow_def the input flow format to store
- */
-static void upipe_aes_decrypt_store_input_flow_def(struct upipe *upipe,
-                                                   struct uref *flow_def)
-{
-    struct upipe_aes_decrypt *upipe_aes_decrypt =
-        upipe_aes_decrypt_from_upipe(upipe);
-
-    if (likely(upipe_aes_decrypt->input_flow_def != NULL))
-        uref_free(upipe_aes_decrypt->input_flow_def);
-    upipe_aes_decrypt->input_flow_def = flow_def;
+    if (!upipe_aes_decrypt->decrypt)
+        upipe_aes_decrypt_output(upipe, uref, upump_p);
+    else {
+        upipe_aes_decrypt_append_uref_stream(upipe, uref);
+        upipe_aes_decrypt_worker(upipe, upump_p);
+    }
 }
 
 /** @internal @This sets the output flow format.
@@ -669,14 +544,24 @@ static int upipe_aes_decrypt_set_flow_def(struct upipe *upipe,
 {
     if (ubase_check(uref_flow_match_def(flow_def, EXPECTED_FLOW_DEF))) {
         UBASE_RETURN(uref_aes_match_method(flow_def, "AES-128"));
+        const uint8_t *key;
+        size_t key_size;
+        UBASE_RETURN(uref_aes_get_key(flow_def, &key, &key_size));
+        if (key_size != 16) {
+            upipe_warn(upipe, "invalid key");
+            return UBASE_ERR_INVALID;
+        }
+        const uint8_t *iv;
+        size_t iv_size;
+        UBASE_RETURN(uref_aes_get_iv(flow_def, &iv, &iv_size));
+        if (iv_size != 16) {
+            upipe_warn(upipe, "invalid IV");
+            return UBASE_ERR_INVALID;
+        }
     } else if (!ubase_check(uref_flow_match_def(flow_def, "block.")))
         return UBASE_ERR_INVALID;
 
     struct uref *flow_def_dup = uref_dup(flow_def);
-    UBASE_ALLOC_RETURN(flow_def_dup);
-    upipe_aes_decrypt_store_input_flow_def(upipe, flow_def_dup);
-
-    flow_def_dup = uref_dup(flow_def);
     UBASE_ALLOC_RETURN(flow_def_dup);
     upipe_input(upipe, flow_def_dup, NULL);
     return UBASE_ERR_NONE;
