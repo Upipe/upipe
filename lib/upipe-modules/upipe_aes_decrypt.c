@@ -56,7 +56,8 @@ struct upipe_aes_decrypt {
     size_t next_uref_size;
     /** list of uref */
     struct uchain urefs;
-
+    /** padding? */
+    enum upipe_aes_decrypt_padding padding;
     /** bypass decryption */
     bool decrypt;
     /** store round keys */
@@ -379,6 +380,7 @@ static struct upipe *upipe_aes_decrypt_alloc(struct upipe_mgr *mgr,
     upipe_aes_decrypt_init_output(upipe);
     upipe_aes_decrypt_init_uref_stream(upipe);
     upipe_aes_decrypt->decrypt = false;
+    upipe_aes_decrypt->padding = UPIPE_AES_DECRYPT_PADDING_NONE;
 
     upipe_throw_ready(upipe);
 
@@ -439,7 +441,8 @@ static void upipe_aes_decrypt_set_flow_def_real(struct upipe *upipe,
  * @param upump_p reference to the pump that generated the buffer
  */
 static void upipe_aes_decrypt_worker(struct upipe *upipe,
-                                     struct upump **upump_p)
+                                     struct upump **upump_p,
+                                     bool eos)
 {
     struct upipe_aes_decrypt *upipe_aes_decrypt =
         upipe_aes_decrypt_from_upipe(upipe);
@@ -449,6 +452,12 @@ static void upipe_aes_decrypt_worker(struct upipe *upipe,
         uref_block_size(upipe_aes_decrypt->next_uref, &block_size);
 
     size_t blocks = block_size / 16;
+    if (blocks && !eos &&
+        upipe_aes_decrypt->padding != UPIPE_AES_DECRYPT_PADDING_NONE)
+        /* keep last block in case it's the last one and we need to remove
+         * padding */
+        blocks--;
+
     if (!blocks)
         return;
 
@@ -491,6 +500,7 @@ static void upipe_aes_decrypt_worker(struct upipe *upipe,
         return;
     }
 
+    uint8_t padding = 0;
     for (size_t i = 0; i < blocks; i++) {
         uint8_t iv[16];
         memcpy(iv, wbuf + i * 16, 16);
@@ -498,9 +508,13 @@ static void upipe_aes_decrypt_worker(struct upipe *upipe,
                         upipe_aes_decrypt->round_keys,
                         upipe_aes_decrypt->iv);
         memcpy(upipe_aes_decrypt->iv, iv, sizeof (upipe_aes_decrypt->iv));
+        padding = wbuf[i * 16 + 15];
     }
 
     uref_block_unmap(uref, 0);
+
+    if (eos && upipe_aes_decrypt->padding != UPIPE_AES_DECRYPT_PADDING_NONE)
+        uref_block_truncate(uref, blocks * 16 - padding);
 
     upipe_aes_decrypt_output(upipe, uref, upump_p);
 }
@@ -520,7 +534,7 @@ static void upipe_aes_decrypt_input(struct upipe *upipe,
 
     const char *def;
     if (unlikely(ubase_check(uref_flow_get_def(uref, &def)))) {
-        upipe_aes_decrypt_worker(upipe, upump_p);
+        upipe_aes_decrypt_worker(upipe, upump_p, true);
         upipe_aes_decrypt_set_flow_def_real(upipe, uref);
         return;
     }
@@ -528,8 +542,9 @@ static void upipe_aes_decrypt_input(struct upipe *upipe,
     if (!upipe_aes_decrypt->decrypt)
         upipe_aes_decrypt_output(upipe, uref, upump_p);
     else {
+        bool eos = ubase_check(uref_block_get_end(uref));
         upipe_aes_decrypt_append_uref_stream(upipe, uref);
-        upipe_aes_decrypt_worker(upipe, upump_p);
+        upipe_aes_decrypt_worker(upipe, upump_p, eos);
     }
 }
 
@@ -567,6 +582,21 @@ static int upipe_aes_decrypt_set_flow_def(struct upipe *upipe,
     return UBASE_ERR_NONE;
 }
 
+/** @This sets PKCS-7 padding support.
+ *
+ * @param upipe description structure of the pipe
+ * @param type padding type to use
+ * @return an error code
+ */
+static int _upipe_aes_decrypt_set_padding(struct upipe *upipe,
+                                          enum upipe_aes_decrypt_padding type)
+{
+    struct upipe_aes_decrypt *upipe_aes_decrypt =
+        upipe_aes_decrypt_from_upipe(upipe);
+    upipe_aes_decrypt->padding = type;
+    return UBASE_ERR_NONE;
+}
+
 /** @internal @This dispatches commands.
  *
  * @param upipe description structure of the pipe
@@ -601,6 +631,18 @@ static int upipe_aes_decrypt_control(struct upipe *upipe,
         struct uref *flow_def = va_arg(args, struct uref *);
         return upipe_aes_decrypt_set_flow_def(upipe, flow_def);
     }
+    }
+
+    if (command < UPIPE_CONTROL_LOCAL ||
+        ubase_get_signature(args) != UPIPE_AES_DECRYPT_SIGNATURE)
+        return UBASE_ERR_UNHANDLED;
+
+    switch (command) {
+        case UPIPE_AES_DECRYPT_SET_PADDING:
+            UBASE_SIGNATURE_CHECK(args, UPIPE_AES_DECRYPT_SIGNATURE);
+            enum upipe_aes_decrypt_padding type =
+                va_arg(args, enum upipe_aes_decrypt_padding);
+            return _upipe_aes_decrypt_set_padding(upipe, type);
     }
     return UBASE_ERR_UNHANDLED;
 }
