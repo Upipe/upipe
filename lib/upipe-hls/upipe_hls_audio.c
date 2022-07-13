@@ -484,6 +484,7 @@ static int probe_playlist(struct uprobe *uprobe, struct upipe *inner,
             uprobe_pfx_alloc(
                 uprobe_use(&upipe_hls_audio->probe_aes_decrypt),
                 UPROBE_LOG_VERBOSE, "aes decrypt"));
+        upipe_aes_decrypt_set_padding(output, UPIPE_AES_DECRYPT_PADDING_PKCS7);
         upipe_mgr_release(upipe_aes_decrypt_mgr);
         UBASE_ALLOC_RETURN(output);
 
