@@ -45,20 +45,34 @@ end
 local void_ptr = ffi.typeof("void *")
 local intptr_t = ffi.typeof("intptr_t")
 
+local function dump_traceback(msg)
+    io.stderr:write(debug.traceback(msg, 2), "\n")
+end
+
 local props = { }
 
 local function props_key(ptr)
     return tohex(cast(intptr_t, cast(void_ptr, ptr)))
 end
 
-local function props_dict(ptr)
-    local k = props_key(ptr)
-    if not props[k] then props[k] = { } end
-    return props[k]
+local function props_init(ptr)
+    props[props_key(ptr)] = {}
 end
 
-local function dump_traceback(msg)
-    io.stderr:write(debug.traceback(msg, 2), "\n")
+local function props_dict(ptr)
+    return props[props_key(ptr)]
+end
+
+local function props_clean(ptr)
+    local k = props_key(ptr)
+    if props[k]._clean then
+        xpcall(props[k]._clean, dump_traceback, ptr)
+    end
+    return k
+end
+
+local function props_destroy(ptr)
+    props[props_clean(ptr)] = nil
 end
 
 local init = {
@@ -95,13 +109,7 @@ local function alloc(ty)
         cb = ffi.cast("urefcount_cb", function (refcount)
             local data = ffi.cast(ffi.typeof("$ *", st),
                 ffi.cast("char *", refcount) + ffi.offsetof(ct, "data"))
-            local k = props_key(data)
-            if ty == "upipe" or ty == "uclock" or ty == "upump" then
-                if props[k] and props[k]._clean then
-                    xpcall(props[k]._clean, dump_traceback, data)
-                end
-                props[k] = nil
-            end
+            props_destroy(data)
             if ty ~= "upipe_mgr" and ty ~= "uclock" then
                 C[ty .. "_clean"](data)
             end
@@ -111,6 +119,7 @@ local function alloc(ty)
             C.free(ffi.cast("void *", refcount))
             cb:free()
         end)
+        props_init(cd.data);
         local f = init[ty] or C[ty .. "_init"]
         f(cd.data, unpack(args))
         cd.refcount:init(cb)
@@ -351,7 +360,7 @@ ffi.metatype("struct upipe", {
         if m then return m end
         local f
         local props = props_dict(pipe)
-        if props._control and props._control[key] then
+        if props and props._control and props._control[key] then
             f = props._control[key]
         else
             f = C["upipe_" .. key]
@@ -410,9 +419,6 @@ ffi.metatype("struct ubuf", {
 
 ffi.metatype("struct upump", {
     __index = function (pump, key)
-        if key == 'props' then
-            return props_dict(pump)
-        end
         return C["upump_" .. key]
     end
 })
@@ -587,6 +593,7 @@ local function upipe_helper_alloc(cb)
     local _control = {}
 
     local mgr = h_mgr.mgr
+    props_init(mgr)
     mgr.upipe_alloc = cb.alloc or
         function (mgr, probe, signature, args)
             local ct = ffi.typeof("struct upipe_helper")
@@ -607,8 +614,9 @@ local function upipe_helper_alloc(cb)
             pipe:helper_init_uref_stream()
             pipe:helper_init_flow_def()
             pipe:helper_init_upump()
-            pipe:throw_ready()
+            props_init(pipe)
             pipe.props.helper = h_pipe
+            pipe:throw_ready()
             if cb.sub_mgr then
                 cb.sub_mgr.props._super = pipe
                 pipe.props._sub_mgr = cb.sub_mgr
@@ -750,10 +758,7 @@ local function upipe_helper_alloc(cb)
     h_mgr.refcount_cb = function (refcount)
         local h_pipe = container_of(refcount, "struct upipe_helper", "urefcount")
         local pipe = h_pipe.upipe
-        local k = props_key(pipe)
-        if props[k] and props[k]._clean then
-            xpcall(props[k]._clean, dump_traceback, pipe)
-        end
+        local k = props_clean(pipe)
         if cb.sub then
             local super = pipe:sub_get_super()
             for i, sub in ipairs(super.props._subpipes) do
@@ -787,6 +792,7 @@ local function upipe_helper_alloc(cb)
     refcount_cb = ffi.cast("urefcount_cb", function (refcount)
         local h_mgr = container_of(refcount, ct, "refcount")
         local mgr = h_mgr.mgr
+        props_destroy(mgr)
         mgr.upipe_alloc:free()
         mgr.upipe_control:free()
         if mgr.upipe_input ~= nil then
