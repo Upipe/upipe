@@ -45,6 +45,7 @@
 #include "upipe/uprobe_ubuf_mem_pool.h"
 #include "upipe/uprobe_transfer.h"
 #include "upipe/uprobe_uclock.h"
+#include "upipe/uprobe_syslog.h"
 
 #include "upipe-modules/upipe_file_source.h"
 #include "upipe-modules/upipe_file_sink.h"
@@ -70,6 +71,7 @@
 
 #include <assert.h>
 #include <unistd.h>
+#include <syslog.h>
 
 #ifdef UPIPE_HAVE_GCRYPT
 #include <gcrypt.h>
@@ -97,6 +99,7 @@ enum {
     OPT_LATENCY = 'L',
     OPT_RSAFILE = 'c',
     OPT_RT_PRIORITY = 'i',
+    OPT_SYSLOG_TAG = 'l',
 };
 
 struct uprobe_dvbcsa_split {
@@ -193,6 +196,7 @@ static inline int catch_src(struct uprobe *uprobe,
 
 int main(int argc, char *argv[])
 {
+    const char *syslog_tag = NULL;
     unsigned int rt_priority = 0;
     int log_level = UPROBE_LOG_INFO;
     bool decryption = false;
@@ -202,7 +206,7 @@ int main(int argc, char *argv[])
     const char *private_key = NULL;
     int c;
 
-    while ((c = getopt(argc, argv, "c:vbk:L:i:DU")) != -1) {
+    while ((c = getopt(argc, argv, "c:vbk:L:i:DUl:")) != -1) {
         switch (c) {
             case OPT_DEBUG:
                 if (log_level == UPROBE_LOG_DEBUG)
@@ -250,6 +254,9 @@ int main(int argc, char *argv[])
                 break;
             case OPT_UDP:
                 udp = true;
+                break;
+            case OPT_SYSLOG_TAG:
+                syslog_tag = optarg;
                 break;
             default:
                 usage(argv[0]);
@@ -306,7 +313,13 @@ int main(int argc, char *argv[])
         uref_std_mgr_alloc(UREF_POOL_DEPTH, udict_mgr, 0);
     assert(uref_mgr);
 
-    struct uprobe *uprobe_main = uprobe_stdio_alloc(NULL, stderr, log_level);
+    struct uprobe *uprobe_main;
+    if (syslog_tag)
+        uprobe_main = uprobe_syslog_alloc(NULL, syslog_tag,
+                                          LOG_NDELAY | LOG_PID,
+                                          LOG_USER, log_level);
+    else
+        uprobe_main = uprobe_stdio_alloc(NULL, stderr, log_level);
     assert(uprobe_main);
     uprobe_main = uprobe_ubuf_mem_pool_alloc(uprobe_main, umem_mgr,
                                              UBUF_POOL_DEPTH,
