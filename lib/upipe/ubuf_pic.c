@@ -144,6 +144,23 @@ int ubuf_pic_plane_set_color(struct ubuf *ubuf, const char *chroma,
             memset(buf, pattern[0], mem_width);
             buf += stride;
         }
+
+#ifdef __x86_64__
+
+    } else if (pattern_size <= 16 && 16 % pattern_size == 0 && mem_width % 16 == 0) {
+        uint8_t __attribute__ ((aligned (16))) temp[16];
+        for (size_t i = 0; i < 16; i += 1)
+            temp[i] = pattern[i % pattern_size];
+        for (int y = 0; y < height; y++) {
+            uint8_t * const t = buf;
+            for (size_t x = 0; x < mem_width; x += 16) {
+                memcpy(t + x, temp, 16);
+            }
+            buf += stride;
+        }
+
+#endif
+
     } else {
         for (size_t i = 0; i < mem_width; i += pattern_size)
             memcpy(buf + i, pattern, pattern_size);
