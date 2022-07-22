@@ -166,11 +166,12 @@ int ubuf_pic_plane_set_color(struct ubuf *ubuf, const char *chroma,
     } else {
         height = vsize;
     }
+    height /= vsub;
 
     const size_t mem_width = width * macropixel_size / hsub / macropixel;
 
     if (pattern_size == 1) {
-        for (size_t i = 0; i < height / vsub; i++) {
+        for (size_t i = 0; i < height; i++) {
             memset(buf, pattern[0], mem_width);
             buf += stride;
         }
@@ -178,7 +179,7 @@ int ubuf_pic_plane_set_color(struct ubuf *ubuf, const char *chroma,
         for (size_t i = 0; i < mem_width; i += pattern_size)
             memcpy(buf + i, pattern, pattern_size);
 
-        for (int i = 1; i < height / vsub; i++) {
+        for (int i = 1; i < height; i++) {
             memcpy(buf + stride, buf, mem_width);
             buf += stride;
         }
