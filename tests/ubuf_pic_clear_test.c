@@ -39,6 +39,8 @@
 #include <string.h>
 #include <assert.h>
 
+#include <time.h>
+
 #define UBUF_POOL_DEPTH     1
 #define UBUF_PREPEND        2
 #define UBUF_APPEND         2
@@ -95,6 +97,10 @@ static void check(struct ubuf *ubuf, const char *chroma,
 
 int main(int argc, char **argv)
 {
+    size_t loops = 0;
+    if (argc >= 2)
+        loops = atol(argv[1]);
+
     struct umem_mgr *umem_mgr = umem_alloc_mgr_alloc();
     assert(umem_mgr != NULL);
 
@@ -223,6 +229,49 @@ int main(int argc, char **argv)
     check(ubuf, "y10l", (uint8_t []){ 0, 0 }, 2);
     check(ubuf, "u10l", (uint8_t []){ 0, 2 }, 2);
     check(ubuf, "v10l", (uint8_t []){ 0, 2 }, 2);
+
+    ubuf_free(ubuf);
+    ubuf_mgr_release(mgr);
+
+    /* yuv422p10le */
+    mgr = ubuf_pic_mem_mgr_alloc(UBUF_POOL_DEPTH, UBUF_POOL_DEPTH, umem_mgr, 1,
+                                 UBUF_PREPEND, UBUF_APPEND,
+                                 UBUF_PREPEND, UBUF_APPEND,
+                                 UBUF_ALIGN, UBUF_ALIGN_HOFFSET);
+    assert(mgr != NULL);
+    ubase_assert(ubuf_pic_mem_mgr_add_plane(mgr, "y10l", 1, 1, 2));
+    ubase_assert(ubuf_pic_mem_mgr_add_plane(mgr, "u10l", 2, 1, 2));
+    ubase_assert(ubuf_pic_mem_mgr_add_plane(mgr, "v10l", 2, 1, 2));
+
+    ubuf = ubuf_pic_alloc(mgr, 1920, 1080);
+    assert(ubuf != NULL);
+    fill_in(ubuf);
+
+    ubase_assert(ubuf_pic_clear(ubuf, 0, 0, -1, -1, 0));
+    check(ubuf, "y10l", (uint8_t []){ 64, 0 }, 2);
+    check(ubuf, "u10l", (uint8_t []){ 0, 2 }, 2);
+    check(ubuf, "v10l", (uint8_t []){ 0, 2 }, 2);
+
+    ubase_assert(ubuf_pic_clear(ubuf, 0, 0, -1, -1, 1));
+    check(ubuf, "y10l", (uint8_t []){ 0, 0 }, 2);
+    check(ubuf, "u10l", (uint8_t []){ 0, 2 }, 2);
+    check(ubuf, "v10l", (uint8_t []){ 0, 2 }, 2);
+
+#if 1
+    struct timespec t, t0;
+    clock_gettime(CLOCK_MONOTONIC_RAW, &t0);
+    for (size_t l = 0; l < loops; /* do nothing */) {
+        ubuf_pic_clear(ubuf, 0, 0, -1, -1, 0);
+        if (++l % 8192 == 0) {
+            clock_gettime(CLOCK_MONOTONIC_RAW, &t);
+            uint64_t t_diff = t.tv_sec * ((int64_t)1000000000) + t.tv_nsec
+                - (t0.tv_sec * ((int64_t)1000000000) + t0.tv_nsec);
+            printf("%zu calls to ubuf_pic_clear per second\n",
+                    8192 * UINT64_C(1000000000) / t_diff);
+            t0 = t;
+        }
+    }
+#endif
 
     ubuf_free(ubuf);
     ubuf_mgr_release(mgr);
