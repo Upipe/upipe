@@ -41,6 +41,7 @@ extern "C" {
 #include <string.h>
 #include <stdint.h>
 
+UREF_ATTR_OPAQUE(ts_scte35, message, "scte35.message", original message);
 UREF_ATTR_SMALL_UNSIGNED(ts_scte35, command_type, "scte35.type", command type)
 UREF_ATTR_UNSIGNED(ts_scte35, event_id, "scte35.id", event ID)
 UREF_ATTR_VOID(ts_scte35, cancel, "scte35.cancel", cancel indicator)
