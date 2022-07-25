@@ -176,6 +176,7 @@ int ubuf_pic_plane_set_color(struct ubuf *ubuf, const char *chroma,
             buf += stride;
         }
 
+#if __GNUC__ >= 7
 #ifdef __x86_64__
 
     } else if (pattern_size <= 16 && 16 % pattern_size == 0 && mem_width % 16 == 0) {
@@ -190,6 +191,7 @@ int ubuf_pic_plane_set_color(struct ubuf *ubuf, const char *chroma,
             buf += stride;
         }
 
+#endif
 #endif
 
     } else {
