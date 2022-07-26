@@ -30,6 +30,7 @@
 #include "upipe/uref.h"
 #include "upipe/uref_clock.h"
 #include "upipe/uref_flow.h"
+#include "upipe/uref_pic_flow.h"
 #include "upipe/uref_block.h"
 #include "upipe/upipe.h"
 #include "upipe/upipe_helper_upipe.h"
@@ -485,6 +486,7 @@ static int upipe_ts_scte104d_time_signal(struct upipe *upipe,
         return UBASE_ERR_ALLOC;
     }
 
+    uref_clock_delete_duration(event);
     uref_ts_scte35_set_command_type(event, SCTE35_TIME_SIGNAL_COMMAND);
     int64_t delay = (int64_t)pre_roll_time * UCLOCK_FREQ / 1000;
     uref_clock_add_date_orig(event, delay);
@@ -545,6 +547,7 @@ upipe_ts_scte104d_insert_segmentation_descriptor(struct upipe *upipe,
                                                  struct uref *event,
                                                  const uint8_t *op)
 {
+    struct upipe_ts_scte104d *scte104d = upipe_ts_scte104d_from_upipe(upipe);
     struct uref *desc = uref_dup_inner(event);
     if (unlikely(desc == NULL)) {
         upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
@@ -559,7 +562,7 @@ upipe_ts_scte104d_insert_segmentation_descriptor(struct upipe *upipe,
     const uint8_t *data = scte104o_get_data(op);
     uint32_t event_id = scte104isdrd_get_event_id(data);
     uint8_t cancel_indicator = scte104isdrd_get_cancel_indicator(data);
-    uint16_t duration = scte104isdrd_get_duration(data);
+    uint64_t duration = UCLOCK_FREQ * scte104isdrd_get_duration(data);
     uint8_t upid_type = scte104isdrd_get_upid_type(data);
     uint8_t upid_length = scte104isdrd_get_upid_length(data);
     if (data_length < SCTE104ISDRD_HEADER_SIZE + upid_length) {
@@ -570,7 +573,7 @@ upipe_ts_scte104d_insert_segmentation_descriptor(struct upipe *upipe,
     uint8_t type_id = scte104isdrd_get_type_id(data);
     uint8_t num = scte104isdrd_get_num(data);
     uint8_t expected = scte104isdrd_get_expected(data);
-    uint8_t duration_extension_frames =
+    uint64_t duration_extension_frames =
         scte104isdrd_get_duration_extension_frames(data);
     uint8_t delivery_not_restricted =
         scte104isdrd_get_delivery_not_restricted(data);
@@ -592,7 +595,6 @@ upipe_ts_scte104d_insert_segmentation_descriptor(struct upipe *upipe,
     uref_ts_scte35_desc_seg_set_event_id(desc, event_id);
     if (cancel_indicator)
         uref_ts_scte35_desc_seg_set_cancel(desc);
-    uref_clock_set_duration(desc, (uint64_t)duration * UCLOCK_FREQ);
     if (upid_type || upid_length) {
         uref_ts_scte35_desc_seg_set_upid_type(desc, upid_type);
         uref_ts_scte35_desc_seg_set_upid_type_name(
@@ -619,9 +621,20 @@ upipe_ts_scte104d_insert_segmentation_descriptor(struct upipe *upipe,
         uref_ts_scte35_desc_seg_set_sub_num(desc, sub_num);
         uref_ts_scte35_desc_seg_set_sub_expected(desc, sub_expected);
     }
-    if (duration_extension_frames)
-        uref_ts_scte35_desc_seg_set_duration_extension_frames(
-            desc, duration_extension_frames);
+    if (duration && duration_extension_frames) {
+        struct urational fps = { 0, 0 };
+        if (scte104d->flow_def)
+            uref_pic_flow_get_fps(scte104d->flow_def, &fps);
+        if (fps.num)
+            duration +=
+                duration_extension_frames * UCLOCK_FREQ * fps.den / fps.num;
+        else
+            upipe_warn(upipe, "no framerate set, cannot guess frame duration");
+    }
+    if (duration)
+        uref_clock_set_duration(desc, duration);
+    else
+        uref_clock_delete_duration(desc);
 
     int ret = uref_ts_scte35_add_desc(event, desc);
     uref_free(desc);
