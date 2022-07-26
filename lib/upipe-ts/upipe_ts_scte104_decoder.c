@@ -329,27 +329,6 @@ static struct upipe *upipe_ts_scte104d_alloc(struct upipe_mgr *mgr,
     return upipe;
 }
 
-/** @internal @This finds an output of a ts_scte104d pipe.
- *
- * @param upipe description structure of the pipe
- * @param dpi_pid_index DPI PID index to find
- * @return pointer to upipe or NULL if not found
- */
-static struct upipe *upipe_ts_scte104d_find_sub(struct upipe *upipe,
-                                                uint64_t dpi_pid_index)
-{
-    struct upipe_ts_scte104d *upipe_ts_scte104d =
-        upipe_ts_scte104d_from_upipe(upipe);
-    struct uchain *uchain;
-    ulist_foreach (&upipe_ts_scte104d->subs, uchain) {
-        struct upipe_ts_scte104d_sub *sub =
-            upipe_ts_scte104d_sub_from_uchain(uchain);
-        if (sub->dpi_pid_index == dpi_pid_index)
-            return upipe_ts_scte104d_sub_to_upipe(sub);
-    }
-    return NULL;
-}
-
 /** @internal @This parses a single operation message.
  *
  * @param upipe description structure of the pipe
@@ -665,12 +644,70 @@ upipe_ts_scte104d_get_handler(struct upipe *upipe, uint16_t opid)
  * @param event uref structure describing the event
  * @param upump_p reference to pump that generated the buffer
  */
-static void upipe_ts_scte104d_output(struct upipe *output,
+static void upipe_ts_scte104d_output(struct upipe *upipe,
+                                     uint16_t dpi_pid_index,
                                      struct uref *uref,
                                      struct upump **upump_p)
 {
+    struct upipe_ts_scte104d *upipe_ts_scte104d =
+        upipe_ts_scte104d_from_upipe(upipe);
+    struct uchain *uchain;
+    unsigned nb = 0;
+
+    if (!uref)
+        return;
+
+    /* count output pipes */
+    ulist_foreach(&upipe_ts_scte104d->subs, uchain) {
+        struct upipe_ts_scte104d_sub *sub =
+            upipe_ts_scte104d_sub_from_uchain(uchain);
+        if (sub->dpi_pid_index == dpi_pid_index)
+            nb++;
+    }
+
+    /* use outputs so they can't be released during output */
+    struct upipe *outputs[nb];
+    unsigned i = 0;
+    ulist_foreach(&upipe_ts_scte104d->subs, uchain) {
+        struct upipe_ts_scte104d_sub *sub =
+            upipe_ts_scte104d_sub_from_uchain(uchain);
+        if (sub->dpi_pid_index == dpi_pid_index)
+            outputs[i++] = upipe_use(upipe_ts_scte104d_sub_to_upipe(sub));
+    }
+
+    /* output */
+    int ret = UBASE_ERR_NONE;
+    for (unsigned i = 0; i < nb && ubase_check(ret); i++) {
+        struct upipe_ts_scte104d_sub *sub =
+            upipe_ts_scte104d_sub_from_upipe(outputs[i]);
+
+        struct uref *out_uref;
+
+        if (i + 1 == nb) {
+            out_uref = uref;
+            uref = NULL;
+        }
+        else
+            out_uref = uref_dup(uref);
+
+        if (unlikely(!out_uref))
+            ret = UBASE_ERR_ALLOC;
+        else {
+            if (!sub->flow_def)
+                upipe_ts_scte104d_sub_build_flow_def(outputs[i]);
+            upipe_ts_scte104d_sub_output(outputs[i], out_uref, upump_p);
+        }
+    }
+
+    /* release all outputs */
+    for (unsigned i = 0; i < nb; i++)
+        upipe_release(outputs[i]);
+
     if (uref)
-        upipe_ts_scte104d_sub_output(output, uref, upump_p);
+        uref_free(uref);
+
+    if (ret)
+        upipe_throw_fatal(upipe, ret);
 }
 
 /** @internal @This parses a multiple operation message.
@@ -717,9 +754,6 @@ static void upipe_ts_scte104d_handle_multiple(struct upipe *upipe,
         goto upipe_ts_scte104d_handle_multiple_ok;
 
     uint16_t dpi_pid_index = scte104m_get_dpi_pid_index(msg);
-    struct upipe *output = upipe_ts_scte104d_find_sub(upipe, dpi_pid_index);
-    if (output == NULL)
-        goto upipe_ts_scte104d_handle_multiple_ok;
 
     const uint8_t *timestamp = scte104m_get_timestamp(msg);
     if (scte104t_get_type(timestamp) != SCTE104T_TYPE_NONE)
@@ -734,13 +768,13 @@ static void upipe_ts_scte104d_handle_multiple(struct upipe *upipe,
             upipe_ts_scte104d_get_handler(upipe, opid);
         if (!handler) {
             upipe_warn_va(upipe, "unimplemented opid %u", opid);
-            upipe_ts_scte104d_output(output, event, upump_p);
+            upipe_ts_scte104d_output(upipe, dpi_pid_index, event, upump_p);
             event = NULL;
             continue;
         }
 
         if (handler->usage != SCTE104_OP_USAGE_SUPPLEMENTAL) {
-            upipe_ts_scte104d_output(output, event, upump_p);
+            upipe_ts_scte104d_output(upipe, dpi_pid_index, event, upump_p);
             event = uref_fork(uref, NULL);
         }
         else if (!event) {
@@ -752,7 +786,7 @@ static void upipe_ts_scte104d_handle_multiple(struct upipe *upipe,
         if (unlikely(!ubase_check(ret)))
             goto upipe_ts_scte104d_handle_multiple_err;
     }
-    upipe_ts_scte104d_output(output, event, upump_p);
+    upipe_ts_scte104d_output(upipe, dpi_pid_index, event, upump_p);
 
 upipe_ts_scte104d_handle_multiple_ok:
     uref_block_unmap(uref, 0);
