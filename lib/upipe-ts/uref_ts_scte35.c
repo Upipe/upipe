@@ -253,16 +253,14 @@ int uref_ts_scte35_add_desc(struct uref *dst, struct uref *uref)
     uint8_t desc[PSI_MAX_SIZE + PSI_HEADER_SIZE];
     uint32_t desc_len = PSI_MAX_SIZE;
 
-    uint8_t tag;
-    UBASE_RETURN(uref_ts_scte35_desc_get_tag(uref, &tag));
-    uint64_t identifier;
-    UBASE_RETURN(uref_ts_scte35_desc_get_identifier(uref, &identifier));
+    uint8_t tag = SCTE35_SPLICE_DESC_TAG_SEG;
+    uref_ts_scte35_desc_get_tag(uref, &tag);
 
     switch (tag) {
         case SCTE35_SPLICE_DESC_TAG_SEG: {
             uint32_t length = 0;
-            uint64_t event_id;
-            UBASE_RETURN(uref_ts_scte35_desc_seg_get_event_id(uref, &event_id));
+            uint64_t event_id = 0;
+            uref_ts_scte35_desc_seg_get_event_id(uref, &event_id);
             bool cancel = ubase_check(uref_ts_scte35_desc_seg_get_cancel(uref));
             bool has_delivery_not_restricted =
                 ubase_check(
@@ -275,10 +273,9 @@ int uref_ts_scte35_add_desc(struct uref *dst, struct uref *uref)
                         uref));
             bool has_archive_allowed =
                 ubase_check(uref_ts_scte35_desc_seg_get_archive(uref));
-            uint8_t device_restrictions = 0;
+            uint8_t device_restrictions = 3;
             if (!cancel && !has_delivery_not_restricted)
-                UBASE_RETURN(uref_ts_scte35_desc_seg_get_device(
-                        uref, &device_restrictions));
+                uref_ts_scte35_desc_seg_get_device(uref, &device_restrictions);
             uint8_t nb_comp = 0;
             bool has_program_seg =
                 !ubase_check(uref_ts_scte35_desc_seg_get_nb_comp(uref, &nb_comp));
@@ -296,11 +293,9 @@ int uref_ts_scte35_add_desc(struct uref *dst, struct uref *uref)
             uint8_t num = 0;
             uint8_t expected = 0;
             if (!cancel) {
-                UBASE_RETURN(
-                    uref_ts_scte35_desc_seg_get_type_id(uref, &type_id));
-                UBASE_RETURN(uref_ts_scte35_desc_seg_get_num(uref, &num));
-                UBASE_RETURN(
-                    uref_ts_scte35_desc_seg_get_expected(uref, &expected));
+                uref_ts_scte35_desc_seg_get_type_id(uref, &type_id);
+                uref_ts_scte35_desc_seg_get_num(uref, &num);
+                uref_ts_scte35_desc_seg_get_expected(uref, &expected);
             }
             uint8_t sub_num = 0;
             bool has_sub_num =
