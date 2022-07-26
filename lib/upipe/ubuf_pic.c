@@ -33,6 +33,10 @@
 #include <stdint.h>
 #include <string.h>
 
+#if defined(__GNUC__) && defined(__x86_64__)
+#include <emmintrin.h>
+#endif
+
 /** @This clears (part of) the specified plane, depending on plane type
  * and size (set U/V chroma to 0x80 instead of 0 for instance)
  *
@@ -145,22 +149,21 @@ int ubuf_pic_plane_set_color(struct ubuf *ubuf, const char *chroma,
             buf += stride;
         }
 
-#if __GNUC__ >= 7
-#ifdef __x86_64__
+#if defined(__GNUC__) && defined(__x86_64__)
 
     } else if (pattern_size <= 16 && 16 % pattern_size == 0 && mem_width % 16 == 0) {
         uint8_t __attribute__ ((aligned (16))) temp[16];
         for (size_t i = 0; i < 16; i += 1)
             temp[i] = pattern[i % pattern_size];
+        register const __m128i xmm = _mm_load_si128((void*)temp);
         for (int y = 0; y < height; y++) {
             uint8_t * const t = buf;
             for (size_t x = 0; x < mem_width; x += 16) {
-                memcpy(t + x, temp, 16);
+                _mm_storeu_si128((void*)(t + x), xmm);
             }
             buf += stride;
         }
 
-#endif
 #endif
 
     } else {
