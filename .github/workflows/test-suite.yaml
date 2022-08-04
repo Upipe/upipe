@@ -150,7 +150,7 @@ jobs:
           brew install luajit --HEAD
           set-env HOST_CC "clang"
           set-env HOST_CXX "clang++"
-          set-env CFLAGS "-Wno-error=unused-command-line-argument -fsanitize=undefined -fsanitize=address -fsanitize-address-use-after-scope -fno-omit-frame-pointer -fno-optimize-sibling-calls"
+          set-env CFLAGS "-Wno-error=unused-command-line-argument -Wno-error=deprecated-declarations -fsanitize=undefined -fsanitize=address -fsanitize-address-use-after-scope -fno-omit-frame-pointer -fno-optimize-sibling-calls"
           set-env LDFLAGS "-fsanitize=undefined -fsanitize=address"
           set-env DISABLE_VALGRIND "1"
           set-env INSERT_LIBRARIES "$(clang -print-search-dirs | sed -n 's/^libraries: =//p')/lib/darwin/libclang_rt.asan_osx_dynamic.dylib"
