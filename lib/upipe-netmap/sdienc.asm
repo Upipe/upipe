@@ -23,12 +23,15 @@
 
 SECTION_RODATA 32
 
-planar_8_y_mult: times 2 dw 0x40, 0x4, 0x40, 0x4, 0x40, 0x4, 0x40, 0x0
+planar_8_y_shuf2: times 2 db 6, -1, 7, -1, 8, -1, 9, -1, 10, -1, 11, -1, -1, -1, -1, -1
+planar_8_y_mult: times 2 dw 0x40, 0x4, 0x40, 0x4, 0x40, 0x4, 0x0, 0x0
 planar_8_y_shuf_after: times 2 db -1, 1, 0, 3, 2, -1, 5, 4, 7, 6, -1, 9, 8, 11, 10, -1
 
-planar_8_u_shuf: times 2 db 0, -1, -1, -1, -1, 1, -1, -1, -1, -1, 2, -1, -1, -1, -1, -1
+planar_8_u_shuf:  times 2 db 0, -1, -1, -1, -1, 1, -1, -1, -1, -1, 2, -1, -1, -1, -1, -1
+planar_8_u_shuf2: times 2 db 3, -1, -1, -1, -1, 4, -1, -1, -1, -1, 5, -1, -1, -1, -1, -1
 
-planar_8_v_shuf_after: times 2 db -1, -1, 1, 0, -1, -1, -1, 3, 2, -1, -1, -1, 5, 4, -1, -1
+planar_8_v_shuf_after:  times 2 db -1, -1, 1, 0, -1, -1, -1, 3, 2, -1, -1, -1,  5,  4, -1, -1
+planar_8_v_shuf_after2: times 2 db -1, -1, 7, 6, -1, -1, -1, 9, 8, -1, -1, -1, 11, 10, -1, -1
 
 planar_10_y_shift:  times 2 dw 0x10, 0x1, 0x10, 0x1, 0x10, 0x1, 0x10, 0x1
 planar_10_uv_shift: times 2 dw 0x40, 0x40, 0x40, 0x40, 0x4, 0x4, 0x4, 0x4
@@ -41,7 +44,7 @@ SECTION .text
 %macro planar_to_sdi_8 0
 
 ; planar_to_sdi_8(const uint8_t *y, const uint8_t *u, const uint8_t *v, uint8_t *l, const int64_t width)
-cglobal planar_to_sdi_8, 5, 5, 4, y, u, v, l, pixels
+cglobal planar_to_sdi_8, 5, 5, 6, y, u, v, l, pixels
     shr    pixelsq, 1
     lea    yq, [yq + 2*pixelsq]
     add    uq, pixelsq
@@ -49,39 +52,52 @@ cglobal planar_to_sdi_8, 5, 5, 4, y, u, v, l, pixels
 
     neg    pixelsq
 
-    pxor m3, m3
+    pxor   m3, m3
 
 .loop:
-    movq   xm0, [yq + pixelsq*2]
-    movd   xm1, [uq + pixelsq*1]
-    movd   xm2, [vq + pixelsq*1]
+    movu   xm0, [yq + pixelsq*2]
+    movq   xm1, [uq + pixelsq*1]
+    movq   xm2, [vq + pixelsq*1]
 %if cpuflag(avx2)
-    vinserti128 m0, m0, [yq + pixelsq*2 + 6], 1
-    vinserti128 m1, m1, [uq + pixelsq*1 + 3], 1
-    vinserti128 m2, m2, [vq + pixelsq*1 + 3], 1
+    vinserti128 m0, m0, [yq + pixelsq*2 + 12], 1
+    vinserti128 m1, m1, [uq + pixelsq*1 + 6], 1
+    vinserti128 m2, m2, [vq + pixelsq*1 + 6], 1
 %endif
 
+    pshufb    m4, m0, [planar_8_y_shuf2]
     punpcklbw m0, m3
+
+    pmullw m4, [planar_8_y_mult]
+    pshufb m4, [planar_8_y_shuf_after]
+
     pmullw m0, [planar_8_y_mult]
     pshufb m0, [planar_8_y_shuf_after]
 
+    pshufb m5, m1, [planar_8_u_shuf2]
     pshufb m1, [planar_8_u_shuf]
 
+    por    m4, m5
     por    m0, m1
 
     punpcklbw m2, m3
     psllw  m2, 4
+
+    pshufb m6, m2, [planar_8_v_shuf_after2]
     pshufb m2, [planar_8_v_shuf_after]
 
+    por    m4, m6
     por    m0, m2
 
     movu   [lq], xm0
+    movu   [lq+15], xm4
+
 %if cpuflag(avx2)
-    vextracti128 [lq+15], m0, 1
+    vextracti128 [lq+((15*mmsize)/16)], m0, 1
+    vextracti128 [lq+((15*mmsize)/16)+15], m4, 1
 %endif
 
-    add    lq, (15*mmsize)/16
-    add    pixelsq, (3*mmsize)/16
+    add    lq, (30*mmsize)/16
+    add    pixelsq, (6*mmsize)/16
     jl .loop
 
     RET
@@ -97,39 +113,55 @@ cglobal planar_to_sdi_8_2, 5, 5, 4, y, u, v, dst1, dst2, pixels
     pxor m3, m3
 
     .loop:
-        movq   xm0, [yq + pixelsq*2]
-        movd   xm1, [uq + pixelsq*1]
-        movd   xm2, [vq + pixelsq*1]
+
+    movu   xm0, [yq + pixelsq*2]
+    movq   xm1, [uq + pixelsq*1]
+    movq   xm2, [vq + pixelsq*1]
 %if cpuflag(avx2)
-        vinserti128 m0, m0, [yq + pixelsq*2 + 6], 1
-        vinserti128 m1, m1, [uq + pixelsq*1 + 3], 1
-        vinserti128 m2, m2, [vq + pixelsq*1 + 3], 1
+    vinserti128 m0, m0, [yq + pixelsq*2 + 12], 1
+    vinserti128 m1, m1, [uq + pixelsq*1 + 6], 1
+    vinserti128 m2, m2, [vq + pixelsq*1 + 6], 1
 %endif
 
-        punpcklbw m0, m3
-        pmullw m0, [planar_8_y_mult]
-        pshufb m0, [planar_8_y_shuf_after]
+    pshufb    m4, m0, [planar_8_y_shuf2]
+    punpcklbw m0, m3
 
-        pshufb m1, [planar_8_u_shuf]
+    pmullw m4, [planar_8_y_mult]
+    pshufb m4, [planar_8_y_shuf_after]
 
-        por    m0, m1
+    pmullw m0, [planar_8_y_mult]
+    pshufb m0, [planar_8_y_shuf_after]
 
-        punpcklbw m2, m3
-        psllw  m2, 4
-        pshufb m2, [planar_8_v_shuf_after]
+    pshufb m5, m1, [planar_8_u_shuf2]
+    pshufb m1, [planar_8_u_shuf]
 
-        por    m0, m2
+    por    m4, m5
+    por    m0, m1
 
-        movu   [dst1q], xm0
-        movu   [dst2q], xm0
+    punpcklbw m2, m3
+    psllw  m2, 4
+
+    pshufb m6, m2, [planar_8_v_shuf_after2]
+    pshufb m2, [planar_8_v_shuf_after]
+
+    por    m4, m6
+    por    m0, m2
+
+    movu   [dst1q], xm0
+    movu   [dst2q], xm0
+    movu   [dst1q+15], xm4
+    movu   [dst2q+15], xm4
+
 %if cpuflag(avx2)
-    vextracti128 [dst1q+15], m0, 1
-    vextracti128 [dst2q+15], m0, 1
+    vextracti128 [dst1q+((15*mmsize)/16)], m0, 1
+    vextracti128 [dst2q+((15*mmsize)/16)], m0, 1
+    vextracti128 [dst1q+((15*mmsize)/16)+15], m4, 1
+    vextracti128 [dst2q+((15*mmsize)/16)+15], m4, 1
 %endif
 
-        add    dst1q, (15*mmsize)/16
-        add    dst2q, (15*mmsize)/16
-        add    pixelsq, (3*mmsize)/16
+        add    dst1q, (30*mmsize)/16
+        add    dst2q, (30*mmsize)/16
+        add    pixelsq, (6*mmsize)/16
     jl .loop
 RET
 
