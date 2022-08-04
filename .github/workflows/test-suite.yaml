@@ -117,6 +117,7 @@ jobs:
       - name: Install compiler (clang)
         if: runner.os == 'Linux' && matrix.compiler == 'clang'
         run: |
+          sudo apt-get update
           sudo apt-get install clang-${{ matrix.version }}
           set-env HOST_CC "clang-${{ matrix.version }}"
           set-env HOST_CXX "clang++-${{ matrix.version }}"
