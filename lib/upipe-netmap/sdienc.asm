@@ -23,13 +23,11 @@
 
 SECTION_RODATA 32
 
-planar_8_y_shuf: times 2 db 0, -1, 1, -1, 2, -1, 3, -1, 4, -1, 5, -1, 6, -1, -1, -1
 planar_8_y_mult: times 2 dw 0x40, 0x4, 0x40, 0x4, 0x40, 0x4, 0x40, 0x0
 planar_8_y_shuf_after: times 2 db -1, 1, 0, 3, 2, -1, 5, 4, 7, 6, -1, 9, 8, 11, 10, -1
 
 planar_8_u_shuf: times 2 db 0, -1, -1, -1, -1, 1, -1, -1, -1, -1, 2, -1, -1, -1, -1, -1
 
-planar_8_v_shuf: times 2 db 0, -1, 1, -1, 2, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1
 planar_8_v_shuf_after: times 2 db -1, -1, 1, 0, -1, -1, -1, 3, 2, -1, -1, -1, 5, 4, -1, -1
 
 planar_10_y_shift:  times 2 dw 0x10, 0x1, 0x10, 0x1, 0x10, 0x1, 0x10, 0x1
@@ -43,13 +41,15 @@ SECTION .text
 %macro planar_to_sdi_8 0
 
 ; planar_to_sdi_8(const uint8_t *y, const uint8_t *u, const uint8_t *v, uint8_t *l, const int64_t width)
-cglobal planar_to_sdi_8, 5, 5, 3, y, u, v, l, pixels
+cglobal planar_to_sdi_8, 5, 5, 4, y, u, v, l, pixels
     shr    pixelsq, 1
     lea    yq, [yq + 2*pixelsq]
     add    uq, pixelsq
     add    vq, pixelsq
 
     neg    pixelsq
+
+    pxor m3, m3
 
 .loop:
     movq   xm0, [yq + pixelsq*2]
@@ -61,7 +61,7 @@ cglobal planar_to_sdi_8, 5, 5, 3, y, u, v, l, pixels
     vinserti128 m2, m2, [vq + pixelsq*1 + 3], 1
 %endif
 
-    pshufb m0, [planar_8_y_shuf]
+    punpcklbw m0, m3
     pmullw m0, [planar_8_y_mult]
     pshufb m0, [planar_8_y_shuf_after]
 
@@ -69,7 +69,7 @@ cglobal planar_to_sdi_8, 5, 5, 3, y, u, v, l, pixels
 
     por    m0, m1
 
-    pshufb m2, [planar_8_v_shuf]
+    punpcklbw m2, m3
     psllw  m2, 4
     pshufb m2, [planar_8_v_shuf_after]
 
@@ -86,13 +86,15 @@ cglobal planar_to_sdi_8, 5, 5, 3, y, u, v, l, pixels
 
     RET
 
-cglobal planar_to_sdi_8_2, 5, 5, 3, y, u, v, dst1, dst2, pixels
+cglobal planar_to_sdi_8_2, 5, 5, 4, y, u, v, dst1, dst2, pixels
     shr    pixelsq, 1
     lea    yq, [yq + 2*pixelsq]
     add    uq, pixelsq
     add    vq, pixelsq
 
     neg    pixelsq
+
+    pxor m3, m3
 
     .loop:
         movq   xm0, [yq + pixelsq*2]
@@ -104,7 +106,7 @@ cglobal planar_to_sdi_8_2, 5, 5, 3, y, u, v, dst1, dst2, pixels
         vinserti128 m2, m2, [vq + pixelsq*1 + 3], 1
 %endif
 
-        pshufb m0, [planar_8_y_shuf]
+        punpcklbw m0, m3
         pmullw m0, [planar_8_y_mult]
         pshufb m0, [planar_8_y_shuf_after]
 
@@ -112,7 +114,7 @@ cglobal planar_to_sdi_8_2, 5, 5, 3, y, u, v, dst1, dst2, pixels
 
         por    m0, m1
 
-        pshufb m2, [planar_8_v_shuf]
+        punpcklbw m2, m3
         psllw  m2, 4
         pshufb m2, [planar_8_v_shuf_after]
 
