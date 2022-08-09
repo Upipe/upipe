@@ -1113,7 +1113,7 @@ static void upipe_sdi_enc_input(struct upipe *upipe, struct uref *uref,
 
         struct uref *uref_audio = uref_from_uchain(ulist_pop(&sdi_enc_sub->urefs));
         if (uref_audio) {
-		upipe_verbose_va(upipe, "sub urefs after pop: %zu", --sdi_enc_sub->n);
+            upipe_verbose_va(upipe, "sub urefs after pop: %zu", --sdi_enc_sub->n);
             const uint8_t channels = sdi_enc_sub->channels;
 
             size_t size = 0;
@@ -1211,14 +1211,16 @@ static void upipe_sdi_enc_input(struct upipe *upipe, struct uref *uref,
     struct uref *subpic[2] = { NULL, NULL };
     /* buffered uref if any */
     struct upipe_sdi_enc_sub *subpic_sub = &upipe_sdi_enc->subpic_subpipe;
+    struct upipe *subpipe = upipe_sdi_enc_sub_to_upipe(subpic_sub);
     int i = 0;
     for (;;) {
         struct uchain *uchain_subpic = ulist_pop(&subpic_sub->urefs);
         if (!uchain_subpic)
             break;
+        upipe_verbose_va(subpipe, "sub urefs after pop: %zu", --subpic_sub->n);
         if (i >= 2) {
             uref_free(uref_from_uchain(uchain_subpic));
-            upipe_err(upipe, "Too many subpics");
+            upipe_err(subpipe, "Too many subpics");
             continue;
         }
         subpic[i] = uref_from_uchain(uchain_subpic);
@@ -1230,8 +1232,10 @@ static void upipe_sdi_enc_input(struct upipe *upipe, struct uref *uref,
             const uint8_t *pic_data = buf;
             int pic_data_size = size;
 
-            if (pic_data[0] != DVBVBI_DATA_IDENTIFIER)
+            if (pic_data[0] != DVBVBI_DATA_IDENTIFIER) {
+                upipe_err(subpipe, "not DVBVBI_DATA_IDENTIFIER");
                 return;
+            }
 
             pic_data++;
             pic_data_size--;
@@ -1241,17 +1245,23 @@ static void upipe_sdi_enc_input(struct upipe *upipe, struct uref *uref,
                 uint8_t data_unit_id  = pic_data[0];
                 uint8_t data_unit_len = pic_data[1];
 
-                if (data_unit_id != DVBVBI_ID_TTX_SUB && data_unit_id != DVBVBI_ID_TTX_NONSUB)
+                if (data_unit_id != DVBVBI_ID_TTX_SUB && data_unit_id != DVBVBI_ID_TTX_NONSUB) {
+                    upipe_verbose(subpipe, "not DVBVBI_ID_TTX_SUB DVBVBI_ID_TTX_NONSUB ");
                     continue;
+                }
 
-                if (data_unit_len != DVBVBI_LENGTH)
+                if (data_unit_len != DVBVBI_LENGTH) {
+                    upipe_err(subpipe, "not DVBVBI_LENGTH");
                     continue;
+                }
 
                 uint8_t line_offset = dvbvbittx_get_line(&pic_data[DVBVBI_UNIT_HEADER_SIZE]);
 
                 uint8_t f2 = !dvbvbittx_get_field(&pic_data[DVBVBI_UNIT_HEADER_SIZE]);
-                if (f2 == 0 && line_offset == 0) // line == 0
+                if (f2 == 0 && line_offset == 0) { // line == 0
+                    upipe_err(subpipe, "f2 and line_offset both 0");
                     continue;
+                }
 
                 if (upipe_sdi_enc->ttx_packets[f2] < (sd ? 1 : 5)) {
                     if (sd && upipe_sdi_enc->ttx_packets[f2] == 0) {
@@ -1259,6 +1269,8 @@ static void upipe_sdi_enc_input(struct upipe *upipe, struct uref *uref,
                     }
                     upipe_sdi_enc->ttx_packet[f2][upipe_sdi_enc->ttx_packets[f2]++] = pic_data;
                 }
+                else
+                    upipe_err(subpipe, "no more space in line for packets");
             }
             i++;
         } else {
