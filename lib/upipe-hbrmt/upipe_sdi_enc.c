@@ -21,6 +21,7 @@
 #include <upipe/upipe_helper_subpipe.h>
 #include <upipe/upipe_helper_output.h>
 #include <upipe/upipe_helper_input.h>
+#include <upipe/upipe_helper_flow.h>
 
 #include <bitstream/smpte/291.h>
 #include <bitstream/smpte/352.h>
@@ -549,6 +550,7 @@ UPIPE_HELPER_UBUF_MGR(upipe_sdi_enc, ubuf_mgr, flow_format, ubuf_mgr_request,
                       upipe_sdi_enc_unregister_output_request)
 
 UPIPE_HELPER_UPIPE(upipe_sdi_enc_sub, upipe, UPIPE_SDI_ENC_SUB_SIGNATURE);
+UPIPE_HELPER_FLOW(upipe_sdi_enc_sub, NULL);
 UPIPE_HELPER_UREFCOUNT(upipe_sdi_enc_sub, urefcount, upipe_sdi_enc_sub_free);
 UPIPE_HELPER_VOID(upipe_sdi_enc_sub);
 
@@ -646,14 +648,7 @@ static void upipe_sdi_enc_sub_init(struct upipe *upipe,
         struct upipe_mgr *sub_mgr, struct uprobe *uprobe, enum subpipe_type type)
 {
     struct upipe_sdi_enc *upipe_sdi_enc = upipe_sdi_enc_from_sub_mgr(sub_mgr);
-
-    if (type != SDIENC_SOUND) {
-        upipe_init(upipe, sub_mgr, uprobe);
-        /* increment super pipe refcount only when the static pipes are retrieved */
-        upipe_mgr_release(sub_mgr);
-        upipe->refcount = &upipe_sdi_enc->urefcount;
-    } else
-        upipe_sdi_enc_sub_init_urefcount(upipe);
+    upipe_sdi_enc_sub_init_urefcount(upipe);
 
     struct upipe_sdi_enc_sub *sdi_enc_sub = upipe_sdi_enc_sub_from_upipe(upipe);
 
@@ -672,13 +667,47 @@ static struct upipe *upipe_sdi_enc_sub_alloc(struct upipe_mgr *mgr,
                                      struct uprobe *uprobe,
                                      uint32_t signature, va_list args)
 {
-    struct upipe *upipe = upipe_sdi_enc_sub_alloc_void(mgr, uprobe, signature, args);
-    if (unlikely(upipe == NULL))
-        return NULL;
+    struct uref *flow_def = NULL;
+    struct upipe *upipe = upipe_sdi_enc_sub_alloc_flow(mgr,
+            uprobe, signature, args, &flow_def);
+    struct upipe_sdi_enc_sub *upipe_sdi_enc_sub = upipe_sdi_enc_sub_from_upipe(upipe);
 
-    upipe_sdi_enc_sub_init(upipe, mgr, uprobe, false);
+    if (unlikely(upipe == NULL || flow_def == NULL))
+        goto error;
+
+    const char *def;
+    if (!ubase_check(uref_flow_get_def(flow_def, &def)))
+        goto error;
+
+    if (!ubase_ncmp(def, "sound.")) {
+        upipe_sdi_enc_sub_init(upipe, mgr, uprobe, false);
+        upipe_sdi_enc_sub->type = SDIENC_SOUND;
+    }
+    else if (!ubase_ncmp(def, "block.dvb_teletext.")) {
+        upipe_sdi_enc_sub_init(upipe, mgr, uprobe, false);
+        upipe_sdi_enc_sub->type = SDIENC_SUBPIC;
+    }
+    else if (!ubase_ncmp(def, "block.scte104.")) {
+        upipe_sdi_enc_sub_init(upipe, mgr, uprobe, false);
+        upipe_sdi_enc_sub->type = SDIENC_SCTE104;
+    }
+    else if (!ubase_ncmp(def, "pic.")) {
+        upipe_sdi_enc_sub_init(upipe, mgr, uprobe, false);
+        upipe_sdi_enc_sub->type = SDIENC_VANC;
+    }
+    else {
+        goto error;
+    }
 
     return upipe;
+
+error:
+    uref_free(flow_def);
+    if (upipe) {
+        upipe_clean(upipe);
+        free(upipe_sdi_enc_sub);
+    }
+    return NULL;
 }
 
 static void upipe_sdi_enc_sub_free(struct upipe *upipe)
