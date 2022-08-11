@@ -45,7 +45,8 @@ static const bool parity_tab[512] = {
 
 enum subpipe_type {
     SDIENC_SOUND,
-    SDIENC_SUBPIC,
+    SDIENC_SUBPIC, /* teletext */
+    SDIENC_SCTE104,
     SDIENC_VANC,
 };
 
@@ -70,7 +71,7 @@ struct upipe_sdi_enc_sub {
     /** stereo pair position */
     uint8_t channel_idx;
 
-    /** audio or subpic or vanc */
+    /** type of pipe */
     enum subpipe_type type;
 
     /** public upipe structure */
@@ -100,12 +101,6 @@ struct upipe_sdi_enc {
     struct uchain subs;
     /** manager to create input subpipes */
     struct upipe_mgr sub_mgr;
-
-    /** subpic subpipe */
-    struct upipe_sdi_enc_sub subpic_subpipe;
-
-    /** vanc subpipe */
-    struct upipe_sdi_enc_sub vanc_subpipe;
 
     /** ubuf manager */
     struct ubuf_mgr *ubuf_mgr;
@@ -556,9 +551,6 @@ UPIPE_HELPER_UBUF_MGR(upipe_sdi_enc, ubuf_mgr, flow_format, ubuf_mgr_request,
 UPIPE_HELPER_UPIPE(upipe_sdi_enc_sub, upipe, UPIPE_SDI_ENC_SUB_SIGNATURE);
 UPIPE_HELPER_UREFCOUNT(upipe_sdi_enc_sub, urefcount, upipe_sdi_enc_sub_free);
 UPIPE_HELPER_VOID(upipe_sdi_enc_sub);
-
-UBASE_FROM_TO(upipe_sdi_enc, upipe_sdi_enc_sub, subpic_subpipe, subpic_subpipe)
-UBASE_FROM_TO(upipe_sdi_enc, upipe_sdi_enc_sub, vanc_subpipe, vanc_subpipe)
 
 UPIPE_HELPER_SUBPIPE(upipe_sdi_enc, upipe_sdi_enc_sub, sub, sub_mgr, subs, uchain)
 
@@ -1208,6 +1200,7 @@ static void upipe_sdi_enc_input(struct upipe *upipe, struct uref *uref,
     upipe_sdi_enc->ttx_packets[0] = 0;
     upipe_sdi_enc->ttx_packets[1] = 0;
 
+#if 0
     struct uref *subpic[2] = { NULL, NULL };
     /* buffered uref if any */
     struct upipe_sdi_enc_sub *subpic_sub = &upipe_sdi_enc->subpic_subpipe;
@@ -1279,6 +1272,7 @@ static void upipe_sdi_enc_input(struct upipe *upipe, struct uref *uref,
             subpic[i] = NULL;
         }
     }
+#endif
 
     uref_pic_get_cea_708(uref, &upipe_sdi_enc->cea708, &upipe_sdi_enc->cea708_size);
 
@@ -1303,6 +1297,7 @@ static void upipe_sdi_enc_input(struct upipe *upipe, struct uref *uref,
         }
     }
 
+#if 0
     struct upipe_sdi_enc_sub *vanc_sub = &upipe_sdi_enc->vanc_subpipe;
     for (;;) {
         struct uchain *uchain_vanc = ulist_pop(&vanc_sub->urefs);
@@ -1364,6 +1359,7 @@ end:
             uref_free(subpic[i]);
         }
     }
+#endif
 
     ubuf_block_unmap(ubuf, 0);
 
@@ -1621,22 +1617,6 @@ static int upipe_sdi_enc_control(struct upipe *upipe, int command, va_list args)
             struct uref *flow = va_arg(args, struct uref *);
             return upipe_sdi_enc_set_flow_def(upipe, flow);
         }
-        case UPIPE_SDI_ENC_GET_VANC_SUB: {
-            UBASE_SIGNATURE_CHECK(args, UPIPE_SDI_ENC_SIGNATURE)
-            struct upipe **upipe_p = va_arg(args, struct upipe **);
-            *upipe_p =  upipe_sdi_enc_sub_to_upipe(
-                    upipe_sdi_enc_to_vanc_subpipe(
-                        upipe_sdi_enc_from_upipe(upipe)));
-            return UBASE_ERR_NONE;
-        }
-        case UPIPE_SDI_ENC_GET_SUBPIC_SUB: {
-            UBASE_SIGNATURE_CHECK(args, UPIPE_SDI_ENC_SIGNATURE)
-            struct upipe **upipe_p = va_arg(args, struct upipe **);
-            *upipe_p =  upipe_sdi_enc_sub_to_upipe(
-                    upipe_sdi_enc_to_subpic_subpipe(
-                        upipe_sdi_enc_from_upipe(upipe)));
-            return UBASE_ERR_NONE;
-        }
         case UPIPE_SET_OPTION: {
             const char *k = va_arg(args, const char *);
             const char *v = va_arg(args, const char *);
@@ -1670,9 +1650,6 @@ static struct upipe *_upipe_sdi_enc_alloc(struct upipe_mgr *mgr,
 {
     if (signature != UPIPE_SDI_ENC_SIGNATURE)
         return NULL;
-
-    struct uprobe *uprobe_subpic = va_arg(args, struct uprobe *);
-    struct uprobe *uprobe_vanc = va_arg(args, struct uprobe *);
 
     struct upipe_sdi_enc *upipe_sdi_enc = calloc(1, sizeof(*upipe_sdi_enc));
     if (unlikely(upipe_sdi_enc == NULL))
@@ -1729,12 +1706,6 @@ static struct upipe *_upipe_sdi_enc_alloc(struct upipe_mgr *mgr,
     upipe_sdi_enc_init_sub_mgr(upipe);
     upipe_sdi_enc_init_sub_subs(upipe);
 
-    /* Initalise subpipes */
-    upipe_sdi_enc_sub_init(upipe_sdi_enc_sub_to_upipe(upipe_sdi_enc_to_subpic_subpipe(upipe_sdi_enc)),
-            &upipe_sdi_enc->sub_mgr, uprobe_subpic, true);
-    upipe_sdi_enc_sub_init(upipe_sdi_enc_sub_to_upipe(upipe_sdi_enc_to_vanc_subpipe(upipe_sdi_enc)),
-            &upipe_sdi_enc->sub_mgr, uprobe_vanc, true);
-
     upipe_sdi_enc->crc_c = 0;
     upipe_sdi_enc->crc_y = 0;
 
@@ -1762,9 +1733,6 @@ static struct upipe *_upipe_sdi_enc_alloc(struct upipe_mgr *mgr,
 static void upipe_sdi_enc_free(struct upipe *upipe)
 {
     struct upipe_sdi_enc *upipe_sdi_enc = upipe_sdi_enc_from_upipe(upipe);
-
-    upipe_sdi_enc_sub_free(&upipe_sdi_enc->subpic_subpipe.upipe);
-    upipe_sdi_enc_sub_free(&upipe_sdi_enc->vanc_subpipe.upipe);
 
     upipe_throw_dead(upipe);
     uref_free(upipe_sdi_enc->uref_audio);
