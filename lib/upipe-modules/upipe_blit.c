@@ -432,7 +432,7 @@ static int upipe_blit_sub_provide_flow_format(struct upipe *upipe)
         uref_pic_set_vposition(uref, vposition);
 
         /* Check for a dedicated alpha plane. */
-        uint8_t plane;
+        uint8_t plane = 0;
         bool alpha = ubase_check(uref_pic_flow_find_chroma(uref, "a8", &plane))
             || ubase_check(uref_pic_flow_find_chroma(uref, "a10l", &plane))
             || ubase_check(uref_pic_flow_find_chroma(uref, "a16", &plane));
