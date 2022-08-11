@@ -1229,79 +1229,86 @@ static void upipe_sdi_enc_input(struct upipe *upipe, struct uref *uref,
     upipe_sdi_enc->ttx_packets[0] = 0;
     upipe_sdi_enc->ttx_packets[1] = 0;
 
-#if 0
     struct uref *subpic[2] = { NULL, NULL };
     /* buffered uref if any */
-    struct upipe_sdi_enc_sub *subpic_sub = &upipe_sdi_enc->subpic_subpipe;
-    struct upipe *subpipe = upipe_sdi_enc_sub_to_upipe(subpic_sub);
-    int i = 0;
-    for (;;) {
-        struct uchain *uchain_subpic = ulist_pop(&subpic_sub->urefs);
-        if (!uchain_subpic)
-            break;
-        upipe_verbose_va(subpipe, "sub urefs after pop: %zu", --subpic_sub->n);
-        if (i >= 2) {
-            uref_free(uref_from_uchain(uchain_subpic));
-            upipe_err(subpipe, "Too many subpics");
-            continue;
-        }
-        subpic[i] = uref_from_uchain(uchain_subpic);
 
-        const uint8_t *buf;
-        int size = -1;
-        if (ubase_check(uref_block_read(subpic[i], 0, &size, &buf))) {
-            bool sd = upipe_sdi_enc->p->sd;
-            const uint8_t *pic_data = buf;
-            int pic_data_size = size;
+    /* Handle teletext which may be going via libzvbi so we cannot write directly */
+    uchain = NULL;
+    ulist_foreach(&upipe_sdi_enc->subs, uchain) {
+        struct upipe_sdi_enc_sub *upipe_sdi_enc_sub =
+            upipe_sdi_enc_sub_from_uchain(uchain);
+        struct upipe *subpipe = upipe_sdi_enc_sub_to_upipe(upipe_sdi_enc_sub);
 
-            if (pic_data[0] != DVBVBI_DATA_IDENTIFIER) {
-                upipe_err(subpipe, "not DVBVBI_DATA_IDENTIFIER");
-                return;
-            }
-
-            pic_data++;
-            pic_data_size--;
-
-            static const unsigned dvb_unit_size = DVBVBI_UNIT_HEADER_SIZE + DVBVBI_LENGTH;
-            for (; pic_data_size >= dvb_unit_size; pic_data += dvb_unit_size, pic_data_size -= dvb_unit_size) {
-                uint8_t data_unit_id  = pic_data[0];
-                uint8_t data_unit_len = pic_data[1];
-
-                if (data_unit_id != DVBVBI_ID_TTX_SUB && data_unit_id != DVBVBI_ID_TTX_NONSUB) {
-                    upipe_verbose(subpipe, "not DVBVBI_ID_TTX_SUB DVBVBI_ID_TTX_NONSUB ");
+        if (upipe_sdi_enc_sub->type == SDIENC_SUBPIC) {
+            int i = 0;
+            for (;;) {
+                struct uchain *uchain_subpic = ulist_pop(&upipe_sdi_enc_sub->urefs);
+                if (!uchain_subpic)
+                    break;
+                upipe_verbose_va(subpipe, "sub urefs after pop: %zu", --upipe_sdi_enc_sub->n);
+                if (i >= 2) {
+                    uref_free(uref_from_uchain(uchain_subpic));
+                    upipe_err(subpipe, "Too many subpics");
                     continue;
                 }
+                subpic[i] = uref_from_uchain(uchain_subpic);
 
-                if (data_unit_len != DVBVBI_LENGTH) {
-                    upipe_err(subpipe, "not DVBVBI_LENGTH");
-                    continue;
-                }
+                const uint8_t *buf;
+                int size = -1;
+                if (ubase_check(uref_block_read(subpic[i], 0, &size, &buf))) {
+                    bool sd = upipe_sdi_enc->p->sd;
+                    const uint8_t *pic_data = buf;
+                    int pic_data_size = size;
 
-                uint8_t line_offset = dvbvbittx_get_line(&pic_data[DVBVBI_UNIT_HEADER_SIZE]);
-
-                uint8_t f2 = !dvbvbittx_get_field(&pic_data[DVBVBI_UNIT_HEADER_SIZE]);
-                if (f2 == 0 && line_offset == 0) { // line == 0
-                    upipe_err(subpipe, "f2 and line_offset both 0");
-                    continue;
-                }
-
-                if (upipe_sdi_enc->ttx_packets[f2] < (sd ? 1 : 5)) {
-                    if (sd && upipe_sdi_enc->ttx_packets[f2] == 0) {
-                        upipe_sdi_enc->ttx_line[f2] = line_offset + PAL_FIELD_OFFSET * f2;
+                    if (pic_data[0] != DVBVBI_DATA_IDENTIFIER) {
+                        upipe_err(subpipe, "not DVBVBI_DATA_IDENTIFIER"); // fixme
+                        return;
                     }
-                    upipe_sdi_enc->ttx_packet[f2][upipe_sdi_enc->ttx_packets[f2]++] = pic_data;
+
+                    pic_data++;
+                    pic_data_size--;
+
+                    static const unsigned dvb_unit_size = DVBVBI_UNIT_HEADER_SIZE + DVBVBI_LENGTH;
+                    for (; pic_data_size >= dvb_unit_size; pic_data += dvb_unit_size, pic_data_size -= dvb_unit_size) {
+                        uint8_t data_unit_id  = pic_data[0];
+                        uint8_t data_unit_len = pic_data[1];
+
+                        if (data_unit_id != DVBVBI_ID_TTX_SUB && data_unit_id != DVBVBI_ID_TTX_NONSUB) {
+                            upipe_verbose(subpipe, "not DVBVBI_ID_TTX_SUB DVBVBI_ID_TTX_NONSUB ");
+                            continue;
+                        }
+
+                        if (data_unit_len != DVBVBI_LENGTH) {
+                            upipe_err(subpipe, "not DVBVBI_LENGTH");
+                            continue;
+                        }
+
+                        uint8_t line_offset = dvbvbittx_get_line(&pic_data[DVBVBI_UNIT_HEADER_SIZE]);
+
+                        uint8_t f2 = !dvbvbittx_get_field(&pic_data[DVBVBI_UNIT_HEADER_SIZE]);
+                        if (f2 == 0 && line_offset == 0) { // line == 0
+                            upipe_err(subpipe, "f2 and line_offset both 0");
+                            continue;
+                        }
+
+                        if (upipe_sdi_enc->ttx_packets[f2] < (sd ? 1 : 5)) {
+                            if (sd && upipe_sdi_enc->ttx_packets[f2] == 0) {
+                                upipe_sdi_enc->ttx_line[f2] = line_offset + PAL_FIELD_OFFSET * f2;
+                            }
+                            upipe_sdi_enc->ttx_packet[f2][upipe_sdi_enc->ttx_packets[f2]++] = pic_data;
+                        }
+                        else
+                            upipe_err(subpipe, "no more space in line for packets");
+                    }
+                    i++;
+                } else {
+                    upipe_err(upipe, "Could not map subpic");
+                    uref_free(subpic[i]);
+                    subpic[i] = NULL;
                 }
-                else
-                    upipe_err(subpipe, "no more space in line for packets");
             }
-            i++;
-        } else {
-            upipe_err(upipe, "Could not map subpic");
-            uref_free(subpic[i]);
-            subpic[i] = NULL;
         }
     }
-#endif
 
     uref_pic_get_cea_708(uref, &upipe_sdi_enc->cea708, &upipe_sdi_enc->cea708_size);
 
