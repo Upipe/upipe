@@ -178,6 +178,8 @@ struct upipe_sdi_enc {
     /** OP47 teletext sequence counter **/
     uint16_t op47_sequence_counter[2];
 
+    uint8_t block_uref_buf[VANC_WIDTH];
+
     /** vbi **/
     vbi_sampling_par sp;
 
@@ -1047,6 +1049,7 @@ static void upipe_hd_sdi_enc_encode_line(struct upipe *upipe, int line_num, uint
         /* +1 to write into the Y plane */
         uint16_t *vanc_start = &active_start[1];
 
+        /* Teletext (OP-47) */
         const uint8_t **ttx = NULL;
         int num_ttx = 0;
         if (line_num == OP47_LINE1 + p->field_offset*f2) {
@@ -1232,13 +1235,13 @@ static void upipe_sdi_enc_input(struct upipe *upipe, struct uref *uref,
     struct uref *subpic[2] = { NULL, NULL };
     /* buffered uref if any */
 
-    /* Handle teletext which may be going via libzvbi so we cannot write directly */
     uchain = NULL;
     ulist_foreach(&upipe_sdi_enc->subs, uchain) {
         struct upipe_sdi_enc_sub *upipe_sdi_enc_sub =
             upipe_sdi_enc_sub_from_uchain(uchain);
         struct upipe *subpipe = upipe_sdi_enc_sub_to_upipe(upipe_sdi_enc_sub);
 
+        /* Handle teletext which may be going via libzvbi so we cannot write directly */
         if (upipe_sdi_enc_sub->type == SDIENC_SUBPIC) {
             int i = 0;
             for (;;) {
@@ -1253,9 +1256,16 @@ static void upipe_sdi_enc_input(struct upipe *upipe, struct uref *uref,
                 }
                 subpic[i] = uref_from_uchain(uchain_subpic);
 
-                const uint8_t *buf;
-                int size = -1;
-                if (ubase_check(uref_block_read(subpic[i], 0, &size, &buf))) {
+                uint8_t *buf = upipe_sdi_enc->block_uref_buf;
+                size_t size = -1;
+                uref_block_size(subpic[i], &size);
+                if (size > sizeof(upipe_sdi_enc->block_uref_buf))
+                    size = sizeof(upipe_sdi_enc->block_uref_buf);
+
+                if (size > DVBVBI_LENGTH * 10)
+                    size = DVBVBI_LENGTH * 10;
+
+                if (ubase_check(uref_block_extract(subpic[i], 0, size, buf))) {
                     bool sd = upipe_sdi_enc->p->sd;
                     const uint8_t *pic_data = buf;
                     int pic_data_size = size;
