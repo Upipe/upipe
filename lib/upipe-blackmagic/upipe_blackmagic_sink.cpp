@@ -267,8 +267,7 @@ struct upipe_bmd_sink {
     // XXX: should counter be per-field?
     uint16_t op47_sequence_counter[2];
 
-    /** OP47 teletext buffer. 10 is the max number of units */
-    uint8_t op47_ttx_buf[DVBVBI_LENGTH * 10];
+    uint8_t block_uref_buf[VANC_WIDTH];
 
     /** vbi **/
     vbi_sampling_par sp;
@@ -853,10 +852,13 @@ static upipe_bmd_sink_frame *get_video_frame(struct upipe *upipe,
                 if (upipe_bmd_sink_sub->type == BMD_SUBPIPE_TYPE_VANC) {
                     upipe_bmd_sink_write_smpte2038(ancillary, subpic, w, sd);
                 } else {
-                    uint8_t *buf = upipe_bmd_sink->op47_ttx_buf;
+                    uint8_t *buf = upipe_bmd_sink->block_uref_buf;
                     size_t size = -1;
                     uref_block_size(subpic, &size);
-                    if (size > DVBVBI_LENGTH * 10)
+                    if (size > sizeof(upipe_bmd_sink->block_uref_buf))
+                        size = sizeof(upipe_bmd_sink->block_uref_buf);
+
+                    if (upipe_bmd_sink_sub->type == BMD_SUBPIPE_TYPE_TTX && size > DVBVBI_LENGTH * 10)
                         size = DVBVBI_LENGTH * 10;
 
                     if (ubase_check(uref_block_extract(subpic, 0, size, buf))) {
