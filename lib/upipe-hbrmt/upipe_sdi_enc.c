@@ -196,6 +196,10 @@ struct upipe_sdi_enc {
     /** teletext option */
     bool ttx;
 
+    /* SCTE-104 */
+    struct uref *scte104_uref;
+    bool write_scte104_null;
+
     /** public upipe structure */
     struct upipe upipe;
 };
@@ -634,6 +638,8 @@ static void upipe_sdi_enc_sub_input(struct upipe *upipe, struct uref *uref,
         break;
     case SDIENC_VANC:
         break;
+    case SDIENC_SCTE104:
+        break;
     }
 
     ulist_add(&sdi_enc_sub->urefs, uref_to_uchain(uref));
@@ -1067,6 +1073,33 @@ static void upipe_hd_sdi_enc_encode_line(struct upipe *upipe, int line_num, uint
                           &upipe_sdi_enc->cdp_hdr_sequence_cntr, 0x4 /* 29.97 fps only */);
             sdi_calc_parity_checksum(vanc_start);
         }
+
+        /* SCTE-104 */
+        if ((upipe_sdi_enc->scte104_uref || upipe_sdi_enc->write_scte104_null) && line_num == SCTE104_LINE) {
+            if (upipe_sdi_enc->scte104_uref) {
+                uint8_t *buf = upipe_sdi_enc->block_uref_buf;
+                size_t size = -1;
+                uref_block_size(upipe_sdi_enc->scte104_uref, &size);
+                if (size > sizeof(upipe_sdi_enc->block_uref_buf))
+                    size = sizeof(upipe_sdi_enc->block_uref_buf);
+
+                if (ubase_check(uref_block_extract(upipe_sdi_enc->scte104_uref, 0, size, buf))) {
+                    sdi_write_scte104(buf, size, vanc_start, 2);
+                    sdi_calc_parity_checksum(vanc_start);
+                }
+
+                uref_free(upipe_sdi_enc->scte104_uref);
+                upipe_sdi_enc->scte104_uref = NULL;
+            }
+            else if (upipe_sdi_enc->write_scte104_null) {
+                uint8_t tmp[16];
+                sdi_encode_scte104_null(tmp);
+                sdi_write_scte104(tmp, sizeof(tmp), vanc_start, 2);
+                sdi_calc_parity_checksum(vanc_start);
+                upipe_sdi_enc->write_scte104_null = false;
+            }
+        }
+
     } else {
         const uint8_t *y = planes[f2][0];
         const uint8_t *u = planes[f2][1];
@@ -1315,6 +1348,24 @@ static void upipe_sdi_enc_input(struct upipe *upipe, struct uref *uref,
                     upipe_err(upipe, "Could not map subpic");
                     uref_free(subpic[i]);
                     subpic[i] = NULL;
+                }
+            }
+        }
+        else if (upipe_sdi_enc_sub->type == SDIENC_SCTE104) {
+            upipe_sdi_enc->write_scte104_null = true;
+            for (;;) {
+                struct uchain *uchain = ulist_pop(&upipe_sdi_enc_sub->urefs);
+                if (!uchain)
+                    break;
+
+                struct uref *scte_uref = uref_from_uchain(uchain);
+                if(upipe_sdi_enc->scte104_uref) {
+                    upipe_err(subpipe, "Too many SCTE-104 messages");
+                    uref_free(scte_uref);
+                }
+                else {
+                    upipe_sdi_enc->write_scte104_null = false;
+                    upipe_sdi_enc->scte104_uref = scte_uref;
                 }
             }
         }
