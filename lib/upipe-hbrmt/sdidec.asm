@@ -30,6 +30,8 @@ sdi_mask_10:         times 2 db 0xc0, 0xff, 0xf0, 0x3f, 0xfc, 0x0f, 0xff, 0x03, 
 sdi_chroma_mult_10:  times 4 dw 0x400, 0x0, 0x4000, 0x0
 sdi_luma_mult_10:    times 4 dw 0x0, 0x800, 0x0, 0x7fff
 
+sdi_shift_10:        times 4 dw 0x6, 0x4, 0x2, 0x0
+
 uyvy_planar_shuf_10: times 2 db 0, 1, 8, 9, 4, 5,12,13, 2, 3, 6, 7,10,11,14,15
 
 uyvy_planar_shuf_8: times 2 db 2, 6, 10, 14, -1, -1, -1, -1, -1, -1, -1, -1, 0, 8, 4, 12
