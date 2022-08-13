@@ -23,10 +23,10 @@
 
 SECTION_RODATA 32
 
-sdi_comp_mask_10:  times 2 db 0xff, 0xc0, 0xf,  0xfc, 0x0,  0xff, 0xc0, 0xf,  0xfc, 0x0,  0x0, 0x0, 0x0, 0x0, 0x0, 0x0
+sdi_chroma_mask_10:  times 2 db 0xc0, 0xff, 0x00, 0x00, 0xfc, 0x0f, 0x00, 0x00, 0xc0, 0xff, 0x00, 0x00, 0xfc, 0x0f, 0x00, 0x00
+sdi_luma_mask_10:    times 2 db 0x00, 0x00, 0xf0, 0x3f, 0x00, 0x00, 0xff, 0x03, 0x00, 0x00, 0xf0, 0x3f, 0x00, 0x00, 0xff, 0x03
 
-sdi_chroma_shuf_10:  times 2 db  1,  0, -1, -1,  3,  2, -1, -1,  6,  5, -1, -1,  8,  7, -1, -1
-sdi_luma_shuf_10:    times 2 db -1, -1,  2,  1, -1, -1,  4,  3, -1, -1,  7,  6, -1, -1,  9,  8
+sdi_shuf_10:         times 2 db 1, 0, 2, 1, 3, 2, 4, 3, 6, 5, 7, 6, 8, 7, 9, 8
 
 sdi_chroma_mult_10:  times 4 dw 0x400, 0x0, 0x4000, 0x0
 sdi_luma_mult_10:    times 4 dw 0x0, 0x800, 0x0, 0x7fff
@@ -79,9 +79,9 @@ cglobal sdi_to_uyvy, 3, 3, 7, src, y, pixels
     lea yq,     [yq + 4*pixelsq]
     neg pixelsq
 
-    mova     m2, [sdi_comp_mask_10]
-    mova     m3, [sdi_chroma_shuf_10]
-    mova     m4, [sdi_luma_shuf_10]
+    mova     m2, [sdi_shuf_10]
+    mova     m3, [sdi_chroma_mask_10]
+    mova     m4, [sdi_luma_mask_10]
     mova     m5, [sdi_chroma_mult_10]
     mova     m6, [sdi_luma_mult_10]
 
@@ -91,11 +91,10 @@ cglobal sdi_to_uyvy, 3, 3, 7, src, y, pixels
     vinserti128 m0, m0, [srcq + 10], 1
 %endif
 
-    pandn    m1, m2, m0
-    pand     m0, m2
+    pshufb m0, m2
 
-    pshufb   m0, m3
-    pshufb   m1, m4
+    pand   m1, m0, m4
+    pand   m0, m3
 
     pmulhuw  m0, m5
     pmulhrsw m1, m6
