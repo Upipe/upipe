@@ -30,11 +30,11 @@ planar_8_y_shuf_after: times 2 db -1, 1, 0, 3, 2, -1, 5, 4, 7, 6, -1, 9, 8, 11, 
 planar_8_uv_shuf:   times 2 db 0, -1, 8,  -1, -1, 1,  9,  -1, -1, -1, 2, -1, 10, -1, -1, -1
 planar_8_uv_shuf2:  times 2 db 3, -1, 11, -1, -1, 4, 12,  -1, -1, -1, 5, -1, 13, -1, -1, -1
 
-planar_8_uv_shift: times 2 dw 0x1, 0x10, 0x1, 0x10, 0x1, 0x1, 0x10, 0x1
+planar_8_uv_mult: times 2 dw 0x1, 0x10, 0x1, 0x10, 0x1, 0x1, 0x10, 0x1
 planar_8_uv_shuf3: times 2 db 0, -1, 3, 2, -1, 5, -1, 7, 6, -1, 10, -1, 13, 12, -1, -1
 
-planar_10_y_shift:  times 2 dw 0x10, 0x1, 0x10, 0x1, 0x10, 0x1, 0x10, 0x1
-planar_10_uv_shift: times 2 dw 0x40, 0x40, 0x40, 0x40, 0x4, 0x4, 0x4, 0x4
+planar_10_y_mult:  times 2 dw 0x10, 0x1, 0x10, 0x1, 0x10, 0x1, 0x10, 0x1
+planar_10_uv_mult: times 2 dw 0x40, 0x40, 0x40, 0x40, 0x4, 0x4, 0x4, 0x4
 
 planar_10_y_shuf:  times 2 db -1, 1, 0, 3, 2, -1, 5, 4, 7, 6, -1, 9, 8, 11, 10, -1
 planar_10_uv_shuf: times 2 db 1, 0, 9, 8, -1, 3, 2, 11, 10, -1, 5, 4, 13, 12, -1, -1
@@ -77,8 +77,8 @@ cglobal planar_to_sdi_8, 5, 5, 6, y, u, v, l, pixels
     pshufb m5, m1, [planar_8_uv_shuf2]
     pshufb m1, [planar_8_uv_shuf]
 
-    pmullw m5, [planar_8_uv_shift]
-    pmullw m1, [planar_8_uv_shift]
+    pmullw m5, [planar_8_uv_mult]
+    pmullw m1, [planar_8_uv_mult]
 
     pshufb m5, [planar_8_uv_shuf3]
     pshufb m1, [planar_8_uv_shuf3]
@@ -134,8 +134,8 @@ cglobal planar_to_sdi_8_2, 5, 5, 4, y, u, v, dst1, dst2, pixels
     pshufb m5, m1, [planar_8_uv_shuf2]
     pshufb m1, [planar_8_uv_shuf]
 
-    pmullw m5, [planar_8_uv_shift]
-    pmullw m1, [planar_8_uv_shift]
+    pmullw m5, [planar_8_uv_mult]
+    pmullw m1, [planar_8_uv_mult]
 
     pshufb m5, [planar_8_uv_shuf3]
     pshufb m1, [planar_8_uv_shuf3]
@@ -191,8 +191,8 @@ cglobal planar_to_sdi_10, 5, 5, 2+cpuflag(avx2), y, u, v, l, pixels
     vinserti128 m1, m1, xm2, 1
 %endif
 
-    pmullw m0, [planar_10_y_shift]
-    pmullw m1, [planar_10_uv_shift]
+    pmullw m0, [planar_10_y_mult]
+    pmullw m1, [planar_10_uv_mult]
 
     pshufb m0, [planar_10_y_shuf]
     pshufb m1, [planar_10_uv_shuf]
@@ -228,8 +228,8 @@ cglobal planar_to_sdi_10_2, 5, 5, 2+cpuflag(avx2), y, u, v, dst1, dst2, pixels
         vinserti128 m1, m1, xm2, 1
 %endif
 
-        pmullw m0, [planar_10_y_shift]
-        pmullw m1, [planar_10_uv_shift]
+        pmullw m0, [planar_10_y_mult]
+        pmullw m1, [planar_10_uv_mult]
 
         pshufb m0, [planar_10_y_shuf]
         pshufb m1, [planar_10_uv_shuf]
