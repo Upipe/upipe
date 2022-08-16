@@ -911,12 +911,8 @@ static int upipe_ts_demux_output_telx_probe(struct uprobe *uprobe,
     struct uref *uref = va_arg(args_copy, struct uref *);
     va_end(args_copy);
 
-//    if (ubase_check(uref_clock_get_dts_orig(uref, &output->last_dts_orig)))
-//        return UBASE_ERR_NONE; /* compliant teletext */
-
-    uref_clock_set_dts_orig(uref, UINT64_MAX);
-    uref_clock_set_dts_prog(uref, UINT64_MAX);
-    uref_clock_set_dts_sys(uref, UINT64_MAX);
+    if (ubase_check(uref_clock_get_dts_orig(uref, &output->last_dts_orig)))
+        return UBASE_ERR_NONE; /* compliant teletext */
 
     struct upipe_ts_demux_program *program =
         upipe_ts_demux_program_from_output_mgr(upipe->mgr);
