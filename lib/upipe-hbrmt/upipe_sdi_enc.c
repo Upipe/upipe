@@ -178,13 +178,14 @@ struct upipe_sdi_enc {
     /** OP47 teletext sequence counter **/
     uint16_t op47_sequence_counter[2];
 
-    uint8_t block_uref_buf[VANC_WIDTH];
+    uint8_t block_uref_buf[5000];
 
     /** vbi **/
     vbi_sampling_par sp;
 
     /* teletext data */
-    const uint8_t *ttx_packet[2][5];
+    uint8_t ttx_packet[2][5][DVBVBI_UNIT_HEADER_SIZE+DVBVBI_LENGTH];
+    const uint8_t *ttx_packet_p[2][5];
     int ttx_packets[2];
     int ttx_line[2];
 
@@ -845,7 +846,7 @@ static void upipe_sdi_enc_encode_line(struct upipe *upipe, int line_num, uint16_
         upipe_sdi_enc->blank(active_start, input_hsize);
 
         if (upipe_sdi_enc->ttx_packets[f2] && line_num == upipe_sdi_enc->ttx_line[f2]) {
-            const uint8_t *ttx = upipe_sdi_enc->ttx_packet[f2][0];
+            const uint8_t *ttx = upipe_sdi_enc->ttx_packet_p[f2][0];
 
             /* Set to 8-bit black */
             uint8_t buf[input_hsize];
@@ -1061,7 +1062,7 @@ static void upipe_hd_sdi_enc_encode_line(struct upipe *upipe, int line_num, uint
         if (line_num == OP47_LINE1 + p->field_offset*f2) {
             num_ttx = upipe_sdi_enc->ttx_packets[f2];
             if (num_ttx)
-                ttx = &upipe_sdi_enc->ttx_packet[f2][0];
+                ttx = &upipe_sdi_enc->ttx_packet_p[f2][0];
         }
         if (ttx) {
             sdi_encode_ttx(vanc_start, num_ttx, ttx, &upipe_sdi_enc->op47_sequence_counter[f2]);
@@ -1295,9 +1296,6 @@ static void upipe_sdi_enc_input(struct upipe *upipe, struct uref *uref,
                 if (size > sizeof(upipe_sdi_enc->block_uref_buf))
                     size = sizeof(upipe_sdi_enc->block_uref_buf);
 
-                if (size > DVBVBI_LENGTH * 10)
-                    size = DVBVBI_LENGTH * 10;
-
                 if (ubase_check(uref_block_extract(subpic[i], 0, size, buf))) {
                     bool sd = upipe_sdi_enc->p->sd;
                     const uint8_t *pic_data = buf;
@@ -1338,12 +1336,16 @@ static void upipe_sdi_enc_input(struct upipe *upipe, struct uref *uref,
                             if (sd && upipe_sdi_enc->ttx_packets[f2] == 0) {
                                 upipe_sdi_enc->ttx_line[f2] = line_offset + PAL_FIELD_OFFSET * f2;
                             }
-                            upipe_sdi_enc->ttx_packet[f2][upipe_sdi_enc->ttx_packets[f2]++] = pic_data;
+                            int num_packets = upipe_sdi_enc->ttx_packets[f2];
+                            memcpy(upipe_sdi_enc->ttx_packet[f2][num_packets], pic_data, DVBVBI_UNIT_HEADER_SIZE+DVBVBI_LENGTH);
+                            upipe_sdi_enc->ttx_packet_p[f2][num_packets] = upipe_sdi_enc->ttx_packet[f2][num_packets];
+
+                            upipe_sdi_enc->ttx_packets[f2]++;
                         }
                         else
                             upipe_err(subpipe, "no more space in line for packets");
                     }
-                    i++;
+                    uref_free(subpic[i++]);
                 } else {
                     upipe_err(upipe, "Could not map subpic");
                     uref_free(subpic[i]);
@@ -1449,14 +1451,8 @@ static void upipe_sdi_enc_input(struct upipe *upipe, struct uref *uref,
 end:
         uref_free(uref_vanc);
     }
-
-    for (int i = 0; i < 2; i++) {
-        if (subpic[i]) {
-            uref_block_unmap(subpic[i], 0);
-            uref_free(subpic[i]);
-        }
-    }
 #endif
+
 
     ubuf_block_unmap(ubuf, 0);
 
