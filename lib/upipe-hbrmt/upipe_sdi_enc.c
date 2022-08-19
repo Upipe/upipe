@@ -1396,63 +1396,66 @@ static void upipe_sdi_enc_input(struct upipe *upipe, struct uref *uref,
         }
     }
 
-#if 0
-    struct upipe_sdi_enc_sub *vanc_sub = &upipe_sdi_enc->vanc_subpipe;
-    for (;;) {
-        struct uchain *uchain_vanc = ulist_pop(&vanc_sub->urefs);
-        if (!uchain_vanc)
-            break;
-        struct uref *uref_vanc = uref_from_uchain(uchain_vanc);
-        uint64_t line, offset;
-        size_t hsize;
-        if (!ubase_check(uref_pic_size(uref_vanc, &hsize, NULL, NULL))) {
-            goto end;
-        }
-        if (!ubase_check(uref_pic_size(uref_vanc, &hsize, NULL, NULL)) ||
-                !ubase_check(uref_pic_get_hposition(uref_vanc, &offset)) ||
-                !ubase_check(uref_pic_get_vposition(uref_vanc, &line))) {
-            goto end;
-        }
+    uchain = NULL;
+    ulist_foreach(&upipe_sdi_enc->subs, uchain) {
+        struct upipe_sdi_enc_sub *upipe_sdi_enc_sub =
+            upipe_sdi_enc_sub_from_uchain(uchain);
+        struct upipe *subpipe = upipe_sdi_enc_sub_to_upipe(upipe_sdi_enc_sub);
 
-        if (line >= f->height)
-            goto end;
-
-        bool sd = upipe_sdi_enc->p->sd;
-        if (sd) {
-            // TODO
-        } else {
-            offset *= 2;
-            if (ubase_check(uref_pic_get_c_not_y(uref_vanc))) {
-            } else {
-                offset++; // luma
-            }
-
-            offset += UPIPE_HD_SDI_SAV_LENGTH;
-
-            if ((offset+hsize*2) >= f->width*2)
+        if (upipe_sdi_enc_sub->type == SDIENC_VANC) {
+            struct uchain *uchain_vanc = ulist_pop(&upipe_sdi_enc_sub->urefs);
+            if (!uchain_vanc)
+                break;
+            struct uref *uref_vanc = uref_from_uchain(uchain_vanc);
+            uint64_t line, offset;
+            size_t hsize;
+            if (!ubase_check(uref_pic_size(uref_vanc, &hsize, NULL, NULL))) {
                 goto end;
-        }
-
-        const uint8_t *r;
-        if (!ubase_check(uref_pic_plane_read(uref_vanc, "x10", 0, 0, -1, -1, &r)))
-            goto end;
-
-        uint16_t *dst_line = &dst[line * f->width * 2];
-        if (sd) {
-            memcpy(&dst_line[offset], r, hsize);
-        } else {
-            for (int i = 0; i < hsize; i++) {
-                uint16_t *src = (uint16_t*)r;
-                dst_line[offset+i*2] = r[i];
             }
+            if (!ubase_check(uref_pic_size(uref_vanc, &hsize, NULL, NULL)) ||
+                    !ubase_check(uref_pic_get_hposition(uref_vanc, &offset)) ||
+                    !ubase_check(uref_pic_get_vposition(uref_vanc, &line))) {
+                goto end;
+            }
+
+            if (line >= f->height)
+                goto end;
+
+            bool sd = upipe_sdi_enc->p->sd;
+            if (sd) {
+                // TODO
+            } else {
+                offset *= 2;
+                if (ubase_check(uref_pic_get_c_not_y(uref_vanc))) {
+                } else {
+                    offset++; // luma
+                }
+
+                offset += UPIPE_HD_SDI_SAV_LENGTH;
+
+                if ((offset+hsize*2) >= f->width*2)
+                    goto end;
+            }
+
+            const uint8_t *r;
+            if (!ubase_check(uref_pic_plane_read(uref_vanc, "x10", 0, 0, -1, -1, &r)))
+                goto end;
+
+            uint16_t *dst_line = &dst[line * f->width * 2];
+            if (sd) {
+                memcpy(&dst_line[offset], r, hsize);
+            } else {
+                for (int i = 0; i < hsize; i++) {
+                    uint16_t *src = (uint16_t*)r;
+                    dst_line[offset+i*2] = r[i];
+                }
+            }
+
+            uref_pic_plane_unmap(uref_vanc, "x10", 0, 0, -1, -1);
+    end:
+            uref_free(uref_vanc);
         }
-
-        uref_pic_plane_unmap(uref_vanc, "x10", 0, 0, -1, -1);
-end:
-        uref_free(uref_vanc);
     }
-#endif
-
 
     ubuf_block_unmap(ubuf, 0);
 
