@@ -832,8 +832,6 @@ static void output_subpic(struct upipe_sync *upipe_sync, struct upump **upump_p)
 
             else if (pts > now + ticks / 2) {
                 /* pts is too far in the future */
-                upipe_warn_va(upipe_sub, "subpic too early: %.2f > %.2f",
-                    pts_to_time(pts), pts_to_time(now + ticks / 2));
                 break; /* TODO: should this break out of the loop? */
             }
 
