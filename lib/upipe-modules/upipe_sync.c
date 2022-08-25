@@ -789,7 +789,7 @@ static void output_sound(struct upipe *upipe, const struct urational *fps,
     }
 }
 
-static void output_picture(struct upipe_sync *upipe_sync, struct upump **upump_p)
+static void output_subpic(struct upipe_sync *upipe_sync, struct upump **upump_p)
 {
     const uint64_t now = upipe_sync->pts; // the upump was scheduled for now
 
@@ -832,8 +832,6 @@ static void output_picture(struct upipe_sync *upipe_sync, struct upump **upump_p
 
             else if (pts > now + ticks / 2) {
                 /* pts is too far in the future */
-                upipe_warn_va(upipe_sub, "subpic too early: %.2f > %.2f",
-                    pts_to_time(pts), pts_to_time(now + ticks / 2));
                 break; /* TODO: should this break out of the loop? */
             }
 
@@ -912,8 +910,8 @@ static void cb(struct upump *upump)
 
     /* output audio */
     output_sound(upipe_sync_to_upipe(upipe_sync), &upipe_sync->fps, NULL);
-    /* output pictures */
-    output_picture(upipe_sync, NULL);
+    /* output subpic */
+    output_subpic(upipe_sync, NULL);
 
     struct uref *uref = NULL;
     if (upipe_sync->frame_sync) {

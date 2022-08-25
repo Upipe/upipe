@@ -267,7 +267,7 @@ struct upipe_bmd_sink {
     // XXX: should counter be per-field?
     uint16_t op47_sequence_counter[2];
 
-    uint8_t block_uref_buf[VANC_WIDTH];
+    uint8_t block_uref_buf[5000];
 
     /** vbi **/
     vbi_sampling_par sp;
@@ -857,9 +857,6 @@ static upipe_bmd_sink_frame *get_video_frame(struct upipe *upipe,
                     uref_block_size(subpic, &size);
                     if (size > sizeof(upipe_bmd_sink->block_uref_buf))
                         size = sizeof(upipe_bmd_sink->block_uref_buf);
-
-                    if (upipe_bmd_sink_sub->type == BMD_SUBPIPE_TYPE_TTX && size > DVBVBI_LENGTH * 10)
-                        size = DVBVBI_LENGTH * 10;
 
                     if (ubase_check(uref_block_extract(subpic, 0, size, buf))) {
                         if (upipe_bmd_sink_sub->type == BMD_SUBPIPE_TYPE_TTX) {

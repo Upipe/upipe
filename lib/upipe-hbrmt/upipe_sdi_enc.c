@@ -21,6 +21,7 @@
 #include <upipe/upipe_helper_subpipe.h>
 #include <upipe/upipe_helper_output.h>
 #include <upipe/upipe_helper_input.h>
+#include <upipe/upipe_helper_flow.h>
 
 #include <bitstream/smpte/291.h>
 #include <bitstream/smpte/352.h>
@@ -45,7 +46,8 @@ static const bool parity_tab[512] = {
 
 enum subpipe_type {
     SDIENC_SOUND,
-    SDIENC_SUBPIC,
+    SDIENC_SUBPIC, /* teletext */
+    SDIENC_SCTE104,
     SDIENC_VANC,
 };
 
@@ -70,7 +72,7 @@ struct upipe_sdi_enc_sub {
     /** stereo pair position */
     uint8_t channel_idx;
 
-    /** audio or subpic or vanc */
+    /** type of pipe */
     enum subpipe_type type;
 
     /** public upipe structure */
@@ -100,12 +102,6 @@ struct upipe_sdi_enc {
     struct uchain subs;
     /** manager to create input subpipes */
     struct upipe_mgr sub_mgr;
-
-    /** subpic subpipe */
-    struct upipe_sdi_enc_sub subpic_subpipe;
-
-    /** vanc subpipe */
-    struct upipe_sdi_enc_sub vanc_subpipe;
 
     /** ubuf manager */
     struct ubuf_mgr *ubuf_mgr;
@@ -182,11 +178,14 @@ struct upipe_sdi_enc {
     /** OP47 teletext sequence counter **/
     uint16_t op47_sequence_counter[2];
 
+    uint8_t block_uref_buf[5000];
+
     /** vbi **/
     vbi_sampling_par sp;
 
     /* teletext data */
-    const uint8_t *ttx_packet[2][5];
+    uint8_t ttx_packet[2][5][DVBVBI_UNIT_HEADER_SIZE+DVBVBI_LENGTH];
+    const uint8_t *ttx_packet_p[2][5];
     int ttx_packets[2];
     int ttx_line[2];
 
@@ -197,6 +196,10 @@ struct upipe_sdi_enc {
 
     /** teletext option */
     bool ttx;
+
+    /* SCTE-104 */
+    struct uref *scte104_uref;
+    bool write_scte104_null;
 
     /** public upipe structure */
     struct upipe upipe;
@@ -554,11 +557,9 @@ UPIPE_HELPER_UBUF_MGR(upipe_sdi_enc, ubuf_mgr, flow_format, ubuf_mgr_request,
                       upipe_sdi_enc_unregister_output_request)
 
 UPIPE_HELPER_UPIPE(upipe_sdi_enc_sub, upipe, UPIPE_SDI_ENC_SUB_SIGNATURE);
+UPIPE_HELPER_FLOW(upipe_sdi_enc_sub, NULL);
 UPIPE_HELPER_UREFCOUNT(upipe_sdi_enc_sub, urefcount, upipe_sdi_enc_sub_free);
 UPIPE_HELPER_VOID(upipe_sdi_enc_sub);
-
-UBASE_FROM_TO(upipe_sdi_enc, upipe_sdi_enc_sub, subpic_subpipe, subpic_subpipe)
-UBASE_FROM_TO(upipe_sdi_enc, upipe_sdi_enc_sub, vanc_subpipe, vanc_subpipe)
 
 UPIPE_HELPER_SUBPIPE(upipe_sdi_enc, upipe_sdi_enc_sub, sub, sub_mgr, subs, uchain)
 
@@ -638,6 +639,8 @@ static void upipe_sdi_enc_sub_input(struct upipe *upipe, struct uref *uref,
         break;
     case SDIENC_VANC:
         break;
+    case SDIENC_SCTE104:
+        break;
     }
 
     ulist_add(&sdi_enc_sub->urefs, uref_to_uchain(uref));
@@ -654,14 +657,7 @@ static void upipe_sdi_enc_sub_init(struct upipe *upipe,
         struct upipe_mgr *sub_mgr, struct uprobe *uprobe, enum subpipe_type type)
 {
     struct upipe_sdi_enc *upipe_sdi_enc = upipe_sdi_enc_from_sub_mgr(sub_mgr);
-
-    if (type != SDIENC_SOUND) {
-        upipe_init(upipe, sub_mgr, uprobe);
-        /* increment super pipe refcount only when the static pipes are retrieved */
-        upipe_mgr_release(sub_mgr);
-        upipe->refcount = &upipe_sdi_enc->urefcount;
-    } else
-        upipe_sdi_enc_sub_init_urefcount(upipe);
+    upipe_sdi_enc_sub_init_urefcount(upipe);
 
     struct upipe_sdi_enc_sub *sdi_enc_sub = upipe_sdi_enc_sub_from_upipe(upipe);
 
@@ -680,13 +676,47 @@ static struct upipe *upipe_sdi_enc_sub_alloc(struct upipe_mgr *mgr,
                                      struct uprobe *uprobe,
                                      uint32_t signature, va_list args)
 {
-    struct upipe *upipe = upipe_sdi_enc_sub_alloc_void(mgr, uprobe, signature, args);
-    if (unlikely(upipe == NULL))
-        return NULL;
+    struct uref *flow_def = NULL;
+    struct upipe *upipe = upipe_sdi_enc_sub_alloc_flow(mgr,
+            uprobe, signature, args, &flow_def);
+    struct upipe_sdi_enc_sub *upipe_sdi_enc_sub = upipe_sdi_enc_sub_from_upipe(upipe);
 
-    upipe_sdi_enc_sub_init(upipe, mgr, uprobe, false);
+    if (unlikely(upipe == NULL || flow_def == NULL))
+        goto error;
+
+    const char *def;
+    if (!ubase_check(uref_flow_get_def(flow_def, &def)))
+        goto error;
+
+    if (!ubase_ncmp(def, "sound.")) {
+        upipe_sdi_enc_sub_init(upipe, mgr, uprobe, false);
+        upipe_sdi_enc_sub->type = SDIENC_SOUND;
+    }
+    else if (!ubase_ncmp(def, "block.dvb_teletext.")) {
+        upipe_sdi_enc_sub_init(upipe, mgr, uprobe, false);
+        upipe_sdi_enc_sub->type = SDIENC_SUBPIC;
+    }
+    else if (!ubase_ncmp(def, "block.scte104.")) {
+        upipe_sdi_enc_sub_init(upipe, mgr, uprobe, false);
+        upipe_sdi_enc_sub->type = SDIENC_SCTE104;
+    }
+    else if (!ubase_ncmp(def, "pic.")) {
+        upipe_sdi_enc_sub_init(upipe, mgr, uprobe, false);
+        upipe_sdi_enc_sub->type = SDIENC_VANC;
+    }
+    else {
+        goto error;
+    }
 
     return upipe;
+
+error:
+    uref_free(flow_def);
+    if (upipe) {
+        upipe_clean(upipe);
+        free(upipe_sdi_enc_sub);
+    }
+    return NULL;
 }
 
 static void upipe_sdi_enc_sub_free(struct upipe *upipe)
@@ -816,7 +846,7 @@ static void upipe_sdi_enc_encode_line(struct upipe *upipe, int line_num, uint16_
         upipe_sdi_enc->blank(active_start, input_hsize);
 
         if (upipe_sdi_enc->ttx_packets[f2] && line_num == upipe_sdi_enc->ttx_line[f2]) {
-            const uint8_t *ttx = upipe_sdi_enc->ttx_packet[f2][0];
+            const uint8_t *ttx = upipe_sdi_enc->ttx_packet_p[f2][0];
 
             /* Set to 8-bit black */
             uint8_t buf[input_hsize];
@@ -1026,23 +1056,51 @@ static void upipe_hd_sdi_enc_encode_line(struct upipe *upipe, int line_num, uint
         /* +1 to write into the Y plane */
         uint16_t *vanc_start = &active_start[1];
 
+        /* Teletext (OP-47) */
         const uint8_t **ttx = NULL;
         int num_ttx = 0;
         if (line_num == OP47_LINE1 + p->field_offset*f2) {
             num_ttx = upipe_sdi_enc->ttx_packets[f2];
             if (num_ttx)
-                ttx = &upipe_sdi_enc->ttx_packet[f2][0];
+                ttx = &upipe_sdi_enc->ttx_packet_p[f2][0];
         }
         if (ttx) {
             sdi_encode_ttx(vanc_start, num_ttx, ttx, &upipe_sdi_enc->op47_sequence_counter[f2]);
         }
 
-        /* FIXME: support 720p59.94 captions */
         if (upipe_sdi_enc->cea708_size && line_num == CC_LINE) {
+            uint8_t fps = f->frame_rate == S352_PICTURE_RATE_30000_1001 ? 0x4 : 0x7;
             sdi_write_cdp(upipe_sdi_enc->cea708, upipe_sdi_enc->cea708_size, vanc_start, 2,
-                          &upipe_sdi_enc->cdp_hdr_sequence_cntr, 0x4 /* 29.97 fps only */);
+                          &upipe_sdi_enc->cdp_hdr_sequence_cntr, fps);
             sdi_calc_parity_checksum(vanc_start);
         }
+
+        /* SCTE-104 */
+        if ((upipe_sdi_enc->scte104_uref || upipe_sdi_enc->write_scte104_null) && line_num == SCTE104_LINE) {
+            if (upipe_sdi_enc->scte104_uref) {
+                uint8_t *buf = upipe_sdi_enc->block_uref_buf;
+                size_t size = -1;
+                uref_block_size(upipe_sdi_enc->scte104_uref, &size);
+                if (size > sizeof(upipe_sdi_enc->block_uref_buf))
+                    size = sizeof(upipe_sdi_enc->block_uref_buf);
+
+                if (ubase_check(uref_block_extract(upipe_sdi_enc->scte104_uref, 0, size, buf))) {
+                    sdi_write_scte104(buf, size, vanc_start, 2);
+                    sdi_calc_parity_checksum(vanc_start);
+                }
+
+                uref_free(upipe_sdi_enc->scte104_uref);
+                upipe_sdi_enc->scte104_uref = NULL;
+            }
+            else if (upipe_sdi_enc->write_scte104_null) {
+                uint8_t tmp[16];
+                sdi_encode_scte104_null(tmp);
+                sdi_write_scte104(tmp, sizeof(tmp), vanc_start, 2);
+                sdi_calc_parity_checksum(vanc_start);
+                upipe_sdi_enc->write_scte104_null = false;
+            }
+        }
+
     } else {
         const uint8_t *y = planes[f2][0];
         const uint8_t *u = planes[f2][1];
@@ -1210,73 +1268,108 @@ static void upipe_sdi_enc_input(struct upipe *upipe, struct uref *uref,
 
     struct uref *subpic[2] = { NULL, NULL };
     /* buffered uref if any */
-    struct upipe_sdi_enc_sub *subpic_sub = &upipe_sdi_enc->subpic_subpipe;
-    struct upipe *subpipe = upipe_sdi_enc_sub_to_upipe(subpic_sub);
-    int i = 0;
-    for (;;) {
-        struct uchain *uchain_subpic = ulist_pop(&subpic_sub->urefs);
-        if (!uchain_subpic)
-            break;
-        upipe_verbose_va(subpipe, "sub urefs after pop: %zu", --subpic_sub->n);
-        if (i >= 2) {
-            uref_free(uref_from_uchain(uchain_subpic));
-            upipe_err(subpipe, "Too many subpics");
-            continue;
-        }
-        subpic[i] = uref_from_uchain(uchain_subpic);
 
-        const uint8_t *buf;
-        int size = -1;
-        if (ubase_check(uref_block_read(subpic[i], 0, &size, &buf))) {
-            bool sd = upipe_sdi_enc->p->sd;
-            const uint8_t *pic_data = buf;
-            int pic_data_size = size;
+    uchain = NULL;
+    ulist_foreach(&upipe_sdi_enc->subs, uchain) {
+        struct upipe_sdi_enc_sub *upipe_sdi_enc_sub =
+            upipe_sdi_enc_sub_from_uchain(uchain);
+        struct upipe *subpipe = upipe_sdi_enc_sub_to_upipe(upipe_sdi_enc_sub);
 
-            if (pic_data[0] != DVBVBI_DATA_IDENTIFIER) {
-                upipe_err(subpipe, "not DVBVBI_DATA_IDENTIFIER");
-                return;
-            }
-
-            pic_data++;
-            pic_data_size--;
-
-            static const unsigned dvb_unit_size = DVBVBI_UNIT_HEADER_SIZE + DVBVBI_LENGTH;
-            for (; pic_data_size >= dvb_unit_size; pic_data += dvb_unit_size, pic_data_size -= dvb_unit_size) {
-                uint8_t data_unit_id  = pic_data[0];
-                uint8_t data_unit_len = pic_data[1];
-
-                if (data_unit_id != DVBVBI_ID_TTX_SUB && data_unit_id != DVBVBI_ID_TTX_NONSUB) {
-                    upipe_verbose(subpipe, "not DVBVBI_ID_TTX_SUB DVBVBI_ID_TTX_NONSUB ");
+        /* Handle teletext which may be going via libzvbi so we cannot write directly */
+        if (upipe_sdi_enc_sub->type == SDIENC_SUBPIC) {
+            int i = 0;
+            for (;;) {
+                struct uchain *uchain_subpic = ulist_pop(&upipe_sdi_enc_sub->urefs);
+                if (!uchain_subpic)
+                    break;
+                upipe_verbose_va(subpipe, "sub urefs after pop: %zu", --upipe_sdi_enc_sub->n);
+                if (i >= 2) {
+                    uref_free(uref_from_uchain(uchain_subpic));
+                    upipe_err(subpipe, "Too many subpics");
                     continue;
                 }
+                subpic[i] = uref_from_uchain(uchain_subpic);
 
-                if (data_unit_len != DVBVBI_LENGTH) {
-                    upipe_err(subpipe, "not DVBVBI_LENGTH");
-                    continue;
-                }
+                uint8_t *buf = upipe_sdi_enc->block_uref_buf;
+                size_t size = -1;
+                uref_block_size(subpic[i], &size);
+                if (size > sizeof(upipe_sdi_enc->block_uref_buf))
+                    size = sizeof(upipe_sdi_enc->block_uref_buf);
 
-                uint8_t line_offset = dvbvbittx_get_line(&pic_data[DVBVBI_UNIT_HEADER_SIZE]);
+                if (ubase_check(uref_block_extract(subpic[i], 0, size, buf))) {
+                    bool sd = upipe_sdi_enc->p->sd;
+                    const uint8_t *pic_data = buf;
+                    int pic_data_size = size;
 
-                uint8_t f2 = !dvbvbittx_get_field(&pic_data[DVBVBI_UNIT_HEADER_SIZE]);
-                if (f2 == 0 && line_offset == 0) { // line == 0
-                    upipe_err(subpipe, "f2 and line_offset both 0");
-                    continue;
-                }
-
-                if (upipe_sdi_enc->ttx_packets[f2] < (sd ? 1 : 5)) {
-                    if (sd && upipe_sdi_enc->ttx_packets[f2] == 0) {
-                        upipe_sdi_enc->ttx_line[f2] = line_offset + PAL_FIELD_OFFSET * f2;
+                    if (pic_data[0] != DVBVBI_DATA_IDENTIFIER) {
+                        upipe_err(subpipe, "not DVBVBI_DATA_IDENTIFIER"); // fixme
+                        return;
                     }
-                    upipe_sdi_enc->ttx_packet[f2][upipe_sdi_enc->ttx_packets[f2]++] = pic_data;
+
+                    pic_data++;
+                    pic_data_size--;
+
+                    static const unsigned dvb_unit_size = DVBVBI_UNIT_HEADER_SIZE + DVBVBI_LENGTH;
+                    for (; pic_data_size >= dvb_unit_size; pic_data += dvb_unit_size, pic_data_size -= dvb_unit_size) {
+                        uint8_t data_unit_id  = pic_data[0];
+                        uint8_t data_unit_len = pic_data[1];
+
+                        if (data_unit_id != DVBVBI_ID_TTX_SUB && data_unit_id != DVBVBI_ID_TTX_NONSUB) {
+                            upipe_verbose(subpipe, "not DVBVBI_ID_TTX_SUB DVBVBI_ID_TTX_NONSUB ");
+                            continue;
+                        }
+
+                        if (data_unit_len != DVBVBI_LENGTH) {
+                            upipe_err(subpipe, "not DVBVBI_LENGTH");
+                            continue;
+                        }
+
+                        uint8_t line_offset = dvbvbittx_get_line(&pic_data[DVBVBI_UNIT_HEADER_SIZE]);
+
+                        uint8_t f2 = !dvbvbittx_get_field(&pic_data[DVBVBI_UNIT_HEADER_SIZE]);
+                        if (f2 == 0 && line_offset == 0) { // line == 0
+                            upipe_err(subpipe, "f2 and line_offset both 0");
+                            continue;
+                        }
+
+                        if (upipe_sdi_enc->ttx_packets[f2] < (sd ? 1 : 5)) {
+                            if (sd && upipe_sdi_enc->ttx_packets[f2] == 0) {
+                                upipe_sdi_enc->ttx_line[f2] = line_offset + PAL_FIELD_OFFSET * f2;
+                            }
+                            int num_packets = upipe_sdi_enc->ttx_packets[f2];
+                            memcpy(upipe_sdi_enc->ttx_packet[f2][num_packets], pic_data, DVBVBI_UNIT_HEADER_SIZE+DVBVBI_LENGTH);
+                            upipe_sdi_enc->ttx_packet_p[f2][num_packets] = upipe_sdi_enc->ttx_packet[f2][num_packets];
+
+                            upipe_sdi_enc->ttx_packets[f2]++;
+                        }
+                        else
+                            upipe_err(subpipe, "no more space in line for packets");
+                    }
+                    uref_free(subpic[i++]);
+                } else {
+                    upipe_err(upipe, "Could not map subpic");
+                    uref_free(subpic[i]);
+                    subpic[i] = NULL;
                 }
-                else
-                    upipe_err(subpipe, "no more space in line for packets");
             }
-            i++;
-        } else {
-            upipe_err(upipe, "Could not map subpic");
-            uref_free(subpic[i]);
-            subpic[i] = NULL;
+        }
+        else if (upipe_sdi_enc_sub->type == SDIENC_SCTE104) {
+            upipe_sdi_enc->write_scte104_null = true;
+            for (;;) {
+                struct uchain *uchain = ulist_pop(&upipe_sdi_enc_sub->urefs);
+                if (!uchain)
+                    break;
+
+                struct uref *scte_uref = uref_from_uchain(uchain);
+                if(upipe_sdi_enc->scte104_uref) {
+                    upipe_err(subpipe, "Too many SCTE-104 messages");
+                    uref_free(scte_uref);
+                }
+                else {
+                    upipe_sdi_enc->write_scte104_null = false;
+                    upipe_sdi_enc->scte104_uref = scte_uref;
+                }
+            }
         }
     }
 
@@ -1303,65 +1396,64 @@ static void upipe_sdi_enc_input(struct upipe *upipe, struct uref *uref,
         }
     }
 
-    struct upipe_sdi_enc_sub *vanc_sub = &upipe_sdi_enc->vanc_subpipe;
-    for (;;) {
-        struct uchain *uchain_vanc = ulist_pop(&vanc_sub->urefs);
-        if (!uchain_vanc)
-            break;
-        struct uref *uref_vanc = uref_from_uchain(uchain_vanc);
-        uint64_t line, offset;
-        size_t hsize;
-        if (!ubase_check(uref_pic_size(uref_vanc, &hsize, NULL, NULL))) {
-            goto end;
-        }
-        if (!ubase_check(uref_pic_size(uref_vanc, &hsize, NULL, NULL)) ||
-                !ubase_check(uref_pic_get_hposition(uref_vanc, &offset)) ||
-                !ubase_check(uref_pic_get_vposition(uref_vanc, &line))) {
-            goto end;
-        }
+    uchain = NULL;
+    ulist_foreach(&upipe_sdi_enc->subs, uchain) {
+        struct upipe_sdi_enc_sub *upipe_sdi_enc_sub =
+            upipe_sdi_enc_sub_from_uchain(uchain);
+        struct upipe *subpipe = upipe_sdi_enc_sub_to_upipe(upipe_sdi_enc_sub);
 
-        if (line >= f->height)
-            goto end;
-
-        bool sd = upipe_sdi_enc->p->sd;
-        if (sd) {
-            // TODO
-        } else {
-            offset *= 2;
-            if (ubase_check(uref_pic_get_c_not_y(uref_vanc))) {
-            } else {
-                offset++; // luma
-            }
-
-            offset += UPIPE_HD_SDI_SAV_LENGTH;
-
-            if ((offset+hsize*2) >= f->width*2)
+        if (upipe_sdi_enc_sub->type == SDIENC_VANC) {
+            struct uchain *uchain_vanc = ulist_pop(&upipe_sdi_enc_sub->urefs);
+            if (!uchain_vanc)
+                break;
+            struct uref *uref_vanc = uref_from_uchain(uchain_vanc);
+            uint64_t line, offset;
+            size_t hsize;
+            if (!ubase_check(uref_pic_size(uref_vanc, &hsize, NULL, NULL))) {
                 goto end;
-        }
-
-        const uint8_t *r;
-        if (!ubase_check(uref_pic_plane_read(uref_vanc, "x10", 0, 0, -1, -1, &r)))
-            goto end;
-
-        uint16_t *dst_line = &dst[line * f->width * 2];
-        if (sd) {
-            memcpy(&dst_line[offset], r, hsize);
-        } else {
-            for (int i = 0; i < hsize; i++) {
-                uint16_t *src = (uint16_t*)r;
-                dst_line[offset+i*2] = r[i];
             }
-        }
+            if (!ubase_check(uref_pic_size(uref_vanc, &hsize, NULL, NULL)) ||
+                    !ubase_check(uref_pic_get_hposition(uref_vanc, &offset)) ||
+                    !ubase_check(uref_pic_get_vposition(uref_vanc, &line))) {
+                goto end;
+            }
 
-        uref_pic_plane_unmap(uref_vanc, "x10", 0, 0, -1, -1);
-end:
-        uref_free(uref_vanc);
-    }
+            if (line >= f->height)
+                goto end;
 
-    for (int i = 0; i < 2; i++) {
-        if (subpic[i]) {
-            uref_block_unmap(subpic[i], 0);
-            uref_free(subpic[i]);
+            bool sd = upipe_sdi_enc->p->sd;
+            if (sd) {
+                // TODO
+            } else {
+                offset *= 2;
+                if (ubase_check(uref_pic_get_c_not_y(uref_vanc))) {
+                } else {
+                    offset++; // luma
+                }
+
+                offset += UPIPE_HD_SDI_SAV_LENGTH;
+
+                if ((offset+hsize*2) >= f->width*2)
+                    goto end;
+            }
+
+            const uint8_t *r;
+            if (!ubase_check(uref_pic_plane_read(uref_vanc, "x10", 0, 0, -1, -1, &r)))
+                goto end;
+
+            uint16_t *dst_line = &dst[line * f->width * 2];
+            if (sd) {
+                memcpy(&dst_line[offset], r, hsize);
+            } else {
+                for (int i = 0; i < hsize; i++) {
+                    uint16_t *src = (uint16_t*)r;
+                    dst_line[offset+i*2] = r[i];
+                }
+            }
+
+            uref_pic_plane_unmap(uref_vanc, "x10", 0, 0, -1, -1);
+    end:
+            uref_free(uref_vanc);
         }
     }
 
@@ -1621,22 +1713,6 @@ static int upipe_sdi_enc_control(struct upipe *upipe, int command, va_list args)
             struct uref *flow = va_arg(args, struct uref *);
             return upipe_sdi_enc_set_flow_def(upipe, flow);
         }
-        case UPIPE_SDI_ENC_GET_VANC_SUB: {
-            UBASE_SIGNATURE_CHECK(args, UPIPE_SDI_ENC_SIGNATURE)
-            struct upipe **upipe_p = va_arg(args, struct upipe **);
-            *upipe_p =  upipe_sdi_enc_sub_to_upipe(
-                    upipe_sdi_enc_to_vanc_subpipe(
-                        upipe_sdi_enc_from_upipe(upipe)));
-            return UBASE_ERR_NONE;
-        }
-        case UPIPE_SDI_ENC_GET_SUBPIC_SUB: {
-            UBASE_SIGNATURE_CHECK(args, UPIPE_SDI_ENC_SIGNATURE)
-            struct upipe **upipe_p = va_arg(args, struct upipe **);
-            *upipe_p =  upipe_sdi_enc_sub_to_upipe(
-                    upipe_sdi_enc_to_subpic_subpipe(
-                        upipe_sdi_enc_from_upipe(upipe)));
-            return UBASE_ERR_NONE;
-        }
         case UPIPE_SET_OPTION: {
             const char *k = va_arg(args, const char *);
             const char *v = va_arg(args, const char *);
@@ -1670,9 +1746,6 @@ static struct upipe *_upipe_sdi_enc_alloc(struct upipe_mgr *mgr,
 {
     if (signature != UPIPE_SDI_ENC_SIGNATURE)
         return NULL;
-
-    struct uprobe *uprobe_subpic = va_arg(args, struct uprobe *);
-    struct uprobe *uprobe_vanc = va_arg(args, struct uprobe *);
 
     struct upipe_sdi_enc *upipe_sdi_enc = calloc(1, sizeof(*upipe_sdi_enc));
     if (unlikely(upipe_sdi_enc == NULL))
@@ -1729,12 +1802,6 @@ static struct upipe *_upipe_sdi_enc_alloc(struct upipe_mgr *mgr,
     upipe_sdi_enc_init_sub_mgr(upipe);
     upipe_sdi_enc_init_sub_subs(upipe);
 
-    /* Initalise subpipes */
-    upipe_sdi_enc_sub_init(upipe_sdi_enc_sub_to_upipe(upipe_sdi_enc_to_subpic_subpipe(upipe_sdi_enc)),
-            &upipe_sdi_enc->sub_mgr, uprobe_subpic, true);
-    upipe_sdi_enc_sub_init(upipe_sdi_enc_sub_to_upipe(upipe_sdi_enc_to_vanc_subpipe(upipe_sdi_enc)),
-            &upipe_sdi_enc->sub_mgr, uprobe_vanc, true);
-
     upipe_sdi_enc->crc_c = 0;
     upipe_sdi_enc->crc_y = 0;
 
@@ -1762,9 +1829,6 @@ static struct upipe *_upipe_sdi_enc_alloc(struct upipe_mgr *mgr,
 static void upipe_sdi_enc_free(struct upipe *upipe)
 {
     struct upipe_sdi_enc *upipe_sdi_enc = upipe_sdi_enc_from_upipe(upipe);
-
-    upipe_sdi_enc_sub_free(&upipe_sdi_enc->subpic_subpipe.upipe);
-    upipe_sdi_enc_sub_free(&upipe_sdi_enc->vanc_subpipe.upipe);
 
     upipe_throw_dead(upipe);
     uref_free(upipe_sdi_enc->uref_audio);
