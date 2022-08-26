@@ -76,14 +76,18 @@ RET
 %macro sdi_to_uyvy 0
 
 ; sdi_to_uyvy(const uint8_t *src, uint16_t *y, int64_t size)
-cglobal sdi_to_uyvy, 3, 3, 6, src, y, pixels
+cglobal sdi_to_uyvy, 3, 3, 6-cpuflag(avx512), src, y, pixels
     lea yq,     [yq + 4*pixelsq]
     neg pixelsq
 
     mova     m2, [sdi_shuf_10]
     mova     m3, [sdi_mask_10]
+%if notcpuflag(avx512)
     mova     m4, [sdi_chroma_mult_10]
     mova     m5, [sdi_luma_mult_10]
+%else
+    mova     m4, [sdi_shift_10]
+%endif
 
 .loop:
     movu     xm0, [srcq]
@@ -94,10 +98,14 @@ cglobal sdi_to_uyvy, 3, 3, 6, src, y, pixels
     pshufb m0, m2
     pand   m0, m3
 
+%if cpuflag(avx512)
+    vpsrlvw m0, m4
+%else
     pmulhuw  m1, m0, m4
     pmulhrsw m0, m5
 
     por      m0, m1
+%endif
 
     movu     [yq + 4*pixelsq], m0
 
@@ -111,6 +119,8 @@ cglobal sdi_to_uyvy, 3, 3, 6, src, y, pixels
 INIT_XMM ssse3
 sdi_to_uyvy
 INIT_YMM avx2
+sdi_to_uyvy
+INIT_YMM avx512
 sdi_to_uyvy
 
 %macro uyvy_to_planar_8 0
