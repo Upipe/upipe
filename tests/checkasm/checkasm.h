@@ -28,8 +28,11 @@
 
 /* silence warnings caused by unknown config variables from FFmpeg */
 #define ARCH_ARM 0
+#define ARCH_LOONGARCH 0
+#define ARCH_MIPS 0
 #define ARCH_PPC 0
 #define CONFIG_LINUX_PERF 0
+#define CONFIG_MACOS_KPERF 0
 #define HAVE_IO_H 0
 #define HAVE_ISATTY 0
 #define HAVE_SETCONSOLETEXTATTRIBUTE 0
@@ -61,6 +64,8 @@
 #include <sys/ioctl.h>
 #include <asm/unistd.h>
 #include <linux/perf_event.h>
+#elif CONFIG_MACOS_KPERF
+#include "libavutil/macos_kperf.h"
 #endif
 
 #include <libavutil/avstring.h>
@@ -212,7 +217,7 @@ typedef struct CheckasmPerf {
     int iterations;
 } CheckasmPerf;
 
-#if defined(AV_READ_TIME) || CONFIG_LINUX_PERF
+#if defined(AV_READ_TIME) || CONFIG_LINUX_PERF || CONFIG_MACOS_KPERF
 
 #if CONFIG_LINUX_PERF
 #define PERF_START(t) do {                              \
@@ -220,9 +225,14 @@ typedef struct CheckasmPerf {
     ioctl(sysfd, PERF_EVENT_IOC_ENABLE, 0);             \
 } while (0)
 #define PERF_STOP(t) do {                               \
+    int ret;                                            \
     ioctl(sysfd, PERF_EVENT_IOC_DISABLE, 0);            \
-    read(sysfd, &t, sizeof(t));                         \
+    ret = read(sysfd, &t, sizeof(t));                   \
+    (void)ret;                                          \
 } while (0)
+#elif CONFIG_MACOS_KPERF
+#define PERF_START(t) t = ff_kperf_cycles()
+#define PERF_STOP(t)  t = ff_kperf_cycles() - t
 #else
 #define PERF_START(t) t = AV_READ_TIME()
 #define PERF_STOP(t)  t = AV_READ_TIME() - t
