@@ -105,28 +105,37 @@ static const struct {
     { "ALTIVEC",  "altivec",  AV_CPU_FLAG_ALTIVEC },
     { "VSX",      "vsx",      AV_CPU_FLAG_VSX },
     { "POWER8",   "power8",   AV_CPU_FLAG_POWER8 },
+#elif ARCH_MIPS
+    { "MMI",      "mmi",      AV_CPU_FLAG_MMI },
+    { "MSA",      "msa",      AV_CPU_FLAG_MSA },
 #elif ARCH_X86
-    { "MMX",      "mmx",      AV_CPU_FLAG_MMX|AV_CPU_FLAG_CMOV },
-    { "MMXEXT",   "mmxext",   AV_CPU_FLAG_MMXEXT },
-    { "3DNOW",    "3dnow",    AV_CPU_FLAG_3DNOW },
-    { "3DNOWEXT", "3dnowext", AV_CPU_FLAG_3DNOWEXT },
-    { "SSE",      "sse",      AV_CPU_FLAG_SSE },
-    { "SSE2",     "sse2",     AV_CPU_FLAG_SSE2|AV_CPU_FLAG_SSE2SLOW },
-    { "SSE3",     "sse3",     AV_CPU_FLAG_SSE3|AV_CPU_FLAG_SSE3SLOW },
-    { "SSSE3",    "ssse3",    AV_CPU_FLAG_SSSE3|AV_CPU_FLAG_ATOM },
-    { "SSE4.1",   "sse4",     AV_CPU_FLAG_SSE4 },
-    { "SSE4.2",   "sse42",    AV_CPU_FLAG_SSE42 },
+    { "MMX",        "mmx",       AV_CPU_FLAG_MMX|AV_CPU_FLAG_CMOV },
+    { "MMXEXT",     "mmxext",    AV_CPU_FLAG_MMXEXT },
+    { "3DNOW",      "3dnow",     AV_CPU_FLAG_3DNOW },
+    { "3DNOWEXT",   "3dnowext",  AV_CPU_FLAG_3DNOWEXT },
+    { "SSE",        "sse",       AV_CPU_FLAG_SSE },
+    { "SSE2",       "sse2",      AV_CPU_FLAG_SSE2|AV_CPU_FLAG_SSE2SLOW },
+    { "SSE3",       "sse3",      AV_CPU_FLAG_SSE3|AV_CPU_FLAG_SSE3SLOW },
+    { "SSSE3",      "ssse3",     AV_CPU_FLAG_SSSE3|AV_CPU_FLAG_ATOM },
+    { "SSE4.1",     "sse4",      AV_CPU_FLAG_SSE4 },
+    { "SSE4.2",     "sse42",     AV_CPU_FLAG_SSE42 },
 #ifdef AV_CPU_FLAG_AESNI
-    { "AES-NI",   "aesni",    AV_CPU_FLAG_AESNI },
+    { "AES-NI",     "aesni",     AV_CPU_FLAG_AESNI },
 #endif
-    { "AVX",      "avx",      AV_CPU_FLAG_AVX },
-    { "XOP",      "xop",      AV_CPU_FLAG_XOP },
-    { "FMA3",     "fma3",     AV_CPU_FLAG_FMA3 },
-    { "FMA4",     "fma4",     AV_CPU_FLAG_FMA4 },
-    { "AVX2",     "avx2",     AV_CPU_FLAG_AVX2 },
+    { "AVX",        "avx",       AV_CPU_FLAG_AVX },
+    { "XOP",        "xop",       AV_CPU_FLAG_XOP },
+    { "FMA3",       "fma3",      AV_CPU_FLAG_FMA3 },
+    { "FMA4",       "fma4",      AV_CPU_FLAG_FMA4 },
+    { "AVX2",       "avx2",      AV_CPU_FLAG_AVX2 },
 #ifdef AV_CPU_FLAG_AVX512
-    { "AVX-512",  "avx512",   AV_CPU_FLAG_AVX512 },
+    { "AVX-512",    "avx512",    AV_CPU_FLAG_AVX512 },
 #endif
+#ifdef AV_CPU_FLAG_AVX512ICL
+    { "AVX-512ICL", "avx512icl", AV_CPU_FLAG_AVX512ICL },
+#endif
+#elif ARCH_LOONGARCH
+    { "LSX",      "lsx",      AV_CPU_FLAG_LSX },
+    { "LASX",     "lasx",     AV_CPU_FLAG_LASX },
 #endif
     { NULL, NULL, 0 }
 };
@@ -521,9 +530,13 @@ static int bench_init_linux(void)
     }
     return 0;
 }
-#endif
-
-#if !CONFIG_LINUX_PERF
+#elif CONFIG_MACOS_KPERF
+static int bench_init_kperf(void)
+{
+    ff_kperf_init();
+    return 0;
+}
+#else
 static int bench_init_ffmpeg(void)
 {
 #ifdef AV_READ_TIME
@@ -540,6 +553,8 @@ static int bench_init(void)
 {
 #if CONFIG_LINUX_PERF
     int ret = bench_init_linux();
+#elif CONFIG_MACOS_KPERF
+    int ret = bench_init_kperf();
 #else
     int ret = bench_init_ffmpeg();
 #endif
