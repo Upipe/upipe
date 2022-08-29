@@ -12,9 +12,10 @@
 /* GCC bug 85100 says that the AVX512 detection can be incorrect if OS support
  * is disabled (or possibly not present) so just use the built-in function for
  * versions which have that fixed. */
-#if __GNUC__ >= 8 \
-    || __GNUC__ == 7 && __GNUC_MINOR__ >= 4 \
-    || __GNUC__ == 6 && __GNUC_MINOR__ >= 5
+/* GCC 6.5 doesn't know vnni vbmi2 vpopcntdq bitalg and GCC 7.5 doesn't know:
+ * vnni vbmi2 bitalg.  These versions might be okay with just the Skylake-X
+ * subset but Ice Lake will need gcc 8. */
+#if __GNUC__ >= 8
 
 static inline bool has_avx512_support(void)
 {
