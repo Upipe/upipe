@@ -359,7 +359,7 @@ static void upipe_pciesdi_src_worker(struct upump *upump)
     /* If either the core or datapath bits are unset or the "was unlocked"
      * bit is set then a discontinuity needs flaggiing on the next output. */
     if (locked != 0x3) {
-        upipe_dbg_va(upipe, "unlocked (%d), setting discontinuity (%s)",
+        upipe_notice_va(upipe, "unlocked (%d), setting discontinuity (%s)",
                 locked, __func__);
         upipe_pciesdi_src->discontinuity = true;
         return;
@@ -370,13 +370,13 @@ static void upipe_pciesdi_src_worker(struct upump *upump)
             || family != upipe_pciesdi_src->family
             || scan != upipe_pciesdi_src->scan
             || rate != upipe_pciesdi_src->rate) {
-        upipe_err_va(upipe, "format change, changing flow_def (%s)", __func__);
+        upipe_warn_va(upipe, "format change, changing flow_def (%s)", __func__);
 
         /* On a mode change some HW needs reconfiguring/reinitializing.  Store
          * the new mode so that it isn't done again. */
         if (mode != upipe_pciesdi_src->mode
                 && need_init_hardware(upipe_pciesdi_src->capability_flags)) {
-            upipe_err_va(upipe, "mode change, reconfiguring HW (%s)", __func__);
+            upipe_warn_va(upipe, "mode change, reconfiguring HW (%s)", __func__);
             init_hardware(upipe_pciesdi_src, mode == SDI_TX_MODE_SD);
             upipe_pciesdi_src->mode = mode;
         }
@@ -626,7 +626,7 @@ static int get_flow_def(struct upipe *upipe, struct uref **flow_format)
     /* Query the HW for what it thinks the received format is. */
     uint8_t locked, mode, family, scan, rate;
     sdi_rx(upipe_pciesdi_src->fd, &locked, &mode, &family, &scan, &rate);
-    upipe_dbg_va(upipe, "locked: %d, mode: %s (%d), family: %s (%d), scan: %s (%d), rate: %s (%d)",
+    upipe_notice_va(upipe, "locked: %d, mode: %s (%d), family: %s (%d), scan: %s (%d), rate: %s (%d)",
             locked,
             sdi_decode_mode(mode), mode,
             sdi_decode_family(family), family,
@@ -787,11 +787,11 @@ static void get_flow_def_on_signal_lock(struct upump *upump)
             || family != upipe_pciesdi_src->family
             || scan != upipe_pciesdi_src->scan
             || rate != upipe_pciesdi_src->rate) {
-        upipe_err_va(upipe, "format change, changing flow_def (%s)", __func__);
+        upipe_warn_va(upipe, "format change, changing flow_def (%s)", __func__);
 
         if (mode != upipe_pciesdi_src->mode
                 && need_init_hardware(upipe_pciesdi_src->capability_flags)) {
-            upipe_err_va(upipe, "mode change, reconfiguring HW (%s)", __func__);
+            upipe_warn_va(upipe, "mode change, reconfiguring HW (%s)", __func__);
             init_hardware(upipe_pciesdi_src, mode == SDI_TX_MODE_SD);
             upipe_pciesdi_src->mode = mode;
         }
