@@ -60,6 +60,9 @@ void checkasm_check_levelb_input(void)
     if (cpu_flags & AV_CPU_FLAG_AVX2) {
         s.packed = upipe_levelb_to_uyvy_avx2;
     }
+    if (cpu_flags & AV_CPU_FLAG_AVX512) {
+        s.packed = upipe_levelb_to_uyvy_avx512;
+    }
 #endif
 
     if (check_func(s.packed, "packed")) {
