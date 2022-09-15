@@ -65,7 +65,7 @@ void checkasm_check_levelb_input(void)
     }
 #endif
 
-    if (check_func(s.packed, "packed")) {
+    if (check_func(s.packed, "levelb_to_uyvy")) {
         uint8_t  src0[2 * NUM_SAMPLES * 10 / 8];
         uint8_t  src1[2 * NUM_SAMPLES * 10 / 8];
         uint16_t dst0[NUM_SAMPLES];
@@ -83,5 +83,5 @@ void checkasm_check_levelb_input(void)
             fail();
         bench_new(src1, dst1, dst3, NUM_SAMPLES / 2);
     }
-    report("packed");
+    report("levelb_to_uyvy");
 }
