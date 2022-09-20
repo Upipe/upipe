@@ -121,28 +121,35 @@ struct upipe_pciesdi_src {
 
     /** file descriptor */
     int fd;
+    /* device number, read from URI */
     int device_number;
+    /* bitfield of card features from driver */
     uint32_t capability_flags;
-
-    bool discontinuity;
 
     /* picture properties, same units as upipe_hbrmt_common.h, pixels */
     const struct sdi_offsets_fmt *sdi_format;
-    bool sdi3g_levelb;
+    /* picture properties as read from card */
     int mode, family, scan, rate;
+    /* input is level B */
+    bool sdi3g_levelb;
+    /* discontinuity needs to be flagged on next output */
+    bool discontinuity;
 
+    /* the mmap pointer */
     uint8_t *read_buffer;
 
+    /* level B unpack function */
     void (*levelb_to_uyvy)(const uint8_t *src, uint16_t *dst1, uint16_t *dst2, uintptr_t pixels);
+    /* normal sdi unpack function */
     void (*sdi_to_uyvy)(const uint8_t *src, uint16_t *y, uintptr_t pixels);
-
-    /** bytes in scratch buffer */
-    int scratch_buffer_count;
 
     /** public upipe structure */
     struct upipe upipe;
 
-    /** scratch buffer */
+    /** bytes in scratch buffer */
+    int scratch_buffer_count;
+
+    /** scratch buffer to store some packed data between calls */
     uint8_t scratch_buffer[2 * DMA_BUFFER_SIZE];
 };
 
@@ -349,20 +356,27 @@ static void upipe_pciesdi_src_worker(struct upump *upump)
     uint8_t locked, mode, family, scan, rate;
     sdi_rx(upipe_pciesdi_src->fd, &locked, &mode, &family, &scan, &rate);
 
+    /* If either the core or datapath bits are unset or the "was unlocked"
+     * bit is set then a discontinuity needs flaggiing on the next output. */
     if (locked != 0x3) {
+        upipe_notice_va(upipe, "unlocked (%d), setting discontinuity (%s)",
+                locked, __func__);
         upipe_pciesdi_src->discontinuity = true;
         return;
     }
 
+    /* Format change needs to change output. */
     if (mode != upipe_pciesdi_src->mode
             || family != upipe_pciesdi_src->family
             || scan != upipe_pciesdi_src->scan
             || rate != upipe_pciesdi_src->rate) {
-        upipe_err_va(upipe, "format change, changing flow_def (%s)", __func__);
+        upipe_warn_va(upipe, "format change, changing flow_def (%s)", __func__);
 
+        /* On a mode change some HW needs reconfiguring/reinitializing.  Store
+         * the new mode so that it isn't done again. */
         if (mode != upipe_pciesdi_src->mode
                 && need_init_hardware(upipe_pciesdi_src->capability_flags)) {
-            upipe_err_va(upipe, "mode change, reconfiguring HW (%s)", __func__);
+            upipe_warn_va(upipe, "mode change, reconfiguring HW (%s)", __func__);
             init_hardware(upipe_pciesdi_src, mode == SDI_TX_MODE_SD);
             upipe_pciesdi_src->mode = mode;
         }
@@ -391,6 +405,9 @@ static void upipe_pciesdi_src_worker(struct upump *upump)
         sdi_dma_writer(upipe_pciesdi_src->fd, 1, &hw, &sw);
         upipe_pciesdi_src->scratch_buffer_count = 0;
         upipe_pciesdi_src->discontinuity = true;
+
+        upipe_dbg_va(upipe, "mode or format change, setting discontinuity (%s)",
+                __func__);
 
         /* Return because there should be no data to read. */
         return;
@@ -581,6 +598,7 @@ static void upipe_pciesdi_src_worker(struct upump *upump)
     }
 
     if (upipe_pciesdi_src->discontinuity) {
+        upipe_dbg(upipe, "setting discontinuity attribute on output uref");
         uref_flow_set_discontinuity(uref);
         upipe_pciesdi_src->discontinuity = false;
     }
@@ -608,7 +626,7 @@ static int get_flow_def(struct upipe *upipe, struct uref **flow_format)
     /* Query the HW for what it thinks the received format is. */
     uint8_t locked, mode, family, scan, rate;
     sdi_rx(upipe_pciesdi_src->fd, &locked, &mode, &family, &scan, &rate);
-    upipe_dbg_va(upipe, "locked: %d, mode: %s (%d), family: %s (%d), scan: %s (%d), rate: %s (%d)",
+    upipe_notice_va(upipe, "locked: %d, mode: %s (%d), family: %s (%d), scan: %s (%d), rate: %s (%d)",
             locked,
             sdi_decode_mode(mode), mode,
             sdi_decode_family(family), family,
@@ -683,6 +701,7 @@ static int get_flow_def(struct upipe *upipe, struct uref **flow_format)
         return UBASE_ERR_INVALID;
     }
 
+    /* Create flow_def and fill in attributes. */
     struct uref *flow_def = uref_alloc(upipe_pciesdi_src->uref_mgr);
     if (!flow_def)
         return UBASE_ERR_ALLOC;
@@ -745,8 +764,8 @@ static void get_flow_def_on_signal_lock(struct upump *upump)
     struct upipe_pciesdi_src *upipe_pciesdi_src = upipe_pciesdi_src_from_upipe(upipe);
 
     /* If execution makes it here the main worker has not executed for the
-     * repeat time of the upump so it assumes RX signal has been lost.  Or it is
-     * the first time after pipe creation. */
+     * repeat time of the upump so it assumes RX signal has been lost.  Or this
+     * is the first time after pipe creation. */
 
     /* Query the HW for what it thinks the received format is. */
     uint8_t locked, mode, family, scan, rate;
@@ -768,11 +787,11 @@ static void get_flow_def_on_signal_lock(struct upump *upump)
             || family != upipe_pciesdi_src->family
             || scan != upipe_pciesdi_src->scan
             || rate != upipe_pciesdi_src->rate) {
-        upipe_err_va(upipe, "format change, changing flow_def (%s)", __func__);
+        upipe_warn_va(upipe, "format change, changing flow_def (%s)", __func__);
 
         if (mode != upipe_pciesdi_src->mode
                 && need_init_hardware(upipe_pciesdi_src->capability_flags)) {
-            upipe_err_va(upipe, "mode change, reconfiguring HW (%s)", __func__);
+            upipe_warn_va(upipe, "mode change, reconfiguring HW (%s)", __func__);
             init_hardware(upipe_pciesdi_src, mode == SDI_TX_MODE_SD);
             upipe_pciesdi_src->mode = mode;
         }
@@ -790,6 +809,7 @@ static void get_flow_def_on_signal_lock(struct upump *upump)
     sdi_dma_writer(upipe_pciesdi_src->fd, 1, &hw, &sw);
     upipe_pciesdi_src->scratch_buffer_count = 0;
     upipe_pciesdi_src->discontinuity = true;
+    upipe_dbg_va(upipe, "setting discontinuity (%s)", __func__);
 
     /* Start main pump. */
     upump_start(upipe_pciesdi_src->upump);
