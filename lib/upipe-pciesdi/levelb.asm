@@ -56,11 +56,11 @@ cglobal levelb_to_uyvy, 4, 4, 6-cpuflag(avx512), src, dst1, dst2, pixels
             vinserti128 m0, m0, [srcq + 10], 1
         %endif
 
-        pshufb   m0, m2
-        pand     m0, m3
+        pshufb   m0, m2 ; spread into words and byte swap
+        pand     m0, m3 ; mask out bits
 
 %if cpuflag(avx512)
-        vpsrlvw m0, m4
+        vpsrlvw  m0, m4
 %else
         pmulhuw  m1, m0, m4
         pmulhrsw m0, m5
