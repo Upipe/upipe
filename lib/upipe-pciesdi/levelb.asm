@@ -23,14 +23,14 @@
 
 SECTION_RODATA 32
 
-sdi_shuf_10:         times 2 db 1, 0, 2, 1, 3, 2, 4, 3, 6, 5, 7, 6, 8, 7, 9, 8
+sdi_shuf_10:         times 2 db 1, 0, 3, 2, 6, 5, 8, 7, 2, 1, 4, 3, 7, 6, 9, 8
 
-sdi_mask_10:         times 2 db 0xc0, 0xff, 0xf0, 0x3f, 0xfc, 0x0f, 0xff, 0x03, 0xc0, 0xff, 0xf0, 0x3f, 0xfc, 0x0f, 0xff, 0x03
+sdi_mask_10:         times 2 dw 0xffc0, 0x0ffc, 0xffc0, 0x0ffc, 0x3ff0, 0x03ff, 0x3ff0, 0x03ff
 
-sdi_chroma_mult_10:  times 4 dw 0x400, 0x0, 0x4000, 0x0
-sdi_luma_mult_10:    times 4 dw 0x0, 0x800, 0x0, 0x7fff
+sdi_chroma_mult_10:  times 2 dw 0x400, 0x4000, 0x400, 0x4000, 0, 0, 0, 0
+sdi_luma_mult_10:    times 2 dw 0, 0, 0, 0, 0x800, 0x7fff, 0x800, 0x7fff
 
-sdi_shift_10:        times 4 dw 0x6, 0x4, 0x2, 0x0
+sdi_shift_10:        times 2 dw 6, 2, 6, 2, 4, 0, 4, 0
 
 levelb_shuf: times 2 db 0, 1, 4, 5, 8, 9, 12, 13, 2, 3, 6, 7, 10, 11, 14, 15
 
@@ -70,8 +70,6 @@ cglobal levelb_to_uyvy, 4, 4, 7-cpuflag(avx512), src, dst1, dst2, pixels
 
         por      m0, m1
 %endif
-
-        pshufb   m0, m4 ; FIXME merge this shuffle with the above
 
         %if cpuflag(avx2)
             vpermq       m0, m0, q3120
