@@ -209,6 +209,7 @@ static struct upipe *upipe_pciesdi_src_alloc(struct upipe_mgr *mgr,
 
     if (has_avx512_support()) {
         upipe_pciesdi_src->sdi_to_uyvy = upipe_sdi_to_uyvy_avx512;
+        upipe_pciesdi_src->levelb_to_uyvy = upipe_levelb_to_uyvy_avx512;
     }
 #endif
 #endif
