@@ -26,13 +26,6 @@
 
 #define NUM_SAMPLES 512
 
-static void randomize_buffers_unpacked(uint16_t *src0, uint16_t *src1)
-{
-    for (int i = 0; i < NUM_SAMPLES; i++) {
-        src0[i] = src1[i] = rnd() & 0x3ff;
-    }
-}
-
 static void randomize_buffers_packed(uint8_t *src0, uint8_t *src1)
 {
     for (int i = 0; i < 2 * NUM_SAMPLES * 10 / 8; i++) {
