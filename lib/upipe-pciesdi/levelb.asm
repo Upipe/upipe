@@ -32,25 +32,22 @@ sdi_luma_mult_10:    times 2 dw 0, 0, 0, 0, 0x800, 0x7fff, 0x800, 0x7fff
 
 sdi_shift_10:        times 2 dw 6, 2, 6, 2, 4, 0, 4, 0
 
-levelb_shuf: times 2 db 0, 1, 4, 5, 8, 9, 12, 13, 2, 3, 6, 7, 10, 11, 14, 15
-
 SECTION .text
 
 %macro levelb_to_uyvy 0
 
-cglobal levelb_to_uyvy, 4, 4, 7-cpuflag(avx512), src, dst1, dst2, pixels
+cglobal levelb_to_uyvy, 4, 4, 6-cpuflag(avx512), src, dst1, dst2, pixels
     lea dst1q, [dst1q + 4*pixelsq]
     lea dst2q, [dst2q + 4*pixelsq]
     neg pixelsq
 
     mova     m2, [sdi_shuf_10]
     mova     m3, [sdi_mask_10]
-    mova     m4, [levelb_shuf]
 %if notcpuflag(avx512)
-    mova     m5, [sdi_chroma_mult_10]
-    mova     m6, [sdi_luma_mult_10]
+    mova     m4, [sdi_chroma_mult_10]
+    mova     m5, [sdi_luma_mult_10]
 %else
-    mova     m5, [sdi_shift_10]
+    mova     m4, [sdi_shift_10]
 %endif
 
     .loop:
@@ -63,10 +60,10 @@ cglobal levelb_to_uyvy, 4, 4, 7-cpuflag(avx512), src, dst1, dst2, pixels
         pand     m0, m3
 
 %if cpuflag(avx512)
-        vpsrlvw m0, m5
+        vpsrlvw m0, m4
 %else
-        pmulhuw  m1, m0, m5
-        pmulhrsw m0, m6
+        pmulhuw  m1, m0, m4
+        pmulhrsw m0, m5
 
         por      m0, m1
 %endif
