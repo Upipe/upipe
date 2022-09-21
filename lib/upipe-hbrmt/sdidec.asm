@@ -25,7 +25,7 @@ SECTION_RODATA 32
 
 sdi_shuf_10:         times 2 db 1, 0, 2, 1, 3, 2, 4, 3, 6, 5, 7, 6, 8, 7, 9, 8
 
-sdi_mask_10:         times 2 db 0xc0, 0xff, 0xf0, 0x3f, 0xfc, 0x0f, 0xff, 0x03, 0xc0, 0xff, 0xf0, 0x3f, 0xfc, 0x0f, 0xff, 0x03
+sdi_mask_10:         times 4 dw 0xffc0, 0x3ff0, 0x0ffc, 0x03ff
 
 sdi_chroma_mult_10:  times 4 dw 0x400, 0x0, 0x4000, 0x0
 sdi_luma_mult_10:    times 4 dw 0x0, 0x800, 0x0, 0x7fff
@@ -95,11 +95,11 @@ cglobal sdi_to_uyvy, 3, 3, 6-cpuflag(avx512), src, y, pixels
     vinserti128 m0, m0, [srcq + 10], 1
 %endif
 
-    pshufb m0, m2
-    pand   m0, m3
+    pshufb   m0, m2 ; spread into words and byte swap
+    pand     m0, m3 ; mask out bits
 
 %if cpuflag(avx512)
-    vpsrlvw m0, m4
+    vpsrlvw  m0, m4
 %else
     pmulhuw  m1, m0, m4
     pmulhrsw m0, m5
@@ -163,7 +163,7 @@ cglobal uyvy_to_planar_8, 5, 5, 7, y, u, v, l, pixels
     pshufb     m2, m6
     pshufb     m3, m6
 
-    ; all registers have yyyy0000uuvv
+    ; all registers have yyyy0...0uuvv
 
     punpckldq  m4, m0, m1 ; yyyy from m0 and yyyy from m1 -> yyyyyyyy
     punpckldq  m5, m2, m3
