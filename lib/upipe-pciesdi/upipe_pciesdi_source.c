@@ -359,7 +359,7 @@ static void upipe_pciesdi_src_worker(struct upump *upump)
     /* If either the core or datapath bits are unset or the "was unlocked"
      * bit is set then a discontinuity needs flaggiing on the next output. */
     if (locked != 0x3) {
-        upipe_notice_va(upipe, "unlocked (%d), setting discontinuity (%s)",
+        upipe_dbg_va(upipe, "unlocked (%d), setting discontinuity (%s)",
                 locked, __func__);
         upipe_pciesdi_src->discontinuity = true;
         return;
