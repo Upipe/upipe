@@ -2666,6 +2666,38 @@ static int upipe_netmap_sink_provide_flow_format(struct upipe *upipe,
     return urequest_provide_flow_format(request, flow_format);
 }
 
+static int upipe_netmap_set_option(struct upipe *upipe, const char *option,
+        const char *value)
+{
+    struct upipe_netmap_sink *upipe_netmap_sink = upipe_netmap_sink_from_upipe(upipe);
+
+    if (!option || !value)
+        return UBASE_ERR_INVALID;
+
+    if (!strcmp(option, "rtp-type-video")) {
+        int type = atoi(value);
+        if (type < 0 || type > 255) {
+            upipe_err_va(upipe, "rtp-type-video value (%d) out of range 0..255", type);
+            return UBASE_ERR_INVALID;
+        }
+        upipe_netmap_sink->rtp_type_video = type;
+        return UBASE_ERR_NONE;
+    }
+
+    if (!strcmp(option, "rtp-type-audio")) {
+        int type = atoi(value);
+        if (type < 0 || type > 255) {
+            upipe_err_va(upipe, "rtp-type-audio value (%d) out of range 0..255", type);
+            return UBASE_ERR_INVALID;
+        }
+        upipe_netmap_sink->rtp_type_audio = type;
+        return UBASE_ERR_NONE;
+    }
+
+    upipe_err_va(upipe, "Unknown option %s", option);
+    return UBASE_ERR_INVALID;
+}
+
 /** @internal @This processes control commands on a netmap sink pipe.
  *
  * @param upipe description structure of the pipe
@@ -2725,6 +2757,12 @@ static int _upipe_netmap_sink_control(struct upipe *upipe,
                     upipe_netmap_sink_to_audio_subpipe(
                         upipe_netmap_sink_from_upipe(upipe)));
             return UBASE_ERR_NONE;
+        }
+
+        case UPIPE_SET_OPTION: {
+            const char *option = va_arg(args, const char *);
+            const char *value  = va_arg(args, const char *);
+            return upipe_netmap_set_option(upipe, option, value);
         }
 
         default:
@@ -3197,6 +3235,12 @@ static int audio_subpipe_set_option(struct upipe *upipe, const char *option,
         audio_subpipe->num_flows = audio_count_populated_flows(audio_subpipe);
         audio_subpipe->need_reconfig = true;
         return UBASE_ERR_NONE;
+    }
+
+    if (!strcmp(option, "rtp-type-audio")) {
+        /* Redirect into the main pipe */
+        return upipe_netmap_set_option(upipe_netmap_sink_to_upipe(upipe_netmap_sink_from_audio_subpipe(audio_subpipe)),
+                option, value);
     }
 
     upipe_err_va(upipe, "Unknown option %s", option);
