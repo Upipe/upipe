@@ -219,6 +219,7 @@ struct upipe_netmap_sink {
     /* RTP Header */
     uint8_t rtp_header[RTP_HEADER_SIZE + RFC_4175_EXT_SEQ_NUM_LEN + RFC_4175_HEADER_LEN];
     uint8_t audio_rtp_header[RTP_HEADER_SIZE];
+    uint8_t rtp_type_video, rtp_type_audio;
 
     unsigned gap_fakes_current;
     unsigned gap_fakes;
@@ -672,6 +673,11 @@ static struct upipe *_upipe_netmap_sink_alloc(struct upipe_mgr *mgr,
     }
 #endif
 #endif
+
+    memset(upipe_netmap_sink->rtp_header, 0, sizeof upipe_netmap_sink->rtp_header);
+    memset(upipe_netmap_sink->audio_rtp_header, 0, sizeof upipe_netmap_sink->audio_rtp_header);
+    upipe_netmap_sink->rtp_type_video = 98;
+    upipe_netmap_sink->rtp_type_audio = 97;
 
     /*
      * Audio subpipe.
@@ -2359,7 +2365,8 @@ static int upipe_netmap_sink_set_flow_def(struct upipe *upipe,
 
     if (!upipe_netmap_sink->rfc4175) {
         /* Largely constant headers so don't keep rewriting them */
-        upipe_netmap_put_rtp_headers(upipe_netmap_sink, upipe_netmap_sink->rtp_header, false, 98, false, false);
+        upipe_netmap_put_rtp_headers(upipe_netmap_sink, upipe_netmap_sink->rtp_header,
+                false, upipe_netmap_sink->rtp_type_video, false, false);
         upipe_put_hbrmt_headers(upipe, upipe_netmap_sink->rtp_header + RTP_HEADER_SIZE);
     } else {
             /* RTP Headers done in worker_rfc4175 */
@@ -2368,7 +2375,7 @@ static int upipe_netmap_sink_set_flow_def(struct upipe *upipe,
         /* RTP header for audio. */
         memset(upipe_netmap_sink->audio_rtp_header, 0, RTP_HEADER_SIZE);
         rtp_set_hdr(upipe_netmap_sink->audio_rtp_header);
-        rtp_set_type(upipe_netmap_sink->audio_rtp_header, 97);
+        rtp_set_type(upipe_netmap_sink->audio_rtp_header, upipe_netmap_sink->rtp_type_audio);
         rtp_set_seqnum(upipe_netmap_sink->audio_rtp_header, 0);
         rtp_set_timestamp(upipe_netmap_sink->audio_rtp_header, 0);
     }
