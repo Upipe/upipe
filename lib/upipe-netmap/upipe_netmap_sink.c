@@ -676,7 +676,7 @@ static struct upipe *_upipe_netmap_sink_alloc(struct upipe_mgr *mgr,
 
     memset(upipe_netmap_sink->rtp_header, 0, sizeof upipe_netmap_sink->rtp_header);
     memset(upipe_netmap_sink->audio_rtp_header, 0, sizeof upipe_netmap_sink->audio_rtp_header);
-    upipe_netmap_sink->rtp_type_video = 98;
+    upipe_netmap_sink->rtp_type_video = 96;
     upipe_netmap_sink->rtp_type_audio = 97;
 
     /*
@@ -931,7 +931,8 @@ static int worker_rfc4175(struct upipe_netmap_sink *upipe_netmap_sink, uint8_t *
 
     const uint16_t data_len1 = upipe_netmap_sink->payload;
 
-    upipe_netmap_put_rtp_headers(upipe_netmap_sink, upipe_netmap_sink->rtp_header, marker, 96, true, field);
+    upipe_netmap_put_rtp_headers(upipe_netmap_sink, upipe_netmap_sink->rtp_header,
+            marker, upipe_netmap_sink->rtp_type_video, true, field);
     upipe_put_rfc4175_headers(upipe_netmap_sink, upipe_netmap_sink->rtp_header + RTP_HEADER_SIZE, data_len1,
                               field, upipe_netmap_sink->line, continuation, upipe_netmap_sink->pixel_offset);
 
@@ -2366,7 +2367,7 @@ static int upipe_netmap_sink_set_flow_def(struct upipe *upipe,
     if (!upipe_netmap_sink->rfc4175) {
         /* Largely constant headers so don't keep rewriting them */
         upipe_netmap_put_rtp_headers(upipe_netmap_sink, upipe_netmap_sink->rtp_header,
-                false, upipe_netmap_sink->rtp_type_video, false, false);
+                false, 98, false, false);
         upipe_put_hbrmt_headers(upipe, upipe_netmap_sink->rtp_header + RTP_HEADER_SIZE);
     } else {
             /* RTP Headers done in worker_rfc4175 */
@@ -2681,10 +2682,6 @@ static int upipe_netmap_set_option(struct upipe *upipe, const char *option,
             return UBASE_ERR_INVALID;
         }
         upipe_netmap_sink->rtp_type_video = type;
-        /* FIXME: remove this after cleaning up how headers are handled.  IP
-         * details have (had) a similar issue about not updating. */
-        upipe_netmap_put_rtp_headers(upipe_netmap_sink, upipe_netmap_sink->rtp_header,
-                false, type, false, false);
         return UBASE_ERR_NONE;
     }
 
