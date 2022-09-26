@@ -2681,6 +2681,10 @@ static int upipe_netmap_set_option(struct upipe *upipe, const char *option,
             return UBASE_ERR_INVALID;
         }
         upipe_netmap_sink->rtp_type_video = type;
+        /* FIXME: remove this after cleaning up how headers are handled.  IP
+         * details have (had) a similar issue about not updating. */
+        upipe_netmap_put_rtp_headers(upipe_netmap_sink, upipe_netmap_sink->rtp_header,
+                false, type, false, false);
         return UBASE_ERR_NONE;
     }
 
@@ -2691,6 +2695,9 @@ static int upipe_netmap_set_option(struct upipe *upipe, const char *option,
             return UBASE_ERR_INVALID;
         }
         upipe_netmap_sink->rtp_type_audio = type;
+        /* FIXME: remove this after cleaning up how headers are handled.  IP
+         * details have (had) a similar issue about not updating. */
+        rtp_set_type(upipe_netmap_sink->audio_rtp_header, type);
         return UBASE_ERR_NONE;
     }
 
