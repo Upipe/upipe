@@ -62,12 +62,12 @@
 /** @This defines an 8-bit packing function. */
 typedef void (*upipe_v210enc_pack_line_8)(
         const uint8_t *y, const uint8_t *u, const uint8_t *v,
-        uint8_t *dst, ptrdiff_t width);
+        uint8_t *dst, uintptr_t width);
 
 /** @This defines a 10-bit packing function. */
 typedef void (*upipe_v210enc_pack_line_10)(
         const uint16_t *y, const uint16_t *u, const uint16_t *v,
-        uint8_t *dst, ptrdiff_t width);
+        uint8_t *dst, uintptr_t width, uint32_t mask);
 
 /** upipe_v210enc structure with v210enc parameters */
 struct upipe_v210enc {
@@ -111,6 +111,8 @@ struct upipe_v210enc {
     const char *input_chroma_map[UPIPE_V210_MAX_PLANES+1];
     /** output chroma map */
     const char *output_chroma_map;
+
+    bool policy;
 
     /** public upipe structure */
     struct upipe upipe;
@@ -266,7 +268,8 @@ static bool upipe_v210enc_handle(struct upipe *upipe, struct uref *uref,
         for (h = 0; h < input_vsize; h++) {
             uint32_t val = 0;
             w = (input_hsize / 6) * 6;
-            upipe_v210enc->pack_line_10(y, u, v, dst, w);
+            upipe_v210enc->pack_line_10(y, u, v, dst, w,
+                    (upipe_v210enc->policy) ? 0x3ff : 0x3fc);
 
             y += w;
             u += w >> 1;
@@ -530,6 +533,7 @@ static int upipe_v210enc_provide_flow_format(struct upipe *upipe,
  */
 static int upipe_v210enc_control(struct upipe *upipe, int command, va_list args)
 {
+    struct upipe_v210enc *upipe_v210enc = upipe_v210enc_from_upipe(upipe);
     switch (command) {
         case UPIPE_REGISTER_REQUEST: {
             struct urequest *request = va_arg(args, struct urequest *);
@@ -554,6 +558,17 @@ static int upipe_v210enc_control(struct upipe *upipe, int command, va_list args)
         case UPIPE_SET_FLOW_DEF: {
             struct uref *flow = va_arg(args, struct uref *);
             return upipe_v210enc_set_flow_def(upipe, flow);
+        }
+
+        case UPIPE_SET_OPTION: {
+            const char *k = va_arg(args, const char *);
+            const char *v = va_arg(args, const char *);
+            if (!strcmp(k, "policy")) {
+                upipe_v210enc->policy = strcmp(v, "0");
+            } else
+                return UBASE_ERR_INVALID;
+
+            return UBASE_ERR_NONE;
         }
 
         default:
@@ -597,6 +612,8 @@ static struct upipe *upipe_v210enc_alloc(struct upipe_mgr *mgr,
     }
 #endif
 #endif
+
+    upipe_v210enc->policy = true;
 
     upipe_v210enc_init_urefcount(upipe);
     upipe_v210enc_init_ubuf_mgr(upipe);

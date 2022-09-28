@@ -40,8 +40,8 @@ void checkasm_check_planar10_input(void)
     struct {
         void (*sdi)(const uint16_t *y, const uint16_t *u, const uint16_t *v, uint8_t *l, const int64_t width);
         void (*sdi_2)(const uint16_t *y, const uint16_t *u, const uint16_t *v, uint8_t *dst1, uint8_t *dst2, uintptr_t pixels);
-        void (*uyvy)(uint16_t *dst, const uint16_t *y, const uint16_t *u, const uint16_t *v, uintptr_t pixels);
-        void (*v210)(const uint16_t *y, const uint16_t *u, const uint16_t *v, uint8_t *dst, ptrdiff_t pixels);
+        void (*uyvy)(uint16_t *dst, const uint16_t *y, const uint16_t *u, const uint16_t *v, uintptr_t pixels, uint32_t mask);
+        void (*v210)(const uint16_t *y, const uint16_t *u, const uint16_t *v, uint8_t *dst, uintptr_t pixels, uint32_t mask);
     } s = {
 #ifdef HAVE_NETMAP
         .sdi   = upipe_planar_to_sdi_10_c,
@@ -141,19 +141,19 @@ void checkasm_check_planar10_input(void)
         uint16_t dst0[NUM_SAMPLES];
         uint16_t dst1[NUM_SAMPLES];
 
-        declare_func(void, uint16_t *dst, const uint16_t *y, const uint16_t *u, const uint16_t *v, uintptr_t pixels);
+        declare_func(void, uint16_t *dst, const uint16_t *y, const uint16_t *u, const uint16_t *v, uintptr_t pixels, uint32_t mask);
 
         randomize_buffers(y0, y1, NUM_SAMPLES/2);
         randomize_buffers(u0, u1, NUM_SAMPLES/4);
         randomize_buffers(v0, v1, NUM_SAMPLES/4);
-        call_ref(dst0, y0, u0, v0, NUM_SAMPLES / 2);
-        call_new(dst1, y1, u1, v1, NUM_SAMPLES / 2);
+        call_ref(dst0, y0, u0, v0, NUM_SAMPLES / 2, 0xffff);
+        call_new(dst1, y1, u1, v1, NUM_SAMPLES / 2, 0xffff);
         if (memcmp(dst0, dst1, sizeof dst0)
                 || memcmp(y0, y1, sizeof y0)
                 || memcmp(u0, u1, sizeof u0)
                 || memcmp(v0, v1, sizeof v0))
             fail();
-        bench_new(dst1, y1, u1, v1, NUM_SAMPLES / 2);
+        bench_new(dst1, y1, u1, v1, NUM_SAMPLES / 2, 0xffff);
     }
     report("planar_to_uyvy_10");
 
@@ -168,19 +168,19 @@ void checkasm_check_planar10_input(void)
         uint8_t dst1[NUM_SAMPLES * 4 / 3 + 32];
         const int pixels = NUM_SAMPLES / 2 / 6 * 6;
 
-        declare_func(void, const uint16_t *y, const uint16_t *u, const uint16_t *v, uint8_t *dst, ptrdiff_t pixels);
+        declare_func(void, const uint16_t *y, const uint16_t *u, const uint16_t *v, uint8_t *dst, uintptr_t pixels, uint32_t mask);
 
         randomize_buffers(y0, y1, NUM_SAMPLES/2);
         randomize_buffers(u0, u1, NUM_SAMPLES/4);
         randomize_buffers(v0, v1, NUM_SAMPLES/4);
-        call_ref(y0, u0, v0, dst0, pixels);
-        call_new(y1, u1, v1, dst1, pixels);
+        call_ref(y0, u0, v0, dst0, pixels, 0xffff);
+        call_new(y1, u1, v1, dst1, pixels, 0xffff);
         if (memcmp(dst0, dst1, pixels * 2 * 4 / 3)
                 || memcmp(y0, y1, sizeof y0)
                 || memcmp(u0, u1, sizeof u0)
                 || memcmp(v0, v1, sizeof v0))
             fail();
-        bench_new(y1, u1, v1, dst1, pixels);
+        bench_new(y1, u1, v1, dst1, pixels, 0xffff);
     }
     report("planar_to_v210_10");
 }
