@@ -70,6 +70,9 @@ void checkasm_check_sdi_input(void)
         s.uyvy = upipe_sdi_to_uyvy_avx2;
         s.v210 = upipe_sdi_to_v210_avx2;
     }
+    if (cpu_flags & AV_CPU_FLAG_AVX512) {
+        s.uyvy = upipe_sdi_to_uyvy_avx512;
+    }
 #endif
 
     if (check_func(s.planar10, "sdi_to_planar10")) {

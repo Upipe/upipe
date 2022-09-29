@@ -62,6 +62,8 @@
 #include <bitstream/ietf/rfc4175.h>
 #include <bitstream/ietf/rtp.h>
 
+#include "x86/avx512.h"
+
 /** @hidden */
 static int upipe_netmap_source_check(struct upipe *upipe, struct uref *flow_format);
 
@@ -306,6 +308,10 @@ static struct upipe *upipe_netmap_source_alloc(struct upipe_mgr *mgr,
         upipe_netmap_source->bitpacked_to_v210 = upipe_sdi_to_v210_avx2;
         upipe_netmap_source->bitpacked_to_planar_8 = upipe_sdi_to_planar_8_avx2;
         upipe_netmap_source->bitpacked_to_planar_10 = upipe_sdi_to_planar_10_avx2;
+   }
+
+   if (has_avx512_support()) {
+        upipe_netmap_source->sdi_to_uyvy = upipe_sdi_to_uyvy_avx512;
    }
 #endif
 #endif

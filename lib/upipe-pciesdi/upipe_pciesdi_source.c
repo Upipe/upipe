@@ -67,6 +67,8 @@
 #include "../upipe-hbrmt/upipe_hbrmt_common.h"
 #include "../upipe-hbrmt/sdidec.h"
 
+#include "x86/avx512.h"
+
 enum upipe_pciesdi_src_err {
     /** No RX signal or signal is not locked. */
     UPIPE_PCIESDI_SRC_ERR_NOSIGNAL = UBASE_ERR_LOCAL,
@@ -210,6 +212,11 @@ static struct upipe *upipe_pciesdi_src_alloc(struct upipe_mgr *mgr,
     if (__builtin_cpu_supports("avx2")) {
         upipe_pciesdi_src->sdi_to_uyvy = upipe_sdi_to_uyvy_avx2;
         upipe_pciesdi_src->levelb_to_uyvy = upipe_levelb_to_uyvy_avx2;
+    }
+
+    if (has_avx512_support()) {
+        upipe_pciesdi_src->sdi_to_uyvy = upipe_sdi_to_uyvy_avx512;
+        upipe_pciesdi_src->levelb_to_uyvy = upipe_levelb_to_uyvy_avx512;
     }
 #endif
 #endif
