@@ -219,7 +219,7 @@ struct upipe_netmap_sink {
     /* RTP Header */
     uint8_t rtp_header[RTP_HEADER_SIZE + RFC_4175_EXT_SEQ_NUM_LEN + RFC_4175_HEADER_LEN];
     uint8_t audio_rtp_header[RTP_HEADER_SIZE];
-    uint8_t rtp_type_video, rtp_type_audio;
+    uint8_t rtp_pt_video, rtp_pt_audio;
 
     unsigned gap_fakes_current;
     unsigned gap_fakes;
@@ -676,8 +676,8 @@ static struct upipe *_upipe_netmap_sink_alloc(struct upipe_mgr *mgr,
 
     memset(upipe_netmap_sink->rtp_header, 0, sizeof upipe_netmap_sink->rtp_header);
     memset(upipe_netmap_sink->audio_rtp_header, 0, sizeof upipe_netmap_sink->audio_rtp_header);
-    upipe_netmap_sink->rtp_type_video = 96;
-    upipe_netmap_sink->rtp_type_audio = 97;
+    upipe_netmap_sink->rtp_pt_video = 96;
+    upipe_netmap_sink->rtp_pt_audio = 97;
 
     /*
      * Audio subpipe.
@@ -932,7 +932,7 @@ static int worker_rfc4175(struct upipe_netmap_sink *upipe_netmap_sink, uint8_t *
     const uint16_t data_len1 = upipe_netmap_sink->payload;
 
     upipe_netmap_put_rtp_headers(upipe_netmap_sink, upipe_netmap_sink->rtp_header,
-            marker, upipe_netmap_sink->rtp_type_video, true, field);
+            marker, upipe_netmap_sink->rtp_pt_video, true, field);
     upipe_put_rfc4175_headers(upipe_netmap_sink, upipe_netmap_sink->rtp_header + RTP_HEADER_SIZE, data_len1,
                               field, upipe_netmap_sink->line, continuation, upipe_netmap_sink->pixel_offset);
 
@@ -2376,7 +2376,7 @@ static int upipe_netmap_sink_set_flow_def(struct upipe *upipe,
         /* RTP header for audio. */
         memset(upipe_netmap_sink->audio_rtp_header, 0, RTP_HEADER_SIZE);
         rtp_set_hdr(upipe_netmap_sink->audio_rtp_header);
-        rtp_set_type(upipe_netmap_sink->audio_rtp_header, upipe_netmap_sink->rtp_type_audio);
+        rtp_set_type(upipe_netmap_sink->audio_rtp_header, upipe_netmap_sink->rtp_pt_audio);
         rtp_set_seqnum(upipe_netmap_sink->audio_rtp_header, 0);
         rtp_set_timestamp(upipe_netmap_sink->audio_rtp_header, 0);
     }
@@ -2681,7 +2681,7 @@ static int upipe_netmap_set_option(struct upipe *upipe, const char *option,
             upipe_err_va(upipe, "rtp-pt-video value (%d) out of range 0..255", type);
             return UBASE_ERR_INVALID;
         }
-        upipe_netmap_sink->rtp_type_video = type;
+        upipe_netmap_sink->rtp_pt_video = type;
         return UBASE_ERR_NONE;
     }
 
@@ -2691,7 +2691,7 @@ static int upipe_netmap_set_option(struct upipe *upipe, const char *option,
             upipe_err_va(upipe, "rtp-pt-audio value (%d) out of range 0..255", type);
             return UBASE_ERR_INVALID;
         }
-        upipe_netmap_sink->rtp_type_audio = type;
+        upipe_netmap_sink->rtp_pt_audio = type;
         /* FIXME: remove this after cleaning up how headers are handled.  IP
          * details have (had) a similar issue about not updating. */
         rtp_set_type(upipe_netmap_sink->audio_rtp_header, type);
