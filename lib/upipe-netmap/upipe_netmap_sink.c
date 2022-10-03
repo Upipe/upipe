@@ -2677,8 +2677,8 @@ static int upipe_netmap_set_option(struct upipe *upipe, const char *option,
 
     if (!strcmp(option, "rtp-pt-video")) {
         int type = atoi(value);
-        if (type < 0 || type > 255) {
-            upipe_err_va(upipe, "rtp-pt-video value (%d) out of range 0..255", type);
+        if (type < 0 || type > 127) {
+            upipe_err_va(upipe, "rtp-pt-video value (%d) out of range 0..127", type);
             return UBASE_ERR_INVALID;
         }
         upipe_netmap_sink->rtp_pt_video = type;
@@ -2687,8 +2687,8 @@ static int upipe_netmap_set_option(struct upipe *upipe, const char *option,
 
     if (!strcmp(option, "rtp-pt-audio")) {
         int type = atoi(value);
-        if (type < 0 || type > 255) {
-            upipe_err_va(upipe, "rtp-pt-audio value (%d) out of range 0..255", type);
+        if (type < 0 || type > 127) {
+            upipe_err_va(upipe, "rtp-pt-audio value (%d) out of range 0..127", type);
             return UBASE_ERR_INVALID;
         }
         upipe_netmap_sink->rtp_pt_audio = type;
