@@ -1138,7 +1138,7 @@ static int upipe_ts_mux_input_set_flow_def(struct upipe *upipe,
     if (strstr(def, ".pic.sub.")) {
         input_type = UPIPE_TS_MUX_INPUT_OTHER;
         if (!ubase_ncmp(sub_def, ".dvb_teletext.") ||
-            !ubase_ncmp(sub_def, ".dvb_teletext."))
+            !ubase_ncmp(sub_def, ".dvb_subtitle."))
             UBASE_FATAL(upipe, uref_ts_flow_set_pes_id(
                     flow_def_dup, PES_STREAM_ID_PRIVATE_1));
     } else if (strstr(def, ".pic.")) {
