@@ -386,6 +386,9 @@ static int upipe_avcdec_get_buffer_pic(struct AVCodecContext *context,
         UBASE_FATAL(upipe, uref_pic_flow_set_sar(flow_def_attr, sar))
     }
 
+    if (context->color_range == AVCOL_RANGE_JPEG)
+        uref_pic_flow_set_full_range(flow_def_attr);
+
     if (unlikely(upipe_avcdec->ubuf_mgr != NULL &&
                  udict_cmp(upipe_avcdec->flow_def_format->udict,
                            flow_def_attr->udict))) {
@@ -433,7 +436,8 @@ static int upipe_avcdec_get_buffer_pic(struct AVCodecContext *context,
             goto error;
         }
 
-        ubuf_pic_clear(ubuf, 0, 0, -1, -1, 0);
+        ubuf_pic_clear(ubuf, 0, 0, -1, -1,
+                       frame->color_range == AVCOL_RANGE_JPEG);
     }
     uref_attach_ubuf(uref, ubuf);
 
@@ -973,6 +977,7 @@ static void upipe_avcdec_output_sub(struct upipe *upipe, AVSubtitle *sub,
     UBASE_FATAL(upipe, uref_pic_flow_set_vsize(flow_def_attr, height_aligned))
     UBASE_FATAL(upipe, uref_pic_flow_set_hsize_visible(flow_def_attr, w))
     UBASE_FATAL(upipe, uref_pic_flow_set_vsize_visible(flow_def_attr, h))
+    UBASE_FATAL(upipe, uref_pic_flow_set_full_range(flow_def_attr))
 
     if (unlikely(upipe_avcdec->ubuf_mgr == NULL)) {
         upipe_avcdec->flow_def_format = uref_dup(flow_def_attr);
@@ -995,7 +1000,7 @@ static void upipe_avcdec_output_sub(struct upipe *upipe, AVSubtitle *sub,
     }
 
     uref_pic_set_progressive(uref);
-    ubuf_pic_clear(ubuf, 0, 0, -1, -1, 0);
+    ubuf_pic_clear(ubuf, 0, 0, -1, -1, 1);
 
     uref_attach_ubuf(uref, ubuf);
 
