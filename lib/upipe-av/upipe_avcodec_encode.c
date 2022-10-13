@@ -59,6 +59,7 @@
 #include "upipe-framers/uref_h264.h"
 #include "upipe-framers/uref_mpgv.h"
 #include "upipe-framers/uref_mpga_flow.h"
+#include "upipe-ts/uref_ts_flow.h"
 
 #include <stdlib.h>
 #include <stdbool.h>
@@ -74,6 +75,7 @@
 #include <libavutil/channel_layout.h>
 #include <bitstream/mpeg/h264.h>
 #include <bitstream/mpeg/mp2v.h>
+#include <bitstream/dvb/sub.h>
 
 #include "upipe-av/upipe_av_pixfmt.h"
 #include "upipe-av/upipe_av_samplefmt.h"
@@ -85,6 +87,11 @@ UREF_ATTR_INT(avcenc, priv, "x.avcenc_priv", avcenc private pts)
 
 /** start offset of avcodec PTS */
 #define AVCPTS_INIT 1
+/** T-STD TB octet rate for DVB subtitles with display definition segment */
+#define TB_RATE_DVBSUB_DISP 50000
+/** DVB subtitles buffer size with display definition segment
+ * (ETSI EN 300 743 5.) */
+#define BS_DVBSUB_DISP 102400
 
 /** @hidden */
 static int upipe_avcenc_check_ubuf_mgr(struct upipe *upipe,
@@ -559,6 +566,15 @@ static void upipe_avcenc_build_flow_def(struct upipe *upipe)
                                       context->extradata_size))
     }
 
+    if (context->codec->id == AV_CODEC_ID_DVB_SUBTITLE) {
+        int type = 0x10;
+        if (ubase_check(uref_flow_get_hearing_impaired(flow_def, 0)))
+            type += 0x10;
+        UBASE_FATAL(upipe, uref_ts_flow_set_sub_type(flow_def, type, 0))
+        UBASE_FATAL(upipe, uref_ts_flow_set_sub_composition(flow_def, 1, 0))
+        UBASE_FATAL(upipe, uref_ts_flow_set_sub_ancillary(flow_def, 1, 0))
+    }
+
     upipe_avcenc_store_flow_def(upipe, flow_def);
 }
 
@@ -718,6 +734,132 @@ static int upipe_avcenc_encode_frame(struct upipe *upipe,
     av_packet_unref(upipe_avcenc->avpkt);
 
     return UBASE_ERR_NONE;
+}
+
+#define MIN(A, B) ((A) < (B) ? (A) : (B))
+#define MAX(A, B) ((A) > (B) ? (A) : (B))
+
+/** @internal @This encodes subtitles.
+ *
+ * @param upipe description structure of the pipe
+ * @param uref uref structure
+ * @param upump_p reference to upump structure
+ */
+static void upipe_avcenc_encode_subtitle(struct upipe *upipe,
+                                         struct uref *uref,
+                                         struct upump **upump_p)
+{
+    struct upipe_avcenc *upipe_avcenc = upipe_avcenc_from_upipe(upipe);
+    AVCodecContext *context = upipe_avcenc->context;
+
+    const uint8_t *data;
+    size_t stride;
+    if (unlikely(
+            !ubase_check(uref_pic_plane_size(
+                    uref, "b8g8r8a8", &stride, NULL, NULL, NULL)) ||
+            !ubase_check(uref_pic_plane_read(
+                    uref, "b8g8r8a8", 0, 0, -1, -1, &data)))) {
+        upipe_warn(upipe, "invalid buffer received");
+        uref_free(uref);
+        return;
+    }
+
+    int x_max = 0, x_min = context->width;
+    int y_max = 0, y_min = context->height;
+
+    for (int y = 0; y < context->height; y++)
+        for (int x = 0; x < context->width; x++)
+            if (data[y * stride + x * 4 + 3]) {
+                y_min = MIN(y_min, y);
+                y_max = MAX(y_max, y);
+                x_min = MIN(x_min, x);
+                x_max = MAX(x_max, x);
+            }
+
+    int x = x_min;
+    int y = y_min;
+    int width;
+    int height;
+    uint32_t palette[256];
+    uint8_t plane[context->width * context->height];
+    int colors = 0;
+    int num_rects = 1;
+
+    if (y == context->height) {
+        /* blank subtitle */
+        num_rects = 0;
+        x = 0;
+        y = 0;
+        width = 0;
+        height = 0;
+    } else {
+        height = y_max - y_min + 1;
+        width = x_max - x_min + 1;
+        for (int h = 0; h < height; h++)
+            for (int w = 0; w < width; w++) {
+                const uint8_t *p = data + (y + h) * stride + (x + w) * 4;
+                uint32_t c = (p[3] << 24) | (p[2] << 16) | (p[1] << 8) | p[0];
+                int i;
+                for (i = 0; i < colors; i++)
+                    if (palette[i] == c)
+                        break;
+                if (i == colors) {
+                    if (colors < UBASE_ARRAY_SIZE(palette))
+                        palette[colors++] = c;
+                    else
+                        i = 0;
+                }
+                plane[h * width + w] = i;
+            }
+    }
+
+    uref_pic_plane_unmap(uref, "b8g8r8a8", 0, 0, -1, -1);
+
+    struct AVSubtitleRect rect = {
+        .type = SUBTITLE_BITMAP,
+        .x = x,
+        .y = y,
+        .w = width,
+        .h = height,
+        .nb_colors = colors,
+        .data = { plane, (uint8_t *) palette },
+        .linesize = { width },
+    };
+    AVSubtitleRect *rects = &rect;
+    AVSubtitle subtitle = {
+        .num_rects = num_rects,
+        .rects = num_rects > 0 ? &rects : NULL,
+    };
+
+    /* set pts (needed for uref/avpkt mapping) */
+    upipe_verbose_va(upipe, "input pts %"PRId64, upipe_avcenc->avcpts);
+    int64_t pts = upipe_avcenc->avcpts++;
+    upipe_avcenc->avpkt->pts = upipe_avcenc->avpkt->dts = pts;
+    if (unlikely(!ubase_check(uref_avcenc_set_priv(uref, pts)))) {
+        uref_free(uref);
+        upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
+        return;
+    }
+
+    /* store uref in mapping list */
+    ulist_add(&upipe_avcenc->urefs_in_use, uref_to_uchain(uref));
+
+    uint8_t buf[1024 * 1024];
+    buf[0] = DVBSUB_DATA_IDENTIFIER;
+    buf[1] = 0x00;
+    int err = avcodec_encode_subtitle(context, buf + 2, sizeof buf - 3,
+                                      &subtitle);
+    if (err < 0) {
+        upipe_err_va(upipe, "avcodec_encode_subtitle: %s", av_err2str(err));
+        uref_free(uref);
+        return;
+    }
+
+    buf[2 + err] = 0xff;
+    upipe_avcenc->avpkt->data = buf;
+    upipe_avcenc->avpkt->size = 3 + err;
+    upipe_avcenc_output_pkt(upipe, upipe_avcenc->avpkt, upump_p);
+    av_packet_unref(upipe_avcenc->avpkt);
 }
 
 /** @internal @This encodes video frames.
@@ -1044,6 +1186,11 @@ static bool upipe_avcenc_handle(struct upipe *upipe, struct uref *uref,
                 upipe_avcenc_encode_audio(upipe, upump_p);
             break;
         }
+
+        case AVMEDIA_TYPE_SUBTITLE:
+            upipe_avcenc_encode_subtitle(upipe, uref, upump_p);
+            break;
+
         default:
             uref_free(uref);
             break;
@@ -1235,7 +1382,16 @@ static int upipe_avcenc_set_flow_def(struct upipe *upipe, struct uref *flow_def)
         return UBASE_ERR_ALLOC;
     }
 
-    if (!ubase_ncmp(def, "pic.")) {
+    if (!ubase_ncmp(def, "pic.sub.")) {
+        uint64_t hsize, vsize;
+        if (!ubase_check(uref_pic_flow_get_hsize(flow_def, &hsize)) ||
+            !ubase_check(uref_pic_flow_get_vsize(flow_def, &vsize))) {
+            upipe_err(upipe, "incompatible flow def attributes");
+            uref_free(flow_def_check);
+            return UBASE_ERR_INVALID;
+        }
+
+    } else if (!ubase_ncmp(def, "pic.")) {
         uint64_t hsize, vsize;
         struct urational fps;
         if (!ubase_check(uref_pic_flow_get_hsize(flow_def, &hsize)) ||
@@ -1264,7 +1420,8 @@ static int upipe_avcenc_set_flow_def(struct upipe *upipe, struct uref *flow_def)
             upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
             return UBASE_ERR_ALLOC;
         }
-    } else {
+
+    } else if (!ubase_ncmp(def, "sound.")) {
         uint8_t channels;
         uint64_t rate;
         if (!ubase_check(uref_sound_flow_get_channels(flow_def, &channels)) ||
@@ -1296,6 +1453,31 @@ static int upipe_avcenc_set_flow_def(struct upipe *upipe, struct uref *flow_def)
             return UBASE_ERR_BUSY;
         }
         uref_free(flow_def_check);
+
+    } else if (!ubase_ncmp(def, "pic.sub.")) {
+        uint64_t hsize = 0, vsize = 0;
+        uref_pic_flow_get_hsize(flow_def, &hsize);
+        uref_pic_flow_get_vsize(flow_def, &vsize);
+        uref_pic_flow_get_hsize_visible(flow_def, &hsize);
+        uref_pic_flow_get_vsize_visible(flow_def, &vsize);
+        context->width = hsize;
+        context->height = vsize;
+
+        context->time_base.num = 1;
+        context->time_base.den = 1;
+
+        struct urational sar;
+        if (ubase_check(uref_pic_flow_get_sar(flow_def, &sar))) {
+            context->sample_aspect_ratio.num = sar.num;
+            context->sample_aspect_ratio.den = sar.den;
+        }
+
+        if (codec->id == AV_CODEC_ID_DVB_SUBTITLE) {
+            context->bit_rate = TB_RATE_DVBSUB_DISP * 8;
+            context->rc_buffer_size = BS_DVBSUB_DISP * 8;
+        }
+
+        upipe_avcenc_store_flow_def_check(upipe, flow_def_check);
 
     } else if (!ubase_ncmp(def, "pic.")) {
         uint64_t hsize = 0, vsize = 0;
@@ -1492,7 +1674,14 @@ static int _upipe_avcenc_provide_flow_format(struct upipe *upipe,
     const char *def;
     if (unlikely(!ubase_check(uref_flow_get_def(flow_format, &def))))
         goto upipe_avcenc_provide_flow_format_err;
-    if (!ubase_ncmp(def, "pic.")) {
+
+    if (!ubase_ncmp(def, "pic.sub.")) {
+        if (codec->type != AVMEDIA_TYPE_SUBTITLE ||
+            codec->id != AV_CODEC_ID_DVB_SUBTITLE)
+            goto upipe_avcenc_provide_flow_format_err;
+        return urequest_provide_flow_format(request, flow_format);
+
+    } else if (!ubase_ncmp(def, "pic.")) {
         if (unlikely(codec->pix_fmts == NULL || codec->pix_fmts[0] == -1))
             goto upipe_avcenc_provide_flow_format_err;
 

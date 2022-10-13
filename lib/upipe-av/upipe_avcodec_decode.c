@@ -53,6 +53,7 @@
 #include "upipe-av/upipe_avcodec_decode.h"
 #include "upipe-av/ubuf_av.h"
 #include "upipe-framers/uref_h26x.h"
+#include "upipe-ts/uref_ts_flow.h"
 
 #include <stdlib.h>
 #include <stdbool.h>
@@ -903,6 +904,71 @@ static void upipe_avcdec_set_time_attributes(struct upipe *upipe,
     }
 }
 
+/** @internal @This builds the flow definition packet for subtitles.
+ *
+ * @param upipe description structure of the pipe
+ * @param flow_def_attr flow def attributes uref
+ */
+static void upipe_avcdec_build_flow_def_sub(struct upipe *upipe,
+                                            struct uref *flow_def_attr)
+{
+    struct upipe_avcdec *upipe_avcdec = upipe_avcdec_from_upipe(upipe);
+    struct uref *flow_def =
+        upipe_avcdec_store_flow_def_attr(upipe, flow_def_attr);
+    if (flow_def == NULL)
+        return;
+
+    if (upipe_avcdec->context->codec_id == AV_CODEC_ID_DVB_TELETEXT) {
+        uint8_t *txt_page;
+        if (av_opt_get(upipe_avcdec->context, "txt_page",
+                       AV_OPT_SEARCH_CHILDREN, &txt_page) >= 0 &&
+            strlen((const char *) txt_page) == 3) {
+            int d_magazine = txt_page[0] - '0';
+            int d_page = strtoul((const char *) txt_page + 1, NULL, 16);
+            if (d_magazine == 8)
+                d_magazine = 0;
+            av_free(txt_page);
+
+            int d_type = 0;
+            char d_lang[4];
+            uint8_t languages = 0;
+            uref_flow_get_languages(flow_def, &languages);
+            for (uint8_t l = 0; l < languages; l++) {
+                const char *lang;
+                uint8_t type = 0;
+                uint8_t magazine = 0;
+                uint8_t page = 0;
+                uref_flow_get_language(flow_def, &lang, l);
+                uref_ts_flow_get_telx_type(flow_def, &type, l);
+                uref_ts_flow_get_telx_magazine(flow_def, &magazine, l);
+                uref_ts_flow_get_telx_page(flow_def, &page, l);
+                if (magazine == d_magazine && page == d_page) {
+                    strncpy(d_lang, lang, 3);
+                    d_lang[3] = '\0';
+                    d_type = type;
+                }
+                uref_flow_delete_language(flow_def, l);
+                uref_ts_flow_delete_telx_type(flow_def, l);
+                uref_ts_flow_delete_telx_magazine(flow_def, l);
+                uref_ts_flow_delete_telx_page(flow_def, l);
+            }
+
+            if (d_type) {
+                uref_flow_set_languages(flow_def, 1);
+                uref_flow_set_language(flow_def, d_lang, 0);
+                if (d_type == 5)
+                    uref_flow_set_hearing_impaired(flow_def, 0);
+                else
+                    uref_flow_delete_hearing_impaired(flow_def, 0);
+            }
+        }
+    }
+
+    uref_block_flow_clear_format(flow_def);
+    uref_flow_delete_headers(flow_def);
+    upipe_avcdec_store_flow_def(upipe, flow_def);
+}
+
 /** @internal @This outputs subtitles.
  *
  * @param upipe description structure of the pipe
@@ -1055,15 +1121,8 @@ static void upipe_avcdec_output_sub(struct upipe *upipe, AVSubtitle *sub,
     }
 
     /* Find out if flow def attributes have changed. */
-    if (!upipe_avcdec_check_flow_def_attr(upipe, flow_def_attr)) {
-        struct uref *flow_def =
-            upipe_avcdec_store_flow_def_attr(upipe, flow_def_attr);
-        if (flow_def != NULL) {
-            uref_block_flow_clear_format(flow_def);
-            uref_flow_delete_headers(flow_def);
-            upipe_avcdec_store_flow_def(upipe, flow_def);
-        }
-    }
+    if (!upipe_avcdec_check_flow_def_attr(upipe, flow_def_attr))
+        upipe_avcdec_build_flow_def_sub(upipe, flow_def_attr);
 
     upipe_avcdec->uref = NULL;
 
