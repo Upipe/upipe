@@ -44,6 +44,7 @@ extern "C" {
 
 /** @internal flow definition prefix for pic allocator */
 #define UREF_PIC_FLOW_DEF "pic."
+#define UREF_PIC_SUB_FLOW_DEF "pic.sub."
 
 /* The following attributes define an ubuf picture manager format. */
 UREF_ATTR_SMALL_UNSIGNED(pic_flow, macropixel, "p.macropixel",

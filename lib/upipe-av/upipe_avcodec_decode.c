@@ -962,7 +962,7 @@ static void upipe_avcdec_output_sub(struct upipe *upipe, AVSubtitle *sub,
 #else
     uref_pic_flow_add_plane(flow_def_attr, 1, 1, 4, "b8g8r8a8");
 #endif
-    uref_flow_set_def(flow_def_attr, UREF_PIC_FLOW_DEF);
+    uref_flow_set_def(flow_def_attr, UREF_PIC_SUB_FLOW_DEF);
     uref_pic_set_progressive(flow_def_attr);
 
     int width_aligned = (w + 15) & ~15;
