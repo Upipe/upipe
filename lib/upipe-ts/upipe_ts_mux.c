@@ -1236,9 +1236,9 @@ static int upipe_ts_mux_input_set_flow_def(struct upipe *upipe,
                                                     max_octetrate * 6 / 5));
 
         if (!ubase_check(uref_block_flow_get_buffer_size(flow_def,
-                                                         &buffer_size) &&
+                                                         &buffer_size)) &&
             !ubase_check(uref_block_flow_get_max_buffer_size(flow_def,
-                                                         &buffer_size)))) {
+                                                         &buffer_size))) {
             uref_free(flow_def_dup);
             return UBASE_ERR_INVALID;
         }
