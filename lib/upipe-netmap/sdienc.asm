@@ -23,15 +23,18 @@
 
 SECTION_RODATA 32
 
-planar_8_y_shuf2: times 2 db 6, -1, 7, -1, 8, -1, 9, -1, 10, -1, 11, -1, -1, -1, -1, -1
-planar_8_y_mult: times 2 dw 0x40, 0x4, 0x40, 0x4, 0x40, 0x4, 0x0, 0x0
-planar_8_y_shuf_after: times 2 db -1, 1, 0, 3, 2, -1, 5, 4, 7, 6, -1, 9, 8, 11, 10, -1
+planar_8_y_shuf1: times 2 db 1, -1, 0, -1, 3, -1, 2, -1, 5, -1, 4, -1, -1, -1, -1, -1
+planar_8_y_shuf2: times 2 db 7, -1, 6, -1, 9, -1, 8, -1, 11, -1, 10, -1, -1, -1, -1, -1
+planar_8_y_mult: times 8 dw 0x4, 0x40
+planar_8_y_shift: times 8 dw 2, 6
 
-planar_8_uv_shuf:   times 2 db 0, -1, 8,  -1, -1, 1,  9,  -1, -1, -1, 2, -1, 10, -1, -1, -1
-planar_8_uv_shuf2:  times 2 db 3, -1, 11, -1, -1, 4, 12,  -1, -1, -1, 5, -1, 13, -1, -1, -1
+planar_8_uv_shuf1:   times 2 db -1,  8, -1, -1, -1,  9, -1, -1, -1, 10, -1, -1, 0, 1, 2, -1
+planar_8_uv_shuf2:  times 2 db -1, 11, -1, -1, -1, 12, -1, -1, -1, 13, -1, -1, 3, 4, 5, -1
 
-planar_8_uv_mult: times 2 dw 0x1, 0x10, 0x1, 0x10, 0x1, 0x1, 0x10, 0x1
-planar_8_uv_shuf3: times 2 db 0, -1, 3, 2, -1, 5, -1, 7, 6, -1, 10, -1, 13, 12, -1, -1
+planar_8_uv_mult: times 2 dd 0x10, 0x10, 0x10, 0x1
+planar_8_uv_shift: times 2 dd 4, 4, 4, 0
+
+planar_8_shuf_final: times 2 db 12, 3, 2, 1, 0, 13, 7, 6, 5, 4, 14, 11, 10, 9, 8, -1
 
 planar_10_y_mult:  times 2 dw 0x10, 0x1, 0x10, 0x1, 0x10, 0x1, 0x10, 0x1
 planar_10_uv_mult: times 2 dw 0x40, 0x40, 0x40, 0x40, 0x4, 0x4, 0x4, 0x4
@@ -66,25 +69,32 @@ cglobal planar_to_sdi_8, 5, 5, 6, y, u, v, l, pixels
 %endif
 
     pshufb    m4, m0, [planar_8_y_shuf2]
-    punpcklbw m0, m3
+    pshufb    m0, [planar_8_y_shuf1]
 
+%if cpuflag(avx512)
+    vpsllvw m4, m4, [planar_8_y_shift]
+    vpsllvw m0, m0, [planar_8_y_shift]
+%else
     pmullw m4, [planar_8_y_mult]
-    pshufb m4, [planar_8_y_shuf_after]
-
     pmullw m0, [planar_8_y_mult]
-    pshufb m0, [planar_8_y_shuf_after]
+%endif
 
     pshufb m5, m1, [planar_8_uv_shuf2]
-    pshufb m1, [planar_8_uv_shuf]
+    pshufb m1, [planar_8_uv_shuf1]
 
-    pmullw m5, [planar_8_uv_mult]
-    pmullw m1, [planar_8_uv_mult]
-
-    pshufb m5, [planar_8_uv_shuf3]
-    pshufb m1, [planar_8_uv_shuf3]
+%if cpuflag(avx512)
+    vpsllvd m5, m5, [planar_8_uv_shift]
+    vpsllvd m1, m1, [planar_8_uv_shift]
+%else
+    pmulld m5, [planar_8_uv_mult]
+    pmulld m1, [planar_8_uv_mult]
+%endif
 
     por    m4, m5
     por    m0, m1
+
+    pshufb m4, [planar_8_shuf_final]
+    pshufb m0, [planar_8_shuf_final]
 
     movu   [lq], xm0
     movu   [lq+15], xm4
@@ -123,25 +133,32 @@ cglobal planar_to_sdi_8_2, 5, 5, 4, y, u, v, dst1, dst2, pixels
 %endif
 
     pshufb    m4, m0, [planar_8_y_shuf2]
-    punpcklbw m0, m3
+    pshufb    m0, [planar_8_y_shuf1]
 
+%if cpuflag(avx512)
+    vpsllvw m4, m4, [planar_8_y_shift]
+    vpsllvw m0, m0, [planar_8_y_shift]
+%else
     pmullw m4, [planar_8_y_mult]
-    pshufb m4, [planar_8_y_shuf_after]
-
     pmullw m0, [planar_8_y_mult]
-    pshufb m0, [planar_8_y_shuf_after]
+%endif
 
     pshufb m5, m1, [planar_8_uv_shuf2]
-    pshufb m1, [planar_8_uv_shuf]
+    pshufb m1, [planar_8_uv_shuf1]
 
-    pmullw m5, [planar_8_uv_mult]
-    pmullw m1, [planar_8_uv_mult]
-
-    pshufb m5, [planar_8_uv_shuf3]
-    pshufb m1, [planar_8_uv_shuf3]
+%if cpuflag(avx512)
+    vpsllvd m5, m5, [planar_8_uv_shift]
+    vpsllvd m1, m1, [planar_8_uv_shift]
+%else
+    pmulld m5, [planar_8_uv_mult]
+    pmulld m1, [planar_8_uv_mult]
+%endif
 
     por    m4, m5
     por    m0, m1
+
+    pshufb m4, [planar_8_shuf_final]
+    pshufb m0, [planar_8_shuf_final]
 
     movu   [dst1q], xm0
     movu   [dst2q], xm0
@@ -163,11 +180,11 @@ RET
 
 %endmacro
 
-INIT_XMM ssse3
-planar_to_sdi_8
 INIT_XMM avx
 planar_to_sdi_8
 INIT_YMM avx2
+planar_to_sdi_8
+INIT_YMM avx512
 planar_to_sdi_8
 
 %macro planar_to_sdi_10 0
