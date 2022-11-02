@@ -78,6 +78,9 @@ void checkasm_check_planar8_input(void)
        s.sdi   = upipe_planar_to_sdi_8_avx512;
        s.sdi_2 = upipe_planar_to_sdi_8_2_avx512;
     }
+    if (cpu_flags & AV_CPU_FLAG_AVX512ICL) {
+       s.sdi   = upipe_planar_to_sdi_8_avx512icl;
+    }
 #endif
 
     if (check_func(s.sdi, "planar_to_sdi_8")) {
