@@ -47,15 +47,12 @@ SECTION .text
 %macro planar_to_sdi_8 0
 
 ; planar_to_sdi_8(const uint8_t *y, const uint8_t *u, const uint8_t *v, uint8_t *l, const int64_t width)
-cglobal planar_to_sdi_8, 5, 5, 6, y, u, v, l, pixels
+cglobal planar_to_sdi_8, 5, 5, 4, y, u, v, l, pixels
     shr    pixelsq, 1
     lea    yq, [yq + 2*pixelsq]
     add    uq, pixelsq
     add    vq, pixelsq
-
     neg    pixelsq
-
-    pxor   m3, m3
 
 .loop:
     movu   xm0, [yq + pixelsq*2] ; yyyy yyyy yyyy xxxx
@@ -68,40 +65,40 @@ cglobal planar_to_sdi_8, 5, 5, 6, y, u, v, l, pixels
     vinserti128 m1, m1, xm2, 1 ; uuuu uuxx vvvv vvxx uuuu uuxx vvvv vvxx
 %endif
 
-    pshufb    m4, m0, [planar_8_y_shuf2] ; y7 0 y6 0 y9 0 y8 0 y11 0 y10 0 0 0 0 0
+    pshufb    m3, m0, [planar_8_y_shuf2] ; y7 0 y6 0 y9 0 y8 0 y11 0 y10 0 0 0 0 0
     pshufb    m0, [planar_8_y_shuf1]     ; y1 0 y0 0 y3 0 y2 0  y5 0  y4 0 0 0 0 0
 
 %if cpuflag(avx512)
-    vpsllvw m4, m4, [planar_8_y_shift]
+    vpsllvw m3, m3, [planar_8_y_shift]
     vpsllvw m0, m0, [planar_8_y_shift] ; words y1<<2 y0<<6 ...
 %else
-    pmullw m4, [planar_8_y_mult]
+    pmullw m3, [planar_8_y_mult]
     pmullw m0, [planar_8_y_mult] ; words y1*4 y0*64 ...
 %endif
 
-    pshufb m5, m1, [planar_8_uv_shuf2] ; 0 v3 0 0 0 v4 0 0 0 v5 0 0 u3 u4 u5 0
+    pshufb m2, m1, [planar_8_uv_shuf2] ; 0 v3 0 0 0 v4 0 0 0 v5 0 0 u3 u4 u5 0
     pshufb m1, [planar_8_uv_shuf1]     ; 0 v0 0 0 0 v1 0 0 0 v2 0 0 u0 u1 u2 0
 
 %if cpuflag(avx512)
-    vpsllvd m5, m5, [planar_8_uv_shift]
+    vpsllvd m2, m2, [planar_8_uv_shift]
     vpsllvd m1, m1, [planar_8_uv_shift] ; dwords v0<<4 ...
 %else
-    pmulld m5, [planar_8_uv_mult]
+    pmulld m2, [planar_8_uv_mult]
     pmulld m1, [planar_8_uv_mult] ; dwords v0*16 ...
 %endif
 
-    por    m4, m5
+    por    m3, m2
     por    m0, m1 ; dwords low y1|v0|y0 high y3|v1|y2 y5|v2|y4 uuu0
 
-    pshufb m4, [planar_8_shuf_final]
+    pshufb m3, [planar_8_shuf_final]
     pshufb m0, [planar_8_shuf_final] ; insert u and endian swap dwords
 
     movu   [lq], xm0
-    movu   [lq+15], xm4
+    movu   [lq+15], xm3
 
 %if cpuflag(avx2)
     vextracti128 [lq+((15*mmsize)/16)], m0, 1
-    vextracti128 [lq+((15*mmsize)/16)+15], m4, 1
+    vextracti128 [lq+((15*mmsize)/16)+15], m3, 1
 %endif
 
     add    lq, (30*mmsize)/16
