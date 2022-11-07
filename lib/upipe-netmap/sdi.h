@@ -14,8 +14,10 @@ void upipe_planar_to_sdi_8_2_c(const uint8_t *y, const uint8_t *u, const uint8_t
 void upipe_planar_to_sdi_8_2_avx(const uint8_t *y, const uint8_t *u, const uint8_t *v, uint8_t *dst1, uint8_t *dst2, uintptr_t pixels);
 void upipe_planar_to_sdi_8_2_avx2(const uint8_t *y, const uint8_t *u, const uint8_t *v, uint8_t *dst1, uint8_t *dst2, uintptr_t pixels);
 void upipe_planar_to_sdi_8_2_avx512(const uint8_t *y, const uint8_t *u, const uint8_t *v, uint8_t *dst1, uint8_t *dst2, uintptr_t pixels);
+void upipe_planar_to_sdi_8_2_avx512icl(const uint8_t *y, const uint8_t *u, const uint8_t *v, uint8_t *dst1, uint8_t *dst2, uintptr_t pixels);
 
 void upipe_planar_to_sdi_10_2_c(const uint16_t *y, const uint16_t *u, const uint16_t *v, uint8_t *dst1, uint8_t *dst2, uintptr_t pixels);
 void upipe_planar_to_sdi_10_2_ssse3(const uint16_t *y, const uint16_t *u, const uint16_t *v, uint8_t *dst1, uint8_t *dst2, uintptr_t pixels);
 void upipe_planar_to_sdi_10_2_avx(const uint16_t *y, const uint16_t *u, const uint16_t *v, uint8_t *dst1, uint8_t *dst2, uintptr_t pixels);
 void upipe_planar_to_sdi_10_2_avx2(const uint16_t *y, const uint16_t *u, const uint16_t *v, uint8_t *dst1, uint8_t *dst2, uintptr_t pixels);
+void upipe_planar_to_sdi_10_2_avx512icl(const uint16_t *y, const uint16_t *u, const uint16_t *v, uint8_t *dst1, uint8_t *dst2, uintptr_t pixels);

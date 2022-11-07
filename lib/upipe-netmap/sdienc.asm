@@ -164,9 +164,16 @@ planar_to_sdi_8 _2
 INIT_YMM avx512
 planar_to_sdi_8
 planar_to_sdi_8 _2
-INIT_ZMM avx512icl
 
-cglobal planar_to_sdi_8, 5, 5, 6, y, u, v, dst, pixels
+%macro icl_planar8 0-1
+
+cglobal planar_to_sdi_8%1, 5+%0, 5+%0, 6, y, u, v, dst1, dst2, p
+    %if %0 == 1
+        %define pixelsq pq
+    %else
+        %define pixelsq dst2q
+    %endif
+
     shr    pixelsq, 1
     lea    yq, [yq + 2*pixelsq]
     add    uq, pixelsq
@@ -192,11 +199,17 @@ cglobal planar_to_sdi_8, 5, 5, 6, y, u, v, dst, pixels
         vpermb  m1{k2}{z}, m5, m1 ; move u, endian swap v, and make space for y where the k-mask sets to 0
         por m0, m1
 
-        movu   [dstq], m0
-        add     dstq, 60
+        movu   [dst1q], m0
+        add     dst1q, 60
+        %if %0 == 1
+            movu [dst2q], m0
+            add    dst2q, 60
+        %endif
         add  pixelsq, 12
     jl .loop
 RET
+
+%endmacro
 
 %macro planar_to_sdi_10 0-1
 
@@ -262,9 +275,16 @@ planar_to_sdi_10 _2
 INIT_YMM avx2
 planar_to_sdi_10
 planar_to_sdi_10 _2
-INIT_ZMM avx512icl
 
-cglobal planar_to_sdi_10, 5, 5, 6, y, u, v, dst, pixels
+%macro icl_planar10 0-1
+
+cglobal planar_to_sdi_10%1, 5+%0, 5+%0, 6, y, u, v, dst1, dst2, p
+    %if %0 == 1
+        %define pixelsq pq
+    %else
+        %define pixelsq dst2q
+    %endif
+
     lea    yq, [yq + 2*pixelsq]
     add    uq, pixelsq
     add    vq, pixelsq
@@ -288,8 +308,20 @@ cglobal planar_to_sdi_10, 5, 5, 6, y, u, v, dst, pixels
         vpermb  m1{k2}{z}, m5, m1 ; endian swap and make space for y where the k-mask sets to zero
         por m0, m1
 
-        movu   [dstq], m0
-        add     dstq, 60
+        movu   [dst1q], m0
+        add    dst1q, 60
+        %if %0 == 1
+            movu [dst2q], m0
+            add    dst2q, 60
+        %endif
         add  pixelsq, 24
     jl .loop
 RET
+
+%endmacro
+
+INIT_ZMM avx512icl
+icl_planar8
+icl_planar8 _2
+icl_planar10
+icl_planar10 _2

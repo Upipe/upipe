@@ -75,6 +75,7 @@ void checkasm_check_planar10_input(void)
     }
     if (cpu_flags & AV_CPU_FLAG_AVX512ICL) {
        s.sdi   = upipe_planar_to_sdi_10_avx512icl;
+       s.sdi_2 = upipe_planar_to_sdi_10_2_avx512icl;
     }
 #endif
 
