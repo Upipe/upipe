@@ -23,7 +23,12 @@ static inline bool has_avx512_support(void)
         && __builtin_cpu_supports("avx512cd")
         && __builtin_cpu_supports("avx512bw")
         && __builtin_cpu_supports("avx512dq")
-        && __builtin_cpu_supports("avx512vl")
+        && __builtin_cpu_supports("avx512vl");
+}
+
+static inline bool has_avx512icl_support(void)
+{
+    return has_avx512_support()
         && __builtin_cpu_supports("avx512vnni")
         && __builtin_cpu_supports("avx512ifma")
         && __builtin_cpu_supports("avx512vbmi")
@@ -63,7 +68,7 @@ static inline bool has_avx512_support(void)
                     cpuid(7, 0, eax, ebx, ecx, edx);
                     if (X(ebx, 0x00000128)) /* BMI1/BMI2/AVX2 */ {
                         if (X(xcrlow, 0x000000e0)) /* ZMM/OPMASK */ {
-                            if (X(ebx, 0xd0230000) && X(ecx, 0x00005f42))
+                            if (X(ebx, 0xd0030000))
                                 return true;
                         }
                     }
@@ -74,11 +79,28 @@ static inline bool has_avx512_support(void)
     return false;
 }
 
+static inline bool has_avx512icl_support(void)
+{
+    uint32_t eax, ebx, ecx, edx;
+    if (has_avx512_support()) {
+        cpuid(7, 0, eax, ebx, ecx, edx);
+        if (X(ebx, 0x200000) && X(ecx, 0x5f42))
+            return true;
+    }
+    return false;
+}
+
+
 #undef X
 
 #else
 
 static inline bool has_avx512_support(void)
+{
+    return false;
+}
+
+static inline bool has_avx512icl_support(void)
 {
     return false;
 }
