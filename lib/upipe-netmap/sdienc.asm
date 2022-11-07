@@ -39,6 +39,9 @@ icl_perm_uv: ; vpermb does not set bytes to zero when the high bit is set unlike
 %endrep
 times 4 db -1 ; padding to 64 bytes
 
+icl_planar10_shift_uv:
+    times 16 dw 2 ; shift v left by 2
+    times 16 dw 6 ; shift u left by 6
 icl_planar8_shift_uv:
     times 16 dw 4 ; shift v left by 4
     times 16 dw 8 ; shift u left by 8
@@ -66,6 +69,8 @@ planar_10_uv_shuf: times 2 db 1, 0, 9, 8, -1, 3, 2, 11, 10, -1, 5, 4, 13, 12, -1
 
 icl_perm_y_kmask:  dq 0b11110_11110_11110_11110_11110_11110_11110_11110_11110_11110_11110_11110
 icl_perm_uv_kmask: dq 0b01111_01111_01111_01111_01111_01111_01111_01111_01111_01111_01111_01111
+
+icl_planar10_shift_y: dw 4, 0
 
 SECTION .text
 
@@ -257,3 +262,34 @@ planar_to_sdi_10 _2
 INIT_YMM avx2
 planar_to_sdi_10
 planar_to_sdi_10 _2
+INIT_ZMM avx512icl
+
+cglobal planar_to_sdi_10, 5, 5, 6, y, u, v, dst, pixels
+    lea    yq, [yq + 2*pixelsq]
+    add    uq, pixelsq
+    add    vq, pixelsq
+    neg    pixelsq
+
+    vpbroadcastd m2, [icl_planar10_shift_y]
+    movu         m3, [icl_planar10_shift_uv]
+    mova         m4, [icl_perm_y]
+    mova         m5, [icl_perm_uv]
+    kmovq        k1, [icl_perm_y_kmask]
+    kmovq        k2, [icl_perm_uv_kmask]
+
+    .loop:
+        movu         zm0, [yq + pixelsq*2]
+        movu         ym1, [vq + pixelsq*1]    ; load v into low end
+        vinserti32x8 zm1, [uq + pixelsq*1], 1 ; load u into high end
+
+        vpsllvw m0, m2
+        vpsllvw m1, m3
+        vpermb  m0{k1}{z}, m4, m0 ; endian swap and make space for u where the k-mask sets to zero
+        vpermb  m1{k2}{z}, m5, m1 ; endian swap and make space for y where the k-mask sets to zero
+        por m0, m1
+
+        movu   [dstq], m0
+        add     dstq, 60
+        add  pixelsq, 24
+    jl .loop
+RET
