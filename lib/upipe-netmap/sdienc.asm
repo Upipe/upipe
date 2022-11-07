@@ -21,7 +21,29 @@
 
 %include "x86util.asm"
 
-SECTION_RODATA 32
+SECTION_RODATA 64
+
+icl_perm_y: ; vpermb does not set bytes to zero when the high bit is set unlike pshufb
+%assign i 0
+%rep 12
+    db -1, i+1, i+0, i+3, i+2
+    %assign i i+4
+%endrep
+times 4 db -1 ; padding to 64 bytes
+
+icl_perm_uv: ; vpermb does not set bytes to zero when the high bit is set unlike pshufb
+%assign i 0
+%rep 12
+    db i+33, i+32, i+1, i+0, -1
+    %assign i i+2
+%endrep
+times 4 db -1 ; padding to 64 bytes
+
+icl_planar8_shift_uv:
+    times 16 dw 4 ; shift v left by 4
+    times 16 dw 8 ; shift u left by 8
+
+; align 32
 
 planar_8_y_shuf1: times 2 db 1, -1, 0, -1, 3, -1, 2, -1,  5, -1,  4, -1, -1, -1, -1, -1
 planar_8_y_shuf2: times 2 db 7, -1, 6, -1, 9, -1, 8, -1, 11, -1, 10, -1, -1, -1, -1, -1
@@ -42,23 +64,8 @@ planar_10_uv_mult: times 2 dw 0x40, 0x40, 0x40, 0x40, 0x4, 0x4, 0x4, 0x4
 planar_10_y_shuf:  times 2 db -1, 1, 0, 3, 2, -1, 5, 4, 7, 6, -1, 9, 8, 11, 10, -1
 planar_10_uv_shuf: times 2 db 1, 0, 9, 8, -1, 3, 2, 11, 10, -1, 5, 4, 13, 12, -1, -1
 
-planar8_perm_y: ; vpermb does not set bytes to zero when the high bit is set unlike pshufb
-%assign i 0
-%rep 12
-    db -1, i+1, i+0, i+3, i+2
-    %assign i i+4
-%endrep
-times 4 db -1 ; padding to 64 bytes
-
-planar8_perm_uv: ; vpermb does not set bytes to zero when the high bit is set unlike pshufb
-%assign i 0
-%rep 12
-    db i+32, -1, i+1, i+0, -1
-    %assign i i+2
-%endrep
-times 4 db -1 ; padding to 64 bytes
-
-planar8_perm_y_kmask: dq 0b11110_11110_11110_11110_11110_11110_11110_11110_11110_11110_11110_11110
+icl_perm_y_kmask:  dq 0b11110_11110_11110_11110_11110_11110_11110_11110_11110_11110_11110_11110
+icl_perm_uv_kmask: dq 0b01111_01111_01111_01111_01111_01111_01111_01111_01111_01111_01111_01111
 
 SECTION .text
 
@@ -161,11 +168,12 @@ cglobal planar_to_sdi_8, 5, 5, 6, y, u, v, dst, pixels
     add    vq, pixelsq
     neg    pixelsq
 
-    vpbroadcastd  m2, [planar_8_y_shift+2] ; broadcast and "swap" values
-    vpbroadcastw ym3, [planar_8_uv_shift]  ; broadcast 4 and set high to 0
-    movu          m4, [planar8_perm_y]
-    movu          m5, [planar8_perm_uv]
-    kmovq         k1, [planar8_perm_y_kmask]
+    vpbroadcastd m2, [planar_8_y_shift+2] ; broadcast and "swap" values
+    movu         m3, [icl_planar8_shift_uv]
+    movu         m4, [icl_perm_y]
+    movu         m5, [icl_perm_uv]
+    kmovq        k1, [icl_perm_y_kmask]
+    kmovq        k2, [icl_perm_uv_kmask]
 
     .loop:
         vpmovzxbw    zm0, [yq + pixelsq*2]
@@ -176,7 +184,7 @@ cglobal planar_to_sdi_8, 5, 5, 6, y, u, v, dst, pixels
         vpsllvw m0, m2
         vpsllvw m1, m3
         vpermb  m0{k1}{z}, m4, m0 ; endian swap and make space for u where the k-mask sets to zero
-        vpermb  m1, m5, m1        ; move u and endian swap v
+        vpermb  m1{k2}{z}, m5, m1 ; move u, endian swap v, and make space for y where the k-mask sets to 0
         por m0, m1
 
         movu   [dstq], m0
