@@ -2481,6 +2481,9 @@ static void upipe_ts_mux_program_no_input(struct upipe *upipe)
 {
     struct upipe_ts_mux_program *upipe_ts_mux_program =
         upipe_ts_mux_program_from_upipe(upipe);
+    struct upipe_ts_mux *mux =
+        upipe_ts_mux_from_program_mgr(upipe->mgr);
+    struct upipe *super = upipe_use(upipe_ts_mux_to_upipe(mux));
 
     upipe_ts_mux_program_clean_sub(upipe);
     uref_free(upipe_ts_mux_program->flow_def_input);
@@ -2488,6 +2491,9 @@ static void upipe_ts_mux_program_no_input(struct upipe *upipe)
     upipe_ts_mux_psi_pid_release(upipe_ts_mux_program->psi_pid_pmt);
     upipe_release(upipe_ts_mux_program->sig_service);
     upipe_ts_mux_program_clean_sub_inputs(upipe);
+
+    upipe_ts_mux_update(super);
+    upipe_release(super);
 
     urefcount_release(upipe_ts_mux_program_to_urefcount_real(upipe_ts_mux_program));
 }
