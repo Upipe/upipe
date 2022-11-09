@@ -419,13 +419,16 @@ static inline int64_t urational_cmp(const struct urational *urational1,
  * @param urational2 pointer to rational 2
  * @return a rational
  */
-static inline struct urational urational_add(const struct urational *urational1,
-                                             const struct urational *urational2)
+static inline struct urational urational_add(const struct urational *v1,
+                                             const struct urational *v2)
 {
-    struct urational sum;
-    sum.num = urational1->num * (int64_t)urational2->den +
-              urational2->num * (int64_t)urational1->den;
-    sum.den = urational1->den * urational2->den;
+    uint64_t gcd = ubase_gcd(v1->den, v2->den);
+    uint64_t d1 = v1->den / gcd;
+    uint64_t d2 = v2->den / gcd;
+    struct urational sum = {
+        .num = v1->num * (int64_t)d2 + v2->num * (int64_t)d1,
+        .den = d1 * d2 * gcd,
+    };
     urational_simplify(&sum);
     return sum;
 }
