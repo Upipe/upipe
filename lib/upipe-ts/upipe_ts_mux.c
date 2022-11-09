@@ -2482,12 +2482,12 @@ static void upipe_ts_mux_program_no_input(struct upipe *upipe)
     struct upipe_ts_mux_program *upipe_ts_mux_program =
         upipe_ts_mux_program_from_upipe(upipe);
 
+    upipe_ts_mux_program_clean_sub(upipe);
     uref_free(upipe_ts_mux_program->flow_def_input);
     upipe_ts_mux_program_clean_bin_input(upipe);
     upipe_ts_mux_psi_pid_release(upipe_ts_mux_program->psi_pid_pmt);
     upipe_release(upipe_ts_mux_program->sig_service);
     upipe_ts_mux_program_clean_sub_inputs(upipe);
-    upipe_ts_mux_program_clean_sub(upipe);
 
     urefcount_release(upipe_ts_mux_program_to_urefcount_real(upipe_ts_mux_program));
 }
