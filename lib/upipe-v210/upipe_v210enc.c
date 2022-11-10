@@ -56,6 +56,7 @@
 #include <upipe-v210/upipe_v210enc.h>
 
 #include "v210enc.h"
+#include "x86/avx512.h"
 
 #define UPIPE_V210_MAX_PLANES 3
 
@@ -609,6 +610,16 @@ static struct upipe *upipe_v210enc_alloc(struct upipe_mgr *mgr,
     if (__builtin_cpu_supports("avx2")) {
         upipe_v210enc->pack_line_8  = upipe_planar_to_v210_8_avx2;
         upipe_v210enc->pack_line_10 = upipe_planar_to_v210_10_avx2;
+    }
+
+    if (has_avx512_support()) {
+        upipe_v210enc->pack_line_8  = upipe_planar_to_v210_8_avx512;
+        upipe_v210enc->pack_line_10 = upipe_planar_to_v210_10_avx512;
+    }
+
+    if (has_avx512icl_support()) {
+        upipe_v210enc->pack_line_8  = upipe_planar_to_v210_8_avx512icl;
+        upipe_v210enc->pack_line_10 = upipe_planar_to_v210_10_avx512icl;
     }
 #endif
 #endif
