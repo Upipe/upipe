@@ -857,9 +857,10 @@ static bool upipe_ts_encaps_count_pcr_au(struct upipe *upipe,
         if (unlikely(!ubase_check(uref_clock_get_cr_sys(uref, &cr_sys))))
             break;
 
-        while (last_pcr + encaps->pcr_interval <= cr_sys) {
-            last_pcr += encaps->pcr_interval;
-            (*nb_pcr_p)++;
+        if (last_pcr + encaps->pcr_interval <= cr_sys) {
+            size_t nb = (cr_sys - last_pcr) / encaps->pcr_interval;
+            last_pcr += nb * encaps->pcr_interval;
+            *nb_pcr_p += nb;
         }
 
         if (ulist_is_last(&encaps->urefs, uchain))
