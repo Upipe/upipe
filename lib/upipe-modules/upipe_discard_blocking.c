@@ -27,12 +27,15 @@
  * @short Upipe module discarding input uref when the output pipe is blocking
  */
 
+#define UPIPE_DISBLO_MAX_UREFS_DEFAULT  5
+
 #include "upipe/upipe.h"
 #include "upipe/upipe_helper_upipe.h"
 #include "upipe/upipe_helper_void.h"
 #include "upipe/upipe_helper_urefcount.h"
 #include "upipe/upipe_helper_upump_mgr.h"
 #include "upipe/upipe_helper_upump.h"
+#include "upipe/upipe_helper_input.h"
 #include "upipe/upipe_helper_output.h"
 #include "upipe-modules/upipe_discard_blocking.h"
 
@@ -56,7 +59,18 @@ struct upipe_disblo {
     struct uchain requests;
     /** last received uref */
     struct uref *uref;
+    /** list of retained urefs */
+    struct uchain urefs;
+    /** number of retained urefs */
+    unsigned nb_urefs;
+    /** maximum number of retained urefs */
+    unsigned max_urefs;
+    /** blockers */
+    struct uchain blockers;
 };
+
+bool upipe_disblo_handle(struct upipe *upipe, struct uref *uref,
+                         struct upump **upump);
 
 UPIPE_HELPER_UPIPE(upipe_disblo, upipe, UPIPE_DISBLO_SIGNATURE);
 UPIPE_HELPER_VOID(upipe_disblo);
@@ -64,6 +78,8 @@ UPIPE_HELPER_UREFCOUNT(upipe_disblo, urefcount, upipe_disblo_free);
 UPIPE_HELPER_UPUMP_MGR(upipe_disblo, upump_mgr);
 UPIPE_HELPER_UPUMP(upipe_disblo, upump, upump_mgr);
 UPIPE_HELPER_OUTPUT(upipe_disblo, output, flow_def, output_state, requests);
+UPIPE_HELPER_INPUT(upipe_disblo, urefs, nb_urefs, max_urefs, blockers,
+                   upipe_disblo_handle);
 
 /** @internal @This allocates a discard blocking pipe.
  *
@@ -85,10 +101,12 @@ static struct upipe *upipe_disblo_alloc(struct upipe_mgr *mgr,
     upipe_disblo_init_urefcount(upipe);
     upipe_disblo_init_upump_mgr(upipe);
     upipe_disblo_init_upump(upipe);
+    upipe_disblo_init_input(upipe);
     upipe_disblo_init_output(upipe);
 
     struct upipe_disblo *upipe_disblo = upipe_disblo_from_upipe(upipe);
     upipe_disblo->uref = NULL;
+    upipe_disblo->max_urefs = UPIPE_DISBLO_MAX_UREFS_DEFAULT;
 
     upipe_throw_ready(upipe);
 
@@ -107,6 +125,7 @@ static void upipe_disblo_free(struct upipe *upipe)
 
     uref_free(upipe_disblo->uref);
     upipe_disblo_clean_output(upipe);
+    upipe_disblo_clean_input(upipe);
     upipe_disblo_clean_upump(upipe);
     upipe_disblo_clean_upump_mgr(upipe);
     upipe_disblo_clean_urefcount(upipe);
@@ -125,18 +144,14 @@ static void upipe_disblo_input(struct upipe *upipe,
 {
     struct upipe_disblo *upipe_disblo = upipe_disblo_from_upipe(upipe);
 
-    if (upipe_disblo->uref) {
+    if (upipe_disblo->nb_urefs >= upipe_disblo->max_urefs) {
         upipe_warn(upipe, "dropping uref");
         uref_free(upipe_disblo->uref);
     }
-
-    if (upipe_disblo->upump) {
-        upipe_disblo->uref = uref;
-        upump_start(upipe_disblo->upump);
-    }
     else {
-        upipe_warn(upipe, "no idler, dropping uref");
-        uref_free(uref);
+        upipe_disblo_hold_input(upipe, uref);
+        if (upipe_disblo->upump)
+            upump_start(upipe_disblo->upump);
     }
 }
 
@@ -162,8 +177,31 @@ static int upipe_disblo_control_real(struct upipe *upipe, int cmd, va_list args)
         case UPIPE_ATTACH_UPUMP_MGR:
             upipe_disblo_set_upump(upipe, NULL);
             return upipe_disblo_attach_upump_mgr(upipe);
+
+        case UPIPE_GET_MAX_LENGTH: {
+            unsigned int *max = va_arg(args, unsigned int *);
+            return upipe_disblo_get_max_length(upipe, max);
+        }
+        case UPIPE_SET_MAX_LENGTH: {
+            unsigned int max = va_arg(args, unsigned int);
+            return upipe_disblo_set_max_length(upipe, max);
+        }
     }
     return UBASE_ERR_UNHANDLED;
+}
+
+/** @internal @This outputs an uref.
+ *
+ * @param upipe description structure of the pipe
+ * @param uref input buffer to handle
+ * @param upump_p reference to pump that generated the buffer
+ */
+bool upipe_disblo_handle(struct upipe *upipe, struct uref *uref,
+                         struct upump **upump_p)
+{
+    struct upipe_disblo *upipe_disblo = upipe_disblo_from_upipe(upipe);
+    upipe_disblo_output(upipe, uref, &upipe_disblo->upump);
+    return true;
 }
 
 /** @internal @This is the idler pump callback.
@@ -174,11 +212,7 @@ static void upipe_disblo_idle(struct upump *upump)
 {
     struct upipe *upipe = upump_get_opaque(upump, struct upipe *);
     struct upipe_disblo *upipe_disblo = upipe_disblo_from_upipe(upipe);
-    if (upipe_disblo->uref) {
-        struct uref *uref = upipe_disblo->uref;
-        upipe_disblo->uref = NULL;
-        upipe_disblo_output(upipe, uref, &upipe_disblo->upump);
-    }
+    upipe_disblo_output_input(upipe);
     upump_stop(upipe_disblo->upump);
 }
 
