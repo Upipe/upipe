@@ -198,7 +198,7 @@ cglobal planar_to_v210_8, 5, 5, 7+notcpuflag(avx512icl), y, u, v, dst, width
     neg     widthq
 
     %if cpuflag(avx512icl)
-        mova m2, [v210enc_8_permb]
+        movu m2, [v210enc_8_permb] ; unaligned for minimal difference to ffmpeg
     %else
         mova m2, [v210enc_8_permd]
     %endif
