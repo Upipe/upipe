@@ -219,6 +219,7 @@ struct upipe_netmap_sink {
     /* RTP Header */
     uint8_t rtp_header[RTP_HEADER_SIZE + RFC_4175_EXT_SEQ_NUM_LEN + RFC_4175_HEADER_LEN];
     uint8_t audio_rtp_header[RTP_HEADER_SIZE];
+    uint8_t rtp_pt_video, rtp_pt_audio;
 
     unsigned gap_fakes_current;
     unsigned gap_fakes;
@@ -673,6 +674,11 @@ static struct upipe *_upipe_netmap_sink_alloc(struct upipe_mgr *mgr,
 #endif
 #endif
 
+    memset(upipe_netmap_sink->rtp_header, 0, sizeof upipe_netmap_sink->rtp_header);
+    memset(upipe_netmap_sink->audio_rtp_header, 0, sizeof upipe_netmap_sink->audio_rtp_header);
+    upipe_netmap_sink->rtp_pt_video = 96;
+    upipe_netmap_sink->rtp_pt_audio = 97;
+
     /*
      * Audio subpipe.
      */
@@ -925,7 +931,8 @@ static int worker_rfc4175(struct upipe_netmap_sink *upipe_netmap_sink, uint8_t *
 
     const uint16_t data_len1 = upipe_netmap_sink->payload;
 
-    upipe_netmap_put_rtp_headers(upipe_netmap_sink, upipe_netmap_sink->rtp_header, marker, 96, true, field);
+    upipe_netmap_put_rtp_headers(upipe_netmap_sink, upipe_netmap_sink->rtp_header,
+            marker, upipe_netmap_sink->rtp_pt_video, true, field);
     upipe_put_rfc4175_headers(upipe_netmap_sink, upipe_netmap_sink->rtp_header + RTP_HEADER_SIZE, data_len1,
                               field, upipe_netmap_sink->line, continuation, upipe_netmap_sink->pixel_offset);
 
@@ -2359,7 +2366,8 @@ static int upipe_netmap_sink_set_flow_def(struct upipe *upipe,
 
     if (!upipe_netmap_sink->rfc4175) {
         /* Largely constant headers so don't keep rewriting them */
-        upipe_netmap_put_rtp_headers(upipe_netmap_sink, upipe_netmap_sink->rtp_header, false, 98, false, false);
+        upipe_netmap_put_rtp_headers(upipe_netmap_sink, upipe_netmap_sink->rtp_header,
+                false, 98, false, false);
         upipe_put_hbrmt_headers(upipe, upipe_netmap_sink->rtp_header + RTP_HEADER_SIZE);
     } else {
             /* RTP Headers done in worker_rfc4175 */
@@ -2368,7 +2376,7 @@ static int upipe_netmap_sink_set_flow_def(struct upipe *upipe,
         /* RTP header for audio. */
         memset(upipe_netmap_sink->audio_rtp_header, 0, RTP_HEADER_SIZE);
         rtp_set_hdr(upipe_netmap_sink->audio_rtp_header);
-        rtp_set_type(upipe_netmap_sink->audio_rtp_header, 97);
+        rtp_set_type(upipe_netmap_sink->audio_rtp_header, upipe_netmap_sink->rtp_pt_audio);
         rtp_set_seqnum(upipe_netmap_sink->audio_rtp_header, 0);
         rtp_set_timestamp(upipe_netmap_sink->audio_rtp_header, 0);
     }
@@ -2659,6 +2667,41 @@ static int upipe_netmap_sink_provide_flow_format(struct upipe *upipe,
     return urequest_provide_flow_format(request, flow_format);
 }
 
+static int upipe_netmap_set_option(struct upipe *upipe, const char *option,
+        const char *value)
+{
+    struct upipe_netmap_sink *upipe_netmap_sink = upipe_netmap_sink_from_upipe(upipe);
+
+    if (!option || !value)
+        return UBASE_ERR_INVALID;
+
+    if (!strcmp(option, "rtp-pt-video")) {
+        int type = atoi(value);
+        if (type < 0 || type > 127) {
+            upipe_err_va(upipe, "rtp-pt-video value (%d) out of range 0..127", type);
+            return UBASE_ERR_INVALID;
+        }
+        upipe_netmap_sink->rtp_pt_video = type;
+        return UBASE_ERR_NONE;
+    }
+
+    if (!strcmp(option, "rtp-pt-audio")) {
+        int type = atoi(value);
+        if (type < 0 || type > 127) {
+            upipe_err_va(upipe, "rtp-pt-audio value (%d) out of range 0..127", type);
+            return UBASE_ERR_INVALID;
+        }
+        upipe_netmap_sink->rtp_pt_audio = type;
+        /* FIXME: remove this after cleaning up how headers are handled.  IP
+         * details have (had) a similar issue about not updating. */
+        rtp_set_type(upipe_netmap_sink->audio_rtp_header, type);
+        return UBASE_ERR_NONE;
+    }
+
+    upipe_err_va(upipe, "Unknown option %s", option);
+    return UBASE_ERR_INVALID;
+}
+
 /** @internal @This processes control commands on a netmap sink pipe.
  *
  * @param upipe description structure of the pipe
@@ -2718,6 +2761,12 @@ static int _upipe_netmap_sink_control(struct upipe *upipe,
                     upipe_netmap_sink_to_audio_subpipe(
                         upipe_netmap_sink_from_upipe(upipe)));
             return UBASE_ERR_NONE;
+        }
+
+        case UPIPE_SET_OPTION: {
+            const char *option = va_arg(args, const char *);
+            const char *value  = va_arg(args, const char *);
+            return upipe_netmap_set_option(upipe, option, value);
         }
 
         default:
@@ -3190,6 +3239,12 @@ static int audio_subpipe_set_option(struct upipe *upipe, const char *option,
         audio_subpipe->num_flows = audio_count_populated_flows(audio_subpipe);
         audio_subpipe->need_reconfig = true;
         return UBASE_ERR_NONE;
+    }
+
+    if (!strcmp(option, "rtp-type-audio")) {
+        /* Redirect into the main pipe */
+        return upipe_netmap_set_option(upipe_netmap_sink_to_upipe(upipe_netmap_sink_from_audio_subpipe(audio_subpipe)),
+                option, value);
     }
 
     upipe_err_va(upipe, "Unknown option %s", option);
