@@ -49,7 +49,7 @@ SECTION .text
 
 ; planar_to_v210_10(const uint16_t *y, const uint16_t *u, const uint16_t *v, uint8_t *dst, ptrdiff_t width)
 cglobal planar_to_v210_10, 6, 6, 5+cpuflag(avx2), y, u, v, dst, width, mask
-    lea     r0, [yq+2*widthq]
+    lea     yq, [yq+2*widthq]
     add     uq, widthq
     add     vq, widthq
     neg     widthq
