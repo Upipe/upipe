@@ -70,6 +70,7 @@
 #include "../upipe-hbrmt/sdienc.h"
 #include "../upipe-hbrmt/rfc4175_enc.h"
 #include "../upipe-modules/upipe_udp.h"
+#include "x86/avx512.h"
 
 #include <math.h>
 
@@ -646,9 +647,7 @@ static struct upipe *_upipe_netmap_sink_alloc(struct upipe_mgr *mgr,
         upipe_netmap_sink->pack = upipe_uyvy_to_sdi_ssse3;
         upipe_netmap_sink->pack2 = upipe_uyvy_to_sdi_2_ssse3;
         upipe_netmap_sink->pack_10_planar = upipe_planar_to_sdi_10_ssse3;
-        upipe_netmap_sink->pack_8_planar = upipe_planar_to_sdi_8_ssse3;
         upipe_netmap_sink->unpack_v210 = upipe_v210_to_sdi_ssse3;
-        upipe_netmap_sink->pack2_8_planar = upipe_planar_to_sdi_8_2_ssse3;
         upipe_netmap_sink->pack2_10_planar = upipe_planar_to_sdi_10_2_ssse3;
     }
 
@@ -670,6 +669,18 @@ static struct upipe *_upipe_netmap_sink_alloc(struct upipe_mgr *mgr,
         upipe_netmap_sink->pack_10_planar = upipe_planar_to_sdi_10_avx2;
         upipe_netmap_sink->pack_8_planar = upipe_planar_to_sdi_8_avx2;
         upipe_netmap_sink->unpack_v210 = upipe_v210_to_sdi_avx2;
+    }
+
+    if (has_avx512_support()) {
+        upipe_netmap_sink->pack2_8_planar = upipe_planar_to_sdi_8_2_avx512;
+        upipe_netmap_sink->pack_8_planar = upipe_planar_to_sdi_8_avx512;
+    }
+
+    if (has_avx512icl_support()) {
+        upipe_netmap_sink->pack2_10_planar = upipe_planar_to_sdi_10_2_avx512icl;
+        upipe_netmap_sink->pack2_8_planar = upipe_planar_to_sdi_8_2_avx512icl;
+        upipe_netmap_sink->pack_10_planar = upipe_planar_to_sdi_10_avx512icl;
+        upipe_netmap_sink->pack_8_planar = upipe_planar_to_sdi_8_avx512icl;
     }
 #endif
 #endif

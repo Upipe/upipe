@@ -73,6 +73,10 @@ void checkasm_check_planar10_input(void)
        s.uyvy  = upipe_planar_to_uyvy_10_avx2;
        s.v210  = upipe_planar_to_v210_10_avx2;
     }
+    if (cpu_flags & AV_CPU_FLAG_AVX512ICL) {
+       s.sdi   = upipe_planar_to_sdi_10_avx512icl;
+       s.sdi_2 = upipe_planar_to_sdi_10_2_avx512icl;
+    }
 #endif
 
     if (check_func(s.sdi, "planar_to_sdi_10")) {
