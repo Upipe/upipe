@@ -56,25 +56,32 @@ cglobal planar_to_v210_10, 6, 6, 5+cpuflag(avx2), y, u, v, dst, width, mask
 
     mova    m2, [v210_enc_min_10]
     mova    m3, [v210_enc_max_10]
-    movd   xm4, maskd
-    SPLATW  m4, xm4
+    %if cpuflag(avx2)
+        movd   xm5, maskd
+        SPLATW  m5, xm5
+        %define pm m5
+    %else
+        movd   xm4, maskd
+        SPLATW  m4, xm4
+        %define pm m4
+    %endif
 
 .loop:
     movu        xm0, [yq+2*widthq]
 %if cpuflag(avx2)
     vinserti128 m0,   m0, [yq+widthq*2+12], 1
 %endif
-    pand    m0, m4
+    pand    m0, pm
     CLIPW   m0, m2, m3
 
     movq         xm1, [uq+widthq]
     movhps       xm1, [vq+widthq]
 %if cpuflag(avx2)
-    movq         xm5, [uq+widthq+6]
-    movhps       xm5, [vq+widthq+6]
-    vinserti128  m1,   m1, xm5, 1
+    movq         xm4, [uq+widthq+6]
+    movhps       xm4, [vq+widthq+6]
+    vinserti128  m1,   m1, xm4, 1
 %endif
-    pand    m1, m4
+    pand    m1, pm
     CLIPW   m1, m2, m3
 
 
