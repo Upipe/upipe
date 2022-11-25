@@ -84,7 +84,6 @@ cglobal planar_to_v210_10, 6, 6, 5+cpuflag(avx2), y, u, v, dst, width, mask
     pand    m1, pm
     CLIPW   m1, m2, m3
 
-
     pmullw  m0, [v210_enc_luma_mult_10]
     pshufb  m0, [v210_enc_luma_shuf_10]
 
