@@ -46,13 +46,16 @@ void checkasm_check_uyvy_input(void)
         void (*sdi_2)(uint8_t *dst1, uint8_t *dst2, const uint8_t *src, uintptr_t pixels);
         void (*v210)(const uint16_t *src, uint8_t *dst, uintptr_t pixels);
     } s = {
+#ifdef HAVE_BITSTREAM_COMMON_H
         .planar10 = upipe_uyvy_to_planar_10_c,
         .planar8 = upipe_uyvy_to_planar_8_c,
         .sdi = upipe_uyvy_to_sdi_c,
         .sdi_2 = upipe_uyvy_to_sdi_2_c,
         .v210 = upipe_uyvy_to_v210_c,
+#endif
     };
 
+#ifdef HAVE_BITSTREAM_COMMON_H
     int cpu_flags = av_get_cpu_flags();
 
 #ifdef HAVE_X86ASM
@@ -77,6 +80,7 @@ void checkasm_check_uyvy_input(void)
         s.sdi_2 = upipe_uyvy_to_sdi_2_avx2;
         s.v210 = upipe_uyvy_to_v210_avx2;
     }
+#endif
 #endif
 
     if (check_func(s.planar10, "uyvy_to_planar10")) {

@@ -24,8 +24,6 @@ checkasm_LDADD += \
     $(top_builddir)/lib/upipe-hbrmt/libupipe_hbrmt_la-sdienc.o \
     $(top_builddir)/lib/upipe-pciesdi/libupipe_pciesdi_la-levelb.o \
     $(NULL)
-
-checkasm_CPPFLAGS += -DHAVE_SDI
 endif
 
 if HAVE_NETMAP
@@ -58,6 +56,10 @@ checkasm_LDADD += \
     $(top_builddir)/lib/upipe-netmap/sdienc.o \
     $(NULL)
 endif
+endif
+
+if ARCH_AARCH64
+checkasm_SOURCES += asm_aarch64.S checkasm_aarch64.S timer_aarch64.h
 endif
 
 V_ASM = $(V_ASM_@AM_V@)
