@@ -149,7 +149,7 @@ planar_to_v210_10
 
 %macro planar_to_v210_10_new 0
 
-cglobal planar_to_v210_10, 5, 5, 8+2*notcpuflag(avx512icl), y, u, v, dst, width
+cglobal planar_to_v210_10, 5, 5, 9+2*notcpuflag(avx512icl), y, u, v, dst, width, mask
     lea     yq, [yq+2*widthq]
     add     uq, widthq
     add     vq, widthq
@@ -160,11 +160,15 @@ cglobal planar_to_v210_10, 5, 5, 8+2*notcpuflag(avx512icl), y, u, v, dst, width
         movu  m7, [icl_perm_uv]
         kmovq k1, [icl_perm_y_kmask]
         kmovq k2, [icl_perm_uv_kmask]
+        vpbroadcastw m8, maskw
+        %define pm m8
     %else
         movu           m6, [v210enc_10_permd_y]
         VBROADCASTI128 m7, [v210enc_10_shufb_y]
         movu           m8, [v210enc_10_permd_uv]
         movu           m9, [v210enc_10_shufb_uv]
+        vpbroadcastw m10, maskw
+        %define pm m10
     %endif
     movu  m2, [icl_shift_y]
     movu  m3, [icl_shift_uv]
@@ -180,6 +184,8 @@ cglobal planar_to_v210_10, 5, 5, 8+2*notcpuflag(avx512icl), y, u, v, dst, width
             movu         xm1, [uq + widthq*1]
             vinserti128  ym1, [vq + widthq*1], 1
         %endif
+        pand  m0, pm
+        pand  m1, pm
         CLIPW m0, m4, m5
         CLIPW m1, m4, m5
 
