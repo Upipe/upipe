@@ -6,10 +6,12 @@ void upipe_v210_to_uyvy_c(const uint32_t *src, uint16_t *dst, uintptr_t pixels);
 void upipe_uyvy_to_sdi_ssse3(uint8_t *dst, const uint8_t *y, uintptr_t pixels);
 void upipe_uyvy_to_sdi_avx  (uint8_t *dst, const uint8_t *y, uintptr_t pixels);
 void upipe_uyvy_to_sdi_avx2 (uint8_t *dst, const uint8_t *y, uintptr_t pixels);
+void upipe_uyvy_to_sdi_avx512icl(uint8_t *dst, const uint8_t *y, uintptr_t pixels);
 
 void upipe_uyvy_to_sdi_2_ssse3(uint8_t *dst1, uint8_t *dst2, const uint8_t *y, uintptr_t pixels);
 void upipe_uyvy_to_sdi_2_avx  (uint8_t *dst1, uint8_t *dst2, const uint8_t *y, uintptr_t pixels);
 void upipe_uyvy_to_sdi_2_avx2 (uint8_t *dst1, uint8_t *dst2, const uint8_t *y, uintptr_t pixels);
+void upipe_uyvy_to_sdi_2_avx512icl(uint8_t *dst1, uint8_t *dst2, const uint8_t *y, uintptr_t pixels);
 
 void upipe_planar_to_uyvy_8_c(uint16_t *dst, const uint8_t *y, const uint8_t *u, const uint8_t *v, const uintptr_t width);
 /* process 2*mmsize pixels per iteration */

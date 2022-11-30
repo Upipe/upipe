@@ -21,7 +21,23 @@
 
 %include "x86util.asm"
 
-SECTION_RODATA 32
+SECTION_RODATA 64
+
+icl_perm_y: ; vpermb does not set bytes to zero when the high bit is set unlike pshufb
+%assign i 0
+%rep 12
+    db -1, i+3, i+2, i+7, i+6
+    %assign i i+8
+%endrep
+times 4 db -1 ; padding to 64 bytes
+
+icl_perm_uv: ; vpermb does not set bytes to zero when the high bit is set unlike pshufb
+%assign i 0
+%rep 12
+    db i+1, i+0, i+5, i+4, -1
+    %assign i i+8
+%endrep
+times 4 db -1 ; padding to 64 bytes
 
 uyvy_enc_min_10: times 16 dw 0x0004
 uyvy_enc_max_10: times 16 dw 0x3fb
@@ -50,6 +66,10 @@ v210_uyvy_luma_shuf3:   times 2 db -1,-1, 6, 7,-1,-1, 9,10,-1,-1,12,13,-1,-1,14,
 v210_uyvy_mult1: times 2 dw 0x7fff, 0x2000, 0x0800, 0x7fff, 0x2000, 0x0800, 0x7fff, 0x2000
 v210_uyvy_mult2: times 2 dw 0x0800, 0x7fff, 0x2000, 0x0800, 0x7fff, 0x2000, 0x0800, 0x7fff
 v210_uyvy_mult3: times 2 dw 0x2000, 0x0800, 0x7fff, 0x2000, 0x0800, 0x7fff, 0x2000, 0x0800
+
+icl_uyvy_shift:    dw 6, 4, 2, 0
+icl_perm_y_kmask:  dq 0b11110_11110_11110_11110_11110_11110_11110_11110_11110_11110_11110_11110
+icl_perm_uv_kmask: dq 0b01111_01111_01111_01111_01111_01111_01111_01111_01111_01111_01111_01111
 
 SECTION .text
 
@@ -113,6 +133,49 @@ uyvy_to_sdi _2
 INIT_YMM avx2
 uyvy_to_sdi
 uyvy_to_sdi _2
+
+%macro icl_uyvy 0-1
+
+cglobal uyvy_to_sdi%1, 3+%0, 3+%0, 5, dst1, dst2
+    %if %0 == 1
+        %define pixelsq r3q
+        %define srcq    r2q
+    %else
+        %define pixelsq r2q
+        %define srcq    r1q
+    %endif
+    lea     srcq, [srcq + 4*pixelsq]
+    neg     pixelsq
+
+    vpbroadcastq m2, [icl_uyvy_shift]
+    mova         m3, [icl_perm_y]
+    mova         m4, [icl_perm_uv]
+    kmovq        k1, [icl_perm_y_kmask]
+    kmovq        k2, [icl_perm_uv_kmask]
+
+    .loop:
+        movu    m0,        [srcq+4*pixelsq]
+        vpsllvw m0,        m0, m2 ; shift all samples
+        vpermb  m1{k1}{z}, m3, m0 ; endian swap y and make space for uv where the k-mask sets to zero
+        vpermb  m0{k2}{z}, m4, m0 ; endian swap uv and make space for y where the k-mask sets to zero
+        por     m0,        m1
+
+        movu [dst1q], m0
+        add   dst1q, (mmsize*5)/8
+        %if %0 == 1
+            movu [dst2q], m0
+            add   dst2q, (mmsize*5)/8
+        %endif
+        add pixelsq, mmsize/4
+    jl .loop
+
+RET
+
+%endmacro
+
+INIT_ZMM avx512icl
+icl_uyvy
+icl_uyvy _2
 
 %macro sdi_blank 0
 
