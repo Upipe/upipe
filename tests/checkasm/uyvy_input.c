@@ -80,6 +80,10 @@ void checkasm_check_uyvy_input(void)
         s.sdi_2 = upipe_uyvy_to_sdi_2_avx2;
         s.v210 = upipe_uyvy_to_v210_avx2;
     }
+    if (cpu_flags & AV_CPU_FLAG_AVX512ICL) {
+        s.sdi = upipe_uyvy_to_sdi_avx512icl;
+        s.sdi_2 = upipe_uyvy_to_sdi_2_avx512icl;
+    }
 #endif
 #endif
 

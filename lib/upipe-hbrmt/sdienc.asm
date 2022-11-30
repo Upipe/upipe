@@ -21,7 +21,23 @@
 
 %include "x86util.asm"
 
-SECTION_RODATA 32
+SECTION_RODATA 64
+
+icl_perm_y: ; vpermb does not set bytes to zero when the high bit is set unlike pshufb
+%assign i 0
+%rep 12
+    db -1, i+3, i+2, i+7, i+6
+    %assign i i+8
+%endrep
+times 4 db -1 ; padding to 64 bytes
+
+icl_perm_uv: ; vpermb does not set bytes to zero when the high bit is set unlike pshufb
+%assign i 0
+%rep 12
+    db i+1, i+0, i+5, i+4, -1
+    %assign i i+8
+%endrep
+times 4 db -1 ; padding to 64 bytes
 
 uyvy_enc_min_10: times 16 dw 0x0004
 uyvy_enc_max_10: times 16 dw 0x3fb
@@ -51,12 +67,23 @@ v210_uyvy_mult1: times 2 dw 0x7fff, 0x2000, 0x0800, 0x7fff, 0x2000, 0x0800, 0x7f
 v210_uyvy_mult2: times 2 dw 0x0800, 0x7fff, 0x2000, 0x0800, 0x7fff, 0x2000, 0x0800, 0x7fff
 v210_uyvy_mult3: times 2 dw 0x2000, 0x0800, 0x7fff, 0x2000, 0x0800, 0x7fff, 0x2000, 0x0800
 
+icl_uyvy_shift:    dw 6, 4, 2, 0
+icl_perm_y_kmask:  dq 0b11110_11110_11110_11110_11110_11110_11110_11110_11110_11110_11110_11110
+icl_perm_uv_kmask: dq 0b01111_01111_01111_01111_01111_01111_01111_01111_01111_01111_01111_01111
+
 SECTION .text
 
-%macro uyvy_to_sdi 0
+%macro uyvy_to_sdi 0-1
 
 ; uyvy_to_sdi(uint8_t *dst, const uint8_t *y, int64_t size)
-cglobal uyvy_to_sdi, 3, 4, 5, dst, y, pixels
+cglobal uyvy_to_sdi%1, 3+%0, 3+%0, 5, dst1, dst2
+    %if %0 == 1
+        %define pixelsq r3q
+        %define yq      r2q
+    %else
+        %define pixelsq r2q
+        %define yq      r1q
+    %endif
     lea     yq, [yq + 4*pixelsq]
     neg     pixelsq
     mova    m2, [sdi_enc_mult_10]
@@ -74,46 +101,22 @@ cglobal uyvy_to_sdi, 3, 4, 5, dst, y, pixels
     pshufb  m0, m4
     por     m0, m1
 
-    movu    [dstq], xm0
+    movu    [dst1q], xm0
 %if cpuflag(avx2)
-    vextracti128 [dstq+10], m0, 1
+    vextracti128 [dst1q+10], m0, 1
 %endif
 
-    add     dstq, (mmsize*5)/8
-    add     pixelsq, mmsize/4
-    jl .loop
-
-    RET
-
-cglobal uyvy_to_sdi_2, 3, 5, 5, dst1, dst2, y, pixels
-    %define offset    r4q
-    xor     offset,   offset
-    lea     yq,      [yq + 4*pixelsq]
-    neg     pixelsq
-    mova    m2,      [sdi_enc_mult_10]
-    mova    m3,      [sdi_chroma_shuf_10]
-    mova    m4,      [sdi_luma_shuf_10]
-
-    .loop:
-        %if notcpuflag(avx)
-            movu    m0, [yq+4*pixelsq]
-            pmullw  m0, m2
-        %else
-            pmullw  m0, m2, [yq+4*pixelsq]
-        %endif
-
-        pshufb  m1, m0, m3
-        pshufb  m0, m4
-        por     m0, m1
-
-        movu    [dst1q + offset], xm0
-        movu    [dst2q + offset], xm0
+    %if %0 == 1
+        movu    [dst2q], xm0
         %if cpuflag(avx2)
-            vextracti128 [dst1q + offset + 10], m0, 1
-            vextracti128 [dst2q + offset + 10], m0, 1
+            vextracti128 [dst2q + 10], m0, 1
         %endif
+    %endif
 
-        add     offset, (mmsize*5)/8
+        add     dst1q, (mmsize*5)/8
+        %if %0 == 1
+            add     dst2q, (mmsize*5)/8
+        %endif
         add     pixelsq, mmsize/4
     jl .loop
 
@@ -123,10 +126,56 @@ RET
 
 INIT_XMM ssse3
 uyvy_to_sdi
+uyvy_to_sdi _2
 INIT_XMM avx
 uyvy_to_sdi
+uyvy_to_sdi _2
 INIT_YMM avx2
 uyvy_to_sdi
+uyvy_to_sdi _2
+
+%macro icl_uyvy 0-1
+
+cglobal uyvy_to_sdi%1, 3+%0, 3+%0, 5, dst1, dst2
+    %if %0 == 1
+        %define pixelsq r3q
+        %define srcq    r2q
+    %else
+        %define pixelsq r2q
+        %define srcq    r1q
+    %endif
+    lea     srcq, [srcq + 4*pixelsq]
+    neg     pixelsq
+
+    vpbroadcastq m2, [icl_uyvy_shift]
+    mova         m3, [icl_perm_y]
+    mova         m4, [icl_perm_uv]
+    kmovq        k1, [icl_perm_y_kmask]
+    kmovq        k2, [icl_perm_uv_kmask]
+
+    .loop:
+        movu    m0,        [srcq+4*pixelsq]
+        vpsllvw m0,        m0, m2 ; shift all samples
+        vpermb  m1{k1}{z}, m3, m0 ; endian swap y and make space for uv where the k-mask sets to zero
+        vpermb  m0{k2}{z}, m4, m0 ; endian swap uv and make space for y where the k-mask sets to zero
+        por     m0,        m1
+
+        movu [dst1q], m0
+        add   dst1q, (mmsize*5)/8
+        %if %0 == 1
+            movu [dst2q], m0
+            add   dst2q, (mmsize*5)/8
+        %endif
+        add pixelsq, mmsize/4
+    jl .loop
+
+RET
+
+%endmacro
+
+INIT_ZMM avx512icl
+icl_uyvy
+icl_uyvy _2
 
 %macro sdi_blank 0
 
