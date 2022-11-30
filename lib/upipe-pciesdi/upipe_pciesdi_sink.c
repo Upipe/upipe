@@ -59,6 +59,7 @@
 #include "../upipe-hbrmt/sdienc.h"
 #include "../upipe-hbrmt/upipe_hbrmt_common.h"
 #include "config.h"
+#include "x86/avx512.h"
 
 /** upipe_pciesdi_sink structure */
 struct upipe_pciesdi_sink {
@@ -208,6 +209,10 @@ static struct upipe *upipe_pciesdi_sink_alloc(struct upipe_mgr *mgr,
     if (__builtin_cpu_supports("avx2")) {
         upipe_pciesdi_sink->uyvy_to_sdi = upipe_uyvy_to_sdi_avx2;
     }
+
+    if (has_avx512icl_support()) {
+        upipe_pciesdi_sink->uyvy_to_sdi = upipe_uyvy_to_sdi_avx512icl;
+    }
 #endif
 #endif
 
@@ -352,7 +357,7 @@ static void upipe_pciesdi_sink_worker(struct upump *upump)
     upipe_pciesdi_sink->scratch_bytes = 0;
 
     /* maximum number of bytes the SIMD can write beyond the end of the buffer. */
-#define SIMD_OVERWRITE 25
+#define SIMD_OVERWRITE 63
 
     int samples_written = 0;
     /* Pack data from uref. */
