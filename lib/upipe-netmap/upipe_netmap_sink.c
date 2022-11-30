@@ -677,6 +677,8 @@ static struct upipe *_upipe_netmap_sink_alloc(struct upipe_mgr *mgr,
     }
 
     if (has_avx512icl_support()) {
+        upipe_netmap_sink->pack = upipe_uyvy_to_sdi_avx512icl;
+        upipe_netmap_sink->pack2 = upipe_uyvy_to_sdi_2_avx512icl;
         upipe_netmap_sink->pack2_10_planar = upipe_planar_to_sdi_10_2_avx512icl;
         upipe_netmap_sink->pack2_8_planar = upipe_planar_to_sdi_8_2_avx512icl;
         upipe_netmap_sink->pack_10_planar = upipe_planar_to_sdi_10_avx512icl;
