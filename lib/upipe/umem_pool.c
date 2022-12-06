@@ -116,10 +116,10 @@ static bool umem_pool_alloc(struct umem_mgr *mgr, struct umem *umem,
         }
     }
     else
-        buffer = malloc(real_size);
+        buffer = memalign(64, size);
     }
 #else
-    buffer = malloc(real_size);
+    buffer = memalign(64, size);
 #endif
     if (unlikely(buffer == NULL))
         return false;
@@ -266,7 +266,7 @@ struct umem_mgr *umem_pool_mgr_alloc(size_t pool0_size, size_t nb_pools, ...)
  */
 struct umem_mgr *umem_pool_mgr_alloc_simple(uint16_t base_pools_depth)
 {
-    return umem_pool_mgr_alloc(32, 19,
+    return umem_pool_mgr_alloc(32, 20,
                                base_pools_depth, /* 32 */
                                base_pools_depth, /* 64 */
                                base_pools_depth, /* 128 */
@@ -286,4 +286,5 @@ struct umem_mgr *umem_pool_mgr_alloc_simple(uint16_t base_pools_depth)
                                base_pools_depth / 8, /* 2 Mi */
                                base_pools_depth / 8, /* 4 Mi */
                                base_pools_depth / 8); /* 8 Mi */
+                               base_pools_depth / 8); /* 16 Mi */
 }
