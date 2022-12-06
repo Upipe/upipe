@@ -285,6 +285,6 @@ struct umem_mgr *umem_pool_mgr_alloc_simple(uint16_t base_pools_depth)
                                base_pools_depth / 8, /* 1 Mi */
                                base_pools_depth / 8, /* 2 Mi */
                                base_pools_depth / 8, /* 4 Mi */
-                               base_pools_depth / 8); /* 8 Mi */
+                               base_pools_depth / 8, /* 8 Mi */
                                base_pools_depth / 8); /* 16 Mi */
 }
