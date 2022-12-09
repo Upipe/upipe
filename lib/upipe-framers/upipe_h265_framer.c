@@ -570,7 +570,10 @@ static void upipe_h265f_stream_parse_scaling(struct ubuf_block_stream *s)
 static bool
 upipe_h265f_stream_parse_short_term_ref_pic_set(struct ubuf_block_stream *s,
         int idx, uint32_t max, uint32_t max_dec_pic_buffering_1,
-        uint32_t num_delta_pocs[])
+        uint32_t num_negative_pics[max],
+        uint32_t num_positive_pics[max],
+        int delta_poc[max][max_dec_pic_buffering_1],
+        bool used_by_curr_pic[max][max_dec_pic_buffering_1])
 {
     bool prediction_flag = false;
     if (idx) {
@@ -584,32 +587,100 @@ upipe_h265f_stream_parse_short_term_ref_pic_set(struct ubuf_block_stream *s,
         if (idx == max)
             delta_idx = upipe_h26xf_stream_ue(s) + 1;
         upipe_h26xf_stream_fill_bits(s, 1);
+        int delta_rps_sign = ubuf_block_stream_show_bits(s, 1);
         ubuf_block_stream_skip_bits(s, 1);
-        upipe_h26xf_stream_ue(s);
-        int ref_idx = delta_idx > idx ? 0 : delta_idx;
-        for (int i = 0; i < num_delta_pocs[ref_idx]; i++) {
-            upipe_h26xf_stream_fill_bits(s, 2);
-            bool used_by_curr_pic = !!ubuf_block_stream_show_bits(s, 1);
+        int abs_delta_rps = upipe_h26xf_stream_ue(s) + 1;
+        int delta_rps = (1 - 2 * delta_rps_sign) * abs_delta_rps;
+        int ref_idx = delta_idx > idx ? 0 : idx - delta_idx;
+        int num_delta_pocs = num_negative_pics[ref_idx] +
+            num_positive_pics[ref_idx];
+        bool used_by_curr_pic_flag[num_delta_pocs + 1];
+        bool use_delta_flag[num_delta_pocs + 1];
+        for (int i = 0; i <= num_delta_pocs; i++) {
+            upipe_h26xf_stream_fill_bits(s, 1);
+            used_by_curr_pic_flag[i] = ubuf_block_stream_show_bits(s, 1);
             ubuf_block_stream_skip_bits(s, 1);
-            if (used_by_curr_pic)
+            if (!used_by_curr_pic_flag[i]) {
+                upipe_h26xf_stream_fill_bits(s, 1);
+                use_delta_flag[i] = ubuf_block_stream_show_bits(s, 1);
                 ubuf_block_stream_skip_bits(s, 1);
+            } else {
+                use_delta_flag[i] = 1;
+            }
         }
+
+        int i;
+        int *delta_poc_s0 = delta_poc[idx];
+        bool *used_by_curr_pic_s0 = used_by_curr_pic[idx];
+
+        i = 0;
+        for (int j = num_positive_pics[ref_idx] - 1; j >= 0; j--) {
+            int k = num_negative_pics[ref_idx] + j;
+            int d_poc = delta_poc[ref_idx][k] + delta_rps;
+            if (d_poc < 0 && use_delta_flag[k]) {
+                delta_poc_s0[i] = d_poc;
+                used_by_curr_pic_s0[i++] = used_by_curr_pic_flag[k];
+            }
+        }
+        if (delta_rps < 0 && use_delta_flag[num_delta_pocs]) {
+            delta_poc_s0[i] = delta_rps;
+            used_by_curr_pic_s0[i++] = used_by_curr_pic_flag[num_delta_pocs];
+        }
+        for (int j = 0; j < num_negative_pics[ref_idx]; j++) {
+            int d_poc = delta_poc[ref_idx][j] + delta_rps;
+            if (d_poc < 0 && use_delta_flag[j]) {
+                delta_poc_s0[i] = d_poc;
+                used_by_curr_pic_s0[i++] = used_by_curr_pic_flag[j];
+            }
+        }
+        num_negative_pics[idx] = i;
+
+        int *delta_poc_s1 = delta_poc[idx] + i;
+        bool *used_by_curr_pic_s1 = used_by_curr_pic[idx] + i;
+
+        i = 0;
+        for (int j = num_negative_pics[ref_idx] - 1; j >= 0; j--) {
+            int d_poc = delta_poc[ref_idx][j] + delta_rps;
+            if (d_poc > 0 && use_delta_flag[j]) {
+                delta_poc_s1[i] = d_poc;
+                used_by_curr_pic_s1[i++] = used_by_curr_pic_flag[j];
+            }
+        }
+        if (delta_rps > 0 && use_delta_flag[num_delta_pocs]) {
+            delta_poc_s1[i] = delta_rps;
+            used_by_curr_pic_s1[i++] = used_by_curr_pic_flag[num_delta_pocs];
+        }
+        for (int j = 0; j < num_positive_pics[ref_idx]; j++) {
+            int k = num_negative_pics[ref_idx] + j;
+            int d_poc = delta_poc[ref_idx][k] + delta_rps;
+            if (d_poc > 0 && use_delta_flag[k]) {
+                delta_poc_s1[i] = d_poc;
+                used_by_curr_pic_s1[i++] = used_by_curr_pic_flag[k];
+            }
+        }
+        num_positive_pics[idx] = i;
+
     } else {
-        uint32_t num_negative_pics = upipe_h26xf_stream_ue(s);
-        if (num_negative_pics > max_dec_pic_buffering_1)
+        num_negative_pics[idx] = upipe_h26xf_stream_ue(s);
+        if (num_negative_pics[idx] > max_dec_pic_buffering_1)
             return false;
-        uint32_t num_positive_pics = upipe_h26xf_stream_ue(s);
-        if (num_positive_pics > max_dec_pic_buffering_1 - num_negative_pics)
+        num_positive_pics[idx] = upipe_h26xf_stream_ue(s);
+        if (num_positive_pics[idx] + num_negative_pics[idx] >
+            max_dec_pic_buffering_1)
             return false;
-        num_delta_pocs[idx] = num_negative_pics + num_positive_pics;
-        for (int i = 0; i < num_negative_pics; i++) {
-            upipe_h26xf_stream_ue(s);
+        for (int i = 0, d_poc = 0; i < num_negative_pics[idx]; i++) {
+            d_poc -= upipe_h26xf_stream_ue(s) + 1;
+            delta_poc[idx][i] = d_poc;
             upipe_h26xf_stream_fill_bits(s, 1);
+            used_by_curr_pic[idx][i] = ubuf_block_stream_show_bits(s, 1);
             ubuf_block_stream_skip_bits(s, 1);
         }
-        for (int i = 0; i < num_positive_pics; i++) {
-            upipe_h26xf_stream_ue(s);
+        for (int i = 0, d_poc = 0; i < num_positive_pics[idx]; i++) {
+            int j = num_negative_pics[idx] + i;
+            d_poc += upipe_h26xf_stream_ue(s) + 1;
+            delta_poc[idx][j] = d_poc;
             upipe_h26xf_stream_fill_bits(s, 1);
+            used_by_curr_pic[idx][j] = ubuf_block_stream_show_bits(s, 1);
             ubuf_block_stream_skip_bits(s, 1);
         }
     }
@@ -852,13 +923,22 @@ static bool upipe_h265f_activate_sps(struct upipe *upipe, uint32_t sps_id)
         ubuf_block_stream_skip_bits(s, 1);
     }
 
-    uint32_t max_short_term_ref_pic_sets = upipe_h26xf_stream_ue(s);
-    uint32_t num_delta_pocs[max_short_term_ref_pic_sets];
-    memset(num_delta_pocs, 0, sizeof(num_delta_pocs));
-    for (int i = 0; i < max_short_term_ref_pic_sets; i++) {
+    uint32_t num_short_term_ref_pic_sets = upipe_h26xf_stream_ue(s);
+    if (num_short_term_ref_pic_sets > 64) {
+        upipe_err(upipe, "invalid SPS (num_short_term_ref_pic_sets)");
+        ubuf_block_stream_clean(s);
+        return false;
+    }
+
+    uint32_t num_negative_pics[num_short_term_ref_pic_sets];
+    uint32_t num_positive_pics[num_short_term_ref_pic_sets];
+    int delta_poc[num_short_term_ref_pic_sets][max_dec_pic_buffering_1];
+    bool used_by_curr_pic[num_short_term_ref_pic_sets][max_dec_pic_buffering_1];
+    for (int i = 0; i < num_short_term_ref_pic_sets; i++) {
         if (!upipe_h265f_stream_parse_short_term_ref_pic_set(s, i,
-                max_short_term_ref_pic_sets, max_dec_pic_buffering_1,
-                num_delta_pocs)) {
+                num_short_term_ref_pic_sets, max_dec_pic_buffering_1,
+                num_negative_pics, num_positive_pics,
+                delta_poc, used_by_curr_pic)) {
             upipe_err(upipe, "invalid SPS (short_term_ref_pic_sets)");
             ubuf_block_stream_clean(s);
             return false;
