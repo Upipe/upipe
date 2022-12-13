@@ -21,9 +21,14 @@
 
 %include "x86util.asm"
 
-SECTION_RODATA 32
+SECTION_RODATA 64
 
-sdi_shuf_10:         times 2 db 1, 0, 2, 1, 3, 2, 4, 3, 6, 5, 7, 6, 8, 7, 9, 8
+sdi_shuf_10:
+%assign i 0
+%rep 4
+    db i+1,i+0, i+2,i+1, i+3,i+2, i+4,i+3, i+6,i+5, i+7,i+6, i+8,i+7, i+9,i+8
+    %assign i i+10
+%endrep
 
 sdi_mask_10:         times 4 dw 0xffc0, 0x3ff0, 0x0ffc, 0x03ff
 
@@ -80,39 +85,47 @@ cglobal sdi_to_uyvy, 3, 3, 6-cpuflag(avx512), src, y, pixels
     lea yq,     [yq + 4*pixelsq]
     neg pixelsq
 
-    mova     m2, [sdi_shuf_10]
-    mova     m3, [sdi_mask_10]
+    %if cpuflag(avx512icl)
+        mova           m2, [sdi_shuf_10]
+    %else
+        VBROADCASTI128 m2, [sdi_shuf_10]
+    %endif
+    VBROADCASTI128     m3, [sdi_mask_10]
     %if notcpuflag(avx512)
         mova     m4, [sdi_chroma_mult_10]
         mova     m5, [sdi_luma_mult_10]
     %else
-        mova     m4, [sdi_shift_10]
+        VBROADCASTI128 m4, [sdi_shift_10]
     %endif
 
     .loop:
-        movu     xm0, [srcq]
-        %if cpuflag(avx2)
-            vinserti128 m0, m0, [srcq + 10], 1
+        %if cpuflag(avx512icl) || notcpuflag(avx2)
+            movu         m0, [srcq]
+        %else
+            movu        xm0, [srcq]
+            vinserti128  m0, m0, [srcq + 10], 1
         %endif
 
-        pshufb   m0, m2 ; spread into words and byte swap
+        %if cpuflag(avx512icl)
+            vpermb   m0, m2, m0
+        %else
+            pshufb   m0, m2 ; spread into words and byte swap
+        %endif
+
         pand     m0, m3 ; mask out bits
 
         %if cpuflag(avx512)
-            vpsrlvw  m0, m4
+            vpsrlvw  m0, m4 ; shift into right positions
         %else
             pmulhuw  m1, m0, m4
             pmulhrsw m0, m5
-
             por      m0, m1
         %endif
 
         movu     [yq + 4*pixelsq], m0
-
         add    srcq, (mmsize*5)/8
         add pixelsq, mmsize/4
     jl .loop
-
 RET
 %endmacro
 
@@ -121,6 +134,8 @@ sdi_to_uyvy
 INIT_YMM avx2
 sdi_to_uyvy
 INIT_YMM avx512
+sdi_to_uyvy
+INIT_ZMM avx512icl
 sdi_to_uyvy
 
 %macro uyvy_to_planar_8 0

@@ -5,6 +5,7 @@ void upipe_sdi_to_uyvy_c(const uint8_t *src, uint16_t *y, uintptr_t pixels);
 void upipe_sdi_to_uyvy_ssse3(const uint8_t *src, uint16_t *y, uintptr_t pixels);
 void upipe_sdi_to_uyvy_avx2 (const uint8_t *src, uint16_t *y, uintptr_t pixels);
 void upipe_sdi_to_uyvy_avx512 (const uint8_t *src, uint16_t *y, uintptr_t pixels);
+void upipe_sdi_to_uyvy_avx512icl(const uint8_t *src, uint16_t *y, uintptr_t pixels);
 
 void upipe_uyvy_to_planar_8_c(uint8_t *y, uint8_t *u, uint8_t *v, const uint16_t *l, uintptr_t width);
 /* process mmsize pixels per iteration */
