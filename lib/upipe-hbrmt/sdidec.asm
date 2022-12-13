@@ -82,38 +82,38 @@ cglobal sdi_to_uyvy, 3, 3, 6-cpuflag(avx512), src, y, pixels
 
     mova     m2, [sdi_shuf_10]
     mova     m3, [sdi_mask_10]
-%if notcpuflag(avx512)
-    mova     m4, [sdi_chroma_mult_10]
-    mova     m5, [sdi_luma_mult_10]
-%else
-    mova     m4, [sdi_shift_10]
-%endif
+    %if notcpuflag(avx512)
+        mova     m4, [sdi_chroma_mult_10]
+        mova     m5, [sdi_luma_mult_10]
+    %else
+        mova     m4, [sdi_shift_10]
+    %endif
 
-.loop:
-    movu     xm0, [srcq]
-%if cpuflag(avx2)
-    vinserti128 m0, m0, [srcq + 10], 1
-%endif
+    .loop:
+        movu     xm0, [srcq]
+        %if cpuflag(avx2)
+            vinserti128 m0, m0, [srcq + 10], 1
+        %endif
 
-    pshufb   m0, m2 ; spread into words and byte swap
-    pand     m0, m3 ; mask out bits
+        pshufb   m0, m2 ; spread into words and byte swap
+        pand     m0, m3 ; mask out bits
 
-%if cpuflag(avx512)
-    vpsrlvw  m0, m4
-%else
-    pmulhuw  m1, m0, m4
-    pmulhrsw m0, m5
+        %if cpuflag(avx512)
+            vpsrlvw  m0, m4
+        %else
+            pmulhuw  m1, m0, m4
+            pmulhrsw m0, m5
 
-    por      m0, m1
-%endif
+            por      m0, m1
+        %endif
 
-    movu     [yq + 4*pixelsq], m0
+        movu     [yq + 4*pixelsq], m0
 
-    add    srcq, (mmsize*5)/8
-    add pixelsq, mmsize/4
+        add    srcq, (mmsize*5)/8
+        add pixelsq, mmsize/4
     jl .loop
 
-    RET
+RET
 %endmacro
 
 INIT_XMM ssse3
