@@ -342,7 +342,8 @@ static int upipe_avcdec_get_buffer_pic(struct AVCodecContext *context,
                                                           flow_def_attr)))) {
         uref_free(uref);
         uref_free(flow_def_attr);
-        upipe_err_va(upipe, "unhandled pixel format %d", pix_fmt);
+        upipe_err_va(upipe, "unhandled pixel format '%s' (%d)",
+                     av_get_pix_fmt_name(pix_fmt) ?: "unknown", pix_fmt);
         upipe_throw_fatal(upipe, UBASE_ERR_INVALID);
         return -1;
     }
