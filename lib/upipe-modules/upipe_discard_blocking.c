@@ -27,7 +27,7 @@
  * @short Upipe module discarding input uref when the output pipe is blocking
  */
 
-#define UPIPE_DISBLO_MAX_UREFS_DEFAULT  5
+#define UPIPE_DISBLO_MAX_UREFS_DEFAULT  1
 
 #include "upipe/upipe.h"
 #include "upipe/upipe_helper_upipe.h"
