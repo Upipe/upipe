@@ -152,6 +152,8 @@ static int upipe_sws_convert_color(struct upipe *upipe, struct uref *flow_def)
             colorspace = SWS_CS_SMPTE170M;
         else if (!strcmp(matrix_coefficients, "smpte240m"))
             colorspace = SWS_CS_SMPTE240M;
+        else if (!strcmp(matrix_coefficients, "bt2020nc"))
+            colorspace = SWS_CS_BT2020;
         else
             upipe_warn_va(upipe, "unknown color space %s", matrix_coefficients);
     }
