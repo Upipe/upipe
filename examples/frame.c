@@ -54,6 +54,7 @@
 #include <upipe-framers/upipe_auto_framer.h>
 #include <upipe-framers/upipe_mpga_framer.h>
 #include <upipe-framers/upipe_h264_framer.h>
+#include <upipe-framers/upipe_h265_framer.h>
 #include <upipe-framers/upipe_dvbsub_framer.h>
 #include <upipe-filters/upipe_filter_decode.h>
 #include <upipe-av/upipe_avcodec_decode.h>
@@ -606,6 +607,9 @@ int main(int argc, char *argv[])
         }
         else if (!strcmp(framer, "h264")) {
             upipe_framer_mgr = upipe_h264f_mgr_alloc();
+        }
+        else if (!strcmp(framer, "h265")) {
+            upipe_framer_mgr = upipe_h265f_mgr_alloc();
         }
         else if (!strcmp(framer, "dvbsub")) {
             upipe_framer_mgr = upipe_dvbsubf_mgr_alloc();
