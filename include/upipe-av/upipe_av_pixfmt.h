@@ -157,6 +157,8 @@ upipe_av_pixfmt_to_format(enum AVPixelFormat pix_fmt)
 #endif
         case AV_PIX_FMT_GBRP:
             return &uref_pic_flow_format_gbrp;
+        case AV_PIX_FMT_P010LE:
+            return &uref_pic_flow_format_p010le;
         default:
             break;
     }
@@ -247,6 +249,7 @@ static inline enum AVPixelFormat
         AV_PIX_FMT_NV24,
 #endif
         AV_PIX_FMT_GBRP,
+        AV_PIX_FMT_P010LE,
         -1
     };
 

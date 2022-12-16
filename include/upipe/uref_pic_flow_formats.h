@@ -460,6 +460,11 @@ UREF_PIC_FLOW_FORMAT(gbrp, 1,
                      { 1, 1, 1, "b8", 8 },
                      { 1, 1, 1, "r8", 8 });
 
+/** @This is the description of the p010le format. */
+UREF_PIC_FLOW_FORMAT(p010le, 1,
+                     { 1, 1, 2, "y10l", 10 },
+                     { 2, 2, 4, "u10v10l", 20 });
+
 #define UREF_PIC_FLOW_FORMAT_FOREACH(Do, ...) \
     Do(yuva420p, ## __VA_ARGS__) \
     Do(yuva422p, ## __VA_ARGS__) \
@@ -508,6 +513,7 @@ UREF_PIC_FLOW_FORMAT(gbrp, 1,
     Do(nv16, ## __VA_ARGS__) \
     Do(nv24, ## __VA_ARGS__) \
     Do(gbrp, ## __VA_ARGS__) \
+    Do(p010le, ## __VA_ARGS__) \
 
 /** @This defines a helper functions to deal with a specified format.
  *
