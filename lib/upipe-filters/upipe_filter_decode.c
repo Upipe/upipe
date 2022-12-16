@@ -111,6 +111,8 @@ struct upipe_fdec {
     struct upump *timer;
     /** watchdog timer timeout */
     uint64_t timeout;
+    /** is currently watched? */
+    bool watched;
 
     /** flow def attributes */
     struct uref *flow_def_attr;
@@ -173,6 +175,7 @@ static struct upipe *upipe_fdec_alloc(struct upipe_mgr *mgr,
     upipe_fdec->hw_type = NULL;
     upipe_fdec->hw_device = NULL;
     upipe_fdec->timeout = UINT64_MAX;
+    upipe_fdec->watched = false;
 
     upipe_throw_ready(upipe);
     upipe_fdec_demand_uref_mgr(upipe);
@@ -482,7 +485,7 @@ static int upipe_fdec_catch_last_inner(struct uprobe *uprobe,
 
     if (event == UPROBE_PROBE_UREF &&
         ubase_get_signature(args) == UPIPE_PROBE_UREF_SIGNATURE) {
-        if (upipe_fdec->timer)
+        if (upipe_fdec->timer && upipe_fdec->watched)
             upump_restart(upipe_fdec->timer);
         return UBASE_ERR_NONE;
     }
@@ -500,12 +503,12 @@ static void upipe_fdec_timeout(struct upump *timer)
 
     upipe_warn(upipe, "watchdog timer timeout");
 
+    upipe_fdec->watched = false;
     upipe_fdec_store_bin_input(upipe, NULL);
     struct uref *flow_def_input = upipe_fdec->flow_def_input;
     upipe_fdec->flow_def_input = NULL;
     upipe_fdec_set_flow_def(upipe, flow_def_input);
     uref_free(flow_def_input);
-    upump_restart(timer);
 }
 
 /** @internal @This checks the internal pipe state.
@@ -536,7 +539,8 @@ static int upipe_fdec_check(struct upipe *upipe)
             return UBASE_ERR_UPUMP;
 
         upipe_fdec_set_timer(upipe, timer);
-        upump_start(timer);
+        if (upipe_fdec->watched)
+            upump_start(timer);
     }
 
     return UBASE_ERR_NONE;
@@ -554,6 +558,27 @@ static int upipe_fdec_control(struct upipe *upipe, int cmd, va_list args)
 {
     UBASE_RETURN(upipe_fdec_control_real(upipe, cmd, args));
     return upipe_fdec_check(upipe);
+}
+
+/** @internal @This handles input buffers.
+ *
+ * @param upipe description structure of the pipe
+ * @param uref input buffer to handle
+ * @param upump_p reference to upump that generated the buffer
+ */
+static void upipe_fdec_input(struct upipe *upipe, struct uref *uref,
+                             struct upump **upump_p)
+{
+    struct upipe_fdec *upipe_fdec = upipe_fdec_from_upipe(upipe);
+    struct upump *timer = upipe_fdec->timer;
+
+    if (!upipe_fdec->watched) {
+        upipe_fdec->watched = true;
+        if (timer)
+            upump_restart(timer);
+    }
+
+    upipe_fdec_bin_input(upipe, uref, upump_p);
 }
 
 /** @This frees a upipe.
@@ -661,7 +686,7 @@ struct upipe_mgr *upipe_fdec_mgr_alloc(void)
     fdec_mgr->mgr.refcount = upipe_fdec_mgr_to_urefcount(fdec_mgr);
     fdec_mgr->mgr.signature = UPIPE_FDEC_SIGNATURE;
     fdec_mgr->mgr.upipe_alloc = upipe_fdec_alloc;
-    fdec_mgr->mgr.upipe_input = upipe_fdec_bin_input;
+    fdec_mgr->mgr.upipe_input = upipe_fdec_input;
     fdec_mgr->mgr.upipe_control = upipe_fdec_control;
     fdec_mgr->mgr.upipe_mgr_control = upipe_fdec_mgr_control;
     return upipe_fdec_mgr_to_upipe_mgr(fdec_mgr);
