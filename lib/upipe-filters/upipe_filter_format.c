@@ -390,9 +390,11 @@ static int upipe_ffmt_check_flow_format(struct upipe *upipe,
                 const char *pix_fmt_in = "unknown";
                 const char *pix_fmt_out = "unknown";
                 upipe_avfilt_mgr_get_pixfmt_name(ffmt_mgr->avfilter_mgr,
-                                                 flow_def, &pix_fmt_in);
+                                                 flow_def, &pix_fmt_in,
+                                                 true);
                 upipe_avfilt_mgr_get_pixfmt_name(ffmt_mgr->avfilter_mgr,
-                                                 flow_def_dup, &pix_fmt_out);
+                                                 flow_def_dup, &pix_fmt_out,
+                                                 true);
                 upipe_notice_va(upipe, "need format conversion %s → %s",
                                 pix_fmt_in, pix_fmt_out);
             }
@@ -421,7 +423,10 @@ static int upipe_ffmt_check_flow_format(struct upipe *upipe,
 
             const char *pix_fmt = NULL;
             upipe_avfilt_mgr_get_pixfmt_name(ffmt_mgr->avfilter_mgr,
-                                             flow_def_dup, &pix_fmt);
+                                             flow_def_dup, &pix_fmt, false);
+            const char *pix_fmt_sw = NULL;
+            upipe_avfilt_mgr_get_pixfmt_name(ffmt_mgr->avfilter_mgr,
+                                             flow_def_dup, &pix_fmt_sw, true);
 
             char filters[512];
             int pos = 0;
@@ -432,15 +437,22 @@ static int upipe_ffmt_check_flow_format(struct upipe *upipe,
                 str_cat("scale,format=nv12,hwupload,");
             if (need_deint)
                 str_cat("deinterlace_vaapi=auto=1,");
-            if (need_scale)
-                str_cat("scale_vaapi=w=%"PRIu64":h=%"PRIu64",", hsize, vsize);
+            if (need_scale || need_format) {
+                str_cat("scale_vaapi=");
+                if (need_scale)
+                    str_cat("w=%"PRIu64":h=%"PRIu64, hsize, vsize);
+                if (need_scale && need_format)
+                    str_cat(":");
+                if (need_format)
+                    str_cat("format=%s", pix_fmt_sw);
+                str_cat(",");
+            }
             if (!hw_out) {
                 str_cat("hwmap=mode=read+direct,format=nv12,");
                 if (pix_fmt != NULL && strcmp(pix_fmt, "nv12"))
                     str_cat("scale,format=%s,", pix_fmt);
             } else if (pic_qsv_out && (need_deint || need_scale || pic_vaapi_in))
                 str_cat("hwmap=derive_device=qsv,format=qsv");
-
 #undef str_cat
 
             if (filters[pos - 1] == ',')

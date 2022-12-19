@@ -105,7 +105,7 @@ struct upipe_mgr *upipe_avfilt_mgr_alloc(void);
 enum upipe_avfilt_mgr_command {
     UPIPE_AVFILT_MGR_SENTINEL = UPIPE_MGR_CONTROL_LOCAL,
 
-    /** gets the pixel format name from flow def (struct uref *, const char **) */
+    /** gets the pixel format name from flow def (struct uref *, const char **, bool) */
     UPIPE_AVFILT_MGR_GET_PIXFMT_NAME
 };
 
@@ -118,10 +118,11 @@ enum upipe_avfilt_mgr_command {
  */
 static inline int upipe_avfilt_mgr_get_pixfmt_name(struct upipe_mgr *mgr,
                                                    struct uref *flow_def,
-                                                   const char **name)
+                                                   const char **name,
+                                                   bool software)
 {
     return upipe_mgr_control(mgr, UPIPE_AVFILT_MGR_GET_PIXFMT_NAME,
-                             UPIPE_AVFILT_SIGNATURE, flow_def, name);
+                             UPIPE_AVFILT_SIGNATURE, flow_def, name, software);
 }
 
 #ifdef __cplusplus
