@@ -310,9 +310,13 @@ static struct upipe *upipe_h265f_alloc(struct upipe_mgr *mgr,
     upipe_h265f->profile_idc = 0;
     upipe_h265f->profile_compatibility = 0;
     upipe_h265f->level_idc = 0;
+    upipe_h265f->constraint_indicator = 0;
     upipe_h265f->general_progressive = 0;
     upipe_h265f->general_interlaced = 0;
-    upipe_h265f->constraint_indicator = 0;
+    upipe_h265f->frame_rate.num = 0;
+    upipe_h265f->frame_rate.den = 0;
+    upipe_h265f->octet_rate = 0;
+    upipe_h265f->cpb_size = 0;
     upipe_h265f->pic_struct = -1;
     upipe_h265f->duration = 0;
     upipe_h265f->got_discontinuity = false;
