@@ -182,7 +182,7 @@ static inline int upipe_av_pixfmt_to_flow_def(enum AVPixelFormat pix_fmt,
     return uref_flow_set_def(flow_def, UREF_PIC_FLOW_DEF);
 }
 
-/** @This finds the appropriate av pixel format according to the flow
+/** @This finds the appropriate software av pixel format according to the flow
  * definition, and creates a mapping system for planes.
  *
  * @param flow_def flow definition
@@ -192,9 +192,9 @@ static inline int upipe_av_pixfmt_to_flow_def(enum AVPixelFormat pix_fmt,
  * was found
  */
 static inline enum AVPixelFormat
-    upipe_av_pixfmt_from_flow_def(struct uref *flow_def,
-                                  const enum AVPixelFormat *pix_fmts,
-                                  const char *chroma_p[UPIPE_AV_MAX_PLANES])
+    upipe_av_sw_pixfmt_from_flow_def(struct uref *flow_def,
+                                     const enum AVPixelFormat *pix_fmts,
+                                     const char *chroma_p[UPIPE_AV_MAX_PLANES])
 {
     static const enum AVPixelFormat supported_fmts[] = {
         AV_PIX_FMT_YUVA420P,
@@ -253,28 +253,6 @@ static inline enum AVPixelFormat
         -1
     };
 
-    const char *surface_type;
-    if (ubase_check(uref_pic_flow_get_surface_type(flow_def, &surface_type))) {
-        if (ubase_ncmp(surface_type, "av."))
-            return AV_PIX_FMT_NONE;
-
-        enum AVPixelFormat pix_fmt = av_get_pix_fmt(surface_type + 3);
-        if (pix_fmts == NULL) {
-            chroma_p[0] = NULL;
-            return pix_fmt;
-        }
-
-        while (*pix_fmts != -1) {
-            if (*pix_fmts == pix_fmt) {
-                chroma_p[0] = NULL;
-                return pix_fmt;
-            }
-            pix_fmts++;
-        }
-
-        return AV_PIX_FMT_NONE;
-    }
-
     if (pix_fmts == NULL)
         pix_fmts = supported_fmts;
 
@@ -299,6 +277,61 @@ static inline enum AVPixelFormat
     }
 
     return AV_PIX_FMT_NONE;
+}
+
+/** @This returns the appropriate hardware av pixel format according to the
+ * flow definition.
+ *
+ * @param flow_def flow definition
+ * @return selected pixel format, or AV_PIX_FMT_NONE if no compatible pixel
+ * format was found
+ */
+static inline enum AVPixelFormat
+    upipe_av_hw_pixfmt_from_flow_def(struct uref *flow_def)
+{
+    const char *surface_type;
+
+    if (ubase_check(uref_pic_flow_get_surface_type(flow_def, &surface_type)))
+        if (!ubase_ncmp(surface_type, "av."))
+            return av_get_pix_fmt(surface_type + 3);
+
+    return AV_PIX_FMT_NONE;
+}
+
+/** @This finds the appropriate av pixel format according to the flow
+ * definition, and creates a mapping system for planes.
+ *
+ * @param flow_def flow definition
+ * @param pix_fmts allowed pixel formats, terminated by -1 (or NULL for any)
+ * @param chroma_map av plane number vs. chroma map
+ * @return selected pixel format, or AV_PIX_FMT_NONE if no compatible pixel
+ * format was found
+ */
+static inline enum AVPixelFormat
+    upipe_av_pixfmt_from_flow_def(struct uref *flow_def,
+                                  const enum AVPixelFormat *pix_fmts,
+                                  const char *chroma_p[UPIPE_AV_MAX_PLANES])
+{
+    enum AVPixelFormat pix_fmt = upipe_av_hw_pixfmt_from_flow_def(flow_def);
+
+    if (pix_fmt != AV_PIX_FMT_NONE) {
+        if (pix_fmts == NULL) {
+            chroma_p[0] = NULL;
+            return pix_fmt;
+        }
+
+        while (*pix_fmts != -1) {
+            if (*pix_fmts == pix_fmt) {
+                chroma_p[0] = NULL;
+                return pix_fmt;
+            }
+            pix_fmts++;
+        }
+
+        return AV_PIX_FMT_NONE;
+    }
+
+    return upipe_av_sw_pixfmt_from_flow_def(flow_def, pix_fmts, chroma_p);
 }
 
 #ifdef __cplusplus

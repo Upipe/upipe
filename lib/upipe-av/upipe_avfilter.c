@@ -2695,10 +2695,12 @@ static void upipe_avfilt_free(struct upipe *upipe)
  * @return an error code
  */
 static int _upipe_avfilt_mgr_get_pixfmt_name(struct uref *flow_def,
-                                             const char **name_p)
+                                             const char **name_p,
+                                             bool software)
 {
     const char *chroma_map[UPIPE_AV_MAX_PLANES];
-    enum AVPixelFormat pix_fmt =
+    enum AVPixelFormat pix_fmt = software ?
+        upipe_av_sw_pixfmt_from_flow_def(flow_def, NULL, chroma_map) :
         upipe_av_pixfmt_from_flow_def(flow_def, NULL, chroma_map);
 
     const char *name = av_get_pix_fmt_name(pix_fmt);
@@ -2726,7 +2728,9 @@ static int upipe_avfilt_mgr_control(struct upipe_mgr *mgr,
             UBASE_SIGNATURE_CHECK(args, UPIPE_AVFILT_SIGNATURE)
             struct uref *flow_def = va_arg(args, struct uref *);
             const char **name_p = va_arg(args, const char **);
-            return _upipe_avfilt_mgr_get_pixfmt_name(flow_def, name_p);
+            bool software = va_arg(args, int);
+            return _upipe_avfilt_mgr_get_pixfmt_name(flow_def, name_p,
+                                                     software);
         default:
             return UBASE_ERR_UNHANDLED;
     }
