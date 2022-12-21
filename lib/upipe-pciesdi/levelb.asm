@@ -43,11 +43,11 @@ cglobal levelb_to_uyvy, 4, 4, 6-cpuflag(avx512), src, dst1, dst2, pixels
 
     mova     m2, [sdi_shuf_10]
     mova     m3, [sdi_mask_10]
-    %if notcpuflag(avx512)
+    %if cpuflag(avx512)
+        mova m4, [sdi_shift_10]
+    %else
         mova m4, [sdi_chroma_mult_10]
         mova m5, [sdi_luma_mult_10]
-    %else
-        mova m4, [sdi_shift_10]
     %endif
 
     .loop:
