@@ -25,9 +25,9 @@ SECTION_RODATA 64
 
 sdi_shuf_10:
 %assign i 0
-%rep 4
-    db i+1,i+0, i+2,i+1, i+3,i+2, i+4,i+3, i+6,i+5, i+7,i+6, i+8,i+7, i+9,i+8
-    %assign i i+10
+%rep 32
+    db i+1+i/4, i+i/4
+    %assign i i+1
 %endrep
 
 sdi_mask_10:         times 4 dw 0xffc0, 0x3ff0, 0x0ffc, 0x03ff
