@@ -23,7 +23,7 @@
 
 SECTION_RODATA 32
 
-sdi_shuf_10:         times 2 db 1, 0, 3, 2, 6, 5, 8, 7, 2, 1, 4, 3, 7, 6, 9, 8
+sdi_shuf_10:         times 2 db 1,0, 3,2, 6,5, 8,7, 2,1, 4,3, 7,6, 9,8
 
 sdi_mask_10:         times 2 dw 0xffc0, 0x0ffc, 0xffc0, 0x0ffc, 0x3ff0, 0x03ff, 0x3ff0, 0x03ff
 
@@ -43,12 +43,12 @@ cglobal levelb_to_uyvy, 4, 4, 6-cpuflag(avx512), src, dst1, dst2, pixels
 
     mova     m2, [sdi_shuf_10]
     mova     m3, [sdi_mask_10]
-%if notcpuflag(avx512)
-    mova     m4, [sdi_chroma_mult_10]
-    mova     m5, [sdi_luma_mult_10]
-%else
-    mova     m4, [sdi_shift_10]
-%endif
+    %if notcpuflag(avx512)
+        mova m4, [sdi_chroma_mult_10]
+        mova m5, [sdi_luma_mult_10]
+    %else
+        mova m4, [sdi_shift_10]
+    %endif
 
     .loop:
         movu     xm0, [srcq]
@@ -56,17 +56,16 @@ cglobal levelb_to_uyvy, 4, 4, 6-cpuflag(avx512), src, dst1, dst2, pixels
             vinserti128 m0, m0, [srcq + 10], 1
         %endif
 
-        pshufb   m0, m2 ; spread into words and byte swap
-        pand     m0, m3 ; mask out bits
+        pshufb m0, m2 ; spread into words and byte swap
+        pand   m0, m3 ; mask out bits
 
-%if cpuflag(avx512)
-        vpsrlvw  m0, m4
-%else
-        pmulhuw  m1, m0, m4
-        pmulhrsw m0, m5
-
-        por      m0, m1
-%endif
+        %if cpuflag(avx512)
+            vpsrlvw  m0, m4
+        %else
+            pmulhuw  m1, m0, m4
+            pmulhrsw m0, m5
+            por      m0, m1
+        %endif
 
         %if cpuflag(avx2)
             vpermq       m0, m0, q3120
@@ -81,7 +80,6 @@ cglobal levelb_to_uyvy, 4, 4, 6-cpuflag(avx512), src, dst1, dst2, pixels
         add    srcq, (mmsize*5)/8
         add pixelsq, mmsize/8
     jl .loop
-
 RET
 
 %endmacro
