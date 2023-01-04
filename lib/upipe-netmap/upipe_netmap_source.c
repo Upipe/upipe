@@ -313,6 +313,10 @@ static struct upipe *upipe_netmap_source_alloc(struct upipe_mgr *mgr,
    if (has_avx512_support()) {
         upipe_netmap_source->sdi_to_uyvy = upipe_sdi_to_uyvy_avx512;
    }
+
+    if (has_avx512icl_support()) {
+        upipe_netmap_source->sdi_to_uyvy = upipe_sdi_to_uyvy_avx512icl;
+    }
 #endif
 #endif
 
