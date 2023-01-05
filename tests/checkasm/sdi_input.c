@@ -76,6 +76,10 @@ void checkasm_check_sdi_input(void)
     if (cpu_flags & AV_CPU_FLAG_AVX512) {
         s.uyvy = upipe_sdi_to_uyvy_avx512;
     }
+
+    if (cpu_flags & AV_CPU_FLAG_AVX512ICL) {
+        s.uyvy = upipe_sdi_to_uyvy_avx512icl;
+    }
 #endif
 #endif
 

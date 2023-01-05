@@ -21,9 +21,25 @@
 
 %include "x86util.asm"
 
-SECTION_RODATA 32
+SECTION_RODATA 64
 
-sdi_shuf_10:         times 2 db 1, 0, 3, 2, 6, 5, 8, 7, 2, 1, 4, 3, 7, 6, 9, 8
+icl_perm:
+%assign i 0
+%rep 16
+    db i+1+i/4, i+i/4
+    %assign i i+2
+%endrep
+%assign i 1
+%rep 16
+    db i+1+i/4, i+i/4
+    %assign i i+2
+%endrep
+
+icl_shift:
+    times 8 dw 6,2
+    times 8 dw 4,0
+
+sdi_shuf_10:         times 2 db 1,0, 3,2, 6,5, 8,7, 2,1, 4,3, 7,6, 9,8
 
 sdi_mask_10:         times 2 dw 0xffc0, 0x0ffc, 0xffc0, 0x0ffc, 0x3ff0, 0x03ff, 0x3ff0, 0x03ff
 
@@ -31,6 +47,8 @@ sdi_chroma_mult_10:  times 2 dw 0x400, 0x4000, 0x400, 0x4000, 0, 0, 0, 0
 sdi_luma_mult_10:    times 2 dw 0, 0, 0, 0, 0x800, 0x7fff, 0x800, 0x7fff
 
 sdi_shift_10:        times 2 dw 6, 2, 6, 2, 4, 0, 4, 0
+
+icl_mask: dw 0x3ff
 
 SECTION .text
 
@@ -41,34 +59,51 @@ cglobal levelb_to_uyvy, 4, 4, 6-cpuflag(avx512), src, dst1, dst2, pixels
     lea dst2q, [dst2q + 4*pixelsq]
     neg pixelsq
 
-    mova     m2, [sdi_shuf_10]
-    mova     m3, [sdi_mask_10]
-%if notcpuflag(avx512)
-    mova     m4, [sdi_chroma_mult_10]
-    mova     m5, [sdi_luma_mult_10]
-%else
-    mova     m4, [sdi_shift_10]
-%endif
+    %if cpuflag(avx512icl)
+        mova         m2, [icl_perm]
+        vpbroadcastw m3, [icl_mask]
+    %else
+        mova m2, [sdi_shuf_10]
+        mova m3, [sdi_mask_10]
+    %endif
+
+    %if cpuflag(avx512icl)
+        mova m4, [icl_shift]
+    %elif cpuflag(avx512)
+        mova m4, [sdi_shift_10]
+    %else
+        mova m4, [sdi_chroma_mult_10]
+        mova m5, [sdi_luma_mult_10]
+    %endif
 
     .loop:
-        movu     xm0, [srcq]
-        %if cpuflag(avx2)
-            vinserti128 m0, m0, [srcq + 10], 1
+        %if cpuflag(avx512icl) || notcpuflag(avx2)
+            movu         m0, [srcq]
+        %else
+            movu        xm0, [srcq]
+            vinserti128  m0, m0, [srcq + 10], 1
         %endif
 
-        pshufb   m0, m2 ; spread into words and byte swap
-        pand     m0, m3 ; mask out bits
+        %if cpuflag(avx512icl)
+            vpermb m0, m2, m0
+        %else
+            pshufb m0, m2 ; spread into words and byte swap
+            pand   m0, m3 ; mask out bits
+        %endif
 
-%if cpuflag(avx512)
-        vpsrlvw  m0, m4
-%else
-        pmulhuw  m1, m0, m4
-        pmulhrsw m0, m5
+        %if cpuflag(avx512)
+            vpsrlvw  m0, m4
+        %else
+            pmulhuw  m1, m0, m4
+            pmulhrsw m0, m5
+            por      m0, m1
+        %endif
 
-        por      m0, m1
-%endif
-
-        %if cpuflag(avx2)
+        %if cpuflag(avx512icl)
+            pand m0, m3 ; mask bits after shifting
+            movu          [dst1q + 4*pixelsq], ym0
+            vextracti32x8 [dst2q + 4*pixelsq], zm0, 1
+        %elif cpuflag(avx2)
             vpermq       m0, m0, q3120
             movu         [dst1q + 4*pixelsq], xm0
             vextracti128 [dst2q + 4*pixelsq], m0, 1
@@ -81,7 +116,6 @@ cglobal levelb_to_uyvy, 4, 4, 6-cpuflag(avx512), src, dst1, dst2, pixels
         add    srcq, (mmsize*5)/8
         add pixelsq, mmsize/8
     jl .loop
-
 RET
 
 %endmacro
@@ -93,4 +127,6 @@ levelb_to_uyvy
 INIT_YMM avx2
 levelb_to_uyvy
 INIT_YMM avx512
+levelb_to_uyvy
+INIT_ZMM avx512icl
 levelb_to_uyvy

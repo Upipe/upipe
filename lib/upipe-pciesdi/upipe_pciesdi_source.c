@@ -218,6 +218,11 @@ static struct upipe *upipe_pciesdi_src_alloc(struct upipe_mgr *mgr,
         upipe_pciesdi_src->sdi_to_uyvy = upipe_sdi_to_uyvy_avx512;
         upipe_pciesdi_src->levelb_to_uyvy = upipe_levelb_to_uyvy_avx512;
     }
+
+    if (has_avx512icl_support()) {
+        upipe_pciesdi_src->sdi_to_uyvy = upipe_sdi_to_uyvy_avx512icl;
+        upipe_pciesdi_src->levelb_to_uyvy = upipe_levelb_to_uyvy_avx512icl;
+    }
 #endif
 #endif
 
@@ -523,7 +528,7 @@ static void upipe_pciesdi_src_worker(struct upump *upump)
         const uint8_t *sdi_line = mmap_wraparound(upipe_pciesdi_src->read_buffer, sw, offset);
 
     /* maximum number of bytes the SIMD can read beyond the end of the buffer. */
-#define SIMD_OVERREAD 25
+#define SIMD_OVERREAD 63
 
         /* check whether a line wraps around in the mmap buffer */
         if (mmap_length_does_wrap(sw, offset, sdi_line_width + SIMD_OVERREAD)) {
