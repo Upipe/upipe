@@ -473,8 +473,6 @@ static int upipe_netmap_source_alloc_output_uref(struct upipe *upipe, uint64_t s
         upipe_netmap_source->uref = uref;
     }
 
-    uref_clock_set_cr_sys(upipe_netmap_source->uref, systime);
-
     return UBASE_ERR_NONE;
 }
 
@@ -847,6 +845,9 @@ static uint64_t do_packet(struct upipe *upipe, struct netmap_ring *rxring,
 
             marker &= eof;
         }
+
+        if (upipe_netmap_source->packets == 0 && upipe_netmap_source->uref)
+                uref_clock_set_cr_sys(upipe_netmap_source->uref, systime);
 
         upipe_netmap_source->packets++;
     }
