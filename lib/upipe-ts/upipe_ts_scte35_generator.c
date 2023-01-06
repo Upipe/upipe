@@ -35,13 +35,19 @@
 #include "upipe/uref_clock.h"
 #include "upipe/ubuf.h"
 #include "upipe/ubuf_block.h"
+#include "upipe/uprobe_prefix.h"
 #include "upipe/upipe.h"
 #include "upipe/upipe_helper_upipe.h"
 #include "upipe/upipe_helper_urefcount.h"
+#include "upipe/upipe_helper_urefcount_real.h"
+#include "upipe/upipe_helper_uprobe.h"
+#include "upipe/upipe_helper_inner.h"
+#include "upipe/upipe_helper_bin_input.h"
 #include "upipe/upipe_helper_void.h"
 #include "upipe/upipe_helper_uref_mgr.h"
 #include "upipe/upipe_helper_ubuf_mgr.h"
 #include "upipe/upipe_helper_output.h"
+#include "upipe-ts/upipe_ts_scte35_merge.h"
 #include "upipe-ts/upipe_ts_scte35_generator.h"
 #include "upipe-ts/upipe_ts_mux.h"
 #include "upipe-ts/uref_ts_scte35.h"
@@ -64,6 +70,10 @@
 struct scte35_message {
     /** link in the list */
     struct uchain uchain;
+    /** uref description of the message */
+    struct uref *uref;
+    /** type name of the message */
+    const char *name;
     /** SCTE-35 message */
     struct ubuf *ubuf;
     /** immediate version of the SCTE-35 message */
@@ -76,10 +86,21 @@ UBASE_FROM_TO(scte35_message, uchain, uchain, uchain);
 
 /** @internal @This is the private context of a ts scte35g pipe. */
 struct upipe_ts_scte35g {
-    /** refcount management structure */
+    /** external refcount management structure */
     struct urefcount urefcount;
-    /** input flow definition */
-    struct uref *flow_def;
+    /** internal refcount management structure */
+    struct urefcount urefcount_real;
+
+    /** internal clock */
+    struct uclock uclock;
+    /** internal clock value */
+    uint64_t cr_sys;
+    /** inner probe */
+    struct uprobe proxy_probe;
+    /** inner pipe */
+    struct upipe *scte35m;
+    /** request list */
+    struct uchain input_request_list;
 
     /** uref manager */
     struct uref_mgr *uref_mgr;
@@ -96,7 +117,7 @@ struct upipe_ts_scte35g {
     /** pipe acting as output */
     struct upipe *output;
     /** output flow definition packet */
-    struct uref *output_flow_def;
+    struct uref *flow_def;
     /** output state */
     enum upipe_helper_output_state output_state;
     /** list of output requests */
@@ -109,16 +130,28 @@ struct upipe_ts_scte35g {
     /** SCTE-35 null command section */
     struct ubuf *scte35_null_section;
     /** list of SCTE-35 messages */
-    struct uchain scte35_sections;
+    struct uchain messages;
 
     /** public upipe structure */
     struct upipe upipe;
 };
 
+/** @hidden */
+static int upipe_ts_scte35g_catch_scte35m(struct uprobe *uprobe,
+                                          struct upipe *inner,
+                                          int event, va_list args);
+
+UBASE_FROM_TO(upipe_ts_scte35g, uclock, uclock, uclock)
 UPIPE_HELPER_UPIPE(upipe_ts_scte35g, upipe, UPIPE_TS_SCTE35G_SIGNATURE)
-UPIPE_HELPER_UREFCOUNT(upipe_ts_scte35g, urefcount, upipe_ts_scte35g_free)
+UPIPE_HELPER_UREFCOUNT(upipe_ts_scte35g, urefcount, upipe_ts_scte35g_no_ref)
+UPIPE_HELPER_UREFCOUNT_REAL(upipe_ts_scte35g, urefcount_real,
+                            upipe_ts_scte35g_free)
+UPIPE_HELPER_UPROBE(upipe_ts_scte35g, urefcount_real, proxy_probe,
+                    upipe_ts_scte35g_catch_scte35m)
+UPIPE_HELPER_INNER(upipe_ts_scte35g, scte35m)
+UPIPE_HELPER_BIN_INPUT(upipe_ts_scte35g, scte35m, input_request_list)
 UPIPE_HELPER_VOID(upipe_ts_scte35g)
-UPIPE_HELPER_OUTPUT(upipe_ts_scte35g, output, output_flow_def, output_state,
+UPIPE_HELPER_OUTPUT(upipe_ts_scte35g, output, flow_def, output_state,
                     request_list)
 UPIPE_HELPER_UREF_MGR(upipe_ts_scte35g, uref_mgr, uref_mgr_request, NULL,
                       upipe_ts_scte35g_register_output_request,
@@ -133,16 +166,52 @@ UPIPE_HELPER_UBUF_MGR(upipe_ts_scte35g, ubuf_mgr, flow_format, ubuf_mgr_request,
  * @return an allocated SCTE-35 message or NULL in case of error
  */
 static struct scte35_message *
-scte35_message_new(uint64_t cr_sys)
+scte35_message_new(struct uchain *list, struct uref *uref)
 {
+    if (!uref)
+        return NULL;
+
+    const char *name;
+    uint8_t type;
+    if (!ubase_check(uref_ts_scte35_get_command_type(uref, &type)))
+        return NULL;
+    switch (type) {
+        case SCTE35_INSERT_COMMAND:
+            name = "splice insert";
+            break;
+        case SCTE35_TIME_SIGNAL_COMMAND:
+            name = "time signal";
+            break;
+        default:
+            return NULL;
+    }
+
     struct scte35_message *msg = malloc(sizeof (*msg));
     if (!msg)
         return NULL;
+
+    uint64_t cr_sys = 0;
+    uref_clock_get_pts_sys(uref, &cr_sys);
     uchain_init(&msg->uchain);
+    msg->uref = uref;
+    msg->name = name;
     msg->cr_sys = cr_sys;
     msg->ubuf = NULL;
     msg->immediate = NULL;
+    ulist_add(list, &msg->uchain);
     return msg;
+}
+
+/** @internal @This cleans a SCTE-35 message.
+ *
+ * @param msg SCTE-35 message to clean
+ */
+static void scte35_message_clean(struct scte35_message *msg)
+{
+    ubuf_free(msg->ubuf);
+    msg->ubuf = NULL;
+    ubuf_free(msg->immediate);
+    msg->immediate = NULL;
 }
 
 /** @internal @This frees a SCTE-35 message.
@@ -151,9 +220,28 @@ scte35_message_new(uint64_t cr_sys)
  */
 static void scte35_message_del(struct scte35_message *msg)
 {
-    ubuf_free(msg->ubuf);
-    ubuf_free(msg->immediate);
+    if (ulist_is_in(&msg->uchain))
+        ulist_delete(&msg->uchain);
+    scte35_message_clean(msg);
     free(msg);
+}
+
+/** @internal @This finds a previous SCTE-35 message.
+ *
+ * @param list list of previous SCTE-35 message
+ * @param uref description of the SCTE-35 message
+ * @return the previous message if any
+ */
+static struct scte35_message *scte35_message_find(struct uchain *list,
+                                                  struct uref *uref)
+{
+    struct uchain *uchain;
+    ulist_foreach(list, uchain) {
+        struct scte35_message *msg = scte35_message_from_uchain(uchain);
+        if (msg->uref == uref)
+            return msg;
+    }
+    return NULL;
 }
 
 /** @internal @This replaces the SCTE-35 message buffer.
@@ -188,60 +276,20 @@ static void scte35_message_set_immediate(struct scte35_message *msg,
         ubuf_free(ubuf);
 }
 
-/** @internal @This allocates a ts_scte35g pipe.
+/** @internal @This build a splice insert message.
  *
- * @param mgr common management structure
- * @param uprobe structure used to raise events
- * @param signature signature of the pipe allocator
- * @param args optional arguments
- * @return pointer to upipe or NULL in case of allocation error
+ * @param msg SCTE-35 message to build
+ * @param ubuf_mgr block allocator
+ * @return an error code
  */
-static struct upipe *upipe_ts_scte35g_alloc(struct upipe_mgr *mgr,
-                                            struct uprobe *uprobe,
-                                            uint32_t signature, va_list args)
+static int scte35_message_build_insert(struct scte35_message *msg,
+                                       struct ubuf_mgr *ubuf_mgr)
 {
-    struct upipe *upipe = upipe_ts_scte35g_alloc_void(mgr, uprobe, signature,
-                                                      args);
-    if (unlikely(upipe == NULL))
-        return NULL;
-
-    struct upipe_ts_scte35g *upipe_ts_scte35g =
-        upipe_ts_scte35g_from_upipe(upipe);
-    upipe_ts_scte35g_init_urefcount(upipe);
-    upipe_ts_scte35g_init_uref_mgr(upipe);
-    upipe_ts_scte35g_init_ubuf_mgr(upipe);
-    upipe_ts_scte35g_init_output(upipe);
-    upipe_ts_scte35g->flow_def = NULL;
-
-    upipe_ts_scte35g->scte35_interval = 0;
-    upipe_ts_scte35g->scte35_cr_sys = 0;
-    upipe_ts_scte35g->scte35_null_section = NULL;
-    ulist_init(&upipe_ts_scte35g->scte35_sections);
-
-    upipe_throw_ready(upipe);
-    upipe_ts_scte35g_demand_uref_mgr(upipe);
-    if (likely(upipe_ts_scte35g->uref_mgr != NULL)) {
-        struct uref *flow_format = uref_alloc_control(upipe_ts_scte35g->uref_mgr);
-        uref_flow_set_def(flow_format, "block.mpegtspsi.");
-        upipe_ts_scte35g_demand_ubuf_mgr(upipe, flow_format);
-    }
-    return upipe;
-}
-
-/** @internal @This creates a new PSI section for splice insert.
- *
- * @param upipe description structure of the pipe
- */
-static void upipe_ts_scte35g_input_insert(struct upipe *upipe,
-                                          struct uref *uref)
-{
-    struct upipe_ts_scte35g *scte35g = upipe_ts_scte35g_from_upipe(upipe);
+    struct uref *uref = msg->uref;
     uint64_t pts_prog = UINT64_MAX;
     uref_clock_get_pts_prog(uref, &pts_prog);
     uint64_t duration = UINT64_MAX;
     uref_clock_get_duration(uref, &duration);
-    uint64_t cr_sys = 0;
-    uref_clock_get_pts_sys(uref, &cr_sys);
     uint64_t event_id = 0;
     uref_ts_scte35_get_event_id(uref, &event_id);
     bool cancel = ubase_check(uref_ts_scte35_get_cancel(uref));
@@ -250,28 +298,17 @@ static void upipe_ts_scte35g_input_insert(struct upipe *upipe,
     uint64_t program_id = 0;
     uref_ts_scte35_get_unique_program_id(uref, &program_id);
 
-    struct scte35_message *msg = scte35_message_new(cr_sys);
-    if (unlikely(!msg)) {
-        upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
-        return;
-    }
-
     for ( ; ; ) {
-        struct ubuf *ubuf = ubuf_block_alloc(scte35g->ubuf_mgr,
-                                             PSI_MAX_SIZE + PSI_HEADER_SIZE);
-        if (unlikely(ubuf == NULL)) {
-            scte35_message_del(msg);
-            upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
-            return;
-        }
+        struct ubuf *ubuf =
+            ubuf_block_alloc(ubuf_mgr, PSI_MAX_SIZE + PSI_HEADER_SIZE);
+        if (unlikely(ubuf == NULL))
+            return UBASE_ERR_ALLOC;
 
         uint8_t *scte35;
         int size = -1;
         if (!ubase_check(ubuf_block_write(ubuf, 0, &size, &scte35))) {
-            scte35_message_del(msg);
             ubuf_free(ubuf);
-            upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
-            return;
+            return UBASE_ERR_ALLOC;
         }
 
         scte35_init(scte35);
@@ -334,14 +371,7 @@ static void upipe_ts_scte35g_input_insert(struct upipe *upipe,
         scte35_message_set_ubuf(msg, ubuf);
         pts_prog = UINT64_MAX;
     }
-
-    ulist_add(&scte35g->scte35_sections, &msg->uchain);
-
-    /* Force sending the table immediately */
-    scte35g->scte35_cr_sys = 0;
-    upipe_notice_va(upipe,
-                    "now using splice_insert command for event %"PRIu64,
-                    event_id);
+    return UBASE_ERR_NONE;
 }
 
 /** @internal @This creates a new PSI section for time signal.
@@ -349,42 +379,29 @@ static void upipe_ts_scte35g_input_insert(struct upipe *upipe,
  * @param upipe description structure of the pipe
  * @param uref uref structure
  */
-static void upipe_ts_scte35g_time_signal(struct upipe *upipe,
-                                         struct uref *uref)
+static int scte35_message_build_time_signal(struct scte35_message *msg,
+                                            struct ubuf_mgr *ubuf_mgr)
 {
-    struct upipe_ts_scte35g *scte35g = upipe_ts_scte35g_from_upipe(upipe);
+    struct uref *uref = msg->uref;
     uint64_t pts_prog = UINT64_MAX;
     uref_clock_get_pts_prog(uref, &pts_prog);
     uint64_t duration = UINT64_MAX;
     uref_clock_get_duration(uref, &duration);
-    uint64_t cr_sys = 0;
-    uref_clock_get_pts_sys(uref, &cr_sys);
     uint64_t pts_orig = UINT64_MAX;
     if (pts_prog != UINT64_MAX)
         pts_orig = (pts_prog / CLOCK_SCALE) % POW2_33;
 
-    struct scte35_message *msg = scte35_message_new(cr_sys);
-    if (!msg) {
-        upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
-        return;
-    }
-
     for ( ; ; ) {
-        struct ubuf *ubuf = ubuf_block_alloc(scte35g->ubuf_mgr,
-                                             PSI_MAX_SIZE + PSI_HEADER_SIZE);
-        if (unlikely(ubuf == NULL)) {
-            scte35_message_del(msg);
-            upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
-            return;
-        }
+        struct ubuf *ubuf =
+            ubuf_block_alloc(ubuf_mgr, PSI_MAX_SIZE + PSI_HEADER_SIZE);
+        if (unlikely(ubuf == NULL))
+            return UBASE_ERR_ALLOC;
 
         uint8_t *scte35;
         int size = -1;
         if (!ubase_check(ubuf_block_write(ubuf, 0, &size, &scte35))) {
             ubuf_free(ubuf);
-            scte35_message_del(msg);
-            upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
-            return;
+            return UBASE_ERR_ALLOC;
         }
 
         scte35_init(scte35);
@@ -442,12 +459,169 @@ static void upipe_ts_scte35g_time_signal(struct upipe *upipe,
         scte35_message_set_ubuf(msg, ubuf);
         pts_prog = UINT64_MAX;
     }
+    return UBASE_ERR_NONE;
+}
 
-    ulist_add(&scte35g->scte35_sections, &msg->uchain);
+/** @internal @This builds a SCTE-35 message.
+ *
+ * @param msg SCTE-35 message to build
+ * @return an error code
+ */
+static int scte35_message_build(struct scte35_message *msg,
+                                struct ubuf_mgr *ubuf_mgr)
+{
+    uint8_t type;
+    if (!msg || !msg->uref || !ubuf_mgr ||
+        !ubase_check(uref_ts_scte35_get_command_type(msg->uref, &type)))
+        return UBASE_ERR_INVALID;
 
-    /* Force sending the table immediately */
-    scte35g->scte35_cr_sys = 0;
-    upipe_notice(upipe, "now using time signal command");
+    int ret = UBASE_ERR_UNHANDLED;
+    switch (type) {
+        case SCTE35_INSERT_COMMAND:
+            ret = scte35_message_build_insert(msg, ubuf_mgr);
+            break;
+        case SCTE35_TIME_SIGNAL_COMMAND:
+            ret = scte35_message_build_time_signal(msg, ubuf_mgr);
+            break;
+    }
+    return ret;
+}
+
+/** @internal @This returns the current time of the scte35 generator.
+ *
+ * @param uclock private clock structure
+ * @return the current scte35 generator time or UINT64_MAX
+ */
+static uint64_t upipe_ts_scte35g_now(struct uclock *uclock)
+{
+    struct upipe_ts_scte35g *scte35g = upipe_ts_scte35g_from_uclock(uclock);
+    return scte35g->cr_sys;
+}
+
+/** @internal @This allocates a ts_scte35g pipe.
+ *
+ * @param mgr common management structure
+ * @param uprobe structure used to raise events
+ * @param signature signature of the pipe allocator
+ * @param args optional arguments
+ * @return pointer to upipe or NULL in case of allocation error
+ */
+static struct upipe *upipe_ts_scte35g_alloc(struct upipe_mgr *mgr,
+                                            struct uprobe *uprobe,
+                                            uint32_t signature, va_list args)
+{
+    struct upipe *upipe = upipe_ts_scte35g_alloc_void(mgr, uprobe, signature,
+                                                      args);
+    if (unlikely(upipe == NULL))
+        return NULL;
+
+    struct upipe_ts_scte35g *upipe_ts_scte35g =
+        upipe_ts_scte35g_from_upipe(upipe);
+    upipe_ts_scte35g_init_urefcount(upipe);
+    upipe_ts_scte35g_init_urefcount_real(upipe);
+    upipe_ts_scte35g_init_proxy_probe(upipe);
+    upipe_ts_scte35g_init_bin_input(upipe);
+    upipe_ts_scte35g_init_uref_mgr(upipe);
+    upipe_ts_scte35g_init_ubuf_mgr(upipe);
+    upipe_ts_scte35g_init_output(upipe);
+
+    upipe_ts_scte35g->cr_sys = UINT64_MAX;
+    upipe_ts_scte35g->uclock.refcount = &upipe_ts_scte35g->urefcount_real;
+    upipe_ts_scte35g->uclock.uclock_now = upipe_ts_scte35g_now;
+    upipe_ts_scte35g->uclock.uclock_to_real = NULL;
+    upipe_ts_scte35g->uclock.uclock_from_real = NULL;
+    upipe_ts_scte35g->scte35_interval = 0;
+    upipe_ts_scte35g->scte35_cr_sys = 0;
+    upipe_ts_scte35g->scte35_null_section = NULL;
+    ulist_init(&upipe_ts_scte35g->messages);
+
+    upipe_throw_ready(upipe);
+
+    struct upipe_mgr *upipe_ts_scte35m_mgr = upipe_ts_scte35m_mgr_alloc();
+    struct upipe *scte35m = upipe_void_alloc(
+        upipe_ts_scte35m_mgr,
+        uprobe_pfx_alloc(
+            uprobe_use(&upipe_ts_scte35g->proxy_probe),
+            UPROBE_LOG_VERBOSE, "scte35m"));
+    upipe_mgr_release(upipe_ts_scte35m_mgr);
+    upipe_ts_scte35g_store_bin_input(upipe, scte35m);
+    if (unlikely(!scte35m)) {
+        upipe_warn(upipe, "fail to allocate scte35m inner pipe");
+        upipe_release(upipe);
+        return NULL;
+    }
+
+    return upipe;
+}
+
+/** @internal @This catches event from the scte35m pipe.
+ *
+ * @param uprobe structure used to raise events
+ * @param inner inner pipe
+ * @param event event triggered by the inner pipe
+ * @param args optional arguments
+ * @return an error code
+ */
+static int upipe_ts_scte35g_catch_scte35m(struct uprobe *uprobe,
+                                          struct upipe *inner,
+                                          int event, va_list args)
+{
+    struct upipe_ts_scte35g *scte35g =
+        upipe_ts_scte35g_from_proxy_probe(uprobe);
+    struct upipe *upipe = upipe_ts_scte35g_to_upipe(scte35g);
+
+    switch (event) {
+        case UPROBE_NEED_UPUMP_MGR: {
+            struct upump_mgr **upump_mgr = va_arg(args, struct upump_mgr **);
+            *upump_mgr = NULL;
+            return UBASE_ERR_NONE;
+        }
+        case UPROBE_PROVIDE_REQUEST: {
+            va_list args_copy;
+            va_copy(args_copy, args);
+            struct urequest *urequest = va_arg(args_copy, struct urequest *);
+            va_end(args_copy);
+            if (urequest->type == UREQUEST_UCLOCK)
+                return urequest_provide_uclock(
+                    urequest, uclock_use(&scte35g->uclock));
+            break;
+        }
+    }
+
+    if (ubase_get_signature(args) == UPIPE_TS_SCTE35M_SIGNATURE) {
+        UBASE_SIGNATURE_CHECK(args, UPIPE_TS_SCTE35M_SIGNATURE);
+        struct uref *prev = va_arg(args, struct uref *);
+        struct uref *uref = va_arg(args, struct uref *);
+        struct scte35_message *msg = NULL;
+        switch (event) {
+            case UPROBE_TS_SCTE35M_CHANGED:
+                if (prev) {
+                    msg = scte35_message_find(&scte35g->messages, prev);
+                    if (msg) {
+                        scte35_message_clean(msg);
+                        msg->uref = uref;
+                    }
+                }
+                else
+                    msg = scte35_message_new(&scte35g->messages, uref);
+
+                if (msg) {
+                    scte35_message_build(msg, scte35g->ubuf_mgr);
+                    /* Force sending the table immediately */
+                    scte35g->scte35_cr_sys = 0;
+                }
+                break;
+
+            case UPROBE_TS_SCTE35M_EXPIRED: {
+                msg = scte35_message_find(&scte35g->messages, uref);
+                if (msg)
+                    msg->uref = NULL;
+                break;
+            }
+        }
+        return UBASE_ERR_NONE;
+    }
+    return upipe_throw_proxy(upipe, inner, event, args);
 }
 
 /** @internal @This builds a null command SCTE-35 section.
@@ -491,40 +665,6 @@ static void upipe_ts_scte35g_build_null(struct upipe *upipe)
 
     ubuf_free(scte35g->scte35_null_section);
     scte35g->scte35_null_section = ubuf;
-}
-
-/** @internal @This creates a new PSI section.
- *
- * @param upipe description structure of the pipe
- * @param uref uref structure
- * @param upump_p reference to pump that generated the buffer
- */
-static void upipe_ts_scte35g_input(struct upipe *upipe, struct uref *uref,
-                                   struct upump **upump_p)
-{
-    uint8_t cmd_type;
-
-    if (uref == NULL || uref->udict == NULL)
-        upipe_notice(upipe, "now using splice_null command due to empty event");
-    else if (!ubase_check(uref_ts_scte35_get_command_type(uref, &cmd_type)))
-        upipe_warn(upipe, "no command type in packet");
-    else {
-        switch (cmd_type) {
-            case SCTE35_INSERT_COMMAND:
-                upipe_ts_scte35g_input_insert(upipe, uref);
-                break;
-            case SCTE35_NULL_COMMAND:
-                upipe_ts_scte35g_build_null(upipe);
-                break;
-            case SCTE35_TIME_SIGNAL_COMMAND:
-                upipe_ts_scte35g_time_signal(upipe, uref);
-                break;
-            default:
-                upipe_warn_va(upipe, "unimplemented command type %u", cmd_type);
-                break;
-        }
-    }
-    uref_free(uref);
 }
 
 /** @internal @This builds a new output flow definition.
@@ -581,38 +721,6 @@ static void upipe_ts_scte35g_send(struct upipe *upipe, struct ubuf *section,
     scte35g->scte35_cr_sys = cr_sys;
 }
 
-/** @internal @This sets the input flow definition.
- *
- * @param upipe description structure of the pipe
- * @param flow_def flow definition packet
- * @return an error code
- */
-static int upipe_ts_scte35g_set_flow_def(struct upipe *upipe,
-                                         struct uref *flow_def)
-{
-    if (flow_def == NULL)
-        return UBASE_ERR_INVALID;
-    UBASE_RETURN(uref_flow_match_def(flow_def, "void.scte35."))
-
-    struct uref *flow_def_dup;
-    if (unlikely((flow_def_dup = uref_dup(flow_def)) == NULL)) {
-        upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
-        return UBASE_ERR_ALLOC;
-    }
-
-    struct upipe_ts_scte35g *scte35g = upipe_ts_scte35g_from_upipe(upipe);
-    bool scte35_change = scte35g->flow_def == NULL;
-
-    uref_free(scte35g->flow_def);
-    scte35g->flow_def = flow_def_dup;
-
-    if (scte35_change) {
-        upipe_ts_scte35g_build_null(upipe);
-        upipe_ts_scte35g_build_flow_def(upipe);
-    }
-    return UBASE_ERR_NONE;
-}
-
 /** @internal @This returns the current SCTE35 interval.
  *
  * @param upipe description structure of the pipe
@@ -655,39 +763,75 @@ static int upipe_ts_scte35g_prepare(struct upipe *upipe, uint64_t cr_sys,
                                     uint64_t latency)
 {
     struct upipe_ts_scte35g *scte35g = upipe_ts_scte35g_from_upipe(upipe);
+    scte35g->cr_sys = cr_sys;
     if (unlikely(scte35g->flow_def == NULL ||
                  scte35g->scte35_null_section == NULL ||
                  !scte35g->scte35_interval ||
                  scte35g->scte35_cr_sys + scte35g->scte35_interval > cr_sys))
         return UBASE_ERR_NONE;
 
+    upipe_flush(scte35g->scte35m);
+
     bool handled = false;
     struct uchain *uchain, *uchain_tmp;
-    ulist_delete_foreach(&scte35g->scte35_sections, uchain, uchain_tmp) {
+    ulist_delete_foreach(&scte35g->messages, uchain, uchain_tmp) {
         struct scte35_message *msg = scte35_message_from_uchain(uchain);
 
         if (msg->cr_sys < cr_sys) {
             if (msg->immediate) {
-                upipe_notice(upipe, "sending an immediate event");
+                upipe_dbg_va(upipe, "sending an immediate %s event", msg->name);
                 upipe_ts_scte35g_send(upipe, msg->immediate, cr_sys);
                 handled = true;
             }
             else
-                upipe_notice(upipe, "event expired");
-            ulist_delete(uchain);
+                upipe_dbg_va(upipe, "%s event expired", msg->name);
             scte35_message_del(msg);
-            continue;
-        }
-        upipe_dbg(upipe, "sending an event");
-        scte35_message_set_immediate(msg, NULL);
-        if (msg->ubuf) {
-            upipe_ts_scte35g_send(upipe, msg->ubuf, cr_sys);
-            handled = true;
+        } else {
+            upipe_dbg_va(upipe, "sending an %s event", msg->name);
+            scte35_message_set_immediate(msg, NULL);
+            if (msg->ubuf) {
+                upipe_ts_scte35g_send(upipe, msg->ubuf, cr_sys);
+                handled = true;
+            }
         }
     }
 
-    if (!handled)
+    if (!handled) {
+        upipe_verbose(upipe, "sending null");
         upipe_ts_scte35g_send(upipe, scte35g->scte35_null_section, cr_sys);
+    }
+    return UBASE_ERR_NONE;
+}
+
+/** @internal @This checks the internal state of the pipe.
+ *
+ * @param upipe description structure of the pipe
+ * @return an error code
+ */
+static int upipe_ts_scte35g_check(struct upipe *upipe)
+{
+    struct upipe_ts_scte35g *scte35g = upipe_ts_scte35g_from_upipe(upipe);
+
+    if (unlikely(!scte35g->uref_mgr)) {
+        upipe_ts_scte35g_demand_uref_mgr(upipe);
+        if (!scte35g->uref_mgr)
+            return UBASE_ERR_NONE;
+    }
+
+    if (unlikely(!scte35g->flow_def))
+        upipe_ts_scte35g_build_flow_def(upipe);
+
+    if (unlikely(!scte35g->ubuf_mgr)) {
+        struct uref *flow_format = uref_alloc_control(scte35g->uref_mgr);
+        uref_flow_set_def(flow_format, "block.mpegtspsi.");
+        upipe_ts_scte35g_demand_ubuf_mgr(upipe, flow_format);
+        if (!scte35g->ubuf_mgr)
+            return UBASE_ERR_NONE;
+    }
+
+    if (unlikely(!scte35g->scte35_null_section))
+        upipe_ts_scte35g_build_null(upipe);
+
     return UBASE_ERR_NONE;
 }
 
@@ -698,15 +842,13 @@ static int upipe_ts_scte35g_prepare(struct upipe *upipe, uint64_t cr_sys,
  * @param args arguments of the command
  * @return an error code
  */
-static int upipe_ts_scte35g_control(struct upipe *upipe, int command, va_list args)
+static int upipe_ts_scte35g_control_real(struct upipe *upipe,
+                                         int command, va_list args)
 {
+    UBASE_HANDLED_RETURN(
+        upipe_ts_scte35g_control_bin_input(upipe, command, args));
     UBASE_HANDLED_RETURN(upipe_ts_scte35g_control_output(upipe, command, args));
     switch (command) {
-        case UPIPE_SET_FLOW_DEF: {
-            struct uref *flow_def = va_arg(args, struct uref *);
-            return upipe_ts_scte35g_set_flow_def(upipe, flow_def);
-        }
-
         case UPIPE_TS_MUX_GET_SCTE35_INTERVAL: {
             UBASE_SIGNATURE_CHECK(args, UPIPE_TS_MUX_SIGNATURE)
             uint64_t *interval_p = va_arg(args, uint64_t *);
@@ -729,25 +871,52 @@ static int upipe_ts_scte35g_control(struct upipe *upipe, int command, va_list ar
     }
 }
 
+/** @internal @This processes control commands and checks internal state of the
+ * pipe.
+ *
+ * @param upipe description structure of the pipe
+ * @param command type of command to process
+ * @param args arguments of the command
+ * @return an error code
+ */
+static int upipe_ts_scte35g_control(struct upipe *upipe,
+                                    int command, va_list args)
+{
+    UBASE_RETURN(upipe_ts_scte35g_control_real(upipe, command, args));
+    return upipe_ts_scte35g_check(upipe);
+}
+
 /** @This frees a upipe.
  *
  * @param upipe description structure of the pipe
  */
 static void upipe_ts_scte35g_free(struct upipe *upipe)
 {
+    upipe_ts_scte35g_clean_proxy_probe(upipe);
+    upipe_ts_scte35g_clean_urefcount_real(upipe);
+    upipe_ts_scte35g_clean_urefcount(upipe);
+    upipe_ts_scte35g_free_void(upipe);
+}
+
+/** @This is called when there is no external reference to the pipe anymore.
+ *
+ * @param upipe description structure of the pipe
+ */
+static void upipe_ts_scte35g_no_ref(struct upipe *upipe)
+{
     struct upipe_ts_scte35g *scte35g = upipe_ts_scte35g_from_upipe(upipe);
     upipe_throw_dead(upipe);
 
+    upipe_ts_scte35g_clean_bin_input(upipe);
+
     struct uchain *uchain;
-    while ((uchain = ulist_pop(&scte35g->scte35_sections)))
+    while ((uchain = ulist_pop(&scte35g->messages)))
         scte35_message_del(scte35_message_from_uchain(uchain));
-    uref_free(scte35g->flow_def);
     ubuf_free(scte35g->scte35_null_section);
     upipe_ts_scte35g_clean_output(upipe);
     upipe_ts_scte35g_clean_ubuf_mgr(upipe);
     upipe_ts_scte35g_clean_uref_mgr(upipe);
-    upipe_ts_scte35g_clean_urefcount(upipe);
-    upipe_ts_scte35g_free_void(upipe);
+    upipe_ts_scte35g_release_urefcount_real(upipe);
 }
 
 /** module manager static descriptor */
@@ -756,7 +925,7 @@ static struct upipe_mgr upipe_ts_scte35g_mgr = {
     .signature = UPIPE_TS_SCTE35G_SIGNATURE,
 
     .upipe_alloc = upipe_ts_scte35g_alloc,
-    .upipe_input = upipe_ts_scte35g_input,
+    .upipe_input = upipe_ts_scte35g_bin_input,
     .upipe_control = upipe_ts_scte35g_control,
 
     .upipe_mgr_control = NULL

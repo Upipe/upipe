@@ -30,6 +30,7 @@
 #undef NDEBUG
 
 #include "upipe/uclock.h"
+#include "upipe/uclock_std.h"
 #include "upipe/uprobe.h"
 #include "upipe/uprobe_stdio.h"
 #include "upipe/uprobe_prefix.h"
@@ -65,7 +66,7 @@
 #define UBUF_POOL_DEPTH 0
 #define UPROBE_LOG_LEVEL UPROBE_LOG_DEBUG
 
-static int round = 0;
+static int round = 0, subround = 0;
 static const char *upid_str = "This is a user defined UPID !";
 
 /** definition of our uprobe */
@@ -151,20 +152,54 @@ static int catch(struct uprobe *uprobe, struct upipe *upipe,
 
                 case 6: {
                     uint64_t pts_orig;
-                    ubase_assert(uref_clock_get_pts_orig(uref, &pts_orig));
-                    assert(pts_orig == 1);
+                    ubase_nassert(uref_clock_get_pts_orig(uref, &pts_orig));
+                    break;
+                }
 
-                    uint64_t nb = 0;
-                    uref_ts_flow_get_descriptors(uref, &nb);
-                    assert(nb == 1);
+                case 7: {
+                    switch (subround) {
+                        case 0: {
+                            uint64_t pts_orig;
+                            ubase_nassert(uref_clock_get_pts_orig(uref, &pts_orig));
 
-                    struct uref *desc = uref_ts_scte35_extract_desc(uref, 0);
-                    assert(desc);
-                    uint64_t event_id = 0;
-                    uref_ts_scte35_desc_seg_get_event_id(desc, &event_id);
-                    assert(event_id == 4242);
-                    ubase_assert(uref_ts_scte35_desc_seg_get_cancel(desc));
-                    uref_free(desc);
+                            uint64_t nb = 0;
+                            uref_ts_flow_get_descriptors(uref, &nb);
+                            assert(nb == 1);
+
+                            struct uref *desc = uref_ts_scte35_extract_desc(uref, 0);
+                            assert(desc);
+                            uint64_t event_id = 0;
+                            uref_ts_scte35_desc_seg_get_event_id(desc, &event_id);
+                            assert(event_id == 4242);
+                            ubase_assert(uref_ts_scte35_desc_seg_get_cancel(desc));
+                            uref_free(desc);
+                            subround = 1;
+                            return UBASE_ERR_NONE;
+                        }
+
+                        case 1: {
+                            uint64_t pts_orig;
+                            ubase_assert(uref_clock_get_pts_orig(uref, &pts_orig));
+                            assert(pts_orig == 1);
+
+                            uint64_t nb = 0;
+                            uref_ts_flow_get_descriptors(uref, &nb);
+                            assert(nb == 1);
+
+                            struct uref *desc = uref_ts_scte35_extract_desc(uref, 0);
+                            assert(desc);
+                            uint64_t event_id = 0;
+                            uref_ts_scte35_desc_seg_get_event_id(desc, &event_id);
+                            assert(event_id == 4243);
+                            ubase_nassert(uref_ts_scte35_desc_seg_get_cancel(desc));
+                            uref_free(desc);
+                            subround = 0;
+                            break;
+                        }
+
+                        default:
+                            abort();
+                    }
                     break;
                 }
                 default:
@@ -175,12 +210,6 @@ static int catch(struct uprobe *uprobe, struct upipe *upipe,
         }
     }
     return UBASE_ERR_NONE;
-}
-
-/** helper uclock */
-static uint64_t test_now(struct uclock *uclock)
-{
-    return 1;
 }
 
 int main(int argc, char *argv[])
@@ -210,11 +239,8 @@ int main(int argc, char *argv[])
     uprobe_stdio = uprobe_upump_mgr_alloc(&uprobe, upump_mgr);
     assert(uprobe_stdio != NULL);
 
-    struct uclock uclock;
-    uclock.refcount = NULL;
-    uclock.uclock_now = test_now;
-    uclock.uclock_to_real = uclock.uclock_from_real = NULL;
-    uprobe_stdio = uprobe_uclock_alloc(uprobe_stdio, &uclock);
+    struct uclock *uclock = uclock_std_alloc(0);;
+    uprobe_stdio = uprobe_uclock_alloc(uprobe_stdio, uclock);
     assert(uprobe_stdio != NULL);
 
     struct uref *uref;
@@ -231,23 +257,27 @@ int main(int argc, char *argv[])
     ubase_assert(upipe_set_flow_def(upipe_ts_scte35p, uref));
     uref_free(uref);
 
+    /* immediate splice insert */
     uref = uref_alloc(uref_mgr);
     assert(uref != NULL);
     ubase_assert(uref_ts_scte35_set_command_type(uref, SCTE35_INSERT_COMMAND));
     ubase_assert(uref_ts_scte35_set_event_id(uref, 1));
     ubase_assert(uref_ts_scte35_set_out_of_network(uref));
     round = 1;
+    uprobe_notice_va(uprobe_stdio, NULL, "round %i", round);
     upipe_input(upipe_ts_scte35p, uref, NULL);
     assert(round == 0);
     assert(!ev_run(loop, EVRUN_NOWAIT));
 
+    /* scheduled splice insert overwrite to immediate */
     uref = uref_alloc(uref_mgr);
     assert(uref != NULL);
     ubase_assert(uref_ts_scte35_set_command_type(uref, SCTE35_INSERT_COMMAND));
     ubase_assert(uref_ts_scte35_set_event_id(uref, 2));
     ubase_assert(uref_ts_scte35_set_out_of_network(uref));
-    uref_clock_set_pts_sys(uref, UCLOCK_FREQ);
+    uref_clock_set_pts_sys(uref, uclock_now(uclock) + UCLOCK_FREQ);
     round = 2;
+    uprobe_notice_va(uprobe_stdio, NULL, "round %i", round);
     upipe_input(upipe_ts_scte35p, uref, NULL);
     assert(ev_run(loop, EVRUN_NOWAIT));
 
@@ -263,34 +293,67 @@ int main(int argc, char *argv[])
     assert(ev_run(loop, EVRUN_NOWAIT));
 
     round = 3;
+    uprobe_notice_va(uprobe_stdio, NULL, "round %i", round);
     assert(!ev_run(loop, 0));
     assert(round == 0);
 
+    /* null */
     uref = uref_alloc(uref_mgr);
     assert(uref != NULL);
     ubase_assert(uref_ts_scte35_set_command_type(uref, SCTE35_NULL_COMMAND));
-    uref_clock_set_pts_sys(uref, UCLOCK_FREQ);
+    uref_clock_set_pts_sys(uref, uclock_now(uclock) + UCLOCK_FREQ);
     round = 4;
+    uprobe_notice_va(uprobe_stdio, NULL, "round %i", round);
     upipe_input(upipe_ts_scte35p, uref, NULL);
+    assert(!ev_run(loop, EVRUN_NOWAIT));
     assert(round == 0);
 
+    /* simple schedule time signal */
     round = 5;
+    uprobe_notice_va(uprobe_stdio, NULL, "round %i", round);
     uref = uref_alloc(uref_mgr);
     assert(uref != NULL);
     ubase_assert(uref_ts_scte35_set_command_type(uref,
                                                  SCTE35_TIME_SIGNAL_COMMAND));
-    uref_clock_set_pts_sys(uref, UCLOCK_FREQ);
+    uref_clock_set_pts_sys(uref, uclock_now(uclock) + UCLOCK_FREQ);
     uref_clock_set_pts_orig(uref, 1);
     upipe_input(upipe_ts_scte35p, uref, NULL);
     assert(!ev_run(loop, 0));
     assert(round == 0);
 
-    round = 6;
+    /* duplicate simple schedule time signal */
+    round = 5;
+    uprobe_notice_va(uprobe_stdio, NULL, "round %i dup", round);
     uref = uref_alloc(uref_mgr);
     assert(uref != NULL);
     ubase_assert(uref_ts_scte35_set_command_type(uref,
                                                  SCTE35_TIME_SIGNAL_COMMAND));
-    uref_clock_set_pts_sys(uref, UCLOCK_FREQ);
+    uref_clock_set_pts_sys(uref, uclock_now(uclock) + UCLOCK_FREQ);
+    uref_clock_set_pts_orig(uref, 1);
+    upipe_input(upipe_ts_scte35p, uref_dup(uref), NULL);
+    upipe_input(upipe_ts_scte35p, uref, NULL);
+    assert(!ev_run(loop, 0));
+    assert(round == 0);
+
+    /* simple immediate time signal */
+    round = 6;
+    uprobe_notice_va(uprobe_stdio, NULL, "round %i", round);
+    uref = uref_alloc(uref_mgr);
+    assert(uref != NULL);
+    ubase_assert(uref_ts_scte35_set_command_type(uref,
+                                                 SCTE35_TIME_SIGNAL_COMMAND));
+    upipe_input(upipe_ts_scte35p, uref, NULL);
+    assert(!ev_run(loop, 0));
+    assert(round == 0);
+
+    /* time signal with segmentation descriptors */
+    round = 7;
+    uprobe_notice_va(uprobe_stdio, NULL, "round %i", round);
+    uref = uref_alloc(uref_mgr);
+    assert(uref != NULL);
+    ubase_assert(uref_ts_scte35_set_command_type(uref,
+                                                 SCTE35_TIME_SIGNAL_COMMAND));
+    uref_clock_set_pts_sys(uref, uclock_now(uclock) + UCLOCK_FREQ);
     uref_clock_set_pts_orig(uref, 1);
     {
         struct uref *desc = uref_alloc_control(uref_mgr);
@@ -303,19 +366,35 @@ int main(int argc, char *argv[])
         uref_ts_scte35_desc_seg_set_upid(desc,
                                          (uint8_t *)upid_str, strlen(upid_str) + 1);
         uref_ts_scte35_desc_seg_set_type_id(desc,
+                                            SCTE35_SEG_DESC_TYPE_ID_PROG_END);
+        uref_ts_scte35_desc_seg_set_num(desc, 0);
+        uref_ts_scte35_desc_seg_set_expected(desc, 0);
+        ubase_assert(uref_ts_scte35_add_desc(uref, desc));
+        uref_free(desc);
+    }
+    {
+        struct uref *desc = uref_alloc_control(uref_mgr);
+        assert(desc != NULL);
+        uref_ts_scte35_desc_set_tag(desc, SCTE35_SPLICE_DESC_TAG_SEG);
+        uref_ts_scte35_desc_set_identifier(desc, 0x43554549);
+        uref_ts_scte35_desc_seg_set_event_id(desc, 4243);
+        uref_ts_scte35_desc_seg_set_delivery_not_restricted(desc);
+        uref_ts_scte35_desc_seg_set_upid_type(desc, SCTE35_SEG_DESC_UPID_TYPE_MPU);
+        uref_ts_scte35_desc_seg_set_upid(desc,
+                                         (uint8_t *)upid_str, strlen(upid_str) + 1);
+        uref_ts_scte35_desc_seg_set_type_id(desc,
                                             SCTE35_SEG_DESC_TYPE_ID_BREAK_START);
         uref_ts_scte35_desc_seg_set_num(desc, 0);
         uref_ts_scte35_desc_seg_set_expected(desc, 0);
         ubase_assert(uref_ts_scte35_add_desc(uref, desc));
         uref_free(desc);
     }
+    upipe_input(upipe_ts_scte35p, uref_dup(uref), NULL);
     upipe_input(upipe_ts_scte35p, uref, NULL);
     uref = uref_alloc(uref_mgr);
     assert(uref != NULL);
     ubase_assert(uref_ts_scte35_set_command_type(uref,
                                                  SCTE35_TIME_SIGNAL_COMMAND));
-    uref_clock_set_pts_sys(uref, UCLOCK_FREQ);
-    uref_clock_set_pts_orig(uref, 1);
     {
         struct uref *desc = uref_alloc_control(uref_mgr);
         assert(desc != NULL);
@@ -334,6 +413,7 @@ int main(int argc, char *argv[])
     upipe_release(upipe_ts_scte35p);
     upipe_mgr_release(upipe_ts_scte35p_mgr); // nop
 
+    uclock_release(uclock);
     upump_mgr_release(upump_mgr);
     uref_mgr_release(uref_mgr);
     udict_mgr_release(udict_mgr);

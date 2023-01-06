@@ -46,10 +46,10 @@
  * @param at index of the descriptor to extract
  * @return an error code
  */
-int uref_ts_scte35_desc_get_seg(struct uref *uref,
-                                const uint8_t **desc_p,
-                                size_t *desc_len_p,
-                                uint64_t at)
+int uref_ts_scte35_desc_get_splice(struct uref *uref,
+                                   const uint8_t **desc_p,
+                                   size_t *desc_len_p,
+                                   uint64_t at)
 {
     uint64_t nb = 0;
     UBASE_RETURN(uref_ts_flow_get_descriptors(uref, &nb));
@@ -90,7 +90,7 @@ struct uref *uref_ts_scte35_extract_desc(struct uref *uref, uint64_t at)
 {
     const uint8_t *desc;
     size_t length;
-    int ret = uref_ts_scte35_desc_get_seg(uref, &desc, &length, at);
+    int ret = uref_ts_scte35_desc_get_splice(uref, &desc, &length, at);
     if (unlikely(!ubase_check(ret)))
         return NULL;
 

@@ -52,10 +52,10 @@ UREF_ATTR_VOID(ts_scte35, auto_return, "scte35.autoreturn",
 UREF_ATTR_UNSIGNED(ts_scte35, unique_program_id, "scte35.programid",
         unique program ID)
 
-int uref_ts_scte35_desc_get_seg(struct uref *uref,
-                                const uint8_t **desc_p,
-                                size_t *desc_len_p,
-                                uint64_t at);
+int uref_ts_scte35_desc_get_splice(struct uref *uref,
+                                   const uint8_t **desc_p,
+                                   size_t *desc_len_p,
+                                   uint64_t at);
 
 struct uref *uref_ts_scte35_extract_desc(struct uref *uref,
                                          uint64_t descriptor);

@@ -23,6 +23,7 @@ myinclude_HEADERS = \
 	upipe_ts_psi_split.h \
 	upipe_ts_scte104_decoder.h \
 	upipe_ts_scte35_decoder.h \
+	upipe_ts_scte35_merge.h \
 	upipe_ts_scte35_generator.h \
 	upipe_ts_scte35_probe.h \
 	upipe_ts_sdt_decoder.h \

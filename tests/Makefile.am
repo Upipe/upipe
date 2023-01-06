@@ -357,17 +357,13 @@ if HAVE_EV
 check_PROGRAMS += \
 	upipe_h264_framer_test \
 	upipe_rtp_test \
-	upipe_ts_test
+	upipe_ts_test \
+	upipe_ts_scte35_probe_test
 TESTS += \
 	upipe_h264_framer_test \
 	upipe_rtp_test \
-	upipe_ts_test.sh
-if HAVE_BITSTREAM
-check_PROGRAMS += \
+	upipe_ts_test.sh \
 	upipe_ts_scte35_probe_test
-TESTS += \
-	upipe_ts_scte35_probe_test
-endif
 endif
 
 if HAVE_X264
@@ -516,7 +512,6 @@ upipe_ts_pat_decoder_test_LDADD = $(LDADD) $(top_builddir)/lib/upipe-ts/libupipe
 upipe_ts_pmt_decoder_test_LDADD = $(LDADD) $(top_builddir)/lib/upipe-ts/libupipe_ts.la
 upipe_ts_scte35_decoder_test_LDADD = $(LDADD) $(top_builddir)/lib/upipe-ts/libupipe_ts.la
 upipe_ts_scte35_generator_test_LDADD = $(LDADD) $(top_builddir)/lib/upipe-ts/libupipe_ts.la
-upipe_ts_scte35_probe_test_CFLAGS = $(AM_CFLAGS) $(BITSTREAM_CFLAGS)
 upipe_ts_scte35_probe_test_LDADD = $(LDADD) $(top_builddir)/lib/upipe-ts/libupipe_ts.la -lev $(top_builddir)/lib/upump-ev/libupump_ev.la
 upipe_ts_sdt_decoder_test_LDADD = $(LDADD) $(top_builddir)/lib/upipe-ts/libupipe_ts.la
 upipe_ts_si_generator_test_LDADD = $(LDADD) $(top_builddir)/lib/upipe-ts/libupipe_ts.la
@@ -584,6 +579,7 @@ upipe_ts_psi_merge_test_CFLAGS = $(AM_CFLAGS) $(BITSTREAM_CFLAGS)
 upipe_ts_psi_split_test_CFLAGS = $(AM_CFLAGS) $(BITSTREAM_CFLAGS)
 upipe_ts_scte35_decoder_test_CFLAGS = $(AM_CFLAGS) $(BITSTREAM_CFLAGS)
 upipe_ts_scte35_generator_test_CFLAGS = $(AM_CFLAGS) $(BITSTREAM_CFLAGS)
+upipe_ts_scte35_probe_test_CFLAGS = $(AM_CFLAGS) $(BITSTREAM_CFLAGS)
 upipe_ts_sdt_decoder_test_CFLAGS = $(AM_CFLAGS) $(BITSTREAM_CFLAGS)
 upipe_ts_si_generator_test_CFLAGS = $(AM_CFLAGS) $(BITSTREAM_CFLAGS)
 upipe_ts_split_test_CFLAGS = $(AM_CFLAGS) $(BITSTREAM_CFLAGS)

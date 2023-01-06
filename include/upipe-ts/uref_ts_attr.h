@@ -64,6 +64,29 @@ static inline int uref_##group##_add_##name(struct uref *uref,              \
                                               descriptors))                 \
     return UBASE_ERR_NONE;                                                  \
 }                                                                           \
+/** @This unregisters a name in the TS flow definition packet.              \
+ *                                                                          \
+ * @param uref pointer to the uref                                          \
+ * @param at position to remove                                             \
+ * @return an error code                                                    \
+ */                                                                         \
+static inline int uref_##group##_remove_##name(struct uref *uref,           \
+                                               uint64_t at)                 \
+{                                                                           \
+    uint64_t descriptors = 0;                                               \
+    uref_##group##_get_##name##s(uref, &descriptors);                       \
+    if (descriptors > at) {                                                 \
+        for (uint64_t i = at; i < descriptors - 1; i++) {                   \
+            const uint8_t *desc = NULL;                                     \
+            size_t desc_len = 0;                                            \
+            uref_##group##_get_##name(uref, &desc, &desc_len, i + 1);       \
+            uref_##group##_set_##name(uref, desc, desc_len, i);             \
+        }                                                                   \
+        uref_##group##_delete_##name(uref, descriptors - 1);                \
+        UBASE_RETURN(uref_##group##_set_##name##s(uref, descriptors - 1));  \
+    }                                                                       \
+    return UBASE_ERR_NONE;                                                  \
+}                                                                           \
 /** @This gets the total size of name##s.                                   \
  *                                                                          \
  * @param uref pointer to the uref                                          \
