@@ -1,6 +1,6 @@
 /*
  * Copyright (C) 2013-2019 OpenHeadend S.A.R.L.
- * Copyright (C) 2020 EasyTools S.A.S.
+ * Copyright (C) 2020-2023 EasyTools S.A.S.
  *
  * Authors: Christophe Massiot
  *
@@ -54,6 +54,7 @@
 #include "upipe/upipe_helper_upipe.h"
 #include "upipe/upipe_helper_urefcount.h"
 #include "upipe/upipe_helper_void.h"
+#include "upipe/upipe_helper_flow_def.h"
 #include "upipe/upipe_helper_output.h"
 #include "upipe/upipe_helper_uref_mgr.h"
 #include "upipe/upipe_helper_ubuf_mgr.h"
@@ -309,6 +310,8 @@ struct upipe_ts_mux {
     uint64_t max_delay;
     /** muxing delay */
     uint64_t mux_delay;
+    /** default minimum duration of audio PES */
+    uint64_t pes_min_duration;
     /** initial cr_prog */
     uint64_t initial_cr_prog;
     /** AAC encapsulation */
@@ -462,6 +465,8 @@ struct upipe_ts_mux_program {
     int aac_encaps;
     /** AAC signaling mode */
     int aac_signaling;
+    /** default minimum duration of audio PES */
+    uint64_t pes_min_duration;
 
     /** input flow definition */
     struct uref *flow_def_input;
@@ -521,6 +526,10 @@ struct upipe_ts_mux_input {
     /** structure for double-linked lists for PSI inputs */
     struct uchain uchain_psi;
 
+    /** input flow def */
+    struct uref *input_flow_def;
+    /** input flow def attributes */
+    struct uref *input_flow_attr;
     /** true if the input is in the process of being deleted */
     bool deleted;
     /** input type */
@@ -567,6 +576,8 @@ struct upipe_ts_mux_input {
     int aac_encaps;
     /** AAC signaling mode */
     int aac_signaling;
+    /** default minimum duration of audio PES */
+    uint64_t pes_min_duration;
 
     /** maximum retention delay */
     uint64_t max_delay;
@@ -584,6 +595,7 @@ UPIPE_HELPER_UREFCOUNT(upipe_ts_mux_input, urefcount,
                        upipe_ts_mux_input_no_input)
 UPIPE_HELPER_VOID(upipe_ts_mux_input)
 UPIPE_HELPER_INNER(upipe_ts_mux_input, input);
+UPIPE_HELPER_FLOW_DEF(upipe_ts_mux_input, input_flow_def, input_flow_attr);
 UPIPE_HELPER_BIN_INPUT(upipe_ts_mux_input, input, input_request_list)
 
 UBASE_FROM_TO(upipe_ts_mux_input, urefcount, urefcount_real, urefcount_real)
@@ -990,6 +1002,7 @@ static struct upipe *upipe_ts_mux_input_alloc(struct upipe_mgr *mgr,
     upipe_ts_mux_input_init_urefcount(upipe);
     urefcount_init(upipe_ts_mux_input_to_urefcount_real(upipe_ts_mux_input),
                    upipe_ts_mux_input_free);
+    upipe_ts_mux_input_init_flow_def(upipe);
     upipe_ts_mux_input_init_bin_input(upipe);
     uchain_init(upipe_ts_mux_input_to_uchain_psi(upipe_ts_mux_input));
     upipe_ts_mux_input->pcr = false;
@@ -1009,6 +1022,7 @@ static struct upipe *upipe_ts_mux_input_alloc(struct upipe_mgr *mgr,
     upipe_ts_mux_input->scte35_interval = program->scte35_interval;
     upipe_ts_mux_input->aac_encaps = program->aac_encaps;
     upipe_ts_mux_input->aac_signaling = program->aac_signaling;
+    upipe_ts_mux_input->pes_min_duration = program->pes_min_duration;
     upipe_ts_mux_input->max_delay = program->max_delay;
     upipe_ts_mux_input->au_per_sec.num = upipe_ts_mux_input->au_per_sec.den = 0;
     upipe_ts_mux_input->original_au_per_sec.num =
@@ -1252,7 +1266,7 @@ static int upipe_ts_mux_input_set_flow_def(struct upipe *upipe,
             (au_per_sec.num + au_per_sec.den - 1) / au_per_sec.den;
 
     } else if (strstr(def, ".sound.") != NULL) {
-        uint64_t pes_min_duration = DEFAULT_AUDIO_PES_MIN_DURATION;
+        uint64_t pes_min_duration = upipe_ts_mux->pes_min_duration;
         buffer_size = BS_ADTS_2;
 
         if (!ubase_ncmp(def, "block.mp2.") || !ubase_ncmp(def, "block.mp3.")) {
@@ -1427,14 +1441,15 @@ static int upipe_ts_mux_input_set_flow_def(struct upipe *upipe,
     }
     uref_free(flow_def_dup);
 
+    uint64_t latency = 0;
+    uref_clock_get_latency(flow_def, &latency);
     input->input_type = input_type;
     input->pid = pid;
     input->octetrate = octetrate;
     input->required_octetrate = octetrate + pes_overhead + ts_overhead;
     input->pcr = false; /* reset PCR state to trigger a new PMT */
+    upipe_ts_mux_input_store_flow_def_input(upipe, uref_dup(flow_def));
 
-    uint64_t latency = 0;
-    uref_clock_get_latency(flow_def, &latency);
     /* we never lower latency */
     if (latency + input->buffer_duration > upipe_ts_mux->latency) {
         upipe_ts_mux->latency = latency + input->buffer_duration;
@@ -1582,6 +1597,45 @@ static int _upipe_ts_mux_input_set_aac_signaling(struct upipe *upipe,
     return UBASE_ERR_NONE;
 }
 
+/** @internal @This returns the default minimum PES duration configured.
+ *
+ * @param upipe description structure of the pipe
+ * @param duration filled with the duration
+ * @return an error code
+ */
+static int _upipe_ts_mux_input_get_pes_min_duration(struct upipe *upipe,
+                                                    uint64_t *duration)
+{
+    struct upipe_ts_mux_input *input = upipe_ts_mux_input_from_upipe(upipe);
+    if (duration)
+        *duration = input->pes_min_duration;
+    return UBASE_ERR_NONE;
+}
+
+/** @internal @This sets the default minimum PES duration.
+ *
+ * @param upipe description structure of the pipe
+ * @param duration new minimum duration in UCLOCK_FREQ ticks
+ * @return an error code
+ */
+static int _upipe_ts_mux_input_set_pes_min_duration(struct upipe *upipe,
+                                                    uint64_t duration)
+{
+    struct upipe_ts_mux_input *input = upipe_ts_mux_input_from_upipe(upipe);
+    int ret = UBASE_ERR_NONE;
+
+    if (duration != input->pes_min_duration) {
+        input->pes_min_duration = duration;
+        struct uref *input_flow_def = input->input_flow_def;
+        input->input_flow_def = NULL;
+        if (input_flow_def) {
+            ret = upipe_ts_mux_input_set_flow_def(upipe, input_flow_def);
+            uref_free(input_flow_def);
+        }
+    }
+    return ret;
+}
+
 /** @internal @This processes control commands on a ts_mux_input
  * pipe.
  *
@@ -1638,6 +1692,16 @@ static int upipe_ts_mux_input_control(struct upipe *upipe,
             UBASE_SIGNATURE_CHECK(args, UPIPE_TS_MUX_SIGNATURE)
             int signaling = va_arg(args, int);
             return _upipe_ts_mux_input_set_aac_signaling(upipe, signaling);
+        }
+        case UPIPE_TS_MUX_SET_PES_MIN_DURATION: {
+            UBASE_SIGNATURE_CHECK(args, UPIPE_TS_MUX_SIGNATURE)
+            uint64_t duration = va_arg(args, uint64_t);
+            return _upipe_ts_mux_input_set_pes_min_duration(upipe, duration);
+        }
+        case UPIPE_TS_MUX_GET_PES_MIN_DURATION: {
+            UBASE_SIGNATURE_CHECK(args, UPIPE_TS_MUX_SIGNATURE)
+            uint64_t *duration = va_arg(args, uint64_t *);
+            return _upipe_ts_mux_input_get_pes_min_duration(upipe, duration);
         }
 
         case UPIPE_GET_MAX_LENGTH:
@@ -1703,6 +1767,7 @@ static void upipe_ts_mux_input_free(struct urefcount *urefcount_real)
     uprobe_clean(&upipe_ts_mux_input->probe);
     uprobe_clean(&upipe_ts_mux_input->encaps_probe);
     urefcount_clean(urefcount_real);
+    upipe_ts_mux_input_clean_flow_def(upipe);
     upipe_ts_mux_input_clean_urefcount(upipe);
     upipe_ts_mux_input_free_void(upipe);
 }
@@ -1819,6 +1884,36 @@ static int upipe_ts_mux_program_probe(struct uprobe *uprobe,
     return upipe_throw_proxy(upipe, inner, event, args);
 }
 
+/** @internal @This returns the next input of the provided program.
+ *
+ * @param program program to retrieve the next input from
+ * @param input the previous input ot NULL
+ * @return the next input or NULL
+ */
+static struct upipe_ts_mux_input *
+upipe_ts_mux_program_next_input(struct upipe_ts_mux_program *program,
+                                struct upipe_ts_mux_input *input)
+{
+    struct uchain *uchain;
+    if (!input)
+        uchain = program ? ulist_peek(&program->inputs) : NULL;
+    else {
+        uchain = upipe_ts_mux_input_to_uchain(input);
+        uchain = uchain->next != &program->inputs ? uchain->next : NULL;
+    }
+    return uchain ? upipe_ts_mux_input_from_uchain(uchain) : NULL;
+}
+
+/** @internal @This iterates the inputs of a program.
+ * @param Program program to retrieve inputs from
+ * @param Input name of the iterator
+ */
+#define upipe_ts_mux_program_each_input(Program, Input)                     \
+    for (struct upipe_ts_mux_input *Input =                                 \
+            upipe_ts_mux_program_next_input(Program, NULL);                 \
+            Input != NULL;                                                  \
+            Input = upipe_ts_mux_program_next_input(Program, Input))
+
 /** @internal @This allocates a program subpipe of a ts_mux pipe.
  *
  * @param mgr common management structure
@@ -1861,6 +1956,7 @@ static struct upipe *upipe_ts_mux_program_alloc(struct upipe_mgr *mgr,
     upipe_ts_mux_program->scte35_interval = upipe_ts_mux->scte35_interval;
     upipe_ts_mux_program->aac_encaps = upipe_ts_mux->aac_encaps;
     upipe_ts_mux_program->aac_signaling = upipe_ts_mux->aac_signaling;
+    upipe_ts_mux_program->pes_min_duration = upipe_ts_mux->pes_min_duration;
     upipe_ts_mux_program->max_delay = upipe_ts_mux->max_delay;
     upipe_ts_mux_program->required_octetrate = 0;
     upipe_ts_mux_program_init_sub(upipe);
@@ -2337,6 +2433,42 @@ static int _upipe_ts_mux_program_set_aac_signaling(struct upipe *upipe,
     return UBASE_ERR_NONE;
 }
 
+/** @internal @This returns the default minimum PES duration configured.
+ *
+ * @param upipe description structure of the pipe
+ * @param duration filled with the duration
+ * @return an error code
+ */
+static int _upipe_ts_mux_program_get_pes_min_duration(struct upipe *upipe,
+                                                      uint64_t *duration)
+{
+    struct upipe_ts_mux_program *program =
+        upipe_ts_mux_program_from_upipe(upipe);
+    if (duration)
+        *duration = program->pes_min_duration;
+    return UBASE_ERR_NONE;
+}
+
+/** @internal @This sets the default minimum PES duration.
+ *
+ * @param upipe description structure of the pipe
+ * @param duration new minimum duration in UCLOCK_FREQ ticks
+ * @return an error code
+ */
+static int _upipe_ts_mux_program_set_pes_min_duration(struct upipe *upipe,
+                                                      uint64_t duration)
+{
+    struct upipe_ts_mux_program *program =
+        upipe_ts_mux_program_from_upipe(upipe);
+
+    program->pes_min_duration = duration;
+
+    upipe_ts_mux_program_each_input(program, input)
+        upipe_ts_mux_set_pes_min_duration(
+            upipe_ts_mux_input_to_upipe(input), duration);
+    return UBASE_ERR_NONE;
+}
+
 /** @internal @This processes control commands on a ts_mux_program pipe.
  *
  * @param upipe description structure of the pipe
@@ -2427,6 +2559,16 @@ static int upipe_ts_mux_program_control(struct upipe *upipe,
             UBASE_SIGNATURE_CHECK(args, UPIPE_TS_MUX_SIGNATURE)
             int signaling = va_arg(args, int);
             return _upipe_ts_mux_program_set_aac_signaling(upipe, signaling);
+        }
+        case UPIPE_TS_MUX_SET_PES_MIN_DURATION: {
+            UBASE_SIGNATURE_CHECK(args, UPIPE_TS_MUX_SIGNATURE)
+            uint64_t duration = va_arg(args, uint64_t);
+            return _upipe_ts_mux_program_set_pes_min_duration(upipe, duration);
+        }
+        case UPIPE_TS_MUX_GET_PES_MIN_DURATION: {
+            UBASE_SIGNATURE_CHECK(args, UPIPE_TS_MUX_SIGNATURE)
+            uint64_t *duration = va_arg(args, uint64_t *);
+            return _upipe_ts_mux_program_get_pes_min_duration(upipe, duration);
         }
 
         case UPIPE_TS_MUX_GET_VERSION:
@@ -2599,6 +2741,37 @@ static int upipe_ts_mux_probe(struct uprobe *uprobe, struct upipe *inner,
     return upipe_throw_proxy(upipe, inner, event, args);
 }
 
+/** @internal @This returns the next program of the provided mux.
+ *
+ * @param mux mux to retrieve the next program from
+ * @oaram program the previous program or NULL
+ * @return the next program in the mux or NULL
+ */
+static struct upipe_ts_mux_program *
+upipe_ts_mux_next_program(struct upipe_ts_mux *mux,
+                          struct upipe_ts_mux_program *program)
+{
+    struct uchain *uchain;
+
+    if (!program)
+        uchain = mux ? ulist_peek(&mux->programs) : NULL;
+    else {
+        uchain = upipe_ts_mux_program_to_uchain(program);
+        uchain = uchain->next != &mux->programs ? uchain->next : NULL;
+    }
+    return uchain ? upipe_ts_mux_program_from_uchain(uchain) : NULL;
+}
+
+/** @internal @This iterates the programs of a mux.
+ * @param Mux mux to retrieve programs from
+ * @param Program name of the iterator
+ */
+#define upipe_ts_mux_each_program(Mux, Program)                 \
+    for (struct upipe_ts_mux_program *Program =                 \
+            upipe_ts_mux_next_program(Mux, NULL);               \
+         Program != NULL;                                       \
+         Program = upipe_ts_mux_next_program(Mux, Program))
+
 /** @internal @This allocates a ts_mux pipe.
  *
  * @param mgr common management structure
@@ -2656,6 +2829,7 @@ static struct upipe *upipe_ts_mux_alloc(struct upipe_mgr *mgr,
     upipe_ts_mux->encoding = DEFAULT_ENCODING;
     upipe_ts_mux->max_delay = UINT64_MAX;
     upipe_ts_mux->mux_delay = DEFAULT_MUX_DELAY;
+    upipe_ts_mux->pes_min_duration = DEFAULT_AUDIO_PES_MIN_DURATION;
     upipe_ts_mux->initial_cr_prog = UINT64_MAX;
     upipe_ts_mux->sid_auto = DEFAULT_SID_AUTO;
     upipe_ts_mux->pid_auto = DEFAULT_PID_AUTO;
@@ -4431,6 +4605,40 @@ static int _upipe_ts_mux_set_encoding(struct upipe *upipe, const char *encoding)
     return UBASE_ERR_NONE;
 }
 
+/** @internal @This returns the default minimum PES duration configured.
+ *
+ * @param upipe description structure of the pipe
+ * @param duration filled with the duration
+ * @return an error code
+ */
+static int _upipe_ts_mux_get_pes_min_duration(struct upipe *upipe,
+                                              uint64_t *duration)
+{
+    struct upipe_ts_mux *mux = upipe_ts_mux_from_upipe(upipe);
+    if (duration)
+        *duration = mux->pes_min_duration;
+    return UBASE_ERR_NONE;
+}
+
+/** @internal @This sets the default minimum PES duration.
+ *
+ * @param upipe description structure of the pipe
+ * @param duration new minimum duration in UCLOCK_FREQ ticks
+ * @return an error code
+ */
+static int _upipe_ts_mux_set_pes_min_duration(struct upipe *upipe,
+                                              uint64_t duration)
+{
+    struct upipe_ts_mux *mux = upipe_ts_mux_from_upipe(upipe);
+
+    mux->pes_min_duration = duration;
+
+    upipe_ts_mux_each_program(mux, program)
+        upipe_ts_mux_set_pes_min_duration(
+            upipe_ts_mux_program_to_upipe(program), duration);
+    return UBASE_ERR_NONE;
+}
+
 /** @internal @This processes control commands on a ts_mux pipe.
  *
  * @param upipe description structure of the pipe
@@ -4666,6 +4874,16 @@ static int _upipe_ts_mux_control(struct upipe *upipe, int command, va_list args)
             UBASE_SIGNATURE_CHECK(args, UPIPE_TS_MUX_SIGNATURE)
             uint64_t max_octetrate = va_arg(args, uint64_t);
             return _upipe_ts_mux_set_max_octetrate(upipe, max_octetrate);
+        }
+        case UPIPE_TS_MUX_SET_PES_MIN_DURATION: {
+            UBASE_SIGNATURE_CHECK(args, UPIPE_TS_MUX_SIGNATURE)
+            uint64_t duration = va_arg(args, uint64_t);
+            return _upipe_ts_mux_set_pes_min_duration(upipe, duration);
+        }
+        case UPIPE_TS_MUX_GET_PES_MIN_DURATION: {
+            UBASE_SIGNATURE_CHECK(args, UPIPE_TS_MUX_SIGNATURE)
+            uint64_t *duration = va_arg(args, uint64_t *);
+            return _upipe_ts_mux_get_pes_min_duration(upipe, duration);
         }
 
         case UPIPE_TS_MUX_GET_VERSION:

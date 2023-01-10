@@ -1,6 +1,6 @@
 /*
  * Copyright (C) 2013-2017 OpenHeadend S.A.R.L.
- * Copyright (C) 2020 EasyTools S.A.S.
+ * Copyright (C) 2020-2023 EasyTools S.A.S.
  *
  * Authors: Christophe Massiot
  *
@@ -165,6 +165,10 @@ enum upipe_ts_mux_command {
     UPIPE_TS_MUX_PREPARE,
     /** sets the mux maximum octetrate (uint64_t) */
     UPIPE_TS_MUX_SET_MAX_OCTETRATE,
+    /** sets the default minimum PES duration (uint64_t) */
+    UPIPE_TS_MUX_SET_PES_MIN_DURATION,
+    /** returns the default minimum PES duration (uint64_t *) */
+    UPIPE_TS_MUX_GET_PES_MIN_DURATION,
 
     /** ts_encaps commands begin here */
     UPIPE_TS_MUX_ENCAPS = UPIPE_CONTROL_LOCAL + 0x1000,
@@ -719,6 +723,32 @@ static inline int upipe_ts_mux_set_encoding(struct upipe *upipe,
 {
     return upipe_control(upipe, UPIPE_TS_MUX_SET_ENCODING,
                          UPIPE_TS_MUX_SIGNATURE, encoding);
+}
+
+/** @This returns the current PES minimum duration.
+ *
+ * @param upipe description structure of the pipe
+ * @param duration filled in with the PES minimum duration
+ * @return an error code
+ */
+static inline int upipe_ts_mux_get_pes_min_duration(struct upipe *upipe,
+                                                    uint64_t *duration)
+{
+    return upipe_control(upipe, UPIPE_TS_MUX_GET_PES_MIN_DURATION,
+                         UPIPE_TS_MUX_SIGNATURE, duration);
+}
+
+/** @This sets the default PES minimum duration.
+ *
+ * @param upipe description structure of the pipe
+ * @param duration default PES minimum duration to use
+ * @return an error code
+ */
+static inline int upipe_ts_mux_set_pes_min_duration(struct upipe *upipe,
+                                                    uint64_t duration)
+{
+    return upipe_control(upipe, UPIPE_TS_MUX_SET_PES_MIN_DURATION,
+                         UPIPE_TS_MUX_SIGNATURE, duration);
 }
 
 /** @This stops updating a PSI table upon sub removal.
