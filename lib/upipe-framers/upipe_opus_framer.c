@@ -398,6 +398,8 @@ static void upipe_opusf_work(struct upipe *upipe, struct upump **upump_p)
 static void upipe_opusf_input(struct upipe *upipe, struct uref *uref,
                              struct upump **upump_p)
 {
+    uref_flow_delete_random(uref);
+
     struct upipe_opusf *upipe_opusf = upipe_opusf_from_upipe(upipe);
     if (unlikely(uref->ubuf == NULL)) {
         upipe_opusf_output(upipe, uref, upump_p);

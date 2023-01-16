@@ -1891,6 +1891,8 @@ static bool upipe_mpgaf_handle(struct upipe *upipe, struct uref *uref,
 static void upipe_mpgaf_input(struct upipe *upipe, struct uref *uref,
                               struct upump **upump_p)
 {
+    uref_flow_delete_random(uref);
+
     if (!upipe_mpgaf_check_input(upipe)) {
         upipe_mpgaf_hold_input(upipe, uref);
         upipe_mpgaf_block_input(upipe, upump_p);

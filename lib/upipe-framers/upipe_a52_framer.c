@@ -558,6 +558,8 @@ static void upipe_a52f_work(struct upipe *upipe, struct upump **upump_p)
 static void upipe_a52f_input(struct upipe *upipe, struct uref *uref,
                              struct upump **upump_p)
 {
+    uref_flow_delete_random(uref);
+
     struct upipe_a52f *upipe_a52f = upipe_a52f_from_upipe(upipe);
     if (unlikely(uref->ubuf == NULL)) {
         upipe_a52f_output(upipe, uref, upump_p);
