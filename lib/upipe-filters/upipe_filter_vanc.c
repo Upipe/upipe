@@ -652,10 +652,8 @@ static void upipe_vanc_process_op47sdp(struct upipe *upipe, struct uref *uref,
         upipe_warn(upipe, "invalid OP47 SDP syntax");
         return;
     }
-    if (unlikely(!rdd08sdp_get_a(r, 0))) {
+    if (unlikely(!rdd08sdp_get_a(r, 0)))
         upipe_warn(upipe, "invalid OP47 A struct");
-        return;
-    }
 
     if (unlikely(upipe_vanc->telx_uref == NULL))
         upipe_vanc_alloc_telx(upipe, uref);
