@@ -1,5 +1,6 @@
 /*
  * Copyright (c) 2015 Arnaud de Turckheim <quarium@gmail.com>
+ * Copyright (C) 2023 EasyTools S.A.S.
  *
  * Permission is hereby granted, free of charge, to any person obtaining
  * a copy of this software and associated documentation files (the
@@ -893,8 +894,13 @@ static int upipe_hls_playlist_play_uri(struct upipe *upipe,
             uprobe_use(&upipe_hls_playlist->probe_src),
             UPROBE_LOG_VERBOSE, "src"));
     UBASE_ALLOC_RETURN(inner);
-    UBASE_RETURN(upipe_set_output(inner, upipe_hls_playlist->setflowdef));
-    UBASE_RETURN(upipe_set_uri(inner, uri));
+    int ret = upipe_set_output(inner, upipe_hls_playlist->setflowdef);
+    if (likely(ubase_check(ret)))
+        ret = upipe_set_uri(inner, uri);
+    if (unlikely(!ubase_check(ret))) {
+        upipe_release(inner);
+        return ret;
+    }
     UBASE_RETURN(upipe_hls_playlist_set_src(upipe, inner));
 
     uint64_t range_off = 0;
