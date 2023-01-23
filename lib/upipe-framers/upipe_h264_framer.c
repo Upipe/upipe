@@ -1,5 +1,6 @@
 /*
  * Copyright (C) 2013-2017 OpenHeadend S.A.R.L.
+ * Copyright (C) 2023 EasyTools
  *
  * Authors: Christophe Massiot
  *
@@ -491,64 +492,73 @@ static bool upipe_h264f_activate_sps(struct upipe *upipe, uint32_t sps_id)
     ubuf_block_stream_skip_bits(s, 8);
     UBASE_FATAL(upipe, uref_h264_flow_set_level(flow_def, level))
 
-    uint64_t max_octetrate, max_bs;
+    uint64_t max_kbitrate, max_kbit_bs;
     switch (level) {
         case 10:
-            max_octetrate = 64000 / 8;
-            max_bs = 175000 / 8;
+            max_kbitrate = 64;
+            max_kbit_bs = 175;
             break;
         case 11:
-            max_octetrate = 192000 / 8;
-            max_bs = 500000 / 8;
+            max_kbitrate = 192;
+            max_kbit_bs = 500;
             break;
         case 12:
-            max_octetrate = 384000 / 8;
-            max_bs = 1000000 / 8;
+            max_kbitrate = 384;
+            max_kbit_bs = 1000;
             break;
         case 13:
-            max_octetrate = 768000 / 8;
-            max_bs = 2000000 / 8;
+            max_kbitrate = 768;
+            max_kbit_bs = 2000;
             break;
         case 20:
-            max_octetrate = 2000000 / 8;
-            max_bs = 2000000 / 8;
+            max_kbitrate = 2000;
+            max_kbit_bs = 2000;
             break;
         case 21:
         case 22:
-            max_octetrate = 4000000 / 8;
-            max_bs = 4000000 / 8;
+            max_kbitrate = 4000;
+            max_kbit_bs = 4000;
             break;
         case 30:
-            max_octetrate = 10000000 / 8;
-            max_bs = 10000000 / 8;
+            max_kbitrate = 10000;
+            max_kbit_bs = 10000;
             break;
         case 31:
-            max_octetrate = 14000000 / 8;
-            max_bs = 14000000 / 8;
+            max_kbitrate = 14000;
+            max_kbit_bs = 14000;
             break;
         case 32:
         case 40:
-            max_octetrate = 20000000 / 8;
-            max_bs = 20000000 / 8;
+            max_kbitrate = 20000;
+            max_kbit_bs = 20000;
             break;
         case 41:
         case 42:
-            max_octetrate = 50000000 / 8;
-            max_bs = 62500000 / 8;
+            max_kbitrate = 50000;
+            max_kbit_bs = 62500;
             break;
         case 50:
-            max_octetrate = 135000000 / 8;
-            max_bs = 135000000 / 8;
+            max_kbitrate = 135000;
+            max_kbit_bs = 135000;
             break;
         default:
             upipe_warn_va(upipe, "unknown level %"PRIu8, level);
             /* fallthrough */
         case 51:
         case 52:
-            max_octetrate = 240000000 / 8;
-            max_bs = 240000000 / 8;
+            max_kbitrate = 240000;
+            max_kbit_bs = 240000;
             break;
     }
+    /* From A.3.1 Level limits common to the Baseline, Main, and Extended
+     * profiles
+     * ...
+     * j) For the NAL HRD parameters, BitRate[ SchedSelIdx ] <= 1200
+     * MaxBR and CpbSize[ SchedSelIdx ] <= 1200 * MaxCPB...
+     */
+    uint64_t max_octetrate = max_kbitrate * 1200 / 8;
+    uint64_t max_bs = max_kbit_bs * 1200 / 8;
+
     UBASE_FATAL(upipe, uref_block_flow_set_max_octetrate(flow_def, max_octetrate))
     UBASE_FATAL(upipe, uref_block_flow_set_max_buffer_size(flow_def, max_bs))
 
