@@ -528,9 +528,12 @@ static bool upipe_h264f_activate_sps(struct upipe *upipe, uint32_t sps_id)
             max_bs = 14000 / 8;
             break;
         case 32:
-        case 40:
             max_octetrate = 20000 / 8;
             max_bs = 20000 / 8;
+            break;
+        case 40:
+            max_octetrate = 20000 / 8;
+            max_bs = 25000 / 8;
             break;
         case 41:
         case 42:
