@@ -528,9 +528,12 @@ static bool upipe_h264f_activate_sps(struct upipe *upipe, uint32_t sps_id)
             max_kbit_bs = 14000;
             break;
         case 32:
-        case 40:
             max_kbitrate = 20000;
             max_kbit_bs = 20000;
+            break;
+        case 40:
+            max_kbitrate = 20000;
+            max_kbit_bs = 25000;
             break;
         case 41:
         case 42:
