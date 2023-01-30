@@ -965,15 +965,22 @@ static int upipe_pciesdi_set_uri(struct upipe *upipe, const char *path)
     /* TODO: check need to release things on failure. */
 
     upipe_pciesdi_src->read_buffer = buf;
-    upipe_pciesdi_src->device_number = path[strlen(path) - 1] - 0x30;
+    upipe_pciesdi_src->device_number = path[strlen(path) - 1] - 0x30; /* FIXME for more than 9 channels. */
 
     /* Get capability_flags. */
     uint8_t channels;
     sdi_capabilities(upipe_pciesdi_src->fd, &upipe_pciesdi_src->capability_flags, &channels);
-    if (upipe_pciesdi_src->device_number < 0 || upipe_pciesdi_src->device_number >= channels) {
-        upipe_err_va(upipe, "invalid device number (%d) for number of channels (%d)",
-                upipe_pciesdi_src->device_number, channels);
+    if (upipe_pciesdi_src->device_number < 0) {
+        upipe_err_va(upipe, "invalid device number (%d)",
+                upipe_pciesdi_src->device_number);
         return UBASE_ERR_INVALID;
+    }
+    if (upipe_pciesdi_src->device_number >= channels) {
+        /* Wrap around the number of channels. FIXME heterogenous cards. */
+        int temp = upipe_pciesdi_src->device_number % channels;
+        upipe_warn_va(upipe, "wrapping device number (%d) around using number of channels (%d) to %d",
+                upipe_pciesdi_src->device_number, channels, temp);
+        upipe_pciesdi_src->device_number = temp;
     }
 
     /* initialize hardware except the clock */
