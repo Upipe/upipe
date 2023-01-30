@@ -87,8 +87,6 @@ struct upipe_pciesdi_sink {
     /** write watcher */
     struct upump *fd_write_upump;
 
-    int device_number;
-
     /** scratch buffer */
     int scratch_bytes;
     uint8_t scratch_buffer[DMA_BUFFER_SIZE + 32];
@@ -520,17 +518,10 @@ static int check_capabilities(struct upipe *upipe, bool genlock)
 {
     struct upipe_pciesdi_sink *ctx = upipe_pciesdi_sink_from_upipe(upipe);
     int fd = ctx->fd;
-    int device_number = ctx->device_number;
 
     uint32_t capability_flags;
     uint8_t channels;
     sdi_capabilities(fd, &capability_flags, &channels);
-
-    if (device_number < 0 || device_number >= channels) {
-        upipe_err_va(upipe, "invalid device number (%d) for number of channels (%d)",
-                device_number, channels);
-        return UBASE_ERR_INVALID;
-    }
 
     if ((capability_flags & SDI_CAP_HAS_GENLOCK) == 0 && genlock) {
         upipe_err(upipe, "genlock not supported on this board");
@@ -937,7 +928,6 @@ static int upipe_pciesdi_set_uri(struct upipe *upipe, const char *path)
 
     upipe_pciesdi_sink->mmap_info = mmap_info;
     upipe_pciesdi_sink->write_buffer = buf;
-    upipe_pciesdi_sink->device_number = path[strlen(path) - 1] - 0x30;
 
     int genlock;
     upipe_pciesdi_sink->genlock = genlock = sdi_get_genlock(upipe_pciesdi_sink->fd);
