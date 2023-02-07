@@ -511,7 +511,10 @@ enum upipe_ts_mux_input_type {
     /** other (unsuitable for PCR) */
     UPIPE_TS_MUX_INPUT_OTHER,
     /** SCTE-35 PSI sections */
-    UPIPE_TS_MUX_INPUT_SCTE35
+    UPIPE_TS_MUX_INPUT_SCTE35,
+    /** metadata */
+    UPIPE_TS_MUX_INPUT_METADATA,
+
 };
 
 /** @internal @This is the private context of an output of a ts_mux_program
@@ -1125,8 +1128,10 @@ static int upipe_ts_mux_input_set_flow_def(struct upipe *upipe,
             !octetrate) {
             UBASE_RETURN(uref_block_flow_get_max_octetrate(
                     flow_def, &octetrate));
-            if (!octetrate)
+            if (!octetrate) {
+                upipe_warn_va(upipe, "no octetrate found");
                 return UBASE_ERR_INVALID;
+            }
             upipe_warn_va(upipe, "using max octetrate %"PRIu64" bits/s",
                           octetrate * 8);
         }
@@ -1176,6 +1181,11 @@ static int upipe_ts_mux_input_set_flow_def(struct upipe *upipe,
             UBASE_FATAL(upipe, uref_ts_flow_set_pes_id(
                     flow_def_dup, PES_STREAM_ID_PRIVATE_1));
         }
+    } else if (strstr(def, ".metadata.")) {
+        input_type = UPIPE_TS_MUX_INPUT_METADATA;
+        if (!ubase_ncmp(sub_def, ".id3."))
+            UBASE_FATAL(upipe, uref_ts_flow_set_pes_id(
+                    flow_def_dup, PES_STREAM_ID_PRIVATE_1));
     } else if (!ubase_ncmp(def, "void.scte35.")) {
         input_type = UPIPE_TS_MUX_INPUT_SCTE35;
     }
@@ -1319,6 +1329,15 @@ static int upipe_ts_mux_input_set_flow_def(struct upipe *upipe,
         urational_simplify(&au_per_sec);
 
         /* PES header overhead */
+        pes_overhead += PES_HEADER_SIZE_PTS *
+            (au_per_sec.num + au_per_sec.den - 1) / au_per_sec.den;
+    } else if (strstr(def, ".metadata.") != NULL) {
+        UBASE_FATAL(upipe, uref_ts_flow_set_tb_rate(flow_def_dup, octetrate));
+        buffer_size = octetrate;
+        /* PES header overhead - worst case one metadata by frame in a
+         * 30 Hz system */
+        au_per_sec.num = 30;
+        au_per_sec.den = 1;
         pes_overhead += PES_HEADER_SIZE_PTS *
             (au_per_sec.num + au_per_sec.den - 1) / au_per_sec.den;
     }

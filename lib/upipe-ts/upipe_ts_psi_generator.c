@@ -280,9 +280,17 @@ static int upipe_ts_psig_flow_check_outer(struct upipe *upipe,
         !ubase_check(uref_flow_get_raw_def(flow->flow_def, &raw_def)))
         return UBASE_ERR_UNHANDLED;
 
+    const char *sub_def = raw_def;
+    if (!ubase_ncmp(sub_def, "block.")) {
+        sub_def += strlen("block");
+    } else if (!ubase_ncmp(sub_def, "void."))
+        sub_def += strlen("void");
+
     *descriptors_size_p = 0;
     if (!ubase_ncmp(raw_def, "void.scte35."))
         *descriptors_size_p += DESC05_HEADER_SIZE;
+    else if (!ubase_ncmp(sub_def, ".id3."))
+        *descriptors_size_p += DESC25_HEADER_SIZE + 4 + 4 + 2;
 
     return UBASE_ERR_NONE;
 }
@@ -372,6 +380,11 @@ static int upipe_ts_psig_flow_check_inner(struct upipe *upipe,
             upipe_warn_va(upipe, "unknown flow definition \"%s\"", raw_def);
             return UBASE_ERR_UNHANDLED;
         }
+    } else if (strstr(raw_def, ".metadata.")) {
+        if (!ubase_ncmp(sub_def, ".id3.")) {
+            *descriptors_size_p += DESC26_HEADER_SIZE + 4 + 4;
+        }
+
     } else if (ubase_ncmp(raw_def, "void.scte35.") &&
                ubase_ncmp(sub_def, ".mpeg1video.") &&
                ubase_ncmp(sub_def, ".mpeg2video.") &&
@@ -395,6 +408,8 @@ static int upipe_ts_psig_flow_check_inner(struct upipe *upipe,
 static int upipe_ts_psig_flow_build_outer(struct upipe *upipe, uint8_t *desc,
                                           size_t *descriptors_size_p)
 {
+    struct upipe_ts_psig_program *program =
+        upipe_ts_psig_program_from_flow_mgr(upipe->mgr);
     struct upipe_ts_psig_flow *flow = upipe_ts_psig_flow_from_upipe(upipe);
     const char *raw_def;
     uint64_t pid;
@@ -403,12 +418,38 @@ static int upipe_ts_psig_flow_build_outer(struct upipe *upipe, uint8_t *desc,
         !ubase_check(uref_flow_get_raw_def(flow->flow_def, &raw_def)))
         return UBASE_ERR_UNHANDLED;
 
+    const char *sub_def = raw_def;
+    if (!ubase_ncmp(sub_def, "block.")) {
+        sub_def += strlen("block");
+    } else if (!ubase_ncmp(sub_def, "void."))
+        sub_def += strlen("void");
+
     *descriptors_size_p = 0;
     if (!ubase_ncmp(raw_def, "void.scte35.")) {
         desc05_init(desc);
         const uint8_t id[4] = { 'C', 'U', 'E', 'I' };
         desc05_set_identifier(desc, id);
         *descriptors_size_p += DESC05_HEADER_SIZE;
+    } else if (!ubase_ncmp(sub_def, ".id3.")) {
+        uint64_t service_id = 0;
+        uref_flow_get_id(flow->flow_def, &service_id);
+        uint64_t program_number = 0;
+        uref_flow_get_id(program->flow_def, &program_number);
+
+        desc25_init(desc);
+
+        desc25_set_metadata_application_format(desc, 0xffff);
+        desc25_set_metadata_application_format_identifier(
+            desc, DESC25_METADATA_FORMAT_ID3);
+        desc25_set_metadata_format(desc, 0xff);
+        desc25_set_metadata_format_identifier(
+            desc, DESC25_METADATA_FORMAT_ID3);
+        desc25_set_metadata_service_id(desc, service_id);
+        desc25_set_metadata_locator_record_flag(desc, 0);
+        desc25_set_mpeg_carriage_flags(desc, 0);
+        desc25_set_program_number(desc, program_number);
+        desc25_set_length(desc);
+        *descriptors_size_p += DESC25_HEADER_SIZE + 4 + 4 + 2;
     }
 
     return UBASE_ERR_NONE;
@@ -478,6 +519,8 @@ static int upipe_ts_psig_flow_build_inner(struct upipe *upipe, uint8_t *es,
     } else if (!ubase_ncmp(sub_def, ".eac3.")) {
         if (conformance == UPIPE_TS_CONFORMANCE_ATSC)
             stream_type = PMT_STREAMTYPE_ATSC_A52E;
+    } else if (!ubase_ncmp(sub_def, ".id3.")) {
+        stream_type = PMT_STREAMTYPE_META_PES;
     }
 
     upipe_notice_va(upipe,
@@ -820,6 +863,24 @@ static int upipe_ts_psig_flow_build_inner(struct upipe *upipe, uint8_t *es,
                 default:
                     break;
             }
+        }
+    } else if (strstr(raw_def, ".metadata.")) {
+        if (!ubase_ncmp(sub_def, ".id3.")) {
+            uint64_t service_id = 0;
+            uref_flow_get_id(flow->flow_def, &service_id);
+
+            desc = descs_get_desc(descs, k++);
+            desc26_init(desc);
+            desc26_set_metadata_application_format(desc, 0xffff);
+            desc26_set_metadata_application_format_identifier(
+                desc, DESC26_METADATA_FORMAT_ID3);
+            desc26_set_metadata_format(desc, 0xff);
+            desc26_set_metadata_format_identifier(
+                desc, DESC26_METADATA_FORMAT_ID3);
+            desc26_set_metadata_service_id(desc, service_id);
+            desc26_set_decoder_config_flags(desc, 0);
+            desc26_set_dsm_cc_flag(desc, 0);
+            desc26_set_length(desc);
         }
     }
 
