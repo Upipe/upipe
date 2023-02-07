@@ -257,6 +257,14 @@ static void upipe_ts_pmtd_parse_streamtype(struct upipe *upipe,
                             MAX_DELAY))
             break;
 
+        case PMT_STREAMTYPE_META_PES:
+            UBASE_FATAL(upipe, uref_flow_set_def(flow_def, "block.metadata."))
+            UBASE_FATAL(upipe, uref_flow_set_raw_def(flow_def,
+                            "block.mpegts.mpegtspes.metadata."))
+            UBASE_FATAL(upipe, uref_ts_flow_set_max_delay(flow_def,
+                            MAX_DELAY))
+            break;
+
         default:
             break;
     }
@@ -368,6 +376,25 @@ static void upipe_ts_pmtd_parse_es_descs(struct upipe *upipe,
             case 0x21: /* Muxcode descriptor */
             case 0x22: /* FmxBufferSize descriptor */
             case 0x23: /* MultiplexBuffer descriptor */
+                break;
+
+            case 0x26: /* Metadata descriptor */
+                if ((valid = desc26_validate(desc))) {
+                    if (desc26_get_metadata_application_format(desc) == 0xffff
+                        && desc26_get_metadata_format(desc) == 0xff
+                        && desc26_get_metadata_application_format_identifier(desc)
+                        == DESC26_METADATA_FORMAT_ID3
+                        && desc26_get_metadata_format_identifier(desc)
+                        == DESC26_METADATA_FORMAT_ID3) {
+                        UBASE_FATAL(upipe, uref_flow_set_def(
+                                flow_def, "block.id3.metadata."))
+                        UBASE_FATAL(upipe, uref_flow_set_raw_def(
+                                flow_def,
+                                "block.mpegts.mpegtspes.id3.metadata."))
+                    }
+                }
+                break;
+
             case 0x27: /* Metadata STD descriptor */
                 break;
 
