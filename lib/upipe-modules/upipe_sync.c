@@ -677,15 +677,17 @@ static void output_sound(struct upipe *upipe, const struct urational *fps,
             uref_clock_set_pts_sys(uref, upipe_sync->pts - upipe_sync->latency);
             if (samples != src_samples) {
                 if (samples - 1 != src_samples && samples + 1 != src_samples) {
+                    /* Log this error but copy anyway so that avsync always outputs the same number
+                       of audio samples for each audio subpipe */
                     upipe_err_va(upipe, "Problem with s337 framing: got %zu instead of %zu",
                         src_samples, samples);
-                } else {
-                    struct ubuf *ubuf = ubuf_sound_copy(uref->ubuf->mgr, uref->ubuf,
-                            0, samples);
-                    assert(ubuf);
-                    ubuf_free(uref->ubuf);
-                    uref->ubuf = ubuf;
                 }
+
+                struct ubuf *ubuf = ubuf_sound_copy(uref->ubuf->mgr, uref->ubuf,
+                        0, samples);
+                assert(ubuf);
+                ubuf_free(uref->ubuf);
+                uref->ubuf = ubuf;
             }
             upipe_sync_sub_output(upipe_sub, uref, upump_p);
 
