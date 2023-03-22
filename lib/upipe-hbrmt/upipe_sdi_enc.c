@@ -656,18 +656,15 @@ static void upipe_sdi_enc_sub_input(struct upipe *upipe, struct uref *uref,
 static void upipe_sdi_enc_sub_init(struct upipe *upipe,
         struct upipe_mgr *sub_mgr, struct uprobe *uprobe, enum subpipe_type type)
 {
-    struct upipe_sdi_enc *upipe_sdi_enc = upipe_sdi_enc_from_sub_mgr(sub_mgr);
-    upipe_sdi_enc_sub_init_urefcount(upipe);
-
     struct upipe_sdi_enc_sub *sdi_enc_sub = upipe_sdi_enc_sub_from_upipe(upipe);
 
+    upipe_sdi_enc_sub_init_urefcount(upipe);
     upipe_sdi_enc_sub_init_sub(upipe);
-
-    sdi_enc_sub->type = type;
 
     ulist_init(&sdi_enc_sub->urefs);
     sdi_enc_sub->n = 0;
     sdi_enc_sub->dolbye = false;
+    sdi_enc_sub->type = type;
 
     upipe_throw_ready(upipe);
 }
@@ -689,20 +686,16 @@ static struct upipe *upipe_sdi_enc_sub_alloc(struct upipe_mgr *mgr,
         goto error;
 
     if (!ubase_ncmp(def, "sound.")) {
-        upipe_sdi_enc_sub_init(upipe, mgr, uprobe, false);
-        upipe_sdi_enc_sub->type = SDIENC_SOUND;
+        upipe_sdi_enc_sub_init(upipe, mgr, uprobe, SDIENC_SOUND);
     }
     else if (!ubase_ncmp(def, "block.dvb_teletext.")) {
-        upipe_sdi_enc_sub_init(upipe, mgr, uprobe, false);
-        upipe_sdi_enc_sub->type = SDIENC_SUBPIC;
+        upipe_sdi_enc_sub_init(upipe, mgr, uprobe, SDIENC_SUBPIC);
     }
     else if (!ubase_ncmp(def, "block.scte104.")) {
-        upipe_sdi_enc_sub_init(upipe, mgr, uprobe, false);
-        upipe_sdi_enc_sub->type = SDIENC_SCTE104;
+        upipe_sdi_enc_sub_init(upipe, mgr, uprobe, SDIENC_SCTE104);
     }
     else if (!ubase_ncmp(def, "pic.")) {
-        upipe_sdi_enc_sub_init(upipe, mgr, uprobe, false);
-        upipe_sdi_enc_sub->type = SDIENC_VANC;
+        upipe_sdi_enc_sub_init(upipe, mgr, uprobe, SDIENC_VANC);
     }
     else {
         goto error;
