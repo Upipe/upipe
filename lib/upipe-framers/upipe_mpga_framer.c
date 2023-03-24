@@ -1504,6 +1504,10 @@ static void upipe_mpgaf_output_frame(struct upipe *upipe, struct uref *uref,
                                      struct upump **upump_p)
 {
     struct upipe_mpgaf *upipe_mpgaf = upipe_mpgaf_from_upipe(upipe);
+
+    if (unlikely(!uref))
+        return;
+
     if (upipe_mpgaf->type != UPIPE_MPGAF_AAC ||
         upipe_mpgaf->encaps_input == upipe_mpgaf->encaps_output) {
         upipe_mpgaf_output(upipe, uref, upump_p);
