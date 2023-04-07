@@ -982,7 +982,7 @@ static void upipe_avcdec_output_sub(struct upipe *upipe, AVSubtitle *sub,
     struct upipe_avcdec *upipe_avcdec = upipe_avcdec_from_upipe(upipe);
     struct uref *uref = upipe_avcdec->uref;
 
-    uint64_t w = 0, h = 0, x = 0, y = 0;
+    uint64_t w = 0, h = 0;
 
     for (int i = 0; i < sub->num_rects; i++) {
         AVSubtitleRect *r = sub->rects[i];
@@ -991,18 +991,11 @@ static void upipe_avcdec_output_sub(struct upipe *upipe, AVSubtitle *sub,
             upipe_err_va(upipe, "Not handling subtitle type %d", r->type);
             continue;
         }
-        if (w < r->w)
-            w = r->w;
-        if (h < r->h)
-            h = r->h;
-        if (x < r->x)
-            x = r->x;
-        if (y < r->y)
-            y = r->y;
+        if (w < r->w + r->x)
+            w = r->w + r->x;
+        if (h < r->h + r->y)
+            h = r->h + r->y;
     }
-
-    w = w + x;
-    h = h + y;
 
     if (sub->num_rects == 0) {
         /* blank sub */
