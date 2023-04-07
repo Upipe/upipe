@@ -345,9 +345,11 @@ static int upipe_ffmt_check_flow_format(struct upipe *upipe,
         bool need_scale =
             uref_pic_flow_cmp_hsize(flow_def, flow_def_dup) ||
             uref_pic_flow_cmp_vsize(flow_def, flow_def_dup);
+        bool need_range = uref_pic_flow_cmp_full_range(flow_def, flow_def_dup);
         bool need_format =
             !uref_pic_flow_compare_format(flow_def, flow_def_dup);
-        bool need_sws = ffmt_mgr->sws_mgr && (need_scale || need_format);
+        bool need_sws = ffmt_mgr->sws_mgr &&
+            (need_scale || need_format || need_range);
         bool pic_vaapi_in = ubase_check(uref_pic_flow_get_surface_type(
                 flow_def, &surface_type)) && !strcmp(surface_type, "av.vaapi");
         bool pic_vaapi_out = ubase_check(uref_pic_flow_get_surface_type(
@@ -474,6 +476,16 @@ static int upipe_ffmt_check_flow_format(struct upipe *upipe,
                 upipe_notice_va(upipe, "need scale %" PRIu64 "x%" PRIu64
                                 " → %" PRIu64 "x%" PRIu64,
                                 hsize_in, vsize_in, hsize_out, vsize_out);
+            }
+            if (need_range) {
+                const char *from =
+                    ubase_check(uref_pic_flow_get_full_range(flow_def)) ?
+                    "full" : "limited";
+                const char *to =
+                    ubase_check(uref_pic_flow_get_full_range(flow_def_dup)) ?
+                    "full" : "limited";
+                upipe_notice_va(upipe, "need range conversion %s → %s",
+                                from, to);
             }
             struct upipe *sws = upipe_flow_alloc(ffmt_mgr->sws_mgr,
                     uprobe_pfx_alloc(uprobe_use(&upipe_ffmt->last_inner_probe),
