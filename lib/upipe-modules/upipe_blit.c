@@ -370,66 +370,70 @@ static int upipe_blit_sub_provide_flow_format(struct upipe *upipe)
         uint64_t vposition = sub->toffset_r;
 
         /* Get original sizes */
-        uint64_t src_hsize, src_vsize;
-        if (ubase_check(uref_pic_flow_get_hsize(urequest->uref, &src_hsize)) &&
-            ubase_check(uref_pic_flow_get_vsize(urequest->uref, &src_vsize)) &&
-            src_hsize && src_vsize) {
-            struct urational src_sar;
-            src_sar.num = src_sar.den = 1;
-            uref_pic_flow_get_sar(urequest->uref, &src_sar);
+        uint64_t src_hsize = hsize;
+        uint64_t src_vsize = vsize;
+        uref_pic_flow_get_hsize(urequest->uref, &src_hsize);
+        uref_pic_flow_get_vsize(urequest->uref, &src_vsize);
 
-            /* Get alignment directives */
-            uint64_t lpad = 0, rpad = 0, tpad = 0, bpad = 0;
-            uref_pic_get_lpadding(urequest->uref, &lpad);
-            uref_pic_get_rpadding(urequest->uref, &rpad);
-            uref_pic_get_tpadding(urequest->uref, &tpad);
-            uref_pic_get_bpadding(urequest->uref, &bpad);
-            src_hsize += lpad + rpad;
-            src_vsize += tpad + bpad;
+        struct urational src_sar;
+        src_sar.num = src_sar.den = 1;
+        uref_pic_flow_get_sar(urequest->uref, &src_sar);
 
-            /* FIXME take into account overscan */
-            struct urational src_dar;
+        /* Get alignment directives */
+        uint64_t lpad = 0, rpad = 0, tpad = 0, bpad = 0;
+        uref_pic_get_lpadding(urequest->uref, &lpad);
+        uref_pic_get_rpadding(urequest->uref, &rpad);
+        uref_pic_get_tpadding(urequest->uref, &tpad);
+        uref_pic_get_bpadding(urequest->uref, &bpad);
+        src_hsize += lpad + rpad;
+        src_vsize += tpad + bpad;
+
+        /* FIXME take into account overscan */
+        struct urational src_dar;
+        src_dar.num = src_dar.den = 1;
+        if (src_hsize && src_vsize) {
             src_dar.num = src_hsize * src_sar.num;
             src_dar.den = src_vsize * src_sar.den;
-            urational_simplify(&src_dar);
+        }
+        uref_pic_flow_get_dar(urequest->uref, &src_dar);
+        urational_simplify(&src_dar);
 
-            struct urational div = urational_divide(&dest_dar, &src_dar);
-            if (div.num > div.den) {
-                /* Destination rectangle larger than source picture */
-                hsize = dest_hsize * div.den / div.num;
-                vsize = dest_vsize;
-            } else if (div.num < div.den) {
-                /* Destination rectangle smaller than source picture */
-                hsize = dest_hsize;
-                vsize = dest_vsize * div.num / div.den;
-            } else {
-                hsize = dest_hsize;
-                vsize = dest_vsize;
-            }
+        struct urational div = urational_divide(&dest_dar, &src_dar);
+        if (div.num > div.den) {
+            /* Destination rectangle larger than source picture */
+            hsize = dest_hsize * div.den / div.num;
+            vsize = dest_vsize;
+        } else if (div.num < div.den) {
+            /* Destination rectangle smaller than source picture */
+            hsize = dest_hsize;
+            vsize = dest_vsize * div.num / div.den;
+        } else {
+            hsize = dest_hsize;
+            vsize = dest_vsize;
+        }
 
-            lpad *= dest_hsize;
-            lpad /= src_hsize;
-            rpad *= dest_hsize;
-            rpad /= src_hsize;
+        if (src_hsize) {
+            lpad = lpad * dest_hsize / src_hsize;
+            rpad = rpad * dest_hsize / src_hsize;
             hsize -= lpad + rpad;
             hsize -= hsize % hround;
-            hposition += (dest_hsize - hsize - lpad -rpad) / 2 + lpad;
+            hposition += (dest_hsize - hsize - lpad - rpad) / 2 + lpad;
+            hposition -= hposition % hround;
+            uref_pic_set_hposition(uref, hposition);
+        }
 
-            tpad *= dest_vsize;
-            tpad /= src_vsize;
-            bpad *= dest_vsize;
-            bpad /= src_vsize;
+        if (src_vsize) {
+            tpad = tpad * dest_vsize / src_vsize;
+            bpad = tpad * dest_vsize / src_vsize;
             vsize -= tpad + bpad;
             vsize -= vsize % vround;
             vposition += (dest_vsize - vsize - tpad - bpad) / 2 + tpad;
+            vposition -= vposition % hround;
+            uref_pic_set_vposition(uref, vposition);
         }
-        hposition -= hposition % hround;
-        vposition -= vposition % hround;
 
         uref_pic_flow_set_hsize(uref, hsize);
         uref_pic_flow_set_vsize(uref, vsize);
-        uref_pic_set_hposition(uref, hposition);
-        uref_pic_set_vposition(uref, vposition);
 
         /* Check for a dedicated alpha plane. */
         uint8_t plane = 0;
