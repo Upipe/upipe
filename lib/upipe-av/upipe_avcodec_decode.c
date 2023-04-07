@@ -1039,6 +1039,14 @@ static void upipe_avcdec_output_sub(struct upipe *upipe, AVSubtitle *sub,
     UBASE_FATAL(upipe, uref_pic_flow_set_vsize_visible(flow_def_attr, h))
     UBASE_FATAL(upipe, uref_pic_flow_set_full_range(flow_def_attr))
 
+    if (unlikely(upipe_avcdec->ubuf_mgr != NULL &&
+                 udict_cmp(upipe_avcdec->flow_def_format->udict,
+                           flow_def_attr->udict))) {
+        /* flow format changed */
+        ubuf_mgr_release(upipe_avcdec->ubuf_mgr);
+        upipe_avcdec->ubuf_mgr = NULL;
+    }
+
     if (unlikely(upipe_avcdec->ubuf_mgr == NULL)) {
         upipe_avcdec->flow_def_format = uref_dup(flow_def_attr);
         if (unlikely(!upipe_avcdec_demand_ubuf_mgr(upipe, flow_def_attr))) {
