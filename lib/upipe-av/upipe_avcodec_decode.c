@@ -970,6 +970,17 @@ static void upipe_avcdec_build_flow_def_sub(struct upipe *upipe,
     upipe_avcdec_store_flow_def(upipe, flow_def);
 }
 
+/** @internal @This rounds a value to the next aligmnent.
+ *
+ * @param value value to align
+ * @param aligmnent desired aligmnent
+ * @return the next align value
+ */
+static int align(int value, int alignment)
+{
+    return alignment > 1 ? (value + (alignment - 1)) & ~(alignment - 1) : value;
+}
+
 /** @internal @This outputs subtitles.
  *
  * @param upipe description structure of the pipe
@@ -1011,6 +1022,34 @@ static void upipe_avcdec_output_sub(struct upipe *upipe, AVSubtitle *sub,
     if (w == 0 || h == 0)
         return;
 
+    uint8_t alignment = 16;
+    const char *input_def = NULL;
+    uref_flow_get_def(upipe_avcdec->flow_def_input, &input_def);
+    if (input_def && strstr(input_def, ".dvb_subtitle.")) {
+        uint8_t subtype = 0;
+        uref_ts_flow_get_sub_type(upipe_avcdec->flow_def_input, &subtype, 0);
+        switch (subtype) {
+            case 0x10:
+            case 0x20:
+                w = w < 720 ? 720 : w;
+                h = h < 576 ? 576 : h;
+                alignment = 0;
+                break;
+            case 0x14:
+            case 0x24:
+                w = w < 1920 ? 1920 : w;
+                h = h < 1080 ? 1080 : h;
+                alignment = 0;
+                break;
+            case 0x16:
+            case 0x26:
+                w = w < 3840 ? 3840 : w;
+                h = h < 2160 ? 2160 : h;
+                alignment = 0;
+                break;
+        }
+    }
+
     /* Prepare flow definition attributes. */
     struct uref *flow_def_attr = upipe_avcdec_alloc_flow_def_attr(upipe);
     if (unlikely(flow_def_attr == NULL)) {
@@ -1029,10 +1068,10 @@ static void upipe_avcdec_output_sub(struct upipe *upipe, AVSubtitle *sub,
     uref_flow_set_def(flow_def_attr, UREF_PIC_SUB_FLOW_DEF);
     uref_pic_set_progressive(flow_def_attr);
 
-    int width_aligned = (w + 15) & ~15;
-    int height_aligned = (h + 15) & ~15;
-
-    UBASE_FATAL(upipe, uref_pic_flow_set_align(flow_def_attr, 16))
+    int width_aligned = align(w, alignment);
+    int height_aligned = align(h, alignment);
+    if (alignment)
+        UBASE_FATAL(upipe, uref_pic_flow_set_align(flow_def_attr, alignment))
     UBASE_FATAL(upipe, uref_pic_flow_set_hsize(flow_def_attr, width_aligned))
     UBASE_FATAL(upipe, uref_pic_flow_set_vsize(flow_def_attr, height_aligned))
     UBASE_FATAL(upipe, uref_pic_flow_set_hsize_visible(flow_def_attr, w))
