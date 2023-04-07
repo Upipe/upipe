@@ -127,7 +127,7 @@ extern "C" {
 static UBASE_UNUSED inline struct SUBSTRUCT *                               \
     STRUCTURE##_to_##SUBNAME(struct STRUCTURE *s)                           \
 {                                                                           \
-    return &s->SUB;                                                         \
+    return s ? &s->SUB : NULL;                                              \
 }                                                                           \
 /** @internal @This returns a pointer to SUBNAME.                           \
  *                                                                          \
@@ -137,7 +137,7 @@ static UBASE_UNUSED inline struct SUBSTRUCT *                               \
 static UBASE_UNUSED inline struct STRUCTURE *                               \
     STRUCTURE##_from_##SUBNAME(struct SUBSTRUCT *sub)                       \
 {                                                                           \
-    return container_of(sub, struct STRUCTURE, SUB);                        \
+    return sub ? container_of(sub, struct STRUCTURE, SUB) : NULL;           \
 }
 
 /** @internal @This is a helper to simplify printf-style functions. */
