@@ -473,6 +473,7 @@ static int upipe_blit_sub_provide_flow_format(struct upipe *upipe)
         uref_pic_flow_delete_sar(uref);
         uref_pic_flow_delete_overscan(uref);
         uref_pic_flow_delete_dar(uref);
+        uref_pic_flow_set_full_range(uref);
 
         /* Compare with previous request and bail out if identical */
         if (proxy->uref != NULL &&
@@ -987,6 +988,7 @@ static int upipe_blit_set_flow_def(struct upipe *upipe, struct uref *flow_def)
     UBASE_RETURN(uref_pic_flow_max_subsampling(flow_def, &hsub, &vsub))
     UBASE_RETURN(uref_pic_flow_get_hsize(flow_def, &hsize))
     UBASE_RETURN(uref_pic_flow_get_vsize(flow_def, &vsize))
+    UBASE_RETURN(uref_pic_flow_get_full_range(flow_def));
     uref_pic_flow_get_sar(flow_def, &sar);
 
     struct upipe_blit *upipe_blit = upipe_blit_from_upipe(upipe);
