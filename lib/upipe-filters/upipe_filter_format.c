@@ -33,6 +33,7 @@
 #include "upipe/uref.h"
 #include "upipe/uref_pic.h"
 #include "upipe/uref_pic_flow.h"
+#include "upipe/uref_pic_flow_formats.h"
 #include "upipe/uref_sound_flow.h"
 #include "upipe/upipe.h"
 #include "upipe/upipe_helper_upipe.h"
@@ -454,8 +455,15 @@ static int upipe_ffmt_check_flow_format(struct upipe *upipe,
         }
 
         if (need_sws) {
-            if (need_format)
-                upipe_notice(upipe, "need format conversion");
+            if (need_format) {
+                const struct uref_pic_flow_format *from =
+                    uref_pic_flow_get_format(flow_def);
+                const struct uref_pic_flow_format *to =
+                    uref_pic_flow_get_format(flow_def_dup);
+                upipe_notice_va(upipe, "need format conversion %s → %s",
+                                from ? from->name : "unknown",
+                                to ? to->name : "unknown");
+            }
             if (need_scale) {
                 uint64_t hsize_in = 0, vsize_in = 0;
                 uint64_t hsize_out = 0, vsize_out = 0;
