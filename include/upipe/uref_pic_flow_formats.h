@@ -53,6 +53,8 @@ struct uref_pic_flow_format_plane {
 
 /** @This describes a picture format. */
 struct uref_pic_flow_format {
+    /** name */
+    const char *name;
     /** macro pixel */
     uint8_t macropixel;
     /** number of planes */
@@ -189,6 +191,324 @@ uref_pic_flow_alloc_format(struct uref_mgr *mgr,
     return uref;
 }
 
+#define UREF_PIC_FLOW_FORMAT_NB_PLANES(...)                                 \
+    (sizeof (__VA_ARGS__) / sizeof ((__VA_ARGS__)[0]))
+
+#define UREF_PIC_FLOW_FORMAT(Name, MacroPixel, ...)                         \
+static const struct uref_pic_flow_format uref_pic_flow_format_##Name = {    \
+    .name = #Name,                                                          \
+    .macropixel = MacroPixel,                                               \
+    .nb_planes = UREF_PIC_FLOW_FORMAT_NB_PLANES(                            \
+        (struct uref_pic_flow_format_plane []){ __VA_ARGS__ }),             \
+    .planes = {                                                             \
+        __VA_ARGS__                                                         \
+    },                                                                      \
+}
+
+/** @This is the description of the yuva420p format. */
+UREF_PIC_FLOW_FORMAT(yuva420p, 1,
+                     { 1, 1, 1, "y8", 8 },
+                     { 2, 2, 1, "u8", 8 },
+                     { 2, 2, 1, "v8", 8 },
+                     { 1, 1, 1, "a8", 8 });
+
+/** @This is the description of the yuva422p format. */
+UREF_PIC_FLOW_FORMAT(yuva422p, 1,
+                     { 1, 1, 1, "y8", 8 },
+                     { 2, 1, 1, "u8", 8 },
+                     { 2, 1, 1, "v8", 8 },
+                     { 1, 1, 1, "a8", 8 });
+
+/** @This is the description of the yuva444p format. */
+UREF_PIC_FLOW_FORMAT(yuva444p, 1,
+                     { 1, 1, 1, "y8", 8 },
+                     { 1, 1, 1, "u8", 8 },
+                     { 1, 1, 1, "v8", 8 },
+                     { 1, 1, 1, "a8", 8 });
+
+/** @This is the description of the yuv420p format. */
+UREF_PIC_FLOW_FORMAT(yuv420p, 1,
+                     { 1, 1, 1, "y8", 8 },
+                     { 2, 2, 1, "u8", 8 },
+                     { 2, 2, 1, "v8", 8 });
+
+/** @This is the description of the yuv422p format. */
+UREF_PIC_FLOW_FORMAT(yuv422p, 1,
+                     { 1, 1, 1, "y8", 8 },
+                     { 2, 1, 1, "u8", 8 },
+                     { 2, 1, 1, "v8", 8 });
+
+/** @This is the description of the yuv444p format. */
+UREF_PIC_FLOW_FORMAT(yuv444p, 1,
+                     { 1, 1, 1, "y8", 8 },
+                     { 1, 1, 1, "u8", 8 },
+                     { 1, 1, 1, "v8", 8 });
+
+/** @This is the description of the yuva420p10le format */
+UREF_PIC_FLOW_FORMAT(yuva420p10le, 1,
+                     { 1, 1, 2, "y10l", 10 },
+                     { 2, 2, 2, "u10l", 10 },
+                     { 2, 2, 2, "v10l", 10 },
+                     { 1, 1, 2, "a10l", 10 });
+
+/** @This is the description of the yuva422p10le format */
+UREF_PIC_FLOW_FORMAT(yuva422p10le, 1,
+                     { 1, 1, 2, "y10l", 10 },
+                     { 2, 1, 2, "u10l", 10 },
+                     { 2, 1, 2, "v10l", 10 },
+                     { 1, 1, 2, "a10l", 10 });
+
+/** @This is the description of the yuva444p10le format */
+UREF_PIC_FLOW_FORMAT(yuva444p10le, 1,
+                     { 1, 1, 2, "y10l", 10 },
+                     { 1, 1, 2, "u10l", 10 },
+                     { 1, 1, 2, "v10l", 10 },
+                     { 1, 1, 2, "a10l", 10 });
+
+/** @This is the description of the yuv420p10le format */
+UREF_PIC_FLOW_FORMAT(yuv420p10le, 1,
+                     { 1, 1, 2, "y10l", 10 },
+                     { 2, 2, 2, "u10l", 10 },
+                     { 2, 2, 2, "v10l", 10 });
+
+/** @This is the description of the yuv422p10le format */
+UREF_PIC_FLOW_FORMAT(yuv422p10le, 1,
+                     { 1, 1, 2, "y10l", 10 },
+                     { 2, 1, 2, "u10l", 10 },
+                     { 2, 1, 2, "v10l", 10 });
+
+/** @This is the description of the yuv444p10le format */
+UREF_PIC_FLOW_FORMAT(yuv444p10le, 1,
+                     { 1, 1, 2, "y10l", 10 },
+                     { 1, 1, 2, "u10l", 10 },
+                     { 1, 1, 2, "v10l", 10 });
+
+/** @This is the description of the yuv420p10be format */
+UREF_PIC_FLOW_FORMAT(yuv420p10be, 1,
+                     { 1, 1, 2, "y10b", 10 },
+                     { 2, 2, 2, "u10b", 10 },
+                     { 2, 2, 2, "v10b", 10 });
+
+/** @This is the description of the yuv422p10be format */
+UREF_PIC_FLOW_FORMAT(yuv422p10be, 1,
+                     { 1, 1, 2, "y10b", 10 },
+                     { 2, 1, 2, "u10b", 10 },
+                     { 2, 1, 2, "v10b", 10 });
+
+/** @This is the description of the yuv444p10be format */
+UREF_PIC_FLOW_FORMAT(yuv444p10be, 1,
+                     { 1, 1, 2, "y10b", 10 },
+                     { 1, 1, 2, "u10b", 10 },
+                     { 1, 1, 2, "v10b", 10 });
+
+/** @This is the description of the yuv420p12le format. */
+UREF_PIC_FLOW_FORMAT(yuv420p12le, 1,
+                     { 1, 1, 2, "y12l", 12 },
+                     { 2, 2, 2, "u12l", 12 },
+                     { 2, 2, 2, "v12l", 12 });
+
+/** @This is the description of the yuv422p12le format. */
+UREF_PIC_FLOW_FORMAT(yuv422p12le, 1,
+                     { 1, 1, 2, "y12l", 12 },
+                     { 2, 1, 2, "u12l", 12 },
+                     { 2, 1, 2, "v12l", 12 });
+
+/** @This is the description of the yuv444p12le format. */
+UREF_PIC_FLOW_FORMAT(yuv444p12le, 1,
+                     { 1, 1, 2, "y12l", 12 },
+                     { 1, 1, 2, "u12l", 12 },
+                     { 1, 1, 2, "v12l", 12 });
+
+/** @This is the description of the yuv420p12be format. */
+UREF_PIC_FLOW_FORMAT(yuv420p12be, 1,
+                     { 1, 1, 2, "y12b", 12 },
+                     { 2, 2, 2, "u12b", 12 },
+                     { 2, 2, 2, "v12b", 12 });
+
+/** @This is the description of the yuv422p12be format. */
+UREF_PIC_FLOW_FORMAT(yuv422p12be, 1,
+                     { 1, 1, 2, "y12b", 12 },
+                     { 2, 1, 2, "u12b", 12 },
+                     { 2, 1, 2, "v12b", 12 });
+
+/** @This is the description of the yuv444p12be format. */
+UREF_PIC_FLOW_FORMAT(yuv444p12be, 1,
+                     { 1, 1, 2, "y12b", 12 },
+                     { 1, 1, 2, "u12b", 12 },
+                     { 1, 1, 2, "v12b", 12 });
+
+/** @This is the description of the yuv420p16le format. */
+UREF_PIC_FLOW_FORMAT(yuv420p16le, 1,
+                     { 1, 1, 2, "y16l", 16 },
+                     { 2, 2, 2, "u16l", 16 },
+                     { 2, 2, 2, "v16l", 16 });
+
+/** @This is the description of the yuv422p16le format. */
+UREF_PIC_FLOW_FORMAT(yuv422p16le, 1,
+                     { 1, 1, 2, "y16l", 16 },
+                     { 2, 1, 2, "u16l", 16 },
+                     { 2, 1, 2, "v16l", 16 });
+
+/** @This is the description of the yuv444p16le format. */
+UREF_PIC_FLOW_FORMAT(yuv444p16le, 1,
+                     { 1, 1, 2, "y16l", 16 },
+                     { 1, 1, 2, "u16l", 16 },
+                     { 1, 1, 2, "v16l", 16 });
+
+/** @This is the description of the yuv420p16be format. */
+UREF_PIC_FLOW_FORMAT(yuv420p16be, 1,
+                     { 1, 1, 2, "y16b", 16 },
+                     { 2, 2, 2, "u16b", 16 },
+                     { 2, 2, 2, "v16b", 16 });
+
+/** @This is the description of the yuv422p16be format. */
+UREF_PIC_FLOW_FORMAT(yuv422p16be, 1,
+                     { 1, 1, 2, "y16b", 16 },
+                     { 2, 1, 2, "u16b", 16 },
+                     { 2, 1, 2, "v16b", 16 });
+
+/** @This is the description of the yuv444p16be format. */
+UREF_PIC_FLOW_FORMAT(yuv444p16be, 1,
+                     { 1, 1, 2, "y16b", 16 },
+                     { 1, 1, 2, "u16b", 16 },
+                     { 1, 1, 2, "v16b", 16 });
+
+/** @This is the description of the yuyv422 format. */
+UREF_PIC_FLOW_FORMAT(yuyv422, 2, { 1, 1, 4, "y8u8y8v8", 32 });
+
+/** @This is the description of the uyvy422 format. */
+UREF_PIC_FLOW_FORMAT(uyvy422, 2, { 1, 1, 4, "u8y8v8y8", 32 });
+
+/** This is the description of the gray8 format. */
+UREF_PIC_FLOW_FORMAT(gray8, 1, { 1, 1, 1, "y8", 8 });
+
+/** This is the description of the mono black format.
+ *
+ * From libavutil/pixfmt.h:
+ * 1bpp, 0 is black, 1 is white, in each byte pixels are ordered from the msb
+ * to the lsb
+ */
+UREF_PIC_FLOW_FORMAT(monoblack, 1, { 1, 1, 1, "y1", 1 });
+
+/** This is the description of the mono white format.
+ *
+ * From libavutil/pixfmt.h:
+ * 1bpp, 0 is white, 1 is black, in each byte pixels are ordered from the msb
+ * to the lsb
+ */
+UREF_PIC_FLOW_FORMAT(monowhite, 1, { 1, 1, 1, "Y1", 1 });
+
+/** @This is the description of the rgb0 format.
+ *
+ * From libavutil/pixfmt.h:
+ * packed RGB 8:8:8, 32bpp, RGBXRGBX...  X=unused/undefined
+ */
+UREF_PIC_FLOW_FORMAT(rgb0, 1, { 1, 1, 1, "r8g8b808", 32 });
+
+/** @This is the description of the 0rgb format.
+ *
+ * from libavutil/pixfmt.h:
+ * packed RGB 8:8:8, 32bpp, XRGBXRGB... X=unused/undefined
+ */
+UREF_PIC_FLOW_FORMAT(0rgb, 1, { 1, 1, 1, "08r8g8b8", 32 });
+
+/** This is the description of the rgb565 format. */
+UREF_PIC_FLOW_FORMAT(rgb565, 1, { 1, 1, 2, "r5g6b5", 16 });
+
+/** @This is the description of the rgb24 format. */
+UREF_PIC_FLOW_FORMAT(rgb24, 1, { 1, 1, 3, "r8g8b8", 24 });
+
+/** @This is the description of the bgr format. */
+UREF_PIC_FLOW_FORMAT(bgr24, 1, { 1, 1, 3, "b8g8e8", 24 });
+
+/** @This is the description of the argb format. */
+UREF_PIC_FLOW_FORMAT(argb, 1, { 1, 1, 4, "a8r8g8b8", 32 });
+
+/** @This is the description of the rgba format. */
+UREF_PIC_FLOW_FORMAT(rgba, 1, { 1, 1, 4, "r8g8b8a8", 32 });
+
+/** @This is the description of the abgr format. */
+UREF_PIC_FLOW_FORMAT(abgr, 1, { 1, 1, 4, "a8b8g8r8", 32 });
+
+/** @This is the description of the bgra format. */
+UREF_PIC_FLOW_FORMAT(bgra, 1, { 1, 1, 4, "b8g8r8a8", 32 });
+
+/** @This is the description of the rgba64le format. */
+UREF_PIC_FLOW_FORMAT(rgba64le, 1, { 1, 1, 8, "r16g16b16a16l", 64 });
+
+/** @This is the description of the rgba64be format. */
+UREF_PIC_FLOW_FORMAT(rgba64be, 1, { 1, 1, 8, "r16g16b16a16", 64 });
+
+/** @This is the description of the nv12 format. */
+UREF_PIC_FLOW_FORMAT(nv12, 1,
+                     { 1, 1, 1, "y8", 8 },
+                     { 2, 2, 2, "u8v8", 16 });
+
+/** @This is the description of the nv16 format. */
+UREF_PIC_FLOW_FORMAT(nv16, 1,
+                     { 1, 1, 1, "y8", 8 },
+                     { 2, 1, 2, "u8v8", 16 });
+
+/** @This is the description of the nv24 format. */
+UREF_PIC_FLOW_FORMAT(nv24, 1,
+                     { 1, 1, 1, "y8", 8 },
+                     { 1, 1, 2, "u8v8", 16 });
+
+/** @This is the description of the gbrp format. */
+UREF_PIC_FLOW_FORMAT(gbrp, 1,
+                     { 1, 1, 1, "g8", 8 },
+                     { 1, 1, 1, "b8", 8 },
+                     { 1, 1, 1, "r8", 8 });
+
+#define UREF_PIC_FLOW_FORMAT_FOREACH(Do, ...) \
+    Do(yuva420p, ## __VA_ARGS__) \
+    Do(yuva422p, ## __VA_ARGS__) \
+    Do(yuva444p, ## __VA_ARGS__) \
+    Do(yuv420p, ## __VA_ARGS__) \
+    Do(yuv422p, ## __VA_ARGS__) \
+    Do(yuv444p, ## __VA_ARGS__) \
+    Do(yuva420p10le, ## __VA_ARGS__) \
+    Do(yuva422p10le, ## __VA_ARGS__) \
+    Do(yuva444p10le, ## __VA_ARGS__) \
+    Do(yuv420p10le, ## __VA_ARGS__) \
+    Do(yuv422p10le, ## __VA_ARGS__) \
+    Do(yuv444p10le, ## __VA_ARGS__) \
+    Do(yuv420p10be, ## __VA_ARGS__) \
+    Do(yuv422p10be, ## __VA_ARGS__) \
+    Do(yuv444p10be, ## __VA_ARGS__) \
+    Do(yuv420p12le, ## __VA_ARGS__) \
+    Do(yuv422p12le, ## __VA_ARGS__) \
+    Do(yuv444p12le, ## __VA_ARGS__) \
+    Do(yuv420p12be, ## __VA_ARGS__) \
+    Do(yuv422p12be, ## __VA_ARGS__) \
+    Do(yuv444p12be, ## __VA_ARGS__) \
+    Do(yuv420p16le, ## __VA_ARGS__) \
+    Do(yuv422p16le, ## __VA_ARGS__) \
+    Do(yuv444p16le, ## __VA_ARGS__) \
+    Do(yuv420p16be, ## __VA_ARGS__) \
+    Do(yuv422p16be, ## __VA_ARGS__) \
+    Do(yuv444p16be, ## __VA_ARGS__) \
+    Do(yuyv422, ## __VA_ARGS__) \
+    Do(uyvy422, ## __VA_ARGS__) \
+    Do(gray8, ## __VA_ARGS__) \
+    Do(monoblack, ## __VA_ARGS__) \
+    Do(monowhite, ## __VA_ARGS__) \
+    Do(rgb0, ## __VA_ARGS__) \
+    Do(0rgb, ## __VA_ARGS__) \
+    Do(rgb565, ## __VA_ARGS__) \
+    Do(rgb24, ## __VA_ARGS__) \
+    Do(bgr24, ## __VA_ARGS__) \
+    Do(argb, ## __VA_ARGS__) \
+    Do(rgba, ## __VA_ARGS__) \
+    Do(abgr, ## __VA_ARGS__) \
+    Do(bgra, ## __VA_ARGS__) \
+    Do(rgba64le, ## __VA_ARGS__) \
+    Do(rgba64be, ## __VA_ARGS__) \
+    Do(nv12, ## __VA_ARGS__) \
+    Do(nv16, ## __VA_ARGS__) \
+    Do(nv24, ## __VA_ARGS__) \
+    Do(gbrp, ## __VA_ARGS__) \
+
 /** @This defines a helper functions to deal with a specified format.
  *
  * @param Format format to check
@@ -222,605 +542,9 @@ uref_pic_flow_alloc_##Format(struct uref_mgr *mgr)                          \
     return uref_pic_flow_alloc_format(mgr, &uref_pic_flow_format_##Format); \
 }
 
-/** @This is the description of the yuva420p format. */
-static const struct uref_pic_flow_format uref_pic_flow_format_yuva420p = {
-    .macropixel = 1,
-    .nb_planes = 4,
-    .planes = {
-        { 1, 1, 1, "y8", 8 },
-        { 2, 2, 1, "u8", 8 },
-        { 2, 2, 1, "v8", 8 },
-        { 1, 1, 1, "a8", 8 },
-    },
-};
-
-UREF_PIC_FLOW_FORMAT_HELPER(yuva420p);
-
-/** @This is the description of the yuva422p format. */
-static const struct uref_pic_flow_format uref_pic_flow_format_yuva422p = {
-    .macropixel = 1,
-    .nb_planes = 4,
-    .planes = {
-        { 1, 1, 1, "y8", 8 },
-        { 2, 1, 1, "u8", 8 },
-        { 2, 1, 1, "v8", 8 },
-        { 1, 1, 1, "a8", 8 },
-    },
-};
-
-UREF_PIC_FLOW_FORMAT_HELPER(yuva422p);
-
-/** @This is the description of the yuva444p format. */
-static const struct uref_pic_flow_format uref_pic_flow_format_yuva444p = {
-    .macropixel = 1,
-    .nb_planes = 4,
-    .planes = {
-        { 1, 1, 1, "y8", 8 },
-        { 1, 1, 1, "u8", 8 },
-        { 1, 1, 1, "v8", 8 },
-        { 1, 1, 1, "a8", 8 },
-    },
-};
-
-UREF_PIC_FLOW_FORMAT_HELPER(yuva444p);
-
-/** @This is the description of the yuv420p format. */
-static const struct uref_pic_flow_format uref_pic_flow_format_yuv420p = {
-    .macropixel = 1,
-    .nb_planes = 3,
-    .planes = {
-        { 1, 1, 1, "y8", 8 },
-        { 2, 2, 1, "u8", 8 },
-        { 2, 2, 1, "v8", 8 },
-    },
-};
-
-UREF_PIC_FLOW_FORMAT_HELPER(yuv420p);
-
-/** @This is the description of the yuv422p format. */
-static const struct uref_pic_flow_format uref_pic_flow_format_yuv422p = {
-    .macropixel = 1,
-    .nb_planes = 3,
-    .planes = {
-        { 1, 1, 1, "y8", 8 },
-        { 2, 1, 1, "u8", 8 },
-        { 2, 1, 1, "v8", 8 },
-    },
-};
-
-UREF_PIC_FLOW_FORMAT_HELPER(yuv422p);
-
-/** @This is the description of the yuv444p format. */
-static const struct uref_pic_flow_format uref_pic_flow_format_yuv444p = {
-    .macropixel = 1,
-    .nb_planes = 3,
-    .planes = {
-        { 1, 1, 1, "y8", 8 },
-        { 1, 1, 1, "u8", 8 },
-        { 1, 1, 1, "v8", 8 },
-    },
-};
-
-UREF_PIC_FLOW_FORMAT_HELPER(yuv444p);
-
-/** @This is the description of the yuva420p10le format */
-static const struct uref_pic_flow_format uref_pic_flow_format_yuva420p10le = {
-    .macropixel = 1,
-    .nb_planes = 4,
-    .planes = {
-        { 1, 1, 2, "y10l", 10 },
-        { 2, 2, 2, "u10l", 10 },
-        { 2, 2, 2, "v10l", 10 },
-        { 1, 1, 2, "a10l", 10 },
-    },
-};
-
-UREF_PIC_FLOW_FORMAT_HELPER(yuva420p10le);
-
-/** @This is the description of the yuva422p10le format */
-static const struct uref_pic_flow_format uref_pic_flow_format_yuva422p10le = {
-    .macropixel = 1,
-    .nb_planes = 4,
-    .planes = {
-        { 1, 1, 2, "y10l", 10 },
-        { 2, 1, 2, "u10l", 10 },
-        { 2, 1, 2, "v10l", 10 },
-        { 1, 1, 2, "a10l", 10 },
-    },
-};
-
-UREF_PIC_FLOW_FORMAT_HELPER(yuva422p10le);
-
-/** @This is the description of the yuva444p10le format */
-static const struct uref_pic_flow_format uref_pic_flow_format_yuva444p10le = {
-    .macropixel = 1,
-    .nb_planes = 4,
-    .planes = {
-        { 1, 1, 2, "y10l", 10 },
-        { 1, 1, 2, "u10l", 10 },
-        { 1, 1, 2, "v10l", 10 },
-        { 1, 1, 2, "a10l", 10 },
-    },
-};
-
-UREF_PIC_FLOW_FORMAT_HELPER(yuva444p10le);
-
-/** @This is the description of the yuv420p10le format */
-static const struct uref_pic_flow_format uref_pic_flow_format_yuv420p10le = {
-    .macropixel = 1,
-    .nb_planes = 3,
-    .planes = {
-        { 1, 1, 2, "y10l", 10 },
-        { 2, 2, 2, "u10l", 10 },
-        { 2, 2, 2, "v10l", 10 },
-    },
-};
-
-UREF_PIC_FLOW_FORMAT_HELPER(yuv420p10le);
-
-/** @This is the description of the yuv422p10le format */
-static const struct uref_pic_flow_format uref_pic_flow_format_yuv422p10le = {
-    .macropixel = 1,
-    .nb_planes = 3,
-    .planes = {
-        { 1, 1, 2, "y10l", 10 },
-        { 2, 1, 2, "u10l", 10 },
-        { 2, 1, 2, "v10l", 10 },
-    },
-};
-
-UREF_PIC_FLOW_FORMAT_HELPER(yuv422p10le);
-
-/** @This is the description of the yuv444p10le format */
-static const struct uref_pic_flow_format uref_pic_flow_format_yuv444p10le = {
-    .macropixel = 1,
-    .nb_planes = 3,
-    .planes = {
-        { 1, 1, 2, "y10l", 10 },
-        { 1, 1, 2, "u10l", 10 },
-        { 1, 1, 2, "v10l", 10 },
-    },
-};
-
-UREF_PIC_FLOW_FORMAT_HELPER(yuv444p10le);
-
-/** @This is the description of the yuv420p10be format */
-static const struct uref_pic_flow_format uref_pic_flow_format_yuv420p10be = {
-    .macropixel = 1,
-    .nb_planes = 3,
-    .planes = {
-        { 1, 1, 2, "y10b", 10 },
-        { 2, 2, 2, "u10b", 10 },
-        { 2, 2, 2, "v10b", 10 },
-    },
-};
-
-UREF_PIC_FLOW_FORMAT_HELPER(yuv420p10be);
-
-/** @This is the description of the yuv422p10be format */
-static const struct uref_pic_flow_format uref_pic_flow_format_yuv422p10be = {
-    .macropixel = 1,
-    .nb_planes = 3,
-    .planes = {
-        { 1, 1, 2, "y10b", 10 },
-        { 2, 1, 2, "u10b", 10 },
-        { 2, 1, 2, "v10b", 10 },
-    },
-};
-
-UREF_PIC_FLOW_FORMAT_HELPER(yuv422p10be);
-
-/** @This is the description of the yuv444p10be format */
-static const struct uref_pic_flow_format uref_pic_flow_format_yuv444p10be = {
-    .macropixel = 1,
-    .nb_planes = 3,
-    .planes = {
-        { 1, 1, 2, "y10b", 10 },
-        { 1, 1, 2, "u10b", 10 },
-        { 1, 1, 2, "v10b", 10 },
-    },
-};
-
-UREF_PIC_FLOW_FORMAT_HELPER(yuv444p10be);
-
-/** @This is the description of the yuv420p12le format. */
-static const struct uref_pic_flow_format uref_pic_flow_format_yuv420p12le = {
-    .macropixel = 1,
-    .nb_planes = 3,
-    .planes = {
-        { 1, 1, 2, "y12l", 12 },
-        { 2, 2, 2, "u12l", 12 },
-        { 2, 2, 2, "v12l", 12 },
-    },
-};
-
-UREF_PIC_FLOW_FORMAT_HELPER(yuv420p12le);
-
-/** @This is the description of the yuv422p12le format. */
-static const struct uref_pic_flow_format uref_pic_flow_format_yuv422p12le = {
-    .macropixel = 1,
-    .nb_planes = 3,
-    .planes = {
-        { 1, 1, 2, "y12l", 12 },
-        { 2, 1, 2, "u12l", 12 },
-        { 2, 1, 2, "v12l", 12 },
-    },
-};
-
-UREF_PIC_FLOW_FORMAT_HELPER(yuv422p12le);
-
-/** @This is the description of the yuv444p12le format. */
-static const struct uref_pic_flow_format uref_pic_flow_format_yuv444p12le = {
-    .macropixel = 1,
-    .nb_planes = 3,
-    .planes = {
-        { 1, 1, 2, "y12l", 12 },
-        { 1, 1, 2, "u12l", 12 },
-        { 1, 1, 2, "v12l", 12 },
-    },
-};
-
-UREF_PIC_FLOW_FORMAT_HELPER(yuv444p12le);
-
-/** @This is the description of the yuv420p12be format. */
-static const struct uref_pic_flow_format uref_pic_flow_format_yuv420p12be = {
-    .macropixel = 1,
-    .nb_planes = 3,
-    .planes = {
-        { 1, 1, 2, "y12b", 12 },
-        { 2, 2, 2, "u12b", 12 },
-        { 2, 2, 2, "v12b", 12 },
-    },
-};
-
-UREF_PIC_FLOW_FORMAT_HELPER(yuv420p12be);
-
-/** @This is the description of the yuv422p12be format. */
-static const struct uref_pic_flow_format uref_pic_flow_format_yuv422p12be = {
-    .macropixel = 1,
-    .nb_planes = 3,
-    .planes = {
-        { 1, 1, 2, "y12b", 12 },
-        { 2, 1, 2, "u12b", 12 },
-        { 2, 1, 2, "v12b", 12 },
-    },
-};
-
-UREF_PIC_FLOW_FORMAT_HELPER(yuv422p12be);
-
-/** @This is the description of the yuv444p12be format. */
-static const struct uref_pic_flow_format uref_pic_flow_format_yuv444p12be = {
-    .macropixel = 1,
-    .nb_planes = 3,
-    .planes = {
-        { 1, 1, 2, "y12b", 12 },
-        { 1, 1, 2, "u12b", 12 },
-        { 1, 1, 2, "v12b", 12 },
-    },
-};
-
-UREF_PIC_FLOW_FORMAT_HELPER(yuv444p12be);
-
-/** @This is the description of the yuv420p16le format. */
-static const struct uref_pic_flow_format uref_pic_flow_format_yuv420p16le = {
-    .macropixel = 1,
-    .nb_planes = 3,
-    .planes = {
-        { 1, 1, 2, "y16l", 16 },
-        { 2, 2, 2, "u16l", 16 },
-        { 2, 2, 2, "v16l", 16 },
-    },
-};
-
-UREF_PIC_FLOW_FORMAT_HELPER(yuv420p16le);
-
-/** @This is the description of the yuv422p16le format. */
-static const struct uref_pic_flow_format uref_pic_flow_format_yuv422p16le = {
-    .macropixel = 1,
-    .nb_planes = 3,
-    .planes = {
-        { 1, 1, 2, "y16l", 16 },
-        { 2, 1, 2, "u16l", 16 },
-        { 2, 1, 2, "v16l", 16 },
-    },
-};
-
-UREF_PIC_FLOW_FORMAT_HELPER(yuv422p16le);
-
-/** @This is the description of the yuv444p16le format. */
-static const struct uref_pic_flow_format uref_pic_flow_format_yuv444p16le = {
-    .macropixel = 1,
-    .nb_planes = 3,
-    .planes = {
-        { 1, 1, 2, "y16l", 16 },
-        { 1, 1, 2, "u16l", 16 },
-        { 1, 1, 2, "v16l", 16 },
-    },
-};
-
-UREF_PIC_FLOW_FORMAT_HELPER(yuv444p16le);
-
-/** @This is the description of the yuv420p16be format. */
-static const struct uref_pic_flow_format uref_pic_flow_format_yuv420p16be = {
-    .macropixel = 1,
-    .nb_planes = 3,
-    .planes = {
-        { 1, 1, 2, "y16b", 16 },
-        { 2, 2, 2, "u16b", 16 },
-        { 2, 2, 2, "v16b", 16 },
-    },
-};
-
-UREF_PIC_FLOW_FORMAT_HELPER(yuv420p16be);
-
-/** @This is the description of the yuv422p16be format. */
-static const struct uref_pic_flow_format uref_pic_flow_format_yuv422p16be = {
-    .macropixel = 1,
-    .nb_planes = 3,
-    .planes = {
-        { 1, 1, 2, "y16b", 16 },
-        { 2, 1, 2, "u16b", 16 },
-        { 2, 1, 2, "v16b", 16 },
-    },
-};
-
-UREF_PIC_FLOW_FORMAT_HELPER(yuv422p16be);
-
-/** @This is the description of the yuv444p16be format. */
-static const struct uref_pic_flow_format uref_pic_flow_format_yuv444p16be = {
-    .macropixel = 1,
-    .nb_planes = 3,
-    .planes = {
-        { 1, 1, 2, "y16b", 16 },
-        { 1, 1, 2, "u16b", 16 },
-        { 1, 1, 2, "v16b", 16 },
-    },
-};
-
-UREF_PIC_FLOW_FORMAT_HELPER(yuv444p16be);
-
-/** @This is the description of the yuyv422 format. */
-static const struct uref_pic_flow_format uref_pic_flow_format_yuyv422 = {
-    .macropixel = 2,
-    .nb_planes = 1,
-    .planes = {
-        { 1, 1, 4, "y8u8y8v8", 32 },
-    },
-};
-
-UREF_PIC_FLOW_FORMAT_HELPER(yuyv422);
-
-/** @This is the description of the uyvy422 format. */
-static const struct uref_pic_flow_format uref_pic_flow_format_uyvy422 = {
-    .macropixel = 2,
-    .nb_planes = 1,
-    .planes = {
-        { 1, 1, 4, "u8y8v8y8", 32 },
-    },
-};
-
-UREF_PIC_FLOW_FORMAT_HELPER(uyvy422);
-
-/** This is the description of the gray8 format. */
-static const struct uref_pic_flow_format uref_pic_flow_format_gray8 = {
-    .macropixel = 1,
-    .nb_planes = 1,
-    .planes = {
-        { 1, 1, 1, "y8", 8 },
-    },
-};
-
-UREF_PIC_FLOW_FORMAT_HELPER(gray8);
-
-/** This is the description of the mono black format.
- *
- * From libavutil/pixfmt.h:
- * 1bpp, 0 is black, 1 is white, in each byte pixels are ordered from the msb
- * to the lsb
- */
-static const struct uref_pic_flow_format uref_pic_flow_format_monoblack = {
-    .macropixel = 1,
-    .nb_planes = 1,
-    .planes = {
-        { 1, 1, 1, "y1", 1 },
-    },
-};
-
-UREF_PIC_FLOW_FORMAT_HELPER(monoblack);
-
-/** This is the description of the mono white format.
- *
- * From libavutil/pixfmt.h:
- * 1bpp, 0 is white, 1 is black, in each byte pixels are ordered from the msb
- * to the lsb
- */
-static const struct uref_pic_flow_format uref_pic_flow_format_monowhite = {
-    .macropixel = 1,
-    .nb_planes = 1,
-    .planes = {
-        { 1, 1, 1, "Y1", 1 },
-    },
-};
-
-UREF_PIC_FLOW_FORMAT_HELPER(monowhite);
-
-/** @This is the description of the rgb0 format.
- *
- * From libavutil/pixfmt.h:
- * packed RGB 8:8:8, 32bpp, RGBXRGBX...  X=unused/undefined
- */
-static const struct uref_pic_flow_format uref_pic_flow_format_rgb0 = {
-    .macropixel = 1,
-    .nb_planes = 1,
-    .planes = {
-        { 1, 1, 1, "r8g8b808", 32 },
-    },
-};
-
-UREF_PIC_FLOW_FORMAT_HELPER(rgb0);
-
-/** @This is the description of the 0rgb format.
- *
- * from libavutil/pixfmt.h:
- * packed RGB 8:8:8, 32bpp, XRGBXRGB... X=unused/undefined
- */
-static const struct uref_pic_flow_format uref_pic_flow_format_0rgb = {
-    .macropixel = 1,
-    .nb_planes = 1,
-    .planes = {
-        { 1, 1, 1, "08r8g8b8", 32 },
-    },
-};
-
-UREF_PIC_FLOW_FORMAT_HELPER(0rgb);
-
-/** This is the description of the rgb565 format. */
-static const struct uref_pic_flow_format uref_pic_flow_format_rgb565 = {
-    .macropixel = 1,
-    .nb_planes = 1,
-    .planes = {
-        { 1, 1, 2, "r5g6b5", 16 },
-    },
-};
-
-UREF_PIC_FLOW_FORMAT_HELPER(rgb565);
-
-/** @This is the description of the rgb24 format. */
-static const struct uref_pic_flow_format uref_pic_flow_format_rgb24 = {
-    .macropixel = 1,
-    .nb_planes = 1,
-    .planes = {
-        { 1, 1, 3, "r8g8b8", 24 },
-    },
-};
-
-UREF_PIC_FLOW_FORMAT_HELPER(rgb24);
-
-/** @This is the description of the bgr format. */
-static const struct uref_pic_flow_format uref_pic_flow_format_bgr24 = {
-    .macropixel = 1,
-    .nb_planes = 1,
-    .planes = {
-        { 1, 1, 3, "b8g8e8", 24 },
-    },
-};
-
-UREF_PIC_FLOW_FORMAT_HELPER(bgr24);
-
-/** @This is the description of the argb format. */
-static const struct uref_pic_flow_format uref_pic_flow_format_argb = {
-    .macropixel = 1,
-    .nb_planes = 1,
-    .planes = {
-        { 1, 1, 4, "a8r8g8b8", 32 },
-    },
-};
-
-UREF_PIC_FLOW_FORMAT_HELPER(argb);
-
-/** @This is the description of the rgba format. */
-static const struct uref_pic_flow_format uref_pic_flow_format_rgba = {
-    .macropixel = 1,
-    .nb_planes = 1,
-    .planes = {
-        { 1, 1, 4, "r8g8b8a8", 32 },
-    },
-};
-
-UREF_PIC_FLOW_FORMAT_HELPER(rgba);
-
-/** @This is the description of the abgr format. */
-static const struct uref_pic_flow_format uref_pic_flow_format_abgr = {
-    .macropixel = 1,
-    .nb_planes = 1,
-    .planes = {
-        { 1, 1, 4, "a8b8g8r8", 32 },
-    },
-};
-
-UREF_PIC_FLOW_FORMAT_HELPER(abgr);
-
-/** @This is the description of the bgra format. */
-static const struct uref_pic_flow_format uref_pic_flow_format_bgra = {
-    .macropixel = 1,
-    .nb_planes = 1,
-    .planes = {
-        { 1, 1, 4, "b8g8r8a8", 32 },
-    },
-};
-
-UREF_PIC_FLOW_FORMAT_HELPER(bgra);
-
-/** @This is the description of the rgba64le format. */
-static const struct uref_pic_flow_format uref_pic_flow_format_rgba64le = {
-    .macropixel = 1,
-    .nb_planes = 1,
-    .planes = {
-        { 1, 1, 8, "r16g16b16a16l", 64 },
-    },
-};
-
-UREF_PIC_FLOW_FORMAT_HELPER(rgba64le);
-
-/** @This is the description of the rgba64be format. */
-static const struct uref_pic_flow_format uref_pic_flow_format_rgba64be = {
-    .macropixel = 1,
-    .nb_planes = 1,
-    .planes = {
-        { 1, 1, 8, "r16g16b16a16", 64 },
-    },
-};
-
-UREF_PIC_FLOW_FORMAT_HELPER(rgba64be);
-
-/** @This is the description of the nv12 format. */
-static const struct uref_pic_flow_format uref_pic_flow_format_nv12 = {
-    .macropixel = 1,
-    .nb_planes = 2,
-    .planes = {
-        { 1, 1, 1, "y8", 8 },
-        { 2, 2, 2, "u8v8", 16 },
-    },
-};
-
-UREF_PIC_FLOW_FORMAT_HELPER(nv12);
-
-/** @This is the description of the nv16 format. */
-static const struct uref_pic_flow_format uref_pic_flow_format_nv16 = {
-    .macropixel = 1,
-    .nb_planes = 2,
-    .planes = {
-        { 1, 1, 1, "y8", 8 },
-        { 2, 1, 2, "u8v8", 16 },
-    },
-};
-
-UREF_PIC_FLOW_FORMAT_HELPER(nv16);
-
-/** @This is the description of the nv24 format. */
-static const struct uref_pic_flow_format uref_pic_flow_format_nv24 = {
-    .macropixel = 1,
-    .nb_planes = 2,
-    .planes = {
-        { 1, 1, 1, "y8", 8 },
-        { 1, 1, 2, "u8v8", 16 },
-    },
-};
-
-UREF_PIC_FLOW_FORMAT_HELPER(nv24);
-
-/** @This is the description of the gbrp format. */
-static const struct uref_pic_flow_format uref_pic_flow_format_gbrp = {
-    .macropixel = 1,
-    .nb_planes = 3,
-    .planes = {
-        { 1, 1, 1, "g8", 8 },
-        { 1, 1, 1, "b8", 8 },
-        { 1, 1, 1, "r8", 8 },
-    },
-};
-
-UREF_PIC_FLOW_FORMAT_HELPER(gbrp);
+#define Do(Type)    UREF_PIC_FLOW_FORMAT_HELPER(Type)
+UREF_PIC_FLOW_FORMAT_FOREACH(Do)
+#undef Do
 
 #ifdef __cplusplus
 }
