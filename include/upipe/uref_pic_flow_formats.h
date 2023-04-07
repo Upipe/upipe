@@ -546,6 +546,23 @@ uref_pic_flow_alloc_##Format(struct uref_mgr *mgr)                          \
 UREF_PIC_FLOW_FORMAT_FOREACH(Do)
 #undef Do
 
+static const struct uref_pic_flow_format *uref_pic_flow_formats[] = {
+#define Do(Type)    &uref_pic_flow_format_##Type,
+    UREF_PIC_FLOW_FORMAT_FOREACH(Do)
+#undef Do
+};
+
+static inline const struct uref_pic_flow_format *
+uref_pic_flow_get_format(struct uref *uref)
+{
+    for (unsigned i = 0; i < UBASE_ARRAY_SIZE(uref_pic_flow_formats); i++) {
+        const struct uref_pic_flow_format *format = uref_pic_flow_formats[i];
+        if (ubase_check(uref_pic_flow_check_format(uref, format)))
+            return format;
+    }
+    return NULL;
+}
+
 #ifdef __cplusplus
 }
 #endif
