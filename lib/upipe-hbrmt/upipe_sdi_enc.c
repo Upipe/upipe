@@ -560,7 +560,6 @@ UPIPE_HELPER_UBUF_MGR(upipe_sdi_enc, ubuf_mgr, flow_format, ubuf_mgr_request,
 UPIPE_HELPER_UPIPE(upipe_sdi_enc_sub, upipe, UPIPE_SDI_ENC_SUB_SIGNATURE);
 UPIPE_HELPER_FLOW(upipe_sdi_enc_sub, NULL);
 UPIPE_HELPER_UREFCOUNT(upipe_sdi_enc_sub, urefcount, upipe_sdi_enc_sub_free);
-UPIPE_HELPER_VOID(upipe_sdi_enc_sub);
 
 UPIPE_HELPER_SUBPIPE(upipe_sdi_enc, upipe_sdi_enc_sub, sub, sub_mgr, subs, uchain)
 
@@ -657,18 +656,15 @@ static void upipe_sdi_enc_sub_input(struct upipe *upipe, struct uref *uref,
 static void upipe_sdi_enc_sub_init(struct upipe *upipe,
         struct upipe_mgr *sub_mgr, struct uprobe *uprobe, enum subpipe_type type)
 {
-    struct upipe_sdi_enc *upipe_sdi_enc = upipe_sdi_enc_from_sub_mgr(sub_mgr);
-    upipe_sdi_enc_sub_init_urefcount(upipe);
-
     struct upipe_sdi_enc_sub *sdi_enc_sub = upipe_sdi_enc_sub_from_upipe(upipe);
 
+    upipe_sdi_enc_sub_init_urefcount(upipe);
     upipe_sdi_enc_sub_init_sub(upipe);
-
-    sdi_enc_sub->type = type;
 
     ulist_init(&sdi_enc_sub->urefs);
     sdi_enc_sub->n = 0;
     sdi_enc_sub->dolbye = false;
+    sdi_enc_sub->type = type;
 
     upipe_throw_ready(upipe);
 }
@@ -690,25 +686,22 @@ static struct upipe *upipe_sdi_enc_sub_alloc(struct upipe_mgr *mgr,
         goto error;
 
     if (!ubase_ncmp(def, "sound.")) {
-        upipe_sdi_enc_sub_init(upipe, mgr, uprobe, false);
-        upipe_sdi_enc_sub->type = SDIENC_SOUND;
+        upipe_sdi_enc_sub_init(upipe, mgr, uprobe, SDIENC_SOUND);
     }
     else if (!ubase_ncmp(def, "block.dvb_teletext.")) {
-        upipe_sdi_enc_sub_init(upipe, mgr, uprobe, false);
-        upipe_sdi_enc_sub->type = SDIENC_SUBPIC;
+        upipe_sdi_enc_sub_init(upipe, mgr, uprobe, SDIENC_SUBPIC);
     }
     else if (!ubase_ncmp(def, "block.scte104.")) {
-        upipe_sdi_enc_sub_init(upipe, mgr, uprobe, false);
-        upipe_sdi_enc_sub->type = SDIENC_SCTE104;
+        upipe_sdi_enc_sub_init(upipe, mgr, uprobe, SDIENC_SCTE104);
     }
     else if (!ubase_ncmp(def, "pic.")) {
-        upipe_sdi_enc_sub_init(upipe, mgr, uprobe, false);
-        upipe_sdi_enc_sub->type = SDIENC_VANC;
+        upipe_sdi_enc_sub_init(upipe, mgr, uprobe, SDIENC_VANC);
     }
     else {
         goto error;
     }
 
+    uref_free(flow_def);
     return upipe;
 
 error:
@@ -726,12 +719,8 @@ static void upipe_sdi_enc_sub_free(struct upipe *upipe)
     upipe_throw_dead(upipe);
     upipe_sdi_enc_clean_urefs(&sdi_enc_sub->urefs);
     upipe_sdi_enc_sub_clean_sub(upipe);
-    if (sdi_enc_sub->type != SDIENC_SOUND) {
-        upipe_clean(upipe);
-    } else {
-        upipe_sdi_enc_sub_clean_urefcount(upipe);
-        upipe_sdi_enc_sub_free_void(upipe);
-    }
+    upipe_sdi_enc_sub_clean_urefcount(upipe);
+    upipe_sdi_enc_sub_free_flow(upipe);
 }
 
 static void upipe_sdi_enc_init_sub_mgr(struct upipe *upipe)
