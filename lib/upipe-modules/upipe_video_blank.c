@@ -70,6 +70,8 @@ struct upipe_vblk {
     struct uref *flow_format;
     /** ubuf manager request */
     struct urequest ubuf_mgr_request;
+    /** picture */
+    struct ubuf *pic;
     /** picture attributes */
     struct uref *pic_attr;
 };
@@ -107,6 +109,8 @@ static void upipe_vblk_free(struct upipe *upipe)
 
     if (upipe_vblk->ubuf)
         ubuf_free(upipe_vblk->ubuf);
+    if (upipe_vblk->pic)
+        ubuf_free(upipe_vblk->pic);
     if (upipe_vblk->pic_attr)
         uref_free(upipe_vblk->pic_attr);
 
@@ -162,6 +166,7 @@ static struct upipe *upipe_vblk_alloc(struct upipe_mgr *mgr,
 
     struct upipe_vblk *upipe_vblk = upipe_vblk_from_upipe(upipe);
     upipe_vblk->ubuf = NULL;
+    upipe_vblk->pic = NULL;
     upipe_vblk->pic_attr = NULL;
 
     upipe_throw_ready(upipe);
@@ -176,6 +181,53 @@ static struct upipe *upipe_vblk_alloc(struct upipe_mgr *mgr,
     upipe_vblk_store_flow_def(upipe, flow_def);
 
     return upipe;
+}
+
+/** @internal @This allocates a picture.
+ *
+ * @param upipe description structure of the pipe
+ * @return a ubuf filled with a picture
+ */
+static struct ubuf *upipe_vblk_alloc_pic(struct upipe *upipe)
+{
+    struct upipe_vblk *upipe_vblk = upipe_vblk_from_upipe(upipe);
+
+    if (upipe_vblk->pic)
+        return ubuf_dup(upipe_vblk->pic);
+
+    if (upipe_vblk->ubuf)
+        return ubuf_dup(upipe_vblk->ubuf);
+
+    struct uref *flow_def = upipe_vblk->flow_def;
+    uint64_t hsize = 0, vsize = 0;
+    uref_pic_flow_get_hsize(flow_def, &hsize);
+    uref_pic_flow_get_vsize(flow_def, &vsize);
+    bool full_range = ubase_check(uref_pic_flow_get_full_range(flow_def));
+
+    upipe_verbose_va(upipe, "allocate blank %"PRIu64"x%"PRIu64" picture",
+                     hsize, vsize);
+    if (unlikely(!hsize || !vsize)) {
+        upipe_warn(upipe, "no output size");
+        return NULL;
+    }
+
+    struct ubuf *ubuf = ubuf_pic_alloc(upipe_vblk->ubuf_mgr, hsize, vsize);
+    if (unlikely(!ubuf)) {
+        upipe_err_va(upipe, "fail to allocate %"PRIu64"x%"PRIu64" picture",
+                     hsize, vsize);
+        upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
+        return NULL;
+    }
+
+    int err = ubuf_pic_clear(ubuf, 0, 0, -1, -1, full_range);
+    if (unlikely(!ubase_check(err))) {
+        upipe_err(upipe, "fail to clear picture");
+        ubuf_free(ubuf);
+        return NULL;
+    }
+
+    upipe_vblk->ubuf = ubuf;
+    return ubuf_dup(ubuf);
 }
 
 /** @internal @This handles the input uref.
@@ -215,36 +267,9 @@ static void upipe_vblk_input(struct upipe *upipe,
         return;
     }
 
-    if (unlikely(!upipe_vblk->ubuf)) {
-        upipe_verbose(upipe, "allocate blank picture");
-
-        uint64_t hsize, vsize;
-        if (unlikely(
-                !ubase_check(uref_pic_flow_get_hsize(upipe_vblk->flow_def,
-                                                     &hsize)) ||
-                !ubase_check(uref_pic_flow_get_vsize(upipe_vblk->flow_def,
-                                                     &vsize)))) {
-            upipe_warn(upipe, "no output size");
-            uref_free(uref);
-            return;
-        }
-
-        upipe_vblk->ubuf = ubuf_pic_alloc(upipe_vblk->ubuf_mgr, hsize, vsize);
-        if (unlikely(!upipe_vblk->ubuf)) {
-            upipe_err_va(upipe, "fail to allocate %"PRIu64"x%"PRIu64" picture",
-                         hsize, vsize);
-            uref_free(uref);
-            upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
-            return;
-        }
-        if (!ubase_check(ubuf_pic_clear(upipe_vblk->ubuf, 0, 0, -1, -1,
-            ubase_check(uref_pic_flow_get_full_range(upipe_vblk->flow_def)))))
-            upipe_err(upipe, "fail to clear picture");
-    }
-
-    struct ubuf *ubuf = ubuf_dup(upipe_vblk->ubuf);
+    struct ubuf *ubuf = upipe_vblk_alloc_pic(upipe);
     if (unlikely(!ubuf)) {
-        upipe_err(upipe, "fail to duplicate blank picture");
+        upipe_err(upipe, "fail to allocate picture");
         uref_free(uref);
         upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
         return;
@@ -342,24 +367,25 @@ static int upipe_vblk_set_flow_def(struct upipe *upipe,
 static int upipe_vblk_set_pic_real(struct upipe *upipe, struct uref *uref)
 {
     struct upipe_vblk *upipe_vblk = upipe_vblk_from_upipe(upipe);
-    if (upipe_vblk->ubuf) {
-        ubuf_free(upipe_vblk->ubuf);
-        upipe_vblk->ubuf = NULL;
+
+    if (upipe_vblk->pic) {
+        ubuf_free(upipe_vblk->pic);
+        upipe_vblk->pic = NULL;
     }
+
     if (upipe_vblk->pic_attr) {
         uref_free(upipe_vblk->pic_attr);
         upipe_vblk->pic_attr = NULL;
     }
+
     if (!uref)
         return UBASE_ERR_NONE;
 
-    if (!uref->mgr) {
+    upipe_vblk->pic_attr = uref_sibling_alloc_control(uref);
+    if (!upipe_vblk->pic_attr) {
         uref_free(uref);
-        return UBASE_ERR_INVALID;
-    }
-    upipe_vblk->pic_attr = uref_alloc_control(uref->mgr);
-    if (!upipe_vblk->pic_attr)
         return UBASE_ERR_ALLOC;
+    }
     int ret = uref_attr_import(upipe_vblk->pic_attr, uref);
     if (unlikely(!ubase_check(ret))) {
         uref_free(upipe_vblk->pic_attr);
@@ -367,7 +393,7 @@ static int upipe_vblk_set_pic_real(struct upipe *upipe, struct uref *uref)
         uref_free(uref);
         return ret;
     }
-    upipe_vblk->ubuf = uref->ubuf;
+    upipe_vblk->pic = uref->ubuf;
     uref->ubuf = NULL;
     uref_free(uref);
     return UBASE_ERR_NONE;
