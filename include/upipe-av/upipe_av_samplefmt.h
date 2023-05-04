@@ -80,7 +80,8 @@ static inline int
     char channels_desc[sizeof(UPIPE_AV_SAMPLEFMT_CHANNELS)];
     memcpy(channels_desc, UPIPE_AV_SAMPLEFMT_CHANNELS,
            sizeof(UPIPE_AV_SAMPLEFMT_CHANNELS));
-    assert(channels < strlen(channels_desc));
+    if (channels >= strlen(channels_desc))
+        return UBASE_ERR_INVALID;
     UBASE_RETURN(uref_sound_flow_set_channels(flow_def, channels))
     UBASE_RETURN(uref_sound_flow_set_planes(flow_def, 0))
     if (av_sample_fmt_is_planar(fmt)) {
