@@ -67,6 +67,7 @@ static inline void uref_dump_lvl(struct uref *uref, struct uprobe *uprobe,
     UREF_DUMP_VOID("f.end", UREF_FLAG_FLOW_END)
     UREF_DUMP_VOID("f.disc", UREF_FLAG_FLOW_DISC)
     UREF_DUMP_VOID("b.start", UREF_FLAG_BLOCK_START)
+    UREF_DUMP_VOID("b.end", UREF_FLAG_BLOCK_END)
 #undef UREF_DUMP_VOID
 
 #define UREF_DUMP_DATE(name, member)                                        \
