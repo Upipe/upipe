@@ -17,6 +17,7 @@ libupipe_framers_la_SOURCES = \
 	upipe_s337_decaps.c \
 	upipe_s337_framer.c \
 	upipe_video_trim.c \
+	upipe_id3v2_framer.c \
 	$(NULL)
 
 libupipe_framers_la_CPPFLAGS = -I$(top_builddir)/include -I$(top_srcdir)/include
