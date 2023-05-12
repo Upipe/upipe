@@ -16,6 +16,7 @@ myinclude_HEADERS = \
 	upipe_s337_decaps.h \
 	upipe_s337_framer.h \
 	upipe_video_trim.h \
+	upipe_id3v2_framer.h \
 	uref_mpgv.h \
 	uref_h264.h \
 	uref_h264_flow.h \
