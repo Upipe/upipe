@@ -46,6 +46,7 @@
 #include "upipe-framers/upipe_dvbsub_framer.h"
 #include "upipe-framers/upipe_opus_framer.h"
 #include "upipe-framers/upipe_s302_framer.h"
+#include "upipe-framers/upipe_id3v2_framer.h"
 
 #include <stdlib.h>
 #include <stdarg.h>
@@ -78,6 +79,8 @@ struct upipe_autof_mgr {
     struct upipe_mgr *opusf_mgr;
     /** pointer to s302f manager */
     struct upipe_mgr *s302f_mgr;
+    /** pointer to id3v2f manager */
+    struct upipe_mgr *id3v2f_mgr;
 
     /** public upipe_mgr structure */
     struct upipe_mgr mgr;
@@ -237,6 +240,13 @@ static struct upipe *upipe_autof_alloc_framer(struct upipe *upipe,
                     uprobe_use(&autof->last_inner_probe),
                     UPROBE_LOG_VERBOSE, "s302f"));
 
+    if (!ubase_ncmp(def, "block.id3.") &&
+        autof_mgr->id3v2f_mgr != NULL)
+        return upipe_void_alloc(autof_mgr->id3v2f_mgr,
+                uprobe_pfx_alloc(
+                    uprobe_use(&autof->last_inner_probe),
+                    UPROBE_LOG_VERBOSE, "id3v2f"));
+
     upipe_warn_va(upipe, "unframed inner flow definition: %s", def);
     return upipe_void_alloc(autof_mgr->idem_mgr,
             uprobe_pfx_alloc(
@@ -361,6 +371,7 @@ static void upipe_autof_mgr_free(struct urefcount *urefcount)
     upipe_mgr_release(autof_mgr->dvbsubf_mgr);
     upipe_mgr_release(autof_mgr->opusf_mgr);
     upipe_mgr_release(autof_mgr->s302f_mgr);
+    upipe_mgr_release(autof_mgr->id3v2f_mgr);
 
     urefcount_clean(urefcount);
     free(autof_mgr);
@@ -406,6 +417,7 @@ static int upipe_autof_mgr_control(struct upipe_mgr *mgr,
         GET_SET_MGR(dvbsubf, DVBSUBF)
         GET_SET_MGR(opusf, OPUSF)
         GET_SET_MGR(s302f, S302F)
+        GET_SET_MGR(id3v2f, ID3V2F)
 #undef GET_SET_MGR
 
         default:
@@ -434,6 +446,7 @@ struct upipe_mgr *upipe_autof_mgr_alloc(void)
     autof_mgr->dvbsubf_mgr = upipe_dvbsubf_mgr_alloc();
     autof_mgr->opusf_mgr = upipe_opusf_mgr_alloc();
     autof_mgr->s302f_mgr = upipe_s302f_mgr_alloc();
+    autof_mgr->id3v2f_mgr = upipe_id3v2f_mgr_alloc();
 
     urefcount_init(upipe_autof_mgr_to_urefcount(autof_mgr),
                    upipe_autof_mgr_free);
