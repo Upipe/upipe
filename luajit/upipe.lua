@@ -48,6 +48,15 @@ local function dump_traceback(msg)
     io.stderr:write(debug.traceback(msg, 2), "\n")
 end
 
+local function wrap_traceback(f)
+    return function (...)
+        local ret = {xpcall(f, dump_traceback, ...)}
+        local success = table.remove(ret, 1)
+        if not success then return C.UBASE_ERR_UNKNOWN end
+        return unpack(ret)
+    end
+end
+
 local props = { }
 
 local function props_key(ptr)
@@ -208,7 +217,8 @@ uprobe = setmetatable({ }, {
                 return ret
             end
         end
-        return uprobe_alloc(uprobe_throw, ffi.cast("struct uprobe *", nil))
+        local uprobe_throw_tb = wrap_traceback(uprobe_throw)
+        return uprobe_alloc(uprobe_throw_tb, ffi.cast("struct uprobe *", nil))
     end,
     __index = function (_, key)
         local sym = fmt("uprobe_%s_alloc", key)
@@ -630,15 +640,6 @@ local function upipe_helper_alloc(cb)
             pipe.props._clean = cb.clean
             return pipe:use()
         end
-
-    local function wrap_traceback(f)
-        return function (...)
-            local ret = {xpcall(f, dump_traceback, ...)}
-            local success = table.remove(ret, 1)
-            if not success then return C.UBASE_ERR_UNKNOWN end
-            return unpack(ret)
-        end
-    end
 
     if cb.input_output then
         mgr.upipe_input = function (pipe, ref, pump_p)
