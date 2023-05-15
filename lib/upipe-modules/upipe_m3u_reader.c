@@ -25,6 +25,7 @@
 
 #include <stdlib.h>
 #include <ctype.h>
+#include <time.h>
 
 #include "upipe/ustring.h"
 #include "upipe/uclock.h"
@@ -144,6 +145,8 @@ struct upipe_m3u_reader {
     struct uref *key;
     /** current map */
     struct uref *map;
+    /** current program date time */
+    uint64_t program_date_time;
     /** list of items */
     struct uchain items;
 
@@ -192,6 +195,7 @@ static struct upipe *upipe_m3u_reader_alloc(struct upipe_mgr *mgr,
     upipe_m3u_reader->item = NULL;
     upipe_m3u_reader->key = NULL;
     upipe_m3u_reader->map = NULL;
+    upipe_m3u_reader->program_date_time = UINT64_MAX;
     upipe_m3u_reader->restart = false;
     upipe_throw_ready(upipe);
 
@@ -840,6 +844,44 @@ static int upipe_m3u_reader_map(struct upipe *upipe,
     return UBASE_ERR_NONE;
 }
 
+static int upipe_m3u_reader_program_date_time(struct upipe *upipe,
+                                              struct uref *flow_def,
+                                              const char *line)
+{
+    struct upipe_m3u_reader *upipe_m3u_reader =
+        upipe_m3u_reader_from_upipe(upipe);
+
+    if (unlikely(!ubase_check(uref_flow_match_def(flow_def,
+                                                  M3U_FLOW_DEF))) &&
+        unlikely(!ubase_check(uref_flow_match_def(flow_def,
+                                                  PLAYLIST_FLOW_DEF))))
+        return UBASE_ERR_INVALID;
+    UBASE_RETURN(uref_flow_set_def(flow_def, PLAYLIST_FLOW_DEF));
+
+    int year, mon, mday, hour, min, sec;
+    double ms;
+    if (sscanf(line, "%d-%d-%dT%d:%d:%d.%lf",
+               &year, &mon, &mday, &hour, &min, &sec, &ms) != 7) {
+        upipe_warn_va(upipe, "invalid program date time %s", line);
+        return UBASE_ERR_INVALID;
+    }
+
+    struct tm tm = {
+        .tm_year = year - 1900,
+        .tm_mon = mon - 1,
+        .tm_mday = mday,
+        .tm_hour = hour,
+        .tm_min = min,
+        .tm_sec = sec,
+        .tm_isdst = -1
+    };
+
+    upipe_m3u_reader->program_date_time = mktime(&tm) * UCLOCK_FREQ +
+        ms * UCLOCK_FREQ / 1000;
+
+    return UBASE_ERR_NONE;
+}
+
 /** @internal @This checks an URI.
  *
  * @param upipe description structure of the pipe
@@ -863,6 +905,13 @@ static int upipe_m3u_reader_process_uri(struct upipe *upipe,
         UBASE_RETURN(uref_m3u_playlist_key_copy(item, upipe_m3u_reader->key));
     if (upipe_m3u_reader->map)
         UBASE_RETURN(uref_m3u_playlist_map_copy(item, upipe_m3u_reader->map));
+    if (upipe_m3u_reader->program_date_time != UINT64_MAX) {
+        UBASE_RETURN(uref_m3u_playlist_set_program_date_time(
+                item, upipe_m3u_reader->program_date_time));
+        uint64_t duration;
+        if (ubase_check(uref_m3u_playlist_get_seq_duration(item, &duration)))
+            upipe_m3u_reader->program_date_time += duration;
+    }
     upipe_m3u_reader->item = NULL;
     ulist_add(&upipe_m3u_reader->items, uref_to_uchain(item));
     return UBASE_ERR_NONE;
@@ -895,6 +944,7 @@ static int upipe_m3u_reader_process_line(struct upipe *upipe,
         { "#EXT-X-ENDLIST", upipe_m3u_reader_ext_x_endlist },
         { "#EXT-X-KEY:", upipe_m3u_reader_key },
         { "#EXT-X-MAP:", upipe_m3u_reader_map },
+        { "#EXT-X-PROGRAM-DATE-TIME:", upipe_m3u_reader_program_date_time },
     };
 
     size_t block_size;

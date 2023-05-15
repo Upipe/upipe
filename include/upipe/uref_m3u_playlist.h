@@ -37,6 +37,8 @@ UREF_ATTR_UNSIGNED(m3u_playlist, byte_range_len, "m3u.playlist.byte_range_len",
                       length of the sub range)
 UREF_ATTR_UNSIGNED(m3u_playlist, byte_range_off, "m3u.playlist.byte_range_off",
                    offset of the sub range)
+UREF_ATTR_UNSIGNED(m3u_playlist, program_date_time, "m3u.playlist.program_date_time",
+                   program date time)
 
 UREF_ATTR_STRING(m3u_playlist_key, method, "m3u.playlist.key.method",
                  key method);
@@ -70,6 +72,7 @@ static inline int uref_m3u_playlist_delete(struct uref *uref)
         uref_m3u_playlist_delete_seq_duration,
         uref_m3u_playlist_delete_byte_range_len,
         uref_m3u_playlist_delete_byte_range_off,
+        uref_m3u_playlist_delete_program_date_time,
         uref_m3u_playlist_key_delete,
         uref_m3u_playlist_map_delete,
     };
@@ -103,6 +106,7 @@ static inline int uref_m3u_playlist_copy(struct uref *uref,
         uref_m3u_playlist_copy_seq_duration,
         uref_m3u_playlist_copy_byte_range_len,
         uref_m3u_playlist_copy_byte_range_off,
+        uref_m3u_playlist_copy_program_date_time,
         uref_m3u_playlist_key_copy,
         uref_m3u_playlist_map_copy,
     };
