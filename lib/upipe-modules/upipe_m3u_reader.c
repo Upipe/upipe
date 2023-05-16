@@ -71,11 +71,78 @@ static int duration_to_uclock(const char *str,
     return UBASE_ERR_NONE;
 }
 
+/** @hidden */
+static int date_to_uclock(const char *str,
+                          uint64_t *date_p)
+{
+    int year, mon, mday, hour, min, sec;
+    double ms;
+
+    if (sscanf(str, "%d-%d-%dT%d:%d:%d.%lfZ",
+               &year, &mon, &mday, &hour, &min, &sec, &ms) != 7)
+        return UBASE_ERR_INVALID;
+
+    struct tm tm = {
+        .tm_year = year - 1900,
+        .tm_mon = mon - 1,
+        .tm_mday = mday,
+        .tm_hour = hour,
+        .tm_min = min,
+        .tm_sec = sec,
+        .tm_isdst = -1
+    };
+
+    if (date_p)
+        *date_p = mktime(&tm) * UCLOCK_FREQ + ms * UCLOCK_FREQ / 1000;
+
+    return UBASE_ERR_NONE;
+}
+
+/** @hidden */
+static int hexadecimal_sequence_to_buf(const char *str,
+                                       void **buf_p,
+                                       size_t *len_p)
+{
+    if (unlikely(strncmp(str, "0x", 2)))
+        return UBASE_ERR_INVALID;
+
+    str += 2;
+
+    size_t len = strlen(str);
+    if (unlikely(len % 2 != 0))
+        return UBASE_ERR_INVALID;
+
+    len /= 2;
+    uint8_t *buf = malloc(len);
+    if (unlikely(buf == NULL))
+        return UBASE_ERR_ALLOC;
+
+    for (int i = 0; str[2 * i] != '\0'; i++) {
+        int v;
+        if (sscanf(str + 2 * i, "%02X", &v) != 1) {
+            free(buf);
+            return UBASE_ERR_INVALID;
+        }
+        buf[i] = v;
+    }
+
+    if (buf_p)
+        *buf_p = buf;
+    else
+        free(buf);
+    if (len_p)
+        *len_p = len;
+
+    return UBASE_ERR_NONE;
+}
+
 static int attribute_iterate(const char **item,
                              struct ustring *name,
                              struct ustring *value)
 {
-    static const char name_set[] = { USTRING_ALPHA_UPPER, '-', '\0' };
+    static const char name_set[] = {
+        USTRING_ALPHA_UPPER, USTRING_DIGIT, '-', '\0'
+    };
     if (unlikely(!item) || unlikely(!*item))
         return UBASE_ERR_INVALID;
 
@@ -858,27 +925,140 @@ static int upipe_m3u_reader_program_date_time(struct upipe *upipe,
         return UBASE_ERR_INVALID;
     UBASE_RETURN(uref_flow_set_def(flow_def, PLAYLIST_FLOW_DEF));
 
-    int year, mon, mday, hour, min, sec;
-    double ms;
-    if (sscanf(line, "%d-%d-%dT%d:%d:%d.%lf",
-               &year, &mon, &mday, &hour, &min, &sec, &ms) != 7) {
-        upipe_warn_va(upipe, "invalid program date time %s", line);
+    if (unlikely(!ubase_check(
+                date_to_uclock(line, &upipe_m3u_reader->program_date_time))))
+        upipe_warn_va(upipe, "invalid date `%s'", line);
+
+    return UBASE_ERR_NONE;
+}
+
+static int upipe_m3u_reader_daterange(struct upipe *upipe,
+                                      struct uref *flow_def,
+                                      const char *line)
+{
+    struct upipe_m3u_reader *upipe_m3u_reader =
+        upipe_m3u_reader_from_upipe(upipe);
+
+    if (unlikely(!ubase_check(uref_flow_match_def(flow_def,
+                                                  M3U_FLOW_DEF))) &&
+        unlikely(!ubase_check(uref_flow_match_def(flow_def,
+                                                  PLAYLIST_FLOW_DEF))))
         return UBASE_ERR_INVALID;
+    UBASE_RETURN(uref_flow_set_def(flow_def, PLAYLIST_FLOW_DEF));
+
+    struct uref *item = uref_sibling_alloc_control(flow_def);
+    if (unlikely(item == NULL)) {
+        upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
+        return UBASE_ERR_ALLOC;
     }
 
-    struct tm tm = {
-        .tm_year = year - 1900,
-        .tm_mon = mon - 1,
-        .tm_mday = mday,
-        .tm_hour = hour,
-        .tm_min = min,
-        .tm_sec = sec,
-        .tm_isdst = -1
-    };
+    const char *iterator = line;
+    struct ustring name, value;
+    while (ubase_check(attribute_iterate(&iterator, &name, &value)) &&
+           iterator != NULL) {
+        char value_str[value.len + 1];
+        int err = ustring_cpy(value, value_str, sizeof (value_str));
+        if (unlikely(!ubase_check(err))) {
+            upipe_err_va(upipe, "fail to copy ustring %.*s",
+                         (int)value.len, value.at);
+            continue;
+        }
 
-    upipe_m3u_reader->program_date_time = mktime(&tm) * UCLOCK_FREQ +
-        ms * UCLOCK_FREQ / 1000;
+        if (!ustring_cmp_str(name, "ID")) {
+            err = uref_m3u_playlist_daterange_set_id(item, value_str);
+            if (unlikely(!ubase_check(err)))
+                upipe_err_va(upipe, "fail to set daterange id to %s", value_str);
+        }
+        else if (!ustring_cmp_str(name, "START-DATE")) {
+            uint64_t date;
+            if (ubase_check(date_to_uclock(value_str, &date))) {
+                err = uref_m3u_playlist_daterange_set_start_date(item, date);
+                if (unlikely(!ubase_check(err)))
+                    upipe_err_va(upipe, "fail to set daterange start-date to %s",
+                                 value_str);
+            } else
+                upipe_warn_va(upipe, "fail to parse daterange start-date `%s'",
+                              value_str);
+        }
+        else if (!ustring_cmp_str(name, "END-DATE")) {
+            uint64_t date;
+            if (ubase_check(date_to_uclock(value_str, &date))) {
+                err = uref_m3u_playlist_daterange_set_end_date(item, date);
+                if (unlikely(!ubase_check(err)))
+                    upipe_err_va(upipe, "fail to set daterange end-date to %s",
+                                 value_str);
+            } else
+                upipe_warn_va(upipe, "fail to parse daterange end-date `%s'",
+                              value_str);
+        }
+        else if (!ustring_cmp_str(name, "DURATION")) {
+            uint64_t duration;
+            if (ubase_check(duration_to_uclock(value_str, NULL, &duration))) {
+                err = uref_m3u_playlist_daterange_set_duration(item, duration);
+                if (unlikely(!ubase_check(err)))
+                    upipe_err_va(upipe, "fail to set daterange duration to %s",
+                                 value_str);
+            } else
+                upipe_warn_va(upipe, "fail to parse daterange duration `%s'",
+                              value_str);
+        }
+        else if (!ustring_cmp_str(name, "PLANNED-DURATION")) {
+            uint64_t duration;
+            if (ubase_check(duration_to_uclock(value_str, NULL, &duration))) {
+                err = uref_m3u_playlist_daterange_set_planned_duration(item, duration);
+                if (unlikely(!ubase_check(err)))
+                    upipe_err_va(upipe, "fail to set daterange planned-duration to %s",
+                                 value_str);
+            } else
+                upipe_warn_va(upipe, "fail to parse daterange planned-duration `%s'",
+                              value_str);
+        }
+        else if (!ustring_cmp_str(name, "SCTE35-CMD")) {
+            void *buf;
+            size_t len;
+            if (ubase_check(hexadecimal_sequence_to_buf(value_str, &buf, &len))) {
+                err = uref_m3u_playlist_daterange_set_scte35_cmd(item, buf, len);
+                free(buf);
+                if (unlikely(!ubase_check(err)))
+                    upipe_err_va(upipe, "fail to set daterange scte35-cmd to %s",
+                                 value_str);
+            } else
+                upipe_warn_va(upipe, "fail to parse daterange scte35-cmd `%s'",
+                              value_str);
+        }
+        else if (!ustring_cmp_str(name, "SCTE35-OUT")) {
+            void *buf;
+            size_t len;
+            if (ubase_check(hexadecimal_sequence_to_buf(value_str, &buf, &len))) {
+                err = uref_m3u_playlist_daterange_set_scte35_out(item, buf, len);
+                free(buf);
+                if (unlikely(!ubase_check(err)))
+                    upipe_err_va(upipe, "fail to set daterange scte35-out to %s",
+                                 value_str);
+            } else
+                upipe_warn_va(upipe, "fail to parse daterange scte35-out `%s'",
+                              value_str);
+        }
+        else if (!ustring_cmp_str(name, "SCTE35-IN")) {
+            void *buf;
+            size_t len;
+            if (ubase_check(hexadecimal_sequence_to_buf(value_str, &buf, &len))) {
+                err = uref_m3u_playlist_daterange_set_scte35_in(item, buf, len);
+                free(buf);
+                if (unlikely(!ubase_check(err)))
+                    upipe_err_va(upipe, "fail to set daterange scte35-in to %s",
+                                 value_str);
+            } else
+                upipe_warn_va(upipe, "fail to parse daterange scte35-in `%s'",
+                              value_str);
+        }
+        else {
+            upipe_warn_va(upipe, "ignoring attribute %.*s (%.*s)",
+                          (int)name.len, name.at, (int)value.len, value.at);
+        }
+    }
 
+    ulist_add(&upipe_m3u_reader->items, uref_to_uchain(item));
     return UBASE_ERR_NONE;
 }
 
@@ -945,6 +1125,7 @@ static int upipe_m3u_reader_process_line(struct upipe *upipe,
         { "#EXT-X-KEY:", upipe_m3u_reader_key },
         { "#EXT-X-MAP:", upipe_m3u_reader_map },
         { "#EXT-X-PROGRAM-DATE-TIME:", upipe_m3u_reader_program_date_time },
+        { "#EXT-X-DATERANGE:", upipe_m3u_reader_daterange },
     };
 
     size_t block_size;

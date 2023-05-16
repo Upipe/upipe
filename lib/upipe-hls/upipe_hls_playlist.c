@@ -1167,6 +1167,11 @@ static void upipe_hls_playlist_input(struct upipe *upipe,
         upipe_hls_playlist->reloading = true;
     }
 
+    if (unlikely(ubase_check(uref_m3u_playlist_daterange_get_id(uref, NULL)))) {
+        uref_free(uref);
+        return;
+    }
+
     ulist_add(&upipe_hls_playlist->items, uref_to_uchain(uref));
     if (ubase_check(uref_block_get_end(uref))) {
         upipe_dbg(upipe, "playlist end");

@@ -48,6 +48,31 @@ UREF_ATTR_STRING(m3u_playlist_key, iv, "m3u.playlist.key.iv",
                  key initialization vector);
 UREF_ATTR_STRING(m3u_playlist_map, uri, "m3u.playlist.map.uri", map uri);
 
+UREF_ATTR_STRING(m3u_playlist_daterange, id,
+                 "m3u.playlist.daterange.id",
+                 date range id);
+UREF_ATTR_UNSIGNED(m3u_playlist_daterange, start_date,
+                   "m3u.playlist.daterange.start_date",
+                   date range start date);
+UREF_ATTR_UNSIGNED(m3u_playlist_daterange, end_date,
+                   "m3u.playlist.daterange.end_date",
+                   date range end date);
+UREF_ATTR_UNSIGNED(m3u_playlist_daterange, duration,
+                   "m3u.playlist.daterange.duration",
+                   date range duration);
+UREF_ATTR_UNSIGNED(m3u_playlist_daterange, planned_duration,
+                   "m3u.playlist.daterange.planned_duration",
+                   date range planned duration);
+UREF_ATTR_OPAQUE(m3u_playlist_daterange, scte35_cmd,
+                 "m3u.playlist.daterange.scte35_cmd",
+                 date range SCTE-35 command data);
+UREF_ATTR_OPAQUE(m3u_playlist_daterange, scte35_out,
+                 "m3u.playlist.daterange.scte35_out",
+                 date range SCTE-35 out data);
+UREF_ATTR_OPAQUE(m3u_playlist_daterange, scte35_in,
+                 "m3u.playlist.daterange.scte35_in",
+                 date range SCTE-35 in data);
+
 static inline int uref_m3u_playlist_key_delete(struct uref *uref)
 {
     int (*list[])(struct uref *) = {
@@ -66,6 +91,21 @@ static inline int uref_m3u_playlist_map_delete(struct uref *uref)
     return uref_attr_delete_list(uref, list, UBASE_ARRAY_SIZE(list));
 }
 
+static inline int uref_m3u_playlist_daterange_delete(struct uref *uref)
+{
+    int (*list[])(struct uref *) = {
+        uref_m3u_playlist_daterange_delete_id,
+        uref_m3u_playlist_daterange_delete_start_date,
+        uref_m3u_playlist_daterange_delete_end_date,
+        uref_m3u_playlist_daterange_delete_duration,
+        uref_m3u_playlist_daterange_delete_planned_duration,
+        uref_m3u_playlist_daterange_delete_scte35_cmd,
+        uref_m3u_playlist_daterange_delete_scte35_out,
+        uref_m3u_playlist_daterange_delete_scte35_in,
+    };
+    return uref_attr_delete_list(uref, list, UBASE_ARRAY_SIZE(list));
+}
+
 static inline int uref_m3u_playlist_delete(struct uref *uref)
 {
     int (*list[])(struct uref *) = {
@@ -75,6 +115,7 @@ static inline int uref_m3u_playlist_delete(struct uref *uref)
         uref_m3u_playlist_delete_program_date_time,
         uref_m3u_playlist_key_delete,
         uref_m3u_playlist_map_delete,
+        uref_m3u_playlist_daterange_delete,
     };
     return uref_attr_delete_list(uref, list, UBASE_ARRAY_SIZE(list));
 }
@@ -99,6 +140,22 @@ static inline int uref_m3u_playlist_map_copy(struct uref *uref,
     return uref_attr_copy_list(uref, uref_src, list, UBASE_ARRAY_SIZE(list));
 }
 
+static inline int uref_m3u_playlist_daterange_copy(struct uref *uref,
+                                                   struct uref *uref_src)
+{
+    int (*list[])(struct uref *, struct uref *) = {
+        uref_m3u_playlist_daterange_copy_id,
+        uref_m3u_playlist_daterange_copy_start_date,
+        uref_m3u_playlist_daterange_copy_end_date,
+        uref_m3u_playlist_daterange_copy_duration,
+        uref_m3u_playlist_daterange_copy_planned_duration,
+        uref_m3u_playlist_daterange_copy_scte35_cmd,
+        uref_m3u_playlist_daterange_copy_scte35_out,
+        uref_m3u_playlist_daterange_copy_scte35_in,
+    };
+    return uref_attr_copy_list(uref, uref_src, list, UBASE_ARRAY_SIZE(list));
+}
+
 static inline int uref_m3u_playlist_copy(struct uref *uref,
                                          struct uref *uref_src)
 {
@@ -109,6 +166,7 @@ static inline int uref_m3u_playlist_copy(struct uref *uref,
         uref_m3u_playlist_copy_program_date_time,
         uref_m3u_playlist_key_copy,
         uref_m3u_playlist_map_copy,
+        uref_m3u_playlist_daterange_copy,
     };
     return uref_attr_copy_list(uref, uref_src, list, UBASE_ARRAY_SIZE(list));
 }
