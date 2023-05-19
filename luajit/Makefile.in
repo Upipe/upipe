@@ -50,6 +50,7 @@ LIST_C = upipe-modules upipe-filters upipe-dveo
 @HAVE_SRT_TRUE@LIST_C += upump-srt
 @HAVE_ZVBI_TRUE@LIST_C += upipe-zvbi
 @HAVE_BITSTREAM_TRUE@@HAVE_DVBCSA_TRUE@LIST_C += upipe-dvbcsa
+@HAVE_BEARSSL_TRUE@LIST_C += upipe-bearssl
 
 INCLUDEDIR   = $(top_srcdir)/include
 LIST         = upipe $(LIST_C)
@@ -224,6 +225,7 @@ prefix_modules = upipe_ uprobe_ uref_ upump_
 enum_upipe-ts = uprobe_ts_
 enum_upipe-hls = uprobe_hls_
 enum_upipe-filters = uprobe_filters_
+enum_upipe-bearssl = uprobe_https_
 
 libupipe.lua: $(srcdir)/gen-ffi-cdef.pl $(srcdir)/libc.defs upipe.debug_info upipe.static.debug_info
 	$(V_GEN)$(PERL) $< \
