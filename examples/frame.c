@@ -376,7 +376,7 @@ static int catch_prog(struct uprobe *uprobe, struct upipe *upipe,
         const char *def = NULL;
         ubase_assert(uref_flow_get_def(es->flow_def, &def));
         assert(def);
-        uprobe_notice_va(uprobe, upipe, "deleted es %"PRIu64 "- %s",
+        uprobe_notice_va(uprobe, upipe, "deleted es %"PRIu64 " - %s",
                          es->id, def);
         es_del(es);
     }
