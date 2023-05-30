@@ -979,6 +979,42 @@ static void cb(struct upump *upump)
             upipe_sync_wait_upump(upipe, wait, cb);
         }
     }
+    else {
+        /* schedule next pic */
+        while (1) {
+            uchain = ulist_peek(&upipe_sync->urefs);
+            if (uchain) {
+                uref = uref_from_uchain(uchain);
+                now = uclock_now(upipe_sync->uclock);
+
+                /* get uref date */
+                uint64_t pts;
+                if (!ubase_check(uref_clock_get_pts_sys(uref, &pts))) {
+                    upipe_err(upipe, "undated uref");
+                    uref_free(uref);
+                    return;
+                }
+                pts += upipe_sync->latency;
+                upipe_sync->pts = pts;
+
+                uint64_t wait;
+                if (now <= pts) {
+                    wait = upipe_sync->pts - now;
+                    upipe_sync_wait_upump(upipe, wait, cb);
+                    break;
+                }
+                else {
+                    ulist_pop(&upipe_sync->urefs);
+                    uref_free(uref);
+                    upipe_err_va(upipe, "dropping late frame PTS: %"PRIu64"", pts);
+                }
+            }
+            else {
+                upipe_sync_set_upump(upipe, NULL);
+                break;
+            }
+        }
+    }
 }
 
 /** @internal @This receives data.
@@ -1112,7 +1148,7 @@ static void upipe_sync_input(struct upipe *upipe, struct uref *uref,
         }
 
         /* too new frames */
-        if (wait > upipe_sync->ticks_per_frame) {
+        if (wait > 3*upipe_sync->ticks_per_frame/2) {
             uref_free(uref);
             return;
         }
@@ -1125,6 +1161,10 @@ static void upipe_sync_input(struct upipe *upipe, struct uref *uref,
             ulist_uref_flush(&upipe_sync->urefs);
             upipe_sync->buffered_frames = 0;
         }
+
+        /* timer already active */
+        if (upipe_sync->upump)
+            return;
 
         /* need upump mgr */
         if (!ubase_check(upipe_sync_check_upump_mgr(upipe_sync_to_upipe(upipe_sync))))
