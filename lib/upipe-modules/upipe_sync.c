@@ -1112,7 +1112,7 @@ static void upipe_sync_input(struct upipe *upipe, struct uref *uref,
         }
 
         /* too new frames */
-        if (wait > 3*upipe_sync->ticks_per_frame/2) {
+        if (wait > upipe_sync->ticks_per_frame) {
             uref_free(uref);
             return;
         }
