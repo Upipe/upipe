@@ -57,8 +57,6 @@ struct upipe_disblo {
     enum upipe_helper_output_state output_state;
     /** list of registered request */
     struct uchain requests;
-    /** last received uref */
-    struct uref *uref;
     /** list of retained urefs */
     struct uchain urefs;
     /** number of retained urefs */
@@ -105,7 +103,6 @@ static struct upipe *upipe_disblo_alloc(struct upipe_mgr *mgr,
     upipe_disblo_init_output(upipe);
 
     struct upipe_disblo *upipe_disblo = upipe_disblo_from_upipe(upipe);
-    upipe_disblo->uref = NULL;
     upipe_disblo->max_urefs = UPIPE_DISBLO_MAX_UREFS_DEFAULT;
 
     upipe_throw_ready(upipe);
@@ -119,11 +116,8 @@ static struct upipe *upipe_disblo_alloc(struct upipe_mgr *mgr,
  */
 static void upipe_disblo_free(struct upipe *upipe)
 {
-    struct upipe_disblo *upipe_disblo = upipe_disblo_from_upipe(upipe);
-
     upipe_throw_dead(upipe);
 
-    uref_free(upipe_disblo->uref);
     upipe_disblo_clean_output(upipe);
     upipe_disblo_clean_input(upipe);
     upipe_disblo_clean_upump(upipe);
@@ -146,7 +140,7 @@ static void upipe_disblo_input(struct upipe *upipe,
 
     if (upipe_disblo->nb_urefs >= upipe_disblo->max_urefs) {
         upipe_warn(upipe, "dropping uref");
-        uref_free(upipe_disblo->uref);
+        uref_free(uref);
     }
     else {
         upipe_disblo_hold_input(upipe, uref);
