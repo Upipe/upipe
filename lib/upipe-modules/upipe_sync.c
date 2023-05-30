@@ -991,6 +991,7 @@ static void cb(struct upump *upump)
                 uint64_t pts;
                 if (!ubase_check(uref_clock_get_pts_sys(uref, &pts))) {
                     upipe_err(upipe, "undated uref");
+                    ulist_pop(&upipe_sync->urefs);
                     uref_free(uref);
                     return;
                 }
