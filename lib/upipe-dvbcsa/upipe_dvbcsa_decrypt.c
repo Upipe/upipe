@@ -46,7 +46,7 @@
 #include <bitstream/mpeg/ts.h>
 #include <dvbcsa/dvbcsa.h>
 
-#ifdef UPIPE_HAVE_GCRYPT
+#ifdef UPIPE_HAVE_GCRYPT_H
 #include <gcrypt.h>
 #endif
 
@@ -63,7 +63,7 @@ static void upipe_dvbcsa_dec_worker(struct upump *upump);
 enum mode {
     CSA,
     CSA_BS,
-#ifdef UPIPE_HAVE_GCRYPT
+#ifdef UPIPE_HAVE_GCRYPT_H
     AES,
 #endif
 };
@@ -105,7 +105,7 @@ struct upipe_dvbcsa_dec {
         dvbcsa_bs_key_t *key_bs[2];
         /** dvbcsa key */
         dvbcsa_key_t *key[2];
-#ifdef UPIPE_HAVE_GCRYPT
+#ifdef UPIPE_HAVE_GCRYPT_H
         /** AES handle */
         gcry_cipher_hd_t aes[2];
 #endif
@@ -166,7 +166,7 @@ static void upipe_dvbcsa_dec_free_key(struct upipe *upipe)
         for (int i = 0; i < 2; i++)
             dvbcsa_bs_key_free(upipe_dvbcsa_dec->key_bs[i]);
         break;
-#ifdef UPIPE_HAVE_GCRYPT
+#ifdef UPIPE_HAVE_GCRYPT_H
     case AES:
         for (int i = 0; i < 2; i++)
             if (upipe_dvbcsa_dec->aes[i])
@@ -232,7 +232,7 @@ static struct upipe *upipe_dvbcsa_dec_alloc(struct upipe_mgr *mgr,
     struct upipe_dvbcsa_common *common =
         upipe_dvbcsa_dec_to_common(upipe_dvbcsa_dec);
 
-#ifdef UPIPE_HAVE_GCRYPT
+#ifdef UPIPE_HAVE_GCRYPT_H
     if (!gcry_control(GCRYCTL_INITIALIZATION_FINISHED_P)) {
         uprobe_err(uprobe, upipe, "Application did not initialize libgcrypt, see "
                 "https://www.gnupg.org/documentation/manuals/gcrypt/Initializing-the-library.html");
@@ -461,7 +461,7 @@ static void upipe_dvbcsa_dec_input(struct upipe *upipe,
 
     ts_set_scrambling(ts, 0);
 
-#ifdef UPIPE_HAVE_GCRYPT
+#ifdef UPIPE_HAVE_GCRYPT_H
     if (upipe_dvbcsa_dec->mode == AES) {
         /* from biss2 spec */
         static const uint8_t cissa_iv[16] = {
@@ -583,7 +583,7 @@ static int upipe_dvbcsa_dec_set_key(struct upipe *upipe, const char *even_key, c
             upipe_dvbcsa_dec_free_key(upipe);
         UBASE_ALLOC_RETURN(upipe_dvbcsa_dec->key_bs[1]);
         dvbcsa_bs_key_set(odd_cw.value, upipe_dvbcsa_dec->key_bs[1]);
-#ifdef UPIPE_HAVE_GCRYPT
+#ifdef UPIPE_HAVE_GCRYPT_H
     } else if (even_cw.str.len >= 32) {
         upipe_dvbcsa_dec->mode = AES;
         gcry_error_t err;

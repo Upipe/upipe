@@ -71,7 +71,7 @@
 #include <assert.h>
 #include <unistd.h>
 
-#ifdef UPIPE_HAVE_GCRYPT
+#ifdef UPIPE_HAVE_GCRYPT_H
 #include <gcrypt.h>
 #endif
 
@@ -262,7 +262,7 @@ int main(int argc, char *argv[])
         exit(-1);
     }
 
-#ifdef UPIPE_HAVE_GCRYPT
+#ifdef UPIPE_HAVE_GCRYPT_H
     gcry_check_version(NULL);
     gcry_control(GCRYCTL_INITIALIZATION_FINISHED, 0);
 #endif

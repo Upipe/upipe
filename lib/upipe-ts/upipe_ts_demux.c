@@ -77,7 +77,7 @@
 #include <upipe-ts/upipe_ts_psi_split.h>
 #include <upipe-ts/upipe_ts_pat_decoder.h>
 #include <upipe-ts/upipe_ts_cat_decoder.h>
-#if defined(UPIPE_HAVE_GCRYPT) && defined(UPIPE_HAVE_LIBTASN1_H)
+#if defined(UPIPE_HAVE_GCRYPT_H) && defined(UPIPE_HAVE_LIBTASN1_H)
 #include <upipe-ts/upipe_ts_emm_decoder.h>
 #endif
 #include <upipe-ts/upipe_ts_pmt_decoder.h>
@@ -2978,7 +2978,7 @@ static int upipe_ts_demux_catd_probe(struct uprobe *uprobe,
                 upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
                 return UBASE_ERR_ALLOC;
             }
-#if defined(UPIPE_HAVE_GCRYPT) && defined(UPIPE_HAVE_LIBTASN1_H)
+#if defined(UPIPE_HAVE_GCRYPT_H) && defined(UPIPE_HAVE_LIBTASN1_H)
             if (upipe_ts_demux->private_key)
                 upipe_ts_emmd_set_private_key(upipe_ts_demux->emmd,
                         upipe_ts_demux->private_key);
@@ -3508,7 +3508,7 @@ static int upipe_ts_demux_control(struct upipe *upipe,
             const char *private_key = va_arg(args, const char *);
             free(upipe_ts_demux->private_key);
             upipe_ts_demux->private_key = strdup(private_key);
-#if defined(UPIPE_HAVE_GCRYPT) && defined(UPIPE_HAVE_LIBTASN1_H)
+#if defined(UPIPE_HAVE_GCRYPT_H) && defined(UPIPE_HAVE_LIBTASN1_H)
             if (upipe_ts_demux->emmd)
                 upipe_ts_emmd_set_private_key(upipe_ts_demux->emmd,
                         upipe_ts_demux->private_key);
@@ -3768,7 +3768,7 @@ struct upipe_mgr *upipe_ts_demux_mgr_alloc(void)
     ts_demux_mgr->ts_psi_split_mgr = upipe_ts_psi_split_mgr_alloc();
     ts_demux_mgr->ts_patd_mgr = upipe_ts_patd_mgr_alloc();
     ts_demux_mgr->ts_catd_mgr = upipe_ts_catd_mgr_alloc();
-#if defined(UPIPE_HAVE_GCRYPT) && defined(UPIPE_HAVE_LIBTASN1_H)
+#if defined(UPIPE_HAVE_GCRYPT_H) && defined(UPIPE_HAVE_LIBTASN1_H)
     ts_demux_mgr->ts_emmd_mgr = upipe_ts_emmd_mgr_alloc();
 #endif
     ts_demux_mgr->ts_nitd_mgr = upipe_ts_nitd_mgr_alloc();
