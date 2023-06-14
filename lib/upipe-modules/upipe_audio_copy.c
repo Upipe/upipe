@@ -256,6 +256,15 @@ static bool upipe_audio_copy_output_buffer(struct upipe *upipe,
     assert(uchain);
     struct uref *in = uref_from_uchain(uchain);
 
+    size_t in_size = 0;
+    uref_sound_size(in, &in_size, NULL);
+    if (in_size == samples) {
+        upipe_audio_copy->size -= samples;
+        ulist_delete(uchain);
+        upipe_audio_copy_output(upipe, in, upump_p);
+        return true;
+    }
+
     /* allocate output sound buffer from first buffer */
     struct uref *out = uref_sound_alloc(in->mgr, in->ubuf->mgr, samples);
     if (unlikely(!out)) {
