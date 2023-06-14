@@ -49,6 +49,7 @@
 #include "upipe/upipe.h"
 #include "upipe/upipe_helper_upipe.h"
 #include "upipe/upipe_helper_urefcount.h"
+#include "upipe/upipe_helper_urefcount_real.h"
 #include "upipe/upipe_helper_void.h"
 #include "upipe/upipe_helper_uref_mgr.h"
 #include "upipe/upipe_helper_flow.h"
@@ -470,6 +471,8 @@ struct upipe_ts_demux_output {
     struct uprobe telx_probe;
     /** probe to get events from inner pipes */
     struct uprobe probe;
+    /** probe to update highest timestamp after the framer */
+    struct uprobe timestamp_probe;
 
     /** list of output bin requests */
     struct uchain output_request_list;
@@ -484,12 +487,34 @@ struct upipe_ts_demux_output {
     struct upipe upipe;
 };
 
+/** @hidden */
+static int upipe_ts_demux_output_probe(struct uprobe *uprobe,
+                                       struct upipe *inner,
+                                       int event, va_list args);
+/** @hidden */
+static int upipe_ts_demux_output_telx_probe(struct uprobe *uprobe,
+                                            struct upipe *inner,
+                                            int event, va_list args);
+/** @hidden */
+static int upipe_ts_demux_output_timestamp_probe(struct uprobe *uprobe,
+                                                 struct upipe *inner,
+                                                 int event, va_list args);
+
+
 UPIPE_HELPER_UPIPE(upipe_ts_demux_output, upipe,
                    UPIPE_TS_DEMUX_OUTPUT_SIGNATURE)
 UPIPE_HELPER_UREFCOUNT(upipe_ts_demux_output, urefcount,
                        upipe_ts_demux_output_no_input)
+UPIPE_HELPER_UREFCOUNT_REAL(upipe_ts_demux_output, urefcount_real,
+                            upipe_ts_demux_output_free)
 UPIPE_HELPER_FLOW(upipe_ts_demux_output, NULL)
 UPIPE_HELPER_INNER(upipe_ts_demux_output, last_inner)
+UPIPE_HELPER_UPROBE(upipe_ts_demux_output, urefcount_real, probe,
+                    upipe_ts_demux_output_probe)
+UPIPE_HELPER_UPROBE(upipe_ts_demux_output, urefcount_real, telx_probe,
+                    upipe_ts_demux_output_telx_probe)
+UPIPE_HELPER_UPROBE(upipe_ts_demux_output, urefcount_real, timestamp_probe,
+                    upipe_ts_demux_output_timestamp_probe)
 UPIPE_HELPER_UPROBE(upipe_ts_demux_output, urefcount_real, last_inner_probe,
                     NULL)
 UPIPE_HELPER_BIN_OUTPUT(upipe_ts_demux_output, last_inner,
@@ -497,12 +522,6 @@ UPIPE_HELPER_BIN_OUTPUT(upipe_ts_demux_output, last_inner,
 
 UPIPE_HELPER_SUBPIPE(upipe_ts_demux_program, upipe_ts_demux_output, output,
                      output_mgr, outputs, uchain)
-
-UBASE_FROM_TO(upipe_ts_demux_output, urefcount, urefcount_real, urefcount_real)
-
-/** @hidden */
-static void upipe_ts_demux_output_free(struct urefcount *urefcount_real);
-
 
 /*
  * psi_pid structure handling
@@ -830,6 +849,16 @@ static int upipe_ts_demux_output_plumber(struct upipe *upipe,
                     UPROBE_LOG_VERBOSE, "autof"));
         if (unlikely(output == NULL))
             return UBASE_ERR_ALLOC;
+
+        /* allocate probe_uref to watch pts */
+        output = upipe_void_chain_output(
+            output, ts_demux_mgr->probe_uref_mgr,
+            uprobe_pfx_alloc(
+                uprobe_use(&upipe_ts_demux_output->timestamp_probe),
+                UPROBE_LOG_VERBOSE, "autof probe"));
+        if (unlikely(output == NULL))
+            return UBASE_ERR_ALLOC;
+
         upipe_ts_demux_output_store_bin_output(upipe, output);
         return UBASE_ERR_NONE;
     }
@@ -937,6 +966,41 @@ static int upipe_ts_demux_output_telx_probe(struct uprobe *uprobe,
     return upipe_ts_demux_output_clock_ts(upipe, inner, UPROBE_CLOCK_TS, args);
 }
 
+/** @internal @This catches events after the framer to update the highest DTS
+ * of the program as the framer might interpolate DTS.
+ *
+ * @param uprobe pointer to the probe in upipe_ts_demux_output
+ * @param inner pointer to the inner pipe
+ * @param event event triggered by the inner pipe
+ * @param args arguments of the event
+ * @return an error code
+ */
+static int upipe_ts_demux_output_timestamp_probe(struct uprobe *uprobe,
+                                                 struct upipe *inner,
+                                                 int event, va_list args)
+{
+    struct upipe_ts_demux_output *output =
+        container_of(uprobe, struct upipe_ts_demux_output, timestamp_probe);
+    struct upipe *upipe = upipe_ts_demux_output_to_upipe(output);
+
+    if (event != UPROBE_PROBE_UREF ||
+        ubase_get_signature(args) != UPIPE_PROBE_UREF_SIGNATURE)
+        return upipe_throw_proxy(upipe, inner, event, args);
+    UBASE_SIGNATURE_CHECK(args, UPIPE_PROBE_UREF_SIGNATURE);
+    struct uref *uref = va_arg(args, struct uref *);
+
+    uint64_t dts;
+    if (ubase_check(uref_clock_get_dts_prog(uref, &dts))) {
+        struct upipe_ts_demux_program *program =
+            upipe_ts_demux_program_from_output_mgr(upipe->mgr);
+        uint64_t dts_pts_delay = 0;
+        uref_clock_get_dts_pts_delay(uref, &dts_pts_delay);
+        if (dts + dts_pts_delay > program->timestamp_highest)
+            program->timestamp_highest = dts + dts_pts_delay;
+    }
+    return UBASE_ERR_NONE;
+}
+
 /** @internal @This allocates an output subpipe of a ts_demux_program subpipe.
  *
  * @param mgr common management structure
@@ -959,7 +1023,7 @@ static struct upipe *upipe_ts_demux_output_alloc(struct upipe_mgr *mgr,
     struct upipe_ts_demux_output *upipe_ts_demux_output =
         upipe_ts_demux_output_from_upipe(upipe);
     upipe_ts_demux_output_init_urefcount(upipe);
-    urefcount_init(upipe_ts_demux_output_to_urefcount_real(upipe_ts_demux_output), upipe_ts_demux_output_free);
+    upipe_ts_demux_output_init_urefcount_real(upipe);
     upipe_ts_demux_output_init_last_inner_probe(upipe);
     upipe_ts_demux_output_init_bin_output(upipe);
     upipe_ts_demux_output->flow_def_input = flow_def;
@@ -984,14 +1048,9 @@ static struct upipe *upipe_ts_demux_output_alloc(struct upipe_mgr *mgr,
     upipe_ts_demux_output->max_delay = MAX_DELAY;
     upipe_ts_demux_output->last_dts_orig = UINT64_MAX;
     uref_ts_flow_get_max_delay(flow_def, &upipe_ts_demux_output->max_delay);
-    uprobe_init(&upipe_ts_demux_output->telx_probe,
-                upipe_ts_demux_output_telx_probe, NULL);
-    uprobe_init(&upipe_ts_demux_output->probe,
-                upipe_ts_demux_output_probe, NULL);
-    upipe_ts_demux_output->telx_probe.refcount =
-    upipe_ts_demux_output->probe.refcount =
-        upipe_ts_demux_output_to_urefcount_real(upipe_ts_demux_output);
-
+    upipe_ts_demux_output_init_telx_probe(upipe);
+    upipe_ts_demux_output_init_timestamp_probe(upipe);
+    upipe_ts_demux_output_init_probe(upipe);
     upipe_ts_demux_output_init_sub(upipe);
     upipe_throw_ready(upipe);
 
@@ -1120,18 +1179,18 @@ static int upipe_ts_demux_output_control(struct upipe *upipe,
  *
  * @param urefcount_real pointer to urefcount_real structure
  */
-static void upipe_ts_demux_output_free(struct urefcount *urefcount_real)
+static void upipe_ts_demux_output_free(struct upipe *upipe)
 {
     struct upipe_ts_demux_output *upipe_ts_demux_output =
-        upipe_ts_demux_output_from_urefcount_real(urefcount_real);
-    struct upipe *upipe = upipe_ts_demux_output_to_upipe(upipe_ts_demux_output);
+        upipe_ts_demux_output_from_upipe(upipe);
 
     upipe_throw_dead(upipe);
     uref_free(upipe_ts_demux_output->flow_def_input);
     upipe_ts_demux_output_clean_last_inner_probe(upipe);
-    uprobe_clean(&upipe_ts_demux_output->probe);
-    uprobe_clean(&upipe_ts_demux_output->telx_probe);
-    urefcount_clean(urefcount_real);
+    upipe_ts_demux_output_clean_probe(upipe);
+    upipe_ts_demux_output_clean_timestamp_probe(upipe);
+    upipe_ts_demux_output_clean_telx_probe(upipe);
+    upipe_ts_demux_output_clean_urefcount_real(upipe);
     upipe_ts_demux_output_clean_urefcount(upipe);
     upipe_ts_demux_output_free_flow(upipe);
 }
@@ -1155,7 +1214,7 @@ static void upipe_ts_demux_output_no_input(struct upipe *upipe)
     upipe_ts_demux_output_clean_bin_output(upipe);
     upipe_ts_demux_output_clean_sub(upipe);
     upipe_ts_demux_program_check_pcr(upipe_ts_demux_program_to_upipe(program));
-    urefcount_release(upipe_ts_demux_output_to_urefcount_real(upipe_ts_demux_output));
+    upipe_ts_demux_output_release_urefcount_real(upipe);
 }
 
 /** @internal @This initializes the output manager for a ts_demux_program
