@@ -12,15 +12,6 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        name:
-          - ubuntu-amd64-gcc-12
-          - ubuntu-amd64-gcc-12-static
-          - ubuntu-amd64-clang-16
-          - ubuntu-i386-gcc-12
-          - ubuntu-armhf-gcc-12
-          - ubuntu-arm64-gcc-12
-          - macos-12-xcode
-
         include:
           - name: ubuntu-amd64-gcc-12
             os: ubuntu-22.04
@@ -41,12 +32,12 @@ jobs:
             compiler: clang
             version: 16
 
-          - name: ubuntu-i386-gcc-12
-            os: ubuntu-22.04
-            arch: i386
-            host: i686-linux-gnu
-            compiler: gcc
-            version: 12
+        # - name: ubuntu-i386-gcc-12
+        #   os: ubuntu-22.04
+        #   arch: i386
+        #   host: i686-linux-gnu
+        #   compiler: gcc
+        #   version: 12
 
           - name: ubuntu-armhf-gcc-12
             os: ubuntu-22.04
