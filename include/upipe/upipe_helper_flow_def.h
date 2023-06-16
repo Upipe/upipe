@@ -137,7 +137,8 @@ static struct uref *STRUCTURE##_make_flow_def(struct upipe *upipe)          \
     struct uref *flow_def = uref_dup(s->FLOW_DEF_INPUT);                    \
     if (unlikely(flow_def == NULL))                                         \
         return NULL;                                                        \
-    uref_attr_import(flow_def, s->FLOW_DEF_ATTR);                           \
+    if (s->FLOW_DEF_ATTR != NULL)                                           \
+        uref_attr_import(flow_def, s->FLOW_DEF_ATTR);                       \
     return flow_def;                                                        \
 }                                                                           \
 /** @internal @This checks a flow definition attributes packet against the  \
