@@ -342,10 +342,14 @@ static int upipe_vblk_set_flow_def(struct upipe *upipe,
 static int upipe_vblk_set_pic_real(struct upipe *upipe, struct uref *uref)
 {
     struct upipe_vblk *upipe_vblk = upipe_vblk_from_upipe(upipe);
-    if (upipe_vblk->ubuf)
+    if (upipe_vblk->ubuf) {
         ubuf_free(upipe_vblk->ubuf);
-    if (upipe_vblk->pic_attr)
+        upipe_vblk->ubuf = NULL;
+    }
+    if (upipe_vblk->pic_attr) {
         uref_free(upipe_vblk->pic_attr);
+        upipe_vblk->pic_attr = NULL;
+    }
     if (!uref)
         return UBASE_ERR_NONE;
 
