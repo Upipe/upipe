@@ -631,6 +631,46 @@ static int upipe_ffmt_set_hw_config(struct upipe *upipe,
     return UBASE_ERR_NONE;
 }
 
+static int upipe_ffmt_alloc_output_proxy(struct upipe *upipe,
+                                         struct urequest *urequest)
+{
+    struct upipe_ffmt *upipe_ffmt = upipe_ffmt_from_upipe(upipe);
+    struct urequest *proxy = urequest_alloc_proxy(urequest);
+    UBASE_ALLOC_RETURN(proxy);
+
+    if (urequest->type == UREQUEST_FLOW_FORMAT && urequest->uref) {
+        /** It is legal to have just "sound." in flow_def_wanted to avoid
+         * changing unnecessarily the sample format. */
+        const char *def = NULL;
+        uref_flow_get_def(urequest->uref, &def);
+
+        char *old_def = NULL;
+        if (!ubase_ncmp(def, "sound."))
+            old_def = strdup(def);
+        uref_attr_import(proxy->uref, upipe_ffmt->flow_def_wanted);
+        if (old_def != NULL &&
+            (!ubase_check(uref_flow_get_def(proxy->uref, &def)) ||
+             !strcmp(def, "sound.")))
+            uref_flow_set_def(proxy->uref, old_def);
+        free(old_def);
+    }
+    return upipe_ffmt_register_bin_output_request(upipe, proxy);
+}
+
+static int upipe_ffmt_free_output_proxy(struct upipe *upipe,
+                                        struct urequest *urequest)
+{
+    struct upipe_ffmt *upipe_ffmt = upipe_ffmt_from_upipe(upipe);
+    struct urequest *proxy =
+        urequest_find_proxy(urequest, &upipe_ffmt->output_request_list);
+    if (unlikely(!proxy))
+        return UBASE_ERR_INVALID;
+
+    upipe_ffmt_unregister_bin_output_request(upipe, proxy);
+    urequest_free_proxy(proxy);
+    return UBASE_ERR_INVALID;
+}
+
 /** @internal @This processes control commands on a ffmt pipe.
  *
  * @param upipe description structure of the pipe
@@ -647,8 +687,10 @@ static int upipe_ffmt_control(struct upipe *upipe, int command, va_list args)
             struct urequest *request = va_arg(args_copy, struct urequest *);
             va_end(args_copy);
 
-            if (request->type == UREQUEST_UBUF_MGR ||
-                request->type == UREQUEST_FLOW_FORMAT)
+            if (request->type == UREQUEST_FLOW_FORMAT)
+                return upipe_ffmt_alloc_output_proxy(upipe, request);
+
+            if (request->type == UREQUEST_UBUF_MGR)
                 return upipe_throw_provide_request(upipe, request);
             break;
         }
@@ -658,8 +700,9 @@ static int upipe_ffmt_control(struct upipe *upipe, int command, va_list args)
             struct urequest *request = va_arg(args_copy, struct urequest *);
             va_end(args_copy);
 
-            if (request->type == UREQUEST_UBUF_MGR ||
-                request->type == UREQUEST_FLOW_FORMAT)
+            if (request->type == UREQUEST_FLOW_FORMAT)
+                return upipe_ffmt_free_output_proxy(upipe, request);
+            if (request->type == UREQUEST_UBUF_MGR)
                 return UBASE_ERR_NONE;
             break;
         }
