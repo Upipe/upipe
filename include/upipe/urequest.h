@@ -35,6 +35,7 @@ extern "C" {
 #endif
 
 #include "upipe/ubase.h"
+#include "upipe/ulist.h"
 #include "upipe/uref.h"
 
 #include <stdbool.h>
@@ -354,6 +355,76 @@ static inline int urequest_provide_sink_latency(struct urequest *urequest,
     if (unlikely(urequest->type != UREQUEST_SINK_LATENCY))
         return UBASE_ERR_INVALID;
     return urequest_provide(urequest, latency);
+}
+
+/** @This handles the result of a proxy request.
+ *
+ * @param urequest request provided
+ * @param args optional arguments
+ * @return an error code
+ */
+static inline int urequest_provide_proxy(struct urequest *urequest,
+                                         va_list args)
+{
+    struct urequest *upstream =
+        urequest_get_opaque(urequest, struct urequest *);
+    return urequest_provide_va(upstream, args);
+}
+
+/** @This duplicates and configure a proxy request.
+ *
+ * @param urequest request to proxy
+ * @return an allocated request
+ */
+static inline struct urequest *urequest_alloc_proxy(struct urequest *urequest)
+{
+    if (unlikely(!urequest))
+        return NULL;
+
+    struct urequest *proxy = (struct urequest *)malloc(sizeof (*proxy));
+    if (unlikely(!proxy))
+        return NULL;
+    urequest_set_opaque(proxy, urequest);
+    struct uref *uref = urequest->uref ? uref_dup(urequest->uref) : NULL;
+    if (unlikely(urequest->uref && !uref)) {
+        free(proxy);
+        return NULL;
+    }
+    urequest_init(proxy, urequest->type, uref, urequest_provide_proxy,
+                  (urequest_free_func)free);
+    return proxy;
+}
+
+/** @This frees a proxy request.
+ *
+ * @param urequest proxy request to free
+ */
+static inline void urequest_free_proxy(struct urequest *urequest)
+{
+    if (urequest) {
+        urequest_clean(urequest);
+        urequest_free(urequest);
+    }
+}
+
+/** @This finds a proxy urequest in a list from the original request.
+ *
+ * @param urequest original request
+ * @param requests list of requests to look
+ * @return the proxy request or NULL
+ */
+static inline struct urequest *urequest_find_proxy(struct urequest *urequest,
+                                                   struct uchain *requests)
+{
+    if (requests) {
+        struct uchain *uchain;
+        ulist_foreach(requests, uchain) {
+            struct urequest *proxy = urequest_from_uchain(uchain);
+            if (urequest_get_opaque(proxy, struct urequest *) == urequest)
+                return proxy;
+        }
+    }
+    return NULL;
 }
 
 #ifdef __cplusplus
