@@ -306,9 +306,7 @@ static int STRUCTURE##_unregister_output_request(struct upipe *upipe,       \
 static int STRUCTURE##_provide_output_proxy(struct urequest *urequest,      \
                                             va_list args)                   \
 {                                                                           \
-    struct urequest *upstream = urequest_get_opaque(urequest,               \
-                                                    struct urequest *);     \
-    return urequest_provide_va(upstream, args);                             \
+    return urequest_provide_proxy(urequest, args);                          \
 }                                                                           \
 /** @internal @This creates and registers a proxy request for an upstream   \
  * request to be forwarded downstream.                                      \
@@ -320,19 +318,9 @@ static int STRUCTURE##_provide_output_proxy(struct urequest *urequest,      \
 static int UBASE_UNUSED STRUCTURE##_alloc_output_proxy(struct upipe *upipe, \
                                                  struct urequest *urequest) \
 {                                                                           \
-    struct urequest *proxy =                                                \
-        (struct urequest *)malloc(sizeof(struct urequest));                 \
+    struct urequest *proxy = urequest_alloc_proxy(urequest);                \
     UBASE_ALLOC_RETURN(proxy);                                              \
-    urequest_set_opaque(proxy, urequest);                                   \
-    struct uref *uref = NULL;                                               \
-    if (urequest->uref != NULL &&                                           \
-        (uref = uref_dup(urequest->uref)) == NULL) {                        \
-        free(proxy);                                                        \
-        return UBASE_ERR_ALLOC;                                             \
-    }                                                                       \
-    urequest_init(proxy, urequest->type, uref,                              \
-                  STRUCTURE##_provide_output_proxy,                         \
-                  (urequest_free_func)free);                                \
+    proxy->urequest_provide = STRUCTURE##_provide_output_proxy;             \
     return STRUCTURE##_register_output_request(upipe, proxy);               \
 }                                                                           \
 /** @internal @This unregisters and frees a proxy request.                  \
@@ -345,17 +333,13 @@ static int UBASE_UNUSED STRUCTURE##_free_output_proxy(struct upipe *upipe,  \
                                                 struct urequest *urequest)  \
 {                                                                           \
     struct STRUCTURE *s = STRUCTURE##_from_upipe(upipe);                    \
-    struct uchain *uchain, *uchain_tmp;                                     \
-    ulist_delete_foreach (&s->REQUEST_LIST, uchain, uchain_tmp) {           \
-        struct urequest *proxy = urequest_from_uchain(uchain);              \
-        if (urequest_get_opaque(proxy, struct urequest *) == urequest) {    \
-            STRUCTURE##_unregister_output_request(upipe, proxy);            \
-            urequest_clean(proxy);                                          \
-            urequest_free(proxy);                                           \
-            return UBASE_ERR_NONE;                                          \
-        }                                                                   \
-    }                                                                       \
-    return UBASE_ERR_INVALID;                                               \
+    struct urequest *proxy =                                                \
+        urequest_find_proxy(urequest, &s->REQUEST_LIST);                    \
+    if (!proxy)                                                             \
+        return UBASE_ERR_INVALID;                                           \
+    STRUCTURE##_unregister_output_request(upipe, proxy);                    \
+    urequest_free_proxy(proxy);                                             \
+    return UBASE_ERR_NONE;                                                  \
 }                                                                           \
 /** @internal @This stores the flow definition to use on the output.        \
  *                                                                          \
