@@ -97,6 +97,8 @@ struct upipe_grid_in {
     struct uchain urefs;
     /** input flow def */
     struct uref *flow_def;
+    /** current input flow def */
+    struct uref *current_flow_def;
     /** flow def attr */
     struct uref *flow_attr;
     /** proxy probe */
@@ -211,6 +213,7 @@ static void upipe_grid_in_free(struct upipe *upipe)
         ulist_delete(uchain);
         uref_free(uref_from_uchain(uchain));
     }
+    uref_free(upipe_grid_in->current_flow_def);
     upipe_grid_in_clean_upump(upipe);
     upipe_grid_in_clean_upump_mgr(upipe);
     upipe_grid_in_clean_flow_def(upipe);
@@ -252,6 +255,7 @@ static struct upipe *upipe_grid_in_alloc(struct upipe_mgr *mgr,
     upipe_grid_in->last_update_print = 0;
     upipe_grid_in->max_buffer = INT64_MIN;
     upipe_grid_in->min_buffer = INT64_MAX;
+    upipe_grid_in->current_flow_def = NULL;
 
     upipe_throw_ready(upipe);
 
@@ -512,6 +516,8 @@ static void upipe_grid_in_input(struct upipe *upipe,
     if (unlikely(ubase_check(uref_flow_get_def(uref, NULL)))) {
         upipe_grid_in->latency = 0;
         uref_clock_get_latency(uref, &upipe_grid_in->latency);
+        uref_free(upipe_grid_in->current_flow_def);
+        upipe_grid_in->current_flow_def = uref_dup(uref);
         if (!upipe_grid_in->flow_def)
             upipe_grid_in_set_flow_def_real(upipe, uref);
         else
@@ -551,7 +557,9 @@ static void upipe_grid_in_input(struct upipe *upipe,
     uint64_t duration = 0;
     uref_clock_get_duration(uref, &duration);
 
-    if (upipe_grid_in->last_pts && upipe_grid_in->last_duration && duration) {
+    if (!ubase_check(uref_flow_match_def(upipe_grid_in->current_flow_def,
+                                         UREF_PIC_SUB_FLOW_DEF)) &&
+        upipe_grid_in->last_pts && upipe_grid_in->last_duration && duration) {
         uint64_t next_pts = upipe_grid_in->last_pts + upipe_grid_in->last_duration;
         uint64_t diff = next_pts > pts ? next_pts - pts : pts - next_pts;
         if (diff >= duration / 10)
@@ -879,30 +887,43 @@ static int upipe_grid_out_extract_input(struct upipe *upipe, struct uref *uref,
         else if (extracts.prev.uref &&
                  extracts.prev.pts == upipe_grid_out->last_input_pts) {
             e = &extracts.prev;
-            max_diff = upipe_grid->max_retention;
+            uint64_t input_duration = 0;
+            uref_clock_get_duration(e->uref, &input_duration);
+            if (input_duration > upipe_grid->max_retention)
+                max_diff = input_duration;
         }
         else if (extracts.current.uref &&
                  extracts.current.pts == upipe_grid_out->last_input_pts) {
             e = &extracts.current;
-            max_diff = upipe_grid->max_retention;
+            uint64_t input_duration = 0;
+            uref_clock_get_duration(e->uref, &input_duration);
+            if (input_duration > upipe_grid->max_retention)
+                max_diff = input_duration;
         }
     }
 
+    bool pic_sub = e->flow_def &&
+        ubase_check(uref_flow_match_def(e->flow_def, UREF_PIC_SUB_FLOW_DEF));
+
     if (!e->uref || e->diff > max_diff) {
-        if (upipe_grid_out->warn_no_input_buffer)
+        if (upipe_grid_out->warn_no_input_buffer && !pic_sub)
             upipe_warn(upipe, "no input buffer found");
         upipe_grid_out->warn_no_input_buffer = false;
         upipe_grid_out->last_input_pts = UINT64_MAX;
         return UBASE_ERR_INVALID;
     }
 
-    if (!upipe_grid_out->warn_no_input_buffer)
+    if (!upipe_grid_out->warn_no_input_buffer && !pic_sub)
         upipe_info(upipe, "input buffer found");
     upipe_grid_out->warn_no_input_buffer = true;
 
     if (upipe_grid_out->last_input_pts != UINT64_MAX &&
         e->pts <= upipe_grid_out->last_input_pts) {
-        if (ubase_check(uref_flow_match_def(e->flow_def, UREF_PIC_FLOW_DEF))) {
+        if (pic_sub) {
+            uref_attach_ubuf(uref, NULL);
+            return UBASE_ERR_NONE;
+        }
+        else if (ubase_check(uref_flow_match_def(e->flow_def, UREF_PIC_FLOW_DEF))) {
             if (ubase_check(uref_clock_get_duration(e->uref, NULL)))
                 upipe_warn(upipe, "duplicate output");
             else  {
