@@ -192,7 +192,7 @@ int main(int argc, char **argv)
     fill_in(ubuf);
 
     ubase_assert(ubuf_pic_clear(ubuf, 0, 0, -1, -1, 0));
-    check(ubuf, "r8g8b8a8", (uint8_t []){ 16, 16, 16, 16 }, 4);
+    check(ubuf, "r8g8b8a8", (uint8_t []){ 16, 16, 16, 0 }, 4);
 
     ubase_assert(ubuf_pic_clear(ubuf, 0, 0, -1, -1, 1));
     check(ubuf, "r8g8b8a8", (uint8_t []){ 0, 0, 0, 0 }, 4);
