@@ -206,27 +206,17 @@ static inline int uref_pic_flow_check_chroma(struct uref *uref,
 static inline int uref_pic_flow_copy_format(struct uref *uref_dst,
                                             struct uref *uref_src)
 {
-    const char *def;
-    uint8_t planes, macropixel;
-    UBASE_RETURN(uref_flow_get_def(uref_src, &def))
-    UBASE_RETURN(uref_flow_set_def(uref_dst, def))
-    UBASE_RETURN(uref_pic_flow_get_macropixel(uref_src, &macropixel))
-    UBASE_RETURN(uref_pic_flow_set_macropixel(uref_dst, macropixel))
-    UBASE_RETURN(uref_pic_flow_get_planes(uref_src, &planes))
-    UBASE_RETURN(uref_pic_flow_set_planes(uref_dst, planes))
+    UBASE_RETURN(uref_flow_copy_def(uref_dst, uref_src));
+    UBASE_RETURN(uref_pic_flow_copy_macropixel(uref_dst, uref_src));
+    UBASE_RETURN(uref_pic_flow_copy_planes(uref_dst, uref_src));
 
-    for (uint8_t plane = 0; plane < planes; plane++) {
-        const char *chroma;
-        uint8_t var;
-        UBASE_RETURN(uref_pic_flow_get_chroma(uref_src, &chroma, plane))
-        UBASE_RETURN(uref_pic_flow_set_chroma(uref_dst, chroma, plane))
-        UBASE_RETURN(uref_pic_flow_get_hsubsampling(uref_src, &var, plane))
-        UBASE_RETURN(uref_pic_flow_set_hsubsampling(uref_dst, var, plane))
-        UBASE_RETURN(uref_pic_flow_get_vsubsampling(uref_src, &var, plane))
-        UBASE_RETURN(uref_pic_flow_set_vsubsampling(uref_dst, var, plane))
-        UBASE_RETURN(uref_pic_flow_get_macropixel_size(uref_src, &var,
-                                                        plane))
-        UBASE_RETURN(uref_pic_flow_set_macropixel_size(uref_dst, var, plane))
+    uint8_t planes = 0;
+    uref_pic_flow_get_planes(uref_src, &planes);
+    for (uint8_t p = 0; p < planes; p++) {
+        UBASE_RETURN(uref_pic_flow_copy_chroma(uref_dst, uref_src, p));
+        UBASE_RETURN(uref_pic_flow_copy_hsubsampling(uref_dst, uref_src, p));
+        UBASE_RETURN(uref_pic_flow_copy_vsubsampling(uref_dst, uref_src, p));
+        UBASE_RETURN(uref_pic_flow_copy_macropixel_size(uref_dst, uref_src, p));
     }
     return UBASE_ERR_NONE;
 }
