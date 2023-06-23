@@ -62,9 +62,23 @@ int ubuf_pic_plane_clear(struct ubuf *ubuf, const char *chroma,
                                         hoffset, voffset, hsize, vsize, \
                                         pattern, sizeof pattern)
 
-    if (MATCH("y8") || MATCH("y16l") || MATCH("y16b") || MATCH("a8") ||
-        MATCH("r8g8b8") || MATCH("r8g8b8a8") || MATCH("a8r8g8b8") ||
-        MATCH("b8g8r8") || MATCH("b8g8r8a8") || MATCH("a8b8g8r8")) {
+    if (MATCH("a8")) {
+        /* Assume alpha to be always full range */
+        SET_COLOR(0);
+    } else if (MATCH("r8g8b8a8") || MATCH("b8g8r8a8")) {
+        if (fullrange) {
+            SET_COLOR(0);
+        } else {
+            SET_COLOR(16, 16, 16, 0);
+        }
+    } else if (MATCH("a8r8g8b8") || MATCH("a8b8g8r8")) {
+        if (fullrange) {
+            SET_COLOR(0);
+        } else {
+            SET_COLOR(0, 16, 16, 16);
+        }
+    } else if (MATCH("y8") || MATCH("y16l") || MATCH("y16b") ||
+               MATCH("r8g8b8") || MATCH("b8g8r8")) {
         SET_COLOR(fullrange ? 0 : 16);
 
     } else if (MATCH("u8") || MATCH("v8") || MATCH("u8v8")) {
