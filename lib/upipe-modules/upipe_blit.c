@@ -463,6 +463,7 @@ static int upipe_blit_sub_provide_flow_format(struct upipe *upipe)
 
         uref_pic_flow_clear_format(uref);
         uref_pic_flow_copy_format(uref, upipe_blit->flow_def);
+        uref_pic_flow_copy_full_range(uref, upipe_blit->flow_def);
 
         /* If the alpha was found add the alpha back into the flow format. */
         if (alpha) {
