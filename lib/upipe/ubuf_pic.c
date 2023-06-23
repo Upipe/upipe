@@ -101,6 +101,12 @@ int ubuf_pic_plane_clear(struct ubuf *ubuf, const char *chroma,
     } else if (MATCH("u10l") || MATCH("v10l")) {
         SET_COLOR(0x00, 0x02);
 
+    } else if (MATCH("u16l") || MATCH("v16l")) {
+        SET_COLOR(0x00, 0x80);
+
+    } else if (MATCH("u16b") || MATCH("v16b")) {
+        SET_COLOR(0x80, 0x00);
+
     } else if (MATCH("u10y10v10y10u10y10v10y10u10y10v10y10")) {
         if (fullrange) {
             SET_COLOR(0x00, 0x02, 0x00, 0x20, 0x00, 0x00, 0x08, 0x00);
