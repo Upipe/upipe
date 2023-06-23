@@ -77,10 +77,21 @@ int ubuf_pic_plane_clear(struct ubuf *ubuf, const char *chroma,
         } else {
             SET_COLOR(0, 16, 16, 16);
         }
-    } else if (MATCH("y8") || MATCH("y16l") || MATCH("y16b") ||
-               MATCH("r8g8b8") || MATCH("b8g8r8")) {
+    } else if (MATCH("y8") || MATCH("r8g8b8") || MATCH("b8g8r8")) {
         SET_COLOR(fullrange ? 0 : 16);
 
+    } else if (MATCH("y16l")) {
+        if (fullrange) {
+            SET_COLOR(0);
+        } else {
+            SET_COLOR(0, 16);
+        }
+    } else if (MATCH("y16b")) {
+        if (fullrange) {
+            SET_COLOR(0);
+        } else {
+            SET_COLOR(16, 0);
+        }
     } else if (MATCH("u8") || MATCH("v8") || MATCH("u8v8")) {
         SET_COLOR(0x80);
 
