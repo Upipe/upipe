@@ -57,6 +57,7 @@
 #include "upipe-av/upipe_avcodec_encode.h"
 #include "upipe-av/ubuf_av.h"
 #include "upipe-framers/uref_h264.h"
+#include "upipe-framers/uref_h265.h"
 #include "upipe-framers/uref_mpgv.h"
 #include "upipe-framers/uref_mpga_flow.h"
 #include "upipe-ts/uref_ts_flow.h"
@@ -74,6 +75,7 @@
 #include <libavutil/opt.h>
 #include <libavutil/channel_layout.h>
 #include <bitstream/mpeg/h264.h>
+#include <bitstream/itu/h265.h>
 #include <bitstream/mpeg/mp2v.h>
 #include <bitstream/dvb/sub.h>
 
@@ -932,6 +934,20 @@ static void upipe_avcenc_encode_video(struct upipe *upipe,
                     break;
                 case H264SLI_TYPE_SI:
                     frame->pict_type = AV_PICTURE_TYPE_SI;
+                    break;
+                default:
+                    break;
+            }
+        } else if (ubase_check(uref_h265_get_type(uref, &type))) {
+            switch (type) {
+                case H265SLI_TYPE_P:
+                    frame->pict_type = AV_PICTURE_TYPE_P;
+                    break;
+                case H265SLI_TYPE_B:
+                    frame->pict_type = AV_PICTURE_TYPE_B;
+                    break;
+                case H265SLI_TYPE_I:
+                    frame->pict_type = AV_PICTURE_TYPE_I;
                     break;
                 default:
                     break;
