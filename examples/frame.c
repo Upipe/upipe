@@ -37,6 +37,8 @@
 #include <upipe/uprobe_uclock.h>
 #include <upipe/uprobe_dejitter.h>
 #include <upipe/uref_block.h>
+#include <upipe/uref_sound.h>
+#include <upipe/uref_pic.h>
 #include <upipe/uclock.h>
 #include <upipe/uclock_std.h>
 #include <upipe-modules/upipe_file_source.h>
@@ -88,6 +90,7 @@ static struct uprobe *main_probe = NULL;
 static bool second_framer = false;
 static bool decode = false;
 static bool dump_date = false;
+static bool dump_size = false;
 
 struct pid {
     struct uchain uchain;
@@ -158,6 +161,18 @@ static int catch_uref(struct uprobe *uprobe, struct upipe *upipe,
 
     if (dump_date)
         uref_dump_clock_dbg(uref, upipe->uprobe);
+
+    if (dump_size) {
+        size_t size = 0, vsize = 0;
+        uint8_t sample_size = 0;
+        if (ubase_check(uref_block_size(uref, &size)))
+            upipe_dbg_va(upipe, "block size %zu", size);
+        else if (ubase_check(uref_sound_size(uref, &size, &sample_size)))
+            upipe_dbg_va(upipe, "sound size %zu (sample %u)", size, sample_size);
+        else if (ubase_check(uref_pic_size(uref, &size, &vsize, &sample_size)))
+            upipe_dbg_va(upipe, "pic size %zux%zu (sample %u)",
+                         size, vsize, sample_size);
+    }
 
     return UBASE_ERR_NONE;
 }
@@ -437,6 +452,7 @@ enum {
     OPT_PID_FILTER_OUT,
     OPT_PID,
     OPT_DATE,
+    OPT_SIZE,
 };
 
 static struct option options[] = {
@@ -449,6 +465,7 @@ static struct option options[] = {
     { "pid-filter-out", no_argument, NULL, OPT_PID_FILTER_OUT },
     { "pid", required_argument, NULL, OPT_PID },
     { "date", no_argument, NULL, OPT_DATE },
+    { "size", no_argument, NULL, OPT_SIZE },
     { NULL, 0, NULL, 0 },
 };
 
@@ -513,6 +530,10 @@ int main(int argc, char *argv[])
 
             case OPT_DATE:
                 dump_date = true;
+                break;
+
+            case OPT_SIZE:
+                dump_size = true;
                 break;
 
             default:
