@@ -599,6 +599,7 @@ int main(int argc, char *argv[])
         upipe_mgr_release(upipe_ts_demux_mgr);
         uprobe_release(uprobe_dejitter);
         upipe_ts_demux_set_conformance(demux, UPIPE_TS_CONFORMANCE_AUTO);
+        upipe_release(demux);
     }
     else {
         struct upipe_mgr *upipe_framer_mgr = NULL;
