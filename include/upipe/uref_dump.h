@@ -178,6 +178,15 @@ UREF_DUMP_CLOCK_DUMP_CLOCK(orig);
 UREF_DUMP_CLOCK_DUMP_CLOCK(prog);
 UREF_DUMP_CLOCK_DUMP_CLOCK(sys);
 
+    uint64_t duration = UINT64_MAX;
+    if (ubase_check(uref_clock_get_duration(uref, &duration))) {
+        struct uclock_brokendown duration_bd = uclock_breakdown(duration);
+
+        uprobe_log_va(uprobe, NULL, level, "  duration: "
+                      UREF_DUMP_CLOCK_BD_FMT,
+                      UREF_DUMP_CLOCK_BD_ARGS(duration_bd));
+    }
+
 #undef UREF_DUMP_CLOCK_DUMP_CLOCK
 #undef UREF_DUMP_CLOCK_DUMP
 #undef UREF_DUMP_CLOCK_BD_ARGS
