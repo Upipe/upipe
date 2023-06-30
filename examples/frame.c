@@ -87,7 +87,7 @@ static struct uclock *uclock = NULL;
 static struct uprobe *main_probe = NULL;
 static bool second_framer = false;
 static bool decode = false;
-static const char *date_type = "(none)";
+static bool dump_date = false;
 
 struct pid {
     struct uchain uchain;
@@ -156,35 +156,9 @@ static int catch_uref(struct uprobe *uprobe, struct upipe *upipe,
     UBASE_SIGNATURE_CHECK(args, UPIPE_PROBE_UREF_SIGNATURE);
     struct uref *uref = va_arg(args, struct uref *);
 
-    uint64_t now = uclock_now(uclock);
+    if (dump_date)
+        uref_dump_clock_dbg(uref, upipe->uprobe);
 
-    uint64_t date = UINT64_MAX;
-#define DATE_TYPE(Type)                         \
-    if (!strcmp(date_type, #Type))              \
-        uref_clock_get_##Type(uref, &date);
-
-    DATE_TYPE(pts_sys);
-    DATE_TYPE(dts_sys);
-    DATE_TYPE(cr_sys);
-    DATE_TYPE(pts_prog);
-    DATE_TYPE(dts_prog);
-    DATE_TYPE(cr_prog);
-    DATE_TYPE(pts_orig);
-    DATE_TYPE(dts_orig);
-    DATE_TYPE(cr_orig);
-
-    if (date != UINT64_MAX) {
-        uint64_t diff = date > now ? date - now : now - date;
-        int sign = date >= now ? 1 : -1;
-
-        upipe_dbg_va(upipe, "uref %s %s%f ms",
-                     date_type,
-                     sign > 0 ? "+" : "-",
-                     diff * 1000. / UCLOCK_FREQ);
-    }
-    else {
-        upipe_dbg(upipe, "uref");
-    }
     return UBASE_ERR_NONE;
 }
 
@@ -462,7 +436,7 @@ enum {
     OPT_DECODE,
     OPT_PID_FILTER_OUT,
     OPT_PID,
-    OPT_DATE_TYPE,
+    OPT_DATE,
 };
 
 static struct option options[] = {
@@ -474,7 +448,7 @@ static struct option options[] = {
     { "decode", no_argument, NULL, OPT_DECODE },
     { "pid-filter-out", no_argument, NULL, OPT_PID_FILTER_OUT },
     { "pid", required_argument, NULL, OPT_PID },
-    { "date-type", required_argument, NULL, OPT_DATE_TYPE },
+    { "date", no_argument, NULL, OPT_DATE },
     { NULL, 0, NULL, 0 },
 };
 
@@ -537,8 +511,8 @@ int main(int argc, char *argv[])
                 pid_add(strtoull(optarg, NULL, 0));
                 break;
 
-            case OPT_DATE_TYPE:
-                date_type = optarg;
+            case OPT_DATE:
+                dump_date = true;
                 break;
 
             default:
