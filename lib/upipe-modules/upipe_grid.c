@@ -751,6 +751,10 @@ static int upipe_grid_out_import_format(struct upipe *upipe,
         uref_pic_flow_copy_colour_primaries(out_flow, in_flow);
         uref_pic_flow_copy_transfer_characteristics(out_flow, in_flow);
         uref_pic_flow_copy_matrix_coefficients(out_flow, in_flow);
+        uref_pic_copy_lpadding(out_flow, in_flow);
+        uref_pic_copy_rpadding(out_flow, in_flow);
+        uref_pic_copy_tpadding(out_flow, in_flow);
+        uref_pic_copy_bpadding(out_flow, in_flow);
     }
     else if (ubase_check(uref_flow_match_def(in_flow, UREF_SOUND_FLOW_DEF))) {
         uref_sound_flow_copy_format(out_flow, in_flow);
