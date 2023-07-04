@@ -1118,9 +1118,10 @@ static int upipe_blit_check(struct upipe *upipe)
 
     if (unlikely(!upipe_blit->idler)) {
         struct upump *idler =
-            upump_alloc_idler(upipe_blit->upump_mgr,
+            upump_alloc_timer(upipe_blit->upump_mgr,
                               upipe_blit_idler_cb, upipe,
-                              upipe_blit_to_urefcount(upipe_blit));
+                              upipe_blit_to_urefcount(upipe_blit),
+                              0, 0);
         if (unlikely(!idler))
             return UBASE_ERR_UPUMP;
 
