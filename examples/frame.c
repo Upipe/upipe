@@ -59,6 +59,7 @@
 #include <upipe-framers/upipe_h265_framer.h>
 #include <upipe-framers/upipe_dvbsub_framer.h>
 #include <upipe-filters/upipe_filter_decode.h>
+#include <upipe-av/upipe_av.h>
 #include <upipe-av/upipe_avcodec_decode.h>
 #include <upump-ev/upump_ev.h>
 
@@ -570,6 +571,11 @@ int main(int argc, char *argv[])
     assert(uprobe != NULL);
     main_probe = uprobe;
 
+    if (decode) {
+        upipe_av_init(true, uprobe_pfx_alloc(uprobe_use(main_probe),
+                                             UPROBE_LOG_VERBOSE, "av"));
+    }
+
     /* create source */
     struct upipe *upipe_src = upipe_source_alloc(source, uprobe);
 
@@ -645,6 +651,10 @@ int main(int argc, char *argv[])
     ulist_delete_foreach(&es_list, uchain, uchain_tmp) {
         struct es *es = es_from_uchain(uchain);
         es_del(es);
+    }
+
+    if (decode) {
+        upipe_av_clean();
     }
 
     /* release probes, pipes and managers */
