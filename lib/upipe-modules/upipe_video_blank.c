@@ -27,9 +27,11 @@
  * @short Upipe module generating blank pictures for void urefs
  */
 
+#include "upipe/ubase.h"
 #include "upipe/upipe_helper_upipe.h"
 #include "upipe/upipe_helper_urefcount.h"
 #include "upipe/upipe_helper_flow.h"
+#include "upipe/upipe_helper_input.h"
 #include "upipe/upipe_helper_output.h"
 #include "upipe/upipe_helper_flow_def.h"
 #include "upipe/upipe_helper_flow_format.h"
@@ -70,6 +72,14 @@ struct upipe_vblk {
     struct uref *flow_format;
     /** ubuf manager request */
     struct urequest ubuf_mgr_request;
+    /** buffered urefs */
+    struct uchain urefs;
+    /** number of buffered urefs */
+    unsigned nb_urefs;
+    /** maximum buffered urefs */
+    unsigned max_urefs;
+    /** blockers */
+    struct uchain blockers;
     /** picture */
     struct ubuf *pic;
     /** picture attributes */
@@ -83,9 +93,15 @@ static int upipe_vblk_check_flow_format(struct upipe *upipe,
 /** @hidden */
 static int upipe_vblk_check(struct upipe *upipe, struct uref *flow_format);
 
+/** @hidden */
+static bool upipe_vblk_try_output(struct upipe *upipe, struct uref *uref,
+                                  struct upump **upump_p);
+
 UPIPE_HELPER_UPIPE(upipe_vblk, upipe, UPIPE_VBLK_SIGNATURE);
 UPIPE_HELPER_UREFCOUNT(upipe_vblk, urefcount, upipe_vblk_free);
 UPIPE_HELPER_FLOW(upipe_vblk, UREF_PIC_FLOW_DEF);
+UPIPE_HELPER_INPUT(upipe_vblk, urefs, nb_urefs, max_urefs, blockers,
+                   upipe_vblk_try_output);
 UPIPE_HELPER_OUTPUT(upipe_vblk, output, flow_def, output_state, requests);
 UPIPE_HELPER_FLOW_DEF(upipe_vblk, input_flow_def, flow_attr);
 UPIPE_HELPER_FLOW_FORMAT(upipe_vblk, flow_format_request,
@@ -114,6 +130,7 @@ static void upipe_vblk_free(struct upipe *upipe)
     if (upipe_vblk->pic_attr)
         uref_free(upipe_vblk->pic_attr);
 
+    upipe_vblk_clean_input(upipe);
     upipe_vblk_clean_ubuf_mgr(upipe);
     upipe_vblk_clean_flow_format(upipe);
     upipe_vblk_clean_flow_def(upipe);
@@ -147,6 +164,7 @@ static struct upipe *upipe_vblk_alloc(struct upipe_mgr *mgr,
     upipe_vblk_init_flow_def(upipe);
     upipe_vblk_init_flow_format(upipe);
     upipe_vblk_init_ubuf_mgr(upipe);
+    upipe_vblk_init_input(upipe);
 
     struct upipe_vblk *upipe_vblk = upipe_vblk_from_upipe(upipe);
     upipe_vblk->ubuf = NULL;
@@ -162,7 +180,7 @@ static struct upipe *upipe_vblk_alloc(struct upipe_mgr *mgr,
         return NULL;
     }
 
-    upipe_vblk_store_flow_def(upipe, flow_def);
+    upipe_vblk->flow_attr = flow_def;
 
     return upipe;
 }
@@ -214,6 +232,51 @@ static struct ubuf *upipe_vblk_alloc_pic(struct upipe *upipe)
     return ubuf_dup(ubuf);
 }
 
+/** @internal @This tries to output a buffer.
+ *
+ * @param upipe description structure of the pipe
+ * @param uref input uref
+ * @param upump_p reference to pump that generated the buffer
+ * @return true if the buffered was outputted
+ */
+static bool upipe_vblk_try_output(struct upipe *upipe,
+                                  struct uref *uref,
+                                  struct upump **upump_p)
+{
+    struct upipe_vblk *upipe_vblk = upipe_vblk_from_upipe(upipe);
+
+    if (uref->ubuf) {
+        upipe_vblk_output(upipe, uref, upump_p);
+        return true;
+    }
+
+    if (unlikely(!upipe_vblk->input_flow_def)) {
+        upipe_warn(upipe, "no input flow definition");
+        uref_free(uref);
+        return true;
+    }
+
+    if (unlikely(!upipe_vblk->flow_def || !upipe_vblk->ubuf_mgr))
+        return false;
+
+    struct ubuf *ubuf = upipe_vblk_alloc_pic(upipe);
+    if (unlikely(!ubuf)) {
+        upipe_err(upipe, "fail to allocate picture");
+        uref_free(uref);
+        upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
+        return true;
+    }
+
+    uref_attach_ubuf(uref, ubuf);
+    if (upipe_vblk->pic_attr)
+        uref_attr_import(uref, upipe_vblk->pic_attr);
+    if (ubase_check(uref_pic_get_progressive(upipe_vblk->flow_def)))
+        uref_pic_set_progressive(uref);
+
+    upipe_vblk_output(upipe, uref, upump_p);
+    return true;
+}
+
 /** @internal @This handles the input uref.
  *
  * @param upipe description structure of the pipe
@@ -224,48 +287,15 @@ static void upipe_vblk_input(struct upipe *upipe,
                              struct uref *uref,
                              struct upump **upump_p)
 {
-    struct upipe_vblk *upipe_vblk = upipe_vblk_from_upipe(upipe);
-    struct uref *flow_def = upipe_vblk->flow_def;
-    struct uref *input_flow_def = upipe_vblk->input_flow_def;
+    if (!upipe_vblk_check_input(upipe) ||
+        !upipe_vblk_try_output(upipe, uref, upump_p)) {
 
-    if (uref->ubuf) {
-        upipe_vblk_output(upipe, uref, upump_p);
-        return;
+        if (upipe_vblk_check_input(upipe))
+            upipe_use(upipe);
+
+        upipe_vblk_hold_input(upipe, uref);
+        upipe_vblk_block_input(upipe, upump_p);
     }
-
-    if (unlikely(!input_flow_def)) {
-        upipe_warn(upipe, "no input flow definition");
-        uref_free(uref);
-        return;
-    }
-
-    if (unlikely(!flow_def)) {
-        upipe_warn(upipe, "no output flow definition");
-        uref_free(uref);
-        return;
-    }
-
-    if (unlikely(!upipe_vblk->ubuf_mgr)) {
-        upipe_warn(upipe, "no ubuf manager set");
-        uref_free(uref);
-        return;
-    }
-
-    struct ubuf *ubuf = upipe_vblk_alloc_pic(upipe);
-    if (unlikely(!ubuf)) {
-        upipe_err(upipe, "fail to allocate picture");
-        uref_free(uref);
-        upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
-        return;
-    }
-
-    uref_attach_ubuf(uref, ubuf);
-    if (upipe_vblk->pic_attr)
-        uref_attr_import(uref, upipe_vblk->pic_attr);
-    if (ubase_check(uref_pic_get_progressive(flow_def)))
-        uref_pic_set_progressive(uref);
-
-    upipe_vblk_output(upipe, uref, upump_p);
 }
 
 /** @internal @This sets the input flow def.
@@ -284,60 +314,24 @@ static int upipe_vblk_set_flow_def(struct upipe *upipe,
         return UBASE_ERR_INVALID;
 
     struct uref *input_flow_def = uref_dup(flow_def);
-    if (unlikely(!input_flow_def)) {
-        upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
-        return UBASE_ERR_ALLOC;
-    }
-    upipe_vblk_store_flow_def_input(upipe, input_flow_def);
+    UBASE_ALLOC_RETURN(input_flow_def);
 
-    if (ubase_check(uref_flow_match_def(flow_def, UREF_VOID_FLOW_DEF)))
-        return UBASE_ERR_NONE;
-
-    uint64_t hsize = 0, vsize = 0;
-    UBASE_RETURN(uref_pic_flow_get_hsize(flow_def, &hsize));
-    UBASE_RETURN(uref_pic_flow_get_vsize(flow_def, &vsize));
-
-    struct uref *flow_def_dup = uref_dup(flow_def);
-    if (unlikely(!flow_def_dup)) {
-        upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
-        return UBASE_ERR_ALLOC;
-    }
-
-    struct urational sar;
-    uref_pic_flow_clear_format(flow_def_dup);
-    uref_pic_flow_copy_format(flow_def_dup, flow_def);
-    uref_pic_flow_set_hsize(flow_def_dup, hsize);
-    uref_pic_flow_set_vsize(flow_def_dup, vsize);
-    if (likely(ubase_check(uref_pic_flow_get_sar(flow_def, &sar)))) {
-        uref_pic_flow_set_sar(flow_def_dup, sar);
-    } else {
-        uref_pic_flow_delete_sar(flow_def_dup);
-    }
-    bool overscan;
-    if (likely(ubase_check(uref_pic_flow_get_overscan(flow_def, &overscan)))) {
-        uref_pic_flow_set_overscan(flow_def_dup, overscan);
-    } else {
-        uref_pic_flow_delete_overscan(flow_def_dup);
-    }
-    if (likely(ubase_check(uref_pic_get_progressive(flow_def)))) {
-        uref_pic_set_progressive(flow_def_dup);
-    } else {
-        uref_pic_delete_progressive(flow_def_dup);
-    }
+    struct uref *flow_format =
+        upipe_vblk_store_flow_def_input(upipe, input_flow_def);
+    UBASE_ALLOC_RETURN(flow_format);
 
     if (upipe_vblk->ubuf) {
         ubuf_free(upipe_vblk->ubuf);
         upipe_vblk->ubuf = NULL;
     }
 
-    if (upipe_vblk->ubuf_mgr &&
-        !ubase_check(ubuf_mgr_check(upipe_vblk->ubuf_mgr, flow_def_dup))) {
+    if (!upipe_vblk->ubuf_mgr ||
+        !ubase_check(ubuf_mgr_check(upipe_vblk->ubuf_mgr, flow_format))) {
         ubuf_mgr_release(upipe_vblk->ubuf_mgr);
         upipe_vblk->ubuf_mgr = NULL;
-        upipe_vblk_require_flow_format(upipe, flow_def_dup);
     }
-    else
-        upipe_vblk_store_flow_def(upipe, flow_def_dup);
+
+    upipe_vblk_require_flow_format(upipe, flow_format);
 
     return UBASE_ERR_NONE;
 }
@@ -420,6 +414,14 @@ static int upipe_vblk_check(struct upipe *upipe, struct uref *flow_format)
                             struct upipe *) != upipe) {
         upipe_vblk_require_flow_format(upipe, uref_dup(upipe_vblk->flow_def));
         return UBASE_ERR_NONE;
+    }
+
+    bool release = !upipe_vblk_check_input(upipe);
+    bool unblock = upipe_vblk_output_input(upipe);
+    if (unblock) {
+        upipe_vblk_unblock_input(upipe);
+        if (release)
+            upipe_release(upipe);
     }
 
     return UBASE_ERR_NONE;
