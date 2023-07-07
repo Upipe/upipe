@@ -123,22 +123,6 @@ static void upipe_vblk_free(struct upipe *upipe)
     upipe_vblk_free_flow(upipe);
 }
 
-/** @internal @This checks a flow definition validity.
- *
- * @param upipe description structure of the pipe
- * @param flow_def flow definition to check
- * @return an error code
- */
-static int upipe_vblk_check_flow_def(struct upipe *upipe,
-                                     struct uref *flow_def)
-{
-    uint64_t hsize, vsize;
-    UBASE_RETURN(uref_flow_match_def(flow_def, UREF_PIC_FLOW_DEF));
-    UBASE_RETURN(uref_pic_flow_get_hsize(flow_def, &hsize));
-    UBASE_RETURN(uref_pic_flow_get_vsize(flow_def, &vsize));
-    return UBASE_ERR_NONE;
-}
-
 /** @internal @This allocates a video blank pipe.
  *
  * @param mgr pointer to upipe manager
@@ -296,7 +280,7 @@ static int upipe_vblk_set_flow_def(struct upipe *upipe,
     struct upipe_vblk *upipe_vblk = upipe_vblk_from_upipe(upipe);
 
     if (!ubase_check(uref_flow_match_def(flow_def, UREF_VOID_FLOW_DEF)) &&
-        !ubase_check(upipe_vblk_check_flow_def(upipe, flow_def)))
+        !ubase_check(uref_flow_match_def(flow_def, UREF_PIC_FLOW_DEF)))
         return UBASE_ERR_INVALID;
 
     struct uref *input_flow_def = uref_dup(flow_def);
