@@ -31,6 +31,7 @@
 #include "upipe/upipe_helper_upipe.h"
 #include "upipe/upipe_helper_urefcount.h"
 #include "upipe/upipe_helper_void.h"
+#include "upipe/upipe_helper_flow_def.h"
 #include "upipe/upipe_helper_output.h"
 #include "upipe-modules/upipe_crop.h"
 
@@ -41,22 +42,44 @@
 /** we only accept pictures */
 #define EXPECTED_FLOW_DEF "pic."
 
+struct padding { uint64_t l, r, t, b; };
+struct offset { int64_t l, r, t, b; };
+
+UREF_ATTR_OPAQUE(crop, offset_opaque, "crop.offset", crop offset);
+
+static inline int uref_crop_set_offset(struct uref *uref,
+                                       const struct offset *offset)
+{
+    const uint8_t *data = (const uint8_t *)offset;
+    size_t size = sizeof (*offset);
+    return uref_crop_set_offset_opaque(uref, data, size);
+}
+
+static inline int uref_crop_get_offset(struct uref *uref, struct offset **offset)
+{
+    const uint8_t *data = NULL;
+    size_t size;
+    UBASE_RETURN(uref_crop_get_offset_opaque( uref, &data, &size));
+    if (size != sizeof (**offset))
+        return UBASE_ERR_INVALID;
+    *offset = (struct offset *)data;
+    return UBASE_ERR_NONE;
+}
+
 /** @internal @This is the private context of a crop pipe */
 struct upipe_crop {
     /** refcount management structure */
     struct urefcount urefcount;
 
-    /** configured offset from the left border */
-    int64_t loffset;
-    /** configured offset from the right border */
-    int64_t roffset;
-    /** configured offset from the top border */
-    int64_t toffset;
-    /** configured offset from the bottom border */
-    int64_t boffset;
+    /** configured offsets from the border */
+    struct offset offset;
 
     /** output pipe */
     struct upipe *output;
+    /** input flow definition packet */
+    struct uref *flow_def_input;
+    /** flow definition additional attributes */
+    struct uref *flow_def_attr;
     /** output flow_definition packet */
     struct uref *flow_def;
     /** output state */
@@ -83,6 +106,8 @@ struct upipe_crop {
     uint64_t hsize;
     /** vertical size of the input picture */
     uint64_t vsize;
+    /** padding */
+    struct padding padding;
 
     /** public upipe structure */
     struct upipe upipe;
@@ -91,6 +116,7 @@ struct upipe_crop {
 UPIPE_HELPER_UPIPE(upipe_crop, upipe, UPIPE_CROP_SIGNATURE);
 UPIPE_HELPER_UREFCOUNT(upipe_crop, urefcount, upipe_crop_free)
 UPIPE_HELPER_VOID(upipe_crop)
+UPIPE_HELPER_FLOW_DEF(upipe_crop, flow_def_input, flow_def_attr)
 UPIPE_HELPER_OUTPUT(upipe_crop, output, flow_def, output_state, request_list)
 
 /** @internal @This allocates a crop pipe.
@@ -111,9 +137,11 @@ static struct upipe *upipe_crop_alloc(struct upipe_mgr *mgr,
 
     struct upipe_crop *crop = upipe_crop_from_upipe(upipe);
     upipe_crop_init_urefcount(upipe);
+    upipe_crop_init_flow_def(upipe);
     upipe_crop_init_output(upipe);
-    crop->loffset = crop->roffset = crop->toffset = crop->boffset = 0;
+    crop->offset.l = crop->offset.r = crop->offset.t = crop->offset.b = 0;
     crop->out_hsize = crop->out_vsize = crop->hskip = crop->vskip = UINT64_MAX;
+    crop->padding.l = crop->padding.r = crop->padding.t = crop->padding.b = 0;
 
     upipe_throw_ready(upipe);
     return upipe;
@@ -162,37 +190,36 @@ static void upipe_crop_input(struct upipe *upipe, struct uref *uref,
 static int upipe_crop_prepare(struct upipe *upipe)
 {
     struct upipe_crop *crop = upipe_crop_from_upipe(upipe);
-    if (crop->flow_def == NULL)
+    if (crop->flow_def_input == NULL)
         return UBASE_ERR_NONE;
 
-    struct uref *flow_def = crop->flow_def;
-    crop->flow_def = NULL;
-    uref_pic_delete_lpadding(flow_def);
-    uref_pic_delete_rpadding(flow_def);
-    uref_pic_delete_tpadding(flow_def);
-    uref_pic_delete_bpadding(flow_def);
+    struct uref *flow_def = upipe_crop_make_flow_def(upipe);
+    UBASE_ALLOC_RETURN(flow_def);
 
     /* Round parameters */
     uint8_t hround = crop->hsub * crop->macropixel;
-    int64_t loffset = crop->loffset;
-    int64_t roffset = crop->roffset;
-    if (hround > 1) {
-        loffset -= loffset % hround;
-        roffset -= roffset % hround;
-    }
-
     uint8_t vround = crop->vsub;
-    int64_t toffset = crop->toffset;
-    int64_t boffset = crop->boffset;
+    struct offset offset = crop->offset;
+    struct padding padding = crop->padding;
+
+    if (hround > 1) {
+        offset.l -= offset.l % hround;
+        offset.r -= offset.r % hround;
+    }
     if (vround > 1) {
-        toffset -= toffset % vround;
-        boffset -= boffset % vround;
+        offset.t -= offset.t % vround;
+        offset.b -= offset.b % vround;
     }
 
 #define OFFSET(dir)                                                         \
-    if (dir##offset < 0) {                                                  \
-        UBASE_RETURN(uref_pic_set_##dir##padding(flow_def, -dir##offset))   \
-        dir##offset = 0;                                                    \
+    if (offset.dir < 0) {                                                   \
+        padding.dir -= offset.dir;                                          \
+        offset.dir = 0;                                                     \
+    } else if (padding.dir > offset.dir) {                                  \
+        padding.dir -= offset.dir;                                          \
+    } else {                                                                \
+        offset.dir -= padding.dir;                                          \
+        padding.dir = 0;                                                    \
     }
     OFFSET(l)
     OFFSET(r)
@@ -200,19 +227,37 @@ static int upipe_crop_prepare(struct upipe *upipe)
     OFFSET(b)
 #undef OFFSET
 
-    if (crop->hsize < loffset + roffset ||
-        crop->vsize < toffset + boffset) {
+    if (crop->hsize < offset.l + offset.r ||
+        crop->vsize < offset.t + offset.b) {
         uref_free(flow_def);
         return UBASE_ERR_INVALID;
     }
 
-    crop->hskip = loffset;
-    crop->vskip = toffset;
-    crop->out_hsize = crop->hsize - loffset - roffset;
-    crop->out_vsize = crop->vsize - toffset - boffset;
+    crop->hskip = offset.l;
+    crop->vskip = offset.t;
+    crop->out_hsize = crop->hsize - offset.l - offset.r;
+    crop->out_vsize = crop->vsize - offset.t - offset.b;
+
+    if (padding.l)
+        uref_pic_set_lpadding(flow_def, padding.l);
+    else
+        uref_pic_delete_lpadding(flow_def);
+    if (padding.r)
+        uref_pic_set_rpadding(flow_def, padding.r);
+    else
+        uref_pic_delete_rpadding(flow_def);
+    if (padding.t)
+        uref_pic_set_tpadding(flow_def, padding.t);
+    else
+        uref_pic_delete_tpadding(flow_def);
+    if (padding.b)
+        uref_pic_set_bpadding(flow_def, padding.b);
+    else
+        uref_pic_delete_bpadding(flow_def);
     UBASE_RETURN(uref_pic_flow_set_hsize(flow_def, crop->out_hsize))
     UBASE_RETURN(uref_pic_flow_set_vsize(flow_def, crop->out_vsize))
     upipe_crop_store_flow_def(upipe, flow_def);
+
     return UBASE_ERR_NONE;
 }
 
@@ -237,10 +282,15 @@ static int upipe_crop_set_flow_def(struct upipe *upipe, struct uref *flow_def)
     UBASE_RETURN(uref_pic_flow_get_hsize(flow_def, &hsize))
     UBASE_RETURN(uref_pic_flow_get_vsize(flow_def, &vsize))
 
-    flow_def = uref_dup(flow_def);
-    if (unlikely(flow_def == NULL))
-        return UBASE_ERR_ALLOC;
-    upipe_crop_store_flow_def(upipe, flow_def);
+    struct padding padding = { .l = 0, .r = 0, .t = 0, .b = 0};
+    uref_pic_get_lpadding(flow_def, &padding.l);
+    uref_pic_get_rpadding(flow_def, &padding.r);
+    uref_pic_get_tpadding(flow_def, &padding.t);
+    uref_pic_get_bpadding(flow_def, &padding.b);
+
+    struct uref *flow_def_input = uref_dup(flow_def);
+    UBASE_ALLOC_RETURN(flow_def_input);
+    upipe_crop_store_flow_def_input(upipe, flow_def_input);
 
     struct upipe_crop *upipe_crop = upipe_crop_from_upipe(upipe);
     upipe_crop->macropixel = macropixel;
@@ -248,6 +298,7 @@ static int upipe_crop_set_flow_def(struct upipe *upipe, struct uref *flow_def)
     upipe_crop->vsub = vsub;
     upipe_crop->hsize = hsize;
     upipe_crop->vsize = vsize;
+    upipe_crop->padding = padding;
     return upipe_crop_prepare(upipe);
 }
 
@@ -266,10 +317,10 @@ static int _upipe_crop_get_rect(struct upipe *upipe,
         int64_t *toffset_p, int64_t *boffset_p)
 {
     struct upipe_crop *crop = upipe_crop_from_upipe(upipe);
-    *loffset_p = crop->loffset;
-    *roffset_p = crop->roffset;
-    *toffset_p = crop->toffset;
-    *boffset_p = crop->boffset;
+    *loffset_p = crop->offset.l;
+    *roffset_p = crop->offset.r;
+    *toffset_p = crop->offset.t;
+    *boffset_p = crop->offset.b;
     return UBASE_ERR_NONE;
 }
 
@@ -287,11 +338,71 @@ static int _upipe_crop_set_rect(struct upipe *upipe,
         int64_t loffset, int64_t roffset, int64_t toffset, int64_t boffset)
 {
     struct upipe_crop *crop = upipe_crop_from_upipe(upipe);
-    crop->loffset = loffset;
-    crop->roffset = roffset;
-    crop->toffset = toffset;
-    crop->boffset = boffset;
-    return upipe_crop_prepare(upipe);
+    crop->offset.l = loffset;
+    crop->offset.r = roffset;
+    crop->offset.t = toffset;
+    crop->offset.b = boffset;
+    UBASE_RETURN(upipe_crop_prepare(upipe));
+
+    struct uchain proxies;
+    ulist_init(&proxies);
+
+    struct uchain *uchain, *uchain_tmp;
+    ulist_delete_foreach(&crop->request_list, uchain, uchain_tmp) {
+        struct urequest *proxy = urequest_from_uchain(uchain);
+        if (proxy->type == UREQUEST_FLOW_FORMAT) {
+            upipe_crop_unregister_output_request(upipe, proxy);
+            ulist_add(&proxies, urequest_to_uchain(proxy));
+        }
+    }
+
+    while ((uchain = ulist_pop(&proxies))) {
+        struct urequest *proxy = urequest_from_uchain(uchain);
+        if (proxy->uref)
+            uref_crop_set_offset(proxy->uref, &crop->offset);
+        upipe_crop_register_output_request(upipe, proxy);
+    }
+
+    return UBASE_ERR_NONE;
+}
+
+static int upipe_crop_provide_flow_format(struct urequest *urequest,
+                                          va_list args)
+{
+    struct urequest *upstream =
+        urequest_get_opaque(urequest, struct urequest *);
+    struct uref *flow_format = va_arg(args, struct uref *);
+
+    if (flow_format && urequest->uref) {
+        struct offset *offset = NULL;
+        uref_crop_get_offset(urequest->uref, &offset);
+        if (offset) {
+            if (!ubase_check(uref_pic_flow_get_hsize(urequest->uref, NULL)) &&
+                ubase_check(uref_pic_flow_get_hsize(flow_format, NULL))) {
+                uref_pic_set_lpadding(flow_format, offset->l);
+                uref_pic_set_rpadding(flow_format, offset->r);
+            }
+            if (!ubase_check(uref_pic_flow_get_vsize(urequest->uref, NULL)) &&
+                ubase_check(uref_pic_flow_get_vsize(flow_format, NULL))) {
+                uref_pic_set_tpadding(flow_format, offset->t);
+                uref_pic_set_bpadding(flow_format, offset->b);
+            }
+        }
+        uref_crop_delete_offset_opaque(flow_format);
+    }
+    return urequest_provide_flow_format(upstream, flow_format);
+}
+
+static int upipe_crop_alloc_output_proxy_flow_format(struct upipe *upipe,
+                                                     struct urequest *urequest)
+{
+    struct upipe_crop *crop = upipe_crop_from_upipe(upipe);
+    struct urequest *proxy = urequest_alloc_proxy(urequest);
+    UBASE_ALLOC_RETURN(proxy);
+    proxy->urequest_provide = upipe_crop_provide_flow_format;
+    if (proxy->uref)
+        uref_crop_set_offset(proxy->uref, &crop->offset);
+    return upipe_crop_register_output_request(upipe, proxy);
 }
 
 /** @internal @This processes control commands on a file source pipe, and
@@ -304,8 +415,18 @@ static int _upipe_crop_set_rect(struct upipe *upipe,
  */
 static int upipe_crop_control(struct upipe *upipe, int command, va_list args)
 {
-    UBASE_HANDLED_RETURN(upipe_crop_control_output(upipe, command, args));
     switch (command) {
+        case UPIPE_REGISTER_REQUEST: {
+            va_list args_copy;
+            va_copy(args_copy, args);
+            struct urequest *request = va_arg(args_copy, struct urequest *);
+            va_end(args_copy);
+
+            if (request->type == UREQUEST_FLOW_FORMAT)
+                return upipe_crop_alloc_output_proxy_flow_format(
+                    upipe, request);
+            break;
+        }
         case UPIPE_SET_FLOW_DEF: {
             struct uref *flow = va_arg(args, struct uref *);
             return upipe_crop_set_flow_def(upipe, flow);
@@ -329,9 +450,9 @@ static int upipe_crop_control(struct upipe *upipe, int command, va_list args)
             return _upipe_crop_set_rect(upipe,
                     loffset, roffset, toffset, boffset);
         }
-        default:
-            return UBASE_ERR_UNHANDLED;
     }
+    UBASE_HANDLED_RETURN(upipe_crop_control_output(upipe, command, args));
+    return UBASE_ERR_UNHANDLED;
 }
 
 /** @This frees a upipe.
@@ -343,6 +464,7 @@ static void upipe_crop_free(struct upipe *upipe)
     upipe_throw_dead(upipe);
 
     upipe_crop_clean_output(upipe);
+    upipe_crop_clean_flow_def(upipe);
     upipe_crop_clean_urefcount(upipe);
     upipe_crop_free_void(upipe);
 }
