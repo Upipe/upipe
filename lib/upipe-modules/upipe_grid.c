@@ -23,6 +23,7 @@
  * SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
  */
 
+#include "upipe/ulist.h"
 #include "upipe/upipe_helper_upipe.h"
 #include "upipe/upipe_helper_urefcount.h"
 #include "upipe/upipe_helper_urefcount_real.h"
@@ -314,35 +315,6 @@ static void upipe_grid_in_set_flow_def_real(struct upipe *upipe,
     upipe_throw_new_flow_def(upipe, flow_def);
 }
 
-/** @internal @This gets the last outdated buffer in the list.
- *
- * @param upipe description structure of the input pipe
- * @param now current date
- * @return a buffer or NULL
- */
-static struct uref *upipe_grid_in_get_last(struct upipe *upipe, uint64_t now)
-{
-    struct upipe_grid_in *upipe_grid_in = upipe_grid_in_from_upipe(upipe);
-    struct uchain *uchain;
-    /* find last input buffer */
-    struct uref *last = NULL;
-    ulist_foreach_reverse(&upipe_grid_in->urefs, uchain) {
-        struct uref *tmp = uref_from_uchain(uchain);
-        if (unlikely(ubase_check(uref_flow_get_def(tmp, NULL))))
-            continue;
-
-        uint64_t pts;
-        ubase_assert(uref_clock_get_pts_sys(tmp, &pts));
-        uint64_t duration = 0;
-        uref_clock_get_duration(tmp, &duration);
-        if (pts + duration < now) {
-            last = tmp;
-            break;
-        }
-    }
-    return last;
-}
-
 /** @internal @This removes all past urefs from an input pipe.
  *
  * @param upipe description structure of the input pipe
@@ -351,7 +323,6 @@ static void upipe_grid_in_update(struct upipe *upipe)
 {
     struct upipe_grid_in *upipe_grid_in = upipe_grid_in_from_upipe(upipe);
     struct upipe_grid *upipe_grid = upipe_grid_from_in_mgr(upipe->mgr);
-    struct uref *flow_def = upipe_grid_in->flow_def;
 
     uint64_t now = UINT64_MAX;
     upipe_grid_uclock_now(upipe_grid_to_upipe(upipe_grid), &now);
@@ -362,48 +333,71 @@ static void upipe_grid_in_update(struct upipe *upipe)
 
     upipe_verbose_va(upipe, "update PTS %"PRIu64, now);
 
-    /* find last input buffer */
-    struct uref *last = upipe_grid_in_get_last(upipe, now);
-
+    struct uref *pending_flow_def = NULL;
+    struct uref *current_flow_def = upipe_grid_in->flow_def;
+    struct uref *first = NULL;
     uint64_t pts = UINT64_MAX;
-    /* iterate through the input buffers */
-    struct uchain *uchain, *uchain_tmp;
-    ulist_delete_foreach(&upipe_grid_in->urefs, uchain, uchain_tmp) {
+    uint64_t duration = 0;
+
+    /* release outdated buffers */
+    struct uchain *uchain;
+    while ((uchain = ulist_pop(&upipe_grid_in->urefs))) {
         struct uref *uref = uref_from_uchain(uchain);
 
-        /* if this is a new flow def, apply it and continue */
+        /* check if it's a flow def? */
         if (unlikely(ubase_check(uref_flow_get_def(uref, NULL)))) {
-            ulist_delete(uchain);
-            flow_def = uref;
-            upipe_grid_in_set_flow_def_real(upipe, flow_def);
+            if (pending_flow_def)
+                uref_free(pending_flow_def);
+            pending_flow_def = uref;
             continue;
         }
 
-        if (unlikely(!flow_def)) {
-            /* no input flow definition set, drop */
-            upipe_warn(upipe, "no input flow def set");
-            ulist_delete(uchain);
+        /* apply pending flow def if any */
+        if (pending_flow_def) {
+            if (current_flow_def != upipe_grid_in->flow_def)
+                uref_free(current_flow_def);
+            current_flow_def = pending_flow_def;
+            pending_flow_def = NULL;
+        }
+
+        /* drop if no flow def is set */
+        if (!current_flow_def) {
             uref_free(uref);
             continue;
         }
 
-        /* checked in upipe_grid_in_input */
+        /* release previous buffer */
+        if (first) {
+            upipe_verbose_va(upipe, "drop uref pts %"PRIu64, pts);
+            uref_free(first);
+        }
+
+        /* set new head */
+        first = uref;
+
+        /* new head is up to date? */
         ubase_assert(uref_clock_get_pts_sys(uref, &pts));
-        uint64_t duration = upipe_grid->max_retention;
+        duration = 0;
         uref_clock_get_duration(uref, &duration);
-        if (uref == last && duration < upipe_grid->max_retention)
-            duration = upipe_grid->max_retention;
-        if (pts + duration < now) {
-            upipe_verbose_va(upipe, "drop %suref pts %"PRIu64,
-                             uref == last ? "last " : "", pts);
-            ulist_delete(uchain);
-            uref_free(uref);
-            continue;
-        }
+        if (pts + duration >= now)
+            /* then stop */
+            break;
+    }
 
-        /* remaining buffers are up to date,.. */
-        upipe_grid_in_schedule_update(upipe);
-        break;
+    if (pending_flow_def)
+        ulist_unshift(&upipe_grid_in->urefs, uref_to_uchain(pending_flow_def));
+
+    if (current_flow_def != upipe_grid_in->flow_def)
+        upipe_grid_in_set_flow_def_real(upipe, current_flow_def);
+
+    if (first) {
+        if (pts + duration < now && pts + upipe_grid->max_retention < now) {
+            upipe_verbose_va(upipe, "drop last uref pts %"PRIu64, pts);
+            uref_free(first);
+        } else {
+            ulist_unshift(&upipe_grid_in->urefs, uref_to_uchain(first));
+            upipe_grid_in_schedule_update(upipe);
+        }
     }
 
     /* print input statistics */
@@ -469,29 +463,31 @@ static void upipe_grid_in_schedule_update(struct upipe *upipe)
         return;
     }
 
-    struct uchain *uchain;
-    struct uref *last = upipe_grid_in_get_last(upipe, now);
-
     uint64_t pts = UINT64_MAX;
-    struct uref *uref = NULL;
+    struct uref *first = NULL, *next = NULL;
+    struct uchain *uchain;
     ulist_foreach(&upipe_grid_in->urefs, uchain) {
         struct uref *tmp = uref_from_uchain(uchain);
         if (unlikely(ubase_check(uref_flow_get_def(tmp, NULL))))
             continue;
 
-        uref = tmp;
-        ubase_assert(uref_clock_get_pts_sys(uref, &pts));
-        break;
+        if (!first) {
+            first = tmp;
+            ubase_assert(uref_clock_get_pts_sys(first, &pts));
+        } else if (!next) {
+            next = tmp;
+        } else
+            break;
     }
 
-    if (!uref) {
+    if (!first) {
         upipe_grid_in_set_upump(upipe, NULL);
         return;
     }
 
     uint64_t duration = upipe_grid->max_retention;
-    uref_clock_get_duration(uref, &duration);
-    if (uref == last && duration < upipe_grid->max_retention)
+    uref_clock_get_duration(first, &duration);
+    if (!next && duration < upipe_grid->max_retention)
         duration = upipe_grid->max_retention;
     if (pts + duration < now)
         upipe_grid_in_update(upipe);
@@ -555,7 +551,11 @@ static void upipe_grid_in_input(struct upipe *upipe,
     }
 
     uint64_t duration = 0;
-    uref_clock_get_duration(uref, &duration);
+    if (unlikely(!ubase_check(uref_clock_get_duration(uref, &duration)))) {
+        upipe_warn_va(upipe, "packet without duration");
+        duration = UCLOCK_FREQ * 10;
+        uref_clock_set_duration(uref, duration);
+    }
 
     if (!ubase_check(uref_flow_match_def(upipe_grid_in->current_flow_def,
                                          UREF_PIC_SUB_FLOW_DEF)) &&
@@ -944,10 +944,10 @@ static int upipe_grid_out_extract_input(struct upipe *upipe, struct uref *uref,
 
     uint64_t input_duration = 0;
     uref_clock_get_duration(e->uref, &input_duration);
-    if (input_duration && upipe_grid_out->last_input_pts != UINT64_MAX) {
-        if (e->pts > upipe_grid_out->last_input_pts + input_duration * 3 / 2)
-            upipe_warn_va(upipe, "potentially lost frames");
-    }
+//    if (input_duration && upipe_grid_out->last_input_pts != UINT64_MAX) {
+//        if (e->pts > upipe_grid_out->last_input_pts + input_duration * 3 / 2)
+//            upipe_warn_va(upipe, "potentially lost frames");
+//    }
     upipe_grid_out->last_input_pts = e->pts;
 
     struct ubuf *ubuf = ubuf_dup(e->uref->ubuf);
