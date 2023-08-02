@@ -67,6 +67,7 @@ myinclude_HEADERS = \
 	upipe_sequential_source.h \
 	upipe_segment_source.h \
 	upipe_id3v2.h \
+	upipe_id3v2_decaps.h \
 	upipe_rtp_reorder.h \
 	upipe_subpic_schedule.h \
 	upipe_s337_encaps.h \
