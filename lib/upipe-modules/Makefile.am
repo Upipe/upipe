@@ -64,8 +64,6 @@ libupipe_modules_la_SOURCES = \
 	upipe_sequential_source.c \
 	upipe_segment_source.c \
 	upipe_subpic_schedule.c \
-	upipe_id3v2.c \
-	id3v2.h \
 	upipe_ntsc_prepend.c \
 	upipe_rtp_pcm_unpack.c \
 	upipe_rtp_pcm_pack.c \
@@ -104,6 +102,7 @@ libupipe_modules_la_SOURCES += \
 	upipe_vanc_decoder.c \
 	upipe_id3v2_decaps.c \
 	upipe_id3v2_encaps.c \
+	upipe_id3v2.c \
 	$(NULL)
 libupipe_modules_la_CFLAGS = $(AM_CFLAGS) $(BITSTREAM_CFLAGS)
 endif
