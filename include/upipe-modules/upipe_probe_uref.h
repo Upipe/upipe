@@ -49,6 +49,40 @@ enum uprobe_probe_uref_event {
     UPROBE_PROBE_UREF
 };
 
+/** @This defines a helper to check probe_uref extended events. */
+#define uprobe_probe_uref_check_extended(event, args, expected_event)   \
+    uprobe_check_extended(event, args, expected_event,                  \
+                          UPIPE_PROBE_UREF_SIGNATURE)
+
+/** @This checks if an event is the extended probe_uref event.
+ *
+ * @param event event triggered by the pipe
+ * @param args arguments of the event
+ * @param uref_p filled with the first argument
+ * @param upump_pp filled with the second argument
+ * @param drop_p filled with the third argument
+ * @return true if the event is the expected extended event, false otherwise
+ */
+static inline bool uprobe_probe_uref_check(int event, va_list args,
+                                           struct uref **uref_p,
+                                           struct upump ***upump_pp,
+                                           bool **drop_p)
+{
+    if (uprobe_probe_uref_check_extended(event, args, UPROBE_PROBE_UREF)) {
+        struct uref *uref = va_arg(args, struct uref *);
+        struct upump **upump_p = va_arg(args, struct upump **);
+        bool *drop = va_arg(args, bool *);
+        if (uref_p)
+            *uref_p = uref;
+        if (upump_pp)
+            *upump_pp = upump_p;
+        if (drop_p)
+            *drop_p = drop;
+        return true;
+    }
+    return false;
+}
+
 /** @This returns the management structure for probe pipes.
  *
  * @return pointer to manager
