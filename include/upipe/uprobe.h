@@ -449,6 +449,24 @@ static inline bool uprobe_plumber(int event, va_list args,
     return true;
 }
 
+/** @This checks is the event is an expected extended event.
+ *
+ * @param event event triggered by the pipe
+ * @param args arguments of the event
+ * @param expected_event extended event to check
+ * @param signature extended event signature to check
+ * @return true if the event is the expected extended event, false otherwise
+ */
+static inline bool uprobe_check_extended(int event, va_list args,
+                                         int expected_event, uint32_t signature)
+{
+    if (event == expected_event && ubase_get_signature(args) == signature) {
+        va_arg(args, unsigned int);
+        return true;
+    }
+    return false;
+}
+
 #ifdef __cplusplus
 }
 #endif
