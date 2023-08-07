@@ -408,8 +408,10 @@ TESTS += \
 endif
 
 if HAVE_SRT
+if !HAVE_OSX_DARWIN
 check_PROGRAMS += upump_srt_test
 TESTS += upump_srt_test
+endif
 endif
 
 AM_CPPFLAGS = -I$(top_builddir)/include -I$(top_srcdir)/include

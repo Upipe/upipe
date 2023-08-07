@@ -102,5 +102,7 @@ SUBDIRS += upipe-bearssl
 endif
 
 if HAVE_SRT
+if !HAVE_OSX_DARWIN
 SUBDIRS += upump-srt
+endif
 endif
