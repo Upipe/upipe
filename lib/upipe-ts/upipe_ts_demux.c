@@ -761,9 +761,14 @@ static int upipe_ts_demux_output_clock_ts(struct upipe *upipe,
                 program->timestamp_highest = dts + dts_pts_delay;
             upipe_verbose_va(upipe, "read DTS %"PRIu64" -> %"PRIu64" (pts delay %"PRIu64")",
                              dts_orig, dts, dts_pts_delay);
+        } else if (delta > TS_CLOCK_MAX / 2) {
+            upipe_warn_va(upipe, "late DTS %"PRIu64" (%"PRIu64" - %f ms)",
+                          dts_orig, TS_CLOCK_MAX - delta,
+                          (TS_CLOCK_MAX - delta) * 1000. / UCLOCK_FREQ);
         } else
-            upipe_warn_va(upipe, "too long delay for DTS %"PRIu64" (%"PRIu64")",
-                          dts_orig, delta);
+            upipe_warn_va(upipe, "too long delay for DTS %"PRIu64" "
+                          "(%"PRIu64" - %f ms)",
+                          dts_orig, delta, delta * 1000. / UCLOCK_FREQ);
     }
 
     return upipe_throw(upipe, event, uref);
