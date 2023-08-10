@@ -9,7 +9,6 @@ local tohex = bit.tohex
 
 ffi.cdef [[
     // stdlib.h
-    typedef long ssize_t;
     void *malloc(size_t);
     void *calloc(size_t, size_t);
     void free(void *);

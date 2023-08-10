@@ -18,7 +18,7 @@ my @builtins = qw(
   va_list __builtin_va_list __gnuc_va_list
   int8_t int16_t int32_t int64_t
   uint8_t uint16_t uint32_t uint64_t
-  intptr_t uintptr_t ptrdiff_t size_t wchar_t
+  intptr_t uintptr_t ptrdiff_t size_t ssize_t wchar_t
 );
 
 my %aliases = ( _Bool => 'bool' );
