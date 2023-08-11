@@ -36,6 +36,7 @@ use constant {
 # workaround for x86_64 va_list
 $aliases{'struct __va_list_tag *'} = 'va_list';
 $defs{'struct __va_list_tag'} = PREDEFINED;
+$defs{'struct _IO_FILE'} = PREDEFINED;
 
 sub parse_input_objdump {
   my %info;
@@ -246,9 +247,11 @@ sub p {
 my $format = 'objdump';
 my @enums;
 my @structs;
+my @typedefs;
 my @prefix;
 my $write_defs;
 my @read_defs;
+my @opaque_defs;
 my $output;
 my @libs;
 my @requires;
@@ -257,8 +260,10 @@ GetOptions(
   'format=s'     => \$format,
   'write-defs=s' => \$write_defs,
   'read-defs=s'  => \@read_defs,
+  'def=s'        => \@opaque_defs,
   'enum=s'       => \@enums,
   'struct=s'     => \@structs,
+  'typedef=s'    => \@typedefs,
   'prefix=s'     => \@prefix,
   'output=s'     => \$output,
   'load=s'       => \@libs,
@@ -278,6 +283,8 @@ foreach (@read_defs) {
   close $file;
 }
 
+$defs{$_} = PREDEFINED foreach @opaque_defs;
+
 my %parse_input = (
   'objdump' => \&parse_input_objdump,
   'eu-readelf' => \&parse_input_eu_readelf,
@@ -291,13 +298,15 @@ print "ffi.cdef [[\n";
 
 $_ =~ s/\*/.+/ foreach @enums;
 $_ =~ s/\*/.+/ foreach @structs;
+$_ =~ s/\*/.+/ foreach @typedefs;
 
 &p($_) for
   sort {$a->{attr}{name} cmp $b->{attr}{name}}
   grep {
     my $n = $_->{attr}{name} || '';
     ($_->{type} eq 'structure_type' and grep {$n =~ m/^$_$/} @structs) or
-    ($_->{type} eq 'enumeration_type' and grep {$n =~ m/^$_$/} @enums)}
+    ($_->{type} eq 'enumeration_type' and grep {$n =~ m/^$_$/} @enums) or
+    ($_->{type} eq 'typedef' and grep {$n =~ m/^$_$/} @typedefs)}
   grep {not $_->{attr}{declaration}}
   values %$info;
 
