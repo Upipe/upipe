@@ -226,6 +226,7 @@ enum_upipe-ts = uprobe_ts_
 enum_upipe-hls = uprobe_hls_
 enum_upipe-filters = uprobe_filters_
 enum_upipe-bearssl = uprobe_https_
+enum_upipe-framers = uref_h26x_ uref_mpga_
 
 libupipe.lua: $(srcdir)/gen-ffi-cdef.pl $(srcdir)/libc.defs upipe.debug_info upipe.static.debug_info
 	$(V_GEN)$(PERL) $< \
