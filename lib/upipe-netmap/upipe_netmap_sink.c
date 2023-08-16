@@ -94,6 +94,10 @@
 
 #define MAX_AUDIO_UREFS 20
 
+/* From pciutils' pci.ids */
+#define VENDOR_ID_MELLANOX 0x15b3
+#define DEVICE_ID_CONNECTX6DX 0x101d
+
 static struct upipe_mgr upipe_netmap_sink_audio_mgr;
 
 /** @hidden */
@@ -280,6 +284,7 @@ struct upipe_netmap_sink {
     uint64_t bits;
     uint64_t start;
 
+    double tx_rate_factor;
     uint64_t fakes;
     uint32_t step;
     int64_t needed_fakes;
@@ -629,6 +634,16 @@ static int upipe_netmap_sink_open_dev(struct upipe *upipe, const char *dev)
         UBASE_RETURN(upipe_netmap_sink_open_intf(upipe, intf+1, p));
     }
 
+    if (upipe_netmap_sink->intf[0].vendor_id == VENDOR_ID_MELLANOX
+            && upipe_netmap_sink->intf[0].device_id == DEVICE_ID_CONNECTX6DX
+            && upipe_netmap_sink->intf[1].vendor_id == VENDOR_ID_MELLANOX
+            && upipe_netmap_sink->intf[1].device_id == DEVICE_ID_CONNECTX6DX)
+    {
+        /* Device is a Mellanox ConnectX-6 Dx assuming REAL_TIME_CLOCK_ENABLE=1 */
+        /* TODO: eventually add detection of the config variables. */
+        upipe_netmap_sink->tx_rate_factor = 1.0001;
+    }
+
     free((char*)dev);
 
     upipe_notice_va(upipe, "opened %d netmap device(s)", p ? 2 : 1);
@@ -725,6 +740,7 @@ static struct upipe *_upipe_netmap_sink_alloc(struct upipe_mgr *mgr,
     upipe_netmap_sink_reset_counters(upipe);
     upipe_netmap_sink->gap_fakes = 0;
     upipe_netmap_sink->gap_fakes_current = 0;
+    upipe_netmap_sink->tx_rate_factor = 1;
 
     upipe_netmap_sink->uri = NULL;
     for (size_t i = 0; i < 2; i++) {
@@ -2251,7 +2267,13 @@ static bool upipe_netmap_sink_output(struct upipe *upipe, struct uref *uref,
                 upipe_err_va(upipe, "Could not open maxrate sysctl %s",
                         intf->maxrate_uri);
             } else {
-                fprintf(f, "%" PRIu64, upipe_netmap_sink->rate / upipe_netmap_sink->fps.den);
+                double tx_rate_factor = 1;
+                if (!upipe_netmap_sink->rfc4175)
+                    tx_rate_factor = upipe_netmap_sink->tx_rate_factor;
+                double tx_rate = tx_rate_factor
+                    * upipe_netmap_sink->rate
+                    / upipe_netmap_sink->fps.den;
+                fprintf(f, "%.0f", tx_rate);
                 fclose(f);
             }
         }
