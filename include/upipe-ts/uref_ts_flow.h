@@ -1,5 +1,6 @@
 /*
  * Copyright (C) 2012-2015 OpenHeadend S.A.R.L.
+ * Copyright (C) 2023 EasyTools S.A.S.
  *
  * Authors: Christophe Massiot
  *
@@ -146,6 +147,20 @@ UREF_ATTR_UNSIGNED_VA(ts_flow, nit_ts_descriptors,
         uint64_t ts, ts)
 UREF_TS_ATTR_SUBDESCRIPTOR(ts_flow, nit_ts_descriptor,
         "t.nit.tsdesc[%" PRIu64"][%" PRIu64"]")
+
+/* TOT */
+UREF_ATTR_SMALL_UNSIGNED(ts_flow, tot_regions, "t.tot.regions",
+        number of TOT regions)
+UREF_ATTR_STRING_VA(ts_flow, tot_code, "t.tot.code[%" PRIu8"]",
+        TOT country code, uint8_t nb, nb)
+UREF_ATTR_SMALL_UNSIGNED_VA(ts_flow, tot_region, "t.tot.region[%" PRIu8"]",
+        TOT region ID, uint8_t nb, nb)
+UREF_ATTR_INT_VA(ts_flow, tot_offset, "t.tot.offset[%" PRIu8"]",
+        offset in UCLOCK_REF units, uint8_t nb, nb)
+UREF_ATTR_UNSIGNED_VA(ts_flow, tot_change, "t.tot.change[%" PRIu8"]",
+        next change in UCLOCK_REF units since Epoch, uint8_t nb, nb)
+UREF_ATTR_INT_VA(ts_flow, tot_next_offset, "t.tot.next_off[%" PRIu8"]",
+        next offset in UCLOCK_REF units, uint8_t nb, nb)
 
 /** @This returns the value of a PSI section filter.
  *
