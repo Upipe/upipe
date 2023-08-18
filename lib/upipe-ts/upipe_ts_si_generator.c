@@ -1,5 +1,6 @@
 /*
  * Copyright (C) 2015-2017 OpenHeadend S.A.R.L.
+ * Copyright (C) 2023 EasyTools S.A.S.
  *
  * Authors: Christophe Massiot
  *
@@ -191,6 +192,8 @@ struct upipe_ts_sig {
     uint64_t tdt_interval;
     /** last TDT cr_sys */
     uint64_t tdt_cr_sys;
+    /** TOT section if available */
+    struct ubuf *tot_section;
 
     /** NIT output */
     struct upipe_ts_sig_output nit_output;
@@ -1042,6 +1045,7 @@ static struct upipe *_upipe_ts_sig_alloc(struct upipe_mgr *mgr,
 
     upipe_ts_sig->tdt_interval = 0;
     upipe_ts_sig->tdt_cr_sys = 0;
+    upipe_ts_sig->tot_section = NULL;
 
     upipe_throw_ready(upipe);
     upipe_ts_sig_demand_uref_mgr(upipe);
@@ -1780,11 +1784,11 @@ static void upipe_ts_sig_send_eits(struct upipe *upipe, uint64_t cr_sys)
     sig->eits_cr_sys = cr_sys + eits_interval;
 }
 
-/** @internal @This builds a new output flow definition for TDT.
+/** @internal @This builds a new output flow definition for TDT/TOT.
  *
  * @param upipe description structure of the pipe
  */
-static void upipe_ts_sig_build_tdt_flow_def(struct upipe *upipe)
+static void upipe_ts_sig_build_tdttot_flow_def(struct upipe *upipe)
 {
     struct upipe_ts_sig *sig = upipe_ts_sig_from_upipe(upipe);
     struct upipe_ts_sig_output *output = upipe_ts_sig_to_tdt_output(sig);
@@ -1803,7 +1807,11 @@ static void upipe_ts_sig_build_tdt_flow_def(struct upipe *upipe)
         duration = MIN_SECTION_INTERVAL;
     }
 
-    output->octetrate = (uint64_t)TDT_HEADER_SIZE * UCLOCK_FREQ / duration;
+    size_t size = 0;
+    if (sig->tot_section != NULL)
+        ubuf_block_size(sig->tot_section, &size);
+    size += TDT_HEADER_SIZE;
+    output->octetrate = (uint64_t)size * UCLOCK_FREQ / duration;
     if (!output->octetrate)
         output->octetrate = 1;
     struct uref *flow_def = uref_alloc_control(sig->uref_mgr);
@@ -1828,14 +1836,107 @@ static void upipe_ts_sig_build_tdt_flow_def(struct upipe *upipe)
                                NULL, NULL);
 }
 
-/** @internal @This sends a TDT PSI section.
+/** @internal @This builds new TOT PSI section.
+ *
+ * @param upipe description structure of the pipe
+ */
+static void upipe_ts_sig_build_tot(struct upipe *upipe)
+{
+    struct upipe_ts_sig *sig = upipe_ts_sig_from_upipe(upipe);
+    if (unlikely(sig->flow_def == NULL || sig->ubuf_mgr == NULL))
+        return;
+    if (unlikely(sig->frozen)) {
+        upipe_dbg_va(upipe, "not rebuilding a TOT");
+        return;
+    }
+
+    ubuf_free(sig->tot_section);
+    sig->tot_section = NULL;
+
+    uint8_t regions = 0;
+    uref_ts_flow_get_tot_regions(sig->flow_def, &regions);
+    if (!regions)
+        return;
+    size_t regions_size = regions * DESC58_LTO_SIZE;
+
+    upipe_notice(upipe, "new TOT");
+
+    struct ubuf *ubuf = ubuf_block_alloc(sig->ubuf_mgr,
+        TOT_HEADER_SIZE + DESC58_HEADER_SIZE + regions_size + PSI_CRC_SIZE);
+    if (unlikely(ubuf == NULL)) {
+        upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
+        return;
+    }
+
+    uint8_t *buffer;
+    int size = -1;
+    if (!ubase_check(ubuf_block_write(ubuf, 0, &size, &buffer))) {
+        ubuf_free(ubuf);
+        upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
+        return;
+    }
+
+    memset(buffer, 0, size);
+    tot_init(buffer);
+    psi_set_length(buffer, TOT_HEADER_SIZE - PSI_HEADER_SIZE +
+                           DESC58_HEADER_SIZE + regions_size + PSI_CRC_SIZE);
+    /* set UTC later */
+    tot_set_desclength(buffer, DESC58_HEADER_SIZE + regions_size);
+    uint8_t *desc = descs_get_desc(tot_get_descs(buffer), 0);
+    desc58_init(desc);
+    desc_set_length(desc, DESC58_HEADER_SIZE - DESC_HEADER_SIZE + regions_size);
+
+    for (uint8_t l = 0; l < regions; l++) {
+        uint8_t *lto = desc58_get_lto(desc, l);
+        assert(lto != NULL);
+        const char *code = "UNK";
+        uref_ts_flow_get_tot_code(sig->flow_def, &code, l);
+        if (strlen(code) < 3)
+            code = "UNK";
+
+        uint8_t region = 0;
+        uref_ts_flow_get_tot_region(sig->flow_def, &region, l);
+        int64_t offset = 0;
+        uref_ts_flow_get_tot_offset(sig->flow_def, &offset, l);
+        uint64_t change = 0;
+        uref_ts_flow_get_tot_change(sig->flow_def, &change, l);
+        int64_t next_offset = 0;
+        uref_ts_flow_get_tot_next_offset(sig->flow_def, &next_offset, l);
+
+        desc58n_set_country_code(lto, (const uint8_t *)code);
+        desc58n_set_country_region_id(lto, region);
+        if (offset < 0) {
+            desc58n_set_lto_polarity(lto, 1);
+            offset *= -1;
+        }
+        if (next_offset < 0)
+            next_offset *= -1;
+        desc58n_set_lt_offset(lto, dvb_time_encode_duration16(offset / UCLOCK_FREQ / 60));
+        desc58n_set_time_of_change(lto, dvb_time_encode_UTC(change / UCLOCK_FREQ));
+        desc58n_set_next_offset(lto, dvb_time_encode_duration16(next_offset / UCLOCK_FREQ / 60));
+
+        upipe_notice_va(upipe,
+                " * LTO country=%s region=%"PRIu8" offset=%"PRIu64,
+                code, region, offset / UCLOCK_FREQ / 60);
+    }
+
+    /* set CRC later */
+    ubuf_block_unmap(ubuf, 0);
+
+    upipe_notice(upipe, "end TOT");
+
+    sig->tot_section = ubuf;
+    upipe_ts_sig_update_status(upipe);
+}
+
+/** @internal @This sends a TDT/TOT PSI section.
  *
  * @param upipe description structure of the pipe
  * @param cr_sys cr_sys of the next muxed packet
  * @param latency latency before the packet is output
  */
-static void upipe_ts_sig_send_tdt(struct upipe *upipe, uint64_t cr_sys,
-                                  uint64_t latency)
+static void upipe_ts_sig_send_tdttot(struct upipe *upipe, uint64_t cr_sys,
+                                     uint64_t latency)
 {
     struct upipe_ts_sig *sig = upipe_ts_sig_from_upipe(upipe);
     uint64_t now;
@@ -1852,7 +1953,7 @@ static void upipe_ts_sig_send_tdt(struct upipe *upipe, uint64_t cr_sys,
     sig->tdt_cr_sys = cr_sys;
     output->cr_sys = cr_sys;
 
-    upipe_verbose_va(upipe, "sending TDT (%"PRIu64")", cr_sys);
+    upipe_verbose_va(upipe, "sending TDT/TOT (%"PRIu64")", cr_sys);
 
     struct uref *uref = uref_block_alloc(sig->uref_mgr, sig->ubuf_mgr,
                                          TDT_HEADER_SIZE);
@@ -1872,6 +1973,27 @@ static void upipe_ts_sig_send_tdt(struct upipe *upipe, uint64_t cr_sys,
     tdt_init(buffer);
     tdt_set_utc(buffer, dvb_time_encode_UTC(now / UCLOCK_FREQ));
     uref_block_unmap(uref, 0);
+
+    if (sig->tot_section != NULL) {
+        struct ubuf *ubuf = ubuf_block_copy(sig->ubuf_mgr, sig->tot_section, 0, -1);
+        if (unlikely(ubuf == NULL)) {
+            uref_free(uref);
+            upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
+            return;
+        }
+
+        if (!ubase_check(ubuf_block_write(ubuf, 0, &size, &buffer))) {
+            uref_free(uref);
+            ubuf_free(ubuf);
+            upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
+            return;
+        }
+
+        tot_set_utc(buffer, dvb_time_encode_UTC(now / UCLOCK_FREQ));
+        psi_set_crc(buffer);
+        ubuf_block_unmap(ubuf, 0);
+        uref_block_append(uref, ubuf);
+    }
 
     uref_block_set_start(uref);
     uref_clock_set_cr_sys(uref, output->cr_sys);
@@ -1998,6 +2120,20 @@ static int upipe_ts_sig_set_flow_def(struct upipe *upipe, struct uref *flow_def)
 
     bool eit_change = sdt_change;
 
+    bool tot_change = sig->flow_def == NULL ||
+        uref_ts_flow_cmp_tot_regions(flow_def, sig->flow_def);
+
+    uint8_t regions = 0;
+    uref_ts_flow_get_tot_regions(flow_def, &regions);
+    for (uint8_t l = 0; l < regions; l++) {
+        tot_change = tot_change ||
+            uref_ts_flow_cmp_tot_code(flow_def, sig->flow_def, l) ||
+            uref_ts_flow_cmp_tot_region(flow_def, sig->flow_def, l) ||
+            uref_ts_flow_cmp_tot_offset(flow_def, sig->flow_def, l) ||
+            uref_ts_flow_cmp_tot_change(flow_def, sig->flow_def, l) ||
+            uref_ts_flow_cmp_tot_next_offset(flow_def, sig->flow_def, l);
+    }
+
     uref_free(sig->flow_def);
     sig->flow_def = flow_def_dup;
 
@@ -2020,6 +2156,11 @@ static int upipe_ts_sig_set_flow_def(struct upipe *upipe, struct uref *flow_def)
         }
         upipe_ts_sig_build_eit_flow_def(upipe);
     }
+
+    if (tot_change) {
+        upipe_ts_sig_build_tot(upipe);
+        upipe_ts_sig_build_tdttot_flow_def(upipe);
+    }
     return UBASE_ERR_NONE;
 }
 
@@ -2041,7 +2182,7 @@ static int upipe_ts_sig_prepare(struct upipe *upipe, uint64_t cr_sys,
     upipe_ts_sig_send_sdt(upipe, cr_sys);
     upipe_ts_sig_send_eit(upipe, cr_sys);
     upipe_ts_sig_send_eits(upipe, cr_sys);
-    upipe_ts_sig_send_tdt(upipe, cr_sys, latency);
+    upipe_ts_sig_send_tdttot(upipe, cr_sys, latency);
     upipe_ts_sig_update_status(upipe);
     return UBASE_ERR_NONE;
 }
@@ -2147,7 +2288,7 @@ static int upipe_ts_sig_control(struct upipe *upipe, int command, va_list args)
             sig->tdt_interval = va_arg(args, uint64_t);
             if (sig->tdt_interval && sig->uclock == NULL)
                 upipe_ts_sig_require_uclock(upipe);
-            upipe_ts_sig_build_tdt_flow_def(upipe);
+            upipe_ts_sig_build_tdttot_flow_def(upipe);
             upipe_ts_sig_update_status(upipe);
             return UBASE_ERR_NONE;
         }
@@ -2253,6 +2394,7 @@ static void upipe_ts_sig_free(struct upipe *upipe)
         ubuf_free(ubuf_from_uchain(section_chain));
     while ((section_chain = ulist_pop(&sig->sdt_sections)) != NULL)
         ubuf_free(ubuf_from_uchain(section_chain));
+    ubuf_free(sig->tot_section);
     uref_free(sig->flow_def);
 
     upipe_ts_sig_clean_dvb_string(upipe);

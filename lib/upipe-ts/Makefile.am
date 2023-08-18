@@ -21,6 +21,7 @@ libupipe_ts_la_SOURCES = \
 	upipe_ts_scte35_probe.c \
 	upipe_ts_sdt_decoder.c \
 	upipe_ts_tdt_decoder.c \
+	upipe_ts_tot_decoder.c \
 	upipe_ts_split.c \
 	upipe_ts_sync.c \
 	upipe_ts_align.c \
