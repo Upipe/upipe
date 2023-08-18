@@ -502,12 +502,12 @@ static int upipe_ts_psig_flow_build_inner(struct upipe *upipe, uint8_t *es,
             uint8_t *language = desc56_get_language(desc, l);
             assert(language != NULL);
             const char *lang = "unk";
-            if (strlen(lang) < 3)
-                lang = "unk";
             uint8_t type = DESC56_TELETEXTTYPE_INFORMATION;
             uint8_t magazine = 0;
             uint8_t page = 0;
             uref_flow_get_language(flow->flow_def, &lang, l);
+            if (strlen(lang) < 3)
+                lang = "unk";
             uref_ts_flow_get_telx_type(flow->flow_def, &type, l);
             uref_ts_flow_get_telx_magazine(flow->flow_def, &magazine, l);
             uref_ts_flow_get_telx_page(flow->flow_def, &page, l);
@@ -528,13 +528,13 @@ static int upipe_ts_psig_flow_build_inner(struct upipe *upipe, uint8_t *es,
             uint8_t *language = desc59_get_language(desc, l);
             assert(language != NULL);
             const char *lang = "unk";
-            if (strlen(lang) < 3)
-                lang = "unk";
             /* DVB-subtitles (normal) with no AR criticality */
             uint8_t type = 0x10;
             uint8_t composition = 0;
             uint8_t ancillary = 88;
             uref_flow_get_language(flow->flow_def, &lang, l);
+            if (strlen(lang) < 3)
+                lang = "unk";
             uref_ts_flow_get_sub_type(flow->flow_def, &type, l);
             uref_ts_flow_get_sub_composition(flow->flow_def,
                                              &composition, l);
@@ -557,10 +557,10 @@ static int upipe_ts_psig_flow_build_inner(struct upipe *upipe, uint8_t *es,
                 uint8_t *language = desc0a_get_language(desc, l);
                 assert(language != NULL);
                 const char *lang = "unk";
-                if (strlen(lang) < 3)
-                    lang = "unk";
                 uint8_t type = DESC0A_TYPE_UNDEFINED;
                 uref_flow_get_language(flow->flow_def, &lang, l);
+                if (strlen(lang) < 3)
+                    lang = "unk";
                 if (ubase_check(uref_flow_get_hearing_impaired(
                                 flow->flow_def, l)))
                     type = DESC0A_TYPE_HEARING_IMP;
