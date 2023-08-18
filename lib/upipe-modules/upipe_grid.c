@@ -954,6 +954,21 @@ static int upipe_grid_out_extract_input(struct upipe *upipe, struct uref *uref,
         upipe_info(upipe, "input buffer found");
     upipe_grid_out->warn_no_input_buffer = true;
 
+    uint64_t input_duration = 0;
+    uref_clock_get_duration(e->uref, &input_duration);
+    struct urational in_fps, out_fps;
+    bool check_frames = true;
+    if (upipe_grid_out->last_input_pts == UINT64_MAX ||
+        !ubase_check(uref_clock_get_duration(e->uref, &input_duration)) ||
+        !input_duration ||
+        !ubase_check(uref_pic_flow_get_fps(e->flow_def, &in_fps)) ||
+        !upipe_grid_out->flow_def ||
+        !ubase_check(uref_pic_flow_get_fps(upipe_grid_out->flow_def,
+                                           &out_fps)) ||
+        in_fps.den * out_fps.num != in_fps.num * out_fps.den)
+        check_frames = false;
+
+
     if (upipe_grid_out->last_input_pts != UINT64_MAX &&
         e->pts <= upipe_grid_out->last_input_pts) {
         if (pic_sub) {
@@ -961,9 +976,10 @@ static int upipe_grid_out_extract_input(struct upipe *upipe, struct uref *uref,
             return UBASE_ERR_NONE;
         }
         else if (ubase_check(uref_flow_match_def(e->flow_def, UREF_PIC_FLOW_DEF))) {
-            if (ubase_check(uref_clock_get_duration(e->uref, NULL)))
-                upipe_warn(upipe, "duplicate output");
-            else  {
+            if (input_duration) {
+                if (check_frames)
+                    upipe_warn(upipe, "duplicate output");
+            } else  {
                 uref_attach_ubuf(uref, NULL);
                 return UBASE_ERR_NONE;
             }
@@ -975,12 +991,9 @@ static int upipe_grid_out_extract_input(struct upipe *upipe, struct uref *uref,
         }
     }
 
-    uint64_t input_duration = 0;
-    uref_clock_get_duration(e->uref, &input_duration);
-//    if (input_duration && upipe_grid_out->last_input_pts != UINT64_MAX) {
-//        if (e->pts > upipe_grid_out->last_input_pts + input_duration * 3 / 2)
-//            upipe_warn_va(upipe, "potentially lost frames");
-//    }
+    if (check_frames &&
+        e->pts > upipe_grid_out->last_input_pts + input_duration * 3 / 2)
+            upipe_warn_va(upipe, "potentially lost frames");
     upipe_grid_out->last_input_pts = e->pts;
 
     struct ubuf *ubuf = ubuf_dup(e->uref->ubuf);
