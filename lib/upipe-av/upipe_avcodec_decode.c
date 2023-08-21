@@ -34,6 +34,7 @@
 #include "upipe/uref_pic.h"
 #include "upipe/uref_flow.h"
 #include "upipe/uref_pic_flow.h"
+#include "upipe/uref_pic_flow_formats.h"
 #include "upipe/uref_sound.h"
 #include "upipe/uref_sound_flow.h"
 #include "upipe/uref_block_flow.h"
@@ -970,17 +971,6 @@ static void upipe_avcdec_build_flow_def_sub(struct upipe *upipe,
     upipe_avcdec_store_flow_def(upipe, flow_def);
 }
 
-/** @internal @This rounds a value to the next aligmnent.
- *
- * @param value value to align
- * @param aligmnent desired aligmnent
- * @return the next align value
- */
-static int align(int value, int alignment)
-{
-    return alignment > 1 ? (value + (alignment - 1)) & ~(alignment - 1) : value;
-}
-
 /** @internal @This outputs subtitles.
  *
  * @param upipe description structure of the pipe
@@ -988,41 +978,62 @@ static int align(int value, int alignment)
  * @param upump_p reference to upump structure
  */
 static void upipe_avcdec_output_sub(struct upipe *upipe, AVSubtitle *sub,
-        struct upump **upump_p)
+                                    struct upump **upump_p)
 {
     struct upipe_avcdec *upipe_avcdec = upipe_avcdec_from_upipe(upipe);
     struct uref *uref = upipe_avcdec->uref;
+    int width = upipe_avcdec->context->width;
+    int height = upipe_avcdec->context->height;
 
-    uint64_t w = 0, h = 0;
-
-    for (int i = 0; i < sub->num_rects; i++) {
-        AVSubtitleRect *r = sub->rects[i];
-
-        if (r->type != SUBTITLE_BITMAP) {
-            upipe_err_va(upipe, "Not handling subtitle type %d", r->type);
-            continue;
-        }
-        if (w < r->w + r->x)
-            w = r->w + r->x;
-        if (h < r->h + r->y)
-            h = r->h + r->y;
-    }
-
-    if (sub->num_rects == 0) {
-        /* blank sub */
-        if (!upipe_avcdec->flow_def_attr)
-            return;
-
-        UBASE_FATAL(upipe,
-                uref_pic_flow_get_hsize(upipe_avcdec->flow_def_attr, &w));
-        UBASE_FATAL(upipe,
-                uref_pic_flow_get_vsize(upipe_avcdec->flow_def_attr, &h));
-    }
-
-    if (w == 0 || h == 0)
+    if (!width || !height) {
+        upipe_throw_fatal(upipe, UBASE_ERR_INVALID);
         return;
+    }
 
-    uint8_t alignment = 16;
+    const int alignment = 16;
+    if (unlikely(upipe_avcdec->ubuf_mgr == NULL)) {
+        /* Prepare flow definition attributes. */
+        struct uref *flow_def_attr = upipe_avcdec_alloc_flow_def_attr(upipe);
+        if (unlikely(flow_def_attr == NULL)) {
+            upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
+            return;
+        }
+
+        if (unlikely(
+#ifdef UPIPE_WORDS_BIGENDIAN
+                !ubase_check(uref_pic_flow_set_argb(flow_def_attr)) ||
+#else
+                !ubase_check(uref_pic_flow_set_bgra(flow_def_attr)) ||
+#endif
+                !ubase_check(uref_flow_set_def(flow_def_attr, UREF_PIC_SUB_FLOW_DEF)) ||
+                !ubase_check(uref_pic_set_progressive(flow_def_attr)) ||
+                !ubase_check(uref_pic_flow_set_full_range(flow_def_attr))))
+        {
+            uref_free(flow_def_attr);
+            upipe_throw_fatal(upipe, UBASE_ERR_INVALID);
+            return;
+        }
+
+        if (unlikely(!upipe_avcdec_demand_ubuf_mgr(upipe, flow_def_attr)))
+            return;
+    }
+
+    struct uref *flow_def = uref_dup(upipe_avcdec->flow_def_provided);
+    if (unlikely(flow_def == NULL)) {
+        upipe_throw_fatal(upipe, UBASE_ERR_INVALID);
+        return;
+    }
+    if (unlikely(
+            !ubase_check(uref_pic_flow_set_align(flow_def, alignment)) ||
+            !ubase_check(uref_pic_flow_set_hsize(flow_def, width)) ||
+            !ubase_check(uref_pic_flow_set_vsize(flow_def, height)) ||
+            !ubase_check(uref_pic_flow_set_hsize_visible(flow_def, width)) ||
+            !ubase_check(uref_pic_flow_set_vsize_visible(flow_def, height))
+            )) {
+        upipe_throw_fatal(upipe, UBASE_ERR_INVALID);
+        return;
+    }
+
     const char *input_def = NULL;
     uref_flow_get_def(upipe_avcdec->flow_def_input, &input_def);
     if (input_def && strstr(input_def, ".dvb_subtitle.")) {
@@ -1031,77 +1042,40 @@ static void upipe_avcdec_output_sub(struct upipe *upipe, AVSubtitle *sub,
         switch (subtype) {
             case 0x10:
             case 0x20:
-                w = w < 720 ? 720 : w;
-                h = h < 576 ? 576 : h;
-                alignment = 0;
+            default:
+                /* no monitor aspect ratio */
                 break;
+            case 0x11:
+            case 0x21: {
+                struct urational dar = { .num = 4, .den = 3 };
+                uref_pic_flow_set_dar(flow_def, dar);
+                break;
+            }
+            case 0x13:
+            case 0x23: {
+                struct urational dar = { .num = 221, .den = 100 };
+                uref_pic_flow_set_dar(flow_def, dar);
+                break;
+            }
+            case 0x12:
             case 0x14:
-            case 0x24:
-                w = w < 1920 ? 1920 : w;
-                h = h < 1080 ? 1080 : h;
-                alignment = 0;
-                break;
+            case 0x15:
             case 0x16:
-            case 0x26:
-                w = w < 3840 ? 3840 : w;
-                h = h < 2160 ? 2160 : h;
-                alignment = 0;
+            case 0x22:
+            case 0x24:
+            case 0x25:
+            case 0x26: {
+                struct urational dar = { .num = 16, .den = 9 };
+                uref_pic_flow_set_dar(flow_def, dar);
                 break;
+            }
         }
     }
-
-    /* Prepare flow definition attributes. */
-    struct uref *flow_def_attr = upipe_avcdec_alloc_flow_def_attr(upipe);
-    if (unlikely(flow_def_attr == NULL)) {
-        uref_free(uref);
-        upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
-        return;
-    }
-
-    uref_pic_flow_set_planes(flow_def_attr, 0);
-    uref_pic_flow_set_macropixel(flow_def_attr, 1);
-#ifdef UPIPE_WORDS_BIGENDIAN
-    uref_pic_flow_add_plane(flow_def_attr, 1, 1, 4, "a8r8g8b8");
-#else
-    uref_pic_flow_add_plane(flow_def_attr, 1, 1, 4, "b8g8r8a8");
-#endif
-    uref_flow_set_def(flow_def_attr, UREF_PIC_SUB_FLOW_DEF);
-    uref_pic_set_progressive(flow_def_attr);
-
-    int width_aligned = align(w, alignment);
-    int height_aligned = align(h, alignment);
-    if (alignment)
-        UBASE_FATAL(upipe, uref_pic_flow_set_align(flow_def_attr, alignment))
-    UBASE_FATAL(upipe, uref_pic_flow_set_hsize(flow_def_attr, width_aligned))
-    UBASE_FATAL(upipe, uref_pic_flow_set_vsize(flow_def_attr, height_aligned))
-    UBASE_FATAL(upipe, uref_pic_flow_set_hsize_visible(flow_def_attr, w))
-    UBASE_FATAL(upipe, uref_pic_flow_set_vsize_visible(flow_def_attr, h))
-    UBASE_FATAL(upipe, uref_pic_flow_set_full_range(flow_def_attr))
-
-    if (unlikely(upipe_avcdec->ubuf_mgr != NULL &&
-                 udict_cmp(upipe_avcdec->flow_def_format->udict,
-                           flow_def_attr->udict))) {
-        /* flow format changed */
-        ubuf_mgr_release(upipe_avcdec->ubuf_mgr);
-        upipe_avcdec->ubuf_mgr = NULL;
-    }
-
-    if (unlikely(upipe_avcdec->ubuf_mgr == NULL)) {
-        upipe_avcdec->flow_def_format = uref_dup(flow_def_attr);
-        if (unlikely(!upipe_avcdec_demand_ubuf_mgr(upipe, flow_def_attr))) {
-            uref_free(uref);
-            return;
-        }
-    } else
-        uref_free(flow_def_attr);
-
-    flow_def_attr = uref_dup(upipe_avcdec->flow_def_provided);
 
     /* Allocate a ubuf */
-    struct ubuf *ubuf = ubuf_pic_alloc(upipe_avcdec->ubuf_mgr, width_aligned, height_aligned);
+    struct ubuf *ubuf = ubuf_pic_alloc(upipe_avcdec->ubuf_mgr, width, height);
     if (unlikely(ubuf == NULL)) {
-        uref_free(uref);
-        uref_free(flow_def_attr);
+        uref_free(flow_def);
         upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
         return;
     }
@@ -1110,10 +1084,6 @@ static void upipe_avcdec_output_sub(struct upipe *upipe, AVSubtitle *sub,
     ubuf_pic_clear(ubuf, 0, 0, -1, -1, 1);
 
     uref_attach_ubuf(uref, ubuf);
-
-    /* Chain the new flow def attributes to the uref so we can apply them
-     * later. */
-    uref->uchain.next = uref_to_uchain(flow_def_attr);
 
     if (sub->end_display_time != UINT32_MAX)
         uref_clock_set_duration(uref, UCLOCK_FREQ * sub->end_display_time / 1000);
@@ -1128,7 +1098,7 @@ static void upipe_avcdec_output_sub(struct upipe *upipe, AVSubtitle *sub,
     if (sub->num_rects) {
         uint8_t *buf;
         const char *chroma;
-        if (unlikely(!ubase_check(uref_pic_flow_get_chroma(flow_def_attr,
+        if (unlikely(!ubase_check(uref_pic_flow_get_chroma(flow_def,
                             &chroma, 0)) ||
                     !ubase_check(ubuf_pic_plane_write(uref->ubuf, chroma,
                             0, 0, -1, -1, &buf)))) {
@@ -1138,7 +1108,7 @@ static void upipe_avcdec_output_sub(struct upipe *upipe, AVSubtitle *sub,
         /* Decode palettized to bgra */
         for (int i = 0; i < sub->num_rects; i++) {
             AVSubtitleRect *r = sub->rects[i];
-            uint8_t *dst = buf + 4 * ((width_aligned * r->y) + r->x);
+            uint8_t *dst = buf + 4 * ((width * r->y) + r->x);
             uint8_t *src = r->data[0];
             uint8_t *palette = r->data[1];
 
@@ -1153,7 +1123,7 @@ static void upipe_avcdec_output_sub(struct upipe *upipe, AVSubtitle *sub,
                     memcpy(&dst[j*4], &palette[idx*4], 4);
                 }
 
-                dst += width_aligned * 4;
+                dst += width * 4;
                 src += r->w;
             }
         }
@@ -1162,8 +1132,10 @@ static void upipe_avcdec_output_sub(struct upipe *upipe, AVSubtitle *sub,
     }
 
     /* Find out if flow def attributes have changed. */
-    if (!upipe_avcdec_check_flow_def_attr(upipe, flow_def_attr))
-        upipe_avcdec_build_flow_def_sub(upipe, flow_def_attr);
+    if (!upipe_avcdec_check_flow_def_attr(upipe, flow_def))
+        upipe_avcdec_build_flow_def_sub(upipe, flow_def);
+    else
+        uref_free(flow_def);
 
     upipe_avcdec->uref = NULL;
 
@@ -1171,6 +1143,7 @@ static void upipe_avcdec_output_sub(struct upipe *upipe, AVSubtitle *sub,
     return;
 
 alloc_error:
+    upipe_avcdec->uref = NULL;
     uref_free(uref);
     upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
     return;
