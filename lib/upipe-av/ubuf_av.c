@@ -232,6 +232,7 @@ static struct ubuf *ubuf_av_alloc(struct ubuf_mgr *mgr,
             else {
                 char tmp[frame->channels + 1];
                 memcpy(tmp, channels_desc, frame->channels);
+                tmp[frame->channels] = '\0';
                 ubuf_av->sound.channels[0] = strdup(tmp);
                 if (unlikely(!ubuf_av->sound.channels[0])) {
                     ubuf_av_free(ubuf);
