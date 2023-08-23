@@ -180,7 +180,7 @@ static struct upipe *upipe_vblk_alloc(struct upipe_mgr *mgr,
         return NULL;
     }
 
-    upipe_vblk->flow_attr = flow_def;
+    upipe_vblk_store_flow_def_attr(upipe, flow_def);
 
     return upipe;
 }
@@ -309,29 +309,30 @@ static int upipe_vblk_set_flow_def(struct upipe *upipe,
 {
     struct upipe_vblk *upipe_vblk = upipe_vblk_from_upipe(upipe);
 
-    if (!ubase_check(uref_flow_match_def(flow_def, UREF_VOID_FLOW_DEF)) &&
-        !ubase_check(uref_flow_match_def(flow_def, UREF_PIC_FLOW_DEF)))
-        return UBASE_ERR_INVALID;
-
     struct uref *input_flow_def = uref_dup(flow_def);
     UBASE_ALLOC_RETURN(input_flow_def);
 
-    struct uref *flow_format =
-        upipe_vblk_store_flow_def_input(upipe, input_flow_def);
-    UBASE_ALLOC_RETURN(flow_format);
+    struct uref *flow_format = NULL;
+    if (ubase_check(uref_flow_match_def(flow_def, UREF_VOID_FLOW_DEF))) {
+        flow_format = upipe_vblk_store_flow_def_input(upipe, input_flow_def);
+    } else if (ubase_check(uref_flow_match_def(flow_def, UREF_PIC_FLOW_DEF))) {
+        flow_format = upipe_vblk_store_flow_def_attr(upipe, input_flow_def);
+    } else {
+        upipe_warn(upipe, "unsupported flow def");
+        uref_free(input_flow_def);
+        return UBASE_ERR_INVALID;
+    }
 
-    if (upipe_vblk->ubuf) {
+    if (!upipe_vblk->ubuf_mgr || !flow_format ||
+        !ubase_check(ubuf_mgr_check(upipe_vblk->ubuf_mgr, flow_format))) {
+        ubuf_mgr_release(upipe_vblk->ubuf_mgr);
+        upipe_vblk->ubuf_mgr = NULL;
         ubuf_free(upipe_vblk->ubuf);
         upipe_vblk->ubuf = NULL;
     }
 
-    if (!upipe_vblk->ubuf_mgr ||
-        !ubase_check(ubuf_mgr_check(upipe_vblk->ubuf_mgr, flow_format))) {
-        ubuf_mgr_release(upipe_vblk->ubuf_mgr);
-        upipe_vblk->ubuf_mgr = NULL;
-    }
-
-    upipe_vblk_require_flow_format(upipe, flow_format);
+    if (flow_format)
+        upipe_vblk_require_flow_format(upipe, flow_format);
 
     return UBASE_ERR_NONE;
 }
