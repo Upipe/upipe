@@ -1387,10 +1387,9 @@ static void handle_tx_stamp(struct upipe *upipe, uint64_t t, uint16_t seq)
         upipe_netmap_sink->step = 0;
 
     upipe_dbg_va(upipe,
-            "%.2f ms, ideal %.2f"
-            " step %.2f, fakes %" PRIu64 " needed fakes %.2f",
-            (float)(dur - x) / 27000., ideal, step,
-            upipe_netmap_sink->fakes, needed_fakes);
+            "% .3f ms, ideal % .2f step % .2f, fakes %u needed fakes %.2f",
+            (double)(dur - x) / 27000., ideal, step,
+            (unsigned)upipe_netmap_sink->fakes, needed_fakes);
     upipe_netmap_sink->fakes = 0;
 
     upipe_netmap_sink->pkts_in_frame = 0;
