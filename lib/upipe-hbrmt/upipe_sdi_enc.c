@@ -347,11 +347,10 @@ static int put_audio_control_packet(struct upipe_sdi_enc *upipe_sdi_enc,
     dst[6] = S291_HD_AUDIOCONTROL_GROUP1_DID - ch_group;
 
     /* DBN */
-    dst[8] = upipe_sdi_enc->dbn[4+ch_group];
-    sdi_increment_dbn(&upipe_sdi_enc->dbn[4+ch_group]);
+    dst[8] = upipe_sdi_enc->dbn[4+ch_group]; /* SMPTE 299 says this does not increment */
 
     /* DC */
-    dst[10] = 11;
+    dst[10] = 10; /* SMPTE 299 says this must be (incorrectly) written as 10 */
 
     /* UDW */
     dst[12] = 0x00; /* No frame numbering available */
