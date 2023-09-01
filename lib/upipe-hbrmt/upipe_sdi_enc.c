@@ -231,8 +231,6 @@ static void sdi_init_crc_channel_status(uint8_t *data)
     memset(data, 0, 23);
 
     data[0] = 0x81; /* Professional, LPCM, 48kHz */
-    data[1] = 0x40; /* Stereophonic Mode */
-    data[2] = 0x34; /* Forces 24 bits, leaves Level regulation default */
 
     uint8_t crc = 0xff;
     for (int i = 0; i < 23; i++)
