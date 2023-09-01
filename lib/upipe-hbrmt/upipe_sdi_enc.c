@@ -154,8 +154,8 @@ struct upipe_sdi_enc {
      * on each packet until it syncs back up */
     int mpf_packet_bits[4];
 
-    /* data block number for each audio control and data group */
-    uint8_t dbn[8];
+    /* data block number for each data group */
+    uint8_t dbn[4];
 
     /* SDI offsets */
     const struct sdi_offsets_fmt *f;
@@ -347,10 +347,10 @@ static int put_audio_control_packet(struct upipe_sdi_enc *upipe_sdi_enc,
     dst[6] = S291_HD_AUDIOCONTROL_GROUP1_DID - ch_group;
 
     /* DBN */
-    dst[8] = upipe_sdi_enc->dbn[4+ch_group]; /* SMPTE 299 says this does not increment */
+    dst[8] = 0; /* SMPTE 299 says this does not increment */
 
     /* DC */
-    dst[10] = 10; /* SMPTE 299 says this must be (incorrectly) written as 10 */
+    dst[10] = 11;
 
     /* UDW */
     dst[12] = 0x00; /* No frame numbering available */
@@ -1806,7 +1806,7 @@ static struct upipe *_upipe_sdi_enc_alloc(struct upipe_mgr *mgr,
     upipe_sdi_enc->total_audio_samples_put = 0;
     for (int i = 0; i < UPIPE_SDI_CHANNELS_PER_GROUP; i++)
         upipe_sdi_enc->mpf_packet_bits[i] = 0;
-    for (int i = 0; i < 8; i++)
+    for (int i = 0; i < 4; i++)
         upipe_sdi_enc->dbn[i] = 1;
 
     sdi_crc_setup(upipe_sdi_enc->crc_lut);
