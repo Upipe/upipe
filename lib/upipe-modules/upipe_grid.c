@@ -36,9 +36,11 @@
 #include "upipe/upipe_helper_upump.h"
 
 #include "upipe/uclock.h"
+#include "upipe/uref.h"
 #include "upipe/uref_clock.h"
 #include "upipe/uref_pic_flow.h"
 #include "upipe/uref_sound_flow.h"
+#include "upipe/uref_void_flow.h"
 #include "upipe/uref_pic.h"
 #include "upipe/uref_dump.h"
 #include "upipe/upipe.h"
@@ -937,6 +939,11 @@ static int upipe_grid_out_extract_input(struct upipe *upipe, struct uref *uref,
     }
 
     if (!e->uref || (e->duration && e->diff > max_diff)) {
+        if (ubase_check(uref_flow_match_def(upipe_grid_out->input_flow_def,
+                                            UREF_VOID_FLOW_DEF))) {
+            uref_attach_ubuf(uref, NULL);
+            return UBASE_ERR_NONE;
+        }
         bool pic_sub = input->flow_def &&
             ubase_check(uref_flow_match_def(
                     input->flow_def, UREF_PIC_SUB_FLOW_DEF));
