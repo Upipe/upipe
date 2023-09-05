@@ -978,7 +978,6 @@ static void upipe_hd_sdi_enc_encode_line(struct upipe *upipe, int line_num, uint
     /* Audio can go anywhere but the switching lines+1 */
     if (!(line_num == p->switching_line + 1) &&
         !(p->field_offset && line_num == p->switching_line + switching_line_offset + 1)) {
-        int packets_put = 0;
 
         /* Start counting the destination from the start of the
          * chroma horizontal blanking */
@@ -1013,7 +1012,6 @@ static void upipe_hd_sdi_enc_encode_line(struct upipe *upipe, int line_num, uint
 
                 dst_pos += put_hd_audio_data_packet(upipe_sdi_enc, &dst[dst_pos],
                                                     ch_group, mpf_bit, sample_clock);
-                packets_put++;
             }
             upipe_sdi_enc->total_audio_samples_put++;
             upipe_sdi_enc->sample_pos++;
