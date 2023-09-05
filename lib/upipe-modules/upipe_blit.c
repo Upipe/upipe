@@ -392,8 +392,12 @@ static int upipe_blit_sub_provide_flow_format(struct upipe *upipe)
         struct urational src_dar;
         src_dar.num = src_dar.den = 1;
         if (src_hsize && src_vsize) {
-            src_dar.num = src_hsize * src_sar.num;
-            src_dar.den = src_vsize * src_sar.den;
+            if (src_sar.num) {
+                src_dar.num = src_hsize * src_sar.num;
+                src_dar.den = src_vsize * src_sar.den;
+            } else {
+                src_dar = dest_dar;
+            }
         }
         uref_pic_flow_get_dar(urequest->uref, &src_dar);
         urational_simplify(&src_dar);

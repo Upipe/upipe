@@ -1504,7 +1504,7 @@ static int upipe_avcenc_set_flow_def(struct upipe *upipe, struct uref *flow_def)
         context->time_base.den = 1;
 
         struct urational sar;
-        if (ubase_check(uref_pic_flow_get_sar(flow_def, &sar))) {
+        if (ubase_check(uref_pic_flow_get_sar(flow_def, &sar)) && sar.num) {
             context->sample_aspect_ratio.num = sar.num;
             context->sample_aspect_ratio.den = sar.den;
         }
@@ -1555,7 +1555,7 @@ static int upipe_avcenc_set_flow_def(struct upipe *upipe, struct uref *flow_def)
         context->framerate.den = fps.den;
 
         struct urational sar;
-        if (ubase_check(uref_pic_flow_get_sar(flow_def, &sar))) {
+        if (ubase_check(uref_pic_flow_get_sar(flow_def, &sar)) && sar.num) {
             context->sample_aspect_ratio.num = sar.num;
             context->sample_aspect_ratio.den = sar.den;
         }

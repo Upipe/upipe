@@ -1036,6 +1036,7 @@ static void upipe_avcdec_output_sub(struct upipe *upipe, AVSubtitle *sub,
 
     const char *input_def = NULL;
     uref_flow_get_def(upipe_avcdec->flow_def_input, &input_def);
+    uref_pic_flow_set_sar(flow_def, (struct urational){ .num = 0, .den = 0});
     if (input_def && strstr(input_def, ".dvb_subtitle.")) {
         uint8_t subtype = 0;
         uref_ts_flow_get_sub_type(upipe_avcdec->flow_def_input, &subtype, 0);
@@ -1049,12 +1050,16 @@ static void upipe_avcdec_output_sub(struct upipe *upipe, AVSubtitle *sub,
             case 0x21: {
                 struct urational dar = { .num = 4, .den = 3 };
                 uref_pic_flow_set_dar(flow_def, dar);
+                struct urational sar = { .num = 1, .den = 1 };
+                uref_pic_flow_set_sar(flow_def, sar);
                 break;
             }
             case 0x13:
             case 0x23: {
                 struct urational dar = { .num = 221, .den = 100 };
                 uref_pic_flow_set_dar(flow_def, dar);
+                struct urational sar = { .num = 1, .den = 1 };
+                uref_pic_flow_set_sar(flow_def, sar);
                 break;
             }
             case 0x12:
@@ -1067,6 +1072,8 @@ static void upipe_avcdec_output_sub(struct upipe *upipe, AVSubtitle *sub,
             case 0x26: {
                 struct urational dar = { .num = 16, .den = 9 };
                 uref_pic_flow_set_dar(flow_def, dar);
+                struct urational sar = { .num = 1, .den = 1 };
+                uref_pic_flow_set_sar(flow_def, sar);
                 break;
             }
         }
