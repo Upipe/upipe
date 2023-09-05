@@ -150,9 +150,9 @@ struct upipe_sdi_enc {
     uint64_t eav_clock;
     uint64_t total_audio_samples_put;
 
-    /* mpf bits which need to be set for each packet after a switching point
-     * on each packet until it syncs back up */
-    int mpf_packet_bits[4];
+    /* Number of samples delayed because audio packets cannot
+       be written on the switching line */
+    int num_delayed_samples[4];
 
     /* data block number for each data group */
     uint8_t dbn[4];
@@ -996,9 +996,9 @@ static void upipe_hd_sdi_enc_encode_line(struct upipe *upipe, int line_num, uint
 
                 /* mpf bit was set, which means that the packet was meant
                  * to arrive on the previous line */
-                if (upipe_sdi_enc->mpf_packet_bits[ch_group]) {
+                if (upipe_sdi_enc->num_delayed_samples[ch_group]) {
                     mpf_bit = 1;
-                    upipe_sdi_enc->mpf_packet_bits[ch_group]--;
+                    upipe_sdi_enc->num_delayed_samples[ch_group]--;
                 }
 
                 /* If the mpf bit is set roll the clock back to the previous line and
@@ -1021,7 +1021,7 @@ static void upipe_hd_sdi_enc_encode_line(struct upipe *upipe, int line_num, uint
          * amount of packets for each audio group to be belonging to a line before */
         for (int ch_group = 0; ch_group < UPIPE_SDI_CHANNELS_PER_GROUP; ch_group++) {
             /* Difference between current samples actually put and the target */
-            upipe_sdi_enc->mpf_packet_bits[ch_group] = samples - upipe_sdi_enc->sample_pos;
+            upipe_sdi_enc->num_delayed_samples[ch_group] = samples_to_put;
         }
     }
 
