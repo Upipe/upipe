@@ -1800,7 +1800,7 @@ static struct upipe *_upipe_sdi_enc_alloc(struct upipe_mgr *mgr,
     upipe_sdi_enc->sample_pos = 0;
     upipe_sdi_enc->total_audio_samples_put = 0;
     for (int i = 0; i < UPIPE_SDI_CHANNELS_PER_GROUP; i++)
-        upipe_sdi_enc->mpf_packet_bits[i] = 0;
+        upipe_sdi_enc->num_delayed_samples[i] = 0;
     for (int i = 0; i < 4; i++)
         upipe_sdi_enc->dbn[i] = 1;
 
