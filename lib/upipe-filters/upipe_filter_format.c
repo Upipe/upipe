@@ -308,12 +308,14 @@ static int upipe_ffmt_check_flow_format(struct upipe *upipe,
     if (!ubase_ncmp(def, "pic.")) {
         /* check aspect ratio */
         struct urational sar, dar;
-        if (ubase_check(uref_pic_flow_get_sar(flow_def_wanted, &sar))) {
+        if (ubase_check(uref_pic_flow_get_sar(flow_def_wanted, &sar)) &&
+            sar.num) {
             struct urational input_sar;
             uint64_t hsize;
             if (!ubase_check(uref_pic_flow_get_hsize(flow_def_wanted, &hsize)) &&
                 ubase_check(uref_pic_flow_get_hsize(flow_def, &hsize)) &&
-                ubase_check(uref_pic_flow_get_sar(flow_def, &input_sar))) {
+                ubase_check(uref_pic_flow_get_sar(flow_def, &input_sar)) &&
+                input_sar.num) {
                 struct urational sar_factor =
                     urational_divide(&input_sar, &sar);
                 hsize = (hsize * sar_factor.num / sar_factor.den / 2) * 2;

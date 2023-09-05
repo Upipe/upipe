@@ -387,10 +387,12 @@ static int upipe_avfsink_sub_set_flow_def(struct upipe *upipe,
         codecpar->codec_type = AVMEDIA_TYPE_VIDEO;
         codecpar->width = width;
         codecpar->height = height;
-        stream->sample_aspect_ratio.num =
-            codecpar->sample_aspect_ratio.num = sar.num;
-        stream->sample_aspect_ratio.den =
-            codecpar->sample_aspect_ratio.den = sar.den;
+        if (sar.num) {
+            stream->sample_aspect_ratio.num =
+                codecpar->sample_aspect_ratio.num = sar.num;
+            stream->sample_aspect_ratio.den =
+                codecpar->sample_aspect_ratio.den = sar.den;
+        }
         stream->avg_frame_rate.num = 25;
         stream->avg_frame_rate.den = 1;
         stream->time_base.num = fps.den;
