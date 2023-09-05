@@ -167,9 +167,6 @@ struct upipe_sdi_enc {
     /* worst case audio buffer (~128kB) */
     int32_t audio_buf[UPIPE_SDI_MAX_CHANNELS /* channels */ * 48000 * 1001 / 24000];
 
-    /* */
-    bool started;
-
     /* sample offset for dolby E to be on the right line */
     unsigned dolby_offset;
 
@@ -1811,7 +1808,6 @@ static struct upipe *_upipe_sdi_enc_alloc(struct upipe_mgr *mgr,
     sdi_crc_setup(upipe_sdi_enc->crc_lut);
 
     upipe_sdi_enc->uref_audio = NULL;
-    upipe_sdi_enc->started = 0;
 
     upipe_throw_ready(upipe);
     return upipe;
