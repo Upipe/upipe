@@ -1009,11 +1009,10 @@ static void upipe_hd_sdi_enc_encode_line(struct upipe *upipe, int line_num, uint
                  * signal the bit in the packet to indicate it was meant to arrive on
                  * the previous line which happened to be a switching point */
                 uint64_t eav_clock = upipe_sdi_enc->eav_clock - mpf_bit*f->width;
-                // FIXME: eav_clock unused
 
                 /* Phase offset is the difference between the audio clock and the
                  * EAV pixel clock */
-                uint16_t sample_clock = aud_clock - upipe_sdi_enc->eav_clock;
+                uint16_t sample_clock = aud_clock - eav_clock;
 
                 dst_pos += put_hd_audio_data_packet(upipe_sdi_enc, &dst[dst_pos],
                                                     ch_group, mpf_bit, sample_clock);
