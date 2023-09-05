@@ -753,6 +753,7 @@ static void upipe_sdi_enc_encode_line(struct upipe *upipe, int line_num, uint16_
     bool vbi = 0, f2 = 0, special_case = 0, ntsc;
     ntsc = p->active_height == 486;
 
+    /* Use the actual line number in audio calculations, before NTSC line 4 handling */
     unsigned line_num_audio = line_num;
 
     /* Use wraparound arithmetic to start at line 4 */
